@@ -40,6 +40,7 @@ pub fn generate_task_description(wt: WorkType, entity: Entity, refs: TaskCompone
                     BuildingType::BonePile => "Construct BonePile".to_string(),
                     BuildingType::WheelbarrowParking => "Construct Parking".to_string(),
                     BuildingType::SoulSpa => "Construct Soul Spa".to_string(),
+                    BuildingType::OutdoorLamp => "Construct Outdoor Lamp".to_string(),
                 }
             } else {
                 format!("Construct {:?}", entity)

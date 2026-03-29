@@ -48,6 +48,7 @@ pub(super) fn spawn_completed_building(
         ),
         BuildingType::Bridge => unreachable!("Bridge uses use_3d = false path"),
         BuildingType::SoulSpa => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+        BuildingType::OutdoorLamp => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
     };
 
     let building_entity = if use_3d {
@@ -102,6 +103,7 @@ pub(super) fn spawn_completed_building(
                 Vec2::splat(TILE_SIZE * 2.0),
             ),
             BuildingType::SoulSpa => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
+            BuildingType::OutdoorLamp => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
         };
 
         commands
@@ -177,64 +179,75 @@ fn spawn_building_3d_visual(
     is_provisional: bool,
     handles_3d: &Building3dHandles,
 ) {
-    let (mesh, material, height) = match kind {
+    if matches!(kind, BuildingType::Bridge) {
+        return;
+    }
+
+    match kind {
         BuildingType::Wall => {
-            let mat = if is_provisional {
+            let material = if is_provisional {
                 handles_3d.wall_provisional_material.clone()
             } else {
                 handles_3d.wall_material.clone()
             };
-            (handles_3d.wall_mesh.clone(), mat, TILE_SIZE)
+            let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.5, -pos2d.y);
+            let entity = commands
+                .spawn((
+                    Mesh3d(handles_3d.wall_mesh.clone()),
+                    MeshMaterial3d(material),
+                    transform_3d,
+                    handles_3d.render_layers.clone(),
+                    Building3dVisual { owner },
+                    Name::new(format!("Building3dVisual ({:?})", kind)),
+                ))
+                .id();
+            attach_wall_orientation_aid(commands, entity, handles_3d);
         }
-        BuildingType::Door => (
-            handles_3d.door_mesh.clone(),
-            handles_3d.door_material.clone(),
-            TILE_SIZE * 0.5,
-        ),
-        BuildingType::Floor => (
-            handles_3d.floor_mesh.clone(),
-            handles_3d.floor_material.clone(),
-            0.0,
-        ),
-        BuildingType::SandPile | BuildingType::BonePile => (
-            handles_3d.equipment_1x1_mesh.clone(),
-            handles_3d.equipment_material.clone(),
-            TILE_SIZE * 0.6,
-        ),
-        BuildingType::WheelbarrowParking => (
-            handles_3d.equipment_1x1_mesh.clone(),
-            handles_3d.equipment_material.clone(),
-            TILE_SIZE * 0.6,
-        ),
-        BuildingType::Tank | BuildingType::MudMixer | BuildingType::RestArea => (
-            handles_3d.equipment_2x2_mesh.clone(),
-            handles_3d.equipment_material.clone(),
-            TILE_SIZE * 0.8,
-        ),
-        BuildingType::Bridge => return, // Bridge は 2D スプライトのまま（Phase 2 対象外）
-        BuildingType::SoulSpa => (
-            handles_3d.equipment_2x2_mesh.clone(),
-            handles_3d.equipment_material.clone(),
-            TILE_SIZE * 0.8,
-        ),
-    };
-
-    // Floor は XZ 平面に平置き（y=0）、それ以外は高さの中心に配置
-    let center_y = height / 2.0;
-    let transform_3d = Transform::from_xyz(pos2d.x, center_y, -pos2d.y);
-
-    let visual_entity = commands
-        .spawn((
-            Mesh3d(mesh),
-            MeshMaterial3d(material),
-            transform_3d,
-            handles_3d.render_layers.clone(),
-            Building3dVisual { owner },
-            Name::new(format!("Building3dVisual ({:?})", kind)),
-        ))
-        .id();
-
-    if matches!(kind, BuildingType::Wall) {
-        attach_wall_orientation_aid(commands, visual_entity, handles_3d);
+        BuildingType::Door => {
+            let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.25, -pos2d.y);
+            commands.spawn((
+                Mesh3d(handles_3d.door_mesh.clone()),
+                MeshMaterial3d(handles_3d.door_material.clone()),
+                transform_3d,
+                handles_3d.render_layers.clone(),
+                Building3dVisual { owner },
+                Name::new(format!("Building3dVisual ({:?})", kind)),
+            ));
+        }
+        BuildingType::Floor => {
+            let transform_3d = Transform::from_xyz(pos2d.x, 0.0, -pos2d.y);
+            commands.spawn((
+                Mesh3d(handles_3d.floor_mesh.clone()),
+                MeshMaterial3d(handles_3d.floor_material.clone()),
+                transform_3d,
+                handles_3d.render_layers.clone(),
+                Building3dVisual { owner },
+                Name::new(format!("Building3dVisual ({:?})", kind)),
+            ));
+        }
+        BuildingType::SandPile | BuildingType::BonePile | BuildingType::WheelbarrowParking
+        | BuildingType::OutdoorLamp => {
+            let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.3, -pos2d.y);
+            commands.spawn((
+                Mesh3d(handles_3d.equipment_1x1_mesh.clone()),
+                MeshMaterial3d(handles_3d.equipment_material.clone()),
+                transform_3d,
+                handles_3d.render_layers.clone(),
+                Building3dVisual { owner },
+                Name::new(format!("Building3dVisual ({:?})", kind)),
+            ));
+        }
+        BuildingType::Tank | BuildingType::MudMixer | BuildingType::RestArea | BuildingType::SoulSpa => {
+            let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.4, -pos2d.y);
+            commands.spawn((
+                Mesh3d(handles_3d.equipment_2x2_mesh.clone()),
+                MeshMaterial3d(handles_3d.equipment_material.clone()),
+                transform_3d,
+                handles_3d.render_layers.clone(),
+                Building3dVisual { owner },
+                Name::new(format!("Building3dVisual ({:?})", kind)),
+            ));
+        }
+        BuildingType::Bridge => unreachable!(),
     }
 }

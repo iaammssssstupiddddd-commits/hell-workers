@@ -218,7 +218,15 @@ pub struct MutStorageAccess<'w, 's> {
             Option<&'static TaskWorkers>,
         ),
     >,
-    pub floor_tiles: Query<'w, 's, &'static mut hw_jobs::construction::FloorTileBlueprint>,
+    pub floor_tiles: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static mut hw_jobs::construction::FloorTileBlueprint,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
     pub wall_sites: Query<
         'w,
         's,
@@ -228,7 +236,15 @@ pub struct MutStorageAccess<'w, 's> {
             Option<&'static TaskWorkers>,
         ),
     >,
-    pub wall_tiles: Query<'w, 's, &'static mut hw_jobs::construction::WallTileBlueprint>,
+    pub wall_tiles: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static mut hw_jobs::construction::WallTileBlueprint,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
     pub buildings: Query<
         'w,
         's,

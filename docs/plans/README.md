@@ -19,7 +19,8 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [code-quality-refactoring-2026-03-26.md](code-quality-refactoring-2026-03-26.md) | Draft | 大ファイル分割・重複除去（本線 **M1〜M6**、M4 は A/B の 2 ステップ、**M7** は任意） |
+| [rtt-pipeline-refactor-2026-03-29.md](rtt-pipeline-refactor-2026-03-29.md) | Draft | RtT Pipeline Refactor Plan |
+| [task-chain-system-2026-03-29.md](task-chain-system-2026-03-29.md) | Draft | タスクチェーンシステム実装計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -36,6 +37,7 @@
 | [archive/bucket-return-rebuild-plan.md](archive/bucket-return-rebuild-plan.md) | アーカイブ | バケツ返却仕様の再構築計画。 |
 | [archive/cargo-workspace-migration-plan.md](archive/cargo-workspace-migration-plan.md) | アーカイブ | Cargo Workspace 移行計画 |
 | [archive/clippy-allow-cleanup-2026-03-24.md](archive/clippy-allow-cleanup-2026-03-24.md) | アーカイブ | コードベース全体に散在するの計画。 |
+| [archive/code-quality-refactoring-2026-03-26.md](archive/code-quality-refactoring-2026-03-26.md) | アーカイブ | コード品質リファクタリング（大ファイル分割・重複除去） |
 | [archive/codebase-quality-refactor.md](archive/codebase-quality-refactor.md) | アーカイブ | リファクタリング計画: コードベース全体の整理・品質向上 |
 | [archive/command-crate-extraction-plan-2026-03-12.md](archive/command-crate-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/command/の計画。 |
 | [archive/crate-boundary-alignment-plan-2026-03-18.md](archive/crate-boundary-alignment-plan-2026-03-18.md) | アーカイブ | docs/crate-boundaries.mdの計画。 |

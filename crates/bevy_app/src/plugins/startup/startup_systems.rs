@@ -15,9 +15,9 @@ use hw_core::constants::{
     LAYER_2D, LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_MASK, LAYER_3D_SOUL_SHADOW,
     LAYER_OVERLAY, VIEW_HEIGHT, Z_OFFSET, topdown_sun_direction_world,
 };
+use hw_core::quality::QualitySettings;
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 use hw_ui::camera::MainCamera;
-
 use super::asset_catalog::create_game_assets;
 use super::rtt_setup::{self, Camera3dRtt, Camera3dSoulMaskRtt, RttTextures};
 
@@ -43,17 +43,17 @@ pub(super) fn setup(
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
     q_window: Query<&Window, With<PrimaryWindow>>,
+    quality: Res<QualitySettings>,
 ) {
     commands.insert_resource(DirectionalLightShadowMap { size: 4096 });
 
     // --- RtT オフスクリーンテクスチャ生成 ---
+    let fallback_viewport =
+        rtt_setup::RttViewportSize::from_physical_size(1280, 720, quality.rtt_scale());
     let viewport_size = q_window
         .single()
-        .map(rtt_setup::RttViewportSize::from_window)
-        .unwrap_or(rtt_setup::RttViewportSize {
-            width: 1280,
-            height: 720,
-        });
+        .map(|window| rtt_setup::RttViewportSize::from_window(window, *quality))
+        .unwrap_or(fallback_viewport);
     let rtt_handle =
         rtt_setup::create_rtt_texture(viewport_size.width, viewport_size.height, &mut images);
     let soul_mask_handle =

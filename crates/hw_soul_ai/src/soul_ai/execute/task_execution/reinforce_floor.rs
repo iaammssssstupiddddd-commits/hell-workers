@@ -66,7 +66,7 @@ pub fn handle_reinforce_floor_task(
         }
 
         ReinforceFloorPhase::PickingUpBones => {
-            let Ok(tile_blueprint) = ctx.queries.storage.floor_tiles.get(tile_entity) else {
+            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity) else {
                 info!(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
@@ -76,25 +76,39 @@ pub fn handle_reinforce_floor_task(
                 return;
             };
 
-            if matches!(tile_blueprint.state, FloorTileState::ReinforcingReady) {
-                *ctx.task = AssignedTask::ReinforceFloorTile(
-                    crate::soul_ai::execute::task_execution::types::ReinforceFloorTileData {
-                        tile: tile_entity,
-                        site: site_entity,
-                        phase: ReinforceFloorPhase::GoingToTile,
-                    },
-                );
-                ctx.path.waypoints.clear();
-                info!(
-                    "REINFORCE_FLOOR: Soul {:?} material ready, heading to tile {:?}",
-                    ctx.soul_entity, tile_entity
-                );
+            match tile_blueprint.state {
+                FloorTileState::WaitingBones => {
+                    // 素材待ち - 搬入完了を待機
+                }
+                FloorTileState::ReinforcingReady => {
+                    *ctx.task = AssignedTask::ReinforceFloorTile(
+                        crate::soul_ai::execute::task_execution::types::ReinforceFloorTileData {
+                            tile: tile_entity,
+                            site: site_entity,
+                            phase: ReinforceFloorPhase::GoingToTile,
+                        },
+                    );
+                    ctx.path.waypoints.clear();
+                    info!(
+                        "REINFORCE_FLOOR: Soul {:?} material ready, heading to tile {:?}",
+                        ctx.soul_entity, tile_entity
+                    );
+                }
+                _ => {
+                    // 他のソウルが先に作業を開始または完了した → 中断
+                    info!(
+                        "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} state changed unexpectedly in PickingUpBones",
+                        ctx.soul_entity, tile_entity
+                    );
+                    clear_task_and_path(ctx.task, ctx.path);
+                    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                }
             }
         }
 
         ReinforceFloorPhase::GoingToTile => {
             // Get tile position
-            let Ok(tile_blueprint) = ctx.queries.storage.floor_tiles.get(tile_entity) else {
+            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity) else {
                 // Tile disappeared
                 info!(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",
@@ -137,7 +151,7 @@ pub fn handle_reinforce_floor_task(
 
         ReinforceFloorPhase::Reinforcing { progress_bp } => {
             // Get tile and update state
-            let Ok(mut tile_blueprint) = ctx.queries.storage.floor_tiles.get_mut(tile_entity)
+            let Ok((_, mut tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get_mut(tile_entity)
             else {
                 info!(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",

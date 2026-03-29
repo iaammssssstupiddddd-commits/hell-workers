@@ -5,11 +5,11 @@ use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::TaskWorkers;
 use hw_energy::{SoulSpaPhase, SoulSpaSite};
 use hw_jobs::TargetSoulSpaSite;
+use hw_logistics::ResourceType;
 use hw_logistics::transport_request::producer::{
     RequestSyncSpec, collect_all_area_owners, find_owner, sync_construction_requests,
 };
 use hw_logistics::transport_request::{TransportRequest, TransportRequestKind};
-use hw_logistics::ResourceType;
 use hw_world::zones::{AreaBounds, Yard};
 use std::collections::HashMap;
 
@@ -39,8 +39,7 @@ pub fn soul_spa_auto_haul_system(
         return;
     }
 
-    let mut desired_requests: HashMap<(Entity, ResourceType), (Entity, u32, Vec2)> =
-        HashMap::new();
+    let mut desired_requests: HashMap<(Entity, ResourceType), (Entity, u32, Vec2)> = HashMap::new();
 
     for (site_entity, transform, site) in q_sites.iter() {
         if site.phase != SoulSpaPhase::Constructing {

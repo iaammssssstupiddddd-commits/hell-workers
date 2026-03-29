@@ -2,10 +2,12 @@ use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::{
-    LAYER_2D, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT,
-    Z_MAP, Z_MAP_DIRT, Z_MAP_GRASS, Z_MAP_SAND, building_3d_render_layers,
+    LAYER_2D, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT, Z_MAP,
+    Z_MAP_DIRT, Z_MAP_GRASS, Z_MAP_SAND, building_3d_render_layers,
 };
-use hw_world::{SAND_WIDTH, TerrainType, generate_base_terrain_tiles, grid_to_world, world_to_grid};
+use hw_world::{
+    SAND_WIDTH, TerrainType, generate_base_terrain_tiles, grid_to_world, world_to_grid,
+};
 
 use crate::types::*;
 
@@ -97,12 +99,16 @@ impl TestBuilding3dHandles {
         kind: TestBuildingKind,
     ) -> Option<(Handle<Mesh>, Handle<StandardMaterial>, f32)> {
         match kind {
-            TestBuildingKind::Wall => {
-                Some((self.wall_mesh.clone(), self.wall_material.clone(), TILE_SIZE))
-            }
-            TestBuildingKind::Door => {
-                Some((self.door_mesh.clone(), self.door_material.clone(), TILE_SIZE * 0.5))
-            }
+            TestBuildingKind::Wall => Some((
+                self.wall_mesh.clone(),
+                self.wall_material.clone(),
+                TILE_SIZE,
+            )),
+            TestBuildingKind::Door => Some((
+                self.door_mesh.clone(),
+                self.door_material.clone(),
+                TILE_SIZE * 0.5,
+            )),
             TestBuildingKind::Floor => {
                 Some((self.floor_mesh.clone(), self.floor_material.clone(), 0.0))
             }
@@ -213,9 +219,9 @@ pub fn spawn_test_building(
 ) {
     let pos2d = grid_to_world(grid.0, grid.1);
     let z = match kind {
-        TestBuildingKind::Floor
-        | TestBuildingKind::SandPile
-        | TestBuildingKind::BonePile => Z_BUILDING_FLOOR,
+        TestBuildingKind::Floor | TestBuildingKind::SandPile | TestBuildingKind::BonePile => {
+            Z_BUILDING_FLOOR
+        }
         _ => Z_BUILDING_STRUCT,
     };
 
@@ -286,7 +292,9 @@ pub fn update_building_cursor(
     mut q_cursor: CursorQuery,
     mut commands: Commands,
 ) {
-    let Ok((mut tf, mut sprite)) = q_cursor.single_mut() else { return };
+    let Ok((mut tf, mut sprite)) = q_cursor.single_mut() else {
+        return;
+    };
 
     // Soul モード: ゴーストを画面外に退避
     if state.mode != AppMode::Build {
@@ -310,10 +318,7 @@ pub fn update_building_cursor(
         && let Ok(world_pos) = camera.viewport_to_world_2d(cam_tf, cursor_screen)
     {
         let (gx, gy) = world_to_grid(world_pos);
-        state.building_cursor = (
-            gx.clamp(0, MAP_WIDTH - 1),
-            gy.clamp(0, MAP_HEIGHT - 1),
-        );
+        state.building_cursor = (gx.clamp(0, MAP_WIDTH - 1), gy.clamp(0, MAP_HEIGHT - 1));
     }
 
     let grid = state.building_cursor;
@@ -323,10 +328,9 @@ pub fn update_building_cursor(
     if !over_panel && mouse_buttons.just_pressed(MouseButton::Left) {
         if occupied {
             despawn_test_building_at(&mut commands, grid, &q_buildings, &q_building_3d);
-        } else if let (Some(ba), Some(bh)) = (
-            building_assets.as_deref(),
-            building_3d_handles.as_deref(),
-        ) {
+        } else if let (Some(ba), Some(bh)) =
+            (building_assets.as_deref(), building_3d_handles.as_deref())
+        {
             spawn_test_building(&mut commands, state.building_kind, grid, ba, bh);
         }
     }
@@ -369,7 +373,11 @@ pub fn setup_world_map(mut commands: Commands, asset_server: Res<AssetServer>) {
             };
             let pos = grid_to_world(x, y);
             commands.spawn((
-                Sprite { image: texture, custom_size: Some(Vec2::splat(TILE_SIZE)), ..default() },
+                Sprite {
+                    image: texture,
+                    custom_size: Some(Vec2::splat(TILE_SIZE)),
+                    ..default()
+                },
                 Transform::from_xyz(pos.x, pos.y, z),
                 RenderLayers::layer(LAYER_2D),
                 WorldMapTile,

@@ -6,6 +6,8 @@ use bevy::prelude::*;
 
 use hw_core::visual_mirror::building::{BuildingVisualState, MudMixerVisualState};
 use hw_core::visual_mirror::gather::{GatherHighlightMarker, RestAreaVisual};
+use hw_core::visual_mirror::PoweredVisualState;
+use hw_energy::{PowerConsumer, Unpowered};
 
 use crate::model::{Building, Designation, RestArea, Rock, Tree};
 use crate::mud_mixer::MudMixerStorage;
@@ -51,4 +53,26 @@ pub fn on_mud_mixer_storage_added(on: On<Add, MudMixerStorage>, mut commands: Co
     commands
         .entity(on.entity)
         .try_insert(MudMixerVisualState::default());
+}
+
+/// PowerConsumer が追加されたとき PoweredVisualState を付与する（初期値 is_powered=false）。
+/// Unpowered が初期状態で付いているため is_powered は false が正しい初期値。
+pub fn on_power_consumer_visual_added(on: On<Add, PowerConsumer>, mut commands: Commands) {
+    commands
+        .entity(on.entity)
+        .try_insert(PoweredVisualState { is_powered: false });
+}
+
+/// Unpowered が付与されたとき PoweredVisualState を false に更新する。
+pub fn on_unpowered_added(on: On<Add, Unpowered>, mut q: Query<&mut PoweredVisualState>) {
+    if let Ok(mut vis) = q.get_mut(on.entity) {
+        vis.is_powered = false;
+    }
+}
+
+/// Unpowered が除去されたとき PoweredVisualState を true に更新する。
+pub fn on_unpowered_removed(on: On<Remove, Unpowered>, mut q: Query<&mut PoweredVisualState>) {
+    if let Ok(mut vis) = q.get_mut(on.entity) {
+        vis.is_powered = true;
+    }
 }

@@ -64,7 +64,7 @@ pub fn wall_construction_cancellation_system(
 
         let mut site_tiles: Vec<SiteTileSnapshot> = Vec::new();
         for tile_entity in wl_queries.q_entities.iter() {
-            let Ok(tile) = reservation_queries.storage.wall_tiles.get_mut(tile_entity) else {
+            let Ok((_, tile, _)) = reservation_queries.storage.wall_tiles.get_mut(tile_entity) else {
                 continue;
             };
             if tile.parent_site != site_entity {

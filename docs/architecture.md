@@ -181,11 +181,16 @@ Perceive → Update → Decide → Execute
 
 ### RtT テクスチャ管理
 
-`RttTextures`（Resource、`crates/bevy_app/src/plugins/startup/rtt_setup.rs`）が `Handle<Image>` を保持する。
+`RttTextures`（Resource、`crates/bevy_app/src/plugins/startup/rtt_setup.rs`）が `Handle<Image>` を保持し、`RttViewportSize` が現在の RtT 実解像度を保持する。
 
-テクスチャ生成は `create_rtt_texture(width, height, images)` 関数（`rtt_setup.rs`）に切り出されている。起動時は `PrimaryWindow` の物理解像度で生成し、`sync_rtt_texture_size_to_window` が物理解像度の変化を検知したフレームに再生成する（`Rgba8Unorm` / `Rgba8UnormSrgb`）。
+テクスチャ生成は `create_rtt_texture(width, height, images)` 関数（`rtt_setup.rs`）に切り出されている。起動時は `PrimaryWindow` の物理解像度と `hw_core::quality::QualitySettings` の `rtt_scale()` を掛けたサイズで生成し、`sync_rtt_texture_size_to_window_and_quality` がウィンドウの物理解像度変化または品質変更を検知したフレームに、scene RtT / soul mask RtT を同時再生成する（`Rgba8Unorm` / `Rgba8UnormSrgb`）。
 
-`WgpuFeatures::CLIP_DISTANCES` は `main.rs` の `WgpuSettings` で有効化済み（MS-P3-Pre-A）。`SectionMaterial` のシェーダークリップ平面（`section_material.wgsl`）に必要。
+- `QualitySettings.rtt` は `High / Medium / Low` を持ち、係数は `1.0 / 0.75 / 0.5`。
+- `RttViewportSize.pixel_size()` は shader 側へ渡す `1 / texture_size` を返し、logical な表示サイズではなく実際の RtT 解像度を基準にする。
+
+`WgpuFeatures::CLIP_DISTANCES` は `main.rs` の `WgpuSettings` で有効化済み（MS-P3-Pre-A）。ただし現在の `SectionMaterial` 実装は runtime 実機検証の結果 `clip_distances` を使わず、fragment `discard` ベースの one-sided slab クリップを採用している。
+
+`hw_visual::SectionMaterial` / `SectionCut` は現在 `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` で実装している。lighting / shadow / prepass は `StandardMaterial` 側を維持し、section clip だけを extension shader と prepass shader で追加する構成である。`SectionCut.position` は `MainCamera` 中心のワールド位置、`SectionCut.normal` は矢視方向、`SectionCut.thickness` はその切断線から奥側へ残すスラブ幅として扱う。
 
 ### Camera2d ↔ Camera3d 同期
 
@@ -227,7 +232,7 @@ Perceive → Update → Decide → Execute
 - TopDown の太陽方向は `hw_core::constants::topdown_sun_direction_world()` を単一の真実とし、検証用 `DirectionalLight` と `CharacterMaterial` の body shader の両方が同じ方向を使う。現在は画面手前側の壁面が完全な日陰にならないよう、真上寄りではなく前方寄りの斜光を採用している。
 - Bevy 0.18 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 `DirectionalLight` は caster/receiver 専用 layer に加えて `LAYER_3D` も持ち、`Camera3dRtt` 視点で light 自体が有効になるようにしている。
 
-`sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は `RttTextures` の変化を検知し、`Camera3dRtt.target` / `Camera3dSoulMaskRtt.target` と `RttCompositeMaterial` の参照テクスチャを同時に更新する。RtT テクスチャ自体は物理解像度で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`sync_rtt_texture_size_to_window` と `chain` で登録されているため、ウィンドウサイズ変更フレーム内で再生成後のテクスチャへ差し替わる。
+`sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は `RttTextures` と `RttViewportSize` の変化を検知し、`Camera3dRtt.target` / `Camera3dSoulMaskRtt.target` と `RttCompositeMaterial` の参照テクスチャを同時に更新する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttViewportSize` の実サイズから再計算し、品質スケール時でも Soul silhouette 合成がずれないようにしている。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ変更フレームや品質変更フレーム内で再生成後のテクスチャへ差し替わる。
 
 ### キャラクター表示（Soul GLB + Familiar 2D 前面表示）
 
@@ -239,7 +244,8 @@ Perceive → Update → Decide → Execute
 - `SoulShadowProxy3d` は shadow caster 専用の複製 root で、通常の Soul 表示とは分離して同期する。表示側 `mesh_body` / `mesh_face` には `NotShadowCaster` を付ける。
 - shadow proxy 側は `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW])` に所属し、`SoulShadowMaterial` を使って main pass では `discard`、prepass / shadow pass では depth のみを書く。Bevy 0.18 の shadow queue は `camera_layers ∩ mesh_layers` を満たさない caster を落とすため、shadow 専用 layer だけでは参加できない。main pass 側の不可視化は layer 分離ではなく material 側で行う。
 - shadow proxy root には表示用 Soul より前に起こした回転を入れ、影だけをより自然な upright silhouette に寄せる。face mesh も shadow proxy 側では不可視・非寄与にしている。
-- 仮 wall / floor / door / equipment 用 `StandardMaterial` は shadow receiver として働くように `unlit = false` の lit material にしている。見た目の破綻を避けるため、roughness を高く、reflectance を 0 に寄せている。
+- 現在の placeholder consumer では `Wall` / `ProvisionalWall` のみ `SectionMaterial` を使い、`floor` / `door` / `equipment` は引き続き `StandardMaterial` を使う。full migration は後段の `MS-3-5` で行う。
+- section clip は現在 `discard` ベースのため断面キャップを生成しない。壁 volume の途中で切ると切断面の蓋は作られず、内部を覗き込むような見え方になる。これは `section-material-proposal` の「方針 C: 何もしない」に相当し、断面キャップ方針は将来実装で確定する。
 - `hw_visual::CharacterMaterial` と `assets/shaders/character_material.wgsl` が Soul 用 custom material 経路を提供し、`AlphaMode::Blend` の透過付き描画を行う。現段階では section 連動や表情状態切り替えはまだ入れていない。
 - `apply_soul_gltf_render_layers_on_ready` が `SceneInstanceReady` を受けて Soul GLB の子孫へ `RenderLayers::layer(LAYER_3D)` を付与し、`mesh_body` / `mesh_face` の両方を `CharacterMaterial` へ差し替える。
 - `apply_soul_mask_gltf_render_layers_on_ready` が `SoulMaskProxy3d` の子孫へ `RenderLayers::layer(LAYER_3D_SOUL_MASK)` を付与し、すべてのメッシュを `SoulMaskMaterial` に差し替える。mask ルートは最終色を描かず、輪郭抽出専用の白単色 RtT だけを生成する。
@@ -269,6 +275,7 @@ Perceive → Update → Decide → Execute
 | 操作 | 方法 |
 |:---|:---|
 | F3 キー | `render3d_toggle_system`（`plugins/input.rs`）が `Render3dVisible.0` を反転 |
+| F4 キー | `rtt_quality_cycle_system`（`plugins/input.rs`）が `QualitySettings.rtt` を `High → Medium → Low` で循環 |
 | Dev ボタン | TopLeft パネルの「3D ON / 3D OFF」ボタン（`interface/ui/dev_panel.rs`）|
 
 `apply_render3d_visibility_system`（`plugins/visual.rs`、`GameSystemSet::Visual`）が `Render3dVisible` 変更を検知し、

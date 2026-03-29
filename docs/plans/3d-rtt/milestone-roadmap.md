@@ -356,36 +356,45 @@
 
 ### MS-3-2: RtT WindowResized + 品質スケール
 
-> **依存**: MS-P3-Pre-B 完了・`QualitySettings` リソース存在
+> **依存**: MS-P3-Pre-B 完了
 
 - **やること**:
-  1. `systems/visual/rtt_resize.rs` を新規作成（`on_window_resized`・`on_quality_changed`・共通ヘルパー `recreate_rtt`）
-  2. `hw_core/src/quality.rs` に `rtt_scale()` メソッドを追加（高=1.0・中=0.75・低=0.5）
-- **変更ファイル**: `systems/visual/rtt_resize.rs`（新規）、`hw_core/src/quality.rs`
+  1. `hw_core::quality::QualitySettings` を追加し、`High / Medium / Low` の `rtt_scale()` を定義する
+  2. `plugins/startup/rtt_setup.rs` に scene RtT / soul mask RtT の共通再生成経路を集約する
+  3. `plugins/startup/rtt_composite.rs` で `pixel_size` を RtT 実解像度基準へ切り替える
+  4. dev 用に `F4` で RtT 品質を循環できるようにする
+- **変更ファイル**: `hw_core/src/quality.rs`, `plugins/startup/rtt_setup.rs`, `plugins/startup/rtt_composite.rs`, `plugins/startup/startup_systems.rs`, `plugins/input.rs`
 - **完了条件**:
-  - [ ] `cargo check` ゼロエラー
-  - [ ] ウィンドウリサイズ時に建物・キャラクターの描画が追従する（目視）
-  - [ ] 品質設定変更時に RtT 解像度が変わる（目視）
-- **ステータス**: [ ] 未着手
+  - [x] `cargo check` ゼロエラー
+  - [x] `cargo clippy --workspace -- -D warnings`
+  - [x] ウィンドウリサイズ時に建物・キャラクターの描画が追従する（目視）
+  - [x] 品質設定変更時に RtT 解像度が変わる（目視）
+- **ステータス**: [x] 完了（window resize / F4 品質切替の目視確認まで完了）
 
 ---
 
-### MS-3-3: SectionMaterial 基盤（MS-Section-A / 将来実装）
+### MS-3-3: SectionMaterial 基盤（MS-Section-A）
 
 > **依存**: MS-P3-Pre-A 完了（`WgpuFeatures::CLIP_DISTANCES` 確認済みであること）
 
 - **やること**:
-  1. `hw_visual/src/material/section_material.rs` を新規作成（`SectionMaterial`・`SectionCut`）
-  2. `assets/shaders/section_material.wgsl` を新規作成（クリップ平面 + 施工進捗クリップの完全版 WGSL）
-  3. `MaterialPlugin::<SectionMaterial>` を `HwVisualPlugin` に追加
-  4. `sync_section_cut_normal` システムを実装・登録
-  5. `sync_section_cut_to_materials` システムを実装・登録
-- **変更ファイル**: `hw_visual/src/material/section_material.rs`（新規）、`assets/shaders/section_material.wgsl`（新規）、`hw_visual/src/lib.rs`、`systems/visual/camera_sync.rs`
+  1. [x] `hw_visual/src/material/section_material.rs` を追加（`SectionMaterial`・`SectionCut`）
+  2. [x] `assets/shaders/section_material.wgsl` を接続
+  3. [x] isolated probe 用の最小 runtime 接続を入れる
+  4. [x] `sync_section_cut_normal` / `sync_section_cut_to_materials` を isolated probe で検証する
+  5. [x] 単純な Cuboid probe で目視確認する
+  6. [x] `Wall` / `ProvisionalWall` を first consumer として接続し、lighting / shadow を維持したまま切断できることを確認する
+- **変更ファイル**: `hw_visual/src/material/section_material.rs`, `assets/shaders/section_material.wgsl`, `assets/shaders/section_material_prepass.wgsl`, `hw_visual/src/lib.rs`, `systems/visual/section_cut.rs`, `plugins/visual.rs`, `plugins/startup/visual_handles.rs`, `building_completion/spawn.rs`, `wall_construction/phase_transition.rs`, `systems/visual/building3d_cleanup.rs`
 - **完了条件**:
-  - [ ] `cargo check` ゼロエラー
-  - [ ] `SectionCut.active = true` のとき Cuboid がスラブ外でクリップされる（目視）
-  - [ ] `SectionCut.active = false` のとき全体が正常描画される（目視）
-- **ステータス**: [ ] 将来実装
+  - [x] `cargo check` ゼロエラー
+  - [x] `cargo clippy --workspace -- -D warnings`
+  - [x] `SectionCut.active = true` のとき Cuboid がスラブ外でクリップされる（目視）
+  - [x] `SectionCut.active = false` のとき全体が正常描画される（目視）
+- **ステータス**: [x] 基盤成立・wall 系 first consumer 接続済み
+- **補足**:
+  - 現行実装は `clip_distances` ではなく fragment `discard` ベースの one-sided slab
+  - `SectionMaterial` は `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` で、lighting / shadow / prepass は `StandardMaterial` 側を維持
+  - 断面キャップは未実装で、途中切断時に内部を覗く見え方は proposal の「方針 C」に相当
 
 ---
 
@@ -411,10 +420,11 @@
 > **依存**: MS-3-3 完了・Phase 3 GLB 取込完了
 
 - **やること**:
-  1. `visual_handles.rs` の `Building3dHandles` を `SectionMaterial` ベースに変更
-  2. `building_completion/spawn.rs` の全 `MeshMaterial3d<StandardMaterial>` を `MeshMaterial3d<SectionMaterial>` に置き換え
+  1. `visual_handles.rs` の `Building3dHandles` を全 BuildingType で `SectionMaterial` ベースにそろえる
+  2. `building_completion/spawn.rs` の残る `MeshMaterial3d<StandardMaterial>` を `MeshMaterial3d<SectionMaterial>` に置き換える
   3. 設備別 visual system（`tank.rs`・`mud_mixer.rs` 等）の同様置き換え
 - **変更ファイル**: `hw_visual/src/visual_handles.rs`、`building_completion/spawn.rs`、`systems/visual/tank.rs`、`systems/visual/mud_mixer.rs`
+- **補足**: `Wall` / `ProvisionalWall` は pilot として移行済み。`floor` / `door` / `equipment` が未移行。
 - **完了条件**:
   - [ ] `cargo check` ゼロエラー
   - [ ] 矢視モードで切断線設定時に全 BuildingType のスラブ外部分がクリップされる（目視）
@@ -573,13 +583,11 @@ MS-WFC-1 → MS-WFC-2 → MS-WFC-3 → MS-WFC-3.5  (独立)
 | P0（データ確定） | MS-P3-Pre-C | Camera3d 角度未確定のまま GLB 生成パイプラインを進められない |
 | P1（基盤整備） | MS-P3-Pre-B | Phase 3 参照箇所が増える前に一元化しておく必要がある |
 | P1（PoC） | MS-P3-Pre-D | Character GLB + face atlas 表示確認。MS-3-1 の前提 |
-| P1（本実装） | MS-3-2 | RtT 解像度と品質スケール整備。現行 Phase 3 の次タスク |
+| P1（本実装） | MS-3-4〜MS-3-9 | Section 系を後ろ倒しした前提で、Phase 3 後半の主線 |
 | P4（将来実装） | MS-3-3 | SectionMaterial / section clip は将来フェーズへ延期 |
-| P2（キャラクター） | MS-3-Char-A | M-3-1 完了後の次タスク |
-| P2（キャラクター） | MS-3-Char-A | AnimationGraph + タスク連動。MS-3-1 完了後すぐ着手 |
-| P2（キャラクター） | MS-3-Char-B | Soul の P1 クリップ接続 + face atlas 状態連動。MS-3-Char-A 完了後 |
+| P2（完了済み） | MS-3-Char-A | AnimationGraph + タスク連動。完了済み |
+| P2（完了済み） | MS-3-Char-B | Soul の P1 クリップ接続 + face atlas 状態連動。完了済み |
 | P3（方針確定） | MS-3-Fam-R | Familiar を Phase 3 では 2D 前面表示・影なしで扱い、多層階の可視ルールを後段へ送る |
-| P2（本実装） | MS-3-4〜MS-3-9 | Phase 3 中盤〜後半の順次実装 |
 | 独立 | MS-WFC-1〜3 | メインルートとは独立。地形改善を先行させることも可 |
 
 ---

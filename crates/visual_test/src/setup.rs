@@ -8,8 +8,8 @@ use bevy::sprite_render::MeshMaterial2d;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::{
     LAYER_2D, LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_MASK, LAYER_3D_SOUL_SHADOW,
-    LAYER_OVERLAY, VIEW_HEIGHT, Z_OFFSET, Z_RTT_COMPOSITE,
-    topdown_rtt_vertical_compensation, topdown_sun_direction_world,
+    LAYER_OVERLAY, VIEW_HEIGHT, Z_OFFSET, Z_RTT_COMPOSITE, topdown_rtt_vertical_compensation,
+    topdown_sun_direction_world,
 };
 use hw_visual::{CharacterMaterial, SoulMaskMaterial, SoulShadowMaterial};
 
@@ -52,8 +52,8 @@ pub fn setup_scene(
         Some(TextureFormat::Rgba8UnormSrgb),
     ));
 
-    let cam3d_transform = Transform::from_xyz(0.0, VIEW_HEIGHT, Z_OFFSET)
-        .looking_at(Vec3::ZERO, Vec3::NEG_Z);
+    let cam3d_transform =
+        Transform::from_xyz(0.0, VIEW_HEIGHT, Z_OFFSET).looking_at(Vec3::ZERO, Vec3::NEG_Z);
 
     // --- Camera3d (RtT — ソウル本体/顔) ---
     commands.spawn((
@@ -63,7 +63,10 @@ pub fn setup_scene(
             clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
             ..default()
         },
-        AmbientLight { brightness: 500.0, ..default() },
+        AmbientLight {
+            brightness: 500.0,
+            ..default()
+        },
         Projection::Orthographic(OrthographicProjection::default_3d()),
         cam3d_transform,
         RenderTarget::Image(rtt_handle.clone().into()),
@@ -89,7 +92,10 @@ pub fn setup_scene(
     // --- Camera2d (メイン: パン + ズーム) ---
     commands.spawn((
         Camera2d,
-        Camera { order: 0, ..default() },
+        Camera {
+            order: 0,
+            ..default()
+        },
         RenderLayers::layer(LAYER_2D),
         TestMainCamera,
         PanCamera {
@@ -104,7 +110,11 @@ pub fn setup_scene(
     // --- Camera2d (オーバーレイ: 合成メッシュ + UI) ---
     commands.spawn((
         Camera2d,
-        Camera { order: 1, clear_color: ClearColorConfig::None, ..default() },
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
         RenderLayers::layer(LAYER_OVERLAY),
     ));
 
@@ -128,8 +138,11 @@ pub fn setup_scene(
     commands.spawn((
         Mesh2d(mesh),
         MeshMaterial2d(composite_mat),
-        Transform::from_xyz(0.0, 0.0, Z_RTT_COMPOSITE)
-            .with_scale(Vec3::new(win_size.x, comp_height, 1.0)),
+        Transform::from_xyz(0.0, 0.0, Z_RTT_COMPOSITE).with_scale(Vec3::new(
+            win_size.x,
+            comp_height,
+            1.0,
+        )),
         RenderLayers::layer(LAYER_OVERLAY),
         LocalRttComposite,
     ));
@@ -140,7 +153,11 @@ pub fn setup_scene(
     let gltf_handle = asset_server.load("models/characters/soul.glb");
     let face_atlas = asset_server.load("textures/character/soul_face_atlas.png");
     let white_pixel = images.add(Image::new(
-        bevy::render::render_resource::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+        bevy::render::render_resource::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
         bevy::render::render_resource::TextureDimension::D2,
         vec![255, 255, 255, 255],
         TextureFormat::Rgba8UnormSrgb,
@@ -153,7 +170,11 @@ pub fn setup_scene(
     // --- 指向性ライト (本番相当) ---
     let sun_dir = topdown_sun_direction_world();
     commands.spawn((
-        DirectionalLight { shadows_enabled: true, illuminance: 12_000.0, ..default() },
+        DirectionalLight {
+            shadows_enabled: true,
+            illuminance: 12_000.0,
+            ..default()
+        },
         Transform::from_translation(sun_dir * 360.0).looking_at(Vec3::ZERO, Vec3::Y),
         CascadeShadowConfigBuilder {
             first_cascade_far_bound: 120.0,
@@ -209,13 +230,23 @@ const DIM_COL: Color = Color::Srgba(bevy::color::Srgba::new(0.65, 0.65, 0.70, 1.
 const PANEL_BG: Color = Color::Srgba(bevy::color::Srgba::new(0.04, 0.04, 0.04, 0.82));
 
 /// ボタン本体スポーン。w は Val::Percent(49.0) か Val::Percent(100.0) を使う。
-fn spawn_btn(p: &mut ChildSpawnerCommands, a: VisualTestAction, label: &str, w: Val, font: &Handle<Font>) {
+fn spawn_btn(
+    p: &mut ChildSpawnerCommands,
+    a: VisualTestAction,
+    label: &str,
+    w: Val,
+    font: &Handle<Font>,
+) {
     p.spawn((
         Button,
         Node {
             width: w,
             height: Val::Px(BTN_H),
-            margin: UiRect { right: Val::Px(BTN_GAP), bottom: Val::Px(BTN_GAP), ..default() },
+            margin: UiRect {
+                right: Val::Px(BTN_GAP),
+                bottom: Val::Px(BTN_GAP),
+                ..default()
+            },
             justify_content: JustifyContent::Center,
             align_items: AlignItems::Center,
             border_radius: BorderRadius::all(Val::Px(3.0)),
@@ -227,7 +258,11 @@ fn spawn_btn(p: &mut ChildSpawnerCommands, a: VisualTestAction, label: &str, w: 
     .with_children(|b| {
         b.spawn((
             Text::new(label),
-            TextFont { font: font.clone(), font_size: SFONT, ..default() },
+            TextFont {
+                font: font.clone(),
+                font_size: SFONT,
+                ..default()
+            },
             TextColor(Color::srgb(0.9, 0.9, 0.92)),
         ));
     });
@@ -252,7 +287,11 @@ fn small_btn(p: &mut ChildSpawnerCommands, a: VisualTestAction, label: &str, fon
     .with_children(|b| {
         b.spawn((
             Text::new(label),
-            TextFont { font: font.clone(), font_size: 13.0, ..default() },
+            TextFont {
+                font: font.clone(),
+                font_size: 13.0,
+                ..default()
+            },
             TextColor(Color::srgb(0.9, 0.9, 0.92)),
         ));
     });
@@ -262,31 +301,57 @@ fn small_btn(p: &mut ChildSpawnerCommands, a: VisualTestAction, label: &str, fon
 fn sec_label(p: &mut ChildSpawnerCommands, text: &str, font: &Handle<Font>) {
     p.spawn((
         Text::new(text),
-        TextFont { font: font.clone(), font_size: 10.0, ..default() },
+        TextFont {
+            font: font.clone(),
+            font_size: 10.0,
+            ..default()
+        },
         TextColor(SEC_COL),
         Node {
             width: Val::Percent(100.0),
-            margin: UiRect { top: Val::Px(8.0), bottom: Val::Px(3.0), ..default() },
+            margin: UiRect {
+                top: Val::Px(8.0),
+                bottom: Val::Px(3.0),
+                ..default()
+            },
             ..default()
         },
     ));
 }
 
 /// 動的値テキスト（update_dynamic_texts で更新）。
-fn val_text(p: &mut ChildSpawnerCommands, initial: &str, kind: DynamicTextKind, font: &Handle<Font>) {
+fn val_text(
+    p: &mut ChildSpawnerCommands,
+    initial: &str,
+    kind: DynamicTextKind,
+    font: &Handle<Font>,
+) {
     p.spawn((
         Text::new(initial),
-        TextFont { font: font.clone(), font_size: SFONT, ..default() },
+        TextFont {
+            font: font.clone(),
+            font_size: SFONT,
+            ..default()
+        },
         TextColor(VAL_COL),
-        Node { min_width: Val::Px(36.0), justify_content: JustifyContent::Center, ..default() },
+        Node {
+            min_width: Val::Px(36.0),
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
         kind,
     ));
 }
 
 /// ラベル + [−] 値 [+] の横並び行。幅 100% で flex-wrap 親内に収まる。
 fn param_row(
-    p: &mut ChildSpawnerCommands, label: &str, initial: &str, kind: DynamicTextKind,
-    font: &Handle<Font>, down: VisualTestAction, up: VisualTestAction,
+    p: &mut ChildSpawnerCommands,
+    label: &str,
+    initial: &str,
+    kind: DynamicTextKind,
+    font: &Handle<Font>,
+    down: VisualTestAction,
+    up: VisualTestAction,
 ) {
     p.spawn(Node {
         flex_direction: FlexDirection::Row,
@@ -298,9 +363,16 @@ fn param_row(
     .with_children(|row| {
         row.spawn((
             Text::new(label),
-            TextFont { font: font.clone(), font_size: SFONT, ..default() },
+            TextFont {
+                font: font.clone(),
+                font_size: SFONT,
+                ..default()
+            },
             TextColor(DIM_COL),
-            Node { min_width: Val::Px(50.0), ..default() },
+            Node {
+                min_width: Val::Px(50.0),
+                ..default()
+            },
         ));
         small_btn(row, down, "−", font);
         val_text(row, initial, kind, font);
@@ -311,16 +383,41 @@ fn param_row(
 fn spawn_header(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
     p.spawn((
         Text::new("Visual Test"),
-        TextFont { font: font.clone(), font_size: 14.0, weight: FontWeight::BOLD, ..default() },
+        TextFont {
+            font: font.clone(),
+            font_size: 14.0,
+            weight: FontWeight::BOLD,
+            ..default()
+        },
         TextColor(Color::WHITE),
-        Node { margin: UiRect::bottom(Val::Px(6.0)), width: Val::Percent(100.0), ..default() },
+        Node {
+            margin: UiRect::bottom(Val::Px(6.0)),
+            width: Val::Percent(100.0),
+            ..default()
+        },
     ));
     // モード切替ボタン (2 列)
-    p.spawn(Node { flex_direction: FlexDirection::Row, width: Val::Percent(100.0), ..default() })
-        .with_children(|row| {
-            spawn_btn(row, VisualTestAction::SetMode(AppMode::Soul), "SOUL", Val::Percent(49.0), font);
-            spawn_btn(row, VisualTestAction::SetMode(AppMode::Build), "BUILD", Val::Percent(49.0), font);
-        });
+    p.spawn(Node {
+        flex_direction: FlexDirection::Row,
+        width: Val::Percent(100.0),
+        ..default()
+    })
+    .with_children(|row| {
+        spawn_btn(
+            row,
+            VisualTestAction::SetMode(AppMode::Soul),
+            "SOUL",
+            Val::Percent(49.0),
+            font,
+        );
+        spawn_btn(
+            row,
+            VisualTestAction::SetMode(AppMode::Build),
+            "BUILD",
+            Val::Percent(49.0),
+            font,
+        );
+    });
 }
 
 fn spawn_camera_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
@@ -344,7 +441,11 @@ fn spawn_camera_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
     .with_children(|b| {
         b.spawn((
             Text::new("TopDown  [V]"),
-            TextFont { font: font.clone(), font_size: SFONT, ..default() },
+            TextFont {
+                font: font.clone(),
+                font_size: SFONT,
+                ..default()
+            },
             TextColor(Color::srgb(0.9, 0.9, 0.92)),
             DynamicTextKind::ViewDir,
         ));
@@ -360,9 +461,16 @@ fn spawn_camera_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
     .with_children(|row| {
         row.spawn((
             Text::new("H:"),
-            TextFont { font: font.clone(), font_size: SFONT, ..default() },
+            TextFont {
+                font: font.clone(),
+                font_size: SFONT,
+                ..default()
+            },
             TextColor(DIM_COL),
-            Node { min_width: Val::Px(22.0), ..default() },
+            Node {
+                min_width: Val::Px(22.0),
+                ..default()
+            },
         ));
         small_btn(row, VisualTestAction::HeightDown, "−", font);
         val_text(row, "150", DynamicTextKind::Height, font);
@@ -380,9 +488,16 @@ fn spawn_camera_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
     .with_children(|row| {
         row.spawn((
             Text::new("Off:"),
-            TextFont { font: font.clone(), font_size: SFONT, ..default() },
+            TextFont {
+                font: font.clone(),
+                font_size: SFONT,
+                ..default()
+            },
             TextColor(DIM_COL),
-            Node { min_width: Val::Px(22.0), ..default() },
+            Node {
+                min_width: Val::Px(22.0),
+                ..default()
+            },
         ));
         small_btn(row, VisualTestAction::OffsetDown, "−", font);
         val_text(row, "90", DynamicTextKind::Offset, font);
@@ -393,37 +508,120 @@ fn spawn_camera_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
 /// Soul モード用セクション（SoulSectionNode でモード切替時に show/hide）。
 fn spawn_soul_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
     p.spawn((
-        Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, width: Val::Percent(100.0), ..default() },
+        Node {
+            flex_direction: FlexDirection::Row,
+            flex_wrap: FlexWrap::Wrap,
+            width: Val::Percent(100.0),
+            ..default()
+        },
         SoulSectionNode,
     ))
     .with_children(|s| {
         sec_label(s, "─ Soul ─", font);
-        spawn_btn(s, VisualTestAction::AddSoul, "+Soul [=]", Val::Percent(49.0), font);
-        spawn_btn(s, VisualTestAction::RemoveSoul, "-Soul [-]", Val::Percent(49.0), font);
-        spawn_btn(s, VisualTestAction::SelectNextSoul, "Select [Tab]", Val::Percent(49.0), font);
-        spawn_btn(s, VisualTestAction::ResetSoulPos, "Reset [R]", Val::Percent(49.0), font);
+        spawn_btn(
+            s,
+            VisualTestAction::AddSoul,
+            "+Soul [=]",
+            Val::Percent(49.0),
+            font,
+        );
+        spawn_btn(
+            s,
+            VisualTestAction::RemoveSoul,
+            "-Soul [-]",
+            Val::Percent(49.0),
+            font,
+        );
+        spawn_btn(
+            s,
+            VisualTestAction::SelectNextSoul,
+            "Select [Tab]",
+            Val::Percent(49.0),
+            font,
+        );
+        spawn_btn(
+            s,
+            VisualTestAction::ResetSoulPos,
+            "Reset [R]",
+            Val::Percent(49.0),
+            font,
+        );
 
         sec_label(s, "─ 表情 ─", font);
         for expr in FaceExpression::ALL {
-            spawn_btn(s, VisualTestAction::SetFace(expr), expr.label(), Val::Percent(49.0), font);
+            spawn_btn(
+                s,
+                VisualTestAction::SetFace(expr),
+                expr.label(),
+                Val::Percent(49.0),
+                font,
+            );
         }
-        spawn_btn(s, VisualTestAction::SetFaceAll, "全表情 [G]", Val::Percent(100.0), font);
+        spawn_btn(
+            s,
+            VisualTestAction::SetFaceAll,
+            "全表情 [G]",
+            Val::Percent(100.0),
+            font,
+        );
 
         sec_label(s, "─ アニメーション ─", font);
         for (i, &name) in ANIM_CLIP_NAMES.iter().enumerate() {
-            spawn_btn(s, VisualTestAction::SetAnimation(i), name, Val::Percent(49.0), font);
+            spawn_btn(
+                s,
+                VisualTestAction::SetAnimation(i),
+                name,
+                Val::Percent(49.0),
+                font,
+            );
         }
 
         sec_label(s, "─ モーション ─", font);
         for mode in MotionMode::ALL {
-            spawn_btn(s, VisualTestAction::SetMotion(mode), mode.label(), Val::Percent(49.0), font);
+            spawn_btn(
+                s,
+                VisualTestAction::SetMotion(mode),
+                mode.label(),
+                Val::Percent(49.0),
+                font,
+            );
         }
 
         sec_label(s, "─ シェーダー ─", font);
-        param_row(s, "Ghost:", "1.00", DynamicTextKind::Ghost, font, VisualTestAction::GhostDown, VisualTestAction::GhostUp);
-        param_row(s, "Rim:  ", "0.28", DynamicTextKind::Rim, font, VisualTestAction::RimDown, VisualTestAction::RimUp);
-        param_row(s, "Post: ", "4.0", DynamicTextKind::Posterize, font, VisualTestAction::PosterizeDown, VisualTestAction::PosterizeUp);
-        spawn_btn(s, VisualTestAction::ResetShader, "Reset Shader [P]", Val::Percent(100.0), font);
+        param_row(
+            s,
+            "Ghost:",
+            "1.00",
+            DynamicTextKind::Ghost,
+            font,
+            VisualTestAction::GhostDown,
+            VisualTestAction::GhostUp,
+        );
+        param_row(
+            s,
+            "Rim:  ",
+            "0.28",
+            DynamicTextKind::Rim,
+            font,
+            VisualTestAction::RimDown,
+            VisualTestAction::RimUp,
+        );
+        param_row(
+            s,
+            "Post: ",
+            "4.0",
+            DynamicTextKind::Posterize,
+            font,
+            VisualTestAction::PosterizeDown,
+            VisualTestAction::PosterizeUp,
+        );
+        spawn_btn(
+            s,
+            VisualTestAction::ResetShader,
+            "Reset Shader [P]",
+            Val::Percent(100.0),
+            font,
+        );
     });
 }
 
@@ -442,19 +640,45 @@ fn spawn_build_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
     .with_children(|s| {
         sec_label(s, "─ 建築種別 ─", font);
         for kind in TestBuildingKind::ALL {
-            spawn_btn(s, VisualTestAction::SetBuildingKind(kind), kind.label(), Val::Percent(49.0), font);
+            spawn_btn(
+                s,
+                VisualTestAction::SetBuildingKind(kind),
+                kind.label(),
+                Val::Percent(49.0),
+                font,
+            );
         }
 
         sec_label(s, "─ 配置位置 ─", font);
         s.spawn((
             Text::new("(50, 50)"),
-            TextFont { font: font.clone(), font_size: SFONT, ..default() },
+            TextFont {
+                font: font.clone(),
+                font_size: SFONT,
+                ..default()
+            },
             TextColor(VAL_COL),
-            Node { width: Val::Percent(100.0), margin: UiRect::bottom(Val::Px(4.0)), ..default() },
+            Node {
+                width: Val::Percent(100.0),
+                margin: UiRect::bottom(Val::Px(4.0)),
+                ..default()
+            },
             DynamicTextKind::CursorPos,
         ));
-        spawn_btn(s, VisualTestAction::PlaceOrRemove, "配置/削除 [Enter]", Val::Percent(100.0), font);
-        spawn_btn(s, VisualTestAction::RemoveAllBuildings, "全削除 [Del]", Val::Percent(100.0), font);
+        spawn_btn(
+            s,
+            VisualTestAction::PlaceOrRemove,
+            "配置/削除 [Enter]",
+            Val::Percent(100.0),
+            font,
+        );
+        spawn_btn(
+            s,
+            VisualTestAction::RemoveAllBuildings,
+            "全削除 [Del]",
+            Val::Percent(100.0),
+            font,
+        );
     });
 }
 
@@ -485,7 +709,11 @@ fn spawn_menu_ui(commands: &mut Commands, font: Handle<Font>) {
 
     commands.spawn((
         Text::new("[H] メニュー表示"),
-        TextFont { font, font_size: 13.0, ..default() },
+        TextFont {
+            font,
+            font_size: 13.0,
+            ..default()
+        },
         TextColor(Color::srgba(1.0, 1.0, 1.0, 0.55)),
         Node {
             position_type: PositionType::Absolute,

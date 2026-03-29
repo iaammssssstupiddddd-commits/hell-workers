@@ -77,7 +77,7 @@ pub fn floor_construction_cancellation_system(
 
         let mut site_tiles: Vec<SiteTileSnapshot> = Vec::new();
         for entity in fl_queries.q_entities.iter() {
-            let Ok(tile) = reservation_queries.storage.floor_tiles.get_mut(entity) else {
+            let Ok((_, tile, _)) = reservation_queries.storage.floor_tiles.get_mut(entity) else {
                 continue;
             };
             if tile.parent_site != site_entity {

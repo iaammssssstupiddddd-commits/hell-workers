@@ -207,7 +207,7 @@ pub fn handle_coat_wall_task(
             }
         }
         CoatWallPhase::PickingUpMud => {
-            let Ok(tile_blueprint) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
+            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
                 cancel_coat_wall_task(ctx, tile_entity, commands, "tile gone");
                 return;
             };
@@ -215,21 +215,28 @@ pub fn handle_coat_wall_task(
                 cancel_coat_wall_task(ctx, tile_entity, commands, "spawned wall missing");
                 return;
             };
-            if !matches!(tile_blueprint.state, WallTileState::CoatingReady) {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "tile not ready");
-                return;
-            }
 
-            *ctx.task = AssignedTask::CoatWall(CoatWallData {
-                tile: tile_entity,
-                site: site_entity,
-                wall: actual_wall,
-                phase: CoatWallPhase::GoingToTile,
-            });
-            ctx.path.waypoints.clear();
+            match tile_blueprint.state {
+                WallTileState::WaitingMud => {
+                    // 素材待ち - 搬入完了を待機
+                }
+                WallTileState::CoatingReady => {
+                    *ctx.task = AssignedTask::CoatWall(CoatWallData {
+                        tile: tile_entity,
+                        site: site_entity,
+                        wall: actual_wall,
+                        phase: CoatWallPhase::GoingToTile,
+                    });
+                    ctx.path.waypoints.clear();
+                }
+                _ => {
+                    // 他のソウルが先に作業を開始または完了した → 中断
+                    cancel_coat_wall_task(ctx, tile_entity, commands, "tile not coatable");
+                }
+            }
         }
         CoatWallPhase::GoingToTile => {
-            let Ok(tile_blueprint) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
+            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
                 cancel_coat_wall_task(ctx, tile_entity, commands, "tile gone");
                 return;
             };
@@ -271,7 +278,7 @@ pub fn handle_coat_wall_task(
             }
         }
         CoatWallPhase::Coating { progress_bp } => {
-            let Ok(mut tile_blueprint) = ctx.queries.storage.wall_tiles.get_mut(tile_entity) else {
+            let Ok((_, mut tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get_mut(tile_entity) else {
                 cancel_coat_wall_task(ctx, tile_entity, commands, "tile gone");
                 return;
             };

@@ -17,7 +17,7 @@
 - [room_detection.md](room_detection.md): Room 検出システム（壁・扉・床で囲まれた空間の自動認識・オーバーレイ表示）。
 - [dream.md](dream.md): Dreamシステム。睡眠中の夢による通貨獲得メカニクス。
 - [state.md](state.md): ゲームの進行状態、プレイモードの遷移。
-- **Soul Energy システム（Phase 1b 完了）**: `crates/hw_energy` に型・定数・Relationship を集約。Soul Spa 建設・GeneratePower タスク・発電出力まで実装済み。ロードマップは [plans/soul-energy/milestone-roadmap.md](plans/soul-energy/milestone-roadmap.md) を参照。
+- **Soul Energy システム（Phase 1c 完了）**: `crates/hw_energy` に型・定数・Relationship を集約。Soul Spa 建設・GeneratePower タスク・発電出力、Outdoor Lamp 建設・消費グリッド統合・停電/回復サイクル・視覚フィードバック・UIまで実装済み。ロードマップは [plans/soul-energy/milestone-roadmap.md](plans/soul-energy/milestone-roadmap.md) を参照。
 
 ## UI & Visuals
 - [entity_list_ui.md](entity_list_ui.md): エンティティリストのフィルタリングと操作。

@@ -32,6 +32,7 @@ use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
 use hw_core::GameTime;
+use hw_core::quality::{QualitySettings, RttQualityPreset};
 use hw_spatial::{
     BlueprintSpatialGrid, FamiliarSpatialGrid, FloorConstructionSpatialGrid,
     GatheringSpotSpatialGrid, ResourceSpatialGrid, SpatialGrid, StockpileSpatialGrid,
@@ -43,6 +44,9 @@ pub struct StartupPlugin;
 impl Plugin for StartupPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WorldMap>()
+            .register_type::<QualitySettings>()
+            .register_type::<RttQualityPreset>()
+            .init_resource::<QualitySettings>()
             .init_resource::<SelectedEntity>()
             .init_resource::<HoveredEntity>()
             .init_resource::<MenuState>()
@@ -88,7 +92,7 @@ impl Plugin for StartupPlugin {
                 (
                     setup_perf_scenario_runtime_if_enabled,
                     (
-                        rtt_setup::sync_rtt_texture_size_to_window,
+                        rtt_setup::sync_rtt_texture_size_to_window_and_quality,
                         rtt_composite::sync_rtt_output_bindings,
                     )
                         .chain(),

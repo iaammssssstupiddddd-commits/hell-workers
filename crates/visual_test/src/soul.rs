@@ -1,3 +1,4 @@
+use crate::types::*;
 use bevy::camera::visibility::RenderLayers;
 use bevy::gltf::{Gltf, GltfMeshName};
 use bevy::light::{NotShadowCaster, NotShadowReceiver};
@@ -11,7 +12,6 @@ use hw_core::constants::{
 };
 use hw_visual::visual3d::{SoulMaskProxy3d, SoulShadowProxy3d};
 use hw_visual::{CharacterMaterial, SoulMaskMaterial, SoulShadowMaterial};
-use crate::types::*;
 
 // ─── Soul 生成 ────────────────────────────────────────────────────────────────
 
@@ -45,7 +45,11 @@ pub fn spawn_test_soul(
         SceneRoot(args.soul_scene.clone()),
         Transform::from_xyz(args.x, 0.0, args.z).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         RenderLayers::layer(LAYER_3D),
-        TestSoulConfig { face_mat, body_mat, index: args.index },
+        TestSoulConfig {
+            face_mat,
+            body_mat,
+            index: args.index,
+        },
     ));
     if args.selected {
         entity.insert(SelectedSoul);
@@ -61,7 +65,9 @@ pub fn spawn_test_soul(
             )),
         RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW]),
         SoulShadowProxy3d { owner: soul_entity },
-        SoulShadowConfig { shadow_mat: args.soul_shadow_material.clone() },
+        SoulShadowConfig {
+            shadow_mat: args.soul_shadow_material.clone(),
+        },
     ));
 
     commands.spawn((
@@ -69,7 +75,9 @@ pub fn spawn_test_soul(
         Transform::from_xyz(args.x, 0.0, args.z).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         RenderLayers::layer(LAYER_3D_SOUL_MASK),
         SoulMaskProxy3d { owner: soul_entity },
-        SoulMaskConfig { mask_mat: args.soul_mask_material.clone() },
+        SoulMaskConfig {
+            mask_mat: args.soul_mask_material.clone(),
+        },
     ));
 }
 
@@ -111,7 +119,8 @@ pub fn on_soul_scene_ready(
         if matches!(mesh_name, Some("Soul_Face_Mesh")) || matches!(name, Some("Soul_Face_Mesh")) {
             if let Ok(face_tf) = q_transforms.get(child) {
                 let mut scaled = *face_tf;
-                scaled.scale *= Vec3::new(SOUL_FACE_SCALE_MULTIPLIER, SOUL_FACE_SCALE_MULTIPLIER, 1.0);
+                scaled.scale *=
+                    Vec3::new(SOUL_FACE_SCALE_MULTIPLIER, SOUL_FACE_SCALE_MULTIPLIER, 1.0);
                 ec.insert(scaled);
             }
             ec.remove::<MeshMaterial3d<StandardMaterial>>()
@@ -122,15 +131,21 @@ pub fn on_soul_scene_ready(
         let is_body = matches!(mesh_name, Some("Soul_Mesh.010"))
             || matches!(name, Some("Soul_Mesh.010") | Some("Soul_Mesh.010.SoulMat"));
         if is_body {
-            ec.remove::<MeshMaterial3d<StandardMaterial>>()
-                .insert((MeshMaterial3d::<CharacterMaterial>(config.body_mat.clone()), NotShadowCaster));
+            ec.remove::<MeshMaterial3d<StandardMaterial>>().insert((
+                MeshMaterial3d::<CharacterMaterial>(config.body_mat.clone()),
+                NotShadowCaster,
+            ));
         }
     }
 
     // アニメーション設定
-    let Some(player_entity) = anim_player_entity else { return };
+    let Some(player_entity) = anim_player_entity else {
+        return;
+    };
     let Some(ref assets) = assets else { return };
-    let Some(gltf) = gltfs.get(&assets.gltf_handle) else { return };
+    let Some(gltf) = gltfs.get(&assets.gltf_handle) else {
+        return;
+    };
 
     let mut graph = AnimationGraph::new();
     let clips: Vec<(&'static str, AnimationNodeIndex)> = ANIM_CLIP_NAMES
@@ -147,9 +162,10 @@ pub fn on_soul_scene_ready(
     }
 
     let graph_handle = anim_graphs.add(graph);
-    commands
-        .entity(player_entity)
-        .insert((AnimationGraphHandle(graph_handle), AnimationTransitions::new()));
+    commands.entity(player_entity).insert((
+        AnimationGraphHandle(graph_handle),
+        AnimationTransitions::new(),
+    ));
     commands.entity(scene_ready.entity).insert(SoulAnimHandle {
         anim_player_entity: player_entity,
         clips,
@@ -231,5 +247,3 @@ pub fn sync_shadow_proxies(
         }
     }
 }
-
-

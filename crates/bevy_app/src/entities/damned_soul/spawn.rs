@@ -189,7 +189,11 @@ pub fn spawn_damned_soul_at(
                 InventoryItemVisual::default(),
                 SoulTaskVisualState::default(),
             ),
-            Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER),
+            (
+                Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER),
+                // Mesh2d 子（例: DreamParticle）が InheritedVisibility を持つため、親にも Visibility が必要（Bevy B0004）。
+                Visibility::Inherited,
+            ),
             Destination(actual_pos),
             Path::default(),
             AnimationState::default(),

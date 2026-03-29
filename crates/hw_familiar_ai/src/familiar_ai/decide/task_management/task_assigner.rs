@@ -5,7 +5,9 @@ use hw_core::area::TaskArea;
 use hw_core::logistics::ResourceType;
 use hw_core::relationships::{CommandedBy, ParticipatingIn};
 use hw_core::soul::{DamnedSoul, Destination, IdleState, Path};
+use hw_energy::constants::DREAM_GENERATE_ASSIGN_THRESHOLD;
 use hw_jobs::AssignedTask;
+use hw_jobs::WorkType;
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_logistics::types::Inventory;
 use std::collections::HashMap;
@@ -173,6 +175,15 @@ pub fn assign_task_to_worker(
         debug!("ASSIGN: Task designation {:?} disappeared", ctx.task_entity);
         return false;
     };
+
+    // GeneratePower: Dream が閾値未満の Soul にはアサインしない（終了→即再アサインのループ防止）
+    if work_type == WorkType::GeneratePower && soul.dream < DREAM_GENERATE_ASSIGN_THRESHOLD {
+        debug!(
+            "ASSIGN: Worker {:?} dream too low for GeneratePower ({:.1} < {:.1})",
+            ctx.worker_entity, soul.dream, DREAM_GENERATE_ASSIGN_THRESHOLD
+        );
+        return false;
+    }
 
     super::policy::assign_by_work_type(
         work_type,

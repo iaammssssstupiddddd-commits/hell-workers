@@ -11,6 +11,7 @@ pub mod layer;
 pub mod material;
 pub mod mud_mixer;
 pub mod plant_trees;
+pub mod power;
 pub mod progress_bar;
 pub mod selection_indicator;
 pub mod site_yard_visual;
@@ -33,8 +34,8 @@ pub use handles::{
     PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
 pub use material::{
-    CharacterMaterial, SoulMaskMaterial, SoulShadowMaterial, soul_face_uv_offset,
-    soul_face_uv_scale,
+    CharacterMaterial, SectionCut, SectionMaterial, SoulMaskMaterial, SoulShadowMaterial,
+    make_section_material, soul_face_uv_offset, soul_face_uv_scale, with_alpha_mode,
 };
 
 pub use visual3d::{
@@ -60,6 +61,7 @@ impl Plugin for HwVisualPlugin {
             UiMaterialPlugin::<dream::DreamBubbleUiMaterial>::default(),
             Material2dPlugin::<TaskAreaMaterial>::default(),
             MaterialPlugin::<material::CharacterMaterial>::default(),
+            MaterialPlugin::<material::SectionMaterial>::default(),
             MaterialPlugin::<material::SoulMaskMaterial>::default(),
             MaterialPlugin::<material::SoulShadowMaterial>::default(),
         ));
@@ -70,6 +72,7 @@ impl Plugin for HwVisualPlugin {
         app.add_systems(
             Update,
             (
+                material::sync_section_cut_to_materials_system,
                 wall_connection::wall_connections_system,
                 site_yard_visual::sync_site_yard_boundaries_system,
             )
@@ -204,6 +207,7 @@ impl Plugin for HwVisualPlugin {
             (
                 tank::update_tank_visual_system,
                 mud_mixer::update_mud_mixer_visual_system,
+                power::sync_powered_visual_system,
             )
                 .in_set(GameSystemSet::Visual),
         );

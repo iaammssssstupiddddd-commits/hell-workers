@@ -50,23 +50,33 @@ pub fn handle_frame_wall_task(
             }
         }
         FrameWallPhase::PickingUpWood => {
-            let Ok(tile_blueprint) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
+            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
                 clear_task_and_path(ctx.task, ctx.path);
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 return;
             };
 
-            if matches!(tile_blueprint.state, WallTileState::FramingReady) {
-                *ctx.task = AssignedTask::FrameWallTile(FrameWallTileData {
-                    tile: tile_entity,
-                    site: site_entity,
-                    phase: FrameWallPhase::GoingToTile,
-                });
-                ctx.path.waypoints.clear();
+            match tile_blueprint.state {
+                WallTileState::WaitingWood => {
+                    // 素材待ち - 搬入完了を待機
+                }
+                WallTileState::FramingReady => {
+                    *ctx.task = AssignedTask::FrameWallTile(FrameWallTileData {
+                        tile: tile_entity,
+                        site: site_entity,
+                        phase: FrameWallPhase::GoingToTile,
+                    });
+                    ctx.path.waypoints.clear();
+                }
+                _ => {
+                    // 他のソウルが先に作業を開始または完了した → 中断
+                    clear_task_and_path(ctx.task, ctx.path);
+                    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                }
             }
         }
         FrameWallPhase::GoingToTile => {
-            let Ok(tile_blueprint) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
+            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
                 clear_task_and_path(ctx.task, ctx.path);
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 return;
@@ -93,7 +103,7 @@ pub fn handle_frame_wall_task(
             }
         }
         FrameWallPhase::Framing { progress_bp } => {
-            let Ok(mut tile_blueprint) = ctx.queries.storage.wall_tiles.get_mut(tile_entity) else {
+            let Ok((_, mut tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get_mut(tile_entity) else {
                 clear_task_and_path(ctx.task, ctx.path);
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 return;

@@ -2,8 +2,8 @@
 
 use hw_core::relationships::WorkingOn;
 use hw_core::soul::StressBreakdown;
-// use crate::systems::familiar_ai::perceive::resource_sync::SharedResourceCache; // Removed unused import
 use crate::soul_ai::execute::task_execution::{
+    chain,
     common::*,
     context::TaskExecutionContext,
     transport_common::{cancel, reservation},
@@ -21,10 +21,7 @@ pub fn handle_haul_to_blueprint_task(
     commands: &mut Commands,
     world_map: &WorldMap,
 ) {
-    let q_targets = &ctx.queries.designation.targets;
-    let q_designations = &ctx.queries.designation.designations;
     let soul_pos = ctx.soul_pos();
-    let q_blueprints = &mut ctx.queries.storage.blueprints;
     // 疲労またはストレス崩壊のチェック
     if ctx.soul.fatigue > 0.95 || breakdown_opt.is_some() {
         info!(
@@ -44,13 +41,14 @@ pub fn handle_haul_to_blueprint_task(
             ctx.path,
             ctx.queries,
             world_map,
-            true, // 失敗時はセリフを出す
+            true,
         );
         return;
     }
 
     match phase {
         HaulToBpPhase::GoingToItem => {
+            let q_targets = &ctx.queries.designation.targets;
             if let Ok((item_transform, _, _, _, _, _, stored_in_opt)) = q_targets.get(item_entity) {
                 let item_pos = item_transform.translation.truncate();
                 let stored_in_entity = stored_in_opt.map(|stored_in| stored_in.0);
@@ -81,17 +79,12 @@ pub fn handle_haul_to_blueprint_task(
                     }
                     release_mixer_mud_storage_for_item(ctx, item_entity, commands);
 
-                    // もしアイテムが備蓄場所にあったなら、その備蓄場所の型管理を更新する
                     if let Some(stored_in) = stored_in_entity {
                         update_stockpile_on_item_removal(
                             stored_in,
                             &mut ctx.queries.storage.stockpiles,
                         );
                     }
-
-                    // ブループリントへの目的地設定は、次のフレームの GoingToBlueprint フェーズで
-                    // update_destination_to_blueprint により自動的に（一貫したロジックで）行われるため、
-                    // ここではパスをクリアするのみとする。
 
                     reservation::record_picked_source(ctx, item_entity, 1);
 
@@ -117,7 +110,9 @@ pub fn handle_haul_to_blueprint_task(
             }
         }
         HaulToBpPhase::GoingToBlueprint => {
-            if let Ok((_bp_transform, bp, _)) = q_blueprints.get(blueprint_entity) {
+            if let Ok((_bp_transform, bp, _)) =
+                ctx.queries.storage.blueprints.get(blueprint_entity)
+            {
                 let reachable = update_destination_to_blueprint(
                     ctx.dest,
                     &bp.occupied_grids,
@@ -154,8 +149,10 @@ pub fn handle_haul_to_blueprint_task(
                     "HAUL_TO_BP: Cancelled for {:?} - Blueprint {:?} gone",
                     ctx.soul_entity, blueprint_entity
                 );
-                // Blueprint が消失 - アイテムを解除して再発行
-                let dropped_res = q_targets
+                let dropped_res = ctx
+                    .queries
+                    .designation
+                    .targets
                     .get(item_entity)
                     .ok()
                     .and_then(|(_, _, _, _, ri, _, _)| ri.map(|r| r.0));
@@ -176,73 +173,104 @@ pub fn handle_haul_to_blueprint_task(
             }
         }
         HaulToBpPhase::Delivering => {
-            if let Ok((_, mut bp, _)) = q_blueprints.get_mut(blueprint_entity) {
-                // アイテムの資材タイプを取得
-                if let Ok((_, _, _, _, Some(res_item), _, _)) = q_targets.get(item_entity) {
-                    let resource_type = res_item.0;
+            // Step 1: アイテムのリソースタイプを先に取得（blueprints の借用不要）
+            let Some(resource_type) = ctx
+                .queries
+                .designation
+                .targets
+                .get(item_entity)
+                .ok()
+                .and_then(|(_, _, _, _, ri, _, _)| ri.map(|r| r.0))
+            else {
+                ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
+                reservation::release_destination(ctx, blueprint_entity);
+                return;
+            };
 
+            // Step 2: 搬入処理（blueprints の可変借用をスコープ内に閉じ込める）
+            enum DeliverResult {
+                Done { materials_complete: bool },
+                Cancel,
+            }
+            let result = {
+                if let Ok((_, mut bp, _)) =
+                    ctx.queries.storage.blueprints.get_mut(blueprint_entity)
+                {
                     if bp.remaining_material_amount(resource_type) == 0 {
                         info!(
                             "HAUL_TO_BP: Cancelled delivery for {:?} - blueprint {:?} no longer needs {:?}",
                             ctx.soul_entity, blueprint_entity, resource_type
                         );
-                        cancel::cancel_haul_to_blueprint(
-                            ctx,
-                            item_entity,
+                        DeliverResult::Cancel
+                    } else {
+                        bp.deliver_material(resource_type, 1);
+                        info!(
+                            "HAUL_TO_BP: Soul {:?} delivered {:?} to blueprint {:?}. Progress: {:?}/{:?}",
+                            ctx.soul_entity,
+                            resource_type,
                             blueprint_entity,
-                            commands,
+                            bp.delivered_materials,
+                            bp.required_materials
                         );
-                        return;
-                    }
-
-                    // Blueprint に資材を搬入
-                    bp.deliver_material(resource_type, 1);
-                    info!(
-                        "HAUL_TO_BP: Soul {:?} delivered {:?} to blueprint {:?}. Progress: {:?}/{:?}",
-                        ctx.soul_entity,
-                        resource_type,
-                        blueprint_entity,
-                        bp.delivered_materials,
-                        bp.required_materials
-                    );
-
-                    // 資材が揃った場合、BlueprintエンティティのIssuedByを削除して未割り当て状態にする
-                    // そして、DesignationCreatedEventを再発行して使い魔が建築タスクを探せるようにする
-                    if bp.materials_complete()
-                        && let Ok((_, _, _designation, managed_by_opt, _, _, _, _)) =
-                            q_designations.get(blueprint_entity)
-                    {
-                        // ManagedByを削除して未割り当て状態にする
-                        if managed_by_opt.is_some() {
-                            commands
-                                .entity(blueprint_entity)
-                                .remove::<hw_core::relationships::ManagedBy>();
+                        let done = bp.materials_complete();
+                        DeliverResult::Done {
+                            materials_complete: done,
                         }
+                    }
+                    // bp と blueprints の可変借用がここで解放される
+                } else {
+                    // Blueprint が消失
+                    DeliverResult::Cancel
+                }
+            };
 
-                        // Priority(10) を付与して使い魔がタスクを探せるようにする
+            let materials_complete = match result {
+                DeliverResult::Cancel => {
+                    cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity, commands);
+                    return;
+                }
+                DeliverResult::Done { materials_complete } => materials_complete,
+            };
+
+            // Step 3: 素材完成時のサイドエフェクト（ManagedBy 削除・Priority 付与）
+            if materials_complete
+                && let Ok((_, _, _, managed_by_opt, _, _, _, _)) =
+                    ctx.queries.designation.designations.get(blueprint_entity)
+                {
+                    if managed_by_opt.is_some() {
                         commands
                             .entity(blueprint_entity)
-                            .insert(hw_jobs::Priority(10));
-
-                        info!(
-                            "HAUL_TO_BP: Blueprint {:?} materials complete, reissuing DesignationCreatedEvent for build task",
-                            blueprint_entity
-                        );
+                            .remove::<hw_core::relationships::ManagedBy>();
                     }
-
-                    // ====== 修正点: 参照先の Item(task_entity)が despawn される前に WorkingOn 等を外す ======
-                    ctx.inventory.0 = None;
-                    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-                    clear_task_and_path(ctx.task, ctx.path);
-
-                    // アイテムを消費
-                    commands.entity(item_entity).despawn();
-                    // DeliveringTo is removed with despawn
+                    commands
+                        .entity(blueprint_entity)
+                        .insert(hw_jobs::Priority(10));
+                    info!(
+                        "HAUL_TO_BP: Blueprint {:?} materials complete, reissuing for build task",
+                        blueprint_entity
+                    );
                 }
+
+            // Step 4: チェーン判定（blueprints の借用が解放済みなので ctx を安全に渡せる）
+            if let Some(opp) = chain::find_chain_opportunity(
+                blueprint_entity,
+                resource_type,
+                Some(materials_complete),
+                ctx,
+            ) {
+                ctx.inventory.0 = None;
+                chain::execute_chain(opp, ctx, commands);
+                commands.entity(item_entity).despawn();
+                reservation::release_destination(ctx, blueprint_entity);
+                return;
             }
 
+            // Step 5: チェーンなし — 通常のクリーンアップ
+            ctx.inventory.0 = None;
+            commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+            clear_task_and_path(ctx.task, ctx.path);
+            commands.entity(item_entity).despawn();
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
-
             reservation::release_destination(ctx, blueprint_entity);
         }
     }

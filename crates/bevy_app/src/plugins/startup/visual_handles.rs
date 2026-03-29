@@ -2,6 +2,7 @@
 
 use crate::assets::GameAssets;
 use bevy::camera::visibility::RenderLayers;
+use bevy::ecs::system::SystemParam;
 use bevy::mesh::Mesh;
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, building_3d_render_layers};
@@ -9,8 +10,8 @@ use hw_core::visual::SoulTaskHandles;
 use hw_logistics::ResourceItemVisualHandles;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
-    PlantTreeHandles, SoulMaskMaterial, SoulShadowMaterial, SpeechHandles, WallVisualHandles,
-    WorkIconHandles,
+    PlantTreeHandles, SectionMaterial, SoulMaskMaterial, SoulShadowMaterial, SpeechHandles,
+    WallVisualHandles, WorkIconHandles, make_section_material, with_alpha_mode,
 };
 use hw_visual::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
 use hw_world::{DoorVisualHandles, TerrainVisualHandles};
@@ -23,8 +24,8 @@ use hw_world::{DoorVisualHandles, TerrainVisualHandles};
 pub struct Building3dHandles {
     // --- 壁 ---
     pub wall_mesh: Handle<Mesh>,
-    pub wall_material: Handle<StandardMaterial>,
-    pub wall_provisional_material: Handle<StandardMaterial>,
+    pub wall_material: Handle<SectionMaterial>,
+    pub wall_provisional_material: Handle<SectionMaterial>,
     pub wall_orientation_aid_mesh: Handle<Mesh>,
     pub wall_orientation_aid_material: Handle<StandardMaterial>,
     // --- 床 ---
@@ -53,15 +54,27 @@ pub struct CharacterHandles {
     pub soul_shadow_proxy_material: Handle<SoulShadowMaterial>,
 }
 
-pub fn init_visual_handles(
-    mut commands: Commands,
-    game_assets: Res<GameAssets>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut character_materials: ResMut<Assets<CharacterMaterial>>,
-    mut soul_mask_materials: ResMut<Assets<SoulMaskMaterial>>,
-    mut soul_shadow_materials: ResMut<Assets<SoulShadowMaterial>>,
-) {
+#[derive(SystemParam)]
+pub struct InitVisualHandlesParams<'w, 's> {
+    commands: Commands<'w, 's>,
+    game_assets: Res<'w, GameAssets>,
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<StandardMaterial>>,
+    section_materials: ResMut<'w, Assets<SectionMaterial>>,
+    character_materials: ResMut<'w, Assets<CharacterMaterial>>,
+    soul_mask_materials: ResMut<'w, Assets<SoulMaskMaterial>>,
+    soul_shadow_materials: ResMut<'w, Assets<SoulShadowMaterial>>,
+}
+
+pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
+    let game_assets = params.game_assets.as_ref();
+    let commands = &mut params.commands;
+    let meshes = &mut params.meshes;
+    let materials = &mut params.materials;
+    let section_materials = &mut params.section_materials;
+    let character_materials = &mut params.character_materials;
+    let soul_mask_materials = &mut params.soul_mask_materials;
+    let soul_shadow_materials = &mut params.soul_shadow_materials;
     commands.insert_resource(WallVisualHandles {
         stone_isolated: game_assets.wall_isolated.clone(),
         stone_horizontal_left: game_assets.wall_horizontal_left.clone(),
@@ -202,19 +215,14 @@ pub fn init_visual_handles(
     ));
     let familiar_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.9, TILE_SIZE * 0.9));
 
-    let wall_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.56, 0.44, 0.3),
-        perceptual_roughness: 1.0,
-        reflectance: 0.0,
-        ..default()
-    });
-    let wall_provisional_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.95, 0.72, 0.45, 0.9),
-        perceptual_roughness: 1.0,
-        reflectance: 0.0,
-        alpha_mode: AlphaMode::Blend,
-        ..default()
-    });
+    let wall_material =
+        section_materials.add(make_section_material(LinearRgba::new(0.56, 0.44, 0.30, 1.0)));
+    let wall_provisional_material = section_materials.add(
+        with_alpha_mode(
+            make_section_material(LinearRgba::new(0.95, 0.72, 0.45, 0.9)),
+            AlphaMode::Blend,
+        ),
+    );
     let wall_orientation_aid_material = materials.add(StandardMaterial {
         base_color: Color::srgb(1.0, 0.95, 0.2),
         unlit: true,

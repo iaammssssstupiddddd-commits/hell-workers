@@ -9,7 +9,11 @@ use crate::systems::command::{
     zone_removal_system,
 };
 use crate::systems::dream_tree_planting::dream_tree_planting_system;
-use crate::systems::energy::grid_lifecycle::{on_yard_added, on_yard_removed};
+use crate::systems::energy::grid_lifecycle::{
+    on_power_consumer_added, on_yard_added, on_yard_removed,
+};
+use crate::systems::energy::grid_recalc::grid_recalc_system;
+use crate::systems::energy::lamp_buff::lamp_buff_system;
 use crate::systems::energy::power_output::soul_spa_power_output_system;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
 use crate::systems::jobs::floor_construction::{
@@ -36,7 +40,8 @@ use hw_energy::{
 };
 use hw_jobs::visual_sync::{
     on_building_added_sync_visual, on_designation_added, on_designation_removed,
-    on_mud_mixer_storage_added, on_rest_area_added, sync_blueprint_visual_system,
+    on_mud_mixer_storage_added, on_power_consumer_visual_added, on_rest_area_added,
+    on_unpowered_added, on_unpowered_removed, sync_blueprint_visual_system,
     sync_building_visual_system, sync_floor_site_visual_system, sync_floor_tile_visual_system,
     sync_mud_mixer_active_system, sync_soul_task_visual_system, sync_wall_site_visual_system,
     sync_wall_tile_visual_system,
@@ -161,6 +166,14 @@ impl Plugin for LogicPlugin {
         .add_systems(
             Update,
             (
+                grid_recalc_system.after(soul_spa_power_output_system),
+                lamp_buff_system,
+            )
+                .in_set(GameSystemSet::Logic),
+        )
+        .add_systems(
+            Update,
+            (
                 sync_inventory_item_visual_system,
                 sync_soul_task_visual_system,
                 sync_blueprint_visual_system,
@@ -198,6 +211,10 @@ impl Plugin for LogicPlugin {
         .add_observer(on_stockpile_added_sync_visual)
         .add_observer(on_yard_added)
         .add_observer(on_yard_removed)
+        .add_observer(on_power_consumer_added)
+        .add_observer(on_power_consumer_visual_added)
+        .add_observer(on_unpowered_added)
+        .add_observer(on_unpowered_removed)
         .add_systems(
             Update,
             (

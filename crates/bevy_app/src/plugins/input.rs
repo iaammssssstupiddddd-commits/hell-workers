@@ -6,6 +6,7 @@ use crate::systems::GameSystemSet;
 use bevy::camera_controller::pan_camera::{PanCamera, PanCameraPlugin};
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
+use hw_core::quality::QualitySettings;
 use hw_ui::camera::MainCamera;
 
 pub struct InputPlugin;
@@ -23,6 +24,7 @@ impl Plugin for InputPlugin {
                 handle_mouse_input.run_if(in_state(PlayMode::Normal)),
                 debug_toggle_system,
                 render3d_toggle_system,
+                rtt_quality_cycle_system,
             )
                 .in_set(GameSystemSet::Input),
         );
@@ -46,6 +48,17 @@ fn render3d_toggle_system(
 ) {
     if buttons.just_pressed(KeyCode::F3) {
         render3d.0 = !render3d.0;
+    }
+}
+
+/// F4キーで RtT 品質を High -> Medium -> Low で循環させる。
+fn rtt_quality_cycle_system(
+    buttons: Res<ButtonInput<KeyCode>>,
+    mut quality: ResMut<QualitySettings>,
+) {
+    if buttons.just_pressed(KeyCode::F4) {
+        quality.rtt = quality.rtt.next();
+        info!("RTT quality changed: {:?}", quality.rtt);
     }
 }
 

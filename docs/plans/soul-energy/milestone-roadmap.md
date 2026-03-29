@@ -1,8 +1,8 @@
 # Soul Energy System — Milestone Roadmap
 
 Created: 2026-03-27
-Last Updated: 2026-03-28
-Status: Phase 1a complete, Phase 1b complete, Phase 1c not started
+Last Updated: 2026-04-01
+Status: Phase 1a complete, Phase 1b complete, Phase 1c complete
 
 ---
 
@@ -97,15 +97,15 @@ Phase 1: Foundation (Yard-scoped)
 > **Size**: Small. No UI, no gameplay changes.
 > **Delivered**: `crates/hw_energy` crate (`components`, `constants`, `relationships`); `bevy_app/src/systems/energy/grid_lifecycle.rs` (Yard observers)
 
-### Phase 1b: Soul Spa + GeneratePower Task
+### Phase 1b: Soul Spa + GeneratePower Task ✅ Done
 > **File**: `phase1b-soul-spa.md`
 > **Scope**: BuildingType, entity structure, placement UI, construction, task execution, Dream consumption, Familiar integration, slot control, GeneratesFor connection
 > **Size**: Large. Core generation-side feature.
 > **Depends on**: Phase 1a
 
-### Phase 1c: Outdoor Lamp + Grid Integration + Visual
+### Phase 1c: Outdoor Lamp + Grid Integration + Visual ✅ Done
 > **File**: `phase1c-lamp-and-grid.md`
-> **Scope**: Outdoor Lamp building, ConsumesFrom connection, buff system, grid recalculation, powered/unpowered cycle, visual feedback
+> **Scope**: Outdoor Lamp building, ConsumesFrom connection, buff system, grid recalculation, powered/unpowered cycle, visual feedback, power status UI
 > **Size**: Medium-large. Completes the full power loop.
 > **Depends on**: Phase 1a + Phase 1b
 

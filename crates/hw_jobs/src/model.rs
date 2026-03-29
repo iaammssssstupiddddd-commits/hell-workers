@@ -22,6 +22,7 @@ pub enum BuildingType {
     BonePile,
     WheelbarrowParking,
     SoulSpa,
+    OutdoorLamp,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,7 +57,8 @@ impl BuildingType {
             BuildingType::SandPile
             | BuildingType::BonePile
             | BuildingType::WheelbarrowParking
-            | BuildingType::RestArea => BuildingCategory::Temporary,
+            | BuildingType::RestArea
+            | BuildingType::OutdoorLamp => BuildingCategory::Temporary,
         }
     }
 
@@ -94,6 +96,9 @@ impl BuildingType {
             BuildingType::SoulSpa => {
                 // Soul Spa は SoulSpaSite/SoulSpaTile で直接管理するため
                 // Blueprint システムは使用しない。materials は空。
+            }
+            BuildingType::OutdoorLamp => {
+                materials.insert(ResourceType::Bone, 2);
             }
         }
         materials

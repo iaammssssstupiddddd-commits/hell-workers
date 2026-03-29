@@ -11,10 +11,18 @@ pub fn apply_menu_visibility(
         return;
     }
     if let Ok(mut vis) = q_panel.single_mut() {
-        *vis = if state.menu_visible { Visibility::Visible } else { Visibility::Hidden };
+        *vis = if state.menu_visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
     if let Ok(mut vis) = q_hint.single_mut() {
-        *vis = if state.menu_visible { Visibility::Hidden } else { Visibility::Visible };
+        *vis = if state.menu_visible {
+            Visibility::Hidden
+        } else {
+            Visibility::Visible
+        };
     }
 }
 
@@ -27,8 +35,16 @@ pub fn update_section_visibility(
     if !state.is_changed() {
         return;
     }
-    let soul_d = if state.mode == AppMode::Soul { Display::Flex } else { Display::None };
-    let build_d = if state.mode == AppMode::Build { Display::Flex } else { Display::None };
+    let soul_d = if state.mode == AppMode::Soul {
+        Display::Flex
+    } else {
+        Display::None
+    };
+    let build_d = if state.mode == AppMode::Build {
+        Display::Flex
+    } else {
+        Display::None
+    };
     for mut n in &mut q_soul {
         n.display = soul_d;
     }

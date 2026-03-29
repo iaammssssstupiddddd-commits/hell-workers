@@ -385,6 +385,11 @@ fn architect_building_specs(
                 MenuAction::SelectBuild(BuildingType::BonePile),
                 button_color,
             ),
+            MenuEntrySpec::new(
+                "Outdoor Lamp",
+                MenuAction::SelectBuild(BuildingType::OutdoorLamp),
+                button_color,
+            ),
         ],
     }
 }

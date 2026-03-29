@@ -107,6 +107,7 @@ pub(super) fn place_building_blueprint(
         BuildingType::BonePile => game_assets.bone_pile.clone(),
         BuildingType::WheelbarrowParking => game_assets.wheelbarrow_parking.clone(),
         BuildingType::SoulSpa => game_assets.bone_pile.clone(), // placeholder — SoulSpa uses own spawn
+        BuildingType::OutdoorLamp => game_assets.bone_pile.clone(),
     };
 
     let entity = commands

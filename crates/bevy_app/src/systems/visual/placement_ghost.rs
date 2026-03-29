@@ -1,12 +1,13 @@
 use crate::app_contexts::{
     BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState,
+    TaskContext,
 };
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRead, WorldMapRef};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
-use hw_core::game_state::PlayMode;
+use hw_core::game_state::{PlayMode, TaskMode};
 use hw_ui::camera::MainCamera;
 use hw_ui::selection::{
     BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, bucket_storage_geometry,
@@ -62,6 +63,7 @@ type PartnerGhostQuery<'w, 's> = Query<
 pub struct GhostInputState<'w, 's> {
     pub play_mode: Res<'w, State<PlayMode>>,
     pub build_context: Res<'w, BuildContext>,
+    pub task_context: Res<'w, TaskContext>,
     pub companion_state: Res<'w, CompanionPlacementState>,
     pub game_assets: Res<'w, crate::assets::GameAssets>,
     pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
@@ -87,6 +89,7 @@ pub fn placement_ghost_system(
     let GhostInputState {
         play_mode,
         build_context,
+        task_context,
         companion_state,
         game_assets,
         q_window,
@@ -98,8 +101,77 @@ pub fn placement_ghost_system(
         q_sites,
         q_yards,
     } = validation_queries;
+
+    let is_building_place = *play_mode.get() == PlayMode::BuildingPlace;
+    let is_soul_spa_place = matches!(task_context.0, TaskMode::SoulSpaPlace(_));
+
+    // Soul Spa ゴースト処理（TaskDesignation モード）
+    if is_soul_spa_place {
+        let Ok((camera, camera_transform)) = q_camera.single() else {
+            return;
+        };
+        let Ok(window) = q_window.single() else {
+            return;
+        };
+        let Some(cursor_pos) = window.cursor_position() else {
+            return;
+        };
+        let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) else {
+            return;
+        };
+
+        let (gx, gy) = WorldMap::world_to_grid(world_pos);
+        let tiles: [(i32, i32); 4] = [(gx, gy), (gx + 1, gy), (gx, gy - 1), (gx + 1, gy - 1)];
+
+        let can_place = tiles.iter().all(|&(tx, ty)| {
+            let wpos = WorldMap::grid_to_world(tx, ty);
+            let in_yard = q_yards.iter().any(|yard| yard.contains(wpos));
+            let walkable = world_map.is_walkable(tx, ty);
+            let no_building = world_map.building_entity((tx, ty)).is_none();
+            in_yard && walkable && no_building
+        });
+
+        let draw_pos = WorldMap::grid_to_world(gx, gy)
+            + Vec2::new(TILE_SIZE * 0.5, -TILE_SIZE * 0.5);
+        let size = Vec2::splat(TILE_SIZE * 2.0);
+        let texture = game_assets.rest_area.clone();
+        let color = if can_place {
+            Color::srgba(0.5, 1.0, 0.5, 0.5)
+        } else {
+            Color::srgba(1.0, 0.2, 0.2, 0.5)
+        };
+
+        for (entity, _, _) in q_partner_ghost.iter() {
+            commands.entity(entity).despawn();
+        }
+
+        if let Some((_, mut transform, mut sprite)) = q_ghost.iter_mut().next() {
+            transform.translation = draw_pos.extend(hw_core::constants::Z_SELECTION);
+            sprite.custom_size = Some(size);
+            sprite.color = color;
+            if sprite.image != texture {
+                sprite.image = texture;
+            }
+        } else {
+            for (entity, _, _) in q_ghost.iter() {
+                commands.entity(entity).despawn();
+            }
+            commands.spawn((
+                PlacementGhost,
+                Sprite {
+                    image: texture,
+                    color,
+                    custom_size: Some(size),
+                    ..default()
+                },
+                Transform::from_translation(draw_pos.extend(hw_core::constants::Z_SELECTION)),
+            ));
+        }
+        return;
+    }
+
     // 建築モード以外ならゴーストを削除して終了
-    if *play_mode.get() != PlayMode::BuildingPlace {
+    if !is_building_place {
         for (entity, _, _) in q_ghost.iter() {
             commands.entity(entity).despawn();
         }
@@ -228,6 +300,7 @@ pub fn placement_ghost_system(
             BuildingType::BonePile => game_assets.bone_pile.clone(),
             BuildingType::WheelbarrowParking => game_assets.wheelbarrow_parking.clone(),
             BuildingType::SoulSpa => game_assets.rest_area.clone(),
+            BuildingType::OutdoorLamp => game_assets.bone_pile.clone(),
         }
     };
 

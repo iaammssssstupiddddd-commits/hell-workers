@@ -8,6 +8,7 @@ use hw_core::constants::{
     MUD_MIXER_CAPACITY, REST_AREA_CAPACITY, TILE_SIZE, WHEELBARROW_CAPACITY, Z_FLOATING_TEXT,
     Z_ITEM_PICKUP,
 };
+use hw_energy::{OUTDOOR_LAMP_DEMAND, PowerConsumer};
 
 pub(super) struct PostProcessTargets {
     pub blueprint_entity: Entity,
@@ -61,6 +62,10 @@ pub(super) fn apply_building_specific_post_process(
 
     if bp.kind == BuildingType::Bridge {
         commands.entity(building_entity).insert(BridgeMarker);
+    }
+
+    if bp.kind == BuildingType::OutdoorLamp {
+        setup_outdoor_lamp(commands, building_entity);
     }
 
     spawn_completion_text(commands, transform, game_assets);
@@ -144,6 +149,13 @@ fn setup_sand_pile(commands: &mut Commands, building_entity: Entity) {
 
 fn setup_bone_pile(commands: &mut Commands, building_entity: Entity) {
     commands.entity(building_entity).insert(BonePile);
+}
+
+fn setup_outdoor_lamp(commands: &mut Commands, building_entity: Entity) {
+    commands.entity(building_entity).insert(PowerConsumer {
+        demand: OUTDOOR_LAMP_DEMAND,
+    });
+    // ConsumesFrom は on_power_consumer_added Observer が付与する
 }
 
 fn setup_wheelbarrow_parking(

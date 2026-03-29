@@ -35,11 +35,14 @@ impl Plugin for VisualTestPlugin {
         ))
         .init_resource::<TestState>()
         .init_resource::<TestElev>()
-        .add_systems(Startup, (
-            setup::setup_scene,
-            building::setup_world_map,
-            building::setup_building_assets,
-        ))
+        .add_systems(
+            Startup,
+            (
+                setup::setup_scene,
+                building::setup_world_map,
+                building::setup_building_assets,
+            ),
+        )
         .add_observer(soul::on_soul_scene_ready)
         .add_observer(soul::on_shadow_scene_ready)
         .add_observer(soul::on_mask_scene_ready)

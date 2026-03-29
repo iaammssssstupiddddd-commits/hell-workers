@@ -1,3 +1,4 @@
+use crate::soul_ai::execute::task_execution::chain;
 use crate::soul_ai::execute::task_execution::common::{clear_task_and_path, drop_item};
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
@@ -23,7 +24,7 @@ fn floor_site_can_accept(
     };
 
     let needed = floor_site_tile_demand(
-        ctx.queries.storage.floor_tiles.iter(),
+        ctx.queries.storage.floor_tiles.iter().map(|(_, t, _)| t),
         site_entity,
         resource_type,
     );
@@ -48,7 +49,7 @@ fn wall_site_can_accept(
     };
 
     let needed = wall_site_tile_demand(
-        ctx.queries.storage.wall_tiles.iter(),
+        ctx.queries.storage.wall_tiles.iter().map(|(_, t, _)| t),
         site_entity,
         resource_type,
     );
@@ -228,13 +229,11 @@ pub(super) fn handle_dropping_phase(
             cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
             return;
         }
+        let material_center = site.material_center;
+        // `site` はここで最後に使用される → NLL によりこれ以降の借用は解放される
         commands.entity(item).try_insert((
             Visibility::Visible,
-            Transform::from_xyz(
-                site.material_center.x,
-                site.material_center.y,
-                Z_ITEM_PICKUP,
-            ),
+            Transform::from_xyz(material_center.x, material_center.y, Z_ITEM_PICKUP),
         ));
         commands
             .entity(item)
@@ -246,6 +245,16 @@ pub(super) fn handle_dropping_phase(
         commands
             .entity(item)
             .remove::<hw_core::relationships::TaskWorkers>();
+
+        // チェーン判定: そのまま床工事タスクに移行できるか確認
+        if let Some(resource_type) = item_resource_type
+            && let Some(opp) =
+                chain::find_chain_opportunity(stockpile, resource_type, None, ctx)
+            {
+                ctx.inventory.0 = None;
+                chain::execute_chain(opp, ctx, commands);
+                return;
+            }
     } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile) {
         if !item_resource_type
             .is_some_and(|resource_type| wall_site_can_accept(ctx, stockpile, resource_type, item))
@@ -253,13 +262,11 @@ pub(super) fn handle_dropping_phase(
             cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
             return;
         }
+        let material_center = site.material_center;
+        // `site` はここで最後に使用される → NLL によりこれ以降の借用は解放される
         commands.entity(item).try_insert((
             Visibility::Visible,
-            Transform::from_xyz(
-                site.material_center.x,
-                site.material_center.y,
-                Z_ITEM_PICKUP,
-            ),
+            Transform::from_xyz(material_center.x, material_center.y, Z_ITEM_PICKUP),
         ));
         commands
             .entity(item)
@@ -271,6 +278,16 @@ pub(super) fn handle_dropping_phase(
         commands
             .entity(item)
             .remove::<hw_core::relationships::TaskWorkers>();
+
+        // チェーン判定: そのまま壁工事タスクに移行できるか確認
+        if let Some(resource_type) = item_resource_type
+            && let Some(opp) =
+                chain::find_chain_opportunity(stockpile, resource_type, None, ctx)
+            {
+                ctx.inventory.0 = None;
+                chain::execute_chain(opp, ctx, commands);
+                return;
+            }
     } else if let Ok((wall_transform, building, provisional_opt)) =
         ctx.queries.storage.buildings.get(stockpile)
     {

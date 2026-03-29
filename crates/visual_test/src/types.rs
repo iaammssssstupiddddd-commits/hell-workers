@@ -13,8 +13,16 @@ pub const SOUL_SPACING: f32 = hw_core::constants::SOUL_GLB_SCALE * 2.5;
 pub const MENU_WIDTH: f32 = 270.0;
 pub const MAX_SOULS: usize = 6;
 pub const ELEV_DISTANCE: f32 = 200.0;
-pub const ANIM_CLIP_NAMES: &[&str] =
-    &["Idle", "Walk", "Work", "Carry", "Fear", "Exhausted", "WalkLeft", "WalkRight"];
+pub const ANIM_CLIP_NAMES: &[&str] = &[
+    "Idle",
+    "Walk",
+    "Work",
+    "Carry",
+    "Fear",
+    "Exhausted",
+    "WalkLeft",
+    "WalkRight",
+];
 pub const DEFAULT_GHOST_ALPHA: f32 = 1.0;
 pub const DEFAULT_RIM_STRENGTH: f32 = 0.28;
 pub const DEFAULT_POSTERIZE_STEPS: f32 = 4.0;
@@ -217,21 +225,31 @@ impl TestElevDir {
 
     pub fn camera_rotation(self, view_height: f32, z_offset: f32) -> Quat {
         match self {
-            Self::TopDown => Transform::from_xyz(0.0, view_height, z_offset)
-                .looking_at(Vec3::ZERO, Vec3::NEG_Z)
-                .rotation,
-            Self::North => Transform::from_xyz(0.0, 0.0, 1.0)
-                .looking_at(Vec3::ZERO, Vec3::Y)
-                .rotation,
-            Self::South => Transform::from_xyz(0.0, 0.0, -1.0)
-                .looking_at(Vec3::ZERO, Vec3::Y)
-                .rotation,
-            Self::East => Transform::from_xyz(1.0, 0.0, 0.0)
-                .looking_at(Vec3::ZERO, Vec3::Y)
-                .rotation,
-            Self::West => Transform::from_xyz(-1.0, 0.0, 0.0)
-                .looking_at(Vec3::ZERO, Vec3::Y)
-                .rotation,
+            Self::TopDown => {
+                Transform::from_xyz(0.0, view_height, z_offset)
+                    .looking_at(Vec3::ZERO, Vec3::NEG_Z)
+                    .rotation
+            }
+            Self::North => {
+                Transform::from_xyz(0.0, 0.0, 1.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
+            Self::South => {
+                Transform::from_xyz(0.0, 0.0, -1.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
+            Self::East => {
+                Transform::from_xyz(1.0, 0.0, 0.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
+            Self::West => {
+                Transform::from_xyz(-1.0, 0.0, 0.0)
+                    .looking_at(Vec3::ZERO, Vec3::Y)
+                    .rotation
+            }
         }
     }
 }
@@ -478,17 +496,29 @@ impl Default for TestState {
 
 // ─── クエリ型エイリアス ───────────────────────────────────────────────────────
 
-pub type AnimPlayerQuery<'w, 's> =
-    Query<'w, 's, (&'static mut AnimationPlayer, &'static mut AnimationTransitions)>;
+pub type AnimPlayerQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut AnimationPlayer,
+        &'static mut AnimationTransitions,
+    ),
+>;
 
 pub type Cam3dSyncQuery<'w, 's> = Query<
-    'w, 's,
+    'w,
+    's,
     (&'static mut Transform, &'static mut Projection),
     Or<(With<Camera3dRtt>, With<Camera3dSoulMaskTest>)>,
 >;
 
 pub type Cam2dQuery<'w, 's> = Query<
-    'w, 's,
+    'w,
+    's,
     &'static Transform,
-    (With<TestMainCamera>, Without<Camera3dRtt>, Without<Camera3dSoulMaskTest>),
+    (
+        With<TestMainCamera>,
+        Without<Camera3dRtt>,
+        Without<Camera3dSoulMaskTest>,
+    ),
 >;

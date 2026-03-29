@@ -21,5 +21,6 @@ fn building_type_to_visual(kind: BuildingType) -> BuildingTypeVisual {
         BuildingType::BonePile => BuildingTypeVisual::BonePile,
         BuildingType::WheelbarrowParking => BuildingTypeVisual::WheelbarrowParking,
         BuildingType::SoulSpa => BuildingTypeVisual::SoulSpa,
+        BuildingType::OutdoorLamp => BuildingTypeVisual::OutdoorLamp,
     }
 }

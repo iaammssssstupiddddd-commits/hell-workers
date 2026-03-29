@@ -41,7 +41,9 @@ pub fn spawn_soul_spa(
         .id();
 
     if let Some(grid_entity) = power_grid_entity {
-        commands.entity(site_entity).insert(GeneratesFor(grid_entity));
+        commands
+            .entity(site_entity)
+            .insert(GeneratesFor(grid_entity));
     }
 
     for (gx, gy) in tiles {
@@ -70,6 +72,8 @@ pub fn spawn_soul_spa(
         Name::new("Building3dVisual (SoulSpa)"),
     ));
 
-    // WorldMap footprint 登録（SoulSpa は obstacle なし — occupancy のみ）
-    world_map.set_building_occupancies(site_entity, tiles);
+    // WorldMap footprint 登録（SoulSpa は obstacle なし — occupancy のみ。Soulがタイル上を歩ける）
+    for (gx, gy) in tiles {
+        world_map.set_building((gx, gy), site_entity);
+    }
 }

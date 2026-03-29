@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 bevy = { workspace = true }
 hw_core = { path = "../hw_core" }
+hw_energy = { path = "../hw_energy" }

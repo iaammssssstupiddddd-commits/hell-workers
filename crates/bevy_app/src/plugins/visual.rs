@@ -22,6 +22,7 @@ use crate::systems::visual::character_proxy_3d::{
     sync_soul_mask_proxy_3d_system, sync_soul_proxy_3d_system, sync_soul_shadow_proxy_3d_system,
 };
 use crate::systems::visual::elevation_view::{ElevationViewState, elevation_view_input_system};
+use crate::systems::visual::section_cut::sync_section_cut_normal_system;
 use crate::systems::visual::soul_animation::{
     SoulAnimationLibrary, initialize_soul_animation_players_system,
     prepare_soul_animation_library_system, sync_soul_anim_visual_state_system,
@@ -30,6 +31,7 @@ use crate::systems::visual::soul_animation::{
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
 use hw_core::game_state::PlayMode;
 use hw_visual::HwVisualPlugin;
+use hw_visual::SectionCut;
 use hw_visual::soul::task_link_system;
 use hw_world::sync_room_overlay_tiles_system;
 
@@ -45,9 +47,14 @@ impl Plugin for VisualPlugin {
         app.add_plugins(HwVisualPlugin);
 
         app.init_resource::<ElevationViewState>();
+        app.init_resource::<SectionCut>();
         app.init_resource::<SoulAnimationLibrary>();
 
         app.add_systems(Update, sync_camera3d_system.in_set(GameSystemSet::Visual));
+        app.add_systems(
+            Update,
+            sync_section_cut_normal_system.in_set(GameSystemSet::Visual),
+        );
 
         app.add_systems(
             Update,

@@ -11,6 +11,7 @@ use bevy::prelude::*;
 use hw_core::constants::ESCAPE_STRESS_THRESHOLD;
 use hw_core::relationships::CommandedBy;
 use hw_core::relationships::TaskWorkers;
+use hw_energy::{ConsumesFrom, PowerConsumer, PowerGrid};
 use hw_soul_ai::soul_ai::perceive::escaping::is_escape_threat_close;
 use hw_spatial::FamiliarSpatialGrid;
 use hw_ui::components::TooltipTemplate;
@@ -76,6 +77,9 @@ pub struct EntityInspectionQuery<'w, 's> {
     q_rocks: Query<'w, 's, &'static crate::systems::jobs::Rock>,
     q_designations: DesignationInspectionQuery<'w, 's>,
     q_buildings: BuildingInspectionQuery<'w, 's>,
+    pub(super) q_power_consumers:
+        Query<'w, 's, (&'static PowerConsumer, Option<&'static ConsumesFrom>)>,
+    pub(super) q_power_grids: Query<'w, 's, &'static PowerGrid>,
 }
 
 #[derive(Default)]

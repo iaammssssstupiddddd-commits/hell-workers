@@ -104,20 +104,21 @@ UI が無くても dev / debug 経路から値を変えられれば `MS-3-2` の
 
 ## 実装ステップ
 
-1. `QualitySettings` 相当の最小 resource を追加する
-2. `rtt_scale()` を実装する
-3. viewport size 算出を helper 化する
-4. 2 系統 RtT の再生成処理を helper 化する
-5. window change 系システムを helper 利用へ整理する
-6. quality change 系システムを追加する
-7. `RttCompositeMaterial.params.pixel_size` が texture 実サイズ準拠で更新されるよう確認する
-8. docs を同期する
+1. [x] `QualitySettings` 相当の最小 resource を追加する
+2. [x] `rtt_scale()` を実装する
+3. [x] viewport size 算出を helper 化する
+4. [x] 2 系統 RtT の再生成処理を helper 化する
+5. [x] window change 系システムを helper 利用へ整理する
+6. [x] quality change 系システムを追加する
+7. [x] `RttCompositeMaterial.params.pixel_size` が texture 実サイズ準拠で更新されるよう確認する
+8. [x] docs を同期する
 
 ## 変更対象候補
 
 - `crates/bevy_app/src/plugins/startup/rtt_setup.rs`
 - `crates/bevy_app/src/plugins/startup/rtt_composite.rs`
 - `crates/bevy_app/src/plugins/startup/mod.rs`
+- `crates/bevy_app/src/plugins/input.rs`
 - `crates/hw_core/src/quality.rs` または同等の新規ファイル
 - `docs/architecture.md`
 - `docs/plans/3d-rtt/phase3-implementation-plan-2026-03-16.md`
@@ -125,12 +126,12 @@ UI が無くても dev / debug 経路から値を変えられれば `MS-3-2` の
 
 ## 検証
 
-- `cargo check --workspace`
-- `cargo clippy --workspace -- -D warnings`
-- window resize 時に scene RtT / soul mask RtT が両方追従する
-- 品質設定変更時に RtT 解像度が変わる
-- Soul silhouette 丸めが崩れない
-- Familiar の 2D 前面表示に退行がない
+- [x] `cargo check --workspace`
+- [x] `cargo clippy --workspace -- -D warnings`
+- [x] window resize 時に scene RtT / soul mask RtT が両方追従する
+- [x] 品質設定変更時に RtT 解像度が変わる
+- [x] Soul silhouette 丸めが崩れない
+- [x] Familiar の 2D 前面表示に退行がない
 
 ## リスク
 

@@ -8,6 +8,7 @@ pub mod gathering;
 pub mod jobs;
 pub mod logistics;
 pub mod population;
+pub mod quality;
 pub mod relationships;
 pub mod selection;
 pub mod soul;

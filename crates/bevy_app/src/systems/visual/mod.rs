@@ -19,6 +19,7 @@ pub mod floor_construction {
     };
 }
 pub mod placement_ghost;
+pub mod section_cut;
 pub mod task_area_visual;
 pub mod wall_construction {
     pub use hw_visual::wall_construction::{

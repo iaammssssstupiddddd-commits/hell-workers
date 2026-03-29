@@ -14,8 +14,12 @@ use crate::building::{
 use crate::soul::{SoulSpawnArgs, spawn_test_soul};
 use crate::types::*;
 
-type BtnQuery<'w, 's> =
-    Query<'w, 's, (&'static VisualTestAction, &'static Interaction), (Changed<Interaction>, With<Button>)>;
+type BtnQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static VisualTestAction, &'static Interaction),
+    (Changed<Interaction>, With<Button>),
+>;
 
 /// VisualTestAction ボタンの押下をハンドリングして TestState を更新する。
 #[allow(clippy::too_many_arguments)]
@@ -28,7 +32,12 @@ pub fn handle_button_interactions(
     building_assets: Option<Res<TestBuildingAssets>>,
     building_3d_handles: Option<Res<TestBuilding3dHandles>>,
     mut character_materials: ResMut<Assets<CharacterMaterial>>,
-    mut q_souls: Query<(Entity, &mut Transform, &TestSoulConfig, Option<&SelectedSoul>)>,
+    mut q_souls: Query<(
+        Entity,
+        &mut Transform,
+        &TestSoulConfig,
+        Option<&SelectedSoul>,
+    )>,
     q_buildings: Query<(Entity, &TestBuilding)>,
     q_building_3d: Query<(Entity, &TestBuilding3dVisual)>,
 ) {
@@ -83,7 +92,9 @@ pub fn handle_button_interactions(
                 state.posterize_steps = DEFAULT_POSTERIZE_STEPS;
             }
             VisualTestAction::AddSoul => {
-                if state.soul_count < MAX_SOULS && let Some(a) = &assets {
+                if state.soul_count < MAX_SOULS
+                    && let Some(a) = &assets
+                {
                     let expr = match state.face_mode {
                         FaceMode::Single(e) => e,
                         FaceMode::AllDifferent => {
@@ -178,7 +189,6 @@ pub fn handle_button_interactions(
     }
 }
 
-
 pub fn apply_faces(
     state: Res<TestState>,
     q_souls: Query<&TestSoulConfig>,
@@ -197,12 +207,19 @@ pub fn apply_faces(
     }
 }
 
-pub fn apply_motion(state: Res<TestState>, mut q_souls: Query<&mut Transform, With<TestSoulConfig>>, time: Res<Time>) {
+pub fn apply_motion(
+    state: Res<TestState>,
+    mut q_souls: Query<&mut Transform, With<TestSoulConfig>>,
+    time: Res<Time>,
+) {
     let t = time.elapsed_secs();
     let s = SOUL_GLB_SCALE;
     for mut tf in q_souls.iter_mut() {
         match state.motion {
-            MotionMode::Idle => { tf.rotation = Quat::IDENTITY; tf.scale = Vec3::splat(s); }
+            MotionMode::Idle => {
+                tf.rotation = Quat::IDENTITY;
+                tf.scale = Vec3::splat(s);
+            }
             MotionMode::FloatingBob => {
                 tf.scale = Vec3::new(s, s * (1.0 + (t * 2.0).sin() * 0.05), s);
                 tf.rotation = Quat::from_rotation_z((t * 1.5).sin() * 0.08);
@@ -233,10 +250,18 @@ pub fn apply_animation(
     mut q_players: AnimPlayerQuery,
 ) {
     for mut handle in q_anim.iter_mut() {
-        if handle.current_playing == state.anim_clip_idx { continue; }
-        let Some(&(_, new_node)) = handle.clips.get(state.anim_clip_idx) else { continue };
-        let Ok((mut player, mut transitions)) = q_players.get_mut(handle.anim_player_entity) else { continue };
-        transitions.play(&mut player, new_node, Duration::ZERO).repeat();
+        if handle.current_playing == state.anim_clip_idx {
+            continue;
+        }
+        let Some(&(_, new_node)) = handle.clips.get(state.anim_clip_idx) else {
+            continue;
+        };
+        let Ok((mut player, mut transitions)) = q_players.get_mut(handle.anim_player_entity) else {
+            continue;
+        };
+        transitions
+            .play(&mut player, new_node, Duration::ZERO)
+            .repeat();
         handle.current_playing = state.anim_clip_idx;
     }
 }
@@ -266,10 +291,10 @@ pub fn sync_test_camera3d(
 
     let (x_off, y_val, z_off) = match elev.dir {
         TestElevDir::TopDown => (0.0, state.view_height, state.z_offset),
-        TestElevDir::North   => (0.0, soul_mid_y,        ELEV_DISTANCE),
-        TestElevDir::South   => (0.0, soul_mid_y,       -ELEV_DISTANCE),
-        TestElevDir::East    => (ELEV_DISTANCE,  soul_mid_y, 0.0),
-        TestElevDir::West    => (-ELEV_DISTANCE, soul_mid_y, 0.0),
+        TestElevDir::North => (0.0, soul_mid_y, ELEV_DISTANCE),
+        TestElevDir::South => (0.0, soul_mid_y, -ELEV_DISTANCE),
+        TestElevDir::East => (ELEV_DISTANCE, soul_mid_y, 0.0),
+        TestElevDir::West => (-ELEV_DISTANCE, soul_mid_y, 0.0),
     };
 
     for (mut cam3d, mut projection) in &mut q_cam3d {
@@ -286,10 +311,15 @@ pub fn apply_composite_sprite(
     state: Res<TestState>,
     elev: Res<TestElev>,
     q_window: Query<&Window, With<PrimaryWindow>>,
-    mut q_composite: Query<(&mut Transform, &MeshMaterial2d<LocalRttCompositeMaterial>), With<LocalRttComposite>>,
+    mut q_composite: Query<
+        (&mut Transform, &MeshMaterial2d<LocalRttCompositeMaterial>),
+        With<LocalRttComposite>,
+    >,
     mut composite_materials: ResMut<Assets<LocalRttCompositeMaterial>>,
 ) {
-    let Ok((mut tf, mat_handle)) = q_composite.single_mut() else { return };
+    let Ok((mut tf, mat_handle)) = q_composite.single_mut() else {
+        return;
+    };
     let Ok(win) = q_window.single() else { return };
     let s = win.size();
     let comp = if elev.dir.is_top_down() {
@@ -317,7 +347,10 @@ pub fn handle_panel_scroll(
         && q_window
             .single()
             .ok()
-            .and_then(|w| w.cursor_position().map(|pos| pos.x > w.width() - MENU_WIDTH))
+            .and_then(|w| {
+                w.cursor_position()
+                    .map(|pos| pos.x > w.width() - MENU_WIDTH)
+            })
             .unwrap_or(false);
 
     for mut cam in &mut q_pan_cam {

@@ -269,5 +269,20 @@ impl EntityInspectionQuery<'_, '_> {
                 model.push_tooltip(line.clone());
             }
         }
+
+        if let Ok((consumer, consumes_from_opt)) = self.q_power_consumers.get(entity) {
+            let grid_line = consumes_from_opt
+                .and_then(|cf| self.q_power_grids.get(cf.0).ok())
+                .map(|grid| {
+                    format!(
+                        "Power: {:.1}W / {:.1}W [{}]",
+                        grid.generation,
+                        grid.consumption,
+                        if grid.powered { "POWERED" } else { "BLACKOUT" }
+                    )
+                })
+                .unwrap_or_else(|| format!("Power: {:.1}W demand [no grid]", consumer.demand));
+            model.push_tooltip(grid_line);
+        }
     }
 }

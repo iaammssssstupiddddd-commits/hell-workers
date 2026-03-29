@@ -6,6 +6,7 @@
 use crate::plugins::startup::Building3dHandles;
 use bevy::prelude::*;
 use hw_jobs::Building;
+use hw_visual::SectionMaterial;
 use hw_visual::visual3d::Building3dVisual;
 
 /// Building エンティティ削除時に対応する Building3dVisual を despawn する。
@@ -28,7 +29,7 @@ pub fn sync_provisional_wall_material_system(
     handles_3d: Res<Building3dHandles>,
     q_buildings: Query<(Entity, &Building), Changed<Building>>,
     q_visuals: Query<(Entity, &Building3dVisual)>,
-    mut q_materials: Query<&mut MeshMaterial3d<StandardMaterial>>,
+    mut q_materials: Query<&mut MeshMaterial3d<SectionMaterial>>,
 ) {
     for (building_entity, building) in q_buildings.iter() {
         // 仮設から本設への遷移のみ対象

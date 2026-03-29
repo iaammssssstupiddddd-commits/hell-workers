@@ -15,7 +15,7 @@ pub(super) fn floor_site_remaining(
     };
 
     let needed = floor_site_tile_demand(
-        ctx.queries.storage.floor_tiles.iter(),
+        ctx.queries.storage.floor_tiles.iter().map(|(_, t, _)| t),
         site_entity,
         resource_type,
     );
@@ -39,7 +39,7 @@ pub(super) fn wall_site_remaining(
     };
 
     let needed = wall_site_tile_demand(
-        ctx.queries.storage.wall_tiles.iter(),
+        ctx.queries.storage.wall_tiles.iter().map(|(_, t, _)| t),
         site_entity,
         resource_type,
     );

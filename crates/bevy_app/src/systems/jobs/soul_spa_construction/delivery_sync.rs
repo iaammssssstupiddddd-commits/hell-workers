@@ -3,8 +3,8 @@ use hw_core::constants::TILE_SIZE;
 use hw_core::relationships::TaskWorkers;
 use hw_energy::{SoulSpaPhase, SoulSpaSite, SoulSpaTile};
 use hw_jobs::model::{Designation, TaskSlots, WorkType};
-use hw_logistics::types::ResourceItem;
 use hw_logistics::ResourceType;
+use hw_logistics::types::ResourceItem;
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 
 const PICKUP_RADIUS: f32 = TILE_SIZE * 1.5;
@@ -71,7 +71,8 @@ pub fn soul_spa_tile_activate_system(
             continue;
         }
         for child in children.iter() {
-            if q_tiles.get(child).is_ok() {                commands.entity(child).insert((
+            if q_tiles.get(child).is_ok() {
+                commands.entity(child).insert((
                     Designation {
                         work_type: WorkType::GeneratePower,
                     },

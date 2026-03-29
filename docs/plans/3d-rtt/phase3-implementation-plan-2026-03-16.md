@@ -393,47 +393,67 @@ App::new()
 
 ### M-3-2: RtT WindowResized + 品質スケール
 
-> **依存**: M-Pre2 完了・`QualitySettings` リソース存在
+> **依存**: M-Pre2 完了
 > **根拠**: `rtt-resolution-scaling-proposal` §4 Phase 3 序盤
 
 **やること**:
-1. `systems/visual/rtt_resize.rs` を新規作成（`on_window_resized`・`on_quality_changed`・`recreate_rtt` ヘルパー）
-2. `hw_core/src/quality.rs` に `rtt_scale()` メソッドを追加（高=1.0・中=0.75・低=0.5）
-3. 両システムを `Update` スケジュールに登録
+1. `hw_core::quality::QualitySettings` を追加し、`High / Medium / Low` の `rtt_scale()` を定義する
+2. `plugins/startup/rtt_setup.rs` で RtT 実解像度算出と 2 系統 texture 再生成責務を一本化する
+3. `plugins/startup/rtt_composite.rs` で `pixel_size` を logical 表示サイズではなく RtT 実サイズ基準に揃える
+4. 品質変更と window 物理解像度変更を同じ再生成経路へ流す
+5. dev 用に `F4` で `QualitySettings.rtt` を循環できるようにする
 
 **変更ファイル**:
-- `systems/visual/rtt_resize.rs`（新規）
 - `hw_core/src/quality.rs`
+- `plugins/startup/rtt_setup.rs`
+- `plugins/startup/rtt_composite.rs`
+- `plugins/startup/mod.rs`
+- `plugins/startup/startup_systems.rs`
+- `plugins/input.rs`
 
 **完了条件**:
-- [ ] `cargo check` ゼロエラー
-- [ ] ウィンドウリサイズ時に建物・キャラクターの描画が追従する（目視）
-- [ ] 品質設定変更時に RtT 解像度が変わる（目視）
+- [x] `cargo check` ゼロエラー
+- [x] `cargo clippy --workspace -- -D warnings`
+- [x] ウィンドウリサイズ時に建物・キャラクターの描画が追従する（目視）
+- [x] 品質設定変更時に RtT 解像度が変わる（目視）
 
 ---
 
-### M-3-3: SectionMaterial 基盤（MS-Section-A / 将来実装）
+### M-3-3: SectionMaterial 基盤（MS-Section-A）
 
-> **依存**: M-Pre1 完了（`WgpuFeatures::CLIP_DISTANCES` 確認済みであること）・将来フェーズで再開
+> **依存**: M-Pre1 完了（`WgpuFeatures::CLIP_DISTANCES` 確認済みであること）
 > **根拠**: `section-material-proposal` §5 MS-Section-A
 
 **やること**:
-1. `hw_visual/src/material/section_material.rs` を新規作成（`SectionMaterial`・`SectionCut`）
-2. `assets/shaders/section_material.wgsl` を新規作成（`section-material-proposal` §3.4 の完全版 WGSL）
-3. `MaterialPlugin::<SectionMaterial>` を `HwVisualPlugin` に追加
-4. `sync_section_cut_normal` システムを実装・登録（`ElevationViewState` 変化時に `SectionCut.normal` を更新）
-5. `sync_section_cut_to_materials` システムを実装・登録（`SectionCut` 変化時にマテリアル伝播）
+1. [x] `hw_visual/src/material/section_material.rs` を追加（`SectionMaterial`・`SectionCut`）
+2. [x] `assets/shaders/section_material.wgsl` を接続
+3. [x] isolated probe 用の最小 runtime 接続を入れる
+4. [x] `sync_section_cut_normal` / `sync_section_cut_to_materials` を isolated probe で検証する
+5. [x] 単純な Cuboid probe で `SectionCut.active` の on/off を目視確認する
+6. [x] `Wall` / `ProvisionalWall` を first consumer として再接続し、lighting / shadow が維持されることを確認する
 
 **変更ファイル**:
-- `hw_visual/src/material/section_material.rs`（新規）
-- `assets/shaders/section_material.wgsl`（新規）
+- `hw_visual/src/material/section_material.rs`
+- `assets/shaders/section_material.wgsl`
+- `assets/shaders/section_material_prepass.wgsl`
 - `hw_visual/src/lib.rs`
-- `systems/visual/camera_sync.rs`
+- `systems/visual/section_cut.rs`
+- `plugins/visual.rs`
+- `plugins/startup/visual_handles.rs`
+- `systems/jobs/building_completion/spawn.rs`
+- `systems/jobs/wall_construction/phase_transition.rs`
+- `systems/visual/building3d_cleanup.rs`
 
 **完了条件**:
-- [ ] `cargo check` ゼロエラー
-- [ ] `SectionCut.active = true` のとき Cuboid がスラブ外でクリップされる（目視）
-- [ ] `SectionCut.active = false` のとき全体が正常描画される（目視）
+- [x] `cargo check` ゼロエラー
+- [x] `cargo clippy --workspace -- -D warnings`
+- [x] `SectionCut.active = true` のとき Cuboid がスラブ外でクリップされる（目視）
+- [x] `SectionCut.active = false` のとき全体が正常描画される（目視）
+
+**実装メモ**:
+- 現行実装は `clip_distances` ではなく fragment `discard` ベースの one-sided slab を採用している。`SectionCut.position` はスラブ中心ではなく「手前の切断線」。
+- `SectionMaterial` は自前 `Material` ではなく `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` を使い、lighting / shadow / prepass は `StandardMaterial` 側に残している。
+- `discard` 方式のため断面キャップはまだ無く、壁 volume の途中切断では内部を覗き込む見え方になる。これは proposal の「方針 C」相当で、将来方針確定を待つ。
 
 ---
 
@@ -460,9 +480,13 @@ App::new()
 > **根拠**: `section-material-proposal` §5 MS-Section-B
 
 **やること**:
-1. `visual_handles.rs` の `Building3dHandles` を `SectionMaterial` ベースに変更
-2. `building_completion/spawn.rs` の全 `MeshMaterial3d<StandardMaterial>` を `MeshMaterial3d<SectionMaterial>` に置き換え
+1. `visual_handles.rs` の `Building3dHandles` を全 BuildingType で `SectionMaterial` ベースにそろえる
+2. `building_completion/spawn.rs` の残る `MeshMaterial3d<StandardMaterial>` を `MeshMaterial3d<SectionMaterial>` に置き換える
 3. 設備別 visual system（`tank.rs`・`mud_mixer.rs` 等）の同様置き換え
+
+**補足**:
+- 現時点で `Wall` / `ProvisionalWall` は pilot として `SectionMaterial` に移行済み
+- `floor` / `door` / `equipment` はまだ `StandardMaterial`
 
 **変更ファイル**:
 - `hw_visual/src/visual_handles.rs`
@@ -612,20 +636,20 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
 
 ### 現在地
 
-- 進捗: `41%`（M-Pre1〜M-Pre4・M-3-1・M-3-Char-A・M-3-Char-B・M-3-Fam-R 完了）
-- 完了済みマイルストーン: M-Pre1・M-Pre2・M-Pre3・M-Pre4・M-3-1・M-3-Char-A・M-3-Char-B・M-3-Fam-R
-- 今すぐ着手可: M-3-2
+- 進捗: `46%`（M-Pre1〜M-Pre4・M-3-1・M-3-Char-A・M-3-Char-B・M-3-Fam-R・M-3-2 完了）
+- 完了済みマイルストーン: M-Pre1・M-Pre2・M-Pre3・M-Pre4・M-3-1・M-3-Char-A・M-3-Char-B・M-3-Fam-R・M-3-2
+- 今すぐ着手可: M-3-3 を isolated probe で再開するか、Section 系を再度保留して Phase 3 後半タスクへ進むかを判断する
 
 ### 次の AI が最初にやること
 
-1. `docs/proposals/3d-rtt/20260316/rtt-resolution-scaling-proposal-2026-03-16.md` を読む
-2. `plugins/startup/rtt_setup.rs` と `plugins/startup/rtt_composite.rs` の現行 RtT 経路を読む
-3. M-3-2 の実装計画を作り、window resize と品質スケールの責務を整理する
-4. `QualitySettings` 相当の品質リソースが未実装である前提で、最小導線から着手する
+1. `SectionMaterial` は building placeholder への接続を一旦巻き戻していることを確認する
+2. runtime consumer を使わず、単純な Cuboid probe だけで clip の on/off を検証する計画を作る
+3. probe で成立確認が取れるまで `Building3dHandles` への再接続はしない
+4. probe が通った後で consumer 接続順を再設計する
 
 ### ブロッカー/注意点
 
-- Section 系（MS-3-3 以降）は将来実装へ送ったため、現行 Phase 3 主線では着手しない
+- `SectionMaterial` は building placeholder へつないだ時点で side face 描画退行を起こしたため、現在は runtime 接続を外している。次回は isolated probe から始めること
 - Camera3d の `RenderTarget::Image` 型は `Handle<Image>` → `ImageRenderTarget` の `From` 実装で対応済み（MS-1B で確認済み）
 - `SoulProxy3d` は Soul 本実装中の暫定ルートとして扱う。Familiar は M-3-Fam-R の結論どおり 2D 前面表示・影なしを維持する
 - `mesh_face` の `face_billboard_system` は子エンティティのローカルトランスフォームに書き込む。親の `GlobalTransform` から逆回転を適用すること（`character-3d-rendering-proposal` §3.8 参照）

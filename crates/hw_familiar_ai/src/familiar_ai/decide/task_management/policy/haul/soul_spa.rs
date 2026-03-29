@@ -2,7 +2,9 @@ use bevy::prelude::*;
 use hw_core::constants::WHEELBARROW_CAPACITY;
 use hw_core::logistics::ResourceType;
 
-use super::super::super::builders::{WheelbarrowCollectSpec, issue_collect_bone_with_wheelbarrow_to_soul_spa};
+use super::super::super::builders::{
+    WheelbarrowCollectSpec, issue_collect_bone_with_wheelbarrow_to_soul_spa,
+};
 use super::super::super::validator::resolve_haul_to_soul_spa_inputs;
 use super::demand;
 use super::direct_collect;

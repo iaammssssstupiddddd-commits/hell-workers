@@ -4,7 +4,7 @@
 //! Overlay Camera 経由で全画面メッシュに貼り付ける。
 //! Soul 専用 mask も同時に受け取り、最終合成時にシルエットを少し丸める。
 
-use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt, RttTextures};
+use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt, RttTextures, RttViewportSize};
 use bevy::camera::RenderTarget;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
@@ -51,6 +51,7 @@ impl Material2d for RttCompositeMaterial {
 pub fn spawn_rtt_composite_sprite(
     mut commands: Commands,
     rtt: Res<RttTextures>,
+    viewport_size: Res<RttViewportSize>,
     q_window: Query<&Window, With<PrimaryWindow>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<RttCompositeMaterial>>,
@@ -60,7 +61,7 @@ pub fn spawn_rtt_composite_sprite(
     let size = custom_size.unwrap_or(Vec2::new(1280.0, 720.0));
     let material = materials.add(RttCompositeMaterial {
         params: RttCompositeParams {
-            pixel_size: Vec2::new(1.0 / size.x.max(1.0), 1.0 / size.y.max(1.0)),
+            pixel_size: viewport_size.pixel_size(),
             mask_radius_px: 2.25,
             mask_feather: 0.28,
         },
@@ -81,6 +82,7 @@ pub fn spawn_rtt_composite_sprite(
 /// RtT の出力先と合成マテリアルの参照を同期する。
 pub fn sync_rtt_output_bindings(
     rtt: Res<RttTextures>,
+    viewport_size: Res<RttViewportSize>,
     q_window: Query<&Window, With<PrimaryWindow>>,
     mut main_camera_targets: Query<
         &mut RenderTarget,
@@ -111,17 +113,14 @@ pub fn sync_rtt_output_bindings(
         }
         tf.translation.z = Z_RTT_COMPOSITE;
 
-        if !rtt.is_changed() && logical_size.is_none() {
+        if !rtt.is_changed() && !viewport_size.is_changed() && logical_size.is_none() {
             continue;
         }
 
         if let Some(material) = materials.get_mut(&material_handle.0) {
             material.scene_texture = rtt.texture_3d.clone();
             material.soul_mask_texture = rtt.texture_soul_mask.clone();
-            if let Some(size) = logical_size {
-                material.params.pixel_size =
-                    Vec2::new(1.0 / size.x.max(1.0), 1.0 / size.y.max(1.0));
-            }
+            material.params.pixel_size = viewport_size.pixel_size();
         }
     }
 }
