@@ -19,7 +19,7 @@ use hw_core::quality::QualitySettings;
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 use hw_ui::camera::MainCamera;
 use super::asset_catalog::create_game_assets;
-use super::rtt_setup::{self, Camera3dRtt, Camera3dSoulMaskRtt, RttTextures};
+use super::rtt_setup::{self, Camera3dRtt, Camera3dSoulMaskRtt};
 
 pub(super) fn spawn_map_timed(
     commands: Commands,
@@ -48,21 +48,11 @@ pub(super) fn setup(
     commands.insert_resource(DirectionalLightShadowMap { size: 4096 });
 
     // --- RtT オフスクリーンテクスチャ生成 ---
-    let fallback_viewport =
-        rtt_setup::RttViewportSize::from_physical_size(1280, 720, quality.rtt_scale());
-    let viewport_size = q_window
-        .single()
-        .map(|window| rtt_setup::RttViewportSize::from_window(window, *quality))
-        .unwrap_or(fallback_viewport);
-    let rtt_handle =
-        rtt_setup::create_rtt_texture(viewport_size.width, viewport_size.height, &mut images);
-    let soul_mask_handle =
-        rtt_setup::create_rtt_texture(viewport_size.width, viewport_size.height, &mut images);
-    commands.insert_resource(RttTextures {
-        texture_3d: rtt_handle.clone(),
-        texture_soul_mask: soul_mask_handle.clone(),
-    });
-    commands.insert_resource(viewport_size);
+    let runtime =
+        rtt_setup::initialize_rtt_runtime(q_window.single().ok(), *quality, &mut images);
+    let rtt_handle = runtime.scene.clone();
+    let soul_mask_handle = runtime.soul_mask.clone();
+    commands.insert_resource(runtime);
 
     // --- Camera2d（既存: メイン描画・スクリーン出力） ---
     commands.spawn((

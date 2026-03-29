@@ -10,7 +10,7 @@ mod startup_systems;
 mod visual_handles;
 
 pub use rtt_composite::RttCompositeSprite;
-pub use rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttTextures, RttViewportSize};
+pub use rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime, RttViewportSize};
 pub use visual_handles::{Building3dHandles, CharacterHandles};
 
 use perf_scenario::{

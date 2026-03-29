@@ -181,12 +181,19 @@ Perceive → Update → Decide → Execute
 
 ### RtT テクスチャ管理
 
-`RttTextures`（Resource、`crates/bevy_app/src/plugins/startup/rtt_setup.rs`）が `Handle<Image>` を保持し、`RttViewportSize` が現在の RtT 実解像度を保持する。
+`RttRuntime`（Resource、`crates/bevy_app/src/plugins/startup/rtt_setup.rs`）が viewport サイズ・scene テクスチャハンドル・soul mask テクスチャハンドルを 1 つの Resource として保持する。
 
-テクスチャ生成は `create_rtt_texture(width, height, images)` 関数（`rtt_setup.rs`）に切り出されている。起動時は `PrimaryWindow` の物理解像度と `hw_core::quality::QualitySettings` の `rtt_scale()` を掛けたサイズで生成し、`sync_rtt_texture_size_to_window_and_quality` がウィンドウの物理解像度変化または品質変更を検知したフレームに、scene RtT / soul mask RtT を同時再生成する（`Rgba8Unorm` / `Rgba8UnormSrgb`）。
+```
+RttRuntime
+  .viewport: RttViewportSize   // 現在の RtT 実解像度
+  .scene: Handle<Image>        // 3D シーン描画先
+  .soul_mask: Handle<Image>    // Soul シルエット mask 描画先
+```
+
+テクスチャ生成は `create_rtt_texture(width, height, images)` 関数（`rtt_setup.rs`）に切り出されている。起動時は `initialize_rtt_runtime(window, quality, images)` helper が `PrimaryWindow` の物理解像度と `hw_core::quality::QualitySettings` の `rtt_scale()` を掛けたサイズで `RttRuntime` を構築し、`startup_systems::setup()` が Resource として挿入する。`sync_rtt_texture_size_to_window_and_quality` がウィンドウの物理解像度変化または品質変更を検知したフレームに `runtime.recreate()` を呼び、scene RtT / soul mask RtT を同時再生成する（`Rgba8Unorm` / `Rgba8UnormSrgb`）。
 
 - `QualitySettings.rtt` は `High / Medium / Low` を持ち、係数は `1.0 / 0.75 / 0.5`。
-- `RttViewportSize.pixel_size()` は shader 側へ渡す `1 / texture_size` を返し、logical な表示サイズではなく実際の RtT 解像度を基準にする。
+- `RttRuntime.pixel_size()` は shader 側へ渡す `1 / texture_size` を返し、logical な表示サイズではなく実際の RtT 解像度を基準にする。
 
 `WgpuFeatures::CLIP_DISTANCES` は `main.rs` の `WgpuSettings` で有効化済み（MS-P3-Pre-A）。ただし現在の `SectionMaterial` 実装は runtime 実機検証の結果 `clip_distances` を使わず、fragment `discard` ベースの one-sided slab クリップを採用している。
 
@@ -226,13 +233,13 @@ Perceive → Update → Decide → Execute
 - Camera2d の子エンティティではないため、MainCamera のパン・ズームの影響を受けない。
 - 3D コンテンツのパンは Camera3d の Transform、ズームは `OrthographicProjection.scale` を `sync_camera3d_system` が毎フレーム更新することで実現する。
 - `RttCompositeSprite` マーカーコンポーネントが付与されており、`apply_render3d_visibility_system` が `Visibility` を制御する。
-- `RttCompositeMaterial` は通常の 3D RtT (`RttTextures.texture_3d`) と Soul 専用 mask RtT (`RttTextures.texture_soul_mask`) を同時に受け取り、最終合成時に Soul の輪郭を画面上で少し丸める。
+- `RttCompositeMaterial` は通常の 3D RtT (`RttRuntime.scene`) と Soul 専用 mask RtT (`RttRuntime.soul_mask`) を同時に受け取り、最終合成時に Soul の輪郭を画面上で少し丸める。
 - 建築物 3D ビジュアルは `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER])` を使い、RtT Camera3d には見せつつ、影確認用 `DirectionalLight` からも shadow receiver として扱えるようにしている。
 - 表示用 Soul GLB は `LAYER_3D`、Soul shadow proxy は `LAYER_3D` と `LAYER_3D_SOUL_SHADOW` の両方に所属する。Bevy 0.18 の shadow queue は `camera_layers ∩ mesh_layers` を満たさない caster を落とすため、camera 非表示用の専用 layer だけでは shadow map に参加できない。shadow proxy は main view 側にも残しつつ、`SoulShadowMaterial` で通常描画だけ `discard` し、prepass / shadow pass では depth を書く。
 - TopDown の太陽方向は `hw_core::constants::topdown_sun_direction_world()` を単一の真実とし、検証用 `DirectionalLight` と `CharacterMaterial` の body shader の両方が同じ方向を使う。現在は画面手前側の壁面が完全な日陰にならないよう、真上寄りではなく前方寄りの斜光を採用している。
 - Bevy 0.18 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 `DirectionalLight` は caster/receiver 専用 layer に加えて `LAYER_3D` も持ち、`Camera3dRtt` 視点で light 自体が有効になるようにしている。
 
-`sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は `RttTextures` と `RttViewportSize` の変化を検知し、`Camera3dRtt.target` / `Camera3dSoulMaskRtt.target` と `RttCompositeMaterial` の参照テクスチャを同時に更新する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttViewportSize` の実サイズから再計算し、品質スケール時でも Soul silhouette 合成がずれないようにしている。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ変更フレームや品質変更フレーム内で再生成後のテクスチャへ差し替わる。
+`sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は合成メッシュのスケールをウィンドウリサイズに常時追従させ、`RttRuntime.is_changed()` のときのみカメラ `RenderTarget` と `RttCompositeMaterial` の参照テクスチャを更新する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttRuntime.viewport` の実サイズから再計算し、品質スケール時でも Soul silhouette 合成がずれないようにしている。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ変更フレームや品質変更フレーム内で再生成後のテクスチャへ差し替わる。
 
 ### キャラクター表示（Soul GLB + Familiar 2D 前面表示）
 
@@ -263,7 +270,7 @@ Perceive → Update → Decide → Execute
 - `mesh_face` のローカル回転は GLB 側の初期姿勢をそのまま使い、PoC 段階では追加の billboard 回転を行わない。
 - `Camera3dRtt` には `AmbientLight` を付与し、GLB 付属の lit material が RtT 上で暗転しないようにする。
 - `startup_systems::setup` では `LAYER_3D` と `LAYER_3D_SOUL_SHADOW` の両方に作用する shadow-enabled `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 4096 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。これにより Soul の shadow proxy だけを camera 非表示のまま shadow pass に参加させられる。
-- `Camera3dSoulMaskRtt` は Soul mask 専用 Camera3d で、通常の `Camera3dRtt` と同じ Transform / Projection を共有する。最終合成では `RttCompositeMaterial` が `texture_soul_mask` を近傍サンプリングし、Soul シルエットだけを画面上で少し膨らませて角を丸める。
+- `Camera3dSoulMaskRtt` は Soul mask 専用 Camera3d で、通常の `Camera3dRtt` と同じ Transform / Projection を共有する。最終合成では `RttCompositeMaterial` が `soul_mask_texture`（`RttRuntime.soul_mask` と同期）を近傍サンプリングし、Soul シルエットだけを画面上で少し膨らませて角を丸める。
 - Familiar は 2D `Sprite` の 4 フレーム差し替え・左右反転・hover/wobble を本表示として維持する。Command radius オーラ・hover/selection・吹き出しも同じ 2D world transform を参照する。
 - Familiar は建築物 RtT 合成より手前に出す前提とし、Soul のような shadow proxy や shadow caster は持たない。
 - `FamiliarProxy3d` は移行期の検証用経路として残っているが、Phase 3 の恒久方針ではない。多層階導入時は `FloorLevel` 等の所属階 state を導入し、「現在表示中の階に属する Familiar だけを 2D 前面表示する」ルールを別マイルストーンで定義する。

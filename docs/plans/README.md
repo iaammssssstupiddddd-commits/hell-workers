@@ -19,7 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [rtt-pipeline-refactor-2026-03-29.md](rtt-pipeline-refactor-2026-03-29.md) | Draft | RtT Pipeline Refactor Plan |
+| [rtt-pipeline-refactor-2026-03-29.md](rtt-pipeline-refactor-2026-03-29.md) | 完了 | `RttRuntime` 統合・`sync_rtt_output_bindings` 最適化。仕様は `docs/architecture.md` RtT 節 |
 | [task-chain-system-2026-03-29.md](task-chain-system-2026-03-29.md) | Draft | タスクチェーンシステム実装計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)

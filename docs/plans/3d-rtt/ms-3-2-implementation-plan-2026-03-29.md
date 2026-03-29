@@ -9,9 +9,9 @@ Phase 3 の現在地では Soul・建築物・Soul silhouette mask がすべて 
 ## 現状確認
 
 - `create_rtt_texture` は `rtt_setup.rs` に切り出し済み
-- `RttTextures` は `texture_3d` と `texture_soul_mask` の 2 系統を持つ
-- `RttViewportSize` も導入済み
-- `sync_rtt_texture_size_to_window` で PrimaryWindow の物理解像度追従は既に入っている
+- **`RttRuntime`**（Resource）が `.scene` / `.soul_mask` の 2 系統ハンドルと `.viewport`（`RttViewportSize`）をまとめて保持する（2026-03-29 の pipeline 整理で `RttTextures` から統合）
+- `RttViewportSize` は standalone Resource ではなく `RttRuntime.viewport` のフィールド型
+- `sync_rtt_texture_size_to_window_and_quality` で PrimaryWindow の物理解像度および品質変更の追従が入っている
 - `sync_rtt_output_bindings` で camera target と composite material 差し替えも既に入っている
 - proposal が前提にしていた `QualitySettings` / `hw_core/src/quality.rs` は現行 repo に未実装
 
@@ -22,7 +22,7 @@ Phase 3 の現在地では Soul・建築物・Soul silhouette mask がすべて 
 
 ## 到達状態
 
-- window size change 時に `texture_3d` / `texture_soul_mask` が同時に再生成される
+- window size change 時に `RttRuntime.scene` / `RttRuntime.soul_mask` が同時に再生成される
 - `Camera3dRtt` / `Camera3dSoulMaskRtt` / `RttCompositeMaterial` が同フレームで新 handle を参照する
 - 品質設定 change 時も同じ再生成経路を通る
 - `logical size` と `physical size` の使い分けが明文化される
@@ -55,8 +55,8 @@ proposal は `QualitySettings` の存在を前提にしているが、現行 rep
 scene RtT だけを更新すると、soul mask 合成が壊れる。
 
 再生成は常に以下を同時更新する必要がある。
-- `RttTextures.texture_3d`
-- `RttTextures.texture_soul_mask`
+- `RttRuntime.scene`（旧 `RttTextures.texture_3d`）
+- `RttRuntime.soul_mask`（旧 `RttTextures.texture_soul_mask`）
 - `Camera3dRtt.target`
 - `Camera3dSoulMaskRtt.target`
 - `RttCompositeMaterial.scene_texture`

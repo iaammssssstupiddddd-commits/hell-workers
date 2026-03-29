@@ -4,7 +4,7 @@
 //! Overlay Camera 経由で全画面メッシュに貼り付ける。
 //! Soul 専用 mask も同時に受け取り、最終合成時にシルエットを少し丸める。
 
-use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt, RttTextures, RttViewportSize};
+use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime};
 use bevy::camera::RenderTarget;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
@@ -50,8 +50,7 @@ impl Material2d for RttCompositeMaterial {
 /// RtT テクスチャをワールド原点に固定した全画面メッシュとして合成表示する。
 pub fn spawn_rtt_composite_sprite(
     mut commands: Commands,
-    rtt: Res<RttTextures>,
-    viewport_size: Res<RttViewportSize>,
+    runtime: Res<RttRuntime>,
     q_window: Query<&Window, With<PrimaryWindow>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<RttCompositeMaterial>>,
@@ -61,12 +60,12 @@ pub fn spawn_rtt_composite_sprite(
     let size = custom_size.unwrap_or(Vec2::new(1280.0, 720.0));
     let material = materials.add(RttCompositeMaterial {
         params: RttCompositeParams {
-            pixel_size: viewport_size.pixel_size(),
+            pixel_size: runtime.pixel_size(),
             mask_radius_px: 2.25,
             mask_feather: 0.28,
         },
-        scene_texture: rtt.texture_3d.clone(),
-        soul_mask_texture: rtt.texture_soul_mask.clone(),
+        scene_texture: runtime.scene.clone(),
+        soul_mask_texture: runtime.soul_mask.clone(),
     });
 
     commands.spawn((
@@ -81,8 +80,7 @@ pub fn spawn_rtt_composite_sprite(
 
 /// RtT の出力先と合成マテリアルの参照を同期する。
 pub fn sync_rtt_output_bindings(
-    rtt: Res<RttTextures>,
-    viewport_size: Res<RttViewportSize>,
+    runtime: Res<RttRuntime>,
     q_window: Query<&Window, With<PrimaryWindow>>,
     mut main_camera_targets: Query<
         &mut RenderTarget,
@@ -100,27 +98,30 @@ pub fn sync_rtt_output_bindings(
 ) {
     let logical_size = q_window.single().ok().map(logical_composite_size);
 
-    if let Ok(mut target) = main_camera_targets.single_mut() {
-        *target = RenderTarget::Image(rtt.texture_3d.clone().into());
-    }
-    if let Ok(mut target) = soul_mask_targets.single_mut() {
-        *target = RenderTarget::Image(rtt.texture_soul_mask.clone().into());
-    }
-
-    for (material_handle, mut tf) in quads.iter_mut() {
+    // メッシュスケールはウィンドウリサイズで常時追従（RttRuntime 変化とは独立）
+    for (_, mut tf) in quads.iter_mut() {
         if let Some(size) = logical_size {
             tf.scale = size.extend(1.0);
         }
         tf.translation.z = Z_RTT_COMPOSITE;
+    }
 
-        if !rtt.is_changed() && !viewport_size.is_changed() && logical_size.is_none() {
-            continue;
-        }
+    // テクスチャ参照とカメラ RenderTarget の差し替えは RttRuntime が変化したときだけ行う
+    if !runtime.is_changed() {
+        return;
+    }
 
+    if let Ok(mut target) = main_camera_targets.single_mut() {
+        *target = RenderTarget::Image(runtime.scene.clone().into());
+    }
+    if let Ok(mut target) = soul_mask_targets.single_mut() {
+        *target = RenderTarget::Image(runtime.soul_mask.clone().into());
+    }
+    for (material_handle, _) in quads.iter() {
         if let Some(material) = materials.get_mut(&material_handle.0) {
-            material.scene_texture = rtt.texture_3d.clone();
-            material.soul_mask_texture = rtt.texture_soul_mask.clone();
-            material.params.pixel_size = viewport_size.pixel_size();
+            material.scene_texture = runtime.scene.clone();
+            material.soul_mask_texture = runtime.soul_mask.clone();
+            material.params.pixel_size = runtime.pixel_size();
         }
     }
 }

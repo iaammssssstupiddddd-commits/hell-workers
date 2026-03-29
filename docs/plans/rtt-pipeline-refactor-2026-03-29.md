@@ -1,27 +1,28 @@
 # RtT Pipeline Refactor Plan
 
+## ステータス
+
+- **完了**（2026-03-29）。`RttRuntime` 統合・`initialize_rtt_runtime`・`sync_rtt_output_bindings` の `runtime.is_changed()` ガードまでコードへ反映済み。
+- 恒久仕様の参照先: `docs/architecture.md` の「RtT（Render-to-Texture）インフラ」。
+- 以下の Problem / Goal / API 設計・手順は、**計画・実装時の整理用メモ**（当時の課題記述を含む）として残す。
+
 ## Problem
 
 現在の RtT 実装は機能自体は成立しているが、責務が複数ファイルにまたがって分散している。
 
-- `startup_systems.rs`
-  - RtT texture 初期生成
-  - `Camera3dRtt` / `Camera3dSoulMaskRtt` spawn
-  - Overlay camera spawn
-- `rtt_setup.rs`
-  - viewport size 計算
-  - texture 再生成
-- `rtt_composite.rs`
-  - composite material 初期化
-  - camera `RenderTarget` 差し替え
-  - material texture binding / `pixel_size` 更新
+| ファイル | 内容 |
+|---|---|
+| `startup_systems.rs::setup()` | fallback viewport 算出・texture 2 枚生成・`RttTextures`/`RttViewportSize` 挿入・`Camera3dRtt`/`Camera3dSoulMaskRtt` spawn |
+| `rtt_setup.rs` | `RttTextures`/`RttViewportSize` 定義・`recreate_rtt_textures()`・`sync_rtt_texture_size_to_window_and_quality()` |
+| `rtt_composite.rs` | `spawn_rtt_composite_sprite()`・`sync_rtt_output_bindings()` |
 
 この構成には次の問題がある。
 
-- 初期生成と再生成の責務が分かれており、RtT の構成要素を追いにくい
-- `setup()` が大きく、RtT の知識を startup 全体へ漏らしている
-- texture / camera target / composite binding の同期が別々の場所にあり、拡張時に差分漏れを起こしやすい
-- scene RtT と soul mask RtT が「2 系統ある」ことを明示する中間表現が弱い
+- `RttTextures` と `RttViewportSize` が別 Resource として管理されており、どちらか片方だけ変わっても `is_changed()` が片方しか立たない。実際には常に同時に変わるデータ。
+- `startup_systems::setup()` に RtT の viewport 計算・texture 生成・resource 挿入ロジックが直書きされており、`rtt_setup.rs` と責務が被っている。
+- `sync_rtt_output_bindings` はカメラの `RenderTarget` を **毎フレーム無条件で上書き**している（変化チェックなし）。合成マテリアル側は `rtt` / `viewport_size` / `logical_size` による `continue` で更新を抑えているが、カメラ行は毎フレーム通る。
+- scene RtT と soul mask RtT の対称性が `RttTextures.texture_3d` / `texture_soul_mask` というフィールド名では伝わりにくい。
+- `recreate_rtt_textures()` が `setup()` では使われておらず、初期生成と再生成が別コードパスを通っている。
 
 現状では動いているが、今後 `SectionMaterial` / 追加 pass / 品質設定拡張を入れる前に整理しておく価値がある。
 
@@ -31,10 +32,10 @@ RtT を「初期化」「viewport 決定」「texture 再生成」「camera targ
 
 到達目標:
 
-- RtT の初期化と再生成が同じデータモデルで動く
-- `startup_systems.rs` から RtT の詳細を減らす
-- scene RtT / soul mask RtT を 1 つの runtime resource で追える
-- 再生成時に更新すべき対象が 1 箇所にまとまる
+- `RttTextures` + `RttViewportSize` を 1 つの `RttRuntime` Resource に統合する
+- `startup_systems::setup()` から RtT の実装詳細（viewport 計算・texture 生成）を除去する
+- 初期化と再生成が `RttRuntime::new` / `RttRuntime::recreate` として同じコードパスを通る
+- `sync_rtt_output_bindings` に `runtime.is_changed()` ガードを追加し、**カメラ `RenderTarget` とマテリアル差し替え**の無駄な毎フレーム更新を解消する（`Startup` の `setup()` でカメラに初期 `RenderTarget` が付くため、最初の `Update` で早期 return しても描画経路は破綻しにくい）
 
 ## Non-Goals
 
@@ -42,109 +43,284 @@ RtT を「初期化」「viewport 決定」「texture 再生成」「camera targ
 - 新しい texture pass の導入
 - composite shader の見た目変更
 - camera/light の構成変更
+- 旧 `Image` ハンドルが `Assets<Image>` に残る挙動の変更（現状の `recreate_rtt_textures` と同様。参照が外れたアセットの回収は従来どおり）
 
-## Refactor Direction
+---
 
-### 1. RtT runtime resource を明示化する
+## API 設計
 
-`RttTextures` と `RttViewportSize` を別 resource のまま扱うのではなく、次のような RtT runtime 構造へまとめる。
-
-- viewport size
-- scene texture handle
-- soul mask texture handle
-
-候補:
+### `RttRuntime` Resource（`rtt_setup.rs` に追加）
 
 ```rust
+/// RtT パイプラインの runtime state を一元管理する Resource。
+/// 初期化・リサイズ・品質切り替えの全経路が同じ struct を更新する。
 #[derive(Resource)]
 pub struct RttRuntime {
     pub viewport: RttViewportSize,
     pub scene: Handle<Image>,
     pub soul_mask: Handle<Image>,
 }
+
+impl RttRuntime {
+    pub fn new(viewport: RttViewportSize, images: &mut Assets<Image>) -> Self {
+        Self {
+            scene: create_rtt_texture(viewport.width, viewport.height, images),
+            soul_mask: create_rtt_texture(viewport.width, viewport.height, images),
+            viewport,
+        }
+    }
+
+    pub fn recreate(&mut self, viewport: RttViewportSize, images: &mut Assets<Image>) {
+        self.viewport = viewport;
+        self.scene = create_rtt_texture(viewport.width, viewport.height, images);
+        self.soul_mask = create_rtt_texture(viewport.width, viewport.height, images);
+    }
+
+    pub fn pixel_size(&self) -> Vec2 {
+        self.viewport.pixel_size()
+    }
+}
 ```
 
-これにより、初期化と再生成の両方が同じ resource を更新する形にできる。
+### `initialize_rtt_runtime()` helper（`rtt_setup.rs` に追加）
 
-### 2. 初期生成を `rtt_setup.rs` 側へ寄せる
+```rust
+/// window 解像度と quality から RttRuntime を生成して返す。
+/// window が取れない場合は fallback (1280×720) を使用する。
+pub fn initialize_rtt_runtime(
+    window: Option<&Window>,
+    quality: QualitySettings,
+    images: &mut Assets<Image>,
+) -> RttRuntime {
+    let viewport = window
+        .map(|w| RttViewportSize::from_window(w, quality))
+        .unwrap_or_else(|| RttViewportSize::from_physical_size(1280, 720, quality.rtt_scale()));
+    RttRuntime::new(viewport, images)
+}
+```
 
-いまの `startup_systems::setup()` にある:
+---
 
-- fallback viewport 決定
-- window + quality からの viewport 算出
-- scene / soul mask texture 初期生成
-- resource insert
+## 各ファイルの変更詳細
 
-を `rtt_setup.rs` の helper へ寄せる。
+### Step 1: `rtt_setup.rs` — `RttRuntime` 追加・既存 Resource 削除
 
-候補:
+**追加:**
+- `RttRuntime` struct + impl（上記 API 設計のとおり）
+- `initialize_rtt_runtime()` helper
 
-- `initialize_rtt_runtime(...) -> RttRuntime`
-- `spawn_rtt_cameras(...)`
+**削除:**
+- `RttTextures` struct（`RttRuntime` に吸収）
+- standalone Resource としての `RttViewportSize`（`RttRuntime.viewport` フィールドとして保持）
+  - 型定義と impl は残す（`RttRuntime.viewport` のフィールド型として使うため）
+- `recreate_rtt_textures()` 関数（`RttRuntime::recreate` に統合）
 
-こうすると `setup()` は「RtT を使う startup wiring」だけに薄くできる。
+**変更:**
+- `sync_rtt_texture_size_to_window_and_quality` のシグネチャを更新:
 
-### 3. 再生成後の反映を 1 系統にまとめる
+```rust
+// before
+pub fn sync_rtt_texture_size_to_window_and_quality(
+    q_window: Query<Ref<Window>, With<PrimaryWindow>>,
+    quality: Res<QualitySettings>,
+    mut viewport_size: ResMut<RttViewportSize>,
+    mut rtt: ResMut<RttTextures>,
+    mut images: ResMut<Assets<Image>>,
+)
 
-現在は:
+// after
+pub fn sync_rtt_texture_size_to_window_and_quality(
+    q_window: Query<Ref<Window>, With<PrimaryWindow>>,
+    quality: Res<QualitySettings>,
+    mut runtime: ResMut<RttRuntime>,
+    mut images: ResMut<Assets<Image>>,
+)
+```
 
-- `rtt_setup::sync_rtt_texture_size_to_window_and_quality`
-  - texture の再生成
-- `rtt_composite::sync_rtt_output_bindings`
-  - camera target / composite material を同期
+関数本体も `runtime.recreate(next_size, &mut images)` の 1 行呼び出しに変わる。
 
-の 2 段階になっている。
+### Step 2: `startup_systems.rs` — RtT 初期化コードの置換
 
-これ自体は悪くないが、更新対象が増えると追跡が難しい。
+**変更前（現在の `setup()` 内 51–65 行目）:**
 
-次の形に整理する。
+```rust
+let fallback_viewport =
+    rtt_setup::RttViewportSize::from_physical_size(1280, 720, quality.rtt_scale());
+let viewport_size = q_window
+    .single()
+    .map(|window| rtt_setup::RttViewportSize::from_window(window, *quality))
+    .unwrap_or(fallback_viewport);
+let rtt_handle =
+    rtt_setup::create_rtt_texture(viewport_size.width, viewport_size.height, &mut images);
+let soul_mask_handle =
+    rtt_setup::create_rtt_texture(viewport_size.width, viewport_size.height, &mut images);
+commands.insert_resource(RttTextures {
+    texture_3d: rtt_handle.clone(),
+    texture_soul_mask: soul_mask_handle.clone(),
+});
+commands.insert_resource(viewport_size);
+```
 
-- `rtt_setup`
-  - viewport 判定
-  - resource 更新
-- `rtt_bindings`
-  - runtime resource から camera / material / mesh scale へ反映
+**変更後:**
 
-少なくとも「RtT runtime をどこに反映するか」を 1 system に集約する。
+```rust
+let runtime =
+    rtt_setup::initialize_rtt_runtime(q_window.single().ok(), *quality, &mut images);
+let rtt_handle = runtime.scene.clone();
+let soul_mask_handle = runtime.soul_mask.clone();
+commands.insert_resource(runtime);
+```
 
-### 4. camera spawn helper を分離する
+`use super::rtt_setup::{self, Camera3dRtt, Camera3dSoulMaskRtt, RttTextures}` から `RttTextures` を除去する。
 
-`startup_systems.rs` の `setup()` には Camera2d / OverlayCamera / Camera3dRtt / Camera3dSoulMaskRtt が混在している。
+### Step 3: `rtt_composite.rs` — `RttRuntime` への切り替えと early-exit 最適化
 
-RtT に関係するのは:
+**import 変更:**
 
-- OverlayCamera
-- Camera3dRtt
-- Camera3dSoulMaskRtt
+```rust
+// before
+use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt, RttTextures, RttViewportSize};
 
-これらは `rtt_setup.rs` か新規 `rtt_spawn.rs` に切り出した方が読みやすい。
+// after
+use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime};
+```
 
-## Proposed Steps
+**`spawn_rtt_composite_sprite` シグネチャ変更:**
 
-1. `RttRuntime` resource を導入し、`RttTextures` / `RttViewportSize` の利用箇所を洗い出す
-2. 初期 texture 生成を `rtt_setup.rs` helper に移す
-3. `startup_systems::setup()` から RtT resource 初期化コードを除去する
-4. `sync_rtt_output_bindings` が `RttRuntime` を単一入力として受けるようにする
-5. 必要なら RtT camera spawn を helper 化する
-6. docs を新しい責務分割に同期する
+```rust
+// before
+pub fn spawn_rtt_composite_sprite(
+    ...
+    rtt: Res<RttTextures>,
+    viewport_size: Res<RttViewportSize>,
+    ...
+)
+
+// after
+pub fn spawn_rtt_composite_sprite(
+    ...
+    runtime: Res<RttRuntime>,
+    ...
+)
+```
+
+内部の `rtt.texture_3d` → `runtime.scene`、`rtt.texture_soul_mask` → `runtime.soul_mask`、`viewport_size.pixel_size()` → `runtime.pixel_size()` に差し替え。
+
+**`sync_rtt_output_bindings` のシグネチャ変更と早期リターン追加:**
+
+現在のコードはカメラの `RenderTarget` を毎フレーム無条件上書きしている（マテリアル更新ループは条件付き `continue` あり）。変更後は `runtime.is_changed()` でカメラ・マテリアル更新ブロック全体を囲み、変化がないフレームではそこをスキップする。
+
+```rust
+pub fn sync_rtt_output_bindings(
+    runtime: Res<RttRuntime>,
+    q_window: Query<&Window, With<PrimaryWindow>>,
+    mut main_camera_targets: Query<...>,
+    mut soul_mask_targets: Query<...>,
+    mut quads: Query<(&MeshMaterial2d<RttCompositeMaterial>, &mut Transform), With<RttCompositeSprite>>,
+    mut materials: ResMut<Assets<RttCompositeMaterial>>,
+) {
+    let logical_size = q_window.single().ok().map(logical_composite_size);
+
+    // メッシュスケールはウィンドウリサイズで常時追従（RttRuntime 変化とは独立）
+    for (_, mut tf) in quads.iter_mut() {
+        if let Some(size) = logical_size {
+            tf.scale = size.extend(1.0);
+        }
+        tf.translation.z = Z_RTT_COMPOSITE;
+    }
+
+    // テクスチャ参照の差し替えは RttRuntime が変化したときだけ行う
+    if !runtime.is_changed() {
+        return;
+    }
+
+    if let Ok(mut target) = main_camera_targets.single_mut() {
+        *target = RenderTarget::Image(runtime.scene.clone().into());
+    }
+    if let Ok(mut target) = soul_mask_targets.single_mut() {
+        *target = RenderTarget::Image(runtime.soul_mask.clone().into());
+    }
+    for (material_handle, _) in quads.iter() {
+        if let Some(material) = materials.get_mut(&material_handle.0) {
+            material.scene_texture = runtime.scene.clone();
+            material.soul_mask_texture = runtime.soul_mask.clone();
+            material.params.pixel_size = runtime.pixel_size();
+        }
+    }
+}
+```
+
+### Step 4: `mod.rs` — re-export 更新
+
+```rust
+// before
+pub use rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttTextures, RttViewportSize};
+
+// after
+pub use rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime, RttViewportSize};
+// RttTextures は削除（RttRuntime に統合）
+// RttViewportSize は RttRuntime.viewport フィールドへのアクセスで必要なので残す
+```
+
+### Step 5 (Optional): Camera spawn helper の切り出し
+
+`startup_systems.rs::setup()` の Camera3dRtt / Camera3dSoulMaskRtt spawn ブロックを
+`rtt_setup.rs` の `spawn_rtt_cameras(commands: &mut Commands, runtime: &RttRuntime)` に移動する。
+
+**判断基準:**
+- `rtt_setup.rs` への追加 import が増える（`LAYER_3D`, `LAYER_3D_SOUL_MASK`, `VIEW_HEIGHT`, `Z_OFFSET`, `ElevationDirection` など）
+- Step 1–4 完了後に改めて `setup()` の見通しを評価してから実施するかどうか決める
+
+### Step 6: docs 更新
+
+`docs/architecture.md` の startup / RtT セクションを新しい責務分割に合わせて更新する。
+
+---
+
+## 実施単位（ビルドが通る単位）
+
+`RttTextures` / `RttViewportSize` を消して `RttRuntime` のみにすると、同じ変更セットで `rtt_setup.rs`・`startup_systems.rs`・`rtt_composite.rs`・`mod.rs` をまとめて直さないと `cargo check` が通らない。上記 Step 1〜4（Rust 側）は **1 コミット相当でまとめて適用**する想定でよい。ドキュメント（Step 6 / `docs/architecture.md`）はその後でもよい。
+
+## Proposed Steps（実施順）
+
+1. `rtt_setup.rs` に `RttRuntime` 追加・`initialize_rtt_runtime()` 追加
+2. `rtt_setup.rs` の `sync_rtt_texture_size_to_window_and_quality` を `RttRuntime` を受けるように変更
+3. `rtt_setup.rs` から `RttTextures` 削除・`recreate_rtt_textures()` 削除
+4. `startup_systems.rs` の RtT 初期化ブロックを `initialize_rtt_runtime()` 呼び出しへ置換
+5. `rtt_composite.rs` を `RttRuntime` 対応に更新（import, spawn, sync 各関数）
+6. `mod.rs` の re-export を更新
+7. `cargo check --workspace` + `cargo clippy --workspace` でクリーン確認（コマンドは Verification と同一）
+8. `docs/architecture.md` 更新
+9. (Optional) camera spawn helper の切り出し評価
 
 ## Files To Modify
 
-- `crates/bevy_app/src/plugins/startup/rtt_setup.rs`
-- `crates/bevy_app/src/plugins/startup/rtt_composite.rs`
-- `crates/bevy_app/src/plugins/startup/startup_systems.rs`
-- `crates/bevy_app/src/plugins/startup/mod.rs`
-- `docs/architecture.md`
-- `docs/plans/3d-rtt/phase3-implementation-plan-2026-03-16.md` if milestone wording changes
+| ファイル | 変更内容 |
+|---|---|
+| `crates/bevy_app/src/plugins/startup/rtt_setup.rs` | `RttRuntime` 追加・`RttTextures` 削除・helper 追加 |
+| `crates/bevy_app/src/plugins/startup/rtt_composite.rs` | `RttRuntime` 使用へ切り替え・early-exit 追加 |
+| `crates/bevy_app/src/plugins/startup/startup_systems.rs` | RtT 初期化ブロック置換 |
+| `crates/bevy_app/src/plugins/startup/mod.rs` | re-export 更新 |
+| `docs/architecture.md` | startup / RtT セクション更新 |
 
 ## Verification
 
-- `cargo check --workspace`
-- `cargo clippy --workspace -- -D warnings`
-- 起動時に RtT が初期化される
-- window resize で scene / soul mask の両方が追従する
-- `F4` の品質切り替えで RtT 解像度だけが変わる
-- composite 表示と Familiar 2D 前面表示に退行がない
+```bash
+# コンパイルチェック（ワークスペース全体）
+CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace
+
+# Clippy ゼロ警告
+CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace 2>&1 | grep "^warning:" | grep -v generated
+```
+
+実装時メモ: `Res::<RttRuntime>::is_changed()` がフレーム境界で期待どおり立つかは Bevy 0.18 の挙動に合わせて一度確認する（挿入直後・`ResMut` 更新直後の検知）。
+
+動作確認チェックリスト:
+- [ ] 起動時に RtT が正常初期化される
+- [ ] window resize で scene / soul mask の両方が追従する
+- [ ] `F4` の品質切り替えで RtT 解像度が変わる
+- [ ] composite 表示と Familiar 2D 前面表示に退行がない
+- [ ] `sync_rtt_output_bindings` が変化なし時に早期リターンする（デバッグログで確認）
 
 ## Asset Check
 

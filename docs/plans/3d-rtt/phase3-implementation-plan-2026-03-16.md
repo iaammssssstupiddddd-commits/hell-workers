@@ -203,7 +203,7 @@ App::new()
 
 **完了条件**:
 - [ ] `cargo check` ゼロエラー
-- [ ] `RttTextures.handle` を手動差し替えしたとき合成スプライトのサイズが自動追従する（目視）
+- [ ] `RttRuntime.scene`（旧 `RttTextures.texture_3d` / 誤記 `handle`）を手動差し替えたとき合成スプライトのサイズが自動追従する（目視）
 
 ---
 

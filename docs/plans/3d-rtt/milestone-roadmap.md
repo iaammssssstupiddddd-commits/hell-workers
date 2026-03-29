@@ -233,7 +233,7 @@
 - **変更ファイル**: `plugins/startup/rtt_setup.rs`、`systems/visual/rtt_composite.rs`（新規）、`hw_core/src/constants/render.rs`
 - **完了条件**:
   - [x] `cargo check` ゼロエラー
-  - [x] `RttTextures.texture_3d` を手動差し替えしたとき合成スプライトのサイズが自動追従する（目視）
+  - [x] `RttRuntime.scene`（旧 `RttTextures.texture_3d`）を手動差し替えたとき合成スプライトのサイズが自動追従する（目視）
 - **ステータス**: [x] 完了
 
 ---

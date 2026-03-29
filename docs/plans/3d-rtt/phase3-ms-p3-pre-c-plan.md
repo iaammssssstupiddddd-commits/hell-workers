@@ -117,7 +117,7 @@ Phase 3 着手前の基盤整備として、以下の課題を解決する。
 **やること**:
 1. `plugins/startup/mod.rs` の `setup()` にインライン記述されている RTT テクスチャ生成処理を `create_rtt_texture` 関数として `rtt_setup.rs` に切り出す
 2. `plugins/startup/rtt_composite.rs` に `sync_rtt_composite_sprite` システムを追加・登録する
-   > ⚠️ `rtt-resolution-scaling-proposal` §3.3 のサンプルコードは `rtt.handle` を参照しているが、実際の `RttTextures` フィールドは `texture_3d`。実装時は `rtt.texture_3d` を使用すること
+   > ⚠️ `rtt-resolution-scaling-proposal` §3.3 のサンプルコードは `rtt.handle` を参照している。現行は `RttRuntime.scene`（旧 `RttTextures.texture_3d`）を使用すること
 3. `hw_core/src/constants/render.rs` に `Z_RTT_COMPOSITE` 定数を追加する
 4. `RenderTarget::Image` の受け取り型を実装前に `docsrs-mcp` / `~/.cargo/registry/src/` で確認する
 5. `PrimaryWindow` の物理解像度に追従して RtT を再生成し、合成スプライトは logical size + TopDown 縦補正で同期する
@@ -130,7 +130,7 @@ Phase 3 着手前の基盤整備として、以下の課題を解決する。
 
 **完了条件**:
 - [x] `cargo check` ゼロエラー
-- [x] `RttTextures.texture_3d` を手動差し替えしたとき合成スプライトのサイズが自動追従する（目視）
+- [x] `RttRuntime.scene`（旧 `RttTextures.texture_3d`）を手動差し替えたとき合成スプライトのサイズが自動追従する（目視）
 
 ---
 
