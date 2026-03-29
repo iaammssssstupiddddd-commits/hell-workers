@@ -158,6 +158,39 @@ Bevy 0.18 は削除イベントを持たないため、各システムが `Remov
 ### 7.1 需要起点の自動Gather（Wood / Rock）
 `blueprint_auto_gather_system` が `DeliverToBlueprint` / `DeliverToMixerSolid` request の不足を需要起点に、`Tree` / `Rock` へ `Chop` / `Mine` を直付与（`AutoGatherDesignation` marker 付き）。需要解消後に未着手指定は自動回収。
 
+### 7.2 採集後チェーン (gather chain)
+
+採集完了 (`GatherPhase::Done`) 直後、同フレーム内で `chain::find_haul_chain_after_gather` が起動し、採集地点から **4タイル以内の空きアイテム** と **pending な TransportRequest** を照合して同一 Soul が即座に運搬タスクへ移行する。
+
+**チェーン先の優先順位**:
+
+| 優先度 | TransportRequest kind | Soul に割り当てるタスク | 対象リソース |
+|:---|:---|:---|:---|
+| 1 | `DeliverToWallConstruction` | `AssignedTask::Haul { stockpile: wall_site }` | Wood |
+| 1 | `DeliverToFloorConstruction` | `AssignedTask::Haul { stockpile: floor_site }` | 各種 |
+| 2 | `DeliverToBlueprint` | `AssignedTask::HaulToBlueprint` | Wood / Rock 等 |
+| 3 | `DeliverToMixerSolid` | `AssignedTask::HaulToMixer` | Rock |
+| 4 | ―（フォールバック） | `AssignedTask::Haul { stockpile }` | 最近傍ストックパイル |
+
+**フィルタ条件**: `state == Pending` / `WheelbarrowLease.is_none()` / `demand.remaining() > 0` / `resource_type` 一致。  
+**実装**: `crates/hw_soul_ai/src/soul_ai/execute/task_execution/chain.rs` — `GatherHaulChain` enum + `find_haul_chain_after_gather`
+
+### 7.3 搬入後チェーン (haul chain)
+
+Blueprint / FloorSite / WallSite への搬入完了直後、`chain::find_chain_opportunity` が呼ばれ、スロット空きがあれば同一 Soul が作業タスクへ即移行する。
+
+**チェーン対応表**:
+
+| 運搬タスク | 搬入先 | チェーン先タスク | チェーン開始フェーズ |
+|:---|:---|:---|:---|
+| HaulToBlueprint（any素材、`materials_complete == true`） | Blueprint | Build | `BuildPhase::GoingToBlueprint` |
+| Haul（Bone） | FloorSite | ReinforceFloorTile | `ReinforceFloorPhase::PickingUpBones` |
+| Haul（StasisMud） | FloorSite | PourFloorTile | `PourFloorPhase::PickingUpMud` |
+| Haul（Wood） | WallSite | FrameWallTile | `FrameWallPhase::PickingUpWood` |
+| Haul（StasisMud） | WallSite | CoatWall | `CoatWallPhase::PickingUpMud` |
+
+**実装**: `crates/hw_soul_ai/src/soul_ai/execute/task_execution/chain.rs` — `ChainOpportunity` enum + `find_chain_opportunity` + `execute_chain`
+
 ## 8. TaskArea 編集 UI
 
 `Orders -> Area` で `TaskMode::AreaSelection` に入ると TaskArea 連続編集モード。

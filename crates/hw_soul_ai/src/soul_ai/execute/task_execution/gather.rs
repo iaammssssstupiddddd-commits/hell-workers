@@ -1,15 +1,20 @@
 //! 収集タスクの実行処理
 
 use crate::soul_ai::execute::task_execution::{
+    chain::{self, GatherHaulChain},
     common::*,
     context::TaskExecutionContext,
-    types::{AssignedTask, GatherPhase},
+    types::{
+        AssignedTask, GatherPhase, HaulData, HaulPhase, HaulToBlueprintData, HaulToBpPhase,
+        HaulToMixerData, HaulToMixerPhase,
+    },
 };
 use bevy::prelude::*;
 use hw_core::constants::*;
+use hw_core::relationships::WorkingOn;
 use hw_core::visual::{FadeOut, SoulTaskHandles};
 use hw_jobs::{Designation, WorkType};
-use hw_logistics::ResourceItem;
+use hw_logistics::{ResourceItem, ResourceType};
 use hw_world::WorldMap;
 
 /// `handle_gather_task` のタスク引数をまとめた構造体。
@@ -207,6 +212,67 @@ pub fn handle_gather_task(
             }
         }
         GatherPhase::Done => {
+            // 採集完了後、その場で散らばったアイテムを即座に運搬チェーンへ
+            let resource_type = match work_type {
+                WorkType::Chop => Some(ResourceType::Wood),
+                WorkType::Mine => Some(ResourceType::Rock),
+                _ => None,
+            };
+
+            if let Some(resource_type) = resource_type
+                && let Some(chain) =
+                    chain::find_haul_chain_after_gather(resource_type, soul_pos, ctx)
+            {
+                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                ctx.path.waypoints.clear();
+                match chain {
+                    GatherHaulChain::Storage { item, destination } => {
+                        commands
+                            .entity(ctx.soul_entity)
+                            .insert(WorkingOn(destination));
+                        *ctx.task = AssignedTask::Haul(HaulData {
+                            item,
+                            stockpile: destination,
+                            phase: HaulPhase::GoingToItem,
+                        });
+                        info!(
+                            "GATHER_CHAIN: Soul {:?} chained to haul {:?} ({:?}) to storage {:?}",
+                            ctx.soul_entity, item, resource_type, destination
+                        );
+                    }
+                    GatherHaulChain::Blueprint { item, blueprint } => {
+                        commands
+                            .entity(ctx.soul_entity)
+                            .insert(WorkingOn(blueprint));
+                        *ctx.task = AssignedTask::HaulToBlueprint(HaulToBlueprintData {
+                            item,
+                            blueprint,
+                            phase: HaulToBpPhase::GoingToItem,
+                        });
+                        info!(
+                            "GATHER_CHAIN: Soul {:?} chained to haul {:?} ({:?}) to blueprint {:?}",
+                            ctx.soul_entity, item, resource_type, blueprint
+                        );
+                    }
+                    GatherHaulChain::Mixer { item, mixer } => {
+                        commands
+                            .entity(ctx.soul_entity)
+                            .insert(WorkingOn(mixer));
+                        *ctx.task = AssignedTask::HaulToMixer(HaulToMixerData {
+                            item,
+                            mixer,
+                            resource_type,
+                            phase: HaulToMixerPhase::GoingToItem,
+                        });
+                        info!(
+                            "GATHER_CHAIN: Soul {:?} chained to haul {:?} ({:?}) to mixer {:?}",
+                            ctx.soul_entity, item, resource_type, mixer
+                        );
+                    }
+                }
+                return;
+            }
+
             clear_task_and_path(ctx.task, ctx.path);
         }
     }
