@@ -111,48 +111,6 @@ pub fn issue_return_wheelbarrow(
     );
 }
 
-pub fn issue_collect_sand_with_wheelbarrow_to_blueprint(
-    spec: WheelbarrowCollectSpec,
-    task_pos: Vec2,
-    already_commanded: bool,
-    ctx: &AssignTaskContext<'_>,
-    queries: &mut FamiliarTaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
-) {
-    let haul_amount = spec.amount.max(1);
-    let destination = WheelbarrowDestination::Blueprint(spec.destination);
-    let assigned_task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
-        wheelbarrow: spec.wheelbarrow,
-        source_pos: spec.source_pos,
-        destination,
-        collect_source: Some(spec.source_entity),
-        collect_amount: haul_amount,
-        collect_resource_type: Some(ResourceType::Sand),
-        items: Vec::new(),
-        phase: HaulWithWheelbarrowPhase::GoingToParking,
-    });
-
-    let reservation_ops = build_wheelbarrow_reservation_ops(
-        queries,
-        spec.wheelbarrow,
-        &destination,
-        &[spec.source_entity],
-        &[],
-    );
-    submit_assignment_with_reservation_ops(
-        ctx,
-        queries,
-        shadow,
-        TaskTarget {
-            work_type: WorkType::WheelbarrowHaul,
-            task_pos,
-        },
-        assigned_task,
-        reservation_ops,
-        already_commanded,
-    );
-}
-
 pub fn issue_collect_sand_with_wheelbarrow_to_mixer(
     spec: WheelbarrowCollectSpec,
     task_pos: Vec2,
