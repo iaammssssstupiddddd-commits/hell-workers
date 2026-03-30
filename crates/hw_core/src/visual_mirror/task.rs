@@ -29,7 +29,6 @@ pub enum SoulTaskPhaseVisual {
     FrameWall,
     CoatWall,
     Refine,
-    CollectSand,
     CollectBone,
     MovePlant,
     BucketTransport,

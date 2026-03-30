@@ -10,7 +10,7 @@ use hw_ui::camera::MainCamera;
 use hw_ui::selection::SelectionIntent;
 
 use super::hit_test::{
-    hovered_entity_at_world_pos, hovered_task_area_border_entity, selectable_worker_at_world_pos,
+    hovered_entity_at_world_pos, hovered_task_area_border_entity,
 };
 use super::state::{HoveredEntity, SelectedEntity};
 
@@ -53,6 +53,7 @@ fn resolve_left_click_intent(
     q_souls: &Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: &Query<(Entity, &GlobalTransform), With<Familiar>>,
     q_task_areas: &Query<(Entity, &TaskArea), With<Familiar>>,
+    q_targets: &SelectionTargetQuery,
 ) -> SelectionIntent {
     if let Some(familiar) =
         hovered_task_area_border_entity(world_pos, current_selected, q_task_areas)
@@ -60,7 +61,7 @@ fn resolve_left_click_intent(
         return SelectionIntent::StartAreaSelection { familiar };
     }
 
-    match selectable_worker_at_world_pos(world_pos, q_souls, q_familiars) {
+    match hovered_entity_at_world_pos(world_pos, q_souls, q_familiars, q_targets) {
         Some(entity) => SelectionIntent::Select(entity),
         None => SelectionIntent::ClearSelection,
     }
@@ -126,6 +127,7 @@ pub fn handle_mouse_input(
             &q_souls,
             &q_familiars,
             &q_task_areas,
+            &q_targets,
         );
         apply_selection_intent(
             intent,

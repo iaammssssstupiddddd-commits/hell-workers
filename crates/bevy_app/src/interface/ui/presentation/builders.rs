@@ -5,6 +5,7 @@ use super::{
 use crate::entities::damned_soul::Gender;
 use bevy::prelude::*;
 use hw_core::constants::{DREAM_DRAIN_RATE_REST, DREAM_MAX, MUD_MIXER_MUD_CAPACITY};
+use hw_energy::SoulSpaPhase;
 use hw_ui::models::inspection::InspectionSoulGender;
 
 impl EntityInspectionQuery<'_, '_> {
@@ -269,20 +270,78 @@ impl EntityInspectionQuery<'_, '_> {
                 model.push_tooltip(line.clone());
             }
         }
+    }
 
-        if let Ok((consumer, consumes_from_opt)) = self.q_power_consumers.get(entity) {
-            let grid_line = consumes_from_opt
-                .and_then(|cf| self.q_power_grids.get(cf.0).ok())
-                .map(|grid| {
-                    format!(
-                        "Power: {:.1}W / {:.1}W [{}]",
+    pub(super) fn append_power_consumer_model(
+        &self,
+        entity: Entity,
+        model: &mut InspectionAccumulator,
+    ) {
+        let Ok((consumer, consumes_from_opt, unpowered_opt)) =
+            self.q_power_consumers.get(entity)
+        else {
+            return;
+        };
+
+        let status = if unpowered_opt.is_some() {
+            "UNPOWERED"
+        } else {
+            "ACTIVE"
+        };
+        model.push_tooltip(format!("Demand: {:.1}W [{}]", consumer.demand, status));
+
+        if let Some(cf) = consumes_from_opt
+            && let Ok(grid) = self.q_power_grids.get(cf.0)
+        {
+            model.push_tooltip(format!(
+                "Grid: {:.1}W / {:.1}W [{}]",
+                grid.generation,
+                grid.consumption,
+                if grid.powered { "POWERED" } else { "BLACKOUT" }
+            ));
+        }
+    }
+
+    pub(super) fn append_soul_spa_model(
+        &self,
+        entity: Entity,
+        model: &mut InspectionAccumulator,
+    ) {
+        let Ok((site, generator, generates_for_opt)) = self.q_soul_spas.get(entity) else {
+            return;
+        };
+
+        if model.header.is_empty() {
+            model.header = "Soul Spa".to_string();
+        }
+
+        match site.phase {
+            SoulSpaPhase::Constructing => {
+                model.push_tooltip(format!(
+                    "Status: Constructing ({}/{})",
+                    site.bones_delivered, site.bones_required
+                ));
+            }
+            SoulSpaPhase::Operational => {
+                let active_souls = if generator.output_per_soul > f32::EPSILON {
+                    (generator.current_output / generator.output_per_soul).round() as u32
+                } else {
+                    0
+                };
+                model.push_tooltip("Status: Operational".to_string());
+                model.push_tooltip(format!("Active: {}/{} souls", active_souls, site.active_slots));
+                model.push_tooltip(format!("Output: {:.1}W", generator.current_output));
+                if let Some(gen_for) = generates_for_opt
+                    && let Ok(grid) = self.q_power_grids.get(gen_for.0)
+                {
+                    model.push_tooltip(format!(
+                        "Grid: {:.1}W / {:.1}W [{}]",
                         grid.generation,
                         grid.consumption,
                         if grid.powered { "POWERED" } else { "BLACKOUT" }
-                    )
-                })
-                .unwrap_or_else(|| format!("Power: {:.1}W demand [no grid]", consumer.demand));
-            model.push_tooltip(grid_line);
+                    ));
+                }
+            }
         }
     }
 }

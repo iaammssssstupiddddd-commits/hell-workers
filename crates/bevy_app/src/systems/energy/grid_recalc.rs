@@ -44,21 +44,28 @@ pub fn grid_recalc_system(
 
         if powered_changed {
             grid.powered = new_powered;
-            if let Some(consumers) = consumers_opt {
-                for &consumer in consumers.iter() {
-                    if new_powered {
-                        commands.entity(consumer).remove::<Unpowered>();
-                    } else {
-                        commands.entity(consumer).try_insert(Unpowered);
-                    }
-                }
-            }
             info!(
                 "[Energy] Grid {} (gen={:.2}W, cons={:.2}W)",
                 if new_powered { "POWERED" } else { "BLACKOUT" },
                 new_gen,
                 new_cons
             );
+        }
+
+        // powered_changed に加え、グリッドが通電中にコンシューマーが追加された場合も
+        // Unpowered マーカーを同期する（新規追加コンシューマーは #[require(Unpowered)] で
+        // デフォルト Unpowered になるが、powered_changed は発生しないため）。
+        let sync_consumers = powered_changed || (new_powered && cons_changed);
+        if sync_consumers
+            && let Some(consumers) = consumers_opt
+        {
+            for &consumer in consumers.iter() {
+                if new_powered {
+                    commands.entity(consumer).remove::<Unpowered>();
+                } else {
+                    commands.entity(consumer).try_insert(Unpowered);
+                }
+            }
         }
     }
 }

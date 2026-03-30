@@ -429,7 +429,6 @@ fn is_work_phase(phase: SoulTaskPhaseVisual) -> bool {
             | SoulTaskPhaseVisual::FrameWall
             | SoulTaskPhaseVisual::CoatWall
             | SoulTaskPhaseVisual::Refine
-            | SoulTaskPhaseVisual::CollectSand
             | SoulTaskPhaseVisual::CollectBone
             | SoulTaskPhaseVisual::MovePlant
     )

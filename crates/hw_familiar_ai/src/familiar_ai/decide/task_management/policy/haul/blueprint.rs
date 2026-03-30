@@ -6,7 +6,7 @@ use hw_logistics::transport_request::can_complete_pick_drop_to_blueprint;
 
 use super::super::super::builders::{
     WheelbarrowCollectSpec, issue_collect_bone_with_wheelbarrow_to_blueprint,
-    issue_collect_sand_with_wheelbarrow_to_blueprint, issue_haul_to_blueprint_with_source,
+    issue_haul_to_blueprint_with_source,
 };
 use super::super::super::validator::resolve_haul_to_blueprint_inputs;
 use super::demand;
@@ -84,26 +84,6 @@ pub fn assign_haul_to_blueprint(
         queries,
         shadow,
     ) {
-        return true;
-    }
-
-    if resource_type == ResourceType::Sand
-        && try_direct_collect_with_wheelbarrow_to_blueprint(
-            CollectBlueprintParams {
-                blueprint,
-                remaining_needed,
-            },
-            task_pos,
-            already_commanded,
-            ctx,
-            queries,
-            shadow,
-            CollectStrategy {
-                find_source: direct_collect::find_collect_sand_source,
-                issue_fn: issue_collect_sand_with_wheelbarrow_to_blueprint,
-            },
-        )
-    {
         return true;
     }
 

@@ -459,8 +459,9 @@ App::new()
 
 ### M-3-4: テレインの3D化（MS-3A）
 
-> **依存**: M-3-3 完了
-> **根拠**: `docs/plans/3d-rtt/milestone-roadmap.md` MS-3A
+> **依存**: M-3-3 完了  
+> **根拠**: `docs/plans/3d-rtt/milestone-roadmap.md` MS-3A  
+> **詳細計画**: [`ms-3-4-terrain-3d-plan-2026-03-29.md`](ms-3-4-terrain-3d-plan-2026-03-29.md)
 
 **やること**:
 - 既存の地形タイル描画を 3D メッシュ / `SectionMaterial` ベースへ置き換える

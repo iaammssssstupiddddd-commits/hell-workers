@@ -73,7 +73,8 @@ pub(super) fn hovered_entity_at_world_pos(
             match building.kind {
                 crate::systems::jobs::BuildingType::Tank
                 | crate::systems::jobs::BuildingType::MudMixer
-                | crate::systems::jobs::BuildingType::RestArea => TILE_SIZE, // 2x2なので半径を大きく
+                | crate::systems::jobs::BuildingType::RestArea
+                | crate::systems::jobs::BuildingType::SoulSpa => TILE_SIZE, // 2x2なので半径を大きく
                 crate::systems::jobs::BuildingType::Bridge => TILE_SIZE * 2.5, // 2x5 bridge
                 _ => TILE_SIZE / 2.0,
             }
@@ -82,28 +83,6 @@ pub(super) fn hovered_entity_at_world_pos(
         };
 
         if pos.distance(world_pos) < radius {
-            return Some(entity);
-        }
-    }
-
-    None
-}
-
-pub(super) fn selectable_worker_at_world_pos(
-    world_pos: Vec2,
-    q_souls: &Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
-    q_familiars: &Query<(Entity, &GlobalTransform), With<Familiar>>,
-) -> Option<Entity> {
-    for (entity, transform) in q_familiars.iter() {
-        let pos = transform.translation().truncate();
-        if pos.distance(world_pos) < TILE_SIZE / 2.0 {
-            return Some(entity);
-        }
-    }
-
-    for (entity, transform) in q_souls.iter() {
-        let pos = transform.translation().truncate();
-        if pos.distance(world_pos) < TILE_SIZE / 2.0 {
             return Some(entity);
         }
     }

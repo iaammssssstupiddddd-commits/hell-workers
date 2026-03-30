@@ -171,6 +171,20 @@ pub fn handle(
                         unloaded_count += 1;
                     }
                 }
+            } else if let Ok(soul_spa_transform) =
+                ctx.queries.storage.soul_spa_sites.get(dest_stockpile)
+            {
+                // SoulSpaSite は Building コンポーネントも持つため、buildings チェックより先に処理する。
+                // delivery_sync_system がサイト周辺の Bone を収集して bones_delivered を更新する。
+                let site_pos = soul_spa_transform.translation.truncate();
+                for (index, (item_entity, _res_type_opt)) in item_types.iter().enumerate() {
+                    let offset = Vec2::new((index as f32) * 2.0, 0.0);
+                    if try_drop_item(commands, *item_entity, site_pos + offset, None) {
+                        delivered_items.insert(*item_entity);
+                        destination_store_count += 1;
+                        unloaded_count += 1;
+                    }
+                }
             } else if let Ok((wall_transform, building, _)) =
                 ctx.queries.storage.buildings.get(dest_stockpile)
             {
@@ -200,20 +214,6 @@ pub fn handle(
                 } else {
                     cancel::cancel_wheelbarrow_task(ctx, &data, commands);
                     return;
-                }
-            } else if let Ok(soul_spa_transform) =
-                ctx.queries.storage.soul_spa_sites.get(dest_stockpile)
-            {
-                // Soul Spa 建設サイトに骨を降ろす。
-                // delivery_sync_system がサイト周辺の Bone を収集して bones_delivered を更新する。
-                let site_pos = soul_spa_transform.translation.truncate();
-                for (index, (item_entity, _res_type_opt)) in item_types.iter().enumerate() {
-                    let offset = Vec2::new((index as f32) * 2.0, 0.0);
-                    if try_drop_item(commands, *item_entity, site_pos + offset, None) {
-                        delivered_items.insert(*item_entity);
-                        destination_store_count += 1;
-                        unloaded_count += 1;
-                    }
                 }
             } else {
                 cancel::cancel_wheelbarrow_task(ctx, &data, commands);

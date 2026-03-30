@@ -141,9 +141,6 @@ pub fn sync_soul_task_visual_system(mut q: SoulTaskSyncQuery) {
                 (SoulTaskPhaseVisual::CoatWall, progress, Some(d.tile), None)
             }
             AssignedTask::Refine(d) => (SoulTaskPhaseVisual::Refine, None, Some(d.mixer), None),
-            AssignedTask::CollectSand(d) => {
-                (SoulTaskPhaseVisual::CollectSand, None, Some(d.target), None)
-            }
             AssignedTask::CollectBone(d) => {
                 (SoulTaskPhaseVisual::CollectBone, None, Some(d.target), None)
             }

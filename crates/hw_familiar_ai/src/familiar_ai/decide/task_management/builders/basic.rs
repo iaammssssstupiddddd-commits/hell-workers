@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use hw_jobs::WorkType;
 use hw_jobs::{
     AssignedTask, BuildData, BuildPhase, BuildingType, CoatWallData, CoatWallPhase,
-    CollectBoneData, CollectBonePhase, CollectSandData, CollectSandPhase, FrameWallPhase,
+    CollectBoneData, CollectBonePhase, FrameWallPhase,
     FrameWallTileData, GatherData, GatherPhase, GeneratePowerData, GeneratePowerPhase,
     MovePlantData, MovePlantPhase, PourFloorPhase, PourFloorTileData, RefineData, RefinePhase,
     ReinforceFloorPhase, ReinforceFloorTileData,
@@ -59,31 +59,6 @@ pub fn issue_build(
         shadow,
         TaskTarget {
             work_type: WorkType::Build,
-            task_pos,
-        },
-        assigned_task,
-        &[ctx.task_entity],
-        already_commanded,
-    );
-}
-
-pub fn issue_collect_sand(
-    task_pos: Vec2,
-    already_commanded: bool,
-    ctx: &AssignTaskContext<'_>,
-    queries: &mut FamiliarTaskAssignmentQueries,
-    shadow: &mut ReservationShadow,
-) {
-    let assigned_task = AssignedTask::CollectSand(CollectSandData {
-        target: ctx.task_entity,
-        phase: CollectSandPhase::GoingToSand,
-    });
-    submit_assignment_with_source_entities(
-        ctx,
-        queries,
-        shadow,
-        TaskTarget {
-            work_type: WorkType::CollectSand,
             task_pos,
         },
         assigned_task,

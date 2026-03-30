@@ -343,8 +343,10 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 ここに置かないもの:
 
 - `hw_core` 等の他 hw_* クレートへの依存
-- PowerGrid 再計算ロジック（Phase 1c 以降、`hw_energy` 本体に追加予定）
-- Soul Spa / OutdoorLamp の建物 ECS 定義（`hw_jobs` または `hw_energy` 拡張で Phase 1b/1c に追加）
+- Grid 再計算・ランプバフ等のシステムロジック（`bevy_app/src/systems/energy/` が担当）
+- Soul Spa / OutdoorLamp の建物型定義（`hw_jobs::model::BuildingType` が所有）
+
+仕様詳細: [soul_energy.md](soul_energy.md)
 
 ### `hw_world`
 

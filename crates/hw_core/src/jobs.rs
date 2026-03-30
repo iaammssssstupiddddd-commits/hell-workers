@@ -10,7 +10,6 @@ pub enum WorkType {
     Haul,
     HaulToMixer,
     GatherWater,
-    CollectSand,
     CollectBone,
     Refine,
     HaulWaterToMixer,

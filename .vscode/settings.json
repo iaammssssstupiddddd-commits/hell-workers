@@ -1,5 +1,12 @@
 {
   "terminal.integrated.env.linux": {
     "CARGO_TARGET_DIR": "target"
-  }
+  },
+  "files.watcherExclude": {
+    "**/target/**": true,
+    "**/dist/**": true,
+    "**/.trunk/**": true,
+    "**/logs/**": true
+  },
+  "rust-analyzer.files.excludeDirs": ["target", "dist", ".trunk", "logs"]
 }

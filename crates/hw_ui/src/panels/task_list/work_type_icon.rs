@@ -12,11 +12,10 @@ pub fn work_type_label(wt: &WorkType) -> &'static str {
         WorkType::Haul => "Haul",
         WorkType::HaulToMixer => "Haul (Mixer)",
         WorkType::GatherWater => "Water",
-        WorkType::CollectSand => "Sand",
+        WorkType::CollectBone => "Bone",
         WorkType::Refine => "Refine",
         WorkType::HaulWaterToMixer => "Water (Mixer)",
         WorkType::WheelbarrowHaul => "Wheelbarrow",
-        WorkType::CollectBone => "Bone",
         WorkType::ReinforceFloorTile => "Reinforce",
         WorkType::PourFloorTile => "Pour",
         WorkType::FrameWallTile => "Frame",
@@ -41,7 +40,6 @@ pub fn work_type_icon(
         WorkType::GatherWater | WorkType::HaulWaterToMixer => {
             (assets.icon_haul().clone(), theme.colors.water)
         }
-        WorkType::CollectSand => (assets.icon_pick().clone(), theme.colors.gather_default),
         WorkType::CollectBone => (
             assets.icon_bone_small().clone(),
             theme.colors.gather_default,

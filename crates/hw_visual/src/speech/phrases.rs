@@ -121,7 +121,7 @@ impl LatinPhrase {
             | WorkType::FrameWallTile
             | WorkType::CoatWall => LatinPhrase::Laborare,
             WorkType::GatherWater => LatinPhrase::Haurire,
-            WorkType::CollectSand | WorkType::CollectBone => LatinPhrase::Colligere,
+            WorkType::CollectBone => LatinPhrase::Colligere,
             WorkType::Refine => LatinPhrase::Misce,
             WorkType::HaulWaterToMixer => LatinPhrase::Haurire,
             WorkType::GeneratePower => LatinPhrase::Laborare,

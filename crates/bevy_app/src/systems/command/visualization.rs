@@ -25,7 +25,6 @@ pub fn designation_visual_system(
             WorkType::Build => Color::srgb(0.0, 0.5, 1.0),
             WorkType::Move => Color::srgb(0.0, 0.7, 1.0),
             WorkType::GatherWater => Color::srgb(0.0, 0.8, 1.0), // Sky blue for water
-            WorkType::CollectSand => Color::srgb(1.0, 0.8, 0.0), // Orange-yellow
             WorkType::Refine => Color::srgb(0.5, 0.0, 1.0),      // Purple
             WorkType::HaulWaterToMixer => Color::srgb(0.0, 0.8, 1.0), // Same as gather water
             WorkType::WheelbarrowHaul => Color::srgb(0.0, 0.0, 1.0), // Same as Haul

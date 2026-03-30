@@ -1,5 +1,6 @@
 use crate::assets::GameAssets;
 use crate::plugins::startup::Building3dHandles;
+use crate::systems::jobs::{Building, BuildingType};
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_BUILDING_STRUCT};
@@ -21,6 +22,10 @@ pub fn spawn_soul_spa(
     let site_entity = commands
         .spawn((
             SoulSpaSite::default(),
+            Building {
+                kind: BuildingType::SoulSpa,
+                is_provisional: false,
+            },
             Transform::from_translation(center_pos.extend(Z_BUILDING_STRUCT)),
             Visibility::default(),
             Name::new("SoulSpaSite"),

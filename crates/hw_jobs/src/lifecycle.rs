@@ -9,7 +9,7 @@ use hw_core::events::ResourceReservationOp;
 use hw_core::logistics::{ResourceType, WheelbarrowDestination};
 
 use crate::tasks::{
-    AssignedTask, BuildPhase, CoatWallPhase, CollectBonePhase, CollectSandPhase, FrameWallPhase,
+    AssignedTask, BuildPhase, CoatWallPhase, CollectBonePhase, FrameWallPhase,
     GatherPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWithWheelbarrowPhase,
     PourFloorPhase, RefinePhase, ReinforceFloorPhase,
 };
@@ -88,17 +88,6 @@ pub fn collect_active_reservation_ops(
             if matches!(
                 data.phase,
                 GatherPhase::GoingToResource | GatherPhase::Collecting { .. }
-            ) {
-                ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.target,
-                    amount: 1,
-                });
-            }
-        }
-        AssignedTask::CollectSand(data) => {
-            if matches!(
-                data.phase,
-                CollectSandPhase::GoingToSand | CollectSandPhase::Collecting { .. }
             ) {
                 ops.push(ResourceReservationOp::ReserveSource {
                     source: data.target,

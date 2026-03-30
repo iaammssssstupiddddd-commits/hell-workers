@@ -38,6 +38,7 @@
 ## AI/Agent-Specific Instructions
 - Before starting work, skim `README.md`, `docs/DEVELOPMENT.md`, and `docs/README.md` for current rules and specs.
 - Keep `cargo check` green; do not report completion with Rust-analyzer errors.
+- **Clippy**: The workspace maintains **0** `cargo clippy --workspace` warnings. Resolution patterns and the check command are in `CLAUDE.md` (Development Rules §1.5). Prefer fixing structure over `#[allow(clippy::...)]`.
 - Avoid dead code and `#[allow(dead_code)]` unless currently required. Do not leave implementations not documented in `docs/`.
 - Task system conventions: add new `AssignedTask` variants as struct variants and keep task queries aggregated in `TaskQueries` (see `crates/bevy_app/src/systems/soul_ai/execute/task_execution/`).
 - Context hygiene: respect `.cursorignore` and `.geminiignore` by avoiding large build artifacts/logs (`target/`, `dist/`, `.trunk/`, `logs/`, `build_*.txt`, `*_output*.txt`) unless explicitly needed.
@@ -50,7 +51,7 @@
 - probe / debug material / 一時設定変更は最小限に留め、原因切り分け後は必ず撤去する。恒久実装と診断実装を混在させない。
 
 ### Background Agent Policy (STRICT — DO NOT VIOLATE)
-**Do NOT use background/subprocess agents for code editing tasks** (e.g., `general-purpose` agent with file edits).
+**Do NOT use background or subprocess agents for code editing tasks** — including Cursor’s `Task` tool with `run_in_background`, or a `general-purpose` / file-editing subagent.
 
 Reasons:
 - Agents share the same repository and routinely make out-of-scope changes to unrelated files
@@ -60,7 +61,7 @@ Reasons:
 **Permitted agent uses:**
 - `explore` agent — read-only codebase investigation only
 - `code-review` agent — read-only review only
-- All code edits must be made directly by the main agent using `view` / `edit` tools
+- All code edits must be made directly by the main agent (IDE patch/apply tools — e.g. `StrReplace` / `apply_patch` — not delegated editors)
 
 ### Git Revert Policy
 **NEVER run `git checkout -- <file>` or any destructive git command without first:**

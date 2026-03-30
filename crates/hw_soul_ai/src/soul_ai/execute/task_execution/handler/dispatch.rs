@@ -90,17 +90,6 @@ pub fn run_task_handler(
                 breakdown_opt,
             );
         }
-        AssignedTask::CollectSand(data) => {
-            AssignedTask::execute(
-                ctx,
-                data.clone(),
-                commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
-            );
-        }
         AssignedTask::CollectBone(data) => {
             AssignedTask::execute(
                 ctx,

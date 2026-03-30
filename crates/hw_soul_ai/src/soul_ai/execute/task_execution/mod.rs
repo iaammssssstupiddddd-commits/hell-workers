@@ -3,7 +3,6 @@ pub mod build;
 pub mod chain;
 pub mod coat_wall;
 pub mod collect_bone;
-pub mod collect_sand;
 pub mod common;
 pub mod context;
 pub mod frame_wall;

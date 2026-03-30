@@ -11,7 +11,9 @@ use bevy::prelude::*;
 use hw_core::constants::ESCAPE_STRESS_THRESHOLD;
 use hw_core::relationships::CommandedBy;
 use hw_core::relationships::TaskWorkers;
-use hw_energy::{ConsumesFrom, PowerConsumer, PowerGrid};
+use hw_energy::{
+    ConsumesFrom, GeneratesFor, PowerConsumer, PowerGenerator, PowerGrid, SoulSpaSite, Unpowered,
+};
 use hw_soul_ai::soul_ai::perceive::escaping::is_escape_threat_close;
 use hw_spatial::FamiliarSpatialGrid;
 use hw_ui::components::TooltipTemplate;
@@ -77,9 +79,25 @@ pub struct EntityInspectionQuery<'w, 's> {
     q_rocks: Query<'w, 's, &'static crate::systems::jobs::Rock>,
     q_designations: DesignationInspectionQuery<'w, 's>,
     q_buildings: BuildingInspectionQuery<'w, 's>,
-    pub(super) q_power_consumers:
-        Query<'w, 's, (&'static PowerConsumer, Option<&'static ConsumesFrom>)>,
+    pub(super) q_power_consumers: Query<
+        'w,
+        's,
+        (
+            &'static PowerConsumer,
+            Option<&'static ConsumesFrom>,
+            Option<&'static Unpowered>,
+        ),
+    >,
     pub(super) q_power_grids: Query<'w, 's, &'static PowerGrid>,
+    pub(super) q_soul_spas: Query<
+        'w,
+        's,
+        (
+            &'static SoulSpaSite,
+            &'static PowerGenerator,
+            Option<&'static GeneratesFor>,
+        ),
+    >,
 }
 
 #[derive(Default)]
@@ -147,7 +165,9 @@ impl EntityInspectionQuery<'_, '_> {
             || self.build_tree_model(entity, &mut model)
             || self.build_rock_model(entity, &mut model);
 
+        self.append_soul_spa_model(entity, &mut model);
         self.append_building_model(entity, &mut model);
+        self.append_power_consumer_model(entity, &mut model);
         self.append_designation_model(entity, &mut model);
 
         model.finalize()
@@ -181,7 +201,6 @@ pub(super) fn format_task_str(task: &AssignedTask) -> String {
         AssignedTask::HaulToBlueprint(data) => format!("HaulToBp ({:?})", data.phase),
         AssignedTask::Build(data) => format!("Build ({:?})", data.phase),
         AssignedTask::MovePlant(data) => format!("MovePlant ({:?})", data.phase),
-        AssignedTask::CollectSand(data) => format!("CollectSand ({:?})", data.phase),
         AssignedTask::CollectBone(data) => format!("CollectBone ({:?})", data.phase),
         AssignedTask::Refine(data) => format!("Refine ({:?})", data.phase),
         AssignedTask::HaulToMixer(data) => format!("HaulToMixer ({:?})", data.phase),

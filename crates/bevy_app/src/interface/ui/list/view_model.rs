@@ -77,7 +77,6 @@ fn task_visual(task: &AssignedTask) -> TaskVisual {
         AssignedTask::Build { .. } => TaskVisual::Build,
         AssignedTask::MovePlant { .. } => TaskVisual::Build,
         AssignedTask::HaulToBlueprint { .. } => TaskVisual::HaulToBlueprint,
-        AssignedTask::CollectSand { .. } => TaskVisual::GatherDefault,
         AssignedTask::CollectBone { .. } => TaskVisual::GatherDefault,
         AssignedTask::Refine { .. } => TaskVisual::Build,
         AssignedTask::HaulToMixer { .. } => TaskVisual::HaulToBlueprint,

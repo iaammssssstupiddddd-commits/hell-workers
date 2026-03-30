@@ -64,7 +64,7 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --worksp
 - When debugging, first check implementation once cause is roughly estimated
 
 ### 4.5. Background Agent Policy (STRICT)
-**Do NOT use background agents (`task` tool with `mode="background"` or `agent_type="general-purpose"`) for code editing tasks.**
+**Do NOT use background or subprocess agents for code editing tasks** — including Cursor’s `Task` tool with `run_in_background`, or legacy `task` / `general-purpose` agents that edit files.
 
 Reasons:
 - Background agents operate on the shared repository and can make out-of-scope changes (unrelated files, docs, refactors not asked for)
@@ -74,7 +74,7 @@ Reasons:
 **Allowed uses of agents:**
 - `explore` agent: read-only codebase investigation
 - `code-review` agent: read-only review
-- Direct editing by the main agent using `view` / `edit` tools
+- Direct editing by the main agent (patch/apply tools such as `StrReplace` / `apply_patch` — not delegated file-editing subagents)
 
 **`git checkout --` and revert policy:**
 - NEVER run `git checkout -- <file>` or any revert command without first running `git log --oneline -5` and `git diff HEAD -- <file>` to confirm the change is truly unwanted

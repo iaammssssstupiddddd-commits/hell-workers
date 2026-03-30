@@ -65,7 +65,7 @@ pub fn collect_scored_candidates(
         let is_build = designation.work_type == WorkType::Build;
         let is_remote_yard_collect = matches!(
             designation.work_type,
-            WorkType::CollectSand | WorkType::CollectBone
+            WorkType::CollectBone
         ) && managed_by_opt
             .is_some_and(|managed_by| queries.yards.get(managed_by.0).is_ok());
 

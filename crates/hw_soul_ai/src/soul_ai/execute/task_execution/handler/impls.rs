@@ -8,7 +8,7 @@ use hw_world::WorldMap;
 
 use super::task_handler::TaskHandler;
 use crate::soul_ai::execute::task_execution::types::{
-    AssignedTask, BuildData, CoatWallData, CollectBoneData, CollectSandData, FrameWallTileData,
+    AssignedTask, BuildData, CoatWallData, CollectBoneData, FrameWallTileData,
     GatherData, HaulData, HaulToBlueprintData, HaulToMixerData, MovePlantData, PourFloorTileData,
     RefineData, ReinforceFloorTileData,
 };
@@ -97,28 +97,6 @@ impl TaskHandler<HaulToBlueprintData> for AssignedTask {
             data.blueprint,
             data.phase,
             commands,
-            world_map,
-        );
-    }
-}
-
-impl TaskHandler<CollectSandData> for AssignedTask {
-    fn execute(
-        ctx: &mut TaskExecutionContext,
-        data: CollectSandData,
-        commands: &mut Commands,
-        soul_handles: &SoulTaskHandles,
-        time: &Res<Time>,
-        world_map: &WorldMap,
-        _breakdown_opt: Option<&StressBreakdown>,
-    ) {
-        crate::soul_ai::execute::task_execution::collect_sand::handle_collect_sand_task(
-            ctx,
-            data.target,
-            data.phase,
-            commands,
-            soul_handles,
-            time,
             world_map,
         );
     }

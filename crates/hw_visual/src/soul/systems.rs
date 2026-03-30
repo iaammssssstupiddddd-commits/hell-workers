@@ -182,7 +182,6 @@ pub fn task_link_system(
                     SoulTaskPhaseVisual::GatherChop | SoulTaskPhaseVisual::GatherMine => {
                         Color::srgba(0.0, 1.0, 0.0, 0.4)
                     }
-                    SoulTaskPhaseVisual::CollectSand => Color::srgb(1.0, 0.8, 0.0),
                     SoulTaskPhaseVisual::Refine => Color::srgb(0.5, 0.0, 1.0),
                     SoulTaskPhaseVisual::Haul => Color::srgba(1.0, 1.0, 0.0, 0.4),
                     SoulTaskPhaseVisual::Build => Color::srgba(1.0, 1.0, 1.0, 0.5),

@@ -87,7 +87,6 @@ pub fn generate_task_description(wt: WorkType, entity: Entity, refs: TaskCompone
         }
         WorkType::HaulWaterToMixer => "Haul Water to Mixer".to_string(),
         WorkType::GatherWater => "Gather Water".to_string(),
-        WorkType::CollectSand => "Collect Sand".to_string(),
         WorkType::Refine => "Refine".to_string(),
         WorkType::WheelbarrowHaul => "Wheelbarrow Haul".to_string(),
         WorkType::CollectBone => {

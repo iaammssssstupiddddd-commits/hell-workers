@@ -17,7 +17,7 @@ pub use build::{
     BuildData, BuildPhase, CoatWallData, CoatWallPhase, FrameWallPhase, FrameWallTileData,
     PourFloorPhase, PourFloorTileData, ReinforceFloorPhase, ReinforceFloorTileData,
 };
-pub use collect::{CollectBoneData, CollectBonePhase, CollectSandData, CollectSandPhase};
+pub use collect::{CollectBoneData, CollectBonePhase};
 pub use gather::{GatherData, GatherPhase};
 pub use generate_power::{GeneratePowerData, GeneratePowerPhase};
 pub use haul::{HaulData, HaulPhase, HaulToBlueprintData, HaulToBpPhase};
@@ -39,7 +39,6 @@ pub enum AssignedTask {
     Build(BuildData),
     MovePlant(MovePlantData),
     BucketTransport(BucketTransportData),
-    CollectSand(CollectSandData),
     CollectBone(CollectBoneData),
     Refine(RefineData),
     HaulToMixer(HaulToMixerData),
@@ -70,7 +69,6 @@ impl AssignedTask {
                 BucketTransportSource::River => Some(WorkType::GatherWater),
                 BucketTransportSource::Tank { .. } => Some(WorkType::HaulWaterToMixer),
             },
-            AssignedTask::CollectSand(_) => Some(WorkType::CollectSand),
             AssignedTask::CollectBone(_) => Some(WorkType::CollectBone),
             AssignedTask::Refine(_) => Some(WorkType::Refine),
             AssignedTask::HaulToMixer(_) => Some(WorkType::Haul),
@@ -92,7 +90,6 @@ impl AssignedTask {
             AssignedTask::Build(data) => Some(data.blueprint),
             AssignedTask::MovePlant(data) => Some(data.building),
             AssignedTask::BucketTransport(data) => Some(data.bucket),
-            AssignedTask::CollectSand(data) => Some(data.target),
             AssignedTask::CollectBone(data) => Some(data.target),
             AssignedTask::Refine(data) => Some(data.mixer),
             AssignedTask::HaulToMixer(data) => Some(data.item),
