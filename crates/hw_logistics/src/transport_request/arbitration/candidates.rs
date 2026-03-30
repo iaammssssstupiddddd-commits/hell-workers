@@ -124,7 +124,7 @@ pub fn build_request_eval_context(
         TransportRequestKind::DeliverToFloorConstruction => {
             req.resource_type == ResourceType::StasisMud
         }
-        TransportRequestKind::DeliverToMixerSolid => true,
+        TransportRequestKind::DeliverToMixerSolid => req.resource_type.requires_wheelbarrow(),
         _ => false,
     };
     if !eligible_kind {
