@@ -191,7 +191,7 @@ pub(super) fn find_haul_chain_after_gather(
         .resource_items
         .iter()
         .filter(|(_, _, vis, ri, stored_in, loaded_in)| {
-            *vis == Visibility::Visible
+            *vis != Visibility::Hidden
                 && ri.0 == resource_type
                 && stored_in.is_none()
                 && loaded_in.is_none()
