@@ -7,7 +7,7 @@
 - ワールドマップ（`WorldMap`）の定義：タイル・地形・壁・扉の状態管理
 - 座標変換（`world_to_grid`, `grid_to_world`）
 - 部屋検出システム（`room_detection`）：壁・扉・床で囲まれた空間の自動認識
-- 地形生成（`mapgen`）、境界検出（`borders`）、パス探索（`pathfinding`）
+- 地形生成（`mapgen`）、パス探索（`pathfinding`）（旧 `borders` / 境界スプライトは MS-3-4 で廃止）
 - マップクエリユーティリティ（`find_nearest_river_grid`, `find_nearest_walkable_grid`）
 - `WorldMapRead` / `WorldMapWrite` SystemParam の提供
 

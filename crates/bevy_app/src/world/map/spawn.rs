@@ -1,15 +1,16 @@
 //! マップスポーン
 
-use crate::assets::GameAssets;
+use crate::plugins::startup::Terrain3dHandles;
 use bevy::prelude::*;
-use hw_core::constants::*;
-use hw_world::{generate_base_terrain_tiles, grid_to_world};
+use hw_core::constants::{MAP_WIDTH, MAP_HEIGHT, building_3d_render_layers};
+use hw_visual::SectionMaterial;
+use hw_world::{TerrainType, generate_base_terrain_tiles, grid_to_world};
 
-use super::{TerrainType, Tile, WorldMapWrite};
+use super::{Tile, WorldMapWrite};
 
 pub fn spawn_map(
     mut commands: Commands,
-    game_assets: Res<GameAssets>,
+    terrain_handles: Res<Terrain3dHandles>,
     mut world_map: WorldMapWrite,
 ) {
     let terrain_tiles = generate_base_terrain_tiles(MAP_WIDTH, MAP_HEIGHT, super::SAND_WIDTH);
@@ -20,19 +21,17 @@ pub fn spawn_map(
                 .pos_to_idx(x, y)
                 .expect("x/y within MAP_WIDTH x MAP_HEIGHT");
             let terrain = terrain_tiles[idx];
-            let texture = terrain_texture(terrain, &game_assets);
+            let material = terrain_material(terrain, &terrain_handles);
             world_map.set_terrain_at_idx(idx, terrain);
 
-            let pos = grid_to_world(x, y);
+            let pos2d = grid_to_world(x, y);
             let entity = commands
                 .spawn((
                     Tile,
-                    Sprite {
-                        image: texture,
-                        custom_size: Some(Vec2::splat(TILE_SIZE)),
-                        ..default()
-                    },
-                    Transform::from_xyz(pos.x, pos.y, Z_MAP),
+                    Mesh3d(terrain_handles.tile_mesh.clone()),
+                    MeshMaterial3d(material),
+                    Transform::from_xyz(pos2d.x, 0.0, -pos2d.y),
+                    building_3d_render_layers(),
                 ))
                 .id();
 
@@ -46,11 +45,11 @@ pub fn spawn_map(
     );
 }
 
-fn terrain_texture(terrain: TerrainType, assets: &GameAssets) -> Handle<Image> {
+pub fn terrain_material(terrain: TerrainType, handles: &Terrain3dHandles) -> Handle<SectionMaterial> {
     match terrain {
-        TerrainType::River => assets.river.clone(),
-        TerrainType::Sand => assets.sand.clone(),
-        TerrainType::Dirt => assets.dirt.clone(),
-        TerrainType::Grass => assets.grass.clone(),
+        TerrainType::River => handles.river.clone(),
+        TerrainType::Sand  => handles.sand.clone(),
+        TerrainType::Dirt  => handles.dirt.clone(),
+        TerrainType::Grass => handles.grass.clone(),
     }
 }

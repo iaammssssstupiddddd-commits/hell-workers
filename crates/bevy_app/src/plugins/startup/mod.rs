@@ -11,14 +11,14 @@ mod visual_handles;
 
 pub use rtt_composite::RttCompositeSprite;
 pub use rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime, RttViewportSize};
-pub use visual_handles::{Building3dHandles, CharacterHandles};
+pub use visual_handles::{Building3dHandles, CharacterHandles, Terrain3dHandles};
 
 use perf_scenario::{
     PerfScenarioApplied, setup_perf_scenario_if_enabled, setup_perf_scenario_runtime_if_enabled,
 };
 use startup_systems::{
     initial_resource_spawner_timed, initialize_gizmo_config, populate_resource_spatial_grid, setup,
-    spawn_entities, spawn_familiar_wrapper, spawn_map_timed, spawn_terrain_borders_if_enabled,
+    spawn_entities, spawn_familiar_wrapper, spawn_map_timed,
 };
 
 use crate::app_contexts::{
@@ -75,7 +75,6 @@ impl Plugin for StartupPlugin {
                 (
                     visual_handles::init_visual_handles,
                     spawn_map_timed,
-                    spawn_terrain_borders_if_enabled,
                     initial_resource_spawner_timed,
                     spawn_entities,
                     spawn_familiar_wrapper,

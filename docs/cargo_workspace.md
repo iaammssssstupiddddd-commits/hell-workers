@@ -561,12 +561,12 @@ root (`bevy_app`) は app shell として `init_resource::<WorldMap>()`、startu
 - pathfinding
 - terrain 判定
 - nearest walkable / river helper
-- mapgen / border / regrowth の純粋ロジック
+- mapgen / regrowth の純粋ロジック（地形境界オーバーレイ `borders` / `terrain_border` は MS-3-4 で廃止済み）
 - `WorldMapRead` / `WorldMapWrite` の `SystemParam`
-- `obstacle_cleanup_system` のような WorldMap 同期 +地形スプライト更新 system（`TerrainVisualHandles` 注入）
+- `obstacle_cleanup_system` のような WorldMap 同期 + 地形ビジュアル通知（`TerrainChangedEvent` → bevy_app で `MeshMaterial3d` 差し替え）
 - door 自動開閉のような world state 更新 system（`DoorVisualHandles` 注入）
 
-`crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/map/terrain_border.rs`, `crates/bevy_app/src/world/regrowth.rs` は app shell です。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックと `WorldMap` access wrapper は `hw_world` から呼び出します。
+`crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/regrowth.rs` は app shell です。地形メッシュは `spawn_map` で `SectionMaterial` / `Terrain3dHandles` を用いる。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックと `WorldMap` access wrapper は `hw_world` から呼び出します。
 
 ## 7. crate を増やすときの手順
 

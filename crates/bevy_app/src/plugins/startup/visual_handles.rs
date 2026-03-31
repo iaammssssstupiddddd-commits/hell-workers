@@ -11,7 +11,8 @@ use hw_logistics::ResourceItemVisualHandles;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
     PlantTreeHandles, SectionMaterial, SoulMaskMaterial, SoulShadowMaterial, SpeechHandles,
-    WallVisualHandles, WorkIconHandles, make_section_material, with_alpha_mode,
+    WallVisualHandles, WorkIconHandles, make_section_material, make_section_material_textured,
+    with_alpha_mode,
 };
 use hw_visual::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
 use hw_world::{DoorVisualHandles, TerrainVisualHandles};
@@ -44,6 +45,18 @@ pub struct Building3dHandles {
     pub familiar_material: Handle<StandardMaterial>,
     /// 全3Dエンティティに付与する RenderLayers
     pub render_layers: RenderLayers,
+}
+
+/// 地形タイル 3D レンダリング用メッシュ・マテリアルハンドルリソース
+///
+/// 全タイルで共有する `Plane3d` メッシュ 1 つと、地形タイプ別 `SectionMaterial` を保持する。
+#[derive(Resource)]
+pub struct Terrain3dHandles {
+    pub tile_mesh: Handle<Mesh>,
+    pub grass: Handle<SectionMaterial>,
+    pub dirt: Handle<SectionMaterial>,
+    pub sand: Handle<SectionMaterial>,
+    pub river: Handle<SectionMaterial>,
 }
 
 #[derive(Resource)]
@@ -273,6 +286,20 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         familiar_mesh,
         familiar_material,
         render_layers: building_3d_render_layers(),
+    });
+
+    // --- 地形 3D ハンドル ---
+    let terrain_tile_mesh = meshes.add(Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE));
+    let terrain_grass  = section_materials.add(make_section_material_textured(game_assets.grass.clone()));
+    let terrain_dirt   = section_materials.add(make_section_material_textured(game_assets.dirt.clone()));
+    let terrain_sand   = section_materials.add(make_section_material_textured(game_assets.sand.clone()));
+    let terrain_river  = section_materials.add(make_section_material_textured(game_assets.river.clone()));
+    commands.insert_resource(Terrain3dHandles {
+        tile_mesh: terrain_tile_mesh,
+        grass: terrain_grass,
+        dirt: terrain_dirt,
+        sand: terrain_sand,
+        river: terrain_river,
     });
 
     commands.insert_resource(CharacterHandles {

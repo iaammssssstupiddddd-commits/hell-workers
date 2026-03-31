@@ -12,6 +12,11 @@
 //! 矢視（Elevation）モード時:
 //!   - パン・ズームに追従するため XZ と OrthographicProjection.scale は毎フレーム同期
 //!   - 回転・Y 高度は elevation_view_input_system が設定した値を維持
+//!
+//! ## World Foreground Camera（`WorldForeground2dCamera`）
+//! RtT composite より後に `LAYER_2D` を再描画する第 2 の Camera2d がある。
+//! `PanCamera` は `MainCamera` だけ更新するため、このカメラへ **毎フレーム `Transform` と
+//! `Camera::is_active` をコピー**しないと、木・資源・Familiar 等がパン・ズームと連動しない。
 
 use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt};
 use crate::systems::visual::elevation_view::{
@@ -37,6 +42,34 @@ type SyncedCamera3dQuery<'w, 's> = Query<
     (&'static mut Transform, &'static mut Projection),
     Or<(With<Camera3dRtt>, With<Camera3dSoulMaskRtt>)>,
 >;
+
+/// RtT composite より後に `LAYER_2D` を描画する Camera2d（`startup_systems::setup` で spawn）。
+#[derive(Component)]
+pub struct WorldForeground2dCamera;
+
+/// `MainCamera` と同じビューで第 2 の `LAYER_2D` カメラを描画する（PanCamera の追従）。
+///
+/// `Transform` / `Camera` を両方の Query で触るため、`Without<>` でエンティティ集合を
+/// 非交差にしなければならない（Bevy B0001）。
+pub fn sync_world_foreground_2d_camera_system(
+    q_main: Query<
+        (&Transform, &Camera),
+        (With<MainCamera>, Without<WorldForeground2dCamera>),
+    >,
+    mut q_foreground: Query<
+        (&mut Transform, &mut Camera),
+        (With<WorldForeground2dCamera>, Without<MainCamera>),
+    >,
+) {
+    let Ok((main_tf, main_cam)) = q_main.single() else {
+        return;
+    };
+    let Ok((mut fg_tf, mut fg_cam)) = q_foreground.single_mut() else {
+        return;
+    };
+    *fg_tf = *main_tf;
+    fg_cam.is_active = main_cam.is_active;
+}
 
 /// Camera2d（MainCamera）の Transform を Camera3d（Camera3dRtt）へ毎フレーム同期する。
 pub fn sync_camera3d_system(

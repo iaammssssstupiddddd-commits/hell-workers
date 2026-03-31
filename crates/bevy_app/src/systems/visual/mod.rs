@@ -9,7 +9,11 @@ pub mod building3d_cleanup;
 pub mod camera_sync;
 pub mod character_proxy_3d;
 pub mod elevation_view;
+pub mod placement_ghost;
+pub mod section_cut;
 pub mod soul_animation;
+pub mod task_area_visual;
+pub mod terrain_material;
 pub mod wall_orientation_aid;
 pub mod floor_construction {
     pub use hw_visual::floor_construction::{
@@ -18,9 +22,6 @@ pub mod floor_construction {
         update_floor_tile_visuals_system,
     };
 }
-pub mod placement_ghost;
-pub mod section_cut;
-pub mod task_area_visual;
 pub mod wall_construction {
     pub use hw_visual::wall_construction::{
         WallConstructionProgressBar, manage_wall_progress_bars_system,

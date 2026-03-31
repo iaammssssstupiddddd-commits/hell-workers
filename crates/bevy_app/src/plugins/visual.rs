@@ -13,7 +13,9 @@ use crate::systems::logistics::resource_count_display_system;
 use crate::systems::visual::building3d_cleanup::{
     cleanup_building_3d_visuals_system, sync_provisional_wall_material_system,
 };
-use crate::systems::visual::camera_sync::sync_camera3d_system;
+use crate::systems::visual::camera_sync::{
+    sync_camera3d_system, sync_world_foreground_2d_camera_system,
+};
 use crate::systems::visual::character_proxy_3d::{
     apply_soul_gltf_render_layers_on_ready, apply_soul_mask_gltf_render_layers_on_ready,
     apply_soul_shadow_gltf_render_layers_on_ready, cleanup_familiar_proxy_3d_system,
@@ -29,11 +31,12 @@ use crate::systems::visual::soul_animation::{
     sync_soul_body_animation_system, sync_soul_face_expression_system,
 };
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
+use crate::systems::visual::terrain_material::terrain_material_sync_system;
 use hw_core::game_state::PlayMode;
 use hw_visual::HwVisualPlugin;
 use hw_visual::SectionCut;
 use hw_visual::soul::task_link_system;
-use hw_world::sync_room_overlay_tiles_system;
+use hw_world::{TerrainChangedEvent, sync_room_overlay_tiles_system};
 
 use bevy::prelude::*;
 
@@ -50,7 +53,17 @@ impl Plugin for VisualPlugin {
         app.init_resource::<SectionCut>();
         app.init_resource::<SoulAnimationLibrary>();
 
-        app.add_systems(Update, sync_camera3d_system.in_set(GameSystemSet::Visual));
+        app.add_message::<TerrainChangedEvent>();
+
+        app.add_systems(
+            Update,
+            (
+                sync_camera3d_system,
+                sync_world_foreground_2d_camera_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Visual),
+        );
         app.add_systems(
             Update,
             sync_section_cut_normal_system.in_set(GameSystemSet::Visual),
@@ -133,6 +146,12 @@ impl Plugin for VisualPlugin {
                 sync_provisional_wall_material_system,
             )
                 .in_set(GameSystemSet::Visual),
+        );
+
+        // テレインマテリアル差し替え（障害物除去後）
+        app.add_systems(
+            Update,
+            terrain_material_sync_system.in_set(GameSystemSet::Visual),
         );
 
         // キャラクター3Dプロキシ同期・クリーンアップ

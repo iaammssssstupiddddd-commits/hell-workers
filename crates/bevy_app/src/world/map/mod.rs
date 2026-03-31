@@ -1,7 +1,6 @@
 //! ワールドマップと座標変換API
 
 mod spawn;
-pub mod terrain_border;
 
 pub use hw_world::layout::{
     INITIAL_WOOD_POSITIONS, RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, ROCK_POSITIONS,

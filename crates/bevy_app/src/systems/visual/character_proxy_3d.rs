@@ -344,7 +344,8 @@ pub fn apply_soul_shadow_gltf_render_layers_on_ready(
                 .remove::<MeshMaterial3d<SoulShadowMaterial>>()
                 .insert(MeshMaterial3d(
                     character_handles.soul_shadow_proxy_material.clone(),
-                ));
+                ))
+                .insert(NotShadowCaster);
             continue;
         }
 

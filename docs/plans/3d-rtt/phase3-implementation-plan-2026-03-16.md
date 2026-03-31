@@ -460,8 +460,8 @@ App::new()
 ### M-3-4: テレインの3D化（MS-3A）
 
 > **依存**: M-3-3 完了  
-> **根拠**: `docs/plans/3d-rtt/milestone-roadmap.md` MS-3A  
-> **詳細計画**: [`ms-3-4-terrain-3d-plan-2026-03-29.md`](ms-3-4-terrain-3d-plan-2026-03-29.md)
+> **根拠**: `docs/plans/3d-rtt/milestone-roadmap.md` MS-3-4  
+> **詳細計画**: [`archived/ms-3-4-terrain-3d-plan-2026-03-29.md`](archived/ms-3-4-terrain-3d-plan-2026-03-29.md)（完了後アーカイブ）
 
 **やること**:
 - 既存の地形タイル描画を 3D メッシュ / `SectionMaterial` ベースへ置き換える
@@ -469,9 +469,11 @@ App::new()
 - `terrain_border.rs` / `borders.rs` に依存しない地形表現へ移行する
 
 **完了条件**:
-- [ ] `cargo check` ゼロエラー
-- [ ] 地形が Camera3d → RtT のみで描画される
-- [ ] Camera2d 側にインゲーム地形描画が残っていない
+- [x] `cargo check` ゼロエラー
+- [x] 地形が Camera3d → RtT のみで描画される
+- [x] Camera2d 側にインゲーム地形描画が残っていない
+
+**ステータス**: 完了（2026-03-29）。仕様の正は `docs/architecture.md`（RtT・カメラ）および `docs/world_layout.md`（地形）。
 
 ---
 

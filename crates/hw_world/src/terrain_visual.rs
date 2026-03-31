@@ -5,19 +5,28 @@ use crate::terrain::TerrainType;
 use bevy::prelude::*;
 use hw_jobs::ObstaclePosition;
 
+/// 障害物除去によってテレインが変化したことを通知するメッセージ。
+/// `bevy_app` 側の `terrain_material_sync_system` が受信してマテリアルを差し替える。
+#[derive(Message, Clone)]
+pub struct TerrainChangedEvent {
+    pub idx: usize,
+}
+
 /// bevy_app から注入されるテレイン系ビジュアルアセットハンドル。
+/// 3D 化後はマテリアル差し替えは `TerrainChangedEvent` 経由で bevy_app 側が担う。
+/// 将来的に不要になれば除去可。
 #[derive(Resource)]
 pub struct TerrainVisualHandles {
     pub dirt: Handle<Image>,
 }
 
 /// 障害物が削除された時に WorldMap を更新し、テレインを Dirt に戻す。
+/// 視覚的なマテリアル差し替えは `TerrainChangedEvent` を発行して bevy_app 側に委ねる。
 pub fn obstacle_cleanup_system(
     mut world_map: WorldMapWrite,
-    handles: Res<TerrainVisualHandles>,
-    mut q_sprites: Query<&mut Sprite>,
     mut removed: RemovedComponents<ObstaclePosition>,
     q_obstacles: Query<&ObstaclePosition>,
+    mut ev_terrain_changed: MessageWriter<TerrainChangedEvent>,
 ) {
     let any_removed = removed.read().next().is_some();
     let current_obstacles_count = q_obstacles.iter().count();
@@ -51,12 +60,7 @@ pub fn obstacle_cleanup_system(
         world_map.remove_grid_obstacle((x, y));
         if let Some(idx) = world_map.pos_to_idx(x, y) {
             world_map.set_terrain_at_idx(idx, TerrainType::Dirt);
-
-            if let Some(tile_entity) = world_map.tile_entity_at_idx(idx)
-                && let Ok(mut sprite) = q_sprites.get_mut(tile_entity)
-            {
-                sprite.image = handles.dirt.clone();
-            }
+            ev_terrain_changed.write(TerrainChangedEvent { idx });
         }
 
         info!(

@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-03-29）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-03-31）。
 
 ## 新規計画書の作り方
 
@@ -20,7 +20,7 @@
 | Document | Status | Notes |
 |---|---|---|
 | [rtt-pipeline-refactor-2026-03-29.md](rtt-pipeline-refactor-2026-03-29.md) | 完了 | `RttRuntime` 統合・`sync_rtt_output_bindings` 最適化。仕様は `docs/architecture.md` RtT 節 |
-| [task-chain-system-2026-03-29.md](task-chain-system-2026-03-29.md) | Draft | タスクチェーンシステム実装計画 |
+| [task-chain-system-2026-03-29.md](task-chain-system-2026-03-29.md) | Completed | タスクチェーンシステム実装計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 

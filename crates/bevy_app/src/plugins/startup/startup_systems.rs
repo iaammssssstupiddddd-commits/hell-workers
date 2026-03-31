@@ -1,10 +1,12 @@
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
+use crate::plugins::startup::Terrain3dHandles;
 use crate::systems::logistics::{ResourceItem, initial_resource_spawner};
+use crate::systems::visual::camera_sync::WorldForeground2dCamera;
 use crate::systems::visual::elevation_view::ElevationDirection;
 use crate::world::map::{
-    WorldMapRead, WorldMapWrite, spawn_map, terrain_border::spawn_terrain_borders,
+    WorldMapRead, WorldMapWrite, spawn_map,
 };
 use bevy::camera::{RenderTarget, visibility::RenderLayers};
 use bevy::camera_controller::pan_camera::PanCamera;
@@ -23,10 +25,10 @@ use super::rtt_setup::{self, Camera3dRtt, Camera3dSoulMaskRtt};
 
 pub(super) fn spawn_map_timed(
     commands: Commands,
-    game_assets: Res<GameAssets>,
+    terrain_handles: Res<Terrain3dHandles>,
     world_map: WorldMapWrite,
 ) {
-    spawn_map(commands, game_assets, world_map);
+    spawn_map(commands, terrain_handles, world_map);
 }
 
 pub(super) fn initial_resource_spawner_timed(
@@ -74,6 +76,21 @@ pub(super) fn setup(
         RenderLayers::layer(LAYER_OVERLAY),
     ));
 
+    // --- World Foreground Camera（2D ワールドオブジェクト前面描画）---
+    // テレインが Camera3d → RtT に移行したことで composite sprite(order=1) が地面全体を覆う。
+    // 木・石・ファミリアなどの 2D Sprite が隠れないよう、composite の後(order=2)で
+    // LAYER_2D を再描画する。クリアなしで既存描画に上書きする。
+    commands.spawn((
+        Camera2d,
+        Camera {
+            order: 2,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        RenderLayers::layer(LAYER_2D),
+        WorldForeground2dCamera,
+    ));
+
     // --- Camera3d（RtT: オフスクリーン3D描画）---
     // TopDown の初期値は camera_sync.rs の定数と揃える。
     commands.spawn((
@@ -87,7 +104,11 @@ pub(super) fn setup(
             brightness: 500.0,
             ..default()
         },
-        Projection::Orthographic(OrthographicProjection::default_3d()),
+        Projection::Orthographic(OrthographicProjection {
+            near: -2000.0,
+            far: 2000.0,
+            ..OrthographicProjection::default_3d()
+        }),
         {
             let mut transform = Transform::from_translation(Vec3::new(0.0, VIEW_HEIGHT, Z_OFFSET));
             transform.rotation = ElevationDirection::TopDown.camera_rotation();
@@ -124,7 +145,11 @@ pub(super) fn setup(
             clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
             ..default()
         },
-        Projection::Orthographic(OrthographicProjection::default_3d()),
+        Projection::Orthographic(OrthographicProjection {
+            near: -2000.0,
+            far: 2000.0,
+            ..OrthographicProjection::default_3d()
+        }),
         {
             let mut transform = Transform::from_translation(Vec3::new(0.0, VIEW_HEIGHT, Z_OFFSET));
             transform.rotation = ElevationDirection::TopDown.camera_rotation();
@@ -145,32 +170,6 @@ pub(super) fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>
         config.enabled = false;
         config.line.width = 1.0;
     }
-}
-
-pub(super) fn spawn_terrain_borders_if_enabled(
-    commands: Commands,
-    game_assets: Res<GameAssets>,
-    world_map: WorldMapRead,
-) {
-    if skip_terrain_borders() {
-        info!("STARTUP: terrain borders spawn skipped");
-        return;
-    }
-
-    spawn_terrain_borders(commands, game_assets, world_map);
-}
-
-fn skip_terrain_borders() -> bool {
-    if std::env::var("HW_DISABLE_TERRAIN_BORDERS").is_ok_and(|v| {
-        matches!(
-            v.as_str(),
-            "1" | "true" | "TRUE" | "on" | "ON" | "yes" | "YES"
-        )
-    }) {
-        return true;
-    }
-
-    std::env::args().any(|arg| arg == "--disable-terrain-borders")
 }
 
 pub(super) fn populate_resource_spatial_grid(

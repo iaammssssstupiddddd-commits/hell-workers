@@ -1,4 +1,3 @@
-pub mod borders;
 pub mod coords;
 pub mod door_systems;
 pub mod layout;
@@ -17,8 +16,6 @@ pub mod terrain_visual;
 pub mod tree_planting;
 pub mod zone_ops;
 pub mod zones;
-
-pub use borders::{TerrainBorderKind, TerrainBorderSpec, generate_terrain_border_specs};
 pub use coords::{
     grid_to_world, idx_to_pos, snap_to_grid_center, snap_to_grid_edge, world_to_grid,
 };
@@ -51,7 +48,7 @@ pub use room_systems::{
 pub use spatial::SpatialGridOps;
 pub use spawn::{find_nearby_walkable_grid, pick_random_walkable_grid_in_rect};
 pub use terrain::TerrainType;
-pub use terrain_visual::{TerrainVisualHandles, obstacle_cleanup_system};
+pub use terrain_visual::{TerrainChangedEvent, TerrainVisualHandles, obstacle_cleanup_system};
 pub use tree_planting::DreamTreePlantingPlan;
 pub use zone_ops::{
     area_tile_size, expand_yard_area, identify_removal_targets, rectangles_overlap,

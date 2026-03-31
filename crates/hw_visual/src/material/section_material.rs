@@ -65,6 +65,21 @@ pub fn make_section_material(base_color: LinearRgba) -> SectionMaterial {
     }
 }
 
+/// テクスチャ付き `SectionMaterial` を生成するヘルパー。
+/// テレインタイルのように `Handle<Image>` をベースカラーとして使いたい場合に利用する。
+pub fn make_section_material_textured(texture: Handle<Image>) -> SectionMaterial {
+    SectionMaterial {
+        base: StandardMaterial {
+            base_color_texture: Some(texture),
+            perceptual_roughness: 1.0,
+            reflectance: 0.0,
+            opaque_render_method: OpaqueRendererMethod::Forward,
+            ..default()
+        },
+        extension: SectionMaterialExt::default(),
+    }
+}
+
 pub fn with_alpha_mode(mut material: SectionMaterial, alpha_mode: AlphaMode) -> SectionMaterial {
     material.base.alpha_mode = alpha_mode;
     material

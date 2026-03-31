@@ -166,18 +166,20 @@ Perceive → Update → Decide → Execute
 
 ## RtT（Render-to-Texture）インフラ
 
-`docs/plans/3d-rtt/` で管理される段階的な 3D 化計画の Phase 1 として実装済み。
+`docs/plans/3d-rtt/` で管理される段階的な 3D 化計画の Phase 1 として実装済み。地形タイルは **Camera3d → RtT** のみ（`world/map/spawn.rs`、`SectionMaterial`、`Terrain3dHandles`）。ゲーム内地形の 2D `Sprite` は使用しない。
 
-### トリプルカメラ構成
+### カメラ構成（Main / Overlay / RtT / 2D 前景）
 
 | カメラ | マーカー | レイヤー | `order` | レンダー先 | 用途 |
 |:--|:--|:--|:--|:--|:--|
-| `Camera2d` | `MainCamera` | `LAYER_2D`(0) | 0 | スクリーン | 既存2Dゲーム描画・UI。矢視モード時は `is_active=false` |
+| `Camera2d` | `MainCamera` | `LAYER_2D`(0) | 0 | スクリーン | `PanCamera` が更新するメインビュー。矢視モード時は `is_active=false` |
 | `Camera2d` | OverlayCamera（マーカーなし） | `LAYER_OVERLAY`(2) | 1 | スクリーン | RtT composite sprite 専用。常時アクティブ |
-| `Camera3d` | `Camera3dRtt` | `LAYER_3D`(1) | -1 | オフスクリーンテクスチャ (RtT) | 3Dシーンのオフスクリーン描画 |
+| `Camera3d` | `Camera3dRtt` | `LAYER_3D`(1) | -1 | オフスクリーンテクスチャ (RtT) | 地形・建物・Soul 等の 3D オフスクリーン描画 |
+| `Camera2d` | `WorldForeground2dCamera` | `LAYER_2D`(0) | 2 | スクリーン | composite（order 1）**より後**に同じ `LAYER_2D` を再描画。木・資源・Familiar 等を RtT の上に載せる。`clear_color: None` |
 
 - Camera3d は `order: -1` で最初に描画され、結果をオフスクリーンテクスチャに書き込む。
 - OverlayCamera は MainCamera が無効化される矢視モード時も composite sprite を描画し続ける。
+- **World Foreground Camera** は `PanCamera` の対象外のため、`sync_world_foreground_2d_camera_system`（`systems/visual/camera_sync.rs`）が毎フレーム **`MainCamera` の `Transform` と `Camera::is_active` をコピー**する。`GameSystemSet::Visual` では `sync_camera3d_system` と **`.chain()`** で直列（Query は `Without<MainCamera>` / `Without<WorldForeground2dCamera>` で B0001 回避）。
 
 ### RtT テクスチャ管理
 
@@ -201,7 +203,7 @@ RttRuntime
 
 ### Camera2d ↔ Camera3d 同期
 
-`sync_camera3d_system`（`systems/visual/camera_sync.rs`、`GameSystemSet::Visual` で毎フレーム実行）：
+`sync_camera3d_system`（`systems/visual/camera_sync.rs`、`GameSystemSet::Visual` で毎フレーム実行。続けて **`.chain()`** で `sync_world_foreground_2d_camera_system` が実行される）：
 
 全モードで `scale` と XZ を同期（パン・ズーム追従）。方向ごとに XZ オフセットを適用:
 
