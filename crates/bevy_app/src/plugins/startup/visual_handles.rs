@@ -11,8 +11,9 @@ use hw_logistics::ResourceItemVisualHandles;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
     PlantTreeHandles, SectionMaterial, SoulMaskMaterial, SoulShadowMaterial, SpeechHandles,
-    WallVisualHandles, WorkIconHandles, make_section_material, make_section_material_textured,
-    with_alpha_mode,
+    TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_GRASS_UV_DISTORT_STRENGTH,
+    WallVisualHandles, WorkIconHandles, make_section_material,
+    make_terrain_section_material, with_alpha_mode,
 };
 use hw_visual::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
 use hw_world::{DoorVisualHandles, TerrainVisualHandles};
@@ -290,10 +291,30 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
 
     // --- 地形 3D ハンドル ---
     let terrain_tile_mesh = meshes.add(Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE));
-    let terrain_grass  = section_materials.add(make_section_material_textured(game_assets.grass.clone()));
-    let terrain_dirt   = section_materials.add(make_section_material_textured(game_assets.dirt.clone()));
-    let terrain_sand   = section_materials.add(make_section_material_textured(game_assets.sand.clone()));
-    let terrain_river  = section_materials.add(make_section_material_textured(game_assets.river.clone()));
+    let terrain_grass = section_materials.add(make_terrain_section_material(
+        game_assets.grass.clone(),
+        0.0,
+        TERRAIN_GRASS_UV_DISTORT_STRENGTH,
+        TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH,
+    ));
+    let terrain_dirt = section_materials.add(make_terrain_section_material(
+        game_assets.dirt.clone(),
+        0.0,
+        0.0,
+        0.0,
+    ));
+    let terrain_sand = section_materials.add(make_terrain_section_material(
+        game_assets.sand.clone(),
+        0.0,
+        0.0,
+        0.0,
+    ));
+    let terrain_river = section_materials.add(make_terrain_section_material(
+        game_assets.river.clone(),
+        0.03,
+        0.0,
+        0.0,
+    ));
     commands.insert_resource(Terrain3dHandles {
         tile_mesh: terrain_tile_mesh,
         grass: terrain_grass,

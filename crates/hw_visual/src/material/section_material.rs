@@ -12,6 +12,20 @@ pub struct SectionMaterialUniform {
     pub cut_active: f32,
     pub build_progress: f32,
     pub wall_height: f32,
+    /// 0.0 = メッシュ UV（建物など）、1.0 = ワールド XZ UV（地形タイル）
+    pub albedo_uv_mode: f32,
+    /// ワールド UV スケール。地形: `1.0 / TILE_SIZE`、非地形: 0.0
+    pub uv_scale: f32,
+    /// UV スクロール速度（U・画面上は左→右の流れ）。river: ~0.03、grass/dirt/sand: 0.0（停止）
+    pub uv_scroll_speed: f32,
+    /// A3 低周波 UV 歪みの振幅（**UV 空間**、おおよそテクスチャ 1 周に対する割合）。草のみ非ゼロ推奨。0.0 で無効
+    pub uv_distort_strength: f32,
+    /// A3 明度変調。`base_color.rgb *= 1 + sin(wx·freq) * 本値`。草のみ非ゼロ推奨。0.0 で無効
+    pub brightness_variation_strength: f32,
+    /// uniform 末尾アライメント用（常に 0）。`[f32; 3]` は encase の uniform で不可
+    pub _pad_section_tail_0: f32,
+    pub _pad_section_tail_1: f32,
+    pub _pad_section_tail_2: f32,
 }
 
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
@@ -30,6 +44,14 @@ impl Default for SectionMaterialExt {
                 cut_active: 0.0,
                 build_progress: 1.0,
                 wall_height: 0.0,
+                albedo_uv_mode: 0.0,
+                uv_scale: 0.0,
+                uv_scroll_speed: 0.0,
+                uv_distort_strength: 0.0,
+                brightness_variation_strength: 0.0,
+                _pad_section_tail_0: 0.0,
+                _pad_section_tail_1: 0.0,
+                _pad_section_tail_2: 0.0,
             },
         }
     }
@@ -62,6 +84,51 @@ pub fn make_section_material(base_color: LinearRgba) -> SectionMaterial {
             ..default()
         },
         extension: SectionMaterialExt::default(),
+    }
+}
+
+/// 草タイル用 A3（低周波 UV 歪み）の既定振幅（UV 空間）。土・砂・川は `0.0`。
+pub const TERRAIN_GRASS_UV_DISTORT_STRENGTH: f32 = 0.03;
+
+/// 草タイル用 A3 明度変調の既定振幅（`1 ±` の係数、`sin` に掛ける）。土・砂・川は `0.0`。
+pub const TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH: f32 = 0.04;
+
+/// 地形タイル専用 `SectionMaterial`。
+/// ワールド XZ UV モード・サンプラ Repeat を前提とした設定を有効化する。
+/// `uv_scroll_speed`: river は ~0.03（画面上は左→右）、grass/dirt/sand は 0.0（停止）。
+/// `uv_distort_strength` / `brightness_variation_strength`: 草のみ非ゼロ可、他は 0.0。
+pub fn make_terrain_section_material(
+    texture: Handle<Image>,
+    uv_scroll_speed: f32,
+    uv_distort_strength: f32,
+    brightness_variation_strength: f32,
+) -> SectionMaterial {
+    SectionMaterial {
+        base: StandardMaterial {
+            base_color_texture: Some(texture),
+            perceptual_roughness: 1.0,
+            reflectance: 0.0,
+            opaque_render_method: OpaqueRendererMethod::Forward,
+            ..default()
+        },
+        extension: SectionMaterialExt {
+            uniforms: SectionMaterialUniform {
+                cut_position: Vec4::ZERO,
+                cut_normal: Vec3::NEG_Z.extend(0.0),
+                thickness: TILE_SIZE * 5.0,
+                cut_active: 0.0,
+                build_progress: 1.0,
+                wall_height: 0.0,
+                albedo_uv_mode: 1.0,
+                uv_scale: 1.0 / TILE_SIZE,
+                uv_scroll_speed,
+                uv_distort_strength,
+                brightness_variation_strength,
+                _pad_section_tail_0: 0.0,
+                _pad_section_tail_1: 0.0,
+                _pad_section_tail_2: 0.0,
+            },
+        },
     }
 }
 

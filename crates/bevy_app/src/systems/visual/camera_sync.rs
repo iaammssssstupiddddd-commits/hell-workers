@@ -47,19 +47,18 @@ type SyncedCamera3dQuery<'w, 's> = Query<
 #[derive(Component)]
 pub struct WorldForeground2dCamera;
 
+type MainCamQuery<'w, 's> =
+    Query<'w, 's, (&'static Transform, &'static Camera), (With<MainCamera>, Without<WorldForeground2dCamera>)>;
+type ForegroundCamQuery<'w, 's> =
+    Query<'w, 's, (&'static mut Transform, &'static mut Camera), (With<WorldForeground2dCamera>, Without<MainCamera>)>;
+
 /// `MainCamera` と同じビューで第 2 の `LAYER_2D` カメラを描画する（PanCamera の追従）。
 ///
 /// `Transform` / `Camera` を両方の Query で触るため、`Without<>` でエンティティ集合を
 /// 非交差にしなければならない（Bevy B0001）。
 pub fn sync_world_foreground_2d_camera_system(
-    q_main: Query<
-        (&Transform, &Camera),
-        (With<MainCamera>, Without<WorldForeground2dCamera>),
-    >,
-    mut q_foreground: Query<
-        (&mut Transform, &mut Camera),
-        (With<WorldForeground2dCamera>, Without<MainCamera>),
-    >,
+    q_main: MainCamQuery,
+    mut q_foreground: ForegroundCamQuery,
 ) {
     let Ok((main_tf, main_cam)) = q_main.single() else {
         return;

@@ -3,6 +3,7 @@
 //! Phase 5: アセットロード定義を startup から分離。アセット追加時の差分衝突を軽減。
 
 use crate::assets::GameAssets;
+use bevy::image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor};
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
@@ -17,13 +18,21 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
     let font_soul_name = asset_server.load("fonts/SourceSerif4-VF.ttf");
     let font_soul_emoji = asset_server.load("fonts/NotoEmoji-VF.ttf");
 
+    fn terrain_sampler(s: &mut ImageLoaderSettings) {
+        s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+            address_mode_u: ImageAddressMode::Repeat,
+            address_mode_v: ImageAddressMode::Repeat,
+            ..default()
+        });
+    }
+
     GameAssets {
         white_pixel,
-        grass: asset_server.load("textures/grass.png"),
-        dirt: asset_server.load("textures/dirt.png"),
+        grass: asset_server.load_with_settings("textures/grass.png", terrain_sampler),
+        dirt: asset_server.load_with_settings("textures/dirt.png", terrain_sampler),
         stone: asset_server.load("textures/stone.jpg"),
-        river: asset_server.load("textures/river.png"),
-        sand: asset_server.load("textures/sand_terrain.png"),
+        river: asset_server.load_with_settings("textures/river.png", terrain_sampler),
+        sand: asset_server.load_with_settings("textures/sand_terrain.png", terrain_sampler),
         familiar: asset_server.load("textures/character/familiar/imp anime 1.png"),
         familiar_anim_2: asset_server.load("textures/character/familiar/imp anime 2.png"),
         familiar_anim_3: asset_server.load("textures/character/familiar/imp anime 3.png"),

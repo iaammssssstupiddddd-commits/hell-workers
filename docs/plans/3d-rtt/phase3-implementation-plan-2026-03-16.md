@@ -479,8 +479,9 @@ App::new()
 
 ### M-3-5: Building3dHandles の SectionMaterial 移行（MS-Section-B）
 
-> **依存**: M-3-3 完了・Phase 3 GLB 取込完了
-> **根拠**: `section-material-proposal` §5 MS-Section-B
+> **依存**: M-3-3 完了・Phase 3 GLB 取込完了  
+> **根拠**: `section-material-proposal` §5 MS-Section-B  
+> **詳細計画**: [`ms-3-5-building-section-material-plan-2026-03-31.md`](ms-3-5-building-section-material-plan-2026-03-31.md)
 
 **やること**:
 1. `visual_handles.rs` の `Building3dHandles` を全 BuildingType で `SectionMaterial` ベースにそろえる
@@ -491,11 +492,10 @@ App::new()
 - 現時点で `Wall` / `ProvisionalWall` は pilot として `SectionMaterial` に移行済み
 - `floor` / `door` / `equipment` はまだ `StandardMaterial`
 
-**変更ファイル**:
-- `hw_visual/src/visual_handles.rs`
-- `building_completion/spawn.rs`
-- `systems/visual/tank.rs`
-- `systems/visual/mud_mixer.rs`
+**変更ファイル**（詳細は MS-3-5 計画書）:
+- `crates/bevy_app/src/plugins/startup/visual_handles.rs`（`Building3dHandles`）
+- `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs`
+- `crates/bevy_app/src/systems/jobs/floor_construction/completion.rs` 等、`floor` / `door` / `equipment` ハンドルを参照する箇所
 
 **完了条件**:
 - [ ] `cargo check` ゼロエラー
@@ -506,8 +506,9 @@ App::new()
 
 ### M-3-6: テレイン表面表現改善（MS-3B）
 
-> **依存**: M-3-4 完了
-> **根拠**: `docs/plans/3d-rtt/milestone-roadmap.md` MS-3B
+> **依存**: M-3-4 完了  
+> **根拠**: `docs/plans/3d-rtt/milestone-roadmap.md` MS-3B  
+> **詳細計画**: [`ms-3-6-terrain-surface-plan-2026-03-31.md`](ms-3-6-terrain-surface-plan-2026-03-31.md)
 
 **やること**:
 - テクスチャブレンド

@@ -201,6 +201,8 @@ RttRuntime
 
 `hw_visual::SectionMaterial` / `SectionCut` は現在 `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` で実装している。lighting / shadow / prepass は `StandardMaterial` 側を維持し、section clip だけを extension shader と prepass shader で追加する構成である。`SectionCut.position` は `MainCamera` 中心のワールド位置、`SectionCut.normal` は矢視方向、`SectionCut.thickness` はその切断線から奥側へ残すスラブ幅として扱う。
 
+地形タイル専用マテリアル（`make_terrain_section_material`）では `SectionMaterialUniform` に `albedo_uv_mode`・`uv_scale`・`uv_scroll_speed`・`uv_distort_strength`・`brightness_variation_strength` などを載せ、`assets/shaders/section_material.wgsl` の `compute_terrain_uv` とフラグメントでアルベドを決める。川だけ U 方向スクロール、草だけ低周波 UV 歪みと明度のゆるい変調を有効化する。地形 4 テクスチャの `Repeat` は `asset_catalog` 側。詳細は `docs/world_layout.md` の地形レンダリング節。
+
 ### Camera2d ↔ Camera3d 同期
 
 `sync_camera3d_system`（`systems/visual/camera_sync.rs`、`GameSystemSet::Visual` で毎フレーム実行。続けて **`.chain()`** で `sync_world_foreground_2d_camera_system` が実行される）：

@@ -35,8 +35,9 @@ pub use handles::{
 };
 pub use material::{
     CharacterMaterial, SectionCut, SectionMaterial, SoulMaskMaterial, SoulShadowMaterial,
-    make_section_material, make_section_material_textured, soul_face_uv_offset, soul_face_uv_scale,
-    with_alpha_mode,
+    TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_GRASS_UV_DISTORT_STRENGTH,
+    make_section_material, make_section_material_textured, make_terrain_section_material,
+    soul_face_uv_offset, soul_face_uv_scale, with_alpha_mode,
 };
 
 pub use visual3d::{

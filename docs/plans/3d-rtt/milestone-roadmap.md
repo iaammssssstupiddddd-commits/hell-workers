@@ -418,7 +418,8 @@
 
 ### MS-3-5: Building3dHandles の SectionMaterial 移行（MS-Section-B）
 
-> **依存**: MS-3-3 完了・Phase 3 GLB 取込完了
+> **依存**: MS-3-3 完了・Phase 3 GLB 取込完了  
+> **詳細計画**: [`ms-3-5-building-section-material-plan-2026-03-31.md`](ms-3-5-building-section-material-plan-2026-03-31.md)
 
 - **やること**:
   1. `visual_handles.rs` の `Building3dHandles` を全 BuildingType で `SectionMaterial` ベースにそろえる
@@ -436,12 +437,15 @@
 
 ### MS-3-6: テレイン表面表現改善（旧 MS-3B）
 
-> **依存**: MS-3-4 完了
+> **依存**: MS-3-4 完了  
+> **詳細計画**: [`ms-3-6-terrain-surface-plan-2026-03-31.md`](ms-3-6-terrain-surface-plan-2026-03-31.md)
 
-- **やること**: テクスチャブレンド・ノイズによる遷移境界の有機化・必要なら生成時ベイクの検証
+- **やること**: D（アセット）＋ A（シェーダ）＋ 必要なら B（隣接ブレンド、WFC 後）。詳細は [`ms-3-6-terrain-surface-plan-2026-03-31.md`](ms-3-6-terrain-surface-plan-2026-03-31.md)
 - **完了条件**:
-  - [ ] 90度ベースの地形境界オーバーレイに依存しない見た目が成立する
-- **ステータス**: [ ] 未着手
+  - [x] A/D（ワールド UV・UV 歪み・明度変調・川スクロール・AddressMode::Repeat）— 実装済み（2026-04-01）
+  - [ ] S0: WFC 完了後の受入スクリーンショット撮影
+  - [ ] 90度ベースの地形境界オーバーレイに依存しない見た目が成立する（最終判定）
+- **ステータス**: [~] A/D 実装済み。WFC 後の S0 受入・B（隣接ブレンド）は保留
 
 ---
 
@@ -510,14 +514,15 @@
 ## 並行トラックB: WFC地形生成
 
 > **依存**: なし（`hw_world/src/mapgen.rs` のみ影響）
-> **元計画**: `docs/plans/3d-rtt/related/wfc-terrain-generation-plan-2026-03-12.md`
+> **現行計画**: `docs/plans/3d-rtt/wfc-terrain-generation-plan-2026-04-01.md`
 
 | MS | 内容 | ステータス |
 |----|------|-----------|
-| MS-WFC-1 | `TerrainType::can_be_adjacent()` / `can_be_diagonal()` 実装 | [ ] 未着手 |
-| MS-WFC-2 | `bevy_procedural_tilemaps` 導入 + 基本WFC生成（**要: Bevy 0.18 対応確認**） | [ ] 未着手 |
-| MS-WFC-3 | 川・砂バッファゾーンの固定制約統合 | [ ] 未着手 |
-| MS-WFC-3.5 | コーナー制約検証システム（`#[cfg(debug_assertions)]`） | [ ] 未着手 |
+| MS-WFC-1 | 固定 `Site/Yard` と Yard 内固定アンカーを生成前提として定義 | [ ] 未着手 |
+| MS-WFC-2 | 固定アンカーを避ける WFC 地形生成を実装 | [ ] 未着手 |
+| MS-WFC-3 | 木・岩の procedural 配置へ移行 | [ ] 未着手 |
+| MS-WFC-4 | startup を生成結果ベースへ統合し、木材・猫車置き場を Yard 内固定へ移行 | [ ] 未着手 |
+| MS-WFC-4.5 | docs / tests / debug validation を更新 | [ ] 未着手 |
 
 ---
 
@@ -571,7 +576,7 @@ MS-1A → MS-1B → MS-1C → MS-1D ────────────┤
                               │                                       │
                          Phase 4 ──────────────────────────────────┘
 
-MS-WFC-1 → MS-WFC-2 → MS-WFC-3 → MS-WFC-3.5  (独立)
+MS-WFC-1 → MS-WFC-2 → MS-WFC-3 → MS-WFC-4 → MS-WFC-4.5  (独立)
 ```
 
 ---
@@ -589,7 +594,7 @@ MS-WFC-1 → MS-WFC-2 → MS-WFC-3 → MS-WFC-3.5  (独立)
 | P2（完了済み） | MS-3-Char-A | AnimationGraph + タスク連動。完了済み |
 | P2（完了済み） | MS-3-Char-B | Soul の P1 クリップ接続 + face atlas 状態連動。完了済み |
 | P3（方針確定） | MS-3-Fam-R | Familiar を Phase 3 では 2D 前面表示・影なしで扱い、多層階の可視ルールを後段へ送る |
-| 独立 | MS-WFC-1〜3 | メインルートとは独立。地形改善を先行させることも可 |
+| 独立 | MS-WFC-1〜4.5 | メインルートとは独立。固定アンカー付きマップ自動生成として先行させることも可 |
 
 ---
 
@@ -608,4 +613,4 @@ MS-WFC-1 → MS-WFC-2 → MS-WFC-3 → MS-WFC-3.5  (独立)
 | `docs/proposals/3d-rtt/3d-rendering-rtt-proposal-phase2-2026-03-14.md` | フルRtT・多層階アーキテクチャ方針 |
 | `docs/proposals/3d-rtt/related/building-visual-layer-plan-2026-03-12.md` | MS-Pre-B詳細設計 |
 | `docs/proposals/3d-rtt/related/spatial-grid-architecture-plan-2026-03-12.md` | MS-Pre-A詳細設計 |
-| `docs/proposals/3d-rtt/related/wfc-terrain-generation-plan-2026-03-12.md` | WFCトラック詳細設計 |
+| `docs/plans/3d-rtt/wfc-terrain-generation-plan-2026-04-01.md` | WFCトラック詳細設計（現行実装再整列版） |
