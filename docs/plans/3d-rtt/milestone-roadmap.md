@@ -419,7 +419,7 @@
 ### MS-3-5: Building3dHandles の SectionMaterial 移行（MS-Section-B）
 
 > **依存**: MS-3-3 完了・Phase 3 GLB 取込完了  
-> **詳細計画**: [`ms-3-5-building-section-material-plan-2026-03-31.md`](ms-3-5-building-section-material-plan-2026-03-31.md)
+> **詳細計画**: [`archived/ms-3-5-building-section-material-plan-2026-03-31.md`](archived/ms-3-5-building-section-material-plan-2026-03-31.md)
 
 - **やること**:
   1. `visual_handles.rs` の `Building3dHandles` を全 BuildingType で `SectionMaterial` ベースにそろえる

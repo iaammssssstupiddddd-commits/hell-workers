@@ -7,7 +7,7 @@
 | 計画ID | `wfc-ms2c-validator` |
 | ステータス | `Draft` |
 | 作成日 | `2026-04-01` |
-| 最終更新日 | `2026-04-01` |
+| 最終更新日 | `2026-04-04` |
 | 親計画 | [`wfc-terrain-generation-plan-2026-04-01.md`](wfc-terrain-generation-plan-2026-04-01.md) |
 | 前MS | [`wfc-ms2b-wfc-solver-constraints.md`](wfc-ms2b-wfc-solver-constraints.md) |
 | 次MS | [`wfc-ms3-procedural-resources.md`](wfc-ms3-procedural-resources.md) |
@@ -29,12 +29,17 @@ WFC で生成された地形が **ゲーム上の invariant** を満たしてい
 
 ## 2. モジュール構成
 
+本リポジトリでは `mapgen` は **`src/mapgen.rs`** が親モジュールで、サブモジュールは **`src/mapgen/*.rs`** に置く（`src/mapgen/mod.rs` は使わない）。
+
 ```
-crates/hw_world/src/mapgen/
-├── validate.rs          ← 本 MS で新規作成
-│   ├── lightweight_validate()
-│   └── debug_validate()        (#[cfg(debug_assertions)])
-└── ...
+crates/hw_world/src/
+├── mapgen.rs                 ← `pub mod validate;` を追加
+└── mapgen/
+    ├── types.rs
+    ├── wfc_adapter.rs
+    └── validate.rs           ← 本 MS で新規作成
+        ├── lightweight_validate()
+        └── debug_validate()   (#[cfg(debug_assertions)])
 ```
 
 ---
@@ -57,14 +62,17 @@ pub fn lightweight_validate(layout: &GeneratedWorldLayout) -> Result<(), Validat
 #### `check_site_yard_no_river_sand`
 
 ```
-- layout.anchors.site_rect の全セルが River / Sand でないことを確認
-- layout.anchors.yard_rect の全セルが River / Sand でないことを確認
+- layout.anchors.site（GridRect）の全セルが River / Sand でないことを確認
+- layout.anchors.yard（GridRect）の全セルが River / Sand でないことを確認
+- 走査は GridRect::iter_cells() と terrain_tiles の row-major インデックスで対応付ける
 ```
 
 #### `check_site_yard_reachable`
 
 ```
-- Site の代表セル（中心等）から Yard の代表セルへ walkable 経路が存在するか
+- Site の 1 代表セルから Yard の 1 代表セルへ walkable 経路が存在するか
+  （連結性チェックなので、代表点は固定でよい。例: site の min 角 1 点、yard の min 角 1 点、
+   または各矩形の「中心に最も近い整数セル」1 点）
 - hw_world::pathfinding の walkable 判定（現行と同一の関数）を使う
 - 実装: BFS / flood fill でよい（A* 不要）
 ```
@@ -75,16 +83,17 @@ pub fn lightweight_validate(layout: &GeneratedWorldLayout) -> Result<(), Validat
 - Yard の代表セルから以下それぞれへの到達可能性を確認:
   - 水源: layout.masks.river_mask のいずれか 1 セル
   - 砂源: terrain_tiles に Sand が 1 セル以上あり、Yard から到達可能
-  - 岩源: layout.resource_spawn_candidates.rock_positions のいずれか 1 個
-            (MS-WFC-3 で設定される。この MS 時点では空なら SKIP でよい)
+  - 岩源: layout.resource_spawn_candidates.rock_candidates のいずれか 1 座標
+            (MS-WFC-3 で設定される。この MS 時点では Vec が空なら SKIP でよい)
 - 「最低 1 つへ到達可能」を満たせば OK
 ```
 
 #### `check_yard_anchors_present`
 
 ```
-- layout.anchors.initial_wood_grid の全座標が Yard 内に存在する
-- layout.anchors.wheelbarrow_parking_grid が Yard 内に存在する
+- layout.anchors.initial_wood_positions の全座標が layout.anchors.yard（GridRect）内にある
+- layout.anchors.wheelbarrow_parking（GridRect）が layout.anchors.yard に包含される
+  （猫車置き場は Yard 内 2×2 想定。ms1 データモデルに合わせる）
 ```
 
 ---
@@ -113,8 +122,11 @@ pub fn debug_validate(layout: &GeneratedWorldLayout) -> Vec<ValidationWarning> {
 #### `check_protection_band_clean`
 
 ```
-- layout.masks.protection_band の各セルを確認
-- River / 岩 オブジェクトが保護帯内に存在しないことを警告
+- WorldMasks に単一フィールド protection_band はない。
+  debug レポート相当の合成は combined_protection_band()、要素別は
+  river_protection_band / rock_protection_band / tree_dense_protection_band（wfc-ms0 §3.1.1）
+- 検査内容（ms0）: 禁止対象（River タイル・岩占有・高密度木）が各種保護帯「内」に入っていないこと
+- MS-WFC-2c 時点で procedural 岩・木が未配置なら、terrain 上で判定できる River などに絞ってよい
 ```
 
 #### `check_sand_river_adjacency_ratio`
@@ -145,14 +157,15 @@ pub fn debug_validate(layout: &GeneratedWorldLayout) -> Vec<ValidationWarning> {
 #### `check_river_tile_count`
 
 ```
-- river_mask のセル数が RIVER_TOTAL_TILES_TARGET の許容範囲内かを確認
+- river_mask のセル数が、river.rs の RIVER_TOTAL_TILES_TARGET_MIN / MAX（または計画で置いた目安）の範囲内か
 ```
 
 #### `check_no_fallback_reached`
 
 ```
-- layout.generation_attempt > MAX_WFC_RETRIES なら「fallback に到達した」として warn
-- debug_assert!(false, ...) も発火させる
+- layout.used_fallback == true なら「WFC fallback に到達した」として ValidationWarning を追加
+- MS-WFC-2b ではフォールバック時に debug でパニックしない方針のため、
+  **debug_assert!(false, ...) は使わない**（警告・ログのみ）
 ```
 
 #### `check_forbidden_diagonal_patterns`
@@ -167,17 +180,21 @@ pub fn debug_validate(layout: &GeneratedWorldLayout) -> Vec<ValidationWarning> {
 
 ## 5. ValidationError / ValidationWarning 型
 
+座標は **`hw_core::world::GridPos`（`(i32, i32)`）** を使う。`glam::IVec2` はマップ生成コードと揃える必要がなければ導入しない。
+
 ```rust
+use hw_core::world::GridPos;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ValidationError {
     #[error("Site/Yard contains River or Sand at {0:?}")]
-    ForbiddenTileInAnchorZone(IVec2),
+    ForbiddenTileInAnchorZone(GridPos),
     #[error("Site to Yard is not reachable")]
     SiteYardNotReachable,
     #[error("No required resource reachable from Yard")]
     RequiredResourceNotReachable,
     #[error("Yard anchor not in Yard bounds: {0:?}")]
-    YardAnchorOutOfBounds(IVec2),
+    YardAnchorOutOfBounds(GridPos),
 }
 
 #[derive(Debug)]
@@ -197,11 +214,13 @@ pub enum ValidationWarningKind {
 }
 ```
 
-`thiserror` は既存 crate の依存確認が必要。なければ手動 `impl std::fmt::Display`。
+`thiserror` は `hw_world/Cargo.toml` に未追加なら workspace 経由で追加するか、手動 `impl std::fmt::Display` とする。
 
 ---
 
 ## 6. generate_world_layout への統合
+
+`hw_world` に **`log` crate は現状ない**。debug 診断の出力は **`eprintln!`** でよい（または Bevy 利用箇所のみ `tracing` するなら別計画）。下記は `eprintln` 例。
 
 ```rust
 pub fn generate_world_layout(master_seed: u64) -> GeneratedWorldLayout {
@@ -211,7 +230,6 @@ pub fn generate_world_layout(master_seed: u64) -> GeneratedWorldLayout {
 
     // lightweight validate: 失敗は retry 判断に使う（startup で panic）
     if let Err(e) = lightweight_validate(&layout) {
-        // retry ループの外ではここに来ないはずだが念のため panic
         panic!("Generated world failed lightweight validation: {e}");
     }
 
@@ -219,7 +237,7 @@ pub fn generate_world_layout(master_seed: u64) -> GeneratedWorldLayout {
     {
         let warnings = debug_validate(&layout);
         for w in &warnings {
-            log::warn!("[WFC debug] {:?}: {}", w.kind, w.message);
+            eprintln!("[WFC debug] {:?}: {}", w.kind, w.message);
         }
     }
 
@@ -233,14 +251,28 @@ pub fn generate_world_layout(master_seed: u64) -> GeneratedWorldLayout {
 
 | ファイル | 変更内容 |
 | --- | --- |
-| `crates/hw_world/src/mapgen/validate.rs` (新規) | `lightweight_validate` / `debug_validate` / ValidationError / ValidationWarning |
-| `crates/hw_world/src/mapgen/mod.rs` | `validate` モジュール追加 |
-| `crates/hw_world/src/mapgen.rs` | `generate_world_layout()` に validate 呼び出し組み込み |
-| `crates/hw_world/Cargo.toml` | `thiserror` 追加（未追加の場合） |
+| `crates/hw_world/src/mapgen/validate.rs` (新規) | `lightweight_validate` / `debug_validate` / `ValidationError` / `ValidationWarning` |
+| `crates/hw_world/src/mapgen.rs` | `pub mod validate;` を追加し、`generate_world_layout()` に validate 呼び出しを組み込み |
+| `crates/hw_world/Cargo.toml` | `thiserror` を追加する場合のみ（手動 `Display` なら不要） |
 
 ---
 
-## 8. 完了条件チェックリスト
+## 8. Golden seed 定数（テスト用）
+
+[wfc-ms0-invariant-spec.md](wfc-ms0-invariant-spec.md) §3.0 の方針（4 本: `STANDARD`, `WINDING_RIVER`, `TIGHT_BAND`, `RETRY`）に合わせ、`mapgen` の `#[cfg(test)]` または `validate.rs` のテスト用モジュールに **`u64` 定数**を定義する。初版の具体値は実装時に決定し、**`lightweight_validate` が通ること**を CI で保証する。
+
+例（名前のみ・値はプレースホルダ）:
+
+```rust
+pub const GOLDEN_SEED_STANDARD: u64 = 42;
+pub const GOLDEN_SEED_WINDING_RIVER: u64 = 0;      // 実装時に確定
+pub const GOLDEN_SEED_TIGHT_BAND: u64 = 0;
+// RETRY 用 seed は必要に応じて追加
+```
+
+---
+
+## 9. 完了条件チェックリスト
 
 - [ ] `lightweight_validate()` が 4 チェックを実装している
 - [ ] `debug_validate()` が 5 チェック以上を実装している（`#[cfg(debug_assertions)]`）
@@ -248,16 +280,20 @@ pub fn generate_world_layout(master_seed: u64) -> GeneratedWorldLayout {
 - [ ] Site/Yard 内に River/Sand がある場合、`lightweight_validate` が Err を返す
 - [ ] Site ↔ Yard が非連結の場合、`lightweight_validate` が Err を返す
 - [ ] `generate_world_layout()` が lightweight_validate を通過した layout のみを返す
-- [ ] fallback に到達した場合、`debug_validate` が警告を出す
+- [ ] fallback に到達した場合（`used_fallback == true`）、`debug_validate` が警告を出す
 - [ ] Sand の diagonal-only River 接触が多すぎる場合、`debug_validate` が warning を出す
 - [ ] `cargo test -p hw_world` の golden seed テストが全て通る
-- [ ] `cargo check --workspace` / `cargo clippy --workspace` が通る
+- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace` / `cargo clippy --workspace` が通る
 
 ---
 
-## 9. テスト
+## 10. テスト
 
 ```rust
+use crate::anchor::GridRect;
+use crate::terrain::TerrainType;
+use hw_core::constants::MAP_WIDTH;
+
 #[test]
 fn test_golden_seeds_pass_lightweight_validate() {
     for seed in [GOLDEN_SEED_STANDARD, GOLDEN_SEED_WINDING_RIVER, GOLDEN_SEED_TIGHT_BAND] {
@@ -269,28 +305,33 @@ fn test_golden_seeds_pass_lightweight_validate() {
 #[test]
 fn test_fake_invalid_layout_fails_validate() {
     let mut layout = generate_world_layout(GOLDEN_SEED_STANDARD);
-    // Site の最初のセルを River に書き換える
-    let site_pos = layout.anchors.site_rect.min;
-    let idx = site_pos.y as usize * MAP_WIDTH + site_pos.x as usize;
+    // Site の一角（例: min 角）を River に書き換える
+    let site: &GridRect = &layout.anchors.site;
+    let x = site.min_x;
+    let y = site.min_y;
+    let idx = (y * MAP_WIDTH + x) as usize;
     layout.terrain_tiles[idx] = TerrainType::River;
     assert!(lightweight_validate(&layout).is_err());
 }
 ```
 
+`GridRect` は `crate::anchor::GridRect` をテストで import する。
+
 ---
 
-## 10. 検証
+## 11. 検証コマンド
 
 ```sh
 CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo test -p hw_world
-cargo check --workspace
-cargo clippy --workspace
+CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace
+CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace 2>&1 | grep "^warning:" | grep -v generated
 ```
 
 ---
 
-## 11. 更新履歴
+## 12. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-04-01` | `Copilot` | wfc-terrain-generation-plan-2026-04-01.md の MS-WFC-2 を分割・詳細化 |
+| `2026-04-04` | — | レビュー反映: `AnchorLayout` / `ResourceSpawnCandidates` の実フィールド名、`mapgen.rs`+`mapgen/validate.rs` 構成、保護帯は `combined_protection_band` 等、`used_fallback` と `debug_assert` 非使用、`GridPos`・`eprintln`・検証コマンドの `CARGO_HOME` 統一、golden seed 節・テストの `GridRect` 修正。 |
