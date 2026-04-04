@@ -1,5 +1,15 @@
+use std::collections::VecDeque;
+
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use hw_core::world::GridPos;
+
+// ── Protection band widths (wfc-ms0 §3.1) ────────────────────────────────────
+/// アンカー外周の River 禁止帯幅（4 近傍 BFS 距離）
+pub const PROTECTION_BAND_RIVER_WIDTH: u32 = 3;
+/// アンカー外周の岩禁止帯幅
+pub const PROTECTION_BAND_ROCK_WIDTH: u32 = 2;
+/// アンカー外周の高密度木禁止帯幅
+pub const PROTECTION_BAND_TREE_DENSE_WIDTH: u32 = 2;
 
 /// 2D boolean グリッド（row-major, `x + y * width` indexing）。
 #[derive(Debug, Clone)]
@@ -102,13 +112,35 @@ impl WorldMasks {
         WorldMasks {
             site_mask,
             yard_mask,
-            anchor_mask,
-            river_protection_band: BitGrid::map_sized(),      // MS-WFC-2a で設定
-            rock_protection_band: BitGrid::map_sized(),       // MS-WFC-2a で設定
-            tree_dense_protection_band: BitGrid::map_sized(), // MS-WFC-2a で設定
-            river_mask: BitGrid::map_sized(),                 // MS-WFC-2a で設定
-            river_centerline: Vec::new(),                     // MS-WFC-2a で設定
+            anchor_mask: anchor_mask.clone(),
+            river_protection_band: compute_protection_band(&anchor_mask, PROTECTION_BAND_RIVER_WIDTH),
+            rock_protection_band: compute_protection_band(&anchor_mask, PROTECTION_BAND_ROCK_WIDTH),
+            tree_dense_protection_band: compute_protection_band(
+                &anchor_mask,
+                PROTECTION_BAND_TREE_DENSE_WIDTH,
+            ),
+            river_mask: BitGrid::map_sized(), // fill_river_from_seed で設定
+            river_centerline: Vec::new(),     // fill_river_from_seed で設定
         }
+    }
+
+    /// `from_anchor` 済みの `anchor_mask` と `river_protection_band` を参照し、
+    /// seed から deterministic に `river_mask` と `river_centerline` を生成して設定する。
+    ///
+    /// # Panics
+    /// `from_anchor` が先に呼ばれていない場合（anchor_mask が空）に debug_assert で検出する。
+    pub fn fill_river_from_seed(&mut self, seed: u64) {
+        debug_assert!(
+            self.anchor_mask.count_set() > 0,
+            "fill_river_from_seed は from_anchor の後に呼ぶこと"
+        );
+        let (river_mask, centerline) = crate::river::generate_river_mask(
+            seed,
+            &self.anchor_mask,
+            &self.river_protection_band,
+        );
+        self.river_mask = river_mask;
+        self.river_centerline = centerline;
     }
 
     /// debug report 用の合成保護帯。
@@ -119,4 +151,64 @@ impl WorldMasks {
         combined |= &self.tree_dense_protection_band;
         combined
     }
+}
+
+/// anchor_mask の外周から 4 近傍 BFS で距離変換し、
+/// 距離 1..=width のセルを true にした BitGrid を返す。
+///
+/// wfc-ms0 §3.1.1 準拠:
+/// - アンカー占有セル自体は含まない（d = 0 相当）
+/// - マップ外は到達不可
+pub fn compute_protection_band(anchor_mask: &BitGrid, width: u32) -> BitGrid {
+    let w = MAP_WIDTH;
+    let h = MAP_HEIGHT;
+    let mut band = BitGrid::map_sized();
+    let mut dist: Vec<u32> = vec![u32::MAX; (w * h) as usize];
+    let mut queue: VecDeque<GridPos> = VecDeque::new();
+
+    const DIRS: [(i32, i32); 4] = [(0, 1), (0, -1), (1, 0), (-1, 0)];
+
+    // アンカー境界に隣接する非アンカーセルを距離 1 としてキューに積む
+    for y in 0..h {
+        for x in 0..w {
+            if !anchor_mask.get((x, y)) {
+                continue;
+            }
+            for (dx, dy) in DIRS {
+                let nx = x + dx;
+                let ny = y + dy;
+                if nx < 0 || nx >= w || ny < 0 || ny >= h {
+                    continue;
+                }
+                let idx = (ny * w + nx) as usize;
+                if !anchor_mask.get((nx, ny)) && dist[idx] == u32::MAX {
+                    dist[idx] = 1;
+                    queue.push_back((nx, ny));
+                }
+            }
+        }
+    }
+
+    // BFS で距離を伝播; width を超えたセルは band に含めない
+    while let Some(pos) = queue.pop_front() {
+        let d = dist[(pos.1 * w + pos.0) as usize];
+        if d > width {
+            continue;
+        }
+        band.set(pos, true);
+        for (dx, dy) in DIRS {
+            let nx = pos.0 + dx;
+            let ny = pos.1 + dy;
+            if nx < 0 || nx >= w || ny < 0 || ny >= h {
+                continue;
+            }
+            let idx = (ny * w + nx) as usize;
+            if !anchor_mask.get((nx, ny)) && dist[idx] == u32::MAX {
+                dist[idx] = d + 1;
+                queue.push_back((nx, ny));
+            }
+        }
+    }
+
+    band
 }

@@ -23,6 +23,7 @@ WFC で生成された地形が **ゲーム上の invariant** を満たしてい
 - `hw_world::pathfinding` と同一の walkable 判定を使い、到達可能性を確認する
 - validator は `GeneratedWorldLayout` を受け取る pure 関数として実装し、startup との結合を最小にする
 - この MS で **生成後局所修正** は行わない（validator が失敗したら retry または fallback）
+- `Sand` の斜め-only River 接触は、WFC 本体ではなく debug validator で診断する
 
 ---
 
@@ -98,6 +99,7 @@ pub fn debug_validate(layout: &GeneratedWorldLayout) -> Vec<ValidationWarning> {
     let mut warnings = Vec::new();
     check_protection_band_clean(layout, &mut warnings);
     check_sand_river_adjacency_ratio(layout, &mut warnings);
+    check_sand_diagonal_only_contacts(layout, &mut warnings);
     check_river_tile_count(layout, &mut warnings);
     check_no_fallback_reached(layout, &mut warnings);
     // 斜め・2×2 禁止パターンのチェック（F2）
@@ -122,6 +124,24 @@ pub fn debug_validate(layout: &GeneratedWorldLayout) -> Vec<ValidationWarning> {
 - 80% を下回ったら ValidationWarning を追加
 ```
 
+#### `check_sand_diagonal_only_contacts`
+
+```
+- Sand セルごとに、River との 4 近傍接触と斜め 4 マス接触を別々に数える
+- 「River に斜めでは接しているが、4 近傍では接していない」Sand を
+  diagonal-only 接触として扱う
+- diagonal-only 接触は初版では **warning** 扱い
+  - error にはしない
+  - retry 必須条件にも含めない
+- 理由:
+  - 親計画 F2 は斜め整合を validator 側で扱う方針
+  - 親計画 F4 は「砂の 8 割程度が River に辺接」を目標としており、
+    斜め-only は見た目品質の診断対象だが、ただちに不正マップとはみなさない
+- 初期閾値:
+  - 0 件が理想
+  - 総 Sand 数に対して 10% 超なら warning を追加
+```
+
 #### `check_river_tile_count`
 
 ```
@@ -140,6 +160,7 @@ pub fn debug_validate(layout: &GeneratedWorldLayout) -> Vec<ValidationWarning> {
 ```
 - 2×2 以上の禁止パターン（例: River の孤立点、Dirt の孤立点）を検出
 - F2: 斜め整合は WFC 後の validator で扱う方針
+- Sand の diagonal-only 接触はここでまとめず、`check_sand_diagonal_only_contacts` に分離する
 ```
 
 ---
@@ -169,6 +190,7 @@ pub struct ValidationWarning {
 pub enum ValidationWarningKind {
     ProtectionBandViolation,
     SandRiverAdjacencyLow,
+    SandDiagonalOnlyContact,
     RiverTileCountOutOfRange,
     FallbackReached,
     ForbiddenPattern,
@@ -227,6 +249,7 @@ pub fn generate_world_layout(master_seed: u64) -> GeneratedWorldLayout {
 - [ ] Site ↔ Yard が非連結の場合、`lightweight_validate` が Err を返す
 - [ ] `generate_world_layout()` が lightweight_validate を通過した layout のみを返す
 - [ ] fallback に到達した場合、`debug_validate` が警告を出す
+- [ ] Sand の diagonal-only River 接触が多すぎる場合、`debug_validate` が warning を出す
 - [ ] `cargo test -p hw_world` の golden seed テストが全て通る
 - [ ] `cargo check --workspace` / `cargo clippy --workspace` が通る
 
