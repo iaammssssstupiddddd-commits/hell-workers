@@ -1,6 +1,6 @@
 # ワールドマップ仕様書
 
-100x100 の固定グリッドを持つワールドマップの仕様です。`Site/Yard` は固定アンカーのまま、**本番のマップ生成経路**（`generate_world_layout`）では **WFC ソルバー**（gridbugs `wfc`）で `terrain_tiles` を生成し、**各試行ごとに** `mapgen::validate::lightweight_validate()` で invariant と必須資源到達を検証する（MS-WFC-2a/2b/2c/2d 完了）。`debug` / テストビルドでは `debug_validate()` が追加診断を `eprintln!` する。
+100x100 の固定グリッドを持つワールドマップの仕様です。`Site/Yard` は固定アンカーのまま、**本番のマップ生成経路**（`generate_world_layout`）では **WFC ソルバー**（gridbugs `wfc`）で `terrain_tiles` を生成し、**各試行ごとに** `mapgen::validate::lightweight_validate()` で invariant と必須資源到達を検証する（MS-WFC-2a/2b/2c/2d/2e 完了）。`debug` / テストビルドでは `debug_validate()` が追加診断を `eprintln!` する。
 
 ## 基本設定
 
@@ -48,7 +48,7 @@
 
 ### 砂浜 (`Sand`)
 
-- **`generate_world_layout` 経路**: `WorldMasks::fill_sand_from_river_seed()` が `river_mask` の **8 近傍**から `sand_candidate_mask` を作り、seed 由来の carve を差し引いた `final_sand_mask` を決める。`wfc_adapter::post_process_tiles` と `fallback_terrain` はこの `final_sand_mask` を最終 `Sand` 分布として反映する
+- **`generate_world_layout` 経路**: `WorldMasks::fill_sand_from_river_seed()` が `river_mask` から **river distance field** を計算し、River の **8 近傍 shoreline shell を dist=1** として扱う。そこから `dist 1..=2` の **base shoreline** と `dist==1` frontier からの **bounded growth** を合成して `sand_candidate_mask` を作る。seed 由来の non-sand carve を差し引いた `final_sand_mask` を決める。`wfc_adapter::post_process_tiles` と `fallback_terrain` はこの `final_sand_mask` を最終 `Sand` 分布として反映する
 - レガシー経路 `generate_base_terrain_tiles` は従来どおり `generate_sand_tiles` で River 帯から導出
 
 ## 資源配置と再生システム

@@ -16,7 +16,7 @@
 | `mapgen.rs` | `generate_base_terrain_tiles()` と `generate_world_layout()`（WFC + validate + retry/fallback + river 派生 sand mask） |
 | `mapgen/validate.rs` | 生成後バリデータ（`lightweight_validate`, `debug_validate`, `ValidatorPathWorld`） |
 | `mapgen/wfc_adapter.rs` | gridbugs `wfc` の adapter（`run_wfc`, `post_process_tiles`, `fallback_terrain`, `WorldConstraints`）。`final_sand_mask` を最終地形へ反映 |
-| `river.rs` | 固定 River 生成、seed 付き `river_mask` 生成、river 派生 `sand_candidate_mask` / carve / `final_sand_mask` の導出 |
+| `river.rs` | 固定 River 生成、seed 付き `river_mask` 生成、river distance field + base shoreline + bounded growth による `sand_candidate_mask` / carve / `final_sand_mask` の導出 |
 | `layout.rs` | ワールドレイアウト定数 (木・岩・木材の初期位置, 川の範囲) |
 | `world_masks.rs` | `site_mask`, `yard_mask`, protection band, `river_mask`, `river_centerline`, `sand_candidate_mask`, `sand_carve_mask`, `final_sand_mask` |
 | `regrowth.rs` | 森林再生システム (`ForestZone`, 周期的な木スポーン) |

@@ -87,7 +87,8 @@ pub struct WorldMasks {
     pub river_mask: BitGrid,
     /// 川の中心線点列（デバッグ表示・砂配置計算に使う）
     pub river_centerline: Vec<GridPos>,
-    /// river_mask の 8 近傍から作る「砂にしてよい元候補」
+    /// distance-field + growth を合成した「砂にしてよい元候補」
+    /// （dist 1..=2 の base shoreline + dist==1 frontier からの bounded growth）
     pub sand_candidate_mask: BitGrid,
     /// seed 由来で candidate から削る連続 non-sand 領域
     pub sand_carve_mask: BitGrid,

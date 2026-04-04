@@ -7,7 +7,7 @@
 | 計画ID | `wfc-terrain-generation-plan-2026-04-01` |
 | ステータス | `Draft` |
 | 作成日 | `2026-04-01` |
-| 最終更新日 | `2026-04-04` |
+| 最終更新日 | `2026-04-05` |
 | 作成者 | `Codex` |
 | 親マイルストーン | `docs/plans/3d-rtt/milestone-roadmap.md` **並行トラックB: WFC地形生成** |
 | 関連提案 | `docs/proposals/3d-rtt/related/wfc-terrain-generation-plan-2026-03-12.md`（旧案。全面自動生成前提へ再整理） |
@@ -24,6 +24,7 @@
 | MS-WFC-2c | [`wfc-ms2c-validator.md`](wfc-ms2c-validator.md) | lightweight validator（必須 4 チェック）+ debug validator 実装（**完了**・`mapgen/validate.rs`） |
 | MS-WFC-2d | [`wfc-ms2d-river-driven-sand-mask.md`](wfc-ms2d-river-driven-sand-mask.md) | River 派生の砂マスク生成・連続 non-sand carve・WFC 後段反映への再設計 |
 | MS-WFC-2e | [`wfc-ms2e-sand-shore-shape.md`](wfc-ms2e-sand-shore-shape.md) | 砂浜の輪郭依存を緩和し、distance field + additive growth で面としての砂浜形状へ寄せる |
+| MS-WFC-2.5 | [`wfc-ms2-5-terrain-zone-mask.md`](wfc-ms2-5-terrain-zone-mask.md) | アンカー距離場（D）+ flood fill（B）+ 確率的バイアス（A）で Grass/Dirt 地形ゾーンマスクを生成。MS-WFC-3 のフォレスト・岩配置エリアとして接続 |
 | MS-WFC-3 | [`wfc-ms3-procedural-resources.md`](wfc-ms3-procedural-resources.md) | 木・岩の procedural 配置・ForestZone 生成・regrowth 接続準備 |
 | MS-WFC-4 | [`wfc-ms4-startup-integration.md`](wfc-ms4-startup-integration.md) | bevy_app の startup を GeneratedWorldLayout に切り替え |
 | MS-WFC-4.5 | [`wfc-ms45-docs-tests.md`](wfc-ms45-docs-tests.md) | docs 更新・golden seeds 回帰テスト・debug レポート整備 |
@@ -35,7 +36,7 @@
 - **MS-WFC-2b**: `run_wfc`（`RunOwn::new_wrap_forbid` + `collapse`）、`post_process_tiles`、`generate_world_layout` の retry/fallback、スタブ地形 `generate_stub_terrain_tiles_from_masks` の削除済み。
 - **MS-WFC-2c**: `mapgen/validate.rs` に `lightweight_validate` / `debug_validate` を実装済み。`generate_world_layout` の retry ループ内で lightweight 通過時のみ採用し、`ResourceSpawnCandidates` を埋める。詳細は [`wfc-ms2c-validator.md`](wfc-ms2c-validator.md)。
 - **MS-WFC-2d**: `WorldMasks::fill_sand_from_river_seed`、`river::generate_sand_masks`、`post_process_tiles` / `fallback_terrain` の `final_sand_mask` 反映、debug validator の sand-mask 整合チェックを実装済み。
-- **MS-WFC-2e 以降**: 未着手。
+- **MS-WFC-2e 以降**: MS-WFC-2e 完了（distance field + base shoreline + bounded growth による砂浜形状改善、`SAND_GROWTH_*` 定数追加・carve 定数再調整済み）。MS-WFC-3 以降は未着手。
 
 ## 1. 目的
 
@@ -177,7 +178,7 @@
 | F1 | 格子 | **1 ゲームタイル = WFC の 1 セル**（`MAP_WIDTH`×`MAP_HEIGHT` フル解像度）。`WorldMap` との変換層を挟まない。 |
 | F2 | 近傍と検証 | **初版はカーディナル（4 近傍）整合を WFC の主対象**とする。斜め・2×2 などの禁止パターンは **生成後の validator**（および必要なら局所修正・再試行）で扱う。**理由**: 多くの WFC 実装は辺の整合が素直で、対角まで同一ループに入れると制約結合が強く失敗しやすい。対角要件は後からルール拡張しやすい。 |
 | F3 | 川 | **川タイル総数は seed から決まる固定値**（マップごとに一定）。**幅はセグメントごとに 2〜4 タイル**で、パスに沿って **連続的にランダム変化**させる（最小・最大は上記にクリップ）。形状は「横断水系」を満たす手続き生成（中心線＋幅）を先に確定し、**`river_centerline` と `river_mask` の両方**を `GeneratedWorldLayout` に保持したうえで、**川マスクを WFC の hard constraint に渡す**。 |
-| F4 | 砂 | `Sand` は **WFC の主出力ではなく `river_mask` 由来の deterministic mask** として扱う。`river_mask` の **8 近傍**から `sand_candidate_mask` を作り、そこから seed 由来の **連続した non-sand carve** を差し引いて `final_sand_mask` を得る。WFC 本体には weighted な `Sand` hard constraint を追加せず、`post_process_tiles()` が `final_sand_mask` を最終地形へ強制反映する。 |
+| F4 | 砂 | `Sand` は **WFC の主出力ではなく `river_mask` 由来の deterministic mask** として扱う。現行実装では `river_mask` の **8 近傍 shoreline shell を dist=1 とする river distance field** を作り、`dist 1..=2` の base shoreline と `dist==1` frontier からの bounded growth を合成した `sand_candidate_mask` から、seed 由来の **連続した non-sand carve** を差し引いて `final_sand_mask` を得る。WFC 本体には weighted な `Sand` hard constraint を追加せず、`post_process_tiles()` が `final_sand_mask` を最終地形へ強制反映する。 |
 | F5 | ソルバー | **外部 crate 依存**（§4 末尾）。`hw_world` 内は **アダプタ層**（マスク・`TerrainType`・seed の橋渡し）に留め、差し替え可能にする。 |
 | F6 | 収束失敗 | **同一マスタ seed につき最大 N 回**（目安 64）まで再試行。再試行は **`master_seed + attempt_index` から導く deterministic な sub-seed 列**のみを使い、**master seed 自体は変更しない**。それでも失敗時は **同じ master seed から deterministic に得られる安全フォールバック**（未決定セルを `Grass` 等で埋める）へ落とす。これにより **同一 master seed → 同一最終マップ** を維持する。現行方針では debug/test でもフォールバックで続行し、検知は **`used_fallback` の warning・ログ・golden seed テスト**で担保する。正確な N は実装時に定数化。 |
 | F7 | 資源保証 | 資源は **必須資源**（水源・砂源・岩源など序盤進行に必要）と **装飾/追加資源**に分ける。必須資源は hard constraint か validator 必達、追加資源は soft constraint として扱う。 |
@@ -495,3 +496,4 @@
 | `2026-04-04` | `Codex` | MS-WFC-2d を追加し、砂の責務を WFC 重み付けから River 派生 `final_sand_mask` + non-sand carve へ再定義。 |
 | `2026-04-04` | `Codex` | MS-WFC-2d 実装完了に合わせて実装状況・F4・fallback 反映先を更新。 |
 | `2026-04-04` | `Codex` | MS-WFC-2e を追加し、砂浜の輪郭依存を緩和する次段計画（distance field + additive growth）を接続。 |
+| `2026-04-05` | `Codex` | MS-WFC-2e 実装完了に合わせて F4 を `8近傍 shoreline shell + distance field + bounded growth` の実装内容へ更新。 |
