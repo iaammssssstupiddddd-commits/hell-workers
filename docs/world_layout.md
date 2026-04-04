@@ -1,6 +1,6 @@
 # ワールドマップ仕様書
 
-100x100 の固定グリッドを持つワールドマップの仕様です。現状は `Site/Yard` を固定アンカーとして維持しつつ、地形生成を WFC ベースへ段階移行しています。
+100x100 の固定グリッドを持つワールドマップの仕様です。`Site/Yard` は固定アンカーのまま、**本番のマップ生成経路**（`generate_world_layout`）では **WFC ソルバー**（gridbugs `wfc`）で `terrain_tiles` を生成し、**各試行ごとに** `mapgen::validate::lightweight_validate()` で invariant と必須資源到達を検証する（MS-WFC-2a/2b/2c 完了）。`debug` / テストビルドでは `debug_validate()` が追加診断を `eprintln!` する。
 
 ## 基本設定
 
@@ -23,9 +23,12 @@
 ### 現行の生成経路
 
 - legacy 純粋関数: `hw_world::generate_base_terrain_tiles()`
-  - 固定 River と簡易 Dirt/Grass パターンを返す旧経路
-- 現在の画面表示経路: `hw_world::generate_world_layout()`
-  - `AnchorLayout` と `WorldMasks` を構築し、seed 付き `river_mask` を含む `GeneratedWorldLayout` を返す
+  - 固定 River 矩形と簡易 Dirt/Grass パターンを返す旧経路（`GeneratedWorldLayout::stub` や visual 用のレガシー経路で使用）
+- **本番相当の経路**: `hw_world::generate_world_layout(master_seed)`
+  - `AnchorLayout::fixed()` と `WorldMasks::from_anchor` → `fill_river_from_seed` でマスクを確定
+  - `mapgen::wfc_adapter::run_wfc`（`RunOwn::new_wrap_forbid` + `collapse`）で地形を生成し、`post_process_tiles` で Sand / anchor 制約を補正
+  - 各試行で `mapgen::validate::lightweight_validate()` に通過したレイアウトのみ採用。通過時は到達確認済み `ResourceSpawnCandidates` を `GeneratedWorldLayout.resource_spawn_candidates` に格納する
+  - WFC 成功でも validate 失敗なら次 attempt。全試行で通過できなければ `fallback_terrain`（River マスク維持・他は Grass）。fallback レイアウトは lightweight を通さない（`used_fallback == true`）
   - `crates/bevy_app/src/world/map/spawn.rs` は、MS-WFC-4 の本統合前の暫定措置としてこの結果の `terrain_tiles` を描画する
 
 ### 川 (`River`)
@@ -45,9 +48,8 @@
 
 ### 砂浜 (`Sand`)
 
-- 現段階では WFC solver 本体ではなく、一時スタブ地形で `river_mask` から導出する
-- `crates/hw_world/src/mapgen.rs` の `generate_stub_terrain_tiles_from_masks()` が `generate_sand_tiles(...)` を使って River 周辺に配置する
-- `anchor_mask` 上には `Sand` を置かない
+- **`generate_world_layout` 経路**: WFC が Sand パターンを出したあと、`wfc_adapter::post_process_tiles` が **川にカーディナル隣接しない Sand** および **anchor 上の Sand** を Grass/Dirt に置換する（`wfc` 0.10.x の priority queue 制約に合わせた分割）
+- レガシー経路 `generate_base_terrain_tiles` は従来どおり `generate_sand_tiles` で River 帯から導出
 
 ## 資源配置と再生システム
 
@@ -109,6 +111,8 @@
 - [`../crates/hw_world/src/anchor.rs`](../crates/hw_world/src/anchor.rs): `Site/Yard` 固定アンカー定義
 - [`../crates/hw_world/src/world_masks.rs`](../crates/hw_world/src/world_masks.rs): anchor/protection-band/river の各マスク
 - [`../crates/hw_world/src/mapgen.rs`](../crates/hw_world/src/mapgen.rs): `generate_base_terrain_tiles()` と `generate_world_layout()`
+- [`../crates/hw_world/src/mapgen/validate.rs`](../crates/hw_world/src/mapgen/validate.rs): 生成後バリデータ（`lightweight_validate`, `debug_validate`）
+- [`../crates/hw_world/src/mapgen/wfc_adapter.rs`](../crates/hw_world/src/mapgen/wfc_adapter.rs): WFC ソルバー統合（`run_wfc`, `post_process_tiles`, `fallback_terrain`）
 - [`../crates/hw_world/src/river.rs`](../crates/hw_world/src/river.rs): seed 付き川マスク生成と砂地導出
 - [`../crates/hw_world/src/coords.rs`](../crates/hw_world/src/coords.rs): 座標変換
 - [`../crates/bevy_app/src/world/regrowth.rs`](../crates/bevy_app/src/world/regrowth.rs): 木の再生システムの app shell

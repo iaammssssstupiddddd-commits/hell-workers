@@ -1,4 +1,5 @@
 pub mod types;
+pub mod validate;
 pub mod wfc_adapter;
 
 use crate::river::{generate_fixed_river_tiles, generate_sand_tiles};
@@ -32,11 +33,12 @@ pub fn generate_base_terrain_tiles(
     tiles
 }
 
-/// WFC 地形生成のエントリポイント（MS-WFC-2b）。
+/// WFC 地形生成のエントリポイント（MS-WFC-2c）。
 ///
 /// `WorldMasks`（anchor + river_mask）を構築し、WFC ソルバーで地形グリッドを生成する。
-/// 収束失敗時は `MAX_WFC_RETRIES` まで deterministic retry し、それでも失敗した場合のみ
-/// fallback（River マスクを維持した Grass マップ）を返す。
+/// 収束失敗時は `MAX_WFC_RETRIES` まで deterministic retry し、retry 内で
+/// `validate::lightweight_validate()` を通過したレイアウトのみ採用する。
+/// 全試行で通過できない場合のみ fallback（River マスクを維持した Grass マップ）を返す。
 pub fn generate_world_layout(master_seed: u64) -> types::GeneratedWorldLayout {
     use crate::anchor::AnchorLayout;
     use crate::world_masks::WorldMasks;
@@ -47,31 +49,59 @@ pub fn generate_world_layout(master_seed: u64) -> types::GeneratedWorldLayout {
     let mut masks = WorldMasks::from_anchor(&anchors);
     masks.fill_river_from_seed(master_seed);
 
-    let (terrain_tiles, attempt, used_fallback) = (0..=MAX_WFC_RETRIES)
+    let layout = (0..=MAX_WFC_RETRIES)
         .find_map(|attempt| {
             let sub_seed = derive_sub_seed(master_seed, attempt);
-            run_wfc(&masks, sub_seed, attempt)
-                .ok()
-                .map(|tiles| (tiles, attempt, false))
+            let terrain_tiles = run_wfc(&masks, sub_seed, attempt).ok()?;
+            let candidate = types::GeneratedWorldLayout {
+                terrain_tiles,
+                anchors: anchors.clone(),
+                masks: masks.clone(),
+                resource_spawn_candidates: ResourceSpawnCandidates::default(),
+                initial_tree_positions: Vec::new(),
+                forest_regrowth_zones: Vec::new(),
+                initial_rock_positions: Vec::new(),
+                master_seed,
+                generation_attempt: attempt,
+                used_fallback: false,
+            };
+            match validate::lightweight_validate(&candidate) {
+                Ok(resource_spawn_candidates) => Some(types::GeneratedWorldLayout {
+                    resource_spawn_candidates,
+                    ..candidate
+                }),
+                Err(err) => {
+                    eprintln!("[WFC validate] attempt={attempt} seed={sub_seed}: {err}");
+                    None
+                }
+            }
         })
         .unwrap_or_else(|| {
             // debug でも release でもフォールバックは続行する（`debug_assert!(false)` は使わない）
             eprintln!("WFC: fallback terrain used for master_seed={master_seed}");
-            (fallback_terrain(&masks), MAX_WFC_RETRIES + 1, true)
+            types::GeneratedWorldLayout {
+                terrain_tiles: fallback_terrain(&masks),
+                anchors,
+                masks,
+                resource_spawn_candidates: ResourceSpawnCandidates::default(),
+                initial_tree_positions: Vec::new(),
+                forest_regrowth_zones: Vec::new(),
+                initial_rock_positions: Vec::new(),
+                master_seed,
+                generation_attempt: MAX_WFC_RETRIES + 1,
+                used_fallback: true,
+            }
         });
 
-    types::GeneratedWorldLayout {
-        terrain_tiles,
-        anchors,
-        masks,
-        resource_spawn_candidates: ResourceSpawnCandidates::default(),
-        initial_tree_positions: Vec::new(),
-        forest_regrowth_zones: Vec::new(),
-        initial_rock_positions: Vec::new(),
-        master_seed,
-        generation_attempt: attempt,
-        used_fallback,
+    #[cfg(any(test, debug_assertions))]
+    {
+        let warnings = validate::debug_validate(&layout);
+        for w in &warnings {
+            eprintln!("[WFC debug] {:?}: {}", w.kind, w.message);
+        }
     }
+
+    layout
 }
 
 #[cfg(test)]

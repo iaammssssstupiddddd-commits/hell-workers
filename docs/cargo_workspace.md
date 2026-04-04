@@ -367,8 +367,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - nearest walkable / river query
 - `AnchorLayout`, `GridRect` — `Site/Yard` と Yard 内固定物の pure data 契約
 - `WorldMasks` — `site_mask`, `yard_mask`, `river_mask`, protection band, `river_centerline`
-- `generate_world_layout` — WFC 移行用の生成エントリポイント
-- `mapgen::wfc_adapter` — `wfc` crate を局所化する adapter 骨格
+- `generate_world_layout` — WFC ベースの地形生成エントリ（`river_mask` 確定後にソルバー実行・retry/fallback）
+- `mapgen::wfc_adapter` — gridbugs `wfc` を局所化する adapter（`run_wfc`, `post_process_tiles`, `WorldConstraints` 等）
 - `room_detection::{build_detection_input, detect_rooms, room_is_valid_against_input}`
 - `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl も `hw_world` が所有）
 - `SpatialGridOps` trait — `get_nearby_in_radius` など空間グリッド read-only API（concrete resource の本体は `hw_spatial`）

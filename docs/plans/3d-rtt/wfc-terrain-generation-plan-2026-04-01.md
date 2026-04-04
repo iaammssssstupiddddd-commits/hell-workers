@@ -7,7 +7,7 @@
 | 計画ID | `wfc-terrain-generation-plan-2026-04-01` |
 | ステータス | `Draft` |
 | 作成日 | `2026-04-01` |
-| 最終更新日 | `2026-04-01` |
+| 最終更新日 | `2026-04-05` |
 | 作成者 | `Codex` |
 | 親マイルストーン | `docs/plans/3d-rtt/milestone-roadmap.md` **並行トラックB: WFC地形生成** |
 | 関連提案 | `docs/proposals/3d-rtt/related/wfc-terrain-generation-plan-2026-03-12.md`（旧案。全面自動生成前提へ再整理） |
@@ -21,10 +21,18 @@
 | MS-WFC-1 | [`wfc-ms1-anchor-data-model.md`](wfc-ms1-anchor-data-model.md) | `AnchorLayout` / `GeneratedWorldLayout` / `WorldMasks` の型定義 |
 | MS-WFC-2a | [`wfc-ms2a-crate-adapter-river-mask.md`](wfc-ms2a-crate-adapter-river-mask.md) | 外部 WFC crate 選定・アダプタ骨格・川マスク seed 付き帯生成 |
 | MS-WFC-2b | [`wfc-ms2b-wfc-solver-constraints.md`](wfc-ms2b-wfc-solver-constraints.md) | WFC ソルバー統合・制約マスキング・deterministic retry/fallback |
-| MS-WFC-2c | [`wfc-ms2c-validator.md`](wfc-ms2c-validator.md) | lightweight validator（必須 4 チェック）+ debug validator 実装 |
+| MS-WFC-2c | [`wfc-ms2c-validator.md`](wfc-ms2c-validator.md) | lightweight validator（必須 4 チェック）+ debug validator 実装（**完了**・`mapgen/validate.rs`） |
 | MS-WFC-3 | [`wfc-ms3-procedural-resources.md`](wfc-ms3-procedural-resources.md) | 木・岩の procedural 配置・ForestZone 生成・regrowth 接続準備 |
 | MS-WFC-4 | [`wfc-ms4-startup-integration.md`](wfc-ms4-startup-integration.md) | bevy_app の startup を GeneratedWorldLayout に切り替え |
 | MS-WFC-4.5 | [`wfc-ms45-docs-tests.md`](wfc-ms45-docs-tests.md) | docs 更新・golden seeds 回帰テスト・debug レポート整備 |
+
+### 実装状況（2026-04 時点）
+
+- **MS-WFC-0 / 1**: 仕様・`AnchorLayout` / `WorldMasks` / `GeneratedWorldLayout` 型は実装済み。
+- **MS-WFC-2a**: 外部 `wfc` / `direction` 依存、`wfc_adapter` 骨格、保護帯 BFS、`seed` 付き `river_mask` / `fill_river_from_seed` 実装済み。
+- **MS-WFC-2b**: `run_wfc`（`RunOwn::new_wrap_forbid` + `collapse`）、`post_process_tiles`、`generate_world_layout` の retry/fallback、スタブ地形 `generate_stub_terrain_tiles_from_masks` の削除済み。
+- **MS-WFC-2c**: `mapgen/validate.rs` に `lightweight_validate` / `debug_validate` を実装済み。`generate_world_layout` の retry ループ内で lightweight 通過時のみ採用し、`ResourceSpawnCandidates` を埋める。詳細は [`wfc-ms2c-validator.md`](wfc-ms2c-validator.md)。
+- **MS-WFC-3 以降**: 未着手。
 
 ## 1. 目的
 
@@ -168,7 +176,7 @@
 | F3 | 川 | **川タイル総数は seed から決まる固定値**（マップごとに一定）。**幅はセグメントごとに 2〜4 タイル**で、パスに沿って **連続的にランダム変化**させる（最小・最大は上記にクリップ）。形状は「横断水系」を満たす手続き生成（中心線＋幅）を先に確定し、**`river_centerline` と `river_mask` の両方**を `GeneratedWorldLayout` に保持したうえで、**川マスクを WFC の hard constraint に渡す**。 |
 | F4 | 砂 | **川に辺接しない位置にも砂を出してよい**が、**出現頻度は川隣接より大幅に低く**する。目安として **全体の砂タイルのうちおおよそ 8 割は川に辺接**（4 近傍）を満たし、残りは許可セル（`Site/Yard` 外・他マスクと矛盾しない）に **低い重み**で散らす。実装は WFC のタイル重み＋後段の補正、または二段パスでよい。具体係数は定数化し、調整しやすくする。 |
 | F5 | ソルバー | **外部 crate 依存**（§4 末尾）。`hw_world` 内は **アダプタ層**（マスク・`TerrainType`・seed の橋渡し）に留め、差し替え可能にする。 |
-| F6 | 収束失敗 | **同一マスタ seed につき最大 N 回**（目安 64）まで再試行。再試行は **`master_seed + attempt_index` から導く deterministic な sub-seed 列**のみを使い、**master seed 自体は変更しない**。それでも失敗時は **同じ master seed から deterministic に得られる安全フォールバック**（未決定セルを `Grass` 等で埋める）へ落とす。これにより **同一 master seed → 同一最終マップ** を維持する。`debug_assert` / テストでは厳格に失敗を検知する。正確な N は実装時に定数化。 |
+| F6 | 収束失敗 | **同一マスタ seed につき最大 N 回**（目安 64）まで再試行。再試行は **`master_seed + attempt_index` から導く deterministic な sub-seed 列**のみを使い、**master seed 自体は変更しない**。それでも失敗時は **同じ master seed から deterministic に得られる安全フォールバック**（未決定セルを `Grass` 等で埋める）へ落とす。これにより **同一 master seed → 同一最終マップ** を維持する。現行方針では debug/test でもフォールバックで続行し、検知は **`used_fallback` の warning・ログ・golden seed テスト**で担保する。正確な N は実装時に定数化。 |
 | F7 | 資源保証 | 資源は **必須資源**（水源・砂源・岩源など序盤進行に必要）と **装飾/追加資源**に分ける。必須資源は hard constraint か validator 必達、追加資源は soft constraint として扱う。 |
 | F8 | 保護帯 | `Site/Yard` の内側禁止だけでなく、外周にも **保護帯**を設ける。少なくとも River 禁止、岩禁止、高密度木禁止を含め、序盤導線を保護する。具体幅は定数化する。 |
 | F9 | 到達可能性 invariant | validator は 2 段構成にする。**軽量 validator** は `Site↔Yard`、Yard から初期木材・猫車置き場・最低 1 つの水源/砂源/岩源への到達可能性を確認する。**重い debug validator** は距離や通路幅など追加診断を行う。到達判定は `hw_world::pathfinding` と同じ walkable 契約を使う。 |

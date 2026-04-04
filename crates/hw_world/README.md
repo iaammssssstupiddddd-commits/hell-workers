@@ -13,8 +13,9 @@
 | `anchor.rs` | `AnchorLayout`, `GridRect`, Yard 内固定物の pure data 契約 |
 | `map/` | `WorldMap` — 地形・歩行可能性・建物データの保持（access, bridges, buildings, doors, obstacles, stockpiles, tiles のサブモジュールを含む） |
 | `terrain.rs` | `TerrainType` enum (Water, Sand, Rock, Grass, ...) |
-| `mapgen.rs` | `generate_base_terrain_tiles()` と `generate_world_layout()` |
-| `mapgen/wfc_adapter.rs` | `wfc` crate を隠蔽する adapter 骨格と制約変換 |
+| `mapgen.rs` | `generate_base_terrain_tiles()` と `generate_world_layout()`（WFC + validate + retry/fallback） |
+| `mapgen/validate.rs` | 生成後バリデータ（`lightweight_validate`, `debug_validate`, `ValidatorPathWorld`） |
+| `mapgen/wfc_adapter.rs` | gridbugs `wfc` の adapter（`run_wfc`, `post_process_tiles`, `fallback_terrain`, `WorldConstraints`） |
 | `river.rs` | 固定 River 生成、seed 付き `river_mask` 生成、砂地導出 |
 | `layout.rs` | ワールドレイアウト定数 (木・岩・木材の初期位置, 川の範囲) |
 | `world_masks.rs` | `site_mask`, `yard_mask`, protection band, `river_mask`, `river_centerline` |

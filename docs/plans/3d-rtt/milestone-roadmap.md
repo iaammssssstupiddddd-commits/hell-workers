@@ -518,8 +518,8 @@
 
 | MS | 内容 | ステータス |
 |----|------|-----------|
-| MS-WFC-1 | 固定 `Site/Yard` と Yard 内固定アンカーを生成前提として定義 | [ ] 未着手 |
-| MS-WFC-2 | 固定アンカーを避ける WFC 地形生成を実装 | [ ] 未着手 |
+| MS-WFC-1 | 固定 `Site/Yard` と Yard 内固定アンカーを生成前提として定義 | [x] 完了 |
+| MS-WFC-2 | 固定アンカーを避ける WFC 地形生成（2a 入力・川、2b ソルバー、2c validator） | [x] 完了（2a・2b・2c） |
 | MS-WFC-3 | 木・岩の procedural 配置へ移行 | [ ] 未着手 |
 | MS-WFC-4 | startup を生成結果ベースへ統合し、木材・猫車置き場を Yard 内固定へ移行 | [ ] 未着手 |
 | MS-WFC-4.5 | docs / tests / debug validation を更新 | [ ] 未着手 |

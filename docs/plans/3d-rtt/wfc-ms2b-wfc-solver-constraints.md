@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `wfc-ms2b-wfc-solver-constraints` |
-| ステータス | `Draft` |
+| ステータス | `完了`（実装済み・2026-04） |
 | 作成日 | `2026-04-01` |
 | 最終更新日 | `2026-04-04` |
 | 親計画 | [`wfc-terrain-generation-plan-2026-04-01.md`](wfc-terrain-generation-plan-2026-04-01.md) |
