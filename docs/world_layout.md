@@ -1,6 +1,6 @@
 # ワールドマップ仕様書
 
-100x100の固定レイアウトを持つワールドマップの仕様です。地形と資源の配置は、ゲームの拠点としての機能を果たすよう設計されています。
+100x100 の固定グリッドを持つワールドマップの仕様です。現状は `Site/Yard` を固定アンカーとして維持しつつ、地形生成を WFC ベースへ段階移行しています。
 
 ## 基本設定
 
@@ -18,35 +18,57 @@
 | **Sand** | ○ | 川の両岸に広がる砂浜。 |
 | **River** | × | マップを**横断**する水場。物理的な障害物として機能します。 |
 
-## 地形生成アルゴリズム
+## 地形生成の現状
 
-### 蛇行川 (`River`)
-- **手法**: パーリンノイズ（1D）によるY軸オフセットの計算。
-- **方向**: マップを西から東へ**横断**します。
-- **シード**: 42 (固定)
-- **川幅**: 5タイル (`RIVER_WIDTH`)
-- **生成ロジック**: 純粋な生成処理は `crates/hw_world/src/river.rs` にあり、`crates/bevy_app/src/world/mod.rs` の inline module `pub mod river { pub use hw_world::river::...; }` として re-export されています。
+### 現行の生成経路
+
+- legacy 純粋関数: `hw_world::generate_base_terrain_tiles()`
+  - 固定 River と簡易 Dirt/Grass パターンを返す旧経路
+- 現在の画面表示経路: `hw_world::generate_world_layout()`
+  - `AnchorLayout` と `WorldMasks` を構築し、seed 付き `river_mask` を含む `GeneratedWorldLayout` を返す
+  - `crates/bevy_app/src/world/map/spawn.rs` は、MS-WFC-4 の本統合前の暫定措置としてこの結果の `terrain_tiles` を描画する
+
+### 川 (`River`)
+
+- **方向**: マップを西から東へ横断する
+- **生成ロジック**: `crates/hw_world/src/river.rs` の `generate_river_mask(seed, anchor_mask, river_protection_band)`
+- **出力**:
+  - `WorldMasks::river_mask`
+  - `WorldMasks::river_centerline`
+- **制約**:
+  - `Site/Yard` のアンカーセルには進入しない
+  - `river_protection_band` を侵さない
+- **seed**:
+  - 同一 seed では同一形状
+  - `crates/bevy_app/src/world/map/spawn.rs` の暫定プレビューでは `HELL_WORKERS_WORLDGEN_SEED=<u64>` を使う
+  - 未指定時は起動ごとにランダム seed を採用する
 
 ### 砂浜 (`Sand`)
-- 川のタイルから上下2タイル (`SAND_WIDTH`) の範囲に自動生成。
+
+- 現段階では WFC solver 本体ではなく、一時スタブ地形で `river_mask` から導出する
+- `crates/hw_world/src/mapgen.rs` の `generate_stub_terrain_tiles_from_masks()` が `generate_sand_tiles(...)` を使って River 周辺に配置する
+- `anchor_mask` 上には `Sand` を置かない
 
 ## 資源配置と再生システム
 
-資源は特定のエリアに集中して配置され、一部は時間経過とともに再生します。
+現状は「固定アンカー + 一部固定物 + その他自動生成」へ移行中です。
 
-### 1. 森林エリア (ForestZone)
-- **対象**: 木 (`Tree`)
-- **配置**: マップ北西（左上）に広がる森林地。
-- **再生ロジック**: `RegrowthManager` によって管理。伐採された箇所に一定時間（デフォルト60秒）経過後、新しい木が再生します。
-- **物理特性**: 木は物理的な障害物であり、魂（地上ユニット）は通り抜けることができません。
+### 1. 固定アンカー
 
-### 2. 岩石エリア (RockArea)
-- **対象**: 岩 (`Rock`)
-- **配置**: マップ南東（右下）の険しいエリア。
-- **特性**: 岩は強固な障害物です。破壊（採掘）には時間がかかりますが、跡地は `TerrainType::Dirt` に変化し、通行可能になります。
+- `Site` / `Yard` は `crates/hw_world/src/anchor.rs` の `AnchorLayout::fixed()` で決定する
+- `Site` は中央、`Yard` はその東隣に固定配置される
+- `Site/Yard` 内の地形は `Grass` または `Dirt` のみを許可する設計
 
-### 3. 初期資源
-- ゲーム開始時、中央の拠点付近に少量の木材アイテム (`ResourceItem(Wood)`) が配置されます。
+### 2. Yard 内固定物
+
+- 初期木材は `AnchorLayout::initial_wood_positions` に固定配置
+- 猫車置き場は `AnchorLayout::wheelbarrow_parking` の 2x2 footprint に固定配置
+
+### 3. 木・岩・再生
+
+- 木・岩の完全自動生成と `forest_regrowth_zones` の本統合は WFC 系マイルストーンで段階導入中
+- 現在の画面描画で確認できるのは主に地形プレビューであり、初期木・岩・regrowth はまだ旧 startup 経路が残る
+- 木や岩は物理的な障害物として機能し、岩の跡地は `TerrainType::Dirt` に変化する
 
 ## 座標変換 (Coordinate System)
 
@@ -81,10 +103,13 @@
     - **境界到達 (Boundary Reaching)**: 2x2以上の建築物など、ターゲット領域に入り込まずにその境界（隣接マス）で停止する高度なパス探索ロジック（`find_path_to_boundary`）を実装しています。対象占有領域は集合 membership として扱い、開始地点が対象内にある場合は最寄りの外側歩行マスへの短い脱出パスを返します。通常時は目標領域へ入る最初の1歩手前で経路を切り詰めます。
 
 ## 関連ファイル
-- `crates/bevy_app/src/world/map/`: マップデータ構造（mod）・レイアウト定数（layout）・生成システム（spawn）
+- `crates/bevy_app/src/world/map/`: root 側の app shell。`spawn.rs` は暫定的に `generate_world_layout()` の地形を描画する
 - `crates/bevy_app/src/plugins/startup/visual_handles.rs`: `Terrain3dHandles` リソース（タイルメッシュ・4種 SectionMaterial ハンドル）
 - `crates/bevy_app/src/systems/visual/terrain_material.rs`: 障害物除去後のテレインマテリアル差し替えシステム
-- [`../crates/hw_world/src/river.rs`](../crates/hw_world/src/river.rs): 川生成アルゴリズム
+- [`../crates/hw_world/src/anchor.rs`](../crates/hw_world/src/anchor.rs): `Site/Yard` 固定アンカー定義
+- [`../crates/hw_world/src/world_masks.rs`](../crates/hw_world/src/world_masks.rs): anchor/protection-band/river の各マスク
+- [`../crates/hw_world/src/mapgen.rs`](../crates/hw_world/src/mapgen.rs): `generate_base_terrain_tiles()` と `generate_world_layout()`
+- [`../crates/hw_world/src/river.rs`](../crates/hw_world/src/river.rs): seed 付き川マスク生成と砂地導出
 - [`../crates/hw_world/src/coords.rs`](../crates/hw_world/src/coords.rs): 座標変換
 - [`../crates/bevy_app/src/world/regrowth.rs`](../crates/bevy_app/src/world/regrowth.rs): 木の再生システムの app shell
 - `crates/bevy_app/src/world/mod.rs` (inline `pub mod pathfinding`): 通行制御を伴うパス検索の互換層（`hw_world::pathfinding` への re-export）

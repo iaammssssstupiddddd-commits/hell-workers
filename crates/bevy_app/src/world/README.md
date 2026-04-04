@@ -9,19 +9,18 @@
 
 | ディレクトリ | 内容 |
 |---|---|
-| `map/` | ワールドマップの初期化・アクセス・地形境界 |
+| `map/` | ワールドマップの初期化・アクセス・地形描画の app shell |
 
 ## map/ ディレクトリ
 
 | ファイル | 内容 |
 |---|---|
 | `mod.rs` | 公開 API |
-| `spawn.rs` | マップエンティティのスポーン処理 |
-| `terrain_border.rs` | 地形境界タイルの設定 |
+| `spawn.rs` | マップエンティティのスポーン処理。現在は `generate_world_layout()` の地形を暫定プレビュー表示する |
 
 ## 地形生成・経路探索について
 
-地形生成アルゴリズム（Perlin ノイズ・川生成）と A* 経路探索は `hw_world` クレートに実装されている。
+地形生成アルゴリズムと A* 経路探索は `hw_world` クレートに実装されている。
 詳細は `crates/hw_world/README.md` を参照。
 
 ---
@@ -38,8 +37,9 @@
 - `WorldMap` 型と全データ構造
 - `find_path`, `can_reach_target` などの A* アルゴリズム
 - `grid_to_world`, `world_to_grid` などの座標変換
-- `generate_base_terrain_tiles`, `generate_fixed_river_tiles` などの地形生成
+- `generate_base_terrain_tiles`, `generate_world_layout`, `generate_fixed_river_tiles` などの地形生成
 - `find_nearest_walkable_grid` などの空間クエリ
+- `AnchorLayout`, `WorldMasks` などの生成中間データ
 
 ### src/ に置かれているもの（app shell / Bevy 統合層）
 
@@ -52,5 +52,4 @@ pub use hw_world::{WorldMapRead, WorldMapWrite, TerrainType, generate_fixed_rive
 | ファイル | hw_world ではなく src/ にある理由 |
 |---|---|
 | `mod.rs` | `WorldMapRead` / `WorldMapWrite` と layout 定数の root facade |
-| `spawn.rs` | `Commands` によるエンティティスポーンが必要 |
-| `terrain_border.rs` | タイルエンティティへのコンポーネント付与が必要 |
+| `spawn.rs` | `Commands` と `Terrain3dHandles` を使った地形エンティティスポーンが必要。現在は `HELL_WORKERS_WORLDGEN_SEED` を読んで `generate_world_layout()` の地形だけを暫定プレビューする |

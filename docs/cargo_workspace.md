@@ -359,12 +359,16 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 代表例:
 
-- terrain / river / mapgen / borders / regrowth
+- terrain / river / mapgen / regrowth
 - spawn grid helper
 - `WorldMap`
 - `WorldMapRead`, `WorldMapWrite` — `WorldMap` access を system 境界で統一する `SystemParam`
 - `world_to_grid`, `grid_to_world`
 - nearest walkable / river query
+- `AnchorLayout`, `GridRect` — `Site/Yard` と Yard 内固定物の pure data 契約
+- `WorldMasks` — `site_mask`, `yard_mask`, `river_mask`, protection band, `river_centerline`
+- `generate_world_layout` — WFC 移行用の生成エントリポイント
+- `mapgen::wfc_adapter` — `wfc` crate を局所化する adapter 骨格
 - `room_detection::{build_detection_input, detect_rooms, room_is_valid_against_input}`
 - `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl も `hw_world` が所有）
 - `SpatialGridOps` trait — `get_nearby_in_radius` など空間グリッド read-only API（concrete resource の本体は `hw_spatial`）
@@ -384,6 +388,10 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `GameAssets` への直接依存
 - root 側の startup / plugin wiring / entity spawn facade
 - `SpatialGrid` resource 実体と update system（9 種 concrete）は `hw_spatial` が保持（一部更新関数は `hw_logistics` にあり `plugins/spatial` から登録）
+
+補足:
+
+- `hw_world` は WFC 移行のため `wfc` と `direction` に直接依存しているが、その利用点は `mapgen::wfc_adapter` に閉じ込める
 
 ### `hw_spatial`
 
@@ -566,7 +574,7 @@ root (`bevy_app`) は app shell として `init_resource::<WorldMap>()`、startu
 - `obstacle_cleanup_system` のような WorldMap 同期 + 地形ビジュアル通知（`TerrainChangedEvent` → bevy_app で `MeshMaterial3d` 差し替え）
 - door 自動開閉のような world state 更新 system（`DoorVisualHandles` 注入）
 
-`crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/regrowth.rs` は app shell です。地形メッシュは `spawn_map` で `SectionMaterial` / `Terrain3dHandles` を用いる。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックと `WorldMap` access wrapper は `hw_world` から呼び出します。
+`crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/regrowth.rs` は app shell です。地形メッシュは `spawn_map` で `SectionMaterial` / `Terrain3dHandles` を用いる。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックと `WorldMap` access wrapper は `hw_world` から呼び出します。現時点の `spawn_map` は、MS-WFC-4 の本統合前のデバッグ用途として `generate_world_layout()` の `terrain_tiles` を一時描画しているだけで、木・岩・固定物の startup 統合までは引き受けていません。
 
 ## 7. crate を増やすときの手順
 

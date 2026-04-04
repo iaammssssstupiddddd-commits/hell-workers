@@ -33,6 +33,8 @@ hw_core ✓
 hw_jobs ✓
 bevy    ✓
 rand    ✓
+wfc     ✓
+direction ✓
 
 # 禁止
 bevy_app       ✗
