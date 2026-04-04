@@ -513,7 +513,7 @@
 
 ## 並行トラックB: WFC地形生成
 
-> **依存**: なし（`hw_world/src/mapgen.rs` のみ影響）
+> **依存**: なし（主に `hw_world` の生成系と `bevy_app` の `initial_spawn` に影響）
 > **現行計画**: `docs/plans/3d-rtt/wfc-terrain-generation-plan-2026-04-01.md`
 
 | MS | 内容 | ステータス |

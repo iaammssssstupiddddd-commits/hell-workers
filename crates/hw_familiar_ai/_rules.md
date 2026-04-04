@@ -29,12 +29,14 @@
 ```
 # 許可
 hw_core      ✓
+hw_energy    ✓  (SoulSpaSite / PowerConsumer クエリ・GeneratePower タスク割当)
 hw_jobs      ✓
 hw_logistics ✓
 hw_soul_ai   ✓  (タスク割当クエリ・unassign_task を利用)
 hw_world     ✓
 hw_spatial   ✓
 bevy         ✓
+rand         ✓
 
 # 禁止
 bevy_app     ✗  (逆依存禁止)

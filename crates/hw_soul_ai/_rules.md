@@ -33,6 +33,7 @@
 ```
 # 許可
 hw_core      ✓
+hw_energy    ✓  (SoulSpaSite / SoulSpaTile / GeneratePower 定数の参照)
 hw_jobs      ✓
 hw_logistics ✓
 hw_world     ✓
@@ -41,10 +42,10 @@ bevy         ✓
 rand         ✓
 
 # 禁止
-bevy_app     ✗  (逆依存禁止)
+bevy_app       ✗  (逆依存禁止)
 hw_familiar_ai ✗  (双方向依存禁止)
-hw_ui        ✗
-hw_visual    ✗
+hw_ui          ✗
+hw_visual      ✗
 ```
 
 ## plugin / system 登録責務
