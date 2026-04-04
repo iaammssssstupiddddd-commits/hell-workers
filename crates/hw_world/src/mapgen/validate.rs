@@ -346,7 +346,7 @@ fn check_final_sand_mask_applied(
     }
 }
 
-/// final_sand_mask == false のセルに TerrainType::Sand が残っていないか確認する。
+/// final_sand_mask または inland_sand_mask の外に TerrainType::Sand が残っていないか確認する。
 #[cfg(any(test, debug_assertions))]
 fn check_no_stray_sand_outside_mask(
     layout: &GeneratedWorldLayout,
@@ -354,12 +354,16 @@ fn check_no_stray_sand_outside_mask(
 ) {
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
-            if !layout.masks.final_sand_mask.get((x, y)) {
+            let pos = (x, y);
+            // final_sand_mask と inland_sand_mask の合法領域を合わせて判定
+            let in_legal_sand = layout.masks.final_sand_mask.get(pos)
+                || layout.masks.inland_sand_mask.get(pos);
+            if !in_legal_sand {
                 let idx = (y * MAP_WIDTH + x) as usize;
                 if layout.terrain_tiles[idx] == TerrainType::Sand {
                     warnings.push(ValidationWarning {
                         kind: ValidationWarningKind::SandMaskMismatch,
-                        message: format!("Stray Sand outside final_sand_mask at ({x},{y})"),
+                        message: format!("Stray Sand outside sand masks at ({x},{y})"),
                     });
                 }
             }

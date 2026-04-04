@@ -19,6 +19,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
+| [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [rtt-pipeline-refactor-2026-03-29.md](rtt-pipeline-refactor-2026-03-29.md) | 完了 | `RttRuntime` 統合・`sync_rtt_output_bindings` 最適化。仕様は `docs/architecture.md` RtT 節 |
 | [task-chain-system-2026-03-29.md](task-chain-system-2026-03-29.md) | Completed | タスクチェーンシステム実装計画 |
 
@@ -150,4 +151,3 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-

@@ -94,6 +94,18 @@ pub struct WorldMasks {
     pub sand_carve_mask: BitGrid,
     /// sand_candidate_mask から sand_carve_mask を除いた結果。post_process が最終的に Sand にするセル
     pub final_sand_mask: BitGrid,
+    /// アンカーから遠い地点を起点にした Grass バイアスゾーン（MS-WFC-2.5）
+    pub grass_zone_mask: BitGrid,
+    /// アンカーに近い地点を起点にした Dirt バイアスゾーン（MS-WFC-2.5）
+    pub dirt_zone_mask: BitGrid,
+    /// grass_zone_mask 内に生成した内陸砂パッチ（砂浜とは独立、MS-WFC-2.5）
+    pub inland_sand_mask: BitGrid,
+    /// 各セルから最寄りの dirt_zone セルまでの 4 近傍最短距離（C: ゾーン端部グラデーション用）
+    /// dirt_zone セル自体は 0、dirt_zone が空なら全セル u32::MAX
+    pub dirt_zone_distance_field: Vec<u32>,
+    /// 各セルから最寄りの grass_zone セルまでの 4 近傍最短距離（C: ゾーン端部グラデーション用）
+    /// grass_zone セル自体は 0、grass_zone が空なら全セル u32::MAX
+    pub grass_zone_distance_field: Vec<u32>,
 }
 
 impl WorldMasks {
@@ -131,6 +143,11 @@ impl WorldMasks {
             sand_candidate_mask: BitGrid::map_sized(), // fill_sand_from_river_seed で設定
             sand_carve_mask: BitGrid::map_sized(),     // fill_sand_from_river_seed で設定
             final_sand_mask: BitGrid::map_sized(),     // fill_sand_from_river_seed で設定
+            grass_zone_mask: BitGrid::map_sized(),       // fill_terrain_zones_from_seed で設定
+            dirt_zone_mask: BitGrid::map_sized(),        // fill_terrain_zones_from_seed で設定
+            inland_sand_mask: BitGrid::map_sized(),      // fill_terrain_zones_from_seed で設定
+            dirt_zone_distance_field: Vec::new(),        // fill_terrain_zones_from_seed で設定
+            grass_zone_distance_field: Vec::new(),       // fill_terrain_zones_from_seed で設定
         }
     }
 
@@ -172,6 +189,33 @@ impl WorldMasks {
         self.sand_candidate_mask = candidate;
         self.sand_carve_mask = carve;
         self.final_sand_mask = final_mask;
+    }
+
+    /// `fill_sand_from_river_seed()` 適用済みの `final_sand_mask` を参照し、
+    /// seed から deterministic に terrain zone masks と inland_sand_mask を生成して設定する。
+    ///
+    /// # Panics
+    /// `fill_sand_from_river_seed` が先に呼ばれていない場合（final_sand_mask が空）に
+    /// debug_assert で検出する。
+    pub fn fill_terrain_zones_from_seed(&mut self, seed: u64) {
+        debug_assert!(
+            self.final_sand_mask.count_set() > 0,
+            "fill_terrain_zones_from_seed は fill_sand_from_river_seed の後に呼ぶこと（final_sand_mask 非空を期待）"
+        );
+        let (grass, dirt, inland_sand) = crate::terrain_zones::generate_terrain_zone_masks(
+            seed,
+            &self.anchor_mask,
+            &self.river_mask,
+            &self.river_protection_band,
+            &self.final_sand_mask,
+        );
+        self.grass_zone_mask = grass;
+        self.dirt_zone_mask = dirt;
+        self.inland_sand_mask = inland_sand;
+        self.dirt_zone_distance_field =
+            crate::terrain_zones::compute_zone_distance_field(&self.dirt_zone_mask);
+        self.grass_zone_distance_field =
+            crate::terrain_zones::compute_zone_distance_field(&self.grass_zone_mask);
     }
 
     /// debug report 用の合成保護帯。

@@ -15,10 +15,11 @@
 | `terrain.rs` | `TerrainType` enum (Water, Sand, Rock, Grass, ...) |
 | `mapgen.rs` | `generate_base_terrain_tiles()` と `generate_world_layout()`（WFC + validate + retry/fallback + river 派生 sand mask） |
 | `mapgen/validate.rs` | 生成後バリデータ（`lightweight_validate`, `debug_validate`, `ValidatorPathWorld`） |
-| `mapgen/wfc_adapter.rs` | gridbugs `wfc` の adapter（`run_wfc`, `post_process_tiles`, `fallback_terrain`, `WorldConstraints`）。`final_sand_mask` を最終地形へ反映 |
+| `mapgen/wfc_adapter.rs` | gridbugs `wfc` の adapter（`run_wfc`, `post_process_tiles`, `apply_zone_post_process`, `fallback_terrain`, `WorldConstraints`）。`final_sand_mask`・ゾーンバイアス・inland_sand を最終地形へ反映 |
+| `terrain_zones.rs` | MS-WFC-2.5: アンカー距離場→seed 選択→flood fill で `grass_zone_mask` / `dirt_zone_mask` / `inland_sand_mask` を生成。`compute_zone_distance_field` でゾーン境界距離場を提供 |
 | `river.rs` | 固定 River 生成、seed 付き `river_mask` 生成、river distance field + base shoreline + bounded growth による `sand_candidate_mask` / carve / `final_sand_mask` の導出 |
 | `layout.rs` | ワールドレイアウト定数 (木・岩・木材の初期位置, 川の範囲) |
-| `world_masks.rs` | `site_mask`, `yard_mask`, protection band, `river_mask`, `river_centerline`, `sand_candidate_mask`, `sand_carve_mask`, `final_sand_mask` |
+| `world_masks.rs` | `site_mask`, `yard_mask`, protection band, `river_mask`, `river_centerline`, `sand_candidate_mask`, `sand_carve_mask`, `final_sand_mask`, `grass_zone_mask`, `dirt_zone_mask`, `inland_sand_mask`, `dirt_zone_distance_field`, `grass_zone_distance_field` |
 | `regrowth.rs` | 森林再生システム (`ForestZone`, 周期的な木スポーン) |
 | `pathfinding/` | A* 経路探索（下記詳細参照） |
 | `query.rs` | 環境クエリ (`find_nearest_river_grid`, `find_nearest_walkable_grid`) |

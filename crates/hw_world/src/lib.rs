@@ -14,6 +14,7 @@ pub mod spatial;
 pub mod spawn;
 pub mod terrain;
 pub mod terrain_visual;
+pub mod terrain_zones;
 pub mod tree_planting;
 pub mod world_masks;
 pub mod zone_ops;

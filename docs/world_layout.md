@@ -1,6 +1,6 @@
 # ワールドマップ仕様書
 
-100x100 の固定グリッドを持つワールドマップの仕様です。`Site/Yard` は固定アンカーのまま、**本番のマップ生成経路**（`generate_world_layout`）では **WFC ソルバー**（gridbugs `wfc`）で `terrain_tiles` を生成し、**各試行ごとに** `mapgen::validate::lightweight_validate()` で invariant と必須資源到達を検証する（MS-WFC-2a/2b/2c/2d/2e 完了）。`debug` / テストビルドでは `debug_validate()` が追加診断を `eprintln!` する。
+100x100 の固定グリッドを持つワールドマップの仕様です。`Site/Yard` は固定アンカーのまま、**本番のマップ生成経路**（`generate_world_layout`）では **WFC ソルバー**（gridbugs `wfc`）で `terrain_tiles` を生成し、**各試行ごとに** `mapgen::validate::lightweight_validate()` で invariant と必須資源到達を検証する（MS-WFC-2a/2b/2c/2d/2e/2.5 完了）。`debug` / テストビルドでは `debug_validate()` が追加診断を `eprintln!` する。
 
 ## 基本設定
 
@@ -26,9 +26,9 @@
   - 固定 River 矩形と簡易 Dirt/Grass パターンを返す旧経路（`GeneratedWorldLayout::stub` や visual 用のレガシー経路で使用）
 - **本番相当の経路**: `hw_world::generate_world_layout(master_seed)`
   - `AnchorLayout::fixed()` と `WorldMasks::from_anchor` → `fill_river_from_seed` → `fill_sand_from_river_seed` でアンカー・川・砂マスクを確定
-  - `mapgen::wfc_adapter::run_wfc`（`RunOwn::new_wrap_forbid` + `collapse`）で地形を生成し、`post_process_tiles` が `final_sand_mask` と一致するよう Sand を補正
+  - `mapgen::wfc_adapter::run_wfc`（`RunOwn::new_wrap_forbid` + `collapse`）で地形を生成し、`post_process_tiles` が `final_sand_mask` と一致するよう Sand を補正。MS-WFC-2.5 以降は `apply_zone_post_process` がゾーンバイアスと inland_sand も適用
   - 各試行で `mapgen::validate::lightweight_validate()` に通過したレイアウトのみ採用。通過時は到達確認済み `ResourceSpawnCandidates` を `GeneratedWorldLayout.resource_spawn_candidates` に格納する
-  - WFC 成功でも validate 失敗なら次 attempt。全試行で通過できなければ `fallback_terrain`（River と `final_sand_mask` を維持し、他は Grass）。fallback レイアウトは lightweight を通さない（`used_fallback == true`）
+  - WFC 成功でも validate 失敗なら次 attempt。全試行で通過できなければ `fallback_terrain`（River と `final_sand_mask` を維持し、ゾーンバイアス + inland_sand を適用し、他は Grass）。fallback レイアウトは lightweight を通さない（`used_fallback == true`）
   - `crates/bevy_app/src/world/map/spawn.rs` は、MS-WFC-4 の本統合前の暫定措置としてこの結果の `terrain_tiles` を描画する
 
 ### 川 (`River`)
@@ -49,7 +49,59 @@
 ### 砂浜 (`Sand`)
 
 - **`generate_world_layout` 経路**: `WorldMasks::fill_sand_from_river_seed()` が `river_mask` から **river distance field** を計算し、River の **8 近傍 shoreline shell を dist=1** として扱う。そこから `dist 1..=2` の **base shoreline** と `dist==1` frontier からの **bounded growth** を合成して `sand_candidate_mask` を作る。seed 由来の non-sand carve を差し引いた `final_sand_mask` を決める。`wfc_adapter::post_process_tiles` と `fallback_terrain` はこの `final_sand_mask` を最終 `Sand` 分布として反映する
+- **内陸砂 (`inland_sand_mask`)**: MS-WFC-2.5 以降、`fill_terrain_zones_from_seed()` が `grass_zone_mask` 内に小パッチ（面積 ≤ 5）を確率的に生成。`apply_zone_post_process` の Step 5 でパッチ内の全 8 近傍が Grass のセルのみ Sand に変換される。`final_sand_mask` とは排他関係を保つ
 - レガシー経路 `generate_base_terrain_tiles` は従来どおり `generate_sand_tiles` で River 帯から導出
+
+## 地形ゾーン（MS-WFC-2.5）
+
+`WorldMasks::fill_terrain_zones_from_seed(master_seed)` が `fill_sand_from_river_seed` の後に呼ばれ、3 つのマスクと 2 つの距離場を確定する。
+
+### grass_zone_mask / dirt_zone_mask
+
+アンカーからの距離場（`compute_anchor_distance_field`）を基に種点を選び、`flood_fill_zone_patches` で有限面積のパッチを展開する。
+
+| マスク | 種点距離（アンカー基準）| 1 パッチ面積上限 |
+|:--|:--|:--|
+| `dirt_zone_mask` | 5 ≤ dist ≤ 16 | 500 cell |
+| `grass_zone_mask` | dist ≥ 18 | 700 cell |
+
+- Dirt ゾーンが先に展開。Grass ゾーンは Dirt ゾーンから **`ZONE_MIN_SEPARATION`（3 マス）** 以内のセルを除いた残りに展開する（重複・近接なし）
+- アンカー・River・river_protection_band・final_sand_mask 上へはゾーンを展開しない
+- マップ全体に占める割合の目安：ゾーン計 **約 39%**
+
+### B: ゾーン強制（`apply_zone_post_process` Step 4）
+
+ゾーン内セルの確率的フリップ。強制率はセルごとに `[MIN, MAX]` 内でランダム化する。
+
+| ゾーン | 変換方向 | 確率範囲 |
+|:--|:--|:--|
+| `grass_zone_mask` | Dirt → Grass | 72〜98% |
+| `dirt_zone_mask` | Grass → Dirt | 72〜98% |
+
+### C: ゾーン端部グラデーション（`apply_zone_post_process` Step 4）
+
+ゾーン境界から **`ZONE_GRADIENT_WIDTH`（3 マス）** 以内の中立セルに弱いバイアスをかける。両ゾーンが範囲内の場合は近い方を優先。
+
+| 対象 | 変換方向 | 確率 |
+|:--|:--|:--|
+| Dirt ゾーン端部 3 マス以内の中立セル | Grass → Dirt | 30% |
+| Grass ゾーン端部 3 マス以内の中立セル | Dirt → Grass | 40% |
+
+C の適用に使う距離場は `WorldMasks` が保持する `dirt_zone_distance_field` / `grass_zone_distance_field`（`compute_zone_distance_field` による多起点 BFS）。
+
+### 完全中立リージョンバイアス（`apply_zone_post_process` Step 4）
+
+C 範囲外の完全中立セル（**約 32%**）を 8×8 タイルのリージョンに分割し、各リージョンを Grass 寄り/Dirt 寄りに振り分けて 20% のバイアスをかける。リージョン判定は seed 依存の決定論的ハッシュ。Grass-lean/Dirt-lean の比率は約 ±18pp。
+
+### inland_sand_mask
+
+`grass_zone_mask` 内に小パッチ（面積 ≤ 5 cell、3〜6 パッチ）を生成する。`apply_zone_post_process`（Step 5）でパッチ内のセルの **8 近傍が全て Grass** の場合のみ `Sand` に変換される（端セル → 変換なし）。
+
+- `final_sand_mask` とは排他。`check_no_stray_sand_outside_mask` は `final_sand_mask || inland_sand_mask` を合法領域として扱う
+
+### MS-WFC-3 接続
+
+`grass_zone_mask` / `dirt_zone_mask` を `generate_resource_layout()` に渡し、木（`grass_zone`）・岩（`dirt_zone`）の優先配置領域として再利用する予定（MS-WFC-3 で実装）。
 
 ## 資源配置と再生システム
 
@@ -109,7 +161,8 @@
 - `crates/bevy_app/src/plugins/startup/visual_handles.rs`: `Terrain3dHandles` リソース（タイルメッシュ・4種 SectionMaterial ハンドル）
 - `crates/bevy_app/src/systems/visual/terrain_material.rs`: 障害物除去後のテレインマテリアル差し替えシステム
 - [`../crates/hw_world/src/anchor.rs`](../crates/hw_world/src/anchor.rs): `Site/Yard` 固定アンカー定義
-- [`../crates/hw_world/src/world_masks.rs`](../crates/hw_world/src/world_masks.rs): anchor/protection-band/river/sand の各マスク
+- [`../crates/hw_world/src/world_masks.rs`](../crates/hw_world/src/world_masks.rs): anchor/protection-band/river/sand/terrain-zone の各マスク
+- [`../crates/hw_world/src/terrain_zones.rs`](../crates/hw_world/src/terrain_zones.rs): terrain zone mask と inland sand mask の生成（MS-WFC-2.5）
 - [`../crates/hw_world/src/mapgen.rs`](../crates/hw_world/src/mapgen.rs): `generate_base_terrain_tiles()` と `generate_world_layout()`
 - [`../crates/hw_world/src/mapgen/validate.rs`](../crates/hw_world/src/mapgen/validate.rs): 生成後バリデータ（`lightweight_validate`, `debug_validate`）
 - [`../crates/hw_world/src/mapgen/wfc_adapter.rs`](../crates/hw_world/src/mapgen/wfc_adapter.rs): WFC ソルバー統合（`run_wfc`, `post_process_tiles`, `fallback_terrain`）

@@ -36,7 +36,8 @@
 - **MS-WFC-2b**: `run_wfc`（`RunOwn::new_wrap_forbid` + `collapse`）、`post_process_tiles`、`generate_world_layout` の retry/fallback、スタブ地形 `generate_stub_terrain_tiles_from_masks` の削除済み。
 - **MS-WFC-2c**: `mapgen/validate.rs` に `lightweight_validate` / `debug_validate` を実装済み。`generate_world_layout` の retry ループ内で lightweight 通過時のみ採用し、`ResourceSpawnCandidates` を埋める。詳細は [`wfc-ms2c-validator.md`](wfc-ms2c-validator.md)。
 - **MS-WFC-2d**: `WorldMasks::fill_sand_from_river_seed`、`river::generate_sand_masks`、`post_process_tiles` / `fallback_terrain` の `final_sand_mask` 反映、debug validator の sand-mask 整合チェックを実装済み。
-- **MS-WFC-2e 以降**: MS-WFC-2e 完了（distance field + base shoreline + bounded growth による砂浜形状改善、`SAND_GROWTH_*` 定数追加・carve 定数再調整済み）。MS-WFC-3 以降は未着手。
+- **MS-WFC-2e**: 完了（distance field + base shoreline + bounded growth による砂浜形状改善、`SAND_GROWTH_*` 定数追加・carve 定数再調整済み）。
+- **MS-WFC-2.5**: 実装完了・テスト不足。`terrain_zones.rs` 新規追加、`WorldMasks` に `grass_zone_mask` / `dirt_zone_mask` / `inland_sand_mask` / `dirt_zone_distance_field` / `grass_zone_distance_field` 追加。ゾーン強制（B）・端部グラデーション（C）・中立リージョンバイアスを `apply_zone_post_process` で実装。完了条件 5（Grass ゾーン遠端存在）・6（ゾーン占有率スモーク）・8（inland_sand 近傍 Grass 確認）のテストが未実装。MS-WFC-3 以降は未着手。
 
 ## 1. 目的
 

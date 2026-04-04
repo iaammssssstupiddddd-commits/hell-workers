@@ -49,6 +49,7 @@ pub fn generate_world_layout(master_seed: u64) -> types::GeneratedWorldLayout {
     let mut masks = WorldMasks::from_anchor(&anchors);
     masks.fill_river_from_seed(master_seed);
     masks.fill_sand_from_river_seed(master_seed);
+    masks.fill_terrain_zones_from_seed(master_seed);
 
     let layout = (0..=MAX_WFC_RETRIES)
         .find_map(|attempt| {
@@ -81,7 +82,7 @@ pub fn generate_world_layout(master_seed: u64) -> types::GeneratedWorldLayout {
             // debug でも release でもフォールバックは続行する（`debug_assert!(false)` は使わない）
             eprintln!("WFC: fallback terrain used for master_seed={master_seed}");
             types::GeneratedWorldLayout {
-                terrain_tiles: fallback_terrain(&masks),
+                terrain_tiles: fallback_terrain(&masks, master_seed),
                 anchors,
                 masks,
                 resource_spawn_candidates: ResourceSpawnCandidates::default(),
@@ -183,12 +184,159 @@ mod tests {
             for x in 0..MAP_WIDTH {
                 let idx = (y * MAP_WIDTH + x) as usize;
                 let is_sand = layout.terrain_tiles[idx] == TerrainType::Sand;
-                let in_mask = layout.masks.final_sand_mask.get((x, y));
-                assert_eq!(
-                    is_sand, in_mask,
-                    "Sand/mask mismatch at ({x},{y}): terrain={is_sand}, mask={in_mask}"
-                );
+                // inland_sand_mask 上も Sand は合法（MS-WFC-2.5 以降）
+                let in_legal_mask = layout.masks.final_sand_mask.get((x, y))
+                    || layout.masks.inland_sand_mask.get((x, y));
+                // final_sand_mask 上のセルは必ず Sand
+                if layout.masks.final_sand_mask.get((x, y)) {
+                    assert!(
+                        is_sand,
+                        "final_sand_mask=true but terrain is not Sand at ({x},{y})"
+                    );
+                }
+                // Sand セルは必ずどちらかのマスク内
+                if is_sand {
+                    assert!(
+                        in_legal_mask,
+                        "Sand at ({x},{y}) is outside both final_sand_mask and inland_sand_mask"
+                    );
+                }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tile_dist_sim {
+    use super::*;
+    use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
+    use crate::terrain::TerrainType;
+    use crate::terrain_zones::compute_anchor_distance_field;
+
+    #[test]
+    fn print_tile_distribution() {
+        let seeds = [0u64, 42, 99, 12345];
+        println!("\n=== Tile Distribution per Zone Category ===");
+        println!("{:>8}  {:>10} {:>10} {:>10} {:>10} {:>10}",
+            "seed", "area", "grass%", "dirt%", "sand%", "river%");
+
+        for category in &["dirt_zone", "grass_zone", "neutral", "all_non_river"] {
+            let mut g_sum = 0usize; let mut d_sum = 0usize;
+            let mut s_sum = 0usize; let mut total_sum = 0usize;
+            for &seed in &seeds {
+                let layout = generate_world_layout(seed);
+                let masks = &layout.masks;
+                for y in 0..MAP_HEIGHT { for x in 0..MAP_WIDTH {
+                    let p = (x, y);
+                    if masks.river_mask.get(p) { continue; }
+                    let in_cat = match *category {
+                        "dirt_zone"      => masks.dirt_zone_mask.get(p),
+                        "grass_zone"     => masks.grass_zone_mask.get(p),
+                        "neutral"        => !masks.dirt_zone_mask.get(p) && !masks.grass_zone_mask.get(p),
+                        _                => true,
+                    };
+                    if !in_cat { continue; }
+                    let idx = (y * MAP_WIDTH + x) as usize;
+                    match layout.terrain_tiles[idx] {
+                        TerrainType::Grass => g_sum += 1,
+                        TerrainType::Dirt  => d_sum += 1,
+                        TerrainType::Sand  => s_sum += 1,
+                        _ => {}
+                    }
+                    total_sum += 1;
+                }}
+            }
+            if total_sum == 0 { continue; }
+            println!("{:>12}  {:>10} {:>9}% {:>9}% {:>9}%",
+                category,
+                total_sum / seeds.len(),
+                g_sum * 100 / total_sum,
+                d_sum * 100 / total_sum,
+                s_sum * 100 / total_sum);
+        }
+    }
+
+    /// ゾーン / C グラデーション / 完全ニュートラルの割合を表示する
+    #[test]
+    fn print_neutral_breakdown() {
+        let seeds = [0u64, 42, 99, 12345];
+        use crate::terrain_zones::ZONE_GRADIENT_WIDTH;
+
+        let mut zone_sum = 0usize;
+        let mut gradient_sum = 0usize;
+        let mut pure_neutral_sum = 0usize;
+        let mut total_sum = 0usize;
+
+        for &seed in &seeds {
+            let layout = generate_world_layout(seed);
+            let masks = &layout.masks;
+            for y in 0..MAP_HEIGHT { for x in 0..MAP_WIDTH {
+                let p = (x, y);
+                if masks.river_mask.get(p) || masks.anchor_mask.get(p) { continue; }
+                total_sum += 1;
+                if masks.dirt_zone_mask.get(p) || masks.grass_zone_mask.get(p) {
+                    zone_sum += 1;
+                } else {
+                    let idx = (y * MAP_WIDTH + x) as usize;
+                    let dd = masks.dirt_zone_distance_field[idx];
+                    let gd = masks.grass_zone_distance_field[idx];
+                    if dd <= ZONE_GRADIENT_WIDTH || gd <= ZONE_GRADIENT_WIDTH {
+                        gradient_sum += 1;
+                    } else {
+                        pure_neutral_sum += 1;
+                    }
+                }
+            }}
+        }
+        let n = seeds.len();
+        println!("\n=== Zone / Gradient / Pure-Neutral Breakdown (avg over {} seeds) ===", n);
+        println!("  zone          : {:>5} cells ({:.1}%)", zone_sum/n, zone_sum*100/total_sum);
+        println!("  C gradient    : {:>5} cells ({:.1}%)", gradient_sum/n, gradient_sum*100/total_sum);
+        println!("  pure neutral  : {:>5} cells ({:.1}%)", pure_neutral_sum/n, pure_neutral_sum*100/total_sum);
+        println!("  total non-river/anchor: {:>5}", total_sum/n);
+    }
+
+    /// 距離帯ごとにゾーンカバレッジを表示する（中立帯の構造的空白を可視化）
+    #[test]
+    fn print_zone_coverage_by_distance() {
+        let seeds = [0u64, 42, 99, 12345];
+        println!("\n=== Zone Coverage by Distance Band (avg over {} seeds) ===", seeds.len());
+        println!("{:>10}  {:>8} {:>10} {:>11} {:>9}",
+            "dist_range", "cells", "dirt_zone%", "grass_zone%", "neutral%");
+
+        let bands: &[(u32, u32)] = &[
+            (0, 4), (5, 8), (9, 12), (13, 15), (16, 19), (20, 24), (25, 30), (31, 50), (51, 99),
+        ];
+        // 距離場はシード非依存（anchor_maskが同一）なので1度だけ計算
+        let dist_field = {
+            let layout = generate_world_layout(seeds[0]);
+            compute_anchor_distance_field(&layout.masks.anchor_mask)
+        };
+        for &(d_min, d_max) in bands {
+            let mut total_sum = 0usize;
+            let mut dirt_sum = 0usize;
+            let mut grass_sum = 0usize;
+            for &seed in &seeds {
+                let layout = generate_world_layout(seed);
+                let masks = &layout.masks;
+                for y in 0..MAP_HEIGHT { for x in 0..MAP_WIDTH {
+                    let p = (x, y);
+                    if masks.anchor_mask.get(p) || masks.river_mask.get(p) { continue; }
+                    let d = dist_field[(y * MAP_WIDTH + x) as usize];
+                    if d < d_min || d > d_max { continue; }
+                    total_sum += 1;
+                    if masks.dirt_zone_mask.get(p) { dirt_sum += 1; }
+                    if masks.grass_zone_mask.get(p) { grass_sum += 1; }
+                }}
+            }
+            if total_sum == 0 { continue; }
+            let neutral_sum = total_sum - dirt_sum - grass_sum;
+            println!("{:>5}..{:<4}  {:>8} {:>9}% {:>10}% {:>8}%",
+                d_min, d_max,
+                total_sum / seeds.len(),
+                dirt_sum * 100 / total_sum,
+                grass_sum * 100 / total_sum,
+                neutral_sum * 100 / total_sum);
         }
     }
 }

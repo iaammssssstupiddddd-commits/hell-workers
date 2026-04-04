@@ -1,7 +1,7 @@
 # 3D-RtT 移行ロードマップ
 
 作成日: 2026-03-15
-最終更新: 2026-04-05（WFC 砂浜形状改善 MS-WFC-2e 実装完了と MS-WFC-2.5 計画追加を反映）
+最終更新: 2026-04-05（MS-WFC-2.5 実装完了・テスト不足を反映）
 ステータス: Phase 2 完了（MS-2C 目視検証待ち）/ Phase 3 着手前準備に移行
 
 ---
@@ -522,7 +522,7 @@
 | MS-WFC-2 | 固定アンカーを避ける WFC 地形生成（2a 入力・川、2b ソルバー、2c validator） | [x] 完了（2a・2b・2c） |
 | MS-WFC-2d | River 派生の砂マスク生成・連続 non-sand carve・後段反映 | [x] 完了 |
 | MS-WFC-2e | 砂浜の輪郭依存を緩和し、distance field + additive growth で面としての砂浜形状へ寄せる | [x] 完了 |
-| MS-WFC-2.5 | アンカー距離場（D）+ flood fill（B）+ 確率的バイアス（A）で Grass/Dirt の地形ゾーンマスクを生成 | [ ] 未着手 |
+| MS-WFC-2.5 | アンカー距離場（D）+ flood fill（B）+ 確率的バイアス（A）で Grass/Dirt の地形ゾーンマスクを生成 | [-] 実装完了・テスト不足（完了条件 5/6/8 のテスト未実装） |
 | MS-WFC-3 | 木・岩の procedural 配置へ移行 | [ ] 未着手 |
 | MS-WFC-4 | startup を生成結果ベースへ統合し、木材・猫車置き場を Yard 内固定へ移行 | [ ] 未着手 |
 | MS-WFC-4.5 | docs / tests / debug validation を更新 | [ ] 未着手 |
