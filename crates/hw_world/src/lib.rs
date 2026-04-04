@@ -1,3 +1,4 @@
+pub mod anchor;
 pub mod coords;
 pub mod door_systems;
 pub mod layout;
@@ -14,8 +15,10 @@ pub mod spawn;
 pub mod terrain;
 pub mod terrain_visual;
 pub mod tree_planting;
+pub mod world_masks;
 pub mod zone_ops;
 pub mod zones;
+pub use anchor::{AnchorLayout, AnchorLayoutError, GridRect};
 pub use coords::{
     grid_to_world, idx_to_pos, snap_to_grid_center, snap_to_grid_edge, world_to_grid,
 };
@@ -28,6 +31,8 @@ pub use layout::{
 };
 pub use map::{WorldMap, WorldMapRead, WorldMapWrite};
 pub use mapgen::generate_base_terrain_tiles;
+pub use mapgen::generate_world_layout;
+pub use mapgen::types::{GeneratedWorldLayout, ResourceSpawnCandidates, WfcForestZone};
 pub use pathfinding::{
     PathGoalPolicy, PathNode, PathWorld, PathfindingContext, can_reach_target, find_path,
     find_path_to_adjacent, find_path_to_boundary, find_path_world_waypoints,
@@ -50,6 +55,7 @@ pub use spawn::{find_nearby_walkable_grid, pick_random_walkable_grid_in_rect};
 pub use terrain::TerrainType;
 pub use terrain_visual::{TerrainChangedEvent, TerrainVisualHandles, obstacle_cleanup_system};
 pub use tree_planting::DreamTreePlantingPlan;
+pub use world_masks::{BitGrid, WorldMasks};
 pub use zone_ops::{
     area_tile_size, expand_yard_area, identify_removal_targets, rectangles_overlap,
     rectangles_overlap_site,

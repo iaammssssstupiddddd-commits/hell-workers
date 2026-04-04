@@ -12,6 +12,9 @@ use layout::{compute_parking_layout, compute_site_yard_layout};
 use report::InitialSpawnReport;
 use terrain_resources::{spawn_initial_wood, spawn_rocks, spawn_trees};
 
+// TODO(MS-WFC-4): AnchorLayout::fixed().wheelbarrow_parking に置き換える。
+// (58, 58) は Site 内 (x:30-69, y:40-59) に位置しており Yard 内固定条件と矛盾する。
+// 正しい Yard 内位置は (82,52)-(83,53) 参照（wfc-ms1-anchor-data-model §2.2）。
 const INITIAL_WHEELBARROW_PARKING_GRID: (i32, i32) = (58, 58);
 
 /// 初期リソースをすべてスポーンする。スポーン順序は重要:

@@ -17,6 +17,13 @@ pub const RIVER_X_MAX: i32 = 99;
 // 森林エリア（マップ西側）- 散らばり配置
 // ============================================================
 /// 全木の座標 - 散らばり配置
+///
+/// # Deprecated (一部座標)
+/// (45,55), (55,45), (65,55), (38,58), (42,42) は Site 内 (x:30-69, y:40-59)、
+/// (70,45) は Yard 内 (x:70-89, y:40-59) に存在し、WFC 移行後の invariant
+/// 「Site/Yard 内に木を生成しない」と矛盾する。
+/// WFC 移行後は `GeneratedWorldLayout::initial_tree_positions` を使用すること。
+/// この定数は MS-WFC-4 で削除される。
 pub const TREE_POSITIONS: &[(i32, i32)] = &[
     (18, 48),
     (22, 53),
@@ -136,6 +143,13 @@ pub const TREE_POSITIONS: &[(i32, i32)] = &[
 // 岩エリア（マップ東側）- 完全な塊
 // ============================================================
 /// 全岩の座標 - 隙間なし塊配置
+///
+/// # Deprecated (一部座標)
+/// クラスター1 (75-79, y:50-54) の 25 点は Yard 内 (x:70-89, y:40-59) に存在し、
+/// WFC 移行後の invariant「Yard 内に岩を生成しない」と矛盾する。
+/// WFC 移行前の現行コードでは Yard 内に岩がスポーンされ続ける（MS-WFC-4 で解消）。
+/// WFC 移行後は `GeneratedWorldLayout::initial_rock_positions` を使用すること。
+/// この定数は MS-WFC-4 で削除される。
 pub const ROCK_POSITIONS: &[(i32, i32)] = &[
     (75, 50),
     (76, 50),
@@ -290,5 +304,10 @@ pub const ROCK_POSITIONS: &[(i32, i32)] = &[
 ];
 
 /// 初期配置の木材アイテムの座標リスト
+///
+/// # Deprecated
+/// 全 5 点が Site 内 (x:30-69, y:40-59) に存在しており、Yard 内固定の invariant と矛盾する。
+/// WFC 移行後は `AnchorLayout::fixed().initial_wood_positions` を使用すること。
+/// この定数は MS-WFC-4 で削除される。
 pub const INITIAL_WOOD_POSITIONS: &[(i32, i32)] =
     &[(48, 48), (52, 52), (47, 51), (53, 49), (50, 46)];

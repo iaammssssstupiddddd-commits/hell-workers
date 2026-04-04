@@ -1,5 +1,6 @@
 use crate::world::map::WorldMap;
 use hw_core::constants::*;
+use hw_world::{AnchorLayout, AnchorLayoutError};
 use std::fmt;
 
 /// Site と Yard のグリッド配置を表す純粋データ構造。
@@ -16,6 +17,7 @@ pub struct SiteYardLayout {
 }
 
 /// Site/Yard レイアウト計算が失敗した理由。
+#[derive(Debug)]
 pub enum SiteYardLayoutError {
     SiteTooSmallForMinYard,
     YardInitialTooSmall,
@@ -53,51 +55,32 @@ impl fmt::Display for SiteYardLayoutError {
     }
 }
 
+impl From<AnchorLayoutError> for SiteYardLayoutError {
+    fn from(value: AnchorLayoutError) -> Self {
+        match value {
+            AnchorLayoutError::SiteTooSmallForMinYard => Self::SiteTooSmallForMinYard,
+            AnchorLayoutError::YardInitialTooSmall => Self::YardInitialTooSmall,
+            AnchorLayoutError::SiteOutOfBounds => Self::SiteOutOfBounds,
+            AnchorLayoutError::YardOutOfBounds => Self::YardOutOfBounds,
+        }
+    }
+}
+
 /// Site と Yard のグリッド配置を計算する。
-/// 定数のみを参照する pure 関数。
+/// `hw_world::AnchorLayout::try_fixed()` を単一ソースとして使い、
+/// bevy_app 側が必要とする矩形レイアウトへ変換する pure 関数。
 pub fn compute_site_yard_layout() -> Result<SiteYardLayout, SiteYardLayoutError> {
-    let site_width = SITE_WIDTH_TILES as i32;
-    let site_height = SITE_HEIGHT_TILES as i32;
-    let yard_width = YARD_INITIAL_WIDTH_TILES as i32;
-    let yard_height = YARD_INITIAL_HEIGHT_TILES as i32;
-
-    if SITE_WIDTH_TILES < YARD_MIN_WIDTH_TILES || SITE_HEIGHT_TILES < YARD_MIN_HEIGHT_TILES {
-        return Err(SiteYardLayoutError::SiteTooSmallForMinYard);
-    }
-
-    if YARD_INITIAL_WIDTH_TILES < YARD_MIN_WIDTH_TILES
-        || YARD_INITIAL_HEIGHT_TILES < YARD_MIN_HEIGHT_TILES
-    {
-        return Err(SiteYardLayoutError::YardInitialTooSmall);
-    }
-
-    let site_min_x = (MAP_WIDTH - site_width) / 2;
-    let site_min_y = (MAP_HEIGHT - site_height) / 2;
-    let site_max_x = site_min_x + site_width - 1;
-    let site_max_y = site_min_y + site_height - 1;
-
-    if site_min_x < 0 || site_min_y < 0 || site_max_x >= MAP_WIDTH || site_max_y >= MAP_HEIGHT {
-        return Err(SiteYardLayoutError::SiteOutOfBounds);
-    }
-
-    let yard_min_x = site_max_x + 1;
-    let yard_min_y = site_min_y;
-    let yard_max_x = yard_min_x + yard_width - 1;
-    let yard_max_y = yard_min_y + yard_height - 1;
-
-    if yard_max_x >= MAP_WIDTH || yard_max_y >= MAP_HEIGHT {
-        return Err(SiteYardLayoutError::YardOutOfBounds);
-    }
+    let anchor = AnchorLayout::try_fixed().map_err(SiteYardLayoutError::from)?;
 
     Ok(SiteYardLayout {
-        site_min_x,
-        site_min_y,
-        site_max_x,
-        site_max_y,
-        yard_min_x,
-        yard_min_y,
-        yard_max_x,
-        yard_max_y,
+        site_min_x: anchor.site.min_x,
+        site_min_y: anchor.site.min_y,
+        site_max_x: anchor.site.max_x,
+        site_max_y: anchor.site.max_y,
+        yard_min_x: anchor.yard.min_x,
+        yard_min_y: anchor.yard.min_y,
+        yard_max_x: anchor.yard.max_x,
+        yard_max_y: anchor.yard.max_y,
     })
 }
 
@@ -124,4 +107,24 @@ pub fn compute_parking_layout(base: (i32, i32), world_map: &WorldMap) -> Option<
     }
 
     Some(ParkingLayout { base, occupied })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compute_site_yard_layout_matches_anchor_layout() {
+        let anchor = AnchorLayout::fixed();
+        let layout = compute_site_yard_layout().expect("valid site/yard layout");
+
+        assert_eq!(layout.site_min_x, anchor.site.min_x);
+        assert_eq!(layout.site_min_y, anchor.site.min_y);
+        assert_eq!(layout.site_max_x, anchor.site.max_x);
+        assert_eq!(layout.site_max_y, anchor.site.max_y);
+        assert_eq!(layout.yard_min_x, anchor.yard.min_x);
+        assert_eq!(layout.yard_min_y, anchor.yard.min_y);
+        assert_eq!(layout.yard_max_x, anchor.yard.max_x);
+        assert_eq!(layout.yard_max_y, anchor.yard.max_y);
+    }
 }

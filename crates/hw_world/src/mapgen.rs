@@ -1,3 +1,5 @@
+pub mod types;
+
 use crate::river::{generate_fixed_river_tiles, generate_sand_tiles};
 use crate::terrain::TerrainType;
 
@@ -26,4 +28,11 @@ pub fn generate_base_terrain_tiles(
     }
 
     tiles
+}
+
+/// WFC 地形生成のエントリポイント。
+///
+/// MS-WFC-2b 実装まではスタブを返す（固定地形 + 正しい anchor/mask のみ設定）。
+pub fn generate_world_layout(master_seed: u64) -> types::GeneratedWorldLayout {
+    types::GeneratedWorldLayout::stub(master_seed)
 }
