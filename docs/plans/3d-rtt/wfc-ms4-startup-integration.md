@@ -5,175 +5,218 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `wfc-ms4-startup-integration` |
-| ステータス | `Draft` |
+| ステータス | `実装完了・クリーンアップ残あり` |
 | 作成日 | `2026-04-01` |
-| 最終更新日 | `2026-04-06` |
+| 最終更新日 | `2026-04-04` |
 | 親計画 | [`wfc-terrain-generation-plan-2026-04-01.md`](wfc-terrain-generation-plan-2026-04-01.md) |
 | 前MS | [`wfc-ms3-procedural-resources.md`](wfc-ms3-procedural-resources.md) |
 | 次MS | [`wfc-ms45-docs-tests.md`](wfc-ms45-docs-tests.md) |
-| 前提 | `GeneratedWorldLayout` に地形・木・岩・アンカー情報が揃っている（MS-WFC-3 完了）。`used_fallback = true` でも resource fallback により `initial_tree_positions` / `forest_regrowth_zones` / `initial_rock_positions` は空にならない契約とする |
+| 前提 | `GeneratedWorldLayout` に `terrain_tiles` / `anchors` / `masks` / `resource_spawn_candidates` / `initial_tree_positions` / `initial_rock_positions` / `forest_regrowth_zones` 等が入り、`generate_world_layout(master_seed)` 内で `lightweight_validate()`・資源 fallback・`validate_post_resource()` まで完了している（startup は検証済みレイアウトを受け取るだけ） |
 
 ---
 
-## 1. 目的
+## 1. この文書の位置づけ
 
-`bevy_app` の初期スポーンを、固定座標テーブルから `GeneratedWorldLayout` を使うように切り替える。
+この MS は、**WFC 生成結果を bevy_app の startup 実行経路へ実際に接続する**段階である。  
+現行コードでは主要経路はすでに切り替わっているため、本書は「未着手の計画」ではなく
+**実装済み内容の確認メモ + 残課題整理**として扱う。
 
-- `initial_resource_spawner` が生成結果から木・岩・初期木材・猫車置き場を spawn する
-- `INITIAL_WHEELBARROW_PARKING_GRID = (58, 58)` の絶対座標依存を削除する
-- `INITIAL_WOOD_POSITIONS` の固定配列依存を削除する
-- `ForestRegrowthZones` Resource を startup 時に挿入し、`regrowth` システムへ接続する
-- ゲームが正常に起動し、`Site↔Yard` 到達可能性と固定 Yard 資源が維持されることを確認する
-
----
-
-## 2. 前提確認（着手前）
-
-以下が完了していることを確認する:
-
-- [ ] `GeneratedWorldLayout` に `initial_tree_positions`, `initial_rock_positions`, `forest_regrowth_zones` が格納されている
-- [ ] `AnchorLayout` から `initial_wood_positions` と `wheelbarrow_parking` が取得できる
-- [ ] `used_fallback = true` でも木・岩・森林ゾーンが空にならない
-- [ ] `lightweight_validate()` が startup フローで呼ばれる準備がある
+MS-WFC-4.5 の責務は別で、docs 全体の整合、roadmap ステータス更新、追加テスト、
+debug 導線の整理はそちらに残る。
 
 ---
 
-## 3. 移行戦略
+## 2. 実装で達成されたこと
 
-段階的に切り替え、毎ステップで `cargo check` が通ることを確認する。
+現行実装では、startup の主要経路は固定座標テーブルではなく
+`GeneratedWorldLayoutResource` を参照する。
 
-### Step 1: `GeneratedWorldLayout` を startup の Resource として挿入
-
-```rust
-// bevy_app の startup または PostStartup で:
-let layout = hw_world::generate_world_layout(seed);
-commands.insert_resource(GeneratedWorldLayout(layout));
-```
-
-`GeneratedWorldLayout` を `bevy::prelude::Resource` として使うために、`bevy_app` 側で newtype wrapper を用意する。
-
-### Step 2: 木・岩 spawn を生成結果から読むように切り替え
-
-対象ファイル: `crates/bevy_app/src/systems/logistics/initial_spawn/terrain_resources.rs`
-
-```rust
-// Before: TREE_POSITIONS.iter() で固定座標ループ
-// After:  layout.initial_tree_positions.iter() でループ
-```
-
-### Step 3: 初期木材 spawn を Yard 内固定アンカーから読むように切り替え
-
-対象ファイル: `crates/bevy_app/src/systems/logistics/initial_spawn/mod.rs` または `facilities.rs`
-
-```rust
-// Before: INITIAL_WOOD_POSITIONS 固定配列
-// After:  layout.anchors.initial_wood_positions
-```
-
-### Step 4: 猫車置き場 spawn を Yard 内固定アンカーから読むように切り替え
-
-対象ファイル: `crates/bevy_app/src/systems/logistics/initial_spawn/mod.rs`
-
-```rust
-// Before: INITIAL_WHEELBARROW_PARKING_GRID = (58, 58)
-// After:  layout.anchors.wheelbarrow_parking
-```
-
-### Step 5: ForestRegrowthZones Resource を挿入
-
-```rust
-commands.insert_resource(ForestRegrowthZones(layout.forest_regrowth_zones.clone()));
-```
-
-`regrowth.rs` がこの Resource を参照するよう変更する。
-
-### Step 6: 旧固定座標テーブルの削除
-
-- `INITIAL_WHEELBARROW_PARKING_GRID` 削除
-- `INITIAL_WOOD_POSITIONS` 削除（または残す場合はコメントで廃止理由を明記）
-- `TREE_POSITIONS` / `ROCK_POSITIONS` 削除
-
-削除前に `cargo check --workspace` でコンパイルエラーがないことを確認する。
+- `Startup` の `setup()` が `prepare_generated_world_layout_resource()` を呼び、`GeneratedWorldLayoutResource` を `Resource` として挿入する
+- `PostStartup` の chain で `spawn_map_timed` → `initial_resource_spawner_timed` が同じ `GeneratedWorldLayoutResource` を消費する
+- 地形スポーンは `layout.terrain_tiles` を直接使う
+- 初期木・岩は `layout.initial_tree_positions` / `layout.initial_rock_positions` から生成する
+- 初期木材は `layout.anchors.initial_wood_positions` から生成する
+- Site / Yard は `layout.anchors.site` / `layout.anchors.yard` を `site_yard_layout_from_anchor()` で写して生成する
+- `layout.anchors` は `generate_world_layout` 内で `AnchorLayout::aligned_to_worldgen_seed(master_seed)` により決まり、プレビュー川と縦位置が整合する（`docs/world_layout.md` の固定アンカー・川節）
+- 猫車置き場は `layout.anchors.wheelbarrow_parking` の左下セルを基準に `compute_parking_layout()` で walkability を確認してから生成する
+- 森林再生は独立 `ForestRegrowthZones` Resource ではなく、`configure_regrowth_from_generated_layout()` が `RegrowthManager.zones` を上書きする形で接続されている
 
 ---
 
-## 4. seed 管理
+## 3. 現行フロー
 
-`generate_world_layout()` に渡す `master_seed` の取得場所を決める。
+### 3.1 Startup での worldgen resource 準備
 
-| 方法 | トレードオフ |
-| --- | --- |
-| 起動引数 `--seed <u64>` | デバッグしやすい。省略時は `rand::random()` |
-| 環境変数 `HELL_WORKERS_SEED` | テスト自動化に便利 |
-| 起動時刻ベース（現状の乱数） | 再現しにくい |
+実装箇所: `crates/bevy_app/src/plugins/startup/startup_systems.rs`,
+`crates/bevy_app/src/world/map/spawn.rs`
 
-**推奨**: `--seed` 引数優先、省略時は `SystemTime::now()` から `u64` を生成し、起動ログに seed 値を出力する。
+1. `setup()` が `prepare_generated_world_layout_resource()` を呼ぶ
+2. `prepare_generated_world_layout_resource()` が `resolve_worldgen_seed()` で seed を決める
+3. `generate_world_layout(master_seed)` を実行し、`GeneratedWorldLayoutResource { master_seed, layout }` を返す
+4. `setup()` がその resource を `commands.insert_resource(...)` する
+
+現在の seed 入力は **環境変数 `HELL_WORKERS_WORLDGEN_SEED` のみ**である。
+旧計画にあった CLI 引数 `--seed` は未導入。
+
+### 3.2 PostStartup での消費順序
+
+実装箇所: `crates/bevy_app/src/plugins/startup/mod.rs`
+
+`StartupPlugin` は `PostStartup` で次を **この順序で** `chain()` 登録している（`crates/bevy_app/src/plugins/startup/mod.rs` と一致）。
+
+1. `visual_handles::init_visual_handles`
+2. `spawn_map_timed`
+3. `initial_resource_spawner_timed`
+4. `spawn_entities`
+5. `spawn_familiar_wrapper`
+6. `setup_perf_scenario_if_enabled`
+7. `setup_ui`
+8. `crate::interface::ui::dev_panel::spawn_dev_panel_system`
+9. `populate_resource_spatial_grid`
+10. `rtt_composite::spawn_rtt_composite_sprite`
+
+このため、`WorldMap` の地形は `spawn_map_timed` で確定した後に、
+初期木・岩・木材・Site/Yard・猫車置き場が `initial_resource_spawner_timed` から生成される。
+
+### 3.3 地形スポーン
+
+実装箇所: `crates/bevy_app/src/world/map/spawn.rs`
+
+- `spawn_map()` は `generated_layout.layout.terrain_tiles` を row-major で読み、
+  `WorldMap` の terrain を更新しつつ 3D 地形タイルを生成する
+- 起動ログには `worldgen seed`, `attempt`, `fallback` が出る
+
+ここで使うのは **WFC の最終出力**であり、旧来の固定地形テーブルではない。
+
+### 3.4 初期スポーン
+
+実装箇所: `crates/bevy_app/src/systems/logistics/initial_spawn/mod.rs`,
+`terrain_resources.rs`, `layout.rs`, `facilities.rs`
+
+- `spawn_trees()` は `layout.initial_tree_positions`
+- `spawn_rocks()` は `layout.initial_rock_positions`
+- `spawn_initial_wood()` は `layout.anchors.initial_wood_positions`
+- `spawn_site_and_yard()` は `site_yard_layout_from_anchor(&layout.anchors)`
+- `spawn_wheelbarrow_parking()` は `layout.anchors.wheelbarrow_parking.min_x/min_y` を基準に生成
+
+猫車置き場は `compute_parking_layout()` の walkability 判定を通らなければスキップされ、
+`INITIAL_SPAWN: skipped initial wheelbarrow parking at … (not walkable)` が warn される。
+
+### 3.5 森林再生接続
+
+実装箇所: `crates/bevy_app/src/plugins/startup/startup_systems.rs`,
+`crates/bevy_app/src/world/regrowth.rs`
+
+`initial_resource_spawner_timed()` は初期スポーン前に
+`configure_regrowth_from_generated_layout(&mut regrowth, &generated_layout.layout)` を呼ぶ。
+
+この関数は:
+
+- `layout.forest_regrowth_zones` を `RegrowthManager.zones` へ変換する
+- 各 zone に含まれる `initial_tree_positions` を集計して `initial_count` を決める
+- 木が 0 本の zone は捨てる
+
+つまり、旧計画のような `ForestRegrowthZones` 追加 Resource は採用されていない。
+**最終設計は `RegrowthManager` の初期化更新**である。
+
+---
+
+## 4. 旧計画から変わった点
+
+### 4.1 `GeneratedWorldLayout` の扱い
+
+旧案どおり、`hw_world::GeneratedWorldLayout` 自体に Bevy 依存は持たせず、
+`bevy_app` 側で `GeneratedWorldLayoutResource` wrapper を作る方式になった。
+
+### 4.2 validator の接続点
+
+旧案では「startup フローで `lightweight_validate()` を呼ぶ準備」を前提にしていたが、
+現行コードでは validator は `generate_world_layout()` の内部責務である。
+startup 側は **検証済みレイアウトを受け取るだけ**になっている。
+
+### 4.3 regrowth の設計
+
+旧案の `ForestRegrowthZones` Resource は未採用。
+`RegrowthManager` をそのまま使い続け、生成結果から zone 群を注入する設計に収束した。
+
+### 4.4 旧固定定数の扱い
+
+`TREE_POSITIONS` / `ROCK_POSITIONS` / `INITIAL_WOOD_POSITIONS` は **削除済み**
+（`layout.rs` は `RIVER_*` / `SAND_WIDTH` のみ残す）。`bevy_app` / `hw_world` の re-export も除去済み。
 
 ---
 
 ## 5. 変更ファイルと責務
 
-| ファイル | 変更内容 |
+| ファイル | 現行責務 |
 | --- | --- |
-| `crates/bevy_app/src/systems/logistics/initial_spawn/mod.rs` | startup で `generate_world_layout()` を呼び出し、Resource として挿入。猫車置き場・初期木材 spawn を AnchorLayout から読む |
-| `crates/bevy_app/src/systems/logistics/initial_spawn/layout.rs` | `compute_site_yard_layout()` を `AnchorLayout::fixed()` と統合、重複排除 |
-| `crates/bevy_app/src/systems/logistics/initial_spawn/terrain_resources.rs` | 木・岩 spawn を `GeneratedWorldLayout` から読む |
-| `crates/bevy_app/src/systems/logistics/initial_spawn/facilities.rs` | 施設 spawn の固定座標依存を AnchorLayout に切り替え |
-| `crates/bevy_app/src/world/regrowth.rs` | `ForestRegrowthZones` Resource を参照するよう変更 |
-| `crates/hw_world/src/layout.rs` | `TREE_POSITIONS`, `ROCK_POSITIONS`, `INITIAL_WOOD_POSITIONS`, `INITIAL_WHEELBARROW_PARKING_GRID` 削除 |
-| `crates/bevy_app/src/**` | `GeneratedWorldLayout` を包む newtype Resource を追加し startup で挿入 |
+| `crates/bevy_app/src/world/map/spawn.rs` | seed 解決、`GeneratedWorldLayoutResource` 構築、地形タイルの 3D スポーン |
+| `crates/bevy_app/src/world/map/mod.rs` | `GeneratedWorldLayoutResource` / `spawn_map` / seed helper の再 export |
+| `crates/bevy_app/src/plugins/startup/startup_systems.rs` | startup で layout resource を挿入し、regrowth 初期化と `initial_resource_spawner` 呼び出しを配線 |
+| `crates/bevy_app/src/plugins/startup/mod.rs` | `PostStartup` の chain 順序を定義 |
+| `crates/bevy_app/src/systems/logistics/initial_spawn/mod.rs` | 生成済み layout を消費して初期木・岩・木材・Site/Yard・猫車置き場を生成 |
+| `crates/bevy_app/src/systems/logistics/initial_spawn/terrain_resources.rs` | 木・岩・初期木材の各スポーン helper |
+| `crates/bevy_app/src/systems/logistics/initial_spawn/layout.rs` | `AnchorLayout` から Site/Yard と parking の pure data を導出 |
+| `crates/bevy_app/src/systems/logistics/initial_spawn/facilities.rs` | Site/Yard と猫車置き場の実スポーン |
+| `crates/bevy_app/src/world/regrowth.rs` | `GeneratedWorldLayout` から `RegrowthManager` を再設定 |
+| `crates/hw_world/src/mapgen.rs` | validator 済み `GeneratedWorldLayout` の生成本体 |
+| `crates/hw_world/src/layout.rs` | レガシー固定川範囲 `RIVER_*` と `SAND_WIDTH` |
 
 ---
 
-## 6. 完了条件チェックリスト
+## 6. 実装済みチェックリスト
 
-- [ ] startup が `generate_world_layout()` を使って世界を生成する
-- [ ] 初期木材が `AnchorLayout::initial_wood_grid` の位置に spawn される
-- [ ] 猫車置き場が `AnchorLayout::wheelbarrow_parking_grid` の位置に spawn される
-- [ ] 旧 `INITIAL_WHEELBARROW_PARKING_GRID = (58, 58)` への依存が消えている
-- [ ] 旧 `INITIAL_WOOD_POSITIONS` / `TREE_POSITIONS` / `ROCK_POSITIONS` への依存が消えている
-- [ ] `ForestRegrowthZones` が Resource として挿入され、`regrowth.rs` が参照している
-- [ ] 木・岩 spawn が生成結果から読まれている
-- [ ] `used_fallback = true` でも木・岩 spawn が欠落しない
-- [ ] `Site↔Yard` と Yard から固定/必須資源への到達可能性が維持されている
-- [ ] `cargo check --workspace` / `cargo clippy --workspace` が通る
-- [ ] `cargo run` でゲームが正常に起動する
+- [x] startup が `generate_world_layout()` を使って世界を生成する
+- [x] `bevy_app` 側で `GeneratedWorldLayoutResource` wrapper を作って `Resource` 挿入している
+- [x] 地形スポーンが `layout.terrain_tiles` を使う
+- [x] 初期木が `layout.initial_tree_positions` から生成される
+- [x] 初期岩が `layout.initial_rock_positions` から生成される
+- [x] 初期木材が `layout.anchors.initial_wood_positions` から生成される
+- [x] 猫車置き場が `layout.anchors.wheelbarrow_parking` を基準に生成される
+- [x] Site / Yard が `layout.anchors` から生成される
+- [x] `RegrowthManager` が `layout.forest_regrowth_zones` と `layout.initial_tree_positions` から初期化される
+- [x] 起動ログに seed / attempt / fallback が出る
+- [x] fallback 時でも startup が `GeneratedWorldLayout` をそのまま消費できる
 
----
+### 未完了または後続へ送る項目
 
-## 7. 手動確認シナリオ
-
-- `cargo run` を複数回実行し、地形・木・岩の分布が毎回変わることを確認する
-- `Site/Yard` が毎回同じ位置にあり、内部が `Grass` / `Dirt` のみであることを確認する
-- Yard 内に初期木材と猫車置き場が固定位置で生成されることを確認する
-- `Site/Yard` 周辺に木・岩・River が食い込んでいないことを確認する
-- `Site` から `Yard`、および `Yard` から初期木材・猫車置き場・最低 1 つの水源/砂源/岩源へ到達できることを確認する
+- [x] `TREE_POSITIONS` / `ROCK_POSITIONS` / `INITIAL_WOOD_POSITIONS` の定数定義そのものを削除する
+- [x] `crates/bevy_app/src/world/map/mod.rs` / `crates/hw_world/src/lib.rs` の旧定数 re-export を外す
+- [ ] seed 入力を CLI 引数まで拡張するか、環境変数専用で確定する
+- [ ] roadmap / debug docs / README 系の「preview only」表現を現状に合わせて更新する
 
 ---
 
-## 8. ロールバック手順
+## 7. 現時点の判断
 
-問題が起きた場合:
+MS-WFC-4 の本質である「**WFC 生成結果を startup 本経路へ接続する**」は達成済みである。  
+旧木・岩・初期木材の固定座標テーブル（`TREE_POSITIONS` 等）も **撤去済み**である。
 
-1. `initial_resource_spawner` を旧固定 spawn 経路（`TREE_POSITIONS` 等）に戻す
-2. `generate_world_layout()` 呼び出しを一時的に無効化する
-3. `mapgen.rs` の内部を `generate_base_terrain_tiles()` ラッパーに戻す
+一方で、seed を CLI で渡すかどうかや、roadmap / README の表現更新は **未着手**のため、
+マイルストーン全体としては **実装は完了・運用・ドキュメントの細部は後続** が妥当である。
 
----
-
-## 9. 検証
-
-```sh
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace
-cargo clippy --workspace
-cargo run
-```
+したがって、この MS の残りは「起動経路の実装」ではなく、
+**seed 方針の確定と docs の整合化**（および MS-WFC-4.5 の範囲）として扱う。
 
 ---
 
-## 10. 更新履歴
+## 8. ロールバック観点
+
+問題が起きた場合に戻すべきポイントは次の 3 つである。
+
+1. `setup()` での `GeneratedWorldLayoutResource` 挿入を外す
+2. `spawn_map()` の入力を固定地形へ戻す
+3. `initial_resource_spawner()` の各入力を旧固定定数へ戻す
+
+ただし現行コードでは startup がすでに `GeneratedWorldLayoutResource` 前提で配線されているため、
+部分ロールバックではなく **resource 準備・地形スポーン・初期スポーンの 3 点をまとめて戻す**前提で考える。
+
+---
+
+## 9. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
-| `2026-04-06` | `Codex` | MS-WFC-3 の fallback 契約に合わせて前提を更新。`AnchorLayout` の現行フィールド名に修正し、`GeneratedWorldLayout` は bevy_app 側 newtype Resource で扱う方針に統一 |
+| `2026-04-04` | — | レビュー反映（前提・PostStartup chain・anchors・warn 文言）。旧定数 `TREE_POSITIONS` / `ROCK_POSITIONS` / `INITIAL_WOOD_POSITIONS` と re-export 削除、`hw_world` README・§4.4・§5・§6 同期 |
+| `2026-04-05` | `Codex` | 現行実装に合わせて全面更新。`GeneratedWorldLayoutResource` / `setup` + `PostStartup` chain / `RegrowthManager` 初期化 / 環境変数 seed / legacy 定数残存を反映 |
 | `2026-04-01` | `Copilot` | wfc-terrain-generation-plan-2026-04-01.md から分割・詳細化 |

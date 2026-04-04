@@ -20,7 +20,7 @@
 | `terrain_zones.rs` | MS-WFC-2.5: アンカー距離場→seed 選択→flood fill で `grass_zone_mask` / `dirt_zone_mask` / `inland_sand_mask` を生成。`compute_zone_distance_field` でゾーン境界距離場を提供 |
 | `rock_fields.rs` | MS-WFC-3b: 川・砂・内陸砂・アンカー帯を避けた east-side の `rock_field_mask` を deterministic に生成 |
 | `river.rs` | 固定 River 生成、seed 付き `river_mask` 生成、`preview_river_min_y`（プレビュー川の南端 y）、river distance field + base shoreline + bounded growth による `sand_candidate_mask` / carve / `final_sand_mask` の導出 |
-| `layout.rs` | ワールドレイアウト定数 (木・岩・木材の初期位置, 川の範囲) |
+| `layout.rs` | レガシー固定川の範囲 (`RIVER_*`) と `SAND_WIDTH`（`generate_base_terrain_tiles` / 建物配置ヒント等） |
 | `world_masks.rs` | `site_mask`, `yard_mask`, protection band, `river_mask`, `river_centerline`, `sand_candidate_mask`, `sand_carve_mask`, `final_sand_mask`, `grass_zone_mask`, `dirt_zone_mask`, `inland_sand_mask`, `rock_field_mask`, `dirt_zone_distance_field`, `grass_zone_distance_field` |
 | `regrowth.rs` | 森林再生システム (`ForestZone`, 周期的な木スポーン) |
 | `pathfinding/` | A* 経路探索（下記詳細参照） |

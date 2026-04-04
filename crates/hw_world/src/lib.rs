@@ -27,10 +27,7 @@ pub use coords::{
 pub use door_systems::{
     DoorVisualHandles, apply_door_state, door_auto_close_system, door_auto_open_system,
 };
-pub use layout::{
-    INITIAL_WOOD_POSITIONS, RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, ROCK_POSITIONS,
-    SAND_WIDTH, TREE_POSITIONS,
-};
+pub use layout::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, SAND_WIDTH};
 pub use map::{WorldMap, WorldMapRead, WorldMapWrite};
 pub use mapgen::generate_base_terrain_tiles;
 pub use mapgen::generate_world_layout;
