@@ -654,11 +654,11 @@ use crate::river::{RIVER_TOTAL_TILES_TARGET_MAX, RIVER_TOTAL_TILES_TARGET_MIN};
 
 [wfc-ms0-invariant-spec.md](wfc-ms0-invariant-spec.md) §3.0 の方針（4 本: `STANDARD`, `WINDING_RIVER`, `TIGHT_BAND`, `RETRY`）に合わせ、`mapgen.rs` の `#[cfg(test)]` ブロックに **`u64` 定数**を定義する（`validate.rs` のテストからは `super::super::tests` の再利用か、`validate.rs` 内に同じ値を定数で持つ）。
 
-**`GOLDEN_SEED_STANDARD`**: mapgen.rs の既存テストで使用している `TEST_SEED_A = 42` と同じ値を使用する（lightweight_validate が通ることを確認済み）。
+**`GOLDEN_SEED_STANDARD`**: mapgen.rs の既存テストで使用している `TEST_SEED_A = 10_182_272_928_891_625_829` と同じ値を使用する（lightweight_validate が通ることを確認済み）。
 
 ```rust
 // mapgen.rs の #[cfg(test)] ブロック内（または validate.rs の tests モジュール内）
-pub(crate) const GOLDEN_SEED_STANDARD: u64 = 42;       // TEST_SEED_A と同値
+pub(crate) const GOLDEN_SEED_STANDARD: u64 = 10_182_272_928_891_625_829; // TEST_SEED_A と同値
 pub(crate) const GOLDEN_SEED_WINDING_RIVER: u64 = 0;   // 実装時に snake-like river が生成される seed を探して確定
 pub(crate) const GOLDEN_SEED_TIGHT_BAND: u64 = 0;      // 実装時に sand band が狭い seed を探して確定
 // RETRY 用 seed は必要に応じて追加
@@ -699,7 +699,7 @@ mod tests {
     use crate::mapgen::generate_world_layout;
     use hw_core::constants::MAP_WIDTH;
 
-    const GOLDEN_SEED_STANDARD: u64 = 42;
+    const GOLDEN_SEED_STANDARD: u64 = 10_182_272_928_891_625_829;
 
     #[test]
     fn test_golden_seeds_pass_lightweight_validate() {
@@ -756,6 +756,6 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --worksp
 | `2026-04-01` | `Copilot` | wfc-terrain-generation-plan-2026-04-01.md の MS-WFC-2 を分割・詳細化 |
 | `2026-04-04` | — | レビュー反映: `AnchorLayout` / `ResourceSpawnCandidates` の実フィールド名、`mapgen.rs`+`mapgen/validate.rs` 構成、保護帯は `combined_protection_band` 等、`used_fallback` と `debug_assert` 非使用、`GridPos`・`eprintln`・検証コマンドの `CARGO_HOME` 統一、golden seed 節・テストの `GridRect` 修正。 |
 | `2026-04-04` | — | レビュー反映: `lightweight_validate()` が `ResourceSpawnCandidates` を返して `GeneratedWorldLayout.resource_spawn_candidates` を埋める流れを明記。fallback 方針を親計画と同期し、debug/test でも warning+ログで継続する前提に整理。 |
-| `2026-04-04` | `Copilot` | ブラッシュアップ: `ValidatorPathWorld` の 4 メソッド全実装を明示。必須資源チェックを pathfinding ベースで具体化し、River 非 walkable 問題を明記。`thiserror` 未導入を明記し手動 `Display`+`Error` に差し替え。`check_river_tile_count` を `RIVER_TOTAL_TILES_TARGET_MIN/MAX` 定数参照に修正。`check_protection_band_clean` の具体実装を追加。`§6` の統合コードを実際の `generate_world_layout()` パターンに合わせて修正（fallback が validate をスキップする設計を明記）。`§7` に validate.rs のインポート構成を追加。`§8` の golden seed を `TEST_SEED_A=42` と一致させプレースホルダ値を明記。`§10` テストを validate.rs 内 `#[cfg(test)]` に整理。 |
+| `2026-04-04` | `Copilot` | ブラッシュアップ: `ValidatorPathWorld` の 4 メソッド全実装を明示。必須資源チェックを pathfinding ベースで具体化し、River 非 walkable 問題を明記。`thiserror` 未導入を明記し手動 `Display`+`Error` に差し替え。`check_river_tile_count` を `RIVER_TOTAL_TILES_TARGET_MIN/MAX` 定数参照に修正。`check_protection_band_clean` の具体実装を追加。`§6` の統合コードを実際の `generate_world_layout()` パターンに合わせて修正（fallback が validate をスキップする設計を明記）。`§7` に validate.rs のインポート構成を追加。`§8` の golden seed を `TEST_SEED_A` と一致させプレースホルダ値を明記。`§10` テストを validate.rs 内 `#[cfg(test)]` に整理。 |
 | `2026-04-04` | — | レビュー反映: メタを `Ready` に変更。冒頭にサマリ表を追加。水源列挙を `river_mask` と `TerrainType::River` の交差に統一（サンプルコード更新）。`check_sand_diagonal_only_contacts` に疑似コードを追加。§9 の `debug_validate` を 6 チェック・`cfg(any(test, debug_assertions))` に整合。§8 にプレースホルダ seed の注意を追記。 |
 | `2026-04-05` | — | 実装完了を反映: メタを `完了` に変更。§9 チェックリストを全 `[x]` に。恒久ドキュメント（`world_layout.md`、親計画、`milestone-roadmap.md`、`hw_world/README.md`、`debug-features.md`）を 2c 実装済みに同期。 |

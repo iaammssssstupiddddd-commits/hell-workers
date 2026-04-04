@@ -238,7 +238,7 @@ pub fn generate_sand_masks(
 }
 ```
 
-**`sand_candidate_mask` が空の場合**: `final_sand_mask` も空のままとなり、`lightweight_validate` の砂源到達（`RequiredResourceNotReachable`）で **失敗し得る**。本 MS の `final_sand_mask_is_non_empty`（§10.1）等は **shoreline 候補が少なくとも 1 セルある seed**（例: `TEST_SEED_A`）で成立することを回帰とする。河形状によって候補ゼロになり得る場合は、**retry / 別 seed** や `generate_river_mask` 側の前提を親計画で別途扱う。
+**`sand_candidate_mask` が空の場合**: `final_sand_mask` も空のままとなり、`lightweight_validate` の砂源到達（`RequiredResourceNotReachable`）で **失敗し得る**。本 MS の `final_sand_mask_is_non_empty`（§10.1）等は **shoreline 候補が少なくとも 1 セルある seed**（例: `TEST_SEED_A = 10_182_272_928_891_625_829`）で成立することを回帰とする。河形状によって候補ゼロになり得る場合は、**retry / 別 seed** や `generate_river_mask` 側の前提を親計画で別途扱う。
 
 ### 5.2 private helper: `build_sand_candidate_mask()`
 
@@ -618,7 +618,7 @@ fn check_sand_mask_not_in_anchor_or_band(
 | `crates/hw_world/src/mapgen.rs` | `fill_river_from_seed` の直後に `masks.fill_sand_from_river_seed(master_seed);` を追加（§6.2）。`test_sand_is_only_river_adjacent_in_ms2b` テストを削除し、2d 向けテストに置き換える（§10） |
 | `crates/hw_world/src/mapgen/wfc_adapter.rs` | `post_process_tiles()` を `final_sand_mask` 主導へ全面置き換え（§6.3）。`fallback_terrain()` も `final_sand_mask` を反映する形へ更新（§6.4）。`WorldConstraints` コメントに 2d 方針を追記（§6.6） |
 | `crates/hw_world/src/mapgen/validate.rs` | `check_sand_river_adjacency_ratio` / `check_sand_diagonal_only_contacts` を削除。`SandRiverAdjacencyLow` / `SandDiagonalOnlyContact` variant を削除。`SandMaskMismatch` variant 追加。3 つの新チェック関数追加。`debug_validate()` 呼び出しリスト更新（§7） |
-| `docs/plans/3d-rtt/wfc-terrain-generation-plan-2026-04-01.md` | MS-WFC-2d の行をサブ計画表に追加、実装状況を更新 |
+| `docs/plans/3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md` | MS-WFC-2d の行をサブ計画表に追加、実装状況を更新 |
 
 **削除した enum variant の波及確認**: 実装後、`SandRiverAdjacencyLow` / `SandDiagonalOnlyContact` を workspace 全体で grep し、`match` や表示分岐の取りこぼしがないか確認する。
 
@@ -736,7 +736,7 @@ fn test_sand_matches_final_sand_mask() {
 
 | seed 名 | 想定シーン |
 | --- | --- |
-| `TEST_SEED_A = 42` | 基準（直線に近い川） |
+| `TEST_SEED_A = 10_182_272_928_891_625_829` | 基準（直線に近い川） |
 | `TEST_SEED_B = 12_345_678` | 既存 determinism テストで使用 |
 | 追加予定 | winding river / tight band（seed 値は調整中） |
 

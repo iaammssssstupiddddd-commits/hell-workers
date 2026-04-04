@@ -1,7 +1,7 @@
 # 3D-RtT 移行ロードマップ
 
 作成日: 2026-03-15
-最終更新: 2026-04-05（MS-WFC-2.5 実装完了・テスト不足を反映）
+最終更新: 2026-04-04（並行トラック B: MS-WFC-3/4 完了・4.5 一部反映を追記）
 ステータス: Phase 2 完了（MS-2C 目視検証待ち）/ Phase 3 着手前準備に移行
 
 ---
@@ -514,7 +514,7 @@
 ## 並行トラックB: WFC地形生成
 
 > **依存**: なし（主に `hw_world` の生成系と `bevy_app` の `initial_spawn` に影響）
-> **現行計画**: `docs/plans/3d-rtt/wfc-terrain-generation-plan-2026-04-01.md`
+> **現行計画**: `docs/plans/3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md`
 
 | MS | 内容 | ステータス |
 |----|------|-----------|
@@ -523,9 +523,9 @@
 | MS-WFC-2d | River 派生の砂マスク生成・連続 non-sand carve・後段反映 | [x] 完了 |
 | MS-WFC-2e | 砂浜の輪郭依存を緩和し、distance field + additive growth で面としての砂浜形状へ寄せる | [x] 完了 |
 | MS-WFC-2.5 | アンカー距離場（D）+ flood fill（B）+ 確率的バイアス（A）で Grass/Dirt の地形ゾーンマスクを生成 | [-] 実装完了・テスト不足（完了条件 5/6/8 のテスト未実装） |
-| MS-WFC-3 | 木・岩の procedural 配置へ移行 | [ ] 未着手 |
-| MS-WFC-4 | startup を生成結果ベースへ統合し、木材・猫車置き場を Yard 内固定へ移行 | [ ] 未着手 |
-| MS-WFC-4.5 | docs / tests / debug validation を更新 | [ ] 未着手 |
+| MS-WFC-3 | 木・岩の procedural 配置へ移行 | [x] 完了 |
+| MS-WFC-4 | startup を生成結果ベースへ統合（旧固定座標テーブル撤去含む） | [x] 完了 |
+| MS-WFC-4.5 | docs / tests / debug validation を更新 | [-] 一部反映（stale 掃除・整合は継続） |
 
 ---
 
@@ -616,4 +616,4 @@ MS-WFC-1 → MS-WFC-2 → MS-WFC-2d → MS-WFC-2e → MS-WFC-3 → MS-WFC-4 → 
 | `docs/proposals/3d-rtt/3d-rendering-rtt-proposal-phase2-2026-03-14.md` | フルRtT・多層階アーキテクチャ方針 |
 | `docs/proposals/3d-rtt/related/building-visual-layer-plan-2026-03-12.md` | MS-Pre-B詳細設計 |
 | `docs/proposals/3d-rtt/related/spatial-grid-architecture-plan-2026-03-12.md` | MS-Pre-A詳細設計 |
-| `docs/plans/3d-rtt/wfc-terrain-generation-plan-2026-04-01.md` | WFCトラック詳細設計（現行実装再整列版） |
+| `docs/plans/3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md` | WFCトラック詳細設計（現行実装再整列版） |

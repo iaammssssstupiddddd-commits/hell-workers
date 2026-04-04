@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `wfc-terrain-generation-plan-2026-04-01` |
-| ステータス | `Draft` |
+| ステータス | `実装主体完了・MS-WFC-4.5 整備中` |
 | 作成日 | `2026-04-01` |
-| 最終更新日 | `2026-04-05` |
+| 最終更新日 | `2026-04-04` |
 | 作成者 | `Codex` |
 | 親マイルストーン | `docs/plans/3d-rtt/milestone-roadmap.md` **並行トラックB: WFC地形生成** |
 | 関連提案 | `docs/proposals/3d-rtt/related/wfc-terrain-generation-plan-2026-03-12.md`（旧案。全面自動生成前提へ再整理） |
@@ -37,7 +37,10 @@
 - **MS-WFC-2c**: `mapgen/validate.rs` に `lightweight_validate` / `debug_validate` を実装済み。`generate_world_layout` の retry ループ内で lightweight 通過時のみ採用し、`ResourceSpawnCandidates` を埋める。詳細は [`wfc-ms2c-validator.md`](wfc-ms2c-validator.md)。
 - **MS-WFC-2d**: `WorldMasks::fill_sand_from_river_seed`、`river::generate_sand_masks`、`post_process_tiles` / `fallback_terrain` の `final_sand_mask` 反映、debug validator の sand-mask 整合チェックを実装済み。
 - **MS-WFC-2e**: 完了（distance field + base shoreline + bounded growth による砂浜形状改善、`SAND_GROWTH_*` 定数追加・carve 定数再調整済み）。
-- **MS-WFC-2.5**: 実装完了・テスト不足。`terrain_zones.rs` 新規追加、`WorldMasks` に `grass_zone_mask` / `dirt_zone_mask` / `inland_sand_mask` / `dirt_zone_distance_field` / `grass_zone_distance_field` 追加。ゾーン強制（B）・端部グラデーション（C）・中立リージョンバイアスを `apply_zone_post_process` で実装。完了条件 5（Grass ゾーン遠端存在）・6（ゾーン占有率スモーク）・8（inland_sand 近傍 Grass 確認）のテストが未実装。MS-WFC-3 以降は未着手。
+- **MS-WFC-2.5**: 実装完了・テスト不足。`terrain_zones.rs` 新規追加、`WorldMasks` に `grass_zone_mask` / `dirt_zone_mask` / `inland_sand_mask` / `dirt_zone_distance_field` / `grass_zone_distance_field` 追加。ゾーン強制（B）・端部グラデーション（C）・中立リージョンバイアスを `apply_zone_post_process` で実装。完了条件 5（Grass ゾーン遠端存在）・6（ゾーン占有率スモーク）・8（inland_sand 近傍 Grass 確認）のテストが一部未実装。
+- **MS-WFC-3**: procedural 木・岩・`forest_regrowth_zones`・`validate_post_resource` 等は実装済み（[`wfc-ms3-procedural-resources.md`](wfc-ms3-procedural-resources.md)）。
+- **MS-WFC-4**: `GeneratedWorldLayoutResource` による startup 本経路、旧 `layout.rs` の木・岩・初期木材固定テーブル撤去済み（[`wfc-ms4-startup-integration.md`](wfc-ms4-startup-integration.md)）。
+- **MS-WFC-4.5**: docs / golden seed 運用 / debug 記述の整合を進行中（[`wfc-ms45-docs-tests.md`](wfc-ms45-docs-tests.md)）。
 
 ## 1. 目的
 
@@ -81,15 +84,21 @@
 
 ### 現状
 
-- 地形:
-  - [`crates/hw_world/src/mapgen.rs`](../../../crates/hw_world/src/mapgen.rs) は `River` 固定帯 + `Sand` 固定帯 + `(x+y)%30==0` の `Dirt` で構成される。
-- 固定オブジェクト:
-  - [`crates/hw_world/src/layout.rs`](../../../crates/hw_world/src/layout.rs) に `TREE_POSITIONS` / `ROCK_POSITIONS` / `INITIAL_WOOD_POSITIONS` がハードコードされている。
-- 固定施設:
-  - [`compute_site_yard_layout`](../../../crates/bevy_app/src/systems/logistics/initial_spawn/layout.rs) は現行どおり中央固定の `Site` と右側固定の `Yard` を返す。
-  - 初期猫車置き場は [`INITIAL_WHEELBARROW_PARKING_GRID`](../../../crates/bevy_app/src/systems/logistics/initial_spawn/mod.rs) = `(58, 58)` に固定されているが、これは現在の `Site` 側にあり、今回の「Yard 内固定」と一致していない。
+> **注（2026-04）**: 以下は計画起草時点のギャップ記述である。現行の本番経路は [`generate_world_layout`](../../../crates/hw_world/src/mapgen.rs) → [`GeneratedWorldLayout`](../../../crates/hw_world/src/mapgen/types.rs) → startup／[`spawn_map`](../../../crates/bevy_app/src/world/map/spawn.rs) であり、概要は [`docs/world_layout.md`](../../../docs/world_layout.md) を参照。`layout.rs` の旧木・岩・初期木材座標テーブルは撤去済み。
+
+- 地形（本番）:
+  - [`generate_world_layout(master_seed)`](../../../crates/hw_world/src/mapgen.rs) が WFC・validator・資源配置・retry/fallback を含む最終 `terrain_tiles` を返す。レガシー純粋関数 [`generate_base_terrain_tiles`](../../../crates/hw_world/src/mapgen.rs) はスタブ・`visual_test` 等に残る。
+- 固定オブジェクト（本番）:
+  - 初期木・岩は `GeneratedWorldLayout::initial_tree_positions` / `initial_rock_positions`。旧固定配列は削除済み。
+- 固定施設（本番）:
+  - `Site` / `Yard` / Yard 内木材・猫車置き場は [`AnchorLayout`](../../../crates/hw_world/src/anchor.rs)（`aligned_to_worldgen_seed`）由来を [`initial_resource_spawner`](../../../crates/bevy_app/src/systems/logistics/initial_spawn/mod.rs) が消費する。
 - 初期スポーン:
-  - [`initial_resource_spawner`](../../../crates/bevy_app/src/systems/logistics/initial_spawn/mod.rs) は、固定木 → 固定岩 → 固定木材 → 固定 `Site/Yard` → 固定猫車置き場の順でスポーンしている。
+  - 上記 layout を [`initial_resource_spawner`](../../../crates/bevy_app/src/systems/logistics/initial_spawn/mod.rs) が順にスポーンする（MS-WFC-4 完了済み）。
+
+#### 計画起草時点の旧記述（参照用）
+
+- 旧: `layout.rs` に `TREE_POSITIONS` / `ROCK_POSITIONS` / `INITIAL_WOOD_POSITIONS` があった → **撤去済み**
+- 旧: 固定座標のみからスポーン → **`GeneratedWorldLayout` 経由へ移行済み**
 
 ### 問題
 
@@ -216,7 +225,7 @@
   - 固定アンカー、保護帯、必須資源、到達可能性、`golden seeds` を先に仕様化する。
   - debug レポートに何を出すかもここで決める。
 - 変更ファイル:
-  - `docs/plans/3d-rtt/wfc-terrain-generation-plan-2026-04-01.md`
+  - `docs/plans/3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md`
   - `docs/world_layout.md`（先行で仕様メモを入れる場合）
 - 完了条件:
   - [ ] 必須資源と追加資源の区分が定義されている
@@ -237,7 +246,7 @@
   - `crates/hw_world/src/layout.rs`
   - `crates/hw_world/src/mapgen.rs` または `crates/hw_world/src/mapgen/types.rs`
   - `crates/bevy_app/src/systems/logistics/initial_spawn/mod.rs`
-  - `docs/plans/3d-rtt/wfc-terrain-generation-plan-2026-04-01.md`
+  - `docs/plans/3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md`
 - 完了条件:
   - [ ] `Site/Yard` 固定領域を pure に取得できる
   - [ ] Yard 内固定の木材・猫車置き場アンカーを pure に取得できる

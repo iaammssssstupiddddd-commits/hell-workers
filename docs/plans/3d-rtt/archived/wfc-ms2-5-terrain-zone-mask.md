@@ -902,7 +902,7 @@ mod tests {
 | `crates/hw_world/src/mapgen/wfc_adapter.rs` | `post_process_tiles` に `apply_zone_post_process` 呼び出し追加（Step 4/5）、`apply_zone_post_process` / `fallback_post_seed` 追加、`fallback_terrain` シグネチャ変更（`master_seed: u64` 引数追加） |
 | `crates/hw_world/src/mapgen/validate.rs` | `check_no_stray_sand_outside_mask` を `inland_sand_mask` 許容に拡張（§5.5） |
 | `docs/world_layout.md` | 地形ゾーン生成説明追加 |
-| `docs/plans/3d-rtt/wfc-terrain-generation-plan-2026-04-01.md` | MS-WFC-2.5 行を追加・ステータス更新 |
+| `docs/plans/3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md` | MS-WFC-2.5 行を追加・ステータス更新 |
 | `docs/plans/3d-rtt/milestone-roadmap.md` | MS-WFC-2.5 行を追加 |
 
 ---

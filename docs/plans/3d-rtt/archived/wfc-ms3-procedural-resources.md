@@ -618,7 +618,7 @@ pub fn generate_resource_layout(
 ```rust
 // crates/hw_world/src/mapgen/resources.rs (または mapgen.rs の #[cfg(test)])
 
-const TEST_SEED_A: u64 = 42;
+const TEST_SEED_A: u64 = 10_182_272_928_891_625_829;
 const TEST_SEED_B: u64 = 12_345_678;
 
 #[test]

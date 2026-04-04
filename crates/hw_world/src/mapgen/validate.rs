@@ -494,7 +494,7 @@ mod tests {
     use crate::mapgen::generate_world_layout;
     use hw_core::constants::MAP_WIDTH;
 
-    const GOLDEN_SEED_STANDARD: u64 = 42;
+    const GOLDEN_SEED_STANDARD: u64 = 10_182_272_928_891_625_829;
 
     #[test]
     fn test_golden_seeds_pass_lightweight_validate() {

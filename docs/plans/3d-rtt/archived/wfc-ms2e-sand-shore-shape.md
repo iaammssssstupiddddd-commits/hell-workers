@@ -547,7 +547,7 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo test -p hw_worl
 
 - `docs/world_layout.md`: 砂浜生成説明を 8 近傍リングから distance-field + growth へ更新
 - `crates/hw_world/README.md`: `river.rs` / `world_masks.rs` の責務説明更新
-- `docs/plans/3d-rtt/wfc-terrain-generation-plan-2026-04-01.md`: MS-WFC-2e 行をステータス更新
+- `docs/plans/3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md`: MS-WFC-2e 行をステータス更新
 - `docs/plans/3d-rtt/milestone-roadmap.md`: MS-WFC-2e 行のステータス更新
 
 ---
@@ -560,7 +560,7 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo test -p hw_worl
 | `crates/hw_world/src/world_masks.rs` | `sand_candidate_mask` の doc comment を「growth 込み候補」へ更新 |
 | `docs/world_layout.md` | 砂浜生成説明を 8 近傍リングから distance-field + growth へ更新 |
 | `crates/hw_world/README.md` | `river.rs` / `world_masks.rs` の責務説明更新 |
-| `docs/plans/3d-rtt/wfc-terrain-generation-plan-2026-04-01.md` | MS-WFC-2e の**実装状況・本文**を更新（既にサブ計画表に行がある場合は**追記ではなく更新**） |
+| `docs/plans/3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md` | MS-WFC-2e の**実装状況・本文**を更新（既にサブ計画表に行がある場合は**追記ではなく更新**） |
 | `docs/plans/3d-rtt/milestone-roadmap.md` | 同様に MS-WFC-2e 行の**ステータス更新**（未着手→進行/完了） |
 
 `mapgen.rs` と `wfc_adapter.rs` と `validate.rs` は変更不要（`generate_sand_masks()` のシグネチャが変わらないため）。

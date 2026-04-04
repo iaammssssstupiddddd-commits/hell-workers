@@ -257,7 +257,7 @@ MS-WFC-2 着手前に、候補 crate は少なくとも次を満たすこと:
 
 ## 7. 変更ファイル
 
-- `docs/plans/3d-rtt/wfc-ms0-invariant-spec.md`（本ファイル）
+- `docs/plans/3d-rtt/archived/wfc-ms0-invariant-spec.md`（本ファイル）
 - `docs/world_layout.md`: MS-WFC-0 では**短いメモ追記のみ**可。恒久仕様の本更新は親計画の **MS-WFC-4.5**（または同等）で行う。
 
 ---

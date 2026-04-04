@@ -13,7 +13,7 @@
 | 関連提案 | [`section-material-proposal-2026-03-16.md`](../../proposals/3d-rtt/20260316/section-material-proposal-2026-03-16.md) |
 | アセット計画 | [`asset-milestones-2026-03-17.md`](asset-milestones-2026-03-17.md) **MS-Asset-Terrain** |
 | アート指針 | [`docs/world_lore.md`](../../world_lore.md) §6.1 パレット・**§6.2 Rough Vector Sketch**（手描き感・塗りムラ・描き込みすぎない） |
-| 独立トラック | [WFC 地形生成](wfc-terrain-generation-plan-2026-04-01.md) はデータ生成が主眼。本 MS はレンダリング／表現 |
+| 独立トラック | [WFC 地形生成](archived/wfc-terrain-generation-plan-2026-04-01.md) はデータ生成が主眼。本 MS はレンダリング／表現 |
 | 後続 MS | **MS-3-7**（Raycast）と直列必須ではない |
 | 実装サブ計画（現行アセット限定） | [`ms-3-6-ad-implementation-plan-2026-04-01.md`](ms-3-6-ad-implementation-plan-2026-04-01.md) — **A/D のコード・WGSL 手順**（新規 PNG 差し替えなし） |
 

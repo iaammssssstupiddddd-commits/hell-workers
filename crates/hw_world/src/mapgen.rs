@@ -159,7 +159,7 @@ mod tests {
     use super::*;
     use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 
-    const TEST_SEED_A: u64 = 42;
+    const TEST_SEED_A: u64 = 10_182_272_928_891_625_829;
     const TEST_SEED_B: u64 = 12_345_678;
 
     #[test]

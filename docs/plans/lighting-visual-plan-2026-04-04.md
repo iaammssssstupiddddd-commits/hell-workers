@@ -220,7 +220,7 @@
 - owner 解決は `Building3dVisual` の child 走査に頼らず、`OutdoorLampLight3d { owner }` で直接結ぶ。
 - visible Soul mesh は `NotShadowCaster`。lamp light の影を出したい場合は `SoulShadowProxy3d`（`[LAYER_3D, LAYER_3D_SOUL_SHADOW]`）が必要。
 - lamp shadow は 3D RtT 参加物にしか効かない。2D foreground にも効かせたい場合は別設計になる。
-- 既存ワークツリーに `docs/plans/3d-rtt/wfc-ms2-5-terrain-zone-mask.md` の未コミット変更があるため、触らない。
+- 既存ワークツリーに `docs/plans/3d-rtt/archived/wfc-ms2-5-terrain-zone-mask.md` の未コミット変更があるため、触らない。
 - `spawn.rs` の OutdoorLamp は他建物と **共通 arm** のため、実装時は M1 の (a)(b) のどちらで子ライトを足すか先に決める。
 
 ### 参照必須ファイル

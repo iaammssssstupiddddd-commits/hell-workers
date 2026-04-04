@@ -92,7 +92,7 @@ pub struct ResourceSpawnCandidates {
 /// `hw_world::regrowth::ForestZone` は `{ min, max, initial_count, tree_positions }` の
 /// ボックス形状で固定座標を持つ旧型。MS-WFC-3 は本型に pure data を載せるまでとし、
 /// 旧型の削除・名称の `ForestZone` への統一・`bevy_app` 接続は MS-WFC-4 以降の責務とする
-/// （計画: `docs/plans/3d-rtt/wfc-ms3-procedural-resources.md` §4.4）。
+/// （計画: `docs/plans/3d-rtt/archived/wfc-ms3-procedural-resources.md` §4.4）。
 #[derive(Debug, Clone)]
 pub struct WfcForestZone {
     pub center: GridPos,

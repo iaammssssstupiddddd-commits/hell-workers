@@ -16,7 +16,7 @@
 | ファイル | 内容 |
 |---|---|
 | `mod.rs` | 公開 API |
-| `spawn.rs` | マップエンティティのスポーン処理。現在は `generate_world_layout()` の地形を暫定プレビュー表示する |
+| `spawn.rs` | マップエンティティのスポーン。`GeneratedWorldLayoutResource` の `terrain_tiles` を 3D タイルとしてスポーン（startup 本経路） |
 
 ## 地形生成・経路探索について
 
@@ -52,4 +52,4 @@ pub use hw_world::{WorldMapRead, WorldMapWrite, TerrainType, generate_fixed_rive
 | ファイル | hw_world ではなく src/ にある理由 |
 |---|---|
 | `mod.rs` | `WorldMapRead` / `WorldMapWrite` と layout 定数の root facade |
-| `spawn.rs` | `Commands` と `Terrain3dHandles` を使った地形エンティティスポーンが必要。現在は `HELL_WORKERS_WORLDGEN_SEED` を読んで `generate_world_layout()` の地形だけを暫定プレビューする |
+| `spawn.rs` | `Commands` と `Terrain3dHandles` を使った地形スポーン。`PostStartup` で `spawn_map` が呼ばれ、`setup()` で挿入済みの `GeneratedWorldLayoutResource` を消費する |
