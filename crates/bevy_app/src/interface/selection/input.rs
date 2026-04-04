@@ -9,9 +9,7 @@ use hw_core::game_state::PlayMode;
 use hw_ui::camera::MainCamera;
 use hw_ui::selection::SelectionIntent;
 
-use super::hit_test::{
-    hovered_entity_at_world_pos, hovered_task_area_border_entity,
-};
+use super::hit_test::{hovered_entity_at_world_pos, hovered_task_area_border_entity};
 use super::state::{HoveredEntity, SelectedEntity};
 
 type SelectionTargetQuery<'w, 's> = Query<

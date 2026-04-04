@@ -64,7 +64,8 @@ pub fn handle_pour_floor_task(
         }
 
         PourFloorPhase::PickingUpMud => {
-            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity) else {
+            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity)
+            else {
                 info!(
                     "POUR_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
@@ -104,7 +105,8 @@ pub fn handle_pour_floor_task(
 
         PourFloorPhase::GoingToTile => {
             // Get tile position
-            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity) else {
+            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity)
+            else {
                 // Tile disappeared
                 info!(
                     "POUR_FLOOR: Cancelled for {:?} - Tile {:?} gone",
@@ -145,7 +147,8 @@ pub fn handle_pour_floor_task(
 
         PourFloorPhase::Pouring { progress_bp } => {
             // Get tile and update state
-            let Ok((_, mut tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get_mut(tile_entity)
+            let Ok((_, mut tile_blueprint, _)) =
+                ctx.queries.storage.floor_tiles.get_mut(tile_entity)
             else {
                 info!(
                     "POUR_FLOOR: Cancelled for {:?} - Tile {:?} gone",

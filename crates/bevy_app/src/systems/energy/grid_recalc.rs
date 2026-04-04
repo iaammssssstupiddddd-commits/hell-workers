@@ -1,10 +1,16 @@
 use bevy::prelude::*;
-use hw_energy::{GridConsumers, GridGenerators, PowerConsumer, PowerGenerator, PowerGrid, Unpowered};
+use hw_energy::{
+    GridConsumers, GridGenerators, PowerConsumer, PowerGenerator, PowerGrid, Unpowered,
+};
 
 /// PowerGrid の generation/consumption を集計し、停電状態を更新する。
 /// soul_spa_power_output_system の後に実行することで PowerGenerator の変化を即時反映する。
 pub fn grid_recalc_system(
-    mut q_grids: Query<(&mut PowerGrid, Option<&GridGenerators>, Option<&GridConsumers>)>,
+    mut q_grids: Query<(
+        &mut PowerGrid,
+        Option<&GridGenerators>,
+        Option<&GridConsumers>,
+    )>,
     q_generators: Query<&PowerGenerator>,
     q_consumers: Query<&PowerConsumer>,
     mut commands: Commands,
@@ -56,9 +62,7 @@ pub fn grid_recalc_system(
         // Unpowered マーカーを同期する（新規追加コンシューマーは #[require(Unpowered)] で
         // デフォルト Unpowered になるが、powered_changed は発生しないため）。
         let sync_consumers = powered_changed || (new_powered && cons_changed);
-        if sync_consumers
-            && let Some(consumers) = consumers_opt
-        {
+        if sync_consumers && let Some(consumers) = consumers_opt {
             for &consumer in consumers.iter() {
                 if new_powered {
                     commands.entity(consumer).remove::<Unpowered>();

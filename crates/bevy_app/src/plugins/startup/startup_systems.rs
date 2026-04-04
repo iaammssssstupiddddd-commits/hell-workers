@@ -1,3 +1,5 @@
+use super::asset_catalog::create_game_assets;
+use super::rtt_setup::{self, Camera3dRtt, Camera3dSoulMaskRtt};
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
@@ -6,8 +8,10 @@ use crate::systems::logistics::{ResourceItem, initial_resource_spawner};
 use crate::systems::visual::camera_sync::WorldForeground2dCamera;
 use crate::systems::visual::elevation_view::ElevationDirection;
 use crate::world::map::{
-    WorldMapRead, WorldMapWrite, spawn_map,
+    GeneratedWorldLayoutResource, WorldMapRead, WorldMapWrite,
+    prepare_generated_world_layout_resource, spawn_map,
 };
+use crate::world::regrowth::{RegrowthManager, configure_regrowth_from_generated_layout};
 use bevy::camera::{RenderTarget, visibility::RenderLayers};
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
@@ -20,23 +24,25 @@ use hw_core::constants::{
 use hw_core::quality::QualitySettings;
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 use hw_ui::camera::MainCamera;
-use super::asset_catalog::create_game_assets;
-use super::rtt_setup::{self, Camera3dRtt, Camera3dSoulMaskRtt};
 
 pub(super) fn spawn_map_timed(
     commands: Commands,
     terrain_handles: Res<Terrain3dHandles>,
     world_map: WorldMapWrite,
+    generated_layout: Res<GeneratedWorldLayoutResource>,
 ) {
-    spawn_map(commands, terrain_handles, world_map);
+    spawn_map(commands, terrain_handles, world_map, generated_layout);
 }
 
 pub(super) fn initial_resource_spawner_timed(
     commands: Commands,
     game_assets: Res<GameAssets>,
     world_map: WorldMapWrite,
+    generated_layout: Res<GeneratedWorldLayoutResource>,
+    mut regrowth: ResMut<RegrowthManager>,
 ) {
-    initial_resource_spawner(commands, game_assets, world_map);
+    configure_regrowth_from_generated_layout(&mut regrowth, &generated_layout.layout);
+    initial_resource_spawner(commands, game_assets, world_map, &generated_layout);
 }
 
 /// Phase 5: camera/resources 初期化 + asset catalog 生成を呼び出す
@@ -48,10 +54,17 @@ pub(super) fn setup(
     quality: Res<QualitySettings>,
 ) {
     commands.insert_resource(DirectionalLightShadowMap { size: 4096 });
+    let generated_layout = prepare_generated_world_layout_resource();
+    info!(
+        "BEVY_STARTUP: Prepared worldgen layout (seed={}, attempt={}, fallback={})",
+        generated_layout.master_seed,
+        generated_layout.layout.generation_attempt,
+        generated_layout.layout.used_fallback
+    );
+    commands.insert_resource(generated_layout);
 
     // --- RtT オフスクリーンテクスチャ生成 ---
-    let runtime =
-        rtt_setup::initialize_rtt_runtime(q_window.single().ok(), *quality, &mut images);
+    let runtime = rtt_setup::initialize_rtt_runtime(q_window.single().ok(), *quality, &mut images);
     let rtt_handle = runtime.scene.clone();
     let soul_mask_handle = runtime.soul_mask.clone();
     commands.insert_resource(runtime);

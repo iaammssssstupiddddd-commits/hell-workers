@@ -100,6 +100,8 @@ pub struct WorldMasks {
     pub dirt_zone_mask: BitGrid,
     /// grass_zone_mask 内に生成した内陸砂パッチ（砂浜とは独立、MS-WFC-2.5）
     pub inland_sand_mask: BitGrid,
+    /// 川・砂浜の後段で確定する岩場パッチ（MS-WFC-3b）
+    pub rock_field_mask: BitGrid,
     /// 各セルから最寄りの dirt_zone セルまでの 4 近傍最短距離（C: ゾーン端部グラデーション用）
     /// dirt_zone セル自体は 0、dirt_zone が空なら全セル u32::MAX
     pub dirt_zone_distance_field: Vec<u32>,
@@ -132,7 +134,10 @@ impl WorldMasks {
             site_mask,
             yard_mask,
             anchor_mask: anchor_mask.clone(),
-            river_protection_band: compute_protection_band(&anchor_mask, PROTECTION_BAND_RIVER_WIDTH),
+            river_protection_band: compute_protection_band(
+                &anchor_mask,
+                PROTECTION_BAND_RIVER_WIDTH,
+            ),
             rock_protection_band: compute_protection_band(&anchor_mask, PROTECTION_BAND_ROCK_WIDTH),
             tree_dense_protection_band: compute_protection_band(
                 &anchor_mask,
@@ -141,13 +146,14 @@ impl WorldMasks {
             river_mask: BitGrid::map_sized(), // fill_river_from_seed で設定
             river_centerline: Vec::new(),     // fill_river_from_seed で設定
             sand_candidate_mask: BitGrid::map_sized(), // fill_sand_from_river_seed で設定
-            sand_carve_mask: BitGrid::map_sized(),     // fill_sand_from_river_seed で設定
-            final_sand_mask: BitGrid::map_sized(),     // fill_sand_from_river_seed で設定
-            grass_zone_mask: BitGrid::map_sized(),       // fill_terrain_zones_from_seed で設定
-            dirt_zone_mask: BitGrid::map_sized(),        // fill_terrain_zones_from_seed で設定
-            inland_sand_mask: BitGrid::map_sized(),      // fill_terrain_zones_from_seed で設定
-            dirt_zone_distance_field: Vec::new(),        // fill_terrain_zones_from_seed で設定
-            grass_zone_distance_field: Vec::new(),       // fill_terrain_zones_from_seed で設定
+            sand_carve_mask: BitGrid::map_sized(), // fill_sand_from_river_seed で設定
+            final_sand_mask: BitGrid::map_sized(), // fill_sand_from_river_seed で設定
+            grass_zone_mask: BitGrid::map_sized(), // fill_terrain_zones_from_seed で設定
+            dirt_zone_mask: BitGrid::map_sized(), // fill_terrain_zones_from_seed で設定
+            inland_sand_mask: BitGrid::map_sized(), // fill_terrain_zones_from_seed で設定
+            rock_field_mask: BitGrid::map_sized(), // fill_rock_fields_from_seed で設定
+            dirt_zone_distance_field: Vec::new(), // fill_terrain_zones_from_seed で設定
+            grass_zone_distance_field: Vec::new(), // fill_terrain_zones_from_seed で設定
         }
     }
 
@@ -161,11 +167,8 @@ impl WorldMasks {
             self.anchor_mask.count_set() > 0,
             "fill_river_from_seed は from_anchor の後に呼ぶこと"
         );
-        let (river_mask, centerline) = crate::river::generate_river_mask(
-            seed,
-            &self.anchor_mask,
-            &self.river_protection_band,
-        );
+        let (river_mask, centerline) =
+            crate::river::generate_river_mask(seed, &self.anchor_mask, &self.river_protection_band);
         self.river_mask = river_mask;
         self.river_centerline = centerline;
     }
@@ -216,6 +219,19 @@ impl WorldMasks {
             crate::terrain_zones::compute_zone_distance_field(&self.dirt_zone_mask);
         self.grass_zone_distance_field =
             crate::terrain_zones::compute_zone_distance_field(&self.grass_zone_mask);
+    }
+
+    /// `fill_terrain_zones_from_seed()` 適用済みの inland_sand を含むマスク群を参照し、
+    /// seed から deterministic に岩場マスクを生成して設定する。
+    pub fn fill_rock_fields_from_seed(&mut self, seed: u64) {
+        self.rock_field_mask = crate::rock_fields::generate_rock_field_mask(
+            seed,
+            &self.anchor_mask,
+            &self.rock_protection_band,
+            &self.river_mask,
+            &self.final_sand_mask,
+            &self.inland_sand_mask,
+        );
     }
 
     /// debug report 用の合成保護帯。

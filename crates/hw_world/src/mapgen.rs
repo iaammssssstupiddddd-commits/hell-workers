@@ -1,3 +1,4 @@
+pub mod resources;
 pub mod types;
 pub mod validate;
 pub mod wfc_adapter;
@@ -35,26 +36,30 @@ pub fn generate_base_terrain_tiles(
 
 /// WFC 地形生成のエントリポイント（MS-WFC-2c）。
 ///
+/// `AnchorLayout::aligned_to_worldgen_seed(master_seed)` で Site/Yard を川の縦位置に合わせ、
 /// `WorldMasks`（anchor + river_mask）を構築し、WFC ソルバーで地形グリッドを生成する。
 /// 収束失敗時は `MAX_WFC_RETRIES` まで deterministic retry し、retry 内で
-/// `validate::lightweight_validate()` を通過したレイアウトのみ採用する。
+/// `validate::lightweight_validate()`・資源配置・`validate_post_resource` を通過したレイアウトのみ採用する。
 /// 全試行で通過できない場合のみ fallback（River マスクを維持した Grass マップ）を返す。
 pub fn generate_world_layout(master_seed: u64) -> types::GeneratedWorldLayout {
     use crate::anchor::AnchorLayout;
     use crate::world_masks::WorldMasks;
     use types::ResourceSpawnCandidates;
-    use wfc_adapter::{derive_sub_seed, fallback_terrain, run_wfc, MAX_WFC_RETRIES};
+    use wfc_adapter::{MAX_WFC_RETRIES, derive_sub_seed, fallback_terrain, run_wfc};
 
-    let anchors = AnchorLayout::fixed();
+    let anchors = AnchorLayout::aligned_to_worldgen_seed(master_seed);
     let mut masks = WorldMasks::from_anchor(&anchors);
     masks.fill_river_from_seed(master_seed);
     masks.fill_sand_from_river_seed(master_seed);
     masks.fill_terrain_zones_from_seed(master_seed);
+    masks.fill_rock_fields_from_seed(master_seed);
 
     let layout = (0..=MAX_WFC_RETRIES)
         .find_map(|attempt| {
             let sub_seed = derive_sub_seed(master_seed, attempt);
             let terrain_tiles = run_wfc(&masks, sub_seed, attempt).ok()?;
+
+            // ─ Step 3: 地形フェーズ検証 ─
             let candidate = types::GeneratedWorldLayout {
                 terrain_tiles,
                 anchors: anchors.clone(),
@@ -67,21 +72,36 @@ pub fn generate_world_layout(master_seed: u64) -> types::GeneratedWorldLayout {
                 generation_attempt: attempt,
                 used_fallback: false,
             };
-            match validate::lightweight_validate(&candidate) {
-                Ok(resource_spawn_candidates) => Some(types::GeneratedWorldLayout {
-                    resource_spawn_candidates,
-                    ..candidate
-                }),
-                Err(err) => {
-                    eprintln!("[WFC validate] attempt={attempt} seed={sub_seed}: {err}");
-                    None
-                }
-            }
+            let validated_candidates = validate::lightweight_validate(&candidate).ok()?;
+            let candidate = types::GeneratedWorldLayout {
+                resource_spawn_candidates: validated_candidates,
+                ..candidate
+            };
+
+            // ─ Step 4: 資源配置 ─
+            let res = resources::generate_resource_layout(&candidate, sub_seed)?;
+
+            // ─ Step 5: 資源配置後の導線再確認 ─
+            validate::validate_post_resource(&candidate, &res).ok()?;
+
+            // ─ 採用 ─
+            let merged_candidates = ResourceSpawnCandidates {
+                water_tiles: candidate.resource_spawn_candidates.water_tiles.clone(),
+                sand_tiles: candidate.resource_spawn_candidates.sand_tiles.clone(),
+                rock_candidates: res.rock_candidates,
+            };
+
+            Some(types::GeneratedWorldLayout {
+                initial_tree_positions: res.initial_tree_positions,
+                forest_regrowth_zones: res.forest_regrowth_zones,
+                initial_rock_positions: res.initial_rock_positions,
+                resource_spawn_candidates: merged_candidates,
+                ..candidate
+            })
         })
         .unwrap_or_else(|| {
-            // debug でも release でもフォールバックは続行する（`debug_assert!(false)` は使わない）
             eprintln!("WFC: fallback terrain used for master_seed={master_seed}");
-            types::GeneratedWorldLayout {
+            let fallback_candidate = types::GeneratedWorldLayout {
                 terrain_tiles: fallback_terrain(&masks, master_seed),
                 anchors,
                 masks,
@@ -92,6 +112,34 @@ pub fn generate_world_layout(master_seed: u64) -> types::GeneratedWorldLayout {
                 master_seed,
                 generation_attempt: MAX_WFC_RETRIES + 1,
                 used_fallback: true,
+            };
+            let validated = validate::lightweight_validate(&fallback_candidate)
+                .expect("fallback terrain must satisfy lightweight_validate");
+            let fallback_candidate = types::GeneratedWorldLayout {
+                resource_spawn_candidates: validated,
+                ..fallback_candidate
+            };
+            let res =
+                resources::generate_resource_layout_fallback(&fallback_candidate, master_seed)
+                    .expect("fallback resource generation must not return empty world");
+            validate::validate_post_resource(&fallback_candidate, &res)
+                .expect("fallback resource layout must preserve required paths");
+            types::GeneratedWorldLayout {
+                initial_tree_positions: res.initial_tree_positions,
+                forest_regrowth_zones: res.forest_regrowth_zones,
+                initial_rock_positions: res.initial_rock_positions,
+                resource_spawn_candidates: ResourceSpawnCandidates {
+                    water_tiles: fallback_candidate
+                        .resource_spawn_candidates
+                        .water_tiles
+                        .clone(),
+                    sand_tiles: fallback_candidate
+                        .resource_spawn_candidates
+                        .sand_tiles
+                        .clone(),
+                    rock_candidates: res.rock_candidates,
+                },
+                ..fallback_candidate
             }
         });
 
@@ -209,50 +257,66 @@ mod tests {
 #[cfg(test)]
 mod tile_dist_sim {
     use super::*;
-    use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
     use crate::terrain::TerrainType;
     use crate::terrain_zones::compute_anchor_distance_field;
+    use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 
     #[test]
     fn print_tile_distribution() {
         let seeds = [0u64, 42, 99, 12345];
         println!("\n=== Tile Distribution per Zone Category ===");
-        println!("{:>8}  {:>10} {:>10} {:>10} {:>10} {:>10}",
-            "seed", "area", "grass%", "dirt%", "sand%", "river%");
+        println!(
+            "{:>8}  {:>10} {:>10} {:>10} {:>10} {:>10}",
+            "seed", "area", "grass%", "dirt%", "sand%", "river%"
+        );
 
         for category in &["dirt_zone", "grass_zone", "neutral", "all_non_river"] {
-            let mut g_sum = 0usize; let mut d_sum = 0usize;
-            let mut s_sum = 0usize; let mut total_sum = 0usize;
+            let mut g_sum = 0usize;
+            let mut d_sum = 0usize;
+            let mut s_sum = 0usize;
+            let mut total_sum = 0usize;
             for &seed in &seeds {
                 let layout = generate_world_layout(seed);
                 let masks = &layout.masks;
-                for y in 0..MAP_HEIGHT { for x in 0..MAP_WIDTH {
-                    let p = (x, y);
-                    if masks.river_mask.get(p) { continue; }
-                    let in_cat = match *category {
-                        "dirt_zone"      => masks.dirt_zone_mask.get(p),
-                        "grass_zone"     => masks.grass_zone_mask.get(p),
-                        "neutral"        => !masks.dirt_zone_mask.get(p) && !masks.grass_zone_mask.get(p),
-                        _                => true,
-                    };
-                    if !in_cat { continue; }
-                    let idx = (y * MAP_WIDTH + x) as usize;
-                    match layout.terrain_tiles[idx] {
-                        TerrainType::Grass => g_sum += 1,
-                        TerrainType::Dirt  => d_sum += 1,
-                        TerrainType::Sand  => s_sum += 1,
-                        _ => {}
+                for y in 0..MAP_HEIGHT {
+                    for x in 0..MAP_WIDTH {
+                        let p = (x, y);
+                        if masks.river_mask.get(p) {
+                            continue;
+                        }
+                        let in_cat = match *category {
+                            "dirt_zone" => masks.dirt_zone_mask.get(p),
+                            "grass_zone" => masks.grass_zone_mask.get(p),
+                            "neutral" => {
+                                !masks.dirt_zone_mask.get(p) && !masks.grass_zone_mask.get(p)
+                            }
+                            _ => true,
+                        };
+                        if !in_cat {
+                            continue;
+                        }
+                        let idx = (y * MAP_WIDTH + x) as usize;
+                        match layout.terrain_tiles[idx] {
+                            TerrainType::Grass => g_sum += 1,
+                            TerrainType::Dirt => d_sum += 1,
+                            TerrainType::Sand => s_sum += 1,
+                            _ => {}
+                        }
+                        total_sum += 1;
                     }
-                    total_sum += 1;
-                }}
+                }
             }
-            if total_sum == 0 { continue; }
-            println!("{:>12}  {:>10} {:>9}% {:>9}% {:>9}%",
+            if total_sum == 0 {
+                continue;
+            }
+            println!(
+                "{:>12}  {:>10} {:>9}% {:>9}% {:>9}%",
                 category,
                 total_sum / seeds.len(),
                 g_sum * 100 / total_sum,
                 d_sum * 100 / total_sum,
-                s_sum * 100 / total_sum);
+                s_sum * 100 / total_sum
+            );
         }
     }
 
@@ -270,42 +334,74 @@ mod tile_dist_sim {
         for &seed in &seeds {
             let layout = generate_world_layout(seed);
             let masks = &layout.masks;
-            for y in 0..MAP_HEIGHT { for x in 0..MAP_WIDTH {
-                let p = (x, y);
-                if masks.river_mask.get(p) || masks.anchor_mask.get(p) { continue; }
-                total_sum += 1;
-                if masks.dirt_zone_mask.get(p) || masks.grass_zone_mask.get(p) {
-                    zone_sum += 1;
-                } else {
-                    let idx = (y * MAP_WIDTH + x) as usize;
-                    let dd = masks.dirt_zone_distance_field[idx];
-                    let gd = masks.grass_zone_distance_field[idx];
-                    if dd <= ZONE_GRADIENT_WIDTH || gd <= ZONE_GRADIENT_WIDTH {
-                        gradient_sum += 1;
+            for y in 0..MAP_HEIGHT {
+                for x in 0..MAP_WIDTH {
+                    let p = (x, y);
+                    if masks.river_mask.get(p) || masks.anchor_mask.get(p) {
+                        continue;
+                    }
+                    total_sum += 1;
+                    if masks.dirt_zone_mask.get(p) || masks.grass_zone_mask.get(p) {
+                        zone_sum += 1;
                     } else {
-                        pure_neutral_sum += 1;
+                        let idx = (y * MAP_WIDTH + x) as usize;
+                        let dd = masks.dirt_zone_distance_field[idx];
+                        let gd = masks.grass_zone_distance_field[idx];
+                        if dd <= ZONE_GRADIENT_WIDTH || gd <= ZONE_GRADIENT_WIDTH {
+                            gradient_sum += 1;
+                        } else {
+                            pure_neutral_sum += 1;
+                        }
                     }
                 }
-            }}
+            }
         }
         let n = seeds.len();
-        println!("\n=== Zone / Gradient / Pure-Neutral Breakdown (avg over {} seeds) ===", n);
-        println!("  zone          : {:>5} cells ({:.1}%)", zone_sum/n, zone_sum*100/total_sum);
-        println!("  C gradient    : {:>5} cells ({:.1}%)", gradient_sum/n, gradient_sum*100/total_sum);
-        println!("  pure neutral  : {:>5} cells ({:.1}%)", pure_neutral_sum/n, pure_neutral_sum*100/total_sum);
-        println!("  total non-river/anchor: {:>5}", total_sum/n);
+        println!(
+            "\n=== Zone / Gradient / Pure-Neutral Breakdown (avg over {} seeds) ===",
+            n
+        );
+        println!(
+            "  zone          : {:>5} cells ({:.1}%)",
+            zone_sum / n,
+            zone_sum * 100 / total_sum
+        );
+        println!(
+            "  C gradient    : {:>5} cells ({:.1}%)",
+            gradient_sum / n,
+            gradient_sum * 100 / total_sum
+        );
+        println!(
+            "  pure neutral  : {:>5} cells ({:.1}%)",
+            pure_neutral_sum / n,
+            pure_neutral_sum * 100 / total_sum
+        );
+        println!("  total non-river/anchor: {:>5}", total_sum / n);
     }
 
     /// 距離帯ごとにゾーンカバレッジを表示する（中立帯の構造的空白を可視化）
     #[test]
     fn print_zone_coverage_by_distance() {
         let seeds = [0u64, 42, 99, 12345];
-        println!("\n=== Zone Coverage by Distance Band (avg over {} seeds) ===", seeds.len());
-        println!("{:>10}  {:>8} {:>10} {:>11} {:>9}",
-            "dist_range", "cells", "dirt_zone%", "grass_zone%", "neutral%");
+        println!(
+            "\n=== Zone Coverage by Distance Band (avg over {} seeds) ===",
+            seeds.len()
+        );
+        println!(
+            "{:>10}  {:>8} {:>10} {:>11} {:>9}",
+            "dist_range", "cells", "dirt_zone%", "grass_zone%", "neutral%"
+        );
 
         let bands: &[(u32, u32)] = &[
-            (0, 4), (5, 8), (9, 12), (13, 15), (16, 19), (20, 24), (25, 30), (31, 50), (51, 99),
+            (0, 4),
+            (5, 8),
+            (9, 12),
+            (13, 15),
+            (16, 19),
+            (20, 24),
+            (25, 30),
+            (31, 50),
+            (51, 99),
         ];
         // 距離場はシード非依存（anchor_maskが同一）なので1度だけ計算
         let dist_field = {
@@ -319,24 +415,39 @@ mod tile_dist_sim {
             for &seed in &seeds {
                 let layout = generate_world_layout(seed);
                 let masks = &layout.masks;
-                for y in 0..MAP_HEIGHT { for x in 0..MAP_WIDTH {
-                    let p = (x, y);
-                    if masks.anchor_mask.get(p) || masks.river_mask.get(p) { continue; }
-                    let d = dist_field[(y * MAP_WIDTH + x) as usize];
-                    if d < d_min || d > d_max { continue; }
-                    total_sum += 1;
-                    if masks.dirt_zone_mask.get(p) { dirt_sum += 1; }
-                    if masks.grass_zone_mask.get(p) { grass_sum += 1; }
-                }}
+                for y in 0..MAP_HEIGHT {
+                    for x in 0..MAP_WIDTH {
+                        let p = (x, y);
+                        if masks.anchor_mask.get(p) || masks.river_mask.get(p) {
+                            continue;
+                        }
+                        let d = dist_field[(y * MAP_WIDTH + x) as usize];
+                        if d < d_min || d > d_max {
+                            continue;
+                        }
+                        total_sum += 1;
+                        if masks.dirt_zone_mask.get(p) {
+                            dirt_sum += 1;
+                        }
+                        if masks.grass_zone_mask.get(p) {
+                            grass_sum += 1;
+                        }
+                    }
+                }
             }
-            if total_sum == 0 { continue; }
+            if total_sum == 0 {
+                continue;
+            }
             let neutral_sum = total_sum - dirt_sum - grass_sum;
-            println!("{:>5}..{:<4}  {:>8} {:>9}% {:>10}% {:>8}%",
-                d_min, d_max,
+            println!(
+                "{:>5}..{:<4}  {:>8} {:>9}% {:>10}% {:>8}%",
+                d_min,
+                d_max,
                 total_sum / seeds.len(),
                 dirt_sum * 100 / total_sum,
                 grass_sum * 100 / total_sum,
-                neutral_sum * 100 / total_sum);
+                neutral_sum * 100 / total_sum
+            );
         }
     }
 }

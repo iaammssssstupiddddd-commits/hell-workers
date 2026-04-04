@@ -1,9 +1,10 @@
 use crate::assets::GameAssets;
 use crate::systems::jobs::{ObstaclePosition, Rock, Tree, TreeVariant};
 use crate::systems::logistics::{ResourceItem, ResourceType};
-use crate::world::map::{INITIAL_WOOD_POSITIONS, ROCK_POSITIONS, TREE_POSITIONS, WorldMap};
+use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use hw_core::constants::*;
+use hw_core::world::GridPos;
 
 /// 障害物スポーンの共通 helper。
 /// 各位置で地形の通行可能チェック（`terrain_at_idx` ベース）を行い、
@@ -35,8 +36,9 @@ pub fn spawn_trees(
     commands: &mut Commands,
     game_assets: &GameAssets,
     world_map: &mut WorldMap,
+    positions: &[GridPos],
 ) -> usize {
-    spawn_obstacle_batch(TREE_POSITIONS, commands, world_map, |gx, gy, pos| {
+    spawn_obstacle_batch(positions, commands, world_map, |gx, gy, pos| {
         let variant_index = rand::random::<usize>() % game_assets.trees.len();
         (
             Tree,
@@ -56,8 +58,9 @@ pub fn spawn_rocks(
     commands: &mut Commands,
     game_assets: &GameAssets,
     world_map: &mut WorldMap,
+    positions: &[GridPos],
 ) -> usize {
-    spawn_obstacle_batch(ROCK_POSITIONS, commands, world_map, |gx, gy, pos| {
+    spawn_obstacle_batch(positions, commands, world_map, |gx, gy, pos| {
         (
             Rock,
             ObstaclePosition(gx, gy),
@@ -77,9 +80,10 @@ pub fn spawn_initial_wood(
     commands: &mut Commands,
     game_assets: &GameAssets,
     world_map: &WorldMap,
+    positions: &[GridPos],
 ) -> usize {
     let mut count = 0;
-    for &(gx, gy) in INITIAL_WOOD_POSITIONS {
+    for &(gx, gy) in positions {
         if world_map.is_walkable(gx, gy) {
             let spawn_pos = WorldMap::grid_to_world(gx, gy);
             commands.spawn((

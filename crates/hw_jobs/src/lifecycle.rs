@@ -9,9 +9,9 @@ use hw_core::events::ResourceReservationOp;
 use hw_core::logistics::{ResourceType, WheelbarrowDestination};
 
 use crate::tasks::{
-    AssignedTask, BuildPhase, CoatWallPhase, CollectBonePhase, FrameWallPhase,
-    GatherPhase, HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWithWheelbarrowPhase,
-    PourFloorPhase, RefinePhase, ReinforceFloorPhase,
+    AssignedTask, BuildPhase, CoatWallPhase, CollectBonePhase, FrameWallPhase, GatherPhase,
+    HaulPhase, HaulToBpPhase, HaulToMixerPhase, HaulWithWheelbarrowPhase, PourFloorPhase,
+    RefinePhase, ReinforceFloorPhase,
 };
 
 /// 現在フェーズで保持される予約を `Reserve*` 操作として返す。

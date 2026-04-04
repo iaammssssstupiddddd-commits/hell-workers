@@ -2,23 +2,28 @@
 
 use crate::plugins::startup::Terrain3dHandles;
 use bevy::prelude::*;
-use hw_core::constants::{MAP_WIDTH, MAP_HEIGHT, building_3d_render_layers};
+use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, building_3d_render_layers};
 use hw_visual::SectionMaterial;
-use hw_world::{TerrainType, generate_world_layout, grid_to_world};
+use hw_world::{GeneratedWorldLayout, TerrainType, generate_world_layout, grid_to_world};
 
 use super::{Tile, WorldMapWrite};
 
 const WORLDGEN_SEED_ENV: &str = "HELL_WORKERS_WORLDGEN_SEED";
 
-fn preview_worldgen_seed() -> u64 {
+#[derive(Resource, Clone)]
+pub struct GeneratedWorldLayoutResource {
+    pub master_seed: u64,
+    pub layout: GeneratedWorldLayout,
+}
+
+pub fn resolve_worldgen_seed() -> u64 {
     match std::env::var(WORLDGEN_SEED_ENV) {
         Ok(raw) => match raw.parse::<u64>() {
             Ok(seed) => seed,
             Err(err) => {
                 warn!(
                     "BEVY_STARTUP: invalid {}='{}' ({err}); falling back to random seed",
-                    WORLDGEN_SEED_ENV,
-                    raw
+                    WORLDGEN_SEED_ENV, raw
                 );
                 rand::random::<u64>()
             }
@@ -27,17 +32,22 @@ fn preview_worldgen_seed() -> u64 {
     }
 }
 
+pub fn prepare_generated_world_layout_resource() -> GeneratedWorldLayoutResource {
+    let master_seed = resolve_worldgen_seed();
+    let layout = generate_world_layout(master_seed);
+    GeneratedWorldLayoutResource {
+        master_seed,
+        layout,
+    }
+}
+
 pub fn spawn_map(
     mut commands: Commands,
     terrain_handles: Res<Terrain3dHandles>,
     mut world_map: WorldMapWrite,
+    generated_layout: Res<GeneratedWorldLayoutResource>,
 ) {
-    // Temporary preview hook for MS-WFC-2a/2b:
-    // render the map from `generate_world_layout()` so seed-based river changes
-    // are visible before the full startup/resource integration in MS-WFC-4.
-    let master_seed = preview_worldgen_seed();
-    let layout = generate_world_layout(master_seed);
-    let terrain_tiles = layout.terrain_tiles;
+    let terrain_tiles = &generated_layout.layout.terrain_tiles;
 
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
@@ -64,16 +74,23 @@ pub fn spawn_map(
     }
 
     info!(
-        "BEVY_STARTUP: Map spawned ({}x{} tiles, preview worldgen seed={})",
-        MAP_WIDTH, MAP_HEIGHT, master_seed
+        "BEVY_STARTUP: Map spawned ({}x{} tiles, worldgen seed={}, attempt={}, fallback={})",
+        MAP_WIDTH,
+        MAP_HEIGHT,
+        generated_layout.master_seed,
+        generated_layout.layout.generation_attempt,
+        generated_layout.layout.used_fallback
     );
 }
 
-pub fn terrain_material(terrain: TerrainType, handles: &Terrain3dHandles) -> Handle<SectionMaterial> {
+pub fn terrain_material(
+    terrain: TerrainType,
+    handles: &Terrain3dHandles,
+) -> Handle<SectionMaterial> {
     match terrain {
         TerrainType::River => handles.river.clone(),
-        TerrainType::Sand  => handles.sand.clone(),
-        TerrainType::Dirt  => handles.dirt.clone(),
+        TerrainType::Sand => handles.sand.clone(),
+        TerrainType::Dirt => handles.dirt.clone(),
         TerrainType::Grass => handles.grass.clone(),
     }
 }

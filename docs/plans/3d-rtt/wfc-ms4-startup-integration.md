@@ -7,11 +7,11 @@
 | 計画ID | `wfc-ms4-startup-integration` |
 | ステータス | `Draft` |
 | 作成日 | `2026-04-01` |
-| 最終更新日 | `2026-04-01` |
+| 最終更新日 | `2026-04-06` |
 | 親計画 | [`wfc-terrain-generation-plan-2026-04-01.md`](wfc-terrain-generation-plan-2026-04-01.md) |
 | 前MS | [`wfc-ms3-procedural-resources.md`](wfc-ms3-procedural-resources.md) |
 | 次MS | [`wfc-ms45-docs-tests.md`](wfc-ms45-docs-tests.md) |
-| 前提 | `GeneratedWorldLayout` に地形・木・岩・アンカー情報が揃っている（MS-WFC-3 完了） |
+| 前提 | `GeneratedWorldLayout` に地形・木・岩・アンカー情報が揃っている（MS-WFC-3 完了）。`used_fallback = true` でも resource fallback により `initial_tree_positions` / `forest_regrowth_zones` / `initial_rock_positions` は空にならない契約とする |
 
 ---
 
@@ -32,7 +32,8 @@
 以下が完了していることを確認する:
 
 - [ ] `GeneratedWorldLayout` に `initial_tree_positions`, `initial_rock_positions`, `forest_regrowth_zones` が格納されている
-- [ ] `AnchorLayout` から `initial_wood_grid` と `wheelbarrow_parking_grid` が取得できる
+- [ ] `AnchorLayout` から `initial_wood_positions` と `wheelbarrow_parking` が取得できる
+- [ ] `used_fallback = true` でも木・岩・森林ゾーンが空にならない
 - [ ] `lightweight_validate()` が startup フローで呼ばれる準備がある
 
 ---
@@ -49,7 +50,7 @@ let layout = hw_world::generate_world_layout(seed);
 commands.insert_resource(GeneratedWorldLayout(layout));
 ```
 
-`GeneratedWorldLayout` を `bevy::prelude::Resource` として使うために、`hw_world` 側で `#[derive(Resource)]` を追加する（または `bevy_app` 側で newtype wrapper を用意する）。
+`GeneratedWorldLayout` を `bevy::prelude::Resource` として使うために、`bevy_app` 側で newtype wrapper を用意する。
 
 ### Step 2: 木・岩 spawn を生成結果から読むように切り替え
 
@@ -66,7 +67,7 @@ commands.insert_resource(GeneratedWorldLayout(layout));
 
 ```rust
 // Before: INITIAL_WOOD_POSITIONS 固定配列
-// After:  layout.anchors.initial_wood_grid
+// After:  layout.anchors.initial_wood_positions
 ```
 
 ### Step 4: 猫車置き場 spawn を Yard 内固定アンカーから読むように切り替え
@@ -75,7 +76,7 @@ commands.insert_resource(GeneratedWorldLayout(layout));
 
 ```rust
 // Before: INITIAL_WHEELBARROW_PARKING_GRID = (58, 58)
-// After:  layout.anchors.wheelbarrow_parking_grid
+// After:  layout.anchors.wheelbarrow_parking
 ```
 
 ### Step 5: ForestRegrowthZones Resource を挿入
@@ -120,7 +121,7 @@ commands.insert_resource(ForestRegrowthZones(layout.forest_regrowth_zones.clone(
 | `crates/bevy_app/src/systems/logistics/initial_spawn/facilities.rs` | 施設 spawn の固定座標依存を AnchorLayout に切り替え |
 | `crates/bevy_app/src/world/regrowth.rs` | `ForestRegrowthZones` Resource を参照するよう変更 |
 | `crates/hw_world/src/layout.rs` | `TREE_POSITIONS`, `ROCK_POSITIONS`, `INITIAL_WOOD_POSITIONS`, `INITIAL_WHEELBARROW_PARKING_GRID` 削除 |
-| `crates/hw_world/src/generated_world_layout.rs` または `lib.rs` | `#[derive(Resource)]` 追加、または bevy_app 側に newtype wrapper |
+| `crates/bevy_app/src/**` | `GeneratedWorldLayout` を包む newtype Resource を追加し startup で挿入 |
 
 ---
 
@@ -133,6 +134,7 @@ commands.insert_resource(ForestRegrowthZones(layout.forest_regrowth_zones.clone(
 - [ ] 旧 `INITIAL_WOOD_POSITIONS` / `TREE_POSITIONS` / `ROCK_POSITIONS` への依存が消えている
 - [ ] `ForestRegrowthZones` が Resource として挿入され、`regrowth.rs` が参照している
 - [ ] 木・岩 spawn が生成結果から読まれている
+- [ ] `used_fallback = true` でも木・岩 spawn が欠落しない
 - [ ] `Site↔Yard` と Yard から固定/必須資源への到達可能性が維持されている
 - [ ] `cargo check --workspace` / `cargo clippy --workspace` が通る
 - [ ] `cargo run` でゲームが正常に起動する
@@ -173,4 +175,5 @@ cargo run
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-04-06` | `Codex` | MS-WFC-3 の fallback 契約に合わせて前提を更新。`AnchorLayout` の現行フィールド名に修正し、`GeneratedWorldLayout` は bevy_app 側 newtype Resource で扱う方針に統一 |
 | `2026-04-01` | `Copilot` | wfc-terrain-generation-plan-2026-04-01.md から分割・詳細化 |

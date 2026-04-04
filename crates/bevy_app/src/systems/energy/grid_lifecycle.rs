@@ -45,7 +45,11 @@ pub fn on_power_consumer_added(
         return;
     };
     let pos = transform.translation.xy();
-    let Some(yard_entity) = q_yards.iter().find(|(_, y)| y.contains(pos)).map(|(e, _)| e) else {
+    let Some(yard_entity) = q_yards
+        .iter()
+        .find(|(_, y)| y.contains(pos))
+        .map(|(e, _)| e)
+    else {
         // Yard 外のランプは ConsumesFrom なし → 常時 Unpowered
         return;
     };

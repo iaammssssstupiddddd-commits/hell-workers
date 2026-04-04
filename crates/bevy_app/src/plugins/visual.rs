@@ -57,10 +57,7 @@ impl Plugin for VisualPlugin {
 
         app.add_systems(
             Update,
-            (
-                sync_camera3d_system,
-                sync_world_foreground_2d_camera_system,
-            )
+            (sync_camera3d_system, sync_world_foreground_2d_camera_system)
                 .chain()
                 .in_set(GameSystemSet::Visual),
         );

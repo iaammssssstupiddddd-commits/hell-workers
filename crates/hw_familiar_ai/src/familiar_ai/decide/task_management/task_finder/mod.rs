@@ -63,11 +63,8 @@ pub fn collect_scored_candidates(
         queries.designation.designations.iter()
     {
         let is_build = designation.work_type == WorkType::Build;
-        let is_remote_yard_collect = matches!(
-            designation.work_type,
-            WorkType::CollectBone
-        ) && managed_by_opt
-            .is_some_and(|managed_by| queries.yards.get(managed_by.0).is_ok());
+        let is_remote_yard_collect = matches!(designation.work_type, WorkType::CollectBone)
+            && managed_by_opt.is_some_and(|managed_by| queries.yards.get(managed_by.0).is_ok());
 
         if (is_build || is_remote_yard_collect) && seen.insert(entity) {
             candidates.push(entity);

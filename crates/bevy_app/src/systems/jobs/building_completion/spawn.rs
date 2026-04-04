@@ -225,7 +225,9 @@ fn spawn_building_3d_visual(
                 Name::new(format!("Building3dVisual ({:?})", kind)),
             ));
         }
-        BuildingType::SandPile | BuildingType::BonePile | BuildingType::WheelbarrowParking
+        BuildingType::SandPile
+        | BuildingType::BonePile
+        | BuildingType::WheelbarrowParking
         | BuildingType::OutdoorLamp => {
             let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.3, -pos2d.y);
             commands.spawn((
@@ -237,7 +239,10 @@ fn spawn_building_3d_visual(
                 Name::new(format!("Building3dVisual ({:?})", kind)),
             ));
         }
-        BuildingType::Tank | BuildingType::MudMixer | BuildingType::RestArea | BuildingType::SoulSpa => {
+        BuildingType::Tank
+        | BuildingType::MudMixer
+        | BuildingType::RestArea
+        | BuildingType::SoulSpa => {
             let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.4, -pos2d.y);
             commands.spawn((
                 Mesh3d(handles_3d.equipment_2x2_mesh.clone()),

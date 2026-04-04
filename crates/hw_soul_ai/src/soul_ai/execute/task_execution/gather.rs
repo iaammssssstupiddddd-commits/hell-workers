@@ -227,9 +227,7 @@ pub fn handle_gather_task(
                 ctx.path.waypoints.clear();
                 match chain {
                     GatherHaulChain::Storage { item, destination } => {
-                        commands
-                            .entity(ctx.soul_entity)
-                            .insert(WorkingOn(item));
+                        commands.entity(ctx.soul_entity).insert(WorkingOn(item));
                         *ctx.task = AssignedTask::Haul(HaulData {
                             item,
                             stockpile: destination,
@@ -241,9 +239,7 @@ pub fn handle_gather_task(
                         );
                     }
                     GatherHaulChain::Blueprint { item, blueprint } => {
-                        commands
-                            .entity(ctx.soul_entity)
-                            .insert(WorkingOn(item));
+                        commands.entity(ctx.soul_entity).insert(WorkingOn(item));
                         *ctx.task = AssignedTask::HaulToBlueprint(HaulToBlueprintData {
                             item,
                             blueprint,
@@ -255,9 +251,7 @@ pub fn handle_gather_task(
                         );
                     }
                     GatherHaulChain::Mixer { item, mixer } => {
-                        commands
-                            .entity(ctx.soul_entity)
-                            .insert(WorkingOn(item));
+                        commands.entity(ctx.soul_entity).insert(WorkingOn(item));
                         *ctx.task = AssignedTask::HaulToMixer(HaulToMixerData {
                             item,
                             mixer,

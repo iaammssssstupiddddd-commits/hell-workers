@@ -358,9 +358,9 @@ fn generate_inland_sand_mask(
     if cand_list.is_empty() {
         return BitGrid::map_sized();
     }
-    let patch_count =
-        (rng.gen_range(INLAND_SAND_PATCH_COUNT_MIN..=INLAND_SAND_PATCH_COUNT_MAX) as usize)
-            .min(cand_list.len());
+    let patch_count = (rng.gen_range(INLAND_SAND_PATCH_COUNT_MIN..=INLAND_SAND_PATCH_COUNT_MAX)
+        as usize)
+        .min(cand_list.len());
     // partial Fisher-Yates で起点を選択
     for i in 0..patch_count {
         let j = rng.gen_range(i..cand_list.len());
@@ -448,9 +448,15 @@ mod tests {
     fn test_zone_masks_deterministic() {
         let m1 = make_masks(12345);
         let m2 = make_masks(12345);
-        assert_eq!(m1.grass_zone_mask.count_set(), m2.grass_zone_mask.count_set());
+        assert_eq!(
+            m1.grass_zone_mask.count_set(),
+            m2.grass_zone_mask.count_set()
+        );
         assert_eq!(m1.dirt_zone_mask.count_set(), m2.dirt_zone_mask.count_set());
-        assert_eq!(m1.inland_sand_mask.count_set(), m2.inland_sand_mask.count_set());
+        assert_eq!(
+            m1.inland_sand_mask.count_set(),
+            m2.inland_sand_mask.count_set()
+        );
     }
 
     #[test]
@@ -540,9 +546,7 @@ mod tests {
             dirt_near_anchor,
             "いずれの候補 seed でも Dirt ゾーンがアンカー近傍（dist {}..={}）に現れなかった。\
              候補リストを走査して更新すること",
-            ZONE_DIRT_DIST_MIN,
-            ZONE_DIRT_DIST_MAX
+            ZONE_DIRT_DIST_MIN, ZONE_DIRT_DIST_MAX
         );
     }
 }
-

@@ -7,8 +7,8 @@ use bevy::prelude::*;
 use hw_core::relationships::WorkingOn;
 use hw_jobs::construction::{FloorTileState, WallTileState};
 use hw_logistics::{
-    transport_request::{TransportRequestKind, TransportRequestState},
     ResourceType,
+    transport_request::{TransportRequestKind, TransportRequestState},
 };
 
 use super::{
@@ -71,42 +71,44 @@ pub(super) fn find_chain_opportunity(
     // 2. FloorConstructionSite チェーン
     if ctx.queries.storage.floor_sites.get(destination).is_ok() {
         let opp = match resource_type {
-            ResourceType::Bone => ctx
-                .queries
-                .storage
-                .floor_tiles
-                .iter()
-                .find_map(|(tile_e, tile, workers)| {
-                    if tile.parent_site == destination
-                        && tile.state == FloorTileState::WaitingBones
-                        && workers.is_none_or(|w| w.is_empty())
-                    {
-                        Some(ChainOpportunity::ReinforceFloor {
-                            tile: tile_e,
-                            site: destination,
-                        })
-                    } else {
-                        None
-                    }
-                }),
-            ResourceType::StasisMud => ctx
-                .queries
-                .storage
-                .floor_tiles
-                .iter()
-                .find_map(|(tile_e, tile, workers)| {
-                    if tile.parent_site == destination
-                        && tile.state == FloorTileState::WaitingMud
-                        && workers.is_none_or(|w| w.is_empty())
-                    {
-                        Some(ChainOpportunity::PourFloor {
-                            tile: tile_e,
-                            site: destination,
-                        })
-                    } else {
-                        None
-                    }
-                }),
+            ResourceType::Bone => {
+                ctx.queries
+                    .storage
+                    .floor_tiles
+                    .iter()
+                    .find_map(|(tile_e, tile, workers)| {
+                        if tile.parent_site == destination
+                            && tile.state == FloorTileState::WaitingBones
+                            && workers.is_none_or(|w| w.is_empty())
+                        {
+                            Some(ChainOpportunity::ReinforceFloor {
+                                tile: tile_e,
+                                site: destination,
+                            })
+                        } else {
+                            None
+                        }
+                    })
+            }
+            ResourceType::StasisMud => {
+                ctx.queries
+                    .storage
+                    .floor_tiles
+                    .iter()
+                    .find_map(|(tile_e, tile, workers)| {
+                        if tile.parent_site == destination
+                            && tile.state == FloorTileState::WaitingMud
+                            && workers.is_none_or(|w| w.is_empty())
+                        {
+                            Some(ChainOpportunity::PourFloor {
+                                tile: tile_e,
+                                site: destination,
+                            })
+                        } else {
+                            None
+                        }
+                    })
+            }
             _ => None,
         };
         return opp;
@@ -115,44 +117,46 @@ pub(super) fn find_chain_opportunity(
     // 3. WallConstructionSite チェーン
     if ctx.queries.storage.wall_sites.get(destination).is_ok() {
         let opp = match resource_type {
-            ResourceType::Wood => ctx
-                .queries
-                .storage
-                .wall_tiles
-                .iter()
-                .find_map(|(tile_e, tile, workers)| {
-                    if tile.parent_site == destination
-                        && tile.state == WallTileState::WaitingWood
-                        && workers.is_none_or(|w| w.is_empty())
-                    {
-                        Some(ChainOpportunity::FrameWall {
-                            tile: tile_e,
-                            site: destination,
-                        })
-                    } else {
-                        None
-                    }
-                }),
-            ResourceType::StasisMud => ctx
-                .queries
-                .storage
-                .wall_tiles
-                .iter()
-                .find_map(|(tile_e, tile, workers)| {
-                    let wall = tile.spawned_wall?;
-                    if tile.parent_site == destination
-                        && tile.state == WallTileState::WaitingMud
-                        && workers.is_none_or(|w| w.is_empty())
-                    {
-                        Some(ChainOpportunity::CoatWall {
-                            tile: tile_e,
-                            site: destination,
-                            wall,
-                        })
-                    } else {
-                        None
-                    }
-                }),
+            ResourceType::Wood => {
+                ctx.queries
+                    .storage
+                    .wall_tiles
+                    .iter()
+                    .find_map(|(tile_e, tile, workers)| {
+                        if tile.parent_site == destination
+                            && tile.state == WallTileState::WaitingWood
+                            && workers.is_none_or(|w| w.is_empty())
+                        {
+                            Some(ChainOpportunity::FrameWall {
+                                tile: tile_e,
+                                site: destination,
+                            })
+                        } else {
+                            None
+                        }
+                    })
+            }
+            ResourceType::StasisMud => {
+                ctx.queries
+                    .storage
+                    .wall_tiles
+                    .iter()
+                    .find_map(|(tile_e, tile, workers)| {
+                        let wall = tile.spawned_wall?;
+                        if tile.parent_site == destination
+                            && tile.state == WallTileState::WaitingMud
+                            && workers.is_none_or(|w| w.is_empty())
+                        {
+                            Some(ChainOpportunity::CoatWall {
+                                tile: tile_e,
+                                site: destination,
+                                wall,
+                            })
+                        } else {
+                            None
+                        }
+                    })
+            }
             _ => None,
         };
         return opp;
@@ -198,7 +202,10 @@ pub(super) fn find_haul_chain_after_gather(
         })
         .map(|(e, t, _, _, _, _)| (e, t.translation.truncate()))
         .filter(|(_, pos)| pos.distance_squared(soul_pos) <= MAX_RADIUS_SQ)
-        .min_by(|(_, a), (_, b)| a.distance_squared(soul_pos).total_cmp(&b.distance_squared(soul_pos)))?;
+        .min_by(|(_, a), (_, b)| {
+            a.distance_squared(soul_pos)
+                .total_cmp(&b.distance_squared(soul_pos))
+        })?;
 
     // 2. pending な TransportRequest から建築/精製先を探す
     // priority: 建築サイト(0) > Blueprint(1) > Mixer(2)

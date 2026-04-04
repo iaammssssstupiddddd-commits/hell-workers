@@ -1,6 +1,5 @@
 use crate::app_contexts::{
-    BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState,
-    TaskContext,
+    BuildContext, CompanionParentKind, CompanionPlacementKind, CompanionPlacementState, TaskContext,
 };
 use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRead, WorldMapRef};
@@ -131,8 +130,8 @@ pub fn placement_ghost_system(
             in_yard && walkable && no_building
         });
 
-        let draw_pos = WorldMap::grid_to_world(gx, gy)
-            + Vec2::new(TILE_SIZE * 0.5, -TILE_SIZE * 0.5);
+        let draw_pos =
+            WorldMap::grid_to_world(gx, gy) + Vec2::new(TILE_SIZE * 0.5, -TILE_SIZE * 0.5);
         let size = Vec2::splat(TILE_SIZE * 2.0);
         let texture = game_assets.rest_area.clone();
         let color = if can_place {

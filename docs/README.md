@@ -39,7 +39,7 @@
 ## 開発ガイド
 - [architecture.md](architecture.md): 全体構造、システム依存関係、GameTime、空間グリッド一覧。
 - [cargo_workspace.md](cargo_workspace.md): Cargo workspace の crate 責務、依存方向、分割ルール（hw_core / hw_world / hw_logistics / hw_jobs / hw_familiar_ai / hw_soul_ai / hw_spatial / hw_ui / hw_visual）。
-- [world_layout.md](world_layout.md): マップ仕様、地形、**座標変換関数**（`world_to_grid` 等）。地形の本番経路は `generate_world_layout`（WFC + river 派生 sand mask + bounded growth + 生成後 `lightweight_validate`・MS-WFC-2e 完了）。
+- [world_layout.md](world_layout.md): マップ仕様、地形、**座標変換関数**（`world_to_grid` 等）。地形の本番経路は `generate_world_layout`（WFC + river 派生 sand mask + bounded growth + 生成後 `lightweight_validate`・MS-WFC-2e 完了）。Site/Yard の縦位置は `aligned_to_worldgen_seed`（`preview_river_min_y` と `site.max_y`、詳細は同文書）。
 - [state.md](state.md): PlayMode、**TaskMode全バリアント一覧**（指定・ゾーン・建築モード等）。
 - [debug-features.md](debug-features.md): DevPanel・IBuild など**デバッグ専用機能**の一覧・実装箇所。
 - [visual_test.md](visual_test.md): Soul GLB Visual Test Scene の操作・アーキテクチャ・UV 計算。

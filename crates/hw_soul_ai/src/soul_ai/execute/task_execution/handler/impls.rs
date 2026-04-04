@@ -8,9 +8,9 @@ use hw_world::WorldMap;
 
 use super::task_handler::TaskHandler;
 use crate::soul_ai::execute::task_execution::types::{
-    AssignedTask, BuildData, CoatWallData, CollectBoneData, FrameWallTileData,
-    GatherData, HaulData, HaulToBlueprintData, HaulToMixerData, MovePlantData, PourFloorTileData,
-    RefineData, ReinforceFloorTileData,
+    AssignedTask, BuildData, CoatWallData, CollectBoneData, FrameWallTileData, GatherData,
+    HaulData, HaulToBlueprintData, HaulToMixerData, MovePlantData, PourFloorTileData, RefineData,
+    ReinforceFloorTileData,
 };
 
 impl TaskHandler<GatherData> for AssignedTask {

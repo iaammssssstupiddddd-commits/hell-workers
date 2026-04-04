@@ -47,10 +47,18 @@ type SyncedCamera3dQuery<'w, 's> = Query<
 #[derive(Component)]
 pub struct WorldForeground2dCamera;
 
-type MainCamQuery<'w, 's> =
-    Query<'w, 's, (&'static Transform, &'static Camera), (With<MainCamera>, Without<WorldForeground2dCamera>)>;
-type ForegroundCamQuery<'w, 's> =
-    Query<'w, 's, (&'static mut Transform, &'static mut Camera), (With<WorldForeground2dCamera>, Without<MainCamera>)>;
+type MainCamQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Transform, &'static Camera),
+    (With<MainCamera>, Without<WorldForeground2dCamera>),
+>;
+type ForegroundCamQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Transform, &'static mut Camera),
+    (With<WorldForeground2dCamera>, Without<MainCamera>),
+>;
 
 /// `MainCamera` と同じビューで第 2 の `LAYER_2D` カメラを描画する（PanCamera の追従）。
 ///

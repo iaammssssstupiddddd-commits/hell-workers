@@ -8,7 +8,10 @@ pub use hw_world::layout::{
 };
 pub use hw_world::map::WorldMap;
 pub use hw_world::{TerrainType, WorldMapRead, WorldMapWrite, generate_fixed_river_tiles};
-pub use spawn::spawn_map;
+pub use spawn::{
+    GeneratedWorldLayoutResource, prepare_generated_world_layout_resource, resolve_worldgen_seed,
+    spawn_map,
+};
 
 use bevy::prelude::*;
 use hw_ui::selection::WorldReadApi;

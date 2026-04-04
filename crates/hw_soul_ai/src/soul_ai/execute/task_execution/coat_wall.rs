@@ -278,7 +278,9 @@ pub fn handle_coat_wall_task(
             }
         }
         CoatWallPhase::Coating { progress_bp } => {
-            let Ok((_, mut tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get_mut(tile_entity) else {
+            let Ok((_, mut tile_blueprint, _)) =
+                ctx.queries.storage.wall_tiles.get_mut(tile_entity)
+            else {
                 cancel_coat_wall_task(ctx, tile_entity, commands, "tile gone");
                 return;
             };

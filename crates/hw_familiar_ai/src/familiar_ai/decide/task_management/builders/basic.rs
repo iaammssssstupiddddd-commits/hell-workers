@@ -2,10 +2,9 @@ use bevy::prelude::*;
 use hw_jobs::WorkType;
 use hw_jobs::{
     AssignedTask, BuildData, BuildPhase, BuildingType, CoatWallData, CoatWallPhase,
-    CollectBoneData, CollectBonePhase, FrameWallPhase,
-    FrameWallTileData, GatherData, GatherPhase, GeneratePowerData, GeneratePowerPhase,
-    MovePlantData, MovePlantPhase, PourFloorPhase, PourFloorTileData, RefineData, RefinePhase,
-    ReinforceFloorPhase, ReinforceFloorTileData,
+    CollectBoneData, CollectBonePhase, FrameWallPhase, FrameWallTileData, GatherData, GatherPhase,
+    GeneratePowerData, GeneratePowerPhase, MovePlantData, MovePlantPhase, PourFloorPhase,
+    PourFloorTileData, RefineData, RefinePhase, ReinforceFloorPhase, ReinforceFloorTileData,
 };
 
 use super::{

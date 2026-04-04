@@ -8,12 +8,16 @@ pub struct InitialSpawnReport {
     pub site_yard_spawned: bool,
     pub parking_spawned: bool,
     pub total_obstacles: usize,
+    pub worldgen_seed: u64,
+    pub used_fallback: bool,
 }
 
 impl InitialSpawnReport {
     pub fn log(&self) {
         info!(
-            "SPAWNER: Trees({}), Rocks({}), Wood({}) spawned. Site/Yard:{} Parking:{}. WorldMap obstacles:{}",
+            "SPAWNER: seed={} fallback={} Trees({}), Rocks({}), Wood({}) spawned. Site/Yard:{} Parking:{}. WorldMap obstacles:{}",
+            self.worldgen_seed,
+            self.used_fallback,
             self.trees_spawned,
             self.rocks_spawned,
             self.wood_spawned,

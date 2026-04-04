@@ -12,8 +12,8 @@ use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
     PlantTreeHandles, SectionMaterial, SoulMaskMaterial, SoulShadowMaterial, SpeechHandles,
     TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_GRASS_UV_DISTORT_STRENGTH,
-    WallVisualHandles, WorkIconHandles, make_section_material,
-    make_terrain_section_material, with_alpha_mode,
+    WallVisualHandles, WorkIconHandles, make_section_material, make_terrain_section_material,
+    with_alpha_mode,
 };
 use hw_visual::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
 use hw_world::{DoorVisualHandles, TerrainVisualHandles};
@@ -229,14 +229,13 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     ));
     let familiar_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.9, TILE_SIZE * 0.9));
 
-    let wall_material =
-        section_materials.add(make_section_material(LinearRgba::new(0.56, 0.44, 0.30, 1.0)));
-    let wall_provisional_material = section_materials.add(
-        with_alpha_mode(
-            make_section_material(LinearRgba::new(0.95, 0.72, 0.45, 0.9)),
-            AlphaMode::Blend,
-        ),
-    );
+    let wall_material = section_materials.add(make_section_material(LinearRgba::new(
+        0.56, 0.44, 0.30, 1.0,
+    )));
+    let wall_provisional_material = section_materials.add(with_alpha_mode(
+        make_section_material(LinearRgba::new(0.95, 0.72, 0.45, 0.9)),
+        AlphaMode::Blend,
+    ));
     let wall_orientation_aid_material = materials.add(StandardMaterial {
         base_color: Color::srgb(1.0, 0.95, 0.2),
         unlit: true,

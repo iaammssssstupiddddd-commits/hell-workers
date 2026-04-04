@@ -1,7 +1,5 @@
 //! 設計図への運搬タスクの実行処理
 
-use hw_core::relationships::WorkingOn;
-use hw_core::soul::StressBreakdown;
 use crate::soul_ai::execute::task_execution::{
     chain,
     common::*,
@@ -10,6 +8,8 @@ use crate::soul_ai::execute::task_execution::{
     types::{AssignedTask, HaulToBpPhase},
 };
 use bevy::prelude::*;
+use hw_core::relationships::WorkingOn;
+use hw_core::soul::StressBreakdown;
 use hw_world::WorldMap;
 
 pub fn handle_haul_to_blueprint_task(
@@ -110,8 +110,7 @@ pub fn handle_haul_to_blueprint_task(
             }
         }
         HaulToBpPhase::GoingToBlueprint => {
-            if let Ok((_bp_transform, bp, _)) =
-                ctx.queries.storage.blueprints.get(blueprint_entity)
+            if let Ok((_bp_transform, bp, _)) = ctx.queries.storage.blueprints.get(blueprint_entity)
             {
                 let reachable = update_destination_to_blueprint(
                     ctx.dest,
@@ -193,8 +192,7 @@ pub fn handle_haul_to_blueprint_task(
                 Cancel,
             }
             let result = {
-                if let Ok((_, mut bp, _)) =
-                    ctx.queries.storage.blueprints.get_mut(blueprint_entity)
+                if let Ok((_, mut bp, _)) = ctx.queries.storage.blueprints.get_mut(blueprint_entity)
                 {
                     if bp.remaining_material_amount(resource_type) == 0 {
                         info!(
@@ -236,20 +234,20 @@ pub fn handle_haul_to_blueprint_task(
             if materials_complete
                 && let Ok((_, _, _, managed_by_opt, _, _, _, _)) =
                     ctx.queries.designation.designations.get(blueprint_entity)
-                {
-                    if managed_by_opt.is_some() {
-                        commands
-                            .entity(blueprint_entity)
-                            .remove::<hw_core::relationships::ManagedBy>();
-                    }
+            {
+                if managed_by_opt.is_some() {
                     commands
                         .entity(blueprint_entity)
-                        .insert(hw_jobs::Priority(10));
-                    info!(
-                        "HAUL_TO_BP: Blueprint {:?} materials complete, reissuing for build task",
-                        blueprint_entity
-                    );
+                        .remove::<hw_core::relationships::ManagedBy>();
                 }
+                commands
+                    .entity(blueprint_entity)
+                    .insert(hw_jobs::Priority(10));
+                info!(
+                    "HAUL_TO_BP: Blueprint {:?} materials complete, reissuing for build task",
+                    blueprint_entity
+                );
+            }
 
             // Step 4: チェーン判定（blueprints の借用が解放済みなので ctx を安全に渡せる）
             if let Some(opp) = chain::find_chain_opportunity(

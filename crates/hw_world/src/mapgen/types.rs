@@ -1,8 +1,8 @@
 use hw_core::world::GridPos;
 
 use crate::anchor::AnchorLayout;
-use crate::world_masks::WorldMasks;
 use crate::terrain::TerrainType;
+use crate::world_masks::WorldMasks;
 
 /// WFC 地形生成の最終出力。hw_world → bevy_app 間のコントラクト。
 ///
@@ -55,7 +55,7 @@ impl GeneratedWorldLayout {
         use super::generate_base_terrain_tiles;
         use crate::layout::SAND_WIDTH;
 
-        let anchors = AnchorLayout::fixed();
+        let anchors = AnchorLayout::aligned_to_worldgen_seed(master_seed);
         let masks = WorldMasks::from_anchor(&anchors);
 
         GeneratedWorldLayout {
@@ -90,7 +90,9 @@ pub struct ResourceSpawnCandidates {
 ///
 /// # 既存型との関係
 /// `hw_world::regrowth::ForestZone` は `{ min, max, initial_count, tree_positions }` の
-/// ボックス形状で固定座標を持つ旧型。MS-WFC-3 でこちらに統一し、名称も `ForestZone` に戻す。
+/// ボックス形状で固定座標を持つ旧型。MS-WFC-3 は本型に pure data を載せるまでとし、
+/// 旧型の削除・名称の `ForestZone` への統一・`bevy_app` 接続は MS-WFC-4 以降の責務とする
+/// （計画: `docs/plans/3d-rtt/wfc-ms3-procedural-resources.md` §4.4）。
 #[derive(Debug, Clone)]
 pub struct WfcForestZone {
     pub center: GridPos,

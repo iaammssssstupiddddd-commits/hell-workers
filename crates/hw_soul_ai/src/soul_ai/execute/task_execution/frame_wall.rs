@@ -103,7 +103,9 @@ pub fn handle_frame_wall_task(
             }
         }
         FrameWallPhase::Framing { progress_bp } => {
-            let Ok((_, mut tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get_mut(tile_entity) else {
+            let Ok((_, mut tile_blueprint, _)) =
+                ctx.queries.storage.wall_tiles.get_mut(tile_entity)
+            else {
                 clear_task_and_path(ctx.task, ctx.path);
                 commands.entity(ctx.soul_entity).remove::<WorkingOn>();
                 return;

@@ -277,8 +277,7 @@ impl EntityInspectionQuery<'_, '_> {
         entity: Entity,
         model: &mut InspectionAccumulator,
     ) {
-        let Ok((consumer, consumes_from_opt, unpowered_opt)) =
-            self.q_power_consumers.get(entity)
+        let Ok((consumer, consumes_from_opt, unpowered_opt)) = self.q_power_consumers.get(entity)
         else {
             return;
         };
@@ -302,11 +301,7 @@ impl EntityInspectionQuery<'_, '_> {
         }
     }
 
-    pub(super) fn append_soul_spa_model(
-        &self,
-        entity: Entity,
-        model: &mut InspectionAccumulator,
-    ) {
+    pub(super) fn append_soul_spa_model(&self, entity: Entity, model: &mut InspectionAccumulator) {
         let Ok((site, generator, generates_for_opt)) = self.q_soul_spas.get(entity) else {
             return;
         };
@@ -329,7 +324,10 @@ impl EntityInspectionQuery<'_, '_> {
                     0
                 };
                 model.push_tooltip("Status: Operational".to_string());
-                model.push_tooltip(format!("Active: {}/{} souls", active_souls, site.active_slots));
+                model.push_tooltip(format!(
+                    "Active: {}/{} souls",
+                    active_souls, site.active_slots
+                ));
                 model.push_tooltip(format!("Output: {:.1}W", generator.current_output));
                 if let Some(gen_for) = generates_for_opt
                     && let Ok(grid) = self.q_power_grids.get(gen_for.0)

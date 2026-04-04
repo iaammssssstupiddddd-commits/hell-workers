@@ -8,6 +8,7 @@ pub mod pathfinding;
 pub mod query;
 pub mod regrowth;
 pub mod river;
+pub mod rock_fields;
 pub mod room_detection;
 pub mod room_systems;
 pub mod spatial;

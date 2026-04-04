@@ -28,7 +28,7 @@
 initial_spawn/
 ├── mod.rs               ← facade: スポーン順序のみを制御
 ├── layout.rs            ← pure 計算（Bevy Commands 非依存）
-│   ├── compute_site_yard_layout() → Result<SiteYardLayout, SiteYardLayoutError>
+│   ├── site_yard_layout_from_anchor(&AnchorLayout) → SiteYardLayout
 │   └── compute_parking_layout(base, &WorldMap) → Option<ParkingLayout>
 ├── terrain_resources.rs ← Tree・Rock・Wood spawn
 │   ├── spawn_trees / spawn_rocks（共通 spawn_obstacle_batch helper 利用）
@@ -44,7 +44,7 @@ initial_spawn/
 2. 拾得可能アイテム（Wood）
 3. 施設（WheelbarrowParking / Site / Yard）— 障害物スポーン後に `register_completed_building_footprint`
 
-**`layout.rs` の境界:** `compute_site_yard_layout` は定数のみ参照する pure 関数。`compute_parking_layout` は `&WorldMap` の読み取り専用参照のみを受け取り、`Commands` には依存しない。
+**`layout.rs` の境界:** `site_yard_layout_from_anchor` は `hw_world` の pure データのみ参照する。`GeneratedWorldLayout.anchors` の縦位置は `generate_world_layout` → `AnchorLayout::aligned_to_worldgen_seed`（川南端 `preview_river_min_y` 基準）と一致させる。`compute_parking_layout` は `&WorldMap` の読み取り専用参照のみを受け取り、`Commands` には依存しない。
 
 ## transport_request/ ディレクトリ
 

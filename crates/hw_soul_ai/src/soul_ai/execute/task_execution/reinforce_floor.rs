@@ -66,7 +66,8 @@ pub fn handle_reinforce_floor_task(
         }
 
         ReinforceFloorPhase::PickingUpBones => {
-            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity) else {
+            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity)
+            else {
                 info!(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
@@ -108,7 +109,8 @@ pub fn handle_reinforce_floor_task(
 
         ReinforceFloorPhase::GoingToTile => {
             // Get tile position
-            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity) else {
+            let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity)
+            else {
                 // Tile disappeared
                 info!(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",
@@ -151,7 +153,8 @@ pub fn handle_reinforce_floor_task(
 
         ReinforceFloorPhase::Reinforcing { progress_bp } => {
             // Get tile and update state
-            let Ok((_, mut tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get_mut(tile_entity)
+            let Ok((_, mut tile_blueprint, _)) =
+                ctx.queries.storage.floor_tiles.get_mut(tile_entity)
             else {
                 info!(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",

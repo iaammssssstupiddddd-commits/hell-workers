@@ -4,9 +4,9 @@
 use bevy::ecs::lifecycle::{Add, Remove};
 use bevy::prelude::*;
 
+use hw_core::visual_mirror::PoweredVisualState;
 use hw_core::visual_mirror::building::{BuildingVisualState, MudMixerVisualState};
 use hw_core::visual_mirror::gather::{GatherHighlightMarker, RestAreaVisual};
-use hw_core::visual_mirror::PoweredVisualState;
 use hw_energy::{PowerConsumer, Unpowered};
 
 use crate::model::{Building, Designation, RestArea, Rock, Tree};

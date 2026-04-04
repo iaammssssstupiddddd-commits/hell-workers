@@ -26,8 +26,14 @@ pub const RIVER_TOTAL_TILES_TARGET_MAX: usize = 500;
 // ── 砂マスク定数 ──────────────────────────────────────────────────────────────
 /// 距離場初期化用 8 近傍（dist==1 は diagonal shoreline を含む）
 const EIGHT_DIRS: [(i32, i32); 8] = [
-    (0, -1), (1, 0), (0, 1), (-1, 0),
-    (1, -1), (1, 1), (-1, 1), (-1, -1),
+    (0, -1),
+    (1, 0),
+    (0, 1),
+    (-1, 0),
+    (1, -1),
+    (1, 1),
+    (-1, 1),
+    (-1, -1),
 ];
 /// carve / growth flood-fill 用 4 近傍（wfc_adapter 依存を避けて独立定義）
 const CARDINAL_DIRS_4: [(i32, i32); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
@@ -143,6 +149,30 @@ pub fn generate_river_mask(
     }
 
     (river_mask, centerline)
+}
+
+/// アンカー・保護帯なしでプレビュー川を生成し、川タイルの **最小 y** を返す。
+///
+/// `grid_to_world` では y が大きいほど Bevy の +Y（画面上の上）なので、
+/// **最小 y が川の南端（画面下側の端）**に相当する。
+pub fn preview_river_min_y(seed: u64) -> i32 {
+    let empty_anchor = BitGrid::map_sized();
+    let empty_band = BitGrid::map_sized();
+    let (river_mask, _) = generate_river_mask(seed, &empty_anchor, &empty_band);
+    let mut min_y = i32::MAX;
+    let mut any = false;
+    for y in 0..MAP_HEIGHT {
+        for x in 0..MAP_WIDTH {
+            if river_mask.get((x, y)) {
+                any = true;
+                min_y = min_y.min(y);
+            }
+        }
+    }
+    if !any {
+        return RIVER_Y_CLAMP_MIN;
+    }
+    min_y
 }
 
 // ── 砂マスク生成 ──────────────────────────────────────────────────────────────
@@ -368,9 +398,7 @@ fn flood_fill_growth_region(
 
 fn build_sand_carve_mask(candidate: &BitGrid, rng: &mut StdRng) -> BitGrid {
     let candidate_positions: Vec<GridPos> = (0..MAP_HEIGHT)
-        .flat_map(|y| {
-            (0..MAP_WIDTH).filter_map(move |x| candidate.get((x, y)).then_some((x, y)))
-        })
+        .flat_map(|y| (0..MAP_WIDTH).filter_map(move |x| candidate.get((x, y)).then_some((x, y))))
         .collect();
 
     let mut carve = BitGrid::map_sized();
@@ -455,7 +483,10 @@ mod tests {
         let masks = make_masks();
         for x in 0..MAP_WIDTH {
             let col_has_river = (0..MAP_HEIGHT).any(|y| masks.river_mask.get((x, y)));
-            assert!(col_has_river, "x={x} に River セルがない（横断が途切れている）");
+            assert!(
+                col_has_river,
+                "x={x} に River セルがない（横断が途切れている）"
+            );
         }
     }
 

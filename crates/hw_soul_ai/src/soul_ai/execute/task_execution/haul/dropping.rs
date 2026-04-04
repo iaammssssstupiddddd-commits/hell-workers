@@ -248,13 +248,12 @@ pub(super) fn handle_dropping_phase(
 
         // チェーン判定: そのまま床工事タスクに移行できるか確認
         if let Some(resource_type) = item_resource_type
-            && let Some(opp) =
-                chain::find_chain_opportunity(stockpile, resource_type, None, ctx)
-            {
-                ctx.inventory.0 = None;
-                chain::execute_chain(opp, ctx, commands);
-                return;
-            }
+            && let Some(opp) = chain::find_chain_opportunity(stockpile, resource_type, None, ctx)
+        {
+            ctx.inventory.0 = None;
+            chain::execute_chain(opp, ctx, commands);
+            return;
+        }
     } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile) {
         if !item_resource_type
             .is_some_and(|resource_type| wall_site_can_accept(ctx, stockpile, resource_type, item))
@@ -281,13 +280,12 @@ pub(super) fn handle_dropping_phase(
 
         // チェーン判定: そのまま壁工事タスクに移行できるか確認
         if let Some(resource_type) = item_resource_type
-            && let Some(opp) =
-                chain::find_chain_opportunity(stockpile, resource_type, None, ctx)
-            {
-                ctx.inventory.0 = None;
-                chain::execute_chain(opp, ctx, commands);
-                return;
-            }
+            && let Some(opp) = chain::find_chain_opportunity(stockpile, resource_type, None, ctx)
+        {
+            ctx.inventory.0 = None;
+            chain::execute_chain(opp, ctx, commands);
+            return;
+        }
     } else if let Ok((wall_transform, building, provisional_opt)) =
         ctx.queries.storage.buildings.get(stockpile)
     {

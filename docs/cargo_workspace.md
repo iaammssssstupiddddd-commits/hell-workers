@@ -365,9 +365,9 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `WorldMapRead`, `WorldMapWrite` — `WorldMap` access を system 境界で統一する `SystemParam`
 - `world_to_grid`, `grid_to_world`
 - nearest walkable / river query
-- `AnchorLayout`, `GridRect` — `Site/Yard` と Yard 内固定物の pure data 契約
+- `AnchorLayout`, `GridRect` — `Site/Yard` と Yard 内固定物の pure data 契約。本番は `AnchorLayout::aligned_to_worldgen_seed` が `river::preview_river_min_y` を用い川南端より南へ Site 北辺をオフセット（`docs/world_layout.md`）
 - `WorldMasks` — `site_mask`, `yard_mask`, `river_mask`, protection band, `river_centerline`
-- `generate_world_layout` — WFC ベースの地形生成エントリ（`river_mask` 確定後にソルバー実行・retry/fallback）
+- `generate_world_layout` — WFC ベースの地形生成エントリ（`river_mask` / `final_sand_mask` / `rock_field_mask` を確定後にソルバー実行し、resource 配置と retry/fallback を含めて最終 `GeneratedWorldLayout` を返す）
 - `mapgen::wfc_adapter` — gridbugs `wfc` を局所化する adapter（`run_wfc`, `post_process_tiles`, `WorldConstraints` 等）
 - `room_detection::{build_detection_input, detect_rooms, room_is_valid_against_input}`
 - `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl も `hw_world` が所有）
@@ -574,7 +574,7 @@ root (`bevy_app`) は app shell として `init_resource::<WorldMap>()`、startu
 - `obstacle_cleanup_system` のような WorldMap 同期 + 地形ビジュアル通知（`TerrainChangedEvent` → bevy_app で `MeshMaterial3d` 差し替え）
 - door 自動開閉のような world state 更新 system（`DoorVisualHandles` 注入）
 
-`crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/regrowth.rs` は app shell です。地形メッシュは `spawn_map` で `SectionMaterial` / `Terrain3dHandles` を用いる。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックと `WorldMap` access wrapper は `hw_world` から呼び出します。現時点の `spawn_map` は、MS-WFC-4 の本統合前のデバッグ用途として `generate_world_layout()` の `terrain_tiles` を一時描画しているだけで、木・岩・固定物の startup 統合までは引き受けていません。
+`crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/regrowth.rs`, `crates/bevy_app/src/systems/logistics/initial_spawn/` は app shell です。地形メッシュは `spawn_map` で `SectionMaterial` / `Terrain3dHandles` を用いる。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックと `WorldMap` access wrapper は `hw_world` から呼び出します。現行の startup は `GeneratedWorldLayout` を root Resource に包んで 1 回だけ生成し、地形描画・初期木/岩・初期木材・猫車置き場・regrowth 初期化が同じ layout を共有します。
 
 ## 7. crate を増やすときの手順
 

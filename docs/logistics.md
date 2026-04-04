@@ -453,16 +453,15 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 ```
 spawn_trees / spawn_rocks   ← add_grid_obstacle を伴う
 spawn_initial_wood          ← obstacle 登録なし
-spawn_site_and_yard         ← layout 計算失敗時は warn & skip
+spawn_site_and_yard         ← `GeneratedWorldLayout.anchors` 由来の `SiteYardLayout`
 spawn_wheelbarrow_parking   ← layout 計算失敗時は warn & skip
 InitialSpawnReport::log()   ← 結果集計ログ
 ```
 
 ### 9.3 layout.rs の境界
 
-- `compute_site_yard_layout()`: マップ定数のみ参照する pure 関数。`Result<SiteYardLayout, SiteYardLayoutError>` を返す。
+- `site_yard_layout_from_anchor(&AnchorLayout)`: `hw_world` のアンカー矩形を `SiteYardLayout` に写す。初期スポーンは `GeneratedWorldLayout.anchors` を渡す。縦位置は `generate_world_layout` 内で `AnchorLayout::aligned_to_worldgen_seed` により決まり、プレビュー川の南端（`preview_river_min_y`）より南に Site 北辺（`site.max_y`）が来る（`docs/world_layout.md` の固定アンカー・川節）。
 - `compute_parking_layout(base, &WorldMap)`: `WorldMap::is_walkable` で 2x2 全マスの通行可能性を確認し、`Option<ParkingLayout>` を返す。
-- `SiteYardLayoutError` は `Display` を実装し、`warn!` メッセージに直接使用可能。
 
 ### 9.4 追加・変更時の手順
 

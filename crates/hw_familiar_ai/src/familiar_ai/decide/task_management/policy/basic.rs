@@ -2,8 +2,7 @@ use bevy::prelude::*;
 use hw_jobs::WorkType;
 
 use super::super::builders::{
-    issue_build, issue_collect_bone, issue_gather, issue_generate_power,
-    issue_move, issue_refine,
+    issue_build, issue_collect_bone, issue_gather, issue_generate_power, issue_move, issue_refine,
 };
 use super::super::validator::can_reserve_source;
 use crate::familiar_ai::decide::task_management::{

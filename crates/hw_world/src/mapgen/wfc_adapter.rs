@@ -3,25 +3,25 @@
 //! - `TerrainType` ↔ `wfc::PatternId` の固定マッピング
 //! - `PatternTable<PatternDescription>` による隣接ルール定義
 //! - `WorldConstraints: ForbidPattern` として river 固定・anchor 禁止・
-//!   マスク外 River 伝播防止・内陸 Sand 禁止を記述
+//!   マスク外 River 伝播防止を記述
 //! - `run_wfc()` によるソルバー呼び出しと deterministic retry
 
 use std::num::NonZeroU32;
 
+use crate::terrain_zones::{
+    ZONE_DIRT_ENFORCE_MAX, ZONE_DIRT_ENFORCE_MIN, ZONE_GRADIENT_DIRT_BIAS_PERCENT,
+    ZONE_GRADIENT_GRASS_BIAS_PERCENT, ZONE_GRADIENT_WIDTH, ZONE_GRASS_ENFORCE_MAX,
+    ZONE_GRASS_ENFORCE_MIN,
+};
 use direction::CardinalDirectionTable;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
-use crate::terrain_zones::{
-    ZONE_GRASS_ENFORCE_MIN, ZONE_GRASS_ENFORCE_MAX,
-    ZONE_DIRT_ENFORCE_MIN,  ZONE_DIRT_ENFORCE_MAX,
-    ZONE_GRADIENT_WIDTH, ZONE_GRADIENT_DIRT_BIAS_PERCENT, ZONE_GRADIENT_GRASS_BIAS_PERCENT,
-};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
-use wfc::{
-    Coord, ForbidInterface, ForbidPattern, GlobalStats, PatternDescription, PatternId, PatternTable,
-    RunOwn, Size,
-};
 use wfc::wrap::{Wrap, WrapNone};
+use wfc::{
+    Coord, ForbidInterface, ForbidPattern, GlobalStats, PatternDescription, PatternId,
+    PatternTable, RunOwn, Size,
+};
 
 use crate::terrain::TerrainType;
 use crate::world_masks::WorldMasks;
@@ -117,7 +117,7 @@ pub fn build_pattern_table() -> PatternTable<PatternDescription> {
         NonZeroU32::new(WEIGHT_GRASS),
         NonZeroU32::new(WEIGHT_DIRT),
         NonZeroU32::new(WEIGHT_SAND),
-        None,  // River: unweighted（hard constraint が出現先を制御）
+        None, // River: unweighted（hard constraint が出現先を制御）
     ];
 
     let descriptions: Vec<PatternDescription> = (0..4_u32)
@@ -125,12 +125,7 @@ pub fn build_pattern_table() -> PatternTable<PatternDescription> {
             let nbrs = allowed[id as usize].clone();
             PatternDescription::new(
                 weights[id as usize],
-                CardinalDirectionTable::new_array([
-                    nbrs.clone(),
-                    nbrs.clone(),
-                    nbrs.clone(),
-                    nbrs,
-                ]),
+                CardinalDirectionTable::new_array([nbrs.clone(), nbrs.clone(), nbrs.clone(), nbrs]),
             )
         })
         .collect();
@@ -247,7 +242,8 @@ fn fallback_post_seed(master_seed: u64) -> u64 {
     master_seed ^ 0xfb7c_3a91_d5e2_4608
 }
 
-/// Step 4（ゾーンバイアス）と Step 5（inland sand）を共通化したヘルパ。
+/// Step 4（ゾーンバイアス）、Step 4.5（rock field dirt 強制）、
+/// Step 5（inland sand）を共通化したヘルパ。
 /// `post_process_tiles` と `fallback_terrain` 両方から呼ぶ。
 fn apply_zone_post_process(tiles: &mut [TerrainType], masks: &WorldMasks, rng: &mut StdRng) {
     // Step 4: zone bias（B: 確率的フリップ・強制率を範囲でランダム化）
@@ -282,7 +278,8 @@ fn apply_zone_post_process(tiles: &mut [TerrainType], masks: &WorldMasks, rng: &
                 let grass_dist = masks.grass_zone_distance_field[idx];
                 let dirt_near = dirt_dist <= ZONE_GRADIENT_WIDTH;
                 let grass_near = grass_dist <= ZONE_GRADIENT_WIDTH;
-                if dirt_near && (!grass_near || dirt_dist <= grass_dist)
+                if dirt_near
+                    && (!grass_near || dirt_dist <= grass_dist)
                     && tiles[idx] == TerrainType::Grass
                     && rng.gen_range(0..100) < ZONE_GRADIENT_DIRT_BIAS_PERCENT
                 {
@@ -296,7 +293,8 @@ fn apply_zone_post_process(tiles: &mut [TerrainType], masks: &WorldMasks, rng: &
                     // 完全中立: 8×8 リージョン単位で Grass/Dirt 寄りに振り分け
                     let rx = (x / NEUTRAL_REGION_SIZE) as u64;
                     let ry = (y / NEUTRAL_REGION_SIZE) as u64;
-                    let h = rx.wrapping_mul(2_654_435_761u64)
+                    let h = rx
+                        .wrapping_mul(2_654_435_761u64)
                         .wrapping_add(ry.wrapping_mul(1_234_567_891u64))
                         .wrapping_add(region_seed);
                     if h & 1 == 0 {
@@ -314,6 +312,15 @@ fn apply_zone_post_process(tiles: &mut [TerrainType], masks: &WorldMasks, rng: &
             }
         }
     }
+    // Step 4.5: rock fields（zone bias 後に Dirt を強制）
+    for y in 0..MAP_HEIGHT {
+        for x in 0..MAP_WIDTH {
+            if masks.rock_field_mask.get((x, y)) {
+                tiles[(y * MAP_WIDTH + x) as usize] = TerrainType::Dirt;
+            }
+        }
+    }
+
     // Step 5: inland sand（zone bias 後の状態を参照）
     const OCTILE_DIRS: [(i32, i32); 8] = [
         (0, 1),
@@ -368,11 +375,7 @@ pub enum WfcError {
 /// - `masks`: `fill_river_from_seed()` 適用済みの WorldMasks
 /// - `seed`: サブシード（caller が `derive_sub_seed` で計算する）
 /// - `attempt`: 試行回数（将来のログ用）
-pub fn run_wfc(
-    masks: &WorldMasks,
-    seed: u64,
-    attempt: u32,
-) -> Result<Vec<TerrainType>, WfcError> {
+pub fn run_wfc(masks: &WorldMasks, seed: u64, attempt: u32) -> Result<Vec<TerrainType>, WfcError> {
     let _ = attempt; // 将来 tracing::debug! に差し替え可
 
     let table = build_pattern_table();
@@ -382,7 +385,8 @@ pub fn run_wfc(
     let mut rng = StdRng::seed_from_u64(seed);
 
     let mut run = RunOwn::new_wrap_forbid(size, &global_stats, WrapNone, constraints, &mut rng);
-    run.collapse(&mut rng).map_err(|_| WfcError::Contradiction)?;
+    run.collapse(&mut rng)
+        .map_err(|_| WfcError::Contradiction)?;
 
     let wave = run.into_wave();
     // Grid::iter() は row-major (idx = y * width + x)。WorldMasks と同じ並び。
@@ -393,8 +397,7 @@ pub fn run_wfc(
             let pid = cell
                 .chosen_pattern_id()
                 .expect("WFC: cell not collapsed after successful collapse");
-            TerrainTileMapping::from_pattern_id(pid)
-                .expect("WFC: unknown PatternId in result")
+            TerrainTileMapping::from_pattern_id(pid).expect("WFC: unknown PatternId in result")
         })
         .collect::<Vec<TerrainType>>();
 

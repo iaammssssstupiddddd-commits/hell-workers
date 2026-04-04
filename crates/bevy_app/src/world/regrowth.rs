@@ -10,7 +10,8 @@ use bevy::prelude::*;
 use hw_core::GameTime;
 use hw_core::constants::*;
 use hw_world::{
-    ForestZone, default_forest_zones, find_regrowth_position, grid_to_world, world_to_grid,
+    ForestZone, GeneratedWorldLayout, default_forest_zones, find_regrowth_position, grid_to_world,
+    world_to_grid,
 };
 
 /// 再生管理リソース
@@ -29,6 +30,40 @@ impl Default for RegrowthManager {
             last_regrowth_day: 0,
         }
     }
+}
+
+pub fn configure_regrowth_from_generated_layout(
+    regrowth: &mut RegrowthManager,
+    layout: &GeneratedWorldLayout,
+) {
+    regrowth.zones = layout
+        .forest_regrowth_zones
+        .iter()
+        .map(|zone| {
+            let radius = zone.radius as i32;
+            let min = (
+                (zone.center.0 - radius).clamp(0, MAP_WIDTH - 1),
+                (zone.center.1 - radius).clamp(0, MAP_HEIGHT - 1),
+            );
+            let max = (
+                (zone.center.0 + radius).clamp(0, MAP_WIDTH - 1),
+                (zone.center.1 + radius).clamp(0, MAP_HEIGHT - 1),
+            );
+            let tree_positions = layout
+                .initial_tree_positions
+                .iter()
+                .copied()
+                .filter(|&pos| zone.contains(pos))
+                .collect::<Vec<_>>();
+            ForestZone {
+                min,
+                max,
+                initial_count: tree_positions.len() as u32,
+                tree_positions,
+            }
+        })
+        .filter(|zone| !zone.tree_positions.is_empty())
+        .collect();
 }
 
 /// 木の再生システム
