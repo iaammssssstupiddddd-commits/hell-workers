@@ -87,6 +87,12 @@ pub struct WorldMasks {
     pub river_mask: BitGrid,
     /// 川の中心線点列（デバッグ表示・砂配置計算に使う）
     pub river_centerline: Vec<GridPos>,
+    /// river_mask の 8 近傍から作る「砂にしてよい元候補」
+    pub sand_candidate_mask: BitGrid,
+    /// seed 由来で candidate から削る連続 non-sand 領域
+    pub sand_carve_mask: BitGrid,
+    /// sand_candidate_mask から sand_carve_mask を除いた結果。post_process が最終的に Sand にするセル
+    pub final_sand_mask: BitGrid,
 }
 
 impl WorldMasks {
@@ -121,6 +127,9 @@ impl WorldMasks {
             ),
             river_mask: BitGrid::map_sized(), // fill_river_from_seed で設定
             river_centerline: Vec::new(),     // fill_river_from_seed で設定
+            sand_candidate_mask: BitGrid::map_sized(), // fill_sand_from_river_seed で設定
+            sand_carve_mask: BitGrid::map_sized(),     // fill_sand_from_river_seed で設定
+            final_sand_mask: BitGrid::map_sized(),     // fill_sand_from_river_seed で設定
         }
     }
 
@@ -141,6 +150,27 @@ impl WorldMasks {
         );
         self.river_mask = river_mask;
         self.river_centerline = centerline;
+    }
+
+    /// `fill_river_from_seed()` 適用済みの `river_mask` を参照し、
+    /// seed から deterministic に 3 つの砂マスクを生成して設定する。
+    ///
+    /// # Panics
+    /// `fill_river_from_seed` が先に呼ばれていない場合（river_mask が空）に debug_assert で検出する。
+    pub fn fill_sand_from_river_seed(&mut self, seed: u64) {
+        debug_assert!(
+            self.river_mask.count_set() > 0,
+            "fill_sand_from_river_seed は fill_river_from_seed の後に呼ぶこと"
+        );
+        let (candidate, carve, final_mask) = crate::river::generate_sand_masks(
+            seed,
+            &self.river_mask,
+            &self.anchor_mask,
+            &self.river_protection_band,
+        );
+        self.sand_candidate_mask = candidate;
+        self.sand_carve_mask = carve;
+        self.final_sand_mask = final_mask;
     }
 
     /// debug report 用の合成保護帯。

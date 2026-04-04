@@ -7,11 +7,11 @@
 | 計画ID | `wfc-ms3-procedural-resources` |
 | ステータス | `Draft` |
 | 作成日 | `2026-04-01` |
-| 最終更新日 | `2026-04-01` |
+| 最終更新日 | `2026-04-04` |
 | 親計画 | [`wfc-terrain-generation-plan-2026-04-01.md`](wfc-terrain-generation-plan-2026-04-01.md) |
-| 前MS | [`wfc-ms2c-validator.md`](wfc-ms2c-validator.md) |
+| 前MS | [`wfc-ms2d-river-driven-sand-mask.md`](wfc-ms2d-river-driven-sand-mask.md) |
 | 次MS | [`wfc-ms4-startup-integration.md`](wfc-ms4-startup-integration.md) |
-| 前提 | `generate_world_layout()` が地形グリッドと `WorldMasks` を返せる（MS-WFC-2c 完了） |
+| 前提 | `generate_world_layout()` が地形グリッドと `WorldMasks` を返せる（MS-WFC-2d 完了） |
 
 ---
 
@@ -42,9 +42,9 @@ pub fn generate_resource_layout(
 ) -> ResourceLayout;
 
 pub struct ResourceLayout {
-    pub initial_tree_positions: Vec<IVec2>,
-    pub forest_regrowth_zones: Vec<ForestZone>,
-    pub initial_rock_positions: Vec<IVec2>,
+    pub initial_tree_positions: Vec<GridPos>,
+    pub forest_regrowth_zones: Vec<WfcForestZone>,
+    pub initial_rock_positions: Vec<GridPos>,
     pub resource_spawn_candidates: ResourceSpawnCandidates,
 }
 ```
@@ -56,7 +56,7 @@ pub struct ResourceLayout {
 | 領域 | 理由 |
 | --- | --- |
 | `masks.anchor_mask`（Site/Yard） | ゲームプレイ導線の確保 |
-| `masks.protection_band` | 序盤導線の安全確保 |
+| `masks.combined_protection_band()` | 序盤導線の安全確保 |
 | River タイル | 川に木・岩は不自然 |
 | `anchors.initial_wood_grid` 周辺 1 タイル | 初期木材の視認性 |
 | `anchors.wheelbarrow_parking_grid` 周辺 1 タイル | 猫車置き場の操作性 |
@@ -87,8 +87,8 @@ pub struct ResourceLayout {
 ### 2.5 ForestZone のデータ構造（MS-WFC-1 からの確認）
 
 ```rust
-pub struct ForestZone {
-    pub center: IVec2,
+pub struct WfcForestZone {
+    pub center: GridPos,
     pub radius: u32,
     // 将来拡張可: density_curve, age, etc.
 }
@@ -140,10 +140,9 @@ commands.insert_resource(ForestRegrowthZones(layout.forest_regrowth_zones.clone(
 | ファイル | 変更内容 |
 | --- | --- |
 | `crates/hw_world/src/mapgen/resources.rs` (新規) | `generate_resource_layout()` / `ResourceLayout` / 配置定数 |
-| `crates/hw_world/src/mapgen/mod.rs` | `resources` モジュール追加 |
-| `crates/hw_world/src/mapgen.rs` | `generate_world_layout()` から `generate_resource_layout()` を呼び出す |
+| `crates/hw_world/src/mapgen.rs` | `pub mod resources;` を追加し、`generate_world_layout()` から `generate_resource_layout()` を呼び出す |
 | `crates/hw_world/src/layout.rs` | `TREE_POSITIONS` / `ROCK_POSITIONS` に `#[deprecated]` または廃止コメント追加 |
-| `crates/hw_world/src/lib.rs` | `ForestZone` / `ForestRegrowthZones` を pub に公開 |
+| `crates/hw_world/src/lib.rs` | `WfcForestZone` / `ForestRegrowthZones` を pub に公開（名称整理は別 MS でも可） |
 | `crates/bevy_app/src/world/regrowth.rs` | `ForestRegrowthZones` Resource を使うよう型追加（接続は MS-WFC-4） |
 | `crates/bevy_app/src/systems/logistics/initial_spawn/terrain_resources.rs` | 固定木・岩 spawn の廃止コメント追加（実際の切り替えは MS-WFC-4） |
 
@@ -170,10 +169,10 @@ commands.insert_resource(ForestRegrowthZones(layout.forest_regrowth_zones.clone(
 #[test]
 fn test_trees_not_in_exclusion_zone() {
     let layout = generate_world_layout(GOLDEN_SEED_STANDARD);
+    let protection_band = layout.masks.combined_protection_band();
     for pos in &layout.initial_tree_positions {
-        let idx = pos.y as usize * MAP_WIDTH + pos.x as usize;
-        assert!(!layout.masks.anchor_mask.get(idx), "tree in anchor zone at {pos:?}");
-        assert!(!layout.masks.protection_band.get(idx), "tree in protection band at {pos:?}");
+        assert!(!layout.masks.anchor_mask.get(*pos), "tree in anchor zone at {pos:?}");
+        assert!(!protection_band.get(*pos), "tree in protection band at {pos:?}");
     }
 }
 
@@ -181,10 +180,10 @@ fn test_trees_not_in_exclusion_zone() {
 fn test_trees_in_forest_zones() {
     let layout = generate_world_layout(GOLDEN_SEED_STANDARD);
     for pos in &layout.initial_tree_positions {
-        let in_some_zone = layout.forest_regrowth_zones.iter().any(|z| {
-            let d = (*pos - z.center).as_vec2().length();
-            d <= z.radius as f32
-        });
+        let in_some_zone = layout
+            .forest_regrowth_zones
+            .iter()
+            .any(|z| z.contains(*pos));
         assert!(in_some_zone, "tree at {pos:?} not in any ForestZone");
     }
 }
@@ -193,8 +192,7 @@ fn test_trees_in_forest_zones() {
 fn test_rocks_not_in_exclusion_zone() {
     let layout = generate_world_layout(GOLDEN_SEED_STANDARD);
     for pos in &layout.initial_rock_positions {
-        let idx = pos.y as usize * MAP_WIDTH + pos.x as usize;
-        assert!(!layout.masks.anchor_mask.get(idx));
+        assert!(!layout.masks.anchor_mask.get(*pos));
     }
 }
 ```

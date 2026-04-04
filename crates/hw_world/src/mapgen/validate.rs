@@ -55,11 +55,10 @@ pub struct ValidationWarning {
 #[derive(Debug)]
 pub enum ValidationWarningKind {
     ProtectionBandViolation,
-    SandRiverAdjacencyLow,
-    SandDiagonalOnlyContact,
     RiverTileCountOutOfRange,
     FallbackReached,
     ForbiddenPattern,
+    SandMaskMismatch,
 }
 
 // ── ValidatorPathWorld（内部ヘルパー） ────────────────────────────────────────
@@ -228,11 +227,12 @@ fn check_yard_anchors_present(layout: &GeneratedWorldLayout) -> Result<(), Valid
 pub fn debug_validate(layout: &GeneratedWorldLayout) -> Vec<ValidationWarning> {
     let mut warnings = Vec::new();
     check_protection_band_clean(layout, &mut warnings);
-    check_sand_river_adjacency_ratio(layout, &mut warnings);
-    check_sand_diagonal_only_contacts(layout, &mut warnings);
     check_river_tile_count(layout, &mut warnings);
     check_no_fallback_reached(layout, &mut warnings);
     check_forbidden_diagonal_patterns(layout, &mut warnings);
+    check_final_sand_mask_applied(layout, &mut warnings);
+    check_no_stray_sand_outside_mask(layout, &mut warnings);
+    check_sand_mask_not_in_anchor_or_band(layout, &mut warnings);
     warnings
 }
 
@@ -253,76 +253,6 @@ fn check_protection_band_clean(
                 });
             }
         }
-    }
-}
-
-/// Sand タイルのうち河川タイルに辺接するものの割合が 80% 未満なら警告する。
-#[cfg(any(test, debug_assertions))]
-fn check_sand_river_adjacency_ratio(
-    layout: &GeneratedWorldLayout,
-    warnings: &mut Vec<ValidationWarning>,
-) {
-    let mut total_sand = 0usize;
-    let mut adjacent_to_river = 0usize;
-    for y in 0..MAP_HEIGHT {
-        for x in 0..MAP_WIDTH {
-            if layout.terrain_tiles[(y * MAP_WIDTH + x) as usize] != TerrainType::Sand {
-                continue;
-            }
-            total_sand += 1;
-            if CARDINAL_DIRS
-                .iter()
-                .any(|(dx, dy)| layout.masks.river_mask.get((x + dx, y + dy)))
-            {
-                adjacent_to_river += 1;
-            }
-        }
-    }
-    if total_sand > 0 && adjacent_to_river * 100 / total_sand < 80 {
-        warnings.push(ValidationWarning {
-            kind: ValidationWarningKind::SandRiverAdjacencyLow,
-            message: format!(
-                "Sand-river adjacency ratio {adjacent_to_river}/{total_sand} ({:.0}%) < 80%",
-                adjacent_to_river as f32 / total_sand as f32 * 100.0
-            ),
-        });
-    }
-}
-
-/// River に斜めでしか接していない Sand セルが総 Sand 数の 10% 超なら警告する。
-#[cfg(any(test, debug_assertions))]
-fn check_sand_diagonal_only_contacts(
-    layout: &GeneratedWorldLayout,
-    warnings: &mut Vec<ValidationWarning>,
-) {
-    let diagonal_dirs: [(i32, i32); 4] = [(1, 1), (1, -1), (-1, 1), (-1, -1)];
-    let mut total_sand = 0usize;
-    let mut diagonal_only = 0usize;
-    for y in 0..MAP_HEIGHT {
-        for x in 0..MAP_WIDTH {
-            let idx = (y * MAP_WIDTH + x) as usize;
-            if layout.terrain_tiles[idx] != TerrainType::Sand {
-                continue;
-            }
-            total_sand += 1;
-            let cardinal_river = CARDINAL_DIRS
-                .iter()
-                .any(|(dx, dy)| layout.masks.river_mask.get((x + dx, y + dy)));
-            let diagonal_river = diagonal_dirs
-                .iter()
-                .any(|(dx, dy)| layout.masks.river_mask.get((x + dx, y + dy)));
-            if diagonal_river && !cardinal_river {
-                diagonal_only += 1;
-            }
-        }
-    }
-    if total_sand > 0 && diagonal_only * 100 / total_sand > 10 {
-        warnings.push(ValidationWarning {
-            kind: ValidationWarningKind::SandDiagonalOnlyContact,
-            message: format!(
-                "Sand cells with diagonal-only river contact: {diagonal_only}/{total_sand} (>10%)"
-            ),
-        });
     }
 }
 
@@ -385,6 +315,80 @@ fn check_forbidden_diagonal_patterns(
                     kind: ValidationWarningKind::ForbiddenPattern,
                     message: format!(
                         "Isolated River tile (no cardinal River neighbor) at ({x},{y})"
+                    ),
+                });
+            }
+        }
+    }
+}
+
+/// final_sand_mask == true のセルがすべて TerrainType::Sand になっているか確認する。
+#[cfg(any(test, debug_assertions))]
+fn check_final_sand_mask_applied(
+    layout: &GeneratedWorldLayout,
+    warnings: &mut Vec<ValidationWarning>,
+) {
+    for y in 0..MAP_HEIGHT {
+        for x in 0..MAP_WIDTH {
+            if layout.masks.final_sand_mask.get((x, y)) {
+                let idx = (y * MAP_WIDTH + x) as usize;
+                if layout.terrain_tiles[idx] != TerrainType::Sand {
+                    warnings.push(ValidationWarning {
+                        kind: ValidationWarningKind::SandMaskMismatch,
+                        message: format!(
+                            "final_sand_mask=true but terrain != Sand at ({x},{y}): {:?}",
+                            layout.terrain_tiles[idx]
+                        ),
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// final_sand_mask == false のセルに TerrainType::Sand が残っていないか確認する。
+#[cfg(any(test, debug_assertions))]
+fn check_no_stray_sand_outside_mask(
+    layout: &GeneratedWorldLayout,
+    warnings: &mut Vec<ValidationWarning>,
+) {
+    for y in 0..MAP_HEIGHT {
+        for x in 0..MAP_WIDTH {
+            if !layout.masks.final_sand_mask.get((x, y)) {
+                let idx = (y * MAP_WIDTH + x) as usize;
+                if layout.terrain_tiles[idx] == TerrainType::Sand {
+                    warnings.push(ValidationWarning {
+                        kind: ValidationWarningKind::SandMaskMismatch,
+                        message: format!("Stray Sand outside final_sand_mask at ({x},{y})"),
+                    });
+                }
+            }
+        }
+    }
+}
+
+/// final_sand_mask が anchor_mask / river_protection_band と交差しないか確認する。
+#[cfg(any(test, debug_assertions))]
+fn check_sand_mask_not_in_anchor_or_band(
+    layout: &GeneratedWorldLayout,
+    warnings: &mut Vec<ValidationWarning>,
+) {
+    for y in 0..MAP_HEIGHT {
+        for x in 0..MAP_WIDTH {
+            if !layout.masks.final_sand_mask.get((x, y)) {
+                continue;
+            }
+            if layout.masks.anchor_mask.get((x, y)) {
+                warnings.push(ValidationWarning {
+                    kind: ValidationWarningKind::SandMaskMismatch,
+                    message: format!("final_sand_mask overlaps anchor_mask at ({x},{y})"),
+                });
+            }
+            if layout.masks.river_protection_band.get((x, y)) {
+                warnings.push(ValidationWarning {
+                    kind: ValidationWarningKind::SandMaskMismatch,
+                    message: format!(
+                        "final_sand_mask overlaps river_protection_band at ({x},{y})"
                     ),
                 });
             }

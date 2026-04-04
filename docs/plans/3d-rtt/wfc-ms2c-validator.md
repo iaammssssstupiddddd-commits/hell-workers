@@ -7,10 +7,10 @@
 | 計画ID | `wfc-ms2c-validator` |
 | ステータス | `完了`（`crates/hw_world/src/mapgen/validate.rs`） |
 | 作成日 | `2026-04-01` |
-| 最終更新日 | `2026-04-05` |
+| 最終更新日 | `2026-04-04` |
 | 親計画 | [`wfc-terrain-generation-plan-2026-04-01.md`](wfc-terrain-generation-plan-2026-04-01.md) |
 | 前MS | [`wfc-ms2b-wfc-solver-constraints.md`](wfc-ms2b-wfc-solver-constraints.md) |
-| 次MS | [`wfc-ms3-procedural-resources.md`](wfc-ms3-procedural-resources.md) |
+| 次MS | [`wfc-ms2d-river-driven-sand-mask.md`](wfc-ms2d-river-driven-sand-mask.md) |
 | 前提 | `generate_world_layout()` が地形グリッドを返せる（MS-WFC-2b 完了） |
 
 ### サマリ
@@ -41,6 +41,7 @@ WFC で生成された地形が **ゲーム上の invariant** を満たしてい
 - validator は `GeneratedWorldLayout` を受け取る **pure 関数**として実装し、startup との結合を最小にする
 - この MS で **生成後局所修正** は行わない（validator は **Err / warning と pure な派生データ**のみを返し、呼び出し側が retry / fallback / panic を判断する）
 - `Sand` の斜め-only River 接触は、WFC 本体ではなく debug validator で診断する
+- `MS-WFC-2d` 実装後は、砂の品質判定を `final_sand_mask` 整合ベースへ置き換え、斜め-only 砂は warning 前提から外している
 
 ---
 

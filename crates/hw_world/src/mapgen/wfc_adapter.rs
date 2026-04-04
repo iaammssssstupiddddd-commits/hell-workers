@@ -146,8 +146,8 @@ pub fn build_pattern_table() -> PatternTable<PatternDescription> {
 ///   （unweighted なので `num_weighted` が変わらず初期エントリが有効なまま）
 ///
 /// **適用不可（ポスト処理で対応）**:
-/// - anchor セルの Sand 禁止 → `post_process_tiles()` で修正
-/// - 川非隣接セルの Sand 禁止 → `post_process_tiles()` で修正
+/// - anchor セルの Sand 禁止 → MS-WFC-2d: `final_sand_mask` が anchor と交差しないため自然に満たされる
+/// - 川非隣接セルの Sand 禁止 → MS-WFC-2d: `post_process_tiles()` が `final_sand_mask` 主導で処理
 #[derive(Clone)]
 pub struct WorldConstraints {
     fixed_river: Vec<Coord>,
@@ -209,9 +209,9 @@ pub(crate) fn derive_sub_seed(master_seed: u64, attempt: u32) -> u64 {
     master_seed.wrapping_add((attempt as u64).wrapping_mul(0x9e3779b97f4a7c15))
 }
 
-/// WFC が全試行で収束しなかった場合の安全マップ。
-/// hard constraint（River マスク・anchor 禁止）は維持し、残りを Grass で埋める。
-/// Sand は配置しない（成功時の WFC より簡略）。
+/// WFC が全試行で収束しなかった場合の安全マップ（MS-WFC-2d 版）。
+/// hard constraint（River マスク・anchor 禁止）は維持しつつ、
+/// final_sand_mask 上は Sand、残りは Grass で埋める。
 pub(crate) fn fallback_terrain(masks: &WorldMasks) -> Vec<TerrainType> {
     let mut tiles = vec![TerrainType::Grass; (MAP_WIDTH * MAP_HEIGHT) as usize];
     for y in 0..MAP_HEIGHT {
@@ -219,8 +219,9 @@ pub(crate) fn fallback_terrain(masks: &WorldMasks) -> Vec<TerrainType> {
             let idx = (y * MAP_WIDTH + x) as usize;
             if masks.river_mask.get((x, y)) {
                 tiles[idx] = TerrainType::River;
+            } else if masks.final_sand_mask.get((x, y)) {
+                tiles[idx] = TerrainType::Sand;
             }
-            // anchor セルは Grass のまま（River / Sand 禁止を維持）
         }
     }
     tiles
@@ -279,28 +280,30 @@ pub fn run_wfc(
     Ok(tiles)
 }
 
-/// WFC 後のポスト処理。
+/// WFC 後のポスト処理（MS-WFC-2d 版）。
 ///
 /// wfc ライブラリの制約として、weighted パターンの `forbid_pattern` は
 /// priority queue を stale にするため `WorldConstraints::forbid()` では適用できない。
-/// 代わりにここで以下の制約を強制する:
-/// - 川に隣接しないセルは Sand 不可 → Grass / Dirt に置換
-/// - anchor セルは Sand 不可 → Grass / Dirt に置換
-/// - River セルはそのまま（WFC で固定済み）
+/// 代わりにここで `final_sand_mask` を主軸として以下の制約を強制する:
+///
+/// 処理順:
+/// 1. river_mask セルは常に River のまま（WFC で固定済み）
+/// 2. final_sand_mask セルは強制 Sand（WFC 結果に関わらず上書き）
+/// 3. final_sand_mask 外で terrain == Sand の stray Sand を Grass/Dirt に置換
 fn post_process_tiles(tiles: &mut [TerrainType], masks: &WorldMasks, rng: &mut StdRng) {
+    let total = WEIGHT_GRASS + WEIGHT_DIRT;
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
             let idx = (y * MAP_WIDTH + x) as usize;
             if masks.river_mask.get((x, y)) {
-                continue; // River セルはそのまま
+                // River は WFC で固定済み。変更しない。
+                continue;
             }
-            let is_river_adjacent = CARDINAL_DIRS
-                .iter()
-                .any(|(dx, dy)| masks.river_mask.get((x + dx, y + dy)));
-            let is_anchor = masks.anchor_mask.get((x, y));
-            // Sand が許可されるのは「川隣接かつ非 anchor」のみ
-            if tiles[idx] == TerrainType::Sand && (!is_river_adjacent || is_anchor) {
-                let total = WEIGHT_GRASS + WEIGHT_DIRT;
+            if masks.final_sand_mask.get((x, y)) {
+                // マスク上のセルは必ず Sand に揃える
+                tiles[idx] = TerrainType::Sand;
+            } else if tiles[idx] == TerrainType::Sand {
+                // マスク外の stray Sand を Grass/Dirt に落とす
                 let r = rng.gen_range(0..total);
                 tiles[idx] = if r < WEIGHT_GRASS {
                     TerrainType::Grass

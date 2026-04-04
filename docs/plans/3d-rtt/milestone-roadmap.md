@@ -1,7 +1,7 @@
 # 3D-RtT 移行ロードマップ
 
 作成日: 2026-03-15
-最終更新: 2026-03-17（キャラクター3D化採用提案 反映）
+最終更新: 2026-04-04（WFC 砂浜形状改善 MS-WFC-2e 計画追加を反映）
 ステータス: Phase 2 完了（MS-2C 目視検証待ち）/ Phase 3 着手前準備に移行
 
 ---
@@ -520,6 +520,8 @@
 |----|------|-----------|
 | MS-WFC-1 | 固定 `Site/Yard` と Yard 内固定アンカーを生成前提として定義 | [x] 完了 |
 | MS-WFC-2 | 固定アンカーを避ける WFC 地形生成（2a 入力・川、2b ソルバー、2c validator） | [x] 完了（2a・2b・2c） |
+| MS-WFC-2d | River 派生の砂マスク生成・連続 non-sand carve・後段反映 | [x] 完了 |
+| MS-WFC-2e | 砂浜の輪郭依存を緩和し、distance field + additive growth で面としての砂浜形状へ寄せる | [ ] 未着手 |
 | MS-WFC-3 | 木・岩の procedural 配置へ移行 | [ ] 未着手 |
 | MS-WFC-4 | startup を生成結果ベースへ統合し、木材・猫車置き場を Yard 内固定へ移行 | [ ] 未着手 |
 | MS-WFC-4.5 | docs / tests / debug validation を更新 | [ ] 未着手 |
@@ -576,7 +578,7 @@ MS-1A → MS-1B → MS-1C → MS-1D ────────────┤
                               │                                       │
                          Phase 4 ──────────────────────────────────┘
 
-MS-WFC-1 → MS-WFC-2 → MS-WFC-3 → MS-WFC-4 → MS-WFC-4.5  (独立)
+MS-WFC-1 → MS-WFC-2 → MS-WFC-2d → MS-WFC-2e → MS-WFC-3 → MS-WFC-4 → MS-WFC-4.5  (独立)
 ```
 
 ---
@@ -594,7 +596,7 @@ MS-WFC-1 → MS-WFC-2 → MS-WFC-3 → MS-WFC-4 → MS-WFC-4.5  (独立)
 | P2（完了済み） | MS-3-Char-A | AnimationGraph + タスク連動。完了済み |
 | P2（完了済み） | MS-3-Char-B | Soul の P1 クリップ接続 + face atlas 状態連動。完了済み |
 | P3（方針確定） | MS-3-Fam-R | Familiar を Phase 3 では 2D 前面表示・影なしで扱い、多層階の可視ルールを後段へ送る |
-| 独立 | MS-WFC-1〜4.5 | メインルートとは独立。固定アンカー付きマップ自動生成として先行させることも可 |
+| 独立 | MS-WFC-1〜4.5 | メインルートとは独立。固定アンカー付きマップ自動生成として先行させることも可。現在は MS-WFC-2d の後に MS-WFC-2e を挿入し、砂の責務を維持したまま見た目の輪郭依存を下げる計画。 |
 
 ---
 

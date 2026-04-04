@@ -48,6 +48,7 @@ pub fn generate_world_layout(master_seed: u64) -> types::GeneratedWorldLayout {
     let anchors = AnchorLayout::fixed();
     let mut masks = WorldMasks::from_anchor(&anchors);
     masks.fill_river_from_seed(master_seed);
+    masks.fill_sand_from_river_seed(master_seed);
 
     let layout = (0..=MAX_WFC_RETRIES)
         .find_map(|attempt| {
@@ -176,26 +177,16 @@ mod tests {
     }
 
     #[test]
-    fn test_sand_is_only_river_adjacent_in_ms2b() {
-        use wfc_adapter::CARDINAL_DIRS;
-
+    fn test_sand_matches_final_sand_mask() {
         let layout = generate_world_layout(TEST_SEED_A);
         for y in 0..MAP_HEIGHT {
             for x in 0..MAP_WIDTH {
                 let idx = (y * MAP_WIDTH + x) as usize;
-                if layout.terrain_tiles[idx] != TerrainType::Sand {
-                    continue;
-                }
-                assert!(
-                    !layout.masks.anchor_mask.get((x, y)),
-                    "sand must not appear in anchor at ({x},{y})"
-                );
-                let is_river_adjacent = CARDINAL_DIRS
-                    .iter()
-                    .any(|(dx, dy)| layout.masks.river_mask.get((x + dx, y + dy)));
-                assert!(
-                    is_river_adjacent,
-                    "sand at ({x},{y}) is not cardinally adjacent to river"
+                let is_sand = layout.terrain_tiles[idx] == TerrainType::Sand;
+                let in_mask = layout.masks.final_sand_mask.get((x, y));
+                assert_eq!(
+                    is_sand, in_mask,
+                    "Sand/mask mismatch at ({x},{y}): terrain={is_sand}, mask={in_mask}"
                 );
             }
         }
