@@ -20,6 +20,8 @@ pub mod tree_planting;
 pub mod world_masks;
 pub mod zone_ops;
 pub mod zones;
+#[cfg(test)]
+pub(crate) mod test_seeds;
 pub use anchor::{AnchorLayout, AnchorLayoutError, GridRect};
 pub use coords::{
     grid_to_world, idx_to_pos, snap_to_grid_center, snap_to_grid_edge, world_to_grid,

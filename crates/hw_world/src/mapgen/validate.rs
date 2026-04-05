@@ -492,13 +492,12 @@ fn check_sand_mask_not_in_anchor_or_band(
 mod tests {
     use super::*;
     use crate::mapgen::generate_world_layout;
+    use crate::test_seeds::GOLDEN_SEED_PRIMARY;
     use hw_core::constants::MAP_WIDTH;
-
-    const GOLDEN_SEED_STANDARD: u64 = 10_182_272_928_891_625_829;
 
     #[test]
     fn test_golden_seeds_pass_lightweight_validate() {
-        for seed in [GOLDEN_SEED_STANDARD] {
+        for seed in [GOLDEN_SEED_PRIMARY] {
             let layout = generate_world_layout(seed);
             assert!(
                 lightweight_validate(&layout).is_ok(),
@@ -517,7 +516,7 @@ mod tests {
 
     #[test]
     fn test_fake_invalid_layout_fails_validate() {
-        let mut layout = generate_world_layout(GOLDEN_SEED_STANDARD);
+        let mut layout = generate_world_layout(GOLDEN_SEED_PRIMARY);
         // Site の左上角を River に書き換える
         let min_x = layout.anchors.site.min_x;
         let min_y = layout.anchors.site.min_y;

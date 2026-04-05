@@ -42,6 +42,29 @@ pub struct GeneratedWorldLayout {
 }
 
 impl GeneratedWorldLayout {
+    /// パイプライン内部用の初期値コンストラクタ。resource 系フィールドはすべて空で初期化する。
+    pub(crate) fn initial(
+        terrain_tiles: Vec<TerrainType>,
+        anchors: AnchorLayout,
+        masks: WorldMasks,
+        master_seed: u64,
+        generation_attempt: u32,
+        used_fallback: bool,
+    ) -> Self {
+        Self {
+            terrain_tiles,
+            anchors,
+            masks,
+            resource_spawn_candidates: ResourceSpawnCandidates::default(),
+            initial_tree_positions: Vec::new(),
+            forest_regrowth_zones: Vec::new(),
+            initial_rock_positions: Vec::new(),
+            master_seed,
+            generation_attempt,
+            used_fallback,
+        }
+    }
+
     /// MS-WFC-2 実装前のスタブ。現行の固定地形を terrain_tiles に入れ、
     /// anchors と masks だけ正しく設定して返す。
     ///

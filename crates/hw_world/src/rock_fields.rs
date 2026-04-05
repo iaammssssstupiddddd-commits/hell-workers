@@ -154,6 +154,7 @@ fn grow_patch(
 mod tests {
     use super::*;
     use crate::anchor::AnchorLayout;
+    use crate::test_seeds::SEED_SUITE_ROCK_REGRESSION;
     use crate::world_masks::WorldMasks;
 
     fn make_masks(seed: u64) -> WorldMasks {
@@ -220,7 +221,7 @@ mod tests {
 
     #[test]
     fn rock_field_mask_has_stable_min_area_on_representative_seeds() {
-        for seed in [0u64, 42, 99, 12_345_678] {
+        for seed in SEED_SUITE_ROCK_REGRESSION.iter().copied() {
             let masks = make_masks(seed);
             assert!(
                 masks.rock_field_mask.count_set() >= ROCK_FIELD_TOTAL_AREA_MIN,

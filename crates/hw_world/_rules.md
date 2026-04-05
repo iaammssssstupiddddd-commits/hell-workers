@@ -59,6 +59,7 @@ hw_visual      ✗
 
 ## docs 更新対象（変更時に必ず更新するドキュメント）
 
+- [docs/map_generation.md](../../docs/map_generation.md)（WFC パイプライン・seed 契約・retry/fallback 変更時）
 - [docs/world_layout.md](../../docs/world_layout.md)（座標・マップ仕様変更時）
 - [docs/room_detection.md](../../docs/room_detection.md)（部屋検出変更時）
 - `crates/hw_world/_rules.md`（このファイル）

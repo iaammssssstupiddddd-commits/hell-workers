@@ -2,7 +2,7 @@
 //!
 //! - `generate_resource_layout()`: grass/dirt ゾーンを使い、木・岩を純粋関数で生成する。
 //! - `generate_resource_layout_fallback()`: terrain fallback 地形向け縮退版。
-//! - 配置候補不足で `None` を返した場合、`mapgen.rs` の `find_map` が次 attempt へ進む。
+//! - 配置候補不足で `None` を返した場合、`mapgen/pipeline.rs` の `find_map` が次 attempt へ進む。
 
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use hw_core::world::GridPos;
@@ -10,7 +10,7 @@ use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
 
-use crate::mapgen::types::{GeneratedWorldLayout, WfcForestZone};
+use crate::mapgen::types::{GeneratedWorldLayout, ResourceSpawnCandidates, WfcForestZone};
 use crate::terrain::TerrainType;
 use crate::world_masks::BitGrid;
 
@@ -36,8 +36,8 @@ pub const TREE_MIN_SPACING: u32 = 2;
 
 // ── 出力型 ────────────────────────────────────────────────────────────────────
 
-/// `generate_resource_layout` の出力。`mapgen.rs` と `validate.rs` の間で共有する crate 内型。
-/// `GeneratedWorldLayout` へのフラット展開は `mapgen.rs` の責務。
+/// `generate_resource_layout` の出力。`pipeline.rs` と `validate.rs` の間で共有する crate 内型。
+/// `GeneratedWorldLayout` へのフラット展開は `pipeline.rs` の責務。
 #[derive(Debug, Clone)]
 pub(crate) struct ResourceLayout {
     pub initial_tree_positions: Vec<GridPos>,
@@ -48,6 +48,29 @@ pub(crate) struct ResourceLayout {
 }
 
 // ── 公開 API ──────────────────────────────────────────────────────────────────
+
+impl GeneratedWorldLayout {
+    /// `ResourceLayout` の内容を `self` にマージして新しい `Self` を返す。
+    /// pipeline の正常系・fallback 系で共通して使う採用ステップ。
+    pub(crate) fn with_resources(
+        self,
+        res: ResourceLayout,
+        water_tiles: Vec<GridPos>,
+        sand_tiles: Vec<GridPos>,
+    ) -> Self {
+        Self {
+            initial_tree_positions: res.initial_tree_positions,
+            forest_regrowth_zones: res.forest_regrowth_zones,
+            initial_rock_positions: res.initial_rock_positions,
+            resource_spawn_candidates: ResourceSpawnCandidates {
+                water_tiles,
+                sand_tiles,
+                rock_candidates: res.rock_candidates,
+            },
+            ..self
+        }
+    }
+}
 
 /// 木・岩・森林ゾーンを純粋関数として生成する。
 /// `layout` は `lightweight_validate` 通過済みを前提とし、
@@ -293,10 +316,8 @@ mod tests {
     use crate::mapgen::types::ResourceSpawnCandidates;
     use crate::mapgen::validate::validate_post_resource;
     use crate::mapgen::wfc_adapter::fallback_terrain;
+    use crate::test_seeds::{GOLDEN_SEED_PRIMARY, GOLDEN_SEED_SECONDARY};
     use crate::world_masks::WorldMasks;
-
-    const TEST_SEED_A: u64 = 10_182_272_928_891_625_829;
-    const TEST_SEED_B: u64 = 12_345_678;
 
     fn make_fallback_layout(seed: u64) -> GeneratedWorldLayout {
         let anchors = AnchorLayout::aligned_to_worldgen_seed(seed);
@@ -330,10 +351,10 @@ mod tests {
 
     #[test]
     fn trees_not_in_exclusion_zone() {
-        let layout = generate_world_layout(TEST_SEED_A);
+        let layout = generate_world_layout(GOLDEN_SEED_PRIMARY);
         assert!(
             !layout.used_fallback,
-            "seed={TEST_SEED_A}: fallback が使われた"
+            "seed={GOLDEN_SEED_PRIMARY}: fallback が使われた"
         );
         for &pos in &layout.initial_tree_positions {
             assert!(
@@ -361,7 +382,7 @@ mod tests {
 
     #[test]
     fn trees_are_inside_some_forest_zone() {
-        let layout = generate_world_layout(TEST_SEED_A);
+        let layout = generate_world_layout(GOLDEN_SEED_PRIMARY);
         assert!(!layout.used_fallback);
         for &pos in &layout.initial_tree_positions {
             assert!(
@@ -373,7 +394,7 @@ mod tests {
 
     #[test]
     fn rocks_not_in_exclusion_zone() {
-        let layout = generate_world_layout(TEST_SEED_A);
+        let layout = generate_world_layout(GOLDEN_SEED_PRIMARY);
         assert!(!layout.used_fallback);
         for &pos in &layout.initial_rock_positions {
             assert!(
@@ -401,7 +422,7 @@ mod tests {
 
     #[test]
     fn rocks_match_rock_field_mask() {
-        let layout = generate_world_layout(TEST_SEED_A);
+        let layout = generate_world_layout(GOLDEN_SEED_PRIMARY);
         assert!(!layout.used_fallback);
         for &pos in &layout.initial_rock_positions {
             assert!(
@@ -418,7 +439,7 @@ mod tests {
 
     #[test]
     fn rock_field_mask_is_dirt_in_final_layout() {
-        let layout = generate_world_layout(TEST_SEED_A);
+        let layout = generate_world_layout(GOLDEN_SEED_PRIMARY);
         for y in 0..MAP_HEIGHT {
             for x in 0..MAP_WIDTH {
                 if layout.masks.rock_field_mask.get((x, y)) {
@@ -434,7 +455,7 @@ mod tests {
 
     #[test]
     fn resource_layout_keeps_required_paths_open() {
-        for seed in [TEST_SEED_A, TEST_SEED_B] {
+        for seed in [GOLDEN_SEED_PRIMARY, GOLDEN_SEED_SECONDARY] {
             let layout = generate_world_layout(seed);
             assert!(!layout.used_fallback, "seed={seed}: fallback が使われた");
             assert!(
@@ -464,7 +485,7 @@ mod tests {
 
     #[test]
     fn rock_candidates_equals_initial_rock_positions() {
-        let layout = generate_world_layout(TEST_SEED_A);
+        let layout = generate_world_layout(GOLDEN_SEED_PRIMARY);
         assert!(!layout.used_fallback);
         let mut expected = layout.initial_rock_positions.clone();
         let mut actual = layout.resource_spawn_candidates.rock_candidates.clone();
@@ -475,8 +496,8 @@ mod tests {
 
     #[test]
     fn resource_layout_is_deterministic() {
-        let l1 = generate_world_layout(TEST_SEED_A);
-        let l2 = generate_world_layout(TEST_SEED_A);
+        let l1 = generate_world_layout(GOLDEN_SEED_PRIMARY);
+        let l2 = generate_world_layout(GOLDEN_SEED_PRIMARY);
         assert_eq!(l1.initial_tree_positions, l2.initial_tree_positions);
         assert_eq!(l1.initial_rock_positions, l2.initial_rock_positions);
         assert_eq!(
@@ -493,7 +514,7 @@ mod tests {
 
     #[test]
     fn fallback_resource_layout_is_non_empty_and_paths_open() {
-        for seed in [0u64, TEST_SEED_A, 99, TEST_SEED_B] {
+        for seed in [0u64, GOLDEN_SEED_PRIMARY, 99, GOLDEN_SEED_SECONDARY] {
             let layout = make_fallback_layout(seed);
             let res = generate_resource_layout_fallback(&layout, seed)
                 .expect("fallback resource generation must succeed for representative seeds");

@@ -367,8 +367,10 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - nearest walkable / river query
 - `AnchorLayout`, `GridRect` — `Site/Yard` と Yard 内固定物の pure data 契約。本番は `AnchorLayout::aligned_to_worldgen_seed` が `river::preview_river_min_y` を用い川南端より南へ Site 北辺をオフセット（`docs/world_layout.md`）
 - `WorldMasks` — `site_mask`, `yard_mask`, `river_mask`, protection band, `river_centerline`
+- `mapgen::mod.rs` / `mapgen::pipeline` — `mapgen` の公開 shell と WFC パイプライン本体。`generate_world_layout` は module root から再公開し、オーケストレーション実装は `pipeline.rs` に置く
 - `generate_world_layout` — WFC ベースの地形生成エントリ（`river_mask` / `final_sand_mask` / `rock_field_mask` を確定後にソルバー実行し、resource 配置と retry/fallback を含めて最終 `GeneratedWorldLayout` を返す）
 - `mapgen::wfc_adapter` — gridbugs `wfc` を局所化する adapter（`run_wfc`, `post_process_tiles`, `WorldConstraints` 等）
+- `test_seeds` (`#[cfg(test)]`) — WFC 周辺テストの代表 seed 定義を共有する crate 内モジュール
 - `room_detection::{build_detection_input, detect_rooms, room_is_valid_against_input}`
 - `PathWorld` trait — `is_walkable` など通行判定 API（`WorldMap` の impl も `hw_world` が所有）
 - `SpatialGridOps` trait — `get_nearby_in_radius` など空間グリッド read-only API（concrete resource の本体は `hw_spatial`）

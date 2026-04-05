@@ -433,6 +433,9 @@ fn generate_inland_sand_mask(
 mod tests {
     use super::*;
     use crate::anchor::AnchorLayout;
+    use crate::test_seeds::{
+        SEED_SUITE_TERRAIN_ZONE_CANDIDATES, TERRAIN_ZONE_DETERMINISM_SEED,
+    };
     use crate::world_masks::WorldMasks;
 
     fn make_masks(seed: u64) -> WorldMasks {
@@ -446,8 +449,8 @@ mod tests {
 
     #[test]
     fn test_zone_masks_deterministic() {
-        let m1 = make_masks(12345);
-        let m2 = make_masks(12345);
+        let m1 = make_masks(TERRAIN_ZONE_DETERMINISM_SEED);
+        let m2 = make_masks(TERRAIN_ZONE_DETERMINISM_SEED);
         assert_eq!(
             m1.grass_zone_mask.count_set(),
             m2.grass_zone_mask.count_set()
@@ -525,9 +528,8 @@ mod tests {
     /// 少なくとも 1 セル存在するか（複数候補 seed のいずれかで成立すれば OK）。
     #[test]
     fn test_dirt_zone_exists_near_anchor() {
-        let candidates: [u64; 4] = [42, 12345, 99, 0];
         let anchors = AnchorLayout::fixed();
-        let dirt_near_anchor = candidates.iter().copied().any(|seed| {
+        let dirt_near_anchor = SEED_SUITE_TERRAIN_ZONE_CANDIDATES.iter().copied().any(|seed| {
             let mut masks = WorldMasks::from_anchor(&anchors);
             masks.fill_river_from_seed(seed);
             masks.fill_sand_from_river_seed(seed);
