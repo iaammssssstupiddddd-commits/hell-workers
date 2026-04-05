@@ -143,7 +143,10 @@
 - [`../crates/hw_world/src/rock_fields.rs`](../crates/hw_world/src/rock_fields.rs): 岩場マスクの deterministic 生成（MS-WFC-3b）
 - [`../crates/hw_world/src/mapgen/mod.rs`](../crates/hw_world/src/mapgen/mod.rs): モジュールルート（`generate_base_terrain_tiles`、`generate_world_layout` の公開）
 - [`../crates/hw_world/src/mapgen/pipeline.rs`](../crates/hw_world/src/mapgen/pipeline.rs): `generate_world_layout()` のオーケストレーション本体
-- [`../crates/hw_world/src/mapgen/validate.rs`](../crates/hw_world/src/mapgen/validate.rs): 生成後バリデータ（`lightweight_validate`, `debug_validate`）
+- [`../crates/hw_world/src/mapgen/validate/mod.rs`](../crates/hw_world/src/mapgen/validate/mod.rs): validate 公開面（`lightweight_validate`, `debug_validate`）
+- [`../crates/hw_world/src/mapgen/validate/terrain.rs`](../crates/hw_world/src/mapgen/validate/terrain.rs): 地形フェーズ validate（Site/Yard・必須資源到達）
+- [`../crates/hw_world/src/mapgen/validate/post_resource.rs`](../crates/hw_world/src/mapgen/validate/post_resource.rs): 資源配置後 validate（木・岩を障害物として重ねた導線再確認）
+- [`../crates/hw_world/src/mapgen/validate/debug.rs`](../crates/hw_world/src/mapgen/validate/debug.rs): debug / test ビルド専用診断
 - [`../crates/hw_world/src/mapgen/wfc_adapter.rs`](../crates/hw_world/src/mapgen/wfc_adapter.rs): WFC ソルバー統合（`run_wfc`, `post_process_tiles`, `fallback_terrain`）
 - [`../crates/hw_world/src/river.rs`](../crates/hw_world/src/river.rs): seed 付き川マスク生成と砂地導出
 - [`../crates/hw_world/src/coords.rs`](../crates/hw_world/src/coords.rs): 座標変換

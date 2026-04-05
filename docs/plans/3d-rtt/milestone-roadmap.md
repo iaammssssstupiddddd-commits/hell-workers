@@ -439,8 +439,10 @@
 
 > **依存**: MS-3-4 完了  
 > **詳細計画**: [`ms-3-6-terrain-surface-plan-2026-03-31.md`](ms-3-6-terrain-surface-plan-2026-03-31.md)
+> **現状再検討**: [`terrain-visual-reassessment-2026-04-05.md`](terrain-visual-reassessment-2026-04-05.md)
 
 - **やること**: D（アセット）＋ A（シェーダ）＋ 必要なら B（隣接ブレンド、WFC 後）。詳細は [`ms-3-6-terrain-surface-plan-2026-03-31.md`](ms-3-6-terrain-surface-plan-2026-03-31.md)
+- **再検討メモ**: WFC 完了後は「旧 2D 境界素材の復帰」ではなく、`GeneratedWorldLayout.masks` / distance field を render path に通す方針を優先する。`terrain-visual-reassessment-2026-04-05.md` を現在の判断材料とする。
 - **完了条件**:
   - [x] A/D（ワールド UV・UV 歪み・明度変調・川スクロール・AddressMode::Repeat）— 実装済み（2026-04-01）
   - [ ] S0: WFC 完了後の受入スクリーンショット撮影

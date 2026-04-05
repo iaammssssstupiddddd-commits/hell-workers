@@ -16,7 +16,10 @@
 | `mapgen/mod.rs` | `mapgen` のモジュールルート。`generate_base_terrain_tiles()` と `generate_world_layout()` の公開面を持つ薄い shell / re-export |
 | `mapgen/pipeline.rs` | `generate_world_layout()` の実装本体（WFC + validate + resource 配置 + retry/fallback + river/sand/rock-field 派生マスク） |
 | `mapgen/resources.rs` | 木・岩・`forest_regrowth_zones` の procedural 配置。木は `grass_zone_mask`、岩は `rock_field_mask` を使う |
-| `mapgen/validate.rs` | 生成後バリデータ（`lightweight_validate`, `validate_post_resource`, `debug_validate`, `ValidatorPathWorld`） |
+| `mapgen/validate/mod.rs` | validate 公開面。`lightweight_validate`, `debug_validate`, `ValidationError`, `ValidationWarning` を再公開する |
+| `mapgen/validate/terrain.rs` | 地形フェーズ validate。`lightweight_validate`, `ValidatorPathWorld`, 必須資源候補の収集を持つ |
+| `mapgen/validate/post_resource.rs` | 資源配置後 validate。`validate_post_resource`, `ResourceObstaclePathWorld` を持つ |
+| `mapgen/validate/debug.rs` | debug / test ビルド専用診断。`debug_validate` と warning 生成ロジックを持つ |
 | `mapgen/wfc_adapter.rs` | gridbugs `wfc` の adapter（`run_wfc`, `post_process_tiles`, `apply_zone_post_process`, `fallback_terrain`, `WorldConstraints`）。`final_sand_mask`・ゾーンバイアス・`rock_field_mask`・inland_sand を最終地形へ反映 |
 | `test_seeds.rs` (`#[cfg(test)]`) | WFC 周辺テストの代表 seed 群。`mapgen` / `rock_fields` / `terrain_zones` が `crate::test_seeds::*` を共有参照する |
 | `terrain_zones.rs` | MS-WFC-2.5: アンカー距離場→seed 選択→flood fill で `grass_zone_mask` / `dirt_zone_mask` / `inland_sand_mask` を生成。`compute_zone_distance_field` でゾーン境界距離場を提供 |
