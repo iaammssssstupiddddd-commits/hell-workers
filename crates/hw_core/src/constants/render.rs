@@ -19,6 +19,9 @@ pub const LAYER_3D_SHADOW_RECEIVER: usize = 5;
 
 /// 背景マップのレイヤー
 pub const Z_MAP: f32 = 0.0;
+/// 境界曲線メッシュの 3D ワールド Y オフセット（タイル Y=0.0 に対して z-fighting 回避）
+/// BoundaryKind ごとに +0.001 ずつ積み上げる基準値
+pub const Y_MAP_BOUNDARY_BASE: f32 = 0.01;
 /// 地形境界オーバーレイ: Sand（Riverの上）
 pub const Z_MAP_SAND: f32 = 0.01;
 /// 地形境界オーバーレイ: Dirt（Sandの上）

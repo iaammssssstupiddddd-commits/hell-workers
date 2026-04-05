@@ -13,7 +13,9 @@ pub use rtt_composite::RttCompositeSprite;
 pub use rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime, RttViewportSize};
 pub use visual_handles::{Building3dHandles, CharacterHandles, Terrain3dHandles};
 
-use crate::world::map::{build_terrain_feature_map, build_terrain_id_map};
+use crate::world::map::{
+    build_terrain_feature_map, build_terrain_id_map, spawn_boundary_meshes,
+};
 use perf_scenario::{
     PerfScenarioApplied, setup_perf_scenario_if_enabled, setup_perf_scenario_runtime_if_enabled,
 };
@@ -78,6 +80,7 @@ impl Plugin for StartupPlugin {
                     build_terrain_id_map,
                     visual_handles::init_visual_handles,
                     spawn_map_timed,
+                    spawn_boundary_meshes,
                     initial_resource_spawner_timed,
                     spawn_entities,
                     spawn_familiar_wrapper,
