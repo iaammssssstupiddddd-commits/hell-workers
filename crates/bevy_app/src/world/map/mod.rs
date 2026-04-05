@@ -10,7 +10,10 @@ pub use spawn::{
     GeneratedWorldLayoutResource, prepare_generated_world_layout_resource, resolve_worldgen_seed,
     spawn_map,
 };
-pub use terrain_metadata::{TerrainFeatureMap, build_terrain_feature_map};
+pub(crate) use terrain_metadata::terrain_type_to_id_byte;
+pub use terrain_metadata::{
+    TerrainFeatureMap, TerrainIdMap, build_terrain_feature_map, build_terrain_id_map,
+};
 
 use bevy::prelude::*;
 use hw_ui::selection::WorldReadApi;

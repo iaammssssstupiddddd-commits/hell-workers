@@ -36,6 +36,14 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         });
     }
 
+    fn terrain_clamp_sampler(s: &mut ImageLoaderSettings) {
+        s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+            address_mode_u: ImageAddressMode::ClampToEdge,
+            address_mode_v: ImageAddressMode::ClampToEdge,
+            ..default()
+        });
+    }
+
     GameAssets {
         white_pixel,
         grass: asset_server.load_with_settings("textures/grass.png", terrain_sampler),
@@ -47,6 +55,14 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
             .load_with_settings("textures/terrain_macro_noise.png", terrain_sampler),
         river_flow_noise: asset_server
             .load_with_settings("textures/river_flow_noise.png", terrain_sampler),
+        river_normal_like: asset_server
+            .load_with_settings("textures/river_normal_like.png", terrain_sampler),
+        terrain_blend_mask_soft: asset_server.load_with_settings(
+            "textures/terrain_blend_mask_soft.png",
+            terrain_clamp_sampler,
+        ),
+        shoreline_detail: asset_server
+            .load_with_settings("textures/shoreline_detail.png", terrain_clamp_sampler),
         terrain_feature_lut: asset_server
             .load_with_settings("textures/terrain_feature_lut.png", terrain_lut_sampler),
         grass_macro_overlay: asset_server

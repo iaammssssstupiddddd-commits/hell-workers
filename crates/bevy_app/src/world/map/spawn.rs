@@ -3,8 +3,8 @@
 use crate::plugins::startup::Terrain3dHandles;
 use bevy::prelude::*;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, building_3d_render_layers};
-use hw_visual::SectionMaterial;
-use hw_world::{GeneratedWorldLayout, TerrainType, generate_world_layout, grid_to_world};
+use hw_visual::TerrainSurfaceMaterial;
+use hw_world::{GeneratedWorldLayout, generate_world_layout, grid_to_world};
 
 use super::{Tile, WorldMapWrite};
 
@@ -55,7 +55,6 @@ pub fn spawn_map(
                 .pos_to_idx(x, y)
                 .expect("x/y within MAP_WIDTH x MAP_HEIGHT");
             let terrain = terrain_tiles[idx];
-            let material = terrain_material(terrain, &terrain_handles);
             world_map.set_terrain_at_idx(idx, terrain);
 
             let pos2d = grid_to_world(x, y);
@@ -63,7 +62,7 @@ pub fn spawn_map(
                 .spawn((
                     Tile,
                     Mesh3d(terrain_handles.tile_mesh.clone()),
-                    MeshMaterial3d(material),
+                    MeshMaterial3d::<TerrainSurfaceMaterial>(terrain_handles.surface.clone()),
                     Transform::from_xyz(pos2d.x, 0.0, -pos2d.y),
                     building_3d_render_layers(),
                 ))
@@ -81,16 +80,4 @@ pub fn spawn_map(
         generated_layout.layout.generation_attempt,
         generated_layout.layout.used_fallback
     );
-}
-
-pub fn terrain_material(
-    terrain: TerrainType,
-    handles: &Terrain3dHandles,
-) -> Handle<SectionMaterial> {
-    match terrain {
-        TerrainType::River => handles.river.clone(),
-        TerrainType::Sand => handles.sand.clone(),
-        TerrainType::Dirt => handles.dirt.clone(),
-        TerrainType::Grass => handles.grass.clone(),
-    }
 }

@@ -5,17 +5,18 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `ms-3-6-terrain-surface-plan-2026-03-31` |
-| ステータス | `A/D 実装済み（WFC 後の S0・B は保留）` |
+| ステータス | `A/D/B 実装済み（S0 受入撮影・最終目視判定待ち）` |
 | 作成日 | `2026-03-31` |
-| 最終更新日 | `2026-04-01` |
+| 最終更新日 | `2026-04-05` |
 | 親マイルストーン | `docs/plans/3d-rtt/milestone-roadmap.md` **MS-3-6** |
-| 前提 MS | **MS-3-4**（地形＝`Mesh3d` + `Terrain3dHandles` / `SectionMaterial`、**4 種共有マテリアル**、タイル 1 セル 1 エンティティ） |
+| 前提 MS | **MS-3-4**（地形＝`Mesh3d` + `Terrain3dHandles`、タイル 1 セル 1 エンティティ） / **MS-WFC-4**（`GeneratedWorldLayout` が startup 経路へ統合済み） |
 | 関連提案 | [`section-material-proposal-2026-03-16.md`](../../proposals/3d-rtt/20260316/section-material-proposal-2026-03-16.md) |
 | アセット計画 | [`asset-milestones-2026-03-17.md`](asset-milestones-2026-03-17.md) **MS-Asset-Terrain** |
 | アート指針 | [`docs/world_lore.md`](../../world_lore.md) §6.1 パレット・**§6.2 Rough Vector Sketch**（手描き感・塗りムラ・描き込みすぎない） |
 | 独立トラック | [WFC 地形生成](archived/wfc-terrain-generation-plan-2026-04-01.md) はデータ生成が主眼。本 MS はレンダリング／表現 |
 | 後続 MS | **MS-3-7**（Raycast）と直列必須ではない |
 | 実装サブ計画（現行アセット限定） | [`ms-3-6-ad-implementation-plan-2026-04-01.md`](ms-3-6-ad-implementation-plan-2026-04-01.md) — **A/D のコード・WGSL 手順**（新規 PNG 差し替えなし） |
+| Phase 3（隣接ブレンド・`TerrainSurfaceMaterial`） | [`blueprint-terrain-surface-material.md`](blueprint-terrain-surface-material.md) — **B** 相当の詳細ブループリント。2026-04-05 実装反映済み |
 
 ---
 
@@ -40,7 +41,7 @@
 
 ## 2. 推奨方針の全体像（段階採用）
 
-**結論**: **D（アセット）と A（シェーダ）を WFC に先行して実装する**。S0 受入基準は WFC 完了後に撮影する。**隣接ブレンド（B）は WFC 後に着手する**（現状は Dirt が孤立点のため境界面積がほぼゼロで検証不可能）。**C（頂点ベイク）は本 MS の初期スコープから外す**（共有メッシュ前提と相性が悪く、地形変更時の更新コストも重い）。
+**結論**: **D（アセット）→ A（metadata / macro variation）→ B（`TerrainSurfaceMaterial` + `terrain_id_map`）** の順で実装した。現在の open item は **S0 受入撮影と最終目視判定**、必要ならその後のアセット微調整だけである。**C（頂点ベイク）は本 MS のスコープ外のまま**（共有メッシュ前提と相性が悪く、地形変更時の更新コストも重い）。
 
 **マップジェン側の境界ノイズ化は WFC に吸収される**。WFC は隣接制約を満たしながら有機的なジグザグ境界を生成するため、別途ノイズを重ねる必要はない（WFC 後にノイズで地形タイプを書き換えると禁止ペア制約が壊れる危険がある）。
 
@@ -55,7 +56,7 @@
 **A と D の役割分担**
 
 - **D**: タイリング・シーム・**4 種間の明度・彩度のレンジ整合**。**筆ムラ・ラフな塗り**はアルベドに載せる（`world_lore` §6.2）。
-- **A**: **隣タイプの色連続は解決しない**。**同一タイプ内の繰り返しの揃い**を緩める。**D の後**に強度を決めると、デジタルノイズ感を出しにくい。
+- **A**: **metadata と macro variation で意味差を返す**。最終的な cross-type の連続は **B** に任せる。
 
 ---
 
@@ -65,10 +66,10 @@
 
 | ファイル | サイズ | `asset_catalog.rs` での参照 | 状態 |
 | --- | --- | --- | --- |
-| `textures/grass.png` | 1024×1024 RGBA | `game_assets.grass` → `Terrain3dHandles.grass` | 要シームレス確認 |
-| `textures/dirt.png` | 1024×1024 RGBA | `game_assets.dirt` → `Terrain3dHandles.dirt` | 要シームレス確認 |
-| `textures/sand_terrain.png` | 1024×1024 RGBA | `game_assets.sand` → `Terrain3dHandles.sand` | 要シームレス確認 |
-| `textures/river.png` | 1024×1024 RGBA | `game_assets.river` → `Terrain3dHandles.river` | 静止1枚・要シームレス確認 |
+| `textures/grass.png` | 1024×1024 RGBA | `game_assets.grass` → `TerrainSurfaceMaterialExt.grass_albedo` | 要シームレス確認 |
+| `textures/dirt.png` | 1024×1024 RGBA | `game_assets.dirt` → `TerrainSurfaceMaterialExt.dirt_albedo` | 要シームレス確認 |
+| `textures/sand_terrain.png` | 1024×1024 RGBA | `game_assets.sand` → `TerrainSurfaceMaterialExt.sand_albedo` | 要シームレス確認 |
+| `textures/river.png` | 1024×1024 RGBA | `game_assets.river` → `TerrainSurfaceMaterialExt.river_albedo` | 静止1枚・要シームレス確認 |
 | `textures/sand.png` | 1024×1024 RGBA | **参照なし** | 旧ファイル（不使用） |
 
 ### 3.1 技術要件（4 種共通）
@@ -106,11 +107,13 @@ Bevy 0.18 では `bevy_render::globals` から `globals.time` をシェーダー
 
 ### 3.5 D だけでは限界があること
 
-- **隣タイルが別 `TerrainType`** のときの **物理的な色のギャップ**は、テクスチャだけでは根本解決しにくい。不足なら **B**（WFC 後に着手）を検討する。
+- **隣タイルが別 `TerrainType`** のときの **物理的な色のギャップ**は、テクスチャだけでは根本解決しにくい。現行は **B** まで実装済みだが、最終品質は引き続きアルベド側の出来に依存する。
 
 ---
 
-## 4. 方針 A — シェーダ（`SectionMaterial` / WGSL）
+## 4. 方針 A — シェーダ（初期段階の方針メモ）
+
+本節は **A 段階の設計メモ**として残す。最終実装では地形専用の [`TerrainSurfaceMaterial`](blueprint-terrain-surface-material.md) へ移行し、tile 単位 90° 回転は採用していない。現行は **連続 world-space UV + macro noise / overlay + feature map / LUT** が基準線である。
 
 ### 4.0 前提：ワールド空間 UV への切り替え（最優先）
 
@@ -130,19 +133,13 @@ let uv = in.world_position.xz / (TILE_SIZE * 2.0);
 
 ### 4.1 入れるもの（優先順）
 
-1. **Stochastic UV 回転**（タイルごとにランダムに 90° 刻み回転）
-   - グリッド座標のハッシュで 0°/90°/180°/270° を選び UV 変換行列を適用。
-   - テクスチャ追加ゼロ、CPU コストゼロ。繰り返し感の低減効果が最も大きい。
-   ```wgsl
-   let tile_id = floor(in.world_position.xz / TILE_SIZE);
-   let rot = hash_to_rot(tile_id);  // 0..4 → 2×2 回転行列
-   let uv = rot * (uv - 0.5) + 0.5;
-   ```
-2. **世界座標 XZ 由来の低周波 UV 歪み**（マクロ）
+1. **世界座標 XZ 由来の低周波 UV 歪み**（マクロ）
    - タイルあたり **0.3〜1 周未満**程度を目安。**タイル内で大きく歪めない**。
-3. **（任意）アルベドのごく弱い明度変調**（±数％程度）
+2. **アルベドのごく弱い明度変調**（±数％程度）
    - **高周波ノイズを強く載せない**（デジタルグレイン化し、`world_lore` と喧嘩しやすい）。
    - 低周波（10〜20 タイルスケール）の FBM で明度にムラをつけると、タイル非依存の自然なパッチ感が出る。
+3. **feature tint / palette bias**
+   - `shore sand` / `inland sand` / `rock field dirt` / `grass_zone` / `dirt_zone` の意味差を、terrain kind ごとに限定して乗せる。
 
 ### 4.2 実装の選択肢
 
@@ -160,11 +157,17 @@ let uv = in.world_position.xz / (TILE_SIZE * 2.0);
 
 ---
 
-## 5. 方針 B — 第 2 段階（任意・隣接情報）
+## 5. 方針 B — 第 2 段階（実装済み・隣接情報）
 
-**発動条件**: **WFC 完了後**、D + A でロードマップ／受入を満たせない、特に **異タイプ境界**が課題のとき。
+**実装結果**: `terrain_id_map`（`R8Unorm`）+ `TerrainSurfaceMaterial` を採用し、center + cardinal 近傍の ID を使って境界をブレンドしている。
 
-**WFC 前に着手しない理由**: 現在の `mapgen.rs` では Dirt が `(x+y)%30==0` の孤立点のみで、Grass↔Dirt・Dirt↔Sand 境界の面積がほぼゼロ。B を実装しても効果を目視検証できない。WFC 後は Dirt が実際の領域として現れ、境界が適切に生まれる。また WFC により 3 種同時接触（禁止コーナー）が保証なしに排除されるため、B のブレンドロジックも単純化できる（2 種ブレンドのみ考慮すればよい）。
+**現行仕様**:
+
+- `TerrainChangedEvent` 後は material handle を差し替えず、`terrain_id_map` の該当ピクセルだけを更新する
+- 境界ブレンドは **逐次 `mix` ではなく重み正規化した和**で計算する
+- ブレンド帯は **cell edge の狭い範囲**に限定し、広い面までにじませない
+- river を含むブレンドは **`river↔sand` の組み合わせだけ**を許可する
+- `TerrainFeatureMap` は static bake のまま据え置き、runtime 更新は `terrain_id_map` に限定する
 
 ### 5.1 推奨サブ案：グリッド ID テクスチャ
 
@@ -190,12 +193,14 @@ let uv = in.world_position.xz / (TILE_SIZE * 2.0);
 
 | 箇所 | 内容 |
 | --- | --- |
-| `world/map/spawn.rs` | `Mesh3d` + `MeshMaterial3d`、**4 種ハンドルのいずれか** |
-| `visual_handles.rs` | `Terrain3dHandles`＝`make_terrain_section_material`（`albedo_uv_mode=1.0`・ワールド UV・草のみ A3・川 scroll） |
-| `section_material.rs` | スラブクリップ＋`sync_section_cut_to_materials_system`・`SectionMaterialUniform` に terrain UV フィールド追加済み |
-| `terrain_material.rs` | `TerrainChangedEvent` で **該当タイルのマテリアル差し替え** |
+| `world/map/spawn.rs` | `Mesh3d` + `MeshMaterial3d<TerrainSurfaceMaterial>`。全タイルで **共有 1 ハンドル** |
+| `terrain_metadata.rs` | startup で `TerrainFeatureMap`（`Rgba8Unorm`）と `TerrainIdMap`（`R8Unorm`）を生成 |
+| `visual_handles.rs` | `Terrain3dHandles.surface` に共有 `TerrainSurfaceMaterial` を構築。4 アルベド、macro noise / overlay、river detail、feature LUT を bind |
+| `terrain_surface_material.rs` | 地形専用 `ExtendedMaterial<StandardMaterial, ...>` と `sync_section_cut_to_terrain_surface_system` |
+| `terrain_surface_material.wgsl` | world-space UV、terrain kind ごとの grade、cardinal 境界ブレンド、`river↔sand` 限定の river 境界処理 |
+| `terrain_material.rs` | `TerrainChangedEvent` で **該当セルの `terrain_id_map` ピクセル更新** |
 
-**ギャップ**: 隣接ブレンドなし。タイリング・トーンは D/A で改善。不足時は B。
+**残ギャップ**: S0 受入スクリーンショット未撮影。runtime での最終目視判定と、必要なら texture 側の微調整が残る。
 
 ---
 
@@ -205,18 +210,18 @@ let uv = in.world_position.xz / (TILE_SIZE * 2.0);
 
 | 要因 | 評価 |
 | --- | --- |
-| **地形マテリアル** | **4 共有ハンドル**（Grass/Dirt/Sand/River）。**1 タイル＝専用 `SectionMaterial` アセットではない**。 |
-| **ドロー** | 約 **10,000** エンティティ、**同一メッシュ共有**。バッチ／インスタンス化はエンジン依存。 |
-| **`sync_section_cut_to_materials_system`** | `SectionCut` 変更時に **`Assets<SectionMaterial>` 全件 `iter_mut`**。地形は 4 個分だが、**壁・建物の `SectionMaterial` が増えるほど CPU が線形増加**（MS-3-5 後に特に効く）。 |
-| **障害物 → Dirt** | イベント駆動・**O(1) タイル単位**。通常は軽い。 |
+| **地形マテリアル** | **共有 `TerrainSurfaceMaterial` 1 ハンドル**。4 地形アルベドと metadata を shader 側で切り替える。 |
+| **ドロー** | 約 **10,000** エンティティ、**同一メッシュ + 同一マテリアル共有**。 |
+| **`SectionCut` 同期** | 地形側は `sync_section_cut_to_terrain_surface_system` が `Assets<TerrainSurfaceMaterial>` を走査。現在は地形 material 数が少ないため負荷は限定的。 |
+| **障害物 → Dirt** | イベント駆動・**O(1) ピクセル更新**。`terrain_id_map` の該当 byte だけ書き換える。 |
 
 ### 8.2 本 MS の各案の性能イメージ
 
 | 案 | GPU | CPU | メモ |
 | --- | --- | --- | --- |
-| **D** | 帯域 **やや増**（解像度・ミップ） | ほぼ ±0 | 圧縮・ミップで緩和 |
-| **A** | **低**（ハッシュのみ or ノイズ 1 枚） | ±0 | 高周波を抑える |
-| **B（ID マップ）** | **中**（近傍サンプル＋ブレンド） | **マップ変更時**のテクスチャ更新 | エンティティ単位より有利 |
+| **D** | 帯域 **やや増**（macro noise / overlay / LUT / detail） | ほぼ ±0 | 現在の表現品質の土台 |
+| **A** | **低〜中**（共通ノイズ・feature map 参照） | ±0 | world-space UV 前提で反復感と意味差を返す |
+| **B（ID マップ）** | **中**（近傍サンプル＋重み付きブレンド） | **マップ変更時**のピクセル更新 | material 差し替えより局所更新に寄せられる |
 
 ### 8.3 本 MS 外だが効く改善（参照）
 
@@ -227,18 +232,18 @@ let uv = in.world_position.xz / (TILE_SIZE * 2.0);
 
 ## 9. 実装ステップ（推奨順）
 
-### WFC 非依存（先行可）
+### 実装履歴
 
-1. **S1 — D**: MS-Asset-Terrain（4 種シームレス・トーン・ミップ・川は任意）。
-2. **S2 — A（ワールド空間 UV）**: `section_material.wgsl` の UV を `in.world_position.xz / (TILE_SIZE * N)` へ変更。D 適用後すぐに確認。
-3. **S3 — A（Stochastic UV 回転）**: グリッド座標ハッシュで 90° 刻みの UV 回転を追加。
-4. **S4 — A（歪み・明度変調）**: 低周波マクロ歪み → 必要なら FBM 明度変調。`SectionCut` 側面の引き伸びを確認し、問題があれば Triplanar 化。
+1. **S1 — D**: 既存 4 地形に加え、macro noise / overlay / LUT / river detail / blend mask を整備した。
+2. **S2 — A**: world-space UV・macro variation・feature tint・river flow distortion を導入した。
+3. **S3 — B**: `TerrainSurfaceMaterial`・`TerrainIdMap`・cardinal 近傍ブレンドへ移行した。
+4. **S4 — 調整**: ブレンド帯を狭め、river を含むブレンドを `river↔sand` に限定した。
+5. **S5 — docs**: `world_layout.md` / `architecture.md` / `events.md` / `cargo_workspace.md` / `hw_visual/README.md` を同期した。
 
-### WFC 後（地形分布が確定してから）
+### 残作業
 
-5. **S0**: 受入のスクリーンショット基準を固定（トップダウン・矢視）。WFC 後の地形で撮影。
-6. **S5**: 受入判定。未達なら **B のスパイク**（ID テクスチャ案を優先・2 種ブレンドのみ）。
-7. **S6**: `docs/world_layout.md` 等を更新。`asset-milestones` の MS-Asset-Terrain と整合。
+6. **S0**: 受入のスクリーンショット基準を固定（トップダウン・矢視）。
+7. **S6**: 最終受入判定。必要なら texture 側の微調整だけ追加で実施する。
 
 ---
 
@@ -246,17 +251,19 @@ let uv = in.world_position.xz / (TILE_SIZE * 2.0);
 
 ### WFC 非依存（先行フェーズ）
 - [x] **A（ワールド空間 UV）**: タイル境界をまたいで同種テクスチャが連続する（2026-04-01 実装済み）
-- [ ] **A（Stochastic UV 回転）**: 同種タイル間でテクスチャ方向が揃って見えない（現行は連続ワールド UV のみ。A2 未採用）
-- [ ] **D**: 4 種が受入基準を満たす（シーム・トーン・ミップ）— MS-Asset-Terrain で対応
-- [x] **A（歪み・変調）**: 草のみ `uv_distort_strength` / `brightness_variation_strength`（2026-04-01 実装済み）
+- [x] **A（metadata / macro variation）**: `terrain_feature_map`・macro noise / overlay・feature LUT を導入済み
+- [x] **B（TerrainSurfaceMaterial）**: `terrain_id_map`・cardinal 近傍ブレンド・共有地形 material へ移行済み
+- [x] **D**: 4 種アルベド + 追加 texture 群が現行 shader 経路へ接続済み
+- [x] **A（歪み・変調）**: Grass / Dirt / Sand の domain warp / brightness variation、river flow distortion を導入済み
 - [x] **AddressMode::Repeat**: 地形 4 テクスチャに設定済み（`asset_catalog.rs`）
-- [x] **川 UV スクロール**: `uv_scroll_speed = 0.03`（U 方向・左→右の流れ）
+- [x] **川 UV スクロール**: `uv_scroll_speed = 0.03`（U 方向・左→右の流れ）+ `river_flow_noise` / `river_normal_like`
+- [x] **境界ブレンド制約**: ブレンド帯は狭い edge band、river は `river↔sand` のみ
 - [ ] 矢視で地形の `SectionCut` が破綻しない（Triplanar 対応を含む）— 目視確認待ち
 - [x] `cargo clippy --workspace` 警告ゼロ
 
 ### WFC 後フェーズ
 - [ ] **S0**: WFC 完了後の地形で受入スクリーンショットを撮影済み
-- [ ] **B**: 採用した場合のみ、マップ変更時の更新経路が文書化されている
+- [x] **B**: マップ変更時の更新経路（`TerrainChangedEvent` → `terrain_id_map` 部分更新）が文書化されている
 - [ ] 仕様ドキュメントが実装と一致
 
 ---

@@ -5,22 +5,34 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `terrain-visual-reassessment-2026-04-05` |
-| ステータス | `Draft` |
+| ステータス | `Implemented（継続チューニングあり）` |
 | 対象マイルストーン | `MS-3-6` |
 | 参照元 | [`ms-3-6-terrain-surface-plan-2026-03-31.md`](ms-3-6-terrain-surface-plan-2026-03-31.md) |
-| 前提 | WFC 地形生成（`generate_world_layout`）が現行経路、地形描画が `Mesh3d + SectionMaterial + RtT` に移行済み |
+| 前提 | WFC 地形生成（`generate_world_layout`）が現行経路、地形描画が `Mesh3d + TerrainSurfaceMaterial + RtT` に移行済み |
 
 ## 問題
 
-旧 `MS-3-6` 計画は「WFC 前」「地形タイプは 4 種だけ見えていればよい」という前提が強かった。現状はその前提が変わっている。
+このメモは **再検討時の問題提起**を残しつつ、2026-04-05 時点の実装結果も併記する。再検討当時は「WFC 前」「地形タイプは 4 種だけ見えていればよい」という前提が強かったが、現状はその前提が変わっている。
 
 - 地形生成は `GeneratedWorldLayout` を通じて `terrain_tiles` だけでなく、**`layout.masks`（`WorldMasks`）** に `river_mask`、`final_sand_mask`、`inland_sand_mask`、`rock_field_mask`、`grass_zone_mask` / `dirt_zone_mask`、`grass_zone_distance_field` / `dirt_zone_distance_field` などを持っている
-- 一方で描画は `TerrainType -> 4 種の SectionMaterial` しか使っておらず、WFC が作った地形の意味差をほぼ捨てている
+- 再検討当時は描画が `TerrainType -> 4 種の SectionMaterial` に留まり、WFC が作った地形の意味差をほぼ捨てていた
 - `Sand` は「河岸の砂」と「内陸砂」が同じ見た目に潰れている
 - `Dirt` も「岩場由来の乾いた土」と「ゾーン境界で出る土」が同じ見た目に潰れている
 - `SectionMaterial` は建物と共有のため、地形専用の情報をこれ以上載せると責務が濁る
 - 旧案の「タイルごとの 90 度回転」は、現在の連続ワールド UV と相性が悪い。入れると同種タイル間の連続感を自分で壊しやすい
 - 旧 2D 境界オーバーレイ素材はファイルとして残っているが、現行の 3D/RtT 経路では未使用。ここへ戻ると設計が逆行する
+
+## 実装反映後の現状
+
+再検討の結論を受けて、現在は次の状態まで進んでいる。
+
+- `GeneratedWorldLayout.terrain_tiles` から `TerrainIdMap`（`R8Unorm`）を startup で生成し、runtime では `TerrainChangedEvent` ごとに該当ピクセルだけ更新する
+- `GeneratedWorldLayout.masks` から `TerrainFeatureMap`（`Rgba8Unorm`）を startup で生成し、`shore sand` / `inland sand` / `rock field` / zone bias を shader へ渡す
+- 地形は `SectionMaterial` から `TerrainSurfaceMaterial` へ分離済みで、4 地形アルベド、macro noise / overlay、river detail、feature LUT、blend mask を同時参照する
+- 境界ブレンドは center + cardinal 近傍で実装済み。ただしブレンド帯は狭く保ち、river が絡む場合は `river↔sand` の組み合わせだけを対象にする
+- zone / shore / rock field の差は terrain kind ごとに限定して掛けており、Grass に Dirt/Sand 向けの grade が漏れないよう整理済み
+
+残っている open item は、S0 用の受入スクリーンショット、実機での最終目視判定、必要なら texture 側の微調整である。
 
 ## 再検討後の方針
 
@@ -371,12 +383,17 @@ repeat 前提の簡易評価:
 
 ### Phase 2: metadata 導入
 
-1. `GeneratedWorldLayoutResource.layout`（`terrain_tiles` + `masks`）から render 用 metadata texture を組み立てる resource を追加
+1. `GeneratedWorldLayoutResource.layout`（`terrain_tiles` + `masks`）から render 用 metadata texture を組み立てる resource を追加する
 2. 地形 shader から world 座標でその texture を引けるようにする
 3. まずは cross-type blend を入れず、`domain warp` + `macro brightness/tint` + `feature tint` だけを入れる
 4. `shore sand` と `inland sand` を見た目で分ける
 5. `rock_field dirt` と通常 dirt を見た目で分ける
 6. river に弱い flow distortion を追加する
+
+実装状況:
+
+- 完了。`terrain_feature_map` と feature LUT、macro noise / overlay、river flow distortion まで接続済み
+- 後続の色調整では、Grass / Dirt / Sand それぞれに適用対象を分離し、zone / feature grade の漏れを解消した
 
 ### Phase 2.5 (optional): アセット接続強化
 
@@ -384,16 +401,33 @@ repeat 前提の簡易評価:
 2. 必要なら `river_flow_noise.png` を追加し、川だけ別の流れ外乱にする
 3. 効果が大きいものだけ残し、texture 数を惰性で増やさない
 
+実装状況:
+
+- 完了。`terrain_macro_noise.png`、各 `*_macro_overlay.png`、`river_flow_noise.png`、`river_normal_like.png`、`terrain_feature_lut.png` は現行 shader 経路で使用中
+- `terrain_blend_mask_soft.png` と `shoreline_detail.png` も接続済み
+- 次の追加候補は、新規 texture を増やすより既存 LUT / overlay の中身調整を優先する
+
 ### Phase 3: 境界ブレンド判定
 
 1. Phase 2 後の画面でまだ境界が硬いかを再評価する
 2. 必要なら `TerrainSurfaceMaterial` を新設し、4 地形テクスチャ + `terrain_id_map` を同時参照する
 3. ブレンドは cardinal 近傍中心で始め、corner の複雑化は後回しにする
 
+実装状況:
+
+- 完了。地形は `TerrainSurfaceMaterial` に移行し、`terrain_id_map` を `textureLoad` で引いて center + cardinal 近傍ブレンドを行う
+- 実運用では「にじみ過ぎ」を避けるため、ブレンド帯は cell edge の狭い範囲へ絞った
+- river を含むブレンドは見た目破綻を避けるため `river↔sand` の組み合わせに限定した
+
 ### Phase 4: 後片付け
 
 1. 旧 overlay asset を使わない方針が固まったら load を削る
 2. 恒久仕様を `docs/world_layout.md` と `docs/architecture.md` に反映する
+
+実装状況:
+
+- `docs/world_layout.md` / `docs/architecture.md` / `docs/events.md` / `docs/cargo_workspace.md` / `crates/hw_visual/README.md` へ反映済み
+- 旧 overlay asset の完全整理は別途でよいが、現行 render path では未使用のまま
 
 ## 変更候補ファイル
 

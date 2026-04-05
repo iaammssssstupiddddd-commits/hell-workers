@@ -33,8 +33,14 @@ pub fn generate_world_layout(master_seed: u64) -> GeneratedWorldLayout {
             let terrain_tiles = run_wfc(&masks, sub_seed, attempt).ok()?;
 
             // ─ Step 3: 地形フェーズ検証 ─
-            let candidate =
-                GeneratedWorldLayout::initial(terrain_tiles, anchors.clone(), masks.clone(), master_seed, attempt, false);
+            let candidate = GeneratedWorldLayout::initial(
+                terrain_tiles,
+                anchors.clone(),
+                masks.clone(),
+                master_seed,
+                attempt,
+                false,
+            );
             let validated_candidates = validate::lightweight_validate(&candidate).ok()?;
             let candidate = GeneratedWorldLayout {
                 resource_spawn_candidates: validated_candidates,
@@ -73,8 +79,14 @@ pub fn generate_world_layout(master_seed: u64) -> GeneratedWorldLayout {
                     .expect("fallback resource generation must not return empty world");
             validate::validate_post_resource(&fallback_candidate, &res)
                 .expect("fallback resource layout must preserve required paths");
-            let water = fallback_candidate.resource_spawn_candidates.water_tiles.clone();
-            let sand = fallback_candidate.resource_spawn_candidates.sand_tiles.clone();
+            let water = fallback_candidate
+                .resource_spawn_candidates
+                .water_tiles
+                .clone();
+            let sand = fallback_candidate
+                .resource_spawn_candidates
+                .sand_tiles
+                .clone();
             fallback_candidate.with_resources(res, water, sand)
         });
 

@@ -1,42 +1,33 @@
-//! 障害物除去後のテレインマテリアル差し替えシステム。
+//! 障害物除去後の terrain id map 更新システム。
 //!
 //! `obstacle_cleanup_system`（hw_world）が発行する `TerrainChangedEvent` を受信し、
-//! 対応するタイルエンティティの `MeshMaterial3d<SectionMaterial>` を差し替える。
+//! 対応するセルの `terrain_id_map` ピクセルを更新する。
 
-use crate::plugins::startup::Terrain3dHandles;
-use crate::world::map::Tile;
+use crate::world::map::{TerrainIdMap, terrain_type_to_id_byte};
 use bevy::prelude::*;
-use hw_visual::SectionMaterial;
-use hw_world::{TerrainChangedEvent, TerrainType, WorldMapRead};
+use hw_core::constants::MAP_WIDTH;
+use hw_world::{TerrainChangedEvent, WorldMapRead};
 
-pub fn terrain_material_sync_system(
+pub fn terrain_id_map_sync_system(
     world_map: WorldMapRead,
-    terrain_handles: Res<Terrain3dHandles>,
+    terrain_id_map: Res<TerrainIdMap>,
+    mut images: ResMut<Assets<Image>>,
     mut events: MessageReader<TerrainChangedEvent>,
-    mut q_tiles: Query<&mut MeshMaterial3d<SectionMaterial>, With<Tile>>,
 ) {
     for ev in events.read() {
-        let Some(tile_entity) = world_map.tile_entity_at_idx(ev.idx) else {
-            continue;
-        };
         let Some(terrain) = world_map.terrain_at_idx(ev.idx) else {
             continue;
         };
-        let Ok(mut mat_handle) = q_tiles.get_mut(tile_entity) else {
+        let Some(image) = images.get_mut(&terrain_id_map.image) else {
             continue;
         };
-        *mat_handle = MeshMaterial3d(terrain_to_material(terrain, &terrain_handles));
-    }
-}
+        let Some(data) = image.data.as_mut() else {
+            continue;
+        };
 
-fn terrain_to_material(
-    terrain: TerrainType,
-    handles: &Terrain3dHandles,
-) -> Handle<SectionMaterial> {
-    match terrain {
-        TerrainType::Grass => handles.grass.clone(),
-        TerrainType::Dirt => handles.dirt.clone(),
-        TerrainType::Sand => handles.sand.clone(),
-        TerrainType::River => handles.river.clone(),
+        let x = ev.idx % MAP_WIDTH as usize;
+        let y = ev.idx / MAP_WIDTH as usize;
+        let pixel_idx = y * MAP_WIDTH as usize + x;
+        data[pixel_idx] = terrain_type_to_id_byte(terrain);
     }
 }

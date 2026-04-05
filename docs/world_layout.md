@@ -135,7 +135,7 @@
 
 ## 関連ファイル
 - `crates/bevy_app/src/world/map/`: root 側の app shell。`spawn.rs` は `GeneratedWorldLayout` の `terrain_tiles` から 3D 地形メッシュをスポーンする（`prepare_generated_world_layout_resource` と同一 layout）
-- `crates/bevy_app/src/plugins/startup/visual_handles.rs`: `Terrain3dHandles` リソース（タイルメッシュ・4種 SectionMaterial ハンドル）
+- `crates/bevy_app/src/plugins/startup/visual_handles.rs`: `Terrain3dHandles` リソース（タイルメッシュ・共有 `TerrainSurfaceMaterial` ハンドル）
 - `crates/bevy_app/src/systems/visual/terrain_material.rs`: 障害物除去後のテレインマテリアル差し替えシステム
 - [`../crates/hw_world/src/anchor.rs`](../crates/hw_world/src/anchor.rs): `Site/Yard` 固定アンカー定義
 - [`../crates/hw_world/src/world_masks.rs`](../crates/hw_world/src/world_masks.rs): anchor/protection-band/river/sand/terrain-zone の各マスク
@@ -158,18 +158,18 @@
 地形タイルは **Camera3d → RtT** パイプラインのみで描画される。`Camera2d` 側のゲーム内地形描画は完全に除去済み。
 
 - **タイルメッシュ**: `Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE)` を全タイルで共有。
-- **マテリアル**: `Terrain3dHandles`（`SectionMaterial` × 4種）を `TerrainType` に応じて割り当て。地形用は `make_terrain_section_material`（`crates/hw_visual/src/material/section_material.rs`）で生成し、`albedo_uv_mode = 1.0` によりフラグメントで **ワールド XZ ベースのアルベド UV**（タイル境界で連続）を使う。建物・壁は `albedo_uv_mode = 0.0` のままメッシュ UV。
-- **terrain kind 分岐**: `SectionMaterialUniform.terrain_kind` で grass / dirt / sand / river を shader へ渡し、色補正を材質別に分ける。`shore/inland` は Sand material のみ、`rock field` は Dirt material のみ、`grass zone` は Grass material のみが参照する。単一の feature stack を全材質へ流さず、材質ごとに別の grading 関数を通す。
+- **マテリアル**: `Terrain3dHandles` は `TerrainSurfaceMaterial` 1 本を全タイルで共有する。地形 shader は `terrain_id_map` を `textureLoad` で引いて center / cardinal 近傍の `TerrainType` を判定し、4 アルベドを world-space UV でサンプルして境界をブレンドする。建物・壁は引き続き `SectionMaterial`。
+- **terrain id map**: startup の `build_terrain_id_map` が `GeneratedWorldLayout.terrain_tiles` から `R8Unorm` の `TerrainIdMap` を生成する。0 / 85 / 170 / 255 を grass / dirt / sand / river として encode し、shader 側では `round(raw * 3.0)` で terrain id に戻す。`ClampToEdge + Nearest`。
 - **テクスチャサンプラ**: 地形 4 枚（`grass` / `dirt` / `sand_terrain` / `river`）は `asset_catalog.rs` で `AddressMode::Repeat` 付きロード。ワールド UV が 0〜1 を超える前提。
-- **feature map**: startup の `build_terrain_feature_map` が `GeneratedWorldLayout.masks` から `Rgba8Unorm` の `TerrainFeatureMap` を生成する。R=`shore sand`、G=`inland sand`、B=`rock field`、A=`zone bias`（grass zone / neutral / dirt zone）。`ClampToEdge + Nearest` で地形 shader から world 座標 lookup する。
-- **macro noise / overlay**: `terrain_macro_noise.png` と terrain 種別ごとの `*_macro_overlay.png` を読み、`domain warp` と明度ムラに使う。Grass / Dirt / Sand は低周波の面変化を加え、`SectionMaterial` の world-space UV のまま反復感を崩す。
-- **川**: `uv_scroll_speed` に加え、`river_flow_noise.png` 由来の V 軸ゆらぎを重ねる。見た目は画面上 **左→右**の流れを保ちつつ、単なる横スクロール感を弱める。
-- **feature tint / roughness**: `terrain_feature_lut.png` は `shore sand` / `inland sand` / `rock field dirt` の色差と roughness に使う。Sand / Dirt は neutral=0.5 の signed tint を `base texture` に対する color grade（乗算 + 加算）へ変換して適用する。一方 zone 差は LUT ではなく shader 内の専用 palette bias で扱い、`grass_zone` は Grass material のみに、`dirt_zone` は Dirt material のみに適用する。zone bias は単純な色混合ではなく、明度を保ったまま色相と彩度だけ少し寄せる処理にしており、土エリアの草や草エリアの土まで一緒に変わる副作用や、ゾーンが薄く見える問題を避ける。Dirt の `dirt_zone` だけは追加で少し暗く締め、広域の土エリアを中立 Dirt より重いトーンに寄せる。`shore sand` には軽い shoreline tone を追加で掛ける。
-- **A3（単調さ緩和）**: `uv_distort_strength`（grass の UV 空間歪み）は後方互換として維持しつつ、`brightness_variation_strength` は grass だけでなく dirt / sand にも使う。最終的な変調は macro noise / overlay と合成して決める。
-- **uniform レイアウト**: `SectionMaterialUniform` にパディング用の `f32` を並べる場合、`[f32; N]` 配列は encase の uniform 制約で使えない（ストライド 16 必須）。**個別の `f32` フィールド**で並べる（`section_material.rs` 参照）。
+- **feature map**: startup の `build_terrain_feature_map` が `GeneratedWorldLayout.masks` から `Rgba8Unorm` の `TerrainFeatureMap` を生成する。R=`shore sand`、G=`inland sand`、B=`rock field`、A=`zone bias`（grass zone / neutral / dirt zone）。こちらは worldgen snapshot を表す static bake で、runtime では更新しない。
+- **macro noise / overlay**: `terrain_macro_noise.png` と terrain 種別ごとの `*_macro_overlay.png` を読み、`domain warp` と明度ムラに使う。Grass / Dirt / Sand は低周波の面変化を加え、共有 material 化後も world-space UV ベースの反復感崩しを維持する。
+- **川**: `river_flow_noise.png` と `river_normal_like.png` を使い、river セルだけ左→右スクロールと V 軸ゆらぎを加える。境界ブレンドは river を含む全ペアには掛けず、**`river↔sand` の組み合わせだけ**を対象にする。
+- **feature tint / roughness**: `terrain_feature_lut.png` は `shore sand` / `inland sand` / `rock field dirt` の色差と roughness に使う。Sand / Dirt は neutral=0.5 の signed tint を `base texture` に対する color grade（乗算 + 加算）へ変換して適用する。一方 zone 差は LUT ではなく shader 内の専用 palette bias で扱い、`grass_zone` は Grass 表現に、`dirt_zone` は Dirt 表現にだけ適用する。`shore sand` には `shoreline_detail.png` を掛けた shoreline tone を追加する。
+- **境界ブレンド**: `terrain_blend_mask_soft.png` をセル内 fraction に対して引き、center + cardinal 近傍の寄与を重み付き和で合成する。逐次 `mix` で上書きせず、正規化した重みで順序依存を避ける。ブレンド帯はセル端の狭い範囲に限定し、広い面までにじませない。
+- **uniform レイアウト**: `TerrainSurfaceUniform` も encase 制約に合わせ、パディング目的の配列ではなく個別の `f32` フィールドで並べる。
 - **レイヤー**: `building_3d_render_layers()`（`LAYER_3D` + `LAYER_3D_SHADOW_RECEIVER`）で他の 3D エンティティと同レイヤー。
 - **Transform**: `from_xyz(x, 0.0, -y)`（Y=0 が地面平面）。
-- **障害物除去後の差し替え**: `hw_world::obstacle_cleanup_system` が `TerrainChangedEvent`（`Message`）を発行 → `bevy_app::terrain_material_sync_system` が受信してマテリアルを Dirt に更新。
+- **障害物除去後の更新**: `hw_world::obstacle_cleanup_system` が `TerrainChangedEvent`（`Message`）を発行 → `bevy_app::terrain_id_map_sync_system` が受信して `TerrainIdMap` の該当ピクセルを書き換える。共有 `TerrainSurfaceMaterial` の handle 自体は差し替えない。
 - **廃止**: `TerrainBorder` / `terrain_border.rs` / `hw_world::borders` は MS-3-4 で除去済み。`TerrainType::z_layer()` も同様に除去済み。
 
 ### 2D 前景カメラ（composite より手前の `LAYER_2D`）

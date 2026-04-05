@@ -24,6 +24,12 @@ pub struct TerrainFeatureMap {
     pub image: Handle<Image>,
 }
 
+/// セルごとの `TerrainType` を `R8Unorm` テクスチャとして保持するリソース。
+#[derive(Resource)]
+pub struct TerrainIdMap {
+    pub image: Handle<Image>,
+}
+
 /// `GeneratedWorldLayoutResource` の `WorldMasks` からフィーチャーマップテクスチャを生成し、
 /// `TerrainFeatureMap` リソースとして挿入する `PostStartup` システム。
 ///
@@ -43,9 +49,17 @@ pub fn build_terrain_feature_map(
             let pos = (x as i32, y as i32);
             let is_final_sand = masks.final_sand_mask.get(pos);
             let is_inland_sand = masks.inland_sand_mask.get(pos);
-            let shore = if is_final_sand && !is_inland_sand { 255u8 } else { 0u8 };
+            let shore = if is_final_sand && !is_inland_sand {
+                255u8
+            } else {
+                0u8
+            };
             let inland = if is_inland_sand { 255u8 } else { 0u8 };
-            let rock = if masks.rock_field_mask.get(pos) { 255u8 } else { 0u8 };
+            let rock = if masks.rock_field_mask.get(pos) {
+                255u8
+            } else {
+                0u8
+            };
             let zone_bias = if masks.grass_zone_mask.get(pos) {
                 0u8
             } else if masks.dirt_zone_mask.get(pos) {
@@ -87,4 +101,59 @@ pub fn build_terrain_feature_map(
         "BEVY_STARTUP: terrain feature map built ({}×{} px, Rgba8Unorm)",
         w, h
     );
+}
+
+/// `GeneratedWorldLayoutResource.layout.terrain_tiles` から terrain id map を生成する。
+///
+/// テクスチャ形式: `R8Unorm`、サイズ `MAP_WIDTH × MAP_HEIGHT`、nearest サンプリング。
+pub fn build_terrain_id_map(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    layout: Res<GeneratedWorldLayoutResource>,
+) {
+    let w = MAP_WIDTH as usize;
+    let h = MAP_HEIGHT as usize;
+
+    let mut pixels: Vec<u8> = Vec::with_capacity(w * h);
+    for y in 0..h {
+        for x in 0..w {
+            let idx = y * w + x;
+            pixels.push(terrain_type_to_id_byte(layout.layout.terrain_tiles[idx]));
+        }
+    }
+
+    let mut image = Image::new(
+        Extent3d {
+            width: w as u32,
+            height: h as u32,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        pixels,
+        TextureFormat::R8Unorm,
+        default(),
+    );
+    image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::ClampToEdge,
+        address_mode_v: ImageAddressMode::ClampToEdge,
+        mag_filter: ImageFilterMode::Nearest,
+        min_filter: ImageFilterMode::Nearest,
+        ..default()
+    });
+
+    let handle = images.add(image);
+    commands.insert_resource(TerrainIdMap { image: handle });
+    info!(
+        "BEVY_STARTUP: terrain id map built ({}×{} px, R8Unorm)",
+        w, h
+    );
+}
+
+pub(crate) fn terrain_type_to_id_byte(terrain: hw_world::TerrainType) -> u8 {
+    match terrain {
+        hw_world::TerrainType::Grass => 0,
+        hw_world::TerrainType::Dirt => 85,
+        hw_world::TerrainType::Sand => 170,
+        hw_world::TerrainType::River => 255,
+    }
 }

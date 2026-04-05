@@ -31,7 +31,7 @@ use crate::systems::visual::soul_animation::{
     sync_soul_body_animation_system, sync_soul_face_expression_system,
 };
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
-use crate::systems::visual::terrain_material::terrain_material_sync_system;
+use crate::systems::visual::terrain_material::terrain_id_map_sync_system;
 use hw_core::game_state::PlayMode;
 use hw_visual::HwVisualPlugin;
 use hw_visual::SectionCut;
@@ -145,10 +145,10 @@ impl Plugin for VisualPlugin {
                 .in_set(GameSystemSet::Visual),
         );
 
-        // テレインマテリアル差し替え（障害物除去後）
+        // terrain id map 更新（障害物除去後）
         app.add_systems(
             Update,
-            terrain_material_sync_system.in_set(GameSystemSet::Visual),
+            terrain_id_map_sync_system.in_set(GameSystemSet::Visual),
         );
 
         // キャラクター3Dプロキシ同期・クリーンアップ

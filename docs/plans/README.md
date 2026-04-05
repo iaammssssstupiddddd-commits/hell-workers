@@ -20,8 +20,6 @@
 | Document | Status | Notes |
 |---|---|---|
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
-| [rtt-pipeline-refactor-2026-03-29.md](rtt-pipeline-refactor-2026-03-29.md) | 完了 | `RttRuntime` 統合・`sync_rtt_output_bindings` 最適化。仕様は `docs/architecture.md` RtT 節 |
-| [task-chain-system-2026-03-29.md](task-chain-system-2026-03-29.md) | Completed | タスクチェーンシステム実装計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -124,6 +122,7 @@
 | [archive/rest-area-system.md](archive/rest-area-system.md) | アーカイブ | 休憩所（Rest Area）システム提案。 |
 | [archive/room-detection-hw-world-extraction-plan-2026-03-11.md](archive/room-detection-hw-world-extraction-plan-2026-03-11.md) | アーカイブ | src/systems/room/detection.rsの計画。 |
 | [archive/room-detection-plan-2026-02-23.md](archive/room-detection-plan-2026-02-23.md) | アーカイブ | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
+| [archive/rtt-pipeline-refactor-2026-03-29.md](archive/rtt-pipeline-refactor-2026-03-29.md) | アーカイブ | RtT Pipeline Refactor Plan |
 | [archive/scaling-performance-bottlenecks-plan.md](archive/scaling-performance-bottlenecks-plan.md) | アーカイブ | スケール時ボトルネック最適化計画。 |
 | [archive/selection-placement-refactor-plan-2026-02-25.md](archive/selection-placement-refactor-plan-2026-02-25.md) | アーカイブ | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
 | [archive/selection-separation-plan-2026-03-08.md](archive/selection-separation-plan-2026-03-08.md) | アーカイブ | -の計画。 |
@@ -135,6 +134,7 @@
 | [archive/soul-ai-root-thinning-plan-2026-03-11 copy.md](archive/soul-ai-root-thinning-plan-2026-03-11 copy.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-ai-root-thinning-plan-2026-03-11.md](archive/soul-ai-root-thinning-plan-2026-03-11.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-spawn-despawn.md](archive/soul-spawn-despawn.md) | アーカイブ | Soul Spawn/Despawn設計計画。 |
+| [archive/task-chain-system-2026-03-29.md](archive/task-chain-system-2026-03-29.md) | アーカイブ | タスクチェーンシステム実装計画 |
 | [archive/task-execution-hw-ai-extraction-plan-2026-03-12.md](archive/task-execution-hw-ai-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/soul_ai/execute/task_execution/の計画。 |
 | [archive/task-list-left-panel-toggle.md](archive/task-list-left-panel-toggle.md) | アーカイブ | タスクリスト左パネル操作改善計画。 |
 | [archive/taskexecution-systemparam-refactor-plan-2026-03-05.md](archive/taskexecution-systemparam-refactor-plan-2026-03-05.md) | アーカイブ | task_execution/context.rsの計画。 |

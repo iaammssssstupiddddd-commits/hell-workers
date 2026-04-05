@@ -33,7 +33,8 @@
 | `site_yard_visual.rs` | site / yard 境界表示 |
 | `wall_construction.rs` | 壁建設のタイル / progress bar visual |
 | `task_area_visual.rs` | `TaskAreaMaterial`, `TaskAreaVisual` 型定義 |
-| `material/section_material.rs` | `SectionMaterial`（建物・地形共有）、`SectionCut`、`make_terrain_section_material`（ワールド UV・川スクロール・草用 A3）。シェーダは `assets/shaders/section_material*.wgsl` |
+| `material/section_material.rs` | `SectionMaterial`（建物用）、`SectionCut`。シェーダは `assets/shaders/section_material*.wgsl` |
+| `material/terrain_surface_material.rs` | `TerrainSurfaceMaterial`（地形専用共有 material）、`TerrainIdMap` 前提の section clip / prepass 対応、`sync_section_cut_to_terrain_surface_system`。シェーダは `assets/shaders/terrain_surface_material*.wgsl` |
 
 ## soul/ の責務
 

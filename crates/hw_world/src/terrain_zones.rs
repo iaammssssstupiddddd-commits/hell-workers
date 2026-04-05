@@ -433,9 +433,7 @@ fn generate_inland_sand_mask(
 mod tests {
     use super::*;
     use crate::anchor::AnchorLayout;
-    use crate::test_seeds::{
-        SEED_SUITE_TERRAIN_ZONE_CANDIDATES, TERRAIN_ZONE_DETERMINISM_SEED,
-    };
+    use crate::test_seeds::{SEED_SUITE_TERRAIN_ZONE_CANDIDATES, TERRAIN_ZONE_DETERMINISM_SEED};
     use crate::world_masks::WorldMasks;
 
     fn make_masks(seed: u64) -> WorldMasks {
@@ -529,21 +527,24 @@ mod tests {
     #[test]
     fn test_dirt_zone_exists_near_anchor() {
         let anchors = AnchorLayout::fixed();
-        let dirt_near_anchor = SEED_SUITE_TERRAIN_ZONE_CANDIDATES.iter().copied().any(|seed| {
-            let mut masks = WorldMasks::from_anchor(&anchors);
-            masks.fill_river_from_seed(seed);
-            masks.fill_sand_from_river_seed(seed);
-            masks.fill_terrain_zones_from_seed(seed);
-            let dist_field = compute_anchor_distance_field(&masks.anchor_mask);
-            (0..MAP_HEIGHT)
-                .flat_map(|y| (0..MAP_WIDTH).map(move |x| (x, y)))
-                .any(|p| {
-                    let d = dist_field[(p.1 * MAP_WIDTH + p.0) as usize];
-                    masks.dirt_zone_mask.get(p)
-                        && d >= ZONE_DIRT_DIST_MIN
-                        && d <= ZONE_DIRT_DIST_MAX
-                })
-        });
+        let dirt_near_anchor = SEED_SUITE_TERRAIN_ZONE_CANDIDATES
+            .iter()
+            .copied()
+            .any(|seed| {
+                let mut masks = WorldMasks::from_anchor(&anchors);
+                masks.fill_river_from_seed(seed);
+                masks.fill_sand_from_river_seed(seed);
+                masks.fill_terrain_zones_from_seed(seed);
+                let dist_field = compute_anchor_distance_field(&masks.anchor_mask);
+                (0..MAP_HEIGHT)
+                    .flat_map(|y| (0..MAP_WIDTH).map(move |x| (x, y)))
+                    .any(|p| {
+                        let d = dist_field[(p.1 * MAP_WIDTH + p.0) as usize];
+                        masks.dirt_zone_mask.get(p)
+                            && d >= ZONE_DIRT_DIST_MIN
+                            && d <= ZONE_DIRT_DIST_MAX
+                    })
+            });
         assert!(
             dirt_near_anchor,
             "いずれの候補 seed でも Dirt ゾーンがアンカー近傍（dist {}..={}）に現れなかった。\

@@ -1,8 +1,8 @@
+pub(crate) mod pipeline;
 pub mod resources;
 pub mod types;
 pub mod validate;
 pub mod wfc_adapter;
-pub(crate) mod pipeline;
 
 use crate::river::{generate_fixed_river_tiles, generate_sand_tiles};
 use crate::terrain::TerrainType;

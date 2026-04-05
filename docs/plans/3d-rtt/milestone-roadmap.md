@@ -1,8 +1,8 @@
 # 3D-RtT 移行ロードマップ
 
 作成日: 2026-03-15
-最終更新: 2026-04-04（並行トラック B: MS-WFC-3/4 完了・4.5 一部反映を追記）
-ステータス: Phase 2 完了（MS-2C 目視検証待ち）/ Phase 3 着手前準備に移行
+最終更新: 2026-04-05（MS-3-6 TerrainSurfaceMaterial 実装・境界ブレンド制約整理を反映）
+ステータス: Phase 3 進行中（MS-3-6 実装済み、MS-3-7 以降未着手）
 
 ---
 
@@ -440,14 +440,16 @@
 > **依存**: MS-3-4 完了  
 > **詳細計画**: [`ms-3-6-terrain-surface-plan-2026-03-31.md`](ms-3-6-terrain-surface-plan-2026-03-31.md)
 > **現状再検討**: [`terrain-visual-reassessment-2026-04-05.md`](terrain-visual-reassessment-2026-04-05.md)
+> **実装ブループリント**: [`blueprint-terrain-surface-material.md`](blueprint-terrain-surface-material.md)
 
-- **やること**: D（アセット）＋ A（シェーダ）＋ 必要なら B（隣接ブレンド、WFC 後）。詳細は [`ms-3-6-terrain-surface-plan-2026-03-31.md`](ms-3-6-terrain-surface-plan-2026-03-31.md)
-- **再検討メモ**: WFC 完了後は「旧 2D 境界素材の復帰」ではなく、`GeneratedWorldLayout.masks` / distance field を render path に通す方針を優先する。`terrain-visual-reassessment-2026-04-05.md` を現在の判断材料とする。
+- **やること**: D（アセット）＋ A（metadata / macro variation）＋ B（`TerrainSurfaceMaterial` による隣接ブレンド）。実装後は `terrain_id_map` / `terrain_feature_map` を起点に、共有地形マテリアル 1 本で見た目を作る。
+- **再検討メモ**: WFC 完了後は「旧 2D 境界素材の復帰」ではなく、`GeneratedWorldLayout.masks` を render path に通す方針を採用済み。境界ブレンドは広くにじませず、cell edge の狭い帯だけに限定し、river を含むブレンドは `river↔sand` の組み合わせだけを対象にする。
 - **完了条件**:
-  - [x] A/D（ワールド UV・UV 歪み・明度変調・川スクロール・AddressMode::Repeat）— 実装済み（2026-04-01）
+  - [x] A/D（ワールド UV・macro noise / overlay・feature tint・川スクロール / distortion・AddressMode::Repeat）
+  - [x] B（`TerrainSurfaceMaterial`・`terrain_id_map`・cardinal 近傍ブレンド・`TerrainChangedEvent` 後の id map 部分更新）
   - [ ] S0: WFC 完了後の受入スクリーンショット撮影
   - [ ] 90度ベースの地形境界オーバーレイに依存しない見た目が成立する（最終判定）
-- **ステータス**: [~] A/D 実装済み。WFC 後の S0 受入・B（隣接ブレンド）は保留
+- **ステータス**: [~] 実装完了。S0 受入撮影と最終目視判定待ち
 
 ---
 

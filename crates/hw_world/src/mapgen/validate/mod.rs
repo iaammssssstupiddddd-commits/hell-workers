@@ -5,10 +5,10 @@
 //! - `debug_validate()`: `#[cfg(any(test, debug_assertions))]` で有効な追加診断。
 //!   `Vec<ValidationWarning>` を返すだけで地形を変更しない。
 
-pub(crate) mod terrain;
-pub(crate) mod post_resource;
 #[cfg(any(test, debug_assertions))]
 pub(crate) mod debug;
+pub(crate) mod post_resource;
+pub(crate) mod terrain;
 
 use hw_core::world::GridPos;
 
@@ -58,10 +58,10 @@ pub enum ValidationWarningKind {
 
 // ── re-exports ────────────────────────────────────────────────────────────────
 
-pub use terrain::lightweight_validate;
-pub(crate) use post_resource::validate_post_resource;
 #[cfg(any(test, debug_assertions))]
 pub use debug::debug_validate;
+pub(crate) use post_resource::validate_post_resource;
+pub use terrain::lightweight_validate;
 
 // ── テスト ────────────────────────────────────────────────────────────────────
 
