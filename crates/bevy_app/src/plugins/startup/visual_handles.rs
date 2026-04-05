@@ -11,12 +11,19 @@ use hw_logistics::ResourceItemVisualHandles;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
     PlantTreeHandles, SectionMaterial, SoulMaskMaterial, SoulShadowMaterial, SpeechHandles,
-    TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_GRASS_UV_DISTORT_STRENGTH,
-    WallVisualHandles, WorkIconHandles, make_section_material, make_terrain_section_material,
+    TERRAIN_DIRT_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_DIRT_DOMAIN_WARP_STRENGTH,
+    TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_GRASS_DOMAIN_WARP_STRENGTH,
+    TERRAIN_GRASS_UV_DISTORT_STRENGTH, TERRAIN_KIND_DIRT, TERRAIN_KIND_GRASS,
+    TERRAIN_KIND_RIVER, TERRAIN_KIND_SAND,
+    TERRAIN_SAND_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_SAND_DOMAIN_WARP_STRENGTH,
+    TerrainMaterialMaps, WallVisualHandles, WorkIconHandles, make_section_material,
+    make_terrain_section_material,
     with_alpha_mode,
 };
 use hw_visual::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
 use hw_world::{DoorVisualHandles, TerrainVisualHandles};
+
+use crate::world::map::TerrainFeatureMap;
 
 /// 3D レンダリング用メッシュ・マテリアルハンドルリソース
 ///
@@ -78,6 +85,7 @@ pub struct InitVisualHandlesParams<'w, 's> {
     character_materials: ResMut<'w, Assets<CharacterMaterial>>,
     soul_mask_materials: ResMut<'w, Assets<SoulMaskMaterial>>,
     soul_shadow_materials: ResMut<'w, Assets<SoulShadowMaterial>>,
+    terrain_feature_map: Res<'w, TerrainFeatureMap>,
 }
 
 pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
@@ -89,6 +97,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     let character_materials = &mut params.character_materials;
     let soul_mask_materials = &mut params.soul_mask_materials;
     let soul_shadow_materials = &mut params.soul_shadow_materials;
+    let feature_map_handle = params.terrain_feature_map.image.clone();
     commands.insert_resource(WallVisualHandles {
         stone_isolated: game_assets.wall_isolated.clone(),
         stone_horizontal_left: game_assets.wall_horizontal_left.clone(),
@@ -290,29 +299,70 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
 
     // --- 地形 3D ハンドル ---
     let terrain_tile_mesh = meshes.add(Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE));
+    let common_feature_map = Some(feature_map_handle);
+    let common_macro_noise = Some(game_assets.terrain_macro_noise.clone());
+    let common_feature_lut = Some(game_assets.terrain_feature_lut.clone());
+    let river_flow_noise = Some(game_assets.river_flow_noise.clone());
+
     let terrain_grass = section_materials.add(make_terrain_section_material(
         game_assets.grass.clone(),
+        TerrainMaterialMaps {
+            feature_map: common_feature_map.clone(),
+            macro_noise: common_macro_noise.clone(),
+            macro_overlay: Some(game_assets.grass_macro_overlay.clone()),
+            river_flow_noise: None,
+            feature_lut: common_feature_lut.clone(),
+        },
+        TERRAIN_KIND_GRASS,
         0.0,
         TERRAIN_GRASS_UV_DISTORT_STRENGTH,
         TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH,
+        TERRAIN_GRASS_DOMAIN_WARP_STRENGTH,
     ));
     let terrain_dirt = section_materials.add(make_terrain_section_material(
         game_assets.dirt.clone(),
+        TerrainMaterialMaps {
+            feature_map: common_feature_map.clone(),
+            macro_noise: common_macro_noise.clone(),
+            macro_overlay: Some(game_assets.dirt_macro_overlay.clone()),
+            river_flow_noise: None,
+            feature_lut: common_feature_lut.clone(),
+        },
+        TERRAIN_KIND_DIRT,
         0.0,
         0.0,
-        0.0,
+        TERRAIN_DIRT_BRIGHTNESS_VARIATION_STRENGTH,
+        TERRAIN_DIRT_DOMAIN_WARP_STRENGTH,
     ));
     let terrain_sand = section_materials.add(make_terrain_section_material(
         game_assets.sand.clone(),
+        TerrainMaterialMaps {
+            feature_map: common_feature_map.clone(),
+            macro_noise: common_macro_noise.clone(),
+            macro_overlay: Some(game_assets.sand_macro_overlay.clone()),
+            river_flow_noise: None,
+            feature_lut: common_feature_lut.clone(),
+        },
+        TERRAIN_KIND_SAND,
         0.0,
         0.0,
-        0.0,
+        TERRAIN_SAND_BRIGHTNESS_VARIATION_STRENGTH,
+        TERRAIN_SAND_DOMAIN_WARP_STRENGTH,
     ));
     let terrain_river = section_materials.add(make_terrain_section_material(
         game_assets.river.clone(),
+        TerrainMaterialMaps {
+            feature_map: common_feature_map,
+            macro_noise: common_macro_noise,
+            macro_overlay: None,
+            river_flow_noise,
+            feature_lut: common_feature_lut,
+        },
+        TERRAIN_KIND_RIVER,
         0.03,
         0.0,
         0.0,
+        0.0, // 川は domain warp なし（直線的な流れを保つ）
     ));
     commands.insert_resource(Terrain3dHandles {
         tile_mesh: terrain_tile_mesh,

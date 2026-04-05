@@ -26,6 +26,16 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         });
     }
 
+    fn terrain_lut_sampler(s: &mut ImageLoaderSettings) {
+        s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+            address_mode_u: ImageAddressMode::ClampToEdge,
+            address_mode_v: ImageAddressMode::ClampToEdge,
+            mag_filter: bevy::image::ImageFilterMode::Nearest,
+            min_filter: bevy::image::ImageFilterMode::Nearest,
+            ..default()
+        });
+    }
+
     GameAssets {
         white_pixel,
         grass: asset_server.load_with_settings("textures/grass.png", terrain_sampler),
@@ -33,6 +43,18 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         stone: asset_server.load("textures/stone.jpg"),
         river: asset_server.load_with_settings("textures/river.png", terrain_sampler),
         sand: asset_server.load_with_settings("textures/sand_terrain.png", terrain_sampler),
+        terrain_macro_noise: asset_server
+            .load_with_settings("textures/terrain_macro_noise.png", terrain_sampler),
+        river_flow_noise: asset_server
+            .load_with_settings("textures/river_flow_noise.png", terrain_sampler),
+        terrain_feature_lut: asset_server
+            .load_with_settings("textures/terrain_feature_lut.png", terrain_lut_sampler),
+        grass_macro_overlay: asset_server
+            .load_with_settings("textures/grass_macro_overlay.png", terrain_sampler),
+        dirt_macro_overlay: asset_server
+            .load_with_settings("textures/dirt_macro_overlay.png", terrain_sampler),
+        sand_macro_overlay: asset_server
+            .load_with_settings("textures/sand_macro_overlay.png", terrain_sampler),
         familiar: asset_server.load("textures/character/familiar/imp anime 1.png"),
         familiar_anim_2: asset_server.load("textures/character/familiar/imp anime 2.png"),
         familiar_anim_3: asset_server.load("textures/character/familiar/imp anime 3.png"),

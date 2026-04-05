@@ -19,7 +19,6 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [3d-rtt/wfc-refactor-plan-2026-04-04.md](3d-rtt/wfc-refactor-plan-2026-04-04.md) | 提案 | `hw_world` の WFC 周辺（`mapgen` 分割・golden seed・重いテスト分離）リファクタ |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [rtt-pipeline-refactor-2026-03-29.md](rtt-pipeline-refactor-2026-03-29.md) | 完了 | `RttRuntime` 統合・`sync_rtt_output_bindings` 最適化。仕様は `docs/architecture.md` RtT 節 |
 | [task-chain-system-2026-03-29.md](task-chain-system-2026-03-29.md) | Completed | タスクチェーンシステム実装計画 |

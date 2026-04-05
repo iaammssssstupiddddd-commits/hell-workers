@@ -201,7 +201,7 @@ RttRuntime
 
 `hw_visual::SectionMaterial` / `SectionCut` は現在 `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` で実装している。lighting / shadow / prepass は `StandardMaterial` 側を維持し、section clip だけを extension shader と prepass shader で追加する構成である。`SectionCut.position` は `MainCamera` 中心のワールド位置、`SectionCut.normal` は矢視方向、`SectionCut.thickness` はその切断線から奥側へ残すスラブ幅として扱う。
 
-地形タイル専用マテリアル（`make_terrain_section_material`）では `SectionMaterialUniform` に `albedo_uv_mode`・`uv_scale`・`uv_scroll_speed`・`uv_distort_strength`・`brightness_variation_strength` などを載せ、`assets/shaders/section_material.wgsl` の `compute_terrain_uv` とフラグメントでアルベドを決める。川だけ U 方向スクロール、草だけ低周波 UV 歪みと明度のゆるい変調を有効化する。地形 4 テクスチャの `Repeat` は `asset_catalog` 側。詳細は `docs/world_layout.md` の地形レンダリング節。
+地形タイル専用マテリアル（`make_terrain_section_material`）では `SectionMaterialUniform` に `albedo_uv_mode`・`uv_scale`・`uv_scroll_speed`・`uv_distort_strength`・`brightness_variation_strength`・`map_world_width` / `map_world_height`・`domain_warp_strength`・`terrain_kind` を載せ、さらに `terrain_feature_map`・`terrain_macro_noise`・terrain 種別ごとの `macro_overlay`・`river_flow_noise`・`terrain_feature_lut` を bind する。`assets/shaders/section_material.wgsl` では world-space UV、feature map lookup、domain warp、macro brightness、terrain kind ごとの grading、river flow distortion を合成して地形アルベドを決める。`shore/inland` は Sand material、`rock field` は Dirt material、zone 差は Grass / Dirt の palette bias に限定し、材質ごとに別経路で処理する。地形 4 テクスチャと macro/flow 系の `Repeat`、LUT の `ClampToEdge + Nearest` は `asset_catalog` 側、feature map の `ClampToEdge + Nearest` は startup 生成側で設定する。詳細は `docs/world_layout.md` の地形レンダリング節。
 
 ### Camera2d ↔ Camera3d 同期
 

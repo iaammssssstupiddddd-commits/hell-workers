@@ -159,9 +159,13 @@
 
 - **タイルメッシュ**: `Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE)` を全タイルで共有。
 - **マテリアル**: `Terrain3dHandles`（`SectionMaterial` × 4種）を `TerrainType` に応じて割り当て。地形用は `make_terrain_section_material`（`crates/hw_visual/src/material/section_material.rs`）で生成し、`albedo_uv_mode = 1.0` によりフラグメントで **ワールド XZ ベースのアルベド UV**（タイル境界で連続）を使う。建物・壁は `albedo_uv_mode = 0.0` のままメッシュ UV。
+- **terrain kind 分岐**: `SectionMaterialUniform.terrain_kind` で grass / dirt / sand / river を shader へ渡し、色補正を材質別に分ける。`shore/inland` は Sand material のみ、`rock field` は Dirt material のみ、`grass zone` は Grass material のみが参照する。単一の feature stack を全材質へ流さず、材質ごとに別の grading 関数を通す。
 - **テクスチャサンプラ**: 地形 4 枚（`grass` / `dirt` / `sand_terrain` / `river`）は `asset_catalog.rs` で `AddressMode::Repeat` 付きロード。ワールド UV が 0〜1 を超える前提。
-- **川**: `uv_scroll_speed` のみ非ゼロ（U 方向・時間でオフセット）。見た目は画面上 **左→右**の流れ（符号はシェーダ側で調整済み）。
-- **草のみ A3（任意の単調さ緩和）**: `uv_distort_strength`（UV 空間の低周波歪み、`TERRAIN_GRASS_UV_DISTORT_STRENGTH`）と `brightness_variation_strength`（`base_color.rgb` への低周波乗算、`TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH`）。土・砂・川は両方 `0.0`。
+- **feature map**: startup の `build_terrain_feature_map` が `GeneratedWorldLayout.masks` から `Rgba8Unorm` の `TerrainFeatureMap` を生成する。R=`shore sand`、G=`inland sand`、B=`rock field`、A=`zone bias`（grass zone / neutral / dirt zone）。`ClampToEdge + Nearest` で地形 shader から world 座標 lookup する。
+- **macro noise / overlay**: `terrain_macro_noise.png` と terrain 種別ごとの `*_macro_overlay.png` を読み、`domain warp` と明度ムラに使う。Grass / Dirt / Sand は低周波の面変化を加え、`SectionMaterial` の world-space UV のまま反復感を崩す。
+- **川**: `uv_scroll_speed` に加え、`river_flow_noise.png` 由来の V 軸ゆらぎを重ねる。見た目は画面上 **左→右**の流れを保ちつつ、単なる横スクロール感を弱める。
+- **feature tint / roughness**: `terrain_feature_lut.png` は `shore sand` / `inland sand` / `rock field dirt` の色差と roughness に使う。Sand / Dirt は neutral=0.5 の signed tint を `base texture` に対する color grade（乗算 + 加算）へ変換して適用する。一方 zone 差は LUT ではなく shader 内の専用 palette bias で扱い、`grass_zone` は Grass material のみに、`dirt_zone` は Dirt material のみに適用する。zone bias は単純な色混合ではなく、明度を保ったまま色相と彩度だけ少し寄せる処理にしており、土エリアの草や草エリアの土まで一緒に変わる副作用や、ゾーンが薄く見える問題を避ける。Dirt の `dirt_zone` だけは追加で少し暗く締め、広域の土エリアを中立 Dirt より重いトーンに寄せる。`shore sand` には軽い shoreline tone を追加で掛ける。
+- **A3（単調さ緩和）**: `uv_distort_strength`（grass の UV 空間歪み）は後方互換として維持しつつ、`brightness_variation_strength` は grass だけでなく dirt / sand にも使う。最終的な変調は macro noise / overlay と合成して決める。
 - **uniform レイアウト**: `SectionMaterialUniform` にパディング用の `f32` を並べる場合、`[f32; N]` 配列は encase の uniform 制約で使えない（ストライド 16 必須）。**個別の `f32` フィールド**で並べる（`section_material.rs` 参照）。
 - **レイヤー**: `building_3d_render_layers()`（`LAYER_3D` + `LAYER_3D_SHADOW_RECEIVER`）で他の 3D エンティティと同レイヤー。
 - **Transform**: `from_xyz(x, 0.0, -y)`（Y=0 が地面平面）。

@@ -1,6 +1,7 @@
 //! ワールドマップと座標変換API
 
 mod spawn;
+mod terrain_metadata;
 
 pub use hw_world::layout::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, SAND_WIDTH};
 pub use hw_world::map::WorldMap;
@@ -9,6 +10,7 @@ pub use spawn::{
     GeneratedWorldLayoutResource, prepare_generated_world_layout_resource, resolve_worldgen_seed,
     spawn_map,
 };
+pub use terrain_metadata::{TerrainFeatureMap, build_terrain_feature_map};
 
 use bevy::prelude::*;
 use hw_ui::selection::WorldReadApi;
