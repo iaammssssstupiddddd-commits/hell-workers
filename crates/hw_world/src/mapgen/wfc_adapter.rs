@@ -776,7 +776,6 @@ mod tests {
     use super::*;
     use crate::mapgen::pipeline::generate_world_layout;
     use crate::test_seeds::GOLDEN_SEED_PRIMARY;
-    use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 
     #[test]
     fn generated_layouts_have_no_visual_cross() {

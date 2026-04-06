@@ -20,6 +20,7 @@
 | Document | Status | Notes |
 |---|---|---|
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
+| [terrain-zone-boundary-naturalization-plan-2026-04-06.md](terrain-zone-boundary-naturalization-plan-2026-04-06.md) | M2 Complete | 草エリアのひし形・階段状境界を、ゾーン形状生成と境界描画の両面から自然化する計画 |
 | [world-map-lod-plan-2026-04-05.md](world-map-lod-plan-2026-04-05.md) | Draft | ワールドマップ LOD 計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)

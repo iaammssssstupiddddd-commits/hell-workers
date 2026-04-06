@@ -55,8 +55,9 @@ pub const ZONE_GRADIENT_DIRT_BIAS_PERCENT: u32 = 30;
 pub const ZONE_GRADIENT_GRASS_BIAS_PERCENT: u32 = 40;
 
 // ── D: ゾーン間離隔定数 ───────────────────────────────────────────────────────
-/// Dirt ゾーンと Grass ゾーンの間に設ける最低離隔（Chamfer 3-4 コスト単位、旧 BFS 値の約 ×3）
-pub const ZONE_MIN_SEPARATION: u32 = 9;
+/// Dirt ゾーンと Grass ゾーンの間に設ける最低離隔（Chamfer 3-4 コスト単位）。
+/// naive な ×3 換算だと狭すぎて visual cross が再発したため、やや広めに調整している。
+pub const ZONE_MIN_SEPARATION: u32 = 12;
 
 // ── 内陸砂定数 ────────────────────────────────────────────────────────────────
 
@@ -272,7 +273,7 @@ fn expand_mask(mask: &BitGrid, radius: u32) -> BitGrid {
             }
             let idx = (ny * w + nx) as usize;
             let nd = d + cost;
-            if nd < dist[idx] {
+            if nd <= radius && nd < dist[idx] {
                 dist[idx] = nd;
                 result.set((nx, ny), true);
                 heap.push(Reverse((nd, nx, ny)));
@@ -591,6 +592,34 @@ mod tests {
             "いずれの候補 seed でも Dirt ゾーンがアンカー近傍（dist {}..={}）に現れなかった。\
              候補リストを走査して更新すること",
             ZONE_DIRT_DIST_MIN, ZONE_DIRT_DIST_MAX
+        );
+    }
+
+    #[test]
+    fn test_expand_mask_respects_chamfer_radius_upper_bound() {
+        let mut mask = BitGrid::map_sized();
+        let origin = (50, 50);
+        mask.set(origin, true);
+
+        let expanded = expand_mask(&mask, 9);
+
+        assert!(expanded.get(origin), "origin should remain included");
+        assert!(
+            expanded.get((51, 50)),
+            "orthogonal neighbor with cost 3 should be included"
+        );
+        assert!(
+            expanded.get((51, 51)),
+            "diagonal neighbor with cost 4 should be included"
+        );
+        assert!(
+            expanded.get((52, 50)),
+            "two-step orthogonal cell with cost 6 should be included"
+        );
+        assert!(expanded.get((53, 50)), "cell with cost 9 should be included");
+        assert!(
+            !expanded.get((53, 51)),
+            "cell with minimum chamfer cost 10 must not be included for radius 9"
         );
     }
 }
