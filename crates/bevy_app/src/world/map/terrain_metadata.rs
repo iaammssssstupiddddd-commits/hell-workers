@@ -149,6 +149,8 @@ pub fn build_terrain_id_map(
     );
 }
 
+/// TerrainType をシェーダー参照用の id バイト（R8Unorm）に変換する。
+/// `assets/shaders/terrain_surface_material.wgsl` の `cell_terrain_raw_byte` と値を同期すること。
 pub(crate) fn terrain_type_to_id_byte(terrain: hw_world::TerrainType) -> u8 {
     match terrain {
         hw_world::TerrainType::Grass => 0,
