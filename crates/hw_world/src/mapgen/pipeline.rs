@@ -10,7 +10,7 @@ use crate::world_masks::WorldMasks;
 use super::resources;
 use super::types::GeneratedWorldLayout;
 use super::validate;
-use super::wfc_adapter::{MAX_WFC_RETRIES, derive_sub_seed, fallback_terrain, run_wfc};
+use super::wfc_adapter::{MAX_WFC_RETRIES, derive_sub_seed, fallback_terrain, fix_zone_mask_crosses, run_wfc};
 
 /// WFC 地形生成のエントリポイント（MS-WFC-2c）。
 ///
@@ -25,12 +25,13 @@ pub fn generate_world_layout(master_seed: u64) -> GeneratedWorldLayout {
     masks.fill_river_from_seed(master_seed);
     masks.fill_sand_from_river_seed(master_seed);
     masks.fill_terrain_zones_from_seed(master_seed);
+    fix_zone_mask_crosses(&mut masks);
     masks.fill_rock_fields_from_seed(master_seed);
 
     let layout = (0..=MAX_WFC_RETRIES)
         .find_map(|attempt| {
             let sub_seed = derive_sub_seed(master_seed, attempt);
-            let terrain_tiles = run_wfc(&masks, sub_seed, attempt).ok()?;
+            let terrain_tiles = run_wfc(&mut masks, sub_seed, attempt).ok()?;
 
             // ─ Step 3: 地形フェーズ検証 ─
             let candidate = GeneratedWorldLayout::initial(
