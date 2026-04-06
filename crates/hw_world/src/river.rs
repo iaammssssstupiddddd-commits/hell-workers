@@ -19,6 +19,9 @@ pub const RIVER_Y_CLAMP_MAX: i32 = MAP_HEIGHT - 6; // = 94
 /// セグメントごとの幅（タイル数、両端含む）
 pub const RIVER_MIN_WIDTH: i32 = 2;
 pub const RIVER_MAX_WIDTH: i32 = 4;
+/// center_y・width 配列に適用する 1D 移動平均のパス数。
+/// 値を増やすほど川の蛇行が滑らかになる。
+const RIVER_SMOOTH_PASSES: usize = 3;
 /// 全体タイル数の目安（検証テスト用; seed によって変動可）
 pub const RIVER_TOTAL_TILES_TARGET_MIN: usize = 200;
 pub const RIVER_TOTAL_TILES_TARGET_MAX: usize = 500;
@@ -106,20 +109,29 @@ pub fn generate_sand_tiles(
 ///
 /// # 戻り値
 /// `(river_mask, river_centerline)`
+///
+/// # アルゴリズム
+/// 1. RNG で各列の `center_y` と `width` を生配列として生成。
+/// 2. `smooth_1d_f32` で `RIVER_SMOOTH_PASSES` 回の移動平均を適用し、列ごとの急変を抑制。
+/// 3. 平滑化後の値を `round() as i32` で整数に変換し、`river_mask` と `centerline` を構築。
+///    タイル書き込み時は既存の保護帯フィルタを維持する。
 pub fn generate_river_mask(
     seed: u64,
     anchor_mask: &BitGrid,
     river_protection_band: &BitGrid,
 ) -> (BitGrid, Vec<GridPos>) {
     let mut rng = StdRng::seed_from_u64(seed);
-    let mut river_mask = BitGrid::map_sized();
-    let mut centerline: Vec<GridPos> = Vec::with_capacity(MAP_WIDTH as usize);
+    let map_width = MAP_WIDTH as usize;
 
     let start_y = rng.gen_range(RIVER_START_Y_MIN..=RIVER_START_Y_MAX);
     let mut current_y = start_y;
 
     // 蛇行バイアス: -1 が 2/7, 0 が 3/7, +1 が 2/7（期待値 0、標準偏差 ≈ 0.93）
     let steps: &[i32] = &[-1, -1, 0, 0, 0, 1, 1];
+
+    // Phase 1: RNG で生配列を生成（保護帯チェックは逐次維持）
+    let mut raw_center_y: Vec<f32> = Vec::with_capacity(map_width);
+    let mut raw_width: Vec<i32> = Vec::with_capacity(map_width);
 
     for x in 0..MAP_WIDTH {
         let step = *steps.choose(&mut rng).unwrap();
@@ -131,10 +143,27 @@ pub fn generate_river_mask(
         }
 
         current_y = next_y;
-        centerline.push((x, current_y));
+        raw_center_y.push(current_y as f32);
 
         let width = rng.gen_range(RIVER_MIN_WIDTH..=RIVER_MAX_WIDTH);
-        let top = current_y - width / 2;
+        raw_width.push(width);
+    }
+
+    // Phase 2: center_y に移動平均スムージングを適用（f32 で処理し精度損失を防ぐ）。
+    // width はランダム性を維持し川岸の有機的な変化を保つ。
+    let smoothed_center_y = smooth_1d_f32(&raw_center_y, RIVER_SMOOTH_PASSES);
+
+    // Phase 3: スムージング後の配列から river_mask と centerline を構築
+    let mut river_mask = BitGrid::map_sized();
+    let mut centerline: Vec<GridPos> = Vec::with_capacity(map_width);
+
+    for (x_usize, (&cy_f, &width)) in smoothed_center_y.iter().zip(raw_width.iter()).enumerate() {
+        let x = x_usize as i32;
+        let center_y = cy_f.round() as i32;
+
+        centerline.push((x, center_y));
+
+        let top = center_y - width / 2;
         let bottom = top + width - 1;
 
         for ry in top..=bottom {
@@ -149,6 +178,29 @@ pub fn generate_river_mask(
     }
 
     (river_mask, centerline)
+}
+
+/// 1D 移動平均スムージングを `passes` 回適用する。
+///
+/// 端点はミラー補外（境界値を 2 回使用）で処理する。
+fn smooth_1d_f32(arr: &[f32], passes: usize) -> Vec<f32> {
+    let n = arr.len();
+    if n < 3 {
+        return arr.to_vec();
+    }
+    let mut result = arr.to_vec();
+    for _ in 0..passes {
+        let prev = result.clone();
+        // 左端: prev[0] をミラー
+        result[0] = (prev[0] + prev[0] + prev[1]) / 3.0;
+        // 中間
+        for i in 1..n - 1 {
+            result[i] = (prev[i - 1] + prev[i] + prev[i + 1]) / 3.0;
+        }
+        // 右端: prev[n-1] をミラー
+        result[n - 1] = (prev[n - 2] + prev[n - 1] + prev[n - 1]) / 3.0;
+    }
+    result
 }
 
 /// アンカー・保護帯なしでプレビュー川を生成し、川タイルの **最小 y** を返す。
