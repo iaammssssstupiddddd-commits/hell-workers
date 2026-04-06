@@ -48,6 +48,15 @@ const STRIP_WIDTH: f32 = NOISE_AMPLITUDE * 4.0; // 48wu
 /// 開チェーン端のラウンドキャップ（半円）の円周分割数。
 const ROUND_CAP_SEGMENTS: u32 = 10;
 
+/// 面取り（Chamfer）ベベル距離（ワールド単位）。
+/// 川岸 1 タイル段差（32wu）の 35% を面取りし、Catmull-Rom のオーバーシュートを抑制する。
+const CHAMFER_DISTANCE: f32 = TILE_SIZE * 0.35; // ≈ 11.2wu
+
+/// 面取りを適用するコーナー角のコサイン閾値。
+/// cos(60°) = 0.5: それより鋭い角（0°〜60°未満）のコーナーのみ面取りする。
+/// 川岸の 90° ステップ（cos = 0）はこの閾値に確実に掛かる。
+const CHAMFER_COS_THRESHOLD: f32 = 0.5;
+
 // ── 境界種別 ─────────────────────────────────────────────────────────────────
 
 /// 隣接する 2 種類の TerrainType ペア（無向）を表す列挙型。
@@ -585,6 +594,64 @@ pub fn displace_polyline(
     result
 }
 
+/// ノイズ変位済み点列の鋭角コーナーを面取り（Chamfer）し、
+/// Catmull-Rom スプラインのオーバーシュートを抑制した新しい点列を返す。
+///
+/// 各コーナーを 2 つのベベル点で置換する：
+/// - `bevel1 = p - t * d_in`  （コーナー手前）
+/// - `bevel2 = p + t * d_out` （コーナー直後）
+///
+/// 以下の頂点は変更しない：
+/// - 開ポリラインの端点
+/// - `junctions` に含まれるコーナー（三叉路点: 変位 0 で元座標にある）
+/// - 内角が `cos_threshold` 以上の緩やかな曲がり（面取り不要）
+fn chamfer_polyline_points(
+    points: &[Vec2],
+    is_closed: bool,
+    junctions: &HashSet<(i32, i32)>,
+    t: f32,
+    cos_threshold: f32,
+) -> Vec<Vec2> {
+    let n = points.len();
+    if n < 3 {
+        return points.to_vec();
+    }
+
+    let mut result = Vec::with_capacity(n + n / 3);
+
+    for i in 0..n {
+        let p = points[i];
+
+        // 開ポリラインの端点は変更しない
+        if !is_closed && (i == 0 || i == n - 1) {
+            result.push(p);
+            continue;
+        }
+
+        // ジャンクション頂点は変更しない（displace_polyline で変位=0 なので元の grid 座標にある）
+        if junctions.contains(&world_to_corner_key(p)) {
+            result.push(p);
+            continue;
+        }
+
+        let prev_i = if i == 0 { n - 1 } else { i - 1 };
+        let next_i = if i == n - 1 { 0 } else { i + 1 };
+
+        let d_in = (p - points[prev_i]).normalize_or_zero();
+        let d_out = (points[next_i] - p).normalize_or_zero();
+
+        // 内角コサインが cos_threshold より小さい（より鋭い）コーナーのみ面取り
+        if d_in.dot(d_out) < cos_threshold {
+            result.push(p - t * d_in); // コーナー手前
+            result.push(p + t * d_out); // コーナー直後
+        } else {
+            result.push(p);
+        }
+    }
+
+    result
+}
+
 /// 点列の i 番目における接線方向を返す（中央差分、端点は前後向き差分）。
 fn compute_tangent(points: &[Vec2], i: usize, is_closed: bool) -> Vec2 {
     let n = points.len();
@@ -954,7 +1021,14 @@ pub fn spawn_boundary_meshes(
             NOISE_AMPLITUDE,
             &junctions,
         );
-        let sampled = sample_catmull_rom(&displaced, polyline.is_closed, CATMULL_ROM_STEPS);
+        let chamfered = chamfer_polyline_points(
+            &displaced,
+            polyline.is_closed,
+            &junctions,
+            CHAMFER_DISTANCE,
+            CHAMFER_COS_THRESHOLD,
+        );
+        let sampled = sample_catmull_rom(&chamfered, polyline.is_closed, CATMULL_ROM_STEPS);
         if sampled.len() < 2 {
             continue;
         }
