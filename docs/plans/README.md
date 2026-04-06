@@ -20,7 +20,7 @@
 | Document | Status | Notes |
 |---|---|---|
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
-| [terrain-boundary-surface-alignment-plan-2026-04-06.md](terrain-boundary-surface-alignment-plan-2026-04-06.md) | Draft | 境界曲線 ribbon を唯一の形状ソースとし、terrain 側サブセル範囲で境界面と塗り範囲を一致させる計画 |
+| [world-map-lod-plan-2026-04-05.md](world-map-lod-plan-2026-04-05.md) | Draft | ワールドマップ LOD 計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -152,3 +152,4 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
+

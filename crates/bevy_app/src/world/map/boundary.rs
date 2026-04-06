@@ -19,9 +19,12 @@ use bevy::camera::visibility::RenderLayers;
 use bevy::mesh::{Indices, Mesh, PrimitiveTopology};
 use bevy::prelude::*;
 use hw_core::constants::{LAYER_3D, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, Y_MAP_BOUNDARY_BASE};
+use hw_visual::{BoundarySurfaceMaterialExt, BoundarySurfaceUniform, make_boundary_surface_material};
 use hw_world::{TerrainType, WorldMasks, grid_to_world};
 
+use crate::assets::GameAssets;
 use crate::world::map::spawn::GeneratedWorldLayoutResource;
+use crate::world::map::terrain_metadata::TerrainFeatureMap;
 
 // ── パラメータ定数 ──────────────────────────────────────────────────────────
 
@@ -36,8 +39,11 @@ const NOISE_AMPLITUDE: f32 = TILE_SIZE * 0.375; // 12.0
 /// Catmull-Rom スプライン 1 セグメントあたりのサンプル数。
 const CATMULL_ROM_STEPS: u32 = 8;
 
-/// クワッドストリップの幅（ワールド単位）。
-const STRIP_WIDTH: f32 = TILE_SIZE * 0.2; // 6.4
+/// リボン幅（ワールド単位）。変位曲線を中心に ±NOISE_AMPLITUDE × 2 の半幅を持つ。
+/// 完全不透明ゾーン: 中心 ± NOISE_AMPLITUDE（内側 50%）、フェードゾーン: 残り各 25%。
+/// これにより、最大変位 (±NOISE_AMPLITUDE = ±12wu) 時でも u=0.25 位置がグリッドエッジと
+/// 一致し、完全不透明ゾーン端でギャップなく境界をカバーできる。
+const STRIP_WIDTH: f32 = NOISE_AMPLITUDE * 4.0; // 48wu
 
 /// 開チェーン端のラウンドキャップ（半円）の円周分割数。
 const ROUND_CAP_SEGMENTS: u32 = 10;
@@ -87,20 +93,6 @@ impl BoundaryKind {
     pub fn index(self) -> u32 {
         self as u32
     }
-
-    /// この境界種別に対応する表示色。
-    pub fn color(self) -> Color {
-        match self {
-            Self::GrassDirt => Color::srgb(0.35, 0.22, 0.08),
-            Self::GrassSand => Color::srgb(0.85, 0.78, 0.45),
-            Self::GrassRiver => Color::srgb(0.15, 0.45, 0.70),
-            Self::DirtSand => Color::srgb(0.70, 0.60, 0.35),
-            Self::DirtRiver => Color::srgb(0.20, 0.35, 0.55),
-            Self::SandRiver => Color::srgb(0.45, 0.65, 0.75),
-            Self::GrassZoneTone => Color::srgb(0.26, 0.44, 0.12),
-            Self::DirtZoneTone => Color::srgb(0.40, 0.30, 0.16),
-        }
-    }
 }
 
 // ── データ型 ──────────────────────────────────────────────────────────────────
@@ -111,6 +103,10 @@ pub struct BoundaryEdge {
     pub a: Vec2,
     pub b: Vec2,
     pub kind: BoundaryKind,
+    /// a→b 方向に対する左側（CCW 法線側）の地形種別。
+    pub left_terrain: TerrainType,
+    /// a→b 方向に対する右側の地形種別。
+    pub right_terrain: TerrainType,
 }
 
 /// 連続した境界ポリライン。開チェーンと閉ループの両方を表現する。
@@ -121,7 +117,22 @@ pub struct BoundaryPolyline {
     pub arc_lengths: Vec<f32>,
     pub is_closed: bool,
     pub kind: BoundaryKind,
+    /// ポリライン進行方向左側（メッシュで u=0 になる側）の地形種別。
+    pub left_terrain: TerrainType,
+    /// ポリライン進行方向右側（メッシュで u=1 になる側）の地形種別。
+    pub right_terrain: TerrainType,
 }
+
+/// 境界リボンメッシュ所有エンティティを示すマーカーコンポーネント。
+#[derive(Component)]
+pub struct BoundaryMeshMarker;
+
+/// 境界リボンが影響するグリッドセルのインデックス。
+///
+/// PostStartup で build し、将来の TerrainChangedEvent 対応の基盤として使用する。
+/// M4 で `cells: HashMap<(i32, i32), Vec<BoundaryKind>>` フィールドを追加予定。
+#[derive(Resource, Default)]
+pub struct BoundarySliceSpatialIndex;
 
 // ── M1: エッジ抽出と連結 ──────────────────────────────────────────────────────
 
@@ -183,6 +194,8 @@ pub fn extract_boundary_edges(terrain_tiles: &[TerrainType], masks: &WorldMasks)
                     a: Vec2::new(center.x - half, center.y + half),
                     b: Vec2::new(center.x + half, center.y + half),
                     kind,
+                    left_terrain: t1,   // +Y 側 = upper cell
+                    right_terrain: t0,  // -Y 側 = lower cell
                 });
             } else if let Some(kind) = maybe_zone_tone_edge(
                 t0,
@@ -195,6 +208,8 @@ pub fn extract_boundary_edges(terrain_tiles: &[TerrainType], masks: &WorldMasks)
                     a: Vec2::new(center.x - half, center.y + half),
                     b: Vec2::new(center.x + half, center.y + half),
                     kind,
+                    left_terrain: t1,   // 同一種別（ゾーントーン境界）
+                    right_terrain: t0,
                 });
             }
         }
@@ -213,6 +228,8 @@ pub fn extract_boundary_edges(terrain_tiles: &[TerrainType], masks: &WorldMasks)
                     a: Vec2::new(center.x + half, center.y - half),
                     b: Vec2::new(center.x + half, center.y + half),
                     kind,
+                    left_terrain: t0,   // -X 側 = left cell
+                    right_terrain: t1,  // +X 側 = right cell
                 });
             } else if let Some(kind) = maybe_zone_tone_edge(
                 t0,
@@ -225,6 +242,8 @@ pub fn extract_boundary_edges(terrain_tiles: &[TerrainType], masks: &WorldMasks)
                     a: Vec2::new(center.x + half, center.y - half),
                     b: Vec2::new(center.x + half, center.y + half),
                     kind,
+                    left_terrain: t0,   // 同一種別（ゾーントーン境界）
+                    right_terrain: t1,
                 });
             }
         }
@@ -296,7 +315,7 @@ pub fn chain_edges_to_polylines(edges: Vec<BoundaryEdge>) -> Vec<BoundaryPolylin
                 Some(&i) => i,
                 None => continue,
             };
-            let points = follow_chain(
+            let (points, first_forward) = follow_chain(
                 start_key,
                 first,
                 &kind_edges,
@@ -306,11 +325,14 @@ pub fn chain_edges_to_polylines(edges: Vec<BoundaryEdge>) -> Vec<BoundaryPolylin
             );
             if points.len() >= 2 {
                 let arc_lengths = parameterize_arc_length(&points);
+                let (left_terrain, right_terrain) = terrain_from_edge_polarity(&kind_edges[first], first_forward);
                 result.push(BoundaryPolyline {
                     points,
                     arc_lengths,
                     is_closed: false,
                     kind,
+                    left_terrain,
+                    right_terrain,
                 });
             }
         }
@@ -321,7 +343,7 @@ pub fn chain_edges_to_polylines(edges: Vec<BoundaryEdge>) -> Vec<BoundaryPolylin
                 continue;
             }
             let start_key = corner_keys[start_idx][0];
-            let mut points = follow_chain(
+            let (mut points, first_forward) = follow_chain(
                 start_key,
                 start_idx,
                 &kind_edges,
@@ -333,17 +355,44 @@ pub fn chain_edges_to_polylines(edges: Vec<BoundaryEdge>) -> Vec<BoundaryPolylin
             // 閉じた単純ループは少なくとも 3 頂点（重複除去後）。
             if points.len() >= 3 {
                 let arc_lengths = parameterize_arc_length(&points);
+                let (left_terrain, right_terrain) = terrain_from_edge_polarity(&kind_edges[start_idx], first_forward);
                 result.push(BoundaryPolyline {
                     points,
                     arc_lengths,
                     is_closed: true,
                     kind,
+                    left_terrain,
+                    right_terrain,
                 });
             }
         }
     }
 
     result
+}
+
+/// `TerrainType` を shader に渡す粗い ID (0=Grass, 1=Dirt, 2=Sand, 3=River) に変換する。
+#[inline]
+fn terrain_coarse_id(t: TerrainType) -> u8 {
+    match t {
+        TerrainType::Grass => 0,
+        TerrainType::Dirt => 1,
+        TerrainType::Sand => 2,
+        TerrainType::River => 3,
+    }
+}
+
+/// エッジの `left_terrain`/`right_terrain` をポリライン走査方向に合わせて返す。
+///
+/// `first_forward = true`（a→b 方向で辿った）なら edge の left/right をそのまま使う。
+/// `first_forward = false`（b→a 方向で辿った）なら左右を反転する。
+#[inline]
+fn terrain_from_edge_polarity(edge: &BoundaryEdge, first_forward: bool) -> (TerrainType, TerrainType) {
+    if first_forward {
+        (edge.left_terrain, edge.right_terrain)
+    } else {
+        (edge.right_terrain, edge.left_terrain)
+    }
 }
 
 /// 閉ループ走査では始点コーナーが **先頭と末尾の両方** に入る（`follow_chain` が一周して戻るため）。
@@ -359,7 +408,7 @@ fn trim_closed_polyline_duplicate_end(points: &mut Vec<Vec2>) {
     }
 }
 
-/// 指定コーナーから始まる連続チェーンを辿り、Vec<Vec2> の点列を返す。
+/// 指定コーナーから始まる連続チェーンを辿り、点列と「最初のエッジを順方向（a→b）で辿ったか」を返す。
 fn follow_chain(
     start_key: (i32, i32),
     first_edge_idx: usize,
@@ -367,10 +416,11 @@ fn follow_chain(
     corner_keys: &[[(i32, i32); 2]],
     adj: &HashMap<(i32, i32), Vec<usize>>,
     visited: &mut [bool],
-) -> Vec<Vec2> {
+) -> (Vec<Vec2>, bool) {
     let mut points = Vec::new();
     let mut cur_key = start_key;
     let mut cur_edge_idx = first_edge_idx;
+    let mut first_forward = true;
 
     loop {
         visited[cur_edge_idx] = true;
@@ -379,10 +429,12 @@ fn follow_chain(
 
         if points.is_empty() {
             if ka == cur_key {
+                first_forward = true;
                 points.push(edge.a);
                 points.push(edge.b);
                 cur_key = kb;
             } else {
+                first_forward = false;
                 points.push(edge.b);
                 points.push(edge.a);
                 cur_key = ka;
@@ -405,7 +457,7 @@ fn follow_chain(
         }
     }
 
-    points
+    (points, first_forward)
 }
 
 /// 点列の累積弧長テーブルを構築する（先頭は 0.0、points と同じ長さ）。
@@ -650,9 +702,11 @@ struct RoundCapInput {
 /// 開いたポリラインの **端** を半円で覆う（ストロークの round cap に相当）。
 ///
 /// 弧は `theta in [0, π]` で `center + half_width * (cos(theta)*n_width + sin(theta)*bulge_dir)`。
+/// UV: `theta=0`（n_width 側 = left = u=0.0）→ `theta=π`（-n_width 側 = right = u=1.0）。
 fn append_round_cap(
     positions: &mut Vec<[f32; 3]>,
     normals: &mut Vec<[f32; 3]>,
+    uvs: &mut Vec<[f32; 2]>,
     indices: &mut Vec<u32>,
     cap: RoundCapInput,
 ) {
@@ -666,6 +720,7 @@ fn append_round_cap(
     let seg = ROUND_CAP_SEGMENTS;
     let center_idx = positions.len() as u32;
     push_vertex_xz(positions, normals, center, y_offset);
+    uvs.push([0.5, 0.0]);
 
     let arc_start = positions.len() as u32;
     for i in 0..=seg {
@@ -673,6 +728,7 @@ fn append_round_cap(
         let theta = std::f32::consts::PI * s;
         let p = center + half_width * (theta.cos() * n_width + theta.sin() * bulge_dir);
         push_vertex_xz(positions, normals, p, y_offset);
+        uvs.push([s, 0.0]); // s=0 → u=0.0 (left), s=1 → u=1.0 (right)
     }
 
     for i in 0..seg {
@@ -680,21 +736,25 @@ fn append_round_cap(
     }
 }
 
-/// 密な点列（Vec2）からクワッドストリップ Mesh を生成する。
+/// 密な点列（Vec2）からミター補正クワッドストリップ Mesh を生成する。
 ///
 /// Vec2(wx, wy) → Vec3(wx, y_offset, -wy) で 3D 化（タイルスポーンと同一ルール）。
 ///
-/// 各 **セグメント** を線分方向に垂直な幅 `width` で押し出す（頂点ごとに接線を共有しない）。
-/// 頂点共有＋角でのミーター伸長による **外側の尖り** を避けるため。サンプルが密なほど
-/// 継ぎ目の隙は目立たない。
+/// **ミター補正**: 各点で隣接セグメントの法線を合成し、角度に依存した幅補正（miter scale）を
+/// 適用して頂点位置を決める。隣接セグメント間で頂点を **共有** するため、カーブ部での
+/// クワッド外縁ギャップ（短冊アーティファクト）が発生しない。
 ///
-/// **開チェーン**（`is_closed == false`）では両端にラウンドキャップを付け、矩形端の
-/// 鋭角（必ず 90° 未満に見えるシルエット）を抑える。
+/// ミタースケールの上限を `MAX_MITER_SCALE` でクランプし、鋭角コーナーでの頂点突出を防ぐ。
+///
+/// **開チェーン**（`is_closed == false`）では `add_start_cap` / `add_end_cap` に従い
+/// 端部にラウンドキャップを付ける。ジャンクション点（三叉路）では false を渡してキャップを省略する。
 pub fn build_quad_strip_mesh(
     points: &[Vec2],
     width: f32,
     y_offset: f32,
     is_closed: bool,
+    add_start_cap: bool,
+    add_end_cap: bool,
 ) -> Mesh {
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
     let raw_n = points.len();
@@ -702,8 +762,7 @@ pub fn build_quad_strip_mesh(
         return mesh;
     }
 
-    // `sample_catmull_rom` は閉曲線で先頭点を末尾に複製する。同一位置に重複があると
-    // ゼロ長セグメントが増えるため落とす。
+    // `sample_catmull_rom` は閉曲線で先頭点を末尾に複製する。重複を除く。
     let points: &[Vec2] = if is_closed
         && raw_n >= 2
         && points[0].distance_squared(points[raw_n - 1]) < 1e-12
@@ -718,62 +777,91 @@ pub fn build_quad_strip_mesh(
     }
 
     let hw = width * 0.5;
+    /// 鋭角コーナーでのミター突出上限（これ以上伸長しない）。
+    const MAX_MITER_SCALE: f32 = 4.0;
     let num_segs = if is_closed { n } else { n - 1 };
-    let cap_extra_verts = if is_closed {
-        0
-    } else {
-        2 * (ROUND_CAP_SEGMENTS as usize + 2)
-    };
-    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(num_segs * 4 + cap_extra_verts);
-    let mut normals: Vec<[f32; 3]> = Vec::with_capacity(num_segs * 4 + cap_extra_verts);
-    let cap_extra_idx = if is_closed {
-        0
-    } else {
-        2 * ROUND_CAP_SEGMENTS as usize * 3
-    };
-    let mut indices: Vec<u32> = Vec::with_capacity(num_segs * 6 + cap_extra_idx);
 
+    // ── セグメント法線の事前計算 ──────────────────────────────────────────────
+    let mut seg_normals: Vec<Vec2> = Vec::with_capacity(num_segs);
     for s in 0..num_segs {
         let i = s;
         let j = if is_closed { (s + 1) % n } else { s + 1 };
-        let pi = points[i];
-        let pj = points[j];
-        let seg = pj - pi;
-        let len_sq = seg.length_squared();
-        if len_sq < 1e-16 {
-            continue;
-        }
-        let t = seg * (1.0 / len_sq.sqrt());
-        // セグメントに直交する 2D 法線（幅方向）
-        let n2 = Vec2::new(-t.y, t.x);
-        let li = pi + n2 * hw;
-        let ri = pi - n2 * hw;
-        let lj = pj + n2 * hw;
-        let rj = pj - n2 * hw;
-
-        let base = positions.len() as u32;
-        push_vertex_xz(&mut positions, &mut normals, li, y_offset);
-        push_vertex_xz(&mut positions, &mut normals, ri, y_offset);
-        push_vertex_xz(&mut positions, &mut normals, lj, y_offset);
-        push_vertex_xz(&mut positions, &mut normals, rj, y_offset);
-        // Vulkan Y-down NDC で CCW（Bevy FrontFace::Ccw）になる巻き順。
-        indices.extend_from_slice(&[base, base + 1, base + 2, base + 1, base + 3, base + 2]);
+        let d = points[j] - points[i];
+        let len = d.length();
+        seg_normals.push(if len > 1e-8 {
+            Vec2::new(-d.y, d.x) / len
+        } else {
+            Vec2::Y
+        });
     }
 
+    // ── 各点のミター補正頂点を計算 ──────────────────────────────────────────
+    let mut lefts: Vec<Vec2> = Vec::with_capacity(n);
+    let mut rights: Vec<Vec2> = Vec::with_capacity(n);
+
+    for i in 0..n {
+        let (l, r) = miter_pair(
+            points[i],
+            if is_closed {
+                seg_normals[(i + num_segs - 1) % num_segs]
+            } else if i == 0 {
+                seg_normals[0]
+            } else {
+                seg_normals[i - 1]
+            },
+            if is_closed {
+                seg_normals[i % num_segs]
+            } else if i == n - 1 {
+                seg_normals[num_segs - 1]
+            } else {
+                seg_normals[i]
+            },
+            hw,
+            MAX_MITER_SCALE,
+        );
+        lefts.push(l);
+        rights.push(r);
+    }
+
+    // ── 頂点・UV・インデックスの構築 ────────────────────────────────────────
+    let cap_count = if is_closed { 0 } else { add_start_cap as usize + add_end_cap as usize };
+    let cap_verts = cap_count * (ROUND_CAP_SEGMENTS as usize + 2);
+    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(n * 2 + cap_verts);
+    let mut normals_buf: Vec<[f32; 3]> = Vec::with_capacity(n * 2 + cap_verts);
+    let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(n * 2 + cap_verts);
+    let cap_idx = cap_count * ROUND_CAP_SEGMENTS as usize * 3;
+    let mut indices: Vec<u32> = Vec::with_capacity(num_segs * 6 + cap_idx);
+
+    for i in 0..n {
+        push_vertex_xz(&mut positions, &mut normals_buf, lefts[i], y_offset);
+        uvs.push([0.0, 0.0]);
+        push_vertex_xz(&mut positions, &mut normals_buf, rights[i], y_offset);
+        uvs.push([1.0, 0.0]);
+    }
+
+    for s in 0..num_segs {
+        let a = (s * 2) as u32;
+        let b = if is_closed {
+            ((s + 1) % n * 2) as u32
+        } else {
+            ((s + 1) * 2) as u32
+        };
+        // CCW 巻き順（Bevy FrontFace::Ccw）
+        indices.extend_from_slice(&[a, a + 1, b, a + 1, b + 1, b]);
+    }
+
+    // ── ラウンドキャップ（開チェーンのみ、ジャンクション点はスキップ）──────────
     if !is_closed && n >= 2 {
-        let p0 = points[0];
-        let p1 = points[1];
-        let s0 = p1 - p0;
-        let l0 = s0.length_squared();
-        if l0 >= 1e-16 {
-            let t0 = s0 * (1.0 / l0.sqrt());
-            let n0 = Vec2::new(-t0.y, t0.x);
+        if add_start_cap {
+            let n0 = seg_normals[0];
+            let t0 = Vec2::new(n0.y, -n0.x);
             append_round_cap(
                 &mut positions,
-                &mut normals,
+                &mut normals_buf,
+                &mut uvs,
                 &mut indices,
                 RoundCapInput {
-                    center: p0,
+                    center: points[0],
                     n_width: n0,
                     bulge_dir: -t0,
                     half_width: hw,
@@ -782,19 +870,16 @@ pub fn build_quad_strip_mesh(
             );
         }
 
-        let pa = points[n - 2];
-        let pb = points[n - 1];
-        let sl = pb - pa;
-        let ll = sl.length_squared();
-        if ll >= 1e-16 {
-            let tl = sl * (1.0 / ll.sqrt());
-            let nl = Vec2::new(-tl.y, tl.x);
+        if add_end_cap {
+            let nl = seg_normals[num_segs - 1];
+            let tl = Vec2::new(nl.y, -nl.x);
             append_round_cap(
                 &mut positions,
-                &mut normals,
+                &mut normals_buf,
+                &mut uvs,
                 &mut indices,
                 RoundCapInput {
-                    center: pb,
+                    center: points[n - 1],
                     n_width: nl,
                     bulge_dir: tl,
                     half_width: hw,
@@ -805,20 +890,44 @@ pub fn build_quad_strip_mesh(
     }
 
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals_buf);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.insert_indices(Indices::U32(indices));
     mesh
+}
+
+/// 2 セグメントの法線からミター補正した左右頂点オフセットを計算する。
+///
+/// 両端点（開チェーンの end points）では prev/next が同じ法線を渡す。
+/// スケールを `max_scale` でクランプし鋭角コーナーでの頂点突出を防ぐ。
+fn miter_pair(
+    center: Vec2,
+    n_prev: Vec2,
+    n_next: Vec2,
+    hw: f32,
+    max_scale: f32,
+) -> (Vec2, Vec2) {
+    let m = (n_prev + n_next).normalize_or_zero();
+    if m.length_squared() < 1e-8 {
+        // 対向セグメント（真逆）→ prev 法線をそのまま使う
+        return (center + n_prev * hw, center - n_prev * hw);
+    }
+    let scale = (1.0 / m.dot(n_prev).max(1.0 / max_scale)).min(max_scale);
+    (center + m * hw * scale, center - m * hw * scale)
 }
 
 /// PostStartup で呼ばれる境界曲線メッシュスポーンシステム。
 ///
 /// GeneratedWorldLayoutResource から地形タイルを読み取り、
 /// 全境界種別のポリラインを生成・スポーンする。
+/// 各リボンに `BoundarySurfaceMaterial` を割り当て、world-space UV で地形テクスチャをブレンドする。
 pub fn spawn_boundary_meshes(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut boundary_materials: ResMut<Assets<hw_visual::BoundarySurfaceMaterial>>,
     layout: Res<GeneratedWorldLayoutResource>,
+    game_assets: Res<GameAssets>,
+    feature_map: Res<TerrainFeatureMap>,
 ) {
     let terrain_tiles = &layout.layout.terrain_tiles;
     let master_seed = layout.master_seed;
@@ -827,6 +936,14 @@ pub fn spawn_boundary_meshes(
     let junctions = boundary_junction_corner_keys(&edges);
     let polylines = chain_edges_to_polylines(edges);
     let count = polylines.len();
+
+    // (BoundaryKind, left_id, right_id) → マテリアルハンドルのキャッシュ。
+    // ポリラインごとに left/right が異なる場合があるため、kind 単位ではなく
+    // テクスチャ構成まで含めたキーでキャッシュする。
+    let mut kind_material_cache: HashMap<
+        (BoundaryKind, u8, u8),
+        Handle<hw_visual::BoundarySurfaceMaterial>,
+    > = HashMap::new();
 
     for polyline in polylines {
         let noise = boundary_polyline_noise_params(master_seed, &polyline);
@@ -842,26 +959,63 @@ pub fn spawn_boundary_meshes(
             continue;
         }
 
+        // ジャンクション点（三叉路以上）ではラウンドキャップが複数リボン間で干渉して
+        // 円形のアーティファクトを生む。ジャンクション端点にはキャップを付けない。
+        let add_start_cap = !polyline.is_closed
+            && !polyline.points.is_empty()
+            && !junctions.contains(&world_to_corner_key(polyline.points[0]));
+        let add_end_cap = !polyline.is_closed
+            && polyline.points.len() > 1
+            && !junctions.contains(&world_to_corner_key(*polyline.points.last().unwrap()));
+
         let mesh = build_quad_strip_mesh(
             &sampled,
             STRIP_WIDTH,
             Y_MAP_BOUNDARY_BASE,
             polyline.is_closed,
+            add_start_cap,
+            add_end_cap,
         );
         let mesh_handle = meshes.add(mesh);
-        let material_handle = materials.add(StandardMaterial {
-            base_color: polyline.kind.color(),
-            unlit: true,
-            ..default()
+
+        let left_id = terrain_coarse_id(polyline.left_terrain);
+        let right_id = terrain_coarse_id(polyline.right_terrain);
+        let cache_key = (polyline.kind, left_id, right_id);
+        let material_handle = kind_material_cache.entry(cache_key).or_insert_with(|| {
+            boundary_materials.add(make_boundary_surface_material(
+                BoundarySurfaceMaterialExt {
+                    uniforms: BoundarySurfaceUniform {
+                        left_terrain_id: left_id as f32,
+                        right_terrain_id: right_id as f32,
+                        uv_scale: 1.0 / TILE_SIZE,
+                        blend_softness: 0.15,
+                    },
+                    grass_albedo: Some(game_assets.grass.clone()),
+                    dirt_albedo: Some(game_assets.dirt.clone()),
+                    sand_albedo: Some(game_assets.sand.clone()),
+                    river_albedo: Some(game_assets.river.clone()),
+                    terrain_macro_noise: Some(game_assets.terrain_macro_noise.clone()),
+                    grass_macro_overlay: Some(game_assets.grass_macro_overlay.clone()),
+                    dirt_macro_overlay: Some(game_assets.dirt_macro_overlay.clone()),
+                    sand_macro_overlay: Some(game_assets.sand_macro_overlay.clone()),
+                    terrain_feature_map: Some(feature_map.image.clone()),
+                    terrain_feature_lut: Some(game_assets.terrain_feature_lut.clone()),
+                    shoreline_detail: Some(game_assets.shoreline_detail.clone()),
+                },
+            ))
         });
 
+        // ── メインリボン（ノイズ変位済み Catmull-Rom 曲線） ───────────────────
         commands.spawn((
             Mesh3d(mesh_handle),
-            MeshMaterial3d(material_handle),
+            MeshMaterial3d(material_handle.clone()),
             Transform::IDENTITY,
             RenderLayers::from_layers(&[LAYER_3D]),
+            BoundaryMeshMarker,
         ));
     }
+
+    commands.insert_resource(BoundarySliceSpatialIndex);
 
     info!("BEVY_STARTUP: Spawned {} boundary polylines", count);
 }
