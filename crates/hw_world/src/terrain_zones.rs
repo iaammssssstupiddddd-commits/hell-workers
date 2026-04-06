@@ -4,7 +4,8 @@
 //! - アンカー距離場（D）→ flood fill（B）→ 内陸砂パッチ の順で処理する
 //! - 生成したマスクは `WorldMasks::fill_terrain_zones_from_seed()` 経由で `WorldMasks` に格納する
 
-use std::collections::VecDeque;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, VecDeque};
 
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use rand::rngs::StdRng;
@@ -14,12 +15,12 @@ use crate::world_masks::BitGrid;
 
 // ── 定数 ─────────────────────────────────────────────────────────────────────
 
-/// Dirt ゾーン起点のアンカー距離下限（保護帯 PROTECTION_BAND_RIVER_WIDTH=3 の外）
-pub const ZONE_DIRT_DIST_MIN: u32 = 5;
-/// Dirt ゾーン起点のアンカー距離上限
-pub const ZONE_DIRT_DIST_MAX: u32 = 16;
-/// Grass ゾーン起点のアンカー距離下限
-pub const ZONE_GRASS_DIST_MIN: u32 = 18;
+/// Dirt ゾーン起点のアンカー距離下限（Chamfer 3-4 コスト単位、旧 BFS 値の約 ×3）
+pub const ZONE_DIRT_DIST_MIN: u32 = 15;
+/// Dirt ゾーン起点のアンカー距離上限（Chamfer 3-4 コスト単位）
+pub const ZONE_DIRT_DIST_MAX: u32 = 48;
+/// Grass ゾーン起点のアンカー距離下限（Chamfer 3-4 コスト単位）
+pub const ZONE_GRASS_DIST_MIN: u32 = 54;
 
 /// Dirt ゾーン起点数の下限
 pub const ZONE_DIRT_SEED_COUNT_MIN: u32 = 2;
@@ -46,16 +47,16 @@ pub const ZONE_DIRT_ENFORCE_MIN: u32 = 72;
 pub const ZONE_DIRT_ENFORCE_MAX: u32 = 98;
 
 // ── C: ゾーン端部グラデーション定数 ──────────────────────────────────────────
-/// ゾーン境界から外側何マス以内の中立セルに C グラデーションバイアスをかけるか
-pub const ZONE_GRADIENT_WIDTH: u32 = 3;
+/// ゾーン境界から外側何コスト以内の中立セルに C グラデーションバイアスをかけるか（Chamfer 3-4 コスト単位）
+pub const ZONE_GRADIENT_WIDTH: u32 = 9;
 /// Dirt ゾーン端部グラデーション内の Grass→Dirt 変換確率（%）
 pub const ZONE_GRADIENT_DIRT_BIAS_PERCENT: u32 = 30;
 /// Grass ゾーン端部グラデーション内の Dirt→Grass 変換確率（%）
 pub const ZONE_GRADIENT_GRASS_BIAS_PERCENT: u32 = 40;
 
 // ── D: ゾーン間離隔定数 ───────────────────────────────────────────────────────
-/// Dirt ゾーンと Grass ゾーンの間に設ける最低離隔（マス）
-pub const ZONE_MIN_SEPARATION: u32 = 3;
+/// Dirt ゾーンと Grass ゾーンの間に設ける最低離隔（Chamfer 3-4 コスト単位、旧 BFS 値の約 ×3）
+pub const ZONE_MIN_SEPARATION: u32 = 9;
 
 // ── 内陸砂定数 ────────────────────────────────────────────────────────────────
 
@@ -160,34 +161,50 @@ pub fn generate_terrain_zone_masks(
 
 // ── 内部関数 ──────────────────────────────────────────────────────────────────
 
-/// mask の true セルを多起点 BFS の起点（距離 0）として、全セルへの最短距離を返す。
+/// mask の true セルを多起点ダイクストラの起点（距離 0）として、全セルへの Chamfer 3-4 最短距離を返す。
+///
+/// 直交移動コスト=3、斜め移動コスト=4（Chamfer 3-4 距離）。
+/// 4 近傍 BFS によるマンハッタン距離と異なり、等距離帯が円形に近くなる。
 fn distance_field_from_mask(mask: &BitGrid) -> Vec<u32> {
     let w = MAP_WIDTH;
     let h = MAP_HEIGHT;
     let mut dist = vec![u32::MAX; (w * h) as usize];
-    let mut queue: VecDeque<(i32, i32)> = VecDeque::new();
-    const DIRS: [(i32, i32); 4] = [(0, 1), (0, -1), (1, 0), (-1, 0)];
+    let mut heap: BinaryHeap<Reverse<(u32, i32, i32)>> = BinaryHeap::new();
+
+    const DIRS_8: [((i32, i32), u32); 8] = [
+        ((0, 1), 3),
+        ((0, -1), 3),
+        ((1, 0), 3),
+        ((-1, 0), 3),
+        ((1, 1), 4),
+        ((1, -1), 4),
+        ((-1, 1), 4),
+        ((-1, -1), 4),
+    ];
 
     for y in 0..h {
         for x in 0..w {
             if mask.get((x, y)) {
                 dist[(y * w + x) as usize] = 0;
-                queue.push_back((x, y));
+                heap.push(Reverse((0, x, y)));
             }
         }
     }
-    while let Some((cx, cy)) = queue.pop_front() {
-        let d = dist[(cy * w + cx) as usize];
-        for (dx, dy) in DIRS {
+    while let Some(Reverse((d, cx, cy))) = heap.pop() {
+        if dist[(cy * w + cx) as usize] < d {
+            continue; // stale entry
+        }
+        for &((dx, dy), cost) in &DIRS_8 {
             let nx = cx + dx;
             let ny = cy + dy;
             if nx < 0 || nx >= w || ny < 0 || ny >= h {
                 continue;
             }
             let idx = (ny * w + nx) as usize;
-            if dist[idx] == u32::MAX {
-                dist[idx] = d + 1;
-                queue.push_back((nx, ny));
+            let nd = d + cost;
+            if nd < dist[idx] {
+                dist[idx] = nd;
+                heap.push(Reverse((nd, nx, ny)));
             }
         }
     }
@@ -209,8 +226,8 @@ pub(crate) fn compute_zone_distance_field(zone_mask: &BitGrid) -> Vec<u32> {
     distance_field_from_mask(zone_mask)
 }
 
-/// mask の true セルから 4 近傍 BFS で radius マス以内を全て true にした BitGrid を返す。
-/// 元の mask 自体も結果に含まれる。
+/// mask の true セルから Chamfer 3-4 距離で radius コスト以内を全て true にした BitGrid を返す。
+/// 元の mask 自体も結果に含まれる。radius はマス数ではなく Chamfer コスト閾値。
 fn expand_mask(mask: &BitGrid, radius: u32) -> BitGrid {
     let mut result = mask.clone();
     if radius == 0 {
@@ -219,33 +236,46 @@ fn expand_mask(mask: &BitGrid, radius: u32) -> BitGrid {
     let w = MAP_WIDTH;
     let h = MAP_HEIGHT;
     let mut dist = vec![u32::MAX; (w * h) as usize];
-    let mut queue: VecDeque<(i32, i32)> = VecDeque::new();
-    const DIRS: [(i32, i32); 4] = [(0, 1), (0, -1), (1, 0), (-1, 0)];
+    let mut heap: BinaryHeap<Reverse<(u32, i32, i32)>> = BinaryHeap::new();
+
+    const DIRS_8: [((i32, i32), u32); 8] = [
+        ((0, 1), 3),
+        ((0, -1), 3),
+        ((1, 0), 3),
+        ((-1, 0), 3),
+        ((1, 1), 4),
+        ((1, -1), 4),
+        ((-1, 1), 4),
+        ((-1, -1), 4),
+    ];
 
     for y in 0..h {
         for x in 0..w {
             if mask.get((x, y)) {
                 dist[(y * w + x) as usize] = 0;
-                queue.push_back((x, y));
+                heap.push(Reverse((0, x, y)));
             }
         }
     }
-    while let Some((cx, cy)) = queue.pop_front() {
-        let d = dist[(cy * w + cx) as usize];
-        if d >= radius {
-            continue;
+    while let Some(Reverse((d, cx, cy))) = heap.pop() {
+        if dist[(cy * w + cx) as usize] < d {
+            continue; // stale entry
         }
-        for (dx, dy) in DIRS {
+        if d >= radius {
+            continue; // コスト閾値超過: これ以上展開しない
+        }
+        for &((dx, dy), cost) in &DIRS_8 {
             let nx = cx + dx;
             let ny = cy + dy;
             if nx < 0 || nx >= w || ny < 0 || ny >= h {
                 continue;
             }
             let idx = (ny * w + nx) as usize;
-            if dist[idx] == u32::MAX {
-                dist[idx] = d + 1;
+            let nd = d + cost;
+            if nd < dist[idx] {
+                dist[idx] = nd;
                 result.set((nx, ny), true);
-                queue.push_back((nx, ny));
+                heap.push(Reverse((nd, nx, ny)));
             }
         }
     }
@@ -285,37 +315,48 @@ fn pick_zone_seeds(
     candidates
 }
 
-/// seeds から順に 4 近傍 flood fill で BitGrid を生成する（結果は同一 result に累積）。
+/// seeds から順に Chamfer 3-4 コスト付き 8 近傍優先度キューで BitGrid を生成する（結果は同一 result に累積）。
 ///
 /// allowed_mask 外への展開は行わない。
 /// area_max は 1 起点ごとの上限（seed 間で共有しない）。
+/// BinaryHeap によりコスト最小のセルから展開するため、パッチ輪郭が円形に近くなる。
 fn flood_fill_zone_patches(
     seeds: &[(i32, i32)],
     allowed_mask: &BitGrid,
     area_max: usize,
 ) -> BitGrid {
     let mut result = BitGrid::map_sized();
-    const DIRS: [(i32, i32); 4] = [(0, 1), (0, -1), (1, 0), (-1, 0)];
+
+    const DIRS_8: [((i32, i32), u32); 8] = [
+        ((0, 1), 3),
+        ((0, -1), 3),
+        ((1, 0), 3),
+        ((-1, 0), 3),
+        ((1, 1), 4),
+        ((1, -1), 4),
+        ((-1, 1), 4),
+        ((-1, -1), 4),
+    ];
 
     for &origin in seeds {
         if !allowed_mask.get(origin) || result.get(origin) {
             continue;
         }
-        let mut queue: VecDeque<(i32, i32)> = VecDeque::new();
-        queue.push_back(origin);
+        let mut heap: BinaryHeap<Reverse<(u32, i32, i32)>> = BinaryHeap::new();
         result.set(origin, true);
+        heap.push(Reverse((0, origin.0, origin.1)));
         let mut count = 1usize;
 
-        'outer: while let Some(pos) = queue.pop_front() {
-            for (dx, dy) in DIRS {
+        'outer: while let Some(Reverse((d, cx, cy))) = heap.pop() {
+            for &((dx, dy), cost) in &DIRS_8 {
                 if count >= area_max {
                     break 'outer;
                 }
-                let np = (pos.0 + dx, pos.1 + dy);
+                let np = (cx + dx, cy + dy);
                 if allowed_mask.get(np) && !result.get(np) {
                     result.set(np, true);
                     count += 1;
-                    queue.push_back(np);
+                    heap.push(Reverse((d + cost, np.0, np.1)));
                 }
             }
         }
