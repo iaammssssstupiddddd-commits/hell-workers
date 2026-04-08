@@ -34,16 +34,15 @@ pub use handles::{
     PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
 pub use material::{
-    BoundarySurfaceMaterial, BoundarySurfaceMaterialExt, BoundarySurfaceUniform,
     CharacterMaterial, SectionCut, SectionMaterial, SoulMaskMaterial, SoulShadowMaterial,
     TERRAIN_DIRT_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_DIRT_DOMAIN_WARP_STRENGTH,
     TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_GRASS_DOMAIN_WARP_STRENGTH,
     TERRAIN_GRASS_UV_DISTORT_STRENGTH, TERRAIN_KIND_DIRT, TERRAIN_KIND_GRASS, TERRAIN_KIND_RIVER,
     TERRAIN_KIND_SAND, TERRAIN_SAND_BRIGHTNESS_VARIATION_STRENGTH,
     TERRAIN_SAND_DOMAIN_WARP_STRENGTH, TerrainMaterialMaps, TerrainSurfaceMaterial,
-    TerrainSurfaceMaterialExt, TerrainSurfaceUniform, make_boundary_surface_material,
-    make_section_material, make_section_material_textured, make_terrain_section_material,
-    make_terrain_surface_material, soul_face_uv_offset, soul_face_uv_scale, with_alpha_mode,
+    TerrainSurfaceMaterialExt, TerrainSurfaceUniform, make_section_material,
+    make_section_material_textured, make_terrain_section_material, make_terrain_surface_material,
+    soul_face_uv_offset, soul_face_uv_scale, with_alpha_mode,
 };
 
 pub use visual3d::{
@@ -68,7 +67,6 @@ impl Plugin for HwVisualPlugin {
             Material2dPlugin::<dream::DreamBubbleMaterial>::default(),
             UiMaterialPlugin::<dream::DreamBubbleUiMaterial>::default(),
             Material2dPlugin::<TaskAreaMaterial>::default(),
-            MaterialPlugin::<material::BoundarySurfaceMaterial>::default(),
             MaterialPlugin::<material::CharacterMaterial>::default(),
             MaterialPlugin::<material::SectionMaterial>::default(),
             MaterialPlugin::<material::SoulMaskMaterial>::default(),

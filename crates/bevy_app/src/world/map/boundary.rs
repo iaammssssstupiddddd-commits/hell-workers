@@ -12,19 +12,17 @@
 //! 決定論的に導出する。同じ地形でも境界線が複数あれば互いに別の波形になる。
 //! **三叉路**（全境界グラフで次数 ≥ 3 のコーナー）では法線変位を 0 にし、種別の異なる帯が同一点で食い違わないようにする。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
-use bevy::asset::RenderAssetUsages;
-use bevy::camera::visibility::RenderLayers;
-use bevy::mesh::{Indices, Mesh, PrimitiveTopology};
+use bevy::image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
 use bevy::prelude::*;
-use hw_core::constants::{LAYER_3D, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, Y_MAP_BOUNDARY_BASE};
-use hw_visual::{BoundarySurfaceMaterialExt, BoundarySurfaceUniform, make_boundary_surface_material};
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE};
+use hw_visual::TerrainSurfaceMaterial;
 use hw_world::{TerrainType, WorldMasks, grid_to_world};
 
-use crate::assets::GameAssets;
+use crate::plugins::startup::Terrain3dHandles;
 use crate::world::map::spawn::GeneratedWorldLayoutResource;
-use crate::world::map::terrain_metadata::TerrainFeatureMap;
 
 // ── パラメータ定数 ──────────────────────────────────────────────────────────
 
@@ -39,15 +37,6 @@ const NOISE_AMPLITUDE: f32 = TILE_SIZE * 0.375; // 12.0
 /// Catmull-Rom スプライン 1 セグメントあたりのサンプル数。
 const CATMULL_ROM_STEPS: u32 = 8;
 
-/// リボン幅（ワールド単位）。変位曲線を中心に ±NOISE_AMPLITUDE × 2 の半幅を持つ。
-/// 完全不透明ゾーン: 中心 ± NOISE_AMPLITUDE（内側 50%）、フェードゾーン: 残り各 25%。
-/// これにより、最大変位 (±NOISE_AMPLITUDE = ±12wu) 時でも u=0.25 位置がグリッドエッジと
-/// 一致し、完全不透明ゾーン端でギャップなく境界をカバーできる。
-const STRIP_WIDTH: f32 = NOISE_AMPLITUDE * 4.0; // 48wu
-
-/// 開チェーン端のラウンドキャップ（半円）の円周分割数。
-const ROUND_CAP_SEGMENTS: u32 = 10;
-
 /// 面取り（Chamfer）ベベル距離（ワールド単位）。
 /// 川岸 1 タイル段差（32wu）の 35% を面取りし、Catmull-Rom のオーバーシュートを抑制する。
 const CHAMFER_DISTANCE: f32 = TILE_SIZE * 0.35; // ≈ 11.2wu
@@ -56,6 +45,18 @@ const CHAMFER_DISTANCE: f32 = TILE_SIZE * 0.35; // ≈ 11.2wu
 /// cos(60°) = 0.5: それより鋭い角（0°〜60°未満）のコーナーのみ面取りする。
 /// 川岸の 90° ステップ（cos = 0）はこの閾値に確実に掛かる。
 const CHAMFER_COS_THRESHOLD: f32 = 0.5;
+
+/// terrain_region_map テクスチャの解像度（1 辺のピクセル数）。
+/// MAP_WIDTH=100 に対して 10.24 px/tile（1024 にすると 5.12 の倍精細でジャギーが減る）。
+const TERRAIN_REGION_RES: usize = 1024;
+
+/// terrain_region_map のセンチネル値。River(255) と区別するため 254 を使う。
+/// BFS flood fill のバリア壁として機能し、最終的に短 dilation で隣接値に置き換えられる。
+const TERRAIN_REGION_SENTINEL: u8 = 254;
+
+/// terrain_region_map の未割当値。BFS で塗りつぶされる前の初期値。
+/// 11 値エンコーディング (0,1,2,85,86,87,170,171,172,255) および SENTINEL(254) と衝突しない。
+const TERRAIN_REGION_UNASSIGNED: u8 = 253;
 
 // ── 境界種別 ─────────────────────────────────────────────────────────────────
 
@@ -72,6 +73,8 @@ pub enum BoundaryKind {
     GrassZoneTone,
     /// 同じ `TerrainType` の土どうしで、ゾーンバイアスが隣接で変わる境。
     DirtZoneTone,
+    /// 同じ Sand どうしで shore/inland variant が隣接で変わる境。
+    SandZoneTone,
 }
 
 impl BoundaryKind {
@@ -102,6 +105,7 @@ impl BoundaryKind {
     pub fn index(self) -> u32 {
         self as u32
     }
+
 }
 
 // ── データ型 ──────────────────────────────────────────────────────────────────
@@ -112,10 +116,6 @@ pub struct BoundaryEdge {
     pub a: Vec2,
     pub b: Vec2,
     pub kind: BoundaryKind,
-    /// a→b 方向に対する左側（CCW 法線側）の地形種別。
-    pub left_terrain: TerrainType,
-    /// a→b 方向に対する右側の地形種別。
-    pub right_terrain: TerrainType,
 }
 
 /// 連続した境界ポリライン。開チェーンと閉ループの両方を表現する。
@@ -126,20 +126,11 @@ pub struct BoundaryPolyline {
     pub arc_lengths: Vec<f32>,
     pub is_closed: bool,
     pub kind: BoundaryKind,
-    /// ポリライン進行方向左側（メッシュで u=0 になる側）の地形種別。
-    pub left_terrain: TerrainType,
-    /// ポリライン進行方向右側（メッシュで u=1 になる側）の地形種別。
-    pub right_terrain: TerrainType,
 }
-
-/// 境界リボンメッシュ所有エンティティを示すマーカーコンポーネント。
-#[derive(Component)]
-pub struct BoundaryMeshMarker;
 
 /// 境界リボンが影響するグリッドセルのインデックス。
 ///
 /// PostStartup で build し、将来の TerrainChangedEvent 対応の基盤として使用する。
-/// M4 で `cells: HashMap<(i32, i32), Vec<BoundaryKind>>` フィールドを追加予定。
 #[derive(Resource, Default)]
 pub struct BoundarySliceSpatialIndex;
 
@@ -180,6 +171,260 @@ fn terrain_zone_bias_byte(masks: &WorldMasks, pos: (i32, i32)) -> u8 {
     }
 }
 
+/// Sand タイルの shore/inland variant バイトを返す（shore=171, inland=172, regular=170）。
+#[inline]
+fn terrain_sand_variant_byte(masks: &WorldMasks, pos: (i32, i32)) -> u8 {
+    let is_final = masks.final_sand_mask.get(pos);
+    let is_inland = masks.inland_sand_mask.get(pos);
+    if is_final && !is_inland {
+        171 // shore
+    } else if is_inland {
+        172 // inland
+    } else {
+        170 // regular
+    }
+}
+
+/// TerrainType + WorldMasks + タイル座標 → terrain_region_map 用バイト（11 値エンコーディング）。
+///
+/// Grass:  grass_zone=0, neutral=1, dirt_zone=2
+/// Dirt:   grass_zone=85, neutral=86, dirt_zone=87
+/// Sand:   regular=170, shore=171, inland=172
+/// River:  255
+fn terrain_region_byte(t: TerrainType, masks: &WorldMasks, pos: (i32, i32)) -> u8 {
+    match t {
+        TerrainType::Grass => match terrain_zone_bias_byte(masks, pos) {
+            0 => 0,
+            255 => 2,
+            _ => 1,
+        },
+        TerrainType::Dirt => match terrain_zone_bias_byte(masks, pos) {
+            0 => 85,
+            255 => 87,
+            _ => 86,
+        },
+        TerrainType::Sand => terrain_sand_variant_byte(masks, pos),
+        TerrainType::River => 255,
+    }
+}
+
+/// ワールド 2D 座標 → terrain_region_map テクスチャピクセル座標。
+///
+/// 3D スポーンが `Vec3(wx, 0, -wy)` なので `world_position.z = -world_2d.y`。
+/// WGSL `world_to_boundary_uv` の `uv.y = (world_2d.y + half_h) / world_h` と
+/// 同一の向き（Y反転なし）で書き込む。
+/// grid_y=0 (マップ下端, world_2d.y ≈ -half_h) → py ≈ 0 (テクスチャ上端)。
+#[inline]
+fn world_to_region_pixel(p: Vec2) -> (f32, f32) {
+    let world_w = MAP_WIDTH as f32 * TILE_SIZE;
+    let world_h = MAP_HEIGHT as f32 * TILE_SIZE;
+    let half_w = world_w / 2.0;
+    let half_h = world_h / 2.0;
+    let px = (p.x + half_w) / world_w * TERRAIN_REGION_RES as f32;
+    let py = (p.y + half_h) / world_h * TERRAIN_REGION_RES as f32;
+    (px, py)
+}
+
+/// Bresenham ラインを sentinel で 2px 幅に描画する。
+fn rasterize_segment_barrier(buf: &mut [u8], res: usize, p0: (f32, f32), p1: (f32, f32)) {
+    let (mut x0, mut y0) = (p0.0 as i32, p0.1 as i32);
+    let (x1, y1) = (p1.0 as i32, p1.1 as i32);
+    let dx = (x1 - x0).abs();
+    let dy = (y1 - y0).abs();
+    let sx = if x0 < x1 { 1 } else { -1 };
+    let sy = if y0 < y1 { 1 } else { -1 };
+    let mut err = dx - dy;
+
+    let set = |buf: &mut [u8], x: i32, y: i32| {
+        if x >= 0 && y >= 0 && (x as usize) < res && (y as usize) < res {
+            buf[y as usize * res + x as usize] = TERRAIN_REGION_SENTINEL;
+        }
+    };
+
+    loop {
+        set(buf, x0, y0);
+        // 2px 幅: 横方向が支配的なら上下、縦方向が支配的なら左右に 1px 追加
+        if dx >= dy {
+            set(buf, x0, y0 + 1);
+            set(buf, x0, y0 - 1);
+        } else {
+            set(buf, x0 + 1, y0);
+            set(buf, x0 - 1, y0);
+        }
+        if x0 == x1 && y0 == y1 {
+            break;
+        }
+        let e2 = 2 * err;
+        if e2 > -dy {
+            err -= dy;
+            x0 += sx;
+        }
+        if e2 < dx {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+/// sentinel blob（半径 r px の円）を描画してギャップを閉鎖する。
+fn rasterize_blob(buf: &mut [u8], res: usize, center: (f32, f32), radius: i32) {
+    let cx = center.0 as i32;
+    let cy = center.1 as i32;
+    for dy in -radius..=radius {
+        for dx in -radius..=radius {
+            if dx * dx + dy * dy <= radius * radius {
+                let x = cx + dx;
+                let y = cy + dy;
+                if x >= 0 && y >= 0 && (x as usize) < res && (y as usize) < res {
+                    buf[y as usize * res + x as usize] = TERRAIN_REGION_SENTINEL;
+                }
+            }
+        }
+    }
+}
+
+/// タイルマップ・WorldMasks・ポリライン点列群から terrain_region_map バッファ（RES×RES, u8）を生成。
+///
+/// アルゴリズム:
+/// 1. バッファを UNASSIGNED(253) で初期化
+/// 2. 全ポリライン点列を sentinel=254 で「バリア壁」として描画
+/// 3. 非 junction 開端点に radius=3px の sentinel blob を描画（ギャップ閉鎖）
+/// 4. タイル中心ピクセルをシード（タイル種別バイト）として書き込む
+///    （sentinel と衝突する場合はスキップ — テクスチャ端や blob 境界上のレアケース）
+/// 5. 多点源 BFS で UNASSIGNED ピクセルを塗りつぶす（sentinel でブロック）
+/// 6. 残存 sentinel を最短 dilation (ダブルバッファ、最大 5 パス) で上書き
+fn rasterize_terrain_regions(
+    terrain_tiles: &[TerrainType],
+    masks: &WorldMasks,
+    sampled_polylines: &[Vec<Vec2>],
+    endpoint_blobs: &[Vec2],
+) -> Vec<u8> {
+    let res = TERRAIN_REGION_RES;
+
+    // Step 1: 全ピクセルを UNASSIGNED で初期化
+    let mut buf = vec![TERRAIN_REGION_UNASSIGNED; res * res];
+
+    // Step 2: ポリライン点列を sentinel で壁として描画
+    for polyline in sampled_polylines {
+        for pair in polyline.windows(2) {
+            let p0 = world_to_region_pixel(pair[0]);
+            let p1 = world_to_region_pixel(pair[1]);
+            rasterize_segment_barrier(&mut buf, res, p0, p1);
+        }
+    }
+
+    // Step 2.5: 非 junction 開端点に sentinel blob を描画（最大ギャップ ≈ 4px を封鎖）
+    for &ep in endpoint_blobs {
+        let center = world_to_region_pixel(ep);
+        rasterize_blob(&mut buf, res, center, 3);
+    }
+
+    // Step 3: タイル中心をシード（BFS の多点源）として書き込む
+    let w = MAP_WIDTH as usize;
+    let h = MAP_HEIGHT as usize;
+    let mut queue: VecDeque<(usize, usize)> = VecDeque::new();
+    for ty in 0..h {
+        for tx in 0..w {
+            let id_byte = terrain_region_byte(terrain_tiles[ty * w + tx], masks, (tx as i32, ty as i32));
+            let world_p = hw_world::grid_to_world(tx as i32, ty as i32);
+            let (fpx, fpy) = world_to_region_pixel(world_p);
+            let px = (fpx as usize).min(res - 1);
+            let py = (fpy as usize).min(res - 1);
+            // sentinel と衝突したら近傍 1px 範囲で非 sentinel を探す
+            if buf[py * res + px] == TERRAIN_REGION_SENTINEL {
+                let mut found = false;
+                'outer: for dy in -1i32..=1 {
+                    for dx in -1i32..=1 {
+                        let nx = px as i32 + dx;
+                        let ny = py as i32 + dy;
+                        if nx >= 0 && ny >= 0 && (nx as usize) < res && (ny as usize) < res {
+                            let idx = ny as usize * res + nx as usize;
+                            if buf[idx] == TERRAIN_REGION_UNASSIGNED {
+                                buf[idx] = id_byte;
+                                queue.push_back((nx as usize, ny as usize));
+                                found = true;
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+                if !found {
+                    // sentinel blob の内部に完全に埋まっている場合 — スキップ
+                    // (blob 境界上タイルのみ起こり得るレアケース; 近傍 BFS で後続補填される)
+                }
+            } else {
+                buf[py * res + px] = id_byte;
+                queue.push_back((px, py));
+            }
+        }
+    }
+
+    // Step 4: 多点源 BFS で UNASSIGNED ピクセルを塗りつぶす（sentinel でブロック）
+    let neighbors: [(i32, i32); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
+    while let Some((px, py)) = queue.pop_front() {
+        let cur_val = buf[py * res + px];
+        for (dx, dy) in neighbors {
+            let nx = px as i32 + dx;
+            let ny = py as i32 + dy;
+            if nx < 0 || ny < 0 || nx as usize >= res || ny as usize >= res {
+                continue;
+            }
+            let nidx = ny as usize * res + nx as usize;
+            if buf[nidx] == TERRAIN_REGION_UNASSIGNED {
+                buf[nidx] = cur_val;
+                queue.push_back((nx as usize, ny as usize));
+            }
+        }
+    }
+
+    // Step 4.5: BFS 後に残存する UNASSIGNED ピクセルを SENTINEL に昇格させる。
+    // sentinel 壁の交差部（blob 内部など）に閉じ込められた孤立 UNASSIGNED ピクセルが
+    // BFS で到達できなかった場合にのみ発生する。これらは壁の一部として Step 5 が処理する。
+    for v in buf.iter_mut() {
+        if *v == TERRAIN_REGION_UNASSIGNED {
+            *v = TERRAIN_REGION_SENTINEL;
+        }
+    }
+
+    // Step 5: 残存 sentinel をダブルバッファ dilation で上書き
+    // blob 半径=3px の場合、最大 3 パスで収束する。余裕を持って 8 パスとする。
+    let mut tmp = buf.clone();
+    for _ in 0..8 {
+        let mut changed = false;
+        for py in 0..res {
+            for px in 0..res {
+                if buf[py * res + px] != TERRAIN_REGION_SENTINEL {
+                    continue;
+                }
+                for (dx, dy) in neighbors {
+                    let qx = px as i32 + dx;
+                    let qy = py as i32 + dy;
+                    if qx < 0 || qy < 0 || qx as usize >= res || qy as usize >= res {
+                        continue;
+                    }
+                    let neighbor = buf[qy as usize * res + qx as usize];
+                    if neighbor != TERRAIN_REGION_SENTINEL {
+                        tmp[py * res + px] = neighbor;
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+        }
+        buf.copy_from_slice(&tmp);
+        if !changed {
+            break;
+        }
+    }
+
+    debug_assert!(
+        !buf.contains(&TERRAIN_REGION_SENTINEL),
+        "terrain_region_map: sentinel pixels remain after dilation"
+    );
+
+    buf
+}
+
 /// terrain_tiles（row-major: y*MAP_WIDTH+x）と `WorldMasks` から全境界エッジを抽出する。
 ///
 /// - **粗いカテゴリ**が変わる境（`BoundaryKind::from_pair`）
@@ -203,8 +448,6 @@ pub fn extract_boundary_edges(terrain_tiles: &[TerrainType], masks: &WorldMasks)
                     a: Vec2::new(center.x - half, center.y + half),
                     b: Vec2::new(center.x + half, center.y + half),
                     kind,
-                    left_terrain: t1,   // +Y 側 = upper cell
-                    right_terrain: t0,  // -Y 側 = lower cell
                 });
             } else if let Some(kind) = maybe_zone_tone_edge(
                 t0,
@@ -217,8 +460,17 @@ pub fn extract_boundary_edges(terrain_tiles: &[TerrainType], masks: &WorldMasks)
                     a: Vec2::new(center.x - half, center.y + half),
                     b: Vec2::new(center.x + half, center.y + half),
                     kind,
-                    left_terrain: t1,   // 同一種別（ゾーントーン境界）
-                    right_terrain: t0,
+                });
+            } else if t0 == TerrainType::Sand
+                && t1 == TerrainType::Sand
+                && terrain_sand_variant_byte(masks, (gx, gy))
+                    != terrain_sand_variant_byte(masks, (gx, gy + 1))
+            {
+                let center = grid_to_world(gx, gy);
+                edges.push(BoundaryEdge {
+                    a: Vec2::new(center.x - half, center.y + half),
+                    b: Vec2::new(center.x + half, center.y + half),
+                    kind: BoundaryKind::SandZoneTone,
                 });
             }
         }
@@ -237,8 +489,6 @@ pub fn extract_boundary_edges(terrain_tiles: &[TerrainType], masks: &WorldMasks)
                     a: Vec2::new(center.x + half, center.y - half),
                     b: Vec2::new(center.x + half, center.y + half),
                     kind,
-                    left_terrain: t0,   // -X 側 = left cell
-                    right_terrain: t1,  // +X 側 = right cell
                 });
             } else if let Some(kind) = maybe_zone_tone_edge(
                 t0,
@@ -251,8 +501,17 @@ pub fn extract_boundary_edges(terrain_tiles: &[TerrainType], masks: &WorldMasks)
                     a: Vec2::new(center.x + half, center.y - half),
                     b: Vec2::new(center.x + half, center.y + half),
                     kind,
-                    left_terrain: t0,   // 同一種別（ゾーントーン境界）
-                    right_terrain: t1,
+                });
+            } else if t0 == TerrainType::Sand
+                && t1 == TerrainType::Sand
+                && terrain_sand_variant_byte(masks, (gx, gy))
+                    != terrain_sand_variant_byte(masks, (gx + 1, gy))
+            {
+                let center = grid_to_world(gx, gy);
+                edges.push(BoundaryEdge {
+                    a: Vec2::new(center.x + half, center.y - half),
+                    b: Vec2::new(center.x + half, center.y + half),
+                    kind: BoundaryKind::SandZoneTone,
                 });
             }
         }
@@ -324,7 +583,7 @@ pub fn chain_edges_to_polylines(edges: Vec<BoundaryEdge>) -> Vec<BoundaryPolylin
                 Some(&i) => i,
                 None => continue,
             };
-            let (points, first_forward) = follow_chain(
+            let (points, _first_forward) = follow_chain(
                 start_key,
                 first,
                 &kind_edges,
@@ -334,14 +593,11 @@ pub fn chain_edges_to_polylines(edges: Vec<BoundaryEdge>) -> Vec<BoundaryPolylin
             );
             if points.len() >= 2 {
                 let arc_lengths = parameterize_arc_length(&points);
-                let (left_terrain, right_terrain) = terrain_from_edge_polarity(&kind_edges[first], first_forward);
                 result.push(BoundaryPolyline {
                     points,
                     arc_lengths,
                     is_closed: false,
                     kind,
-                    left_terrain,
-                    right_terrain,
                 });
             }
         }
@@ -352,7 +608,7 @@ pub fn chain_edges_to_polylines(edges: Vec<BoundaryEdge>) -> Vec<BoundaryPolylin
                 continue;
             }
             let start_key = corner_keys[start_idx][0];
-            let (mut points, first_forward) = follow_chain(
+            let (mut points, _first_forward) = follow_chain(
                 start_key,
                 start_idx,
                 &kind_edges,
@@ -364,44 +620,17 @@ pub fn chain_edges_to_polylines(edges: Vec<BoundaryEdge>) -> Vec<BoundaryPolylin
             // 閉じた単純ループは少なくとも 3 頂点（重複除去後）。
             if points.len() >= 3 {
                 let arc_lengths = parameterize_arc_length(&points);
-                let (left_terrain, right_terrain) = terrain_from_edge_polarity(&kind_edges[start_idx], first_forward);
                 result.push(BoundaryPolyline {
                     points,
                     arc_lengths,
                     is_closed: true,
                     kind,
-                    left_terrain,
-                    right_terrain,
                 });
             }
         }
     }
 
     result
-}
-
-/// `TerrainType` を shader に渡す粗い ID (0=Grass, 1=Dirt, 2=Sand, 3=River) に変換する。
-#[inline]
-fn terrain_coarse_id(t: TerrainType) -> u8 {
-    match t {
-        TerrainType::Grass => 0,
-        TerrainType::Dirt => 1,
-        TerrainType::Sand => 2,
-        TerrainType::River => 3,
-    }
-}
-
-/// エッジの `left_terrain`/`right_terrain` をポリライン走査方向に合わせて返す。
-///
-/// `first_forward = true`（a→b 方向で辿った）なら edge の left/right をそのまま使う。
-/// `first_forward = false`（b→a 方向で辿った）なら左右を反転する。
-#[inline]
-fn terrain_from_edge_polarity(edge: &BoundaryEdge, first_forward: bool) -> (TerrainType, TerrainType) {
-    if first_forward {
-        (edge.left_terrain, edge.right_terrain)
-    } else {
-        (edge.right_terrain, edge.left_terrain)
-    }
 }
 
 /// 閉ループ走査では始点コーナーが **先頭と末尾の両方** に入る（`follow_chain` が一周して戻るため）。
@@ -748,253 +977,18 @@ fn catmull_rom_point(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, t: f32) -> Vec2 {
         + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
 }
 
-// ── M3: クワッドストリップメッシュと Bevy スポーン ────────────────────────────
+// ── メッシュスポーン ────────────────────────────────────────────────────────────
 
-fn push_vertex_xz(positions: &mut Vec<[f32; 3]>, normals: &mut Vec<[f32; 3]>, p: Vec2, y_offset: f32) {
-    positions.push([p.x, y_offset, -p.y]);
-    normals.push([0.0, 1.0, 0.0]);
-}
-
-/// [`append_round_cap`] への入力（Clippy `too_many_arguments` 回避用）。
-struct RoundCapInput {
-    center: Vec2,
-    /// 単位ベクトル（`left = center + n_width * half_width` と帯本体で一致させること）。
-    n_width: Vec2,
-    /// 単位ベクトル。チェーンの外側へ膨らむ向き（始点では `-seg_dir`、終点では `+seg_dir`）。
-    bulge_dir: Vec2,
-    half_width: f32,
-    y_offset: f32,
-}
-
-/// 開いたポリラインの **端** を半円で覆う（ストロークの round cap に相当）。
-///
-/// 弧は `theta in [0, π]` で `center + half_width * (cos(theta)*n_width + sin(theta)*bulge_dir)`。
-/// UV: `theta=0`（n_width 側 = left = u=0.0）→ `theta=π`（-n_width 側 = right = u=1.0）。
-fn append_round_cap(
-    positions: &mut Vec<[f32; 3]>,
-    normals: &mut Vec<[f32; 3]>,
-    uvs: &mut Vec<[f32; 2]>,
-    indices: &mut Vec<u32>,
-    cap: RoundCapInput,
-) {
-    let RoundCapInput {
-        center,
-        n_width,
-        bulge_dir,
-        half_width,
-        y_offset,
-    } = cap;
-    let seg = ROUND_CAP_SEGMENTS;
-    let center_idx = positions.len() as u32;
-    push_vertex_xz(positions, normals, center, y_offset);
-    uvs.push([0.5, 0.0]);
-
-    let arc_start = positions.len() as u32;
-    for i in 0..=seg {
-        let s = i as f32 / seg as f32;
-        let theta = std::f32::consts::PI * s;
-        let p = center + half_width * (theta.cos() * n_width + theta.sin() * bulge_dir);
-        push_vertex_xz(positions, normals, p, y_offset);
-        uvs.push([s, 0.0]); // s=0 → u=0.0 (left), s=1 → u=1.0 (right)
-    }
-
-    for i in 0..seg {
-        indices.extend_from_slice(&[center_idx, arc_start + i, arc_start + i + 1]);
-    }
-}
-
-/// 密な点列（Vec2）からミター補正クワッドストリップ Mesh を生成する。
-///
-/// Vec2(wx, wy) → Vec3(wx, y_offset, -wy) で 3D 化（タイルスポーンと同一ルール）。
-///
-/// **ミター補正**: 各点で隣接セグメントの法線を合成し、角度に依存した幅補正（miter scale）を
-/// 適用して頂点位置を決める。隣接セグメント間で頂点を **共有** するため、カーブ部での
-/// クワッド外縁ギャップ（短冊アーティファクト）が発生しない。
-///
-/// ミタースケールの上限を `MAX_MITER_SCALE` でクランプし、鋭角コーナーでの頂点突出を防ぐ。
-///
-/// **開チェーン**（`is_closed == false`）では `add_start_cap` / `add_end_cap` に従い
-/// 端部にラウンドキャップを付ける。ジャンクション点（三叉路）では false を渡してキャップを省略する。
-pub fn build_quad_strip_mesh(
-    points: &[Vec2],
-    width: f32,
-    y_offset: f32,
-    is_closed: bool,
-    add_start_cap: bool,
-    add_end_cap: bool,
-) -> Mesh {
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
-    let raw_n = points.len();
-    if raw_n < 2 {
-        return mesh;
-    }
-
-    // `sample_catmull_rom` は閉曲線で先頭点を末尾に複製する。重複を除く。
-    let points: &[Vec2] = if is_closed
-        && raw_n >= 2
-        && points[0].distance_squared(points[raw_n - 1]) < 1e-12
-    {
-        &points[..raw_n - 1]
-    } else {
-        points
-    };
-    let n = points.len();
-    if n < 2 {
-        return mesh;
-    }
-
-    let hw = width * 0.5;
-    /// 鋭角コーナーでのミター突出上限（これ以上伸長しない）。
-    const MAX_MITER_SCALE: f32 = 4.0;
-    let num_segs = if is_closed { n } else { n - 1 };
-
-    // ── セグメント法線の事前計算 ──────────────────────────────────────────────
-    let mut seg_normals: Vec<Vec2> = Vec::with_capacity(num_segs);
-    for s in 0..num_segs {
-        let i = s;
-        let j = if is_closed { (s + 1) % n } else { s + 1 };
-        let d = points[j] - points[i];
-        let len = d.length();
-        seg_normals.push(if len > 1e-8 {
-            Vec2::new(-d.y, d.x) / len
-        } else {
-            Vec2::Y
-        });
-    }
-
-    // ── 各点のミター補正頂点を計算 ──────────────────────────────────────────
-    let mut lefts: Vec<Vec2> = Vec::with_capacity(n);
-    let mut rights: Vec<Vec2> = Vec::with_capacity(n);
-
-    for i in 0..n {
-        let (l, r) = miter_pair(
-            points[i],
-            if is_closed {
-                seg_normals[(i + num_segs - 1) % num_segs]
-            } else if i == 0 {
-                seg_normals[0]
-            } else {
-                seg_normals[i - 1]
-            },
-            if is_closed {
-                seg_normals[i % num_segs]
-            } else if i == n - 1 {
-                seg_normals[num_segs - 1]
-            } else {
-                seg_normals[i]
-            },
-            hw,
-            MAX_MITER_SCALE,
-        );
-        lefts.push(l);
-        rights.push(r);
-    }
-
-    // ── 頂点・UV・インデックスの構築 ────────────────────────────────────────
-    let cap_count = if is_closed { 0 } else { add_start_cap as usize + add_end_cap as usize };
-    let cap_verts = cap_count * (ROUND_CAP_SEGMENTS as usize + 2);
-    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(n * 2 + cap_verts);
-    let mut normals_buf: Vec<[f32; 3]> = Vec::with_capacity(n * 2 + cap_verts);
-    let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(n * 2 + cap_verts);
-    let cap_idx = cap_count * ROUND_CAP_SEGMENTS as usize * 3;
-    let mut indices: Vec<u32> = Vec::with_capacity(num_segs * 6 + cap_idx);
-
-    for i in 0..n {
-        push_vertex_xz(&mut positions, &mut normals_buf, lefts[i], y_offset);
-        uvs.push([0.0, 0.0]);
-        push_vertex_xz(&mut positions, &mut normals_buf, rights[i], y_offset);
-        uvs.push([1.0, 0.0]);
-    }
-
-    for s in 0..num_segs {
-        let a = (s * 2) as u32;
-        let b = if is_closed {
-            ((s + 1) % n * 2) as u32
-        } else {
-            ((s + 1) * 2) as u32
-        };
-        // CCW 巻き順（Bevy FrontFace::Ccw）
-        indices.extend_from_slice(&[a, a + 1, b, a + 1, b + 1, b]);
-    }
-
-    // ── ラウンドキャップ（開チェーンのみ、ジャンクション点はスキップ）──────────
-    if !is_closed && n >= 2 {
-        if add_start_cap {
-            let n0 = seg_normals[0];
-            let t0 = Vec2::new(n0.y, -n0.x);
-            append_round_cap(
-                &mut positions,
-                &mut normals_buf,
-                &mut uvs,
-                &mut indices,
-                RoundCapInput {
-                    center: points[0],
-                    n_width: n0,
-                    bulge_dir: -t0,
-                    half_width: hw,
-                    y_offset,
-                },
-            );
-        }
-
-        if add_end_cap {
-            let nl = seg_normals[num_segs - 1];
-            let tl = Vec2::new(nl.y, -nl.x);
-            append_round_cap(
-                &mut positions,
-                &mut normals_buf,
-                &mut uvs,
-                &mut indices,
-                RoundCapInput {
-                    center: points[n - 1],
-                    n_width: nl,
-                    bulge_dir: tl,
-                    half_width: hw,
-                    y_offset,
-                },
-            );
-        }
-    }
-
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals_buf);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(Indices::U32(indices));
-    mesh
-}
-
-/// 2 セグメントの法線からミター補正した左右頂点オフセットを計算する。
-///
-/// 両端点（開チェーンの end points）では prev/next が同じ法線を渡す。
-/// スケールを `max_scale` でクランプし鋭角コーナーでの頂点突出を防ぐ。
-fn miter_pair(
-    center: Vec2,
-    n_prev: Vec2,
-    n_next: Vec2,
-    hw: f32,
-    max_scale: f32,
-) -> (Vec2, Vec2) {
-    let m = (n_prev + n_next).normalize_or_zero();
-    if m.length_squared() < 1e-8 {
-        // 対向セグメント（真逆）→ prev 法線をそのまま使う
-        return (center + n_prev * hw, center - n_prev * hw);
-    }
-    let scale = (1.0 / m.dot(n_prev).max(1.0 / max_scale)).min(max_scale);
-    (center + m * hw * scale, center - m * hw * scale)
-}
-
-/// PostStartup で呼ばれる境界曲線メッシュスポーンシステム。
+/// PostStartup で呼ばれる境界ラスタライズシステム。
 ///
 /// GeneratedWorldLayoutResource から地形タイルを読み取り、
-/// 全境界種別のポリラインを生成・スポーンする。
-/// 各リボンに `BoundarySurfaceMaterial` を割り当て、world-space UV で地形テクスチャをブレンドする。
+/// CPU で terrain_region_map テクスチャをベイクして TerrainSurfaceMaterial に設定する。
 pub fn spawn_boundary_meshes(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut boundary_materials: ResMut<Assets<hw_visual::BoundarySurfaceMaterial>>,
+    mut images: ResMut<Assets<Image>>,
     layout: Res<GeneratedWorldLayoutResource>,
-    game_assets: Res<GameAssets>,
-    feature_map: Res<TerrainFeatureMap>,
+    terrain_handles: Res<Terrain3dHandles>,
+    mut terrain_surface_materials: ResMut<Assets<TerrainSurfaceMaterial>>,
 ) {
     let terrain_tiles = &layout.layout.terrain_tiles;
     let master_seed = layout.master_seed;
@@ -1004,13 +998,8 @@ pub fn spawn_boundary_meshes(
     let polylines = chain_edges_to_polylines(edges);
     let count = polylines.len();
 
-    // (BoundaryKind, left_id, right_id) → マテリアルハンドルのキャッシュ。
-    // ポリラインごとに left/right が異なる場合があるため、kind 単位ではなく
-    // テクスチャ構成まで含めたキーでキャッシュする。
-    let mut kind_material_cache: HashMap<
-        (BoundaryKind, u8, u8),
-        Handle<hw_visual::BoundarySurfaceMaterial>,
-    > = HashMap::new();
+    let mut sampled_polylines: Vec<Vec<Vec2>> = Vec::new();
+    let mut endpoint_blobs: Vec<Vec2> = Vec::new();
 
     for polyline in polylines {
         let noise = boundary_polyline_noise_params(master_seed, &polyline);
@@ -1033,65 +1022,58 @@ pub fn spawn_boundary_meshes(
             continue;
         }
 
-        // ジャンクション点（三叉路以上）ではラウンドキャップが複数リボン間で干渉して
-        // 円形のアーティファクトを生む。ジャンクション端点にはキャップを付けない。
-        let add_start_cap = !polyline.is_closed
-            && !polyline.points.is_empty()
-            && !junctions.contains(&world_to_corner_key(polyline.points[0]));
-        let add_end_cap = !polyline.is_closed
-            && polyline.points.len() > 1
-            && !junctions.contains(&world_to_corner_key(*polyline.points.last().unwrap()));
+        // 非 junction 開端点を endpoint_blobs に追加（ギャップ閉鎖用）
+        if !polyline.is_closed {
+            if !polyline.points.is_empty()
+                && !junctions.contains(&world_to_corner_key(polyline.points[0]))
+            {
+                endpoint_blobs.push(sampled[0]);
+            }
+            if polyline.points.len() > 1
+                && !junctions.contains(&world_to_corner_key(*polyline.points.last().unwrap()))
+            {
+                endpoint_blobs.push(*sampled.last().unwrap());
+            }
+        }
 
-        let mesh = build_quad_strip_mesh(
-            &sampled,
-            STRIP_WIDTH,
-            Y_MAP_BOUNDARY_BASE,
-            polyline.is_closed,
-            add_start_cap,
-            add_end_cap,
-        );
-        let mesh_handle = meshes.add(mesh);
+        sampled_polylines.push(sampled);
+    }
 
-        let left_id = terrain_coarse_id(polyline.left_terrain);
-        let right_id = terrain_coarse_id(polyline.right_terrain);
-        let cache_key = (polyline.kind, left_id, right_id);
-        let material_handle = kind_material_cache.entry(cache_key).or_insert_with(|| {
-            boundary_materials.add(make_boundary_surface_material(
-                BoundarySurfaceMaterialExt {
-                    uniforms: BoundarySurfaceUniform {
-                        left_terrain_id: left_id as f32,
-                        right_terrain_id: right_id as f32,
-                        uv_scale: 1.0 / TILE_SIZE,
-                        blend_softness: 0.15,
-                    },
-                    grass_albedo: Some(game_assets.grass.clone()),
-                    dirt_albedo: Some(game_assets.dirt.clone()),
-                    sand_albedo: Some(game_assets.sand.clone()),
-                    river_albedo: Some(game_assets.river.clone()),
-                    terrain_macro_noise: Some(game_assets.terrain_macro_noise.clone()),
-                    grass_macro_overlay: Some(game_assets.grass_macro_overlay.clone()),
-                    dirt_macro_overlay: Some(game_assets.dirt_macro_overlay.clone()),
-                    sand_macro_overlay: Some(game_assets.sand_macro_overlay.clone()),
-                    terrain_feature_map: Some(feature_map.image.clone()),
-                    terrain_feature_lut: Some(game_assets.terrain_feature_lut.clone()),
-                    shoreline_detail: Some(game_assets.shoreline_detail.clone()),
-                },
-            ))
-        });
+    let buf = rasterize_terrain_regions(
+        terrain_tiles,
+        &layout.layout.masks,
+        &sampled_polylines,
+        &endpoint_blobs,
+    );
 
-        // ── メインリボン（ノイズ変位済み Catmull-Rom 曲線） ───────────────────
-        commands.spawn((
-            Mesh3d(mesh_handle),
-            MeshMaterial3d(material_handle.clone()),
-            Transform::IDENTITY,
-            RenderLayers::from_layers(&[LAYER_3D]),
-            BoundaryMeshMarker,
-        ));
+    let mut image = Image::new(
+        Extent3d {
+            width: TERRAIN_REGION_RES as u32,
+            height: TERRAIN_REGION_RES as u32,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        buf,
+        TextureFormat::R8Unorm,
+        default(),
+    );
+    image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::ClampToEdge,
+        address_mode_v: ImageAddressMode::ClampToEdge,
+        mag_filter: ImageFilterMode::Nearest,
+        min_filter: ImageFilterMode::Nearest,
+        ..default()
+    });
+
+    let handle = images.add(image);
+
+    if let Some(mat) = terrain_surface_materials.get_mut(&terrain_handles.surface) {
+        mat.extension.boundary_mask = Some(handle);
     }
 
     commands.insert_resource(BoundarySliceSpatialIndex);
 
-    info!("BEVY_STARTUP: Spawned {} boundary polylines", count);
+    info!("BEVY_STARTUP: Rasterized terrain_region_map from {} boundary polylines", count);
 }
 
 #[cfg(test)]

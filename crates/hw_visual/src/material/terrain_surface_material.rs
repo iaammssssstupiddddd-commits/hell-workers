@@ -67,6 +67,9 @@ pub struct TerrainSurfaceMaterialExt {
     #[texture(127)]
     #[sampler(128)]
     pub terrain_feature_lut: Option<Handle<Image>>,
+    #[texture(129)]
+    #[sampler(130)]
+    pub boundary_mask: Option<Handle<Image>>,
 }
 
 impl Default for TerrainSurfaceMaterialExt {
@@ -99,6 +102,7 @@ impl Default for TerrainSurfaceMaterialExt {
             river_normal_like: None,
             shoreline_detail: None,
             terrain_feature_lut: None,
+            boundary_mask: None,
         }
     }
 }

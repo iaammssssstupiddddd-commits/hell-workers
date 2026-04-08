@@ -1,14 +1,9 @@
-pub mod boundary_surface_material;
 pub mod character_material;
 pub mod section_material;
 pub mod soul_mask_material;
 pub mod soul_shadow_material;
 pub mod terrain_surface_material;
 
-pub use boundary_surface_material::{
-    BoundarySurfaceMaterial, BoundarySurfaceMaterialExt, BoundarySurfaceUniform,
-    make_boundary_surface_material,
-};
 pub use character_material::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
 pub use section_material::{
     SectionCut, SectionMaterial, TERRAIN_DIRT_BRIGHTNESS_VARIATION_STRENGTH,

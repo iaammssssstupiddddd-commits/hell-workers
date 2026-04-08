@@ -323,6 +323,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
             river_normal_like: Some(game_assets.river_normal_like.clone()),
             shoreline_detail: Some(game_assets.shoreline_detail.clone()),
             terrain_feature_lut: Some(game_assets.terrain_feature_lut.clone()),
+            boundary_mask: None, // spawn_boundary_meshes (PostStartup) で後から設定される
         }));
     commands.insert_resource(Terrain3dHandles {
         tile_mesh: terrain_tile_mesh,
