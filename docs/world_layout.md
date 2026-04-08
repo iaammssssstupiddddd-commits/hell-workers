@@ -133,9 +133,28 @@
     - **再計算抑制**: Soul 側では失敗時クールダウンとフレーム当たり探索件数制限により、再探索スパイクを抑制しています。
     - **境界到達 (Boundary Reaching)**: 2x2以上の建築物など、ターゲット領域に入り込まずにその境界（隣接マス）で停止する高度なパス探索ロジック（`find_path_to_boundary`）を実装しています。対象占有領域は集合 membership として扱い、開始地点が対象内にある場合は最寄りの外側歩行マスへの短い脱出パスを返します。通常時は目標領域へ入る最初の1歩手前で経路を切り詰めます。
 
+## 論理タイルデータの真実源（Truth Source）
+
+地形タイル情報は以下の配列データが唯一の真実源である。ECS entity は描画・ロジック anchor を担うに過ぎない。
+
+| データ | 型 | 更新タイミング | 備考 |
+|:--|:--|:--|:--|
+| `WorldMap.tiles` | `Vec<TerrainType>` | startup + obstacle 除去時 | 論理地形の truth source |
+| `WorldMap.tile_entities` | `Vec<Option<Entity>>` | startup のみ | 論理 anchor の lookup 層。描画 entity ではない |
+| `GeneratedWorldLayout.terrain_tiles` | `&[TerrainType]` | startup のみ（snapshot） | worldgen 結果。`WorldMap.tiles` の初期値として使用 |
+
+**`WorldMap.tile_entities` / `tile_entity_at_idx()` について**:
+- `tile_entities` に登録される `Tile` entity は描画コンポーネント（`Mesh3d` / `MeshMaterial3d`）を持たない論理 anchor である。
+- ランタイムで `tile_entity_at_idx()` を呼ぶ箇所は `crates/hw_familiar_ai/.../haul/direct_collect.rs:147` の **1 箇所のみ**。用途は tile entity 上の `Designation` + `TaskWorkers` コンポーネントの Query（収集可否判定）。
+- 地形描画は chunk entity（`TerrainChunk`）が担う。`tile_entities` は将来の別フェーズで廃止検討。
+
+**将来の BiomeType 追加方針**:
+- biome タイプは `WorldMap.tiles` と並列に `Vec<BiomeType>` を `WorldMap` に追加する形で格納する。
+- 描画用には `TerrainFeatureMap` と同様の独立した `BiomeIdMap` texture（`R8Unorm`）を startup で生成し、`TerrainSurfaceMaterial` の uniform に追加するだけで chunk entity 自体の変更は不要。
+
 ## 関連ファイル
-- `crates/bevy_app/src/world/map/`: root 側の app shell。`spawn.rs` は `GeneratedWorldLayout` の `terrain_tiles` から 3D 地形メッシュをスポーンする（`prepare_generated_world_layout_resource` と同一 layout）
-- `crates/bevy_app/src/plugins/startup/visual_handles.rs`: `Terrain3dHandles` リソース（タイルメッシュ・共有 `TerrainSurfaceMaterial` ハンドル）
+- `crates/bevy_app/src/world/map/`: root 側の app shell。`spawn.rs` は `GeneratedWorldLayout` の `terrain_tiles` から地形論理タイル anchor をスポーンし、chunk render は `spawn_terrain_chunks` が担う（`prepare_generated_world_layout_resource` と同一 layout）
+- `crates/bevy_app/src/plugins/startup/visual_handles.rs`: `Terrain3dHandles` リソース（共有 `TerrainSurfaceMaterial` ハンドル）
 - `crates/bevy_app/src/systems/visual/terrain_material.rs`: 障害物除去後のテレインマテリアル差し替えシステム
 - [`../crates/hw_world/src/anchor.rs`](../crates/hw_world/src/anchor.rs): `Site/Yard` 固定アンカー定義
 - [`../crates/hw_world/src/world_masks.rs`](../crates/hw_world/src/world_masks.rs): anchor/protection-band/river/sand/terrain-zone の各マスク
@@ -153,12 +172,17 @@
 - [`../crates/bevy_app/src/world/regrowth.rs`](../crates/bevy_app/src/world/regrowth.rs): 木の再生システムの app shell
 - `crates/bevy_app/src/world/mod.rs` (inline `pub mod pathfinding`): 通行制御を伴うパス検索の互換層（`hw_world::pathfinding` への re-export）
 
-## 地形レンダリング（MS-3-4 完了・2026-03-29）
+## 地形レンダリング（chunk renderer 導入済み）
 
 地形タイルは **Camera3d → RtT** パイプラインのみで描画される。`Camera2d` 側のゲーム内地形描画は完全に除去済み。
 
-- **タイルメッシュ**: `Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE)` を全タイルで共有。
-- **マテリアル**: `Terrain3dHandles` は `TerrainSurfaceMaterial` 1 本を全タイルで共有する。地形 shader は `terrain_id_map` を `textureLoad` で引いて center / cardinal 近傍の `TerrainType` を判定し、4 アルベドを world-space UV でサンプルして境界をブレンドする。建物・壁は引き続き `SectionMaterial`。
+地形描画は **chunk 単位の `TerrainChunk` entity** で行う（per-tile render entity は廃止）。
+
+- **Chunk 構成**: `CHUNK_TILES = 16`（16×16 タイル/chunk）。100×100 マップ → 7×7 = **49 chunk entity**。辺端は 4 tile 幅の端数 chunk が生じる。
+- **Chunk entity**: `TerrainChunk { cx, cy }` + `Mesh3d` + `MeshMaterial3d<TerrainSurfaceMaterial>` + `Transform` + `building_3d_render_layers()`。chunk の中心ワールド座標に配置。
+- **Chunk mesh**: `Plane3d::default().mesh().size(w * TILE_SIZE, h * TILE_SIZE)`。フルチャンク（512×512wu）、端数チャンク（128×512wu 等）。
+- **Tile anchor entity**: 10,000 個の `Tile` entity（`Tile` component + `Transform`）は描画コンポーネントなしで存続。`WorldMap.tile_entities` に登録され、Familiar AI の収集可否判定（`direct_collect.rs`）から `Designation` / `TaskWorkers` を取得する論理 anchor として機能する。
+- **マテリアル**: `Terrain3dHandles` は `TerrainSurfaceMaterial` 1 本を全 chunk で共有する。地形 shader は `terrain_id_map` を `textureLoad` で引いて center / cardinal 近傍の `TerrainType` を判定し、4 アルベドを world-space UV でサンプルして境界をブレンドする。chunk 境界での継ぎ目は発生しない（shader が world-space 参照のため）。建物・壁は引き続き `SectionMaterial`。
 - **terrain id map**: startup の `build_terrain_id_map` が `GeneratedWorldLayout.terrain_tiles` から `R8Unorm` の `TerrainIdMap` を生成する。0 / 85 / 170 / 255 を grass / dirt / sand / river として encode し、shader 側では `round(raw * 3.0)` で terrain id に戻す。`ClampToEdge + Nearest`。
 - **テクスチャサンプラ**: 地形 4 枚（`grass` / `dirt` / `sand_terrain` / `river`）は `asset_catalog.rs` で `AddressMode::Repeat` 付きロード。ワールド UV が 0〜1 を超える前提。
 - **feature map**: startup の `build_terrain_feature_map` が `GeneratedWorldLayout.masks` から `Rgba8Unorm` の `TerrainFeatureMap` を生成する。R=`shore sand`、G=`inland sand`、B=`rock field`、A=`zone bias`（grass zone / neutral / dirt zone）。こちらは worldgen snapshot を表す static bake で、runtime では更新しない。
@@ -168,9 +192,9 @@
 - **境界ブレンド**: `terrain_blend_mask_soft.png` をセル内 fraction に対して引き、center + cardinal 近傍の寄与を重み付き和で合成する。逐次 `mix` で上書きせず、正規化した重みで順序依存を避ける。ブレンド帯はセル端の狭い範囲に限定し、広い面までにじませない。
 - **uniform レイアウト**: `TerrainSurfaceUniform` も encase 制約に合わせ、パディング目的の配列ではなく個別の `f32` フィールドで並べる。
 - **レイヤー**: `building_3d_render_layers()`（`LAYER_3D` + `LAYER_3D_SHADOW_RECEIVER`）で他の 3D エンティティと同レイヤー。
-- **Transform**: `from_xyz(x, 0.0, -y)`（Y=0 が地面平面）。
-- **障害物除去後の更新**: `hw_world::obstacle_cleanup_system` が `TerrainChangedEvent`（`Message`）を発行 → `bevy_app::terrain_id_map_sync_system` が受信して `TerrainIdMap` の該当ピクセルを書き換える。共有 `TerrainSurfaceMaterial` の handle 自体は差し替えない。
-- **廃止**: `TerrainBorder` / `terrain_border.rs` / `hw_world::borders` は MS-3-4 で除去済み。`TerrainType::z_layer()` も同様に除去済み。
+- **Transform**: chunk は `from_xyz(cx_world, 0.0, -cy_world)`（chunk 中心）。Y=0 が地面平面。
+- **障害物除去後の更新**: `hw_world::obstacle_cleanup_system` が `TerrainChangedEvent`（`Message`）を発行 → `bevy_app::terrain_id_map_sync_system` が受信して `TerrainIdMap` の該当ピクセルを書き換える。**chunk entity の再生成は不要**（shader が world-space で texture を参照するため、texture 1 ピクセル更新だけで全 chunk の見た目が更新される）。
+- **廃止**: `TerrainBorder` / `terrain_border.rs` / `hw_world::borders` は MS-3-4 で除去済み。`TerrainType::z_layer()` も同様に除去済み。per-tile の `Mesh3d` render entity は chunk renderer 導入時に廃止。`Terrain3dHandles.tile_mesh` フィールドも廃止済み。
 
 ### 2D 前景カメラ（composite より手前の `LAYER_2D`）
 

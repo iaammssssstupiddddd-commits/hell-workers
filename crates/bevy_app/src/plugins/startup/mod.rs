@@ -21,7 +21,7 @@ use perf_scenario::{
 };
 use startup_systems::{
     initial_resource_spawner_timed, initialize_gizmo_config, populate_resource_spatial_grid, setup,
-    spawn_entities, spawn_familiar_wrapper, spawn_map_timed,
+    spawn_entities, spawn_familiar_wrapper, spawn_map_timed, spawn_terrain_chunks_timed,
 };
 
 use crate::app_contexts::{
@@ -80,6 +80,7 @@ impl Plugin for StartupPlugin {
                     build_terrain_id_map,
                     visual_handles::init_visual_handles,
                     spawn_map_timed,
+                    spawn_terrain_chunks_timed,
                     spawn_boundary_meshes,
                     initial_resource_spawner_timed,
                     spawn_entities,

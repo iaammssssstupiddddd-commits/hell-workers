@@ -9,7 +9,7 @@ use crate::systems::visual::camera_sync::WorldForeground2dCamera;
 use crate::systems::visual::elevation_view::ElevationDirection;
 use crate::world::map::{
     GeneratedWorldLayoutResource, WorldMapRead, WorldMapWrite,
-    prepare_generated_world_layout_resource, spawn_map,
+    prepare_generated_world_layout_resource, spawn_map, spawn_terrain_chunks,
 };
 use crate::world::regrowth::{RegrowthManager, configure_regrowth_from_generated_layout};
 use bevy::camera::{RenderTarget, visibility::RenderLayers};
@@ -27,11 +27,18 @@ use hw_ui::camera::MainCamera;
 
 pub(super) fn spawn_map_timed(
     commands: Commands,
-    terrain_handles: Res<Terrain3dHandles>,
     world_map: WorldMapWrite,
     generated_layout: Res<GeneratedWorldLayoutResource>,
 ) {
-    spawn_map(commands, terrain_handles, world_map, generated_layout);
+    spawn_map(commands, world_map, generated_layout);
+}
+
+pub(super) fn spawn_terrain_chunks_timed(
+    commands: Commands,
+    terrain_handles: Res<Terrain3dHandles>,
+    meshes: ResMut<Assets<Mesh>>,
+) {
+    spawn_terrain_chunks(commands, terrain_handles, meshes);
 }
 
 pub(super) fn initial_resource_spawner_timed(

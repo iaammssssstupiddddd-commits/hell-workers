@@ -49,12 +49,12 @@ pub struct Building3dHandles {
     pub render_layers: RenderLayers,
 }
 
-/// 地形タイル 3D レンダリング用メッシュ・マテリアルハンドルリソース
+/// 地形タイル 3D レンダリング用マテリアルハンドルリソース
 ///
-/// 全タイルで共有する `Plane3d` メッシュ 1 つと、共有 `TerrainSurfaceMaterial` を保持する。
+/// 全 chunk で共有する `TerrainSurfaceMaterial` を保持する。
+/// chunk mesh は `spawn_terrain_chunks` が `Assets<Mesh>` に直接追加する。
 #[derive(Resource)]
 pub struct Terrain3dHandles {
-    pub tile_mesh: Handle<Mesh>,
     pub surface: Handle<TerrainSurfaceMaterial>,
 }
 
@@ -293,7 +293,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     });
 
     // --- 地形 3D ハンドル ---
-    let terrain_tile_mesh = meshes.add(Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE));
     let terrain_surface =
         terrain_surface_materials.add(make_terrain_surface_material(TerrainSurfaceMaterialExt {
             uniforms: TerrainSurfaceUniform {
@@ -326,7 +325,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
             boundary_mask: None, // spawn_boundary_meshes (PostStartup) で後から設定される
         }));
     commands.insert_resource(Terrain3dHandles {
-        tile_mesh: terrain_tile_mesh,
         surface: terrain_surface,
     });
 

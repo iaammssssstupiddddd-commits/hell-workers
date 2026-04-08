@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-04-06）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-04-08）。
 
 ## 新規計画書の作り方
 
@@ -23,6 +23,7 @@
 | [river-boundary-naturalization-plan-2026-04-06.md](river-boundary-naturalization-plan-2026-04-06.md) | Complete | 川岸の wavy staircase を M1（center_y スムージング）+ M2（面取り）で解消する計画 |
 | [terrain-zone-boundary-naturalization-plan-2026-04-06.md](terrain-zone-boundary-naturalization-plan-2026-04-06.md) | M2 Complete | 草エリアのひし形・階段状境界を、ゾーン形状生成と境界描画の両面から自然化する計画 |
 | [world-map-lod-strategy-2026-04-06.md](world-map-lod-strategy-2026-04-06.md) | Draft | ワールドマップ LOD 計画。TopDown far overview と中景 shader 簡略化を主軸に整理 |
+| [world-map-render-chunking-plan-2026-04-08.md](world-map-render-chunking-plan-2026-04-08.md) | Draft | 論理タイルデータを維持したまま地形描画を chunk 化し、将来の biome 拡張と両立させる計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 

@@ -8,8 +8,8 @@ pub use hw_world::layout::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, S
 pub use hw_world::map::WorldMap;
 pub use hw_world::{TerrainType, WorldMapRead, WorldMapWrite, generate_fixed_river_tiles};
 pub use spawn::{
-    GeneratedWorldLayoutResource, prepare_generated_world_layout_resource, resolve_worldgen_seed,
-    spawn_map,
+    GeneratedWorldLayoutResource, TerrainChunk, prepare_generated_world_layout_resource,
+    resolve_worldgen_seed, spawn_map, spawn_terrain_chunks,
 };
 pub(crate) use boundary::spawn_boundary_meshes;
 pub(crate) use terrain_metadata::terrain_type_to_id_byte;
