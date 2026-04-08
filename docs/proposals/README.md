@@ -18,6 +18,7 @@
 | Document | Notes |
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
+| [boundary-texture-paste-proposal-2026-04-07.md](boundary-texture-paste-proposal-2026-04-07.md) | **現状**: `crates/bevy_app/src/world/map/boundary.rs` にて、Catmull-Rom スプラインと法線ノイズで境界ポリラインを計算し、それに幅を持たせた **リボンメッシュ（3Dポリゴン帯）** を生成して地形タイルの上に配置しているの提案。 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 

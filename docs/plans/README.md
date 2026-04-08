@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-04-08）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-04-09）。
 
 ## 新規計画書の作り方
 
@@ -19,11 +19,11 @@
 
 | Document | Status | Notes |
 |---|---|---|
+| [boundary-texture-paste-plan-2026-04-07.md](boundary-texture-paste-plan-2026-04-07.md) | Draft | 境界テクスチャ貼り付け計画（terrain_region_map） |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [river-boundary-naturalization-plan-2026-04-06.md](river-boundary-naturalization-plan-2026-04-06.md) | Complete | 川岸の wavy staircase を M1（center_y スムージング）+ M2（面取り）で解消する計画 |
-| [terrain-zone-boundary-naturalization-plan-2026-04-06.md](terrain-zone-boundary-naturalization-plan-2026-04-06.md) | M2 Complete | 草エリアのひし形・階段状境界を、ゾーン形状生成と境界描画の両面から自然化する計画 |
 | [world-map-lod-strategy-2026-04-06.md](world-map-lod-strategy-2026-04-06.md) | Draft | ワールドマップ LOD 計画。TopDown far overview と中景 shader 簡略化を主軸に整理 |
-| [world-map-render-chunking-plan-2026-04-08.md](world-map-render-chunking-plan-2026-04-08.md) | Draft | 論理タイルデータを維持したまま地形描画を chunk 化し、将来の biome 拡張と両立させる計画 |
+| [world-map-render-chunking-plan-2026-04-08.md](world-map-render-chunking-plan-2026-04-08.md) | 完了 | 論理タイルデータを維持したまま地形描画を chunk 化し、将来の biome 拡張と両立させる計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -142,6 +142,7 @@
 | [archive/task-execution-hw-ai-extraction-plan-2026-03-12.md](archive/task-execution-hw-ai-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/soul_ai/execute/task_execution/の計画。 |
 | [archive/task-list-left-panel-toggle.md](archive/task-list-left-panel-toggle.md) | アーカイブ | タスクリスト左パネル操作改善計画。 |
 | [archive/taskexecution-systemparam-refactor-plan-2026-03-05.md](archive/taskexecution-systemparam-refactor-plan-2026-03-05.md) | アーカイブ | task_execution/context.rsの計画。 |
+| [archive/terrain-zone-boundary-naturalization-plan-2026-04-06.md](archive/terrain-zone-boundary-naturalization-plan-2026-04-06.md) | アーカイブ | 草エリアや草ゾーン寄りの領域がマンハッタン距離ベースのひし形になりやすく、境界が階段状に見えて不自然の計画。 |
 | [archive/think-phase-iteration-optimization-plan-2026-03-07.md](archive/think-phase-iteration-optimization-plan-2026-03-07.md) | アーカイブ | -の計画。 |
 | [archive/transport-overdelivery-fix-plan-2026-03-07.md](archive/transport-overdelivery-fix-plan-2026-03-07.md) | アーカイブ | 設計図搬入と補充系 request で、必要量を超える資材が搬送・消費・地面残留するの計画。 |
 | [archive/ui-menu-action-boundary-plan-2026-03-01.md](archive/ui-menu-action-boundary-plan-2026-03-01.md) | アーカイブ | `MenuAction` 処理の責務境界整理と no-op 分岐解消の計画。 |
@@ -155,3 +156,4 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
+

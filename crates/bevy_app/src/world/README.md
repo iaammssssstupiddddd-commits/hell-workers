@@ -16,7 +16,7 @@
 | ファイル | 内容 |
 |---|---|
 | `mod.rs` | 公開 API |
-| `spawn.rs` | マップエンティティのスポーン。`GeneratedWorldLayoutResource` の `terrain_tiles` を 3D タイルとしてスポーン（startup 本経路） |
+| `spawn.rs` | マップエンティティのスポーン。`spawn_map` は `Tile` 論理 anchor を登録し、`spawn_terrain_chunks` が `GeneratedWorldLayoutResource` の `terrain_tiles` を chunk 単位で 3D 描画する（startup 本経路） |
 
 ## 地形生成・経路探索について
 
@@ -52,4 +52,4 @@ pub use hw_world::{WorldMapRead, WorldMapWrite, TerrainType, generate_fixed_rive
 | ファイル | hw_world ではなく src/ にある理由 |
 |---|---|
 | `mod.rs` | `WorldMapRead` / `WorldMapWrite` と layout 定数の root facade |
-| `spawn.rs` | `Commands` と `Terrain3dHandles` を使った地形スポーン。`PostStartup` で `spawn_map` が呼ばれ、`setup()` で挿入済みの `GeneratedWorldLayoutResource` を消費する |
+| `spawn.rs` | `Commands` と `Terrain3dHandles` を使った地形スポーン。`PostStartup` で `spawn_map` が tile anchor を、`spawn_terrain_chunks` が chunk render entity を生成し、`setup()` で挿入済みの `GeneratedWorldLayoutResource` を消費する |

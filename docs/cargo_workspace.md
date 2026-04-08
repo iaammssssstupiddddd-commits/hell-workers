@@ -576,7 +576,7 @@ root (`bevy_app`) は app shell として `init_resource::<WorldMap>()`、startu
 - `obstacle_cleanup_system` のような WorldMap 同期 + 地形ビジュアル通知（`TerrainChangedEvent` → bevy_app で `TerrainIdMap` 更新）
 - door 自動開閉のような world state 更新 system（`DoorVisualHandles` 注入）
 
-`crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/regrowth.rs`, `crates/bevy_app/src/systems/logistics/initial_spawn/` は app shell です。地形メッシュは `spawn_map` で `TerrainSurfaceMaterial` / `Terrain3dHandles` を用いる。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックと `WorldMap` access wrapper は `hw_world` から呼び出します。startup は `GeneratedWorldLayout` を root Resource に包んで 1 回だけ生成し、`TerrainFeatureMap` と `TerrainIdMap` をその snapshot から焼き、地形描画・初期木/岩・初期木材・猫車置き場・regrowth 初期化が同じ layout を共有します。
+`crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/regrowth.rs`, `crates/bevy_app/src/systems/logistics/initial_spawn/` は app shell です。地形スポーンは `spawn_map` が `WorldMap.tile_entities` に紐づく `Tile` 論理 anchor を登録し、`spawn_terrain_chunks` が `TerrainSurfaceMaterial` / `Terrain3dHandles` を使って chunk render entity を生成する構成になっています。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックと `WorldMap` access wrapper は `hw_world` から呼び出します。startup は `GeneratedWorldLayout` を root Resource に包んで 1 回だけ生成し、`TerrainFeatureMap` と `TerrainIdMap` をその snapshot から焼き、地形描画・初期木/岩・初期木材・猫車置き場・regrowth 初期化が同じ layout を共有します。
 
 ## 7. crate を増やすときの手順
 
