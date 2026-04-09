@@ -201,7 +201,32 @@ RttRuntime
 
 `hw_visual::SectionMaterial` / `SectionCut` は現在 `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` で実装している。lighting / shadow / prepass は `StandardMaterial` 側を維持し、section clip だけを extension shader と prepass shader で追加する構成である。`SectionCut.position` は `MainCamera` 中心のワールド位置、`SectionCut.normal` は矢視方向、`SectionCut.thickness` はその切断線から奥側へ残すスラブ幅として扱う。
 
-地形は `hw_visual::TerrainSurfaceMaterial` / `TerrainSurfaceMaterialExt` を基本にしつつ、M2 では軽量 variant の `hw_visual::TerrainSurfaceMaterialLod2` / `TerrainSurfaceMaterialExtLod2` を追加している。どちらも `ExtendedMaterial<StandardMaterial, ...>` のまま section clip・lighting・prepass を維持する。startup は `TerrainIdMap`（`R8Unorm`、runtime 更新対象）と `TerrainFeatureMap`（`Rgba8Unorm`、worldgen snapshot）を生成し、`Terrain3dHandles { lod1, lod2 }` として 2 種の共有 material handle を保持する。**地形描画は `TerrainChunk` entity（16×16 タイル/chunk、7×7=49 entity）で行い、per-tile の render entity は廃止**。chunk には LOD に応じて `MeshMaterial3d<TerrainSurfaceMaterial>` または `MeshMaterial3d<TerrainSurfaceMaterialLod2>` のどちらかが付く。`Tile` marker entity（10,000 個）は描画コンポーネントなしで `WorldMap.tile_entities` に登録され、Familiar AI の収集可否判定の論理 anchor としてのみ機能する。現在の runtime では `TerrainSurfaceMaterial` が `Lod1`、`TerrainSurfaceMaterialLod2` が `Lod2` に対応し、`Lod0` は将来のリッチビジュアル用に予約で未使用である。LOD1 shader（`assets/shaders/terrain_surface_material.wgsl`）は `terrain_id_map` を `textureLoad` で引いて center / cardinal 近傍の terrain id を取り、4 アルベド、`terrain_macro_noise`、terrain 種別ごとの `macro_overlay`、`terrain_blend_mask_soft`、`river_flow_noise`、`river_normal_like`、`shoreline_detail`、`terrain_feature_lut` を合成して最終アルベドを決める。LOD2 shader（`assets/shaders/terrain_surface_material_lod2.wgsl`）は `boundary_mask` の nearest region を正本にして曲線境界を保ちつつ、4-corner bilinear・domain warp・river scroll・shoreline detail を落とし、albedo UV を量子化して低解像度 texture 相当へ簡略化する。shader はいずれも world-space UV で参照するため chunk 境界に継ぎ目は生じない。`TerrainChangedEvent` の consumer は `terrain_id_map_sync_system` で、`Assets<Image>` 上の id map ピクセルを書き換えるだけで見た目を更新する（chunk entity の再生成は不要）。M1 では `TerrainLodMetrics` / `TerrainLodState` を追加し、`update_terrain_lod_metrics_system` が `Camera3dRtt` の viewport から `tile_rtt_px` を算出する。LOD 判定は `tile_rtt_px` を正本に行い、`tile_screen_px` は `composite_logical_size(window)` 由来の補助観測値としてのみ扱う。現 runtime の hysteresis は `Lod1 → Lod2` が 14px 未満、`Lod2 → Lod1` が 16px 超である。詳細は `docs/world_layout.md` の地形レンダリング節。
+地形は `hw_visual::TerrainSurfaceMaterial` / `TerrainSurfaceMaterialExt` を基本にしつつ、3 種の LOD variant を持つ。全 variant が `ExtendedMaterial<StandardMaterial, ...>` のまま section clip・lighting・prepass を維持する。
+
+| 型名 | シェーダー | 用途 |
+|---|---|---|
+| `TerrainSurfaceMaterial` / `TerrainSurfaceMaterialExt` | `terrain_surface_material.wgsl` | LOD1（近景・フルクオリティ） |
+| `TerrainSurfaceMaterialLod1Lite` / `TerrainSurfaceMaterialExtLod1Lite` | `terrain_surface_material_lod1_lite.wgsl` | LOD1-lite（中景・簡略化） |
+| `TerrainSurfaceMaterialLod2` / `TerrainSurfaceMaterialExtLod2` | `terrain_surface_material_lod2.wgsl` | LOD2（遠景・最低コスト） |
+
+startup は `TerrainIdMap`（`R8Unorm`、runtime 更新対象）と `TerrainFeatureMap`（`Rgba8Unorm`、worldgen snapshot）を生成し、`Terrain3dHandles { lod1, lod2, lod1_lite }` として 3 種の共有 material handle を保持する。**地形描画は `TerrainChunk` entity（16×16 タイル/chunk、7×7=49 entity）で行い、per-tile の render entity は廃止**。chunk には LOD に応じて 3 種の material のいずれかが付く。`Tile` marker entity（10,000 個）は描画コンポーネントなしで `WorldMap.tile_entities` に登録され、Familiar AI の収集可否判定の論理 anchor としてのみ機能する。`Lod0` は将来のリッチビジュアル用に予約で未使用。
+
+**シェーダー機能比較**:
+
+| 機能 | LOD1 | LOD1-lite | LOD2 |
+|---|---|---|---|
+| 4-corner bilinear blend | ✓ | ✓ | ✓（nearest 正本） |
+| `boundary_proximity_mask` early-out | ✓ | ✓ | — |
+| domain warp | ✓ | — | — |
+| macro noise / overlay | ✓ | — | — |
+| river scroll / shoreline_detail | ✓ | — | — |
+| `terrain_feature_lut` uniform fast-path | ✓ | ✓ | ✓ |
+
+LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardinal 近傍の terrain id を取り、4 アルベド・macro noise・overlay・river scroll・shoreline detail・`terrain_feature_lut` を合成する。LOD1-lite は macro noise / domain warp / river scroll / shoreline_detail を省き、fast path で ~3–4 sample/px に削減する。LOD2 は `boundary_mask` の nearest region を正本にして曲線境界を保ちつつ albedo UV を量子化する。shader はいずれも world-space UV で参照するため chunk 境界に継ぎ目は生じない。
+
+**`terrain_feature_lut` uniform 高速化**（LUT constant-ization, M4）: `sync_terrain_feature_lut_uniforms_system`（`hw_visual`、`Visual` フェーズ毎フレーム実行）が `TerrainSurfaceLutImageHandle`（bridge Resource、`bevy_app` の `init_visual_handles` が挿入）経由で LUT テクスチャを CPU サンプリングし、`TerrainSurfaceUniform.lut_shore/inland/rock` uniform に焼き込む。`feature_lut_constants_ready` フラグが `1.0` になると全シェーダーが `textureSample(terrain_feature_lut, ...)` の代わりに uniform 定数を参照する。これによりフレームごとの LUT テクスチャサンプルが 0 になる。
+
+`TerrainChangedEvent` の consumer は `terrain_id_map_sync_system` で、`Assets<Image>` 上の id map ピクセルを書き換えるだけで見た目を更新する（chunk entity の再生成は不要）。M1 では `TerrainLodMetrics` / `TerrainLodState` を追加し、`update_terrain_lod_metrics_system` が `Camera3dRtt` の viewport から `tile_rtt_px` を算出する。LOD 判定は `tile_rtt_px` を正本に行い、`tile_screen_px` は `composite_logical_size(window)` 由来の補助観測値としてのみ扱う。LOD 遷移は 3 段 hysteresis で管理する（詳細は `docs/rendering-performance.md` §8）。詳細は `docs/world_layout.md` の地形レンダリング節。
 
 ### Camera2d ↔ Camera3d 同期
 
@@ -220,7 +245,7 @@ RttRuntime
 - `ELEVATION_DISTANCE = 800`（`pub const`、`elevation_view.rs` で定義）
 - TopDown の RtT は Camera3d の `OrthographicProjection.scale` を Camera2d 側のズーム量に同期する。
 - 矢視時の回転・Y 高度は `elevation_view_input_system`（V キー押下時）が設定し、`sync_camera3d_system` は上書きしない。
-- `update_terrain_lod_metrics_system` は `sync_camera3d_system.after(...)` で登録され、更新済みの `Camera3dRtt` 投影から `tile_rtt_px` / `tile_screen_px` を観測する。現 runtime LOD は `Lod1 / Lod2` を使い、`Lod0` は将来の高品質 variant 用に予約されている。
+- `update_terrain_lod_metrics_system` は `sync_camera3d_system.after(...)` で登録され、更新済みの `Camera3dRtt` 投影から `tile_rtt_px` / `tile_screen_px` を観測する。現 runtime LOD は `Lod1 / Lod1Lite / Lod2` の 3 段を使い、`Lod0` は将来の高品質 variant 用に予約されている。
 
 ### Camera3d の向き
 

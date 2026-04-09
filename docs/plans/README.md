@@ -21,7 +21,7 @@
 |---|---|---|
 | [dream-bubble-perf-2026-04-09.md](dream-bubble-perf-2026-04-09.md) | Draft | 夢の泡パーティクル描画負荷最適化 |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
-| [world-map-lod1-performance-plan-2026-04-09.md](world-map-lod1-performance-plan-2026-04-09.md) | In Progress | ワールドマップ近景 `LOD1` の fragment 負荷を、境界 early-out・中間 LOD・feature ベイク再編で下げる計画 |
+| [world-map-lod1-performance-plan-2026-04-09.md](world-map-lod1-performance-plan-2026-04-09.md) | Complete | ワールドマップ近景 `LOD1` の fragment 負荷を、境界 early-out・中間 LOD・feature ベイク再編で下げる計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
