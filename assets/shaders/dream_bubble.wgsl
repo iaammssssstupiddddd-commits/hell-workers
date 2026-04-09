@@ -4,6 +4,7 @@
 #import bevy_sprite::{
     mesh2d_vertex_output::VertexOutput,
 }
+#import bevy_sprite::mesh2d_view_bindings::globals
 
 // -- 疑似乱数とノイズ関数 --
 fn hash(p: vec2<f32>) -> f32 {
@@ -39,10 +40,10 @@ fn fbm(p: vec2<f32>) -> f32 {
 
 struct DreamBubbleMaterial {
     color: vec4<f32>,  // offset 0:  ベース色 (16 bytes)
-    time: f32,         // offset 16: 経過時間
-    alpha: f32,        // offset 20: 透明度
-    mass: f32,         // offset 24: 質量（ノイズ変形の強さに使用）
-    _pad: f32,         // offset 28: パディング
+    alpha: f32,        // offset 16: 透明度
+    mass: f32,         // offset 20: 質量（ノイズ変形の強さに使用）
+    _pad0: f32,        // offset 24: パディング
+    _pad1: f32,        // offset 28: パディング
 }
 
 @group(2) @binding(0) var<uniform> material: DreamBubbleMaterial;
@@ -54,7 +55,7 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     let p = (uv - 0.5) * 2.0;
 
     // ---- 有機的な変形（Morphing） ----
-    let t = material.time * 0.8; // 時間変化を少し早める
+    let t = globals.time * 0.8; // 時間変化を少し早める
     let deform_val = fbm(p * 2.5 - vec2<f32>(t, t * 1.5)) * 2.0 - 1.0;
     // 質量が小さくても明らかにうごめくよう、ベース変形強度を 0.15 に引き上げ
     let deform_strength = 0.15 + clamp(material.mass / 12.0, 0.0, 1.0) * 0.10;
@@ -71,7 +72,7 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // ---- 睡眠の呼吸（Breathing） ----
-    let breath = 0.85 + 0.15 * sin(material.time * 1.5);
+    let breath = 0.85 + 0.15 * sin(globals.time * 1.5);
 
     // ---- 星雲テクスチャ（Nebula）とベースカラーの強調 ----
     // ノイズの模様を大きくし、コントラストを強める
@@ -86,7 +87,7 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
 
     // ---- 虹色屈折（シャボン玉の表面） ----
     let angle = atan2(p.y, p.x);
-    let iridescent_phase = angle + material.time * 0.6;
+    let iridescent_phase = angle + globals.time * 0.6;
     let iris_r = 0.5 + 0.5 * sin(iridescent_phase * 1.0);
     let iris_g = 0.5 + 0.5 * sin(iridescent_phase * 1.0 + 2.094);
     let iris_b = 0.5 + 0.5 * sin(iridescent_phase * 1.0 + 4.189);

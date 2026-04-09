@@ -69,6 +69,8 @@ Unlit（ライティングなし）
 
 ### 3.5 LOD目安（確定済み）
 
+> **注**: ここの LOD0/LOD1 は GLB メッシュのポリゴン段階を指す。地形マテリアルの `LodLevel::Lod1`（フル品質）/ `LodLevel::Lod2`（遠景簡略）とは別軸の命名。
+
 | LOD | 三角形数 | 用途 |
 | --- | --- | --- |
 | LOD0 | 600〜1,200 | セクションビュー（高品質） |
@@ -105,7 +107,66 @@ Unlit（ライティングなし）
 | **裂け目** | 紫の光（`#8b008b`）が漏れる「怠惰のエネルギー」表現 |
 | **金属** | 錆びた鉄（Rusty Metal）。均質な金属感は禁止 |
 
-### 5.2 壁ノーマルマップ（PoC待ち）
+### 5.2 地形テクスチャ LOD 基準（確定済み）
+
+地形は 3D チャンクメッシュ + RtT 経路で描画される。マテリアルは `tile_rtt_px`（RtT 上での 1 タイル見かけサイズ）を基準に切り替わる。
+
+#### LOD 切替閾値
+
+| 遷移 | 閾値 |
+| --- | --- |
+| LOD1 → LOD2（遠景へ） | `tile_rtt_px < 14 px` |
+| LOD2 → LOD1（近景へ） | `tile_rtt_px > 16 px` |
+
+#### テクスチャスロット一覧
+
+| テクスチャ | 現行サイズ | LOD1 | LOD2 | 備考 |
+| --- | --- | --- | --- | --- |
+| grass_albedo | 1024×1024 | 必須 | 必須 | UV 量子化（8 wu ステップ）で使用 |
+| dirt_albedo | 1024×1024 | 必須 | 必須 | 同上 |
+| sand_albedo | 1024×1024 | 必須 | 必須 | 同上 |
+| river_albedo | 1024×1024 | 必須 | 必須 | 同上 |
+| terrain_macro_noise | 256×256 | 必須 | 未使用 | RGB、明暗ムラ全体用 |
+| grass_macro_overlay | 256×256 | 必須 | 未使用 | グレースケール |
+| dirt_macro_overlay | 256×256 | 必須 | 未使用 | グレースケール |
+| sand_macro_overlay | 256×256 | 必須 | 未使用 | グレースケール |
+| terrain_blend_mask_soft | 256×256 | 必須 | 未使用 | グレースケール |
+| river_flow_noise | 256×256 | 必須 | 未使用 | グレースケール、川面アニメ用 |
+| river_normal_like | 256×256 | 必須 | 未使用 | RGB、水面反射的演出 |
+| shoreline_detail | 256×256 | 必須 | 未使用 | グレースケール、砂浜際の grain |
+| terrain_feature_lut | 256×1 | 必須 | 必須 | RGBA、地物カラーグレーディング LUT |
+| terrain_id_map | 生成 | 必須 | 必須 | 起動時に CPU 生成 |
+| terrain_feature_map | 生成 | 必須 | 必須 | 起動時に CPU 生成 |
+| boundary_mask | 生成 | 必須 | 必須 | PostStartup で後設定 |
+
+#### テクスチャ受け入れ基準
+
+**albedo 4 種（grass / dirt / sand / river）**
+- LOD1: タイリング継ぎ目が近景（`tile_rtt_px ≥ 14 px`）で視認されないこと
+- LOD2: 8 wu 量子化後に「ブロック感」が著しく不自然でないこと（タイルが小さいため許容範囲は広い）
+- 色調: §6 パレット（地面 `#2d1810`・川 `#3d1515`系）と整合していること
+
+**macro_noise（LOD1 のみ）**
+- 地形全体に自然な明暗ムラを与える。周期が一様でないこと
+
+**macro_overlay 3 種（LOD1 のみ）**
+- albedo に乗算した際、草・土・砂それぞれの質感が強調されること
+
+**terrain_blend_mask_soft（LOD1 のみ）**
+- 境界ブレンド計算に使用。エッジが過度に硬くないこと（滑らかなグラデーション）
+
+**river_flow_noise / river_normal_like（LOD1 のみ）**
+- 川面に流れ・波状感が視認できること
+
+**shoreline_detail（LOD1 のみ）**
+- 砂浜の水際に粒状感が追加されること
+
+**terrain_feature_lut（LOD1 / LOD2 共通）**
+- 256 エントリ × RGBA。各エントリの符号付き tint（0.5 = 無変化）が地物（岩場・汀・内陸砂）の色補正として自然に見えること
+
+---
+
+### 5.3 壁ノーマルマップ（PoC待ち）
 
 > **判断タイミング**: MS-Asset-Build-A（壁 GLB PoC）の目視確認後に確定する。
 

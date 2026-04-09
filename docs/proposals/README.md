@@ -18,7 +18,6 @@
 | Document | Notes |
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
-| [boundary-texture-paste-proposal-2026-04-07.md](boundary-texture-paste-proposal-2026-04-07.md) | **現状**: `crates/bevy_app/src/world/map/boundary.rs` にて、Catmull-Rom スプラインと法線ノイズで境界ポリラインを計算し、それに幅を持たせた **リボンメッシュ（3Dポリゴン帯）** を生成して地形タイルの上に配置しているの提案。 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 
@@ -33,6 +32,7 @@
 | [archive/ai-scalability-optimization.md](archive/ai-scalability-optimization.md) | AIシステム スケーラビリティ最適化提案 (Scale: Familiar 30, Soul 500) |
 | [archive/architecture-improvements-2026.md](archive/architecture-improvements-2026.md) | アーキテクチャ改善提案 (Architecture Improvement Proposals) |
 | [archive/bevy_018_features.md](archive/bevy_018_features.md) | Bevy 0.18 新機能導入提案 |
+| [archive/boundary-texture-paste-proposal-2026-04-07.md](archive/boundary-texture-paste-proposal-2026-04-07.md) | **現状**: `crates/bevy_app/src/world/map/boundary.rs` にて、Catmull-Rom スプラインと法線ノイズで境界ポリラインを計算し、それに幅を持たせた **リボンメッシュ（3Dポリゴン帯）** を生成して地形タイルの上に配置しているの提案。 |
 | [archive/destination-validation-unification-proposal-2026-03-07.md](archive/destination-validation-unification-proposal-2026-03-07.md) | 現状: 搬入先（FloorSite, WallSite, ProvisionalWall 等）の受入可能量チェックが **3箇所に独立実装** されている:の提案。 |
 | [archive/dream_general_visuals.md](archive/dream_general_visuals.md) | Dreamシステム全体 ビジュアルアップデート提案 |
 | [archive/dream_tree_planting_proposal.md](archive/dream_tree_planting_proposal.md) | Dream を使った植林システム提案 |
@@ -61,4 +61,5 @@
 | [archive/water-transport-consolidation-proposal-2026-03-07.md](archive/water-transport-consolidation-proposal-2026-03-07.md) | 現状: `GatherWater`（River → Tank）と `HaulWaterToMixer`（Tank → Mixer）は、ほぼ同一の「バケツ搬送」パターンを独立に実装している:の提案。 |
 | [archive/wheelbarraw_sand_stasis_mud_implementation_plan.md](archive/wheelbarraw_sand_stasis_mud_implementation_plan.md) | 実装計画書: Sand / StasisMud の猫車専用運搬化 |
 | [archive/wheelbarrow_only_for_sand_and_stasis_mud.md](archive/wheelbarrow_only_for_sand_and_stasis_mud.md) | 提案: Sand / StasisMud の猫車専用運搬化 |
+| [archive/world-map-lod-strategy-2026-04-06.md](archive/world-map-lod-strategy-2026-04-06.md) | - 現在の地形描画はの計画。 |
 

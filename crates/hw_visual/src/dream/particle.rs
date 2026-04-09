@@ -1,5 +1,6 @@
 use super::components::{DreamParticle, DreamVisualState};
-use super::dream_bubble_material::{DreamBubbleMaterial, DreamBubbleUiMaterial};
+use super::dream_bubble_material::DreamBubbleUiMaterial;
+use super::handles::{self, DreamBubbleHandles};
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;
 use hw_core::camera::MainCamera;
@@ -54,15 +55,6 @@ fn particle_lifetime_for_quality(quality: DreamQuality) -> f32 {
     }
 }
 
-fn particle_color_for_quality(quality: DreamQuality) -> LinearRgba {
-    match quality {
-        DreamQuality::VividDream => LinearRgba::new(0.55, 0.8, 1.0, 1.0),
-        DreamQuality::NormalDream => LinearRgba::new(0.55, 0.65, 0.95, 1.0),
-        DreamQuality::NightTerror => LinearRgba::new(0.95, 0.45, 0.55, 1.0),
-        DreamQuality::Awake => LinearRgba::WHITE,
-    }
-}
-
 fn particle_sway_for_quality(quality: DreamQuality) -> f32 {
     match quality {
         DreamQuality::VividDream => DREAM_PARTICLE_SWAY_VIVID,
@@ -87,8 +79,7 @@ pub fn ensure_dream_visual_state_system(
 pub fn dream_particle_spawn_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<DreamBubbleMaterial>>,
+    handles: Res<DreamBubbleHandles>,
     mut q_souls: SleepingSoulsQuery,
 ) {
     let dt = time.delta_secs();
@@ -113,19 +104,14 @@ pub fn dream_particle_spawn_system(
         }
 
         let particle_lifetime = particle_lifetime_for_quality(dream.quality);
-        let color = particle_color_for_quality(dream.quality);
         let velocity = Vec2::new(rng.gen_range(-3.0..=3.0), rng.gen_range(12.0..=18.0));
         let x_offset = rng.gen_range(-DREAM_PARTICLE_SPAWN_OFFSET..=DREAM_PARTICLE_SPAWN_OFFSET);
         let y_offset = DREAM_PARTICLE_SPAWN_OFFSET + rng.gen_range(0.0..=4.0);
         let size = rng.gen_range(DREAM_PARTICLE_SIZE_MIN..=DREAM_PARTICLE_SIZE_MAX);
 
-        let mesh = meshes.add(Circle::new(0.5));
-        let material = materials.add(DreamBubbleMaterial {
-            color,
-            time: 0.0,
-            alpha: 0.85,
-            mass: 1.0,
-        });
+        let initial_bucket = handles::life_ratio_to_bucket(1.0);
+        let mesh = handles.circle_mesh.clone();
+        let material = handles.materials[handles::quality_index(dream.quality)][initial_bucket].clone();
 
         commands.spawn((
             DreamParticle {
@@ -135,6 +121,7 @@ pub fn dream_particle_spawn_system(
                 max_lifetime: particle_lifetime,
                 velocity,
                 phase: rng.gen_range(0.0..=std::f32::consts::TAU),
+                alpha_bucket: initial_bucket,
             },
             Mesh2d(mesh),
             MeshMaterial2d(material),
@@ -153,8 +140,7 @@ pub fn dream_particle_spawn_system(
 pub struct RestAreaDreamParams<'w, 's> {
     commands: Commands<'w, 's>,
     time: Res<'w, Time>,
-    meshes: ResMut<'w, Assets<Mesh>>,
-    materials: ResMut<'w, Assets<DreamBubbleMaterial>>,
+    handles: Res<'w, DreamBubbleHandles>,
     q_rest_areas: Query<
         'w,
         's,
@@ -230,7 +216,6 @@ pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
 
         let particle_quality = DreamQuality::VividDream;
         let particle_lifetime = particle_lifetime_for_quality(particle_quality);
-        let color = particle_color_for_quality(particle_quality);
 
         let velocity_y = rng.gen_range(12.0..=18.0) * (1.0 + (scale_factor - 1.0) * 0.5);
         let velocity = Vec2::new(rng.gen_range(-5.0..=5.0) * scale_factor, velocity_y);
@@ -241,13 +226,9 @@ pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
         let size = rng.gen_range(DREAM_PARTICLE_SIZE_MIN..=DREAM_PARTICLE_SIZE_MAX)
             * (1.0 + (scale_factor - 1.0) * 0.5);
 
-        let mesh = p.meshes.add(Circle::new(0.5));
-        let material = p.materials.add(DreamBubbleMaterial {
-            color,
-            time: 0.0,
-            alpha: 0.85,
-            mass: 1.0,
-        });
+        let initial_bucket = handles::life_ratio_to_bucket(1.0);
+        let mesh = p.handles.circle_mesh.clone();
+        let material = p.handles.materials[handles::quality_index(particle_quality)][initial_bucket].clone();
 
         p.commands.spawn((
             DreamParticle {
@@ -257,6 +238,7 @@ pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
                 max_lifetime: particle_lifetime,
                 velocity,
                 phase: rng.gen_range(0.0..=std::f32::consts::TAU),
+                alpha_bucket: initial_bucket,
             },
             Mesh2d(mesh),
             MeshMaterial2d(material),
@@ -286,18 +268,18 @@ pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
 pub fn dream_particle_update_system(
     mut commands: Commands,
     time: Res<Time>,
+    handles: Res<DreamBubbleHandles>,
     mut q_particles: Query<(
         Entity,
         &mut DreamParticle,
         &mut Transform,
-        &MeshMaterial2d<DreamBubbleMaterial>,
+        &mut MeshMaterial2d<super::dream_bubble_material::DreamBubbleMaterial>,
     )>,
-    mut materials: ResMut<Assets<DreamBubbleMaterial>>,
     mut q_visual_state: Query<&mut DreamVisualState>,
 ) {
     let dt = time.delta_secs();
 
-    for (entity, mut particle, mut transform, material_handle) in q_particles.iter_mut() {
+    for (entity, mut particle, mut transform, mut material_handle) in q_particles.iter_mut() {
         particle.lifetime -= dt;
 
         if particle.lifetime <= 0.0 {
@@ -316,9 +298,20 @@ pub fn dream_particle_update_system(
 
         let life_ratio = (particle.lifetime / particle.max_lifetime).clamp(0.0, 1.0);
 
-        if let Some(material) = materials.get_mut(&material_handle.0) {
-            material.time = time.elapsed_secs();
-            material.alpha = life_ratio * 0.85;
+        let new_bucket = handles::life_ratio_to_bucket(life_ratio);
+        if new_bucket == 0 {
+            commands.entity(entity).try_despawn();
+            if let Ok(mut visual_state) = q_visual_state.get_mut(particle.owner) {
+                visual_state.active_particles = visual_state.active_particles.saturating_sub(1);
+            }
+            continue;
+        }
+
+        if new_bucket != particle.alpha_bucket {
+            particle.alpha_bucket = new_bucket;
+            let qi = handles::quality_index(particle.quality);
+            *material_handle =
+                MeshMaterial2d(handles.materials[qi][new_bucket].clone());
         }
     }
 }

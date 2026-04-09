@@ -78,6 +78,9 @@ impl Plugin for HwVisualPlugin {
 
         app.add_plugins(speech::SpeechPlugin);
 
+        // Dream bubble shared handles (mesh + material pool)
+        app.add_systems(Startup, dream::init_dream_bubble_handles);
+
         // Standalone systems
         app.add_systems(
             Update,

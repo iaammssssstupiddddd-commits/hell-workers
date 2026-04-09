@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-04-09）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-04-10）。
 
 ## 新規計画書の作り方
 
@@ -19,11 +19,9 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [boundary-texture-paste-plan-2026-04-07.md](boundary-texture-paste-plan-2026-04-07.md) | Draft | 境界テクスチャ貼り付け計画（terrain_region_map） |
+| [dream-bubble-perf-2026-04-09.md](dream-bubble-perf-2026-04-09.md) | Draft | 夢の泡パーティクル描画負荷最適化 |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
-| [river-boundary-naturalization-plan-2026-04-06.md](river-boundary-naturalization-plan-2026-04-06.md) | Complete | 川岸の wavy staircase を M1（center_y スムージング）+ M2（面取り）で解消する計画 |
-| [world-map-lod-strategy-2026-04-06.md](world-map-lod-strategy-2026-04-06.md) | In Progress | 2026-04-09 更新版。`Lod1=現行`, `Lod2=曲線境界維持 + coarse surface`, `Lod0=将来予約` の runtime LOD 計画 |
-| [world-map-render-chunking-plan-2026-04-08.md](world-map-render-chunking-plan-2026-04-08.md) | 完了 | 論理タイルデータを維持したまま地形描画を chunk 化し、将来の biome 拡張と両立させる計画 |
+| [world-map-lod1-performance-plan-2026-04-09.md](world-map-lod1-performance-plan-2026-04-09.md) | In Progress | ワールドマップ近景 `LOD1` の fragment 負荷を、境界 early-out・中間 LOD・feature ベイク再編で下げる計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
 
@@ -36,6 +34,7 @@
 | [archive/assigned-task-to-hw-jobs-plan-2026-03-08.md](archive/assigned-task-to-hw-jobs-plan-2026-03-08.md) | アーカイブ | AssignedTask を hw_core → hw_jobs へ移動する計画 |
 | [archive/assignment-builder-unification-plan-2026-03-01.md](archive/assignment-builder-unification-plan-2026-03-01.md) | アーカイブ | `task_management/builders` の重複削減と割り当て生成経路の共通化計画。 |
 | [archive/auto-gather-for-blueprint.md](archive/auto-gather-for-blueprint.md) | アーカイブ | Blueprint不足資材の自動伐採/採掘計画。 |
+| [archive/boundary-texture-paste-plan-2026-04-07.md](archive/boundary-texture-paste-plan-2026-04-07.md) | アーカイブ | 境界テクスチャ貼り付け計画（terrain_region_map） |
 | [archive/bridge-building.md](archive/bridge-building.md) | アーカイブ | 橋（Bridge）建築物の実装計画。 |
 | [archive/bucket-return-rebuild-plan.md](archive/bucket-return-rebuild-plan.md) | アーカイブ | バケツ返却仕様の再構築計画。 |
 | [archive/cargo-workspace-migration-plan.md](archive/cargo-workspace-migration-plan.md) | アーカイブ | Cargo Workspace 移行計画 |
@@ -124,6 +123,7 @@
 | [archive/remove-reexport-indirections-plan.md](archive/remove-reexport-indirections-plan.md) | アーカイブ | bevy_appの計画。 |
 | [archive/request-unification-plan-2026-02-14.md](archive/request-unification-plan-2026-02-14.md) | アーカイブ | Request方式一本化計画。 |
 | [archive/rest-area-system.md](archive/rest-area-system.md) | アーカイブ | 休憩所（Rest Area）システム提案。 |
+| [archive/river-boundary-naturalization-plan-2026-04-06.md](archive/river-boundary-naturalization-plan-2026-04-06.md) | アーカイブ | 川の境界自然化計画 |
 | [archive/room-detection-hw-world-extraction-plan-2026-03-11.md](archive/room-detection-hw-world-extraction-plan-2026-03-11.md) | アーカイブ | src/systems/room/detection.rsの計画。 |
 | [archive/room-detection-plan-2026-02-23.md](archive/room-detection-plan-2026-02-23.md) | アーカイブ | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
 | [archive/rtt-pipeline-refactor-2026-03-29.md](archive/rtt-pipeline-refactor-2026-03-29.md) | アーカイブ | RtT Pipeline Refactor Plan |
@@ -154,5 +154,7 @@
 | [archive/wheelbarrow-arbitration-plan.md](archive/wheelbarrow-arbitration-plan.md) | アーカイブ | 猫車利用仲裁ロジックの実装計画。 |
 | [archive/workspace-area-bounds-extraction.md](archive/workspace-area-bounds-extraction.md) | アーカイブ | AreaBoundsの計画。 |
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
+| [archive/world-map-render-chunking-plan-2026-04-08.md](archive/world-map-render-chunking-plan-2026-04-08.md) | アーカイブ | -の計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
+

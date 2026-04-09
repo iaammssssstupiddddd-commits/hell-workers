@@ -43,6 +43,7 @@
 - [world_layout.md](world_layout.md): マップ仕様、地形タイプ、固定アンカー、資源配置の意味、**座標変換関数**（`world_to_grid` 等）。生成パイプライン自体は `map_generation.md` を参照。
 - [state.md](state.md): PlayMode、**TaskMode全バリアント一覧**（指定・ゾーン・建築モード等）。
 - [debug-features.md](debug-features.md): DevPanel・IBuild など**デバッグ専用機能**の一覧・実装箇所。
+- [rendering-performance.md](rendering-performance.md): 描画パイプライン別の draw call 構造、バジェット、最適化方針。
 - [visual_test.md](visual_test.md): Soul GLB Visual Test Scene の操作・アーキテクチャ・UV 計算。
 - [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン（コーディング規約・MCP活用）。
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。

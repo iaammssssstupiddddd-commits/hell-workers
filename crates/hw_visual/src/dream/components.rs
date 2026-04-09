@@ -10,6 +10,7 @@ pub struct DreamParticle {
     pub max_lifetime: f32,
     pub velocity: Vec2,
     pub phase: f32,
+    pub alpha_bucket: usize,
 }
 
 #[derive(Component, Default)]
