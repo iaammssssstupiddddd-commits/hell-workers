@@ -194,6 +194,7 @@
 - **レイヤー**: `building_3d_render_layers()`（`LAYER_3D` + `LAYER_3D_SHADOW_RECEIVER`）で他の 3D エンティティと同レイヤー。
 - **Transform**: chunk は `from_xyz(cx_world, 0.0, -cy_world)`（chunk 中心）。Y=0 が地面平面。
 - **障害物除去後の更新**: `hw_world::obstacle_cleanup_system` が `TerrainChangedEvent`（`Message`）を発行 → `bevy_app::terrain_id_map_sync_system` が受信して `TerrainIdMap` の該当ピクセルを書き換える。**chunk entity の再生成は不要**（shader が world-space で texture を参照するため、texture 1 ピクセル更新だけで全 chunk の見た目が更新される）。
+- **M1 LOD 観測基盤**: `bevy_app::systems::visual::terrain_lod::update_terrain_lod_metrics_system` が `Camera3dRtt` の `world_to_viewport` から `tile_rtt_px`（RtT 上の 1 タイル見かけサイズ）を算出し、`composite_logical_size(window)` と `RttRuntime.viewport` から `tile_screen_px`（スクリーン表示上の補助値）を導出する。LOD 判定の正本は `TerrainLodMetrics.tile_rtt_px` であり、`tile_screen_px` はデバッグ表示専用。`TerrainLodState.level` は hysteresis 付き閾値で更新され、**矢視 (`North/East/South/West`) では `Lod2` を保持しない**。
 - **廃止**: `TerrainBorder` / `terrain_border.rs` / `hw_world::borders` は MS-3-4 で除去済み。`TerrainType::z_layer()` も同様に除去済み。per-tile の `Mesh3d` render entity は chunk renderer 導入時に廃止。`Terrain3dHandles.tile_mesh` フィールドも廃止済み。
 
 ### 2D 前景カメラ（composite より手前の `LAYER_2D`）

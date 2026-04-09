@@ -31,6 +31,9 @@ use crate::systems::visual::soul_animation::{
     sync_soul_body_animation_system, sync_soul_face_expression_system,
 };
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
+use crate::systems::visual::terrain_lod::{
+    TerrainLodMetrics, TerrainLodState, update_terrain_lod_metrics_system,
+};
 use crate::systems::visual::terrain_material::terrain_id_map_sync_system;
 use hw_core::game_state::PlayMode;
 use hw_visual::HwVisualPlugin;
@@ -52,6 +55,8 @@ impl Plugin for VisualPlugin {
         app.init_resource::<ElevationViewState>();
         app.init_resource::<SectionCut>();
         app.init_resource::<SoulAnimationLibrary>();
+        app.init_resource::<TerrainLodMetrics>();
+        app.init_resource::<TerrainLodState>();
 
         app.add_message::<TerrainChangedEvent>();
 
@@ -59,6 +64,12 @@ impl Plugin for VisualPlugin {
             Update,
             (sync_camera3d_system, sync_world_foreground_2d_camera_system)
                 .chain()
+                .in_set(GameSystemSet::Visual),
+        );
+        app.add_systems(
+            Update,
+            update_terrain_lod_metrics_system
+                .after(sync_camera3d_system)
                 .in_set(GameSystemSet::Visual),
         );
         app.add_systems(

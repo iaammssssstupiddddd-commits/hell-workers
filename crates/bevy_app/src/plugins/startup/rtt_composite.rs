@@ -55,7 +55,7 @@ pub fn spawn_rtt_composite_sprite(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<RttCompositeMaterial>>,
 ) {
-    let custom_size = q_window.single().ok().map(logical_composite_size);
+    let custom_size = q_window.single().ok().map(composite_logical_size);
     let mesh = meshes.add(Rectangle::default().mesh());
     let size = custom_size.unwrap_or(Vec2::new(1280.0, 720.0));
     let material = materials.add(RttCompositeMaterial {
@@ -96,7 +96,7 @@ pub fn sync_rtt_output_bindings(
     >,
     mut materials: ResMut<Assets<RttCompositeMaterial>>,
 ) {
-    let logical_size = q_window.single().ok().map(logical_composite_size);
+    let logical_size = q_window.single().ok().map(composite_logical_size);
 
     // メッシュスケールはウィンドウリサイズで常時追従（RttRuntime 変化とは独立）
     for (_, mut tf) in quads.iter_mut() {
@@ -126,7 +126,8 @@ pub fn sync_rtt_output_bindings(
     }
 }
 
-fn logical_composite_size(window: &Window) -> Vec2 {
+/// RtT 合成メッシュの論理サイズを返す（LOD 観測システムと共有）。
+pub(crate) fn composite_logical_size(window: &Window) -> Vec2 {
     let size = window.size();
     Vec2::new(size.x, size.y * topdown_rtt_vertical_compensation())
 }

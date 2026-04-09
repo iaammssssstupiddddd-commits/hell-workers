@@ -22,7 +22,7 @@
 | [boundary-texture-paste-plan-2026-04-07.md](boundary-texture-paste-plan-2026-04-07.md) | Draft | 境界テクスチャ貼り付け計画（terrain_region_map） |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [river-boundary-naturalization-plan-2026-04-06.md](river-boundary-naturalization-plan-2026-04-06.md) | Complete | 川岸の wavy staircase を M1（center_y スムージング）+ M2（面取り）で解消する計画 |
-| [world-map-lod-strategy-2026-04-06.md](world-map-lod-strategy-2026-04-06.md) | Draft | ワールドマップ LOD 計画。TopDown far overview と中景 shader 簡略化を主軸に整理 |
+| [world-map-lod-strategy-2026-04-06.md](world-map-lod-strategy-2026-04-06.md) | Draft | 2026-04-09 再評価版。chunk renderer 前提で、まず shader LOD1、必要時のみ TopDown far overview を入れる計画 |
 | [world-map-render-chunking-plan-2026-04-08.md](world-map-render-chunking-plan-2026-04-08.md) | 完了 | 論理タイルデータを維持したまま地形描画を chunk 化し、将来の biome 拡張と両立させる計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
@@ -156,4 +156,3 @@
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-

@@ -7,374 +7,610 @@
 | 計画ID | `world-map-lod-strategy-2026-04-06` |
 | ステータス | `Draft` |
 | 作成日 | `2026-04-06` |
-| 最終更新日 | `2026-04-06` |
+| 最終更新日 | `2026-04-09` |
 | 作成者 | `Codex` |
 | 関連提案 | `N/A` |
 | 関連Issue/PR | `N/A` |
-| 関連ドキュメント | `docs/world_layout.md`, `docs/architecture.md`, `docs/art-style-criteria.md` §3.5, `docs/plans/3d-rtt/ms-3-6-terrain-surface-plan-2026-03-31.md` §8.3 |
+| 関連ドキュメント | `docs/world_layout.md`, `docs/architecture.md`, `docs/plans/world-map-render-chunking-plan-2026-04-08.md`, `docs/plans/3d-rtt/ms-3-6-terrain-surface-plan-2026-03-31.md` |
 
 ## 1. 目的
 
 - 解決したい課題:
-  - 地形は `spawn_map` で **100 x 100 = 10,000 タイル**を個別 `Mesh3d` として生成している。
-  - `TerrainSurfaceMaterial` は `terrain_id_map` 近傍参照、macro noise、overlay、river flow を持ち、**遠景でも近景と同じシェーダ負荷**を払う。
+  - 旧LOD案は「地形が 10,000 個の per-tile render entity」「境界が別メッシュ群として残る」という前提で組まれていたが、現実装はすでに **49 個の `TerrainChunk`** と **`boundary_mask` baked** に移行している。
+  - そのため、今の主要課題は entity 数削減ではなく、`TerrainSurfaceMaterial` と RtT 経路の **fragment / fill-rate / texture sampling 負荷** をズームに応じて落とせていない点にある。
+  - 何が本当のボトルネックかを観測する仕組みがなく、TopDown far overview を先に入れるべきか、shader 簡略化で十分かを判断できない。
 - 到達したい状態:
-  - **LOD は描画専用**として導入し、`WorldMap` / pathfinding / 生成データには触れずに、ズームアウト時だけ描画コストを段階的に落とす。
-  - TopDown の遠景では、10,000 タイルをそのまま描くのではなく、**少数 draw に集約した遠景表現**へ切り替える。
-  - 境界リボンは **遠景でも残す**。遠景ではむしろ地形の読みやすさを支える主役として扱い、LOD の削減対象は地形本体の detail に寄せる。
-  - 矢視・Section 系は correctness 優先で、遠景用の単純化を無理に適用しない。
+  - LOD の対象を「すでに解決済みの entity 数」ではなく、**現行 chunk renderer 上の描画負荷**へ再定義する。
+  - 近景は現行品質を維持し、中景は **同じ chunk 経路のまま shader を軽くする**。
+  - 遠景の impostor / overview は、**M2 の実測後に必要な場合だけ**導入する。
+  - 旧案の「境界リボンを far でも残す」は採用しない。現行経路では境界は `boundary_mask` として terrain shader 内に統合されているため、far 表示側も **境界情報ごと baked** する設計に寄せる。
 - 成功指標:
-  - TopDown の遠景ズームで、地形描画の entity / draw / fragment cost を近景より明確に削減できる。
-  - LOD 切替で目立つポッピングや 1 フレーム明滅が発生しない。
-  - `TerrainChangedEvent` 後も far 表示が stale にならない。
+  - LOD 判定が、表示確認用の `tile_screen_px` と GPU 負荷判定用の `tile_rtt_px`、および hysteresis に基づいて 1 箇所で管理される。
+  - LOD1 で TopDown / 矢視の遠景負荷を下げつつ、chunk renderer・`TerrainChangedEvent`・section clip 契約を壊さない。
+  - LOD2 は「必要性が確認できた場合のみ」導入し、導入時は TopDown far 限定で stale 表示を起こさない。
 
 ## 2. スコープ
 
 ### 対象（In Scope）
 
-- TopDown 地形描画の LOD 戦略策定
-- LOD 判定に使う **画面内タイルサイズ**または等価の screen-space metric 導入
-- 地形タイル本体 (`spawn_map` / `TerrainSurfaceMaterial`) の near / mid / far 切替
-- 境界リボン (`boundary.rs`) の LOD 連動表示と、far で残すための簡略化方針
-- `TerrainChangedEvent` と far 表示の同期経路
-- `docs/world_layout.md` / `docs/architecture.md` へ反映する前提整理
+- 現実装ベースの地形LOD再設計
+- `TerrainChunk` / `TerrainSurfaceMaterial` / `TerrainIdMap` / `boundary_mask` 前提での段階計画
+- `tile_screen_px` / `tile_rtt_px` 観測基盤と LOD state/hysteresis の導入
+- chunk renderer を維持したまま行う LOD1（shader 簡略化）
+- 実測後に必要なら行う TopDown far 専用 LOD2（overview/impostor）
+- `TerrainChangedEvent` と LOD 表示の同期経路整理
+- `docs/world_layout.md` / `docs/architecture.md` / `docs/plans/README.md` との整合
 
 ### 非対象（Out of Scope）
 
-- `WorldMap` の解像度変更
-- pathfinding / logistics / AI の探索粒度変更
-- worldgen アルゴリズムの変更
-- 建物 / Soul / Familiar の LOD 本体
-- ミニマップ専用 UI の設計
+- `WorldMap` / pathfinding / AI / logistics の粒度変更
+- 地形 chunk renderer の再撤回や per-tile render entity への逆戻り
+- `BoundarySurfaceMaterial` を使った別境界描画経路の復活
+- Soul / Familiar / 建物 / 影 / RtT 合成全体の LOD 本体
+- worldgen アルゴリズムや `WorldMasks` の再設計
 
 ## 3. 現状とギャップ
 
-### 現状
+### 3.1 現状
 
 - `crates/bevy_app/src/world/map/spawn.rs`
-  - 全セルに `Tile + Mesh3d(tile_mesh) + TerrainSurfaceMaterial + Transform` を生成する。
+  - `spawn_map` は 10,000 個の `Tile` 論理 anchor を生成するが、**描画コンポーネントは持たない**。
+  - 地形描画は `spawn_terrain_chunks` が担い、`CHUNK_TILES = 16`、**7×7 = 49 個の `TerrainChunk` entity** を生成する。
+- `crates/bevy_app/src/plugins/startup/visual_handles.rs`
+  - `Terrain3dHandles` は共有 `Handle<TerrainSurfaceMaterial>` 1 本だけを持つ。
+  - すべての chunk は同一 material を共有する。
 - `crates/bevy_app/src/world/map/boundary.rs`
-  - worldgen 由来の境界をポリライン化し、地形とは別メッシュ群としてスポーンする。
+  - 旧案が想定していた「境界リボンの render entity」は現行 startup 経路にはない。
+  - 実際には PostStartup で `boundary_mask` テクスチャを焼き、`TerrainSurfaceMaterial` に後付けする。
+- `assets/shaders/terrain_surface_material.wgsl`
+  - `terrain_id_map`、`terrain_feature_map`、4 枚の albedo、macro noise、overlay、river flow/normal、shoreline detail、feature LUT、`boundary_mask` を使う。
+  - `boundary_mask` では nearest 判定に加え、4 corner を読む**手動 bilinear**分岐を持つ。
+- `crates/bevy_app/src/systems/visual/terrain_material.rs`
+  - runtime 地形変更は `TerrainChangedEvent` を受けて `TerrainIdMap` の該当ピクセルだけを書き換える。
+  - chunk entity / boundary texture の再生成は行わない。
 - `crates/bevy_app/src/systems/visual/camera_sync.rs`
-  - `MainCamera` の `transform.scale.x` を RtT 用 `Camera3d` の `OrthographicProjection.scale` へ毎フレームコピーする。
-- `crates/hw_core/src/quality.rs`
-  - 現在の品質設定は **RtT 解像度係数のみ**で、地形そのものの描画粒度は変わらない。
+  - `MainCamera` の `Transform.scale.x` を毎フレーム `Camera3d` の `OrthographicProjection.scale` にコピーしている。
+  - ただし、LOD state や `tile_screen_px` / `tile_rtt_px` の集約 Resource はまだ存在しない。
 
-### 問題
+### 3.2 問題
 
-- 既存の品質設定は「描画先テクスチャの解像度」を下げるだけで、**地形の描画仕事量そのもの**を減らさない。
-- LOD 判定に必要な **ズーム契約**が未固定で、`PanCamera::default()` 任せになっている。
-- `TerrainChangedEvent` は `terrain_id_map` 更新には使えているが、将来 far 表示を追加したときの同期先がまだない。
-- 矢視は `SectionCut` と地形 3D 表現の正しさが優先であり、TopDown と同じ far 表示を流用しにくい。
-- 境界リボンは遠景での視認性が高く、単純な非表示は見た目の主情報を消してしまう。
+- 旧計画の主問題だった「10,000 render entity の削減」は、`world-map-render-chunking-plan-2026-04-08` でほぼ解消済み。
+- 現在の主要コストは **terrain shader 自体**と、RtT で地形が画面を広く覆うときの **fill-rate / texture sampling** に寄っている可能性が高い。
+- それにもかかわらず、ズームで変わるのは RtT 解像度ではなく camera scale だけで、terrain shading の重さは常に一定である。
+- 現行コード上で「境界LOD」を論じるなら、対象は境界メッシュではなく **`boundary_mask` を用いた shader 内表現**でなければならない。
+- `BoundarySurfaceMaterial` は crate に残っているが、現 startup 経路では未使用であり、これを前提にした再設計は現実装とズレる。
+- far overview を先に入れても、もしボトルネックが terrain ではなく Soul / 建物 / shadow / RtT 合成側なら、効果が限定的になる。
 
-### 本計画で埋めるギャップ
+### 3.3 本計画で埋めるギャップ
 
-- `ortho.scale` ではなく **screen-space のタイル見かけサイズ**を LOD 指標として定義する。
-- LOD を 3 段階に分け、**近景は現行維持、中景は shader 簡略化、遠景は TopDown 限定の overview impostor** を採用する。
-- 境界リボンは全 LOD で残し、必要なら **far 専用の簡略リボン**へ切り替える。
-- `TerrainChangedEvent` を far 表示にも接続し、runtime 地形変化と整合させる。
+- LOD 判定の正本となる `tile_rtt_px` と、表示確認用の `tile_screen_px` を 1 箇所で算出する。
+- 49 chunk を維持したまま導入できる **低リスクな LOD1** を先に定義する。
+- TopDown far overview は **M2 計測後の条件付き施策**として位置付け直す。
+- `TerrainChangedEvent`・`TerrainIdMap`・`boundary_mask` の責務分離を前提に、LOD2 の更新契約を整理する。
 
 ## 4. 実装方針（高レベル）
 
-### 4.1 採用方針
+### 4.1 設計原則
 
-- **LOD0（近景）**
-  - 現行維持。
-  - 10,000 タイル + `TerrainSurfaceMaterial` + 境界リボンをそのまま使用する。
-- **LOD1（中景）**
-  - 地形タイル entity は維持しつつ、境界リボンは維持する。
-  - `TerrainSurfaceMaterial` は **簡略 variant** を持たせ、macro overlay / river detail / 近傍ブレンド範囲の一部を落とす。
-  - 必要なら境界リボン側だけ **sample 密度 / マテリアル detail / 幅**を落とした中景 variant を使う。
-  - 目的は「構造を変えずに fragment cost を先に下げつつ、遠景の輪郭情報を保つ」こと。
-- **LOD2（遠景, TopDown 限定）**
-  - TopDown のみ、地形を **1 枚または極少数の overview mesh** に切り替える。
-  - overview は `TerrainIdMap` と `TerrainFeatureMap` から生成する **far 専用の baked / semi-baked image** を貼る。
-  - このとき通常の 10,000 タイル entity は `Visibility` で無効化するが、境界リボンは **残す**。必要なら far 用に簡略化した別リボンへ切り替える。
+- **原則A: まず観測する**
+  - 旧案のように「far overview を最初から主役にする」のではなく、まず terrain 側の負荷がどれだけ支配的かを観測する。
+- **原則B: 既存 chunk 経路を第一選択にする**
+  - 49 entity まで削減済みなので、次の一手は entity 構造変更ではなく shader 側の簡略化を優先する。
+- **原則C: far 表示は TopDown 専用の別問題として扱う**
+  - 矢視・section correctness を巻き込まず、LOD2 は TopDown far だけに閉じる。
+- **原則D: 境界情報は terrain と一体で扱う**
+  - 現行経路では境界は `boundary_mask` として terrain shader に織り込まれている。
+  - したがって LOD2 を作る場合も「境界だけ別 entity で残す」ではなく、**overview 側へ焼き込む**のを正本にする。
 
-### 4.2 なぜ chunk 先行ではなく overview impostor を先に取るか
+### 4.2 LOD レベル定義
 
-- マップは **固定 100x100** で、far では「各セルの精密な形」より「川・砂・草土の大局」が読めれば十分。
-- chunk 化は部分更新・境界整合・SectionCut との関係が重く、far 専用 1 枚表現の方が **導入コストに対する削減幅が大きい**。
-- 既存の `TerrainChangedEvent` はピクセル更新モデルと相性が良く、overview image の部分更新へ自然に拡張できる。
+| LOD | 適用範囲 | 内容 | 主目的 |
+| --- | --- | --- | --- |
+| `LOD0` | 近景 | 現行 `TerrainSurfaceMaterial` をそのまま使用 | 見た目維持 |
+| `LOD1` | 中景〜遠景 | 49 chunk は維持し、terrain shader の重い経路を段階的に落とす | fragment / sampling 負荷削減 |
+| `LOD2` | TopDown far のみ | 通常 chunk を隠し、overview/impostor を表示 | fill-rate と shading をさらに削減 |
 
-### 4.3 LOD の駆動変数
+### 4.3 現行シェーダーのコスト分解
 
-- camera distance ではなく、**1 タイルが画面上で何 px に見えるか**を使う。
-- 理由:
-  - RtT 解像度変更 (`QualitySettings.rtt_scale`) が入っても意味が崩れにくい。
-  - TopDown / 矢視で同じ `scale` でも見え方が違うため、screen-space 基準の方が扱いやすい。
+LOD1 で削る候補を判断するため、`terrain_surface_material.wgsl` の主要コストを整理する。
 
-### 4.4 モード制約
+| 処理 | 推定コスト | 説明 |
+| --- | --- | --- |
+| `blend_terrain()` 境界パス | **最重** | 4-corner bilinear + 最大 8 近傍 `textureLoad` = 12+ fetch/pixel（境界付近） |
+| `blend_terrain()` fast path | 低 | 4 corners が同一カテゴリ時は 1 `textureSample` のみ |
+| `compute_terrain_uv()` domain warp | 高 | `sample_macro_noise` を 2 回呼ぶ（warp 前後）; id=0/1/2 のみ発動 |
+| `sample_river_flow_noise` / `sample_river_normal_detail` | 中 | `globals.time` 依存の animated sample; id=3 (River) のみ |
+| `grade_sand()` shoreline_detail | 中 | `shoreline_detail` + `terrain_feature_lut` × 2 |
+| `sample_macro_overlay` | 低 | albedo 枚数 × 1 sample / terrain type |
+| `section_discard` | 無視 | 早期 discard なので最軽量 |
+
+**LOD1 で削る優先順位**（上から順）:
+1. `blend_terrain()` の 4-corner bilinear → nearest-only に差し替え（境界ピクセルのみ差が出る）
+2. domain warp（`terrain_domain_warp_strength` を LOD1 では常に 0 とみなす）
+3. river アニメーション（`scroll_speed=0` 固定 + flow/normal detail をスキップ）
+4. `grade_sand()` の `shoreline_detail` サンプリングをスキップ
+
+### 4.4 LOD1 の採用方針
+
+- まずは **同じ `TerrainChunk` + 同じ world-space UV 構造**を維持する。
+- 49 chunk しかないため、LOD0/LOD1 の切替は少数 entity の material component 差し替えで十分扱える。
+- **material variant 方式を採用する**（WGSL 内の動的 uniform 分岐ではなく、コンパイル済み別シェーダー）。
+  - GPU ドライバが「使われない経路も評価する」リスクを排除できる。
+  - 49 entity の `MeshMaterial3d` 差し替えコストは trivial。
+
+#### LOD1 shader (`terrain_surface_material_lod1.wgsl`) の変更点
+
+```wgsl
+// blend_terrain → blend_terrain_lod1 に差し替え
+// 4-corner bilinear を廃止し nearest-only に落とす（境界ピクセルのギザギザは far では不可視）
+fn blend_terrain_lod1(world_xz: vec2<f32>, cell: vec2<i32>, feature_in: vec4<f32>) -> vec3<f32> {
+    let uv        = world_to_boundary_uv(world_xz);
+    let raw_center = textureSample(boundary_mask, boundary_mask_sampler, uv).r;
+    let region_id  = region_to_coarse_id(raw_center);
+    let region_raw = region_to_raw_byte(raw_center);
+    let eff_f      = feature_with_zone_tone(feature_in, region_raw, region_id);
+    return sample_surface_color(region_id, world_xz, eff_f, region_raw);
+}
+
+// compute_terrain_uv の domain warp を無効化
+fn compute_terrain_uv_lod1(id: u32, world_xz: vec2<f32>) -> vec2<f32> {
+    // domain_warp_strength は呼ばない → macro_noise 2 fetch を省略
+    let base_uv = world_xz * tsm.uv_scale;
+    // scroll_speed / distort も省略（river は静止画扱い）
+    return base_uv;
+}
+
+// grade_sand_lod1: shoreline_detail サンプリングをスキップ
+fn grade_sand_lod1(base_rgb: vec3<f32>, brightness: f32, feature: vec4<f32>) -> vec3<f32> {
+    let shore_lut  = sample_feature_lut(1.0);
+    let inland_lut = sample_feature_lut(2.0);
+    var graded_rgb = base_rgb * brightness;
+    graded_rgb = apply_feature_grade(graded_rgb, shore_lut, feature.r, 1.05);
+    graded_rgb = apply_feature_grade(graded_rgb, inland_lut, feature.g, 0.90);
+    return graded_rgb;
+}
+```
+
+#### `Terrain3dHandles` の拡張
+
+```rust
+// crates/bevy_app/src/plugins/startup/visual_handles.rs
+#[derive(Resource)]
+pub struct Terrain3dHandles {
+    pub lod0: Handle<TerrainSurfaceMaterial>,      // 現行 surface → rename
+    pub lod1: Handle<TerrainSurfaceMaterialLod1>,  // LOD1 軽量 variant（新規）
+}
+```
+
+`lod1` は **別 material 型**として実装する。binding layout と uniform/texture 構造は LOD0 と同じまま、
+`fragment_shader()` だけを `terrain_surface_material_lod1.wgsl` に変えた
+`TerrainSurfaceMaterialLod1 = ExtendedMaterial<StandardMaterial, TerrainSurfaceMaterialExtLod1>` を新設する。
+これにより shader は完全に別パイプラインでコンパイルされ、動的分岐を持ち込まない。
+
+#### chunk への material component 切り替え
+
+```rust
+// crates/bevy_app/src/systems/visual/terrain_lod.rs
+pub fn terrain_lod_switch_system(
+    mut commands: Commands,
+    lod: Res<TerrainLodState>,
+    handles: Res<Terrain3dHandles>,
+    q_lod0: Query<Entity, (With<TerrainChunk>, With<MeshMaterial3d<TerrainSurfaceMaterial>>)>,
+    q_lod1: Query<Entity, (With<TerrainChunk>, With<MeshMaterial3d<TerrainSurfaceMaterialLod1>>)>,
+) {
+    if !lod.is_changed() { return; }
+
+    match lod.level {
+        LodLevel::Lod1 => {
+            for entity in &q_lod0 {
+                commands.entity(entity)
+                    .remove::<MeshMaterial3d<TerrainSurfaceMaterial>>()
+                    .insert(MeshMaterial3d::<TerrainSurfaceMaterialLod1>(handles.lod1.clone()));
+            }
+        }
+        LodLevel::Lod0 | LodLevel::Lod2 => {
+            for entity in &q_lod1 {
+                commands.entity(entity)
+                    .remove::<MeshMaterial3d<TerrainSurfaceMaterialLod1>>()
+                    .insert(MeshMaterial3d::<TerrainSurfaceMaterial>(handles.lod0.clone()));
+            }
+        }
+    }
+}
+```
+
+LOD2 時は通常 chunk を `Visibility::Hidden` にするため、復帰先の既定 material は LOD0 に固定して構わない。
+
+### 4.5 LOD2 の採用条件
+
+- M2 完了後、以下が確認できた場合のみ着手する:
+  - far で terrain が依然として主要ボトルネック
+  - LOD1 だけでは改善幅が不足
+  - TopDown far の見た目要件が overview でも満たせる
+- LOD2 では:
+  - TopDown far のみ通常 `TerrainChunk` を `Visibility::Hidden`
+  - map 全体 footprint を持つ 1 枚の overview mesh（`Plane3d`, 100x100 tiles 相当）に切り替える
+  - overview texture は `RgbaU8` / `MAP_WIDTH × MAP_HEIGHT` px で terrain 種別 + 境界情報を焼き込む
+- runtime 更新:
+  - `TerrainChangedEvent` は引き続き `TerrainIdMap` の truth update として使う
+  - LOD2 側も同イベントを購読するが、再ベイク単位は **dirty cell 単体ではなく dirty rect + 1 cell halo** とする
+  - halo を含める理由は、現行 shader が `boundary_mask` の 4-corner 補間と 8 近傍 feature 参照で最終色を決めるため、隣接セル側の見た目も変わり得るからである
+  - `boundary_mask` と `TerrainFeatureMap` は worldgen snapshot のままなので、通常の obstacle cleanup では再生成不要
+
+### 4.6 LOD の駆動変数
+
+- `ortho.scale` の生値を直接閾値にするのではなく、以下 2 つの指標を分けて扱う。
+  - `tile_rtt_px`: `Camera3dRtt` が実際に描いている RtT 上での 1 タイル見かけサイズ。LOD 閾値の正本。
+  - `tile_screen_px`: composite 後のスクリーン表示上での 1 タイル見かけサイズ。デバッグ表示と見た目確認用。
+- 算出方法は hand-tuned な式ではなく、Bevy 0.18 の `Camera::world_to_viewport(...)` を `Camera3dRtt` に対して使って:
+  - ある地表点 `P`（map center 固定で十分）
+  - `P + Vec3::new(TILE_SIZE, 0.0, 0.0)`
+  - `P + Vec3::new(0.0, 0.0, TILE_SIZE)`
+  - を投影し、**画面内で有効な 2 辺の差分長のうち大きい方**を 1 タイル見かけサイズとして採用する
+- `East/West` 矢視では world X 辺が視線方向へ潰れるため、`P -> P + X` だけで判定しない。
+- `tile_screen_px` は別カメラで再投影せず、`tile_rtt_px` から **composite 表示倍率**で導出する。
+  - `screen_scale_x = logical_composite_size.x / runtime.viewport.width as f32`
+  - `screen_scale_y = logical_composite_size.y / runtime.viewport.height as f32`
+  - `tile_screen_px = tile_rtt_px * max(screen_scale_x, screen_scale_y)`
+  - `logical_composite_size` は `rtt_composite.rs` の `logical_composite_size(window)` と同じ定義を使う
+- これにより `tile_screen_px` は「補助観測値」として一意に定義され、LOD 判定自体は常に `tile_rtt_px` のみを参照する。
+
+#### `TerrainLodMetrics` / `TerrainLodState` の定義
+
+```rust
+// crates/bevy_app/src/systems/visual/terrain_lod.rs
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum LodLevel { #[default] Lod0, Lod1, Lod2 }
+
+#[derive(Resource, Default)]
+pub struct TerrainLodMetrics {
+    pub tile_rtt_px:   f32,   // LOD 判定正本
+    pub tile_screen_px: f32,  // デバッグ表示用
+}
+
+#[derive(Resource, Default)]
+pub struct TerrainLodState {
+    pub level: LodLevel,
+    pub applied_level: LodLevel, // material / visibility 側が最後に適用済みの level
+}
+
+// hysteresis 閾値（初期値: 観測後に調整）
+pub const LOD0_TO_LOD1_ENTER_PX: f32 = 10.0; // tile_rtt_px < これで LOD1 へ
+pub const LOD1_TO_LOD0_EXIT_PX:  f32 = 14.0; // tile_rtt_px > これで LOD0 へ復帰
+pub const LOD1_TO_LOD2_ENTER_PX: f32 = 4.0;  // TopDown far のみ
+pub const LOD2_TO_LOD1_EXIT_PX:  f32 = 6.0;
+```
+
+#### `tile_rtt_px` 算出システム
+
+```rust
+pub fn update_terrain_lod_metrics_system(
+    q_cam3d: Query<(&Camera, &GlobalTransform), With<Camera3dRtt>>,
+    runtime: Res<RttRuntime>,
+    q_window: Query<&Window, With<PrimaryWindow>>,
+    mut metrics: ResMut<TerrainLodMetrics>,
+    mut state: ResMut<TerrainLodState>,
+    elevation: Res<ElevationViewState>,
+) {
+    let Ok((cam, gtf)) = q_cam3d.single() else { return };
+
+    // map center を基準点に（カメラ位置依存にしない）
+    let p  = Vec3::new(0.0, 0.0, 0.0);
+    let px = p + Vec3::new(TILE_SIZE, 0.0, 0.0);
+    let pz = p + Vec3::new(0.0, 0.0, TILE_SIZE);
+
+    let to_vp = |world: Vec3| -> Option<Vec2> {
+        cam.world_to_viewport(gtf, world).ok()
+    };
+
+    if let (Some(v0), Some(vx), Some(vz)) = (to_vp(p), to_vp(px), to_vp(pz)) {
+        let dx = (vx - v0).length();
+        let dz = (vz - v0).length();
+        metrics.tile_rtt_px = dx.max(dz);
+    }
+
+    if let Ok(window) = q_window.single() {
+        let logical = composite_logical_size(window);
+        let screen_scale_x = logical.x / runtime.viewport.width as f32;
+        let screen_scale_y = logical.y / runtime.viewport.height as f32;
+        metrics.tile_screen_px = metrics.tile_rtt_px * screen_scale_x.max(screen_scale_y);
+    }
+
+    // LOD 状態遷移（hysteresis）
+    let new_level = resolve_lod_level(state.level, metrics.tile_rtt_px, &elevation);
+    if new_level != state.level {
+        state.level = new_level;
+    }
+}
+
+fn resolve_lod_level(
+    current: LodLevel,
+    tile_rtt_px: f32,
+    elevation: &ElevationViewState,
+) -> LodLevel {
+    match current {
+        LodLevel::Lod0 => {
+            if tile_rtt_px < LOD0_TO_LOD1_ENTER_PX { LodLevel::Lod1 } else { LodLevel::Lod0 }
+        }
+        LodLevel::Lod1 => {
+            if tile_rtt_px > LOD1_TO_LOD0_EXIT_PX {
+                LodLevel::Lod0
+            } else if elevation.direction.is_top_down()
+                && tile_rtt_px < LOD1_TO_LOD2_ENTER_PX
+            {
+                LodLevel::Lod2
+            } else {
+                LodLevel::Lod1
+            }
+        }
+        LodLevel::Lod2 => {
+            if tile_rtt_px > LOD2_TO_LOD1_EXIT_PX { LodLevel::Lod1 } else { LodLevel::Lod2 }
+        }
+    }
+}
+```
+
+- これにより TopDown / 矢視の違いを同じ尺度で扱える。
+- `East/West` を含む全方向で、view 面内の実効タイルサイズを使える。
+- RtT 品質変更（`QualitySettings.rtt`）を `tile_rtt_px` に反映できる。
+- `tile_screen_px` も composite 表示倍率から一意に導出でき、デバッグ表示に使える。
+- metric 更新と level 切替トリガーを分離できるため、metric 書き換えだけで material 差し替えが毎フレーム走るのを避けられる。
+- `logical_composite_size(window)` は現状 private 関数なので、M1 では shared helper として `pub(crate)` 抽出する。
+
+### 4.7 モード制約
 
 - `ElevationDirection::TopDown`
-  - `LOD0 / LOD1 / LOD2` の全段を許可する。
+  - `LOD0 / LOD1 / LOD2` を許可
 - `ElevationDirection::{North, South, East, West}`
-  - `LOD0 / LOD1` まで。
-  - `LOD2` は禁止し、overview impostor を使わない。
+  - `LOD0 / LOD1` まで
+  - `LOD2` は禁止（`resolve_lod_level` で `is_top_down()` チェック済み）
+- `SectionCut` 連動部分は correctness 優先
+  - LOD1 は `section_discard` を LOD0 と同一実装で保持する
+  - LOD2 は section 系で使用しない
 
-### 4.5 Bevy 0.18 API での注意点
+## 5. マイルストーン
 
-- `Camera3d` のズームは `OrthographicProjection.scale` が正本で、`MainCamera` 側の `Transform.scale` と毎フレーム同期されている。
-- LOD 切替は material の全面差し替えではなく、**Resource に集約した現在 LOD 状態**と `Visibility` / shader flag の更新で扱う。
-- shader variant を使う場合は、既存 `TerrainSurfaceMaterial` の bind group 構成を壊さず、`ExtendedMaterial` 側の定数分岐で済む範囲を優先する。
-
-## 5. LOD レベル定義
-
-| LOD | 適用条件 | 地形本体 | 境界リボン | 備考 |
-| --- | --- | --- | --- | --- |
-| `LOD0` | タイルが十分大きい | 現行 `TerrainSurfaceMaterial` | 表示 | 近景・通常プレイ |
-| `LOD1` | タイルが中サイズ | タイル entity は維持、shader 簡略化 | 表示（必要なら簡略 variant） | まず地形本体の負荷を削る |
-| `LOD2` | TopDown かつタイルが極小 | overview impostor | 表示（far 用簡略 variant 可） | far 専用 |
-
-**閾値の決め方**
-
-1. 実測で `tile_screen_px` を取る。
-2. `LOD0 -> LOD1` と `LOD1 -> LOD2` に別の enter / exit 値を持たせ、ヒステリシスを入れる。
-3. 先に閾値を固定してから shader / visibility 切替を入れる。順序を逆にしない。
-
-## 6. 実装オプション比較
-
-### 6.1 採用: TopDown far overview impostor
-
-- 内容:
-  - map 全体と同じ world footprint を持つ quad または少数 mesh を 3D 側に置く。
-  - far 専用 image を貼り、TopDown 遠景では通常タイルを隠す。
-  - 境界リボンは別レイヤーとして残し、overview の上に重ねる。
-- 利点:
-  - draw 数と fragment cost の削減幅が最も大きい。
-  - `TerrainChangedEvent` をピクセル更新へ再利用しやすい。
-  - `WorldMap` と切り離しやすい。
-- 欠点:
-  - 矢視には使えない。
-  - 近景へ戻る閾値の設計が必要。
-  - overview 側の色と境界リボンの見え方が喧嘩しないよう、far 用トーン合わせが必要。
-
-### 6.2 併用: shader 簡略 LOD1
-
-- 内容:
-  - 現行タイル構造は維持し、遠景寄りでは詳細効果だけ落とす。
-- 利点:
-  - 導入しやすい。
-  - 矢視でも適用しやすい。
-- 欠点:
-  - entity 数は減らない。
-
-### 6.3 併用: 境界リボンの専用 far simplification
-
-- 内容:
-  - 境界リボンは非表示にせず、far では `Catmull-Rom` のサンプル密度、ラウンドキャップ、マテリアル detail を落とした専用表現へ切り替える。
-- 利点:
-  - 遠景で必要な輪郭情報を残せる。
-  - 地形本体だけ impostor 化しても、読みやすさを維持しやすい。
-- 欠点:
-  - 境界側にも LOD 分岐が増える。
-
-### 6.4 先送り: chunk mesh 化
-
-- 内容:
-  - 8x8 / 16x16 などで地形をまとめる。
-- 位置づけ:
-  - `LOD1` と `LOD2` を入れても draw/extract cost が残る場合の第 2 段。
-- 先送り理由:
-  - 現時点では far overview の方が費用対効果が高い。
-  - 部分更新と境界整合が重い。
-
-## 7. マイルストーン
-
-## M1: LOD 観測基盤とズーム契約の固定
+## M1: 観測基盤と LOD 契約の固定
 
 - 変更内容:
-  - `tile_screen_px` を導出する helper / Resource を追加する。
-  - `TopDown` / 矢視で使う LOD 許可範囲を明文化する。
-  - デバッグ表示またはログでズームレンジを記録し、閾値案を固定する。
+  - `crates/bevy_app/src/systems/visual/terrain_lod.rs` を新規作成し、以下を実装する:
+    - `LodLevel` enum (`Lod0 / Lod1 / Lod2`)
+    - `TerrainLodMetrics` Resource (`tile_rtt_px`, `tile_screen_px`)
+    - `TerrainLodState` Resource (`level`, `applied_level`)
+    - `update_terrain_lod_metrics_system`: `Camera3dRtt` の `world_to_viewport` で `tile_rtt_px` を算出し、`RttRuntime.viewport` と `composite_logical_size(window)` から `tile_screen_px` を導出し、`resolve_lod_level` で `state.level` を更新
+    - `resolve_lod_level`: hysteresis 閾値テーブル (`LOD0_TO_LOD1_ENTER_PX = 10.0` など) を参照し、矢視中は LOD2 を禁止
+  - `crates/bevy_app/src/plugins/startup/rtt_composite.rs` の `logical_composite_size(window)` を `pub(crate) fn composite_logical_size(window)` へ抽出し、LOD 観測と composite で共有する
+  - `crates/bevy_app/src/plugins/visual.rs` でシステムを `Visual` セットの適切な位置に登録する
+  - perf シナリオ下で zoom range を走査し、初期閾値 (`10.0` / `14.0` / `4.0` / `6.0`) が妥当かを確認して調整する
 - 変更ファイル:
-  - `crates/bevy_app/src/systems/visual/camera_sync.rs`
+  - `crates/bevy_app/src/systems/visual/terrain_lod.rs` **(新規)**
+  - `crates/bevy_app/src/systems/visual/mod.rs`
+  - `crates/bevy_app/src/plugins/visual.rs`
+  - `crates/bevy_app/src/plugins/startup/rtt_composite.rs`
+  - `docs/world_layout.md`
+  - `docs/architecture.md`
+- 完了条件:
+  - [ ] `TerrainLodMetrics` と `TerrainLodState` が分離されており、metric 更新だけで material 切替が毎フレーム走らない
+  - [ ] `tile_rtt_px` と `tile_screen_px` が毎フレーム更新される
+  - [ ] `East/West` 矢視でも `tile_rtt_px` が view 面内の実効サイズを返す（X/Z 2 軸の大きい方）
+  - [ ] LOD0 / LOD1 / LOD2 の enter / exit 閾値が定数として 1 箇所に書かれている
+  - [ ] `resolve_lod_level` が矢視中は `LodLevel::Lod2` を返さないことをコードで保証する
+  - [ ] `cargo check / clippy` がクリーン
+  - [ ] TopDown / 矢視で zoom in / out し、`TerrainLodState.level` の遷移を `dbg!` または既存 UI 近傍のデバッグ表示で確認する
+- 検証:
+  - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace`
+  - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace`
+  - `cargo run -p bevy_app -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario`
+    で既存 FPS UI を見ながら zoom range を記録し、閾値の妥当性を確認
+
+## M2: LOD1 導入（chunk 維持の shader 簡略化）
+
+- 変更内容:
+  1. **LOD1 shader 作成**: `assets/shaders/terrain_surface_material_lod1.wgsl` を新規作成する
+     - `blend_terrain_lod1`: 4-corner bilinear を廃止し nearest-only（境界付近のみ差が出るが far では不可視）
+     - `compute_terrain_uv_lod1`: domain warp / scroll / distort を除去
+     - `grade_sand_lod1`: `shoreline_detail` サンプリングをスキップ
+     - `section_discard` は LOD0 と同一実装を維持（section correctness 保持）
+  2. **LOD1 material type 追加**: `crates/hw_visual/src/material/terrain_surface_material.rs` に
+     `TerrainSurfaceMaterialExtLod1` newtype を追加し、`fragment_shader()` だけ `lod1.wgsl` を返すようにする
+  3. **`Terrain3dHandles` 拡張**: `surface: Handle<...>` を `lod0: Handle<...>` に rename し、
+     `lod1: Handle<TerrainSurfaceMaterialLod1>` を追加する
+  4. **切り替えシステム追加**: `terrain_lod.rs` に `terrain_lod_switch_system` を実装し、
+     `TerrainLodState.level != TerrainLodState.applied_level` の時のみ 49 chunk の `MeshMaterial3d` component を
+     `remove::<MeshMaterial3d<TerrainSurfaceMaterial>>() / insert::<MeshMaterial3d<TerrainSurfaceMaterialLod1>>()`
+     で差し替え、適用後に `applied_level = level` へ同期する
+  5. **`TerrainChangedEvent` 動作確認**: `terrain_id_map_sync_system` は `TerrainIdMap` を直接更新するため、
+     handle が lod0 / lod1 どちらでも `terrain_id_map` texture を共有しているので追加対応不要であることを確認する
+- 変更ファイル:
+  - `assets/shaders/terrain_surface_material_lod1.wgsl` **(新規)**
+  - `crates/hw_visual/src/material/terrain_surface_material.rs`
+  - `crates/hw_visual/src/lib.rs`（新型を pub re-export）
+  - `crates/bevy_app/src/plugins/startup/visual_handles.rs`
+  - `crates/bevy_app/src/world/map/spawn.rs`
+  - `crates/bevy_app/src/world/map/boundary.rs`
+  - `crates/bevy_app/src/systems/visual/terrain_lod.rs`
   - `crates/bevy_app/src/plugins/visual.rs`
   - `docs/world_layout.md`
-  - `docs/architecture.md`
 - 完了条件:
-  - [ ] `tile_screen_px` の算出が 1 箇所に定義されている
-  - [ ] LOD enter / exit 閾値の初期値が決まっている
-  - [ ] TopDown と矢視の適用差が docs に書かれている
+  - [ ] `lod1.wgsl` が `terrain_id_map` / `boundary_mask` を LOD0 と同じ binding で参照する
+  - [ ] `Terrain3dHandles.surface` の rename 影響が [spawn.rs](/home/satotakumi/projects/hell-workers/crates/bevy_app/src/world/map/spawn.rs#L134) と [boundary.rs](/home/satotakumi/projects/hell-workers/crates/bevy_app/src/world/map/boundary.rs#L1070) を含めて解消されている
+  - [ ] 49 chunk を維持したまま LOD1 切替が機能する（material component 差し替えで完結）
+  - [ ] LOD1 時に `blend_terrain` の 4-corner fetch と domain warp fetch がコードレベルで除去されている
+  - [ ] obstacle cleanup 後も `TerrainChangedEvent` → `TerrainIdMap` 更新が LOD0 / LOD1 両方で反映される
+  - [ ] TopDown / 矢視で近景復帰時（LOD1→LOD0 遷移）に大きなポップが出ない
+  - [ ] perf シナリオで far 時の FPS が M1 比で改善（または同等でコスト削減を GPU profiler で確認）
 - 検証:
-  - `cargo check --workspace`
-  - TopDown / 矢視で zoom in / out して LOD state が想定どおり変わることを確認
+  - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace`
+  - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace`
+  - `cargo run -p bevy_app -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario`
+  - TopDown / 矢視で zoom 往復し、FPS と見た目の差分を記録する
+  - obstacle cleanup（岩除去）後に far / near を往復して見た目の更新を確認
 
-## M2: LOD1 導入（中景の簡略化）
+## M3: 条件付き LOD2（TopDown far overview）
 
+- 着手条件（M2 計測後に評価）:
+  - far で terrain が依然として主要ボトルネックであること
+  - LOD1 だけでは改善幅が目標値に届かないこと
+  - TopDown far の見た目要件が overview でも満たせること
 - 変更内容:
-  - `TerrainSurfaceMaterial` に LOD1 用の簡略パスを追加する。
-  - 境界リボンは維持しつつ、必要なら中景用 simplification を追加する。
-  - 近景復帰時のヒステリシスを入れる。
+  1. **overview texture 準備**: `MAP_WIDTH × MAP_HEIGHT` px の `RgbaU8` texture を CPU 側で焼き、
+     境界情報（`boundary_mask` baked value）と terrain 種別色を合成する
+  2. **overview entity 追加**: `PostStartup` で map 全体 footprint の `Plane3d`（100×100 tiles）を 1 枚 spawn し、
+     overview texture を持つ軽量 material を付与する（`UnlitMaterial` 相当）
+  3. **chunk 可視制御**: LOD2 遷移時に 49 `TerrainChunk` entity を `Visibility::Hidden` にし、
+     LOD2 解除時に `Visibility::Inherited` に戻す
+  4. **dirty 更新**: `TerrainChangedEvent` を overview 側でも購読し、`dirty_cell + 1 cell halo` の
+     矩形範囲だけ CPU 側で overview texture を再書き込みして GPU にアップロードする
+  5. **矢視ガード**: `terrain_lod_switch_system` で `elevation.direction.is_top_down()` が false の場合は
+     LOD2 chunk 切り替えをスキップする
 - 変更ファイル:
-  - `crates/bevy_app/src/world/map/boundary.rs`
-  - `crates/hw_visual/src/material/terrain_surface_material.rs`
-  - `assets/shaders/terrain_surface_material.wgsl`
-  - `docs/world_layout.md`
-- 完了条件:
-  - [ ] LOD1 で far 側の見た目が破綻しない
-  - [ ] LOD1 で境界リボンが残り、輪郭情報が維持される
-  - [ ] LOD0 / LOD1 往復で明滅しない
-- 検証:
-  - `cargo check --workspace`
-  - TopDown / 矢視でズーム往復
-  - `--perf-scenario` で far ズーム時の FPS 傾向を比較
-
-## M3: LOD2 導入（TopDown far overview）
-
-- 変更内容:
-  - far 用 `TerrainOverviewMap` と表示 entity を追加する。
-  - TopDown のみ LOD2 で通常地形を隠し、overview へ切り替える。
-  - 境界リボンは残し、必要なら far 用 simplification を適用する。
-  - `TerrainChangedEvent` で `terrain_id_map` と overview image の両方を更新する。
-- 変更ファイル:
-  - `crates/bevy_app/src/world/map/spawn.rs`
-  - `crates/bevy_app/src/world/map/terrain_metadata.rs`
-  - `crates/bevy_app/src/systems/visual/terrain_material.rs`
+  - `crates/bevy_app/src/world/map/overview.rs` **(新規)**
+  - `crates/bevy_app/src/plugins/startup/mod.rs`
   - `crates/bevy_app/src/plugins/startup/visual_handles.rs`
+  - `crates/bevy_app/src/systems/visual/terrain_lod.rs`
   - `docs/world_layout.md`
   - `docs/architecture.md`
 - 完了条件:
-  - [ ] TopDown far で地形 draw が少数化される
-  - [ ] TopDown far で境界リボンが主輪郭として残る
-  - [ ] 地形変更後も overview が stale にならない
-  - [ ] 矢視では overview に入らない
+  - [ ] TopDown far で 49 chunk が `Visibility::Hidden` になり、overview mesh だけが描画される
+  - [ ] overview が境界情報込みで地形種別の可読性を保つ
+  - [ ] dirty 更新範囲が `dirty cell + 1 cell halo` として実装されており、obstacle cleanup 後に seam が出ない
+  - [ ] `TerrainChangedEvent` 後に stale 表示が出ない
+  - [ ] 矢視（North/East/South/West）ではチャンクが隠れず、overview も表示されない
 - 検証:
-  - `cargo check --workspace`
-  - 岩除去など `TerrainChangedEvent` が出る操作後に far / near を往復
-  - `--perf-scenario` で far ズーム時の FPS 傾向を比較
+  - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace`
+  - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace`
+  - 岩除去後に near / far を往復して stale が出ないことを確認
+  - `cargo run -p bevy_app -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario`
+    で M2 単体と比較し、既存 FPS UI と profiler で差を記録する
 
-## M4: 再評価と chunk 化判断
+## M4: 地形LODの到達点判定
 
 - 変更内容:
-  - M2 / M3 後の計測結果を見て、なお draw/extract cost が重い場合のみ chunk 化を起票する。
+  - M2 / M3 の計測結果を基に「world-map LOD で十分か」「RtT 全体の別計画が必要か」を判断する
+  - terrain 以外が支配的なら、問題を別計画へ切り出す
 - 変更ファイル:
-  - `docs/plans/...` または `docs/proposals/...`
+  - `docs/plans/...`
+  - `docs/architecture.md`
 - 完了条件:
-  - [ ] chunk 化が不要か、次計画として必要かが明文化されている
+  - [ ] world-map LOD の完了条件が明文化されている
+  - [ ] terrain 以外のボトルネックを world-map LOD へ混ぜない整理ができている
 - 検証:
   - 計測ログ比較
+  - `cargo clippy --workspace`
 
-## 8. リスクと対策
+## 6. リスクと対策
 
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
-| `scale` 基準だけで閾値を決めて解像度差で壊れる | 中 | `tile_screen_px` を正本にする |
-| LOD 切替時のポッピング | 中 | enter / exit を分けたヒステリシスを必須にする |
-| overview が runtime 地形変更に追従しない | 高 | `TerrainChangedEvent` の consumer を増やし、更新経路を 1 箇所に集約する |
-| 矢視で flat overview が破綻する | 高 | `LOD2` を TopDown 限定に固定する |
-| shader 簡略化で near の見た目まで落ちる | 中 | LOD0 と LOD1 の分岐を明示し、デフォルトは LOD0 維持にする |
-| overview と境界リボンの色・コントラストが競合する | 中 | far 用 overview のトーンと boundary material の強度をセットで調整する |
-| chunk 化まで広げてスコープが肥大化する | 中 | M4 まで先送りし、M1〜M3 の成果を見てから判断する |
+| terrain 以外がボトルネックなのに terrain LOD へ寄り過ぎる | 高 | M1/M2 で観測を先に入れ、terrain 支配を確認してから M3 へ進む |
+| WGSL の動的分岐で期待ほど軽くならない | 高 | LOD0 / LOD1 を material variant として分離し、重い経路をコンパイル時に外しやすくする |
+| `boundary_mask` の簡略化で far の輪郭が崩れる | 中 | nearest 固定ではなく、まず簡略 blend 版を作って比較する |
+| `East/West` 矢視で LOD 指標が視線方向へ潰れ、誤判定する | 高 | `P -> P + X` 固定ではなく、world X/Z の 2 軸投影差分の大きい方を採用する |
+| LOD2 が runtime 地形変更に追従せず stale になる | 高 | `TerrainChangedEvent` を単一の truth 更新イベントとして扱い、dirty cell 単体ではなく halo 付き dirty rect 更新を必須契約にする |
+| RtT 品質変更で同じ `tile_screen_px` でも GPU コストが変わり、閾値がずれる | 中 | LOD 閾値の正本を `tile_rtt_px` に置き、`tile_screen_px` は見た目確認用に分離する |
+| TopDown / 矢視 / section で切替条件が複雑化する | 中 | `TerrainLodState` に view mode 制約を集約し、個別システムに判定を散らさない |
+| 旧 docs / 旧思考が残り、境界メッシュ前提で再実装してしまう | 中 | `world_layout.md` と本計画に「境界は baked path が正本」と明記する |
+| metric 更新だけで material 切替が毎フレーム走る | 高 | `TerrainLodMetrics` と `TerrainLodState` を分離し、切替条件は `level != applied_level` を使う |
 
-## 9. 検証計画
+## 7. 検証計画
 
 - 必須:
   - `cargo check --workspace`
+  - `cargo clippy --workspace`
 - 手動確認シナリオ:
-  - TopDown で zoom in / out を往復し、LOD0 / LOD1 / LOD2 の切替と復帰を確認
-  - 矢視へ切り替え、LOD2 に入らないことを確認
-  - 岩除去など terrain 変化後に far 表示が stale にならないことを確認
-- パフォーマンス確認（必要時）:
+  - TopDown で zoom in / out を往復し、LOD0 / LOD1 / LOD2 の切替と復帰を確認する
+  - 矢視へ切り替え、LOD2 に入らないことを確認する
+  - `East/West` 矢視でも LOD 判定が暴れず、TopDown と同じ hysteresis で安定することを確認する
+  - obstacle cleanup 後に terrain の見た目が近景・遠景とも更新されることを確認する
+  - LOD2 導入時は、変更セルの隣接境界をまたぐ場所でも stale / seam が出ないことを確認する
+- パフォーマンス確認:
   - `cargo run -p bevy_app -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario`
-  - 近景 / far 景で FPS 表示または profiler を比較
+  - FPS 表示と、可能なら renderdoc / profiler の GPU 側観測で terrain pass の差を見る
+  - `QualitySettings.rtt` の High / Medium / Low で `tile_rtt_px` と改善幅の相関を確認する
+  - M2 と M3 は必ず別々に比較する
 
-## 10. ロールバック方針
+## 8. ロールバック方針
 
 - どの単位で戻せるか:
-  - `M1` 観測基盤
-  - `M2` shader / boundary 切替
-  - `M3` overview impostor
+  - M1 は Resource / debug 観測追加なので個別 revert しやすい
+  - M2 は LOD0 variant を残すため、切替システムを外せば現行品質へ戻せる
+  - M3 は TopDown far 専用 entity / resource 単位で無効化できるようにする
 - 戻す時の手順:
-  - M3 を戻しても M2 は残せる構成にする。
-  - M2 を戻しても M1 の metric は残せる構成にする。
-  - `WorldMap` や pathfinding には触れないため、ロールバックは visual 系だけで完結させる。
+  - `TerrainLodState` を固定で `LOD0` にする
+  - overview entity / runtime resource の登録を外す
+  - docs では M3 を未採用として明記する
 
-## 11. AI引継ぎメモ（最重要）
+## 9. AI引継ぎメモ（最重要）
 
 ### 現在地
 
-- 進捗: `0%`
+- 進捗: `20%`（計画の具体化完了）
 - 完了済みマイルストーン:
-  - なし
+  - 現実装ベースの前提整理
+  - シェーダーコスト分解（`blend_terrain` 4-corner bilinear が最重、domain warp が次点）
+  - `TerrainLodMetrics` / `TerrainLodState` / `LodLevel` / `resolve_lod_level` の型・関数シグネチャ確定
+  - material variant 方針（uniform 分岐ではなく別 wgsl ファイル + newtype）の採用決定
+  - `Terrain3dHandles.lod0` / `lod1` への拡張インターフェース確定
 - 未着手/進行中:
-  - M1〜M4 未着手
+  - M1 以降の実装は未着手
 
 ### 次のAIが最初にやること
 
-1. `tile_screen_px` をどう定義するかを `camera_sync.rs` と RtT viewport 前提で確定する。
-2. LOD state Resource と hysteresis 付き閾値を先に入れる。
- 3. M2 では boundary を消さず、地形本体だけ先に簡略化する。
+1. `terrain_lod.rs` を新規作成し、4.6 節の `TerrainLodMetrics` / `TerrainLodState` / `LodLevel` / 閾値定数 / `update_terrain_lod_metrics_system` / `resolve_lod_level` をそのまま実装する
+   - `Camera3dRtt` は `crates/bevy_app/src/plugins/startup/rtt_setup.rs` で定義されているので確認すること
+   - `ElevationViewState` は `crates/bevy_app/src/systems/visual/elevation_view.rs` から import する
+2. `crates/bevy_app/src/plugins/visual.rs` に `TerrainLodMetrics` / `TerrainLodState` を `init_resource` し、`update_terrain_lod_metrics_system` を登録する（`sync_camera3d_system` の後）。同時に `rtt_composite.rs` から `composite_logical_size(window)` を共有 helper 化する
+3. zoom 往復で `tile_rtt_px` が数値を出すことを確認してから、LOD1 shader の作成（M2）に進む
 
 ### ブロッカー/注意点
 
-- `docs/plans/world-map-lod-plan-2026-04-05.md` は作業木で削除されているため、この計画を正本とする。
-- `LOD2` は TopDown 専用。矢視や section correctness を巻き込まない。
-- まず削るべきは「全部を chunk にすること」ではなく、「far で地形本体の detail を描かないこと」。
-- 境界リボンは遠景の主要情報なので、非表示前提では進めない。
+- `BoundarySurfaceMaterial` は存在するが現 startup 経路では未使用。これを前提に計画を戻さないこと。
+- `TerrainChangedEvent` は現在 `TerrainIdMap` の部分更新だけを担う。boundary / feature は runtime 更新対象ではない。
+- `tile_screen_px` 単独では GPU コストの正本にならない。RtT 実解像度を反映した `tile_rtt_px` を判定に使うこと。
+- `TerrainLodMetrics` と `TerrainLodState` を分けないと、metric 書き換えだけで `state.is_changed()` が毎フレーム立つ。切替判定は `level != applied_level` を使うこと。
+- LOD2 の dirty 更新は cell 単体では不足する。最低でも 1 cell halo を含めること。
+- LOD2 の必要性は未確定。M2 計測前に前倒ししないこと。
+- `Terrain3dHandles.surface` は `lod0` に rename するため、参照箇所を grep で全洗いすること:
+  `grep -r "\.surface" crates/bevy_app/src --include="*.rs"`
+- LOD1 material は `TerrainSurfaceMaterial` とは **別の型** として固定する。したがって切り替えは handle 差し替えではなく、
+  `Commands::entity().remove::<...>().insert(...)` で `MeshMaterial3d` component 自体を差し替える前提で進めること。
+- `tile_screen_px` は `tile_rtt_px` から composite 表示倍率で導出する補助指標であり、LOD 閾値判定には使わないこと。
+- `logical_composite_size(window)` は現状 private 関数なので、そのまま別モジュールから呼べない。shared helper へ抽出してから使うこと。
 
 ### 参照必須ファイル
 
 - `docs/world_layout.md`
 - `docs/architecture.md`
+- `docs/plans/world-map-render-chunking-plan-2026-04-08.md`
 - `crates/bevy_app/src/world/map/spawn.rs`
 - `crates/bevy_app/src/world/map/boundary.rs`
 - `crates/bevy_app/src/systems/visual/camera_sync.rs`
+- `crates/bevy_app/src/systems/visual/elevation_view.rs`
+- `crates/bevy_app/src/plugins/startup/rtt_setup.rs`
 - `crates/hw_visual/src/material/terrain_surface_material.rs`
 - `assets/shaders/terrain_surface_material.wgsl`
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-04-06` / `not run (docs only)`
+- 最終 `cargo check`: `未実行` / `docs-only`（計画ブラッシュアップのみ）
 - 未解決エラー:
-  - 未確認
+  - なし（コード未変更）
 
 ### Definition of Done
 
-- [ ] M1〜M3 が完了
-- [ ] `docs/world_layout.md` / `docs/architecture.md` が同期済み
-- [ ] TopDown far で地形コストが near より下がる
-- [ ] `cargo check --workspace` が成功
+- [ ] M1 が完了し、LOD state と閾値契約が固定されている
+- [ ] M2 が完了し、chunk renderer 上で terrain shader の負荷が落ちている（既存 FPS UI または profiler で確認）
+- [ ] M3 は必要性が確認できた場合のみ完了している
+- [ ] 影響ドキュメントが更新済み（`docs/world_layout.md`, `docs/architecture.md`）
+- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check --workspace` が成功
+- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace` が成功（0 warnings）
 
-## 12. 更新履歴
+## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
-| `2026-04-06` | `Codex` | 初版作成。TopDown far overview impostor を主軸に、shader 簡略化と境界リボン無効化を組み合わせる方針へ整理 |
-
-## 13. パフォーマンスレビューによる追記・改善案
-
-アーキテクチャおよびパフォーマンスの観点から、本計画は「LOD2（Overview Impostor）の導入」「Screen-space metricの採用」「ヒステリシスの導入」「段階的アプローチ（チャンク化の先送り）」など、極めて堅実で効果的なアプローチをとっている。
-実装にあたり、効果を最大化するために以下の懸念事項と改善案を追記する。
-
-### 13.1 LOD2（Overview）更新時のCPU/GPU転送スパイク対策
-- **懸念**: `TerrainChangedEvent` を受けてLOD2の遠景用画像を更新する際、100x100マップ全体のテクスチャを毎度再生成してGPUに丸ごと再転送（Upload）すると、地形変化（岩の採掘など）の瞬間にフレーム落ち（スパイク負荷）が発生するリスクがある。
-- **改善案**: テクスチャ全体の再送ではなく、**変更があったタイルの周辺ピクセルのみを更新する部分更新**（Bevyの `Image` の更新機能やwgpuの `write_texture` 相当の機能を利用）の仕組みをM3の段階で確実に設計・実装すること。
-
-### 13.2 「境界リボン」のLOD2におけるDraw Call残留対策
-- **懸念**: LOD2で地形本体を1枚絵にしても、多数の境界リボン（ポリラインメッシュ）をそのまま描画し続けると、Draw Callがあまり減らず、CPU側の負荷削減効果が薄れる可能性がある。
-- **改善案**: M3にある「far用 simplification（簡略化）」はオプションではなく**必須要件**として扱うべきである。
-  - **最善策**: LOD2用のOverview Imageを生成する際、**境界線もそのテクスチャの中に焼き込んでしまい、境界リボンのEntity自体は遠景では非表示にする**。これによりDraw Callを劇的に削減できる。
-  - **代替策**: 視認性などの観点からどうしても別Entityとして描画し続ける必要がある場合は、極限まで頂点数を減らしたLOD専用のリボンメッシュへ差し替えること。
-
-### 13.3 LOD1のシェーダー分岐の仕組み
-- **懸念**: LOD1（中景）でシェーダーを簡略化する際、WGSL内で単に `if (is_lod1)` のような動的分岐を使って重い処理をスキップしようとすると、GPUのアーキテクチャによっては両方の分岐を評価してしまい、期待ほど負荷が下がらないことがある。
-- **改善案**: 可能な限り、Bevyのパイプラインレベルでの切り替え（異なるシェーダー定義やフラグを持つ別マテリアルへの差し替え、あるいは確実な静的分岐/Specialization Constant）を活用し、シェーダーのコンパイル段階で重い処理（macro overlay等）が完全に除外されるように構成すること。
-
-### 13.4 タイル/ゾーンごとのバイオーム情報保持を前提とした対案の評価
-- **前提**: `hw_world` の生成結果（`WorldMasks` の `grass_zone_mask`, `dirt_zone_mask` 等）をBevy側でもバイオーム情報として保持・活用する設計。
-- **評価**:
-  - 現在の計画（インポスター化）は、ピクセル単位のテクスチャで遠景を描画するため、バイオームの境界線やグラデーションをそのまま「1枚の画像」として焼き込むことができ、最も相性が良い。
-  - **対案（Tilemap Shader / 1枚Quad化）の再評価**: もしタイル単位ではなく、より荒い「ゾーン単位」でのみバイオーム情報を持てば良いのであれば、1枚のQuadメッシュに対して、フラグメントシェーダーでSDF（Signed Distance Field）やバイオームマップをサンプリングして地形を描画するアプローチ（対案3）の実現性が高まる。しかし、依然として「近景での立体感（3Dメッシュの起伏）」とのシームレスな移行が課題となるため、現状では**「LOD2用のインポスターテクスチャ生成時にバイオーム色を反映させる」**という現行案の拡張として扱うのが最も安全かつパフォーマンスが高い。
-
-### 13.5 将来的な「動的地形変更（Terrain Modification）」との相性評価
-- **前提**: プレイヤーのアクション（採掘、整地、バイオーム変化など）により、ゲームプレイ中に地形の形状や種類が動的に変化するケース。
-- **現行案（インポスター化）の評価**: **極めて良好**。
-  - 現行案は既に `TerrainChangedEvent` を用いたインポスター用テクスチャの部分更新（ピクセル単位の書き換え）を想定しており、地形変更時の遠景更新コストが最小限に抑えられる設計です。
-  - 近景（LOD0/1）においても、対象となる特定のタイル Entity のみを更新（メッシュやマテリアルの差し替え）すれば良いため、ECSの強み（個別Entityの独立性）をそのまま活かせます。
-- **対案の評価**:
-  - **対案1（GPU Instancing）**: 良好〜普通。地形変更時は、GPU上のインスタンスバッファやストレージバッファの該当インデックス部分を書き換える必要があります。実装難易度は上がりますが、バッファの部分更新ができれば高速です。
-  - **対案2（チャンク化）**: **相性が悪い**。1つのタイルを変更するたびに、そのタイルが属するチャンク全体（例: 16x16タイル）の頂点メッシュを再生成（Re-mesh）し、GPUへ再転送する必要があります。これがスパイク負荷（フレーム落ち）の直接的な原因となり、非同期メッシュ生成などの複雑な仕組みが追加で必要になります。
-  - **対案3（Tilemap Shader）**: テクスチャ変更のみであれば高速ですが、掘削など「3Dとしての形状変化（高さや立体感の追加）」を伴う場合、1枚のQuadに対するフラグメントシェーダー内でのディスプレイスメント/視差マッピング計算が極めて複雑になり、パフォーマンスとビジュアルの両面で破綻しやすいです。
-- **結論**: 動的な地形変更を将来的に見据えた場合でも、特定のタイルだけを個別のEntityとして操作でき、遠景はテクスチャの部分書き換えで対応可能な**現行案が、最も柔軟性が高くパフォーマンスリスクが少ない（スパイクが起きにくい）アーキテクチャ**と言えます。
+| `2026-04-06` | `Codex` | 初版作成 |
+| `2026-04-09` | `Codex` | chunk renderer・`boundary_mask` baked・`TerrainChangedEvent` 現契約を前提に全面再計画 |
+| `2026-04-09` | `Codex` | レビュー反映: `tile_rtt_px` 正本化、矢視 2 軸測定、LOD2 halo 更新、`clippy` 検証を追記 |
+| `2026-04-08` | `Copilot` | シェーダーコスト分解・具体的型定義・コードスニペット・マイルストーン詳細化でブラッシュアップ |

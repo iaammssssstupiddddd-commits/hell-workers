@@ -10,6 +10,7 @@ mod startup_systems;
 mod visual_handles;
 
 pub use rtt_composite::RttCompositeSprite;
+pub(crate) use rtt_composite::composite_logical_size;
 pub use rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime, RttViewportSize};
 pub use visual_handles::{Building3dHandles, CharacterHandles, Terrain3dHandles};
 

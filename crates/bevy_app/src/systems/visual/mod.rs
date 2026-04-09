@@ -13,6 +13,7 @@ pub mod placement_ghost;
 pub mod section_cut;
 pub mod soul_animation;
 pub mod task_area_visual;
+pub mod terrain_lod;
 pub mod terrain_material;
 pub mod wall_orientation_aid;
 pub mod floor_construction {
