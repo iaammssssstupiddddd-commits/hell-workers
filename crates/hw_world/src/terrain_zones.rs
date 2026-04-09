@@ -616,7 +616,10 @@ mod tests {
             expanded.get((52, 50)),
             "two-step orthogonal cell with cost 6 should be included"
         );
-        assert!(expanded.get((53, 50)), "cell with cost 9 should be included");
+        assert!(
+            expanded.get((53, 50)),
+            "cell with cost 9 should be included"
+        );
         assert!(
             !expanded.get((53, 51)),
             "cell with minimum chamfer cost 10 must not be included for radius 9"

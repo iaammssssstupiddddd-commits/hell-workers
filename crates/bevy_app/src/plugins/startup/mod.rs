@@ -14,9 +14,7 @@ pub(crate) use rtt_composite::composite_logical_size;
 pub use rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime, RttViewportSize};
 pub use visual_handles::{Building3dHandles, CharacterHandles, Terrain3dHandles};
 
-use crate::world::map::{
-    build_terrain_feature_map, build_terrain_id_map, spawn_boundary_meshes,
-};
+use crate::world::map::{build_terrain_feature_map, build_terrain_id_map, spawn_boundary_meshes};
 use perf_scenario::{
     PerfScenarioApplied, setup_perf_scenario_if_enabled, setup_perf_scenario_runtime_if_enabled,
 };

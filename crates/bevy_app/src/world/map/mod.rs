@@ -4,6 +4,7 @@ pub(crate) mod boundary;
 mod spawn;
 mod terrain_metadata;
 
+pub(crate) use boundary::spawn_boundary_meshes;
 pub use hw_world::layout::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, SAND_WIDTH};
 pub use hw_world::map::WorldMap;
 pub use hw_world::{TerrainType, WorldMapRead, WorldMapWrite, generate_fixed_river_tiles};
@@ -11,9 +12,10 @@ pub use spawn::{
     GeneratedWorldLayoutResource, TerrainChunk, prepare_generated_world_layout_resource,
     resolve_worldgen_seed, spawn_map, spawn_terrain_chunks,
 };
-pub(crate) use boundary::spawn_boundary_meshes;
 pub(crate) use terrain_metadata::terrain_type_to_id_byte;
-pub use terrain_metadata::{TerrainFeatureMap, TerrainIdMap, build_terrain_feature_map, build_terrain_id_map};
+pub use terrain_metadata::{
+    TerrainFeatureMap, TerrainIdMap, build_terrain_feature_map, build_terrain_id_map,
+};
 
 use bevy::prelude::*;
 use hw_ui::selection::WorldReadApi;

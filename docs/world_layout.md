@@ -179,10 +179,10 @@
 地形描画は **chunk 単位の `TerrainChunk` entity** で行う（per-tile render entity は廃止）。
 
 - **Chunk 構成**: `CHUNK_TILES = 16`（16×16 タイル/chunk）。100×100 マップ → 7×7 = **49 chunk entity**。辺端は 4 tile 幅の端数 chunk が生じる。
-- **Chunk entity**: `TerrainChunk { cx, cy }` + `Mesh3d` + `MeshMaterial3d<TerrainSurfaceMaterial>` + `Transform` + `building_3d_render_layers()`。chunk の中心ワールド座標に配置。
+- **Chunk entity**: `TerrainChunk { cx, cy }` + `Mesh3d` + `Transform` + `building_3d_render_layers()` を持ち、地形 material は LOD に応じて `MeshMaterial3d<TerrainSurfaceMaterial>` または `MeshMaterial3d<TerrainSurfaceMaterialLod2>` のどちらか一方が付く。chunk の中心ワールド座標に配置。
 - **Chunk mesh**: `Plane3d::default().mesh().size(w * TILE_SIZE, h * TILE_SIZE)`。フルチャンク（512×512wu）、端数チャンク（128×512wu 等）。
 - **Tile anchor entity**: 10,000 個の `Tile` entity（`Tile` component + `Transform`）は描画コンポーネントなしで存続。`WorldMap.tile_entities` に登録され、Familiar AI の収集可否判定（`direct_collect.rs`）から `Designation` / `TaskWorkers` を取得する論理 anchor として機能する。
-- **マテリアル**: `Terrain3dHandles` は `TerrainSurfaceMaterial` 1 本を全 chunk で共有する。地形 shader は `terrain_id_map` を `textureLoad` で引いて center / cardinal 近傍の `TerrainType` を判定し、4 アルベドを world-space UV でサンプルして境界をブレンドする。chunk 境界での継ぎ目は発生しない（shader が world-space 参照のため）。建物・壁は引き続き `SectionMaterial`。
+- **マテリアル**: `Terrain3dHandles` は `lod1: Handle<TerrainSurfaceMaterial>` と `lod2: Handle<TerrainSurfaceMaterialLod2>` を保持する。`terrain_lod_switch_system` が 49 chunk の `MeshMaterial3d` component を差し替え、現 runtime は `Lod1 / Lod2` を使う。`Lod0` は将来のリッチビジュアル用に予約で未使用。LOD1 shader は現行フル品質、LOD2 shader は **`boundary_mask` の nearest region を正本にして曲線境界を維持しつつ**、4-corner bilinear・domain warp・river scroll・shoreline detail を落とし、albedo UV を量子化して低解像度 texture 相当の見た目へ簡略化する。chunk 境界での継ぎ目はどちらも world-space 参照のため発生しない。建物・壁は引き続き `SectionMaterial`。
 - **terrain id map**: startup の `build_terrain_id_map` が `GeneratedWorldLayout.terrain_tiles` から `R8Unorm` の `TerrainIdMap` を生成する。0 / 85 / 170 / 255 を grass / dirt / sand / river として encode し、shader 側では `round(raw * 3.0)` で terrain id に戻す。`ClampToEdge + Nearest`。
 - **テクスチャサンプラ**: 地形 4 枚（`grass` / `dirt` / `sand_terrain` / `river`）は `asset_catalog.rs` で `AddressMode::Repeat` 付きロード。ワールド UV が 0〜1 を超える前提。
 - **feature map**: startup の `build_terrain_feature_map` が `GeneratedWorldLayout.masks` から `Rgba8Unorm` の `TerrainFeatureMap` を生成する。R=`shore sand`、G=`inland sand`、B=`rock field`、A=`zone bias`（grass zone / neutral / dirt zone）。こちらは worldgen snapshot を表す static bake で、runtime では更新しない。
@@ -194,7 +194,7 @@
 - **レイヤー**: `building_3d_render_layers()`（`LAYER_3D` + `LAYER_3D_SHADOW_RECEIVER`）で他の 3D エンティティと同レイヤー。
 - **Transform**: chunk は `from_xyz(cx_world, 0.0, -cy_world)`（chunk 中心）。Y=0 が地面平面。
 - **障害物除去後の更新**: `hw_world::obstacle_cleanup_system` が `TerrainChangedEvent`（`Message`）を発行 → `bevy_app::terrain_id_map_sync_system` が受信して `TerrainIdMap` の該当ピクセルを書き換える。**chunk entity の再生成は不要**（shader が world-space で texture を参照するため、texture 1 ピクセル更新だけで全 chunk の見た目が更新される）。
-- **M1 LOD 観測基盤**: `bevy_app::systems::visual::terrain_lod::update_terrain_lod_metrics_system` が `Camera3dRtt` の `world_to_viewport` から `tile_rtt_px`（RtT 上の 1 タイル見かけサイズ）を算出し、`composite_logical_size(window)` と `RttRuntime.viewport` から `tile_screen_px`（スクリーン表示上の補助値）を導出する。LOD 判定の正本は `TerrainLodMetrics.tile_rtt_px` であり、`tile_screen_px` はデバッグ表示専用。`TerrainLodState.level` は hysteresis 付き閾値で更新され、**矢視 (`North/East/South/West`) では `Lod2` を保持しない**。
+- **M1/M2 LOD 観測基盤**: `bevy_app::systems::visual::terrain_lod::update_terrain_lod_metrics_system` が `Camera3dRtt` の `world_to_viewport` から `tile_rtt_px`（RtT 上の 1 タイル見かけサイズ）を算出し、`composite_logical_size(window)` と `RttRuntime.viewport` から `tile_screen_px`（スクリーン表示上の補助値）を導出する。LOD 判定の正本は `TerrainLodMetrics.tile_rtt_px` であり、`tile_screen_px` はデバッグ表示専用。runtime の hysteresis は **`Lod1 → Lod2` が 14px 未満、`Lod2 → Lod1` が 16px 超**で、`Lod0` は予約スロットのため遷移先に含めない。
 - **廃止**: `TerrainBorder` / `terrain_border.rs` / `hw_world::borders` は MS-3-4 で除去済み。`TerrainType::z_layer()` も同様に除去済み。per-tile の `Mesh3d` render entity は chunk renderer 導入時に廃止。`Terrain3dHandles.tile_mesh` フィールドも廃止済み。
 
 ### 2D 前景カメラ（composite より手前の `LAYER_2D`）

@@ -40,9 +40,10 @@ pub use material::{
     TERRAIN_GRASS_UV_DISTORT_STRENGTH, TERRAIN_KIND_DIRT, TERRAIN_KIND_GRASS, TERRAIN_KIND_RIVER,
     TERRAIN_KIND_SAND, TERRAIN_SAND_BRIGHTNESS_VARIATION_STRENGTH,
     TERRAIN_SAND_DOMAIN_WARP_STRENGTH, TerrainMaterialMaps, TerrainSurfaceMaterial,
-    TerrainSurfaceMaterialExt, TerrainSurfaceUniform, make_section_material,
-    make_section_material_textured, make_terrain_section_material, make_terrain_surface_material,
-    soul_face_uv_offset, soul_face_uv_scale, with_alpha_mode,
+    TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod2, TerrainSurfaceMaterialLod2,
+    TerrainSurfaceUniform, make_section_material, make_section_material_textured,
+    make_terrain_section_material, make_terrain_surface_material,
+    make_terrain_surface_material_lod2, soul_face_uv_offset, soul_face_uv_scale, with_alpha_mode,
 };
 
 pub use visual3d::{
@@ -72,6 +73,7 @@ impl Plugin for HwVisualPlugin {
             MaterialPlugin::<material::SoulMaskMaterial>::default(),
             MaterialPlugin::<material::SoulShadowMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterial>::default(),
+            MaterialPlugin::<material::TerrainSurfaceMaterialLod2>::default(),
         ));
 
         app.add_plugins(speech::SpeechPlugin);
@@ -82,6 +84,7 @@ impl Plugin for HwVisualPlugin {
             (
                 material::sync_section_cut_to_materials_system,
                 material::sync_section_cut_to_terrain_surface_system,
+                material::sync_section_cut_to_terrain_surface_lod2_system,
                 wall_connection::wall_connections_system,
                 site_yard_visual::sync_site_yard_boundaries_system,
             )

@@ -32,7 +32,8 @@ use crate::systems::visual::soul_animation::{
 };
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
 use crate::systems::visual::terrain_lod::{
-    TerrainLodMetrics, TerrainLodState, update_terrain_lod_metrics_system,
+    TerrainLodMetrics, TerrainLodState, terrain_lod_switch_system,
+    update_terrain_lod_metrics_system,
 };
 use crate::systems::visual::terrain_material::terrain_id_map_sync_system;
 use hw_core::game_state::PlayMode;
@@ -70,6 +71,12 @@ impl Plugin for VisualPlugin {
             Update,
             update_terrain_lod_metrics_system
                 .after(sync_camera3d_system)
+                .in_set(GameSystemSet::Visual),
+        );
+        app.add_systems(
+            Update,
+            terrain_lod_switch_system
+                .after(update_terrain_lod_metrics_system)
                 .in_set(GameSystemSet::Visual),
         );
         app.add_systems(

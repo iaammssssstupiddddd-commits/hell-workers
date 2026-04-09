@@ -18,7 +18,7 @@ use bevy::image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerD
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE};
-use hw_visual::TerrainSurfaceMaterial;
+use hw_visual::{TerrainSurfaceMaterial, TerrainSurfaceMaterialLod2};
 use hw_world::{TerrainType, WorldMasks, grid_to_world};
 
 use crate::plugins::startup::Terrain3dHandles;
@@ -105,7 +105,6 @@ impl BoundaryKind {
     pub fn index(self) -> u32 {
         self as u32
     }
-
 }
 
 // ── データ型 ──────────────────────────────────────────────────────────────────
@@ -150,7 +149,12 @@ fn zone_tone_boundary_kind(terrain: TerrainType, bias_a: u8, bias_b: u8) -> Opti
 
 /// 粗い種別が両方草または両方土のときだけゾーン境界（亜種は一致不要。ゾーン境で亜種が違うことが多い）。
 #[inline]
-fn maybe_zone_tone_edge(t0: TerrainType, t1: TerrainType, bias_a: u8, bias_b: u8) -> Option<BoundaryKind> {
+fn maybe_zone_tone_edge(
+    t0: TerrainType,
+    t1: TerrainType,
+    bias_a: u8,
+    bias_b: u8,
+) -> Option<BoundaryKind> {
     let both_grass = matches!((t0, t1), (TerrainType::Grass, TerrainType::Grass));
     let both_dirt = matches!((t0, t1), (TerrainType::Dirt, TerrainType::Dirt));
     if !both_grass && !both_dirt {
@@ -325,7 +329,8 @@ fn rasterize_terrain_regions(
     let mut queue: VecDeque<(usize, usize)> = VecDeque::new();
     for ty in 0..h {
         for tx in 0..w {
-            let id_byte = terrain_region_byte(terrain_tiles[ty * w + tx], masks, (tx as i32, ty as i32));
+            let id_byte =
+                terrain_region_byte(terrain_tiles[ty * w + tx], masks, (tx as i32, ty as i32));
             let world_p = hw_world::grid_to_world(tx as i32, ty as i32);
             let (fpx, fpy) = world_to_region_pixel(world_p);
             let px = (fpx as usize).min(res - 1);
@@ -429,7 +434,10 @@ fn rasterize_terrain_regions(
 ///
 /// - **粗いカテゴリ**が変わる境（`BoundaryKind::from_pair`）
 /// - **草↔草／土↔土**（亜種は問わない）で `terrain_zone_bias_byte`（草ゾーン／中立／土ゾーン）が隣接で変わる境
-pub fn extract_boundary_edges(terrain_tiles: &[TerrainType], masks: &WorldMasks) -> Vec<BoundaryEdge> {
+pub fn extract_boundary_edges(
+    terrain_tiles: &[TerrainType],
+    masks: &WorldMasks,
+) -> Vec<BoundaryEdge> {
     let w = MAP_WIDTH as usize;
     let h = MAP_HEIGHT as usize;
     let half = TILE_SIZE / 2.0;
@@ -753,7 +761,10 @@ pub struct PolylineNoiseParams {
     freq_scale: f32,
 }
 
-pub fn boundary_polyline_noise_params(master_seed: u64, polyline: &BoundaryPolyline) -> PolylineNoiseParams {
+pub fn boundary_polyline_noise_params(
+    master_seed: u64,
+    polyline: &BoundaryPolyline,
+) -> PolylineNoiseParams {
     let mut h = mix64(master_seed);
     h ^= mix64(polyline.kind.index() as u64);
     h ^= mix64(polyline.points.len() as u64);
@@ -767,7 +778,9 @@ pub fn boundary_polyline_noise_params(master_seed: u64, polyline: &BoundaryPolyl
         let k = world_to_corner_key(*p0);
         h ^= mix64((k.0 as u64).wrapping_shl(32) ^ (k.1 as u32 as u64));
     }
-    if polyline.points.len() > 1 && let Some(pl) = polyline.points.last() {
+    if polyline.points.len() > 1
+        && let Some(pl) = polyline.points.last()
+    {
         let k = world_to_corner_key(*pl);
         h ^= mix64((k.0 as u64).wrapping_shl(16) ^ (k.1 as u32 as u64).wrapping_shl(48));
     }
@@ -909,11 +922,7 @@ fn compute_tangent(points: &[Vec2], i: usize, is_closed: bool) -> Vec2 {
 ///
 /// - 開チェーン: 両端に外挿ゴースト点を付加して全セグメントを補間する
 /// - 閉ループ: 末尾/先頭の点を折り返してゴーストとし、接続を滑らかにする
-pub fn sample_catmull_rom(
-    points: &[Vec2],
-    is_closed: bool,
-    steps_per_segment: u32,
-) -> Vec<Vec2> {
+pub fn sample_catmull_rom(points: &[Vec2], is_closed: bool, steps_per_segment: u32) -> Vec<Vec2> {
     let n = points.len();
     if n < 2 || steps_per_segment == 0 {
         return points.to_vec();
@@ -989,6 +998,7 @@ pub fn spawn_boundary_meshes(
     layout: Res<GeneratedWorldLayoutResource>,
     terrain_handles: Res<Terrain3dHandles>,
     mut terrain_surface_materials: ResMut<Assets<TerrainSurfaceMaterial>>,
+    mut terrain_surface_materials_lod2: ResMut<Assets<TerrainSurfaceMaterialLod2>>,
 ) {
     let terrain_tiles = &layout.layout.terrain_tiles;
     let master_seed = layout.master_seed;
@@ -1003,13 +1013,8 @@ pub fn spawn_boundary_meshes(
 
     for polyline in polylines {
         let noise = boundary_polyline_noise_params(master_seed, &polyline);
-        let displaced = displace_polyline(
-            &polyline,
-            &noise,
-            NOISE_FREQ,
-            NOISE_AMPLITUDE,
-            &junctions,
-        );
+        let displaced =
+            displace_polyline(&polyline, &noise, NOISE_FREQ, NOISE_AMPLITUDE, &junctions);
         let chamfered = chamfer_polyline_points(
             &displaced,
             polyline.is_closed,
@@ -1067,13 +1072,19 @@ pub fn spawn_boundary_meshes(
 
     let handle = images.add(image);
 
-    if let Some(mat) = terrain_surface_materials.get_mut(&terrain_handles.surface) {
+    if let Some(mat) = terrain_surface_materials.get_mut(&terrain_handles.lod1) {
+        mat.extension.boundary_mask = Some(handle.clone());
+    }
+    if let Some(mat) = terrain_surface_materials_lod2.get_mut(&terrain_handles.lod2) {
         mat.extension.boundary_mask = Some(handle);
     }
 
     commands.insert_resource(BoundarySliceSpatialIndex);
 
-    info!("BEVY_STARTUP: Rasterized terrain_region_map from {} boundary polylines", count);
+    info!(
+        "BEVY_STARTUP: Rasterized terrain_region_map from {} boundary polylines",
+        count
+    );
 }
 
 #[cfg(test)]

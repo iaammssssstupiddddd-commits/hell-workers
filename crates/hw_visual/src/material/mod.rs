@@ -17,6 +17,8 @@ pub use section_material::{
 pub use soul_mask_material::SoulMaskMaterial;
 pub use soul_shadow_material::SoulShadowMaterial;
 pub use terrain_surface_material::{
-    TerrainSurfaceMaterial, TerrainSurfaceMaterialExt, TerrainSurfaceUniform,
-    make_terrain_surface_material, sync_section_cut_to_terrain_surface_system,
+    TerrainSurfaceMaterial, TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod2,
+    TerrainSurfaceMaterialLod2, TerrainSurfaceUniform, make_terrain_surface_material,
+    make_terrain_surface_material_lod2, sync_section_cut_to_terrain_surface_lod2_system,
+    sync_section_cut_to_terrain_surface_system,
 };

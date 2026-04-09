@@ -79,10 +79,7 @@ pub fn spawn_map(
 
             let pos2d = grid_to_world(x, y);
             let entity = commands
-                .spawn((
-                    Tile,
-                    Transform::from_xyz(pos2d.x, 0.0, -pos2d.y),
-                ))
+                .spawn((Tile, Transform::from_xyz(pos2d.x, 0.0, -pos2d.y)))
                 .id();
 
             world_map.set_tile_entity_at_idx(idx, entity);
@@ -125,13 +122,16 @@ pub fn spawn_terrain_chunks(
             let end = grid_to_world(cx * CHUNK_TILES + w - 1, cy * CHUNK_TILES + h - 1);
             let center = (origin + end) * 0.5;
 
-            let chunk_mesh =
-                meshes.add(Plane3d::default().mesh().size(w as f32 * TILE_SIZE, h as f32 * TILE_SIZE));
+            let chunk_mesh = meshes.add(
+                Plane3d::default()
+                    .mesh()
+                    .size(w as f32 * TILE_SIZE, h as f32 * TILE_SIZE),
+            );
 
             commands.spawn((
                 TerrainChunk { cx, cy },
                 Mesh3d(chunk_mesh),
-                MeshMaterial3d::<TerrainSurfaceMaterial>(terrain_handles.surface.clone()),
+                MeshMaterial3d::<TerrainSurfaceMaterial>(terrain_handles.lod1.clone()),
                 Transform::from_xyz(center.x, 0.0, -center.y),
                 building_3d_render_layers(),
             ));

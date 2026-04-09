@@ -6,8 +6,31 @@
 
 ## DevPanel（左上トグルパネル）
 
-`DevPanel` は画面左上に常時表示される開発用ボタン群。
+`DevPanel` は画面左上に常時表示される開発用ボタン・インジケーター群。
 `crates/bevy_app/src/interface/ui/dev_panel.rs` で定義・管理する。
+
+パネル内の表示順（上から）：
+
+| 行 | 内容 | 更新方法 |
+|---|---|---|
+| 3D: ON/OFF | Camera3d RTT 切り替えボタン | クリック |
+| IBuild: ON/OFF | 壁即時完成トグルボタン | クリック |
+| ─ セパレーター ─ | | — |
+| FPS: XX | フレームレート表示 | `update_fps_display_system`（1秒毎） |
+| LOD:X rtt:XX.Xpx | 地形 LOD レベルと tile_rtt_px | `update_lod_indicator_system`（毎フレーム） |
+
+### FPS インジケーター
+
+- `UiSlot::FpsText` entity として DevPanel 内に spawn し、`spawn_dev_panel_system` で `UiNodeRegistry` に登録する
+- `update_fps_display_system`（`hw_ui` 側）が 1 秒間隔で平均 FPS を書き込む
+- 以前は `top_right_slot` 内に独立 widget として配置していたが、DevPanel と重なって不可視になったため統合
+
+### LOD インジケーター
+
+- マーカー: `LodIndicatorText`
+- 表示形式: `LOD:X rtt:YY.Ypx`（X = LOD レベル、YY.Y = `TerrainLodMetrics.tile_rtt_px`）
+- `update_lod_indicator_system` が毎フレーム `TerrainLodState.level` と `TerrainLodMetrics.tile_rtt_px` を読んでテキストを更新する
+- LOD 遷移の閾値確認（hysteresis デバッグ）に使用する
 
 ### 3D: ON / OFF ボタン
 
@@ -108,7 +131,9 @@ MS-WFC-4 以降、`Startup` の `setup()` が `prepare_generated_world_layout_re
 ## 関連ファイル
 
 - `crates/bevy_app/src/main.rs` — デバッグ resource 定義
-- `crates/bevy_app/src/interface/ui/dev_panel.rs` — DevPanel UI
+- `crates/bevy_app/src/interface/ui/dev_panel.rs` — DevPanel UI・FPS/LOD インジケーター
+- `crates/bevy_app/src/systems/visual/terrain_lod.rs` — `TerrainLodMetrics` / `TerrainLodState` / `LodLevel`
+- `crates/hw_ui/src/interaction/status_display/runtime.rs` — `update_fps_display_system`
 - `crates/bevy_app/src/plugins/interface_debug.rs` — デバッグシステム本体
 - `crates/bevy_app/src/plugins/interface.rs` — Interface セット登録
 - `crates/bevy_app/src/plugins/logic.rs` — Logic セット登録

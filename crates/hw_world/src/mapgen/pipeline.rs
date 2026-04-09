@@ -10,7 +10,9 @@ use crate::world_masks::WorldMasks;
 use super::resources;
 use super::types::GeneratedWorldLayout;
 use super::validate;
-use super::wfc_adapter::{MAX_WFC_RETRIES, derive_sub_seed, fallback_terrain, fix_zone_mask_crosses, run_wfc};
+use super::wfc_adapter::{
+    MAX_WFC_RETRIES, derive_sub_seed, fallback_terrain, fix_zone_mask_crosses, run_wfc,
+};
 
 /// WFC 地形生成のエントリポイント（MS-WFC-2c）。
 ///
@@ -335,15 +337,15 @@ mod tile_dist_sim {
 
         let bands: &[(u32, u32)] = &[
             // Chamfer 3-4 距離単位（旧 BFS 値の約 ×3）
-            (0, 12),   // 旧 (0, 4)
-            (15, 24),  // 旧 (5, 8)
-            (27, 36),  // 旧 (9, 12)
-            (39, 45),  // 旧 (13, 15)
-            (48, 57),  // 旧 (16, 19)  ← ZONE_DIRT_DIST_MIN-MAX 付近
-            (60, 72),  // 旧 (20, 24)
-            (75, 90),  // 旧 (25, 30)  ← ZONE_GRASS_DIST_MIN 付近
-            (93, 150), // 旧 (31, 50)
-            (153, 300),// 旧 (51, 99)
+            (0, 12),    // 旧 (0, 4)
+            (15, 24),   // 旧 (5, 8)
+            (27, 36),   // 旧 (9, 12)
+            (39, 45),   // 旧 (13, 15)
+            (48, 57),   // 旧 (16, 19)  ← ZONE_DIRT_DIST_MIN-MAX 付近
+            (60, 72),   // 旧 (20, 24)
+            (75, 90),   // 旧 (25, 30)  ← ZONE_GRASS_DIST_MIN 付近
+            (93, 150),  // 旧 (31, 50)
+            (153, 300), // 旧 (51, 99)
         ];
         // 距離場はシード非依存（anchor_maskが同一）なので1度だけ計算
         let dist_field = {

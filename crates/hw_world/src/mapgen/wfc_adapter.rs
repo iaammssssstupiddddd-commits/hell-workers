@@ -290,10 +290,8 @@ pub(crate) fn fix_zone_mask_crosses(masks: &mut WorldMasks) {
         }
     }
     if modified {
-        masks.grass_zone_distance_field =
-            compute_zone_distance_field(&masks.grass_zone_mask);
-        masks.dirt_zone_distance_field =
-            compute_zone_distance_field(&masks.dirt_zone_mask);
+        masks.grass_zone_distance_field = compute_zone_distance_field(&masks.grass_zone_mask);
+        masks.dirt_zone_distance_field = compute_zone_distance_field(&masks.dirt_zone_mask);
     }
 }
 
@@ -542,14 +540,8 @@ fn enforce_no_visual_cross_2x2(tiles: &mut [TerrainType], masks: &mut WorldMasks
             for x in 0..MAP_WIDTH - 1 {
                 if is_visual_cross_2x2(tiles, masks, x, y) {
                     changed.clear();
-                    if try_fix_visual_cross_2x2(
-                        tiles,
-                        masks,
-                        x,
-                        y,
-                        &empty_protected,
-                        &mut changed,
-                    ) {
+                    if try_fix_visual_cross_2x2(tiles, masks, x, y, &empty_protected, &mut changed)
+                    {
                         fixed_any = true;
                     }
                 }
@@ -703,7 +695,11 @@ pub enum WfcError {
 /// - `masks`: `fill_river_from_seed()` 適用済みの WorldMasks
 /// - `seed`: サブシード（caller が `derive_sub_seed` で計算する）
 /// - `attempt`: 試行回数（将来のログ用）
-pub fn run_wfc(masks: &mut WorldMasks, seed: u64, attempt: u32) -> Result<Vec<TerrainType>, WfcError> {
+pub fn run_wfc(
+    masks: &mut WorldMasks,
+    seed: u64,
+    attempt: u32,
+) -> Result<Vec<TerrainType>, WfcError> {
     let _ = attempt; // 将来 tracing::debug! に差し替え可
 
     let table = build_pattern_table();

@@ -2,8 +2,13 @@
 //!
 //! ロジック確認のための 3D 表示切り替えボタン・即時ビルドトグルを提供する。
 
+use crate::systems::visual::terrain_lod::{LodLevel, TerrainLodMetrics, TerrainLodState};
 use bevy::prelude::*;
-use hw_ui::components::{UiInputBlocker, UiMountSlot};
+use hw_ui::components::{UiInputBlocker, UiMountSlot, UiNodeRegistry, UiSlot};
+
+/// LOD インジケーターテキストのマーカー
+#[derive(Component)]
+pub struct LodIndicatorText;
 
 /// 3D表示切り替えボタンのマーカー
 #[derive(Component)]
@@ -14,7 +19,11 @@ pub struct ToggleRender3dButton;
 pub struct InstantBuildButton;
 
 /// 開発用パネルをスポーン（TopLeft スロットに配置）
-pub fn spawn_dev_panel_system(mut commands: Commands, q_slots: Query<(Entity, &UiMountSlot)>) {
+pub fn spawn_dev_panel_system(
+    mut commands: Commands,
+    q_slots: Query<(Entity, &UiMountSlot)>,
+    mut ui_nodes: ResMut<UiNodeRegistry>,
+) {
     let Some((top_left, _)) = q_slots
         .iter()
         .find(|(_, slot)| **slot == UiMountSlot::TopLeft)
@@ -95,6 +104,41 @@ pub fn spawn_dev_panel_system(mut commands: Commands, q_slots: Query<(Entity, &U
                     TextColor(Color::WHITE),
                 ));
             });
+
+        // ── セパレーター ──
+        parent.spawn((
+            Node {
+                height: Val::Px(1.0),
+                margin: UiRect::axes(Val::Px(0.0), Val::Px(2.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.35, 0.35, 0.35, 0.6)),
+        ));
+
+        // ── FPS ──
+        let fps_entity = parent
+            .spawn((
+                Text::new("FPS: --"),
+                TextFont {
+                    font_size: 11.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.6, 0.85, 0.6)),
+                UiSlot::FpsText,
+            ))
+            .id();
+        ui_nodes.set_slot(UiSlot::FpsText, fps_entity);
+
+        // ── LOD ──
+        parent.spawn((
+            Text::new("LOD:0 rtt:0.0px"),
+            TextFont {
+                font_size: 11.0,
+                ..default()
+            },
+            TextColor(Color::srgb(0.6, 0.6, 0.9)),
+            LodIndicatorText,
+        ));
     });
 }
 
@@ -151,6 +195,23 @@ pub fn toggle_instant_build_button_system(
         if *interaction == Interaction::Pressed {
             instant_build.0 = !instant_build.0;
         }
+    }
+}
+
+/// LOD インジケーターテキストを毎フレーム更新する
+pub fn update_lod_indicator_system(
+    metrics: Res<TerrainLodMetrics>,
+    state: Res<TerrainLodState>,
+    mut q_text: Query<&mut Text, With<LodIndicatorText>>,
+) {
+    let level = match state.level {
+        LodLevel::Lod0 => "0",
+        LodLevel::Lod1 => "1",
+        LodLevel::Lod2 => "2",
+    };
+    let new_text = format!("LOD:{} rtt:{:.1}px", level, metrics.tile_rtt_px);
+    for mut text in q_text.iter_mut() {
+        text.0 = new_text.clone();
     }
 }
 

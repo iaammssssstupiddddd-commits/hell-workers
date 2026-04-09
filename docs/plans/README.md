@@ -22,7 +22,7 @@
 | [boundary-texture-paste-plan-2026-04-07.md](boundary-texture-paste-plan-2026-04-07.md) | Draft | 境界テクスチャ貼り付け計画（terrain_region_map） |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [river-boundary-naturalization-plan-2026-04-06.md](river-boundary-naturalization-plan-2026-04-06.md) | Complete | 川岸の wavy staircase を M1（center_y スムージング）+ M2（面取り）で解消する計画 |
-| [world-map-lod-strategy-2026-04-06.md](world-map-lod-strategy-2026-04-06.md) | Draft | 2026-04-09 再評価版。chunk renderer 前提で、まず shader LOD1、必要時のみ TopDown far overview を入れる計画 |
+| [world-map-lod-strategy-2026-04-06.md](world-map-lod-strategy-2026-04-06.md) | In Progress | 2026-04-09 更新版。`Lod1=現行`, `Lod2=曲線境界維持 + coarse surface`, `Lod0=将来予約` の runtime LOD 計画 |
 | [world-map-render-chunking-plan-2026-04-08.md](world-map-render-chunking-plan-2026-04-08.md) | 完了 | 論理タイルデータを維持したまま地形描画を chunk 化し、将来の biome 拡張と両立させる計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)

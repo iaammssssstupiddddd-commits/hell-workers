@@ -4,40 +4,6 @@ use bevy::prelude::*;
 
 use super::{UiAssets, bottom_bar, dialogs, entity_list, panels, submenus, time_control};
 
-fn spawn_fps_display(
-    commands: &mut Commands,
-    theme: &UiTheme,
-    parent: Entity,
-    ui_nodes: &mut UiNodeRegistry,
-) {
-    let root = commands
-        .spawn((Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(theme.sizes.fps_left),
-            top: Val::Px(theme.sizes.fps_top),
-            flex_direction: FlexDirection::Column,
-            align_items: AlignItems::Start,
-            ..default()
-        },))
-        .id();
-    commands.entity(parent).add_child(root);
-
-    commands.entity(root).with_children(|parent| {
-        let text_entity = parent
-            .spawn((
-                Text::new("FPS: --"),
-                TextFont {
-                    font_size: theme.typography.font_size_title,
-                    ..default()
-                },
-                TextColor(theme.colors.text_primary),
-                UiSlot::FpsText,
-            ))
-            .id();
-        ui_nodes.set_slot(UiSlot::FpsText, text_entity);
-    });
-}
-
 fn spawn_area_edit_preview(
     commands: &mut Commands,
     game_assets: &dyn UiAssets,
@@ -253,7 +219,6 @@ pub fn setup_ui<F, G>(
         overlay_slot,
         &mut ui_nodes,
     );
-    spawn_fps_display(&mut commands, theme, top_right_slot, &mut ui_nodes);
     dialogs::spawn_dialogs(
         &mut commands,
         game_assets,
