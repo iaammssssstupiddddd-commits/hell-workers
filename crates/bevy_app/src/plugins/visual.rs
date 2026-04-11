@@ -1,7 +1,9 @@
 //! ビジュアル関連のプラグイン
 
 use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
-use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt, RttCompositeSprite};
+use crate::plugins::startup::{
+    Camera3dRtt, Camera3dSoulMaskRtt, RttCompositeSprite, RttDirectionalLight,
+};
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
     area_edit_handles_visual_system, area_selection_indicator_system,
@@ -36,16 +38,21 @@ use crate::systems::visual::terrain_lod::{
     update_terrain_lod_metrics_system,
 };
 use crate::systems::visual::terrain_material::terrain_id_map_sync_system;
+use crate::world::map::TerrainChunk;
 use hw_core::game_state::PlayMode;
 use hw_visual::HwVisualPlugin;
 use hw_visual::SectionCut;
 use hw_visual::soul::task_link_system;
+use hw_visual::visual3d::{Building3dVisual, FamiliarProxy3d, SoulProxy3d};
 use hw_world::{TerrainChangedEvent, sync_room_overlay_tiles_system};
 
 use bevy::prelude::*;
 
-type Render3dCameraQuery<'w, 's> =
-    Query<'w, 's, &'static mut Camera, Or<(With<Camera3dRtt>, With<Camera3dSoulMaskRtt>)>>;
+type MainRttCameraQuery<'w, 's> = Query<'w, 's, &'static mut Camera, With<Camera3dRtt>>;
+type SoulMaskRttCameraQuery<'w, 's> =
+    Query<'w, 's, &'static mut Camera, (With<Camera3dSoulMaskRtt>, Without<Camera3dRtt>)>;
+type RttDirectionalLightQuery<'w, 's> =
+    Query<'w, 's, &'static mut DirectionalLight, With<RttDirectionalLight>>;
 
 pub struct VisualPlugin;
 
@@ -204,6 +211,14 @@ impl Plugin for VisualPlugin {
             Update,
             apply_render3d_visibility_system.in_set(GameSystemSet::Visual),
         );
+        app.add_systems(
+            Update,
+            apply_rtt_directional_light_toggle_system.in_set(GameSystemSet::Visual),
+        );
+        app.add_systems(
+            Update,
+            apply_rtt_scene_content_toggle_system.in_set(GameSystemSet::Visual),
+        );
         app.add_observer(apply_soul_gltf_render_layers_on_ready);
         app.add_observer(apply_soul_mask_gltf_render_layers_on_ready);
         app.add_observer(apply_soul_shadow_gltf_render_layers_on_ready);
@@ -213,14 +228,20 @@ impl Plugin for VisualPlugin {
 /// Render3dVisible の変更を Camera3dRtt と RttCompositeSprite の可視性に反映する
 fn apply_render3d_visibility_system(
     render3d: Res<crate::Render3dVisible>,
-    mut q_camera: Render3dCameraQuery,
+    perf_toggles: Res<crate::RenderPerfToggles>,
+    mut q_main_camera: MainRttCameraQuery,
+    mut q_soul_mask_camera: SoulMaskRttCameraQuery,
     mut q_sprite: Query<&mut Visibility, With<RttCompositeSprite>>,
 ) {
-    if !render3d.is_changed() {
+    if !render3d.is_changed() && !perf_toggles.is_changed() {
         return;
     }
-    for mut camera in &mut q_camera {
+
+    for mut camera in &mut q_main_camera {
         camera.is_active = render3d.0;
+    }
+    for mut camera in &mut q_soul_mask_camera {
+        camera.is_active = render3d.0 && perf_toggles.soul_mask_enabled;
     }
     if let Ok(mut visibility) = q_sprite.single_mut() {
         *visibility = if render3d.0 {
@@ -228,5 +249,61 @@ fn apply_render3d_visibility_system(
         } else {
             Visibility::Hidden
         };
+    }
+}
+
+/// RtT 用 DirectionalLight の固定費を個別比較できるようにする。
+fn apply_rtt_directional_light_toggle_system(
+    perf_toggles: Res<crate::RenderPerfToggles>,
+    mut q_lights: RttDirectionalLightQuery,
+) {
+    if !perf_toggles.is_changed() {
+        return;
+    }
+
+    for mut light in &mut q_lights {
+        light.shadows_enabled = perf_toggles.directional_light_enabled;
+        light.illuminance = if perf_toggles.directional_light_enabled {
+            12_000.0
+        } else {
+            0.0
+        };
+    }
+}
+
+/// 地形と main scene object を個別に隠して、RtT 固定費の内訳を切り分ける。
+fn apply_rtt_scene_content_toggle_system(
+    perf_toggles: Res<crate::RenderPerfToggles>,
+    q_terrain: Query<Entity, With<TerrainChunk>>,
+    q_scene_objects: Query<
+        Entity,
+        Or<(
+            With<Building3dVisual>,
+            With<SoulProxy3d>,
+            With<FamiliarProxy3d>,
+        )>,
+    >,
+    mut commands: Commands,
+) {
+    if !perf_toggles.is_changed() {
+        return;
+    }
+
+    let terrain_visibility = if perf_toggles.terrain_enabled {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for entity in &q_terrain {
+        commands.entity(entity).insert(terrain_visibility);
+    }
+
+    let scene_object_visibility = if perf_toggles.scene_objects_enabled {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for entity in &q_scene_objects {
+        commands.entity(entity).insert(scene_object_visibility);
     }
 }

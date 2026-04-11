@@ -89,7 +89,25 @@ Reasons:
   3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
 - 実装後は `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
 
-### 6. MCP ツール運用フロー（rust-analyzer-mcp / docsrs-mcp）
+### 6. WGSL シェーダー検証ルール
+
+`assets/shaders/*.wgsl` を編集した場合、以下を確認すること。
+
+**ツール制限の注意**: Bevy は独自の `#import` プリプロセッサを使用しているため、`naga` CLIはそのまま使えない（`#import` を解釈できずエラーになる）。
+
+**検証方法（優先順）:**
+1. **wgsl-analyzer**（エディタ拡張）: Bevy の `#import` を認識するため、保存時にリアルタイムで型エラーを検出できる
+2. **実行時検証**: Bevy 起動時に wgpu/naga がシェーダーをコンパイルする。コンソールに `wgpu error` が出ればシェーダーエラー
+3. **naga CLI**（限定的）: `#import` を使わない純粋な WGSL スニペットのみ検証可能
+
+```bash
+# naga はインストール済み（~/.cargo/bin/naga）
+# Bevy の #import を含むファイルには使えない
+```
+
+**シェーダー編集後の完了条件**: `cargo check` 通過 + ゲーム起動時にコンソールに wgpu エラーなし
+
+### 7. MCP ツール運用フロー（rust-analyzer-mcp / docsrs-mcp）
 - ローカルコード解析（定義ジャンプ、参照、型確認）は `rust-analyzer-mcp` を優先する。
 - 外部 crate API の仕様確認は `docsrs-mcp` を優先し、推測で実装しない。
 - Bevy API は必ず 0.18 系の情報で確認する（`docsrs-mcp` / `~/.cargo/registry/src/`）。

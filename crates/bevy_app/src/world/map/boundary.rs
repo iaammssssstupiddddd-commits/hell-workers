@@ -18,7 +18,9 @@ use bevy::image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerD
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE};
-use hw_visual::{TerrainSurfaceMaterial, TerrainSurfaceMaterialLod2};
+use hw_visual::{
+    TerrainSurfaceMaterial, TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2,
+};
 use hw_world::{TerrainType, WorldMasks, grid_to_world};
 
 use crate::plugins::startup::Terrain3dHandles;
@@ -49,6 +51,8 @@ const CHAMFER_COS_THRESHOLD: f32 = 0.5;
 /// terrain_region_map テクスチャの解像度（1 辺のピクセル数）。
 /// MAP_WIDTH=100 に対して 10.24 px/tile（1024 にすると 5.12 の倍精細でジャギーが減る）。
 const TERRAIN_REGION_RES: usize = 1024;
+const BOUNDARY_PROXIMITY_RES: usize = 256;
+const BOUNDARY_PROXIMITY_DILATION_PX: i32 = 5;
 
 /// terrain_region_map のセンチネル値。River(255) と区別するため 254 を使う。
 /// BFS flood fill のバリア壁として機能し、最終的に短 dilation で隣接値に置き換えられる。
@@ -986,6 +990,71 @@ fn catmull_rom_point(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, t: f32) -> Vec2 {
         + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
 }
 
+fn bake_boundary_proximity_mask(buf: &[u8], res: usize) -> Vec<u8> {
+    let mut edge = vec![0u8; res * res];
+    for y in 0..res {
+        for x in 0..res {
+            let idx = y * res + x;
+            let center = buf[idx];
+            let mut is_boundary = false;
+            let y0 = y.saturating_sub(1);
+            let y1 = (y + 1).min(res - 1);
+            let x0 = x.saturating_sub(1);
+            let x1 = (x + 1).min(res - 1);
+            'outer: for ny in y0..=y1 {
+                for nx in x0..=x1 {
+                    if buf[ny * res + nx] != center {
+                        is_boundary = true;
+                        break 'outer;
+                    }
+                }
+            }
+            if is_boundary {
+                edge[idx] = 255;
+            }
+        }
+    }
+
+    let mut dilated = vec![0u8; res * res];
+    for y in 0..res {
+        for x in 0..res {
+            let idx = y * res + x;
+            if edge[idx] == 0 {
+                continue;
+            }
+            let y0 = y.saturating_sub(BOUNDARY_PROXIMITY_DILATION_PX as usize);
+            let y1 = (y + BOUNDARY_PROXIMITY_DILATION_PX as usize).min(res - 1);
+            let x0 = x.saturating_sub(BOUNDARY_PROXIMITY_DILATION_PX as usize);
+            let x1 = (x + BOUNDARY_PROXIMITY_DILATION_PX as usize).min(res - 1);
+            for ny in y0..=y1 {
+                for nx in x0..=x1 {
+                    dilated[ny * res + nx] = 255;
+                }
+            }
+        }
+    }
+    dilated
+}
+
+fn downsample_boundary_proximity_mask(src: &[u8], src_res: usize, dst_res: usize) -> Vec<u8> {
+    let scale = src_res / dst_res;
+    let mut out = vec![0u8; dst_res * dst_res];
+    for y in 0..dst_res {
+        for x in 0..dst_res {
+            let mut max_v = 0u8;
+            for oy in 0..scale {
+                for ox in 0..scale {
+                    let sx = x * scale + ox;
+                    let sy = y * scale + oy;
+                    max_v = max_v.max(src[sy * src_res + sx]);
+                }
+            }
+            out[y * dst_res + x] = max_v;
+        }
+    }
+    out
+}
+
 // ── メッシュスポーン ────────────────────────────────────────────────────────────
 
 /// PostStartup で呼ばれる境界ラスタライズシステム。
@@ -998,6 +1067,7 @@ pub fn spawn_boundary_meshes(
     layout: Res<GeneratedWorldLayoutResource>,
     terrain_handles: Res<Terrain3dHandles>,
     mut terrain_surface_materials: ResMut<Assets<TerrainSurfaceMaterial>>,
+    mut terrain_surface_materials_lod1_lite: ResMut<Assets<TerrainSurfaceMaterialLod1Lite>>,
     mut terrain_surface_materials_lod2: ResMut<Assets<TerrainSurfaceMaterialLod2>>,
 ) {
     let terrain_tiles = &layout.layout.terrain_tiles;
@@ -1050,6 +1120,12 @@ pub fn spawn_boundary_meshes(
         &sampled_polylines,
         &endpoint_blobs,
     );
+    let proximity_full = bake_boundary_proximity_mask(&buf, TERRAIN_REGION_RES);
+    let proximity_buf = downsample_boundary_proximity_mask(
+        &proximity_full,
+        TERRAIN_REGION_RES,
+        BOUNDARY_PROXIMITY_RES,
+    );
 
     let mut image = Image::new(
         Extent3d {
@@ -1071,12 +1147,37 @@ pub fn spawn_boundary_meshes(
     });
 
     let handle = images.add(image);
+    let mut proximity_image = Image::new(
+        Extent3d {
+            width: BOUNDARY_PROXIMITY_RES as u32,
+            height: BOUNDARY_PROXIMITY_RES as u32,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        proximity_buf,
+        TextureFormat::R8Unorm,
+        default(),
+    );
+    proximity_image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::ClampToEdge,
+        address_mode_v: ImageAddressMode::ClampToEdge,
+        mag_filter: ImageFilterMode::Nearest,
+        min_filter: ImageFilterMode::Nearest,
+        ..default()
+    });
+    let proximity_handle = images.add(proximity_image);
 
     if let Some(mat) = terrain_surface_materials.get_mut(&terrain_handles.lod1) {
         mat.extension.boundary_mask = Some(handle.clone());
+        mat.extension.boundary_proximity_mask = Some(proximity_handle.clone());
+    }
+    if let Some(mat) = terrain_surface_materials_lod1_lite.get_mut(&terrain_handles.lod1_lite) {
+        mat.extension.boundary_mask = Some(handle.clone());
+        mat.extension.boundary_proximity_mask = Some(proximity_handle.clone());
     }
     if let Some(mat) = terrain_surface_materials_lod2.get_mut(&terrain_handles.lod2) {
         mat.extension.boundary_mask = Some(handle);
+        mat.extension.boundary_proximity_mask = Some(proximity_handle);
     }
 
     commands.insert_resource(BoundarySliceSpatialIndex);

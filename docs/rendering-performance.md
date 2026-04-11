@@ -43,9 +43,15 @@
 | 要素 | DC 数 | 備考 |
 |---|---|---|
 | `TerrainSurfaceMaterial` (LOD1) | 1 | 49 chunk が同一ハンドルを共有 |
-| `TerrainSurfaceMaterialLod2` (LOD2) | 1 | 同上（LOD 切替で一方が 0 になる） |
+| `TerrainSurfaceMaterialLod1Lite` (LOD1-lite) | 1 | 同上 |
+| `TerrainSurfaceMaterialLod2` (LOD2) | 1 | 同上（LOD 切替で一方だけが有効） |
 
-LOD 切替閾値: `tile_rtt_px < 14px` → LOD2、`> 16px` → LOD1（hysteresis）
+LOD 切替閾値（hysteresis）:
+
+- `LOD1 -> LOD1-lite`: `tile_rtt_px < 22px`
+- `LOD1-lite -> LOD1`: `tile_rtt_px > 25px`
+- `LOD1-lite -> LOD2`: `tile_rtt_px < 14px`
+- `LOD2 -> LOD1-lite`: `tile_rtt_px > 16px`
 
 ### 建築物（現行プレースホルダー）
 

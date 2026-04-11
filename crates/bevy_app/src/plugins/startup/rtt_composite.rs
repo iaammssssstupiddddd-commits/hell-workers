@@ -51,6 +51,7 @@ impl Material2d for RttCompositeMaterial {
 pub fn spawn_rtt_composite_sprite(
     mut commands: Commands,
     runtime: Res<RttRuntime>,
+    perf_toggles: Res<crate::RenderPerfToggles>,
     q_window: Query<&Window, With<PrimaryWindow>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<RttCompositeMaterial>>,
@@ -61,7 +62,11 @@ pub fn spawn_rtt_composite_sprite(
     let material = materials.add(RttCompositeMaterial {
         params: RttCompositeParams {
             pixel_size: runtime.pixel_size(),
-            mask_radius_px: 2.25,
+            mask_radius_px: if perf_toggles.soul_mask_enabled {
+                2.25
+            } else {
+                0.0
+            },
             mask_feather: 0.28,
         },
         scene_texture: runtime.scene.clone(),
@@ -122,6 +127,29 @@ pub fn sync_rtt_output_bindings(
             material.scene_texture = runtime.scene.clone();
             material.soul_mask_texture = runtime.soul_mask.clone();
             material.params.pixel_size = runtime.pixel_size();
+        }
+    }
+}
+
+/// Soul mask の有効/無効に合わせて composite material のマスク半径を更新する。
+pub fn sync_rtt_composite_perf_params_system(
+    perf_toggles: Res<crate::RenderPerfToggles>,
+    quads: Query<&MeshMaterial2d<RttCompositeMaterial>, With<RttCompositeSprite>>,
+    mut materials: ResMut<Assets<RttCompositeMaterial>>,
+) {
+    if !perf_toggles.is_changed() {
+        return;
+    }
+
+    let next_radius = if perf_toggles.soul_mask_enabled {
+        2.25
+    } else {
+        0.0
+    };
+
+    for material_handle in quads.iter() {
+        if let Some(material) = materials.get_mut(&material_handle.0) {
+            material.params.mask_radius_px = next_radius;
         }
     }
 }

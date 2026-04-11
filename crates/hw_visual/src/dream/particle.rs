@@ -111,7 +111,8 @@ pub fn dream_particle_spawn_system(
 
         let initial_bucket = handles::life_ratio_to_bucket(1.0);
         let mesh = handles.circle_mesh.clone();
-        let material = handles.materials[handles::quality_index(dream.quality)][initial_bucket].clone();
+        let material =
+            handles.materials[handles::quality_index(dream.quality)][initial_bucket].clone();
 
         commands.spawn((
             DreamParticle {
@@ -228,7 +229,8 @@ pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
 
         let initial_bucket = handles::life_ratio_to_bucket(1.0);
         let mesh = p.handles.circle_mesh.clone();
-        let material = p.handles.materials[handles::quality_index(particle_quality)][initial_bucket].clone();
+        let material =
+            p.handles.materials[handles::quality_index(particle_quality)][initial_bucket].clone();
 
         p.commands.spawn((
             DreamParticle {
@@ -310,8 +312,7 @@ pub fn dream_particle_update_system(
         if new_bucket != particle.alpha_bucket {
             particle.alpha_bucket = new_bucket;
             let qi = handles::quality_index(particle.quality);
-            *material_handle =
-                MeshMaterial2d(handles.materials[qi][new_bucket].clone());
+            *material_handle = MeshMaterial2d(handles.materials[qi][new_bucket].clone());
         }
     }
 }

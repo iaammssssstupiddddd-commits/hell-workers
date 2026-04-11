@@ -39,10 +39,12 @@ pub use material::{
     TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_GRASS_DOMAIN_WARP_STRENGTH,
     TERRAIN_GRASS_UV_DISTORT_STRENGTH, TERRAIN_KIND_DIRT, TERRAIN_KIND_GRASS, TERRAIN_KIND_RIVER,
     TERRAIN_KIND_SAND, TERRAIN_SAND_BRIGHTNESS_VARIATION_STRENGTH,
-    TERRAIN_SAND_DOMAIN_WARP_STRENGTH, TerrainMaterialMaps, TerrainSurfaceMaterial,
-    TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod2, TerrainSurfaceMaterialLod2,
-    TerrainSurfaceUniform, make_section_material, make_section_material_textured,
-    make_terrain_section_material, make_terrain_surface_material,
+    TERRAIN_SAND_DOMAIN_WARP_STRENGTH, TerrainFeatureLutUniformSyncState, TerrainMaterialMaps,
+    TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial, TerrainSurfaceMaterialExt,
+    TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,
+    TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2, TerrainSurfaceUniform,
+    make_section_material, make_section_material_textured, make_terrain_section_material,
+    make_terrain_surface_material, make_terrain_surface_material_lod1_lite,
     make_terrain_surface_material_lod2, soul_face_uv_offset, soul_face_uv_scale, with_alpha_mode,
 };
 
@@ -73,10 +75,12 @@ impl Plugin for HwVisualPlugin {
             MaterialPlugin::<material::SoulMaskMaterial>::default(),
             MaterialPlugin::<material::SoulShadowMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterial>::default(),
+            MaterialPlugin::<material::TerrainSurfaceMaterialLod1Lite>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterialLod2>::default(),
         ));
 
         app.add_plugins(speech::SpeechPlugin);
+        app.init_resource::<TerrainFeatureLutUniformSyncState>();
 
         // Dream bubble shared handles (mesh + material pool)
         app.add_systems(Startup, dream::init_dream_bubble_handles);
@@ -87,7 +91,9 @@ impl Plugin for HwVisualPlugin {
             (
                 material::sync_section_cut_to_materials_system,
                 material::sync_section_cut_to_terrain_surface_system,
+                material::sync_section_cut_to_terrain_surface_lod1_lite_system,
                 material::sync_section_cut_to_terrain_surface_lod2_system,
+                material::sync_terrain_feature_lut_uniforms_system,
                 wall_connection::wall_connections_system,
                 site_yard_visual::sync_site_yard_boundaries_system,
             )

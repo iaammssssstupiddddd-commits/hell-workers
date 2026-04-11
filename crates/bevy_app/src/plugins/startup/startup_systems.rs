@@ -1,5 +1,5 @@
 use super::asset_catalog::create_game_assets;
-use super::rtt_setup::{self, Camera3dRtt, Camera3dSoulMaskRtt};
+use super::rtt_setup::{self, Camera3dRtt, Camera3dSoulMaskRtt, RttDirectionalLight};
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
@@ -59,8 +59,11 @@ pub(super) fn setup(
     mut images: ResMut<Assets<Image>>,
     q_window: Query<&Window, With<PrimaryWindow>>,
     quality: Res<QualitySettings>,
+    perf_toggles: Res<crate::RenderPerfToggles>,
 ) {
-    commands.insert_resource(DirectionalLightShadowMap { size: 4096 });
+    // 4096 は GPU コスト・VRAM 消費が過大なため 2048 に下げる。
+    // shadow 品質プリセット化は別タスク（docs/plans/shadow-map-size-2026-04-10.md 参照）。
+    commands.insert_resource(DirectionalLightShadowMap { size: 2048 });
     let generated_layout = prepare_generated_world_layout_resource();
     info!(
         "BEVY_STARTUP: Prepared worldgen layout (seed={}, attempt={}, fallback={})",
@@ -118,6 +121,7 @@ pub(super) fn setup(
         Camera {
             order: -1,
             clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+            is_active: true,
             ..default()
         },
         AmbientLight {
@@ -144,8 +148,12 @@ pub(super) fn setup(
     let sun_dir = topdown_sun_direction_world();
     commands.spawn((
         DirectionalLight {
-            shadows_enabled: true,
-            illuminance: 12_000.0,
+            shadows_enabled: perf_toggles.directional_light_enabled,
+            illuminance: if perf_toggles.directional_light_enabled {
+                12_000.0
+            } else {
+                0.0
+            },
             ..default()
         },
         Transform::from_translation(sun_dir * 360.0).looking_at(Vec3::ZERO, Vec3::Y),
@@ -156,6 +164,7 @@ pub(super) fn setup(
         }
         .build(),
         RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]),
+        RttDirectionalLight,
     ));
 
     commands.spawn((
@@ -163,6 +172,7 @@ pub(super) fn setup(
         Camera {
             order: -2,
             clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
+            is_active: perf_toggles.soul_mask_enabled,
             ..default()
         },
         Projection::Orthographic(OrthographicProjection {

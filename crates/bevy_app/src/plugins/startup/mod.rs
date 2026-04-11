@@ -11,7 +11,9 @@ mod visual_handles;
 
 pub use rtt_composite::RttCompositeSprite;
 pub(crate) use rtt_composite::composite_logical_size;
-pub use rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime, RttViewportSize};
+pub use rtt_setup::{
+    Camera3dRtt, Camera3dSoulMaskRtt, RttDirectionalLight, RttRuntime, RttViewportSize,
+};
 pub use visual_handles::{Building3dHandles, CharacterHandles, Terrain3dHandles};
 
 use crate::world::map::{build_terrain_feature_map, build_terrain_id_map, spawn_boundary_meshes};
@@ -99,6 +101,7 @@ impl Plugin for StartupPlugin {
                     (
                         rtt_setup::sync_rtt_texture_size_to_window_and_quality,
                         rtt_composite::sync_rtt_output_bindings,
+                        rtt_composite::sync_rtt_composite_perf_params_system,
                     )
                         .chain(),
                 ),

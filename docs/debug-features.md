@@ -15,9 +15,11 @@
 |---|---|---|
 | 3D: ON/OFF | Camera3d RTT 切り替えボタン | クリック |
 | IBuild: ON/OFF | 壁即時完成トグルボタン | クリック |
+| Mask / Light / Terrain / Objs | 3D 固定費の切り分けボタン | クリック |
 | ─ セパレーター ─ | | — |
 | FPS: XX | フレームレート表示 | `update_fps_display_system`（1秒毎） |
 | LOD:X rtt:XX.Xpx | 地形 LOD レベルと tile_rtt_px | `update_lod_indicator_system`（毎フレーム） |
+| RTT:H Mask:ON Light:ON Terrain:ON Objs:ON | RtT 品質と固定費トグル状態 | `update_render_perf_status_system`（変更時） |
 
 ### FPS インジケーター
 
@@ -41,6 +43,15 @@
 
 - Resource: `Render3dVisible(pub bool)`（`crates/bevy_app/src/main.rs`）
 - マーカー: `ToggleRender3dButton`
+
+### 3D 固定費比較キー
+
+- `F4`: RtT 品質を `High -> Medium -> Low` で循環する
+- `F5`: Soul mask RtT pass を ON / OFF する
+- `F6`: RtT 用 DirectionalLight を ON / OFF する
+- `F7`: RtT terrain を ON / OFF する
+- `F8`: RtT の main scene object（建築物・Soul・Familiar）を ON / OFF する
+- 起動時に固定したい場合は `HW_DISABLE_SOUL_MASK=1` / `HW_DISABLE_RTT_DIRECTIONAL_LIGHT=1` / `HW_DISABLE_RTT_TERRAIN=1` / `HW_DISABLE_RTT_SCENE_OBJECTS=1` を指定する
 
 ### IBuild: ON / OFF ボタン（Instant Build）
 

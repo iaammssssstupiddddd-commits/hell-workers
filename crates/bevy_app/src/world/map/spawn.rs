@@ -1,6 +1,7 @@
 //! マップスポーン
 
 use crate::plugins::startup::Terrain3dHandles;
+use bevy::light::NotShadowCaster;
 use bevy::prelude::*;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, building_3d_render_layers};
 use hw_visual::TerrainSurfaceMaterial;
@@ -134,6 +135,9 @@ pub fn spawn_terrain_chunks(
                 MeshMaterial3d::<TerrainSurfaceMaterial>(terrain_handles.lod1.clone()),
                 Transform::from_xyz(center.x, 0.0, -center.y),
                 building_3d_render_layers(),
+                // 地形は平面なので他のオブジェクトへ落影しない。
+                // shadow pass (49 chunk × 4 cascade) を除去するため明示的に無効化。
+                NotShadowCaster,
             ));
         }
     }

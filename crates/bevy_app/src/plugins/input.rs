@@ -25,6 +25,10 @@ impl Plugin for InputPlugin {
                 debug_toggle_system,
                 render3d_toggle_system,
                 rtt_quality_cycle_system,
+                soul_mask_toggle_system,
+                rtt_directional_light_toggle_system,
+                rtt_terrain_toggle_system,
+                rtt_scene_objects_toggle_system,
             )
                 .in_set(GameSystemSet::Input),
         );
@@ -59,6 +63,56 @@ fn rtt_quality_cycle_system(
     if buttons.just_pressed(KeyCode::F4) {
         quality.rtt = quality.rtt.next();
         info!("RTT quality changed: {:?}", quality.rtt);
+    }
+}
+
+/// F5 キーで Soul mask RtT をトグルする。
+fn soul_mask_toggle_system(
+    buttons: Res<ButtonInput<KeyCode>>,
+    mut perf_toggles: ResMut<crate::RenderPerfToggles>,
+) {
+    if buttons.just_pressed(KeyCode::F5) {
+        perf_toggles.soul_mask_enabled = !perf_toggles.soul_mask_enabled;
+        info!("Soul mask RtT enabled: {}", perf_toggles.soul_mask_enabled);
+    }
+}
+
+/// F6 キーで RtT 用 DirectionalLight をトグルする。
+fn rtt_directional_light_toggle_system(
+    buttons: Res<ButtonInput<KeyCode>>,
+    mut perf_toggles: ResMut<crate::RenderPerfToggles>,
+) {
+    if buttons.just_pressed(KeyCode::F6) {
+        perf_toggles.directional_light_enabled = !perf_toggles.directional_light_enabled;
+        info!(
+            "RtT directional light enabled: {}",
+            perf_toggles.directional_light_enabled
+        );
+    }
+}
+
+/// F7 キーで RtT terrain をトグルする。
+fn rtt_terrain_toggle_system(
+    buttons: Res<ButtonInput<KeyCode>>,
+    mut perf_toggles: ResMut<crate::RenderPerfToggles>,
+) {
+    if buttons.just_pressed(KeyCode::F7) {
+        perf_toggles.terrain_enabled = !perf_toggles.terrain_enabled;
+        info!("RtT terrain enabled: {}", perf_toggles.terrain_enabled);
+    }
+}
+
+/// F8 キーで RtT scene object をトグルする。
+fn rtt_scene_objects_toggle_system(
+    buttons: Res<ButtonInput<KeyCode>>,
+    mut perf_toggles: ResMut<crate::RenderPerfToggles>,
+) {
+    if buttons.just_pressed(KeyCode::F8) {
+        perf_toggles.scene_objects_enabled = !perf_toggles.scene_objects_enabled;
+        info!(
+            "RtT scene objects enabled: {}",
+            perf_toggles.scene_objects_enabled
+        );
     }
 }
 

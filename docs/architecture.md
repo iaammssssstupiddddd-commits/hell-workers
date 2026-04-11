@@ -209,7 +209,7 @@ RttRuntime
 | `TerrainSurfaceMaterialLod1Lite` / `TerrainSurfaceMaterialExtLod1Lite` | `terrain_surface_material_lod1_lite.wgsl` | LOD1-lite（中景・簡略化） |
 | `TerrainSurfaceMaterialLod2` / `TerrainSurfaceMaterialExtLod2` | `terrain_surface_material_lod2.wgsl` | LOD2（遠景・最低コスト） |
 
-startup は `TerrainIdMap`（`R8Unorm`、runtime 更新対象）と `TerrainFeatureMap`（`Rgba8Unorm`、worldgen snapshot）を生成し、`Terrain3dHandles { lod1, lod2, lod1_lite }` として 3 種の共有 material handle を保持する。**地形描画は `TerrainChunk` entity（16×16 タイル/chunk、7×7=49 entity）で行い、per-tile の render entity は廃止**。chunk には LOD に応じて 3 種の material のいずれかが付く。`Tile` marker entity（10,000 個）は描画コンポーネントなしで `WorldMap.tile_entities` に登録され、Familiar AI の収集可否判定の論理 anchor としてのみ機能する。`Lod0` は将来のリッチビジュアル用に予約で未使用。
+startup は `TerrainIdMap`（`R8Unorm`、runtime 更新対象）と `TerrainFeatureMap`（`Rgba8Unorm`、worldgen snapshot）を生成し、`Terrain3dHandles { lod1, lod1_lite, lod2 }` として 3 種の共有 material handle を保持する。**地形描画は `TerrainChunk` entity（16×16 タイル/chunk、7×7=49 entity）で行い、per-tile の render entity は廃止**。chunk には LOD に応じて 3 種の material のいずれかが付く。`Tile` marker entity（10,000 個）は描画コンポーネントなしで `WorldMap.tile_entities` に登録され、Familiar AI の収集可否判定の論理 anchor としてのみ機能する。`Lod0` は将来のリッチビジュアル用に予約で未使用。
 
 **シェーダー機能比較**:
 
@@ -219,10 +219,11 @@ startup は `TerrainIdMap`（`R8Unorm`、runtime 更新対象）と `TerrainFeat
 | `boundary_proximity_mask` early-out | ✓ | ✓ | — |
 | domain warp | ✓ | — | — |
 | macro noise / overlay | ✓ | — | — |
-| river scroll / shoreline_detail | ✓ | — | — |
+| river scroll | ✓ | — | — |
+| shoreline_detail（砂 shoreline tone） | ✓ | ✓ | — |
 | `terrain_feature_lut` uniform fast-path | ✓ | ✓ | ✓ |
 
-LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardinal 近傍の terrain id を取り、4 アルベド・macro noise・overlay・river scroll・shoreline detail・`terrain_feature_lut` を合成する。LOD1-lite は macro noise / domain warp / river scroll / shoreline_detail を省き、fast path で ~3–4 sample/px に削減する。LOD2 は `boundary_mask` の nearest region を正本にして曲線境界を保ちつつ albedo UV を量子化する。shader はいずれも world-space UV で参照するため chunk 境界に継ぎ目は生じない。
+LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardinal 近傍の terrain id を取り、4 アルベド・macro noise・overlay・river scroll・shoreline detail・`terrain_feature_lut` を合成する。LOD1-lite は macro noise / domain warp / river scroll を省きつつ、砂浜色の段差を避けるため Sand の shoreline tone だけは full と揃える。`boundary_proximity_mask` fast path により境界外では boundary bilinear を丸ごと省略する。LOD2 は `boundary_mask` の nearest region を正本にして曲線境界を保ちつつ albedo UV を量子化する。shader はいずれも world-space UV で参照するため chunk 境界に継ぎ目は生じない。
 
 **`terrain_feature_lut` uniform 高速化**（LUT constant-ization, M4）: `sync_terrain_feature_lut_uniforms_system`（`hw_visual`、`Visual` フェーズ毎フレーム実行）が `TerrainSurfaceLutImageHandle`（bridge Resource、`bevy_app` の `init_visual_handles` が挿入）経由で LUT テクスチャを CPU サンプリングし、`TerrainSurfaceUniform.lut_shore/inland/rock` uniform に焼き込む。`feature_lut_constants_ready` フラグが `1.0` になると全シェーダーが `textureSample(terrain_feature_lut, ...)` の代わりに uniform 定数を参照する。これによりフレームごとの LUT テクスチャサンプルが 0 になる。
 
@@ -299,7 +300,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - `mesh_face` には `SOUL_FACE_SCALE_MULTIPLIER` を掛け、PoC 目視で顔が読み取りづらい問題を asset 非破壊で補正する。
 - `mesh_face` のローカル回転は GLB 側の初期姿勢をそのまま使い、PoC 段階では追加の billboard 回転を行わない。
 - `Camera3dRtt` には `AmbientLight` を付与し、GLB 付属の lit material が RtT 上で暗転しないようにする。
-- `startup_systems::setup` では `LAYER_3D` と `LAYER_3D_SOUL_SHADOW` の両方に作用する shadow-enabled `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 4096 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。これにより Soul の shadow proxy だけを camera 非表示のまま shadow pass に参加させられる。
+- `startup_systems::setup` では `LAYER_3D` と `LAYER_3D_SOUL_SHADOW` の両方に作用する shadow-enabled `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 2048 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。これにより Soul の shadow proxy だけを camera 非表示のまま shadow pass に参加させられる。
 - `Camera3dSoulMaskRtt` は Soul mask 専用 Camera3d で、通常の `Camera3dRtt` と同じ Transform / Projection を共有する。最終合成では `RttCompositeMaterial` が `soul_mask_texture`（`RttRuntime.soul_mask` と同期）を近傍サンプリングし、Soul シルエットだけを画面上で少し膨らませて角を丸める。
 - Familiar は 2D `Sprite` の 4 フレーム差し替え・左右反転・hover/wobble を本表示として維持する。Command radius オーラ・hover/selection・吹き出しも同じ 2D world transform を参照する。
 - Familiar は建築物 RtT 合成より手前に出す前提とし、Soul のような shadow proxy や shadow caster は持たない。

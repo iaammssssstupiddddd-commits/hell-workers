@@ -11,10 +11,11 @@ use hw_logistics::ResourceItemVisualHandles;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
     PlantTreeHandles, SectionMaterial, SoulMaskMaterial, SoulShadowMaterial, SpeechHandles,
-    TerrainSurfaceMaterial, TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod2,
-    TerrainSurfaceMaterialLod2, TerrainSurfaceUniform, WallVisualHandles, WorkIconHandles,
-    make_section_material, make_terrain_surface_material, make_terrain_surface_material_lod2,
-    with_alpha_mode,
+    TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial, TerrainSurfaceMaterialExt,
+    TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,
+    TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2, TerrainSurfaceUniform,
+    WallVisualHandles, WorkIconHandles, make_section_material, make_terrain_surface_material,
+    make_terrain_surface_material_lod1_lite, make_terrain_surface_material_lod2, with_alpha_mode,
 };
 use hw_visual::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
 use hw_world::{DoorVisualHandles, TerrainVisualHandles};
@@ -53,11 +54,12 @@ pub struct Building3dHandles {
 
 /// 地形タイル 3D レンダリング用マテリアルハンドルリソース
 ///
-/// 全 chunk で共有する LOD1 / LOD2 の地形 material を保持する。
+/// 全 chunk で共有する LOD1 / LOD1Lite / LOD2 の地形 material を保持する。
 /// chunk mesh は `spawn_terrain_chunks` が `Assets<Mesh>` に直接追加する。
 #[derive(Resource)]
 pub struct Terrain3dHandles {
     pub lod1: Handle<TerrainSurfaceMaterial>,
+    pub lod1_lite: Handle<TerrainSurfaceMaterialLod1Lite>,
     pub lod2: Handle<TerrainSurfaceMaterialLod2>,
 }
 
@@ -77,6 +79,7 @@ pub struct InitVisualHandlesParams<'w, 's> {
     materials: ResMut<'w, Assets<StandardMaterial>>,
     section_materials: ResMut<'w, Assets<SectionMaterial>>,
     terrain_surface_materials: ResMut<'w, Assets<TerrainSurfaceMaterial>>,
+    terrain_surface_materials_lod1_lite: ResMut<'w, Assets<TerrainSurfaceMaterialLod1Lite>>,
     terrain_surface_materials_lod2: ResMut<'w, Assets<TerrainSurfaceMaterialLod2>>,
     character_materials: ResMut<'w, Assets<CharacterMaterial>>,
     soul_mask_materials: ResMut<'w, Assets<SoulMaskMaterial>>,
@@ -96,6 +99,9 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     let soul_shadow_materials = &mut params.soul_shadow_materials;
     let feature_map_handle = params.terrain_feature_map.image.clone();
     let terrain_id_map_handle = params.terrain_id_map.image.clone();
+    commands.insert_resource(TerrainSurfaceLutImageHandle(
+        game_assets.terrain_feature_lut.clone(),
+    ));
     commands.insert_resource(WallVisualHandles {
         stone_isolated: game_assets.wall_isolated.clone(),
         stone_horizontal_left: game_assets.wall_horizontal_left.clone(),
@@ -297,18 +303,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
 
     // --- 地形 3D ハンドル ---
     let terrain_ext = TerrainSurfaceMaterialExt {
-        uniforms: TerrainSurfaceUniform {
-            cut_position: Vec4::ZERO,
-            cut_normal: Vec3::NEG_Z.extend(0.0),
-            thickness: TILE_SIZE * 5.0,
-            cut_active: 0.0,
-            map_world_width: hw_core::constants::MAP_WIDTH as f32 * TILE_SIZE,
-            map_world_height: hw_core::constants::MAP_HEIGHT as f32 * TILE_SIZE,
-            uv_scale: 1.0 / TILE_SIZE,
-            blend_strength: 1.0,
-            macro_noise_scale: 0.00045,
-            overlay_scale: 0.0012,
-        },
+        uniforms: TerrainSurfaceUniform::default(),
         terrain_id_map: Some(terrain_id_map_handle.clone()),
         terrain_feature_map: Some(feature_map_handle.clone()),
         grass_albedo: Some(game_assets.grass.clone()),
@@ -325,10 +320,30 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         shoreline_detail: Some(game_assets.shoreline_detail.clone()),
         terrain_feature_lut: Some(game_assets.terrain_feature_lut.clone()),
         boundary_mask: None, // spawn_boundary_meshes (PostStartup) で後から設定される
+        boundary_proximity_mask: None,
     };
     let terrain_surface = params
         .terrain_surface_materials
         .add(make_terrain_surface_material(terrain_ext));
+
+    let terrain_surface_lod1_lite =
+        params
+            .terrain_surface_materials_lod1_lite
+            .add(make_terrain_surface_material_lod1_lite(
+                TerrainSurfaceMaterialExtLod1Lite {
+                    uniforms: TerrainSurfaceUniform::default(),
+                    terrain_id_map: Some(terrain_id_map_handle.clone()),
+                    terrain_feature_map: Some(feature_map_handle.clone()),
+                    grass_albedo: Some(game_assets.grass.clone()),
+                    dirt_albedo: Some(game_assets.dirt.clone()),
+                    sand_albedo: Some(game_assets.sand.clone()),
+                    river_albedo: Some(game_assets.river.clone()),
+                    terrain_feature_lut: Some(game_assets.terrain_feature_lut.clone()),
+                    boundary_mask: None,
+                    boundary_proximity_mask: None,
+                    ..Default::default()
+                },
+            ));
 
     // LOD2 マテリアル: 実際に使うテクスチャのみ設定し、未使用スロットは None のまま。
     let terrain_surface_lod2 =
@@ -336,18 +351,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
             .terrain_surface_materials_lod2
             .add(make_terrain_surface_material_lod2(
                 TerrainSurfaceMaterialExtLod2 {
-                    uniforms: TerrainSurfaceUniform {
-                        cut_position: Vec4::ZERO,
-                        cut_normal: Vec3::NEG_Z.extend(0.0),
-                        thickness: TILE_SIZE * 5.0,
-                        cut_active: 0.0,
-                        map_world_width: hw_core::constants::MAP_WIDTH as f32 * TILE_SIZE,
-                        map_world_height: hw_core::constants::MAP_HEIGHT as f32 * TILE_SIZE,
-                        uv_scale: 1.0 / TILE_SIZE,
-                        blend_strength: 1.0,
-                        macro_noise_scale: 0.00045,
-                        overlay_scale: 0.0012,
-                    },
+                    uniforms: TerrainSurfaceUniform::default(),
                     terrain_id_map: Some(terrain_id_map_handle),
                     terrain_feature_map: Some(feature_map_handle),
                     grass_albedo: Some(game_assets.grass.clone()),
@@ -356,12 +360,14 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
                     river_albedo: Some(game_assets.river.clone()),
                     terrain_feature_lut: Some(game_assets.terrain_feature_lut.clone()),
                     boundary_mask: None, // spawn_boundary_meshes (PostStartup) で後から設定される
+                    boundary_proximity_mask: None,
                     ..Default::default()
                 },
             ));
 
     commands.insert_resource(Terrain3dHandles {
         lod1: terrain_surface,
+        lod1_lite: terrain_surface_lod1_lite,
         lod2: terrain_surface_lod2,
     });
 

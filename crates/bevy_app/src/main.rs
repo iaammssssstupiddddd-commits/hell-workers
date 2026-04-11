@@ -45,6 +45,15 @@ pub struct DebugVisible(pub bool);
 #[derive(Resource)]
 pub struct Render3dVisible(pub bool);
 
+/// 3D RtT の固定費を切り分けるための個別トグル。
+#[derive(Resource)]
+pub struct RenderPerfToggles {
+    pub soul_mask_enabled: bool,
+    pub directional_light_enabled: bool,
+    pub terrain_enabled: bool,
+    pub scene_objects_enabled: bool,
+}
+
 /// デバッグ用：壁建築を即時完成させるトグル
 #[derive(Resource, Default)]
 pub struct DebugInstantBuild(pub bool);
@@ -52,6 +61,17 @@ pub struct DebugInstantBuild(pub bool);
 impl Default for Render3dVisible {
     fn default() -> Self {
         Self(true)
+    }
+}
+
+impl Default for RenderPerfToggles {
+    fn default() -> Self {
+        Self {
+            soul_mask_enabled: !env_flag_is_true("HW_DISABLE_SOUL_MASK"),
+            directional_light_enabled: !env_flag_is_true("HW_DISABLE_RTT_DIRECTIONAL_LIGHT"),
+            terrain_enabled: !env_flag_is_true("HW_DISABLE_RTT_TERRAIN"),
+            scene_objects_enabled: !env_flag_is_true("HW_DISABLE_RTT_SCENE_OBJECTS"),
+        }
     }
 }
 
@@ -89,6 +109,7 @@ fn main() {
         .add_plugins(PopoverPlugin)
         .init_resource::<DebugVisible>()
         .init_resource::<Render3dVisible>()
+        .init_resource::<RenderPerfToggles>()
         .init_resource::<DebugInstantBuild>()
         // PlayMode State
         .init_state::<PlayMode>()
@@ -117,6 +138,12 @@ fn main() {
         .add_plugins(VisualPlugin)
         .add_plugins(InterfacePlugin)
         .run();
+}
+
+fn env_flag_is_true(name: &str) -> bool {
+    env::var(name)
+        .ok()
+        .is_some_and(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "on" | "ON"))
 }
 
 #[cfg(target_os = "linux")]

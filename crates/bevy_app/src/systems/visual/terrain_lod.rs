@@ -6,7 +6,7 @@
 //!   - `metric` の変化が毎フレーム `state.is_changed()` を立てるのを防ぐため、2 つを分離する。
 //!   - 切替システムは `level != applied_level` の時のみ実際の差し替えを行う。
 //! - `tile_rtt_px` が LOD 判定の正本。`tile_screen_px` はデバッグ補助用。
-//! - runtime は現状 `Lod1`（現行フル品質）と `Lod2`（軽量 variant）を使用する。
+//! - runtime は現状 `Lod1`（現行フル品質）/ `Lod1Lite`（中景簡略版）/ `Lod2`（軽量 variant）を使用する。
 //! - `Lod0` は将来のリッチビジュアル実装用に予約し、現在の runtime では選択しない。
 
 use crate::plugins::startup::Terrain3dHandles;
@@ -18,7 +18,9 @@ use crate::world::map::TerrainChunk;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::TILE_SIZE;
-use hw_visual::{TerrainSurfaceMaterial, TerrainSurfaceMaterialLod2};
+use hw_visual::{
+    TerrainSurfaceMaterial, TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2,
+};
 
 // ── 型エイリアス ──────────────────────────────────────────────────────────────
 
@@ -49,6 +51,16 @@ type ChunkLod2Query<'w, 's> = Query<
     ),
 >;
 
+type ChunkLod1LiteQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    (
+        With<TerrainChunk>,
+        With<MeshMaterial3d<TerrainSurfaceMaterialLod1Lite>>,
+    ),
+>;
+
 // ── LOD レベル定義 ────────────────────────────────────────────────────────────
 
 /// 地形 LOD レベル。
@@ -59,16 +71,22 @@ pub enum LodLevel {
     /// 現行フル品質。現在の近景〜通常表示で使用する。
     #[default]
     Lod1,
+    /// 中景の簡略版。曲線境界は維持しつつ surface detail を落とす。
+    Lod1Lite,
     /// 軽量 variant。現在の遠景表示で使用する。
     Lod2,
 }
 
 // ── hysteresis 閾値（tile_rtt_px 基準） ──────────────────────────────────────
 
-/// LOD1 → LOD2 に遷移する RtT タイルサイズ閾値（px）。
-pub const LOD1_TO_LOD2_ENTER_PX: f32 = 14.0;
-/// LOD2 → LOD1 に復帰する RtT タイルサイズ閾値（px）。
-pub const LOD2_TO_LOD1_EXIT_PX: f32 = 16.0;
+/// LOD1 → LOD1Lite に遷移する RtT タイルサイズ閾値（px）。
+pub const LOD1_TO_LOD1LITE_ENTER_PX: f32 = 22.0;
+/// LOD1Lite → LOD1 に復帰する RtT タイルサイズ閾値（px）。
+pub const LOD1LITE_TO_LOD1_EXIT_PX: f32 = 25.0;
+/// LOD1Lite → LOD2 に遷移する RtT タイルサイズ閾値（px）。
+pub const LOD1LITE_TO_LOD2_ENTER_PX: f32 = 14.0;
+/// LOD2 → LOD1Lite に復帰する RtT タイルサイズ閾値（px）。
+pub const LOD2_TO_LOD1LITE_EXIT_PX: f32 = 16.0;
 
 // ── Resources ────────────────────────────────────────────────────────────────
 
@@ -153,15 +171,24 @@ pub fn resolve_lod_level(
     match current {
         LodLevel::Lod0 => LodLevel::Lod1,
         LodLevel::Lod1 => {
-            if tile_rtt_px < LOD1_TO_LOD2_ENTER_PX {
-                LodLevel::Lod2
+            if tile_rtt_px < LOD1_TO_LOD1LITE_ENTER_PX {
+                LodLevel::Lod1Lite
             } else {
                 LodLevel::Lod1
             }
         }
-        LodLevel::Lod2 => {
-            if tile_rtt_px > LOD2_TO_LOD1_EXIT_PX {
+        LodLevel::Lod1Lite => {
+            if tile_rtt_px > LOD1LITE_TO_LOD1_EXIT_PX {
                 LodLevel::Lod1
+            } else if tile_rtt_px < LOD1LITE_TO_LOD2_ENTER_PX {
+                LodLevel::Lod2
+            } else {
+                LodLevel::Lod1Lite
+            }
+        }
+        LodLevel::Lod2 => {
+            if tile_rtt_px > LOD2_TO_LOD1LITE_EXIT_PX {
+                LodLevel::Lod1Lite
             } else {
                 LodLevel::Lod2
             }
@@ -172,12 +199,13 @@ pub fn resolve_lod_level(
 // ── LOD 切替システム ──────────────────────────────────────────────────────────
 
 /// `TerrainLodState.level != applied_level` の時に限り、49 chunk の
-/// `MeshMaterial3d` を LOD1 ↔ LOD2 で差し替える。
+/// `MeshMaterial3d` を LOD1 / LOD1Lite / LOD2 間で差し替える。
 pub fn terrain_lod_switch_system(
     mut commands: Commands,
     mut lod: ResMut<TerrainLodState>,
     handles: Res<Terrain3dHandles>,
     q_lod1: ChunkLod1Query,
+    q_lod1_lite: ChunkLod1LiteQuery,
     q_lod2: ChunkLod2Query,
 ) {
     if lod.level == lod.applied_level {
@@ -191,9 +219,35 @@ pub fn terrain_lod_switch_system(
                     .remove::<MeshMaterial3d<TerrainSurfaceMaterial>>()
                     .insert(MeshMaterial3d(handles.lod2.clone()));
             }
+            for entity in &q_lod1_lite {
+                commands
+                    .entity(entity)
+                    .remove::<MeshMaterial3d<TerrainSurfaceMaterialLod1Lite>>()
+                    .insert(MeshMaterial3d(handles.lod2.clone()));
+            }
+        }
+        LodLevel::Lod1Lite => {
+            for entity in &q_lod1 {
+                commands
+                    .entity(entity)
+                    .remove::<MeshMaterial3d<TerrainSurfaceMaterial>>()
+                    .insert(MeshMaterial3d(handles.lod1_lite.clone()));
+            }
+            for entity in &q_lod2 {
+                commands
+                    .entity(entity)
+                    .remove::<MeshMaterial3d<TerrainSurfaceMaterialLod2>>()
+                    .insert(MeshMaterial3d(handles.lod1_lite.clone()));
+            }
         }
         // LOD0 は未実装のため、当面は LOD1 material へフォールバックする。
         LodLevel::Lod0 | LodLevel::Lod1 => {
+            for entity in &q_lod1_lite {
+                commands
+                    .entity(entity)
+                    .remove::<MeshMaterial3d<TerrainSurfaceMaterialLod1Lite>>()
+                    .insert(MeshMaterial3d(handles.lod1.clone()));
+            }
             for entity in &q_lod2 {
                 commands
                     .entity(entity)
@@ -220,19 +274,37 @@ mod tests {
     #[test]
     fn lod1_enters_lod2_when_small() {
         let result = resolve_lod_level(LodLevel::Lod1, 13.0, ElevationDirection::TopDown);
-        assert_eq!(result, LodLevel::Lod2);
+        assert_eq!(result, LodLevel::Lod1Lite);
     }
 
     #[test]
     fn lod1_stays_when_large() {
-        let result = resolve_lod_level(LodLevel::Lod1, 15.0, ElevationDirection::TopDown);
+        let result = resolve_lod_level(LodLevel::Lod1, 26.0, ElevationDirection::TopDown);
         assert_eq!(result, LodLevel::Lod1);
     }
 
     #[test]
-    fn lod2_exits_to_lod1_when_large() {
-        let result = resolve_lod_level(LodLevel::Lod2, 17.0, ElevationDirection::TopDown);
+    fn lod1lite_enters_lod2_when_small() {
+        let result = resolve_lod_level(LodLevel::Lod1Lite, 13.0, ElevationDirection::TopDown);
+        assert_eq!(result, LodLevel::Lod2);
+    }
+
+    #[test]
+    fn lod1lite_returns_to_lod1_when_large() {
+        let result = resolve_lod_level(LodLevel::Lod1Lite, 26.0, ElevationDirection::TopDown);
         assert_eq!(result, LodLevel::Lod1);
+    }
+
+    #[test]
+    fn lod1lite_stays_within_band() {
+        let result = resolve_lod_level(LodLevel::Lod1Lite, 20.0, ElevationDirection::TopDown);
+        assert_eq!(result, LodLevel::Lod1Lite);
+    }
+
+    #[test]
+    fn lod2_exits_to_lod1lite_when_large() {
+        let result = resolve_lod_level(LodLevel::Lod2, 17.0, ElevationDirection::TopDown);
+        assert_eq!(result, LodLevel::Lod1Lite);
     }
 
     #[test]
@@ -252,8 +324,8 @@ mod tests {
             let result = resolve_lod_level(LodLevel::Lod1, 13.0, dir);
             assert_eq!(
                 result,
-                LodLevel::Lod2,
-                "LOD2 should remain available in {:?}",
+                LodLevel::Lod1Lite,
+                "LOD1Lite should remain available in {:?}",
                 dir
             );
         }
@@ -261,9 +333,13 @@ mod tests {
 
     #[test]
     fn hysteresis_lod2_does_not_exit_at_enter_threshold() {
-        // LOD1→LOD2 の enter は 14 px。LOD2→LOD1 の exit は 16 px。
-        // LOD2 で 15 px（enter < 15 < exit）のとき LOD2 を維持する。
         let result = resolve_lod_level(LodLevel::Lod2, 15.0, ElevationDirection::TopDown);
         assert_eq!(result, LodLevel::Lod2);
+    }
+
+    #[test]
+    fn hysteresis_lod1lite_does_not_exit_to_lod1_below_exit_threshold() {
+        let result = resolve_lod_level(LodLevel::Lod1Lite, 24.0, ElevationDirection::TopDown);
+        assert_eq!(result, LodLevel::Lod1Lite);
     }
 }

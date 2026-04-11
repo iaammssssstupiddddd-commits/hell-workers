@@ -13,9 +13,18 @@ pub struct DreamBubbleHandles {
 }
 
 const QUALITY_COLORS: [(DreamQuality, LinearRgba); 3] = [
-    (DreamQuality::VividDream, LinearRgba::new(0.55, 0.80, 1.00, 1.0)),
-    (DreamQuality::NormalDream, LinearRgba::new(0.55, 0.65, 0.95, 1.0)),
-    (DreamQuality::NightTerror, LinearRgba::new(0.95, 0.45, 0.55, 1.0)),
+    (
+        DreamQuality::VividDream,
+        LinearRgba::new(0.55, 0.80, 1.00, 1.0),
+    ),
+    (
+        DreamQuality::NormalDream,
+        LinearRgba::new(0.55, 0.65, 0.95, 1.0),
+    ),
+    (
+        DreamQuality::NightTerror,
+        LinearRgba::new(0.95, 0.45, 0.55, 1.0),
+    ),
 ];
 
 pub fn init_dream_bubble_handles(

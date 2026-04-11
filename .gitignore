@@ -41,6 +41,8 @@ scripts/__pycache__
 
 # Assets (Keep only WGSL)
 /assets/**
+!/assets/
+!/assets/shaders/
 !/assets/**/*.wgsl
 /assets_src/
 /assets_exports/
