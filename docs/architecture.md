@@ -266,9 +266,9 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - `RttCompositeSprite` マーカーコンポーネントが付与されており、`apply_render3d_visibility_system` が `Visibility` を制御する。
 - `RttCompositeMaterial` は通常の 3D RtT (`RttRuntime.scene`) と Soul 専用 mask RtT (`RttRuntime.soul_mask`) を同時に受け取り、最終合成時に Soul の輪郭を画面上で少し丸める。
 - 建築物 3D ビジュアルは `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER])` を使い、RtT Camera3d には見せつつ、影確認用 `DirectionalLight` からも shadow receiver として扱えるようにしている。
-- 表示用 Soul GLB は `LAYER_3D`、Soul shadow proxy は `LAYER_3D` と `LAYER_3D_SOUL_SHADOW` の両方に所属する。Bevy 0.18 の shadow queue は `camera_layers ∩ mesh_layers` を満たさない caster を落とすため、camera 非表示用の専用 layer だけでは shadow map に参加できない。shadow proxy は main view 側にも残しつつ、`SoulShadowMaterial` で通常描画だけ `discard` し、prepass / shadow pass では depth を書く。
-- TopDown の太陽方向は `hw_core::constants::topdown_sun_direction_world()` を単一の真実とし、検証用 `DirectionalLight` と `CharacterMaterial` の body shader の両方が同じ方向を使う。現在は画面手前側の壁面が完全な日陰にならないよう、真上寄りではなく前方寄りの斜光を採用している。
-- Bevy 0.18 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 `DirectionalLight` は caster/receiver 専用 layer に加えて `LAYER_3D` も持ち、`Camera3dRtt` 視点で light 自体が有効になるようにしている。
+- 表示用 Soul GLB は `LAYER_3D`、`SoulMaskProxy3d` は `LAYER_3D_SOUL_MASK` に所属する。`Soul` の輪郭補正は `RttCompositeMaterial` が `soul_mask_texture` を参照して行い、影そのものはこの mask RtT からは作らない。
+- TopDown の主光源方向は `hw_core::constants::topdown_sun_direction_world()` を単一の真実とし、RtT の主 `DirectionalLight` と `CharacterMaterial` の body shader が同じ方向を使う。現在は画面手前側の壁面が完全な日陰にならないよう、真上寄りではなく前方寄りの斜光を採用している。
+- Bevy 0.18 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 light は `LAYER_3D` を含み、`Camera3dRtt` 視点で有効な light として GPU light 配列に入る。`Soul` projected shadow もこの view 内の shadow-enabled directional light だけを使う。
 
 `sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は合成メッシュのスケールをウィンドウリサイズに常時追従させ、`RttRuntime.is_changed()` のときのみカメラ `RenderTarget` と `RttCompositeMaterial` の参照テクスチャを更新する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttRuntime.viewport` の実サイズから再計算し、品質スケール時でも Soul silhouette 合成がずれないようにしている。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ変更フレームや品質変更フレーム内で再生成後のテクスチャへ差し替わる。
 
@@ -279,9 +279,10 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - `GameAssets.soul_scene` に `GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb")` を保持し、Soul spawn 時に `SceneRoot` として 3D シーンへ追加する。
 - Soul 本体エンティティは 2D `Sprite` を持たず、通常表示は GLB 側へ一本化している。従来の `animation_system` / `idle_visual_system` は `Sprite` を optional にして、Soul の状態更新を維持したまま 3D 表示へ移行している。
 - Soul の通常描画ルートとは別に、`SoulMaskProxy3d` が同じ `soul.glb` を `LAYER_3D_SOUL_MASK` へ複製スポーンする。`sync_soul_mask_proxy_3d_system` が本体と同じ 2D 位置へ同期し、Soul 専用 mask RtT の入力に使う。
-- `SoulShadowProxy3d` は shadow caster 専用の複製 root で、通常の Soul 表示とは分離して同期する。表示側 `mesh_body` / `mesh_face` には `NotShadowCaster` を付ける。
-- shadow proxy 側は `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW])` に所属し、`SoulShadowMaterial` を使って main pass では `discard`、prepass / shadow pass では depth のみを書く。Bevy 0.18 の shadow queue は `camera_layers ∩ mesh_layers` を満たさない caster を落とすため、shadow 専用 layer だけでは参加できない。main pass 側の不可視化は layer 分離ではなく material 側で行う。
-- shadow proxy root には表示用 Soul より前に起こした回転を入れ、影だけをより自然な upright silhouette に寄せる。face mesh も shadow proxy 側では不可視・非寄与にしている。
+- `SoulShadowProxy3d` は互換性のために残っているが、現在の runtime では `mesh_body` / `mesh_face` の両方に `NotShadowCaster` を付けており、実際の `Soul` 影には寄与しない。`Soul` の見た目変更は real shadow caster ではなく receiver 側で行う。
+- `systems/visual/soul_shadow_projector.rs` の `sync_soul_shadow_projectors_system` は、`Camera3dRtt` に近い `Soul` を最大 `MAX_SOUL_SHADOW_PROJECTORS` 個だけ選び、world-space projector 配列を `SectionMaterial` と terrain 系 material に流す。これにより床と壁が同じ projector 情報を共有し、影の接続を保ったまま stylize できる。
+- `assets/shaders/shadow_style.wgsl` の `apply_soul_projected_shadow` は、receiver 側で `Soul` ごとの radial / forward-falloff を評価し、最終色を直接暗い影色へブレンドする。既存の directional shadow blur/stylize と同じ shader 内で適用するが、`Soul` 影の濃さや外周フェードは shadow map caster の depth ではなく、この projector 評価で決まる。
+- projector の向きは固定 1 本ではなく、その view で有効な全 `DirectionalLight` を走査して合成する。したがって追加光源テスト時も「最後に選ばれた 1 本だけ」に切り替わらず、同じ `Soul` projector が各 light 方向に対して評価される。
 - 現在の placeholder consumer では `Wall` / `ProvisionalWall` のみ `SectionMaterial` を使い、`floor` / `door` / `equipment` は引き続き `StandardMaterial` を使う。full migration は後段の `MS-3-5` で行う。
 - section clip は現在 `discard` ベースのため断面キャップを生成しない。壁 volume の途中で切ると切断面の蓋は作られず、内部を覗き込むような見え方になる。これは `section-material-proposal` の「方針 C: 何もしない」に相当し、断面キャップ方針は将来実装で確定する。
 - `hw_visual::CharacterMaterial` と `assets/shaders/character_material.wgsl` が Soul 用 custom material 経路を提供し、`AlphaMode::Blend` の透過付き描画を行う。現段階では section 連動や表情状態切り替えはまだ入れていない。
@@ -300,7 +301,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - `mesh_face` には `SOUL_FACE_SCALE_MULTIPLIER` を掛け、PoC 目視で顔が読み取りづらい問題を asset 非破壊で補正する。
 - `mesh_face` のローカル回転は GLB 側の初期姿勢をそのまま使い、PoC 段階では追加の billboard 回転を行わない。
 - `Camera3dRtt` には `AmbientLight` を付与し、GLB 付属の lit material が RtT 上で暗転しないようにする。
-- `startup_systems::setup` では `LAYER_3D` と `LAYER_3D_SOUL_SHADOW` の両方に作用する shadow-enabled `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 2048 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。これにより Soul の shadow proxy だけを camera 非表示のまま shadow pass に参加させられる。
+- `startup_systems::setup` では RtT 用の主 `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 2048 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。追加の 2 本目 light は `RenderPerfToggles.extra_directional_light_enabled` で有効化するテスト用経路で、`F9` / DevPanel `Light2` から切り替える。receiver-side `Soul` projector はこの追加 light も含めて評価する。
 - `Camera3dSoulMaskRtt` は Soul mask 専用 Camera3d で、通常の `Camera3dRtt` と同じ Transform / Projection を共有する。最終合成では `RttCompositeMaterial` が `soul_mask_texture`（`RttRuntime.soul_mask` と同期）を近傍サンプリングし、Soul シルエットだけを画面上で少し膨らませて角を丸める。
 - Familiar は 2D `Sprite` の 4 フレーム差し替え・左右反転・hover/wobble を本表示として維持する。Command radius オーラ・hover/selection・吹き出しも同じ 2D world transform を参照する。
 - Familiar は建築物 RtT 合成より手前に出す前提とし、Soul のような shadow proxy や shadow caster は持たない。

@@ -2,6 +2,7 @@
 //!
 //! ゲーム本体とは独立して、表情アトラス・モーション・Z-fight を検証する。
 //! 右側のメニューパネルに操作一覧と現在値を常時表示。[H] でパネルを折りたたみ。
+//! [Y] で Soul shadow caster の通常配置と A/B 比較配置を切り替える。
 //!
 //! ```bash
 //! CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo run -p visual_test
@@ -50,19 +51,28 @@ impl Plugin for VisualTestPlugin {
             PreUpdate,
             systems::handle_panel_scroll.after(bevy::input::InputSystems),
         )
+        .add_systems(Update, input::keyboard_input)
+        .add_systems(Update, systems::handle_button_interactions)
         .add_systems(
             Update,
-            (
-                input::keyboard_input,
-                systems::handle_button_interactions,
+            ((
                 systems::sync_test_camera3d,
                 soul::sync_mask_proxies,
                 soul::sync_shadow_proxies,
+                soul::sync_blob_shadow_proxies,
                 systems::apply_faces,
                 systems::apply_motion,
                 systems::apply_animation,
                 systems::apply_shader_params,
                 systems::apply_composite_sprite,
+            )
+                .chain()
+                .after(input::keyboard_input)
+                .after(systems::handle_button_interactions),),
+        )
+        .add_systems(
+            Update,
+            (
                 building::update_building_cursor,
                 hud::apply_menu_visibility,
                 hud::update_section_visibility,

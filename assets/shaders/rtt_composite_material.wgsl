@@ -4,6 +4,9 @@ struct RttCompositeMaterial {
     pixel_size: vec2<f32>,
     mask_radius_px: f32,
     mask_feather: f32,
+    shadow_offset_uv: vec2<f32>,
+    shadow_width_px: f32,
+    shadow_strength: f32,
 }
 
 @group(2) @binding(0) var<uniform> material: RttCompositeMaterial;
@@ -30,6 +33,43 @@ const SAMPLE_DIRS: array<vec2<f32>, 12> = array<vec2<f32>, 12>(
 
 fn soul_mask_alpha(uv: vec2<f32>) -> f32 {
     return textureSample(soul_mask_texture, soul_mask_sampler, uv).a;
+}
+
+fn soul_mask_blur_alpha(
+    uv: vec2<f32>,
+    lateral_uv: vec2<f32>,
+    longitudinal_uv: vec2<f32>,
+) -> f32 {
+    let diagonal_uv = (lateral_uv + longitudinal_uv) * 0.7;
+    return soul_mask_alpha(uv) * 0.22
+        + soul_mask_alpha(uv + lateral_uv) * 0.16
+        + soul_mask_alpha(uv - lateral_uv) * 0.16
+        + soul_mask_alpha(uv + longitudinal_uv) * 0.12
+        + soul_mask_alpha(uv - longitudinal_uv) * 0.12
+        + soul_mask_alpha(uv + diagonal_uv) * 0.11
+        + soul_mask_alpha(uv - diagonal_uv) * 0.11;
+}
+
+fn soul_fake_shadow_alpha(uv: vec2<f32>, center_mask: f32) -> f32 {
+    if material.shadow_strength <= 0.0 {
+        return 0.0;
+    }
+
+    let shadow_dir = material.shadow_offset_uv;
+    let shadow_len = length(shadow_dir);
+    if shadow_len <= 0.00001 {
+        return 0.0;
+    }
+
+    let shadow_forward = shadow_dir / shadow_len;
+    let shadow_normal = vec2(-shadow_forward.y, shadow_forward.x);
+    let source_uv = uv - shadow_dir;
+    let lateral_uv = shadow_normal * material.pixel_size * material.shadow_width_px;
+    let longitudinal_uv = shadow_forward * material.pixel_size * material.shadow_width_px * 0.8;
+    let shadow = soul_mask_blur_alpha(source_uv, lateral_uv, longitudinal_uv);
+
+    let self_mask = smoothstep(0.05, 0.35, center_mask);
+    return clamp(shadow * 1.35, 0.0, 1.0) * (1.0 - self_mask);
 }
 
 @fragment
@@ -62,6 +102,8 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let expanded_rgb = select(scene.rgb, color_sum / color_weight, color_weight > 0.0001);
     let extra_alpha = clamp(rounded_mask - scene.a, 0.0, 1.0 - scene.a);
     let composed_rgb = mix(scene.rgb, expanded_rgb, extra_alpha);
+    let shadow_alpha = soul_fake_shadow_alpha(uv, center_mask);
+    let shadowed_rgb = composed_rgb * (1.0 - material.shadow_strength * shadow_alpha);
 
-    return vec4<f32>(composed_rgb, max(scene.a, rounded_mask));
+    return vec4<f32>(shadowed_rgb, max(scene.a, rounded_mask));
 }

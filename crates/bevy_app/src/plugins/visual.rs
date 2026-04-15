@@ -3,6 +3,7 @@
 use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
 use crate::plugins::startup::{
     Camera3dRtt, Camera3dSoulMaskRtt, RttCompositeSprite, RttDirectionalLight,
+    RttExtraDirectionalLight,
 };
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
@@ -32,6 +33,7 @@ use crate::systems::visual::soul_animation::{
     prepare_soul_animation_library_system, sync_soul_anim_visual_state_system,
     sync_soul_body_animation_system, sync_soul_face_expression_system,
 };
+use crate::systems::visual::soul_shadow_projector::sync_soul_shadow_projectors_system;
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
 use crate::systems::visual::terrain_lod::{
     TerrainLodMetrics, TerrainLodState, terrain_lod_switch_system,
@@ -53,6 +55,8 @@ type SoulMaskRttCameraQuery<'w, 's> =
     Query<'w, 's, &'static mut Camera, (With<Camera3dSoulMaskRtt>, Without<Camera3dRtt>)>;
 type RttDirectionalLightQuery<'w, 's> =
     Query<'w, 's, &'static mut DirectionalLight, With<RttDirectionalLight>>;
+type RttExtraDirectionalLightQuery<'w, 's> =
+    Query<'w, 's, &'static mut DirectionalLight, With<RttExtraDirectionalLight>>;
 
 pub struct VisualPlugin;
 
@@ -159,6 +163,12 @@ impl Plugin for VisualPlugin {
             Update,
             update_task_area_material_system.in_set(GameSystemSet::Visual),
         );
+        app.add_systems(
+            Update,
+            sync_soul_shadow_projectors_system
+                .after(sync_camera3d_system)
+                .in_set(GameSystemSet::Visual),
+        );
 
         // Building3dVisual クリーンアップ・マテリアル遷移
         app.add_systems(
@@ -217,6 +227,10 @@ impl Plugin for VisualPlugin {
         );
         app.add_systems(
             Update,
+            apply_rtt_extra_directional_light_toggle_system.in_set(GameSystemSet::Visual),
+        );
+        app.add_systems(
+            Update,
             apply_rtt_scene_content_toggle_system.in_set(GameSystemSet::Visual),
         );
         app.add_observer(apply_soul_gltf_render_layers_on_ready);
@@ -265,6 +279,25 @@ fn apply_rtt_directional_light_toggle_system(
         light.shadows_enabled = perf_toggles.directional_light_enabled;
         light.illuminance = if perf_toggles.directional_light_enabled {
             12_000.0
+        } else {
+            0.0
+        };
+    }
+}
+
+/// 追加テスト用 DirectionalLight の ON/OFF を反映する。
+fn apply_rtt_extra_directional_light_toggle_system(
+    perf_toggles: Res<crate::RenderPerfToggles>,
+    mut q_lights: RttExtraDirectionalLightQuery,
+) {
+    if !perf_toggles.is_changed() {
+        return;
+    }
+
+    for mut light in &mut q_lights {
+        light.shadows_enabled = perf_toggles.extra_directional_light_enabled;
+        light.illuminance = if perf_toggles.extra_directional_light_enabled {
+            8_000.0
         } else {
             0.0
         };

@@ -15,12 +15,24 @@ use hw_visual::{CharacterMaterial, SoulMaskMaterial, SoulShadowMaterial};
 
 // ─── Soul 生成 ────────────────────────────────────────────────────────────────
 
+const BLOB_SHADOW_XY_RADIUS: f32 = 0.28;
+const SHADOW_COMPARE_PAIR_GAP: f32 = SOUL_SPACING * 1.75;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TestSoulShadowCaster {
+    Glb,
+    BlobCandidate,
+}
+
 pub struct SoulSpawnArgs<'a> {
     pub soul_scene: &'a Handle<Scene>,
     pub face_atlas: &'a Handle<Image>,
     pub white_pixel: &'a Handle<Image>,
+    pub blob_shadow_mesh: &'a Handle<Mesh>,
+    pub blob_shadow_material: &'a Handle<StandardMaterial>,
     pub soul_shadow_material: &'a Handle<SoulShadowMaterial>,
     pub soul_mask_material: &'a Handle<SoulMaskMaterial>,
+    pub shadow_caster: TestSoulShadowCaster,
     pub x: f32,
     pub z: f32,
     pub index: usize,
@@ -56,19 +68,34 @@ pub fn spawn_test_soul(
     }
     let soul_entity = entity.id();
 
-    commands.spawn((
-        SceneRoot(args.soul_scene.clone()),
-        Transform::from_xyz(args.x, 0.0, args.z)
-            .with_scale(Vec3::splat(SOUL_GLB_SCALE))
-            .with_rotation(Quat::from_rotation_x(
-                SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES.to_radians(),
-            )),
-        RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW]),
-        SoulShadowProxy3d { owner: soul_entity },
-        SoulShadowConfig {
-            shadow_mat: args.soul_shadow_material.clone(),
-        },
-    ));
+    match args.shadow_caster {
+        TestSoulShadowCaster::Glb => {
+            commands.spawn((
+                SceneRoot(args.soul_scene.clone()),
+                Transform::from_xyz(args.x, 0.0, args.z)
+                    .with_scale(Vec3::splat(SOUL_GLB_SCALE))
+                    .with_rotation(Quat::from_rotation_x(
+                        (-SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES).to_radians(),
+                    )),
+                RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW]),
+                SoulShadowProxy3d { owner: soul_entity },
+                SoulShadowConfig {
+                    shadow_mat: args.soul_shadow_material.clone(),
+                },
+            ));
+        }
+        TestSoulShadowCaster::BlobCandidate => {
+            commands.spawn((
+                Mesh3d(args.blob_shadow_mesh.clone()),
+                MeshMaterial3d(args.blob_shadow_material.clone()),
+                Transform::from_xyz(args.x, 0.0, args.z)
+                    .with_rotation(blob_shadow_proxy_rotation()),
+                RenderLayers::from_layers(&[LAYER_3D_SOUL_SHADOW]),
+                NotShadowReceiver,
+                SoulBlobShadowProxy3d { owner: soul_entity },
+            ));
+        }
+    }
 
     commands.spawn((
         SceneRoot(args.soul_scene.clone()),
@@ -197,6 +224,8 @@ pub fn on_shadow_scene_ready(
     }
 }
 
+// ─── マスクプロキシ Observer ─────────────────────────────────────────────────
+
 pub fn on_mask_scene_ready(
     scene_ready: On<SceneInstanceReady>,
     q_configs: Query<&SoulMaskConfig>,
@@ -238,7 +267,7 @@ pub fn sync_shadow_proxies(
     q_souls: Query<(Entity, &Transform), With<TestSoulConfig>>,
     mut q_proxies: Query<(&SoulShadowProxy3d, &mut Transform), Without<TestSoulConfig>>,
 ) {
-    let pitch = Quat::from_rotation_x(SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES.to_radians());
+    let pitch = Quat::from_rotation_x((-SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES).to_radians());
     for (proxy, mut proxy_tf) in q_proxies.iter_mut() {
         if let Ok((_, soul_tf)) = q_souls.get(proxy.owner) {
             proxy_tf.translation = soul_tf.translation;
@@ -246,4 +275,135 @@ pub fn sync_shadow_proxies(
             proxy_tf.rotation = pitch;
         }
     }
+}
+
+pub fn sync_blob_shadow_proxies(
+    q_souls: Query<(Entity, &Transform), With<TestSoulConfig>>,
+    mut q_proxies: Query<(&SoulBlobShadowProxy3d, &mut Transform), Without<TestSoulConfig>>,
+) {
+    let rotation = blob_shadow_proxy_rotation();
+    for (proxy, mut proxy_tf) in q_proxies.iter_mut() {
+        if let Ok((_, soul_tf)) = q_souls.get(proxy.owner) {
+            proxy_tf.translation = soul_tf.translation;
+            proxy_tf.scale = soul_tf.scale / SOUL_GLB_SCALE;
+            proxy_tf.rotation = rotation;
+        }
+    }
+}
+
+pub fn rebuild_soul_test_layout(
+    commands: &mut Commands,
+    character_materials: &mut Assets<CharacterMaterial>,
+    assets: &TestAssets,
+    state: &mut TestState,
+    soul_entities: &[Entity],
+    shadow_entities: &[Entity],
+    blob_shadow_entities: &[Entity],
+    mask_entities: &[Entity],
+    layout: SoulLayout,
+) {
+    for &entity in soul_entities {
+        commands.entity(entity).despawn();
+    }
+    for &entity in shadow_entities {
+        commands.entity(entity).despawn();
+    }
+    for &entity in blob_shadow_entities {
+        commands.entity(entity).despawn();
+    }
+    for &entity in mask_entities {
+        commands.entity(entity).despawn();
+    }
+
+    state.soul_layout = layout;
+    state.soul_count = 0;
+    state.next_index = 0;
+
+    match layout {
+        SoulLayout::Default => {
+            for i in 0..3 {
+                spawn_test_soul(
+                    commands,
+                    character_materials,
+                    SoulSpawnArgs {
+                        soul_scene: &assets.soul_scene,
+                        face_atlas: &assets.face_atlas,
+                        white_pixel: &assets.white_pixel,
+                        blob_shadow_mesh: &assets.blob_shadow_mesh,
+                        blob_shadow_material: &assets.blob_shadow_material,
+                        soul_shadow_material: &assets.soul_shadow_material,
+                        soul_mask_material: &assets.soul_mask_material,
+                        shadow_caster: TestSoulShadowCaster::Glb,
+                        x: (i as f32 - 1.0) * SOUL_SPACING,
+                        z: 0.0,
+                        index: state.next_index,
+                        initial_expr: initial_expr_for_layout(state.face_mode, i),
+                        selected: i == 0,
+                    },
+                );
+                state.next_index += 1;
+                state.soul_count += 1;
+            }
+        }
+        SoulLayout::ShadowCompare => {
+            for (i, (x, shadow_caster)) in [
+                (-SHADOW_COMPARE_PAIR_GAP * 0.5, TestSoulShadowCaster::Glb),
+                (
+                    SHADOW_COMPARE_PAIR_GAP * 0.5,
+                    TestSoulShadowCaster::BlobCandidate,
+                ),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                spawn_test_soul(
+                    commands,
+                    character_materials,
+                    SoulSpawnArgs {
+                        soul_scene: &assets.soul_scene,
+                        face_atlas: &assets.face_atlas,
+                        white_pixel: &assets.white_pixel,
+                        blob_shadow_mesh: &assets.blob_shadow_mesh,
+                        blob_shadow_material: &assets.blob_shadow_material,
+                        soul_shadow_material: &assets.soul_shadow_material,
+                        soul_mask_material: &assets.soul_mask_material,
+                        shadow_caster,
+                        x,
+                        z: 0.0,
+                        index: state.next_index,
+                        initial_expr: initial_expr_for_layout(state.face_mode, i),
+                        selected: i == 0,
+                    },
+                );
+                state.next_index += 1;
+                state.soul_count += 1;
+            }
+        }
+    }
+}
+
+fn initial_expr_for_layout(face_mode: FaceMode, index: usize) -> FaceExpression {
+    match face_mode {
+        FaceMode::Single(expr) => expr,
+        FaceMode::AllDifferent => FaceExpression::ALL[index % FaceExpression::ALL.len()],
+    }
+}
+
+fn blob_shadow_proxy_rotation() -> Quat {
+    Quat::from_rotation_x((-70.0f32).to_radians()) * Quat::from_rotation_z((-70.0f32).to_radians())
+}
+
+pub fn blob_shadow_outline() -> Vec<Vec2> {
+    (0..48)
+        .map(|i| {
+            let angle = (i as f32 / 48.0) * std::f32::consts::TAU;
+            let wobble = 1.0
+                + 0.18
+                    * ((angle * 3.0 + 1.3).sin() * 0.50
+                        + (angle * 5.0 + 2.7).sin() * 0.30
+                        + (angle * 7.0 + 0.8).sin() * 0.20);
+            let radius = BLOB_SHADOW_XY_RADIUS * wobble;
+            Vec2::new(angle.cos() * radius, angle.sin() * radius)
+        })
+        .collect()
 }

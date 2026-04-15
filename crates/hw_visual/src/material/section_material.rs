@@ -2,7 +2,11 @@ use bevy::pbr::{ExtendedMaterial, MaterialExtension, OpaqueRendererMethod, Stand
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;
-use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE};
+use hw_core::constants::{
+    MAP_HEIGHT, MAP_WIDTH, MAX_SOUL_SHADOW_PROJECTORS, SOUL_SHADOW_PROJECTOR_FEATHER,
+    SOUL_SHADOW_PROJECTOR_FORWARD_EXTENT, SOUL_SHADOW_PROJECTOR_STRENGTH, TILE_SIZE,
+    topdown_shadow_style_blur, topdown_shadow_style_params, topdown_shadow_style_tint,
+};
 
 #[derive(Clone, Copy, Debug, ShaderType, Reflect)]
 pub struct SectionMaterialUniform {
@@ -30,6 +34,16 @@ pub struct SectionMaterialUniform {
     pub domain_warp_strength: f32,
     /// 0=grass, 1=dirt, 2=sand, 3=river。非地形は 0 のままで未使用。
     pub terrain_kind: f32,
+    /// `x`: effect mix, `y`: shadow threshold, `z`: softness, `w`: full-shadow darken
+    pub shadow_style_params: Vec4,
+    /// `rgb`: shadow tint target, `a`: tint strength
+    pub shadow_style_tint: Vec4,
+    /// `x`: blur radius in shadow texels, `yzw`: reserved
+    pub shadow_style_blur: Vec4,
+    /// `xyz`: projector center in world space, `w`: radius
+    pub soul_shadow_projectors: [Vec4; MAX_SOUL_SHADOW_PROJECTORS],
+    /// `x`: projector count, `y`: feather, `z`: strength, `w`: reserved
+    pub soul_shadow_projector_meta: Vec4,
 }
 
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
@@ -78,6 +92,16 @@ impl Default for SectionMaterialExt {
                 map_world_height: 0.0,
                 domain_warp_strength: 0.0,
                 terrain_kind: 0.0,
+                shadow_style_params: topdown_shadow_style_params(),
+                shadow_style_tint: topdown_shadow_style_tint(),
+                shadow_style_blur: topdown_shadow_style_blur(),
+                soul_shadow_projectors: [Vec4::ZERO; MAX_SOUL_SHADOW_PROJECTORS],
+                soul_shadow_projector_meta: Vec4::new(
+                    0.0,
+                    SOUL_SHADOW_PROJECTOR_FEATHER,
+                    SOUL_SHADOW_PROJECTOR_STRENGTH,
+                    SOUL_SHADOW_PROJECTOR_FORWARD_EXTENT,
+                ),
             },
             terrain_feature_map: None,
             terrain_macro_noise: None,
@@ -200,6 +224,16 @@ pub fn make_terrain_section_material(
                 map_world_height: MAP_HEIGHT as f32 * TILE_SIZE,
                 domain_warp_strength,
                 terrain_kind,
+                shadow_style_params: topdown_shadow_style_params(),
+                shadow_style_tint: topdown_shadow_style_tint(),
+                shadow_style_blur: topdown_shadow_style_blur(),
+                soul_shadow_projectors: [Vec4::ZERO; MAX_SOUL_SHADOW_PROJECTORS],
+                soul_shadow_projector_meta: Vec4::new(
+                    0.0,
+                    SOUL_SHADOW_PROJECTOR_FEATHER,
+                    SOUL_SHADOW_PROJECTOR_STRENGTH,
+                    0.0,
+                ),
             },
             terrain_feature_map: maps.feature_map,
             terrain_macro_noise: maps.macro_noise,

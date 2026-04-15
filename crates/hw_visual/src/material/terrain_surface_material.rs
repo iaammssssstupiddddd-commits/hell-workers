@@ -2,7 +2,11 @@ use bevy::pbr::{ExtendedMaterial, MaterialExtension, OpaqueRendererMethod, Stand
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;
-use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE};
+use hw_core::constants::{
+    MAP_HEIGHT, MAP_WIDTH, MAX_SOUL_SHADOW_PROJECTORS, SOUL_SHADOW_PROJECTOR_FEATHER,
+    SOUL_SHADOW_PROJECTOR_FORWARD_EXTENT, SOUL_SHADOW_PROJECTOR_STRENGTH, TILE_SIZE,
+    topdown_shadow_style_blur, topdown_shadow_style_params, topdown_shadow_style_tint,
+};
 
 use super::section_material::SectionCut;
 
@@ -22,6 +26,16 @@ pub struct TerrainSurfaceUniform {
     pub lut_inland: Vec4,
     pub lut_rock: Vec4,
     pub feature_lut_constants_ready: f32,
+    /// `x`: effect mix, `y`: shadow threshold, `z`: softness, `w`: full-shadow darken
+    pub shadow_style_params: Vec4,
+    /// `rgb`: shadow tint target, `a`: tint strength
+    pub shadow_style_tint: Vec4,
+    /// `x`: blur radius in shadow texels, `yzw`: reserved
+    pub shadow_style_blur: Vec4,
+    /// `xyz`: projector center in world space, `w`: radius
+    pub soul_shadow_projectors: [Vec4; MAX_SOUL_SHADOW_PROJECTORS],
+    /// `x`: projector count, `y`: feather, `z`: strength, `w`: reserved
+    pub soul_shadow_projector_meta: Vec4,
 }
 
 impl Default for TerrainSurfaceUniform {
@@ -42,11 +56,21 @@ impl Default for TerrainSurfaceUniform {
             lut_inland: Vec4::splat(0.5),
             lut_rock: Vec4::splat(0.5),
             feature_lut_constants_ready: 0.0,
+            shadow_style_params: topdown_shadow_style_params(),
+            shadow_style_tint: topdown_shadow_style_tint(),
+            shadow_style_blur: topdown_shadow_style_blur(),
+            soul_shadow_projectors: [Vec4::ZERO; MAX_SOUL_SHADOW_PROJECTORS],
+            soul_shadow_projector_meta: Vec4::new(
+                0.0,
+                SOUL_SHADOW_PROJECTOR_FEATHER,
+                SOUL_SHADOW_PROJECTOR_STRENGTH,
+                SOUL_SHADOW_PROJECTOR_FORWARD_EXTENT,
+            ),
         }
     }
 }
 
-#[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
 pub struct TerrainSurfaceMaterialExt {
     #[uniform(100)]
     pub uniforms: TerrainSurfaceUniform,
@@ -99,31 +123,6 @@ pub struct TerrainSurfaceMaterialExt {
     #[texture(131)]
     #[sampler(132)]
     pub boundary_proximity_mask: Option<Handle<Image>>,
-}
-
-impl Default for TerrainSurfaceMaterialExt {
-    fn default() -> Self {
-        Self {
-            uniforms: TerrainSurfaceUniform::default(),
-            terrain_id_map: None,
-            terrain_feature_map: None,
-            grass_albedo: None,
-            dirt_albedo: None,
-            sand_albedo: None,
-            river_albedo: None,
-            terrain_macro_noise: None,
-            grass_macro_overlay: None,
-            dirt_macro_overlay: None,
-            sand_macro_overlay: None,
-            terrain_blend_mask_soft: None,
-            river_flow_noise: None,
-            river_normal_like: None,
-            shoreline_detail: None,
-            terrain_feature_lut: None,
-            boundary_mask: None,
-            boundary_proximity_mask: None,
-        }
-    }
 }
 
 impl MaterialExtension for TerrainSurfaceMaterialExt {
@@ -245,7 +244,7 @@ pub fn make_terrain_surface_material_lod1_lite(
 
 /// LOD2 用マテリアル拡張。バインドグループレイアウトは `TerrainSurfaceMaterialExt` と同一だが、
 /// フラグメントシェーダーに簡略版 (`terrain_surface_material_lod2.wgsl`) を使用する。
-#[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
 pub struct TerrainSurfaceMaterialExtLod2 {
     #[uniform(100)]
     pub uniforms: TerrainSurfaceUniform,
@@ -298,31 +297,6 @@ pub struct TerrainSurfaceMaterialExtLod2 {
     #[texture(131)]
     #[sampler(132)]
     pub boundary_proximity_mask: Option<Handle<Image>>,
-}
-
-impl Default for TerrainSurfaceMaterialExtLod2 {
-    fn default() -> Self {
-        Self {
-            uniforms: TerrainSurfaceUniform::default(),
-            terrain_id_map: None,
-            terrain_feature_map: None,
-            grass_albedo: None,
-            dirt_albedo: None,
-            sand_albedo: None,
-            river_albedo: None,
-            terrain_macro_noise: None,
-            grass_macro_overlay: None,
-            dirt_macro_overlay: None,
-            sand_macro_overlay: None,
-            terrain_blend_mask_soft: None,
-            river_flow_noise: None,
-            river_normal_like: None,
-            shoreline_detail: None,
-            terrain_feature_lut: None,
-            boundary_mask: None,
-            boundary_proximity_mask: None,
-        }
-    }
 }
 
 impl MaterialExtension for TerrainSurfaceMaterialExtLod2 {

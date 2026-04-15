@@ -1,7 +1,9 @@
+use bevy::asset::RenderAssetUsages;
 use bevy::camera::visibility::RenderLayers;
 use bevy::camera::{ClearColorConfig, RenderTarget};
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
+use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::sprite_render::MeshMaterial2d;
@@ -13,7 +15,7 @@ use hw_core::constants::{
 };
 use hw_visual::{CharacterMaterial, SoulMaskMaterial, SoulShadowMaterial};
 
-use crate::soul::{SoulSpawnArgs, spawn_test_soul};
+use crate::soul::{blob_shadow_outline, rebuild_soul_test_layout};
 use crate::types::*;
 
 // ─── シーン初期化 ─────────────────────────────────────────────────────────────
@@ -24,6 +26,7 @@ pub fn setup_scene(
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
     mut character_materials: ResMut<Assets<CharacterMaterial>>,
+    mut standard_materials: ResMut<Assets<StandardMaterial>>,
     mut soul_shadow_materials: ResMut<Assets<SoulShadowMaterial>>,
     mut soul_mask_materials: ResMut<Assets<SoulMaskMaterial>>,
     mut composite_materials: ResMut<Assets<LocalRttCompositeMaterial>>,
@@ -164,6 +167,13 @@ pub fn setup_scene(
         default(),
     ));
     let font: Handle<Font> = asset_server.load("fonts/NotoSansJP-VF.ttf");
+    let blob_shadow_mesh = meshes.add(build_blob_shadow_mesh());
+    let blob_shadow_material = standard_materials.add(StandardMaterial {
+        base_color: Color::BLACK,
+        unlit: true,
+        cull_mode: None,
+        ..default()
+    });
     let soul_shadow_material = soul_shadow_materials.add(SoulShadowMaterial::default());
     let soul_mask_material = soul_mask_materials.add(SoulMaskMaterial::solid_white());
 
@@ -185,38 +195,56 @@ pub fn setup_scene(
         RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]),
     ));
 
-    commands.insert_resource(TestAssets {
+    let test_assets = TestAssets {
         soul_scene: soul_scene.clone(),
         face_atlas: face_atlas.clone(),
         white_pixel: white_pixel.clone(),
         gltf_handle,
+        blob_shadow_mesh,
+        blob_shadow_material,
         soul_shadow_material: soul_shadow_material.clone(),
         soul_mask_material: soul_mask_material.clone(),
-    });
-
-    // --- 初期 3 Soul ---
-    for i in 0..3 {
-        spawn_test_soul(
-            &mut commands,
-            &mut character_materials,
-            SoulSpawnArgs {
-                soul_scene: &soul_scene,
-                face_atlas: &face_atlas,
-                white_pixel: &white_pixel,
-                soul_shadow_material: &soul_shadow_material,
-                soul_mask_material: &soul_mask_material,
-                x: (i as f32 - 1.0) * SOUL_SPACING,
-                z: 0.0,
-                index: state.next_index,
-                initial_expr: FaceExpression::Normal,
-                selected: i == 0,
-            },
-        );
-        state.next_index += 1;
-        state.soul_count += 1;
-    }
+    };
+    rebuild_soul_test_layout(
+        &mut commands,
+        &mut character_materials,
+        &test_assets,
+        &mut state,
+        &[],
+        &[],
+        &[],
+        &[],
+        SoulLayout::Default,
+    );
+    commands.insert_resource(test_assets);
 
     spawn_menu_ui(&mut commands, font);
+}
+
+fn build_blob_shadow_mesh() -> Mesh {
+    let outline = blob_shadow_outline();
+    let mut positions = Vec::with_capacity(outline.len() + 1);
+    positions.push([0.0, 0.0, 0.0]);
+    positions.extend(outline.iter().map(|p| [p.x, p.y, 0.0]));
+
+    let mut indices = Vec::with_capacity(outline.len() * 3);
+    for i in 0..outline.len() {
+        let current = (i + 1) as u32;
+        let next = if i + 1 == outline.len() {
+            1
+        } else {
+            (i + 2) as u32
+        };
+        indices.extend_from_slice(&[0, current, next]);
+    }
+
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_indices(Indices::U32(indices))
+    .with_computed_normals()
 }
 
 // ─── ボタンメニュー ───────────────────────────────────────────────────────────
@@ -546,6 +574,37 @@ fn spawn_soul_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
             Val::Percent(49.0),
             font,
         );
+
+        sec_label(s, "─ Shadow Caster ─", font);
+        spawn_btn(
+            s,
+            VisualTestAction::SetSoulLayout(SoulLayout::Default),
+            "Default",
+            Val::Percent(49.0),
+            font,
+        );
+        spawn_btn(
+            s,
+            VisualTestAction::SetSoulLayout(SoulLayout::ShadowCompare),
+            "Shadow A/B",
+            Val::Percent(49.0),
+            font,
+        );
+        s.spawn((
+            Text::new("Default  [Y]"),
+            TextFont {
+                font: font.clone(),
+                font_size: SFONT,
+                ..default()
+            },
+            TextColor(VAL_COL),
+            Node {
+                width: Val::Percent(100.0),
+                margin: UiRect::bottom(Val::Px(BTN_GAP)),
+                ..default()
+            },
+            DynamicTextKind::ShadowLayout,
+        ));
 
         sec_label(s, "─ 表情 ─", font);
         for expr in FaceExpression::ALL {

@@ -11,8 +11,9 @@ use crate::building::{
     TestBuilding, TestBuilding3dHandles, TestBuilding3dVisual, TestBuildingAssets,
     despawn_test_building_at, spawn_test_building,
 };
-use crate::soul::{SoulSpawnArgs, spawn_test_soul};
+use crate::soul::{SoulSpawnArgs, TestSoulShadowCaster, rebuild_soul_test_layout, spawn_test_soul};
 use crate::types::*;
+use hw_visual::visual3d::{SoulMaskProxy3d, SoulShadowProxy3d};
 
 type BtnQuery<'w, 's> = Query<
     'w,
@@ -38,6 +39,9 @@ pub fn handle_button_interactions(
         &TestSoulConfig,
         Option<&SelectedSoul>,
     )>,
+    q_shadow_proxies: Query<Entity, With<SoulShadowProxy3d>>,
+    q_blob_shadow_proxies: Query<Entity, With<SoulBlobShadowProxy3d>>,
+    q_mask_proxies: Query<Entity, With<SoulMaskProxy3d>>,
     q_buildings: Query<(Entity, &TestBuilding)>,
     q_building_3d: Query<(Entity, &TestBuilding3dVisual)>,
 ) {
@@ -63,6 +67,26 @@ pub fn handle_button_interactions(
             VisualTestAction::ResetElevation => {
                 state.view_height = VIEW_HEIGHT;
                 state.z_offset = Z_OFFSET;
+            }
+            VisualTestAction::SetSoulLayout(layout) => {
+                if state.soul_layout != layout
+                    && let Some(a) = &assets
+                {
+                    rebuild_soul_test_layout(
+                        &mut commands,
+                        &mut character_materials,
+                        a.as_ref(),
+                        &mut state,
+                        &q_souls
+                            .iter()
+                            .map(|(entity, _, _, _)| entity)
+                            .collect::<Vec<_>>(),
+                        &q_shadow_proxies.iter().collect::<Vec<_>>(),
+                        &q_blob_shadow_proxies.iter().collect::<Vec<_>>(),
+                        &q_mask_proxies.iter().collect::<Vec<_>>(),
+                        layout,
+                    );
+                }
             }
             VisualTestAction::SetFace(e) => state.face_mode = FaceMode::Single(e),
             VisualTestAction::SetFaceAll => state.face_mode = FaceMode::AllDifferent,
@@ -92,7 +116,8 @@ pub fn handle_button_interactions(
                 state.posterize_steps = DEFAULT_POSTERIZE_STEPS;
             }
             VisualTestAction::AddSoul => {
-                if state.soul_count < MAX_SOULS
+                if state.soul_layout == SoulLayout::Default
+                    && state.soul_count < MAX_SOULS
                     && let Some(a) = &assets
                 {
                     let expr = match state.face_mode {
@@ -108,8 +133,11 @@ pub fn handle_button_interactions(
                             soul_scene: &a.soul_scene,
                             face_atlas: &a.face_atlas,
                             white_pixel: &a.white_pixel,
+                            blob_shadow_mesh: &a.blob_shadow_mesh,
+                            blob_shadow_material: &a.blob_shadow_material,
                             soul_shadow_material: &a.soul_shadow_material,
                             soul_mask_material: &a.soul_mask_material,
+                            shadow_caster: TestSoulShadowCaster::Glb,
                             x: (state.soul_count as f32 - 1.0) * SOUL_SPACING * 0.5,
                             z: 0.0,
                             index: state.next_index,
@@ -122,7 +150,7 @@ pub fn handle_button_interactions(
                 }
             }
             VisualTestAction::RemoveSoul => {
-                if state.soul_count > 1 {
+                if state.soul_layout == SoulLayout::Default && state.soul_count > 1 {
                     let mut cands: Vec<_> = q_souls
                         .iter()
                         .map(|(e, _, cfg, sel)| (e, cfg.index, sel.is_some()))
@@ -154,6 +182,26 @@ pub fn handle_button_interactions(
                 }
             }
             VisualTestAction::ResetSoulPos => {
+                if state.soul_layout == SoulLayout::ShadowCompare
+                    && let Some(a) = &assets
+                {
+                    let layout = state.soul_layout;
+                    rebuild_soul_test_layout(
+                        &mut commands,
+                        &mut character_materials,
+                        a.as_ref(),
+                        &mut state,
+                        &q_souls
+                            .iter()
+                            .map(|(entity, _, _, _)| entity)
+                            .collect::<Vec<_>>(),
+                        &q_shadow_proxies.iter().collect::<Vec<_>>(),
+                        &q_blob_shadow_proxies.iter().collect::<Vec<_>>(),
+                        &q_mask_proxies.iter().collect::<Vec<_>>(),
+                        layout,
+                    );
+                    continue;
+                }
                 let mut sorted: Vec<_> = q_souls.iter_mut().collect();
                 sorted.sort_by_key(|(_, _, cfg, _)| cfg.index);
                 let n = sorted.len();

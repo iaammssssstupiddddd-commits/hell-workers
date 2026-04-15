@@ -2,7 +2,7 @@
 
 use super::world::TILE_SIZE;
 use bevy::camera::visibility::RenderLayers;
-use bevy::prelude::{Color, Vec3};
+use bevy::prelude::{Color, Vec3, Vec4};
 
 /// Camera2d が使用する RenderLayer インデックス（デフォルトレイヤー）
 pub const LAYER_2D: usize = 0;
@@ -81,6 +81,37 @@ pub const SOUL_GLB_SCALE: f32 = TILE_SIZE * 0.8;
 pub const SOUL_FACE_SCALE_MULTIPLIER: f32 = 1.6;
 /// 表示用 Soul mesh の後傾を打ち消す shadow proxy 用の起こし角度（度）。
 pub const SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES: f32 = -40.0;
+/// receiver shader が扱う Soul radial shadow projector の最大数。
+pub const MAX_SOUL_SHADOW_PROJECTORS: usize = 12;
+/// Soul radial shadow projector のワールド半径。
+pub const SOUL_SHADOW_PROJECTOR_RADIUS: f32 = TILE_SIZE * 0.85;
+/// Soul radial shadow projector の外周フェザー幅。
+pub const SOUL_SHADOW_PROJECTOR_FEATHER: f32 = TILE_SIZE * 0.55;
+/// Soul radial shadow projector の影寄与の強さ。
+pub const SOUL_SHADOW_PROJECTOR_STRENGTH: f32 = 1.0;
+/// Soul projected shadow の前方到達距離。
+pub const SOUL_SHADOW_PROJECTOR_FORWARD_EXTENT: f32 = TILE_SIZE * 2.4;
+
+/// 影スタイルの共通パラメータ。
+///
+/// `x`: effect mix, `y`: shadow amount threshold, `z`: threshold softness, `w`: full-shadow darken
+pub fn topdown_shadow_style_params() -> Vec4 {
+    Vec4::new(0.92, 0.20, 0.18, 0.74)
+}
+
+/// 影スタイルの共通ティント。
+///
+/// `rgb`: shadow tint target, `a`: tint strength
+pub fn topdown_shadow_style_tint() -> Vec4 {
+    Vec4::new(0.78, 0.84, 0.96, 0.30)
+}
+
+/// 影ぼかしの共通パラメータ。
+///
+/// `x`: blur radius in shadow texels, `yzw`: reserved
+pub fn topdown_shadow_style_blur() -> Vec4 {
+    Vec4::new(18.0, 0.0, 0.0, 0.0)
+}
 
 /// TopDown 2.5D 表示で壁・Soul 両方の陰影に使う共通の太陽方向。
 ///

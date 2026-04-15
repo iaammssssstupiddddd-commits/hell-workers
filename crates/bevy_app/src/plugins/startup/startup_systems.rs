@@ -1,5 +1,7 @@
 use super::asset_catalog::create_game_assets;
-use super::rtt_setup::{self, Camera3dRtt, Camera3dSoulMaskRtt, RttDirectionalLight};
+use super::rtt_setup::{
+    self, Camera3dRtt, Camera3dSoulMaskRtt, RttDirectionalLight, RttExtraDirectionalLight,
+};
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
@@ -165,6 +167,28 @@ pub(super) fn setup(
         .build(),
         RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]),
         RttDirectionalLight,
+    ));
+
+    let extra_sun_dir = Vec3::new(-0.66, 0.46, 0.59).normalize();
+    commands.spawn((
+        DirectionalLight {
+            shadows_enabled: perf_toggles.extra_directional_light_enabled,
+            illuminance: if perf_toggles.extra_directional_light_enabled {
+                8_000.0
+            } else {
+                0.0
+            },
+            ..default()
+        },
+        Transform::from_translation(extra_sun_dir * 360.0).looking_at(Vec3::ZERO, Vec3::Y),
+        CascadeShadowConfigBuilder {
+            first_cascade_far_bound: 120.0,
+            maximum_distance: 500.0,
+            ..default()
+        }
+        .build(),
+        RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]),
+        RttExtraDirectionalLight,
     ));
 
     commands.spawn((

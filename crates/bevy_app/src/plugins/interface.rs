@@ -2,10 +2,11 @@
 
 use crate::interface::ui::dev_panel::{
     toggle_instant_build_button_system, toggle_render3d_button_system,
-    toggle_rtt_light_button_system, toggle_rtt_scene_objects_button_system,
-    toggle_rtt_terrain_button_system, toggle_soul_mask_button_system,
-    update_instant_build_button_visual_system, update_lod_indicator_system,
-    update_render_perf_status_system, update_render3d_button_visual_system,
+    toggle_rtt_extra_light_button_system, toggle_rtt_light_button_system,
+    toggle_rtt_scene_objects_button_system, toggle_rtt_terrain_button_system,
+    toggle_soul_mask_button_system, update_instant_build_button_visual_system,
+    update_lod_indicator_system, update_render_perf_status_system,
+    update_render3d_button_visual_system, update_rtt_extra_light_button_visual_system,
     update_rtt_light_button_visual_system, update_rtt_scene_objects_button_visual_system,
     update_rtt_terrain_button_visual_system, update_soul_mask_button_visual_system,
 };
@@ -36,6 +37,8 @@ impl Plugin for InterfacePlugin {
                 update_soul_mask_button_visual_system,
                 toggle_rtt_light_button_system,
                 update_rtt_light_button_visual_system,
+                toggle_rtt_extra_light_button_system,
+                update_rtt_extra_light_button_visual_system,
                 toggle_rtt_terrain_button_system,
                 update_rtt_terrain_button_visual_system,
                 toggle_rtt_scene_objects_button_system,

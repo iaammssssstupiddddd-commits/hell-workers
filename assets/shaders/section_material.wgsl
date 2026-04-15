@@ -6,6 +6,7 @@
     forward_io::{VertexOutput, FragmentOutput},
     mesh_view_bindings::globals,
 }
+#import "shaders/shadow_style.wgsl" apply_directional_shadow_style
 
 struct SectionMaterialUniforms {
     cut_position:    vec4<f32>,
@@ -23,6 +24,11 @@ struct SectionMaterialUniforms {
     map_world_height:              f32,
     domain_warp_strength:          f32,
     terrain_kind:                  f32,
+    shadow_style_params:           vec4<f32>,
+    shadow_style_tint:             vec4<f32>,
+    shadow_style_blur:             vec4<f32>,
+    soul_shadow_projectors:        array<vec4<f32>, 12>,
+    soul_shadow_projector_meta:    vec4<f32>,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> section_material: SectionMaterialUniforms;
@@ -344,6 +350,18 @@ fn fragment(
     var out: FragmentOutput;
     if (pbr_input.material.flags & pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT) == 0u {
         out.color = apply_pbr_lighting(pbr_input);
+        out.color = vec4<f32>(
+            apply_directional_shadow_style(
+                pbr_input,
+                out.color.rgb,
+                section_material.shadow_style_params,
+                section_material.shadow_style_tint,
+                section_material.shadow_style_blur,
+                section_material.soul_shadow_projectors,
+                section_material.soul_shadow_projector_meta,
+            ),
+            out.color.a,
+        );
     } else {
         out.color = pbr_input.material.base_color;
     }

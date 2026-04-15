@@ -130,7 +130,7 @@ pub fn sync_soul_shadow_proxy_3d_system(
     mut q_proxies: SoulShadowProxy3dQuery,
 ) {
     let pitch_correction =
-        Quat::from_rotation_x(SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES.to_radians());
+        Quat::from_rotation_x((-SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES).to_radians());
 
     for (proxy, mut proxy_transform) in q_proxies.iter_mut() {
         if let Ok((_, soul_transform)) = q_souls.get(proxy.owner) {
@@ -359,7 +359,8 @@ pub fn apply_soul_shadow_gltf_render_layers_on_ready(
                 .remove::<MeshMaterial3d<SoulShadowMaterial>>()
                 .insert(MeshMaterial3d(
                     character_handles.soul_shadow_proxy_material.clone(),
-                ));
+                ))
+                .insert(NotShadowCaster);
         }
     }
 }

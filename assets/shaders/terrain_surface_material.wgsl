@@ -5,6 +5,7 @@
     forward_io::{VertexOutput, FragmentOutput},
     mesh_view_bindings::globals,
 }
+#import "shaders/shadow_style.wgsl" apply_directional_shadow_style
 
 struct TerrainSurfaceUniforms {
     cut_position:               vec4<f32>,
@@ -22,6 +23,11 @@ struct TerrainSurfaceUniforms {
     lut_inland:                 vec4<f32>,
     lut_rock:                   vec4<f32>,
     feature_lut_constants_ready: f32,
+    shadow_style_params:        vec4<f32>,
+    shadow_style_tint:          vec4<f32>,
+    shadow_style_blur:          vec4<f32>,
+    soul_shadow_projectors:     array<vec4<f32>, 12>,
+    soul_shadow_projector_meta: vec4<f32>,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> tsm: TerrainSurfaceUniforms;
@@ -641,6 +647,18 @@ fn fragment(
     var out: FragmentOutput;
     if (pbr_input.material.flags & pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT) == 0u {
         out.color = apply_pbr_lighting(pbr_input);
+        out.color = vec4<f32>(
+            apply_directional_shadow_style(
+                pbr_input,
+                out.color.rgb,
+                tsm.shadow_style_params,
+                tsm.shadow_style_tint,
+                tsm.shadow_style_blur,
+                tsm.soul_shadow_projectors,
+                tsm.soul_shadow_projector_meta,
+            ),
+            out.color.a,
+        );
     } else {
         out.color = pbr_input.material.base_color;
     }

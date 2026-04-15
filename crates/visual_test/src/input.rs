@@ -6,7 +6,7 @@ use crate::building::{
     TestBuilding, TestBuilding3dHandles, TestBuilding3dVisual, TestBuildingAssets,
     despawn_test_building_at, spawn_test_building,
 };
-use crate::soul::{SoulSpawnArgs, spawn_test_soul};
+use crate::soul::{SoulSpawnArgs, TestSoulShadowCaster, rebuild_soul_test_layout, spawn_test_soul};
 use crate::types::*;
 
 const FACE_KEYS: [KeyCode; 6] = [
@@ -28,6 +28,7 @@ pub fn keyboard_input(
     building_assets: Option<Res<TestBuildingAssets>>,
     building_3d_handles: Option<Res<TestBuilding3dHandles>>,
     mut character_materials: ResMut<Assets<CharacterMaterial>>,
+    soul_layout_entities: SoulLayoutEntities,
     mut q_souls: Query<(
         Entity,
         &mut Transform,
@@ -82,6 +83,7 @@ pub fn keyboard_input(
             &mut commands,
             &assets,
             &mut character_materials,
+            &soul_layout_entities,
             &mut q_souls,
             &q_anim_handles,
             &time,
@@ -107,6 +109,7 @@ fn handle_soul_mode(
     commands: &mut Commands,
     assets: &Option<Res<TestAssets>>,
     character_materials: &mut Assets<CharacterMaterial>,
+    soul_layout_entities: &SoulLayoutEntities,
     q_souls: &mut Query<(
         Entity,
         &mut Transform,
@@ -165,9 +168,36 @@ fn handle_soul_mode(
         state.rim_strength = DEFAULT_RIM_STRENGTH;
         state.posterize_steps = DEFAULT_POSTERIZE_STEPS;
     }
+    if keys.just_pressed(KeyCode::KeyY)
+        && let Some(assets) = assets
+    {
+        let layout = state.soul_layout.toggle();
+        rebuild_soul_test_layout(
+            commands,
+            character_materials,
+            assets.as_ref(),
+            state,
+            &q_souls
+                .iter()
+                .map(|(entity, _, _, _)| entity)
+                .collect::<Vec<_>>(),
+            &soul_layout_entities
+                .shadow_proxies
+                .iter()
+                .collect::<Vec<_>>(),
+            &soul_layout_entities
+                .blob_shadow_proxies
+                .iter()
+                .collect::<Vec<_>>(),
+            &soul_layout_entities.mask_proxies.iter().collect::<Vec<_>>(),
+            layout,
+        );
+        return;
+    }
 
     // Soul 追加 [=]
     if keys.just_pressed(KeyCode::Equal)
+        && state.soul_layout == SoulLayout::Default
         && state.soul_count < MAX_SOULS
         && let Some(assets) = assets
     {
@@ -184,8 +214,11 @@ fn handle_soul_mode(
                 soul_scene: &assets.soul_scene,
                 face_atlas: &assets.face_atlas,
                 white_pixel: &assets.white_pixel,
+                blob_shadow_mesh: &assets.blob_shadow_mesh,
+                blob_shadow_material: &assets.blob_shadow_material,
                 soul_shadow_material: &assets.soul_shadow_material,
                 soul_mask_material: &assets.soul_mask_material,
+                shadow_caster: TestSoulShadowCaster::Glb,
                 x: (state.soul_count as f32 - 1.0) * SOUL_SPACING * 0.5,
                 z: 0.0,
                 index: state.next_index,
@@ -198,7 +231,10 @@ fn handle_soul_mode(
     }
 
     // Soul 削除 [-]
-    if keys.just_pressed(KeyCode::Minus) && state.soul_count > 1 {
+    if keys.just_pressed(KeyCode::Minus)
+        && state.soul_layout == SoulLayout::Default
+        && state.soul_count > 1
+    {
         let mut candidates: Vec<_> = q_souls
             .iter()
             .map(|(e, _, cfg, sel)| (e, cfg.index, sel.is_some()))
@@ -232,6 +268,32 @@ fn handle_soul_mode(
 
     // 位置リセット [R]
     if keys.just_pressed(KeyCode::KeyR) {
+        if state.soul_layout == SoulLayout::ShadowCompare
+            && let Some(assets) = assets
+        {
+            let layout = state.soul_layout;
+            rebuild_soul_test_layout(
+                commands,
+                character_materials,
+                assets.as_ref(),
+                state,
+                &q_souls
+                    .iter()
+                    .map(|(entity, _, _, _)| entity)
+                    .collect::<Vec<_>>(),
+                &soul_layout_entities
+                    .shadow_proxies
+                    .iter()
+                    .collect::<Vec<_>>(),
+                &soul_layout_entities
+                    .blob_shadow_proxies
+                    .iter()
+                    .collect::<Vec<_>>(),
+                &soul_layout_entities.mask_proxies.iter().collect::<Vec<_>>(),
+                layout,
+            );
+            return;
+        }
         let mut sorted: Vec<_> = q_souls.iter_mut().collect();
         sorted.sort_by_key(|(_, _, cfg, _)| cfg.index);
         let n = sorted.len();

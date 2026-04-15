@@ -23,6 +23,10 @@ pub struct ToggleSoulMaskButton;
 #[derive(Component)]
 pub struct ToggleRttLightButton;
 
+/// 追加 RtT directional light トグルボタンのマーカー
+#[derive(Component)]
+pub struct ToggleRttExtraLightButton;
+
 /// RtT terrain トグルボタンのマーカー
 #[derive(Component)]
 pub struct ToggleRttTerrainButton;
@@ -92,6 +96,32 @@ pub fn spawn_dev_panel_system(
             .with_children(|btn| {
                 btn.spawn((
                     Text::new("3D: ON"),
+                    TextFont {
+                        font_size: 11.0,
+                        ..default()
+                    },
+                    TextColor(Color::WHITE),
+                ));
+            });
+
+        parent
+            .spawn((
+                Button,
+                Node {
+                    padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
+                    border: UiRect::all(Val::Px(1.0)),
+                    border_radius: BorderRadius::all(Val::Px(3.0)),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                BackgroundColor(Color::srgb(0.12, 0.10, 0.18)),
+                BorderColor::all(Color::srgb(0.28, 0.24, 0.42)),
+                ToggleRttExtraLightButton,
+            ))
+            .with_children(|btn| {
+                btn.spawn((
+                    Text::new("Light2: OFF"),
                     TextFont {
                         font_size: 11.0,
                         ..default()
@@ -266,7 +296,7 @@ pub fn spawn_dev_panel_system(
         ));
 
         parent.spawn((
-            Text::new("RTT:H Mask:ON Light:ON Terrain:ON Objs:ON"),
+            Text::new("RTT:H Mask:ON Light:ON Light2:OFF Terrain:ON Objs:ON"),
             TextFont {
                 font_size: 11.0,
                 ..default()
@@ -357,6 +387,19 @@ pub fn toggle_rtt_light_button_system(
     }
 }
 
+/// 追加 RtT light ボタンのクリックを処理
+pub fn toggle_rtt_extra_light_button_system(
+    q_button: Query<&Interaction, (Changed<Interaction>, With<ToggleRttExtraLightButton>)>,
+    mut perf_toggles: ResMut<crate::RenderPerfToggles>,
+) {
+    for interaction in q_button.iter() {
+        if *interaction == Interaction::Pressed {
+            perf_toggles.extra_directional_light_enabled =
+                !perf_toggles.extra_directional_light_enabled;
+        }
+    }
+}
+
 /// RtT terrain ボタンのクリックを処理
 pub fn toggle_rtt_terrain_button_system(
     q_button: Query<&Interaction, (Changed<Interaction>, With<ToggleRttTerrainButton>)>,
@@ -424,6 +467,11 @@ pub fn update_render_perf_status_system(
     } else {
         "OFF"
     };
+    let light2 = if perf_toggles.extra_directional_light_enabled {
+        "ON"
+    } else {
+        "OFF"
+    };
     let terrain = if perf_toggles.terrain_enabled {
         "ON"
     } else {
@@ -434,8 +482,9 @@ pub fn update_render_perf_status_system(
     } else {
         "OFF"
     };
-    let text =
-        format!("RTT:{rtt} Mask:{mask} Light:{light} Terrain:{terrain} Objs:{scene_objects}");
+    let text = format!(
+        "RTT:{rtt} Mask:{mask} Light:{light} Light2:{light2} Terrain:{terrain} Objs:{scene_objects}"
+    );
 
     for mut label in q_text.iter_mut() {
         label.0 = text.clone();
@@ -502,6 +551,39 @@ pub fn update_rtt_light_button_visual_system(
                     "Light: ON".to_string()
                 } else {
                     "Light: OFF".to_string()
+                };
+            }
+        }
+    }
+}
+
+/// 追加 RtT light ボタンのラベルと色を同期する。
+pub fn update_rtt_extra_light_button_visual_system(
+    perf_toggles: Res<crate::RenderPerfToggles>,
+    mut q_button: Query<
+        (&Children, &mut BackgroundColor, &mut BorderColor),
+        With<ToggleRttExtraLightButton>,
+    >,
+    mut q_text: Query<&mut Text>,
+) {
+    if !perf_toggles.is_changed() {
+        return;
+    }
+
+    for (children, mut bg, mut border) in q_button.iter_mut() {
+        if perf_toggles.extra_directional_light_enabled {
+            *bg = BackgroundColor(Color::srgb(0.20, 0.14, 0.30));
+            *border = BorderColor::all(Color::srgb(0.42, 0.32, 0.56));
+        } else {
+            *bg = BackgroundColor(Color::srgb(0.12, 0.10, 0.18));
+            *border = BorderColor::all(Color::srgb(0.28, 0.24, 0.42));
+        }
+        for child in children.iter() {
+            if let Ok(mut text) = q_text.get_mut(child) {
+                text.0 = if perf_toggles.extra_directional_light_enabled {
+                    "Light2: ON".to_string()
+                } else {
+                    "Light2: OFF".to_string()
                 };
             }
         }

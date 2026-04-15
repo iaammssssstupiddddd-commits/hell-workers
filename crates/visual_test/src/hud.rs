@@ -84,6 +84,9 @@ pub fn update_dynamic_texts(
             DynamicTextKind::ViewDir => format!("{}  [V]", elev.dir.label()),
             DynamicTextKind::Height => format!("{:.0}", state.view_height),
             DynamicTextKind::Offset => format!("{:.0}", state.z_offset),
+            DynamicTextKind::ShadowLayout => {
+                format!("{}  [Y]", state.soul_layout.label())
+            }
             DynamicTextKind::Ghost => format!("{:.2}", state.ghost_alpha),
             DynamicTextKind::Rim => format!("{:.2}", state.rim_strength),
             DynamicTextKind::Posterize => format!("{:.1}", state.posterize_steps),
@@ -97,6 +100,7 @@ pub fn update_dynamic_texts(
 fn is_selected(action: &VisualTestAction, state: &TestState) -> bool {
     match action {
         VisualTestAction::SetMode(m) => *m == state.mode,
+        VisualTestAction::SetSoulLayout(layout) => *layout == state.soul_layout,
         VisualTestAction::SetFace(e) => matches!(state.face_mode, FaceMode::Single(f) if f == *e),
         VisualTestAction::SetFaceAll => matches!(state.face_mode, FaceMode::AllDifferent),
         VisualTestAction::SetAnimation(i) => *i == state.anim_clip_idx,

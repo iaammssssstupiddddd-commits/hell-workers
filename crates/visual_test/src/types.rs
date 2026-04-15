@@ -1,10 +1,13 @@
 use bevy::color::Srgba;
+use bevy::ecs::system::SystemParam;
 use bevy::gltf::Gltf;
+use bevy::pbr::StandardMaterial;
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{AlphaMode2d, Material2d};
 use hw_core::constants::{VIEW_HEIGHT, Z_OFFSET};
+use hw_visual::visual3d::{SoulMaskProxy3d, SoulShadowProxy3d};
 use hw_visual::{CharacterMaterial, SoulMaskMaterial, SoulShadowMaterial};
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
@@ -293,6 +296,7 @@ pub enum DynamicTextKind {
     ViewDir,
     Height,
     Offset,
+    ShadowLayout,
     Ghost,
     Rim,
     Posterize,
@@ -310,6 +314,7 @@ pub enum VisualTestAction {
     OffsetDown,
     OffsetUp,
     ResetElevation,
+    SetSoulLayout(SoulLayout),
     // Soul
     SetFace(FaceExpression),
     SetFaceAll,
@@ -359,6 +364,29 @@ impl AppMode {
         match self {
             Self::Soul => "SOUL",
             Self::Build => "BUILD",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SoulLayout {
+    #[default]
+    Default,
+    ShadowCompare,
+}
+
+impl SoulLayout {
+    pub fn toggle(self) -> Self {
+        match self {
+            Self::Default => Self::ShadowCompare,
+            Self::ShadowCompare => Self::Default,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Default => "Default",
+            Self::ShadowCompare => "A/B  L=GLB R=Blob",
         }
     }
 }
@@ -423,13 +451,18 @@ impl TestBuildingKind {
 }
 
 #[derive(Component)]
+pub struct SoulMaskConfig {
+    pub mask_mat: Handle<SoulMaskMaterial>,
+}
+
+#[derive(Component)]
 pub struct SoulShadowConfig {
     pub shadow_mat: Handle<SoulShadowMaterial>,
 }
 
 #[derive(Component)]
-pub struct SoulMaskConfig {
-    pub mask_mat: Handle<SoulMaskMaterial>,
+pub struct SoulBlobShadowProxy3d {
+    pub owner: Entity,
 }
 
 #[derive(Component)]
@@ -445,6 +478,8 @@ pub struct TestAssets {
     pub face_atlas: Handle<Image>,
     pub white_pixel: Handle<Image>,
     pub gltf_handle: Handle<Gltf>,
+    pub blob_shadow_mesh: Handle<Mesh>,
+    pub blob_shadow_material: Handle<StandardMaterial>,
     pub soul_shadow_material: Handle<SoulShadowMaterial>,
     pub soul_mask_material: Handle<SoulMaskMaterial>,
 }
@@ -460,6 +495,7 @@ pub struct TestState {
     pub mode: AppMode,
     pub face_mode: FaceMode,
     pub motion: MotionMode,
+    pub soul_layout: SoulLayout,
     pub soul_count: usize,
     pub next_index: usize,
     pub anim_clip_idx: usize,
@@ -479,6 +515,7 @@ impl Default for TestState {
             mode: AppMode::Soul,
             face_mode: FaceMode::Single(FaceExpression::Normal),
             motion: MotionMode::Idle,
+            soul_layout: SoulLayout::Default,
             soul_count: 0,
             next_index: 0,
             anim_clip_idx: 0,
@@ -504,6 +541,13 @@ pub type AnimPlayerQuery<'w, 's> = Query<
         &'static mut AnimationTransitions,
     ),
 >;
+
+#[derive(SystemParam)]
+pub struct SoulLayoutEntities<'w, 's> {
+    pub shadow_proxies: Query<'w, 's, Entity, With<SoulShadowProxy3d>>,
+    pub blob_shadow_proxies: Query<'w, 's, Entity, With<SoulBlobShadowProxy3d>>,
+    pub mask_proxies: Query<'w, 's, Entity, With<SoulMaskProxy3d>>,
+}
 
 pub type Cam3dSyncQuery<'w, 's> = Query<
     'w,

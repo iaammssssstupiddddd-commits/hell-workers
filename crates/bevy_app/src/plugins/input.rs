@@ -27,6 +27,7 @@ impl Plugin for InputPlugin {
                 rtt_quality_cycle_system,
                 soul_mask_toggle_system,
                 rtt_directional_light_toggle_system,
+                rtt_extra_directional_light_toggle_system,
                 rtt_terrain_toggle_system,
                 rtt_scene_objects_toggle_system,
             )
@@ -87,6 +88,21 @@ fn rtt_directional_light_toggle_system(
         info!(
             "RtT directional light enabled: {}",
             perf_toggles.directional_light_enabled
+        );
+    }
+}
+
+/// F9 キーで追加の RtT DirectionalLight をトグルする。
+fn rtt_extra_directional_light_toggle_system(
+    buttons: Res<ButtonInput<KeyCode>>,
+    mut perf_toggles: ResMut<crate::RenderPerfToggles>,
+) {
+    if buttons.just_pressed(KeyCode::F9) {
+        perf_toggles.extra_directional_light_enabled =
+            !perf_toggles.extra_directional_light_enabled;
+        info!(
+            "RtT extra directional light enabled: {}",
+            perf_toggles.extra_directional_light_enabled
         );
     }
 }

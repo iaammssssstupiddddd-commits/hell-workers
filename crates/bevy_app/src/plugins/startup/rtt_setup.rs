@@ -66,6 +66,10 @@ pub struct Camera3dSoulMaskRtt;
 #[derive(Component)]
 pub struct RttDirectionalLight;
 
+/// 追加テスト用 RtT DirectionalLight のマーカー。
+#[derive(Component)]
+pub struct RttExtraDirectionalLight;
+
 /// RtT テクスチャを生成して Assets に登録し、ハンドルを返す。
 /// ウィンドウリサイズ時に呼び直すことで全参照箇所が追従する。
 pub fn create_rtt_texture(width: u32, height: u32, images: &mut Assets<Image>) -> Handle<Image> {

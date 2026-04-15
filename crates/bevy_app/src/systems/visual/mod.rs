@@ -12,6 +12,7 @@ pub mod elevation_view;
 pub mod placement_ghost;
 pub mod section_cut;
 pub mod soul_animation;
+pub mod soul_shadow_projector;
 pub mod task_area_visual;
 pub mod terrain_lod;
 pub mod terrain_material;

@@ -50,6 +50,7 @@ pub struct Render3dVisible(pub bool);
 pub struct RenderPerfToggles {
     pub soul_mask_enabled: bool,
     pub directional_light_enabled: bool,
+    pub extra_directional_light_enabled: bool,
     pub terrain_enabled: bool,
     pub scene_objects_enabled: bool,
 }
@@ -69,6 +70,9 @@ impl Default for RenderPerfToggles {
         Self {
             soul_mask_enabled: !env_flag_is_true("HW_DISABLE_SOUL_MASK"),
             directional_light_enabled: !env_flag_is_true("HW_DISABLE_RTT_DIRECTIONAL_LIGHT"),
+            extra_directional_light_enabled: env_flag_is_true(
+                "HW_ENABLE_RTT_EXTRA_DIRECTIONAL_LIGHT",
+            ),
             terrain_enabled: !env_flag_is_true("HW_DISABLE_RTT_TERRAIN"),
             scene_objects_enabled: !env_flag_is_true("HW_DISABLE_RTT_SCENE_OBJECTS"),
         }
