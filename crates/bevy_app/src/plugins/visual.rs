@@ -304,18 +304,18 @@ fn apply_rtt_extra_directional_light_toggle_system(
     }
 }
 
+type SceneObjectQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    Or<(With<Building3dVisual>, With<SoulProxy3d>, With<FamiliarProxy3d>)>,
+>;
+
 /// 地形と main scene object を個別に隠して、RtT 固定費の内訳を切り分ける。
 fn apply_rtt_scene_content_toggle_system(
     perf_toggles: Res<crate::RenderPerfToggles>,
     q_terrain: Query<Entity, With<TerrainChunk>>,
-    q_scene_objects: Query<
-        Entity,
-        Or<(
-            With<Building3dVisual>,
-            With<SoulProxy3d>,
-            With<FamiliarProxy3d>,
-        )>,
-    >,
+    q_scene_objects: SceneObjectQuery,
     mut commands: Commands,
 ) {
     if !perf_toggles.is_changed() {

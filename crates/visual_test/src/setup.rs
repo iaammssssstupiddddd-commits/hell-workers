@@ -15,7 +15,7 @@ use hw_core::constants::{
 };
 use hw_visual::{CharacterMaterial, SoulMaskMaterial, SoulShadowMaterial};
 
-use crate::soul::{blob_shadow_outline, rebuild_soul_test_layout};
+use crate::soul::{SoulRebuildEntities, blob_shadow_outline, rebuild_soul_test_layout};
 use crate::types::*;
 
 // ─── シーン初期化 ─────────────────────────────────────────────────────────────
@@ -210,10 +210,7 @@ pub fn setup_scene(
         &mut character_materials,
         &test_assets,
         &mut state,
-        &[],
-        &[],
-        &[],
-        &[],
+        SoulRebuildEntities::default(),
         SoulLayout::Default,
     );
     commands.insert_resource(test_assets);

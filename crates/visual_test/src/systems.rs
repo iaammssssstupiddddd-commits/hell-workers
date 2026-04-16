@@ -11,7 +11,10 @@ use crate::building::{
     TestBuilding, TestBuilding3dHandles, TestBuilding3dVisual, TestBuildingAssets,
     despawn_test_building_at, spawn_test_building,
 };
-use crate::soul::{SoulSpawnArgs, TestSoulShadowCaster, rebuild_soul_test_layout, spawn_test_soul};
+use crate::soul::{
+    SoulRebuildEntities, SoulSpawnArgs, TestSoulShadowCaster, rebuild_soul_test_layout,
+    spawn_test_soul,
+};
 use crate::types::*;
 use hw_visual::visual3d::{SoulMaskProxy3d, SoulShadowProxy3d};
 
@@ -77,13 +80,15 @@ pub fn handle_button_interactions(
                         &mut character_materials,
                         a.as_ref(),
                         &mut state,
-                        &q_souls
-                            .iter()
-                            .map(|(entity, _, _, _)| entity)
-                            .collect::<Vec<_>>(),
-                        &q_shadow_proxies.iter().collect::<Vec<_>>(),
-                        &q_blob_shadow_proxies.iter().collect::<Vec<_>>(),
-                        &q_mask_proxies.iter().collect::<Vec<_>>(),
+                        SoulRebuildEntities {
+                            souls: q_souls
+                                .iter()
+                                .map(|(entity, _, _, _)| entity)
+                                .collect(),
+                            shadows: q_shadow_proxies.iter().collect(),
+                            blob_shadows: q_blob_shadow_proxies.iter().collect(),
+                            masks: q_mask_proxies.iter().collect(),
+                        },
                         layout,
                     );
                 }
@@ -191,13 +196,15 @@ pub fn handle_button_interactions(
                         &mut character_materials,
                         a.as_ref(),
                         &mut state,
-                        &q_souls
-                            .iter()
-                            .map(|(entity, _, _, _)| entity)
-                            .collect::<Vec<_>>(),
-                        &q_shadow_proxies.iter().collect::<Vec<_>>(),
-                        &q_blob_shadow_proxies.iter().collect::<Vec<_>>(),
-                        &q_mask_proxies.iter().collect::<Vec<_>>(),
+                        SoulRebuildEntities {
+                            souls: q_souls
+                                .iter()
+                                .map(|(entity, _, _, _)| entity)
+                                .collect(),
+                            shadows: q_shadow_proxies.iter().collect(),
+                            blob_shadows: q_blob_shadow_proxies.iter().collect(),
+                            masks: q_mask_proxies.iter().collect(),
+                        },
                         layout,
                     );
                     continue;

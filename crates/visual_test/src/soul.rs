@@ -291,27 +291,32 @@ pub fn sync_blob_shadow_proxies(
     }
 }
 
+#[derive(Default)]
+pub struct SoulRebuildEntities {
+    pub souls: Vec<Entity>,
+    pub shadows: Vec<Entity>,
+    pub blob_shadows: Vec<Entity>,
+    pub masks: Vec<Entity>,
+}
+
 pub fn rebuild_soul_test_layout(
     commands: &mut Commands,
     character_materials: &mut Assets<CharacterMaterial>,
     assets: &TestAssets,
     state: &mut TestState,
-    soul_entities: &[Entity],
-    shadow_entities: &[Entity],
-    blob_shadow_entities: &[Entity],
-    mask_entities: &[Entity],
+    entities: SoulRebuildEntities,
     layout: SoulLayout,
 ) {
-    for &entity in soul_entities {
+    for entity in entities.souls {
         commands.entity(entity).despawn();
     }
-    for &entity in shadow_entities {
+    for entity in entities.shadows {
         commands.entity(entity).despawn();
     }
-    for &entity in blob_shadow_entities {
+    for entity in entities.blob_shadows {
         commands.entity(entity).despawn();
     }
-    for &entity in mask_entities {
+    for entity in entities.masks {
         commands.entity(entity).despawn();
     }
 
