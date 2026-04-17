@@ -17,7 +17,6 @@ pub struct TaskAreaContext<'w, 's> {
 }
 
 pub fn update_task_area_material_system(
-    time: Res<Time>,
     q_visuals: Query<(&TaskAreaVisual, &MeshMaterial2d<TaskAreaMaterial>)>,
     mut materials: ResMut<Assets<TaskAreaMaterial>>,
     q_familiars: Query<(Entity, &TaskArea)>,
@@ -36,31 +35,36 @@ pub fn update_task_area_material_system(
     let editing_mode = matches!(ctx.task_context.0, TaskMode::AreaSelection(_));
 
     for (visual, material_handle) in q_visuals.iter() {
-        if let Some(material) = materials.get_mut(&material_handle.0) {
-            material.time = time.elapsed_secs();
+        let Ok((fam_entity, area)) = q_familiars.get(visual.familiar) else {
+            continue;
+        };
+        let new_size = area.size();
 
-            if let Ok((fam_entity, area)) = q_familiars.get(visual.familiar) {
-                material.size = area.size();
+        let is_selected = ctx.selected.0 == Some(fam_entity);
+        let is_border_hovered = cursor_pos.is_some_and(|pos| area.contains_border(pos, 6.0));
+        let is_familiar_hovered = ctx.hovered_entity.0 == Some(fam_entity);
+        let is_hovered = is_border_hovered || is_familiar_hovered;
 
-                let is_selected = ctx.selected.0 == Some(fam_entity);
+        let new_state: u32 = if editing_mode && is_selected {
+            3
+        } else if is_selected {
+            2
+        } else if is_hovered {
+            1
+        } else {
+            0
+        };
 
-                // 強調条件: 境界線をホバーしているか、使い魔本体をホバーしているか
-                let is_border_hovered =
-                    cursor_pos.is_some_and(|pos| area.contains_border(pos, 6.0));
-                let is_familiar_hovered = ctx.hovered_entity.0 == Some(fam_entity);
-                let is_hovered = is_border_hovered || is_familiar_hovered;
-
-                let state = if editing_mode && is_selected {
-                    3 // Editing
-                } else if is_selected {
-                    2 // Selected
-                } else if is_hovered {
-                    1 // Hover
-                } else {
-                    0 // Idle
-                };
-                material.state = state;
-            }
+        let Some(material) = materials.get(&material_handle.0) else {
+            continue;
+        };
+        if material.state == new_state && material.size == new_size {
+            continue;
         }
+        let Some(material) = materials.get_mut(&material_handle.0) else {
+            continue;
+        };
+        material.size = new_size;
+        material.state = new_state;
     }
 }

@@ -3,20 +3,18 @@
 //! Creates transport requests for wood and mud delivery to wall construction sites.
 
 use bevy::prelude::*;
-use hw_core::area::TaskArea;
 use hw_core::constants::{
     TILE_SIZE, WALL_COAT_PRIORITY, WALL_FRAME_PRIORITY, WALL_MUD_PER_TILE, WALL_WOOD_PER_TILE,
     WHEELBARROW_CAPACITY,
 };
-use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::TaskWorkers;
 use hw_jobs::construction::{TargetWallConstructionSite, WallConstructionPhase, WallTileBlueprint};
 use hw_jobs::{Designation, Priority, TaskSlots, WallConstructionSite, WallTileState, WorkType};
 use hw_spatial::ResourceSpatialGrid;
-use hw_world::zones::Yard;
-use std::collections::HashMap;
 use std::time::Instant;
 
+use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
+use crate::transport_request::producer::tile_wait_cache::WallTileWaitingCache;
 use crate::transport_request::producer::{ConstructionDeliverySpec, RequestSyncSpec};
 use crate::transport_request::{TransportRequest, TransportRequestKind, TransportRequestMetrics};
 use crate::types::{ResourceItem, ResourceType};
@@ -59,50 +57,25 @@ fn request_priority(resource_type: ResourceType) -> u32 {
 /// Auto-haul system for wall construction materials
 pub fn wall_construction_auto_haul_system(
     mut commands: Commands,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
-    q_yards: Query<(Entity, &Yard)>,
+    familiars_cache: Res<CachedActiveFamiliars>,
+    yards_cache: Res<CachedActiveYards>,
     q_sites: Query<(
         Entity,
         &Transform,
         &WallConstructionSite,
         Option<&TaskWorkers>,
     )>,
-    q_tiles: Query<&WallTileBlueprint>,
     q_wall_requests: Query<(
         Entity,
         &TargetWallConstructionSite,
         &TransportRequest,
         Option<&TaskWorkers>,
     )>,
+    waiting_cache: Res<WallTileWaitingCache>,
 ) {
-    let active_familiars: Vec<_> = q_familiars
-        .iter()
-        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.bounds()))
-        .collect();
-    let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(e, y)| (e, y.clone())).collect();
-    let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
-
-    let mut waiting_by_site = HashMap::<Entity, (u32, u32)>::new();
-    for tile in q_tiles.iter() {
-        match tile.state {
-            WallTileState::WaitingWood => {
-                let needed = WALL_WOOD_PER_TILE.saturating_sub(tile.wood_delivered);
-                if needed > 0 {
-                    let entry = waiting_by_site.entry(tile.parent_site).or_insert((0, 0));
-                    entry.0 = entry.0.saturating_add(needed);
-                }
-            }
-            WallTileState::WaitingMud => {
-                let needed = WALL_MUD_PER_TILE.saturating_sub(tile.mud_delivered);
-                if needed > 0 {
-                    let entry = waiting_by_site.entry(tile.parent_site).or_insert((0, 0));
-                    entry.1 = entry.1.saturating_add(needed);
-                }
-            }
-            _ => {}
-        }
-    }
+    let active_familiars = &familiars_cache.data;
+    let active_yards = &yards_cache.data;
+    let all_owners = super::collect_all_area_owners(active_familiars, active_yards);
 
     let mut desired_requests =
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
@@ -118,7 +91,7 @@ pub fn wall_construction_auto_haul_system(
         };
 
         let (waiting_wood, waiting_mud) =
-            waiting_by_site.get(&site_entity).copied().unwrap_or((0, 0));
+            waiting_cache.map.get(&site_entity).copied().unwrap_or((0, 0));
         if waiting_wood == 0 && waiting_mud == 0 {
             continue;
         }

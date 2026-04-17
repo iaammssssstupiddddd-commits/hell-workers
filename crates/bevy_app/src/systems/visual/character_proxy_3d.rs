@@ -21,7 +21,7 @@ use hw_core::soul::DamnedSoul;
 use hw_visual::visual3d::{FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d, SoulShadowProxy3d};
 use hw_visual::{
     CharacterMaterial, SoulAnimationPlayer3d, SoulBodyAnimState, SoulFaceMaterial3d,
-    SoulMaskMaterial, SoulShadowMaterial,
+    SoulMaskMaterial, SoulProxyOwnerCache, SoulShadowMaterial,
 };
 
 type SoulProxy3dQuery<'w, 's> = Query<
@@ -160,17 +160,55 @@ pub fn sync_familiar_proxy_3d_system(
     }
 }
 
+/// 新規スポーンされた SoulProxy3d を SoulProxyOwnerCache に登録する。
+pub fn register_soul_proxy_3d_system(
+    q_new: Query<(Entity, &SoulProxy3d), Added<SoulProxy3d>>,
+    mut cache: ResMut<SoulProxyOwnerCache>,
+) {
+    for (proxy_entity, proxy) in q_new.iter() {
+        cache.soul_proxy.insert(proxy.owner, proxy_entity);
+    }
+}
+
+/// 新規スポーンされた SoulMaskProxy3d を SoulProxyOwnerCache に登録する。
+pub fn register_soul_mask_proxy_3d_system(
+    q_new: Query<(Entity, &SoulMaskProxy3d), Added<SoulMaskProxy3d>>,
+    mut cache: ResMut<SoulProxyOwnerCache>,
+) {
+    for (proxy_entity, proxy) in q_new.iter() {
+        cache.soul_mask_proxy.insert(proxy.owner, proxy_entity);
+    }
+}
+
+/// 新規スポーンされた SoulShadowProxy3d を SoulProxyOwnerCache に登録する。
+pub fn register_soul_shadow_proxy_3d_system(
+    q_new: Query<(Entity, &SoulShadowProxy3d), Added<SoulShadowProxy3d>>,
+    mut cache: ResMut<SoulProxyOwnerCache>,
+) {
+    for (proxy_entity, proxy) in q_new.iter() {
+        cache.soul_shadow_proxy.insert(proxy.owner, proxy_entity);
+    }
+}
+
+/// 新規スポーンされた FamiliarProxy3d を SoulProxyOwnerCache に登録する。
+pub fn register_familiar_proxy_3d_system(
+    q_new: Query<(Entity, &FamiliarProxy3d), Added<FamiliarProxy3d>>,
+    mut cache: ResMut<SoulProxyOwnerCache>,
+) {
+    for (proxy_entity, proxy) in q_new.iter() {
+        cache.familiar_proxy.insert(proxy.owner, proxy_entity);
+    }
+}
+
 /// DamnedSoul 削除時に対応する SoulProxy3d を despawn する。
 pub fn cleanup_soul_proxy_3d_system(
     mut commands: Commands,
     mut removed: RemovedComponents<DamnedSoul>,
-    q_proxies: Query<(Entity, &SoulProxy3d)>,
+    mut cache: ResMut<SoulProxyOwnerCache>,
 ) {
     for removed_entity in removed.read() {
-        for (proxy_entity, proxy) in q_proxies.iter() {
-            if proxy.owner == removed_entity {
-                commands.entity(proxy_entity).despawn();
-            }
+        if let Some(proxy_entity) = cache.soul_proxy.remove(&removed_entity) {
+            commands.entity(proxy_entity).despawn();
         }
     }
 }
@@ -179,13 +217,11 @@ pub fn cleanup_soul_proxy_3d_system(
 pub fn cleanup_soul_mask_proxy_3d_system(
     mut commands: Commands,
     mut removed: RemovedComponents<DamnedSoul>,
-    q_proxies: Query<(Entity, &SoulMaskProxy3d)>,
+    mut cache: ResMut<SoulProxyOwnerCache>,
 ) {
     for removed_entity in removed.read() {
-        for (proxy_entity, proxy) in q_proxies.iter() {
-            if proxy.owner == removed_entity {
-                commands.entity(proxy_entity).despawn();
-            }
+        if let Some(proxy_entity) = cache.soul_mask_proxy.remove(&removed_entity) {
+            commands.entity(proxy_entity).despawn();
         }
     }
 }
@@ -194,13 +230,11 @@ pub fn cleanup_soul_mask_proxy_3d_system(
 pub fn cleanup_soul_shadow_proxy_3d_system(
     mut commands: Commands,
     mut removed: RemovedComponents<DamnedSoul>,
-    q_proxies: Query<(Entity, &SoulShadowProxy3d)>,
+    mut cache: ResMut<SoulProxyOwnerCache>,
 ) {
     for removed_entity in removed.read() {
-        for (proxy_entity, proxy) in q_proxies.iter() {
-            if proxy.owner == removed_entity {
-                commands.entity(proxy_entity).despawn();
-            }
+        if let Some(proxy_entity) = cache.soul_shadow_proxy.remove(&removed_entity) {
+            commands.entity(proxy_entity).despawn();
         }
     }
 }
@@ -209,13 +243,11 @@ pub fn cleanup_soul_shadow_proxy_3d_system(
 pub fn cleanup_familiar_proxy_3d_system(
     mut commands: Commands,
     mut removed: RemovedComponents<Familiar>,
-    q_proxies: Query<(Entity, &FamiliarProxy3d)>,
+    mut cache: ResMut<SoulProxyOwnerCache>,
 ) {
     for removed_entity in removed.read() {
-        for (proxy_entity, proxy) in q_proxies.iter() {
-            if proxy.owner == removed_entity {
-                commands.entity(proxy_entity).despawn();
-            }
+        if let Some(proxy_entity) = cache.familiar_proxy.remove(&removed_entity) {
+            commands.entity(proxy_entity).despawn();
         }
     }
 }

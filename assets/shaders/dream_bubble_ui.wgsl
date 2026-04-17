@@ -3,15 +3,16 @@
 
 #import bevy_ui::ui_vertex_output::UiVertexOutput
 #import bevy_render::view::View
+#import bevy_render::globals::Globals
 
 @group(0) @binding(0) var<uniform> view: View;
+@group(0) @binding(1) var<uniform> globals: Globals;
 
 struct DreamBubbleUiMaterial {
     color: vec4<f32>,       // offset 0:  ベース色 (16 bytes)
-    time: f32,              // offset 16: 経過時間
-    alpha: f32,             // offset 20: 透明度
-    mass: f32,              // offset 24: 質量
-    velocity_dir: vec2<f32>,// offset 28: 移動方向（正規化済み）
+    alpha: f32,             // offset 16: 透明度
+    mass: f32,              // offset 20: 質量
+    velocity_dir: vec2<f32>,// offset 24: 移動方向（正規化済み）
 }
 
 @group(1) @binding(0) var<uniform> material: DreamBubbleUiMaterial;
@@ -52,7 +53,7 @@ const CENTER_FADE_END: f32 = 1.0;
 const CENTER_MIN_ALPHA: f32 = 0.4;  
 
 // 1つの円に対するグロー・リム・スペキュラを計算して返す
-fn bubble_at(p: vec2<f32>, center: vec2<f32>, r: f32, time: f32) -> vec4<f32> {
+fn bubble_at(p: vec2<f32>, center: vec2<f32>, r: f32) -> vec4<f32> {
     let local = p - center;
     let angle = atan2(local.y, local.x);
     let radius = length(local) / r; 
@@ -62,8 +63,8 @@ fn bubble_at(p: vec2<f32>, center: vec2<f32>, r: f32, time: f32) -> vec4<f32> {
         return vec4<f32>(0.0);
     }
 
-    let t = time * 0.8;
-    let breath = 0.85 + 0.15 * sin(time * 1.5);
+    let t = globals.time * 0.8;
+    let breath = 0.85 + 0.15 * sin(globals.time * 1.5);
 
     // 星雲テクスチャ（Nebula）
     let nebula_noise = fbm(local * 2.0 / r + vec2<f32>(t * 0.8, t * -0.5));
@@ -76,7 +77,7 @@ fn bubble_at(p: vec2<f32>, center: vec2<f32>, r: f32, time: f32) -> vec4<f32> {
     let base_fill = bright_rgb * fill_intensity;
 
     // 虹色屈折
-    let iridescent_phase = angle + time * 0.6;
+    let iridescent_phase = angle + globals.time * 0.6;
     let iris_r = 0.5 + 0.5 * sin(iridescent_phase);
     let iris_g = 0.5 + 0.5 * sin(iridescent_phase + 2.094);
     let iris_b = 0.5 + 0.5 * sin(iridescent_phase + 4.189);
@@ -108,7 +109,7 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
 
     let bubble_count = select(select(1u, 2u, material.mass >= 3.0), 3u, material.mass >= 6.0);
     
-    let t = material.time * 0.8;
+    let t = globals.time * 0.8;
     var final_color = vec4<f32>(0.0);
 
     if bubble_count == 1u {
@@ -120,7 +121,7 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
 
         let soft_edge = 0.08;
         if single_effective_radius <= 1.0 + soft_edge {
-            let breath = 0.85 + 0.15 * sin(material.time * 1.5);
+            let breath = 0.85 + 0.15 * sin(globals.time * 1.5);
 
             let nebula_noise = fbm(p * 2.0 + vec2<f32>(t * 0.8, t * -0.5));
             let glow_falloff = pow(clamp(1.0 - single_effective_radius, 0.0, 1.0), 1.2); 
@@ -131,7 +132,7 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
             let base_fill = bright_rgb * fill_intensity;
 
             let angle_single = atan2(p.y, p.x);
-            let iridescent_phase = angle_single + material.time * 0.6;
+            let iridescent_phase = angle_single + globals.time * 0.6;
             let iris_r = 0.5 + 0.5 * sin(iridescent_phase);
             let iris_g = 0.5 + 0.5 * sin(iridescent_phase + 2.094);
             let iris_b = 0.5 + 0.5 * sin(iridescent_phase + 4.189);
@@ -159,7 +160,7 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
 
     } else if bubble_count == 2u {
         // ---- 2泡: 横並び（移動方向に沿って配置） ----
-        let rot_angle = material.time * 0.3;
+        let rot_angle = globals.time * 0.3;
         let cos_r = cos(rot_angle);
         let sin_r = sin(rot_angle);
         let offset = 0.45;
@@ -167,14 +168,14 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
         let c2 = vec2<f32>( offset * cos_r,  offset * sin_r);
         let r_sub = 0.60;
 
-        let b1 = bubble_at(p, c1, r_sub, material.time);
-        let b2 = bubble_at(p, c2, r_sub, material.time);
+        let b1 = bubble_at(p, c1, r_sub);
+        let b2 = bubble_at(p, c2, r_sub);
 
         final_color = vec4<f32>(max(b1.rgb, b2.rgb), max(b1.a, b2.a));
 
     } else {
         // ---- 3泡: 三角形配置 ----
-        let rot_angle = material.time * 0.2;
+        let rot_angle = globals.time * 0.2;
         let cos_r = cos(rot_angle);
         let sin_r = sin(rot_angle);
         let offset = 0.42;
@@ -185,9 +186,9 @@ fn fragment(in: UiVertexOutput) -> @location(0) vec4<f32> {
         let c3 = vec2<f32>(offset * cos(angle3), offset * sin(angle3));
         let r_sub = 0.55;
 
-        let b1 = bubble_at(p, c1, r_sub, material.time);
-        let b2 = bubble_at(p, c2, r_sub, material.time);
-        let b3 = bubble_at(p, c3, r_sub, material.time);
+        let b1 = bubble_at(p, c1, r_sub);
+        let b2 = bubble_at(p, c2, r_sub);
+        let b3 = bubble_at(p, c3, r_sub);
 
         final_color = vec4<f32>(
             max(max(b1.rgb, b2.rgb), b3.rgb),

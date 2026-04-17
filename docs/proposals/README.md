@@ -20,6 +20,7 @@
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
+| [3d-rtt/20260416/soul-outline-mask-ring-vs-inverted-hull-proposal-2026-04-16.md](3d-rtt/20260416/soul-outline-mask-ring-vs-inverted-hull-proposal-2026-04-16.md) | Soul 外周強調の比較提案。`mask ring` を本線、`inverted hull` を研究案として整理。 |
 
 ## アーカイブ提案書一覧 (`docs/proposals/archive`)
 
@@ -62,4 +63,3 @@
 | [archive/wheelbarraw_sand_stasis_mud_implementation_plan.md](archive/wheelbarraw_sand_stasis_mud_implementation_plan.md) | 実装計画書: Sand / StasisMud の猫車専用運搬化 |
 | [archive/wheelbarrow_only_for_sand_and_stasis_mud.md](archive/wheelbarrow_only_for_sand_and_stasis_mud.md) | 提案: Sand / StasisMud の猫車専用運搬化 |
 | [archive/world-map-lod-strategy-2026-04-06.md](archive/world-map-lod-strategy-2026-04-06.md) | - 現在の地形描画はの計画。 |
-

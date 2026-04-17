@@ -3,22 +3,20 @@
 //! Creates transport requests for bones and mud delivery to floor construction sites
 
 use bevy::prelude::*;
-use hw_core::area::TaskArea;
 use hw_core::constants::{
-    FLOOR_BONES_PER_TILE, FLOOR_CONSTRUCTION_PRIORITY, FLOOR_MUD_PER_TILE, TILE_SIZE,
+    FLOOR_CONSTRUCTION_PRIORITY, FLOOR_BONES_PER_TILE, FLOOR_MUD_PER_TILE, TILE_SIZE,
     WHEELBARROW_CAPACITY,
 };
-use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::TaskWorkers;
 use hw_jobs::construction::{
     FloorConstructionPhase, FloorTileBlueprint, TargetFloorConstructionSite,
 };
 use hw_jobs::{FloorConstructionSite, FloorTileState};
 use hw_spatial::{FloorConstructionSpatialGrid, ResourceSpatialGrid};
-use hw_world::zones::AreaBounds;
-use std::collections::HashMap;
 use std::time::Instant;
 
+use crate::transport_request::producer::active_unit_cache::CachedActiveFamiliars;
+use crate::transport_request::producer::tile_wait_cache::FloorTileWaitingCache;
 use crate::transport_request::producer::{ConstructionDeliverySpec, RequestSyncSpec};
 use crate::transport_request::{TransportRequest, TransportRequestKind, TransportRequestMetrics};
 use crate::types::{ResourceItem, ResourceType};
@@ -44,56 +42,29 @@ pub use designation::floor_tile_designation_system;
 pub fn floor_construction_auto_haul_system(
     mut commands: Commands,
     floor_grid: Res<FloorConstructionSpatialGrid>,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
+    familiars_cache: Res<CachedActiveFamiliars>,
     q_sites: Query<(
         Entity,
         &Transform,
         &FloorConstructionSite,
         Option<&TaskWorkers>,
     )>,
-    q_tiles: Query<&FloorTileBlueprint>,
     q_floor_requests: Query<(
         Entity,
         &TargetFloorConstructionSite,
         &TransportRequest,
         Option<&TaskWorkers>,
     )>,
+    waiting_cache: Res<FloorTileWaitingCache>,
 ) {
-    // Collect active familiars
-    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
-        .iter()
-        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.bounds()))
-        .collect();
-
-    // Site ごとの不足材料をタイル1回走査で集計する。
-    let mut waiting_by_site = HashMap::<Entity, (u32, u32)>::new();
-    for tile in q_tiles.iter() {
-        match tile.state {
-            FloorTileState::WaitingBones => {
-                let needed = FLOOR_BONES_PER_TILE.saturating_sub(tile.bones_delivered);
-                if needed > 0 {
-                    let entry = waiting_by_site.entry(tile.parent_site).or_insert((0, 0));
-                    entry.0 = entry.0.saturating_add(needed);
-                }
-            }
-            FloorTileState::WaitingMud => {
-                let needed = FLOOR_MUD_PER_TILE.saturating_sub(tile.mud_delivered);
-                if needed > 0 {
-                    let entry = waiting_by_site.entry(tile.parent_site).or_insert((0, 0));
-                    entry.1 = entry.1.saturating_add(needed);
-                }
-            }
-            _ => {}
-        }
-    }
+    let active_familiars = &familiars_cache.data;
 
     // 2. Calculate material needs for each site
     let mut desired_requests =
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
 
     let mut sites_to_process = std::collections::HashSet::new();
-    for (_, area) in &active_familiars {
+    for (_, area) in active_familiars {
         for &site_entity in floor_grid.get_in_area(area.min, area.max).iter() {
             sites_to_process.insert(site_entity);
         }
@@ -110,12 +81,12 @@ pub fn floor_construction_auto_haul_system(
             continue;
         }
 
-        let Some((fam_entity, _)) = super::find_owner(site_pos, &active_familiars) else {
+        let Some((fam_entity, _)) = super::find_owner(site_pos, active_familiars) else {
             continue;
         };
 
         let (waiting_bones, waiting_mud) =
-            waiting_by_site.get(&site_entity).copied().unwrap_or((0, 0));
+            waiting_cache.map.get(&site_entity).copied().unwrap_or((0, 0));
         if waiting_bones == 0 && waiting_mud == 0 {
             continue;
         }

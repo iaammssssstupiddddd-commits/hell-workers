@@ -11,7 +11,6 @@ pub(super) struct TrailGhostSpec {
     pub trail_size: f32,
     pub width_scale: f32,
     pub length_scale: f32,
-    pub elapsed: f32,
     pub speed: f32,
     pub vel_dir: Vec2,
 }
@@ -27,7 +26,6 @@ pub(super) fn spawn_trail_ghost(
         trail_size,
         width_scale,
         length_scale,
-        elapsed,
         speed,
         vel_dir,
     } = spec;
@@ -54,7 +52,6 @@ pub(super) fn spawn_trail_ghost(
             trail_transform,
             MaterialNode(materials.add(DreamBubbleUiMaterial {
                 color: LinearRgba::new(0.65, 0.9, 1.0, 1.0),
-                time: elapsed,
                 alpha: DREAM_UI_TRAIL_ALPHA,
                 mass: 0.5,
                 velocity_dir: vel_dir,

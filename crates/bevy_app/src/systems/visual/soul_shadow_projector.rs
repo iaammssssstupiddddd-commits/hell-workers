@@ -46,6 +46,12 @@ pub fn sync_soul_shadow_projectors_system(
             (distance_sq, world_center)
         })
         .collect::<Vec<_>>();
+    if projectors.len() > MAX_SOUL_SHADOW_PROJECTORS {
+        projectors.select_nth_unstable_by(MAX_SOUL_SHADOW_PROJECTORS, |a, b| {
+            a.0.total_cmp(&b.0)
+        });
+        projectors.truncate(MAX_SOUL_SHADOW_PROJECTORS);
+    }
     projectors.sort_by(|a, b| a.0.total_cmp(&b.0));
 
     let mut projector_array = [Vec4::ZERO; MAX_SOUL_SHADOW_PROJECTORS];

@@ -2,25 +2,23 @@
 
 use bevy::prelude::*;
 
-use hw_core::area::TaskArea;
 use hw_core::constants::WHEELBARROW_CAPACITY;
-use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::{ManagedBy, TaskWorkers};
 use hw_jobs::{Blueprint, Designation, Priority, TargetBlueprint, TaskSlots, WorkType};
 use hw_spatial::BlueprintSpatialGrid;
-use hw_world::zones::{AreaBounds, Yard};
 
 use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
+use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
 use crate::types::ResourceType;
 
 pub fn blueprint_auto_haul_system(
     mut commands: Commands,
     blueprint_grid: Res<BlueprintSpatialGrid>,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
-    q_yards: Query<(Entity, &Yard)>,
+    familiars_cache: Res<CachedActiveFamiliars>,
+    yards_cache: Res<CachedActiveYards>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
     q_bp_requests: Query<(
         Entity,
@@ -42,20 +40,13 @@ pub fn blueprint_auto_haul_system(
         }
     }
 
-    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
-        .iter()
-        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.bounds()))
-        .collect();
-    let active_yards: Vec<(Entity, Yard)> = q_yards
-        .iter()
-        .map(|(entity, yard)| (entity, yard.clone()))
-        .collect();
+    let active_familiars = &familiars_cache.data;
+    let active_yards = &yards_cache.data;
 
     let mut desired_requests =
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
 
-    let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
+    let all_owners = super::collect_all_area_owners(active_familiars, active_yards);
 
     let mut blueprints_to_process = std::collections::HashSet::new();
     for (_, area) in &all_owners {
@@ -78,7 +69,7 @@ pub fn blueprint_auto_haul_system(
         }
 
         let Some((fam_entity, _)) =
-            super::find_owner_for_position(bp_pos, &all_owners, &active_yards)
+            super::find_owner_for_position(bp_pos, &all_owners, active_yards)
         else {
             continue;
         };

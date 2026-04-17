@@ -4,6 +4,7 @@
 //! Phase 3 で GLB モデルに置き換えるまでのプレースホルダー実装。
 
 use bevy::prelude::*;
+use std::collections::HashMap;
 
 /// 完成した Building エンティティに対応する独立3Dビジュアルエンティティのマーカー。
 ///
@@ -79,4 +80,15 @@ pub struct SoulAnimVisualState {
 #[derive(Component, Debug, Clone)]
 pub struct FamiliarProxy3d {
     pub owner: Entity,
+}
+
+/// owner → proxy エンティティの O(1) ルックアップキャッシュ。
+///
+/// 各プロキシのスポーン時（`Added<T>`）に登録し、owner 削除時の cleanup で使用する。
+#[derive(Resource, Default)]
+pub struct SoulProxyOwnerCache {
+    pub soul_proxy: HashMap<Entity, Entity>,
+    pub soul_mask_proxy: HashMap<Entity, Entity>,
+    pub soul_shadow_proxy: HashMap<Entity, Entity>,
+    pub familiar_proxy: HashMap<Entity, Entity>,
 }

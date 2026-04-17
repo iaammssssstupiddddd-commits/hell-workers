@@ -37,7 +37,6 @@ pub fn ui_particle_update_system(
     mut q_particles: ParticlesQuery,
 ) {
     let dt = time.delta_secs();
-    let elapsed = time.elapsed_secs();
     let ui_bubble_layer = read
         .q_ui_bubble_layer
         .iter()
@@ -69,7 +68,6 @@ pub fn ui_particle_update_system(
             update_merging_particle(
                 MergeInput {
                     dt,
-                    elapsed,
                     viewport_size,
                     current_pos,
                 },
@@ -83,7 +81,6 @@ pub fn ui_particle_update_system(
             let arrived = update_standard::update_standard_particle(
                 update_standard::StandardInput {
                     dt,
-                    elapsed,
                     viewport_size,
                     current_pos,
                 },
@@ -140,7 +137,6 @@ fn merge_cluster_scale(mass: f32) -> f32 {
 
 struct MergeInput {
     dt: f32,
-    elapsed: f32,
     viewport_size: Vec2,
     current_pos: Vec2,
 }
@@ -155,7 +151,6 @@ fn update_merging_particle(
 ) -> bool {
     let MergeInput {
         dt,
-        elapsed,
         viewport_size,
         current_pos,
     } = input;
@@ -193,7 +188,6 @@ fn update_merging_particle(
 
         if let Some(mat) = materials.get_mut(&mat_node.0) {
             mat.alpha = 0.9 * (1.0 - progress);
-            mat.time = elapsed;
             mat.mass = particle.mass;
         }
         return particle.merge_timer <= 0.0;
@@ -252,7 +246,6 @@ pub fn spawn_ui_particle(
             Transform::default(),
             MaterialNode(materials.add(DreamBubbleUiMaterial {
                 color: LinearRgba::new(0.65, 0.9, 1.0, 1.0),
-                time: 0.0,
                 alpha: 0.0,
                 mass,
                 velocity_dir: Vec2::ZERO,

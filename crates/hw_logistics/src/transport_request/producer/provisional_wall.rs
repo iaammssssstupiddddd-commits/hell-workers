@@ -2,20 +2,18 @@
 
 use bevy::prelude::*;
 
-use hw_core::area::TaskArea;
 use hw_core::constants::TILE_SIZE;
-use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::TaskWorkers;
 use hw_jobs::construction::WallTileBlueprint;
 use hw_jobs::{
     Building, BuildingType, Designation, Priority, ProvisionalWall, TaskSlots, WorkType,
 };
-use hw_world::zones::{AreaBounds, Yard};
 
 use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
+use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
 use crate::types::{ResourceItem, ResourceType};
 
 const PROVISIONAL_WALL_PRIORITY: u32 = 5;
@@ -38,8 +36,8 @@ fn to_u32_saturating(value: usize) -> u32 {
 
 pub fn provisional_wall_auto_haul_system(
     mut commands: Commands,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
-    q_yards: Query<(Entity, &Yard)>,
+    familiars_cache: Res<CachedActiveFamiliars>,
+    yards_cache: Res<CachedActiveYards>,
     q_walls: Query<(
         Entity,
         &Transform,
@@ -66,13 +64,9 @@ pub fn provisional_wall_auto_haul_system(
         }
     }
 
-    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
-        .iter()
-        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.bounds()))
-        .collect();
-    let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(e, y)| (e, y.clone())).collect();
-    let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
+    let active_familiars = &familiars_cache.data;
+    let active_yards = &yards_cache.data;
+    let all_owners = super::collect_all_area_owners(active_familiars, active_yards);
 
     let mut desired_requests = std::collections::HashMap::<Entity, (Entity, Vec2, u32)>::new();
     for (wall_entity, wall_transform, building, provisional, workers_opt) in q_walls.iter() {

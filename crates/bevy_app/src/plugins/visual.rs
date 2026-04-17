@@ -23,7 +23,9 @@ use crate::systems::visual::character_proxy_3d::{
     apply_soul_gltf_render_layers_on_ready, apply_soul_mask_gltf_render_layers_on_ready,
     apply_soul_shadow_gltf_render_layers_on_ready, cleanup_familiar_proxy_3d_system,
     cleanup_soul_mask_proxy_3d_system, cleanup_soul_proxy_3d_system,
-    cleanup_soul_shadow_proxy_3d_system, sync_familiar_proxy_3d_system,
+    cleanup_soul_shadow_proxy_3d_system, register_familiar_proxy_3d_system,
+    register_soul_mask_proxy_3d_system, register_soul_proxy_3d_system,
+    register_soul_shadow_proxy_3d_system, sync_familiar_proxy_3d_system,
     sync_soul_mask_proxy_3d_system, sync_soul_proxy_3d_system, sync_soul_shadow_proxy_3d_system,
 };
 use crate::systems::visual::elevation_view::{ElevationViewState, elevation_view_input_system};
@@ -45,6 +47,7 @@ use hw_core::game_state::PlayMode;
 use hw_visual::HwVisualPlugin;
 use hw_visual::SectionCut;
 use hw_visual::soul::task_link_system;
+use hw_visual::SoulProxyOwnerCache;
 use hw_visual::visual3d::{Building3dVisual, FamiliarProxy3d, SoulProxy3d};
 use hw_world::{TerrainChangedEvent, sync_room_overlay_tiles_system};
 
@@ -67,6 +70,7 @@ impl Plugin for VisualPlugin {
         app.init_resource::<ElevationViewState>();
         app.init_resource::<SectionCut>();
         app.init_resource::<SoulAnimationLibrary>();
+        app.init_resource::<SoulProxyOwnerCache>();
         app.init_resource::<TerrainLodMetrics>();
         app.init_resource::<TerrainLodState>();
 
@@ -206,6 +210,10 @@ impl Plugin for VisualPlugin {
                 cleanup_soul_mask_proxy_3d_system,
                 cleanup_soul_shadow_proxy_3d_system,
                 cleanup_familiar_proxy_3d_system,
+                register_soul_proxy_3d_system,
+                register_soul_mask_proxy_3d_system,
+                register_soul_shadow_proxy_3d_system,
+                register_familiar_proxy_3d_system,
             )
                 .in_set(GameSystemSet::Visual),
         );

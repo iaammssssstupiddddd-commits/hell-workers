@@ -1,13 +1,12 @@
 #import bevy_sprite::{
     mesh2d_vertex_output::VertexOutput,
-    mesh2d_view_bindings::view,
+    mesh2d_view_bindings::{view, globals},
 }
 
 struct TaskAreaMaterial {
     color: vec4<f32>,   // offset 0
     size: vec2<f32>,    // offset 16
-    time: f32,          // offset 24
-    state: u32,         // offset 28
+    state: u32,         // offset 24
 }
 
 @group(2) @binding(0) var<uniform> material: TaskAreaMaterial;
@@ -78,7 +77,7 @@ fn fragment(
             // Selected/Editing: 実線
             var pulse = 1.0;
             if (material.state == 3u) {
-                pulse = 0.8 + 0.2 * sin(material.time * 12.0);
+                pulse = 0.8 + 0.2 * sin(globals.time * 12.0);
             }
             final_color = material.color * pulse;
         } else {

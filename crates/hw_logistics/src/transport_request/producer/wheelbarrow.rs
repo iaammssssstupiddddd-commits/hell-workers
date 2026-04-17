@@ -2,16 +2,14 @@
 
 use bevy::prelude::*;
 
-use hw_core::area::TaskArea;
-use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::{ManagedBy, ParkedAt, PushedBy, TaskWorkers};
 use hw_jobs::{Designation, Priority, TaskSlots, WorkType};
-use hw_world::zones::AreaBounds;
 
 use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
+use crate::transport_request::producer::active_unit_cache::CachedActiveFamiliars;
 use crate::types::{ResourceType, Wheelbarrow};
 
 const RETURN_REQUEST_PRIORITY: u32 = 0;
@@ -37,23 +35,19 @@ type WheelbarrowParkedQuery<'w, 's> = Query<
 
 pub fn wheelbarrow_auto_haul_system(
     mut commands: Commands,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
+    familiars_cache: Res<CachedActiveFamiliars>,
     q_wheelbarrows: WheelbarrowParkedQuery,
     q_transforms: Query<&Transform>,
     q_wb_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
 ) {
-    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
-        .iter()
-        .filter(|(_, ac, _)| !matches!(ac.command, FamiliarCommand::Idle))
-        .map(|(e, _, a)| (e, a.bounds()))
-        .collect();
+    let active_familiars = &familiars_cache.data;
 
     let mut desired_return_requests =
         std::collections::HashMap::<Entity, DesiredWheelbarrowRequest>::new();
 
     for (wb_entity, wb_transform, parked_at) in q_wheelbarrows.iter() {
         let wb_pos = wb_transform.translation.truncate();
-        let Some((fam_entity, _)) = super::find_owner(wb_pos, &active_familiars) else {
+        let Some((fam_entity, _)) = super::find_owner(wb_pos, active_familiars) else {
             continue;
         };
 

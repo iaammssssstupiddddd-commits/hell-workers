@@ -108,7 +108,6 @@ pub fn area_selection_indicator_system(
                 MeshMaterial2d(materials.add(TaskAreaMaterial {
                     color,
                     size,
-                    time: 0.0,
                     state: 3,
                 })),
                 Transform::from_translation(center.extend(0.6)).with_scale(size.extend(1.0)),

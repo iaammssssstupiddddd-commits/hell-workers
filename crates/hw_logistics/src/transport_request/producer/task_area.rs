@@ -8,13 +8,13 @@ use std::time::Instant;
 use hw_core::relationships::{StoredItems, TaskWorkers};
 use hw_jobs::{Designation, Priority, TaskSlots, WorkType};
 use hw_spatial::StockpileSpatialGrid;
-use hw_world::zones::Yard;
 
 use crate::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportPolicy,
     TransportPriority, TransportRequest, TransportRequestKind, TransportRequestMetrics,
     TransportRequestState,
 };
+use crate::transport_request::producer::active_unit_cache::CachedActiveYards;
 use crate::types::{BelongsTo, BucketStorage, ReservedForTask, ResourceItem, ResourceType};
 use crate::zone::Stockpile;
 
@@ -204,7 +204,7 @@ fn pick_representative_resource_type_per_group(
 #[derive(SystemParam)]
 pub struct TaskAreaAutoHaulParams<'w, 's> {
     pub stockpile_grid: Res<'w, StockpileSpatialGrid>,
-    pub q_yards: Query<'w, 's, (Entity, &'static Yard)>,
+    pub yards_cache: Res<'w, CachedActiveYards>,
     pub q_stockpiles: StockpilesQuery<'w, 's>,
     pub q_stockpiles_detail: StockpilesDetailQuery<'w, 's>,
     pub q_stockpile_requests: Query<
@@ -237,10 +237,10 @@ pub fn task_area_auto_haul_system(mut commands: Commands, mut p: TaskAreaAutoHau
         }
     }
 
-    let active_yards: Vec<(Entity, Yard)> = p.q_yards.iter().map(|(e, a)| (e, a.clone())).collect();
+    let active_yards = &p.yards_cache.data;
 
-    let groups = build_stockpile_groups(&p.stockpile_grid, &active_yards, &p.q_stockpiles);
-    let group_spatial_index = build_group_spatial_index(&groups, &active_yards);
+    let groups = build_stockpile_groups(&p.stockpile_grid, active_yards, &p.q_stockpiles);
+    let group_spatial_index = build_group_spatial_index(&groups, active_yards);
     let group_contexts = build_group_eval_contexts(&groups, &p.q_stockpiles_detail);
     let (group_resource_types, free_items_scanned, items_matched) =
         pick_representative_resource_type_per_group(

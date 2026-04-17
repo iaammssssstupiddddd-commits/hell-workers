@@ -51,6 +51,7 @@ pub use material::{
 pub use visual3d::{
     Building3dVisual, FamiliarProxy3d, SoulAnimVisualState, SoulAnimationPlayer3d,
     SoulBodyAnimState, SoulFaceMaterial3d, SoulFaceState, SoulMaskProxy3d, SoulProxy3d,
+    SoulProxyOwnerCache,
 };
 
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};

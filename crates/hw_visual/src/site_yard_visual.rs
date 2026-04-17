@@ -67,7 +67,6 @@ fn spawn_boundary_visual(
         MeshMaterial2d(materials.add(TaskAreaMaterial {
             color,
             size,
-            time: 0.0,
             state: 0,
         })),
         Transform::from_translation(center.extend(Z_SELECTION + 0.05)).with_scale(size.extend(1.0)),

@@ -30,8 +30,6 @@ pub struct DreamBubbleUiMaterial {
     #[uniform(0)]
     pub color: LinearRgba,
     #[uniform(0)]
-    pub time: f32,
-    #[uniform(0)]
     pub alpha: f32,
     #[uniform(0)]
     pub mass: f32,

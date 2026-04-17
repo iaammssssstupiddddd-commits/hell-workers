@@ -4,14 +4,12 @@ use super::mixer_helpers;
 
 use bevy::prelude::*;
 
-use hw_core::area::TaskArea;
-use hw_core::familiar::ActiveCommand;
 use hw_core::relationships::TaskWorkers;
 use hw_jobs::mud_mixer::{MudMixerStorage, TargetMixer};
-use hw_world::zones::Yard;
 
 use crate::resource_cache::SharedResourceCache;
 use crate::transport_request::TransportRequest;
+use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
 use crate::types::ResourceType;
 
 type MixerQuery<'w, 's> = Query<
@@ -41,15 +39,15 @@ type MixerRequestQuery<'w, 's> = Query<
 pub fn mud_mixer_auto_haul_system(
     mut commands: Commands,
     haul_cache: Res<SharedResourceCache>,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
-    q_yards: Query<(Entity, &Yard)>,
+    familiars_cache: Res<CachedActiveFamiliars>,
+    yards_cache: Res<CachedActiveYards>,
     q_mixers: MixerQuery,
     q_mixer_requests: MixerRequestQuery,
     q_stockpiles_detailed: mixer_helpers::StockpilesDetailedQuery,
 ) {
-    let active_familiars = mixer_helpers::collect_active_familiars(&q_familiars);
-    let active_yards = mixer_helpers::collect_active_yards(&q_yards);
-    let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
+    let active_familiars = &familiars_cache.data;
+    let active_yards = &yards_cache.data;
+    let all_owners = super::collect_all_area_owners(active_familiars, active_yards);
 
     let (water_inflight_by_mixer, sand_inflight_by_mixer) =
         mixer_helpers::collect_inflight_mixer_requests(&q_mixer_requests);
@@ -63,7 +61,7 @@ pub fn mud_mixer_auto_haul_system(
         &mut desired_requests,
         &mut active_mixers,
         &all_owners,
-        &active_yards,
+        active_yards,
         &q_stockpiles_detailed,
         mixer_helpers::MixerInflightContext {
             haul_cache: &haul_cache,

@@ -171,10 +171,14 @@ alpha bucket の運用:
 - 同じ mesh / material を共有していても、Z 順で隣接したものしか batch されない
 - したがって **24 ハンドル = draw call 上限** ではない
 
-UI 側の `DreamBubbleUiMaterial` は `UiMaterial` パイプラインで別問題を持つため、
-world-space 泡と分けて評価する。
+UI 側の `DreamBubbleUiMaterial` は world-space 版と同様に `time` フィールドを削除し、
+`@group(0) @binding(1) var<uniform> globals: Globals;` で `globals.time` を shader 内で直接参照する方式に変更済み。
+これにより per-frame の `Assets::get_mut` 呼び出しがパーティクル数に比例して発生していた問題を解消した。
 
-→ 詳細は `docs/plans/dream-bubble-perf-2026-04-09.md`
+`TaskAreaMaterial` も同様に `time` フィールドを削除し `globals.time` を使用するよう変更済み
+（`mesh2d_view_bindings::globals` 経由、`@group(2)` マテリアルバインドへの毎フレーム書き込みを排除）。
+
+→ world-space 泡の draw call 最適化詳細は `docs/plans/dream-bubble-perf-2026-04-09.md`
 
 ---
 

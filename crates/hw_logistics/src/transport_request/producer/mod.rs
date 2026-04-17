@@ -1,3 +1,4 @@
+pub mod active_unit_cache;
 pub mod blueprint;
 pub mod bucket;
 pub mod consolidation;
@@ -8,6 +9,7 @@ pub mod provisional_wall;
 pub mod stockpile_group;
 pub mod tank_water_request;
 pub mod task_area;
+pub mod tile_wait_cache;
 pub mod upsert;
 pub mod wall_construction;
 pub mod wheelbarrow;

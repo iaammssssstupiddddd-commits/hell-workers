@@ -11,8 +11,6 @@ pub struct TaskAreaMaterial {
     #[uniform(0)]
     pub size: Vec2,
     #[uniform(0)]
-    pub time: f32,
-    #[uniform(0)]
     pub state: u32,
 }
 

@@ -71,7 +71,6 @@ pub fn task_area_indicator_system(
                 MeshMaterial2d(materials.add(TaskAreaMaterial {
                     color,
                     size: task_area.size(),
-                    time: 0.0,
                     state: 0,
                 })),
                 Transform::from_translation(task_area.center().extend(0.2))

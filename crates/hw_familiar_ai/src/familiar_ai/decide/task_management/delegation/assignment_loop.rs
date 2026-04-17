@@ -114,17 +114,11 @@ fn build_worker_candidates(
     ranked.select_nth_unstable_by(top_k, |a, b| {
         b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal)
     });
-    let mut top_ranked = ranked[..top_k].to_vec();
-    top_ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
-    let fallback_ranked = ranked[top_k..].to_vec();
+    ranked[..top_k].sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+    let top: Vec<DelegationCandidate> = ranked[..top_k].iter().map(|(c, _)| *c).collect();
+    let fallback: Vec<(DelegationCandidate, f32)> = ranked[top_k..].to_vec();
 
-    (
-        top_ranked
-            .into_iter()
-            .map(|(candidate, _)| candidate)
-            .collect(),
-        fallback_ranked,
-    )
+    (top, fallback)
 }
 
 /// `try_assign_from_candidates` の per-worker データをまとめた構造体。

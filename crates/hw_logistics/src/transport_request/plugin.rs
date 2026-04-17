@@ -4,6 +4,10 @@ use bevy::prelude::*;
 use hw_core::system_sets::{FamiliarAiSystemSet, GameSystemSet, SoulAiSystemSet};
 
 use super::producer::{
+    active_unit_cache::{
+        CachedActiveFamiliars, CachedActiveYards, update_cached_active_familiars_system,
+        update_cached_active_yards_system,
+    },
     blueprint::blueprint_auto_haul_system,
     bucket::bucket_auto_haul_system,
     consolidation::stockpile_consolidation_producer_system,
@@ -18,6 +22,10 @@ use super::producer::{
     },
     tank_water_request::tank_water_request_system,
     task_area::task_area_auto_haul_system,
+    tile_wait_cache::{
+        FloorTileWaitingCache, WallTileWaitingCache, update_floor_tile_waiting_cache_system,
+        update_wall_tile_waiting_cache_system,
+    },
     wall_construction::{
         wall_construction_auto_haul_system, wall_material_delivery_sync_system,
         wall_tile_designation_system,
@@ -50,6 +58,10 @@ pub struct TransportRequestPlugin;
 impl Plugin for TransportRequestPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TransportRequestMetrics>();
+        app.init_resource::<FloorTileWaitingCache>();
+        app.init_resource::<WallTileWaitingCache>();
+        app.init_resource::<CachedActiveFamiliars>();
+        app.init_resource::<CachedActiveYards>();
 
         app.configure_sets(
             Update,
@@ -83,6 +95,10 @@ impl Plugin for TransportRequestPlugin {
             Update,
             (
                 transport_request_metrics_system.in_set(TransportRequestSet::Perceive),
+                update_floor_tile_waiting_cache_system.in_set(TransportRequestSet::Perceive),
+                update_wall_tile_waiting_cache_system.in_set(TransportRequestSet::Perceive),
+                update_cached_active_familiars_system.in_set(TransportRequestSet::Perceive),
+                update_cached_active_yards_system.in_set(TransportRequestSet::Perceive),
                 (
                     blueprint_auto_haul_system,
                     bucket_auto_haul_system,

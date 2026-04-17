@@ -3,16 +3,14 @@
 use bevy::prelude::*;
 use hw_core::constants::BUCKET_CAPACITY;
 
-use hw_core::area::TaskArea;
-use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::{IncomingDeliveries, StoredItems, TaskWorkers};
 use hw_jobs::{Designation, MovePlanned, Priority, TaskSlots, WorkType};
-use hw_world::zones::{AreaBounds, Yard};
 
 use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
+use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
 use crate::types::ResourceType;
 use crate::water::tank_can_accept_new_bucket;
 use crate::zone::Stockpile;
@@ -20,19 +18,15 @@ use crate::zone::Stockpile;
 pub fn tank_water_request_system(
     mut commands: Commands,
     q_incoming: Query<&IncomingDeliveries>,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
-    q_yards: Query<(Entity, &Yard)>,
+    familiars_cache: Res<CachedActiveFamiliars>,
+    yards_cache: Res<CachedActiveYards>,
     q_tanks: Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
     q_tank_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
     q_move_planned: Query<(), With<MovePlanned>>,
 ) {
-    let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
-        .iter()
-        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.bounds()))
-        .collect();
-    let active_yards: Vec<(Entity, Yard)> = q_yards.iter().map(|(e, y)| (e, y.clone())).collect();
-    let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
+    let active_familiars = &familiars_cache.data;
+    let active_yards = &yards_cache.data;
+    let all_owners = super::collect_all_area_owners(active_familiars, active_yards);
 
     let mut desired_requests = std::collections::HashMap::<Entity, (Entity, u32, Vec2)>::new();
 

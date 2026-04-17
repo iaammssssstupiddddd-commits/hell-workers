@@ -27,7 +27,6 @@ pub(super) struct StandardParticleMotion {
 
 pub(super) struct StandardInput {
     pub dt: f32,
-    pub elapsed: f32,
     pub viewport_size: Vec2,
     pub current_pos: Vec2,
 }
@@ -45,7 +44,6 @@ pub(super) struct NodeVisuals<'a> {
 
 pub(super) struct TrailTimingCtx {
     pub dt: f32,
-    pub elapsed: f32,
     pub ui_bubble_layer: Option<Entity>,
 }
 
@@ -59,7 +57,6 @@ pub(super) fn update_standard_particle(
 ) -> bool {
     let StandardInput {
         dt,
-        elapsed,
         viewport_size,
         current_pos,
     } = input;
@@ -76,7 +73,6 @@ pub(super) fn update_standard_particle(
         integrate_standard_particle_motion(dt, viewport_size, current_pos, &forces, particle, node);
 
     update_standard_particle_visual(
-        elapsed,
         particle,
         VisualData {
             mat_node,
@@ -95,7 +91,6 @@ pub(super) fn update_standard_particle(
     emit_standard_particle_trail(
         TrailTimingCtx {
             dt,
-            elapsed,
             ui_bubble_layer,
         },
         &motion,
@@ -265,7 +260,6 @@ struct VisualData<'a> {
 }
 
 fn update_standard_particle_visual(
-    elapsed: f32,
     particle: &DreamGainUiParticle,
     vis: VisualData<'_>,
     motion: &StandardParticleMotion,
@@ -317,7 +311,6 @@ fn update_standard_particle_visual(
     if let Some(mat) = materials.get_mut(&mat_node.0) {
         mat.color = base_color;
         mat.alpha = alpha;
-        mat.time = elapsed;
         mat.mass = particle.mass;
         mat.velocity_dir = motion.vel_dir;
     }
@@ -333,7 +326,6 @@ fn emit_standard_particle_trail(
 ) {
     let TrailTimingCtx {
         dt,
-        elapsed,
         ui_bubble_layer,
     } = timing;
     particle.trail_cooldown -= dt;
@@ -354,7 +346,6 @@ fn emit_standard_particle_trail(
                     trail_size,
                     width_scale: motion.width_scale,
                     length_scale: motion.length_scale,
-                    elapsed,
                     speed: motion.speed,
                     vel_dir: motion.vel_dir,
                 },

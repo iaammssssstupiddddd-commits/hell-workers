@@ -3,17 +3,15 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-use hw_core::area::TaskArea;
-use hw_core::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use hw_core::relationships::{IncomingDeliveries, ManagedBy, StoredItems, TaskWorkers};
 use hw_jobs::{Designation, MovePlanned, Priority, TaskSlots, WorkType};
-use hw_world::zones::{AreaBounds, Yard};
 
 use crate::resource_cache::SharedResourceCache;
 use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
+use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
 use crate::types::{BelongsTo, BucketStorage, ReservedForTask, ResourceItem, ResourceType};
 use crate::zone::Stockpile;
 
@@ -68,10 +66,9 @@ type DroppedBucketsQuery<'w, 's> = Query<
 #[derive(SystemParam)]
 pub struct BucketAutoHaulParams<'w, 's> {
     pub _haul_cache: Res<'w, SharedResourceCache>,
+    pub familiars_cache: Res<'w, CachedActiveFamiliars>,
+    pub yards_cache: Res<'w, CachedActiveYards>,
     pub q_incoming: Query<'w, 's, &'static IncomingDeliveries>,
-    pub q_familiars:
-        Query<'w, 's, (Entity, &'static ActiveCommand, &'static TaskArea), With<Familiar>>,
-    pub q_yards: Query<'w, 's, (Entity, &'static Yard)>,
     pub q_tanks: Query<'w, 's, (&'static Transform, &'static Stockpile), Without<BucketStorage>>,
     pub q_dropped_buckets: DroppedBucketsQuery<'w, 's>,
     pub q_bucket_storages: Query<
@@ -98,14 +95,9 @@ pub struct BucketAutoHaulParams<'w, 's> {
 }
 
 pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) {
-    let active_familiars: Vec<(Entity, AreaBounds)> = p
-        .q_familiars
-        .iter()
-        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.bounds()))
-        .collect();
-    let active_yards: Vec<(Entity, Yard)> = p.q_yards.iter().map(|(e, y)| (e, y.clone())).collect();
-    let all_owners = super::collect_all_area_owners(&active_familiars, &active_yards);
+    let active_familiars = &p.familiars_cache.data;
+    let active_yards = &p.yards_cache.data;
+    let all_owners = super::collect_all_area_owners(active_familiars, active_yards);
 
     let mut tank_demands = std::collections::HashMap::<Entity, TankDemand>::new();
 

@@ -2,12 +2,9 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use hw_core::area::TaskArea;
-use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::TaskWorkers;
 use hw_jobs::Designation;
 use hw_jobs::mud_mixer::TargetMixer;
-use hw_world::zones::{AreaBounds, Yard};
 
 use crate::transport_request::{TransportRequest, TransportRequestKind};
 use crate::types::ResourceType;
@@ -23,23 +20,6 @@ type MixerRequestsQuery<'w, 's> = Query<
         Option<&'static TaskWorkers>,
     ),
 >;
-
-pub(crate) fn collect_active_familiars(
-    q_familiars: &Query<(Entity, &ActiveCommand, &TaskArea)>,
-) -> Vec<(Entity, AreaBounds)> {
-    q_familiars
-        .iter()
-        .filter(|(_, active_command, _)| !matches!(active_command.command, FamiliarCommand::Idle))
-        .map(|(entity, _, area)| (entity, area.bounds()))
-        .collect()
-}
-
-pub(crate) fn collect_active_yards(q_yards: &Query<(Entity, &Yard)>) -> Vec<(Entity, Yard)> {
-    q_yards
-        .iter()
-        .map(|(entity, yard)| (entity, yard.clone()))
-        .collect()
-}
 
 pub(crate) fn collect_inflight_mixer_requests(
     q_mixer_requests: &MixerRequestsQuery,

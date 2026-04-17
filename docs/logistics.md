@@ -53,7 +53,13 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 
 `TransportRequestPlugin` は以下の順で実行されます。
 
-1. `Perceive`（メトリクス集計）
+1. `Perceive`（メトリクス集計 + フレームキャッシュ更新）
+   - `update_floor_tile_waiting_cache_system`: `Changed<FloorTileBlueprint>` 検知時のみ `FloorTileWaitingCache`（site → bones/mud 不足量）を再構築
+   - `update_wall_tile_waiting_cache_system`: `Changed<WallTileBlueprint>` 検知時のみ `WallTileWaitingCache`（site → wood/mud 不足量）を再構築
+   - `update_cached_active_familiars_system`: Idle 以外のアクティブ Familiar リストを `CachedActiveFamiliars` に毎フレーム更新（clear + extend）
+   - `update_cached_active_yards_system`: 全 Yard リストを `CachedActiveYards` に毎フレーム更新
+   - `FloorTileWaitingCache` / `WallTileWaitingCache` は変化のないフレームでは再構築をスキップする（Change Detection ベース）
+   - `CachedActiveFamiliars` / `CachedActiveYards` は全 producer が共有参照し、producer ごとの Vec 再構築を排除する
 2. `Decide`（各 producer が request を upsert）
 3. `Arbitrate`（手押し車仲裁 — 後述 §5.2）
 4. `Execute`（`TaskWorkers` に応じた state 同期）— `TaskWorkers.len() > 0` → `Claimed`、`== 0` → `Pending` に毎フレーム遷移
