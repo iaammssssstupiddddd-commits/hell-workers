@@ -38,7 +38,6 @@ impl Plugin for SpeechPlugin {
                 animation::animate_speech_bubbles,
                 typewriter::update_typewriter,
                 periodic::periodic_emotion_system,
-                observers::reaction_delay_system,
             )
                 .chain()
                 .in_set(hw_core::system_sets::GameSystemSet::Visual),

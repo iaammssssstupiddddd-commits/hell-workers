@@ -81,14 +81,6 @@ pub struct FamiliarBubble;
 #[derive(Component)]
 pub struct SpeechBubbleBackground;
 
-/// リアクションの遅延実行用
-#[derive(Component)]
-pub struct ReactionDelay {
-    pub timer: Timer,
-    pub emotion: BubbleEmotion,
-    pub text: String,
-}
-
 /// 定期的な感情表現の状態管理
 #[derive(Component, Default)]
 pub struct SoulEmotionState {

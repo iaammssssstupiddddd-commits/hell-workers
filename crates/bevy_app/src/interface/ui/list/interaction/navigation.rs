@@ -1,43 +1,11 @@
 use crate::app_contexts::TaskContext;
 use crate::systems::command::TaskMode;
-use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
 use hw_ui::camera::MainCamera;
 use hw_ui::components::{
-    EntityListScrollHint, FamiliarListItem, SoulListItem, UiScrollArea, UnassignedFolded,
+    EntityListScrollHint, FamiliarListItem, SoulListItem, UnassignedFolded,
     UnassignedSectionArrowIcon, UnassignedSoulContent, UnassignedSoulSection,
 };
-use hw_ui::theme::UiTheme;
-
-pub fn entity_list_scroll_system(
-    mut mouse_wheel_events: MessageReader<MouseWheel>,
-    mut q_scroll_areas: Query<(&RelativeCursorPosition, &mut ScrollPosition, &UiScrollArea)>,
-    theme: Res<UiTheme>,
-) {
-    let Some((_, mut scroll_position, scroll_area)) = q_scroll_areas
-        .iter_mut()
-        .find(|(cursor, _, _)| cursor.cursor_over())
-    else {
-        return;
-    };
-
-    let mut delta_y = 0.0;
-    for event in mouse_wheel_events.read() {
-        let unit_scale = match event.unit {
-            MouseScrollUnit::Line => scroll_area.speed,
-            MouseScrollUnit::Pixel => 1.0,
-        };
-        delta_y += event.y * unit_scale;
-    }
-    if delta_y.abs() <= f32::EPSILON {
-        return;
-    }
-
-    let step = theme.sizes.soul_item_height.max(1.0);
-    let target = (scroll_position.y - delta_y).max(0.0);
-    scroll_position.y = (target / step).round() * step;
-}
 
 pub fn entity_list_tab_focus_system(
     keyboard: Res<ButtonInput<KeyCode>>,

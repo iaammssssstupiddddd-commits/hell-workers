@@ -22,9 +22,12 @@ type AvailableSoulQuery<'w, 's> = Query<
 pub fn end_conversation(commands: &mut Commands, entity: Entity, cooldown: Option<f32>) {
     commands.entity(entity).remove::<ConversationParticipant>();
     if let Some(dur) = cooldown {
-        commands.entity(entity).insert(ConversationCooldown {
-            timer: Timer::from_seconds(dur, TimerMode::Once),
-        });
+        commands.entity(entity).insert(ConversationCooldown);
+        commands
+            .delayed()
+            .secs(dur)
+            .entity(entity)
+            .remove::<ConversationCooldown>();
     }
 }
 
@@ -230,20 +233,6 @@ pub fn apply_conversation_rewards(
                 // 会話によるモチベーション減少（サボり）
                 soul.motivation = (soul.motivation - MOTIVATION_PENALTY_CONVERSATION).max(0.0);
             }
-        }
-    }
-}
-
-pub fn update_conversation_cooldowns(
-    time: Res<Time>,
-    mut commands: Commands,
-    mut q_cooldowns: Query<(Entity, &mut ConversationCooldown)>,
-) {
-    let dt = time.delta_secs();
-    for (entity, mut cooldown) in q_cooldowns.iter_mut() {
-        cooldown.timer.tick(std::time::Duration::from_secs_f32(dt));
-        if cooldown.timer.just_finished() {
-            commands.entity(entity).remove::<ConversationCooldown>();
         }
     }
 }

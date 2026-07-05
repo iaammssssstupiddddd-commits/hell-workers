@@ -253,11 +253,6 @@ pub struct UnassignedSoulSection;
 #[derive(Component)]
 pub struct UnassignedSoulContent;
 
-#[derive(Component)]
-pub struct UiScrollArea {
-    pub speed: f32,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntityListSectionType {
     Familiar(Entity),

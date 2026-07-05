@@ -56,6 +56,15 @@ hw_energy      ✗
 2. `bevy_app/src/entities/game_assets.rs` の `impl UiAssets for GameAssets` に実装を追加
 3. このクレートに `GameAssets` への直接依存は追加しない
 
+## テキスト入力・スクロール UI の方針（Bevy 0.19 標準 widget 利用）
+
+- スクロール可能な UI コンテナには自前実装を追加せず、`bevy::ui_widgets::{ScrollArea, Scrollbar, ScrollbarThumb, ControlOrientation}` を使う。
+  - `ScrollArea` は `#[require(ScrollPosition)]` 付きなので `ScrollPosition` の手動 insert は不要。
+  - `UiWidgetsPlugins`（`ScrollAreaPlugin` / `ScrollbarPlugin` / `EditableTextInputPlugin` 等）は `bevy` の `ui` feature 経由で `DefaultPlugins` に自動登録済み。個別に plugin 登録しない。
+  - 参考実装: `crates/hw_ui/src/setup/entity_list.rs` の未所属 Soul リスト（`UnassignedSoulContent`）。
+- 将来 Soul 名リネームや検索 UI 等でテキスト入力が必要になった場合、自前 text input を作らず `bevy::text::EditableText`（`bevy::ui_widgets::EditableTextInputPlugin` が対応）を使う。
+- スクロール入力ブロック（`UiInputBlocker` + `RelativeCursorPosition`）はスクロール実装方式に関わらず、pointer-over 判定用として維持する。
+
 ## BuildingType メニュー追加時のルール
 
 新 `BuildingType` を建設メニューに追加する場合:

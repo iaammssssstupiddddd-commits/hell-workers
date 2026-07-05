@@ -47,8 +47,8 @@ mod visual {
 
 pub use hw_ui::list::entity_list_section_toggle_system;
 pub use navigation::{
-    entity_list_scroll_hint_visibility_system, entity_list_scroll_system,
-    entity_list_tab_focus_system, update_unassigned_arrow_icon_system,
+    entity_list_scroll_hint_visibility_system, entity_list_tab_focus_system,
+    update_unassigned_arrow_icon_system,
 };
 pub use visual::{apply_row_highlight, entity_list_visual_feedback_system};
 

@@ -1,6 +1,4 @@
-use super::components::{
-    BubbleEmotion, BubblePriority, FamiliarBubble, ReactionDelay, SpeechBubble,
-};
+use super::components::{BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble};
 use super::cooldown::SpeechHistory;
 use super::emitter::{SoulSpeechContent, emit_familiar_with_history, emit_soul_with_history};
 use super::phrases::LatinPhrase;
@@ -19,6 +17,41 @@ use hw_core::soul::DamnedSoul;
 use rand::Rng;
 
 use super::conversation::events::{ConversationTone, ConversationToneTriggered};
+
+/// リアクションバブルの遅延秒数
+const REACTION_BUBBLE_DELAY_SECS: f32 = 0.3;
+
+/// 遅延リアクションバブルを Delayed Commands で発行する
+///
+/// バブルは `ChildOf(soul_entity)` で Soul に追従するため、発火時に位置を読む必要はない。
+/// 発火前に Soul が despawn した場合は何もしない。
+fn queue_delayed_reaction_bubble(
+    commands: &mut Commands,
+    soul_entity: Entity,
+    emoji: &'static str,
+    emotion: BubbleEmotion,
+) {
+    commands
+        .delayed()
+        .secs(REACTION_BUBBLE_DELAY_SECS)
+        .queue(move |world: &mut World| {
+            if world.get_entity(soul_entity).is_err() {
+                return;
+            }
+            world.resource_scope(|world, handles: Mut<SpeechHandles>| {
+                let mut commands = world.commands();
+                spawn_soul_bubble(
+                    &mut commands,
+                    soul_entity,
+                    emoji,
+                    Vec3::ZERO,
+                    &handles,
+                    emotion,
+                    BubblePriority::Normal,
+                );
+            });
+        });
+}
 
 type SoulTaskSpeechQuery<'w, 's> = Query<
     'w,
@@ -199,11 +232,7 @@ pub fn on_soul_recruited(
         );
     }
 
-    commands.entity(soul_entity).insert(ReactionDelay {
-        timer: Timer::from_seconds(0.3, TimerMode::Once),
-        emotion: BubbleEmotion::Fearful,
-        text: "😨".to_string(),
-    });
+    queue_delayed_reaction_bubble(&mut commands, soul_entity, "😨", BubbleEmotion::Fearful);
 }
 
 /// 疲労限界時のオブザーバー
@@ -257,30 +286,6 @@ pub fn on_stress_breakdown(
             history_opt,
             current_time,
         );
-    }
-}
-
-/// リアクションの遅延実行を行うシステム
-pub fn reaction_delay_system(
-    time: Res<Time>,
-    mut commands: Commands,
-    handles: Res<SpeechHandles>,
-    mut query: Query<(Entity, &GlobalTransform, &mut ReactionDelay)>,
-) {
-    for (entity, transform, mut delay) in query.iter_mut() {
-        delay.timer.tick(time.delta());
-        if delay.timer.just_finished() {
-            spawn_soul_bubble(
-                &mut commands,
-                entity,
-                &delay.text,
-                transform.translation(),
-                &handles,
-                delay.emotion,
-                BubblePriority::Normal,
-            );
-            commands.entity(entity).remove::<ReactionDelay>();
-        }
     }
 }
 
@@ -372,9 +377,5 @@ pub fn on_encouraged(
         );
     }
 
-    commands.entity(soul_entity).insert(ReactionDelay {
-        timer: Timer::from_seconds(0.3, TimerMode::Once),
-        emotion: BubbleEmotion::Stressed,
-        text: "😓".to_string(),
-    });
+    queue_delayed_reaction_bubble(&mut commands, soul_entity, "😓", BubbleEmotion::Stressed);
 }

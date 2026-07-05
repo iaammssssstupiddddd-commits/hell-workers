@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-04-17）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-07-05）。
 
 ## 新規計画書の作り方
 
@@ -19,9 +19,12 @@
 
 | Document | Status | Notes |
 |---|---|---|
+| [bevy-0-19-feature-adoption-plan-2026-07-05.md](bevy-0-19-feature-adoption-plan-2026-07-05.md) | Draft | Bevy 0.19 新機能の採用候補を Delayed Commands / UI widgets / contiguous query / ICU4X QA に分けて扱う親計画 |
 | [bevy-0-19-migration-plan-2026-07-05.md](bevy-0-19-migration-plan-2026-07-05.md) | Completed | Bevy 0.18 → 0.19 マイグレーション完了。既知の制約: ICU4X 日本語セグメンテーション（要目視QA） |
+| [blob-shadow-tim-burton-2026-04-12.md](blob-shadow-tim-burton-2026-04-12.md) | Draft | 影スタイル 2D 化計画（床・壁接続維持） 2026-04-12 |
 | [dream-bubble-perf-2026-04-09.md](dream-bubble-perf-2026-04-09.md) | Draft | 夢の泡パーティクル描画負荷最適化 |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
+| [performance-cpu-2026-04-16.md](performance-cpu-2026-04-16.md) | Draft | CPU パフォーマンス改善計画書 |
 | [terrain-lod-switch-flicker-plan-2026-04-17.md](terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD 切替時のちらつきを、判定安定化と短い遷移フェーズで抑える計画 |
 | [world-map-lod1-performance-plan-2026-04-09.md](world-map-lod1-performance-plan-2026-04-09.md) | Complete | ワールドマップ近景 `LOD1` の fragment 負荷を、境界 early-out・中間 LOD・feature ベイク再編で下げる計画 |
 
@@ -36,6 +39,8 @@
 | [archive/assigned-task-to-hw-jobs-plan-2026-03-08.md](archive/assigned-task-to-hw-jobs-plan-2026-03-08.md) | アーカイブ | AssignedTask を hw_core → hw_jobs へ移動する計画 |
 | [archive/assignment-builder-unification-plan-2026-03-01.md](archive/assignment-builder-unification-plan-2026-03-01.md) | アーカイブ | `task_management/builders` の重複削減と割り当て生成経路の共通化計画。 |
 | [archive/auto-gather-for-blueprint.md](archive/auto-gather-for-blueprint.md) | アーカイブ | Blueprint不足資材の自動伐採/採掘計画。 |
+| [archive/bevy-0-19-delayed-commands-plan-2026-07-05.md](archive/bevy-0-19-delayed-commands-plan-2026-07-05.md) | アーカイブ | ワンショット Timer の Delayed Commands 置き換え完了（ConversationCooldown / ReactionDelay）。TimerMode::Once 全数調査の最終分類表と適格判定基準（`docs/DEVELOPMENT.md` §13 に恒久化）を含む |
+| [archive/bevy-0-19-ui-widgets-adoption-plan-2026-07-05.md](archive/bevy-0-19-ui-widgets-adoption-plan-2026-07-05.md) | アーカイブ | Entity List の `UiScrollArea` を `bevy::ui_widgets::ScrollArea`/`Scrollbar` へ移行し、`EditableText` 使用方針を `hw_ui/_rules.md` に整備完了 |
 | [archive/boundary-texture-paste-plan-2026-04-07.md](archive/boundary-texture-paste-plan-2026-04-07.md) | アーカイブ | 境界テクスチャ貼り付け計画（terrain_region_map） |
 | [archive/bridge-building.md](archive/bridge-building.md) | アーカイブ | 橋（Bridge）建築物の実装計画。 |
 | [archive/bucket-return-rebuild-plan.md](archive/bucket-return-rebuild-plan.md) | アーカイブ | バケツ返却仕様の再構築計画。 |
@@ -50,6 +55,7 @@
 | [archive/destination-validation-unification-plan-2026-03-07.md](archive/destination-validation-unification-plan-2026-03-07.md) | アーカイブ | FloorConstruction / WallConstruction / ProvisionalWall の搬入先需要計算と実行時受入判定が、割り当て時・手運搬 dropping 時・猫車 unloading 時の 3 系統に分散し、同一ロジックを複数箇所で維持しているの計画。 |
 | [archive/docs-index-automation-plan-2026-03-05.md](archive/docs-index-automation-plan-2026-03-05.md) | アーカイブ | docs/plans/README.mdの計画。 |
 | [archive/door-implementation-2026-02-22.md](archive/door-implementation-2026-02-22.md) | アーカイブ | 壁で囲まれた空間への出入りを制御する手段がない。現状は壁に穴を開けるか、壁を完全に閉じるかの二択しかないの計画。 |
+| [archive/dream-bubble-perf-2026-04-09.md](archive/dream-bubble-perf-2026-04-09.md) | アーカイブ | 夢の泡パーティクル描画負荷最適化 |
 | [archive/dream-bubble-physics.md](archive/dream-bubble-physics.md) | アーカイブ | Dreamバブル物理挙動の実装計画。 |
 | [archive/dream-per-soul-storage-plan-2026-02-26.md](archive/dream-per-soul-storage-plan-2026-02-26.md) | アーカイブ | dreamがグローバルプール直接加算でsoul個別の管理軸がないの計画。 |
 | [archive/dream-system.md](archive/dream-system.md) | アーカイブ | Dreamシステム提案。 |
@@ -132,6 +138,8 @@
 | [archive/scaling-performance-bottlenecks-plan.md](archive/scaling-performance-bottlenecks-plan.md) | アーカイブ | スケール時ボトルネック最適化計画。 |
 | [archive/selection-placement-refactor-plan-2026-02-25.md](archive/selection-placement-refactor-plan-2026-02-25.md) | アーカイブ | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
 | [archive/selection-separation-plan-2026-03-08.md](archive/selection-separation-plan-2026-03-08.md) | アーカイブ | -の計画。 |
+| [archive/shadow-map-size-2026-04-10 copy.md](archive/shadow-map-size-2026-04-10 copy.md) | アーカイブ | シャドウマップサイズ削減計画 |
+| [archive/shadow-map-size-2026-04-10.md](archive/shadow-map-size-2026-04-10.md) | アーカイブ | シャドウマップサイズ削減計画 |
 | [archive/site-yard-system.md](archive/site-yard-system.md) | アーカイブ | 実装計画: Site / Yard システム |
 | [archive/soul-ai-crate-extraction-plan-2026-03-12.md](archive/soul-ai-crate-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/soul_ai/の計画。 |
 | [archive/soul-ai-root-thinning-plan-2026-03-09.md](archive/soul-ai-root-thinning-plan-2026-03-09.md) | アーカイブ | soul_ai を段階的に crate へ寄せて root を薄くする計画 |
@@ -156,6 +164,8 @@
 | [archive/wheelbarrow-arbitration-plan.md](archive/wheelbarrow-arbitration-plan.md) | アーカイブ | 猫車利用仲裁ロジックの実装計画。 |
 | [archive/workspace-area-bounds-extraction.md](archive/workspace-area-bounds-extraction.md) | アーカイブ | AreaBoundsの計画。 |
 | [archive/workspace-construction-phase-extraction.md](archive/workspace-construction-phase-extraction.md) | アーカイブ | Floor/Wall 建設で使うフェーズ・状態型がの計画。 |
+| [archive/world-map-lod1-performance-plan-2026-04-09.md](archive/world-map-lod1-performance-plan-2026-04-09.md) | アーカイブ | ワールドマップの近景表示で使うの計画。 |
 | [archive/world-map-render-chunking-plan-2026-04-08.md](archive/world-map-render-chunking-plan-2026-04-08.md) | アーカイブ | -の計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
+

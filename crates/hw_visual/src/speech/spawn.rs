@@ -7,12 +7,16 @@ use bevy::prelude::*;
 use hw_core::constants::*;
 
 /// Soul用の絵文字吹き出しをスポーンする
+///
+/// `&Res<SpeechHandles>` ではなく `&SpeechHandles` を取る（`Res` は `&mut World` から
+/// 再構築できないため、Delayed Commands の closure 内からも呼べるようにする。
+/// 既存の `Res` 呼び出し元は deref coercion でそのまま通る）
 pub fn spawn_soul_bubble(
     commands: &mut Commands,
     soul_entity: Entity,
     emoji: &str,
     _pos: Vec3,
-    handles: &Res<SpeechHandles>,
+    handles: &SpeechHandles,
     emotion: BubbleEmotion,
     priority: BubblePriority,
 ) {

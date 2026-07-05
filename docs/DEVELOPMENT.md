@@ -287,6 +287,29 @@ pub fn apply_door_state(world_map: &mut WorldMap, ...) { ... }
 pub fn is_soul_available_for_work(assigned: &AssignedTask) -> bool { ... }
 ```
 
+### 13. ワンショット遅延処理の規約（Delayed Commands vs Timer）
+
+「N 秒後に一度だけ何かする」処理は、Timer コンポーネント + tick システムを新設せず、Bevy 0.19 の Delayed Commands（`commands.delayed().secs(..)`、`bevy::prelude` に含まれる）を第一候補にする。
+
+**Delayed Commands を使ってよい条件（5 つすべて満たすこと）:**
+
+1. `TimerMode::Once` 相当のワンショットである
+2. 発火までの経過が**無条件**（状態によって進行を止めない）
+3. 途中キャンセル・リセット・上書きの経路が**存在しない**（Delayed Commands にキャンセル API はない）
+4. 発火時に必要なデータが、発行時に確定しているか、closure コマンド内で World から取得できる
+5. 同じ対象へ短時間に複数回発行されても、旧実装の上書き/デバウンス挙動に依存していない（複数キューはすべて発火する）
+
+1 つでも満たさない場合は従来どおり Timer コンポーネント + tick システムを使う（例: `ItemDespawnTimer` は予約中に tick を止めるため対象外、`DoorCloseTimer` は近接キャンセルがあるため対象外）。
+
+**実装上の注意:**
+
+- 発火は `TimePlugin` が `PreUpdate` に登録済みの `check_delayed_command_queues` が担う。アプリ側の登録は不要
+- デフォルトクロック基準のため、ポーズ/倍速（`Time` の pause / relative_speed）に自動追従する
+- closure コマンド（`.queue(move |world: &mut World| {..})`）内では、対象エンティティの despawn に備えて `world.get_entity(..)` で存在確認する
+- closure 内で resource と `world.commands()` を同時に使う場合は `world.resource_scope` で borrow 競合を回避する
+- `Res<T>` は `&mut World` から再構築できない。closure から呼ぶヘルパーの引数は `&Res<T>` ではなく `&T` にする（既存の呼び出し元は deref coercion でそのまま通る）
+- 適用例: `ConversationCooldown` の時限除去、勧誘/激励リアクションの遅延バブル（`docs/speech_system.md` 参照）
+
 ## 推奨開発ツール
 
 | ツール | 用途 | インストール |

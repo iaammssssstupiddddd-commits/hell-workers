@@ -5,6 +5,7 @@ use crate::components::*;
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
+use bevy::ui_widgets::{ControlOrientation, ScrollArea, Scrollbar, ScrollbarThumb};
 
 pub fn spawn_entity_list_panel(
     commands: &mut Commands,
@@ -168,20 +169,50 @@ pub fn spawn_entity_list_panel(
                             ));
                         });
 
-                    // 未所属ソウルリストコンテナ
-                    section.spawn((
-                        Node {
+                    // 未所属ソウルリストコンテナ + スクロールバーの行ラッパー
+                    section
+                        .spawn(Node {
                             flex_grow: 1.0,
                             min_height: Val::Px(0.0),
-                            flex_direction: FlexDirection::Column,
-                            overflow: Overflow::scroll_y(),
+                            flex_direction: FlexDirection::Row,
                             ..default()
-                        },
-                        RelativeCursorPosition::default(),
-                        UiInputBlocker,
-                        UiScrollArea { speed: 28.0 },
-                        UnassignedSoulContent,
-                    ));
+                        })
+                        .with_children(|row| {
+                            let content_id = row
+                                .spawn((
+                                    Node {
+                                        flex_grow: 1.0,
+                                        min_height: Val::Px(0.0),
+                                        flex_direction: FlexDirection::Column,
+                                        overflow: Overflow::scroll_y(),
+                                        ..default()
+                                    },
+                                    RelativeCursorPosition::default(),
+                                    UiInputBlocker,
+                                    ScrollArea,
+                                    UnassignedSoulContent,
+                                ))
+                                .id();
+
+                            // 縦スクロールバー（overflow 時のみ視認できる程度の細さ）
+                            row.spawn((
+                                Node {
+                                    width: Val::Px(4.0),
+                                    height: Val::Percent(100.0),
+                                    ..default()
+                                },
+                                Scrollbar::new(content_id, ControlOrientation::Vertical, 20.0),
+                            ))
+                            .with_children(|scrollbar| {
+                                scrollbar.spawn((
+                                    ScrollbarThumb {
+                                        border_radius: BorderRadius::all(Val::Px(2.0)),
+                                        border: UiRect::ZERO,
+                                    },
+                                    BackgroundColor(theme.colors.text_muted),
+                                ));
+                            });
+                        });
                 });
 
                 // スクロール可能であることを示す固定ヒント

@@ -38,8 +38,6 @@ pub enum ConversationPhase {
     Closing,  // 終わり
 }
 
-/// 会話のクールダウン
+/// 会話のクールダウン（Delayed Commands により一定時間後に自動的に除去される）
 #[derive(Component, Reflect)]
-pub struct ConversationCooldown {
-    pub timer: Timer,
-}
+pub struct ConversationCooldown;

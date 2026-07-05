@@ -22,9 +22,10 @@ Soul は主に「感情」を絵文字で表現します。表示時は各感情
 | `OnExhausted` | 😴 | Exhausted | High | 疲労限界に達し、休息へ向かう時 |
 | `OnStressBreakdown` | 😰 | Stressed | Critical | ストレス崩壊を起こした時 |
 | `OnSoulRecruited` | 😨 | Fearful | Normal | 勧誘された時 (0.3s遅延) | [NEW]
+| `OnEncouraged` | 😓 | Stressed | Normal | 激励された時 (0.3s遅延) |
 | `OnReleasedFromService` | 😅 | Relieved | Normal | 使役から解放された時 | [NEW]
 | `OnGatheringJoined`| 😌 | Relaxed | Normal | 集会所に到着した時 | [NEW]
-| `OnTaskAbandoned` | 😓 | Frustrated | Normal | タスクがキャンセルされた時 | [NEW]
+| `OnTaskAbandoned` | 🙅‍♂️ | Unmotivated | Normal | タスクがキャンセルされた時 | [NEW]
 | `Periodic: Idle` | 💤.. | Bored | Low | 長時間アイドル時 (10s+) | [NEW]
 | `Periodic: High` | 😰/😴..| (各種) | High | 状態異常時の定期リマインド | [NEW]
 | `Conversation` | (複数) | Chatting/Happy/Slacking.. | Normal | Soul同士の対話システム | [NEW]
@@ -101,15 +102,24 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
 - **コンポーネント**: `SpeechBubble`, `BubbleAnimation`, `TypewriterEffect`, `BubbleEmotion`, `ConversationExpression`, `ConversationInitiator`
 - **定数**: [crates/hw_core/src/constants/speech.rs](../crates/hw_core/src/constants/speech.rs) 内の `BUBBLE_` プレフィックスが付いた各定数（速度、色、サイズ等）
 - **システム構成**:
-    - `spawn_soul_bubble` / `spawn_familiar_bubble`: 生成ロジック
+    - `spawn_soul_bubble` / `spawn_familiar_bubble`: 生成ロジック（`spawn_soul_bubble` は Delayed Commands の closure からも呼べるよう `&SpeechHandles` を取る。`Res` は `&mut World` から再構築できないため `&Res<SpeechHandles>` に戻さないこと）
     - `animate_speech_bubbles`: アニメーション制御
     - `update_typewriter`: テキスト表示制御
     - `update_bubble_stacking`: 位置調整制御
     - `periodic_emotion_system`: [NEW] 定期的な感情判定ロジック
-    - `reaction_delay_system`: [NEW] 勧誘時の遅延リアクション制御
-    - `ConversationPlugin`: `check_conversation_triggers` / `handle_conversation_requests` / `process_conversation_logic` / `apply_conversation_rewards` / `update_conversation_cooldowns` を登録
+    - `queue_delayed_reaction_bubble`（observers.rs 内 helper）: 勧誘・激励時の 0.3 秒遅延リアクション。専用の tick システムは持たず、`commands.delayed().secs(..)`（bevy_time Delayed Commands）で発火する。バブルは `ChildOf` で Soul に追従するため発火時の位置読み取りは不要。発火前に Soul が despawn した場合は何もしない
+    - `ConversationPlugin`: `check_conversation_triggers` / `handle_conversation_requests` / `process_conversation_logic` / `apply_conversation_rewards` を登録
     - `conversation/phase_handlers.rs`: Greeting / Chatting / Closing 各フェーズの進行と tone / reward 判定
     - `conversation/bubble_spawn_helpers.rs`: 会話バブル生成と絵文字選定の helper 群
+
+### 遅延実行の仕組み（Delayed Commands）
+
+勧誘/激励リアクションと会話クールダウンの時限処理は、Timer コンポーネント + tick システムではなく Bevy 0.19 の Delayed Commands（`commands.delayed().secs(..)`）で実装されている。
+
+- 発火は `TimePlugin` が `PreUpdate` に登録する `check_delayed_command_queues` が担う（アプリ側の登録は不要）
+- デフォルトクロック基準のため、ゲームのポーズ/倍速（`Time` の pause / relative_speed）に追従する
+- **発火のキャンセル手段はない**。キャンセル・リセット・上書きが必要な時限処理には使わないこと（判定基準は `docs/DEVELOPMENT.md` の該当規約を参照）
+- ⚠️ 同一 Soul に 0.3 秒以内へ複数のリアクション（勧誘 + 激励など）が重なった場合、両方のバブルが表示される（旧実装は後勝ち上書きだった）。発火源はいずれも離散アクションのエッジトリガーであり、意図的に許容している
 
 ---
 
@@ -131,6 +141,17 @@ Soul 同士が近接した際に発生する、動的な対話システムです
 ### 報酬 (機械的メリット)
 会話が正常に完了すると、参加したすべての Soul の **ストレス値が減少** します。
 - 3ターン以上の長い会話には、追加のボーナス報酬が適用されます。
+
+### 会話クールダウン（ConversationCooldown）
+
+`ConversationCooldown` はタイマーを持たない**マーカーコンポーネント**で、存在自体がクールダウン状態を表します。
+
+| 項目 | 内容 |
+|:---|:---|
+| 書き込み元 | `end_conversation(.., Some(dur))` — Closing フェーズ完了時のみ |
+| 削除元 | 挿入と同時に発行される Delayed Commands（`CONVERSATION_COOLDOWN` 秒後）。tick システムは存在しない |
+| 効果 | `Without<ConversationCooldown>` フィルタにより、クールダウン中の Soul は会話の開始者・対象の両方から除外される |
+| ⚠️ 中断終了 | 相手消失などによる中断（`end_conversation(.., None)`）ではクールダウンは付与されず、即座に再会話可能 |
 
 ---
 

@@ -23,7 +23,6 @@ impl Plugin for ConversationPlugin {
                     handle_conversation_requests,
                     process_conversation_logic,
                     apply_conversation_rewards,
-                    update_conversation_cooldowns,
                 )
                     .in_set(hw_core::system_sets::GameSystemSet::Visual),
             );
