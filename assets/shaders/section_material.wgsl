@@ -6,7 +6,7 @@
     forward_io::{VertexOutput, FragmentOutput},
     mesh_view_bindings::globals,
 }
-#import "shaders/shadow_style.wgsl" apply_directional_shadow_style
+#import "shaders/shadow_style.wgsl"::apply_directional_shadow_style
 
 struct SectionMaterialUniforms {
     cut_position:    vec4<f32>,

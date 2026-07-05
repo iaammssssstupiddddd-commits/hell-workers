@@ -247,8 +247,8 @@ pub fn soul_status_visual_system(
                         StatusIcon,
                         Text2d::new(text),
                         TextFont {
-                            font: speech_handles.font_soul_name.clone(),
-                            font_size: FONT_SIZE_BODY,
+                            font: speech_handles.font_soul_name.clone().into(),
+                            font_size: FontSize::Px(FONT_SIZE_BODY),
                             ..default()
                         },
                         TextColor(color),

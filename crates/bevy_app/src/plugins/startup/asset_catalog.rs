@@ -46,31 +46,59 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
 
     GameAssets {
         white_pixel,
-        grass: asset_server.load_with_settings("textures/grass.png", terrain_sampler),
-        dirt: asset_server.load_with_settings("textures/dirt.png", terrain_sampler),
+        grass: asset_server
+            .load_builder()
+            .with_settings(terrain_sampler)
+            .load("textures/grass.png"),
+        dirt: asset_server
+            .load_builder()
+            .with_settings(terrain_sampler)
+            .load("textures/dirt.png"),
         stone: asset_server.load("textures/stone.jpg"),
-        river: asset_server.load_with_settings("textures/river.png", terrain_sampler),
-        sand: asset_server.load_with_settings("textures/sand_terrain.png", terrain_sampler),
+        river: asset_server
+            .load_builder()
+            .with_settings(terrain_sampler)
+            .load("textures/river.png"),
+        sand: asset_server
+            .load_builder()
+            .with_settings(terrain_sampler)
+            .load("textures/sand_terrain.png"),
         terrain_macro_noise: asset_server
-            .load_with_settings("textures/terrain_macro_noise.png", terrain_sampler),
+            .load_builder()
+            .with_settings(terrain_sampler)
+            .load("textures/terrain_macro_noise.png"),
         river_flow_noise: asset_server
-            .load_with_settings("textures/river_flow_noise.png", terrain_sampler),
+            .load_builder()
+            .with_settings(terrain_sampler)
+            .load("textures/river_flow_noise.png"),
         river_normal_like: asset_server
-            .load_with_settings("textures/river_normal_like.png", terrain_sampler),
-        terrain_blend_mask_soft: asset_server.load_with_settings(
-            "textures/terrain_blend_mask_soft.png",
-            terrain_clamp_sampler,
-        ),
+            .load_builder()
+            .with_settings(terrain_sampler)
+            .load("textures/river_normal_like.png"),
+        terrain_blend_mask_soft: asset_server
+            .load_builder()
+            .with_settings(terrain_clamp_sampler)
+            .load("textures/terrain_blend_mask_soft.png"),
         shoreline_detail: asset_server
-            .load_with_settings("textures/shoreline_detail.png", terrain_clamp_sampler),
+            .load_builder()
+            .with_settings(terrain_clamp_sampler)
+            .load("textures/shoreline_detail.png"),
         terrain_feature_lut: asset_server
-            .load_with_settings("textures/terrain_feature_lut.png", terrain_lut_sampler),
+            .load_builder()
+            .with_settings(terrain_lut_sampler)
+            .load("textures/terrain_feature_lut.png"),
         grass_macro_overlay: asset_server
-            .load_with_settings("textures/grass_macro_overlay.png", terrain_sampler),
+            .load_builder()
+            .with_settings(terrain_sampler)
+            .load("textures/grass_macro_overlay.png"),
         dirt_macro_overlay: asset_server
-            .load_with_settings("textures/dirt_macro_overlay.png", terrain_sampler),
+            .load_builder()
+            .with_settings(terrain_sampler)
+            .load("textures/dirt_macro_overlay.png"),
         sand_macro_overlay: asset_server
-            .load_with_settings("textures/sand_macro_overlay.png", terrain_sampler),
+            .load_builder()
+            .with_settings(terrain_sampler)
+            .load("textures/sand_macro_overlay.png"),
         familiar: asset_server.load("textures/character/familiar/imp anime 1.png"),
         familiar_anim_2: asset_server.load("textures/character/familiar/imp anime 2.png"),
         familiar_anim_3: asset_server.load("textures/character/familiar/imp anime 3.png"),

@@ -2,11 +2,11 @@
 
 ## システム全体俯瞰 (System Overview)
 
-本プロジェクトは Bevy 0.18 のプラグインアーキテクチャに基づき、関心事ごとに分離されています。
+本プロジェクトは Bevy 0.19 のプラグインアーキテクチャに基づき、関心事ごとに分離されています。
 
 ```mermaid
 graph TD
-    subgraph Engine["Bevy Engine (0.18)"]
+    subgraph Engine["Bevy Engine (0.19)"]
         ECS["ECS (Entities, Components, Systems)"]
         Rel["ECS Relationships"]
         Obs["Observers"]
@@ -269,15 +269,15 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - 建築物 3D ビジュアルは `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER])` を使い、RtT Camera3d には見せつつ、影確認用 `DirectionalLight` からも shadow receiver として扱えるようにしている。
 - 表示用 Soul GLB は `LAYER_3D`、`SoulMaskProxy3d` は `LAYER_3D_SOUL_MASK` に所属する。`Soul` の輪郭補正は `RttCompositeMaterial` が `soul_mask_texture` を参照して行い、影そのものはこの mask RtT からは作らない。
 - TopDown の主光源方向は `hw_core::constants::topdown_sun_direction_world()` を単一の真実とし、RtT の主 `DirectionalLight` と `CharacterMaterial` の body shader が同じ方向を使う。現在は画面手前側の壁面が完全な日陰にならないよう、真上寄りではなく前方寄りの斜光を採用している。
-- Bevy 0.18 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 light は `LAYER_3D` を含み、`Camera3dRtt` 視点で有効な light として GPU light 配列に入る。`Soul` projected shadow もこの view 内の shadow-enabled directional light だけを使う。
+- Bevy 0.19 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 light は `LAYER_3D` を含み、`Camera3dRtt` 視点で有効な light として GPU light 配列に入る。`Soul` projected shadow もこの view 内の shadow-enabled directional light だけを使う。
 
 `sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は合成メッシュのスケールをウィンドウリサイズに常時追従させ、`RttRuntime.is_changed()` のときのみカメラ `RenderTarget` と `RttCompositeMaterial` の参照テクスチャを更新する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttRuntime.viewport` の実サイズから再計算し、品質スケール時でも Soul silhouette 合成がずれないようにしている。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ変更フレームや品質変更フレーム内で再生成後のテクスチャへ差し替わる。
 
 ### キャラクター表示（Soul GLB + Familiar 2D 前面表示）
 
-`SoulProxy3d` は `SceneRoot` で `assets/models/characters/soul.glb#Scene0` を読み込む 3D ルートとして使う。Familiar は Phase 3 の表示方針として 2D 前面表示・影なしを採用し、建築物 RtT より手前の Camera2d レイヤーで扱う。
+`SoulProxy3d` は `WorldAssetRoot` で `assets/models/characters/soul.glb#Scene0` を読み込む 3D ルートとして使う。Familiar は Phase 3 の表示方針として 2D 前面表示・影なしを採用し、建築物 RtT より手前の Camera2d レイヤーで扱う。
 
-- `GameAssets.soul_scene` に `GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb")` を保持し、Soul spawn 時に `SceneRoot` として 3D シーンへ追加する。
+- `GameAssets.soul_scene`（`Handle<WorldAsset>`）に `GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb")` を保持し、Soul spawn 時に `WorldAssetRoot` として 3D シーンへ追加する。
 - Soul 本体エンティティは 2D `Sprite` を持たず、通常表示は GLB 側へ一本化している。従来の `animation_system` / `idle_visual_system` は `Sprite` を optional にして、Soul の状態更新を維持したまま 3D 表示へ移行している。
 - Soul の通常描画ルートとは別に、`SoulMaskProxy3d` が同じ `soul.glb` を `LAYER_3D_SOUL_MASK` へ複製スポーンする。`sync_soul_mask_proxy_3d_system` が本体と同じ 2D 位置へ同期し、Soul 専用 mask RtT の入力に使う。
 - `SoulShadowProxy3d` は互換性のために残っているが、現在の runtime では `mesh_body` / `mesh_face` の両方に `NotShadowCaster` を付けており、実際の `Soul` 影には寄与しない。`Soul` の見た目変更は real shadow caster ではなく receiver 側で行う。
@@ -287,7 +287,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - 現在の placeholder consumer では `Wall` / `ProvisionalWall` のみ `SectionMaterial` を使い、`floor` / `door` / `equipment` は引き続き `StandardMaterial` を使う。full migration は後段の `MS-3-5` で行う。
 - section clip は現在 `discard` ベースのため断面キャップを生成しない。壁 volume の途中で切ると切断面の蓋は作られず、内部を覗き込むような見え方になる。これは `section-material-proposal` の「方針 C: 何もしない」に相当し、断面キャップ方針は将来実装で確定する。
 - `hw_visual::CharacterMaterial` と `assets/shaders/character_material.wgsl` が Soul 用 custom material 経路を提供し、`AlphaMode::Blend` の透過付き描画を行う。現段階では section 連動や表情状態切り替えはまだ入れていない。
-- `apply_soul_gltf_render_layers_on_ready` が `SceneInstanceReady` を受けて Soul GLB の子孫へ `RenderLayers::layer(LAYER_3D)` を付与し、`mesh_body` / `mesh_face` の両方を `CharacterMaterial` へ差し替える。
+- `apply_soul_gltf_render_layers_on_ready` が `WorldInstanceReady` を受けて Soul GLB の子孫へ `RenderLayers::layer(LAYER_3D)` を付与し、`mesh_body` / `mesh_face` の両方を `CharacterMaterial` へ差し替える。
 - `apply_soul_mask_gltf_render_layers_on_ready` が `SoulMaskProxy3d` の子孫へ `RenderLayers::layer(LAYER_3D_SOUL_MASK)` を付与し、すべてのメッシュを `SoulMaskMaterial` に差し替える。mask ルートは最終色を描かず、輪郭抽出専用の白単色 RtT だけを生成する。
 - `CharacterHandles` は Soul body/face 用の `Handle<CharacterMaterial>` と、Soul mask 用の `Handle<SoulMaskMaterial>` を保持する。`mesh_body` はリポジトリ内で生成する 1x1 白テクスチャを使い、shader 側で青白い base/shadow 色、簡易ポスタライズ、rim 強調で 2D の幽体感へ寄せる。body 自体は不透明描画にして、腕や胴体の重なりでポリゴン内部が透けないようにしている。
 - `mesh_face` は atlas の先頭セル（通常表情）から、Idle 表情の可視領域計測を元にした crop を `uv_scale` / `uv_offset` で切り出し、中心固定で 1.4 倍拡大している。
@@ -324,7 +324,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 ## イベントシステム
 
-本プロジェクトでは、Bevy 0.18 の `Message` と `Observer` を用途に応じて使い分けています。
+本プロジェクトでは、Bevy 0.19 の `Message` と `Observer` を用途に応じて使い分けています。
 
 | 方式 | 用途 | 定義場所 |
 |:--|:--|:--|

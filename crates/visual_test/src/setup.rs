@@ -134,6 +134,9 @@ pub fn setup_scene(
             pixel_size: Vec2::new(1.0 / win_size.x.max(1.0), 1.0 / win_size.y.max(1.0)),
             mask_radius_px: 2.25,
             mask_feather: 0.28,
+            shadow_offset_uv: Vec2::ZERO,
+            shadow_width_px: 0.0,
+            shadow_strength: 0.0,
         },
         scene_texture: rtt_handle,
         soul_mask_texture: mask_handle,
@@ -181,7 +184,7 @@ pub fn setup_scene(
     let sun_dir = topdown_sun_direction_world();
     commands.spawn((
         DirectionalLight {
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             illuminance: 12_000.0,
             ..default()
         },
@@ -284,8 +287,8 @@ fn spawn_btn(
         b.spawn((
             Text::new(label),
             TextFont {
-                font: font.clone(),
-                font_size: SFONT,
+                font: font.clone().into(),
+                font_size: FontSize::Px(SFONT),
                 ..default()
             },
             TextColor(Color::srgb(0.9, 0.9, 0.92)),
@@ -313,8 +316,8 @@ fn small_btn(p: &mut ChildSpawnerCommands, a: VisualTestAction, label: &str, fon
         b.spawn((
             Text::new(label),
             TextFont {
-                font: font.clone(),
-                font_size: 13.0,
+                font: font.clone().into(),
+                font_size: FontSize::Px(13.0),
                 ..default()
             },
             TextColor(Color::srgb(0.9, 0.9, 0.92)),
@@ -327,8 +330,8 @@ fn sec_label(p: &mut ChildSpawnerCommands, text: &str, font: &Handle<Font>) {
     p.spawn((
         Text::new(text),
         TextFont {
-            font: font.clone(),
-            font_size: 10.0,
+            font: font.clone().into(),
+            font_size: FontSize::Px(10.0),
             ..default()
         },
         TextColor(SEC_COL),
@@ -354,8 +357,8 @@ fn val_text(
     p.spawn((
         Text::new(initial),
         TextFont {
-            font: font.clone(),
-            font_size: SFONT,
+            font: font.clone().into(),
+            font_size: FontSize::Px(SFONT),
             ..default()
         },
         TextColor(VAL_COL),
@@ -389,8 +392,8 @@ fn param_row(
         row.spawn((
             Text::new(label),
             TextFont {
-                font: font.clone(),
-                font_size: SFONT,
+                font: font.clone().into(),
+                font_size: FontSize::Px(SFONT),
                 ..default()
             },
             TextColor(DIM_COL),
@@ -409,8 +412,8 @@ fn spawn_header(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
     p.spawn((
         Text::new("Visual Test"),
         TextFont {
-            font: font.clone(),
-            font_size: 14.0,
+            font: font.clone().into(),
+            font_size: FontSize::Px(14.0),
             weight: FontWeight::BOLD,
             ..default()
         },
@@ -467,8 +470,8 @@ fn spawn_camera_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
         b.spawn((
             Text::new("TopDown  [V]"),
             TextFont {
-                font: font.clone(),
-                font_size: SFONT,
+                font: font.clone().into(),
+                font_size: FontSize::Px(SFONT),
                 ..default()
             },
             TextColor(Color::srgb(0.9, 0.9, 0.92)),
@@ -487,8 +490,8 @@ fn spawn_camera_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
         row.spawn((
             Text::new("H:"),
             TextFont {
-                font: font.clone(),
-                font_size: SFONT,
+                font: font.clone().into(),
+                font_size: FontSize::Px(SFONT),
                 ..default()
             },
             TextColor(DIM_COL),
@@ -514,8 +517,8 @@ fn spawn_camera_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
         row.spawn((
             Text::new("Off:"),
             TextFont {
-                font: font.clone(),
-                font_size: SFONT,
+                font: font.clone().into(),
+                font_size: FontSize::Px(SFONT),
                 ..default()
             },
             TextColor(DIM_COL),
@@ -590,8 +593,8 @@ fn spawn_soul_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
         s.spawn((
             Text::new("Default  [Y]"),
             TextFont {
-                font: font.clone(),
-                font_size: SFONT,
+                font: font.clone().into(),
+                font_size: FontSize::Px(SFONT),
                 ..default()
             },
             TextColor(VAL_COL),
@@ -709,8 +712,8 @@ fn spawn_build_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
         s.spawn((
             Text::new("(50, 50)"),
             TextFont {
-                font: font.clone(),
-                font_size: SFONT,
+                font: font.clone().into(),
+                font_size: FontSize::Px(SFONT),
                 ..default()
             },
             TextColor(VAL_COL),
@@ -766,8 +769,8 @@ fn spawn_menu_ui(commands: &mut Commands, font: Handle<Font>) {
     commands.spawn((
         Text::new("[H] メニュー表示"),
         TextFont {
-            font,
-            font_size: 13.0,
+            font: font.into(),
+            font_size: FontSize::Px(13.0),
             ..default()
         },
         TextColor(Color::srgba(1.0, 1.0, 1.0, 0.55)),

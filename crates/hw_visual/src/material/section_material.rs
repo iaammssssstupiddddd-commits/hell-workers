@@ -1,4 +1,5 @@
-use bevy::pbr::{ExtendedMaterial, MaterialExtension, OpaqueRendererMethod, StandardMaterial};
+use bevy::material::OpaqueRendererMethod;
+use bevy::pbr::{ExtendedMaterial, MaterialExtension, StandardMaterial};
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;

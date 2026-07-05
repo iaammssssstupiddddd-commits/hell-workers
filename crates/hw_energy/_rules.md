@@ -6,7 +6,7 @@
 
 - Soul Energy システムの **型・定数・Relationship** を定義するドメインクレート
 - `PowerGrid`, `PowerGenerator`, `PowerConsumer`, `Unpowered` 等のコンポーネント定義
-- `GeneratesFor` / `ConsumesFrom` Relationship（Bevy 0.18 ECS Relationships）
+- `GeneratesFor` / `ConsumesFrom` Relationship（Bevy 0.19 ECS Relationships）
 - `SoulSpaSite` / `SoulSpaTile` / `SoulSpaPhase` の構造定義
 - 発電・消費・ランプバフ等の全定数
 
@@ -16,7 +16,7 @@
 - **他の hw_* クレートへの依存禁止**（このクレートは `bevy` のみに依存する最軽量 leaf crate）
 - **Grid 再計算やバフ等のシステムロジックをこのクレートに書かない**（システムは `bevy_app/src/systems/energy/` が担当）
 - **`#[allow(dead_code)]` を使用しない**（使われないコードは削除する）
-- **Bevy 0.14 以前の API を推測で使わない**（0.18 の変更点が多い。既存コードまたは docs.rs/bevy/0.18.0 で確認する）
+- **Bevy 0.14 以前の API を推測で使わない**（0.19 の変更点が多い。既存コードまたは docs.rs/bevy/0.19.0 で確認する）
 
 ## crate 境界ルール（docs/crate-boundaries.md に基づく）
 

@@ -71,7 +71,7 @@ door_tiles       : BuildingType::Door
 ### 4.3 Room エンティティの同期
 
 ```
-既存 Room エンティティをすべて despawn（Bevy 0.18: 子の RoomOverlayTile も自動 despawn）
+既存 Room エンティティをすべて despawn（Bevy 0.19: 子の RoomOverlayTile も自動 despawn）
 ↓
 `DetectedRoom` を `Room` component に変換して新規 Room エンティティをスポーン（Transform::default() を必ず含める）
 ↓
@@ -79,7 +79,7 @@ RoomTileLookup を再構築
 ```
 
 > **`Transform` が必須な理由**:  
-> `Room` エンティティは `RoomOverlayTile` を `with_children` で子として保持します。Bevy 0.18 のトランスフォーム伝播は親の `GlobalTransform`（`Transform` から自動挿入）を必要とします。`Transform` を省略すると、すべての子オーバーレイタイルが `GlobalTransform::IDENTITY`（ワールド原点）で固定されてしまい、実際の部屋位置にオーバーレイが表示されません。
+> `Room` エンティティは `RoomOverlayTile` を `with_children` で子として保持します。Bevy 0.19 のトランスフォーム伝播は親の `GlobalTransform`（`Transform` から自動挿入）を必要とします。`Transform` を省略すると、すべての子オーバーレイタイルが `GlobalTransform::IDENTITY`（ワールド原点）で固定されてしまい、実際の部屋位置にオーバーレイが表示されません。
 
 ## 5. dirty タイル追跡
 
@@ -109,7 +109,7 @@ Room 再検出は「dirty タイルが存在する」かつ「クールダウン
 
 - `Z_ROOM_OVERLAY`（= 0.08）レイヤーに描画（床より上、拾得アイテムより下）
 - 色: `ROOM_OVERLAY_COLOR`（半透明）
-- Bevy 0.18 では親 Room を `try_despawn()` するだけで子 RoomOverlayTile も自動 despawn されます
+- Bevy 0.19 では親 Room を `try_despawn()` するだけで子 RoomOverlayTile も自動 despawn されます
 
 ## 8. システム実行順序
 
@@ -129,7 +129,7 @@ GameSystemSet::Visual（Visual ループ内）
 
 ### `Room` エンティティには必ず `Transform::default()` を付与すること
 
-`RoomOverlayTile` は `Room` の子エンティティです。Bevy 0.18 のトランスフォーム伝播（`propagate_parent_transforms`）は、親の `GlobalTransform` が存在しない場合に子をスキップします。`Transform` が欠けていると全オーバーレイタイルがワールド原点 (0, 0) に描画されます。
+`RoomOverlayTile` は `Room` の子エンティティです。Bevy 0.19 のトランスフォーム伝播（`propagate_parent_transforms`）は、親の `GlobalTransform` が存在しない場合に子をスキップします。`Transform` が欠けていると全オーバーレイタイルがワールド原点 (0, 0) に描画されます。
 
 ### `WorldMap.buildings` と床タイルの関係
 

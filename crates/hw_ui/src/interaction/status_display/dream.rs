@@ -66,8 +66,8 @@ pub fn update_dream_pool_display_system(
                         },
                         Text::new(format!("{:.1}", delta)),
                         TextFont {
-                            font: font_ui.clone(),
-                            font_size: theme.typography.font_size_clock,
+                            font: font_ui.clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_clock),
                             ..default()
                         },
                         TextColor(theme.colors.task_high_warning),

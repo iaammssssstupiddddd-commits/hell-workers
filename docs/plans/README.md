@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-04-10）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-04-17）。
 
 ## 新規計画書の作り方
 
@@ -19,8 +19,10 @@
 
 | Document | Status | Notes |
 |---|---|---|
+| [bevy-0-19-migration-plan-2026-07-05.md](bevy-0-19-migration-plan-2026-07-05.md) | Completed | Bevy 0.18 → 0.19 マイグレーション完了。既知の制約: ICU4X 日本語セグメンテーション（要目視QA） |
 | [dream-bubble-perf-2026-04-09.md](dream-bubble-perf-2026-04-09.md) | Draft | 夢の泡パーティクル描画負荷最適化 |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
+| [terrain-lod-switch-flicker-plan-2026-04-17.md](terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD 切替時のちらつきを、判定安定化と短い遷移フェーズで抑える計画 |
 | [world-map-lod1-performance-plan-2026-04-09.md](world-map-lod1-performance-plan-2026-04-09.md) | Complete | ワールドマップ近景 `LOD1` の fragment 負荷を、境界 early-out・中間 LOD・feature ベイク再編で下げる計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
@@ -157,4 +159,3 @@
 | [archive/world-map-render-chunking-plan-2026-04-08.md](archive/world-map-render-chunking-plan-2026-04-08.md) | アーカイブ | -の計画。 |
 | [archive/zone-placement-refactor-plan-2026-03-05.md](archive/zone-placement-refactor-plan-2026-03-05.md) | アーカイブ | zone_placement.rsの計画。 |
 | [archive/zone-removal-preview-diff-plan-2026-03-01.md](archive/zone-removal-preview-diff-plan-2026-03-01.md) | アーカイブ | Zone removal preview の全件更新を差分更新へ置換する計画。 |
-

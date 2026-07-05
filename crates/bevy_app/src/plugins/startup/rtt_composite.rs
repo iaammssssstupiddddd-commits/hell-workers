@@ -131,7 +131,7 @@ pub fn sync_rtt_output_bindings(
         *target = RenderTarget::Image(runtime.soul_mask.clone().into());
     }
     for (material_handle, _) in quads.iter() {
-        if let Some(material) = materials.get_mut(&material_handle.0) {
+        if let Some(mut material) = materials.get_mut(&material_handle.0) {
             material.scene_texture = runtime.scene.clone();
             material.soul_mask_texture = runtime.soul_mask.clone();
             material.params.pixel_size = runtime.pixel_size();
@@ -162,7 +162,7 @@ pub fn sync_rtt_composite_perf_params_system(
     };
 
     for material_handle in quads.iter() {
-        if let Some(material) = materials.get_mut(&material_handle.0) {
+        if let Some(mut material) = materials.get_mut(&material_handle.0) {
             material.params.mask_radius_px = next_radius;
             if let Some(offset_uv) = shadow_offset_uv {
                 material.params.shadow_offset_uv = offset_uv;

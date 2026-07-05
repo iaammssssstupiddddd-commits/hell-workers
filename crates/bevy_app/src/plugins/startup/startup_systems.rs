@@ -150,7 +150,7 @@ pub(super) fn setup(
     let sun_dir = topdown_sun_direction_world();
     commands.spawn((
         DirectionalLight {
-            shadows_enabled: perf_toggles.directional_light_enabled,
+            shadow_maps_enabled: perf_toggles.directional_light_enabled,
             illuminance: if perf_toggles.directional_light_enabled {
                 12_000.0
             } else {
@@ -172,7 +172,7 @@ pub(super) fn setup(
     let extra_sun_dir = Vec3::new(-0.66, 0.46, 0.59).normalize();
     commands.spawn((
         DirectionalLight {
-            shadows_enabled: perf_toggles.extra_directional_light_enabled,
+            shadow_maps_enabled: perf_toggles.extra_directional_light_enabled,
             illuminance: if perf_toggles.extra_directional_light_enabled {
                 8_000.0
             } else {

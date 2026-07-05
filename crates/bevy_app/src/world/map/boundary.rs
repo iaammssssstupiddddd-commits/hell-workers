@@ -1167,15 +1167,15 @@ pub fn spawn_boundary_meshes(
     });
     let proximity_handle = images.add(proximity_image);
 
-    if let Some(mat) = terrain_surface_materials.get_mut(&terrain_handles.lod1) {
+    if let Some(mut mat) = terrain_surface_materials.get_mut(&terrain_handles.lod1) {
         mat.extension.boundary_mask = Some(handle.clone());
         mat.extension.boundary_proximity_mask = Some(proximity_handle.clone());
     }
-    if let Some(mat) = terrain_surface_materials_lod1_lite.get_mut(&terrain_handles.lod1_lite) {
+    if let Some(mut mat) = terrain_surface_materials_lod1_lite.get_mut(&terrain_handles.lod1_lite) {
         mat.extension.boundary_mask = Some(handle.clone());
         mat.extension.boundary_proximity_mask = Some(proximity_handle.clone());
     }
-    if let Some(mat) = terrain_surface_materials_lod2.get_mut(&terrain_handles.lod2) {
+    if let Some(mut mat) = terrain_surface_materials_lod2.get_mut(&terrain_handles.lod2) {
         mat.extension.boundary_mask = Some(handle);
         mat.extension.boundary_proximity_mask = Some(proximity_handle);
     }

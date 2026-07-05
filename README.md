@@ -28,7 +28,7 @@
 
 ## 技術スタック
 
-- **Engine**: Bevy 0.18
+- **Engine**: Bevy 0.19
 - **Language**: Rust (Edition 2024)
 - **UI System**: Bevy UI + `bevy-inspector-egui` (debug)
 - **Features**:

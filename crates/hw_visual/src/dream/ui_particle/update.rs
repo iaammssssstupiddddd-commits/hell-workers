@@ -186,7 +186,7 @@ fn update_merging_particle(
         node.width = Val::Px(size);
         node.height = Val::Px(size);
 
-        if let Some(mat) = materials.get_mut(&mat_node.0) {
+        if let Some(mut mat) = materials.get_mut(&mat_node.0) {
             mat.alpha = 0.9 * (1.0 - progress);
             mat.mass = particle.mass;
         }

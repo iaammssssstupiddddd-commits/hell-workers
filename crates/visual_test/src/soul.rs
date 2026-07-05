@@ -5,7 +5,7 @@ use bevy::light::{NotShadowCaster, NotShadowReceiver};
 use bevy::mesh::Mesh3d;
 use bevy::pbr::{MeshMaterial3d, StandardMaterial};
 use bevy::prelude::*;
-use bevy::scene::SceneInstanceReady;
+use bevy::world_serialization::WorldInstanceReady;
 use hw_core::constants::{
     LAYER_3D, LAYER_3D_SOUL_MASK, LAYER_3D_SOUL_SHADOW, SOUL_FACE_SCALE_MULTIPLIER, SOUL_GLB_SCALE,
     SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES,
@@ -25,7 +25,7 @@ pub enum TestSoulShadowCaster {
 }
 
 pub struct SoulSpawnArgs<'a> {
-    pub soul_scene: &'a Handle<Scene>,
+    pub soul_scene: &'a Handle<WorldAsset>,
     pub face_atlas: &'a Handle<Image>,
     pub white_pixel: &'a Handle<Image>,
     pub blob_shadow_mesh: &'a Handle<Mesh>,
@@ -54,7 +54,7 @@ pub fn spawn_test_soul(
     let body_mat = character_materials.add(CharacterMaterial::body(args.white_pixel.clone()));
 
     let mut entity = commands.spawn((
-        SceneRoot(args.soul_scene.clone()),
+        WorldAssetRoot(args.soul_scene.clone()),
         Transform::from_xyz(args.x, 0.0, args.z).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         RenderLayers::layer(LAYER_3D),
         TestSoulConfig {
@@ -71,7 +71,7 @@ pub fn spawn_test_soul(
     match args.shadow_caster {
         TestSoulShadowCaster::Glb => {
             commands.spawn((
-                SceneRoot(args.soul_scene.clone()),
+                WorldAssetRoot(args.soul_scene.clone()),
                 Transform::from_xyz(args.x, 0.0, args.z)
                     .with_scale(Vec3::splat(SOUL_GLB_SCALE))
                     .with_rotation(Quat::from_rotation_x(
@@ -98,7 +98,7 @@ pub fn spawn_test_soul(
     }
 
     commands.spawn((
-        SceneRoot(args.soul_scene.clone()),
+        WorldAssetRoot(args.soul_scene.clone()),
         Transform::from_xyz(args.x, 0.0, args.z).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         RenderLayers::layer(LAYER_3D_SOUL_MASK),
         SoulMaskProxy3d { owner: soul_entity },
@@ -112,7 +112,7 @@ pub fn spawn_test_soul(
 
 #[allow(clippy::too_many_arguments)]
 pub fn on_soul_scene_ready(
-    scene_ready: On<SceneInstanceReady>,
+    scene_ready: On<WorldInstanceReady>,
     q_configs: Query<&TestSoulConfig>,
     q_children: Query<&Children>,
     q_mesh_names: Query<&GltfMeshName>,
@@ -203,7 +203,7 @@ pub fn on_soul_scene_ready(
 // ─── シャドウ・マスクプロキシ Observer ──────────────────────────────────────
 
 pub fn on_shadow_scene_ready(
-    scene_ready: On<SceneInstanceReady>,
+    scene_ready: On<WorldInstanceReady>,
     q_configs: Query<&SoulShadowConfig>,
     q_children: Query<&Children>,
     q_meshes: Query<(), With<Mesh3d>>,
@@ -227,7 +227,7 @@ pub fn on_shadow_scene_ready(
 // ─── マスクプロキシ Observer ─────────────────────────────────────────────────
 
 pub fn on_mask_scene_ready(
-    scene_ready: On<SceneInstanceReady>,
+    scene_ready: On<WorldInstanceReady>,
     q_configs: Query<&SoulMaskConfig>,
     q_children: Query<&Children>,
     q_meshes: Query<(), With<Mesh3d>>,

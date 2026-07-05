@@ -284,7 +284,7 @@ fn apply_rtt_directional_light_toggle_system(
     }
 
     for mut light in &mut q_lights {
-        light.shadows_enabled = perf_toggles.directional_light_enabled;
+        light.shadow_maps_enabled = perf_toggles.directional_light_enabled;
         light.illuminance = if perf_toggles.directional_light_enabled {
             12_000.0
         } else {
@@ -303,7 +303,7 @@ fn apply_rtt_extra_directional_light_toggle_system(
     }
 
     for mut light in &mut q_lights {
-        light.shadows_enabled = perf_toggles.extra_directional_light_enabled;
+        light.shadow_maps_enabled = perf_toggles.extra_directional_light_enabled;
         light.illuminance = if perf_toggles.extra_directional_light_enabled {
             8_000.0
         } else {

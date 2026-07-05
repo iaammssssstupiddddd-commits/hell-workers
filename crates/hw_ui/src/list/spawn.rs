@@ -55,12 +55,12 @@ fn spawn_text(
     margin_right: f32,
 ) {
     let mut text_font = TextFont {
-        font_size,
+        font_size: FontSize::Px(font_size),
         weight,
         ..default()
     };
     if let Some(f) = font {
-        text_font.font = f;
+        text_font.font = f.into();
     }
     parent.spawn((
         Text::new(text),
@@ -104,8 +104,8 @@ fn spawn_adjust_button(
         b.spawn((
             Text::new(label),
             TextFont {
-                font: assets.font_ui().clone(),
-                font_size: theme.typography.font_size_base,
+                font: assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_base),
                 weight: FontWeight::BOLD,
                 ..default()
             },
@@ -208,8 +208,8 @@ pub fn spawn_familiar_section(
         .spawn((
             Text::new(familiar.label.clone()),
             TextFont {
-                font: assets.font_familiar().clone(),
-                font_size: theme.typography.font_size_header,
+                font: assets.font_familiar().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_header),
                 ..default()
             },
             TextColor(theme.colors.accent_soul),
@@ -278,8 +278,8 @@ pub fn spawn_empty_squad_hint_entity(
                 .spawn((
                     Text::new("  (empty)"),
                     TextFont {
-                        font: assets.font_ui().clone(),
-                        font_size: theme.typography.font_size_item,
+                        font: assets.font_ui().clone().into(),
+                        font_size: FontSize::Px(theme.typography.font_size_item),
                         ..default()
                     },
                     TextColor(theme.colors.empty_text),

@@ -256,7 +256,7 @@ pub fn apply_faces(
             FaceMode::Single(e) => e,
             FaceMode::AllDifferent => FaceExpression::ALL[i % FaceExpression::ALL.len()],
         };
-        if let Some(mat) = materials.get_mut(&config.face_mat) {
+        if let Some(mut mat) = materials.get_mut(&config.face_mat) {
             mat.params.uv_offset = expr.uv_offset();
         }
     }
@@ -327,7 +327,7 @@ pub fn apply_shader_params(
     mut materials: ResMut<Assets<CharacterMaterial>>,
 ) {
     let Ok(config) = q_souls.single() else { return };
-    if let Some(mat) = materials.get_mut(&config.body_mat) {
+    if let Some(mut mat) = materials.get_mut(&config.body_mat) {
         mat.params.ghost_alpha = state.ghost_alpha;
         mat.params.rim_strength = state.rim_strength;
         mat.params.posterize_steps = state.posterize_steps;
@@ -384,7 +384,7 @@ pub fn apply_composite_sprite(
     };
     tf.scale = Vec3::new(s.x, s.y * comp, 1.0);
     tf.translation.z = Z_RTT_COMPOSITE;
-    if let Some(mat) = composite_materials.get_mut(&mat_handle.0) {
+    if let Some(mut mat) = composite_materials.get_mut(&mat_handle.0) {
         mat.params.pixel_size = Vec2::new(1.0 / s.x.max(1.0), 1.0 / s.y.max(1.0));
     }
 }

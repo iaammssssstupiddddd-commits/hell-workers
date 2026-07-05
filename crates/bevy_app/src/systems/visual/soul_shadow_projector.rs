@@ -107,7 +107,7 @@ fn sync_section_material_projectors(
     projectors: &[Vec4; MAX_SOUL_SHADOW_PROJECTORS],
     projector_meta: Vec4,
 ) {
-    let Some(material) = materials.get_mut(handle) else {
+    let Some(mut material) = materials.get_mut(handle) else {
         return;
     };
     let uniforms = &mut material.extension.uniforms;
@@ -126,7 +126,7 @@ fn sync_terrain_surface_material_projectors(
     projectors: &[Vec4; MAX_SOUL_SHADOW_PROJECTORS],
     projector_meta: Vec4,
 ) {
-    let Some(material) = materials.get_mut(handle) else {
+    let Some(mut material) = materials.get_mut(handle) else {
         return;
     };
     let uniforms = &mut material.extension.uniforms;
@@ -145,7 +145,7 @@ fn sync_terrain_surface_material_lod1_lite_projectors(
     projectors: &[Vec4; MAX_SOUL_SHADOW_PROJECTORS],
     projector_meta: Vec4,
 ) {
-    let Some(material) = materials.get_mut(handle) else {
+    let Some(mut material) = materials.get_mut(handle) else {
         return;
     };
     let uniforms = &mut material.extension.uniforms;
@@ -164,7 +164,7 @@ fn sync_terrain_surface_material_lod2_projectors(
     projectors: &[Vec4; MAX_SOUL_SHADOW_PROJECTORS],
     projector_meta: Vec4,
 ) {
-    let Some(material) = materials.get_mut(handle) else {
+    let Some(mut material) = materials.get_mut(handle) else {
         return;
     };
     let uniforms = &mut material.extension.uniforms;

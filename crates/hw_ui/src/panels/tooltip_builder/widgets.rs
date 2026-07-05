@@ -27,8 +27,8 @@ pub fn spawn_progress_bar(
             bar_col.spawn((
                 Text::new(format!("{label}: {:.0}%", clamped * 100.0)),
                 TextFont {
-                    font: game_assets.font_ui().clone(),
-                    font_size: theme.typography.font_size_xs,
+                    font: game_assets.font_ui().clone().into(),
+                    font_size: FontSize::Px(theme.typography.font_size_xs),
                     ..default()
                 },
                 TextColor(theme.colors.text_secondary_semantic),
@@ -93,8 +93,8 @@ pub fn spawn_icon_text_row(
             row.spawn((
                 Text::new(icon),
                 TextFont {
-                    font: game_assets.font_ui().clone(),
-                    font_size: theme.typography.font_size_xs,
+                    font: game_assets.font_ui().clone().into(),
+                    font_size: FontSize::Px(theme.typography.font_size_xs),
                     weight: FontWeight::SEMIBOLD,
                     ..default()
                 },
@@ -112,8 +112,8 @@ pub fn spawn_icon_text_row(
                     text_col.spawn((
                         Text::new(line),
                         TextFont {
-                            font: game_assets.font_ui().clone(),
-                            font_size: theme.typography.font_size_sm,
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_sm),
                             ..default()
                         },
                         TextLayout::new(Justify::Left, LineBreak::WordOrCharacter),
@@ -139,8 +139,8 @@ pub fn spawn_header(
     parent.spawn((
         Text::new(display_text),
         TextFont {
-            font: game_assets.font_ui().clone(),
-            font_size: theme.typography.font_size_md,
+            font: game_assets.font_ui().clone().into(),
+            font_size: FontSize::Px(theme.typography.font_size_md),
             weight: FontWeight::BOLD,
             ..default()
         },
@@ -164,8 +164,8 @@ pub fn spawn_body_line(
         parent.spawn((
             Text::new(line),
             TextFont {
-                font: game_assets.font_ui().clone(),
-                font_size: theme.typography.font_size_sm,
+                font: game_assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_sm),
                 ..default()
             },
             TextLayout::new(Justify::Left, LineBreak::WordOrCharacter),

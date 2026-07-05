@@ -62,6 +62,9 @@ pub struct RttCompositeParams {
     pub pixel_size: Vec2,
     pub mask_radius_px: f32,
     pub mask_feather: f32,
+    pub shadow_offset_uv: Vec2,
+    pub shadow_width_px: f32,
+    pub shadow_strength: f32,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
@@ -474,7 +477,7 @@ pub struct SoulAnimHandle {
 
 #[derive(Resource)]
 pub struct TestAssets {
-    pub soul_scene: Handle<Scene>,
+    pub soul_scene: Handle<WorldAsset>,
     pub face_atlas: Handle<Image>,
     pub white_pixel: Handle<Image>,
     pub gltf_handle: Handle<Gltf>,

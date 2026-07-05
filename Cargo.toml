@@ -6,10 +6,10 @@ members = [
 default-members = ["crates/bevy_app"]
 
 [workspace.dependencies]
-bevy = { version = "0.18", default-features = false, features = [
+bevy = { version = "0.19", default-features = false, features = [
     "2d",
     "3d",
-    "experimental_bevy_ui_widgets",
+    "ui",
     "pan_camera",
     "png",
     "jpeg",

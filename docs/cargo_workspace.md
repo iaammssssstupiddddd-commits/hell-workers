@@ -271,7 +271,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 - 実装本体を `hw_familiar_ai` / `hw_soul_ai` / `hw_visual` / `hw_jobs` へ移した system は、原則として所有 crate の Plugin が唯一の登録者になる。
 - root 側の `pub use` / thin shell は互換パス維持と ordering 参照のために残してよいが、同じ system function を再登録してはいけない。
-- root shell は `.after(...)` / `.before(...)` で移設済み system に順序制約を付けるだけにとどめる。二重登録すると Bevy 0.18 の schedule 初期化で `SystemTypeSet` が曖昧になり panic する。
+- root shell は `.after(...)` / `.before(...)` で移設済み system に順序制約を付けるだけにとどめる。二重登録すると Bevy 0.19 の schedule 初期化で `SystemTypeSet` が曖昧になり panic する。
 - 用語は次のように使い分ける:
   - thin shell: `pub use` のみを持つ互換モジュール
   - root wrapper: root-only query/resource/event を束ねる system

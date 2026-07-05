@@ -48,8 +48,8 @@ pub fn spawn_time_control(
         panel.spawn((
             Text::new("Day 1, 00:00"),
             TextFont {
-                font: game_assets.font_ui().clone(),
-                font_size: theme.typography.font_size_clock,
+                font: game_assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_clock),
                 ..default()
             },
             TextColor(theme.colors.text_primary_semantic),
@@ -99,8 +99,8 @@ pub fn spawn_time_control(
                             btn.spawn((
                                 Text::new(label),
                                 TextFont {
-                                    font: game_assets.font_ui().clone(),
-                                    font_size: theme.typography.font_size_title,
+                                    font: game_assets.font_ui().clone().into(),
+                                    font_size: FontSize::Px(theme.typography.font_size_title),
                                     ..default()
                                 },
                                 TextColor(theme.colors.accent_sulfur),
@@ -124,8 +124,8 @@ pub fn spawn_time_control(
             .spawn((
                 Text::new("Tasks: 0 (0 High)"),
                 TextFont {
-                    font: game_assets.font_ui().clone(),
-                    font_size: theme.typography.font_size_status,
+                    font: game_assets.font_ui().clone().into(),
+                    font_size: FontSize::Px(theme.typography.font_size_status),
                     ..default()
                 },
                 TextColor(theme.colors.panel_accent_time_control),
@@ -150,8 +150,8 @@ pub fn spawn_time_control(
                     .spawn((
                         Text::new("Dream: 0"),
                         TextFont {
-                            font: game_assets.font_ui().clone(),
-                            font_size: theme.typography.font_size_status,
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_status),
                             ..default()
                         },
                         TextColor(theme.colors.accent_soul_bright),

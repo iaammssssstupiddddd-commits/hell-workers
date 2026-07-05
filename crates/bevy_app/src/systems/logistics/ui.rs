@@ -79,11 +79,11 @@ pub fn resource_count_display_system(
                     ResourceCountLabel,
                     Text2d::new(count.to_string()),
                     TextFont {
-                        font_size: 14.0,
+                        font_size: FontSize::Px(14.0),
                         ..default()
                     },
                     TextColor(Color::WHITE),
-                    TextLayout::new_with_justify(Justify::Center),
+                    TextLayout::justify(Justify::Center),
                     target_transform,
                 ))
                 .id();

@@ -97,7 +97,7 @@ pub fn spawn_dev_panel_system(
                 btn.spawn((
                     Text::new("3D: ON"),
                     TextFont {
-                        font_size: 11.0,
+                        font_size: FontSize::Px(11.0),
                         ..default()
                     },
                     TextColor(Color::WHITE),
@@ -123,7 +123,7 @@ pub fn spawn_dev_panel_system(
                 btn.spawn((
                     Text::new("Light2: OFF"),
                     TextFont {
-                        font_size: 11.0,
+                        font_size: FontSize::Px(11.0),
                         ..default()
                     },
                     TextColor(Color::WHITE),
@@ -149,7 +149,7 @@ pub fn spawn_dev_panel_system(
                 btn.spawn((
                     Text::new("IBuild: OFF"),
                     TextFont {
-                        font_size: 11.0,
+                        font_size: FontSize::Px(11.0),
                         ..default()
                     },
                     TextColor(Color::WHITE),
@@ -175,7 +175,7 @@ pub fn spawn_dev_panel_system(
                 btn.spawn((
                     Text::new("Mask: ON"),
                     TextFont {
-                        font_size: 11.0,
+                        font_size: FontSize::Px(11.0),
                         ..default()
                     },
                     TextColor(Color::WHITE),
@@ -201,7 +201,7 @@ pub fn spawn_dev_panel_system(
                 btn.spawn((
                     Text::new("Light: ON"),
                     TextFont {
-                        font_size: 11.0,
+                        font_size: FontSize::Px(11.0),
                         ..default()
                     },
                     TextColor(Color::WHITE),
@@ -227,7 +227,7 @@ pub fn spawn_dev_panel_system(
                 btn.spawn((
                     Text::new("Terrain: ON"),
                     TextFont {
-                        font_size: 11.0,
+                        font_size: FontSize::Px(11.0),
                         ..default()
                     },
                     TextColor(Color::WHITE),
@@ -253,7 +253,7 @@ pub fn spawn_dev_panel_system(
                 btn.spawn((
                     Text::new("Objs: ON"),
                     TextFont {
-                        font_size: 11.0,
+                        font_size: FontSize::Px(11.0),
                         ..default()
                     },
                     TextColor(Color::WHITE),
@@ -275,7 +275,7 @@ pub fn spawn_dev_panel_system(
             .spawn((
                 Text::new("FPS: --"),
                 TextFont {
-                    font_size: 11.0,
+                    font_size: FontSize::Px(11.0),
                     ..default()
                 },
                 TextColor(Color::srgb(0.6, 0.85, 0.6)),
@@ -288,7 +288,7 @@ pub fn spawn_dev_panel_system(
         parent.spawn((
             Text::new("LOD:0 rtt:0.0px"),
             TextFont {
-                font_size: 11.0,
+                font_size: FontSize::Px(11.0),
                 ..default()
             },
             TextColor(Color::srgb(0.6, 0.6, 0.9)),
@@ -298,7 +298,7 @@ pub fn spawn_dev_panel_system(
         parent.spawn((
             Text::new("RTT:H Mask:ON Light:ON Light2:OFF Terrain:ON Objs:ON"),
             TextFont {
-                font_size: 11.0,
+                font_size: FontSize::Px(11.0),
                 ..default()
             },
             TextColor(Color::srgb(0.85, 0.75, 0.55)),

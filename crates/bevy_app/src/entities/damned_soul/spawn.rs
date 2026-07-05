@@ -208,7 +208,7 @@ pub fn spawn_damned_soul_at(
 
     // Soul の通常表示は GLB SceneRoot を RtT に流し、2D Sprite は持たない。
     commands.spawn((
-        SceneRoot(handles_3d.soul_scene.clone()),
+        WorldAssetRoot(handles_3d.soul_scene.clone()),
         Transform::from_xyz(actual_pos.x, 0.0, -actual_pos.y)
             .with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         bevy::camera::visibility::RenderLayers::layer(LAYER_3D),
@@ -220,7 +220,7 @@ pub fn spawn_damned_soul_at(
     ));
 
     commands.spawn((
-        SceneRoot(handles_3d.soul_scene.clone()),
+        WorldAssetRoot(handles_3d.soul_scene.clone()),
         Transform::from_xyz(actual_pos.x, 0.0, -actual_pos.y)
             .with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         bevy::camera::visibility::RenderLayers::layer(LAYER_3D_SOUL_MASK),
@@ -229,7 +229,7 @@ pub fn spawn_damned_soul_at(
     ));
 
     commands.spawn((
-        SceneRoot(handles_3d.soul_scene.clone()),
+        WorldAssetRoot(handles_3d.soul_scene.clone()),
         Transform::from_xyz(actual_pos.x, 0.0, -actual_pos.y)
             .with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         bevy::camera::visibility::RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW]),

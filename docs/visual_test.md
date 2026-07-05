@@ -114,7 +114,7 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo run -p visual_t
 | `types.rs` | 全共有型・定数・リソース (`TestState`, `TestElev`, enums) |
 | `setup.rs` | カメラ・ライト・RtT・UIパネルの初期化 |
 | `building.rs` | 建築物のアセット定義・スポーン/デスポーン・ゴーストシステム・ワールドマップ生成 |
-| `soul.rs` | Soul GLB スポーン・SceneInstanceReady Observer |
+| `soul.rs` | Soul GLB スポーン・WorldInstanceReady Observer |
 | `systems.rs` | ボタンインタラクション・カメラ同期・Soul 描画システム群 |
 | `hud.rs` | パネル表示制御・ボタン状態更新・動的テキスト更新 |
 | `input.rs` | キーボード入力ハンドラ（Soul モード / Build モード）|

@@ -91,7 +91,7 @@ pub struct GameAssets {
     // Soul
     pub soul: Handle<Image>,
     pub soul_gltf: Handle<Gltf>,
-    pub soul_scene: Handle<Scene>,
+    pub soul_scene: Handle<WorldAsset>,
     pub soul_face_atlas: Handle<Image>,
     pub soul_exhausted: Handle<Image>,
     pub soul_lough: Handle<Image>,

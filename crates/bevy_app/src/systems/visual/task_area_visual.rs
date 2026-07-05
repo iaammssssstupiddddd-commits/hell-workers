@@ -61,7 +61,7 @@ pub fn update_task_area_material_system(
         if material.state == new_state && material.size == new_size {
             continue;
         }
-        let Some(material) = materials.get_mut(&material_handle.0) else {
+        let Some(mut material) = materials.get_mut(&material_handle.0) else {
             continue;
         };
         material.size = new_size;
