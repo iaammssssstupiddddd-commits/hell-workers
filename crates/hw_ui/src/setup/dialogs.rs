@@ -67,8 +67,8 @@ fn spawn_operation_dialog(
                 header.spawn((
                     Text::new("Familiar Operation"),
                     TextFont {
-                        font: game_assets.font_ui().clone(),
-                        font_size: theme.typography.font_size_xl,
+                        font: game_assets.font_ui().clone().into(),
+                        font_size: FontSize::Px(theme.typography.font_size_xl),
                         ..default()
                     },
                     TextColor(theme.colors.text_accent),
@@ -91,8 +91,8 @@ fn spawn_operation_dialog(
                         btn.spawn((
                             Text::new("X"),
                             TextFont {
-                                font: game_assets.font_ui().clone(),
-                                font_size: theme.typography.font_size_dialog_small,
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: FontSize::Px(theme.typography.font_size_dialog_small),
                                 ..default()
                             },
                             TextColor(Color::WHITE),
@@ -105,8 +105,8 @@ fn spawn_operation_dialog(
             .spawn((
                 Text::new("Familiar Name"),
                 TextFont {
-                    font: game_assets.font_familiar().clone(),
-                    font_size: theme.typography.font_size_title,
+                    font: game_assets.font_familiar().clone().into(),
+                    font_size: FontSize::Px(theme.typography.font_size_title),
                     ..default()
                 },
                 TextColor(theme.colors.header_text),
@@ -123,8 +123,8 @@ fn spawn_operation_dialog(
         parent.spawn((
             Text::new("Work Standards:"),
             TextFont {
-                font: game_assets.font_ui().clone(),
-                font_size: theme.typography.font_size_dialog_small,
+                font: game_assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_dialog_small),
                 ..default()
             },
             TextColor(theme.colors.text_secondary),
@@ -165,7 +165,7 @@ fn spawn_operation_dialog(
                     btn.spawn((
                         Text::new("-"),
                         TextFont {
-                            font_size: theme.typography.font_size_title,
+                            font_size: FontSize::Px(theme.typography.font_size_title),
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -177,8 +177,8 @@ fn spawn_operation_dialog(
                     .spawn((
                         Text::new("1"),
                         TextFont {
-                            font: game_assets.font_ui().clone(),
-                            font_size: theme.typography.font_size_title,
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_title),
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -208,7 +208,7 @@ fn spawn_operation_dialog(
                     btn.spawn((
                         Text::new("+"),
                         TextFont {
-                            font_size: theme.typography.font_size_title,
+                            font_size: FontSize::Px(theme.typography.font_size_title),
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -220,8 +220,8 @@ fn spawn_operation_dialog(
         parent.spawn((
             Text::new("Max Controlled Souls:"),
             TextFont {
-                font: game_assets.font_ui().clone(),
-                font_size: theme.typography.font_size_dialog_small,
+                font: game_assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_dialog_small),
                 ..default()
             },
             TextColor(theme.colors.text_secondary),
@@ -264,8 +264,8 @@ fn spawn_operation_dialog(
                     btn.spawn((
                         Text::new("-"),
                         TextFont {
-                            font: game_assets.font_ui().clone(),
-                            font_size: theme.typography.font_size_xl,
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_xl),
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -276,7 +276,7 @@ fn spawn_operation_dialog(
                     .spawn((
                         Text::new("1"),
                         TextFont {
-                            font_size: theme.typography.font_size_title,
+                            font_size: FontSize::Px(theme.typography.font_size_title),
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -305,8 +305,8 @@ fn spawn_operation_dialog(
                     btn.spawn((
                         Text::new("+"),
                         TextFont {
-                            font: game_assets.font_ui().clone(),
-                            font_size: theme.typography.font_size_xl,
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_xl),
                             ..default()
                         },
                         TextColor(Color::WHITE),
@@ -318,8 +318,8 @@ fn spawn_operation_dialog(
         parent.spawn((
             Text::new("(Settings automatically synced)"),
             TextFont {
-                font: game_assets.font_ui().clone(),
-                font_size: theme.typography.font_size_dialog_tiny,
+                font: game_assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_dialog_tiny),
                 ..default()
             },
             TextColor(theme.colors.text_muted),

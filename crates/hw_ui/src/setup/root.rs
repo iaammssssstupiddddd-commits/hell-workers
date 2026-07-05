@@ -27,8 +27,8 @@ fn spawn_area_edit_preview(
             BorderColor::all(theme.colors.tooltip_border),
             Text::new(""),
             TextFont {
-                font: game_assets.font_ui().clone(),
-                font_size: theme.typography.font_size_sm,
+                font: game_assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_sm),
                 ..default()
             },
             TextColor(theme.colors.text_primary_semantic),

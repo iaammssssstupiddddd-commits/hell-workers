@@ -37,8 +37,8 @@ fn spawn_info_section_divider(
             row.spawn((
                 Text::new(label),
                 TextFont {
-                    font: game_assets.font_ui().clone(),
-                    font_size: theme.typography.font_size_xs,
+                    font: game_assets.font_ui().clone().into(),
+                    font_size: FontSize::Px(theme.typography.font_size_xs),
                     weight: FontWeight::SEMIBOLD,
                     ..default()
                 },
@@ -120,8 +120,8 @@ pub fn spawn_info_panel_ui(
                         .spawn((
                             Text::new(""),
                             TextFont {
-                                font: game_assets.font_ui().clone(),
-                                font_size: theme.typography.font_size_title,
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: FontSize::Px(theme.typography.font_size_title),
                                 weight: FontWeight::BOLD,
                                 ..default()
                             },
@@ -168,8 +168,8 @@ pub fn spawn_info_panel_ui(
                         btn.spawn((
                             Text::new("Unpin"),
                             TextFont {
-                                font: game_assets.font_ui().clone(),
-                                font_size: theme.typography.font_size_xs,
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: FontSize::Px(theme.typography.font_size_xs),
                                 weight: FontWeight::SEMIBOLD,
                                 ..default()
                             },
@@ -196,8 +196,8 @@ pub fn spawn_info_panel_ui(
                     .spawn((
                         Text::new(""),
                         TextFont {
-                            font: game_assets.font_ui().clone(),
-                            font_size: theme.typography.font_size_small,
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_small),
                             ..default()
                         },
                         UiSlot::StatMotivation,
@@ -225,8 +225,8 @@ pub fn spawn_info_panel_ui(
                         .spawn((
                             Text::new(""),
                             TextFont {
-                                font: game_assets.font_ui().clone(),
-                                font_size: theme.typography.font_size_small,
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: FontSize::Px(theme.typography.font_size_small),
                                 ..default()
                             },
                             UiSlot::StatStress,
@@ -255,8 +255,8 @@ pub fn spawn_info_panel_ui(
                         .spawn((
                             Text::new(""),
                             TextFont {
-                                font: game_assets.font_ui().clone(),
-                                font_size: theme.typography.font_size_small,
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: FontSize::Px(theme.typography.font_size_small),
                                 ..default()
                             },
                             UiSlot::StatFatigue,
@@ -270,8 +270,8 @@ pub fn spawn_info_panel_ui(
                     .spawn((
                         Text::new(""),
                         TextFont {
-                            font: game_assets.font_ui().clone(),
-                            font_size: theme.typography.font_size_small,
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_small),
                             ..default()
                         },
                         UiSlot::StatDream,
@@ -293,8 +293,8 @@ pub fn spawn_info_panel_ui(
                         .spawn((
                             Text::new(""),
                             TextFont {
-                                font: game_assets.font_ui().clone(),
-                                font_size: theme.typography.font_size_small,
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: FontSize::Px(theme.typography.font_size_small),
                                 ..default()
                             },
                             UiSlot::TaskText,
@@ -310,8 +310,8 @@ pub fn spawn_info_panel_ui(
                     .spawn((
                         Text::new(""),
                         TextFont {
-                            font: game_assets.font_ui().clone(),
-                            font_size: theme.typography.font_size_small,
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_small),
                             ..default()
                         },
                         UiSlot::InventoryText,
@@ -328,8 +328,8 @@ pub fn spawn_info_panel_ui(
             .spawn((
                 Text::new(""),
                 TextFont {
-                    font: game_assets.font_ui().clone(),
-                    font_size: theme.typography.font_size_item,
+                    font: game_assets.font_ui().clone().into(),
+                    font_size: FontSize::Px(theme.typography.font_size_item),
                     ..default()
                 },
                 TextColor(theme.colors.text_primary),

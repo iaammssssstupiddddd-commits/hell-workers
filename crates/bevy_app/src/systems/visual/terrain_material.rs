@@ -18,7 +18,7 @@ pub fn terrain_id_map_sync_system(
         let Some(terrain) = world_map.terrain_at_idx(ev.idx) else {
             continue;
         };
-        let Some(image) = images.get_mut(&terrain_id_map.image) else {
+        let Some(mut image) = images.get_mut(&terrain_id_map.image) else {
             continue;
         };
         let Some(data) = image.data.as_mut() else {

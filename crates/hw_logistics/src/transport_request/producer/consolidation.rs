@@ -84,7 +84,7 @@ pub fn stockpile_consolidation_producer_system(
                 continue;
             }
 
-            type_cells.sort_by(|a, b| b.stored.cmp(&a.stored));
+            type_cells.sort_by_key(|c| std::cmp::Reverse(c.stored));
 
             let mut receivers_used = 0usize;
             let total_items: usize = type_cells.iter().map(|c| c.stored).sum();

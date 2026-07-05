@@ -94,8 +94,8 @@ pub fn spawn_bottom_bar(
                     button.spawn((
                         Text::new(label),
                         TextFont {
-                            font: game_assets.font_ui().clone(),
-                            font_size: theme.typography.font_size_base, // Semantic
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_base), // Semantic
                             weight: FontWeight::SEMIBOLD,               // Variation
                             ..default()
                         },
@@ -111,8 +111,8 @@ pub fn spawn_bottom_bar(
             .spawn((
                 Text::new("Mode: Normal"),
                 TextFont {
-                    font: game_assets.font_ui().clone(),
-                    font_size: theme.typography.font_size_md, // Semantic
+                    font: game_assets.font_ui().clone().into(),
+                    font_size: FontSize::Px(theme.typography.font_size_md), // Semantic
                     weight: FontWeight::BOLD,
                     ..default()
                 },

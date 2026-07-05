@@ -11,7 +11,7 @@ use bevy::light::{NotShadowCaster, NotShadowReceiver};
 use bevy::mesh::Mesh3d;
 use bevy::pbr::{MeshMaterial3d, StandardMaterial};
 use bevy::prelude::*;
-use bevy::scene::SceneInstanceReady;
+use bevy::world_serialization::WorldInstanceReady;
 use hw_core::constants::{
     LAYER_3D, LAYER_3D_SOUL_MASK, LAYER_3D_SOUL_SHADOW, SOUL_FACE_SCALE_MULTIPLIER,
     SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES,
@@ -254,7 +254,7 @@ pub fn cleanup_familiar_proxy_3d_system(
 
 /// Soul GLB の SceneRoot 子孫へ RenderLayers を付与し、RtT Camera3d に乗せる。
 pub fn apply_soul_gltf_render_layers_on_ready(
-    scene_ready: On<SceneInstanceReady>,
+    scene_ready: On<WorldInstanceReady>,
     mut commands: Commands,
     character_handles: Res<CharacterHandles>,
     mut character_materials: ResMut<Assets<CharacterMaterial>>,
@@ -332,7 +332,7 @@ pub fn apply_soul_gltf_render_layers_on_ready(
 
 /// Soul shadow proxy 用 SceneRoot 子孫へ RenderLayers と shadow proxy 設定を付与する。
 pub fn apply_soul_shadow_gltf_render_layers_on_ready(
-    scene_ready: On<SceneInstanceReady>,
+    scene_ready: On<WorldInstanceReady>,
     mut commands: Commands,
     character_handles: Res<CharacterHandles>,
     params: SoulShadowGltfApplyParams,
@@ -399,7 +399,7 @@ pub fn apply_soul_shadow_gltf_render_layers_on_ready(
 
 /// Soul mask 用 SceneRoot 子孫へ RenderLayers と単色 mask material を付与する。
 pub fn apply_soul_mask_gltf_render_layers_on_ready(
-    scene_ready: On<SceneInstanceReady>,
+    scene_ready: On<WorldInstanceReady>,
     mut commands: Commands,
     character_handles: Res<CharacterHandles>,
     params: SoulMaskGltfApplyParams,

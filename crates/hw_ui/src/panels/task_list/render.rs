@@ -17,8 +17,8 @@ pub fn rebuild_task_list_ui(
         parent.spawn((
             Text::new("No designations"),
             TextFont {
-                font: game_assets.font_ui().clone(),
-                font_size: theme.typography.font_size_small,
+                font: game_assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_small),
                 ..default()
             },
             TextColor(theme.colors.empty_text),
@@ -63,8 +63,8 @@ pub fn rebuild_task_list_ui(
                         entries.len()
                     )),
                     TextFont {
-                        font: game_assets.font_ui().clone(),
-                        font_size: theme.typography.font_size_xs,
+                        font: game_assets.font_ui().clone().into(),
+                        font_size: FontSize::Px(theme.typography.font_size_xs),
                         weight: FontWeight::SEMIBOLD,
                         ..default()
                     },
@@ -114,8 +114,8 @@ pub fn rebuild_task_list_ui(
                     btn.spawn((
                         Text::new(&entry.description),
                         TextFont {
-                            font: game_assets.font_ui().clone(),
-                            font_size: theme.typography.font_size_item,
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_item),
                             ..default()
                         },
                         TextColor(desc_color),
@@ -128,8 +128,8 @@ pub fn rebuild_task_list_ui(
                         btn.spawn((
                             Text::new(format!("\u{00d7}{}", entry.worker_count)),
                             TextFont {
-                                font: game_assets.font_ui().clone(),
-                                font_size: theme.typography.font_size_small,
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: FontSize::Px(theme.typography.font_size_small),
                                 ..default()
                             },
                             TextColor(theme.colors.text_secondary),

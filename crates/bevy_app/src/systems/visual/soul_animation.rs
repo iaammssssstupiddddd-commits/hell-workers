@@ -273,7 +273,7 @@ pub fn sync_soul_face_expression_system(
         let Ok(state) = q_states.get(face.owner) else {
             continue;
         };
-        let Some(material) = materials.get_mut(&face.material) else {
+        let Some(mut material) = materials.get_mut(&face.material) else {
             continue;
         };
         material.set_face_uv_offset(face_uv_offset_for_state(state.face));

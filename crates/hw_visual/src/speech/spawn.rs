@@ -83,12 +83,12 @@ pub fn spawn_soul_bubble(
             SoulBubble,
             Text2d::new(emoji),
             TextFont {
-                font: handles.font_soul_emoji.clone(),
-                font_size,
+                font: handles.font_soul_emoji.clone().into(),
+                font_size: FontSize::Px(font_size),
                 ..default()
             },
             TextColor(Color::WHITE),
-            TextLayout::new_with_justify(Justify::Center),
+            TextLayout::justify(Justify::Center),
             Transform::from_xyz(
                 SPEECH_BUBBLE_OFFSET.x,
                 SPEECH_BUBBLE_OFFSET.y,
@@ -214,12 +214,12 @@ pub fn spawn_familiar_bubble(
             FamiliarBubble,
             Text2d::new(text_str),
             TextFont {
-                font: handles.font_familiar.clone(),
-                font_size,
+                font: handles.font_familiar.clone().into(),
+                font_size: FontSize::Px(font_size),
                 ..default()
             },
             TextColor(Color::BLACK),
-            TextLayout::new_with_justify(Justify::Center),
+            TextLayout::justify(Justify::Center),
             Transform::from_xyz(
                 SPEECH_BUBBLE_OFFSET.x,
                 SPEECH_BUBBLE_OFFSET.y,

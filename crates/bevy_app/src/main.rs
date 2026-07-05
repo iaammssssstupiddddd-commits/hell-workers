@@ -20,7 +20,6 @@ pub use hw_jobs::events::TaskAssignmentRequest;
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuFeatures, WgpuSettings};
-use bevy::ui_widgets::popover::PopoverPlugin;
 use bevy::window::PresentMode;
 use std::env;
 #[cfg(target_os = "linux")]
@@ -102,15 +101,14 @@ fn main() {
                     ..default()
                 })
                 .set(RenderPlugin {
-                    render_creation: RenderCreation::Automatic(WgpuSettings {
+                    render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
                         backends: Some(backends), // WSL は GL を優先
                         features: WgpuFeatures::CLIP_DISTANCES,
                         ..default()
-                    }),
+                    })),
                     ..default()
                 }),
         )
-        .add_plugins(PopoverPlugin)
         .init_resource::<DebugVisible>()
         .init_resource::<Render3dVisible>()
         .init_resource::<RenderPerfToggles>()

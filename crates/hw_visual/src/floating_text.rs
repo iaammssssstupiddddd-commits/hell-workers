@@ -53,8 +53,8 @@ pub fn spawn_floating_text(
         },
         Text2d::new(text),
         TextFont {
-            font,
-            font_size: font_size.unwrap_or(12.0),
+            font: font.into(),
+            font_size: FontSize::Px(font_size.unwrap_or(12.0)),
             ..default()
         },
         TextColor(config.initial_color),

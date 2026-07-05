@@ -19,7 +19,7 @@
     pbr_functions::{alpha_discard, apply_pbr_lighting, main_pass_post_lighting_processing},
     forward_io::{VertexOutput, FragmentOutput},
 }
-#import "shaders/shadow_style.wgsl" apply_directional_shadow_style
+#import "shaders/shadow_style.wgsl"::apply_directional_shadow_style
 
 struct TerrainSurfaceUniforms {
     cut_position:               vec4<f32>,

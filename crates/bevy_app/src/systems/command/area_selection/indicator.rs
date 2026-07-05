@@ -95,7 +95,7 @@ pub fn area_selection_indicator_system(
         {
             transform.translation = center.extend(0.6);
             transform.scale = size.extend(1.0);
-            if let Some(material) = materials.get_mut(&material_handle.0) {
+            if let Some(mut material) = materials.get_mut(&material_handle.0) {
                 material.color = color;
                 material.size = size;
                 material.state = 3; // Editing state (dashed border)

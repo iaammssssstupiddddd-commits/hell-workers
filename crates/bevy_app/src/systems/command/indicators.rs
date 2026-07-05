@@ -37,7 +37,7 @@ pub fn task_area_indicator_system(
             transform.translation = task_area.center().extend(0.2);
             transform.scale = task_area.size().extend(1.0);
 
-            if let Some(material) = materials.get_mut(&material_handle.0) {
+            if let Some(mut material) = materials.get_mut(&material_handle.0) {
                 material.size = task_area.size();
             }
 

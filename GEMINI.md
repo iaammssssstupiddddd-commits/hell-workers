@@ -1,10 +1,10 @@
 # Hell Workers Project Rules (Gemini CLI)
 
-This project uses **Bevy 0.18**. Adhere to the following rules and conventions.
+This project uses **Bevy 0.19**. Adhere to the following rules and conventions.
 
 ## 1. Bevy Version & Documentation
-- **Bevy 0.18** is strictly required. Avoid using APIs from older versions (0.14 or earlier).
-- Verify API signatures using `docs.rs/bevy/0.18.0` or local source code in `~/.cargo/registry/src/` if unsure.
+- **Bevy 0.19** is strictly required. Avoid using APIs from older versions (0.14 or earlier).
+- Verify API signatures using `docs.rs/bevy/0.19.0` or local source code in `~/.cargo/registry/src/` if unsure.
 - Always run `cargo check` after implementation to verify API compatibility.
 
 ## 2. Crate Boundaries & Architecture

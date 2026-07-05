@@ -16,7 +16,7 @@
 - **`bevy_app` への逆依存禁止**（Cargo 循環依存制約）
 - **`hw_soul_ai` / `hw_familiar_ai` に依存しない**（ビジュアルは hw_core events / hw_core types を通じて接続する）
 - **`#[allow(dead_code)]` を使用しない**
-- **Bevy 0.14 以前の Window / UI API を推測で使わない**（0.18 は Window / UI API の変更が多い。`docs.rs/bevy/0.18.0` または既存コードを参照）
+- **Bevy 0.14 以前の Window / UI API を推測で使わない**（0.19 は Window / UI API の変更が多い。`docs.rs/bevy/0.19.0` または既存コードを参照）
 
 ## crate 境界ルール（docs/crate-boundaries.md に基づく）
 
@@ -50,11 +50,11 @@ hw_familiar_ai ✗
 新規コードで `hw_jobs` / `hw_logistics` を直接インポートしてはならない。
 ドメイン状態の参照は必ず `hw_core::visual_mirror::*` を通じて行うこと。
 
-## ⚠️ Bevy 0.18 API 注意事項
+## ⚠️ Bevy 0.19 API 注意事項
 
-- **Window / UI API**：Bevy 0.18 では大きく変更された部分がある。Window 関連のコードを変更する前に必ず `docs.rs/bevy/0.18.0` または既存コードを確認すること
+- **Window / UI API**：Bevy 0.19 では大きく変更された部分がある。Window 関連のコードを変更する前に必ず `docs.rs/bevy/0.19.0` または既存コードを確認すること
 - **シェーダー / Material**：`Material2d` / `AsBindGroup` の API が変更されている可能性がある。既存の `TaskAreaMaterial` 実装を参考にすること
-- **UI ノード**：Bevy 0.18 の UI は `Node` / `PickingInteraction` を使う（旧 `Style` 廃止）
+- **UI ノード**：Bevy 0.19 の UI は `Node` / `PickingInteraction` を使う（旧 `Style` 廃止）
 
 ## plugin / system 登録責務
 

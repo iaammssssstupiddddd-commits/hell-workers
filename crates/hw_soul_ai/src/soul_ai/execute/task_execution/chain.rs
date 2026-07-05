@@ -275,10 +275,10 @@ pub(super) fn find_haul_chain_after_gather(
                     best_blueprint = Some((tr.anchor, dist_sq));
                 }
             }
-            TransportRequestKind::DeliverToMixerSolid => {
-                if best_mixer.is_none_or(|x| dist_sq < x.1) {
-                    best_mixer = Some((tr.anchor, dist_sq));
-                }
+            TransportRequestKind::DeliverToMixerSolid
+                if best_mixer.is_none_or(|x| dist_sq < x.1) =>
+            {
+                best_mixer = Some((tr.anchor, dist_sq));
             }
             _ => {}
         }

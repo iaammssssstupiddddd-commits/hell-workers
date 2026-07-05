@@ -225,6 +225,6 @@ fn spawn_completion_text(commands: &mut Commands, transform: &Transform, game_as
                 config: completion_config,
             },
         },
-        TextLayout::new_with_justify(Justify::Center),
+        TextLayout::justify(Justify::Center),
     ));
 }

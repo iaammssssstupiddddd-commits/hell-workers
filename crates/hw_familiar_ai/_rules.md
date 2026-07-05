@@ -14,7 +14,7 @@
 - **Soul の `WorkingOn` Relationship を直接操作しない**（タスク割当は `hw_soul_ai` 側の `apply_task_assignment_requests` が担う）
 - **`GameAssets` や `UiNodeRegistry` を引数に取るシステムをこのクレートに書かない**（root shell 固有型）
 - **`#[allow(dead_code)]` を使用しない**（使われないコードは削除する）
-- **Bevy 0.14 以前の API を推測で使わない**（0.18 の変更点が多い。既存コードまたは docs.rs/bevy/0.18.0 で確認する）
+- **Bevy 0.14 以前の API を推測で使わない**（0.19 の変更点が多い。既存コードまたは docs.rs/bevy/0.19.0 で確認する）
 
 ## crate 境界ルール（docs/crate-boundaries.md に基づく）
 

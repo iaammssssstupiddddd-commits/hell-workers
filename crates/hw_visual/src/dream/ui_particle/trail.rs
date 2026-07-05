@@ -22,7 +22,7 @@ pub fn dream_trail_ghost_update_system(
             continue;
         }
         let alpha = (ghost.lifetime / ghost.max_lifetime) * DREAM_UI_TRAIL_ALPHA;
-        if let Some(mat) = materials.get_mut(&mat_node.0) {
+        if let Some(mut mat) = materials.get_mut(&mat_node.0) {
             mat.alpha = alpha;
         }
     }

@@ -288,8 +288,8 @@ fn spawn_menu_item(
             row.spawn((
                 Text::new(label),
                 TextFont {
-                    font: game_assets.font_ui.clone(),
-                    font_size: theme.typography.font_size_sm,
+                    font: game_assets.font_ui.clone().into(),
+                    font_size: FontSize::Px(theme.typography.font_size_sm),
                     ..default()
                 },
                 TextColor(theme.colors.text_primary_semantic),

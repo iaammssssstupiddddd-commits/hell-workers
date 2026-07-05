@@ -51,7 +51,7 @@ Familiar エンティティ自身が `WorkingOn` を持ってはならない。
 `Haul` / `HaulToMixer` / `GatherWater` / `HaulWaterToMixer` / `WheelbarrowHaul`
 
 ### I-T2: Bevy Relationship の Target は手動で書かない
-Bevy 0.18 の Relationship は Source 側を操作すれば Target 側が自動更新される。
+Bevy 0.19 の Relationship は Source 側を操作すれば Target 側が自動更新される。
 Target 側（`TaskWorkers`, `ManagedTasks`, `HeldBy`, `StoredItems`, `IncomingDeliveries`, `Commanding`）を手動で書いてはならない。
 → 詳細: [tasks.md §2.1](tasks.md)
 

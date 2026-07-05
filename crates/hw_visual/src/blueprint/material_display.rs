@@ -45,11 +45,11 @@ pub fn spawn_material_display_system(
                     },
                     Text2d::new("0/0"),
                     TextFont {
-                        font_size: 10.0,
+                        font_size: FontSize::Px(10.0),
                         ..default()
                     },
                     TextColor(Color::WHITE),
-                    TextLayout::new_with_justify(Justify::Left),
+                    TextLayout::justify(Justify::Left),
                     Transform::from_translation(offset + COUNTER_TEXT_OFFSET),
                     Name::new(format!("MaterialCounter ({:?})", resource_type)),
                 ));
@@ -88,11 +88,11 @@ pub fn spawn_material_display_system(
                     },
                     Text2d::new("0/0"),
                     TextFont {
-                        font_size: 10.0,
+                        font_size: FontSize::Px(10.0),
                         ..default()
                     },
                     TextColor(Color::WHITE),
-                    TextLayout::new_with_justify(Justify::Left),
+                    TextLayout::justify(Justify::Left),
                     Transform::from_translation(offset + COUNTER_TEXT_OFFSET),
                     Name::new(format!("MaterialCounter (Flexible {:?})", accepted_types)),
                 ));

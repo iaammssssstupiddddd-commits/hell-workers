@@ -12,7 +12,7 @@
 - `scripts/`: utility scripts (image conversion, etc.)
 
 ## Tech Stack & Targets
-- Engine: Bevy 0.18 (see `Cargo.toml`).
+- Engine: Bevy 0.19 (see `Cargo.toml`).
 - Language: Rust 2024 edition.
 - Build target: use native `cargo run` by default.
 
@@ -110,18 +110,18 @@ Create an implementation plan in `docs/plans/` when:
 - User can manually commit specific plans if needed
 
 ### Bevy バージョンの厳守とドキュメント確認
-- 本プロジェクトは **Bevy 0.18** を使用している。
+- 本プロジェクトは **Bevy 0.19** を使用している。
 - AIの学習データにある過去のバージョン（0.14以前など）のAPIを無自覚に使用しないこと。
 - 新しい機能やシステムを実装する（特に Window, UI, Query, Commands周りなど）際は、推測でコードを書く前に以下のいずれかを行うこと：
   1. すでに正しく動いている他のプロジェクト内ソースコードの書き方を参考にする
-  2. Web検索ツール等で `https://docs.rs/bevy/0.18.0/bevy/` や関連ドキュメントを確認する
+  2. Web検索ツール等で `https://docs.rs/bevy/0.19.0/bevy/` や関連ドキュメントを確認する
   3. ローカルの `/home/satotakumi/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
 - 実装後は `cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
 
 ### MCP ツール運用フロー（rust-analyzer-mcp / docsrs-mcp）
 - ローカルコード解析（定義ジャンプ、参照、型確認）は `rust-analyzer-mcp` を優先する。
 - 外部 crate API の仕様確認は `docsrs-mcp` を優先し、推測で実装しない。
-- Bevy API は必ず 0.18 系の情報で確認する（`docsrs-mcp` / `~/.cargo/registry/src/`）。
+- Bevy API は必ず 0.19 系の情報で確認する（`docsrs-mcp` / `~/.cargo/registry/src/`）。
 - 実装後は rust-analyzer 診断確認に加えて `cargo check` を実行する。
 - MCP が利用できない場合は、`~/.cargo/registry/src/` と `docs.rs` の一次情報を使って代替確認する。
 

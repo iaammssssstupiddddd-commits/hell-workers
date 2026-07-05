@@ -45,7 +45,7 @@ pub struct Building3dHandles {
     pub equipment_2x2_mesh: Handle<Mesh>,
     pub equipment_material: Handle<StandardMaterial>,
     // --- キャラクター ---
-    pub soul_scene: Handle<Scene>,
+    pub soul_scene: Handle<WorldAsset>,
     pub familiar_mesh: Handle<Mesh>,
     pub familiar_material: Handle<StandardMaterial>,
     /// 全3Dエンティティに付与する RenderLayers

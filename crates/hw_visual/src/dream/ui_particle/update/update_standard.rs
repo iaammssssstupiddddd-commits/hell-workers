@@ -308,7 +308,7 @@ fn update_standard_particle_visual(
         0.9
     };
 
-    if let Some(mat) = materials.get_mut(&mat_node.0) {
+    if let Some(mut mat) = materials.get_mut(&mat_node.0) {
         mat.color = base_color;
         mat.alpha = alpha;
         mat.mass = particle.mass;
