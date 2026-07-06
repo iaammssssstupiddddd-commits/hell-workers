@@ -27,6 +27,10 @@ pub enum UiIntent {
     CloseDialog,
     SetTimeSpeed(TimeSpeed),
     TogglePause,
+    SaveGame,
+    RequestLoadGame,
+    ConfirmLoadGame,
+    CancelLoadConfirm,
     SelectArchitectCategory(Option<BuildingCategory>),
     MovePlantBuilding(Entity),
 }

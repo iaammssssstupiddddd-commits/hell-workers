@@ -69,7 +69,7 @@ pub fn familiar_spawning_system(
 /// 指定座標に使い魔をスポーンする
 pub fn spawn_familiar_at(
     commands: &mut Commands,
-    game_assets: &Res<GameAssets>,
+    game_assets: &GameAssets,
     handles_3d: &crate::plugins::startup::Building3dHandles,
     world_map: &WorldMap,
     pos: Vec2,
@@ -87,33 +87,67 @@ pub fn spawn_familiar_at(
     let fam_entity = commands
         .spawn((
             familiar,
-            Name::new(familiar_name.clone()),
-            FamiliarOperation::default(),
-            ActiveCommand::default(),
-            crate::systems::familiar_ai::FamiliarAiState::default(),
-            hw_familiar_ai::familiar_ai::perceive::state_detection::FamiliarAiStateHistory::default(
-            ),
             hw_core::relationships::Commanding::default(),
             hw_core::relationships::ManagedTasks::default(),
-            Destination(actual_pos),
-            Path::default(),
-            FamiliarAnimation::default(),
-            FamiliarVoice::random(),
-            Sprite {
-                image: game_assets.familiar.clone(),
-                custom_size: Some(Vec2::splat(TILE_SIZE * 0.9)),
-                color: Color::WHITE,
-                ..default()
-            },
             Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER + 0.5),
         ))
         .id();
+
+    attach_familiar_shell(
+        commands,
+        fam_entity,
+        &familiar_name,
+        command_radius,
+        actual_pos,
+        game_assets,
+        handles_3d,
+    );
+
+    info!(
+        "SPAWN: Familiar '{}' ({:?}) at {:?}",
+        familiar_name, familiar_type, actual_pos
+    );
+}
+
+/// 使い魔の「シェル」を付与する: セーブ対象外の実行時コンポーネント
+/// （AI 状態・アニメーション・移動・Sprite）と随伴エンティティ
+/// （3D プロキシ・指揮範囲インジケーター）。
+///
+/// spawn 時とセーブデータのロード後（rehydrate）の両方から呼ばれる。
+/// 永続化される simulation 状態（`Familiar` / `Commanding` / `ManagedTasks` /
+/// `Transform`）はここに含めないこと（`systems/save/saving.rs` の allow-list 参照）。
+pub fn attach_familiar_shell(
+    commands: &mut Commands,
+    fam_entity: Entity,
+    familiar_name: &str,
+    command_radius: f32,
+    pos: Vec2,
+    game_assets: &GameAssets,
+    handles_3d: &crate::plugins::startup::Building3dHandles,
+) {
+    commands.entity(fam_entity).insert((
+        Name::new(familiar_name.to_string()),
+        FamiliarOperation::default(),
+        ActiveCommand::default(),
+        crate::systems::familiar_ai::FamiliarAiState::default(),
+        hw_familiar_ai::familiar_ai::perceive::state_detection::FamiliarAiStateHistory::default(),
+        Destination(pos),
+        Path::default(),
+        FamiliarAnimation::default(),
+        FamiliarVoice::random(),
+        Sprite {
+            image: game_assets.familiar.clone(),
+            custom_size: Some(Vec2::splat(TILE_SIZE * 0.9)),
+            color: Color::WHITE,
+            ..default()
+        },
+    ));
 
     // 3D プロキシ（Phase 2 プレースホルダー）
     commands.spawn((
         Mesh3d(handles_3d.familiar_mesh.clone()),
         MeshMaterial3d(handles_3d.familiar_material.clone()),
-        Transform::from_xyz(actual_pos.x, TILE_SIZE * 0.45, -actual_pos.y),
+        Transform::from_xyz(pos.x, TILE_SIZE * 0.45, -pos.y),
         bevy::camera::visibility::RenderLayers::layer(LAYER_3D),
         hw_visual::visual3d::FamiliarProxy3d { owner: fam_entity },
         Name::new(format!("FamiliarProxy3d: {}", familiar_name)),
@@ -128,7 +162,7 @@ pub fn spawn_familiar_at(
             custom_size: Some(Vec2::splat(command_radius * 2.0)),
             ..default()
         },
-        Transform::from_translation(actual_pos.extend(Z_AURA)),
+        Transform::from_translation(pos.extend(Z_AURA)),
     ));
 
     commands.spawn((
@@ -140,7 +174,7 @@ pub fn spawn_familiar_at(
             custom_size: Some(Vec2::splat(command_radius * 2.0)),
             ..default()
         },
-        Transform::from_translation(actual_pos.extend(Z_AURA + 0.01)),
+        Transform::from_translation(pos.extend(Z_AURA + 0.01)),
     ));
 
     commands.spawn((
@@ -153,11 +187,6 @@ pub fn spawn_familiar_at(
             custom_size: Some(Vec2::splat(command_radius * 1.8)),
             ..default()
         },
-        Transform::from_translation(actual_pos.extend(Z_AURA + 0.03)),
+        Transform::from_translation(pos.extend(Z_AURA + 0.03)),
     ));
-
-    info!(
-        "SPAWN: Familiar '{}' ({:?}) at {:?}",
-        familiar_name, familiar_type, actual_pos
-    );
 }

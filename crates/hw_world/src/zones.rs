@@ -4,7 +4,8 @@ use crate::coords::world_to_grid;
 
 pub use hw_core::area::AreaBounds;
 
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, Reflect)]
+#[reflect(Component)]
 pub struct Site {
     pub min: Vec2,
     pub max: Vec2,
@@ -35,7 +36,8 @@ impl From<&Site> for AreaBounds {
     }
 }
 
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, Reflect)]
+#[reflect(Component)]
 pub struct Yard {
     pub min: Vec2,
     pub max: Vec2,
@@ -82,8 +84,10 @@ impl From<&Yard> for AreaBounds {
     }
 }
 
-#[derive(Component, Clone, Debug)]
-pub struct PairedYard(pub Entity);
+#[derive(Component, Clone, Debug, Reflect)]
+#[reflect(Component)]
+pub struct PairedYard(#[entities] pub Entity);
 
-#[derive(Component, Clone, Debug)]
-pub struct PairedSite(pub Entity);
+#[derive(Component, Clone, Debug, Reflect)]
+#[reflect(Component)]
+pub struct PairedSite(#[entities] pub Entity);

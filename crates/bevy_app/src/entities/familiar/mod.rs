@@ -12,4 +12,6 @@ pub use components::{
 };
 pub use hw_familiar_ai::familiar_movement;
 pub use range_indicator::update_familiar_range_indicator;
-pub use spawn::{FamiliarSpawnEvent, familiar_spawning_system, spawn_familiar};
+pub use spawn::{
+    FamiliarSpawnEvent, attach_familiar_shell, familiar_spawning_system, spawn_familiar,
+};

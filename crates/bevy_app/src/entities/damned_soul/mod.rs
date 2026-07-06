@@ -30,7 +30,8 @@ pub enum Gender {
 }
 
 /// 魂のアイデンティティ（名前と性別）
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component)]
 pub struct SoulIdentity {
     pub name: String,
     pub gender: Gender,

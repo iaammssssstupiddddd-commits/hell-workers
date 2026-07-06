@@ -112,10 +112,11 @@ pub struct Building {
     pub is_provisional: bool,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 pub struct BridgeMarker;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Reflect)]
 pub struct FlexibleMaterialRequirement {
     pub accepted_types: Vec<ResourceType>,
     pub required_total: u32,
@@ -136,15 +137,18 @@ impl FlexibleMaterialRequirement {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component, Default)]
 pub struct ProvisionalWall {
     pub mud_delivered: bool,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 pub struct SandPile;
 
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 pub struct BonePile;
 
 #[derive(Component, Reflect, Debug, Clone, Copy)]
@@ -153,22 +157,28 @@ pub struct RestArea {
     pub capacity: usize,
 }
 
-#[derive(Component)]
-pub struct TargetBlueprint(pub Entity);
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
+pub struct TargetBlueprint(#[entities] pub Entity);
 
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 pub struct Tree;
 
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
 pub struct TreeVariant(pub usize);
 
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 pub struct Rock;
 
-#[derive(Component)]
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+#[reflect(Component)]
 pub struct ObstaclePosition(pub i32, pub i32);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct Blueprint {
     pub kind: BuildingType,
     pub progress: f32,
@@ -273,7 +283,8 @@ pub struct MovePlanned {
     pub task_entity: Entity,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 pub struct Designation {
     pub work_type: WorkType,
 }
@@ -352,4 +363,4 @@ pub fn remove_tile_task_components(commands: &mut Commands, tile_entities: &[Ent
 /// Soul Spa 建設ロジスティクスシステムが使用する。
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]
-pub struct TargetSoulSpaSite(pub Entity);
+pub struct TargetSoulSpaSite(#[entities] pub Entity);

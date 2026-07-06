@@ -35,6 +35,7 @@ use crate::plugins::{
     input::InputPlugin, interface::InterfacePlugin, logic::LogicPlugin, messages::MessagesPlugin,
     spatial::SpatialPlugin, startup::StartupPlugin, visual::VisualPlugin,
 };
+use crate::systems::save::SavePlugin;
 
 /// ゲーム内のデバッグ情報の表示状態（独自実装用）
 #[derive(Resource, Default)]
@@ -139,6 +140,7 @@ fn main() {
         .add_plugins(LogicPlugin)
         .add_plugins(VisualPlugin)
         .add_plugins(InterfacePlugin)
+        .add_plugins(SavePlugin)
         .run();
 }
 

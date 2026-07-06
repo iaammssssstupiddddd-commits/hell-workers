@@ -2,7 +2,8 @@
 
 use super::UiAssets;
 use crate::components::{
-    MenuAction, MenuButton, OperationDialog, UiInputBlocker, UiNodeRegistry, UiSlot,
+    LoadConfirmDialog, MenuAction, MenuButton, OperationDialog, UiInputBlocker, UiNodeRegistry,
+    UiSlot,
 };
 use crate::theme::UiTheme;
 use bevy::prelude::*;
@@ -17,6 +18,7 @@ pub fn spawn_dialogs(
     ui_nodes: &mut UiNodeRegistry,
 ) {
     spawn_operation_dialog(commands, game_assets, theme, parent_entity, ui_nodes);
+    spawn_load_confirm_dialog(commands, game_assets, theme, parent_entity);
 }
 
 fn spawn_operation_dialog(
@@ -329,5 +331,127 @@ fn spawn_operation_dialog(
                 ..default()
             },
         ));
+    });
+}
+
+fn spawn_load_confirm_dialog(
+    commands: &mut Commands,
+    game_assets: &dyn UiAssets,
+    theme: &UiTheme,
+    parent_entity: Entity,
+) {
+    let dialog_root = commands
+        .spawn((
+            Node {
+                display: Display::None,
+                width: Val::Px(360.0),
+                height: Val::Auto,
+                position_type: PositionType::Absolute,
+                left: Val::Percent(50.0),
+                top: Val::Percent(40.0),
+                margin: UiRect::left(Val::Px(-180.0)),
+                flex_direction: FlexDirection::Column,
+                padding: UiRect::all(Val::Px(16.0)),
+                border: UiRect::all(Val::Px(2.0)),
+                border_radius: BorderRadius::all(Val::Px(6.0)),
+                ..default()
+            },
+            BackgroundColor(theme.colors.dialog_bg),
+            BorderColor::all(theme.colors.dialog_border),
+            Interaction::default(),
+            RelativeCursorPosition::default(),
+            UiInputBlocker,
+            LoadConfirmDialog,
+            ZIndex(40),
+        ))
+        .id();
+    commands.entity(parent_entity).add_child(dialog_root);
+
+    commands.entity(dialog_root).with_children(|parent| {
+        parent.spawn((
+            Text::new("Load saved game?"),
+            TextFont {
+                font: game_assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_xl),
+                ..default()
+            },
+            TextColor(theme.colors.text_accent),
+            Node {
+                margin: UiRect::bottom(Val::Px(8.0)),
+                ..default()
+            },
+        ));
+
+        parent.spawn((
+            Text::new("Current progress will be lost. This cannot be undone."),
+            TextFont {
+                font: game_assets.font_ui().clone().into(),
+                font_size: FontSize::Px(theme.typography.font_size_dialog_small),
+                ..default()
+            },
+            TextColor(theme.colors.text_secondary),
+            Node {
+                margin: UiRect::bottom(Val::Px(16.0)),
+                ..default()
+            },
+        ));
+
+        parent
+            .spawn(Node {
+                width: Val::Percent(100.0),
+                flex_direction: FlexDirection::Row,
+                justify_content: JustifyContent::FlexEnd,
+                column_gap: Val::Px(8.0),
+                ..default()
+            })
+            .with_children(|row| {
+                row.spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(90.0),
+                        height: Val::Px(32.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(theme.colors.button_default),
+                    MenuButton(MenuAction::CancelLoadConfirm),
+                ))
+                .with_children(|btn| {
+                    btn.spawn((
+                        Text::new("Cancel"),
+                        TextFont {
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_dialog_small),
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                    ));
+                });
+
+                row.spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(90.0),
+                        height: Val::Px(32.0),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(theme.colors.button_default),
+                    MenuButton(MenuAction::ConfirmLoadGame),
+                ))
+                .with_children(|btn| {
+                    btn.spawn((
+                        Text::new("Load"),
+                        TextFont {
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: FontSize::Px(theme.typography.font_size_dialog_small),
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                    ));
+                });
+            });
     });
 }

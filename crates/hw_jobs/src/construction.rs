@@ -65,8 +65,10 @@ pub enum WallTileState {
 }
 
 /// Individual floor tile blueprint - child entity
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, Reflect)]
+#[reflect(Component)]
 pub struct FloorTileBlueprint {
+    #[entities]
     pub parent_site: Entity,
     pub grid_pos: GridPos,
     pub state: FloorTileState,
@@ -97,8 +99,10 @@ pub struct TargetFloorConstructionSite(pub Entity);
 pub struct FloorConstructionCancelRequested;
 
 /// Individual wall tile blueprint - child entity
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, Reflect)]
+#[reflect(Component)]
 pub struct WallTileBlueprint {
+    #[entities]
     pub parent_site: Entity,
     pub grid_pos: GridPos,
     pub state: WallTileState,
@@ -107,6 +111,7 @@ pub struct WallTileBlueprint {
     /// Mud delivered (0-1)
     pub mud_delivered: u32,
     /// Spawned provisional/permanent wall entity after framing
+    #[entities]
     pub spawned_wall: Option<Entity>,
 }
 
@@ -132,7 +137,8 @@ pub struct TargetWallConstructionSite(pub Entity);
 pub struct WallConstructionCancelRequested;
 
 /// Floor construction site - parent entity managing an area of floor tiles
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, Reflect)]
+#[reflect(Component)]
 pub struct FloorConstructionSite {
     pub phase: FloorConstructionPhase,
     pub area_bounds: TaskArea,
@@ -160,7 +166,8 @@ impl FloorConstructionSite {
 }
 
 /// Wall construction site - parent entity managing a line of wall tiles
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, Reflect)]
+#[reflect(Component)]
 pub struct WallConstructionSite {
     pub phase: WallConstructionPhase,
     pub area_bounds: TaskArea,

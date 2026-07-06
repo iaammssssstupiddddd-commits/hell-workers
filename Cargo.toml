@@ -13,8 +13,12 @@ bevy = { version = "0.19", default-features = false, features = [
     "pan_camera",
     "png",
     "jpeg",
+    "serialize",
 ] }
 rand = "0.8"
+ron = "0.12"
+serde = { version = "1", features = ["derive"] }
+bevy_world_serialization = "0.19"
 wfc = "0.10"        # gridbugs/wfc — MIT, seed + ForbidPattern hard constraint
 direction = "0.18"  # gridbugs/direction — CardinalDirectionTable (wfc の推移依存だが明示追加)
 

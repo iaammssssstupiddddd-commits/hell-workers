@@ -18,10 +18,13 @@ pub enum TransportPriority {
 #[reflect(Component)]
 pub struct TransportRequest {
     pub kind: TransportRequestKind,
+    #[entities]
     pub anchor: Entity,
     pub resource_type: ResourceType,
+    #[entities]
     pub issued_by: Entity,
     pub priority: TransportPriority,
+    #[entities]
     pub stockpile_group: Vec<Entity>,
 }
 
@@ -29,9 +32,9 @@ pub struct TransportRequest {
 #[reflect(Component, Default)]
 pub struct ManualTransportRequest;
 
-#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[derive(Component, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
-pub struct TransportRequestFixedSource(pub Entity);
+pub struct TransportRequestFixedSource(#[entities] pub Entity);
 
 #[derive(Component, Debug, Clone, Copy, Reflect, Default)]
 #[reflect(Component, Default)]

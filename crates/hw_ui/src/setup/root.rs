@@ -226,6 +226,7 @@ pub fn setup_ui<F, G>(
         overlay_slot,
         &mut ui_nodes,
     );
+    super::pause_menu::spawn_pause_menu(&mut commands, game_assets, theme, overlay_slot);
     spawn_root_panels(
         &mut commands,
         right_slot,

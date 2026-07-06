@@ -120,7 +120,7 @@
   - [x] Soul 表示（GLB → RtT）・地形・task_area 表示が起動ログ上でエラーなし（画面スクリーンショットはサンドボックス制約で撮影不可。コンソールログでの検証に留まる — 詳細は後述の既知の制約参照）
   - [x] soul.glb のマテリアル: GltfMaterial 化によるエラーは発生せず（既存コードは `Handle<Scene>`→`Handle<WorldAsset>` のリネームのみで動作。マテリアル差し替えは不要だった）
 - 検証: 起動確認（bevy_app 60秒 / visual_test 25秒、いずれも wgpu エラー 0）✅
-- **既知の制約（要 目視 QA）**: Parley 移行に伴い `ICU4X data error: No segmentation model for language: ja` が起動時に非致命的警告として出続ける。これは icu_segmenter の cjdict（日本語辞書ベース分割）データが実行時にロードされない upstream 側の制約で、行いた対処では解決しなかった（アプリはクラッシュせず継続動作）。実害は「日本語テキストの単語境界での折返しが効かず、長い和文が想定より折り返されない可能性」。本プロジェクトの UI は日本語表記が多いため、tooltip/dialog/task_list 等で長い和文を表示する画面は次回の目視 QA で確認すること。upstream（bevy_text / parley）の 0.19.x パッチで解消される可能性あり。
+- **既知の制約（目視 QA 済み 2026-07-05: ユーザー確認で実害なし・クローズ）**: Parley 移行に伴い `ICU4X data error: No segmentation model for language: ja` が起動時に非致命的警告として出続ける。これは icu_segmenter の cjdict（日本語辞書ベース分割）データが実行時にロードされない upstream 側の制約で、行いた対処では解決しなかった（アプリはクラッシュせず継続動作）。実害は「日本語テキストの単語境界での折返しが効かず、長い和文が想定より折り返されない可能性」。本プロジェクトの UI は日本語表記が多いため、tooltip/dialog/task_list 等で長い和文を表示する画面は次回の目視 QA で確認すること。upstream（bevy_text / parley）の 0.19.x パッチで解消される可能性あり。
 
 ## M4: 実行時挙動と品質ゲート（Completed）
 

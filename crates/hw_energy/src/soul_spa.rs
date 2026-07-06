@@ -53,6 +53,7 @@ impl SoulSpaSite {
 #[reflect(Component)]
 pub struct SoulSpaTile {
     /// 所属する SoulSpaSite エンティティ
+    #[entities]
     pub parent_site: Entity,
     /// グリッド座標
     pub grid_pos: (i32, i32),

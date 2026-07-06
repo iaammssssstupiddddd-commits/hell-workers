@@ -20,7 +20,8 @@ pub use terrain_metadata::{
 use bevy::prelude::*;
 use hw_ui::selection::WorldReadApi;
 
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 pub struct Tile;
 
 /// Lightweight `&WorldMap` wrapper implementing [`WorldReadApi`].

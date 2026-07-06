@@ -7,9 +7,10 @@ use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::{EntityListNodeIndex, InfoPanelPinState};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarAiState;
+use crate::systems::save::SaveLoadState;
 use hw_core::game_state::PlayMode;
 use hw_core::relationships::Commanding;
-use hw_ui::components::{MenuState, OperationDialog};
+use hw_ui::components::{LoadConfirmDialog, MenuState, OperationDialog};
 
 #[derive(SystemParam)]
 pub(crate) struct IntentModeCtx<'w> {
@@ -45,8 +46,14 @@ pub(crate) struct IntentFamiliarQueries<'w, 's> {
 
 #[derive(SystemParam)]
 pub(crate) struct IntentUiQueries<'w, 's> {
-    pub(crate) q_dialog: Query<'w, 's, &'static mut Node, With<OperationDialog>>,
+    // ダイアログはそれぞれ独立したエンティティだが、&mut Node の 2 クエリは
+    // Without で disjoint を明示しないと B0001（クエリ競合 panic）になる。
+    pub(crate) q_dialog:
+        Query<'w, 's, &'static mut Node, (With<OperationDialog>, Without<LoadConfirmDialog>)>,
+    pub(crate) q_load_confirm:
+        Query<'w, 's, &'static mut Node, (With<LoadConfirmDialog>, Without<OperationDialog>)>,
     pub(crate) q_text: Query<'w, 's, &'static mut Text>,
+    pub(crate) save_load_state: ResMut<'w, SaveLoadState>,
 }
 
 pub(crate) fn ensure_familiar_selected(

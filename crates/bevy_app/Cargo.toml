@@ -6,6 +6,9 @@ edition = "2024"
 [dependencies]
 bevy = { workspace = true }
 rand = { workspace = true }
+ron = { workspace = true }
+serde = { workspace = true }
+bevy_world_serialization = { workspace = true }
 hw_core = { path = "../hw_core" }
 hw_energy = { path = "../hw_energy" }
 hw_jobs = { path = "../hw_jobs" }

@@ -14,6 +14,7 @@
 - [gathering.md](gathering.md): 動的集会システム（自然発生・拡大・統合・消滅）。
 - [rest_area_system.md](rest_area_system.md): 休憩所（Rest Area）の定員管理、予約、バイタル回復の仕組み。
 - [population_system.md](population_system.md): Soul人口（初期/定期スポーン、人口上限、漂流デスポーン）の仕様。
+- [save_load.md](save_load.md): シミュレーション状態の RON セーブ/ロード（F5/F9、allow-list、Phase A 正規化）。
 - [room_detection.md](room_detection.md): Room 検出システム（壁・扉・床で囲まれた空間の自動認識・オーバーレイ表示）。
 - [dream.md](dream.md): Dreamシステム。睡眠中の夢による通貨獲得メカニクス。
 - [state.md](state.md): ゲームの進行状態、プレイモードの遷移。
@@ -49,4 +50,5 @@
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。
+- [proposals/hvac-plumbing-proposal.md](proposals/hvac-plumbing-proposal.md): 空調・衛生の建築設備導入と世界観への落とし込み提案。
 - `architecture.md` / `cargo_workspace.md` / `familiar_ai.md` / `soul_ai.md`: crate 境界と `root shell` 方針（thin shell、root adapter、leaf plugin の登録責務）を同期済み。

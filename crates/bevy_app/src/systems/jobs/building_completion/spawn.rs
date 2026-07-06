@@ -17,20 +17,72 @@ pub(super) fn spawn_completed_building(
     let is_provisional = !bp.is_fully_complete();
     let pos2d = transform.translation.truncate();
 
-    let (z, layer_kind) = match bp.kind {
-        BuildingType::Floor | BuildingType::SandPile | BuildingType::BonePile => {
-            (Z_BUILDING_FLOOR, VisualLayerKind::Floor)
-        }
-        _ => (Z_BUILDING_STRUCT, VisualLayerKind::Struct),
+    let z = match bp.kind {
+        BuildingType::Floor | BuildingType::SandPile | BuildingType::BonePile => Z_BUILDING_FLOOR,
+        _ => Z_BUILDING_STRUCT,
     };
 
-    let parent_transform = Transform::from_xyz(pos2d.x, pos2d.y, z);
+    let building_entity = commands
+        .spawn((
+            Building {
+                kind: bp.kind,
+                is_provisional,
+            },
+            Transform::from_xyz(pos2d.x, pos2d.y, z),
+        ))
+        .id();
+
+    attach_building_shell(
+        commands,
+        building_entity,
+        bp.kind,
+        is_provisional,
+        pos2d,
+        game_assets,
+        handles_3d,
+    );
+
+    if bp.kind == BuildingType::Wall && is_provisional {
+        commands
+            .entity(building_entity)
+            .insert(ProvisionalWall::default());
+    }
+
+    if bp.kind == BuildingType::Door {
+        commands.entity(building_entity).insert(Door {
+            state: DoorState::Closed,
+        });
+    }
+
+    building_entity
+}
+
+/// Building の「シェル」を付与する: Name / 完成バウンス演出 / 2D VisualLayer 子エンティティ /
+/// 独立 3D ビジュアルエンティティ。
+///
+/// 建築完成時（`spawn_completed_building`）とセーブデータのロード後（rehydrate）の
+/// 両方から呼ばれる。永続化される simulation 状態（`Building` / `Door` /
+/// `ProvisionalWall` / `Transform`）はここに含めないこと。
+/// 壁の 2D スプライトは初期画像を入れておけば `wall_connection` システムが上書きする。
+pub(crate) fn attach_building_shell(
+    commands: &mut Commands,
+    building_entity: Entity,
+    kind: BuildingType,
+    is_provisional: bool,
+    pos2d: Vec2,
+    game_assets: &GameAssets,
+    handles_3d: &Building3dHandles,
+) {
+    let layer_kind = match kind {
+        BuildingType::Floor | BuildingType::SandPile | BuildingType::BonePile => {
+            VisualLayerKind::Floor
+        }
+        _ => VisualLayerKind::Struct,
+    };
 
     // Phase 2: 全 BuildingType が 3D ビジュアルを使用する（Bridge は除外）
-    let use_3d = !matches!(bp.kind, BuildingType::Bridge);
-
     // 2D スプライト初期画像の選択（wall_connection システムが後から上書きする）
-    let (sprite_image_2d, custom_size_2d) = match bp.kind {
+    let (sprite_image_2d, custom_size_2d) = match kind {
         BuildingType::Wall => (
             game_assets.mud_wall_isolated.clone(),
             Vec2::splat(TILE_SIZE),
@@ -46,125 +98,54 @@ pub(super) fn spawn_completed_building(
             game_assets.wheelbarrow_parking.clone(),
             Vec2::splat(TILE_SIZE * 2.0),
         ),
-        BuildingType::Bridge => unreachable!("Bridge uses use_3d = false path"),
+        BuildingType::Bridge => (
+            game_assets.bridge.clone(),
+            Vec2::new(TILE_SIZE * 2.0, TILE_SIZE * 5.0),
+        ),
         BuildingType::SoulSpa => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
         BuildingType::OutdoorLamp => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
     };
 
-    let building_entity = if use_3d {
-        commands
-            .spawn((
-                Building {
-                    kind: bp.kind,
-                    is_provisional,
-                },
-                parent_transform,
-                Name::new(format!("Building ({:?})", bp.kind)),
-                hw_visual::blueprint::BuildingBounceEffect {
-                    bounce_animation: hw_visual::animations::BounceAnimation {
-                        timer: 0.0,
-                        config: hw_visual::animations::BounceAnimationConfig {
-                            duration: hw_visual::blueprint::BOUNCE_DURATION,
-                            min_scale: 1.0,
-                            max_scale: 1.2,
-                        },
+    commands
+        .entity(building_entity)
+        .insert((
+            Name::new(format!("Building ({:?})", kind)),
+            // VisualLayer 子が Visibility を持つため、親にも必要（Bevy B0004）
+            Visibility::Inherited,
+            hw_visual::blueprint::BuildingBounceEffect {
+                bounce_animation: hw_visual::animations::BounceAnimation {
+                    timer: 0.0,
+                    config: hw_visual::animations::BounceAnimationConfig {
+                        duration: hw_visual::blueprint::BOUNCE_DURATION,
+                        min_scale: 1.0,
+                        max_scale: 1.2,
                     },
                 },
-            ))
-            .with_children(|parent| {
-                parent.spawn((
-                    layer_kind,
-                    Sprite {
-                        image: sprite_image_2d,
-                        custom_size: Some(custom_size_2d),
-                        ..default()
-                    },
-                    Transform::default(),
-                    Name::new(format!("VisualLayer ({:?})", layer_kind)),
-                ));
-            })
-            .id()
-    } else {
-        let (sprite_image, custom_size) = match bp.kind {
-            BuildingType::Wall => unreachable!(),
-            BuildingType::Door => (game_assets.door_closed.clone(), Vec2::splat(TILE_SIZE)),
-            BuildingType::Floor => (game_assets.mud_floor.clone(), Vec2::splat(TILE_SIZE)),
-            BuildingType::Tank => (game_assets.tank_empty.clone(), Vec2::splat(TILE_SIZE * 2.0)),
-            BuildingType::MudMixer => (game_assets.mud_mixer.clone(), Vec2::splat(TILE_SIZE * 2.0)),
-            BuildingType::RestArea => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
-            BuildingType::Bridge => (
-                game_assets.bridge.clone(),
-                Vec2::new(TILE_SIZE * 2.0, TILE_SIZE * 5.0),
-            ),
-            BuildingType::SandPile => (game_assets.sand_pile.clone(), Vec2::splat(TILE_SIZE)),
-            BuildingType::BonePile => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
-            BuildingType::WheelbarrowParking => (
-                game_assets.wheelbarrow_parking.clone(),
-                Vec2::splat(TILE_SIZE * 2.0),
-            ),
-            BuildingType::SoulSpa => (game_assets.rest_area.clone(), Vec2::splat(TILE_SIZE * 2.0)),
-            BuildingType::OutdoorLamp => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
-        };
-
-        commands
-            .spawn((
-                Building {
-                    kind: bp.kind,
-                    is_provisional,
+            },
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                layer_kind,
+                Sprite {
+                    image: sprite_image_2d,
+                    custom_size: Some(custom_size_2d),
+                    ..default()
                 },
-                parent_transform,
-                Name::new(format!("Building ({:?})", bp.kind)),
-                hw_visual::blueprint::BuildingBounceEffect {
-                    bounce_animation: hw_visual::animations::BounceAnimation {
-                        timer: 0.0,
-                        config: hw_visual::animations::BounceAnimationConfig {
-                            duration: hw_visual::blueprint::BOUNCE_DURATION,
-                            min_scale: 1.0,
-                            max_scale: 1.2,
-                        },
-                    },
-                },
-            ))
-            .with_children(|parent| {
-                parent.spawn((
-                    layer_kind,
-                    Sprite {
-                        image: sprite_image,
-                        custom_size: Some(custom_size),
-                        ..default()
-                    },
-                    Transform::default(),
-                    Name::new(format!("VisualLayer ({:?})", layer_kind)),
-                ));
-            })
-            .id()
-    };
-
-    if bp.kind == BuildingType::Wall && is_provisional {
-        commands
-            .entity(building_entity)
-            .insert(ProvisionalWall::default());
-    }
-
-    if bp.kind == BuildingType::Door {
-        commands.entity(building_entity).insert(Door {
-            state: DoorState::Closed,
+                Transform::default(),
+                Name::new(format!("VisualLayer ({:?})", layer_kind)),
+            ));
         });
-    }
 
     // 3D ビジュアルエンティティを独立して spawn（Building の Transform を変えない）
-    if use_3d {
-        spawn_building_3d_visual(
-            commands,
-            building_entity,
-            bp.kind,
-            pos2d,
-            is_provisional,
-            handles_3d,
-        );
-    }
-
-    building_entity
+    // Bridge は 2D のみ（spawn_building_3d_visual 側で early return）
+    spawn_building_3d_visual(
+        commands,
+        building_entity,
+        kind,
+        pos2d,
+        is_provisional,
+        handles_3d,
+    );
 }
 
 /// Building エンティティに対応する独立 3D ビジュアルエンティティを XZ 平面上に spawn する。

@@ -179,38 +179,54 @@ pub fn spawn_damned_soul_at(
     let soul_entity = commands
         .spawn((
             DamnedSoul::default(),
-            SoulUiLinks::default(),
             DreamState::default(),
-            Name::new(format!("Soul: {}", soul_name)),
             identity,
             IdleState::default(),
-            (
-                AssignedTask::default(),
-                InventoryItemVisual::default(),
-                SoulTaskVisualState::default(),
-            ),
-            (
-                Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER),
-                // Mesh2d 子（例: DreamParticle）が InheritedVisibility を持つため、親にも Visibility が必要（Bevy B0004）。
-                Visibility::Inherited,
-            ),
-            Destination(actual_pos),
-            Path::default(),
-            AnimationState::default(),
-            hw_visual::SoulAnimVisualState::default(),
-            hw_visual::speech::components::SoulEmotionState::default(),
-            hw_visual::speech::conversation::components::ConversationInitiator {
-                timer: Timer::from_seconds(CONVERSATION_CHECK_INTERVAL, TimerMode::Repeating),
-            },
+            AssignedTask::default(),
+            Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER),
             crate::systems::logistics::Inventory::default(),
         ))
         .id();
 
+    attach_soul_shell(commands, soul_entity, &soul_name, actual_pos, handles_3d);
+
+    info!("SPAWN: {} ({:?}) at {:?}", soul_name, gender, actual_pos);
+}
+
+/// Soul の「シェル」を付与する: セーブ対象外の実行時コンポーネント
+/// （ビジュアル・アニメーション・移動・UI リンク）と GLB 表示用の随伴エンティティ。
+///
+/// spawn 時とセーブデータのロード後（rehydrate）の両方から呼ばれる。
+/// セーブ/ロードで永続化される simulation 状態（`DamnedSoul` / `IdleState` /
+/// `Inventory` 等）はここに含めないこと（`systems/save/saving.rs` の allow-list 参照）。
+pub fn attach_soul_shell(
+    commands: &mut Commands,
+    soul_entity: Entity,
+    soul_name: &str,
+    pos: Vec2,
+    handles_3d: &crate::plugins::startup::Building3dHandles,
+) {
+    commands.entity(soul_entity).insert((
+        SoulUiLinks::default(),
+        Name::new(format!("Soul: {}", soul_name)),
+        InventoryItemVisual::default(),
+        SoulTaskVisualState::default(),
+        // Mesh2d 子（例: DreamParticle）が InheritedVisibility を持つため、親にも Visibility が必要（Bevy B0004）。
+        Visibility::Inherited,
+        Destination(pos),
+        Path::default(),
+        AnimationState::default(),
+        hw_visual::SoulAnimVisualState::default(),
+        hw_visual::speech::components::SoulEmotionState::default(),
+        hw_visual::speech::conversation::components::ConversationInitiator {
+            timer: Timer::from_seconds(CONVERSATION_CHECK_INTERVAL, TimerMode::Repeating),
+        },
+    ));
+
     // Soul の通常表示は GLB SceneRoot を RtT に流し、2D Sprite は持たない。
     commands.spawn((
         WorldAssetRoot(handles_3d.soul_scene.clone()),
-        Transform::from_xyz(actual_pos.x, 0.0, -actual_pos.y)
-            .with_scale(Vec3::splat(SOUL_GLB_SCALE)),
+        Transform::from_xyz(pos.x, 0.0, -pos.y).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         bevy::camera::visibility::RenderLayers::layer(LAYER_3D),
         hw_visual::visual3d::SoulProxy3d {
             owner: soul_entity,
@@ -221,8 +237,7 @@ pub fn spawn_damned_soul_at(
 
     commands.spawn((
         WorldAssetRoot(handles_3d.soul_scene.clone()),
-        Transform::from_xyz(actual_pos.x, 0.0, -actual_pos.y)
-            .with_scale(Vec3::splat(SOUL_GLB_SCALE)),
+        Transform::from_xyz(pos.x, 0.0, -pos.y).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         bevy::camera::visibility::RenderLayers::layer(LAYER_3D_SOUL_MASK),
         hw_visual::visual3d::SoulMaskProxy3d { owner: soul_entity },
         Name::new(format!("SoulMaskProxy3d: {}", soul_name)),
@@ -230,12 +245,9 @@ pub fn spawn_damned_soul_at(
 
     commands.spawn((
         WorldAssetRoot(handles_3d.soul_scene.clone()),
-        Transform::from_xyz(actual_pos.x, 0.0, -actual_pos.y)
-            .with_scale(Vec3::splat(SOUL_GLB_SCALE)),
+        Transform::from_xyz(pos.x, 0.0, -pos.y).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         bevy::camera::visibility::RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW]),
         hw_visual::visual3d::SoulShadowProxy3d { owner: soul_entity },
         Name::new(format!("SoulShadowProxy3d: {}", soul_name)),
     ));
-
-    info!("SPAWN: {} ({:?}) at {:?}", soul_name, gender, actual_pos);
 }

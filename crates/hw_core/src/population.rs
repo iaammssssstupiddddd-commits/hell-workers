@@ -9,7 +9,8 @@ use crate::constants::{
 use bevy::prelude::*;
 
 /// Soul の人口管理状態
-#[derive(Resource)]
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
 pub struct PopulationManager {
     pub current_count: u32,
     pub population_cap: u32,

@@ -28,7 +28,10 @@ pub use spatial_sync::{
     update_stockpile_spatial_grid_system_stockpile,
     update_transport_request_spatial_grid_system_transport_request,
 };
-pub use types::{BelongsTo, BucketStorage, Inventory, ReservedForTask, ResourceItem, Wheelbarrow};
+pub use types::{
+    BelongsTo, BucketStorage, Inventory, PendingBelongsToBlueprint, ReservedForTask, ResourceItem,
+    Wheelbarrow,
+};
 pub use water::tank_has_capacity_for_full_bucket;
 pub use zone::Stockpile;
 // Functions used in dropping / unloading handlers

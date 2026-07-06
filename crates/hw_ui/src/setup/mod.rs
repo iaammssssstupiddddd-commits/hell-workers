@@ -6,6 +6,7 @@ mod bottom_bar;
 mod dialogs;
 mod entity_list;
 mod panels;
+mod pause_menu;
 mod root;
 mod submenus;
 mod time_control;

@@ -64,6 +64,8 @@ pub fn ui_keyboard_shortcuts_system(
     mut time: ResMut<Time<Virtual>>,
     play_mode: Res<State<PlayMode>>,
     mut companion_state: ResMut<CompanionPlacementState>,
+    q_load_confirm: Query<&Node, With<LoadConfirmDialog>>,
+    mut ui_intent_writer: MessageWriter<UiIntent>,
 ) {
     let KeyboardModeCtx {
         mut menu_state,
@@ -123,6 +125,11 @@ pub fn ui_keyboard_shortcuts_system(
 
     // モードキャンセル (Escape)
     if keyboard.just_pressed(KeyCode::Escape) {
+        if hw_ui::interaction::dialog::is_load_confirm_dialog_open(&q_load_confirm) {
+            ui_intent_writer.write(UiIntent::CancelLoadConfirm);
+            return;
+        }
+
         let current_mode = play_mode.get();
         if *current_mode == PlayMode::BuildingPlace {
             companion_state.0 = None;

@@ -64,6 +64,18 @@ pub(super) fn handle_pressed_action(action: MenuAction, ui_intents: &mut Message
         MenuAction::TogglePause => {
             ui_intents.write(UiIntent::TogglePause);
         }
+        MenuAction::SaveGame => {
+            ui_intents.write(UiIntent::SaveGame);
+        }
+        MenuAction::RequestLoadGame => {
+            ui_intents.write(UiIntent::RequestLoadGame);
+        }
+        MenuAction::ConfirmLoadGame => {
+            ui_intents.write(UiIntent::ConfirmLoadGame);
+        }
+        MenuAction::CancelLoadConfirm => {
+            ui_intents.write(UiIntent::CancelLoadConfirm);
+        }
         MenuAction::ToggleDoorLock(entity) => {
             ui_intents.write(UiIntent::ToggleDoorLock(entity));
         }

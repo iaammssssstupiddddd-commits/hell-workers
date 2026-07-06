@@ -12,7 +12,7 @@ pub struct ReservedForTask;
 
 #[derive(Component, Reflect, Debug, Clone, Copy, PartialEq, Eq)]
 #[reflect(Component)]
-pub struct BelongsTo(pub Entity);
+pub struct BelongsTo(#[entities] pub Entity);
 
 #[derive(Component, Reflect, Debug, Clone, Copy, PartialEq, Eq)]
 #[reflect(Component)]
@@ -32,8 +32,8 @@ pub struct WheelbarrowParking {
 
 #[derive(Component, Reflect, Debug, Clone, Copy, PartialEq, Eq)]
 #[reflect(Component)]
-pub struct PendingBelongsToBlueprint(pub Entity);
+pub struct PendingBelongsToBlueprint(#[entities] pub Entity);
 
 #[derive(Component, Default, Reflect, Clone, Copy, Debug)]
 #[reflect(Component)]
-pub struct Inventory(pub Option<Entity>);
+pub struct Inventory(#[entities] pub Option<Entity>);

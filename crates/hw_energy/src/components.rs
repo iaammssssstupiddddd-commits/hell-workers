@@ -67,7 +67,7 @@ pub struct Unpowered;
 /// PowerGrid エンティティ上に付与。所属する Yard への逆参照。
 #[derive(Component, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
-pub struct YardPowerGrid(pub Entity);
+pub struct YardPowerGrid(#[entities] pub Entity);
 
 impl Default for YardPowerGrid {
     fn default() -> Self {

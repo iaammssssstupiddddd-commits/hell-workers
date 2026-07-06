@@ -180,6 +180,8 @@ impl Default for AnimationState {
 #[derive(Component, Default, Reflect)]
 #[reflect(Component)]
 pub struct SoulUiLinks {
+    #[reflect(skip_serializing)]
     pub bar_entity: Option<Entity>,
+    #[reflect(skip_serializing)]
     pub icon_entity: Option<Entity>,
 }

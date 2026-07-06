@@ -15,11 +15,11 @@ pub struct MudMixerStorage {
 
 #[derive(Component, Reflect)]
 #[reflect(Component)]
-pub struct TargetMixer(pub Entity);
+pub struct TargetMixer(#[entities] pub Entity);
 
 #[derive(Component, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
-pub struct StoredByMixer(pub Entity);
+pub struct StoredByMixer(#[entities] pub Entity);
 
 impl MudMixerStorage {
     pub fn is_full(&self, resource: ResourceType) -> bool {

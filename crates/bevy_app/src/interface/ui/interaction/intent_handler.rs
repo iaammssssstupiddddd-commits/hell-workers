@@ -58,6 +58,12 @@ pub(crate) fn handle_ui_intent(
             UiIntent::TogglePause | UiIntent::SetTimeSpeed(_) => {
                 handlers::handle_time(intent, &mut time);
             }
+            UiIntent::SaveGame
+            | UiIntent::RequestLoadGame
+            | UiIntent::ConfirmLoadGame
+            | UiIntent::CancelLoadConfirm => {
+                handlers::handle_save_game(intent, &mut ui_queries);
+            }
             UiIntent::ToggleDoorLock(_)
             | UiIntent::SelectArchitectCategory(_)
             | UiIntent::MovePlantBuilding(_) => {

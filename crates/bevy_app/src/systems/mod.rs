@@ -4,6 +4,7 @@ pub mod energy;
 pub mod familiar_ai;
 pub mod jobs;
 pub mod logistics;
+pub mod save;
 pub mod soul_ai;
 pub mod time;
 pub mod visual;

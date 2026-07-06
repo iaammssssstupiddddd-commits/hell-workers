@@ -1,6 +1,8 @@
 mod post_process;
 mod spawn;
 
+pub(crate) use spawn::attach_building_shell;
+
 use crate::assets::GameAssets;
 use crate::plugins::startup::Building3dHandles;
 use crate::world::map::WorldMapWrite;

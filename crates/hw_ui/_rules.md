@@ -71,6 +71,19 @@ hw_energy      ✗
 1. `setup/submenus.rs` の該当カテゴリの `architect_building_specs()` に `MenuEntrySpec` を追加
 2. `panels/task_list/presenter.rs` に表示ラベルを追加
 
+## Pause メニュー / 確認ダイアログ追加時のルール
+
+セーブ/ロード等、ゲーム状態を変える UI ボタンは以下の流れに従う:
+
+1. **`hw_ui/src/intents.rs`**: `UiIntent` バリアントを追加（hw_ui はゲーム状態を直接書かない）
+2. **`hw_ui/src/components.rs`**: パネル marker（例: `PauseMenu`, `LoadConfirmDialog`）を追加
+3. **`hw_ui/src/setup/`**: `MenuButton(MenuAction::…)` 付きボタンを spawn（`dialogs.rs` / `pause_menu.rs` 参照）
+4. **`bevy_app/.../menu_actions.rs`**: `MenuAction` → `UiIntent` 変換
+5. **`bevy_app/.../handlers/`**: intent 実処理（例: `save_game.rs` → `SaveLoadState`）
+6. **`bevy_app/.../intent_handler.rs`**: 新 intent の match 分岐
+
+`bsn!` マクロは Bevy 0.19 本プロジェクトでは未採用。新規 UI も **`commands.spawn` + `MenuButton`** で統一する。
+
 ## docs 更新対象（変更時に必ず更新するドキュメント）
 
 - [docs/building.md](../../docs/building.md)（BuildingType メニュー追加時）

@@ -19,10 +19,12 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [bevy-0-19-feature-adoption-plan-2026-07-05.md](bevy-0-19-feature-adoption-plan-2026-07-05.md) | Draft | Bevy 0.19 新機能の採用候補を Delayed Commands / UI widgets / contiguous query / ICU4X QA に分けて扱う親計画 |
-| [bevy-0-19-migration-plan-2026-07-05.md](bevy-0-19-migration-plan-2026-07-05.md) | Completed | Bevy 0.18 → 0.19 マイグレーション完了。既知の制約: ICU4X 日本語セグメンテーション（要目視QA） |
+| [bevy-0-19-migration-plan-2026-07-05.md](bevy-0-19-migration-plan-2026-07-05.md) | Completed | Bevy 0.18 → 0.19 マイグレーション完了。ICU4X 日本語セグメンテーションは目視 QA 済み・実害なし（2026-07-05 クローズ）。機能採用（Delayed Commands / UI widgets）は archive の各計画を参照。contiguous_iter 最適化は計測不要と判断し見送りでクローズ |
 | [blob-shadow-tim-burton-2026-04-12.md](blob-shadow-tim-burton-2026-04-12.md) | Draft | 影スタイル 2D 化計画（床・壁接続維持） 2026-04-12 |
-| [dream-bubble-perf-2026-04-09.md](dream-bubble-perf-2026-04-09.md) | Draft | 夢の泡パーティクル描画負荷最適化 |
+| [dev-tools-debug-overlay-plan-2026-07-05.md](dev-tools-debug-overlay-plan-2026-07-05.md) | Draft | gizmo テキストの AI デバッグラベル導入（BSN トグル UI）。再検証により FpsOverlay 等の自前実装置き換えは却下（§0）、フレームタイムグラフは計測時オプション |
+| [save-load-world-serialization-plan-2026-07-05.md](save-load-world-serialization-plan-2026-07-05.md) | Draft | bevy_world_serialization によるセーブ/ロード実装。Relationship 再マップ PoC が最優先。UI は BSN |
+| [settings-screen-plan-2026-07-05.md](settings-screen-plan-2026-07-05.md) | Draft | GameSettings + RON 永続化 + ui_widgets Slider/Checkbox の設定画面（BSN 構築）+ FontSize::Rem UI スケール |
+| [text-input-ui-plan-2026-07-05.md](text-input-ui-plan-2026-07-05.md) | Draft | EditableText による Soul リネーム・エンティティリスト検索 + bevy_clipboard。入力フィールドは BSN 構築 |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [performance-cpu-2026-04-16.md](performance-cpu-2026-04-16.md) | Draft | CPU パフォーマンス改善計画書 |
 | [terrain-lod-switch-flicker-plan-2026-04-17.md](terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD 切替時のちらつきを、判定安定化と短い遷移フェーズで抑える計画 |

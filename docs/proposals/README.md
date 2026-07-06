@@ -18,6 +18,7 @@
 | Document | Notes |
 | --- | --- |
 | [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
+| [hvac-plumbing-proposal.md](hvac-plumbing-proposal.md) | 空調・衛生の建築設備導入と世界観への落とし込み提案 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
 | [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
 

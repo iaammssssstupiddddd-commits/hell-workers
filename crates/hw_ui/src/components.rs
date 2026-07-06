@@ -211,6 +211,12 @@ pub struct SpeedButtonMarker(pub TimeSpeed);
 #[derive(Component)]
 pub struct OperationDialog;
 
+#[derive(Component)]
+pub struct PauseMenu;
+
+#[derive(Component)]
+pub struct LoadConfirmDialog;
+
 // ============================================================
 // エンティティリスト UI コンポーネント
 // ============================================================

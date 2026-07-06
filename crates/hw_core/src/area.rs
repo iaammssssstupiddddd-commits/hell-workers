@@ -6,7 +6,7 @@ use crate::game_state::TaskMode;
 /// 矩形領域の共通データ型。
 /// Site / Yard / TaskArea が共有する「min-max 矩形」を型消去して扱うために使う。
 /// Component ではなく plain struct。
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Reflect)]
 pub struct AreaBounds {
     pub min: Vec2,
     pub max: Vec2,
@@ -46,7 +46,8 @@ impl AreaBounds {
 }
 
 /// タスクエリア - 使い魔が担当するエリア
-#[derive(Component, Clone, Debug, PartialEq)]
+#[derive(Component, Clone, Debug, PartialEq, Reflect)]
+#[reflect(Component)]
 pub struct TaskArea {
     pub bounds: AreaBounds,
 }
