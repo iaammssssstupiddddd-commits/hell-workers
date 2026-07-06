@@ -138,3 +138,21 @@ changed |= removed_b.read().next().is_some();
 ### I-A2: ECS（Commands/Query）を leaf crate に持ち込まない
 `hw_familiar_ai`・`hw_soul_ai`・`hw_jobs` 等の leaf crate に Bevy の `Commands`・`Query` を直接持ち込まない。
 ECS 接続は `bevy_app/src/systems/` 層が担当する。
+
+---
+
+## 7. セーブ/ロードの不変条件
+
+### I-P1: spawn 時コンポーネントは allow-list か shell のどちらかに必ず登録
+セーブ対象エンティティ（Soul / Familiar / Building 等）へ spawn 時に付与するコンポーネントを追加したら、
+永続化すべき simulation 状態なら `systems/save/saving.rs` の allow-list + `register.rs` へ、
+実行時状態なら対応する `attach_*_shell`（spawn とロード後 rehydrate の共用関数）へ追加する。
+どちらにも登録しないと**ロード後にだけ**そのコンポーネントが欠落するサイレントバグになる。
+詳細: [docs/save_load.md](save_load.md)
+
+### I-P2: タプルキーのコレクションを保存対象型に持ち込まない
+`HashMap<(i32,i32), _>` / `HashSet<(i32,i32)>` を含む型を allow-list に入れると、
+ロード時に `DynamicMap::insert_boxed` がタプルの `reflect_hash`（bevy_reflect 0.19 未実装）を
+要求して panic する。enum キーは `enum_hash` があるため可。どうしても必要な場合は
+`WorldMap` と同様に serde derive + `#[reflect(Serialize, Deserialize)]` で型全体を
+serde 経路にする（`crates/hw_world/src/map/mod.rs` 参照）。

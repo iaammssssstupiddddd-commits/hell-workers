@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-07-05）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-07-06）。
 
 ## 新規計画書の作り方
 
@@ -22,12 +22,11 @@
 | [bevy-0-19-migration-plan-2026-07-05.md](bevy-0-19-migration-plan-2026-07-05.md) | Completed | Bevy 0.18 → 0.19 マイグレーション完了。ICU4X 日本語セグメンテーションは目視 QA 済み・実害なし（2026-07-05 クローズ）。機能採用（Delayed Commands / UI widgets）は archive の各計画を参照。contiguous_iter 最適化は計測不要と判断し見送りでクローズ |
 | [blob-shadow-tim-burton-2026-04-12.md](blob-shadow-tim-burton-2026-04-12.md) | Draft | 影スタイル 2D 化計画（床・壁接続維持） 2026-04-12 |
 | [dev-tools-debug-overlay-plan-2026-07-05.md](dev-tools-debug-overlay-plan-2026-07-05.md) | Draft | gizmo テキストの AI デバッグラベル導入（BSN トグル UI）。再検証により FpsOverlay 等の自前実装置き換えは却下（§0）、フレームタイムグラフは計測時オプション |
-| [save-load-world-serialization-plan-2026-07-05.md](save-load-world-serialization-plan-2026-07-05.md) | Draft | bevy_world_serialization によるセーブ/ロード実装。Relationship 再マップ PoC が最優先。UI は BSN |
-| [settings-screen-plan-2026-07-05.md](settings-screen-plan-2026-07-05.md) | Draft | GameSettings + RON 永続化 + ui_widgets Slider/Checkbox の設定画面（BSN 構築）+ FontSize::Rem UI スケール |
-| [text-input-ui-plan-2026-07-05.md](text-input-ui-plan-2026-07-05.md) | Draft | EditableText による Soul リネーム・エンティティリスト検索 + bevy_clipboard。入力フィールドは BSN 構築 |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [performance-cpu-2026-04-16.md](performance-cpu-2026-04-16.md) | Draft | CPU パフォーマンス改善計画書 |
+| [settings-screen-plan-2026-07-05.md](settings-screen-plan-2026-07-05.md) | Draft | GameSettings + RON 永続化 + ui_widgets Slider/Checkbox の設定画面（BSN 構築）+ FontSize::Rem UI スケール |
 | [terrain-lod-switch-flicker-plan-2026-04-17.md](terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD 切替時のちらつきを、判定安定化と短い遷移フェーズで抑える計画 |
+| [text-input-ui-plan-2026-07-05.md](text-input-ui-plan-2026-07-05.md) | Draft | EditableText による Soul リネーム・エンティティリスト検索 + bevy_clipboard。入力フィールドは BSN 構築 |
 | [world-map-lod1-performance-plan-2026-04-09.md](world-map-lod1-performance-plan-2026-04-09.md) | Complete | ワールドマップ近景 `LOD1` の fragment 負荷を、境界 early-out・中間 LOD・feature ベイク再編で下げる計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
@@ -42,6 +41,7 @@
 | [archive/assignment-builder-unification-plan-2026-03-01.md](archive/assignment-builder-unification-plan-2026-03-01.md) | アーカイブ | `task_management/builders` の重複削減と割り当て生成経路の共通化計画。 |
 | [archive/auto-gather-for-blueprint.md](archive/auto-gather-for-blueprint.md) | アーカイブ | Blueprint不足資材の自動伐採/採掘計画。 |
 | [archive/bevy-0-19-delayed-commands-plan-2026-07-05.md](archive/bevy-0-19-delayed-commands-plan-2026-07-05.md) | アーカイブ | ワンショット Timer の Delayed Commands 置き換え完了（ConversationCooldown / ReactionDelay）。TimerMode::Once 全数調査の最終分類表と適格判定基準（`docs/DEVELOPMENT.md` §13 に恒久化）を含む |
+| [archive/bevy-0-19-feature-adoption-plan-2026-07-05.md](archive/bevy-0-19-feature-adoption-plan-2026-07-05.md) | アーカイブ | Bevy 0.19 移行は完了したが、0.19 新機能の活用は Out of Scope として見送られたまま。0.18 時代のパターン（自前タイマー tick システム、自前スクロール実装など）が残っているの計画。 |
 | [archive/bevy-0-19-ui-widgets-adoption-plan-2026-07-05.md](archive/bevy-0-19-ui-widgets-adoption-plan-2026-07-05.md) | アーカイブ | Entity List の `UiScrollArea` を `bevy::ui_widgets::ScrollArea`/`Scrollbar` へ移行し、`EditableText` 使用方針を `hw_ui/_rules.md` に整備完了 |
 | [archive/boundary-texture-paste-plan-2026-04-07.md](archive/boundary-texture-paste-plan-2026-04-07.md) | アーカイブ | 境界テクスチャ貼り付け計画（terrain_region_map） |
 | [archive/bridge-building.md](archive/bridge-building.md) | アーカイブ | 橋（Bridge）建築物の実装計画。 |
@@ -137,6 +137,7 @@
 | [archive/room-detection-hw-world-extraction-plan-2026-03-11.md](archive/room-detection-hw-world-extraction-plan-2026-03-11.md) | アーカイブ | src/systems/room/detection.rsの計画。 |
 | [archive/room-detection-plan-2026-02-23.md](archive/room-detection-plan-2026-02-23.md) | アーカイブ | 壁・扉・床の閉領域をRoomとして検出し、オーバーレイ表示する実装計画。 |
 | [archive/rtt-pipeline-refactor-2026-03-29.md](archive/rtt-pipeline-refactor-2026-03-29.md) | アーカイブ | RtT Pipeline Refactor Plan |
+| [archive/save-load-world-serialization-plan-2026-07-05.md](archive/save-load-world-serialization-plan-2026-07-05.md) | アーカイブ | コロニーシムなのにセーブ/ロードが存在しない。ゲームを閉じると Soul・建物・資材・時間・Dream 等の全進捗が失われるの計画。 |
 | [archive/scaling-performance-bottlenecks-plan.md](archive/scaling-performance-bottlenecks-plan.md) | アーカイブ | スケール時ボトルネック最適化計画。 |
 | [archive/selection-placement-refactor-plan-2026-02-25.md](archive/selection-placement-refactor-plan-2026-02-25.md) | アーカイブ | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
 | [archive/selection-separation-plan-2026-03-08.md](archive/selection-separation-plan-2026-03-08.md) | アーカイブ | -の計画。 |

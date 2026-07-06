@@ -127,6 +127,15 @@ Perceive → Update → Decide → Execute
 - `game_time_system`（時刻計算 + ClockText 更新）は `bevy_app/src/systems/time.rs` に残留。`ClockText`（`hw_ui` 型）への依存があるため Leaf に移動不可。
 - `GameTime` の正規 public path は `hw_core::GameTime`。`bevy_app/src/systems/time.rs` は system 実装のみを持ち、型の pass-through re-export は持たない。
 
+## セーブ/ロード (SavePlugin)
+
+`crates/bevy_app/src/systems/save/` — `SavePlugin`（`main.rs` で登録、root 専用: 全クレートの型に届く必要があるため leaf へ移動不可）。
+
+- セーブ/ロードとも exclusive system（`&mut World`）で 1 フレーム内に完結する
+- 保存対象は allow-list 方式（`saving.rs`）。ロード後は `rehydrate.rs` が spawn 共用の `attach_*_shell` 関数で実行時コンポーネント・随伴エンティティを再付与する
+- **spawn 時コンポーネントを追加したら allow-list か shell のどちらかに必ず登録する**（I-P1）。タプルキーのコレクションは保存型に持ち込まない（I-P2）
+- 仕様: [docs/save_load.md](save_load.md) / 不変条件: [docs/invariants.md §7](invariants.md)
+
 ## 空間グリッド一覧 (Spatial Grids)
 
 `crates/hw_spatial` が 9 種類の concrete グリッド `Resource`（および `SpatialGridOps` 実装）を実体として保持する（Soul 用の型名は **`SpatialGrid`** — `SoulSpatialGrid` という Rust 型はない）。`ResourceSpatialGrid` / `StockpileSpatialGrid` の更新関数の一部は `hw_logistics` にあり、`plugins/spatial.rs` から登録される。`crates/bevy_app/src/systems/spatial/` は削除済みで、`crates/bevy_app/src/plugins/spatial.rs` が `hw_spatial` / `hw_logistics` から直接 import する。

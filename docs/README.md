@@ -14,7 +14,7 @@
 - [gathering.md](gathering.md): 動的集会システム（自然発生・拡大・統合・消滅）。
 - [rest_area_system.md](rest_area_system.md): 休憩所（Rest Area）の定員管理、予約、バイタル回復の仕組み。
 - [population_system.md](population_system.md): Soul人口（初期/定期スポーン、人口上限、漂流デスポーン）の仕様。
-- [save_load.md](save_load.md): シミュレーション状態の RON セーブ/ロード（F5/F9、allow-list、Phase A 正規化）。
+- [save_load.md](save_load.md): シミュレーション状態の RON セーブ/ロード（F5/F9、allow-list、rehydrate、seed ガード）。
 - [room_detection.md](room_detection.md): Room 検出システム（壁・扉・床で囲まれた空間の自動認識・オーバーレイ表示）。
 - [dream.md](dream.md): Dreamシステム。睡眠中の夢による通貨獲得メカニクス。
 - [state.md](state.md): ゲームの進行状態、プレイモードの遷移。
