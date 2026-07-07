@@ -81,10 +81,20 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
     let allow_task_delegation = !delegation_timer.first_run_done || timer_finished;
     delegation_timer.first_run_done = true;
 
+    let needs_incoming_snapshot = allow_task_delegation
+        || q_familiars
+            .iter_mut()
+            .any(|(_, _, _, active_command, ..)| {
+                matches!(active_command.command, FamiliarCommand::Idle)
+            });
+    let incoming_snapshot = if needs_incoming_snapshot {
+        crate::familiar_ai::decide::task_management::IncomingDeliverySnapshot::build(&task_queries)
+    } else {
+        crate::familiar_ai::decide::task_management::IncomingDeliverySnapshot::default()
+    };
+
     let mut reservation_shadow =
         crate::familiar_ai::decide::task_management::ReservationShadow::default();
-    let incoming_snapshot =
-        crate::familiar_ai::decide::task_management::IncomingDeliverySnapshot::build(&task_queries);
     let mut familiars_processed = 0u32;
 
     for (

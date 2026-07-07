@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 
 const TASK_AREA_BORDER_HIT_THICKNESS: f32 = 6.0;
+const TILE_HALF_SIZE_SQ: f32 = (TILE_SIZE / 2.0) * (TILE_SIZE / 2.0);
 
 type SelectionTargetQuery<'w, 's> = Query<
     'w,
@@ -44,6 +45,22 @@ pub(super) fn hovered_task_area_border_entity(
         .map(|(entity, _)| entity)
 }
 
+fn entity_hit_radius(building_opt: Option<&Building>) -> f32 {
+    if let Some(building) = building_opt {
+        let radius = match building.kind {
+            crate::systems::jobs::BuildingType::Tank
+            | crate::systems::jobs::BuildingType::MudMixer
+            | crate::systems::jobs::BuildingType::RestArea
+            | crate::systems::jobs::BuildingType::SoulSpa => TILE_SIZE,
+            crate::systems::jobs::BuildingType::Bridge => TILE_SIZE * 2.5,
+            _ => TILE_SIZE / 2.0,
+        };
+        radius * radius
+    } else {
+        TILE_HALF_SIZE_SQ
+    }
+}
+
 pub(super) fn hovered_entity_at_world_pos(
     world_pos: Vec2,
     q_souls: &Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
@@ -53,7 +70,7 @@ pub(super) fn hovered_entity_at_world_pos(
     // 1. 使い魔（優先）
     for (entity, transform) in q_familiars.iter() {
         let pos = transform.translation().truncate();
-        if pos.distance(world_pos) < TILE_SIZE / 2.0 {
+        if pos.distance_squared(world_pos) < TILE_HALF_SIZE_SQ {
             return Some(entity);
         }
     }
@@ -61,7 +78,7 @@ pub(super) fn hovered_entity_at_world_pos(
     // 2. 魂
     for (entity, transform) in q_souls.iter() {
         let pos = transform.translation().truncate();
-        if pos.distance(world_pos) < TILE_SIZE / 2.0 {
+        if pos.distance_squared(world_pos) < TILE_HALF_SIZE_SQ {
             return Some(entity);
         }
     }
@@ -69,20 +86,9 @@ pub(super) fn hovered_entity_at_world_pos(
     // 3. 資源・アイテム・建物
     for (entity, transform, building_opt) in q_targets.iter() {
         let pos = transform.translation().truncate();
-        let radius = if let Some(building) = building_opt {
-            match building.kind {
-                crate::systems::jobs::BuildingType::Tank
-                | crate::systems::jobs::BuildingType::MudMixer
-                | crate::systems::jobs::BuildingType::RestArea
-                | crate::systems::jobs::BuildingType::SoulSpa => TILE_SIZE, // 2x2なので半径を大きく
-                crate::systems::jobs::BuildingType::Bridge => TILE_SIZE * 2.5, // 2x5 bridge
-                _ => TILE_SIZE / 2.0,
-            }
-        } else {
-            TILE_SIZE / 2.0
-        };
+        let radius_sq = entity_hit_radius(building_opt);
 
-        if pos.distance(world_pos) < radius {
+        if pos.distance_squared(world_pos) < radius_sq {
             return Some(entity);
         }
     }

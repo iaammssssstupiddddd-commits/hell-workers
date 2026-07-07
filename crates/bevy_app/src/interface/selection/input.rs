@@ -44,6 +44,16 @@ pub struct SelectionWorldQueries<'w, 's> {
     pub q_targets: SelectionTargetQuery<'w, 's>,
 }
 
+#[derive(SystemParam)]
+pub struct HoverUpdateParams<'w, 's> {
+    pub ui_input_state: Res<'w, UiInputState>,
+    pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
+    pub q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
+    pub q_souls: Query<'w, 's, (Entity, &'static GlobalTransform), With<DamnedSoul>>,
+    pub q_familiars: Query<'w, 's, (Entity, &'static GlobalTransform), With<Familiar>>,
+    pub q_targets: SelectionTargetQuery<'w, 's>,
+}
+
 /// Determines the SelectionIntent for a left-click at `world_pos`.
 fn resolve_left_click_intent(
     world_pos: Vec2,
@@ -187,22 +197,39 @@ fn apply_selection_intent(
 }
 
 pub fn update_hover_entity(
-    ui_input_state: Res<UiInputState>,
-    q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    q_souls: Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
-    q_familiars: Query<(Entity, &GlobalTransform), With<Familiar>>,
-    q_targets: SelectionTargetQuery,
+    params: HoverUpdateParams,
     mut hovered_entity: ResMut<HoveredEntity>,
+    mut hover_cache: Local<(Option<Vec2>, Option<Vec3>)>,
 ) {
+    let HoverUpdateParams {
+        ui_input_state,
+        q_window,
+        q_camera,
+        q_souls,
+        q_familiars,
+        q_targets,
+    } = params;
+
     if ui_input_state.pointer_over_ui {
         hovered_entity.0 = None;
+        hover_cache.0 = None;
         return;
     }
 
     let Some(world_pos) = hw_ui::camera::world_cursor_pos(&q_window, &q_camera) else {
         return;
     };
+
+    let camera_translation = q_camera.iter().next().map(|(_, transform)| transform.translation());
+    let cursor_unchanged = hover_cache.0 == Some(world_pos);
+    let camera_unchanged = hover_cache.1 == camera_translation;
+    if cursor_unchanged && camera_unchanged {
+        return;
+    }
+
+    hover_cache.0 = Some(world_pos);
+    hover_cache.1 = camera_translation;
+
     let found = hovered_entity_at_world_pos(world_pos, &q_souls, &q_familiars, &q_targets);
 
     if found != hovered_entity.0 {
