@@ -114,6 +114,10 @@ pub struct Destination(pub Vec2);
 pub struct Path {
     pub waypoints: Vec<Vec2>,
     pub current_index: usize,
+    /// このパスが計画されたときの目的地。変更検知に使用する。
+    pub planned_destination: Option<Vec2>,
+    /// パス上の通行可否を最後に検証したときの `WorldMap::obstacle_version`。
+    pub validated_obstacle_version: u64,
 }
 
 /// ストレスによるブレイクダウン状態

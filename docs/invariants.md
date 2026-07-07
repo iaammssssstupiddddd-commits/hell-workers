@@ -156,3 +156,24 @@ ECS 接続は `bevy_app/src/systems/` 層が担当する。
 要求して panic する。enum キーは `enum_hash` があるため可。どうしても必要な場合は
 `WorldMap` と同様に serde derive + `#[reflect(Serialize, Deserialize)]` で型全体を
 serde 経路にする（`crates/hw_world/src/map/mod.rs` 参照）。
+
+---
+
+## 8. 経路探索 (Pathfinding) の不変条件
+
+### I-PF1: 歩行可否を変える WorldMap 変更は必ず obstacle_version を bump する
+⚠️ **サイレント失敗**: `WorldMap` は歩行可否の世代番号 `obstacle_version` を持つ。
+Soul のパス再利用（`pathfinding/reuse.rs`）と `pathfinding_system` の per-tick スキップ
+（`can_skip_pathfinding_tick`）は、「`Path.validated_obstacle_version == WorldMap.obstacle_version`
+なら経路上の障害物再検証を省略する」ことで成立している。
+
+したがって **`is_walkable` の入力（`obstacles` / `door_states` / `bridged_tiles` / 地形 `tiles`）を
+変える全ての mutation は `bump_obstacle_version()` を通過しなければならない**。
+既存の全経路（`add_obstacle` / `add_grid_obstacle(s)` / `set_building_occupanc*` /
+`clear_building_*` / `add_door` / `remove_door` / `set_door_state` / `sync_door_passability` /
+`register_door` / `set_terrain_at_idx` / `add_bridged_tile`）は満たしている。
+
+新しく歩行可否を変える setter を追加して bump を忘れると、**壁・扉を建てても Soul が
+古いパスを再利用して障害物に突っ込む**（エラーもログも出ない）。特に walkable → blocked
+方向（障害物追加・扉ロック）の漏れが危険。`bump_obstacle_version` は wrapping で単調増加し、
+値そのものに意味はない（一致=無変更の検知にのみ使う）。

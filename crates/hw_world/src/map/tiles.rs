@@ -56,7 +56,12 @@ impl WorldMap {
 
     pub fn set_terrain_at_idx(&mut self, idx: usize, terrain: TerrainType) {
         if let Some(slot) = self.tiles.get_mut(idx) {
+            let old_walkable = slot.is_walkable();
+            let new_walkable = terrain.is_walkable();
             *slot = terrain;
+            if old_walkable != new_walkable {
+                self.bump_obstacle_version();
+            }
         }
     }
 

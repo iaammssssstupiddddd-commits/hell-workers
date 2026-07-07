@@ -7,16 +7,22 @@ impl WorldMap {
     pub fn add_door(&mut self, x: i32, y: i32, door_entity: Entity, state: DoorState) {
         self.doors.insert((x, y), door_entity);
         self.door_states.insert((x, y), state);
+        self.bump_obstacle_version();
     }
 
     pub fn remove_door(&mut self, x: i32, y: i32) {
-        self.doors.remove(&(x, y));
-        self.door_states.remove(&(x, y));
+        if self.doors.remove(&(x, y)).is_some() {
+            self.door_states.remove(&(x, y));
+            self.bump_obstacle_version();
+        }
     }
 
     pub fn set_door_state(&mut self, x: i32, y: i32, state: DoorState) {
-        if self.doors.contains_key(&(x, y)) {
+        if self.doors.contains_key(&(x, y))
+            && self.door_states.get(&(x, y)).copied() != Some(state)
+        {
             self.door_states.insert((x, y), state);
+            self.bump_obstacle_version();
         }
     }
 
@@ -41,10 +47,17 @@ impl WorldMap {
     }
 
     pub fn sync_door_passability(&mut self, grid: (i32, i32), state: DoorState) {
-        match state {
-            DoorState::Open => self.remove_obstacle(grid.0, grid.1),
-            DoorState::Closed | DoorState::Locked => self.add_obstacle(grid.0, grid.1),
+        let obstacle_changed = match state {
+            DoorState::Open => self.set_obstacle_at(grid.0, grid.1, false),
+            DoorState::Closed | DoorState::Locked => self.set_obstacle_at(grid.0, grid.1, true),
+        };
+        let state_changed = self.doors.contains_key(&grid)
+            && self.door_states.get(&grid).copied() != Some(state);
+        if state_changed {
+            self.door_states.insert(grid, state);
         }
-        self.set_door_state(grid.0, grid.1, state);
+        if obstacle_changed || state_changed {
+            self.bump_obstacle_version();
+        }
     }
 }

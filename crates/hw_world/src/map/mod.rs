@@ -45,6 +45,9 @@ pub struct WorldMap {
     pub stockpiles: HashMap<(i32, i32), Entity>,
     pub bridged_tiles: HashSet<(i32, i32)>,
     pub obstacles: Vec<bool>,
+    /// 障害物・扉・建物占有など歩行可否に影響する変更の世代番号。
+    #[serde(default)]
+    pub obstacle_version: u64,
 }
 
 impl Default for WorldMap {
@@ -60,7 +63,14 @@ impl Default for WorldMap {
             stockpiles: HashMap::new(),
             bridged_tiles: HashSet::new(),
             obstacles: vec![false; size],
+            obstacle_version: 0,
         }
+    }
+}
+
+impl WorldMap {
+    pub fn bump_obstacle_version(&mut self) {
+        self.obstacle_version = self.obstacle_version.wrapping_add(1);
     }
 }
 

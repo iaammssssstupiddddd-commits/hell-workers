@@ -3,7 +3,9 @@ use bevy::prelude::*;
 
 impl WorldMap {
     pub fn add_bridged_tile(&mut self, grid: (i32, i32)) {
-        self.bridged_tiles.insert(grid);
+        if self.bridged_tiles.insert(grid) {
+            self.bump_obstacle_version();
+        }
     }
 
     pub fn register_bridge_tile(&mut self, grid: (i32, i32), entity: Entity) {

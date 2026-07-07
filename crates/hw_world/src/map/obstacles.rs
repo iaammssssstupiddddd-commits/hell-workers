@@ -1,6 +1,16 @@
 use super::WorldMap;
 
 impl WorldMap {
+    pub(crate) fn set_obstacle_at(&mut self, x: i32, y: i32, blocked: bool) -> bool {
+        if let Some(idx) = self.pos_to_idx(x, y)
+            && self.obstacles[idx] != blocked
+        {
+            self.obstacles[idx] = blocked;
+            return true;
+        }
+        false
+    }
+
     pub fn obstacle_count(&self) -> usize {
         self.obstacles.iter().filter(|&&blocked| blocked).count()
     }
@@ -13,14 +23,14 @@ impl WorldMap {
     }
 
     pub fn add_obstacle(&mut self, x: i32, y: i32) {
-        if let Some(idx) = self.pos_to_idx(x, y) {
-            self.obstacles[idx] = true;
+        if self.set_obstacle_at(x, y, true) {
+            self.bump_obstacle_version();
         }
     }
 
     pub fn remove_obstacle(&mut self, x: i32, y: i32) {
-        if let Some(idx) = self.pos_to_idx(x, y) {
-            self.obstacles[idx] = false;
+        if self.set_obstacle_at(x, y, false) {
+            self.bump_obstacle_version();
         }
     }
 

@@ -57,12 +57,18 @@ pub(super) fn try_reuse_existing_path(
         return false;
     }
 
+    if path.validated_obstacle_version == world_map.obstacle_version {
+        return true;
+    }
+
     let blocked_relative = path.waypoints[path.current_index..].iter().position(|wp| {
         let grid = WorldMap::world_to_grid(*wp);
         !world_map.is_walkable(grid.0, grid.1)
     });
 
     let Some(rel_idx) = blocked_relative else {
+        path.validated_obstacle_version = world_map.obstacle_version;
+        path.planned_destination = Some(destination);
         return true;
     };
 
@@ -84,6 +90,8 @@ pub(super) fn try_reuse_existing_path(
             let keep_len = path.current_index + rel_idx;
             path.waypoints.truncate(keep_len);
             path.waypoints.extend(partial_world_path);
+            path.validated_obstacle_version = world_map.obstacle_version;
+            path.planned_destination = Some(destination);
             commands.entity(entity).remove::<PathCooldown>();
             debug!("PATH: Soul {:?} reused partial path after blockage", entity);
             return true;

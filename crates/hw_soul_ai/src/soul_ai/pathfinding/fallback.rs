@@ -166,7 +166,7 @@ pub(super) fn cleanup_unreachable_destination(
 
     // タスク実行中なら放棄
     if soul.has_task {
-        info!(
+        debug!(
             "PATH: Soul {:?} abandoning task due to unreachable destination",
             soul.entity
         );

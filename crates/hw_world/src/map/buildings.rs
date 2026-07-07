@@ -23,6 +23,7 @@ impl WorldMap {
     pub fn set_building_occupancy(&mut self, grid: (i32, i32), entity: Entity) {
         self.set_building(grid, entity);
         self.add_obstacle(grid.0, grid.1);
+        // add_obstacle が version を更新する。建物登録のみの変更はここでは追加しない。
     }
 
     pub fn set_building_occupancies<I>(&mut self, entity: Entity, grids: I)

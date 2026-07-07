@@ -36,6 +36,8 @@ pub fn soul_stuck_escape_system(
             transform.translation.y = escape_pos.y;
             path.waypoints.clear();
             path.current_index = 0;
+            path.planned_destination = None;
+            path.validated_obstacle_version = 0;
             debug!(
                 "SOUL_STUCK_ESCAPE: moved soul from {:?} to walkable {:?}",
                 current_pos, escape_pos
@@ -62,6 +64,35 @@ struct WorldPfCtx<'a> {
     budget: usize,
 }
 
+fn record_path_plan(path: &mut Path, destination: Vec2, obstacle_version: u64) {
+    path.planned_destination = Some(destination);
+    path.validated_obstacle_version = obstacle_version;
+}
+
+/// クールダウン中でなく、有効なパス追従中なら当フレームの探索処理を省略できる。
+fn can_skip_pathfinding_tick(
+    has_task: bool,
+    idle_can_move: bool,
+    cooldown: Option<&PathCooldown>,
+    path: &Path,
+    destination: Vec2,
+    obstacle_version: u64,
+) -> bool {
+    if !has_task && !idle_can_move {
+        return true;
+    }
+    if cooldown.is_some() {
+        return false;
+    }
+    if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
+        return false;
+    }
+    if path.planned_destination != Some(destination) {
+        return false;
+    }
+    path.validated_obstacle_version == obstacle_version
+}
+
 /// 1 worker のパス探索処理（cooldown 処理後に呼ぶ）。
 /// pathfind_count は再利用時の部分再計算・新規計算それぞれで内部更新される。
 fn process_worker_pathfinding(
@@ -77,6 +108,7 @@ fn process_worker_pathfinding(
     let current_pos = transform.translation.truncate();
     let start_grid = WorldMap::world_to_grid(current_pos);
     let goal_grid = WorldMap::world_to_grid(soul.destination.0);
+    let obstacle_version = world_pf.world_map.obstacle_version;
 
     // --- 再利用フェーズ: 既存パスが有効なら A* コストなしで続行 ---
     if reuse::try_reuse_existing_path(
@@ -95,30 +127,12 @@ fn process_worker_pathfinding(
         return;
     }
 
-    // デバッグログ: どのソウルがパス探索を行うか
-    if has_task && soul.path.waypoints.is_empty() {
-        info!(
-            "PATHFIND_DEBUG: Soul {:?} seeking path from {:?} to {:?}",
-            entity, start_grid, goal_grid
-        );
-    }
-
     // 同グリッド: A* 不要、1ステップで到達可能
     if start_grid == goal_grid {
         soul.path.waypoints = vec![soul.destination.0];
         soul.path.current_index = 0;
+        record_path_plan(soul.path, soul.destination.0, obstacle_version);
         commands.entity(entity).remove::<PathCooldown>();
-        // デバッグ：集会中のsoulで特定位置付近の場合
-        if matches!(soul.idle.behavior, IdleBehavior::Gathering)
-            && current_pos.x.abs() < 150.0
-            && current_pos.y.abs() < 250.0
-        {
-            let dist = (soul.destination.0 - current_pos).length();
-            info!(
-                "PATHFIND: {:?} same grid - pos: {:?}, dest: {:?}, dist: {:.1}",
-                entity, current_pos, soul.destination.0, dist
-            );
-        }
         return;
     }
 
@@ -134,21 +148,9 @@ fn process_worker_pathfinding(
         start_grid,
         goal_grid,
     ) {
-        // デバッグ：集会中のsoulで特定位置付近の場合
-        if matches!(soul.idle.behavior, IdleBehavior::Gathering)
-            && current_pos.x.abs() < 150.0
-            && current_pos.y.abs() < 250.0
-        {
-            info!(
-                "PATHFIND: {:?} found path - waypoints: {}, from {:?} to {:?}",
-                entity,
-                world_path.len(),
-                start_grid,
-                goal_grid
-            );
-        }
         soul.path.waypoints = world_path;
         soul.path.current_index = 0;
+        record_path_plan(soul.path, soul.destination.0, obstacle_version);
         commands.entity(entity).remove::<PathCooldown>();
         debug!("PATH: Soul {:?} found new path", entity);
     } else {
@@ -175,18 +177,8 @@ fn process_worker_pathfinding(
                 },
             )
         {
+            record_path_plan(soul.path, soul.destination.0, obstacle_version);
             return;
-        }
-
-        // デバッグ：集会中のsoulで特定位置付近の場合
-        if matches!(soul.idle.behavior, IdleBehavior::Gathering)
-            && current_pos.x.abs() < 150.0
-            && current_pos.y.abs() < 250.0
-        {
-            warn!(
-                "PATHFIND: {:?} FAILED to find path - from grid {:?} to grid {:?}, dest: {:?}",
-                entity, start_grid, goal_grid, soul.destination.0
-            );
         }
 
         // --- cleanup フェーズ: 到達不能の destination を破棄し、冷却期間を付与 ---
@@ -238,6 +230,7 @@ pub fn pathfinding_system(
     mut queries: crate::soul_ai::execute::task_execution::context::TaskAssignmentQueries,
 ) {
     let mut pathfind_count = 0usize;
+    let obstacle_version = world_map.obstacle_version;
 
     // task フェーズ → idle フェーズの順に処理
     for prioritize_tasks in [true, false] {
@@ -273,8 +266,14 @@ pub fn pathfinding_system(
                 _ => true,
             };
 
-            // タスクがなく、かつアイドル移動が不要なら探索不要
-            if !has_task && !idle_can_move {
+            if can_skip_pathfinding_tick(
+                has_task,
+                idle_can_move,
+                cooldown_opt.as_deref(),
+                &path,
+                destination.0,
+                obstacle_version,
+            ) {
                 continue;
             }
 
