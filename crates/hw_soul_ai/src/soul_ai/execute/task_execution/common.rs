@@ -18,23 +18,22 @@ pub use crate::soul_ai::helpers::navigation::{
 // パスキャッシュ・経路設定ヘルパーを re-export
 pub use super::path_cache::{update_destination_to_adjacent, update_destination_to_blueprint};
 
-/// タスクとパスをクリア
-pub fn clear_task_and_path(task: &mut AssignedTask, path: &mut Path) {
+/// タスクとパスをクリア（終了 API 内部専用）
+pub(super) fn clear_task_and_path(task: &mut AssignedTask, path: &mut Path) {
     *task = AssignedTask::None;
     path.waypoints.clear();
 }
 
 /// 指定が解除されていたらタスクをキャンセル
 ///
-/// 指定が解除されていた場合、タスクとパスをクリアして`true`を返します。
-/// 指定が存在する場合、`false`を返します。
+/// 指定が解除されていた場合、`abort_closed` して `true` を返す。
 pub fn cancel_task_if_designation_missing(
+    ctx: &mut TaskExecutionContext,
+    commands: &mut Commands,
     des_opt: Option<&Designation>,
-    task: &mut AssignedTask,
-    path: &mut Path,
 ) -> bool {
     if des_opt.is_none() {
-        clear_task_and_path(task, path);
+        ctx.abort_closed(commands, "designation missing");
         return true;
     }
     false
@@ -89,7 +88,7 @@ pub fn update_stockpile_on_item_removal(
         // 自分を引いて 0 個になるなら None に戻す
         if stored_items.len() <= 1 {
             stock_comp.resource_type = None;
-            info!(
+            debug!(
                 "STOCKPILE: Stockpile {:?} became empty. Resetting resource type.",
                 stock_entity
             );
@@ -124,13 +123,11 @@ pub struct PickupLocations {
     pub item_pos: Vec2,
 }
 
-/// 拾い判定が満たされない場合はタスクをクリアする
+/// 拾い判定が満たされない場合はタスクを中断する
 pub fn try_pickup_item(
     commands: &mut Commands,
+    ctx: &mut TaskExecutionContext,
     locations: PickupLocations,
-    inventory: &mut Inventory,
-    task: &mut AssignedTask,
-    path: &mut Path,
 ) -> bool {
     let PickupLocations {
         soul_entity,
@@ -139,10 +136,10 @@ pub fn try_pickup_item(
         item_pos,
     } = locations;
     if !can_pickup_item(soul_pos, item_pos) {
-        clear_task_and_path(task, path);
+        ctx.abort_retryable(commands, "cannot pickup item in range");
         return false;
     }
-    pickup_item(commands, soul_entity, item_entity, inventory);
+    pickup_item(commands, soul_entity, item_entity, ctx.inventory);
     true
 }
 
@@ -164,24 +161,16 @@ pub enum NavOutcome {
 }
 
 /// 指定チェック → 隣接ナビゲーション → 到達判定をまとめたヘルパー。
-///
-/// - 指定が存在しない (`designation_present: false`) なら `Cancelled`（task+path はすでにクリア済み）
-/// - 到達不能なら `Unreachable`
-/// - 到達済みなら `Arrived`
-/// - 移動中なら `Moving`
-///
-/// # Note
-/// `designation_present` は呼び出し元で `des_opt.is_some()` に評価してから渡すこと。
-/// これにより `ctx` に対するイミュータブル借用（クエリ結果）を事前に解放できる。
 pub fn navigate_to_adjacent(
     ctx: &mut TaskExecutionContext,
     designation_present: bool,
     target_pos: Vec2,
     soul_pos: Vec2,
     world_map: &WorldMap,
+    commands: &mut Commands,
 ) -> NavOutcome {
     if !designation_present {
-        clear_task_and_path(ctx.task, ctx.path);
+        ctx.abort_closed(commands, "designation missing during navigation");
         return NavOutcome::Cancelled;
     }
     let reachable = update_destination_to_adjacent(
@@ -203,9 +192,6 @@ pub fn navigate_to_adjacent(
 }
 
 /// 指定チェックなしの隣接移動フェーズヘルパー。
-///
-/// 指定（Designation）が存在しない hauling など、キャンセル条件が呼び出し元固有の
-/// フェーズで使用する。`navigate_to_adjacent` と異なり `Cancelled` を返さない。
 pub fn navigate_to_pos(
     ctx: &mut TaskExecutionContext,
     target_pos: Vec2,
@@ -230,18 +216,8 @@ pub fn navigate_to_pos(
     }
 }
 
-/// 収集対象が消えた・到達不能のときの共通クリーンアップ。
-///
-/// Designation / TaskSlots を削除し、予約を解放してからタスクをクリアする。
-pub fn cleanup_collect_target(
-    ctx: &mut TaskExecutionContext,
-    target: Entity,
-    commands: &mut Commands,
-) {
-    cleanup_collect_common(ctx, target, commands, false);
-}
-
-fn cleanup_collect_common(
+/// 収集対象の Designation / 予約を片付けたうえで Soul 割り当てを閉じる。
+fn cleanup_collect_target_components(
     ctx: &mut TaskExecutionContext,
     target: Entity,
     commands: &mut Commands,
@@ -258,16 +234,24 @@ fn cleanup_collect_common(
         source: target,
         amount: 1,
     });
-    clear_task_and_path(ctx.task, ctx.path);
+}
+
+/// 収集対象が消えた・到達不能のときの共通クリーンアップ。
+pub fn cleanup_collect_target(
+    ctx: &mut TaskExecutionContext,
+    target: Entity,
+    commands: &mut Commands,
+) {
+    cleanup_collect_target_components(ctx, target, commands, false);
+    ctx.abort_closed(commands, "collect target gone or unreachable");
 }
 
 /// 収集タスク Done フェーズの共通クリーンアップ。
-///
-/// Designation / TaskSlots / IssuedBy を削除し、予約を解放してからタスクをクリアする。
 pub fn finalize_collect_task(
     ctx: &mut TaskExecutionContext,
     target: Entity,
     commands: &mut Commands,
 ) {
-    cleanup_collect_common(ctx, target, commands, true);
+    cleanup_collect_target_components(ctx, target, commands, true);
+    ctx.complete_task(commands, "collect task done");
 }

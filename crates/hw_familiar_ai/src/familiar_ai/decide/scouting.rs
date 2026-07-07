@@ -33,7 +33,7 @@ pub struct ScoutingOutcome {
 pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> ScoutingOutcome {
     // 早期退出: 分隊が既に満員なら監視モードへ
     if ctx.squad.len() >= ctx.max_workers {
-        info!(
+        debug!(
             "FAM_AI: {:?} scouting cancelled (squad full: {}/{}), switching to Supervising",
             ctx.fam_entity,
             ctx.squad.len(),
@@ -62,7 +62,7 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
         if uc.is_none() || matches!(uc, Some(u) if u.0 == ctx.fam_entity) {
             if !fatigue_ok || !stress_ok || !matches!(*soul_task, AssignedTask::None) {
                 // 条件を満たさなくなった
-                info!(
+                debug!(
                     "FAM_AI: {:?} scouting cancelled for {:?} (FatigueOK: {}, StressOK: {}, Task: {:?})",
                     ctx.fam_entity, ctx.target_soul, fatigue_ok, stress_ok, soul_task
                 );
@@ -79,7 +79,7 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
             // リクルート半径を少し広げて確実に成功させる (1.5 -> 2.5)
             if dist_sq < (TILE_SIZE * 2.5).powi(2) {
                 // リクルート成功
-                info!(
+                debug!(
                     "FAM_AI: {:?} reached target {:?} (dist: {:.2}), recruiting...",
                     ctx.fam_entity,
                     ctx.target_soul,
@@ -94,7 +94,7 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
 
                 // 次のステートを決定 (元々のロジック: 満員でないなら探索に戻る)
                 if ctx.squad.len() >= ctx.max_workers {
-                    info!(
+                    debug!(
                         "FAM_AI: {:?} squad full after recruit, switching to Supervising",
                         ctx.fam_entity
                     );
@@ -103,7 +103,7 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
                         timer: 2.0,
                     };
                 } else {
-                    info!(
+                    debug!(
                         "FAM_AI: {:?} squad has room ({}/{}), returning to Searching",
                         ctx.fam_entity,
                         ctx.squad.len(),
@@ -138,7 +138,7 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
             }
         } else {
             // 他の使い魔に取られた
-            info!(
+            debug!(
                 "FAM_AI: {:?} scouting target {:?} taken by another familiar",
                 ctx.fam_entity, ctx.target_soul
             );
@@ -150,7 +150,7 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
         }
     } else {
         // ターゲット消失
-        info!(
+        debug!(
             "FAM_AI: {:?} scouting target {:?} disappeared from world",
             ctx.fam_entity, ctx.target_soul
         );

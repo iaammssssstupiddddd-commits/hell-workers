@@ -1,8 +1,7 @@
 //! 手押し車タスクのキャンセル・予約解放
 
 use crate::soul_ai::execute::task_execution::{
-    common::clear_task_and_path,
-    context::TaskExecutionContext,
+    context::{TaskEndDisposition, TaskExecutionContext},
     transport_common::{reservation, wheelbarrow as wheelbarrow_common},
     types::HaulWithWheelbarrowData,
 };
@@ -59,12 +58,9 @@ pub fn cancel_wheelbarrow_task(
     release_all_reservations(ctx, data);
 
     ctx.inventory.0 = None;
-    if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
-        soul_commands.try_remove::<hw_core::relationships::WorkingOn>();
-    }
-    clear_task_and_path(ctx.task, ctx.path);
+    ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
 
-    info!(
+    debug!(
         "WB_HAUL: Soul {:?} canceled wheelbarrow task",
         ctx.soul_entity
     );

@@ -17,7 +17,6 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: &BucketTransportData,
     commands: &mut Commands,
-    world_map: &WorldMap,
 ) {
     let bucket_entity = data.bucket;
     let soul_pos = ctx.soul_pos();
@@ -37,7 +36,7 @@ pub fn handle(
                         };
                         reservation::release_source(ctx, tank, 1);
                         routing::transition_to_destination(
-                            commands, ctx, data, soul_pos, world_map,
+                            commands, ctx, data, soul_pos, ctx.env.world_map,
                         );
                         // Filling フェーズをスキップしたため amount が 0 のまま。
                         // GoingToDestination/Pouring フェーズが正しく動作するよう補正する。
@@ -48,7 +47,7 @@ pub fn handle(
                         }
                     } else {
                         // 空ならタンクへ
-                        routing::transition_to_source(commands, ctx, data, soul_pos, world_map);
+                        routing::transition_to_source(commands, ctx, data, soul_pos, ctx.env.world_map);
                     }
                 } else {
                     // バケツが見つからない場合は中断
@@ -62,7 +61,7 @@ pub fn handle(
                         hw_logistics::ResourceType::Water,
                     );
                     let _ = tank;
-                    common::clear_task_and_path(ctx.task, ctx.path);
+                    ctx.abort_retryable(commands, "bucket transport bucket missing");
                 }
             }
             BucketTransportDestination::Tank(tank_entity) => {
@@ -78,7 +77,7 @@ pub fn handle(
                         let tank_pos = tank_transform.translation.truncate();
                         if routing::set_path_to_tank_boundary(
                                 ctx,
-                                world_map,
+                                ctx.env.world_map,
                                 tank_pos,
                                 data,
                                 crate::soul_ai::execute::task_execution::types::BucketTransportPhase::GoingToDestination,
@@ -93,8 +92,8 @@ pub fn handle(
                     }
                 }
                 // 空バケツ: 川へ
-                if routing::set_path_to_river(ctx, world_map, data).is_none() {
-                    abort::abort_with_bucket(commands, ctx, data, world_map);
+                if routing::set_path_to_river(ctx, ctx.env.world_map, data).is_none() {
+                    abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                 } else {
                     commands
                         .entity(bucket_entity)
@@ -109,7 +108,7 @@ pub fn handle(
     let Ok((bucket_transform, _, _, _, res_item_opt, _, stored_in_opt)) =
         ctx.queries.designation.targets.get(bucket_entity)
     else {
-        abort::abort_without_bucket(commands, ctx, data, world_map);
+        abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
         return;
     };
 
@@ -119,7 +118,7 @@ pub fn handle(
     if let Some(rt) = res_type
         && !matches!(rt, ResourceType::BucketEmpty | ResourceType::BucketWater)
     {
-        abort::abort_without_bucket(commands, ctx, data, world_map);
+        abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
         return;
     }
 
@@ -128,15 +127,13 @@ pub fn handle(
     if common::can_pickup_item(soul_pos, bucket_pos) {
         if !common::try_pickup_item(
             commands,
+            ctx,
             common::PickupLocations {
                 soul_entity: ctx.soul_entity,
                 item_entity: bucket_entity,
                 soul_pos,
                 item_pos: bucket_pos,
             },
-            ctx.inventory,
-            ctx.task,
-            ctx.path,
         ) {
             return;
         }
@@ -162,7 +159,7 @@ pub fn handle(
                         let tank_pos = tank_transform.translation.truncate();
                         if routing::set_path_to_tank_boundary(
                             ctx,
-                            world_map,
+                            ctx.env.world_map,
                             tank_pos,
                             data,
                             crate::soul_ai::execute::task_execution::types::BucketTransportPhase::GoingToDestination,
@@ -184,7 +181,7 @@ pub fn handle(
                         _ => bucket_entity,
                     };
                     reservation::release_source(ctx, tank, 1);
-                    routing::transition_to_destination(commands, ctx, data, soul_pos, world_map);
+                    routing::transition_to_destination(commands, ctx, data, soul_pos, ctx.env.world_map);
                     // Filling フェーズをスキップしたため amount が 0 のまま。
                     // GoingToDestination/Pouring フェーズが正しく動作するよう補正する。
                     if let AssignedTask::BucketTransport(ref mut d) = *ctx.task
@@ -198,14 +195,14 @@ pub fn handle(
         }
 
         // 空バケツ or タンクパス失敗: ソースへ向かう
-        routing::transition_to_source(commands, ctx, data, soul_pos, world_map);
+        routing::transition_to_source(commands, ctx, data, soul_pos, ctx.env.world_map);
         return;
     }
 
     // まだバケツに近づいていない: 移動中
     let bucket_grid = WorldMap::world_to_grid(bucket_pos);
     if ctx.path.waypoints.is_empty()
-        && routing::set_path_to_grid_boundary(ctx, world_map, bucket_grid, bucket_pos).is_none()
+        && routing::set_path_to_grid_boundary(ctx, ctx.env.world_map, bucket_grid, bucket_pos).is_none()
     {
         ctx.dest.0 = bucket_pos;
     }

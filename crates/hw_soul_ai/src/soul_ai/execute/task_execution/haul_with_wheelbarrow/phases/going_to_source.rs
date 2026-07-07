@@ -8,16 +8,15 @@ use crate::soul_ai::execute::task_execution::{
 };
 use bevy::prelude::*;
 use hw_logistics::transport_request::WheelbarrowDestination;
-use hw_world::WorldMap;
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    world_map: &WorldMap,
+    
     soul_pos: Vec2,
 ) {
-    match navigate_to_pos(ctx, data.source_pos, soul_pos, world_map) {
+    match navigate_to_pos(ctx, data.source_pos, soul_pos, ctx.env.world_map) {
         NavOutcome::Moving => return,
         NavOutcome::Unreachable => {
             cancel::cancel_wheelbarrow_task(ctx, &data, commands);

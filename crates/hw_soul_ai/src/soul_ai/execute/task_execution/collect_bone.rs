@@ -1,22 +1,17 @@
 use super::common::*;
 use super::context::TaskExecutionContext;
-use super::types::{AssignedTask, CollectBonePhase};
+use super::types::{AssignedTask, CollectBoneData, CollectBonePhase};
 
 use bevy::prelude::*;
 use hw_core::constants::*;
-use hw_core::visual::SoulTaskHandles;
 use hw_logistics::{ResourceItem, ResourceType};
-use hw_world::WorldMap;
 
 pub fn handle_collect_bone_task(
     ctx: &mut TaskExecutionContext,
-    target: Entity,
-    phase: CollectBonePhase,
+    data: CollectBoneData,
     commands: &mut Commands,
-    soul_handles: &SoulTaskHandles,
-    _time: &Res<Time>,
-    world_map: &WorldMap,
 ) {
+    let CollectBoneData { target, phase } = data;
     let soul_pos = ctx.soul_pos();
     let q_targets = &ctx.queries.designation.targets;
 
@@ -35,17 +30,24 @@ pub fn handle_collect_bone_task(
                     des_opt.is_some(),
                 )
             };
-            match navigate_to_adjacent(ctx, has_designation, res_pos, soul_pos, world_map) {
+            match navigate_to_adjacent(
+                ctx,
+                has_designation,
+                res_pos,
+                soul_pos,
+                ctx.env.world_map,
+                commands,
+            ) {
                 NavOutcome::Moving | NavOutcome::Cancelled => {}
                 NavOutcome::Unreachable => {
-                    info!(
+                    debug!(
                         "COLLECT_BONE: Soul {:?} cannot reach BonePile {:?}, canceling",
                         ctx.soul_entity, target
                     );
                     cleanup_collect_target(ctx, target, commands);
                 }
                 NavOutcome::Arrived => {
-                    complete_collect_bone_now(ctx, target, res_translation, commands, soul_handles);
+                    complete_collect_bone_now(ctx, target, res_translation, commands);
                     ctx.path.waypoints.clear();
                 }
             }
@@ -56,7 +58,8 @@ pub fn handle_collect_bone_task(
                 return;
             };
             let (res_transform, _, _, _, _, des_opt, _) = target_data;
-            if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
+            if des_opt.is_none() {
+                ctx.abort_closed(commands, "designation missing");
                 return;
             }
             complete_collect_bone_now(
@@ -64,7 +67,6 @@ pub fn handle_collect_bone_task(
                 target,
                 res_transform.translation,
                 commands,
-                soul_handles,
             );
         }
         CollectBonePhase::Done => {
@@ -78,7 +80,6 @@ fn complete_collect_bone_now(
     target: Entity,
     source_translation: Vec3,
     commands: &mut Commands,
-    soul_handles: &SoulTaskHandles,
 ) {
     // Bone をドロップ
     for i in 0..BONE_DROP_AMOUNT {
@@ -86,7 +87,7 @@ fn complete_collect_bone_now(
         commands.spawn((
             ResourceItem(ResourceType::Bone),
             Sprite {
-                image: soul_handles.icon_bone_small.clone(),
+                image: ctx.env.soul_handles.icon_bone_small.clone(),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                 ..default()
             },
@@ -97,7 +98,7 @@ fn complete_collect_bone_now(
         ));
     }
 
-    info!(
+    debug!(
         "TASK_EXEC: Soul {:?} collected bone instantly",
         ctx.soul_entity
     );

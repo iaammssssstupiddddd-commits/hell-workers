@@ -1,12 +1,10 @@
 use crate::soul_ai::execute::task_execution::{
-    common::clear_task_and_path,
     common::{is_near_target_or_dest, update_destination_to_adjacent},
     context::TaskExecutionContext,
     types::{AssignedTask, MovePlantData, MovePlantPhase},
 };
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
-use hw_core::relationships::WorkingOn;
 use hw_jobs::{Building, BuildingType, Designation};
 use hw_world::{WorldMap, WorldMapWrite};
 
@@ -28,13 +26,12 @@ pub fn handle_move_plant_task(
     ctx: &mut TaskExecutionContext,
     data: MovePlantData,
     commands: &mut Commands,
-    world_map: &WorldMap,
 ) {
     match data.phase {
         MovePlantPhase::GoToBuilding => {
             let Ok((building_transform, _, _)) = ctx.queries.storage.buildings.get(data.building)
             else {
-                cleanup_move_task(ctx, commands, data.task_entity, data.building);
+                cleanup_move_task(ctx, commands, data.task_entity, data.building, false);
                 return;
             };
 
@@ -45,12 +42,12 @@ pub fn handle_move_plant_task(
                 building_pos,
                 ctx.path,
                 soul_pos,
-                world_map,
+                ctx.env.world_map,
                 ctx.pf_context,
             );
 
             if !reachable {
-                cleanup_move_task(ctx, commands, data.task_entity, data.building);
+                cleanup_move_task(ctx, commands, data.task_entity, data.building, false);
                 return;
             }
 
@@ -70,7 +67,7 @@ pub fn handle_move_plant_task(
             let Ok((building_transform, building, _)) =
                 ctx.queries.storage.buildings.get(data.building)
             else {
-                cleanup_move_task(ctx, commands, data.task_entity, data.building);
+                cleanup_move_task(ctx, commands, data.task_entity, data.building, false);
                 return;
             };
 
@@ -102,7 +99,7 @@ pub fn handle_move_plant_task(
         MovePlantPhase::Done => {
             commands.entity(data.task_entity).remove::<Designation>();
             commands.entity(data.task_entity).despawn();
-            cleanup_move_task(ctx, commands, data.task_entity, data.building);
+            cleanup_move_task(ctx, commands, data.task_entity, data.building, true);
         }
     }
 }
@@ -112,12 +109,16 @@ fn cleanup_move_task(
     commands: &mut Commands,
     task_entity: Entity,
     building_entity: Entity,
+    completed: bool,
 ) {
     commands.entity(task_entity).remove::<Designation>();
     commands.entity(task_entity).despawn();
     commands.entity(building_entity).remove::<MovePlanned>();
-    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-    clear_task_and_path(ctx.task, ctx.path);
+    if completed {
+        ctx.complete_task(commands, "move plant done");
+    } else {
+        ctx.abort_closed(commands, "move plant cancelled");
+    }
 }
 
 type BucketStorageQuery<'w, 's> = Query<

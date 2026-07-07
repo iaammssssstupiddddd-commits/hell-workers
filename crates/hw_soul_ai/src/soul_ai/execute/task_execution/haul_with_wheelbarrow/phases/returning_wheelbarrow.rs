@@ -8,13 +8,12 @@ use crate::soul_ai::execute::task_execution::{
 };
 use bevy::prelude::*;
 use hw_logistics::Wheelbarrow;
-use hw_world::WorldMap;
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    world_map: &WorldMap,
+    
     q_wheelbarrows: &Query<
         (&Transform, Option<&hw_core::relationships::ParkedAt>),
         With<Wheelbarrow>,
@@ -24,10 +23,10 @@ pub fn handle(
     let Ok(_) = q_wheelbarrows.get(data.wheelbarrow) else {
         reservation::release_source(ctx, data.wheelbarrow, 1);
         ctx.inventory.0 = None;
-        if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
-            soul_commands.try_remove::<hw_core::relationships::WorkingOn>();
-        }
-        crate::soul_ai::execute::task_execution::common::clear_task_and_path(ctx.task, ctx.path);
+        ctx.clear_soul_assignment(
+            commands,
+            crate::soul_ai::execute::task_execution::context::TaskEndDisposition::AbortedRetryable,
+        );
         return;
     };
 
@@ -52,14 +51,14 @@ pub fn handle(
         parking_pos,
         ctx.path,
         soul_pos,
-        world_map,
+        ctx.env.world_map,
         ctx.pf_context,
     );
 
     if !reachable {
         reservation::release_source(ctx, data.wheelbarrow, 1);
         wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, soul_pos);
-        info!(
+        debug!(
             "WB_HAUL: Soul {:?} returned wheelbarrow {:?} (unreachable, parked here)",
             ctx.soul_entity, data.wheelbarrow
         );
@@ -69,7 +68,7 @@ pub fn handle(
     if is_near_target(soul_pos, parking_pos) {
         reservation::release_source(ctx, data.wheelbarrow, 1);
         wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, parking_pos);
-        info!(
+        debug!(
             "WB_HAUL: Soul {:?} returned wheelbarrow {:?}",
             ctx.soul_entity, data.wheelbarrow
         );

@@ -1,20 +1,23 @@
 use super::common::*;
 use super::context::TaskExecutionContext;
 use super::transport_common::{cancel, reservation};
-use super::types::{AssignedTask, HaulToMixerPhase};
+use super::types::{AssignedTask, HaulToMixerData, HaulToMixerPhase};
 use bevy::prelude::*;
 use hw_logistics::ResourceType;
-use hw_world::WorldMap;
 
 pub fn handle_haul_to_mixer_task(
     ctx: &mut TaskExecutionContext,
-    item_entity: Entity,
-    mixer_entity: Entity,
-    resource_type: ResourceType,
-    phase: HaulToMixerPhase,
+    data: HaulToMixerData,
     commands: &mut Commands,
-    world_map: &WorldMap,
 ) {
+    let HaulToMixerData {
+        item,
+        mixer,
+        resource_type,
+        phase,
+    } = data;
+    let item_entity = item;
+    let mixer_entity = mixer;
     let soul_pos = ctx.soul_pos();
 
     match phase {
@@ -24,7 +27,7 @@ pub fn handle_haul_to_mixer_task(
                 let (_, storage, _) = mixer_data;
                 let is_full = storage.is_full(resource_type);
                 if is_full {
-                    info!(
+                    debug!(
                         "HAUL_TO_MIXER: Soul {:?} - mixer {:?} storage full for {:?}, canceling",
                         ctx.soul_entity, mixer_entity, resource_type
                     );
@@ -33,11 +36,12 @@ pub fn handle_haul_to_mixer_task(
                         item_entity,
                         mixer_entity,
                         resource_type,
+                        commands,
                     );
                     return;
                 }
             } else {
-                info!(
+                debug!(
                     "HAUL_TO_MIXER: Soul {:?} - mixer {:?} not found, canceling",
                     ctx.soul_entity, mixer_entity
                 );
@@ -46,6 +50,7 @@ pub fn handle_haul_to_mixer_task(
                     item_entity,
                     mixer_entity,
                     resource_type,
+                    commands,
                 );
                 return;
             }
@@ -60,13 +65,13 @@ pub fn handle_haul_to_mixer_task(
                     item_pos,
                     ctx.path,
                     soul_pos,
-                    world_map,
+                    ctx.env.world_map,
                     ctx.pf_context,
                 );
 
                 if !reachable {
                     // 到達不能: タスクをキャンセル
-                    info!(
+                    debug!(
                         "HAUL_TO_MIXER: Soul {:?} cannot reach item {:?}, canceling",
                         ctx.soul_entity, item_entity
                     );
@@ -75,6 +80,7 @@ pub fn handle_haul_to_mixer_task(
                         item_entity,
                         mixer_entity,
                         resource_type,
+                        commands,
                     );
                     return;
                 }
@@ -83,15 +89,13 @@ pub fn handle_haul_to_mixer_task(
                     // アイテムを拾う（拾えなければタスクをクリア）
                     if !try_pickup_item(
                         commands,
+                        ctx,
                         PickupLocations {
                             soul_entity: ctx.soul_entity,
                             item_entity,
                             soul_pos,
                             item_pos,
                         },
-                        ctx.inventory,
-                        ctx.task,
-                        ctx.path,
                     ) {
                         return;
                     }
@@ -109,7 +113,7 @@ pub fn handle_haul_to_mixer_task(
                     reservation::record_picked_source(ctx, item_entity, 1);
                 }
             } else {
-                info!(
+                debug!(
                     "HAUL_TO_MIXER: Soul {:?} - item {:?} not found, canceling",
                     ctx.soul_entity, item_entity
                 );
@@ -118,6 +122,7 @@ pub fn handle_haul_to_mixer_task(
                     item_entity,
                     mixer_entity,
                     resource_type,
+                    commands,
                 );
             }
         }
@@ -125,11 +130,11 @@ pub fn handle_haul_to_mixer_task(
         HaulToMixerPhase::GoingToMixer => {
             // インベントリにアイテムがあるか確認
             if ctx.inventory.0 != Some(item_entity) {
-                info!(
+                debug!(
                     "HAUL_TO_MIXER: Soul {:?} - item not in inventory, canceling",
                     ctx.soul_entity
                 );
-                cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type);
+                cancel::cancel_haul_to_mixer(ctx, mixer_entity, resource_type, commands);
                 return;
             }
 
@@ -140,17 +145,13 @@ pub fn handle_haul_to_mixer_task(
                 // ミキサーが満タンかチェック（移動中に満タンになる可能性）
                 if storage.is_full(resource_type) {
                     // 満タン: 砂は無限にあるのでdespawn、それ以外はdrop
-                    info!(
+                    debug!(
                         "HAUL_TO_MIXER: Mixer {:?} full for {:?}, disposing item",
                         mixer_entity, resource_type
                     );
                     reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
                     if resource_type == ResourceType::Sand {
-                        commands
-                            .entity(ctx.soul_entity)
-                            .remove::<hw_core::relationships::WorkingOn>();
                         commands.entity(item_entity).despawn();
-                        // DeliveringTo is removed with despawn
                     } else {
                         drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
                         commands
@@ -158,7 +159,10 @@ pub fn handle_haul_to_mixer_task(
                             .remove::<hw_core::relationships::DeliveringTo>();
                     }
                     ctx.inventory.0 = None;
-                    clear_task_and_path(ctx.task, ctx.path);
+                    ctx.clear_soul_assignment(
+                        commands,
+                        crate::soul_ai::execute::task_execution::context::TaskEndDisposition::AbortedRetryable,
+                    );
                     return;
                 }
 
@@ -168,13 +172,13 @@ pub fn handle_haul_to_mixer_task(
                     mixer_pos,
                     ctx.path,
                     soul_pos,
-                    world_map,
+                    ctx.env.world_map,
                     ctx.pf_context,
                 );
 
                 if !reachable {
                     // 到達不能: アイテムをドロップしてタスクをキャンセル
-                    info!(
+                    debug!(
                         "HAUL_TO_MIXER: Soul {:?} cannot reach mixer {:?}, dropping item",
                         ctx.soul_entity, mixer_entity
                     );
@@ -184,7 +188,10 @@ pub fn handle_haul_to_mixer_task(
                         .entity(item_entity)
                         .remove::<hw_core::relationships::DeliveringTo>();
                     ctx.inventory.0 = None;
-                    clear_task_and_path(ctx.task, ctx.path);
+                    ctx.clear_soul_assignment(
+                        commands,
+                        crate::soul_ai::execute::task_execution::context::TaskEndDisposition::AbortedRetryable,
+                    );
                     return;
                 }
 
@@ -206,40 +213,30 @@ pub fn handle_haul_to_mixer_task(
                     drop_item(commands, ctx.soul_entity, item, soul_pos);
                     ctx.inventory.0 = None;
                 }
-                clear_task_and_path(ctx.task, ctx.path);
+                ctx.abort_closed(commands, "haul to mixer target gone");
             }
         }
 
         HaulToMixerPhase::Delivering => {
+            let mut delivered = false;
             if let Ok(mixer_data) = ctx.queries.storage.mixers.get_mut(mixer_entity) {
                 let (_, mut storage, _) = mixer_data;
-                let mut delivered = false;
                 if storage.add_material(resource_type) {
                     delivered = true;
                 }
 
                 if delivered {
-                    commands
-                        .entity(ctx.soul_entity)
-                        .remove::<hw_core::relationships::WorkingOn>();
                     commands.entity(item_entity).despawn();
-                    // DeliveringTo is removed with despawn
                     ctx.inventory.0 = None;
-                    info!(
+                    debug!(
                         "TASK_EXEC: Soul {:?} delivered {:?} to MudMixer",
                         ctx.soul_entity, resource_type
                     );
-                } else {
-                    // ストレージがいっぱいなら足元にドロップ
-                    if let Some(item) = ctx.inventory.0 {
-                        drop_item(commands, ctx.soul_entity, item, soul_pos);
-                        commands
-                            .entity(item)
-                            .remove::<hw_core::relationships::DeliveringTo>();
-                        ctx.inventory.0 = None;
-                    }
+                    reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
+                    ctx.complete_task(commands, "haul to mixer delivered");
+                    return;
                 }
-            } else {
+
                 if let Some(item) = ctx.inventory.0 {
                     drop_item(commands, ctx.soul_entity, item, soul_pos);
                     commands
@@ -247,9 +244,18 @@ pub fn handle_haul_to_mixer_task(
                         .remove::<hw_core::relationships::DeliveringTo>();
                     ctx.inventory.0 = None;
                 }
+            } else if let Some(item) = ctx.inventory.0 {
+                drop_item(commands, ctx.soul_entity, item, soul_pos);
+                commands
+                    .entity(item)
+                    .remove::<hw_core::relationships::DeliveringTo>();
+                ctx.inventory.0 = None;
             }
             reservation::release_mixer_destination(ctx, mixer_entity, resource_type);
-            clear_task_and_path(ctx.task, ctx.path);
+            ctx.clear_soul_assignment(
+                commands,
+                crate::soul_ai::execute::task_execution::context::TaskEndDisposition::AbortedRetryable,
+            );
         }
     }
 }

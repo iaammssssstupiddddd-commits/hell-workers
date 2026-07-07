@@ -8,7 +8,6 @@ use crate::soul_ai::execute::task_execution::types::{
 };
 use bevy::prelude::*;
 use hw_logistics::ResourceType;
-use hw_world::WorldMap;
 
 use super::super::{abort, guards};
 
@@ -16,14 +15,14 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: &BucketTransportData,
     commands: &mut Commands,
-    world_map: &WorldMap,
+    
 ) {
     if ctx.inventory.0 != Some(data.bucket) {
         warn!(
             "GoingToSource: Bucket not in inventory for soul {:?}",
             ctx.soul_entity
         );
-        abort::abort_without_bucket(commands, ctx, data, world_map);
+        abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
         return;
     }
 
@@ -36,7 +35,7 @@ pub fn handle(
                 let tank_entity = match data.destination {
                     BucketTransportDestination::Tank(tank) => tank,
                     _ => {
-                        abort::abort_with_bucket(commands, ctx, data, world_map);
+                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                         return;
                     }
                 };
@@ -47,7 +46,7 @@ pub fn handle(
                         commands,
                         ctx,
                         data.bucket,
-                        world_map,
+                        ctx.env.world_map,
                     );
                     return;
                 }
@@ -69,7 +68,7 @@ pub fn handle(
                     tank_pos,
                     ctx.path,
                     soul_pos,
-                    world_map,
+                    ctx.env.world_map,
                     ctx.pf_context,
                 );
 
@@ -77,7 +76,7 @@ pub fn handle(
                     let mixer = match data.destination {
                         BucketTransportDestination::Mixer(m) => m,
                         _ => {
-                            abort::abort_with_bucket(commands, ctx, data, world_map);
+                            abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                             return;
                         }
                     };
@@ -109,7 +108,7 @@ pub fn handle(
                 let mixer = match data.destination {
                     BucketTransportDestination::Mixer(m) => m,
                     _ => {
-                        abort::abort_with_bucket(commands, ctx, data, world_map);
+                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                         return;
                     }
                 };
@@ -134,13 +133,13 @@ pub fn handle(
         {
             // バケツが既に水入りならソースには行かずデスティネーションへ
             super::super::routing::transition_to_destination(
-                commands, ctx, data, soul_pos, world_map,
+                commands, ctx, data, soul_pos, ctx.env.world_map,
             );
             return;
         }
 
         if !guards::tank_can_accept_full_bucket(ctx, tank_entity) {
-            super::super::helpers::drop_bucket_for_auto_haul(commands, ctx, data.bucket, world_map);
+            super::super::helpers::drop_bucket_for_auto_haul(commands, ctx, data.bucket, ctx.env.world_map);
         }
     }
 }

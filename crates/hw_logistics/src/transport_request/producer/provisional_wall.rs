@@ -236,7 +236,7 @@ pub fn provisional_wall_material_delivery_sync_system(
         if let Some(mud_entity) = nearest_mud {
             commands.entity(mud_entity).try_despawn();
             provisional.mud_delivered = true;
-            info!(
+            debug!(
                 "PROVISIONAL_WALL: Wall {:?} received StasisMud and is ready to coat",
                 wall_entity
             );

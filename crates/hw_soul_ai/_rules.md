@@ -73,8 +73,9 @@ hw_visual      ✗
 - 詳細: [docs/invariants.md §I-S2](../../docs/invariants.md)
 
 ### AssignedTask の変更
-- `None` への変化時に `OnTaskCompleted` が発火する（Change Detection）
-- `None` 状態のまま直接書き換えてはならない
+- 正常完了は `TaskExecutionContext::complete_task` を呼び、`task_execution_system` が `TaskEndDisposition::Completed` を検知したフレームで `OnTaskCompleted` を trigger する
+- `abort_retryable` / `abort_closed` / `clear_soul_assignment(Aborted*)` では `OnTaskCompleted` は発火しない
+- ハンドラ内で `clear_task_and_path` + `remove::<WorkingOn>` を手書きしない（`chain.rs` の `WorkingOn` 付け替えのみ例外）
 - 詳細: [docs/invariants.md §I-S3](../../docs/invariants.md)
 
 ## 既知のサイレント失敗トラップ

@@ -8,13 +8,12 @@ use crate::soul_ai::execute::task_execution::{
 };
 use bevy::prelude::*;
 use hw_logistics::transport_request::WheelbarrowDestination;
-use hw_world::WorldMap;
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    world_map: &WorldMap,
+    
     soul_pos: Vec2,
 ) {
     let (reachable, arrived) = match data.destination {
@@ -23,21 +22,21 @@ pub fn handle(
                 ctx.queries.storage.stockpiles.get(stockpile_entity)
             {
                 let stock_pos = stock_transform.translation.truncate();
-                let outcome = navigate_to_pos(ctx, stock_pos, soul_pos, world_map);
+                let outcome = navigate_to_pos(ctx, stock_pos, soul_pos, ctx.env.world_map);
                 (
                     !matches!(outcome, NavOutcome::Unreachable),
                     matches!(outcome, NavOutcome::Arrived),
                 )
             } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile_entity) {
                 let site_pos = site.material_center;
-                let outcome = navigate_to_pos(ctx, site_pos, soul_pos, world_map);
+                let outcome = navigate_to_pos(ctx, site_pos, soul_pos, ctx.env.world_map);
                 (
                     !matches!(outcome, NavOutcome::Unreachable),
                     matches!(outcome, NavOutcome::Arrived),
                 )
             } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile_entity) {
                 let site_pos = site.material_center;
-                let outcome = navigate_to_pos(ctx, site_pos, soul_pos, world_map);
+                let outcome = navigate_to_pos(ctx, site_pos, soul_pos, ctx.env.world_map);
                 (
                     !matches!(outcome, NavOutcome::Unreachable),
                     matches!(outcome, NavOutcome::Arrived),
@@ -47,7 +46,7 @@ pub fn handle(
             {
                 // SoulSpaSite は Building コンポーネントも持つため、buildings チェックより先に処理する。
                 let site_pos = soul_spa_transform.translation.truncate();
-                let outcome = navigate_to_pos(ctx, site_pos, soul_pos, world_map);
+                let outcome = navigate_to_pos(ctx, site_pos, soul_pos, ctx.env.world_map);
                 (
                     !matches!(outcome, NavOutcome::Unreachable),
                     matches!(outcome, NavOutcome::Arrived),
@@ -57,25 +56,25 @@ pub fn handle(
             {
                 if building.kind == hw_jobs::BuildingType::Wall && building.is_provisional {
                     let site_pos = wall_transform.translation.truncate();
-                    let outcome = navigate_to_pos(ctx, site_pos, soul_pos, world_map);
+                    let outcome = navigate_to_pos(ctx, site_pos, soul_pos, ctx.env.world_map);
                     (
                         !matches!(outcome, NavOutcome::Unreachable),
                         matches!(outcome, NavOutcome::Arrived),
                     )
                 } else {
-                    info!("WB_HAUL: Destination stockpile/site not found, canceling");
+                    debug!("WB_HAUL: Destination stockpile/site not found, canceling");
                     cancel::cancel_wheelbarrow_task(ctx, &data, commands);
                     return;
                 }
             } else {
-                info!("WB_HAUL: Destination stockpile/site not found, canceling");
+                debug!("WB_HAUL: Destination stockpile/site not found, canceling");
                 cancel::cancel_wheelbarrow_task(ctx, &data, commands);
                 return;
             }
         }
         WheelbarrowDestination::Blueprint(blueprint_entity) => {
             let Ok((_, blueprint, _)) = ctx.queries.storage.blueprints.get(blueprint_entity) else {
-                info!("WB_HAUL: Destination blueprint destroyed, dropping items");
+                debug!("WB_HAUL: Destination blueprint destroyed, dropping items");
                 cancel::drop_items_and_cancel(ctx, &data, commands);
                 return;
             };
@@ -85,7 +84,7 @@ pub fn handle(
                 &blueprint.occupied_grids,
                 ctx.path,
                 soul_pos,
-                world_map,
+                ctx.env.world_map,
                 ctx.pf_context,
             );
             (
@@ -95,13 +94,13 @@ pub fn handle(
         }
         WheelbarrowDestination::Mixer { entity, .. } => {
             let Ok((mixer_transform, _, _)) = ctx.queries.storage.mixers.get(entity) else {
-                info!("WB_HAUL: Destination mixer not found, dropping items");
+                debug!("WB_HAUL: Destination mixer not found, dropping items");
                 cancel::drop_items_and_cancel(ctx, &data, commands);
                 return;
             };
 
             let mixer_pos = mixer_transform.translation.truncate();
-            let outcome = navigate_to_pos(ctx, mixer_pos, soul_pos, world_map);
+            let outcome = navigate_to_pos(ctx, mixer_pos, soul_pos, ctx.env.world_map);
             (
                 !matches!(outcome, NavOutcome::Unreachable),
                 matches!(outcome, NavOutcome::Arrived),

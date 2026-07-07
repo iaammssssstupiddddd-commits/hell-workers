@@ -247,7 +247,7 @@ pub fn handle(
                     blueprint_commands.try_insert(hw_jobs::Priority(10));
                 }
             } else {
-                info!("WB_HAUL: Blueprint destroyed during unloading, dropping items");
+                debug!("WB_HAUL: Blueprint destroyed during unloading, dropping items");
                 cancel::drop_items_and_cancel(ctx, &data, commands);
                 return;
             }
@@ -287,7 +287,7 @@ pub fn handle(
                     mixer_release_types.push(res_type);
                 }
             } else {
-                info!("WB_HAUL: Mixer destroyed during unloading, dropping items");
+                debug!("WB_HAUL: Mixer destroyed during unloading, dropping items");
                 cancel::drop_items_and_cancel(ctx, &data, commands);
                 return;
             }
@@ -320,7 +320,7 @@ pub fn handle(
         }
     }
 
-    info!(
+    debug!(
         "WB_HAUL: Soul {:?} unloaded {} items",
         ctx.soul_entity, unloaded_count
     );
@@ -328,12 +328,12 @@ pub fn handle(
     finalize_unload_task(ctx, &data, commands, soul_pos);
 
     if has_pending_wheelbarrow_task(ctx) {
-        info!(
+        debug!(
             "WB_HAUL: Soul {:?} parked wheelbarrow {:?} at delivery site; pending tasks may reuse it",
             ctx.soul_entity, data.wheelbarrow
         );
     } else {
-        info!(
+        debug!(
             "WB_HAUL: Soul {:?} parked wheelbarrow {:?}; awaiting low-priority return task",
             ctx.soul_entity, data.wheelbarrow
         );

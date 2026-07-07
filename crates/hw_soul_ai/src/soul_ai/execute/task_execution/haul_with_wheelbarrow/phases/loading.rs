@@ -68,7 +68,7 @@ pub fn handle(
         next_data.phase = HaulWithWheelbarrowPhase::GoingToDestination;
         *ctx.task = AssignedTask::HaulWithWheelbarrow(next_data);
 
-        info!(
+        debug!(
             "WB_HAUL: Soul {:?} collected {} items into wheelbarrow",
             ctx.soul_entity, loaded_count
         );
@@ -94,7 +94,7 @@ pub fn handle(
         .collect();
 
     if items_to_load.is_empty() {
-        info!(
+        debug!(
             "WB_HAUL: Soul {:?} found no loadable items, canceling",
             ctx.soul_entity
         );
@@ -134,7 +134,7 @@ pub fn handle(
                 }
             }
         }
-        info!(
+        debug!(
             "WB_HAUL: {} of {} items missing, released reservations",
             total_count - loaded_count,
             total_count
@@ -146,7 +146,7 @@ pub fn handle(
         ..data
     });
 
-    info!(
+    debug!(
         "WB_HAUL: Soul {:?} loaded {} items into wheelbarrow",
         ctx.soul_entity, loaded_count
     );

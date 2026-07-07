@@ -7,27 +7,24 @@ use crate::soul_ai::execute::task_execution::{
 };
 use bevy::prelude::*;
 use hw_core::constants::{WALL_FRAME_DURATION_SECS, WALL_WOOD_PER_TILE};
-use hw_core::relationships::WorkingOn;
 use hw_jobs::WallTileState;
 use hw_world::WorldMap;
 
 pub fn handle_frame_wall_task(
     ctx: &mut TaskExecutionContext,
-    tile_entity: Entity,
-    site_entity: Entity,
-    phase: FrameWallPhase,
+    data: FrameWallTileData,
     commands: &mut Commands,
-    time: &Res<Time>,
-    world_map: &WorldMap,
 ) {
+    let FrameWallTileData { tile, site, phase } = data;
+    let tile_entity = tile;
+    let site_entity = site;
     let soul_pos = ctx.soul_pos();
 
     match phase {
         FrameWallPhase::GoingToMaterialCenter => {
             let Ok((site_transform, _site, _)) = ctx.queries.storage.wall_sites.get(site_entity)
             else {
-                clear_task_and_path(ctx.task, ctx.path);
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                ctx.abort_closed(commands, "construction cancelled");
                 return;
             };
 
@@ -37,7 +34,7 @@ pub fn handle_frame_wall_task(
                 material_center,
                 ctx.path,
                 soul_pos,
-                world_map,
+                ctx.env.world_map,
                 ctx.pf_context,
             );
 
@@ -51,8 +48,7 @@ pub fn handle_frame_wall_task(
         }
         FrameWallPhase::PickingUpWood => {
             let Ok((_, tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
-                clear_task_and_path(ctx.task, ctx.path);
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                ctx.abort_closed(commands, "construction cancelled");
                 return;
             };
 
@@ -70,15 +66,13 @@ pub fn handle_frame_wall_task(
                 }
                 _ => {
                     // 他のソウルが先に作業を開始または完了した → 中断
-                    clear_task_and_path(ctx.task, ctx.path);
-                    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                    ctx.abort_closed(commands, "construction cancelled");
                 }
             }
         }
         FrameWallPhase::GoingToTile => {
             let Ok((_, tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
-                clear_task_and_path(ctx.task, ctx.path);
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                ctx.abort_closed(commands, "construction cancelled");
                 return;
             };
 
@@ -89,7 +83,7 @@ pub fn handle_frame_wall_task(
                 tile_pos,
                 ctx.path,
                 soul_pos,
-                world_map,
+                ctx.env.world_map,
                 ctx.pf_context,
             );
 
@@ -106,13 +100,12 @@ pub fn handle_frame_wall_task(
             let Ok((_, mut tile_blueprint, _)) =
                 ctx.queries.storage.wall_tiles.get_mut(tile_entity)
             else {
-                clear_task_and_path(ctx.task, ctx.path);
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                ctx.abort_closed(commands, "construction cancelled");
                 return;
             };
 
             const MAX_PROGRESS_BP: u16 = 10_000;
-            let delta_bp = ((time.delta_secs() / WALL_FRAME_DURATION_SECS * MAX_PROGRESS_BP as f32)
+            let delta_bp = ((ctx.env.time.delta_secs() / WALL_FRAME_DURATION_SECS * MAX_PROGRESS_BP as f32)
                 .round()
                 .max(1.0)) as u16;
             let new_progress_bp = progress_bp.saturating_add(delta_bp).min(MAX_PROGRESS_BP);
@@ -153,8 +146,7 @@ pub fn handle_frame_wall_task(
                 source: tile_entity,
                 amount: 1,
             });
-            commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-            clear_task_and_path(ctx.task, ctx.path);
+            ctx.complete_task(commands, "construction done");
         }
     }
 }

@@ -29,7 +29,7 @@ fn cancel_haul_with_reason(
     commands: &mut Commands,
     reason: &str,
 ) {
-    info!(
+    debug!(
         "HAUL: Soul {:?} {}, canceling (item={:?}, stockpile={:?})",
         ctx.soul_entity, reason, item, stockpile
     );
@@ -38,13 +38,14 @@ fn cancel_haul_with_reason(
 
 pub fn handle_haul_task(
     ctx: &mut TaskExecutionContext,
-    item: Entity,
-    stockpile: Entity,
-    phase: HaulPhase,
+    data: HaulData,
     commands: &mut Commands,
-    // haul_cache is now accessed via ctx.queries.resource_cache
-    world_map: &WorldMap,
 ) {
+    let HaulData {
+        item,
+        stockpile,
+        phase,
+    } = data;
     let soul_pos = ctx.soul_pos();
     let q_targets = &ctx.queries.designation.targets;
     match phase {
@@ -54,7 +55,7 @@ pub fn handle_haul_task(
             {
                 let res_pos = res_transform.translation.truncate();
                 let stored_in_entity = stored_in_opt.map(|stored_in| stored_in.0);
-                match navigate_to_pos(ctx, res_pos, soul_pos, world_map) {
+                match navigate_to_pos(ctx, res_pos, soul_pos, ctx.env.world_map) {
                     NavOutcome::Moving => {}
                     NavOutcome::Unreachable => {
                         cancel_haul_with_reason(
@@ -71,15 +72,13 @@ pub fn handle_haul_task(
                         }
                         if !try_pickup_item(
                             commands,
+                            ctx,
                             PickupLocations {
                                 soul_entity: ctx.soul_entity,
                                 item_entity: item,
                                 soul_pos,
                                 item_pos: res_pos,
                             },
-                            ctx.inventory,
-                            ctx.task,
-                            ctx.path,
                         ) {
                             return;
                         }
@@ -104,7 +103,7 @@ pub fn handle_haul_task(
                             ctx.queries.storage.floor_sites.get(stockpile)
                         {
                             if matches!(
-                                navigate_to_pos(ctx, site.material_center, soul_pos, world_map),
+                                navigate_to_pos(ctx, site.material_center, soul_pos, ctx.env.world_map),
                                 NavOutcome::Unreachable
                             ) {
                                 cancel_haul_with_reason(
@@ -120,7 +119,7 @@ pub fn handle_haul_task(
                             ctx.queries.storage.wall_sites.get(stockpile)
                         {
                             if matches!(
-                                navigate_to_pos(ctx, site.material_center, soul_pos, world_map),
+                                navigate_to_pos(ctx, site.material_center, soul_pos, ctx.env.world_map),
                                 NavOutcome::Unreachable
                             ) {
                                 cancel_haul_with_reason(
@@ -146,7 +145,7 @@ pub fn handle_haul_task(
                         {
                             if can_deliver_to_wall {
                                 if matches!(
-                                    navigate_to_pos(ctx, wall_pos, soul_pos, world_map),
+                                    navigate_to_pos(ctx, wall_pos, soul_pos, ctx.env.world_map),
                                     NavOutcome::Unreachable
                                 ) {
                                     cancel_haul_with_reason(
@@ -172,7 +171,7 @@ pub fn handle_haul_task(
 
                         set_haul_phase(ctx.task, item, stockpile, HaulPhase::GoingToStockpile);
                         reservation::record_picked_source(ctx, item, 1);
-                        info!("HAUL: Soul {:?} picked up item {:?}", ctx.soul_entity, item);
+                        debug!("HAUL: Soul {:?} picked up item {:?}", ctx.soul_entity, item);
                     }
                 }
             } else {
@@ -197,7 +196,7 @@ pub fn handle_haul_task(
                     site_pos,
                     ctx.path,
                     soul_pos,
-                    world_map,
+                    ctx.env.world_map,
                     ctx.pf_context,
                 );
                 if !reachable {
@@ -222,7 +221,7 @@ pub fn handle_haul_task(
                     site_pos,
                     ctx.path,
                     soul_pos,
-                    world_map,
+                    ctx.env.world_map,
                     ctx.pf_context,
                 );
                 if !reachable {
@@ -265,7 +264,7 @@ pub fn handle_haul_task(
                     wall_pos,
                     ctx.path,
                     soul_pos,
-                    world_map,
+                    ctx.env.world_map,
                     ctx.pf_context,
                 );
                 if !reachable {
@@ -288,7 +287,7 @@ pub fn handle_haul_task(
             }
         }
         HaulPhase::Dropping => {
-            handle_dropping_phase(ctx, item, stockpile, commands, world_map, soul_pos);
+            handle_dropping_phase(ctx, item, stockpile, commands, ctx.env.world_map, soul_pos);
         }
     }
 }

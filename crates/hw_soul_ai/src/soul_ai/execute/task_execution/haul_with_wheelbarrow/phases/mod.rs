@@ -14,13 +14,11 @@ use crate::soul_ai::execute::task_execution::{
 };
 use bevy::prelude::*;
 use hw_logistics::Wheelbarrow;
-use hw_world::WorldMap;
 
 pub fn handle_haul_with_wheelbarrow_task(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    world_map: &WorldMap,
     q_wheelbarrows: &Query<
         (&Transform, Option<&hw_core::relationships::ParkedAt>),
         With<Wheelbarrow>,
@@ -30,25 +28,25 @@ pub fn handle_haul_with_wheelbarrow_task(
 
     match data.phase {
         HaulWithWheelbarrowPhase::GoingToParking => {
-            going_to_parking::handle(ctx, data, commands, world_map, q_wheelbarrows, soul_pos);
+            going_to_parking::handle(ctx, data, commands, q_wheelbarrows, soul_pos);
         }
         HaulWithWheelbarrowPhase::PickingUpWheelbarrow => {
             picking_up_wheelbarrow::handle(ctx, data, commands);
         }
         HaulWithWheelbarrowPhase::GoingToSource => {
-            going_to_source::handle(ctx, data, commands, world_map, soul_pos);
+            going_to_source::handle(ctx, data, commands, soul_pos);
         }
         HaulWithWheelbarrowPhase::Loading => {
             loading::handle(ctx, data, commands);
         }
         HaulWithWheelbarrowPhase::GoingToDestination => {
-            going_to_destination::handle(ctx, data, commands, world_map, soul_pos);
+            going_to_destination::handle(ctx, data, commands, soul_pos);
         }
         HaulWithWheelbarrowPhase::Unloading => {
             unloading::handle(ctx, data, commands, soul_pos);
         }
         HaulWithWheelbarrowPhase::ReturningWheelbarrow => {
-            returning_wheelbarrow::handle(ctx, data, commands, world_map, q_wheelbarrows, soul_pos);
+            returning_wheelbarrow::handle(ctx, data, commands, q_wheelbarrows, soul_pos);
         }
     }
 }

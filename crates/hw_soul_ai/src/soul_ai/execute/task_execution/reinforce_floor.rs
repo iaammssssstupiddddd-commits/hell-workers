@@ -3,23 +3,21 @@
 use crate::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
-    types::{AssignedTask, ReinforceFloorPhase},
+    types::{AssignedTask, ReinforceFloorPhase, ReinforceFloorTileData},
 };
 use bevy::prelude::*;
 use hw_core::constants::{FLOOR_BONES_PER_TILE, FLOOR_REINFORCE_DURATION_SECS};
-use hw_core::relationships::WorkingOn;
 use hw_jobs::FloorTileState;
 use hw_world::WorldMap;
 
 pub fn handle_reinforce_floor_task(
     ctx: &mut TaskExecutionContext,
-    tile_entity: Entity,
-    site_entity: Entity,
-    phase: ReinforceFloorPhase,
+    data: ReinforceFloorTileData,
     commands: &mut Commands,
-    time: &Res<Time>,
-    world_map: &WorldMap,
 ) {
+    let ReinforceFloorTileData { tile, site, phase } = data;
+    let tile_entity = tile;
+    let site_entity = site;
     let soul_pos = ctx.soul_pos();
 
     match phase {
@@ -28,12 +26,11 @@ pub fn handle_reinforce_floor_task(
             let Ok((site_transform, _site, _)) = ctx.queries.storage.floor_sites.get(site_entity)
             else {
                 // Site disappeared
-                info!(
+                debug!(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Site {:?} gone",
                     ctx.soul_entity, site_entity
                 );
-                clear_task_and_path(ctx.task, ctx.path);
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                ctx.abort_closed(commands, "construction cancelled");
                 return;
             };
 
@@ -45,7 +42,7 @@ pub fn handle_reinforce_floor_task(
                 material_center,
                 ctx.path,
                 soul_pos,
-                world_map,
+                ctx.env.world_map,
                 ctx.pf_context,
             );
 
@@ -58,7 +55,7 @@ pub fn handle_reinforce_floor_task(
                         phase: ReinforceFloorPhase::PickingUpBones,
                     },
                 );
-                info!(
+                debug!(
                     "REINFORCE_FLOOR: Soul {:?} arrived at material center",
                     ctx.soul_entity
                 );
@@ -68,12 +65,11 @@ pub fn handle_reinforce_floor_task(
         ReinforceFloorPhase::PickingUpBones => {
             let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity)
             else {
-                info!(
+                debug!(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
                 );
-                clear_task_and_path(ctx.task, ctx.path);
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                ctx.abort_closed(commands, "construction cancelled");
                 return;
             };
 
@@ -90,19 +86,18 @@ pub fn handle_reinforce_floor_task(
                         },
                     );
                     ctx.path.waypoints.clear();
-                    info!(
+                    debug!(
                         "REINFORCE_FLOOR: Soul {:?} material ready, heading to tile {:?}",
                         ctx.soul_entity, tile_entity
                     );
                 }
                 _ => {
                     // 他のソウルが先に作業を開始または完了した → 中断
-                    info!(
+                    debug!(
                         "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} state changed unexpectedly in PickingUpBones",
                         ctx.soul_entity, tile_entity
                     );
-                    clear_task_and_path(ctx.task, ctx.path);
-                    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                    ctx.abort_retryable(commands, "tile state changed unexpectedly");
                 }
             }
         }
@@ -112,12 +107,11 @@ pub fn handle_reinforce_floor_task(
             let Ok((_, tile_blueprint, _)) = ctx.queries.storage.floor_tiles.get(tile_entity)
             else {
                 // Tile disappeared
-                info!(
+                debug!(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
                 );
-                clear_task_and_path(ctx.task, ctx.path);
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                ctx.abort_closed(commands, "construction cancelled");
                 return;
             };
 
@@ -130,7 +124,7 @@ pub fn handle_reinforce_floor_task(
                 tile_pos,
                 ctx.path,
                 soul_pos,
-                world_map,
+                ctx.env.world_map,
                 ctx.pf_context,
             );
 
@@ -144,7 +138,7 @@ pub fn handle_reinforce_floor_task(
                     },
                 );
                 ctx.path.waypoints.clear();
-                info!(
+                debug!(
                     "REINFORCE_FLOOR: Soul {:?} started reinforcing tile {:?}",
                     ctx.soul_entity, tile_entity
                 );
@@ -156,18 +150,17 @@ pub fn handle_reinforce_floor_task(
             let Ok((_, mut tile_blueprint, _)) =
                 ctx.queries.storage.floor_tiles.get_mut(tile_entity)
             else {
-                info!(
+                debug!(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
                 );
-                clear_task_and_path(ctx.task, ctx.path);
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+                ctx.abort_closed(commands, "construction cancelled");
                 return;
             };
 
             // Update progress (basis points) to avoid truncation at 1x speed.
             const MAX_PROGRESS_BP: u16 = 10_000;
-            let delta_bp = ((time.delta_secs() / FLOOR_REINFORCE_DURATION_SECS
+            let delta_bp = ((ctx.env.time.delta_secs() / FLOOR_REINFORCE_DURATION_SECS
                 * MAX_PROGRESS_BP as f32)
                 .round()
                 .max(1.0)) as u16;
@@ -189,7 +182,7 @@ pub fn handle_reinforce_floor_task(
                 // Update site counter
                 if let Ok((_, mut site, _)) = ctx.queries.storage.floor_sites.get_mut(site_entity) {
                     site.tiles_reinforced += 1;
-                    info!(
+                    debug!(
                         "REINFORCE_FLOOR: Tile {:?} reinforced ({}/{})",
                         tile_entity, site.tiles_reinforced, site.tiles_total
                     );
@@ -205,7 +198,7 @@ pub fn handle_reinforce_floor_task(
                         phase: ReinforceFloorPhase::Done,
                     },
                 );
-                info!(
+                debug!(
                     "REINFORCE_FLOOR: Soul {:?} completed reinforcing tile {:?}",
                     ctx.soul_entity, tile_entity
                 );
@@ -228,9 +221,8 @@ pub fn handle_reinforce_floor_task(
                 source: tile_entity,
                 amount: 1,
             });
-            commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-            clear_task_and_path(ctx.task, ctx.path);
-            info!(
+            ctx.complete_task(commands, "construction done");
+            debug!(
                 "REINFORCE_FLOOR: Soul {:?} finished reinforcing task",
                 ctx.soul_entity
             );

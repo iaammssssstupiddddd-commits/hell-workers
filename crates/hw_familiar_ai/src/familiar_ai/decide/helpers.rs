@@ -77,7 +77,7 @@ pub fn finalize_state_transitions(
             let prev_state = ai_state.clone();
             *ai_state = FamiliarAiState::SearchingTask;
             state_changed = true;
-            info!(
+            debug!(
                 "FAM_AI: {:?} squad is empty. Transitioning to SearchingTask from {:?}",
                 fam_entity, prev_state
             );
@@ -91,7 +91,7 @@ pub fn finalize_state_transitions(
             if !is_squad_full && matches!(*ai_state, FamiliarAiState::Supervising { .. }) {
                 *ai_state = FamiliarAiState::SearchingTask;
                 state_changed = true;
-                info!(
+                debug!(
                     "FAM_AI: {:?} squad has open slots ({}/{}). Switching to SearchingTask",
                     fam_entity,
                     squad_entities.len(),
@@ -104,7 +104,7 @@ pub fn finalize_state_transitions(
                     timer: 0.0,
                 };
                 state_changed = true;
-                info!("FAM_AI: {:?} squad full. -> Supervising", fam_entity);
+                debug!("FAM_AI: {:?} squad full. -> Supervising", fam_entity);
             }
         }
     }

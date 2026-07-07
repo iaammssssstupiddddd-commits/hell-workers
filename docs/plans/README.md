@@ -24,6 +24,7 @@
 | [dev-tools-debug-overlay-plan-2026-07-05.md](dev-tools-debug-overlay-plan-2026-07-05.md) | Draft | gizmo テキストの AI デバッグラベル導入（BSN トグル UI）。再検証により FpsOverlay 等の自前実装置き換えは却下（§0）、フレームタイムグラフは計測時オプション |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [performance-cpu-2026-04-16.md](performance-cpu-2026-04-16.md) | Draft | CPU パフォーマンス改善計画書 |
+| [task-execution-refactor-plan-2026-07-07.md](task-execution-refactor-plan-2026-07-07.md) | Completed | task_execution リファクタリング計画（コンテキスト集約・完了/中断区別・ログ降格・boundary.rs 分割） |
 | [terrain-lod-switch-flicker-plan-2026-04-17.md](terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD 切替時のちらつきを、判定安定化と短い遷移フェーズで抑える計画 |
 | [text-input-ui-plan-2026-07-05.md](text-input-ui-plan-2026-07-05.md) | Draft | EditableText による Soul リネーム・エンティティリスト検索 + bevy_clipboard。入力フィールドは BSN 構築 |
 | [world-map-lod1-performance-plan-2026-04-09.md](world-map-lod1-performance-plan-2026-04-09.md) | Complete | ワールドマップ近景 `LOD1` の fragment 負荷を、境界 early-out・中間 LOD・feature ベイク再編で下げる計画 |

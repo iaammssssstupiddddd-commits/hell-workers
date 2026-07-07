@@ -231,3 +231,20 @@ root 側の shell には `PopulationManager`・visual/UI 依存・request 再検
    root 側互換 API を維持する inline facade。`transport_common/*` は wrapper ではなく helper 群として扱う。
 
 `FloorConstructionSite` / `WallConstructionSite` は `hw_jobs::construction` 所有に移り、root の `crates/bevy_app/src/systems/jobs/*/components.rs` は re-export shell になっている。
+
+#### タスク終了 API（M2）
+
+ハンドラは `TaskExecutionContext`（`context/execution.rs`）の終了 API で Soul 割り当てを解除する。`clear_task_and_path` と `remove::<WorkingOn>` の手書き組み合わせは禁止（`chain.rs` の `WorkingOn` 付け替えのみ例外）。
+
+| メソッド | 用途 |
+|:---|:---|
+| `complete_task` | 正常完了。`OnTaskCompleted` 発火の唯一の経路 |
+| `abort_retryable` | 再アサイン可能な中断（`cleanup_task_assignment` + 予約解放） |
+| `abort_closed` | 対象消滅・designation 削除（同上、`AbortedClosed`） |
+| `clear_soul_assignment` | 専用 cancel / abort が予約・インベントリ cleanup 済みのとき Soul 側だけ解除 |
+
+`task_execution_system` はフレーム末尾で `ctx.end_disposition == TaskEndDisposition::Completed` のときだけ `OnTaskCompleted` を trigger する。
+
+#### ログレベル（M3）
+
+`task_execution` 内のフェーズ遷移・到着・完了ログは `debug!` に統一。通常プレイでは info レベルに流れない。詳細確認は `RUST_LOG=hw_soul_ai=debug`（必要なら `hw_familiar_ai=debug` も併用）。

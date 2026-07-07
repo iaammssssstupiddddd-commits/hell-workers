@@ -25,6 +25,31 @@
     *   `hw_core` などの型を参照しつつ、自らの UI 状態（例: `AreaEditSession`, `Selection` 等）を管理する。
     *   フォントや画像などのアセットに依存する必要があるため、直接 `GameAssets` を参照するのではなく、`UiAssets` トレイトなどを通じて `bevy_app` から注入（Inject）される設計を維持すること。
 
+### 1.1 UI 2層構造（`hw_ui` × `bevy_app/interface`）
+
+UI は **Widget 層**（`hw_ui`）と **Adapter 層**（`bevy_app/src/interface/`）の 2 層に分離する。ファイル対応の一覧は [`docs/cargo_workspace.md`](cargo_workspace.md) の `hw_ui` 節を参照（重複表は置かない）。
+
+| 層 | クレート / パス | 責務 | 典型パターン |
+|:---|:---|:---|:---|
+| **Widget** | `hw_ui` | ノード生成・テーマ・レイアウト、ViewModel → Bevy UI ノードへの同期、操作の **`UiIntent` 発行** | `setup/`, `list/spawn`, `list/sync`, `panels/task_list/render`, `intents.rs` |
+| **ViewModel** | `bevy_app/src/interface/ui/` | ゲーム ECS（`Familiar`, `DamnedSoul`, `Designation` 等）から **表示用データを構築**、dirty 検出 | `list/view_model.rs`, `list/change_detection.rs`, `panels/task_list/view_model.rs`, `panels/task_list/dirty.rs` |
+| **Presenter** | `bevy_app/src/interface/ui/` | ViewModel を `hw_ui` の sync API に渡す **thin shell**（ゲーム依存の引数注入） | `list/sync.rs`, `panels/task_list/presenter.rs`, `panels/task_list/update.rs` |
+| **Intent Handler** | `bevy_app/src/interface/ui/interaction/` | `UiIntent` を受け取り **ワールド状態を変更**（`PlayMode`, `WorldMapWrite`, squad 操作等） | `intent_handler.rs`, `handlers/`, `intent_context.rs` |
+
+**規範:**
+
+1. **`UiIntent` の流れ**: 定義は `hw_ui::intents`。ボタン・リスト操作は `hw_ui` が `MessageWriter<UiIntent>` で発行し、**副作用（ECS 変更）は `bevy_app` の handler のみ**が行う。
+2. **ViewModel は root 側**: ゲームエンティティを `Query` する ViewModel 構築は `hw_ui` に置かない。
+3. **Widget sync は `hw_ui` 側**: ノードツリーの spawn / テキスト更新 / ハイライトは `hw_ui`。root の Presenter は `Res<GameAssets>` 注入など Bevy 制約の橋渡しに限定する。
+4. **共有契約型は `hw_core`**: `SelectedEntity`, `UiNodeRegistry`, `MainCamera` 等は `hw_core` が所有。両層から参照する。
+5. **依存方向**: `bevy_app` → `hw_ui` のみ。`hw_ui` → `bevy_app` は禁止。
+
+**禁止:**
+
+- `hw_ui` 内で `DamnedSoul` / `Familiar` / `Blueprint` 等のゲーム ECS を `Query` すること
+- `hw_ui` 内で `Res<GameAssets>` をシステム引数に取ること（`UiAssets` トレイト注入を使う）
+- ViewModel 構築や `UiIntent` のゲーム副作用を `hw_ui` に実装すること
+
 ## 2. 型定義と所有権（Ownership）のルール
 
 複数のシステム間でデータをやり取りするための型（struct や enum）や、関数の戻り値（Result / Outcome 型）は、**「その処理の主たる責務を持つ Leaf クレート (`hw_*`)」** 側で定義し、Root 側がそれを `use` して利用する。

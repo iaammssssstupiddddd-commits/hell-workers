@@ -12,21 +12,17 @@ use hw_core::relationships::WorkingOn;
 use hw_energy::constants::{
     DREAM_CONSUME_RATE_GENERATING, DREAM_GENERATE_FLOOR, FATIGUE_RATE_GENERATING,
 };
-use hw_world::WorldMap;
 
 pub fn handle_generate_power_task(
     ctx: &mut TaskExecutionContext,
     data: GeneratePowerData,
     commands: &mut Commands,
-    time: &Res<Time>,
-    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
     let tile_entity = data.tile;
 
     match data.phase {
         GeneratePowerPhase::GoingToTile => {
-            // Designation が外れたらキャンセル
             if ctx
                 .queries
                 .designation
@@ -34,11 +30,11 @@ pub fn handle_generate_power_task(
                 .get(tile_entity)
                 .is_err()
             {
-                info!(
+                debug!(
                     "GENERATE_POWER: Soul {:?} - tile {:?} lost Designation, canceling",
                     ctx.soul_entity, tile_entity
                 );
-                clear_task_and_path(ctx.task, ctx.path);
+                ctx.abort_closed(commands, "generate power designation missing");
                 return;
             }
 
@@ -49,12 +45,12 @@ pub fn handle_generate_power_task(
                 tile_pos,
                 ctx.path,
                 soul_pos,
-                world_map,
+                ctx.env.world_map,
                 ctx.pf_context,
             );
 
             if !reachable {
-                info!(
+                debug!(
                     "GENERATE_POWER: Soul {:?} cannot reach tile {:?}, canceling",
                     ctx.soul_entity, tile_entity
                 );
@@ -62,12 +58,11 @@ pub fn handle_generate_power_task(
                     source: tile_entity,
                     amount: 1,
                 });
-                clear_task_and_path(ctx.task, ctx.path);
+                ctx.abort_retryable(commands, "generate power tile unreachable");
                 return;
             }
 
             if is_near_target(soul_pos, tile_pos) {
-                // タイルに到達: WorkingOn を設定して Generating フェーズへ
                 commands
                     .entity(ctx.soul_entity)
                     .insert(WorkingOn(tile_entity));
@@ -77,7 +72,7 @@ pub fn handle_generate_power_task(
                     tile_pos,
                     phase: GeneratePowerPhase::Generating,
                 });
-                info!(
+                debug!(
                     "GENERATE_POWER: Soul {:?} started generating at tile {:?}",
                     ctx.soul_entity, tile_entity
                 );
@@ -85,7 +80,6 @@ pub fn handle_generate_power_task(
         }
 
         GeneratePowerPhase::Generating => {
-            // Designation が外れたら終了
             if ctx
                 .queries
                 .designation
@@ -93,18 +87,16 @@ pub fn handle_generate_power_task(
                 .get(tile_entity)
                 .is_err()
             {
-                info!(
+                debug!(
                     "GENERATE_POWER: Soul {:?} - tile {:?} lost Designation, stopping",
                     ctx.soul_entity, tile_entity
                 );
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-                clear_task_and_path(ctx.task, ctx.path);
+                ctx.abort_closed(commands, "generate power designation removed");
                 return;
             }
 
-            // Dream が下限を下回ったら自動終了
             if ctx.soul.dream < DREAM_GENERATE_FLOOR {
-                info!(
+                debug!(
                     "GENERATE_POWER: Soul {:?} ran out of Dream ({:.1}), stopping",
                     ctx.soul_entity, ctx.soul.dream
                 );
@@ -112,17 +104,13 @@ pub fn handle_generate_power_task(
                     source: tile_entity,
                     amount: 1,
                 });
-                commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-                clear_task_and_path(ctx.task, ctx.path);
+                ctx.abort_retryable(commands, "generate power dream depleted");
                 return;
             }
 
-            let dt = time.delta_secs();
+            let dt = ctx.env.time.delta_secs();
 
-            // Dream 消費（dream_update_system 側での蓄積はスキップされる）
             ctx.soul.dream = (ctx.soul.dream - DREAM_CONSUME_RATE_GENERATING * dt).max(0.0);
-
-            // 疲労の緩やかな蓄積（発電は安らかな行為）
             ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_RATE_GENERATING * dt).min(1.0);
         }
     }

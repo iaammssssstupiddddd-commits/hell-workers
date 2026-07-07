@@ -1,11 +1,10 @@
 use crate::soul_ai::execute::task_execution::chain;
-use crate::soul_ai::execute::task_execution::common::{clear_task_and_path, drop_item};
+use crate::soul_ai::execute::task_execution::common::drop_item;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
 use crate::soul_ai::helpers::work::cleanup_task_assignment;
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
-use hw_core::relationships::WorkingOn;
 use hw_jobs::BuildingType;
 use hw_logistics::{
     ResourceType, count_nearby_ground_resources, floor_site_tile_demand,
@@ -202,7 +201,7 @@ pub(super) fn handle_dropping_phase(
                 .remove::<hw_core::relationships::TaskWorkers>();
 
             reservation::record_stored_destination(ctx, stockpile);
-            info!(
+            debug!(
                 "TASK_EXEC: Soul {:?} dropped item at stockpile. Count ~ {}",
                 ctx.soul_entity, current_count
             );
@@ -323,7 +322,6 @@ pub(super) fn handle_dropping_phase(
     }
 
     ctx.inventory.0 = None;
-    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-    clear_task_and_path(ctx.task, ctx.path);
+    ctx.complete_task(commands, "haul to stockpile done");
     ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
 }

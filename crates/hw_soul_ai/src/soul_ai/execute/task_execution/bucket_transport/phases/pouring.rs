@@ -1,8 +1,6 @@
 //! Pouring phase: バケツの水をデスティネーション（タンク or ミキサー）に注ぐ
 
-use crate::soul_ai::execute::task_execution::common::{
-    clear_task_and_path, drop_item, update_destination_if_needed,
-};
+use crate::soul_ai::execute::task_execution::common::{drop_item, update_destination_if_needed};
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use crate::soul_ai::execute::task_execution::transport_common::reservation;
 use crate::soul_ai::execute::task_execution::types::{
@@ -11,9 +9,7 @@ use crate::soul_ai::execute::task_execution::types::{
 };
 use bevy::prelude::*;
 use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY, TILE_SIZE};
-use hw_core::visual::SoulTaskHandles;
 use hw_logistics::{ResourceItem, ResourceType};
-use hw_world::WorldMap;
 
 use super::super::{abort, helpers};
 
@@ -22,8 +18,6 @@ pub fn handle(
     data: &BucketTransportData,
     progress: f32,
     commands: &mut Commands,
-    soul_handles: &SoulTaskHandles,
-    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
 
@@ -32,7 +26,7 @@ pub fn handle(
             "Pouring: Bucket not in inventory for soul {:?}",
             ctx.soul_entity
         );
-        abort::abort_without_bucket(commands, ctx, data, world_map);
+        abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
         return;
     }
 
@@ -42,7 +36,7 @@ pub fn handle(
 
             if new_progress >= 1.0 {
                 if !super::super::guards::tank_can_accept_full_bucket(ctx, tank_entity) {
-                    helpers::drop_bucket_for_auto_haul(commands, ctx, data.bucket, world_map);
+                    helpers::drop_bucket_for_auto_haul(commands, ctx, data.bucket, ctx.env.world_map);
                     return;
                 }
 
@@ -50,7 +44,7 @@ pub fn handle(
                     .entity(data.bucket)
                     .try_insert(ResourceItem(ResourceType::BucketEmpty));
                 commands.entity(data.bucket).try_insert(Sprite {
-                    image: soul_handles.bucket_empty.clone(),
+                    image: ctx.env.soul_handles.bucket_empty.clone(),
                     custom_size: Some(Vec2::splat(TILE_SIZE * 0.6)),
                     ..default()
                 });
@@ -68,7 +62,7 @@ pub fn handle(
                     .entity(data.bucket)
                     .remove::<hw_core::relationships::DeliveringTo>();
 
-                helpers::drop_bucket_for_auto_haul(commands, ctx, data.bucket, world_map);
+                helpers::drop_bucket_for_auto_haul(commands, ctx, data.bucket, ctx.env.world_map);
             } else {
                 *ctx.task = AssignedTask::BucketTransport(BucketTransportData {
                     phase: BucketTransportPhase::Pouring {
@@ -82,7 +76,7 @@ pub fn handle(
             let tank = match data.source {
                 BucketTransportSource::Tank { tank, .. } => tank,
                 BucketTransportSource::River => {
-                    abort::abort_with_bucket(commands, ctx, data, world_map);
+                    abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                     return;
                 }
             };
@@ -142,7 +136,7 @@ pub fn handle(
                     ));
                 }
 
-                info!(
+                debug!(
                     "TASK_EXEC: Soul {:?} poured {} water into MudMixer",
                     ctx.soul_entity, added
                 );
@@ -156,7 +150,7 @@ pub fn handle(
                 commands.entity(data.bucket).try_insert((
                     ResourceItem(ResourceType::BucketEmpty),
                     Sprite {
-                        image: soul_handles.bucket_empty.clone(),
+                        image: ctx.env.soul_handles.bucket_empty.clone(),
                         custom_size: Some(Vec2::splat(TILE_SIZE * 0.6)),
                         ..default()
                     },
@@ -182,7 +176,7 @@ pub fn handle(
                 } else {
                     drop_item(commands, ctx.soul_entity, data.bucket, soul_pos);
                     ctx.inventory.0 = None;
-                    clear_task_and_path(ctx.task, ctx.path);
+                    ctx.abort_retryable(commands, "bucket transport no return position");
                 }
             } else {
                 // Mixer が満杯

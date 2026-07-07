@@ -1,7 +1,8 @@
 //! バケツ搬送共通 abort/cleanup ヘルパー
 
-use crate::soul_ai::execute::task_execution::common::clear_task_and_path;
-use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::soul_ai::execute::task_execution::context::{
+    TaskEndDisposition, TaskExecutionContext,
+};
 use crate::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
 use crate::soul_ai::execute::task_execution::types::{
     BucketTransportData, BucketTransportDestination, BucketTransportSource,
@@ -31,7 +32,7 @@ pub fn abort_and_drop_bucket_mixer(
     cancel::drop_bucket_with_cleanup(commands, bucket_entity, pos);
 
     ctx.inventory.0 = None;
-    clear_task_and_path(ctx.task, ctx.path);
+    ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
 }
 
 /// バケツなし abort（インベントリにバケツが存在しない状態でのタスク中断）
@@ -54,7 +55,7 @@ pub fn abort_without_bucket(
             {
                 reservation::release_source(ctx, tank, 1);
             }
-            clear_task_and_path(ctx.task, ctx.path);
+            ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
         }
         BucketTransportDestination::Tank(_) => {
             let soul_pos = ctx.soul_pos();
@@ -99,7 +100,7 @@ pub fn abort_with_bucket(
             let soul_pos = ctx.soul_pos();
             cancel::drop_bucket_with_cleanup(commands, data.bucket, soul_pos);
             ctx.inventory.0 = None;
-            clear_task_and_path(ctx.task, ctx.path);
+            ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
         }
         BucketTransportDestination::Tank(_) => {
             let soul_pos = ctx.soul_pos();

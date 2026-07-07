@@ -2,23 +2,14 @@
 
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use bevy::prelude::*;
-use hw_core::soul::StressBreakdown;
-use hw_core::visual::SoulTaskHandles;
 use hw_logistics::Wheelbarrow;
-use hw_world::WorldMap;
 
-use super::task_handler::TaskHandler;
 use crate::soul_ai::execute::task_execution::types::{AssignedTask, HaulWithWheelbarrowData};
 
 /// タスクタイプに応じて適切なハンドラにルーティングする。
-/// 標準ハンドラは TaskHandler 経由、HaulWithWheelbarrow は q_wheelbarrows を渡すため特別扱い。
 pub fn run_task_handler(
     ctx: &mut TaskExecutionContext,
     commands: &mut Commands,
-    soul_handles: &SoulTaskHandles,
-    time: &Res<Time>,
-    world_map: &WorldMap,
-    breakdown_opt: Option<&StressBreakdown>,
     q_wheelbarrows: &Query<
         (&Transform, Option<&hw_core::relationships::ParkedAt>),
         With<Wheelbarrow>,
@@ -26,14 +17,10 @@ pub fn run_task_handler(
 ) {
     match &*ctx.task {
         AssignedTask::Gather(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::gather::handle_gather_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::BucketTransport(data) => {
@@ -41,133 +28,86 @@ pub fn run_task_handler(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
             );
         }
         AssignedTask::Haul(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::haul::handle_haul_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::Build(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::build::handle_build_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::MovePlant(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::move_plant::handle_move_plant_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::HaulToBlueprint(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::haul_to_blueprint::handle_haul_to_blueprint_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::CollectBone(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::collect_bone::handle_collect_bone_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::Refine(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::refine::handle_refine_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::HaulToMixer(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::haul_to_mixer::handle_haul_to_mixer_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::HaulWithWheelbarrow(data) => {
-            execute_haul_with_wheelbarrow(ctx, data.clone(), commands, world_map, q_wheelbarrows);
+            execute_haul_with_wheelbarrow(ctx, data.clone(), commands, q_wheelbarrows);
         }
         AssignedTask::ReinforceFloorTile(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::reinforce_floor::handle_reinforce_floor_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::PourFloorTile(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::pour_floor::handle_pour_floor_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::CoatWall(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::coat_wall::handle_coat_wall_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::FrameWallTile(data) => {
-            AssignedTask::execute(
+            crate::soul_ai::execute::task_execution::frame_wall::handle_frame_wall_task(
                 ctx,
                 data.clone(),
                 commands,
-                soul_handles,
-                time,
-                world_map,
-                breakdown_opt,
             );
         }
         AssignedTask::GeneratePower(data) => {
@@ -175,8 +115,6 @@ pub fn run_task_handler(
                 ctx,
                 data.clone(),
                 commands,
-                time,
-                world_map,
             );
         }
         AssignedTask::None => {}
@@ -188,7 +126,6 @@ pub fn execute_haul_with_wheelbarrow(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    world_map: &WorldMap,
     q_wheelbarrows: &Query<
         (&Transform, Option<&hw_core::relationships::ParkedAt>),
         With<Wheelbarrow>,
@@ -198,7 +135,6 @@ pub fn execute_haul_with_wheelbarrow(
         ctx,
         data,
         commands,
-        world_map,
         q_wheelbarrows,
     );
 }

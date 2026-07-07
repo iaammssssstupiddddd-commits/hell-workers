@@ -19,7 +19,7 @@ pub fn handle(
     }
     ctx.inventory.0 = Some(data.wheelbarrow);
 
-    info!(
+    debug!(
         "WB_HAUL: Soul {:?} picked up wheelbarrow {:?}",
         ctx.soul_entity, data.wheelbarrow
     );

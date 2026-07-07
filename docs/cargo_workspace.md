@@ -77,9 +77,22 @@ hw_visual (hw_core + hw_spatial + hw_world)
 
 境界ルール（最終整理反映）:
 
+- UI は **2 層**に分離する（規範: [`crate-boundaries.md` §1.1](crate-boundaries.md#11-ui-2層構造hw_ui--bevy_appinterface)）:
+  - **Widget 層 (`hw_ui`)**: ノード生成・テーマ・ViewModel→ノード同期・`UiIntent` 発行
+  - **Adapter 層 (`bevy_app/src/interface/`)**: ECS→ViewModel、Presenter（thin sync）、`UiIntent` ハンドラ
 - `hw_ui` は UI の構築・更新ロジックを集約し、`bevy_app` は shell/adapter とゲーム状態更新ハンドラを保持する。
 - `bevy_app` → `hw_ui` は依存方向を維持し、`hw_ui` から `bevy_app` へ依存しない。
 - `UiShell` 的な役割（Selection やカメラ・モード遷移）は `bevy_app` 側で管理する。`MainCamera`、`SelectedEntity` / `HoveredEntity` / `SelectionIndicator`、`UiNodeRegistry` / `UiSlot` / `UiMountSlot` / `UiRoot` のような**共有 UI 契約型**は `hw_core` が所有し、`hw_ui` は必要に応じて re-export する。`world_cursor_pos` のような UI 実装ヘルパーは `hw_ui::camera` に残す。
+
+#### UI 2 層 — 機能別ファイル対応（Adapter = `bevy_app/src/interface/ui/`）
+
+| 機能 | ViewModel | Presenter | Widget (`hw_ui`) |
+|:---|:---|:---|:---|
+| エンティティリスト | `list/view_model.rs`, `list/change_detection.rs` | `list/sync.rs` | `list/spawn`, `list/sync`, `list/visual`, `list/section_toggle` |
+| タスクリスト | `panels/task_list/view_model.rs`, `panels/task_list/dirty.rs` | `panels/task_list/presenter.rs`, `panels/task_list/update.rs` | `panels/task_list/render.rs`, `panels/task_list/interaction.rs` |
+| 操作 → ゲーム | — | `interaction/intent_handler.rs`, `interaction/handlers/`, `interaction/intent_context.rs` | `intents.rs`（型定義・発行元） |
+| 情報パネル | `presentation/`（EntityInspectionQuery） | `panels/info_panel` re-export + root wiring | `panels/info_panel/*`, `models/inspection/` |
+| 初期 UI ツリー | — | `setup/mod.rs`（`GameAssets` → `UiAssets`） | `setup/*` |
 
 ### `hw_ui`
 
@@ -116,22 +129,22 @@ hw_visual (hw_core + hw_spatial + hw_world)
 - PlayMode 遷移ロジック（`NextState<PlayMode>`）
 - WorldMap / WorldMapWrite への依存
 
-root 側の `bevy_app` 残留（adapter 責務）:
+root 側の `bevy_app/src/interface/ui/` 残留（Adapter 層 — ViewModel / Presenter / Intent）:
 
-| ファイル/モジュール | 残留理由 |
-|:---|:---|
-| `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | BuildContext, ZoneContext, `FamiliarOperation`, `TimeSpeed`, `WorldMapWrite` などのゲーム依存 `UiIntent` 処理。`intent_handler.rs` 自体は dispatcher だが、実処理は root 側 handler 群に残留 |
-| `interaction/mode.rs` | PlayMode 遷移、TaskMode、BuildingType |
-| `list/change_detection.rs` | DamnedSoul, Familiar, AssignedTask の Changed 監視 |
-| `list/view_model.rs` | Familiar, DamnedSoul, FamiliarAiState からビューモデル構築 |
-| `list/sync.rs` | `sync_entity_list_from_view_model_system` / `sync_entity_list_value_rows_system`（hw_ui helpers の thin shell） |
-| `list/drag_drop.rs` | SquadManagementRequest, SoulIdentity（DragState 型は hw_ui） |
-| `list/interaction.rs`, `list/interaction/navigation.rs` | 行クリック・Tab 巡回・target 付き `UiIntent` 発行。TaskContext は navigation 側に残留（SectionToggle 操作は hw_ui の `entity_list_section_toggle_system` へ移設済み） |
-| `panels/context_menu.rs` | Familiar, DamnedSoul, Building, Door の分類 |
-| `panels/task_list/view_model.rs`, `presenter.rs`, `dirty.rs`（detect systems）| Designation, Blueprint, WorkType 等のゲームクエリ |
-| `panels/task_list/update.rs` | `Res<GameAssets>` をシステム引数に取るため hw_ui 移動不可 |
-| `presentation/` | EntityInspectionQuery（ゲームエンティティ 10+ 型のクエリ集約）|
-| `vignette.rs` | TaskContext (DreamPlanting モード判定) |
+| ファイル/モジュール | 層 | 残留理由 |
+|:---|:---|:---|
+| `list/view_model.rs`, `list/change_detection.rs` | ViewModel | `Familiar`, `DamnedSoul`, `AssignedTask` 等の ECS Query |
+| `panels/task_list/view_model.rs`, `panels/task_list/dirty.rs` | ViewModel | `Designation`, `Blueprint`, `WorkType` 等のゲームクエリ |
+| `presentation/` | ViewModel | `EntityInspectionQuery`（ゲームエンティティ 10+ 型のクエリ集約） |
+| `list/sync.rs` | Presenter | `hw_ui::list::sync` への thin shell（`GameAssets` 注入） |
+| `panels/task_list/presenter.rs`, `panels/task_list/update.rs` | Presenter | ViewModel → `hw_ui` render 橋渡し。`update.rs` は `Res<GameAssets>` 必須 |
+| `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | Intent | `BuildContext`, `ZoneContext`, `FamiliarOperation`, `TimeSpeed`, `WorldMapWrite` 等のゲーム依存 `UiIntent` 処理 |
+| `interaction/mode.rs` | Intent | `PlayMode` 遷移、`TaskMode`, `BuildingType` |
+| `list/interaction.rs`, `list/interaction/navigation.rs` | Intent | 行クリック・Tab 巡回・target 付き `UiIntent` 発行（SectionToggle は hw_ui 側） |
+| `list/drag_drop.rs` | Intent | `SquadManagementRequest`, `SoulIdentity`（`DragState` 型は hw_ui） |
+| `panels/context_menu.rs` | Intent | `Familiar`, `DamnedSoul`, `Building`, `Door` の分類 |
+| `vignette.rs` | Presenter | `TaskContext`（DreamPlanting モード判定） |
+
 - `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。`hw_visual::handles` の 8 Resource（`WallVisualHandles` 等）は root の `init_visual_handles` startup システムが `GameAssets` から注入する。`SoulTaskHandles` は `hw_core::visual`、`TerrainVisualHandles` / `DoorVisualHandles` は `hw_world`、`ResourceItemVisualHandles` は `hw_logistics` が所有し、同じ startup 注入パターンを共有する。visual marker (`FadeOut`, `WheelbarrowMovement`) は `hw_core::visual` に置き、`hw_familiar_ai` / `hw_soul_ai` / `hw_visual` の共有型として扱う。Dream 系 UI 連携で読む shared contract (`MainCamera`, `SelectedEntity`, `UiNodeRegistry`, `UiMountSlot` など) も `hw_core` 側に寄せ、`hw_visual` が `hw_ui` に直接依存しない構成へ整理済み。
 - `bevy_app` → `hw_visual` は依存方向を維持し、`hw_visual` から `bevy_app` へ依存しない。
 

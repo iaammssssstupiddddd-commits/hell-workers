@@ -5,53 +5,50 @@ use crate::soul_ai::execute::task_execution::{
     common::*,
     context::TaskExecutionContext,
     types::{
-        AssignedTask, GatherPhase, HaulData, HaulPhase, HaulToBlueprintData, HaulToBpPhase,
-        HaulToMixerData, HaulToMixerPhase,
+        AssignedTask, GatherData, GatherPhase, HaulData, HaulPhase, HaulToBlueprintData,
+        HaulToBpPhase, HaulToMixerData, HaulToMixerPhase,
     },
 };
 use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_core::relationships::WorkingOn;
-use hw_core::visual::{FadeOut, SoulTaskHandles};
+use hw_core::visual::FadeOut;
 use hw_jobs::{Designation, WorkType};
 use hw_logistics::{ResourceItem, ResourceType};
-use hw_world::WorldMap;
-
-/// `handle_gather_task` のタスク引数をまとめた構造体。
-pub struct GatherTaskArgs<'a> {
-    pub target: Entity,
-    pub work_type: &'a WorkType,
-    pub phase: GatherPhase,
-}
 
 pub fn handle_gather_task(
     ctx: &mut TaskExecutionContext,
-    args: GatherTaskArgs<'_>,
+    data: GatherData,
     commands: &mut Commands,
-    soul_handles: &SoulTaskHandles,
-    time: &Res<Time>,
-    world_map: &WorldMap,
 ) {
-    let GatherTaskArgs {
+    let GatherData {
         target,
         work_type,
         phase,
-    } = args;
+    } = data;
+    let work_type = &work_type;
     let soul_pos = ctx.soul_pos();
     let q_targets = &ctx.queries.designation.targets;
     match phase {
         GatherPhase::GoingToResource => {
             let (res_pos, has_designation) = {
                 let Ok((res_transform, _, _, _, _, des_opt, _)) = q_targets.get(target) else {
-                    clear_task_and_path(ctx.task, ctx.path);
+                    ctx.abort_closed(commands, "gather target entity missing");
                     return;
                 };
                 (res_transform.translation.truncate(), des_opt.is_some())
             };
-            match navigate_to_adjacent(ctx, has_designation, res_pos, soul_pos, world_map) {
+            match navigate_to_adjacent(
+                ctx,
+                has_designation,
+                res_pos,
+                soul_pos,
+                ctx.env.world_map,
+                commands,
+            ) {
                 NavOutcome::Moving | NavOutcome::Cancelled => {}
                 NavOutcome::Unreachable => {
-                    info!(
+                    debug!(
                         "GATHER: Soul {:?} cannot reach target {:?}, canceling",
                         ctx.soul_entity, target
                     );
@@ -59,7 +56,10 @@ pub fn handle_gather_task(
                         source: target,
                         amount: 1,
                     });
-                    clear_task_and_path(ctx.task, ctx.path);
+                    ctx.clear_soul_assignment(
+                        commands,
+                        crate::soul_ai::execute::task_execution::context::TaskEndDisposition::AbortedRetryable,
+                    );
                 }
                 NavOutcome::Arrived => {
                     *ctx.task = AssignedTask::Gather(
@@ -78,66 +78,56 @@ pub fn handle_gather_task(
             if let Ok(target_data) = q_targets.get(target) {
                 let (res_transform, tree, tree_variant, rock, _res_item, des_opt, _stored_in) =
                     target_data;
-                // 指定が解除されていたら中止
-                // 指定が解除されていたら中止
-                if cancel_task_if_designation_missing(des_opt, ctx.task, ctx.path) {
-                    // キャンセル時も予約解除
+                if des_opt.is_none() {
                     ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                         source: target,
                         amount: 1,
                     });
+                    ctx.abort_closed(commands, "designation missing");
                     return;
                 }
                 let pos = res_transform.translation;
 
-                // 進行度を更新（岩は2倍の時間がかかる）
                 let speed = if rock.is_some() {
                     GATHER_SPEED_BASE * hw_core::constants::GATHER_SPEED_ROCK_MULTIPLIER
                 } else {
                     GATHER_SPEED_BASE
                 };
-                progress += time.delta_secs() * speed;
+                progress += ctx.env.time.delta_secs() * speed;
 
                 if progress >= 1.0 {
                     if tree.is_some() {
-                        // 木1本 → Wood × WOOD_DROP_AMOUNT
                         for i in 0..hw_core::constants::WOOD_DROP_AMOUNT {
-                            // タイルサイズ 32 なので、中心から ±16 以内に収める。余裕を見て ±12
                             let offset = Vec3::new((i as f32 - 2.0) * 6.0, 0.0, 0.0);
                             commands.spawn((
                                 ResourceItem(hw_logistics::ResourceType::Wood),
                                 Sprite {
-                                    image: soul_handles.wood.clone(),
+                                    image: ctx.env.soul_handles.wood.clone(),
                                     custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                                     ..default()
                                 },
                                 Transform::from_translation(pos + offset),
                             ));
                         }
-                        info!(
+                        debug!(
                             "TASK_EXEC: Soul {:?} chopped a tree (dropped {} wood)",
                             ctx.soul_entity,
                             hw_core::constants::WOOD_DROP_AMOUNT
                         );
 
-                        // 障害物解除
-                        // 障害物判定を即座に消すために、ObstaclePositionを削除する。
                         commands
                             .entity(target)
                             .remove::<hw_jobs::ObstaclePosition>();
-                        commands.entity(target).remove::<hw_jobs::Tree>(); // タスク対象から外す
-                        commands.entity(target).remove::<Designation>(); // Designationも外す
+                        commands.entity(target).remove::<hw_jobs::Tree>();
+                        commands.entity(target).remove::<Designation>();
 
-                        // アニメーション画像に変更
-                        // 注: target_dataの変数は既に上で分解されているため、再度getする必要はない
-                        // ただし、tree_variantはOption<&TreeVariant>なので、値を取り出す
                         let variant_index = if let Some(variant) = tree_variant {
                             variant.0
                         } else {
                             0
                         };
 
-                        if let Some(anime_image) = soul_handles.tree_animes.get(variant_index) {
+                        if let Some(anime_image) = ctx.env.soul_handles.tree_animes.get(variant_index) {
                             commands.entity(target).insert(Sprite {
                                 image: anime_image.clone(),
                                 custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),
@@ -145,12 +135,9 @@ pub fn handle_gather_task(
                             });
                         }
 
-                        // フェードアウト開始
                         commands.entity(target).insert(FadeOut { speed: 1.0 });
                     } else if rock.is_some() {
-                        // 岩1つ → Rock × ROCK_DROP_AMOUNT
                         for i in 0..hw_core::constants::ROCK_DROP_AMOUNT {
-                            // タイルサイズ 32 なので、中心から ±16 以内に収める。余裕を見て ±12
                             let offset = Vec3::new(
                                 ((i % 5) as f32 - 2.0) * 6.0,
                                 ((i / 5) as f32 - 0.5) * 6.0,
@@ -159,14 +146,14 @@ pub fn handle_gather_task(
                             commands.spawn((
                                 ResourceItem(hw_logistics::ResourceType::Rock),
                                 Sprite {
-                                    image: soul_handles.rock.clone(),
+                                    image: ctx.env.soul_handles.rock.clone(),
                                     custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                                     ..default()
                                 },
                                 Transform::from_translation(pos + offset),
                             ));
                         }
-                        info!(
+                        debug!(
                             "TASK_EXEC: Soul {:?} mined a rock (dropped {} rock)",
                             ctx.soul_entity,
                             hw_core::constants::ROCK_DROP_AMOUNT
@@ -176,14 +163,12 @@ pub fn handle_gather_task(
                             .remove::<hw_core::relationships::WorkingOn>();
                         commands.entity(target).despawn();
                     } else {
-                        // その他（デフォルト）は即Despawn
                         commands
                             .entity(ctx.soul_entity)
                             .remove::<hw_core::relationships::WorkingOn>();
                         commands.entity(target).despawn();
                     }
 
-                    // 完了時予約解除
                     ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                         source: target,
                         amount: 1,
@@ -198,7 +183,6 @@ pub fn handle_gather_task(
                     );
                     ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
                 } else {
-                    // 進捗を保存
                     *ctx.task = AssignedTask::Gather(
                         crate::soul_ai::execute::task_execution::types::GatherData {
                             target,
@@ -208,11 +192,10 @@ pub fn handle_gather_task(
                     );
                 }
             } else {
-                clear_task_and_path(ctx.task, ctx.path);
+                ctx.abort_closed(commands, "gather target missing during collect");
             }
         }
         GatherPhase::Done => {
-            // 採集完了後、その場で散らばったアイテムを即座に運搬チェーンへ
             let resource_type = match work_type {
                 WorkType::Chop => Some(ResourceType::Wood),
                 WorkType::Mine => Some(ResourceType::Rock),
@@ -233,7 +216,7 @@ pub fn handle_gather_task(
                             stockpile: destination,
                             phase: HaulPhase::GoingToItem,
                         });
-                        info!(
+                        debug!(
                             "GATHER_CHAIN: Soul {:?} chained to haul {:?} ({:?}) to storage {:?}",
                             ctx.soul_entity, item, resource_type, destination
                         );
@@ -245,7 +228,7 @@ pub fn handle_gather_task(
                             blueprint,
                             phase: HaulToBpPhase::GoingToItem,
                         });
-                        info!(
+                        debug!(
                             "GATHER_CHAIN: Soul {:?} chained to haul {:?} ({:?}) to blueprint {:?}",
                             ctx.soul_entity, item, resource_type, blueprint
                         );
@@ -258,7 +241,7 @@ pub fn handle_gather_task(
                             resource_type,
                             phase: HaulToMixerPhase::GoingToItem,
                         });
-                        info!(
+                        debug!(
                             "GATHER_CHAIN: Soul {:?} chained to haul {:?} ({:?}) to mixer {:?}",
                             ctx.soul_entity, item, resource_type, mixer
                         );
@@ -267,7 +250,7 @@ pub fn handle_gather_task(
                 return;
             }
 
-            clear_task_and_path(ctx.task, ctx.path);
+            ctx.complete_task(commands, "gather done without chain");
         }
     }
 }

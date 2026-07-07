@@ -213,7 +213,7 @@ fn try_direct_bone_collect_to_floor(
         queries,
         shadow,
     );
-    info!(
+    debug!(
         "ASSIGN: Floor request {:?} assigned direct Bone collect via wheelbarrow {:?} from {:?} to site {:?} (amount {})",
         params.task_entity, wheelbarrow, source_entity, params.site_entity, amount
     );

@@ -8,12 +8,12 @@ pub mod context {
     pub use hw_soul_ai::soul_ai::execute::task_execution::context::{
         ConstructionSiteAccess, DesignationAccess, FamiliarStorageAccess, MutStorageAccess,
         ReservationAccess, StorageAccess, TaskAssignmentQueries, TaskAssignmentReadAccess,
-        TaskExecutionContext, TaskQueries, TaskReservationAccess, TaskUnassignQueries,
+        TaskEndDisposition, TaskExecEnv, TaskExecutionContext, TaskQueries, TaskReservationAccess, TaskUnassignQueries,
     };
 }
 pub mod handler {
     pub use hw_soul_ai::soul_ai::execute::task_execution::handler::{
-        TaskHandler, dispatch::execute_haul_with_wheelbarrow, dispatch::run_task_handler,
+        dispatch::execute_haul_with_wheelbarrow, dispatch::run_task_handler,
     };
 }
 pub mod move_plant {

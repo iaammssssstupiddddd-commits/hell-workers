@@ -2,8 +2,9 @@
 //!
 //! 失敗経路での予約解放とタスククリアを共通化する。
 
-use crate::soul_ai::execute::task_execution::common::clear_task_and_path;
-use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::soul_ai::execute::task_execution::context::{
+    TaskEndDisposition, TaskExecutionContext,
+};
 use bevy::prelude::*;
 use hw_world::WorldMap;
 
@@ -30,7 +31,7 @@ pub fn cancel_haul_to_stockpile(
     commands
         .entity(item)
         .remove::<hw_core::relationships::DeliveringTo>();
-    clear_task_and_path(ctx.task, ctx.path);
+    ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
 }
 
 /// Blueprint運搬の中断: 目的地＋ソース解放、タスククリア
@@ -55,7 +56,7 @@ pub fn cancel_haul_to_blueprint(
     commands
         .entity(item)
         .remove::<hw_core::relationships::DeliveringTo>();
-    clear_task_and_path(ctx.task, ctx.path);
+    ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
 }
 
 /// ミキサー運搬の中断: ミキサー目的地解放、タスククリア
@@ -63,9 +64,10 @@ pub fn cancel_haul_to_mixer(
     ctx: &mut TaskExecutionContext,
     mixer: Entity,
     resource_type: hw_logistics::ResourceType,
+    commands: &mut Commands,
 ) {
     reservation::release_mixer_destination(ctx, mixer, resource_type);
-    clear_task_and_path(ctx.task, ctx.path);
+    ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
 }
 
 /// ミキサー運搬（未ピックアップ段階）の中断:
@@ -75,9 +77,10 @@ pub fn cancel_haul_to_mixer_before_pickup(
     item: Entity,
     mixer: Entity,
     resource_type: hw_logistics::ResourceType,
+    commands: &mut Commands,
 ) {
     reservation::release_source(ctx, item, 1);
-    cancel_haul_to_mixer(ctx, mixer, resource_type);
+    cancel_haul_to_mixer(ctx, mixer, resource_type, commands);
 }
 
 /// バケツを足元グリッドへドロップし、運搬関連の管理コンポーネントを除去する。

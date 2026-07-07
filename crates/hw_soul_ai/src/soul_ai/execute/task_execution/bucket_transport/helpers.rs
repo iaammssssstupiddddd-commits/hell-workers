@@ -1,6 +1,8 @@
 //! バケツ搬送共通ヘルパー
 
-use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::soul_ai::execute::task_execution::context::{
+    TaskEndDisposition, TaskExecutionContext,
+};
 use crate::soul_ai::execute::task_execution::transport_common::cancel;
 use bevy::prelude::*;
 use hw_world::WorldMap;
@@ -30,4 +32,5 @@ pub fn drop_bucket_for_auto_haul(
         world_map,
         false,
     );
+    ctx.clear_soul_assignment(commands, TaskEndDisposition::Completed);
 }

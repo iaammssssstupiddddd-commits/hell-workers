@@ -10,7 +10,6 @@ use crate::soul_ai::execute::task_execution::types::{
 };
 use bevy::prelude::*;
 use hw_logistics::ResourceType;
-use hw_world::WorldMap;
 
 use super::super::{abort, guards};
 
@@ -18,14 +17,14 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: &BucketTransportData,
     commands: &mut Commands,
-    world_map: &WorldMap,
+    
 ) {
     if ctx.inventory.0 != Some(data.bucket) {
         warn!(
             "GoingToDestination: Bucket not in inventory for soul {:?}",
             ctx.soul_entity
         );
-        abort::abort_without_bucket(commands, ctx, data, world_map);
+        abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
         return;
     }
 
@@ -39,7 +38,7 @@ pub fn handle(
                     commands,
                     ctx,
                     data.bucket,
-                    world_map,
+                    ctx.env.world_map,
                 );
                 return;
             }
@@ -60,7 +59,7 @@ pub fn handle(
                     let tank = match data.source {
                         BucketTransportSource::Tank { tank, .. } => tank,
                         BucketTransportSource::River => {
-                            abort::abort_with_bucket(commands, ctx, data, world_map);
+                            abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                             return;
                         }
                     };
@@ -96,7 +95,7 @@ pub fn handle(
                 let tank = match data.source {
                     BucketTransportSource::Tank { tank, .. } => tank,
                     BucketTransportSource::River => {
-                        abort::abort_with_bucket(commands, ctx, data, world_map);
+                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                         return;
                     }
                 };
@@ -121,7 +120,7 @@ pub fn handle(
                     mixer_pos,
                     ctx.path,
                     soul_pos,
-                    world_map,
+                    ctx.env.world_map,
                     ctx.pf_context,
                 );
 

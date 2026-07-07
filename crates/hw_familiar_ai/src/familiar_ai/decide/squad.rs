@@ -44,7 +44,7 @@ impl SquadManager {
                     // 整合性チェック: 相手が自分を主人だと思っていないなら無効
                     if let Some(uc_comp) = uc {
                         if uc_comp.0 != fam_entity {
-                            info!(
+                            debug!(
                                 "FAM_AI: {:?} squad member {:?} belongs to another master {:?}",
                                 fam_entity, member_entity, uc_comp.0
                             );

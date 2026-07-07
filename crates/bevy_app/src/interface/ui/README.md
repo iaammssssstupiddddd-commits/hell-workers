@@ -6,6 +6,8 @@
 ゲームエンティティ（`Familiar`, `DamnedSoul`, `Building` 等）への依存が不可避な処理はここに残し、
 純粋 UI ロジックは `hw_ui` に置く。
 
+2 層の責務分担（ViewModel / Presenter / Intent vs Widget）は [`docs/crate-boundaries.md` §1.1](../../../../../docs/crate-boundaries.md#11-ui-2層構造hw_ui--bevy_appinterface) を参照。
+
 ## ディレクトリ構成
 
 | ディレクトリ/ファイル | 内容 |

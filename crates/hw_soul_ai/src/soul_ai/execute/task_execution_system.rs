@@ -1,15 +1,15 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::events::OnTaskCompleted;
-use hw_core::relationships::WorkingOn;
 use hw_core::visual::SoulTaskHandles;
 use hw_logistics::Wheelbarrow;
 use hw_world::WorldMapRead;
 use hw_world::pathfinding::PathfindingContext;
 
-use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskQueries};
+use crate::soul_ai::execute::task_execution::context::{
+    TaskEndDisposition, TaskExecEnv, TaskExecutionContext, TaskQueries,
+};
 use crate::soul_ai::execute::task_execution::handler::dispatch::run_task_handler;
-use crate::soul_ai::execute::task_execution::types::AssignedTask;
 use crate::soul_ai::helpers::query_types::TaskExecutionSoulQuery;
 use crate::soul_ai::helpers::work::unassign_task;
 
@@ -69,7 +69,6 @@ pub fn task_execution_system(
             }
         }
 
-        let was_busy = !matches!(*task, AssignedTask::None);
         let old_work_type = task.work_type();
         let old_task_entity = task.get_target_entity();
 
@@ -83,20 +82,20 @@ pub fn task_execution_system(
             inventory: &mut inventory,
             pf_context: &mut res.pf_context,
             queries: &mut queries,
+            env: TaskExecEnv {
+                soul_handles: &res.soul_handles,
+                time: res.time.as_ref(),
+                world_map: res.world_map.as_ref(),
+                breakdown: breakdown_opt,
+            },
+            end_disposition: TaskEndDisposition::Running,
         };
 
-        run_task_handler(
-            &mut ctx,
-            &mut commands,
-            &res.soul_handles,
-            &res.time,
-            res.world_map.as_ref(),
-            breakdown_opt,
-            &q_wheelbarrows,
-        );
+        run_task_handler(&mut ctx, &mut commands, &q_wheelbarrows);
 
-        if was_busy
-            && matches!(*task, AssignedTask::None)
+        let end_disposition = ctx.end_disposition;
+
+        if end_disposition == TaskEndDisposition::Completed
             && let Some(work_type) = old_work_type
         {
             commands.trigger(OnTaskCompleted {
@@ -105,9 +104,7 @@ pub fn task_execution_system(
                 work_type,
             });
 
-            commands.entity(soul_entity).remove::<WorkingOn>();
-
-            info!(
+            debug!(
                 "EVENT: OnTaskCompleted triggered for Soul {:?}",
                 soul_entity
             );

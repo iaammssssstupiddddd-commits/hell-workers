@@ -6,7 +6,6 @@ use hw_logistics::transport_request::WheelbarrowDestination;
 use std::collections::HashSet;
 
 use crate::soul_ai::execute::task_execution::{
-    common::clear_task_and_path,
     context::TaskExecutionContext,
     transport_common::{reservation, wheelbarrow as wheelbarrow_common},
     types::HaulWithWheelbarrowData,
@@ -33,10 +32,7 @@ pub(super) fn finalize_unload_task(
         soul_pos,
     );
     ctx.inventory.0 = None;
-    if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
-        soul_commands.try_remove::<hw_core::relationships::WorkingOn>();
-    }
-    clear_task_and_path(ctx.task, ctx.path);
+    ctx.complete_task(commands, "wheelbarrow unload done");
 }
 
 pub(super) fn finish_partial_unload(

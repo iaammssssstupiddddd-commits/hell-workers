@@ -9,9 +9,7 @@ use crate::soul_ai::execute::task_execution::types::{
 };
 use bevy::prelude::*;
 use hw_core::constants::{BUCKET_CAPACITY, TILE_SIZE};
-use hw_core::visual::SoulTaskHandles;
 use hw_logistics::{ResourceItem, ResourceType};
-use hw_world::WorldMap;
 
 use super::super::abort;
 
@@ -20,16 +18,13 @@ pub fn handle(
     data: &BucketTransportData,
     progress: f32,
     commands: &mut Commands,
-    soul_handles: &SoulTaskHandles,
-    time: &Res<Time>,
-    world_map: &WorldMap,
 ) {
     if ctx.inventory.0 != Some(data.bucket) {
         warn!(
             "Filling: Bucket not in inventory for soul {:?}",
             ctx.soul_entity
         );
-        abort::abort_without_bucket(commands, ctx, data, world_map);
+        abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
         return;
     }
 
@@ -38,13 +33,13 @@ pub fn handle(
     match data.source {
         BucketTransportSource::River => {
             // 時間経過で水を汲む
-            let new_progress = progress + time.delta_secs() * 0.5;
+            let new_progress = progress + ctx.env.time.delta_secs() * 0.5;
 
             if new_progress >= 1.0 {
                 let tank_entity = match data.destination {
                     BucketTransportDestination::Tank(tank) => tank,
                     _ => {
-                        abort::abort_with_bucket(commands, ctx, data, world_map);
+                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                         return;
                     }
                 };
@@ -52,7 +47,7 @@ pub fn handle(
                 commands.entity(data.bucket).try_insert((
                     ResourceItem(ResourceType::BucketWater),
                     Sprite {
-                        image: soul_handles.bucket_water.clone(),
+                        image: ctx.env.soul_handles.bucket_water.clone(),
                         custom_size: Some(Vec2::splat(TILE_SIZE * 0.6)),
                         ..default()
                     },
@@ -64,7 +59,7 @@ pub fn handle(
                     let tank_pos = tank_transform.translation.truncate();
                     if super::super::routing::set_path_to_tank_boundary(
                         ctx,
-                        world_map,
+                        ctx.env.world_map,
                         tank_pos,
                         data,
                         BucketTransportPhase::GoingToDestination,
@@ -75,10 +70,10 @@ pub fn handle(
                             .entity(data.bucket)
                             .try_insert(hw_core::relationships::DeliveringTo(tank_entity));
                     } else {
-                        abort::abort_with_bucket(commands, ctx, data, world_map);
+                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                     }
                 } else {
-                    abort::abort_with_bucket(commands, ctx, data, world_map);
+                    abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                 }
             } else {
                 *ctx.task = AssignedTask::BucketTransport(BucketTransportData {
@@ -117,7 +112,7 @@ pub fn handle(
                 commands.entity(data.bucket).try_insert((
                     ResourceItem(ResourceType::BucketWater),
                     Sprite {
-                        image: soul_handles.bucket_water.clone(),
+                        image: ctx.env.soul_handles.bucket_water.clone(),
                         custom_size: Some(Vec2::splat(TILE_SIZE * 0.6)),
                         ..default()
                     },
@@ -126,7 +121,7 @@ pub fn handle(
                 let mixer_entity = match data.destination {
                     BucketTransportDestination::Mixer(m) => m,
                     _ => {
-                        abort::abort_with_bucket(commands, ctx, data, world_map);
+                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                         return;
                     }
                 };
@@ -152,7 +147,7 @@ pub fn handle(
                         mixer_pos,
                         ctx.path,
                         soul_pos,
-                        world_map,
+                        ctx.env.world_map,
                         ctx.pf_context,
                     );
                 } else {
@@ -170,7 +165,7 @@ pub fn handle(
                 let mixer = match data.destination {
                     BucketTransportDestination::Mixer(m) => m,
                     _ => {
-                        abort::abort_with_bucket(commands, ctx, data, world_map);
+                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                         return;
                     }
                 };

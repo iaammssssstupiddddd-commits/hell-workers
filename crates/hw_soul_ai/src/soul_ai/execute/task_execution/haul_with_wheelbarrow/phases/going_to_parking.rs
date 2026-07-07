@@ -9,13 +9,12 @@ use crate::soul_ai::execute::task_execution::{
     context::TaskExecutionContext,
 };
 use bevy::prelude::*;
-use hw_world::WorldMap;
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    world_map: &WorldMap,
+    
     q_wheelbarrows: &Query<
         (&Transform, Option<&hw_core::relationships::ParkedAt>),
         With<hw_logistics::Wheelbarrow>,
@@ -23,7 +22,7 @@ pub fn handle(
     soul_pos: Vec2,
 ) {
     let Ok((wb_transform, _)) = q_wheelbarrows.get(data.wheelbarrow) else {
-        info!(
+        debug!(
             "WB_HAUL: Wheelbarrow {:?} not found, canceling",
             data.wheelbarrow
         );
@@ -32,7 +31,7 @@ pub fn handle(
     };
 
     let wb_pos = wb_transform.translation.truncate();
-    match navigate_to_pos(ctx, wb_pos, soul_pos, world_map) {
+    match navigate_to_pos(ctx, wb_pos, soul_pos, ctx.env.world_map) {
         NavOutcome::Moving => return,
         NavOutcome::Unreachable => {
             cancel::cancel_wheelbarrow_task(ctx, &data, commands);

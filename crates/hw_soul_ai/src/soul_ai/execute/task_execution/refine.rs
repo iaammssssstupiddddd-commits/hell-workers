@@ -1,22 +1,18 @@
 use super::common::*;
 use super::context::TaskExecutionContext;
-use super::types::{AssignedTask, RefinePhase};
+use super::types::{AssignedTask, RefineData, RefinePhase};
 use bevy::prelude::*;
 use hw_core::constants::*;
-use hw_core::visual::SoulTaskHandles;
 use hw_jobs::StoredByMixer;
 use hw_logistics::{ResourceItem, ResourceType};
-use hw_world::WorldMap;
 
 pub fn handle_refine_task(
     ctx: &mut TaskExecutionContext,
-    mixer_entity: Entity,
-    phase: RefinePhase,
+    data: RefineData,
     commands: &mut Commands,
-    soul_handles: &SoulTaskHandles,
-    time: &Res<Time>,
-    world_map: &WorldMap,
 ) {
+    let RefineData { mixer, phase } = data;
+    let mixer_entity = mixer;
     let soul_pos = ctx.soul_pos();
 
     match phase {
@@ -25,19 +21,17 @@ pub fn handle_refine_task(
                 let (mixer_transform, _, _) = mixer_data;
                 let mixer_pos = mixer_transform.translation.truncate();
 
-                // 到達可能かチェック
                 let reachable = update_destination_to_adjacent(
                     ctx.dest,
                     mixer_pos,
                     ctx.path,
                     soul_pos,
-                    world_map,
+                    ctx.env.world_map,
                     ctx.pf_context,
                 );
 
                 if !reachable {
-                    // 到達不能: タスクをキャンセル
-                    info!(
+                    debug!(
                         "REFINE: Soul {:?} cannot reach mixer {:?}, canceling",
                         ctx.soul_entity, mixer_entity
                     );
@@ -49,21 +43,18 @@ pub fn handle_refine_task(
                         source: mixer_entity,
                         amount: 1,
                     });
-                    clear_task_and_path(ctx.task, ctx.path);
+                    ctx.abort_retryable(commands, "refine mixer unreachable");
                     return;
                 }
 
                 if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {
-                    *ctx.task = AssignedTask::Refine(
-                        crate::soul_ai::execute::task_execution::types::RefineData {
-                            mixer: mixer_entity,
-                            phase: RefinePhase::Refining { progress: 0.0 },
-                        },
-                    );
+                    *ctx.task = AssignedTask::Refine(RefineData {
+                        mixer: mixer_entity,
+                        phase: RefinePhase::Refining { progress: 0.0 },
+                    });
                     ctx.path.waypoints.clear();
                 }
             } else {
-                // Mixer が存在しない場合も Designation を削除
                 commands
                     .entity(mixer_entity)
                     .remove::<hw_jobs::Designation>();
@@ -72,7 +63,7 @@ pub fn handle_refine_task(
                     source: mixer_entity,
                     amount: 1,
                 });
-                clear_task_and_path(ctx.task, ctx.path);
+                ctx.abort_closed(commands, "refine mixer gone");
             }
         }
 
@@ -88,11 +79,10 @@ pub fn handle_refine_task(
                     _ => 0,
                 };
 
-                // 原料がまだあるか確認
                 if !storage.has_materials_for_refining(water_count)
                     || !storage.has_output_capacity_for_refining()
                 {
-                    info!(
+                    debug!(
                         "TASK_EXEC: Soul {:?} canceled refining due to lack of materials or mud storage",
                         ctx.soul_entity
                     );
@@ -104,15 +94,13 @@ pub fn handle_refine_task(
                         source: mixer_entity,
                         amount: 1,
                     });
-                    clear_task_and_path(ctx.task, ctx.path);
+                    ctx.abort_retryable(commands, "refine materials unavailable");
                     return;
                 }
 
-                // 精製速度は伐採と同じ GATHER_SPEED_BASE を使用
-                progress += time.delta_secs() * GATHER_SPEED_BASE;
+                progress += ctx.env.time.delta_secs() * GATHER_SPEED_BASE;
 
                 if progress >= 1.0 {
-                    // 原料消費
                     storage.consume_materials_for_refining(water_count);
                     if let Some(water_entity) = ctx.queries.resource_items.iter().find_map(
                         |(res_entity, _, _, res_item, stored_in, _)| {
@@ -136,7 +124,6 @@ pub fn handle_refine_task(
                         );
                     }
 
-                    // StasisMud をドロップ（Stockpile オートホールで自動的に運搬される）
                     let pos = mixer_transform.translation;
                     for i in 0..STASIS_MUD_OUTPUT {
                         let offset =
@@ -145,7 +132,7 @@ pub fn handle_refine_task(
                             ResourceItem(ResourceType::StasisMud),
                             StoredByMixer(mixer_entity),
                             Sprite {
-                                image: soul_handles.icon_stasis_mud_small.clone(),
+                                image: ctx.env.soul_handles.icon_stasis_mud_small.clone(),
                                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
                                 ..default()
                             },
@@ -159,25 +146,20 @@ pub fn handle_refine_task(
                     }
                     storage.mud += STASIS_MUD_OUTPUT;
 
-                    info!("TASK_EXEC: Soul {:?} refined 5 StasisMud", ctx.soul_entity);
+                    debug!("TASK_EXEC: Soul {:?} refined 5 StasisMud", ctx.soul_entity);
 
-                    *ctx.task = AssignedTask::Refine(
-                        crate::soul_ai::execute::task_execution::types::RefineData {
-                            mixer: mixer_entity,
-                            phase: RefinePhase::Done,
-                        },
-                    );
+                    *ctx.task = AssignedTask::Refine(RefineData {
+                        mixer: mixer_entity,
+                        phase: RefinePhase::Done,
+                    });
                     ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_GAIN_ON_COMPLETION).min(1.0);
                 } else {
-                    *ctx.task = AssignedTask::Refine(
-                        crate::soul_ai::execute::task_execution::types::RefineData {
-                            mixer: mixer_entity,
-                            phase: RefinePhase::Refining { progress },
-                        },
-                    );
+                    *ctx.task = AssignedTask::Refine(RefineData {
+                        mixer: mixer_entity,
+                        phase: RefinePhase::Refining { progress },
+                    });
                 }
             } else {
-                // Mixer が存在しない場合も Designation を削除
                 commands
                     .entity(mixer_entity)
                     .remove::<hw_jobs::Designation>();
@@ -186,11 +168,10 @@ pub fn handle_refine_task(
                     source: mixer_entity,
                     amount: 1,
                 });
-                clear_task_and_path(ctx.task, ctx.path);
+                ctx.abort_closed(commands, "refine mixer gone during refine");
             }
         }
         RefinePhase::Done => {
-            // 精製完了時に Designation を削除（次回必要なときに再発行される）
             commands
                 .entity(mixer_entity)
                 .remove::<hw_jobs::Designation>();
@@ -200,7 +181,7 @@ pub fn handle_refine_task(
                 source: mixer_entity,
                 amount: 1,
             });
-            clear_task_and_path(ctx.task, ctx.path);
+            ctx.complete_task(commands, "refine done");
         }
     }
 }

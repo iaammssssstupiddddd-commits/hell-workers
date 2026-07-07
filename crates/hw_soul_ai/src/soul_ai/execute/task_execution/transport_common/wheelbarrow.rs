@@ -3,7 +3,7 @@
 //! park/cancel/reset を共通化し、予約解放漏れを防ぐ。
 
 use crate::soul_ai::execute::task_execution::{
-    common::clear_task_and_path, context::TaskExecutionContext, types::HaulWithWheelbarrowData,
+    context::TaskExecutionContext, types::HaulWithWheelbarrowData,
 };
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
@@ -73,8 +73,5 @@ pub fn complete_wheelbarrow_task(
 
     park_wheelbarrow_entity(commands, data.wheelbarrow, parking_anchor, pos);
     ctx.inventory.0 = None;
-    if let Ok(mut soul_commands) = commands.get_entity(ctx.soul_entity) {
-        soul_commands.try_remove::<hw_core::relationships::WorkingOn>();
-    }
-    clear_task_and_path(ctx.task, ctx.path);
+    ctx.complete_task(commands, "wheelbarrow task complete");
 }

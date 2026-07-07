@@ -354,7 +354,7 @@ pub(super) fn execute_chain(
             });
             ctx.path.waypoints.clear();
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
-            info!(
+            debug!(
                 "CHAIN: Soul {:?} chained to Build {:?}",
                 ctx.soul_entity, blueprint
             );
@@ -368,7 +368,7 @@ pub(super) fn execute_chain(
             });
             ctx.path.waypoints.clear();
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
-            info!(
+            debug!(
                 "CHAIN: Soul {:?} chained to ReinforceFloor tile {:?}",
                 ctx.soul_entity, tile
             );
@@ -382,7 +382,7 @@ pub(super) fn execute_chain(
             });
             ctx.path.waypoints.clear();
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
-            info!(
+            debug!(
                 "CHAIN: Soul {:?} chained to PourFloor tile {:?}",
                 ctx.soul_entity, tile
             );
@@ -396,7 +396,7 @@ pub(super) fn execute_chain(
             });
             ctx.path.waypoints.clear();
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
-            info!(
+            debug!(
                 "CHAIN: Soul {:?} chained to FrameWall tile {:?}",
                 ctx.soul_entity, tile
             );
@@ -411,7 +411,7 @@ pub(super) fn execute_chain(
             });
             ctx.path.waypoints.clear();
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
-            info!(
+            debug!(
                 "CHAIN: Soul {:?} chained to CoatWall tile {:?}",
                 ctx.soul_entity, tile
             );

@@ -3,22 +3,19 @@
 use crate::soul_ai::execute::task_execution::common::is_near_target;
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use bevy::prelude::*;
-use hw_world::WorldMap;
 
-pub fn handle(ctx: &mut TaskExecutionContext, commands: &mut Commands, world_map: &WorldMap) {
+pub fn handle(ctx: &mut TaskExecutionContext, commands: &mut Commands) {
     let soul_pos = ctx.soul_pos();
 
     if is_near_target(soul_pos, ctx.dest.0) {
         let bucket_entity = match ctx.inventory.0 {
             Some(e) => e,
             None => {
-                crate::soul_ai::execute::task_execution::common::clear_task_and_path(
-                    ctx.task, ctx.path,
-                );
+                ctx.abort_closed(commands, "bucket transport returning without bucket");
                 return;
             }
         };
 
-        super::super::helpers::drop_bucket_for_auto_haul(commands, ctx, bucket_entity, world_map);
+        super::super::helpers::drop_bucket_for_auto_haul(commands, ctx, bucket_entity, ctx.env.world_map);
     }
 }

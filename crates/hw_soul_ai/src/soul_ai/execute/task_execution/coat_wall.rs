@@ -7,7 +7,6 @@ use crate::soul_ai::execute::task_execution::{
 };
 use bevy::prelude::*;
 use hw_core::constants::{FATIGUE_GAIN_ON_COMPLETION, WALL_COAT_DURATION_SECS, WALL_MUD_PER_TILE};
-use hw_core::relationships::WorkingOn;
 use hw_jobs::BuildingType;
 use hw_jobs::WallTileState;
 use hw_world::WorldMap;
@@ -18,7 +17,7 @@ fn cancel_coat_wall_task(
     commands: &mut Commands,
     reason: &str,
 ) {
-    info!(
+    debug!(
         "COAT_WALL: Cancelled for {:?} - tile {:?} ({})",
         ctx.soul_entity, tile_entity, reason
     );
@@ -26,8 +25,7 @@ fn cancel_coat_wall_task(
         source: tile_entity,
         amount: 1,
     });
-    clear_task_and_path(ctx.task, ctx.path);
-    commands.entity(ctx.soul_entity).remove::<WorkingOn>();
+    ctx.abort_closed(commands, reason);
 }
 
 fn handle_legacy_coat_wall_task(
@@ -35,8 +33,6 @@ fn handle_legacy_coat_wall_task(
     wall_entity: Entity,
     phase: CoatWallPhase,
     commands: &mut Commands,
-    time: &Res<Time>,
-    world_map: &WorldMap,
 ) {
     let soul_pos = ctx.soul_pos();
 
@@ -63,7 +59,7 @@ fn handle_legacy_coat_wall_task(
                 wall_pos,
                 ctx.path,
                 soul_pos,
-                world_map,
+                ctx.env.world_map,
                 ctx.pf_context,
             );
             if !reachable {
@@ -107,7 +103,7 @@ fn handle_legacy_coat_wall_task(
             }
 
             const MAX_PROGRESS_BP: u16 = 10_000;
-            let delta_bp = ((time.delta_secs() / WALL_COAT_DURATION_SECS * MAX_PROGRESS_BP as f32)
+            let delta_bp = ((ctx.env.time.delta_secs() / WALL_COAT_DURATION_SECS * MAX_PROGRESS_BP as f32)
                 .round()
                 .max(1.0)) as u16;
             let new_progress_bp = progress_bp.saturating_add(delta_bp).min(MAX_PROGRESS_BP);
@@ -140,35 +136,27 @@ fn handle_legacy_coat_wall_task(
                 source: wall_entity,
                 amount: 1,
             });
-            commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-            clear_task_and_path(ctx.task, ctx.path);
+            ctx.complete_task(commands, "legacy coat wall done");
         }
     }
 }
 
-/// `handle_coat_wall_task` のタスク引数をまとめた構造体。
-pub struct CoatWallArgs {
-    pub tile_entity: Entity,
-    pub site_entity: Entity,
-    pub wall_entity: Entity,
-    pub phase: CoatWallPhase,
-}
-
 pub fn handle_coat_wall_task(
     ctx: &mut TaskExecutionContext,
-    args: CoatWallArgs,
+    data: CoatWallData,
     commands: &mut Commands,
-    time: &Res<Time>,
-    world_map: &WorldMap,
 ) {
-    let CoatWallArgs {
-        tile_entity,
-        site_entity,
-        wall_entity,
+    let CoatWallData {
+        tile,
+        site,
+        wall,
         phase,
-    } = args;
+    } = data;
+    let tile_entity = tile;
+    let site_entity = site;
+    let wall_entity = wall;
     if site_entity == Entity::PLACEHOLDER {
-        handle_legacy_coat_wall_task(ctx, wall_entity, phase, commands, time, world_map);
+        handle_legacy_coat_wall_task(ctx, wall_entity, phase, commands);
         return;
     }
 
@@ -188,7 +176,7 @@ pub fn handle_coat_wall_task(
                 material_center,
                 ctx.path,
                 soul_pos,
-                world_map,
+                ctx.env.world_map,
                 ctx.pf_context,
             );
             if !reachable {
@@ -259,7 +247,7 @@ pub fn handle_coat_wall_task(
                 tile_pos,
                 ctx.path,
                 soul_pos,
-                world_map,
+                ctx.env.world_map,
                 ctx.pf_context,
             );
             if !reachable {
@@ -306,7 +294,7 @@ pub fn handle_coat_wall_task(
             }
 
             const MAX_PROGRESS_BP: u16 = 10_000;
-            let delta_bp = ((time.delta_secs() / WALL_COAT_DURATION_SECS * MAX_PROGRESS_BP as f32)
+            let delta_bp = ((ctx.env.time.delta_secs() / WALL_COAT_DURATION_SECS * MAX_PROGRESS_BP as f32)
                 .round()
                 .max(1.0)) as u16;
             let new_progress_bp = progress_bp.saturating_add(delta_bp).min(MAX_PROGRESS_BP);
@@ -353,8 +341,7 @@ pub fn handle_coat_wall_task(
                 source: tile_entity,
                 amount: 1,
             });
-            commands.entity(ctx.soul_entity).remove::<WorkingOn>();
-            clear_task_and_path(ctx.task, ctx.path);
+            ctx.complete_task(commands, "legacy coat wall done");
         }
     }
 }
