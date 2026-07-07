@@ -24,7 +24,6 @@
 | [dev-tools-debug-overlay-plan-2026-07-05.md](dev-tools-debug-overlay-plan-2026-07-05.md) | Draft | gizmo テキストの AI デバッグラベル導入（BSN トグル UI）。再検証により FpsOverlay 等の自前実装置き換えは却下（§0）、フレームタイムグラフは計測時オプション |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [performance-cpu-2026-04-16.md](performance-cpu-2026-04-16.md) | Draft | CPU パフォーマンス改善計画書 |
-| [system-wide-performance-followups-plan-2026-07-07.md](system-wide-performance-followups-plan-2026-07-07.md) | Complete | 静的レビューで抽出した毎フレーム全体走査、重複 cache 構築、UI particle material 更新、pathfinding 対象絞り込みの改善計画（M1〜M6 実装・実機確認済み） |
 | [terrain-lod-switch-flicker-plan-2026-04-17.md](terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD 切替時のちらつきを、判定安定化と短い遷移フェーズで抑える計画 |
 | [text-input-ui-plan-2026-07-05.md](text-input-ui-plan-2026-07-05.md) | Draft | EditableText による Soul リネーム・エンティティリスト検索 + bevy_clipboard。入力フィールドは BSN 構築 |
 | [world-map-lod1-performance-plan-2026-04-09.md](world-map-lod1-performance-plan-2026-04-09.md) | Complete | ワールドマップ近景 `LOD1` の fragment 負荷を、境界 early-out・中間 LOD・feature ベイク再編で下げる計画 |
@@ -152,6 +151,7 @@
 | [archive/soul-ai-root-thinning-plan-2026-03-11 copy.md](archive/soul-ai-root-thinning-plan-2026-03-11 copy.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-ai-root-thinning-plan-2026-03-11.md](archive/soul-ai-root-thinning-plan-2026-03-11.md) | アーカイブ | src/systems/soul_aiの計画。 |
 | [archive/soul-spawn-despawn.md](archive/soul-spawn-despawn.md) | アーカイブ | Soul Spawn/Despawn設計計画。 |
+| [archive/system-wide-performance-followups-plan-2026-07-07.md](archive/system-wide-performance-followups-plan-2026-07-07.md) | アーカイブ | 全体パフォーマンス改善フォローアップ計画書 |
 | [archive/task-chain-system-2026-03-29.md](archive/task-chain-system-2026-03-29.md) | アーカイブ | タスクチェーンシステム実装計画 |
 | [archive/task-execution-hw-ai-extraction-plan-2026-03-12.md](archive/task-execution-hw-ai-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/soul_ai/execute/task_execution/の計画。 |
 | [archive/task-list-left-panel-toggle.md](archive/task-list-left-panel-toggle.md) | アーカイブ | タスクリスト左パネル操作改善計画。 |
