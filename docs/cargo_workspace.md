@@ -319,6 +319,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `AreaBounds`, `TaskArea`（矩形エリア抽象型）
 - `command` 系 pure helper の一部（`wall_line_area`, `count_positions_in_area`, `overlap_summary_from_areas`, `get_drag_start`）
 - `GameTime`（`hw_core::time`）— ゲーム内時間 Resource。`game_time_system` は `ClockText` 依存のため bevy_app に残留するが、型自体は `hw_core::GameTime` を直接使う。1 段だけの pass-through re-export は置かない
+- `GameSettings`（`hw_core::settings`）— 永続化対象のゲーム設定 Resource（型定義のみ）。RON ロード/保存・反映・intent 処理は `bevy_app/systems/settings/`、設定画面 UI は `hw_ui`。write は bevy_app のみ（詳細: [docs/settings.md](settings.md)）
 
 ### `hw_energy`
 

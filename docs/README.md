@@ -18,6 +18,7 @@
 - [room_detection.md](room_detection.md): Room 検出システム（壁・扉・床で囲まれた空間の自動認識・オーバーレイ表示）。
 - [dream.md](dream.md): Dreamシステム。睡眠中の夢による通貨獲得メカニクス。
 - [state.md](state.md): ゲームの進行状態、プレイモードの遷移。
+- [settings.md](settings.md): GameSettings と settings.ron 永続化、設定画面 UI。
 - [soul_energy.md](soul_energy.md): Soul Energy システム（発電・消費・停電サイクル、Soul Spa、Outdoor Lamp）。ロードマップは [plans/soul-energy/milestone-roadmap.md](plans/soul-energy/milestone-roadmap.md)。
 
 ## UI & Visuals

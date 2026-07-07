@@ -83,6 +83,7 @@ Normal ↔ ZonePlace（Zoneボタン/Esc）、Normal ↔ TaskDesignation（Order
 | `Zones` | ゾーンメニュー |
 | `Orders` | 命令メニュー |
 | `Dream` | Dreamメニュー |
+| `Settings` | 設定モーダル（中央オーバーレイ。Architect 等サブメニューは非表示） |
 
 ### Architect サブメニューの2段階構造
 

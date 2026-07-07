@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-07-06）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-07-07）。
 
 ## 新規計画書の作り方
 
@@ -24,7 +24,6 @@
 | [dev-tools-debug-overlay-plan-2026-07-05.md](dev-tools-debug-overlay-plan-2026-07-05.md) | Draft | gizmo テキストの AI デバッグラベル導入（BSN トグル UI）。再検証により FpsOverlay 等の自前実装置き換えは却下（§0）、フレームタイムグラフは計測時オプション |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [performance-cpu-2026-04-16.md](performance-cpu-2026-04-16.md) | Draft | CPU パフォーマンス改善計画書 |
-| [settings-screen-plan-2026-07-05.md](settings-screen-plan-2026-07-05.md) | Draft | GameSettings + RON 永続化 + ui_widgets Slider/Checkbox の設定画面（BSN 構築）+ FontSize::Rem UI スケール |
 | [terrain-lod-switch-flicker-plan-2026-04-17.md](terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD 切替時のちらつきを、判定安定化と短い遷移フェーズで抑える計画 |
 | [text-input-ui-plan-2026-07-05.md](text-input-ui-plan-2026-07-05.md) | Draft | EditableText による Soul リネーム・エンティティリスト検索 + bevy_clipboard。入力フィールドは BSN 構築 |
 | [world-map-lod1-performance-plan-2026-04-09.md](world-map-lod1-performance-plan-2026-04-09.md) | Complete | ワールドマップ近景 `LOD1` の fragment 負荷を、境界 early-out・中間 LOD・feature ベイク再編で下げる計画 |
@@ -141,6 +140,7 @@
 | [archive/scaling-performance-bottlenecks-plan.md](archive/scaling-performance-bottlenecks-plan.md) | アーカイブ | スケール時ボトルネック最適化計画。 |
 | [archive/selection-placement-refactor-plan-2026-02-25.md](archive/selection-placement-refactor-plan-2026-02-25.md) | アーカイブ | `interface/selection` の配置処理を責務分離するリファクタ計画。 |
 | [archive/selection-separation-plan-2026-03-08.md](archive/selection-separation-plan-2026-03-08.md) | アーカイブ | -の計画。 |
+| [archive/settings-screen-plan-2026-07-05.md](archive/settings-screen-plan-2026-07-05.md) | アーカイブ | 設定画面 — ui_widgets + UiScale/FontSize::Rem 実装計画 |
 | [archive/shadow-map-size-2026-04-10 copy.md](archive/shadow-map-size-2026-04-10 copy.md) | アーカイブ | シャドウマップサイズ削減計画 |
 | [archive/shadow-map-size-2026-04-10.md](archive/shadow-map-size-2026-04-10.md) | アーカイブ | シャドウマップサイズ削減計画 |
 | [archive/site-yard-system.md](archive/site-yard-system.md) | アーカイブ | 実装計画: Site / Yard システム |
