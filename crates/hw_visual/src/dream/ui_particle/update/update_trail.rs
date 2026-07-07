@@ -3,7 +3,10 @@ use bevy::ui_render::prelude::MaterialNode;
 use hw_core::constants::*;
 
 use super::super::super::components::DreamTrailGhost;
-use super::super::super::dream_bubble_material::DreamBubbleUiMaterial;
+use super::super::super::ui_handles::{
+    DreamBubbleUiHandles, DreamUiMaterialBucket, alpha_to_bucket, bucket_material_index,
+    mass_to_bucket, velocity_to_bucket,
+};
 
 pub(super) struct TrailGhostSpec {
     pub root: Entity,
@@ -17,7 +20,7 @@ pub(super) struct TrailGhostSpec {
 
 pub(super) fn spawn_trail_ghost(
     commands: &mut Commands,
-    materials: &mut Assets<DreamBubbleUiMaterial>,
+    handles: &DreamBubbleUiHandles,
     spec: TrailGhostSpec,
 ) {
     let TrailGhostSpec {
@@ -35,12 +38,21 @@ pub(super) fn spawn_trail_ghost(
         trail_transform.rotation = Quat::from_rotation_z(angle);
     }
 
+    let bucket = DreamUiMaterialBucket {
+        alpha: alpha_to_bucket(DREAM_UI_TRAIL_ALPHA),
+        mass: mass_to_bucket(0.5),
+        color: 0,
+        velocity: velocity_to_bucket(vel_dir),
+    };
+    let material = handles.materials[bucket_material_index(bucket)].clone();
+
     let trail = commands
         .spawn((
             DreamTrailGhost {
                 lifetime: DREAM_UI_TRAIL_LIFETIME,
                 max_lifetime: DREAM_UI_TRAIL_LIFETIME,
             },
+            bucket,
             Node {
                 position_type: PositionType::Absolute,
                 left: Val::Px(final_pos.x),
@@ -50,12 +62,7 @@ pub(super) fn spawn_trail_ghost(
                 ..default()
             },
             trail_transform,
-            MaterialNode(materials.add(DreamBubbleUiMaterial {
-                color: LinearRgba::new(0.65, 0.9, 1.0, 1.0),
-                alpha: DREAM_UI_TRAIL_ALPHA,
-                mass: 0.5,
-                velocity_dir: vel_dir,
-            })),
+            MaterialNode(material),
             GlobalZIndex(-1),
             Name::new("DreamTrailGhost"),
         ))

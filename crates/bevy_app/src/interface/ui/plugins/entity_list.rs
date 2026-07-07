@@ -51,15 +51,18 @@ fn register_ui_entity_list_plugin_systems(app: &mut App) {
     )
     .add_systems(
         Update,
-        (
-            build_entity_list_view_model_system,
-            sync_entity_list_from_view_model_system,
-        )
-            .chain()
+        build_entity_list_view_model_system
             .run_if(|dirty: Res<EntityListDirty>| {
                 dirty.needs_structure_sync() || dirty.needs_value_sync_only()
             })
             .after(detect_entity_list_changes)
+            .in_set(GameSystemSet::Interface),
+    )
+    .add_systems(
+        Update,
+        sync_entity_list_from_view_model_system
+            .run_if(|dirty: Res<EntityListDirty>| dirty.needs_structure_sync())
+            .after(build_entity_list_view_model_system)
             .in_set(GameSystemSet::Interface),
     )
     .add_systems(

@@ -6,6 +6,10 @@ use rand::rngs::ThreadRng;
 
 use super::super::super::components::DreamGainUiParticle;
 use super::super::super::dream_bubble_material::DreamBubbleUiMaterial;
+use super::super::super::ui_handles::{
+    DreamBubbleUiHandles, DreamUiMaterialBucket, alpha_to_bucket, apply_ui_material_bucket,
+    color_to_bucket, mass_to_bucket, velocity_to_bucket,
+};
 use super::update_trail::spawn_trail_ghost;
 
 pub(super) struct StandardParticleForces {
@@ -38,7 +42,8 @@ pub(super) struct ParticleState<'a> {
 
 pub(super) struct NodeVisuals<'a> {
     pub node: &'a mut Node,
-    pub mat_node: &'a MaterialNode<DreamBubbleUiMaterial>,
+    pub mat_node: &'a mut MaterialNode<DreamBubbleUiMaterial>,
+    pub material_bucket: &'a mut DreamUiMaterialBucket,
     pub transform: &'a mut Transform,
 }
 
@@ -51,7 +56,7 @@ pub(super) fn update_standard_particle(
     input: StandardInput,
     state: ParticleState<'_>,
     visuals: NodeVisuals<'_>,
-    materials: &mut Assets<DreamBubbleUiMaterial>,
+    handles: &DreamBubbleUiHandles,
     ui_bubble_layer: Option<Entity>,
     commands: &mut Commands<'_, '_>,
 ) -> bool {
@@ -64,6 +69,7 @@ pub(super) fn update_standard_particle(
     let NodeVisuals {
         node,
         mat_node,
+        material_bucket,
         transform,
     } = visuals;
 
@@ -76,7 +82,8 @@ pub(super) fn update_standard_particle(
         particle,
         VisualData {
             mat_node,
-            materials,
+            material_bucket,
+            handles,
             transform,
             node,
         },
@@ -97,7 +104,7 @@ pub(super) fn update_standard_particle(
         &forces,
         particle,
         commands,
-        materials,
+        handles,
     );
 
     false
@@ -253,8 +260,9 @@ fn integrate_standard_particle_motion(
 }
 
 struct VisualData<'a> {
-    mat_node: &'a MaterialNode<DreamBubbleUiMaterial>,
-    materials: &'a mut Assets<DreamBubbleUiMaterial>,
+    mat_node: &'a mut MaterialNode<DreamBubbleUiMaterial>,
+    material_bucket: &'a mut DreamUiMaterialBucket,
+    handles: &'a DreamBubbleUiHandles,
     transform: &'a mut Transform,
     node: &'a mut Node,
 }
@@ -267,7 +275,8 @@ fn update_standard_particle_visual(
 ) {
     let VisualData {
         mat_node,
-        materials,
+        material_bucket,
+        handles,
         transform,
         node,
     } = vis;
@@ -293,27 +302,19 @@ fn update_standard_particle_visual(
         transform.rotation = Quat::from_rotation_z(angle);
     }
 
-    let base_color = if motion.visual_distance_ratio < 0.3 {
-        let white_t = 1.0 - (motion.visual_distance_ratio / 0.3);
-        let r = 0.65 + white_t * 0.35;
-        let g = 0.9 + white_t * 0.1;
-        LinearRgba::new(r, g, 1.0, 1.0)
-    } else {
-        LinearRgba::new(0.65, 0.9, 1.0, 1.0)
-    };
-
     let alpha = if particle.time_alive < 0.2 {
         (particle.time_alive / 0.2).clamp(0.0, 1.0) * 0.9
     } else {
         0.9
     };
 
-    if let Some(mut mat) = materials.get_mut(&mat_node.0) {
-        mat.color = base_color;
-        mat.alpha = alpha;
-        mat.mass = particle.mass;
-        mat.velocity_dir = motion.vel_dir;
-    }
+    let desired = DreamUiMaterialBucket {
+        alpha: alpha_to_bucket(alpha),
+        mass: mass_to_bucket(particle.mass),
+        color: color_to_bucket(motion.visual_distance_ratio),
+        velocity: velocity_to_bucket(motion.vel_dir),
+    };
+    apply_ui_material_bucket(mat_node, material_bucket, desired, handles);
 }
 
 fn emit_standard_particle_trail(
@@ -322,7 +323,7 @@ fn emit_standard_particle_trail(
     forces: &StandardParticleForces,
     particle: &mut DreamGainUiParticle,
     commands: &mut Commands<'_, '_>,
-    materials: &mut Assets<DreamBubbleUiMaterial>,
+    handles: &DreamBubbleUiHandles,
 ) {
     let TrailTimingCtx {
         dt,
@@ -339,7 +340,7 @@ fn emit_standard_particle_trail(
         if let Some(root) = ui_bubble_layer {
             spawn_trail_ghost(
                 commands,
-                materials,
+                handles,
                 super::update_trail::TrailGhostSpec {
                     root,
                     final_pos: motion.final_pos,

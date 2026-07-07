@@ -85,6 +85,7 @@ impl Plugin for HwVisualPlugin {
 
         // Dream bubble shared handles (mesh + material pool)
         app.add_systems(Startup, dream::init_dream_bubble_handles);
+        app.add_systems(Startup, dream::init_dream_bubble_ui_handles);
 
         // Standalone systems
         app.add_systems(

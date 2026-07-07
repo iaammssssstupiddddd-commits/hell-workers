@@ -1,7 +1,7 @@
 //! Dream 獲得時のビジュアル表現（UIパーティクル・ポップアップテキスト）
 
 use super::components::{DreamGainPopup, DreamVisualState};
-use super::dream_bubble_material::DreamBubbleUiMaterial;
+use super::ui_handles::DreamBubbleUiHandles;
 use crate::floating_text::{
     FloatingText, FloatingTextConfig, spawn_floating_text, update_floating_text,
 };
@@ -32,7 +32,7 @@ pub struct DreamPopupParams<'w, 's> {
     commands: Commands<'w, 's>,
     time: Res<'w, Time>,
     handles: Res<'w, MaterialIconHandles>,
-    ui_bubble_materials: ResMut<'w, Assets<DreamBubbleUiMaterial>>,
+    ui_handles: Res<'w, DreamBubbleUiHandles>,
     q_souls: DreamSoulsQuery<'w, 's>,
     q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
     q_ui_root: Query<'w, 's, Entity, With<UiRoot>>,
@@ -108,7 +108,7 @@ pub fn dream_popup_spawn_system(mut p: DreamPopupParams) {
                         start_pos,
                         target_pos,
                         ui_root,
-                        &mut p.ui_bubble_materials,
+                        &p.ui_handles,
                         amount,
                     );
                 }
@@ -160,7 +160,7 @@ pub fn dream_popup_spawn_system(mut p: DreamPopupParams) {
                         start_pos,
                         target_pos,
                         ui_root,
-                        &mut p.ui_bubble_materials,
+                        &p.ui_handles,
                         amount,
                     );
                 }

@@ -43,12 +43,21 @@
 - 最小化中はリサイズ無効
 
 ## 同期方式（実装）
-- `build_entity_list_view_model_system`
-  - `current/previous` スナップショット構築
-- `sync_entity_list_from_view_model_system`
+
+`EntityListDirty` を **structure dirty / value dirty** に分離し、行の増減・並び替え（重い再構築）と
+バイタル値の更新（軽量なテキスト差し替え）を別 system・別 run_if で処理する。
+
+- `build_entity_list_view_model_system`（run_if: `needs_structure_sync() || needs_value_sync_only()`）
+  - `current/previous` スナップショット構築。構造・値どちらの変化でも VM を作り直す
+- `sync_entity_list_from_view_model_system`（run_if: **`needs_structure_sync()` のみ**）
   - 使い魔セクションを差分同期（追加/削除/折りたたみ/ヘッダーテキスト）
   - 未所属ソウル行をキー管理で差分更新（`EntityListNodeIndex.unassigned_rows`）
   - 表示順は `replace_children` でビュー順へ再整列
+  - 行の生成時に値も設定するため、構造変化フレームでは値行 system は走らせない
+- `sync_entity_list_value_rows_system`（run_if: **`needs_value_sync_only()` のみ**）
+  - 既存行の `Text` / `TextColor` / `TextFont` / `ImageNode` を in-place 更新
+  - **代入前に現値と比較し、変化した項目だけ書き込む**（`get_mut` の DerefMut を避けることで、値が変わらない vitals 更新で `Changed` が立って UI が再レイアウトされるのを防ぐ）
+  - 二つの run_if は排他（structure 変化フレームは全再構築側が値も含めて処理する）
 
 ## インタラクション
 

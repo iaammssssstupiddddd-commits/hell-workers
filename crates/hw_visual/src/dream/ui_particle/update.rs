@@ -8,6 +8,10 @@ use rand::Rng;
 
 use super::super::components::{DreamGainUiParticle, DreamIconAbsorb};
 use super::super::dream_bubble_material::DreamBubbleUiMaterial;
+use super::super::ui_handles::{
+    DreamBubbleUiHandles, DreamUiMaterialBucket, alpha_to_bucket, apply_ui_material_bucket,
+    bucket_material_index, mass_to_bucket,
+};
 
 #[derive(SystemParam)]
 pub struct UiParticleReadParams<'w, 's> {
@@ -23,7 +27,8 @@ type ParticlesQuery<'w, 's> = Query<
         Entity,
         &'static mut DreamGainUiParticle,
         &'static mut Node,
-        &'static MaterialNode<DreamBubbleUiMaterial>,
+        &'static mut MaterialNode<DreamBubbleUiMaterial>,
+        &'static mut DreamUiMaterialBucket,
         &'static mut Transform,
     ),
 >;
@@ -31,7 +36,7 @@ type ParticlesQuery<'w, 's> = Query<
 pub fn ui_particle_update_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut materials: ResMut<Assets<DreamBubbleUiMaterial>>,
+    handles: Res<DreamBubbleUiHandles>,
     read: UiParticleReadParams,
     mut q_icon: Query<&mut DreamIconAbsorb>,
     mut q_particles: ParticlesQuery,
@@ -52,14 +57,16 @@ pub fn ui_particle_update_system(
 
     let target_positions: Vec<(Entity, Vec2)> = q_particles
         .iter()
-        .map(|(e, _, n, _, _)| (e, ui_position_from_node(n)))
+        .map(|(e, _, n, _, _, _)| (e, ui_position_from_node(n)))
         .collect();
 
     let mut rng = rand::thread_rng();
 
     let icon_entity = read.ui_nodes.get_slot(UiSlot::DreamPoolIcon);
 
-    for (entity, mut particle, mut node, mat_node, mut transform) in q_particles.iter_mut() {
+    for (entity, mut particle, mut node, mut mat_node, mut material_bucket, mut transform) in
+        q_particles.iter_mut()
+    {
         particle.time_alive += dt;
 
         let current_pos = ui_position_from_node(&node);
@@ -74,8 +81,9 @@ pub fn ui_particle_update_system(
                 &target_positions,
                 &mut particle,
                 &mut node,
-                mat_node,
-                &mut materials,
+                &mut mat_node,
+                &mut material_bucket,
+                &handles,
             )
         } else {
             let arrived = update_standard::update_standard_particle(
@@ -90,10 +98,11 @@ pub fn ui_particle_update_system(
                 },
                 update_standard::NodeVisuals {
                     node: &mut node,
-                    mat_node,
+                    mat_node: &mut mat_node,
+                    material_bucket: &mut material_bucket,
                     transform: &mut transform,
                 },
-                &mut materials,
+                &handles,
                 ui_bubble_layer,
                 &mut commands,
             );
@@ -146,8 +155,9 @@ fn update_merging_particle(
     target_positions: &[(Entity, Vec2)],
     particle: &mut DreamGainUiParticle,
     node: &mut Node,
-    mat_node: &MaterialNode<DreamBubbleUiMaterial>,
-    materials: &mut Assets<DreamBubbleUiMaterial>,
+    mat_node: &mut MaterialNode<DreamBubbleUiMaterial>,
+    material_bucket: &mut DreamUiMaterialBucket,
+    handles: &DreamBubbleUiHandles,
 ) -> bool {
     let MergeInput {
         dt,
@@ -186,10 +196,14 @@ fn update_merging_particle(
         node.width = Val::Px(size);
         node.height = Val::Px(size);
 
-        if let Some(mut mat) = materials.get_mut(&mat_node.0) {
-            mat.alpha = 0.9 * (1.0 - progress);
-            mat.mass = particle.mass;
-        }
+        let alpha = 0.9 * (1.0 - progress);
+        let desired = DreamUiMaterialBucket {
+            alpha: alpha_to_bucket(alpha),
+            mass: mass_to_bucket(particle.mass),
+            color: material_bucket.color,
+            velocity: material_bucket.velocity,
+        };
+        apply_ui_material_bucket(mat_node, material_bucket, desired, handles);
         return particle.merge_timer <= 0.0;
     }
 
@@ -210,13 +224,21 @@ pub fn spawn_ui_particle(
     start_pos: Vec2,
     target_pos: Vec2,
     ui_root: Entity,
-    materials: &mut Assets<DreamBubbleUiMaterial>,
+    handles: &DreamBubbleUiHandles,
     mass: f32,
 ) {
     let mut rng = rand::thread_rng();
 
     let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
     let noise_dir = Vec2::new(angle.cos(), angle.sin());
+
+    let bucket = DreamUiMaterialBucket {
+        alpha: 0,
+        mass: mass_to_bucket(mass),
+        color: 0,
+        velocity: 0,
+    };
+    let material = handles.materials[bucket_material_index(bucket)].clone();
 
     let particle = commands
         .spawn((
@@ -235,6 +257,7 @@ pub fn spawn_ui_particle(
                 prev_pos: start_pos,
                 mass,
             },
+            bucket,
             Node {
                 position_type: PositionType::Absolute,
                 left: Val::Px(start_pos.x),
@@ -244,12 +267,7 @@ pub fn spawn_ui_particle(
                 ..default()
             },
             Transform::default(),
-            MaterialNode(materials.add(DreamBubbleUiMaterial {
-                color: LinearRgba::new(0.65, 0.9, 1.0, 1.0),
-                alpha: 0.0,
-                mass,
-                velocity_dir: Vec2::ZERO,
-            })),
+            MaterialNode(material),
             GlobalZIndex(-1),
             Name::new("DreamGainUiParticle"),
         ))

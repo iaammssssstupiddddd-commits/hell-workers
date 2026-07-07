@@ -1,5 +1,5 @@
 use super::components::{DreamParticle, DreamVisualState};
-use super::dream_bubble_material::DreamBubbleUiMaterial;
+use super::ui_handles::DreamBubbleUiHandles;
 use super::handles::{self, DreamBubbleHandles};
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;
@@ -157,7 +157,7 @@ pub struct RestAreaDreamParams<'w, 's> {
     q_ui_bubble_layer: Query<'w, 's, (Entity, &'static UiMountSlot)>,
     ui_nodes: Res<'w, UiNodeRegistry>,
     q_ui_transform: Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
-    ui_bubble_materials: ResMut<'w, Assets<DreamBubbleUiMaterial>>,
+    ui_handles: Res<'w, DreamBubbleUiHandles>,
 }
 
 pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
@@ -257,7 +257,7 @@ pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
                 start_pos,
                 target_pos,
                 dream_bubble_layer,
-                &mut p.ui_bubble_materials,
+                &p.ui_handles,
                 0.5 * scale_factor,
             );
         }
