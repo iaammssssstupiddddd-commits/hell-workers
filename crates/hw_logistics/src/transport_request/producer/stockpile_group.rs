@@ -40,6 +40,17 @@ pub struct StockpileGroupSpatialIndex {
     cell_size: f32,
 }
 
+impl Default for StockpileGroupSpatialIndex {
+    fn default() -> Self {
+        Self {
+            groups_by_owner: HashMap::new(),
+            owner_yards: HashMap::new(),
+            owners_by_cell: HashMap::new(),
+            cell_size: TILE_SIZE * 2.0,
+        }
+    }
+}
+
 const TASK_AREA_PERIMETER_SEARCH_RADIUS_TILES: f32 = 10.0;
 
 fn pos_to_cell(pos: Vec2, cell_size: f32) -> (i32, i32) {

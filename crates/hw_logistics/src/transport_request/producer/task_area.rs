@@ -14,13 +14,14 @@ use crate::transport_request::{
     TransportPriority, TransportRequest, TransportRequestKind, TransportRequestMetrics,
     TransportRequestState,
 };
-use crate::transport_request::producer::active_unit_cache::CachedActiveYards;
+use crate::transport_request::producer::active_unit_cache::{
+    CachedActiveYards, CachedStockpileGroups,
+};
 use crate::types::{BelongsTo, BucketStorage, ReservedForTask, ResourceItem, ResourceType};
 use crate::zone::Stockpile;
 
 use super::stockpile_group::{
-    StockpileGroup, StockpileGroupSpatialIndex, build_group_spatial_index, build_stockpile_groups,
-    find_nearest_group_for_item_indexed,
+    StockpileGroup, StockpileGroupSpatialIndex, find_nearest_group_for_item_indexed,
 };
 
 type StockpilesDetailQuery<'w, 's> = Query<
@@ -205,6 +206,7 @@ fn pick_representative_resource_type_per_group(
 pub struct TaskAreaAutoHaulParams<'w, 's> {
     pub stockpile_grid: Res<'w, StockpileSpatialGrid>,
     pub yards_cache: Res<'w, CachedActiveYards>,
+    pub stockpile_groups_cache: Res<'w, CachedStockpileGroups>,
     pub q_stockpiles: StockpilesQuery<'w, 's>,
     pub q_stockpiles_detail: StockpilesDetailQuery<'w, 's>,
     pub q_stockpile_requests: Query<
@@ -237,15 +239,13 @@ pub fn task_area_auto_haul_system(mut commands: Commands, mut p: TaskAreaAutoHau
         }
     }
 
-    let active_yards = &p.yards_cache.data;
-
-    let groups = build_stockpile_groups(&p.stockpile_grid, active_yards, &p.q_stockpiles);
-    let group_spatial_index = build_group_spatial_index(&groups, active_yards);
-    let group_contexts = build_group_eval_contexts(&groups, &p.q_stockpiles_detail);
+    let groups = &p.stockpile_groups_cache.groups;
+    let group_spatial_index = &p.stockpile_groups_cache.spatial_index;
+    let group_contexts = build_group_eval_contexts(groups, &p.q_stockpiles_detail);
     let (group_resource_types, free_items_scanned, items_matched) =
         pick_representative_resource_type_per_group(
-            &groups,
-            &group_spatial_index,
+            groups,
+            group_spatial_index,
             &group_contexts,
             &p.q_free_items,
         );

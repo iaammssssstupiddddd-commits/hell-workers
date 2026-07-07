@@ -5,17 +5,14 @@ use std::collections::HashMap;
 
 use hw_core::relationships::{ManagedBy, StoredItems, TaskWorkers};
 use hw_jobs::{Designation, Priority, TaskSlots, WorkType};
-use hw_spatial::StockpileSpatialGrid;
 
 use crate::transport_request::{
     ManualTransportRequest, TransportDemand, TransportPolicy, TransportPriority, TransportRequest,
     TransportRequestKind, TransportRequestState,
 };
-use crate::transport_request::producer::active_unit_cache::CachedActiveYards;
+use crate::transport_request::producer::active_unit_cache::CachedStockpileGroups;
 use crate::types::{BucketStorage, ResourceType};
 use crate::zone::Stockpile;
-
-use super::stockpile_group::build_stockpile_groups;
 
 struct CellInfo {
     entity: Entity,
@@ -38,22 +35,19 @@ type ConsolidationStockpileQuery<'w, 's> = Query<
 
 pub fn stockpile_consolidation_producer_system(
     mut commands: Commands,
-    stockpile_grid: Res<StockpileSpatialGrid>,
-    yards_cache: Res<CachedActiveYards>,
+    stockpile_groups_cache: Res<CachedStockpileGroups>,
     q_stockpiles: ConsolidationStockpileQuery,
     q_existing_requests: Query<
         (Entity, &TransportRequest, Option<&TaskWorkers>),
         Without<ManualTransportRequest>,
     >,
 ) {
-    let active_yards = &yards_cache.data;
-
-    let groups = build_stockpile_groups(&stockpile_grid, active_yards, &q_stockpiles);
+    let groups = &stockpile_groups_cache.groups;
 
     let mut desired_requests =
         HashMap::<(Entity, ResourceType), (Entity, Vec<Entity>, usize, Vec2)>::new();
 
-    for group in &groups {
+    for group in groups {
         let mut cells: Vec<CellInfo> = Vec::new();
         for &cell in &group.cells {
             let Ok((entity, _, stockpile, stored_opt, bucket_opt)) = q_stockpiles.get(cell) else {

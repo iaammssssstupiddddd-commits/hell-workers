@@ -7,7 +7,27 @@
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
 use hw_core::familiar::{ActiveCommand, FamiliarCommand};
+use hw_core::relationships::StoredItems;
+use hw_spatial::StockpileSpatialGrid;
 use hw_world::zones::{AreaBounds, Yard};
+
+use crate::transport_request::producer::stockpile_group::{
+    StockpileGroup, StockpileGroupSpatialIndex, build_group_spatial_index, build_stockpile_groups,
+};
+use crate::types::BucketStorage;
+use crate::zone::Stockpile;
+
+type StockpilesQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Stockpile,
+        Option<&'static StoredItems>,
+        Option<&'static BucketStorage>,
+    ),
+>;
 
 /// アクティブな Familiar（Idle 以外）のリスト。毎フレーム Perceive 時に更新される。
 #[derive(Resource, Default)]
@@ -19,6 +39,13 @@ pub struct CachedActiveFamiliars {
 #[derive(Resource, Default)]
 pub struct CachedActiveYards {
     pub data: Vec<(Entity, Yard)>,
+}
+
+/// Stockpile グループと空間インデックス。毎フレーム Perceive 時に 1 回だけ構築される。
+#[derive(Resource, Default)]
+pub struct CachedStockpileGroups {
+    pub groups: Vec<StockpileGroup>,
+    pub spatial_index: StockpileGroupSpatialIndex,
 }
 
 /// CachedActiveFamiliars を更新する。Idle の Familiar は除外する。
@@ -43,3 +70,16 @@ pub fn update_cached_active_yards_system(
     cache.data.clear();
     cache.data.extend(q_yards.iter().map(|(e, y)| (e, y.clone())));
 }
+
+/// Stockpile グループと空間インデックスを 1 回だけ構築する。
+pub fn update_cached_stockpile_groups_system(
+    stockpile_grid: Res<StockpileSpatialGrid>,
+    yards_cache: Res<CachedActiveYards>,
+    q_stockpiles: StockpilesQuery,
+    mut cache: ResMut<CachedStockpileGroups>,
+) {
+    let active_yards = &yards_cache.data;
+    cache.groups = build_stockpile_groups(&stockpile_grid, active_yards, &q_stockpiles);
+    cache.spatial_index = build_group_spatial_index(&cache.groups, active_yards);
+}
+

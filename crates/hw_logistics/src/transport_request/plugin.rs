@@ -5,8 +5,9 @@ use hw_core::system_sets::{FamiliarAiSystemSet, GameSystemSet, SoulAiSystemSet};
 
 use super::producer::{
     active_unit_cache::{
-        CachedActiveFamiliars, CachedActiveYards, update_cached_active_familiars_system,
-        update_cached_active_yards_system,
+        CachedActiveFamiliars, CachedActiveYards, CachedStockpileGroups,
+        update_cached_active_familiars_system, update_cached_active_yards_system,
+        update_cached_stockpile_groups_system,
     },
     blueprint::blueprint_auto_haul_system,
     bucket::bucket_auto_haul_system,
@@ -62,6 +63,7 @@ impl Plugin for TransportRequestPlugin {
         app.init_resource::<WallTileWaitingCache>();
         app.init_resource::<CachedActiveFamiliars>();
         app.init_resource::<CachedActiveYards>();
+        app.init_resource::<CachedStockpileGroups>();
 
         app.configure_sets(
             Update,
@@ -99,6 +101,9 @@ impl Plugin for TransportRequestPlugin {
                 update_wall_tile_waiting_cache_system.in_set(TransportRequestSet::Perceive),
                 update_cached_active_familiars_system.in_set(TransportRequestSet::Perceive),
                 update_cached_active_yards_system.in_set(TransportRequestSet::Perceive),
+                update_cached_stockpile_groups_system
+                    .after(update_cached_active_yards_system)
+                    .in_set(TransportRequestSet::Perceive),
                 (
                     blueprint_auto_haul_system,
                     bucket_auto_haul_system,
