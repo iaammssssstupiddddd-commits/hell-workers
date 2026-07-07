@@ -32,8 +32,9 @@ use crate::systems::visual::elevation_view::{ElevationViewState, elevation_view_
 use crate::systems::visual::section_cut::sync_section_cut_normal_system;
 use crate::systems::visual::soul_animation::{
     SoulAnimationLibrary, initialize_soul_animation_players_system,
-    prepare_soul_animation_library_system, sync_soul_anim_visual_state_system,
-    sync_soul_body_animation_system, sync_soul_face_expression_system,
+    init_soul_face_expression_system, prepare_soul_animation_library_system,
+    sync_soul_anim_visual_state_system, sync_soul_body_animation_system,
+    sync_soul_face_expression_system,
 };
 use crate::systems::visual::soul_shadow_projector::sync_soul_shadow_projectors_system;
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
@@ -194,15 +195,19 @@ impl Plugin for VisualPlugin {
         app.add_systems(
             Update,
             (
-                sync_soul_proxy_3d_system,
-                sync_soul_mask_proxy_3d_system,
-                sync_soul_shadow_proxy_3d_system,
-                sync_familiar_proxy_3d_system,
+                (
+                    sync_soul_proxy_3d_system,
+                    sync_soul_mask_proxy_3d_system,
+                    sync_soul_shadow_proxy_3d_system,
+                    sync_familiar_proxy_3d_system,
+                )
+                    .run_if(render3d_sync_enabled),
                 prepare_soul_animation_library_system,
                 (
                     sync_soul_anim_visual_state_system,
                     initialize_soul_animation_players_system,
                     sync_soul_body_animation_system,
+                    init_soul_face_expression_system,
                     sync_soul_face_expression_system,
                 )
                     .chain(),
@@ -245,6 +250,10 @@ impl Plugin for VisualPlugin {
         app.add_observer(apply_soul_mask_gltf_render_layers_on_ready);
         app.add_observer(apply_soul_shadow_gltf_render_layers_on_ready);
     }
+}
+
+fn render3d_sync_enabled(render3d: Res<crate::Render3dVisible>) -> bool {
+    render3d.0
 }
 
 /// Render3dVisible の変更を Camera3dRtt と RttCompositeSprite の可視性に反映する

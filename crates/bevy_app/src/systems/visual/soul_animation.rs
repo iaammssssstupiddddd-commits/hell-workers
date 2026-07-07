@@ -89,8 +89,6 @@ type SoulAnimationOwnerStateQuery<'w, 's> = Query<
     ),
     With<DamnedSoul>,
 >;
-type SoulFaceMaterialQuery<'w, 's> = Query<'w, 's, &'static SoulFaceMaterial3d>;
-
 pub fn prepare_soul_animation_library_system(
     game_assets: Res<GameAssets>,
     gltfs: Res<Assets<Gltf>>,
@@ -265,11 +263,32 @@ pub fn sync_soul_body_animation_system(
 }
 
 pub fn sync_soul_face_expression_system(
-    q_states: Query<&SoulAnimVisualState, With<DamnedSoul>>,
-    q_face_materials: SoulFaceMaterialQuery,
+    q_states: Query<&SoulAnimVisualState, (With<DamnedSoul>, Changed<SoulAnimVisualState>)>,
+    mut q_face_materials: Query<&mut SoulFaceMaterial3d>,
     mut materials: ResMut<Assets<CharacterMaterial>>,
 ) {
-    for face in &q_face_materials {
+    for mut face in q_face_materials.iter_mut() {
+        let Ok(state) = q_states.get(face.owner) else {
+            continue;
+        };
+        if face.last_applied_face == Some(state.face) {
+            continue;
+        }
+        let Some(mut material) = materials.get_mut(&face.material) else {
+            continue;
+        };
+        material.set_face_uv_offset(face_uv_offset_for_state(state.face));
+        face.last_applied_face = Some(state.face);
+    }
+}
+
+/// 新規 face proxy 登録時の初回表情適用。
+pub fn init_soul_face_expression_system(
+    q_states: Query<&SoulAnimVisualState, With<DamnedSoul>>,
+    mut q_face_materials: Query<&mut SoulFaceMaterial3d, Added<SoulFaceMaterial3d>>,
+    mut materials: ResMut<Assets<CharacterMaterial>>,
+) {
+    for mut face in q_face_materials.iter_mut() {
         let Ok(state) = q_states.get(face.owner) else {
             continue;
         };
@@ -277,6 +296,7 @@ pub fn sync_soul_face_expression_system(
             continue;
         };
         material.set_face_uv_offset(face_uv_offset_for_state(state.face));
+        face.last_applied_face = Some(state.face);
     }
 }
 

@@ -313,6 +313,7 @@ pub fn apply_soul_gltf_render_layers_on_ready(
                 .insert(SoulFaceMaterial3d {
                     owner: proxy.owner,
                     material: face_material,
+                    last_applied_face: None,
                 });
             continue;
         }

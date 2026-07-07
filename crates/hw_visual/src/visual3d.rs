@@ -46,6 +46,7 @@ pub struct SoulAnimationPlayer3d {
 pub struct SoulFaceMaterial3d {
     pub owner: Entity,
     pub material: Handle<crate::CharacterMaterial>,
+    pub last_applied_face: Option<SoulFaceState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
