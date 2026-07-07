@@ -4,6 +4,12 @@
 
 use bevy::prelude::*;
 
+/// Bevy `RemSize` デフォルト 20.0 px を基準に rem 換算する。
+#[inline]
+pub fn font_size_rem(px: f32) -> FontSize {
+    FontSize::Rem(px / 20.0)
+}
+
 // ============================================================
 // Theme sub-structures
 // ============================================================

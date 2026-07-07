@@ -104,21 +104,22 @@ pub fn menu_visibility_system(
     mut q: MenuNodeQueries,
 ) {
     let is_architect = matches!(*menu_state, MenuState::Architect);
+    let settings_open = matches!(*menu_state, MenuState::Settings);
 
     if let Ok(mut node) = q.q_architect.single_mut() {
-        node.display = if is_architect {
+        node.display = if is_architect && !settings_open {
             Display::Flex
         } else {
             Display::None
         };
     }
 
-    if !is_architect {
+    if !is_architect || settings_open {
         arch_category_state.0 = None;
     }
 
     if let Ok(mut node) = q.q_category_panel.single_mut() {
-        node.display = if is_architect {
+        node.display = if is_architect && !settings_open {
             Display::Flex
         } else {
             Display::None
@@ -126,7 +127,7 @@ pub fn menu_visibility_system(
     }
 
     for (mut node, panel) in q.q_building_panels.iter_mut() {
-        node.display = if is_architect && arch_category_state.0 == Some(panel.0) {
+        node.display = if is_architect && !settings_open && arch_category_state.0 == Some(panel.0) {
             Display::Flex
         } else {
             Display::None
@@ -134,21 +135,21 @@ pub fn menu_visibility_system(
     }
 
     if let Ok(mut node) = q.q_zones.single_mut() {
-        node.display = if matches!(*menu_state, MenuState::Zones) {
+        node.display = if matches!(*menu_state, MenuState::Zones) && !settings_open {
             Display::Flex
         } else {
             Display::None
         };
     }
     if let Ok(mut node) = q.q_orders.single_mut() {
-        node.display = if matches!(*menu_state, MenuState::Orders) {
+        node.display = if matches!(*menu_state, MenuState::Orders) && !settings_open {
             Display::Flex
         } else {
             Display::None
         };
     }
     if let Ok(mut node) = q.q_dream.single_mut() {
-        node.display = if matches!(*menu_state, MenuState::Dream) {
+        node.display = if matches!(*menu_state, MenuState::Dream) && !settings_open {
             Display::Flex
         } else {
             Display::None

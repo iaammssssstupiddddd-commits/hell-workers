@@ -137,11 +137,26 @@ pub fn debug_toggle_system(
     buttons: Res<ButtonInput<KeyCode>>,
     mut visible: ResMut<crate::DebugVisible>,
     mut config_store: ResMut<GizmoConfigStore>,
+    mut settings: ResMut<hw_core::GameSettings>,
+    q_checkboxes: Query<(Entity, &hw_ui::components::SettingsCheckboxMarker)>,
+    mut commands: Commands,
 ) {
     if buttons.just_pressed(KeyCode::F12) {
         visible.0 = !visible.0;
+        settings.debug_gizmos_enabled = visible.0;
         for (_, config, _) in config_store.iter_mut() {
             config.enabled = visible.0;
+        }
+
+        // 設定画面の Debug Gizmos チェックボックスにも反映（Checked は widget 状態の実体）
+        for (entity, marker) in q_checkboxes.iter() {
+            if marker.0 == hw_ui::components::SettingsField::DebugGizmos {
+                if visible.0 {
+                    commands.entity(entity).insert(bevy::ui::Checked);
+                } else {
+                    commands.entity(entity).remove::<bevy::ui::Checked>();
+                }
+            }
         }
     }
 }

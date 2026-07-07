@@ -8,6 +8,7 @@ mod entity_list;
 mod panels;
 mod pause_menu;
 mod root;
+mod settings_panel;
 mod submenus;
 mod time_control;
 
@@ -32,4 +33,5 @@ pub trait UiAssets {
     fn icon_bone_small(&self) -> &Handle<Image>;
 }
 
-pub use root::setup_ui;
+pub use root::{setup_ui, SetupUiParams};
+pub use settings_panel::{spawn_settings_panel, SettingsPanelInitial};

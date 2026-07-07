@@ -19,6 +19,7 @@ pub(crate) struct IntentModeCtx<'w> {
     pub(crate) build_context: ResMut<'w, BuildContext>,
     pub(crate) zone_context: ResMut<'w, ZoneContext>,
     pub(crate) task_context: ResMut<'w, TaskContext>,
+    pub(crate) time: ResMut<'w, Time<Virtual>>,
 }
 
 #[derive(SystemParam)]

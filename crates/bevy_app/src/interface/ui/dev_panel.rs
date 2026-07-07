@@ -48,6 +48,7 @@ pub fn spawn_dev_panel_system(
     mut commands: Commands,
     q_slots: Query<(Entity, &UiMountSlot)>,
     mut ui_nodes: ResMut<UiNodeRegistry>,
+    settings: Res<hw_core::GameSettings>,
 ) {
     let Some((top_left, _)) = q_slots
         .iter()
@@ -280,6 +281,11 @@ pub fn spawn_dev_panel_system(
                 },
                 TextColor(Color::srgb(0.6, 0.85, 0.6)),
                 UiSlot::FpsText,
+                if settings.fps_display_enabled {
+                    Visibility::Visible
+                } else {
+                    Visibility::Hidden
+                },
             ))
             .id();
         ui_nodes.set_slot(UiSlot::FpsText, fps_entity);

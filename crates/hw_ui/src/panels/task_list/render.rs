@@ -18,7 +18,7 @@ pub fn rebuild_task_list_ui(
             Text::new("No designations"),
             TextFont {
                 font: game_assets.font_ui().clone().into(),
-                font_size: FontSize::Px(theme.typography.font_size_small),
+                font_size: crate::theme::font_size_rem(theme.typography.font_size_small),
                 ..default()
             },
             TextColor(theme.colors.empty_text),
@@ -64,7 +64,7 @@ pub fn rebuild_task_list_ui(
                     )),
                     TextFont {
                         font: game_assets.font_ui().clone().into(),
-                        font_size: FontSize::Px(theme.typography.font_size_xs),
+                        font_size: crate::theme::font_size_rem(theme.typography.font_size_xs),
                         weight: FontWeight::SEMIBOLD,
                         ..default()
                     },
@@ -115,7 +115,7 @@ pub fn rebuild_task_list_ui(
                         Text::new(&entry.description),
                         TextFont {
                             font: game_assets.font_ui().clone().into(),
-                            font_size: FontSize::Px(theme.typography.font_size_item),
+                            font_size: crate::theme::font_size_rem(theme.typography.font_size_item),
                             ..default()
                         },
                         TextColor(desc_color),
@@ -129,7 +129,7 @@ pub fn rebuild_task_list_ui(
                             Text::new(format!("\u{00d7}{}", entry.worker_count)),
                             TextFont {
                                 font: game_assets.font_ui().clone().into(),
-                                font_size: FontSize::Px(theme.typography.font_size_small),
+                                font_size: crate::theme::font_size_rem(theme.typography.font_size_small),
                                 ..default()
                             },
                             TextColor(theme.colors.text_secondary),

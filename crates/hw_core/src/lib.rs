@@ -11,6 +11,7 @@ pub mod population;
 pub mod quality;
 pub mod relationships;
 pub mod selection;
+pub mod settings;
 pub mod soul;
 pub mod system_sets;
 pub mod time;
@@ -19,5 +20,6 @@ pub mod visual;
 pub mod visual_mirror;
 pub mod world;
 
+pub use settings::GameSettings;
 pub use time::GameTime;
 pub use world::GridPos;

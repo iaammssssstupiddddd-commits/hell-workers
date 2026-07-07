@@ -123,7 +123,7 @@ pub(crate) fn resolve_visible_submenu_spans_x(
                 spans.push(compute_rect_x(computed, transform));
             }
         }
-        MenuState::Hidden => {}
+        MenuState::Hidden | MenuState::Settings => {}
     }
 
     spans

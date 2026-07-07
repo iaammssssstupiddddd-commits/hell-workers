@@ -49,6 +49,9 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             crate::interface::ui::door_lock_action_system,
             crate::interface::ui::menu_visibility_system,
             hw_ui::interaction::update_pause_menu_visibility_system,
+            hw_ui::interaction::update_settings_panel_visibility,
+            hw_ui::interaction::sync_settings_slider_thumbs_system,
+            hw_ui::interaction::sync_settings_checkmarks_system,
             crate::interface::ui::update_mode_text_system,
             crate::interface::ui::update_area_edit_preview_ui_system,
         )

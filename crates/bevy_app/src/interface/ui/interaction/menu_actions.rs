@@ -22,6 +22,15 @@ pub(super) fn handle_pressed_action(action: MenuAction, ui_intents: &mut Message
         MenuAction::ToggleDream => {
             ui_intents.write(UiIntent::ToggleDream);
         }
+        MenuAction::ToggleSettings => {
+            ui_intents.write(UiIntent::ToggleSettings);
+        }
+        MenuAction::CloseSettings => {
+            ui_intents.write(UiIntent::CloseSettings);
+        }
+        MenuAction::SetDefaultTimeSpeed(speed) => {
+            ui_intents.write(UiIntent::SetDefaultTimeSpeed(speed));
+        }
         MenuAction::SelectBuild(kind) => {
             ui_intents.write(UiIntent::SelectBuild(kind));
         }
@@ -84,6 +93,13 @@ pub(super) fn handle_pressed_action(action: MenuAction, ui_intents: &mut Message
         }
         MenuAction::MovePlantBuilding(entity) => {
             ui_intents.write(UiIntent::MovePlantBuilding(entity));
+        }
+        MenuAction::SetUiScale(_)
+        | MenuAction::SetCameraPanSpeed(_)
+        | MenuAction::SetCameraMousePanEnabled(_)
+        | MenuAction::SetDebugGizmosEnabled(_)
+        | MenuAction::SetFpsDisplayEnabled(_) => {
+            // Slider/Checkbox observer 経由で発行される
         }
     }
 }

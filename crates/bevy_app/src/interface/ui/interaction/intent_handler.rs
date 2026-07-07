@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_ui::UiIntent;
 
@@ -7,6 +8,13 @@ use super::intent_context::{
 };
 use crate::FamiliarOperationMaxSoulChangedEvent;
 
+#[derive(SystemParam)]
+pub(crate) struct IntentSettingsCtx<'w> {
+    settings: ResMut<'w, hw_core::GameSettings>,
+    debug_visible: ResMut<'w, crate::DebugVisible>,
+    config_store: ResMut<'w, GizmoConfigStore>,
+}
+
 pub(crate) fn handle_ui_intent(
     mut ui_intents: MessageReader<UiIntent>,
     mut mode_ctx: IntentModeCtx,
@@ -14,18 +22,20 @@ pub(crate) fn handle_ui_intent(
     mut familiar_queries: IntentFamiliarQueries,
     mut ui_queries: IntentUiQueries,
     mut ev_max_soul_changed: MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
-    mut time: ResMut<Time<Virtual>>,
+    mut settings_ctx: IntentSettingsCtx,
 ) {
     for intent in ui_intents.read().cloned() {
-        match intent {
+        let should_save_settings = match intent {
             UiIntent::InspectEntity(_) | UiIntent::ClearInspectPin => {
                 handlers::handle_selection(intent, &mut selection_ctx);
+                false
             }
             UiIntent::ToggleArchitect
             | UiIntent::ToggleOrders
             | UiIntent::ToggleZones
             | UiIntent::ToggleDream => {
                 handlers::handle_toggle(intent, &mut mode_ctx);
+                false
             }
             UiIntent::SelectBuild(_)
             | UiIntent::SelectFloorPlace
@@ -40,9 +50,11 @@ pub(crate) fn handle_ui_intent(
                     &mut selection_ctx,
                     &familiar_queries,
                 );
+                false
             }
             UiIntent::OpenOperationDialog | UiIntent::CloseDialog => {
                 handlers::handle_dialog(intent, &mut ui_queries);
+                false
             }
             UiIntent::AdjustFatigueThreshold(_)
             | UiIntent::AdjustMaxControlledSoul(_)
@@ -54,21 +66,38 @@ pub(crate) fn handle_ui_intent(
                     &mut ui_queries,
                     &mut ev_max_soul_changed,
                 );
+                false
             }
             UiIntent::TogglePause | UiIntent::SetTimeSpeed(_) => {
-                handlers::handle_time(intent, &mut time);
+                handlers::handle_time(intent, &mut mode_ctx.time);
+                false
             }
             UiIntent::SaveGame
             | UiIntent::RequestLoadGame
             | UiIntent::ConfirmLoadGame
             | UiIntent::CancelLoadConfirm => {
                 handlers::handle_save_game(intent, &mut ui_queries);
+                false
             }
+            UiIntent::ToggleSettings
+            | UiIntent::CloseSettings
+            | UiIntent::SetUiScale(_)
+            | UiIntent::SetCameraPanSpeed(_)
+            | UiIntent::SetCameraMousePanEnabled(_)
+            | UiIntent::SetDefaultTimeSpeed(_)
+            | UiIntent::SetDebugGizmosEnabled(_)
+            | UiIntent::SetFpsDisplayEnabled(_) => handlers::handle_settings(
+                intent,
+                &mut settings_ctx.settings,
+                &mut mode_ctx.menu_state,
+                &mut settings_ctx.debug_visible,
+                &mut settings_ctx.config_store,
+            ),
             UiIntent::ToggleDoorLock(_)
             | UiIntent::SelectArchitectCategory(_)
-            | UiIntent::MovePlantBuilding(_) => {
-                // 専用システム側で扱うためここでは無視
-            }
-        }
+            | UiIntent::MovePlantBuilding(_) => false,
+        };
+
+        handlers::save_if_requested(should_save_settings, &settings_ctx.settings);
     }
 }

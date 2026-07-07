@@ -69,6 +69,12 @@ pub fn spawn_bottom_bar(
                 MenuAction::ToggleDream,
                 Some("D"),
             ),
+            (
+                "Settings",
+                "設定",
+                MenuAction::ToggleSettings,
+                None,
+            ),
         ];
 
         for (label, tooltip, action, shortcut) in buttons {
@@ -95,7 +101,7 @@ pub fn spawn_bottom_bar(
                         Text::new(label),
                         TextFont {
                             font: game_assets.font_ui().clone().into(),
-                            font_size: FontSize::Px(theme.typography.font_size_base), // Semantic
+                            font_size: crate::theme::font_size_rem(theme.typography.font_size_base), // Semantic
                             weight: FontWeight::SEMIBOLD,               // Variation
                             ..default()
                         },
@@ -112,7 +118,7 @@ pub fn spawn_bottom_bar(
                 Text::new("Mode: Normal"),
                 TextFont {
                     font: game_assets.font_ui().clone().into(),
-                    font_size: FontSize::Px(theme.typography.font_size_md), // Semantic
+                    font_size: crate::theme::font_size_rem(theme.typography.font_size_md), // Semantic
                     weight: FontWeight::BOLD,
                     ..default()
                 },

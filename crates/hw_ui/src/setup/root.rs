@@ -2,7 +2,7 @@ use crate::components::{InfoPanelNodes, UiMountSlot, UiNodeRegistry, UiRoot, UiS
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 
-use super::{UiAssets, bottom_bar, dialogs, entity_list, panels, submenus, time_control};
+use super::{UiAssets, bottom_bar, dialogs, entity_list, panels, settings_panel, submenus, time_control};
 
 fn spawn_area_edit_preview(
     commands: &mut Commands,
@@ -174,18 +174,30 @@ fn spawn_ui_root(
     )
 }
 
+pub struct SetupUiParams<'w> {
+    pub game_assets: &'w dyn UiAssets,
+    pub theme: &'w UiTheme,
+    pub ui_nodes: ResMut<'w, UiNodeRegistry>,
+    pub info_panel_nodes: ResMut<'w, InfoPanelNodes>,
+    pub settings_initial: settings_panel::SettingsPanelInitial,
+}
+
 pub fn setup_ui<F, G>(
     mut commands: Commands,
-    game_assets: &dyn UiAssets,
-    theme: &UiTheme,
-    mut ui_nodes: ResMut<UiNodeRegistry>,
-    mut info_panel_nodes: ResMut<InfoPanelNodes>,
+    params: SetupUiParams,
     spawn_root_panels: F,
     spawn_root_vignette: G,
 ) where
     F: FnOnce(&mut Commands, Entity, Entity, &mut UiNodeRegistry, &mut InfoPanelNodes),
     G: FnOnce(&mut Commands, Entity),
 {
+    let SetupUiParams {
+        game_assets,
+        theme,
+        mut ui_nodes,
+        mut info_panel_nodes,
+        settings_initial,
+    } = params;
     let (_, left_slot, right_slot, bottom_slot, overlay_slot, top_right_slot, _dream_bubble_slot) =
         spawn_ui_root(&mut commands);
 
@@ -227,6 +239,13 @@ pub fn setup_ui<F, G>(
         &mut ui_nodes,
     );
     super::pause_menu::spawn_pause_menu(&mut commands, game_assets, theme, overlay_slot);
+    settings_panel::spawn_settings_panel(
+        &mut commands,
+        game_assets,
+        theme,
+        overlay_slot,
+        settings_initial,
+    );
     spawn_root_panels(
         &mut commands,
         right_slot,

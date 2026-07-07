@@ -72,7 +72,7 @@ pub struct InfoPanelNodes {
     pub common: Option<Entity>,
 }
 
-#[derive(Resource, Default, Debug, Clone, Copy)]
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuState {
     #[default]
     Hidden,
@@ -80,6 +80,7 @@ pub enum MenuState {
     Zones,
     Orders,
     Dream,
+    Settings,
 }
 
 pub use crate::UiIntent as MenuAction;
@@ -213,6 +214,33 @@ pub struct OperationDialog;
 
 #[derive(Component)]
 pub struct PauseMenu;
+
+#[derive(Component, Default, Clone)]
+pub struct SettingsPanel;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettingsField {
+    UiScale,
+    CameraPanSpeed,
+    CameraMousePan,
+    DebugGizmos,
+    FpsDisplay,
+}
+
+#[derive(Component, Clone, Copy)]
+pub struct SettingsSliderMarker(pub SettingsField);
+
+#[derive(Component, Clone, Copy)]
+pub struct SettingsCheckboxMarker(pub SettingsField);
+
+#[derive(Component, Clone, Copy)]
+pub struct SettingsSliderThumbMarker(pub SettingsField);
+
+#[derive(Component, Clone, Copy)]
+pub struct SettingsCheckmarkMarker(pub SettingsField);
+
+#[derive(Component, Clone, Copy)]
+pub struct SettingsDefaultSpeedButton(pub TimeSpeed);
 
 #[derive(Component)]
 pub struct LoadConfirmDialog;

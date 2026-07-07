@@ -107,5 +107,12 @@ pub fn spawn_pause_menu(
             "Load Game",
             MenuAction::RequestLoadGame,
         );
+        spawn_menu_button(
+            parent,
+            game_assets,
+            theme,
+            "Settings",
+            MenuAction::ToggleSettings,
+        );
     });
 }

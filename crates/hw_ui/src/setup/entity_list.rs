@@ -86,7 +86,7 @@ pub fn spawn_entity_list_panel(
                             Text::new("-"),
                             TextFont {
                                 font: game_assets.font_ui().clone().into(),
-                                font_size: FontSize::Px(theme.typography.font_size_base),
+                                font_size: crate::theme::font_size_rem(theme.typography.font_size_base),
                                 weight: FontWeight::BOLD,
                                 ..default()
                             },
@@ -162,7 +162,7 @@ pub fn spawn_entity_list_panel(
                                 Text::new("Unassigned Souls"),
                                 TextFont {
                                     font: game_assets.font_ui().clone().into(),
-                                    font_size: FontSize::Px(theme.typography.font_size_base),
+                                    font_size: crate::theme::font_size_rem(theme.typography.font_size_base),
                                     ..default()
                                 },
                                 TextColor(theme.colors.text_primary_semantic),
@@ -220,7 +220,7 @@ pub fn spawn_entity_list_panel(
                     Text::new("Scroll: Mouse Wheel"),
                     TextFont {
                         font: game_assets.font_ui().clone().into(),
-                        font_size: FontSize::Px(theme.typography.font_size_xs),
+                        font_size: crate::theme::font_size_rem(theme.typography.font_size_xs),
                         ..default()
                     },
                     TextColor(theme.colors.text_secondary_semantic),
@@ -312,7 +312,7 @@ fn spawn_left_panel_tab_button(
                 Text::new(label),
                 TextFont {
                     font: game_assets.font_ui().clone().into(),
-                    font_size: FontSize::Px(theme.typography.font_size_sm),
+                    font_size: crate::theme::font_size_rem(theme.typography.font_size_sm),
                     weight: FontWeight::SEMIBOLD,
                     ..default()
                 },

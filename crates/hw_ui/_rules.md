@@ -65,6 +65,24 @@ hw_energy      ✗
 - 将来 Soul 名リネームや検索 UI 等でテキスト入力が必要になった場合、自前 text input を作らず `bevy::text::EditableText`（`bevy::ui_widgets::EditableTextInputPlugin` が対応）を使う。
 - スクロール入力ブロック（`UiInputBlocker` + `RelativeCursorPosition`）はスクロール実装方式に関わらず、pointer-over 判定用として維持する。
 
+## 設定画面 UI（Slider / Checkbox / BSN）
+
+- 設定 UI は `crates/hw_ui/src/setup/settings_panel.rs`。ルート entity は `bsn! { SettingsPanel }` + 子は imperative spawn（`FontSource` / `MenuButton` は BSN 制約上 imperative）。
+- Slider / Checkbox は `bevy::ui_widgets` headless widget。`SettingsPlugin` で `slider_self_update` / `checkbox_self_update` を **各 1 回** `add_observer` する。spawn 時 `.observe(...)` は使わない。
+- `ValueChange` → `UiIntent` の observer（bevy_app）は **`SettingsSliderMarker` / `SettingsCheckboxMarker` で必ずフィルタ**する。
+- `GameSettings` への write は bevy_app の intent handler のみ。hw_ui から `ResMut<GameSettings>` 禁止。
+- 詳細: [docs/settings.md](../../docs/settings.md)
+
+### 設定項目追加チェックリスト
+
+1. `hw_core::GameSettings` にフィールド + `Default`
+2. `bevy_app/systems/settings/persistence.rs` の `GameSettingsFile` + `From`
+3. `apply_settings_system` に反映（`Time<Virtual>` は触らない）
+4. `settings_panel.rs` に UI 行
+5. `SettingsField` + marker
+6. `handlers/settings.rs` + `intents.rs`
+7. 手動 QA + RON 再起動確認
+
 ## BuildingType メニュー追加時のルール
 
 新 `BuildingType` を建設メニューに追加する場合:
@@ -82,7 +100,7 @@ hw_energy      ✗
 5. **`bevy_app/.../handlers/`**: intent 実処理（例: `save_game.rs` → `SaveLoadState`）
 6. **`bevy_app/.../intent_handler.rs`**: 新 intent の match 分岐
 
-`bsn!` マクロは Bevy 0.19 本プロジェクトでは未採用。新規 UI も **`commands.spawn` + `MenuButton`** で統一する。
+`bsn!` マクロは **ルート entity のみ採用**（`settings_panel.rs` の「設定画面 UI」節参照）。子ツリーやボタンは **`commands.spawn` + `MenuButton`** で統一する（`FontSource` / `MenuButton` は BSN 制約上 imperative spawn が必要）。
 
 ## docs 更新対象（変更時に必ず更新するドキュメント）
 

@@ -58,13 +58,19 @@ pub struct KeyboardModeCtx<'w> {
     task_context: ResMut<'w, TaskContext>,
 }
 
+#[derive(SystemParam)]
+pub struct KeyboardShortcutQueries<'w, 's> {
+    q_load_confirm: Query<'w, 's, &'static Node, With<LoadConfirmDialog>>,
+    q_settings_panel: Query<'w, 's, &'static Node, With<SettingsPanel>>,
+}
+
 pub fn ui_keyboard_shortcuts_system(
     keyboard: Res<ButtonInput<KeyCode>>,
     mode_ctx: KeyboardModeCtx,
     mut time: ResMut<Time<Virtual>>,
     play_mode: Res<State<PlayMode>>,
     mut companion_state: ResMut<CompanionPlacementState>,
-    q_load_confirm: Query<&Node, With<LoadConfirmDialog>>,
+    shortcut_queries: KeyboardShortcutQueries,
     mut ui_intent_writer: MessageWriter<UiIntent>,
 ) {
     let KeyboardModeCtx {
@@ -107,26 +113,37 @@ pub fn ui_keyboard_shortcuts_system(
             time.pause();
         }
     }
-    if keyboard.just_pressed(KeyCode::Digit1) {
-        time.pause();
-    }
-    if keyboard.just_pressed(KeyCode::Digit2) {
-        time.unpause();
-        time.set_relative_speed(1.0);
-    }
-    if keyboard.just_pressed(KeyCode::Digit3) {
-        time.unpause();
-        time.set_relative_speed(2.0);
-    }
-    if keyboard.just_pressed(KeyCode::Digit4) {
-        time.unpause();
-        time.set_relative_speed(4.0);
+    // 時間制御（設定モーダル表示中は数字キーで unpause しない）
+    if *menu_state != MenuState::Settings {
+        if keyboard.just_pressed(KeyCode::Digit1) {
+            time.pause();
+        }
+        if keyboard.just_pressed(KeyCode::Digit2) {
+            time.unpause();
+            time.set_relative_speed(1.0);
+        }
+        if keyboard.just_pressed(KeyCode::Digit3) {
+            time.unpause();
+            time.set_relative_speed(2.0);
+        }
+        if keyboard.just_pressed(KeyCode::Digit4) {
+            time.unpause();
+            time.set_relative_speed(4.0);
+        }
     }
 
     // モードキャンセル (Escape)
     if keyboard.just_pressed(KeyCode::Escape) {
-        if hw_ui::interaction::dialog::is_load_confirm_dialog_open(&q_load_confirm) {
+        if hw_ui::interaction::dialog::is_load_confirm_dialog_open(
+            &shortcut_queries.q_load_confirm,
+        ) {
             ui_intent_writer.write(UiIntent::CancelLoadConfirm);
+            return;
+        }
+
+        if hw_ui::interaction::settings::is_settings_panel_open(&shortcut_queries.q_settings_panel)
+        {
+            ui_intent_writer.write(UiIntent::CloseSettings);
             return;
         }
 

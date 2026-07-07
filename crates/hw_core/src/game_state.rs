@@ -42,7 +42,7 @@ pub enum TaskMode {
     SoulSpaPlace(Option<Vec2>),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect)]
 pub enum TimeSpeed {
     Paused,
     Normal,

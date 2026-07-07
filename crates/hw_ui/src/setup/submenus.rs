@@ -136,7 +136,7 @@ fn spawn_menu_button(
                 Text::new(label),
                 TextFont {
                     font: game_assets.font_ui().clone().into(),
-                    font_size: FontSize::Px(theme.typography.font_size_title),
+                    font_size: crate::theme::font_size_rem(theme.typography.font_size_title),
                     ..default()
                 },
                 TextColor(theme.colors.text_primary),
