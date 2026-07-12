@@ -296,7 +296,11 @@ pub(crate) fn bake_boundary_proximity_mask(buf: &[u8], res: usize) -> Vec<u8> {
     dilated
 }
 
-pub(crate) fn downsample_boundary_proximity_mask(src: &[u8], src_res: usize, dst_res: usize) -> Vec<u8> {
+pub(crate) fn downsample_boundary_proximity_mask(
+    src: &[u8],
+    src_res: usize,
+    dst_res: usize,
+) -> Vec<u8> {
     let scale = src_res / dst_res;
     let mut out = vec![0u8; dst_res * dst_res];
     for y in 0..dst_res {

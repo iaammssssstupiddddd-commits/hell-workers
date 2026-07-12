@@ -295,7 +295,11 @@ mod tests {
 
     #[test]
     fn displace_polyline_zero_at_junction() {
-        let points = vec![Vec2::new(0.0, 0.0), Vec2::new(32.0, 0.0), Vec2::new(64.0, 0.0)];
+        let points = vec![
+            Vec2::new(0.0, 0.0),
+            Vec2::new(32.0, 0.0),
+            Vec2::new(64.0, 0.0),
+        ];
         let junction_key = world_to_corner_key(points[1]);
         let polyline = BoundaryPolyline {
             points: points.clone(),

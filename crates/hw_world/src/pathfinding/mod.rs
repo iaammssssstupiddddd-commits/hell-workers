@@ -223,21 +223,14 @@ mod tests {
     use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
     use std::collections::HashSet;
 
+    #[derive(Default)]
     struct TestWorld {
         obstacles: HashSet<(i32, i32)>,
     }
 
-    impl Default for TestWorld {
-        fn default() -> Self {
-            Self {
-                obstacles: HashSet::new(),
-            }
-        }
-    }
-
     impl PathWorld for TestWorld {
         fn pos_to_idx(&self, x: i32, y: i32) -> Option<usize> {
-            if x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT {
+            if !(0..MAP_WIDTH).contains(&x) || !(0..MAP_HEIGHT).contains(&y) {
                 return None;
             }
             Some((y * MAP_WIDTH + x) as usize)

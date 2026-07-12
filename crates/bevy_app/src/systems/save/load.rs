@@ -99,9 +99,7 @@ pub fn load_world_system(world: &mut World) {
     // seed が一致しないセッションへのロードは論理と表示が食い違う。ここで中止する。
     match extract_saved_worldgen_seed(&dynamic_world) {
         Some(saved_seed) => {
-            let current_seed = world
-                .resource::<GeneratedWorldLayoutResource>()
-                .master_seed;
+            let current_seed = world.resource::<GeneratedWorldLayoutResource>().master_seed;
             if saved_seed != current_seed {
                 error!(
                     "Load aborted: worldgen seed mismatch (save={saved_seed}, session={current_seed}). \

@@ -46,6 +46,7 @@
 - [state.md](state.md): PlayMode、**TaskMode全バリアント一覧**（指定・ゾーン・建築モード等）。
 - [debug-features.md](debug-features.md): DevPanel・IBuild など**デバッグ専用機能**の一覧・実装箇所。
 - [rendering-performance.md](rendering-performance.md): 描画パイプライン別の draw call 構造、バジェット、最適化方針。
+- [performance-profiling.md](performance-profiling.md): 決定的なランタイム計測シナリオ、CSV、Tracy、RenderDocの採取手順。
 - [visual_test.md](visual_test.md): Soul GLB Visual Test Scene の操作・アーキテクチャ・UV 計算。
 - [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン（コーディング規約・MCP活用）。
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。

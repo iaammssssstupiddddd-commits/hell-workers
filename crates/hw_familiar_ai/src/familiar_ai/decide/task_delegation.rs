@@ -13,15 +13,16 @@ use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::WorldMapRead;
 use hw_world::pathfinding::PathfindingContext;
+#[cfg(feature = "profiling")]
 use std::time::Instant;
 
 use crate::familiar_ai::decide::delegation_context::{
     FamiliarDelegationContext, process_task_delegation_and_movement,
 };
 use crate::familiar_ai::decide::query_types::{FamiliarSoulQuery, FamiliarTaskQuery};
-use crate::familiar_ai::decide::resources::{
-    FamiliarDelegationPerfMetrics, FamiliarTaskDelegationTimer, ReachabilityFrameCache,
-};
+#[cfg(feature = "profiling")]
+use crate::familiar_ai::decide::resources::FamiliarDelegationPerfMetrics;
+use crate::familiar_ai::decide::resources::{FamiliarTaskDelegationTimer, ReachabilityFrameCache};
 use crate::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
 
 const REACHABILITY_CACHE_SAFETY_CLEAR_INTERVAL_FRAMES: u32 = 60;
@@ -42,11 +43,13 @@ pub struct FamiliarAiTaskDelegationParams<'w, 's> {
     pub world_map: WorldMapRead<'w>,
     pub pf_context: Local<'s, PathfindingContext>,
     pub reachability_frame_cache: ResMut<'w, ReachabilityFrameCache>,
+    #[cfg(feature = "profiling")]
     pub perf_metrics: ResMut<'w, FamiliarDelegationPerfMetrics>,
 }
 
 /// 使い魔AIのタスク委譲・移動システム（Decide Phase）
 pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
+    #[cfg(feature = "profiling")]
     let started_at = Instant::now();
     let FamiliarAiTaskDelegationParams {
         time,
@@ -62,6 +65,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         world_map,
         mut pf_context,
         mut reachability_frame_cache,
+        #[cfg(feature = "profiling")]
         mut perf_metrics,
         ..
     } = params;
@@ -82,11 +86,9 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
     delegation_timer.first_run_done = true;
 
     let needs_incoming_snapshot = allow_task_delegation
-        || q_familiars
-            .iter_mut()
-            .any(|(_, _, _, active_command, ..)| {
-                matches!(active_command.command, FamiliarCommand::Idle)
-            });
+        || q_familiars.iter_mut().any(|(_, _, _, active_command, ..)| {
+            matches!(active_command.command, FamiliarCommand::Idle)
+        });
     let incoming_snapshot = if needs_incoming_snapshot {
         crate::familiar_ai::decide::task_management::IncomingDeliverySnapshot::build(&task_queries)
     } else {
@@ -95,6 +97,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
 
     let mut reservation_shadow =
         crate::familiar_ai::decide::task_management::ReservationShadow::default();
+    #[cfg(feature = "profiling")]
     let mut familiars_processed = 0u32;
 
     for (
@@ -111,7 +114,10 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
     ) in q_familiars.iter_mut()
     {
         let is_idle_command = matches!(active_command.command, FamiliarCommand::Idle);
-        familiars_processed += 1;
+        #[cfg(feature = "profiling")]
+        {
+            familiars_processed += 1;
+        }
 
         let state_changed = ai_state.is_changed();
         let default_tasks = hw_core::relationships::ManagedTasks::default();
@@ -163,45 +169,36 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         process_task_delegation_and_movement(&mut delegation_ctx);
     }
 
-    let (
-        source_selector_calls,
-        source_selector_cache_build_scanned_items,
-        source_selector_candidate_scanned_items,
-    ) = crate::familiar_ai::decide::task_management::take_source_selector_scan_snapshot();
-    let source_selector_scanned_items = source_selector_cache_build_scanned_items
-        .saturating_add(source_selector_candidate_scanned_items);
-    let reachable_with_cache_calls =
-        crate::familiar_ai::decide::task_management::take_reachable_with_cache_calls();
+    #[cfg(feature = "profiling")]
+    {
+        let (
+            source_selector_calls,
+            source_selector_cache_build_scanned_items,
+            source_selector_candidate_scanned_items,
+        ) = crate::familiar_ai::decide::task_management::take_source_selector_scan_snapshot();
+        let source_selector_scanned_items = source_selector_cache_build_scanned_items
+            .saturating_add(source_selector_candidate_scanned_items);
+        let reachable_with_cache_calls =
+            crate::familiar_ai::decide::task_management::take_reachable_with_cache_calls();
 
-    perf_metrics.latest_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
-    perf_metrics.source_selector_calls = perf_metrics
-        .source_selector_calls
-        .saturating_add(source_selector_calls);
-    perf_metrics.source_selector_cache_build_scanned_items = perf_metrics
-        .source_selector_cache_build_scanned_items
-        .saturating_add(source_selector_cache_build_scanned_items);
-    perf_metrics.source_selector_candidate_scanned_items = perf_metrics
-        .source_selector_candidate_scanned_items
-        .saturating_add(source_selector_candidate_scanned_items);
-    perf_metrics.source_selector_scanned_items = perf_metrics
-        .source_selector_scanned_items
-        .saturating_add(source_selector_scanned_items);
-    perf_metrics.reachable_with_cache_calls = perf_metrics
-        .reachable_with_cache_calls
-        .saturating_add(reachable_with_cache_calls);
-    perf_metrics.familiars_processed = perf_metrics
-        .familiars_processed
-        .saturating_add(familiars_processed);
-    perf_metrics.log_interval_secs += time.delta_secs();
-
-    // 実測ログ出力は廃止。集計カウンタのみ定期リセットする。
-    if perf_metrics.log_interval_secs >= 5.0 {
-        perf_metrics.log_interval_secs = 0.0;
-        perf_metrics.source_selector_calls = 0;
-        perf_metrics.source_selector_cache_build_scanned_items = 0;
-        perf_metrics.source_selector_candidate_scanned_items = 0;
-        perf_metrics.source_selector_scanned_items = 0;
-        perf_metrics.reachable_with_cache_calls = 0;
-        perf_metrics.familiars_processed = 0;
+        perf_metrics.latest_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
+        perf_metrics.source_selector_calls = perf_metrics
+            .source_selector_calls
+            .saturating_add(source_selector_calls);
+        perf_metrics.source_selector_cache_build_scanned_items = perf_metrics
+            .source_selector_cache_build_scanned_items
+            .saturating_add(source_selector_cache_build_scanned_items);
+        perf_metrics.source_selector_candidate_scanned_items = perf_metrics
+            .source_selector_candidate_scanned_items
+            .saturating_add(source_selector_candidate_scanned_items);
+        perf_metrics.source_selector_scanned_items = perf_metrics
+            .source_selector_scanned_items
+            .saturating_add(source_selector_scanned_items);
+        perf_metrics.reachable_with_cache_calls = perf_metrics
+            .reachable_with_cache_calls
+            .saturating_add(reachable_with_cache_calls);
+        perf_metrics.familiars_processed = perf_metrics
+            .familiars_processed
+            .saturating_add(familiars_processed);
     }
 }

@@ -52,7 +52,8 @@ graph TD
 5.  **Completion**: 資源が尽きると実体が消滅。`Observer` が検知し、`魂` のタスクを解除。
 
 ## システムセットの実行順序
-`GameSystemSet` は `hw_core::system_sets` で定義され、`crates/bevy_app/src/main.rs` でチェーンされています：
+`GameSystemSet` は `hw_core::system_sets` で定義され、production App の `crates/bevy_app/src/main.rs` でチェーンされています。
+`crates/bevy_app/src/lib.rs` は共有 Resource・公開 module・event re-exportを提供し、focused unit testはここから対象systemだけを登録する：
 `Input` → `Spatial` → `Logic` → `Actor` → `Visual` → `Interface`
 
 ### Global Cycle Framework (Logic Phase)
@@ -319,7 +320,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 ### 3D 表示トグル（開発機能）
 
-`Render3dVisible` Resource（`main.rs`）が 3D 表示の有効・無効を管理する。
+`Render3dVisible` Resource（`lib.rs`）が 3D 表示の有効・無効を管理する。production App への初期登録は `main.rs` が担当する。
 
 | 操作 | 方法 |
 |:---|:---|
@@ -338,7 +339,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 | 方式 | 用途 | 定義場所 |
 |:--|:--|:--|
 | `Message` | グローバル通知（タスクキュー更新等） | 主に `crates/hw_core/src/events.rs`（`TaskAssignmentRequest` のみ `crates/hw_jobs/src/events.rs`）（登録は `crates/bevy_app/src/plugins/messages.rs`） |
-| `Observer` | エンティティベースの即時反応 | 主に `crates/hw_core/src/events.rs`（root 互換面は `crates/bevy_app/src/main.rs` に直接 `pub use`） |
+| `Observer` | エンティティベースの即時反応 | 主に `crates/hw_core/src/events.rs`（root 互換面は `crates/bevy_app/src/lib.rs` に明示 `pub use`） |
 
 > [!TIP]
 > リソース (`ResMut`) を更新する必要がある場合は `Message` を使用してください。

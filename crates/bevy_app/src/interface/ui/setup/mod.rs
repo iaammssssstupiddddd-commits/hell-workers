@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use hw_ui::setup::{setup_ui as hwui_setup_ui, SettingsPanelInitial, SetupUiParams};
+use hw_ui::setup::{SettingsPanelInitial, SetupUiParams, setup_ui as hwui_setup_ui};
 
 pub fn setup_ui(
     commands: Commands,

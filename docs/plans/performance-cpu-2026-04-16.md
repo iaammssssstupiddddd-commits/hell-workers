@@ -1,9 +1,32 @@
 # CPU パフォーマンス改善計画書
 
+## メタ情報
+
+| 項目 | 値 |
+| --- | --- |
+| ステータス | `Superseded` |
+| 作成日 | `2026-04-16` |
+| 最終再監査日 | `2026-07-12` |
+| 後継計画 | `docs/plans/system-wide-runtime-performance-plan-2026-07-12.md` |
+
 作成日: 2026-04-16
 最終検証: 2026-04-16（全対象ファイルをコードで直接確認済み）
 
 コードを直接読んで確認した問題を対象にする。計画書や提案書に既に挙げられているものは対象外。
+
+> 2026-07-12再監査: 本計画は後継計画で置き換えた。P1/P2/P3/P5/P6/P7は実装済み。P4はproducer間共有まで実装済みだが、`CachedActiveFamiliars` / `CachedActiveYards`の毎フレーム再構築が残るため、後継計画M3Aへ移管した。本書を新規実装の正本として使わない。
+
+## 2026-07-12 実装状況
+
+| ID | 状況 | 後継での扱い |
+| --- | --- | --- |
+| P1 | 実装済み | 再実装しない |
+| P2 | owner cache方式で実装済み | cleanupではなくlogical/visual Transform分離を後継M2で扱う |
+| P3 | shader global time方式で実装済み | 再実装しない |
+| P4 | 一部実装済み | active Familiar/Yard cacheのdirty駆動化だけを後継M3Aへ移管 |
+| P5 | `FloorTileWaitingCache` / `WallTileWaitingCache`方式で実装済み | 後継M5は別基盤の`TileSiteIndex`を使ってphase/completion/curing側を扱う |
+| P6 | primary Top-K allocationは実装済み | fallback用copyは意図的に維持。別candidate scratchだけを後継M3Aで扱う |
+| P7 | 実装済み | 再実装しない |
 
 ---
 

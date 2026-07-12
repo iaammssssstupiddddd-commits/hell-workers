@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-use hw_core::game_state::TimeSpeed;
 use hw_core::GameSettings;
+use hw_core::game_state::TimeSpeed;
 use serde::{Deserialize, Serialize};
 
 const SETTINGS_DIR: &str = "settings";

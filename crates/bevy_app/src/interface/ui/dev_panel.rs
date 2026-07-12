@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use hw_core::quality::{QualitySettings, RttQualityPreset};
 use hw_ui::components::{UiInputBlocker, UiMountSlot, UiNodeRegistry, UiSlot};
 use hw_ui::theme::UiTheme;
-use hw_ui::widgets::{spawn_text_field, TextFieldConfig, TextFieldRole};
+use hw_ui::widgets::{TextFieldConfig, TextFieldRole, spawn_text_field};
 
 /// LOD インジケーターテキストのマーカー
 #[derive(Component)]

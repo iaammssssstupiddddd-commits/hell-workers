@@ -1,8 +1,8 @@
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::prelude::*;
+use hw_core::GameSettings;
 use hw_core::game_state::TimeSpeed;
 use hw_core::ui_nodes::{UiNodeRegistry, UiSlot};
-use hw_core::GameSettings;
 use hw_ui::camera::MainCamera;
 
 use crate::DebugVisible;

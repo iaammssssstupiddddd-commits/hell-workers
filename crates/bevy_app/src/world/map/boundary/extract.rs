@@ -64,7 +64,11 @@ pub struct BoundaryEdge {
 // ── M1: エッジ抽出と連結 ──────────────────────────────────────────────────────
 
 #[inline]
-pub(crate) fn zone_tone_boundary_kind(terrain: TerrainType, bias_a: u8, bias_b: u8) -> Option<BoundaryKind> {
+pub(crate) fn zone_tone_boundary_kind(
+    terrain: TerrainType,
+    bias_a: u8,
+    bias_b: u8,
+) -> Option<BoundaryKind> {
     if bias_a == bias_b {
         return None;
     }
@@ -216,7 +220,7 @@ pub fn extract_boundary_edges(
 
 #[cfg(test)]
 mod tests {
-    use super::{maybe_zone_tone_edge, zone_tone_boundary_kind, BoundaryKind};
+    use super::{BoundaryKind, maybe_zone_tone_edge, zone_tone_boundary_kind};
     use hw_world::TerrainType;
 
     #[test]

@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::entities::spawn_args;
+use crate::plugins::startup::{PerfScenarioConfig, PerfScenarioRandomStreams};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MIN, WorldMap, WorldMapRead};
 use hw_core::constants::*;
@@ -12,12 +13,16 @@ use rand::Rng;
 
 pub use hw_core::population::PopulationManager;
 
-fn initial_spawn_count() -> u32 {
-    spawn_args::parse_spawn_count_from_args_or_env(
-        "--spawn-souls",
-        "HW_SPAWN_SOULS",
-        SOUL_SPAWN_INITIAL,
-    )
+fn initial_spawn_count(perf_config: &PerfScenarioConfig) -> u32 {
+    if perf_config.enabled() {
+        perf_config.soul_count
+    } else {
+        spawn_args::parse_spawn_count_from_args_or_env(
+            "--spawn-souls",
+            "HW_SPAWN_SOULS",
+            SOUL_SPAWN_INITIAL,
+        )
+    }
 }
 
 fn pick_river_south_bank_spawn(world_map: &WorldMap, rng: &mut impl Rng) -> Option<Vec2> {
@@ -51,12 +56,12 @@ fn queue_river_spawn_events(
     spawn_events: &mut MessageWriter<DamnedSoulSpawnEvent>,
     world_map: &WorldMap,
     count: u32,
+    rng: &mut impl Rng,
 ) -> u32 {
-    let mut rng = rand::thread_rng();
     let mut spawned = 0;
 
     for _ in 0..count {
-        if let Some(position) = pick_river_south_bank_spawn(world_map, &mut rng) {
+        if let Some(position) = pick_river_south_bank_spawn(world_map, rng) {
             spawn_events.write(DamnedSoulSpawnEvent { position });
             spawned += 1;
         }
@@ -69,9 +74,21 @@ fn queue_river_spawn_events(
 pub fn spawn_damned_souls(
     mut spawn_events: MessageWriter<DamnedSoulSpawnEvent>,
     world_map: WorldMapRead,
+    perf_config: Res<PerfScenarioConfig>,
+    mut perf_rngs: ResMut<PerfScenarioRandomStreams>,
 ) {
-    let spawn_count = initial_spawn_count();
-    let spawned = queue_river_spawn_events(&mut spawn_events, &world_map, spawn_count);
+    let spawn_count = initial_spawn_count(&perf_config);
+    let spawned = if perf_config.enabled() {
+        queue_river_spawn_events(
+            &mut spawn_events,
+            &world_map,
+            spawn_count,
+            &mut perf_rngs.souls,
+        )
+    } else {
+        let mut rng = rand::thread_rng();
+        queue_river_spawn_events(&mut spawn_events, &world_map, spawn_count, &mut rng)
+    };
     info!(
         "SPAWN_CONFIG: Souls requested={} spawned={} (river south bank)",
         spawn_count, spawned
@@ -98,13 +115,19 @@ pub fn periodic_spawn_system(
     world_map: WorldMapRead,
     mut population: ResMut<PopulationManager>,
     mut spawn_events: MessageWriter<DamnedSoulSpawnEvent>,
+    perf_config: Res<PerfScenarioConfig>,
 ) {
+    if perf_config.enabled() {
+        return;
+    }
+
     let current = population.current_count;
     let cap = population.population_cap.max(SOUL_POPULATION_BASE_CAP);
 
     if current == 0 {
         let emergency = SOUL_SPAWN_INITIAL.min(cap.max(1));
-        let spawned = queue_river_spawn_events(&mut spawn_events, &world_map, emergency);
+        let mut rng = rand::thread_rng();
+        let spawned = queue_river_spawn_events(&mut spawn_events, &world_map, emergency, &mut rng);
         if spawned > 0 {
             population.total_spawned += spawned;
             info!(
@@ -134,7 +157,7 @@ pub fn periodic_spawn_system(
         return;
     }
 
-    let spawned = queue_river_spawn_events(&mut spawn_events, &world_map, spawn_count);
+    let spawned = queue_river_spawn_events(&mut spawn_events, &world_map, spawn_count, &mut rng);
     if spawned > 0 {
         population.total_spawned += spawned;
         info!(
@@ -150,29 +173,36 @@ pub fn soul_spawning_system(
     mut spawn_events: MessageReader<DamnedSoulSpawnEvent>,
     handles_3d: Res<crate::plugins::startup::Building3dHandles>,
     world_map: WorldMapRead,
+    perf_config: Res<PerfScenarioConfig>,
+    mut perf_rngs: ResMut<PerfScenarioRandomStreams>,
 ) {
     for event in spawn_events.read() {
-        spawn_damned_soul_at(
+        let identity = if perf_config.enabled() {
+            SoulIdentity::from_rng(&mut perf_rngs.soul_traits)
+        } else {
+            SoulIdentity::random()
+        };
+        spawn_damned_soul_at_with_identity(
             &mut commands,
             &handles_3d,
             world_map.as_ref(),
             event.position,
+            identity,
         );
     }
 }
 
-/// 指定座標にソウルをスポーンする（内部用ヘルパー）
-pub fn spawn_damned_soul_at(
+fn spawn_damned_soul_at_with_identity(
     commands: &mut Commands,
     handles_3d: &crate::plugins::startup::Building3dHandles,
     world_map: &WorldMap,
     pos: Vec2,
+    identity: SoulIdentity,
 ) {
     let spawn_grid = WorldMap::world_to_grid(pos);
     let actual_grid = find_nearby_walkable_grid(spawn_grid, world_map, 5);
     let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
 
-    let identity = SoulIdentity::random();
     let soul_name = identity.name.clone();
     let gender = identity.gender;
 

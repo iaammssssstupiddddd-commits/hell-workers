@@ -9,6 +9,9 @@ mod rtt_setup;
 mod startup_systems;
 mod visual_handles;
 
+pub use perf_scenario::{
+    PerfRenderMode, PerfScenarioConfig, PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
+};
 pub use rtt_composite::RttCompositeSprite;
 pub(crate) use rtt_composite::composite_logical_size;
 pub use rtt_setup::{
@@ -72,6 +75,8 @@ impl Plugin for StartupPlugin {
             .init_resource::<BlueprintSpatialGrid>()
             .init_resource::<FloorConstructionSpatialGrid>()
             .init_resource::<StockpileSpatialGrid>()
+            .init_resource::<PerfScenarioConfig>()
+            .init_resource::<PerfScenarioRandomStreams>()
             .init_resource::<PerfScenarioApplied>()
             .add_plugins(Material2dPlugin::<rtt_composite::RttCompositeMaterial>::default())
             .add_systems(Startup, (setup, initialize_gizmo_config))
@@ -107,5 +112,9 @@ impl Plugin for StartupPlugin {
                         .chain(),
                 ),
             );
+
+        #[cfg(feature = "profiling")]
+        app.init_resource::<perf_scenario::PerfCapture>()
+            .add_systems(Update, perf_scenario::drive_perf_capture_system);
     }
 }

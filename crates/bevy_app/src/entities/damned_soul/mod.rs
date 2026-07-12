@@ -6,7 +6,6 @@ pub mod observers;
 pub mod spawn;
 
 use names::{FEMALE_NAMES, MALE_NAMES};
-use rand::Rng;
 
 // コアコンポーネントは hw_core::soul から再エクスポート
 pub use hw_core::soul::{
@@ -40,6 +39,10 @@ pub struct SoulIdentity {
 impl SoulIdentity {
     pub fn random() -> Self {
         let mut rng = rand::thread_rng();
+        Self::from_rng(&mut rng)
+    }
+
+    pub fn from_rng(rng: &mut impl rand::Rng) -> Self {
         let gender = if rng.gen_bool(0.5) {
             Gender::Male
         } else {

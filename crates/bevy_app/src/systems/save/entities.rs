@@ -15,10 +15,10 @@ use hw_core::area::TaskArea;
 use hw_core::familiar::Familiar;
 use hw_core::soul::DamnedSoul;
 
-use hw_jobs::construction::{FloorConstructionSite, FloorTileBlueprint, WallConstructionSite, WallTileBlueprint};
-use hw_jobs::{
-    Blueprint, Building, Designation, Door, RestArea, Rock, Tree,
+use hw_jobs::construction::{
+    FloorConstructionSite, FloorTileBlueprint, WallConstructionSite, WallTileBlueprint,
 };
+use hw_jobs::{Blueprint, Building, Designation, Door, RestArea, Rock, Tree};
 
 use hw_energy::{PowerConsumer, PowerGenerator, PowerGrid, SoulSpaSite, SoulSpaTile};
 

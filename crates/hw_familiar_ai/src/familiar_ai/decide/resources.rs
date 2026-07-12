@@ -25,11 +25,12 @@ impl Default for FamiliarTaskDelegationTimer {
     }
 }
 
-/// Familiar task delegation の計測値（PERF-00）
+/// Familiar task delegation の計測値（PERF-00）。
+///
+/// 通常ビルドのhot pathへカウンタ更新を残さないため、profiling feature時だけ登録する。
+#[cfg(feature = "profiling")]
 #[derive(Resource, Debug)]
 pub struct FamiliarDelegationPerfMetrics {
-    /// 集計ログ出力までの経過秒
-    pub log_interval_secs: f32,
     /// 直近フレームの委譲システム実行時間
     pub latest_elapsed_ms: f32,
     /// source_selector 呼び出し回数（期間集計）
@@ -46,10 +47,10 @@ pub struct FamiliarDelegationPerfMetrics {
     pub familiars_processed: u32,
 }
 
+#[cfg(feature = "profiling")]
 impl Default for FamiliarDelegationPerfMetrics {
     fn default() -> Self {
         Self {
-            log_interval_secs: 0.0,
             latest_elapsed_ms: 0.0,
             source_selector_calls: 0,
             source_selector_cache_build_scanned_items: 0,

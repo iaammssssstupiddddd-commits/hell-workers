@@ -206,7 +206,7 @@
 
 ### 実装結果（2026-07-07 完了）
 
-- **M1〜M6 すべて実装済み**。M0 のログ削除（M4）を先行し、以降を実施。
+- **実装記録の訂正**: M1〜M3、M5〜M6と、M4のデバッグログ削除・`obstacle_version`/`validated_obstacle_version`による版一致時のpath再検証skipは実装済み。M4に記載した`NeedsPath`等による全Soul二重走査のmarker/queue置換は未実装であり、`pathfinding_system`の`for prioritize_tasks in [true, false]`走査が残る。後者は`system-wide-runtime-performance-plan-2026-07-12.md` M4へ移管した。
 - `cargo check --workspace` / `cargo clippy --workspace` ともに成功（警告 0）。
 - ユーザーによる実機動作確認済み（建物設置後の再経路探索・Dream 演出・3D ON/OFF・Familiar 委譲）。
 - 同期した恒久ドキュメント: `docs/invariants.md`（I-PF1: obstacle_version bump 契約）/ `docs/logistics.md`（CachedStockpileGroups）/ `docs/soul_ai.md`（§5.1 版一致スキップ）/ `docs/dream-visual.md`（§3 共有 material bucket）/ `docs/entity_list_ui.md`（structure/value dirty 分離）。
@@ -227,3 +227,4 @@
 | `2026-07-07` | `Claude` | コード詳細調査に基づくブラッシュアップ: `sync_removed_tiles` の O(R*S) 走査の逆引き Hash 最適化設計、`sync_soul_face_expression_system` の `get_mut` 回避、3Dプロキシ同期の `Render3dVisible` `run_if` ガード、パス再利用時のマップ未変更スキップなどを追記 |
 | `2026-07-07` | `Codex` | レビュー指摘を反映: path 再検証を version 比較へ修正、Dream UI particle の置換案を shader/material 前提に修正、`Render3dVisible` run condition の trait 条件を明記、M2 cache 方針とリンク表記を整理 |
 | `2026-07-07` | `Claude` | M1〜M6 実装完了・実機確認済み。ステータスを Complete に更新、恒久ドキュメント（invariants/logistics/soul_ai/dream-visual/entity_list_ui）を同期 |
+| `2026-07-12` | `Codex` | 現行コードとの再照合によりM4の実装記録を訂正。版一致skipは完了、`NeedsPath`/queueによる全Soul二重走査置換は未実装として後継性能計画へ移管。 |

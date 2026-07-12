@@ -6,6 +6,7 @@
 ## 1. 目的
 
 - root crate (`bevy_app`) を Bevy の app shell に寄せる
+- `bevy_app` の library は共有 Resource・公開 module・root re-export を所有し、binary `main.rs` は production App の起動設定だけを持つ
 - 純粋ロジックや共有 model を責務ごとに別 crate へ置く
 - `cargo check --workspace` を常に green に保ちながら段階的に分割する
 
@@ -313,6 +314,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `Commands`, `Res`, `Query` を使う app shell
 - Sprite spawn, UI, ECS wiring
 - crate 間の接着層
+- `lib.rs`: 共有 Resource、公開 module、root re-export、library unit testの入口
+- `main.rs`: window / render / backend設定と production App の構成
 
 ここに残すもの:
 

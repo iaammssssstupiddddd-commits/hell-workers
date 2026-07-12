@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 use hw_core::GameSettings;
-use hw_ui::components::MenuState;
 use hw_ui::UiIntent;
+use hw_ui::components::MenuState;
 
+use crate::DebugVisible;
 use crate::systems::settings::apply::sync_debug_gizmos;
 use crate::systems::settings::persistence::save_settings_to_disk;
-use crate::DebugVisible;
 
 pub fn handle(
     intent: UiIntent,

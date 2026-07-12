@@ -13,10 +13,12 @@ use super::geometry::{
     boundary_polyline_noise_params, chamfer_polyline_points, displace_polyline, sample_catmull_rom,
 };
 use super::params::{
-    CATMULL_ROM_STEPS, CHAMFER_COS_THRESHOLD, CHAMFER_DISTANCE, BOUNDARY_PROXIMITY_RES,
+    BOUNDARY_PROXIMITY_RES, CATMULL_ROM_STEPS, CHAMFER_COS_THRESHOLD, CHAMFER_DISTANCE,
     NOISE_AMPLITUDE, NOISE_FREQ, TERRAIN_REGION_RES,
 };
-use super::polyline::{boundary_junction_corner_keys, chain_edges_to_polylines, world_to_corner_key};
+use super::polyline::{
+    boundary_junction_corner_keys, chain_edges_to_polylines, world_to_corner_key,
+};
 use super::raster::{
     bake_boundary_proximity_mask, downsample_boundary_proximity_mask, rasterize_terrain_regions,
 };

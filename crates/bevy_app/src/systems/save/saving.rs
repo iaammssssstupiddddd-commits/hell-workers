@@ -18,6 +18,7 @@ use std::io::Write;
 
 use crate::world::map::Tile;
 
+use hw_core::GameTime;
 use hw_core::area::TaskArea;
 use hw_core::familiar::Familiar;
 use hw_core::population::PopulationManager;
@@ -30,7 +31,6 @@ use hw_core::relationships::{
 use hw_core::soul::{
     DamnedSoul, DreamPool, DreamState, DriftingState, RestAreaCooldown, StressBreakdown,
 };
-use hw_core::GameTime;
 
 use hw_jobs::construction::{
     FloorConstructionSite, FloorTileBlueprint, WallConstructionSite, WallTileBlueprint,

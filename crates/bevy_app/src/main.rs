@@ -1,91 +1,58 @@
-pub mod app_contexts;
-mod assets;
-mod entities;
-use hw_core::game_state;
-pub mod interface;
-pub mod plugins;
-pub mod systems;
-pub mod world;
-
-pub use hw_core::events::{
-    DesignationRequest, EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent,
-    FamiliarIdleVisualRequest, FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest,
-    GatheringManagementRequest, GatheringSpawnRequest, IdleBehaviorRequest, OnExhausted,
-    OnGatheringParticipated, OnSoulRecruited, OnStressBreakdown, OnTaskAbandoned, OnTaskAssigned,
-    OnTaskCompleted, ResourceReservationRequest, SoulTaskUnassignRequest, SquadManagementOperation,
-    SquadManagementRequest,
-};
-pub use hw_jobs::events::TaskAssignmentRequest;
-
+#[cfg(feature = "profiling")]
+use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuFeatures, WgpuSettings};
 use bevy::window::PresentMode;
+use bevy_app::{
+    DamnedSoulPlugin, DebugInstantBuild, DebugVisible,
+    plugins::{
+        input::InputPlugin,
+        interface::InterfacePlugin,
+        logic::LogicPlugin,
+        messages::MessagesPlugin,
+        spatial::SpatialPlugin,
+        startup::{PerfScenarioConfig, StartupPlugin},
+        visual::VisualPlugin,
+    },
+    systems::{GameSystemSet, save::SavePlugin, settings::SettingsPlugin},
+};
+use hw_core::game_state::PlayMode;
 use std::env;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixStream;
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
 
-use game_state::PlayMode;
-use hw_core::system_sets::GameSystemSet;
-
-use crate::entities::damned_soul::DamnedSoulPlugin;
-use crate::plugins::{
-    input::InputPlugin, interface::InterfacePlugin, logic::LogicPlugin, messages::MessagesPlugin,
-    spatial::SpatialPlugin, startup::StartupPlugin, visual::VisualPlugin,
-};
-use crate::systems::save::SavePlugin;
-use crate::systems::settings::SettingsPlugin;
-
-/// ゲーム内のデバッグ情報の表示状態（独自実装用）
-#[derive(Resource, Default)]
-pub struct DebugVisible(pub bool);
-
-/// 3D表示（RtT レンダリング）の有効/無効状態
-#[derive(Resource)]
-pub struct Render3dVisible(pub bool);
-
-/// 3D RtT の固定費を切り分けるための個別トグル。
-#[derive(Resource)]
-pub struct RenderPerfToggles {
-    pub soul_mask_enabled: bool,
-    pub directional_light_enabled: bool,
-    pub extra_directional_light_enabled: bool,
-    pub terrain_enabled: bool,
-    pub scene_objects_enabled: bool,
-}
-
-/// デバッグ用：壁建築を即時完成させるトグル
-#[derive(Resource, Default)]
-pub struct DebugInstantBuild(pub bool);
-
-impl Default for Render3dVisible {
-    fn default() -> Self {
-        Self(true)
-    }
-}
-
-impl Default for RenderPerfToggles {
-    fn default() -> Self {
-        Self {
-            soul_mask_enabled: !env_flag_is_true("HW_DISABLE_SOUL_MASK"),
-            directional_light_enabled: !env_flag_is_true("HW_DISABLE_RTT_DIRECTIONAL_LIGHT"),
-            extra_directional_light_enabled: env_flag_is_true(
-                "HW_ENABLE_RTT_EXTRA_DIRECTIONAL_LIGHT",
-            ),
-            terrain_enabled: !env_flag_is_true("HW_DISABLE_RTT_TERRAIN"),
-            scene_objects_enabled: !env_flag_is_true("HW_DISABLE_RTT_SCENE_OBJECTS"),
-        }
-    }
-}
-
 fn main() {
+    let perf_config = PerfScenarioConfig::from_process();
+    if perf_config.enabled() {
+        eprintln!(
+            "PERF_SCENARIO: seed={} workload={} size={} souls={} familiars={} render={} warmup={}s measure={}s",
+            perf_config.master_seed,
+            perf_config.workload.as_str(),
+            perf_config.size.as_str(),
+            perf_config.soul_count,
+            perf_config.familiar_count,
+            perf_config.render_mode.as_str(),
+            perf_config.warmup_secs,
+            perf_config.measure_secs,
+        );
+    }
+    let (render3d_visible, render_perf_toggles) = perf_config.initial_render_resources();
+    let log_filter = if perf_config.enabled() {
+        "wgpu=error,bevy_app=warn".to_string()
+    } else {
+        "wgpu=error,bevy_app=info".to_string()
+    };
     configure_linux_window_backend();
     let backends = select_backends();
     let present_mode = select_present_mode();
-    App::new()
-        .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
+    let mut app = App::new();
+    app.insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
+        .insert_resource(perf_config)
+        .insert_resource(render3d_visible)
+        .insert_resource(render_perf_toggles)
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
@@ -99,7 +66,7 @@ fn main() {
                 })
                 .set(bevy::log::LogPlugin {
                     level: bevy::log::Level::INFO,
-                    filter: "wgpu=error,bevy_app=info".to_string(),
+                    filter: log_filter,
                     ..default()
                 })
                 .set(RenderPlugin {
@@ -112,8 +79,6 @@ fn main() {
                 }),
         )
         .init_resource::<DebugVisible>()
-        .init_resource::<Render3dVisible>()
-        .init_resource::<RenderPerfToggles>()
         .init_resource::<DebugInstantBuild>()
         // PlayMode State
         .init_state::<PlayMode>()
@@ -142,14 +107,12 @@ fn main() {
         .add_plugins(VisualPlugin)
         .add_plugins(InterfacePlugin)
         .add_plugins(SettingsPlugin)
-        .add_plugins(SavePlugin)
-        .run();
-}
+        .add_plugins(SavePlugin);
 
-fn env_flag_is_true(name: &str) -> bool {
-    env::var(name)
-        .ok()
-        .is_some_and(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "on" | "ON"))
+    #[cfg(feature = "profiling")]
+    app.add_plugins(FrameTimeDiagnosticsPlugin::default());
+
+    app.run();
 }
 
 #[cfg(target_os = "linux")]

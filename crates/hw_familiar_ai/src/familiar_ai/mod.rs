@@ -12,9 +12,12 @@ impl Plugin for FamiliarAiCorePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<decide::resources::FamiliarTaskDelegationTimer>()
             .init_resource::<decide::resources::ReachabilityFrameCache>()
-            .init_resource::<decide::resources::FamiliarDelegationPerfMetrics>()
-            .init_resource::<decide::blueprint_auto_gather::BlueprintAutoGatherTimer>()
-            .register_type::<decide::encouragement::EncouragementCooldown>()
+            .init_resource::<decide::blueprint_auto_gather::BlueprintAutoGatherTimer>();
+
+        #[cfg(feature = "profiling")]
+        app.init_resource::<decide::resources::FamiliarDelegationPerfMetrics>();
+
+        app.register_type::<decide::encouragement::EncouragementCooldown>()
             .register_type::<hw_core::familiar::FamiliarAiState>()
             .add_systems(
                 Update,

@@ -583,8 +583,7 @@ mod tests {
                     .any(|p| {
                         let d = dist_field[(p.1 * MAP_WIDTH + p.0) as usize];
                         masks.dirt_zone_mask.get(p)
-                            && d >= ZONE_DIRT_DIST_MIN
-                            && d <= ZONE_DIRT_DIST_MAX
+                            && (ZONE_DIRT_DIST_MIN..=ZONE_DIRT_DIST_MAX).contains(&d)
                     })
             });
         assert!(

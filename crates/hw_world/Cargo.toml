@@ -3,6 +3,10 @@ name = "hw_world"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+profiling = []
+
 [dependencies]
 bevy = { workspace = true }
 hw_core = { path = "../hw_core" }

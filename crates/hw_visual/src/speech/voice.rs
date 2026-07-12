@@ -15,6 +15,10 @@ pub struct FamiliarVoice {
 impl FamiliarVoice {
     pub fn random() -> Self {
         let mut rng = rand::thread_rng();
+        Self::from_rng(&mut rng)
+    }
+
+    pub fn from_rng(rng: &mut impl Rng) -> Self {
         let mut preferences = [0; LatinPhrase::COUNT];
         for p in preferences.iter_mut() {
             *p = rng.gen_range(0..5);

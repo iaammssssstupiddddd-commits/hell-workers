@@ -220,7 +220,10 @@ pub fn update_hover_entity(
         return;
     };
 
-    let camera_translation = q_camera.iter().next().map(|(_, transform)| transform.translation());
+    let camera_translation = q_camera
+        .iter()
+        .next()
+        .map(|(_, transform)| transform.translation());
     let cursor_unchanged = hover_cache.0 == Some(world_pos);
     let camera_unchanged = hover_cache.1 == camera_translation;
     if cursor_unchanged && camera_unchanged {

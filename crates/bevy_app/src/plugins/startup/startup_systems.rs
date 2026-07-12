@@ -6,6 +6,7 @@ use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
 use crate::plugins::startup::Terrain3dHandles;
+use crate::plugins::startup::{PerfScenarioConfig, PerfScenarioRandomStreams};
 use crate::systems::logistics::{ResourceItem, initial_resource_spawner};
 use crate::systems::visual::camera_sync::WorldForeground2dCamera;
 use crate::systems::visual::elevation_view::ElevationDirection;
@@ -62,11 +63,12 @@ pub(super) fn setup(
     q_window: Query<&Window, With<PrimaryWindow>>,
     quality: Res<QualitySettings>,
     perf_toggles: Res<crate::RenderPerfToggles>,
+    perf_config: Res<PerfScenarioConfig>,
 ) {
     // 4096 は GPU コスト・VRAM 消費が過大なため 2048 に下げる。
     // shadow 品質プリセット化は別タスク（docs/plans/shadow-map-size-2026-04-10.md 参照）。
     commands.insert_resource(DirectionalLightShadowMap { size: 2048 });
-    let generated_layout = prepare_generated_world_layout_resource();
+    let generated_layout = prepare_generated_world_layout_resource(&perf_config);
     info!(
         "BEVY_STARTUP: Prepared worldgen layout (seed={}, attempt={}, fallback={})",
         generated_layout.master_seed,
@@ -243,10 +245,16 @@ pub(super) fn populate_resource_spatial_grid(
 pub(super) fn spawn_entities(
     spawn_events: MessageWriter<DamnedSoulSpawnEvent>,
     world_map: WorldMapRead,
+    perf_config: Res<PerfScenarioConfig>,
+    perf_rngs: ResMut<PerfScenarioRandomStreams>,
 ) {
-    spawn_damned_souls(spawn_events, world_map);
+    spawn_damned_souls(spawn_events, world_map, perf_config, perf_rngs);
 }
 
-pub(super) fn spawn_familiar_wrapper(spawn_events: MessageWriter<FamiliarSpawnEvent>) {
-    crate::entities::familiar::spawn_familiar(spawn_events);
+pub(super) fn spawn_familiar_wrapper(
+    spawn_events: MessageWriter<FamiliarSpawnEvent>,
+    perf_config: Res<PerfScenarioConfig>,
+    perf_rngs: ResMut<PerfScenarioRandomStreams>,
+) {
+    crate::entities::familiar::spawn_familiar(spawn_events, perf_config, perf_rngs);
 }

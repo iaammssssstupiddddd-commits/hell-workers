@@ -47,9 +47,7 @@ pub fn sync_soul_shadow_projectors_system(
         })
         .collect::<Vec<_>>();
     if projectors.len() > MAX_SOUL_SHADOW_PROJECTORS {
-        projectors.select_nth_unstable_by(MAX_SOUL_SHADOW_PROJECTORS, |a, b| {
-            a.0.total_cmp(&b.0)
-        });
+        projectors.select_nth_unstable_by(MAX_SOUL_SHADOW_PROJECTORS, |a, b| a.0.total_cmp(&b.0));
         projectors.truncate(MAX_SOUL_SHADOW_PROJECTORS);
     }
     projectors.sort_by(|a, b| a.0.total_cmp(&b.0));

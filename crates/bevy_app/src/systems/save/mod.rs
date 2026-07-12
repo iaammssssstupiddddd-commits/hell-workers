@@ -15,7 +15,7 @@ mod state;
 
 use bevy::prelude::*;
 
-pub use state::{SaveLoadState, SAVE_FILE_PATH};
+pub use state::{SAVE_FILE_PATH, SaveLoadState};
 
 use load::load_world_system;
 use register::register_save_types;

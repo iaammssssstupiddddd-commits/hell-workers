@@ -1,5 +1,6 @@
 //! マップスポーン
 
+use crate::plugins::startup::PerfScenarioConfig;
 use crate::plugins::startup::Terrain3dHandles;
 use bevy::light::NotShadowCaster;
 use bevy::prelude::*;
@@ -30,7 +31,11 @@ pub struct GeneratedWorldLayoutResource {
     pub layout: GeneratedWorldLayout,
 }
 
-pub fn resolve_worldgen_seed() -> u64 {
+pub fn resolve_worldgen_seed(perf_config: &PerfScenarioConfig) -> u64 {
+    if perf_config.enabled() {
+        return perf_config.master_seed;
+    }
+
     match std::env::var(WORLDGEN_SEED_ENV) {
         Ok(raw) => match raw.parse::<u64>() {
             Ok(seed) => seed,
@@ -46,8 +51,10 @@ pub fn resolve_worldgen_seed() -> u64 {
     }
 }
 
-pub fn prepare_generated_world_layout_resource() -> GeneratedWorldLayoutResource {
-    let master_seed = resolve_worldgen_seed();
+pub fn prepare_generated_world_layout_resource(
+    perf_config: &PerfScenarioConfig,
+) -> GeneratedWorldLayoutResource {
+    let master_seed = resolve_worldgen_seed(perf_config);
     let layout = generate_world_layout(master_seed);
     GeneratedWorldLayoutResource {
         master_seed,

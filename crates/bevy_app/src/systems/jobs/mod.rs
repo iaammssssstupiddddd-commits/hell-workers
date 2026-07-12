@@ -3,8 +3,8 @@ pub mod floor_construction;
 pub mod soul_spa_construction;
 pub mod wall_construction;
 
-pub use building_completion::building_completion_system;
 pub(crate) use building_completion::attach_building_shell;
+pub use building_completion::building_completion_system;
 pub use hw_core::world::DoorState;
 pub use hw_jobs::model::{
     Blueprint, BonePile, BridgeMarker, Building, BuildingCategory, BuildingType, Designation,

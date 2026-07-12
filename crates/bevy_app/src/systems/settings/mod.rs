@@ -2,11 +2,11 @@ pub mod apply;
 pub mod persistence;
 
 use bevy::prelude::*;
-use bevy::ui_widgets::{checkbox_self_update, slider_self_update, ValueChange};
-use hw_core::game_state::TimeSpeed;
+use bevy::ui_widgets::{ValueChange, checkbox_self_update, slider_self_update};
 use hw_core::GameSettings;
-use hw_ui::components::{SettingsCheckboxMarker, SettingsField, SettingsSliderMarker};
+use hw_core::game_state::TimeSpeed;
 use hw_ui::UiIntent;
+use hw_ui::components::{SettingsCheckboxMarker, SettingsField, SettingsSliderMarker};
 
 use apply::apply_default_time_speed;
 use persistence::{load_settings_from_disk, save_settings_to_disk};
@@ -39,10 +39,7 @@ fn load_settings_system(mut commands: Commands, mut time: ResMut<Time<Virtual>>)
     commands.insert_resource(settings);
 }
 
-fn save_settings_on_app_exit_system(
-    mut exit: MessageReader<AppExit>,
-    settings: Res<GameSettings>,
-) {
+fn save_settings_on_app_exit_system(mut exit: MessageReader<AppExit>, settings: Res<GameSettings>) {
     if exit.read().next().is_none() {
         return;
     }
@@ -90,9 +87,10 @@ fn on_settings_checkbox_value_change(
 fn update_settings_default_speed_highlight(
     settings: Res<GameSettings>,
     theme: Res<hw_ui::theme::UiTheme>,
-    mut q_buttons: Query<
-        (&hw_ui::components::SettingsDefaultSpeedButton, &mut BackgroundColor),
-    >,
+    mut q_buttons: Query<(
+        &hw_ui::components::SettingsDefaultSpeedButton,
+        &mut BackgroundColor,
+    )>,
 ) {
     if !settings.is_changed() {
         return;

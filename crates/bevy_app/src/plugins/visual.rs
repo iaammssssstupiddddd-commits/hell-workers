@@ -31,8 +31,8 @@ use crate::systems::visual::character_proxy_3d::{
 use crate::systems::visual::elevation_view::{ElevationViewState, elevation_view_input_system};
 use crate::systems::visual::section_cut::sync_section_cut_normal_system;
 use crate::systems::visual::soul_animation::{
-    SoulAnimationLibrary, initialize_soul_animation_players_system,
-    init_soul_face_expression_system, prepare_soul_animation_library_system,
+    SoulAnimationLibrary, init_soul_face_expression_system,
+    initialize_soul_animation_players_system, prepare_soul_animation_library_system,
     sync_soul_anim_visual_state_system, sync_soul_body_animation_system,
     sync_soul_face_expression_system,
 };
@@ -47,9 +47,11 @@ use crate::world::map::TerrainChunk;
 use hw_core::game_state::PlayMode;
 use hw_visual::HwVisualPlugin;
 use hw_visual::SectionCut;
-use hw_visual::soul::task_link_system;
 use hw_visual::SoulProxyOwnerCache;
-use hw_visual::visual3d::{Building3dVisual, FamiliarProxy3d, SoulProxy3d};
+use hw_visual::soul::task_link_system;
+use hw_visual::visual3d::{
+    Building3dVisual, FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d, SoulShadowProxy3d,
+};
 use hw_world::{TerrainChangedEvent, sync_room_overlay_tiles_system};
 
 use bevy::prelude::*;
@@ -325,7 +327,13 @@ type SceneObjectQuery<'w, 's> = Query<
     'w,
     's,
     Entity,
-    Or<(With<Building3dVisual>, With<SoulProxy3d>, With<FamiliarProxy3d>)>,
+    Or<(
+        With<Building3dVisual>,
+        With<SoulProxy3d>,
+        With<SoulMaskProxy3d>,
+        With<SoulShadowProxy3d>,
+        With<FamiliarProxy3d>,
+    )>,
 >;
 
 /// 地形と main scene object を個別に隠して、RtT 固定費の内訳を切り分ける。

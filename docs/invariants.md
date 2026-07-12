@@ -137,9 +137,12 @@ changed |= removed_b.read().next().is_some();
 `hw_*` crate は `bevy_app` に依存してはならない（依存グラフが循環する）。
 `bevy_app` が `hw_*` に依存するのは正当。逆は禁止。
 
-### I-A2: ECS（Commands/Query）を leaf crate に持ち込まない
-`hw_familiar_ai`・`hw_soul_ai`・`hw_jobs` 等の leaf crate に Bevy の `Commands`・`Query` を直接持ち込まない。
-ECS 接続は `bevy_app/src/systems/` 層が担当する。
+### I-A2: leaf crate は root へ逆依存しない
+`hw_*` crate は `bevy_app` に依存してはならない。Bevy の `Commands`・`Query`・`Res` を使う
+system / Observer は、所有する leaf crate に置いてよい。
+
+root (`bevy_app`) は、window / asset / UI adapter / production plugin wiring と、root 固有 Resource を
+必要とする ECS 接続を担当する。leaf の system を root 側へ戻して依存方向や登録責務を曖昧にしてはならない。
 
 ---
 

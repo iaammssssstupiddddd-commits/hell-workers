@@ -9,6 +9,7 @@ use bevy::prelude::*;
 
 use crate::world::map::Tile;
 
+use hw_core::GameTime;
 use hw_core::area::{AreaBounds, TaskArea};
 use hw_core::familiar::{Familiar, FamiliarType};
 use hw_core::logistics::ResourceType;
@@ -24,7 +25,6 @@ use hw_core::soul::{
     GatheringBehavior, IdleBehavior, IdleState, RestAreaCooldown, StressBreakdown,
 };
 use hw_core::world::DoorState;
-use hw_core::GameTime;
 
 use hw_jobs::construction::{
     FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,

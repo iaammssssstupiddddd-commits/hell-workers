@@ -4,6 +4,7 @@ use hw_world::WorldMap;
 use hw_world::pathfinding::{self, PathfindingContext};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+#[cfg(feature = "profiling")]
 use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 
 use super::{DelegationEnvCtx, PathfindingCtxMut};
@@ -22,10 +23,17 @@ const WORKER_SCORE_MAX_DIST_SQ: f32 = (TILE_SIZE * 80.0) * (TILE_SIZE * 80.0);
 const WORKER_PRIORITY_WEIGHT: f32 = 0.65;
 const WORKER_DISTANCE_WEIGHT: f32 = 0.35;
 
+#[cfg(feature = "profiling")]
 static REACHABLE_WITH_CACHE_CALLS: AtomicU32 = AtomicU32::new(0);
 
+#[cfg(feature = "profiling")]
 pub fn take_reachable_with_cache_calls() -> u32 {
     REACHABLE_WITH_CACHE_CALLS.swap(0, AtomicOrdering::Relaxed)
+}
+
+#[cfg(not(feature = "profiling"))]
+pub fn take_reachable_with_cache_calls() -> u32 {
+    0
 }
 
 fn evaluate_reachability(
@@ -50,6 +58,7 @@ fn reachable_with_cache(
     pf_context: &mut PathfindingContext,
     cache: &mut HashMap<ReachabilityCacheKey, bool>,
 ) -> bool {
+    #[cfg(feature = "profiling")]
     REACHABLE_WITH_CACHE_CALLS.fetch_add(1, AtomicOrdering::Relaxed);
     let key = (worker_grid, candidate.target_grid);
     if let Some(reachable) = cache.get(&key) {

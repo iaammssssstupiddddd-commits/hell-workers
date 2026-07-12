@@ -3,9 +3,12 @@ name = "hw_spatial"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+profiling = []
+
 [dependencies]
 bevy = { workspace = true }
 hw_core = { path = "../hw_core" }
 hw_jobs = { path = "../hw_jobs" }
 hw_world = { path = "../hw_world" }
-

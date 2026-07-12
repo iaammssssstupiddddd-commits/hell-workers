@@ -24,3 +24,17 @@ hw_visual = { path = "../hw_visual" }
 [features]
 default = ["dynamic_linking"]
 dynamic_linking = ["bevy/dynamic_linking"]
+profiling = [
+    "bevy/trace_tracy",
+    "hw_core/profiling",
+    "hw_energy/profiling",
+    "hw_jobs/profiling",
+    "hw_logistics/profiling",
+    "hw_spatial/profiling",
+    "hw_ui/profiling",
+    "hw_world/profiling",
+    "hw_soul_ai/profiling",
+    "hw_familiar_ai/profiling",
+    "hw_visual/profiling",
+]
+profiling-memory = ["profiling", "bevy/trace_tracy_memory"]

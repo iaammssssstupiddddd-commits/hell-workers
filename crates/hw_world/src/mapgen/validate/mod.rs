@@ -75,21 +75,20 @@ mod tests {
 
     #[test]
     fn test_golden_seeds_pass_lightweight_validate() {
-        for seed in [GOLDEN_SEED_PRIMARY] {
-            let layout = generate_world_layout(seed);
-            assert!(
-                lightweight_validate(&layout).is_ok(),
-                "seed={seed}: lightweight_validate failed"
-            );
-            assert!(
-                !layout.resource_spawn_candidates.water_tiles.is_empty(),
-                "seed={seed}: validated water_tiles missing"
-            );
-            assert!(
-                !layout.resource_spawn_candidates.sand_tiles.is_empty(),
-                "seed={seed}: validated sand_tiles missing"
-            );
-        }
+        let seed = GOLDEN_SEED_PRIMARY;
+        let layout = generate_world_layout(seed);
+        assert!(
+            lightweight_validate(&layout).is_ok(),
+            "seed={seed}: lightweight_validate failed"
+        );
+        assert!(
+            !layout.resource_spawn_candidates.water_tiles.is_empty(),
+            "seed={seed}: validated water_tiles missing"
+        );
+        assert!(
+            !layout.resource_spawn_candidates.sand_tiles.is_empty(),
+            "seed={seed}: validated sand_tiles missing"
+        );
     }
 
     #[test]

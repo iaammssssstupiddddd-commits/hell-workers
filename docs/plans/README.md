@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-07-12）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-07-13）。
 
 ## 新規計画書の作り方
 
@@ -21,7 +21,12 @@
 |---|---|---|
 | [blob-shadow-tim-burton-2026-04-12.md](blob-shadow-tim-burton-2026-04-12.md) | Draft | 影スタイル 2D 化計画（床・壁接続維持） 2026-04-12 |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
-| [performance-cpu-2026-04-16.md](performance-cpu-2026-04-16.md) | Draft | CPU パフォーマンス改善計画書 |
+| [performance-cpu-2026-04-16.md](performance-cpu-2026-04-16.md) | Superseded | CPU パフォーマンス改善計画書 |
+| [runtime-correctness-contracts-plan-2026-07-12.md](runtime-correctness-contracts-plan-2026-07-12.md) | In Progress | 実行時正しさ契約リファクタリング計画 |
+| [save-load-hardening-plan-2026-07-12.md](save-load-hardening-plan-2026-07-12.md) | Draft | Save/Load境界強化・互換性リファクタリング計画 |
+| [structural-maintainability-followups-plan-2026-07-12.md](structural-maintainability-followups-plan-2026-07-12.md) | Draft | 構造・保守性・品質ゲート フォローアップ計画 |
+| [system-wide-correctness-refactoring-plan-2026-07-12.md](system-wide-correctness-refactoring-plan-2026-07-12.md) | Draft | 全体実装レビュー追補: 横断リファクタリングロードマップ |
+| [system-wide-runtime-performance-plan-2026-07-12.md](system-wide-runtime-performance-plan-2026-07-12.md) | In Progress | 全体ランタイム・ホットパス性能改善計画書 |
 | [terrain-lod-switch-flicker-plan-2026-04-17.md](terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD 切替時のちらつきを、判定安定化と短い遷移フェーズで抑える計画 |
 | [world-map-lod1-performance-plan-2026-04-09.md](world-map-lod1-performance-plan-2026-04-09.md) | Complete | ワールドマップ近景 `LOD1` の fragment 負荷を、境界 early-out・中間 LOD・feature ベイク再編で下げる計画 |
 

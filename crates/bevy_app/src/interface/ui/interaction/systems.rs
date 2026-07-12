@@ -148,9 +148,8 @@ pub fn ui_keyboard_shortcuts_system(
 
     // モードキャンセル (Escape)
     if keyboard.just_pressed(KeyCode::Escape) {
-        if hw_ui::interaction::dialog::is_load_confirm_dialog_open(
-            &shortcut_queries.q_load_confirm,
-        ) {
+        if hw_ui::interaction::dialog::is_load_confirm_dialog_open(&shortcut_queries.q_load_confirm)
+        {
             ui_intent_writer.write(UiIntent::CancelLoadConfirm);
             return;
         }

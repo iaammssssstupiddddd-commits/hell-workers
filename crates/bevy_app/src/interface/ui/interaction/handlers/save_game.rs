@@ -1,11 +1,9 @@
 use bevy::prelude::*;
 use hw_ui::UiIntent;
-use hw_ui::interaction::dialog::{
-    close_load_confirm_dialog, open_load_confirm_dialog,
-};
+use hw_ui::interaction::dialog::{close_load_confirm_dialog, open_load_confirm_dialog};
 
 use super::super::intent_context::IntentUiQueries;
-use crate::systems::save::{SaveLoadState, SAVE_FILE_PATH};
+use crate::systems::save::{SAVE_FILE_PATH, SaveLoadState};
 
 pub(crate) fn handle(intent: UiIntent, ui: &mut IntentUiQueries) {
     match intent {

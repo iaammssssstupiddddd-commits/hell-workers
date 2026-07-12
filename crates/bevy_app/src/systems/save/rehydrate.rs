@@ -110,8 +110,7 @@ fn rehydrate_shells(
 
     let mut familiars: Vec<(Entity, String, f32, Vec2)> = Vec::new();
     {
-        let mut q = world
-            .query_filtered::<(Entity, &Familiar, &Transform), Without<Destination>>();
+        let mut q = world.query_filtered::<(Entity, &Familiar, &Transform), Without<Destination>>();
         for (entity, familiar, transform) in q.iter(world) {
             familiars.push((
                 entity,
@@ -124,8 +123,7 @@ fn rehydrate_shells(
 
     let mut trees: Vec<(Entity, usize)> = Vec::new();
     {
-        let mut q =
-            world.query_filtered::<(Entity, &TreeVariant), (With<Tree>, Without<Sprite>)>();
+        let mut q = world.query_filtered::<(Entity, &TreeVariant), (With<Tree>, Without<Sprite>)>();
         for (entity, variant) in q.iter(world) {
             trees.push((entity, variant.0));
         }
@@ -138,8 +136,8 @@ fn rehydrate_shells(
 
     let mut items: Vec<(Entity, ResourceType, bool)> = Vec::new();
     {
-        let mut q = world
-            .query_filtered::<(Entity, &ResourceItem, Option<&LoadedIn>), Without<Sprite>>();
+        let mut q =
+            world.query_filtered::<(Entity, &ResourceItem, Option<&LoadedIn>), Without<Sprite>>();
         for (entity, item, loaded_in) in q.iter(world) {
             items.push((entity, item.0, loaded_in.is_some()));
         }

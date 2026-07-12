@@ -375,15 +375,16 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo run -p visual_t
 
 ソース: `crates/visual_test/`
 
-### 高負荷パフォーマンス計測（500 Soul / 30 Familiar）
+### 再現可能なパフォーマンス計測
 ```bash
-cargo run -p bevy_app -- --spawn-souls 500 --spawn-familiars 30 --perf-scenario
+HW_PRESENT_MODE=novsync cargo run --profile profiling -p bevy_app@0.1.0 --no-default-features --features profiling -- --perf-scenario --perf-seed 20260712 --perf-size medium --perf-workload gather --perf-render cpu
 ```
 
-- `--spawn-souls`: 初期 Soul 数を上書き（既定: 10）
-- `--spawn-familiars`: 初期 Familiar 数を上書き（既定: 2）
-- `--perf-scenario`: 収集シナリオを自動セットアップ（TaskArea / command / designation）
-- 環境変数でも指定可: `HW_SPAWN_SOULS`, `HW_SPAWN_FAMILIARS`, `HW_PERF_SCENARIO=1`
+- `--perf-scenario`: Warmup/Measure/Flush/AppExitを自動実行する。
+- `--perf-seed`: worldgenとSoul/Familiar配置のmaster seed。`HELL_WORKERS_WORLDGEN_SEED`より優先する。
+- `--perf-size`: `small`（50/4）、`medium`（200/12）、`large`（500/30）のSoul/Familiar数を選ぶ。`--spawn-souls`と`--spawn-familiars`は個別上書き。
+- `--perf-render cpu|gpu`: CPU-only寄りまたは3D RtT込みの固定描画条件を選ぶ。
+- CSV、Tracy memory、RenderDocの採取条件と出力形式は[performance-profiling.md](performance-profiling.md)を正本とする。
 
 ## トラブルシューティング
 
