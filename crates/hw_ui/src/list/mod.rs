@@ -3,6 +3,7 @@ pub mod drag_state;
 pub mod minimize;
 pub mod models;
 pub mod resize;
+pub mod search;
 pub mod section_toggle;
 pub mod selection_focus;
 pub mod spawn;
@@ -20,6 +21,7 @@ pub use models::{
 pub use resize::{
     EntityListResizeState, entity_list_resize_cursor_system, entity_list_resize_system,
 };
+pub use search::EntityListSearchState;
 pub use section_toggle::entity_list_section_toggle_system;
 pub use selection_focus::{focus_camera_on_entity, select_entity_and_focus_camera};
 pub use spawn::{

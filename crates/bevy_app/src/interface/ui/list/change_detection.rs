@@ -7,6 +7,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::relationships::{CommandedBy, Commanding};
 use hw_ui::components::{SectionFolded, UnassignedFolded};
+use hw_ui::list::search::EntityListSearchState;
 
 #[derive(SystemParam)]
 pub struct StructureDetectors<'w, 's> {
@@ -33,6 +34,7 @@ pub struct ValueDetectors<'w, 's> {
 
 pub fn detect_entity_list_changes(
     mut dirty: ResMut<EntityListDirty>,
+    search_state: Res<EntityListSearchState>,
     structure: StructureDetectors,
     value: ValueDetectors,
 ) {
@@ -69,9 +71,14 @@ pub fn detect_entity_list_changes(
         dirty.mark_structure();
     }
 
+    let search_active = !search_state.normalized().is_empty();
+    if search_active && !q_identity.is_empty() {
+        dirty.mark_structure();
+    }
+
     let value_changed = !q_souls.is_empty()
         || !q_tasks.is_empty()
-        || !q_identity.is_empty()
+        || (!q_identity.is_empty() && !search_active)
         || !q_familiars.is_empty()
         || !q_familiar_ai.is_empty()
         || !q_familiar_op.is_empty();

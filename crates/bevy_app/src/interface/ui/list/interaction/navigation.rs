@@ -1,33 +1,41 @@
 use crate::app_contexts::TaskContext;
 use crate::systems::command::TaskMode;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_ui::camera::MainCamera;
 use hw_ui::components::{
-    EntityListScrollHint, FamiliarListItem, SoulListItem, UnassignedFolded,
+    EntityListScrollHint, FamiliarListItem, SoulListItem, UiInputState, UnassignedFolded,
     UnassignedSectionArrowIcon, UnassignedSoulContent, UnassignedSoulSection,
 };
 
-pub fn entity_list_tab_focus_system(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    task_context: Res<TaskContext>,
-    mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
-    q_soul_items: Query<&SoulListItem>,
-    q_familiar_items: Query<&FamiliarListItem>,
-    mut q_camera: Query<&mut Transform, With<MainCamera>>,
-    q_transforms: Query<&GlobalTransform>,
-) {
-    if !keyboard.just_pressed(KeyCode::Tab) {
+#[derive(SystemParam)]
+pub struct EntityListTabFocusCtx<'w, 's> {
+    pub keyboard: Res<'w, ButtonInput<KeyCode>>,
+    pub ui_input_state: Res<'w, UiInputState>,
+    pub task_context: Res<'w, TaskContext>,
+    pub selected_entity: ResMut<'w, crate::interface::selection::SelectedEntity>,
+    pub soul_items: Query<'w, 's, &'static SoulListItem>,
+    pub familiar_items: Query<'w, 's, &'static FamiliarListItem>,
+    pub camera: Query<'w, 's, &'static mut Transform, With<MainCamera>>,
+    pub transforms: Query<'w, 's, &'static GlobalTransform>,
+}
+
+pub fn entity_list_tab_focus_system(mut ctx: EntityListTabFocusCtx) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ctx.ui_input_state) {
+        return;
+    }
+    if !ctx.keyboard.just_pressed(KeyCode::Tab) {
         return;
     }
 
-    let in_area_task_mode = matches!(task_context.0, TaskMode::AreaSelection(_));
+    let in_area_task_mode = matches!(ctx.task_context.0, TaskMode::AreaSelection(_));
     let mut candidates: Vec<Entity> = if in_area_task_mode {
-        q_familiar_items.iter().map(|item| item.0).collect()
+        ctx.familiar_items.iter().map(|item| item.0).collect()
     } else {
-        q_familiar_items
+        ctx.familiar_items
             .iter()
             .map(|item| item.0)
-            .chain(q_soul_items.iter().map(|item| item.0))
+            .chain(ctx.soul_items.iter().map(|item| item.0))
             .collect()
     };
     candidates.sort_by_key(|entity| entity.index());
@@ -36,8 +44,10 @@ pub fn entity_list_tab_focus_system(
         return;
     }
 
-    let reverse = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
-    let current_index = selected_entity
+    let reverse =
+        ctx.keyboard.pressed(KeyCode::ShiftLeft) || ctx.keyboard.pressed(KeyCode::ShiftRight);
+    let current_index = ctx
+        .selected_entity
         .0
         .and_then(|selected| candidates.iter().position(|&entity| entity == selected));
     let next_index = if reverse {
@@ -53,9 +63,9 @@ pub fn entity_list_tab_focus_system(
     hw_ui::list::select_entity_and_focus_camera(
         candidates[next_index],
         "tab-focus",
-        &mut selected_entity,
-        &mut q_camera,
-        &q_transforms,
+        &mut ctx.selected_entity,
+        &mut ctx.camera,
+        &ctx.transforms,
     );
 }
 

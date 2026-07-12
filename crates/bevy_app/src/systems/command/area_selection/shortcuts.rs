@@ -5,6 +5,7 @@ use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar};
 use crate::interface::selection::SelectedEntity;
+use crate::interface::ui::UiInputState;
 use crate::systems::command::{TaskArea, TaskMode};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -13,6 +14,7 @@ use hw_world::zones::Site;
 #[derive(SystemParam)]
 pub struct ShortcutResources<'w> {
     keyboard: Res<'w, ButtonInput<KeyCode>>,
+    ui_input_state: Res<'w, UiInputState>,
     task_context: Res<'w, TaskContext>,
     selected_entity: ResMut<'w, SelectedEntity>,
     area_edit_history: ResMut<'w, AreaEditHistory>,
@@ -34,6 +36,9 @@ pub fn task_area_edit_history_shortcuts_system(
     mut queries: ShortcutQueries,
     mut commands: Commands,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&res.ui_input_state) {
+        return;
+    }
     if !matches!(res.task_context.0, TaskMode::AreaSelection(_)) {
         return;
     }

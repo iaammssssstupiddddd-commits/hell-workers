@@ -1,6 +1,6 @@
 # 情報パネルUI仕様
 
-最終更新: 2026-03-30
+最終更新: 2026-07-10
 
 ## 概要
 画面右側に表示される常駐パネルです。  
@@ -24,6 +24,7 @@
 ### ソウル
 - ヘッダー（名前）
 - 性別アイコン
+- リネームボタン（`✎`、Soul 選択時のみ表示）
 - ステータス
   - Motivation
   - Stress
@@ -31,6 +32,17 @@
 - Current Task
 - Inventory
 - 共通テキスト（補助情報）
+
+### Soul リネーム
+- 対象: `SoulIdentity.name`（`DamnedSoul` エンティティ）
+- ヘッダー右の `✎` ボタンで編集モード開始。`EditableText` フィールドがヘッダー直下に表示される
+- `Enter`: 確定 → `TextInputIntent::RenameSoul` を発行し、`bevy_app` 側 handler が `SoulIdentity` を更新
+- `Escape`: キャンセル（変更を破棄しフィールドを閉じる）
+- 編集中は通常ヘッダー `Text` を非表示にし、`SoulRenameFieldContainer` のみ表示する
+- バリデーション: 空文字・32 文字超は拒否（トリム後判定）
+- `UiIntent` は `Copy` 前提のため、リネームは non-`Copy` の `TextInputIntent` を使用
+- 確定後は Info Panel ヘッダー・エンティティリストの Soul 行名が次回 VM 同期で更新される
+- セーブ/ロードは既存の `SoulIdentity` 永続化経路に従う
 
 ### 使い魔
 - ヘッダー（名前）
@@ -71,6 +83,7 @@
   - `update_entity_inspection_view_model_system` が `EntityInspectionViewModel` resource を更新
   - パネル側は描画責務に限定
 - `InfoPanelState` で前回モデルを保持し、同一内容の再描画を抑制
+- `InfoPanelState` はリネーム中の対象 entity も保持する。表示モデルが同一でも、`SoulRenameState.active` の開始/終了でフィールド表示が切り替わるため、この状態は再描画判定に含める
 - `Update` では `update_entity_inspection_view_model_system` → `info_panel_system` の順に固定し、selection / pin / entity 消滅の反映が 1 フレーム遅れないようにします。
 - `info_panel_system` は `menu_visibility_system` の後、`update_mode_text_system` の前で実行されます。
 
@@ -94,8 +107,11 @@ append_designation_model   // Designation: タスク情報
 ## 関連ファイル（最終境界反映）
 
 ### `hw_ui` 側（実装本体）
-- `crates/hw_ui/src/panels/info_panel/` - `InfoPanelState`, `InfoPanelPinState`, `spawn_info_panel_ui`, `info_panel_system`
+- `crates/hw_ui/src/panels/info_panel/` - `InfoPanelState`, `InfoPanelPinState`, `spawn_info_panel_ui`, `info_panel_system`（リネーム表示状態を含む差分更新）
 - `crates/hw_ui/src/panels/menu.rs` - `menu_visibility_system`
+- `crates/hw_ui/src/interaction/soul_rename.rs` - リネームボタン・フィールド spawn / cleanup
+- `crates/hw_ui/src/widgets/text_field.rs` - 再利用可能 `spawn_text_field` ヘルパー
+- `crates/hw_ui/src/text_input_intents.rs` - `TextInputIntent::RenameSoul`
 
 ### root shell（adapter）
 - `crates/bevy_app/src/interface/ui/panels/mod.rs` - `hw_ui::panels::info_panel` の re-export と `context_menu_system` の公開
@@ -106,75 +122,5 @@ append_designation_model   // Designation: タスク情報
   - `builders.rs` — 各 `build_*` / `append_*` メソッド実装
 - `crates/bevy_app/src/interface/ui/panels/context_menu.rs` - `Inspect (Pin)` メニュー
 - `crates/bevy_app/src/interface/ui/interaction/menu_actions.rs` - `InspectEntity` / `ClearInspectPin`
-- `crates/bevy_app/src/interface/ui/setup/mod.rs` - `spawn_info_panel_ui` を `hw_ui` 実装へ委譲する setup adapter
-
-## 概要
-画面右側に表示される常駐パネルです。  
-`SelectedEntity` またはピン留め中エンティティを参照し、変更時は差分更新のみ行います。  
-対象がない場合は `display: none` で非表示です。
-
-## 表示ルール
-
-### 参照優先順位
-- `InfoPanelPinState.entity` があればそれを優先（ピン表示）
-- ピンが無ければ `SelectedEntity`
-- ピン対象が消滅した場合は自動でピン解除し、選択対象へフォールバック
-
-### ピン操作
-- 右クリックコンテキストメニューの `Inspect (Pin)` でピン設定
-- パネル右上 `Unpin` ボタンで解除
-- `Unpin` ボタンはピン中のみ表示
-
-## 表示対象
-
-### ソウル
-- ヘッダー（名前）
-- 性別アイコン
-- ステータス
-  - Motivation
-  - Stress
-  - Fatigue
-- Current Task
-- Inventory
-- 共通テキスト（補助情報）
-
-### 使い魔
-- ヘッダー（名前）
-- 共通テキスト（タイプ、指揮関連パラメータ）
-- ソウル専用ステータス列は非表示
-
-### その他
-- Blueprint / Building / Resource / Tree / Rock / Designation などを
-  `EntityInspectionModel` の共通テキストとして表示
-
-## 実装アーキテクチャ
-- `UiNodeRegistry`（`UiSlot -> Entity`）経由でノード参照
-- `Query::get_mut(entity)` で対象ノードのみ更新
-- 表示データは `presentation` 層で構築
-  - `build_entity_inspection_model` が `EntityInspectionModel` を生成
-  - `update_entity_inspection_view_model_system` が `EntityInspectionViewModel` resource を更新
-  - パネル側は描画責務に限定
-- `InfoPanelState` で前回モデルを保持し、同一内容の再描画を抑制
-- `Update` では `update_entity_inspection_view_model_system` → `info_panel_system` の順に固定し、selection / pin / entity 消滅の反映が 1 フレーム遅れないようにします。
-- `info_panel_system` は `menu_visibility_system` の後、`update_mode_text_system` の前で実行されます。
-
-## デザイン仕様（現行）
-- 幅: `260px`（`min 200 / max 400`）
-- 背景: セマンティックグラデーション
-- 外枠: `panel_border_width` + `panel_corner_radius`
-- セクションディバイダー: `Status / Current Task / Inventory`
-
-## 関連ファイル（最終境界反映）
-
-### `hw_ui` 側（実装本体）
-- `crates/hw_ui/src/panels/info_panel/` - `InfoPanelState`, `InfoPanelPinState`, `spawn_info_panel_ui`, `info_panel_system`
-- `crates/hw_ui/src/panels/menu.rs` - `menu_visibility_system`
-
-### root shell（adapter）
-- `crates/bevy_app/src/interface/ui/panels/mod.rs` - `hw_ui::panels::info_panel` の re-export と `context_menu_system` の公開
-- `crates/bevy_app/src/interface/ui/mod.rs` - app shell 側の UI facade として `InfoPanelPinState` / `InfoPanelState` / `info_panel_system` を明示 re-export
-- `crates/bevy_app/src/interface/ui/plugins/info_panel.rs` - ViewModel producer / consumer の順序固定と plugin wiring
-- `crates/bevy_app/src/interface/ui/presentation/` - `EntityInspectionModel` / `ViewModel` 構築（ゲームエンティティクエリ）
-- `crates/bevy_app/src/interface/ui/panels/context_menu.rs` - `Inspect (Pin)` メニュー
-- `crates/bevy_app/src/interface/ui/interaction/menu_actions.rs` - `InspectEntity` / `ClearInspectPin`
+- `crates/bevy_app/src/interface/ui/interaction/handlers/soul_rename.rs` - `TextInputIntent` → `SoulIdentity` 更新
 - `crates/bevy_app/src/interface/ui/setup/mod.rs` - `spawn_info_panel_ui` を `hw_ui` 実装へ委譲する setup adapter

@@ -2,10 +2,13 @@
 //!
 //! ロジック確認のための 3D 表示切り替えボタン・即時ビルドトグルを提供する。
 
+use crate::assets::GameAssets;
 use crate::systems::visual::terrain_lod::{LodLevel, TerrainLodMetrics, TerrainLodState};
 use bevy::prelude::*;
 use hw_core::quality::{QualitySettings, RttQualityPreset};
 use hw_ui::components::{UiInputBlocker, UiMountSlot, UiNodeRegistry, UiSlot};
+use hw_ui::theme::UiTheme;
+use hw_ui::widgets::{spawn_text_field, TextFieldConfig, TextFieldRole};
 
 /// LOD インジケーターテキストのマーカー
 #[derive(Component)]
@@ -49,6 +52,8 @@ pub fn spawn_dev_panel_system(
     q_slots: Query<(Entity, &UiMountSlot)>,
     mut ui_nodes: ResMut<UiNodeRegistry>,
     settings: Res<hw_core::GameSettings>,
+    game_assets: Res<GameAssets>,
+    theme: Res<UiTheme>,
 ) {
     let Some((top_left, _)) = q_slots
         .iter()
@@ -310,6 +315,26 @@ pub fn spawn_dev_panel_system(
             TextColor(Color::srgb(0.85, 0.75, 0.55)),
             RenderPerfStatusText,
         ));
+
+        parent
+            .spawn(Node {
+                width: Val::Px(180.0),
+                margin: UiRect::top(Val::Px(4.0)),
+                ..default()
+            })
+            .with_children(|row| {
+                spawn_text_field(
+                    row,
+                    game_assets.as_ref(),
+                    &theme,
+                    TextFieldConfig {
+                        initial_text: "",
+                        role: TextFieldRole::DevPoc,
+                        max_characters: Some(64),
+                        select_all_on_focus: false,
+                    },
+                );
+            });
     });
 }
 

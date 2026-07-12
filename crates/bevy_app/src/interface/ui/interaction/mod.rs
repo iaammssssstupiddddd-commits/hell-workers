@@ -3,6 +3,7 @@
 //! ツールチップ、モードテキスト、タスクサマリー、およびボタン操作を管理します。
 
 mod handlers;
+pub(crate) use handlers::soul_rename::handle_text_input_intents_system;
 mod intent_context;
 mod intent_handler;
 mod menu_actions;

@@ -6,6 +6,7 @@
 //! `Idle` へ戻す。
 
 use bevy::prelude::*;
+use hw_ui::components::UiInputState;
 
 /// セーブファイルの保存先（ワークスペースルートからの相対パス）
 pub const SAVE_FILE_PATH: &str = "saves/world.scn.ron";
@@ -32,8 +33,12 @@ pub enum SaveLoadState {
 /// 既にセーブ/ロードが要求中の場合は多重リクエストを無視する。
 pub fn save_load_keybind_system(
     buttons: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     mut state: ResMut<SaveLoadState>,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     if *state != SaveLoadState::Idle {
         return;
     }

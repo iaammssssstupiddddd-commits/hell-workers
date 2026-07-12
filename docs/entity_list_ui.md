@@ -1,6 +1,6 @@
 # エンティティリストUI仕様
 
-最終更新: 2026-02-26
+最終更新: 2026-07-10
 
 ## 概要
 画面左側のパネルで、使い魔とソウル一覧を表示します。  
@@ -12,6 +12,14 @@
 - タイトル: `Entity List`
 - 右側に最小化ボタン（`-` / `+`）
 - 最小化時は本文 (`EntityListBody`) を非表示化し、パネル高さをヘッダー相当へ縮小
+
+### 検索バー（`EntityListSearchRow`）
+- ヘッダー直下に `Search` ラベル + `EditableText` フィールド
+- ライブフィルタ: 入力のたびに `EntityListSearchState.query` を更新し、VM 構築時に部分一致で絞り込み
+- 対象: 使い魔配下 Soul 行・未所属 Soul 行（名前 `SoulIdentity.name`、`str::contains` のそのまま部分一致）
+- 最大 64 文字。Enter 確定は不要（検索は常時反映）
+- `Escape`: 検索フィールド本体と `EntityListSearchState.query` を同時にクリアし、同フレームのゲーム側 Escape 処理へは伝播しない
+- 検索中に `SoulIdentity.name` が変わった場合は structure dirty となり、結果へ即時に入る/消える
 
 ### 本文 (`EntityListBody`)
 - `FamiliarListContainer`（使い魔セクションの親）
@@ -58,6 +66,9 @@
   - 既存行の `Text` / `TextColor` / `TextFont` / `ImageNode` を in-place 更新
   - **代入前に現値と比較し、変化した項目だけ書き込む**（`get_mut` の DerefMut を避けることで、値が変わらない vitals 更新で `Changed` が立って UI が再レイアウトされるのを防ぐ）
   - 二つの run_if は排他（structure 変化フレームは全再構築側が値も含めて処理する）
+- 検索入力の同期は `EditableText` の pending edit 適用後（`EditableTextSystems` 後）の `PostUpdate` で行う
+  - 検索値が変わった場合のみ `EntityListDirty::mark_structure()` を立てる
+  - `last_applied` は同じ検索文字列で毎フレーム structure dirty を立て続けないための適用済み値
 
 ## インタラクション
 
@@ -74,6 +85,7 @@
 - `Tab`: 次の候補を選択
 - `Shift + Tab`: 前の候補を選択
 - `TaskArea` 編集モード中（`TaskMode::AreaSelection`）は、`Tab/Shift+Tab` の循環対象を **Familiar のみ** に制限
+- テキスト入力フォーカス中（検索バー・リネーム等）は `Tab` 巡回を含むゲーム keybind を抑止（`UiInputState::text_input_blocks_keybinds`）
 
 ## 補助表示
 - `Unassigned Souls` の内容がオーバーフローした時のみスクロールヒント表示
@@ -82,6 +94,8 @@
 ## 入力ガード
 - `UiInputBlocker` + `UiInputState` でUI上のワールド入力を抑止
 - スクロール領域上のホイール入力はリスト優先
+- `EditableText` フォーカス中は `text_input_focused` / `text_input_consumed_keyboard` によりゲーム側 `ButtonInput<KeyCode>` ショートカット（WASD パン、B/Z メニュー、Space/1-4 時間制御、Tab 巡回、Ctrl+C/V/Z/Y 等）を抑止
+- Escape でフォーカス解除した同フレームは `text_input_consumed_keyboard` latch によりゲーム Escape 処理へ伝播しない
 
 ## 楽観的更新（体感改善）
 - 使役数上限の `-` / `+` 操作時、`FamiliarOperation.max_controlled_soul` 更新直後に
@@ -94,9 +108,10 @@
 
 ### root shell（adapter）
 - `crates/bevy_app/src/interface/ui/list/mod.rs` - イベント受付、interaction/system 登録
-- `crates/bevy_app/src/interface/ui/list/change_detection.rs` - 変更検知トリガ（DamnedSoul/Familiar Changed 監視）
-- `crates/bevy_app/src/interface/ui/list/view_model.rs` - ゲームエンティティ → ビューモデル変換
+- `crates/bevy_app/src/interface/ui/list/view_model.rs` - ゲームエンティティ → ビューモデル変換（検索フィルタ含む）
+- `crates/bevy_app/src/interface/ui/list/change_detection.rs` - 変更検知トリガ（DamnedSoul/Familiar Changed 監視、検索中の `SoulIdentity` 変更は structure dirty）
 - `crates/bevy_app/src/interface/ui/list/sync.rs` - `sync_entity_list_from_view_model_system` / `sync_entity_list_value_rows_system`（hw_ui sync helpers の thin shell）
+- `crates/bevy_app/src/interface/ui/plugins/entity_list.rs` - 検索 sync を `EditableTextSystems` 後に登録
 - `crates/bevy_app/src/interface/ui/list/drag_drop.rs` - ドラッグ&ドロップシステム（`DragState` 型は hw_ui）
 - `crates/bevy_app/src/interface/ui/list/interaction.rs`, `interaction/navigation.rs` - 行クリック・Tab 巡回・target 付き `UiIntent` 発行（`FamiliarOperation` 直接更新は行わない）
 - `crates/bevy_app/src/interface/ui/interaction/intent_handler.rs` - `UiIntent` dispatcher
@@ -115,9 +130,12 @@
 - `crates/hw_ui/src/list/selection_focus.rs` - `focus_camera_on_entity`, `select_entity_and_focus_camera`
 - `crates/hw_ui/src/list/tree_ops.rs` - `clear_children`
 - `crates/hw_ui/src/list/visual.rs` - `apply_row_highlight`, `entity_list_visual_feedback_system`
+- `crates/hw_ui/src/list/search.rs` - `EntityListSearchState`、検索 sync system
+- `crates/hw_ui/src/widgets/text_field.rs` - 検索バー用 `spawn_text_field`
+- `crates/hw_ui/src/interaction/text_field.rs` - フォーカス枠・Enter/Escape・検索ライブ sync（Escape 検索クリア含む）
 - `crates/hw_ui/src/list/mod.rs` - `hw_ui` 対外エクスポート
 - `crates/hw_ui/src/setup/mod.rs` - `UiAssets` トレイト（`icon_arrow_right`, `icon_idle`, `font_soul_name` 含む）
 
 ### 境界横断
 - `crates/hw_ui/src/components.rs`, `crates/hw_ui/src/theme.rs` は `hw_ui` API の再エクスポートシェルとして残す
-- `crates/hw_ui/src/setup/entity_list.rs`（初期構築）は root shell 経由で呼び出される
+- `crates/hw_ui/src/setup/entity_list.rs`（初期構築・検索バー行 spawn）は root shell 経由で呼び出される

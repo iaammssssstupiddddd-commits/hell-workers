@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-07-07）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-07-12）。
 
 ## 新規計画書の作り方
 
@@ -19,14 +19,10 @@
 
 | Document | Status | Notes |
 |---|---|---|
-| [bevy-0-19-migration-plan-2026-07-05.md](bevy-0-19-migration-plan-2026-07-05.md) | Completed | Bevy 0.18 → 0.19 マイグレーション完了。ICU4X 日本語セグメンテーションは目視 QA 済み・実害なし（2026-07-05 クローズ）。機能採用（Delayed Commands / UI widgets）は archive の各計画を参照。contiguous_iter 最適化は計測不要と判断し見送りでクローズ |
 | [blob-shadow-tim-burton-2026-04-12.md](blob-shadow-tim-burton-2026-04-12.md) | Draft | 影スタイル 2D 化計画（床・壁接続維持） 2026-04-12 |
-| [dev-tools-debug-overlay-plan-2026-07-05.md](dev-tools-debug-overlay-plan-2026-07-05.md) | Draft | gizmo テキストの AI デバッグラベル導入（BSN トグル UI）。再検証により FpsOverlay 等の自前実装置き換えは却下（§0）、フレームタイムグラフは計測時オプション |
 | [lighting-visual-plan-2026-04-04.md](lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [performance-cpu-2026-04-16.md](performance-cpu-2026-04-16.md) | Draft | CPU パフォーマンス改善計画書 |
-| [task-execution-refactor-plan-2026-07-07.md](task-execution-refactor-plan-2026-07-07.md) | Completed | task_execution リファクタリング計画（コンテキスト集約・完了/中断区別・ログ降格・boundary.rs 分割） |
 | [terrain-lod-switch-flicker-plan-2026-04-17.md](terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD 切替時のちらつきを、判定安定化と短い遷移フェーズで抑える計画 |
-| [text-input-ui-plan-2026-07-05.md](text-input-ui-plan-2026-07-05.md) | Draft | EditableText による Soul リネーム・エンティティリスト検索 + bevy_clipboard。入力フィールドは BSN 構築 |
 | [world-map-lod1-performance-plan-2026-04-09.md](world-map-lod1-performance-plan-2026-04-09.md) | Complete | ワールドマップ近景 `LOD1` の fragment 負荷を、境界 early-out・中間 LOD・feature ベイク再編で下げる計画 |
 
 ## アーカイブ計画書一覧 (`docs/plans/archive`)
@@ -42,6 +38,7 @@
 | [archive/auto-gather-for-blueprint.md](archive/auto-gather-for-blueprint.md) | アーカイブ | Blueprint不足資材の自動伐採/採掘計画。 |
 | [archive/bevy-0-19-delayed-commands-plan-2026-07-05.md](archive/bevy-0-19-delayed-commands-plan-2026-07-05.md) | アーカイブ | ワンショット Timer の Delayed Commands 置き換え完了（ConversationCooldown / ReactionDelay）。TimerMode::Once 全数調査の最終分類表と適格判定基準（`docs/DEVELOPMENT.md` §13 に恒久化）を含む |
 | [archive/bevy-0-19-feature-adoption-plan-2026-07-05.md](archive/bevy-0-19-feature-adoption-plan-2026-07-05.md) | アーカイブ | Bevy 0.19 移行は完了したが、0.19 新機能の活用は Out of Scope として見送られたまま。0.18 時代のパターン（自前タイマー tick システム、自前スクロール実装など）が残っているの計画。 |
+| [archive/bevy-0-19-migration-plan-2026-07-05.md](archive/bevy-0-19-migration-plan-2026-07-05.md) | アーカイブ | Bevy 0.18 のまま留まると、今後のエコシステム追随・バグ修正・パフォーマンス改善（render graph as systems, Parley テキスト等）を受けられないの計画。 |
 | [archive/bevy-0-19-ui-widgets-adoption-plan-2026-07-05.md](archive/bevy-0-19-ui-widgets-adoption-plan-2026-07-05.md) | アーカイブ | Entity List の `UiScrollArea` を `bevy::ui_widgets::ScrollArea`/`Scrollbar` へ移行し、`EditableText` 使用方針を `hw_ui/_rules.md` に整備完了 |
 | [archive/boundary-texture-paste-plan-2026-04-07.md](archive/boundary-texture-paste-plan-2026-04-07.md) | アーカイブ | 境界テクスチャ貼り付け計画（terrain_region_map） |
 | [archive/bridge-building.md](archive/bridge-building.md) | アーカイブ | 橋（Bridge）建築物の実装計画。 |
@@ -55,6 +52,7 @@
 | [archive/dead-code-cleanup.md](archive/dead-code-cleanup.md) | アーカイブ | ワークスペース全体に散在するの計画。 |
 | [archive/debug-instant-build-plan.md](archive/debug-instant-build-plan.md) | アーカイブ | Debug Instant Build ボタン 実装計画 |
 | [archive/destination-validation-unification-plan-2026-03-07.md](archive/destination-validation-unification-plan-2026-03-07.md) | アーカイブ | FloorConstruction / WallConstruction / ProvisionalWall の搬入先需要計算と実行時受入判定が、割り当て時・手運搬 dropping 時・猫車 unloading 時の 3 系統に分散し、同一ロジックを複数箇所で維持しているの計画。 |
+| [archive/dev-tools-debug-overlay-plan-2026-07-05.md](archive/dev-tools-debug-overlay-plan-2026-07-05.md) | アーカイブ | Soul / Familiar の AI 状態（AssignedTask・フェーズ・Squad 状態）をワールド内で直接確認できず、デバッグがログ頼み。フレームスパイクの可視化手段がないの計画。 |
 | [archive/docs-index-automation-plan-2026-03-05.md](archive/docs-index-automation-plan-2026-03-05.md) | アーカイブ | docs/plans/README.mdの計画。 |
 | [archive/door-implementation-2026-02-22.md](archive/door-implementation-2026-02-22.md) | アーカイブ | 壁で囲まれた空間への出入りを制御する手段がない。現状は壁に穴を開けるか、壁を完全に閉じるかの二択しかないの計画。 |
 | [archive/dream-bubble-perf-2026-04-09.md](archive/dream-bubble-perf-2026-04-09.md) | アーカイブ | 夢の泡パーティクル描画負荷最適化 |
@@ -155,9 +153,11 @@
 | [archive/system-wide-performance-followups-plan-2026-07-07.md](archive/system-wide-performance-followups-plan-2026-07-07.md) | アーカイブ | 全体パフォーマンス改善フォローアップ計画書 |
 | [archive/task-chain-system-2026-03-29.md](archive/task-chain-system-2026-03-29.md) | アーカイブ | タスクチェーンシステム実装計画 |
 | [archive/task-execution-hw-ai-extraction-plan-2026-03-12.md](archive/task-execution-hw-ai-extraction-plan-2026-03-12.md) | アーカイブ | src/systems/soul_ai/execute/task_execution/の計画。 |
+| [archive/task-execution-refactor-plan-2026-07-07.md](archive/task-execution-refactor-plan-2026-07-07.md) | アーカイブ | task_execution リファクタリング計画（コンテキスト集約・完了/中断区別・ログ降格・boundary.rs 分割） |
 | [archive/task-list-left-panel-toggle.md](archive/task-list-left-panel-toggle.md) | アーカイブ | タスクリスト左パネル操作改善計画。 |
 | [archive/taskexecution-systemparam-refactor-plan-2026-03-05.md](archive/taskexecution-systemparam-refactor-plan-2026-03-05.md) | アーカイブ | task_execution/context.rsの計画。 |
 | [archive/terrain-zone-boundary-naturalization-plan-2026-04-06.md](archive/terrain-zone-boundary-naturalization-plan-2026-04-06.md) | アーカイブ | 草エリアや草ゾーン寄りの領域がマンハッタン距離ベースのひし形になりやすく、境界が階段状に見えて不自然の計画。 |
+| [archive/text-input-ui-plan-2026-07-05.md](archive/text-input-ui-plan-2026-07-05.md) | アーカイブ | テキスト入力 UI — EditableText + clipboard 実装計画 |
 | [archive/think-phase-iteration-optimization-plan-2026-03-07.md](archive/think-phase-iteration-optimization-plan-2026-03-07.md) | アーカイブ | -の計画。 |
 | [archive/transport-overdelivery-fix-plan-2026-03-07.md](archive/transport-overdelivery-fix-plan-2026-03-07.md) | アーカイブ | 設計図搬入と補充系 request で、必要量を超える資材が搬送・消費・地面残留するの計画。 |
 | [archive/ui-menu-action-boundary-plan-2026-03-01.md](archive/ui-menu-action-boundary-plan-2026-03-01.md) | アーカイブ | `MenuAction` 処理の責務境界整理と no-op 分岐解消の計画。 |

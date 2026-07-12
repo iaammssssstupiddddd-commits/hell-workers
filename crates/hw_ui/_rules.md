@@ -62,8 +62,23 @@ hw_energy      ✗
   - `ScrollArea` は `#[require(ScrollPosition)]` 付きなので `ScrollPosition` の手動 insert は不要。
   - `UiWidgetsPlugins`（`ScrollAreaPlugin` / `ScrollbarPlugin` / `EditableTextInputPlugin` 等）は `bevy` の `ui` feature 経由で `DefaultPlugins` に自動登録済み。個別に plugin 登録しない。
   - 参考実装: `crates/hw_ui/src/setup/entity_list.rs` の未所属 Soul リスト（`UnassignedSoulContent`）。
-- 将来 Soul 名リネームや検索 UI 等でテキスト入力が必要になった場合、自前 text input を作らず `bevy::text::EditableText`（`bevy::ui_widgets::EditableTextInputPlugin` が対応）を使う。
+- テキスト入力は自前 widget を作らず `bevy::text::EditableText` + `crates/hw_ui/src/widgets/text_field.rs` の `spawn_text_field` を使う。
+  - `TextFieldRole` は **root ではなく `EditableText` エンティティ**に付与（observer フィルタ用）
+  - Enter/Escape は `crates/hw_ui/src/interaction/text_field.rs` の observer で処理（`EditableText` に `ValueChange` はない）
+  - `String` を含む確定イベント（リネーム等）は `TextInputIntent`（non-`Copy`）で送る。`UiIntent` / `MenuAction` は `Copy` 維持
+  - フォーカス中のゲーム keybind 抑止は `UiInputState::text_input_focused` / `text_input_consumed_keyboard` + `text_input_blocks_keybinds()`
+  - `text_input_consumed_keyboard` のリセットは `InputFocusSystems::Dispatch` より前、Enter/Escape の適用は dispatch 後。Escape でフォーカス解除した同フレームもゲーム側 keybind に伝播させない
+  - 検索などのライブ同期は `EditableTextSystems` 後に `EditableText` 値を読む。Escape クリア時は state だけでなく `EditableText` 本体も空にする
+  - クリップボード連携は workspace `bevy` features の `"system_clipboard"` で有効化（`EditableTextInputPlugin` 内蔵の Ctrl+C/V 等）
 - スクロール入力ブロック（`UiInputBlocker` + `RelativeCursorPosition`）はスクロール実装方式に関わらず、pointer-over 判定用として維持する。
+
+### text_field 追加チェックリスト
+
+1. `widgets/text_field.rs` の `TextFieldRole` に用途を追加（必要なら）
+2. `spawn_text_field` / `spawn_text_field_on_entity` で imperative spawn（BSN は root のみ可）
+3. `interaction/text_field.rs` に Enter/Escape / ライブ sync を追加
+4. ゲーム状態を変える確定処理は `TextInputIntent` または `bevy_app` handler へ委譲（hw_ui から `SoulIdentity` 等をクエリしない）
+5. `ButtonInput<KeyCode>` 系ショートカットに `text_input_blocks_keybinds` ガードを追加
 
 ## 設定画面 UI（Slider / Checkbox / BSN）
 

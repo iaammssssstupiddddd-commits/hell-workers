@@ -20,6 +20,7 @@ pub struct SoulInspectionFields {
 
 #[derive(Clone, PartialEq)]
 pub struct EntityInspectionModel {
+    pub entity: Entity,
     pub header: String,
     pub common_text: String,
     pub tooltip_lines: Vec<String>,

@@ -2,16 +2,21 @@ use super::{TaskArea, TaskMode};
 use crate::app_contexts::TaskContext;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::interface::selection::SelectedEntity;
+use crate::interface::ui::UiInputState;
 use bevy::prelude::*;
 
 /// キーボードで使い魔に指示を与えるシステム
 pub fn familiar_command_input_system(
     keyboard: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     selected: Res<SelectedEntity>,
     q_familiars: Query<(), With<Familiar>>,
     mut q_active_commands: Query<(&mut ActiveCommand, Option<&TaskArea>), With<Familiar>>,
     mut task_context: ResMut<TaskContext>,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     // 選択されたエンティティが使い魔の場合のみ処理（Soulは直接指示不可）
     let Some(entity) = selected.0 else { return };
     if q_familiars.get(entity).is_err() {

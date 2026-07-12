@@ -12,7 +12,8 @@ use crate::interface::ui::{
 };
 use crate::systems::GameSystemSet;
 use bevy::prelude::*;
-use hw_ui::components::LeftPanelMode;
+use hw_ui::components::{LeftPanelMode, SoulRenameState};
+use hw_ui::interaction::{soul_rename_button_system, soul_rename_cleanup_system};
 
 pub type UiInfoPanelPlugin = hw_ui::plugins::info_panel::UiInfoPanelPlugin;
 
@@ -45,9 +46,11 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
                 info_panel_system::<crate::assets::GameAssets>
                     .run_if(
                         |selected: Res<crate::interface::selection::SelectedEntity>,
-                         pin_state: Res<InfoPanelPinState>| {
+                         pin_state: Res<InfoPanelPinState>,
+                         rename_state: Res<SoulRenameState>| {
                             selected.is_changed()
                                 || pin_state.is_changed()
+                                || rename_state.is_changed()
                                 || selected.0.is_some()
                                 || pin_state.entity.is_some()
                         },
@@ -62,6 +65,8 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
             task_list_update_system.after(left_panel_tab_system),
             task_list_click_system,
             task_list_visual_feedback_system.after(task_list_click_system),
+            soul_rename_button_system::<crate::assets::GameAssets>,
+            soul_rename_cleanup_system,
         )
             .in_set(GameSystemSet::Interface),
     );

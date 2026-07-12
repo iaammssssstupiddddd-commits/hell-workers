@@ -59,20 +59,29 @@ pub struct KeyboardModeCtx<'w> {
 }
 
 #[derive(SystemParam)]
+pub struct KeyboardShortcutInputs<'w> {
+    keyboard: Res<'w, ButtonInput<KeyCode>>,
+    ui_input_state: Res<'w, UiInputState>,
+    time: ResMut<'w, Time<Virtual>>,
+    play_mode: Res<'w, State<PlayMode>>,
+    companion_state: ResMut<'w, CompanionPlacementState>,
+    ui_intent_writer: MessageWriter<'w, UiIntent>,
+}
+
+#[derive(SystemParam)]
 pub struct KeyboardShortcutQueries<'w, 's> {
     q_load_confirm: Query<'w, 's, &'static Node, With<LoadConfirmDialog>>,
     q_settings_panel: Query<'w, 's, &'static Node, With<SettingsPanel>>,
 }
 
 pub fn ui_keyboard_shortcuts_system(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    mut inputs: KeyboardShortcutInputs,
     mode_ctx: KeyboardModeCtx,
-    mut time: ResMut<Time<Virtual>>,
-    play_mode: Res<State<PlayMode>>,
-    mut companion_state: ResMut<CompanionPlacementState>,
     shortcut_queries: KeyboardShortcutQueries,
-    mut ui_intent_writer: MessageWriter<UiIntent>,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&inputs.ui_input_state) {
+        return;
+    }
     let KeyboardModeCtx {
         mut menu_state,
         mut next_play_mode,
@@ -80,6 +89,11 @@ pub fn ui_keyboard_shortcuts_system(
         mut zone_context,
         mut task_context,
     } = mode_ctx;
+    let keyboard = &inputs.keyboard;
+    let time = &mut inputs.time;
+    let play_mode = &inputs.play_mode;
+    let companion_state = &mut inputs.companion_state;
+    let ui_intent_writer = &mut inputs.ui_intent_writer;
     // メニュートグル
     if keyboard.just_pressed(KeyCode::KeyB) {
         mode::toggle_menu_and_reset_mode(

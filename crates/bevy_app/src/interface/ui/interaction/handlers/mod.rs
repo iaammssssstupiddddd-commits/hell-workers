@@ -4,6 +4,7 @@ pub(super) mod mode_selection;
 pub(super) mod mode_toggle;
 pub(super) mod save_game;
 pub(super) mod settings;
+pub mod soul_rename;
 
 pub(super) use familiar_settings::handle as handle_familiar_settings;
 pub(super) use general::{handle_dialog, handle_selection, handle_time};

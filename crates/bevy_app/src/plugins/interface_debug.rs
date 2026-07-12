@@ -10,15 +10,20 @@ use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_MAP};
 use hw_ui::camera::MainCamera;
+use hw_ui::components::UiInputState;
 use hw_visual::visual3d::Building3dVisual;
 
 pub fn debug_spawn_system(
     buttons: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut soul_spawn_events: MessageWriter<DamnedSoulSpawnEvent>,
     mut familiar_spawn_events: MessageWriter<FamiliarSpawnEvent>,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     let mut spawn_pos = Vec2::ZERO;
 
     if let Ok(window) = q_window.single()

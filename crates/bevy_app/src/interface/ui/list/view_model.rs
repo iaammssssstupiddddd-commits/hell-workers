@@ -9,6 +9,22 @@ use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
 use hw_core::relationships::{CommandedBy, Commanding};
 use hw_ui::components::{SectionFolded, UnassignedFolded, UnassignedSoulSection};
+use hw_ui::list::search::EntityListSearchState;
+
+fn matches_search(name: &str, query: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    name.contains(query)
+}
+
+fn filter_soul_rows(mut souls: Vec<SoulRowViewModel>, query: &str) -> Vec<SoulRowViewModel> {
+    if query.is_empty() {
+        return souls;
+    }
+    souls.retain(|row| matches_search(&row.name, query));
+    souls
+}
 
 type FamiliarListQuery<'w, 's> = Query<
     'w,
@@ -158,6 +174,7 @@ fn build_familiar_row_view_model(
 
 pub fn build_entity_list_view_model_system(
     dirty: Res<super::dirty::EntityListDirty>,
+    search_state: Res<EntityListSearchState>,
     mut view_model: ResMut<EntityListViewModel>,
     q_familiars: FamiliarListQuery<'_, '_>,
     q_all_souls: AllSoulsQuery<'_, '_>,
@@ -196,6 +213,16 @@ pub fn build_entity_list_view_model_system(
         }
     }
     unassigned.sort_by_key(|vm| vm.entity.index());
+
+    let query = search_state.normalized();
+    let familiars = familiars
+        .into_iter()
+        .map(|mut row| {
+            row.souls = filter_soul_rows(row.souls, query);
+            row
+        })
+        .collect();
+    let unassigned = filter_soul_rows(unassigned, query);
 
     view_model.current = EntityListSnapshot {
         familiars,

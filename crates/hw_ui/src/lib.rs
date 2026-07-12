@@ -10,13 +10,17 @@ pub mod models;
 pub mod panels;
 pub mod plugins;
 pub mod setup;
+pub mod text_input_intents;
+pub use text_input_intents::TextInputIntent;
 pub mod theme;
+pub mod widgets;
 
 pub struct HwUiPlugin;
 
 impl Plugin for HwUiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<UiIntent>();
+        app.add_message::<UiIntent>()
+            .add_message::<TextInputIntent>();
     }
 }
 pub mod camera;

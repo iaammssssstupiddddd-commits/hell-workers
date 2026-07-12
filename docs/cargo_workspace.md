@@ -75,6 +75,14 @@ hw_visual (hw_core + hw_spatial + hw_world)
 - `hw_components` のような雑多な共通箱は作らない
 - 型定義とその主要 `impl` は同じ crate に置く
 
+### Bevy workspace features（root `Cargo.toml`）
+
+workspace 共通の `bevy` 依存は `default-features = false` で必要 feature のみ列挙する。
+
+| feature | 用途 |
+|:---|:---|
+| `system_clipboard` | `EditableText` の Ctrl+C/V 等。OS クリップボード連携（テキスト入力 UI: リネーム・検索・Dev PoC） |
+
 境界ルール（最終整理反映）:
 
 - UI は **2 層**に分離する（規範: [`crate-boundaries.md` §1.1](crate-boundaries.md#11-ui-2層構造hw_ui--bevy_appinterface)）:
@@ -108,6 +116,11 @@ hw_visual (hw_core + hw_spatial + hw_world)
 - `components.rs` — MenuState, MenuButton, FamiliarListItem, SoulListItem 等 50+ 型（`UiNodeRegistry` / `UiSlot` / `UiMountSlot` / `UiRoot` は `hw_core::ui_nodes` から re-export）
 - `theme.rs` — `UiTheme` Resource（カラーパレット・フォントサイズ・スペーシング・サイズ定数）
 - `intents.rs` — `UiIntent` enum（プレイヤー UI 操作メッセージ）
+- `text_input_intents.rs` — `TextInputIntent` enum（non-`Copy` テキスト確定イベント、例: `RenameSoul`）
+- `widgets/text_field.rs` — 再利用可能 `spawn_text_field` ヘルパー、`TextFieldRole`
+- `interaction/text_field.rs` — フォーカス枠・Enter/Escape・検索ライブ sync
+  - `text_input_consumed_keyboard` は `InputFocusSystems::Dispatch` 前にリセットし、Enter/Escape 適用は dispatch 後に行う
+  - 検索 sync の登録責務は `bevy_app` の entity list plugin 側が持ち、`EditableTextSystems` 後に値を読む
 - `interaction/` — tooltip/dialog/hover_action/status_display システム群（FPS, speed, dream pool, area_edit_preview 等）
 - `list/` — EntityListDirty, EntityListViewModel, EntityListNodeIndex, FamiliarSectionNodes, EntityListMinimizeState, EntityListResizeState, DragState, spawn（`spawn_familiar_section`, `spawn_soul_list_item_entity` 等）, sync（`sync_familiar_sections`, `sync_unassigned_souls`）, section_toggle（`entity_list_section_toggle_system`）, selection_focus, tree_ops, visual（apply_row_highlight, entity_list_visual_feedback_system）
 - `panels/tooltip_builder/` — text_wrap, widgets (spawn_progress_bar 等), templates（Soul/Building/Resource/UiButton/Generic ツールチップ）

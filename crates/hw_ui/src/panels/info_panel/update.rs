@@ -1,6 +1,6 @@
 use super::model::{InfoPanelViewModel, to_view_model};
 use super::state::{InfoPanelPinState, InfoPanelState};
-use crate::components::{InfoPanelNodes, UiNodeRegistry, UiSlot};
+use crate::components::{InfoPanelNodes, SoulRenameState, UiNodeRegistry, UiSlot};
 use crate::models::inspection::{EntityInspectionViewModel, InspectionSoulGender};
 use crate::selection::SelectedEntity;
 use crate::setup::UiAssets;
@@ -43,6 +43,15 @@ fn entity_for_slot(
         _ => None,
     };
     info_entity.or_else(|| ui_nodes.get_slot(slot))
+}
+
+fn set_node_display(entity: Option<Entity>, q_node: &mut Query<&mut Node>, display: Display) {
+    let Some(entity) = entity else {
+        return;
+    };
+    if let Ok(mut node) = q_node.get_mut(entity) {
+        node.display = display;
+    }
 }
 
 fn set_text_slot(
@@ -120,12 +129,27 @@ pub fn info_panel_system<A: UiAssets + Resource>(
     _selected: Res<SelectedEntity>,
     pin_state: ResMut<InfoPanelPinState>,
     mut panel_state: ResMut<InfoPanelState>,
+    rename_state: Res<SoulRenameState>,
     mut queries: InfoPanelNodeQueries,
 ) {
     let next_model = res.inspection_view_model.model.clone().map(to_view_model);
 
     let pinned = pin_state.entity.is_some();
-    if panel_state.last == next_model && panel_state.last_pinned == pinned {
+    let rename_target = match &next_model {
+        Some(InfoPanelViewModel::Soul(soul))
+            if rename_state
+                .active
+                .is_some_and(|active| active.target == soul.entity) =>
+        {
+            Some(soul.entity)
+        }
+        _ => None,
+    };
+
+    if panel_state.last == next_model
+        && panel_state.last_pinned == pinned
+        && panel_state.last_rename_target == rename_target
+    {
         return;
     }
 
@@ -150,12 +174,40 @@ pub fn info_panel_system<A: UiAssets + Resource>(
 
     match &next_model {
         Some(InfoPanelViewModel::Soul(soul)) => {
+            let renaming = rename_state
+                .active
+                .is_some_and(|active| active.target == soul.entity);
+            set_node_display(
+                res.info_nodes.rename_button,
+                &mut queries.q_node,
+                Display::Flex,
+            );
+            set_node_display(
+                res.info_nodes.rename_field_container,
+                &mut queries.q_node,
+                if renaming {
+                    Display::Flex
+                } else {
+                    Display::None
+                },
+            );
             set_display_slot(
                 &res.info_nodes,
                 &res.ui_nodes,
                 &mut queries.q_node,
                 UiSlot::InfoPanelStatsGroup,
                 Display::Flex,
+            );
+            set_display_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_node,
+                UiSlot::Header,
+                if renaming {
+                    Display::None
+                } else {
+                    Display::Flex
+                },
             );
             set_text_slot(
                 &res.info_nodes,
@@ -223,6 +275,16 @@ pub fn info_panel_system<A: UiAssets + Resource>(
             );
         }
         Some(InfoPanelViewModel::Simple(simple)) => {
+            set_node_display(
+                res.info_nodes.rename_button,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_node_display(
+                res.info_nodes.rename_field_container,
+                &mut queries.q_node,
+                Display::None,
+            );
             set_display_slot(
                 &res.info_nodes,
                 &res.ui_nodes,
@@ -296,6 +358,16 @@ pub fn info_panel_system<A: UiAssets + Resource>(
             );
         }
         None => {
+            set_node_display(
+                res.info_nodes.rename_button,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_node_display(
+                res.info_nodes.rename_field_container,
+                &mut queries.q_node,
+                Display::None,
+            );
             set_display_slot(
                 &res.info_nodes,
                 &res.ui_nodes,
@@ -316,4 +388,5 @@ pub fn info_panel_system<A: UiAssets + Resource>(
 
     panel_state.last = next_model;
     panel_state.last_pinned = pinned;
+    panel_state.last_rename_target = rename_target;
 }

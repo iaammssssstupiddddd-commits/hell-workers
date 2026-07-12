@@ -36,21 +36,26 @@ impl Plugin for InputPlugin {
     }
 }
 
-/// UI パネル上にカーソルがある間は PanCamera を無効化する
+/// UI パネル上にカーソルがある間、またはテキスト入力中は PanCamera を無効化する
 fn pan_camera_ui_guard_system(
     mut q_camera: Query<&mut PanCamera, With<MainCamera>>,
     ui_input_state: Res<UiInputState>,
 ) {
     if let Ok(mut pan_camera) = q_camera.single_mut() {
-        pan_camera.enabled = !ui_input_state.pointer_over_ui;
+        pan_camera.enabled = !ui_input_state.pointer_over_ui
+            && !hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state);
     }
 }
 
 /// F3キーで 3D表示をトグル
 fn render3d_toggle_system(
     buttons: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     mut render3d: ResMut<crate::Render3dVisible>,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     if buttons.just_pressed(KeyCode::F3) {
         render3d.0 = !render3d.0;
     }
@@ -59,8 +64,12 @@ fn render3d_toggle_system(
 /// F4キーで RtT 品質を High -> Medium -> Low で循環させる。
 fn rtt_quality_cycle_system(
     buttons: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     mut quality: ResMut<QualitySettings>,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     if buttons.just_pressed(KeyCode::F4) {
         quality.rtt = quality.rtt.next();
         info!("RTT quality changed: {:?}", quality.rtt);
@@ -70,8 +79,12 @@ fn rtt_quality_cycle_system(
 /// F5 キーで Soul mask RtT をトグルする。
 fn soul_mask_toggle_system(
     buttons: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     mut perf_toggles: ResMut<crate::RenderPerfToggles>,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     if buttons.just_pressed(KeyCode::F5) {
         perf_toggles.soul_mask_enabled = !perf_toggles.soul_mask_enabled;
         info!("Soul mask RtT enabled: {}", perf_toggles.soul_mask_enabled);
@@ -81,8 +94,12 @@ fn soul_mask_toggle_system(
 /// F6 キーで RtT 用 DirectionalLight をトグルする。
 fn rtt_directional_light_toggle_system(
     buttons: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     mut perf_toggles: ResMut<crate::RenderPerfToggles>,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     if buttons.just_pressed(KeyCode::F6) {
         perf_toggles.directional_light_enabled = !perf_toggles.directional_light_enabled;
         info!(
@@ -95,8 +112,12 @@ fn rtt_directional_light_toggle_system(
 /// F9 キーで追加の RtT DirectionalLight をトグルする。
 fn rtt_extra_directional_light_toggle_system(
     buttons: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     mut perf_toggles: ResMut<crate::RenderPerfToggles>,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     if buttons.just_pressed(KeyCode::F9) {
         perf_toggles.extra_directional_light_enabled =
             !perf_toggles.extra_directional_light_enabled;
@@ -110,8 +131,12 @@ fn rtt_extra_directional_light_toggle_system(
 /// F7 キーで RtT terrain をトグルする。
 fn rtt_terrain_toggle_system(
     buttons: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     mut perf_toggles: ResMut<crate::RenderPerfToggles>,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     if buttons.just_pressed(KeyCode::F7) {
         perf_toggles.terrain_enabled = !perf_toggles.terrain_enabled;
         info!("RtT terrain enabled: {}", perf_toggles.terrain_enabled);
@@ -121,8 +146,12 @@ fn rtt_terrain_toggle_system(
 /// F8 キーで RtT scene object をトグルする。
 fn rtt_scene_objects_toggle_system(
     buttons: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     mut perf_toggles: ResMut<crate::RenderPerfToggles>,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     if buttons.just_pressed(KeyCode::F8) {
         perf_toggles.scene_objects_enabled = !perf_toggles.scene_objects_enabled;
         info!(
@@ -135,12 +164,16 @@ fn rtt_scene_objects_toggle_system(
 /// F12キーでデバッグ情報の表示をトグル
 pub fn debug_toggle_system(
     buttons: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     mut visible: ResMut<crate::DebugVisible>,
     mut config_store: ResMut<GizmoConfigStore>,
     mut settings: ResMut<hw_core::GameSettings>,
     q_checkboxes: Query<(Entity, &hw_ui::components::SettingsCheckboxMarker)>,
     mut commands: Commands,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     if buttons.just_pressed(KeyCode::F12) {
         visible.0 = !visible.0;
         settings.debug_gizmos_enabled = visible.0;

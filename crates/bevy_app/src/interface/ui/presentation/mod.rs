@@ -117,7 +117,7 @@ impl InspectionAccumulator {
         self.tooltip_lines.push(line.into());
     }
 
-    fn finalize(mut self) -> Option<EntityInspectionModel> {
+    fn finalize(mut self, entity: Entity) -> Option<EntityInspectionModel> {
         if self.header.is_empty() && self.tooltip_lines.is_empty() {
             return None;
         }
@@ -127,6 +127,7 @@ impl InspectionAccumulator {
         }
 
         Some(EntityInspectionModel {
+            entity,
             header: self.header,
             common_text: self.common_lines.join("\n"),
             tooltip_lines: self.tooltip_lines,
@@ -170,7 +171,7 @@ impl EntityInspectionQuery<'_, '_> {
         self.append_power_consumer_model(entity, &mut model);
         self.append_designation_model(entity, &mut model);
 
-        model.finalize()
+        model.finalize(entity)
     }
 
     pub fn classify_template(&self, entity: Entity) -> TooltipTemplate {

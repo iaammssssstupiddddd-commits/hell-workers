@@ -14,6 +14,10 @@ use crate::interface::ui::{
 use crate::systems::GameSystemSet;
 use crate::systems::command::task_area_edit_cursor_system;
 use bevy::prelude::*;
+use bevy::text::EditableTextSystems;
+use hw_ui::interaction::{
+    finalize_entity_list_search_apply_system, sync_entity_list_search_system,
+};
 
 pub type UiEntityListPlugin = hw_ui::plugins::entity_list::UiEntityListPlugin;
 
@@ -70,6 +74,14 @@ fn register_ui_entity_list_plugin_systems(app: &mut App) {
         sync_entity_list_value_rows_system
             .run_if(|dirty: Res<EntityListDirty>| dirty.needs_value_sync_only())
             .after(detect_entity_list_changes)
+            .in_set(GameSystemSet::Interface),
+    )
+    .add_systems(
+        PostUpdate,
+        (
+            sync_entity_list_search_system.after(EditableTextSystems),
+            finalize_entity_list_search_apply_system.after(sync_entity_list_search_system),
+        )
             .in_set(GameSystemSet::Interface),
     );
 }

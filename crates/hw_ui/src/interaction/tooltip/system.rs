@@ -118,6 +118,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
         template = TooltipTemplate::Generic;
         payload = format!("placement_failure:{reason}");
         model = Some(EntityInspectionModel {
+            entity: Entity::PLACEHOLDER,
             header: "Cannot Place".to_string(),
             common_text: String::new(),
             tooltip_lines: vec![reason.clone()],

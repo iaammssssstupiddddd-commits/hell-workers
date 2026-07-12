@@ -3,6 +3,7 @@
 use super::UiAssets;
 use crate::components::*;
 use crate::theme::UiTheme;
+use crate::widgets::{spawn_text_field, TextFieldConfig, TextFieldRole};
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
 use bevy::ui_widgets::{ControlOrientation, ScrollArea, Scrollbar, ScrollbarThumb};
@@ -94,6 +95,45 @@ pub fn spawn_entity_list_panel(
                             EntityListMinimizeButtonLabel,
                         ));
                     });
+            });
+
+        parent
+            .spawn((
+                Node {
+                    width: Val::Percent(100.0),
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    column_gap: Val::Px(6.0),
+                    margin: UiRect::bottom(Val::Px(6.0)),
+                    ..default()
+                },
+                EntityListSearchRow,
+            ))
+            .with_children(|row| {
+                row.spawn((
+                    Text::new("Search"),
+                    TextFont {
+                        font: game_assets.font_ui().clone().into(),
+                        font_size: crate::theme::font_size_rem(theme.typography.font_size_xs),
+                        ..default()
+                    },
+                    TextColor(theme.colors.text_secondary_semantic),
+                    Node {
+                        flex_shrink: 0.0,
+                        ..default()
+                    },
+                ));
+                spawn_text_field(
+                    row,
+                    game_assets,
+                    theme,
+                    TextFieldConfig {
+                        initial_text: "",
+                        role: TextFieldRole::EntityListSearch,
+                        max_characters: Some(64),
+                        select_all_on_focus: false,
+                    },
+                );
             });
 
         // エンティティリスト ボディ（EntityList モード時に表示）

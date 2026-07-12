@@ -24,7 +24,35 @@ pub enum LeftPanelMode {
 #[derive(Resource, Default)]
 pub struct UiInputState {
     pub pointer_over_ui: bool,
+    pub text_input_focused: bool,
+    pub text_input_consumed_keyboard: bool,
 }
+
+impl UiInputState {
+    pub fn text_input_blocks_keybinds(&self) -> bool {
+        self.text_input_focused || self.text_input_consumed_keyboard
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct SoulRenameState {
+    pub active: Option<SoulRenameActive>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SoulRenameActive {
+    pub target: Entity,
+    pub field_root: Entity,
+}
+
+#[derive(Component)]
+pub struct SoulRenameButton;
+
+#[derive(Component)]
+pub struct SoulRenameFieldContainer;
+
+#[derive(Component)]
+pub struct EntityListSearchRow;
 
 #[derive(Resource, Default, Debug, Clone)]
 pub struct PlacementFailureTooltip {
@@ -70,6 +98,8 @@ pub struct InfoPanelNodes {
     pub task: Option<Entity>,
     pub inventory: Option<Entity>,
     pub common: Option<Entity>,
+    pub rename_button: Option<Entity>,
+    pub rename_field_container: Option<Entity>,
 }
 
 #[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]

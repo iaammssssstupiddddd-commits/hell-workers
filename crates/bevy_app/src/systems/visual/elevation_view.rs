@@ -5,6 +5,7 @@
 //! camera_sync.rs は矢視中は XZ 平行移動のみ同期し、回転・Y は保持する。
 
 use crate::plugins::startup::Camera3dRtt;
+use crate::interface::ui::UiInputState;
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, VIEW_HEIGHT, Z_OFFSET};
 use hw_ui::camera::MainCamera;
@@ -93,10 +94,14 @@ type Cam2dQuery<'w, 's> = Query<
 /// V キーで矢視方向をサイクル切替する。
 pub fn elevation_view_input_system(
     keys: Res<ButtonInput<KeyCode>>,
+    ui_input_state: Res<UiInputState>,
     mut state: ResMut<ElevationViewState>,
     mut q_cam3d: Query<&mut Transform, With<Camera3dRtt>>,
     mut q_cam2d: Cam2dQuery,
 ) {
+    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+        return;
+    }
     if !keys.just_pressed(KeyCode::KeyV) {
         return;
     }

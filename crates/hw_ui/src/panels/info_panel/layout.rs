@@ -1,5 +1,6 @@
 use crate::components::{
-    InfoPanel, InfoPanelNodes, MenuAction, MenuButton, UiInputBlocker, UiNodeRegistry, UiSlot,
+    InfoPanel, InfoPanelNodes, MenuAction, MenuButton, SoulRenameButton, SoulRenameFieldContainer,
+    UiInputBlocker, UiNodeRegistry, UiSlot,
 };
 use crate::setup::UiAssets;
 use crate::theme::UiTheme;
@@ -147,6 +148,37 @@ pub fn spawn_info_panel_ui(
                         .id();
                     ui_nodes.set_slot(UiSlot::GenderIcon, gender);
                     info_panel_nodes.gender_icon = Some(gender);
+
+                    let rename_button = left
+                        .spawn((
+                            Button,
+                            Node {
+                                display: Display::None,
+                                width: Val::Px(22.0),
+                                height: Val::Px(22.0),
+                                margin: UiRect::left(Val::Px(6.0)),
+                                justify_content: JustifyContent::Center,
+                                align_items: AlignItems::Center,
+                                ..default()
+                            },
+                            BackgroundColor(theme.colors.button_default),
+                            SoulRenameButton,
+                        ))
+                        .with_children(|btn| {
+                            btn.spawn((
+                                Text::new("✎"),
+                                TextFont {
+                                    font: game_assets.font_ui().clone().into(),
+                                    font_size: crate::theme::font_size_rem(
+                                        theme.typography.font_size_xs,
+                                    ),
+                                    ..default()
+                                },
+                                TextColor(theme.colors.text_primary_semantic),
+                            ));
+                        })
+                        .id();
+                    info_panel_nodes.rename_button = Some(rename_button);
                 });
 
                 let unpin_button = row
@@ -180,6 +212,19 @@ pub fn spawn_info_panel_ui(
                 ui_nodes.set_slot(UiSlot::InfoPanelUnpinButton, unpin_button);
                 info_panel_nodes.unpin_button = Some(unpin_button);
             });
+
+        let rename_field_container = parent
+            .spawn((
+                Node {
+                    display: Display::None,
+                    width: Val::Percent(100.0),
+                    margin: UiRect::bottom(Val::Px(5.0)),
+                    ..default()
+                },
+                SoulRenameFieldContainer,
+            ))
+            .id();
+        info_panel_nodes.rename_field_container = Some(rename_field_container);
 
         let stats = parent
             .spawn((

@@ -5,6 +5,7 @@ use bevy::prelude::*;
 pub struct InfoPanelState {
     pub(super) last: Option<InfoPanelViewModel>,
     pub(super) last_pinned: bool,
+    pub(super) last_rename_target: Option<Entity>,
 }
 
 #[derive(Resource, Default)]

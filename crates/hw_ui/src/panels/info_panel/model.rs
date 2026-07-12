@@ -1,4 +1,5 @@
 use crate::models::inspection::{EntityInspectionModel, InspectionSoulGender};
+use bevy::prelude::*;
 
 #[derive(Clone, PartialEq)]
 pub(super) enum InfoPanelViewModel {
@@ -8,6 +9,7 @@ pub(super) enum InfoPanelViewModel {
 
 #[derive(Clone, PartialEq)]
 pub(super) struct SoulInfoViewModel {
+    pub(super) entity: Entity,
     pub(super) header: String,
     pub(super) gender: Option<InspectionSoulGender>,
     pub(super) motivation: String,
@@ -28,6 +30,7 @@ pub(super) struct SimpleInfoViewModel {
 pub(super) fn to_view_model(model: EntityInspectionModel) -> InfoPanelViewModel {
     if let Some(soul) = model.soul {
         InfoPanelViewModel::Soul(SoulInfoViewModel {
+            entity: model.entity,
             header: model.header,
             gender: soul.gender,
             motivation: soul.motivation,
