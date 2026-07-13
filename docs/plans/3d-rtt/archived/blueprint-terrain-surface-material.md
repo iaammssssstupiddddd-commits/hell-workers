@@ -5,13 +5,15 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `blueprint-terrain-surface-material` |
-| ステータス | `Implemented（受入確認・微調整継続）` |
+| ステータス | `Archived` |
 | 対象 | **MS-3-6** 再検討後の **Phase 3**（隣接タイプ境界のソフトブレンド＋地形専用マテリアル） |
 | 前提 Phase | [地形ビジュアル再検討](terrain-visual-reassessment-2026-04-05.md) の **Phase 1〜2**（観測・metadata・feature tint 等）。本書は **Phase 3 専用** |
 | 親計画 | [`ms-3-6-terrain-surface-plan-2026-03-31.md`](ms-3-6-terrain-surface-plan-2026-03-31.md) の **B（隣接ブレンド）** に相当 |
 | 参照 | [地形ビジュアル再検討 §4](terrain-visual-reassessment-2026-04-05.md)（`SectionMaterial` 拡張より `TerrainSurfaceMaterial` 新設） |
 
 ---
+
+> **Archived 2026-07-13**: baseline 実装後、地形描画は 49 chunk・3 LOD 構成へ発展した。現行仕様は `docs/architecture.md` と `docs/world_layout.md` を正とする。
 
 ## 0. 実装反映サマリ（2026-04-05）
 
@@ -23,7 +25,7 @@
 - 実運用ではブレンド帯を cell edge の狭い範囲に絞り、river が絡むブレンドは `river↔sand` の組み合わせだけを許可している
 - 実装上は `terrain_id_map` / `terrain_feature_map` を `textureLoad` で読むため sampler を持たず、binding 番号や uniform の細部は本文の初期案から一部変わっている
 
-したがって、以下の各節は「採用した設計意図の記録」として読む。現行挙動の真実は [`docs/world_layout.md`](../../world_layout.md) と [`docs/architecture.md`](../../architecture.md) を優先する。
+したがって、以下の各節は「採用した設計意図の記録」として読む。現行挙動の真実は [`docs/world_layout.md`](../../../world_layout.md) と [`docs/architecture.md`](../../../architecture.md) を優先する。
 
 ## 1. 前提（現状のコードとアセット）
 
@@ -864,4 +866,4 @@ MaterialPlugin::<material::TerrainSurfaceMaterial>::default(),
 
 - [地形ビジュアル再検討（2026-04-05）](terrain-visual-reassessment-2026-04-05.md)
 - [MS-3-6 テレイン表面表現改善](ms-3-6-terrain-surface-plan-2026-03-31.md)
-- [docs/crate-boundaries.md](../../crate-boundaries.md)
+- [docs/crate-boundaries.md](../../../crate-boundaries.md)

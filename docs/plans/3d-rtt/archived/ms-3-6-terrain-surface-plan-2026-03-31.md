@@ -5,20 +5,22 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `ms-3-6-terrain-surface-plan-2026-03-31` |
-| ステータス | `A/D/B 実装済み（S0 受入撮影・最終目視判定待ち）` |
+| ステータス | `Archived` |
 | 作成日 | `2026-03-31` |
-| 最終更新日 | `2026-04-05` |
+| 最終更新日 | `2026-07-13` |
 | 親マイルストーン | `docs/plans/3d-rtt/milestone-roadmap.md` **MS-3-6** |
 | 前提 MS | **MS-3-4**（地形＝`Mesh3d` + `Terrain3dHandles`、タイル 1 セル 1 エンティティ） / **MS-WFC-4**（`GeneratedWorldLayout` が startup 経路へ統合済み） |
-| 関連提案 | [`section-material-proposal-2026-03-16.md`](../../proposals/3d-rtt/20260316/section-material-proposal-2026-03-16.md) |
-| アセット計画 | [`asset-milestones-2026-03-17.md`](asset-milestones-2026-03-17.md) **MS-Asset-Terrain** |
-| アート指針 | [`docs/world_lore.md`](../../world_lore.md) §6.1 パレット・**§6.2 Rough Vector Sketch**（手描き感・塗りムラ・描き込みすぎない） |
-| 独立トラック | [WFC 地形生成](archived/wfc-terrain-generation-plan-2026-04-01.md) はデータ生成が主眼。本 MS はレンダリング／表現 |
+| 関連提案 | [`section-material-proposal-2026-03-16.md`](../../../proposals/3d-rtt/archived/section-material-proposal-2026-03-16.md) |
+| アセット計画 | [`asset-milestones-2026-03-17.md`](../asset-milestones-2026-03-17.md) **MS-Asset-Terrain** |
+| アート指針 | [`docs/world_lore.md`](../../../world_lore.md) §6.1 パレット・**§6.2 Rough Vector Sketch**（手描き感・塗りムラ・描き込みすぎない） |
+| 独立トラック | [WFC 地形生成](wfc-terrain-generation-plan-2026-04-01.md) はデータ生成が主眼。本 MS はレンダリング／表現 |
 | 後続 MS | **MS-3-7**（Raycast）と直列必須ではない |
 | 実装サブ計画（現行アセット限定） | [`ms-3-6-ad-implementation-plan-2026-04-01.md`](ms-3-6-ad-implementation-plan-2026-04-01.md) — **A/D のコード・WGSL 手順**（新規 PNG 差し替えなし） |
 | Phase 3（隣接ブレンド・`TerrainSurfaceMaterial`） | [`blueprint-terrain-surface-material.md`](blueprint-terrain-surface-material.md) — **B** 相当の詳細ブループリント。2026-04-05 実装反映済み |
 
 ---
+
+> **統合先**: A/D/B は実装済み。残る目視受入は `milestone-roadmap.md` の MS-3-6 に集約し、恒久仕様は `docs/architecture.md`、`docs/world_layout.md`、`docs/art-style-criteria.md` を正とする。
 
 ## 1. 目的
 

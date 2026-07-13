@@ -7,9 +7,9 @@
 | 計画ID | `terrain-lod-switch-flicker-plan-2026-04-17` |
 | ステータス | `Draft` |
 | 作成日 | `2026-04-17` |
-| 最終更新日 | `2026-04-18` |
+| 最終更新日 | `2026-07-13` |
 | 作成者 | `Codex` |
-| 関連提案 | `N/A` |
+| 関連計画 | `docs/plans/3d-rtt/milestone-roadmap.md` |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的
@@ -68,7 +68,7 @@
   - `Terrain3dHandles` は LOD ごとの共有 material handle を 1 本ずつ持っている
   - `MeshMaterial3d<T>` は型ごとの別 component なので、異なる LOD material を同じ entity に同時保持して lerp する構成は取れない
   - そのため視覚遷移は「一時的に複数の chunk view を重ねる」か「material を単一型へ再統合する」かの二択になる
-- Bevy 0.18 API での注意点:
+- Bevy 0.19 API での注意点:
   - `MeshMaterial3d<T>` の差し替えだけでは cross-fade にならない
   - prepass と main pass の discard 条件を揃えないと深度や輪郭が一瞬破綻する
   - 共有 material handle を使う都合上、遷移パラメータは per-chunk ではなく global uniform / resource で持つのが自然
@@ -91,6 +91,7 @@
   - [ ] 単発切替時のポップを観測する再現手順が docs に残っている
 - 検証:
   - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
   - 手動: 同一 seed / 同一 camera direction で単発の閾値通過を確認する
 
 ## M2: 切替時の視覚遷移導入
@@ -100,6 +101,8 @@
   - 地形 chunk は LOD 別の sibling view を持てる構成にし、遷移中だけ source / target の 2 系統を同時表示する
   - 遷移は alpha blend ではなく dither discard を使う
     - 理由: 地形は opaque 前提で、sorted transparent に落としたくないため
+    - source / target は同じ `transition_progress` を逆位相の weight として使い、両方が同時に欠けたり重なり続けたりしないようにする
+    - dither 座標は chunk ローカルではなく world-space で安定させ、chunk 境界とカメラ移動で模様が跳ねないようにする
   - `TerrainSurfaceUniform` にグローバルな transition パラメータを追加し、main / prepass の両 shader で同じ dither 判定を使う
   - 遷移完了後に source view を非表示化し、通常時は従来どおり単一 view のみ表示する
 - 変更ファイル:
@@ -119,6 +122,7 @@
   - [ ] 通常時は 1 LOD view のみが有効で、常時 2 倍描画にならない
 - 検証:
   - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
   - 手動: TopDown / elevation view の両方で閾値通過を確認
   - 手動: section cut 有効時、river/sand 境界、map 端で切替確認
 
@@ -137,6 +141,7 @@
   - [ ] デバッグ手順なしでも挙動を理解できる状態になっている
 - 検証:
   - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
   - 手動: 低速ズーム、急速ズーム、カメラ方向変更後の再確認
 
 ## 6. リスクと対策
@@ -151,6 +156,7 @@
 
 - 必須:
   - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
 - 手動確認シナリオ:
   - TopDown で `LOD1 ↔ Lod1Lite` の単発切替を確認する
   - TopDown で `Lod1Lite ↔ Lod2` の単発切替を確認する
@@ -205,7 +211,7 @@
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-04-17` / `not run (plan only)`
+- 最終 `cargo check --workspace`: `2026-07-13` / `not run (plan only)`
 - 未解決エラー:
   - なし
 
@@ -222,3 +228,4 @@
 | --- | --- | --- |
 | `2026-04-17` | `Codex` | 初版作成 |
 | `2026-04-18` | `Codex` | ヒステリシスは適正と仮定し、切替瞬間の視覚ポップ対策にスコープを絞って再構成 |
+| `2026-07-13` | `Codex` | Bevy 0.19、workspace clippy、逆位相 weight と world-space dither の契約を反映 |

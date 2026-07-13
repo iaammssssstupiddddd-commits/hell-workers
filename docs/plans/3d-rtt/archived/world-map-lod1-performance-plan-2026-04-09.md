@@ -5,12 +5,14 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `world-map-lod1-performance-plan-2026-04-09` |
-| ステータス | `Complete` |
+| ステータス | `Archived` |
 | 作成日 | `2026-04-09` |
-| 最終更新日 | `2026-04-10` |
+| 最終更新日 | `2026-07-13` |
 | 作成者 | `Codex` |
 | 関連提案 | `N/A` |
 | 関連Issue/PR | `N/A` |
+
+> `boundary_proximity_mask`、`Lod1Lite`、3段階ヒステリシス、feature LUT の uniform fast-path は実装済み。未解決の LOD 切替ポップは現行の `terrain-lod-switch-flicker-plan-2026-04-17.md` へ移管した。
 
 ## 1. 目的
 
@@ -427,8 +429,8 @@ LOD1 と LOD1-lite の両 shader に適用する（LOD2 は既に `sample_featur
 
 ### 完了条件
 
-- [ ] `sample_feature_lut` 呼び出しが全 shader から除去されている
-- [ ] Dirt / Sand / rock の grading が変化しない（同一 seed で視覚比較）
+- [x] 通常経路は uniform fast-path を使い、asset ready 前だけ `sample_feature_lut` fallback を残す
+- [x] Dirt / Sand / rock の grading 契約を維持している
 
 ### 検証
 
@@ -455,8 +457,8 @@ LOD1 と LOD1-lite の両 shader に適用する（LOD2 は既に `sample_featur
 
 ### 完了条件
 
-- [ ] 実装に対応する docs が同期されている
-- [ ] LOD1 改善の判断根拠と閾値が追える
+- [x] 実装に対応する docs が同期されている
+- [x] LOD1 改善の判断根拠と閾値が追える
 
 ### 検証
 
@@ -482,7 +484,7 @@ LOD1 と LOD1-lite の両 shader に適用する（LOD2 は既に `sample_featur
   - `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check`
 - 手動確認シナリオ:
   - M2 後: 近景で grass / dirt / sand / river 境界が破綻していないか、早期 return された内部タイルの色が正しいか確認
-  - M3 後: zoom in/out で LOD1 → LOD1-lite → LOD2 の遷移にちらつきなし、各レベルで tile_rtt_px が意図値か確認
+  - M3 後: zoom in/out で LOD1 → LOD1-lite → LOD2 がヒステリシスどおり単発切替し、各レベルで tile_rtt_px が意図値か確認。切替瞬間の視覚ポップは現行 `../terrain-lod-switch-flicker-plan-2026-04-17.md` へ移管
   - M4 後: 岩場 dirt / shore sand / inland sand の色・roughness が変わっていないか確認
   - 全体: 矢視方向（TopDown / North / East / South / West）で tile_rtt_px 切替が安定するか確認
 - パフォーマンス確認（任意）:
@@ -501,11 +503,13 @@ LOD1 と LOD1-lite の両 shader に適用する（LOD2 は既に `sample_featur
 
 ### 現在地
 
-- 進捗: `0%`（計画ブラッシュアップ完了、実装未着手）
+- 進捗: `100%`（M1〜M5 実装済み、2026-07-13 棚卸し確認）
 - 完了済みマイルストーン:
-  - なし
-- 未着手/進行中:
-  - M1〜M5 未着手
+  - M1〜M5
+- 後続:
+  - LOD 切替瞬間の視覚ポップは `../terrain-lod-switch-flicker-plan-2026-04-17.md`
+
+> 以下の「コードベース調査結果」と当初の実装手順は、着手前スナップショットとして残す。現行コードの指示として使用しない。
 
 ### コードベース調査結果サマリー
 
@@ -523,13 +527,8 @@ LOD1 と LOD1-lite の両 shader に適用する（LOD2 は既に `sample_featur
 
 ### 次のAIが最初にやること
 
-1. M2 の `bake_boundary_proximity_mask` を `boundary.rs` に追加する
-   - `rasterize_terrain_regions` の戻り値 `buf: Vec<u8>` に対して 3×3 neighborhood check → dilation 5px → 256×256 ダウンサンプル
-   - `spawn_boundary_meshes`（line ~994）内で呼び出し、`Image`（R8Unorm, Nearest sampler）を作成し `mat.extension.boundary_proximity_mask` に設定
-2. binding 131/132 を `TerrainSurfaceMaterialExt` と `TerrainSurfaceMaterialExtLod2` に追加（両方必須）
-3. `terrain_surface_material.wgsl` に binding 131/132 宣言と `blend_terrain` 先頭 early-out を追加
-4. `terrain_surface_material_lod2.wgsl` に binding 131/132 宣言のみ追加（unused、レイアウト一致維持）
-5. `cargo check` → 手動目視確認
+1. 本書から実装を再開しない。
+2. LOD 切替ポップを扱う場合は `../terrain-lod-switch-flicker-plan-2026-04-17.md` の M1 観測から開始する。
 
 ### ブロッカー/注意点
 
@@ -557,14 +556,15 @@ LOD1 と LOD1-lite の両 shader に適用する（LOD2 は既に `sample_featur
 
 ### Definition of Done
 
-- [ ] 目的に対応するマイルストーンが全て完了
-- [ ] 影響ドキュメントが更新済み
-- [ ] `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` が成功
+- [x] 目的に対応するマイルストーンが全て完了
+- [x] 影響ドキュメントが更新済み
+- 当時の最終 `cargo check` ログは本書に記録されていない
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-04-09` | `Codex` | 初版作成 |
+| `2026-07-13` | `Codex` | 実装済み状態へ訂正し、feature LUT fallback と LOD pop の後続先を明記してアーカイブ |
 | `2026-04-10` | `Codex` | startup 順序・plugin 配線・LUT 同期タイミング・検証手順の不整合を修正 |
 | `2026-04-09` | `Copilot` | コードベース実読（shader/boundary.rs/terrain_lod.rs 等）に基づき全セクションを具体化。バインディング番号・関数名・コード行番号・実装手順を明記 |

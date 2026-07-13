@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 提案ID | `billboard-camera-angle-proposal-2026-03-16` |
-| ステータス | `Partially Superseded` |
+| ステータス | `Superseded / Archived` |
 | 作成日 | `2026-03-16` |
-| 最終更新日 | `2026-03-17` |
+| 最終更新日 | `2026-07-13` |
 | 作成者 | Claude Sonnet 4.6 |
 | 関連ロードマップ | `docs/plans/3d-rtt/milestone-roadmap.md` |
 | 関連提案 | `docs/proposals/3d-rtt/phase2-hybrid-rtt-plan-2026-03-15.md` |

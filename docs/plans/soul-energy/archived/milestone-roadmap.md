@@ -1,10 +1,12 @@
 # Soul Energy System — Milestone Roadmap
 
 Created: 2026-03-27
-Last Updated: 2026-04-01
-Status: Phase 1a complete, Phase 1b complete, Phase 1c complete
+Last Updated: 2026-07-13
+Status: Archived — Phase 1a–1c complete
 
 ---
+
+> Phase 1 は実装・恒久ドキュメントへの移管が完了した。Phase 2 以降の概念は `docs/soul_energy.md` §11 を正とする。
 
 ## Vision
 

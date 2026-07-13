@@ -1,10 +1,24 @@
 # 3D-RtT 移行ロードマップ
 
 作成日: 2026-03-15
-最終更新: 2026-04-05（MS-3-6 TerrainSurfaceMaterial 実装・境界ブレンド制約整理を反映）
-ステータス: Phase 3 進行中（MS-3-6 実装済み、MS-3-7 以降未着手）
+最終更新: 2026-07-13（既存計画の統合・現行コード照合）
+ステータス: Phase 3 進行中（未完: MS-3-5 / 7 / 8 / 9、受入残件: MS-3-6 / 10）
 
 ---
+
+## 現行バックログ（2026-07-13）
+
+このロードマップを 3D-RtT の実装順序と未完条件の正本とする。完了済みの詳細計画・採用提案は `archived/` に移し、恒久仕様は `docs/architecture.md` と各システム文書を正とする。過去の完了記録にある Bevy 0.18 表記は当時の検証履歴であり、新規実装・再検証は **Bevy 0.19** を前提とする。
+
+| 優先 | 対象 | 現在の残件 |
+| --- | --- | --- |
+| P0 | MS-3-5 | floor / door / equipment の `SectionMaterial` 移行。GLB 完成を待たず placeholder で契約を成立させる |
+| P0 | MS-3-6 | WFC 後の受入スクリーンショットと最終目視判定 |
+| P1 | MS-3-7 | 矢視中のゲーム操作可否を先に決め、必要な入力経路だけ Camera3d raycast 化 |
+| P1 | MS-3-8 | 残存 2D 描画を棚卸しし、`WorldForeground2dCamera` の意図的な前面描画を例外として固定 |
+| P1 | MS-3-9 | section cut の配置・厚み UI とワールドプレビュー |
+| P2 | MS-3-10 | Soul mask ring PoC、アウトライン値と壁ノーマル方針の受入確定 |
+| 独立 | 配置 ghost | マウス移動時の配置検証を計測し、必要な場合だけ差分再計算を計画化 |
 
 ## ビジョン
 
@@ -27,7 +41,7 @@
 
 ```
 並行トラック A ──────────────────────────────────────────── 前提フェーズ
-並行トラック B ──────────────────────────────────────────── WFC地形生成（独立）
+完了済みトラック B ──────────────────────────────────────── WFC地形生成（履歴参照）
 
 メインルート:
   Phase 0 (前提)
@@ -204,7 +218,7 @@
 ## Phase 3 着手前準備（今すぐ着手可・M-Gate と並走可）
 
 > **依存**: Phase 2 実装完了（目視検証 MS-2C は並走可）
-> **詳細**: `docs/plans/3d-rtt/phase3-implementation-plan-2026-03-16.md`
+> **統合前の詳細履歴**: `docs/plans/3d-rtt/archived/phase3-implementation-plan-2026-03-16.md`
 
 ---
 
@@ -276,7 +290,7 @@
 ## Phase 3: フルRtT（地形を含むインゲーム要素の3D化）
 
 > **依存**: Phase 2 完了（MS-2C 含む）・Phase 3 着手前準備完了
-> **詳細**: `docs/plans/3d-rtt/phase3-implementation-plan-2026-03-16.md`
+> **統合前の詳細履歴**: `docs/plans/3d-rtt/archived/phase3-implementation-plan-2026-03-16.md`
 
 ---
 
@@ -400,7 +414,7 @@
 
 ### MS-3-4: テレインの3D化（旧 MS-3A）
 
-> **依存**: MS-3-3 完了  
+> **依存**: MS-3-3 完了
 > **詳細計画**: [`archived/ms-3-4-terrain-3d-plan-2026-03-29.md`](archived/ms-3-4-terrain-3d-plan-2026-03-29.md)（完了後アーカイブ）
 
 - **やること**:
@@ -418,7 +432,7 @@
 
 ### MS-3-5: Building3dHandles の SectionMaterial 移行（MS-Section-B）
 
-> **依存**: MS-3-3 完了・Phase 3 GLB 取込完了  
+> **依存**: MS-3-3 完了
 > **詳細計画**: [`archived/ms-3-5-building-section-material-plan-2026-03-31.md`](archived/ms-3-5-building-section-material-plan-2026-03-31.md)
 
 - **やること**:
@@ -426,9 +440,9 @@
   2. `building_completion/spawn.rs` の残る `MeshMaterial3d<StandardMaterial>` を `MeshMaterial3d<SectionMaterial>` に置き換える
   3. 設備別 visual system（`tank.rs`・`mud_mixer.rs` 等）の同様置き換え
 - **変更ファイル**: `hw_visual/src/visual_handles.rs`、`building_completion/spawn.rs`、`systems/visual/tank.rs`、`systems/visual/mud_mixer.rs`
-- **補足**: `Wall` / `ProvisionalWall` は pilot として移行済み。`floor` / `door` / `equipment` が未移行。
+- **補足**: `Wall` / `ProvisionalWall` は pilot として移行済み。`floor` / `door` / `equipment` が未移行。GLB アセット完成を契約移行の前提にせず、現行 placeholder mesh で先に完了可能とする。
 - **完了条件**:
-  - [ ] `cargo check` ゼロエラー
+  - [ ] `cargo check --workspace` ゼロエラー
   - [ ] 矢視モードで切断線設定時に全 BuildingType のスラブ外部分がクリップされる（目視）
   - [ ] トップダウンモードで全建物が正常表示される
 - **ステータス**: [ ] 未着手
@@ -438,9 +452,9 @@
 ### MS-3-6: テレイン表面表現改善（旧 MS-3B）
 
 > **依存**: MS-3-4 完了  
-> **詳細計画**: [`ms-3-6-terrain-surface-plan-2026-03-31.md`](ms-3-6-terrain-surface-plan-2026-03-31.md)
-> **現状再検討**: [`terrain-visual-reassessment-2026-04-05.md`](terrain-visual-reassessment-2026-04-05.md)
-> **実装ブループリント**: [`blueprint-terrain-surface-material.md`](blueprint-terrain-surface-material.md)
+> **実装履歴**: [`archived/ms-3-6-terrain-surface-plan-2026-03-31.md`](archived/ms-3-6-terrain-surface-plan-2026-03-31.md)
+> **現状再検討**: [`archived/terrain-visual-reassessment-2026-04-05.md`](archived/terrain-visual-reassessment-2026-04-05.md)
+> **実装ブループリント**: [`archived/blueprint-terrain-surface-material.md`](archived/blueprint-terrain-surface-material.md)
 
 - **やること**: D（アセット）＋ A（metadata / macro variation）＋ B（`TerrainSurfaceMaterial` による隣接ブレンド）。実装後は `terrain_id_map` / `terrain_feature_map` を起点に、共有地形マテリアル 1 本で見た目を作る。
 - **再検討メモ**: WFC 完了後は「旧 2D 境界素材の復帰」ではなく、`GeneratedWorldLayout.masks` を render path に通す方針を採用済み。境界ブレンドは広くにじませず、cell edge の狭い帯だけに限定し、river を含むブレンドは `river↔sand` の組み合わせだけを対象にする。
@@ -458,11 +472,11 @@
 > **依存**: MS-3-4 完了
 
 - **やること**:
-  - 現在の `viewport_to_world_2d` を Camera3d からの Raycasting に全面置換する
-  - `hw_ui`・`bevy_app`・`hw_visual` に散在する `viewport_to_world_2d` 利用箇所を共有ヘルパー経由の Raycast 判定へ寄せる
+  - 矢視中にクリック・ホバー・範囲選択・配置を許可するかを入力モードごとに決定する
+  - 矢視中も必要な経路だけを Camera3d raycast の共有ヘルパーへ寄せ、TopDown 専用の `viewport_to_world_2d` を機械的に全廃しない
   - クリック・ホバー・範囲選択・配置プレビューの各入力モードを個別に検証する
 - **完了条件**:
-  - [ ] インゲーム入力で `viewport_to_world_2d` への依存が残らない
+  - [ ] 各入力モードの TopDown / 矢視対応可否が明文化され、矢視対応経路に 2D camera 依存が残らない
   - [ ] クリック・ホバー・ドラッグ操作が 3D ビューで正しく動作する
 - **ステータス**: [ ] 未着手
 
@@ -472,10 +486,10 @@
 
 > **依存**: MS-3-7 完了
 
-- **やること**: Phase 2〜3で3D化済みのインゲーム要素から 2D Sprite コンポーネントと関連Z定数を順次削除し、Camera2d を UI 専用へ絞る
+- **やること**: Phase 2〜3で3D化済みの要素に残る 2D Sprite と Z 定数を棚卸しし、不要な互換経路を削除する。木・資源・Familiar など `WorldForeground2dCamera` で意図的に RtT 前面へ描く要素は例外として明文化する。
 - **完了条件**:
-  - [ ] Camera2d 側に残るのは UI と純2Dオーバーレイのみ
-  - [ ] `cargo check` ゼロエラー
+  - [ ] Camera2d / `WorldForeground2dCamera` に残る各描画が、UI・純2Dオーバーレイ・意図的な前面描画のいずれかとして説明できる
+  - [ ] `cargo check --workspace` ゼロエラー
 - **ステータス**: [ ] 未着手
 
 ---
@@ -492,7 +506,7 @@
   5. 切断線のワールドマップ上プレビュー（2D Gizmo）を実装
 - **変更ファイル**: `hw_ui/src/section_cut_ui.rs`（新規）、`systems/visual/camera_sync.rs`
 - **完了条件**:
-  - [ ] `cargo check` ゼロエラー
+  - [ ] `cargo check --workspace` ゼロエラー
   - [ ] クリック・ドラッグで切断線を配置できる
   - [ ] スラブ厚みスライダーを動かすと即座に 3D 描画が変化する
 - **ステータス**: [ ] 未着手
@@ -504,18 +518,18 @@
 > **依存**: Phase 3 GLB 取込 PoC 完了
 
 - **やること**:
-  - アウトラインの受入基準を文書化する（線幅・揺らぎ量・色・ズームアウト無効化閾値）
+  - Soul mask ring を [`../../proposals/soul-outline-mask-ring-proposal-2026-04-16.md`](../../proposals/soul-outline-mask-ring-proposal-2026-04-16.md) に従って PoC し、アウトラインの受入値（線幅・揺らぎ量・色・ズームアウト無効化閾値）を確定する
   - 壁メッシュ方法A（コーナー専用メッシュ）の GLB 仕様を確定する
   - 断面キャップの実装方針（A / B / C）を確定する
-  - アウトライン生成計画を別計画として起票する
 - **完了条件**:
-  - [ ] アートスタイル受入基準がドキュメント化されている
-  - [ ] アウトライン生成の実装計画が別計画として起票されている
-- **ステータス**: [ ] 未着手
+  - [x] Soul GLB PoC と仮のアートスタイル基準がドキュメント化されている
+  - [ ] Soul mask ring の目視受入値が確定している
+  - [ ] 壁メッシュとノーマルマップ方針が確定している
+- **ステータス**: [~] 部分完了（Soul GLB PoC 済み、outline / wall 受入待ち）
 
 ---
 
-## 並行トラックB: WFC地形生成
+## 完了済み参照: WFC地形生成
 
 > **依存**: なし（主に `hw_world` の生成系と `bevy_app` の `initial_spawn` に影響）
 > **現行計画**: `docs/plans/3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md`
@@ -592,16 +606,10 @@ MS-WFC-1 → MS-WFC-2 → MS-WFC-2d → MS-WFC-2e → MS-WFC-3 → MS-WFC-4 → 
 
 | 優先 | MS | 理由 |
 |------|------|------|
-| ⚠️ P0（ブロッカー確認） | MS-P3-Pre-A | `CLIP_DISTANCES` 非対応なら SectionMaterial 設計を全面再検討 |
-| P0（データ確定） | MS-P3-Pre-C | Camera3d 角度未確定のまま GLB 生成パイプラインを進められない |
-| P1（基盤整備） | MS-P3-Pre-B | Phase 3 参照箇所が増える前に一元化しておく必要がある |
-| P1（PoC） | MS-P3-Pre-D | Character GLB + face atlas 表示確認。MS-3-1 の前提 |
-| P1（本実装） | MS-3-4〜MS-3-9 | Section 系を後ろ倒しした前提で、Phase 3 後半の主線 |
-| P4（将来実装） | MS-3-3 | SectionMaterial / section clip は将来フェーズへ延期 |
-| P2（完了済み） | MS-3-Char-A | AnimationGraph + タスク連動。完了済み |
-| P2（完了済み） | MS-3-Char-B | Soul の P1 クリップ接続 + face atlas 状態連動。完了済み |
-| P3（方針確定） | MS-3-Fam-R | Familiar を Phase 3 では 2D 前面表示・影なしで扱い、多層階の可視ルールを後段へ送る |
-| 独立 | MS-WFC-1〜4.5 | メインルートとは独立。固定アンカー付きマップ自動生成として先行させることも可。現在は MS-WFC-2d の後に MS-WFC-2e を挿入し、砂の責務を維持したまま見た目の輪郭依存を下げる計画。 |
+| P0 | MS-3-5 / MS-3-6 | SectionMaterial の残移行と terrain visual の受入を閉じる |
+| P1 | MS-3-7 / MS-3-8 / MS-3-9 | 入力契約を決めた後、互換描画棚卸しと section cut UI を進める |
+| P2 | MS-3-10 | Soul outline と建築アート基準の PoC 受入を閉じる |
+| 独立 | Asset roadmap | 建築 GLB パイプラインと全 BuildingType のモデル制作 |
 
 ---
 
@@ -609,15 +617,12 @@ MS-WFC-1 → MS-WFC-2 → MS-WFC-2d → MS-WFC-2e → MS-WFC-3 → MS-WFC-4 → 
 
 | ドキュメント | 内容 |
 |------------|------|
-| `docs/plans/3d-rtt/phase3-implementation-plan-2026-03-16.md` | Phase 3 詳細実装計画（各MSの変更ファイル・完了条件） |
 | `docs/plans/3d-rtt/asset-milestones-2026-03-17.md` | アセット制作マイルストーン（スプライト・GLB・シェーダー・テクスチャ） |
-| `docs/proposals/3d-rtt/20260317/character-3d-rendering-proposal-2026-03-16.md` | キャラクター3D化採用提案（CharacterMaterial・AnimationGraph・顔アトラス・CurtainMaterial） |
-| `docs/proposals/3d-rtt/20260316/billboard-camera-angle-proposal-2026-03-16.md` | Camera3d 斜め角度採用提案（ビルボード記述はキャラクター提案書で上書き） |
-| `docs/proposals/3d-rtt/20260316/section-material-proposal-2026-03-16.md` | SectionMaterial・セクションカット採用提案 |
-| `docs/proposals/3d-rtt/20260316/rtt-resolution-scaling-proposal-2026-03-16.md` | RtT 解像度スケーリング設計提案 |
-| `docs/proposals/3d-rtt/20260316/outline-rendering-proposal-2026-03-16.md` | アウトライン生成設計方針（実装保留・前提条件整理） |
-| `docs/proposals/3d-rtt/3d-rendering-rtt-proposal-2026-03-14.md` | ハイブリッドRtT提案（Phase 1〜4詳細） |
-| `docs/proposals/3d-rtt/3d-rendering-rtt-proposal-phase2-2026-03-14.md` | フルRtT・多層階アーキテクチャ方針 |
-| `docs/proposals/3d-rtt/related/building-visual-layer-plan-2026-03-12.md` | MS-Pre-B詳細設計 |
-| `docs/proposals/3d-rtt/related/spatial-grid-architecture-plan-2026-03-12.md` | MS-Pre-A詳細設計 |
+| `docs/plans/3d-rtt/lighting-visual-plan-2026-04-04.md` | Outdoor Lamp の局所光・影・通電同期 |
+| `docs/plans/3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md` | terrain LOD 切替ポップの観測と遷移導入 |
+| `docs/proposals/soul-outline-mask-ring-proposal-2026-04-16.md` | Soul 専用 screen-space outline の比較・採用案 |
+| `docs/architecture.md` | 現行 RtT / camera / material アーキテクチャ |
+| `docs/world_layout.md` | 現行 terrain chunk / LOD / map 表示仕様 |
+| `docs/plans/3d-rtt/archived/phase3-implementation-plan-2026-03-16.md` | 統合前の Phase 3 詳細計画（履歴） |
+| `docs/proposals/3d-rtt/archived/` | 実装済み・上書き済みの 3D-RtT 採用提案（履歴） |
 | `docs/plans/3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md` | WFCトラック詳細設計（現行実装再整列版） |

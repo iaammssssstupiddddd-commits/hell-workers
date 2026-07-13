@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `building-visual-layer-plan-2026-03-12` |
-| ステータス | `Draft` |
+| ステータス | `Implemented / Archived` |
 | 作成日 | `2026-03-12` |
-| 最終更新日 | `2026-03-15` |
+| 最終更新日 | `2026-07-13` |
 | 作成者 | `Gemini CLI` |
 | 関連提案 | `docs/proposals/3d-rtt/3d-rendering-rtt-proposal-2026-03-14.md`<br>`docs/proposals/3d-rtt/related/spatial-grid-architecture-plan-2026-03-12.md` |
 

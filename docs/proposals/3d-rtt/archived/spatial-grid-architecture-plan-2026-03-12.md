@@ -5,14 +5,16 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `spatial-grid-architecture-plan-2026-03-12` |
-| ステータス | `Draft` |
+| ステータス | `Partially Implemented / Archived` |
 | 作成日 | `2026-03-12` |
-| 最終更新日 | `2026-03-12` |
+| 最終更新日 | `2026-07-13` |
 | 作成者 | `Claude` |
 | 関連提案 | N/A |
 | 関連Issue/PR | N/A |
 
 ---
+
+> 障害物差分更新は実装済み。配置 ghost の差分再計算だけを性能バックログ候補として `docs/plans/3d-rtt/milestone-roadmap.md` へ統合し、ECS/WorldMap の二重保持解消案は save/load と索引責務が異なるため採用しない。
 
 ## 1. 目的
 

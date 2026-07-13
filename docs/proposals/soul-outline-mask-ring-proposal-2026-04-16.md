@@ -5,14 +5,14 @@
 | 項目 | 値 |
 | --- | --- |
 | ドキュメントID | `soul-outline-mask-ring-vs-inverted-hull-proposal-2026-04-16` |
-| ステータス | `Draft` |
+| ステータス | `Accepted / Not Implemented` |
 | 作成日 | `2026-04-16` |
-| 最終更新日 | `2026-04-16` |
+| 最終更新日 | `2026-07-13` |
 | 作成者 | `Codex (GPT-5)` |
-| 関連計画 | `TBD` |
+| 関連計画 | `docs/plans/3d-rtt/milestone-roadmap.md` MS-3-10 |
 | 関連Issue/PR | `N/A` |
-| 関連提案 | `docs/proposals/3d-rtt/20260316/outline-rendering-proposal-2026-03-16.md` |
-| 関連提案 | `docs/proposals/3d-rtt/20260317/character-3d-rendering-proposal-2026-03-16.md` |
+| 置換元 | `docs/proposals/3d-rtt/archived/outline-rendering-proposal-2026-03-16.md` |
+| 実装済み前提 | `docs/proposals/3d-rtt/archived/character-3d-rendering-proposal-2026-03-16.md` |
 
 ## 1. 背景と問題
 
@@ -51,6 +51,8 @@
   - 実装前に「見た目は強いが重い案」と「既存構成に自然に乗る案」を分けて評価できる。
 
 ## 5. 詳細設計
+
+実装時は Bevy 0.19 と現行 `RttCompositeMaterial` / `assets/shaders/rtt_composite_material.wgsl` を前提にし、古い汎用 post-process outline 提案へ依存しない。
 
 ### 5.1 現状の制約
 
@@ -217,6 +219,9 @@ Soul GLB本体
 
 ## 9. 検証計画
 
+- 必須:
+  - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
 - `visual_test` に outline 幅・強度の比較 UI を追加する前提で検証する。
 - 手動確認シナリオ:
   - TopDown で 1 体表示し、外周のみが強調されるか確認。
@@ -248,7 +253,8 @@ Soul GLB本体
 
 ### 現在地
 
-- 進捗: `100%`
+- 提案整理: `100%`
+- 実装進捗: `0%`
 - 直近で完了したこと:
   - 案1と案3の比較提案を文書化した。
   - 採用候補を案1に寄せる判断理由を整理した。

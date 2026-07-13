@@ -42,7 +42,7 @@
 
 ### 5.2 変更対象（想定）
 
-- `src/...`
+- `crates/.../src/...`
 - `docs/...`
 
 ### 5.3 データ/コンポーネント/API 変更
@@ -74,7 +74,8 @@
 
 ## 9. 検証計画
 
-- `cargo check`
+- `cargo check --workspace`
+- `cargo clippy --workspace --all-targets -- -D warnings`
 - 手動確認シナリオ:
 - 計測/ログ確認:
 

@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 提案ID | `outline-rendering-proposal-2026-03-16` |
-| ステータス | `Accepted` |
+| ステータス | `Superseded / Archived` |
 | 作成日 | `2026-03-16` |
-| 最終更新日 | `2026-03-16` |
+| 最終更新日 | `2026-07-13` |
 | 作成者 | Claude Sonnet 4.6 |
 | 関連ロードマップ | `docs/plans/3d-rtt/milestone-roadmap.md` |
 | 関連提案 | `docs/proposals/3d-rtt/20260316/section-material-proposal-2026-03-16.md` |

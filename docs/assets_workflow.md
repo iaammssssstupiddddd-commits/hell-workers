@@ -55,6 +55,14 @@
 
 マゼンタ背景付き画像から透過 PNG を作る場合は、既存の `scripts/convert_to_png.py` を使ってから `exports/textures/` に置く。
 
+### 画像・モデル生成時の共通規約
+
+- アート方向は `docs/world_lore.md` §6.2 と `docs/art-style-criteria.md` を正とする。古い個別 prompt のスタイル文をコピーして正本化しない。
+- 透過 cutout 用の生成画像は、背景を **solid magenta `#FF00FF`** にする。gray / off-white 背景は `convert_to_png.py` の前提外。
+- 出力ファイル名と配置先は、生成前に現行 `assets.rs` / asset catalog と `assets/` の実体を確認する。旧 2D Soul スプライト名を新規生成の前提にしない。
+- Soul は GLB + face atlas、Familiar は Phase 3 では 2D 前面表示、建築物は placeholder から GLB へ段階移行する。媒体ごとの現況は `docs/plans/3d-rtt/asset-milestones-2026-03-17.md` を参照する。
+- 再利用する具体的な生成 prompt は `source/references/` 側で原本と一緒に管理し、repo 内には安定したスタイル・背景・命名・受入規約だけを残す。
+
 例:
 
 ```bash

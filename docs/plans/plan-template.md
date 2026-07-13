@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `<topic>-plan-YYYY-MM-DD` |
-| ステータス | `Draft` / `In Progress` / `Blocked` / `Completed` / `Archived` |
+| ステータス | `Draft` / `In Progress` / `Blocked` / `Completed` / `Superseded` / `Archived` |
 | 作成日 | `YYYY-MM-DD` |
 | 最終更新日 | `YYYY-MM-DD` |
 | 作成者 | `<name>` |
@@ -38,7 +38,7 @@
 
 - 方針:
 - 設計上の前提:
-- Bevy 0.18 APIでの注意点:
+- Bevy 0.19 APIでの注意点:
 
 ## 5. マイルストーン
 
@@ -46,34 +46,37 @@
 
 - 変更内容:
 - 変更ファイル:
-  - `src/...`
+  - `crates/.../src/...`
   - `docs/...`
 - 完了条件:
   - [ ] 
 - 検証:
-  - `cargo check`
+  - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
 
 ## M2: [マイルストーン名]
 
 - 変更内容:
 - 変更ファイル:
-  - `src/...`
+  - `crates/.../src/...`
   - `docs/...`
 - 完了条件:
   - [ ] 
 - 検証:
-  - `cargo check`
+  - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
 
 ## M3: [マイルストーン名]
 
 - 変更内容:
 - 変更ファイル:
-  - `src/...`
+  - `crates/.../src/...`
   - `docs/...`
 - 完了条件:
   - [ ] 
 - 検証:
-  - `cargo check`
+  - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
 
 ## 6. リスクと対策
 
@@ -84,7 +87,11 @@
 ## 7. 検証計画
 
 - 必須:
-  - `cargo check`
+  - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
+- 計画完了時:
+  - `cargo test --workspace`
+  - `git diff --check`
 - 手動確認シナリオ:
 - パフォーマンス確認（必要時）:
 
@@ -114,18 +121,22 @@
 ### 参照必須ファイル
 
 - `docs/...`
-- `src/...`
+- `crates/.../src/...`
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `YYYY-MM-DD` / `pass or fail`
+- 最終 `cargo check --workspace`: `YYYY-MM-DD` / `pass or fail`
+- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `YYYY-MM-DD` / `pass or fail`
+- 最終 `cargo test --workspace`: `YYYY-MM-DD` / `pass or fail`
 - 未解決エラー:
 
 ### Definition of Done
 
 - [ ] 目的に対応するマイルストーンが全て完了
 - [ ] 影響ドキュメントが更新済み
-- [ ] `cargo check` が成功
+- [ ] `cargo check --workspace` が成功
+- [ ] `cargo clippy --workspace --all-targets -- -D warnings` が成功
+- [ ] `cargo test --workspace` が成功
 
 ## 10. 更新履歴
 

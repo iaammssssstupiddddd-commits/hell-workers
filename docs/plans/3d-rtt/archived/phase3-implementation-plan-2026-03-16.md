@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `phase3-implementation-plan-2026-03-16` |
-| ステータス | `Draft` |
+| ステータス | `Superseded / Archived` |
 | 作成日 | `2026-03-16` |
-| 最終更新日 | `2026-03-17` |
+| 最終更新日 | `2026-07-13` |
 | 作成者 | Claude Sonnet 4.6 |
 | 関連ロードマップ | `docs/plans/3d-rtt/milestone-roadmap.md` |
 | 関連提案 | `docs/proposals/3d-rtt/20260317/character-3d-rendering-proposal-2026-03-16.md` |
@@ -17,6 +17,8 @@
 | 関連提案 | `docs/proposals/3d-rtt/20260316/outline-rendering-proposal-2026-03-16.md` |
 
 ---
+
+> **統合先**: 未完の MS-3-5 / 7 / 8 / 9 / 10 は `milestone-roadmap.md` に統合した。以後は同ロードマップを Phase 3 の正本とする。
 
 ## 1. 目的
 
@@ -461,7 +463,7 @@ App::new()
 
 > **依存**: M-3-3 完了  
 > **根拠**: `docs/plans/3d-rtt/milestone-roadmap.md` MS-3-4  
-> **詳細計画**: [`archived/ms-3-4-terrain-3d-plan-2026-03-29.md`](archived/ms-3-4-terrain-3d-plan-2026-03-29.md)（完了後アーカイブ）
+> **詳細計画**: [`ms-3-4-terrain-3d-plan-2026-03-29.md`](ms-3-4-terrain-3d-plan-2026-03-29.md)（完了後アーカイブ）
 
 **やること**:
 - 既存の地形タイル描画を 3D メッシュ / `SectionMaterial` ベースへ置き換える
@@ -481,7 +483,7 @@ App::new()
 
 > **依存**: M-3-3 完了・Phase 3 GLB 取込完了  
 > **根拠**: `section-material-proposal` §5 MS-Section-B  
-> **詳細計画**: [`archived/ms-3-5-building-section-material-plan-2026-03-31.md`](archived/ms-3-5-building-section-material-plan-2026-03-31.md)
+> **詳細計画**: [`ms-3-5-building-section-material-plan-2026-03-31.md`](ms-3-5-building-section-material-plan-2026-03-31.md)
 
 **やること**:
 1. `visual_handles.rs` の `Building3dHandles` を全 BuildingType で `SectionMaterial` ベースにそろえる

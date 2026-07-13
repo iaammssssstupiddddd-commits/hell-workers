@@ -15,52 +15,27 @@
 
 ## 現在の提案書
 
-| Document | Notes |
-| --- | --- |
-| [08_visual_update_prompts.md](08_visual_update_prompts.md) | ビジュアル更新プロンプト集 |
-| [hvac-plumbing-proposal.md](hvac-plumbing-proposal.md) | 空調・衛生の建築設備導入と世界観への落とし込み提案 |
-| [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Soul Spawn/Despawn 最適化提案 |
-| [speech_optimization.md](speech_optimization.md) | スピーチシステム最適化提案 |
+| Document | Status | Notes |
+| --- | --- | --- |
+| [hvac-plumbing-proposal.md](hvac-plumbing-proposal.md) | Draft | 空調・衛生の建築設備導入と世界観への落とし込み提案 |
+| [soul-outline-mask-ring-proposal-2026-04-16.md](soul-outline-mask-ring-proposal-2026-04-16.md) | Accepted / Not Implemented | 既存 soul mask RtT を使い、composite 側で画面空間の外周 ring を生成する提案 |
+| [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Draft / Active | Soul Spawn/Despawn 最適化提案 |
 
-## アーカイブ提案書一覧 (`docs/proposals/archive`)
+## アーカイブ提案書一覧 (`archive/` / `**/archived/`)
 
-| Document | Notes |
-| --- | --- |
-| [archive/01-event-driven-ui.md](archive/01-event-driven-ui.md) | 提案01: ポーリング廃止 — イベント駆動UIアーキテクチャへの全面移行 |
-| [archive/05-unified-interaction-layer.md](archive/05-unified-interaction-layer.md) | 提案05: インタラクション層の統一 — 全UI操作を単一の入力パイプラインに集約 |
-| [archive/09-large-file-refactor.md](archive/09-large-file-refactor.md) | 提案09: 500行超ファイルの段階的リファクタリング計画 |
-| [archive/agent-md-for-branches.md](archive/agent-md-for-branches.md) | AI開発エージェント最適化 提案書 |
-| [archive/ai-scalability-optimization.md](archive/ai-scalability-optimization.md) | AIシステム スケーラビリティ最適化提案 (Scale: Familiar 30, Soul 500) |
-| [archive/architecture-improvements-2026.md](archive/architecture-improvements-2026.md) | アーキテクチャ改善提案 (Architecture Improvement Proposals) |
-| [archive/bevy_018_features.md](archive/bevy_018_features.md) | Bevy 0.18 新機能導入提案 |
-| [archive/boundary-texture-paste-proposal-2026-04-07.md](archive/boundary-texture-paste-proposal-2026-04-07.md) | **現状**: `crates/bevy_app/src/world/map/boundary.rs` にて、Catmull-Rom スプラインと法線ノイズで境界ポリラインを計算し、それに幅を持たせた **リボンメッシュ（3Dポリゴン帯）** を生成して地形タイルの上に配置しているの提案。 |
-| [archive/destination-validation-unification-proposal-2026-03-07.md](archive/destination-validation-unification-proposal-2026-03-07.md) | 現状: 搬入先（FloorSite, WallSite, ProvisionalWall 等）の受入可能量チェックが **3箇所に独立実装** されている:の提案。 |
-| [archive/dream_general_visuals.md](archive/dream_general_visuals.md) | Dreamシステム全体 ビジュアルアップデート提案 |
-| [archive/dream_tree_planting_proposal.md](archive/dream_tree_planting_proposal.md) | Dream を使った植林システム提案 |
-| [archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md) | `src/systems/familiar_ai/decide/task_management/` には、候補収集、優先度評価、搬送元選定、予約影反映、`AssignedTask` 構築など、使い魔 AI の中核ロジックがまとまっていたの提案。 |
-| [archive/high-priority-performance-proposal-2026-03-23.md](archive/high-priority-performance-proposal-2026-03-23.md) | **現状**: Soul 数・使い魔数の増加に伴い、Actor/Logic フェーズの CPU 負荷が上がる。コード走査により、次の 3 領域が **優先度高** の改善候補として整理されたの提案。 |
-| [archive/high_priority_performance_plan.md](archive/high_priority_performance_plan.md) | `try_assign_for_workers` でワーカーごとに候補収集と評価を実行しているの提案。 |
-| [archive/hw-ai-crate copy.md](archive/hw-ai-crate copy.md) | 現状: `src/systems/soul_ai/`（98ファイル）と `src/systems/familiar_ai/`（70ファイル）が root crate に存在し、全479ファイルの **35%** を占める。root crate 内のどのファイルを変更しても、AI コード含む全体が再コンパイル対象になるの提案。 |
-| [archive/hw-ai-crate-phase2-2026-03-08.md](archive/hw-ai-crate-phase2-2026-03-08.md) | Phase 1 時点ではの計画。 |
-| [archive/hw-ai-crate.md](archive/hw-ai-crate.md) | 現状: `src/systems/soul_ai/`（98ファイル）と `src/systems/familiar_ai/`（70ファイル）が root crate に存在し、全479ファイルの **35%** を占める。root crate 内のどのファイルを変更しても、AI コード含む全体が再コンパイル対象になるの提案。 |
-| [archive/hw-ai-familiar-soul-split-proposal-2026-03-13.md](archive/hw-ai-familiar-soul-split-proposal-2026-03-13.md) | `hw_ai` を `hw_familiar_ai` と `hw_soul_ai` に分割する提案。**実装済み**。 |
-| [archive/hw-ui-crate.md](archive/hw-ui-crate.md) | 現状: `src/interface/`（94ファイル）が root crate に存在し、全479ファイルの **20%** を占める。UI はゲームロジックと同一コンパイル単位にあり、ロジック変更で UI が再コンパイルされる（逆も同様）の提案。 |
-| [archive/hw-visual-domain-decoupling.md](archive/hw-visual-domain-decoupling.md) | `hw_visual` は `hw_jobs` と `hw_logistics` を `Cargo.toml` で直接依存しているの提案。 |
-| [archive/pathfinding-optimization.md](archive/pathfinding-optimization.md) | 経路探索システムの最適化提案 |
-| [archive/performance-bottlenecks-proposal-2026-02-26.md](archive/performance-bottlenecks-proposal-2026-02-26.md) | **現状**: Soul 数が増加するにつれてフレームレートが低下する傾向がある。Space/Spatial グリッドの同期、Room 検出、Soul AI の決定処理など複数の領域で毎フレーム・定期的な全件処理が行われているの提案。 |
-| [archive/plant_trees_visuals.md](archive/plant_trees_visuals.md) | Plant Trees機能 個別ビジュアルアップデート提案 |
-| [archive/recruit-and-task-assignment-algorithm.md](archive/recruit-and-task-assignment-algorithm.md) | リクルート及びタスクアサインの選定アルゴリズム改善提案 |
-| [archive/room-detection-hw-world-extraction-proposal-2026-03-11.md](archive/room-detection-hw-world-extraction-proposal-2026-03-11.md) | `src/systems/room/detection.rs` には、部屋候補の flood fill、境界判定、妥当性判定、ECS entity の再生成が同居しているの提案。 |
-| [archive/room_detection.md](archive/room_detection.md) | 現状: 壁・ドア・床は個別のエンティティとして管理されており、囲まれた空間を論理的に認識する仕組みがないの提案。 |
-| [archive/scaling_performance_bottlenecks.md](archive/scaling_performance_bottlenecks.md) | スケール時パフォーマンス・ボトルネック再評価（2026-02-17 更新） |
-| [archive/selection-separation-2026-03-08.md](archive/selection-separation-2026-03-08.md) | `hw_ui` 分離は進み、UI 本体は `hw_ui` に寄せられたが、`src/interface/selection/` は `selection` 系を root 側が全面担当しているの提案。 |
-| [archive/site-yard-system.md](archive/site-yard-system.md) | **現状**: Familiar ごとに 1 つの `TaskArea`（矩形）が全活動範囲を担っている。建築現場・設備・Stockpile すべてが同じ TaskArea 内に配置され、1 Familiar = 1 エリアの 1:1 対応の提案。 |
-| [archive/task_delegation_implementation_plan.md](archive/task_delegation_implementation_plan.md) | タスク移譲最適化 実装計画 |
-| [archive/think-phase-iteration-optimization-proposal-2026-03-07.md](archive/think-phase-iteration-optimization-proposal-2026-03-07.md) | タスク割り当て（Think/Decide フェーズ）で、2つの O(n) イテレーションがボトルネック候補として特定された:の提案。 |
-| [archive/transport-task-refactor.md](archive/transport-task-refactor.md) | 提案10: 運搬タスクの責務分離と予約処理の統合リファクタ（Phase 2） |
-| [archive/ui-visual-redesign.md](archive/ui-visual-redesign.md) | UI ビジュアル再設計 & 操作感改善ドキュメント |
-| [archive/water-transport-consolidation-proposal-2026-03-07.md](archive/water-transport-consolidation-proposal-2026-03-07.md) | 現状: `GatherWater`（River → Tank）と `HaulWaterToMixer`（Tank → Mixer）は、ほぼ同一の「バケツ搬送」パターンを独立に実装している:の提案。 |
-| [archive/wheelbarraw_sand_stasis_mud_implementation_plan.md](archive/wheelbarraw_sand_stasis_mud_implementation_plan.md) | 実装計画書: Sand / StasisMud の猫車専用運搬化 |
-| [archive/wheelbarrow_only_for_sand_and_stasis_mud.md](archive/wheelbarrow_only_for_sand_and_stasis_mud.md) | 提案: Sand / StasisMud の猫車専用運搬化 |
-| [archive/world-map-lod-strategy-2026-04-06.md](archive/world-map-lod-strategy-2026-04-06.md) | - 現在の地形描画はの計画。 |
+| Document | Status | Notes |
+| --- | --- | --- |
+| [3d-rtt/archived/3d-rendering-rtt-proposal-2026-03-14.md](3d-rtt/archived/3d-rendering-rtt-proposal-2026-03-14.md) | Archived | 建築物は2Dスプライトの静的組み合わせで描画（壁は16+バリアントのテクスチャ切替）の提案。 |
+| [3d-rtt/archived/3d-rendering-rtt-proposal-phase2-2026-03-14.md](3d-rtt/archived/3d-rendering-rtt-proposal-phase2-2026-03-14.md) | Archived | 3d-rendering-rtt-proposal-phase2-2026-03-14 |
+| [3d-rtt/archived/billboard-camera-angle-proposal-2026-03-16.md](3d-rtt/archived/billboard-camera-angle-proposal-2026-03-16.md) | Archived | Camera3d 角度確定提案（旧：ビルボード方式採用） |
+| [3d-rtt/archived/building-visual-layer-plan-2026-03-12.md](3d-rtt/archived/building-visual-layer-plan-2026-03-12.md) | Archived | 建築物ビジュアル多層レイヤー（2D互換・3D準備）詳細設計書 |
+| [3d-rtt/archived/character-3d-rendering-proposal-2026-03-16.md](3d-rtt/archived/character-3d-rendering-proposal-2026-03-16.md) | Archived | キャラクター 3D モデルレンダリング採用提案 |
+| [3d-rtt/archived/outline-rendering-proposal-2026-03-16.md](3d-rtt/archived/outline-rendering-proposal-2026-03-16.md) | Archived | アウトライン生成設計方針 |
+| [3d-rtt/archived/rtt-resolution-scaling-proposal-2026-03-16.md](3d-rtt/archived/rtt-resolution-scaling-proposal-2026-03-16.md) | Archived | RtT 解像度スケーリング設計提案 |
+| [3d-rtt/archived/section-material-proposal-2026-03-16.md](3d-rtt/archived/section-material-proposal-2026-03-16.md) | Archived | SectionMaterial 採用提案 |
+| [3d-rtt/archived/spatial-grid-architecture-plan-2026-03-12.md](3d-rtt/archived/spatial-grid-architecture-plan-2026-03-12.md) | Archived | **の計画。 |
+| [3d-rtt/archived/wfc-terrain-generation-plan-2026-03-12.md](3d-rtt/archived/wfc-terrain-generation-plan-2026-03-12.md) | Archived | **の計画。 |
+| [archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md) | Archived | `src/systems/familiar_ai/decide/task_management/` には、候補収集、優先度評価、搬送元選定、予約影反映、`AssignedTask` 構築など、使い魔 AI の中核ロジックがまとまっていたの提案。 |
+| [archived/08_visual_update_prompts.md](archived/08_visual_update_prompts.md) | Archived | ビジュアルアップデート用アセット生成プロンプト案 |
+| [archived/speech_optimization.md](archived/speech_optimization.md) | Archived | スピーチシステムの最適化提案 (Scale: Soul 300, Familiar 30) |
 

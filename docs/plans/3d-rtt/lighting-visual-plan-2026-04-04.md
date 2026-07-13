@@ -7,10 +7,10 @@
 | 計画ID | `lighting-visual-plan-2026-04-04` |
 | ステータス | `Draft` |
 | 作成日 | `2026-04-04` |
-| 最終更新日 | `2026-04-04` |
+| 最終更新日 | `2026-07-13` |
 | 作成者 | `Codex` |
 | レビュー | `Claude Sonnet 4.6 (2026-04-04)` / `Cursor 追記 (2026-04-04)` |
-| 関連提案 | `N/A` |
+| 関連計画 | `docs/plans/3d-rtt/milestone-roadmap.md` |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的
@@ -44,7 +44,7 @@
 
 - `OutdoorLamp` は `post_process.rs::setup_outdoor_lamp` で `PowerConsumer { demand: OUTDOOR_LAMP_DEMAND }` のみ挿入。ランプ専用の light entity はない。
 - `spawn.rs` では `BuildingType::OutdoorLamp` が **専用 arm ではなく**、`SandPile | BonePile | WheelbarrowParking | OutdoorLamp` の共通 arm に含まれる。3D では `equipment_1x1_mesh` + `Transform::from_xyz(..., TILE_SIZE * 0.3, ...)` + `building_3d_render_layers()` = `[LAYER_3D, LAYER_3D_SHADOW_RECEIVER]` で `Building3dVisual { owner }` を作るが、子 light は持たない。
-- 3D RtT 側には `DirectionalLight`（`shadows_enabled: true`, `illuminance: 12_000.0`, cascade `first_cascade_far_bound: 120.0 / maximum_distance: 500.0`）が 1 本あり、`RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW])` でランプ影もカバーできる構成。
+- 3D RtT 側には primary / extra の `DirectionalLight` があり、`PerfToggles` で個別に有効化される。primary は `illuminance: 12_000.0`、extra は `8_000.0`、両方とも cascade `first_cascade_far_bound: 120.0 / maximum_distance: 500.0` と `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW])` を使う。
 - `SoulShadowProxy3d` は `[LAYER_3D, LAYER_3D_SOUL_SHADOW]` で spawn 済み（`damned_soul/spawn.rs`）。
 - `PoweredVisualState` の on/off は `hw_jobs/src/visual_sync/observers.rs` の 3 つの Observer が管理。`hw_visual/src/power.rs` の `sync_powered_visual_system` は Sprite color のみ同期し、lamp light の `Visibility` は未対応。
 - `cleanup_building_3d_visuals_system`（`building3d_cleanup.rs`）は `Building3dVisual.owner == removed_entity` で全該当 entity を `despawn()` する。
@@ -63,7 +63,8 @@
 - 影は 2D フェイクではなく、3D RtT 側の実ライト shadow で出す。対象は `Soul` と建物に限定する。
 - **spawn 設計**: Outdoor Lamp ごとに `Building3dVisual` 子エンティティとして local light を spawn する。子なので `Building3dVisual` を `despawn()` すれば自動クリーンアップされ、専用クリーンアップシステムが不要。
 - **RenderLayers**: lamp local light に `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW])` を付与する。これは現行 `DirectionalLight` と同じ設定で、建物（`LAYER_3D_SHADOW_RECEIVER`）と Soul shadow proxy（`LAYER_3D_SOUL_SHADOW`）の両方に影が出る。
-- **light 種別**: 初手は `SpotLight` を使用する。`PointLight` は cubemap shadow と `PointLightShadowMap` 管理が必要でコストも重くなりやすい。`SpotLight` は cone を下向きに絞って影範囲を制御しやすい。`shadows_enabled: true`、`range` は `TILE_SIZE * 6.0` 程度、`outer_angle` は狭めに始める。**M1 では Bevy 0.18 の `SpotLight` が RtT で影を落とすことを実行と一次情報（docs.rs / `~/.cargo/registry`）で確認してから本番前提にする。Directional と同一シャドウ設定の「流用」と決め打ちしない。**
+- **light 種別**: 初手は `SpotLight` を使用する。`PointLight` は cubemap shadow と `PointLightShadowMap` 管理が必要でコストも重くなりやすい。`SpotLight` は cone を下向きに絞って影範囲を制御しやすい。`shadow_maps_enabled: true`、`range` は `TILE_SIZE * 6.0` 程度、`outer_angle` は狭めに始める。**M1 では Bevy 0.19 の `SpotLight` が RtT で影を落とすことを実行と一次情報（docs.rs / `~/.cargo/registry`）で確認してから本番前提にする。Directional と同一シャドウ設定の「流用」と決め打ちしない。**
+- **light budget**: 影付き SpotLight の同時有効数に上限を設ける。上限超過時は Camera3d との距離が近い通電ランプだけを有効化し、同距離では Entity 順など安定した tie-break を使う。上限値は実測後に定数化する。
 - **owner 解決**: lamp light child には spawn 時点で `OutdoorLampLight3d { owner: building_entity }` を必ず付与する。これにより M2 の同期は `PoweredVisualState` を持つ building owner と light child を `owner` で直接突き合わせられる。
 - **on/off 同期**: `PoweredVisualState` が変化したとき、lamp light の `Visibility` を `Visible` / `Hidden` に切り替えるシステムを追加する。初期値は `Visibility::Hidden`（`PoweredVisualState` 初期値が `is_powered: false` のため）。
 - Soul の影は `SoulShadowProxy3d` を caster として再利用。visible mesh 側の `NotShadowCaster` 方針は維持する。
@@ -73,11 +74,11 @@
 
 - この影は 3D RtT に参加している `Soul`（`SoulShadowProxy3d`）/ 建物（`Building3dVisual`）にのみ効く。2D foreground 専用 Sprite には効かない。
 - `RenderLayers` は camera / light / mesh が交差しないと効かない。lamp light の layer は必ず `[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]` の 3 つを含める。
-- `DirectionalLightShadowMap { size: 4096 }` はグローバルリソース。Spot / Point など追加ライトの shadow が **別リソース・別パス**になる可能性があるため、動作確認前に推測で「Directional と同一設定の流用」と決め打ちしない。
+- 現行の `DirectionalLightShadowMap { size: 2048 }` はグローバルリソース。Spot / Point など追加ライトの shadow が **別リソース・別パス**になる可能性があるため、動作確認前に推測で「Directional と同一設定の流用」と決め打ちしない。
 
-### Bevy 0.18 API での注意点
+### Bevy 0.19 API での注意点
 
-- `SpotLight` の `shadows_enabled` はデフォルト `false`。明示的に `true` にする。
+- `SpotLight` の `shadow_maps_enabled` はデフォルト `false`。明示的に `true` にする。
 - `range` を大きくしすぎると shadow map 解像度が落ちる。ランプの照明半径に合わせて `TILE_SIZE * 6.0` 程度から始める。
 - `SpotLight` は direction を `Transform::looking_at(...)` で決める必要がある。真下固定で始め、必要なら少し斜め前へ振って影を見やすくする。
 - shadow 付き local light はフレームコストが高い。同時有効数が増えた場合は近傍ランプだけ有効化するフォールバックを検討する。
@@ -91,7 +92,7 @@
 - **メッシュ位置との関係**: 親 `Building3dVisual` の根は現状 `TILE_SIZE * 0.3` 高さ。ライトは子の **ローカル** `Transform` で `y ≈ TILE_SIZE * 0.8`（ポール先）などを指定し、見た目と照らし合わせる。M3 で専用 mesh に差し替える場合はライト子のオフセットを再調整する。
 - 変更ファイル:
   - `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs`
-    - OutdoorLamp 用に `with_children` を追加し、`p.spawn((SpotLight { shadows_enabled: true, range: TILE_SIZE * 6.0, ... }, OutdoorLampLight3d { owner }, ...))` を子として追加
+    - OutdoorLamp 用に `with_children` を追加し、`p.spawn((SpotLight { shadow_maps_enabled: true, range: TILE_SIZE * 6.0, ... }, OutdoorLampLight3d { owner }, ...))` を子として追加
     - 子 `SpotLight` の `Transform::looking_at(...)` で下向き cone（例: ローカルで `looking_at` し、ワールド整合は親 Transform と合成される）
     - RenderLayers は `[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]`（DirectionalLight と同じ）
   - `crates/hw_visual/src/visual3d.rs`
@@ -102,9 +103,10 @@
   - [ ] `OutdoorLamp` ごとに light 子エンティティが生成される（初期は Visibility::Hidden）
   - [ ] light 子エンティティが `OutdoorLampLight3d { owner }` を持つ
   - [ ] building 削除時に light も自動的にクリーンアップされる
-  - [ ] `cargo run` で SpotLight の影が RtT 上に出る（出ない場合は Bevy 0.18 の shadow 設定を一次情報で確認してから続行）
+  - [ ] `cargo run` で SpotLight の影が RtT 上に出る（出ない場合は Bevy 0.19 の shadow 設定を一次情報で確認してから続行）
 - 検証:
-  - `cargo check`
+  - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
   - `cargo run`（上記完了条件の手動確認）
 
 ### M2: 通電状態と lamp light Visibility の同期を実装する
@@ -126,8 +128,10 @@
   - [ ] 通電ランプ近傍の Soul にローカル shadow が出る
   - [ ] `Unpowered` 付与時に lamp shadow が消える（`Visibility::Hidden`）
   - [ ] visible Soul mesh の shadow 設計（`NotShadowCaster`）を壊さない
+  - [ ] 影付き local light の同時有効数が予算上限を超えず、近傍選択が安定している
 - 検証:
-  - `cargo check`
+  - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
   - `cargo run`（手動: 1 基建設→通電→Soul 近傍で影確認→停電で消えることを確認）
 
 ### M3: 建物影・ドキュメント整合を整える
@@ -148,7 +152,8 @@
   - [ ] 影が出る entity（caster / receiver / light）と RenderLayers の対応が docs に残る
   - [ ] Room Light 追加時の拡張ポイント（`OutdoorLampLight3d` パターンの再利用）が明文化される
 - 検証:
-  - `cargo check`
+  - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
   - `cargo run`
 
 ## 6. リスクと対策
@@ -165,7 +170,8 @@
 ## 7. 検証計画
 
 - 必須:
-  - `cargo check`
+  - `cargo check --workspace`
+  - `cargo clippy --workspace --all-targets -- -D warnings`
 - 手動確認シナリオ:
   - ランプ 1 基を Yard 内に建設し、停電時は local shadow が出ないことを確認
   - Soul Spa 稼働後に通電し、ランプ近傍の Soul に影が出ることを確認
@@ -196,10 +202,10 @@
 
 ### 次のAIが最初にやること
 
-1. `spawn.rs` で OutdoorLamp が `SandPile | … | OutdoorLamp` の**共通 arm**にあることを踏まえ、OutdoorLamp 専用に分離するか spawn 直後に `with_children` するなどして、`Building3dVisual` の子として `SpotLight` を追加する（`shadows_enabled: true`, `range: TILE_SIZE * 6.0`, `Visibility::Hidden`, RenderLayers: `[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]`）。親メッシュは `TILE_SIZE * 0.3`、ライト子はローカル y でポール高（例 `TILE_SIZE * 0.8`）を調整。
+1. `spawn.rs` で OutdoorLamp が `SandPile | … | OutdoorLamp` の**共通 arm**にあることを踏まえ、OutdoorLamp 専用に分離するか spawn 直後に `with_children` するなどして、`Building3dVisual` の子として `SpotLight` を追加する（`shadow_maps_enabled: true`, `range: TILE_SIZE * 6.0`, `Visibility::Hidden`, RenderLayers: `[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]`）。親メッシュは `TILE_SIZE * 0.3`、ライト子はローカル y でポール高（例 `TILE_SIZE * 0.8`）を調整。
 2. `hw_visual/src/visual3d.rs` に `OutdoorLampLight3d { owner: Entity }` マーカーを追加し、spawn 時に同時付与する。
 3. `hw_visual/src/power.rs` に `sync_lamp_light_visibility_system` を追加し、M2 のクエリ方針（`OutdoorLampLight3d.owner` と `PoweredVisualState` の照合、child 走査なし）に従う。
-4. `cargo check` → `cargo run` で Spot の影と通電同期を手動確認する。
+4. `cargo check --workspace` と clippy を通し、`cargo run` で Spot の影・通電同期・同時有効数上限を手動確認する。
 
 ### 既存コードの要点（実装前に確認）
 
@@ -220,7 +226,6 @@
 - owner 解決は `Building3dVisual` の child 走査に頼らず、`OutdoorLampLight3d { owner }` で直接結ぶ。
 - visible Soul mesh は `NotShadowCaster`。lamp light の影を出したい場合は `SoulShadowProxy3d`（`[LAYER_3D, LAYER_3D_SOUL_SHADOW]`）が必要。
 - lamp shadow は 3D RtT 参加物にしか効かない。2D foreground にも効かせたい場合は別設計になる。
-- 既存ワークツリーに `docs/plans/3d-rtt/archived/wfc-ms2-5-terrain-zone-mask.md` の未コミット変更があるため、触らない。
 - `spawn.rs` の OutdoorLamp は他建物と **共通 arm** のため、実装時は M1 の (a)(b) のどちらで子ライトを足すか先に決める。
 
 ### 参照必須ファイル
@@ -238,7 +243,7 @@
 
 ### 最終確認ログ
 
-- 最終 `cargo check`: `2026-04-04` / `not run`
+- 最終 `cargo check --workspace`: `2026-07-13` / `not run (plan only)`
 - 未解決エラー:
   - なし
 
@@ -246,7 +251,8 @@
 
 - [ ] 目的に対応するマイルストーンが全て完了
 - [ ] 影響ドキュメントが更新済み
-- [ ] `cargo check` が成功
+- [ ] `cargo check --workspace` が成功
+- [ ] `cargo clippy --workspace --all-targets -- -D warnings` が成功
 
 ## 10. 更新履歴
 
@@ -256,3 +262,4 @@
 | `2026-04-04` | `Codex` | 焦点を glow 表現から Outdoor Lamp のローカル shadow 実装へ更新 |
 | `2026-04-04` | `Claude Sonnet 4.6` | コードベース調査に基づき全節をブラッシュアップ：spawn設計（Building3dVisual の子エンティティ化）、RenderLayers 具体値の明記、M1-M3 の変更ファイルと実装詳細の精緻化、M4をM3に統合、AI引継ぎメモに実装要点テーブル追加 |
 | `2026-04-04` | `Cursor` | レビュー反映：`spawn.rs` 共通 match arm の明記、メッシュ高とライト子のオフセット、Spot shadow の一次情報確認、M2 のクエリ方針（`hw_visual` 境界）、見出し `### M1-M3`、検証・引継ぎの追記、更新履歴の誤字修正 |
+| `2026-07-13` | `Codex` | Bevy 0.19 API、workspace 検証、影付き local light の同時有効数予算を反映 |
