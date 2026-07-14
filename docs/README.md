@@ -51,6 +51,7 @@
 - [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン（コーディング規約・MCP活用）。
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
+- [plans/hvac-plumbing-plan-2026-07-13.md](plans/hvac-plumbing-plan-2026-07-13.md): 換気・導水・Room 認可を M0〜M4 で導入する実装計画。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。
-- [proposals/hvac-plumbing-proposal.md](proposals/hvac-plumbing-proposal.md): 空調・衛生の建築設備導入と世界観への落とし込み提案。
+- [proposals/hvac-plumbing-proposal.md](proposals/hvac-plumbing-proposal.md): 採用済みの空調・衛生インフラ提案（世界観・採否理由）。
 - `architecture.md` / `cargo_workspace.md` / `familiar_ai.md` / `soul_ai.md`: crate 境界と `root shell` 方針（thin shell、root adapter、leaf plugin の登録責務）を同期済み。

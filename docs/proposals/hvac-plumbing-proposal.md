@@ -5,15 +5,17 @@
 | 項目 | 値 |
 | --- | --- |
 | ドキュメントID | `hvac-plumbing-proposal-2026-07-05` |
-| ステータス | `Draft` (第2版: 設定拡充・既存システム整合) |
+| ステータス | `Accepted / Promoted`（実装契約は関連計画を正本とする） |
 | 作成日 | `2026-07-05` |
-| 最終更新日 | `2026-07-07` |
+| 最終更新日 | `2026-07-14` |
 | 作成者 | `Antigravity`（第2版更新: Claude） |
-| 関連計画 | `TBD` (承認後に `docs/plans/hvac-plumbing-plan.md` を作成) |
+| 関連計画 | [hvac-plumbing-plan-2026-07-13.md](../plans/hvac-plumbing-plan-2026-07-13.md) |
 | 関連Issue/PR | `N/A` |
 | 前提ドキュメント | [world_lore.md](../world_lore.md) / [room_detection.md](../room_detection.md) / [soul_energy.md](../soul_energy.md) / [building.md](../building.md) / [logistics.md](../logistics.md) |
 
 ---
+
+> 本提案は採用済みの世界観・機能方針と採否理由を保持する。現行コードに合わせた実装順序、型所有、Room 占有、壁 lookup、配管レイヤー、状態モデルは関連計画を正本とする。
 
 ## 1. 背景と問題
 
@@ -42,22 +44,22 @@
 │   [水のインフラ]                             │
 │   骨の導水管 💧 ────> 罪泥(Lethe Sludge)を排泥 │
 │                                              │
-│   ※満たされない部屋は「機能停止・動作不可」  │
+│   ※瘴気侵食または断水した本設設備は機能停止   │
 └──────────────────────────────────────────────┘
 ```
 
 ### 2.1 王の建築基準：認可済み部屋（Sanctioned Room）
 
-- **世界観**: `Room` 検出で成立した密閉空間は、地獄の行政上はまだ「密閉された罪の箱」に過ぎない。換気と排泥の条件を満たした部屋だけが **認可済み部屋（Sanctioned Room）** として扱われ、本設設備の稼働許可を得る。
+- **世界観**: `Room` 検出で成立した密閉空間は、地獄の行政上はまだ「密閉された罪の箱」に過ぎない。換気と排泥の条件を満たした部屋だけが **認可済み部屋（Sanctioned Room）** として扱われ、王庁の正式な認証を得る。
 - **竣工検査の担い手**: 認可の判定はゲーム的には自動だが、世界観上は**下級官吏である使い魔**（→ [world_lore.md](../world_lore.md) §4.1）が王庁に竣工検査書を提出する体裁を取る。使い魔が監督官と検査官を兼ねるため、部屋が認可されるたびに使い魔が誇らしげにするなどの演出余地がある。
-- **ゲーム的意味**: Room 成立は建築の第一段階、インフラ接続は本設利用の第二段階。仮設設備は現場裁量で動かせるが、王の監査対象になる本設設備は認可済み部屋でなければ動作しない。
-- **UI 表現案**: Room overlay に `Enclosed（密閉）/ Sanctioned（認可済）/ MiasmaInfested（怠惰侵食）` の状態差を持たせ、インフラ不足時は「換気不足」「排泥不足」を理由として表示する。認可時に印章（スタンプ）風のエフェクトを出すと「王の認可」の体感が強まる。
+- **ゲーム的意味**: Room 成立は建築の第一段階、換気と排泥の充足は本設利用の第二段階。`Ventilated && Drained` の Room だけが `Sanctioned` になる。ただし、認可状態そのものを停止条件にはせず、`Stagnant + Drained` は行政上未認可の猶予運転として警告だけを表示し、本設設備を強制停止しない。`MiasmaInfested` または Room 全体の `Unwatered` という重大違反だけが、その Room の本設設備を機能停止させる。
+- **UI 表現案**: `RoomSanctionState`（`Enclosed / Sanctioned`）、換気状態（`Ventilated / Stagnant / MiasmaInfested`）、排泥状態（`Drained / Unwatered`）を別軸で保持し、Room overlay ではそれらを合成して表現する。info panel には「換気不足」「排泥不足」などの理由を個別表示し、認可時には印章（スタンプ）風のエフェクトを出す。
 
 ### 2.2 風のインフラ：怠惰の侵食を防ぐ「風の循環」
 
 - **世界観**: 密閉された部屋（Room）を放置すると、空間に囚われた魂たちの「怠惰の念」が「**怠惰の瘴気（Miasma）**」として物質化し、室内に滞留する。この瘴気は本設の石造建築を腐食させ、機械設備を「怠惰の呪い」で機能停止させる。王は瘴気に塗れた施設の稼働を認めないため、部屋には必ず風を循環させる設備が義務付けられる。
 - **既存カノンとの接続**: 怠惰の瘴気は新規設定ではない。[world_lore.md](../world_lore.md) §2.2 で屋外に漂う「薄紫色の靄」がすでに怠惰の瘴気と定義されており、§1.2 では懶惰の野の特徴として「遅延と停滞が常態化」した時間の流れが設定されている。本提案はこれを**「屋外では薄く拡散している瘴気が、密閉空間では濃縮される」**という一貫した物理法則に昇格させるものである。集会スポットの紫オーラ（怠惰の象徴）と同系色で表現することで、「紫 = 怠惰の濃度」という色彩言語が世界全体で統一される。
-- **停滞現象としての瘴気**: 怠惰の瘴気は単なる悪臭ではなく、**部屋の内部時間を遅らせる停滞現象**である。換気が足りない部屋では、歯車、弁、炉、祭壇などの動作周期が鈍り、やがて「まだ働き始めなくてよい」という呪いに飲まれて停止する。設備が「壊れる」のではなく「怠ける」——これが地獄のインフラ障害である。
+- **停滞現象としての瘴気**: 怠惰の瘴気は単なる悪臭ではなく、**部屋の内部時間を遅らせる停滞現象**である。部分換気しかない部屋では歯車、弁、炉、祭壇などの動作周期が鈍る兆候が警告として現れ、風が完全に途絶えると「まだ働き始めなくてよい」という呪いに飲まれて停止する。設備が「壊れる」のではなく「怠ける」——これが地獄のインフラ障害である。
 
 ### 2.3 水のインフラ：罪泥の堆積を洗い流す「骨の導水路」
 
@@ -82,8 +84,8 @@
 
 - 空調・衛生を人間界の概念から脱却させ、**「怠惰の瘴気（風）」と「罪泥の排泥（水）」という地獄の建築ルール**として導入する。
 - `Room` を「囲われた空間」から「王の基準に認可された本設空間」へ段階的に発展させ、Room 検出システムに初のゲームプレイ上の意味を与える。
-- 密閉された `Room` 内の換気が基準を満たさない場合、その部屋にある本設設備が**「怠惰の侵食」により稼働不可（機能停止）**になる仕様を導入する。
-- 川から本設設備へ水を送る「骨の導水管」ネットワークを構築し、インフラ未接続（断水）時の設備停止を制御する。
+- 密閉された `Room` の換気能力が 0 になり `MiasmaInfested` へ落ちた場合、その部屋にある本設設備が**「怠惰の侵食」により稼働不可（機能停止）**になる仕様を導入する。部分換気の `Stagnant` は警告のみとする。
+- 川から Room 内の `SludgePurifier` へ水を送る「骨の導水管」ネットワークを構築し、Purifier の到達性から Room 単位の排泥状態と断水時の設備停止を制御する。
 - 電化換気設備・取水門を **Soul Energy の新規消費者**として追加し、電力システムの需要側を拡充する（[soul_energy.md](../soul_energy.md) §11 の将来拡張に対応）。
 
 ## 4. 非目的（Non-Goals）
@@ -98,20 +100,20 @@
 
 ## 5. 新規建築物と世界観表現
 
-素材・数値はすべてバランス調整前の**案**。電力需要は既存スケール（Soul 1体の発電 = 1.0W、Lamp 需要 = 0.2W）に合わせている。
+初期実装対象である Vent / Chimney / Fan / Intake / Conduit / Purifier の素材・数値は、計画着手時の**初期実装値として採用済み**であり、M2 / M3 の手動プレイ結果に応じて調整する。follow-up 設備の値は引き続き構想段階とする。電力需要は既存スケール（Soul 1体の発電 = 1.0W、Lamp 需要 = 0.2W）に合わせている。
 
 ### 5.1 風（空調）設備
 
-| 設備名 | 世界観説明 | ゲーム的機能（案） |
+| 設備名 | 世界観説明 | 採用方針 |
 |:---|:---|:---|
 | **叫びの風穴**<br>`Screaming Vent` | 悔恨の岩（叫び声がこもった灰色の岩 → [world_lore.md](../world_lore.md) §2.1）を彫り抜いた石造換気口。岩に封じられた罪人の叫びを風圧に変換して空気を押し出す。壁に埋め込んで設置する。 | 壁用(1x1)。非電化。<br>換気能力 **1.0**。<br>素材: 岩×2 + 骨×1 |
 | **溜息煙突**<br>`Sigh Chimney` | 部屋に溜まった怠惰な溜息を屋外へ逃がす縦穴。強制排気ではないが、外気に接する壁では安定して機能する。 | 壁用(1x1)。非電化。<br>換気能力 **2.0**。**外気接続壁**（Room 外周の屋外側）にのみ設置可。<br>素材: 木材×2 + 岩×2 |
 | **黒鞭の送風機**<br>`Scourge Fan` | 鞭を振るうような激しい回転で怠惰な空気を強制排気する大型送風機。錆びた鉄の羽根に骨のベルトを掛けた構造（→ [world_lore.md](../world_lore.md) §6.2 の Rusty Metal モチーフ）。 | 床置き(1x1)。**要電力 0.5W**。<br>換気能力 **5.0**。<br>素材: 木材×2 + 骨×6 |
-| **瘴気検査針**<br>`Miasma Gauge` | 部屋の停滞度を測る呪術計器。針が寝るほど部屋そのものが怠けていることを示す。 | 床置き(1x1)。非電化。<br>換気状態の可視化のみ（判定に不要）。UI 補助設備として後続マイルストーンで検討。 |
+| **瘴気検査針**<br>`Miasma Gauge` | 部屋の停滞度を測る呪術計器。針が寝るほど部屋そのものが怠けていることを示す。 | 床置き(1x1)。非電化。<br>換気状態の可視化のみ（判定に不要）。M4 評価後の別計画で検討。 |
 
 ### 5.2 水（衛生）設備
 
-| 設備名 | 世界観説明 | ゲーム的機能（案） |
+| 設備名 | 世界観説明 | 採用方針 |
 |:---|:---|:---|
 | **忘却の川の取水門**<br>`Lethe Intake Gate` | 忘却の川の黒い水を汲み上げ、導水網に加圧送水する大型取水装置。水と共に流れてくる他人の記憶を濾し取る格子を持つ。 | 川岸限定(3x2)。**要電力 1.0W**。流体ネットワークの供給源。<br>素材: 木材×6 + 岩×6 |
 | **骨の導水管**<br>`Ossuary Conduit` | 怠惰な魂の成れの果てである骨を繋ぎ合わせた中空配管。壁や床の下に重ねて敷設できる。管の継ぎ目からかすかな寝息が聞こえる。 | 配管(1x1)。既存建物と同一タイルに重ね敷設可。ドラッグ配置対応。<br>素材: 骨×1 / タイル（BonePile から量産可能） |
@@ -140,9 +142,9 @@
 | 系統 | 判定単位 | 主な失敗状態 | ゲーム上の圧力 |
 |:---|:---|:---|:---|
 | **風（換気）** | `Room` 単位 | 怠惰の侵食 | 部屋の広さ・密閉度に応じて換気設備を増やす |
-| **水（排泥）** | 本設設備または `SludgePurifier` 単位 | 断水・泥詰まり | 川岸から本設区画まで配管網を計画する |
+| **水（排泥）** | `Room` 単位（Room 内 Purifier の到達性を集約） | `Unwatered` / 断水・泥詰まり | 川岸から本設区画まで配管網を計画する |
 
-風は「部屋を認可する」ための面管理、水は「設備を稼働し続ける」ためのネットワーク管理として扱う。これにより Room 検出、電力グリッド、物流と役割が重なりすぎないようにする。
+風は Room の換気能力を集計する面管理、水は Purifier のネットワーク到達性を Room の排泥状態へ集約する経路管理として扱う。両方を Room 認可の別軸とすることで、Room 検出、電力グリッド、物流と役割が重なりすぎないようにする。
 
 ### 6.2 部屋の「換気基準」と「怠惰の侵食」
 
@@ -151,61 +153,67 @@
 - 部屋に設置された**稼働中**（電化設備は通電中）の換気設備の能力合計が provided となる。
 - 換気状態は 3 段階:
 
-| 状態 | 条件案 | 効果案 |
+| 状態 | 初期実装条件 | 効果 |
 |:---|:---|:---|
-| `Ventilated` / 換気済み | `provided >= required` | 認可条件を充足。本設設備が通常稼働可能 |
+| `Ventilated` / 換気済み | `provided >= required` | 換気側の認可条件を充足。排泥状態は別判定 |
 | `Stagnant` / 停滞 | `0 < provided < required` | 警告表示のみ。将来は効率低下に使える |
-| `MiasmaInfested` / 怠惰侵食 | `provided == 0`、または不足が一定時間継続 | 部屋内の本設設備が機能停止 |
+| `MiasmaInfested` / 怠惰侵食 | `provided == 0` | 部屋内の本設設備が機能停止 |
 
-- 侵食された部屋の**本設設備**には機能停止マーカーが付与され稼働できなくなる。仮設カテゴリ（`Temporary`）と既存 Plant（Tank / MudMixer / SoulSpa）は免除。
-- **「本設設備」の判定【決定済み】**: `BuildingCategory` に新バリアント **`Permanent`** を追加し、`category() == Permanent` の設備のみをインフラ要件（侵食・断水による機能停止）の対象とする。既存カテゴリ（Structure / Architecture / Plant / Temporary）は一切影響を受けない。現時点のコードベースには `Permanent` に属する設備がまだ存在せず、最初の被適用者は `SludgePurifier` 自身になる見込み。本提案は将来の本設施設（罪人大楼の構成設備）に先行してインフラ層を整備するものである。
+- 初期実装は即時判定とし、侵食の猶予タイマーは持たない。猶予時間は follow-up の検討対象とする。
+- 侵食された部屋の**本設設備**には `InfrastructureDisabled` が付与され稼働できなくなる。仮設カテゴリ（`Temporary`）と既存 Plant（Tank / MudMixer / SoulSpa）は免除。
+- **「本設設備」の判定【決定済み】**: `BuildingCategory` に新バリアント **`Permanent`** を追加し、`category() == Permanent` の完成設備のみをインフラ要件（侵食・断水による機能停止）の対象とする。既存カテゴリ（Structure / Architecture / Plant / Temporary）は一切影響を受けない。`OssuaryConduit` の `Permanent` は配置メニュー分類だけに使い、通常の完成 `Building` や停止対象にはしない。最初の被適用設備は `SludgePurifier` 自身になる見込みであり、本提案は将来の本設施設（罪人大楼の構成設備）に先行してインフラ層を整備するものである。
 
 ### 6.3 流体ネットワーク（排泥システム）
 
 - `LetheIntakeGate`（供給源） → `OssuaryConduit`（配管） → `SludgePurifier`（消費者）を、電力グリッドと同様のグラフ接続（流体グリッド）で結ぶ。
 - 接続判定は配管タイルの 4 近傍連結成分。流量計算はせず「稼働中の取水門に到達できるか」の bool のみ（Non-Goal 準拠）。
-- 配管が取水門と繋がっていない、または取水門が停電している場合、`SludgePurifier` は **「断水・泥詰まり」** 状態となり動作を停止する。
-- `SludgeBasin` を導入する場合、供給不足や一時停電が起きても短時間だけ停止を猶予できる。バッファ満杯で関連設備は停止する（後続マイルストーン）。
+- 配管が取水門と繋がっていない、または取水門が停電している場合、その `SludgePurifier` 個体に `Unwatered` を付けて動作を停止する。
+- Room 内に `Unwatered` でない Purifier が 1 基以上あれば `RoomDrainageState::Drained`、Purifier がないか全基が `Unwatered` なら `RoomDrainageState::Unwatered` とする。複数基のうち一部だけが断水した場合、到達不能な Purifier 個体だけを停止し、Room と他の本設設備は `Drained` を維持する。判定は network reachability → Purifier 個体状態 → Room drainage → sanction / disabled の一方向とし、`InfrastructureDisabled` を排泥判定の入力へ戻さない。
+- `SludgeBasin` を導入する場合、供給不足や一時停電が起きても短時間だけ停止を猶予できる。バッファ満杯で関連設備は停止する（M4 評価後の follow-up）。
 
 ### 6.4 ECS 設計案（既存パターンの踏襲）
 
-【決定済み】換気・流体のコンポーネント / Relationship / recalc システムは**新設クレート `crates/hw_infra`** に集約する（`hw_energy` は電力専任のまま変更しない。依存方向は `hw_infra` → `hw_energy`（`Unpowered` 参照）を想定）。実装は `hw_energy` で確立済みのパターンをそのまま流用する。
+【決定済み】換気・流体のコンポーネント / Relationship / recalc システムは**新設クレート `crates/hw_infra`** に集約する（`hw_energy` は電力専任のまま変更しない。依存方向は `hw_infra` → `hw_energy`（`Unpowered` 参照）を想定）。`PowerConsumer` / `Unpowered` と Relationship の型パターンは `hw_energy` を参照するが、電力 lifecycle と cross-domain system ordering は現行どおり root `bevy_app` の adapter で接続し、leaf crate の実装をそのまま複製しない。
 
 | 要素 | 電力（実装済み） | 換気（本提案） | 流体（本提案) |
 |:---|:---|:---|:---|
 | グリッド実体 | `PowerGrid`（Yard 単位） | `Room` 自体 | `FluidGrid`（配管連結成分単位） |
-| 供給側 Relationship | `GeneratesFor(grid)` | `VentilatesFor(room)`※ | `SuppliesTo(grid)` |
+| 供給側 Relationship | `GeneratesFor(grid)` | —（床 / 壁 lookup から毎回集計）※ | `SuppliesTo(grid)` |
 | 消費側 Relationship | `ConsumesFrom(grid)` | —（部屋内判定） | `DrainsFrom(grid)` |
-| 停止マーカー | `Unpowered` | `MiasmaInfested`（Room に付与） | `Unwatered` |
+| 派生状態 | `Unpowered` | `RoomVentilationState` | `RoomDrainageState` / Purifier の `Unwatered` |
+| 本設設備への停止反映 | 消費設備自身を停止 | Room の `MiasmaInfested` を理由に `InfrastructureDisabled` | 個体 `Unwatered` は該当 Purifier、Room state の `Unwatered` は Room 内本設設備へ `InfrastructureDisabled` |
 | 再計算システム | `grid_recalc_system` | `room_ventilation_recalc_system` | `fluid_grid_recalc_system` |
 | 視覚反映 | `PoweredVisualState`（VisualMirror） | Room overlay 色変更 | 同 VisualMirror パターン |
 
 ※ **重要な実装上の注意（Room の揮発性）**: [room_detection.md](../room_detection.md) §4.3 の通り、Room エンティティは再検出のたびに**全 despawn → 再スポーン**される。したがって:
-- Room を Target とする Relationship（`VentilatesFor` 等）は再検出のたびに消滅する。素直に永続 Relationship を張るのではなく、**recalc 時に `RoomTileLookup` で換気設備の設置タイルから Room を毎回逆引きする**方式を推奨する（電力と違い供給側の登録が不要になり、despawn 問題を回避できる）。
-- 「不足が一定時間継続で侵食」のタイマーを Room エンティティに持たせると再検出でリセットされる。タイマーが必要なら Room の外（タイル集合をキーとする Resource 等）に置くか、初期実装では即時判定にする。
+- Room を Target とする Relationship（`VentilatesFor` 等）は再検出のたびに消滅する。素直に永続 Relationship を張るのではなく、**床設備は `RoomTileLookup`、壁設備は計画で追加する `RoomBoundaryLookup` から Room を毎回逆引きする**（電力と違い供給側の永続登録が不要になり、despawn 問題を回避できる）。
+- 初期実装は `provided == 0` を即時 `MiasmaInfested` とする。follow-up で猶予タイマーを導入する場合も Room エンティティには持たせず、タイル集合をキーとする Resource 等で再検出をまたいで保持する。
 
-- **Scourge Fan の電力接続**: 既存の `PowerConsumer` + `#[require(Unpowered)]` + `on_power_consumer_added` Observer をそのまま使う。PowerGrid は Yard 単位のため、**Yard 外に建てた送風機は常時 `Unpowered`**（Lamp と同じサイレント失敗 → [soul_energy.md](../soul_energy.md) §8）。設置時 UI で警告を出すこと。
-- **配管の dirty 追跡**: 導水管の追加・削除で連結成分が変わるため、`room_detection` の dirty マーキング（Observer + クールダウン付き再計算）と同じ方式を流用する。
+- **Scourge Fan の電力接続**: 既存の `PowerConsumer` + `#[require(Unpowered)]` + `on_power_consumer_added` Observer を使う。PowerGrid entity は Yard 所有のまま、Consumer lookup を paired Site まで拡張する。pair を解決できない送風機は `Unpowered` のままなので、設置時 UI で警告を出すこと。
+- **配管の dirty 追跡**: 導水管の追加・削除では topology dirty、取水門の通電変化では supply dirty を立てる。連結成分の再構築は topology dirty frame に限定し、停電だけで flood fill を再実行しない。
 
 ### 6.5 進行段階（プレイヤー体験）
 
 | 段階 | 解禁される考え方 | プレイヤー体験 | 依存する既存システム |
 |:---|:---|:---|:---|
 | 序盤 | 仮設設備と手動水搬送 | 屋外作業・仮設拠点で建設を始める | バケツ搬送（実装済み） |
-| 中盤 | `Room` 成立と小規模換気 | 小部屋を作り、風穴・煙突で認可を取る | Room 検出（実装済み） |
-| 中盤後半 | 電力付き強制換気 | 大部屋に送風機を入れ、発電 Soul の配分を悩む | Soul Energy（実装済み） |
-| 後半 | 導水・排泥ネットワーク | 川岸から本設区画へ導水管を伸ばし、停止しない施設網を作る | 本提案の流体グリッド |
+| 中盤 | `Room` 成立と小規模換気 | 小部屋を作り、風穴・煙突で換気基準を満たす | Room 検出（実装済み） |
+| 中盤後半 | 電力付き強制換気 | 大部屋の換気基準を維持し、発電 Soul の配分を悩む | Soul Energy（実装済み） |
+| 後半 | 導水・排泥ネットワーク | 川岸から本設区画へ導水管を伸ばし、換気と排泥を満たして初めて Room の認可を取る | 本提案の流体グリッド |
 
-電化換気は「Dream トレードオフ三角形」（[soul_energy.md](../soul_energy.md) §10）に直接接続する: 大部屋を認可し続けるには発電 Soul が要り、発電 Soul を増やせば労働力が減る。**部屋を広くする欲と電力予算の綱引き**が中盤のマクロ判断になる。
+電化換気は「Dream トレードオフ三角形」（[soul_energy.md](../soul_energy.md) §10）に直接接続する: 大部屋の換気基準を維持するには発電 Soul が要り、発電 Soul を増やせば労働力が減る。**部屋を広くする欲と電力予算の綱引き**が中盤のマクロ判断になり、後半の排泥網完成によって初めて Room 認可へ到達する。
 
 ---
 
 ## 7. 変更対象（想定）
 
+実装上の完全な変更ファイル一覧と crate 境界は関連計画を正本とする。提案段階で想定する責務領域は次のとおり。
+
 - **新設** `crates/hw_infra`: 換気・流体のコンポーネント / Relationship / recalc システム / 定数（`hw_energy` パターン踏襲）
-- `crates/hw_world`: Room への換気状態反映、overlay 色分岐
+- `crates/hw_world`: Room 検出 role、`RoomBoundaryLookup`、Room overlay geometry
 - `crates/hw_jobs`: `BuildingType` 追加（Vent / Chimney / Fan / IntakeGate / Conduit / Purifier）、`BuildingCategory::Permanent` 追加、資材要件
-- `crates/bevy_app`: 配置 UI（壁埋め込み・川岸限定・配管ドラッグ）、info panel 表示
+- `crates/bevy_app`: cross-domain system ordering、電力 lifecycle adapter、配置 UI、info panel ViewModel、visual sync
+- `crates/hw_ui`: 配置・表示 widget と intent
 - `docs/`: `building.md` / `soul_energy.md` / `room_detection.md` / `cargo_workspace.md` / `crate-boundaries.md` 更新、新規 `infrastructure.md`
 
 ## 8. 代替案と比較
@@ -223,73 +231,71 @@
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
 | Room エンティティの揮発性（再検出で despawn）を見落として Relationship / タイマーが消える | 換気状態が頻繁にリセットされる不具合 | §6.4 の逆引き方式を採用。侵食タイマーは初期実装では持たない（即時判定） |
-| 停止スパイラル（停電 → 送風機停止 → 部屋侵食 → 設備停止 → 復旧手段喪失） | 詰み状態 | 仮設設備は常に免除されるため、手動搬送・仮設ワークフローで必ず復旧可能。非電化の風穴・煙突だけでも小部屋は認可できる |
-| 電力需要の急増で既存バランス崩壊 | Lamp 運用が割を食う | 送風機 0.5W / 取水門 1.0W は案。マイルストーンごとに実プレイで調整 |
-| 配管連結成分の再計算コスト | 大規模配管網でスパイク | dirty マーキング + クールダウン（room_detection と同方式）で毎フレーム全再計算を回避 |
-| Yard 外設置の送風機が黙って動かない | プレイヤーが原因不明のまま放置 | 設置ゴーストで Yard 外警告。info panel に「no grid」表示（Lamp と同じ文法） |
+| 停止スパイラル（停電 → 送風機停止 → 部屋侵食 → 設備停止 → 復旧手段喪失） | 詰み状態 | 仮設設備は常に免除され、手動搬送・仮設ワークフローを復旧に使える。非電化の風穴・煙突で換気条件を戻し、電力復旧後は Intake / Purifier が network reachability から自動復帰する |
+| 電力需要の急増で既存バランス崩壊 | Lamp 運用が割を食う | 送風機 0.5W / 取水門 1.0W を初期値として採用し、M2 / M3 の手動プレイで調整 |
+| 配管連結成分の再計算コスト | 大規模配管網でスパイク | topology dirty / supply dirty を分離し、連結成分の再構築を topology dirty frame に限定する |
+| Site 内の送風機が Yard grid を解決できず黙って動かない | プレイヤーが原因不明のまま放置 | paired Site から Yard grid を解決し、失敗時は設置ゴーストと info panel に `no grid` を表示 |
 | セーブ互換 | 新コンポーネント追加でロード失敗 | save_load の対応をマイルストーンごとに含める。状態はすべて再計算可能な設計にし、セーブ対象を最小化する |
 
 ## 10. 検証計画
 
-- `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` / `cargo clippy --workspace`（0 warning 維持）
+- `cargo check --workspace`
+- `cargo clippy --workspace --all-targets -- -D warnings`（0 warning 維持）
+- `cargo fmt --all --check` / `git diff --check`
 - 手動確認シナリオ:
   1. 3×3 の部屋を建て、風穴 1 個で `Ventilated` になること
   2. 風穴なしの部屋が `MiasmaInfested` になり、overlay が紫系に変わること
   3. 送風機のみの部屋で停電させると侵食に落ちること（電力連動）
-  4. 取水門 → 導水管 → 浄化盤を接続し、管を 1 本壊すと `Unwatered` になること
+  4. 取水門 → 導水管 → 浄化盤を接続し、管を 1 本壊すと Purifier と担当 Room が `Unwatered` になること
   5. 壁の建て直しで Room が再検出されても換気状態が正しく復元されること（揮発性トラップの回帰確認）
   6. 既存の MudMixer / Tank / SoulSpa のワークフローが一切変化しないこと
 - セーブ → ロードで各状態が復元（または正しく再計算）されること
 
-## 11. ロールアウト（段階導入）
+## 11. 実装計画への委譲
 
-各マイルストーンは単独でシップ可能な粒度とする。
+実装順序、変更ファイル、出荷判断、ロールバック方針は [hvac-plumbing-plan-2026-07-13.md](../plans/hvac-plumbing-plan-2026-07-13.md) を正本とする。本提案では世界観・採用方針・初期バランス・採否理由だけを保持し、マイルストーン契約を重複管理しない。
 
-| マイルストーン | 内容 | 出荷判断 |
-|:---|:---|:---|
-| **M1: 認可状態の可視化** | Room に `Enclosed / Ventilated / MiasmaInfested` 判定と overlay 表示のみ（設備はまだ機能停止しない） | 判定と表示が安定していること |
-| **M2: 換気設備と侵食** | 風穴・煙突・送風機の建設、電力接続、本設設備の機能停止 | 停止スパイラルの安全弁確認 |
-| **M3: 流体ネットワーク** | 取水門・導水管・浄化盤、`Unwatered` 判定 | 配管 dirty 再計算の負荷確認 |
-| **M4: 拡張** | 罪泥溜め（バッファ）、懺悔弁（区画制御）、瘴気検査針（UI 補助） | M3 までの実プレイ評価次第 |
+現行計画は M0（Room 検出契約）→ M1（基本換気）→ M2（高度換気と電力）→ M3（導水層と FluidGrid）→ M4（認可・本設停止・統合 UI）の順で進める。罪泥溜め、懺悔弁、瘴気検査針は M4 評価後に別計画として起票する。
 
-問題発生時は該当マイルストーンの機能フラグを畳む（判定システムを外せば既存挙動に戻る設計を維持する）。
-
-## 12. 未解決事項（Open Questions）
+## 12. 計画化時の決定事項
 
 ### 決定済み（2026-07-07）
 
 - [x] コンポーネント群の配置 → **独立クレート `crates/hw_infra` を新設**（`hw_energy` は電力専任のまま）
 - [x] 「本設設備」の判定方法 → **`BuildingCategory::Permanent` を追加**（マーカーコンポーネント案は不採用）
 
-### 未解決
+### 計画昇格時に決定（2026-07-13）
 
-- [ ] 侵食の即時判定 vs 猶予タイマー（タイマー採用時の Room 揮発性対策の具体設計）
-- [ ] 換気能力・電力需要・資材コストの数値バランス（§5 の値はすべて仮）
-- [ ] 導水管の重ね敷設の描画レイヤーと、壁下敷設時の当たり判定
-- [ ] `SludgePurifier` 1 台がカバーする範囲の定義（Room 単位か、半径か、設備直結か）
-- [ ] Room 認可を電力の「Room 接続（Phase 2）」構想（[soul_energy.md](../soul_energy.md) §11）と統合するか
+- [x] 侵食は初期実装では即時判定。猶予タイマーは follow-up とする。
+- [x] §5 の初期実装対象設備の値を初期定数として採用し、M2 / M3 の手動プレイで調整する。
+- [x] 導水管は通常 `Building` と別のインフラ層に置き、専用 overlay で壁下も確認可能にする。
+- [x] `SludgePurifier` 1 台は設置先の Room 全体を担当する。
+- [x] Room 単位 PowerGrid とは統合せず、Fan は paired Site から既存 Yard grid を解決し、Intake は配置時に対応する paired Yard grid へ明示接続する。
+- [x] `VentilationState`、排泥状態、`RoomSanctionState` を別軸にし、両条件を満たした Room だけを `Sanctioned` とする。
+- [x] 壁設備は床用 `RoomTileLookup` ではなく、計画で追加する `RoomBoundaryLookup` から所属 Room を引く。
 
 ## 13. AI引継ぎメモ
 
 ### 現在地
 
-- 進捗: `0%`（世界観定義・設計合意段階。コード変更なし）
+- 進捗: `0%`（提案採用・計画昇格済み。コード変更なし）
 - 直近で完了したこと:
   - 世界観（怠惰の瘴気 / 罪泥 / 骨の導水管 / 王の認可）を [world_lore.md](../world_lore.md) の既存カノン（薄紫の靄、悔恨の岩、骨の由来、ラテン語号令、色彩言語）に接続した第2版へ更新。
   - ECS 設計を実装済みパターン（`hw_energy` の Relationship + マーカー + recalc、`room_detection` の dirty 追跡）に接地。**Room エンティティの揮発性**という実装トラップを特定し、逆引き方式を推奨として明記。
-  - Non-Goals・リスク・検証計画・段階導入（M1〜M4）をテンプレート準拠で追加。
+  - Non-Goals・リスク・検証方針を追加し、実装順序とマイルストーン契約は関連計画へ委譲した。
   - ユーザー決定 2 件を反映: **`crates/hw_infra` 新設** / **`BuildingCategory::Permanent` 追加**（2026-07-07）。
+  - 現行コードへ再照合し、[実装計画](../plans/hvac-plumbing-plan-2026-07-13.md)へ昇格（2026-07-13）。
 
 ### 次のAIが最初にやること
 
-1. §12 の残る Open Questions（侵食タイマー、数値バランス、Purifier のカバー範囲など）についてユーザーと合意する。
-2. 承認後、`docs/plans/hvac-plumbing-plan.md` を作成し、M1（Room 認可状態の可視化）の実装手順に落とす。`hw_infra` クレートの新設（Cargo.toml・plugin 登録・`cargo_workspace.md` / `crate-boundaries.md` 更新）を M1 の最初のステップに含める。
-3. M1 着手時は `crates/hw_world/src/room_systems.rs` と `hw_energy` の `grid_recalc_system` を読み、recalc システムの雛形を写経する。
+1. [実装計画](../plans/hvac-plumbing-plan-2026-07-13.md)の M0 だけを対象に、current worktree と関連コードを再確認する。
+2. `RoomDetectionBuildingTile` の占有 role 化と pure test から着手する。
+3. 電力連携時は `hw_energy` の型だけでなく、root `crates/bevy_app/src/systems/energy/` の lifecycle / recalc adapter を確認する。
 
 ### ブロッカー/注意点
 
 - Room エンティティは再検出のたびに despawn される（§6.4）。Room を Target にした Relationship や Room 上のタイマーは設計禁止に近い。
-- PowerGrid は Yard 単位。Yard 外の電化設備は黙って動かない（[soul_energy.md](../soul_energy.md) §8 と同じトラップ）。
+- PowerGrid entity は Yard 単位。Fan は paired Site、Intake は配置時の明示 anchor から対応 Yard grid を解決し、解決失敗時は `Unpowered` の理由を UI に出す。
 - 既存の仮設ワークフロー（バケツ水搬送・MudMixer）は変更禁止。詰み回避の安全弁を兼ねている。
 
 ### 参照必須ファイル
@@ -301,9 +307,9 @@
 
 ### 完了条件（Definition of Done）
 
-- [ ] Open Questions が解消され、ステータスが `Approved` になっている
-- [ ] `docs/plans/hvac-plumbing-plan.md` が M1 の粒度で作成されている
-- [ ] 数値バランス（§5）が初期実装値として確定している
+- [x] Open Questions が初期実装方針として解消され、ステータスが `Accepted / Promoted` になっている
+- [x] `docs/plans/hvac-plumbing-plan-2026-07-13.md` が M0〜M4 の粒度で作成されている
+- [x] §5 の初期実装対象設備の数値が初期実装値として採用されている
 
 ## 14. 更新履歴
 
@@ -312,3 +318,5 @@
 | `2026-07-05` | `Antigravity` | 初版作成（世界観刷新版） |
 | `2026-07-07` | `Claude` | 第2版: 世界観を既存カノンに接続、ECS 設計を実装済みパターンに接地、Room 揮発性トラップを明記、テンプレート準拠のセクション（Non-Goals / リスク / 検証 / ロールアウト / Open Questions）を追加 |
 | `2026-07-07` | `Claude` | ユーザー決定を反映: `crates/hw_infra` 新設・`BuildingCategory::Permanent` 追加。該当 Open Questions を決定済みへ移動 |
+| `2026-07-13` | `Codex` | 提案を採用済みとして計画へ昇格。残る設計判断を初期方針として確定し、現行コードに合わせた実装計画を関連付け |
+| `2026-07-14` | `Codex` | 昇格後レビューを反映。停止条件、3状態軸、即時侵食、Room 単位排泥、初期値、検証コマンドを計画書と同期し、旧ロールアウトを計画への委譲へ置換 |
