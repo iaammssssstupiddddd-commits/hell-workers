@@ -8,6 +8,11 @@ use hw_core::soul::{GatheringBehavior, IdleBehavior};
 /// ランダムな集会中のサブ行動を選択
 pub fn random_gathering_behavior(dream: f32) -> GatheringBehavior {
     let mut rng = rand::thread_rng();
+    random_gathering_behavior_with_rng(dream, &mut rng)
+}
+
+/// `random_gathering_behavior` の乱数源を呼び出し元が所有する変種。
+pub fn random_gathering_behavior_with_rng(dream: f32, rng: &mut impl Rng) -> GatheringBehavior {
     if dream > 0.0 {
         match rng.gen_range(0..4) {
             0 => GatheringBehavior::Wandering,
@@ -28,12 +33,22 @@ pub fn random_gathering_behavior(dream: f32) -> GatheringBehavior {
 /// ランダムな集会行動の持続時間を取得
 pub fn random_gathering_duration() -> f32 {
     let mut rng = rand::thread_rng();
+    random_gathering_duration_with_rng(&mut rng)
+}
+
+/// `random_gathering_duration` の乱数源を呼び出し元が所有する変種。
+pub fn random_gathering_duration_with_rng(rng: &mut impl Rng) -> f32 {
     rng.gen_range(GATHERING_BEHAVIOR_DURATION_MIN..GATHERING_BEHAVIOR_DURATION_MAX)
 }
 
 /// 待機行動の持続時間を取得
 pub fn behavior_duration_for(behavior: IdleBehavior) -> f32 {
     let mut rng = rand::thread_rng();
+    behavior_duration_for_with_rng(behavior, &mut rng)
+}
+
+/// `behavior_duration_for` の乱数源を呼び出し元が所有する変種。
+pub fn behavior_duration_for_with_rng(behavior: IdleBehavior, rng: &mut impl Rng) -> f32 {
     match behavior {
         IdleBehavior::Sleeping => rng.gen_range(IDLE_DURATION_SLEEP_MIN..IDLE_DURATION_SLEEP_MAX),
         IdleBehavior::Sitting => rng.gen_range(IDLE_DURATION_SIT_MIN..IDLE_DURATION_SIT_MAX),
@@ -58,8 +73,19 @@ pub fn select_next_behavior(
     _total_idle_time: f32,
     dream: f32,
 ) -> IdleBehavior {
-    let can_sleep = dream > 0.0;
     let mut rng = rand::thread_rng();
+    select_next_behavior_with_rng(laziness, _fatigue, _total_idle_time, dream, &mut rng)
+}
+
+/// `select_next_behavior` の乱数源を呼び出し元が所有する変種。
+pub fn select_next_behavior_with_rng(
+    laziness: f32,
+    _fatigue: f32,
+    _total_idle_time: f32,
+    dream: f32,
+    rng: &mut impl Rng,
+) -> IdleBehavior {
+    let can_sleep = dream > 0.0;
     let roll: f32 = rng.gen_range(0.0..1.0);
 
     if laziness > LAZINESS_THRESHOLD_HIGH {

@@ -149,7 +149,7 @@
 - **CPU と GPU を分離する**: `Render3dVisible` と既存 `RenderPerfToggles` を使い、GPU変更は M0 の結果を開始条件にする。
 - **段階適用する**: 依存waveを守りつつsub-milestoneごとにrevert可能なcommitへ分け、事前宣言したprimary metricで採否を判断する。
 - **crate 境界を維持する**: domain resource / component は該当 `hw_*` crate、ゲーム固有の配線と UI 表示は `bevy_app` に置く。
-- **load後のEntityを持ち越さない**: 本計画で追加するEntity-bearing Local/Resource/cache/queueは、`save-load-hardening` M4の`WorldEpoch`不一致でclearするか`LoadResetRegistry`へroot facade経由で登録し、追加時にreset inventoryも更新する。
+- **load後のEntityを持ち越さない**: 本計画で追加するEntity-bearing Local/Resource/cache/queueは、`save-load-hardening` M4の`WorldEpoch`不一致でclearするか、root load facadeのreset inventoryへ登録してload時にclearし、追加時にreset inventoryも更新する。
 - **Bevy 0.19 を一次情報で確認する**: `Mut<T>`、Relationship、FixedUpdate、Assets、shader binding 等は docs.rs または `~/.cargo/registry/src/` の 0.19.0 ソースを確認してから実装する。
 
 ## 5. マイルストーン
@@ -169,8 +169,9 @@
   - warm-up 30秒、計測60秒、固定window size、`HW_PRESENT_MODE=novsync`、固定log filterを標準条件にする。Tracy memory、通常frame time、RenderDocは互いの計測擾乱を避けるため別runで採取する。
   - `--perf-render`から`Render3dVisible`と`RenderPerfToggles`を無入力で固定し、CPU-only寄り/GPU込みを分ける。現行`HW_DISABLE_RTT_SCENE_OBJECTS`が対象外としている`SoulMaskProxy3d`/`SoulShadowProxy3d`も含めてtoggle契約を修正し、OFF時に対象draw/scene entity数が期待値まで下がることを確認する。
   - `[profile.profiling]` を release 継承、debug symbol 有効、thin LTO で追加する。
-  - optional feature `profiling = ["bevy/trace_tracy", ...]` と `FrameTimeDiagnosticsPlugin` をfeature-gatedで追加する。計測siteを持つ各`hw_*` crateにも空defaultの`profiling` featureを定義し、`bevy_app`のfeatureから伝播する。allocation計測用に `profiling-memory = ["profiling", "bevy/trace_tracy_memory"]` を分け、通常ビルドには含めない。
-  - p50/p95/p99とdomain counterは `DiagnosticsStore`/専用collectorからignoredな `target/perf/<scenario>/` へCSV出力し、system CPU timeはTracy capture、allocation/frameはTracy memoryで採取する。GPU pass/drawは固定frameのRenderDoc capture、texture sampleはshaderの静的sample数と利用可能ならvendor profilerで記録する。raw traceはcommitせず、要約値だけを `docs/performance-profiling.md` に残す。
+  - `profiling`はCSV/counter専用、`profiling-tracy`はsystem CPU trace、`profiling-memory`はallocation traceへ分離し、標準frame time runへTracyの接続待ち/メモリ挙動を混在させない。計測siteを持つ各`hw_*` crateにも空defaultの`profiling` featureを定義し、`bevy_app`のfeatureから伝播する。
+  - scenario用のdeferred commandを適用した直後、`GameSystemSet::Input`より前に初期fixture checkpointを採る。Soul/Familiar数が構成値に一致するまで開始せず、初回のAI/animation更新後の状態を「初期」と誤認しない。
+  - p50/p95/p99とdomain counterはrun固有のignored artifact directoryへCSV出力し、`scripts/perf.py`がbuild、絶対asset root、GPU/backend照合、log健全性、反復集約を一元化する。初期fixture checksumは常に3反復一致を要求する。実時間runのwarm-up終端checksumは、境界frameの可変deltaによる位相差をartifactへ記録する標準`record`とし、完全な状態決定性は将来の固定step auditで別検証する。完了marker後のteardown warningは件数・原文を記録するが、marker前のwarning/errorは失格にする。system CPU timeはTracy capture、allocation/frameはTracy memoryで採取する。GPU pass/drawは固定frameのRenderDoc capture、texture sampleはshaderの静的sample数と利用可能ならvendor profilerで記録する。raw traceはcommitせず、要約値だけを `docs/performance-profiling.md` に残す。
   - 次の軽量カウンタを feature-gated で追加する。
     - task execution の query 件数、実handler件数、idle skip件数。
     - reservation full rebuild 回数と走査した pending/active 件数。
@@ -186,6 +187,8 @@
   - `crates/bevy_app/src/main.rs`
   - `crates/bevy_app/src/plugins/visual.rs`
   - `crates/bevy_app/src/plugins/startup/perf_scenario.rs`
+  - `crates/bevy_app/src/plugins/startup/mod.rs`
+  - `crates/bevy_app/src/systems/settings/mod.rs`
   - `crates/bevy_app/src/plugins/startup/startup_systems.rs`
   - `crates/bevy_app/src/world/map/spawn.rs`
   - `crates/bevy_app/src/entities/damned_soul/spawn.rs`
@@ -202,24 +205,86 @@
   - `crates/hw_visual/Cargo.toml`
   - `crates/hw_familiar_ai/src/familiar_ai/decide/resources.rs`
   - `crates/hw_familiar_ai/src/familiar_ai/decide/task_delegation.rs`
+  - `crates/hw_jobs/src/visual_sync/observers.rs`
+  - `crates/hw_soul_ai/src/soul_ai/execute/gathering_apply.rs`
   - 各対象systemのmetrics定義、または新規のfeature-gated diagnostics module
-  - `docs/DEVELOPMENT.md`
-  - 新規 `docs/performance-profiling.md`
+  - `scripts/perf.py`
+  - `docs/performance-profiling.md`
+  - `docs/gathering.md`
 - **期待効果**: 直接の高速化はない。誤った仮説の反復と計測ノイズを減らす。
 - **完了条件**:
-  - [ ] 3規模 × CPU/GPU切り分け条件で p50 / p95 / p99 と主要カウンタを記録した。
-  - [ ] 同一seed/workloadを3回実行し、worldgen seed、warm-up終了時のentity/task/state checksum、固定camera/配置、操作列が一致する。
-  - [ ] CPU toggle OFFでmain/mask/shadowを含む対象3D scene entity/draw数が期待値まで減る。
-  - [ ] CSV、Tracy memory、RenderDocのどの指標をどの手順で採るか文書化した。
-  - [ ] profiling feature 無効時に計測用処理が hot path に残らない。
-  - [ ] baseline の起動コマンドと結果記録形式を `docs/performance-profiling.md` に記載した。
+  - [x] 3規模 × CPU/GPU切り分け条件で、log健全性を満たすp50 / p95 / p99 と主要カウンタを記録した。
+  - [x] 同一seed/workloadを3回実行し、ゲーム更新前のinitial fixture（Soul/Familiar/Designation数とstate checksum）、固定camera/配置、操作列が一致することを確認した。
+  - [ ] 固定stepの決定性auditを別計測モードとして設計し、必要なworkloadでwarm-up終了時のentity/task/state checksumを一致確認する。実時間frame-time baselineとは混在させない。runnerとactor単位artifactは実装済みだが、現行`gather`はtick 224以降で状態差が出るため、この確認は未達として分離する。
+  - [x] CPU toggle OFFでmain/mask/shadowを含む対象3D scene entity数が期待値まで減る。runnerはCPUでSoul main/mask/shadow・Familiar rootが0、GPUでfixture人口と一致する`scene_roots.csv`を検証する。pass/drawの内訳はRenderDoc採取の契約として別runで扱う。
+  - [x] CSV、Tracy memory、RenderDocのどの指標をどの手順で採るか文書化した。
+  - [x] profiling feature 無効時に計測用処理が hot path に残らない。
+  - [x] baseline の起動コマンドと結果記録形式を `docs/performance-profiling.md` に記載した。
 - **検証**:
-  - `cargo run --profile profiling -p bevy_app@0.1.0 --no-default-features --features profiling -- --spawn-souls 200 --spawn-familiars 12 --perf-scenario --perf-seed 20260712 --perf-workload gather`
+  - `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test`
+  - `python3 scripts/perf.py run --workload gather --sizes small,medium,large --renders cpu,gpu --repeat 3 --seed 20260712 --backend vulkan --adapter Intel --window-backend wayland --output target/perf-runs/<session>`
   - `cargo check -p bevy_app@0.1.0 --no-default-features --features profiling`
+  - `cargo check -p bevy_app@0.1.0 --no-default-features --features profiling-tracy`
   - `cargo clippy -p bevy_app@0.1.0 --no-default-features --features profiling -- -D warnings`
   - `cargo check -p bevy_app@0.1.0 --no-default-features --features profiling-memory`
   - `cargo check --workspace`
   - `cargo clippy --workspace`
+
+#### 2026-07-14 M0 smoke（NVIDIA MX250 / Vulkan）
+
+- `scripts/perf.py self-test` と `gather / Small / CPU・GPU / repeat 1 / warm-up 0秒 / measure 1秒` を実行し、2 runともvalidだった。これはrunner、`summary.csv`、adapter/log検証、CPU/GPU切替の経路確認であり、性能比較用のbaselineではない。
+- CPUの`scene_roots.csv`はSoul main/mask/shadowとFamiliar rootがすべて0、GPUはそれぞれ50/50/50/4だった。CPU-only条件へ対象外の3D scene rootを混在させない契約を確認した。
+- fixed-step auditのrunnerとactor単位artifactは存在するが、`gather`はtick 224以降にstate checksumが分岐する。frame-time baselineの採取を止めない未達項目として保留し、原因追跡はM0の性能計測基盤とは切り離す。
+
+#### 2026-07-13 Gather 暫定値（Intel UHD / Vulkan、比較用には未認定）
+
+- 条件: Fedora 44、Intel Core i7-10850H、Intel UHD Graphics (CML GT2)、Mesa 26.1.4 Vulkan、`WGPU_ADAPTER_NAME=Intel`、`HW_PRESENT_MODE=novsync`、固定1280×720 window。
+- 各条件はseed `20260712`、warm-up 30 virtual秒、計測60 virtual秒、`gather` workloadで3回実行した。raw CSV/logは`target/perf-runs/m0-20260713-intel-uhd-seed-20260712/`にのみ保持し、commitしない。
+- 下表は3回の中央値。`reach/frame`は`reachable_with_cache_calls / captured frame`の中央値である。
+
+| 規模 | 描画 | p50 ms | p95 ms | p99 ms | reach/frame |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Small (50/4) | CPU | 16.642 | 17.820 | 19.311 | 0.370 |
+| Small (50/4) | GPU | 31.216 | 32.997 | 37.286 | 0.919 |
+| Medium (200/12) | CPU | 16.420 | 20.222 | 212.020 | 35.618 |
+| Medium (200/12) | GPU | 37.830 | 40.641 | 249.783 | 87.098 |
+| Large (500/30) | CPU | 26.517 | 41.269 | 691.625 | 222.330 |
+| Large (500/30) | GPU | 50.111 | 56.202 | 707.456 | 377.262 |
+
+- 全18 runでseed、Soul数、Familiar数、Designation数、初期state checksumが各条件の3反復で一致し、asset load errorは0件だった。Small/CPUのp50は10.015–16.662 msと分散が大きかった。
+- `source_selector_calls`は全runで0だった。現行Gather操作列はsource selectorを負荷化していないため、当該counterの比較は専用workload追加後に行う。
+- 後日のlog再監査で、`PERF_CAPTURE`前に`ParticipatingIn`の不存在target warningと、despawn済みtargetから`GatherHighlightMarker`をremoveするBevy command errorが反復していたことを確認した。したがってこの表は問題の発見用の暫定値として残し、最適化前後の比較baselineには使わない。
+- `CommandQueue has un-applied commands`警告は全runで`PERF_CAPTURE` CSV出力の後にのみ発生した。計測区間外のteardown警告としてraw logへ残し、frame timeへは混在させない。
+- 次の採取は`PerfScenarioConfig`のstrict parse、1x virtual time固定、run固有output directory、initial/warm-up/measure-end checkpoint、`scripts/perf.py`のadapter/log/checksum検証を通す。RenderDocによるdraw/pass確認、Tracy memoryによるallocation/frameは引き続き未採取である。
+
+#### 2026-07-13 計測器の再検証（Intel UHD / Vulkan、短縮経路）
+
+- `scripts/perf.py self-test`を通し、`gather / Small / CPU / seed 20260712 / warm-up 2秒 / measure 3秒`を3反復した。artifactは`target/perf-runs/m0-runner-repeat-after-initial-checkpoint-20260713-a/`にのみ保持する。
+- 3反復とも実adapterは`Intel(R) UHD Graphics (CML GT2)` / Vulkan / Mesa 26.1.4であり、短縮経路の`PERF_CAPTURE`前warning/errorは0件だった。これは計測器の経路検証としてのみ有効であり、30/60秒の正式baselineとは区別する。
+- `initial_state_checksum`は全runで`ec0d54db7ffbbd2b`（50 Soul / 4 Familiar / 72 Designation）に一致した。これはcheckpointをゲーム更新前へ移した結果であり、Familiar hover animationを初期fixtureに混ぜない。
+- warm-up終端checksumは`0ffee40345c4f99d`、`a2f46c5cbc6f6982`、`e5fb0f4757ccdc35`に分かれ、実warm-up時間も2.000577–2.004146秒だった。可変real deltaで閾値を跨ぐ実時間計測のため、標準policyを`record`へ分離した。`require`なら正しく失格になる。
+- `record`再集約では3 valid run、p50中央値 9.812 ms、p95中央値 12.850 ms、p99中央値 13.639 ms（MAD: 0.031 / 0.048 / 0.080 ms）になった。これは手順・契約の短縮検証値であり、30/60秒・全規模×CPU/GPUの正式baselineではない。
+- 正式matrixの再開直後のSmall/CPU 30/60秒runでは、`PERF_CAPTURE`前に`ParticipatingIn`の不存在target warningを3件検出したため、そのrunは失格として残し、数値を採用しない。Bevy 0.19の当該warningはtargetのdespawn cleanupではなく、存在しないtargetへのRelationship insert時に出る。`gathering_apply_system`を一括正規化し、同じmessage batchで退役予定のspotをtargetにするRecruitと退役予定absorberへのMergeを破棄し、残るjoinもdeferred command適用時にsource/targetの存続を確認するよう修正した。Dissolve+Recruit、Dissolve+Merge、既に消えたtargetへのRecruitの回帰テストを追加し、修正後に短縮runから正式matrixを再実行する。
+
+#### 2026-07-13 Gather 正式baseline（Intel UHD / Vulkan、schema v2）
+
+- 条件は Fedora 44、Intel Core i7-10850H、Intel(R) UHD Graphics (CML GT2)、Mesa 26.1.4 / Vulkan、1280×720、`HW_PRESENT_MODE=novsync`、seed `20260712`、`gather` workload、warm-up 30 virtual秒、measure 60 virtual秒で固定した。各caseを3反復し、`scripts/perf.py`のadapter/checksum/log検証を通した。
+- artifact は `target/perf-runs/m0-post-relationship-fix-long-small-cpu-20260713-a/`、`m0-post-relationship-fix-long-small-gpu-20260713-a/`、`m0-post-relationship-fix-long-medium-large-20260713-a/` にのみ保持する。全18 runがvalidで、capture完了前のwarning/errorは0件だった。
+- 下表はrunごとのquantileを3反復で集約した中央値である。値は以後のframe-time比較の基準とし、旧「暫定値」は比較に使わない。
+
+| 規模 | 描画 | p50 ms | p95 ms | p99 ms |
+| --- | --- | ---: | ---: | ---: |
+| Small (50/4) | CPU | 7.377425 | 8.800670 | 13.545635 |
+| Small (50/4) | GPU | 31.235805 | 32.754739 | 33.685718 |
+| Medium (200/12) | CPU | 12.602796 | 18.140467 | 222.074834 |
+| Medium (200/12) | GPU | 36.885022 | 40.452499 | 203.797758 |
+| Large (500/30) | CPU | 25.308291 | 38.291954 | 665.141722 |
+| Large (500/30) | GPU | 50.485880 | 56.468044 | 613.658792 |
+
+- `initial_state_checksum`はSmall `ec0d54db7ffbbd2b`、Medium `e0d253e3ac15f363`、Large `feec763dd1218193`であり、各規模・描画条件の3反復で一致した。warm-up終端は実時間frame境界に依存するため、標準policyどおりrecordのみとした。
+- post-captureの`CommandQueue has un-applied commands`はSmall CPU/GPUが各39件、Medium/Large matrixが合計1,318件だった。いずれも`PERF_CAPTURE: wrote`後の`Commands::delayed()` teardownであり、runnerが原文・件数をartifactへ保存している。frame-timeを変える強制flushは行わない。
+- M0のframe-time baseline条件は満たした。fixed-step determinism audit、CPU toggle時のdraw/scene数、Tracy memory、RenderDoc、Gather以外の専用workloadは未完であり、M0全体を完了扱いにはしない。
+- M1-A artifactはtask execution counterを含むschema v3である。M1-Bからreservation sync counterを加えた新規captureはschema v4となる。schema v2/v3 baselineとの比較は共通のframe-timeだけに限り、旧artifactにないcounterを0として扱わない。
 
 ### M1: Task execution の Changed 汚染と予約全再構築を解消
 
@@ -229,14 +294,45 @@
   1. `TaskExecutionContext` 作成前に `AssignedTask::None` を早期除外する。
   2. `WorkingOn` はtask target despawn時にRelationship cleanupで先に消え、`AssignedTask::Some` が一時的に残り得るため、`With<WorkingOn>` をtask executionのfilterには使わない。`Some + Without<WorkingOn>` も従来どおりhandler/cleanupへ到達させる。
   3. `TaskExecutionContext` が全コンポーネントを即座に `&mut T` へ coercion しないよう、`Mut<T>` wrapperまたは用途別contextへ分割する。handlerが実際に書くフィールドだけを changed にする。
-  4. `collect_active_reservation_ops` が参照するフィールドだけから、比較専用で `Eq` な `ReservationSignature` を正規化生成する。`sync_reservations_system` の `Local<EntityHashMap<Entity, ReservationSignature>>` に前回値を保持し、progressだけが変化した場合は `active_dirty` にしない。
+  4. `collect_active_reservation_ops` が参照するフィールドだけから、比較専用で `Eq` な `ReservationSignature` を正規化生成する。`sync_reservations_system` の root resource `ReservationSignatureCache` に前回値を保持し、progressだけが変化した場合は `active_dirty` にしない。
      - `AssignedTask`/Soul removal時は該当entryを削除する。
      - first runと安全監査full rebuild時はsignature mapも同じsnapshotから再構築する。
   5. assignment、予約対象/種別のphase遷移、abort、completion、handoff、pending task追加削除、`TaskWorkers`変更を予約dirty条件として列挙し、低頻度のfull rebuildを安全監査として残す。
   6. `AssignedTask` の直接書き換え箇所を監査し、予約意味を変える更新は共通helperまたはdirty通知を通す。
   7. `SharedResourceCache::reset()`が予約snapshotだけでなく`frame_stored_count`/`frame_picked_count`も消す現状を分離する。Familiar Perceive先頭で毎frame実行する`begin_frame()`はtransient差分だけをclearし、予約snapshot置換はreservation dirty/full audit時だけ行う。
   8. `ReservationSignature`は`hw_jobs::lifecycle`に置き、予約operationを生成する唯一の正規化関数と同じmatchから導出する。独立した意味定義を二重に持たない。
-  9. signature mapを保持する`Local`は`last_world_epoch`も保持し、loadで`WorldEpoch`が変わった最初の実行時に全entryをclearしてfirst-run rebuildへ戻る。
+  9. signature mapはloadから直接reset可能なroot resourceに置き、`rebuild_transient_caches`で`ReservationSignatureCache`と`ReservationSyncTimer`をdefaultへ戻す。これにより次フレームはfirst-run rebuildとなり、旧worldのEntityを持ち越さない。
+
+#### M1-A: idle task の早期除外と観測（2026-07-13）
+
+- `TaskExecutionSoulQuery`のfilterは変えず、`TaskExecutionContext`を構築する前に`&AssignedTask`としてread-onlyで`None`を判定してcontinueする。これによりidle Soulの`DamnedSoul`、`AssignedTask`、`Destination`、`Path`、`Inventory`へ`&mut`を渡さない。
+- `With<WorkingOn>`は追加しない。`AssignedTask::Some + Without<WorkingOn>`は従来どおりexpected-item検証・handler・cleanupへ進む。targetのdespawn後にRelationship cleanupだけが先行する既存の回復経路を変えない。
+- profiling feature時だけ`task_execution_souls_queried`、`task_execution_idle_skips`、`task_execution_handler_runs`をcapture期間で集計し、`summary.csv` schema v3と`aggregate.csv`へ出力する。通常buildにはResource・counter更新を含めない。
+- `TaskExecutionContext`の用途別分割は後続sub-milestoneとして保留する。reservation signature、cache reset分離、load resetはM1-Bで実施する。M1-Aの測定はLarge/CPUの正式baselineと同一条件で行い、frame-timeと新規work counterを併記する。
+
+#### M1-A 実測（2026-07-13、Large / CPU）
+
+- artifact: `target/perf-runs/m1a-idle-guard-large-cpu-20260713-a/`。M0のLarge/CPU baselineと同じseed、population、Vulkan adapter、window/present mode、30秒warm-up、60秒measureを3反復し、全runがvalidだった。`initial_state_checksum`は全runで`feec763dd1218193`、capture完了前のwarning/errorは0件である。
+- `task_execution_souls_queried`の中央値は997,000（MAD 11,500）、`task_execution_idle_skips`は990,287（MAD 12,177）、`task_execution_handler_runs`は7,390（MAD 677）だった。counterはrunごとに比率を出してから集約し、idle skip比率は99.250127%（MAD 0.076553%）、handler到達比率は0.749873%（MAD 0.076553%）である。M0 schema v2にはこのcounterがないため、存在しないbefore値を推測・0埋めしない。
+
+| 指標 | M0 baseline | M1-A | 差分 |
+| --- | ---: | ---: | ---: |
+| p50 ms | 25.308291 | 24.711394 | -2.359% |
+| p95 ms | 38.291954 | 38.270375 | -0.056% |
+| p99 ms | 665.141722 | 604.353435 | -9.139% |
+
+- `scripts/perf.py compare --allow-case-subset`でLarge/CPUだけを正式matrixから安全に比較した。p50/p99の低下は観測されたが、p95の差は分散内であり、frame-time単独では過大解釈しない。採用根拠は、idleで5対象コンポーネントをmutable context化しない回帰testと、99%超のqueryが実際に早期除外されたwork counterである。
+- post-capture teardown warningは`170;157;169`（合計496）で、既知の`Commands::delayed()`終了経路のみ。計測区間を変えるflushは行わない。
+
+#### M1-B: reservation signature、cache split、観測（2026-07-14）
+
+- `hw_jobs::lifecycle::ReservationSignature`は`collect_active_reservation_ops`と同じ正規化経路からactive operationだけを導出する。`Changed<AssignedTask>`（Addedを含む）のsignatureが同値ならprogress更新ではsnapshotを置換しない。completion、signatureが空になるphase遷移、assignment/Soul removalではdirtyにする。`RemovedComponents<AssignedTask>`はreaderを全件消費し、同一frameのassignment/despawnでも安全側で再構築する。
+- signature mapはroot resource `ReservationSignatureCache`として保持し、`load::rebuild_transient_caches`が`SharedResourceCache`、signature cache、timerを同時にdefaultへ戻す。`Local + WorldEpoch`は採用しない。load直後のtimer初回実行が完全再構築を保証する。
+- `SharedResourceCache::begin_frame()`は毎frameのpickup/store差分だけをclearし、`replace_reservation_snapshot()`はdirtyまたは定期監査時だけreservation mapを置換する。snapshot置換でframe-local差分を消さない。
+- profiling feature時だけ`reservation_sync_full_rebuilds`、`reservation_sync_pending_tasks_scanned`、`reservation_sync_assigned_tasks_scanned`をcapture期間に集計し、schema v4の`summary.csv`と`aggregate.csv`へ出す。通常buildにはこのresourceと更新経路を含めない。schema v3以前にはreservation counterがないため、0埋めやcounter比較を行わない。
+- regression testはprogress-only更新のsnapshot非置換、completion/removal、複数removal readerの全消費、profiling counterが実際に実行したsweepだけを数えることを確認する。3反復の30/60秒正式比較はschema v4 artifactで別途採取する。
+- smoke artifact: `target/perf-runs/m1b-reservation-metrics-smoke-20260714-a/`。Small/CPU、warm-up 0.25秒、measure 0.5秒の1 runはvalidで、capture前warning/errorとteardown warningは0件だった。`reservation_sync_full_rebuilds=4`、`reservation_sync_pending_tasks_scanned=282`、`reservation_sync_assigned_tasks_scanned=200`を記録した。これはschema/counter経路の検証であり、frame-timeや削減率の正式比較には使わない。
+
 - **変更ファイル**:
   - `crates/hw_soul_ai/src/soul_ai/helpers/query_types.rs`
   - `crates/hw_soul_ai/src/soul_ai/execute/task_execution_system.rs`
@@ -246,20 +342,26 @@
   - `crates/hw_soul_ai/src/soul_ai/execute/task_unassign_apply.rs`
   - `crates/hw_jobs/src/lifecycle.rs`
   - `crates/hw_logistics/src/resource_cache.rs`
+  - `crates/bevy_app/src/plugins/startup/perf_scenario.rs`
+  - `crates/bevy_app/src/systems/familiar_ai/mod.rs`
   - `crates/bevy_app/src/systems/familiar_ai/perceive/resource_sync.rs`
+  - `crates/bevy_app/src/systems/save/load.rs`
   - `crates/hw_jobs/src/visual_sync/sync.rs`
   - `crates/hw_logistics/src/visual_sync.rs`
+  - `scripts/perf.py`
+  - `docs/performance-profiling.md`
   - `docs/tasks.md`
   - `docs/invariants.md`
 - **期待効果**: 非常に高い。予約、UI、Visual Mirror、ECS scheduler の不要競合を同時に減らす。
 - **完了条件**:
-  - [ ] `AssignedTask::None` の Soul で5対象コンポーネントのchanged件数が task execution 前後で増えない。
+  - [x] `AssignedTask::None` の Soul で5対象コンポーネントのchanged件数が task execution 前後で増えない。
+  - [x] `WorkingOn`なしのactive taskがqueryから除外されず、既存handler/cleanup経路へ進める。
   - [ ] active taskで未更新のコンポーネントが changed にならない。
-  - [ ] progress更新だけでは予約full rebuildが走らない。
-  - [ ] pickup/storeのframe-local差分が翌frameへ残らず、予約snapshot低頻度化後もlogical countを二重加算しない。
+  - [x] progress更新だけでは予約full rebuildが走らない。
+  - [x] pickup/storeのframe-local差分が翌frameへ残らず、予約snapshot低頻度化後もlogical countを二重加算しない。
   - [ ] assignment / phase遷移 / abort / completion / handoffで予約内容が正しい。
   - [ ] load後に保存対象外の`AssignedTask`は`None`へ戻り、stale `WorkingOn`の除去、予約再構築、再割当が正しく行われる。
-  - [ ] load後にsignature Localを含むM1追加stateへ旧worldのEntityが0件である。
+  - [ ] load後に`ReservationSignatureCache`を含むM1追加stateへ旧worldのEntityが0件である。
   - [ ] `OnTaskCompleted` と `TaskEndDisposition` の既存契約を維持した。
 - **検証**:
   - task完了、中断、資材不一致、搬送handoff、active taskを持つ状態からのsave/load後cleanupと再割当を個別確認する。
@@ -720,7 +822,7 @@
 | 低頻度化で時間積分がFPS依存、またはone-shotが重複する | vitals/balance・通知変化 | Update内0.1秒accumulator、per-step順序、frame内dedupeを固定し、30/60/120 FPS・速度倍率・長frameを自動testする。 |
 | Entity List gateでstructure反映まで遅れる | 操作対象が見えない | structure dirtyは即時、value dirtyのみ100ms gateとする。 |
 | feature-gated計測自体がhot pathを歪める | 誤判定 | 各crateまでfeatureを伝播し、release通常buildとprofiling buildを両方測る。hot loopではlocal集計後に一度だけresourceへ反映する。 |
-| perf seedがworldgenより後に適用される/未seed randomが残る | 実行ごとにmap/workloadが変わる | Plugin登録前configをmaster seedとしsubstreamへ分配し、同seed3回のworldgen seedとwarm-up checksum一致をM0完了条件にする。 |
+| perf seedがworldgenより後に適用される/未seed randomが残る | 実行ごとにmap/workloadが変わる | Plugin登録前configをmaster seedとしsubstreamへ分配し、ゲーム更新前のinitial fixture checksumを同seed3回で必須一致にする。warm-up状態の完全一致はfixed-step auditで別途検証する。 |
 | shader sample削減・mask簡略化で品質が落ちる | visual回帰 | M8を条件付きにし、品質tierとスクリーンショット比較、即時rollback可能な独立PRにする。 |
 
 ## 7. 検証計画
@@ -754,7 +856,7 @@
   HW_PRESENT_MODE=novsync cargo run --profile profiling -p bevy_app@0.1.0 --no-default-features --features profiling -- --spawn-souls 200 --spawn-familiars 12 --perf-scenario --perf-seed 20260712 --perf-workload gather --perf-render cpu
   ```
 
-- 30秒warm-up後に60秒採取し、最低3回実行して中央値を採用する。
+- `scripts/perf.py run`で30秒warm-up後に60秒採取し、最低3回実行して中央値を採用する。実時間baselineはinitial fixtureを必須一致、warm-up終端は`record`する。
 - 記録項目:
   - frame time p50 / p95 / p99 / max。
   - system別 CPU time。
@@ -785,10 +887,10 @@
 
 ### 現在地
 
-- 進捗: `10%`
-- 完了済みマイルストーン: なし。
-- 未着手/進行中: §3.4 wave A の `runtime-correctness-contracts` M0 は完了。性能 M0 は `PerfScenarioConfig`、worldgen/Soul/Familiar/cosmetic用の独立seed stream、固定size/render条件、profiling feature、Warmup/Measure/Flush CSV capture、Familiar delegation counter、計測手順を実装済み。`gather`以外の専用workload操作列、全domain counter、3回の実測baselineは未完。
-- 本計画は静的コードレビューをもとに開始した。runtime profilerによる比較用 baseline はまだ記録していない。
+- 進捗: 性能 M0の計測基盤・Gather正式baseline、M1-A（idle早期除外とcounter）、M1-Bのreservation signature/cache split/counterが完了。M0全体とM1のcontext mutable遅延以降は継続中。
+- 完了済みsub-milestone: M1-A、M1-Bのreservation同期部分。3規模×CPU/GPUのGather frame-time baselineも有効化済みだが、M0のfixed-step audit・draw/scene count・Tracy memory・RenderDoc・専用workloadは未完である。
+- 未着手/進行中: §3.4 wave A の `runtime-correctness-contracts` M0 は完了。性能 M0 は strict parse、固定size/render条件、profiling feature分離、Warmup/Measure/Flush CSV capture、ゲーム更新前initial fixture checkpoint、run固有artifact、adapter/log/checksum検証、M1-A task execution counter、M1-B reservation counterを実装済み。旧18 runは計測中errorのため比較対象外。M1のcontext分割はreservation同期と独立して、正しさ/save-load前提を確認してから開始する。
+- M1-AはLarge/CPUの正式baselineと同条件で3 valid runを採取し、idle skip比率99.250127%を確認した。M1-B以後のcaptureはschema v4で、schema v2/v3 artifactとはframe-timeだけを比較し、欠落counterは新規postcondition観測として扱う。
 
 ### 次のAIが最初にやること
 
@@ -796,8 +898,8 @@
 2. userの未コミット差分を `git status --short` と `git diff` で確認し、対象外ファイルを編集しない。
 3. `runtime-correctness-contracts` M0完了を確認し、未完なら性能M0より先に同計画を実施する。
 4. runtime M4のDoor topology version契約と回帰テストがgreenであることを確認し、本計画からmutation APIを変更しない。
-5. 性能M0でworldgenまで固定したscenarioを作り、release/profiling条件のCPU/GPU baselineを記録する。
-6. 正しさ/save-loadの前提wave完了後、最初の性能変更はM1の`AssignedTask::None`早期除外だけに限定し、changed/reservation counterの変化を確認する。
+5. M0のraw CSVを保持したまま、fixed-step determinism audit、CPU toggle時のdraw/scene count、RenderDoc、Tracy memory、Gather以外の専用workloadを補完する。実時間frame-time baselineとは混在させない。
+6. schema v4でM1-B reservation同期の3反復30/60秒比較を採取し、`reservation_sync_full_rebuilds`と2種の走査件数をframe-timeと併記する。M1のcontext mutable遅延は正しさ/save-loadの前提wave確認後に別sub-milestoneとして実施し、M1-A/Bのtask/reservation契約を変えない。
 
 ### ブロッカー/注意点
 
@@ -849,7 +951,17 @@
 - 性能 M0 実装後 `cargo check -p bevy_app@0.1.0 --no-default-features --features profiling-memory`: `2026-07-13 / pass`
 - 性能 M0 実装後 `cargo clippy --workspace -- -D warnings`: `2026-07-13 / pass (warnings 0)`
 - 性能 M0 実装後 `cargo test -p bevy_app@0.1.0 --lib perf_scenario`: `2026-07-13 / pass (1 passed)`
-- runtime baseline: `未実施`
+- asset catalog修正後 `cargo check --workspace`: `2026-07-13 / pass`
+- asset catalog修正後 `cargo clippy --workspace -- -D warnings`: `2026-07-13 / pass (warnings 0)`
+- runtime baseline: `2026-07-13 / Gather / Small・Medium・Large × CPU・GPU × 3 run / CSV capture pass`
+- M1-A `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test`: `2026-07-13 / pass`
+- M1-A `cargo test -p hw_soul_ai` / `cargo test -p hw_soul_ai --features profiling`: `2026-07-13 / pass (5 passed each)`
+- M1-A `cargo check -p bevy_app@0.1.0 --no-default-features --features profiling|profiling-tracy|profiling-memory`: `2026-07-13 / pass`
+- M1-A `cargo check --workspace` / `cargo clippy --workspace --all-targets -- -D warnings` / `cargo test --workspace`: `2026-07-13 / pass`
+- M1-A runtime candidate: `2026-07-13 / Gather Large・CPU × 3 run / CSV capture pass / p50 -2.359% / idle skip 99.250127%`
+- M1-B `cargo test -p bevy_app@0.1.0 --no-default-features --features profiling --lib systems::familiar_ai::perceive::resource_sync::tests`: `2026-07-14 / pass (5 passed)`
+- M1-B `cargo check -p bevy_app@0.1.0 --no-default-features --features profiling` / `cargo check --workspace` / `cargo clippy --workspace --all-targets -- -D warnings` / `cargo test --workspace` / `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test`: `2026-07-14 / pass`
+- M1-B runtime smoke: `2026-07-14 / Gather Small・CPU × 1 run / schema v4 CSV capture pass / reservation rebuild=4, pending scan=282, assigned scan=200`
 - 未解決設計gate: なし（Door cost/topology version契約はruntime M4へ統一済み）。
 
 ### Definition of Done
@@ -876,3 +988,6 @@
 | `2026-07-12` | `Codex` | runtime M4のDoor topology version契約、明示package ID、共通all-target Clippy gateへ整合。 |
 | `2026-07-13` | `Codex` | M0を開始。固定seed/規模/描画条件、profiling feature、CSV captureと計測手順を実装し、専用workload・domain counter・実測baselineは未完として継続管理。 |
 | `2026-07-13` | `Codex` | M0の実装を更新。worldgen/Soul/Familiar/cosmeticのseed stream、Familiar delegation counter、profiling/profiling-memoryの検証を追加。`gather`以外の専用操作列と実測baselineは未完のまま分離した。 |
+| `2026-07-13` | `Codex` | 存在しないasset参照を除去・修正し、Intel Vulkan上でGather baseline 18 runを採取。中央値、再現性、未完の観測項目をM0へ記録。 |
+| `2026-07-13` | `Codex` | 計測runner/CSV契約をschema v3へ拡張し、部分case比較とtask execution counterを追加。M1-Aのidle早期除外を実装・実測し、恒久task contractを更新した。 |
+| `2026-07-14` | `Codex` | M1-Bのreservation signature/cache splitを実装。load reset可能なroot signature cache、frame deltaとsnapshotの分離、schema v4 reservation sync counter、回帰testを追加した。正式3反復比較は未採取。 |

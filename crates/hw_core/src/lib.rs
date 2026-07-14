@@ -12,6 +12,8 @@ pub mod quality;
 pub mod relationships;
 pub mod selection;
 pub mod settings;
+#[cfg(any(feature = "profiling", test))]
+pub mod simulation_rng;
 pub mod soul;
 pub mod system_sets;
 pub mod time;

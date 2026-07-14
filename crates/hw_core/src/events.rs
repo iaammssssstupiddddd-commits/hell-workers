@@ -174,7 +174,7 @@ pub struct ResourceReservationRequest {
 }
 
 /// リソース予約の操作
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResourceReservationOp {
     ReserveMixerDestination {
         target: Entity,

@@ -13,6 +13,9 @@ impl Plugin for FamiliarAiPlugin {
         // hw_ai の FamiliarAiCorePlugin でコアシステムを登録
         app.add_plugins(hw_familiar_ai::FamiliarAiCorePlugin);
 
+        #[cfg(feature = "profiling")]
+        app.init_resource::<perceive::resource_sync::ReservationSyncPerfMetrics>();
+
         app.configure_sets(
             Update,
             (
@@ -26,6 +29,7 @@ impl Plugin for FamiliarAiPlugin {
         )
         .init_resource::<perceive::resource_sync::SharedResourceCache>()
         .init_resource::<perceive::resource_sync::ReservationSyncTimer>()
+        .init_resource::<perceive::resource_sync::ReservationSignatureCache>()
         .add_systems(
             Update,
             (

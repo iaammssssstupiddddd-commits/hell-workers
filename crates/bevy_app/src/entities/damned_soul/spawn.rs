@@ -6,6 +6,8 @@ use crate::plugins::startup::{PerfScenarioConfig, PerfScenarioRandomStreams};
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MIN, WorldMap, WorldMapRead};
 use hw_core::constants::*;
+#[cfg(feature = "profiling")]
+use hw_core::simulation_rng::SimulationRandomState;
 use hw_core::visual_mirror::logistics::InventoryItemVisual;
 use hw_core::visual_mirror::task::SoulTaskVisualState;
 use hw_world::find_nearby_walkable_grid;
@@ -57,12 +59,17 @@ fn queue_river_spawn_events(
     world_map: &WorldMap,
     count: u32,
     rng: &mut impl Rng,
+    simulation_random_key_start: Option<u64>,
 ) -> u32 {
     let mut spawned = 0;
 
-    for _ in 0..count {
+    for spawn_index in 0..count {
         if let Some(position) = pick_river_south_bank_spawn(world_map, rng) {
-            spawn_events.write(DamnedSoulSpawnEvent { position });
+            spawn_events.write(DamnedSoulSpawnEvent {
+                position,
+                simulation_random_key: simulation_random_key_start
+                    .map(|start| start.wrapping_add(u64::from(spawn_index))),
+            });
             spawned += 1;
         }
     }
@@ -84,10 +91,11 @@ pub fn spawn_damned_souls(
             &world_map,
             spawn_count,
             &mut perf_rngs.souls,
+            perf_config.uses_fixed_timesteps().then_some(0),
         )
     } else {
         let mut rng = rand::thread_rng();
-        queue_river_spawn_events(&mut spawn_events, &world_map, spawn_count, &mut rng)
+        queue_river_spawn_events(&mut spawn_events, &world_map, spawn_count, &mut rng, None)
     };
     info!(
         "SPAWN_CONFIG: Souls requested={} spawned={} (river south bank)",
@@ -127,7 +135,8 @@ pub fn periodic_spawn_system(
     if current == 0 {
         let emergency = SOUL_SPAWN_INITIAL.min(cap.max(1));
         let mut rng = rand::thread_rng();
-        let spawned = queue_river_spawn_events(&mut spawn_events, &world_map, emergency, &mut rng);
+        let spawned =
+            queue_river_spawn_events(&mut spawn_events, &world_map, emergency, &mut rng, None);
         if spawned > 0 {
             population.total_spawned += spawned;
             info!(
@@ -157,7 +166,8 @@ pub fn periodic_spawn_system(
         return;
     }
 
-    let spawned = queue_river_spawn_events(&mut spawn_events, &world_map, spawn_count, &mut rng);
+    let spawned =
+        queue_river_spawn_events(&mut spawn_events, &world_map, spawn_count, &mut rng, None);
     if spawned > 0 {
         population.total_spawned += spawned;
         info!(
@@ -188,6 +198,11 @@ pub fn soul_spawning_system(
             world_map.as_ref(),
             event.position,
             identity,
+            perf_config
+                .uses_fixed_timesteps()
+                .then_some(event.simulation_random_key)
+                .flatten(),
+            !perf_config.omits_3d_scene_roots(),
         );
     }
 }
@@ -198,7 +213,12 @@ fn spawn_damned_soul_at_with_identity(
     world_map: &WorldMap,
     pos: Vec2,
     identity: SoulIdentity,
+    simulation_random_key: Option<u64>,
+    spawn_3d_scene_roots: bool,
 ) {
+    #[cfg(not(feature = "profiling"))]
+    let _ = simulation_random_key;
+
     let spawn_grid = WorldMap::world_to_grid(pos);
     let actual_grid = find_nearby_walkable_grid(spawn_grid, world_map, 5);
     let actual_pos = WorldMap::grid_to_world(actual_grid.0, actual_grid.1);
@@ -217,8 +237,21 @@ fn spawn_damned_soul_at_with_identity(
             crate::systems::logistics::Inventory::default(),
         ))
         .id();
+    #[cfg(feature = "profiling")]
+    if let Some(key) = simulation_random_key {
+        commands
+            .entity(soul_entity)
+            .insert(SimulationRandomState::new(key));
+    }
 
-    attach_soul_shell(commands, soul_entity, &soul_name, actual_pos, handles_3d);
+    attach_soul_shell_with_scene_roots(
+        commands,
+        soul_entity,
+        &soul_name,
+        actual_pos,
+        handles_3d,
+        spawn_3d_scene_roots,
+    );
 
     info!("SPAWN: {} ({:?}) at {:?}", soul_name, gender, actual_pos);
 }
@@ -236,6 +269,21 @@ pub fn attach_soul_shell(
     pos: Vec2,
     handles_3d: &crate::plugins::startup::Building3dHandles,
 ) {
+    attach_soul_shell_with_scene_roots(commands, soul_entity, soul_name, pos, handles_3d, true);
+}
+
+/// `attach_soul_shell` の perf fixture 専用の内部変種。
+///
+/// セーブ再hydrateを含む公開APIは常に3D rootを付与する。CPU-only perfでは
+/// scene 展開・proxy同期・RTT対象を計測に混ぜないため、spawn時だけ省略する。
+fn attach_soul_shell_with_scene_roots(
+    commands: &mut Commands,
+    soul_entity: Entity,
+    soul_name: &str,
+    pos: Vec2,
+    handles_3d: &crate::plugins::startup::Building3dHandles,
+    spawn_3d_scene_roots: bool,
+) {
     commands.entity(soul_entity).insert((
         SoulUiLinks::default(),
         Name::new(format!("Soul: {}", soul_name)),
@@ -252,6 +300,10 @@ pub fn attach_soul_shell(
             timer: Timer::from_seconds(CONVERSATION_CHECK_INTERVAL, TimerMode::Repeating),
         },
     ));
+
+    if !spawn_3d_scene_roots {
+        return;
+    }
 
     // Soul の通常表示は GLB SceneRoot を RtT に流し、2D Sprite は持たない。
     commands.spawn((

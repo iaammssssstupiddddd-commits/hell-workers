@@ -1,22 +1,51 @@
 //! 再現可能なパフォーマンス計測シナリオの構成と採取。
 
 #[cfg(feature = "profiling")]
-use crate::entities::damned_soul::DamnedSoul;
+use crate::entities::damned_soul::{
+    DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
+};
 #[cfg(feature = "profiling")]
-use crate::entities::familiar::Familiar;
-use crate::entities::familiar::{ActiveCommand, FamiliarCommand, FamiliarOperation};
+use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation};
+#[cfg(feature = "profiling")]
 use crate::systems::command::TaskArea;
+#[cfg(feature = "profiling")]
+use crate::systems::familiar_ai::FamiliarAiState;
+#[cfg(feature = "profiling")]
+use crate::systems::familiar_ai::perceive::resource_sync::ReservationSyncPerfMetrics;
+#[cfg(feature = "profiling")]
 use crate::systems::jobs::{Designation, Priority, Rock, TaskSlots, Tree, WorkType};
+#[cfg(feature = "profiling")]
+use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::{Render3dVisible, RenderPerfToggles};
 use bevy::prelude::*;
 #[cfg(feature = "profiling")]
+use bevy::time::{Fixed, Real};
+#[cfg(feature = "profiling")]
+use hw_core::simulation_rng::SimulationRandomState;
+#[cfg(feature = "profiling")]
 use hw_familiar_ai::familiar_ai::decide::resources::FamiliarDelegationPerfMetrics;
+#[cfg(feature = "profiling")]
+use hw_jobs::GatherPhase;
+#[cfg(feature = "profiling")]
+use hw_soul_ai::soul_ai::execute::task_execution::TaskExecutionPerfMetrics;
+#[cfg(feature = "profiling")]
+use hw_visual::visual3d::{
+    Building3dVisual, FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d, SoulShadowProxy3d,
+};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use std::env;
+use std::fmt;
+use std::path::PathBuf;
 
 const DEFAULT_WARMUP_SECS: f32 = 30.0;
 const DEFAULT_MEASURE_SECS: f32 = 60.0;
+#[cfg(feature = "profiling")]
+const PERF_SUMMARY_SCHEMA_VERSION: u32 = 4;
+const FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS: [u64; 4] = [1, 8, 32, 128];
+const DEFAULT_FIXED_STEP_HZ: u32 = 64;
+const DEFAULT_FIXED_WARMUP_TICKS: u64 = 1_920;
+const DEFAULT_FIXED_AUDIT_TICKS: u64 = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PerfWorkload {
@@ -46,6 +75,7 @@ impl PerfWorkload {
         }
     }
 
+    #[cfg(feature = "profiling")]
     const fn has_automated_setup(self) -> bool {
         matches!(self, Self::Gather)
     }
@@ -108,6 +138,29 @@ impl PerfRenderMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PerfClockMode {
+    Realtime,
+    Fixed,
+}
+
+impl PerfClockMode {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "realtime" => Some(Self::Realtime),
+            "fixed" => Some(Self::Fixed),
+            _ => None,
+        }
+    }
+
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Realtime => "realtime",
+            Self::Fixed => "fixed",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum PerfRandomStream {
     Souls,
@@ -139,36 +192,135 @@ pub struct PerfScenarioConfig {
     pub render_mode: PerfRenderMode,
     pub warmup_secs: f32,
     pub measure_secs: f32,
+    pub output_dir: Option<PathBuf>,
+    clock_mode: PerfClockMode,
+    fixed_step_hz: u32,
+    fixed_warmup_ticks: u64,
+    fixed_audit_ticks: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PerfScenarioConfigError(String);
+
+impl fmt::Display for PerfScenarioConfigError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for PerfScenarioConfigError {}
+
 impl PerfScenarioConfig {
-    pub fn from_process() -> Self {
+    pub fn try_from_process() -> Result<Self, PerfScenarioConfigError> {
         let args = env::args().collect::<Vec<_>>();
         let enabled = has_flag(&args, "--perf-scenario")
             || env::var("HW_PERF_SCENARIO").is_ok_and(|value| value == "1");
-        let workload = value_from_args_or_env(&args, "--perf-workload", "HW_PERF_WORKLOAD")
-            .as_deref()
-            .and_then(PerfWorkload::parse)
-            .unwrap_or(PerfWorkload::Gather);
-        let size = value_from_args_or_env(&args, "--perf-size", "HW_PERF_SIZE")
-            .as_deref()
-            .and_then(PerfScenarioSize::parse)
-            .unwrap_or(PerfScenarioSize::Medium);
-        let render_mode = value_from_args_or_env(&args, "--perf-render", "HW_PERF_RENDER")
-            .as_deref()
-            .and_then(PerfRenderMode::parse)
-            .unwrap_or(PerfRenderMode::Gpu);
-        let (default_souls, default_familiars) = size.population();
-        let soul_count = parse_u32_from_args_or_env(&args, "--spawn-souls", "HW_SPAWN_SOULS")
-            .unwrap_or(default_souls);
-        let familiar_count =
-            parse_u32_from_args_or_env(&args, "--spawn-familiars", "HW_SPAWN_FAMILIARS")
-                .unwrap_or(default_familiars);
-        let master_seed = parse_u64_from_args_or_env(&args, "--perf-seed", "HW_PERF_SEED")
-            .or_else(|| env::var("HELL_WORKERS_WORLDGEN_SEED").ok()?.parse().ok())
-            .unwrap_or_else(rand::random);
 
-        Self {
+        if !enabled {
+            return Ok(Self::default());
+        }
+
+        if !cfg!(feature = "profiling") {
+            return Err(PerfScenarioConfigError(
+                "--perf-scenario requires the profiling feature; rebuild with --features profiling"
+                    .to_string(),
+            ));
+        }
+
+        let workload = parse_value_or_default(
+            value_from_args_or_env(&args, "--perf-workload", "HW_PERF_WORKLOAD")?,
+            "--perf-workload",
+            "gather|path-door|construction|ui-gpu",
+            PerfWorkload::parse,
+            PerfWorkload::Gather,
+        )?;
+        let size = parse_value_or_default(
+            value_from_args_or_env(&args, "--perf-size", "HW_PERF_SIZE")?,
+            "--perf-size",
+            "small|medium|large",
+            PerfScenarioSize::parse,
+            PerfScenarioSize::Medium,
+        )?;
+        let render_mode = parse_value_or_default(
+            value_from_args_or_env(&args, "--perf-render", "HW_PERF_RENDER")?,
+            "--perf-render",
+            "cpu|gpu",
+            PerfRenderMode::parse,
+            PerfRenderMode::Gpu,
+        )?;
+        let clock_mode = parse_value_or_default(
+            value_from_args_or_env(&args, "--perf-clock", "HW_PERF_CLOCK")?,
+            "--perf-clock",
+            "realtime|fixed",
+            PerfClockMode::parse,
+            PerfClockMode::Realtime,
+        )?;
+        let fixed_step_hz = parse_u32_value_or_default(
+            value_from_args_or_env(&args, "--perf-fixed-hz", "HW_PERF_FIXED_HZ")?,
+            "--perf-fixed-hz",
+            DEFAULT_FIXED_STEP_HZ,
+        )?;
+        let fixed_warmup_ticks = parse_u64_value_or_default(
+            value_from_args_or_env(&args, "--perf-warmup-ticks", "HW_PERF_WARMUP_TICKS")?,
+            "--perf-warmup-ticks",
+            DEFAULT_FIXED_WARMUP_TICKS,
+        )?;
+        let fixed_audit_ticks = parse_u64_value_or_default(
+            value_from_args_or_env(&args, "--perf-audit-ticks", "HW_PERF_AUDIT_TICKS")?,
+            "--perf-audit-ticks",
+            DEFAULT_FIXED_AUDIT_TICKS,
+        )?;
+        if matches!(clock_mode, PerfClockMode::Fixed) {
+            if fixed_step_hz == 0 || fixed_warmup_ticks == 0 || fixed_audit_ticks == 0 {
+                return Err(PerfScenarioConfigError(
+                    "--perf-fixed-hz, --perf-warmup-ticks, and --perf-audit-ticks must be greater than 0 for --perf-clock fixed".to_string(),
+                ));
+            }
+            if fixed_warmup_ticks <= FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS[3] {
+                return Err(PerfScenarioConfigError(format!(
+                    "--perf-warmup-ticks must be greater than {} for --perf-clock fixed so required checkpoints remain distinct",
+                    FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS[3]
+                )));
+            }
+            if fixed_warmup_ticks.checked_add(fixed_audit_ticks).is_none() {
+                return Err(PerfScenarioConfigError(
+                    "--perf-warmup-ticks + --perf-audit-ticks overflows u64".to_string(),
+                ));
+            }
+        }
+        let (default_souls, default_familiars) = size.population();
+        let soul_count = parse_u32_value_or_default(
+            value_from_args_or_env(&args, "--spawn-souls", "HW_SPAWN_SOULS")?,
+            "--spawn-souls",
+            default_souls,
+        )?;
+        let familiar_count = parse_u32_value_or_default(
+            value_from_args_or_env(&args, "--spawn-familiars", "HW_SPAWN_FAMILIARS")?,
+            "--spawn-familiars",
+            default_familiars,
+        )?;
+        let master_seed = parse_u64_value_or_random(
+            value_from_args_or_env(&args, "--perf-seed", "HW_PERF_SEED")?
+                .or_else(|| env::var("HELL_WORKERS_WORLDGEN_SEED").ok()),
+            "--perf-seed",
+        )?;
+        let warmup_secs = parse_duration_secs(
+            value_from_args_or_env(&args, "--perf-warmup-secs", "HW_PERF_WARMUP_SECS")?,
+            "--perf-warmup-secs",
+            DEFAULT_WARMUP_SECS,
+            true,
+        )?;
+        let measure_secs = parse_duration_secs(
+            value_from_args_or_env(&args, "--perf-measure-secs", "HW_PERF_MEASURE_SECS")?,
+            "--perf-measure-secs",
+            DEFAULT_MEASURE_SECS,
+            false,
+        )?;
+        let output_dir = value_from_args_or_env(&args, "--perf-output-dir", "HW_PERF_OUTPUT_DIR")?
+            .map(PathBuf::from)
+            .filter(|path| !path.as_os_str().is_empty());
+
+        Ok(Self {
             enabled,
             master_seed,
             workload,
@@ -176,13 +328,51 @@ impl PerfScenarioConfig {
             soul_count,
             familiar_count,
             render_mode,
-            warmup_secs: parse_f32_env("HW_PERF_WARMUP_SECS").unwrap_or(DEFAULT_WARMUP_SECS),
-            measure_secs: parse_f32_env("HW_PERF_MEASURE_SECS").unwrap_or(DEFAULT_MEASURE_SECS),
-        }
+            warmup_secs,
+            measure_secs,
+            output_dir,
+            clock_mode,
+            fixed_step_hz,
+            fixed_warmup_ticks,
+            fixed_audit_ticks,
+        })
     }
 
     pub const fn enabled(&self) -> bool {
         self.enabled
+    }
+
+    pub const fn uses_fixed_timesteps(&self) -> bool {
+        matches!(self.clock_mode, PerfClockMode::Fixed)
+    }
+
+    /// 自動 perf の CPU 条件では、計測対象外の 3D scene root を生成しない。
+    ///
+    /// これは起動時 fixture の生成だけに使う。通常プレイと、実行中の F8/F3
+    /// 切替は既存どおり scene root を維持する。
+    pub const fn omits_3d_scene_roots(&self) -> bool {
+        self.enabled && matches!(self.render_mode, PerfRenderMode::Cpu)
+    }
+
+    pub const fn clock_mode_as_str(&self) -> &'static str {
+        self.clock_mode.as_str()
+    }
+
+    pub const fn fixed_step_hz(&self) -> u32 {
+        self.fixed_step_hz
+    }
+
+    pub const fn fixed_warmup_ticks(&self) -> u64 {
+        self.fixed_warmup_ticks
+    }
+
+    pub const fn fixed_audit_ticks(&self) -> u64 {
+        self.fixed_audit_ticks
+    }
+
+    #[cfg(feature = "profiling")]
+    const fn fixed_audit_end_tick(&self) -> u64 {
+        self.fixed_warmup_ticks + self.fixed_audit_ticks
     }
 
     pub fn initial_render_resources(&self) -> (Render3dVisible, RenderPerfToggles) {
@@ -201,9 +391,40 @@ impl PerfScenarioConfig {
     }
 }
 
+/// 固定 step 監査では、初期 fixture を通常の Logic ゲートより先に適用する。
+///
+/// 監査開始時は `Time<Virtual>` を停止したままにするため、通常の `Logic`
+/// system set に置かれた spawn consumer は実行できない。この条件は、その
+/// 専用経路と通常経路を相互排他的にするために使う。
+#[cfg(feature = "profiling")]
+pub(crate) fn is_fixed_step_audit(config: Option<Res<PerfScenarioConfig>>) -> bool {
+    config.is_some_and(|config| config.enabled() && config.uses_fixed_timesteps())
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn is_not_fixed_step_audit(config: Option<Res<PerfScenarioConfig>>) -> bool {
+    !is_fixed_step_audit(config)
+}
+
 impl Default for PerfScenarioConfig {
     fn default() -> Self {
-        Self::from_process()
+        let (soul_count, familiar_count) = PerfScenarioSize::Medium.population();
+        Self {
+            enabled: false,
+            master_seed: 0,
+            workload: PerfWorkload::Gather,
+            size: PerfScenarioSize::Medium,
+            soul_count,
+            familiar_count,
+            render_mode: PerfRenderMode::Gpu,
+            warmup_secs: DEFAULT_WARMUP_SECS,
+            measure_secs: DEFAULT_MEASURE_SECS,
+            output_dir: None,
+            clock_mode: PerfClockMode::Realtime,
+            fixed_step_hz: DEFAULT_FIXED_STEP_HZ,
+            fixed_warmup_ticks: DEFAULT_FIXED_WARMUP_TICKS,
+            fixed_audit_ticks: DEFAULT_FIXED_AUDIT_TICKS,
+        }
     }
 }
 
@@ -230,23 +451,44 @@ impl FromWorld for PerfScenarioRandomStreams {
     }
 }
 
+#[cfg(feature = "profiling")]
 #[derive(Resource, Default)]
 pub(crate) struct PerfScenarioApplied(pub(crate) bool);
 
+#[cfg(feature = "profiling")]
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum PerfScenarioSet {
+    FixtureSpawn,
+    FixtureApply,
+    Setup,
+    Apply,
+    InitialCheckpoint,
+    #[cfg(feature = "profiling")]
+    Capture,
+}
+
+#[cfg(feature = "profiling")]
 pub fn setup_perf_scenario_if_enabled(
     config: Res<PerfScenarioConfig>,
     mut commands: Commands,
+    mut applied: ResMut<PerfScenarioApplied>,
     mut q_familiars: Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
     q_trees: Query<Entity, With<Tree>>,
     q_rocks: Query<Entity, With<Rock>>,
 ) {
-    if !config.enabled() || !config.workload.has_automated_setup() {
+    if applied.0
+        || !config.enabled()
+        || !config.workload.has_automated_setup()
+        || q_familiars.is_empty()
+    {
         return;
     }
 
     configure_gather_baseline(&mut commands, &mut q_familiars, &q_trees, &q_rocks);
+    applied.0 = true;
 }
 
+#[cfg(feature = "profiling")]
 pub fn setup_perf_scenario_runtime_if_enabled(
     config: Res<PerfScenarioConfig>,
     mut commands: Commands,
@@ -267,6 +509,7 @@ pub fn setup_perf_scenario_runtime_if_enabled(
     applied.0 = true;
 }
 
+#[cfg(feature = "profiling")]
 fn configure_gather_baseline(
     commands: &mut Commands,
     q_familiars: &mut Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
@@ -308,7 +551,18 @@ pub(crate) struct PerfCapture {
     phase: PerfCapturePhase,
     elapsed_secs: f32,
     frame_times_ms: Vec<f64>,
-    checksum: Option<PerfScenarioChecksum>,
+    fixture_wait_reported: bool,
+    initial_checksum: Option<PerfScenarioChecksum>,
+    initial_scene_roots: Option<PerfSceneRootCounts>,
+    warmup_checksum: Option<PerfScenarioChecksum>,
+    measure_end_checksum: Option<PerfScenarioChecksum>,
+    warmup_virtual_secs: f64,
+    warmup_real_secs: f64,
+    measure_virtual_secs: f64,
+    measure_real_secs: f64,
+    fixed_update_tick: u64,
+    determinism_checkpoints: Vec<PerfDeterminismCheckpoint>,
+    determinism_actor_records: Vec<PerfDeterminismActorRecord>,
 }
 
 #[cfg(feature = "profiling")]
@@ -316,6 +570,7 @@ pub(crate) struct PerfCapture {
 enum PerfCapturePhase {
     #[default]
     WaitingForScenario,
+    ArmFixedAudit,
     Warmup,
     Measure,
     Flush,
@@ -331,23 +586,217 @@ struct PerfScenarioChecksum {
     value: u64,
 }
 
+/// perf fixtureに生成された3D root markerの個数。
+///
+/// CPU条件ではSoul/Familiar用のscene rootが0、GPU条件ではfixture人口と一致
+/// することをrunnerが検証する。建物rootは現時点では記録だけに留める。
+#[cfg(feature = "profiling")]
+#[derive(Clone, Copy)]
+struct PerfSceneRootCounts {
+    soul_proxy_3d: usize,
+    soul_mask_proxy_3d: usize,
+    soul_shadow_proxy_3d: usize,
+    familiar_proxy_3d: usize,
+    building_3d_visual: usize,
+}
+
+#[cfg(feature = "profiling")]
+#[derive(Clone, Copy)]
+struct PerfDeterminismCheckpoint {
+    checkpoint: &'static str,
+    update_tick: u64,
+    fixed_timestep_ns: u128,
+    virtual_delta_ns: u128,
+    virtual_elapsed_ns: u128,
+    fixed_delta_ns: u128,
+    fixed_elapsed_ns: u128,
+    fixed_overstep_ns: u128,
+    virtual_paused: bool,
+    virtual_relative_speed_bits: u64,
+    virtual_effective_speed_bits: u64,
+    checksum: PerfScenarioChecksum,
+}
+
+/// 固定 step auditでchecksumの差分をactor単位まで追跡するための記録。
+///
+/// frame-time captureには出力せず、fixtureの安定keyと監査対象の直列化recordだけを残す。
+#[cfg(feature = "profiling")]
+struct PerfDeterminismActorRecord {
+    checkpoint: &'static str,
+    update_tick: u64,
+    actor_kind: &'static str,
+    actor_key: u64,
+    record: Vec<u8>,
+}
+
+#[cfg(feature = "profiling")]
+struct PerfAuditActorRecord {
+    actor_kind: &'static str,
+    actor_key: u64,
+    record: Vec<u8>,
+}
+
 #[cfg(feature = "profiling")]
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct PerfChecksumQueries<'w, 's> {
     souls: Query<'w, 's, (Entity, &'static Transform), With<DamnedSoul>>,
     familiars: Query<'w, 's, (Entity, &'static Transform), With<Familiar>>,
     designations: Query<'w, 's, Entity, With<Designation>>,
+    audit_souls: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static DamnedSoul,
+            &'static IdleState,
+            &'static Destination,
+            &'static Path,
+            &'static AssignedTask,
+            Option<&'static SimulationRandomState>,
+        ),
+        With<DamnedSoul>,
+    >,
+    audit_familiars: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static Familiar,
+            &'static Destination,
+            &'static Path,
+            &'static ActiveCommand,
+            &'static FamiliarOperation,
+            &'static FamiliarAiState,
+            Option<&'static SimulationRandomState>,
+        ),
+        With<Familiar>,
+    >,
+    audit_designations: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static Designation,
+            Option<&'static Priority>,
+            Option<&'static TaskSlots>,
+        ),
+    >,
+    target_transforms: Query<'w, 's, &'static Transform>,
+    soul_proxy_3d: Query<'w, 's, (), With<SoulProxy3d>>,
+    soul_mask_proxy_3d: Query<'w, 's, (), With<SoulMaskProxy3d>>,
+    soul_shadow_proxy_3d: Query<'w, 's, (), With<SoulShadowProxy3d>>,
+    familiar_proxy_3d: Query<'w, 's, (), With<FamiliarProxy3d>>,
+    building_3d_visual: Query<'w, 's, (), With<Building3dVisual>>,
 }
 
 #[cfg(feature = "profiling")]
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct PerfCaptureParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
-    applied: Res<'w, PerfScenarioApplied>,
-    time: Res<'w, Time<Virtual>>,
+    time: ResMut<'w, Time<Virtual>>,
+    fixed_time: Res<'w, Time<Fixed>>,
+    real_time: Res<'w, Time<Real>>,
     diagnostics: Option<Res<'w, bevy::diagnostic::DiagnosticsStore>>,
     checksum_queries: PerfChecksumQueries<'w, 's>,
     familiar_metrics: ResMut<'w, FamiliarDelegationPerfMetrics>,
+    task_execution_metrics: ResMut<'w, TaskExecutionPerfMetrics>,
+    reservation_sync_metrics: ResMut<'w, ReservationSyncPerfMetrics>,
+}
+
+/// シナリオの初期状態を、ゲーム更新より前に固定して記録する。
+///
+/// `Update` の末尾で初期値を採ると、初回フレームのAIや移動が入り込み、
+/// 同じ seed の fixture ではなくなってしまう。そのため、シナリオ用の
+/// deferred command を適用した直後にこの checkpoint を置く。
+#[cfg(feature = "profiling")]
+pub(crate) fn start_perf_capture_system(
+    config: Res<PerfScenarioConfig>,
+    applied: Res<PerfScenarioApplied>,
+    checksum_queries: PerfChecksumQueries,
+    mut capture: ResMut<PerfCapture>,
+    virtual_time: ResMut<Time<Virtual>>,
+    fixed_time: Res<Time<Fixed>>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    if !config.enabled() || !matches!(capture.phase, PerfCapturePhase::WaitingForScenario) {
+        return;
+    }
+
+    if !config.workload.has_automated_setup() {
+        error!(
+            "PERF_CAPTURE: workload '{}' has no automated setup yet; use gather",
+            config.workload.as_str()
+        );
+        capture.phase = PerfCapturePhase::Finished;
+        exit.write(AppExit::error());
+        return;
+    }
+    if !applied.0 {
+        if config.uses_fixed_timesteps() && !capture.fixture_wait_reported {
+            eprintln!(
+                "PERF_DETERMINISM_AUDIT: waiting for fixture setup while virtual time remains paused"
+            );
+            capture.fixture_wait_reported = true;
+        }
+        return;
+    }
+
+    let initial_checksum = calculate_checksum(&checksum_queries);
+    let expected_souls = config.soul_count as usize;
+    let expected_familiars = config.familiar_count as usize;
+    if initial_checksum.souls != expected_souls || initial_checksum.familiars != expected_familiars
+    {
+        if !capture.fixture_wait_reported {
+            eprintln!(
+                "{}: waiting for fixture expected_souls={expected_souls} expected_familiars={expected_familiars} observed_souls={} observed_familiars={}",
+                if config.uses_fixed_timesteps() {
+                    "PERF_DETERMINISM_AUDIT"
+                } else {
+                    "PERF_CAPTURE"
+                },
+                initial_checksum.souls,
+                initial_checksum.familiars,
+            );
+            capture.fixture_wait_reported = true;
+        }
+        return;
+    }
+
+    capture.initial_checksum = Some(initial_checksum);
+    capture.initial_scene_roots = Some(calculate_scene_root_counts(&checksum_queries));
+    if config.uses_fixed_timesteps() {
+        if let Err(error) = record_determinism_checkpoint(
+            &mut capture,
+            "fixture-pre-update",
+            0,
+            &virtual_time,
+            &fixed_time,
+            &checksum_queries,
+            true,
+        ) {
+            error!("PERF_DETERMINISM_AUDIT: invalid initial checkpoint: {error}");
+            capture.phase = PerfCapturePhase::Finished;
+            exit.write(AppExit::error());
+            return;
+        }
+        capture.phase = PerfCapturePhase::ArmFixedAudit;
+        eprintln!(
+            "PERF_DETERMINISM_AUDIT: fixture checkpoint captured; arming fixed_hz={} warmup_ticks={} audit_ticks={}",
+            config.fixed_step_hz(),
+            config.fixed_warmup_ticks(),
+            config.fixed_audit_ticks(),
+        );
+    } else {
+        capture.phase = PerfCapturePhase::Warmup;
+        capture.elapsed_secs = 0.0;
+        eprintln!(
+            "PERF_CAPTURE: phase=warmup virtual_speed=1.0 target_secs={}",
+            config.warmup_secs
+        );
+    }
 }
 
 /// perf scenarioのwarm-up/計測/CSV出力を自動化する。
@@ -362,59 +811,280 @@ pub(crate) fn drive_perf_capture_system(
     }
 
     match capture.phase {
-        PerfCapturePhase::WaitingForScenario => {
-            if !params.config.workload.has_automated_setup() {
-                error!(
-                    "PERF_CAPTURE: workload '{}' has no automated setup yet; use gather",
-                    params.config.workload.as_str()
-                );
+        PerfCapturePhase::WaitingForScenario => {}
+        PerfCapturePhase::ArmFixedAudit => {
+            if !params.config.uses_fixed_timesteps() {
+                error!("PERF_CAPTURE: fixed audit arm phase was entered with realtime clock");
                 capture.phase = PerfCapturePhase::Finished;
                 exit.write(AppExit::error());
                 return;
             }
-            if !params.applied.0 {
-                return;
-            }
-            capture.checksum = Some(calculate_checksum(&params.checksum_queries));
+            params.time.unpause();
             capture.phase = PerfCapturePhase::Warmup;
-            capture.elapsed_secs = 0.0;
+            eprintln!("PERF_DETERMINISM_AUDIT: phase=warmup");
         }
         PerfCapturePhase::Warmup => {
-            capture.elapsed_secs += params.time.delta_secs();
-            if capture.elapsed_secs >= params.config.warmup_secs {
-                capture.phase = PerfCapturePhase::Measure;
-                capture.elapsed_secs = 0.0;
-                capture.frame_times_ms.clear();
-                *params.familiar_metrics = FamiliarDelegationPerfMetrics::default();
+            if params.config.uses_fixed_timesteps() {
+                if let Err(error) = advance_fixed_audit_warmup(
+                    &params.config,
+                    &mut capture,
+                    &params.time,
+                    &params.fixed_time,
+                    &params.checksum_queries,
+                ) {
+                    error!("PERF_DETERMINISM_AUDIT: invalid warmup checkpoint: {error}");
+                    capture.phase = PerfCapturePhase::Finished;
+                    exit.write(AppExit::error());
+                }
+            } else {
+                capture.elapsed_secs += params.time.delta_secs();
+                capture.warmup_virtual_secs += params.time.delta_secs_f64();
+                capture.warmup_real_secs += params.real_time.delta_secs_f64();
+                if capture.elapsed_secs >= params.config.warmup_secs {
+                    capture.warmup_checksum = Some(calculate_checksum(&params.checksum_queries));
+                    capture.phase = PerfCapturePhase::Measure;
+                    capture.elapsed_secs = 0.0;
+                    capture.frame_times_ms.clear();
+                    *params.familiar_metrics = FamiliarDelegationPerfMetrics::default();
+                    *params.task_execution_metrics = TaskExecutionPerfMetrics::default();
+                    *params.reservation_sync_metrics = ReservationSyncPerfMetrics::default();
+                    eprintln!(
+                        "PERF_CAPTURE: phase=measure target_secs={}",
+                        params.config.measure_secs
+                    );
+                }
             }
         }
         PerfCapturePhase::Measure => {
-            capture.elapsed_secs += params.time.delta_secs();
-            if let Some(frame_time_ms) =
-                params.diagnostics.as_deref().and_then(latest_frame_time_ms)
-            {
-                capture.frame_times_ms.push(frame_time_ms);
-            }
-            if capture.elapsed_secs >= params.config.measure_secs {
-                capture.phase = PerfCapturePhase::Flush;
+            if params.config.uses_fixed_timesteps() {
+                if let Err(error) = advance_fixed_audit_measure(
+                    &params.config,
+                    &mut capture,
+                    &params.time,
+                    &params.fixed_time,
+                    &params.checksum_queries,
+                ) {
+                    error!("PERF_DETERMINISM_AUDIT: invalid audit checkpoint: {error}");
+                    capture.phase = PerfCapturePhase::Finished;
+                    exit.write(AppExit::error());
+                }
+            } else {
+                capture.elapsed_secs += params.time.delta_secs();
+                capture.measure_virtual_secs += params.time.delta_secs_f64();
+                capture.measure_real_secs += params.real_time.delta_secs_f64();
+                if let Some(frame_time_ms) =
+                    params.diagnostics.as_deref().and_then(latest_frame_time_ms)
+                {
+                    capture.frame_times_ms.push(frame_time_ms);
+                }
+                if capture.elapsed_secs >= params.config.measure_secs {
+                    capture.measure_end_checksum =
+                        Some(calculate_checksum(&params.checksum_queries));
+                    capture.phase = PerfCapturePhase::Flush;
+                }
             }
         }
         PerfCapturePhase::Flush => {
-            if let Some(checksum) = capture.checksum
-                && let Err(error) = write_perf_capture(
+            let result = if params.config.uses_fixed_timesteps() {
+                write_determinism_audit(
                     &params.config,
-                    checksum,
-                    &capture.frame_times_ms,
-                    &params.familiar_metrics,
+                    &capture.determinism_checkpoints,
+                    &capture.determinism_actor_records,
                 )
-            {
-                error!("PERF_CAPTURE: failed to write CSV: {error}");
-            }
+            } else {
+                match (
+                    capture.initial_checksum,
+                    capture.initial_scene_roots,
+                    capture.warmup_checksum,
+                    capture.measure_end_checksum,
+                ) {
+                    (Some(initial), Some(initial_scene_roots), Some(warmup), Some(measure_end)) => {
+                        write_perf_capture(
+                            &params.config,
+                            initial,
+                            initial_scene_roots,
+                            warmup,
+                            measure_end,
+                            &capture.frame_times_ms,
+                            capture.warmup_virtual_secs,
+                            capture.warmup_real_secs,
+                            capture.measure_virtual_secs,
+                            capture.measure_real_secs,
+                            &params.familiar_metrics,
+                            &params.task_execution_metrics,
+                            &params.reservation_sync_metrics,
+                        )
+                    }
+                    _ => Err(std::io::Error::other(
+                        "capture reached Flush without all scenario checkpoints",
+                    )),
+                }
+            };
+
             capture.phase = PerfCapturePhase::Finished;
-            exit.write(AppExit::Success);
+            if let Err(error) = result {
+                error!("PERF_CAPTURE: failed to write CSV: {error}");
+                exit.write(AppExit::error());
+            } else {
+                exit.write(AppExit::Success);
+            }
         }
         PerfCapturePhase::Finished => {}
     }
+}
+
+#[cfg(feature = "profiling")]
+fn advance_fixed_audit_warmup(
+    config: &PerfScenarioConfig,
+    capture: &mut PerfCapture,
+    virtual_time: &Time<Virtual>,
+    fixed_time: &Time<Fixed>,
+    checksum_queries: &PerfChecksumQueries<'_, '_>,
+) -> Result<(), String> {
+    capture.fixed_update_tick += 1;
+    let tick = capture.fixed_update_tick;
+    if let Some(checkpoint) = early_checkpoint_name(tick) {
+        record_determinism_checkpoint(
+            capture,
+            checkpoint,
+            tick,
+            virtual_time,
+            fixed_time,
+            checksum_queries,
+            false,
+        )?;
+    }
+    if tick == config.fixed_warmup_ticks() {
+        record_determinism_checkpoint(
+            capture,
+            "post-warmup",
+            tick,
+            virtual_time,
+            fixed_time,
+            checksum_queries,
+            false,
+        )?;
+        capture.phase = PerfCapturePhase::Measure;
+        eprintln!("PERF_DETERMINISM_AUDIT: phase=audit");
+    }
+    Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn advance_fixed_audit_measure(
+    config: &PerfScenarioConfig,
+    capture: &mut PerfCapture,
+    virtual_time: &Time<Virtual>,
+    fixed_time: &Time<Fixed>,
+    checksum_queries: &PerfChecksumQueries<'_, '_>,
+) -> Result<(), String> {
+    capture.fixed_update_tick += 1;
+    let tick = capture.fixed_update_tick;
+    if tick == config.fixed_audit_end_tick() {
+        record_determinism_checkpoint(
+            capture,
+            "post-audit-end",
+            tick,
+            virtual_time,
+            fixed_time,
+            checksum_queries,
+            false,
+        )?;
+        capture.phase = PerfCapturePhase::Flush;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn early_checkpoint_name(tick: u64) -> Option<&'static str> {
+    match tick {
+        1 => Some("post-update-1"),
+        8 => Some("post-update-8"),
+        32 => Some("post-update-32"),
+        128 => Some("post-update-128"),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "profiling")]
+fn record_determinism_checkpoint(
+    capture: &mut PerfCapture,
+    checkpoint: &'static str,
+    update_tick: u64,
+    virtual_time: &Time<Virtual>,
+    fixed_time: &Time<Fixed>,
+    checksum_queries: &PerfChecksumQueries<'_, '_>,
+    expects_paused_virtual_time: bool,
+) -> Result<(), String> {
+    if virtual_time.is_paused() != expects_paused_virtual_time {
+        return Err(format!(
+            "{checkpoint}: virtual pause state is {}, expected {}",
+            virtual_time.is_paused(),
+            expects_paused_virtual_time
+        ));
+    }
+    if virtual_time.relative_speed_f64() != 1.0 {
+        return Err(format!(
+            "{checkpoint}: virtual relative speed is {}, expected 1.0",
+            virtual_time.relative_speed_f64()
+        ));
+    }
+    if !expects_paused_virtual_time {
+        let timestep = fixed_time.timestep();
+        if virtual_time.delta() != timestep {
+            return Err(format!(
+                "{checkpoint}: virtual delta {:?} differs from fixed timestep {:?}",
+                virtual_time.delta(),
+                timestep
+            ));
+        }
+        if fixed_time.delta() != timestep {
+            return Err(format!(
+                "{checkpoint}: fixed delta {:?} differs from fixed timestep {:?}",
+                fixed_time.delta(),
+                timestep
+            ));
+        }
+        if fixed_time.overstep() != std::time::Duration::ZERO {
+            return Err(format!(
+                "{checkpoint}: fixed overstep is {:?}, expected zero",
+                fixed_time.overstep()
+            ));
+        }
+    }
+
+    let audit_records = collect_audit_actor_records(checksum_queries)?;
+    let checksum = checksum_from_audit_records(&audit_records);
+    capture
+        .determinism_checkpoints
+        .push(PerfDeterminismCheckpoint {
+            checkpoint,
+            update_tick,
+            fixed_timestep_ns: fixed_time.timestep().as_nanos(),
+            virtual_delta_ns: virtual_time.delta().as_nanos(),
+            virtual_elapsed_ns: virtual_time.elapsed().as_nanos(),
+            fixed_delta_ns: fixed_time.delta().as_nanos(),
+            fixed_elapsed_ns: fixed_time.elapsed().as_nanos(),
+            fixed_overstep_ns: fixed_time.overstep().as_nanos(),
+            virtual_paused: virtual_time.is_paused(),
+            virtual_relative_speed_bits: virtual_time.relative_speed_f64().to_bits(),
+            virtual_effective_speed_bits: virtual_time.effective_speed_f64().to_bits(),
+            checksum,
+        });
+    capture
+        .determinism_actor_records
+        .extend(
+            audit_records
+                .into_iter()
+                .map(|record| PerfDeterminismActorRecord {
+                    checkpoint,
+                    update_tick,
+                    actor_kind: record.actor_kind,
+                    actor_key: record.actor_key,
+                    record: record.record,
+                }),
+        );
+    Ok(())
 }
 
 #[cfg(feature = "profiling")]
@@ -463,6 +1133,126 @@ fn calculate_checksum(checksum_queries: &PerfChecksumQueries<'_, '_>) -> PerfSce
 }
 
 #[cfg(feature = "profiling")]
+fn calculate_scene_root_counts(
+    checksum_queries: &PerfChecksumQueries<'_, '_>,
+) -> PerfSceneRootCounts {
+    PerfSceneRootCounts {
+        soul_proxy_3d: checksum_queries.soul_proxy_3d.iter().count(),
+        soul_mask_proxy_3d: checksum_queries.soul_mask_proxy_3d.iter().count(),
+        soul_shadow_proxy_3d: checksum_queries.soul_shadow_proxy_3d.iter().count(),
+        familiar_proxy_3d: checksum_queries.familiar_proxy_3d.iter().count(),
+        building_3d_visual: checksum_queries.building_3d_visual.iter().count(),
+    }
+}
+
+#[cfg(feature = "profiling")]
+fn collect_audit_actor_records(
+    checksum_queries: &PerfChecksumQueries<'_, '_>,
+) -> Result<Vec<PerfAuditActorRecord>, String> {
+    let mut records = Vec::new();
+
+    for (entity, transform, soul, idle, destination, path, task, random_state) in
+        checksum_queries.audit_souls.iter()
+    {
+        let mut record = vec![b'S'];
+        write_transform(&mut record, transform, "soul transform")?;
+        write_f32(&mut record, soul.laziness, "soul laziness")?;
+        write_f32(&mut record, soul.motivation, "soul motivation")?;
+        write_f32(&mut record, soul.fatigue, "soul fatigue")?;
+        write_f32(&mut record, soul.stress, "soul stress")?;
+        write_f32(&mut record, soul.dream, "soul dream")?;
+        write_idle_state(&mut record, idle)?;
+        write_vec2(&mut record, destination.0, "soul destination")?;
+        write_path(&mut record, path, "soul path")?;
+        write_assigned_task(&mut record, task, &checksum_queries.target_transforms)?;
+        records.push(PerfAuditActorRecord {
+            actor_kind: "soul",
+            actor_key: random_state
+                .map(SimulationRandomState::stable_key)
+                .unwrap_or_else(|| entity.to_bits()),
+            record,
+        });
+    }
+
+    for (
+        entity,
+        transform,
+        familiar,
+        destination,
+        path,
+        command,
+        operation,
+        ai_state,
+        random_state,
+    ) in checksum_queries.audit_familiars.iter()
+    {
+        let mut record = vec![b'F'];
+        write_transform(&mut record, transform, "familiar transform")?;
+        write_familiar_state(&mut record, familiar, command, operation, ai_state)?;
+        write_vec2(&mut record, destination.0, "familiar destination")?;
+        write_path(&mut record, path, "familiar path")?;
+        records.push(PerfAuditActorRecord {
+            actor_kind: "familiar",
+            actor_key: random_state
+                .map(SimulationRandomState::stable_key)
+                .unwrap_or_else(|| entity.to_bits()),
+            record,
+        });
+    }
+
+    for (entity, transform, designation, priority, slots) in
+        checksum_queries.audit_designations.iter()
+    {
+        let mut record = vec![b'D'];
+        write_transform(&mut record, transform, "designation transform")?;
+        write_work_type(&mut record, designation.work_type);
+        write_option_u32(&mut record, priority.map(|priority| priority.0));
+        write_option_u32(&mut record, slots.map(|slots| slots.max));
+        records.push(PerfAuditActorRecord {
+            actor_kind: "designation",
+            actor_key: entity.to_bits(),
+            record,
+        });
+    }
+
+    records.sort_unstable_by(|left, right| {
+        left.actor_kind
+            .cmp(right.actor_kind)
+            .then(left.actor_key.cmp(&right.actor_key))
+    });
+    Ok(records)
+}
+
+#[cfg(feature = "profiling")]
+fn checksum_from_audit_records(records: &[PerfAuditActorRecord]) -> PerfScenarioChecksum {
+    let mut payloads = records
+        .iter()
+        .map(|record| record.record.as_slice())
+        .collect::<Vec<_>>();
+    payloads.sort_unstable();
+    let mut checksum = fnv1a(0xcbf2_9ce4_8422_2325u64, payloads.len() as u64);
+    for record in payloads {
+        checksum = fnv1a_bytes(checksum, record);
+    }
+
+    PerfScenarioChecksum {
+        souls: records
+            .iter()
+            .filter(|record| record.actor_kind == "soul")
+            .count(),
+        familiars: records
+            .iter()
+            .filter(|record| record.actor_kind == "familiar")
+            .count(),
+        designations: records
+            .iter()
+            .filter(|record| record.actor_kind == "designation")
+            .count(),
+        value: checksum,
+    }
+}
+
+#[cfg(feature = "profiling")]
 fn checksum_position(transform: &Transform) -> (i64, i64) {
     (
         (transform.translation.x * 100.0).round() as i64,
@@ -471,52 +1261,461 @@ fn checksum_position(transform: &Transform) -> (i64, i64) {
 }
 
 #[cfg(feature = "profiling")]
+fn write_transform(record: &mut Vec<u8>, transform: &Transform, label: &str) -> Result<(), String> {
+    write_f32(record, transform.translation.x, label)?;
+    write_f32(record, transform.translation.y, label)?;
+    write_f32(record, transform.translation.z, label)
+}
+
+#[cfg(feature = "profiling")]
+fn write_vec2(record: &mut Vec<u8>, value: Vec2, label: &str) -> Result<(), String> {
+    write_f32(record, value.x, label)?;
+    write_f32(record, value.y, label)
+}
+
+#[cfg(feature = "profiling")]
+fn write_f32(record: &mut Vec<u8>, value: f32, label: &str) -> Result<(), String> {
+    if !value.is_finite() {
+        return Err(format!("{label} contains non-finite value {value}"));
+    }
+    let normalized = if value == 0.0 { 0.0 } else { value };
+    record.extend_from_slice(&normalized.to_bits().to_le_bytes());
+    Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn write_u64(record: &mut Vec<u8>, value: u64) {
+    record.extend_from_slice(&value.to_le_bytes());
+}
+
+#[cfg(feature = "profiling")]
+fn write_option_u32(record: &mut Vec<u8>, value: Option<u32>) {
+    match value {
+        Some(value) => {
+            record.push(1);
+            record.extend_from_slice(&value.to_le_bytes());
+        }
+        None => record.push(0),
+    }
+}
+
+#[cfg(feature = "profiling")]
+fn write_idle_state(record: &mut Vec<u8>, idle: &IdleState) -> Result<(), String> {
+    write_f32(record, idle.idle_timer, "idle timer")?;
+    write_f32(record, idle.total_idle_time, "total idle time")?;
+    write_idle_behavior(record, idle.behavior);
+    write_f32(record, idle.behavior_duration, "idle behavior duration")?;
+    write_gathering_behavior(record, idle.gathering_behavior);
+    write_f32(
+        record,
+        idle.gathering_behavior_timer,
+        "gathering behavior timer",
+    )?;
+    write_f32(
+        record,
+        idle.gathering_behavior_duration,
+        "gathering behavior duration",
+    )?;
+    record.push(u8::from(idle.needs_separation));
+    Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn write_idle_behavior(record: &mut Vec<u8>, behavior: IdleBehavior) {
+    record.push(match behavior {
+        IdleBehavior::Wandering => 0,
+        IdleBehavior::Sitting => 1,
+        IdleBehavior::Sleeping => 2,
+        IdleBehavior::Gathering => 3,
+        IdleBehavior::ExhaustedGathering => 4,
+        IdleBehavior::Resting => 5,
+        IdleBehavior::GoingToRest => 6,
+        IdleBehavior::Escaping => 7,
+        IdleBehavior::Drifting => 8,
+    });
+}
+
+#[cfg(feature = "profiling")]
+fn write_gathering_behavior(record: &mut Vec<u8>, behavior: GatheringBehavior) {
+    record.push(match behavior {
+        GatheringBehavior::Wandering => 0,
+        GatheringBehavior::Sleeping => 1,
+        GatheringBehavior::Standing => 2,
+        GatheringBehavior::Dancing => 3,
+    });
+}
+
+#[cfg(feature = "profiling")]
+fn write_path(record: &mut Vec<u8>, path: &Path, label: &str) -> Result<(), String> {
+    write_u64(record, path.waypoints.len() as u64);
+    write_u64(record, path.current_index as u64);
+    for waypoint in &path.waypoints {
+        write_vec2(record, *waypoint, label)?;
+    }
+    match path.planned_destination {
+        Some(destination) => {
+            record.push(1);
+            write_vec2(record, destination, label)?;
+        }
+        None => record.push(0),
+    }
+    write_u64(record, path.validated_obstacle_version);
+    Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn write_assigned_task(
+    record: &mut Vec<u8>,
+    task: &AssignedTask,
+    target_transforms: &Query<&Transform>,
+) -> Result<(), String> {
+    match task {
+        AssignedTask::None => record.push(0),
+        AssignedTask::Gather(data) => {
+            record.push(1);
+            write_work_type(record, data.work_type);
+            match data.phase {
+                GatherPhase::GoingToResource => record.push(0),
+                GatherPhase::Collecting { progress } => {
+                    record.push(1);
+                    write_f32(record, progress, "gather progress")?;
+                }
+                GatherPhase::Done => record.push(2),
+            }
+            let target = target_transforms
+                .get(data.target)
+                .map_err(|_| "gather task references an entity without a transform".to_string())?;
+            write_transform(record, target, "gather target transform")?;
+        }
+        _ => {
+            return Err(
+                "gather determinism audit encountered an unsupported AssignedTask variant"
+                    .to_string(),
+            );
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn write_familiar_state(
+    record: &mut Vec<u8>,
+    familiar: &Familiar,
+    command: &ActiveCommand,
+    operation: &FamiliarOperation,
+    ai_state: &FamiliarAiState,
+) -> Result<(), String> {
+    record.push(match familiar.familiar_type {
+        hw_core::familiar::FamiliarType::Imp => 0,
+    });
+    write_f32(record, familiar.command_radius, "familiar command radius")?;
+    write_f32(record, familiar.efficiency, "familiar efficiency")?;
+    record.extend_from_slice(&familiar.color_index.to_le_bytes());
+    record.push(match command.command {
+        FamiliarCommand::Idle => 0,
+        FamiliarCommand::GatherResources => 1,
+        FamiliarCommand::Patrol => 2,
+    });
+    write_f32(
+        record,
+        operation.fatigue_threshold,
+        "familiar fatigue threshold",
+    )?;
+    write_u64(record, operation.max_controlled_soul as u64);
+    match ai_state {
+        FamiliarAiState::Idle => record.push(0),
+        FamiliarAiState::SearchingTask => record.push(1),
+        FamiliarAiState::Scouting { .. } => record.push(2),
+        FamiliarAiState::Supervising { target, timer } => {
+            record.push(3);
+            record.push(u8::from(target.is_some()));
+            write_f32(record, *timer, "familiar supervising timer")?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn write_work_type(record: &mut Vec<u8>, work_type: WorkType) {
+    record.push(match work_type {
+        WorkType::Chop => 0,
+        WorkType::Mine => 1,
+        WorkType::Build => 2,
+        WorkType::Move => 3,
+        WorkType::Haul => 4,
+        WorkType::HaulToMixer => 5,
+        WorkType::GatherWater => 6,
+        WorkType::CollectBone => 7,
+        WorkType::Refine => 8,
+        WorkType::HaulWaterToMixer => 9,
+        WorkType::WheelbarrowHaul => 10,
+        WorkType::ReinforceFloorTile => 11,
+        WorkType::PourFloorTile => 12,
+        WorkType::FrameWallTile => 13,
+        WorkType::CoatWall => 14,
+        WorkType::GeneratePower => 15,
+    });
+}
+
+#[cfg(feature = "profiling")]
 fn write_perf_capture(
     config: &PerfScenarioConfig,
-    checksum: PerfScenarioChecksum,
+    initial_checksum: PerfScenarioChecksum,
+    initial_scene_roots: PerfSceneRootCounts,
+    warmup_checksum: PerfScenarioChecksum,
+    measure_end_checksum: PerfScenarioChecksum,
     samples: &[f64],
+    warmup_virtual_secs: f64,
+    warmup_real_secs: f64,
+    measure_virtual_secs: f64,
+    measure_real_secs: f64,
     familiar_metrics: &FamiliarDelegationPerfMetrics,
+    task_execution_metrics: &TaskExecutionPerfMetrics,
+    reservation_sync_metrics: &ReservationSyncPerfMetrics,
 ) -> std::io::Result<()> {
-    let directory = format!(
-        "target/perf/{}-{}-{}-seed-{}",
-        config.workload.as_str(),
-        config.size.as_str(),
-        config.render_mode.as_str(),
-        config.master_seed
-    );
+    if config.uses_fixed_timesteps() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "frame-time capture must not write fixed-step audit artifacts",
+        ));
+    }
+    if samples.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "frame-time capture produced no samples",
+        ));
+    }
+
+    let directory = perf_output_directory(config);
     std::fs::create_dir_all(&directory)?;
 
+    let frames_path = directory.join("frames.csv");
+    let summary_path = directory.join("summary.csv");
+    let scene_roots_path = directory.join("scene_roots.csv");
+    if frames_path.exists()
+        || summary_path.exists()
+        || scene_roots_path.exists()
+        || directory.join("determinism.csv").exists()
+        || directory.join("determinism_records.csv").exists()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("perf output already exists in {}", directory.display()),
+        ));
+    }
     let mut frame_csv = String::from("frame_index,frame_time_ms\n");
     for (index, frame_time_ms) in samples.iter().enumerate() {
         frame_csv.push_str(&format!("{index},{frame_time_ms:.6}\n"));
     }
-    std::fs::write(format!("{directory}/frames.csv"), frame_csv)?;
+    std::fs::write(&frames_path, frame_csv)?;
+
+    let scene_roots_csv = format!(
+        concat!(
+            "soul_proxy_3d,soul_mask_proxy_3d,soul_shadow_proxy_3d,",
+            "familiar_proxy_3d,building_3d_visual\n",
+            "{},{},{},{},{}\n"
+        ),
+        initial_scene_roots.soul_proxy_3d,
+        initial_scene_roots.soul_mask_proxy_3d,
+        initial_scene_roots.soul_shadow_proxy_3d,
+        initial_scene_roots.familiar_proxy_3d,
+        initial_scene_roots.building_3d_visual,
+    );
+    std::fs::write(&scene_roots_path, scene_roots_csv)?;
 
     let (p50, p95, p99) = percentile_summary(samples);
-    let summary = format!(
-        "seed,workload,size,render,souls,familiars,designations,state_checksum,samples,p50_ms,p95_ms,p99_ms,delegation_latest_ms,delegation_familiars_processed,source_selector_calls,source_selector_scanned_items,reachable_with_cache_calls\n{},{},{},{},{},{},{},{:016x},{},{p50:.6},{p95:.6},{p99:.6},{:.6},{},{},{},{}\n",
-        config.master_seed,
-        config.workload.as_str(),
-        config.size.as_str(),
-        config.render_mode.as_str(),
-        checksum.souls,
-        checksum.familiars,
-        checksum.designations,
-        checksum.value,
-        samples.len(),
-        familiar_metrics.latest_elapsed_ms,
-        familiar_metrics.familiars_processed,
-        familiar_metrics.source_selector_calls,
-        familiar_metrics.source_selector_scanned_items,
-        familiar_metrics.reachable_with_cache_calls,
+    let max = samples.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let summary_header = concat!(
+        "schema_version,seed,workload,size,render,configured_souls,configured_familiars,",
+        "initial_souls,initial_familiars,initial_designations,initial_state_checksum,",
+        "warmup_souls,warmup_familiars,warmup_designations,warmup_state_checksum,",
+        "measure_end_souls,measure_end_familiars,measure_end_designations,measure_end_state_checksum,",
+        "samples,p50_ms,p95_ms,p99_ms,max_ms,warmup_virtual_secs,warmup_real_secs,",
+        "measure_virtual_secs,measure_real_secs,virtual_time_speed,delegation_latest_ms,",
+        "delegation_familiars_processed,source_selector_calls,source_selector_scanned_items,",
+        "reachable_with_cache_calls,task_execution_souls_queried,task_execution_idle_skips,",
+        "task_execution_handler_runs,reservation_sync_full_rebuilds,",
+        "reservation_sync_pending_tasks_scanned,reservation_sync_assigned_tasks_scanned\n"
     );
-    std::fs::write(format!("{directory}/summary.csv"), summary)?;
+    let summary_fields = vec![
+        PERF_SUMMARY_SCHEMA_VERSION.to_string(),
+        config.master_seed.to_string(),
+        config.workload.as_str().to_string(),
+        config.size.as_str().to_string(),
+        config.render_mode.as_str().to_string(),
+        config.soul_count.to_string(),
+        config.familiar_count.to_string(),
+        initial_checksum.souls.to_string(),
+        initial_checksum.familiars.to_string(),
+        initial_checksum.designations.to_string(),
+        format!("{:016x}", initial_checksum.value),
+        warmup_checksum.souls.to_string(),
+        warmup_checksum.familiars.to_string(),
+        warmup_checksum.designations.to_string(),
+        format!("{:016x}", warmup_checksum.value),
+        measure_end_checksum.souls.to_string(),
+        measure_end_checksum.familiars.to_string(),
+        measure_end_checksum.designations.to_string(),
+        format!("{:016x}", measure_end_checksum.value),
+        samples.len().to_string(),
+        format!("{p50:.6}"),
+        format!("{p95:.6}"),
+        format!("{p99:.6}"),
+        format!("{max:.6}"),
+        format!("{warmup_virtual_secs:.6}"),
+        format!("{warmup_real_secs:.6}"),
+        format!("{measure_virtual_secs:.6}"),
+        format!("{measure_real_secs:.6}"),
+        "1.0".to_string(),
+        format!("{:.6}", familiar_metrics.latest_elapsed_ms),
+        familiar_metrics.familiars_processed.to_string(),
+        familiar_metrics.source_selector_calls.to_string(),
+        familiar_metrics.source_selector_scanned_items.to_string(),
+        familiar_metrics.reachable_with_cache_calls.to_string(),
+        task_execution_metrics.souls_queried.to_string(),
+        task_execution_metrics.idle_skips.to_string(),
+        task_execution_metrics.handler_runs.to_string(),
+        reservation_sync_metrics.full_rebuilds.to_string(),
+        reservation_sync_metrics.pending_tasks_scanned.to_string(),
+        reservation_sync_metrics.assigned_tasks_scanned.to_string(),
+    ];
+    let summary = format!("{summary_header}{}\n", summary_fields.join(","));
+    std::fs::write(&summary_path, summary)?;
     eprintln!(
-        "PERF_CAPTURE: wrote {} samples to {directory} (p50={p50:.3}ms p95={p95:.3}ms p99={p99:.3}ms checksum={:016x})",
+        "PERF_CAPTURE: wrote {} samples to {} (p50={p50:.3}ms p95={p95:.3}ms p99={p99:.3}ms initial_checksum={:016x} warmup_checksum={:016x})",
         samples.len(),
-        checksum.value
+        directory.display(),
+        initial_checksum.value,
+        warmup_checksum.value,
     );
     Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn perf_output_directory(config: &PerfScenarioConfig) -> PathBuf {
+    config.output_dir.clone().unwrap_or_else(|| {
+        PathBuf::from(format!(
+            "target/perf/{}-{}-{}-seed-{}",
+            config.workload.as_str(),
+            config.size.as_str(),
+            config.render_mode.as_str(),
+            config.master_seed
+        ))
+    })
+}
+
+#[cfg(feature = "profiling")]
+fn expected_determinism_checkpoints(config: &PerfScenarioConfig) -> [(&'static str, u64); 7] {
+    [
+        ("fixture-pre-update", 0),
+        ("post-update-1", FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS[0]),
+        ("post-update-8", FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS[1]),
+        ("post-update-32", FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS[2]),
+        ("post-update-128", FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS[3]),
+        ("post-warmup", config.fixed_warmup_ticks()),
+        ("post-audit-end", config.fixed_audit_end_tick()),
+    ]
+}
+
+#[cfg(feature = "profiling")]
+fn write_determinism_audit(
+    config: &PerfScenarioConfig,
+    checkpoints: &[PerfDeterminismCheckpoint],
+    actor_records: &[PerfDeterminismActorRecord],
+) -> std::io::Result<()> {
+    if !config.uses_fixed_timesteps() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "determinism audit requires --perf-clock fixed",
+        ));
+    }
+    let expected = expected_determinism_checkpoints(config);
+    let observed = checkpoints
+        .iter()
+        .map(|checkpoint| (checkpoint.checkpoint, checkpoint.update_tick))
+        .collect::<Vec<_>>();
+    if observed.as_slice() != expected {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("determinism checkpoints are {observed:?}; expected {expected:?}"),
+        ));
+    }
+
+    let directory = perf_output_directory(config);
+    std::fs::create_dir_all(&directory)?;
+    let determinism_path = directory.join("determinism.csv");
+    let actor_records_path = directory.join("determinism_records.csv");
+    if determinism_path.exists()
+        || actor_records_path.exists()
+        || directory.join("frames.csv").exists()
+        || directory.join("summary.csv").exists()
+        || directory.join("scene_roots.csv").exists()
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("perf output already exists in {}", directory.display()),
+        ));
+    }
+
+    let mut csv = String::from(concat!(
+        "schema_version,checkpoint,update_tick,fixed_timestep_ns,virtual_delta_ns,",
+        "virtual_elapsed_ns,fixed_delta_ns,fixed_elapsed_ns,fixed_overstep_ns,virtual_paused,",
+        "virtual_relative_speed_bits,virtual_effective_speed_bits,souls,familiars,designations,",
+        "state_checksum\n"
+    ));
+    for checkpoint in checkpoints {
+        csv.push_str(&format!(
+            "1,{},{},{},{},{},{},{},{},{},{:016x},{:016x},{},{},{},{:016x}\n",
+            checkpoint.checkpoint,
+            checkpoint.update_tick,
+            checkpoint.fixed_timestep_ns,
+            checkpoint.virtual_delta_ns,
+            checkpoint.virtual_elapsed_ns,
+            checkpoint.fixed_delta_ns,
+            checkpoint.fixed_elapsed_ns,
+            checkpoint.fixed_overstep_ns,
+            u8::from(checkpoint.virtual_paused),
+            checkpoint.virtual_relative_speed_bits,
+            checkpoint.virtual_effective_speed_bits,
+            checkpoint.checksum.souls,
+            checkpoint.checksum.familiars,
+            checkpoint.checksum.designations,
+            checkpoint.checksum.value,
+        ));
+    }
+    std::fs::write(&determinism_path, csv)?;
+
+    let mut records_csv =
+        String::from("schema_version,checkpoint,update_tick,actor_kind,actor_key,record_hex\n");
+    for record in actor_records {
+        records_csv.push_str(&format!(
+            "1,{},{},{},{},{}\n",
+            record.checkpoint,
+            record.update_tick,
+            record.actor_kind,
+            record.actor_key,
+            encode_hex(&record.record),
+        ));
+    }
+    std::fs::write(&actor_records_path, records_csv)?;
+    eprintln!(
+        "PERF_DETERMINISM_AUDIT: wrote {} checkpoints and {} actor records to {}",
+        checkpoints.len(),
+        actor_records.len(),
+        directory.display(),
+    );
+    Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(HEX[(byte >> 4) as usize] as char);
+        output.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    output
 }
 
 #[cfg(feature = "profiling")]
@@ -547,30 +1746,116 @@ const fn fnv1a(current: u64, value: u64) -> u64 {
     hash
 }
 
+#[cfg(feature = "profiling")]
+fn fnv1a_bytes(mut current: u64, bytes: &[u8]) -> u64 {
+    for byte in bytes {
+        current ^= *byte as u64;
+        current = current.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    current
+}
+
 fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
 }
 
-fn value_from_args_or_env(args: &[String], flag: &str, env_key: &str) -> Option<String> {
-    value_from_args(args, flag).or_else(|| env::var(env_key).ok())
+fn value_from_args_or_env(
+    args: &[String],
+    flag: &str,
+    env_key: &str,
+) -> Result<Option<String>, PerfScenarioConfigError> {
+    value_from_args(args, flag).map(|value| value.or_else(|| env::var(env_key).ok()))
 }
 
-fn parse_u32_from_args_or_env(args: &[String], flag: &str, env_key: &str) -> Option<u32> {
-    value_from_args_or_env(args, flag, env_key)?.parse().ok()
+fn parse_value_or_default<T>(
+    value: Option<String>,
+    flag: &str,
+    allowed: &str,
+    parse: impl FnOnce(&str) -> Option<T>,
+    default: T,
+) -> Result<T, PerfScenarioConfigError> {
+    match value {
+        Some(value) => parse(&value).ok_or_else(|| {
+            PerfScenarioConfigError(format!("{flag} must be one of {allowed}; got '{value}'"))
+        }),
+        None => Ok(default),
+    }
 }
 
-fn parse_u64_from_args_or_env(args: &[String], flag: &str, env_key: &str) -> Option<u64> {
-    value_from_args_or_env(args, flag, env_key)?.parse().ok()
+fn parse_u32_value_or_default(
+    value: Option<String>,
+    flag: &str,
+    default: u32,
+) -> Result<u32, PerfScenarioConfigError> {
+    match value {
+        Some(value) => value.parse().map_err(|_| {
+            PerfScenarioConfigError(format!("{flag} must be an unsigned integer; got '{value}'"))
+        }),
+        None => Ok(default),
+    }
 }
 
-fn parse_f32_env(env_key: &str) -> Option<f32> {
-    env::var(env_key).ok()?.parse().ok()
+fn parse_u64_value_or_random(
+    value: Option<String>,
+    flag: &str,
+) -> Result<u64, PerfScenarioConfigError> {
+    match value {
+        Some(value) => value.parse().map_err(|_| {
+            PerfScenarioConfigError(format!("{flag} must be an unsigned integer; got '{value}'"))
+        }),
+        None => Ok(rand::random()),
+    }
 }
 
-fn value_from_args(args: &[String], flag: &str) -> Option<String> {
-    args.windows(2)
-        .find(|window| window[0] == flag)
-        .map(|window| window[1].clone())
+fn parse_u64_value_or_default(
+    value: Option<String>,
+    flag: &str,
+    default: u64,
+) -> Result<u64, PerfScenarioConfigError> {
+    match value {
+        Some(value) => value.parse().map_err(|_| {
+            PerfScenarioConfigError(format!("{flag} must be an unsigned integer; got '{value}'"))
+        }),
+        None => Ok(default),
+    }
+}
+
+fn parse_duration_secs(
+    value: Option<String>,
+    flag: &str,
+    default: f32,
+    allow_zero: bool,
+) -> Result<f32, PerfScenarioConfigError> {
+    let Some(value) = value else {
+        return Ok(default);
+    };
+    let parsed = value.parse::<f32>().map_err(|_| {
+        PerfScenarioConfigError(format!(
+            "{flag} must be a finite number of seconds; got '{value}'"
+        ))
+    })?;
+    let is_valid = parsed.is_finite() && (parsed >= 0.0) && (allow_zero || parsed > 0.0);
+    if !is_valid {
+        let constraint = if allow_zero {
+            "at least 0"
+        } else {
+            "greater than 0"
+        };
+        return Err(PerfScenarioConfigError(format!(
+            "{flag} must be finite and {constraint}; got '{value}'"
+        )));
+    }
+    Ok(parsed)
+}
+
+fn value_from_args(args: &[String], flag: &str) -> Result<Option<String>, PerfScenarioConfigError> {
+    let Some(index) = args.iter().position(|arg| arg == flag) else {
+        return Ok(None);
+    };
+    args.get(index + 1)
+        .cloned()
+        .map(Some)
+        .ok_or_else(|| PerfScenarioConfigError(format!("{flag} requires a value")))
 }
 
 const fn splitmix64(mut value: u64) -> u64 {
@@ -583,7 +1868,10 @@ const fn splitmix64(mut value: u64) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{PerfRandomStream, PerfScenarioConfig, splitmix64};
+    use super::{
+        DEFAULT_FIXED_AUDIT_TICKS, DEFAULT_FIXED_STEP_HZ, DEFAULT_FIXED_WARMUP_TICKS,
+        PerfClockMode, PerfRandomStream, PerfScenarioConfig, splitmix64,
+    };
 
     #[test]
     fn random_streams_are_stable_and_independent() {
@@ -597,6 +1885,11 @@ mod tests {
             render_mode: super::PerfRenderMode::Cpu,
             warmup_secs: 30.0,
             measure_secs: 60.0,
+            output_dir: None,
+            clock_mode: PerfClockMode::Realtime,
+            fixed_step_hz: DEFAULT_FIXED_STEP_HZ,
+            fixed_warmup_ticks: DEFAULT_FIXED_WARMUP_TICKS,
+            fixed_audit_ticks: DEFAULT_FIXED_AUDIT_TICKS,
         };
         assert_eq!(
             config.stream_seed(PerfRandomStream::Souls),
@@ -610,6 +1903,38 @@ mod tests {
             config.stream_seed(PerfRandomStream::SoulTraits),
             config.stream_seed(PerfRandomStream::FamiliarVoices)
         );
+        assert!(config.omits_3d_scene_roots());
+        let mut gpu_config = config.clone();
+        gpu_config.render_mode = super::PerfRenderMode::Gpu;
+        assert!(!gpu_config.omits_3d_scene_roots());
         assert_eq!(splitmix64(42), splitmix64(42));
+    }
+
+    #[test]
+    fn duration_parser_rejects_invalid_measurement_window() {
+        assert!(
+            super::parse_duration_secs(Some("0".to_string()), "--perf-measure-secs", 60.0, false)
+                .is_err()
+        );
+        assert!(
+            super::parse_duration_secs(Some("NaN".to_string()), "--perf-warmup-secs", 30.0, true)
+                .is_err()
+        );
+        assert_eq!(
+            super::parse_duration_secs(Some("0".to_string()), "--perf-warmup-secs", 30.0, true)
+                .unwrap(),
+            0.0
+        );
+    }
+
+    #[test]
+    fn fixed_clock_mode_is_explicit() {
+        assert_eq!(PerfClockMode::parse("fixed"), Some(PerfClockMode::Fixed));
+        assert_eq!(
+            PerfClockMode::parse("realtime"),
+            Some(PerfClockMode::Realtime)
+        );
+        assert_eq!(PerfClockMode::parse("auto"), None);
+        assert_eq!(PerfClockMode::Fixed.as_str(), "fixed");
     }
 }

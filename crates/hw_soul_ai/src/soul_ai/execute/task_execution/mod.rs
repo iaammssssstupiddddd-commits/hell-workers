@@ -13,6 +13,8 @@ pub mod haul;
 pub mod haul_to_blueprint;
 pub mod haul_to_mixer;
 pub mod haul_with_wheelbarrow;
+#[cfg(feature = "profiling")]
+pub mod metrics;
 pub mod move_plant;
 pub mod path_cache;
 pub mod pour_floor;
@@ -27,4 +29,6 @@ pub use context::{
     TaskExecutionContext, TaskQueries, TaskReservationAccess, TaskUnassignQueries,
 };
 pub use handler::dispatch::run_task_handler;
+#[cfg(feature = "profiling")]
+pub use metrics::TaskExecutionPerfMetrics;
 pub use types::AssignedTask;

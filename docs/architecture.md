@@ -65,7 +65,7 @@ Perceive → Update → Decide → Execute
   (知覚)    (更新)   (決定)    (実行)
 ```
 
-1.  **Perceive**: 環境情報の読み取り、変化の検出、キャッシュ再構築（`sync_reservations_system`: 0.2秒間隔, 初回即時）
+1.  **Perceive**: 環境情報の読み取り、変化の検出、キャッシュ再構築（`sync_reservations_system`: reservation dirty 時は即時、0.2秒ごとの安全監査）
 2.  **Update**: 時間経過による内部状態の変化（バイタル更新、タイマー、メンテナンス）
 3.  **Decide**: 次の行動の選択、要求の生成 (`DesignationRequest`, `TaskAssignmentRequest`, `IdleBehaviorRequest`)
 4.  **Execute**: 決定された行動の実行、コマンド発行 (`apply_designation_requests_system`, `apply_task_assignment_requests_system`, `task_execution`)

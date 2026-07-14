@@ -23,7 +23,11 @@ pub fn on_designation_added(on: On<Add, Designation>, mut commands: Commands, q:
 }
 
 pub fn on_designation_removed(on: On<Remove, Designation>, mut commands: Commands) {
-    commands.entity(on.entity).remove::<GatherHighlightMarker>();
+    // Designation removal can be emitted while the resource itself is being despawned.
+    // There is then no marker left to clean up, so a stale deferred command is intentionally a no-op.
+    commands
+        .entity(on.entity)
+        .try_remove::<GatherHighlightMarker>();
 }
 
 pub fn on_rest_area_added(on: On<Add, RestArea>, mut commands: Commands, q: Query<&RestArea>) {

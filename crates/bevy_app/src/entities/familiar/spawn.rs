@@ -9,6 +9,8 @@ use crate::entities::spawn_args;
 use crate::plugins::startup::{PerfScenarioConfig, PerfScenarioRandomStreams};
 use crate::world::map::{WorldMap, WorldMapRead};
 use hw_core::constants::*;
+#[cfg(feature = "profiling")]
+use hw_core::simulation_rng::SimulationRandomState;
 use hw_world::find_nearby_walkable_grid;
 
 use super::components::*;
@@ -19,6 +21,8 @@ use hw_visual::speech::FamiliarVoice;
 pub struct FamiliarSpawnEvent {
     pub position: Vec2,
     pub familiar_type: FamiliarType,
+    /// 固定 step 監査でだけ actor-local RNG に使う fixture spawn 順。
+    pub simulation_random_key: Option<u64>,
 }
 
 #[derive(bevy::ecs::system::SystemParam)]
@@ -36,6 +40,8 @@ struct FamiliarSpawnInput {
     familiar_type: FamiliarType,
     color_index: u32,
     voice: FamiliarVoice,
+    simulation_random_key: Option<u64>,
+    spawn_3d_scene_root: bool,
 }
 
 struct FamiliarShellInput<'a> {
@@ -44,6 +50,7 @@ struct FamiliarShellInput<'a> {
     command_radius: f32,
     position: Vec2,
     voice: FamiliarVoice,
+    spawn_3d_scene_root: bool,
 }
 
 /// 使い魔をスポーンする
@@ -60,10 +67,15 @@ pub fn spawn_familiar(
     };
 
     if perf_config.enabled() {
-        queue_familiar_spawn_events(&mut spawn_events, spawn_count, &mut perf_rngs.familiars);
+        queue_familiar_spawn_events(
+            &mut spawn_events,
+            spawn_count,
+            &mut perf_rngs.familiars,
+            perf_config.uses_fixed_timesteps().then_some(0),
+        );
     } else {
         let mut rng = rand::thread_rng();
-        queue_familiar_spawn_events(&mut spawn_events, spawn_count, &mut rng);
+        queue_familiar_spawn_events(&mut spawn_events, spawn_count, &mut rng, None);
     }
 
     info!("SPAWN_CONFIG: Familiars requested={spawn_count}");
@@ -73,13 +85,16 @@ fn queue_familiar_spawn_events(
     spawn_events: &mut MessageWriter<FamiliarSpawnEvent>,
     spawn_count: usize,
     rng: &mut impl Rng,
+    simulation_random_key_start: Option<u64>,
 ) {
-    for _ in 0..spawn_count {
+    for spawn_index in 0..spawn_count {
         let x = rng.gen_range(-120.0..120.0);
         let y = rng.gen_range(-120.0..120.0);
         spawn_events.write(FamiliarSpawnEvent {
             position: Vec2::new(x, y),
             familiar_type: FamiliarType::Imp,
+            simulation_random_key: simulation_random_key_start
+                .map(|start| start.wrapping_add(spawn_index as u64)),
         });
     }
 }
@@ -109,6 +124,12 @@ pub fn familiar_spawning_system(
                 familiar_type: event.familiar_type,
                 color_index,
                 voice,
+                simulation_random_key: params
+                    .perf_config
+                    .uses_fixed_timesteps()
+                    .then_some(event.simulation_random_key)
+                    .flatten(),
+                spawn_3d_scene_root: !params.perf_config.omits_3d_scene_roots(),
             },
         );
     }
@@ -130,6 +151,9 @@ fn spawn_familiar_at(
     let familiar_name = familiar.name.clone();
     let command_radius = familiar.command_radius;
 
+    #[cfg(not(feature = "profiling"))]
+    let _ = input.simulation_random_key;
+
     let fam_entity = commands
         .spawn((
             familiar,
@@ -138,6 +162,12 @@ fn spawn_familiar_at(
             Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER + 0.5),
         ))
         .id();
+    #[cfg(feature = "profiling")]
+    if let Some(key) = input.simulation_random_key {
+        commands
+            .entity(fam_entity)
+            .insert(SimulationRandomState::new(key));
+    }
 
     attach_familiar_shell_with_voice(
         commands,
@@ -147,6 +177,7 @@ fn spawn_familiar_at(
             command_radius,
             position: actual_pos,
             voice: input.voice,
+            spawn_3d_scene_root: input.spawn_3d_scene_root,
         },
         game_assets,
         handles_3d,
@@ -182,6 +213,7 @@ pub fn attach_familiar_shell(
             command_radius,
             position: pos,
             voice: FamiliarVoice::random(),
+            spawn_3d_scene_root: true,
         },
         game_assets,
         handles_3d,
@@ -212,17 +244,19 @@ fn attach_familiar_shell_with_voice(
         },
     ));
 
-    // 3D プロキシ（Phase 2 プレースホルダー）
-    commands.spawn((
-        Mesh3d(handles_3d.familiar_mesh.clone()),
-        MeshMaterial3d(handles_3d.familiar_material.clone()),
-        Transform::from_xyz(input.position.x, TILE_SIZE * 0.45, -input.position.y),
-        bevy::camera::visibility::RenderLayers::layer(LAYER_3D),
-        hw_visual::visual3d::FamiliarProxy3d {
-            owner: input.entity,
-        },
-        Name::new(format!("FamiliarProxy3d: {}", input.name)),
-    ));
+    if input.spawn_3d_scene_root {
+        // 3D プロキシ（Phase 2 プレースホルダー）
+        commands.spawn((
+            Mesh3d(handles_3d.familiar_mesh.clone()),
+            MeshMaterial3d(handles_3d.familiar_material.clone()),
+            Transform::from_xyz(input.position.x, TILE_SIZE * 0.45, -input.position.y),
+            bevy::camera::visibility::RenderLayers::layer(LAYER_3D),
+            hw_visual::visual3d::FamiliarProxy3d {
+                owner: input.entity,
+            },
+            Name::new(format!("FamiliarProxy3d: {}", input.name)),
+        ));
+    }
 
     commands.spawn((
         FamiliarRangeIndicator(input.entity),

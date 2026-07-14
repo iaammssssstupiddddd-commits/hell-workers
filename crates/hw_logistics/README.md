@@ -18,7 +18,7 @@
 | `floor_construction.rs` | 床建設サイトへの需要計算・資材消費ヘルパー |
 | `wall_construction.rs` | 壁建設サイトへの需要計算・資材消費ヘルパー |
 | `tile_index.rs` | `TileSiteIndex` — タイル座標 → サイトエンティティ高速逆引き |
-| `resource_cache.rs` | `SharedResourceCache` — タスク間リソース予約キャッシュ |
+| `resource_cache.rs` | `SharedResourceCache` — タスク間リソース予約キャッシュ。`begin_frame` は frame delta のみを clear し、`replace_reservation_snapshot` は予約 snapshot のみを置換する |
 | `construction_helpers.rs` | `ResourceItemVisualHandles`, `spawn_refund_items` — 建設キャンセル返却 helper |
 | `plugin.rs` | `LogisticsPlugin` — `apply_reservation_requests_system` のプラグイン登録 |
 | `manual_haul_selector.rs` | 手動運搬選定ロジック（`StockpileCandidateView` / `ExistingHaulRequestView` 処理） |

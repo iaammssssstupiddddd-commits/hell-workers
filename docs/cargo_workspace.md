@@ -292,7 +292,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `Commands` で複雑な Entity 生成を行うもの
 - `execute/task_execution/mod.rs` — `common`・`handler`・`move_plant`・`types`・`context` の `pub mod` をインラインで保有する thin shell（bevy_app 側に残留）。`context` は `pub mod context { ... }` としてインライン化済み。
 - `familiar_ai/decide/mod.rs` / `familiar_ai/execute/mod.rs` / `familiar_ai/helpers/mod.rs` — 互換 import path の pub use を `mod.rs` にインライン化済み。実体は `hw_familiar_ai` 側にある
-- `familiar_ai/perceive/resource_sync.rs` — root perceive system。`SharedResourceCache` の再構築と実ワールドとの同期は root の責務
+- `familiar_ai/perceive/resource_sync.rs` — root perceive system。`SharedResourceCache` snapshot と `ReservationSignatureCache` を実ワールドから同期し、load 後に再構築する責務は root に残す
 
 移設済み system の登録ルール:
 
@@ -455,7 +455,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - water / ground resource helper
 - `TransportRequest*`, `TransportRequestPlugin`, `TransportRequestSet`
 - transport metrics / state sync / lifecycle cleanup
-- `SharedResourceCache`（タスク間リソース予約キャッシュ）
+- `SharedResourceCache`（タスク間リソース予約 cache。frame-local delta と reservation snapshot を分離して保持）
 - `apply_reservation_op` / `apply_reservation_requests_system`（予約操作の反映 helper）
 - **`LogisticsPlugin`**：`apply_reservation_requests_system` を `SoulAiSystemSet::Execute` に登録する Plugin（`src/plugin.rs`）
 - `TileSiteIndex`（タイル→サイト逆引き）
@@ -465,7 +465,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 補足:
 
-- `apply_reservation_requests_system` は `hw_logistics::LogisticsPlugin` が `SoulAiSystemSet::Execute` に登録する。`ResourceReservationRequest` の `add_message` と `SharedResourceCache` の `init_resource` は root app shell が担当する。
+- `apply_reservation_requests_system` は `hw_logistics::LogisticsPlugin` が `SoulAiSystemSet::Execute` に登録する。`ResourceReservationRequest` の `add_message`、`SharedResourceCache`、`ReservationSyncTimer`、`ReservationSignatureCache` の `init_resource` は root app shell が担当する。`profiling` feature時の `ReservationSyncPerfMetrics` も root が登録する。Entity を持つ signature cache と、その再構築を保証する同期 timer は root の load reset inventory に属する。
 
 ここに置かないもの:
 
@@ -487,6 +487,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `MudMixerStorage`
 - `AssignedTask`（ワーカー実行中タスク状態 + 全フェーズ型）
 - `TaskAssignmentRequest`（`hw_jobs::events`）
+- `lifecycle::{ReservationSignature, collect_active_reservation_ops, active_reservation_signature}`（予約 operation の正規化と比較用 signature）
 - `MovePlanned`（建物移動タスクの計画状態）
 - `Door`, `DoorCloseTimer`
 - `FloorConstructionSite`, `WallConstructionSite`（親 site component）

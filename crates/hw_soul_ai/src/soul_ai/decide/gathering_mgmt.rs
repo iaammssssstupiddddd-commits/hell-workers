@@ -4,6 +4,8 @@ use hw_core::constants::{ESCAPE_GATHERING_JOIN_RADIUS, ESCAPE_SAFE_DISTANCE_MULT
 use hw_core::events::{GatheringManagementOp, GatheringManagementRequest};
 use hw_core::familiar::Familiar;
 use hw_core::relationships::{CommandedBy, GatheringParticipants, ParticipatingIn};
+#[cfg(feature = "profiling")]
+use hw_core::simulation_rng::FixedAuditSeed;
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
 use hw_jobs::AssignedTask;
 
@@ -151,6 +153,7 @@ type GatheringRecruitSoulQuery<'w, 's> = Query<
 
 /// 条件を満たすSoulの集会参加を Recruit 要求に変換する
 pub fn gathering_recruitment_decision(
+    #[cfg(feature = "profiling")] audit_seed: Option<Res<FixedAuditSeed>>,
     q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants)>,
     soul_grid: Res<SpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,
@@ -174,6 +177,10 @@ pub fn gathering_recruitment_decision(
         soul_grid
             .0
             .get_nearby_in_radius_into(spot.center, search_radius, &mut nearby_buf);
+        #[cfg(feature = "profiling")]
+        if audit_seed.is_some() {
+            nearby_buf.sort_unstable_by_key(|entity| entity.to_bits());
+        }
 
         let mut current_participants = gp.len();
         for &soul_entity in nearby_buf.iter() {

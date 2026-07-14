@@ -14,6 +14,30 @@ use crate::tasks::{
     RefinePhase, ReinforceFloorPhase,
 };
 
+/// 現在の予約状態を比較するための正規化済みスナップショット。
+///
+/// `AssignedTask` 自体には progress など `Eq` にできないフィールドがあるため、
+/// 実際に予約へ反映する operation だけを保持する。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReservationSignature(Vec<ResourceReservationOp>);
+
+impl ReservationSignature {
+    /// `collect_active_reservation_ops` の結果から signature を作る。
+    pub fn from_active_ops(ops: Vec<ResourceReservationOp>) -> Self {
+        Self(ops)
+    }
+
+    /// 予約を持たないタスクかを返す。
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// snapshot 再構築時に反映する active operation を返す。
+    pub fn active_ops(&self) -> &[ResourceReservationOp] {
+        &self.0
+    }
+}
+
 /// 現在フェーズで保持される予約を `Reserve*` 操作として返す。
 pub fn collect_active_reservation_ops(
     task: &AssignedTask,
@@ -200,6 +224,20 @@ pub fn collect_active_reservation_ops(
     ops
 }
 
+/// 現在フェーズの予約比較用 signature を返す。
+///
+/// operation の正規化規則を二重に持たないため、必ず
+/// `collect_active_reservation_ops` の結果から導出する。
+pub fn active_reservation_signature(
+    task: &AssignedTask,
+    resolve_wheelbarrow_item_type: impl FnMut(Entity, ResourceType) -> ResourceType,
+) -> ReservationSignature {
+    ReservationSignature::from_active_ops(collect_active_reservation_ops(
+        task,
+        resolve_wheelbarrow_item_type,
+    ))
+}
+
 /// 中断時に解放すべき予約を `Release*` 操作として返す。
 pub fn collect_release_reservation_ops(
     task: &AssignedTask,
@@ -226,5 +264,54 @@ fn to_release_op(op: ResourceReservationOp) -> Option<ResourceReservationOp> {
         ResourceReservationOp::ReleaseMixerDestination { .. }
         | ResourceReservationOp::ReleaseSource { .. }
         | ResourceReservationOp::RecordPickedSource { .. } => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tasks::{GatherData, GatherPhase};
+    use hw_core::jobs::WorkType;
+
+    fn gathering_task(phase: GatherPhase) -> AssignedTask {
+        AssignedTask::Gather(GatherData {
+            target: Entity::PLACEHOLDER,
+            work_type: WorkType::Chop,
+            phase,
+        })
+    }
+
+    #[test]
+    fn reservation_signature_ignores_gather_progress() {
+        let first = gathering_task(GatherPhase::Collecting { progress: 0.1 });
+        let later = gathering_task(GatherPhase::Collecting { progress: 0.9 });
+
+        assert_eq!(
+            active_reservation_signature(&first, |_, fallback| fallback),
+            active_reservation_signature(&later, |_, fallback| fallback)
+        );
+    }
+
+    #[test]
+    fn reservation_signature_tracks_reservation_phase_boundaries() {
+        let collecting = gathering_task(GatherPhase::Collecting { progress: 0.5 });
+        let done = gathering_task(GatherPhase::Done);
+
+        assert_ne!(
+            active_reservation_signature(&collecting, |_, fallback| fallback),
+            active_reservation_signature(&done, |_, fallback| fallback)
+        );
+        assert!(active_reservation_signature(&done, |_, fallback| fallback).is_empty());
+    }
+
+    #[test]
+    fn reservation_signature_is_derived_from_active_operations() {
+        let task = gathering_task(GatherPhase::GoingToResource);
+        let ops = collect_active_reservation_ops(&task, |_, fallback| fallback);
+
+        assert_eq!(
+            ReservationSignature::from_active_ops(ops.clone()),
+            active_reservation_signature(&task, |_, fallback| fallback)
+        );
     }
 }

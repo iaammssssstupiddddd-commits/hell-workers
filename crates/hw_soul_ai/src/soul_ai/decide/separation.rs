@@ -2,18 +2,29 @@ use bevy::prelude::*;
 
 use hw_core::constants::*;
 use hw_core::relationships::ParticipatingIn;
+#[cfg(feature = "profiling")]
+use hw_core::simulation_rng::{FixedAuditSeed, SimulationRandomState, SimulationRng};
 use hw_core::soul::{DamnedSoul, Destination, IdleBehavior, IdleState, Path};
 use hw_jobs::AssignedTask;
 use hw_spatial::{SpatialGrid, SpatialGridOps};
 use hw_world::WorldMap;
 
 use crate::soul_ai::helpers::gathering::{GatheringSpot, GatheringUpdateTimer};
+use crate::soul_ai::helpers::gathering_positions::SeparationParams;
+#[cfg(not(feature = "profiling"))]
 use crate::soul_ai::helpers::gathering_positions::{
-    SeparationParams, find_position_fallback_away, find_position_with_separation,
+    find_position_fallback_away, find_position_with_separation,
+};
+#[cfg(feature = "profiling")]
+use crate::soul_ai::helpers::gathering_positions::{
+    find_position_fallback_away_with_rng, find_position_with_separation_with_rng,
 };
 
 /// 重なり回避の最小間隔
 const GATHERING_MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
+
+#[cfg(feature = "profiling")]
+const GATHERING_SEPARATION_POSITION_STREAM: u64 = 0x6761_7468_5f73_6570;
 
 type GatheringSeparationQuery<'w, 's> = Query<
     'w,
@@ -32,12 +43,14 @@ type GatheringSeparationQuery<'w, 's> = Query<
 
 /// 集会中のSoul同士の重なりを防ぐシステム（0.5秒間隔）
 pub fn gathering_separation_system(
+    #[cfg(feature = "profiling")] audit_seed: Option<Res<FixedAuditSeed>>,
     world_map: Res<WorldMap>,
     q_spots: Query<&GatheringSpot>,
     update_timer: Res<GatheringUpdateTimer>,
     soul_grid: Res<SpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,
     mut q_souls: GatheringSeparationQuery,
+    #[cfg(feature = "profiling")] mut random_states: Query<&mut SimulationRandomState>,
 ) {
     if !update_timer.timer.just_finished() {
         return;
@@ -71,7 +84,16 @@ pub fn gathering_separation_system(
             let min_dist = TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN;
             let max_dist = TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
 
-            if let Some(new_pos) = find_position_with_separation(
+            #[cfg(feature = "profiling")]
+            let mut random_state = random_states.get_mut(entity).ok();
+            #[cfg(feature = "profiling")]
+            let mut rng = SimulationRng::for_actor(
+                audit_seed.as_deref(),
+                random_state.as_deref_mut(),
+                GATHERING_SEPARATION_POSITION_STREAM,
+            );
+            #[cfg(feature = "profiling")]
+            let new_position = find_position_with_separation_with_rng(
                 center,
                 entity,
                 &*soul_grid,
@@ -83,18 +105,51 @@ pub fn gathering_separation_system(
                     min_separation: GATHERING_MIN_SEPARATION,
                     max_attempts: 30,
                 },
-            ) {
+                &mut rng,
+            );
+            #[cfg(not(feature = "profiling"))]
+            let new_position = find_position_with_separation(
+                center,
+                entity,
+                &*soul_grid,
+                world_map.as_ref(),
+                &mut nearby_buf,
+                SeparationParams {
+                    min_dist,
+                    max_dist,
+                    min_separation: GATHERING_MIN_SEPARATION,
+                    max_attempts: 30,
+                },
+            );
+
+            if let Some(new_pos) = new_position {
                 dest.0 = new_pos;
                 path.waypoints.clear();
                 path.current_index = 0;
-            } else if let Some(new_pos) = find_position_fallback_away(
+                continue;
+            }
+
+            #[cfg(feature = "profiling")]
+            let fallback_position = find_position_fallback_away_with_rng(
                 center,
                 current_pos,
                 entity,
                 &*soul_grid,
                 world_map.as_ref(),
                 &mut nearby_buf,
-            ) {
+                &mut rng,
+            );
+            #[cfg(not(feature = "profiling"))]
+            let fallback_position = find_position_fallback_away(
+                center,
+                current_pos,
+                entity,
+                &*soul_grid,
+                world_map.as_ref(),
+                &mut nearby_buf,
+            );
+
+            if let Some(new_pos) = fallback_position {
                 dest.0 = new_pos;
                 path.waypoints.clear();
                 path.current_index = 0;

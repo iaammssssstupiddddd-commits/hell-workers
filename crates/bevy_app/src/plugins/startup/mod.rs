@@ -12,6 +12,8 @@ mod visual_handles;
 pub use perf_scenario::{
     PerfRenderMode, PerfScenarioConfig, PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
 };
+#[cfg(feature = "profiling")]
+pub(crate) use perf_scenario::{is_fixed_step_audit, is_not_fixed_step_audit};
 pub use rtt_composite::RttCompositeSprite;
 pub(crate) use rtt_composite::composite_logical_size;
 pub use rtt_setup::{
@@ -21,8 +23,10 @@ pub use rtt_setup::{
 pub use visual_handles::{Building3dHandles, CharacterHandles, Terrain3dHandles};
 
 use crate::world::map::{build_terrain_feature_map, build_terrain_id_map, spawn_boundary_meshes};
+#[cfg(feature = "profiling")]
 use perf_scenario::{
-    PerfScenarioApplied, setup_perf_scenario_if_enabled, setup_perf_scenario_runtime_if_enabled,
+    PerfScenarioApplied, PerfScenarioSet, setup_perf_scenario_if_enabled,
+    setup_perf_scenario_runtime_if_enabled,
 };
 use startup_systems::{
     initial_resource_spawner_timed, initialize_gizmo_config, populate_resource_spatial_grid, setup,
@@ -35,6 +39,8 @@ use crate::app_contexts::{
 };
 use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::interface::ui::{MenuState, setup_ui};
+#[cfg(feature = "profiling")]
+use crate::systems::GameSystemSet;
 use crate::systems::logistics::{ResourceCountDisplayTimer, ResourceLabels};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -77,7 +83,6 @@ impl Plugin for StartupPlugin {
             .init_resource::<StockpileSpatialGrid>()
             .init_resource::<PerfScenarioConfig>()
             .init_resource::<PerfScenarioRandomStreams>()
-            .init_resource::<PerfScenarioApplied>()
             .add_plugins(Material2dPlugin::<rtt_composite::RttCompositeMaterial>::default())
             .add_systems(Startup, (setup, initialize_gizmo_config))
             .add_systems(
@@ -92,7 +97,6 @@ impl Plugin for StartupPlugin {
                     initial_resource_spawner_timed,
                     spawn_entities,
                     spawn_familiar_wrapper,
-                    setup_perf_scenario_if_enabled,
                     setup_ui,
                     crate::interface::ui::dev_panel::spawn_dev_panel_system,
                     populate_resource_spatial_grid,
@@ -103,18 +107,69 @@ impl Plugin for StartupPlugin {
             .add_systems(
                 Update,
                 (
-                    setup_perf_scenario_runtime_if_enabled,
-                    (
-                        rtt_setup::sync_rtt_texture_size_to_window_and_quality,
-                        rtt_composite::sync_rtt_output_bindings,
-                        rtt_composite::sync_rtt_composite_perf_params_system,
-                    )
-                        .chain(),
-                ),
+                    rtt_setup::sync_rtt_texture_size_to_window_and_quality,
+                    rtt_composite::sync_rtt_output_bindings,
+                    rtt_composite::sync_rtt_composite_perf_params_system,
+                )
+                    .chain(),
             );
 
         #[cfg(feature = "profiling")]
-        app.init_resource::<perf_scenario::PerfCapture>()
-            .add_systems(Update, perf_scenario::drive_perf_capture_system);
+        {
+            app.init_resource::<PerfScenarioApplied>()
+                .add_systems(
+                    PostStartup,
+                    setup_perf_scenario_if_enabled
+                        .after(spawn_familiar_wrapper)
+                        .before(setup_ui),
+                )
+                .configure_sets(
+                    Update,
+                    (
+                        PerfScenarioSet::FixtureSpawn,
+                        PerfScenarioSet::FixtureApply,
+                        PerfScenarioSet::Setup,
+                        PerfScenarioSet::Apply,
+                        PerfScenarioSet::InitialCheckpoint,
+                    )
+                        .chain()
+                        .before(GameSystemSet::Input),
+                )
+                .add_systems(
+                    Update,
+                    (
+                        crate::entities::damned_soul::spawn::soul_spawning_system,
+                        crate::entities::familiar::familiar_spawning_system,
+                    )
+                        .in_set(PerfScenarioSet::FixtureSpawn)
+                        .run_if(is_fixed_step_audit),
+                )
+                .add_systems(
+                    Update,
+                    bevy::ecs::schedule::ApplyDeferred.in_set(PerfScenarioSet::FixtureApply),
+                )
+                .add_systems(
+                    Update,
+                    setup_perf_scenario_runtime_if_enabled.in_set(PerfScenarioSet::Setup),
+                )
+                .add_systems(
+                    Update,
+                    bevy::ecs::schedule::ApplyDeferred.in_set(PerfScenarioSet::Apply),
+                )
+                .init_resource::<perf_scenario::PerfCapture>()
+                .configure_sets(
+                    Update,
+                    PerfScenarioSet::Capture.after(GameSystemSet::Interface),
+                )
+                .add_systems(
+                    Update,
+                    perf_scenario::start_perf_capture_system
+                        .in_set(PerfScenarioSet::InitialCheckpoint),
+                )
+                .add_systems(
+                    Update,
+                    perf_scenario::drive_perf_capture_system.in_set(PerfScenarioSet::Capture),
+                );
+        }
     }
 }

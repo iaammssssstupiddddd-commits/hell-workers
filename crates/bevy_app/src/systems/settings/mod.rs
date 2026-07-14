@@ -8,6 +8,7 @@ use hw_core::game_state::TimeSpeed;
 use hw_ui::UiIntent;
 use hw_ui::components::{SettingsCheckboxMarker, SettingsField, SettingsSliderMarker};
 
+use crate::plugins::startup::PerfScenarioConfig;
 use apply::apply_default_time_speed;
 use persistence::{load_settings_from_disk, save_settings_to_disk};
 
@@ -33,13 +34,37 @@ impl Plugin for SettingsPlugin {
     }
 }
 
-fn load_settings_system(mut commands: Commands, mut time: ResMut<Time<Virtual>>) {
+fn load_settings_system(
+    mut commands: Commands,
+    mut time: ResMut<Time<Virtual>>,
+    perf_config: Option<Res<PerfScenarioConfig>>,
+) {
     let settings = load_settings_from_disk();
-    apply_default_time_speed(&mut time, settings.default_time_speed);
+    if let Some(config) = perf_config.filter(|config| config.enabled()) {
+        // 計測はローカルの settings.ron にある一時停止・倍速設定の影響を受けない。
+        time.set_relative_speed(1.0);
+        if config.uses_fixed_timesteps() {
+            // fixed-step audit は fixture checkpoint が採れた後に capture system が
+            // 明示的に unpause する。Startup から最初の Update までのゲーム更新を
+            // 混入させないための gate である。
+            time.pause();
+        } else {
+            time.unpause();
+        }
+    } else {
+        apply_default_time_speed(&mut time, settings.default_time_speed);
+    }
     commands.insert_resource(settings);
 }
 
-fn save_settings_on_app_exit_system(mut exit: MessageReader<AppExit>, settings: Res<GameSettings>) {
+fn save_settings_on_app_exit_system(
+    mut exit: MessageReader<AppExit>,
+    settings: Res<GameSettings>,
+    perf_config: Option<Res<PerfScenarioConfig>>,
+) {
+    if perf_config.is_some_and(|config| config.enabled()) {
+        return;
+    }
     if exit.read().next().is_none() {
         return;
     }

@@ -81,7 +81,7 @@
 
 ### 5.1. 実行サイクル (Execution Cycle)
 
-4フェーズ（[ai-system-phases.md](ai-system-phases.md) 参照）。主要システム: Perceive=`detect_state_changes_system`/`sync_reservations_system`（0.2秒）, Decide=`familiar_ai_state_system`/`blueprint_auto_gather_system`（1.0秒）/`familiar_task_delegation_system`（0.5秒）, Execute=`familiar_state_apply_system`/`apply_squad_management_requests_system`等。
+4フェーズ（[ai-system-phases.md](ai-system-phases.md) 参照）。主要システム: Perceive=`detect_state_changes_system`/`sync_reservations_system`（予約 dirty 時は即時、0.2秒ごとの安全監査あり）, Decide=`familiar_ai_state_system`/`blueprint_auto_gather_system`（1.0秒）/`familiar_task_delegation_system`（0.5秒）, Execute=`familiar_state_apply_system`/`apply_squad_management_requests_system`等。
 
 ### 5.2. 主要モジュール
 
@@ -89,8 +89,8 @@
 
 | ファイル | 区分 | root 残留理由 |
 |:---|:---|:---|
-| `perceive/resource_sync.rs` | root perceive system | `SharedResourceCache` 再構築・`AssignedTask`/`Designation`/`TransportRequest`/relationship の実ワールド再構築は root の責務。`apply_reservation_op` / `apply_reservation_requests_system` は **`hw_logistics` に移設済み** |
-| `mod.rs` | root wiring | `configure_sets`・`FamiliarAiCorePlugin` の追加を担当（SpatialGrid の `init_resource` は `SpatialPlugin` に移設済み） |
+| `perceive/resource_sync.rs` | root perceive system | `SharedResourceCache` snapshot と `ReservationSignatureCache` を実ワールドの `AssignedTask` / `Designation` / `TransportRequest` / relationship から同期するのは root の責務。`apply_reservation_op` / `apply_reservation_requests_system` は **`hw_logistics` に移設済み** |
+| `mod.rs` | root wiring | `configure_sets`・`FamiliarAiCorePlugin` と root reservation resources（`SharedResourceCache` / `ReservationSyncTimer` / `ReservationSignatureCache`、profiling 時の metrics）の登録を担当（SpatialGrid の `init_resource` は `SpatialPlugin` に移設済み） |
 
 **thin re-export（削除済み: 2026-03-22）**
 
@@ -149,8 +149,10 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 
 ### 7.1. 共有リソースキャッシュ (SharedResourceCache)
 タスク間のリソース競合を O(1) で管理します。従来の `HaulReservationCache` を統合・拡張したものです。
-- **仕組み**: Perceiveフェーズで **0.2秒間隔（初回即時）** に再構築され、各フレームの更新は `ResourceReservationRequest` を通じて反映されます。
-- **境界**: `apply_reservation_op` / `apply_reservation_requests_system` の実装は `hw_logistics` にあるが、`SharedResourceCache` の `init_resource` と `ResourceReservationRequest` の `add_message` は app shell が担当します。
+- **仕組み**: Perceiveフェーズで初回、reservation signature の差分、pending task 側の変更/削除、または **0.2秒の安全監査**時に snapshot を再構築し、各フレームの更新は `ResourceReservationRequest` を通じて反映されます。signature は active reservation operation だけを比較するため、進捗値の更新は再構築しません。
+- **cache 境界**: `begin_frame()` は frame-local の pickup/store delta だけを clear し、snapshot 置換は delta を保ったまま予約 map だけを更新します。
+- **load**: `ReservationSignatureCache` と同期 timer も cache と同時に reset され、次の Perceive が完全 snapshot を構築します。
+- **境界**: `apply_reservation_op` / `apply_reservation_requests_system` の実装は `hw_logistics` にあるが、`SharedResourceCache` / `ReservationSignatureCache` の `init_resource` と `ResourceReservationRequest` の `add_message` は app shell が担当します。
 - **機能**: 
   - **Destination Reservation**: 搬送先（ストックパイル、タンク、ミキサー）への予約。
   - **Source Reservation**: アイテム（拾う対象）の重複予約防止。

@@ -7,8 +7,8 @@ use hw_core::constants::*;
 use hw_world::{PathWorld, SpatialGridOps, world_to_grid};
 
 use super::gathering_positions::{
-    SeparationParams, find_position_fallback_away, find_position_with_separation,
-    random_position_around,
+    SeparationParams, find_position_fallback_away_with_rng, find_position_with_separation_with_rng,
+    random_position_around_with_rng,
 };
 
 /// 到着直後・中心に近すぎる場合の移動先を探索
@@ -20,11 +20,33 @@ pub fn find_initial_gathering_position<G: SpatialGridOps, W: PathWorld>(
     world_map: &W,
     scratch: &mut Vec<Entity>,
 ) -> Option<Vec2> {
+    let mut rng = rand::thread_rng();
+    find_initial_gathering_position_with_rng(
+        center,
+        current_pos,
+        exclude_entity,
+        soul_grid,
+        world_map,
+        scratch,
+        &mut rng,
+    )
+}
+
+/// 到着直後・中心に近すぎる場合の移動先を、指定した乱数列で探索する。
+pub fn find_initial_gathering_position_with_rng<G: SpatialGridOps, W: PathWorld>(
+    center: Vec2,
+    current_pos: Vec2,
+    exclude_entity: Entity,
+    soul_grid: &G,
+    world_map: &W,
+    scratch: &mut Vec<Entity>,
+    rng: &mut impl Rng,
+) -> Option<Vec2> {
     const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
     let min_dist = TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN;
     let max_dist = TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
 
-    find_position_with_separation(
+    find_position_with_separation_with_rng(
         center,
         exclude_entity,
         soul_grid,
@@ -36,15 +58,17 @@ pub fn find_initial_gathering_position<G: SpatialGridOps, W: PathWorld>(
             min_separation: MIN_SEPARATION,
             max_attempts: 20,
         },
+        rng,
     )
     .or_else(|| {
-        find_position_fallback_away(
+        find_position_fallback_away_with_rng(
             center,
             current_pos,
             exclude_entity,
             soul_grid,
             world_map,
             scratch,
+            rng,
         )
     })
 }
@@ -58,14 +82,35 @@ pub fn find_gathering_wandering_target<G: SpatialGridOps, W: PathWorld>(
     world_map: &W,
     scratch: &mut Vec<Entity>,
 ) -> Option<Vec2> {
+    let mut rng = rand::thread_rng();
+    find_gathering_wandering_target_with_rng(
+        center,
+        current_pos,
+        exclude_entity,
+        soul_grid,
+        world_map,
+        scratch,
+        &mut rng,
+    )
+}
+
+/// 集会中の Wandering サブ行動の移動先を、指定した乱数列で探索する。
+pub fn find_gathering_wandering_target_with_rng<G: SpatialGridOps, W: PathWorld>(
+    center: Vec2,
+    current_pos: Vec2,
+    exclude_entity: Entity,
+    soul_grid: &G,
+    world_map: &W,
+    scratch: &mut Vec<Entity>,
+    rng: &mut impl Rng,
+) -> Option<Vec2> {
     const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
     const MIN_DIST_FROM_CURRENT: f32 = TILE_SIZE * 2.0;
     let min_dist = TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MIN;
     let max_dist = TILE_SIZE * GATHERING_KEEP_DISTANCE_TARGET_MAX;
 
-    let mut rng = rand::thread_rng();
     for _ in 0..10 {
-        let new_target = random_position_around(center, min_dist, max_dist);
+        let new_target = random_position_around_with_rng(center, min_dist, max_dist, rng);
         let dist_from_current = (new_target - current_pos).length();
         if dist_from_current < MIN_DIST_FROM_CURRENT {
             continue;
@@ -104,11 +149,32 @@ pub fn find_gathering_still_retreat_target<G: SpatialGridOps, W: PathWorld>(
     world_map: &W,
     scratch: &mut Vec<Entity>,
 ) -> Option<Vec2> {
+    let mut rng = rand::thread_rng();
+    find_gathering_still_retreat_target_with_rng(
+        center,
+        current_pos,
+        exclude_entity,
+        soul_grid,
+        world_map,
+        scratch,
+        &mut rng,
+    )
+}
+
+/// Sleeping/Standing/Dancing 時の退避先を、指定した乱数列で探索する。
+pub fn find_gathering_still_retreat_target_with_rng<G: SpatialGridOps, W: PathWorld>(
+    center: Vec2,
+    current_pos: Vec2,
+    exclude_entity: Entity,
+    soul_grid: &G,
+    world_map: &W,
+    scratch: &mut Vec<Entity>,
+    rng: &mut impl Rng,
+) -> Option<Vec2> {
     const MIN_SEPARATION: f32 = TILE_SIZE * 1.2;
     let away = if (current_pos - center).length() > 0.1 {
         (current_pos - center).normalize_or_zero()
     } else {
-        let mut rng = rand::thread_rng();
         let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
         Vec2::new(angle.cos(), angle.sin())
     };

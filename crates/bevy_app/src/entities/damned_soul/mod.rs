@@ -18,6 +18,8 @@ pub use hw_core::soul::{
 #[derive(Message)]
 pub struct DamnedSoulSpawnEvent {
     pub position: Vec2,
+    /// 固定 step 監査でだけ actor-local RNG に使う fixture spawn 順。
+    pub simulation_random_key: Option<u64>,
 }
 
 /// 性別
@@ -81,6 +83,11 @@ use crate::systems::GameSystemSet;
 
 pub use spawn::spawn_damned_souls;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum DamnedSoulSystemSet {
+    SpawnEvents,
+}
+
 impl Plugin for DamnedSoulPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<DamnedSoul>()
@@ -100,8 +107,7 @@ impl Plugin for DamnedSoulPlugin {
                     spawn::periodic_spawn_system
                         .in_set(GameSystemSet::Logic)
                         .after(spawn::population_tracking_system)
-                        .before(spawn::soul_spawning_system),
-                    spawn::soul_spawning_system.in_set(GameSystemSet::Logic),
+                        .before(DamnedSoulSystemSet::SpawnEvents),
                     movement::soul_movement
                         .in_set(GameSystemSet::Actor)
                         .after(hw_soul_ai::soul_ai::pathfinding::pathfinding_system),
@@ -121,5 +127,22 @@ impl Plugin for DamnedSoulPlugin {
             .add_observer(observers::on_soul_recruited)
             .add_observer(observers::on_stress_breakdown)
             .add_observer(observers::on_exhausted);
+
+        #[cfg(feature = "profiling")]
+        app.add_systems(
+            Update,
+            spawn::soul_spawning_system
+                .in_set(GameSystemSet::Logic)
+                .in_set(DamnedSoulSystemSet::SpawnEvents)
+                .run_if(crate::plugins::startup::is_not_fixed_step_audit),
+        );
+
+        #[cfg(not(feature = "profiling"))]
+        app.add_systems(
+            Update,
+            spawn::soul_spawning_system
+                .in_set(GameSystemSet::Logic)
+                .in_set(DamnedSoulSystemSet::SpawnEvents),
+        );
     }
 }

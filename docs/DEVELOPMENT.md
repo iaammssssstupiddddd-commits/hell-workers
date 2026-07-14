@@ -96,7 +96,8 @@ rg -n "#\[allow\\(clippy::" crates -g '*.rs'
   - 自動発行時に予約を確定する場合は `ReservedForTask` を付与し、割り当て時の同種予約を重複発行しない。
 - 共有ソースを消費するタスク（例: Tank からの取水）は、処理中に `ReserveSource` でロックし、成功/失敗/中断の全経路で解除する。
 - フェーズ移行で不要になったロックは即時解除し、`unassign_task` 側でもフェーズに応じて解放漏れを防ぐ。
-- `sync_reservations_system` の再構築条件は、実行フェーズの予約寿命と一致させる（フェーズ定義を変更したら同時更新する）。
+- `sync_reservations_system` の再構築条件は、実行フェーズの予約寿命と一致させる（フェーズ定義を変更したら同時更新する）。比較用の `ReservationSignature` は `collect_active_reservation_ops` / `active_reservation_signature` と同じ正規化経路から導出し、独立した phase match を増やさない。progress のような予約非依存フィールドだけで snapshot を再構築しない。
+- `SharedResourceCache` の frame-local delta と reservation snapshot は別の寿命で管理する。snapshot 置換で未反映 delta を消さず、Entity を持つ reservation signature cache と、その再構築を保証する同期 timer は load 時に必ず reset する。
 
 ### 7. TransportRequest の規約（M3〜M7 完了）
 運搬系は全て **Anchor Request パターン** に統一済み。request エンティティをアンカー位置（Blueprint/Mixer/Stockpile）に生成し、割り当て時にソースを遅延解決する。
@@ -377,14 +378,17 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo run -p visual_t
 
 ### 再現可能なパフォーマンス計測
 ```bash
-HW_PRESENT_MODE=novsync cargo run --profile profiling -p bevy_app@0.1.0 --no-default-features --features profiling -- --perf-scenario --perf-seed 20260712 --perf-size medium --perf-workload gather --perf-render cpu
+python3 scripts/perf.py run \
+  --workload gather --sizes medium --renders cpu --repeat 3 \
+  --seed 20260712 --backend vulkan --adapter Intel \
+  --window-backend wayland --present-mode novsync \
+  --output target/perf-runs/gather-intel-vulkan
 ```
 
-- `--perf-scenario`: Warmup/Measure/Flush/AppExitを自動実行する。
-- `--perf-seed`: worldgenとSoul/Familiar配置のmaster seed。`HELL_WORKERS_WORLDGEN_SEED`より優先する。
-- `--perf-size`: `small`（50/4）、`medium`（200/12）、`large`（500/30）のSoul/Familiar数を選ぶ。`--spawn-souls`と`--spawn-familiars`は個別上書き。
-- `--perf-render cpu|gpu`: CPU-only寄りまたは3D RtT込みの固定描画条件を選ぶ。
-- CSV、Tracy memory、RenderDocの採取条件と出力形式は[performance-profiling.md](performance-profiling.md)を正本とする。
+- `scripts/perf.py run` が profiling binary の計測外build、runごとの隔離、CSV/log/adapter/checksumの検証、集約を行う。比較用の計測はこの runner だけを使う。
+- `--sizes`: `small`（50/4）、`medium`（200/12）、`large`（500/30）のSoul/Familiar数を選ぶ。`--souls`と`--familiars`は組で個別上書きする。
+- `--renders cpu|gpu`: CPU-only寄りまたは3D RtT込みの固定描画条件を選ぶ。`--repeat 3`、backend、adapter、window backend、present modeを明示して比較する。
+- binary の直接起動は起動経路のデバッグ用途だけにし、最終比較には使わない。CSV、Tracy memory、RenderDocの採取条件と出力形式は[performance-profiling.md](performance-profiling.md)を正本とする。
 
 ## トラブルシューティング
 

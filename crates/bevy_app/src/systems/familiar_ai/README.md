@@ -98,7 +98,7 @@ root adapter から呼ばれる pure logic / helper:
 
 | モジュール | 理由 |
 |---|---|
-| `perceive/resource_sync.rs` | ゲーム固有リソース予約の同期。`sync_reservations_system` と `ReservationSyncTimer` を持ち、`SharedResourceCache` は `hw_logistics` から re-export |
+| `perceive/resource_sync.rs` | ゲーム固有リソース予約の同期。`sync_reservations_system`、`ReservationSyncTimer`、`ReservationSignatureCache` を持ち、`SharedResourceCache` は `hw_logistics` から re-export |
 | `decide/task_management` | `hw_familiar_ai::familiar_ai::decide::task_management` への thin bridge。root 側は inline module で互換 path を維持 |
 | `decide/familiar_processor.rs` | `FamiliarDelegationContext` / helper 群の thin re-export |
 | `decide/auto_gather_for_blueprint.rs` | `blueprint_auto_gather_system` の thin re-export |
@@ -123,7 +123,9 @@ impl Plugin for FamiliarAiPlugin {
 }
 ```
 
-`ResourceReservationRequest` の message 登録は `MessagesPlugin`、`SharedResourceCache` の `init_resource` は `FamiliarAiPlugin` が担当する。`hw_logistics::apply_reservation_requests_system` はその app shell 初期化を前提に動作する。
+`ResourceReservationRequest` の message 登録と、`SharedResourceCache`、`ReservationSyncTimer`、`ReservationSignatureCache` の `init_resource` は `FamiliarAiPlugin` が担当する。`profiling` feature時は`ReservationSyncPerfMetrics`も登録する。`hw_logistics::apply_reservation_requests_system` はその app shell 初期化を前提に動作する。
+
+`sync_reservations_system` は Perceive の先頭で `SharedResourceCache::begin_frame()` を呼び、pending task の変更、予約 operation が変わる `AssignedTask` の signature 差分、または定期監査時だけ snapshot を置換する。signature は `hw_jobs::lifecycle::collect_active_reservation_ops` から導出し、ロード時には signature cache と timer を reset して次フレームの完全再構築を保証する。
 
 ## 設計メモ
 

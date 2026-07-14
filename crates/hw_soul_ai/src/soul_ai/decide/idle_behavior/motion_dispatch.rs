@@ -8,6 +8,8 @@ use crate::soul_ai::helpers::gathering_motion;
 use hw_core::constants::*;
 use hw_core::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use hw_core::relationships::ParticipatingIn;
+#[cfg(feature = "profiling")]
+use hw_core::simulation_rng::{FixedAuditSeed, SimulationRandomState, SimulationRng};
 use hw_core::soul::{Destination, GatheringBehavior, IdleBehavior, IdleState, Path};
 use hw_world::coords::grid_to_world;
 use hw_world::coords::world_to_grid;
@@ -38,7 +40,24 @@ pub struct MotionExtras<'a> {
     pub dt: f32,
     pub dream: f32,
     pub scratch: &'a mut Vec<Entity>,
+    #[cfg(feature = "profiling")]
+    pub audit_seed: Option<&'a FixedAuditSeed>,
+    #[cfg(feature = "profiling")]
+    pub random_state: Option<&'a mut SimulationRandomState>,
 }
+
+#[cfg(feature = "profiling")]
+const WANDER_DESTINATION_STREAM: u64 = 0x6964_6c65_5f77_616e;
+#[cfg(feature = "profiling")]
+const GATHERING_SUB_BEHAVIOR_STREAM: u64 = 0x6761_7468_5f62_6568;
+#[cfg(feature = "profiling")]
+const GATHERING_SUB_DURATION_STREAM: u64 = 0x6761_7468_5f64_7572;
+#[cfg(feature = "profiling")]
+const GATHERING_INITIAL_POSITION_STREAM: u64 = 0x6761_7468_5f69_6e69;
+#[cfg(feature = "profiling")]
+const GATHERING_WANDERING_POSITION_STREAM: u64 = 0x6761_7468_5f77_616e;
+#[cfg(feature = "profiling")]
+const GATHERING_RETREAT_POSITION_STREAM: u64 = 0x6761_7468_5f72_6574;
 
 /// 現在の行動に応じて移動先を更新
 pub fn update_motion_destinations(
@@ -52,9 +71,16 @@ pub fn update_motion_destinations(
 ) {
     let entity = soul_pos.entity;
     let current_pos = soul_pos.pos;
-    let dt = extras.dt;
-    let dream = extras.dream;
-    let scratch = extras.scratch;
+    #[cfg(feature = "profiling")]
+    let MotionExtras {
+        dt,
+        dream,
+        scratch,
+        audit_seed,
+        mut random_state,
+    } = extras;
+    #[cfg(not(feature = "profiling"))]
+    let MotionExtras { dt, dream, scratch } = extras;
     let idle = state.idle;
     let dest = state.dest;
     let path = state.path;
@@ -64,17 +90,15 @@ pub fn update_motion_destinations(
     match idle.behavior {
         IdleBehavior::Wandering => {
             if path.waypoints.is_empty() || path.current_index >= path.waypoints.len() {
-                let current_grid = world_to_grid(current_pos);
+                #[cfg(feature = "profiling")]
+                let mut rng = SimulationRng::for_actor(
+                    audit_seed,
+                    random_state.as_deref_mut(),
+                    WANDER_DESTINATION_STREAM,
+                );
+                #[cfg(not(feature = "profiling"))]
                 let mut rng = rand::thread_rng();
-                for _ in 0..10 {
-                    let dx: i32 = rng.gen_range(-5..=5);
-                    let dy: i32 = rng.gen_range(-5..=5);
-                    let new_grid = (current_grid.0 + dx, current_grid.1 + dy);
-                    if world_map.is_walkable(new_grid.0, new_grid.1) {
-                        dest.0 = grid_to_world(new_grid.0, new_grid.1);
-                        break;
-                    }
-                }
+                set_wandering_destination(current_pos, dest, world_map, &mut rng);
             }
         }
         IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
@@ -84,16 +108,76 @@ pub fn update_motion_destinations(
                 idle.gathering_behavior_timer += dt;
                 if idle.gathering_behavior_timer >= idle.gathering_behavior_duration {
                     idle.gathering_behavior_timer = 0.0;
-                    idle.gathering_behavior = transitions::random_gathering_behavior(dream);
-                    idle.gathering_behavior_duration = transitions::random_gathering_duration();
+                    #[cfg(feature = "profiling")]
+                    let mut behavior_rng = SimulationRng::for_actor(
+                        audit_seed,
+                        random_state.as_deref_mut(),
+                        GATHERING_SUB_BEHAVIOR_STREAM,
+                    );
+                    #[cfg(feature = "profiling")]
+                    {
+                        idle.gathering_behavior = transitions::random_gathering_behavior_with_rng(
+                            dream,
+                            &mut behavior_rng,
+                        );
+                    }
+                    #[cfg(not(feature = "profiling"))]
+                    {
+                        idle.gathering_behavior = transitions::random_gathering_behavior(dream);
+                    }
+                    #[cfg(feature = "profiling")]
+                    let mut duration_rng = SimulationRng::for_actor(
+                        audit_seed,
+                        random_state.as_deref_mut(),
+                        GATHERING_SUB_DURATION_STREAM,
+                    );
+                    #[cfg(feature = "profiling")]
+                    {
+                        idle.gathering_behavior_duration =
+                            transitions::random_gathering_duration_with_rng(&mut duration_rng);
+                    }
+                    #[cfg(not(feature = "profiling"))]
+                    {
+                        idle.gathering_behavior_duration = transitions::random_gathering_duration();
+                    }
                     idle.needs_separation = true;
                 }
 
                 // dream=0で集会中Sleeping → Sleeping以外に切り替え
                 if idle.gathering_behavior == GatheringBehavior::Sleeping && dream <= 0.0 {
-                    idle.gathering_behavior = transitions::random_gathering_behavior(dream);
+                    #[cfg(feature = "profiling")]
+                    let mut behavior_rng = SimulationRng::for_actor(
+                        audit_seed,
+                        random_state.as_deref_mut(),
+                        GATHERING_SUB_BEHAVIOR_STREAM,
+                    );
+                    #[cfg(feature = "profiling")]
+                    {
+                        idle.gathering_behavior = transitions::random_gathering_behavior_with_rng(
+                            dream,
+                            &mut behavior_rng,
+                        );
+                    }
+                    #[cfg(not(feature = "profiling"))]
+                    {
+                        idle.gathering_behavior = transitions::random_gathering_behavior(dream);
+                    }
                     idle.gathering_behavior_timer = 0.0;
-                    idle.gathering_behavior_duration = transitions::random_gathering_duration();
+                    #[cfg(feature = "profiling")]
+                    let mut duration_rng = SimulationRng::for_actor(
+                        audit_seed,
+                        random_state.as_deref_mut(),
+                        GATHERING_SUB_DURATION_STREAM,
+                    );
+                    #[cfg(feature = "profiling")]
+                    {
+                        idle.gathering_behavior_duration =
+                            transitions::random_gathering_duration_with_rng(&mut duration_rng);
+                    }
+                    #[cfg(not(feature = "profiling"))]
+                    {
+                        idle.gathering_behavior_duration = transitions::random_gathering_duration();
+                    }
                     idle.needs_separation = true;
                 }
 
@@ -119,38 +203,76 @@ pub fn update_motion_destinations(
                     if !is_moving
                         && (just_arrived
                             || dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN)
-                        && let Some(new_target) = gathering_motion::find_initial_gathering_position(
+                    {
+                        #[cfg(feature = "profiling")]
+                        let new_target = {
+                            let mut rng = SimulationRng::for_actor(
+                                audit_seed,
+                                random_state.as_deref_mut(),
+                                GATHERING_INITIAL_POSITION_STREAM,
+                            );
+                            gathering_motion::find_initial_gathering_position_with_rng(
+                                center,
+                                current_pos,
+                                entity,
+                                soul_grid,
+                                world_map,
+                                scratch,
+                                &mut rng,
+                            )
+                        };
+                        #[cfg(not(feature = "profiling"))]
+                        let new_target = gathering_motion::find_initial_gathering_position(
                             center,
                             current_pos,
                             entity,
                             soul_grid,
                             world_map,
                             scratch,
-                        )
-                    {
-                        dest.0 = new_target;
-                        path.waypoints.clear();
-                        path.current_index = 0;
+                        );
+                        if let Some(new_target) = new_target {
+                            dest.0 = new_target;
+                            path.waypoints.clear();
+                            path.current_index = 0;
+                        }
                     }
 
                     match idle.gathering_behavior {
                         GatheringBehavior::Wandering => {
                             let path_complete = path.waypoints.is_empty()
                                 || path.current_index >= path.waypoints.len();
-                            if path_complete
-                                && let Some(new_target) =
-                                    gathering_motion::find_gathering_wandering_target(
+                            if path_complete {
+                                #[cfg(feature = "profiling")]
+                                let new_target = {
+                                    let mut rng = SimulationRng::for_actor(
+                                        audit_seed,
+                                        random_state.as_deref_mut(),
+                                        GATHERING_WANDERING_POSITION_STREAM,
+                                    );
+                                    gathering_motion::find_gathering_wandering_target_with_rng(
                                         center,
                                         current_pos,
                                         entity,
                                         soul_grid,
                                         world_map,
                                         scratch,
+                                        &mut rng,
                                     )
-                            {
-                                dest.0 = new_target;
-                                path.waypoints.clear();
-                                path.current_index = 0;
+                                };
+                                #[cfg(not(feature = "profiling"))]
+                                let new_target = gathering_motion::find_gathering_wandering_target(
+                                    center,
+                                    current_pos,
+                                    entity,
+                                    soul_grid,
+                                    world_map,
+                                    scratch,
+                                );
+                                if let Some(new_target) = new_target {
+                                    dest.0 = new_target;
+                                    path.waypoints.clear();
+                                    path.current_index = 0;
+                                }
                             }
                         }
                         GatheringBehavior::Sleeping
@@ -161,16 +283,33 @@ pub fn update_motion_destinations(
                             if dist_from_center < TILE_SIZE * GATHERING_KEEP_DISTANCE_MIN
                                 && path_complete
                             {
-                                if let Some(target) =
-                                    gathering_motion::find_gathering_still_retreat_target(
+                                #[cfg(feature = "profiling")]
+                                let target = {
+                                    let mut rng = SimulationRng::for_actor(
+                                        audit_seed,
+                                        random_state.as_deref_mut(),
+                                        GATHERING_RETREAT_POSITION_STREAM,
+                                    );
+                                    gathering_motion::find_gathering_still_retreat_target_with_rng(
                                         center,
                                         current_pos,
                                         entity,
                                         soul_grid,
                                         world_map,
                                         scratch,
+                                        &mut rng,
                                     )
-                                {
+                                };
+                                #[cfg(not(feature = "profiling"))]
+                                let target = gathering_motion::find_gathering_still_retreat_target(
+                                    center,
+                                    current_pos,
+                                    entity,
+                                    soul_grid,
+                                    world_map,
+                                    scratch,
+                                );
+                                if let Some(target) = target {
                                     dest.0 = target;
                                     path.waypoints.clear();
                                     path.current_index = 0;
@@ -202,5 +341,23 @@ pub fn update_motion_destinations(
         | IdleBehavior::GoingToRest
         | IdleBehavior::Escaping
         | IdleBehavior::Drifting => {}
+    }
+}
+
+fn set_wandering_destination(
+    current_pos: Vec2,
+    destination: &mut Destination,
+    world_map: &WorldMap,
+    rng: &mut impl Rng,
+) {
+    let current_grid = world_to_grid(current_pos);
+    for _ in 0..10 {
+        let dx: i32 = rng.gen_range(-5..=5);
+        let dy: i32 = rng.gen_range(-5..=5);
+        let new_grid = (current_grid.0 + dx, current_grid.1 + dy);
+        if world_map.is_walkable(new_grid.0, new_grid.1) {
+            destination.0 = grid_to_world(new_grid.0, new_grid.1);
+            break;
+        }
     }
 }

@@ -41,7 +41,7 @@ Perceive → (ApplyDeferred) → Update → (ApplyDeferred) → Decide → Execu
 - `FamiliarAiPlugin` が担う：
   1. `hw_familiar_ai::FamiliarAiCorePlugin` のインストール
   2. `FamiliarAiSystemSet` の `configure_sets`（ordering のみ）
-  3. root-only resource の `init_resource`（`SharedResourceCache`, `ReservationSyncTimer`）
+  3. root-only resource の `init_resource`（`SharedResourceCache`, `ReservationSyncTimer`, `ReservationSignatureCache`、`profiling` feature時の `ReservationSyncPerfMetrics`）
   4. `sync_reservations_system`（Perceive フェーズ）および ApplyDeferred の登録
 - leaf 側 `FamiliarAiCorePlugin` / `HwVisualPlugin` が登録済みのシステムはここで再登録しない
 

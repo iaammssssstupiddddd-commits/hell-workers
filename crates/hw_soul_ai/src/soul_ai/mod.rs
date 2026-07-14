@@ -14,6 +14,9 @@ pub struct SoulAiCorePlugin;
 
 impl Plugin for SoulAiCorePlugin {
     fn build(&self, app: &mut App) {
+        #[cfg(feature = "profiling")]
+        app.init_resource::<execute::task_execution::TaskExecutionPerfMetrics>();
+
         app.init_resource::<helpers::gathering::GatheringUpdateTimer>()
             .init_resource::<perceive::escaping::EscapeDetectionTimer>()
             .init_resource::<perceive::escaping::EscapeBehaviorTimer>()

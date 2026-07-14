@@ -9,6 +9,18 @@ use hw_world::{PathWorld, SpatialGridOps, world_to_grid};
 /// 中心周辺のランダムなリング上の位置を生成
 pub fn random_position_around(center: Vec2, min_dist: f32, max_dist: f32) -> Vec2 {
     let mut rng = rand::thread_rng();
+    random_position_around_with_rng(center, min_dist, max_dist, &mut rng)
+}
+
+/// 中心周辺のランダムなリング上の位置を、呼び出し元が指定した乱数列で生成する。
+///
+/// 固定 step 監査では actor-local RNG を渡し、他の system の乱数消費から独立させる。
+pub fn random_position_around_with_rng(
+    center: Vec2,
+    min_dist: f32,
+    max_dist: f32,
+    rng: &mut impl Rng,
+) -> Vec2 {
     let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
     let dist: f32 = rng.gen_range(min_dist..max_dist);
     center + Vec2::new(angle.cos() * dist, angle.sin() * dist)
@@ -32,6 +44,27 @@ pub fn find_position_with_separation<G: SpatialGridOps, W: PathWorld>(
     params: SeparationParams,
 ) -> Option<Vec2> {
     let mut rng = rand::thread_rng();
+    find_position_with_separation_with_rng(
+        center,
+        exclude_entity,
+        soul_grid,
+        world_map,
+        scratch,
+        params,
+        &mut rng,
+    )
+}
+
+/// overlap 回避付きの移動先を、呼び出し元が指定した乱数列で探索する。
+pub fn find_position_with_separation_with_rng<G: SpatialGridOps, W: PathWorld>(
+    center: Vec2,
+    exclude_entity: Entity,
+    soul_grid: &G,
+    world_map: &W,
+    scratch: &mut Vec<Entity>,
+    params: SeparationParams,
+    rng: &mut impl Rng,
+) -> Option<Vec2> {
     for _ in 0..params.max_attempts {
         let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
         let dist: f32 = rng.gen_range(params.min_dist..params.max_dist);
@@ -60,10 +93,31 @@ pub fn find_position_fallback_away<G: SpatialGridOps, W: PathWorld>(
     world_map: &W,
     scratch: &mut Vec<Entity>,
 ) -> Option<Vec2> {
+    let mut rng = rand::thread_rng();
+    find_position_fallback_away_with_rng(
+        center,
+        current_pos,
+        exclude_entity,
+        soul_grid,
+        world_map,
+        scratch,
+        &mut rng,
+    )
+}
+
+/// ランダム探索失敗時の退避先を、呼び出し元が指定した乱数列で求める。
+pub fn find_position_fallback_away_with_rng<G: SpatialGridOps, W: PathWorld>(
+    center: Vec2,
+    current_pos: Vec2,
+    exclude_entity: Entity,
+    soul_grid: &G,
+    world_map: &W,
+    scratch: &mut Vec<Entity>,
+    rng: &mut impl Rng,
+) -> Option<Vec2> {
     let away = if (current_pos - center).length() > 0.1 {
         (current_pos - center).normalize()
     } else {
-        let mut rng = rand::thread_rng();
         let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
         Vec2::new(angle.cos(), angle.sin())
     };

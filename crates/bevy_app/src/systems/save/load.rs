@@ -44,6 +44,9 @@ use hw_spatial::stockpile::StockpileSpatialGrid;
 use hw_spatial::transport_request::TransportRequestSpatialGrid;
 use hw_world::room_detection::{RoomDetectionState, RoomTileLookup, RoomValidationState};
 
+use crate::systems::familiar_ai::perceive::resource_sync::{
+    ReservationSignatureCache, ReservationSyncTimer,
+};
 use crate::world::map::GeneratedWorldLayoutResource;
 use crate::world::regrowth::{RegrowthManager, configure_regrowth_from_generated_layout};
 use hw_familiar_ai::familiar_ai::decide::resources::ReachabilityFrameCache;
@@ -166,6 +169,8 @@ fn extract_saved_worldgen_seed(dynamic_world: &DynamicWorld) -> Option<u64> {
 /// 既存の各システムが次フレーム以降に自然に再構築する前提。
 fn rebuild_transient_caches(world: &mut World) {
     world.insert_resource(SharedResourceCache::default());
+    world.insert_resource(ReservationSignatureCache::default());
+    world.insert_resource(ReservationSyncTimer::default());
     world.insert_resource(TileSiteIndex::default());
     world.insert_resource(TransportRequestMetrics::default());
     world.insert_resource(CachedActiveFamiliars::default());

@@ -353,12 +353,20 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 
 #### 再構築
 - `sync_reservations_system` が `AssignedTask` と未割り当て request（`Designation` + `TransportRequest`）から予約を再構築。
-- 同期間隔は `RESERVATION_SYNC_INTERVAL`（初回は即時）。
+- 初回、予約 operation を変える active task の signature 差分、pending request 側の変更/削除、または `RESERVATION_SYNC_INTERVAL` の安全監査で snapshot を置換する。timer は遅延適用のためではなく、取りこぼし検出のための監査である。
+- active task の signature は `hw_jobs::lifecycle::collect_active_reservation_ops` と同じ正規化経路から導出する。progress のみが変わった `AssignedTask` は snapshot を再構築しないが、予約対象・種別・phase が変わる遷移、assignment、completion、removal は再構築対象である。
+- `AssignedTask` removal は安全側で snapshot を再構築する。`RemovedComponents` reader は全件消費し、同じ removal を次フレーム以降に繰り返し dirty と扱わない。
 
 #### 差分適用
-- `ResourceReservationRequest` を `hw_logistics::apply_reservation_requests_system` でフレーム内反映。
+- `TaskAssignmentRequest` に含まれる `reservation_ops` は、その適用時に `apply_reservation_op` を通じて cache へ直接反映する。
+- task の中断と実行 handler は `ResourceReservationRequest` を送信し、`hw_logistics::apply_reservation_requests_system` が Execute で `ResourceReservationOp` を適用する。
 - `apply_reservation_requests_system` と `apply_reservation_op` の実装は `hw_logistics` にあり、system 登録は `hw_logistics::LogisticsPlugin`（`SoulAiSystemSet::Execute`）が担う。`ResourceReservationRequest` の `add_message` と `SharedResourceCache` の `init_resource` は app shell が担当する。
-- `RecordPickedSource` によりフレーム内のソース論理在庫差分も追跡。
+- `RecordPickedSource` によりソース論理在庫の差分も追跡する。
+
+#### cache の寿命
+- `SharedResourceCache::begin_frame()` は Perceive の先頭で pickup/store の frame-local delta だけを clear する。
+- `replace_reservation_snapshot()` はソース/ミキサー予約 map だけを置換し、同一フレームにまだコンポーネントへ反映されていない delta を clear しない。
+- load 時は cache、reservation signature cache、同期 timer を default に戻す。次の Perceive は初回同期として完全 snapshot を構築し、旧 world の Entity を cache に残さない。
 
 ### 6.3 水搬送の排他
 - `BucketTransport`（`WorkType::GatherWater` / `WorkType::HaulWaterToMixer`）は、`AssignedTask::BucketTransport` の `source`/`destination`/`phase` の組み合わせに応じて

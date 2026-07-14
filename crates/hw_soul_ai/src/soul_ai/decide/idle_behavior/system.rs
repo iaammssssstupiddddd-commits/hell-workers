@@ -7,14 +7,27 @@ use hw_core::constants::*;
 use hw_core::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use hw_core::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
 use hw_core::relationships::GatheringParticipants;
+#[cfg(feature = "profiling")]
+use hw_core::simulation_rng::{FixedAuditSeed, SimulationRng};
 use hw_core::soul::IdleBehavior;
 use hw_spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
 use hw_world::WorldMap;
 
+#[cfg(feature = "profiling")]
+use crate::soul_ai::helpers::query_types::IdleDecisionRandomStateQuery;
 use crate::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
 
 use super::rest_area::{RestAreasQuery, find_nearest_available_rest_area};
 use super::{exhausted_gathering, motion_dispatch, rest_decision, task_override, transitions};
+
+#[cfg(feature = "profiling")]
+const IDLE_BEHAVIOR_DURATION_STREAM: u64 = 0x6964_6c65_5f64_7572;
+#[cfg(feature = "profiling")]
+const IDLE_GATHERING_BEHAVIOR_STREAM: u64 = 0x6964_6c65_5f67_6268;
+#[cfg(feature = "profiling")]
+const IDLE_GATHERING_DURATION_STREAM: u64 = 0x6964_6c65_5f67_6472;
+#[cfg(feature = "profiling")]
+const IDLE_SELECT_BEHAVIOR_STREAM: u64 = 0x6964_6c65_5f73_656c;
 
 #[derive(SystemParam)]
 pub(crate) struct IdleLocalState<'s> {
@@ -48,11 +61,13 @@ pub(crate) struct IdleGatheringQueries<'w, 's> {
 /// idle_behavior_apply_systemで行われる。
 pub(crate) fn idle_behavior_decision_system(
     time: Res<Time>,
+    #[cfg(feature = "profiling")] audit_seed: Option<Res<FixedAuditSeed>>,
     mut request_writer: MessageWriter<IdleBehaviorRequest>,
     world_map: Res<WorldMap>,
     mut local: IdleLocalState,
     gq: IdleGatheringQueries,
     mut query: IdleDecisionSoulQuery,
+    #[cfg(feature = "profiling")] mut random_states: IdleDecisionRandomStateQuery,
 ) {
     let dt = time.delta_secs();
     local.pending_rest_reservations.clear();
@@ -71,6 +86,9 @@ pub(crate) fn idle_behavior_decision_system(
         rest_cooldown,
     ) in query.iter_mut()
     {
+        #[cfg(feature = "profiling")]
+        let mut random_state = random_states.get_mut(entity).ok();
+
         let (gathering_center, target_spot_entity) = resolve_gathering_target(
             participating_in,
             &gq.q_spots,
@@ -273,7 +291,22 @@ pub(crate) fn idle_behavior_decision_system(
         if soul.dream <= 0.0 && idle.behavior == IdleBehavior::Sleeping {
             idle.behavior = IdleBehavior::Wandering;
             idle.idle_timer = 0.0;
-            idle.behavior_duration = transitions::behavior_duration_for(IdleBehavior::Wandering);
+            #[cfg(feature = "profiling")]
+            let mut rng = SimulationRng::for_actor(
+                audit_seed.as_deref(),
+                random_state.as_deref_mut(),
+                IDLE_BEHAVIOR_DURATION_STREAM,
+            );
+            #[cfg(feature = "profiling")]
+            {
+                idle.behavior_duration =
+                    transitions::behavior_duration_for_with_rng(IdleBehavior::Wandering, &mut rng);
+            }
+            #[cfg(not(feature = "profiling"))]
+            {
+                idle.behavior_duration =
+                    transitions::behavior_duration_for(IdleBehavior::Wandering);
+            }
             path.waypoints.clear();
             path.current_index = 0;
             dest.0 = current_pos;
@@ -295,9 +328,42 @@ pub(crate) fn idle_behavior_decision_system(
                 if idle.behavior != IdleBehavior::Gathering
                     && idle.behavior != IdleBehavior::ExhaustedGathering
                 {
-                    idle.gathering_behavior = transitions::random_gathering_behavior(soul.dream);
+                    #[cfg(feature = "profiling")]
+                    let mut gathering_behavior_rng = SimulationRng::for_actor(
+                        audit_seed.as_deref(),
+                        random_state.as_deref_mut(),
+                        IDLE_GATHERING_BEHAVIOR_STREAM,
+                    );
+                    #[cfg(feature = "profiling")]
+                    {
+                        idle.gathering_behavior = transitions::random_gathering_behavior_with_rng(
+                            soul.dream,
+                            &mut gathering_behavior_rng,
+                        );
+                    }
+                    #[cfg(not(feature = "profiling"))]
+                    {
+                        idle.gathering_behavior =
+                            transitions::random_gathering_behavior(soul.dream);
+                    }
                     idle.gathering_behavior_timer = 0.0;
-                    idle.gathering_behavior_duration = transitions::random_gathering_duration();
+                    #[cfg(feature = "profiling")]
+                    let mut gathering_duration_rng = SimulationRng::for_actor(
+                        audit_seed.as_deref(),
+                        random_state.as_deref_mut(),
+                        IDLE_GATHERING_DURATION_STREAM,
+                    );
+                    #[cfg(feature = "profiling")]
+                    {
+                        idle.gathering_behavior_duration =
+                            transitions::random_gathering_duration_with_rng(
+                                &mut gathering_duration_rng,
+                            );
+                    }
+                    #[cfg(not(feature = "profiling"))]
+                    {
+                        idle.gathering_behavior_duration = transitions::random_gathering_duration();
+                    }
                     idle.needs_separation = true;
                 }
                 idle.behavior = if soul.fatigue > FATIGUE_GATHERING_THRESHOLD {
@@ -306,12 +372,31 @@ pub(crate) fn idle_behavior_decision_system(
                     IdleBehavior::Gathering
                 };
             } else {
-                idle.behavior = transitions::select_next_behavior(
-                    soul.laziness,
-                    soul.fatigue,
-                    idle.total_idle_time,
-                    soul.dream,
+                #[cfg(feature = "profiling")]
+                let mut select_behavior_rng = SimulationRng::for_actor(
+                    audit_seed.as_deref(),
+                    random_state.as_deref_mut(),
+                    IDLE_SELECT_BEHAVIOR_STREAM,
                 );
+                #[cfg(feature = "profiling")]
+                {
+                    idle.behavior = transitions::select_next_behavior_with_rng(
+                        soul.laziness,
+                        soul.fatigue,
+                        idle.total_idle_time,
+                        soul.dream,
+                        &mut select_behavior_rng,
+                    );
+                }
+                #[cfg(not(feature = "profiling"))]
+                {
+                    idle.behavior = transitions::select_next_behavior(
+                        soul.laziness,
+                        soul.fatigue,
+                        idle.total_idle_time,
+                        soul.dream,
+                    );
+                }
             }
 
             if matches!(
@@ -325,7 +410,23 @@ pub(crate) fn idle_behavior_decision_system(
                 dest.0 = current_pos;
             }
 
-            idle.behavior_duration = transitions::behavior_duration_for(idle.behavior);
+            #[cfg(feature = "profiling")]
+            let mut behavior_duration_rng = SimulationRng::for_actor(
+                audit_seed.as_deref(),
+                random_state.as_deref_mut(),
+                IDLE_BEHAVIOR_DURATION_STREAM,
+            );
+            #[cfg(feature = "profiling")]
+            {
+                idle.behavior_duration = transitions::behavior_duration_for_with_rng(
+                    idle.behavior,
+                    &mut behavior_duration_rng,
+                );
+            }
+            #[cfg(not(feature = "profiling"))]
+            {
+                idle.behavior_duration = transitions::behavior_duration_for(idle.behavior);
+            }
         }
 
         motion_dispatch::update_motion_destinations(
@@ -350,6 +451,10 @@ pub(crate) fn idle_behavior_decision_system(
                 dt,
                 dream: soul.dream,
                 scratch: &mut local.nearby_buf,
+                #[cfg(feature = "profiling")]
+                audit_seed: audit_seed.as_deref(),
+                #[cfg(feature = "profiling")]
+                random_state: random_state.as_deref_mut(),
             },
         );
     }

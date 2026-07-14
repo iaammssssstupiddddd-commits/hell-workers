@@ -2,10 +2,13 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::events::OnTaskCompleted;
 use hw_core::visual::SoulTaskHandles;
+use hw_jobs::AssignedTask;
 use hw_logistics::Wheelbarrow;
 use hw_world::WorldMapRead;
 use hw_world::pathfinding::PathfindingContext;
 
+#[cfg(feature = "profiling")]
+use crate::soul_ai::execute::task_execution::TaskExecutionPerfMetrics;
 use crate::soul_ai::execute::task_execution::context::{
     TaskEndDisposition, TaskExecEnv, TaskExecutionContext, TaskQueries,
 };
@@ -31,7 +34,15 @@ pub fn task_execution_system(
         With<Wheelbarrow>,
     >,
     q_entities: Query<Entity>,
+    #[cfg(feature = "profiling")] mut perf_metrics: ResMut<TaskExecutionPerfMetrics>,
 ) {
+    #[cfg(feature = "profiling")]
+    let mut souls_queried = 0u32;
+    #[cfg(feature = "profiling")]
+    let mut idle_skips = 0u32;
+    #[cfg(feature = "profiling")]
+    let mut handler_runs = 0u32;
+
     for (
         soul_entity,
         soul_transform,
@@ -43,6 +54,22 @@ pub fn task_execution_system(
         breakdown_opt,
     ) in q_souls.iter_mut()
     {
+        #[cfg(feature = "profiling")]
+        {
+            souls_queried = souls_queried.saturating_add(1);
+        }
+
+        // `&task` is an immutable reborrow of `Mut<AssignedTask>`. これを
+        // TaskExecutionContext の `&mut AssignedTask` に渡す前に判定し、idle
+        // Soul の5コンポーネントに不要な Changed を立てない。
+        if is_idle_task(&task) {
+            #[cfg(feature = "profiling")]
+            {
+                idle_skips = idle_skips.saturating_add(1);
+            }
+            continue;
+        }
+
         if let Some(expected_item) = task.expected_item() {
             let needs_item = task.requires_item_in_inventory();
             let expected_item_alive = q_entities.get(expected_item).is_ok();
@@ -91,6 +118,10 @@ pub fn task_execution_system(
             end_disposition: TaskEndDisposition::Running,
         };
 
+        #[cfg(feature = "profiling")]
+        {
+            handler_runs = handler_runs.saturating_add(1);
+        }
         run_task_handler(&mut ctx, &mut commands, &q_wheelbarrows);
 
         let end_disposition = ctx.end_disposition;
@@ -109,5 +140,116 @@ pub fn task_execution_system(
                 soul_entity
             );
         }
+    }
+
+    #[cfg(feature = "profiling")]
+    {
+        perf_metrics.souls_queried = perf_metrics.souls_queried.saturating_add(souls_queried);
+        perf_metrics.idle_skips = perf_metrics.idle_skips.saturating_add(idle_skips);
+        perf_metrics.handler_runs = perf_metrics.handler_runs.saturating_add(handler_runs);
+    }
+}
+
+/// `Mut<AssignedTask>` を mutable に dereference せず、idle task を判定する。
+fn is_idle_task(task: &AssignedTask) -> bool {
+    matches!(task, AssignedTask::None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::soul::{DamnedSoul, Destination, Path};
+    use hw_jobs::{GeneratePowerData, GeneratePowerPhase};
+    use hw_logistics::types::Inventory;
+
+    fn idle_guard_probe_system(mut q_souls: TaskExecutionSoulQuery) {
+        for (_, _, _, task, _, _, _, _) in q_souls.iter_mut() {
+            if is_idle_task(&task) {
+                continue;
+            }
+            unreachable!("the probe only spawns AssignedTask::None");
+        }
+    }
+
+    #[derive(Resource, Default)]
+    struct ActiveTaskProbe {
+        reached_without_working_on: bool,
+    }
+
+    fn active_task_without_working_on_probe_system(
+        mut q_souls: TaskExecutionSoulQuery,
+        mut probe: ResMut<ActiveTaskProbe>,
+    ) {
+        for (_, _, _, task, _, _, _, _) in q_souls.iter_mut() {
+            if !is_idle_task(&task) {
+                probe.reached_without_working_on = true;
+            }
+        }
+    }
+
+    fn spawn_task_execution_soul(world: &mut World, task: AssignedTask) -> Entity {
+        world
+            .spawn((
+                Transform::default(),
+                DamnedSoul::default(),
+                task,
+                Destination(Vec2::ZERO),
+                Path::default(),
+                Inventory::default(),
+            ))
+            .id()
+    }
+
+    fn assert_component_unchanged<T: Component>(world: &mut World, entity: Entity) {
+        let mut changed_components = world.query_filtered::<Entity, Changed<T>>();
+        assert!(
+            !changed_components
+                .iter(world)
+                .any(|changed| changed == entity),
+            "{} was unexpectedly marked Changed",
+            std::any::type_name::<T>()
+        );
+    }
+
+    #[test]
+    fn idle_guard_leaves_task_context_components_unchanged() {
+        let mut world = World::new();
+        let soul = spawn_task_execution_soul(&mut world, AssignedTask::None);
+        world.clear_trackers();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(idle_guard_probe_system);
+        schedule.run(&mut world);
+
+        assert_component_unchanged::<DamnedSoul>(&mut world, soul);
+        assert_component_unchanged::<AssignedTask>(&mut world, soul);
+        assert_component_unchanged::<Destination>(&mut world, soul);
+        assert_component_unchanged::<Path>(&mut world, soul);
+        assert_component_unchanged::<Inventory>(&mut world, soul);
+    }
+
+    #[test]
+    fn active_task_without_working_on_remains_in_task_execution_query() {
+        let mut world = World::new();
+        world.init_resource::<ActiveTaskProbe>();
+        spawn_task_execution_soul(
+            &mut world,
+            AssignedTask::GeneratePower(GeneratePowerData {
+                tile: Entity::PLACEHOLDER,
+                tile_pos: Vec2::ZERO,
+                phase: GeneratePowerPhase::GoingToTile,
+            }),
+        );
+        world.clear_trackers();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(active_task_without_working_on_probe_system);
+        schedule.run(&mut world);
+
+        assert!(
+            world
+                .resource::<ActiveTaskProbe>()
+                .reached_without_working_on
+        );
     }
 }

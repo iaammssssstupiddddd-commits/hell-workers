@@ -27,16 +27,26 @@ pub struct SharedResourceCache {
 }
 
 impl SharedResourceCache {
-    /// 外部から予約状況を再構築する（Senseフェーズ用）
-    pub fn reset(
+    /// フレーム内差分を開始する。
+    ///
+    /// reservation snapshot は保ったまま、コンポーネントへの反映待ち差分だけを
+    /// Perceive フェーズの先頭で破棄する。
+    pub fn begin_frame(&mut self) {
+        self.frame_stored_count.clear();
+        self.frame_picked_count.clear();
+    }
+
+    /// 外部から予約 snapshot を置き換える（Senseフェーズ用）。
+    ///
+    /// frame delta は実体コンポーネントへ反映されるまで保持するため、ここでは
+    /// clear しない。
+    pub fn replace_reservation_snapshot(
         &mut self,
         mixer_dest_reservations: HashMap<(Entity, ResourceType), usize>,
         source_reservations: HashMap<Entity, usize>,
     ) {
         self.mixer_dest_reservations = mixer_dest_reservations;
         self.source_reservations = source_reservations;
-        self.frame_stored_count.clear();
-        self.frame_picked_count.clear();
     }
 
     /// ミキサーへの予約を追加
@@ -140,5 +150,34 @@ pub fn apply_reservation_requests_system(
 ) {
     for request in requests.read() {
         apply_reservation_op(&mut cache, &request.op);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replacing_snapshot_preserves_current_frame_pick_delta() {
+        let source = Entity::PLACEHOLDER;
+        let mut cache = SharedResourceCache::default();
+
+        cache.replace_reservation_snapshot(HashMap::new(), HashMap::from([(source, 3)]));
+        cache.record_picked_source(source, 1);
+        cache.replace_reservation_snapshot(HashMap::new(), HashMap::from([(source, 5)]));
+
+        assert_eq!(cache.get_source_reservation(source), 6);
+    }
+
+    #[test]
+    fn beginning_frame_clears_pick_delta_without_resetting_snapshot() {
+        let source = Entity::PLACEHOLDER;
+        let mut cache = SharedResourceCache::default();
+
+        cache.replace_reservation_snapshot(HashMap::new(), HashMap::from([(source, 3)]));
+        cache.record_picked_source(source, 1);
+        cache.begin_frame();
+
+        assert_eq!(cache.get_source_reservation(source), 2);
     }
 }

@@ -118,7 +118,6 @@ impl Plugin for LogicPlugin {
         .add_systems(
             Update,
             (
-                familiar_spawning_system,
                 tree_regrowth_system,
                 obstacle_cleanup_system,
                 blueprint_cancel_cleanup_system,
@@ -223,6 +222,20 @@ impl Plugin for LogicPlugin {
                 door_auto_close_system.after(crate::entities::damned_soul::movement::soul_movement),
             )
                 .in_set(GameSystemSet::Actor),
+        );
+
+        #[cfg(feature = "profiling")]
+        app.add_systems(
+            Update,
+            familiar_spawning_system
+                .in_set(GameSystemSet::Logic)
+                .run_if(crate::plugins::startup::is_not_fixed_step_audit),
+        );
+
+        #[cfg(not(feature = "profiling"))]
+        app.add_systems(
+            Update,
+            familiar_spawning_system.in_set(GameSystemSet::Logic),
         );
     }
 }

@@ -37,6 +37,7 @@ pub fn debug_spawn_system(
     if buttons.just_pressed(KeyCode::KeyP) {
         soul_spawn_events.write(DamnedSoulSpawnEvent {
             position: spawn_pos,
+            simulation_random_key: None,
         });
     }
 
@@ -44,6 +45,7 @@ pub fn debug_spawn_system(
         familiar_spawn_events.write(FamiliarSpawnEvent {
             position: spawn_pos,
             familiar_type: FamiliarType::Imp,
+            simulation_random_key: None,
         });
     }
 }

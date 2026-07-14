@@ -4,6 +4,8 @@ use hw_core::familiar::Familiar;
 use hw_core::relationships::{
     CommandedBy, ParticipatingIn, RestAreaReservedFor, RestingIn, WorkingOn,
 };
+#[cfg(feature = "profiling")]
+use hw_core::simulation_rng::SimulationRandomState;
 use hw_core::soul::{
     DamnedSoul, Destination, DreamState, IdleState, Path, RestAreaCooldown, StressBreakdown,
 };
@@ -64,6 +66,10 @@ pub type IdleDecisionSoulQuery<'w, 's> = Query<
     ),
     (Without<WorkingOn>, Without<CommandedBy>),
 >;
+
+/// fixed-step perf audit時にだけ、actor-local RNG状態を取得するためのquery。
+#[cfg(feature = "profiling")]
+pub type IdleDecisionRandomStateQuery<'w, 's> = Query<'w, 's, &'static mut SimulationRandomState>;
 
 /// Idle の集会分離に使うソウルの標準クエリ型
 pub type IdleSeparationSoulQuery<'w, 's> = Query<
