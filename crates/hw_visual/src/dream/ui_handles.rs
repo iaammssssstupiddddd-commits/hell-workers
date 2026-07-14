@@ -54,8 +54,7 @@ pub fn init_dream_bubble_ui_handles(
 }
 
 pub fn alpha_to_bucket(alpha: f32) -> u8 {
-    ((alpha / 0.9 * UI_ALPHA_BUCKETS as f32).floor() as usize)
-        .min(UI_ALPHA_BUCKETS - 1) as u8
+    ((alpha / 0.9 * UI_ALPHA_BUCKETS as f32).floor() as usize).min(UI_ALPHA_BUCKETS - 1) as u8
 }
 
 pub fn mass_to_bucket(mass: f32) -> u8 {
@@ -71,11 +70,7 @@ pub fn mass_to_bucket(mass: f32) -> u8 {
 }
 
 pub fn color_to_bucket(visual_distance_ratio: f32) -> u8 {
-    if visual_distance_ratio < 0.3 {
-        1
-    } else {
-        0
-    }
+    if visual_distance_ratio < 0.3 { 1 } else { 0 }
 }
 
 pub fn velocity_to_bucket(vel_dir: Vec2) -> u8 {

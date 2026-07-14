@@ -68,7 +68,9 @@ pub fn update_cached_active_yards_system(
     mut cache: ResMut<CachedActiveYards>,
 ) {
     cache.data.clear();
-    cache.data.extend(q_yards.iter().map(|(e, y)| (e, y.clone())));
+    cache
+        .data
+        .extend(q_yards.iter().map(|(e, y)| (e, y.clone())));
 }
 
 /// Stockpile グループと空間インデックスを 1 回だけ構築する。
@@ -82,4 +84,3 @@ pub fn update_cached_stockpile_groups_system(
     cache.groups = build_stockpile_groups(&stockpile_grid, active_yards, &q_stockpiles);
     cache.spatial_index = build_group_spatial_index(&cache.groups, active_yards);
 }
-

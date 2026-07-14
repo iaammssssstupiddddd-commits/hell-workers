@@ -159,7 +159,7 @@ root 側の `bevy_app/src/interface/ui/` 残留（Adapter 層 — ViewModel / Pr
 | `panels/context_menu.rs` | Intent | `Familiar`, `DamnedSoul`, `Building`, `Door` の分類 |
 | `vignette.rs` | Presenter | `TaskContext`（DreamPlanting モード判定） |
 
-- `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。`hw_visual::handles` の 8 Resource（`WallVisualHandles` 等）は root の `init_visual_handles` startup システムが `GameAssets` から注入する。`SoulTaskHandles` は `hw_core::visual`、`TerrainVisualHandles` / `DoorVisualHandles` は `hw_world`、`ResourceItemVisualHandles` は `hw_logistics` が所有し、同じ startup 注入パターンを共有する。visual marker (`FadeOut`, `WheelbarrowMovement`) は `hw_core::visual` に置き、`hw_familiar_ai` / `hw_soul_ai` / `hw_visual` の共有型として扱う。Dream 系 UI 連携で読む shared contract (`MainCamera`, `SelectedEntity`, `UiNodeRegistry`, `UiMountSlot` など) も `hw_core` 側に寄せ、`hw_visual` が `hw_ui` に直接依存しない構成へ整理済み。
+- `hw_visual` はビジュアルシステム全体を集約し、`GameAssets` には依存しない。`hw_visual::handles` の 8 Resource（`WallVisualHandles` 等）は root の `init_visual_handles` startup システムが `GameAssets` から注入する。`SoulTaskHandles` は `hw_core::visual`、`DoorVisualHandles` は `hw_world`、`ResourceItemVisualHandles` は `hw_logistics` が所有し、同じ startup 注入パターンを共有する。`terrain_visual` はアセット handle を持たず、source-aware WorldMap 同期と `TerrainChangedEvent` 発行だけを担う。visual marker (`FadeOut`, `WheelbarrowMovement`) は `hw_core::visual` に置き、`hw_familiar_ai` / `hw_soul_ai` / `hw_visual` の共有型として扱う。Dream 系 UI 連携で読む shared contract (`MainCamera`, `SelectedEntity`, `UiNodeRegistry`, `UiMountSlot` など) も `hw_core` 側に寄せ、`hw_visual` が `hw_ui` に直接依存しない構成へ整理済み。
 - `bevy_app` → `hw_visual` は依存方向を維持し、`hw_visual` から `bevy_app` へ依存しない。
 
 ### `hw_visual`
@@ -407,7 +407,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `Yard`, `Site`, `PairedYard`, `PairedSite`（zone 系コンポーネント）
 - `zone_ops::identify_removal_targets` — 削除対象タイル + 孤立フラグメント特定（Flood Fill）
 - `zone_ops::area_tile_size`, `rectangles_overlap_site`, `rectangles_overlap`, `expand_yard_area` — ゾーン geometry helper
-- `terrain_visual::{TerrainVisualHandles, obstacle_cleanup_system}` — 地形スプライト更新を伴う障害物 cleanup。`GameAssets` は root から専用 Resource で注入する
+- `terrain_visual::{ObstaclePositionIndex, obstacle_sync_system, TerrainChangedEvent}` — runtime marker の旧位置/source を index し、source-aware に WorldMap を同期する。自然物由来の最後の blocker を外した場合だけ terrain visual 更新を通知する
 - `door_systems::{DoorVisualHandles, apply_door_state, door_auto_open_system, door_auto_close_system}` — ドア通行状態とスプライト更新を扱う world 系 system。`GameAssets` は root から専用 Resource で注入する
 - **`Room`, `RoomOverlayTile`（Component）** — Room ECS 型
 - **`RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`（Resource）** — Room 管理リソース
@@ -518,7 +518,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - world/map/pathfinding の純粋ロジック
 - `WorldMap` を trait や引数で抽象化できる
 - root 固有の `GameAssets` を直接参照しない world 系 system
-- `GameAssets` の一部フィールドだけが必要な場合は、`TerrainVisualHandles` / `DoorVisualHandles` のような専用 Resource を leaf crate 側で定義し、root の startup system が注入する
+- `GameAssets` の一部フィールドだけが必要な場合は、`DoorVisualHandles` のような専用 Resource を leaf crate 側で定義し、root の startup system が注入する
 
 ### `hw_logistics` に置く
 
@@ -604,7 +604,7 @@ root (`bevy_app`) は app shell として `init_resource::<WorldMap>()`、startu
 - nearest walkable / river helper
 - mapgen / regrowth の純粋ロジック（地形境界オーバーレイ `borders` / `terrain_border` は MS-3-4 で廃止済み）
 - `WorldMapRead` / `WorldMapWrite` の `SystemParam`
-- `obstacle_cleanup_system` のような WorldMap 同期 + 地形ビジュアル通知（`TerrainChangedEvent` → bevy_app で `TerrainIdMap` 更新）
+- `obstacle_sync_system` のような source-aware WorldMap 同期 + 地形ビジュアル通知（`TerrainChangedEvent` → bevy_app で `TerrainIdMap` 更新）
 - door 自動開閉のような world state 更新 system（`DoorVisualHandles` 注入）
 
 `crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/regrowth.rs`, `crates/bevy_app/src/systems/logistics/initial_spawn/` は app shell です。地形スポーンは `spawn_map` が `WorldMap.tile_entities` に紐づく `Tile` 論理 anchor を登録し、`spawn_terrain_chunks` が `TerrainSurfaceMaterial` / `Terrain3dHandles` を使って chunk render entity を生成する構成になっています。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックと `WorldMap` access wrapper は `hw_world` から呼び出します。startup は `GeneratedWorldLayout` を root Resource に包んで 1 回だけ生成し、`TerrainFeatureMap` と `TerrainIdMap` をその snapshot から焼き、地形描画・初期木/岩・初期木材・猫車置き場・regrowth 初期化が同じ layout を共有します。

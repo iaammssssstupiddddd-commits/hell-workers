@@ -54,7 +54,9 @@ pub use room_systems::{
 pub use spatial::SpatialGridOps;
 pub use spawn::{find_nearby_walkable_grid, pick_random_walkable_grid_in_rect};
 pub use terrain::TerrainType;
-pub use terrain_visual::{TerrainChangedEvent, TerrainVisualHandles, obstacle_cleanup_system};
+pub use terrain_visual::{
+    ObstaclePositionIndex, TerrainChangedEvent, obstacle_sync_system, seed_obstacle_position_index,
+};
 pub use tree_planting::DreamTreePlantingPlan;
 pub use world_masks::{BitGrid, WorldMasks};
 pub use zone_ops::{

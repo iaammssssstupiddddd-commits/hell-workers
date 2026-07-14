@@ -6,7 +6,7 @@ use crate::soul_ai::execute::task_execution::types::{
 };
 use crate::soul_ai::execute::task_execution::{
     common::{NavOutcome, navigate_to_pos},
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
 };
 use bevy::prelude::*;
 
@@ -14,30 +14,29 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    
+
     q_wheelbarrows: &Query<
         (&Transform, Option<&hw_core::relationships::ParkedAt>),
         With<hw_logistics::Wheelbarrow>,
     >,
     soul_pos: Vec2,
-) {
+) -> TaskHandlerControl {
     let Ok((wb_transform, _)) = q_wheelbarrows.get(data.wheelbarrow) else {
         debug!(
             "WB_HAUL: Wheelbarrow {:?} not found, canceling",
             data.wheelbarrow
         );
-        cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-        return;
+        return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
     };
 
     let wb_pos = wb_transform.translation.truncate();
     match navigate_to_pos(ctx, wb_pos, soul_pos, ctx.env.world_map) {
-        NavOutcome::Moving => return,
+        NavOutcome::Moving => return TaskHandlerControl::Continue,
         NavOutcome::Unreachable => {
-            cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-            return;
+            return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
         }
-        _ => {}
+        NavOutcome::Ended(control) => return control,
+        NavOutcome::Arrived => {}
     }
 
     *ctx.task = AssignedTask::HaulWithWheelbarrow(HaulWithWheelbarrowData {
@@ -45,4 +44,6 @@ pub fn handle(
         ..data
     });
     ctx.path.waypoints.clear();
+
+    TaskHandlerControl::Continue
 }

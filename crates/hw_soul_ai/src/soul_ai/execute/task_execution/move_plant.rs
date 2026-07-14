@@ -1,6 +1,6 @@
 use crate::soul_ai::execute::task_execution::{
     common::{is_near_target_or_dest, update_destination_to_adjacent},
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     types::{AssignedTask, MovePlantData, MovePlantPhase},
 };
 use bevy::prelude::*;
@@ -26,13 +26,12 @@ pub fn handle_move_plant_task(
     ctx: &mut TaskExecutionContext,
     data: MovePlantData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     match data.phase {
         MovePlantPhase::GoToBuilding => {
             let Ok((building_transform, _, _)) = ctx.queries.storage.buildings.get(data.building)
             else {
-                cleanup_move_task(ctx, commands, data.task_entity, data.building, false);
-                return;
+                return cleanup_move_task(ctx, commands, data.task_entity, data.building, false);
             };
 
             let building_pos = building_transform.translation.truncate();
@@ -47,8 +46,7 @@ pub fn handle_move_plant_task(
             );
 
             if !reachable {
-                cleanup_move_task(ctx, commands, data.task_entity, data.building, false);
-                return;
+                return cleanup_move_task(ctx, commands, data.task_entity, data.building, false);
             }
 
             if is_near_target_or_dest(soul_pos, building_pos, ctx.dest.0)
@@ -67,8 +65,7 @@ pub fn handle_move_plant_task(
             let Ok((building_transform, building, _)) =
                 ctx.queries.storage.buildings.get(data.building)
             else {
-                cleanup_move_task(ctx, commands, data.task_entity, data.building, false);
-                return;
+                return cleanup_move_task(ctx, commands, data.task_entity, data.building, false);
             };
 
             let old_anchor =
@@ -99,9 +96,11 @@ pub fn handle_move_plant_task(
         MovePlantPhase::Done => {
             commands.entity(data.task_entity).remove::<Designation>();
             commands.entity(data.task_entity).despawn();
-            cleanup_move_task(ctx, commands, data.task_entity, data.building, true);
+            return cleanup_move_task(ctx, commands, data.task_entity, data.building, true);
         }
     }
+
+    TaskHandlerControl::Continue
 }
 
 fn cleanup_move_task(
@@ -110,14 +109,14 @@ fn cleanup_move_task(
     task_entity: Entity,
     building_entity: Entity,
     completed: bool,
-) {
+) -> TaskHandlerControl {
     commands.entity(task_entity).remove::<Designation>();
     commands.entity(task_entity).despawn();
     commands.entity(building_entity).remove::<MovePlanned>();
     if completed {
-        ctx.complete_task(commands, "move plant done");
+        ctx.complete_task(commands, "move plant done")
     } else {
-        ctx.abort_closed(commands, "move plant cancelled");
+        ctx.abort_closed(commands, "move plant cancelled")
     }
 }
 

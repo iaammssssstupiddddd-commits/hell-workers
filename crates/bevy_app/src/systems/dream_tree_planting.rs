@@ -6,7 +6,7 @@
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::DreamPool;
 use crate::systems::command::AreaEditSession;
-use crate::systems::jobs::{ObstaclePosition, Tree, TreeVariant};
+use crate::systems::jobs::{ObstaclePosition, ObstacleSourceKind, Tree, TreeVariant};
 use crate::systems::logistics::ResourceItem;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
@@ -196,6 +196,7 @@ fn process_dream_planting(
             Tree,
             TreeVariant(variant_index),
             ObstaclePosition(gx, gy),
+            ObstacleSourceKind::NaturalTerrainClearing,
             PlantTreeVisualState::default(),
             Sprite {
                 image: game_assets.trees[variant_index].clone(),

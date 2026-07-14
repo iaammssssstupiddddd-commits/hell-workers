@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
-use hw_core::relationships::TaskWorkers;
 use hw_energy::{SoulSpaPhase, SoulSpaSite, SoulSpaTile};
 use hw_jobs::model::{Designation, TaskSlots, WorkType};
 use hw_logistics::ResourceType;
@@ -77,7 +76,6 @@ pub fn soul_spa_tile_activate_system(
                         work_type: WorkType::GeneratePower,
                     },
                     TaskSlots { max: 1 },
-                    TaskWorkers::default(),
                 ));
             }
         }

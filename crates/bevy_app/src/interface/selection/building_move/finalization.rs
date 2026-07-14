@@ -1,4 +1,6 @@
-use crate::systems::jobs::{Building, BuildingType, Designation, Priority, TaskSlots, WorkType};
+use crate::systems::jobs::{
+    Building, BuildingType, Designation, ObstacleSourceKind, Priority, TaskSlots, WorkType,
+};
 use crate::systems::logistics::transport_request::TransportRequest;
 use crate::systems::soul_ai::execute::task_execution::context::TaskUnassignQueries;
 use crate::systems::soul_ai::execute::task_execution::move_plant::{
@@ -56,6 +58,7 @@ pub(super) fn finalize_move_request(
         for &(gx, gy) in &reserved_occupied {
             parent.spawn((
                 crate::systems::jobs::ObstaclePosition(gx, gy),
+                ObstacleSourceKind::PlacementReservation,
                 Name::new("Move Reservation Obstacle"),
             ));
         }

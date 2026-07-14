@@ -7,11 +7,13 @@ use hw_core::relationships::{ManagedBy, TaskWorkers};
 use hw_jobs::{Blueprint, Designation, Priority, TargetBlueprint, TaskSlots, WorkType};
 use hw_spatial::BlueprintSpatialGrid;
 
+use crate::transport_request::producer::active_unit_cache::{
+    CachedActiveFamiliars, CachedActiveYards,
+};
 use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
 use crate::types::ResourceType;
 
 pub fn blueprint_auto_haul_system(

@@ -4,7 +4,7 @@
 //! 初期配置数を超えて再生することはない。
 
 use crate::assets::GameAssets;
-use crate::systems::jobs::Tree;
+use crate::systems::jobs::{ObstaclePosition, ObstacleSourceKind, Tree, TreeVariant};
 use crate::world::map::WorldMapRead;
 use bevy::prelude::*;
 use hw_core::GameTime;
@@ -115,7 +115,9 @@ pub fn tree_regrowth_system(
             let variant_index = rand::random::<usize>() % game_assets.trees.len();
             commands.spawn((
                 Tree,
-                crate::systems::jobs::TreeVariant(variant_index),
+                TreeVariant(variant_index),
+                ObstaclePosition(px, py),
+                ObstacleSourceKind::NaturalTerrainClearing,
                 Sprite {
                     image: game_assets.trees[variant_index].clone(),
                     custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),

@@ -9,13 +9,13 @@ use hw_core::relationships::{StoredItems, TaskWorkers};
 use hw_jobs::{Designation, Priority, TaskSlots, WorkType};
 use hw_spatial::StockpileSpatialGrid;
 
+use crate::transport_request::producer::active_unit_cache::{
+    CachedActiveYards, CachedStockpileGroups,
+};
 use crate::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportPolicy,
     TransportPriority, TransportRequest, TransportRequestKind, TransportRequestMetrics,
     TransportRequestState,
-};
-use crate::transport_request::producer::active_unit_cache::{
-    CachedActiveYards, CachedStockpileGroups,
 };
 use crate::types::{BelongsTo, BucketStorage, ReservedForTask, ResourceItem, ResourceType};
 use crate::zone::Stockpile;

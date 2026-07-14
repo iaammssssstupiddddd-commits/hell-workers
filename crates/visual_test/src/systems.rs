@@ -81,10 +81,7 @@ pub fn handle_button_interactions(
                         a.as_ref(),
                         &mut state,
                         SoulRebuildEntities {
-                            souls: q_souls
-                                .iter()
-                                .map(|(entity, _, _, _)| entity)
-                                .collect(),
+                            souls: q_souls.iter().map(|(entity, _, _, _)| entity).collect(),
                             shadows: q_shadow_proxies.iter().collect(),
                             blob_shadows: q_blob_shadow_proxies.iter().collect(),
                             masks: q_mask_proxies.iter().collect(),
@@ -197,10 +194,7 @@ pub fn handle_button_interactions(
                         a.as_ref(),
                         &mut state,
                         SoulRebuildEntities {
-                            souls: q_souls
-                                .iter()
-                                .map(|(entity, _, _, _)| entity)
-                                .collect(),
+                            souls: q_souls.iter().map(|(entity, _, _, _)| entity).collect(),
                             shadows: q_shadow_proxies.iter().collect(),
                             blob_shadows: q_blob_shadow_proxies.iter().collect(),
                             masks: q_mask_proxies.iter().collect(),

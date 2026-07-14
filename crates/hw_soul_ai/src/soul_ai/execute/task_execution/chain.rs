@@ -5,6 +5,7 @@
 
 use bevy::prelude::*;
 use hw_core::relationships::WorkingOn;
+use hw_jobs::WorkType;
 use hw_jobs::construction::{FloorTileState, WallTileState};
 use hw_logistics::{
     ResourceType,
@@ -348,6 +349,7 @@ pub(super) fn execute_chain(
             commands
                 .entity(ctx.soul_entity)
                 .insert(WorkingOn(blueprint));
+            ctx.transition_task_identity(blueprint, WorkType::Build);
             *ctx.task = AssignedTask::Build(BuildData {
                 blueprint,
                 phase: BuildPhase::GoingToBlueprint,
@@ -361,6 +363,7 @@ pub(super) fn execute_chain(
         }
         ChainOpportunity::ReinforceFloor { tile, site } => {
             commands.entity(ctx.soul_entity).insert(WorkingOn(tile));
+            ctx.transition_task_identity(tile, WorkType::ReinforceFloorTile);
             *ctx.task = AssignedTask::ReinforceFloorTile(ReinforceFloorTileData {
                 tile,
                 site,
@@ -375,6 +378,7 @@ pub(super) fn execute_chain(
         }
         ChainOpportunity::PourFloor { tile, site } => {
             commands.entity(ctx.soul_entity).insert(WorkingOn(tile));
+            ctx.transition_task_identity(tile, WorkType::PourFloorTile);
             *ctx.task = AssignedTask::PourFloorTile(PourFloorTileData {
                 tile,
                 site,
@@ -389,6 +393,7 @@ pub(super) fn execute_chain(
         }
         ChainOpportunity::FrameWall { tile, site } => {
             commands.entity(ctx.soul_entity).insert(WorkingOn(tile));
+            ctx.transition_task_identity(tile, WorkType::FrameWallTile);
             *ctx.task = AssignedTask::FrameWallTile(FrameWallTileData {
                 tile,
                 site,
@@ -403,6 +408,7 @@ pub(super) fn execute_chain(
         }
         ChainOpportunity::CoatWall { tile, site, wall } => {
             commands.entity(ctx.soul_entity).insert(WorkingOn(tile));
+            ctx.transition_task_identity(tile, WorkType::CoatWall);
             *ctx.task = AssignedTask::CoatWall(CoatWallData {
                 tile,
                 site,

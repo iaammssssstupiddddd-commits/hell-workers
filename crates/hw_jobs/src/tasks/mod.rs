@@ -28,6 +28,64 @@ pub use wheelbarrow::{HaulWithWheelbarrowData, HaulWithWheelbarrowPhase};
 use bevy::prelude::*;
 use hw_core::jobs::WorkType;
 
+/// 実行中 assignment の相関情報。
+///
+/// assignment の起点と、chain 後の現在 segment を分けて保持する。runtime-only の
+/// 状態であり、セーブ対象には含めない。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActiveTaskIdentity {
+    pub assignment_entity: Entity,
+    pub current_target_entity: Entity,
+    pub current_work_type: WorkType,
+    binding: TaskIdentityBinding,
+}
+
+/// `ActiveTaskIdentity` と `WorkingOn` の対応状態。
+///
+/// 通常の実行 segment は必ず `Attached` である。Gather / Refine が成果物を確定して
+/// 次 frame の Done phase を待つ間だけ `Detached` を使うため、外部要因による
+/// `WorkingOn` の消失を正常な状態として扱わない。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TaskIdentityBinding {
+    Attached,
+    Detached,
+}
+
+impl ActiveTaskIdentity {
+    pub fn new(
+        assignment_entity: Entity,
+        current_target_entity: Entity,
+        current_work_type: WorkType,
+    ) -> Self {
+        Self {
+            assignment_entity,
+            current_target_entity,
+            current_work_type,
+            binding: TaskIdentityBinding::Attached,
+        }
+    }
+
+    /// 同じ assignment 内で次の task segment へ移行する。
+    pub fn transition_to(&mut self, current_target_entity: Entity, current_work_type: WorkType) {
+        self.current_target_entity = current_target_entity;
+        self.current_work_type = current_work_type;
+        self.binding = TaskIdentityBinding::Attached;
+    }
+
+    /// 成果確定後、次 frame の Done phase まで `WorkingOn` を持たないことを明示する。
+    pub fn detach_from_working_on(&mut self) {
+        self.binding = TaskIdentityBinding::Detached;
+    }
+
+    /// 現在の `WorkingOn` と identity の組が実行可能な状態か判定する。
+    pub fn matches_working_on(&self, working_on: Option<Entity>) -> bool {
+        match self.binding {
+            TaskIdentityBinding::Attached => working_on == Some(self.current_target_entity),
+            TaskIdentityBinding::Detached => working_on.is_none(),
+        }
+    }
+}
+
 #[derive(Component, Reflect, Clone, Debug, Default)]
 #[reflect(Component)]
 pub enum AssignedTask {
@@ -71,7 +129,7 @@ impl AssignedTask {
             },
             AssignedTask::CollectBone(_) => Some(WorkType::CollectBone),
             AssignedTask::Refine(_) => Some(WorkType::Refine),
-            AssignedTask::HaulToMixer(_) => Some(WorkType::Haul),
+            AssignedTask::HaulToMixer(_) => Some(WorkType::HaulToMixer),
             AssignedTask::HaulWithWheelbarrow(_) => Some(WorkType::WheelbarrowHaul),
             AssignedTask::ReinforceFloorTile(_) => Some(WorkType::ReinforceFloorTile),
             AssignedTask::PourFloorTile(_) => Some(WorkType::PourFloorTile),
@@ -82,7 +140,7 @@ impl AssignedTask {
         }
     }
 
-    pub fn get_target_entity(&self) -> Option<Entity> {
+    pub fn primary_payload_entity(&self) -> Option<Entity> {
         match self {
             AssignedTask::Gather(data) => Some(data.target),
             AssignedTask::Haul(data) => Some(data.item),
@@ -142,5 +200,51 @@ impl AssignedTask {
             ),
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn active_task_identity_transition_preserves_assignment() {
+        let mut world = World::new();
+        let assignment = world.spawn_empty().id();
+        let initial_target = world.spawn_empty().id();
+        let next_target = world.spawn_empty().id();
+        let mut identity = ActiveTaskIdentity::new(assignment, initial_target, WorkType::Chop);
+
+        identity.transition_to(next_target, WorkType::HaulToMixer);
+
+        assert_eq!(identity.assignment_entity, assignment);
+        assert_eq!(identity.current_target_entity, next_target);
+        assert_eq!(identity.current_work_type, WorkType::HaulToMixer);
+        assert!(identity.matches_working_on(Some(next_target)));
+    }
+
+    #[test]
+    fn detached_identity_only_allows_an_absent_working_on() {
+        let mut world = World::new();
+        let assignment = world.spawn_empty().id();
+        let target = world.spawn_empty().id();
+        let mut identity = ActiveTaskIdentity::new(assignment, target, WorkType::Chop);
+
+        assert!(!identity.matches_working_on(None));
+        identity.detach_from_working_on();
+        assert!(identity.matches_working_on(None));
+        assert!(!identity.matches_working_on(Some(target)));
+    }
+
+    #[test]
+    fn haul_to_mixer_reports_its_distinct_work_type() {
+        let task = AssignedTask::HaulToMixer(HaulToMixerData {
+            item: Entity::PLACEHOLDER,
+            mixer: Entity::PLACEHOLDER,
+            resource_type: hw_core::logistics::ResourceType::Rock,
+            phase: HaulToMixerPhase::GoingToItem,
+        });
+
+        assert_eq!(task.work_type(), Some(WorkType::HaulToMixer));
     }
 }

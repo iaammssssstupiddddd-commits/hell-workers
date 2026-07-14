@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use hw_core::constants::*;
-use hw_core::events::OnExhausted;
+use hw_core::events::publish_soul_exhausted;
 use hw_core::relationships::CommandedBy;
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
 use hw_jobs::AssignedTask;
@@ -46,7 +46,7 @@ pub fn fatigue_update_system(
             && soul.fatigue > FATIGUE_GATHERING_THRESHOLD;
 
         if crossed_exhausted_threshold && idle.behavior != IdleBehavior::ExhaustedGathering {
-            commands.trigger(OnExhausted { entity });
+            publish_soul_exhausted(&mut commands, entity);
         }
     }
 }

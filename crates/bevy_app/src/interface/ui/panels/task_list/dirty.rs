@@ -3,6 +3,7 @@ use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::TransportRequest;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use hw_core::ecs::drain_removed;
 use hw_core::relationships::TaskWorkers;
 use hw_ui::components::LeftPanelMode;
 
@@ -79,20 +80,18 @@ pub fn detect_task_list_removed_components(
     mut dirty: ResMut<TaskListDirty>,
     mut removed: TaskRemovedDetectors,
 ) {
-    // 全リーダーを毎フレーム必ず消費する（|| 短絡評価を避ける）。
-    // Bevy のイベントは 2 フレームで期限切れになるため、
-    // 短絡評価で消費されないと変更が永久に見落とされる可能性がある。
+    // 全 reader を1件だけ進めずに最後まで消費する。
     let mut removed_any = false;
-    removed_any |= removed.removed_designations.read().next().is_some();
-    removed_any |= removed.removed_priority.read().next().is_some();
-    removed_any |= removed.removed_task_workers.read().next().is_some();
-    removed_any |= removed.removed_blueprints.read().next().is_some();
-    removed_any |= removed.removed_transport_requests.read().next().is_some();
-    removed_any |= removed.removed_resource_items.read().next().is_some();
-    removed_any |= removed.removed_trees.read().next().is_some();
-    removed_any |= removed.removed_rocks.read().next().is_some();
-    removed_any |= removed.removed_sand_piles.read().next().is_some();
-    removed_any |= removed.removed_bone_piles.read().next().is_some();
+    removed_any |= drain_removed(&mut removed.removed_designations);
+    removed_any |= drain_removed(&mut removed.removed_priority);
+    removed_any |= drain_removed(&mut removed.removed_task_workers);
+    removed_any |= drain_removed(&mut removed.removed_blueprints);
+    removed_any |= drain_removed(&mut removed.removed_transport_requests);
+    removed_any |= drain_removed(&mut removed.removed_resource_items);
+    removed_any |= drain_removed(&mut removed.removed_trees);
+    removed_any |= drain_removed(&mut removed.removed_rocks);
+    removed_any |= drain_removed(&mut removed.removed_sand_piles);
+    removed_any |= drain_removed(&mut removed.removed_bone_piles);
 
     if removed_any {
         dirty.mark_all();

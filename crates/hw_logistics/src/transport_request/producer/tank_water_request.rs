@@ -6,11 +6,13 @@ use hw_core::constants::BUCKET_CAPACITY;
 use hw_core::relationships::{IncomingDeliveries, StoredItems, TaskWorkers};
 use hw_jobs::{Designation, MovePlanned, Priority, TaskSlots, WorkType};
 
+use crate::transport_request::producer::active_unit_cache::{
+    CachedActiveFamiliars, CachedActiveYards,
+};
 use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
 use crate::types::ResourceType;
 use crate::water::tank_can_accept_new_bucket;
 use crate::zone::Stockpile;

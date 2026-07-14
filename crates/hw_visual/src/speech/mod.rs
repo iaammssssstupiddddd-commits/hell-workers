@@ -21,7 +21,6 @@ pub use voice::FamiliarVoice;
 
 use bevy::prelude::*;
 use conversation::ConversationPlugin;
-use observers::*;
 
 pub struct SpeechPlugin;
 
@@ -47,17 +46,15 @@ impl Plugin for SpeechPlugin {
             (
                 observers::speech_on_task_assigned_system,
                 observers::speech_on_task_completed_system,
+                observers::speech_on_soul_recruited_system,
+                observers::speech_on_exhausted_system,
+                observers::speech_on_stress_breakdown_system,
+                observers::speech_on_released_from_service_system,
+                observers::speech_on_gathering_joined_system,
+                observers::speech_on_task_abandoned_system,
+                observers::speech_on_encouraged_system,
             )
                 .in_set(hw_core::system_sets::GameSystemSet::Visual),
         );
-
-        // Observers の登録
-        app.add_observer(on_soul_recruited);
-        app.add_observer(on_exhausted);
-        app.add_observer(on_stress_breakdown);
-        app.add_observer(on_released_from_service);
-        app.add_observer(on_gathering_joined);
-        app.add_observer(on_task_abandoned);
-        app.add_observer(on_encouraged);
     }
 }

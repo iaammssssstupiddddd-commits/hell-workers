@@ -3,7 +3,7 @@
 use crate::soul_ai::execute::task_execution::{
     chain::{self, GatherHaulChain},
     common::*,
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     types::{
         AssignedTask, GatherData, GatherPhase, HaulData, HaulPhase, HaulToBlueprintData,
         HaulToBpPhase, HaulToMixerData, HaulToMixerPhase,
@@ -20,7 +20,7 @@ pub fn handle_gather_task(
     ctx: &mut TaskExecutionContext,
     data: GatherData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let GatherData {
         target,
         work_type,
@@ -33,8 +33,7 @@ pub fn handle_gather_task(
         GatherPhase::GoingToResource => {
             let (res_pos, has_designation) = {
                 let Ok((res_transform, _, _, _, _, des_opt, _)) = q_targets.get(target) else {
-                    ctx.abort_closed(commands, "gather target entity missing");
-                    return;
+                    return ctx.abort_closed(commands, "gather target entity missing");
                 };
                 (res_transform.translation.truncate(), des_opt.is_some())
             };
@@ -46,19 +45,16 @@ pub fn handle_gather_task(
                 ctx.env.world_map,
                 commands,
             ) {
-                NavOutcome::Moving | NavOutcome::Cancelled => {}
+                NavOutcome::Moving => {}
+                NavOutcome::Ended(control) => return control,
                 NavOutcome::Unreachable => {
                     debug!(
                         "GATHER: Soul {:?} cannot reach target {:?}, canceling",
                         ctx.soul_entity, target
                     );
-                    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                        source: target,
-                        amount: 1,
-                    });
-                    ctx.clear_soul_assignment(
+                    return ctx.abort_retryable_after_custom_cleanup(
                         commands,
-                        crate::soul_ai::execute::task_execution::context::TaskEndDisposition::AbortedRetryable,
+                        "gather target unreachable",
                     );
                 }
                 NavOutcome::Arrived => {
@@ -79,12 +75,7 @@ pub fn handle_gather_task(
                 let (res_transform, tree, tree_variant, rock, _res_item, des_opt, _stored_in) =
                     target_data;
                 if des_opt.is_none() {
-                    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                        source: target,
-                        amount: 1,
-                    });
-                    ctx.abort_closed(commands, "designation missing");
-                    return;
+                    return ctx.abort_closed(commands, "designation missing");
                 }
                 let pos = res_transform.translation;
 
@@ -127,7 +118,9 @@ pub fn handle_gather_task(
                             0
                         };
 
-                        if let Some(anime_image) = ctx.env.soul_handles.tree_animes.get(variant_index) {
+                        if let Some(anime_image) =
+                            ctx.env.soul_handles.tree_animes.get(variant_index)
+                        {
                             commands.entity(target).insert(Sprite {
                                 image: anime_image.clone(),
                                 custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),
@@ -158,16 +151,15 @@ pub fn handle_gather_task(
                             ctx.soul_entity,
                             hw_core::constants::ROCK_DROP_AMOUNT
                         );
-                        commands
-                            .entity(ctx.soul_entity)
-                            .remove::<hw_core::relationships::WorkingOn>();
                         commands.entity(target).despawn();
                     } else {
-                        commands
-                            .entity(ctx.soul_entity)
-                            .remove::<hw_core::relationships::WorkingOn>();
                         commands.entity(target).despawn();
                     }
+
+                    ctx.detach_task_identity();
+                    commands
+                        .entity(ctx.soul_entity)
+                        .remove::<hw_core::relationships::WorkingOn>();
 
                     ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                         source: target,
@@ -192,7 +184,7 @@ pub fn handle_gather_task(
                     );
                 }
             } else {
-                ctx.abort_closed(commands, "gather target missing during collect");
+                return ctx.abort_closed(commands, "gather target missing during collect");
             }
         }
         GatherPhase::Done => {
@@ -211,6 +203,7 @@ pub fn handle_gather_task(
                 match chain {
                     GatherHaulChain::Storage { item, destination } => {
                         commands.entity(ctx.soul_entity).insert(WorkingOn(item));
+                        ctx.transition_task_identity(item, WorkType::Haul);
                         *ctx.task = AssignedTask::Haul(HaulData {
                             item,
                             stockpile: destination,
@@ -223,6 +216,7 @@ pub fn handle_gather_task(
                     }
                     GatherHaulChain::Blueprint { item, blueprint } => {
                         commands.entity(ctx.soul_entity).insert(WorkingOn(item));
+                        ctx.transition_task_identity(item, WorkType::Haul);
                         *ctx.task = AssignedTask::HaulToBlueprint(HaulToBlueprintData {
                             item,
                             blueprint,
@@ -235,6 +229,7 @@ pub fn handle_gather_task(
                     }
                     GatherHaulChain::Mixer { item, mixer } => {
                         commands.entity(ctx.soul_entity).insert(WorkingOn(item));
+                        ctx.transition_task_identity(item, WorkType::HaulToMixer);
                         *ctx.task = AssignedTask::HaulToMixer(HaulToMixerData {
                             item,
                             mixer,
@@ -247,10 +242,12 @@ pub fn handle_gather_task(
                         );
                     }
                 }
-                return;
+                return TaskHandlerControl::Continue;
             }
 
-            ctx.complete_task(commands, "gather done without chain");
+            return ctx.complete_task(commands, "gather done without chain");
         }
     }
+
+    TaskHandlerControl::Continue
 }

@@ -45,4 +45,10 @@ pub enum SoulAiSystemSet {
     Decide,
     /// 決定された行動の実行
     Execute,
+    /// pathfinding を含む Actor phase の後段処理
+    Actor,
 }
+
+/// Source-aware obstacle cache synchronization before pathfinding.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ObstacleSyncSet;

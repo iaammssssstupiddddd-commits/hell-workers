@@ -69,12 +69,7 @@ pub fn spawn_bottom_bar(
                 MenuAction::ToggleDream,
                 Some("D"),
             ),
-            (
-                "Settings",
-                "設定",
-                MenuAction::ToggleSettings,
-                None,
-            ),
+            ("Settings", "設定", MenuAction::ToggleSettings, None),
         ];
 
         for (label, tooltip, action, shortcut) in buttons {
@@ -102,7 +97,7 @@ pub fn spawn_bottom_bar(
                         TextFont {
                             font: game_assets.font_ui().clone().into(),
                             font_size: crate::theme::font_size_rem(theme.typography.font_size_base), // Semantic
-                            weight: FontWeight::SEMIBOLD,               // Variation
+                            weight: FontWeight::SEMIBOLD, // Variation
                             ..default()
                         },
                         TextColor(theme.colors.text_primary_semantic), // Semantic

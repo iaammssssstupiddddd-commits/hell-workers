@@ -1,8 +1,12 @@
-use crate::components::{SoulRenameActive, SoulRenameButton, SoulRenameFieldContainer, SoulRenameState};
+use crate::components::{
+    SoulRenameActive, SoulRenameButton, SoulRenameFieldContainer, SoulRenameState,
+};
 use crate::models::inspection::EntityInspectionViewModel;
 use crate::setup::UiAssets;
 use crate::theme::UiTheme;
-use crate::widgets::{focus_text_field, spawn_text_field_on_entity, TextFieldConfig, TextFieldRole};
+use crate::widgets::{
+    TextFieldConfig, TextFieldRole, focus_text_field, spawn_text_field_on_entity,
+};
 use bevy::ecs::system::SystemParam;
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
@@ -84,9 +88,10 @@ pub fn soul_rename_cleanup_system(
         return;
     };
 
-    let should_close = inspection_vm.model.as_ref().is_none_or(|model| {
-        model.soul.is_none() || model.entity != active.target
-    });
+    let should_close = inspection_vm
+        .model
+        .as_ref()
+        .is_none_or(|model| model.soul.is_none() || model.entity != active.target);
 
     if should_close {
         close_soul_rename(&mut commands, &mut rename_state);

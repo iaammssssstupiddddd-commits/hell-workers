@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 use hw_core::constants::{
-    FLOOR_CONSTRUCTION_PRIORITY, FLOOR_BONES_PER_TILE, FLOOR_MUD_PER_TILE, TILE_SIZE,
+    FLOOR_BONES_PER_TILE, FLOOR_CONSTRUCTION_PRIORITY, FLOOR_MUD_PER_TILE, TILE_SIZE,
     WHEELBARROW_CAPACITY,
 };
 use hw_core::relationships::TaskWorkers;
@@ -85,8 +85,11 @@ pub fn floor_construction_auto_haul_system(
             continue;
         };
 
-        let (waiting_bones, waiting_mud) =
-            waiting_cache.map.get(&site_entity).copied().unwrap_or((0, 0));
+        let (waiting_bones, waiting_mud) = waiting_cache
+            .map
+            .get(&site_entity)
+            .copied()
+            .unwrap_or((0, 0));
         if waiting_bones == 0 && waiting_mud == 0 {
             continue;
         }

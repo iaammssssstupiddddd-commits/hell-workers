@@ -1,7 +1,7 @@
 //! Pouring phase: バケツの水をデスティネーション（タンク or ミキサー）に注ぐ
 
 use crate::soul_ai::execute::task_execution::common::{drop_item, update_destination_if_needed};
-use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use crate::soul_ai::execute::task_execution::transport_common::reservation;
 use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
@@ -18,7 +18,7 @@ pub fn handle(
     data: &BucketTransportData,
     progress: f32,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let soul_pos = ctx.soul_pos();
 
     if ctx.inventory.0 != Some(data.bucket) {
@@ -26,8 +26,7 @@ pub fn handle(
             "Pouring: Bucket not in inventory for soul {:?}",
             ctx.soul_entity
         );
-        abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
-        return;
+        return abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
     }
 
     match data.destination {
@@ -36,8 +35,12 @@ pub fn handle(
 
             if new_progress >= 1.0 {
                 if !super::super::guards::tank_can_accept_full_bucket(ctx, tank_entity) {
-                    helpers::drop_bucket_for_auto_haul(commands, ctx, data.bucket, ctx.env.world_map);
-                    return;
+                    return helpers::drop_bucket_for_auto_haul(
+                        commands,
+                        ctx,
+                        data.bucket,
+                        ctx.env.world_map,
+                    );
                 }
 
                 commands
@@ -62,7 +65,12 @@ pub fn handle(
                     .entity(data.bucket)
                     .remove::<hw_core::relationships::DeliveringTo>();
 
-                helpers::drop_bucket_for_auto_haul(commands, ctx, data.bucket, ctx.env.world_map);
+                return helpers::drop_bucket_for_auto_haul(
+                    commands,
+                    ctx,
+                    data.bucket,
+                    ctx.env.world_map,
+                );
             } else {
                 *ctx.task = AssignedTask::BucketTransport(BucketTransportData {
                     phase: BucketTransportPhase::Pouring {
@@ -76,8 +84,7 @@ pub fn handle(
             let tank = match data.source {
                 BucketTransportSource::Tank { tank, .. } => tank,
                 BucketTransportSource::River => {
-                    abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
-                    return;
+                    return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                 }
             };
 
@@ -88,11 +95,17 @@ pub fn handle(
                         "Pouring: Empty bucket for mixer, returning to tank for soul {:?}",
                         ctx.soul_entity
                     );
-                    transition_to_tank_for_mixer(commands, ctx, data, tank, mixer_entity, soul_pos);
-                    return;
+                    return transition_to_tank_for_mixer(
+                        commands,
+                        ctx,
+                        data,
+                        tank,
+                        mixer_entity,
+                        soul_pos,
+                    );
                 }
             } else {
-                abort::abort_and_drop_bucket_mixer(
+                return abort::abort_and_drop_bucket_mixer(
                     commands,
                     ctx,
                     data.bucket,
@@ -100,7 +113,6 @@ pub fn handle(
                     mixer_entity,
                     soul_pos,
                 );
-                return;
             }
 
             let amount = data.amount;
@@ -109,8 +121,14 @@ pub fn handle(
                     "Pouring: Zero amount for mixer for soul {:?}, returning to tank",
                     ctx.soul_entity
                 );
-                transition_to_tank_for_mixer(commands, ctx, data, tank, mixer_entity, soul_pos);
-                return;
+                return transition_to_tank_for_mixer(
+                    commands,
+                    ctx,
+                    data,
+                    tank,
+                    mixer_entity,
+                    soul_pos,
+                );
             }
 
             // Mixer の容量確認
@@ -176,11 +194,11 @@ pub fn handle(
                 } else {
                     drop_item(commands, ctx.soul_entity, data.bucket, soul_pos);
                     ctx.inventory.0 = None;
-                    ctx.abort_retryable(commands, "bucket transport no return position");
+                    return ctx.abort_retryable(commands, "bucket transport no return position");
                 }
             } else {
                 // Mixer が満杯
-                abort::abort_and_drop_bucket_mixer(
+                return abort::abort_and_drop_bucket_mixer(
                     commands,
                     ctx,
                     data.bucket,
@@ -191,6 +209,8 @@ pub fn handle(
             }
         }
     }
+
+    TaskHandlerControl::Continue
 }
 
 fn transition_to_tank_for_mixer(
@@ -200,7 +220,7 @@ fn transition_to_tank_for_mixer(
     tank_entity: Entity,
     _mixer_entity: Entity,
     _soul_pos: Vec2,
-) {
+) -> TaskHandlerControl {
     if let Ok(tank_data) = ctx.queries.storage.stockpiles.get(tank_entity) {
         let (_, tank_transform, _, _) = tank_data;
         let tank_pos = tank_transform.translation.truncate();
@@ -222,10 +242,10 @@ fn transition_to_tank_for_mixer(
     } else {
         let mixer = match data.destination {
             BucketTransportDestination::Mixer(m) => m,
-            _ => return,
+            _ => return TaskHandlerControl::Continue,
         };
         let soul_pos = ctx.soul_pos();
-        abort::abort_and_drop_bucket_mixer(
+        return abort::abort_and_drop_bucket_mixer(
             commands,
             ctx,
             data.bucket,
@@ -234,4 +254,6 @@ fn transition_to_tank_for_mixer(
             soul_pos,
         );
     }
+
+    TaskHandlerControl::Continue
 }

@@ -2,7 +2,7 @@
 
 use crate::soul_ai::execute::task_execution::{
     common::*,
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     types::{AssignedTask, PourFloorPhase, PourFloorTileData},
 };
 use bevy::prelude::*;
@@ -14,7 +14,7 @@ pub fn handle_pour_floor_task(
     ctx: &mut TaskExecutionContext,
     data: PourFloorTileData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let PourFloorTileData { tile, site, phase } = data;
     let tile_entity = tile;
     let site_entity = site;
@@ -30,8 +30,7 @@ pub fn handle_pour_floor_task(
                     "POUR_FLOOR: Cancelled for {:?} - Site {:?} gone",
                     ctx.soul_entity, site_entity
                 );
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             let material_center = site_transform.translation.truncate();
@@ -67,8 +66,7 @@ pub fn handle_pour_floor_task(
                     "POUR_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
                 );
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             match tile_blueprint.state {
@@ -93,7 +91,7 @@ pub fn handle_pour_floor_task(
                         "POUR_FLOOR: Cancelled for {:?} - Tile {:?} state changed unexpectedly in PickingUpMud",
                         ctx.soul_entity, tile_entity
                     );
-                    ctx.abort_retryable(commands, "tile state changed unexpectedly");
+                    return ctx.abort_retryable(commands, "tile state changed unexpectedly");
                 }
             }
         }
@@ -107,8 +105,7 @@ pub fn handle_pour_floor_task(
                     "POUR_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
                 );
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             let tile_pos =
@@ -148,13 +145,13 @@ pub fn handle_pour_floor_task(
                     "POUR_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
                 );
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             // Update progress (basis points) to avoid truncation at 1x speed.
             const MAX_PROGRESS_BP: u16 = 10_000;
-            let delta_bp = ((ctx.env.time.delta_secs() / FLOOR_POUR_DURATION_SECS * MAX_PROGRESS_BP as f32)
+            let delta_bp = ((ctx.env.time.delta_secs() / FLOOR_POUR_DURATION_SECS
+                * MAX_PROGRESS_BP as f32)
                 .round()
                 .max(1.0)) as u16;
             let new_progress_bp = progress_bp.saturating_add(delta_bp).min(MAX_PROGRESS_BP);
@@ -211,11 +208,13 @@ pub fn handle_pour_floor_task(
                 source: tile_entity,
                 amount: 1,
             });
-            ctx.complete_task(commands, "construction done");
             debug!(
                 "POUR_FLOOR: Soul {:?} finished pouring task",
                 ctx.soul_entity
             );
+            return ctx.complete_task(commands, "construction done");
         }
     }
+
+    TaskHandlerControl::Continue
 }

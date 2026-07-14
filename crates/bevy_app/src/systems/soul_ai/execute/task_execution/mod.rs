@@ -8,7 +8,7 @@ pub mod context {
     pub use hw_soul_ai::soul_ai::execute::task_execution::context::{
         ConstructionSiteAccess, DesignationAccess, FamiliarStorageAccess, MutStorageAccess,
         ReservationAccess, StorageAccess, TaskAssignmentQueries, TaskAssignmentReadAccess,
-        TaskEndDisposition, TaskExecEnv, TaskExecutionContext, TaskQueries, TaskReservationAccess,
+        TaskExecEnv, TaskExecutionContext, TaskHandlerControl, TaskQueries, TaskReservationAccess,
         TaskUnassignQueries,
     };
 }

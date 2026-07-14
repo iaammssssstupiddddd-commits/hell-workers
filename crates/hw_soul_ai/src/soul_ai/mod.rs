@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use hw_core::system_sets::{GameSystemSet, SoulAiSystemSet};
+use hw_core::system_sets::SoulAiSystemSet;
 
 pub mod building_completed;
 pub mod decide;
@@ -38,6 +38,7 @@ impl Plugin for SoulAiCorePlugin {
                     update::rest_area_update::rest_area_update_system,
                     update::state_sanity::ensure_rest_area_component_system,
                     update::state_sanity::clear_stale_working_on_system,
+                    update::state_sanity::clear_stale_task_identity_system,
                     update::state_sanity::reconcile_rest_state_system,
                     update::dream_update::dream_update_system,
                     update::vitals_influence::familiar_influence_unified_system,
@@ -56,6 +57,14 @@ impl Plugin for SoulAiCorePlugin {
                     ),
                     execute::drifting::despawn_at_edge_system
                         .after(execute::drifting::drifting_behavior_system),
+                    // Assignment uses Commands for WorkingOn and ActiveTaskIdentity. Apply them
+                    // before task execution so an accepted assignment has one coherent identity.
+                    ApplyDeferred
+                        .after(
+                            execute::task_assignment_apply::apply_task_assignment_requests_system,
+                        )
+                        .after(execute::drifting::drifting_behavior_system)
+                        .before(execute::task_execution_system::task_execution_system),
                     execute::task_execution_system::task_execution_system
                         .after(
                             execute::task_assignment_apply::apply_task_assignment_requests_system,
@@ -96,9 +105,9 @@ impl Plugin for SoulAiCorePlugin {
                 Update,
                 (
                     pathfinding::soul_stuck_escape_system
-                        .in_set(GameSystemSet::Actor)
+                        .in_set(SoulAiSystemSet::Actor)
                         .before(pathfinding::pathfinding_system),
-                    pathfinding::pathfinding_system.in_set(GameSystemSet::Actor),
+                    pathfinding::pathfinding_system.in_set(SoulAiSystemSet::Actor),
                 ),
             );
     }

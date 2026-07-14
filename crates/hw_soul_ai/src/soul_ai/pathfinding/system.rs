@@ -310,3 +310,78 @@ pub fn pathfinding_system(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::ecs::schedule::ApplyDeferred;
+    use hw_core::events::{ResourceReservationOp, ResourceReservationRequest};
+    use hw_core::relationships::WorkingOn;
+    use hw_jobs::events::TaskAssignmentRequest;
+    use hw_jobs::{ActiveTaskIdentity, GeneratePowerData, GeneratePowerPhase, WorkType};
+    use hw_logistics::SharedResourceCache;
+
+    #[derive(Resource, Default)]
+    struct ReservationReceipts(Vec<ResourceReservationOp>);
+
+    fn collect_reservations(
+        mut reservations: MessageReader<ResourceReservationRequest>,
+        mut receipts: ResMut<ReservationReceipts>,
+    ) {
+        receipts
+            .0
+            .extend(reservations.read().map(|request| request.op.clone()));
+    }
+
+    #[test]
+    fn unreachable_task_destination_unassigns_and_releases_its_reservation() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(WorldMap::default())
+            .init_resource::<SharedResourceCache>()
+            .init_resource::<ReservationReceipts>()
+            .add_message::<ResourceReservationRequest>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_systems(
+                Update,
+                (pathfinding_system, ApplyDeferred, collect_reservations).chain(),
+            );
+
+        let target = app.world_mut().spawn_empty().id();
+        let start = WorldMap::grid_to_world(10, 12);
+        let soul = app
+            .world_mut()
+            .spawn((
+                Transform::from_translation(start.extend(0.0)),
+                DamnedSoul::default(),
+                Destination(WorldMap::grid_to_world(-1, 12)),
+                Path::default(),
+                AssignedTask::GeneratePower(GeneratePowerData {
+                    tile: target,
+                    tile_pos: start,
+                    phase: GeneratePowerPhase::Generating,
+                }),
+                IdleState::default(),
+                ActiveTaskIdentity::new(target, target, WorkType::GeneratePower),
+                WorkingOn(target),
+            ))
+            .id();
+
+        app.update();
+
+        assert!(matches!(
+            app.world().get::<AssignedTask>(soul),
+            Some(AssignedTask::None)
+        ));
+        assert!(app.world().get::<ActiveTaskIdentity>(soul).is_none());
+        assert!(app.world().get::<WorkingOn>(soul).is_none());
+        assert!(app.world().get::<PathCooldown>(soul).is_some());
+        assert_eq!(
+            app.world().resource::<ReservationReceipts>().0,
+            vec![ResourceReservationOp::ReleaseSource {
+                source: target,
+                amount: 1,
+            }]
+        );
+    }
+}

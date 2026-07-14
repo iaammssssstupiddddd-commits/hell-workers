@@ -129,7 +129,9 @@ pub fn rebuild_task_list_ui(
                             Text::new(format!("\u{00d7}{}", entry.worker_count)),
                             TextFont {
                                 font: game_assets.font_ui().clone().into(),
-                                font_size: crate::theme::font_size_rem(theme.typography.font_size_small),
+                                font_size: crate::theme::font_size_rem(
+                                    theme.typography.font_size_small,
+                                ),
                                 ..default()
                             },
                             TextColor(theme.colors.text_secondary),

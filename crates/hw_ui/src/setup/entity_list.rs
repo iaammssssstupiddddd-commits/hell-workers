@@ -3,7 +3,7 @@
 use super::UiAssets;
 use crate::components::*;
 use crate::theme::UiTheme;
-use crate::widgets::{spawn_text_field, TextFieldConfig, TextFieldRole};
+use crate::widgets::{TextFieldConfig, TextFieldRole, spawn_text_field};
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
 use bevy::ui_widgets::{ControlOrientation, ScrollArea, Scrollbar, ScrollbarThumb};
@@ -87,7 +87,9 @@ pub fn spawn_entity_list_panel(
                             Text::new("-"),
                             TextFont {
                                 font: game_assets.font_ui().clone().into(),
-                                font_size: crate::theme::font_size_rem(theme.typography.font_size_base),
+                                font_size: crate::theme::font_size_rem(
+                                    theme.typography.font_size_base,
+                                ),
                                 weight: FontWeight::BOLD,
                                 ..default()
                             },
@@ -202,7 +204,9 @@ pub fn spawn_entity_list_panel(
                                 Text::new("Unassigned Souls"),
                                 TextFont {
                                     font: game_assets.font_ui().clone().into(),
-                                    font_size: crate::theme::font_size_rem(theme.typography.font_size_base),
+                                    font_size: crate::theme::font_size_rem(
+                                        theme.typography.font_size_base,
+                                    ),
                                     ..default()
                                 },
                                 TextColor(theme.colors.text_primary_semantic),

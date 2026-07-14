@@ -11,13 +11,13 @@
 - **増加**: タスク実行中 (+0.01/s)、タスク完了時 (採取:+0.10, 運搬:+0.05)。
 - **減少**: 待機中 (-0.05/s)、使役下の待機 (-0.01/s)、集会所での休息。
 - **閾値**: 使い魔ごとに設定された `fatigue_threshold`（デフォルト 0.8）を超えると使役解除。
-- **限界**: 0.9 を超えると `OnExhausted` イベントが発生し、強制的に集会所へ移動（`ExhaustedGathering`）。
+- **限界**: 0.9 を超えると `publish_soul_exhausted` が domain `OnExhausted` と presentation `SoulExhaustedVisualMessage` を発行し、強制的に集会所へ移動（`ExhaustedGathering`）。
 
 ### 1.2. ストレス (Stress)
 監視下での労働や、過酷な環境で蓄積します。
 - **増加**: タスク実行中 (+0.015/s)、監視下での労働（使い魔の効率に応じて追加）、**リクルート時 (+0.10)**、**使い魔の激励 (+0.0125)**。
 - **減少**: 通常待機 (-0.02/s)、集会所での休息 (-0.04/s)、Soul同士の会話完了時（即時減少）。
-- **ブレイクダウン**: ストレスが 1.0 に到達すると `OnStressBreakdown` が発生します。
+- **ブレイクダウン**: ストレスが 1.0 に到達すると `publish_stress_breakdown` が domain `OnStressBreakdown` と presentation `SoulStressBreakdownVisualMessage` を発行します。
   - 硬直時間は **1 秒のみ**で、その間は `StressBreakdown` の `is_frozen=true` として移動不能になります。
   - 1 秒経過後は `is_frozen=false` となり、次の行動決定（逃走や空きタスク対応など）へ進行可能になります。
   - この間、`StressBreakdown` 自体は残るため、内部状態として「高ストレスの維持」を記録し続けます。
@@ -31,7 +31,7 @@
 - **怠惰**: 待機時間が長いと蓄積し、高いと自律的な行動（ wandered 等）を取りやすくなります。監視によって減少します。
 
 ### 1.4. タスク放棄 (Task Abandonment)
-やる気が **0.3 (30%)** を下回ると、ワーカーは現在のタスクを放棄 (`OnTaskAbandoned`) してアイドル状態に戻ります。
+やる気が **0.3 (30%)** を下回ると、ワーカーは現在のタスクを放棄し、presentation `OnTaskAbandoned` Message を書き込んでアイドル状態に戻ります。
 放棄時には「🙅‍♂️」の絵文字が表示されます。
 
 ## 2. 行動状態 (Idle Behavior)
@@ -111,7 +111,7 @@
 Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し替えされます。  
 実装は `ConversationExpression`（画像種別・優先度・残り秒）でロック制御されています。
 
-- `OnExhausted` -> `soul_exhausted`（4.0秒, 優先度30）
+- `SoulExhaustedVisualMessage` -> `soul_exhausted`（4.0秒, 優先度30）
 - `ConversationToneTriggered(Positive/Negative)` -> `soul_lough` / `soul_stress`（3.0秒 / 3.4秒, 優先度20）
 - `OnGatheringParticipated` + `GatheringParticipants.len()` (または `GatheringSpot.object_type`):
   - `Barrel` -> `soul_wine`（2.2秒, 優先度15）
@@ -238,12 +238,14 @@ root 側の shell には `PopulationManager`・visual/UI 依存・request 再検
 
 | メソッド | 用途 |
 |:---|:---|
-| `complete_task` | 正常完了。`OnTaskCompleted` 発火の唯一の経路 |
+| `complete_task` | 正常完了。`publish_task_completed` による domain / presentation 通知の唯一の経路 |
 | `abort_retryable` | 再アサイン可能な中断（`cleanup_task_assignment` + 予約解放） |
 | `abort_closed` | 対象消滅・designation 削除（同上、`AbortedClosed`） |
-| `clear_soul_assignment` | 専用 cancel / abort が予約・インベントリ cleanup 済みのとき Soul 側だけ解除 |
+| `complete_after_custom_cleanup` | 専用物理 cleanup 後に正常完了を確定し、通常の完了通知を発行する |
+| `abort_retryable_after_custom_cleanup` | 専用物理 cleanup 後に予約を一度だけ解放して再アサイン可能な中断を確定する |
 
-`task_execution_system` はフレーム末尾で `ctx.end_disposition == TaskEndDisposition::Completed` のときだけ `OnTaskCompleted` を trigger する。
+terminal disposition は context 内部だけで保持する。`task_execution_system` は正常終了が確定したときだけ
+`publish_task_completed` を呼び、retryable/closed abort では完了通知を出さない。
 
 #### ログレベル（M3）
 

@@ -66,7 +66,7 @@ pub fn gathering_spawn_system(
         commands
             .entity(request.initiator_entity)
             .insert(ParticipatingIn(spot_entity));
-        commands.trigger(OnGatheringParticipated {
+        commands.write_message(OnGatheringParticipated {
             entity: request.initiator_entity,
             spot_entity,
         });

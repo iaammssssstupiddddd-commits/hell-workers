@@ -1,5 +1,5 @@
 use super::common::*;
-use super::context::TaskExecutionContext;
+use super::context::{TaskExecutionContext, TaskHandlerControl};
 use super::types::{AssignedTask, RefineData, RefinePhase};
 use bevy::prelude::*;
 use hw_core::constants::*;
@@ -10,7 +10,7 @@ pub fn handle_refine_task(
     ctx: &mut TaskExecutionContext,
     data: RefineData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let RefineData { mixer, phase } = data;
     let mixer_entity = mixer;
     let soul_pos = ctx.soul_pos();
@@ -39,12 +39,7 @@ pub fn handle_refine_task(
                         .entity(mixer_entity)
                         .remove::<hw_jobs::Designation>();
                     commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
-                    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                        source: mixer_entity,
-                        amount: 1,
-                    });
-                    ctx.abort_retryable(commands, "refine mixer unreachable");
-                    return;
+                    return ctx.abort_retryable(commands, "refine mixer unreachable");
                 }
 
                 if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {
@@ -59,11 +54,7 @@ pub fn handle_refine_task(
                     .entity(mixer_entity)
                     .remove::<hw_jobs::Designation>();
                 commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
-                ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                    source: mixer_entity,
-                    amount: 1,
-                });
-                ctx.abort_closed(commands, "refine mixer gone");
+                return ctx.abort_closed(commands, "refine mixer gone");
             }
         }
 
@@ -90,12 +81,7 @@ pub fn handle_refine_task(
                         .entity(mixer_entity)
                         .remove::<hw_jobs::Designation>();
                     commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
-                    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                        source: mixer_entity,
-                        amount: 1,
-                    });
-                    ctx.abort_retryable(commands, "refine materials unavailable");
-                    return;
+                    return ctx.abort_retryable(commands, "refine materials unavailable");
                 }
 
                 progress += ctx.env.time.delta_secs() * GATHER_SPEED_BASE;
@@ -113,6 +99,7 @@ pub fn handle_refine_task(
                             }
                         },
                     ) {
+                        ctx.identity.detach_from_working_on();
                         commands
                             .entity(ctx.soul_entity)
                             .remove::<hw_core::relationships::WorkingOn>();
@@ -164,11 +151,7 @@ pub fn handle_refine_task(
                     .entity(mixer_entity)
                     .remove::<hw_jobs::Designation>();
                 commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
-                ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                    source: mixer_entity,
-                    amount: 1,
-                });
-                ctx.abort_closed(commands, "refine mixer gone during refine");
+                return ctx.abort_closed(commands, "refine mixer gone during refine");
             }
         }
         RefinePhase::Done => {
@@ -181,7 +164,9 @@ pub fn handle_refine_task(
                 source: mixer_entity,
                 amount: 1,
             });
-            ctx.complete_task(commands, "refine done");
+            return ctx.complete_task(commands, "refine done");
         }
     }
+
+    TaskHandlerControl::Continue
 }

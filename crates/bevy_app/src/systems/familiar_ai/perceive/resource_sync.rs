@@ -10,6 +10,7 @@ use crate::systems::logistics::transport_request::{TransportRequest, TransportRe
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
 use hw_core::constants::RESERVATION_SYNC_INTERVAL;
+use hw_core::ecs::drain_removed;
 use hw_core::events::ResourceReservationOp;
 use hw_core::relationships::TaskWorkers;
 use hw_jobs::lifecycle::{self, ReservationSignature};
@@ -128,9 +129,9 @@ pub fn sync_reservations_system(
 
     // RemovedComponents はこの system の reader から全件消費する。短絡評価や
     // `next()` だけの消費だと、古い removal を次フレーム以降も dirty と誤認する。
-    let removed_designations = removed.removed_designations.read().count() > 0;
-    let removed_transport_requests = removed.removed_transport_requests.read().count() > 0;
-    let removed_task_workers = removed.removed_task_workers.read().count() > 0;
+    let removed_designations = drain_removed(&mut removed.removed_designations);
+    let removed_transport_requests = drain_removed(&mut removed.removed_transport_requests);
+    let removed_task_workers = drain_removed(&mut removed.removed_task_workers);
     let pending_dirty = q_pending_dirty.iter().next().is_some()
         || q_task_workers_added.iter().next().is_some()
         || removed_designations

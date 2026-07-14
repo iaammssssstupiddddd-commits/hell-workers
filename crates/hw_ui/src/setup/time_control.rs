@@ -100,7 +100,9 @@ pub fn spawn_time_control(
                                 Text::new(label),
                                 TextFont {
                                     font: game_assets.font_ui().clone().into(),
-                                    font_size: crate::theme::font_size_rem(theme.typography.font_size_title),
+                                    font_size: crate::theme::font_size_rem(
+                                        theme.typography.font_size_title,
+                                    ),
                                     ..default()
                                 },
                                 TextColor(theme.colors.accent_sulfur),
@@ -151,7 +153,9 @@ pub fn spawn_time_control(
                         Text::new("Dream: 0"),
                         TextFont {
                             font: game_assets.font_ui().clone().into(),
-                            font_size: crate::theme::font_size_rem(theme.typography.font_size_status),
+                            font_size: crate::theme::font_size_rem(
+                                theme.typography.font_size_status,
+                            ),
                             ..default()
                         },
                         TextColor(theme.colors.accent_soul_bright),

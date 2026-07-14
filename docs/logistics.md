@@ -64,8 +64,11 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
    - ⚠️ `task_area_auto_haul_system` と `stockpile_consolidation_producer_system` は `Decide` で `CachedStockpileGroups` を **読むだけ**にする。両 system が個別に `build_stockpile_groups` を呼ぶと同一フレームで重複構築になるため、Perceive の cache を経由すること
 2. `Decide`（各 producer が request を upsert）
 3. `Arbitrate`（手押し車仲裁 — 後述 §5.2）
-4. `Execute`（`TaskWorkers` に応じた state 同期）— `TaskWorkers.len() > 0` → `Claimed`、`== 0` → `Pending` に毎フレーム遷移
-5. `Maintain`（アンカー消失や不要 request の cleanup）
+4. `Execute`（`Changed<TaskWorkers>` に応じた state 同期）— worker がいる request は `Claimed`、target が残ったまま空になった request は `Pending` に遷移
+5. `Reconcile`（Soul AI の `Execute` 後）— `WorkingOn` source の削除を適用してから、Relationship hook が内部 queue に積んだ空 `TaskWorkers` target の削除も適用する。`RemovedComponents<TaskWorkers>` を全件消費し、現存する worker なし request を同じ `Update` で `Pending` に戻す
+6. `Maintain`（アンカー消失や不要 request の cleanup）
+
+`Arbitrate` は `Reconcile` より前に実行済みであるため、最後の worker を失った request は次の Logic frame から再仲裁候補になる。
 
 `task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方を探索して候補を集約します。
 

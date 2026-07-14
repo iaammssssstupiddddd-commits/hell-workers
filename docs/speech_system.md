@@ -6,11 +6,11 @@
 
 ## 1. 出現タイミングと条件
 
-セリフは主に Bevy の **Observer** イベント、または **AI 状態の変化** によってトリガーされます。
+セリフは主に presentation `Message`、または **AI 状態の変化** によってトリガーされます。
 
-### Observer 登録方針
-- セリフ系オブザーバーは `SpeechPlugin` の `app.add_observer(...)` で一元登録します。
-- 同じハンドラをエンティティ生成時の `.observe(...)` と重複登録しない運用です。
+### MessageReader 登録方針
+- セリフ系の通知 consumer は `SpeechPlugin` の `MessageReader` system として一元登録し、`GameSystemSet::Visual` で実行します。
+- gameplay の即時副作用は対応する domain `EntityEvent` Observer に残し、SpeechPlugin に visual-only Observer を追加しません。
 
 ### Soul (魂) のセリフ
 Soul は主に「感情」を絵文字で表現します。表示時は各感情に対応した色の **グロー（光彩）背景** が伴います。
@@ -18,11 +18,11 @@ Soul は主に「感情」を絵文字で表現します。表示時は各感情
 | トリガー | 絵文字 | 感情 (BubbleEmotion) | 優先度 | 内容・条件 |
 | :--- | :--- | :--- | :--- | :--- |
 | `OnTaskAssigned` | 💪 | Motivated | Low | タスクが割り当てられた瞬間 |
-| `OnTaskCompleted` | 😊 | Happy | Low | タスクを正常に完了した瞬間 |
-| `OnExhausted` | 😴 | Exhausted | High | 疲労限界に達し、休息へ向かう時 |
-| `OnStressBreakdown` | 😰 | Stressed | Critical | ストレス崩壊を起こした時 |
-| `OnSoulRecruited` | 😨 | Fearful | Normal | 勧誘された時 (0.3s遅延) | [NEW]
-| `OnEncouraged` | 😓 | Stressed | Normal | 激励された時 (0.3s遅延) |
+| `TaskCompletedVisualMessage` | 😊 | Happy | Low | タスクを正常に完了した瞬間（domain: `OnTaskCompleted`） |
+| `SoulExhaustedVisualMessage` | 😴 | Exhausted | High | 疲労限界に達し、休息へ向かう時（domain: `OnExhausted`） |
+| `SoulStressBreakdownVisualMessage` | 😰 | Stressed | Critical | ストレス崩壊を起こした時（domain: `OnStressBreakdown`） |
+| `SoulRecruitedVisualMessage` | 😨 | Fearful | Normal | 勧誘された時 (0.3s遅延、domain: `OnSoulRecruited`) | [NEW]
+| `SoulEncouragedVisualMessage` | 😓 | Stressed | Normal | 激励された時 (0.3s遅延、domain: `OnEncouraged`) |
 | `OnReleasedFromService` | 😅 | Relieved | Normal | 使役から解放された時 | [NEW]
 | `OnGatheringJoined`| 😌 | Relaxed | Normal | 集会所に到着した時 | [NEW]
 | `OnTaskAbandoned` | 🙅‍♂️ | Unmotivated | Normal | タスクがキャンセルされた時 | [NEW]
@@ -36,7 +36,7 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
 | トリガー | ラテン語 | 感情 | 優先度 | 内容・条件 |
 | :--- | :--- | :--- | :--- | :--- |
 | `OnTaskAssigned` | (複数) | Motivated | Low | 部下にタスクを命じた時 |
-| `OnSoulRecruited` | Veni | Neutral | Normal | 新しい Soul を分隊に勧誘した時 |
+| `SoulRecruitedVisualMessage` | Veni | Neutral | Normal | 新しい Soul を分隊に勧誘した時 |
 | `AI: Idle` | Requiesce | Neutral | Normal | 命令が解除され、待機状態に入った時 |
 
 #### 命令別のラテン語 (OnTaskAssigned)
@@ -163,7 +163,7 @@ Soul 同士が近接した際に発生する、動的な対話システムです
 ### トリガー一覧（画像差し替え）
 | イベント | 条件 | 画像 | 優先度 | ロック秒 |
 | :--- | :--- | :--- | :--- | :--- |
-| `OnExhausted` | 疲労限界 | `soul_exhausted` | 30 | 4.0 |
+| `SoulExhaustedVisualMessage` | 疲労限界 | `soul_exhausted` | 30 | 4.0 |
 | `ConversationToneTriggered` | `Positive` | `soul_lough` | 20 | 3.0 |
 | `ConversationToneTriggered` | `Negative` | `soul_stress` | 20 | 3.4 |
 | `OnGatheringParticipated` | `GatheringSpot.object_type == Barrel` | `soul_wine` | 15 | 2.2 |

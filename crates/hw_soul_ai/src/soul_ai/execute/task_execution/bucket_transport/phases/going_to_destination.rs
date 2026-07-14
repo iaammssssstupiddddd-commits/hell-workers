@@ -3,7 +3,7 @@
 use crate::soul_ai::execute::task_execution::common::{
     is_near_target_or_dest, update_destination_to_adjacent,
 };
-use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
     BucketTransportSource,
@@ -17,15 +17,13 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: &BucketTransportData,
     commands: &mut Commands,
-    
-) {
+) -> TaskHandlerControl {
     if ctx.inventory.0 != Some(data.bucket) {
         warn!(
             "GoingToDestination: Bucket not in inventory for soul {:?}",
             ctx.soul_entity
         );
-        abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
-        return;
+        return abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
     }
 
     let soul_pos = ctx.soul_transform.translation.truncate();
@@ -34,13 +32,12 @@ pub fn handle(
         BucketTransportDestination::Tank(tank_entity) => {
             if !guards::tank_can_accept_full_bucket(ctx, tank_entity) {
                 // タンクが満杯: バケツをドロップして auto haul に任せる
-                super::super::helpers::drop_bucket_for_auto_haul(
+                return super::super::helpers::drop_bucket_for_auto_haul(
                     commands,
                     ctx,
                     data.bucket,
                     ctx.env.world_map,
                 );
-                return;
             }
 
             // タンク境界に近づいたら Pouring へ
@@ -59,11 +56,15 @@ pub fn handle(
                     let tank = match data.source {
                         BucketTransportSource::Tank { tank, .. } => tank,
                         BucketTransportSource::River => {
-                            abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
-                            return;
+                            return abort::abort_with_bucket(
+                                commands,
+                                ctx,
+                                data,
+                                ctx.env.world_map,
+                            );
                         }
                     };
-                    transition_to_tank_internal(
+                    return transition_to_tank_internal(
                         commands,
                         ctx,
                         data.bucket,
@@ -72,14 +73,13 @@ pub fn handle(
                         soul_pos,
                         data,
                     );
-                    return;
                 }
             } else {
                 let tank = match data.source {
                     BucketTransportSource::Tank { tank, .. } => tank,
                     BucketTransportSource::River => data.bucket,
                 };
-                abort::abort_and_drop_bucket_mixer(
+                return abort::abort_and_drop_bucket_mixer(
                     commands,
                     ctx,
                     data.bucket,
@@ -87,7 +87,6 @@ pub fn handle(
                     mixer_entity,
                     soul_pos,
                 );
-                return;
             }
 
             // amount チェック
@@ -95,11 +94,10 @@ pub fn handle(
                 let tank = match data.source {
                     BucketTransportSource::Tank { tank, .. } => tank,
                     BucketTransportSource::River => {
-                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
-                        return;
+                        return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                     }
                 };
-                transition_to_tank_internal(
+                return transition_to_tank_internal(
                     commands,
                     ctx,
                     data.bucket,
@@ -108,7 +106,6 @@ pub fn handle(
                     soul_pos,
                     data,
                 );
-                return;
             }
 
             if let Ok(mixer_data) = ctx.queries.storage.mixers.get(mixer_entity) {
@@ -129,7 +126,7 @@ pub fn handle(
                         BucketTransportSource::Tank { tank, .. } => tank,
                         BucketTransportSource::River => data.bucket,
                     };
-                    abort::abort_and_drop_bucket_mixer(
+                    return abort::abort_and_drop_bucket_mixer(
                         commands,
                         ctx,
                         data.bucket,
@@ -137,7 +134,6 @@ pub fn handle(
                         mixer_entity,
                         soul_pos,
                     );
-                    return;
                 }
 
                 if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {
@@ -152,7 +148,7 @@ pub fn handle(
                     BucketTransportSource::Tank { tank, .. } => tank,
                     BucketTransportSource::River => data.bucket,
                 };
-                abort::abort_and_drop_bucket_mixer(
+                return abort::abort_and_drop_bucket_mixer(
                     commands,
                     ctx,
                     data.bucket,
@@ -163,6 +159,8 @@ pub fn handle(
             }
         }
     }
+
+    TaskHandlerControl::Continue
 }
 
 fn transition_to_tank_internal(
@@ -173,7 +171,7 @@ fn transition_to_tank_internal(
     _mixer_entity: Entity,
     soul_pos: Vec2,
     data: &BucketTransportData,
-) {
+) -> TaskHandlerControl {
     if let Ok(tank_data) = ctx.queries.storage.stockpiles.get(tank_entity) {
         let (_, tank_transform, _, _) = tank_data;
         let tank_pos = tank_transform.translation.truncate();
@@ -194,9 +192,9 @@ fn transition_to_tank_internal(
     } else {
         let mixer = match data.destination {
             BucketTransportDestination::Mixer(m) => m,
-            _ => return,
+            _ => return TaskHandlerControl::Continue,
         };
-        abort::abort_and_drop_bucket_mixer(
+        return abort::abort_and_drop_bucket_mixer(
             commands,
             ctx,
             bucket_entity,
@@ -205,4 +203,6 @@ fn transition_to_tank_internal(
             soul_pos,
         );
     }
+
+    TaskHandlerControl::Continue
 }

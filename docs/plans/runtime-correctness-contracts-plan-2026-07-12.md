@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `runtime-correctness-contracts-plan-2026-07-12` |
-| ステータス | `In Progress` |
+| ステータス | `Completed` |
 | 作成日 | `2026-07-12` |
-| 最終更新日 | `2026-07-12` |
+| 最終更新日 | `2026-07-14` |
 | 作成者 | `Codex` |
 | 親ロードマップ | [system-wide-correctness-refactoring-plan-2026-07-12.md](system-wide-correctness-refactoring-plan-2026-07-12.md) |
 | 関連済み計画 | `archive/task-execution-refactor-plan-2026-07-07.md` / `archive/observer-message-optimization-plan-2026-03-23.md` |
@@ -118,7 +118,7 @@ pub struct ActiveTaskIdentity {
 - fatigue増加など完了に付随するmutationはterminal API呼び出し前に行う。
 - raw `TaskEndDisposition`を引数に取る`clear_soul_assignment`は廃止し、`complete_after_custom_cleanup` / `abort_retryable_after_custom_cleanup`へ分ける。
 - release buildでも二度目のterminal callは状態を上書きせず、errorを返す。
-- retryable/closed内部abortでは`OnTaskAbandoned`を発行しない。外部ユーザー操作等の`unassign_task(emit=true)`だけが発行する。
+- retryable/closed内部abortでは`OnTaskAbandoned`を発行しない。外部ユーザー操作は area selection が`SoulTaskUnassignRequest { emit_abandoned: true }`を書き、Logic の`ApplyDeferred`後に Soul AI Perceive が`unassign_task(emit=true)`を適用する。これによりcleanupは同じ`Update`のExecuteより先に完了し、通知はその後に読める。
 
 ### 3.4 obstacle source契約
 
@@ -128,14 +128,14 @@ pub struct ActiveTaskIdentity {
 - ECS markerとWorldMap recordが同じowner/gridを表す場合は1つの論理blockerとして扱う。完成建物の`BuildingFootprint`子はWorldMap occupancyの意図的なmirrorであり、重複禁止の対象にしない。異なるowner同士の同一grid重複だけをplacement validationで禁止する。
 - source componentと非保存のmirror entityは次表のowner情報から決定論的にrehydrateし、その後indexをseedする。
 - Door state変更はpassability/costの専用APIを正本とし、footprint marker数と比較しない。
-- `obstacle_version`は`is_walkable`のtopology世代とする。Door追加/削除または`Locked`境界の変更では更新し、`Open`↔`Closed`のcost変更では更新しない。既存pathをcostだけで再探索する要件が実測で必要になった場合は、性能計画で別の`path_cost_version`を導入する。
+- `obstacle_version`は`is_walkable`のtopology世代とする。Door追加/削除を含む全mutationは、最終`is_walkable`が変わる場合だけ更新する。`Open`↔`Closed`のcost変更では更新せず、`Locked`境界の変更は更新する。既存pathをcostだけで再探索する要件が実測で必要になった場合は、性能計画で別の`path_cost_version`を導入する。
 
 #### source/rehydrate matrix（正本）
 
 | Source | Runtime owner | Save body | Load時の復元 |
 | --- | --- | --- | --- |
 | `NaturalTerrainClearing` | `Tree` / `Rock` root | ownerと`ObstaclePosition`を保存、sourceは除外 | `Tree` / `Rock` markerからsourceを再付与 |
-| `BuildingFootprint` | 非Bridgeの完成`Building`配下mirror child | child/sourceとも除外、WorldMap occupancyとBuilding rootを保存 | WorldMap entryのentityが完成`Building` rootと一致し、kindがBridge以外の場合だけchildを再生成。Blueprint/Bridge entryは除外 |
+| `BuildingFootprint` | `blocks_movement()`がtrueの完成`Building`配下mirror child | child/sourceとも除外、WorldMap occupancyとBuilding rootを保存 | WorldMap entryのentityが完成`Building` rootと一致し、kindが`blocks_movement()`を満たす場合だけchildを再生成。Blueprint・Bridge・passableな完成Buildingは除外 |
 | `PlacementReservation` | `MovePlantTask`配下mirror child | `Designation` root以外のtask payload/child/sourceは保存しない | durable sourceからobstacle bitmapを再構築して予約bitを除外し、不完全なMove `Designation` rootをdespawn。再生成しない |
 | `ConstructionProtection` | Curing中の`FloorTileBlueprint` | site/tile/WorldMapを保存、sourceは除外 | site phaseとtile ownerを照合し、Curing中だけsourceを再付与 |
 
@@ -208,15 +208,17 @@ pub struct ActiveTaskIdentity {
 
 ### 完了条件
 
-- [ ] 同frameの複数reader・同reader複数removalを全件消費する
-- [ ] predicateの最初のmatch後も後続entityを評価する
-- [ ] 次frameに未消費event由来の不要なdirty rebuildがない
-- [ ] RemovedComponentsに対する`.read().next()` / `.read().any()`が0件
+- [x] 同frameの複数reader・同reader複数removalを全件消費する
+- [x] predicateの最初のmatch後も後続entityを評価する
+- [x] 次frameに未消費event由来の不要なdirty rebuildがない
+- [x] RemovedComponentsに対する`.read().next()` / `.read().any()`が0件
 
 ### 検証
 
-- helper単体test
-- Familiar/arbitration/listの同時削除App test
+- `cargo test -p hw_core`
+- `cargo test -p hw_logistics --lib transport_request::arbitration::system::tests::resource_item_removal_predicate_consumes_nonmatching_entries`
+- `cargo test -p bevy_app@0.1.0 --lib interface::ui::list::change_detection::tests::consumes_all_structure_removal_readers_in_one_update`
+- Familiar reservation sync の既存 removal regression test
 - `cargo test --workspace`
 
 ## M2: 通知transportの明示化
@@ -244,17 +246,17 @@ pub struct ActiveTaskIdentity {
 
 ### 完了条件
 
-- [ ] matrix全10行についてProducer/Consumer/登録が一致
-- [ ] dual publisherはdomain Observerとvisual Messageを各1回だけ発行
-- [ ] visual-only処理がObserverに残っていない
-- [ ] `commands.trigger()`だけをProducerとする型をMessageReaderが購読していない
+- [x] matrix全10行についてProducer/Consumer/登録が一致
+- [x] dual publisherはdomain Observerとvisual Messageを各1回だけ発行
+- [x] visual-only処理がObserverに残っていない
+- [x] `commands.trigger()`だけをProducerとする型をMessageReaderが購読していない
 
 ### 回帰テスト
 
-- matrix table-driven App test: domain受信数、visual受信数、payload一致
-- `OnExhausted`: cleanup + speech + expression各1回
-- `OnSoulRecruited` / `OnStressBreakdown` / `OnEncouraged`: gameplay + speech各1回
-- visual-only 5型: Messageだけ1回
+- [x] matrix table-driven App test: domain受信数、visual受信数、payload一致
+- [x] `OnExhausted`: domain Observer + speech / expression reader各1回
+- [x] `OnSoulRecruited` / `OnStressBreakdown` / `OnEncouraged`: domain Observer + speech reader各1回
+- [x] visual-only 5型: Messageだけ1回
 
 ## M3: タスク終了・identity・Relationship lifecycle
 
@@ -270,7 +272,7 @@ pub struct ActiveTaskIdentity {
 8. reservation lifecycle matchのwildcardを廃止する。
 9. `TaskWorkers`手動insert/removeを全廃する。
 10. early state syncとは別に`TaskWorkers` removal reconcile systemを追加し、M1 helperで全件消費して対象requestをPendingへ戻す。
-11. `TransportRequestSet::Reconcile`を`SoulAiSystemSet::Execute`後に追加し、その直前へ明示的な`ApplyDeferred`を置く。reconcileは同じ`Update`でPending復帰まで行い、既存arbitrationは次のLogic frameで再候補化する。
+11. `TransportRequestSet::Reconcile`を`SoulAiSystemSet::Execute`後に追加する。source commandの適用と、Relationship hookが内部queueへ積む空target削除の適用には二段の`ApplyDeferred`を置く。reconcileは同じ`Update`でPending復帰まで行い、既存arbitrationは次のLogic frameで再候補化する。
 
 ### 主な変更ファイル
 
@@ -293,31 +295,31 @@ pub struct ActiveTaskIdentity {
 
 ### 完了条件
 
-- [ ] terminal dispositionはrelease buildでも上書き不能
-- [ ] raw disposition setterがpublic APIにない
-- [ ] stockpile rejectはretryable abort、完了報酬/Completed/Abandoned通知なし
-- [ ] normal completionはassignment/current targetが一致
-- [ ] chain completionはroot assignment維持、final current target/work type更新
-- [ ] identity欠落時にplaceholder完了通知を出さない
-- [ ] task abortはCompleted domain/visualを発行しない
-- [ ] 最後のWorkingOn削除後、同じUpdate終了時にTaskWorkers不在・request Pending、次のLogic frameでarbitration再候補化
-- [ ] reservation解放とWorkingOn削除が各終了経路で1回
+- [x] terminal dispositionはrelease buildでも上書き不能
+- [x] raw disposition setterがpublic APIにない
+- [x] stockpile rejectはretryable abort、完了報酬/Completed/Abandoned通知なし
+- [x] normal completionはassignment/current targetが一致
+- [x] chain completionはroot assignment維持、final current target/work type更新
+- [x] identity欠落時にplaceholder完了通知を出さない
+- [x] task abortはCompleted domain/visualを発行しない
+- [x] 最後のWorkingOn削除後、同じUpdate終了時にTaskWorkers不在・request Pending、次のLogic frameでarbitration再候補化
+- [x] reservation解放とWorkingOn削除が各終了経路で1回
 
 ### 回帰テスト
 
-- stockpile reject、blueprint消滅、bucket中断、pathfinding fallback
-- normal assignment → completion identity
-- Gather → Haul chain → completion identity
-- terminal API二重呼び出し（debug/release共通ロジック）
-- Relationship source insert/removeとTransportRequest state遷移
-- lifecycle全AssignedTask variant table
+- [x] stockpile reject、blueprint消滅、bucket中断、pathfinding到達不能cleanup
+- [x] normal assignment → completion identity
+- [x] chain final segment → completion identity
+- [x] terminal API二重呼び出し（debug/release共通ロジック）
+- [x] Relationship source insert/removeとTransportRequest state遷移
+- [x] lifecycle全AssignedTask variant table
 
 ## M4: source-aware obstacle同期
 
 ### 変更内容
 
 1. 全`ObstaclePosition` Producerを棚卸しし、`ObstacleSourceKind`を必須付与する。
-2. 自然物spawnだけに`NaturalTerrainClearing`を付与する。建物、移動予約、床養生には付与しない。
+2. 自然物spawnには`NaturalTerrainClearing`、完成建物 footprintには`BuildingFootprint`、移動予約には`PlacementReservation`、床養生には`ConstructionProtection`を付与する。
 3. indexはEntity→旧GridPos/source/論理ownerとGridPos owner refcountを保持し、Added/Changedを先に反映してからRemoved batchを処理する。同じownerのWorldMap recordとmirror markerを二重countしない。
 4. removal後に別ownerのrefcountが0かつ、削除対象と異なるlive WorldMap building ownerがない場合だけpassability blockerを解除する。
 5. terrain Dirt化は削除recordがNaturalTerrainClearingの場合だけ行う。
@@ -326,7 +328,7 @@ pub struct ActiveTaskIdentity {
 8. building completionをVisual setからLogic内の`BuildingCompletionSet`へ移す。
 9. `ApplyDeferred.after(SoulAiSystemSet::Execute/building completion).before(ObstacleSyncSet)`を追加し、`ObstacleSyncSet`をActor/pathfindingより前に置く。
 10. §3.4のmatrixどおりにsource/mirrorを復元するidempotent helperを追加する。
-11. load時は保存済み`WorldMap.obstacles`を正本にせず、一度clearして、WorldMap building entries（Bridgeを除く）、Tree/Rock、Curing中FloorTileというdurable semantic sourceからbitmapを再構築する。その後、保存済み`door_states`を最終overrideとして適用し、Openはfalse、Closed/Lockedはtrueにする。PlacementReservation bitは再構築対象外とし、不完全なMove `Designation` rootもdespawnする。最後にtopology差分があった場合だけversionを1回更新する。
+11. load時は保存済み`WorldMap.obstacles`を正本にせず、一度clearして、`blocks_movement()`がtrueの完成Building、non-Bridge Blueprint、WallConstructionSite、Tree/Rock、Curing中FloorTileというdurable semantic sourceからbitmapを再構築する。完成Bridgeから`bridged_tiles`も再構築する。保存済み`door_states`を最終overrideとして適用し、Openはraw bitをclear、Closed/Lockedはraw bitを立てる。raw blocker / Door / Bridge cache は一括更新し、更新前後の最終walkabilityに差分があった場合だけversionを1回更新する。PlacementReservation bitは再構築対象外とし、不完全なMove `Designation` rootもdespawnする。
 12. runtime M4内で現行`rehydrate_after_load`へhelperを暫定配線し、M4単独commit時点でも通常load/v0 loadを壊さない。Save/Load計画M4で固定phase coordinatorへ移す際は挙動とtestをそのまま維持する。
 
 ### 主な変更ファイル
@@ -348,22 +350,22 @@ pub struct ActiveTaskIdentity {
 
 ### 完了条件
 
-- [ ] 最後の自然物削除でblocker解除 + terrain Dirt化
-- [ ] 建物/移動予約/床養生削除でterrain維持
-- [ ] 同gridのECS obstacleが残る場合はblocker維持
-- [ ] Door open steady-stateで全障害物scanなし
-- [ ] walkability topology変更時だけobstacle_version増加。Door Open↔Closed/no-opでは不変、Locked境界では増加
-- [ ] representative Worldへrehydrate helperを2回適用しても、source/mirror/indexとsemantic source由来bitmapがmatrixどおりで重複しない
-- [ ] live Move reservationを含むv0相当Worldをrehydrateすると予約bitと不完全Move Designationが消え、durable blockerは維持される
-- [ ] obstacle removalが次のpathfinding実行前に反映
+- [x] 最後の自然物削除でblocker解除 + terrain Dirt化
+- [x] 建物/移動予約/床養生削除でterrain維持
+- [x] 同gridのECS obstacleが残る場合はblocker維持
+- [x] Door open steady-stateで全障害物scanなし
+- [x] walkability topology変更時だけobstacle_version増加。Door Open↔Closed/no-opでは不変、Locked境界では増加
+- [x] representative Worldへrehydrate helperを2回適用しても、source/mirror/indexとsemantic source由来bitmapがmatrixどおりで重複しない
+- [x] live Move reservationを含むv0相当Worldをrehydrateすると予約bitと不完全Move Designationが消え、durable blockerは維持される
+- [x] obstacle removalが次のpathfinding実行前に反映
 
 ### 回帰テスト
 
-- hw_world: natural/building/reservation/construction removal policy
-- hw_world: duplicate logical owner/refcount、last removal、Door open/close/locked cost/topology version
-- bevy_app App schedule: task removal → ApplyDeferred → ObstacleSync → pathfinding
-- rehydrate helper: Tree/Rock、completed Building、Blueprint、Bridge、Door Open/Closed/Locked、Curing floor、transient reservation、incomplete Move Designation
-- building placement validation: cross-domain blocker重複拒否
+- [x] hw_world: natural/building/reservation/construction removal policy
+- [x] hw_world: duplicate logical owner/refcount、last removal、Door open/close/locked cost/topology version
+- [x] bevy_app App schedule: task removal → ApplyDeferred → ObstacleSync → pathfinding
+- [x] rehydrate helper: Tree/Rock、completed Building、Blueprint、Bridge cache再構築/stale cache除去、Door Open/Closed/Lockedとv0 door stateのtopology version、Curing floor、transient reservation、incomplete Move Designation
+- [x] building placement validation: cross-domain blocker重複拒否
 
 ## 6. リスクと対策
 
@@ -416,16 +418,15 @@ pub struct ActiveTaskIdentity {
 
 ### 現在地
 
-- 進捗: `20%`
-- 完了済み: M0
-- 未着手: M1〜M4
+- 進捗: `100%`
+- 完了済み: M0、M1、M2、M3、M4
+- 残作業: 計画書のarchive判断のみ
 - `docs/proposals/hvac-plumbing-proposal.md`の既存変更は対象外。
 
 ### 次のAIが最初にやること
 
-1. M1の`RemovedComponents` helperのBevy 0.19 reader契約を再確認する。
-2. helper単体testと、複数readerのApp-level regression testを先に作る。
-3. 置換対象を一度に変更せず、Familiar/arbitration/list/speech/terrainの順にgreenを保つ。
+1. archive 実施時に `docs/plans/archive/` へ移動し、indexを再生成する。
+2. 実ゲームで通知・cancel・door topology の手動確認を行う。
 
 ### ブロッカー/注意点
 
@@ -439,12 +440,12 @@ pub struct ActiveTaskIdentity {
 
 ### Definition of Done
 
-- [ ] M0〜M4完了
-- [ ] 全確認済みruntime不具合に回帰テストあり
-- [ ] `cargo check --workspace`成功
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings`成功
-- [ ] `cargo test --workspace`成功
-- [ ] docs更新・index再生成済み
+- [x] M0〜M4完了
+- [x] 全確認済みruntime不具合に回帰テストあり
+- [x] `cargo check --workspace`成功
+- [x] `cargo clippy --workspace --all-targets -- -D warnings`成功
+- [x] `cargo test --workspace`成功
+- [x] docs更新・index再生成済み
 - [ ] 計画書archive済み
 
 ## 10. 更新履歴
@@ -454,3 +455,10 @@ pub struct ActiveTaskIdentity {
 | `2026-07-12` | `Codex` | 全体計画の自己レビュー指摘を反映して新規作成 |
 | `2026-07-12` | `Codex` | 再レビューを反映し、removal schedule、通知/terminal依存、source rehydrate、Door topology version、v0 obstacle再構築を確定 |
 | `2026-07-12` | `Codex` | M0完了: bevy_app library境界、focused test harness、all-target Clippy baseline、関連ドキュメントを実装 |
+| `2026-07-14` | `Codex` | M1完了: `RemovedComponents` 全量 drain helper、Familiar/arbitration/UI/speech/terrain の短絡 reader 置換、回帰テストと I-U3 を更新 |
+| `2026-07-14` | `Codex` | M2完了: domain / presentation notification transport を分離し、全10行の matrix test・Speech MessageReader 移行・仕様書を同期 |
+| `2026-07-14` | `Codex` | M3 Relationship lifecycle slice: `TaskWorkers` の手動削除を廃止し、二段 deferred 後の removal reconcile と同Update回帰テストを追加 |
+| `2026-07-14` | `Codex` | M3完了: ActiveTaskIdentity、release-safe terminal API、cancel順序、bucket abort / pathfinding failure cleanup の回帰テストを固定 |
+| `2026-07-14` | `Codex` | M4完了: source-aware obstacle同期、topology-aware WorldMap、load rehydrate、placement bridge validation、Actor前scheduleと恒久仕様を同期 |
+| `2026-07-14` | `Codex` | workspace check / all-target Clippy / workspace test とrelease terminal testを完了し、計画をCompletedへ更新 |
+| `2026-07-15` | `Codex` | 最終監査を反映。v0 Door state のtopology version、Bridge cache再構築/stale cache除去、source-less marker debug validation、rehydrate経路の恒久仕様を追加 |

@@ -13,7 +13,9 @@ use hw_jobs::{Designation, Priority, TaskSlots, WallConstructionSite, WallTileSt
 use hw_spatial::ResourceSpatialGrid;
 use std::time::Instant;
 
-use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
+use crate::transport_request::producer::active_unit_cache::{
+    CachedActiveFamiliars, CachedActiveYards,
+};
 use crate::transport_request::producer::tile_wait_cache::WallTileWaitingCache;
 use crate::transport_request::producer::{ConstructionDeliverySpec, RequestSyncSpec};
 use crate::transport_request::{TransportRequest, TransportRequestKind, TransportRequestMetrics};
@@ -90,8 +92,11 @@ pub fn wall_construction_auto_haul_system(
             continue;
         };
 
-        let (waiting_wood, waiting_mud) =
-            waiting_cache.map.get(&site_entity).copied().unwrap_or((0, 0));
+        let (waiting_wood, waiting_mud) = waiting_cache
+            .map
+            .get(&site_entity)
+            .copied()
+            .unwrap_or((0, 0));
         if waiting_wood == 0 && waiting_mud == 0 {
             continue;
         }

@@ -2,7 +2,7 @@
 
 use crate::soul_ai::execute::task_execution::{
     common::*,
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     types::{AssignedTask, ReinforceFloorPhase, ReinforceFloorTileData},
 };
 use bevy::prelude::*;
@@ -14,7 +14,7 @@ pub fn handle_reinforce_floor_task(
     ctx: &mut TaskExecutionContext,
     data: ReinforceFloorTileData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let ReinforceFloorTileData { tile, site, phase } = data;
     let tile_entity = tile;
     let site_entity = site;
@@ -30,8 +30,7 @@ pub fn handle_reinforce_floor_task(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Site {:?} gone",
                     ctx.soul_entity, site_entity
                 );
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             let material_center = site_transform.translation.truncate();
@@ -69,8 +68,7 @@ pub fn handle_reinforce_floor_task(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
                 );
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             match tile_blueprint.state {
@@ -97,7 +95,7 @@ pub fn handle_reinforce_floor_task(
                         "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} state changed unexpectedly in PickingUpBones",
                         ctx.soul_entity, tile_entity
                     );
-                    ctx.abort_retryable(commands, "tile state changed unexpectedly");
+                    return ctx.abort_retryable(commands, "tile state changed unexpectedly");
                 }
             }
         }
@@ -111,8 +109,7 @@ pub fn handle_reinforce_floor_task(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
                 );
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             let tile_pos =
@@ -154,8 +151,7 @@ pub fn handle_reinforce_floor_task(
                     "REINFORCE_FLOOR: Cancelled for {:?} - Tile {:?} gone",
                     ctx.soul_entity, tile_entity
                 );
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             // Update progress (basis points) to avoid truncation at 1x speed.
@@ -221,11 +217,13 @@ pub fn handle_reinforce_floor_task(
                 source: tile_entity,
                 amount: 1,
             });
-            ctx.complete_task(commands, "construction done");
             debug!(
                 "REINFORCE_FLOOR: Soul {:?} finished reinforcing task",
                 ctx.soul_entity
             );
+            return ctx.complete_task(commands, "construction done");
         }
     }
+
+    TaskHandlerControl::Continue
 }

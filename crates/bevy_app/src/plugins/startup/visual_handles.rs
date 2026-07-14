@@ -18,7 +18,7 @@ use hw_visual::{
     make_terrain_surface_material_lod1_lite, make_terrain_surface_material_lod2, with_alpha_mode,
 };
 use hw_visual::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
-use hw_world::{DoorVisualHandles, TerrainVisualHandles};
+use hw_world::DoorVisualHandles;
 
 use crate::world::map::{TerrainFeatureMap, TerrainIdMap};
 
@@ -208,10 +208,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         icon_stasis_mud_small: game_assets.icon_stasis_mud_small.clone(),
         bucket_water: game_assets.bucket_water.clone(),
         bucket_empty: game_assets.bucket_empty.clone(),
-    });
-
-    commands.insert_resource(TerrainVisualHandles {
-        dirt: game_assets.dirt.clone(),
     });
 
     commands.insert_resource(DoorVisualHandles {

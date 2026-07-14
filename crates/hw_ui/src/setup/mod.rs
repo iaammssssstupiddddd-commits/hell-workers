@@ -33,5 +33,5 @@ pub trait UiAssets {
     fn icon_bone_small(&self) -> &Handle<Image>;
 }
 
-pub use root::{setup_ui, SetupUiParams};
-pub use settings_panel::{spawn_settings_panel, SettingsPanelInitial};
+pub use root::{SetupUiParams, setup_ui};
+pub use settings_panel::{SettingsPanelInitial, spawn_settings_panel};

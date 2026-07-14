@@ -1,6 +1,7 @@
 use super::components::*;
 use bevy::prelude::*;
 use hw_core::constants::*;
+use hw_core::ecs::drain_removed;
 
 type AddedBubbleQuery<'w, 's> = Query<'w, 's, &'static SpeechBubble, Added<SpeechBubble>>;
 type BubbleMutQuery<'w, 's> = Query<'w, 's, (Entity, &'static mut SpeechBubble)>;
@@ -41,7 +42,7 @@ pub fn update_bubble_stacking(
 ) {
     // 1. 追加または削除があるかチェック
     let has_added = !set.p0().is_empty();
-    let has_removed = removed.read().next().is_some();
+    let has_removed = drain_removed(&mut removed);
 
     if !has_added && !has_removed {
         return;

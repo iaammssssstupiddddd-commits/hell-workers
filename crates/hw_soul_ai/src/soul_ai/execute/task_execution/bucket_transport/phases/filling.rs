@@ -1,7 +1,7 @@
 //! Filling phase: バケツに水を詰める（川から汲む or タンクから取り出す）
 
 use crate::soul_ai::execute::task_execution::common::update_destination_to_adjacent;
-use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use crate::soul_ai::execute::task_execution::transport_common::reservation;
 use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
@@ -18,14 +18,13 @@ pub fn handle(
     data: &BucketTransportData,
     progress: f32,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     if ctx.inventory.0 != Some(data.bucket) {
         warn!(
             "Filling: Bucket not in inventory for soul {:?}",
             ctx.soul_entity
         );
-        abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
-        return;
+        return abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
     }
 
     let soul_pos = ctx.soul_transform.translation.truncate();
@@ -39,8 +38,7 @@ pub fn handle(
                 let tank_entity = match data.destination {
                     BucketTransportDestination::Tank(tank) => tank,
                     _ => {
-                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
-                        return;
+                        return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                     }
                 };
 
@@ -70,10 +68,10 @@ pub fn handle(
                             .entity(data.bucket)
                             .try_insert(hw_core::relationships::DeliveringTo(tank_entity));
                     } else {
-                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
+                        return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                     }
                 } else {
-                    abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
+                    return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                 }
             } else {
                 *ctx.task = AssignedTask::BucketTransport(BucketTransportData {
@@ -121,8 +119,7 @@ pub fn handle(
                 let mixer_entity = match data.destination {
                     BucketTransportDestination::Mixer(m) => m,
                     _ => {
-                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
-                        return;
+                        return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                     }
                 };
 
@@ -151,7 +148,7 @@ pub fn handle(
                         ctx.pf_context,
                     );
                 } else {
-                    abort::abort_and_drop_bucket_mixer(
+                    return abort::abort_and_drop_bucket_mixer(
                         commands,
                         ctx,
                         data.bucket,
@@ -165,11 +162,10 @@ pub fn handle(
                 let mixer = match data.destination {
                     BucketTransportDestination::Mixer(m) => m,
                     _ => {
-                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
-                        return;
+                        return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                     }
                 };
-                abort::abort_and_drop_bucket_mixer(
+                return abort::abort_and_drop_bucket_mixer(
                     commands,
                     ctx,
                     data.bucket,
@@ -180,4 +176,6 @@ pub fn handle(
             }
         }
     }
+
+    TaskHandlerControl::Continue
 }

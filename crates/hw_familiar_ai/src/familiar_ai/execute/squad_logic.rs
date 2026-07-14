@@ -4,8 +4,8 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 use hw_core::events::{
-    OnReleasedFromService, OnSoulRecruited, SoulTaskUnassignRequest, SquadManagementOperation,
-    SquadManagementRequest,
+    OnReleasedFromService, SoulTaskUnassignRequest, SquadManagementOperation,
+    SquadManagementRequest, publish_soul_recruited,
 };
 use hw_core::familiar::Familiar;
 use hw_core::relationships::{CommandedBy, ParticipatingIn};
@@ -39,10 +39,7 @@ pub fn squad_logic_system(
                     commands.entity(soul_entity).remove::<ParticipatingIn>();
                 }
 
-                commands.trigger(OnSoulRecruited {
-                    entity: soul_entity,
-                    familiar_entity: fam_entity,
-                });
+                publish_soul_recruited(&mut commands, soul_entity, fam_entity);
             }
             SquadManagementOperation::ReleaseMember {
                 soul_entity,
@@ -59,7 +56,7 @@ pub fn squad_logic_system(
                 let _ = reason;
 
                 commands.entity(soul_entity).remove::<CommandedBy>();
-                commands.trigger(OnReleasedFromService {
+                commands.write_message(OnReleasedFromService {
                     entity: soul_entity,
                 });
             }

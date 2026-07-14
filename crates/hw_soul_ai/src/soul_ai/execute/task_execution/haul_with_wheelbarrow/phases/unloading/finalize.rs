@@ -6,7 +6,7 @@ use hw_logistics::transport_request::WheelbarrowDestination;
 use std::collections::HashSet;
 
 use crate::soul_ai::execute::task_execution::{
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     transport_common::{reservation, wheelbarrow as wheelbarrow_common},
     types::HaulWithWheelbarrowData,
 };
@@ -16,7 +16,7 @@ pub(super) fn finalize_unload_task(
     data: &HaulWithWheelbarrowData,
     commands: &mut Commands,
     soul_pos: Vec2,
-) {
+) -> TaskHandlerControl {
     reservation::release_source(ctx, data.wheelbarrow, 1);
     let parking_anchor = ctx
         .queries
@@ -32,7 +32,7 @@ pub(super) fn finalize_unload_task(
         soul_pos,
     );
     ctx.inventory.0 = None;
-    ctx.complete_task(commands, "wheelbarrow unload done");
+    ctx.complete_task(commands, "wheelbarrow unload done")
 }
 
 pub(super) fn finish_partial_unload(
@@ -43,7 +43,7 @@ pub(super) fn finish_partial_unload(
     delivered_items: &HashSet<Entity>,
     destination_store_count: usize,
     mixer_release_types: &[ResourceType],
-) {
+) -> TaskHandlerControl {
     for &item_entity in &data.items {
         if delivered_items.contains(&item_entity) {
             continue;
@@ -71,5 +71,5 @@ pub(super) fn finish_partial_unload(
         }
     }
 
-    finalize_unload_task(ctx, data, commands, soul_pos);
+    finalize_unload_task(ctx, data, commands, soul_pos)
 }

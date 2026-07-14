@@ -1,10 +1,9 @@
 //! タスク実行の共通処理
 
-use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use crate::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 use hw_core::soul::Path;
-use hw_jobs::Designation;
 use hw_logistics::{Inventory, ReservedForTask, Stockpile};
 
 use hw_world::WorldMap;
@@ -22,21 +21,6 @@ pub use super::path_cache::{update_destination_to_adjacent, update_destination_t
 pub(super) fn clear_task_and_path(task: &mut AssignedTask, path: &mut Path) {
     *task = AssignedTask::None;
     path.waypoints.clear();
-}
-
-/// 指定が解除されていたらタスクをキャンセル
-///
-/// 指定が解除されていた場合、`abort_closed` して `true` を返す。
-pub fn cancel_task_if_designation_missing(
-    ctx: &mut TaskExecutionContext,
-    commands: &mut Commands,
-    des_opt: Option<&Designation>,
-) -> bool {
-    if des_opt.is_none() {
-        ctx.abort_closed(commands, "designation missing");
-        return true;
-    }
-    false
 }
 
 /// アイテムをピックアップ
@@ -128,7 +112,7 @@ pub fn try_pickup_item(
     commands: &mut Commands,
     ctx: &mut TaskExecutionContext,
     locations: PickupLocations,
-) -> bool {
+) -> Result<(), TaskHandlerControl> {
     let PickupLocations {
         soul_entity,
         item_entity,
@@ -136,11 +120,10 @@ pub fn try_pickup_item(
         item_pos,
     } = locations;
     if !can_pickup_item(soul_pos, item_pos) {
-        ctx.abort_retryable(commands, "cannot pickup item in range");
-        return false;
+        return Err(ctx.abort_retryable(commands, "cannot pickup item in range"));
     }
     pickup_item(commands, soul_entity, item_entity, ctx.inventory);
-    true
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -154,8 +137,8 @@ pub enum NavOutcome {
     Moving,
     /// 到達済み: 次フェーズへ遷移可能
     Arrived,
-    /// 指定が解除された: task/path はすでにクリア済み
-    Cancelled,
+    /// terminal 処理済み: task/path はすでにクリア済み
+    Ended(TaskHandlerControl),
     /// 到達不能: task/path はまだ残っている（呼び出し元でクリーンアップ）
     Unreachable,
 }
@@ -170,8 +153,9 @@ pub fn navigate_to_adjacent(
     commands: &mut Commands,
 ) -> NavOutcome {
     if !designation_present {
-        ctx.abort_closed(commands, "designation missing during navigation");
-        return NavOutcome::Cancelled;
+        return NavOutcome::Ended(
+            ctx.abort_closed(commands, "designation missing during navigation"),
+        );
     }
     let reachable = update_destination_to_adjacent(
         ctx.dest,
@@ -216,9 +200,8 @@ pub fn navigate_to_pos(
     }
 }
 
-/// 収集対象の Designation / 予約を片付けたうえで Soul 割り当てを閉じる。
+/// 収集対象の Designation を片付けたうえで Soul 割り当てを閉じる。
 fn cleanup_collect_target_components(
-    ctx: &mut TaskExecutionContext,
     target: Entity,
     commands: &mut Commands,
     remove_issued_by: bool,
@@ -230,10 +213,6 @@ fn cleanup_collect_target_components(
     if remove_issued_by {
         entity_cmd.remove::<hw_jobs::IssuedBy>();
     }
-    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-        source: target,
-        amount: 1,
-    });
 }
 
 /// 収集対象が消えた・到達不能のときの共通クリーンアップ。
@@ -241,9 +220,9 @@ pub fn cleanup_collect_target(
     ctx: &mut TaskExecutionContext,
     target: Entity,
     commands: &mut Commands,
-) {
-    cleanup_collect_target_components(ctx, target, commands, false);
-    ctx.abort_closed(commands, "collect target gone or unreachable");
+) -> TaskHandlerControl {
+    cleanup_collect_target_components(target, commands, false);
+    ctx.abort_closed(commands, "collect target gone or unreachable")
 }
 
 /// 収集タスク Done フェーズの共通クリーンアップ。
@@ -251,7 +230,11 @@ pub fn finalize_collect_task(
     ctx: &mut TaskExecutionContext,
     target: Entity,
     commands: &mut Commands,
-) {
-    cleanup_collect_target_components(ctx, target, commands, true);
-    ctx.complete_task(commands, "collect task done");
+) -> TaskHandlerControl {
+    cleanup_collect_target_components(target, commands, true);
+    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
+        source: target,
+        amount: 1,
+    });
+    ctx.complete_task(commands, "collect task done")
 }

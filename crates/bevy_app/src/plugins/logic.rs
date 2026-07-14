@@ -27,13 +27,17 @@ use crate::systems::jobs::wall_construction::{
     wall_construction_cancellation_system, wall_construction_completion_system,
     wall_construction_phase_transition_system, wall_framed_tile_spawn_system,
 };
-use crate::systems::jobs::{door_auto_close_system, door_auto_open_system};
+use crate::systems::jobs::{
+    BuildingCompletionSet, building_completion_system, door_auto_close_system,
+    door_auto_open_system,
+};
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
 use crate::systems::soul_ai::SoulAiPlugin;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
+use hw_core::system_sets::{ObstacleSyncSet, SoulAiSystemSet};
 use hw_energy::{
     ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerConsumer, PowerGenerator,
     PowerGrid, SoulSpaPhase, SoulSpaSite, SoulSpaTile, Unpowered, YardPowerGrid,
@@ -51,11 +55,10 @@ use hw_logistics::visual_sync::{
     on_stockpile_added_sync_visual, on_wheelbarrow_added, sync_inventory_item_visual_system,
     sync_stockpile_visual_system,
 };
-use hw_world::obstacle_cleanup_system;
 use hw_world::{
-    RoomDetectionState, RoomTileLookup, RoomValidationState, detect_rooms_system,
-    mark_room_dirty_from_building_changes_system, on_building_added, on_building_removed,
-    on_door_added, on_door_removed, validate_rooms_system,
+    ObstaclePositionIndex, RoomDetectionState, RoomTileLookup, RoomValidationState,
+    detect_rooms_system, mark_room_dirty_from_building_changes_system, obstacle_sync_system,
+    on_building_added, on_building_removed, on_door_added, on_door_removed, validate_rooms_system,
 };
 
 pub struct LogicPlugin;
@@ -78,6 +81,7 @@ impl Plugin for LogicPlugin {
         app.init_resource::<RoomDetectionState>();
         app.init_resource::<RoomTileLookup>();
         app.init_resource::<RoomValidationState>();
+        app.init_resource::<ObstaclePositionIndex>();
 
         // Soul Energy 型登録
         app.register_type::<PowerGrid>()
@@ -112,6 +116,16 @@ impl Plugin for LogicPlugin {
                 task_area_edit_history_shortcuts_system.run_if(in_state(PlayMode::TaskDesignation)),
             )
                 .chain()
+                .before(SoulAiSystemSet::Perceive)
+                .in_set(GameSystemSet::Logic),
+        )
+        // User cancellation writes SoulTaskUnassignRequest through Commands.
+        // Apply it before Perceive so cleanup precedes task execution.
+        .add_systems(
+            Update,
+            bevy::ecs::schedule::ApplyDeferred
+                .after(task_area_selection_system)
+                .before(SoulAiSystemSet::Perceive)
                 .in_set(GameSystemSet::Logic),
         )
         // グループB: maintenance / spawn 系（独立。Bevy scheduler が競合を自動調停）
@@ -119,11 +133,17 @@ impl Plugin for LogicPlugin {
             Update,
             (
                 tree_regrowth_system,
-                obstacle_cleanup_system,
                 blueprint_cancel_cleanup_system,
                 despawn_expired_items_system,
                 dream_tree_planting_system,
             )
+                .in_set(GameSystemSet::Logic),
+        )
+        .add_systems(
+            Update,
+            building_completion_system
+                .after(SoulAiSystemSet::Execute)
+                .in_set(BuildingCompletionSet)
                 .in_set(GameSystemSet::Logic),
         )
         // グループC: floor construction（フェーズ順序が必要）
@@ -213,8 +233,11 @@ impl Plugin for LogicPlugin {
         .add_observer(on_power_consumer_added)
         .add_observer(on_power_consumer_visual_added)
         .add_observer(on_unpowered_added)
-        .add_observer(on_unpowered_removed)
-        .add_systems(
+        .add_observer(on_unpowered_removed);
+
+        configure_obstacle_sync_schedule(app);
+
+        app.add_systems(
             Update,
             (
                 door_auto_open_system.before(crate::entities::damned_soul::movement::soul_movement),
@@ -237,5 +260,93 @@ impl Plugin for LogicPlugin {
             Update,
             familiar_spawning_system.in_set(GameSystemSet::Logic),
         );
+    }
+}
+
+fn configure_obstacle_sync_schedule(app: &mut App) {
+    app.configure_sets(
+        Update,
+        ObstacleSyncSet
+            .in_set(GameSystemSet::Actor)
+            .before(SoulAiSystemSet::Actor),
+    )
+    .add_systems(
+        Update,
+        bevy::ecs::schedule::ApplyDeferred
+            .after(SoulAiSystemSet::Execute)
+            .after(BuildingCompletionSet)
+            .before(ObstacleSyncSet)
+            .in_set(GameSystemSet::Actor),
+    )
+    .add_systems(Update, obstacle_sync_system.in_set(ObstacleSyncSet));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::configure_obstacle_sync_schedule;
+    use crate::systems::GameSystemSet;
+    use bevy::prelude::*;
+    use hw_core::system_sets::SoulAiSystemSet;
+    use hw_jobs::{ObstaclePosition, ObstacleSourceKind};
+    use hw_world::{
+        ObstaclePositionIndex, TerrainChangedEvent, WorldMap, seed_obstacle_position_index,
+    };
+
+    #[derive(Resource)]
+    struct PendingMarkerRemoval(Option<Entity>);
+
+    #[derive(Resource, Default)]
+    struct PathfindingProbe(Option<bool>);
+
+    fn remove_marker_in_execute(mut commands: Commands, mut pending: ResMut<PendingMarkerRemoval>) {
+        if let Some(marker) = pending.0.take() {
+            commands.entity(marker).remove::<ObstaclePosition>();
+        }
+    }
+
+    fn record_pathfinding_input(world_map: Res<WorldMap>, mut probe: ResMut<PathfindingProbe>) {
+        probe.0 = Some(world_map.is_walkable(21, 22));
+    }
+
+    #[test]
+    fn obstacle_sync_applies_execute_removal_before_actor_pathfinding() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(WorldMap::default())
+            .init_resource::<ObstaclePositionIndex>()
+            .init_resource::<PathfindingProbe>()
+            .add_message::<TerrainChangedEvent>()
+            .configure_sets(Update, (GameSystemSet::Logic, GameSystemSet::Actor).chain())
+            .configure_sets(
+                Update,
+                SoulAiSystemSet::Execute.in_set(GameSystemSet::Logic),
+            )
+            .configure_sets(Update, SoulAiSystemSet::Actor.in_set(GameSystemSet::Actor))
+            .add_systems(
+                Update,
+                remove_marker_in_execute.in_set(SoulAiSystemSet::Execute),
+            )
+            .add_systems(
+                Update,
+                record_pathfinding_input.in_set(SoulAiSystemSet::Actor),
+            );
+        configure_obstacle_sync_schedule(&mut app);
+
+        let marker = app
+            .world_mut()
+            .spawn((
+                ObstaclePosition(21, 22),
+                ObstacleSourceKind::NaturalTerrainClearing,
+            ))
+            .id();
+        seed_obstacle_position_index(app.world_mut());
+        app.world_mut()
+            .resource_mut::<WorldMap>()
+            .add_grid_obstacle((21, 22));
+        app.insert_resource(PendingMarkerRemoval(Some(marker)));
+
+        app.update();
+
+        assert_eq!(app.world().resource::<PathfindingProbe>().0, Some(true));
     }
 }

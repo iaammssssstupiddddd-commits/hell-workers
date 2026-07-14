@@ -35,17 +35,18 @@ pub fn sync_settings_checkmarks_system(
     for (checkbox, checked) in q_checkboxes.iter() {
         for (checkmark, mut node) in q_checkmarks.iter_mut() {
             if checkmark.0 == checkbox.0 {
-                node.display = if checked { Display::Flex } else { Display::None };
+                node.display = if checked {
+                    Display::Flex
+                } else {
+                    Display::None
+                };
             }
         }
     }
 }
 
 pub fn sync_settings_slider_thumbs_system(
-    q_sliders: Query<
-        (&SettingsSliderMarker, &SliderValue, &SliderRange, &Children),
-        With<Slider>,
-    >,
+    q_sliders: Query<(&SettingsSliderMarker, &SliderValue, &SliderRange, &Children), With<Slider>>,
     mut q_thumbs: Query<(&SettingsSliderThumbMarker, &mut Node)>,
 ) {
     for (marker, value, range, children) in q_sliders.iter() {

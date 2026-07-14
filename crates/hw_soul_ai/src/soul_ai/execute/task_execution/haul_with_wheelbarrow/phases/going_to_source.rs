@@ -3,7 +3,7 @@
 use super::super::cancel;
 use crate::soul_ai::execute::task_execution::{
     common::{NavOutcome, navigate_to_pos},
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
 use bevy::prelude::*;
@@ -13,16 +13,16 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    
+
     soul_pos: Vec2,
-) {
+) -> TaskHandlerControl {
     match navigate_to_pos(ctx, data.source_pos, soul_pos, ctx.env.world_map) {
-        NavOutcome::Moving => return,
+        NavOutcome::Moving => return TaskHandlerControl::Continue,
         NavOutcome::Unreachable => {
-            cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-            return;
+            return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
         }
-        _ => {}
+        NavOutcome::Ended(control) => return control,
+        NavOutcome::Arrived => {}
     }
 
     // 搬入先の空き容量チェック
@@ -39,8 +39,7 @@ pub fn handle(
             .map(|(_, inc)| inc.len())
             .unwrap_or(0);
         if (current_count + incoming) >= stock.capacity {
-            cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-            return;
+            return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
         }
     }
 
@@ -49,4 +48,6 @@ pub fn handle(
         ..data
     });
     ctx.path.waypoints.clear();
+
+    TaskHandlerControl::Continue
 }

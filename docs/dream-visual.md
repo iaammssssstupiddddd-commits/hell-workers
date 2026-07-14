@@ -155,7 +155,7 @@ Dream 消費による植林は、ロジックで木を生成したあとに Visu
 - フェーズ1: `PlantTreeMagicCircle` により予兆の魔法陣をフェードイン/拡大/フェードアウト
 - フェーズ2: 木スプライトを `scale: 0.05 -> 1.0` に補間し、青白い色から白へ遷移
 - フェーズ3: `PlantTreeLifeSpark` を根元から放射し、短寿命で減衰デスポーン
-- 木タイルの地形データは変更せず、障害物判定は `ObstaclePosition` で維持
+- 木タイルの地形データは変更せず、障害物判定は `ObstaclePosition` と `NaturalTerrainClearing` source で維持する。最後の自然 blocker を除去したときだけ terrain は Dirt へ変わる
 - `plant_tree_magic_circle.png` / `plant_tree_life_spark.png` は現時点ではプレースホルダー画像
 
 ## 7. 関連ファイル

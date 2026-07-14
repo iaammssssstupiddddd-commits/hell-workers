@@ -33,7 +33,9 @@ use super::producer::{
     },
     wheelbarrow::wheelbarrow_auto_haul_system,
 };
-use super::state_machine::transport_request_state_sync_system;
+use super::state_machine::{
+    transport_request_state_sync_system, transport_request_task_workers_reconcile_system,
+};
 use super::{
     TransportRequestMetrics, transport_request_anchor_cleanup_system,
     transport_request_metrics_system, wheelbarrow_arbitration_system,
@@ -50,6 +52,8 @@ pub enum TransportRequestSet {
     Arbitrate,
     /// Commands 適用
     Execute,
+    /// Soul AI 実行後の relationship lifecycle 同期
+    Reconcile,
     /// timeout/retry/cleanup
     Maintain,
 }
@@ -81,9 +85,13 @@ impl Plugin for TransportRequestPlugin {
 
         app.configure_sets(
             Update,
-            TransportRequestSet::Maintain
-                .after(SoulAiSystemSet::Execute)
-                .in_set(GameSystemSet::Logic),
+            (
+                TransportRequestSet::Reconcile,
+                TransportRequestSet::Maintain,
+            )
+                .chain()
+                .after(SoulAiSystemSet::Actor)
+                .in_set(GameSystemSet::Actor),
         );
 
         app.add_systems(
@@ -91,6 +99,18 @@ impl Plugin for TransportRequestPlugin {
             ApplyDeferred
                 .after(TransportRequestSet::Execute)
                 .before(FamiliarAiSystemSet::Decide),
+        );
+
+        // Actor systems can remove WorkingOn after Logic has completed. Removing that source can
+        // queue removal of its empty relationship target from the world's internal command queue.
+        // Flush both stages before reading TaskWorkers removals.
+        app.add_systems(
+            Update,
+            (ApplyDeferred, ApplyDeferred)
+                .chain()
+                .after(SoulAiSystemSet::Actor)
+                .before(TransportRequestSet::Reconcile)
+                .in_set(GameSystemSet::Actor),
         );
 
         app.add_systems(
@@ -127,6 +147,8 @@ impl Plugin for TransportRequestPlugin {
                     .in_set(TransportRequestSet::Decide),
                 wheelbarrow_arbitration_system.in_set(TransportRequestSet::Arbitrate),
                 transport_request_state_sync_system.in_set(TransportRequestSet::Execute),
+                transport_request_task_workers_reconcile_system
+                    .in_set(TransportRequestSet::Reconcile),
                 transport_request_anchor_cleanup_system.in_set(TransportRequestSet::Maintain),
             ),
         );

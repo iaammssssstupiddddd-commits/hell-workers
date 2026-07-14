@@ -2,7 +2,7 @@
 
 use crate::soul_ai::execute::task_execution::{
     common::*,
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     types::{AssignedTask, BuildData, BuildPhase},
 };
 use bevy::prelude::*;
@@ -11,7 +11,7 @@ pub fn handle_build_task(
     ctx: &mut TaskExecutionContext,
     data: BuildData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let BuildData { blueprint, phase } = data;
     let blueprint_entity = blueprint;
     let soul_pos = ctx.soul_pos();
@@ -22,8 +22,7 @@ pub fn handle_build_task(
                 ctx.queries.storage.blueprints.get(blueprint_entity)
             {
                 if des_opt.is_none() {
-                    ctx.abort_closed(commands, "designation missing");
-                    return;
+                    return ctx.abort_closed(commands, "designation missing");
                 }
 
                 if !bp.materials_complete() {
@@ -31,12 +30,7 @@ pub fn handle_build_task(
                         "BUILD: Soul {:?} waiting for materials at blueprint {:?}",
                         ctx.soul_entity, blueprint_entity
                     );
-                    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                        source: blueprint_entity,
-                        amount: 1,
-                    });
-                    ctx.abort_retryable(commands, "build waiting for materials");
-                    return;
+                    return ctx.abort_retryable(commands, "build waiting for materials");
                 }
 
                 let reachable = update_destination_to_blueprint(
@@ -52,12 +46,7 @@ pub fn handle_build_task(
                         "BUILD: Soul {:?} cannot reach blueprint {:?}, canceling",
                         ctx.soul_entity, blueprint_entity
                     );
-                    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                        source: blueprint_entity,
-                        amount: 1,
-                    });
-                    ctx.abort_retryable(commands, "build blueprint unreachable");
-                    return;
+                    return ctx.abort_retryable(commands, "build blueprint unreachable");
                 }
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {
@@ -72,11 +61,7 @@ pub fn handle_build_task(
                     );
                 }
             } else {
-                ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                    source: blueprint_entity,
-                    amount: 1,
-                });
-                ctx.abort_closed(commands, "build blueprint gone");
+                return ctx.abort_closed(commands, "build blueprint gone");
             }
         }
         BuildPhase::Building { mut progress } => {
@@ -84,8 +69,7 @@ pub fn handle_build_task(
                 ctx.queries.storage.blueprints.get_mut(blueprint_entity)
             {
                 if des_opt.is_none() {
-                    ctx.abort_closed(commands, "designation missing");
-                    return;
+                    return ctx.abort_closed(commands, "designation missing");
                 }
 
                 if !is_near_blueprint(soul_pos, &bp.occupied_grids) {
@@ -93,22 +77,23 @@ pub fn handle_build_task(
                         blueprint: blueprint_entity,
                         phase: BuildPhase::GoingToBlueprint,
                     });
-                    return;
+                    return TaskHandlerControl::Continue;
                 }
 
                 progress += ctx.env.time.delta_secs() * 0.33;
                 bp.progress = progress;
 
                 if progress >= 1.0 {
-                    *ctx.task = AssignedTask::Build(BuildData {
-                        blueprint: blueprint_entity,
-                        phase: BuildPhase::Done,
-                    });
                     ctx.soul.fatigue = (ctx.soul.fatigue + 0.15).min(1.0);
                     debug!(
                         "BUILD: Soul {:?} completed building {:?}",
                         ctx.soul_entity, blueprint_entity
                     );
+                    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
+                        source: blueprint_entity,
+                        amount: 1,
+                    });
+                    return ctx.complete_task(commands, "build done");
                 } else {
                     *ctx.task = AssignedTask::Build(BuildData {
                         blueprint: blueprint_entity,
@@ -116,19 +101,28 @@ pub fn handle_build_task(
                     });
                 }
             } else {
-                ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                    source: blueprint_entity,
-                    amount: 1,
-                });
-                ctx.abort_closed(commands, "build blueprint gone during build");
+                return ctx.abort_closed(commands, "build blueprint gone during build");
             }
         }
         BuildPhase::Done => {
+            // This phase can survive only in an older save or a deferred
+            // transition. Never publish completion for a vanished blueprint.
+            if ctx
+                .queries
+                .storage
+                .blueprints
+                .get(blueprint_entity)
+                .is_err()
+            {
+                return ctx.abort_closed(commands, "build blueprint gone before completion");
+            }
             ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
                 source: blueprint_entity,
                 amount: 1,
             });
-            ctx.complete_task(commands, "build done");
+            return ctx.complete_task(commands, "build done");
         }
     }
+
+    TaskHandlerControl::Continue
 }

@@ -49,5 +49,8 @@ Ready → Framed → ProvisionalReady → CoatedReady → Coated
 |---|---|
 | `mod.rs` | `building_completion_system` |
 | `spawn.rs` | 完成後エンティティのスポーン |
-| `post_process.rs` | 完成後処理（ワールドマップ更新等） |
-| `world_update.rs` | ワールドマップ歩行可能性の更新 |
+| `post_process.rs` | 建物種別ごとの完成後処理 |
+
+`building_completion_system` は `BuildingCompletionSet` で Soul AI Execute の後に走る。
+WorldMap の footprint 登録・movement blocker marker・Soul の押し出しは
+`BuildingCompletedEvent` を受ける `hw_soul_ai::building_completed::on_building_completed` が所有する。

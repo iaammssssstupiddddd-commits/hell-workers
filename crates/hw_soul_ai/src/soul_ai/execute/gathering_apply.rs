@@ -29,7 +29,7 @@ fn queue_gathering_join(commands: &mut Commands, soul: Entity, spot: Entity) {
             soul_entity.insert(ParticipatingIn(spot));
         }
 
-        world.trigger(OnGatheringParticipated {
+        world.write_message(OnGatheringParticipated {
             entity: soul,
             spot_entity: spot,
         });
@@ -147,19 +147,22 @@ mod tests {
     struct ParticipationCount(u32);
 
     fn count_gathering_participation(
-        _: On<OnGatheringParticipated>,
+        mut reader: MessageReader<OnGatheringParticipated>,
         mut count: ResMut<ParticipationCount>,
     ) {
-        count.0 += 1;
+        count.0 += reader.read().count() as u32;
     }
 
     fn test_app() -> App {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_once()))
             .add_message::<GatheringManagementRequest>()
+            .add_message::<OnGatheringParticipated>()
             .init_resource::<ParticipationCount>()
-            .add_observer(count_gathering_participation)
-            .add_systems(Update, gathering_apply_system);
+            .add_systems(
+                Update,
+                (gathering_apply_system, count_gathering_participation).chain(),
+            );
         app
     }
 
@@ -255,5 +258,28 @@ mod tests {
                 .is_none()
         );
         assert_eq!(app.world().resource::<ParticipationCount>().0, 0);
+    }
+
+    #[test]
+    fn recruit_writes_participation_message_after_inserting_relation() {
+        let mut app = test_app();
+        let soul = app.world_mut().spawn_empty().id();
+        let spot = app.world_mut().spawn(GatheringParticipants::default()).id();
+
+        app.world_mut().write_message(GatheringManagementRequest {
+            operation: GatheringManagementOp::Recruit { soul, spot },
+        });
+
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .get_entity(soul)
+                .unwrap()
+                .get::<ParticipatingIn>()
+                .map(|participating_in| participating_in.0),
+            Some(spot)
+        );
+        assert_eq!(app.world().resource::<ParticipationCount>().0, 1);
     }
 }

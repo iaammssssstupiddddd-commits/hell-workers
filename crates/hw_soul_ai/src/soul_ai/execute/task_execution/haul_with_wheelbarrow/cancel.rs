@@ -1,21 +1,20 @@
 //! 手押し車タスクのキャンセル・予約解放
 
 use crate::soul_ai::execute::task_execution::{
-    context::{TaskEndDisposition, TaskExecutionContext},
-    transport_common::{reservation, wheelbarrow as wheelbarrow_common},
+    context::{TaskExecutionContext, TaskHandlerControl},
+    transport_common::wheelbarrow as wheelbarrow_common,
     types::HaulWithWheelbarrowData,
 };
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
-use hw_logistics::transport_request::WheelbarrowDestination;
 
 /// 手押し車タスクのキャンセル処理（全フェーズ共通）
-/// 積載済みアイテムを地面にドロップし、猫車を駐車に戻し、全予約を解放する。
+/// 積載済みアイテムを地面にドロップし、猫車を駐車に戻す。
 pub fn cancel_wheelbarrow_task(
     ctx: &mut TaskExecutionContext,
     data: &HaulWithWheelbarrowData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let soul_pos = ctx.soul_pos();
     // 積載済みアイテムを地面にドロップ
     if let Ok(loaded_items) = ctx.queries.storage.loaded_items.get(data.wheelbarrow) {
@@ -54,58 +53,19 @@ pub fn cancel_wheelbarrow_task(
         wheelbarrow_commands.try_remove::<hw_core::relationships::DeliveringTo>();
     }
 
-    // 全予約を解放
-    release_all_reservations(ctx, data);
-
-    ctx.inventory.0 = None;
-    ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
-
     debug!(
         "WB_HAUL: Soul {:?} canceled wheelbarrow task",
         ctx.soul_entity
     );
+    ctx.inventory.0 = None;
+    ctx.abort_retryable_after_custom_cleanup(commands, "wheelbarrow haul canceled")
 }
 
-/// 宛先が破壊された場合: アイテムを地面にドロップしてキャンセル
-/// cancel_wheelbarrow_task と同等だが、宛先の予約も確実に解放する。
+/// 宛先が破壊された場合: アイテムを地面にドロップしてキャンセル。
 pub fn drop_items_and_cancel(
     ctx: &mut TaskExecutionContext,
     data: &HaulWithWheelbarrowData,
     commands: &mut Commands,
-) {
-    cancel_wheelbarrow_task(ctx, data, commands);
-}
-
-/// 全アイテムの予約（ソース + 宛先）を解放
-pub fn release_all_reservations(ctx: &mut TaskExecutionContext, data: &HaulWithWheelbarrowData) {
-    reservation::release_source(ctx, data.wheelbarrow, 1);
-
-    if let Some(source_entity) = data.collect_source {
-        reservation::release_source(ctx, source_entity, 1);
-    }
-
-    for &item_entity in &data.items {
-        reservation::release_source(ctx, item_entity, 1);
-
-        match data.destination {
-            WheelbarrowDestination::Stockpile(_) | WheelbarrowDestination::Blueprint(_) => {
-                // DeliveringTo リレーションシップの削除は
-                // cancel_wheelbarrow_task や unload 各所で行われる。
-            }
-            WheelbarrowDestination::Mixer {
-                entity: target,
-                resource_type,
-            } => {
-                let item_type = ctx
-                    .queries
-                    .reservation
-                    .resources
-                    .get(item_entity)
-                    .ok()
-                    .map(|r| r.0)
-                    .unwrap_or(resource_type);
-                reservation::release_mixer_destination(ctx, target, item_type);
-            }
-        }
-    }
+) -> TaskHandlerControl {
+    cancel_wheelbarrow_task(ctx, data, commands)
 }

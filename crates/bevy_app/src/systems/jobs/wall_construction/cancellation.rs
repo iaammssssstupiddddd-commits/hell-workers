@@ -105,7 +105,7 @@ pub fn wall_construction_cancellation_system(
         ) in q_souls.iter_mut()
         {
             let matches_site_task = assigned_task
-                .get_target_entity()
+                .primary_payload_entity()
                 .is_some_and(|target| related_targets.contains(&target));
             let matches_working_on =
                 working_on_opt.is_some_and(|working_on| related_targets.contains(&working_on.0));

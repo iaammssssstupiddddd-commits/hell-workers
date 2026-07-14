@@ -77,7 +77,8 @@ Perceive → Update → Decide → Execute
 `crates/bevy_app/src/plugins/logic.rs` の `GameSystemSet::Logic` 登録は、単一の巨大 `.chain()` ではなく、責務ごとに次のグループへ分割されている。
 
 - Group A: command 系 (`assign_task_system`, `familiar_command_input_system`, `task_area_selection_system`, `zone_placement_system`, `zone_removal_system`, `task_area_edit_history_shortcuts_system`) を `.chain()` で直列実行する。`TaskContext` / `AreaEdit*` / `WorldMapWrite` を共有するため、この並びが唯一の ordering 契約である。
-- Group B: maintenance / spawn 系 (`familiar_spawning_system`, `tree_regrowth_system`, `obstacle_cleanup_system`, `blueprint_cancel_cleanup_system`, `despawn_expired_items_system`, `dream_tree_planting_system`) は非 chain で登録し、Bevy scheduler に競合解決を委ねる。
+- Group B: maintenance / spawn 系 (`familiar_spawning_system`, `tree_regrowth_system`, `blueprint_cancel_cleanup_system`, `despawn_expired_items_system`, `dream_tree_planting_system`) は非 chain で登録し、Bevy scheduler に競合解決を委ねる。
+- `building_completion_system` は `SoulAiSystemSet::Execute` 後の `BuildingCompletionSet` で実行する。続く Actor phase は `ApplyDeferred` により command を反映してから `ObstacleSyncSet` を実行し、`SoulAiSystemSet::Actor`（pathfinding を含む）より前に `obstacle_sync_system` が WorldMap を更新する。
 - Group C: floor construction 系 (`floor_construction_cancellation_system` → `floor_construction_phase_transition_system` → `floor_construction_completion_system`) はフェーズ順を保つため `.chain()` で登録する。
 - Group D: wall construction 系 (`wall_construction_cancellation_system` → `debug_instant_complete_walls_system` → `wall_framed_tile_spawn_system` → `wall_construction_phase_transition_system` → `wall_construction_completion_system`) はフェーズ順とデバッグ割り込み位置を保つため `.chain()` で登録する。
 - room detection 系 (`mark_room_dirty_from_building_changes_system` → `validate_rooms_system` → `detect_rooms_system`) は `.chain().after(dream_tree_planting_system)` を維持し、DreamTree 反映後のワールド状態を入力にする。
@@ -98,7 +99,7 @@ Perceive → Update → Decide → Execute
 - `DesignationSpatialGrid` / `TransportRequestSpatialGrid` の `init_resource` は `bevy_app::SpatialPlugin` に移設済み（2026-03-17）。
 - Soul 側の集会発生は `hw_soul_ai::soul_ai::execute::gathering_spawn::gathering_spawn_logic_system` が `GatheringSpawnRequest` を emit し、root `execute/gathering_spawn.rs` が `GameAssets` を使う visual spawn を担当する。adapter 側は request 消費時に initiator の task / relationship / idle 状態を再検証し、同一フレームで stale になった要求を破棄する。
 - `pathfinding_system` / `soul_stuck_escape_system` は `hw_soul_ai::soul_ai::pathfinding` に移管済み（`GameSystemSet::Actor` で登録）。既存パス再利用・再探索・休憩所フォールバック・到達不能時クリーンアップの補助関数群で構成し、挙動差分を局所化する。`hw_world::pathfinding`（`world/mod.rs` の inline `pub mod pathfinding` として re-export）側は `find_path_with_policy` を探索共通核として、通常探索・隣接探索・境界探索の差分をポリシー化する。`find_path` は `PathGoalPolicy` でゴール歩行性契約を明示し、`find_path_to_adjacent` は `allow_goal_blocked`（開始点が非歩行のケースを含む）で逆探索の許容条件を制御する。
-- 建設完了後の WorldMap 更新・ObstaclePosition spawn・Soul 押し出しは `BuildingCompletedEvent`（`hw_jobs::events`）の Pub/Sub パターンに移管済み。root の `building_completion_system` がイベントを `commands.trigger()` で発行し、`hw_soul_ai::soul_ai::building_completed::on_building_completed` Observer（`SoulAiCorePlugin` 登録）が受理・適用する。
+- 建設完了後の WorldMap 更新・movement-blocking footprint marker spawn・Soul 押し出しは `BuildingCompletedEvent`（`hw_jobs::events`）の Pub/Sub パターンに移管済み。root の `building_completion_system` がイベントを `commands.trigger()` で発行し、`hw_soul_ai::soul_ai::building_completed::on_building_completed` Observer（`SoulAiCorePlugin` 登録）が受理・適用する。
 - `transport_request::producer` の floor/wall 搬入同期は `producer/mod.rs` の共通ヘルパー（`sync_construction_requests`, `sync_construction_delivery`）を利用して重複実装を避ける。全プロデューサーのオーナー解決は `AreaBounds`（`zones.rs` の共通矩形型）に統一し、`collect_all_area_owners` / `find_owner_for_position` で Familiar TaskArea と Yard 境界を同列に処理する。
 - UI/Visual の更新責務は `status_display/*` と `dream/ui_particle/*` に分離し、表示更新と演出更新を独立に保守する。UI 入力処理は `MenuAction` の汎用経路（`ui_interaction_system`）と専用経路（`arch_category_action_system` / `door_lock_action_system`）を分離して維持する。
 
@@ -133,8 +134,8 @@ Perceive → Update → Decide → Execute
 `crates/bevy_app/src/systems/save/` — `SavePlugin`（`main.rs` で登録、root 専用: 全クレートの型に届く必要があるため leaf へ移動不可）。
 
 - セーブ/ロードとも exclusive system（`&mut World`）で 1 フレーム内に完結する
-- 保存対象は allow-list 方式（`saving.rs`）。ロード後は `rehydrate.rs` が spawn 共用の `attach_*_shell` 関数で実行時コンポーネント・随伴エンティティを再付与する
-- **spawn 時コンポーネントを追加したら allow-list か shell のどちらかに必ず登録する**（I-P1）。タプルキーのコレクションは保存型に持ち込まない（I-P2）
+- 保存対象は allow-list 方式（`saving.rs`）。ロード後は `rehydrate.rs` が spawn 共用の `attach_*_shell` 関数で通常の実行時コンポーネント・随伴エンティティを再付与し、`rehydrate_obstacle_runtime` が obstacle provenance / navigation cache を durable semantic source から再構築する
+- **spawn 時コンポーネントを追加したら allow-list、shell、または source-aware rehydrate helper に必ず登録する**（I-P1）。タプルキーのコレクションは保存型に持ち込まない（I-P2）
 - 仕様: [docs/save_load.md](save_load.md) / 不変条件: [docs/invariants.md §7](invariants.md)
 
 ## 空間グリッド一覧 (Spatial Grids)
@@ -334,16 +335,16 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 ## イベントシステム
 
-本プロジェクトでは、Bevy 0.19 の `Message` と `Observer` を用途に応じて使い分けています。
+本プロジェクトでは、Bevy 0.19 の `Message` と `EntityEvent` Observer を用途に応じて使い分けています。
 
 | 方式 | 用途 | 定義場所 |
 |:--|:--|:--|
-| `Message` | グローバル通知（タスクキュー更新等） | 主に `crates/hw_core/src/events.rs`（`TaskAssignmentRequest` のみ `crates/hw_jobs/src/events.rs`）（登録は `crates/bevy_app/src/plugins/messages.rs`） |
-| `Observer` | エンティティベースの即時反応 | 主に `crates/hw_core/src/events.rs`（root 互換面は `crates/bevy_app/src/lib.rs` に明示 `pub use`） |
+| `Message` | Request と presentation 通知。`MessagesPlugin` に登録し、遅延可能な system が `MessageReader` で消費する | 主に `crates/hw_core/src/events.rs`（`TaskAssignmentRequest` のみ `crates/hw_jobs/src/events.rs`）（登録は `crates/bevy_app/src/plugins/messages.rs`） |
+| `EntityEvent` Observer | エンティティベースで即時整合が必要な domain 副作用 | 主に `crates/hw_core/src/events.rs` |
 
 > [!TIP]
-> リソース (`ResMut`) を更新する必要がある場合は `Message` を使用してください。
-> エンティティのコンポーネントに即座に反応する場合は `Observer` を使用してください。
+> domain と presentation の両方が必要な場合、`publish_*` helper が EntityEvent を `trigger` し、
+> 対応する `*VisualMessage` を `write_message` する。`trigger` は Message を自動生成しない。
 
 ---
 

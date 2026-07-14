@@ -3,7 +3,7 @@
 use super::components::*;
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::plugins::startup::Building3dHandles;
-use crate::systems::jobs::{Building, BuildingType, ObstaclePosition};
+use crate::systems::jobs::{Building, BuildingType, ObstaclePosition, ObstacleSourceKind};
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::{FLOOR_CURING_DURATION_SECS, Z_MAP};
@@ -84,9 +84,10 @@ pub fn floor_construction_completion_system(
                 .collect();
 
             for (tile_entity, (gx, gy), _) in &site_tiles {
-                commands
-                    .entity(*tile_entity)
-                    .insert(ObstaclePosition(*gx, *gy));
+                commands.entity(*tile_entity).insert((
+                    ObstaclePosition(*gx, *gy),
+                    ObstacleSourceKind::ConstructionProtection,
+                ));
             }
             world_map.reserve_building_footprint_tiles(blocked_tiles.iter().copied());
 

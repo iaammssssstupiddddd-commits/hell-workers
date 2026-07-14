@@ -37,6 +37,9 @@ impl WorldReadApi for WorldMapRef<'_> {
     fn has_stockpile(&self, grid: (i32, i32)) -> bool {
         self.0.has_stockpile(grid)
     }
+    fn has_raw_obstacle(&self, grid: (i32, i32)) -> bool {
+        self.0.has_raw_obstacle(grid.0, grid.1)
+    }
     fn is_walkable(&self, gx: i32, gy: i32) -> bool {
         self.0.is_walkable(gx, gy)
     }

@@ -2,7 +2,7 @@
 
 use crate::soul_ai::execute::task_execution::{
     common::*,
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     types::{AssignedTask, CoatWallData, CoatWallPhase},
 };
 use bevy::prelude::*;
@@ -16,16 +16,12 @@ fn cancel_coat_wall_task(
     tile_entity: Entity,
     commands: &mut Commands,
     reason: &str,
-) {
+) -> TaskHandlerControl {
     debug!(
         "COAT_WALL: Cancelled for {:?} - tile {:?} ({})",
         ctx.soul_entity, tile_entity, reason
     );
-    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-        source: tile_entity,
-        amount: 1,
-    });
-    ctx.abort_closed(commands, reason);
+    ctx.abort_closed(commands, reason)
 }
 
 fn handle_legacy_coat_wall_task(
@@ -33,7 +29,7 @@ fn handle_legacy_coat_wall_task(
     wall_entity: Entity,
     phase: CoatWallPhase,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let soul_pos = ctx.soul_pos();
 
     match phase {
@@ -41,16 +37,14 @@ fn handle_legacy_coat_wall_task(
             let Ok((wall_transform, building, provisional_opt)) =
                 ctx.queries.storage.buildings.get_mut(wall_entity)
             else {
-                cancel_coat_wall_task(ctx, wall_entity, commands, "legacy wall gone");
-                return;
+                return cancel_coat_wall_task(ctx, wall_entity, commands, "legacy wall gone");
             };
 
             if building.kind != BuildingType::Wall
                 || !building.is_provisional
                 || provisional_opt.is_none_or(|provisional| !provisional.mud_delivered)
             {
-                cancel_coat_wall_task(ctx, wall_entity, commands, "legacy wall not ready");
-                return;
+                return cancel_coat_wall_task(ctx, wall_entity, commands, "legacy wall not ready");
             }
 
             let wall_pos = wall_transform.translation.truncate();
@@ -63,8 +57,12 @@ fn handle_legacy_coat_wall_task(
                 ctx.pf_context,
             );
             if !reachable {
-                cancel_coat_wall_task(ctx, wall_entity, commands, "legacy wall unreachable");
-                return;
+                return cancel_coat_wall_task(
+                    ctx,
+                    wall_entity,
+                    commands,
+                    "legacy wall unreachable",
+                );
             }
 
             if is_near_target_or_dest(soul_pos, wall_pos, ctx.dest.0) {
@@ -90,20 +88,24 @@ fn handle_legacy_coat_wall_task(
             let Ok((_, mut building, provisional_opt)) =
                 ctx.queries.storage.buildings.get_mut(wall_entity)
             else {
-                cancel_coat_wall_task(ctx, wall_entity, commands, "legacy wall gone");
-                return;
+                return cancel_coat_wall_task(ctx, wall_entity, commands, "legacy wall gone");
             };
 
             if building.kind != BuildingType::Wall
                 || !building.is_provisional
                 || provisional_opt.is_none()
             {
-                cancel_coat_wall_task(ctx, wall_entity, commands, "legacy wall not provisional");
-                return;
+                return cancel_coat_wall_task(
+                    ctx,
+                    wall_entity,
+                    commands,
+                    "legacy wall not provisional",
+                );
             }
 
             const MAX_PROGRESS_BP: u16 = 10_000;
-            let delta_bp = ((ctx.env.time.delta_secs() / WALL_COAT_DURATION_SECS * MAX_PROGRESS_BP as f32)
+            let delta_bp = ((ctx.env.time.delta_secs() / WALL_COAT_DURATION_SECS
+                * MAX_PROGRESS_BP as f32)
                 .round()
                 .max(1.0)) as u16;
             let new_progress_bp = progress_bp.saturating_add(delta_bp).min(MAX_PROGRESS_BP);
@@ -136,16 +138,18 @@ fn handle_legacy_coat_wall_task(
                 source: wall_entity,
                 amount: 1,
             });
-            ctx.complete_task(commands, "legacy coat wall done");
+            return ctx.complete_task(commands, "legacy coat wall done");
         }
     }
+
+    TaskHandlerControl::Continue
 }
 
 pub fn handle_coat_wall_task(
     ctx: &mut TaskExecutionContext,
     data: CoatWallData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let CoatWallData {
         tile,
         site,
@@ -156,8 +160,7 @@ pub fn handle_coat_wall_task(
     let site_entity = site;
     let wall_entity = wall;
     if site_entity == Entity::PLACEHOLDER {
-        handle_legacy_coat_wall_task(ctx, wall_entity, phase, commands);
-        return;
+        return handle_legacy_coat_wall_task(ctx, wall_entity, phase, commands);
     }
 
     let soul_pos = ctx.soul_pos();
@@ -166,8 +169,7 @@ pub fn handle_coat_wall_task(
         CoatWallPhase::GoingToMaterialCenter => {
             let Ok((site_transform, _site, _)) = ctx.queries.storage.wall_sites.get(site_entity)
             else {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "site gone");
-                return;
+                return cancel_coat_wall_task(ctx, tile_entity, commands, "site gone");
             };
 
             let material_center = site_transform.translation.truncate();
@@ -180,8 +182,12 @@ pub fn handle_coat_wall_task(
                 ctx.pf_context,
             );
             if !reachable {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "material center unreachable");
-                return;
+                return cancel_coat_wall_task(
+                    ctx,
+                    tile_entity,
+                    commands,
+                    "material center unreachable",
+                );
             }
 
             if is_near_target_or_dest(soul_pos, material_center, ctx.dest.0) {
@@ -196,12 +202,10 @@ pub fn handle_coat_wall_task(
         }
         CoatWallPhase::PickingUpMud => {
             let Ok((_, tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "tile gone");
-                return;
+                return cancel_coat_wall_task(ctx, tile_entity, commands, "tile gone");
             };
             let Some(actual_wall) = tile_blueprint.spawned_wall else {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "spawned wall missing");
-                return;
+                return cancel_coat_wall_task(ctx, tile_entity, commands, "spawned wall missing");
             };
 
             match tile_blueprint.state {
@@ -219,25 +223,22 @@ pub fn handle_coat_wall_task(
                 }
                 _ => {
                     // 他のソウルが先に作業を開始または完了した → 中断
-                    cancel_coat_wall_task(ctx, tile_entity, commands, "tile not coatable");
+                    return cancel_coat_wall_task(ctx, tile_entity, commands, "tile not coatable");
                 }
             }
         }
         CoatWallPhase::GoingToTile => {
             let Ok((_, tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "tile gone");
-                return;
+                return cancel_coat_wall_task(ctx, tile_entity, commands, "tile gone");
             };
             let Some(actual_wall) = tile_blueprint.spawned_wall else {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "spawned wall missing");
-                return;
+                return cancel_coat_wall_task(ctx, tile_entity, commands, "spawned wall missing");
             };
             if !matches!(
                 tile_blueprint.state,
                 WallTileState::CoatingReady | WallTileState::Coating { .. }
             ) {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "tile not coatable");
-                return;
+                return cancel_coat_wall_task(ctx, tile_entity, commands, "tile not coatable");
             }
 
             let tile_pos =
@@ -251,8 +252,7 @@ pub fn handle_coat_wall_task(
                 ctx.pf_context,
             );
             if !reachable {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "tile unreachable");
-                return;
+                return cancel_coat_wall_task(ctx, tile_entity, commands, "tile unreachable");
             }
 
             if is_near_target_or_dest(soul_pos, tile_pos, ctx.dest.0) {
@@ -269,32 +269,29 @@ pub fn handle_coat_wall_task(
             let Ok((_, mut tile_blueprint, _)) =
                 ctx.queries.storage.wall_tiles.get_mut(tile_entity)
             else {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "tile gone");
-                return;
+                return cancel_coat_wall_task(ctx, tile_entity, commands, "tile gone");
             };
 
             let Some(actual_wall) = tile_blueprint.spawned_wall else {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "spawned wall missing");
-                return;
+                return cancel_coat_wall_task(ctx, tile_entity, commands, "spawned wall missing");
             };
 
             let Ok((_, mut building, provisional_opt)) =
                 ctx.queries.storage.buildings.get_mut(actual_wall)
             else {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "wall gone");
-                return;
+                return cancel_coat_wall_task(ctx, tile_entity, commands, "wall gone");
             };
 
             if building.kind != BuildingType::Wall
                 || !building.is_provisional
                 || provisional_opt.is_none()
             {
-                cancel_coat_wall_task(ctx, tile_entity, commands, "wall not provisional");
-                return;
+                return cancel_coat_wall_task(ctx, tile_entity, commands, "wall not provisional");
             }
 
             const MAX_PROGRESS_BP: u16 = 10_000;
-            let delta_bp = ((ctx.env.time.delta_secs() / WALL_COAT_DURATION_SECS * MAX_PROGRESS_BP as f32)
+            let delta_bp = ((ctx.env.time.delta_secs() / WALL_COAT_DURATION_SECS
+                * MAX_PROGRESS_BP as f32)
                 .round()
                 .max(1.0)) as u16;
             let new_progress_bp = progress_bp.saturating_add(delta_bp).min(MAX_PROGRESS_BP);
@@ -341,7 +338,9 @@ pub fn handle_coat_wall_task(
                 source: tile_entity,
                 amount: 1,
             });
-            ctx.complete_task(commands, "legacy coat wall done");
+            return ctx.complete_task(commands, "coat wall done");
         }
     }
+
+    TaskHandlerControl::Continue
 }

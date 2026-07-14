@@ -93,6 +93,11 @@ where
     if world.has_stockpile(grid) {
         return Some(PlacementRejectReason::OccupiedByStockpile);
     }
+    // A bridge is allowed on a non-walkable river tile, but it must not
+    // overwrite a natural, reservation, or construction blocker.
+    if world.has_raw_obstacle(grid) {
+        return Some(PlacementRejectReason::NotWalkable);
+    }
     if !world.is_river_tile(grid.0, grid.1) {
         return Some(PlacementRejectReason::NotRiverTile);
     }

@@ -4,7 +4,7 @@ use hw_core::events::{OnTaskAbandoned, ResourceReservationRequest};
 use hw_core::relationships::{DeliveringTo, LoadedIn, ParkedAt, PushedBy, StoredIn};
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
 use hw_core::visual::WheelbarrowMovement;
-use hw_jobs::{AssignedTask, Priority, TargetBlueprint};
+use hw_jobs::{ActiveTaskIdentity, AssignedTask, Priority, TargetBlueprint};
 use hw_logistics::{Inventory, ResourceType};
 use hw_world::WorldMap;
 
@@ -49,12 +49,12 @@ pub struct SoulDropCtx<'a> {
     pub dropped_item_res: Option<ResourceType>,
 }
 
-/// タスク解除時の低レベル cleanup を適用する。
+/// タスク解除時の crate 内部 low-level cleanup を適用する。
 ///
-/// `AssignedTask` / インベントリ / 予約状態の cleanup を行うが、
+/// `AssignedTask` / インベントリ / 予約状態 / runtime identity の cleanup を行うが、
 /// `WorkingOn` の削除は行わない。公開 API としての `unassign_task` は
 /// root crate 側の wrapper が所有する。
-pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
+pub(crate) fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     commands: &mut Commands,
     ctx: SoulDropCtx<'_>,
     task: &mut AssignedTask,
@@ -70,7 +70,7 @@ pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
         dropped_item_res,
     } = ctx;
     if !matches!(*task, AssignedTask::None) && emit_abandoned_event {
-        commands.trigger(OnTaskAbandoned {
+        commands.write_message(OnTaskAbandoned {
             entity: soul_entity,
         });
     }
@@ -149,12 +149,14 @@ pub fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
 
     *task = AssignedTask::None;
     path.waypoints.clear();
+    commands.entity(soul_entity).remove::<ActiveTaskIdentity>();
 }
 
 /// タスク解除の公開 API。
 ///
 /// 内部で `cleanup_task_assignment` を呼び出し、加えて
 /// `OnTaskAbandoned` イベントの発行と `WorkingOn` コンポーネントの削除を行う。
+/// `ActiveTaskIdentity` は内部 cleanup で削除される。
 pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     commands: &mut Commands,
     ctx: SoulDropCtx<'_>,

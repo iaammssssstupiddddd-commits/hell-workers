@@ -1,8 +1,7 @@
 use crate::soul_ai::execute::task_execution::chain;
 use crate::soul_ai::execute::task_execution::common::drop_item;
-use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use crate::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
-use crate::soul_ai::helpers::work::cleanup_task_assignment;
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
 use hw_jobs::BuildingType;
@@ -10,7 +9,6 @@ use hw_logistics::{
     ResourceType, count_nearby_ground_resources, floor_site_tile_demand,
     provisional_wall_mud_demand, wall_site_tile_demand,
 };
-use hw_world::WorldMap;
 
 fn floor_site_can_accept(
     ctx: &TaskExecutionContext,
@@ -97,9 +95,8 @@ pub(super) fn handle_dropping_phase(
     item: Entity,
     stockpile: Entity,
     commands: &mut Commands,
-    world_map: &WorldMap,
     soul_pos: Vec2,
-) {
+) -> TaskHandlerControl {
     let q_targets = &ctx.queries.designation.targets;
     let q_belongs = &ctx.queries.designation.belongs;
     let item_resource_type =
@@ -196,9 +193,6 @@ pub(super) fn handle_dropping_phase(
                 .entity(item)
                 .remove::<hw_core::relationships::DeliveringTo>();
             commands.entity(item).remove::<hw_jobs::IssuedBy>();
-            commands
-                .entity(item)
-                .remove::<hw_core::relationships::TaskWorkers>();
 
             reservation::record_stored_destination(ctx, stockpile);
             debug!(
@@ -206,27 +200,13 @@ pub(super) fn handle_dropping_phase(
                 ctx.soul_entity, current_count
             );
         } else {
-            cleanup_task_assignment(
-                commands,
-                crate::soul_ai::helpers::work::SoulDropCtx {
-                    soul_entity: ctx.soul_entity,
-                    drop_pos: soul_pos,
-                    inventory: Some(ctx.inventory),
-                    dropped_item_res: item_info.and_then(|(it, _)| it),
-                },
-                ctx.task,
-                ctx.path,
-                ctx.queries,
-                world_map,
-                true,
-            );
+            return ctx.abort_retryable(commands, "stockpile no longer accepts item");
         }
     } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile) {
         if !item_resource_type
             .is_some_and(|resource_type| floor_site_can_accept(ctx, stockpile, resource_type, item))
         {
-            cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
-            return;
+            return cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
         }
         let material_center = site.material_center;
         // `site` はここで最後に使用される → NLL によりこれ以降の借用は解放される
@@ -241,9 +221,6 @@ pub(super) fn handle_dropping_phase(
             .entity(item)
             .remove::<hw_core::relationships::DeliveringTo>();
         commands.entity(item).remove::<hw_jobs::IssuedBy>();
-        commands
-            .entity(item)
-            .remove::<hw_core::relationships::TaskWorkers>();
 
         // チェーン判定: そのまま床工事タスクに移行できるか確認
         if let Some(resource_type) = item_resource_type
@@ -251,14 +228,13 @@ pub(super) fn handle_dropping_phase(
         {
             ctx.inventory.0 = None;
             chain::execute_chain(opp, ctx, commands);
-            return;
+            return TaskHandlerControl::Continue;
         }
     } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile) {
         if !item_resource_type
             .is_some_and(|resource_type| wall_site_can_accept(ctx, stockpile, resource_type, item))
         {
-            cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
-            return;
+            return cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
         }
         let material_center = site.material_center;
         // `site` はここで最後に使用される → NLL によりこれ以降の借用は解放される
@@ -273,9 +249,6 @@ pub(super) fn handle_dropping_phase(
             .entity(item)
             .remove::<hw_core::relationships::DeliveringTo>();
         commands.entity(item).remove::<hw_jobs::IssuedBy>();
-        commands
-            .entity(item)
-            .remove::<hw_core::relationships::TaskWorkers>();
 
         // チェーン判定: そのまま壁工事タスクに移行できるか確認
         if let Some(resource_type) = item_resource_type
@@ -283,7 +256,7 @@ pub(super) fn handle_dropping_phase(
         {
             ctx.inventory.0 = None;
             chain::execute_chain(opp, ctx, commands);
-            return;
+            return TaskHandlerControl::Continue;
         }
     } else if let Ok((wall_transform, building, provisional_opt)) =
         ctx.queries.storage.buildings.get(stockpile)
@@ -310,18 +283,14 @@ pub(super) fn handle_dropping_phase(
                 .entity(item)
                 .remove::<hw_core::relationships::DeliveringTo>();
             commands.entity(item).remove::<hw_jobs::IssuedBy>();
-            commands
-                .entity(item)
-                .remove::<hw_core::relationships::TaskWorkers>();
         } else if ctx.inventory.0.is_some() {
-            cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
-            return;
+            return cancel::cancel_haul_to_stockpile(ctx, item, stockpile, commands);
         }
     } else if ctx.inventory.0.is_some() {
         drop_item(commands, ctx.soul_entity, item, soul_pos);
     }
 
     ctx.inventory.0 = None;
-    ctx.complete_task(commands, "haul to stockpile done");
     ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
+    ctx.complete_task(commands, "haul to stockpile done")
 }

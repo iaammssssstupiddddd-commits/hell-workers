@@ -1,6 +1,6 @@
 //! 障害物除去後の terrain id map 更新システム。
 //!
-//! `obstacle_cleanup_system`（hw_world）が発行する `TerrainChangedEvent` を受信し、
+//! `obstacle_sync_system`（hw_world）が発行する `TerrainChangedEvent` を受信し、
 //! 対応するセルの `terrain_id_map` ピクセルを更新する。
 
 use crate::world::map::{TerrainIdMap, terrain_type_to_id_byte};

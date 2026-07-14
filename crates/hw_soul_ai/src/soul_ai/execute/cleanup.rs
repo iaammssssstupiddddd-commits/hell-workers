@@ -45,7 +45,7 @@ pub fn cleanup_commanded_souls_system(
             false, // emit_abandoned_event: 解放時は個別のタスク中断セリフを出さない
         );
 
-        commands.trigger(OnReleasedFromService {
+        commands.write_message(OnReleasedFromService {
             entity: soul_entity,
         });
 

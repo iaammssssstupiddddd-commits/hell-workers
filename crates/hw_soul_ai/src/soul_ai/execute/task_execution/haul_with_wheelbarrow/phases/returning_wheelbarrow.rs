@@ -3,7 +3,7 @@
 use crate::soul_ai::execute::task_execution::types::HaulWithWheelbarrowData;
 use crate::soul_ai::execute::task_execution::{
     common::{is_near_target, update_destination_to_adjacent},
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     transport_common::{reservation, wheelbarrow as wheelbarrow_common},
 };
 use bevy::prelude::*;
@@ -13,21 +13,19 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-    
+
     q_wheelbarrows: &Query<
         (&Transform, Option<&hw_core::relationships::ParkedAt>),
         With<Wheelbarrow>,
     >,
     soul_pos: Vec2,
-) {
+) -> TaskHandlerControl {
     let Ok(_) = q_wheelbarrows.get(data.wheelbarrow) else {
-        reservation::release_source(ctx, data.wheelbarrow, 1);
         ctx.inventory.0 = None;
-        ctx.clear_soul_assignment(
+        return ctx.abort_retryable_after_custom_cleanup(
             commands,
-            crate::soul_ai::execute::task_execution::context::TaskEndDisposition::AbortedRetryable,
+            "wheelbarrow disappeared while returning",
         );
-        return;
     };
 
     let parking_pos = ctx
@@ -57,20 +55,21 @@ pub fn handle(
 
     if !reachable {
         reservation::release_source(ctx, data.wheelbarrow, 1);
-        wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, soul_pos);
         debug!(
             "WB_HAUL: Soul {:?} returned wheelbarrow {:?} (unreachable, parked here)",
             ctx.soul_entity, data.wheelbarrow
         );
-        return;
+        return wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, soul_pos);
     }
 
     if is_near_target(soul_pos, parking_pos) {
         reservation::release_source(ctx, data.wheelbarrow, 1);
-        wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, parking_pos);
         debug!(
             "WB_HAUL: Soul {:?} returned wheelbarrow {:?}",
             ctx.soul_entity, data.wheelbarrow
         );
+        return wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, parking_pos);
     }
+
+    TaskHandlerControl::Continue
 }

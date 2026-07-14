@@ -9,11 +9,13 @@ use hw_jobs::{
     Building, BuildingType, Designation, Priority, ProvisionalWall, TaskSlots, WorkType,
 };
 
+use crate::transport_request::producer::active_unit_cache::{
+    CachedActiveFamiliars, CachedActiveYards,
+};
 use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
 use crate::types::{ResourceItem, ResourceType};
 
 const PROVISIONAL_WALL_PRIORITY: u32 = 5;

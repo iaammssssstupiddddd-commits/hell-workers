@@ -112,9 +112,10 @@ pub fn spawn_text_field(
         })
         .id();
 
-    parent.commands().entity(editable_entity).insert(TextFieldEditable {
-        root,
-    });
+    parent
+        .commands()
+        .entity(editable_entity)
+        .insert(TextFieldEditable { root });
     if config.select_all_on_focus {
         parent
             .commands()

@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use hw_core::constants::REST_AREA_CAPACITY;
 use hw_core::relationships::{RestAreaReservedFor, RestingIn, WorkingOn};
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
-use hw_jobs::AssignedTask;
+use hw_jobs::{ActiveTaskIdentity, AssignedTask};
 use hw_jobs::{Building, BuildingType, RestArea};
 
 /// AssignedTask が None なのに WorkingOn が残っている不整合を解消する。
@@ -14,6 +14,18 @@ pub fn clear_stale_working_on_system(
     for (entity, task) in q_souls.iter() {
         if matches!(task, AssignedTask::None) {
             commands.entity(entity).remove::<WorkingOn>();
+        }
+    }
+}
+
+/// AssignedTask が None なのに runtime identity が残っている不整合を解消する。
+pub fn clear_stale_task_identity_system(
+    mut commands: Commands,
+    q_souls: Query<(Entity, &AssignedTask), With<ActiveTaskIdentity>>,
+) {
+    for (entity, task) in q_souls.iter() {
+        if matches!(task, AssignedTask::None) {
+            commands.entity(entity).remove::<ActiveTaskIdentity>();
         }
     }
 }

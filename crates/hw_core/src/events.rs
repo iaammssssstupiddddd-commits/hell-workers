@@ -5,57 +5,87 @@ use crate::logistics::ResourceType;
 use crate::world::GridPos;
 use bevy::prelude::*;
 
-/// 魂が使い魔に勧誘（使役開始）された
-#[derive(Message, EntityEvent)]
+/// 魂が使い魔に勧誘（使役開始）された際の domain 通知。
+#[derive(EntityEvent, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OnSoulRecruited {
     pub entity: Entity,
     pub familiar_entity: Entity,
 }
 
-/// ストレスが限界に達した
-#[derive(Message, EntityEvent)]
+/// 勧誘時の presentation 通知。
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SoulRecruitedVisualMessage {
+    pub entity: Entity,
+    pub familiar_entity: Entity,
+}
+
+/// ストレスが限界に達した際の domain 通知。
+#[derive(EntityEvent, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OnStressBreakdown {
     pub entity: Entity,
 }
 
-/// 疲労が限界に達した（強制集会へ）
-#[derive(Message, EntityEvent)]
+/// ストレス崩壊時の presentation 通知。
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SoulStressBreakdownVisualMessage {
+    pub entity: Entity,
+}
+
+/// 疲労が限界に達した（強制集会へ）際の domain 通知。
+#[derive(EntityEvent, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OnExhausted {
     pub entity: Entity,
 }
 
+/// 疲労限界時の presentation 通知。
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SoulExhaustedVisualMessage {
+    pub entity: Entity,
+}
+
 /// 魂が使い魔の使役から解放された
-#[derive(Message, EntityEvent)]
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OnReleasedFromService {
     pub entity: Entity,
 }
 
 /// 魂が自発的に集会に参加した
-#[derive(Message, EntityEvent)]
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OnGatheringJoined {
     pub entity: Entity,
 }
 
 /// 魂のタスクが中断・放棄された
-#[derive(Message, EntityEvent)]
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OnTaskAbandoned {
     pub entity: Entity,
 }
 
 /// 魂がタスクに割り当てられた
-#[derive(Message, EntityEvent)]
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OnTaskAssigned {
     pub entity: Entity,
-    pub task_entity: Entity,
-    pub work_type: WorkType,
+    pub assignment_entity: Entity,
+    pub current_target_entity: Entity,
+    pub current_work_type: WorkType,
 }
 
-/// 魂がタスクを完了した
-#[derive(Message, EntityEvent)]
+/// 魂がタスクを完了した際の domain 通知。
+#[derive(EntityEvent, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OnTaskCompleted {
     pub entity: Entity,
-    pub task_entity: Entity,
-    pub work_type: WorkType,
+    pub assignment_entity: Entity,
+    pub current_target_entity: Entity,
+    pub current_work_type: WorkType,
+}
+
+/// タスク完了時の presentation 通知。
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TaskCompletedVisualMessage {
+    pub entity: Entity,
+    pub assignment_entity: Entity,
+    pub current_target_entity: Entity,
+    pub current_work_type: WorkType,
 }
 
 /// 使い魔の使役数上限が変更された
@@ -67,18 +97,87 @@ pub struct FamiliarOperationMaxSoulChangedEvent {
 }
 
 /// 魂が集会に参加した（スポット管理用）
-#[derive(Message, EntityEvent)]
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OnGatheringParticipated {
     pub entity: Entity,
     pub spot_entity: Entity,
 }
 
-/// 使い魔が魂を激励した
-#[derive(Message, EntityEvent)]
+/// 使い魔が魂を激励した際の domain 通知。
+#[derive(EntityEvent, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OnEncouraged {
     pub familiar_entity: Entity,
     #[event_target]
     pub soul_entity: Entity,
+}
+
+/// 激励時の presentation 通知。
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SoulEncouragedVisualMessage {
+    pub familiar_entity: Entity,
+    pub soul_entity: Entity,
+}
+
+/// domain と presentation の両方が必要な勧誘通知を発行する。
+pub fn publish_soul_recruited(commands: &mut Commands, entity: Entity, familiar_entity: Entity) {
+    commands.trigger(OnSoulRecruited {
+        entity,
+        familiar_entity,
+    });
+    commands.write_message(SoulRecruitedVisualMessage {
+        entity,
+        familiar_entity,
+    });
+}
+
+/// domain と presentation の両方が必要なストレス崩壊通知を発行する。
+pub fn publish_stress_breakdown(commands: &mut Commands, entity: Entity) {
+    commands.trigger(OnStressBreakdown { entity });
+    commands.write_message(SoulStressBreakdownVisualMessage { entity });
+}
+
+/// domain と presentation の両方が必要な疲労限界通知を発行する。
+pub fn publish_soul_exhausted(commands: &mut Commands, entity: Entity) {
+    commands.trigger(OnExhausted { entity });
+    commands.write_message(SoulExhaustedVisualMessage { entity });
+}
+
+/// domain と presentation の両方が必要なタスク完了通知を発行する。
+pub fn publish_task_completed(
+    commands: &mut Commands,
+    entity: Entity,
+    assignment_entity: Entity,
+    current_target_entity: Entity,
+    current_work_type: WorkType,
+) {
+    commands.trigger(OnTaskCompleted {
+        entity,
+        assignment_entity,
+        current_target_entity,
+        current_work_type,
+    });
+    commands.write_message(TaskCompletedVisualMessage {
+        entity,
+        assignment_entity,
+        current_target_entity,
+        current_work_type,
+    });
+}
+
+/// domain と presentation の両方が必要な激励通知を発行する。
+pub fn publish_soul_encouraged(
+    commands: &mut Commands,
+    familiar_entity: Entity,
+    soul_entity: Entity,
+) {
+    commands.trigger(OnEncouraged {
+        familiar_entity,
+        soul_entity,
+    });
+    commands.write_message(SoulEncouragedVisualMessage {
+        familiar_entity,
+        soul_entity,
+    });
 }
 
 /// 状態遷移の理由

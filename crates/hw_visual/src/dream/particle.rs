@@ -1,6 +1,6 @@
 use super::components::{DreamParticle, DreamVisualState};
-use super::ui_handles::DreamBubbleUiHandles;
 use super::handles::{self, DreamBubbleHandles};
+use super::ui_handles::DreamBubbleUiHandles;
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;
 use hw_core::camera::MainCamera;

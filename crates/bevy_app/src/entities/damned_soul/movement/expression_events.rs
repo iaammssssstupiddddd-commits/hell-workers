@@ -3,10 +3,10 @@
 use crate::entities::damned_soul::{
     ConversationExpression, ConversationExpressionKind, DamnedSoul,
 };
-use crate::{OnExhausted, OnGatheringParticipated};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::*;
+use hw_core::events::{OnGatheringParticipated, SoulExhaustedVisualMessage};
 use hw_soul_ai::soul_ai::helpers::gathering::{GatheringObjectType, GatheringSpot};
 use hw_visual::speech::conversation::events::{
     ConversationCompleted, ConversationTone, ConversationToneTriggered,
@@ -74,7 +74,7 @@ fn apply_expression_lock(
 
 #[derive(SystemParam)]
 pub struct ConversationEventReaders<'w, 's> {
-    pub ev_exhausted: MessageReader<'w, 's, OnExhausted>,
+    pub ev_exhausted: MessageReader<'w, 's, SoulExhaustedVisualMessage>,
     pub ev_gathering_participated: MessageReader<'w, 's, OnGatheringParticipated>,
     pub ev_tone: MessageReader<'w, 's, ConversationToneTriggered>,
     pub ev_completed: MessageReader<'w, 's, ConversationCompleted>,

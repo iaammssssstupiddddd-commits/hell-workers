@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use hw_core::constants::*;
-use hw_core::events::OnStressBreakdown;
+use hw_core::events::publish_stress_breakdown;
 use hw_core::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use hw_core::relationships::CommandedBy;
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState, StressBreakdown};
@@ -114,7 +114,7 @@ pub fn familiar_influence_unified_system(
         }
 
         if soul.stress >= 1.0 && breakdown_opt.is_none() {
-            commands.trigger(OnStressBreakdown { entity });
+            publish_stress_breakdown(&mut commands, entity);
         }
 
         if let Some(mut breakdown) = breakdown_opt {

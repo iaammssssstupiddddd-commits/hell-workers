@@ -1,25 +1,18 @@
 //! 運搬タスクの中断処理
 //!
-//! 失敗経路での予約解放とタスククリアを共通化する。
+//! 失敗経路の物理 cleanup とタスククリアを共通化する。
 
-use crate::soul_ai::execute::task_execution::context::{
-    TaskEndDisposition, TaskExecutionContext,
-};
+use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use bevy::prelude::*;
 use hw_world::WorldMap;
 
-use super::reservation;
-
-/// ストックパイル運搬の中断: 目的地＋ソース解放、タスククリア
+/// ストックパイル運搬の中断: アイテムをドロップし、タスクを閉じる。
 pub fn cancel_haul_to_stockpile(
     ctx: &mut TaskExecutionContext,
     item: Entity,
-    stockpile: Entity,
+    _stockpile: Entity,
     commands: &mut Commands,
-) {
-    reservation::release_destination(ctx, stockpile);
-    reservation::release_source(ctx, item, 1);
-
+) -> TaskHandlerControl {
     if ctx.inventory.0 == Some(item) {
         let soul_pos = ctx.soul_pos();
         commands.entity(item).try_insert((
@@ -31,19 +24,16 @@ pub fn cancel_haul_to_stockpile(
     commands
         .entity(item)
         .remove::<hw_core::relationships::DeliveringTo>();
-    ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
+    ctx.abort_retryable_after_custom_cleanup(commands, "haul to stockpile canceled")
 }
 
-/// Blueprint運搬の中断: 目的地＋ソース解放、タスククリア
+/// Blueprint運搬の中断: アイテムをドロップし、タスクを閉じる。
 pub fn cancel_haul_to_blueprint(
     ctx: &mut TaskExecutionContext,
     item: Entity,
-    blueprint: Entity,
+    _blueprint: Entity,
     commands: &mut Commands,
-) {
-    reservation::release_destination(ctx, blueprint);
-    reservation::release_source(ctx, item, 1);
-
+) -> TaskHandlerControl {
     if ctx.inventory.0 == Some(item) {
         let soul_pos = ctx.soul_pos();
         commands.entity(item).try_insert((
@@ -56,31 +46,23 @@ pub fn cancel_haul_to_blueprint(
     commands
         .entity(item)
         .remove::<hw_core::relationships::DeliveringTo>();
-    ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
+    ctx.abort_retryable_after_custom_cleanup(commands, "haul to blueprint canceled")
 }
 
-/// ミキサー運搬の中断: ミキサー目的地解放、タスククリア
+/// ミキサー運搬の中断。現在 phase の予約解放は context に委ねる。
 pub fn cancel_haul_to_mixer(
     ctx: &mut TaskExecutionContext,
-    mixer: Entity,
-    resource_type: hw_logistics::ResourceType,
     commands: &mut Commands,
-) {
-    reservation::release_mixer_destination(ctx, mixer, resource_type);
-    ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
+) -> TaskHandlerControl {
+    ctx.abort_retryable_after_custom_cleanup(commands, "haul to mixer canceled")
 }
 
-/// ミキサー運搬（未ピックアップ段階）の中断:
-/// ソース＋ミキサー目的地解放、タスククリア
+/// ミキサー運搬（未ピックアップ段階）の中断。
 pub fn cancel_haul_to_mixer_before_pickup(
     ctx: &mut TaskExecutionContext,
-    item: Entity,
-    mixer: Entity,
-    resource_type: hw_logistics::ResourceType,
     commands: &mut Commands,
-) {
-    reservation::release_source(ctx, item, 1);
-    cancel_haul_to_mixer(ctx, mixer, resource_type, commands);
+) -> TaskHandlerControl {
+    cancel_haul_to_mixer(ctx, commands)
 }
 
 /// バケツを足元グリッドへドロップし、運搬関連の管理コンポーネントを除去する。
@@ -95,9 +77,6 @@ pub fn drop_bucket_with_cleanup(commands: &mut Commands, bucket_entity: Entity, 
         .entity(bucket_entity)
         .remove::<hw_core::relationships::StoredIn>();
     commands.entity(bucket_entity).remove::<hw_jobs::IssuedBy>();
-    commands
-        .entity(bucket_entity)
-        .remove::<hw_core::relationships::TaskWorkers>();
     commands
         .entity(bucket_entity)
         .remove::<hw_jobs::Designation>();

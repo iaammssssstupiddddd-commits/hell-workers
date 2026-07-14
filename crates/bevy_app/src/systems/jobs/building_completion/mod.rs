@@ -3,6 +3,9 @@ mod spawn;
 
 pub(crate) use spawn::attach_building_shell;
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BuildingCompletionSet;
+
 use crate::assets::GameAssets;
 use crate::plugins::startup::Building3dHandles;
 use crate::world::map::WorldMapWrite;
@@ -58,7 +61,7 @@ pub fn building_completion_system(
             }
         }
 
-        // WorldMap 更新と ObstaclePosition 配置を hw_jobs の Observer に委譲
+        // WorldMap 更新と ObstaclePosition 配置を SoulAiCorePlugin の Observer に委譲
         commands.trigger(hw_jobs::BuildingCompletedEvent {
             building_entity,
             kind: bp.kind,

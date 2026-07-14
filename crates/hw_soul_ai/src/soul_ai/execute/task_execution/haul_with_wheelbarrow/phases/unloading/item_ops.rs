@@ -28,7 +28,6 @@ pub(super) fn try_drop_item(
     item_commands.try_remove::<LoadedIn>();
     item_commands.try_remove::<hw_core::relationships::DeliveringTo>();
     item_commands.try_remove::<hw_jobs::IssuedBy>();
-    item_commands.try_remove::<hw_core::relationships::TaskWorkers>();
     true
 }
 

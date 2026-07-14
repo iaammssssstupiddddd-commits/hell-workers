@@ -1,7 +1,7 @@
 //! 手押し車を取得するフェーズ
 
 use crate::soul_ai::execute::task_execution::{
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
 use bevy::prelude::*;
@@ -11,7 +11,7 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     if let Ok(mut wheelbarrow_commands) = commands.get_entity(data.wheelbarrow) {
         wheelbarrow_commands.try_remove::<ParkedAt>();
         wheelbarrow_commands.try_insert(PushedBy(ctx.soul_entity));
@@ -34,4 +34,6 @@ pub fn handle(
         phase: next_phase,
         ..data
     });
+
+    TaskHandlerControl::Continue
 }

@@ -10,7 +10,9 @@ use item_ops::{try_despawn_item, try_drop_item};
 
 use super::super::cancel;
 use crate::soul_ai::execute::task_execution::{
-    context::TaskExecutionContext, transport_common::reservation, types::HaulWithWheelbarrowData,
+    context::{TaskExecutionContext, TaskHandlerControl},
+    transport_common::reservation,
+    types::HaulWithWheelbarrowData,
 };
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
@@ -53,7 +55,7 @@ pub fn handle(
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
     soul_pos: Vec2,
-) {
+) -> TaskHandlerControl {
     let unique_items: std::collections::HashSet<Entity> = data.items.iter().copied().collect();
     if unique_items.len() < data.items.len() {
         warn!(
@@ -212,12 +214,10 @@ pub fn handle(
                         }
                     }
                 } else {
-                    cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-                    return;
+                    return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
                 }
             } else {
-                cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-                return;
+                return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
             }
         }
         WheelbarrowDestination::Blueprint(blueprint_entity) => {
@@ -248,8 +248,7 @@ pub fn handle(
                 }
             } else {
                 debug!("WB_HAUL: Blueprint destroyed during unloading, dropping items");
-                cancel::drop_items_and_cancel(ctx, &data, commands);
-                return;
+                return cancel::drop_items_and_cancel(ctx, &data, commands);
             }
         }
         WheelbarrowDestination::Mixer {
@@ -288,14 +287,13 @@ pub fn handle(
                 }
             } else {
                 debug!("WB_HAUL: Mixer destroyed during unloading, dropping items");
-                cancel::drop_items_and_cancel(ctx, &data, commands);
-                return;
+                return cancel::drop_items_and_cancel(ctx, &data, commands);
             }
         }
     }
 
     if unloaded_count < item_types.len() {
-        finish_partial_unload(
+        return finish_partial_unload(
             ctx,
             &data,
             commands,
@@ -304,7 +302,6 @@ pub fn handle(
             destination_store_count,
             &mixer_release_types,
         );
-        return;
     }
 
     match data.destination {
@@ -325,8 +322,6 @@ pub fn handle(
         ctx.soul_entity, unloaded_count
     );
 
-    finalize_unload_task(ctx, &data, commands, soul_pos);
-
     if has_pending_wheelbarrow_task(ctx) {
         debug!(
             "WB_HAUL: Soul {:?} parked wheelbarrow {:?} at delivery site; pending tasks may reuse it",
@@ -338,4 +333,6 @@ pub fn handle(
             ctx.soul_entity, data.wheelbarrow
         );
     }
+
+    finalize_unload_task(ctx, &data, commands, soul_pos)
 }

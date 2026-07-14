@@ -1,5 +1,5 @@
 use super::common::*;
-use super::context::TaskExecutionContext;
+use super::context::{TaskExecutionContext, TaskHandlerControl};
 use super::types::{AssignedTask, CollectBoneData, CollectBonePhase};
 
 use bevy::prelude::*;
@@ -10,7 +10,7 @@ pub fn handle_collect_bone_task(
     ctx: &mut TaskExecutionContext,
     data: CollectBoneData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let CollectBoneData { target, phase } = data;
     let soul_pos = ctx.soul_pos();
     let q_targets = &ctx.queries.designation.targets;
@@ -21,8 +21,7 @@ pub fn handle_collect_bone_task(
                 let Ok((res_transform, _, _, _, _, des_opt, _)) =
                     ctx.queries.designation.targets.get(target)
                 else {
-                    cleanup_collect_target(ctx, target, commands);
-                    return;
+                    return cleanup_collect_target(ctx, target, commands);
                 };
                 (
                     res_transform.translation.truncate(),
@@ -38,13 +37,14 @@ pub fn handle_collect_bone_task(
                 ctx.env.world_map,
                 commands,
             ) {
-                NavOutcome::Moving | NavOutcome::Cancelled => {}
+                NavOutcome::Moving => {}
+                NavOutcome::Ended(control) => return control,
                 NavOutcome::Unreachable => {
                     debug!(
                         "COLLECT_BONE: Soul {:?} cannot reach BonePile {:?}, canceling",
                         ctx.soul_entity, target
                     );
-                    cleanup_collect_target(ctx, target, commands);
+                    return cleanup_collect_target(ctx, target, commands);
                 }
                 NavOutcome::Arrived => {
                     complete_collect_bone_now(ctx, target, res_translation, commands);
@@ -54,25 +54,20 @@ pub fn handle_collect_bone_task(
         }
         CollectBonePhase::Collecting { .. } => {
             let Ok(target_data) = q_targets.get(target) else {
-                cleanup_collect_target(ctx, target, commands);
-                return;
+                return cleanup_collect_target(ctx, target, commands);
             };
             let (res_transform, _, _, _, _, des_opt, _) = target_data;
             if des_opt.is_none() {
-                ctx.abort_closed(commands, "designation missing");
-                return;
+                return ctx.abort_closed(commands, "designation missing");
             }
-            complete_collect_bone_now(
-                ctx,
-                target,
-                res_transform.translation,
-                commands,
-            );
+            complete_collect_bone_now(ctx, target, res_transform.translation, commands);
         }
         CollectBonePhase::Done => {
-            finalize_collect_task(ctx, target, commands);
+            return finalize_collect_task(ctx, target, commands);
         }
     }
+
+    TaskHandlerControl::Continue
 }
 
 fn complete_collect_bone_now(

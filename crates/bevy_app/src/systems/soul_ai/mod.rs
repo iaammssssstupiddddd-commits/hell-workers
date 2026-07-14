@@ -38,6 +38,7 @@ impl Plugin for SoulAiPlugin {
                 .after(FamiliarAiSystemSet::Execute)
                 .in_set(GameSystemSet::Logic),
         )
+        .configure_sets(Update, SoulAiSystemSet::Actor.in_set(GameSystemSet::Actor))
         .add_systems(
             Update,
             (

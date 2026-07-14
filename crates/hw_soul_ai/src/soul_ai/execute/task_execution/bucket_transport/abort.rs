@@ -1,38 +1,26 @@
 //! バケツ搬送共通 abort/cleanup ヘルパー
 
-use crate::soul_ai::execute::task_execution::context::{
-    TaskEndDisposition, TaskExecutionContext,
-};
-use crate::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
+use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
+use crate::soul_ai::execute::task_execution::transport_common::cancel;
 use crate::soul_ai::execute::task_execution::types::{
-    BucketTransportData, BucketTransportDestination, BucketTransportSource,
+    BucketTransportData, BucketTransportDestination,
 };
 use bevy::prelude::*;
-use hw_logistics::ResourceType;
 use hw_world::WorldMap;
 
-/// Mixer 搬送（Tank→Mixer経路）の中断: バケツドロップ + 予約解放 + タスククリア
+/// Mixer 搬送（Tank→Mixer経路）の中断: バケツドロップ後にタスクを閉じる。
 pub fn abort_and_drop_bucket_mixer(
     commands: &mut Commands,
     ctx: &mut TaskExecutionContext,
     bucket_entity: Entity,
-    tank_entity: Entity,
-    mixer_entity: Entity,
+    _tank_entity: Entity,
+    _mixer_entity: Entity,
     pos: Vec2,
-) {
-    reservation::release_mixer_destination(ctx, mixer_entity, ResourceType::Water);
-    let should_release_tank_lock = ctx
-        .task
-        .bucket_transport_data()
-        .is_some_and(|task_data| task_data.should_reserve_tank_source());
-    if should_release_tank_lock {
-        reservation::release_source(ctx, tank_entity, 1);
-    }
-
+) -> TaskHandlerControl {
     cancel::drop_bucket_with_cleanup(commands, bucket_entity, pos);
 
     ctx.inventory.0 = None;
-    ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
+    ctx.abort_retryable_after_custom_cleanup(commands, "bucket transport mixer abort")
 }
 
 /// バケツなし abort（インベントリにバケツが存在しない状態でのタスク中断）
@@ -40,39 +28,14 @@ pub fn abort_without_bucket(
     commands: &mut Commands,
     ctx: &mut TaskExecutionContext,
     data: &BucketTransportData,
-    world_map: &WorldMap,
-) {
+    _world_map: &WorldMap,
+) -> TaskHandlerControl {
     match &data.destination {
-        BucketTransportDestination::Mixer(mixer_entity) => {
-            let mixer = *mixer_entity;
-            let tank_opt = match data.source {
-                BucketTransportSource::Tank { tank, .. } => Some(tank),
-                BucketTransportSource::River => None,
-            };
-            reservation::release_mixer_destination(ctx, mixer, ResourceType::Water);
-            if let Some(tank) = tank_opt
-                && data.should_reserve_tank_source()
-            {
-                reservation::release_source(ctx, tank, 1);
-            }
-            ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
+        BucketTransportDestination::Mixer(_) => {
+            ctx.abort_retryable_after_custom_cleanup(commands, "bucket transport mixer abort")
         }
         BucketTransportDestination::Tank(_) => {
-            let soul_pos = ctx.soul_pos();
-            crate::soul_ai::helpers::work::cleanup_task_assignment(
-                commands,
-                crate::soul_ai::helpers::work::SoulDropCtx {
-                    soul_entity: ctx.soul_entity,
-                    drop_pos: soul_pos,
-                    inventory: None,
-                    dropped_item_res: None,
-                },
-                ctx.task,
-                ctx.path,
-                ctx.queries,
-                world_map,
-                true,
-            );
+            ctx.abort_retryable(commands, "bucket transport tank abort")
         }
     }
 }
@@ -82,42 +45,17 @@ pub fn abort_with_bucket(
     commands: &mut Commands,
     ctx: &mut TaskExecutionContext,
     data: &BucketTransportData,
-    world_map: &WorldMap,
-) {
+    _world_map: &WorldMap,
+) -> TaskHandlerControl {
     match &data.destination {
-        BucketTransportDestination::Mixer(mixer_entity) => {
-            let mixer = *mixer_entity;
-            let tank_opt = match data.source {
-                BucketTransportSource::Tank { tank, .. } => Some(tank),
-                BucketTransportSource::River => None,
-            };
-            reservation::release_mixer_destination(ctx, mixer, ResourceType::Water);
-            if let Some(tank) = tank_opt
-                && data.should_reserve_tank_source()
-            {
-                reservation::release_source(ctx, tank, 1);
-            }
+        BucketTransportDestination::Mixer(_) => {
             let soul_pos = ctx.soul_pos();
             cancel::drop_bucket_with_cleanup(commands, data.bucket, soul_pos);
             ctx.inventory.0 = None;
-            ctx.clear_soul_assignment(commands, TaskEndDisposition::AbortedRetryable);
+            ctx.abort_retryable_after_custom_cleanup(commands, "bucket transport mixer abort")
         }
         BucketTransportDestination::Tank(_) => {
-            let soul_pos = ctx.soul_pos();
-            crate::soul_ai::helpers::work::cleanup_task_assignment(
-                commands,
-                crate::soul_ai::helpers::work::SoulDropCtx {
-                    soul_entity: ctx.soul_entity,
-                    drop_pos: soul_pos,
-                    inventory: Some(ctx.inventory),
-                    dropped_item_res: None,
-                },
-                ctx.task,
-                ctx.path,
-                ctx.queries,
-                world_map,
-                true,
-            );
+            ctx.abort_retryable(commands, "bucket transport tank abort")
         }
     }
 }

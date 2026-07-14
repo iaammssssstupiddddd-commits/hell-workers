@@ -5,6 +5,7 @@ use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use hw_core::ecs::drain_removed;
 use hw_core::relationships::{CommandedBy, Commanding};
 use hw_ui::components::{SectionFolded, UnassignedFolded};
 use hw_ui::list::search::EntityListSearchState;
@@ -57,15 +58,18 @@ pub fn detect_entity_list_changes(
         q_familiar_ai,
         q_familiar_op,
     } = value;
+    let removed_souls = drain_removed(&mut removed_souls);
+    let removed_familiars = drain_removed(&mut removed_familiars);
+    let removed_commanded_by = drain_removed(&mut removed_commanded_by);
     let structure_changed = !q_added_souls.is_empty()
         || !q_added_familiars.is_empty()
         || !q_commanding.is_empty()
         || !q_commanded_by.is_empty()
         || !q_folded.is_empty()
         || !q_unassigned_folded.is_empty()
-        || removed_souls.read().next().is_some()
-        || removed_familiars.read().next().is_some()
-        || removed_commanded_by.read().next().is_some();
+        || removed_souls
+        || removed_familiars
+        || removed_commanded_by;
 
     if structure_changed {
         dirty.mark_structure();
@@ -85,5 +89,51 @@ pub fn detect_entity_list_changes(
 
     if value_changed {
         dirty.mark_values();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::minimal_app;
+
+    #[test]
+    fn consumes_all_structure_removal_readers_in_one_update() {
+        let mut app = minimal_app();
+        app.init_resource::<EntityListDirty>();
+        app.init_resource::<EntityListSearchState>();
+        app.add_systems(Update, detect_entity_list_changes);
+        app.update();
+
+        let commander = app.world_mut().spawn_empty().id();
+        let soul = app.world_mut().spawn(DamnedSoul::default()).id();
+        let familiar = app.world_mut().spawn(Familiar::default()).id();
+        let commanded = app.world_mut().spawn(CommandedBy(commander)).id();
+        app.update();
+        app.world_mut()
+            .resource_mut::<EntityListDirty>()
+            .clear_all();
+
+        app.world_mut().entity_mut(soul).remove::<DamnedSoul>();
+        app.world_mut().entity_mut(familiar).remove::<Familiar>();
+        app.world_mut()
+            .entity_mut(commanded)
+            .remove::<CommandedBy>();
+        app.update();
+        assert!(
+            app.world()
+                .resource::<EntityListDirty>()
+                .needs_structure_sync()
+        );
+
+        app.world_mut()
+            .resource_mut::<EntityListDirty>()
+            .clear_all();
+        app.update();
+        assert!(
+            !app.world()
+                .resource::<EntityListDirty>()
+                .needs_structure_sync()
+        );
     }
 }

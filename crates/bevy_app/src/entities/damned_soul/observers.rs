@@ -105,7 +105,7 @@ pub fn on_stress_breakdown(
                 &mut path,
                 &mut queries,
                 world_map.as_ref(),
-                true,
+                false,
             );
         }
 
@@ -157,7 +157,7 @@ pub fn on_exhausted(
                 &mut path,
                 &mut queries,
                 world_map.as_ref(),
-                true,
+                false,
             );
         }
 

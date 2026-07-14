@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 use hw_core::constants::ENCOURAGEMENT_COOLDOWN;
-use hw_core::events::{EncouragementRequest, OnEncouraged};
+use hw_core::events::{EncouragementRequest, publish_soul_encouraged};
 
 use crate::familiar_ai::decide::encouragement::EncouragementCooldown;
 
@@ -15,10 +15,7 @@ pub fn encouragement_apply_system(
     let current_time = time.elapsed_secs();
 
     for request in request_reader.read() {
-        commands.trigger(OnEncouraged {
-            familiar_entity: request.familiar_entity,
-            soul_entity: request.soul_entity,
-        });
+        publish_soul_encouraged(&mut commands, request.familiar_entity, request.soul_entity);
 
         commands
             .entity(request.soul_entity)

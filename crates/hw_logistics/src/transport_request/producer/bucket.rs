@@ -7,11 +7,13 @@ use hw_core::relationships::{IncomingDeliveries, ManagedBy, StoredItems, TaskWor
 use hw_jobs::{Designation, MovePlanned, Priority, TaskSlots, WorkType};
 
 use crate::resource_cache::SharedResourceCache;
+use crate::transport_request::producer::active_unit_cache::{
+    CachedActiveFamiliars, CachedActiveYards,
+};
 use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
 use crate::types::{BelongsTo, BucketStorage, ReservedForTask, ResourceItem, ResourceType};
 use crate::zone::Stockpile;
 

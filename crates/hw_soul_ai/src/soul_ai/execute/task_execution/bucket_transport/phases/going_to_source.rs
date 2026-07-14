@@ -1,7 +1,7 @@
 //! GoingToSource phase: バケツを持ってソース（川 or タンク）へ向かう
 
 use crate::soul_ai::execute::task_execution::common::update_destination_to_adjacent;
-use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
     BucketTransportSource,
@@ -15,15 +15,13 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: &BucketTransportData,
     commands: &mut Commands,
-    
-) {
+) -> TaskHandlerControl {
     if ctx.inventory.0 != Some(data.bucket) {
         warn!(
             "GoingToSource: Bucket not in inventory for soul {:?}",
             ctx.soul_entity
         );
-        abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
-        return;
+        return abort::abort_without_bucket(commands, ctx, data, ctx.env.world_map);
     }
 
     let soul_pos = ctx.soul_transform.translation.truncate();
@@ -35,20 +33,18 @@ pub fn handle(
                 let tank_entity = match data.destination {
                     BucketTransportDestination::Tank(tank) => tank,
                     _ => {
-                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
-                        return;
+                        return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                     }
                 };
 
                 if !guards::tank_can_accept_full_bucket(ctx, tank_entity) {
                     // タンクが満杯: バケツをドロップして auto haul に任せる
-                    super::super::helpers::drop_bucket_for_auto_haul(
+                    return super::super::helpers::drop_bucket_for_auto_haul(
                         commands,
                         ctx,
                         data.bucket,
                         ctx.env.world_map,
                     );
-                    return;
                 }
 
                 *ctx.task = AssignedTask::BucketTransport(BucketTransportData {
@@ -76,11 +72,15 @@ pub fn handle(
                     let mixer = match data.destination {
                         BucketTransportDestination::Mixer(m) => m,
                         _ => {
-                            abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
-                            return;
+                            return abort::abort_with_bucket(
+                                commands,
+                                ctx,
+                                data,
+                                ctx.env.world_map,
+                            );
                         }
                     };
-                    abort::abort_and_drop_bucket_mixer(
+                    return abort::abort_and_drop_bucket_mixer(
                         commands,
                         ctx,
                         data.bucket,
@@ -88,7 +88,6 @@ pub fn handle(
                         mixer,
                         soul_pos,
                     );
-                    return;
                 }
 
                 use crate::soul_ai::execute::task_execution::common::is_near_target_or_dest;
@@ -108,11 +107,10 @@ pub fn handle(
                 let mixer = match data.destination {
                     BucketTransportDestination::Mixer(m) => m,
                     _ => {
-                        abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
-                        return;
+                        return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                     }
                 };
-                abort::abort_and_drop_bucket_mixer(
+                return abort::abort_and_drop_bucket_mixer(
                     commands,
                     ctx,
                     data.bucket,
@@ -132,14 +130,24 @@ pub fn handle(
             && res_item.0 == ResourceType::BucketWater
         {
             // バケツが既に水入りならソースには行かずデスティネーションへ
-            super::super::routing::transition_to_destination(
-                commands, ctx, data, soul_pos, ctx.env.world_map,
+            return super::super::routing::transition_to_destination(
+                commands,
+                ctx,
+                data,
+                soul_pos,
+                ctx.env.world_map,
             );
-            return;
         }
 
         if !guards::tank_can_accept_full_bucket(ctx, tank_entity) {
-            super::super::helpers::drop_bucket_for_auto_haul(commands, ctx, data.bucket, ctx.env.world_map);
+            return super::super::helpers::drop_bucket_for_auto_haul(
+                commands,
+                ctx,
+                data.bucket,
+                ctx.env.world_map,
+            );
         }
     }
+
+    TaskHandlerControl::Continue
 }

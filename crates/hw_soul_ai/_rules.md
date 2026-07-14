@@ -62,7 +62,7 @@ hw_visual      ✗
 
 ### unassign_task の契約
 - `SharedResourceCache` 予約解放の最終防衛線
-- タスクを中断・放棄・完了する**全経路**で呼ぶこと
+- タスクを中断・放棄する経路では必ず呼ぶこと
 - 内部で `CommandedBy` を削除しない（呼び出し元が必要に応じて削除する）
 - `emit_abandoned_event = true` の場合のみ `OnTaskAbandoned` を発火
 - 詳細: [docs/invariants.md §I-L1](../../docs/invariants.md)
@@ -73,8 +73,8 @@ hw_visual      ✗
 - 詳細: [docs/invariants.md §I-S2](../../docs/invariants.md)
 
 ### AssignedTask の変更
-- 正常完了は `TaskExecutionContext::complete_task` を呼び、`task_execution_system` が `TaskEndDisposition::Completed` を検知したフレームで `OnTaskCompleted` を trigger する
-- `abort_retryable` / `abort_closed` / `clear_soul_assignment(Aborted*)` では `OnTaskCompleted` は発火しない
+- 正常完了は `TaskExecutionContext::complete_task` または `complete_after_custom_cleanup` を呼び、context が正常終了を確定した場合だけ `task_execution_system` が `publish_task_completed` を呼ぶ
+- `abort_retryable` / `abort_closed` / `abort_retryable_after_custom_cleanup` では `OnTaskCompleted` は発火しない
 - ハンドラ内で `clear_task_and_path` + `remove::<WorkingOn>` を手書きしない（`chain.rs` の `WorkingOn` 付け替えのみ例外）
 - 詳細: [docs/invariants.md §I-S3](../../docs/invariants.md)
 

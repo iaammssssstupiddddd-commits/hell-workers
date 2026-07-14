@@ -8,6 +8,7 @@ use super::*;
 struct TestWorld {
     buildings: HashSet<(i32, i32)>,
     stockpiles: HashSet<(i32, i32)>,
+    raw_obstacles: HashSet<(i32, i32)>,
     walkable: HashSet<(i32, i32)>,
     river: HashSet<(i32, i32)>,
     bounds: HashSet<(i32, i32)>,
@@ -20,6 +21,10 @@ impl WorldReadApi for TestWorld {
 
     fn has_stockpile(&self, grid: (i32, i32)) -> bool {
         self.stockpiles.contains(&grid)
+    }
+
+    fn has_raw_obstacle(&self, grid: (i32, i32)) -> bool {
+        self.raw_obstacles.contains(&grid)
     }
 
     fn is_walkable(&self, gx: i32, gy: i32) -> bool {
@@ -84,6 +89,31 @@ fn structure_requires_site() {
     assert_eq!(
         validation.reject_reason,
         Some(PlacementRejectReason::NotInSite)
+    );
+}
+
+#[test]
+fn bridge_rejects_non_building_obstacle_on_river() {
+    let mut world = TestWorld::default();
+    world.bounds.insert((0, 0));
+    world.river.insert((0, 0));
+    // Natural, reservation, and construction blockers do not necessarily
+    // have a WorldMap building owner.
+    world.raw_obstacles.insert((0, 0));
+
+    let geometry = building_geometry(BuildingType::Bridge, (0, 0), 0);
+    let ctx = BuildingPlacementContext {
+        world: &world,
+        in_site: true,
+        in_yard: true,
+        is_wall_or_door_at: &|_| false,
+        is_replaceable_wall_at: &|_| false,
+    };
+
+    let validation = validate_building_placement(&ctx, BuildingType::Bridge, (0, 0), &geometry);
+    assert_eq!(
+        validation.reject_reason,
+        Some(PlacementRejectReason::NotWalkable)
     );
 }
 

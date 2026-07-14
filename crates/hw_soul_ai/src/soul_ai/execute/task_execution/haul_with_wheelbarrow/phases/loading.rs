@@ -3,7 +3,7 @@
 use super::super::cancel;
 use crate::soul_ai::execute::task_execution::{
     common::{release_mixer_mud_storage_for_item, update_stockpile_on_item_removal},
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     transport_common::{reservation, sand_collect},
     types::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
@@ -14,14 +14,13 @@ pub fn handle(
     ctx: &mut TaskExecutionContext,
     data: HaulWithWheelbarrowData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     if let Some(source_entity) = data.collect_source {
         let collect_amount = data.collect_amount.max(1);
         let collected_items = match data.collect_resource_type {
             Some(hw_logistics::ResourceType::Sand) => {
                 if ctx.queries.designation.targets.get(source_entity).is_err() {
-                    cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-                    return;
+                    return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
                 }
                 sand_collect::spawn_loaded_sand_items(
                     commands,
@@ -40,13 +39,11 @@ pub fn handle(
                 )
             }
             _ => {
-                cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-                return;
+                return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
             }
         };
         if collected_items.is_empty() {
-            cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-            return;
+            return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
         }
 
         sand_collect::clear_collect_source_designation(commands, source_entity);
@@ -72,7 +69,7 @@ pub fn handle(
             "WB_HAUL: Soul {:?} collected {} items into wheelbarrow",
             ctx.soul_entity, loaded_count
         );
-        return;
+        return TaskHandlerControl::Continue;
     }
 
     let mut deduped_items = std::collections::HashSet::new();
@@ -98,8 +95,7 @@ pub fn handle(
             "WB_HAUL: Soul {:?} found no loadable items, canceling",
             ctx.soul_entity
         );
-        cancel::cancel_wheelbarrow_task(ctx, &data, commands);
-        return;
+        return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
     }
 
     let mut loaded_entities = std::collections::HashSet::new();
@@ -127,15 +123,14 @@ pub fn handle(
     let total_count = data.items.len();
     if loaded_count < total_count {
         for &item_entity in &data.items {
-            if !loaded_entities.contains(&item_entity) {
-                reservation::release_source(ctx, item_entity, 1);
-                if let Ok(mut item_commands) = commands.get_entity(item_entity) {
-                    item_commands.try_remove::<hw_core::relationships::DeliveringTo>();
-                }
+            if !loaded_entities.contains(&item_entity)
+                && let Ok(mut item_commands) = commands.get_entity(item_entity)
+            {
+                item_commands.try_remove::<hw_core::relationships::DeliveringTo>();
             }
         }
         debug!(
-            "WB_HAUL: {} of {} items missing, released reservations",
+            "WB_HAUL: {} of {} items missing",
             total_count - loaded_count,
             total_count
         );
@@ -150,4 +145,6 @@ pub fn handle(
         "WB_HAUL: Soul {:?} loaded {} items into wheelbarrow",
         ctx.soul_entity, loaded_count
     );
+
+    TaskHandlerControl::Continue
 }

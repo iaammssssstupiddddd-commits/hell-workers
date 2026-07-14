@@ -11,7 +11,6 @@ use crate::systems::command::{
     dream_tree_planting_preview_system, sync_designation_indicator_system,
     update_designation_indicator_system,
 };
-use crate::systems::jobs::building_completion_system;
 use crate::systems::logistics::resource_count_display_system;
 use crate::systems::visual::building3d_cleanup::{
     cleanup_building_3d_visuals_system, sync_provisional_wall_material_system,
@@ -143,7 +142,6 @@ impl Plugin for VisualPlugin {
         app.add_systems(
             Update,
             (
-                building_completion_system,
                 area_selection_indicator_system.run_if(|play_mode: Res<State<PlayMode>>| {
                     matches!(
                         play_mode.get(),

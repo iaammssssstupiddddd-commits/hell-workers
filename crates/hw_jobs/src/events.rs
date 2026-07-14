@@ -18,7 +18,7 @@ pub struct TaskAssignmentRequest {
 }
 
 /// Blueprint が全工程完了し、建物エンティティが spawn された直後に発行される。
-/// `hw_jobs` の Observer が WorldMap 更新と ObstaclePosition の配置を担当する。
+/// `hw_soul_ai` の Observer が WorldMap 更新と ObstaclePosition の配置を担当する。
 #[derive(Event, Debug, Clone)]
 pub struct BuildingCompletedEvent {
     pub building_entity: Entity,

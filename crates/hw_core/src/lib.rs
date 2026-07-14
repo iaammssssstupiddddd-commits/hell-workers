@@ -1,6 +1,7 @@
 pub mod area;
 pub mod camera;
 pub mod constants;
+pub mod ecs;
 pub mod events;
 pub mod familiar;
 pub mod game_state;

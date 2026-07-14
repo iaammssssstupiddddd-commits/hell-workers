@@ -9,7 +9,7 @@ use hw_core::simulation_rng::SimulationRandomState;
 use hw_core::soul::{
     DamnedSoul, Destination, DreamState, IdleState, Path, RestAreaCooldown, StressBreakdown,
 };
-use hw_jobs::AssignedTask;
+use hw_jobs::{ActiveTaskIdentity, AssignedTask};
 use hw_logistics::types::Inventory;
 
 /// タスク割り当て要求の適用に使うソウルの標準クエリ型
@@ -44,6 +44,8 @@ pub type TaskExecutionSoulQuery<'w, 's> = Query<
         &'static mut Path,
         &'static mut Inventory,
         Option<&'static StressBreakdown>,
+        Option<&'static mut ActiveTaskIdentity>,
+        Option<&'static WorkingOn>,
     ),
 >;
 

@@ -8,7 +8,7 @@ use hw_world::{PathGoalPolicy, PathfindingContext, WorldMap, find_path};
 
 use crate::soul_ai::execute::task_execution::AssignedTask;
 use crate::soul_ai::execute::task_execution::context::TaskAssignmentQueries;
-use crate::soul_ai::helpers::work::{SoulDropCtx, cleanup_task_assignment};
+use crate::soul_ai::helpers::work::{SoulDropCtx, unassign_task};
 
 use super::PathCooldown;
 
@@ -170,7 +170,7 @@ pub(super) fn cleanup_unreachable_destination(
             "PATH: Soul {:?} abandoning task due to unreachable destination",
             soul.entity
         );
-        cleanup_task_assignment(
+        unassign_task(
             commands,
             SoulDropCtx {
                 soul_entity: soul.entity,
@@ -182,10 +182,7 @@ pub(super) fn cleanup_unreachable_destination(
             state.path,
             queries,
             world_map,
-            true,
+            false,
         );
-        commands
-            .entity(soul.entity)
-            .remove::<hw_core::relationships::WorkingOn>();
     }
 }

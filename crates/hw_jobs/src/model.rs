@@ -45,6 +45,24 @@ impl BuildingCategory {
 }
 
 impl BuildingType {
+    /// Whether the completed building occupies an impassable pathfinding tile.
+    ///
+    /// Blueprint reservations use their own policy: every non-Bridge blueprint
+    /// blocks while it exists, even for completed kinds that are passable.
+    pub const fn blocks_movement(self) -> bool {
+        matches!(
+            self,
+            Self::Wall
+                | Self::Door
+                | Self::Tank
+                | Self::MudMixer
+                | Self::RestArea
+                | Self::SandPile
+                | Self::BonePile
+                | Self::WheelbarrowParking
+        )
+    }
+
     pub fn category(&self) -> BuildingCategory {
         match self {
             BuildingType::Wall | BuildingType::Floor | BuildingType::Bridge => {
@@ -176,6 +194,36 @@ pub struct Rock;
 #[derive(Component, Reflect, Debug, Clone, Copy)]
 #[reflect(Component)]
 pub struct ObstaclePosition(pub i32, pub i32);
+
+/// 障害物 marker の発生元。
+///
+/// 保存しない runtime-derived component。M4 の obstacle 同期では削除時の terrain
+/// 変更可否と、WorldMap の logical owner を区別するために使う。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ObstacleSourceKind {
+    NaturalTerrainClearing,
+    BuildingFootprint,
+    PlacementReservation,
+    ConstructionProtection,
+}
+
+impl ObstacleSourceKind {
+    pub const ALL: [Self; 4] = [
+        Self::NaturalTerrainClearing,
+        Self::BuildingFootprint,
+        Self::PlacementReservation,
+        Self::ConstructionProtection,
+    ];
+
+    pub const fn clears_terrain_on_removal(self) -> bool {
+        match self {
+            Self::NaturalTerrainClearing => true,
+            Self::BuildingFootprint | Self::PlacementReservation | Self::ConstructionProtection => {
+                false
+            }
+        }
+    }
+}
 
 #[derive(Component, Reflect)]
 #[reflect(Component)]
@@ -364,3 +412,21 @@ pub fn remove_tile_task_components(commands: &mut Commands, tile_entities: &[Ent
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]
 pub struct TargetSoulSpaSite(#[entities] pub Entity);
+
+#[cfg(test)]
+mod tests {
+    use super::ObstacleSourceKind;
+
+    #[test]
+    fn only_natural_terrain_clearings_change_terrain_after_removal() {
+        assert_eq!(ObstacleSourceKind::ALL.len(), 4);
+
+        for source in ObstacleSourceKind::ALL {
+            assert_eq!(
+                source.clears_terrain_on_removal(),
+                source == ObstacleSourceKind::NaturalTerrainClearing,
+                "{source:?} must follow the obstacle removal terrain policy",
+            );
+        }
+    }
+}

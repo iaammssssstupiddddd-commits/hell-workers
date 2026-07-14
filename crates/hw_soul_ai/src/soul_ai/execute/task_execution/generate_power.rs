@@ -4,7 +4,7 @@
 
 use crate::soul_ai::execute::task_execution::{
     common::*,
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     types::{AssignedTask, GeneratePowerData, GeneratePowerPhase},
 };
 use bevy::prelude::*;
@@ -12,12 +12,13 @@ use hw_core::relationships::WorkingOn;
 use hw_energy::constants::{
     DREAM_CONSUME_RATE_GENERATING, DREAM_GENERATE_FLOOR, FATIGUE_RATE_GENERATING,
 };
+use hw_jobs::WorkType;
 
 pub fn handle_generate_power_task(
     ctx: &mut TaskExecutionContext,
     data: GeneratePowerData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let soul_pos = ctx.soul_pos();
     let tile_entity = data.tile;
 
@@ -34,8 +35,7 @@ pub fn handle_generate_power_task(
                     "GENERATE_POWER: Soul {:?} - tile {:?} lost Designation, canceling",
                     ctx.soul_entity, tile_entity
                 );
-                ctx.abort_closed(commands, "generate power designation missing");
-                return;
+                return ctx.abort_closed(commands, "generate power designation missing");
             }
 
             let tile_pos = data.tile_pos;
@@ -54,18 +54,14 @@ pub fn handle_generate_power_task(
                     "GENERATE_POWER: Soul {:?} cannot reach tile {:?}, canceling",
                     ctx.soul_entity, tile_entity
                 );
-                ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                    source: tile_entity,
-                    amount: 1,
-                });
-                ctx.abort_retryable(commands, "generate power tile unreachable");
-                return;
+                return ctx.abort_retryable(commands, "generate power tile unreachable");
             }
 
             if is_near_target(soul_pos, tile_pos) {
                 commands
                     .entity(ctx.soul_entity)
                     .insert(WorkingOn(tile_entity));
+                ctx.transition_task_identity(tile_entity, WorkType::GeneratePower);
                 ctx.path.waypoints.clear();
                 *ctx.task = AssignedTask::GeneratePower(GeneratePowerData {
                     tile: tile_entity,
@@ -91,8 +87,7 @@ pub fn handle_generate_power_task(
                     "GENERATE_POWER: Soul {:?} - tile {:?} lost Designation, stopping",
                     ctx.soul_entity, tile_entity
                 );
-                ctx.abort_closed(commands, "generate power designation removed");
-                return;
+                return ctx.abort_closed(commands, "generate power designation removed");
             }
 
             if ctx.soul.dream < DREAM_GENERATE_FLOOR {
@@ -100,12 +95,7 @@ pub fn handle_generate_power_task(
                     "GENERATE_POWER: Soul {:?} ran out of Dream ({:.1}), stopping",
                     ctx.soul_entity, ctx.soul.dream
                 );
-                ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                    source: tile_entity,
-                    amount: 1,
-                });
-                ctx.abort_retryable(commands, "generate power dream depleted");
-                return;
+                return ctx.abort_retryable(commands, "generate power dream depleted");
             }
 
             let dt = ctx.env.time.delta_secs();
@@ -114,4 +104,6 @@ pub fn handle_generate_power_task(
             ctx.soul.fatigue = (ctx.soul.fatigue + FATIGUE_RATE_GENERATING * dt).min(1.0);
         }
     }
+
+    TaskHandlerControl::Continue
 }

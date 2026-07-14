@@ -6,11 +6,11 @@ use std::collections::HashMap;
 use hw_core::relationships::{ManagedBy, StoredItems, TaskWorkers};
 use hw_jobs::{Designation, Priority, TaskSlots, WorkType};
 
+use crate::transport_request::producer::active_unit_cache::CachedStockpileGroups;
 use crate::transport_request::{
     ManualTransportRequest, TransportDemand, TransportPolicy, TransportPriority, TransportRequest,
     TransportRequestKind, TransportRequestState,
 };
-use crate::transport_request::producer::active_unit_cache::CachedStockpileGroups;
 use crate::types::{BucketStorage, ResourceType};
 use crate::zone::Stockpile;
 

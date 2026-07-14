@@ -1,7 +1,7 @@
 //! バケツ搬送共通ルーティング
 
 use crate::soul_ai::execute::task_execution::common::update_destination_to_adjacent;
-use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
+use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
     BucketTransportSource,
@@ -120,11 +120,11 @@ pub fn transition_to_source(
     data: &BucketTransportData,
     soul_pos: Vec2,
     world_map: &WorldMap,
-) {
+) -> TaskHandlerControl {
     match data.source {
         BucketTransportSource::River => {
             if set_path_to_river(ctx, world_map, data).is_none() {
-                super::abort::abort_with_bucket(commands, ctx, data, world_map);
+                return super::abort::abort_with_bucket(commands, ctx, data, world_map);
             } else {
                 commands
                     .entity(data.bucket)
@@ -150,11 +150,10 @@ pub fn transition_to_source(
                 let mixer = match data.destination {
                     BucketTransportDestination::Mixer(m) => m,
                     _ => {
-                        super::abort::abort_with_bucket(commands, ctx, data, world_map);
-                        return;
+                        return super::abort::abort_with_bucket(commands, ctx, data, world_map);
                     }
                 };
-                super::abort::abort_and_drop_bucket_mixer(
+                return super::abort::abort_and_drop_bucket_mixer(
                     commands,
                     ctx,
                     data.bucket,
@@ -168,6 +167,8 @@ pub fn transition_to_source(
             }
         }
     }
+
+    TaskHandlerControl::Continue
 }
 
 /// デスティネーションへの遷移: Tank→タンク境界, Mixer→ミキサー隣接
@@ -177,7 +178,7 @@ pub fn transition_to_destination(
     data: &BucketTransportData,
     soul_pos: Vec2,
     world_map: &WorldMap,
-) {
+) -> TaskHandlerControl {
     let tank_entity = match data.source {
         BucketTransportSource::Tank { tank, .. } => Some(tank),
         BucketTransportSource::River => None,
@@ -202,10 +203,10 @@ pub fn transition_to_destination(
                         .entity(data.bucket)
                         .try_insert(hw_core::relationships::DeliveringTo(tank_entity));
                 } else {
-                    super::abort::abort_with_bucket(commands, ctx, data, world_map);
+                    return super::abort::abort_with_bucket(commands, ctx, data, world_map);
                 }
             } else {
-                super::abort::abort_with_bucket(commands, ctx, data, world_map);
+                return super::abort::abort_with_bucket(commands, ctx, data, world_map);
             }
         }
         BucketTransportDestination::Mixer(mixer_entity) => {
@@ -231,7 +232,7 @@ pub fn transition_to_destination(
                 );
             } else {
                 let tank = tank_entity.unwrap_or(data.bucket);
-                super::abort::abort_and_drop_bucket_mixer(
+                return super::abort::abort_and_drop_bucket_mixer(
                     commands,
                     ctx,
                     data.bucket,
@@ -242,4 +243,6 @@ pub fn transition_to_destination(
             }
         }
     }
+
+    TaskHandlerControl::Continue
 }

@@ -3,7 +3,7 @@
 use crate::soul_ai::execute::task_execution::{
     chain,
     common::*,
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     transport_common::{cancel, reservation},
     types::{AssignedTask, HaulToBlueprintData, HaulToBpPhase},
 };
@@ -13,7 +13,7 @@ pub fn handle_haul_to_blueprint_task(
     ctx: &mut TaskExecutionContext,
     data: HaulToBlueprintData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let HaulToBlueprintData {
         item,
         blueprint,
@@ -28,22 +28,10 @@ pub fn handle_haul_to_blueprint_task(
             "HAUL_TO_BP: Cancelled for {:?} - Exhausted or Stress breakdown",
             ctx.soul_entity
         );
-        let soul_pos = ctx.soul_transform.translation.truncate();
-        crate::soul_ai::helpers::work::cleanup_task_assignment(
+        return ctx.abort_retryable(
             commands,
-            crate::soul_ai::helpers::work::SoulDropCtx {
-                soul_entity: ctx.soul_entity,
-                drop_pos: soul_pos,
-                inventory: Some(ctx.inventory),
-                dropped_item_res: None,
-            },
-            ctx.task,
-            ctx.path,
-            ctx.queries,
-            ctx.env.world_map,
-            true,
+            "haul to blueprint interrupted by fatigue or breakdown",
         );
-        return;
     }
 
     match phase {
@@ -63,18 +51,7 @@ pub fn handle_haul_to_blueprint_task(
                 let is_near = can_pickup_item(soul_pos, item_pos);
 
                 if is_near {
-                    if !try_pickup_item(
-                        commands,
-                        ctx,
-                        PickupLocations {
-                            soul_entity: ctx.soul_entity,
-                            item_entity,
-                            soul_pos,
-                            item_pos,
-                        },
-                    ) {
-                        return;
-                    }
+                    pickup_item(commands, ctx.soul_entity, item_entity, ctx.inventory);
                     release_mixer_mud_storage_for_item(ctx, item_entity, commands);
 
                     if let Some(stored_in) = stored_in_entity {
@@ -104,7 +81,12 @@ pub fn handle_haul_to_blueprint_task(
                     "HAUL_TO_BP: Cancelled for {:?} - Item {:?} gone",
                     ctx.soul_entity, item_entity
                 );
-                cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity, commands);
+                return cancel::cancel_haul_to_blueprint(
+                    ctx,
+                    item_entity,
+                    blueprint_entity,
+                    commands,
+                );
             }
         }
         HaulToBpPhase::GoingToBlueprint => {
@@ -123,8 +105,12 @@ pub fn handle_haul_to_blueprint_task(
                         "HAUL_TO_BP: Cancelled for {:?} - Blueprint {:?} unreachable",
                         ctx.soul_entity, blueprint_entity
                     );
-                    cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity, commands);
-                    return;
+                    return cancel::cancel_haul_to_blueprint(
+                        ctx,
+                        item_entity,
+                        blueprint_entity,
+                        commands,
+                    );
                 }
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {
@@ -146,27 +132,7 @@ pub fn handle_haul_to_blueprint_task(
                     "HAUL_TO_BP: Cancelled for {:?} - Blueprint {:?} gone",
                     ctx.soul_entity, blueprint_entity
                 );
-                let dropped_res = ctx
-                    .queries
-                    .designation
-                    .targets
-                    .get(item_entity)
-                    .ok()
-                    .and_then(|(_, _, _, _, ri, _, _)| ri.map(|r| r.0));
-                crate::soul_ai::helpers::work::cleanup_task_assignment(
-                    commands,
-                    crate::soul_ai::helpers::work::SoulDropCtx {
-                        soul_entity: ctx.soul_entity,
-                        drop_pos: soul_pos,
-                        inventory: Some(ctx.inventory),
-                        dropped_item_res: dropped_res,
-                    },
-                    ctx.task,
-                    ctx.path,
-                    ctx.queries,
-                    ctx.env.world_map,
-                    true,
-                );
+                return ctx.abort_closed(commands, "haul to blueprint destination disappeared");
             }
         }
         HaulToBpPhase::Delivering => {
@@ -180,8 +146,7 @@ pub fn handle_haul_to_blueprint_task(
                 .and_then(|(_, _, _, _, ri, _, _)| ri.map(|r| r.0))
             else {
                 ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
-                reservation::release_destination(ctx, blueprint_entity);
-                return;
+                return ctx.abort_closed(commands, "haul to blueprint item disappeared");
             };
 
             // Step 2: 搬入処理（blueprints の可変借用をスコープ内に閉じ込める）
@@ -222,8 +187,12 @@ pub fn handle_haul_to_blueprint_task(
 
             let materials_complete = match result {
                 DeliverResult::Cancel => {
-                    cancel::cancel_haul_to_blueprint(ctx, item_entity, blueprint_entity, commands);
-                    return;
+                    return cancel::cancel_haul_to_blueprint(
+                        ctx,
+                        item_entity,
+                        blueprint_entity,
+                        commands,
+                    );
                 }
                 DeliverResult::Done { materials_complete } => materials_complete,
             };
@@ -258,15 +227,17 @@ pub fn handle_haul_to_blueprint_task(
                 chain::execute_chain(opp, ctx, commands);
                 commands.entity(item_entity).despawn();
                 reservation::release_destination(ctx, blueprint_entity);
-                return;
+                return TaskHandlerControl::Continue;
             }
 
             // Step 5: チェーンなし — 通常のクリーンアップ
             ctx.inventory.0 = None;
-            ctx.complete_task(commands, "haul to blueprint done");
             commands.entity(item_entity).despawn();
             ctx.soul.fatigue = (ctx.soul.fatigue + 0.05).min(1.0);
             reservation::release_destination(ctx, blueprint_entity);
+            return ctx.complete_task(commands, "haul to blueprint done");
         }
     }
+
+    TaskHandlerControl::Continue
 }

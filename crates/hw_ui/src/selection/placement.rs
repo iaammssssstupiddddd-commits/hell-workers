@@ -111,6 +111,8 @@ pub struct PlacementGeometry {
 pub trait WorldReadApi {
     fn has_building(&self, grid: (i32, i32)) -> bool;
     fn has_stockpile(&self, grid: (i32, i32)) -> bool;
+    /// Raw runtime blocker, excluding terrain walkability policy.
+    fn has_raw_obstacle(&self, grid: (i32, i32)) -> bool;
     fn is_walkable(&self, gx: i32, gy: i32) -> bool;
     fn is_river_tile(&self, gx: i32, gy: i32) -> bool;
     fn building_entity(&self, grid: (i32, i32)) -> Option<Entity>;

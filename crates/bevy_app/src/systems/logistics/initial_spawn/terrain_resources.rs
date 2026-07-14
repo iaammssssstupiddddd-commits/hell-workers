@@ -1,5 +1,5 @@
 use crate::assets::GameAssets;
-use crate::systems::jobs::{ObstaclePosition, Rock, Tree, TreeVariant};
+use crate::systems::jobs::{ObstaclePosition, ObstacleSourceKind, Rock, Tree, TreeVariant};
 use crate::systems::logistics::{ResourceItem, ResourceType};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -44,6 +44,7 @@ pub fn spawn_trees(
             Tree,
             TreeVariant(variant_index),
             ObstaclePosition(gx, gy),
+            ObstacleSourceKind::NaturalTerrainClearing,
             Sprite {
                 image: game_assets.trees[variant_index].clone(),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 1.5)),
@@ -64,6 +65,7 @@ pub fn spawn_rocks(
         (
             Rock,
             ObstaclePosition(gx, gy),
+            ObstacleSourceKind::NaturalTerrainClearing,
             Sprite {
                 image: game_assets.rock.clone(),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 1.2)),

@@ -7,7 +7,7 @@
 use bevy::prelude::*;
 use hw_core::soul::DamnedSoul;
 use hw_jobs::events::BuildingCompletedEvent;
-use hw_jobs::{BuildingType, ObstaclePosition};
+use hw_jobs::{BuildingType, ObstaclePosition, ObstacleSourceKind};
 use hw_world::{WorldMap, WorldMapWrite};
 
 pub fn on_building_completed(
@@ -21,18 +21,7 @@ pub fn on_building_completed(
     let kind = ev.kind;
     let occupied_grids = &ev.occupied_grids;
 
-    let is_obstacle = matches!(
-        kind,
-        BuildingType::Bridge
-            | BuildingType::Door
-            | BuildingType::Wall
-            | BuildingType::Tank
-            | BuildingType::MudMixer
-            | BuildingType::RestArea
-            | BuildingType::SandPile
-            | BuildingType::BonePile
-            | BuildingType::WheelbarrowParking
-    );
+    let is_obstacle = kind.blocks_movement() || kind == BuildingType::Bridge;
 
     if !is_obstacle {
         return;
@@ -41,7 +30,11 @@ pub fn on_building_completed(
     if kind != BuildingType::Bridge {
         commands.entity(building_entity).with_children(|parent| {
             for &(gx, gy) in occupied_grids {
-                parent.spawn((ObstaclePosition(gx, gy), Name::new("Building Obstacle")));
+                parent.spawn((
+                    ObstaclePosition(gx, gy),
+                    ObstacleSourceKind::BuildingFootprint,
+                    Name::new("Building Obstacle"),
+                ));
             }
         });
     }

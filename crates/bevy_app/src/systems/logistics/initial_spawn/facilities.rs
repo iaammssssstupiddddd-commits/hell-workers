@@ -1,5 +1,7 @@
 use crate::assets::GameAssets;
-use crate::systems::jobs::{Building, BuildingType, ObstaclePosition, TaskSlots};
+use crate::systems::jobs::{
+    Building, BuildingType, ObstaclePosition, ObstacleSourceKind, TaskSlots,
+};
 use crate::systems::logistics::{
     BelongsTo, ResourceItem, ResourceType, Wheelbarrow, WheelbarrowParking,
 };
@@ -83,7 +85,11 @@ pub fn spawn_wheelbarrow_parking(
 
     commands.entity(building_entity).with_children(|parent| {
         for (gx, gy) in occupied {
-            parent.spawn((ObstaclePosition(gx, gy), Name::new("Building Obstacle")));
+            parent.spawn((
+                ObstaclePosition(gx, gy),
+                ObstacleSourceKind::BuildingFootprint,
+                Name::new("Building Obstacle"),
+            ));
         }
     });
 

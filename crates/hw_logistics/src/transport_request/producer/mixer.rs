@@ -9,7 +9,9 @@ use hw_jobs::mud_mixer::{MudMixerStorage, TargetMixer};
 
 use crate::resource_cache::SharedResourceCache;
 use crate::transport_request::TransportRequest;
-use crate::transport_request::producer::active_unit_cache::{CachedActiveFamiliars, CachedActiveYards};
+use crate::transport_request::producer::active_unit_cache::{
+    CachedActiveFamiliars, CachedActiveYards,
+};
 use crate::types::ResourceType;
 
 type MixerQuery<'w, 's> = Query<

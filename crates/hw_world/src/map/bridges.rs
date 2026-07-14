@@ -3,7 +3,8 @@ use bevy::prelude::*;
 
 impl WorldMap {
     pub fn add_bridged_tile(&mut self, grid: (i32, i32)) {
-        if self.bridged_tiles.insert(grid) {
+        let was_walkable = self.is_walkable(grid.0, grid.1);
+        if self.bridged_tiles.insert(grid) && was_walkable != self.is_walkable(grid.0, grid.1) {
             self.bump_obstacle_version();
         }
     }

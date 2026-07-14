@@ -55,7 +55,7 @@ pub fn idle_behavior_apply_system(
                 commands
                     .entity(request.entity)
                     .insert(ParticipatingIn(*spot_entity));
-                commands.trigger(OnGatheringParticipated {
+                commands.write_message(OnGatheringParticipated {
                     entity: request.entity,
                     spot_entity: *spot_entity,
                 });
@@ -73,11 +73,11 @@ pub fn idle_behavior_apply_system(
                 commands
                     .entity(request.entity)
                     .insert(ParticipatingIn(*spot_entity));
-                commands.trigger(OnGatheringParticipated {
+                commands.write_message(OnGatheringParticipated {
                     entity: request.entity,
                     spot_entity: *spot_entity,
                 });
-                commands.trigger(OnGatheringJoined {
+                commands.write_message(OnGatheringJoined {
                     entity: request.entity,
                 });
             }

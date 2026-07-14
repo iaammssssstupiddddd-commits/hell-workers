@@ -9,7 +9,7 @@ mod returning_wheelbarrow;
 mod unloading;
 
 use crate::soul_ai::execute::task_execution::{
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     types::{HaulWithWheelbarrowData, HaulWithWheelbarrowPhase},
 };
 use bevy::prelude::*;
@@ -23,30 +23,26 @@ pub fn handle_haul_with_wheelbarrow_task(
         (&Transform, Option<&hw_core::relationships::ParkedAt>),
         With<Wheelbarrow>,
     >,
-) {
+) -> TaskHandlerControl {
     let soul_pos = ctx.soul_pos();
 
     match data.phase {
         HaulWithWheelbarrowPhase::GoingToParking => {
-            going_to_parking::handle(ctx, data, commands, q_wheelbarrows, soul_pos);
+            going_to_parking::handle(ctx, data, commands, q_wheelbarrows, soul_pos)
         }
         HaulWithWheelbarrowPhase::PickingUpWheelbarrow => {
-            picking_up_wheelbarrow::handle(ctx, data, commands);
+            picking_up_wheelbarrow::handle(ctx, data, commands)
         }
         HaulWithWheelbarrowPhase::GoingToSource => {
-            going_to_source::handle(ctx, data, commands, soul_pos);
+            going_to_source::handle(ctx, data, commands, soul_pos)
         }
-        HaulWithWheelbarrowPhase::Loading => {
-            loading::handle(ctx, data, commands);
-        }
+        HaulWithWheelbarrowPhase::Loading => loading::handle(ctx, data, commands),
         HaulWithWheelbarrowPhase::GoingToDestination => {
-            going_to_destination::handle(ctx, data, commands, soul_pos);
+            going_to_destination::handle(ctx, data, commands, soul_pos)
         }
-        HaulWithWheelbarrowPhase::Unloading => {
-            unloading::handle(ctx, data, commands, soul_pos);
-        }
+        HaulWithWheelbarrowPhase::Unloading => unloading::handle(ctx, data, commands, soul_pos),
         HaulWithWheelbarrowPhase::ReturningWheelbarrow => {
-            returning_wheelbarrow::handle(ctx, data, commands, q_wheelbarrows, soul_pos);
+            returning_wheelbarrow::handle(ctx, data, commands, q_wheelbarrows, soul_pos)
         }
     }
 }

@@ -4,13 +4,13 @@ pub mod soul_spa_construction;
 pub mod wall_construction;
 
 pub(crate) use building_completion::attach_building_shell;
-pub use building_completion::building_completion_system;
+pub use building_completion::{BuildingCompletionSet, building_completion_system};
 pub use hw_core::world::DoorState;
 pub use hw_jobs::model::{
     Blueprint, BonePile, BridgeMarker, Building, BuildingCategory, BuildingType, Designation,
-    FlexibleMaterialRequirement, IssuedBy, MovePlanned, ObstaclePosition, Priority,
-    ProvisionalWall, RestArea, Rock, SandPile, TargetBlueprint, TaskSlots, Tree, TreeVariant,
-    WorkType,
+    FlexibleMaterialRequirement, IssuedBy, MovePlanned, ObstaclePosition, ObstacleSourceKind,
+    Priority, ProvisionalWall, RestArea, Rock, SandPile, TargetBlueprint, TaskSlots, Tree,
+    TreeVariant, WorkType,
 };
 pub use hw_jobs::mud_mixer::{MudMixerStorage, StoredByMixer, TargetMixer};
 pub use hw_jobs::remove_tile_task_components;

@@ -1,14 +1,14 @@
 use bevy::prelude::*;
 
 use hw_core::constants::REST_AREA_RECRUIT_COOLDOWN_SECS;
-use hw_core::events::{OnSoulRecruited, OnTaskAssigned};
+use hw_core::events::{OnTaskAssigned, publish_soul_recruited};
 use hw_core::logistics::WheelbarrowDestination;
 use hw_core::relationships::{
     CommandedBy, DeliveringTo, ParticipatingIn, RestAreaReservedFor, RestingIn, WorkingOn,
 };
 use hw_core::soul::{DamnedSoul, DriftingState, IdleBehavior, IdleState, RestAreaCooldown};
 use hw_jobs::events::TaskAssignmentRequest;
-use hw_jobs::{AssignedTask, IssuedBy};
+use hw_jobs::{ActiveTaskIdentity, AssignedTask, IssuedBy, WorkType};
 use hw_logistics::{SharedResourceCache, apply_reservation_op};
 
 use crate::soul_ai::helpers::query_types::TaskAssignmentSoulQuery;
@@ -18,17 +18,19 @@ fn prepare_worker_for_task_apply(
     worker_entity: Entity,
     familiar_entity: Entity,
     task_entity: Entity,
+    work_type: WorkType,
     already_commanded: bool,
 ) {
     if !already_commanded {
-        commands.trigger(OnSoulRecruited {
-            entity: worker_entity,
-            familiar_entity,
-        });
+        publish_soul_recruited(commands, worker_entity, familiar_entity);
     }
     commands
         .entity(worker_entity)
-        .try_insert((CommandedBy(familiar_entity), WorkingOn(task_entity)));
+        .try_insert(CommandedBy(familiar_entity))
+        .insert((
+            WorkingOn(task_entity),
+            ActiveTaskIdentity::new(task_entity, task_entity, work_type),
+        ));
     commands
         .entity(task_entity)
         .try_insert(IssuedBy(familiar_entity));
@@ -148,10 +150,11 @@ fn trigger_task_assigned_event(
     worker_entity: Entity,
     request: &TaskAssignmentRequest,
 ) {
-    commands.trigger(OnTaskAssigned {
+    commands.write_message(OnTaskAssigned {
         entity: worker_entity,
-        task_entity: request.task_entity,
-        work_type: request.work_type,
+        assignment_entity: request.task_entity,
+        current_target_entity: request.task_entity,
+        current_work_type: request.work_type,
     });
 }
 
@@ -211,6 +214,7 @@ pub fn apply_task_assignment_requests_system(
             worker_entity,
             request.familiar_entity,
             request.task_entity,
+            request.work_type,
             request.already_commanded || under_command_opt.is_some(),
         );
 
@@ -225,5 +229,93 @@ pub fn apply_task_assignment_requests_system(
             worker_entity,
             worker_transform.translation.truncate()
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::soul::{Destination, Path};
+    use hw_jobs::{GeneratePowerData, GeneratePowerPhase};
+
+    #[derive(Resource, Clone, Copy)]
+    struct AssignmentFixture {
+        worker: Entity,
+        familiar: Entity,
+        task: Entity,
+    }
+
+    fn emit_assignment_request(
+        fixture: Res<AssignmentFixture>,
+        mut writer: MessageWriter<TaskAssignmentRequest>,
+    ) {
+        writer.write(TaskAssignmentRequest {
+            familiar_entity: fixture.familiar,
+            worker_entity: fixture.worker,
+            task_entity: fixture.task,
+            work_type: WorkType::GeneratePower,
+            task_pos: Vec2::ZERO,
+            assigned_task: AssignedTask::GeneratePower(GeneratePowerData {
+                tile: fixture.task,
+                tile_pos: Vec2::ZERO,
+                phase: GeneratePowerPhase::GoingToTile,
+            }),
+            reservation_ops: Vec::new(),
+            already_commanded: true,
+        });
+    }
+
+    fn assert_assignment_identity_after_defer(
+        fixture: Res<AssignmentFixture>,
+        q_workers: Query<(&WorkingOn, &ActiveTaskIdentity)>,
+    ) {
+        let (working_on, identity) = q_workers
+            .get(fixture.worker)
+            .expect("assignment must materialize WorkingOn and ActiveTaskIdentity together");
+        assert_eq!(working_on.0, fixture.task);
+        assert_eq!(identity.assignment_entity, fixture.task);
+        assert_eq!(identity.current_target_entity, fixture.task);
+        assert_eq!(identity.current_work_type, WorkType::GeneratePower);
+    }
+
+    #[test]
+    fn assignment_defer_makes_identity_available_to_same_frame_execution() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<SharedResourceCache>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_message::<OnTaskAssigned>();
+
+        let familiar = app.world_mut().spawn_empty().id();
+        let task = app.world_mut().spawn_empty().id();
+        let worker = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                Visibility::Visible,
+                DamnedSoul::default(),
+                AssignedTask::None,
+                Destination(Vec2::ZERO),
+                Path::default(),
+                IdleState::default(),
+            ))
+            .id();
+        app.insert_resource(AssignmentFixture {
+            worker,
+            familiar,
+            task,
+        });
+        app.add_systems(
+            Update,
+            (
+                emit_assignment_request,
+                apply_task_assignment_requests_system,
+                ApplyDeferred,
+                assert_assignment_identity_after_defer,
+            )
+                .chain(),
+        );
+
+        app.update();
     }
 }

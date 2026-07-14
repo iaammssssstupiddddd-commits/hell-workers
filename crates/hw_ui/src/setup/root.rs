@@ -2,7 +2,9 @@ use crate::components::{InfoPanelNodes, UiMountSlot, UiNodeRegistry, UiRoot, UiS
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 
-use super::{UiAssets, bottom_bar, dialogs, entity_list, panels, settings_panel, submenus, time_control};
+use super::{
+    UiAssets, bottom_bar, dialogs, entity_list, panels, settings_panel, submenus, time_control,
+};
 
 fn spawn_area_edit_preview(
     commands: &mut Commands,

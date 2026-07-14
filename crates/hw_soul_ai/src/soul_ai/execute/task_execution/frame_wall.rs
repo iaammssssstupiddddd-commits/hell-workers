@@ -2,7 +2,7 @@
 
 use crate::soul_ai::execute::task_execution::{
     common::*,
-    context::TaskExecutionContext,
+    context::{TaskExecutionContext, TaskHandlerControl},
     types::{AssignedTask, FrameWallPhase, FrameWallTileData},
 };
 use bevy::prelude::*;
@@ -14,7 +14,7 @@ pub fn handle_frame_wall_task(
     ctx: &mut TaskExecutionContext,
     data: FrameWallTileData,
     commands: &mut Commands,
-) {
+) -> TaskHandlerControl {
     let FrameWallTileData { tile, site, phase } = data;
     let tile_entity = tile;
     let site_entity = site;
@@ -24,8 +24,7 @@ pub fn handle_frame_wall_task(
         FrameWallPhase::GoingToMaterialCenter => {
             let Ok((site_transform, _site, _)) = ctx.queries.storage.wall_sites.get(site_entity)
             else {
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             let material_center = site_transform.translation.truncate();
@@ -48,8 +47,7 @@ pub fn handle_frame_wall_task(
         }
         FrameWallPhase::PickingUpWood => {
             let Ok((_, tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             match tile_blueprint.state {
@@ -66,14 +64,13 @@ pub fn handle_frame_wall_task(
                 }
                 _ => {
                     // 他のソウルが先に作業を開始または完了した → 中断
-                    ctx.abort_closed(commands, "construction cancelled");
+                    return ctx.abort_closed(commands, "construction cancelled");
                 }
             }
         }
         FrameWallPhase::GoingToTile => {
             let Ok((_, tile_blueprint, _)) = ctx.queries.storage.wall_tiles.get(tile_entity) else {
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             let tile_pos =
@@ -100,12 +97,12 @@ pub fn handle_frame_wall_task(
             let Ok((_, mut tile_blueprint, _)) =
                 ctx.queries.storage.wall_tiles.get_mut(tile_entity)
             else {
-                ctx.abort_closed(commands, "construction cancelled");
-                return;
+                return ctx.abort_closed(commands, "construction cancelled");
             };
 
             const MAX_PROGRESS_BP: u16 = 10_000;
-            let delta_bp = ((ctx.env.time.delta_secs() / WALL_FRAME_DURATION_SECS * MAX_PROGRESS_BP as f32)
+            let delta_bp = ((ctx.env.time.delta_secs() / WALL_FRAME_DURATION_SECS
+                * MAX_PROGRESS_BP as f32)
                 .round()
                 .max(1.0)) as u16;
             let new_progress_bp = progress_bp.saturating_add(delta_bp).min(MAX_PROGRESS_BP);
@@ -146,7 +143,9 @@ pub fn handle_frame_wall_task(
                 source: tile_entity,
                 amount: 1,
             });
-            ctx.complete_task(commands, "construction done");
+            return ctx.complete_task(commands, "construction done");
         }
     }
+
+    TaskHandlerControl::Continue
 }

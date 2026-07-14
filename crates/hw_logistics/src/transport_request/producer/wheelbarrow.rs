@@ -5,11 +5,11 @@ use bevy::prelude::*;
 use hw_core::relationships::{ManagedBy, ParkedAt, PushedBy, TaskWorkers};
 use hw_jobs::{Designation, Priority, TaskSlots, WorkType};
 
+use crate::transport_request::producer::active_unit_cache::CachedActiveFamiliars;
 use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::transport_request::producer::active_unit_cache::CachedActiveFamiliars;
 use crate::types::{ResourceType, Wheelbarrow};
 
 const RETURN_REQUEST_PRIORITY: u32 = 0;

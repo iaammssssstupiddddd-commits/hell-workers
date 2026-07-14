@@ -1,12 +1,5 @@
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    bevy::prelude::Reflect,
-    serde::Serialize,
-    serde::Deserialize,
+    Debug, Clone, Copy, PartialEq, Eq, bevy::prelude::Reflect, serde::Serialize, serde::Deserialize,
 )]
 pub enum TerrainType {
     Grass,
