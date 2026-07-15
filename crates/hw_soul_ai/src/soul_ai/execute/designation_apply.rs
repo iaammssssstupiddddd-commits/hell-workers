@@ -3,7 +3,6 @@ use bevy::prelude::*;
 use hw_core::events::{DesignationOp, DesignationRequest};
 use hw_jobs::mud_mixer::TargetMixer;
 use hw_jobs::{Designation, IssuedBy, Priority, TargetBlueprint, TaskSlots};
-use hw_logistics::types::ReservedForTask;
 
 /// Decide フェーズで生成された Designation 要求を適用する
 pub fn apply_designation_requests_system(
@@ -19,7 +18,6 @@ pub fn apply_designation_requests_system(
                 priority,
                 target_blueprint,
                 target_mixer,
-                reserved_for_task,
             } => {
                 let mut entity = commands.entity(request.entity);
                 entity.insert((
@@ -40,10 +38,6 @@ pub fn apply_designation_requests_system(
 
                 if let Some(target) = target_mixer {
                     entity.insert(TargetMixer(*target));
-                }
-
-                if *reserved_for_task {
-                    entity.insert(ReservedForTask);
                 }
             }
         }

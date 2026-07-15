@@ -1,4 +1,4 @@
-use super::grid::{GridData, SpatialGridOps};
+use super::grid::{ResourceIndexTag, SpatialGridOps, SpatialIndex};
 use bevy::prelude::*;
 
 type ResourceChangedQuery<'w, 's, T> = Query<
@@ -17,26 +17,7 @@ type ResourceChangedQuery<'w, 's, T> = Query<
 >;
 
 /// リソースアイテム用の空間グリッド
-#[derive(Resource, Default)]
-pub struct ResourceSpatialGrid(pub GridData);
-
-impl SpatialGridOps for ResourceSpatialGrid {
-    fn insert(&mut self, entity: Entity, pos: Vec2) {
-        self.0.insert(entity, pos);
-    }
-    fn remove(&mut self, entity: Entity) {
-        self.0.remove(entity);
-    }
-    fn update(&mut self, entity: Entity, pos: Vec2) {
-        self.0.update(entity, pos);
-    }
-    fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
-        self.0.get_nearby_in_radius(pos, radius)
-    }
-    fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>) {
-        self.0.get_nearby_in_radius_into(pos, radius, out);
-    }
-}
+pub type ResourceSpatialGrid = SpatialIndex<ResourceIndexTag>;
 
 pub fn update_resource_spatial_grid_system<T: Component>(
     mut grid: ResMut<ResourceSpatialGrid>,
@@ -66,5 +47,67 @@ pub fn update_resource_spatial_grid_system<T: Component>(
     // 削除されたアイテムをグリッドから除去
     for entity in removed_items.read() {
         grid.remove(entity);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Component)]
+    struct TestResource;
+
+    #[test]
+    fn visibility_policy_excludes_hidden_and_reregisters_when_visibility_is_removed() {
+        let mut app = App::new();
+        app.init_resource::<ResourceSpatialGrid>()
+            .add_systems(Update, update_resource_spatial_grid_system::<TestResource>);
+
+        let entity = app
+            .world_mut()
+            .spawn((
+                TestResource,
+                Transform::from_xyz(32.0, 0.0, 0.0),
+                Visibility::Hidden,
+            ))
+            .id();
+        app.update();
+        assert!(
+            app.world()
+                .resource::<ResourceSpatialGrid>()
+                .get_nearby_in_radius(Vec2::new(32.0, 0.0), 1.0)
+                .is_empty()
+        );
+
+        app.world_mut()
+            .entity_mut(entity)
+            .insert(Visibility::Visible);
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<ResourceSpatialGrid>()
+                .get_nearby_in_radius(Vec2::new(32.0, 0.0), 1.0),
+            vec![entity]
+        );
+
+        app.world_mut()
+            .entity_mut(entity)
+            .insert(Visibility::Hidden);
+        app.update();
+        assert!(
+            app.world()
+                .resource::<ResourceSpatialGrid>()
+                .get_nearby_in_radius(Vec2::new(32.0, 0.0), 1.0)
+                .is_empty()
+        );
+
+        app.world_mut().entity_mut(entity).remove::<Visibility>();
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<ResourceSpatialGrid>()
+                .get_nearby_in_radius(Vec2::new(32.0, 0.0), 1.0),
+            vec![entity]
+        );
     }
 }

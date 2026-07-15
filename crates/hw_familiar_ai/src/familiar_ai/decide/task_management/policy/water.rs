@@ -87,7 +87,6 @@ pub(super) fn assign_haul_water_to_mixer(
     if needs_tank_fill && !source_not_reserved(tank_entity, queries, shadow) {
         return false;
     }
-    let mixer_already_reserved = queries.reserved_for_task.get(ctx.task_entity).is_ok();
 
     issue_haul_water_to_mixer(
         WaterHaulSpec {
@@ -95,7 +94,6 @@ pub(super) fn assign_haul_water_to_mixer(
             mixer: mixer_entity,
             tank: tank_entity,
             needs_tank_fill,
-            mixer_already_reserved,
         },
         task_pos,
         already_commanded,

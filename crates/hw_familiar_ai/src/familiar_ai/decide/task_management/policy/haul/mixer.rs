@@ -16,7 +16,6 @@ use crate::familiar_ai::decide::task_management::{
 fn mixer_can_accept_item(
     mixer_entity: Entity,
     item_type: ResourceType,
-    mixer_already_reserved: bool,
     queries: &FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
 ) -> bool {
@@ -28,11 +27,7 @@ fn mixer_can_accept_item(
         .resource_cache
         .get_mixer_destination_reservation(mixer_entity, item_type)
         + shadow.mixer_reserved(mixer_entity, item_type);
-    let required = if mixer_already_reserved {
-        reserved as u32
-    } else {
-        (reserved + 1) as u32
-    };
+    let required = (reserved + 1) as u32;
     storage.can_accept(item_type, required)
 }
 
@@ -125,7 +120,7 @@ fn assign_single_item_haul_to_mixer(
         return false;
     }
 
-    if !mixer_can_accept_item(mixer_entity, item_type, false, queries, shadow) {
+    if !mixer_can_accept_item(mixer_entity, item_type, queries, shadow) {
         debug!(
             "ASSIGN: Mixer {:?} cannot accept item {:?} (Full or Reserved)",
             mixer_entity, item_type
@@ -138,7 +133,6 @@ fn assign_single_item_haul_to_mixer(
             source_item,
             mixer: mixer_entity,
             item_type,
-            mixer_already_reserved: false,
         },
         source_pos,
         already_commanded,

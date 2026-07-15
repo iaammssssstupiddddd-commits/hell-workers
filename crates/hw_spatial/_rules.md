@@ -5,8 +5,9 @@
 ## 責務（このクレートがやること）
 
 - ゲームワールドをグリッドに分割し、エンティティ位置の **近傍検索・最近傍検索** を提供する空間インデックスクレート
-- 全 `*SpatialGrid` Resource の型定義（`GridData<T>` + `SpatialGridOps` トレイト）
-- Change Detection（Added / Changed / RemovedComponents）に基づく差分更新システム
+- `SpatialIndex<Tag>`、`GridData`、crate 所有 ZST tag と唯一の `SpatialGridOps` 実装
+- 標準 Transform grid の Change Detection（Added / Changed / RemovedComponents）に基づく差分更新システム
+- Resource Visibility と Gathering center / Added-only の専用 policy
 
 ## 禁止事項（AI がやってはいけないこと）
 
@@ -50,10 +51,11 @@ hw_energy      ✗
 
 ## 新グリッド追加時のルール
 
-1. `SpatialGridOps` を実装した新 Resource を定義
-2. `lib.rs` に `pub use` を追加
-3. `bevy_app/src/plugins/spatial.rs` にシステム登録を追加
-4. [docs/architecture.md](../../docs/architecture.md) の空間グリッド一覧を更新
+1. `hw_spatial` 所有の ZST tag と `SpatialIndex<Tag>` の public alias を定義する（downstream component 型を tag にしない）
+2. 標準 Transform policy なら `update_transform_spatial_index_system::<Tag, Tracked>` を concrete wrapper から呼ぶ。座標正本または Change Detection policy が違う場合だけ専用 updater を置く
+3. `lib.rs` に alias / tag / wrapper の `pub use` を追加する
+4. `bevy_app/src/plugins/spatial.rs` にシステム登録と必要な schedule smoke test を追加する
+5. [docs/architecture.md](../../docs/architecture.md) の空間グリッド一覧を更新する
 
 ## docs 更新対象（変更時に必ず更新するドキュメント）
 

@@ -14,7 +14,7 @@ use crate::transport_request::{
     TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
     TransportRequestState,
 };
-use crate::types::{BelongsTo, BucketStorage, ReservedForTask, ResourceItem, ResourceType};
+use crate::types::{BelongsTo, BucketStorage, ResourceItem, ResourceType};
 use crate::zone::Stockpile;
 
 #[derive(Clone, Copy)]
@@ -55,7 +55,6 @@ type DroppedBucketsQuery<'w, 's> = Query<
         &'static Visibility,
         &'static ResourceItem,
         &'static BelongsTo,
-        Option<&'static ReservedForTask>,
         Option<&'static TaskWorkers>,
     ),
     (
@@ -127,16 +126,11 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
             .saturating_add(to_u32_saturating(free_slots));
     }
 
-    for (visibility, resource_item, belongs_to, reserved_opt, workers_opt) in
-        p.q_dropped_buckets.iter()
-    {
+    for (visibility, resource_item, belongs_to, workers_opt) in p.q_dropped_buckets.iter() {
         if *visibility == Visibility::Hidden {
             continue;
         }
         if !is_bucket_resource(resource_item.0) {
-            continue;
-        }
-        if reserved_opt.is_some() {
             continue;
         }
         if workers_opt.is_some_and(|workers| !workers.is_empty()) {

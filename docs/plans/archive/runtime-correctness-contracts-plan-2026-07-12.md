@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-12` |
 | 最終更新日 | `2026-07-14` |
 | 作成者 | `Codex` |
-| 親ロードマップ | [system-wide-correctness-refactoring-plan-2026-07-12.md](system-wide-correctness-refactoring-plan-2026-07-12.md) |
+| 親ロードマップ | [system-wide-correctness-refactoring-plan-2026-07-12.md](../system-wide-correctness-refactoring-plan-2026-07-12.md) |
 | 関連済み計画 | `archive/task-execution-refactor-plan-2026-07-07.md` / `archive/observer-message-optimization-plan-2026-03-23.md` |
 | 関連Issue/PR | `N/A` |
 
@@ -144,7 +144,7 @@ pub struct ActiveTaskIdentity {
 - 主効果は通知配送、タスク終了、Relationship removal、障害物同期の正しさ回復であり、ゲームバランスは変更しない。
 - obstacle source別の差分同期により、無関係な障害物変更時の全件再構築と不要な`Dirt` mutationを減らす。
 - terminal APIとtransportの明示化で分岐は増えるが、release buildでも一度だけ終了する契約を優先する。
-- 定量性能の採否は[性能計画](system-wide-runtime-performance-plan-2026-07-12.md)のbaselineと対象カウンタで別途判定する。
+- 定量性能の採否は[性能計画](../system-wide-runtime-performance-plan-2026-07-12.md)のbaselineと対象カウンタで別途判定する。
 
 ## 5. マイルストーン
 

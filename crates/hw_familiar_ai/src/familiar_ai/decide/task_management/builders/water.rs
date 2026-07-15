@@ -49,7 +49,6 @@ pub struct WaterHaulSpec {
     pub mixer: Entity,
     pub tank: Entity,
     pub needs_tank_fill: bool,
-    pub mixer_already_reserved: bool,
 }
 
 pub fn issue_haul_water_to_mixer(
@@ -77,7 +76,6 @@ pub fn issue_haul_water_to_mixer(
     reservation_ops.extend(build_mixer_destination_reservation_ops(
         spec.mixer,
         ResourceType::Water,
-        spec.mixer_already_reserved,
     ));
     submit_assignment_with_reservation_ops(
         ctx,

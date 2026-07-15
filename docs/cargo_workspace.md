@@ -420,7 +420,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - root 固有アセットを前提にした初期 sprite spawn
 - `GameAssets` への直接依存
 - root 側の startup / plugin wiring / entity spawn facade
-- `SpatialGrid` resource 実体と update system（9 種 concrete）は `hw_spatial` が保持（一部更新関数は `hw_logistics` にあり `plugins/spatial` から登録）
+- `SpatialIndex<Tag>` storage、crate 所有 tag、標準 Transform updater は `hw_spatial` が保持する。9 個の concrete resource 名は type alias で、`ResourceItem` / `Stockpile` / `TransportRequest` の component 特化 wrapper は `hw_logistics` にあり `plugins/spatial` から登録する
 
 補足:
 
@@ -430,13 +430,14 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 役割:
 
-- SpatialGrid の concrete resource / update 系（9 種）
-- `GridData` と空間検索ヘルパの共通化
+- `SpatialIndex<Tag>` の共通 storage / `SpatialGridOps` / 標準 Transform updater
+- `GridData` と空間検索ヘルパの共通化、crate 所有 ZST tag
 - 2D 空間スナップショットの初期化時の query 補助
 
 ここに置くもの:
 
 - `SpatialGrid`, `FamiliarSpatialGrid`, `BlueprintSpatialGrid`, `DesignationSpatialGrid`, `ResourceSpatialGrid`, `StockpileSpatialGrid`, `TransportRequestSpatialGrid`, `GatheringSpotSpatialGrid`, `FloorConstructionSpatialGrid`
+- `SoulIndexTag` などの index tag と `SpatialIndex<Tag>`。Resource の Visibility と Gathering の center / Added-only policy は専用 updater として保持する
 
 ここに置かないもの:
 

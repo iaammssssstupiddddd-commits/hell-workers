@@ -114,7 +114,6 @@ pub fn mud_mixer_auto_refine_system(
                         priority: Some(MUD_MIXER_REFINE_PRIORITY),
                         target_blueprint: None,
                         target_mixer: None,
-                        reserved_for_task: false,
                     },
                 });
 

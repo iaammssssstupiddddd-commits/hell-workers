@@ -1,47 +1,16 @@
-use super::grid::{GridData, SpatialGridOps};
+use super::grid::{
+    SpatialIndex, StockpileIndexTag, TransformSpatialUpdateQuery,
+    update_transform_spatial_index_system,
+};
 use bevy::prelude::*;
 
-type SpatialUpdateQuery<'w, 's, T> =
-    Query<'w, 's, (Entity, &'static Transform), (With<T>, Or<(Added<T>, Changed<Transform>)>)>;
-
 /// ストックパイル用の空間グリッド
-#[derive(Resource, Default)]
-pub struct StockpileSpatialGrid(pub GridData);
-
-impl StockpileSpatialGrid {
-    /// 指定範囲内のストックパイルを取得
-    pub fn get_in_area(&self, min: Vec2, max: Vec2) -> Vec<Entity> {
-        self.0.get_in_area(min, max)
-    }
-}
-
-impl SpatialGridOps for StockpileSpatialGrid {
-    fn insert(&mut self, entity: Entity, pos: Vec2) {
-        self.0.insert(entity, pos);
-    }
-    fn remove(&mut self, entity: Entity) {
-        self.0.remove(entity);
-    }
-    fn update(&mut self, entity: Entity, pos: Vec2) {
-        self.0.update(entity, pos);
-    }
-    fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
-        self.0.get_nearby_in_radius(pos, radius)
-    }
-    fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>) {
-        self.0.get_nearby_in_radius_into(pos, radius, out);
-    }
-}
+pub type StockpileSpatialGrid = SpatialIndex<StockpileIndexTag>;
 
 pub fn update_stockpile_spatial_grid_system<T: Component>(
-    mut grid: ResMut<StockpileSpatialGrid>,
-    query: SpatialUpdateQuery<T>,
-    mut removed: RemovedComponents<T>,
+    grid: ResMut<StockpileSpatialGrid>,
+    query: TransformSpatialUpdateQuery<T>,
+    removed: RemovedComponents<T>,
 ) {
-    for (entity, transform) in query.iter() {
-        grid.update(entity, transform.translation.truncate());
-    }
-    for entity in removed.read() {
-        grid.remove(entity);
-    }
+    update_transform_spatial_index_system::<StockpileIndexTag, T>(grid, query, removed);
 }

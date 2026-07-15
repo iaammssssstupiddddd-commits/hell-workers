@@ -4,7 +4,7 @@ use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, Tas
 use crate::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::prelude::*;
 use hw_core::soul::Path;
-use hw_logistics::{Inventory, ReservedForTask, Stockpile};
+use hw_logistics::{Inventory, Stockpile};
 
 use hw_world::WorldMap;
 
@@ -45,7 +45,6 @@ pub fn pickup_item(
         .remove::<hw_jobs::Designation>()
         .remove::<hw_jobs::TaskSlots>()
         .remove::<hw_jobs::Priority>()
-        .remove::<ReservedForTask>()
         .remove::<hw_core::relationships::StoredIn>();
 }
 

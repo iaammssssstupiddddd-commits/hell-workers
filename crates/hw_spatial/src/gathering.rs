@@ -1,28 +1,9 @@
-use crate::grid::{GridData, SpatialGridOps};
+use crate::grid::{GatheringSpotIndexTag, SpatialGridOps, SpatialIndex};
 use bevy::prelude::*;
 use hw_core::gathering::GatheringSpot;
 
 /// 集会スポット用の空間グリッド
-#[derive(Resource, Default)]
-pub struct GatheringSpotSpatialGrid(pub GridData);
-
-impl SpatialGridOps for GatheringSpotSpatialGrid {
-    fn insert(&mut self, entity: Entity, pos: Vec2) {
-        self.0.insert(entity, pos);
-    }
-    fn remove(&mut self, entity: Entity) {
-        self.0.remove(entity);
-    }
-    fn update(&mut self, entity: Entity, pos: Vec2) {
-        self.0.update(entity, pos);
-    }
-    fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
-        self.0.get_nearby_in_radius(pos, radius)
-    }
-    fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>) {
-        self.0.get_nearby_in_radius_into(pos, radius, out);
-    }
-}
+pub type GatheringSpotSpatialGrid = SpatialIndex<GatheringSpotIndexTag>;
 
 pub fn update_gathering_spot_spatial_grid_system(
     mut grid: ResMut<GatheringSpotSpatialGrid>,
@@ -36,5 +17,51 @@ pub fn update_gathering_spot_spatial_grid_system(
     }
     for entity in removed.read() {
         grid.remove(entity);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gathering_index_uses_added_center_and_ignores_later_timer_changes() {
+        let mut app = App::new();
+        app.init_resource::<GatheringSpotSpatialGrid>()
+            .add_systems(Update, update_gathering_spot_spatial_grid_system);
+
+        let entity = app
+            .world_mut()
+            .spawn(GatheringSpot {
+                center: Vec2::new(24.0, 0.0),
+                ..default()
+            })
+            .id();
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<GatheringSpotSpatialGrid>()
+                .get_nearby_in_radius(Vec2::new(24.0, 0.0), 1.0),
+            vec![entity]
+        );
+
+        let mut entity_mut = app.world_mut().entity_mut(entity);
+        let mut spot = entity_mut
+            .get_mut::<GatheringSpot>()
+            .expect("gathering entity has its spot component");
+        spot.center = Vec2::new(96.0, 0.0);
+        spot.grace_timer -= 1.0;
+        app.update();
+
+        let index = app.world().resource::<GatheringSpotSpatialGrid>();
+        assert_eq!(
+            index.get_nearby_in_radius(Vec2::new(24.0, 0.0), 1.0),
+            vec![entity]
+        );
+        assert!(
+            index
+                .get_nearby_in_radius(Vec2::new(96.0, 0.0), 1.0)
+                .is_empty()
+        );
     }
 }

@@ -6,9 +6,9 @@
 | --- | --- |
 | 計画ID | `system-wide-correctness-refactoring-plan-2026-07-12` |
 | 文書種別 | 横断ロードマップ |
-| ステータス | `Draft` |
+| ステータス | `In Progress` |
 | 作成日 | `2026-07-12` |
-| 最終更新日 | `2026-07-12` |
+| 最終更新日 | `2026-07-15` |
 | 作成者 | `Codex` |
 | 関連提案 | `N/A`（2026-07-12 の全体実装レビューに基づく） |
 | 関連Issue/PR | `N/A` |
@@ -23,10 +23,10 @@
 
 | 分類 | 計画 | 対象 | 開始条件 |
 | --- | --- | --- | --- |
-| 正しさ | [runtime-correctness-contracts-plan-2026-07-12.md](runtime-correctness-contracts-plan-2026-07-12.md) | 最小test harness、通知transport、タスク終了/Relationship、RemovedComponents、障害物同期 | なし |
-| 永続化 | [save-load-hardening-plan-2026-07-12.md](save-load-hardening-plan-2026-07-12.md) | 外部save header、schema、preflight/rollback、frame境界、load reset、legacy shim | M1〜M3はruntime M0、M4はruntime M1/M2/M4、M5はruntime M3完了 |
-| 構造・品質 | [structural-maintainability-followups-plan-2026-07-12.md](structural-maintainability-followups-plan-2026-07-12.md) | production App composition、SpatialIndex共通化、Clippy allow、toolchain/CI、format baseline | runtime/save-load完了、performance M0〜M7完了、条件付きM8の実施/skip決定後 |
-| 性能 | [system-wide-runtime-performance-plan-2026-07-12.md](system-wide-runtime-performance-plan-2026-07-12.md) | 計測基盤、変更検知、A*予算、低頻度化、描画hot path | M0はruntime M0後。M1〜M7は同計画§3.4のruntime/save-load前提完了後 |
+| 正しさ | [archive/runtime-correctness-contracts-plan-2026-07-12.md](archive/runtime-correctness-contracts-plan-2026-07-12.md) | 最小test harness、通知transport、タスク終了/Relationship、RemovedComponents、障害物同期 | Completed |
+| 永続化 | [archive/save-load-hardening-plan-2026-07-12.md](archive/save-load-hardening-plan-2026-07-12.md) | 外部save header、schema、preflight/rollback、frame境界、load reset、legacy shim | Completed |
+| 構造・品質 | [archive/structural-maintainability-followups-plan-2026-07-12.md](archive/structural-maintainability-followups-plan-2026-07-12.md) | production App composition、SpatialIndex共通化、Clippy allow、toolchain/local quality gate、format baseline | Completed（GitHub CI 実行確認は対象外） |
+| 性能 | [system-wide-runtime-performance-plan-2026-07-12.md](system-wide-runtime-performance-plan-2026-07-12.md) | 計測基盤、変更検知、A*予算、低頻度化、描画hot path | 本依頼の対象外。M0はruntime M0後。M1〜M7は同計画§3.4のruntime/save-load前提完了後 |
 
 ## 3. 分割理由
 
@@ -65,9 +65,13 @@ runtime M0 ─> performance M0: baseline計測
 runtime M3 ─> performance task/reservation最適化
 runtime M4 ─> performance obstacle/path最適化
 
-runtime 完了 + save-load 完了 + performance M0〜M7
-  + performance M8の実施/skip決定
-  └─> structural M1〜M4
+runtime 完了 + save-load 完了
+  ├─> structural M1 / M3 / M4
+  └─> structural M2: tag / alias / update policyを保つ機械的共通化
+       （2026-07-15 の明示指示により性能計画と独立して実施）
+
+performance M0〜M7 + performance M8の実施/skip決定
+  └─> 性能最適化の採否・後続の性能計画
 ```
 
 ## 5. 全体で固定する設計判断
@@ -111,25 +115,21 @@ runtime 完了 + save-load 完了 + performance M0〜M7
 
 ### 現在地
 
-- 進捗: `5%`
-- 子計画: runtime正しさ計画のM0完了。Save/Load・性能・構造計画は未着手
-- 現在のworktreeにある `docs/proposals/hvac-plumbing-proposal.md` の既存変更は、本ロードマップと無関係。編集・revert・commit対象に含めない。
+- 進捗: 非性能の runtime / Save-Load / 構造子計画は archive 済み。性能子計画だけが継続し、本依頼の対象外。
 
 ### 次のAIが最初にやること
 
-1. runtime計画のM0から開始する。
-2. Bevy 0.19の `Commands`、Relationship、RemovedComponentsの一次情報を再確認する。
-3. 失敗する回帰テストと対応修正を同じマイルストーンでgreenにする。
+1. 性能作業を再開する場合は [system-wide-runtime-performance-plan-2026-07-12.md](system-wide-runtime-performance-plan-2026-07-12.md) を正本にする。
 
 ### Definition of Done
 
-- [ ] 4つの子計画が完了・archive済み
-- [ ] 確認済みの挙動不良に自動回帰テストがある
-- [ ] 恒久ドキュメントが現行コードと一致
-- [ ] `cargo check --workspace` 成功
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings` 成功
-- [ ] `cargo test --workspace` 成功
-- [ ] docs index更新済み
+- [x] 非性能の3子計画が完了・archive済み（性能計画は別トラック）
+- [x] 確認済みの挙動不良に自動回帰テストがある
+- [x] 恒久ドキュメントが現行コードと一致
+- [x] `cargo check --workspace` 成功
+- [x] `cargo clippy --workspace --all-targets -- -D warnings` 成功
+- [x] `cargo test --workspace` 成功
+- [x] docs index更新済み
 
 ## 10. 更新履歴
 
@@ -139,3 +139,5 @@ runtime 完了 + save-load 完了 + performance M0〜M7
 | `2026-07-12` | `Codex` | 自己レビューを反映し、単一の9マイルストーン計画を3子計画のロードマップへ再編 |
 | `2026-07-12` | `Codex` | 性能計画を横断ロードマップへ統合し、分割後の依存関係を明記 |
 | `2026-07-12` | `Codex` | 性能M0の開始条件をruntime M0完了後へ統一 |
+| `2026-07-15` | `Codex` | 非性能の残件を更新。runtime / Save-Load 計画を archive し、構造計画 M2 を性能最適化と独立した tag / alias 共通化として完了。M4 の GitHub CI 確認と性能子計画は継続。 |
+| `2026-07-15` | `Codex` | 指示により structural M4 の GitHub CI 実行確認を対象外とし、ローカル品質ゲートで構造計画を完了・archiveした。 |

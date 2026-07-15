@@ -77,7 +77,6 @@ pub struct MixerHaulSpec {
     pub source_item: Entity,
     pub mixer: Entity,
     pub item_type: ResourceType,
-    pub mixer_already_reserved: bool,
 }
 
 pub fn issue_haul_to_mixer(
@@ -98,7 +97,6 @@ pub fn issue_haul_to_mixer(
     reservation_ops.extend(build_mixer_destination_reservation_ops(
         spec.mixer,
         spec.item_type,
-        spec.mixer_already_reserved,
     ));
     submit_assignment_with_reservation_ops(
         ctx,

@@ -17,7 +17,7 @@ use crate::transport_request::{
     TransportPriority, TransportRequest, TransportRequestKind, TransportRequestMetrics,
     TransportRequestState,
 };
-use crate::types::{BelongsTo, BucketStorage, ReservedForTask, ResourceItem, ResourceType};
+use crate::types::{BelongsTo, BucketStorage, ResourceItem, ResourceType};
 use crate::zone::Stockpile;
 
 use super::stockpile_group::{
@@ -49,7 +49,6 @@ type FreeItemsQuery<'w, 's> = Query<
     (
         Without<Designation>,
         Without<TaskWorkers>,
-        Without<ReservedForTask>,
         Without<ManualHaulPinnedSource>,
         Without<hw_core::relationships::StoredIn>,
     ),

@@ -11,7 +11,7 @@
 | 作成者 | `Codex` |
 | 関連提案 | `N/A` |
 | 関連Issue/PR | `N/A` |
-| 関連計画 | `docs/plans/archive/system-wide-performance-followups-plan-2026-07-07.md`, `docs/plans/performance-cpu-2026-04-16.md`, `docs/plans/system-wide-correctness-refactoring-plan-2026-07-12.md`, `docs/plans/runtime-correctness-contracts-plan-2026-07-12.md`, `docs/plans/save-load-hardening-plan-2026-07-12.md`, `docs/plans/structural-maintainability-followups-plan-2026-07-12.md` |
+| 関連計画 | `docs/plans/archive/system-wide-performance-followups-plan-2026-07-07.md`, `docs/plans/performance-cpu-2026-04-16.md`, `docs/plans/system-wide-correctness-refactoring-plan-2026-07-12.md`, `docs/plans/archive/runtime-correctness-contracts-plan-2026-07-12.md`, `docs/plans/archive/save-load-hardening-plan-2026-07-12.md`, `docs/plans/archive/structural-maintainability-followups-plan-2026-07-12.md` |
 
 ## 1. 目的
 
@@ -939,9 +939,9 @@
 - `docs/entity_list_ui.md`
 - `docs/rendering-performance.md`
 - `docs/plans/system-wide-correctness-refactoring-plan-2026-07-12.md`
-- `docs/plans/runtime-correctness-contracts-plan-2026-07-12.md`
-- `docs/plans/save-load-hardening-plan-2026-07-12.md`
-- `docs/plans/structural-maintainability-followups-plan-2026-07-12.md`
+- `docs/plans/archive/runtime-correctness-contracts-plan-2026-07-12.md`
+- `docs/plans/archive/save-load-hardening-plan-2026-07-12.md`
+- `docs/plans/archive/structural-maintainability-followups-plan-2026-07-12.md`
 - `docs/plans/archive/system-wide-performance-followups-plan-2026-07-07.md`
 - `crates/hw_soul_ai/src/soul_ai/execute/task_execution_system.rs`
 - `crates/bevy_app/src/systems/familiar_ai/perceive/resource_sync.rs`

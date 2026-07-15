@@ -25,7 +25,12 @@ pub use floor_construction::{
     FloorConstructionSpatialGrid, update_floor_construction_spatial_grid_system,
 };
 pub use gathering::{GatheringSpotSpatialGrid, update_gathering_spot_spatial_grid_system};
-pub use grid::{GridData, SpatialGridOps};
+pub use grid::{
+    BlueprintIndexTag, DesignationIndexTag, FamiliarIndexTag, FloorConstructionIndexTag,
+    GatheringSpotIndexTag, GridData, ResourceIndexTag, SoulIndexTag, SpatialGridOps, SpatialIndex,
+    StockpileIndexTag, TransformSpatialUpdateQuery, TransportRequestIndexTag,
+    update_transform_spatial_index_system,
+};
 pub use resource::{ResourceSpatialGrid, update_resource_spatial_grid_system};
 pub use soul::{SpatialGrid, update_damned_soul_spatial_grid_system, update_spatial_grid_system};
 pub use stockpile::{StockpileSpatialGrid, update_stockpile_spatial_grid_system};

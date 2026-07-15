@@ -12,8 +12,8 @@ pub use hw_logistics::tile_index::{
     sync_removed_wall_tile_site_index_system, sync_wall_tile_site_index_system,
 };
 pub use hw_logistics::types::{
-    BelongsTo, BucketStorage, Inventory, PendingBelongsToBlueprint, ReservedForTask, ResourceItem,
-    ResourceType, Wheelbarrow, WheelbarrowParking,
+    BelongsTo, BucketStorage, Inventory, PendingBelongsToBlueprint, ResourceItem, ResourceType,
+    Wheelbarrow, WheelbarrowParking,
 };
 pub use hw_logistics::wall_construction::{
     wall_site_tile_demand, wall_site_tile_demand_from_index,

@@ -109,7 +109,6 @@ pub fn handle(
         item_commands.try_remove::<hw_jobs::Designation>();
         item_commands.try_remove::<hw_jobs::TaskSlots>();
         item_commands.try_remove::<hw_jobs::Priority>();
-        item_commands.try_remove::<hw_logistics::ReservedForTask>();
 
         if let Some(stock_entity) = stored_in_stockpile {
             update_stockpile_on_item_removal(*stock_entity, &mut ctx.queries.storage.stockpiles);

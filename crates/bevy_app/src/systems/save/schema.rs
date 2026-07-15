@@ -52,11 +52,9 @@ use hw_logistics::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportPolicy,
     TransportPriority, TransportRequest, TransportRequestFixedSource, TransportRequestKind,
 };
-use hw_logistics::types::WheelbarrowParking;
+use hw_logistics::types::{ReservedForTask, WheelbarrowParking};
 use hw_logistics::zone::Stockpile;
-use hw_logistics::{
-    BelongsTo, Inventory, PendingBelongsToBlueprint, ReservedForTask, ResourceItem, Wheelbarrow,
-};
+use hw_logistics::{BelongsTo, Inventory, PendingBelongsToBlueprint, ResourceItem, Wheelbarrow};
 
 use hw_world::{TerrainType, WorldMap};
 
@@ -121,7 +119,6 @@ macro_rules! for_each_persisted_component {
         $callback!(ResourceItem);
         $callback!(BelongsTo);
         $callback!(PendingBelongsToBlueprint);
-        $callback!(ReservedForTask);
         $callback!(Inventory);
         $callback!(Wheelbarrow);
         $callback!(WheelbarrowParking);
@@ -166,6 +163,15 @@ macro_rules! for_each_runtime_derived_component {
     ($callback:ident) => {
         $callback!(ParticipatingIn);
         $callback!(GatheringParticipants);
+    };
+}
+
+// `ReservedForTask` was persisted by headerless v0 saves. Keep it registered
+// only so those bodies can deserialize; it is stripped before v0 schema
+// validation and never enters the v1 allow-list.
+macro_rules! for_each_legacy_v0_component {
+    ($callback:ident) => {
+        $callback!(ReservedForTask);
     };
 }
 
@@ -250,6 +256,7 @@ pub(super) fn register_save_types(app: &mut App) {
     for_each_persisted_resource!(register_type);
     for_each_persisted_component!(register_type);
     for_each_runtime_derived_component!(register_type);
+    for_each_legacy_v0_component!(register_type);
     for_each_reflect_dependency!(register_type);
 }
 
@@ -308,6 +315,21 @@ pub(super) fn discard_runtime_derived_components(dynamic_world: &mut DynamicWorl
             !component
                 .get_represented_type_info()
                 .is_some_and(|info| is_runtime_derived_component!(info.type_id()))
+        });
+    }
+}
+
+/// Removes the loader-only v0 marker before the durable schema rejects it.
+///
+/// This must only be called for headerless v0 files. A v1 body containing the
+/// removed marker is malformed and must remain visible to schema validation.
+pub(super) fn discard_legacy_reserved_for_task(dynamic_world: &mut DynamicWorld) {
+    let legacy_type = std::any::TypeId::of::<ReservedForTask>();
+    for entity in &mut dynamic_world.entities {
+        entity.components.retain(|component| {
+            component
+                .get_represented_type_info()
+                .is_none_or(|info| info.type_id() != legacy_type)
         });
     }
 }
@@ -495,7 +517,7 @@ mod tests {
     use bevy::asset::{AssetPath, LoadFromPath, UntypedHandle};
     use bevy::ecs::entity::EntityHashMap;
     use bevy::ecs::reflect::{AppTypeRegistry, ReflectComponent, ReflectResource};
-    use bevy::reflect::{ReflectDeserialize, ReflectSerialize, TypeRegistry};
+    use bevy::reflect::{ReflectDeserialize, ReflectSerialize, TypePath, TypeRegistry};
     use bevy_world_serialization::serde::WorldDeserializer;
     use serde::de::DeserializeSeed;
 
@@ -580,6 +602,7 @@ mod tests {
         for_each_persisted_resource!(assert_resource);
         for_each_persisted_component!(assert_component);
         for_each_runtime_derived_component!(assert_component);
+        for_each_legacy_v0_component!(assert_component);
         for_each_reflect_dependency!(assert_dependency);
         assert!(
             registration::<WorldMap>(&registry)
@@ -840,6 +863,56 @@ mod tests {
                 .type_id(),
             TypeId::of::<DamnedSoul>()
         );
+    }
+
+    #[test]
+    fn reserved_for_task_is_loader_registered_but_excluded_from_v1_schema() {
+        let mut app = App::new();
+        register_save_types(&mut app);
+        let item = app
+            .world_mut()
+            .spawn((ResourceItem(ResourceType::Wood), ReservedForTask))
+            .id();
+
+        let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        assert_component_registration::<ReservedForTask>(&registry);
+
+        let persisted = build_persisted_world(app.world(), &registry, std::iter::once(item));
+        let saved_item = persisted
+            .entities
+            .iter()
+            .find(|entity| entity.entity == item)
+            .expect("resource item root must be extracted");
+        assert!(saved_item.components.iter().all(|component| {
+            component
+                .get_represented_type_info()
+                .is_none_or(|info| info.type_id() != TypeId::of::<ReservedForTask>())
+        }));
+        let body = persisted.serialize(&registry).unwrap();
+        assert!(!body.contains(ReservedForTask::type_path()));
+        drop(registry);
+
+        let mut legacy_body = DynamicWorld {
+            resources: Vec::new(),
+            entities: vec![bevy_world_serialization::DynamicEntity {
+                entity: item,
+                components: vec![
+                    Box::new(ResourceItem(ResourceType::Wood)),
+                    Box::new(ReservedForTask),
+                ],
+            }],
+        };
+        let error = validate_persisted_world(&legacy_body).unwrap_err();
+        assert!(
+            error
+                .unsupported_components
+                .contains(&ReservedForTask::type_path().to_string())
+        );
+
+        discard_legacy_reserved_for_task(&mut legacy_body);
+        let error = validate_persisted_world(&legacy_body).unwrap_err();
+        assert!(error.unsupported_components.is_empty());
     }
 
     #[test]

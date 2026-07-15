@@ -29,8 +29,7 @@ pub use spatial_sync::{
     update_transport_request_spatial_grid_system_transport_request,
 };
 pub use types::{
-    BelongsTo, BucketStorage, Inventory, PendingBelongsToBlueprint, ReservedForTask, ResourceItem,
-    Wheelbarrow,
+    BelongsTo, BucketStorage, Inventory, PendingBelongsToBlueprint, ResourceItem, Wheelbarrow,
 };
 pub use water::tank_has_capacity_for_full_bucket;
 pub use zone::Stockpile;

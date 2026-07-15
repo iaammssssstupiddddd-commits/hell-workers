@@ -147,7 +147,6 @@ pub fn issue_collect_sand_with_wheelbarrow_to_mixer(
         reservation_ops.extend(build_mixer_destination_reservation_ops(
             spec.destination,
             ResourceType::Sand,
-            false,
         ));
     }
     submit_assignment_with_reservation_ops(

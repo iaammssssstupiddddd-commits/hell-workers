@@ -12,7 +12,7 @@ use crate::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportRequest,
     TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
-use crate::types::{BelongsTo, ReservedForTask, ResourceItem, Wheelbarrow};
+use crate::types::{BelongsTo, ResourceItem, Wheelbarrow};
 
 use super::collection::{CollectCandidatesQueries, collect_candidates};
 use super::grants::{GrantStats, grant_leases};
@@ -68,7 +68,6 @@ type ArbitrationFreeItemQuery<'w, 's> = Query<
     (
         Without<Designation>,
         Without<hw_core::relationships::TaskWorkers>,
-        Without<ReservedForTask>,
         Without<ManualHaulPinnedSource>,
     ),
 >;
@@ -119,10 +118,6 @@ pub fn wheelbarrow_arbitration_system(
     let removed_requests = drain_removed(&mut dirty.removed_requests);
     let removed_leases = drain_removed(&mut dirty.removed_leases);
     let removed_resource_items = drain_removed(&mut dirty.removed_resource_items);
-    let removed_reserved_for_task = removed_affects_resource_items(
-        &mut dirty.removed_reserved_for_task,
-        &dirty.q_resource_entities,
-    );
     let removed_pinned_source = removed_affects_resource_items(
         &mut dirty.removed_pinned_source,
         &dirty.q_resource_entities,
@@ -144,7 +139,6 @@ pub fn wheelbarrow_arbitration_system(
     let request_dirty = !dirty.q_request_dirty.is_empty() || removed_requests || removed_leases;
     let free_item_dirty = !dirty.q_free_item_dirty.is_empty()
         || removed_resource_items
-        || removed_reserved_for_task
         || removed_pinned_source
         || removed_belongs
         || removed_stored_in

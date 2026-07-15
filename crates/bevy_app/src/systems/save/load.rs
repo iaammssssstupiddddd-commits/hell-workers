@@ -31,7 +31,8 @@ use super::format::{SaveFormat, SaveFormatError, decode_save_file};
 use super::rehydrate::{rehydrate_after_load, validate_rehydrate_prerequisites};
 use super::reset::reset_runtime_caches;
 use super::schema::{
-    DynamicWorldSchemaError, discard_runtime_derived_components, validate_persisted_world,
+    DynamicWorldSchemaError, discard_legacy_reserved_for_task, discard_runtime_derived_components,
+    validate_persisted_world,
 };
 use super::state::{SavePath, SavedWorldgenSeed};
 use super::transaction::{preflight_dynamic_world, replace_persisted_world};
@@ -202,6 +203,7 @@ fn prepare_load_from_str(
             ),
         }
         remove_legacy_saved_worldgen_seed(&mut dynamic_world);
+        discard_legacy_reserved_for_task(&mut dynamic_world);
     }
 
     discard_runtime_derived_components(&mut dynamic_world);
@@ -285,11 +287,55 @@ fn finalize_loaded_world(world: &mut World) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    use std::any::TypeId;
+
+    use bevy::asset::AssetPlugin;
+
     use super::*;
     use crate::world::map::GeneratedWorldLayoutResource;
+    use hw_core::GameTime;
+    use hw_core::logistics::ResourceType;
+    use hw_core::population::PopulationManager;
+    use hw_core::soul::DreamPool;
+    use hw_logistics::types::{ReservedForTask, ResourceItem};
     use hw_world::GeneratedWorldLayout;
+    use hw_world::WorldMap;
 
     use super::super::format::{SaveHeader, encode_save_file};
+    use super::super::schema::{build_persisted_world, register_save_types};
+
+    fn legacy_loader_test_app() -> App {
+        let mut app = App::new();
+        app.add_plugins(AssetPlugin::default());
+        register_save_types(&mut app);
+
+        let world = app.world_mut();
+        world.insert_resource(GeneratedWorldLayoutResource {
+            master_seed: 42,
+            layout: GeneratedWorldLayout::stub(42),
+        });
+        world.insert_resource(GameTime::default());
+        world.insert_resource(DreamPool::default());
+        world.insert_resource(PopulationManager::default());
+        world.insert_resource(WorldMap::default());
+        app
+    }
+
+    fn legacy_body_with_reserved_for_task(app: &mut App) -> String {
+        let item = app.world_mut().spawn(ResourceItem(ResourceType::Wood)).id();
+        let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let mut dynamic_world =
+            build_persisted_world(app.world(), &registry, std::iter::once(item));
+        dynamic_world
+            .entities
+            .iter_mut()
+            .find(|entity| entity.entity == item)
+            .expect("resource item root must be persisted")
+            .components
+            .push(Box::new(ReservedForTask));
+        dynamic_world.serialize(&registry).unwrap()
+    }
 
     #[test]
     fn v1_seed_mismatch_is_rejected_before_dynamic_world_deserialization() {
@@ -333,5 +379,45 @@ mod tests {
         remove_legacy_saved_worldgen_seed(&mut dynamic_world);
 
         assert!(dynamic_world.resources.is_empty());
+    }
+
+    #[test]
+    fn legacy_reserved_marker_is_stripped_before_schema_validation_and_v1_resave() {
+        assert_eq!(
+            ReservedForTask::type_path(),
+            "hw_logistics::types::ReservedForTask",
+            "headerless v0 bodies require the historical reflected type path"
+        );
+
+        let mut app = legacy_loader_test_app();
+        let legacy_body = legacy_body_with_reserved_for_task(&mut app);
+
+        let prepared = prepare_load_from_str(app.world(), &legacy_body)
+            .expect("headerless v0 body with the legacy marker must remain loadable");
+        assert_eq!(prepared.format, SaveFormat::LegacyV0);
+        assert!(prepared.dynamic_world.entities.iter().all(|entity| {
+            entity.components.iter().all(|component| {
+                component
+                    .get_represented_type_info()
+                    .is_none_or(|info| info.type_id() != TypeId::of::<ReservedForTask>())
+            })
+        }));
+
+        let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let resaved_v1_body = prepared.dynamic_world.serialize(&registry).unwrap();
+        assert!(!resaved_v1_body.contains(ReservedForTask::type_path()));
+    }
+
+    #[test]
+    fn v1_body_with_legacy_reserved_marker_is_rejected() {
+        let mut app = legacy_loader_test_app();
+        let legacy_body = legacy_body_with_reserved_for_task(&mut app);
+        let v1_contents = encode_save_file(SaveHeader::current(42), &legacy_body);
+
+        assert!(matches!(
+            prepare_load_from_str(app.world(), &v1_contents),
+            Err(LoadPreparationError::Schema(_))
+        ));
     }
 }

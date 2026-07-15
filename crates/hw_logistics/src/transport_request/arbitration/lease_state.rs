@@ -9,7 +9,7 @@ use crate::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportRequest,
     TransportRequestKind, TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
-use crate::types::{ReservedForTask, ResourceItem, Wheelbarrow};
+use crate::types::{ResourceItem, Wheelbarrow};
 
 type LeaseRequestsQuery<'w, 's> = Query<
     'w,
@@ -38,7 +38,6 @@ type FreeItemsQuery<'w, 's> = Query<
     (
         Without<Designation>,
         Without<hw_core::relationships::TaskWorkers>,
-        Without<ReservedForTask>,
         Without<ManualHaulPinnedSource>,
     ),
 >;

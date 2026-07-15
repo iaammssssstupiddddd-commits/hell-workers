@@ -314,7 +314,6 @@ pub enum DesignationOp {
         priority: Option<u32>,
         target_blueprint: Option<Entity>,
         target_mixer: Option<Entity>,
-        reserved_for_task: bool,
     },
 }
 

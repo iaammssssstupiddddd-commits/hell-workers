@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
+use std::marker::PhantomData;
 
 pub use hw_world::SpatialGridOps;
 
@@ -136,5 +137,234 @@ impl GridData {
     pub fn clear(&mut self) {
         self.grid.clear();
         self.positions.clear();
+    }
+}
+
+/// A type-separated spatial index backed by the common grid storage.
+///
+/// Tags are owned by this crate rather than by the domain crates that own the
+/// tracked components. This keeps the spatial crate independent from its
+/// downstream users while preserving Bevy Resource separation per index.
+#[derive(Resource)]
+pub struct SpatialIndex<Tag> {
+    data: GridData,
+    marker: PhantomData<fn() -> Tag>,
+}
+
+impl<Tag> Default for SpatialIndex<Tag> {
+    fn default() -> Self {
+        Self {
+            data: GridData::default(),
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<Tag> SpatialIndex<Tag> {
+    /// Creates an index with caller-supplied grid storage.
+    ///
+    /// This keeps custom cell sizing available to callers without exposing the
+    /// tag marker that separates Bevy resources.
+    #[must_use]
+    pub fn new(data: GridData) -> Self {
+        Self {
+            data,
+            marker: PhantomData,
+        }
+    }
+
+    /// Returns the underlying grid data for read-only inspection.
+    pub fn data(&self) -> &GridData {
+        &self.data
+    }
+
+    /// Returns the underlying grid data for explicit grid configuration.
+    pub fn data_mut(&mut self) -> &mut GridData {
+        &mut self.data
+    }
+
+    /// Consumes this index and returns its grid data.
+    #[must_use]
+    pub fn into_data(self) -> GridData {
+        self.data
+    }
+
+    /// Returns the entities whose recorded positions are inside the rectangle.
+    pub fn get_in_area(&self, min: Vec2, max: Vec2) -> Vec<Entity> {
+        self.data.get_in_area(min, max)
+    }
+}
+
+impl<Tag> From<GridData> for SpatialIndex<Tag> {
+    fn from(data: GridData) -> Self {
+        Self::new(data)
+    }
+}
+
+impl<Tag: Send + Sync + 'static> SpatialGridOps for SpatialIndex<Tag> {
+    fn insert(&mut self, entity: Entity, pos: Vec2) {
+        self.data.insert(entity, pos);
+    }
+
+    fn remove(&mut self, entity: Entity) {
+        self.data.remove(entity);
+    }
+
+    fn update(&mut self, entity: Entity, pos: Vec2) {
+        self.data.update(entity, pos);
+    }
+
+    fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {
+        self.data.get_nearby_in_radius(pos, radius)
+    }
+
+    fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>) {
+        self.data.get_nearby_in_radius_into(pos, radius, out);
+    }
+}
+
+/// Query shape for index families whose position source is `Transform`.
+pub type TransformSpatialUpdateQuery<'w, 's, Tracked> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (With<Tracked>, Or<(Added<Tracked>, Changed<Transform>)>),
+>;
+
+/// Synchronizes a standard Transform-backed index from component changes.
+///
+/// Resource and Gathering indexes intentionally do not use this system because
+/// their visibility and center-coordinate policies differ from the standard
+/// Transform contract.
+pub fn update_transform_spatial_index_system<Tag, Tracked>(
+    mut index: ResMut<SpatialIndex<Tag>>,
+    query: TransformSpatialUpdateQuery<Tracked>,
+    mut removed: RemovedComponents<Tracked>,
+) where
+    Tag: Send + Sync + 'static,
+    Tracked: Component,
+{
+    for (entity, transform) in query.iter() {
+        index.update(entity, transform.translation.truncate());
+    }
+
+    for entity in removed.read() {
+        index.remove(entity);
+    }
+}
+
+/// Tag for DamnedSoul positions.
+pub struct SoulIndexTag;
+/// Tag for Familiar positions.
+pub struct FamiliarIndexTag;
+/// Tag for Designation positions.
+pub struct DesignationIndexTag;
+/// Tag for Blueprint positions.
+pub struct BlueprintIndexTag;
+/// Tag for FloorConstructionSite positions.
+pub struct FloorConstructionIndexTag;
+/// Tag for Stockpile positions.
+pub struct StockpileIndexTag;
+/// Tag for TransportRequest positions.
+pub struct TransportRequestIndexTag;
+/// Tag for ResourceItem positions.
+pub struct ResourceIndexTag;
+/// Tag for GatheringSpot centers.
+pub struct GatheringSpotIndexTag;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Component)]
+    struct Tracked;
+
+    struct FirstTag;
+    struct SecondTag;
+
+    #[test]
+    fn tags_keep_spatial_resources_separate() {
+        let mut app = App::new();
+        app.init_resource::<SpatialIndex<FirstTag>>()
+            .init_resource::<SpatialIndex<SecondTag>>()
+            .add_systems(
+                Update,
+                update_transform_spatial_index_system::<FirstTag, Tracked>,
+            );
+
+        let entity = app
+            .world_mut()
+            .spawn((Tracked, Transform::from_xyz(16.0, 0.0, 0.0)))
+            .id();
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .resource::<SpatialIndex<FirstTag>>()
+                .get_nearby_in_radius(Vec2::new(16.0, 0.0), 1.0),
+            vec![entity]
+        );
+        assert!(
+            app.world()
+                .resource::<SpatialIndex<SecondTag>>()
+                .get_nearby_in_radius(Vec2::new(16.0, 0.0), 1.0)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn index_keeps_custom_grid_data_available() {
+        let mut index = SpatialIndex::<FirstTag>::new(GridData::new(48.0));
+        assert_eq!(index.data().cell_size, 48.0);
+
+        index.data_mut().clear();
+        assert_eq!(index.into_data().cell_size, 48.0);
+    }
+
+    #[test]
+    fn transform_updater_tracks_add_move_and_component_removal() {
+        let mut app = App::new();
+        app.init_resource::<SpatialIndex<FirstTag>>().add_systems(
+            Update,
+            update_transform_spatial_index_system::<FirstTag, Tracked>,
+        );
+
+        let entity = app
+            .world_mut()
+            .spawn((Tracked, Transform::from_xyz(16.0, 0.0, 0.0)))
+            .id();
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<SpatialIndex<FirstTag>>()
+                .get_nearby_in_radius(Vec2::new(16.0, 0.0), 1.0),
+            vec![entity]
+        );
+
+        app.world_mut()
+            .entity_mut(entity)
+            .get_mut::<Transform>()
+            .expect("tracked entity has a Transform")
+            .translation = Vec3::new(96.0, 0.0, 0.0);
+        app.update();
+        let index = app.world().resource::<SpatialIndex<FirstTag>>();
+        assert!(
+            index
+                .get_nearby_in_radius(Vec2::new(16.0, 0.0), 1.0)
+                .is_empty()
+        );
+        assert_eq!(
+            index.get_nearby_in_radius(Vec2::new(96.0, 0.0), 1.0),
+            vec![entity]
+        );
+
+        app.world_mut().entity_mut(entity).remove::<Tracked>();
+        app.update();
+        assert!(
+            app.world()
+                .resource::<SpatialIndex<FirstTag>>()
+                .get_nearby_in_radius(Vec2::new(96.0, 0.0), 1.0)
+                .is_empty()
+        );
     }
 }

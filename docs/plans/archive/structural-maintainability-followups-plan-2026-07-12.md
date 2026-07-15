@@ -5,12 +5,12 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `structural-maintainability-followups-plan-2026-07-12` |
-| ステータス | `In Progress` |
+| ステータス | `Completed` |
 | 作成日 | `2026-07-12` |
 | 最終更新日 | `2026-07-15` |
 | 作成者 | `Codex` |
-| 親ロードマップ | [system-wide-correctness-refactoring-plan-2026-07-12.md](system-wide-correctness-refactoring-plan-2026-07-12.md) |
-| 前提 | runtime / Save-Load子計画完了、性能計画M0〜M7完了、条件付きM8の実施またはskip決定済み |
+| 親ロードマップ | [system-wide-correctness-refactoring-plan-2026-07-12.md](../system-wide-correctness-refactoring-plan-2026-07-12.md) |
+| 前提 | runtime / Save-Load子計画完了。性能計画M0〜M7とM8判断は性能最適化の採否に必要であり、2026-07-15 の明示指示により、保存形式・grid update policy・hot pathを変えない M2 共通化には適用しない。 |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的
@@ -22,7 +22,7 @@
 - component型をそのままgeneric tagにすると、`hw_logistics -> hw_spatial`の既存依存と循環し得る。
 - Resource gridとGathering gridには特殊update policyがあり、一律generic化すると挙動退行する。
 - `visual_test`に6件の`#[allow(clippy::too_many_arguments)]`が残り、`-D warnings`では検出できない。
-- toolchain/CI方針が未固定で、format baselineの差分有無を継続的に検出できない。
+- local toolchainと品質ゲートが未固定で、format baselineの差分有無を継続的に検出できない。
 
 ### 到達したい状態
 
@@ -32,7 +32,7 @@
 - downstream domain型を`hw_spatial`から参照せず、独立tagとowner側wrapperで依存方向を維持する。
 - Visibility/center等の特殊policyは専用systemとして残る。
 - Clippy allowなしでall-target warnings 0を維持する。
-- Rust toolchainをpinし、GitHub CIとlocal gateを一致させる。
+- Rust toolchainをpinし、ローカルで再現できる品質ゲートを固定する。
 - 全体rustfmtの差分が発生した場合は、機能変更と分離した単独コミットで完了する。
 
 ### 成功指標
@@ -43,7 +43,7 @@
 - `hw_spatial`のdependencyへ`hw_logistics`を追加しない。
 - Resource/Gathering gridの現行filter・position sourceが維持される。
 - `rg -n '#\[(allow|expect)\(clippy::' crates --glob '*.rs'`が0件、または恒久docsで個別承認された例外だけになる。本計画では0件を目標とする。
-- local/CIのfmt、check、all-target clippy、testが一致して成功する。
+- ローカルのfmt、check、profiling compile、all-target clippy、testが成功する。
 
 ## 2. スコープ
 
@@ -55,7 +55,7 @@
 - `hw_logistics`所有component用の具体sync wrapper。
 - startup初期化、Save/Load reset、SpatialPlugin登録の追従。
 - `visual_test` Clippy allow 6件のSystemParam等による構造修正。
-- `rust-toolchain.toml`、GitHub CI、全体format baseline。
+- `rust-toolchain.toml`、local品質ゲート、全体format baseline。
 
 ### 非対象（Out of Scope）
 
@@ -64,6 +64,7 @@
 - pathfinding/AI/transportアルゴリズム最適化。
 - 全大ファイルの分割。
 - UI/visualデザイン変更。
+- GitHub Actions の実行結果・成功確認。既存 workflow は任意の補助とし、本計画の完了条件に含めない。
 
 ## 3. 設計判断
 
@@ -86,6 +87,7 @@ pub struct SpatialIndex<Tag> {
 ```
 
 - tagは`hw_spatial`所有のZST (`SoulIndexTag`, `StockpileIndexTag`等)とし、domain Component型を使わない。
+- 既存のcustom cell sizeとgrid inspectionを失わないよう、`SpatialIndex<Tag>::new(GridData)`、`data`、`data_mut`、`into_data`を公開する。tuple field直参照ではなくこのAPIを使う。
 - updaterはindex tagとtracked componentを分ける。
 
 ```rust
@@ -101,7 +103,7 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 ### 3.3 品質baseline
 
 - `rust-toolchain.toml`で`1.96.1`、`rustfmt`、`clippy`をpinする。実装開始時にBevy 0.19/workspaceがこのversionでbuild可能か再確認し、不可能なら同一PR内で最小互換versionへ調整する。
-- `.github/workflows/ci.yml`を追加し、Linux上でfmt/check/clippy/testを実行する。
+- `.github/workflows/ci.yml` は同じ command を実行する任意の補助とし、ローカル完了判定は外部CIに依存しない。
 - `cargo fmt --all --check`が差分を報告した場合だけ、clean worktreeかつ並行sessionなしを確認して全体rustfmtをformat-only commitとして実施する。
 - Clippy allowは警告抑制ではなくSystemParam/parameter object等で構造修正する。
 
@@ -172,21 +174,22 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 
 ### 完了条件
 
-- [ ] standard gridのGridData委譲とSpatialGridOps implが1箇所
-- [ ] `hw_spatial` dependencyに`hw_logistics`なし
-- [ ] Stockpile/TransportRequest tagがhw_spatial所有ZST
-- [ ] Resource visibility policy維持
-- [ ] Gathering center/Added-only policy維持
-- [ ] set所属・既存ordering constraint・並列性維持
-- [ ] load reset後に全indexが再構築される
+- [x] standard gridのGridData委譲とSpatialGridOps implが1箇所
+- [x] `hw_spatial` dependencyに`hw_logistics`なし
+- [x] Stockpile/TransportRequest tagがhw_spatial所有ZST
+- [x] Resource visibility policy維持
+- [x] Gathering center/Added-only policy維持
+- [x] set所属・既存ordering constraint・並列性維持
+- [x] load reset後に全indexが再構築される
 
 ### 回帰テスト
 
 - tagごとのResource型分離/混線防止
 - standard grid update/move/remove parity
+- custom cell size / grid inspection API (`new` / `data` / `data_mut` / `into_data`)
 - Resource Hidden/Visible/Visibility removal
 - Gathering timer Changedで不要updateなし
-- plugin schedule graph smoke test
+- load reset後、pause中は再構築せずunpause後の最初のSpatial tickで再構築する schedule test
 
 ## M3: Clippy allowの構造的解消
 
@@ -215,24 +218,22 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo check -p visual_test`
 
-## M4: toolchain・CI・format baseline
+## M4: toolchain・local品質ゲート・format baseline
 
 ### 変更内容
 
 1. `rust-toolchain.toml`を追加し、Rust/rustfmt/clippy versionをpinする。
-2. GitHub Actions CIを追加する。
-3. `cargo fmt --all --check`が差分を報告した場合だけ、clean worktree/並行sessionなしを確認して`cargo fmt --all`を単独commitで実行する。
-4. CI/local共通commandを`docs/DEVELOPMENT.md`へ記載する。
-5. format後に全gateを実行する。
+2. `cargo fmt --all --check`が差分を報告した場合だけ、clean worktree/並行sessionなしを確認して`cargo fmt --all`を単独commitで実行する。
+3. local quality commandを`docs/DEVELOPMENT.md`へ記載する。
+4. format後に全gateを実行する。
 
 ### 主な変更ファイル
 
 - `rust-toolchain.toml`
-- `.github/workflows/ci.yml`
 - Rust source全体（format差分がある場合のformat-only commit）
 - `docs/DEVELOPMENT.md`
 
-### CI必須job
+### Local必須gate
 
 1. `cargo fmt --all --check`
 2. `cargo check --workspace`
@@ -244,8 +245,7 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 ### 完了条件
 
 - [x] pin toolchainでlocal全gate成功
-- [ ] CI全job成功
-- [x] CIが新しい`#[allow(clippy::...)]` / `#[expect(clippy::...)]`を失敗として検出
+- [x] local gateが新しい`#[allow(clippy::...)]` / `#[expect(clippy::...)]`を失敗として検出
 - [x] format checkに意味上のコード変更なし
 - [x] user/parallel session由来の差分をformat操作へ混入していない
 
@@ -277,9 +277,10 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 
 - `cargo fmt --all --check`
 - `cargo check --workspace`
+- `cargo check -p bevy_app@0.1.0 --lib --features profiling`
 - `cargo clippy --workspace --all-targets -- -D warnings`
+- `! rg -n '#\[(allow|expect)\(clippy::' crates --glob '*.rs'`
 - `cargo test --workspace`
-- CI成功
 - `python scripts/update_docs_index.py`
 
 ## 8. ロールバック方針
@@ -287,26 +288,24 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 - M1〜M4を独立コミットにする。
 - M2はgrid family単位に分割可能だが、old/new Resourceを同時登録しない。
 - M3はvisual_test feature単位に分割する。
-- M4のtoolchain/CI commitと、必要時のformat-only commitを分ける。
+- M4のtoolchain/local品質ゲート commitと、必要時のformat-only commitを分ける。
 - archive時に必要なら`git add -f docs/plans/archive/<file>`を使う。
 
 ## 9. AI引継ぎメモ
 
 ### 現在地
 
-- 進捗: M1/M3完了、M4はCI実行待ち、M2未着手
-- 完了済み: M1 production App composition、M3 Clippy allow構造解消、M4 toolchain pin・CI定義・local品質gate
-- 未着手: M2 SpatialIndex共通化
-- M4 の `cargo fmt --all --check` は差分なしで成功したため、dirty worktreeに対する全体formatは実行せず、format-only commitは生成していない。CI実行結果だけが M4 の残タスクである。
-- 通常の開始条件は runtime/Save-Load子計画、性能M0〜M7、条件付きM8の実施/skip決定済みとする。`2026-07-15` は明示的な実装指示により、永続化形式・grid update policy・全体formatに触れない M1/M3 だけを先行実施した。
-- M2 は Save/Load・性能計測の前提完了後に再開する。M4 のCI成功は GitHub push 後に記録する。
+- 進捗: M1〜M4完了。GitHub Actions の実行確認は本計画の対象外。
+- 完了済み: M1 production App composition、M2 `SpatialIndex<Tag>` 共通化、M3 Clippy allow構造解消、M4 toolchain pin・local品質gate・format baseline。
+- M2 は性能最適化の採否を前提にしない機械的な型所有・更新 policy 保持のリファクタリングとして、2026-07-15 の明示指示で先行した。性能計画の counter、algorithm、eager rebuild は変更していない。
+- M4 の `cargo fmt --all --check` は差分なしで成功したため、dirty worktreeに対する全体formatは実行せず、format-only commitは生成していない。
+- 通常の開始条件は runtime/Save-Load子計画、性能M0〜M7、条件付きM8の実施/skip決定済みとする。ただし `2026-07-15` の明示指示では、保存形式・grid update policy・hot pathを変えない M2 の型共通化も、この性能前提から独立した機械的リファクタリングとして先行した。
+- M2後の local gate は `cargo fmt --all --check`、`cargo check --workspace`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` の順に成功した。
 - `docs/proposals/hvac-plumbing-proposal.md`の既存変更は対象外。
 
 ### 次のAIが最初にやること
 
-1. Save/Load子計画の最終test logと、性能M0〜M7完了・M8実施/skip記録を確認する。
-2. M2用に `hw_spatial` のtag分離・add/move/remove・Resource Visibility・Gathering center/Added-only policyの回帰testを先に追加する。
-3. GitHub Actions の M4 quality job 成功を確認し、planへ実行結果を記録する。
+1. v0 support終了や新規 grid family を追加する場合は、M2の tag / policy 回帰testを更新する。
 
 ### ブロッカー/注意点
 
@@ -318,12 +317,12 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 
 ### Definition of Done
 
-- [ ] M1〜M4完了
+- [x] M1〜M4完了
 - [x] production plugin ownership一意
-- [ ] SpatialIndex共通化test成功
+- [x] SpatialIndex共通化test成功
 - [x] Clippy allow 0件
-- [ ] pinned toolchain/local/CI全gate成功
-- [ ] docs/index更新、計画archive済み
+- [x] pinned toolchain/local全gate成功
+- [x] docs/index更新、計画archive済み
 
 ## 10. 更新履歴
 
@@ -334,3 +333,6 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 | `2026-07-12` | `Codex` | 再レビューを反映し、package ID、Clippy allow CI gate、期待影響を明記 |
 | `2026-07-15` | `Codex` | 明示指示により M1 の game plugin集約と M3 の Clippy allow構造解消を先行実施。M2/M4 の開始条件は維持。 |
 | `2026-07-15` | `Codex` | M4 の Rust 1.96.1 pin、Linux native dependencyを含むCI、profiling compileを含むlocal品質gateを追加。format checkは差分なし、CI実行待ち。 |
+| `2026-07-15` | `Codex` | 明示指示により M2 を先行実装。`SpatialIndex<Tag>` と crate 所有 ZST tagへ標準7 gridを集約し、Resource Visibility / Gathering center policyは専用 system のまま維持した。tag分離、add/move/remove、Visibility、Gathering Changed、SpatialPlugin / load reset再構築の回帰testを追加。 |
+| `2026-07-15` | `Codex` | 実装後レビューを反映。custom `GridData` の構成・検査 API、物流wrapperの共通query alias、pause中のload reset非再構築、legacy shim TypePath固定と寿命保護非適用の回帰testを追加。 |
+| `2026-07-15` | `Codex` | 指示により GitHub CI 実行確認を完了条件から除外し、ローカル品質ゲートだけで M4 を完了とした。 |

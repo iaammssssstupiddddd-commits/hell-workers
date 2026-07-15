@@ -11,7 +11,7 @@ use hw_jobs::AssignedTask;
 
 use crate::soul_ai::decide::SoulDecideOutput;
 use crate::soul_ai::helpers::gathering::*;
-use hw_spatial::SpatialGrid;
+use hw_spatial::{SpatialGrid, SpatialGridOps};
 
 fn is_gathering_spot_safe_from_familiars(
     spot_pos: Vec2,
@@ -174,9 +174,7 @@ pub fn gathering_recruitment_decision(
         let spot_is_safe_for_escape =
             is_gathering_spot_safe_from_familiars(spot.center, &q_familiars);
         let search_radius = GATHERING_DETECTION_RADIUS.max(ESCAPE_GATHERING_JOIN_RADIUS);
-        soul_grid
-            .0
-            .get_nearby_in_radius_into(spot.center, search_radius, &mut nearby_buf);
+        soul_grid.get_nearby_in_radius_into(spot.center, search_radius, &mut nearby_buf);
         #[cfg(feature = "profiling")]
         if audit_seed.is_some() {
             nearby_buf.sort_unstable_by_key(|entity| entity.to_bits());

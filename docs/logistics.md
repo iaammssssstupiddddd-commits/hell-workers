@@ -30,15 +30,14 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 | `WheelbarrowLease` ← TransportRequest | 仲裁システム（Arbitrate）| `assign_haul*` | 毎フレーム: 期限切れ・車消失・item 不足で自動 remove。消費後 request state が Claimed になるため次フレームの仲裁から自動除外 |
 | `BelongsTo(owner)` | entity spawn 時 | producer / `assign_haul*` | タンク・バケツ・バケツ返却先の所有判定。`issued_by` と照合してソース選定を制御 |
 | `BucketStorage` | entity spawn 時 | `bucket_auto_haul_system` | バケツ返却先マーカー。`BelongsTo` 一致チェックと組み合わせて判定 |
-| `ReservedForTask` | （現状未付与・legacy）| ソース選定フィルタ | 付与されないが選定コードが参照するため、消滅防止コンポーネント（§1.4）としても機能 |
 
 ### 1.4 アイテムの寿命 (Item Lifetime)
 - 特定のアイテム（**StasisMud**, **Sand**）は、地面にドロップされた状態で放置されると **5秒後** に消滅します。
 - **消滅しない条件**:
-  - `ReservedForTask`: タスク用に予約されている
   - `LoadedIn(Entity)`: 手押し車などに積載されている
   - `StoredIn(Entity)`: Stockpile に格納されている
   - `DeliveringTo(Entity)`: 搬送中（リレーションシップあり）
+  - `StoredByMixer(Entity)`: MudMixer に格納されている
 - これにより、運搬されずに放置された余剰な中間素材が自動的にクリーンアップされます。
 
 ### 1.5 TransportRequest
@@ -414,7 +413,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 ### 8.4 ソース選定の安全条件
 - `DepositToStockpile` のソースは地面アイテムのみを対象にする（`StoredIn` 付きは除外）。
 - 所有物資がある場合は `BelongsTo` を一致させ、他 owner の資材を混在させない。
-- `Visibility::Hidden` / `ReservedForTask` / `TaskWorkers` 付きエンティティは候補から外す。
+- `Visibility::Hidden` / `TaskWorkers` 付きエンティティは候補から外す。
 
 ### 8.4.1 AreaBounds によるオーナー解決
 

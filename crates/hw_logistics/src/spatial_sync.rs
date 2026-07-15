@@ -6,27 +6,10 @@ use crate::types::ResourceItem;
 use crate::zone::Stockpile;
 use bevy::prelude::*;
 use hw_spatial::{
-    ResourceSpatialGrid, StockpileSpatialGrid, TransportRequestSpatialGrid,
-    update_resource_spatial_grid_system, update_stockpile_spatial_grid_system,
-    update_transport_request_spatial_grid_system,
+    ResourceSpatialGrid, StockpileIndexTag, StockpileSpatialGrid, TransformSpatialUpdateQuery,
+    TransportRequestIndexTag, TransportRequestSpatialGrid, update_resource_spatial_grid_system,
+    update_transform_spatial_index_system,
 };
-
-type StockpileSyncQuery<'w, 's> = Query<
-    'w,
-    's,
-    (Entity, &'static Transform),
-    (With<Stockpile>, Or<(Added<Stockpile>, Changed<Transform>)>),
->;
-
-type TransportRequestSyncQuery<'w, 's> = Query<
-    'w,
-    's,
-    (Entity, &'static Transform),
-    (
-        With<TransportRequest>,
-        Or<(Added<TransportRequest>, Changed<Transform>)>,
-    ),
->;
 
 type ResourceItemChangedQuery<'w, 's> = Query<
     'w,
@@ -46,20 +29,21 @@ type ResourceItemChangedQuery<'w, 's> = Query<
 /// `Stockpile` コンポーネントに特化した空間グリッド更新システム。
 pub fn update_stockpile_spatial_grid_system_stockpile(
     grid: ResMut<StockpileSpatialGrid>,
-    query: StockpileSyncQuery,
+    query: TransformSpatialUpdateQuery<Stockpile>,
     removed: RemovedComponents<Stockpile>,
 ) {
-    update_stockpile_spatial_grid_system::<Stockpile>(grid, query, removed);
+    update_transform_spatial_index_system::<StockpileIndexTag, Stockpile>(grid, query, removed);
 }
 
 /// `TransportRequest` コンポーネントに特化した空間グリッド更新システム。
 pub fn update_transport_request_spatial_grid_system_transport_request(
     grid: ResMut<TransportRequestSpatialGrid>,
-    query: TransportRequestSyncQuery,
+    query: TransformSpatialUpdateQuery<TransportRequest>,
     removed: RemovedComponents<TransportRequest>,
 ) {
-    // 変更差分のみを反映する。スポーン直後は次フレームで取り込まれる。
-    update_transport_request_spatial_grid_system::<TransportRequest>(grid, query, removed);
+    update_transform_spatial_index_system::<TransportRequestIndexTag, TransportRequest>(
+        grid, query, removed,
+    );
 }
 
 /// `ResourceItem` コンポーネントに特化した空間グリッド更新システム。

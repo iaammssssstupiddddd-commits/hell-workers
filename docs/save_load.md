@@ -57,6 +57,7 @@ HELL_WORKERS_SAVE
 - v1 の `worldgen_seed` は header が正本であり、body に `SavedWorldgenSeed` を含めない。seed mismatch は DynamicWorld の型 registry や entity を触る前に中止する。
 - magic 無しの既存ファイルだけを legacy v0 として読む。v0 は body の `SavedWorldgenSeed` を後方互換の seed guard として使用し、存在しない場合は警告して継続する。
 - v0 の `SavedWorldgenSeed` は seed 照合だけに使い、照合後にDynamicWorldから除去する。live worldへは適用しない。
+- `ReservedForTask` は header 無し v0 body を読む間だけ registry に登録する legacy shim である。v0 deserialize 後、schema 検証より前に全 entity から除去する。v1 の allow-list には含めず、v1 body に混入した同型は schema reject とする。
 - 書き込みは同一ディレクトリの `create_new` で確保した一意 temp file を `sync_all` した後に rename する。固定 `.tmp` 名を共有しないため、並列 test や別プロセスと temp file 名が衝突しない。保存先そのものの複数プロセス排他はこの機構の対象外である。
 
 ## 保存対象
@@ -89,6 +90,7 @@ HELL_WORKERS_SAVE
 | 派生キャッシュ | 空間グリッド、`SharedResourceCache`、`ReservationSignatureCache`、transport producer cache、`CachedStockpileGroups`、`ObstaclePositionIndex` | root reset hookでdefault化する。予約同期 timerもresetし、次のPerceiveが初回同期として完全snapshotを再構築 |
 | runtime obstacle provenance / navigation cache | `ObstacleSourceKind`、`BuildingFootprint`、`ObstaclePositionIndex`、raw `WorldMap.obstacles` / `doors` / `bridged_tiles` | `rehydrate_obstacle_runtime` が durable semantic source から marker / cache を再構築。保存済み Door state は最終 override として使う |
 | transient gathering | `GatheringSpot`、`GatheringVisuals`、`ParticipatingIn`、`GatheringParticipants` | v1 saveから除外。旧bodyのrelationship componentはschema検証前に破棄し、replace hookはspotとlinked aura/objectをdespawn。Soulは非参加状態から通常AIへ戻る |
+| legacy task marker | `ReservedForTask` | header 無し v0 body の deserialize だけで受け付け、schema 検証前に除去する。v1 save / load には含めず、v1 body の混入は reject |
 | ビジュアル / UI | `hw_visual/*`, `hw_ui/*`, `SoulUiLinks`, Sprite / 3D プロキシ | **rehydrate**（下記）と observer / startup で再生成 |
 | 地形描画 | `TerrainChunk` | 起動時 seed から生成（v1 header の seed 照合で整合を保証） |
 | セッション入力 | `BuildContext`, `SelectedEntity` 等 | root reset hookでdefault化し、`NextState<PlayMode>`は`Normal`を予約する |
@@ -114,6 +116,11 @@ Reflect 登録、`DynamicWorldBuilder` の allow-list、root entity の収集を
 legacy bodyのdeserializeのため維持するが、新規saveのallow-listには含めない。deserialize後かつschema
 検証前にこれらを除去するため、旧bodyが持つ消滅済み`GatheringSpot`へのEntity参照をlive worldへ渡さない。
 
+`ReservedForTask` も同じ TypePath を保つ loader 専用の Reflect component として別登録する。ただし
+`persisted_component` には入れない。legacy v0 のみ deserialize 後に除去し、v1 body に同型があれば
+schema validation で reject する。この区別により、旧ファイルは読み直せる一方で新形式へ marker が
+再流入しない。
+
 新しい spawn 時 component を追加する際は次の順序で判断する。
 
 1. durable simulation state なら `schema.rs` の `persisted_component` または `persisted_resource` にだけ追加する。値型だけなら `reflect_dependency`、entity の保存起点なら `root_marker` も追加する。
@@ -135,7 +142,7 @@ root marker matrix は collect、extract、RON serialize/deserialize、Relations
 `PreparedLoad` はheader分類済みの`SaveFormat`とdeserialize済み`DynamicWorld`を保持する。live worldを
 変更する前に、次を順に完了しなければならない。
 
-1. header/seed、RON deserialize、legacy runtime-derived componentの除去、schema allow-list、必須Resourceを検証する。
+1. header/seed、RON deserialize、legacy v0 の runtime-derived component / shim の除去、schema allow-list、必須Resourceを検証する。
 2. 空のstaging `World`へ`write_to_world_with`を実行し、registry、`ReflectComponent`、`ReflectResource`、Entity remapの静的契約を検証する。
 3. `AssetServer`、`GeneratedWorldLayoutResource`、`GameAssets`、`Building3dHandles`、`SoulTaskHandles`、`WorldMap`と、Tree再水和に必要な非空の`GameAssets.trees`を検証する。
 

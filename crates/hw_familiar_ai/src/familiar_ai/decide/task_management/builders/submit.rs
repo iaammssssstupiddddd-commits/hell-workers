@@ -145,16 +145,11 @@ pub fn build_source_reservation_ops(sources: &[Entity]) -> Vec<ResourceReservati
 pub fn build_mixer_destination_reservation_ops(
     mixer: Entity,
     resource_type: ResourceType,
-    already_reserved: bool,
 ) -> Vec<ResourceReservationOp> {
-    if already_reserved {
-        Vec::new()
-    } else {
-        vec![ResourceReservationOp::ReserveMixerDestination {
-            target: mixer,
-            resource_type,
-        }]
-    }
+    vec![ResourceReservationOp::ReserveMixerDestination {
+        target: mixer,
+        resource_type,
+    }]
 }
 
 pub fn build_wheelbarrow_reservation_ops(

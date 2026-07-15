@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use hw_core::events::ResourceReservationRequest;
 use hw_core::relationships::{ParkedAt, PushedBy, TaskWorkers};
 use hw_jobs::events::TaskAssignmentRequest;
-use hw_logistics::types::{ReservedForTask, Wheelbarrow};
+use hw_logistics::types::Wheelbarrow;
 use hw_world::WorldMapRead;
 
 use super::access::{DesignationAccess, MutStorageAccess, ReservationAccess, StorageAccess};
@@ -47,7 +47,6 @@ type FreeResourceItemsQuery<'w, 's> = Query<
     (
         Without<hw_jobs::Designation>,
         Without<TaskWorkers>,
-        Without<ReservedForTask>,
         Without<hw_logistics::transport_request::ManualHaulPinnedSource>,
     ),
 >;
@@ -67,11 +66,7 @@ type StoredItemsQuery<'w, 's> = Query<
         &'static hw_logistics::types::ResourceItem,
         &'static hw_core::relationships::StoredIn,
     ),
-    (
-        Without<hw_jobs::Designation>,
-        Without<TaskWorkers>,
-        Without<ReservedForTask>,
-    ),
+    (Without<hw_jobs::Designation>, Without<TaskWorkers>),
 >;
 
 type ResourceItemsQuery<'w, 's> = Query<
@@ -131,7 +126,6 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
     pub familiar_task_areas:
         Query<'w, 's, &'static hw_core::area::TaskArea, With<hw_core::familiar::Familiar>>,
     pub free_resource_items: FreeResourceItemsQuery<'w, 's>,
-    pub reserved_for_task: Query<'w, 's, &'static ReservedForTask>,
     pub task_slots: Query<'w, 's, &'static hw_jobs::TaskSlots>,
     pub wheelbarrows: WheelbarrowsQuery<'w, 's>,
     pub wheelbarrow_leases:

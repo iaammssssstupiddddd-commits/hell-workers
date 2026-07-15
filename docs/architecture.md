@@ -142,8 +142,8 @@ Perceive → Update → Decide → Execute
 
 ## 空間グリッド一覧 (Spatial Grids)
 
-`crates/hw_spatial` が 9 種類の concrete グリッド `Resource`（および `SpatialGridOps` 実装）を実体として保持する（Soul 用の型名は **`SpatialGrid`** — `SoulSpatialGrid` という Rust 型はない）。`ResourceSpatialGrid` / `StockpileSpatialGrid` の更新関数の一部は `hw_logistics` にあり、`plugins/spatial.rs` から登録される。`crates/bevy_app/src/systems/spatial/` は削除済みで、`crates/bevy_app/src/plugins/spatial.rs` が `hw_spatial` / `hw_logistics` から直接 import する。
-すべてのグリッドで `Added` / `Changed` / `RemovedComponents` の Change Detection に基づく差分更新を実装している。
+`crates/hw_spatial` は `SpatialIndex<Tag>` を実体とし、9 個の公開名は crate 所有 ZST tag を使う type alias である（Soul 用の型名は **`SpatialGrid`** — `SoulSpatialGrid` という Rust 型はない）。`SpatialGridOps` と標準 Transform updater は `SpatialIndex<Tag>` に一度だけ実装する。custom cell sizeまたは内部 grid の検査・構成は `SpatialIndex::new(GridData)`、`data`、`data_mut`、`into_data` を通し、tuple fieldへ依存しない。`ResourceSpatialGrid` の Visibility policy と `GatheringSpotSpatialGrid` の center / Added-only policy は専用 system のまま保持する。`ResourceItem` / `Stockpile` / `TransportRequest` の component 特化 wrapper は `hw_logistics` にあり、`plugins/spatial.rs` から登録される。`crates/bevy_app/src/systems/spatial/` は削除済みで、`crates/bevy_app/src/plugins/spatial.rs` が `hw_spatial` / `hw_logistics` から直接 import する。
+標準 7 系統は `Added<Tracked>` / `Changed<Transform>` / `RemovedComponents<Tracked>` の Change Detection に基づく差分更新を使う。Resource と Gathering は上記の専用 policy を優先する。
 
 | グリッド | 用途 |
 |:--|:--|
@@ -157,8 +157,7 @@ Perceive → Update → Decide → Execute
 | `GatheringSpotSpatialGrid` | 集会スポットの近傍検索 |
 | `FloorConstructionSpatialGrid` | 床建設サイトの近傍検索 |
 
-新しいグリッドを追加する場合は `SpatialGridOps` を実装し、追加検知（Added）、
-変更検知（Changed）、削除検知（RemovedComponents）を使うシステムとして登録する。
+新しい標準グリッドを追加する場合は `hw_spatial` 所有 ZST tag と `SpatialIndex<Tag>` の alias を定義し、共通 Transform updater を具体 wrapper から登録する。座標正本や Change Detection policy が異なる場合だけ専用 updater を置き、その差分をテストする。
 
 ## 定数管理 (`crates/hw_core/src/constants/`)
 

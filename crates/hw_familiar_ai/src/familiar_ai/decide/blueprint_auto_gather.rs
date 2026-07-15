@@ -11,7 +11,7 @@ use hw_core::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
 use hw_jobs::construction::TargetWallConstructionSite;
 use hw_jobs::model::{Blueprint, Designation, Rock, TargetBlueprint, Tree};
 use hw_logistics::transport_request::components::{TransportDemand, TransportRequest};
-use hw_logistics::{ReservedForTask, ResourceItem};
+use hw_logistics::ResourceItem;
 use hw_world::pathfinding::PathfindingContext;
 use hw_world::{WorldMapRead, Yard};
 
@@ -35,7 +35,6 @@ type BpGroundItemsQuery<'w, 's> = Query<
     (
         Without<Designation>,
         Without<TaskWorkers>,
-        Without<ReservedForTask>,
         Without<StoredIn>,
         Without<LoadedIn>,
     ),

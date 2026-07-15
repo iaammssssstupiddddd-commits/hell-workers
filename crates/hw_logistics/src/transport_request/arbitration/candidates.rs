@@ -14,7 +14,7 @@ use crate::transport_request::{
     TransportRequestKind, TransportRequestState, WheelbarrowDestination, WheelbarrowLease,
     WheelbarrowPendingSince, can_complete_pick_drop_to_blueprint, can_complete_pick_drop_to_point,
 };
-use crate::types::{BelongsTo, ReservedForTask, ResourceItem, ResourceType};
+use crate::types::{BelongsTo, ResourceItem, ResourceType};
 use crate::zone::Stockpile;
 
 use super::types::{FreeItemSnapshot, HeapEntry, ItemBucketKey, NearbyItem, RequestEvalContext};
@@ -31,7 +31,6 @@ pub type FreeItemsQuery<'w, 's> = Query<
     (
         Without<Designation>,
         Without<hw_core::relationships::TaskWorkers>,
-        Without<ReservedForTask>,
         Without<ManualHaulPinnedSource>,
     ),
 >;

@@ -21,7 +21,7 @@ use crate::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportRequest,
     TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
-use crate::types::{BelongsTo, ReservedForTask, ResourceItem, Wheelbarrow};
+use crate::types::{BelongsTo, ResourceItem, Wheelbarrow};
 use crate::zone::Stockpile;
 
 pub use system::wheelbarrow_arbitration_system;
@@ -64,8 +64,6 @@ type FreeItemDirtyQuery<'w, 's> = Query<
             Changed<ResourceItem>,
             Changed<Transform>,
             Changed<Visibility>,
-            Added<ReservedForTask>,
-            Changed<ReservedForTask>,
             Added<ManualHaulPinnedSource>,
             Changed<ManualHaulPinnedSource>,
             Added<BelongsTo>,
@@ -124,7 +122,6 @@ pub struct WheelbarrowArbitrationDirtyParams<'w, 's> {
     removed_resource_items: RemovedComponents<'w, 's, ResourceItem>,
     removed_wheelbarrows: RemovedComponents<'w, 's, Wheelbarrow>,
     removed_leases: RemovedComponents<'w, 's, WheelbarrowLease>,
-    removed_reserved_for_task: RemovedComponents<'w, 's, ReservedForTask>,
     removed_pinned_source: RemovedComponents<'w, 's, ManualHaulPinnedSource>,
     removed_belongs: RemovedComponents<'w, 's, BelongsTo>,
     removed_stored_in: RemovedComponents<'w, 's, StoredIn>,

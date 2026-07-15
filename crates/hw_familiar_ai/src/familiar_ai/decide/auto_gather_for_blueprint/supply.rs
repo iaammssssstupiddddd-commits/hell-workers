@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
 use hw_core::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
 use hw_jobs::{Designation, Rock, Tree};
-use hw_logistics::types::{ReservedForTask, ResourceItem};
+use hw_logistics::types::ResourceItem;
 
 use super::AutoGatherDesignation;
 use super::helpers::{
@@ -31,7 +31,6 @@ type GroundItemsQuery<'w, 's> = Query<
     (
         Without<Designation>,
         Without<TaskWorkers>,
-        Without<ReservedForTask>,
         Without<StoredIn>,
         Without<LoadedIn>,
     ),

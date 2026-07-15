@@ -63,9 +63,9 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --worksp
 ! rg -n '#\[(allow|expect)\(clippy::' crates --glob '*.rs'
 ```
 
-### 1.6. Local / CI 共通品質ゲート
+### 1.6. Local 品質ゲート
 
-`rust-toolchain.toml` は Rust `1.96.1` と `rustfmt` / `clippy` を固定する。rustup 環境ではワークスペースルートで cargo を実行すれば自動的に選択される。ローカルと GitHub Actions は、変更完了時に次の同一順序で検証する。
+`rust-toolchain.toml` は Rust `1.96.1` と `rustfmt` / `clippy` を固定する。rustup 環境ではワークスペースルートで cargo を実行すれば自動的に選択される。変更完了時はローカルで次の順序を実行する。GitHub Actions workflow が利用できる場合も同じ command を補助的に実行するが、ローカル完了判定は外部CIに依存しない。
 
 ```bash
 cargo fmt --all --check
@@ -106,7 +106,7 @@ cargo test --workspace
 物流・自動補充の競合を防ぐため、予約の責務と解除タイミングを明確にする。
 
 - 予約責務は「発行時」か「割り当て時」のどちらか一方に統一する。
-  - 自動発行時に予約を確定する場合は `ReservedForTask` を付与し、割り当て時の同種予約を重複発行しない。
+- 自動発行・割り当ての排他は `ResourceReservationOp` と `SharedResourceCache` の reservation snapshot で表現する。component marker を予約根拠に追加してはならない。
 - 共有ソースを消費するタスク（例: Tank からの取水）は、処理中に `ReserveSource` でロックし、成功/失敗/中断の全経路で解除する。
 - フェーズ移行で不要になったロックは即時解除し、`unassign_task` 側でもフェーズに応じて解放漏れを防ぐ。
 - `sync_reservations_system` の再構築条件は、実行フェーズの予約寿命と一致させる（フェーズ定義を変更したら同時更新する）。比較用の `ReservationSignature` は `collect_active_reservation_ops` / `active_reservation_signature` と同じ正規化経路から導出し、独立した phase match を増やさない。progress のような予約非依存フィールドだけで snapshot を再構築しない。
@@ -313,7 +313,7 @@ pub fn is_soul_available_for_work(assigned: &AssignedTask) -> bool { ... }
 4. 発火時に必要なデータが、発行時に確定しているか、closure コマンド内で World から取得できる
 5. 同じ対象へ短時間に複数回発行されても、旧実装の上書き/デバウンス挙動に依存していない（複数キューはすべて発火する）
 
-1 つでも満たさない場合は従来どおり Timer コンポーネント + tick システムを使う（例: `ItemDespawnTimer` は予約中に tick を止めるため対象外、`DoorCloseTimer` は近接キャンセルがあるため対象外）。
+1 つでも満たさない場合は従来どおり Timer コンポーネント + tick システムを使う（例: `ItemDespawnTimer` は relationship で保護されたアイテムの tick を止めるため対象外、`DoorCloseTimer` は近接キャンセルがあるため対象外）。
 
 **実装上の注意:**
 

@@ -24,7 +24,7 @@ use hw_logistics::transport_request::{
     ManualHaulPinnedSource, TransportDemand, TransportRequest, TransportRequestFixedSource,
     WheelbarrowLease,
 };
-use hw_logistics::types::{BelongsTo, BucketStorage, ReservedForTask, ResourceItem, Wheelbarrow};
+use hw_logistics::types::{BelongsTo, BucketStorage, ResourceItem, Wheelbarrow};
 use hw_logistics::zone::Stockpile;
 use hw_world::WorldMapRead;
 
@@ -83,7 +83,6 @@ type FreeResourceItemsQuery<'w, 's> = Query<
     (
         Without<Designation>,
         Without<TaskWorkers>,
-        Without<ReservedForTask>,
         Without<ManualHaulPinnedSource>,
     ),
 >;
@@ -99,11 +98,7 @@ type StoredItemsQuery<'w, 's> = Query<
     'w,
     's,
     (Entity, &'static ResourceItem, &'static StoredIn),
-    (
-        Without<Designation>,
-        Without<TaskWorkers>,
-        Without<ReservedForTask>,
-    ),
+    (Without<Designation>, Without<TaskWorkers>),
 >;
 
 /// リソース予約・管理に必要な共通アクセス
@@ -188,7 +183,6 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
     pub familiar_task_areas:
         Query<'w, 's, &'static hw_core::area::TaskArea, With<hw_core::familiar::Familiar>>,
     pub free_resource_items: FreeResourceItemsQuery<'w, 's>,
-    pub reserved_for_task: Query<'w, 's, &'static ReservedForTask>,
     pub task_slots: Query<'w, 's, &'static TaskSlots>,
     pub wheelbarrows: ParkedWheelbarrowsQuery<'w, 's>,
     pub wheelbarrow_leases: Query<'w, 's, &'static WheelbarrowLease>,

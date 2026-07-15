@@ -25,10 +25,7 @@
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [performance-cpu-2026-04-16.md](performance-cpu-2026-04-16.md) | Superseded | CPU パフォーマンス改善計画書 |
-| [runtime-correctness-contracts-plan-2026-07-12.md](runtime-correctness-contracts-plan-2026-07-12.md) | Completed | 実行時正しさ契約リファクタリング計画 |
-| [save-load-hardening-plan-2026-07-12.md](save-load-hardening-plan-2026-07-12.md) | In Progress | Save/Load境界強化・互換性リファクタリング計画 |
-| [structural-maintainability-followups-plan-2026-07-12.md](structural-maintainability-followups-plan-2026-07-12.md) | In Progress | 構造・保守性・品質ゲート フォローアップ計画 |
-| [system-wide-correctness-refactoring-plan-2026-07-12.md](system-wide-correctness-refactoring-plan-2026-07-12.md) | Draft | 全体実装レビュー追補: 横断リファクタリングロードマップ |
+| [system-wide-correctness-refactoring-plan-2026-07-12.md](system-wide-correctness-refactoring-plan-2026-07-12.md) | In Progress | 全体実装レビュー追補: 横断リファクタリングロードマップ |
 | [system-wide-runtime-performance-plan-2026-07-12.md](system-wide-runtime-performance-plan-2026-07-12.md) | In Progress | 全体ランタイム・ホットパス性能改善計画書 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
@@ -69,6 +66,9 @@
 | [archive/bevy-0-19-migration-plan-2026-07-05.md](archive/bevy-0-19-migration-plan-2026-07-05.md) | Archived | Bevy 0.18 のまま留まると、今後のエコシステム追随・バグ修正・パフォーマンス改善（render graph as systems, Parley テキスト等）を受けられないの計画。 |
 | [archive/dev-tools-debug-overlay-plan-2026-07-05.md](archive/dev-tools-debug-overlay-plan-2026-07-05.md) | Archived | Soul / Familiar の AI 状態（AssignedTask・フェーズ・Squad 状態）をワールド内で直接確認できず、デバッグがログ頼み。フレームスパイクの可視化手段がないの計画。 |
 | [archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md) | Archived | Familiar Task Management `hw_ai` 抽出 実装計画 |
+| [archive/runtime-correctness-contracts-plan-2026-07-12.md](archive/runtime-correctness-contracts-plan-2026-07-12.md) | Archived | 実行時正しさ契約リファクタリング計画 |
+| [archive/save-load-hardening-plan-2026-07-12.md](archive/save-load-hardening-plan-2026-07-12.md) | Archived | Save/Load境界強化・互換性リファクタリング計画 |
+| [archive/structural-maintainability-followups-plan-2026-07-12.md](archive/structural-maintainability-followups-plan-2026-07-12.md) | Archived | 構造・保守性・品質ゲート フォローアップ計画 |
 | [archive/system-wide-performance-followups-plan-2026-07-07.md](archive/system-wide-performance-followups-plan-2026-07-07.md) | Archived | 全体パフォーマンス改善フォローアップ計画書 |
 | [archive/task-execution-refactor-plan-2026-07-07.md](archive/task-execution-refactor-plan-2026-07-07.md) | Archived | task_execution リファクタリング計画（コンテキスト集約・完了/中断区別・ログ降格・boundary.rs 分割） |
 | [archive/text-input-ui-plan-2026-07-05.md](archive/text-input-ui-plan-2026-07-05.md) | Archived | テキスト入力 UI — EditableText + clipboard 実装計画 |

@@ -5,11 +5,11 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `save-load-hardening-plan-2026-07-12` |
-| ステータス | `In Progress` |
+| ステータス | `Completed` |
 | 作成日 | `2026-07-12` |
 | 最終更新日 | `2026-07-15` |
 | 作成者 | `Codex` |
-| 親ロードマップ | [system-wide-correctness-refactoring-plan-2026-07-12.md](system-wide-correctness-refactoring-plan-2026-07-12.md) |
+| 親ロードマップ | [system-wide-correctness-refactoring-plan-2026-07-12.md](../system-wide-correctness-refactoring-plan-2026-07-12.md) |
 | 関連済み計画 | `archive/save-load-world-serialization-plan-2026-07-05.md` |
 | 前提 | M1〜M3: runtime M0完了。M4: runtime M1/M2/M4完了。M5: runtime M3完了 |
 | 関連Issue/PR | `N/A` |
@@ -164,6 +164,7 @@ read content
 - 型自体は`#[doc(hidden)]` legacy Reflect shimとしてv0対応期間だけ同じTypePathで残し、v0 registryへ登録する。
 - v0 load後に全entityからshimを除去し、新しい予約/Relationship契約だけで動作させる。
 - v1 saveを再保存した時点でmarkerはfileに含まれない。
+- v1 bodyにmarkerが混入した場合はstripせず、schema validationでrejectする。互換処理はheader無しv0だけに限定する。
 - v0 supportを将来削除する時にshim型も削除する。本計画では型の物理削除を完了条件にしない。
 
 ## 4. 期待する影響
@@ -343,11 +344,11 @@ read content
 
 ### 完了条件
 
-- [ ] runtimeのReservedForTask参照はlegacy shim/loader以外0件
-- [ ] v0 fixtureをload可能
-- [ ] v0 load後runtime entityにshimなし
-- [ ] 再saveしたv1 bodyにshim型なし
-- [ ] AI candidate/item lifetimeが現行の予約/Relationshipだけで同じ挙動
+- [x] runtimeのReservedForTask参照はlegacy shim/loader以外0件
+- [x] v0 fixtureをload可能
+- [x] v0 load後runtime entityにshimなし
+- [x] 再saveしたv1 bodyにshim型なし
+- [x] AI candidate/item lifetimeが現行の予約/Relationshipだけで同じ挙動
 
 ### 検証
 
@@ -406,16 +407,15 @@ read content
 
 ### 現在地
 
-- 進捗: `80%`（M1〜M4完了）
-- 完了済み: M1（`SavePath`、v1 external header、pure format/I/O 分離、v0 fallback、module test）、M2（`schema.rs` X-macro、registry/allow/root集約、external `Transform` contract、27 root marker round-trip test）、M3（PreparedLoad schema gate、staging preflight、rollback snapshot、partial entity cleanup、rehydrate prerequisite/owner shell cleanup）、M4（`Last::SaveLoadApplySet`、LoadResetRegistry、typed message reset、WorldEpoch、RemovedComponents/Added/Changed contract、runtime gathering exclusion/reset test）
-- 未着手: M5
-- M1〜M3はruntime M0完了前、M4はruntime M1/M2/M4完了前、M5はruntime M3完了前に着手しない。
+- 進捗: `100%`（M1〜M5完了）
+- 完了済み: M1（`SavePath`、v1 external header、pure format/I/O 分離、v0 fallback、module test）、M2（`schema.rs` X-macro、registry/allow/root集約、external `Transform` contract、27 root marker round-trip test）、M3（PreparedLoad schema gate、staging preflight、rollback snapshot、partial entity cleanup、rehydrate prerequisite/owner shell cleanup）、M4（`Last::SaveLoadApplySet`、LoadResetRegistry、typed message reset、WorldEpoch、RemovedComponents/Added/Changed contract、runtime gathering exclusion/reset test）、M5（`ReservedForTask` の runtime 除去、v0 loader-only shim、v1 schema reject、candidate / item lifetime 回帰test）。
+- legacy shim は `hw_logistics::types::ReservedForTask` の同じ TypePath に固定し、v0 support を終了するまで物理削除・移動しない。
 - `docs/proposals/hvac-plumbing-proposal.md`の既存変更は対象外。
 
 ### 次のAIが最初にやること
 
-1. M5の`ReservedForTask` runtime除去前に、legacy v0 fixtureと現行request producerの参照を再確認する。
-2. v0 shimをloader限定に保ち、v1 allow-listへ再流入させない。
+1. v0 support の終了を決めるまで shim の TypePath を維持する。
+2. v0 support を削除する変更では、shim の registry 登録・strip・fixtureを同一変更で除去する。
 
 ### ブロッカー/注意点
 
@@ -429,14 +429,14 @@ read content
 
 ### Definition of Done
 
-- [ ] M1〜M5完了
-- [ ] v0/v1互換とfuture rejectが自動test済み
-- [ ] preflight前failureのlive World不変testと、apply後failureのdegraded recovery test成功
-- [ ] post-load stale Entity検証成功
-- [ ] `cargo check --workspace`成功
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings`成功
-- [ ] `cargo test --workspace`成功
-- [ ] docs/index更新、計画archive済み
+- [x] M1〜M5完了
+- [x] v0/v1互換とfuture rejectが自動test済み
+- [x] preflight前failureのlive World不変testと、apply後failureのdegraded recovery test成功
+- [x] post-load stale Entity検証成功
+- [x] `cargo check --workspace`成功
+- [x] `cargo clippy --workspace --all-targets -- -D warnings`成功
+- [x] `cargo test --workspace`成功
+- [x] docs/index更新、計画archive済み
 
 ## 10. 更新履歴
 
@@ -448,3 +448,4 @@ read content
 | `2026-07-15` | `Codex` | M2を実装。`schema.rs`へ4分類とexternal registration注記を集約し、旧手動一覧を削除。空registry/production registry/root marker matrixのcontract testを追加。 |
 | `2026-07-15` | `Codex` | M3を実装。PreparedLoad schema gate、staging preflight、rollback snapshot、partial entity cleanup、rehydrate prerequisiteとowner presentation cleanup、rollback contract testを追加。 |
 | `2026-07-15` | `Codex` | M4を実装。applyを`Last::SaveLoadApplySet`へ移動し、LoadResetRegistry、typed message reset、root/leaf facade hook、WorldEpoch、old RemovedComponents二重buffer破棄を導入。旧removalをdropしnew Added/Changedを次frameで観測する回帰testを追加。`GatheringSpot`とlinked visualのreplace前despawn、およびlegacy gathering relationshipのschema前stripを追加。続いて、非保存の Blueprint / floor / wall construction visual shell をdurable stateから再水和し、pause中のVisual phaseにも正しいmirrorを渡す回帰testを追加。Blueprint の搬入履歴もmirrorから初期化し、保存済み資材の`+1`演出を再生しない。 |
+| `2026-07-15` | `Codex` | M5を実装。`ReservedForTask` を runtime、v1 allow-list、designation flag、candidate filter、item lifetime 条件から除去し、同 TypePath の loader-only shim を header 無し v0 だけで strip する。v1 混入 reject、v0 strip / v1 再save、item lifetime の回帰testを追加。 |
