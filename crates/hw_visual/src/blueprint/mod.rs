@@ -12,8 +12,9 @@ use crate::animations::{PulseAnimation, update_pulse_animation};
 use hw_core::visual_mirror::construction::BlueprintVisualState;
 
 pub use components::{
-    BlueprintState, BlueprintVisual, BuildingBounceEffect, CompletionText, DeliveryPopup,
-    HasWorkerIndicator, MaterialCounter, MaterialIcon, ProgressBar, WorkerHammerIcon,
+    BlueprintProgressBars, BlueprintState, BlueprintVisual, BuildingBounceEffect, CompletionText,
+    DeliveryPopup, HasWorkerIndicator, MaterialCounter, MaterialIcon, ProgressBar,
+    WorkerHammerIcon,
 };
 pub use effects::{
     building_bounce_animation_system, material_delivery_vfx_system, update_completion_text_system,
@@ -23,8 +24,7 @@ pub use material_display::{
     cleanup_material_display_system, spawn_material_display_system, update_material_counter_system,
 };
 pub use progress_bar::{
-    cleanup_progress_bars_system, spawn_progress_bar_system, sync_progress_bar_position_system,
-    update_progress_bar_fill_system,
+    cleanup_progress_bars_system, spawn_progress_bar_system, update_progress_bar_fill_system,
 };
 pub use worker_indicator::{spawn_worker_indicators_system, update_worker_indicators_system};
 
@@ -46,6 +46,27 @@ pub const COLOR_NORMAL: Color = Color::srgba(1.0, 1.0, 1.0, 1.0);
 pub const COLOR_PROGRESS_BG: Color = Color::srgba(0.1, 0.1, 0.1, 0.9);
 pub const COLOR_PROGRESS_MATERIAL: Color = Color::srgba(1.0, 0.7, 0.1, 1.0);
 pub const COLOR_PROGRESS_BUILD: Color = Color::srgba(0.1, 0.9, 0.3, 1.0);
+
+type BlueprintVisualUpdateQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static BlueprintVisualState,
+        &'static mut BlueprintVisual,
+        &'static mut Sprite,
+    ),
+    Or<(Changed<BlueprintVisualState>, Added<BlueprintVisual>)>,
+>;
+
+type BlueprintScaleUpdateQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static BlueprintVisualState, &'static mut Transform),
+    (
+        With<BlueprintVisual>,
+        Or<(Changed<BlueprintVisualState>, Added<BlueprintVisual>)>,
+    ),
+>;
 
 pub fn calculate_blueprint_state(state: &BlueprintVisualState) -> BlueprintState {
     if state.progress > 0.0 {
@@ -117,14 +138,18 @@ pub fn attach_blueprint_visual_system(
     }
 }
 
-pub fn update_blueprint_visual_system(
-    mut q_blueprints: Query<(&BlueprintVisualState, &mut BlueprintVisual, &mut Sprite)>,
-) {
+pub fn update_blueprint_visual_system(mut q_blueprints: BlueprintVisualUpdateQuery) {
     for (state, mut visual, mut sprite) in q_blueprints.iter_mut() {
-        visual.state = calculate_blueprint_state(state);
+        let visual_state = calculate_blueprint_state(state);
+        if visual.state != visual_state {
+            visual.state = visual_state;
+        }
 
         let (color, opacity) = calculate_blueprint_visual_props(state);
-        sprite.color = color.with_alpha(opacity);
+        let color = color.with_alpha(opacity);
+        if sprite.color != color {
+            sprite.color = color;
+        }
     }
 }
 
@@ -143,16 +168,19 @@ pub fn blueprint_pulse_animation_system(
                 sprite.color = sprite.color.with_alpha(pulse_alpha);
             }
         } else {
-            visual.pulse_animation = None;
+            if visual.pulse_animation.is_some() {
+                visual.pulse_animation = None;
+            }
         }
     }
 }
 
-pub fn blueprint_scale_animation_system(
-    mut q_blueprints: Query<(&BlueprintVisualState, &mut Transform), With<BlueprintVisual>>,
-) {
+pub fn blueprint_scale_animation_system(mut q_blueprints: BlueprintScaleUpdateQuery) {
     for (state, mut transform) in q_blueprints.iter_mut() {
         let scale = 0.9 + 0.1 * state.progress.min(1.0);
-        transform.scale = Vec3::splat(scale);
+        let scale = Vec3::splat(scale);
+        if transform.scale != scale {
+            transform.scale = scale;
+        }
     }
 }

@@ -6,6 +6,7 @@ mod worker_indicator;
 
 use bevy::prelude::Color;
 
+pub use components::WorkerGatherIcon;
 pub use resource_highlight::{
     COLOR_DESIGNATED_TINT, COLOR_WORKING_TINT, attach_resource_visual_system,
     cleanup_resource_visual_system, update_resource_visual_system,

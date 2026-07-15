@@ -90,3 +90,10 @@ presentation 専用通知は `write_message` のみを使い、visual-only Obser
 
 ### R-E6: `hw_world` 由来の `Message`（例: `TerrainChangedEvent`）
 ドメインに近い通知で `hw_core` に置きにくい型は `hw_world` に置き、bevy_app の該当 `Plugin` で `add_message` / `add_event` を登録する。カタログの「定義」列に実パスを書く。
+
+### R-E7: persistent world replacement前のMessage破棄
+ロードは別のEntity世代へ切り替わるため、前worldで発行されたrequest/presentation `Message`を
+new worldへ適用してはならない。`MessagesPlugin`に登録するroot message型は単一typed macroから
+`add_message`と`Messages<T>::clear()`を生成し、`LoadResetRegistry`のreplace phaseで全bufferをclearする。
+leaf UI messageとroot facade登録の`TerrainChangedEvent`も同じphaseでclearする。`EntityEvent`のobserver配送は
+即時でありmessage bufferを持たないため、この対象には含めない。

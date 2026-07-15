@@ -1,7 +1,7 @@
 //! ワールドのセーブ（exclusive system）。
 //!
-//! `DynamicWorldBuilder` を allow-list（`register_save_types` で登録した型のみ許可）
-//! で構築し、RON にシリアライズしてファイルへ書き込む。
+//! `schema.rs` が構成する DynamicWorld allow-listで構築し、RON にシリアライズして
+//! ファイルへ書き込む。
 //!
 //! # 設計上の逸脱（plan からの変更点）
 //! plan の Phase A は「セーブ前にライブワールドを正規化する」（例: `AssignedTask` を
@@ -10,58 +10,36 @@
 //! 採用した。ライブゲームの状態を一切変更せずに済み、`unassign_task` の呼び出しに
 //! 伴う予約解放処理を経由する必要もない。詳細は `docs/save_load.md` を参照。
 
+use std::fmt;
+use std::fs::{File, OpenOptions};
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-use bevy::ecs::reflect::AppTypeRegistry;
 use bevy::prelude::*;
-use std::io::Write;
 
-use crate::world::map::Tile;
+use super::format::{SaveHeader, encode_save_file};
+use super::schema::{build_persisted_world, collect_persisted_entities};
+use super::state::SavePath;
 
-use hw_core::GameTime;
-use hw_core::area::TaskArea;
-use hw_core::familiar::Familiar;
-use hw_core::population::PopulationManager;
-use hw_core::relationships::{
-    CommandedBy, Commanding, DeliveringTo, GatheringParticipants, IncomingDeliveries, LoadedIn,
-    LoadedItems, ManagedBy, ManagedTasks, ParkedAt, ParkedWheelbarrows, ParticipatingIn, PushedBy,
-    PushingWheelbarrow, RestAreaOccupants, RestAreaReservations, RestAreaReservedFor, RestingIn,
-    StoredIn, StoredItems, TaskWorkers, WorkingOn,
-};
-use hw_core::soul::{
-    DamnedSoul, DreamPool, DreamState, DriftingState, RestAreaCooldown, StressBreakdown,
-};
+static NEXT_TEMP_SAVE_FILE_ID: AtomicU64 = AtomicU64::new(0);
+const TEMP_FILE_ATTEMPTS: usize = 16;
 
-use hw_jobs::construction::{
-    FloorConstructionSite, FloorTileBlueprint, WallConstructionSite, WallTileBlueprint,
-};
-use hw_jobs::mud_mixer::{MudMixerStorage, StoredByMixer, TargetMixer};
-use hw_jobs::{
-    Blueprint, BonePile, BridgeMarker, Building, Designation, Door, ProvisionalWall, RestArea,
-    Rock, SandPile, TargetBlueprint, TargetSoulSpaSite, TaskSlots, Tree, TreeVariant,
-};
+#[derive(Debug)]
+enum SaveError {
+    Serialize(String),
+}
 
-use hw_energy::{
-    ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerConsumer, PowerGenerator,
-    PowerGrid, SoulSpaSite, SoulSpaTile, Unpowered, YardPowerGrid,
-};
-
-use hw_logistics::transport_request::{
-    ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportPolicy,
-    TransportRequest, TransportRequestFixedSource,
-};
-use hw_logistics::types::WheelbarrowParking;
-use hw_logistics::zone::Stockpile;
-use hw_logistics::{
-    BelongsTo, Inventory, PendingBelongsToBlueprint, ReservedForTask, ResourceItem, Wheelbarrow,
-};
-
-use hw_world::WorldMap;
-
-use bevy_world_serialization::DynamicWorldBuilder;
-
-use super::entities::collect_persisted_entities;
-use super::state::SAVE_FILE_PATH;
+impl fmt::Display for SaveError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Serialize(error) => {
+                write!(formatter, "DynamicWorld serialization failed: {error}")
+            }
+        }
+    }
+}
 
 pub fn save_world_system(world: &mut World) {
     let started = Instant::now();
@@ -70,128 +48,22 @@ pub fn save_world_system(world: &mut World) {
     // state stuck (which would block all future save/load requests).
     *world.resource_mut::<super::state::SaveLoadState>() = super::state::SaveLoadState::Idle;
 
-    // セーブ時点の worldgen seed をリソースとして焼き込む（ロード時の照合用）。
     let master_seed = world
         .resource::<crate::world::map::GeneratedWorldLayoutResource>()
         .master_seed;
-    world.insert_resource(super::state::SavedWorldgenSeed(master_seed));
+    let save_path = world.resource::<SavePath>().as_path().to_path_buf();
 
-    let type_registry = world.resource::<AppTypeRegistry>().clone();
-    let registry = type_registry.read();
-
-    let target_entities = collect_persisted_entities(world);
-
-    let dynamic_world = DynamicWorldBuilder::from_world(world, &registry)
-        .deny_all_components()
-        .deny_all_resources()
-        // ---- Resources ----
-        .allow_resource::<GameTime>()
-        .allow_resource::<DreamPool>()
-        .allow_resource::<PopulationManager>()
-        .allow_resource::<WorldMap>()
-        .allow_resource::<super::state::SavedWorldgenSeed>()
-        // ---- Components ----
-        .allow_component::<Transform>()
-        .allow_component::<DamnedSoul>()
-        .allow_component::<hw_core::soul::IdleState>()
-        .allow_component::<DreamState>()
-        .allow_component::<StressBreakdown>()
-        .allow_component::<RestAreaCooldown>()
-        .allow_component::<DriftingState>()
-        .allow_component::<Familiar>()
-        .allow_component::<CommandedBy>()
-        .allow_component::<Commanding>()
-        .allow_component::<WorkingOn>()
-        .allow_component::<TaskWorkers>()
-        .allow_component::<ManagedBy>()
-        .allow_component::<ManagedTasks>()
-        .allow_component::<StoredIn>()
-        .allow_component::<StoredItems>()
-        .allow_component::<LoadedIn>()
-        .allow_component::<LoadedItems>()
-        .allow_component::<ParkedAt>()
-        .allow_component::<ParkedWheelbarrows>()
-        .allow_component::<PushedBy>()
-        .allow_component::<PushingWheelbarrow>()
-        .allow_component::<DeliveringTo>()
-        .allow_component::<IncomingDeliveries>()
-        .allow_component::<ParticipatingIn>()
-        .allow_component::<GatheringParticipants>()
-        .allow_component::<RestingIn>()
-        .allow_component::<RestAreaOccupants>()
-        .allow_component::<RestAreaReservedFor>()
-        .allow_component::<RestAreaReservations>()
-        .allow_component::<Designation>()
-        .allow_component::<hw_jobs::Priority>()
-        .allow_component::<TaskSlots>()
-        .allow_component::<TaskArea>()
-        .allow_component::<Building>()
-        .allow_component::<Door>()
-        .allow_component::<RestArea>()
-        .allow_component::<Blueprint>()
-        .allow_component::<ProvisionalWall>()
-        .allow_component::<BridgeMarker>()
-        .allow_component::<SandPile>()
-        .allow_component::<BonePile>()
-        .allow_component::<TargetBlueprint>()
-        .allow_component::<TargetSoulSpaSite>()
-        .allow_component::<FloorConstructionSite>()
-        .allow_component::<FloorTileBlueprint>()
-        .allow_component::<WallConstructionSite>()
-        .allow_component::<WallTileBlueprint>()
-        .allow_component::<ResourceItem>()
-        .allow_component::<BelongsTo>()
-        .allow_component::<PendingBelongsToBlueprint>()
-        .allow_component::<ReservedForTask>()
-        .allow_component::<Inventory>()
-        .allow_component::<Wheelbarrow>()
-        .allow_component::<WheelbarrowParking>()
-        .allow_component::<Stockpile>()
-        .allow_component::<TransportRequest>()
-        .allow_component::<TransportRequestFixedSource>()
-        .allow_component::<ManualTransportRequest>()
-        .allow_component::<ManualHaulPinnedSource>()
-        .allow_component::<TransportDemand>()
-        .allow_component::<TransportPolicy>()
-        .allow_component::<MudMixerStorage>()
-        .allow_component::<TargetMixer>()
-        .allow_component::<StoredByMixer>()
-        .allow_component::<PowerGrid>()
-        .allow_component::<PowerGenerator>()
-        .allow_component::<PowerConsumer>()
-        .allow_component::<Unpowered>()
-        .allow_component::<YardPowerGrid>()
-        .allow_component::<GeneratesFor>()
-        .allow_component::<GridGenerators>()
-        .allow_component::<ConsumesFrom>()
-        .allow_component::<GridConsumers>()
-        .allow_component::<SoulSpaSite>()
-        .allow_component::<SoulSpaTile>()
-        .allow_component::<Tree>()
-        .allow_component::<TreeVariant>()
-        .allow_component::<Rock>()
-        .allow_component::<hw_jobs::ObstaclePosition>()
-        .allow_component::<Tile>()
-        .allow_component::<crate::entities::damned_soul::SoulIdentity>()
-        .allow_component::<hw_world::zones::Site>()
-        .allow_component::<hw_world::zones::Yard>()
-        .allow_component::<hw_world::zones::PairedSite>()
-        .allow_component::<hw_world::zones::PairedYard>()
-        .extract_entities(target_entities.into_iter())
-        .remove_empty_entities()
-        .extract_resources()
-        .build();
-
-    let ron_string = match dynamic_world.serialize(&registry) {
-        Ok(s) => s,
+    let body = match serialize_world_body(world) {
+        Ok(body) => body,
         Err(err) => {
             error!("Failed to serialize world for save: {err}");
             return;
         }
     };
+    let contents = encode_save_file(SaveHeader::current(master_seed), &body);
 
-    if let Err(err) = write_save_file(&ron_string) {
-        error!("Failed to write save file {SAVE_FILE_PATH}: {err}");
+    if let Err(err) = write_save_file(&save_path, &contents) {
+        error!("Failed to write save file {}: {err}", save_path.display());
         return;
     }
 
@@ -199,28 +71,124 @@ pub fn save_world_system(world: &mut World) {
     if elapsed.as_millis() > 100 {
         warn!("Save took {elapsed:?} (>100ms)");
     } else {
-        info!("World saved to {SAVE_FILE_PATH} in {elapsed:?}");
+        info!("World saved to {} in {elapsed:?}", save_path.display());
     }
 }
 
-/// アトミック書き込み: `.tmp` に書き出してから rename する。
+/// Serializes the persisted simulation state without doing filesystem I/O.
+fn serialize_world_body(world: &mut World) -> Result<String, SaveError> {
+    let type_registry = world
+        .resource::<bevy::ecs::reflect::AppTypeRegistry>()
+        .clone();
+    let registry = type_registry.read();
+
+    let target_entities = collect_persisted_entities(world);
+
+    let dynamic_world = build_persisted_world(world, &registry, target_entities.into_iter());
+
+    dynamic_world
+        .serialize(&registry)
+        .map_err(|error| SaveError::Serialize(error.to_string()))
+}
+
+/// 同じディレクトリ内の一意な一時ファイルへ書き込んでから rename する。
 /// 途中でクラッシュしても既存のセーブファイルは破損しない。
-fn write_save_file(contents: &str) -> std::io::Result<()> {
-    let path = std::path::Path::new(SAVE_FILE_PATH);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let tmp_path = path.with_file_name(format!(
-        "{}.tmp",
-        path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("world.scn.ron")
-    ));
-    {
-        let mut file = std::fs::File::create(&tmp_path)?;
+fn write_save_file(path: &Path, contents: &str) -> io::Result<()> {
+    let (temporary_path, mut file) = create_temporary_save_file(path)?;
+    let write_result = (|| -> io::Result<()> {
         file.write_all(contents.as_bytes())?;
-        file.sync_all()?;
+        file.sync_all()
+    })();
+    drop(file);
+
+    if let Err(error) = write_result {
+        let _ = std::fs::remove_file(&temporary_path);
+        return Err(error);
     }
-    std::fs::rename(&tmp_path, path)?;
+
+    if let Err(error) = std::fs::rename(&temporary_path, path) {
+        let _ = std::fs::remove_file(&temporary_path);
+        return Err(error);
+    }
+
     Ok(())
+}
+
+fn create_temporary_save_file(path: &Path) -> io::Result<(PathBuf, File)> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)?;
+
+    for _ in 0..TEMP_FILE_ATTEMPTS {
+        let temporary_path = temporary_save_path(path);
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary_path)
+        {
+            Ok(file) => return Ok((temporary_path, file)),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "could not allocate a unique temporary save file",
+    ))
+}
+
+fn temporary_save_path(path: &Path) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("world.scn.ron");
+    let unique_id = NEXT_TEMP_SAVE_FILE_ID.fetch_add(1, Ordering::Relaxed);
+    path.with_file_name(format!(
+        ".{file_name}.{}.{}.tmp",
+        std::process::id(),
+        unique_id
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unique_test_directory() -> PathBuf {
+        let unique_id = NEXT_TEMP_SAVE_FILE_ID.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "hell-workers-save-test-{}.{}",
+            std::process::id(),
+            unique_id
+        ))
+    }
+
+    #[test]
+    fn temporary_paths_are_unique_for_the_same_save_file() {
+        let path = Path::new("saves/world.scn.ron");
+
+        assert_ne!(temporary_save_path(path), temporary_save_path(path));
+    }
+
+    #[test]
+    fn atomic_write_replaces_the_target_without_leaving_temp_files() {
+        let directory = unique_test_directory();
+        let path = directory.join("world.scn.ron");
+
+        write_save_file(&path, "first save").expect("first write should succeed");
+        write_save_file(&path, "second save").expect("replacement write should succeed");
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "second save");
+        let remaining_temp_files = std::fs::read_dir(&directory)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .count();
+        assert_eq!(remaining_temp_files, 0);
+
+        std::fs::remove_dir_all(directory).expect("test directory should be removable");
+    }
 }

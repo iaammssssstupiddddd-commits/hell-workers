@@ -8,7 +8,7 @@ mod spawn;
 pub use animation::familiar_animation_system;
 pub use components::{
     ActiveCommand, Familiar, FamiliarColorAllocator, FamiliarCommand, FamiliarOperation,
-    FamiliarType,
+    FamiliarRangeIndicator, FamiliarType,
 };
 pub use hw_familiar_ai::familiar_movement;
 pub use range_indicator::update_familiar_range_indicator;

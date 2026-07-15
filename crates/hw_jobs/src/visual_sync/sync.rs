@@ -171,35 +171,58 @@ pub fn sync_soul_task_visual_system(mut q: SoulTaskSyncQuery) {
 
 pub fn sync_blueprint_visual_system(mut q: BlueprintSyncQuery) {
     for (bp, mut state) in q.iter_mut() {
-        state.progress = bp.progress;
-        state.material_counts = bp
+        *state = blueprint_visual_state(bp);
+    }
+}
+
+/// Builds the visual mirror from durable Blueprint state.
+///
+/// The root app uses this during load rehydration so the visual state is
+/// correct even while `GameSystemSet::Logic` is paused.
+pub fn blueprint_visual_state(bp: &Blueprint) -> BlueprintVisualState {
+    BlueprintVisualState {
+        progress: bp.progress,
+        material_counts: bp
             .required_materials
             .iter()
-            .map(|(rt, req)| {
+            .map(|(resource_type, required)| {
                 (
-                    *rt,
-                    bp.delivered_materials.get(rt).copied().unwrap_or(0),
-                    *req,
+                    *resource_type,
+                    bp.delivered_materials
+                        .get(resource_type)
+                        .copied()
+                        .unwrap_or(0),
+                    *required,
                 )
             })
-            .collect();
-        state.flexible_material = bp.flexible_material_requirement.as_ref().map(|f| {
-            (
-                f.accepted_types.clone(),
-                f.delivered_total,
-                f.required_total,
-            )
-        });
-        state.is_wall_or_door = matches!(bp.kind, BuildingType::Wall | BuildingType::Door);
-        state.is_plain_wall = matches!(bp.kind, BuildingType::Wall);
-        state.occupied_grids = bp.occupied_grids.clone();
+            .collect(),
+        flexible_material: bp
+            .flexible_material_requirement
+            .as_ref()
+            .map(|requirement| {
+                (
+                    requirement.accepted_types.clone(),
+                    requirement.delivered_total,
+                    requirement.required_total,
+                )
+            }),
+        is_wall_or_door: matches!(bp.kind, BuildingType::Wall | BuildingType::Door),
+        is_plain_wall: matches!(bp.kind, BuildingType::Wall),
+        occupied_grids: bp.occupied_grids.clone(),
     }
 }
 
 pub fn sync_floor_tile_visual_system(mut q: FloorTileSyncQuery) {
     for (tile, mut mirror) in q.iter_mut() {
-        mirror.bones_delivered = tile.bones_delivered;
-        mirror.state = match tile.state {
+        *mirror = floor_tile_visual_mirror(tile);
+    }
+}
+
+/// Builds the floor-tile visual mirror from durable construction state.
+pub fn floor_tile_visual_mirror(tile: &FloorTileBlueprint) -> FloorTileVisualMirror {
+    FloorTileVisualMirror {
+        bones_delivered: tile.bones_delivered,
+        state: match tile.state {
             FloorTileState::WaitingBones => FloorTileStateMirror::WaitingBones,
             FloorTileState::ReinforcingReady => FloorTileStateMirror::ReinforcingReady,
             FloorTileState::Reinforcing { progress } => {
@@ -210,13 +233,20 @@ pub fn sync_floor_tile_visual_system(mut q: FloorTileSyncQuery) {
             FloorTileState::PouringReady => FloorTileStateMirror::PouringReady,
             FloorTileState::Pouring { progress } => FloorTileStateMirror::Pouring { progress },
             FloorTileState::Complete => FloorTileStateMirror::Complete,
-        };
+        },
     }
 }
 
 pub fn sync_wall_tile_visual_system(mut q: WallTileSyncQuery) {
     for (tile, mut mirror) in q.iter_mut() {
-        mirror.state = match tile.state {
+        *mirror = wall_tile_visual_mirror(tile);
+    }
+}
+
+/// Builds the wall-tile visual mirror from durable construction state.
+pub fn wall_tile_visual_mirror(tile: &WallTileBlueprint) -> WallTileVisualMirror {
+    WallTileVisualMirror {
+        state: match tile.state {
             WallTileState::WaitingWood => WallTileStateMirror::WaitingWood,
             WallTileState::FramingReady => WallTileStateMirror::FramingReady,
             WallTileState::Framing { progress } => WallTileStateMirror::Framing { progress },
@@ -225,28 +255,42 @@ pub fn sync_wall_tile_visual_system(mut q: WallTileSyncQuery) {
             WallTileState::CoatingReady => WallTileStateMirror::CoatingReady,
             WallTileState::Coating { progress } => WallTileStateMirror::Coating { progress },
             WallTileState::Complete => WallTileStateMirror::Complete,
-        };
+        },
     }
 }
 
 pub fn sync_floor_site_visual_system(mut q: FloorSiteSyncQuery) {
     for (site, mut state) in q.iter_mut() {
-        state.phase = match site.phase {
+        *state = floor_site_visual_state(site);
+    }
+}
+
+/// Builds the floor-site visual state from durable construction state.
+pub fn floor_site_visual_state(site: &FloorConstructionSite) -> FloorSiteVisualState {
+    FloorSiteVisualState {
+        phase: match site.phase {
             FloorConstructionPhase::Reinforcing => FloorConstructionPhaseMirror::Reinforcing,
             FloorConstructionPhase::Pouring => FloorConstructionPhaseMirror::Pouring,
             FloorConstructionPhase::Curing => FloorConstructionPhaseMirror::Curing,
-        };
-        state.curing_remaining_secs = site.curing_remaining_secs;
-        state.tiles_total = site.tiles_total;
+        },
+        curing_remaining_secs: site.curing_remaining_secs,
+        tiles_total: site.tiles_total,
     }
 }
 
 pub fn sync_wall_site_visual_system(mut q: WallSiteSyncQuery) {
     for (site, mut state) in q.iter_mut() {
-        state.phase_is_framing = site.phase == WallConstructionPhase::Framing;
-        state.tiles_total = site.tiles_total;
-        state.tiles_framed = site.tiles_framed;
-        state.tiles_coated = site.tiles_coated;
+        *state = wall_site_visual_state(site);
+    }
+}
+
+/// Builds the wall-site visual state from durable construction state.
+pub fn wall_site_visual_state(site: &WallConstructionSite) -> WallSiteVisualState {
+    WallSiteVisualState {
+        phase_is_framing: site.phase == WallConstructionPhase::Framing,
+        tiles_total: site.tiles_total,
+        tiles_framed: site.tiles_framed,
+        tiles_coated: site.tiles_coated,
     }
 }
 

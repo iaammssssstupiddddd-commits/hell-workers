@@ -3,7 +3,7 @@ use hw_ui::UiIntent;
 use hw_ui::interaction::dialog::{close_load_confirm_dialog, open_load_confirm_dialog};
 
 use super::super::intent_context::IntentUiQueries;
-use crate::systems::save::{SAVE_FILE_PATH, SaveLoadState};
+use crate::systems::save::SaveLoadState;
 
 pub(crate) fn handle(intent: UiIntent, ui: &mut IntentUiQueries) {
     match intent {
@@ -14,8 +14,8 @@ pub(crate) fn handle(intent: UiIntent, ui: &mut IntentUiQueries) {
             }
         }
         UiIntent::RequestLoadGame => {
-            if !std::path::Path::new(SAVE_FILE_PATH).exists() {
-                warn!("No save file at {SAVE_FILE_PATH}");
+            if !ui.save_path.as_path().exists() {
+                warn!("No save file at {}", ui.save_path.as_path().display());
                 return;
             }
             open_load_confirm_dialog(&mut ui.q_load_confirm);

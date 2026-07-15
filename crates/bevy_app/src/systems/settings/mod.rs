@@ -14,6 +14,11 @@ use persistence::{load_settings_from_disk, save_settings_to_disk};
 
 pub struct SettingsPlugin;
 
+/// Project-owned `Last` work that must finish before a save/load world
+/// replacement can run.
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct SettingsPersistenceSet;
+
 impl Plugin for SettingsPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<GameSettings>()
@@ -30,7 +35,11 @@ impl Plugin for SettingsPlugin {
                     update_settings_default_speed_highlight,
                 ),
             )
-            .add_systems(Last, save_settings_on_app_exit_system);
+            .configure_sets(Last, SettingsPersistenceSet)
+            .add_systems(
+                Last,
+                save_settings_on_app_exit_system.in_set(SettingsPersistenceSet),
+            );
     }
 }
 

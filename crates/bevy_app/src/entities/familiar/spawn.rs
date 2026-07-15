@@ -195,7 +195,7 @@ fn spawn_familiar_at(
 ///
 /// spawn 時とセーブデータのロード後（rehydrate）の両方から呼ばれる。
 /// 永続化される simulation 状態（`Familiar` / `Commanding` / `ManagedTasks` /
-/// `Transform`）はここに含めないこと（`systems/save/saving.rs` の allow-list 参照）。
+/// `Transform`）はここに含めないこと（`systems/save/schema.rs` の allow-list 参照）。
 pub fn attach_familiar_shell(
     commands: &mut Commands,
     fam_entity: Entity,

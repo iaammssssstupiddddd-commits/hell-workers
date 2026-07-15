@@ -1,22 +1,40 @@
 //! セーブ/ロードのトリガー状態管理
 //!
 //! `SaveLoadState` はキー入力（F5=セーブ, F9=ロード）を検出した通常システムから
-//! `SaveRequested` / `LoadRequested` にセットされ、`save_world_system` /
-//! `load_world_system`（exclusive system）が `run_if` でこれを検知して実行後に
-//! `Idle` へ戻す。
+//! `SaveRequested` / `LoadRequested` にセットされ、`Last`のexclusive apply
+//! dispatcherがこれを実行後に`Idle`へ戻す。
 
 use bevy::prelude::*;
 use hw_ui::components::UiInputState;
+use std::path::{Path, PathBuf};
 
 /// セーブファイルの保存先（ワークスペースルートからの相対パス）
 pub const SAVE_FILE_PATH: &str = "saves/world.scn.ron";
 
-/// セーブ時点の worldgen seed。
+/// セーブ先。通常は既定パスを使うが、テストと将来の slot 選択では差し替えられる。
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
+pub struct SavePath(pub PathBuf);
+
+impl SavePath {
+    pub fn new(path: impl Into<PathBuf>) -> Self {
+        Self(path.into())
+    }
+
+    pub fn as_path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Default for SavePath {
+    fn default() -> Self {
+        Self::new(SAVE_FILE_PATH)
+    }
+}
+
+/// header 無し v0 セーブの worldgen seed。
 ///
-/// 地形チャンク等のビジュアルは起動時に `GeneratedWorldLayoutResource` の seed から
-/// 生成され、セーブには含まれない。別 seed のセッションにロードすると論理
-/// （`WorldMap`）と地形表示が食い違うため、ロード時にこの値を照合して
-/// 不一致ならロードを中止する（`load.rs` の seed ガード参照）。
+/// v1 以降は外部 header が seed を保持する。この型は magic 無しの既存セーブを
+/// 読む間だけ `AppTypeRegistry` に残す。
 #[derive(Resource, Reflect, Debug, Clone, Copy, PartialEq, Eq)]
 #[reflect(Resource)]
 pub struct SavedWorldgenSeed(pub u64);
@@ -49,12 +67,4 @@ pub fn save_load_keybind_system(
         *state = SaveLoadState::LoadRequested;
         info!("Load requested (F9)");
     }
-}
-
-pub fn is_save_requested(state: Res<SaveLoadState>) -> bool {
-    *state == SaveLoadState::SaveRequested
-}
-
-pub fn is_load_requested(state: Res<SaveLoadState>) -> bool {
-    *state == SaveLoadState::LoadRequested
 }

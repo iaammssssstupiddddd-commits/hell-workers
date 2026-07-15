@@ -7,7 +7,7 @@
 | 計画ID | `system-wide-runtime-performance-plan-2026-07-12` |
 | ステータス | `In Progress` |
 | 作成日 | `2026-07-12` |
-| 最終更新日 | `2026-07-13` |
+| 最終更新日 | `2026-07-15` |
 | 作成者 | `Codex` |
 | 関連提案 | `N/A` |
 | 関連Issue/PR | `N/A` |
@@ -666,6 +666,24 @@
 - progress barは子のlocal Transform継承を利用し、定数位置の毎フレーム再同期を削除する。cleanupはRemovedComponentsまたはowner linkで行い、全BlueprintのHashSetを毎フレーム構築しない。
 - visual color/scale/fillは`Changed<BlueprintVisualState>`または前回値差分があるownerだけ更新する。Building中のpulseだけactive marker付きvisual childで毎フレーム動かし、logical rootのscaleを書かない。rootを残す場合も同値比較後だけwriteする。
 
+#### M7A-1: progress bar owner link・差分更新（2026-07-15）
+
+- `BlueprintProgressBars { background, fill }` をBlueprint親へ持たせ、従来の
+  `Without<ProgressBar>` + 各親から全barを`.any()`で探索する経路を廃止した。未所有の親だけが
+  2子を生成するため、bar有無の確認は親1件あたりO(1)になった。
+- background/fillは`ChildOf`のlocal `Transform`を生成時に設定する。定数位置を毎frameに
+  書き直す`sync_progress_bar_position_system`を登録から外し、fillは
+  `Changed<BlueprintVisualState>`またはlink追加時だけ更新する。
+- `RemovedComponents<BlueprintVisualState>`で親のlinkを参照して子を破棄する。親entityの
+  despawnはBevy 0.19の`Children` cascadeに任せるため、毎frameのBlueprint `HashSet`構築と
+  全bar cleanup scanはない。
+- Blueprint本体の色・scaleも`Changed<BlueprintVisualState>`に限定し、同値は書き込まない。
+  Building中のpulseを専用visual childへ移す作業は、表示差分を伴うためM7Aの後続sliceとして残す。
+- 回帰testは「親1件につきbar 2子だけ」「静止frameでbar Transformを書かない」「state変更で
+  fillだけ更新」「state除去・親despawnで子を除去」を固定する。
+- `construction` workloadにはまだ自動fixtureがないため、本sliceはframe-time改善率を主張しない。
+  上記の決定的なwork削減と回帰testを採用根拠とし、正式なconstruction比較はM0 workload追加後に行う。
+
 #### M7B: Entity List 100ms cadence
 
 - structure dirtyを即時、value dirtyを`Time<Real>`基準のlatched 100 ms cadenceで処理し、pause/game speedの影響を受けないようにする。
@@ -887,19 +905,19 @@
 
 ### 現在地
 
-- 進捗: 性能 M0の計測基盤・Gather正式baseline、M1-A（idle早期除外とcounter）、M1-Bのreservation signature/cache split/counterが完了。M0全体とM1のcontext mutable遅延以降は継続中。
-- 完了済みsub-milestone: M1-A、M1-Bのreservation同期部分。3規模×CPU/GPUのGather frame-time baselineも有効化済みだが、M0のfixed-step audit・draw/scene count・Tracy memory・RenderDoc・専用workloadは未完である。
-- 未着手/進行中: §3.4 wave A の `runtime-correctness-contracts` M0 は完了。性能 M0 は strict parse、固定size/render条件、profiling feature分離、Warmup/Measure/Flush CSV capture、ゲーム更新前initial fixture checkpoint、run固有artifact、adapter/log/checksum検証、M1-A task execution counter、M1-B reservation counterを実装済み。旧18 runは計測中errorのため比較対象外。M1のcontext分割はreservation同期と独立して、正しさ/save-load前提を確認してから開始する。
+- 進捗: 性能 M0の計測基盤・Gather正式baseline、M1-A（idle早期除外とcounter）、M1-Bのreservation signature/cache split/counter、M7A-1（Blueprint progress bar owner link/差分更新）が完了。M0全体とM1のcontext mutable遅延以降は継続中。
+- 完了済みsub-milestone: M1-A、M1-Bのreservation同期部分、M7A-1。3規模×CPU/GPUのGather frame-time baselineも有効化済みだが、M0のfixed-step audit・draw/scene count・Tracy memory・RenderDoc・constructionを含む専用workloadは未完である。
+- 未着手/進行中: §3.4 wave A の `runtime-correctness-contracts` M0〜M4 は完了。性能 M0 は strict parse、固定size/render条件、profiling feature分離、Warmup/Measure/Flush CSV capture、ゲーム更新前initial fixture checkpoint、run固有artifact、adapter/log/checksum検証、M1-A task execution counter、M1-B reservation counterを実装済み。M7A-1は任意のGather baselineをconstruction性能として流用せず、決定的work削減だけを確認した。M1のcontext分割はreservation同期と独立して、正しさ/save-load前提を確認してから開始する。
 - M1-AはLarge/CPUの正式baselineと同条件で3 valid runを採取し、idle skip比率99.250127%を確認した。M1-B以後のcaptureはschema v4で、schema v2/v3 artifactとはframe-timeだけを比較し、欠落counterは新規postcondition観測として扱う。
 
 ### 次のAIが最初にやること
 
 1. `README.md`、`docs/DEVELOPMENT.md`、`docs/README.md`、本計画、正しさロードマップと3子計画、`docs/plans/archive/system-wide-performance-followups-plan-2026-07-07.md`を読む。
 2. userの未コミット差分を `git status --short` と `git diff` で確認し、対象外ファイルを編集しない。
-3. `runtime-correctness-contracts` M0完了を確認し、未完なら性能M0より先に同計画を実施する。
+3. `runtime-correctness-contracts` M0〜M4完了を確認し、Door topology version契約を性能側から変更しない。
 4. runtime M4のDoor topology version契約と回帰テストがgreenであることを確認し、本計画からmutation APIを変更しない。
 5. M0のraw CSVを保持したまま、fixed-step determinism audit、CPU toggle時のdraw/scene count、RenderDoc、Tracy memory、Gather以外の専用workloadを補完する。実時間frame-time baselineとは混在させない。
-6. schema v4でM1-B reservation同期の3反復30/60秒比較を採取し、`reservation_sync_full_rebuilds`と2種の走査件数をframe-timeと併記する。M1のcontext mutable遅延は正しさ/save-loadの前提wave確認後に別sub-milestoneとして実施し、M1-A/Bのtask/reservation契約を変えない。
+6. M7A以後のconstruction性能を比較する必要が出た場合は、先にM0へconstruction fixtureを追加する。Gather baselineをconstruction最適化の比較値にしない。M1のcontext mutable遅延は正しさ/save-loadの前提wave確認後に別sub-milestoneとして実施し、M1-A/Bのtask/reservation契約を変えない。
 
 ### ブロッカー/注意点
 
@@ -962,6 +980,10 @@
 - M1-B `cargo test -p bevy_app@0.1.0 --no-default-features --features profiling --lib systems::familiar_ai::perceive::resource_sync::tests`: `2026-07-14 / pass (5 passed)`
 - M1-B `cargo check -p bevy_app@0.1.0 --no-default-features --features profiling` / `cargo check --workspace` / `cargo clippy --workspace --all-targets -- -D warnings` / `cargo test --workspace` / `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test`: `2026-07-14 / pass`
 - M1-B runtime smoke: `2026-07-14 / Gather Small・CPU × 1 run / schema v4 CSV capture pass / reservation rebuild=4, pending scan=282, assigned scan=200`
+- M7A-1 `cargo test -p hw_visual`: `2026-07-15 / pass (5 passed)`
+- M7A-1 `cargo check --workspace` / `cargo clippy --workspace --all-targets -- -D warnings`: `2026-07-15 / pass (warnings 0, concurrent save/load未コミット変更の反映前)`
+- M7A-1 `cargo clippy -p hw_visual --all-targets -- -D warnings`: `2026-07-15 / pass (warnings 0)`。その後の全workspace Clippyは対象外の未コミット`systems/save/format.rs`のdead code 9件で停止し、同ファイルは変更しなかった。
+- M7A-1 deterministic work regression: `2026-07-15 / owner link 2 children / unchanged frame 0 bar Transform writes / state change updates linked fill / visual-state removal and owner despawn clean children`
 - 未解決設計gate: なし（Door cost/topology version契約はruntime M4へ統一済み）。
 
 ### Definition of Done
@@ -991,3 +1013,4 @@
 | `2026-07-13` | `Codex` | 存在しないasset参照を除去・修正し、Intel Vulkan上でGather baseline 18 runを採取。中央値、再現性、未完の観測項目をM0へ記録。 |
 | `2026-07-13` | `Codex` | 計測runner/CSV契約をschema v3へ拡張し、部分case比較とtask execution counterを追加。M1-Aのidle早期除外を実装・実測し、恒久task contractを更新した。 |
 | `2026-07-14` | `Codex` | M1-Bのreservation signature/cache splitを実装。load reset可能なroot signature cache、frame deltaとsnapshotの分離、schema v4 reservation sync counter、回帰testを追加した。正式3反復比較は未採取。 |
+| `2026-07-15` | `Codex` | 正しさM0〜M4完了後にM7A-1を実装。Blueprint progress barの親link、差分fill更新、local Transform化、RemovedComponents cleanup、回帰testを追加し、construction fixture未整備のためframe-time比較は保留と記録。 |

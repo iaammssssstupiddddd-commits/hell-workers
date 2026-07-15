@@ -6,6 +6,7 @@ mod effects;
 mod wheelbarrow_follow;
 
 pub use carrying_item::{spawn_carrying_item_system, update_carrying_item_system};
+pub use components::{CarryingItemVisual, DropPopup};
 pub use effects::update_drop_popup_system;
 pub use wheelbarrow_follow::wheelbarrow_follow_system;
 

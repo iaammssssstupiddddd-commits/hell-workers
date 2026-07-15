@@ -7,7 +7,7 @@ use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::{EntityListNodeIndex, InfoPanelPinState};
 use crate::systems::command::TaskArea;
 use crate::systems::familiar_ai::FamiliarAiState;
-use crate::systems::save::SaveLoadState;
+use crate::systems::save::{SaveLoadState, SavePath};
 use hw_core::game_state::PlayMode;
 use hw_core::relationships::Commanding;
 use hw_ui::components::{LoadConfirmDialog, MenuState, OperationDialog};
@@ -55,6 +55,7 @@ pub(crate) struct IntentUiQueries<'w, 's> {
         Query<'w, 's, &'static mut Node, (With<LoadConfirmDialog>, Without<OperationDialog>)>,
     pub(crate) q_text: Query<'w, 's, &'static mut Text>,
     pub(crate) save_load_state: ResMut<'w, SaveLoadState>,
+    pub(crate) save_path: Res<'w, SavePath>,
 }
 
 pub(crate) fn ensure_familiar_selected(

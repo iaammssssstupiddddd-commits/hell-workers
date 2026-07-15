@@ -7,7 +7,8 @@ use crate::plugins::startup::{
 };
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
-    area_edit_handles_visual_system, area_selection_indicator_system,
+    AreaEditHandleVisual, AreaSelectionIndicator, DesignationIndicator, DreamTreePreviewIndicator,
+    TaskAreaIndicator, area_edit_handles_visual_system, area_selection_indicator_system,
     dream_tree_planting_preview_system, sync_designation_indicator_system,
     update_designation_indicator_system,
 };
@@ -68,6 +69,16 @@ pub struct VisualPlugin;
 impl Plugin for VisualPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(HwVisualPlugin);
+        crate::systems::save::register_load_reset_hook(
+            app,
+            "hw-visual",
+            hw_visual::reset_for_world_replace,
+        );
+        crate::systems::save::register_load_reset_hook(
+            app,
+            "root-command-visuals",
+            reset_root_command_visuals,
+        );
 
         app.init_resource::<ElevationViewState>();
         app.init_resource::<SectionCut>();
@@ -252,6 +263,27 @@ impl Plugin for VisualPlugin {
     }
 }
 
+/// Removes root-owned transient command visuals before their target world is
+/// replaced. `DesignationIndicator` cannot rely on its normal
+/// `RemovedComponents<Designation>` cleanup because the replacement boundary
+/// intentionally discards old removal buffers before the next frame.
+fn reset_root_command_visuals(world: &mut World) {
+    let transient_entities: Vec<Entity> = {
+        let mut query = world.query_filtered::<Entity, Or<(
+            With<DesignationIndicator>,
+            With<TaskAreaIndicator>,
+            With<AreaEditHandleVisual>,
+            With<AreaSelectionIndicator>,
+            With<DreamTreePreviewIndicator>,
+        )>>();
+        query.iter(world).collect()
+    };
+
+    for entity in transient_entities {
+        world.despawn(entity);
+    }
+}
+
 fn render3d_sync_enabled(render3d: Res<crate::Render3dVisible>) -> bool {
     render3d.0
 }
@@ -361,5 +393,39 @@ fn apply_rtt_scene_content_toggle_system(
     };
     for entity in &q_scene_objects {
         commands.entity(entity).insert(scene_object_visibility);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::systems::command::AreaEditHandleKind;
+
+    #[test]
+    fn world_replace_reset_removes_root_command_visuals() {
+        let mut world = World::new();
+        let stale = world.spawn_empty().id();
+        let designation = world.spawn(DesignationIndicator(stale)).id();
+        let task_area = world.spawn(TaskAreaIndicator(stale)).id();
+        let handle = world
+            .spawn(AreaEditHandleVisual {
+                owner: stale,
+                kind: AreaEditHandleKind::Center,
+            })
+            .id();
+        let area_selection = world.spawn(AreaSelectionIndicator).id();
+        let dream_preview = world.spawn(DreamTreePreviewIndicator).id();
+
+        reset_root_command_visuals(&mut world);
+
+        for entity in [
+            designation,
+            task_area,
+            handle,
+            area_selection,
+            dream_preview,
+        ] {
+            assert!(world.get_entity(entity).is_err());
+        }
     }
 }

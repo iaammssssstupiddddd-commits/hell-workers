@@ -134,7 +134,9 @@ Perceive → Update → Decide → Execute
 `crates/bevy_app/src/systems/save/` — `SavePlugin`（`main.rs` で登録、root 専用: 全クレートの型に届く必要があるため leaf へ移動不可）。
 
 - セーブ/ロードとも exclusive system（`&mut World`）で 1 フレーム内に完結する
+- Input / Interfaceは`Update`で`SaveLoadState`だけを発行し、exclusive applyは`Last::SaveLoadApplySet`へ固定する。`SettingsPersistenceSet`の後に順序付けられたproject-owned最終phaseであり、他のproject `Last` systemを追加する場合は前後関係を明示する
 - 保存対象は allow-list 方式（`saving.rs`）。ロード後は `rehydrate.rs` が spawn 共用の `attach_*_shell` 関数で通常の実行時コンポーネント・随伴エンティティを再付与し、`rehydrate_obstacle_runtime` が obstacle provenance / navigation cache を durable semantic source から再構築する
+- `LoadResetRegistry`はroot所有。leafは`reset_for_world_replace(&mut World)`だけを公開し、root facadeがcallbackを登録する。old simulation Entityを保持するResource/message/UI/visual cacheはreplace前にclearし、runtime-only `GatheringSpot`とlinked visualも同時にdespawnする。system-localは`hw_core::WorldEpoch`不一致でlazy clearする。old `RemovedComponents`はwrite前に二重bufferを破棄し、new `Added`/`Changed`は次frameへ保持する
 - **spawn 時コンポーネントを追加したら allow-list、shell、または source-aware rehydrate helper に必ず登録する**（I-P1）。タプルキーのコレクションは保存型に持ち込まない（I-P2）
 - 仕様: [docs/save_load.md](save_load.md) / 不変条件: [docs/invariants.md §7](invariants.md)
 

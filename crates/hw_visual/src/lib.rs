@@ -60,7 +60,9 @@ use bevy::pbr::MaterialPlugin;
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
 use bevy::ui_render::prelude::UiMaterialPlugin;
+use hw_core::gathering::{GatheringSpot, GatheringVisuals};
 use hw_core::system_sets::{FamiliarAiSystemSet, GameSystemSet};
+use std::collections::HashSet;
 
 pub struct HwVisualPlugin;
 
@@ -112,7 +114,6 @@ impl Plugin for HwVisualPlugin {
                 blueprint::blueprint_scale_animation_system,
                 blueprint::spawn_progress_bar_system,
                 blueprint::update_progress_bar_fill_system,
-                blueprint::sync_progress_bar_position_system,
                 blueprint::cleanup_progress_bars_system,
             )
                 .chain()
@@ -260,5 +261,114 @@ impl Plugin for HwVisualPlugin {
             )
                 .in_set(FamiliarAiSystemSet::Execute),
         );
+    }
+}
+
+/// Clears visual-only entities and owner caches that may retain simulation
+/// entity ids across a persistent world replacement.
+///
+/// The root plugin facade registers this function with its load reset
+/// coordinator. This crate intentionally has no dependency on that facade.
+pub fn reset_for_world_replace(world: &mut World) {
+    let mut transient_entities = collect_transient_visual_entities(world);
+    transient_entities.extend(collect_gathering_entities(world));
+    for entity in transient_entities {
+        if world.get_entity(entity).is_ok() {
+            world.despawn(entity);
+        }
+    }
+
+    if world.contains_resource::<SoulProxyOwnerCache>() {
+        world.insert_resource(SoulProxyOwnerCache::default());
+    }
+}
+
+fn collect_transient_visual_entities(world: &mut World) -> HashSet<Entity> {
+    let mut query = world.query_filtered::<Entity, Or<(
+        With<visual3d::Building3dVisual>,
+        With<visual3d::SoulProxy3d>,
+        With<visual3d::SoulMaskProxy3d>,
+        With<visual3d::SoulShadowProxy3d>,
+        With<visual3d::FamiliarProxy3d>,
+        With<speech::components::SpeechBubble>,
+        With<dream::DreamParticle>,
+        With<dream::DreamGainPopup>,
+        With<dream::DreamGainUiParticle>,
+        With<dream::DreamTrailGhost>,
+        With<gather::WorkerGatherIcon>,
+        With<haul::CarryingItemVisual>,
+        With<haul::DropPopup>,
+        With<task_area_visual::TaskAreaVisual>,
+        With<site_yard_visual::SiteYardBoundaryVisual>,
+    )>>();
+    let mut entities: HashSet<_> = query.iter(world).collect();
+    let mut floating_text = world.query_filtered::<Entity, With<floating_text::FloatingText>>();
+    entities.extend(floating_text.iter(world));
+    entities
+}
+
+/// Gathering spots are runtime-only entities, but their visual links are not
+/// individually tagged. Collect the spot and both linked visuals before the
+/// spot is despawned so a world replacement cannot retain either side.
+fn collect_gathering_entities(world: &mut World) -> HashSet<Entity> {
+    let spots: Vec<_> = {
+        let mut query =
+            world.query_filtered::<(Entity, Option<&GatheringVisuals>), With<GatheringSpot>>();
+        query
+            .iter(world)
+            .map(|(spot, visuals)| {
+                (
+                    spot,
+                    visuals.map(|visuals| (visuals.aura_entity, visuals.object_entity)),
+                )
+            })
+            .collect()
+    };
+
+    let mut entities = HashSet::new();
+    for (spot, visuals) in spots {
+        entities.insert(spot);
+        if let Some((aura, object)) = visuals {
+            entities.insert(aura);
+            if let Some(object) = object {
+                entities.insert(object);
+            }
+        }
+    }
+    entities
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::gathering::GatheringObjectType;
+    use hw_core::relationships::{GatheringParticipants, ParticipatingIn};
+
+    #[test]
+    fn world_replace_reset_removes_runtime_gathering_spot_and_visuals() {
+        let mut world = World::new();
+        let aura = world.spawn_empty().id();
+        let object = world.spawn_empty().id();
+        let spot = world
+            .spawn((
+                GatheringSpot {
+                    object_type: GatheringObjectType::Nothing,
+                    ..default()
+                },
+                GatheringParticipants::default(),
+                GatheringVisuals {
+                    aura_entity: aura,
+                    object_entity: Some(object),
+                },
+            ))
+            .id();
+        let participant = world.spawn(ParticipatingIn(spot)).id();
+
+        reset_for_world_replace(&mut world);
+
+        for entity in [spot, aura, object] {
+            assert!(world.get_entity(entity).is_err());
+        }
+        assert!(world.get::<ParticipatingIn>(participant).is_none());
     }
 }

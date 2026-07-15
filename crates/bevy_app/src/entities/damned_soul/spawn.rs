@@ -261,7 +261,7 @@ fn spawn_damned_soul_at_with_identity(
 ///
 /// spawn 時とセーブデータのロード後（rehydrate）の両方から呼ばれる。
 /// セーブ/ロードで永続化される simulation 状態（`DamnedSoul` / `IdleState` /
-/// `Inventory` 等）はここに含めないこと（`systems/save/saving.rs` の allow-list 参照）。
+/// `Inventory` 等）はここに含めないこと（`systems/save/schema.rs` の allow-list 参照）。
 pub fn attach_soul_shell(
     commands: &mut Commands,
     soul_entity: Entity,

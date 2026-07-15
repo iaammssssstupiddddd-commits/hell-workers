@@ -7,6 +7,7 @@ pub(crate) use hw_ui::interaction::tooltip::{
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui_widgets::popover::Popover;
+use hw_core::{EpochLocal, WorldEpoch};
 use hw_ui::components::{
     HoverTooltip, MenuState, PlacementFailureTooltip, TooltipTemplate, UiNodeRegistry,
 };
@@ -80,7 +81,8 @@ pub(crate) fn hover_tooltip_system(
     render_queries: tooltip::TooltipRenderQueries,
     ui_layout: TooltipUiLayoutQueryParam,
     inspection: crate::interface::ui::presentation::EntityInspectionQuery<'_, '_>,
-    mut runtime: Local<TooltipRuntimeState>,
+    world_epoch: Res<WorldEpoch>,
+    mut runtime: Local<EpochLocal<TooltipRuntimeState>>,
 ) {
     let TooltipStateInput {
         time,
@@ -114,6 +116,6 @@ pub(crate) fn hover_tooltip_system(
             inspection: &inspection,
             tooltip_renderer: &TooltipRenderer,
         },
-        &mut runtime,
+        runtime.get_mut(*world_epoch),
     );
 }

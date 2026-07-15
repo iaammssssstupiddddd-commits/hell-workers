@@ -5,6 +5,7 @@ use hw_core::constants::*;
 use hw_core::relationships::PushingWheelbarrow;
 use hw_core::soul::{AnimationState, DamnedSoul, IdleBehavior, IdleState, Path, StressBreakdown};
 use hw_core::world::DoorState;
+use hw_core::{EpochLocal, WorldEpoch};
 use hw_world::{WorldMap, WorldMapRead};
 use std::collections::HashMap;
 
@@ -27,9 +28,11 @@ type SoulMovementQuery<'w, 's> = Query<
 pub fn soul_movement(
     time: Res<Time>,
     world_map: WorldMapRead,
-    mut door_waits: Local<HashMap<Entity, f32>>,
+    world_epoch: Res<WorldEpoch>,
+    mut door_waits: Local<EpochLocal<HashMap<Entity, f32>>>,
     mut query: SoulMovementQuery,
 ) {
+    let door_waits = door_waits.get_mut(*world_epoch);
     for (entity, mut transform, mut path, mut anim, soul, idle, breakdown_opt, pushing_wb) in
         query.iter_mut()
     {

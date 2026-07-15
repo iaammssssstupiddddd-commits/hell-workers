@@ -1,6 +1,6 @@
 //! ロード後の「再水和」（rehydration）。
 //!
-//! セーブは simulation 状態（`saving.rs` の allow-list）のみを復元するため、
+//! セーブは simulation 状態（`schema.rs` の allow-list）のみを復元するため、
 //! ロード直後のエンティティは spawn 時に付与される実行時コンポーネント
 //! （ビジュアル・AI 状態・移動・随伴エンティティ）を欠いた「裸」の状態になる。
 //! このモジュールが `load_world_system` の最後に呼ばれ、各カテゴリの shell を再付与する。
@@ -10,9 +10,10 @@
 //! - Familiar: `entities::familiar::attach_familiar_shell`
 //! - Building: `systems::jobs::attach_building_shell`
 //!
-//! Blueprint / 建設サイト / TaskArea / Site / Yard のビジュアルは visual_mirror 系の
-//! 差分検知システム（`Without<*VisualState>` / `Changed<T>` クエリ）が自然に再生成する
-//! ため、ここでは扱わない。
+//! Blueprint と floor / wall construction の visual mirror と Sprite は save schema
+//! から意図的に除外されるため、durable state からここで明示的に再構築する。
+//! これにより、`GameSystemSet::Logic` が停止中のロードでも Visual phase が完全な
+//! construction state を観測できる。
 
 use bevy::prelude::*;
 
@@ -31,20 +32,175 @@ use hw_core::logistics::ResourceType;
 use hw_core::relationships::LoadedIn;
 use hw_core::soul::DamnedSoul;
 use hw_core::visual::SoulTaskHandles;
+use hw_core::visual_mirror::construction::{
+    BlueprintVisualState, FloorSiteVisualState, FloorTileVisualMirror, WallSiteVisualState,
+    WallTileVisualMirror,
+};
 use hw_core::world::DoorState;
-use hw_jobs::construction::{FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint};
+use hw_jobs::construction::{
+    FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, WallConstructionSite,
+    WallTileBlueprint,
+};
+use hw_jobs::visual_sync::{
+    blueprint_visual_state, floor_site_visual_state, floor_tile_visual_mirror,
+    wall_site_visual_state, wall_tile_visual_mirror,
+};
 use hw_jobs::{
     Blueprint, Building, BuildingType, Designation, Door, ObstaclePosition, ObstacleSourceKind,
-    Rock, Tree, TreeVariant, WallConstructionSite,
+    Rock, Tree, TreeVariant,
 };
 use hw_logistics::zone::Stockpile;
 use hw_logistics::{Inventory, ResourceItem};
-use hw_visual::blueprint::BuildingBounceEffect;
+use hw_ui::selection::building_size;
+use hw_visual::SoulProxyOwnerCache;
+use hw_visual::blueprint::{BlueprintVisual, BuildingBounceEffect};
+use hw_visual::visual3d::{
+    Building3dVisual, FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d, SoulShadowProxy3d,
+};
 use hw_world::seed_obstacle_position_index;
 use std::collections::{HashMap, HashSet};
+use std::fmt;
+
+/// The subset of loaded assets needed to recreate a regular building Blueprint.
+///
+/// Construction state itself is asset-independent; keeping this narrow lets the
+/// rehydration path be tested without constructing the full `GameAssets` catalog.
+#[derive(Default)]
+struct BlueprintSpriteHandles {
+    wall_isolated: Handle<Image>,
+    door_closed: Handle<Image>,
+    mud_floor: Handle<Image>,
+    tank_empty: Handle<Image>,
+    mud_mixer: Handle<Image>,
+    rest_area: Handle<Image>,
+    bridge: Handle<Image>,
+    sand_pile: Handle<Image>,
+    bone_pile: Handle<Image>,
+    wheelbarrow_parking: Handle<Image>,
+}
+
+impl From<&GameAssets> for BlueprintSpriteHandles {
+    fn from(assets: &GameAssets) -> Self {
+        Self {
+            wall_isolated: assets.wall_isolated.clone(),
+            door_closed: assets.door_closed.clone(),
+            mud_floor: assets.mud_floor.clone(),
+            tank_empty: assets.tank_empty.clone(),
+            mud_mixer: assets.mud_mixer.clone(),
+            rest_area: assets.rest_area.clone(),
+            bridge: assets.bridge.clone(),
+            sand_pile: assets.sand_pile.clone(),
+            bone_pile: assets.bone_pile.clone(),
+            wheelbarrow_parking: assets.wheelbarrow_parking.clone(),
+        }
+    }
+}
+
+impl BlueprintSpriteHandles {
+    fn sprite(&self, kind: BuildingType) -> Sprite {
+        let image = match kind {
+            BuildingType::Wall => self.wall_isolated.clone(),
+            BuildingType::Door => self.door_closed.clone(),
+            BuildingType::Floor => self.mud_floor.clone(),
+            BuildingType::Tank => self.tank_empty.clone(),
+            BuildingType::MudMixer => self.mud_mixer.clone(),
+            BuildingType::RestArea => self.rest_area.clone(),
+            BuildingType::Bridge => self.bridge.clone(),
+            BuildingType::SandPile => self.sand_pile.clone(),
+            BuildingType::BonePile | BuildingType::SoulSpa | BuildingType::OutdoorLamp => {
+                self.bone_pile.clone()
+            }
+            BuildingType::WheelbarrowParking => self.wheelbarrow_parking.clone(),
+        };
+
+        Sprite {
+            image,
+            color: Color::srgba(1.0, 1.0, 1.0, 0.5),
+            custom_size: Some(building_size(kind)),
+            ..default()
+        }
+    }
+}
+
+/// Resources required to rebuild runtime shells after a persistent world replacement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct RehydratePrerequisiteError {
+    missing_resources: Vec<&'static str>,
+    invalid_conditions: Vec<&'static str>,
+}
+
+impl fmt::Display for RehydratePrerequisiteError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "cannot rehydrate: missing resource(s): {}; invalid condition(s): {}",
+            self.missing_resources.join(", "),
+            self.invalid_conditions.join(", ")
+        )
+    }
+}
+
+/// Validates resources consumed by rehydration before the live persisted world is despawned.
+pub(super) fn validate_rehydrate_prerequisites(
+    world: &World,
+) -> Result<(), RehydratePrerequisiteError> {
+    let mut missing_resources = Vec::new();
+
+    macro_rules! require_resource {
+        ($type:ty) => {
+            if !world.contains_resource::<$type>() {
+                missing_resources.push(std::any::type_name::<$type>());
+            }
+        };
+    }
+
+    require_resource!(GameAssets);
+    require_resource!(Building3dHandles);
+    require_resource!(SoulTaskHandles);
+    require_resource!(WorldMap);
+
+    let mut invalid_conditions = Vec::new();
+    if let Some(game_assets) = world.get_resource::<GameAssets>()
+        && game_assets.trees.is_empty()
+    {
+        invalid_conditions.push("GameAssets.trees must not be empty");
+    }
+
+    if missing_resources.is_empty() && invalid_conditions.is_empty() {
+        Ok(())
+    } else {
+        Err(RehydratePrerequisiteError {
+            missing_resources,
+            invalid_conditions,
+        })
+    }
+}
+
+/// Removes only presentation entities created by this module's shell helpers.
+/// This is deliberately narrower than M4's general load-reset registry.
+pub(super) fn clear_rehydrate_presentation(world: &mut World) {
+    let presentation_entities: Vec<Entity> = {
+        let mut query = world.query_filtered::<Entity, Or<(
+            With<SoulProxy3d>,
+            With<SoulMaskProxy3d>,
+            With<SoulShadowProxy3d>,
+            With<FamiliarProxy3d>,
+            With<Building3dVisual>,
+            With<crate::entities::familiar::FamiliarRangeIndicator>,
+        )>>();
+        query.iter(world).collect()
+    };
+    for entity in presentation_entities {
+        world.despawn(entity);
+    }
+    if world.contains_resource::<SoulProxyOwnerCache>() {
+        world.insert_resource(SoulProxyOwnerCache::default());
+    }
+}
 
 /// ロード直後に呼び、裸のエンティティへ shell を再付与する。
-pub fn rehydrate_after_load(world: &mut World) {
+pub(super) fn rehydrate_after_load(world: &mut World) -> Result<(), RehydratePrerequisiteError> {
+    validate_rehydrate_prerequisites(world)?;
     drop_orphaned_inventory_items(world);
 
     world.resource_scope::<GameAssets, _>(|world, game_assets| {
@@ -57,6 +213,8 @@ pub fn rehydrate_after_load(world: &mut World) {
 
     world.flush();
     rehydrate_obstacle_runtime(world);
+
+    Ok(())
 }
 
 /// Restores runtime obstacle provenance and derives the raw bitmap from durable
@@ -335,27 +493,9 @@ fn rehydrate_shells(
     soul_handles: &SoulTaskHandles,
 ) {
     // ---- 収集フェーズ（&mut World クエリ） ----
-
-    // Soul: shell 欠落は Destination の有無で判定（shell が必ず挿入する）
-    let mut souls: Vec<(Entity, Option<SoulIdentity>, String, Vec2)> = Vec::new();
-    {
-        let mut q = world.query_filtered::<(Entity, Option<&SoulIdentity>, &Transform), (
-            With<DamnedSoul>,
-            Without<Destination>,
-        )>();
-        for (entity, identity, transform) in q.iter(world) {
-            let pos = transform.translation.truncate();
-            match identity {
-                Some(identity) => souls.push((entity, None, identity.name.clone(), pos)),
-                None => {
-                    // 旧形式セーブ（SoulIdentity 未保存）へのフォールバック
-                    let identity = SoulIdentity::random();
-                    let name = identity.name.clone();
-                    souls.push((entity, Some(identity), name, pos));
-                }
-            }
-        }
-    }
+    let rehydrated_souls = rehydrate_soul_shells(world, handles_3d);
+    let blueprint_sprite_handles = BlueprintSpriteHandles::from(game_assets);
+    rehydrate_construction_shells(world, &blueprint_sprite_handles);
 
     let mut familiars: Vec<(Entity, String, f32, Vec2)> = Vec::new();
     {
@@ -413,7 +553,7 @@ fn rehydrate_shells(
 
     info!(
         "REHYDRATE: souls={} familiars={} trees={} rocks={} items={} buildings={} stockpiles={}",
-        souls.len(),
+        rehydrated_souls,
         familiars.len(),
         trees.len(),
         rocks.len(),
@@ -424,13 +564,6 @@ fn rehydrate_shells(
 
     // ---- 適用フェーズ（Commands 経由、rehydrate_after_load 側で flush） ----
     let mut commands = world.commands();
-
-    for (entity, new_identity, name, pos) in souls {
-        if let Some(identity) = new_identity {
-            commands.entity(entity).insert(identity);
-        }
-        attach_soul_shell(&mut commands, entity, &name, pos, handles_3d);
-    }
 
     for (entity, name, command_radius, pos) in familiars {
         attach_familiar_shell(
@@ -496,6 +629,245 @@ fn rehydrate_shells(
     }
 }
 
+/// Restores the non-persistent visual shell for construction roots.
+///
+/// Mirrors are built directly from their durable source rather than waiting for
+/// `GameSystemSet::Logic`: a load can occur while virtual time is paused, but
+/// the visual systems must still render the saved construction state.
+fn rehydrate_construction_shells(world: &mut World, sprite_handles: &BlueprintSpriteHandles) {
+    let blueprints: Vec<_> = {
+        let mut query = world.query::<(
+            Entity,
+            &Blueprint,
+            Option<&BlueprintVisualState>,
+            Option<&Sprite>,
+            Option<&BlueprintVisual>,
+            Option<&Name>,
+        )>();
+        query
+            .iter(world)
+            .filter_map(
+                |(entity, blueprint, existing_visual_state, sprite, visual, name)| {
+                    let visual_state = existing_visual_state
+                        .is_none()
+                        .then(|| blueprint_visual_state(blueprint));
+                    let sprite = sprite
+                        .is_none()
+                        .then(|| sprite_handles.sprite(blueprint.kind));
+                    let visual = visual.is_none().then(|| {
+                        let state = visual_state
+                            .as_ref()
+                            .or(existing_visual_state)
+                            .expect("a BlueprintVisual requires a visual state");
+                        BlueprintVisual::from_visual_state(state)
+                    });
+                    let name = name
+                        .is_none()
+                        .then(|| Name::new(format!("Blueprint ({:?})", blueprint.kind)));
+                    (visual_state.is_some()
+                        || sprite.is_some()
+                        || visual.is_some()
+                        || name.is_some())
+                    .then_some((entity, visual_state, sprite, visual, name))
+                },
+            )
+            .collect()
+    };
+
+    let floor_sites: Vec<_> = {
+        let mut query = world.query::<(
+            Entity,
+            &FloorConstructionSite,
+            Option<&FloorSiteVisualState>,
+            Option<&Name>,
+        )>();
+        query
+            .iter(world)
+            .filter_map(|(entity, site, visual_state, name)| {
+                let visual_state = visual_state
+                    .is_none()
+                    .then(|| floor_site_visual_state(site));
+                let name = name.is_none().then(|| Name::new("FloorConstructionSite"));
+                (visual_state.is_some() || name.is_some()).then_some((entity, visual_state, name))
+            })
+            .collect()
+    };
+
+    let floor_tiles: Vec<_> = {
+        let mut query = world.query::<(
+            Entity,
+            &FloorTileBlueprint,
+            Option<&FloorTileVisualMirror>,
+            Option<&Sprite>,
+            Option<&Name>,
+        )>();
+        query
+            .iter(world)
+            .filter_map(|(entity, tile, visual_state, sprite, name)| {
+                let visual_state = visual_state
+                    .is_none()
+                    .then(|| floor_tile_visual_mirror(tile));
+                let sprite = sprite.is_none().then(|| Sprite {
+                    color: Color::srgba(0.50, 0.50, 0.80, 0.20),
+                    custom_size: Some(Vec2::splat(TILE_SIZE)),
+                    ..default()
+                });
+                let name = name.is_none().then(|| {
+                    Name::new(format!(
+                        "FloorTile({},{})",
+                        tile.grid_pos.0, tile.grid_pos.1
+                    ))
+                });
+                (visual_state.is_some() || sprite.is_some() || name.is_some()).then_some((
+                    entity,
+                    visual_state,
+                    sprite,
+                    name,
+                ))
+            })
+            .collect()
+    };
+
+    let wall_sites: Vec<_> = {
+        let mut query = world.query::<(
+            Entity,
+            &WallConstructionSite,
+            Option<&WallSiteVisualState>,
+            Option<&Name>,
+        )>();
+        query
+            .iter(world)
+            .filter_map(|(entity, site, visual_state, name)| {
+                let visual_state = visual_state.is_none().then(|| wall_site_visual_state(site));
+                let name = name.is_none().then(|| Name::new("WallConstructionSite"));
+                (visual_state.is_some() || name.is_some()).then_some((entity, visual_state, name))
+            })
+            .collect()
+    };
+
+    let wall_tiles: Vec<_> = {
+        let mut query = world.query::<(
+            Entity,
+            &WallTileBlueprint,
+            Option<&WallTileVisualMirror>,
+            Option<&Sprite>,
+            Option<&Name>,
+        )>();
+        query
+            .iter(world)
+            .filter_map(|(entity, tile, visual_state, sprite, name)| {
+                let visual_state = visual_state
+                    .is_none()
+                    .then(|| wall_tile_visual_mirror(tile));
+                let sprite = sprite.is_none().then(|| Sprite {
+                    color: Color::srgba(0.80, 0.55, 0.30, 0.25),
+                    custom_size: Some(Vec2::splat(TILE_SIZE)),
+                    ..default()
+                });
+                let name = name.is_none().then(|| {
+                    Name::new(format!("WallTile({},{})", tile.grid_pos.0, tile.grid_pos.1))
+                });
+                (visual_state.is_some() || sprite.is_some() || name.is_some()).then_some((
+                    entity,
+                    visual_state,
+                    sprite,
+                    name,
+                ))
+            })
+            .collect()
+    };
+
+    let mut commands = world.commands();
+    for (entity, visual_state, sprite, visual, name) in blueprints {
+        if let Some(visual_state) = visual_state {
+            commands.entity(entity).insert(visual_state);
+        }
+        if let Some(sprite) = sprite {
+            commands.entity(entity).insert(sprite);
+        }
+        if let Some(visual) = visual {
+            commands.entity(entity).insert(visual);
+        }
+        if let Some(name) = name {
+            commands.entity(entity).insert(name);
+        }
+    }
+    for (entity, visual_state, name) in floor_sites {
+        if let Some(visual_state) = visual_state {
+            commands.entity(entity).insert(visual_state);
+        }
+        if let Some(name) = name {
+            commands.entity(entity).insert(name);
+        }
+    }
+    for (entity, visual_state, sprite, name) in floor_tiles {
+        if let Some(visual_state) = visual_state {
+            commands.entity(entity).insert(visual_state);
+        }
+        if let Some(sprite) = sprite {
+            commands.entity(entity).insert(sprite);
+        }
+        if let Some(name) = name {
+            commands.entity(entity).insert(name);
+        }
+    }
+    for (entity, visual_state, name) in wall_sites {
+        if let Some(visual_state) = visual_state {
+            commands.entity(entity).insert(visual_state);
+        }
+        if let Some(name) = name {
+            commands.entity(entity).insert(name);
+        }
+    }
+    for (entity, visual_state, sprite, name) in wall_tiles {
+        if let Some(visual_state) = visual_state {
+            commands.entity(entity).insert(visual_state);
+        }
+        if let Some(sprite) = sprite {
+            commands.entity(entity).insert(sprite);
+        }
+        if let Some(name) = name {
+            commands.entity(entity).insert(name);
+        }
+    }
+}
+
+/// Rehydrates Soul-owned shell state and returns the number of Souls that
+/// needed reconstruction. `Destination` is inserted by every shell, making
+/// the second call on the same world a no-op for both the owner and its 3D
+/// presentation roots.
+fn rehydrate_soul_shells(world: &mut World, handles_3d: &Building3dHandles) -> usize {
+    let mut souls: Vec<(Entity, Option<SoulIdentity>, String, Vec2)> = Vec::new();
+    {
+        let mut query = world.query_filtered::<(Entity, Option<&SoulIdentity>, &Transform), (
+            With<DamnedSoul>,
+            Without<Destination>,
+        )>();
+        for (entity, identity, transform) in query.iter(world) {
+            let position = transform.translation.truncate();
+            match identity {
+                Some(identity) => souls.push((entity, None, identity.name.clone(), position)),
+                None => {
+                    // 旧形式セーブ（SoulIdentity 未保存）へのフォールバック
+                    let identity = SoulIdentity::random();
+                    let name = identity.name.clone();
+                    souls.push((entity, Some(identity), name, position));
+                }
+            }
+        }
+    }
+
+    let count = souls.len();
+    let mut commands = world.commands();
+    for (entity, new_identity, name, position) in souls {
+        if let Some(identity) = new_identity {
+            commands.entity(entity).insert(identity);
+        }
+        attach_soul_shell(&mut commands, entity, &name, position, handles_3d);
+    }
+    count
+}
+
 /// 地面アイテムのスプライト。各 spawn 箇所（`terrain_resources.rs` / soul_ai の
 /// gather / collect_bone / refine / sand_collect / facilities.rs）と同じ画像・サイズ。
 fn item_sprite(
@@ -522,21 +894,476 @@ fn item_sprite(
 
 #[cfg(test)]
 mod tests {
-    use super::rehydrate_obstacle_runtime;
+    use super::{
+        BlueprintSpriteHandles, clear_rehydrate_presentation, rehydrate_construction_shells,
+        rehydrate_obstacle_runtime, rehydrate_soul_shells, validate_rehydrate_prerequisites,
+    };
+    use crate::entities::damned_soul::{Gender, SoulIdentity};
+    use crate::plugins::startup::Building3dHandles;
     use crate::world::map::WorldMap;
     use bevy::prelude::*;
+    use bevy::time::Virtual;
     use hw_core::area::TaskArea;
+    use hw_core::constants::TILE_SIZE;
     use hw_core::jobs::WorkType;
+    use hw_core::logistics::ResourceType;
+    use hw_core::soul::DamnedSoul;
+    use hw_core::system_sets::GameSystemSet;
+    use hw_core::visual_mirror::construction::{
+        BlueprintVisualState, FloorConstructionPhaseMirror, FloorSiteVisualState,
+        FloorTileStateMirror, FloorTileVisualMirror, WallSiteVisualState, WallTileStateMirror,
+        WallTileVisualMirror,
+    };
     use hw_core::world::DoorState;
     use hw_energy::SoulSpaSite;
     use hw_jobs::construction::{
-        FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint,
+        FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
+        WallConstructionPhase, WallConstructionSite, WallTileBlueprint, WallTileState,
     };
     use hw_jobs::{
         Blueprint, Building, BuildingType, Designation, Door, ObstaclePosition, ObstacleSourceKind,
         Rock, Tree, TreeVariant,
     };
+    use hw_visual::MaterialIconHandles;
+    use hw_visual::blueprint::{
+        BlueprintProgressBars, BlueprintState, BlueprintVisual, DeliveryPopup, MaterialCounter,
+        MaterialIcon, material_delivery_vfx_system, spawn_material_display_system,
+        spawn_progress_bar_system, update_blueprint_visual_system, update_progress_bar_fill_system,
+    };
+    use hw_visual::floor_construction::{
+        FloorCuringProgressBar, manage_floor_curing_progress_bars_system,
+        update_floor_curing_progress_bars_system,
+    };
+    use hw_visual::wall_construction::{
+        WallConstructionProgressBar, manage_wall_progress_bars_system,
+        update_wall_progress_bars_system,
+    };
     use hw_world::TerrainType;
+
+    fn empty_building_3d_handles() -> Building3dHandles {
+        Building3dHandles {
+            wall_mesh: Handle::default(),
+            wall_material: Handle::default(),
+            wall_provisional_material: Handle::default(),
+            wall_orientation_aid_mesh: Handle::default(),
+            wall_orientation_aid_material: Handle::default(),
+            floor_mesh: Handle::default(),
+            floor_material: Handle::default(),
+            door_mesh: Handle::default(),
+            door_material: Handle::default(),
+            equipment_1x1_mesh: Handle::default(),
+            equipment_2x2_mesh: Handle::default(),
+            equipment_material: Handle::default(),
+            soul_scene: Handle::default(),
+            familiar_mesh: Handle::default(),
+            familiar_material: Handle::default(),
+            render_layers: bevy::camera::visibility::RenderLayers::default(),
+        }
+    }
+
+    fn empty_material_icon_handles() -> MaterialIconHandles {
+        MaterialIconHandles {
+            wood_small: Handle::default(),
+            rock_small: Handle::default(),
+            sand_small: Handle::default(),
+            bone_small: Handle::default(),
+            stasis_mud_small: Handle::default(),
+            water_small: Handle::default(),
+            font_ui: Handle::default(),
+        }
+    }
+
+    #[derive(Resource, Default)]
+    struct LogicRunCount(u32);
+
+    fn count_logic_run(mut count: ResMut<LogicRunCount>) {
+        count.0 += 1;
+    }
+
+    fn component_count<T: Component>(world: &mut World) -> usize {
+        let mut query = world.query::<&T>();
+        query.iter(world).count()
+    }
+
+    #[test]
+    fn prerequisites_are_reported_before_rehydrate_mutates_the_world() {
+        let mut world = World::new();
+        let durable_entity = world.spawn(DamnedSoul::default()).id();
+
+        assert_eq!(
+            validate_rehydrate_prerequisites(&world)
+                .unwrap_err()
+                .missing_resources,
+            vec![
+                std::any::type_name::<crate::assets::GameAssets>(),
+                std::any::type_name::<crate::plugins::startup::Building3dHandles>(),
+                std::any::type_name::<hw_core::visual::SoulTaskHandles>(),
+                std::any::type_name::<WorldMap>(),
+            ],
+        );
+        assert!(world.get_entity(durable_entity).is_ok());
+    }
+
+    #[test]
+    fn presentation_cleanup_removes_only_rehydrate_owned_shells() {
+        let mut world = World::new();
+        world.init_resource::<hw_visual::SoulProxyOwnerCache>();
+
+        let soul_proxy = world
+            .spawn(hw_visual::visual3d::SoulProxy3d {
+                owner: Entity::PLACEHOLDER,
+                billboard: false,
+            })
+            .id();
+        let mask_proxy = world
+            .spawn(hw_visual::visual3d::SoulMaskProxy3d {
+                owner: Entity::PLACEHOLDER,
+            })
+            .id();
+        let shadow_proxy = world
+            .spawn(hw_visual::visual3d::SoulShadowProxy3d {
+                owner: Entity::PLACEHOLDER,
+            })
+            .id();
+        let familiar_proxy = world
+            .spawn(hw_visual::visual3d::FamiliarProxy3d {
+                owner: Entity::PLACEHOLDER,
+            })
+            .id();
+        let building_visual = world
+            .spawn(hw_visual::visual3d::Building3dVisual {
+                owner: Entity::PLACEHOLDER,
+            })
+            .id();
+        let range_indicator = world
+            .spawn(crate::entities::familiar::FamiliarRangeIndicator(
+                Entity::PLACEHOLDER,
+            ))
+            .id();
+        let durable_entity = world.spawn(Tree).id();
+
+        {
+            let mut cache = world.resource_mut::<hw_visual::SoulProxyOwnerCache>();
+            cache.soul_proxy.insert(Entity::PLACEHOLDER, soul_proxy);
+        }
+
+        clear_rehydrate_presentation(&mut world);
+
+        for entity in [
+            soul_proxy,
+            mask_proxy,
+            shadow_proxy,
+            familiar_proxy,
+            building_visual,
+            range_indicator,
+        ] {
+            assert!(world.get_entity(entity).is_err());
+        }
+        assert!(world.get_entity(durable_entity).is_ok());
+        assert!(
+            world
+                .resource::<hw_visual::SoulProxyOwnerCache>()
+                .soul_proxy
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn soul_shell_rehydrate_is_idempotent() {
+        let mut world = World::new();
+        let soul = world
+            .spawn((
+                DamnedSoul::default(),
+                SoulIdentity {
+                    name: "test soul".to_string(),
+                    gender: Gender::Male,
+                },
+                Transform::from_xyz(2.0, 3.0, 0.0),
+            ))
+            .id();
+        let handles = empty_building_3d_handles();
+
+        assert_eq!(rehydrate_soul_shells(&mut world, &handles), 1);
+        world.flush();
+        assert!(
+            world
+                .get::<crate::entities::damned_soul::Destination>(soul)
+                .is_some()
+        );
+        assert_eq!(
+            world
+                .query::<&hw_visual::visual3d::SoulProxy3d>()
+                .iter(&world)
+                .count(),
+            1
+        );
+        assert_eq!(
+            world
+                .query::<&hw_visual::visual3d::SoulMaskProxy3d>()
+                .iter(&world)
+                .count(),
+            1
+        );
+        assert_eq!(
+            world
+                .query::<&hw_visual::visual3d::SoulShadowProxy3d>()
+                .iter(&world)
+                .count(),
+            1
+        );
+
+        assert_eq!(rehydrate_soul_shells(&mut world, &handles), 0);
+        world.flush();
+        assert_eq!(
+            world
+                .query::<&hw_visual::visual3d::SoulProxy3d>()
+                .iter(&world)
+                .count(),
+            1
+        );
+        assert_eq!(
+            world
+                .query::<&hw_visual::visual3d::SoulMaskProxy3d>()
+                .iter(&world)
+                .count(),
+            1
+        );
+        assert_eq!(
+            world
+                .query::<&hw_visual::visual3d::SoulShadowProxy3d>()
+                .iter(&world)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn construction_shell_rehydrate_restores_saved_state_while_logic_is_paused() {
+        let mut world = World::new();
+
+        let mut blueprint = Blueprint::new(BuildingType::Tank, vec![(3, 4), (4, 4)]);
+        blueprint.progress = 0.25;
+        blueprint.delivered_materials.insert(ResourceType::Wood, 1);
+        let blueprint_entity = world
+            .spawn((blueprint, Transform::from_xyz(3.0, 4.0, 0.0)))
+            .id();
+
+        let mut floor_site = floor_site(FloorConstructionPhase::Curing);
+        floor_site.tiles_total = 3;
+        floor_site.curing_remaining_secs = 42.0;
+        let floor_site_entity = world.spawn(floor_site).id();
+        let mut floor_tile = FloorTileBlueprint::new(floor_site_entity, (5, 6));
+        floor_tile.state = FloorTileState::Pouring { progress: 73 };
+        floor_tile.bones_delivered = 2;
+        let floor_tile_entity = world.spawn(floor_tile).id();
+
+        let mut wall_site = WallConstructionSite::new(
+            TaskArea::from_points(Vec2::ZERO, Vec2::splat(16.0)),
+            Vec2::ZERO,
+            4,
+        );
+        wall_site.phase = WallConstructionPhase::Coating;
+        wall_site.tiles_framed = 4;
+        wall_site.tiles_coated = 2;
+        let wall_site_entity = world.spawn(wall_site).id();
+        let mut wall_tile = WallTileBlueprint::new(wall_site_entity, (7, 8));
+        wall_tile.state = WallTileState::Coating { progress: 61 };
+        let wall_tile_entity = world.spawn(wall_tile).id();
+
+        rehydrate_construction_shells(&mut world, &BlueprintSpriteHandles::default());
+        world.flush();
+
+        let blueprint_visual = world
+            .get::<BlueprintVisualState>(blueprint_entity)
+            .expect("Blueprint visual state should be restored before the next Logic run");
+        assert_eq!(blueprint_visual.progress, 0.25);
+        assert!(
+            blueprint_visual
+                .material_counts
+                .contains(&(ResourceType::Wood, 1, 2))
+        );
+        assert_eq!(
+            world
+                .get::<BlueprintVisual>(blueprint_entity)
+                .and_then(|visual| visual.last_delivered.get(&ResourceType::Wood)),
+            Some(&1)
+        );
+        assert_eq!(
+            world
+                .get::<Sprite>(blueprint_entity)
+                .and_then(|sprite| sprite.custom_size),
+            Some(Vec2::splat(TILE_SIZE * 2.0))
+        );
+        assert_eq!(
+            world.get::<Name>(blueprint_entity).map(Name::as_str),
+            Some("Blueprint (Tank)")
+        );
+
+        let floor_site_visual = world
+            .get::<FloorSiteVisualState>(floor_site_entity)
+            .expect("floor site visual state should be restored");
+        assert_eq!(
+            floor_site_visual.phase,
+            FloorConstructionPhaseMirror::Curing
+        );
+        assert_eq!(floor_site_visual.curing_remaining_secs, 42.0);
+        assert_eq!(floor_site_visual.tiles_total, 3);
+        let floor_tile_visual = world
+            .get::<FloorTileVisualMirror>(floor_tile_entity)
+            .expect("floor tile visual mirror should be restored");
+        assert_eq!(floor_tile_visual.bones_delivered, 2);
+        assert_eq!(
+            floor_tile_visual.state,
+            FloorTileStateMirror::Pouring { progress: 73 }
+        );
+        assert!(world.get::<Sprite>(floor_tile_entity).is_some());
+        assert_eq!(
+            world.get::<Name>(floor_site_entity).map(Name::as_str),
+            Some("FloorConstructionSite")
+        );
+        assert_eq!(
+            world.get::<Name>(floor_tile_entity).map(Name::as_str),
+            Some("FloorTile(5,6)")
+        );
+
+        let wall_site_visual = world
+            .get::<WallSiteVisualState>(wall_site_entity)
+            .expect("wall site visual state should be restored");
+        assert!(!wall_site_visual.phase_is_framing);
+        assert_eq!(wall_site_visual.tiles_total, 4);
+        assert_eq!(wall_site_visual.tiles_framed, 4);
+        assert_eq!(wall_site_visual.tiles_coated, 2);
+        let wall_tile_visual = world
+            .get::<WallTileVisualMirror>(wall_tile_entity)
+            .expect("wall tile visual mirror should be restored");
+        assert_eq!(
+            wall_tile_visual.state,
+            WallTileStateMirror::Coating { progress: 61 }
+        );
+        assert!(world.get::<Sprite>(wall_tile_entity).is_some());
+        assert_eq!(
+            world.get::<Name>(wall_site_entity).map(Name::as_str),
+            Some("WallConstructionSite")
+        );
+        assert_eq!(
+            world.get::<Name>(wall_tile_entity).map(Name::as_str),
+            Some("WallTile(7,8)")
+        );
+
+        let restored_sprite_count = world.query::<&Sprite>().iter(&world).count();
+        rehydrate_construction_shells(&mut world, &BlueprintSpriteHandles::default());
+        world.flush();
+        assert_eq!(
+            world.query::<&Sprite>().iter(&world).count(),
+            restored_sprite_count
+        );
+    }
+
+    #[test]
+    fn paused_visual_phase_rebuilds_construction_without_delivery_replay() {
+        let mut app = App::new();
+        app.init_resource::<Time<Virtual>>();
+        app.init_resource::<LogicRunCount>();
+        app.insert_resource(empty_material_icon_handles());
+        app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        app.configure_sets(
+            Update,
+            (
+                GameSystemSet::Logic.run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
+                GameSystemSet::Visual,
+            )
+                .chain(),
+        );
+        app.add_systems(Update, count_logic_run.in_set(GameSystemSet::Logic));
+        app.add_systems(
+            Update,
+            (
+                update_blueprint_visual_system,
+                spawn_progress_bar_system,
+                update_progress_bar_fill_system,
+                spawn_material_display_system,
+                material_delivery_vfx_system,
+                manage_floor_curing_progress_bars_system,
+                update_floor_curing_progress_bars_system,
+                manage_wall_progress_bars_system,
+                update_wall_progress_bars_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::Visual),
+        );
+
+        let mut blueprint = Blueprint::new(BuildingType::Tank, vec![(3, 4), (4, 4)]);
+        blueprint.progress = 0.25;
+        blueprint.delivered_materials.insert(ResourceType::Wood, 1);
+        let blueprint_entity = app
+            .world_mut()
+            .spawn((blueprint, Transform::from_xyz(3.0, 4.0, 0.0)))
+            .id();
+
+        let mut floor_site = floor_site(FloorConstructionPhase::Curing);
+        floor_site.curing_remaining_secs = 42.0;
+        let floor_site_entity = app
+            .world_mut()
+            .spawn((floor_site, Transform::from_xyz(5.0, 6.0, 0.0)))
+            .id();
+
+        let mut wall_site = WallConstructionSite::new(
+            TaskArea::from_points(Vec2::ZERO, Vec2::splat(16.0)),
+            Vec2::ZERO,
+            3,
+        );
+        wall_site.tiles_framed = 1;
+        let wall_site_entity = app
+            .world_mut()
+            .spawn((wall_site, Transform::from_xyz(7.0, 8.0, 0.0)))
+            .id();
+
+        rehydrate_construction_shells(app.world_mut(), &BlueprintSpriteHandles::default());
+        app.world_mut().flush();
+        app.update();
+        app.update();
+
+        assert_eq!(app.world().resource::<LogicRunCount>().0, 0);
+        let visual = app
+            .world()
+            .get::<BlueprintVisual>(blueprint_entity)
+            .expect("load rehydration should attach BlueprintVisual before Visual runs");
+        assert_eq!(visual.state, BlueprintState::Building);
+        assert_eq!(
+            visual.last_delivered.get(&ResourceType::Wood),
+            Some(&1),
+            "saved deliveries must not be treated as new deliveries"
+        );
+        assert!(
+            app.world()
+                .get::<BlueprintProgressBars>(blueprint_entity)
+                .is_some(),
+            "the paused Visual phase should create the progress bar"
+        );
+        assert_eq!(component_count::<MaterialIcon>(app.world_mut()), 1);
+        assert_eq!(component_count::<MaterialCounter>(app.world_mut()), 1);
+        assert_eq!(component_count::<DeliveryPopup>(app.world_mut()), 0);
+        assert!(
+            app.world()
+                .get::<FloorSiteVisualState>(floor_site_entity)
+                .is_some(),
+            "the paused Visual phase must receive a rehydrated floor site mirror"
+        );
+        assert_eq!(
+            component_count::<FloorCuringProgressBar>(app.world_mut()),
+            2
+        );
+        assert!(
+            app.world()
+                .get::<WallSiteVisualState>(wall_site_entity)
+                .is_some(),
+            "the paused Visual phase must receive a rehydrated wall site mirror"
+        );
+        assert_eq!(
+            component_count::<WallConstructionProgressBar>(app.world_mut()),
+            2
+        );
+    }
 
     fn floor_site(phase: FloorConstructionPhase) -> FloorConstructionSite {
         let mut site = FloorConstructionSite::new(

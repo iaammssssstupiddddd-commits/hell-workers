@@ -22,7 +22,9 @@ pub mod ui_nodes;
 pub mod visual;
 pub mod visual_mirror;
 pub mod world;
+pub mod world_epoch;
 
 pub use settings::GameSettings;
 pub use time::GameTime;
 pub use world::GridPos;
+pub use world_epoch::{EpochLocal, WorldEpoch};

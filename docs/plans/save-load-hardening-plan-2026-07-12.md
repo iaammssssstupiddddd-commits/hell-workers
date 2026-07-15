@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `save-load-hardening-plan-2026-07-12` |
-| ステータス | `Draft` |
+| ステータス | `In Progress` |
 | 作成日 | `2026-07-12` |
-| 最終更新日 | `2026-07-12` |
+| 最終更新日 | `2026-07-15` |
 | 作成者 | `Codex` |
 | 親ロードマップ | [system-wide-correctness-refactoring-plan-2026-07-12.md](system-wide-correctness-refactoring-plan-2026-07-12.md) |
 | 関連済み計画 | `archive/save-load-world-serialization-plan-2026-07-05.md` |
@@ -19,7 +19,7 @@
 ### 解決したい課題
 
 - Save format versionをDynamicWorld内部Resourceへ置くと、削除済み型を含む旧saveのversionをdeserialize前に判定できない。
-- `register.rs` / `saving.rs` / `entities.rs` の手動一覧が役割未分離で同期漏れを起こし得る。
+- 旧 `register.rs` / `saving.rs` / `entities.rs` の手動一覧が役割未分離で同期漏れを起こし得た。
 - 一時World preflightが完全なtransaction保証であるかのように扱われている。
 - save/load systemが無順序のUpdateへ登録され、simulation更新途中へ割り込める。
 - load後resetがcache中心で、旧Entityを保持するMessage、UI/selection Resource、visual cache、System Local、RemovedComponentsが残る。
@@ -81,7 +81,7 @@ HELL_WORKERS_SAVE
 
 - `SaveHeader`は通常のSerde型とし、DynamicWorldのTypeRegistryを使わずparseする。
 - magic無しの既存fileは`LegacyV0`として扱う。
-- `format_version > CURRENT_SAVE_FORMAT_VERSION`はbodyをdeserializeせず明示rejectする。
+- magic を持つ file は `format_version != CURRENT_SAVE_FORMAT_VERSION` なら body を deserialize せず明示 reject する。magic 無しだけを v0 として扱う。
 - v0は本計画中だけacceptし、legacy Reflect shimを登録したregistryでbodyをdeserializeする。
 - seed mismatchもbody適用前にheaderからrejectする。v0だけは旧`SavedWorldgenSeed` Resource抽出へfallbackする。
 
@@ -95,9 +95,9 @@ HELL_WORKERS_SAVE
 | `root_marker` | collect対象entity選択 | `DamnedSoul`, `Building`, `ResourceItem` |
 
 - typed macroまたは型リストmacroから`register_save_types`とDynamicWorldBuilder設定関数を生成する。
-- `Transform`等Bevy側登録に依存するallowed componentは`external_registered_component`としてschemaに明記し、registry testで存在を確認する。
+- `Transform`等Bevy側登録に依存するallowed componentは`external_registered_component`としてschemaに明記し、production registry testで`ReflectComponent` dataまで確認する。これは4分類の追加分類ではなく、`persisted_component`の登録責務を明示する注記である。
 - root markerは意味が異なるため別一覧を維持するが、代表archetype matrixでcollect/extract/round-tripを検証する。
-- 非保存の派生型は`runtime_derived_exclusion` inventoryへ明記する。runtime M4導入後の`ObstacleSourceKind`とbuilding footprint mirrorはここへ追加し、Save bodyへ混入しないことをtestする。
+- 非保存の派生型は`runtime_derived_exclusion` inventoryへ明記する。runtime M4導入後の`ObstacleSourceKind`、building footprint mirror、transient gathering relationship（`ParticipatingIn` / `GatheringParticipants`）はここへ追加し、Save bodyへ混入しないことをtestする。
 
 ### 3.3 load transaction境界
 
@@ -189,16 +189,15 @@ read content
 
 - `crates/bevy_app/src/systems/save/{state.rs,saving.rs,load.rs,mod.rs}`
 - `crates/bevy_app/src/systems/save/format.rs`（新規）
-- `crates/bevy_app/src/systems/save/error.rs`（必要なら新規）
-- `crates/bevy_app/tests/fixtures/save/`（またはmodule内fixture）
+- `crates/bevy_app/src/systems/save/{format.rs,saving.rs,load.rs}` の module unit test
 - `docs/save_load.md`
 
 ### 完了条件
 
-- [ ] unit testが`saves/world.scn.ron`を読み書きしない
-- [ ] header/version/seedをDynamicWorld deserialize前に判定
-- [ ] v0/v1/future/corruptを別errorへ分類
-- [ ] filesystem atomic writeは一意temp pathでtest
+- [x] unit testが`saves/world.scn.ron`を読み書きしない
+- [x] header/version/seedをDynamicWorld deserialize前に判定
+- [x] v0/v1/future/corruptを別errorへ分類
+- [x] filesystem atomic writeは一意temp pathでtest
 
 ### 検証
 
@@ -218,17 +217,17 @@ read content
 
 ### 主な変更ファイル
 
-- `crates/bevy_app/src/systems/save/{schema.rs,register.rs,saving.rs,entities.rs,mod.rs}`
+- `crates/bevy_app/src/systems/save/{schema.rs,saving.rs,load.rs,mod.rs}`（`register.rs` / `entities.rs` は削除）
 - `docs/save_load.md`
 - `docs/invariants.md` I-P1
 
 ### 完了条件
 
-- [ ] persisted resource/componentがregisterとallowの両方へ出力される
-- [ ] reflect dependencyがregisterされallow-listには入らない
-- [ ] external allowed componentのregistry dataが存在
-- [ ] root markerの全代表archetypeが抽出される
-- [ ] schema追加手順が1箇所に記載される
+- [x] persisted resource/componentがregisterとallowの両方へ出力される
+- [x] reflect dependencyがregisterされallow-listには入らない
+- [x] external allowed componentのregistry dataが存在
+- [x] root markerの全代表archetypeが抽出される
+- [x] schema追加手順が1箇所に記載される
 
 ### 検証
 
@@ -240,7 +239,7 @@ read content
 
 ### 変更内容
 
-1. `PreparedLoad { header, dynamic_world }`を導入する。
+1. `PreparedLoad { format, dynamic_world }`を導入する。
 2. deserialize errorとstaging preflight errorを別型で返す。
 3. staging World preflightはstatic registry/Reflect contractだけを検証すると文書化する。
 4. live despawn前にrehydrate prerequisitesとseed/schema invariantをvalidateする。
@@ -251,18 +250,19 @@ read content
 
 ### 主な変更ファイル
 
-- `crates/bevy_app/src/systems/save/{load.rs,rehydrate.rs,entities.rs}`
+- `crates/bevy_app/src/systems/save/{load.rs,rehydrate.rs,schema.rs}`
 - `crates/bevy_app/src/systems/save/transaction.rs`（新規）
 - `docs/save_load.md`
 - `docs/invariants.md`
 
 ### 完了条件
 
-- [ ] deserialize/preflight/live apply/prerequisite errorを別testで再現
-- [ ] preflight失敗前後でlive world同値
-- [ ] injected live apply failure後にEntity-remapを考慮したpersistent graph同値、非保存runtimeは通常loadの初期状態、worldは次frameを継続可能
-- [ ] rehydrate prerequisite失敗時はdespawn前に中止
-- [ ] rehydrate 2回実行でshell重複なし
+- [x] body parse/preflight/live apply/prerequisite errorを別testで再現
+- [x] preflight失敗前後でlive world同値
+- [x] injected live apply failure後にEntity-remapを考慮したpersistent graph同値、partial presentation cleanup、shared finalizer経由のrollback復旧
+- [x] rehydrate prerequisite失敗時はdespawn前に中止
+- [x] Soul shellのrehydrateを2回実行して3D proxy重複なし
+- [x] Blueprint / floor / wall construction の非保存 visual shellをdurable stateから再構築し、Logic pause中でも正しいmirrorをVisual phaseへ渡し、保存済み搬入を新規`+1`演出として再生しない
 
 ### 回帰テスト
 
@@ -300,20 +300,22 @@ read content
 
 ### 完了条件
 
-- [ ] save/load applyがUpdate/PostUpdateへ登録されていない
-- [ ] `Last::SaveLoadApplySet`で全producer後に1回だけ実行
-- [ ] typed message resetに登録漏れtestあり
-- [ ] leaf crateが`bevy_app::systems::save`へ依存せず、root facadeだけがregistry型を参照
-- [ ] old Entityを持つselection/context/UI/visual/cache/Localが0件
-- [ ] old RemovedComponentsを次frame readerが受信しない
-- [ ] loaded componentのAdded/Changedは必要なrebuild systemが観測する
+- [x] save/load applyがUpdate/PostUpdateへ登録されていない
+- [x] `Last::SaveLoadApplySet`で全producer後に1回だけ実行
+- [x] typed message resetに登録漏れtestあり
+- [x] leaf crateが`bevy_app::systems::save`へ依存せず、root facadeだけがregistry型を参照
+- [x] old Entityを持つselection/context/UI/visual/cache/Localが0件
+- [x] old RemovedComponentsを次frame readerが受信しない
+- [x] loaded componentのAdded/Changedは必要なrebuild systemが観測する
 
 ### 回帰テスト
 
 - Interface中load request → Last apply ordering
 - pending request before load → post-load applyなし
 - selected/drag/pin/move/proxy/door-wait state reset
+- transient `GatheringSpot` / linked visualのdespawnとlegacy gathering relationshipのstrip
 - old removal message drop + new Added observation
+- Blueprint / floor / wall construction の Sprite / visual mirror をpaused load直後に復元し、再水和を重複実行してもshellを増やさない
 - v0/v1 live Move reservation fixture → durable blockerだけを再構築し、Door Open/Closed/Lockedを再適用して、予約bit/不完全Move Designationを除去
 
 ## M5: `ReservedForTask` runtime除去とv0 shim
@@ -404,17 +406,16 @@ read content
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済み: なし
-- 未着手: M1〜M5
+- 進捗: `80%`（M1〜M4完了）
+- 完了済み: M1（`SavePath`、v1 external header、pure format/I/O 分離、v0 fallback、module test）、M2（`schema.rs` X-macro、registry/allow/root集約、external `Transform` contract、27 root marker round-trip test）、M3（PreparedLoad schema gate、staging preflight、rollback snapshot、partial entity cleanup、rehydrate prerequisite/owner shell cleanup）、M4（`Last::SaveLoadApplySet`、LoadResetRegistry、typed message reset、WorldEpoch、RemovedComponents/Added/Changed contract、runtime gathering exclusion/reset test）
+- 未着手: M5
 - M1〜M3はruntime M0完了前、M4はruntime M1/M2/M4完了前、M5はruntime M3完了前に着手しない。
 - `docs/proposals/hvac-plumbing-proposal.md`の既存変更は対象外。
 
 ### 次のAIが最初にやること
 
-1. 現行save RONをfixtureとして匿名化/最小化し、v0 parser testを先に作る。
-2. `bevy_world_serialization 0.19.0`のWorldDeserializer/write_to_world_with error境界を再確認する。
-3. M1のpure format/I/O分離から開始する。
+1. M5の`ReservedForTask` runtime除去前に、legacy v0 fixtureと現行request producerの参照を再確認する。
+2. v0 shimをloader限定に保ち、v1 allow-listへ再流入させない。
 
 ### ブロッカー/注意点
 
@@ -443,3 +444,7 @@ read content
 | --- | --- | --- |
 | `2026-07-12` | `Codex` | 全体計画の自己レビュー指摘を反映して新規作成 |
 | `2026-07-12` | `Codex` | 再レビューを反映し、reset ownership/phase、degraded rollback、runtime依存、v0/v1 obstacle正規化を確定 |
+| `2026-07-15` | `Codex` | M1を実装。`SavePath`、v1 external header、header先行のseed/version判定、magic無しv0 fallback、純粋format/I/O境界、一意temp file testを追加。 |
+| `2026-07-15` | `Codex` | M2を実装。`schema.rs`へ4分類とexternal registration注記を集約し、旧手動一覧を削除。空registry/production registry/root marker matrixのcontract testを追加。 |
+| `2026-07-15` | `Codex` | M3を実装。PreparedLoad schema gate、staging preflight、rollback snapshot、partial entity cleanup、rehydrate prerequisiteとowner presentation cleanup、rollback contract testを追加。 |
+| `2026-07-15` | `Codex` | M4を実装。applyを`Last::SaveLoadApplySet`へ移動し、LoadResetRegistry、typed message reset、root/leaf facade hook、WorldEpoch、old RemovedComponents二重buffer破棄を導入。旧removalをdropしnew Added/Changedを次frameで観測する回帰testを追加。`GatheringSpot`とlinked visualのreplace前despawn、およびlegacy gathering relationshipのschema前stripを追加。続いて、非保存の Blueprint / floor / wall construction visual shell をdurable stateから再水和し、pause中のVisual phaseにも正しいmirrorを渡す回帰testを追加。Blueprint の搬入履歴もmirrorから初期化し、保存済み資材の`+1`演出を再生しない。 |
