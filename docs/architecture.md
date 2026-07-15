@@ -52,8 +52,8 @@ graph TD
 5.  **Completion**: 資源が尽きると実体が消滅。`Observer` が検知し、`魂` のタスクを解除。
 
 ## システムセットの実行順序
-`GameSystemSet` は `hw_core::system_sets` で定義され、production App の `crates/bevy_app/src/main.rs` でチェーンされています。
-`crates/bevy_app/src/lib.rs` は共有 Resource・公開 module・event re-exportを提供し、focused unit testはここから対象systemだけを登録する：
+`GameSystemSet` は `hw_core::system_sets` で定義され、production App では `crates/bevy_app/src/plugins/game.rs` の `HellWorkersGamePlugin` がチェーンする。binary `main.rs` は Window / Log / Render backend を設定してこの plugin を追加するだけに留める。
+`crates/bevy_app/src/lib.rs` は共有 Resource・公開 module・event re-exportと `HellWorkersGamePlugin` を提供し、focused unit testはここから対象systemだけを登録する：
 `Input` → `Spatial` → `Logic` → `Actor` → `Visual` → `Interface`
 
 ### Global Cycle Framework (Logic Phase)
@@ -131,7 +131,7 @@ Perceive → Update → Decide → Execute
 
 ## セーブ/ロード (SavePlugin)
 
-`crates/bevy_app/src/systems/save/` — `SavePlugin`（`main.rs` で登録、root 専用: 全クレートの型に届く必要があるため leaf へ移動不可）。
+`crates/bevy_app/src/systems/save/` — `SavePlugin`（`HellWorkersGamePlugin` が登録する root 専用 plugin: 全クレートの型に届く必要があるため leaf へ移動不可）。
 
 - セーブ/ロードとも exclusive system（`&mut World`）で 1 フレーム内に完結する
 - Input / Interfaceは`Update`で`SaveLoadState`だけを発行し、exclusive applyは`Last::SaveLoadApplySet`へ固定する。`SettingsPersistenceSet`の後に順序付けられたproject-owned最終phaseであり、他のproject `Last` systemを追加する場合は前後関係を明示する
@@ -323,7 +323,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 ### 3D 表示トグル（開発機能）
 
-`Render3dVisible` Resource（`lib.rs`）が 3D 表示の有効・無効を管理する。production App への初期登録は `main.rs` が担当する。
+`Render3dVisible` Resource（`lib.rs`）が 3D 表示の有効・無効を管理する。production App への初期登録は `HellWorkersGamePlugin` が担当する。
 
 | 操作 | 方法 |
 |:---|:---|

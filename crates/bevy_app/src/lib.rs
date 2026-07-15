@@ -20,6 +20,7 @@ pub use hw_core::events::{
     SquadManagementRequest,
 };
 pub use hw_jobs::events::TaskAssignmentRequest;
+pub use plugins::game::HellWorkersGamePlugin;
 
 /// ゲーム内のデバッグ情報の表示状態（独自実装用）
 #[derive(Resource, Default)]

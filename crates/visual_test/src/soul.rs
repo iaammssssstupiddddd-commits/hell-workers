@@ -1,5 +1,6 @@
 use crate::types::*;
 use bevy::camera::visibility::RenderLayers;
+use bevy::ecs::system::SystemParam;
 use bevy::gltf::{Gltf, GltfMeshName};
 use bevy::light::{NotShadowCaster, NotShadowReceiver};
 use bevy::mesh::Mesh3d;
@@ -38,6 +39,31 @@ pub struct SoulSpawnArgs<'a> {
     pub index: usize,
     pub initial_expr: FaceExpression,
     pub selected: bool,
+}
+
+type SoulSceneChildrenQuery<'w, 's> = Query<'w, 's, &'static Children>;
+type SoulSceneMeshNameQuery<'w, 's> = Query<'w, 's, &'static GltfMeshName>;
+type SoulSceneNameQuery<'w, 's> = Query<'w, 's, &'static Name>;
+type SoulSceneMeshQuery<'w, 's> = Query<'w, 's, (), With<Mesh3d>>;
+type SoulSceneTransformQuery<'w, 's> = Query<'w, 's, &'static Transform>;
+type SoulSceneAnimationPlayerQuery<'w, 's> = Query<'w, 's, (), With<AnimationPlayer>>;
+
+#[derive(SystemParam)]
+pub struct SoulSceneTraversal<'w, 's> {
+    configs: Query<'w, 's, &'static TestSoulConfig>,
+    children: SoulSceneChildrenQuery<'w, 's>,
+    mesh_names: SoulSceneMeshNameQuery<'w, 's>,
+    names: SoulSceneNameQuery<'w, 's>,
+    meshes: SoulSceneMeshQuery<'w, 's>,
+    transforms: SoulSceneTransformQuery<'w, 's>,
+    animation_players: SoulSceneAnimationPlayerQuery<'w, 's>,
+}
+
+#[derive(SystemParam)]
+pub struct SoulSceneAnimationAssets<'w> {
+    assets: Option<Res<'w, TestAssets>>,
+    gltfs: Res<'w, Assets<Gltf>>,
+    animation_graphs: ResMut<'w, Assets<AnimationGraph>>,
 }
 
 pub fn spawn_test_soul(
@@ -110,41 +136,32 @@ pub fn spawn_test_soul(
 
 // ─── GLB マテリアル差し替え + アニメーション設定 ──────────────────────────────
 
-#[allow(clippy::too_many_arguments)]
 pub fn on_soul_scene_ready(
     scene_ready: On<WorldInstanceReady>,
-    q_configs: Query<&TestSoulConfig>,
-    q_children: Query<&Children>,
-    q_mesh_names: Query<&GltfMeshName>,
-    q_names: Query<&Name>,
-    q_meshes: Query<(), With<Mesh3d>>,
-    q_transforms: Query<&Transform>,
-    q_anim_players: Query<(), With<AnimationPlayer>>,
-    assets: Option<Res<TestAssets>>,
-    gltfs: Res<Assets<Gltf>>,
-    mut anim_graphs: ResMut<Assets<AnimationGraph>>,
+    traversal: SoulSceneTraversal,
+    mut animation_assets: SoulSceneAnimationAssets,
     mut commands: Commands,
 ) {
-    let Ok(config) = q_configs.get(scene_ready.entity) else {
+    let Ok(config) = traversal.configs.get(scene_ready.entity) else {
         return;
     };
     let render_layers = RenderLayers::layer(LAYER_3D);
     let mut anim_player_entity: Option<Entity> = None;
 
-    for child in q_children.iter_descendants(scene_ready.entity) {
+    for child in traversal.children.iter_descendants(scene_ready.entity) {
         let mut ec = commands.entity(child);
         ec.insert(render_layers.clone());
-        if q_anim_players.get(child).is_ok() {
+        if traversal.animation_players.get(child).is_ok() {
             anim_player_entity = Some(child);
         }
-        if q_meshes.get(child).is_err() {
+        if traversal.meshes.get(child).is_err() {
             continue;
         }
-        let mesh_name = q_mesh_names.get(child).ok().map(|n| n.0.as_str());
-        let name = q_names.get(child).ok().map(Name::as_str);
+        let mesh_name = traversal.mesh_names.get(child).ok().map(|n| n.0.as_str());
+        let name = traversal.names.get(child).ok().map(Name::as_str);
 
         if matches!(mesh_name, Some("Soul_Face_Mesh")) || matches!(name, Some("Soul_Face_Mesh")) {
-            if let Ok(face_tf) = q_transforms.get(child) {
+            if let Ok(face_tf) = traversal.transforms.get(child) {
                 let mut scaled = *face_tf;
                 scaled.scale *=
                     Vec3::new(SOUL_FACE_SCALE_MULTIPLIER, SOUL_FACE_SCALE_MULTIPLIER, 1.0);
@@ -169,8 +186,10 @@ pub fn on_soul_scene_ready(
     let Some(player_entity) = anim_player_entity else {
         return;
     };
-    let Some(ref assets) = assets else { return };
-    let Some(gltf) = gltfs.get(&assets.gltf_handle) else {
+    let Some(assets) = &animation_assets.assets else {
+        return;
+    };
+    let Some(gltf) = animation_assets.gltfs.get(&assets.gltf_handle) else {
         return;
     };
 
@@ -188,7 +207,7 @@ pub fn on_soul_scene_ready(
         return;
     }
 
-    let graph_handle = anim_graphs.add(graph);
+    let graph_handle = animation_assets.animation_graphs.add(graph);
     commands.entity(player_entity).insert((
         AnimationGraphHandle(graph_handle),
         AnimationTransitions::new(),

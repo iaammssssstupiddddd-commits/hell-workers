@@ -1,4 +1,5 @@
 use bevy::camera::visibility::RenderLayers;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::{
@@ -277,18 +278,27 @@ type CursorQuery<'w, 's> =
 type GhostCamQuery<'w, 's> =
     Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<TestMainCamera>>;
 
+#[derive(SystemParam)]
+pub struct BuildingCursorPointer<'w, 's> {
+    mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    camera: GhostCamQuery<'w, 's>,
+}
+
+#[derive(SystemParam)]
+pub struct BuildingCursorBuildings<'w, 's> {
+    assets: Option<Res<'w, TestBuildingAssets>>,
+    handles_3d: Option<Res<'w, TestBuilding3dHandles>>,
+    buildings: Query<'w, 's, (Entity, &'static TestBuilding)>,
+    visuals_3d: Query<'w, 's, (Entity, &'static TestBuilding3dVisual)>,
+}
+
 /// Build モード時にマウス追従のゴーストプレビューを表示し、左クリックで配置・削除する。
 /// Soul モード時はカーソルを非表示にする。
-#[allow(clippy::too_many_arguments)]
 pub fn update_building_cursor(
     mut state: ResMut<TestState>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
-    q_window: Query<&Window, With<PrimaryWindow>>,
-    q_camera: GhostCamQuery,
-    building_assets: Option<Res<TestBuildingAssets>>,
-    building_3d_handles: Option<Res<TestBuilding3dHandles>>,
-    q_buildings: Query<(Entity, &TestBuilding)>,
-    q_building_3d: Query<(Entity, &TestBuilding3dVisual)>,
+    pointer: BuildingCursorPointer,
+    building: BuildingCursorBuildings,
     mut q_cursor: CursorQuery,
     mut commands: Commands,
 ) {
@@ -304,7 +314,8 @@ pub fn update_building_cursor(
 
     // マウスがメニューパネル上にあるか判定
     let over_panel = state.menu_visible
-        && q_window
+        && pointer
+            .windows
             .single()
             .ok()
             .and_then(|w| w.cursor_position().map(|p| p.x > w.width() - MENU_WIDTH))
@@ -312,9 +323,9 @@ pub fn update_building_cursor(
 
     // マウス座標 → ワールド座標 → グリッド座標
     if !over_panel
-        && let Ok(window) = q_window.single()
+        && let Ok(window) = pointer.windows.single()
         && let Some(cursor_screen) = window.cursor_position()
-        && let Ok((camera, cam_tf)) = q_camera.single()
+        && let Ok((camera, cam_tf)) = pointer.camera.single()
         && let Ok(world_pos) = camera.viewport_to_world_2d(cam_tf, cursor_screen)
     {
         let (gx, gy) = world_to_grid(world_pos);
@@ -322,14 +333,19 @@ pub fn update_building_cursor(
     }
 
     let grid = state.building_cursor;
-    let occupied = q_buildings.iter().any(|(_, b)| b.grid == grid);
+    let occupied = building.buildings.iter().any(|(_, b)| b.grid == grid);
 
     // 左クリック: 配置 or 削除（パネル上でなければ）
-    if !over_panel && mouse_buttons.just_pressed(MouseButton::Left) {
+    if !over_panel && pointer.mouse_buttons.just_pressed(MouseButton::Left) {
         if occupied {
-            despawn_test_building_at(&mut commands, grid, &q_buildings, &q_building_3d);
+            despawn_test_building_at(
+                &mut commands,
+                grid,
+                &building.buildings,
+                &building.visuals_3d,
+            );
         } else if let (Some(ba), Some(bh)) =
-            (building_assets.as_deref(), building_3d_handles.as_deref())
+            (building.assets.as_deref(), building.handles_3d.as_deref())
         {
             spawn_test_building(&mut commands, state.building_kind, grid, ba, bh);
         }
@@ -346,7 +362,7 @@ pub fn update_building_cursor(
     } else {
         Color::srgba(0.5, 1.0, 0.5, 0.5)
     };
-    if let Some(assets) = &building_assets {
+    if let Some(assets) = &building.assets {
         sprite.image = assets.image_for(state.building_kind);
     }
 }

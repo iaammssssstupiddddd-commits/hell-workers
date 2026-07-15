@@ -2,6 +2,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy::camera::visibility::RenderLayers;
 use bevy::camera::{ClearColorConfig, RenderTarget};
 use bevy::camera_controller::pan_camera::PanCamera;
+use bevy::ecs::system::SystemParam;
 use bevy::light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
@@ -20,17 +21,21 @@ use crate::types::*;
 
 // ─── シーン初期化 ─────────────────────────────────────────────────────────────
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct SceneRenderAssets<'w> {
+    asset_server: Res<'w, AssetServer>,
+    images: ResMut<'w, Assets<Image>>,
+    character_materials: ResMut<'w, Assets<CharacterMaterial>>,
+    standard_materials: ResMut<'w, Assets<StandardMaterial>>,
+    soul_shadow_materials: ResMut<'w, Assets<SoulShadowMaterial>>,
+    soul_mask_materials: ResMut<'w, Assets<SoulMaskMaterial>>,
+    composite_materials: ResMut<'w, Assets<LocalRttCompositeMaterial>>,
+    meshes: ResMut<'w, Assets<Mesh>>,
+}
+
 pub fn setup_scene(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut images: ResMut<Assets<Image>>,
-    mut character_materials: ResMut<Assets<CharacterMaterial>>,
-    mut standard_materials: ResMut<Assets<StandardMaterial>>,
-    mut soul_shadow_materials: ResMut<Assets<SoulShadowMaterial>>,
-    mut soul_mask_materials: ResMut<Assets<SoulMaskMaterial>>,
-    mut composite_materials: ResMut<Assets<LocalRttCompositeMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
+    mut render_assets: SceneRenderAssets,
     q_window: Query<&Window, With<PrimaryWindow>>,
     mut state: ResMut<TestState>,
 ) {
@@ -42,13 +47,13 @@ pub fn setup_scene(
         .unwrap_or((1280, 720));
 
     // --- RtT テクスチャ ---
-    let rtt_handle = images.add(Image::new_target_texture(
+    let rtt_handle = render_assets.images.add(Image::new_target_texture(
         w,
         h,
         TextureFormat::Rgba8Unorm,
         Some(TextureFormat::Rgba8UnormSrgb),
     ));
-    let mask_handle = images.add(Image::new_target_texture(
+    let mask_handle = render_assets.images.add(Image::new_target_texture(
         w,
         h,
         TextureFormat::Rgba8Unorm,
@@ -128,19 +133,21 @@ pub fn setup_scene(
         .map(|win| win.size())
         .unwrap_or(Vec2::new(1280.0, 720.0));
     let comp_height = win_size.y * topdown_rtt_vertical_compensation();
-    let mesh = meshes.add(Rectangle::default().mesh());
-    let composite_mat = composite_materials.add(LocalRttCompositeMaterial {
-        params: RttCompositeParams {
-            pixel_size: Vec2::new(1.0 / win_size.x.max(1.0), 1.0 / win_size.y.max(1.0)),
-            mask_radius_px: 2.25,
-            mask_feather: 0.28,
-            shadow_offset_uv: Vec2::ZERO,
-            shadow_width_px: 0.0,
-            shadow_strength: 0.0,
-        },
-        scene_texture: rtt_handle,
-        soul_mask_texture: mask_handle,
-    });
+    let mesh = render_assets.meshes.add(Rectangle::default().mesh());
+    let composite_mat = render_assets
+        .composite_materials
+        .add(LocalRttCompositeMaterial {
+            params: RttCompositeParams {
+                pixel_size: Vec2::new(1.0 / win_size.x.max(1.0), 1.0 / win_size.y.max(1.0)),
+                mask_radius_px: 2.25,
+                mask_feather: 0.28,
+                shadow_offset_uv: Vec2::ZERO,
+                shadow_width_px: 0.0,
+                shadow_strength: 0.0,
+            },
+            scene_texture: rtt_handle,
+            soul_mask_texture: mask_handle,
+        });
     commands.spawn((
         Mesh2d(mesh),
         MeshMaterial2d(composite_mat),
@@ -154,11 +161,16 @@ pub fn setup_scene(
     ));
 
     // --- アセット ---
-    let soul_scene =
-        asset_server.load(GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb"));
-    let gltf_handle = asset_server.load("models/characters/soul.glb");
-    let face_atlas = asset_server.load("textures/character/soul_face_atlas.png");
-    let white_pixel = images.add(Image::new(
+    let soul_scene = render_assets
+        .asset_server
+        .load(GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb"));
+    let gltf_handle = render_assets
+        .asset_server
+        .load("models/characters/soul.glb");
+    let face_atlas = render_assets
+        .asset_server
+        .load("textures/character/soul_face_atlas.png");
+    let white_pixel = render_assets.images.add(Image::new(
         bevy::render::render_resource::Extent3d {
             width: 1,
             height: 1,
@@ -169,16 +181,20 @@ pub fn setup_scene(
         TextureFormat::Rgba8UnormSrgb,
         default(),
     ));
-    let font: Handle<Font> = asset_server.load("fonts/NotoSansJP-VF.ttf");
-    let blob_shadow_mesh = meshes.add(build_blob_shadow_mesh());
-    let blob_shadow_material = standard_materials.add(StandardMaterial {
+    let font: Handle<Font> = render_assets.asset_server.load("fonts/NotoSansJP-VF.ttf");
+    let blob_shadow_mesh = render_assets.meshes.add(build_blob_shadow_mesh());
+    let blob_shadow_material = render_assets.standard_materials.add(StandardMaterial {
         base_color: Color::BLACK,
         unlit: true,
         cull_mode: None,
         ..default()
     });
-    let soul_shadow_material = soul_shadow_materials.add(SoulShadowMaterial::default());
-    let soul_mask_material = soul_mask_materials.add(SoulMaskMaterial::solid_white());
+    let soul_shadow_material = render_assets
+        .soul_shadow_materials
+        .add(SoulShadowMaterial::default());
+    let soul_mask_material = render_assets
+        .soul_mask_materials
+        .add(SoulMaskMaterial::solid_white());
 
     // --- 指向性ライト (本番相当) ---
     let sun_dir = topdown_sun_direction_world();
@@ -210,7 +226,7 @@ pub fn setup_scene(
     };
     rebuild_soul_test_layout(
         &mut commands,
-        &mut character_materials,
+        &mut render_assets.character_materials,
         &test_assets,
         &mut state,
         SoulRebuildEntities::default(),

@@ -27,7 +27,7 @@
 | [performance-cpu-2026-04-16.md](performance-cpu-2026-04-16.md) | Superseded | CPU パフォーマンス改善計画書 |
 | [runtime-correctness-contracts-plan-2026-07-12.md](runtime-correctness-contracts-plan-2026-07-12.md) | Completed | 実行時正しさ契約リファクタリング計画 |
 | [save-load-hardening-plan-2026-07-12.md](save-load-hardening-plan-2026-07-12.md) | In Progress | Save/Load境界強化・互換性リファクタリング計画 |
-| [structural-maintainability-followups-plan-2026-07-12.md](structural-maintainability-followups-plan-2026-07-12.md) | Draft | 構造・保守性・品質ゲート フォローアップ計画 |
+| [structural-maintainability-followups-plan-2026-07-12.md](structural-maintainability-followups-plan-2026-07-12.md) | In Progress | 構造・保守性・品質ゲート フォローアップ計画 |
 | [system-wide-correctness-refactoring-plan-2026-07-12.md](system-wide-correctness-refactoring-plan-2026-07-12.md) | Draft | 全体実装レビュー追補: 横断リファクタリングロードマップ |
 | [system-wide-runtime-performance-plan-2026-07-12.md](system-wide-runtime-performance-plan-2026-07-12.md) | In Progress | 全体ランタイム・ホットパス性能改善計画書 |
 

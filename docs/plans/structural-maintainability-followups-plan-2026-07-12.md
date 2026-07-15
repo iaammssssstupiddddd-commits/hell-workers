@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `structural-maintainability-followups-plan-2026-07-12` |
-| ステータス | `Draft` |
+| ステータス | `In Progress` |
 | 作成日 | `2026-07-12` |
-| 最終更新日 | `2026-07-12` |
+| 最終更新日 | `2026-07-15` |
 | 作成者 | `Codex` |
 | 親ロードマップ | [system-wide-correctness-refactoring-plan-2026-07-12.md](system-wide-correctness-refactoring-plan-2026-07-12.md) |
 | 前提 | runtime / Save-Load子計画完了、性能計画M0〜M7完了、条件付きM8の実施またはskip決定済み |
@@ -22,7 +22,7 @@
 - component型をそのままgeneric tagにすると、`hw_logistics -> hw_spatial`の既存依存と循環し得る。
 - Resource gridとGathering gridには特殊update policyがあり、一律generic化すると挙動退行する。
 - `visual_test`に6件の`#[allow(clippy::too_many_arguments)]`が残り、`-D warnings`では検出できない。
-- toolchain/CI方針が未固定で、`cargo fmt --all --check`が広範に失敗している。
+- toolchain/CI方針が未固定で、format baselineの差分有無を継続的に検出できない。
 
 ### 到達したい状態
 
@@ -33,7 +33,7 @@
 - Visibility/center等の特殊policyは専用systemとして残る。
 - Clippy allowなしでall-target warnings 0を維持する。
 - Rust toolchainをpinし、GitHub CIとlocal gateを一致させる。
-- 全体rustfmtは機能変更と分離した単独コミットで完了する。
+- 全体rustfmtの差分が発生した場合は、機能変更と分離した単独コミットで完了する。
 
 ### 成功指標
 
@@ -102,7 +102,7 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 
 - `rust-toolchain.toml`で`1.96.1`、`rustfmt`、`clippy`をpinする。実装開始時にBevy 0.19/workspaceがこのversionでbuild可能か再確認し、不可能なら同一PR内で最小互換versionへ調整する。
 - `.github/workflows/ci.yml`を追加し、Linux上でfmt/check/clippy/testを実行する。
-- 全体rustfmtはclean worktreeかつ並行sessionなしを確認し、format-only commitとして実施する。
+- `cargo fmt --all --check`が差分を報告した場合だけ、clean worktreeかつ並行sessionなしを確認して全体rustfmtをformat-only commitとして実施する。
 - Clippy allowは警告抑制ではなくSystemParam/parameter object等で構造修正する。
 
 ## 4. 期待する影響
@@ -136,11 +136,11 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 
 ### 完了条件
 
-- [ ] `main.rs`がruntime shellだけになる
-- [ ] production起動時のplugin/resource/system setが移行前と同一
-- [ ] registration ownerが各system/observerにつき1箇所
-- [ ] runtime計画の最小test App helperを壊さない
-- [ ] crate boundary docs間に矛盾なし
+- [x] `main.rs`がruntime shellだけになる
+- [x] production起動時のplugin/resource/system setが移行前と同一
+- [x] registration ownerが各system/observerにつき1箇所
+- [x] runtime計画の最小test App helperを壊さない
+- [x] crate boundary docs間に矛盾なし
 
 ### 検証
 
@@ -204,10 +204,10 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 
 ### 完了条件
 
-- [ ] 対象6 allowが0件
-- [ ] workspace内Clippy allow/expectが0件
-- [ ] visual_test操作/描画挙動に変更なし
-- [ ] all-target Clippy warnings 0
+- [x] 対象6 allowが0件
+- [x] workspace内Clippy allow/expectが0件
+- [x] visual_test操作/描画挙動に変更なし
+- [x] all-target Clippy warnings 0
 
 ### 検証
 
@@ -221,7 +221,7 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 
 1. `rust-toolchain.toml`を追加し、Rust/rustfmt/clippy versionをpinする。
 2. GitHub Actions CIを追加する。
-3. clean worktree/並行sessionなしを確認して`cargo fmt --all`を単独commitで実行する。
+3. `cargo fmt --all --check`が差分を報告した場合だけ、clean worktree/並行sessionなしを確認して`cargo fmt --all`を単独commitで実行する。
 4. CI/local共通commandを`docs/DEVELOPMENT.md`へ記載する。
 5. format後に全gateを実行する。
 
@@ -229,25 +229,25 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 
 - `rust-toolchain.toml`
 - `.github/workflows/ci.yml`
-- Rust source全体（format-only commit）
+- Rust source全体（format差分がある場合のformat-only commit）
 - `docs/DEVELOPMENT.md`
-- `CLAUDE.md`
 
 ### CI必須job
 
 1. `cargo fmt --all --check`
 2. `cargo check --workspace`
-3. `cargo clippy --workspace --all-targets -- -D warnings`
-4. `! rg -n '#\[(allow|expect)\(clippy::' crates --glob '*.rs'`
-5. `cargo test --workspace`
+3. `cargo check -p bevy_app@0.1.0 --lib --features profiling`
+4. `cargo clippy --workspace --all-targets -- -D warnings`
+5. `! rg -n '#\[(allow|expect)\(clippy::' crates --glob '*.rs'`
+6. `cargo test --workspace`
 
 ### 完了条件
 
-- [ ] pin toolchainでlocal全gate成功
+- [x] pin toolchainでlocal全gate成功
 - [ ] CI全job成功
-- [ ] CIが新しい`#[allow(clippy::...)]` / `#[expect(clippy::...)]`を失敗として検出
-- [ ] format commitに意味上のコード変更なし
-- [ ] user/parallel session由来の差分をformat commitへ混入していない
+- [x] CIが新しい`#[allow(clippy::...)]` / `#[expect(clippy::...)]`を失敗として検出
+- [x] format checkに意味上のコード変更なし
+- [x] user/parallel session由来の差分をformat操作へ混入していない
 
 ## 6. リスクと対策
 
@@ -287,24 +287,26 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 - M1〜M4を独立コミットにする。
 - M2はgrid family単位に分割可能だが、old/new Resourceを同時登録しない。
 - M3はvisual_test feature単位に分割する。
-- M4のtoolchain/CI commitとformat-only commitを分ける。
+- M4のtoolchain/CI commitと、必要時のformat-only commitを分ける。
 - archive時に必要なら`git add -f docs/plans/archive/<file>`を使う。
 
 ## 9. AI引継ぎメモ
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済み: なし
-- 未着手: M1〜M4
-- runtime/Save-Load子計画、性能M0〜M7、条件付きM8の実施/skip決定前は着手しない。
+- 進捗: M1/M3完了、M4はCI実行待ち、M2未着手
+- 完了済み: M1 production App composition、M3 Clippy allow構造解消、M4 toolchain pin・CI定義・local品質gate
+- 未着手: M2 SpatialIndex共通化
+- M4 の `cargo fmt --all --check` は差分なしで成功したため、dirty worktreeに対する全体formatは実行せず、format-only commitは生成していない。CI実行結果だけが M4 の残タスクである。
+- 通常の開始条件は runtime/Save-Load子計画、性能M0〜M7、条件付きM8の実施/skip決定済みとする。`2026-07-15` は明示的な実装指示により、永続化形式・grid update policy・全体formatに触れない M1/M3 だけを先行実施した。
+- M2 は Save/Load・性能計測の前提完了後に再開する。M4 のCI成功は GitHub push 後に記録する。
 - `docs/proposals/hvac-plumbing-proposal.md`の既存変更は対象外。
 
 ### 次のAIが最初にやること
 
-1. runtime/Save-Load子計画の最終test logと、性能M0〜M7完了・M8実施/skip記録を確認する。
-2. M1で現行plugin/system登録ownerを一覧化する。
-3. behavior-neutralなApp composition移動から開始する。
+1. Save/Load子計画の最終test logと、性能M0〜M7完了・M8実施/skip記録を確認する。
+2. M2用に `hw_spatial` のtag分離・add/move/remove・Resource Visibility・Gathering center/Added-only policyの回帰testを先に追加する。
+3. GitHub Actions の M4 quality job 成功を確認し、planへ実行結果を記録する。
 
 ### ブロッカー/注意点
 
@@ -317,9 +319,9 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 ### Definition of Done
 
 - [ ] M1〜M4完了
-- [ ] production plugin ownership一意
+- [x] production plugin ownership一意
 - [ ] SpatialIndex共通化test成功
-- [ ] Clippy allow 0件
+- [x] Clippy allow 0件
 - [ ] pinned toolchain/local/CI全gate成功
 - [ ] docs/index更新、計画archive済み
 
@@ -330,3 +332,5 @@ update_transform_spatial_index_system::<IndexTag, TrackedComponent>
 | `2026-07-12` | `Codex` | 全体計画の自己レビュー指摘を反映して新規作成 |
 | `2026-07-12` | `Codex` | AI引継ぎの開始条件をmetadataどおり性能M0〜M7完了・M8判定後へ統一 |
 | `2026-07-12` | `Codex` | 再レビューを反映し、package ID、Clippy allow CI gate、期待影響を明記 |
+| `2026-07-15` | `Codex` | 明示指示により M1 の game plugin集約と M3 の Clippy allow構造解消を先行実施。M2/M4 の開始条件は維持。 |
+| `2026-07-15` | `Codex` | M4 の Rust 1.96.1 pin、Linux native dependencyを含むCI、profiling compileを含むlocal品質gateを追加。format checkは差分なし、CI実行待ち。 |

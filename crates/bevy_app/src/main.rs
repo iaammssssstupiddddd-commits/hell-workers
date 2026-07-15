@@ -1,27 +1,8 @@
-#[cfg(feature = "profiling")]
-use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuFeatures, WgpuSettings};
-#[cfg(feature = "profiling")]
-use bevy::time::{Fixed, TimeUpdateStrategy};
 use bevy::window::PresentMode;
-use bevy_app::{
-    DamnedSoulPlugin, DebugInstantBuild, DebugVisible,
-    plugins::{
-        input::InputPlugin,
-        interface::InterfacePlugin,
-        logic::LogicPlugin,
-        messages::MessagesPlugin,
-        spatial::SpatialPlugin,
-        startup::{PerfScenarioConfig, StartupPlugin},
-        visual::VisualPlugin,
-    },
-    systems::{GameSystemSet, save::SavePlugin, settings::SettingsPlugin},
-};
-use hw_core::game_state::PlayMode;
-#[cfg(feature = "profiling")]
-use hw_core::simulation_rng::FixedAuditSeed;
+use bevy_app::{HellWorkersGamePlugin, plugins::startup::PerfScenarioConfig};
 use std::env;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixStream;
@@ -33,113 +14,38 @@ fn main() {
         eprintln!("Invalid performance scenario configuration: {error}");
         std::process::exit(2);
     });
-    if perf_config.enabled() {
-        eprintln!(
-            "PERF_SCENARIO: seed={} workload={} size={} souls={} familiars={} render={} clock={} warmup={}s measure={}s fixed_hz={} fixed_warmup_ticks={} fixed_audit_ticks={} virtual_speed=1.0 output_dir={}",
-            perf_config.master_seed,
-            perf_config.workload.as_str(),
-            perf_config.size.as_str(),
-            perf_config.soul_count,
-            perf_config.familiar_count,
-            perf_config.render_mode.as_str(),
-            perf_config.clock_mode_as_str(),
-            perf_config.warmup_secs,
-            perf_config.measure_secs,
-            perf_config.fixed_step_hz(),
-            perf_config.fixed_warmup_ticks(),
-            perf_config.fixed_audit_ticks(),
-            perf_config.output_dir.as_deref().map_or_else(
-                || "<default>".to_string(),
-                |path| path.display().to_string()
-            ),
-        );
-    }
-    let (render3d_visible, render_perf_toggles) = perf_config.initial_render_resources();
-    let log_filter = if perf_config.enabled() {
-        "wgpu=error,bevy_app=warn".to_string()
-    } else {
-        "wgpu=error,bevy_app=info".to_string()
-    };
+    let game_plugin = HellWorkersGamePlugin::new(perf_config);
+    let log_filter = game_plugin.log_filter().to_string();
     configure_linux_window_backend();
     let backends = select_backends();
     let present_mode = select_present_mode();
     let mut app = App::new();
-    #[cfg(feature = "profiling")]
-    let fixed_step_audit = perf_config.uses_fixed_timesteps();
-    #[cfg(feature = "profiling")]
-    if fixed_step_audit {
-        // Bevy 0.19 guarantees that this advances virtual time by the current
-        // fixed timestep and runs FixedMain exactly once per App::update.
-        // Normal game systems remain in Update; this audit fixes their
-        // Time<Virtual> delta without changing their schedule ownership.
-        app.insert_resource(Time::<Fixed>::from_hz(perf_config.fixed_step_hz() as f64));
-        app.insert_resource(TimeUpdateStrategy::FixedTimesteps(1));
-        app.insert_resource(FixedAuditSeed(perf_config.master_seed));
-    }
-    app.insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1)))
-        .insert_resource(perf_config)
-        .insert_resource(render3d_visible)
-        .insert_resource(render_perf_toggles)
-        .add_plugins(
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        title: "Hell Workers".into(),
-                        resolution: (1280, 720).into(),
-                        present_mode,
-                        ..default()
-                    }),
-                    ..default()
-                })
-                .set(bevy::log::LogPlugin {
-                    level: bevy::log::Level::INFO,
-                    filter: log_filter,
-                    ..default()
-                })
-                .set(RenderPlugin {
-                    render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
-                        backends: Some(backends), // WSL は GL を優先
-                        features: WgpuFeatures::CLIP_DISTANCES,
-                        ..default()
-                    })),
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Hell Workers".into(),
+                    resolution: (1280, 720).into(),
+                    present_mode,
                     ..default()
                 }),
-        )
-        .init_resource::<DebugVisible>()
-        .init_resource::<DebugInstantBuild>()
-        // PlayMode State
-        .init_state::<PlayMode>()
-        // Messages
-        .add_plugins(MessagesPlugin)
-        // Entity plugins
-        .add_plugins(DamnedSoulPlugin)
-        // Configure system sets
-        .configure_sets(
-            Update,
-            (
-                GameSystemSet::Input,
-                GameSystemSet::Spatial.run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
-                GameSystemSet::Logic.run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
-                GameSystemSet::Actor.run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
-                GameSystemSet::Visual,
-                GameSystemSet::Interface,
-            )
-                .chain(),
-        )
-        // Game plugins
-        .add_plugins(StartupPlugin)
-        .add_plugins(InputPlugin)
-        .add_plugins(SpatialPlugin)
-        .add_plugins(LogicPlugin)
-        .add_plugins(VisualPlugin)
-        .add_plugins(InterfacePlugin)
-        .add_plugins(SettingsPlugin)
-        .add_plugins(SavePlugin);
-
-    #[cfg(feature = "profiling")]
-    if !fixed_step_audit {
-        app.add_plugins(FrameTimeDiagnosticsPlugin::default());
-    }
+                ..default()
+            })
+            .set(bevy::log::LogPlugin {
+                level: bevy::log::Level::INFO,
+                filter: log_filter,
+                ..default()
+            })
+            .set(RenderPlugin {
+                render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
+                    backends: Some(backends), // WSL は GL を優先
+                    features: WgpuFeatures::CLIP_DISTANCES,
+                    ..default()
+                })),
+                ..default()
+            }),
+    )
+    .add_plugins(game_plugin);
 
     app.run();
 }

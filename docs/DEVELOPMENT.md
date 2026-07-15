@@ -32,7 +32,7 @@
 - **`too_many_arguments`**: Bevy system / helper 関数ともに `#[allow(clippy::too_many_arguments)]` で抑制しない。
   Query / Resource 群は `#[derive(SystemParam)]` にまとめ、純粋ヘルパーは入力構造体へ集約する。
 
-- **`#[allow(clippy::...)]` の扱い**:
+- **`#[allow(clippy::...)]` / `#[expect(clippy::...)]` の扱い**:
   原則禁止。まずコード構造を見直して lint 自体を解消する。
   やむを得ず例外を設ける場合は、false positive か外部制約で回避不能であることを確認し、短い理由コメントと合わせてレビュアー合意を前提にする。
 
@@ -44,7 +44,7 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --worksp
 **厳格運用ルール:**
 
 - `cargo check --workspace` だけで完了扱いにしない。完了前に `cargo clippy --workspace` を必ず通す。
-- `#[allow(clippy::...)]` を追加して警告を黙らせる修正は、構造的な解消が不可能と確認できる場合を除き不可。
+- `#[allow(clippy::...)]` / `#[expect(clippy::...)]` を追加して警告を黙らせる修正は、構造的な解消が不可能と確認できる場合を除き不可。
 - 既存コードに allow が残っているのを見つけた場合も、その場しのぎで追従せず、除去できる設計に寄せる。
 
 **lint 解消の基本方針:**
@@ -59,8 +59,21 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --worksp
 具体的な対象ファイルを調べるには：
 ```bash
 CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace
-# または
-rg -n "#\[allow\\(clippy::" crates -g '*.rs'
+# allow / expect は結果が空でなければ品質ゲート失敗
+! rg -n '#\[(allow|expect)\(clippy::' crates --glob '*.rs'
+```
+
+### 1.6. Local / CI 共通品質ゲート
+
+`rust-toolchain.toml` は Rust `1.96.1` と `rustfmt` / `clippy` を固定する。rustup 環境ではワークスペースルートで cargo を実行すれば自動的に選択される。ローカルと GitHub Actions は、変更完了時に次の同一順序で検証する。
+
+```bash
+cargo fmt --all --check
+cargo check --workspace
+cargo check -p bevy_app@0.1.0 --lib --features profiling
+cargo clippy --workspace --all-targets -- -D warnings
+! rg -n '#\[(allow|expect)\(clippy::' crates --glob '*.rs'
+cargo test --workspace
 ```
 
 ### 2. 死蔵コードの禁止 ([deadcode.md])

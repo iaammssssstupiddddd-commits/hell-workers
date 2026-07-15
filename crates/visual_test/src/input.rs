@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::{SOUL_GLB_SCALE, VIEW_HEIGHT, Z_OFFSET};
 use hw_visual::CharacterMaterial;
@@ -21,28 +22,43 @@ const FACE_KEYS: [KeyCode; 6] = [
     KeyCode::Digit6,
 ];
 
-#[allow(clippy::too_many_arguments)]
+type TestSoulInputQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut Transform,
+        &'static TestSoulConfig,
+        Option<&'static SelectedSoul>,
+    ),
+>;
+
+#[derive(SystemParam)]
+pub struct SoulInputContext<'w, 's> {
+    assets: Option<Res<'w, TestAssets>>,
+    character_materials: ResMut<'w, Assets<CharacterMaterial>>,
+    layout_entities: SoulLayoutEntities<'w, 's>,
+    souls: TestSoulInputQuery<'w, 's>,
+    animation_handles: Query<'w, 's, &'static SoulAnimHandle>,
+    time: Res<'w, Time>,
+}
+
+#[derive(SystemParam)]
+pub struct BuildingInputContext<'w, 's> {
+    assets: Option<Res<'w, TestBuildingAssets>>,
+    handles_3d: Option<Res<'w, TestBuilding3dHandles>>,
+    buildings: Query<'w, 's, (Entity, &'static TestBuilding)>,
+    visuals_3d: Query<'w, 's, (Entity, &'static TestBuilding3dVisual)>,
+}
+
 pub fn keyboard_input(
     keys: Res<ButtonInput<KeyCode>>,
     mut state: ResMut<TestState>,
     mut elev: ResMut<TestElev>,
     mut commands: Commands,
-    assets: Option<Res<TestAssets>>,
-    building_assets: Option<Res<TestBuildingAssets>>,
-    building_3d_handles: Option<Res<TestBuilding3dHandles>>,
-    mut character_materials: ResMut<Assets<CharacterMaterial>>,
-    soul_layout_entities: SoulLayoutEntities,
-    mut q_souls: Query<(
-        Entity,
-        &mut Transform,
-        &TestSoulConfig,
-        Option<&SelectedSoul>,
-    )>,
-    q_anim_handles: Query<&SoulAnimHandle>,
-    q_buildings: Query<(Entity, &TestBuilding)>,
-    q_building_3d: Query<(Entity, &TestBuilding3dVisual)>,
+    mut soul: SoulInputContext,
+    building: BuildingInputContext,
     mut exit: MessageWriter<AppExit>,
-    time: Res<Time>,
 ) {
     // ── 常時有効 ──────────────────────────────────────────────────────────────
     if keys.just_pressed(KeyCode::Escape) {
@@ -80,47 +96,18 @@ pub fn keyboard_input(
 
     // ── モード別 ──────────────────────────────────────────────────────────────
     match state.mode {
-        AppMode::Soul => handle_soul_mode(
-            &keys,
-            &mut state,
-            &mut commands,
-            &assets,
-            &mut character_materials,
-            &soul_layout_entities,
-            &mut q_souls,
-            &q_anim_handles,
-            &time,
-        ),
-        AppMode::Build => handle_build_mode(
-            &keys,
-            &mut state,
-            &mut commands,
-            &building_assets,
-            &building_3d_handles,
-            &q_buildings,
-            &q_building_3d,
-        ),
+        AppMode::Soul => handle_soul_mode(&keys, &mut state, &mut commands, &mut soul),
+        AppMode::Build => handle_build_mode(&keys, &mut state, &mut commands, &building),
     }
 }
 
 // ─── Soul モード ──────────────────────────────────────────────────────────────
 
-#[allow(clippy::too_many_arguments)]
 fn handle_soul_mode(
     keys: &ButtonInput<KeyCode>,
     state: &mut TestState,
     commands: &mut Commands,
-    assets: &Option<Res<TestAssets>>,
-    character_materials: &mut Assets<CharacterMaterial>,
-    soul_layout_entities: &SoulLayoutEntities,
-    q_souls: &mut Query<(
-        Entity,
-        &mut Transform,
-        &TestSoulConfig,
-        Option<&SelectedSoul>,
-    )>,
-    q_anim_handles: &Query<&SoulAnimHandle>,
-    time: &Time,
+    soul: &mut SoulInputContext,
 ) {
     // 表情 [1-6] / [G]
     for (&key, &expr) in FACE_KEYS.iter().zip(FaceExpression::ALL.iter()) {
@@ -137,7 +124,8 @@ fn handle_soul_mode(
         state.motion = state.motion.next();
     }
     if keys.just_pressed(KeyCode::KeyQ) {
-        let n = q_anim_handles
+        let n = soul
+            .animation_handles
             .iter()
             .next()
             .map(|h| h.clips.len())
@@ -172,19 +160,19 @@ fn handle_soul_mode(
         state.posterize_steps = DEFAULT_POSTERIZE_STEPS;
     }
     if keys.just_pressed(KeyCode::KeyY)
-        && let Some(assets) = assets
+        && let Some(assets) = &soul.assets
     {
         let layout = state.soul_layout.toggle();
         rebuild_soul_test_layout(
             commands,
-            character_materials,
+            &mut soul.character_materials,
             assets.as_ref(),
             state,
             SoulRebuildEntities {
-                souls: q_souls.iter().map(|(entity, _, _, _)| entity).collect(),
-                shadows: soul_layout_entities.shadow_proxies.iter().collect(),
-                blob_shadows: soul_layout_entities.blob_shadow_proxies.iter().collect(),
-                masks: soul_layout_entities.mask_proxies.iter().collect(),
+                souls: soul.souls.iter().map(|(entity, _, _, _)| entity).collect(),
+                shadows: soul.layout_entities.shadow_proxies.iter().collect(),
+                blob_shadows: soul.layout_entities.blob_shadow_proxies.iter().collect(),
+                masks: soul.layout_entities.mask_proxies.iter().collect(),
             },
             layout,
         );
@@ -195,7 +183,7 @@ fn handle_soul_mode(
     if keys.just_pressed(KeyCode::Equal)
         && state.soul_layout == SoulLayout::Default
         && state.soul_count < MAX_SOULS
-        && let Some(assets) = assets
+        && let Some(assets) = &soul.assets
     {
         let initial_expr = match state.face_mode {
             FaceMode::Single(e) => e,
@@ -205,7 +193,7 @@ fn handle_soul_mode(
         };
         spawn_test_soul(
             commands,
-            character_materials,
+            &mut soul.character_materials,
             SoulSpawnArgs {
                 soul_scene: &assets.soul_scene,
                 face_atlas: &assets.face_atlas,
@@ -231,7 +219,8 @@ fn handle_soul_mode(
         && state.soul_layout == SoulLayout::Default
         && state.soul_count > 1
     {
-        let mut candidates: Vec<_> = q_souls
+        let mut candidates: Vec<_> = soul
+            .souls
             .iter()
             .map(|(e, _, cfg, sel)| (e, cfg.index, sel.is_some()))
             .collect();
@@ -245,7 +234,8 @@ fn handle_soul_mode(
 
     // 選択切替 [Tab]
     if keys.just_pressed(KeyCode::Tab) {
-        let mut sorted: Vec<_> = q_souls
+        let mut sorted: Vec<_> = soul
+            .souls
             .iter()
             .map(|(e, _, cfg, sel)| (e, cfg.index, sel.is_some()))
             .collect();
@@ -265,25 +255,25 @@ fn handle_soul_mode(
     // 位置リセット [R]
     if keys.just_pressed(KeyCode::KeyR) {
         if state.soul_layout == SoulLayout::ShadowCompare
-            && let Some(assets) = assets
+            && let Some(assets) = &soul.assets
         {
             let layout = state.soul_layout;
             rebuild_soul_test_layout(
                 commands,
-                character_materials,
+                &mut soul.character_materials,
                 assets.as_ref(),
                 state,
                 SoulRebuildEntities {
-                    souls: q_souls.iter().map(|(entity, _, _, _)| entity).collect(),
-                    shadows: soul_layout_entities.shadow_proxies.iter().collect(),
-                    blob_shadows: soul_layout_entities.blob_shadow_proxies.iter().collect(),
-                    masks: soul_layout_entities.mask_proxies.iter().collect(),
+                    souls: soul.souls.iter().map(|(entity, _, _, _)| entity).collect(),
+                    shadows: soul.layout_entities.shadow_proxies.iter().collect(),
+                    blob_shadows: soul.layout_entities.blob_shadow_proxies.iter().collect(),
+                    masks: soul.layout_entities.mask_proxies.iter().collect(),
                 },
                 layout,
             );
             return;
         }
-        let mut sorted: Vec<_> = q_souls.iter_mut().collect();
+        let mut sorted: Vec<_> = soul.souls.iter_mut().collect();
         sorted.sort_by_key(|(_, _, cfg, _)| cfg.index);
         let n = sorted.len();
         for (i, (_, mut tf, _, _)) in sorted.into_iter().enumerate() {
@@ -296,7 +286,7 @@ fn handle_soul_mode(
     }
 
     // 選択ソウル移動 [←→↑↓]
-    let speed = 50.0 * time.delta_secs();
+    let speed = 50.0 * soul.time.delta_secs();
     let mut dx = 0.0f32;
     let mut dz = 0.0f32;
     if keys.pressed(KeyCode::ArrowLeft) {
@@ -312,7 +302,7 @@ fn handle_soul_mode(
         dz += speed;
     }
     if dx != 0.0 || dz != 0.0 {
-        for (_, mut tf, _, sel) in q_souls.iter_mut() {
+        for (_, mut tf, _, sel) in soul.souls.iter_mut() {
             if sel.is_some() {
                 tf.translation.x += dx;
                 tf.translation.z += dz;
@@ -327,10 +317,7 @@ fn handle_build_mode(
     keys: &ButtonInput<KeyCode>,
     state: &mut TestState,
     commands: &mut Commands,
-    building_assets: &Option<Res<TestBuildingAssets>>,
-    building_3d_handles: &Option<Res<TestBuilding3dHandles>>,
-    q_buildings: &Query<(Entity, &TestBuilding)>,
-    q_building_3d: &Query<(Entity, &TestBuilding3dVisual)>,
+    building: &BuildingInputContext,
 ) {
     // 建築種別 [[ ] / [ ]]
     if keys.just_pressed(KeyCode::BracketLeft) {
@@ -343,11 +330,11 @@ fn handle_build_mode(
     // 配置 / 同位置削除 [Enter]
     if keys.just_pressed(KeyCode::Enter) {
         let grid = state.building_cursor;
-        let occupied = q_buildings.iter().any(|(_, b)| b.grid == grid);
+        let occupied = building.buildings.iter().any(|(_, b)| b.grid == grid);
         if occupied {
-            despawn_test_building_at(commands, grid, q_buildings, q_building_3d);
+            despawn_test_building_at(commands, grid, &building.buildings, &building.visuals_3d);
         } else if let (Some(ba), Some(bh)) =
-            (building_assets.as_deref(), building_3d_handles.as_deref())
+            (building.assets.as_deref(), building.handles_3d.as_deref())
         {
             spawn_test_building(commands, state.building_kind, grid, ba, bh);
         }
@@ -355,10 +342,10 @@ fn handle_build_mode(
 
     // 全削除 [Del]
     if keys.just_pressed(KeyCode::Delete) {
-        for (entity, _) in q_buildings.iter() {
+        for (entity, _) in building.buildings.iter() {
             commands.entity(entity).despawn();
         }
-        for (entity, _) in q_building_3d.iter() {
+        for (entity, _) in building.visuals_3d.iter() {
             commands.entity(entity).despawn();
         }
     }

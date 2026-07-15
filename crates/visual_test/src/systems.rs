@@ -1,4 +1,5 @@
 use bevy::camera_controller::pan_camera::PanCamera;
+use bevy::ecs::system::SystemParam;
 use bevy::input::mouse::{AccumulatedMouseScroll, MouseScrollUnit};
 use bevy::prelude::*;
 use bevy::sprite_render::MeshMaterial2d;
@@ -25,28 +26,43 @@ type BtnQuery<'w, 's> = Query<
     (Changed<Interaction>, With<Button>),
 >;
 
+type SoulInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut Transform,
+        &'static TestSoulConfig,
+        Option<&'static SelectedSoul>,
+    ),
+>;
+
+#[derive(SystemParam)]
+pub struct SoulInteractionContext<'w, 's> {
+    assets: Option<Res<'w, TestAssets>>,
+    character_materials: ResMut<'w, Assets<CharacterMaterial>>,
+    souls: SoulInteractionQuery<'w, 's>,
+    shadow_proxies: Query<'w, 's, Entity, With<SoulShadowProxy3d>>,
+    blob_shadow_proxies: Query<'w, 's, Entity, With<SoulBlobShadowProxy3d>>,
+    mask_proxies: Query<'w, 's, Entity, With<SoulMaskProxy3d>>,
+}
+
+#[derive(SystemParam)]
+pub struct BuildingInteractionContext<'w, 's> {
+    assets: Option<Res<'w, TestBuildingAssets>>,
+    handles_3d: Option<Res<'w, TestBuilding3dHandles>>,
+    buildings: Query<'w, 's, (Entity, &'static TestBuilding)>,
+    visuals_3d: Query<'w, 's, (Entity, &'static TestBuilding3dVisual)>,
+}
+
 /// VisualTestAction ボタンの押下をハンドリングして TestState を更新する。
-#[allow(clippy::too_many_arguments)]
 pub fn handle_button_interactions(
     q_btns: BtnQuery,
     mut state: ResMut<TestState>,
     mut elev: ResMut<TestElev>,
     mut commands: Commands,
-    assets: Option<Res<TestAssets>>,
-    building_assets: Option<Res<TestBuildingAssets>>,
-    building_3d_handles: Option<Res<TestBuilding3dHandles>>,
-    mut character_materials: ResMut<Assets<CharacterMaterial>>,
-    mut q_souls: Query<(
-        Entity,
-        &mut Transform,
-        &TestSoulConfig,
-        Option<&SelectedSoul>,
-    )>,
-    q_shadow_proxies: Query<Entity, With<SoulShadowProxy3d>>,
-    q_blob_shadow_proxies: Query<Entity, With<SoulBlobShadowProxy3d>>,
-    q_mask_proxies: Query<Entity, With<SoulMaskProxy3d>>,
-    q_buildings: Query<(Entity, &TestBuilding)>,
-    q_building_3d: Query<(Entity, &TestBuilding3dVisual)>,
+    mut soul: SoulInteractionContext,
+    building: BuildingInteractionContext,
 ) {
     for (action, interaction) in q_btns.iter() {
         if *interaction != Interaction::Pressed {
@@ -73,18 +89,18 @@ pub fn handle_button_interactions(
             }
             VisualTestAction::SetSoulLayout(layout) => {
                 if state.soul_layout != layout
-                    && let Some(a) = &assets
+                    && let Some(assets) = &soul.assets
                 {
                     rebuild_soul_test_layout(
                         &mut commands,
-                        &mut character_materials,
-                        a.as_ref(),
+                        &mut soul.character_materials,
+                        assets.as_ref(),
                         &mut state,
                         SoulRebuildEntities {
-                            souls: q_souls.iter().map(|(entity, _, _, _)| entity).collect(),
-                            shadows: q_shadow_proxies.iter().collect(),
-                            blob_shadows: q_blob_shadow_proxies.iter().collect(),
-                            masks: q_mask_proxies.iter().collect(),
+                            souls: soul.souls.iter().map(|(entity, _, _, _)| entity).collect(),
+                            shadows: soul.shadow_proxies.iter().collect(),
+                            blob_shadows: soul.blob_shadow_proxies.iter().collect(),
+                            masks: soul.mask_proxies.iter().collect(),
                         },
                         layout,
                     );
@@ -120,7 +136,7 @@ pub fn handle_button_interactions(
             VisualTestAction::AddSoul => {
                 if state.soul_layout == SoulLayout::Default
                     && state.soul_count < MAX_SOULS
-                    && let Some(a) = &assets
+                    && let Some(assets) = &soul.assets
                 {
                     let expr = match state.face_mode {
                         FaceMode::Single(e) => e,
@@ -130,15 +146,15 @@ pub fn handle_button_interactions(
                     };
                     spawn_test_soul(
                         &mut commands,
-                        &mut character_materials,
+                        &mut soul.character_materials,
                         SoulSpawnArgs {
-                            soul_scene: &a.soul_scene,
-                            face_atlas: &a.face_atlas,
-                            white_pixel: &a.white_pixel,
-                            blob_shadow_mesh: &a.blob_shadow_mesh,
-                            blob_shadow_material: &a.blob_shadow_material,
-                            soul_shadow_material: &a.soul_shadow_material,
-                            soul_mask_material: &a.soul_mask_material,
+                            soul_scene: &assets.soul_scene,
+                            face_atlas: &assets.face_atlas,
+                            white_pixel: &assets.white_pixel,
+                            blob_shadow_mesh: &assets.blob_shadow_mesh,
+                            blob_shadow_material: &assets.blob_shadow_material,
+                            soul_shadow_material: &assets.soul_shadow_material,
+                            soul_mask_material: &assets.soul_mask_material,
                             shadow_caster: TestSoulShadowCaster::Glb,
                             x: (state.soul_count as f32 - 1.0) * SOUL_SPACING * 0.5,
                             z: 0.0,
@@ -153,7 +169,8 @@ pub fn handle_button_interactions(
             }
             VisualTestAction::RemoveSoul => {
                 if state.soul_layout == SoulLayout::Default && state.soul_count > 1 {
-                    let mut cands: Vec<_> = q_souls
+                    let mut cands: Vec<_> = soul
+                        .souls
                         .iter()
                         .map(|(e, _, cfg, sel)| (e, cfg.index, sel.is_some()))
                         .collect();
@@ -167,7 +184,8 @@ pub fn handle_button_interactions(
                 }
             }
             VisualTestAction::SelectNextSoul => {
-                let mut sorted: Vec<_> = q_souls
+                let mut sorted: Vec<_> = soul
+                    .souls
                     .iter()
                     .map(|(e, _, cfg, sel)| (e, cfg.index, sel.is_some()))
                     .collect();
@@ -185,25 +203,25 @@ pub fn handle_button_interactions(
             }
             VisualTestAction::ResetSoulPos => {
                 if state.soul_layout == SoulLayout::ShadowCompare
-                    && let Some(a) = &assets
+                    && let Some(assets) = &soul.assets
                 {
                     let layout = state.soul_layout;
                     rebuild_soul_test_layout(
                         &mut commands,
-                        &mut character_materials,
-                        a.as_ref(),
+                        &mut soul.character_materials,
+                        assets.as_ref(),
                         &mut state,
                         SoulRebuildEntities {
-                            souls: q_souls.iter().map(|(entity, _, _, _)| entity).collect(),
-                            shadows: q_shadow_proxies.iter().collect(),
-                            blob_shadows: q_blob_shadow_proxies.iter().collect(),
-                            masks: q_mask_proxies.iter().collect(),
+                            souls: soul.souls.iter().map(|(entity, _, _, _)| entity).collect(),
+                            shadows: soul.shadow_proxies.iter().collect(),
+                            blob_shadows: soul.blob_shadow_proxies.iter().collect(),
+                            masks: soul.mask_proxies.iter().collect(),
                         },
                         layout,
                     );
                     continue;
                 }
-                let mut sorted: Vec<_> = q_souls.iter_mut().collect();
+                let mut sorted: Vec<_> = soul.souls.iter_mut().collect();
                 sorted.sort_by_key(|(_, _, cfg, _)| cfg.index);
                 let n = sorted.len();
                 for (i, (_, mut tf, _, _)) in sorted.into_iter().enumerate() {
@@ -217,20 +235,25 @@ pub fn handle_button_interactions(
             VisualTestAction::SetBuildingKind(k) => state.building_kind = k,
             VisualTestAction::PlaceOrRemove => {
                 let grid = state.building_cursor;
-                let occupied = q_buildings.iter().any(|(_, b)| b.grid == grid);
+                let occupied = building.buildings.iter().any(|(_, b)| b.grid == grid);
                 if occupied {
-                    despawn_test_building_at(&mut commands, grid, &q_buildings, &q_building_3d);
+                    despawn_test_building_at(
+                        &mut commands,
+                        grid,
+                        &building.buildings,
+                        &building.visuals_3d,
+                    );
                 } else if let (Some(ba), Some(bh)) =
-                    (building_assets.as_deref(), building_3d_handles.as_deref())
+                    (building.assets.as_deref(), building.handles_3d.as_deref())
                 {
                     spawn_test_building(&mut commands, state.building_kind, grid, ba, bh);
                 }
             }
             VisualTestAction::RemoveAllBuildings => {
-                for (entity, _) in q_buildings.iter() {
+                for (entity, _) in building.buildings.iter() {
                     commands.entity(entity).despawn();
                 }
-                for (entity, _) in q_building_3d.iter() {
+                for (entity, _) in building.visuals_3d.iter() {
                     commands.entity(entity).despawn();
                 }
             }
