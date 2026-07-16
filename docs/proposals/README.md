@@ -17,6 +17,7 @@
 
 | Document | Status | Notes |
 | --- | --- | --- |
+| [gameplay-management-improvements-proposal-2026-07-17.md](gameplay-management-improvements-proposal-2026-07-17.md) | Draft | 操作・フィードバックを基盤に、運営ポリシー、復旧・永続化、進行要素を段階導入する総合提案 |
 | [hvac-plumbing-proposal.md](hvac-plumbing-proposal.md) | Accepted / Promoted | 空調・衛生の建築設備導入と世界観への落とし込み提案 |
 | [soul-outline-mask-ring-proposal-2026-04-16.md](soul-outline-mask-ring-proposal-2026-04-16.md) | Accepted / Not Implemented | 既存 soul mask RtT を使い、composite 側で画面空間の外周 ring を生成する提案 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Draft / Active | Soul Spawn/Despawn 最適化提案 |

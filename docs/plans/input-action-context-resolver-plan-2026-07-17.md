@@ -1,0 +1,751 @@
+# コンテキスト付き入力アクション解決 実装計画
+
+## メタ情報
+
+| 項目 | 値 |
+| --- | --- |
+| 計画ID | `input-action-context-resolver-plan-2026-07-17` |
+| ステータス | `Draft` |
+| 作成日 | `2026-07-17` |
+| 最終更新日 | `2026-07-17` |
+| 作成者 | `Codex` |
+| 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track A1） |
+| 関連Issue/PR | `N/A` |
+
+> **計画境界**: 本計画は関連提案の **A1「コンテキスト付き入力アクション」だけ**を扱う。
+> A2 の通知、A3 のタスク診断、キーバインド設定 UI、ゲームパッド対応は別計画とする。
+> 離散キーボード入力の action 化に加え、Modal/Pause が表示中の既存 pointer/camera 経路へ
+> 共通 capture gate を適用するところまでを A1 の受入境界とする。ただし mouse gesture 自体は
+> action 化しない。
+> 現行コード、`docs/architecture.md`、`docs/state.md`、`docs/tasks.md`、
+> `docs/save_load.md`、`docs/debug-features.md`、完了済み text-input 計画を
+> 2026-07-17 時点で照合した。
+
+## 0. 設計判断ログ
+
+| ID | 論点 | 決定 | 理由 |
+| --- | --- | --- | --- |
+| D1 | 実装単位 | A1 だけを独立計画にする | 入力競合は他トラックの機能仕様や永続化に依存せず、先行して安全性を上げられる |
+| D2 | 型の所有場所 | `bevy_app` の app-shell に `input_actions` module を置く | 解決時に `PlayMode`、`TaskMode`、UI modal、選択 Entity、debug 状態を横断する。単一 leaf crate のドメイン責務ではない |
+| D3 | 対象入力 | project-owned の edge-triggered keyboard shortcut と修飾キー状態 | マウス gesture、`PanCameraPlugin` の held WASD、Bevy `FocusedInput<KeyboardInput>`、独立 `visual_test` binary は別経路のまま維持する。Modal/Pause の共通 gate だけは既存 pointer/camera 経路にも適用する |
+| D4 | 出力 | 毎 `Update` で置換する非永続 `ResolvedInputFrame` Resource | Message の残存期間や複数 reader に依存せず、Logic/Visual/Interface の各既存 consumer が同じ frame snapshot を読める |
+| D5 | 一意性 | 「1 frame 1 action」ではなく「1 physical chord 1 semantic action」を保証する | 同時に別キーを押した場合でも、排他的でない action family 同士は併存できる。問題は同じ chord の多義解決と、同一 family の競合操作である |
+| D6 | 修飾キー | `Ctrl` / `Alt` / `Shift` / `Super` を左右統合し、binding は完全一致させる | `Ctrl+V` が plain `V`、`Ctrl+Z` が plain `Z` としても発火する現状を止める |
+| D7 | UI action | 既存 `UiIntent` に同義 action がある場合は bridge して既存 handler を再利用する | ボタンとキーボードの挙動を揃えつつ、旧「全 UI 操作の巨大 dispatcher」提案を復活させない |
+| D8 | F5/F9 | `F5=Save`、`F9=RequestLoadGame` に予約し、Soul mask / extra light の keyboard alias は削除する | 両 debug 操作は DevPanel と環境変数から操作できる。別の隠し chord を増やさず player 契約を一意にする |
+| D9 | 数字/B | AreaEdit の exact chord、非 pause かつ `PlayMode::Normal` の Familiar 選択、World の順で解決する | 現在の Familiar alias を通常時だけ維持しつつ二重発火を止める。Area/Placement 中の command 上書きと、pause 中に停止した Logic consumer への入力を防ぐ |
+| D10 | Escape | TextInput → visible modal → Pause overlay（`TogglePause`）→ active placement/designation → open menu → Normal の Familiar command の順で解決する | 背景 mode/menu の cancel と modal close / pause toggle を同時発火させない。Pause の Escape/Space は同じ TimeControl action と UiIntent owner に統一し、FloorPlace / BuildingMove / companion placement を含む全 PlayMode の cleanup は各 owner 経由で行う |
+| D11 | F9 の意味 | `UiIntent::RequestLoadGame` を通し、確認 dialog を開く | `docs/save_load.md` の契約と Pause menu の既存経路に合わせ、直接 load を開始するコード上のずれを直す |
+| D12 | 永続化 | binding / context / resolved frame は save と `settings.ron` の対象外 | 再割り当ては別計画。初版は compile-time default binding と deterministic resolver に限定する |
+| D13 | Modal/Pause の pointer 遮断 | `hw_ui` に game 非依存の `UiInputCapture` marker と `UiInputState::world_input_blocked()` を追加し、capture root を viewport 全体の blocking UI node にする | 現状の `UiInputBlocker` は cursor が panel 上にある時だけ有効で、panel 外の world 操作と背景 UI button が反応する。gesture を移設せず共通 guard と Bevy UI picking の両方で閉じる |
+| D14 | pause と frame lifetime | `InputContextSnapshot` に `simulation_paused` / `logic_shortcuts_enabled` を含め、`ResolvedInputFrame` を pause 中も毎 frame 置換する | pause 中に skip された Familiar/Area action を unpause 後へ遅延適用しない。Pause overlay 中は Escape/Space、Digit1-4、Save/Load だけを許可する |
+| D15 | Dream の D 表示 | `D` binding は追加せず、未実装の tooltip shortcut 表示を削除する | `D` は `PanCameraPlugin` の右パンで使用中。虚偽の操作案内を残さず、再割り当ては別計画へ送る |
+| D16 | alias の同時押下 | 異なる chord が同じ `InputAction` へ解決された場合は frame 内で 1 件へ重複排除する | `C` と `Digit1` の同時押下などで同じ consumer 副作用を二重適用しない。D21 の排他的 family に属さない異なる action の同時入力は維持する |
+| D17 | TextInput の pointer 境界 | focus/latch は keyboard action と PanCamera を遮断するが、field 外への明示 click は global capture しない | field 外 click による既存の focus 解除・selection を維持する。「TextInput 中の背後入力」は typing key の伝播を指し、Modal/Pause の全面 capture と分ける |
+| D18 | 複数 action の順序 | context priority、binding table の宣言順、`InputAction` の重複排除順を deterministic に固定する | B と F3 など別 family の chord が同 frame に来ても、consumer の適用順が Query/system scheduling に左右されない |
+| D19 | capture 開始中の drag | `world_input_capture_started` を 1 frame latch とし、`PreUpdate` の capture sync 後に owner 別 gesture rollback を実行する | capture 中に release edge を捨てるだけでは `TaskMode::*Some`、AreaEdit drag、Zone preview が残る。Update の pointer consumer より前に未確定操作を明示的に戻す |
+| D20 | AreaEdit の成立条件 | exact AreaEdit chord は現在の `State<PlayMode>` が `TaskDesignation` かつ `TaskMode::AreaSelection(_)` の時だけ生成する | `handle_mouse_input` が同 frame に `TaskMode` と `NextState<PlayMode>` を変更しても現在 state はまだ Normal で、Logic consumer は `run_if(in_state(...))` により実行されない。消える action を生成しない |
+| D21 | 同一 family の同時入力 | `SaveLoad`、`TimeControl`、`MenuToggle`、`FamiliarCommand`、`AreaEditCommand`、`CancelOrClose` は各 frame 最大 1 action とし、binding table の明示順位で決める | 現行の `if` / `else if` が持つ排他性を resolver 移行後も維持し、C+M、C+Escape、Space+Digit、Pause Escape+Digit、F5+F9 などの結果を deterministic にする。Pause の Escape/Space は `TimeControl`、Normal+Familiar の Escape toggle は `FamiliarCommand` family に含める。Debug 系など別 family は併存可能 |
+
+## 1. 目的
+
+- 解決したい課題:
+  - `ButtonInput<KeyCode>` を複数 system が個別に読み、同一入力を別の意味として同じ frame に処理している。
+  - `GameSystemSet::Input -> Logic -> Visual -> Interface` の順序はあるが、後段 system も同じ
+    `just_pressed` edge を読めるため、順序だけでは消費を表現できない。
+  - 各 system に同じ text-input guard が散在し、新しい shortcut 追加時に modal、修飾キー、
+    PlayMode、Familiar 選択条件の追従が漏れやすい。
+- 到達したい状態:
+  - physical chord を `GameSystemSet::Input` 冒頭で一度だけ context 解決し、後段は
+    `InputAction` だけを読む。
+  - text input や modal が active な frame は、許可された action 以外を解決しない。
+  - Modal/Pause が visible な間は panel 外でも world pointer/camera 操作を遮断する。
+  - existing consumer のドメイン処理と `UiIntent` handler は維持し、入力解決だけを共通化する。
+- 成功指標:
+  - F5/F9、Digit1-4、B、`Ctrl+V`、`Ctrl+Z`、Escape の既知二重発火が 0 件。
+  - binding table の各 context/priority で、同一 chord が複数 action へ解決されないことを
+    pure test で網羅する。
+  - text input または modal 中に World/Familiar/debug shortcut が発火しない。
+  - Modal/Pause 中の panel 外クリック、placement、selection、camera pan の背後発火が 0 件。
+  - pause 中の Familiar/Area shortcut が unpause 後に遅延発火しない。
+  - production `bevy_app` の project-owned keyboard edge 判定が resolver へ集約され、
+    consumer が `just_pressed(KeyCode::...)` を直接読まない。
+  - resolver の処理量が固定 binding 数に比例し、Entity 数や UI node 数に比例する全件処理を追加しない。
+
+## 2. スコープ
+
+### 対象（In Scope）
+
+- `InputAction`、`InputChord`、`InputModifiers`、`InputContextSnapshot`、
+  `ResolvedInputFrame` の追加。
+- default binding table と context priority の一元化。
+- `UiInputState.text_input_focused` / `text_input_consumed_keyboard` を最上位 gate として再利用。
+- 現在実装済みの load confirm、Settings、operation dialog を modal context として扱う。
+- Pause menu を world-input capture context として扱い、Escape/Space、時間、Save/Load の
+  明示 whitelist 以外を抑止する。
+- global UI shortcut、Save/Load、Familiar command、TaskArea edit、Entity List Tab、
+  elevation、render/debug shortcut の移行。
+- AreaSelection の Shift-held 判定を共通 modifier snapshot へ移行。
+- 既存 `UiIntent` と既存ドメイン handler の再利用。
+- binding/context/ordering の unit test と最小 integration test。
+- `UiInputCapture`、`world_input_blocked()` と既存 selection/placement/pan-camera guard の統一。
+- FloorPlace、BuildingMove、companion placement を含む全 active mode の Escape cleanup 統一。
+- 未実装で PanCamera と競合する Dream の `D` tooltip 表示の訂正。
+- 入力仕様を説明する恒久ドキュメントの同期。
+
+### 非対象（Out of Scope）
+
+- A2 の toast/alert、配置拒否理由、Save/Load outcome UI。
+- A3 のタスク停止理由と管理ダッシュボード。
+- ユーザーによるキーバインド変更、binding の `settings.ron` 永続化、競合設定 UI。
+- gamepad、アクセシビリティ preset、キー表示 glyph の自動切替。
+- マウスクリック/ドラッグ/ホイールの action 化。既存 system には capture guard だけを追加する。
+- `PanCameraPlugin` 内部の held key 入力の置換。既存 `pan_camera_ui_guard_system` の enable 条件だけを共通 capture に合わせる。
+- `FocusedInput<KeyboardInput>` を使う Bevy text editing の置換。
+- `crates/visual_test` 独立 binary の入力体系変更。
+- button、context menu、selection を含む全 UI 操作の単一 action enum/dispatcher 化。
+- Familiar command、時間速度、TaskArea 操作そのもののゲーム仕様変更。
+
+## 3. 現状とギャップ
+
+### 3.1 現行 keyboard consumer
+
+| 所有箇所 | 現行入力 | gate | ギャップ |
+| --- | --- | --- | --- |
+| `plugins/input.rs` | F3〜F9、F12 | text input | F5/F9 が Save/Load と競合する |
+| `systems/save/state.rs` | F5/F9 | text input、Idle | debug toggle と同じ edge を読む。F9 は確認 dialog を通らない |
+| `interface/ui/interaction/systems.rs` | B/Z、Space、Digit1-4、Escape | text input、Settings の数字だけ個別抑止 | Familiar command、AreaEdit modifier、modal と競合する |
+| `systems/command/input.rs` | C/M/H/B、Digit0-4、Delete、Escape | text input、Familiar 選択 | B/Digit/Escape が global/cancel と同時発火する |
+| `systems/command/area_selection/shortcuts.rs` | Ctrl/Alt + C/V/Z/Y/1-3 | text input、AreaSelection | global B/Z、elevation V、Familiar Digit と同じ raw edge を後段が再読する |
+| `systems/command/area_selection/input/**` | Shift held | TaskMode/PlayMode | modifier 読み取りだけが raw keyboard Resource と結合している |
+| `systems/visual/elevation_view.rs` | V | text input | `Ctrl+V` でも V として発火する |
+| `interface/ui/list/interaction/navigation.rs` | Tab/Shift+Tab | text input | 個別 guard の追加漏れ余地がある |
+| `plugins/interface_debug.rs` | P/O | DebugVisible、text input | debug context が resolver とは別管理 |
+| selection / placement / area 系 mouse system | 左右 click、drag | `pointer_over_ui` | Modal/Pause panel 外では false になり、背後の world 操作が発火する |
+| `pan_camera_ui_guard_system` | held WASD/QE 等 | `pointer_over_ui`、text input | Modal/Pause panel 外で camera が動く。UI state 更新との PreUpdate 順序も未指定 |
+
+`Logic` set は `Time<Virtual>` の pause 中に実行されない。一方、Input/Visual/Interface は実行されるため、
+Familiar/Area action を保持型 Message にすると、consumer が止まっている間の入力が unpause 後に
+読まれる危険がある。また `docs/state.md` は全 mode の Escape cancel を契約としているが、現行
+keyboard handler は BuildingPlace / ZonePlace / TaskDesignation だけを処理し、FloorPlace と
+BuildingMove は右クリックでしか終了できない。
+
+### 3.2 既存の使える基盤
+
+- `UiInputState` は `InputFocusSystems::Dispatch` 後の `PreUpdate` で同期され、
+  focus が解除された同 frame も `text_input_consumed_keyboard` latch が保持される。
+- `UiInputState.pointer_over_ui` と各 world mouse system の guard はすでに存在するため、
+  capture flag を同 Resource に加えれば gesture 本体を移設せず遮断条件を統一できる。
+- `GameSystemSet` は `Input -> Spatial -> Logic -> Actor -> Visual -> Interface` の順で chain 済み。
+- `UiIntent` は menu、時間、Save/Load、mode 選択の既存 canonical handler を持つ。
+- `PlayMode`、`TaskContext(TaskMode)`、`SelectedEntity`、`MenuState`、dialog marker から
+  resolver に必要な context を導出できる。
+- TaskArea shortcut はすでに modifier を明示しており、exact chord table へ移しやすい。
+
+### 3.3 本計画で埋めるギャップ
+
+```text
+PreUpdate
+  UiSystems::Focus
+    -> RelativeCursorPosition / Interaction
+    -> update_ui_input_state_system
+  InputFocusSystems::Dispatch
+    -> UiInputState text focus / consumed latch
+  visible UiInputCapture query
+    -> UiInputState world_input_captured / world_input_capture_started
+    -> rollback_in_progress_gesture_system
+    -> pan_camera_ui_guard_system
+
+Update::GameSystemSet::Input
+  ButtonInput<KeyCode> + context resources/queries
+    -> resolve_input_frame_system (raw keyboard の唯一の project shortcut reader)
+    -> ResolvedInputFrame
+    -> input_action_to_ui_intent_system / root debug & visual consumers
+
+Update::Logic / Visual / Interface
+  existing consumer が ResolvedInputFrame を読む
+    -> existing domain mutation / UiIntent handler
+  existing pointer consumer
+    -> UiInputState::world_input_blocked() で早期 return
+```
+
+- 物理入力の収集・modifier 正規化・context 優先順位を resolver に集約する。
+- action の処理本体は既存 owner に残し、巨大な中央 mutation dispatcher を作らない。
+- binding table と action consumer ownership をテスト可能なデータとして固定する。
+
+## 4. 実装方針（高レベル）
+
+### 4.1 型と所有権
+
+新規 `crates/bevy_app/src/input_actions/` を root app-shell の入力 adapter とする。
+
+| 型/責務 | 所有候補 | 契約 |
+| --- | --- | --- |
+| `InputAction` | `input_actions/model.rs` | payload を持たない `Copy` enum。physical key 名を variant 名へ含めない |
+| `InputActionFamily` | `input_actions/model.rs` | frame 内 cardinality の分類。排他的 family は最大 1、composable family は複数可 |
+| `InputModifiers` | `input_actions/model.rs` | 左右 Ctrl/Alt/Shift/Super を統合した frame snapshot |
+| `InputChord` | `input_actions/model.rs` | `KeyCode + InputModifiers`。exact match の単位 |
+| `InputContextSnapshot` | `input_actions/context.rs` | text/modal/PlayMode/TaskMode/Familiar/debug の解決入力。保存しない |
+| default binding table | `input_actions/bindings.rs` | context 条件、priority、chord、action の唯一の正本 |
+| pure resolver | `input_actions/resolver.rs` | 同一 chord について最優先の 1 action だけを返す |
+| `ResolvedInputFrame` | `input_actions/mod.rs` | actions と modifiers を毎 Update 置換。Reflect/Serialize/RegisterType しない |
+| Bevy system wiring | `plugins/input.rs` | `InputResolutionSet` と resolver/bridge/consumer の唯一の登録元 |
+| `UiInputCapture` / capture flags | `hw_ui::components` | modal/pause の表示中は cursor 位置に関係なく world pointer/camera を遮断する game 非依存 marker/state。`world_input_capture_started` は false→true の 1 frame だけ立つ。marker は viewport-size の blocking root に付け、背景 UI picking も止める |
+
+`InputAction` 等の game 固有 model は `hw_core` / `hw_ui` へ置かない。`hw_ui` に追加するのは
+game action を知らない capture marker/state だけとする。将来、別 app shell でも同じ resolver が
+必要になった時点で pure model だけの移設を再評価する。`InputContextSnapshot` は resolver 呼び出し時に
+既存正本から組み立てる一時値であり、別 Resource として保持しない。
+
+### 4.2 SystemSet と frame lifetime
+
+```rust
+InputResolutionSet::Resolve
+    .before(InputResolutionSet::Consume)
+    .in_set(GameSystemSet::Input)
+```
+
+- `Resolve` は毎 Update 必ず実行し、pause 中も `ResolvedInputFrame` を空から再構築する。
+- `Consume` は root-owned debug/visual action と `UiIntent` bridge を処理する。
+- Logic/Visual/Interface consumer は既存 `GameSystemSet` chain により Resolve より後に実行される。
+- `ResolvedInputFrame` は frame を越えて action を保持しない。load reset hook や save schema へ追加しない。
+- 同時に異なる chord が押された場合は、異なる action family または composable family なら複数 action を保持できる。同一 chord の action と排他的 family の action は各 1 個だけ。
+- alias chord が同じ semantic action へ解決された場合、`ResolvedInputFrame` はその action を 1 件だけ保持する。
+- 排他的 family は `SaveLoad`、`TimeControl`、`MenuToggle`、`FamiliarCommand`、`AreaEditCommand`、
+  `CancelOrClose` とし、同 family に複数 chord が来た場合は binding table の `family_priority` が高い
+  1 action だけを残す。Debug toggle など composable family は別 action と併存できる。
+- 複数 action は context priority、family priority、binding table の宣言順で安定整列し、consumer は frame 内の順序を変えない。
+- `handle_mouse_input` は `Resolve` より前に固定し、同 frame の selection click と keyboard shortcut が
+  同時に来た場合は更新後の `SelectedEntity` を context 正本とする。
+- scheduling test で `handle_mouse_input -> Resolve -> Consume` を明示し、前 frame ではなく同 frame に
+  更新された selection/context が解決結果へ反映されることを固定する。
+- `logic_shortcuts_enabled = !Time<Virtual>.is_paused()` とし、pause 中は Familiar/Area action を生成しない。
+  frame snapshot の置換により、押して離した action は unpause 後へ残らない。
+
+### 4.3 Context priority
+
+priority は「active context を 1 個だけ選ぶ」のではなく、各 chord を誰が claim するかに使う。
+
+| 優先度 | context | 規則 |
+| --- | --- | --- |
+| 1 | TextInput | `text_input_blocks_keybinds == true` なら project shortcut を 0 件にする。Bevy text editing は raw input を継続利用 |
+| 2 | Modal | visible な load confirm / Settings / operation dialog だけが入力を claim。Escape は最上位 modal を閉じ、他 shortcut は抑止 |
+| 3 | PausedOverlay | Escape/Space、Digit1-4、F5/F9 だけを claim。Escape は resume。B/Z/Tab/Familiar/Area/debug と背景 mode cancel を抑止 |
+| 4 | ActiveMode | active placement/designation の Escape を claimし、owner cleanup と `MenuState::Hidden` を同じ action で行う |
+| 5 | OpenMenu | PlayMode Normal で Architect/Zones/Orders/Dream が開いている時の Escape を claimし、menu だけを閉じる |
+| 6 | AreaEdit | `logic_shortcuts_enabled`、現在の `State<PlayMode> == TaskDesignation`、`TaskMode::AreaSelection(_)` の全条件を満たす時だけ exact Ctrl/Alt chord を claim |
+| 7 | FamiliarCommand | `logic_shortcuts_enabled`、`PlayMode::Normal`、Familiar 選択、TaskMode が None または Familiar command 系の時だけ C/M/H/B、Digit0-4、Delete を claim |
+| 8 | World | B/Z、Space、Digit1-4、V、F5/F9、Tab を claim |
+| 9 | Debug | DebugVisible 条件付き P/O と、競合しない function chord を claim。上位 context が block した場合は発火しない |
+
+複数 modal が同時に visible になる異常状態でも、Escape の優先順位は
+`LoadConfirm -> Settings -> OperationDialog` として 1 action に固定する。
+
+Familiar-compatible な TaskMode は `None`、`DesignateChop`、`DesignateMine`、
+`DesignateHaul`、`CancelDesignation`、`SelectBuildTarget` に限定する。
+`AreaSelection`、Zone/Floor/Wall/Dream/SoulSpa 系では Familiar command を block し、
+active operation の途中状態を別 shortcut で上書きしない。
+
+### 4.4 Default binding contract
+
+| chord | context | action | 備考 |
+| --- | --- | --- | --- |
+| F5 | World | `SaveGame` | `UiIntent::SaveGame` へ bridge |
+| F9 | World | `RequestLoadGame` | 確認 dialog を開き、直接 `LoadRequested` にしない |
+| F5/F9 の debug alias | Debug | なし | Soul mask / extra light は DevPanel と環境変数へ一本化 |
+| F3/F4/F6/F7/F8/F12 | Debug | 現行 render/debug action | 現行意味を維持 |
+| Space | World/Paused | `TogglePause` | Pause の Escape と同じ `TimeControl` action。`UiIntent` へ bridge |
+| Digit1/2/3/4 | World/Paused | `TimePaused/Normal/Fast/Super` | 非 pause の Familiar/Area が claim しない時。pause 中は再開操作として許可 |
+| B/Z | World | `ToggleArchitect/ToggleZones` | exact unmodified chord |
+| C/M/H/B, Digit1-4 | Familiar | Chop/Mine/Haul/Build | 非 pause、PlayMode Normal、互換 TaskMode、Familiar 選択時はこちらを優先 |
+| Digit0/Delete | Familiar | `CancelDesignation` | 現行意味を維持 |
+| Escape | Modal/Pause/Mode/Menu/Familiar | cancel/close/resume/toggle command | Pause は Space と同じ `TogglePause` / `TimeControl` / UiIntent owner、Modal/Mode/Menu は `CancelOrClose`、Normal+Familiar は `FamiliarCommand`。各 family 内で 1 actionだけ |
+| Ctrl+C/V/Z/Y | AreaEdit | copy/paste/undo/redo | plain C/V/Z/Y へ伝播しない |
+| Ctrl+Shift+Z | AreaEdit | redo | Ctrl+Z より exact chord を優先 |
+| Ctrl+Digit1-3 | AreaEdit | preset save | Familiar/Time action へ伝播しない |
+| Alt+Digit1-3 | AreaEdit | preset load | Familiar/Time action へ伝播しない |
+| V | World | `CycleElevation` | exact unmodified chord |
+| Tab/Shift+Tab | World | list next/previous | text input 中は Bevy focus 側だけが処理 |
+| P/O | DebugVisible | spawn Soul/Familiar | cursor world positionの計算と Message 発行は既存 consumer に残す |
+| D | なし | なし | PanCamera の右パンを維持し、Dream tooltip の shortcut 表示だけ削除 |
+
+同一 family に複数 chord が来た時の初版順位も binding table の契約に含める。
+
+| family | 高い順の `family_priority` | 現行互換の根拠 |
+| --- | --- | --- |
+| SaveLoad | Save > RequestLoad | 同時要求時に destructive な load より save を優先 |
+| TimeControl | Super > Fast > Normal > Paused > TogglePause | 現行の Space toggle 後に Digit1→4 の独立 `if` を適用する最終結果。Pause Escape は Space と同じ `TogglePause` alias |
+| MenuToggle | Zones > Architect | 現行の独立 `if` が B→Z の順で適用する最終結果 |
+| FamiliarCommand | Chop > Mine > Haul > Build > CancelDesignation > ToggleIdlePatrol | 現行 `familiar_command_input_system` の `else if` 順。Normal+Familiar の Escape もこの family に含む |
+| AreaEditCommand | Alt preset load > Ctrl preset save > Copy > Paste > Redo > Undo。slot は 1 > 2 > 3 | 現行 shortcut handler の早期 return 順 |
+| CancelOrClose | 4.3 の Modal > ActiveMode > OpenMenu 順 | 同じ Escape を最前面 owner だけが処理。PausedOverlay は TimeControl、Normal+Familiar は FamiliarCommand family |
+
+これにより F5+F9 は Save、C+M は Chop、Digit1+Digit2 の World 入力は TimeNormal へ
+1 件だけ解決される。順位は偶然の enum 順ではなく binding data と matrix test の双方へ記録する。
+
+### 4.5 Cancel / capture-start rollback の owner 契約
+
+Escape と capture 開始は目的を分ける。Escape の `CancelActiveMode` は active mode 自体を終了する。
+`world_input_capture_started` は modal/pause の背後に未確定 gesture を残さないため、mode を終了せず
+その gesture だけを開始前状態へ戻す。いずれも単なる `TaskContext = None` ではなく owner helper を使う。
+
+| owner state | Escape (`CancelActiveMode`) | capture false→true (`rollback_in_progress_gesture_system`) |
+| --- | --- | --- |
+| `BuildContext` / `CompanionPlacementState` | 既存右クリック相当の pending/ghost cleanup 後に Normal | release edge に依存しない click placement なので state を維持し、capture guard で click だけ止める |
+| `MoveContext` / `MovePlacementState` / companion move | 元 transform/parent/visibility を復元する既存 move cancel 後に Normal | release edge に依存しない click placement なので state/preview を維持し、閉じた後に再開できる |
+| Floor/Wall `TaskMode::*Place(Some(_))` | start/preview を消し、`TaskMode::None` と Normal | `Some(_) -> None` に戻し、preview entity を消す |
+| designation / assign / Dream `TaskMode::*Some` | start と preview を消し、`TaskMode::None` と Normal | 同 variant の `None` へ戻す。Dream は `dream_planting_preview_seed` も消す。release 済みの `pending_dream_planting` は触らない |
+| `AreaEditSession.active_drag` | drag 前の `TaskArea` と関連状態を復元後、session を消して Normal | drag 前へ復元して `active_drag=None`、`AreaSelection(None)` に戻す。history/task assignment は追加しない |
+| `ZonePlacement(_, Some(_))` | start/preview を消して Normal | 同 zone kind の `None` へ戻す |
+| `ZoneRemovalPreviewState` / `ZoneRemoval(_, Some(_))` | `clear_removal_preview` で sprite 色も戻して Normal | 同 helper で色を戻し、同 zone kind の `None` へ戻す |
+
+AreaEdit drag は held 中に `TaskArea`、`Destination`、`ActiveCommand` をすでに変更するため、
+`AreaEditDrag` を必要な rollback snapshot（少なくとも元 `TaskArea` と、変更対象なら元 `Destination` /
+`ActiveCommand`）まで拡張する。rollback は Commands の deferred 適用順も含めて、capture が始まった
+frame の後段 gesture system が再度変更しないよう `rollback -> pointer consumers` を固定する。
+
+OpenMenu の Escape は `MenuState::Hidden` だけを設定し、Familiar Idle/Patrol を変更しない。
+ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup と `MenuState::Hidden` を
+`CancelActiveMode` の 1 consumer 内で完了する。
+
+### 4.6 Action consumer ownership
+
+| action 群 | consumer | 方針 |
+| --- | --- | --- |
+| menu toggle/time/save/load/modal close | `input_action_to_ui_intent_system` | `TogglePause`、`CancelLoadConfirm`、`CloseSettings`、`CloseDialog` を含む既存 `UiIntent` へ変換し、`handle_ui_intent` が処理。OpenMenu の Escape は次行の root adapter |
+| Familiar command | `familiar_command_input_system` | raw key 分岐だけを action match に置換。active command/TaskContext の挙動は維持 |
+| TaskArea history/preset | `task_area_edit_history_shortcuts_system` | raw key/modifier 分岐を action match に置換 |
+| Area apply Shift | area-selection input handler | `ResolvedInputFrame.modifiers.shift` を読む |
+| elevation | `elevation_view_input_system` | `CycleElevation` だけを処理 |
+| Tab cycle | `entity_list_tab_focus_system` | next/previous action だけを処理 |
+| render/debug toggles | `plugins/input.rs` の小さな consumer | Resource mutationは現行 owner に残す。F12 は `DebugVisible`、`GizmoConfigStore`、`GameSettings.debug_gizmos_enabled`、Settings checkbox の同期を維持 |
+| P/O debug spawn | `debug_spawn_system` | action に応じて既存 spawn Message を発行 |
+| mode/menu Escape | root の cancel adapter + mode/menu 固有 helper | OpenMenu/全 active mode の priority 解決後、4.5 の owner 契約を一度だけ実行する。Modal/Pause は UiIntent bridge、Normal+Familiar は familiar consumer が所有し、旧 `ui_keyboard_shortcuts_system` の raw Escape path は削除する |
+| capture-start rollback | root の capture transition adapter + gesture 固有 helper | action ではなく `world_input_capture_started` を 1 回だけ処理し、4.5 の未確定 gesture だけを戻す |
+| pointer/camera capture | 既存 selection/placement/area system と `pan_camera_ui_guard_system` | action 化せず `world_input_blocked()` を共通 guard として読む |
+
+1 action variant の mutation owner は 1 system に限定する。binding table の一意性に加え、
+テスト用の owner classification が全 `InputAction` variant を一度だけ分類することを検証する。
+
+### 4.7 既存 `UiIntent` との境界
+
+- button と同じ意味を持つ keyboard action は `UiIntent` へ bridge する。
+- Entity payload、文字列、mouse position を `InputAction` に持たせない。
+- `UiIntent` 自体を `InputAction` の別名にせず、既存 UI button/message API を維持する。
+- Familiar/AreaEdit の root-domain mutation を `handle_ui_intent` の巨大 match へ移さない。
+- 旧 `docs/proposals/archive/05-unified-interaction-layer.md` の button/context-menu/selection 統合は
+  本計画では採用しない。
+
+### 4.8 Bevy 0.19 API と ordering の注意
+
+- raw keyboard は現行どおり `Res<ButtonInput<KeyCode>>` の `just_pressed` / `pressed` を使う。
+- text editing は `FocusedInput<KeyboardInput>` と `InputFocusSystems::Dispatch` の既存経路を維持する。
+- resolver は `UiInputState` が更新済みの `Update` で動かし、PreUpdate observer の consumed latch を消さない。
+- `State<PlayMode>` は現在値、`NextState<PlayMode>` は次状態なので、context 解決に NextState を推測利用しない。
+- modal 判定は marker Entity の存在だけでなく、既存 helper と同じ `Node.display` の可視性を使う。
+- `UiInputCapture` も `Node.display != Display::None` のものだけを active とし、hidden dialog を capture 扱いしない。
+- Bevy 0.19 の `UiSystems::Focus` が `RelativeCursorPosition` と `Interaction` を更新するため、
+  `update_ui_input_state_system.after(UiSystems::Focus)` を明示する。その後に visible capture と
+  text-focus latch を同期し、`pan_camera_ui_guard_system` は両同期より後へ固定する。
+- `MessageWriter<UiIntent>` は Input set で書き、既存 Interface chain の `handle_ui_intent` が同 frame に読む ordering test を置く。
+- `ButtonInput` 自体を mutate/clear して擬似的に「消費」しない。Bevy/外部 plugin の入力状態を壊さない。
+
+## 5. マイルストーン
+
+## M1: Resolver 基盤と F5/F9 vertical slice
+
+- 変更内容:
+  - `input_actions` module と 4.1 の型を追加する。
+  - default binding table、pure context resolver、binding uniqueness/owner completeness test を追加する。
+  - `InputResolutionSet::{Resolve, Consume}` を `InputPlugin` で唯一登録する。
+  - Save/Load と elevation を最初の consumer として移行する。
+  - Soul mask / extra light の F5/F9 keyboard reader を削除し、DevPanel / 環境変数経路は維持する。
+  - F9 keyboard 経路を `UiIntent::RequestLoadGame` へ bridge し、load confirm を通す。
+  - `save_load_keybind_system` を登録から外す。削除は参照が 0 になった時点で同 milestone 内に行う。
+- 変更ファイル:
+  - `crates/bevy_app/src/lib.rs`
+  - `crates/bevy_app/src/input_actions/{mod.rs,model.rs,bindings.rs,context.rs,resolver.rs,tests.rs}`（新規）
+  - `crates/bevy_app/src/plugins/input.rs`
+  - `crates/bevy_app/src/plugins/visual.rs`（elevation consumer の登録順変更）
+  - `crates/bevy_app/src/systems/save/{mod.rs,state.rs}`
+  - `crates/bevy_app/src/systems/visual/elevation_view.rs`
+  - `crates/bevy_app/src/interface/ui/interaction/`（UiIntent bridge の最小配線）
+- 完了条件:
+  - [ ] F5 で Save だけが要求され、Soul mask は変わらない
+  - [ ] save file がある F9 で load confirm だけが開き、確認前に `LoadRequested` にならない
+  - [ ] save file がない F9 は既存 warning/no-op 契約を維持し、direct load を要求しない
+  - [ ] F5/F9 以外の操作と DevPanel から Soul mask / extra light を引き続き変更できる
+  - [ ] Ctrl+V では elevation が変わらないための exact chord test が先に通る
+  - [ ] `handle_mouse_input -> Resolve -> Consume` の system ordering test が通り、同 frame の選択変更を使う
+  - [ ] 同じ action の alias を同 frame に押しても action/consumer は 1 回だけ処理する
+  - [ ] 異なる family の同時 chord は複数 action を安定順で返し、同じ排他的 family は `family_priority` の 1 action だけを返す
+  - [ ] M1 終了時点で unused type/system や `#[allow(dead_code)]` がない
+- 検証:
+  - `cargo test -p bevy_app@0.1.0 input_actions`
+  - `cargo test -p bevy_app@0.1.0 systems::save`
+  - `cargo check --workspace --locked`
+  - `cargo clippy --workspace --all-targets --locked -- -D warnings`
+
+## M2: Global、Modal、Familiar、Escape の一意解決
+
+- 変更内容:
+  - B/Z、Space、Digit1-4 を resolver から既存 `UiIntent` へ bridge する。
+  - `ui_keyboard_shortcuts_system` の raw keyboard path を resolver/bridge/root cancel adapter へ置換し、参照が 0 になれば削除する。
+  - load confirm、Settings、operation dialog の可視性から modal context を構築する。
+  - modal 中は Escape 以外の project shortcut を抑止する。
+  - Pause overlay 中は Escape/Space、Digit1-4、F5/F9 だけを許可し、Escape は resume に解決する。
+  - Familiar 選択時の C/M/H/B、Digit0-4、Delete、Escape を action 化する。
+  - 非 pause、PlayMode Normal、互換 TaskMode で selected Familiar と World が同じ B/Digit を
+    claim した場合、Familiar action だけを返す。Area/Placement 中は Familiar command を生成しない。
+  - pause 中は Familiar/Area action を生成せず、`ResolvedInputFrame` を毎 frame 置換する。
+  - active placement/designation の Escape は mode cancel だけを行い、Familiar Idle/Patrol を同時変更しない。
+  - FloorPlace / WallPlace / BuildingMove / companion placement を含む全 active mode の Escape を、
+    4.5 の各 mode 固有 state cleanup helper へ接続する。
+  - OpenMenu の Escape を ActiveMode と Familiar の間で解決し、menu だけを閉じる。
+  - Normal かつ Familiar 選択時の Escape は現行 Idle/Patrol toggle を維持する。
+- 変更ファイル:
+  - `crates/bevy_app/src/input_actions/{bindings.rs,context.rs,resolver.rs,tests.rs}`
+  - `crates/bevy_app/src/interface/ui/interaction/systems.rs`
+  - `crates/bevy_app/src/interface/selection/{floor_place/,building_move/}`
+  - `crates/bevy_app/src/app_contexts.rs`（既存 state の参照のみ。型変更が不要なら編集しない）
+  - `crates/bevy_app/src/systems/command/input.rs`
+  - `crates/bevy_app/src/systems/command/area_selection/{input.rs,input/**}`
+  - `crates/bevy_app/src/systems/command/zone_placement/{placement.rs,removal.rs,removal_preview.rs}`
+  - `crates/hw_ui/src/area_edit/state.rs`（AreaEdit rollback snapshot が必要な場合）
+  - `crates/bevy_app/src/plugins/{input.rs,logic.rs}`（ordering/登録変更が必要な場合のみ）
+- 完了条件:
+  - [ ] Familiar 未選択の Digit1-4 は時間速度だけを変更する
+  - [ ] Familiar 選択中の Digit1-4 は Familiar command だけを変更する
+  - [ ] Familiar 選択中の B は Build command だけで、Architect menu を開かない
+  - [ ] Area/Placement 中は C/M/H/B/Digit が Familiar command として TaskMode を上書きしない
+  - [ ] pause 中の Digit2-4 は時間速度だけを変更し、選択 Familiar の command は変わらない
+  - [ ] pause 中の Escape は resume だけを行い、背景の active mode/Familiar state を変更しない
+  - [ ] Space/Escape の `TogglePause` と Digit1-4 が同 frame の場合は TimeControl priority の 1 action だけを処理する
+  - [ ] pause 中に押して離した Familiar/Area shortcut が unpause 後に発火しない
+  - [ ] plain Z は Zones、Ctrl+Z は plain Z として解決されない
+  - [ ] text input focus/latch 中は resolved action が空になる
+  - [ ] 各 modal 中は Escape が最上位 modal だけを閉じ、Space/B/Z/Digit/F/debug は発火しない
+  - [ ] placement cancel と Familiar command toggle が同じ Escape で併発しない
+  - [ ] Normal + Familiar で C/M/B/Digit と Escape を同時押下しても現行 `else if` 順の Familiar action 1 件だけを処理する
+  - [ ] OpenMenu + Familiar の Escape は menu だけを閉じ、Idle/Patrol を変更しない
+  - [ ] ActiveMode + OpenMenu の Escape は owner cleanup と menu close を 1 action で行う
+  - [ ] 全 PlayMode の Escape で AreaEdit drag、Dream seed、Zone removal preview、pending companion、move state を残さず Normal へ戻る
+- 検証:
+  - `cargo test -p bevy_app@0.1.0 input_actions`
+  - text input focus/latch の既存 focused test
+  - `cargo check --workspace --locked`
+  - `cargo clippy --workspace --all-targets --locked -- -D warnings`
+
+## M3: AreaEdit、残存 shortcut、Modal/Pause capture gate
+
+- 変更内容:
+  - Ctrl+C/V/Z/Y、Ctrl+Shift+Z、Ctrl+Digit1-3、Alt+Digit1-3 を action 化する。
+  - AreaEdit action は現在の `State<PlayMode> == TaskDesignation` と
+    `TaskMode::AreaSelection(_)` の両方を要求し、同 frame の `NextState` だけでは生成しない。
+  - TaskArea shortcut の modifier/slot 判定を binding table へ移し、`hotkey_slot_index` の
+    raw keyboard 依存を削除する。
+  - AreaSelection の Shift-held 挙動は `ResolvedInputFrame.modifiers.shift` を読む。
+  - Tab/Shift+Tab と P/O debug spawn を action 化する。
+  - F3/F4/F6/F7/F8/F12 を action 化し、project-owned edge shortcut の raw reader を resolver に集約する。
+  - F12 consumer の DebugVisible / GizmoConfigStore / GameSettings / Settings checkbox 同期は変更しない。
+  - `UiInputCapture` を load confirm、Settings、operation dialog、Pause menu へ付与し、
+    `UiInputState::world_input_blocked()` と false→true の `world_input_capture_started` latch を追加する。
+  - 各 capture 対象を viewport 全体の transparent blocking root + 前景 panel の構造へ変更し、
+    Bevy UI picking でも背景 button を遮断する。Pause panel には mouse 操作用の Resume button を追加する。
+  - selection、hover、assignment、building/floor/move/soul-spa/zone/area placement、context menu、
+    debug spawn の
+    既存 `pointer_over_ui` guard を `world_input_blocked()` へ置換する。
+  - `pan_camera_ui_guard_system` も capture flag を使い、capture 更新と text-focus sync の後に実行する。
+  - capture 開始 frame に `rollback_in_progress_gesture_system` を一度だけ実行し、4.5 の owner helper で
+    AreaEdit、designation、Dream、Floor/Wall、Zone placement/removal の未確定 drag/preview を開始前へ戻す。
+    既に release 済みの確定操作や `pending_dream_planting` は戻さない。
+  - `update_ui_input_state_system.after(UiSystems::Focus)` とし、capture/text sync → rollback/camera guard →
+    pointer consumer の明示順を作る。
+  - project-owned production shortcut consumer から `ButtonInput<KeyCode>` / `KeyCode` 分岐を除く。
+  - `PanCameraPlugin`、Bevy text editing、test resource 初期化、`visual_test` は明示 whitelist とする。
+- 変更ファイル:
+  - `crates/bevy_app/src/input_actions/{bindings.rs,context.rs,resolver.rs,tests.rs}`
+  - `crates/bevy_app/src/systems/command/area_selection/{shortcuts.rs,geometry.rs,input.rs,input/**}`
+  - `crates/bevy_app/src/interface/ui/list/interaction/navigation.rs`
+  - `crates/bevy_app/src/plugins/{input.rs,interface.rs,interface_debug.rs}`
+  - `crates/bevy_app/src/interface/ui/{interaction/systems.rs,plugins/foundation.rs}`
+  - `crates/hw_ui/src/{components.rs,setup/dialogs.rs,setup/settings_panel.rs,setup/pause_menu.rs}`
+  - `crates/bevy_app/src/interface/selection/**`
+  - `crates/bevy_app/src/systems/command/{assign_task.rs,zone_placement/**,area_selection/**}`
+  - `crates/bevy_app/src/interface/ui/panels/context_menu.rs`
+- 完了条件:
+  - [ ] Ctrl+V は Area paste だけで elevation を変更しない
+  - [ ] Ctrl+Z/Y と Ctrl+Shift+Z は Area history だけを変更する
+  - [ ] Ctrl/Alt+Digit1-3 は preset だけを変更し、Familiar/Time action を発火しない
+  - [ ] plain V は elevation だけを変更する
+  - [ ] Tab/Shift+Tab の方向と Familiar-only AreaSelection filter が現行どおり
+  - [ ] DebugVisible=false の P/O は action を生成しない
+  - [ ] Modal/Pause 中は panel 外の click/drag でも selection、placement、assignment、context menu が変化しない
+  - [ ] Modal/Pause 中は前景 panel 以外の UI button が反応せず、Pause の Resume/Save/Load/Settings は操作できる
+  - [ ] Modal/Pause 中は PanCamera が無効になり、閉じた次 frame に既存設定どおり復帰する
+  - [ ] UI hover/capture は `UiSystems::Focus` と同 frame の値を使い、modal open/close に 1 frame の漏れがない
+  - [ ] drag 中に Modal/Pause を開いて capture 中に mouse release しても、再開後に `TaskMode::*Some`、
+    `AreaEditSession.active_drag`、Dream seed、Zone removal preview が残らず、AreaEdit は元状態へ戻る
+  - [ ] capture 開始 rollback は AreaEdit history、task assignment、Dream pending request、zone mutationを新規確定しない
+  - [ ] production shortcut の raw keyboard audit が resolver と whitelist 以外 0 件
+- 検証:
+  - `cargo test -p bevy_app@0.1.0 input_actions`
+  - AreaEdit / Entity List の focused test
+  - `rg -n "ButtonInput<KeyCode>|just_pressed\(KeyCode" crates/bevy_app/src --glob '*.rs'`
+  - `cargo check --workspace --locked`
+  - `cargo clippy --workspace --all-targets --locked -- -D warnings`
+
+## M4: 恒久ドキュメント同期と全体回帰
+
+- 変更内容:
+  - keyboard shortcut の唯一の解決元、context priority、consumer ownership を恒久 docs に記載する。
+  - F5/F9 の player 予約と debug alias 廃止、F9 confirmation、Familiar/World/pause priority を操作表へ反映する。
+  - Dream の未実装 `D` shortcut 表示を削除し、PanCamera の D binding は維持する。
+  - direct keyboard reader の追加時は binding table と resolver test を更新するルールを記載する。
+  - 関連提案の A1 状態と、本計画の完了/アーカイブ判断を同期する。
+- 変更ファイル:
+  - `docs/architecture.md`
+  - `docs/state.md`
+  - `docs/tasks.md`
+  - `docs/save_load.md`
+  - `docs/debug-features.md`
+  - `docs/entity_list_ui.md`
+  - `docs/settings.md`
+  - `docs/building.md`
+  - `docs/dream.md`
+  - `docs/cargo_workspace.md`
+  - `crates/bevy_app/src/interface/README.md`
+  - `crates/bevy_app/src/interface/ui/README.md`
+  - `crates/bevy_app/src/systems/command/README.md`
+  - `crates/hw_ui/src/setup/bottom_bar.rs`
+  - `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+- 完了条件:
+  - [ ] 恒久 docs と default binding table が一致する
+  - [ ] `python3 scripts/dev.py docs --check` が成功する
+  - [ ] manual scenario を全件確認する
+  - [ ] full repository quality gate が成功する
+- 検証:
+  - `python3 scripts/dev.py docs --check`
+  - `python3 scripts/dev.py verify`
+
+## 6. リスクと対策
+
+| リスク | 影響 | 対策 |
+| --- | --- | --- |
+| resolver 自体が全 UI mutation を抱える | 新しい巨大 dispatcher になる | resolver は chord -> action だけを担当し、mutation は既存 owner/UiIntent handler に残す |
+| 同じ action を複数 consumer が処理する | physical chord は一意でも副作用が二重になる | action owner table を固定し、全 variant がちょうど一 owner に分類される test を置く |
+| text focus 情報が 1 frame 遅れる | 入力文字が game shortcut に漏れる | `InputFocusSystems::Dispatch` 後の PreUpdate sync と consumed latch を維持し、ordering test を置く |
+| modal の存在だけを見て hidden dialog を active 扱いする | game shortcut が恒常的に無効になる | existing visibility helper と同じ `Node.display` 判定を使う |
+| Modal/Pause capture が cursor hover と同じ意味に混ざる | panel を閉じても world input が無効のままになる | `pointer_over_ui` と `world_input_captured` は別 field で保持し、`world_input_blocked()` だけが合成する。hidden marker の test を置く |
+| capture flag だけで背景 UI button が生き残る | keyboard は止まるが mouse で同じ UiIntent が発火する | capture 対象を full-viewport blocking UI root にし、前景 panel だけを child として操作可能にする。Pause には Resume button を用意する |
+| PreUpdate の capture/focus 更新より先に PanCamera guard が走る | modal 開閉または text focus 直後に 1 frame camera が漏れる | 両 sync 後の system ordering を明示し、open/close/focus の次 frame state を integration test する |
+| capture 中の release edge を guard が捨てる | drag/preview state が残り、再開後に意図しない確定や ghost が起きる | false→true latch で owner 別 rollback を 1 回実行し、drag→capture→release→resume の integration test を置く |
+| AreaEdit drag rollback が表示だけを消す | held 中に変更済みの TaskArea/Destination/ActiveCommand が残る | `AreaEditDrag` に開始前 snapshot を保持し、history/task assignment を作らず全関連 state を復元する |
+| `NextState<PlayMode>` だけで AreaEdit context を判定する | current state Normal の frame に action を生成するが Logic consumer が停止し、入力が消える | current `State<PlayMode> == TaskDesignation` と `TaskMode::AreaSelection(_)` を共に要求する test を置く |
+| 同じ family の複数 chord が複数 mutation を起こす | C+M や Digit1+2 の結果が consumer 順に依存する | `InputActionFamily` と明示 `family_priority` で最大 1 件にし、同時押下 matrix を固定する |
+| F9 の確認導入で既存 code test が変わる | keyboard load のタイミングが変わる | 恒久 docs を正本とし、request -> confirm -> Last apply の test へ更新する |
+| Familiar 選択中に数字速度 shortcut が使えない | UX 上の驚き | Normal の Familiar context だけを優先すると明記し、Area/Placement/pause 中は Familiar alias を無効化する。通常時は UI button でも速度変更可能とする |
+| B が Familiar Build を優先する | Architect hotkey が選択状態依存になる | context indicator/既存 mode UI で状態を示し、本計画で binding を曖昧にしない |
+| F5/F9 debug keyboard alias の削除を見落とす | docs と実装の操作表がずれる | DevPanel 代替を確認し、`debug-features.md` と `architecture.md` を同 milestone で更新する |
+| ButtonInput を clear して外部入力を消費する実装になる | PanCamera/TextInput 等を破壊する | raw Resource は read-only。消費は resolver 出力の一意性だけで表現する |
+| pause 中に resolved frame が更新されない | stale action が再実行される | resolver は ungated `GameSystemSet::Input` で毎 Update frame を置換する |
+| generic Escape が owner 固有 state を一部だけ消す | ghost、pending move、companion state が残る | 単純な `NextState<PlayMode>` 書換えにせず、既存右クリック cleanup を helper 化して同じ経路を呼ぶ |
+| binding table が設定システムへ早期拡張される | A1 の範囲が肥大する | compile-time default だけを実装し、serialization/UI は後続計画へ送る |
+| source grep を品質契約と誤解する | test helper や外部入力まで禁止する | resolver、test init、PanCamera/TextInput、`visual_test` の whitelist を docs と review に明記する |
+
+## 7. 検証計画
+
+### 必須自動検証
+
+- `cargo fmt --all -- --check`
+- `cargo test -p bevy_app@0.1.0 input_actions`
+- `cargo check --workspace --locked`
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`
+- `cargo test --workspace --locked`
+- `python3 scripts/dev.py docs --check`
+- `git diff --check`
+
+### Resolver matrix test
+
+| context | chord | 期待 action | 同時に出てはいけない action |
+| --- | --- | --- | --- |
+| World | F5 | SaveGame | Soul mask toggle side effect |
+| World | F9 | RequestLoadGame | extra light toggle side effect / direct LoadRequested |
+| World | Digit1 | TimePaused | FamiliarChop |
+| Familiar | Digit1 | FamiliarChop | TimePaused |
+| Familiar | B | FamiliarBuild | ToggleArchitect |
+| Paused + Familiar | Digit2 | TimeNormal | FamiliarMine |
+| Paused + AreaEdit | Ctrl+Digit1 | なし | SavePreset1 / FamiliarChop / TimePaused |
+| Paused + Placement | Escape | TogglePause（resume） | CancelActiveMode / ToggleFamiliarIdlePatrol |
+| World | Space + Digit2（同 frame） | TimeNormal 1 件 | TogglePause |
+| Paused + Placement | Escape + Digit1（同 frame） | TimePaused 1 件 | TogglePause / CancelActiveMode |
+| AreaEdit | Ctrl+V | AreaPaste | CycleElevation |
+| AreaEdit | Ctrl+Z | AreaUndo | ToggleZones |
+| AreaEdit | Ctrl+Shift+Z | AreaRedo | AreaUndo / ToggleZones |
+| AreaEdit | Ctrl+Digit1 | SavePreset1 | FamiliarChop / TimePaused |
+| TextInput | 任意 project chord | なし | 全 project action |
+| LoadConfirm | Escape | CancelLoadConfirm | mode cancel / Familiar toggle |
+| Settings | Escape | CloseSettings | mode cancel / Familiar toggle |
+| OperationDialog | Escape | CloseOperationDialog | mode cancel / Familiar toggle |
+| Placement + Familiar | Escape | CancelActiveMode | ToggleFamiliarIdlePatrol |
+| OpenMenu + Familiar | Escape | CloseMenu | ToggleFamiliarIdlePatrol |
+| Placement + OpenMenu | Escape | CancelActiveMode（menu も Hidden） | CloseMenu の二重 action |
+| Normal + Familiar | Escape | ToggleFamiliarIdlePatrol | CancelActiveMode |
+| DebugVisible=false | P/O | なし | DebugSpawn* |
+| 任意 | F5/F9 | player action | Soul mask / extra light debug action |
+| Familiar | C + Digit1（同 frame） | FamiliarChop 1 件 | FamiliarChop の重複 |
+| Familiar | C + M（同 frame） | FamiliarChop 1 件 | FamiliarMine |
+| Normal + Familiar | C + Escape（同 frame） | FamiliarChop 1 件 | ToggleFamiliarIdlePatrol |
+| World | Digit1 + Digit2（同 frame） | TimeNormal 1 件 | TimePaused |
+| World | F5 + F9（同 frame） | SaveGame 1 件 | RequestLoadGame |
+| Normal + `TaskMode::AreaSelection` + pending `NextState::TaskDesignation` | Ctrl+V | なし | AreaPaste |
+| TaskDesignation + `TaskMode::AreaSelection` | Ctrl+V | AreaPaste | CycleElevation |
+
+### UI capture integration test
+
+- visible `LoadConfirmDialog` / `SettingsPanel` / `OperationDialog` / `PauseMenu` により
+  `UiInputState.world_input_captured == true` になる。
+- 同じ Entity が `Display::None` の時は capture しない。
+- `world_input_blocked()` は `pointer_over_ui || world_input_captured` と一致する。
+- `update_ui_input_state_system` は `UiSystems::Focus` が更新した同 frame の
+  `RelativeCursorPosition` / `Interaction` を読み、hover/capture に 1 frame lag がない。
+- capture 中の left/right click で `SelectedEntity`、各 placement context、`TaskContext` が変化しない。
+- capture root 外側に相当する座標で背景の menu/time button が hover/pressed にならず、前景 panel の
+  button だけが UiIntent を発行する。
+- capture sync / text-focus sync → `pan_camera_ui_guard_system` の順で、capture または text focus 中は
+  `PanCamera.enabled == false`、
+  capture 解除後は pointer/text-focus 条件どおり `PanCamera.enabled` が戻り、設定側が所有する
+  `PanCamera.mouse_pan_settings.enabled` を上書きしない。
+- AreaEdit / designation / Dream / Floor / Wall / Zone placement/removal の drag 中に capture を開始し、
+  capture 中に release してから再開しても `TaskMode::*Some`、`active_drag`、Dream seed、Zone preview が残らない。
+- AreaEdit は開始前の `TaskArea`、`Destination`、`ActiveCommand` へ戻り、history、task assignment、
+  Dream pending request、zone mutation が追加されない。
+- BuildingPlace / BuildingMove / companion の click placement は release edge に依存しないため、capture 中の
+  click だけを無視し、owner state/preview を維持して close 後に同じ mode を再開できる。
+
+### 手動確認シナリオ
+
+1. 通常 World で F5 を押し、save file が更新されても DevPanel Mask 表示が変わらない。
+2. DevPanel の Mask / Light2 button から各 debug 表示を変更でき、F5/F9 では変化しないことを確認する。
+3. F9 を押し、確認 dialog で Cancel/Confirm の両経路を確認する。
+4. Familiar を選択して Digit1-4 と B を押し、時間速度/menu が変わらないことを確認する。
+5. pause 中に同じ Familiar shortcut を押して離してから再開し、遅延 command が発火しないことを確認する。
+6. Familiar 選択を外して Digit1-4 と B を押し、時間速度/menu が現行どおり変わることを確認する。
+7. AreaSelection で copy/paste/undo/redo/preset を実行し、elevation/menu/time が変わらないことを確認する。
+8. 検索/rename text field で B/Z/V/Space/Digit/Tab/Ctrl+V/Escape を入力し、ゲーム操作へ漏れないことを確認する。
+9. load confirm、Settings、operation dialog、Pause menu の panel 外で shortcut/click/drag/WASD と背景 UI button を試し、背後の world/UI action が変化しないことを確認する。
+10. Pause panel の Resume/Save/Load/Settings が操作でき、pause 中の Escape は mode を壊さず resume だけを行うことを確認する。
+11. 非 pause の BuildingPlace、Floor/WallPlace、BuildingMove、ZonePlace、TaskDesignation、companion placement で Escape を押し、owner state を残さず Normal へ戻ることを確認する。
+12. Architect/Zones/Orders/Dream menu を Familiar 選択中に開いて Escape を押し、menu だけが閉じて Familiar command が変わらないことを確認する。
+13. AreaEdit、designation、Dream、Floor/Wall、Zone removal の drag 中に Pause/dialog を開き、capture 中に mouse を離して再開しても未確定 state/preview が残らず、AreaEdit が開始前へ戻ることを確認する。
+14. BuildingPlace / BuildingMove / companion placement 中に Pause/dialog を開き、capture 中の click が無視され、閉じると同じ mode/state から再開できることを確認する。
+15. DebugVisible の on/off で P/O を確認し、Modal で抑止される一方、通常時の PanCamera held key と mouse pan が回帰していないことを確認する。
+16. Dream tooltip に D shortcut が表示されず、D は従来どおり camera 右パンだけを行うことを確認する。
+
+### パフォーマンス確認
+
+- resolver は default binding table の固定長走査だけとし、Entity 数に応じた処理を行わない。
+- modal/Familiar context 構築 Query は `single`/選択 Entity lookup に限定し、全 Entity 集計を行わない。
+- profiling workload の work counter 追加は不要。変更前後で通常操作時の frame trace に新しい目立つ system cost がないことだけを確認する。
+
+## 8. ロールバック方針
+
+- M1〜M4 を別 commit 単位にし、各 milestone 終了時に compile/test green を保つ。
+- M2/M3 の consumer 移行は 1 consumer ごとに「action 読み取りへ変更 -> raw key 分岐削除」を同じ差分で行い、
+  二重経路を残さない。
+- M1 を戻す場合は Save/Load の旧 binding、F5/F9 debug alias、`save_load_keybind_system` の登録を
+  同じ commit で復元する。debug alias だけを先に戻して競合状態を再導入しない。
+- M3 の capture gate を戻す場合は `UiInputCapture` marker、`UiInputState` field、全 consumer の
+  guard 置換を同じ commit で戻し、marker だけが残る半端な状態にしない。
+- 本計画は save schema / settings file を変更しないため、データ migration の rollback は不要。
+- 問題切り分け用に raw keyboard fallback flag を恒久実装へ残さない。
+
+## 9. AI引継ぎメモ（最重要）
+
+### 現在地
+
+- 進捗: `計画 100% / 実装 0%`
+- 完了済みマイルストーン: なし
+- 未着手/進行中: M1〜M4 すべて未着手
+- 前提: A1 だけを対象とする。A2/A3 や keybinding settings を同時実装しない。
+
+### 次のAIが最初にやること
+
+1. `git status --short` と並行差分を確認し、本計画外の変更を stage/revert しない。
+2. 3.1 の keyboard consumer と `GameSystemSet` ordering を現行 HEAD で再確認する。
+3. M1 の resolver matrix test を先に書き、F5/F9 vertical slice だけを実装する。
+
+### ブロッカー/注意点
+
+- `UiInputState` の focus/consumed latch は完了済み text-input 契約であり、別の focus model に置き換えない。
+- `UiInputState.pointer_over_ui` と `world_input_captured` を同じ field に畳まず、hover と modal capture の
+  診断可能性を残す。
+- `world_input_capture_started` は current/previous capture から導出する 1 frame latch とし、capture 中ずっと
+  rollback を繰り返さない。
+- raw `ButtonInput<KeyCode>` を mutate/clear しない。
+- `UiIntent` は `Copy` を維持し、payload 付き入力状態を詰め込まない。
+- F9 は恒久 docs 上 confirmation 必須。旧 direct `LoadRequested` をそのまま action handler に移さない。
+- pause 中は Logic set が停止する。Familiar/Area action を Message や永続 queue に積まず、
+  `ResolvedInputFrame` を空から置換して stale action を残さない。
+- Escape は `PlayMode` だけを Normal にせず、Build/Move/Floor/Zone/Task/companion の owner state を
+  既存右クリック cleanup と同じ helper で消す。
+- capture 開始は mode cancel ではない。未確定 gesture だけを owner helper で開始前へ戻し、AreaEdit は
+  `TaskArea` だけでなく `Destination` / `ActiveCommand` も snapshot どおり復元する。
+- AreaEdit action の context は current `State<PlayMode>` と `TaskMode` の両方で判定し、`NextState` を
+  current state の代用にしない。
+- `GameSystemSet::Interface` は Visual より後段。UiIntent bridge をどこに置いても同 frame consumption test を必ず行う。
+- `NextState<PlayMode>` を current context として読まず、`State<PlayMode>` を使う。
+- 新しい Bevy API が必要になった場合は 0.19 の local crate source または docsrs 一次情報を確認する。
+
+### 参照必須ファイル
+
+- `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+- `docs/architecture.md`
+- `docs/state.md`
+- `docs/tasks.md`
+- `docs/save_load.md`
+- `docs/debug-features.md`
+- `docs/entity_list_ui.md`
+- `docs/plans/archive/text-input-ui-plan-2026-07-05.md`
+- `crates/bevy_app/src/plugins/input.rs`
+- `crates/bevy_app/src/plugins/game.rs`
+- `crates/bevy_app/src/interface/ui/interaction/systems.rs`
+- `crates/bevy_app/src/systems/command/input.rs`
+- `crates/bevy_app/src/systems/command/area_selection/shortcuts.rs`
+- `crates/bevy_app/src/systems/save/state.rs`
+- `crates/hw_ui/src/components.rs`
+- `crates/hw_ui/src/setup/{dialogs.rs,settings_panel.rs,pause_menu.rs,bottom_bar.rs}`
+- `crates/hw_ui/src/interaction/text_field.rs`
+
+### 最終確認ログ
+
+- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（並行 worktree を含む）`
+- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（plan-only、並行 worktree を含む）`
+- 最終 `python3 scripts/dev.py docs --check`: `2026-07-17 / pass`
+- 最終 `git diff --check`: `2026-07-17 / pass`
+- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `未実行（実装 0%）`
+- 最終 `cargo test --workspace`: `未実行（実装 0%）`
+- 未解決エラー: なし。実装着手前に並行 worktree の状態を再確認すること。
+
+### Definition of Done
+
+- [ ] M1〜M4 が完了している
+- [ ] 同一 physical chord が複数 semantic action へ解決されない
+- [ ] 排他的 `InputActionFamily` が frame 内最大 1 件で、同時 chord の priority test が成功する
+- [ ] text/modal/mode/Familiar/World/debug の priority test が成功する
+- [ ] pause 中の skipped action が unpause 後へ遅延発火しない
+- [ ] Modal/Pause が world pointer/camera input を panel 外でも遮断する
+- [ ] capture 開始時の未確定 gesture が owner state ごとに rollback され、release edge 消失後も残らない
+- [ ] 全 active PlayMode の Escape が owner state を残さず完了する
+- [ ] project-owned production keyboard shortcut が resolver 経由になっている
+- [ ] PanCamera/TextInput/mouse/visual_test の非対象経路が回帰していない
+- [ ] 影響ドキュメントが更新済み
+- [ ] `python3 scripts/dev.py verify` が成功
+
+## 10. 更新履歴
+
+| 日付 | 変更者 | 内容 |
+| --- | --- | --- |
+| `2026-07-17` | `Codex` | 初版作成。A1 を M1〜M4 の独立実装単位として具体化 |
+| `2026-07-17` | `Codex` | pause 中の frame lifetime、Modal/Pause capture、全 mode Escape cleanup、F5/F9/D の既定割当を現行コード照合後に確定 |
+| `2026-07-17` | `Codex` | 最終レビューを反映。`UiSystems::Focus` 後の capture 順序、drag rollback、OpenMenu Escape、AreaEdit current-state gate、排他的 action family を受入契約へ追加 |
