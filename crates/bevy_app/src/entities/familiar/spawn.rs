@@ -236,13 +236,28 @@ fn attach_familiar_shell_with_voice(
         Path::default(),
         FamiliarAnimation::default(),
         input.voice,
-        Sprite {
-            image: game_assets.familiar.clone(),
-            custom_size: Some(Vec2::splat(TILE_SIZE * 0.9)),
-            color: Color::WHITE,
-            ..default()
-        },
+        // Sprite は logical root ではなく child に置く。root は movement /
+        // spatial index 用の translation と hierarchy visibility だけを持つ。
+        Visibility::Inherited,
     ));
+
+    let visual_child = commands
+        .spawn((
+            hw_visual::FamiliarVisualOwner {
+                owner: input.entity,
+            },
+            hw_visual::FamiliarVisualOffset::default(),
+            Sprite {
+                image: game_assets.familiar.clone(),
+                custom_size: Some(Vec2::splat(TILE_SIZE * 0.9)),
+                color: Color::WHITE,
+                ..default()
+            },
+            Transform::default(),
+            Name::new(format!("FamiliarVisual: {}", input.name)),
+        ))
+        .id();
+    commands.entity(input.entity).add_child(visual_child);
 
     if input.spawn_3d_scene_root {
         // 3D プロキシ（Phase 2 プレースホルダー）

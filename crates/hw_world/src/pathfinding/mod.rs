@@ -1,13 +1,31 @@
+mod budget;
+mod connectivity;
 mod core;
 
+#[cfg(feature = "profiling")]
+pub use budget::RuntimePathSearchMetrics;
+pub use budget::{PathSearchCaller, PathSearchResult, RuntimePathSearchBudget};
+pub use connectivity::WalkabilityConnectivityCache;
 pub use core::{
     MOVE_COST_DIAGONAL, MOVE_COST_STRAIGHT, PathGoalPolicy, PathNode, PathWorld, PathfindingContext,
 };
-use core::{PathPolicy, find_path_with_policy, path_cost_heuristic};
+use core::{PathPolicy, can_cross_diagonal_move, find_path_with_policy, path_cost_heuristic};
 
 use hw_core::GridPos;
 
-pub fn find_path(
+fn has_valid_find_path_input(
+    world_map: &impl PathWorld,
+    start: GridPos,
+    goal: GridPos,
+    goal_policy: PathGoalPolicy,
+) -> bool {
+    world_map.pos_to_idx(start.0, start.1).is_some()
+        && world_map.pos_to_idx(goal.0, goal.1).is_some()
+        && (!matches!(goal_policy, PathGoalPolicy::RespectGoalWalkability)
+            || world_map.is_walkable(goal.0, goal.1))
+}
+
+pub(crate) fn find_path(
     world_map: &impl PathWorld,
     context: &mut PathfindingContext,
     start: GridPos,
@@ -33,21 +51,41 @@ pub fn find_path(
             is_goal_reached: move |pos: (i32, i32)| pos == goal,
             can_enter: |_from: (i32, i32), to: (i32, i32)| world_map.is_walkable(to.0, to.1),
             can_cross_diagonal: |from: (i32, i32), to: (i32, i32)| {
-                let dx = to.0 - from.0;
-                let dy = to.1 - from.1;
-                let is_diagonal = dx.abs() == 1 && dy.abs() == 1;
-                if !is_diagonal {
-                    return true;
-                }
-                world_map.is_walkable(from.0 + dx, from.1)
-                    && world_map.is_walkable(from.0, from.1 + dy)
+                can_cross_diagonal_move(world_map, from, to)
             },
             move_penalty: |x, y, _is_diagonal| world_map.get_door_cost(x, y),
         },
     )
 }
 
-pub fn find_path_to_adjacent(
+/// Runs one core A* search when the frame budget permits it.
+///
+/// Invalid endpoints and a disallowed blocked goal never reach core A*, so
+/// they are reported as `Unreachable` without consuming a budget slot.
+pub fn find_path_with_budget(
+    world_map: &impl PathWorld,
+    context: &mut PathfindingContext,
+    budget: &mut RuntimePathSearchBudget,
+    caller: PathSearchCaller,
+    start: GridPos,
+    goal: GridPos,
+    goal_policy: PathGoalPolicy,
+) -> PathSearchResult<Vec<GridPos>> {
+    if !has_valid_find_path_input(world_map, start, goal, goal_policy) {
+        return PathSearchResult::Unreachable;
+    }
+    if !budget.try_claim_for(caller) {
+        return PathSearchResult::Deferred;
+    }
+
+    let result = find_path(world_map, context, start, goal, goal_policy)
+        .map_or(PathSearchResult::Unreachable, PathSearchResult::Found);
+    #[cfg(feature = "profiling")]
+    budget.record_expanded_nodes(context.expanded_nodes());
+    result
+}
+
+pub(crate) fn find_path_to_adjacent(
     world_map: &impl PathWorld,
     context: &mut PathfindingContext,
     start: GridPos,
@@ -72,7 +110,39 @@ pub fn find_path_to_adjacent(
     }
 }
 
-pub fn can_reach_target(
+/// Runs the adjacent-goal core A* search when the frame budget permits it.
+pub fn find_path_to_adjacent_with_budget(
+    world_map: &impl PathWorld,
+    context: &mut PathfindingContext,
+    budget: &mut RuntimePathSearchBudget,
+    caller: PathSearchCaller,
+    start: GridPos,
+    target: GridPos,
+    allow_goal_blocked: bool,
+) -> PathSearchResult<Vec<GridPos>> {
+    let allow_goal_blocked = allow_goal_blocked || !world_map.is_walkable(start.0, start.1);
+    let policy = if allow_goal_blocked {
+        PathGoalPolicy::AllowBlockedGoal
+    } else {
+        PathGoalPolicy::RespectGoalWalkability
+    };
+
+    // `find_path_to_adjacent` searches target -> start internally.
+    if !has_valid_find_path_input(world_map, target, start, policy) {
+        return PathSearchResult::Unreachable;
+    }
+    if !budget.try_claim_for(caller) {
+        return PathSearchResult::Deferred;
+    }
+
+    let result = find_path_to_adjacent(world_map, context, start, target, allow_goal_blocked)
+        .map_or(PathSearchResult::Unreachable, PathSearchResult::Found);
+    #[cfg(feature = "profiling")]
+    budget.record_expanded_nodes(context.expanded_nodes());
+    result
+}
+
+pub(crate) fn can_reach_target(
     world_map: &impl PathWorld,
     context: &mut PathfindingContext,
     start: GridPos,
@@ -94,7 +164,54 @@ pub fn can_reach_target(
     }
 }
 
-pub fn find_path_to_boundary(
+fn try_exit_target_grids(
+    world_map: &impl PathWorld,
+    start: GridPos,
+    target_grids: &[GridPos],
+) -> Option<Vec<GridPos>> {
+    if !target_grids.contains(&start) {
+        return None;
+    }
+
+    let directions = [
+        (0, 1),
+        (0, -1),
+        (1, 0),
+        (-1, 0),
+        (1, 1),
+        (1, -1),
+        (-1, 1),
+        (-1, -1),
+    ];
+    for (dx, dy) in directions {
+        let next = (start.0 + dx, start.1 + dy);
+        if !target_grids.contains(&next) && world_map.is_walkable(next.0, next.1) {
+            return Some(vec![start, next]);
+        }
+    }
+
+    None
+}
+
+fn has_valid_boundary_search_input(
+    world_map: &impl PathWorld,
+    start: GridPos,
+    target_grids: &[GridPos],
+) -> bool {
+    if target_grids.is_empty() || world_map.pos_to_idx(start.0, start.1).is_none() {
+        return false;
+    }
+
+    let sum_x: f32 = target_grids.iter().map(|grid| grid.0 as f32).sum();
+    let sum_y: f32 = target_grids.iter().map(|grid| grid.1 as f32).sum();
+    let goal = (
+        (sum_x / target_grids.len() as f32).round() as i32,
+        (sum_y / target_grids.len() as f32).round() as i32,
+    );
+    world_map.pos_to_idx(goal.0, goal.1).is_some()
+}
+
+pub(crate) fn find_path_to_boundary(
     world_map: &impl PathWorld,
     context: &mut PathfindingContext,
     start: GridPos,
@@ -109,25 +226,9 @@ pub fn find_path_to_boundary(
     target_grid_set.clear();
     target_grid_set.extend(target_grids.iter().copied());
 
-    if target_grid_set.contains(&start) {
-        let directions = [
-            (0, 1),
-            (0, -1),
-            (1, 0),
-            (-1, 0),
-            (1, 1),
-            (1, -1),
-            (-1, 1),
-            (-1, -1),
-        ];
-        for (dx, dy) in directions {
-            let nx = start.0 + dx;
-            let ny = start.1 + dy;
-            if !target_grid_set.contains(&(nx, ny)) && world_map.is_walkable(nx, ny) {
-                context.target_grid_set = target_grid_set;
-                return Some(vec![start, (nx, ny)]);
-            }
-        }
+    if let Some(path) = try_exit_target_grids(world_map, start, target_grids) {
+        context.target_grid_set = target_grid_set;
+        return Some(path);
     }
 
     let sum_x: f32 = target_grids.iter().map(|g| g.0 as f32).sum();
@@ -191,30 +292,76 @@ pub fn find_path_to_boundary(
     }
 }
 
-/// A* でパスを探索し、ワールド座標 waypoint 列として返す。
-/// 直接到達不可なターゲットには隣接マスへの探索を fallback する。
+/// Runs the boundary-search core A* when the frame budget permits it.
 ///
-/// `find_path` → `find_path_to_adjacent` の fallback + grid→world 変換を1関数に集約。
-pub fn find_path_world_waypoints(
+/// An empty target set, invalid start/center, and the already-inside-target
+/// walkable exit are resolved without starting core A*, so they do not claim a
+/// slot.
+pub fn find_path_to_boundary_with_budget(
+    world_map: &impl PathWorld,
+    context: &mut PathfindingContext,
+    budget: &mut RuntimePathSearchBudget,
+    caller: PathSearchCaller,
+    start: GridPos,
+    target_grids: &[GridPos],
+) -> PathSearchResult<Vec<GridPos>> {
+    if target_grids.is_empty() {
+        return PathSearchResult::Unreachable;
+    }
+    if let Some(path) = try_exit_target_grids(world_map, start, target_grids) {
+        return PathSearchResult::Found(path);
+    }
+    if !has_valid_boundary_search_input(world_map, start, target_grids) {
+        return PathSearchResult::Unreachable;
+    }
+    if !budget.try_claim_for(caller) {
+        return PathSearchResult::Deferred;
+    }
+
+    let result = find_path_to_boundary(world_map, context, start, target_grids)
+        .map_or(PathSearchResult::Unreachable, PathSearchResult::Found);
+    #[cfg(feature = "profiling")]
+    budget.record_expanded_nodes(context.expanded_nodes());
+    result
+}
+
+/// A direct route and the adjacent-goal fallback each claim an independent
+/// core A* slot. Callers must preserve their state on `Deferred`.
+pub fn find_path_world_waypoints_with_budget(
     world_map: &crate::map::WorldMap,
     pf_context: &mut PathfindingContext,
+    budget: &mut RuntimePathSearchBudget,
+    caller: PathSearchCaller,
     start_grid: GridPos,
     goal_grid: GridPos,
-) -> Option<Vec<bevy::math::Vec2>> {
-    find_path(
+) -> PathSearchResult<Vec<bevy::math::Vec2>> {
+    let direct = find_path_with_budget(
         world_map,
         pf_context,
+        budget,
+        caller,
         start_grid,
         goal_grid,
         PathGoalPolicy::RespectGoalWalkability,
-    )
-    .or_else(|| find_path_to_adjacent(world_map, pf_context, start_grid, goal_grid, true))
-    .map(|grid_path| {
-        grid_path
-            .iter()
-            .map(|&(x, y)| crate::map::WorldMap::grid_to_world(x, y))
-            .collect()
-    })
+    );
+
+    let grid_path = match direct {
+        PathSearchResult::Found(path) => PathSearchResult::Found(path),
+        PathSearchResult::Deferred => return PathSearchResult::Deferred,
+        PathSearchResult::Unreachable => find_path_to_adjacent_with_budget(
+            world_map, pf_context, budget, caller, start_grid, goal_grid, true,
+        ),
+    };
+
+    match grid_path {
+        PathSearchResult::Found(path) => PathSearchResult::Found(
+            path.iter()
+                .map(|&(x, y)| crate::map::WorldMap::grid_to_world(x, y))
+                .collect(),
+        ),
+        PathSearchResult::Unreachable => PathSearchResult::Unreachable,
+        PathSearchResult::Deferred => PathSearchResult::Deferred,
+    }
 }
 
 #[cfg(test)]
@@ -270,5 +417,126 @@ mod tests {
             last
         );
         assert!(*last != (5, 5), "Last {:?} should not be target", last);
+    }
+
+    #[test]
+    fn budgeted_waypoint_search_charges_direct_and_adjacent_attempts_separately() {
+        let mut map = crate::map::WorldMap::default();
+        for y in 0..MAP_HEIGHT {
+            map.add_grid_obstacle((50, y));
+        }
+
+        let start = (25, 50);
+        let goal = (75, 50);
+        let mut context = PathfindingContext::default();
+        let mut one_slot = RuntimePathSearchBudget::new(1);
+
+        assert!(matches!(
+            find_path_world_waypoints_with_budget(
+                &map,
+                &mut context,
+                &mut one_slot,
+                PathSearchCaller::ActorNew,
+                start,
+                goal,
+            ),
+            PathSearchResult::Deferred
+        ));
+        assert_eq!(one_slot.used(), 1);
+
+        let mut context = PathfindingContext::default();
+        let mut two_slots = RuntimePathSearchBudget::new(2);
+        assert!(matches!(
+            find_path_world_waypoints_with_budget(
+                &map,
+                &mut context,
+                &mut two_slots,
+                PathSearchCaller::ActorNew,
+                start,
+                goal,
+            ),
+            PathSearchResult::Unreachable
+        ));
+        assert_eq!(two_slots.used(), 2);
+    }
+
+    #[test]
+    fn invalid_waypoint_search_does_not_consume_a_core_search_slot() {
+        let map = crate::map::WorldMap::default();
+        let mut context = PathfindingContext::default();
+        let mut budget = RuntimePathSearchBudget::new(1);
+
+        assert!(matches!(
+            find_path_world_waypoints_with_budget(
+                &map,
+                &mut context,
+                &mut budget,
+                PathSearchCaller::ActorNew,
+                (10, 10),
+                (-1, 10),
+            ),
+            PathSearchResult::Unreachable
+        ));
+        assert_eq!(budget.used(), 0);
+    }
+
+    #[test]
+    fn budgeted_boundary_search_preserves_zero_cost_inside_target_exit() {
+        let map = TestWorld::default();
+        let mut context = PathfindingContext::default();
+        let mut budget = RuntimePathSearchBudget::new(0);
+
+        assert!(matches!(
+            find_path_to_boundary_with_budget(
+                &map,
+                &mut context,
+                &mut budget,
+                PathSearchCaller::ActorNew,
+                (10, 10),
+                &[(10, 10)],
+            ),
+            PathSearchResult::Found(path) if path.first() == Some(&(10, 10))
+        ));
+        assert_eq!(budget.used(), 0);
+    }
+
+    #[test]
+    fn budgeted_boundary_search_defers_without_consuming_when_no_slot_remains() {
+        let map = TestWorld::default();
+        let mut context = PathfindingContext::default();
+        let mut budget = RuntimePathSearchBudget::new(0);
+
+        assert!(matches!(
+            find_path_to_boundary_with_budget(
+                &map,
+                &mut context,
+                &mut budget,
+                PathSearchCaller::ActorNew,
+                (10, 10),
+                &[(20, 20)],
+            ),
+            PathSearchResult::Deferred
+        ));
+        assert_eq!(budget.used(), 0);
+    }
+
+    #[test]
+    fn invalid_boundary_search_does_not_consume_a_core_search_slot() {
+        let map = TestWorld::default();
+        let mut context = PathfindingContext::default();
+        let mut budget = RuntimePathSearchBudget::new(1);
+
+        assert!(matches!(
+            find_path_to_boundary_with_budget(
+                &map,
+                &mut context,
+                &mut budget,
+                PathSearchCaller::ActorNew,
+                (10, 10),
+                &[(MAP_WIDTH + 1, MAP_HEIGHT + 1)],
+            ),
+            PathSearchResult::Unreachable
+        ));
+        assert_eq!(budget.used(), 0);
     }
 }

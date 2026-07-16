@@ -21,6 +21,8 @@ pub enum BlueprintState {
 pub struct BlueprintVisual {
     pub state: BlueprintState,
     pub pulse_animation: Option<PulseAnimation>,
+    /// Building 中だけ存在する、親 Sprite を書き換えずに pulse を描く child。
+    pub pulse_overlay: Option<BlueprintPulseOverlay>,
     pub last_delivered: HashMap<ResourceType, u32>,
 }
 
@@ -83,3 +85,18 @@ pub struct BlueprintProgressBars {
     pub background: Entity,
     pub fill: Entity,
 }
+
+/// `BlueprintVisual` が O(1) で更新する Building pulse child。
+///
+/// `ChildOf` の逆引きを毎 frame 行わず、root の static Sprite を animation の
+/// ために changed にしない。`base_color` は visual state の差分同期で更新され、
+/// child 側だけが alpha を変える。
+#[derive(Clone, Copy)]
+pub struct BlueprintPulseOverlay {
+    pub entity: Entity,
+    pub base_color: Color,
+}
+
+/// Building pulse 専用の visual child marker。
+#[derive(Component)]
+pub struct BlueprintPulseOverlayChild;

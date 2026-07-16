@@ -1,7 +1,7 @@
 //! GoingToDestination phase: 水入りバケツを持ってデスティネーション（タンク or ミキサー）へ向かう
 
 use crate::soul_ai::execute::task_execution::common::{
-    is_near_target_or_dest, update_destination_to_adjacent,
+    PathSearchResult, is_near_target_or_dest, update_bucket_destination_to_adjacent,
 };
 use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use crate::soul_ai::execute::task_execution::types::{
@@ -112,28 +112,23 @@ pub fn handle(
                 let (mixer_transform, _, _) = mixer_data;
                 let mixer_pos = mixer_transform.translation.truncate();
 
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    mixer_pos,
-                    ctx.path,
-                    soul_pos,
-                    ctx.env.world_map,
-                    ctx.pf_context,
-                );
-
-                if !reachable {
-                    let tank = match data.source {
-                        BucketTransportSource::Tank { tank, .. } => tank,
-                        BucketTransportSource::River => data.bucket,
-                    };
-                    return abort::abort_and_drop_bucket_mixer(
-                        commands,
-                        ctx,
-                        data.bucket,
-                        tank,
-                        mixer_entity,
-                        soul_pos,
-                    );
+                match update_bucket_destination_to_adjacent(ctx, mixer_pos) {
+                    PathSearchResult::Found(()) => {}
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        let tank = match data.source {
+                            BucketTransportSource::Tank { tank, .. } => tank,
+                            BucketTransportSource::River => data.bucket,
+                        };
+                        return abort::abort_and_drop_bucket_mixer(
+                            commands,
+                            ctx,
+                            data.bucket,
+                            tank,
+                            mixer_entity,
+                            soul_pos,
+                        );
+                    }
                 }
 
                 if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {

@@ -12,7 +12,10 @@ use crate::systems::dream_tree_planting::dream_tree_planting_system;
 use crate::systems::energy::grid_lifecycle::{
     on_power_consumer_added, on_yard_added, on_yard_removed,
 };
-use crate::systems::energy::grid_recalc::grid_recalc_system;
+use crate::systems::energy::grid_recalc::{
+    EnergyUpdateDirty, detect_energy_update_dirty_system, energy_grid_recalc_should_run,
+    energy_power_output_should_run, grid_recalc_system,
+};
 use crate::systems::energy::lamp_buff::lamp_buff_system;
 use crate::systems::energy::power_output::soul_spa_power_output_system;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
@@ -28,8 +31,8 @@ use crate::systems::jobs::wall_construction::{
     wall_construction_phase_transition_system, wall_framed_tile_spawn_system,
 };
 use crate::systems::jobs::{
-    BuildingCompletionSet, building_completion_system, door_auto_close_system,
-    door_auto_open_system,
+    BuildingCompletionSet, building_completion_system, door_auto_close_nearby_system,
+    door_auto_open_nearby_system,
 };
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
 use crate::systems::logistics::transport_request::TransportRequestPlugin;
@@ -82,6 +85,11 @@ impl Plugin for LogicPlugin {
         app.init_resource::<RoomTileLookup>();
         app.init_resource::<RoomValidationState>();
         app.init_resource::<ObstaclePositionIndex>();
+        app.init_resource::<EnergyUpdateDirty>();
+        #[cfg(feature = "profiling")]
+        app.init_resource::<crate::systems::jobs::DoorPerfMetrics>()
+            .init_resource::<crate::systems::jobs::ConstructionPerfMetrics>()
+            .init_resource::<crate::systems::energy::grid_recalc::EnergyPerfMetrics>();
 
         // Soul Energy 型登録
         app.register_type::<PowerGrid>()
@@ -171,23 +179,25 @@ impl Plugin for LogicPlugin {
                 .chain()
                 .in_set(GameSystemSet::Logic),
         )
-        // グループE: Soul Spa construction（フェーズ順序が必要）
+        // グループE: Soul Spa construction + energy pipeline.
+        // Commands that attach workers/children are visible before dirty
+        // detection. A changed generator then propagates through grid state
+        // and `Unpowered` before the 10 Hz lamp effect reads it.
         .add_systems(
             Update,
             (
                 soul_spa_auto_haul_system,
-                soul_spa_delivery_sync_system.after(soul_spa_auto_haul_system),
-                soul_spa_tile_activate_system.after(soul_spa_delivery_sync_system),
-                soul_spa_power_output_system,
-            )
-                .in_set(GameSystemSet::Logic),
-        )
-        .add_systems(
-            Update,
-            (
-                grid_recalc_system.after(soul_spa_power_output_system),
+                soul_spa_delivery_sync_system,
+                soul_spa_tile_activate_system,
+                bevy::ecs::schedule::ApplyDeferred,
+                detect_energy_update_dirty_system,
+                soul_spa_power_output_system.run_if(energy_power_output_should_run),
+                grid_recalc_system.run_if(energy_grid_recalc_should_run),
+                bevy::ecs::schedule::ApplyDeferred,
                 lamp_buff_system,
             )
+                .chain()
+                .after(SoulAiSystemSet::Update)
                 .in_set(GameSystemSet::Logic),
         )
         .add_systems(
@@ -240,9 +250,11 @@ impl Plugin for LogicPlugin {
         app.add_systems(
             Update,
             (
-                door_auto_open_system.before(crate::entities::damned_soul::movement::soul_movement),
+                door_auto_open_nearby_system
+                    .before(crate::entities::damned_soul::movement::soul_movement),
                 familiar_movement,
-                door_auto_close_system.after(crate::entities::damned_soul::movement::soul_movement),
+                door_auto_close_nearby_system
+                    .after(crate::entities::damned_soul::movement::soul_movement),
             )
                 .in_set(GameSystemSet::Actor),
         );

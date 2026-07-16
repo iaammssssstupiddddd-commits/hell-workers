@@ -107,6 +107,8 @@ Yard 外のランプは ConsumesFrom なし → 常時 `Unpowered`。
 `lamp_buff_system`（Update, GameSystemSet::Logic）:
 
 - 対象: `With<PowerConsumer>, Without<Unpowered>` のランプ（= 通電中のみ）
+- `SlowSimulationClock` の 100 ms step を共有し、render delta を別に積算しない
+- Soul 全件との直積は作らず、Soul 用 `SpatialGrid` から半径内候補だけを取得してから正確な距離を判定する
 - 半径 `OUTDOOR_LAMP_EFFECT_RADIUS` (5.0 タイル) 内の Soul に:
   - stress を `LAMP_STRESS_REDUCTION_RATE` (0.004/s) で軽減
   - fatigue を `LAMP_FATIGUE_RECOVERY_BONUS` (0.003/s) で軽減
@@ -114,7 +116,14 @@ Yard 外のランプは ConsumesFrom なし → 常時 `Unpowered`。
 
 ## 6. Grid 再計算
 
-`grid_recalc_system`（Update, `.after(soul_spa_power_output_system)`, GameSystemSet::Logic）:
+energy pipeline は `soul_spa` の relationship/child 更新を `ApplyDeferred` した後、`detect_energy_update_dirty_system → soul_spa_power_output_system → grid_recalc_system → ApplyDeferred → lamp_buff_system` の順で実行する。output/grid は steady-state では実行せず、次の変更で dirty になる。
+
+- SoulSpaSite / Children / SoulSpaTile の `TaskWorkers`、SoulSpa の `PowerGenerator` 設定
+- `PowerGrid` / generator / consumer の Added・Changed・Removed
+- `GeneratesFor` / `ConsumesFrom` と target relationship の変更
+- load後の最初の再構築
+
+`grid_recalc_system`（dirty時のみ、GameSystemSet::Logic）:
 
 1. 全 `PowerGrid` を走査
 2. `GridGenerators` から `generation` を合計、`GridConsumers` から `consumption` を合計
@@ -156,7 +165,7 @@ Yard 外のランプは ConsumesFrom なし → 常時 `Unpowered`。
 |:---|:---|:---|
 | ランプ建設しても常時暗い | `Unpowered` が除去されない | Yard 外配置 → ConsumesFrom なし → grid_recalc が Unpowered を操作しない |
 | Soul Spa Operational なのに発電 0 | TaskWorkers が空 | Familiar が GeneratePower をアサインしていない。Dream 閾値 (`DREAM_GENERATE_ASSIGN_THRESHOLD` = 30.0) 未満の Soul しかいない |
-| 新規ランプが通電グリッドなのに一瞬暗い | 1 フレーム遅延 | `#[require(Unpowered)]` で初期 Unpowered → 次の grid_recalc で除去される |
+| ランプ追加/出力変更後に通電状態が古い | energy pipeline の順序が崩れている | child/relationship の `ApplyDeferred`、output、grid、`Unpowered`適用の順を保つ |
 
 ## 9. 定数一覧
 

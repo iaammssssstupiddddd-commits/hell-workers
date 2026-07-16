@@ -9,7 +9,9 @@ use hw_jobs::AssignedTask;
 use hw_spatial::FamiliarSpatialGrid;
 use hw_world::SpatialGridOps;
 
-type SoulVitalsQuery<'w, 's> = Query<
+use super::slow_simulation::SlowSimulationClock;
+
+pub(crate) type SoulVitalsQuery<'w, 's> = Query<
     'w,
     's,
     (
@@ -26,16 +28,38 @@ type SoulVitalsQuery<'w, 's> = Query<
 /// Familiar影響関連の更新を1パスで処理する統合システム
 pub fn familiar_influence_unified_system(
     mut commands: Commands,
-    time: Res<Time>,
+    clock: Res<SlowSimulationClock>,
     familiar_grid: Res<FamiliarSpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,
+    mut breakdown_notifications: Local<std::collections::HashSet<Entity>>,
     q_familiars: Query<(&Transform, &Familiar, &ActiveCommand)>,
     mut q_souls: SoulVitalsQuery<'_, '_>,
 ) {
-    let dt = time.delta_secs();
+    breakdown_notifications.clear();
+    for _ in 0..clock.steps_this_frame() {
+        familiar_influence_step(
+            clock.step_secs(),
+            &mut commands,
+            &familiar_grid,
+            &q_familiars,
+            &mut nearby_buf,
+            &mut breakdown_notifications,
+            &mut q_souls,
+        );
+    }
+}
+
+pub(crate) fn familiar_influence_step(
+    dt: f32,
+    commands: &mut Commands,
+    familiar_grid: &FamiliarSpatialGrid,
+    q_familiars: &Query<(&Transform, &Familiar, &ActiveCommand)>,
+    nearby_buf: &mut Vec<Entity>,
+    breakdown_notifications: &mut std::collections::HashSet<Entity>,
+    q_souls: &mut SoulVitalsQuery,
+) {
     let familiar_search_radius = TILE_SIZE * 15.0;
     let supervision_eval_radius_sq = (TILE_SIZE * 10.0).powi(2);
-
     for (entity, soul_transform, mut soul, task, idle, under_command, breakdown_opt) in
         q_souls.iter_mut()
     {
@@ -46,7 +70,7 @@ pub fn familiar_influence_unified_system(
             IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering
         );
 
-        familiar_grid.get_nearby_in_radius_into(soul_pos, familiar_search_radius, &mut nearby_buf);
+        familiar_grid.get_nearby_in_radius_into(soul_pos, familiar_search_radius, nearby_buf);
         let mut best_influence = 0.0_f32;
         let mut is_influence_close = false;
 
@@ -113,8 +137,8 @@ pub fn familiar_influence_unified_system(
             soul.laziness = (soul.laziness + dt * LAZINESS_GAIN_RATE_IDLE).min(1.0);
         }
 
-        if soul.stress >= 1.0 && breakdown_opt.is_none() {
-            publish_stress_breakdown(&mut commands, entity);
+        if soul.stress >= 1.0 && breakdown_opt.is_none() && breakdown_notifications.insert(entity) {
+            publish_stress_breakdown(commands, entity);
         }
 
         if let Some(mut breakdown) = breakdown_opt {

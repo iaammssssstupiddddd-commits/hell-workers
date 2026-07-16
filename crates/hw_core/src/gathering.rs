@@ -49,8 +49,15 @@ pub enum GatheringObjectType {
 impl GatheringObjectType {
     /// 参加人数に応じた確率テーブルでランダム選択
     pub fn random_weighted(participant_count: usize) -> Self {
-        use rand::Rng;
         let mut rng = rand::thread_rng();
+        Self::random_weighted_with_rng(participant_count, &mut rng)
+    }
+
+    /// `random_weighted` の乱数源を呼び出し元が所有する変種。
+    ///
+    /// 固定step監査では actor-local stream を渡し、通常実行は既存wrapperの
+    /// thread-local RNG を使う。
+    pub fn random_weighted_with_rng(participant_count: usize, rng: &mut impl rand::Rng) -> Self {
         let roll: f32 = rng.gen_range(0.0..1.0);
 
         // 人数による確率テーブル
@@ -154,4 +161,26 @@ pub fn calculate_aura_size(participant_count: usize) -> f32 {
 /// 集会システムのタイマーを更新するシステム
 pub fn tick_gathering_timer_system(time: Res<Time>, mut timer: ResMut<GatheringUpdateTimer>) {
     timer.timer.tick(time.delta());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GatheringObjectType;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    #[test]
+    fn weighted_selection_is_repeatable_with_a_caller_owned_rng() {
+        let mut first = StdRng::seed_from_u64(20260712);
+        let mut second = StdRng::seed_from_u64(20260712);
+
+        let first_values = (0..16)
+            .map(|_| GatheringObjectType::random_weighted_with_rng(5, &mut first))
+            .collect::<Vec<_>>();
+        let second_values = (0..16)
+            .map(|_| GatheringObjectType::random_weighted_with_rng(5, &mut second))
+            .collect::<Vec<_>>();
+
+        assert_eq!(first_values, second_values);
+    }
 }

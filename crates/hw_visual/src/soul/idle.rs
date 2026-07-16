@@ -19,7 +19,7 @@ type IdleVisualSoulQuery<'w, 's> = Query<
     'w,
     's,
     (
-        &'static mut Transform,
+        &'static Transform,
         Option<&'static mut Sprite>,
         &'static IdleState,
         &'static DamnedSoul,
@@ -38,19 +38,16 @@ pub fn idle_visual_system(
 ) {
     const GATHERING_ARRIVAL_RADIUS: f32 = TILE_SIZE * GATHERING_ARRIVAL_RADIUS_BASE;
 
-    for (mut transform, mut sprite_opt, idle, soul, task_vs, participating_in, dream) in
+    for (transform, mut sprite_opt, idle, soul, task_vs, participating_in, dream) in
         query.iter_mut()
     {
         if task_vs.phase != SoulTaskPhaseVisual::None {
-            transform.rotation = Quat::IDENTITY;
-            transform.scale = Vec3::ONE;
             set_sprite_color(sprite_opt.as_deref_mut(), Color::WHITE);
             continue;
         }
 
         match idle.behavior {
             IdleBehavior::Sleeping => {
-                transform.rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
                 set_sprite_color(
                     sprite_opt.as_deref_mut(),
                     match dream.quality {
@@ -61,27 +58,18 @@ pub fn idle_visual_system(
                 );
             }
             IdleBehavior::Resting => {
-                transform.rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
                 set_sprite_color(sprite_opt.as_deref_mut(), Color::srgba(0.6, 0.6, 0.7, 1.0));
             }
             IdleBehavior::Sitting => {
-                transform.rotation = Quat::IDENTITY;
-                transform.scale.y = 0.8;
                 set_sprite_color(sprite_opt.as_deref_mut(), Color::srgba(0.8, 0.8, 0.8, 1.0));
             }
             IdleBehavior::Wandering | IdleBehavior::GoingToRest => {
-                transform.rotation = Quat::IDENTITY;
                 set_sprite_color(sprite_opt.as_deref_mut(), Color::WHITE);
             }
             IdleBehavior::Escaping => {
-                transform.rotation = Quat::from_rotation_z(-0.1);
                 set_sprite_color(sprite_opt.as_deref_mut(), Color::srgba(0.8, 0.9, 1.0, 1.0));
-                let panic_pulse = (idle.total_idle_time * 8.0).sin() * 0.05 + 0.95;
-                transform.scale = Vec3::splat(panic_pulse);
             }
             IdleBehavior::Drifting => {
-                transform.rotation = Quat::IDENTITY;
-                transform.scale = Vec3::ONE;
                 set_sprite_color(sprite_opt.as_deref_mut(), Color::srgba(0.9, 0.9, 1.0, 0.85));
             }
             IdleBehavior::Gathering | IdleBehavior::ExhaustedGathering => {
@@ -112,9 +100,6 @@ pub fn idle_visual_system(
                     let has_arrived = dist_from_center <= GATHERING_ARRIVAL_RADIUS;
 
                     if !has_arrived {
-                        transform.rotation = Quat::IDENTITY;
-                        transform.scale = Vec3::ONE;
-
                         if idle.behavior == IdleBehavior::ExhaustedGathering {
                             set_sprite_color(
                                 sprite_opt.as_deref_mut(),
@@ -134,19 +119,12 @@ pub fn idle_visual_system(
 
                         match idle.gathering_behavior {
                             GatheringBehavior::Wandering => {
-                                transform.rotation = Quat::IDENTITY;
-                                let pulse_speed = 1.5;
-                                let scale_offset =
-                                    (idle.total_idle_time * pulse_speed).sin() * 0.05 + 1.0;
-                                transform.scale = Vec3::splat(scale_offset);
                                 set_sprite_color(
                                     sprite_opt.as_deref_mut(),
                                     Color::srgba(0.9, 0.8, 1.0, 0.85),
                                 );
                             }
                             GatheringBehavior::Sleeping => {
-                                transform.rotation =
-                                    Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
                                 set_sprite_color(
                                     sprite_opt.as_deref_mut(),
                                     match dream.quality {
@@ -159,19 +137,9 @@ pub fn idle_visual_system(
                                         _ => Color::srgba(0.6, 0.5, 0.8, 0.6),
                                     },
                                 );
-                                let breath = (idle.total_idle_time * 0.3).sin() * 0.02 + 0.95;
-                                transform.scale = Vec3::splat(breath);
                             }
-                            GatheringBehavior::Standing => {
-                                transform.rotation = Quat::IDENTITY;
-                                let breath = (idle.total_idle_time * 0.4).sin() * 0.03 + 1.0;
-                                transform.scale = Vec3::splat(breath);
-                            }
+                            GatheringBehavior::Standing => {}
                             GatheringBehavior::Dancing => {
-                                let sway_angle = (idle.total_idle_time * 5.0).sin() * 0.3;
-                                transform.rotation = Quat::from_rotation_z(sway_angle);
-                                let bounce = (idle.total_idle_time * 6.0).sin() * 0.15 + 1.0;
-                                transform.scale = Vec3::new(1.0, bounce, 1.0);
                                 set_sprite_color(
                                     sprite_opt.as_deref_mut(),
                                     Color::srgba(1.0, 0.7, 1.0, 1.0),
@@ -180,7 +148,6 @@ pub fn idle_visual_system(
                         }
                     }
                 } else {
-                    transform.rotation = Quat::IDENTITY;
                     set_sprite_color(sprite_opt.as_deref_mut(), Color::WHITE);
                 }
             }
@@ -198,8 +165,6 @@ pub fn idle_visual_system(
             && task_vs.phase == SoulTaskPhaseVisual::None
         {
             set_sprite_color(sprite_opt.as_deref_mut(), Color::srgb(1.0, 1.0, 0.8));
-            transform.rotation = Quat::IDENTITY;
-            transform.scale = Vec3::ONE;
         }
     }
 }

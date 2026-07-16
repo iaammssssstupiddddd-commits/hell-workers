@@ -10,6 +10,7 @@ use crate::world::map::WorldMapWrite;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::relationships::WorkingOn;
+use hw_logistics::tile_index::TileSiteIndex;
 use hw_soul_ai::unassign_task;
 use std::collections::HashSet;
 
@@ -39,8 +40,8 @@ type SoulCancellationQuery<'w, 's> = Query<
 #[derive(SystemParam)]
 pub struct WallCancellationQueries<'w, 's> {
     q_sites: Query<'w, 's, Entity, With<WallConstructionCancelRequested>>,
-    q_entities: Query<'w, 's, Entity>,
     q_wall_requests: Query<'w, 's, (Entity, &'static TargetWallConstructionSite)>,
+    tile_site_index: Res<'w, TileSiteIndex>,
 }
 
 /// Cancels wall construction sites marked with `WallConstructionCancelRequested`.
@@ -62,15 +63,19 @@ pub fn wall_construction_cancellation_system(
             (site.material_center, site.tiles_total)
         };
 
-        let mut site_tiles: Vec<SiteTileSnapshot> = Vec::new();
-        for tile_entity in wl_queries.q_entities.iter() {
+        let Some(tile_entities) = wl_queries
+            .tile_site_index
+            .wall_tiles_by_site
+            .get(&site_entity)
+        else {
+            continue;
+        };
+        let mut site_tiles: Vec<SiteTileSnapshot> = Vec::with_capacity(tile_entities.len());
+        for &tile_entity in tile_entities {
             let Ok((_, tile, _)) = reservation_queries.storage.wall_tiles.get_mut(tile_entity)
             else {
                 continue;
             };
-            if tile.parent_site != site_entity {
-                continue;
-            }
             site_tiles.push(SiteTileSnapshot {
                 entity: tile_entity,
                 grid_pos: tile.grid_pos,

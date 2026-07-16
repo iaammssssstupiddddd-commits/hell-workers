@@ -3,6 +3,7 @@
 //! 対象選定ロジック、`EncouragementCooldown` コンポーネント、および
 //! `encouragement_decision_system` を提供します。
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::{ENCOURAGEMENT_INTERVAL_MAX, ENCOURAGEMENT_INTERVAL_MIN};
 use hw_core::events::EncouragementRequest;
@@ -41,6 +42,31 @@ pub struct FamiliarEncouragementContext<'a, 'w, 's, G: SpatialGridOps> {
 
 #[cfg(feature = "profiling")]
 const ENCOURAGEMENT_TARGET_STREAM: u64 = 0x656e_636f_7572_6167;
+
+type EncouragementFamiliarQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static GlobalTransform,
+        &'static Familiar,
+        &'static FamiliarAiState,
+        &'static ActiveCommand,
+    ),
+>;
+
+#[derive(SystemParam)]
+pub(crate) struct EncouragementDecisionParams<'w, 's> {
+    #[cfg(feature = "profiling")]
+    audit_seed: Option<Res<'w, FixedAuditSeed>>,
+    q_familiars: EncouragementFamiliarQuery<'w, 's>,
+    q_souls: SoulEncouragementQuery<'w, 's>,
+    soul_grid: Res<'w, SpatialGrid>,
+    nearby_buf: Local<'s, Vec<Entity>>,
+    decide_output: FamiliarDecideOutput<'w>,
+    #[cfg(feature = "profiling")]
+    random_states: Query<'w, 's, &'static mut SimulationRandomState>,
+}
 
 /// 激励対象を 1 体選ぶ。
 ///
@@ -84,22 +110,19 @@ pub fn decide_encouragement_target<G: SpatialGridOps, R: Rng + ?Sized>(
 }
 
 /// 激励要求を生成するシステム（Decide Phase）
-pub fn encouragement_decision_system(
-    time: Res<Time>,
-    #[cfg(feature = "profiling")] audit_seed: Option<Res<FixedAuditSeed>>,
-    q_familiars: Query<(
-        Entity,
-        &GlobalTransform,
-        &Familiar,
-        &FamiliarAiState,
-        &ActiveCommand,
-    )>,
-    q_souls: SoulEncouragementQuery,
-    soul_grid: Res<SpatialGrid>,
-    mut nearby_buf: Local<Vec<Entity>>,
-    mut decide_output: FamiliarDecideOutput,
-    #[cfg(feature = "profiling")] mut random_states: Query<&mut SimulationRandomState>,
-) {
+pub(crate) fn encouragement_decision_system(time: Res<Time>, params: EncouragementDecisionParams) {
+    let EncouragementDecisionParams {
+        #[cfg(feature = "profiling")]
+        audit_seed,
+        q_familiars,
+        q_souls,
+        soul_grid,
+        mut nearby_buf,
+        mut decide_output,
+        #[cfg(feature = "profiling")]
+        mut random_states,
+    } = params;
+
     let dt = time.delta_secs();
     #[cfg(not(feature = "profiling"))]
     let mut rng = rand::thread_rng();

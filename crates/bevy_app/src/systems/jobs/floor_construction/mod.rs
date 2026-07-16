@@ -1,5 +1,6 @@
 pub mod cancellation;
 pub mod completion;
+pub mod phase_transition;
 pub mod components {
     pub use hw_jobs::construction::{
         FloorConstructionCancelRequested, FloorConstructionPhase, FloorConstructionSite,
@@ -8,6 +9,6 @@ pub mod components {
 }
 
 pub use cancellation::*;
-pub use completion::*;
+pub(crate) use completion::*;
 pub use components::*;
-pub use hw_jobs::floor_construction_phase_transition_system;
+pub(crate) use phase_transition::*;

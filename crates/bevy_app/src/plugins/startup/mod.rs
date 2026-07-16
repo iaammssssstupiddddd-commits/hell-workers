@@ -117,6 +117,7 @@ impl Plugin for StartupPlugin {
         #[cfg(feature = "profiling")]
         {
             app.init_resource::<PerfScenarioApplied>()
+                .init_resource::<perf_scenario::PerfScenarioDriverState>()
                 .add_systems(
                     PostStartup,
                     setup_perf_scenario_if_enabled
@@ -131,6 +132,7 @@ impl Plugin for StartupPlugin {
                         PerfScenarioSet::Setup,
                         PerfScenarioSet::Apply,
                         PerfScenarioSet::InitialCheckpoint,
+                        PerfScenarioSet::Driver,
                     )
                         .chain()
                         .before(GameSystemSet::Input),
@@ -165,6 +167,10 @@ impl Plugin for StartupPlugin {
                     Update,
                     perf_scenario::start_perf_capture_system
                         .in_set(PerfScenarioSet::InitialCheckpoint),
+                )
+                .add_systems(
+                    Update,
+                    perf_scenario::drive_perf_workload_system.in_set(PerfScenarioSet::Driver),
                 )
                 .add_systems(
                     Update,

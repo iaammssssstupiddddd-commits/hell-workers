@@ -10,8 +10,7 @@ use hw_core::jobs::WorkType;
 use hw_core::logistics::ResourceType;
 use hw_core::relationships::ManagedBy;
 use hw_jobs::model::{Designation, Priority, TaskSlots};
-use hw_world::WorldMap;
-use hw_world::pathfinding::PathfindingContext;
+use hw_world::{WalkabilityConnectivityCache, WorldMap};
 
 use super::AutoGatherDesignation;
 use super::helpers::{
@@ -54,7 +53,7 @@ pub fn assign_needed_auto_designations(
     owner_infos: &HashMap<Entity, OwnerInfo>,
     candidate_sources: &HashMap<(Entity, ResourceType, usize), Vec<SourceCandidate>>,
     world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
+    connectivity_cache: &mut WalkabilityConnectivityCache,
 ) {
     let mut needed_keys: Vec<(Entity, ResourceType)> = needed_new_auto_count
         .iter()
@@ -97,7 +96,12 @@ pub fn assign_needed_auto_designations(
                     break;
                 }
 
-                if !is_reachable(owner_info.path_start, candidate.pos, world_map, pf_context) {
+                if !is_reachable(
+                    owner_info.path_start,
+                    candidate.pos,
+                    world_map,
+                    connectivity_cache,
+                ) {
                     continue;
                 }
 

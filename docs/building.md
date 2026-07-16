@@ -394,10 +394,13 @@ FloorTileBlueprint (子エンティティ、タイルごと)
 **Reinforcing → Pouring の移行**:
 - `floor_construction_phase_transition_system` が実行
 - 条件: `site.tiles_reinforced == site.tiles_total` かつ全タイルが `ReinforcedComplete`
+- `TileSiteIndex` で当該siteのタイルだけを読む。counter未達のsiteはタイルqueryを行わず、index件数・state rankが`tiles_total`と一致しない場合はrelease buildでも遷移させない
 - 処理:
   1. `site.phase` を `Pouring` に更新
   2. 全タイルの state を `WaitingMud` に更新
   3. 既存の Designation を削除（泥配送後に再付与される）
+
+Wall の `Framing → Coating` も同じindex/counter契約を使い、`spawned_wall` を含む全tileの整合が取れた一度だけ遷移する。cancel/rebuild時のtile逆引きも `TileSiteIndex` を正本として更新する。
 
 ### 9.8 Completion System
 
@@ -414,6 +417,8 @@ FloorTileBlueprint (子エンティティ、タイルごと)
   7. 建築中タイルを完成床へ置換（床として通行可能）
   8. FloorTileBlueprint エンティティを despawn
   9. FloorConstructionSite エンティティを despawn
+
+`CuringFootprint` は保存しないruntime cacheである。Curing開始時にindexed tileから一度だけ作り、Soul退避はSoul用`SpatialGrid`の近傍候補に対して開始時と0.5秒安全監査時だけ行う。tile全件やSoul全件を毎frame走査しない。
 
 
 

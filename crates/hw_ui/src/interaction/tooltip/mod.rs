@@ -18,11 +18,22 @@ pub use target::TooltipTarget;
 type TooltipTextQuery<'w, 's> =
     Query<'w, 's, &'static mut TextColor, Or<(With<TooltipHeader>, With<TooltipBody>)>>;
 
-#[derive(Default)]
 pub struct TooltipRuntimeState {
     pub target: Option<TooltipTarget>,
     pub payload: String,
     pub attach_to_anchor: bool,
+    pub(crate) inspection_refresh_timer: Timer,
+}
+
+impl Default for TooltipRuntimeState {
+    fn default() -> Self {
+        Self {
+            target: None,
+            payload: String::new(),
+            attach_to_anchor: false,
+            inspection_refresh_timer: Timer::from_seconds(0.1, TimerMode::Repeating),
+        }
+    }
 }
 
 pub trait TooltipInspectionSource {

@@ -9,7 +9,11 @@ use hw_core::familiar::Familiar;
 use hw_spatial::FamiliarSpatialGrid;
 use hw_world::SpatialGridOps;
 use hw_world::coords::{grid_to_world, world_to_grid};
-use hw_world::{PathGoalPolicy, PathfindingContext, WorldMap, find_path};
+use hw_world::{
+    PathGoalPolicy, PathSearchCaller, PathSearchResult, PathfindingContext,
+    RuntimePathSearchBudget, WorldMap, find_path_with_budget,
+};
+use std::collections::HashMap;
 
 use crate::soul_ai::helpers::gathering::GatheringSpot;
 
@@ -49,6 +53,58 @@ pub struct FamiliarThreat {
     pub entity: Entity,
     pub position: Vec2,
     pub distance: f32,
+}
+
+/// Budget を跨ぐ escape candidate search の再開位置。
+///
+/// A deferred candidate remains at `next_candidate`; candidates already
+/// evaluated (and the best route distance) are not re-run on the next escape
+/// behavior tick.
+#[derive(Default)]
+pub struct EscapePathSearchProgress {
+    entries: HashMap<Entity, EscapeCandidateContinuation>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct EscapeSearchFingerprint {
+    start_grid: (i32, i32),
+    obstacle_version: u64,
+}
+
+struct EscapeCandidateContinuation {
+    fingerprint: EscapeSearchFingerprint,
+    candidates: Vec<Entity>,
+    next_candidate: usize,
+    best: Option<(Entity, f32)>,
+}
+
+impl EscapePathSearchProgress {
+    fn reset_for(
+        &mut self,
+        entity: Entity,
+        fingerprint: EscapeSearchFingerprint,
+        candidates: Vec<Entity>,
+    ) {
+        self.entries.insert(
+            entity,
+            EscapeCandidateContinuation {
+                fingerprint,
+                candidates,
+                next_candidate: 0,
+                best: None,
+            },
+        );
+    }
+
+    fn needs_reset(&self, entity: Entity, fingerprint: EscapeSearchFingerprint) -> bool {
+        self.entries
+            .get(&entity)
+            .is_none_or(|continuation| continuation.fingerprint != fingerprint)
+    }
+
+    pub fn clear_entity(&mut self, entity: Entity) {
+        self.entries.remove(&entity);
+    }
 }
 
 /// 最も近い使い魔を検出し、指定倍率内なら返す
@@ -102,21 +158,28 @@ pub fn detect_nearest_familiar(
 fn path_distance_world(
     world_map: &WorldMap,
     context: &mut PathfindingContext,
+    budget: &mut RuntimePathSearchBudget,
     start: Vec2,
     goal: Vec2,
-) -> Option<f32> {
+) -> PathSearchResult<f32> {
     let start_grid = world_to_grid(start);
     let goal_grid = world_to_grid(goal);
-    let path = find_path(
+    let path = match find_path_with_budget(
         world_map,
         context,
+        budget,
+        PathSearchCaller::Escape,
         start_grid,
         goal_grid,
         PathGoalPolicy::RespectGoalWalkability,
-    )?;
+    ) {
+        PathSearchResult::Found(path) => path,
+        PathSearchResult::Unreachable => return PathSearchResult::Unreachable,
+        PathSearchResult::Deferred => return PathSearchResult::Deferred,
+    };
 
     if path.len() < 2 {
-        return Some(0.0);
+        return PathSearchResult::Found(0.0);
     }
 
     let mut total = 0.0;
@@ -126,69 +189,120 @@ fn path_distance_world(
         total += prev.distance(pos);
         prev = pos;
     }
-    Some(total)
+    PathSearchResult::Found(total)
+}
+
+/// `detect_reachable_familiar_within_safe_distance` の探索入力。
+pub(crate) struct EscapePathSearchInputs<'a, 'w, 's> {
+    pub escaping_soul: Entity,
+    pub progress: &'a mut EscapePathSearchProgress,
+    pub soul_pos: Vec2,
+    pub familiar_grid: &'a FamiliarSpatialGrid,
+    pub q_familiars: &'a Query<'w, 's, (&'static Transform, &'static Familiar)>,
+    pub world_map: &'a WorldMap,
+    pub pf_context: &'a mut PathfindingContext,
+    pub budget: &'a mut RuntimePathSearchBudget,
+    pub scratch: &'a mut Vec<Entity>,
 }
 
 /// 最も近い使い魔を検出し、安全距離内かつ経路距離が到達可能な場合のみ返す
-pub fn detect_reachable_familiar_within_safe_distance(
-    soul_pos: Vec2,
-    familiar_grid: &FamiliarSpatialGrid,
-    q_familiars: &Query<(&Transform, &Familiar)>,
-    world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
-    scratch: &mut Vec<Entity>,
-) -> Option<FamiliarThreat> {
-    let search_radius = TILE_SIZE * 15.0;
-    familiar_grid.get_nearby_in_radius_into(soul_pos, search_radius, scratch);
+///
+/// 候補探索中にbudgetが尽きた場合は、空間gridの候補順に依存した部分結果を採用せず、
+/// `Deferred`をそのまま呼び出し元へ返す。
+pub(crate) fn detect_reachable_familiar_within_safe_distance(
+    inputs: EscapePathSearchInputs<'_, '_, '_>,
+) -> PathSearchResult<FamiliarThreat> {
+    let EscapePathSearchInputs {
+        escaping_soul,
+        progress,
+        soul_pos,
+        familiar_grid,
+        q_familiars,
+        world_map,
+        pf_context,
+        budget,
+        scratch,
+    } = inputs;
+    let fingerprint = EscapeSearchFingerprint {
+        start_grid: world_to_grid(soul_pos),
+        obstacle_version: world_map.obstacle_version,
+    };
+    if progress.needs_reset(escaping_soul, fingerprint) {
+        let search_radius = TILE_SIZE * 15.0;
+        familiar_grid.get_nearby_in_radius_into(soul_pos, search_radius, scratch);
+        let mut candidates = scratch.clone();
+        candidates.sort_by_key(|entity| entity.to_bits());
+        progress.reset_for(escaping_soul, fingerprint, candidates);
+    }
 
-    let mut best: Option<(FamiliarThreat, f32)> = None;
+    let Some(continuation) = progress.entries.get_mut(&escaping_soul) else {
+        return PathSearchResult::Unreachable;
+    };
 
-    for &fam_entity in scratch.iter() {
+    while continuation.next_candidate < continuation.candidates.len() {
+        let fam_entity = continuation.candidates[continuation.next_candidate];
         if let Ok((transform, familiar)) = q_familiars.get(fam_entity) {
             let fam_pos = transform.translation.truncate();
             let euclid = soul_pos.distance(fam_pos);
             let safe_distance = familiar.command_radius * ESCAPE_SAFE_DISTANCE_MULTIPLIER;
 
             if euclid > safe_distance {
+                continuation.next_candidate += 1;
                 continue;
             }
 
             let skip_pathfinding_threshold =
                 safe_distance * ESCAPE_PATHFINDING_SKIP_THRESHOLD_RATIO;
             if euclid < skip_pathfinding_threshold {
-                let threat = FamiliarThreat {
-                    entity: fam_entity,
-                    position: fam_pos,
-                    distance: euclid,
-                };
-                if best.is_none_or(|(_, best_dist)| euclid < best_dist) {
-                    best = Some((threat, euclid));
+                if continuation
+                    .best
+                    .is_none_or(|(_, best_dist)| euclid < best_dist)
+                {
+                    continuation.best = Some((fam_entity, euclid));
                 }
+                continuation.next_candidate += 1;
                 continue;
             }
 
-            let Some(path_dist) = path_distance_world(world_map, pf_context, soul_pos, fam_pos)
-            else {
-                continue;
-            };
+            let path_dist =
+                match path_distance_world(world_map, pf_context, budget, soul_pos, fam_pos) {
+                    PathSearchResult::Found(path_dist) => path_dist,
+                    PathSearchResult::Unreachable => {
+                        continuation.next_candidate += 1;
+                        continue;
+                    }
+                    PathSearchResult::Deferred => return PathSearchResult::Deferred,
+                };
 
             if path_dist > safe_distance {
+                continuation.next_candidate += 1;
                 continue;
             }
 
-            let threat = FamiliarThreat {
-                entity: fam_entity,
-                position: fam_pos,
-                distance: euclid,
-            };
-
-            if best.is_none_or(|(_, best_dist)| path_dist < best_dist) {
-                best = Some((threat, path_dist));
+            if continuation
+                .best
+                .is_none_or(|(_, best_dist)| path_dist < best_dist)
+            {
+                continuation.best = Some((fam_entity, path_dist));
             }
         }
+        continuation.next_candidate += 1;
     }
 
-    best.map(|(threat, _)| threat)
+    let best = continuation.best;
+    progress.clear_entity(escaping_soul);
+    let Some((best_entity, _)) = best else {
+        return PathSearchResult::Unreachable;
+    };
+    let Ok((transform, _)) = q_familiars.get(best_entity) else {
+        return PathSearchResult::Unreachable;
+    };
+    let position = transform.translation.truncate();
+    PathSearchResult::Found(FamiliarThreat {
+        entity: best_entity,
+        position,
+        distance: soul_pos.distance(position),
+    })
 }
 
 /// 警戒圏内に使い魔がいるかを判定

@@ -7,6 +7,7 @@
 use bevy::prelude::{Component, Resource};
 use rand::rngs::{StdRng, ThreadRng};
 use rand::{Error, RngCore, SeedableRng};
+use std::collections::BTreeMap;
 
 /// 固定 step 決定性監査でのみ app に挿入する seed。
 #[derive(Resource, Debug, Clone, Copy)]
@@ -16,15 +17,22 @@ pub struct FixedAuditSeed(pub u64);
 ///
 /// 保存対象ではない。`FixedAuditSeed` と共に存在する場合だけ決定的な
 /// 乱数列を選び、通常プレイでは `SimulationRng::Thread` にフォールバックする。
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone)]
 pub struct SimulationRandomState {
     key: u64,
-    cursor: u64,
+    /// Streamごとの呼び出し回数。
+    ///
+    /// 異なる stream の条件分岐が後続の乱数列をずらさないよう、actor全体で
+    /// 一つの cursor を共有しない。`BTreeMap` は監査recordのhashも安定させる。
+    stream_cursors: BTreeMap<u64, u64>,
 }
 
 impl SimulationRandomState {
     pub const fn new(key: u64) -> Self {
-        Self { key, cursor: 0 }
+        Self {
+            key,
+            stream_cursors: BTreeMap::new(),
+        }
     }
 
     /// 固定 step fixture 内で actor を対応付けるための安定キー。
@@ -33,14 +41,28 @@ impl SimulationRandomState {
     }
 
     #[cfg(test)]
-    const fn cursor(&self) -> u64 {
-        self.cursor
+    fn cursor(&self) -> u64 {
+        self.stream_cursors.values().copied().sum()
+    }
+
+    /// 固定 step auditで乱数消費の分岐を検出するための現在位置。
+    ///
+    /// 通常実行では不要な診断値なので、profiling featureでのみ公開する。
+    #[cfg(feature = "profiling")]
+    pub fn audit_cursor(&self) -> u64 {
+        let mut checksum = 0xcbf2_9ce4_8422_2325u64;
+        for (&stream, &cursor) in &self.stream_cursors {
+            checksum = fnv1a(checksum, stream);
+            checksum = fnv1a(checksum, cursor);
+        }
+        checksum
     }
 
     fn next_seed(&mut self, master_seed: u64, stream: u64) -> u64 {
-        let cursor = self.cursor;
-        self.cursor = self.cursor.wrapping_add(1);
-        splitmix64(master_seed ^ stream ^ self.key.rotate_left(17) ^ cursor.rotate_left(41))
+        let cursor = self.stream_cursors.entry(stream).or_default();
+        let current = *cursor;
+        *cursor = cursor.wrapping_add(1);
+        splitmix64(master_seed ^ stream ^ self.key.rotate_left(17) ^ current.rotate_left(41))
     }
 }
 
@@ -102,6 +124,11 @@ const fn splitmix64(mut value: u64) -> u64 {
     value ^ (value >> 31)
 }
 
+#[cfg(feature = "profiling")]
+const fn fnv1a(checksum: u64, value: u64) -> u64 {
+    (checksum ^ value).wrapping_mul(0x0000_0100_0000_01b3)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{FixedAuditSeed, SimulationRandomState, SimulationRng};
@@ -123,6 +150,29 @@ mod tests {
         assert_ne!(
             SimulationRng::for_actor(Some(&seed), Some(&mut first), 0x101).next_u64(),
             first_value
+        );
+    }
+
+    #[test]
+    fn one_stream_does_not_shift_another_stream() {
+        let seed = FixedAuditSeed(20260712);
+        let mut with_intermediate_stream = SimulationRandomState::new(7);
+        let mut without_intermediate_stream = SimulationRandomState::new(7);
+
+        let _ = SimulationRng::for_actor(Some(&seed), Some(&mut with_intermediate_stream), 0x101)
+            .next_u64();
+        let _ = SimulationRng::for_actor(Some(&seed), Some(&mut with_intermediate_stream), 0x202)
+            .next_u64();
+
+        let _ =
+            SimulationRng::for_actor(Some(&seed), Some(&mut without_intermediate_stream), 0x101)
+                .next_u64();
+
+        assert_eq!(
+            SimulationRng::for_actor(Some(&seed), Some(&mut with_intermediate_stream), 0x101)
+                .next_u64(),
+            SimulationRng::for_actor(Some(&seed), Some(&mut without_intermediate_stream), 0x101)
+                .next_u64(),
         );
     }
 }

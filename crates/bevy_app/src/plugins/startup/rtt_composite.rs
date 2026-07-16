@@ -20,7 +20,7 @@ use hw_core::constants::{
 #[derive(Component)]
 pub struct RttCompositeSprite;
 
-#[derive(Clone, Copy, Debug, ShaderType)]
+#[derive(Clone, Copy, Debug, PartialEq, ShaderType)]
 pub struct RttCompositeParams {
     pub pixel_size: Vec2,
     pub mask_radius_px: f32,
@@ -94,7 +94,7 @@ pub fn spawn_rtt_composite_sprite(
 /// RtT の出力先と合成マテリアルの参照を同期する。
 pub fn sync_rtt_output_bindings(
     runtime: Res<RttRuntime>,
-    q_window: Query<&Window, With<PrimaryWindow>>,
+    q_window: Query<Ref<Window>, With<PrimaryWindow>>,
     mut main_camera_targets: Query<
         &mut RenderTarget,
         (With<Camera3dRtt>, Without<Camera3dSoulMaskRtt>),
@@ -109,14 +109,23 @@ pub fn sync_rtt_output_bindings(
     >,
     mut materials: ResMut<Assets<RttCompositeMaterial>>,
 ) {
-    let logical_size = q_window.single().ok().map(composite_logical_size);
+    let logical_size = q_window
+        .single()
+        .ok()
+        .map(|window| composite_logical_size(window.as_ref()));
 
-    // メッシュスケールはウィンドウリサイズで常時追従（RttRuntime 変化とは独立）
+    // メッシュスケールはウィンドウリサイズで追従する。値比較を先に行い、
+    // 静止 camera / window の root Transform を Changed にしない。
     for (_, mut tf) in quads.iter_mut() {
         if let Some(size) = logical_size {
-            tf.scale = size.extend(1.0);
+            let next_scale = size.extend(1.0);
+            if tf.scale != next_scale {
+                tf.scale = next_scale;
+            }
         }
-        tf.translation.z = Z_RTT_COMPOSITE;
+        if tf.translation.z != Z_RTT_COMPOSITE {
+            tf.translation.z = Z_RTT_COMPOSITE;
+        }
     }
 
     // テクスチャ参照とカメラ RenderTarget の差し替えは RttRuntime が変化したときだけ行う
@@ -142,7 +151,7 @@ pub fn sync_rtt_output_bindings(
 /// Soul mask の有効/無効に合わせて composite material のマスク半径を更新する。
 pub fn sync_rtt_composite_perf_params_system(
     perf_toggles: Res<crate::RenderPerfToggles>,
-    q_camera: Query<(&Transform, &Projection), With<Camera3dRtt>>,
+    q_camera: Query<(Ref<Transform>, Ref<Projection>), With<Camera3dRtt>>,
     quads: Query<&MeshMaterial2d<RttCompositeMaterial>, With<RttCompositeSprite>>,
     mut materials: ResMut<Assets<RttCompositeMaterial>>,
 ) {
@@ -150,10 +159,12 @@ pub fn sync_rtt_composite_perf_params_system(
         return;
     };
 
-    let shadow_offset_uv = composite_shadow_offset_uv(camera_transform, projection);
-    if !perf_toggles.is_changed() && shadow_offset_uv.is_none() {
+    if !perf_toggles.is_changed() && !camera_transform.is_changed() && !projection.is_changed() {
         return;
     }
+
+    let shadow_offset_uv =
+        composite_shadow_offset_uv(camera_transform.as_ref(), projection.as_ref());
 
     let next_radius = if perf_toggles.soul_mask_enabled {
         2.25
@@ -163,9 +174,13 @@ pub fn sync_rtt_composite_perf_params_system(
 
     for material_handle in quads.iter() {
         if let Some(mut material) = materials.get_mut(&material_handle.0) {
-            material.params.mask_radius_px = next_radius;
+            let mut next_params = material.params;
+            next_params.mask_radius_px = next_radius;
             if let Some(offset_uv) = shadow_offset_uv {
-                material.params.shadow_offset_uv = offset_uv;
+                next_params.shadow_offset_uv = offset_uv;
+            }
+            if material.params != next_params {
+                material.params = next_params;
             }
         }
     }

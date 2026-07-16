@@ -6,15 +6,15 @@ mod material_display;
 mod progress_bar;
 mod worker_indicator;
 
-use bevy::prelude::*;
+use bevy::prelude::{ChildOf, *};
 
 use crate::animations::{PulseAnimation, update_pulse_animation};
 use hw_core::visual_mirror::construction::BlueprintVisualState;
 
 pub use components::{
-    BlueprintProgressBars, BlueprintState, BlueprintVisual, BuildingBounceEffect, CompletionText,
-    DeliveryPopup, HasWorkerIndicator, MaterialCounter, MaterialIcon, ProgressBar,
-    WorkerHammerIcon,
+    BlueprintProgressBars, BlueprintPulseOverlay, BlueprintPulseOverlayChild, BlueprintState,
+    BlueprintVisual, BuildingBounceEffect, CompletionText, DeliveryPopup, HasWorkerIndicator,
+    MaterialCounter, MaterialIcon, ProgressBar, WorkerHammerIcon,
 };
 pub use effects::{
     building_bounce_animation_system, material_delivery_vfx_system, update_completion_text_system,
@@ -155,23 +155,97 @@ pub fn update_blueprint_visual_system(mut q_blueprints: BlueprintVisualUpdateQue
 
 pub fn blueprint_pulse_animation_system(
     time: Res<Time>,
-    mut q_blueprints: Query<(&mut BlueprintVisual, &mut Sprite)>,
+    mut commands: Commands,
+    mut q_blueprints: Query<
+        (Entity, &mut BlueprintVisual, &mut Sprite),
+        Without<BlueprintPulseOverlayChild>,
+    >,
+    mut q_overlays: Query<&mut Sprite, With<BlueprintPulseOverlayChild>>,
 ) {
-    for (mut visual, mut sprite) in q_blueprints.iter_mut() {
+    for (entity, mut visual, mut sprite) in q_blueprints.iter_mut() {
         if visual.state == BlueprintState::Building {
-            if visual.pulse_animation.is_none() {
-                visual.pulse_animation = Some(PulseAnimation::default());
+            let overlay = match visual.pulse_overlay {
+                Some(overlay) if q_overlays.get_mut(overlay.entity).is_ok() => overlay,
+                _ => {
+                    let overlay_entity = commands
+                        .spawn((
+                            Sprite {
+                                image: sprite.image.clone(),
+                                color: sprite.color,
+                                ..default()
+                            },
+                            Transform::default(),
+                            BlueprintPulseOverlayChild,
+                            ChildOf(entity),
+                        ))
+                        .id();
+                    let overlay = BlueprintPulseOverlay {
+                        entity: overlay_entity,
+                        base_color: sprite.color,
+                    };
+                    visual.pulse_overlay = Some(overlay);
+                    visual.pulse_animation = Some(PulseAnimation::default());
+                    // The child becomes the displayed blueprint while building.
+                    // This write happens only at the visual-state transition.
+                    sprite.color = sprite.color.with_alpha(0.0);
+                    overlay
+                }
+            };
+
+            // `update_blueprint_visual_system` runs before this system. A
+            // Changed visual state may have refreshed the static root Sprite,
+            // so transfer that new base to the child once and hide the root
+            // again. Steady-state frames leave the root untouched.
+            if sprite.color.alpha() > 0.0 {
+                if let Ok(mut overlay_sprite) = q_overlays.get_mut(overlay.entity) {
+                    overlay_sprite.image = sprite.image.clone();
+                    overlay_sprite.color = sprite.color;
+                }
+                visual.pulse_overlay = Some(BlueprintPulseOverlay {
+                    base_color: sprite.color,
+                    ..overlay
+                });
+                sprite.color = sprite.color.with_alpha(0.0);
             }
 
             if let Some(ref mut pulse) = visual.pulse_animation {
                 let pulse_alpha = update_pulse_animation(&time, pulse);
-                sprite.color = sprite.color.with_alpha(pulse_alpha);
+                if let Ok(mut overlay_sprite) = q_overlays.get_mut(overlay.entity) {
+                    let next_color = visual
+                        .pulse_overlay
+                        .expect("building blueprint keeps its pulse overlay")
+                        .base_color
+                        .with_alpha(pulse_alpha);
+                    if overlay_sprite.color != next_color {
+                        overlay_sprite.color = next_color;
+                    }
+                }
             }
         } else {
-            if visual.pulse_animation.is_some() {
-                visual.pulse_animation = None;
+            if let Some(overlay) = visual.pulse_overlay.take() {
+                commands.entity(overlay.entity).despawn();
             }
+            visual.pulse_animation = None;
         }
+    }
+}
+
+/// `BlueprintVisualState` が外れた root の runtime-only overlay を回収する。
+/// Parent despawn の場合は `ChildOf` cascade が担当するが、load rehydrate のように
+/// root を残して mirror だけ差し替える経路もここで stale Entity link を残さない。
+pub fn cleanup_blueprint_pulse_overlays_system(
+    mut commands: Commands,
+    mut removed_blueprints: RemovedComponents<BlueprintVisualState>,
+    mut q_blueprints: Query<&mut BlueprintVisual>,
+) {
+    for entity in removed_blueprints.read() {
+        let Ok(mut visual) = q_blueprints.get_mut(entity) else {
+            continue;
+        };
+        if let Some(overlay) = visual.pulse_overlay.take() {
+            commands.entity(overlay.entity).despawn();
+        }
+        visual.pulse_animation = None;
     }
 }
 

@@ -2,12 +2,13 @@
 
 use crate::soul_ai::execute::task_execution::types::HaulWithWheelbarrowData;
 use crate::soul_ai::execute::task_execution::{
-    common::{is_near_target, update_destination_to_adjacent},
+    common::{is_near_target, update_task_destination_to_adjacent},
     context::{TaskExecutionContext, TaskHandlerControl},
     transport_common::{reservation, wheelbarrow as wheelbarrow_common},
 };
 use bevy::prelude::*;
 use hw_logistics::Wheelbarrow;
+use hw_world::PathSearchResult;
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,
@@ -44,22 +45,17 @@ pub fn handle(
         })
         .unwrap_or(soul_pos);
 
-    let reachable = update_destination_to_adjacent(
-        ctx.dest,
-        parking_pos,
-        ctx.path,
-        soul_pos,
-        ctx.env.world_map,
-        ctx.pf_context,
-    );
-
-    if !reachable {
-        reservation::release_source(ctx, data.wheelbarrow, 1);
-        debug!(
-            "WB_HAUL: Soul {:?} returned wheelbarrow {:?} (unreachable, parked here)",
-            ctx.soul_entity, data.wheelbarrow
-        );
-        return wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, soul_pos);
+    match update_task_destination_to_adjacent(ctx, parking_pos) {
+        PathSearchResult::Found(()) => {}
+        PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+        PathSearchResult::Unreachable => {
+            reservation::release_source(ctx, data.wheelbarrow, 1);
+            debug!(
+                "WB_HAUL: Soul {:?} returned wheelbarrow {:?} (unreachable, parked here)",
+                ctx.soul_entity, data.wheelbarrow
+            );
+            return wheelbarrow_common::complete_wheelbarrow_task(commands, ctx, &data, soul_pos);
+        }
     }
 
     if is_near_target(soul_pos, parking_pos) {

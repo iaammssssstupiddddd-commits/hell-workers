@@ -6,16 +6,21 @@ use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_core::events::{IdleBehaviorOperation, IdleBehaviorRequest};
 use hw_core::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
-use hw_core::relationships::GatheringParticipants;
+use hw_core::relationships::{GatheringParticipants, RestAreaReservedFor, RestingIn, WorkingOn};
 #[cfg(feature = "profiling")]
 use hw_core::simulation_rng::{FixedAuditSeed, SimulationRng};
-use hw_core::soul::IdleBehavior;
+use hw_core::soul::{IdleBehavior, IdleState, RestAreaCooldown};
+use hw_jobs::ActiveTaskIdentity;
 use hw_spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
 use hw_world::WorldMap;
 
 #[cfg(feature = "profiling")]
 use crate::soul_ai::helpers::query_types::IdleDecisionRandomStateQuery;
 use crate::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
+use crate::soul_ai::helpers::query_types::NeedsIdleDecision;
+use crate::soul_ai::update::slow_simulation::SlowSimulationClock;
+#[cfg(feature = "profiling")]
+use crate::soul_ai::update::slow_simulation::SlowSimulationPerfMetrics;
 
 use super::rest_area::{RestAreasQuery, find_nearest_available_rest_area};
 use super::{exhausted_gathering, motion_dispatch, rest_decision, task_override, transitions};
@@ -51,6 +56,92 @@ pub(crate) struct IdleGatheringQueries<'w, 's> {
     soul_grid: Res<'w, SpatialGrid>,
 }
 
+type IdleDecisionTaskStartQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    (
+        With<IdleState>,
+        Or<(Added<WorkingOn>, Added<ActiveTaskIdentity>)>,
+    ),
+>;
+
+type IdleDecisionRestChangedQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    (
+        With<IdleState>,
+        Or<(
+            Added<RestingIn>,
+            Added<RestAreaReservedFor>,
+            Added<RestAreaCooldown>,
+        )>,
+    ),
+>;
+
+#[derive(SystemParam)]
+pub(crate) struct IdleDecisionWakeParams<'w, 's> {
+    q_initial_idle: Query<'w, 's, Entity, Added<IdleState>>,
+    q_task_started: IdleDecisionTaskStartQuery<'w, 's>,
+    q_rest_changed: IdleDecisionRestChangedQuery<'w, 's>,
+    q_idle: Query<'w, 's, (), With<IdleState>>,
+    removed_working: RemovedComponents<'w, 's, WorkingOn>,
+    removed_task_identity: RemovedComponents<'w, 's, ActiveTaskIdentity>,
+    removed_resting: RemovedComponents<'w, 's, RestingIn>,
+    removed_reserved: RemovedComponents<'w, 's, RestAreaReservedFor>,
+    removed_cooldown: RemovedComponents<'w, 's, RestAreaCooldown>,
+}
+
+#[cfg(feature = "profiling")]
+#[derive(SystemParam)]
+pub(crate) struct IdleDecisionProfiling<'w, 's> {
+    audit_seed: Option<Res<'w, FixedAuditSeed>>,
+    random_states: IdleDecisionRandomStateQuery<'w, 's>,
+    metrics: ResMut<'w, SlowSimulationPerfMetrics>,
+}
+
+/// Marks only decision-relevant state transitions for an immediate `dt = 0`
+/// reevaluation. Timer writes to `IdleState` deliberately do not wake this
+/// path; cadence ticks own normal timer progression.
+pub(crate) fn mark_needs_idle_decision_system(
+    mut commands: Commands,
+    mut wake: IdleDecisionWakeParams,
+) {
+    for entity in wake
+        .q_initial_idle
+        .iter()
+        .chain(wake.q_task_started.iter())
+        .chain(wake.q_rest_changed.iter())
+    {
+        commands.entity(entity).insert(NeedsIdleDecision);
+    }
+    for entity in wake
+        .removed_working
+        .read()
+        .chain(wake.removed_task_identity.read())
+        .chain(wake.removed_resting.read())
+        .chain(wake.removed_reserved.read())
+        .chain(wake.removed_cooldown.read())
+    {
+        if wake.q_idle.get(entity).is_ok() {
+            commands.entity(entity).insert(NeedsIdleDecision);
+        }
+    }
+}
+
+/// Wake markers are one-frame notifications. Update→Decide `ApplyDeferred`
+/// makes them visible to the current decision pass; this cleanup runs after it
+/// so they cannot turn into a steady-state per-frame gate.
+pub(crate) fn clear_idle_decision_wake_system(
+    mut commands: Commands,
+    q_woken: Query<Entity, With<NeedsIdleDecision>>,
+) {
+    for entity in q_woken.iter() {
+        commands.entity(entity).remove::<NeedsIdleDecision>();
+    }
+}
+
 /// アイドル行動の決定システム (Decide Phase)
 ///
 /// 怠惰行動のAIロジック。やる気が低い魂は怠惰な行動をする。
@@ -60,16 +151,24 @@ pub(crate) struct IdleGatheringQueries<'w, 's> {
 /// IdleBehaviorRequestの発行を行う。実際のエンティティ操作は
 /// idle_behavior_apply_systemで行われる。
 pub(crate) fn idle_behavior_decision_system(
-    time: Res<Time>,
-    #[cfg(feature = "profiling")] audit_seed: Option<Res<FixedAuditSeed>>,
+    clock: Res<SlowSimulationClock>,
     mut request_writer: MessageWriter<IdleBehaviorRequest>,
     world_map: Res<WorldMap>,
     mut local: IdleLocalState,
     gq: IdleGatheringQueries,
     mut query: IdleDecisionSoulQuery,
-    #[cfg(feature = "profiling")] mut random_states: IdleDecisionRandomStateQuery,
+    #[cfg(feature = "profiling")] profiling: IdleDecisionProfiling,
 ) {
-    let dt = time.delta_secs();
+    #[cfg(feature = "profiling")]
+    let IdleDecisionProfiling {
+        audit_seed,
+        mut random_states,
+        mut metrics,
+    } = profiling;
+
+    let periodic_steps = clock.steps_this_frame();
+    let periodic_due = periodic_steps > 0;
+    let dt = clock.step_secs() * f32::from(periodic_steps);
     local.pending_rest_reservations.clear();
 
     for (
@@ -84,10 +183,35 @@ pub(crate) fn idle_behavior_decision_system(
         resting_in,
         rest_reserved_for,
         rest_cooldown,
+        wake_up,
     ) in query.iter_mut()
     {
+        if !periodic_due && wake_up.is_none() {
+            continue;
+        }
         #[cfg(feature = "profiling")]
         let mut random_state = random_states.get_mut(entity).ok();
+
+        // A task boundary is a cheap early rejection. Do it before resolving
+        // a gathering target or performing any spatial lookup.
+        if task_override::process_task_override(
+            entity,
+            task,
+            participating_in,
+            resting_in,
+            rest_reserved_for,
+            &mut idle,
+            &mut request_writer,
+        ) {
+            continue;
+        }
+
+        #[cfg(feature = "profiling")]
+        {
+            metrics.idle_decisions = metrics.idle_decisions.saturating_add(1);
+            metrics.idle_spatial_target_lookups =
+                metrics.idle_spatial_target_lookups.saturating_add(1);
+        }
 
         let (gathering_center, target_spot_entity) = resolve_gathering_target(
             participating_in,
@@ -108,18 +232,6 @@ pub(crate) fn idle_behavior_decision_system(
             &mut idle,
             &mut dest,
             &mut path,
-            &mut request_writer,
-        ) {
-            continue;
-        }
-
-        if task_override::process_task_override(
-            entity,
-            task,
-            participating_in,
-            resting_in,
-            rest_reserved_for,
-            &mut idle,
             &mut request_writer,
         ) {
             continue;

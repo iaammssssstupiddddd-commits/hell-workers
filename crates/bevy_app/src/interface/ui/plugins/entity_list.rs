@@ -1,5 +1,7 @@
 use crate::interface::ui::interaction::handle_ui_intent;
-use crate::interface::ui::list::change_detection::detect_entity_list_changes;
+use crate::interface::ui::list::change_detection::{
+    advance_entity_list_value_cadence_system, detect_entity_list_changes,
+};
 use crate::interface::ui::list::dirty::EntityListDirty;
 use crate::interface::ui::{
     DragState, EntityListMinimizeState, EntityListNodeIndex, EntityListResizeState,
@@ -51,7 +53,12 @@ fn register_ui_entity_list_plugin_systems(app: &mut App) {
     )
     .add_systems(
         Update,
-        detect_entity_list_changes.in_set(GameSystemSet::Interface),
+        (
+            detect_entity_list_changes,
+            advance_entity_list_value_cadence_system,
+        )
+            .chain()
+            .in_set(GameSystemSet::Interface),
     )
     .add_systems(
         Update,
@@ -60,6 +67,7 @@ fn register_ui_entity_list_plugin_systems(app: &mut App) {
                 dirty.needs_structure_sync() || dirty.needs_value_sync_only()
             })
             .after(detect_entity_list_changes)
+            .after(advance_entity_list_value_cadence_system)
             .in_set(GameSystemSet::Interface),
     )
     .add_systems(
@@ -74,6 +82,8 @@ fn register_ui_entity_list_plugin_systems(app: &mut App) {
         sync_entity_list_value_rows_system
             .run_if(|dirty: Res<EntityListDirty>| dirty.needs_value_sync_only())
             .after(detect_entity_list_changes)
+            .after(advance_entity_list_value_cadence_system)
+            .after(build_entity_list_view_model_system)
             .in_set(GameSystemSet::Interface),
     )
     .add_systems(

@@ -33,20 +33,24 @@ pub fn handle_build_task(
                     return ctx.abort_retryable(commands, "build waiting for materials");
                 }
 
-                let reachable = update_destination_to_blueprint(
-                    ctx.dest,
+                match update_destination_to_blueprint(
+                    &mut ctx.dest,
                     &bp.occupied_grids,
-                    ctx.path,
+                    &mut ctx.path,
                     soul_pos,
                     ctx.env.world_map,
                     ctx.pf_context,
-                );
-                if !reachable {
-                    debug!(
-                        "BUILD: Soul {:?} cannot reach blueprint {:?}, canceling",
-                        ctx.soul_entity, blueprint_entity
-                    );
-                    return ctx.abort_retryable(commands, "build blueprint unreachable");
+                    ctx.path_budget,
+                ) {
+                    PathSearchResult::Found(()) => {}
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        debug!(
+                            "BUILD: Soul {:?} cannot reach blueprint {:?}, canceling",
+                            ctx.soul_entity, blueprint_entity
+                        );
+                        return ctx.abort_retryable(commands, "build blueprint unreachable");
+                    }
                 }
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {

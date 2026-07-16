@@ -3,12 +3,42 @@ use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
 
+pub(super) const PATHFINDING_DIRECTIONS: [(i32, i32); 8] = [
+    (0, 1),
+    (0, -1),
+    (1, 0),
+    (-1, 0),
+    (1, 1),
+    (1, -1),
+    (-1, 1),
+    (-1, -1),
+];
+
 /// `hw_world` が要求する最小限の通行判定 API。
 pub trait PathWorld {
     fn pos_to_idx(&self, x: i32, y: i32) -> Option<usize>;
     fn idx_to_pos(&self, idx: usize) -> GridPos;
     fn is_walkable(&self, x: i32, y: i32) -> bool;
     fn get_door_cost(&self, x: i32, y: i32) -> i32;
+}
+
+/// Returns whether a one-cell diagonal step preserves the pathfinding
+/// corner-cutting rule.
+///
+/// Cardinal steps always pass. A diagonal step requires both orthogonal side
+/// cells to be walkable, matching the A* traversal contract.
+pub(super) fn can_cross_diagonal_move(
+    world_map: &impl PathWorld,
+    from: (i32, i32),
+    to: (i32, i32),
+) -> bool {
+    let dx = to.0 - from.0;
+    let dy = to.1 - from.1;
+    if dx.abs() != 1 || dy.abs() != 1 {
+        return true;
+    }
+
+    world_map.is_walkable(from.0 + dx, from.1) && world_map.is_walkable(from.0, from.1 + dy)
 }
 
 /// 直線移動のコスト
@@ -24,7 +54,32 @@ pub struct PathNode {
 
 impl Ord for PathNode {
     fn cmp(&self, other: &Self) -> Ordering {
-        other.f_cost.cmp(&self.f_cost)
+        // `BinaryHeap` is a max-heap, so reverse both keys.  `idx` must take
+        // part in the order: Eq/Ord disagreeing for equal f-cost nodes leaves
+        // A* pop order unspecified and can produce different canonical paths.
+        other
+            .f_cost
+            .cmp(&self.f_cost)
+            .then_with(|| other.idx.cmp(&self.idx))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PathNode;
+    use std::collections::BinaryHeap;
+
+    #[test]
+    fn equal_cost_nodes_pop_in_index_order() {
+        let mut heap = BinaryHeap::from([
+            PathNode { idx: 9, f_cost: 10 },
+            PathNode { idx: 2, f_cost: 10 },
+            PathNode { idx: 5, f_cost: 10 },
+        ]);
+
+        assert_eq!(heap.pop().map(|node| node.idx), Some(2));
+        assert_eq!(heap.pop().map(|node| node.idx), Some(5));
+        assert_eq!(heap.pop().map(|node| node.idx), Some(9));
     }
 }
 
@@ -40,6 +95,10 @@ pub struct PathfindingContext {
     pub open_set: BinaryHeap<PathNode>,
     visited: Vec<usize>,
     pub target_grid_set: HashSet<(i32, i32)>,
+    /// Nodes popped from the open set by the most recent core A* search.
+    /// This is diagnostic state rather than a hard cap: resumable search is
+    /// deliberately outside the current runtime contract.
+    expanded_nodes: u64,
 }
 
 impl Default for PathfindingContext {
@@ -51,6 +110,7 @@ impl Default for PathfindingContext {
             open_set: BinaryHeap::with_capacity(size / 4),
             visited: Vec::with_capacity(512),
             target_grid_set: HashSet::with_capacity(64),
+            expanded_nodes: 0,
         }
     }
 }
@@ -63,6 +123,11 @@ impl PathfindingContext {
         }
         self.visited.clear();
         self.open_set.clear();
+        self.expanded_nodes = 0;
+    }
+
+    pub const fn expanded_nodes(&self) -> u64 {
+        self.expanded_nodes
     }
 }
 
@@ -139,17 +204,6 @@ where
         f_cost: heuristic(start_idx),
     });
 
-    let directions = [
-        (0, 1),
-        (0, -1),
-        (1, 0),
-        (-1, 0),
-        (1, 1),
-        (1, -1),
-        (-1, 1),
-        (-1, -1),
-    ];
-
     while let Some(current) = context.open_set.pop() {
         let recorded_g = context.g_scores[current.idx];
         if recorded_g == i32::MAX {
@@ -160,6 +214,7 @@ where
             continue;
         }
 
+        context.expanded_nodes = context.expanded_nodes.saturating_add(1);
         let curr_pos = world_map.idx_to_pos(current.idx);
         if is_goal_reached(curr_pos) {
             return Some(build_path_from_came_from(
@@ -170,7 +225,7 @@ where
             ));
         }
 
-        for (dx, dy) in &directions {
+        for (dx, dy) in &PATHFINDING_DIRECTIONS {
             let nx = curr_pos.0 + dx;
             let ny = curr_pos.1 + dy;
 

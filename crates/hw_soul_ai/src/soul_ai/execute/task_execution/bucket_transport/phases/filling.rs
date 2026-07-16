@@ -1,6 +1,8 @@
 //! Filling phase: バケツに水を詰める（川から汲む or タンクから取り出す）
 
-use crate::soul_ai::execute::task_execution::common::update_destination_to_adjacent;
+use crate::soul_ai::execute::task_execution::common::{
+    PathSearchResult, update_bucket_destination_to_adjacent,
+};
 use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use crate::soul_ai::execute::task_execution::transport_common::reservation;
 use crate::soul_ai::execute::task_execution::types::{
@@ -11,7 +13,7 @@ use bevy::prelude::*;
 use hw_core::constants::{BUCKET_CAPACITY, TILE_SIZE};
 use hw_logistics::{ResourceItem, ResourceType};
 
-use super::super::abort;
+use super::super::{abort, routing};
 
 pub fn handle(
     ctx: &mut TaskExecutionContext,
@@ -42,36 +44,36 @@ pub fn handle(
                     }
                 };
 
-                commands.entity(data.bucket).try_insert((
-                    ResourceItem(ResourceType::BucketWater),
-                    Sprite {
-                        image: ctx.env.soul_handles.bucket_water.clone(),
-                        custom_size: Some(Vec2::splat(TILE_SIZE * 0.6)),
-                        ..default()
-                    },
-                ));
-
-                if let Ok((tank_transform, _, _, _, _, _, _)) =
+                let Ok((tank_transform, _, _, _, _, _, _)) =
                     ctx.queries.designation.targets.get(tank_entity)
-                {
-                    let tank_pos = tank_transform.translation.truncate();
-                    if super::super::routing::set_path_to_tank_boundary(
-                        ctx,
-                        ctx.env.world_map,
-                        tank_pos,
-                        data,
-                        BucketTransportPhase::GoingToDestination,
-                    )
-                    .is_some()
-                    {
+                else {
+                    return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
+                };
+                let tank_pos = tank_transform.translation.truncate();
+                match routing::set_path_to_tank_boundary(
+                    ctx,
+                    ctx.env.world_map,
+                    tank_pos,
+                    data,
+                    BucketTransportPhase::GoingToDestination,
+                ) {
+                    PathSearchResult::Found(()) => {
+                        commands.entity(data.bucket).try_insert((
+                            ResourceItem(ResourceType::BucketWater),
+                            Sprite {
+                                image: ctx.env.soul_handles.bucket_water.clone(),
+                                custom_size: Some(Vec2::splat(TILE_SIZE * 0.6)),
+                                ..default()
+                            },
+                        ));
                         commands
                             .entity(data.bucket)
                             .try_insert(hw_core::relationships::DeliveringTo(tank_entity));
-                    } else {
+                    }
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
                         return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                     }
-                } else {
-                    return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
                 }
             } else {
                 *ctx.task = AssignedTask::BucketTransport(BucketTransportData {
@@ -98,6 +100,30 @@ pub fn handle(
             }
 
             if !found_waters.is_empty() {
+                let mixer_entity = match data.destination {
+                    BucketTransportDestination::Mixer(m) => m,
+                    _ => {
+                        return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
+                    }
+                };
+
+                let Ok((mixer_transform, _, _)) = ctx.queries.storage.mixers.get(mixer_entity)
+                else {
+                    return abort::abort_and_drop_bucket_mixer(
+                        commands,
+                        ctx,
+                        data.bucket,
+                        tank,
+                        mixer_entity,
+                        soul_pos,
+                    );
+                };
+                let mixer_pos = mixer_transform.translation.truncate();
+                let route = update_bucket_destination_to_adjacent(ctx, mixer_pos);
+                if matches!(route, PathSearchResult::Deferred) {
+                    return TaskHandlerControl::Continue;
+                }
+
                 let take_amount = found_waters.len() as u32;
                 for water_entity in found_waters {
                     commands.entity(water_entity).despawn();
@@ -115,48 +141,18 @@ pub fn handle(
                         ..default()
                     },
                 ));
-
-                let mixer_entity = match data.destination {
-                    BucketTransportDestination::Mixer(m) => m,
-                    _ => {
-                        return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
-                    }
-                };
-
-                if let Ok(mixer_data) = ctx.queries.storage.mixers.get(mixer_entity) {
-                    let (mixer_transform, _, _) = mixer_data;
-                    let mixer_pos = mixer_transform.translation.truncate();
-
-                    *ctx.task = AssignedTask::BucketTransport(BucketTransportData {
-                        phase: BucketTransportPhase::GoingToDestination,
-                        amount: take_amount,
-                        source: BucketTransportSource::Tank {
-                            tank,
-                            needs_fill: true,
-                        },
-                        ..data.clone()
-                    });
-                    commands
-                        .entity(data.bucket)
-                        .try_insert(hw_core::relationships::DeliveringTo(mixer_entity));
-                    update_destination_to_adjacent(
-                        ctx.dest,
-                        mixer_pos,
-                        ctx.path,
-                        soul_pos,
-                        ctx.env.world_map,
-                        ctx.pf_context,
-                    );
-                } else {
-                    return abort::abort_and_drop_bucket_mixer(
-                        commands,
-                        ctx,
-                        data.bucket,
+                *ctx.task = AssignedTask::BucketTransport(BucketTransportData {
+                    phase: BucketTransportPhase::GoingToDestination,
+                    amount: take_amount,
+                    source: BucketTransportSource::Tank {
                         tank,
-                        mixer_entity,
-                        soul_pos,
-                    );
-                }
+                        needs_fill: true,
+                    },
+                    ..data.clone()
+                });
+                commands
+                    .entity(data.bucket)
+                    .try_insert(hw_core::relationships::DeliveringTo(mixer_entity));
             } else {
                 // 水が尽きた
                 let mixer = match data.destination {

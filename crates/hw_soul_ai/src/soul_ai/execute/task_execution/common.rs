@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use hw_core::soul::Path;
 use hw_logistics::{Inventory, Stockpile};
 
+pub use hw_world::PathSearchResult;
 use hw_world::WorldMap;
 
 // pure helper を hw_ai から re-export
@@ -15,7 +16,10 @@ pub use crate::soul_ai::helpers::navigation::{
 };
 
 // パスキャッシュ・経路設定ヘルパーを re-export
-pub use super::path_cache::{update_destination_to_adjacent, update_destination_to_blueprint};
+pub use super::path_cache::{
+    update_bucket_destination_to_adjacent, update_destination_to_blueprint,
+    update_task_destination_to_adjacent,
+};
 
 /// タスクとパスをクリア（終了 API 内部専用）
 pub(super) fn clear_task_and_path(task: &mut AssignedTask, path: &mut Path) {
@@ -121,7 +125,7 @@ pub fn try_pickup_item(
     if !can_pickup_item(soul_pos, item_pos) {
         return Err(ctx.abort_retryable(commands, "cannot pickup item in range"));
     }
-    pickup_item(commands, soul_entity, item_entity, ctx.inventory);
+    pickup_item(commands, soul_entity, item_entity, &mut ctx.inventory);
     Ok(())
 }
 
@@ -138,6 +142,8 @@ pub enum NavOutcome {
     Arrived,
     /// terminal 処理済み: task/path はすでにクリア済み
     Ended(TaskHandlerControl),
+    /// 今フレームの経路探索上限に達した。状態は変更していない。
+    Deferred,
     /// 到達不能: task/path はまだ残っている（呼び出し元でクリーンアップ）
     Unreachable,
 }
@@ -148,7 +154,7 @@ pub fn navigate_to_adjacent(
     designation_present: bool,
     target_pos: Vec2,
     soul_pos: Vec2,
-    world_map: &WorldMap,
+    _world_map: &WorldMap,
     commands: &mut Commands,
 ) -> NavOutcome {
     if !designation_present {
@@ -156,16 +162,10 @@ pub fn navigate_to_adjacent(
             ctx.abort_closed(commands, "designation missing during navigation"),
         );
     }
-    let reachable = update_destination_to_adjacent(
-        ctx.dest,
-        target_pos,
-        ctx.path,
-        soul_pos,
-        world_map,
-        ctx.pf_context,
-    );
-    if !reachable {
-        return NavOutcome::Unreachable;
+    match update_task_destination_to_adjacent(ctx, target_pos) {
+        PathSearchResult::Found(()) => {}
+        PathSearchResult::Deferred => return NavOutcome::Deferred,
+        PathSearchResult::Unreachable => return NavOutcome::Unreachable,
     }
     if is_near_target(soul_pos, target_pos) {
         NavOutcome::Arrived
@@ -179,18 +179,12 @@ pub fn navigate_to_pos(
     ctx: &mut TaskExecutionContext,
     target_pos: Vec2,
     soul_pos: Vec2,
-    world_map: &WorldMap,
+    _world_map: &WorldMap,
 ) -> NavOutcome {
-    let reachable = update_destination_to_adjacent(
-        ctx.dest,
-        target_pos,
-        ctx.path,
-        soul_pos,
-        world_map,
-        ctx.pf_context,
-    );
-    if !reachable {
-        return NavOutcome::Unreachable;
+    match update_task_destination_to_adjacent(ctx, target_pos) {
+        PathSearchResult::Found(()) => {}
+        PathSearchResult::Deferred => return NavOutcome::Deferred,
+        PathSearchResult::Unreachable => return NavOutcome::Unreachable,
     }
     if is_near_target(soul_pos, target_pos) {
         NavOutcome::Arrived

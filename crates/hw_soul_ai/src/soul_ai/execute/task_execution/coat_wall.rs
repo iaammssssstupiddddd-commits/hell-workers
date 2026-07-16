@@ -48,21 +48,17 @@ fn handle_legacy_coat_wall_task(
             }
 
             let wall_pos = wall_transform.translation.truncate();
-            let reachable = update_destination_to_adjacent(
-                ctx.dest,
-                wall_pos,
-                ctx.path,
-                soul_pos,
-                ctx.env.world_map,
-                ctx.pf_context,
-            );
-            if !reachable {
-                return cancel_coat_wall_task(
-                    ctx,
-                    wall_entity,
-                    commands,
-                    "legacy wall unreachable",
-                );
+            match update_task_destination_to_adjacent(ctx, wall_pos) {
+                PathSearchResult::Found(()) => {}
+                PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                PathSearchResult::Unreachable => {
+                    return cancel_coat_wall_task(
+                        ctx,
+                        wall_entity,
+                        commands,
+                        "legacy wall unreachable",
+                    );
+                }
             }
 
             if is_near_target_or_dest(soul_pos, wall_pos, ctx.dest.0) {
@@ -173,21 +169,17 @@ pub fn handle_coat_wall_task(
             };
 
             let material_center = site_transform.translation.truncate();
-            let reachable = update_destination_to_adjacent(
-                ctx.dest,
-                material_center,
-                ctx.path,
-                soul_pos,
-                ctx.env.world_map,
-                ctx.pf_context,
-            );
-            if !reachable {
-                return cancel_coat_wall_task(
-                    ctx,
-                    tile_entity,
-                    commands,
-                    "material center unreachable",
-                );
+            match update_task_destination_to_adjacent(ctx, material_center) {
+                PathSearchResult::Found(()) => {}
+                PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                PathSearchResult::Unreachable => {
+                    return cancel_coat_wall_task(
+                        ctx,
+                        tile_entity,
+                        commands,
+                        "material center unreachable",
+                    );
+                }
             }
 
             if is_near_target_or_dest(soul_pos, material_center, ctx.dest.0) {
@@ -243,16 +235,12 @@ pub fn handle_coat_wall_task(
 
             let tile_pos =
                 WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
-            let reachable = update_destination_to_adjacent(
-                ctx.dest,
-                tile_pos,
-                ctx.path,
-                soul_pos,
-                ctx.env.world_map,
-                ctx.pf_context,
-            );
-            if !reachable {
-                return cancel_coat_wall_task(ctx, tile_entity, commands, "tile unreachable");
+            match update_task_destination_to_adjacent(ctx, tile_pos) {
+                PathSearchResult::Found(()) => {}
+                PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                PathSearchResult::Unreachable => {
+                    return cancel_coat_wall_task(ctx, tile_entity, commands, "tile unreachable");
+                }
             }
 
             if is_near_target_or_dest(soul_pos, tile_pos, ctx.dest.0) {

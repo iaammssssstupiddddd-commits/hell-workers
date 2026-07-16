@@ -5,10 +5,8 @@ use bevy::ui_render::prelude::MaterialNode;
 pub const UI_ALPHA_BUCKETS: usize = 8;
 pub const UI_MASS_BUCKETS: usize = 4;
 pub const UI_COLOR_BUCKETS: usize = 2;
-pub const UI_VELOCITY_BUCKETS: usize = 8;
 
-const UI_BUCKET_COUNT: usize =
-    UI_ALPHA_BUCKETS * UI_MASS_BUCKETS * UI_COLOR_BUCKETS * UI_VELOCITY_BUCKETS;
+const UI_BUCKET_COUNT: usize = UI_ALPHA_BUCKETS * UI_MASS_BUCKETS * UI_COLOR_BUCKETS;
 
 const NORMAL_COLOR: LinearRgba = LinearRgba::new(0.65, 0.9, 1.0, 1.0);
 const NEAR_WHITE_COLOR: LinearRgba = LinearRgba::new(1.0, 1.0, 1.0, 1.0);
@@ -23,7 +21,6 @@ pub struct DreamUiMaterialBucket {
     pub alpha: u8,
     pub mass: u8,
     pub color: u8,
-    pub velocity: u8,
 }
 
 pub fn init_dream_bubble_ui_handles(
@@ -37,15 +34,7 @@ pub fn init_dream_bubble_ui_handles(
             let mass = mass_for_bucket(mass_bucket);
             for color_bucket in 0..UI_COLOR_BUCKETS {
                 let color = color_for_bucket(color_bucket);
-                for velocity_bucket in 0..UI_VELOCITY_BUCKETS {
-                    let velocity_dir = velocity_dir_for_bucket(velocity_bucket);
-                    pool.push(materials.add(DreamBubbleUiMaterial {
-                        color,
-                        alpha,
-                        mass,
-                        velocity_dir,
-                    }));
-                }
+                pool.push(materials.add(DreamBubbleUiMaterial { color, alpha, mass }));
             }
         }
     }
@@ -73,21 +62,11 @@ pub fn color_to_bucket(visual_distance_ratio: f32) -> u8 {
     if visual_distance_ratio < 0.3 { 1 } else { 0 }
 }
 
-pub fn velocity_to_bucket(vel_dir: Vec2) -> u8 {
-    if vel_dir == Vec2::ZERO {
-        return 0;
-    }
-    let angle = vel_dir.y.atan2(vel_dir.x) + std::f32::consts::PI;
-    let normalized = angle / std::f32::consts::TAU;
-    ((normalized * UI_VELOCITY_BUCKETS as f32).floor() as usize).min(UI_VELOCITY_BUCKETS - 1) as u8
-}
-
 pub fn bucket_material_index(bucket: DreamUiMaterialBucket) -> usize {
     let alpha = bucket.alpha as usize;
     let mass = bucket.mass as usize;
     let color = bucket.color as usize;
-    let velocity = bucket.velocity as usize;
-    ((alpha * UI_MASS_BUCKETS + mass) * UI_COLOR_BUCKETS + color) * UI_VELOCITY_BUCKETS + velocity
+    (alpha * UI_MASS_BUCKETS + mass) * UI_COLOR_BUCKETS + color
 }
 
 pub fn apply_ui_material_bucket(
@@ -121,13 +100,4 @@ fn color_for_bucket(bucket: usize) -> LinearRgba {
     } else {
         NORMAL_COLOR
     }
-}
-
-fn velocity_dir_for_bucket(bucket: usize) -> Vec2 {
-    if bucket == 0 {
-        return Vec2::ZERO;
-    }
-    let angle =
-        (bucket as f32 / UI_VELOCITY_BUCKETS as f32) * std::f32::consts::TAU - std::f32::consts::PI;
-    Vec2::new(angle.cos(), angle.sin())
 }

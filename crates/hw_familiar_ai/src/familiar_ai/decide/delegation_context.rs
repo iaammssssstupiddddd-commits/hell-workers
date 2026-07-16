@@ -1,6 +1,6 @@
 //! FamiliarDelegationContext と process_task_delegation_and_movement の定義。
 //!
-//! WorldMap / PathfindingContext / ConstructionSiteAccess などは全て leaf crate 由来であり、
+//! WorldMap / WalkabilityConnectivityCache / ConstructionSiteAccess などは全て leaf crate 由来であり、
 //! hw_familiar_ai から直接参照できる。
 
 use bevy::prelude::*;
@@ -11,14 +11,12 @@ use hw_jobs::AssignedTask;
 use hw_jobs::ConstructionSiteAccess;
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
+use hw_world::WalkabilityConnectivityCache;
 use hw_world::map::WorldMap;
-use hw_world::pathfinding::PathfindingContext;
-use std::collections::HashMap;
 
 use super::query_types::FamiliarSoulQuery;
-use super::resources::ReachabilityCacheKey;
 use super::task_management::TaskManager;
-use super::task_management::delegation::{DelegationEnvCtx, PathfindingCtxMut};
+use super::task_management::delegation::DelegationEnvCtx;
 use super::task_management::{
     FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot, ReservationShadow,
 };
@@ -48,14 +46,13 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub resource_grid: &'a ResourceSpatialGrid,
     pub managed_tasks: &'a ManagedTasks,
     pub world_map: &'a WorldMap,
-    pub pf_context: &'a mut PathfindingContext,
+    pub connectivity_cache: &'a mut WalkabilityConnectivityCache,
     pub delta_secs: f32,
     pub allow_task_delegation: bool,
     pub state_changed: bool,
     pub reservation_shadow: &'a mut ReservationShadow,
     pub tile_site_index: &'a TileSiteIndex,
     pub incoming_snapshot: &'a IncomingDeliverySnapshot,
-    pub reachability_frame_cache: &'a mut HashMap<ReachabilityCacheKey, bool>,
 }
 
 /// タスク委譲と移動制御を実行
@@ -83,10 +80,7 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
             ctx.task_queries,
             ctx.construction_sites,
             ctx.q_souls,
-            &mut PathfindingCtxMut {
-                pf_context: ctx.pf_context,
-                reachability_cache: ctx.reachability_frame_cache,
-            },
+            ctx.connectivity_cache,
             ctx.reservation_shadow,
         )
         .is_some()
@@ -101,29 +95,27 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
             FamiliarAiState::Supervising { .. } | FamiliarAiState::SearchingTask
         )
     {
-        let active_members: Vec<Entity> = ctx
-            .squad_entities
-            .iter()
-            .filter(|&&e| {
-                if let Ok((_, _, _, _, _, _, idle, _, _, _)) = ctx.q_souls.get(e) {
-                    idle.behavior != IdleBehavior::ExhaustedGathering
-                } else {
-                    false
-                }
-            })
-            .copied()
-            .collect();
-
-        debug!(
-            "FAM_AI: Movement control - state: {:?}, active_members: {}, has_available_task: {}, state_changed: {}",
-            *ctx.ai_state,
-            active_members.len(),
-            has_available_task,
-            ctx.state_changed
-        );
-
         match *ctx.ai_state {
             FamiliarAiState::Supervising { .. } => {
+                let active_members: Vec<Entity> = ctx
+                    .squad_entities
+                    .iter()
+                    .filter(|&&e| {
+                        if let Ok((_, _, _, _, _, _, idle, _, _, _)) = ctx.q_souls.get(e) {
+                            idle.behavior != IdleBehavior::ExhaustedGathering
+                        } else {
+                            false
+                        }
+                    })
+                    .copied()
+                    .collect();
+
+                debug!(
+                    "FAM_AI: Supervising movement - active_members: {}, has_available_task: {}, state_changed: {}",
+                    active_members.len(),
+                    has_available_task,
+                    ctx.state_changed
+                );
                 let mut q_supervising_lens = ctx.q_souls.transmute_lens_filtered::<
                     (Entity, &Transform, &AssignedTask),
                     Without<Familiar>,

@@ -10,21 +10,26 @@ use super::components::Familiar;
 pub fn familiar_animation_system(
     time: Res<Time>,
     game_assets: Res<crate::assets::GameAssets>,
-    mut query: Query<
+    mut q_animations: Query<&mut super::components::FamiliarAnimation, With<Familiar>>,
+    mut q_visuals: Query<
         (
+            &hw_visual::FamiliarVisualOwner,
             &mut Sprite,
-            &mut super::components::FamiliarAnimation,
             &mut Transform,
+            &mut hw_visual::FamiliarVisualOffset,
         ),
-        With<Familiar>,
+        Without<Familiar>,
     >,
 ) {
-    for (mut sprite, mut anim, mut transform) in query.iter_mut() {
-        if anim.hover_offset != 0.0 {
-            transform.translation.y -= anim.hover_offset;
-        }
+    for (owner, mut sprite, mut transform, mut offset) in q_visuals.iter_mut() {
+        let Ok(mut anim) = q_animations.get_mut(owner.owner) else {
+            continue;
+        };
 
-        sprite.flip_x = !anim.facing_right;
+        let desired_flip_x = !anim.facing_right;
+        if sprite.flip_x != desired_flip_x {
+            sprite.flip_x = desired_flip_x;
+        }
 
         if anim.is_moving {
             anim.timer += time.delta_secs();
@@ -35,13 +40,18 @@ pub fn familiar_animation_system(
             anim.frame = 0;
         }
 
-        sprite.texture_atlas = None;
-        sprite.image = match anim.frame {
+        let desired_image = match anim.frame {
             0 => game_assets.familiar.clone(),
             1 => game_assets.familiar_anim_2.clone(),
             2 => game_assets.familiar_anim_3.clone(),
             _ => game_assets.familiar_anim_4.clone(),
         };
+        if sprite.texture_atlas.is_some() {
+            sprite.texture_atlas = None;
+        }
+        if sprite.image != desired_image {
+            sprite.image = desired_image;
+        }
 
         anim.hover_timer += time.delta_secs() * FAMILIAR_HOVER_SPEED;
         let hover_amplitude = if anim.is_moving {
@@ -51,7 +61,6 @@ pub fn familiar_animation_system(
         };
         let hover_offset = anim.hover_timer.sin() * hover_amplitude;
         anim.hover_offset = hover_offset;
-        transform.translation.y += hover_offset;
 
         let dir_tilt = if anim.is_moving {
             if anim.facing_right { -0.04 } else { 0.04 }
@@ -59,6 +68,16 @@ pub fn familiar_animation_system(
             0.0
         };
         let wobble_tilt = (anim.hover_timer * 0.8).sin() * FAMILIAR_HOVER_TILT_AMPLITUDE;
-        transform.rotation = Quat::from_rotation_z(dir_tilt + wobble_tilt);
+        let tilt_radians = dir_tilt + wobble_tilt;
+        let desired_translation = Vec3::Y * hover_offset;
+        let desired_rotation = Quat::from_rotation_z(tilt_radians);
+        if transform.translation != desired_translation {
+            transform.translation = desired_translation;
+        }
+        if transform.rotation != desired_rotation {
+            transform.rotation = desired_rotation;
+        }
+        offset.hover_offset = hover_offset;
+        offset.tilt_radians = tilt_radians;
     }
 }

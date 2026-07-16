@@ -1,6 +1,8 @@
 //! GoingToSource phase: バケツを持ってソース（川 or タンク）へ向かう
 
-use crate::soul_ai::execute::task_execution::common::update_destination_to_adjacent;
+use crate::soul_ai::execute::task_execution::common::{
+    PathSearchResult, update_bucket_destination_to_adjacent,
+};
 use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
@@ -59,35 +61,30 @@ pub fn handle(
                 let (_, tank_transform, _, _) = tank_data;
                 let tank_pos = tank_transform.translation.truncate();
 
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    tank_pos,
-                    ctx.path,
-                    soul_pos,
-                    ctx.env.world_map,
-                    ctx.pf_context,
-                );
-
-                if !reachable {
-                    let mixer = match data.destination {
-                        BucketTransportDestination::Mixer(m) => m,
-                        _ => {
-                            return abort::abort_with_bucket(
-                                commands,
-                                ctx,
-                                data,
-                                ctx.env.world_map,
-                            );
-                        }
-                    };
-                    return abort::abort_and_drop_bucket_mixer(
-                        commands,
-                        ctx,
-                        data.bucket,
-                        tank,
-                        mixer,
-                        soul_pos,
-                    );
+                match update_bucket_destination_to_adjacent(ctx, tank_pos) {
+                    PathSearchResult::Found(()) => {}
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        let mixer = match data.destination {
+                            BucketTransportDestination::Mixer(m) => m,
+                            _ => {
+                                return abort::abort_with_bucket(
+                                    commands,
+                                    ctx,
+                                    data,
+                                    ctx.env.world_map,
+                                );
+                            }
+                        };
+                        return abort::abort_and_drop_bucket_mixer(
+                            commands,
+                            ctx,
+                            data.bucket,
+                            tank,
+                            mixer,
+                            soul_pos,
+                        );
+                    }
                 }
 
                 use crate::soul_ai::execute::task_execution::common::is_near_target_or_dest;

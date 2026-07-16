@@ -287,7 +287,7 @@ pub fn update_motion_destinations(
                                 let target = {
                                     let mut rng = SimulationRng::for_actor(
                                         audit_seed,
-                                        random_state.as_deref_mut(),
+                                        random_state,
                                         GATHERING_RETREAT_POSITION_STREAM,
                                     );
                                     gathering_motion::find_gathering_still_retreat_target_with_rng(

@@ -46,26 +46,21 @@ pub fn handle_haul_to_mixer_task(
             {
                 let item_pos = res_transform.translation.truncate();
                 // アイテムが障害物の上にある可能性があるため、隣接マスを目的地として設定
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    item_pos,
-                    ctx.path,
-                    soul_pos,
-                    ctx.env.world_map,
-                    ctx.pf_context,
-                );
-
-                if !reachable {
-                    // 到達不能: タスクをキャンセル
-                    debug!(
-                        "HAUL_TO_MIXER: Soul {:?} cannot reach item {:?}, canceling",
-                        ctx.soul_entity, item_entity
-                    );
-                    return cancel::cancel_haul_to_mixer_before_pickup(ctx, commands);
+                match update_task_destination_to_adjacent(ctx, item_pos) {
+                    PathSearchResult::Found(()) => {}
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        // 到達不能: タスクをキャンセル
+                        debug!(
+                            "HAUL_TO_MIXER: Soul {:?} cannot reach item {:?}, canceling",
+                            ctx.soul_entity, item_entity
+                        );
+                        return cancel::cancel_haul_to_mixer_before_pickup(ctx, commands);
+                    }
                 }
 
                 if can_pickup_item(soul_pos, item_pos) {
-                    pickup_item(commands, ctx.soul_entity, item_entity, ctx.inventory);
+                    pickup_item(commands, ctx.soul_entity, item_entity, &mut ctx.inventory);
 
                     *ctx.task = AssignedTask::HaulToMixer(
                         crate::soul_ai::execute::task_execution::types::HaulToMixerData {
@@ -125,30 +120,25 @@ pub fn handle_haul_to_mixer_task(
                 }
 
                 // 到達可能かチェック
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    mixer_pos,
-                    ctx.path,
-                    soul_pos,
-                    ctx.env.world_map,
-                    ctx.pf_context,
-                );
-
-                if !reachable {
-                    // 到達不能: アイテムをドロップしてタスクをキャンセル
-                    debug!(
-                        "HAUL_TO_MIXER: Soul {:?} cannot reach mixer {:?}, dropping item",
-                        ctx.soul_entity, mixer_entity
-                    );
-                    drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
-                    commands
-                        .entity(item_entity)
-                        .remove::<hw_core::relationships::DeliveringTo>();
-                    ctx.inventory.0 = None;
-                    return ctx.abort_retryable_after_custom_cleanup(
-                        commands,
-                        "haul to mixer destination unreachable",
-                    );
+                match update_task_destination_to_adjacent(ctx, mixer_pos) {
+                    PathSearchResult::Found(()) => {}
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        // 到達不能: アイテムをドロップしてタスクをキャンセル
+                        debug!(
+                            "HAUL_TO_MIXER: Soul {:?} cannot reach mixer {:?}, dropping item",
+                            ctx.soul_entity, mixer_entity
+                        );
+                        drop_item(commands, ctx.soul_entity, item_entity, soul_pos);
+                        commands
+                            .entity(item_entity)
+                            .remove::<hw_core::relationships::DeliveringTo>();
+                        ctx.inventory.0 = None;
+                        return ctx.abort_retryable_after_custom_cleanup(
+                            commands,
+                            "haul to mixer destination unreachable",
+                        );
+                    }
                 }
 
                 if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {

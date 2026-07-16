@@ -50,24 +50,25 @@ pub fn designation_visual_system(
 
 pub fn familiar_command_visual_system(
     task_context: Res<TaskContext>,
-    mut q_familiars: Query<(&ActiveCommand, &mut Sprite), With<Familiar>>,
+    q_familiars: Query<&ActiveCommand, With<Familiar>>,
+    mut q_visuals: Query<(&hw_visual::FamiliarVisualOwner, &mut Sprite)>,
 ) {
-    for (command, mut sprite) in q_familiars.iter_mut() {
-        if task_context.0 != TaskMode::None {
-            sprite.color = Color::srgb(1.0, 1.0, 1.0);
-            return;
-        }
+    for (owner, mut sprite) in q_visuals.iter_mut() {
+        let Ok(command) = q_familiars.get(owner.owner) else {
+            continue;
+        };
 
-        match command.command {
-            FamiliarCommand::Idle => {
-                sprite.color = Color::srgb(0.6, 0.2, 0.2);
+        let desired_color = if task_context.0 != TaskMode::None {
+            Color::srgb(1.0, 1.0, 1.0)
+        } else {
+            match command.command {
+                FamiliarCommand::Idle => Color::srgb(0.6, 0.2, 0.2),
+                FamiliarCommand::GatherResources => Color::srgb(1.0, 0.6, 0.2),
+                FamiliarCommand::Patrol => Color::srgb(1.0, 0.3, 0.3),
             }
-            FamiliarCommand::GatherResources => {
-                sprite.color = Color::srgb(1.0, 0.6, 0.2);
-            }
-            FamiliarCommand::Patrol => {
-                sprite.color = Color::srgb(1.0, 0.3, 0.3);
-            }
+        };
+        if sprite.color != desired_color {
+            sprite.color = desired_color;
         }
     }
 }

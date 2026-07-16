@@ -86,11 +86,12 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 - `ConstructionSiteAccess` は root から注入され、floor / wall / provisional wall の construction site 座標解決だけを補助する
 - **排他制御**: `SharedResourceCache` を参照（§2.3 参照）
 - **Haul 系の需要再検証**: `DeliverToBlueprint` / `DepositToStockpile` / `DeliverToFloorConstruction` / `DeliverToWallConstruction` / `DeliverToProvisionalWall` は、`IncomingDeliveries` に加えて Think フェーズ内の `ReservationShadow` も差し引いた残需要が 0 の場合、新規 `AssignedTask` を発行しない。
-- 60タイル超の候補は A* 前に除外。`ReachabilityFrameCache` で到達判定を5フレーム共有
+- 60タイル超の候補は到達判定前に除外。Familiar assignment の Boolean 到達判定は `WalkabilityConnectivityCache` の version付き連結成分を使い、waypoint が必要な実経路生成 A* は起動しない
 
 ### 4.3 実行 (Execution)
 
 - `task_execution_system`は`AssignedTask::None`をread-onlyで早期除外し、idle Soulのtask context用mutable accessを作らない。`WorkingOn`はfilter条件にしないため、target消滅後の`AssignedTask::Some + Without<WorkingOn>`も既存handler/cleanupへ到達する。
+- Actor移動の再探索、task handler、bucket routing が `RuntimePathSearchBudget` 不足で `Deferred` になった場合は、到達不能・タスク中断ではない。`AssignedTask`、phase、予約、`WorkingOn`、`Destination`、`Path`を維持して次フレームに再試行する。task/bucket の direct 探索が失敗後に adjacent 探索で defer した場合は、direct を繰り返さず adjacent 段階から再開する。
 - **採取**: 木=Wood×5、岩=Rock×10ドロップ。Sand/BonePile/砂タイル/河川は無限ソース（即時完了）
 - **運搬 (Haul)**: GoingToSource → Picking → GoingToDestination → Dropping
 - **猫車運搬 (HaulWithWheelbarrow)**: GoingToParking → PickingUpWheelbarrow → GoingToSource → Loading → GoingToDestination → Unloading → ReturningWheelbarrow

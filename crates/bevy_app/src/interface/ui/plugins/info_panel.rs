@@ -12,8 +12,49 @@ use crate::interface::ui::{
 };
 use crate::systems::GameSystemSet;
 use bevy::prelude::*;
+use bevy::time::Real;
 use hw_ui::components::{LeftPanelMode, SoulRenameState};
 use hw_ui::interaction::{soul_rename_button_system, soul_rename_cleanup_system};
+
+const INSPECTION_REFRESH_INTERVAL_SECS: f32 = 0.1;
+
+/// The selected/pinned inspector is dynamic, but rebuilding its strings every
+/// render frame is unnecessary. Selection and pin changes wake immediately;
+/// steady inspection refreshes run from real time so pausing simulation does
+/// not freeze the panel.
+#[derive(Resource)]
+struct InspectionRefreshCadence {
+    timer: Timer,
+    due: bool,
+}
+
+impl Default for InspectionRefreshCadence {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(INSPECTION_REFRESH_INTERVAL_SECS, TimerMode::Repeating),
+            due: true,
+        }
+    }
+}
+
+fn advance_inspection_refresh_cadence_system(
+    time: Res<Time<Real>>,
+    mut cadence: ResMut<InspectionRefreshCadence>,
+) {
+    cadence.due = cadence.timer.tick(time.delta()).just_finished();
+}
+
+fn inspection_refresh_should_run(
+    selected: Res<crate::interface::selection::SelectedEntity>,
+    pin_state: Res<InfoPanelPinState>,
+    rename_state: Res<SoulRenameState>,
+    cadence: Res<InspectionRefreshCadence>,
+) -> bool {
+    selected.is_changed()
+        || pin_state.is_changed()
+        || rename_state.is_changed()
+        || (cadence.due && (selected.0.is_some() || pin_state.entity.is_some()))
+}
 
 pub type UiInfoPanelPlugin = hw_ui::plugins::info_panel::UiInfoPanelPlugin;
 
@@ -27,6 +68,7 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
     app.init_resource::<InfoPanelNodes>();
     app.init_resource::<LeftPanelMode>();
     app.init_resource::<EntityInspectionViewModel>();
+    app.init_resource::<InspectionRefreshCadence>();
     app.init_resource::<TaskListDirty>();
     app.init_resource::<TaskListState>();
     app.add_systems(
@@ -40,26 +82,11 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
     );
     app.add_systems(
         Update,
+        advance_inspection_refresh_cadence_system.in_set(GameSystemSet::Interface),
+    );
+    app.add_systems(
+        Update,
         (
-            (
-                update_entity_inspection_view_model_system,
-                info_panel_system::<crate::assets::GameAssets>
-                    .run_if(
-                        |selected: Res<crate::interface::selection::SelectedEntity>,
-                         pin_state: Res<InfoPanelPinState>,
-                         rename_state: Res<SoulRenameState>| {
-                            selected.is_changed()
-                                || pin_state.is_changed()
-                                || rename_state.is_changed()
-                                || selected.0.is_some()
-                                || pin_state.entity.is_some()
-                        },
-                    )
-                    .after(update_entity_inspection_view_model_system)
-                    .after(crate::interface::ui::menu_visibility_system)
-                    .before(crate::interface::ui::update_mode_text_system),
-            )
-                .chain(),
             left_panel_tab_system,
             left_panel_visibility_system.after(left_panel_tab_system),
             task_list_update_system.after(left_panel_tab_system),
@@ -68,6 +95,20 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
             soul_rename_button_system::<crate::assets::GameAssets>,
             soul_rename_cleanup_system,
         )
+            .in_set(GameSystemSet::Interface),
+    );
+    app.add_systems(
+        Update,
+        (
+            update_entity_inspection_view_model_system,
+            info_panel_system::<crate::assets::GameAssets>
+                .after(update_entity_inspection_view_model_system)
+                .after(crate::interface::ui::menu_visibility_system)
+                .before(crate::interface::ui::update_mode_text_system),
+        )
+            .chain()
+            .run_if(inspection_refresh_should_run)
+            .after(advance_inspection_refresh_cadence_system)
             .in_set(GameSystemSet::Interface),
     );
 }

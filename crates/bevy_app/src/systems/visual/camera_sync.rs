@@ -74,8 +74,16 @@ pub fn sync_world_foreground_2d_camera_system(
     let Ok((mut fg_tf, mut fg_cam)) = q_foreground.single_mut() else {
         return;
     };
-    *fg_tf = *main_tf;
-    fg_cam.is_active = main_cam.is_active;
+    // PanCamera may invoke this system every frame. Avoid turning a stationary
+    // foreground camera into a perpetual Changed<Transform>/Changed<Camera>
+    // source, because the 3D proxy synchronizer uses camera changes as its full
+    // resync trigger.
+    if *fg_tf != *main_tf {
+        *fg_tf = *main_tf;
+    }
+    if fg_cam.is_active != main_cam.is_active {
+        fg_cam.is_active = main_cam.is_active;
+    }
 }
 
 /// Camera2d（MainCamera）の Transform を Camera3d（Camera3dRtt）へ毎フレーム同期する。
@@ -92,33 +100,45 @@ pub fn sync_camera3d_system(
     let scene_z = -cam2d.translation.y; // 2D y → 3D z 変換
 
     for (mut cam3d, mut projection) in &mut q_cam3d {
+        let mut desired_translation = cam3d.translation;
+        let mut desired_rotation = cam3d.rotation;
         match elevation.direction {
             ElevationDirection::TopDown => {
-                cam3d.translation.x = cam2d.translation.x;
-                cam3d.translation.z = scene_z + Z_OFFSET;
-                cam3d.translation.y = VIEW_HEIGHT;
-                cam3d.rotation = elevation.direction.camera_rotation();
+                desired_translation.x = cam2d.translation.x;
+                desired_translation.z = scene_z + Z_OFFSET;
+                desired_translation.y = VIEW_HEIGHT;
+                desired_rotation = elevation.direction.camera_rotation();
             }
             ElevationDirection::North => {
-                cam3d.translation.x = cam2d.translation.x;
-                cam3d.translation.z = scene_z + ELEVATION_DISTANCE;
+                desired_translation.x = cam2d.translation.x;
+                desired_translation.z = scene_z + ELEVATION_DISTANCE;
             }
             ElevationDirection::South => {
-                cam3d.translation.x = cam2d.translation.x;
-                cam3d.translation.z = scene_z - ELEVATION_DISTANCE;
+                desired_translation.x = cam2d.translation.x;
+                desired_translation.z = scene_z - ELEVATION_DISTANCE;
             }
             ElevationDirection::East => {
-                cam3d.translation.x = cam2d.translation.x + ELEVATION_DISTANCE;
-                cam3d.translation.z = scene_z;
+                desired_translation.x = cam2d.translation.x + ELEVATION_DISTANCE;
+                desired_translation.z = scene_z;
             }
             ElevationDirection::West => {
-                cam3d.translation.x = cam2d.translation.x - ELEVATION_DISTANCE;
-                cam3d.translation.z = scene_z;
+                desired_translation.x = cam2d.translation.x - ELEVATION_DISTANCE;
+                desired_translation.z = scene_z;
             }
         }
 
-        cam3d.scale = Vec3::ONE;
-        if let Projection::Orthographic(ortho) = &mut *projection {
+        if cam3d.translation != desired_translation {
+            cam3d.translation = desired_translation;
+        }
+        if cam3d.rotation != desired_rotation {
+            cam3d.rotation = desired_rotation;
+        }
+        if cam3d.scale != Vec3::ONE {
+            cam3d.scale = Vec3::ONE;
+        }
+        if let Projection::Orthographic(ortho) = &mut *projection
+            && ortho.scale != cam2d.scale.x
+        {
             ortho.scale = cam2d.scale.x;
         }
     }

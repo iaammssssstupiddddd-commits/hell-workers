@@ -11,7 +11,8 @@ pub struct FamiliarAiCorePlugin;
 impl Plugin for FamiliarAiCorePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<decide::resources::FamiliarTaskDelegationTimer>()
-            .init_resource::<decide::resources::ReachabilityFrameCache>()
+            .init_resource::<decide::resources::FamiliarStateDecisionTimer>()
+            .init_resource::<hw_world::WalkabilityConnectivityCache>()
             .init_resource::<decide::blueprint_auto_gather::BlueprintAutoGatherTimer>();
 
         #[cfg(feature = "profiling")]

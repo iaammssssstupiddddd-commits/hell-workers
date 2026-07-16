@@ -81,6 +81,7 @@ Perceive → Update → Decide → Execute
 - `building_completion_system` は `SoulAiSystemSet::Execute` 後の `BuildingCompletionSet` で実行する。続く Actor phase は `ApplyDeferred` により command を反映してから `ObstacleSyncSet` を実行し、`SoulAiSystemSet::Actor`（pathfinding を含む）より前に `obstacle_sync_system` が WorldMap を更新する。
 - Group C: floor construction 系 (`floor_construction_cancellation_system` → `floor_construction_phase_transition_system` → `floor_construction_completion_system`) はフェーズ順を保つため `.chain()` で登録する。
 - Group D: wall construction 系 (`wall_construction_cancellation_system` → `debug_instant_complete_walls_system` → `wall_framed_tile_spawn_system` → `wall_construction_phase_transition_system` → `wall_construction_completion_system`) はフェーズ順とデバッグ割り込み位置を保つため `.chain()` で登録する。
+- Soul Spa / energy 系は child・relationship の deferred mutation を先に適用し、`detect_energy_update_dirty_system` → output → grid recalculation → `Unpowered` 適用 → lamp buff を同じLogic frameで直列化する。lamp buff はSoul AIのslow update後にのみ実行し、steady-stateのoutput/grid全走査はdirty gateで止める。
 - room detection 系 (`mark_room_dirty_from_building_changes_system` → `validate_rooms_system` → `detect_rooms_system`) は `.chain().after(dream_tree_planting_system)` を維持し、DreamTree 反映後のワールド状態を入力にする。
 
 ## タスク割り当て・物流・UIの責務境界

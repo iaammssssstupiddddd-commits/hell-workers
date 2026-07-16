@@ -219,20 +219,18 @@ pub fn div_ceil_u32(value: u32, divisor: u32) -> u32 {
     }
 }
 
-/// パス到達可能性チェック（WorldMap + PathfindingContext 依存）
+/// パス到達可能性チェック（version付き連結成分cacheを利用）
 pub fn is_reachable(
     start_grid: (i32, i32),
     target_pos: Vec2,
     world_map: &hw_world::WorldMap,
-    pf_context: &mut hw_world::pathfinding::PathfindingContext,
+    connectivity_cache: &mut hw_world::WalkabilityConnectivityCache,
 ) -> bool {
     let target_grid = hw_world::WorldMap::world_to_grid(target_pos);
-    hw_world::pathfinding::find_path_to_adjacent(
+    connectivity_cache.can_reach_target(
         world_map,
-        pf_context,
         start_grid,
         target_grid,
-        true,
+        world_map.is_walkable(target_grid.0, target_grid.1),
     )
-    .is_some()
 }

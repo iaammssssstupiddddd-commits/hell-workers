@@ -10,10 +10,9 @@ use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
 use hw_jobs::construction::TargetWallConstructionSite;
 use hw_jobs::model::{Blueprint, Designation, Rock, TargetBlueprint, Tree};
-use hw_logistics::transport_request::components::{TransportDemand, TransportRequest};
 use hw_logistics::ResourceItem;
-use hw_world::pathfinding::PathfindingContext;
-use hw_world::{WorldMapRead, Yard};
+use hw_logistics::transport_request::components::{TransportDemand, TransportRequest};
+use hw_world::{WalkabilityConnectivityCache, WorldMapRead, Yard};
 
 use crate::familiar_ai::decide::auto_gather_for_blueprint::AutoGatherDesignation;
 use crate::familiar_ai::decide::auto_gather_for_blueprint::actions::{
@@ -74,7 +73,7 @@ impl Default for BlueprintAutoGatherTimer {
 #[derive(SystemParam)]
 pub struct BlueprintAutoGatherParams<'w, 's> {
     world_map: WorldMapRead<'w>,
-    pf_context: Local<'s, PathfindingContext>,
+    connectivity_cache: ResMut<'w, WalkabilityConnectivityCache>,
     q_familiars: Query<
         'w,
         's,
@@ -201,7 +200,7 @@ pub fn blueprint_auto_gather_system(
         &owner_infos,
         &supply_state.candidate_sources,
         p.world_map.as_ref(),
-        &mut p.pf_context,
+        &mut p.connectivity_cache,
     );
 
     cleanup_auto_gather_markers(

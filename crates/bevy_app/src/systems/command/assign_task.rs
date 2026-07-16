@@ -5,7 +5,7 @@ use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;
 use crate::systems::jobs::Designation;
 use crate::world::map::{WorldMap, WorldMapRead};
-use crate::world::pathfinding::{self, PathfindingContext};
+use crate::world::pathfinding::WalkabilityConnectivityCache;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_ui::camera::MainCamera;
@@ -36,7 +36,7 @@ pub fn assign_task_system(
     mut commands: Commands,
     worker_queries: AssignTaskWorkerQuery,
     world_map: WorldMapRead,
-    mut pf_context: Local<PathfindingContext>,
+    mut connectivity_cache: ResMut<WalkabilityConnectivityCache>,
 ) {
     let AssignTaskInput {
         buttons,
@@ -102,9 +102,8 @@ pub fn assign_task_system(
 
         // 地面周辺から到達可能かチェック（逆引き検索: タスクから地面へ）
         let target_grid = WorldMap::world_to_grid(pos);
-        let is_reachable = pathfinding::can_reach_target(
+        let is_reachable = connectivity_cache.can_reach_target(
             world_map.as_ref(),
-            &mut pf_context,
             actual_start_grid,
             target_grid,
             world_map.is_walkable(target_grid.0, target_grid.1),

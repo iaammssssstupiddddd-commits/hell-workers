@@ -23,6 +23,7 @@ use crate::entities::damned_soul::{Destination, SoulIdentity};
 use crate::entities::familiar::attach_familiar_shell;
 use crate::plugins::startup::Building3dHandles;
 use crate::systems::jobs::attach_building_shell;
+use crate::systems::jobs::floor_construction::CuringFootprint;
 use crate::world::map::WorldMap;
 
 use hw_core::constants::{TILE_SIZE, Z_ITEM_PICKUP};
@@ -38,8 +39,8 @@ use hw_core::visual_mirror::construction::{
 };
 use hw_core::world::DoorState;
 use hw_jobs::construction::{
-    FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, WallConstructionSite,
-    WallTileBlueprint,
+    FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
+    WallConstructionPhase, WallConstructionSite, WallTileBlueprint, WallTileState,
 };
 use hw_jobs::visual_sync::{
     blueprint_visual_state, floor_site_visual_state, floor_tile_visual_mirror,
@@ -49,6 +50,7 @@ use hw_jobs::{
     Blueprint, Building, BuildingType, Designation, Door, ObstaclePosition, ObstacleSourceKind,
     Rock, Tree, TreeVariant,
 };
+use hw_logistics::tile_index::TileSiteIndex;
 use hw_logistics::zone::Stockpile;
 use hw_logistics::{Inventory, ResourceItem};
 use hw_ui::selection::building_size;
@@ -60,6 +62,14 @@ use hw_visual::visual3d::{
 use hw_world::seed_obstacle_position_index;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
+
+type GridPosition = (i32, i32);
+type RehydratedFloorTile = (Entity, GridPosition, FloorTileState);
+type RehydratedFloorTiles = Vec<RehydratedFloorTile>;
+type FloorTilesBySite = HashMap<Entity, RehydratedFloorTiles>;
+type CuringFootprintTile = (Entity, GridPosition);
+type CuringFootprintSpec = (Entity, Vec<CuringFootprintTile>);
+type CuringFootprints = Vec<CuringFootprintSpec>;
 
 /// The subset of loaded assets needed to recreate a regular building Blueprint.
 ///
@@ -212,9 +222,183 @@ pub(super) fn rehydrate_after_load(world: &mut World) -> Result<(), RehydratePre
     });
 
     world.flush();
+    rehydrate_construction_runtime(world);
     rehydrate_obstacle_runtime(world);
 
     Ok(())
+}
+
+/// Rebuilds construction-only runtime state from durable tiles before the
+/// paused load frame can resume Spatial or Logic. `WorldMap` remains the
+/// durable obstacle authority here: rebuilding a curing footprint must not
+/// reserve it a second time.
+fn rehydrate_construction_runtime(world: &mut World) {
+    let floor_tiles: Vec<(Entity, Entity, (i32, i32), FloorTileState)> = {
+        let mut query = world.query::<(Entity, &FloorTileBlueprint)>();
+        query
+            .iter(world)
+            .map(|(entity, tile)| (entity, tile.parent_site, tile.grid_pos, tile.state))
+            .collect()
+    };
+    let wall_tiles: Vec<(Entity, Entity, WallTileState)> = {
+        let mut query = world.query::<(Entity, &WallTileBlueprint)>();
+        query
+            .iter(world)
+            .map(|(entity, tile)| (entity, tile.parent_site, tile.state))
+            .collect()
+    };
+
+    if !world.contains_resource::<TileSiteIndex>() {
+        world.insert_resource(TileSiteIndex::default());
+    }
+    {
+        let mut tile_index = world.resource_mut::<TileSiteIndex>();
+        tile_index.rebuild_from_tiles(
+            floor_tiles
+                .iter()
+                .map(|(entity, site, _, _)| (*entity, *site)),
+            wall_tiles.iter().map(|(entity, site, _)| (*entity, *site)),
+        );
+        // Stable index order makes any later index-backed mutation deterministic
+        // after a dynamically deserialized world replacement.
+        for entities in tile_index.floor_tiles_by_site.values_mut() {
+            entities.sort_unstable_by_key(|entity| entity.to_bits());
+        }
+        for entities in tile_index.wall_tiles_by_site.values_mut() {
+            entities.sort_unstable_by_key(|entity| entity.to_bits());
+        }
+    }
+
+    let mut floor_tiles_by_site: FloorTilesBySite = HashMap::new();
+    for (entity, site, grid, state) in floor_tiles {
+        floor_tiles_by_site
+            .entry(site)
+            .or_default()
+            .push((entity, grid, state));
+    }
+    let mut wall_tiles_by_site: HashMap<Entity, Vec<WallTileState>> = HashMap::new();
+    for (_, site, state) in wall_tiles {
+        wall_tiles_by_site.entry(site).or_default().push(state);
+    }
+
+    {
+        let mut sites = world.query::<(Entity, &mut FloorConstructionSite)>();
+        for (site_entity, mut site) in sites.iter_mut(world) {
+            let tiles = floor_tiles_by_site
+                .get(&site_entity)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            site.tiles_reinforced = tiles
+                .iter()
+                .filter(|(_, _, state)| floor_tile_is_reinforced(*state))
+                .count() as u32;
+            site.tiles_poured = tiles
+                .iter()
+                .filter(|(_, _, state)| *state == FloorTileState::Complete)
+                .count() as u32;
+
+            let index_matches_total =
+                site.tiles_total > 0 && tiles.len() == site.tiles_total as usize;
+            if index_matches_total
+                && site.phase == FloorConstructionPhase::Reinforcing
+                && site.tiles_reinforced == site.tiles_total
+            {
+                site.phase = FloorConstructionPhase::Pouring;
+            }
+            if index_matches_total
+                && site.phase == FloorConstructionPhase::Pouring
+                && site.tiles_poured == site.tiles_total
+            {
+                site.phase = FloorConstructionPhase::Curing;
+            }
+        }
+    }
+    {
+        let mut sites = world.query::<(Entity, &mut WallConstructionSite)>();
+        for (site_entity, mut site) in sites.iter_mut(world) {
+            let tiles = wall_tiles_by_site
+                .get(&site_entity)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            site.tiles_framed = tiles
+                .iter()
+                .filter(|state| wall_tile_is_framed(**state))
+                .count() as u32;
+            site.tiles_coated = tiles
+                .iter()
+                .filter(|state| **state == WallTileState::Complete)
+                .count() as u32;
+
+            if site.tiles_total > 0
+                && tiles.len() == site.tiles_total as usize
+                && site.phase == WallConstructionPhase::Framing
+                && site.tiles_framed == site.tiles_total
+            {
+                site.phase = WallConstructionPhase::Coating;
+            }
+        }
+    }
+
+    let curing_footprints: CuringFootprints = {
+        let mut sites = world.query::<(Entity, &FloorConstructionSite)>();
+        sites
+            .iter(world)
+            .filter(|(_, site)| site.phase == FloorConstructionPhase::Curing)
+            .filter_map(|(site_entity, site)| {
+                let tiles = floor_tiles_by_site.get(&site_entity)?;
+                (site.tiles_total > 0 && tiles.len() == site.tiles_total as usize).then(|| {
+                    (
+                        site_entity,
+                        tiles
+                            .iter()
+                            .map(|(entity, grid, _)| (*entity, *grid))
+                            .collect(),
+                    )
+                })
+            })
+            .collect()
+    };
+    let curing_sites: HashSet<Entity> = curing_footprints
+        .iter()
+        .map(|(site_entity, _)| *site_entity)
+        .collect();
+    let stale_footprints: Vec<Entity> = {
+        let mut query = world.query_filtered::<Entity, With<CuringFootprint>>();
+        query
+            .iter(world)
+            .filter(|entity| !curing_sites.contains(entity))
+            .collect()
+    };
+    for site_entity in stale_footprints {
+        world.entity_mut(site_entity).remove::<CuringFootprint>();
+    }
+    for (site_entity, tiles) in curing_footprints {
+        world
+            .entity_mut(site_entity)
+            .insert(CuringFootprint::from_tile_positions(tiles));
+    }
+}
+
+fn floor_tile_is_reinforced(state: FloorTileState) -> bool {
+    matches!(
+        state,
+        FloorTileState::ReinforcedComplete
+            | FloorTileState::WaitingMud
+            | FloorTileState::PouringReady
+            | FloorTileState::Pouring { .. }
+            | FloorTileState::Complete
+    )
+}
+
+fn wall_tile_is_framed(state: WallTileState) -> bool {
+    matches!(
+        state,
+        WallTileState::FramedProvisional
+            | WallTileState::WaitingMud
+            | WallTileState::CoatingReady
+            | WallTileState::Coating { .. }
+            | WallTileState::Complete
+    )
 }
 
 /// Restores runtime obstacle provenance and derives the raw bitmap from durable
@@ -497,7 +681,7 @@ fn rehydrate_shells(
     let blueprint_sprite_handles = BlueprintSpriteHandles::from(game_assets);
     rehydrate_construction_shells(world, &blueprint_sprite_handles);
 
-    let mut familiars: Vec<(Entity, String, f32, Vec2)> = Vec::new();
+    let mut familiars: Vec<(Entity, String, f32, Vec3)> = Vec::new();
     {
         let mut q = world.query_filtered::<(Entity, &Familiar, &Transform), Without<Destination>>();
         for (entity, familiar, transform) in q.iter(world) {
@@ -505,7 +689,7 @@ fn rehydrate_shells(
                 entity,
                 familiar.name.clone(),
                 familiar.command_radius,
-                transform.translation.truncate(),
+                transform.translation,
             ));
         }
     }
@@ -565,13 +749,21 @@ fn rehydrate_shells(
     // ---- 適用フェーズ（Commands 経由、rehydrate_after_load 側で flush） ----
     let mut commands = world.commands();
 
-    for (entity, name, command_radius, pos) in familiars {
+    for (entity, name, command_radius, translation) in familiars {
+        // root rotation / scale は旧visual animationの残骸であり、論理座標の
+        // consumer は translation だけを読む。ロード直後に正規化して
+        // Spatial / proxy の余分な Changed 連鎖を持ち越さない。
+        commands.entity(entity).insert(Transform {
+            translation,
+            rotation: Quat::IDENTITY,
+            scale: Vec3::ONE,
+        });
         attach_familiar_shell(
             &mut commands,
             entity,
             &name,
             command_radius,
-            pos,
+            translation.truncate(),
             game_assets,
             handles_3d,
         );
@@ -837,21 +1029,21 @@ fn rehydrate_construction_shells(world: &mut World, sprite_handles: &BlueprintSp
 /// the second call on the same world a no-op for both the owner and its 3D
 /// presentation roots.
 fn rehydrate_soul_shells(world: &mut World, handles_3d: &Building3dHandles) -> usize {
-    let mut souls: Vec<(Entity, Option<SoulIdentity>, String, Vec2)> = Vec::new();
+    let mut souls: Vec<(Entity, Option<SoulIdentity>, String, Vec3)> = Vec::new();
     {
         let mut query = world.query_filtered::<(Entity, Option<&SoulIdentity>, &Transform), (
             With<DamnedSoul>,
             Without<Destination>,
         )>();
         for (entity, identity, transform) in query.iter(world) {
-            let position = transform.translation.truncate();
+            let translation = transform.translation;
             match identity {
-                Some(identity) => souls.push((entity, None, identity.name.clone(), position)),
+                Some(identity) => souls.push((entity, None, identity.name.clone(), translation)),
                 None => {
                     // 旧形式セーブ（SoulIdentity 未保存）へのフォールバック
                     let identity = SoulIdentity::random();
                     let name = identity.name.clone();
-                    souls.push((entity, Some(identity), name, position));
+                    souls.push((entity, Some(identity), name, translation));
                 }
             }
         }
@@ -859,11 +1051,22 @@ fn rehydrate_soul_shells(world: &mut World, handles_3d: &Building3dHandles) -> u
 
     let count = souls.len();
     let mut commands = world.commands();
-    for (entity, new_identity, name, position) in souls {
+    for (entity, new_identity, name, translation) in souls {
         if let Some(identity) = new_identity {
             commands.entity(entity).insert(identity);
         }
-        attach_soul_shell(&mut commands, entity, &name, position, handles_3d);
+        commands.entity(entity).insert(Transform {
+            translation,
+            rotation: Quat::IDENTITY,
+            scale: Vec3::ONE,
+        });
+        attach_soul_shell(
+            &mut commands,
+            entity,
+            &name,
+            translation.truncate(),
+            handles_3d,
+        );
     }
     count
 }
@@ -895,11 +1098,13 @@ fn item_sprite(
 #[cfg(test)]
 mod tests {
     use super::{
-        BlueprintSpriteHandles, clear_rehydrate_presentation, rehydrate_construction_shells,
-        rehydrate_obstacle_runtime, rehydrate_soul_shells, validate_rehydrate_prerequisites,
+        BlueprintSpriteHandles, clear_rehydrate_presentation, rehydrate_construction_runtime,
+        rehydrate_construction_shells, rehydrate_obstacle_runtime, rehydrate_soul_shells,
+        validate_rehydrate_prerequisites,
     };
     use crate::entities::damned_soul::{Gender, SoulIdentity};
     use crate::plugins::startup::Building3dHandles;
+    use crate::systems::jobs::floor_construction::CuringFootprint;
     use crate::world::map::WorldMap;
     use bevy::prelude::*;
     use bevy::time::Virtual;
@@ -924,6 +1129,7 @@ mod tests {
         Blueprint, Building, BuildingType, Designation, Door, ObstaclePosition, ObstacleSourceKind,
         Rock, Tree, TreeVariant,
     };
+    use hw_logistics::tile_index::TileSiteIndex;
     use hw_visual::MaterialIconHandles;
     use hw_visual::blueprint::{
         BlueprintProgressBars, BlueprintState, BlueprintVisual, DeliveryPopup, MaterialCounter,
@@ -1373,6 +1579,81 @@ mod tests {
         );
         site.phase = phase;
         site
+    }
+
+    #[test]
+    fn construction_runtime_rehydrate_rebuilds_indexes_counters_and_curing_cache() {
+        let mut world = World::new();
+        world.insert_resource(TileSiteIndex::default());
+        world.insert_resource(WorldMap::default());
+        let original_obstacle_version = world.resource::<WorldMap>().obstacle_version;
+        let original_obstacle_count = world
+            .resource::<WorldMap>()
+            .obstacles
+            .iter()
+            .filter(|blocked| **blocked)
+            .count();
+
+        let mut floor_site = FloorConstructionSite::new(
+            TaskArea::from_points(Vec2::ZERO, Vec2::splat(16.0)),
+            Vec2::ZERO,
+            2,
+        );
+        floor_site.phase = FloorConstructionPhase::Curing;
+        floor_site.tiles_reinforced = 0;
+        floor_site.tiles_poured = 0;
+        let floor_site_entity = world.spawn(floor_site).id();
+        for grid_pos in [(3, 4), (4, 4)] {
+            let mut tile = FloorTileBlueprint::new(floor_site_entity, grid_pos);
+            tile.state = FloorTileState::Complete;
+            world.spawn(tile);
+        }
+
+        let mut wall_site = WallConstructionSite::new(
+            TaskArea::from_points(Vec2::ZERO, Vec2::splat(16.0)),
+            Vec2::ZERO,
+            2,
+        );
+        wall_site.tiles_framed = 0;
+        let wall_site_entity = world.spawn(wall_site).id();
+        for grid_pos in [(7, 8), (8, 8)] {
+            let mut tile = WallTileBlueprint::new(wall_site_entity, grid_pos);
+            tile.state = WallTileState::FramedProvisional;
+            world.spawn(tile);
+        }
+
+        rehydrate_construction_runtime(&mut world);
+
+        let index = world.resource::<TileSiteIndex>();
+        assert_eq!(index.floor_tiles_by_site[&floor_site_entity].len(), 2);
+        assert_eq!(index.wall_tiles_by_site[&wall_site_entity].len(), 2);
+        let floor = world
+            .get::<FloorConstructionSite>(floor_site_entity)
+            .expect("floor site remains durable during curing");
+        assert_eq!(floor.tiles_reinforced, 2);
+        assert_eq!(floor.tiles_poured, 2);
+        assert_eq!(floor.phase, FloorConstructionPhase::Curing);
+        assert!(world.get::<CuringFootprint>(floor_site_entity).is_some());
+        let wall = world
+            .get::<WallConstructionSite>(wall_site_entity)
+            .expect("wall site remains durable during coating");
+        assert_eq!(wall.tiles_framed, 2);
+        assert_eq!(wall.tiles_coated, 0);
+        assert_eq!(wall.phase, WallConstructionPhase::Coating);
+        assert_eq!(
+            world.resource::<WorldMap>().obstacle_version,
+            original_obstacle_version
+        );
+        assert_eq!(
+            world
+                .resource::<WorldMap>()
+                .obstacles
+                .iter()
+                .filter(|blocked| **blocked)
+                .count(),
+            original_obstacle_count,
+            "construction cache rehydration must not reserve the durable map again",
+        );
     }
 
     fn building_mirror_count(world: &mut World, owner: Entity, grid: (i32, i32)) -> usize {

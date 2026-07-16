@@ -9,7 +9,6 @@ use bevy::prelude::*;
 use hw_core::WorldEpoch;
 use hw_core::game_state::PlayMode;
 use hw_core::selection::{HoveredEntity, SelectedEntity};
-use hw_familiar_ai::familiar_ai::decide::resources::ReachabilityFrameCache;
 use hw_logistics::resource_cache::SharedResourceCache;
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_logistics::transport_request::TransportRequestMetrics;
@@ -28,13 +27,14 @@ use hw_spatial::resource::ResourceSpatialGrid;
 use hw_spatial::soul::SpatialGrid;
 use hw_spatial::stockpile::StockpileSpatialGrid;
 use hw_spatial::transport_request::TransportRequestSpatialGrid;
-use hw_world::ObstaclePositionIndex;
 use hw_world::room_detection::{RoomDetectionState, RoomTileLookup, RoomValidationState};
+use hw_world::{ObstaclePositionIndex, RuntimePathSearchBudget, WalkabilityConnectivityCache};
 
 use crate::app_contexts::{
     BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext,
     ZoneContext,
 };
+use crate::systems::energy::grid_recalc::EnergyUpdateDirty;
 use crate::systems::familiar_ai::perceive::resource_sync::{
     ReservationSignatureCache, ReservationSyncTimer,
 };
@@ -141,7 +141,12 @@ pub(crate) fn reset_runtime_caches(world: &mut World) {
     world.insert_resource(SpatialGrid::default());
     world.insert_resource(StockpileSpatialGrid::default());
     world.insert_resource(TransportRequestSpatialGrid::default());
-    world.insert_resource(ReachabilityFrameCache::default());
+    world.insert_resource(WalkabilityConnectivityCache::default());
+    world.insert_resource(RuntimePathSearchBudget::default());
+    world.init_resource::<EnergyUpdateDirty>();
+    world
+        .resource_mut::<EnergyUpdateDirty>()
+        .request_full_rebuild();
 
     let mut regrowth = RegrowthManager::default();
     if let Some(generated_layout) = world.get_resource::<GeneratedWorldLayoutResource>() {
@@ -201,6 +206,8 @@ fn clear_resource_count_labels(world: &mut World) {
 mod tests {
     use super::*;
     use crate::app_contexts::PendingMovePlacement;
+    use hw_core::constants::{MAP_HEIGHT, MAX_PATHFINDS_PER_FRAME};
+    use hw_world::WorldMap;
 
     #[derive(Resource, Default)]
     struct ResetCount(u32);
@@ -266,5 +273,54 @@ mod tests {
             world.resource::<NextState<PlayMode>>(),
             NextState::Pending(PlayMode::Normal)
         ));
+    }
+
+    #[test]
+    fn runtime_cache_reset_drops_connectivity_and_path_budget_for_a_reused_map_version() {
+        let mut blocked_map = WorldMap::default();
+        for y in 0..MAP_HEIGHT {
+            blocked_map.add_grid_obstacle((50, y));
+        }
+
+        let start = (25, 50);
+        let target = (75, 50);
+        let mut world = World::new();
+        world.insert_resource(blocked_map);
+        world.insert_resource(WalkabilityConnectivityCache::default());
+        world.insert_resource(RuntimePathSearchBudget::new(1));
+        assert!(world.resource_mut::<RuntimePathSearchBudget>().try_claim());
+        world.resource_scope(|world, mut cache: Mut<WalkabilityConnectivityCache>| {
+            let map = world.resource::<WorldMap>();
+            assert!(!cache.can_reach_target(map, start, target, true));
+        });
+
+        let obstacle_version = world.resource::<WorldMap>().obstacle_version;
+        let loaded_map = WorldMap {
+            obstacle_version,
+            ..Default::default()
+        };
+        world.insert_resource(loaded_map);
+
+        reset_runtime_caches(&mut world);
+
+        let budget = world.resource::<RuntimePathSearchBudget>();
+        assert_eq!(budget.used(), 0);
+        assert_eq!(budget.hard_limit(), MAX_PATHFINDS_PER_FRAME);
+
+        world.resource_scope(|world, mut cache: Mut<WalkabilityConnectivityCache>| {
+            let map = world.resource::<WorldMap>();
+            assert!(cache.can_reach_target(map, start, target, true));
+        });
+    }
+
+    #[test]
+    fn runtime_cache_reset_requests_one_energy_rebuild_after_load() {
+        let mut world = World::new();
+
+        reset_runtime_caches(&mut world);
+
+        let dirty = world.resource::<EnergyUpdateDirty>();
+        assert!(dirty.power_output_due);
+        assert!(dirty.grid_recalc_due);
     }
 }

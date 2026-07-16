@@ -108,10 +108,10 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 - Decide フェーズの message 出力と world/grid/pathfinding を使うオーケストレーションは `hw_familiar_ai` が所有する
 - root に残すのは `GameAssets` 依存 visual と `SharedResourceCache` 再構築のような app shell 固有処理だけに限定する
 
-**hw_familiar_ai 分担**: `FamiliarAiPlugin` は `hw_familiar_ai::FamiliarAiCorePlugin` を内部で `add_plugins` する。`WorldMapRead` / SpatialGrid / `PathfindingContext` / `MessageWriter` を使う Familiar Decide 系 system も `hw_familiar_ai` 側で所有する。
+**hw_familiar_ai 分担**: `FamiliarAiPlugin` は `hw_familiar_ai::FamiliarAiCorePlugin` を内部で `add_plugins` する。`WorldMapRead` / `WalkabilityConnectivityCache` / SpatialGrid / `MessageWriter` を使う Familiar Decide 系 system も `hw_familiar_ai` 側で所有する。
 
 - `FamiliarAiCorePlugin` が直接登録するもの：
-  - **Resources**: `FamiliarTaskDelegationTimer` / `FamiliarDelegationPerfMetrics` / `ReachabilityFrameCache` / `BlueprintAutoGatherTimer`
+  - **Resources**: `FamiliarTaskDelegationTimer` / `FamiliarDelegationPerfMetrics` / `hw_world::WalkabilityConnectivityCache` / `BlueprintAutoGatherTimer`
   - **RegisterType**: `FamiliarAiState` / `EncouragementCooldown`
   - **Perceive**: `detect_state_changes_system` / `detect_command_changes_system`
   - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → task_delegation`（chain）、`blueprint_auto_gather → ApplyDeferred → encouragement_decision`（chain、`familiar_ai_state_system` の後）
@@ -178,12 +178,12 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 - **仕組み**: UIで使役数が変更されたときのみ `FamiliarOperationMaxSoulChangedEvent` を発火し、超過分の魂をリリースします。
 - **効果**: 毎フレーム全使い魔の使役数をチェックするコストを排除し、変更時のみ処理を実行することでパフォーマンスを向上させています。
 
-### 7.5. 委譲候補の一回収集と到達判定キャッシュ
+### 7.5. 委譲候補の一回収集と到達判定 cache
 委譲処理を「Familiar単位の候補収集」と「worker単位の再スコア・到達判定」に分割し、重複計算を削減しました。
 - **候補一回化**: `collect_scored_candidates` を1回だけ実行し、全アイドルワーカーで候補を使い回します。
 - **Worker基準再スコア**: 候補ごとに worker 距離を再評価し、worker ごとに最適候補順を作成します。
-- **距離フィルタ**: `MAX_ASSIGNMENT_DIST_SQ`（60タイル）を超える候補は A* 前に除外します。
-- **フレーム共有キャッシュ**: `ReachabilityFrameCache`（`(worker_grid, target_grid)` キー）で到達判定結果を複数フレームにわたって共有します。クリア条件は実装どおり **`WorldMap` の Bevy 変更検知時**、または **経過フレーム数が `REACHABILITY_CACHE_SAFETY_CLEAR_INTERVAL_FRAMES`（60）に達したとき**（委譲タイマーの 0.5 秒間隔とは独立）です。
+- **距離フィルタ**: `MAX_ASSIGNMENT_DIST_SQ`（60タイル）を超える候補は連結成分判定前に除外します。
+- **version付き連結成分 cache**: `hw_world::WalkabilityConnectivityCache` が `WorldMap.obstacle_version` ごとに dense component ID 配列を一度だけ構築し、worker/target の Boolean 到達判定を O(1) にします。`WorldMap` の Bevy 変更検知や 60 frame TTL で全消去する旧 `ReachabilityFrameCache` は廃止しました。Open/Closed Door は cache を再構築せず、Locked 等の walkability topology 変更だけが次回問い合わせの flood-fill を発火します。save/load の world replacement では cache を明示 reset します。
 - **Top-K 先行評価**: 優先候補（`TASK_DELEGATION_TOP_K`）を先に評価し、必要時のみ残り候補を評価します。
 - **複数同時割り当て（仮想ワーカー追跡）**: 1回の委譲サイクル内で同一タスクへ複数ワーカーを同時割り当て可能です。`task_virtual_workers: HashMap<Entity, usize>` でサイクル内の仮想割り当て数を追跡し、スロット判定を `current_workers(ECS) + virtual_workers >= max_slots` で行います。これにより、壁建設で木材×10が必要な場合でも1サイクルで最大10体を同時発行でき、以前の「1体/0.5秒」による最大5秒の遅延を解消します。過剰割り当ては `ReservationShadow` によって引き続き防止されます。
 
@@ -201,13 +201,13 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 
 ### 7.7. タスク委譲のタイマーゲート
 - **仕組み**: `familiar_task_delegation_system` は **0.5秒間隔（初回即時）** で実行されます。
-- **効果**: タスク候補ごとの到達可能性チェック（A*）の呼び出し頻度を抑制し、ピーク時のCPU負荷を削減します。
+- **効果**: タスク候補ごとの Boolean 到達判定は連結成分 cache を使うため、実経路生成 A* を起動せずに判定できます。timer は候補収集・スコアリングの頻度を抑制します。
 
 ### 7.8. Blueprint / Mixer不足資材の自動Gather
 - **仕組み**: `blueprint_auto_gather_system` が **1.0秒間隔（初回即時）** で実行され、`DeliverToBlueprint` request（Wood / Rock）と `DeliverToMixerSolid` request（Rock）から不足を検知します。
 - **オーナー**: Active な Familiar と **Yard エンティティの両方**を `owner_infos` に登録して需要・供給を集計します。Yard エンティティの `path_start` はヤード中心の最寄り歩行可能グリッドで算出されます。
 - **探索順**: `TaskArea`（または Yard 境界）内 -> 外周 10 タイル -> 30 -> 60 -> 到達可能な全域の順で候補を走査し、近傍優先で決定します。
-- **負荷制御**: 各段階で経路判定件数に上限を設け、必要量が満たされた時点で探索を打ち切ります。
+- **負荷制御**: 各段階で連結成分による到達判定件数に上限を設け、必要量が満たされた時点で探索を打ち切ります。判定そのものは waypoint A* を起動しません。
 - **整合性**: 既存の地面資材・手動指定・既発行AutoGatherを加味して過剰発行を抑制し、不要になった未着手AutoGatherは marker ベースで回収します。
 
 ## 8. ビジュアルとアニメーション (Visuals & Animation)

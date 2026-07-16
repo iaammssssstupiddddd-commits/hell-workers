@@ -47,6 +47,7 @@ pub fn handle_gather_task(
             ) {
                 NavOutcome::Moving => {}
                 NavOutcome::Ended(control) => return control,
+                NavOutcome::Deferred => return TaskHandlerControl::Continue,
                 NavOutcome::Unreachable => {
                     debug!(
                         "GATHER: Soul {:?} cannot reach target {:?}, canceling",

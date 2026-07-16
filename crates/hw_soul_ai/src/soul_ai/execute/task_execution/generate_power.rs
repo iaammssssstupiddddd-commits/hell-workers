@@ -40,21 +40,16 @@ pub fn handle_generate_power_task(
 
             let tile_pos = data.tile_pos;
 
-            let reachable = update_destination_to_adjacent(
-                ctx.dest,
-                tile_pos,
-                ctx.path,
-                soul_pos,
-                ctx.env.world_map,
-                ctx.pf_context,
-            );
-
-            if !reachable {
-                debug!(
-                    "GENERATE_POWER: Soul {:?} cannot reach tile {:?}, canceling",
-                    ctx.soul_entity, tile_entity
-                );
-                return ctx.abort_retryable(commands, "generate power tile unreachable");
+            match update_task_destination_to_adjacent(ctx, tile_pos) {
+                PathSearchResult::Found(()) => {}
+                PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                PathSearchResult::Unreachable => {
+                    debug!(
+                        "GENERATE_POWER: Soul {:?} cannot reach tile {:?}, canceling",
+                        ctx.soul_entity, tile_entity
+                    );
+                    return ctx.abort_retryable(commands, "generate power tile unreachable");
+                }
             }
 
             if is_near_target(soul_pos, tile_pos) {

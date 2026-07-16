@@ -4,9 +4,14 @@ use bevy::prelude::*;
 use hw_core::events::GatheringSpawnRequest;
 use hw_core::gathering::*;
 use hw_core::relationships::{CommandedBy, ParticipatingIn};
+#[cfg(feature = "profiling")]
+use hw_core::simulation_rng::{FixedAuditSeed, SimulationRandomState, SimulationRng};
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState};
 use hw_jobs::AssignedTask;
 use hw_spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
+
+#[cfg(feature = "profiling")]
+const GATHERING_OBJECT_TYPE_STREAM: u64 = 0x6761_7468_5f6f_626a;
 
 type GatheringSpawnSoulQuery<'w, 's> = Query<
     'w,
@@ -32,6 +37,13 @@ pub struct GatheringSpawnResources<'w> {
     pub update_timer: Res<'w, GatheringUpdateTimer>,
 }
 
+#[cfg(feature = "profiling")]
+#[derive(SystemParam)]
+pub struct GatheringSpawnProfiling<'w, 's> {
+    audit_seed: Option<Res<'w, FixedAuditSeed>>,
+    random_states: Query<'w, 's, &'static mut SimulationRandomState>,
+}
+
 /// 集会スポット発生判定システム (純粋ロジック・Execute Phase)
 ///
 /// GatheringReadiness をティックし、発生条件が揃ったら GatheringSpawnRequest を送信する。
@@ -43,7 +55,14 @@ pub fn gathering_spawn_logic_system(
     mut q_readiness: Query<&mut GatheringReadiness>,
     mut spawn_requests: MessageWriter<GatheringSpawnRequest>,
     res: GatheringSpawnResources,
+    #[cfg(feature = "profiling")] profiling: GatheringSpawnProfiling,
 ) {
+    #[cfg(feature = "profiling")]
+    let GatheringSpawnProfiling {
+        audit_seed,
+        mut random_states,
+    } = profiling;
+
     if !res.update_timer.timer.just_finished() {
         return;
     }
@@ -81,6 +100,17 @@ pub fn gathering_spawn_logic_system(
         if let Ok(mut readiness) = q_readiness.get_mut(entity) {
             readiness.idle_time += dt;
             if readiness.idle_time >= spawn_time {
+                #[cfg(feature = "profiling")]
+                let object_type = {
+                    let mut random_state = random_states.get_mut(entity).ok();
+                    let mut rng = SimulationRng::for_actor(
+                        audit_seed.as_deref(),
+                        random_state.as_deref_mut(),
+                        GATHERING_OBJECT_TYPE_STREAM,
+                    );
+                    GatheringObjectType::random_weighted_with_rng(nearby_souls + 1, &mut rng)
+                };
+                #[cfg(not(feature = "profiling"))]
                 let object_type = GatheringObjectType::random_weighted(nearby_souls + 1);
                 spawn_requests.write(GatheringSpawnRequest {
                     pos,

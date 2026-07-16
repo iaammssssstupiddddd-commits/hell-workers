@@ -1,3 +1,5 @@
+#[cfg(feature = "profiling")]
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use hw_core::constants::*;
@@ -41,17 +43,29 @@ type GatheringSeparationQuery<'w, 's> = Query<
     With<DamnedSoul>,
 >;
 
+#[cfg(feature = "profiling")]
+#[derive(SystemParam)]
+pub(crate) struct GatheringSeparationProfiling<'w, 's> {
+    audit_seed: Option<Res<'w, FixedAuditSeed>>,
+    random_states: Query<'w, 's, &'static mut SimulationRandomState>,
+}
+
 /// 集会中のSoul同士の重なりを防ぐシステム（0.5秒間隔）
-pub fn gathering_separation_system(
-    #[cfg(feature = "profiling")] audit_seed: Option<Res<FixedAuditSeed>>,
+pub(crate) fn gathering_separation_system(
     world_map: Res<WorldMap>,
     q_spots: Query<&GatheringSpot>,
     update_timer: Res<GatheringUpdateTimer>,
     soul_grid: Res<SpatialGrid>,
     mut nearby_buf: Local<Vec<Entity>>,
     mut q_souls: GatheringSeparationQuery,
-    #[cfg(feature = "profiling")] mut random_states: Query<&mut SimulationRandomState>,
+    #[cfg(feature = "profiling")] profiling: GatheringSeparationProfiling,
 ) {
+    #[cfg(feature = "profiling")]
+    let GatheringSeparationProfiling {
+        audit_seed,
+        mut random_states,
+    } = profiling;
+
     if !update_timer.timer.just_finished() {
         return;
     }

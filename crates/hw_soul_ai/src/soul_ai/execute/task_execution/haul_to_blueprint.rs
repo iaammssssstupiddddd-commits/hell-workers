@@ -40,18 +40,16 @@ pub fn handle_haul_to_blueprint_task(
             if let Ok((item_transform, _, _, _, _, _, stored_in_opt)) = q_targets.get(item_entity) {
                 let item_pos = item_transform.translation.truncate();
                 let stored_in_entity = stored_in_opt.map(|stored_in| stored_in.0);
-                update_destination_to_adjacent(
-                    ctx.dest,
-                    item_pos,
-                    ctx.path,
-                    soul_pos,
-                    ctx.env.world_map,
-                    ctx.pf_context,
-                );
+                if matches!(
+                    update_task_destination_to_adjacent(ctx, item_pos),
+                    PathSearchResult::Deferred
+                ) {
+                    return TaskHandlerControl::Continue;
+                }
                 let is_near = can_pickup_item(soul_pos, item_pos);
 
                 if is_near {
-                    pickup_item(commands, ctx.soul_entity, item_entity, ctx.inventory);
+                    pickup_item(commands, ctx.soul_entity, item_entity, &mut ctx.inventory);
                     release_mixer_mud_storage_for_item(ctx, item_entity, commands);
 
                     if let Some(stored_in) = stored_in_entity {
@@ -92,25 +90,29 @@ pub fn handle_haul_to_blueprint_task(
         HaulToBpPhase::GoingToBlueprint => {
             if let Ok((_bp_transform, bp, _)) = ctx.queries.storage.blueprints.get(blueprint_entity)
             {
-                let reachable = update_destination_to_blueprint(
-                    ctx.dest,
+                match update_destination_to_blueprint(
+                    &mut ctx.dest,
                     &bp.occupied_grids,
-                    ctx.path,
+                    &mut ctx.path,
                     soul_pos,
                     ctx.env.world_map,
                     ctx.pf_context,
-                );
-                if !reachable {
-                    debug!(
-                        "HAUL_TO_BP: Cancelled for {:?} - Blueprint {:?} unreachable",
-                        ctx.soul_entity, blueprint_entity
-                    );
-                    return cancel::cancel_haul_to_blueprint(
-                        ctx,
-                        item_entity,
-                        blueprint_entity,
-                        commands,
-                    );
+                    ctx.path_budget,
+                ) {
+                    PathSearchResult::Found(()) => {}
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        debug!(
+                            "HAUL_TO_BP: Cancelled for {:?} - Blueprint {:?} unreachable",
+                            ctx.soul_entity, blueprint_entity
+                        );
+                        return cancel::cancel_haul_to_blueprint(
+                            ctx,
+                            item_entity,
+                            blueprint_entity,
+                            commands,
+                        );
+                    }
                 }
 
                 if is_near_blueprint(soul_pos, &bp.occupied_grids) {

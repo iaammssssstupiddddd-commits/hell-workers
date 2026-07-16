@@ -12,6 +12,7 @@ use super::super::{
 };
 use super::path::{FamiliarDecisionPath, determine_decision_path};
 use super::result::{FamiliarStateDecisionResult, emit_state_decision_messages};
+use crate::familiar_ai::decide::resources::FamiliarStateDecisionTimer;
 use crate::familiar_ai::decide::{
     helpers::{
         FamiliarSquadContext, SquadManagementOutcome, finalize_state_transitions,
@@ -23,11 +24,31 @@ use crate::familiar_ai::decide::{
 };
 use hw_jobs::AssignedTask;
 
+type FamiliarDirtyQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    (
+        With<hw_core::familiar::Familiar>,
+        Or<(
+            Added<hw_core::familiar::Familiar>,
+            Changed<hw_core::familiar::ActiveCommand>,
+            Changed<hw_core::familiar::FamiliarOperation>,
+            Changed<hw_core::familiar::FamiliarAiState>,
+            Changed<hw_core::relationships::Commanding>,
+            Changed<hw_core::area::TaskArea>,
+        )>,
+    ),
+>;
+
 /// 使い魔AIの状態決定に必要なSystemParam
 #[derive(SystemParam)]
 pub struct FamiliarAiStateDecisionParams<'w, 's> {
+    pub time: Res<'w, Time>,
+    pub decision_timer: ResMut<'w, FamiliarStateDecisionTimer>,
     pub spatial_grid: Res<'w, SpatialGrid>,
-    pub q_familiars: FamiliarStateQuery<'w, 's>,
+    pub familiar_queries:
+        ParamSet<'w, 's, (FamiliarStateQuery<'w, 's>, FamiliarDirtyQuery<'w, 's>)>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub q_breakdown: Query<'w, 's, &'static StressBreakdown>,
     pub q_resting: Query<'w, 's, (), With<hw_core::relationships::RestingIn>>,
@@ -39,8 +60,10 @@ pub struct FamiliarAiStateDecisionParams<'w, 's> {
 /// 使い魔AIの状態更新システム（Decide Phase）
 pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
     let FamiliarAiStateDecisionParams {
+        time,
+        mut decision_timer,
         spatial_grid,
-        mut q_familiars,
+        mut familiar_queries,
         mut q_souls,
         q_breakdown,
         q_resting,
@@ -49,6 +72,10 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
         mut nearby_buf,
         ..
     } = params;
+
+    let cadence_due = decision_timer.advance(time.delta());
+    let dirty_familiars = familiar_queries.p1().iter().collect::<HashSet<_>>();
+    let mut q_familiars = familiar_queries.p0();
 
     // 同フレーム内での重複リクルートを防ぐ予約セット
     let mut recruitment_reservations: HashSet<Entity> = HashSet::new();
@@ -66,6 +93,20 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
         commanding,
     ) in q_familiars.iter_mut()
     {
+        // Candidate scans and squad validation run on the explicit cadence.
+        // An input/relationship mutation wakes the affected Familiar
+        // immediately. Scouting is intentionally continuous: it follows an
+        // already selected target and therefore belongs to movement cadence.
+        if !cadence_due
+            && !dirty_familiars.contains(&fam_entity)
+            && !matches!(
+                *ai_state,
+                hw_core::familiar::FamiliarAiState::Scouting { .. }
+            )
+        {
+            continue;
+        }
+
         debug!(
             "FAM_AI: {:?} Processing. Command: {:?}, State: {:?}, Area: {}",
             fam_entity,

@@ -14,4 +14,6 @@ pub use rest_area::{
     find_nearest_available_rest_area, has_arrived_at_rest_area,
     nearest_walkable_adjacent_to_rest_area, rest_area_has_capacity,
 };
-pub(crate) use system::idle_behavior_decision_system;
+pub(crate) use system::{
+    clear_idle_decision_wake_system, idle_behavior_decision_system, mark_needs_idle_decision_system,
+};

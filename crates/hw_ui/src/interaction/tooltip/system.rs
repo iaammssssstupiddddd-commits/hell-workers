@@ -96,6 +96,10 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
     let mut hovered_button_x_span = None;
     let mut hovered_button_y_span = None;
     let mut payload = String::new();
+    let inspection_refresh_due = runtime
+        .inspection_refresh_timer
+        .tick(bevy.time.delta())
+        .just_finished();
 
     if let Some((button_entity, _, tooltip_data, menu_button, computed, transform)) = hovered_button
     {
@@ -124,18 +128,30 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
             tooltip_lines: vec![reason.clone()],
             soul: None,
         });
-    } else if let Some(entity) = bevy.hovered.0
-        && let Some(built_model) = handlers.inspection.build_model(entity)
-    {
+    } else if let Some(entity) = bevy.hovered.0 {
+        let world_target = Some(TooltipTarget::WorldEntity(entity));
         template = handlers.inspection.classify_template(entity);
-        payload = format!(
-            "entity:{entity:?}:{}:{}:{}",
-            built_model.header,
-            built_model.common_text,
-            built_model.tooltip_lines.join("|"),
-        );
-        model = Some(built_model);
-        target = Some(TooltipTarget::WorldEntity(entity));
+        if runtime.target != world_target || inspection_refresh_due {
+            if let Some(built_model) = handlers.inspection.build_model(entity) {
+                payload = format!(
+                    "entity:{entity:?}:{}:{}:{}",
+                    built_model.header,
+                    built_model.common_text,
+                    built_model.tooltip_lines.join("|"),
+                );
+                model = Some(built_model);
+                target = world_target;
+                if runtime.target != world_target {
+                    runtime.inspection_refresh_timer.reset();
+                }
+            }
+        } else {
+            // The entity and its last rendered payload are still valid for the
+            // 10 Hz inspection cadence. Cursor layout/fade below remains
+            // frame-driven without rebuilding strings or tooltip children.
+            target = world_target;
+            payload = runtime.payload.clone();
+        }
     }
 
     let target_changed = runtime.target != target;

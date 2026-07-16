@@ -2,12 +2,11 @@
 
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{
-    ConversationExpression, ConversationExpressionKind, DamnedSoul, GatheringBehavior,
-    IdleBehavior, IdleState, StressBreakdown,
+    ConversationExpression, ConversationExpressionKind, GatheringBehavior, IdleBehavior, IdleState,
+    StressBreakdown,
 };
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
-use hw_core::constants::*;
 
 fn select_soul_image<'a>(
     game_assets: &'a GameAssets,
@@ -59,10 +58,8 @@ type AnimationQuery<'w, 's> = Query<
     'w,
     's,
     (
-        &'static mut Transform,
         Option<&'static mut Sprite>,
         &'static mut crate::entities::damned_soul::AnimationState,
-        &'static DamnedSoul,
         &'static IdleState,
         &'static AssignedTask,
         Option<&'static StressBreakdown>,
@@ -72,9 +69,7 @@ type AnimationQuery<'w, 's> = Query<
 
 /// アニメーションシステム
 pub fn animation_system(time: Res<Time>, game_assets: Res<GameAssets>, mut query: AnimationQuery) {
-    for (mut transform, sprite_opt, mut anim, soul, idle, task, breakdown_opt, expression_opt) in
-        query.iter_mut()
-    {
+    for (sprite_opt, mut anim, idle, task, breakdown_opt, expression_opt) in query.iter_mut() {
         if let Some(mut sprite) = sprite_opt {
             // 進行方向に応じて左右反転（facing_right は movement 側で更新）
             sprite.flip_x = anim.facing_right;
@@ -103,33 +98,10 @@ pub fn animation_system(time: Res<Time>, game_assets: Res<GameAssets>, mut query
         );
 
         if !is_gathering_with_custom_animation {
-            // 浮遊アニメーション（translation はロジック座標と干渉するため変更しない）
+            // Wheelbarrow 等が読む visual-only timer は残す。Soul の通常表示は
+            // root Transform を読まない独立 GLB proxy なので、scale / rotation
+            // の書き込みは行わない。
             anim.bob_timer += time.delta_secs();
-            let sway = (anim.bob_timer * SOUL_FLOAT_SWAY_SPEED).sin();
-
-            let speed_scale = if anim.is_moving { 1.3 } else { 1.0 };
-            let pulse_speed =
-                (SOUL_FLOAT_PULSE_SPEED_BASE + (1.0 - soul.laziness) * 0.4) * speed_scale;
-            let pulse = (anim.bob_timer * pulse_speed).sin();
-            let pulse_amplitude = if anim.is_moving {
-                SOUL_FLOAT_PULSE_AMPLITUDE_MOVE
-            } else {
-                SOUL_FLOAT_PULSE_AMPLITUDE_IDLE
-            };
-            let base_scale = if anim.is_moving { 1.02 } else { 1.0 };
-
-            transform.scale = Vec3::new(
-                base_scale + pulse * (pulse_amplitude * 0.6),
-                base_scale + pulse * pulse_amplitude,
-                1.0,
-            );
-
-            let tilt = if anim.is_moving {
-                SOUL_FLOAT_SWAY_TILT_MOVE
-            } else {
-                SOUL_FLOAT_SWAY_TILT_IDLE
-            };
-            transform.rotation = Quat::from_rotation_z(sway * tilt);
         }
     }
 }

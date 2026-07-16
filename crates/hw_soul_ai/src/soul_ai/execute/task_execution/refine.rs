@@ -21,25 +21,20 @@ pub fn handle_refine_task(
                 let (mixer_transform, _, _) = mixer_data;
                 let mixer_pos = mixer_transform.translation.truncate();
 
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    mixer_pos,
-                    ctx.path,
-                    soul_pos,
-                    ctx.env.world_map,
-                    ctx.pf_context,
-                );
-
-                if !reachable {
-                    debug!(
-                        "REFINE: Soul {:?} cannot reach mixer {:?}, canceling",
-                        ctx.soul_entity, mixer_entity
-                    );
-                    commands
-                        .entity(mixer_entity)
-                        .remove::<hw_jobs::Designation>();
-                    commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
-                    return ctx.abort_retryable(commands, "refine mixer unreachable");
+                match update_task_destination_to_adjacent(ctx, mixer_pos) {
+                    PathSearchResult::Found(()) => {}
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        debug!(
+                            "REFINE: Soul {:?} cannot reach mixer {:?}, canceling",
+                            ctx.soul_entity, mixer_entity
+                        );
+                        commands
+                            .entity(mixer_entity)
+                            .remove::<hw_jobs::Designation>();
+                        commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
+                        return ctx.abort_retryable(commands, "refine mixer unreachable");
+                    }
                 }
 
                 if is_near_target_or_dest(soul_pos, mixer_pos, ctx.dest.0) {

@@ -13,20 +13,36 @@ use hw_core::soul::{
 use hw_jobs::AssignedTask;
 use hw_jobs::tasks::GeneratePowerPhase;
 
+use super::slow_simulation::SlowSimulationClock;
+
+pub(crate) type DreamUpdateQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut DamnedSoul,
+        &'static IdleState,
+        &'static mut DreamState,
+        &'static AssignedTask,
+        Option<&'static ParticipatingIn>,
+    ),
+>;
+
 /// SoulのDream蓄積・放出を処理するシステム
 pub fn dream_update_system(
-    time: Res<Time>,
+    clock: Res<SlowSimulationClock>,
     mut dream_pool: ResMut<DreamPool>,
-    mut q_souls: Query<(
-        &mut DamnedSoul,
-        &IdleState,
-        &mut DreamState,
-        &AssignedTask,
-        Option<&ParticipatingIn>,
-    )>,
+    mut q_souls: DreamUpdateQuery,
 ) {
-    let dt = time.delta_secs();
+    for _ in 0..clock.steps_this_frame() {
+        dream_update_step(clock.step_secs(), &mut dream_pool, &mut q_souls);
+    }
+}
 
+pub(crate) fn dream_update_step(
+    dt: f32,
+    dream_pool: &mut DreamPool,
+    q_souls: &mut DreamUpdateQuery,
+) {
     for (mut soul, idle, mut dream, task, participating_in) in q_souls.iter_mut() {
         let is_sleeping = idle.behavior == IdleBehavior::Sleeping
             || (idle.behavior == IdleBehavior::Gathering

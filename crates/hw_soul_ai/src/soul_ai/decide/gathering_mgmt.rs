@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use hw_core::constants::{ESCAPE_GATHERING_JOIN_RADIUS, ESCAPE_SAFE_DISTANCE_MULTIPLIER};
@@ -151,17 +152,40 @@ type GatheringRecruitSoulQuery<'w, 's> = Query<
     ),
 >;
 
+#[derive(SystemParam)]
+pub(crate) struct GatheringRecruitmentParams<'w, 's> {
+    #[cfg(feature = "profiling")]
+    audit_seed: Option<Res<'w, FixedAuditSeed>>,
+    q_spots: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static GatheringSpot,
+            &'static GatheringParticipants,
+        ),
+    >,
+    soul_grid: Res<'w, SpatialGrid>,
+    nearby_buf: Local<'s, Vec<Entity>>,
+    q_souls: GatheringRecruitSoulQuery<'w, 's>,
+    q_familiars: Query<'w, 's, (&'static Transform, &'static Familiar)>,
+    update_timer: Res<'w, GatheringUpdateTimer>,
+    decide_output: SoulDecideOutput<'w>,
+}
+
 /// 条件を満たすSoulの集会参加を Recruit 要求に変換する
-pub fn gathering_recruitment_decision(
-    #[cfg(feature = "profiling")] audit_seed: Option<Res<FixedAuditSeed>>,
-    q_spots: Query<(Entity, &GatheringSpot, &GatheringParticipants)>,
-    soul_grid: Res<SpatialGrid>,
-    mut nearby_buf: Local<Vec<Entity>>,
-    q_souls: GatheringRecruitSoulQuery,
-    q_familiars: Query<(&Transform, &Familiar)>,
-    update_timer: Res<GatheringUpdateTimer>,
-    mut decide_output: SoulDecideOutput,
-) {
+pub(crate) fn gathering_recruitment_decision(params: GatheringRecruitmentParams) {
+    let GatheringRecruitmentParams {
+        #[cfg(feature = "profiling")]
+        audit_seed,
+        q_spots,
+        soul_grid,
+        mut nearby_buf,
+        q_souls,
+        q_familiars,
+        update_timer,
+        mut decide_output,
+    } = params;
     if !update_timer.timer.just_finished() {
         return;
     }

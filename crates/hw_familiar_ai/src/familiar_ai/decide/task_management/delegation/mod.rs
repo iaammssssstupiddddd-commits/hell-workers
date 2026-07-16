@@ -6,17 +6,15 @@ use hw_core::area::TaskArea;
 use hw_core::relationships::ManagedTasks;
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
-use hw_world::WorldMap;
-use hw_world::pathfinding::PathfindingContext;
-use std::collections::HashMap;
+use hw_world::{WalkabilityConnectivityCache, WorldMap};
 
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 use crate::familiar_ai::decide::task_management::{
     FamiliarSoulQuery, FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot, ReservationShadow,
 };
 
+pub use assignment_loop::take_reachable_with_cache_calls;
 use assignment_loop::try_assign_for_workers;
-pub use assignment_loop::{ReachabilityCacheKey, take_reachable_with_cache_calls};
 use members::collect_idle_members;
 
 /// タスク委譲に必要なイミュータブルな環境データをまとめた構造体。
@@ -35,12 +33,6 @@ pub struct DelegationEnvCtx<'a> {
     pub incoming_snapshot: &'a IncomingDeliverySnapshot,
 }
 
-/// パスファインディング関連のミュータブルな状態をまとめた構造体。
-pub struct PathfindingCtxMut<'a> {
-    pub pf_context: &'a mut PathfindingContext,
-    pub reachability_cache: &'a mut HashMap<ReachabilityCacheKey, bool>,
-}
-
 pub struct TaskManager;
 
 impl TaskManager {
@@ -49,7 +41,7 @@ impl TaskManager {
         queries: &mut FamiliarTaskAssignmentQueries,
         construction_sites: &impl ConstructionSitePositions,
         q_souls: &mut FamiliarSoulQuery,
-        pf_ctx: &mut PathfindingCtxMut<'_>,
+        connectivity_cache: &mut WalkabilityConnectivityCache,
         reservation_shadow: &mut ReservationShadow,
     ) -> Option<Entity> {
         let idle_members = collect_idle_members(env.squad, env.fatigue_threshold, q_souls);
@@ -60,7 +52,7 @@ impl TaskManager {
             queries,
             construction_sites,
             q_souls,
-            pf_ctx,
+            connectivity_cache,
             reservation_shadow,
         )
     }

@@ -30,7 +30,6 @@ pub fn dream_trail_ghost_update_system(
             alpha: alpha_to_bucket(alpha),
             mass: bucket.mass,
             color: bucket.color,
-            velocity: bucket.velocity,
         };
         apply_ui_material_bucket(&mut mat_node, &mut bucket, desired, &handles);
     }

@@ -12,7 +12,6 @@ struct DreamBubbleUiMaterial {
     color: vec4<f32>,       // offset 0:  ベース色 (16 bytes)
     alpha: f32,             // offset 16: 透明度
     mass: f32,              // offset 20: 質量
-    velocity_dir: vec2<f32>,// offset 24: 移動方向（正規化済み）
 }
 
 @group(1) @binding(0) var<uniform> material: DreamBubbleUiMaterial;

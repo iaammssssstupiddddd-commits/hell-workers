@@ -201,7 +201,6 @@ fn update_merging_particle(
             alpha: alpha_to_bucket(alpha),
             mass: mass_to_bucket(particle.mass),
             color: material_bucket.color,
-            velocity: material_bucket.velocity,
         };
         apply_ui_material_bucket(mat_node, material_bucket, desired, handles);
         return particle.merge_timer <= 0.0;
@@ -236,7 +235,6 @@ pub fn spawn_ui_particle(
         alpha: 0,
         mass: mass_to_bucket(mass),
         color: 0,
-        velocity: 0,
     };
     let material = handles.materials[bucket_material_index(bucket)].clone();
 

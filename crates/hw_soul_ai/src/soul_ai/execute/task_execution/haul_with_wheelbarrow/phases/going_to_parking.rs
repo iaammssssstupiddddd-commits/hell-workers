@@ -32,6 +32,7 @@ pub fn handle(
     let wb_pos = wb_transform.translation.truncate();
     match navigate_to_pos(ctx, wb_pos, soul_pos, ctx.env.world_map) {
         NavOutcome::Moving => return TaskHandlerControl::Continue,
+        NavOutcome::Deferred => return TaskHandlerControl::Continue,
         NavOutcome::Unreachable => {
             return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
         }

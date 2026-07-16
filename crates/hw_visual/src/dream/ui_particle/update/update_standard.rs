@@ -8,7 +8,7 @@ use super::super::super::components::DreamGainUiParticle;
 use super::super::super::dream_bubble_material::DreamBubbleUiMaterial;
 use super::super::super::ui_handles::{
     DreamBubbleUiHandles, DreamUiMaterialBucket, alpha_to_bucket, apply_ui_material_bucket,
-    color_to_bucket, mass_to_bucket, velocity_to_bucket,
+    color_to_bucket, mass_to_bucket,
 };
 use super::update_trail::spawn_trail_ghost;
 
@@ -312,7 +312,6 @@ fn update_standard_particle_visual(
         alpha: alpha_to_bucket(alpha),
         mass: mass_to_bucket(particle.mass),
         color: color_to_bucket(motion.visual_distance_ratio),
-        velocity: velocity_to_bucket(motion.vel_dir),
     };
     apply_ui_material_bucket(mat_node, material_bucket, desired, handles);
 }

@@ -22,22 +22,24 @@ type RangeIndicatorQuery<'w, 's> = Query<
 /// オーラのパルスアニメーションと位置追従システム
 pub fn update_familiar_range_indicator(
     time: Res<Time>,
-    q_familiars: Query<(Entity, &Transform, &Familiar, &FamiliarAnimation)>,
+    q_familiars: Query<(Entity, &Transform, &Familiar)>,
     selected: Res<crate::interface::selection::SelectedEntity>,
     mut q_indicators: RangeIndicatorQuery,
 ) {
     let selected_fam = selected.0;
 
     for (indicator, mut transform, mut sprite, aura_opt, layer_opt) in q_indicators.iter_mut() {
-        if let Ok((_, fam_transform, familiar, fam_anim)) = q_familiars.get(indicator.0) {
+        if let Ok((_, fam_transform, familiar)) = q_familiars.get(indicator.0) {
             let z = match layer_opt {
                 Some(AuraLayer::Border) => Z_AURA,
                 Some(AuraLayer::Outline) => Z_AURA + 0.01,
                 Some(AuraLayer::Pulse) => Z_AURA + 0.03,
                 None => Z_AURA,
             };
-            let ground_pos = fam_transform.translation - Vec3::Y * fam_anim.hover_offset;
-            transform.translation = ground_pos.truncate().extend(z);
+            let desired_translation = fam_transform.translation.truncate().extend(z);
+            if transform.translation != desired_translation {
+                transform.translation = desired_translation;
+            }
 
             let is_selected = selected_fam == Some(indicator.0);
 

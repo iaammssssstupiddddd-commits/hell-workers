@@ -5,6 +5,7 @@ use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use bevy::time::Real;
 use hw_core::ecs::drain_removed;
 use hw_core::relationships::{CommandedBy, Commanding};
 use hw_ui::components::{SectionFolded, UnassignedFolded};
@@ -90,6 +91,15 @@ pub fn detect_entity_list_changes(
     if value_changed {
         dirty.mark_values();
     }
+}
+
+/// Opens the value-only UI sync latch at most once per 100 ms. This is kept
+/// separate from change detection so structural UI edits remain immediate.
+pub fn advance_entity_list_value_cadence_system(
+    time: Res<Time<Real>>,
+    mut dirty: ResMut<EntityListDirty>,
+) {
+    dirty.advance_value_gate(time.delta());
 }
 
 #[cfg(test)]

@@ -1,7 +1,10 @@
 //! バケツ搬送共通ルーティング
 
-use crate::soul_ai::execute::task_execution::common::update_destination_to_adjacent;
+use crate::soul_ai::execute::task_execution::common::{
+    PathSearchResult, update_bucket_destination_to_adjacent,
+};
 use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
+use crate::soul_ai::execute::task_execution::transport_common::reservation;
 use crate::soul_ai::execute::task_execution::types::{
     AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
     BucketTransportSource,
@@ -20,20 +23,30 @@ fn set_task_phase(
     });
 }
 
-/// 川グリッドへの経路を設定する。成功時は Some(())、失敗時は None。
+/// 川グリッドへの経路を設定する。
 pub fn set_path_to_river(
     ctx: &mut TaskExecutionContext,
     world_map: &WorldMap,
     data: &BucketTransportData,
-) -> Option<()> {
-    let river_grid = world_map.get_nearest_river_grid(ctx.soul_transform.translation.truncate())?;
-    let path = hw_world::find_path_to_adjacent(
+) -> PathSearchResult<()> {
+    let Some(river_grid) =
+        world_map.get_nearest_river_grid(ctx.soul_transform.translation.truncate())
+    else {
+        return PathSearchResult::Unreachable;
+    };
+    let path = match hw_world::find_path_to_adjacent_with_budget(
         world_map,
         ctx.pf_context,
+        ctx.path_budget,
+        hw_world::PathSearchCaller::BucketTransport,
         WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
         river_grid,
         true,
-    )?;
+    ) {
+        PathSearchResult::Found(path) => path,
+        PathSearchResult::Unreachable => return PathSearchResult::Unreachable,
+        PathSearchResult::Deferred => return PathSearchResult::Deferred,
+    };
 
     set_task_phase(ctx, data, BucketTransportPhase::GoingToSource);
 
@@ -48,7 +61,7 @@ pub fn set_path_to_river(
         .map(|&(x, y)| WorldMap::grid_to_world(x, y))
         .collect();
     ctx.path.current_index = 0;
-    Some(())
+    PathSearchResult::Found(())
 }
 
 /// グリッド境界への経路を設定する（バケツ位置への移動など）。
@@ -57,13 +70,19 @@ pub fn set_path_to_grid_boundary(
     world_map: &WorldMap,
     target_grid: (i32, i32),
     fallback_pos: Vec2,
-) -> Option<()> {
-    let path = hw_world::find_path_to_boundary(
+) -> PathSearchResult<()> {
+    let path = match hw_world::find_path_to_boundary_with_budget(
         world_map,
         ctx.pf_context,
+        ctx.path_budget,
+        hw_world::PathSearchCaller::BucketTransport,
         WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
         &[target_grid],
-    )?;
+    ) {
+        PathSearchResult::Found(path) => path,
+        PathSearchResult::Unreachable => return PathSearchResult::Unreachable,
+        PathSearchResult::Deferred => return PathSearchResult::Deferred,
+    };
 
     if let Some(last_grid) = path.last() {
         ctx.dest.0 = WorldMap::grid_to_world(last_grid.0, last_grid.1);
@@ -76,7 +95,7 @@ pub fn set_path_to_grid_boundary(
         .map(|&(x, y)| WorldMap::grid_to_world(x, y))
         .collect();
     ctx.path.current_index = 0;
-    Some(())
+    PathSearchResult::Found(())
 }
 
 /// タンク境界への経路を設定する。
@@ -86,16 +105,22 @@ pub fn set_path_to_tank_boundary(
     tank_pos: Vec2,
     data: &BucketTransportData,
     next_phase: BucketTransportPhase,
-) -> Option<()> {
+) -> PathSearchResult<()> {
     let (cx, cy) = WorldMap::world_to_grid(tank_pos);
     let tank_grids = vec![(cx - 1, cy - 1), (cx, cy - 1), (cx - 1, cy), (cx, cy)];
 
-    let path = hw_world::find_path_to_boundary(
+    let path = match hw_world::find_path_to_boundary_with_budget(
         world_map,
         ctx.pf_context,
+        ctx.path_budget,
+        hw_world::PathSearchCaller::BucketTransport,
         WorldMap::world_to_grid(ctx.soul_transform.translation.truncate()),
         &tank_grids,
-    )?;
+    ) {
+        PathSearchResult::Found(path) => path,
+        PathSearchResult::Unreachable => return PathSearchResult::Unreachable,
+        PathSearchResult::Deferred => return PathSearchResult::Deferred,
+    };
 
     set_task_phase(ctx, data, next_phase);
 
@@ -110,7 +135,7 @@ pub fn set_path_to_tank_boundary(
         .map(|&(x, y)| WorldMap::grid_to_world(x, y))
         .collect();
     ctx.path.current_index = 0;
-    Some(())
+    PathSearchResult::Found(())
 }
 
 /// ソースへの遷移: River→川グリッド, Tank→タンク境界
@@ -122,15 +147,17 @@ pub fn transition_to_source(
     world_map: &WorldMap,
 ) -> TaskHandlerControl {
     match data.source {
-        BucketTransportSource::River => {
-            if set_path_to_river(ctx, world_map, data).is_none() {
-                return super::abort::abort_with_bucket(commands, ctx, data, world_map);
-            } else {
+        BucketTransportSource::River => match set_path_to_river(ctx, world_map, data) {
+            PathSearchResult::Found(()) => {
                 commands
                     .entity(data.bucket)
                     .remove::<hw_core::relationships::DeliveringTo>();
             }
-        }
+            PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+            PathSearchResult::Unreachable => {
+                return super::abort::abort_with_bucket(commands, ctx, data, world_map);
+            }
+        },
         BucketTransportSource::Tank { tank, .. } => {
             if let Ok(tank_data) = ctx.queries.storage.stockpiles.get(tank) {
                 let (_, tank_transform, _, _) = tank_data;
@@ -190,20 +217,22 @@ pub fn transition_to_destination(
                 ctx.queries.designation.targets.get(tank_entity)
             {
                 let tank_pos = tank_transform.translation.truncate();
-                if set_path_to_tank_boundary(
+                match set_path_to_tank_boundary(
                     ctx,
                     world_map,
                     tank_pos,
                     data,
                     BucketTransportPhase::GoingToDestination,
-                )
-                .is_some()
-                {
-                    commands
-                        .entity(data.bucket)
-                        .try_insert(hw_core::relationships::DeliveringTo(tank_entity));
-                } else {
-                    return super::abort::abort_with_bucket(commands, ctx, data, world_map);
+                ) {
+                    PathSearchResult::Found(()) => {
+                        commands
+                            .entity(data.bucket)
+                            .try_insert(hw_core::relationships::DeliveringTo(tank_entity));
+                    }
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        return super::abort::abort_with_bucket(commands, ctx, data, world_map);
+                    }
                 }
             } else {
                 return super::abort::abort_with_bucket(commands, ctx, data, world_map);
@@ -213,23 +242,18 @@ pub fn transition_to_destination(
             if let Ok(mixer_data) = ctx.queries.storage.mixers.get(mixer_entity) {
                 let (mixer_transform, _, _) = mixer_data;
                 let mixer_pos = mixer_transform.translation.truncate();
+                let route = update_bucket_destination_to_adjacent(ctx, mixer_pos);
+                if matches!(route, PathSearchResult::Deferred) {
+                    return TaskHandlerControl::Continue;
+                }
+
                 commands
                     .entity(data.bucket)
                     .try_insert(hw_core::relationships::DeliveringTo(mixer_entity));
-
-                let new_data = BucketTransportData {
-                    phase: BucketTransportPhase::GoingToDestination,
-                    ..data.clone()
-                };
-                *ctx.task = AssignedTask::BucketTransport(new_data);
-                update_destination_to_adjacent(
-                    ctx.dest,
-                    mixer_pos,
-                    ctx.path,
-                    soul_pos,
-                    world_map,
-                    ctx.pf_context,
-                );
+                if let Some(tank) = tank_entity {
+                    reservation::release_source(ctx, tank, 1);
+                }
+                set_task_phase(ctx, data, BucketTransportPhase::GoingToDestination);
             } else {
                 let tank = tank_entity.unwrap_or(data.bucket);
                 return super::abort::abort_and_drop_bucket_mixer(

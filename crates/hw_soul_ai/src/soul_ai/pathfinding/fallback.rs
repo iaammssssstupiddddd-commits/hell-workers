@@ -4,7 +4,10 @@ use bevy::prelude::*;
 use hw_core::constants::PATHFINDING_RETRY_COOLDOWN_FRAMES;
 use hw_core::relationships::RestAreaReservedFor;
 use hw_core::soul::{Destination, IdleBehavior, IdleState, Path};
-use hw_world::{PathGoalPolicy, PathfindingContext, WorldMap, find_path};
+use hw_world::{
+    PathSearchCaller, PathSearchResult, PathfindingContext, RuntimePathSearchBudget, WorldMap,
+    find_path_with_budget,
+};
 
 use crate::soul_ai::execute::task_execution::AssignedTask;
 use crate::soul_ai::execute::task_execution::context::TaskAssignmentQueries;
@@ -63,7 +66,6 @@ fn rest_area_adjacent_candidates(
 
 /// `try_rest_area_fallback_path` へのソウルのグリッド位置情報。
 pub(super) struct SoulGridPos {
-    pub entity: Entity,
     pub current_pos: Vec2,
     pub start_grid: (i32, i32),
     pub goal_grid: (i32, i32),
@@ -73,6 +75,14 @@ pub(super) struct SoulGridPos {
 pub(super) struct FallbackPfState<'a> {
     pub world_map: &'a WorldMap,
     pub pf_context: &'a mut PathfindingContext,
+    pub budget: &'a mut RuntimePathSearchBudget,
+}
+
+/// GoingToRest の候補探索を budget を跨いで再開するための位置。
+#[derive(Debug, PartialEq)]
+pub(super) struct RestFallbackProgress {
+    candidates: Vec<(i32, i32)>,
+    next_candidate: usize,
 }
 
 /// `cleanup_unreachable_destination` の Soul 位置・タスク情報。
@@ -92,51 +102,73 @@ pub(super) struct SoulMoveState<'a> {
 }
 
 /// 休憩所の周辺タイルへの代替パスを探す（GoingToRest の idle worker 専用）。
-/// 代替パスが見つかった場合は destination と path を更新して true を返す。
+///
+/// `Deferred` の場合、destination と path は更新せず次フレームに再試行する。
 pub(super) fn try_rest_area_fallback_path(
-    commands: &mut Commands,
     destination: &mut Destination,
     path: &mut Path,
     rest_reserved_for: Option<&RestAreaReservedFor>,
     q_rest_areas: &Query<&Transform, With<hw_jobs::RestArea>>,
     soul_grid: SoulGridPos,
     pf: FallbackPfState<'_>,
-) -> bool {
+    progress: &mut Option<RestFallbackProgress>,
+) -> PathSearchResult<()> {
     let Some(reserved) = rest_reserved_for else {
-        return false;
+        return PathSearchResult::Unreachable;
     };
     let Ok(rest_transform) = q_rest_areas.get(reserved.0) else {
-        return false;
+        return PathSearchResult::Unreachable;
     };
 
+    let rest_center = rest_transform.translation.truncate();
     let FallbackPfState {
         world_map,
         pf_context,
+        budget,
     } = pf;
-    let rest_center = rest_transform.translation.truncate();
-    for candidate_grid in
-        rest_area_adjacent_candidates(rest_center, soul_grid.current_pos, world_map)
+    if progress.is_none() {
+        *progress = Some(RestFallbackProgress {
+            candidates: rest_area_adjacent_candidates(
+                rest_center,
+                soul_grid.current_pos,
+                world_map,
+            )
             .into_iter()
             .filter(|grid| *grid != soul_grid.goal_grid)
-    {
-        if let Some(candidate_path) = find_path(
+            .collect(),
+            next_candidate: 0,
+        });
+    }
+    let Some(progress) = progress.as_mut() else {
+        return PathSearchResult::Unreachable;
+    };
+
+    while progress.next_candidate < progress.candidates.len() {
+        let candidate_grid = progress.candidates[progress.next_candidate];
+        match find_path_with_budget(
             world_map,
             pf_context,
+            budget,
+            PathSearchCaller::ActorRestFallback,
             soul_grid.start_grid,
             candidate_grid,
-            PathGoalPolicy::RespectGoalWalkability,
+            hw_world::PathGoalPolicy::RespectGoalWalkability,
         ) {
-            destination.0 = WorldMap::grid_to_world(candidate_grid.0, candidate_grid.1);
-            path.waypoints = candidate_path
-                .iter()
-                .map(|&(x, y)| WorldMap::grid_to_world(x, y))
-                .collect();
-            path.current_index = 0;
-            commands.entity(soul_grid.entity).remove::<PathCooldown>();
-            return true;
+            PathSearchResult::Found(candidate_path) => {
+                destination.0 = WorldMap::grid_to_world(candidate_grid.0, candidate_grid.1);
+                path.waypoints = candidate_path
+                    .iter()
+                    .map(|&(x, y)| WorldMap::grid_to_world(x, y))
+                    .collect();
+                path.current_index = 0;
+                return PathSearchResult::Found(());
+            }
+            PathSearchResult::Unreachable => {}
+            PathSearchResult::Deferred => return PathSearchResult::Deferred,
         }
+        progress.next_candidate += 1;
     }
-    false
+    PathSearchResult::Unreachable
 }
 
 /// 到達不能な destination を破棄し PathCooldown を付与する。

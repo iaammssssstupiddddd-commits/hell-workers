@@ -11,21 +11,49 @@ pub struct TileSiteIndex {
     wall_tile_to_site: HashMap<Entity, Entity>,
 }
 
+impl TileSiteIndex {
+    /// Rebuilds both reverse indexes from durable construction tiles.
+    ///
+    /// This is used by load rehydration before normal Spatial/Logic schedules
+    /// resume. Keeping the insertion path shared with incremental updates
+    /// prevents a paused load frame from depending on `Added<T>` delivery.
+    pub fn rebuild_from_tiles(
+        &mut self,
+        floor_tiles: impl IntoIterator<Item = (Entity, Entity)>,
+        wall_tiles: impl IntoIterator<Item = (Entity, Entity)>,
+    ) {
+        *self = Self::default();
+        for (tile_entity, site_entity) in floor_tiles {
+            self.insert_floor_tile(tile_entity, site_entity);
+        }
+        for (tile_entity, site_entity) in wall_tiles {
+            self.insert_wall_tile(tile_entity, site_entity);
+        }
+    }
+
+    fn insert_floor_tile(&mut self, tile_entity: Entity, site_entity: Entity) {
+        let list = self.floor_tiles_by_site.entry(site_entity).or_default();
+        if !list.contains(&tile_entity) {
+            list.push(tile_entity);
+        }
+        self.floor_tile_to_site.insert(tile_entity, site_entity);
+    }
+
+    fn insert_wall_tile(&mut self, tile_entity: Entity, site_entity: Entity) {
+        let list = self.wall_tiles_by_site.entry(site_entity).or_default();
+        if !list.contains(&tile_entity) {
+            list.push(tile_entity);
+        }
+        self.wall_tile_to_site.insert(tile_entity, site_entity);
+    }
+}
+
 pub fn sync_floor_tile_site_index_system(
     mut tile_site_index: ResMut<TileSiteIndex>,
     q_added: Query<(Entity, &FloorTileBlueprint), Added<FloorTileBlueprint>>,
 ) {
     for (tile_entity, tile) in q_added.iter() {
-        let list = tile_site_index
-            .floor_tiles_by_site
-            .entry(tile.parent_site)
-            .or_default();
-        if !list.contains(&tile_entity) {
-            list.push(tile_entity);
-        }
-        tile_site_index
-            .floor_tile_to_site
-            .insert(tile_entity, tile.parent_site);
+        tile_site_index.insert_floor_tile(tile_entity, tile.parent_site);
     }
 }
 
@@ -73,16 +101,7 @@ pub fn sync_wall_tile_site_index_system(
     q_added: Query<(Entity, &WallTileBlueprint), Added<WallTileBlueprint>>,
 ) {
     for (tile_entity, tile) in q_added.iter() {
-        let list = tile_site_index
-            .wall_tiles_by_site
-            .entry(tile.parent_site)
-            .or_default();
-        if !list.contains(&tile_entity) {
-            list.push(tile_entity);
-        }
-        tile_site_index
-            .wall_tile_to_site
-            .insert(tile_entity, tile.parent_site);
+        tile_site_index.insert_wall_tile(tile_entity, tile.parent_site);
     }
 }
 
@@ -97,4 +116,38 @@ pub fn sync_removed_wall_tile_site_index_system(
         ..
     } = tile_site_index.as_mut();
     sync_removed_tiles(wall_tiles_by_site, wall_tile_to_site, removed.into_iter());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TileSiteIndex;
+    use bevy::prelude::Entity;
+
+    #[test]
+    fn rebuild_replaces_stale_forward_and_reverse_entries() {
+        let old_site = Entity::from_bits(1);
+        let old_floor = Entity::from_bits(2);
+        let floor_site = Entity::from_bits(3);
+        let wall_site = Entity::from_bits(4);
+        let floor_a = Entity::from_bits(5);
+        let floor_b = Entity::from_bits(6);
+        let wall_a = Entity::from_bits(7);
+
+        let mut index = TileSiteIndex::default();
+        index.rebuild_from_tiles([(old_floor, old_site)], []);
+        index.rebuild_from_tiles(
+            [(floor_a, floor_site), (floor_b, floor_site)],
+            [(wall_a, wall_site)],
+        );
+
+        assert!(!index.floor_tiles_by_site.contains_key(&old_site));
+        assert!(!index.floor_tile_to_site.contains_key(&old_floor));
+        assert_eq!(
+            index.floor_tiles_by_site[&floor_site],
+            vec![floor_a, floor_b]
+        );
+        assert_eq!(index.wall_tiles_by_site[&wall_site], vec![wall_a]);
+        assert_eq!(index.floor_tile_to_site[&floor_b], floor_site);
+        assert_eq!(index.wall_tile_to_site[&wall_a], wall_site);
+    }
 }

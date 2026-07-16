@@ -1,21 +1,18 @@
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
-use hw_world::WorldMap;
-use hw_world::pathfinding::{self, PathfindingContext};
+use hw_world::{WalkabilityConnectivityCache, WorldMap};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 #[cfg(feature = "profiling")]
 use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 
-use super::{DelegationEnvCtx, PathfindingCtxMut};
+use super::DelegationEnvCtx;
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 use crate::familiar_ai::decide::task_management::{
     AssignTaskContext, DelegationCandidate, FamiliarSearchContext, FamiliarSoulQuery,
     FamiliarTaskAssignmentQueries, ReservationShadow, ScoredDelegationCandidate,
     assign_task_to_worker, collect_scored_candidates,
 };
-
-pub type ReachabilityCacheKey = ((i32, i32), (i32, i32));
 
 const TASK_DELEGATION_TOP_K: usize = 24;
 const MAX_ASSIGNMENT_DIST_SQ: f32 = (TILE_SIZE * 60.0) * (TILE_SIZE * 60.0);
@@ -36,38 +33,20 @@ pub fn take_reachable_with_cache_calls() -> u32 {
     0
 }
 
-fn evaluate_reachability(
-    worker_grid: (i32, i32),
-    candidate: DelegationCandidate,
-    world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
-) -> bool {
-    pathfinding::can_reach_target(
-        world_map,
-        pf_context,
-        worker_grid,
-        candidate.target_grid,
-        candidate.target_walkable,
-    )
-}
-
 fn reachable_with_cache(
     worker_grid: (i32, i32),
     candidate: DelegationCandidate,
     world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
-    cache: &mut HashMap<ReachabilityCacheKey, bool>,
+    connectivity_cache: &mut WalkabilityConnectivityCache,
 ) -> bool {
     #[cfg(feature = "profiling")]
     REACHABLE_WITH_CACHE_CALLS.fetch_add(1, AtomicOrdering::Relaxed);
-    let key = (worker_grid, candidate.target_grid);
-    if let Some(reachable) = cache.get(&key) {
-        return *reachable;
-    }
-
-    let reachable = evaluate_reachability(worker_grid, candidate, world_map, pf_context);
-    cache.insert(key, reachable);
-    reachable
+    connectivity_cache.can_reach_target(
+        world_map,
+        worker_grid,
+        candidate.target_grid,
+        candidate.target_walkable,
+    )
 }
 
 fn score_for_worker(candidate: &ScoredDelegationCandidate, worker_pos: Vec2) -> f32 {
@@ -75,6 +54,43 @@ fn score_for_worker(candidate: &ScoredDelegationCandidate, worker_pos: Vec2) -> 
     let priority_norm = ((candidate.priority as f32 + 20.0) / 40.0).clamp(0.0, 1.0);
     let dist_norm = 1.0 - (worker_dist_sq / WORKER_SCORE_MAX_DIST_SQ).min(1.0);
     priority_norm * WORKER_PRIORITY_WEIGHT + dist_norm * WORKER_DISTANCE_WEIGHT
+}
+
+/// 同点の候補をEntity IDで一意に順序付ける。
+///
+/// task finderの候補集合は複数のspatial gridとHashSetを経由するため、入力順を
+/// assignmentの意味にしてはいけない。scoreだけの比較では同点候補の優先順位が
+/// HashSetのhash seedに依存し、fixed-step auditで異なるSoulへ同じtaskが割り当て
+/// られる。通常実行でも同じtie-breakを使い、比較の全順序を保つ。
+fn compare_ranked_candidates(
+    left: &(DelegationCandidate, f32),
+    right: &(DelegationCandidate, f32),
+) -> Ordering {
+    right
+        .1
+        .total_cmp(&left.1)
+        .then_with(|| compare_entity_keys(left.0.entity, right.0.entity))
+}
+
+/// Familiarからの距離が同じworkerをEntity IDで一意に順序付ける。
+fn compare_workers(
+    familiar_position: Vec2,
+    left: &(Entity, Vec2),
+    right: &(Entity, Vec2),
+) -> Ordering {
+    left.1
+        .distance_squared(familiar_position)
+        .total_cmp(&right.1.distance_squared(familiar_position))
+        .then_with(|| compare_entity_keys(left.0, right.0))
+}
+
+/// Entityの内部表現順ではなく、fixtureで安定したindex/generation順を使う。
+fn compare_entity_keys(left: Entity, right: Entity) -> Ordering {
+    left.index_u32().cmp(&right.index_u32()).then_with(|| {
+        left.generation()
+            .to_bits()
+            .cmp(&right.generation().to_bits())
+    })
 }
 
 fn build_worker_candidates(
@@ -113,17 +129,15 @@ fn build_worker_candidates(
 
     let top_k = ranked.len().min(TASK_DELEGATION_TOP_K);
     if ranked.len() <= top_k {
-        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+        ranked.sort_unstable_by(compare_ranked_candidates);
         return (
             ranked.into_iter().map(|(candidate, _)| candidate).collect(),
             Vec::new(),
         );
     }
 
-    ranked.select_nth_unstable_by(top_k, |a, b| {
-        b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal)
-    });
-    ranked[..top_k].sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+    ranked.select_nth_unstable_by(top_k, compare_ranked_candidates);
+    ranked[..top_k].sort_unstable_by(compare_ranked_candidates);
     let top: Vec<DelegationCandidate> = ranked[..top_k].iter().map(|(c, _)| *c).collect();
     let fallback: Vec<(DelegationCandidate, f32)> = ranked[top_k..].to_vec();
 
@@ -144,7 +158,7 @@ fn try_assign_from_candidates(
     queries: &mut FamiliarTaskAssignmentQueries,
     construction_sites: &impl ConstructionSitePositions,
     q_souls: &mut FamiliarSoulQuery,
-    pf_ctx: &mut PathfindingCtxMut<'_>,
+    connectivity_cache: &mut WalkabilityConnectivityCache,
     reservation_shadow: &mut ReservationShadow,
 ) -> Option<Entity> {
     for candidate in worker_ctx.candidates.iter().copied() {
@@ -169,8 +183,7 @@ fn try_assign_from_candidates(
                 worker_ctx.worker_grid,
                 candidate,
                 env.world_map,
-                pf_ctx.pf_context,
-                pf_ctx.reachability_cache,
+                connectivity_cache,
             )
         {
             continue;
@@ -205,7 +218,7 @@ pub(super) fn try_assign_for_workers(
     queries: &mut FamiliarTaskAssignmentQueries,
     construction_sites: &impl ConstructionSitePositions,
     q_souls: &mut FamiliarSoulQuery,
-    pf_ctx: &mut PathfindingCtxMut<'_>,
+    connectivity_cache: &mut WalkabilityConnectivityCache,
     reservation_shadow: &mut ReservationShadow,
 ) -> Option<Entity> {
     let scored_candidates = collect_scored_candidates(
@@ -226,12 +239,7 @@ pub(super) fn try_assign_for_workers(
     }
 
     let mut sorted_workers = idle_members.to_vec();
-    sorted_workers.sort_by(|(_, a_pos), (_, b_pos)| {
-        a_pos
-            .distance_squared(env.fam_pos)
-            .partial_cmp(&b_pos.distance_squared(env.fam_pos))
-            .unwrap_or(Ordering::Equal)
-    });
+    sorted_workers.sort_unstable_by(|left, right| compare_workers(env.fam_pos, left, right));
 
     let mut first_assigned_task: Option<Entity> = None;
     let mut task_virtual_workers: HashMap<Entity, usize> = HashMap::new();
@@ -262,7 +270,7 @@ pub(super) fn try_assign_for_workers(
             queries,
             construction_sites,
             q_souls,
-            pf_ctx,
+            connectivity_cache,
             reservation_shadow,
         ) {
             *task_virtual_workers.entry(task_entity).or_insert(0) += 1;
@@ -272,7 +280,7 @@ pub(super) fn try_assign_for_workers(
             continue;
         }
 
-        fallback_ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+        fallback_ranked.sort_unstable_by(compare_ranked_candidates);
         let fallback_candidates: Vec<DelegationCandidate> = fallback_ranked
             .into_iter()
             .map(|(candidate, _)| candidate)
@@ -288,7 +296,7 @@ pub(super) fn try_assign_for_workers(
             queries,
             construction_sites,
             q_souls,
-            pf_ctx,
+            connectivity_cache,
             reservation_shadow,
         ) {
             *task_virtual_workers.entry(task_entity).or_insert(0) += 1;
@@ -299,4 +307,62 @@ pub(super) fn try_assign_for_workers(
     }
 
     first_assigned_task
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DelegationCandidate, compare_ranked_candidates, compare_workers};
+    use bevy::prelude::{Entity, Vec2};
+
+    fn entity(index: u32) -> Entity {
+        Entity::from_raw_u32(index).expect("test entity index is valid")
+    }
+
+    fn candidate(index: u32) -> DelegationCandidate {
+        DelegationCandidate {
+            entity: entity(index),
+            target_grid: (0, 0),
+            target_walkable: true,
+            skip_reachability_check: false,
+        }
+    }
+
+    #[test]
+    fn equal_score_candidates_use_entity_id_as_a_total_order() {
+        let mut candidates = [
+            (candidate(9), 0.5),
+            (candidate(2), 0.5),
+            (candidate(5), 0.5),
+        ];
+
+        candidates.sort_unstable_by(compare_ranked_candidates);
+
+        assert_eq!(
+            candidates
+                .iter()
+                .map(|(candidate, _)| candidate.entity)
+                .collect::<Vec<_>>(),
+            vec![entity(2), entity(5), entity(9)]
+        );
+    }
+
+    #[test]
+    fn equal_distance_workers_use_entity_id_as_a_total_order() {
+        let familiar_position = Vec2::ZERO;
+        let mut workers = vec![
+            (entity(8), Vec2::new(3.0, 4.0)),
+            (entity(1), Vec2::new(0.0, 5.0)),
+            (entity(4), Vec2::new(-3.0, 4.0)),
+        ];
+
+        workers.sort_unstable_by(|left, right| compare_workers(familiar_position, left, right));
+
+        assert_eq!(
+            workers
+                .into_iter()
+                .map(|(entity, _)| entity)
+                .collect::<Vec<_>>(),
+            vec![entity(1), entity(4), entity(8)]
+        );
+    }
 }

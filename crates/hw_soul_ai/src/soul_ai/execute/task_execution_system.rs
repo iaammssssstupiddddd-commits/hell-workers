@@ -3,10 +3,11 @@ use bevy::prelude::*;
 use hw_core::events::publish_task_completed;
 use hw_core::relationships::WorkingOn;
 use hw_core::visual::SoulTaskHandles;
+use hw_core::{EpochLocal, WorldEpoch};
 use hw_jobs::{ActiveTaskIdentity, AssignedTask};
 use hw_logistics::Wheelbarrow;
-use hw_world::WorldMapRead;
 use hw_world::pathfinding::PathfindingContext;
+use hw_world::{RuntimePathSearchBudget, WorldMapRead};
 
 #[cfg(feature = "profiling")]
 use crate::soul_ai::execute::task_execution::TaskExecutionPerfMetrics;
@@ -14,15 +15,30 @@ use crate::soul_ai::execute::task_execution::context::{
     TaskExecEnv, TaskExecutionContext, TaskHandlerControl, TaskQueries,
 };
 use crate::soul_ai::execute::task_execution::handler::dispatch::run_task_handler;
+use crate::soul_ai::execute::task_execution::path_cache::TaskPathSearchProgress;
 use crate::soul_ai::helpers::query_types::TaskExecutionSoulQuery;
 use crate::soul_ai::helpers::work::unassign_task;
+use crate::soul_ai::pathfinding::TASK_EXECUTION_PATHFINDS_PHASE_LIMIT;
 
 #[derive(SystemParam)]
 pub struct TaskExecResources<'w, 's> {
-    pub soul_handles: Res<'w, SoulTaskHandles>,
-    pub time: Res<'w, Time>,
-    pub world_map: WorldMapRead<'w>,
-    pub pf_context: Local<'s, PathfindingContext>,
+    soul_handles: Res<'w, SoulTaskHandles>,
+    time: Res<'w, Time>,
+    world_map: WorldMapRead<'w>,
+    pf_context: Local<'s, PathfindingContext>,
+    path_budget: ResMut<'w, RuntimePathSearchBudget>,
+    world_epoch: Option<Res<'w, WorldEpoch>>,
+    path_search_progress: Local<'s, EpochLocal<TaskPathSearchProgress>>,
+    task_round_robin: Local<'s, EpochLocal<TaskExecutionRoundRobin>>,
+}
+
+/// Active task handlers are visited from the request after the last core A*
+/// claimant. This preserves the existing handler cadence while preventing the
+/// query's first worker from claiming every available task-phase slot.
+#[derive(Default)]
+pub struct TaskExecutionRoundRobin {
+    last_core_search_claimant: Option<Entity>,
+    entities: Vec<Entity>,
 }
 
 pub fn task_execution_system(
@@ -37,6 +53,30 @@ pub fn task_execution_system(
     q_entities: Query<Entity>,
     #[cfg(feature = "profiling")] mut perf_metrics: ResMut<TaskExecutionPerfMetrics>,
 ) {
+    // Escape runs in Decide before task execution. Reserve two ActiveTask
+    // slots for Actor-side replans later in the frame, plus the idle reserve.
+    res.path_budget
+        .begin_phase(TASK_EXECUTION_PATHFINDS_PHASE_LIMIT);
+    let world_epoch = res
+        .world_epoch
+        .map_or_else(WorldEpoch::default, |epoch| *epoch);
+    let path_search_progress = res.path_search_progress.get_mut(world_epoch);
+    let task_round_robin = res.task_round_robin.get_mut(world_epoch);
+    task_round_robin.entities.clear();
+    task_round_robin
+        .entities
+        .extend(q_souls.iter().map(|(entity, ..)| entity));
+    let task_count = task_round_robin.entities.len();
+    let task_start = task_round_robin
+        .last_core_search_claimant
+        .and_then(|last| {
+            task_round_robin
+                .entities
+                .iter()
+                .position(|entity| *entity == last)
+        })
+        .map_or(0, |index| (index + 1) % task_count.max(1));
+
     #[cfg(feature = "profiling")]
     let mut souls_queried = 0u32;
     #[cfg(feature = "profiling")]
@@ -44,19 +84,23 @@ pub fn task_execution_system(
     #[cfg(feature = "profiling")]
     let mut handler_runs = 0u32;
 
-    for (
-        soul_entity,
-        soul_transform,
-        mut soul,
-        mut task,
-        mut dest,
-        mut path,
-        mut inventory,
-        breakdown_opt,
-        identity_opt,
-        working_on_opt,
-    ) in q_souls.iter_mut()
-    {
+    for offset in 0..task_count {
+        let entity = task_round_robin.entities[(task_start + offset) % task_count];
+        let Ok((
+            soul_entity,
+            soul_transform,
+            soul,
+            mut task,
+            dest,
+            mut path,
+            mut inventory,
+            breakdown_opt,
+            identity_opt,
+            working_on_opt,
+        )) = q_souls.get_mut(entity)
+        else {
+            continue;
+        };
         #[cfg(feature = "profiling")]
         {
             souls_queried = souls_queried.saturating_add(1);
@@ -97,9 +141,10 @@ pub fn task_execution_system(
                 res.world_map.as_ref(),
                 false,
             );
+            path_search_progress.clear_entity(soul_entity);
             continue;
         }
-        let Some(mut identity) = identity_opt else {
+        let Some(identity) = identity_opt else {
             unreachable!("identity consistency check requires ActiveTaskIdentity");
         };
 
@@ -129,17 +174,20 @@ pub fn task_execution_system(
             }
         }
 
+        let budget_used_before = res.path_budget.used();
         let completed_identity = {
             let mut ctx = TaskExecutionContext {
                 soul_entity,
                 soul_transform,
-                soul: &mut soul,
-                task: &mut task,
-                dest: &mut dest,
-                path: &mut path,
-                inventory: &mut inventory,
-                identity: &mut identity,
+                soul,
+                task,
+                dest,
+                path,
+                inventory,
+                identity,
                 pf_context: &mut res.pf_context,
+                path_budget: &mut res.path_budget,
+                path_search_progress,
                 queries: &mut queries,
                 env: TaskExecEnv {
                     soul_handles: &res.soul_handles,
@@ -168,6 +216,9 @@ pub fn task_execution_system(
                 None
             }
         };
+        if res.path_budget.used() > budget_used_before {
+            task_round_robin.last_core_search_claimant = Some(soul_entity);
+        }
 
         if let Some(identity) = completed_identity {
             publish_task_completed(
@@ -269,6 +320,7 @@ mod tests {
         app.add_plugins(MinimalPlugins)
             .insert_resource(WorldMap::default())
             .insert_resource(empty_soul_task_handles())
+            .init_resource::<RuntimePathSearchBudget>()
             .init_resource::<SharedResourceCache>()
             .init_resource::<TaskNotificationReceipts>()
             .add_message::<ResourceReservationRequest>()
@@ -284,6 +336,8 @@ mod tests {
                 )
                     .chain(),
             );
+        #[cfg(feature = "profiling")]
+        app.init_resource::<TaskExecutionPerfMetrics>();
         app
     }
 
@@ -381,6 +435,92 @@ mod tests {
                 .resource::<ActiveTaskProbe>()
                 .reached_without_working_on
         );
+    }
+
+    #[test]
+    fn exhausted_task_path_budget_defers_without_changing_task_or_reservations() {
+        let mut app = task_execution_test_app();
+        app.world_mut()
+            .insert_resource(RuntimePathSearchBudget::new(0));
+
+        let tile_pos = WorldMap::grid_to_world(20, 20);
+        let tile = app
+            .world_mut()
+            .spawn((
+                Transform::from_translation(tile_pos.extend(0.0)),
+                Designation {
+                    work_type: WorkType::GeneratePower,
+                },
+            ))
+            .id();
+        let assignment = app.world_mut().spawn_empty().id();
+        let initial_destination = WorldMap::grid_to_world(2, 2);
+        let initial_waypoints = vec![WorldMap::grid_to_world(3, 3)];
+        let soul = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                DamnedSoul::default(),
+                AssignedTask::GeneratePower(GeneratePowerData {
+                    tile,
+                    tile_pos,
+                    phase: GeneratePowerPhase::GoingToTile,
+                }),
+                Destination(initial_destination),
+                Path {
+                    waypoints: initial_waypoints.clone(),
+                    current_index: 0,
+                    planned_destination: Some(initial_destination),
+                    validated_obstacle_version: 7,
+                },
+                Inventory::default(),
+                ActiveTaskIdentity::new(assignment, tile, WorkType::GeneratePower),
+                WorkingOn(tile),
+            ))
+            .id();
+
+        app.world_mut().clear_trackers();
+        app.update();
+
+        assert!(matches!(
+            app.world().get::<AssignedTask>(soul),
+            Some(AssignedTask::GeneratePower(GeneratePowerData {
+                tile: actual_tile,
+                tile_pos: actual_pos,
+                phase: GeneratePowerPhase::GoingToTile,
+            })) if *actual_tile == tile && *actual_pos == tile_pos
+        ));
+        assert_eq!(
+            app.world().get::<Destination>(soul).unwrap().0,
+            initial_destination
+        );
+        let path = app.world().get::<Path>(soul).unwrap();
+        assert_eq!(path.waypoints, initial_waypoints);
+        assert_eq!(path.current_index, 0);
+        assert_eq!(path.planned_destination, Some(initial_destination));
+        assert_eq!(path.validated_obstacle_version, 7);
+        assert!(
+            app.world()
+                .get::<ActiveTaskIdentity>(soul)
+                .is_some_and(|identity| identity.current_target_entity == tile)
+        );
+        assert!(
+            app.world()
+                .get::<WorkingOn>(soul)
+                .is_some_and(|working_on| working_on.0 == tile)
+        );
+        assert!(
+            app.world()
+                .resource::<TaskNotificationReceipts>()
+                .reservation_ops
+                .is_empty()
+        );
+        assert_eq!(app.world().resource::<RuntimePathSearchBudget>().used(), 0);
+        assert_component_unchanged::<DamnedSoul>(app.world_mut(), soul);
+        assert_component_unchanged::<AssignedTask>(app.world_mut(), soul);
+        assert_component_unchanged::<Destination>(app.world_mut(), soul);
+        assert_component_unchanged::<Path>(app.world_mut(), soul);
+        assert_component_unchanged::<Inventory>(app.world_mut(), soul);
     }
 
     #[test]

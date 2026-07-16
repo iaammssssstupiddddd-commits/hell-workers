@@ -190,7 +190,7 @@ pub fn handle(
                         phase: BucketTransportPhase::ReturningBucket,
                         ..data.clone()
                     });
-                    update_destination_if_needed(ctx.dest, pos, ctx.path);
+                    update_destination_if_needed(&mut ctx.dest, pos, &mut ctx.path);
                 } else {
                     drop_item(commands, ctx.soul_entity, data.bucket, soul_pos);
                     ctx.inventory.0 = None;

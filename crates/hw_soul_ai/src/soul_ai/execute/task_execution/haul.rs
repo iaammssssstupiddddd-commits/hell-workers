@@ -58,6 +58,7 @@ pub fn handle_haul_task(
                 match navigate_to_pos(ctx, res_pos, soul_pos, ctx.env.world_map) {
                     NavOutcome::Moving => {}
                     NavOutcome::Ended(control) => return control,
+                    NavOutcome::Deferred => return TaskHandlerControl::Continue,
                     NavOutcome::Unreachable => {
                         return cancel_haul_with_reason(
                             ctx,
@@ -71,7 +72,7 @@ pub fn handle_haul_task(
                         if !can_pickup_item(soul_pos, res_pos) {
                             return TaskHandlerControl::Continue;
                         }
-                        pickup_item(commands, ctx.soul_entity, item, ctx.inventory);
+                        pickup_item(commands, ctx.soul_entity, item, &mut ctx.inventory);
                         release_mixer_mud_storage_for_item(ctx, item, commands);
 
                         if let Some(stored_in) = stored_in_entity {
@@ -88,84 +89,10 @@ pub fn handle_haul_task(
                             let stock_grid = WorldMap::world_to_grid(stock_pos);
                             let stock_dest = WorldMap::grid_to_world(stock_grid.0, stock_grid.1);
                             ctx.path.waypoints.clear();
-                            update_destination_if_needed(ctx.dest, stock_dest, ctx.path);
-                        } else if let Ok((_, site, _)) =
-                            ctx.queries.storage.floor_sites.get(stockpile)
-                        {
-                            if matches!(
-                                navigate_to_pos(
-                                    ctx,
-                                    site.material_center,
-                                    soul_pos,
-                                    ctx.env.world_map
-                                ),
-                                NavOutcome::Unreachable
-                            ) {
-                                return cancel_haul_with_reason(
-                                    ctx,
-                                    item,
-                                    stockpile,
-                                    commands,
-                                    "cannot reach floor site",
-                                );
-                            }
-                        } else if let Ok((_, site, _)) =
-                            ctx.queries.storage.wall_sites.get(stockpile)
-                        {
-                            if matches!(
-                                navigate_to_pos(
-                                    ctx,
-                                    site.material_center,
-                                    soul_pos,
-                                    ctx.env.world_map
-                                ),
-                                NavOutcome::Unreachable
-                            ) {
-                                return cancel_haul_with_reason(
-                                    ctx,
-                                    item,
-                                    stockpile,
-                                    commands,
-                                    "cannot reach wall site",
-                                );
-                            }
-                        } else if let Ok((wall_pos, can_deliver_to_wall)) =
-                            ctx.queries.storage.buildings.get_mut(stockpile).map(
-                                |(wall_transform, building, provisional_opt)| {
-                                    let can_deliver_to_wall = building.kind == BuildingType::Wall
-                                        && building.is_provisional
-                                        && provisional_opt
-                                            .as_ref()
-                                            .is_some_and(|provisional| !provisional.mud_delivered);
-                                    (wall_transform.translation.truncate(), can_deliver_to_wall)
-                                },
-                            )
-                        {
-                            if can_deliver_to_wall {
-                                if matches!(
-                                    navigate_to_pos(ctx, wall_pos, soul_pos, ctx.env.world_map),
-                                    NavOutcome::Unreachable
-                                ) {
-                                    return cancel_haul_with_reason(
-                                        ctx,
-                                        item,
-                                        stockpile,
-                                        commands,
-                                        "cannot reach provisional wall",
-                                    );
-                                }
-                            } else {
-                                return cancel_haul_with_reason(
-                                    ctx,
-                                    item,
-                                    stockpile,
-                                    commands,
-                                    "destination became invalid provisional wall",
-                                );
-                            }
+                            update_destination_if_needed(&mut ctx.dest, stock_dest, &mut ctx.path);
                         }
 
-                        set_haul_phase(ctx.task, item, stockpile, HaulPhase::GoingToStockpile);
+                        set_haul_phase(&mut ctx.task, item, stockpile, HaulPhase::GoingToStockpile);
                         reservation::record_picked_source(ctx, item, 1);
                         debug!("HAUL: Soul {:?} picked up item {:?}", ctx.soul_entity, item);
                     }
@@ -185,58 +112,50 @@ pub fn handle_haul_task(
                 let stock_pos = stock_transform.translation.truncate();
                 let stock_grid = WorldMap::world_to_grid(stock_pos);
                 let stock_dest = WorldMap::grid_to_world(stock_grid.0, stock_grid.1);
-                update_destination_if_needed(ctx.dest, stock_dest, ctx.path);
+                update_destination_if_needed(&mut ctx.dest, stock_dest, &mut ctx.path);
 
                 if is_near_target(soul_pos, stock_pos) {
-                    set_haul_phase(ctx.task, item, stockpile, HaulPhase::Dropping);
+                    set_haul_phase(&mut ctx.task, item, stockpile, HaulPhase::Dropping);
                     ctx.path.waypoints.clear();
                 }
             } else if let Ok((_, site, _)) = ctx.queries.storage.floor_sites.get(stockpile) {
                 let site_pos = site.material_center;
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    site_pos,
-                    ctx.path,
-                    soul_pos,
-                    ctx.env.world_map,
-                    ctx.pf_context,
-                );
-                if !reachable {
-                    return cancel_haul_with_reason(
-                        ctx,
-                        item,
-                        stockpile,
-                        commands,
-                        "cannot reach floor site",
-                    );
+                match update_task_destination_to_adjacent(ctx, site_pos) {
+                    PathSearchResult::Found(()) => {}
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        return cancel_haul_with_reason(
+                            ctx,
+                            item,
+                            stockpile,
+                            commands,
+                            "cannot reach floor site",
+                        );
+                    }
                 }
 
                 if is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0) {
-                    set_haul_phase(ctx.task, item, stockpile, HaulPhase::Dropping);
+                    set_haul_phase(&mut ctx.task, item, stockpile, HaulPhase::Dropping);
                     ctx.path.waypoints.clear();
                 }
             } else if let Ok((_, site, _)) = ctx.queries.storage.wall_sites.get(stockpile) {
                 let site_pos = site.material_center;
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    site_pos,
-                    ctx.path,
-                    soul_pos,
-                    ctx.env.world_map,
-                    ctx.pf_context,
-                );
-                if !reachable {
-                    return cancel_haul_with_reason(
-                        ctx,
-                        item,
-                        stockpile,
-                        commands,
-                        "cannot reach wall site",
-                    );
+                match update_task_destination_to_adjacent(ctx, site_pos) {
+                    PathSearchResult::Found(()) => {}
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        return cancel_haul_with_reason(
+                            ctx,
+                            item,
+                            stockpile,
+                            commands,
+                            "cannot reach wall site",
+                        );
+                    }
                 }
 
                 if is_near_target_or_dest(soul_pos, site_pos, ctx.dest.0) {
-                    set_haul_phase(ctx.task, item, stockpile, HaulPhase::Dropping);
+                    set_haul_phase(&mut ctx.task, item, stockpile, HaulPhase::Dropping);
                     ctx.path.waypoints.clear();
                 }
             } else if let Ok((wall_transform, building, provisional_opt)) =
@@ -258,26 +177,22 @@ pub fn handle_haul_task(
                 }
 
                 let wall_pos = wall_transform.translation.truncate();
-                let reachable = update_destination_to_adjacent(
-                    ctx.dest,
-                    wall_pos,
-                    ctx.path,
-                    soul_pos,
-                    ctx.env.world_map,
-                    ctx.pf_context,
-                );
-                if !reachable {
-                    return cancel_haul_with_reason(
-                        ctx,
-                        item,
-                        stockpile,
-                        commands,
-                        "cannot reach provisional wall",
-                    );
+                match update_task_destination_to_adjacent(ctx, wall_pos) {
+                    PathSearchResult::Found(()) => {}
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        return cancel_haul_with_reason(
+                            ctx,
+                            item,
+                            stockpile,
+                            commands,
+                            "cannot reach provisional wall",
+                        );
+                    }
                 }
 
                 if is_near_target_or_dest(soul_pos, wall_pos, ctx.dest.0) {
-                    set_haul_phase(ctx.task, item, stockpile, HaulPhase::Dropping);
+                    set_haul_phase(&mut ctx.task, item, stockpile, HaulPhase::Dropping);
                     ctx.path.waypoints.clear();
                 }
             } else {

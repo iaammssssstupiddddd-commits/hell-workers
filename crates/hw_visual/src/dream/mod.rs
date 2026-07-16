@@ -20,7 +20,6 @@ pub use particle::{
 pub use ui_handles::{
     DreamBubbleUiHandles, DreamUiMaterialBucket, alpha_to_bucket, apply_ui_material_bucket,
     bucket_material_index, color_to_bucket, init_dream_bubble_ui_handles, mass_to_bucket,
-    velocity_to_bucket,
 };
 pub use ui_particle::{
     dream_icon_absorb_system, dream_trail_ghost_update_system, spawn_ui_particle,

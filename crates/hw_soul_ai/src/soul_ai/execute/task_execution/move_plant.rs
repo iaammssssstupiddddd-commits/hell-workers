@@ -1,12 +1,12 @@
 use crate::soul_ai::execute::task_execution::{
-    common::{is_near_target_or_dest, update_destination_to_adjacent},
+    common::{is_near_target_or_dest, update_task_destination_to_adjacent},
     context::{TaskExecutionContext, TaskHandlerControl},
     types::{AssignedTask, MovePlantData, MovePlantPhase},
 };
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_jobs::{Building, BuildingType, Designation};
-use hw_world::{WorldMap, WorldMapWrite};
+use hw_world::{PathSearchResult, WorldMap, WorldMapWrite};
 
 pub use hw_jobs::MovePlanned;
 
@@ -36,17 +36,18 @@ pub fn handle_move_plant_task(
 
             let building_pos = building_transform.translation.truncate();
             let soul_pos = ctx.soul_pos();
-            let reachable = update_destination_to_adjacent(
-                ctx.dest,
-                building_pos,
-                ctx.path,
-                soul_pos,
-                ctx.env.world_map,
-                ctx.pf_context,
-            );
-
-            if !reachable {
-                return cleanup_move_task(ctx, commands, data.task_entity, data.building, false);
+            match update_task_destination_to_adjacent(ctx, building_pos) {
+                PathSearchResult::Found(()) => {}
+                PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                PathSearchResult::Unreachable => {
+                    return cleanup_move_task(
+                        ctx,
+                        commands,
+                        data.task_entity,
+                        data.building,
+                        false,
+                    );
+                }
             }
 
             if is_near_target_or_dest(soul_pos, building_pos, ctx.dest.0)

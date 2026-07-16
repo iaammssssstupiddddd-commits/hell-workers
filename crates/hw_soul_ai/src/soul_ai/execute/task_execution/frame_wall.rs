@@ -28,14 +28,12 @@ pub fn handle_frame_wall_task(
             };
 
             let material_center = site_transform.translation.truncate();
-            update_destination_to_adjacent(
-                ctx.dest,
-                material_center,
-                ctx.path,
-                soul_pos,
-                ctx.env.world_map,
-                ctx.pf_context,
-            );
+            if matches!(
+                update_task_destination_to_adjacent(ctx, material_center),
+                PathSearchResult::Deferred
+            ) {
+                return TaskHandlerControl::Continue;
+            }
 
             if is_near_target_or_dest(soul_pos, material_center, ctx.dest.0) {
                 *ctx.task = AssignedTask::FrameWallTile(FrameWallTileData {
@@ -75,14 +73,12 @@ pub fn handle_frame_wall_task(
 
             let tile_pos =
                 WorldMap::grid_to_world(tile_blueprint.grid_pos.0, tile_blueprint.grid_pos.1);
-            update_destination_to_adjacent(
-                ctx.dest,
-                tile_pos,
-                ctx.path,
-                soul_pos,
-                ctx.env.world_map,
-                ctx.pf_context,
-            );
+            if matches!(
+                update_task_destination_to_adjacent(ctx, tile_pos),
+                PathSearchResult::Deferred
+            ) {
+                return TaskHandlerControl::Continue;
+            }
 
             if is_near_target_or_dest(soul_pos, tile_pos, ctx.dest.0) {
                 *ctx.task = AssignedTask::FrameWallTile(FrameWallTileData {

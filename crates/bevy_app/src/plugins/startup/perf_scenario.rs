@@ -9,29 +9,52 @@ use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, Famili
 #[cfg(feature = "profiling")]
 use crate::systems::command::TaskArea;
 #[cfg(feature = "profiling")]
+use crate::systems::energy::grid_recalc::EnergyPerfMetrics;
+#[cfg(feature = "profiling")]
 use crate::systems::familiar_ai::FamiliarAiState;
 #[cfg(feature = "profiling")]
 use crate::systems::familiar_ai::perceive::resource_sync::ReservationSyncPerfMetrics;
 #[cfg(feature = "profiling")]
-use crate::systems::jobs::{Designation, Priority, Rock, TaskSlots, Tree, WorkType};
+use crate::systems::jobs::{
+    Blueprint, BuildingType, ConstructionPerfMetrics, Designation, Door, DoorPerfMetrics,
+    DoorState, Priority, Rock, TaskSlots, Tree, WorkType,
+};
 #[cfg(feature = "profiling")]
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
+#[cfg(feature = "profiling")]
+use crate::world::map::{WorldMap, WorldMapWrite};
 use crate::{Render3dVisible, RenderPerfToggles};
+#[cfg(feature = "profiling")]
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 #[cfg(feature = "profiling")]
 use bevy::time::{Fixed, Real};
 #[cfg(feature = "profiling")]
+use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, Z_MAP};
+#[cfg(feature = "profiling")]
 use hw_core::simulation_rng::SimulationRandomState;
+#[cfg(feature = "profiling")]
+use hw_core::visual_mirror::construction::BlueprintVisualState;
 #[cfg(feature = "profiling")]
 use hw_familiar_ai::familiar_ai::decide::resources::FamiliarDelegationPerfMetrics;
 #[cfg(feature = "profiling")]
 use hw_jobs::GatherPhase;
 #[cfg(feature = "profiling")]
+use hw_jobs::construction::{
+    FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
+};
+#[cfg(feature = "profiling")]
 use hw_soul_ai::soul_ai::execute::task_execution::TaskExecutionPerfMetrics;
+#[cfg(feature = "profiling")]
+use hw_soul_ai::soul_ai::pathfinding::RuntimePathDeferMetrics;
+#[cfg(feature = "profiling")]
+use hw_soul_ai::soul_ai::update::slow_simulation::SlowSimulationPerfMetrics;
 #[cfg(feature = "profiling")]
 use hw_visual::visual3d::{
     Building3dVisual, FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d, SoulShadowProxy3d,
 };
+#[cfg(feature = "profiling")]
+use hw_world::{DoorVisualHandles, RuntimePathSearchBudget, RuntimePathSearchMetrics};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use std::env;
@@ -41,7 +64,7 @@ use std::path::PathBuf;
 const DEFAULT_WARMUP_SECS: f32 = 30.0;
 const DEFAULT_MEASURE_SECS: f32 = 60.0;
 #[cfg(feature = "profiling")]
-const PERF_SUMMARY_SCHEMA_VERSION: u32 = 4;
+const PERF_SUMMARY_SCHEMA_VERSION: u32 = 10;
 const FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS: [u64; 4] = [1, 8, 32, 128];
 const DEFAULT_FIXED_STEP_HZ: u32 = 64;
 const DEFAULT_FIXED_WARMUP_TICKS: u64 = 1_920;
@@ -77,7 +100,7 @@ impl PerfWorkload {
 
     #[cfg(feature = "profiling")]
     const fn has_automated_setup(self) -> bool {
-        matches!(self, Self::Gather)
+        true
     }
 }
 
@@ -455,6 +478,84 @@ impl FromWorld for PerfScenarioRandomStreams {
 #[derive(Resource, Default)]
 pub(crate) struct PerfScenarioApplied(pub(crate) bool);
 
+/// Stable fixture identity used by fixed-step audit records. The marker avoids
+/// treating allocator-dependent Entity IDs as part of the reproducibility
+/// contract while still proving that the selected workload was installed.
+#[cfg(feature = "profiling")]
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct PerfFixtureMarker {
+    kind: PerfFixtureKind,
+    ordinal: u32,
+}
+
+#[cfg(feature = "profiling")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PerfFixtureKind {
+    Door,
+    ConstructionSite,
+    ConstructionTile,
+    UiBlueprint,
+}
+
+#[cfg(feature = "profiling")]
+impl PerfFixtureKind {
+    const fn audit_tag(self) -> u8 {
+        match self {
+            Self::Door => 0,
+            Self::ConstructionSite => 1,
+            Self::ConstructionTile => 2,
+            Self::UiBlueprint => 3,
+        }
+    }
+}
+
+/// Driver state intentionally holds no Entity IDs so it is world-epoch safe.
+#[cfg(feature = "profiling")]
+#[derive(Resource, Default)]
+pub(crate) struct PerfScenarioDriverState {
+    last_path_door_toggle_slot: Option<u64>,
+}
+
+#[cfg(feature = "profiling")]
+type PerfSetupFamiliarQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut ActiveCommand,
+        &'static mut FamiliarOperation,
+    ),
+>;
+#[cfg(feature = "profiling")]
+type PerfSetupSoulQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut Transform,
+        &'static mut Destination,
+        &'static mut Path,
+        &'static mut AssignedTask,
+    ),
+>;
+#[cfg(feature = "profiling")]
+type PerfTreeQuery<'w, 's> = Query<'w, 's, Entity, With<Tree>>;
+#[cfg(feature = "profiling")]
+type PerfRockQuery<'w, 's> = Query<'w, 's, Entity, With<Rock>>;
+
+#[cfg(feature = "profiling")]
+#[derive(SystemParam)]
+pub struct PerfWorkloadSetupParams<'w, 's> {
+    config: Res<'w, PerfScenarioConfig>,
+    commands: Commands<'w, 's>,
+    applied: ResMut<'w, PerfScenarioApplied>,
+    q_familiars: PerfSetupFamiliarQuery<'w, 's>,
+    q_souls: PerfSetupSoulQuery<'w, 's>,
+    q_trees: PerfTreeQuery<'w, 's>,
+    q_rocks: PerfRockQuery<'w, 's>,
+    world_map: WorldMapWrite<'w>,
+}
+
 #[cfg(feature = "profiling")]
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum PerfScenarioSet {
@@ -463,50 +564,80 @@ pub(crate) enum PerfScenarioSet {
     Setup,
     Apply,
     InitialCheckpoint,
+    Driver,
     #[cfg(feature = "profiling")]
     Capture,
 }
 
 #[cfg(feature = "profiling")]
-pub fn setup_perf_scenario_if_enabled(
-    config: Res<PerfScenarioConfig>,
-    mut commands: Commands,
-    mut applied: ResMut<PerfScenarioApplied>,
-    mut q_familiars: Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
-    q_trees: Query<Entity, With<Tree>>,
-    q_rocks: Query<Entity, With<Rock>>,
-) {
-    if applied.0
-        || !config.enabled()
-        || !config.workload.has_automated_setup()
-        || q_familiars.is_empty()
-    {
-        return;
-    }
-
-    configure_gather_baseline(&mut commands, &mut q_familiars, &q_trees, &q_rocks);
-    applied.0 = true;
+pub fn setup_perf_scenario_if_enabled(params: PerfWorkloadSetupParams) {
+    setup_perf_workload_if_needed(params);
 }
 
 #[cfg(feature = "profiling")]
-pub fn setup_perf_scenario_runtime_if_enabled(
-    config: Res<PerfScenarioConfig>,
-    mut commands: Commands,
-    mut applied: ResMut<PerfScenarioApplied>,
-    mut q_familiars: Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
-    q_trees: Query<Entity, With<Tree>>,
-    q_rocks: Query<Entity, With<Rock>>,
-) {
-    if applied.0
-        || !config.enabled()
-        || !config.workload.has_automated_setup()
-        || q_familiars.is_empty()
-    {
+fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
+    let PerfWorkloadSetupParams {
+        config,
+        mut commands,
+        mut applied,
+        mut q_familiars,
+        mut q_souls,
+        q_trees,
+        q_rocks,
+        mut world_map,
+    } = params;
+
+    if applied.0 || !config.enabled() || q_familiars.is_empty() {
         return;
     }
 
-    configure_gather_baseline(&mut commands, &mut q_familiars, &q_trees, &q_rocks);
-    applied.0 = true;
+    applied.0 = configure_perf_workload(
+        &config,
+        &mut commands,
+        &mut q_familiars,
+        &mut q_souls,
+        &q_trees,
+        &q_rocks,
+        &mut world_map,
+    );
+}
+
+#[cfg(feature = "profiling")]
+pub fn setup_perf_scenario_runtime_if_enabled(params: PerfWorkloadSetupParams) {
+    setup_perf_workload_if_needed(params);
+}
+
+#[cfg(feature = "profiling")]
+fn configure_perf_workload(
+    config: &PerfScenarioConfig,
+    commands: &mut Commands,
+    q_familiars: &mut Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
+    q_souls: &mut Query<(
+        Entity,
+        &mut Transform,
+        &mut Destination,
+        &mut Path,
+        &mut AssignedTask,
+    )>,
+    q_trees: &Query<Entity, With<Tree>>,
+    q_rocks: &Query<Entity, With<Rock>>,
+    world_map: &mut WorldMapWrite,
+) -> bool {
+    match config.workload {
+        PerfWorkload::Gather => {
+            configure_gather_baseline(commands, q_familiars, q_trees, q_rocks);
+            true
+        }
+        PerfWorkload::PathDoor => {
+            configure_path_door_fixture(commands, q_familiars, q_souls, world_map)
+        }
+        PerfWorkload::Construction => {
+            configure_construction_fixture(commands, q_familiars, world_map, config.size)
+        }
+        PerfWorkload::UiGpu => {
+            configure_ui_gpu_fixture(commands, q_familiars, world_map, config.size)
+        }
+    }
 }
 
 #[cfg(feature = "profiling")]
@@ -542,6 +673,296 @@ fn configure_gather_baseline(
             TaskSlots::new(1),
             Priority(0),
         ));
+    }
+}
+
+#[cfg(feature = "profiling")]
+fn configure_path_door_fixture(
+    commands: &mut Commands,
+    q_familiars: &mut Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
+    q_souls: &mut Query<(
+        Entity,
+        &mut Transform,
+        &mut Destination,
+        &mut Path,
+        &mut AssignedTask,
+    )>,
+    world_map: &mut WorldMapWrite,
+) -> bool {
+    let Some((left_grid, door_grid, right_grid)) = find_fixture_corridor(world_map.as_ref()) else {
+        error!("PERF_CAPTURE: path-door fixture could not find a free three-tile corridor");
+        return false;
+    };
+
+    for (_, mut command, mut operation) in q_familiars.iter_mut() {
+        command.command = FamiliarCommand::Idle;
+        operation.max_controlled_soul = 0;
+    }
+
+    let mut soul_entities = q_souls
+        .iter()
+        .map(|(entity, _, _, _, _)| entity)
+        .collect::<Vec<_>>();
+    soul_entities.sort_unstable_by_key(|entity| entity.to_bits());
+    for (ordinal, soul_entity) in soul_entities.into_iter().enumerate() {
+        let Ok((_, mut transform, mut destination, mut path, mut task)) =
+            q_souls.get_mut(soul_entity)
+        else {
+            continue;
+        };
+        let grid = if ordinal % 2 == 0 {
+            left_grid
+        } else {
+            right_grid
+        };
+        let target = if ordinal % 2 == 0 {
+            right_grid
+        } else {
+            left_grid
+        };
+        let position = WorldMap::grid_to_world(grid.0, grid.1);
+        transform.translation = position.extend(transform.translation.z);
+        destination.0 = WorldMap::grid_to_world(target.0, target.1);
+        path.waypoints.clear();
+        path.current_index = 0;
+        path.planned_destination = None;
+        *task = AssignedTask::None;
+    }
+
+    let door_entity = commands
+        .spawn((
+            Door::default(),
+            Sprite {
+                custom_size: Some(Vec2::splat(TILE_SIZE)),
+                ..default()
+            },
+            Transform::from_translation(
+                WorldMap::grid_to_world(door_grid.0, door_grid.1).extend(Z_MAP + 0.1),
+            ),
+            PerfFixtureMarker {
+                kind: PerfFixtureKind::Door,
+                ordinal: 0,
+            },
+            Name::new("PerfPathDoorFixture"),
+        ))
+        .id();
+    world_map.register_door(door_grid, door_entity, DoorState::Closed);
+    true
+}
+
+#[cfg(feature = "profiling")]
+fn configure_construction_fixture(
+    commands: &mut Commands,
+    q_familiars: &mut Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
+    world_map: &mut WorldMapWrite,
+    size: PerfScenarioSize,
+) -> bool {
+    let tile_count = match size {
+        PerfScenarioSize::Small => 16,
+        PerfScenarioSize::Medium => 64,
+        PerfScenarioSize::Large => 128,
+    };
+    let mut grids = fixture_free_grids(world_map.as_ref(), tile_count);
+    if grids.len() != tile_count {
+        error!(
+            "PERF_CAPTURE: construction fixture found only {} of {tile_count} free walkable tiles",
+            grids.len()
+        );
+        return false;
+    }
+    grids.sort_unstable();
+    for (_, mut command, mut operation) in q_familiars.iter_mut() {
+        command.command = FamiliarCommand::Idle;
+        operation.max_controlled_soul = 0;
+    }
+
+    let world_positions = grids
+        .iter()
+        .map(|(gx, gy)| WorldMap::grid_to_world(*gx, *gy))
+        .collect::<Vec<_>>();
+    let min = world_positions
+        .iter()
+        .copied()
+        .reduce(Vec2::min)
+        .expect("non-empty construction fixture");
+    let max = world_positions
+        .iter()
+        .copied()
+        .reduce(Vec2::max)
+        .expect("non-empty construction fixture");
+    let position = (min + max) * 0.5;
+    let area = TaskArea::from_points(
+        min - Vec2::splat(TILE_SIZE * 0.5),
+        max + Vec2::splat(TILE_SIZE * 0.5),
+    );
+    let mut site = FloorConstructionSite::new(area, position, tile_count as u32);
+    site.phase = FloorConstructionPhase::Curing;
+    site.tiles_reinforced = tile_count as u32;
+    site.tiles_poured = tile_count as u32;
+    site.curing_remaining_secs = 300.0;
+    let site_entity = commands
+        .spawn((
+            site,
+            Transform::from_translation(position.extend(Z_MAP)),
+            PerfFixtureMarker {
+                kind: PerfFixtureKind::ConstructionSite,
+                ordinal: 0,
+            },
+            Name::new("PerfConstructionSiteFixture"),
+        ))
+        .id();
+    for (ordinal, grid) in grids.into_iter().enumerate() {
+        let tile_position = WorldMap::grid_to_world(grid.0, grid.1);
+        let mut tile = FloorTileBlueprint::new(site_entity, grid);
+        tile.state = FloorTileState::Complete;
+        commands.spawn((
+            tile,
+            Transform::from_translation(tile_position.extend(Z_MAP)),
+            PerfFixtureMarker {
+                kind: PerfFixtureKind::ConstructionTile,
+                ordinal: ordinal as u32,
+            },
+            Name::new("PerfConstructionTileFixture"),
+        ));
+    }
+    true
+}
+
+#[cfg(feature = "profiling")]
+fn configure_ui_gpu_fixture(
+    commands: &mut Commands,
+    q_familiars: &mut Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
+    world_map: &mut WorldMapWrite,
+    size: PerfScenarioSize,
+) -> bool {
+    for (_, mut command, mut operation) in q_familiars.iter_mut() {
+        command.command = FamiliarCommand::Idle;
+        operation.max_controlled_soul = 0;
+    }
+
+    let count = match size {
+        PerfScenarioSize::Small => 64,
+        PerfScenarioSize::Medium => 160,
+        PerfScenarioSize::Large => 320,
+    };
+    let mut grids = fixture_free_grids(world_map.as_ref(), count);
+    if grids.len() != count {
+        error!(
+            "PERF_CAPTURE: ui-gpu fixture found only {} of {count} free walkable tiles",
+            grids.len()
+        );
+        return false;
+    }
+    grids.sort_unstable();
+    for (ordinal, grid) in grids.into_iter().enumerate() {
+        let position = WorldMap::grid_to_world(grid.0, grid.1);
+        commands.spawn((
+            Blueprint::new(BuildingType::Wall, vec![grid]),
+            BlueprintVisualState {
+                progress: 0.5,
+                ..default()
+            },
+            Sprite {
+                color: Color::srgba(0.85, 0.9, 1.0, 1.0),
+                custom_size: Some(Vec2::splat(TILE_SIZE)),
+                ..default()
+            },
+            Transform::from_translation(position.extend(Z_MAP + 0.2)),
+            PerfFixtureMarker {
+                kind: PerfFixtureKind::UiBlueprint,
+                ordinal: ordinal as u32,
+            },
+            Name::new("PerfUiGpuBlueprintFixture"),
+        ));
+    }
+    true
+}
+
+#[cfg(feature = "profiling")]
+type PerfGridPosition = (i32, i32);
+#[cfg(feature = "profiling")]
+type PerfFixtureCorridor = (PerfGridPosition, PerfGridPosition, PerfGridPosition);
+
+#[cfg(feature = "profiling")]
+fn find_fixture_corridor(world_map: &WorldMap) -> Option<PerfFixtureCorridor> {
+    for y in 1..MAP_HEIGHT.saturating_sub(1) {
+        for x in 2..MAP_WIDTH.saturating_sub(2) {
+            let grids = [(x - 1, y), (x, y), (x + 1, y)];
+            if grids
+                .iter()
+                .all(|&(gx, gy)| fixture_grid_is_free(world_map, (gx, gy)))
+            {
+                return Some((grids[0], grids[1], grids[2]));
+            }
+        }
+    }
+    None
+}
+
+#[cfg(feature = "profiling")]
+fn fixture_free_grids(world_map: &WorldMap, count: usize) -> Vec<(i32, i32)> {
+    let mut grids = Vec::with_capacity(count);
+    for y in 1..MAP_HEIGHT.saturating_sub(1) {
+        for x in 1..MAP_WIDTH.saturating_sub(1) {
+            let grid = (x, y);
+            if fixture_grid_is_free(world_map, grid) {
+                grids.push(grid);
+                if grids.len() == count {
+                    return grids;
+                }
+            }
+        }
+    }
+    grids
+}
+
+#[cfg(feature = "profiling")]
+fn fixture_grid_is_free(world_map: &WorldMap, grid: (i32, i32)) -> bool {
+    world_map.is_walkable(grid.0, grid.1)
+        && !world_map.buildings.contains_key(&grid)
+        && !world_map.doors.contains_key(&grid)
+}
+
+/// Applies the deterministic path-door interaction sequence after the initial
+/// fixture checkpoint. The slot is derived from virtual time, so render-frame
+/// timing and user input cannot alter the workload.
+#[cfg(feature = "profiling")]
+pub(crate) fn drive_perf_workload_system(
+    config: Res<PerfScenarioConfig>,
+    applied: Res<PerfScenarioApplied>,
+    virtual_time: Res<Time<Virtual>>,
+    mut state: ResMut<PerfScenarioDriverState>,
+    handles: Res<DoorVisualHandles>,
+    mut world_map: WorldMapWrite,
+    mut q_doors: Query<(&PerfFixtureMarker, &Transform, &mut Door, &mut Sprite)>,
+) {
+    if !applied.0 || !config.enabled() || config.workload != PerfWorkload::PathDoor {
+        return;
+    }
+
+    let toggle_slot = (virtual_time.elapsed_secs_f64() / 0.5).floor() as u64;
+    if toggle_slot == 0 || state.last_path_door_toggle_slot == Some(toggle_slot) {
+        return;
+    }
+    state.last_path_door_toggle_slot = Some(toggle_slot);
+    let next_state = if toggle_slot.is_multiple_of(2) {
+        DoorState::Closed
+    } else {
+        DoorState::Open
+    };
+    for (marker, transform, mut door, mut sprite) in q_doors.iter_mut() {
+        if marker.kind != PerfFixtureKind::Door || door.state == next_state {
+            continue;
+        }
+        let grid = WorldMap::world_to_grid(transform.translation.truncate());
+        hw_world::apply_door_state(
+            &mut door,
+            &mut sprite,
+            &mut world_map,
+            &handles,
+            grid,
+            next_state,
+        );
     }
 }
 
@@ -637,53 +1058,75 @@ struct PerfAuditActorRecord {
 }
 
 #[cfg(feature = "profiling")]
-#[derive(bevy::ecs::system::SystemParam)]
+type PerfAuditSoulQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static DamnedSoul,
+        &'static IdleState,
+        &'static Destination,
+        &'static Path,
+        &'static AssignedTask,
+        Option<&'static SimulationRandomState>,
+    ),
+    With<DamnedSoul>,
+>;
+#[cfg(feature = "profiling")]
+type PerfAuditFamiliarQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Familiar,
+        &'static Destination,
+        &'static Path,
+        &'static ActiveCommand,
+        &'static FamiliarOperation,
+        &'static FamiliarAiState,
+        Option<&'static SimulationRandomState>,
+    ),
+    With<Familiar>,
+>;
+#[cfg(feature = "profiling")]
+type PerfAuditDesignationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Designation,
+        Option<&'static Priority>,
+        Option<&'static TaskSlots>,
+    ),
+>;
+#[cfg(feature = "profiling")]
+type PerfAuditFixtureQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static PerfFixtureMarker,
+        &'static Transform,
+        Option<&'static Door>,
+        Option<&'static FloorConstructionSite>,
+        Option<&'static FloorTileBlueprint>,
+        Option<&'static Blueprint>,
+    ),
+>;
+
+#[cfg(feature = "profiling")]
+#[derive(SystemParam)]
 pub(crate) struct PerfChecksumQueries<'w, 's> {
     souls: Query<'w, 's, (Entity, &'static Transform), With<DamnedSoul>>,
     familiars: Query<'w, 's, (Entity, &'static Transform), With<Familiar>>,
     designations: Query<'w, 's, Entity, With<Designation>>,
-    audit_souls: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static DamnedSoul,
-            &'static IdleState,
-            &'static Destination,
-            &'static Path,
-            &'static AssignedTask,
-            Option<&'static SimulationRandomState>,
-        ),
-        With<DamnedSoul>,
-    >,
-    audit_familiars: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static Familiar,
-            &'static Destination,
-            &'static Path,
-            &'static ActiveCommand,
-            &'static FamiliarOperation,
-            &'static FamiliarAiState,
-            Option<&'static SimulationRandomState>,
-        ),
-        With<Familiar>,
-    >,
-    audit_designations: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static Transform,
-            &'static Designation,
-            Option<&'static Priority>,
-            Option<&'static TaskSlots>,
-        ),
-    >,
+    audit_souls: PerfAuditSoulQuery<'w, 's>,
+    audit_familiars: PerfAuditFamiliarQuery<'w, 's>,
+    audit_designations: PerfAuditDesignationQuery<'w, 's>,
+    audit_fixtures: PerfAuditFixtureQuery<'w, 's>,
     target_transforms: Query<'w, 's, &'static Transform>,
     soul_proxy_3d: Query<'w, 's, (), With<SoulProxy3d>>,
     soul_mask_proxy_3d: Query<'w, 's, (), With<SoulMaskProxy3d>>,
@@ -704,6 +1147,12 @@ pub(crate) struct PerfCaptureParams<'w, 's> {
     familiar_metrics: ResMut<'w, FamiliarDelegationPerfMetrics>,
     task_execution_metrics: ResMut<'w, TaskExecutionPerfMetrics>,
     reservation_sync_metrics: ResMut<'w, ReservationSyncPerfMetrics>,
+    door_metrics: ResMut<'w, DoorPerfMetrics>,
+    construction_metrics: ResMut<'w, ConstructionPerfMetrics>,
+    slow_simulation_metrics: ResMut<'w, SlowSimulationPerfMetrics>,
+    energy_metrics: ResMut<'w, EnergyPerfMetrics>,
+    runtime_path_budget: ResMut<'w, RuntimePathSearchBudget>,
+    runtime_path_defer_metrics: ResMut<'w, RuntimePathDeferMetrics>,
 }
 
 /// シナリオの初期状態を、ゲーム更新より前に固定して記録する。
@@ -848,6 +1297,12 @@ pub(crate) fn drive_perf_capture_system(
                     *params.familiar_metrics = FamiliarDelegationPerfMetrics::default();
                     *params.task_execution_metrics = TaskExecutionPerfMetrics::default();
                     *params.reservation_sync_metrics = ReservationSyncPerfMetrics::default();
+                    *params.door_metrics = DoorPerfMetrics::default();
+                    *params.construction_metrics = ConstructionPerfMetrics::default();
+                    *params.slow_simulation_metrics = SlowSimulationPerfMetrics::default();
+                    *params.energy_metrics = EnergyPerfMetrics::default();
+                    params.runtime_path_budget.clear_metrics();
+                    params.runtime_path_defer_metrics.clear();
                     eprintln!(
                         "PERF_CAPTURE: phase=measure target_secs={}",
                         params.config.measure_secs
@@ -899,21 +1354,27 @@ pub(crate) fn drive_perf_capture_system(
                     capture.measure_end_checksum,
                 ) {
                     (Some(initial), Some(initial_scene_roots), Some(warmup), Some(measure_end)) => {
-                        write_perf_capture(
-                            &params.config,
-                            initial,
+                        write_perf_capture(PerfCaptureWriteInput {
+                            config: &params.config,
+                            initial_checksum: initial,
                             initial_scene_roots,
-                            warmup,
-                            measure_end,
-                            &capture.frame_times_ms,
-                            capture.warmup_virtual_secs,
-                            capture.warmup_real_secs,
-                            capture.measure_virtual_secs,
-                            capture.measure_real_secs,
-                            &params.familiar_metrics,
-                            &params.task_execution_metrics,
-                            &params.reservation_sync_metrics,
-                        )
+                            warmup_checksum: warmup,
+                            measure_end_checksum: measure_end,
+                            samples: &capture.frame_times_ms,
+                            warmup_virtual_secs: capture.warmup_virtual_secs,
+                            warmup_real_secs: capture.warmup_real_secs,
+                            measure_virtual_secs: capture.measure_virtual_secs,
+                            measure_real_secs: capture.measure_real_secs,
+                            familiar_metrics: &params.familiar_metrics,
+                            task_execution_metrics: &params.task_execution_metrics,
+                            reservation_sync_metrics: &params.reservation_sync_metrics,
+                            door_metrics: &params.door_metrics,
+                            construction_metrics: &params.construction_metrics,
+                            slow_simulation_metrics: &params.slow_simulation_metrics,
+                            energy_metrics: &params.energy_metrics,
+                            runtime_path_metrics: params.runtime_path_budget.metrics(),
+                            runtime_path_defer_metrics: &params.runtime_path_defer_metrics,
+                        })
                     }
                     _ => Err(std::io::Error::other(
                         "capture reached Flush without all scenario checkpoints",
@@ -1165,6 +1626,10 @@ fn collect_audit_actor_records(
         write_vec2(&mut record, destination.0, "soul destination")?;
         write_path(&mut record, path, "soul path")?;
         write_assigned_task(&mut record, task, &checksum_queries.target_transforms)?;
+        write_option_u64(
+            &mut record,
+            random_state.map(SimulationRandomState::audit_cursor),
+        );
         records.push(PerfAuditActorRecord {
             actor_kind: "soul",
             actor_key: random_state
@@ -1191,6 +1656,10 @@ fn collect_audit_actor_records(
         write_familiar_state(&mut record, familiar, command, operation, ai_state)?;
         write_vec2(&mut record, destination.0, "familiar destination")?;
         write_path(&mut record, path, "familiar path")?;
+        write_option_u64(
+            &mut record,
+            random_state.map(SimulationRandomState::audit_cursor),
+        );
         records.push(PerfAuditActorRecord {
             actor_kind: "familiar",
             actor_key: random_state
@@ -1211,6 +1680,69 @@ fn collect_audit_actor_records(
         records.push(PerfAuditActorRecord {
             actor_kind: "designation",
             actor_key: entity.to_bits(),
+            record,
+        });
+    }
+
+    for (_entity, marker, transform, door, floor_site, floor_tile, blueprint) in
+        checksum_queries.audit_fixtures.iter()
+    {
+        let mut record = vec![b'X', marker.kind.audit_tag()];
+        write_u64(&mut record, marker.ordinal as u64);
+        write_transform(&mut record, transform, "fixture transform")?;
+        match marker.kind {
+            PerfFixtureKind::Door => {
+                let Some(door) = door else {
+                    return Err("door fixture is missing Door".to_string());
+                };
+                write_door_state(&mut record, door.state);
+            }
+            PerfFixtureKind::ConstructionSite => {
+                let Some(site) = floor_site else {
+                    return Err(
+                        "construction site fixture is missing FloorConstructionSite".to_string()
+                    );
+                };
+                write_floor_phase(&mut record, site.phase);
+                write_u64(&mut record, site.tiles_total as u64);
+                write_u64(&mut record, site.tiles_reinforced as u64);
+                write_u64(&mut record, site.tiles_poured as u64);
+                write_f32(
+                    &mut record,
+                    site.curing_remaining_secs,
+                    "fixture curing remaining secs",
+                )?;
+            }
+            PerfFixtureKind::ConstructionTile => {
+                let Some(tile) = floor_tile else {
+                    return Err(
+                        "construction tile fixture is missing FloorTileBlueprint".to_string()
+                    );
+                };
+                write_grid_pos(&mut record, tile.grid_pos);
+                write_floor_tile_state(&mut record, tile.state);
+                write_u64(&mut record, tile.bones_delivered as u64);
+                write_u64(&mut record, tile.mud_delivered as u64);
+            }
+            PerfFixtureKind::UiBlueprint => {
+                let Some(blueprint) = blueprint else {
+                    return Err("ui-gpu fixture is missing Blueprint".to_string());
+                };
+                write_building_type(&mut record, blueprint.kind);
+                write_f32(
+                    &mut record,
+                    blueprint.progress,
+                    "fixture blueprint progress",
+                )?;
+                write_u64(&mut record, blueprint.occupied_grids.len() as u64);
+                for grid in &blueprint.occupied_grids {
+                    write_grid_pos(&mut record, *grid);
+                }
+            }
+        }
+        records.push(PerfAuditActorRecord {
+            actor_kind: "fixture",
+            actor_key: ((marker.kind.audit_tag() as u64) << 32) | u64::from(marker.ordinal),
             record,
         });
     }
@@ -1294,6 +1826,17 @@ fn write_option_u32(record: &mut Vec<u8>, value: Option<u32>) {
         Some(value) => {
             record.push(1);
             record.extend_from_slice(&value.to_le_bytes());
+        }
+        None => record.push(0),
+    }
+}
+
+#[cfg(feature = "profiling")]
+fn write_option_u64(record: &mut Vec<u8>, value: Option<u64>) {
+    match value {
+        Some(value) => {
+            record.push(1);
+            write_u64(record, value);
         }
         None => record.push(0),
     }
@@ -1458,21 +2001,108 @@ fn write_work_type(record: &mut Vec<u8>, work_type: WorkType) {
 }
 
 #[cfg(feature = "profiling")]
-fn write_perf_capture(
-    config: &PerfScenarioConfig,
+fn write_door_state(record: &mut Vec<u8>, state: DoorState) {
+    record.push(match state {
+        DoorState::Open => 0,
+        DoorState::Closed => 1,
+        DoorState::Locked => 2,
+    });
+}
+
+#[cfg(feature = "profiling")]
+fn write_floor_phase(record: &mut Vec<u8>, phase: FloorConstructionPhase) {
+    record.push(match phase {
+        FloorConstructionPhase::Reinforcing => 0,
+        FloorConstructionPhase::Pouring => 1,
+        FloorConstructionPhase::Curing => 2,
+    });
+}
+
+#[cfg(feature = "profiling")]
+fn write_floor_tile_state(record: &mut Vec<u8>, state: FloorTileState) {
+    record.push(match state {
+        FloorTileState::WaitingBones => 0,
+        FloorTileState::ReinforcingReady => 1,
+        FloorTileState::Reinforcing { .. } => 2,
+        FloorTileState::ReinforcedComplete => 3,
+        FloorTileState::WaitingMud => 4,
+        FloorTileState::PouringReady => 5,
+        FloorTileState::Pouring { .. } => 6,
+        FloorTileState::Complete => 7,
+    });
+}
+
+#[cfg(feature = "profiling")]
+fn write_building_type(record: &mut Vec<u8>, kind: BuildingType) {
+    record.push(match kind {
+        BuildingType::Wall => 0,
+        BuildingType::Door => 1,
+        BuildingType::Floor => 2,
+        BuildingType::Tank => 3,
+        BuildingType::MudMixer => 4,
+        BuildingType::RestArea => 5,
+        BuildingType::Bridge => 6,
+        BuildingType::SandPile => 7,
+        BuildingType::BonePile => 8,
+        BuildingType::WheelbarrowParking => 9,
+        BuildingType::SoulSpa => 10,
+        BuildingType::OutdoorLamp => 11,
+    });
+}
+
+#[cfg(feature = "profiling")]
+fn write_grid_pos(record: &mut Vec<u8>, grid: (i32, i32)) {
+    record.extend_from_slice(&grid.0.to_le_bytes());
+    record.extend_from_slice(&grid.1.to_le_bytes());
+}
+
+#[cfg(feature = "profiling")]
+struct PerfCaptureWriteInput<'a> {
+    config: &'a PerfScenarioConfig,
     initial_checksum: PerfScenarioChecksum,
     initial_scene_roots: PerfSceneRootCounts,
     warmup_checksum: PerfScenarioChecksum,
     measure_end_checksum: PerfScenarioChecksum,
-    samples: &[f64],
+    samples: &'a [f64],
     warmup_virtual_secs: f64,
     warmup_real_secs: f64,
     measure_virtual_secs: f64,
     measure_real_secs: f64,
-    familiar_metrics: &FamiliarDelegationPerfMetrics,
-    task_execution_metrics: &TaskExecutionPerfMetrics,
-    reservation_sync_metrics: &ReservationSyncPerfMetrics,
-) -> std::io::Result<()> {
+    familiar_metrics: &'a FamiliarDelegationPerfMetrics,
+    task_execution_metrics: &'a TaskExecutionPerfMetrics,
+    reservation_sync_metrics: &'a ReservationSyncPerfMetrics,
+    door_metrics: &'a DoorPerfMetrics,
+    construction_metrics: &'a ConstructionPerfMetrics,
+    slow_simulation_metrics: &'a SlowSimulationPerfMetrics,
+    energy_metrics: &'a EnergyPerfMetrics,
+    runtime_path_metrics: &'a RuntimePathSearchMetrics,
+    runtime_path_defer_metrics: &'a RuntimePathDeferMetrics,
+}
+
+#[cfg(feature = "profiling")]
+fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::Result<()> {
+    let PerfCaptureWriteInput {
+        config,
+        initial_checksum,
+        initial_scene_roots,
+        warmup_checksum,
+        measure_end_checksum,
+        samples,
+        warmup_virtual_secs,
+        warmup_real_secs,
+        measure_virtual_secs,
+        measure_real_secs,
+        familiar_metrics,
+        task_execution_metrics,
+        reservation_sync_metrics,
+        door_metrics,
+        construction_metrics,
+        slow_simulation_metrics,
+        energy_metrics,
+        runtime_path_metrics,
+        runtime_path_defer_metrics,
+    } = input;
+
     if config.uses_fixed_timesteps() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -1532,10 +2162,30 @@ fn write_perf_capture(
         "measure_end_souls,measure_end_familiars,measure_end_designations,measure_end_state_checksum,",
         "samples,p50_ms,p95_ms,p99_ms,max_ms,warmup_virtual_secs,warmup_real_secs,",
         "measure_virtual_secs,measure_real_secs,virtual_time_speed,delegation_latest_ms,",
-        "delegation_familiars_processed,source_selector_calls,source_selector_scanned_items,",
+        "delegation_cycles,incoming_snapshot_builds,delegation_familiars_processed,",
+        "source_selector_calls,source_selector_scanned_items,",
         "reachable_with_cache_calls,task_execution_souls_queried,task_execution_idle_skips,",
         "task_execution_handler_runs,reservation_sync_full_rebuilds,",
-        "reservation_sync_pending_tasks_scanned,reservation_sync_assigned_tasks_scanned\n"
+        "reservation_sync_pending_tasks_scanned,reservation_sync_assigned_tasks_scanned,",
+        "runtime_path_actor_new_core_searches,runtime_path_actor_new_deferred,",
+        "runtime_path_actor_reuse_core_searches,runtime_path_actor_reuse_deferred,",
+        "runtime_path_actor_rest_fallback_core_searches,runtime_path_actor_rest_fallback_deferred,",
+        "runtime_path_escape_core_searches,runtime_path_escape_deferred,",
+        "runtime_path_task_execution_core_searches,runtime_path_task_execution_deferred,",
+        "runtime_path_bucket_transport_core_searches,runtime_path_bucket_transport_deferred,",
+        "runtime_path_total_core_searches,runtime_path_expanded_nodes,",
+        "runtime_path_max_expanded_nodes_per_search,runtime_path_active_task_max_defer_frames,",
+        "runtime_path_idle_or_rest_max_defer_frames,runtime_path_deferred_actor_retries,",
+        "door_open_souls_scanned,door_open_waypoints_scanned,door_close_souls_scanned,",
+        "construction_floor_sites_considered,construction_wall_sites_considered,",
+        "construction_floor_tiles_inspected,construction_wall_tiles_inspected,",
+        "construction_evacuation_candidates_scanned,",
+        "construction_floor_phase_elapsed_micros,construction_floor_completion_elapsed_micros,",
+        "construction_wall_phase_elapsed_micros,construction_wall_completion_elapsed_micros,",
+        "slow_simulation_steps,slow_simulation_souls_updated,slow_simulation_idle_decisions,",
+        "slow_simulation_idle_spatial_target_lookups,slow_simulation_state_sanity_audits,",
+        "energy_power_output_runs,energy_grid_recalc_runs,energy_lamp_steps,",
+        "energy_lamp_candidates_scanned\n"
     );
     let summary_fields = vec![
         PERF_SUMMARY_SCHEMA_VERSION.to_string(),
@@ -1568,6 +2218,8 @@ fn write_perf_capture(
         format!("{measure_real_secs:.6}"),
         "1.0".to_string(),
         format!("{:.6}", familiar_metrics.latest_elapsed_ms),
+        familiar_metrics.delegation_cycles.to_string(),
+        familiar_metrics.incoming_snapshot_builds.to_string(),
         familiar_metrics.familiars_processed.to_string(),
         familiar_metrics.source_selector_calls.to_string(),
         familiar_metrics.source_selector_scanned_items.to_string(),
@@ -1578,6 +2230,69 @@ fn write_perf_capture(
         reservation_sync_metrics.full_rebuilds.to_string(),
         reservation_sync_metrics.pending_tasks_scanned.to_string(),
         reservation_sync_metrics.assigned_tasks_scanned.to_string(),
+        runtime_path_metrics.actor_new_core_searches.to_string(),
+        runtime_path_metrics.actor_new_deferred.to_string(),
+        runtime_path_metrics.actor_reuse_core_searches.to_string(),
+        runtime_path_metrics.actor_reuse_deferred.to_string(),
+        runtime_path_metrics
+            .actor_rest_fallback_core_searches
+            .to_string(),
+        runtime_path_metrics
+            .actor_rest_fallback_deferred
+            .to_string(),
+        runtime_path_metrics.escape_core_searches.to_string(),
+        runtime_path_metrics.escape_deferred.to_string(),
+        runtime_path_metrics
+            .task_execution_core_searches
+            .to_string(),
+        runtime_path_metrics.task_execution_deferred.to_string(),
+        runtime_path_metrics
+            .bucket_transport_core_searches
+            .to_string(),
+        runtime_path_metrics.bucket_transport_deferred.to_string(),
+        runtime_path_metrics.total_core_searches().to_string(),
+        runtime_path_metrics.expanded_nodes.to_string(),
+        runtime_path_metrics
+            .max_expanded_nodes_per_search
+            .to_string(),
+        runtime_path_defer_metrics
+            .active_task_max_defer_frames
+            .to_string(),
+        runtime_path_defer_metrics
+            .idle_or_rest_max_defer_frames
+            .to_string(),
+        runtime_path_defer_metrics
+            .deferred_actor_retries
+            .to_string(),
+        door_metrics.open_souls_scanned.to_string(),
+        door_metrics.open_waypoints_scanned.to_string(),
+        door_metrics.close_souls_scanned.to_string(),
+        construction_metrics.floor_sites_considered.to_string(),
+        construction_metrics.wall_sites_considered.to_string(),
+        construction_metrics.floor_tiles_inspected.to_string(),
+        construction_metrics.wall_tiles_inspected.to_string(),
+        construction_metrics
+            .evacuation_candidates_scanned
+            .to_string(),
+        construction_metrics.floor_phase_elapsed_micros.to_string(),
+        construction_metrics
+            .floor_completion_elapsed_micros
+            .to_string(),
+        construction_metrics.wall_phase_elapsed_micros.to_string(),
+        construction_metrics
+            .wall_completion_elapsed_micros
+            .to_string(),
+        slow_simulation_metrics.steps.to_string(),
+        slow_simulation_metrics.souls_updated.to_string(),
+        slow_simulation_metrics.idle_decisions.to_string(),
+        slow_simulation_metrics
+            .idle_spatial_target_lookups
+            .to_string(),
+        slow_simulation_metrics.state_sanity_audits.to_string(),
+        energy_metrics.power_output_runs.to_string(),
+        energy_metrics.grid_recalc_runs.to_string(),
+        energy_metrics.lamp_steps.to_string(),
+        energy_metrics.lamp_candidates_scanned.to_string(),
     ];
     let summary = format!("{summary_header}{}\n", summary_fields.join(","));
     std::fs::write(&summary_path, summary)?;

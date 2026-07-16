@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use hw_core::system_sets::SoulAiSystemSet;
+use hw_world::RuntimePathSearchBudget;
 
 pub mod building_completed;
 pub mod decide;
@@ -15,14 +16,24 @@ pub struct SoulAiCorePlugin;
 impl Plugin for SoulAiCorePlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "profiling")]
-        app.init_resource::<execute::task_execution::TaskExecutionPerfMetrics>();
+        app.init_resource::<execute::task_execution::TaskExecutionPerfMetrics>()
+            .init_resource::<pathfinding::RuntimePathDeferMetrics>()
+            .init_resource::<update::slow_simulation::SlowSimulationPerfMetrics>();
 
         app.init_resource::<helpers::gathering::GatheringUpdateTimer>()
             .init_resource::<perceive::escaping::EscapeDetectionTimer>()
             .init_resource::<perceive::escaping::EscapeBehaviorTimer>()
             .init_resource::<decide::drifting::DriftingDecisionTimer>()
+            .init_resource::<decide::work::auto_build::BlueprintAutoBuildTimer>()
+            .init_resource::<update::slow_simulation::SlowSimulationClock>()
+            .init_resource::<update::state_sanity::StateSanityAudit>()
+            .init_resource::<RuntimePathSearchBudget>()
             .register_type::<helpers::gathering::GatheringSpot>()
             .register_type::<execute::task_execution::types::AssignedTask>()
+            .add_systems(
+                PreUpdate,
+                pathfinding::reset_runtime_path_search_budget_system,
+            )
             .add_systems(
                 Update,
                 execute::task_unassign_apply::handle_soul_task_unassign_system
@@ -33,16 +44,48 @@ impl Plugin for SoulAiCorePlugin {
                 (
                     helpers::gathering::tick_gathering_timer_system,
                     update::gathering_tick::gathering_grace_tick_system,
-                    update::vitals_update::fatigue_update_system,
-                    update::vitals_update::fatigue_penalty_system,
-                    update::rest_area_update::rest_area_update_system,
+                )
+                    .in_set(SoulAiSystemSet::Update),
+            )
+            .add_systems(
+                Update,
+                update::state_sanity::update_state_sanity_trigger_system
+                    .after(update::slow_simulation::slow_simulation_driver_system)
+                    .in_set(SoulAiSystemSet::Update),
+            )
+            .add_systems(
+                Update,
+                (
                     update::state_sanity::ensure_rest_area_component_system,
                     update::state_sanity::clear_stale_working_on_system,
                     update::state_sanity::clear_stale_task_identity_system,
                     update::state_sanity::reconcile_rest_state_system,
-                    update::dream_update::dream_update_system,
-                    update::vitals_influence::familiar_influence_unified_system,
                 )
+                    .run_if(update::state_sanity::state_sanity_should_run)
+                    .after(update::state_sanity::update_state_sanity_trigger_system)
+                    .in_set(SoulAiSystemSet::Update),
+            )
+            .add_systems(
+                Update,
+                update::state_sanity::clear_state_sanity_trigger_system
+                    .run_if(update::state_sanity::state_sanity_should_run)
+                    .after(update::state_sanity::reconcile_rest_state_system)
+                    .in_set(SoulAiSystemSet::Update),
+            )
+            .add_systems(
+                Update,
+                (
+                    update::slow_simulation::advance_slow_simulation_clock_system,
+                    update::slow_simulation::slow_simulation_driver_system,
+                )
+                    .chain()
+                    .in_set(SoulAiSystemSet::Update),
+            )
+            .add_systems(
+                Update,
+                decide::idle_behavior::mark_needs_idle_decision_system
+                    .after(update::slow_simulation::slow_simulation_driver_system)
+                    .before(update::state_sanity::update_state_sanity_trigger_system)
                     .in_set(SoulAiSystemSet::Update),
             )
             .add_systems(
@@ -84,6 +127,8 @@ impl Plugin for SoulAiCorePlugin {
                     decide::work::auto_refine::mud_mixer_auto_refine_system,
                     decide::work::auto_build::blueprint_auto_build_system,
                     decide::idle_behavior::idle_behavior_decision_system,
+                    decide::idle_behavior::clear_idle_decision_wake_system
+                        .after(decide::idle_behavior::idle_behavior_decision_system),
                     decide::separation::gathering_separation_system
                         .after(decide::idle_behavior::idle_behavior_decision_system),
                     decide::escaping::escaping_decision_system

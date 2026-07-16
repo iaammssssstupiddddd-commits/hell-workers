@@ -4,11 +4,12 @@ use hw_core::relationships::WorkingOn;
 use hw_core::soul::{DamnedSoul, Destination, Path, StressBreakdown};
 use hw_core::visual::SoulTaskHandles;
 use hw_logistics::types::Inventory;
-use hw_world::{PathfindingContext, WorldMap};
+use hw_world::{PathfindingContext, RuntimePathSearchBudget, WorldMap};
 
 use hw_jobs::{ActiveTaskIdentity, AssignedTask, WorkType, lifecycle};
 
 use super::queries::TaskQueries;
+use crate::soul_ai::execute::task_execution::path_cache::TaskPathSearchProgress;
 
 /// タスク終了の種別（M2: 完了イベント誤発火防止）
 #[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
@@ -68,13 +69,20 @@ pub struct TaskExecEnv<'a> {
 pub struct TaskExecutionContext<'a, 'w, 's> {
     pub soul_entity: Entity,
     pub soul_transform: &'a Transform,
-    pub soul: &'a mut DamnedSoul,
-    pub task: &'a mut AssignedTask,
-    pub dest: &'a mut Destination,
-    pub path: &'a mut Path,
-    pub inventory: &'a mut Inventory,
-    pub(crate) identity: &'a mut ActiveTaskIdentity,
+    /// `Mut` を所有して渡すことで、handler が実際に書き込むまで Changed を立てない。
+    ///
+    /// active task の早期deferはこの5コンポーネントを読むだけである。ここで
+    /// `&mut T` に再借用すると、handlerに入る前に全コンポーネントが Changed になり、
+    /// downstream の Changed query を毎frame起動してしまう。
+    pub soul: Mut<'a, DamnedSoul>,
+    pub task: Mut<'a, AssignedTask>,
+    pub dest: Mut<'a, Destination>,
+    pub path: Mut<'a, Path>,
+    pub inventory: Mut<'a, Inventory>,
+    pub(crate) identity: Mut<'a, ActiveTaskIdentity>,
     pub pf_context: &'a mut PathfindingContext,
+    pub path_budget: &'a mut RuntimePathSearchBudget,
+    pub(crate) path_search_progress: &'a mut TaskPathSearchProgress,
     pub queries: &'a mut TaskQueries<'w, 's>,
     pub env: TaskExecEnv<'a>,
     pub(crate) end_state: TaskEndState,
@@ -130,7 +138,7 @@ impl<'a, 'w, 's> TaskExecutionContext<'a, 'w, 's> {
     /// `Release*` と lifecycle 契約が二重管理にならないようにする。
     fn release_active_task_reservations(&mut self) {
         let release_ops =
-            lifecycle::collect_release_reservation_ops(&*self.task, |item, fallback| {
+            lifecycle::collect_release_reservation_ops(&self.task, |item, fallback| {
                 self.queries
                     .reservation
                     .resources
@@ -163,7 +171,11 @@ impl<'a, 'w, 's> TaskExecutionContext<'a, 'w, 's> {
             return self.reject_duplicate_end(reason, already_ended);
         }
         debug!("complete_task: soul {:?} - {}", self.soul_entity, reason);
-        crate::soul_ai::execute::task_execution::common::clear_task_and_path(self.task, self.path);
+        crate::soul_ai::execute::task_execution::common::clear_task_and_path(
+            &mut self.task,
+            &mut self.path,
+        );
+        self.path_search_progress.clear_entity(self.soul_entity);
         commands
             .entity(self.soul_entity)
             .remove::<(WorkingOn, ActiveTaskIdentity)>();
@@ -203,15 +215,16 @@ impl<'a, 'w, 's> TaskExecutionContext<'a, 'w, 's> {
             SoulDropCtx {
                 soul_entity,
                 drop_pos,
-                inventory: Some(self.inventory),
+                inventory: Some(&mut *self.inventory),
                 dropped_item_res: None,
             },
-            self.task,
-            self.path,
+            &mut self.task,
+            &mut self.path,
             self.queries,
             world_map,
             false,
         );
+        self.path_search_progress.clear_entity(soul_entity);
         commands.entity(soul_entity).remove::<WorkingOn>();
         TaskHandlerControl::Ended
     }
@@ -252,7 +265,11 @@ impl<'a, 'w, 's> TaskExecutionContext<'a, 'w, 's> {
             self.soul_entity, disposition
         );
         self.release_active_task_reservations();
-        crate::soul_ai::execute::task_execution::common::clear_task_and_path(self.task, self.path);
+        crate::soul_ai::execute::task_execution::common::clear_task_and_path(
+            &mut self.task,
+            &mut self.path,
+        );
+        self.path_search_progress.clear_entity(self.soul_entity);
         commands
             .entity(self.soul_entity)
             .remove::<(WorkingOn, ActiveTaskIdentity)>();
@@ -280,15 +297,16 @@ impl<'a, 'w, 's> TaskExecutionContext<'a, 'w, 's> {
             SoulDropCtx {
                 soul_entity,
                 drop_pos,
-                inventory: Some(self.inventory),
+                inventory: Some(&mut *self.inventory),
                 dropped_item_res: None,
             },
-            self.task,
-            self.path,
+            &mut self.task,
+            &mut self.path,
             self.queries,
             world_map,
             false,
         );
+        self.path_search_progress.clear_entity(soul_entity);
         commands.entity(soul_entity).remove::<WorkingOn>();
         TaskHandlerControl::Ended
     }

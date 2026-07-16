@@ -201,6 +201,12 @@ loaded componentの`Added`/`Changed`は次frameの差分rebuildに残す。syste
 `GatheringSpot`と`ParticipatingIn` / `GatheringParticipants`はruntime-onlyであり、新規saveへ含めず、
 legacy bodyからはschema検証前に除去する。replace hookは旧spotとlinked visualを同時にdespawnする。
 
+### I-P5: construction runtime cacheはload中に再構築し、WorldMapを再予約しない
+Floor / Wall construction の `TileSiteIndex`、工程counter、Curing中の`CuringFootprint`は保存しない
+runtime stateである。loadのexclusive rehydrateはSpatial/Logicの再開前に、tileからindex、工程rankから
+counter、Curing siteからfootprintの順で同期再構築する。保存済み`WorldMap`はoccupancyの正本なので、
+この再構築でobstacle/occupancyをreserveしてはならない。
+
 ---
 
 ## 8. 経路探索 (Pathfinding) の不変条件
@@ -225,3 +231,23 @@ topology を比較し、同じく最大1回だけ世代を進める。
 古いパスを再利用して障害物に突っ込む**（エラーもログも出ない）。特に walkable → blocked
 方向（障害物追加・扉ロック）の漏れが危険。`bump_obstacle_version` は wrapping で単調増加し、
 値そのものに意味はない（一致=無変更の検知にのみ使う）。
+
+`WalkabilityConnectivityCache` も同じ世代を正本として、Boolean 到達判定用の連結成分を保持する。
+Open/Closed の Door cost 変更で cache を破棄してはならず、Locked・地形・橋・障害物など最終
+walkability を変える mutation だけが次回問い合わせ時の再構築を要求する。flood-fill の斜め移動は
+A* と同じ corner-cutting helper を使う。cache は保存しない runtime state なので、load 時は新旧
+`WorldMap` が偶然同じ `obstacle_version` を持っていても stale component を使わないよう、
+`reset_runtime_caches` で必ず default に戻す。
+
+### I-PF2: runtime A* budget の `Deferred` は到達不能ではない
+
+`RuntimePathSearchBudget` は `PreUpdate` でframeごとにresetし、world replacementでもdefaultへ戻す。
+budgeted facadeは実際にcore A*を開始する直前にだけ1枠をclaimする。direct探索と隣接goal fallbackは別々のcore A*なので、それぞれ個別にclaimする。範囲外endpointやpolicy上許可されないblocked goalはcore A*を起動しないため枠を消費しない。
+
+`hw_world` 外の runtime waypoint 生成は必ず budgeted facade を通す。raw の
+`find_path` / `find_path_to_adjacent` / `find_path_to_boundary` 等は `pub(crate)` とし、
+`hw_world` 内の mapgen validation と unit test だけが unbudgeted core を使う。
+
+枠がない場合の `PathSearchResult::Deferred` は `Unreachable` と同一視してはならない。Actor再探索では`Deferred`時に`PathCooldown`、`Destination`、`Path`、`AssignedTask`、reservation、task dispositionを変更せず、同じ探索段階から再試行する。task handler と bucket routing でも phase、assignment、reservation、`Destination`、`Path` を維持し、direct 探索が失敗して adjacent 探索で defer した場合は adjacent から再開する。escapeの経路距離判定では`EscapeRequest`を出さず、`Escaping`、`Destination`、既存`Path`と評価済み候補を次の行動tickまで維持する。一方、すべての試行が実行されて`Unreachable`となったときだけ従来の到達不能cleanupまたは`ReachSafety`を許可する。
+
+escapeはLogic/DecideでActorより先に最大2枠を使う。Execute の task handler / bucket routing は累積4枠まで、続く Actor の `ActiveTask` 再探索は累積6枠まで、idle/rest は累積8枠まで引き上げる。これにより Execute が全枠を使い切らず、Actor 側の task replan に2枠を残す。Actor は `RuntimePathWorkQueue` の `ActiveTask` / `IdleOrRest` class 別 FIFO へ、目的地・task・idle state の変更、cooldown 終了、topology version 変更を投入し、topology 変更時以外に全 Soul を二重走査しない。task handler と escape は最後に core A* を claim した Entity の次から round-robin する。これらの queue、continuation、cursor はすべて `EpochLocal` で保持し、`WorldEpoch` 変更時に旧 world の Entity/request を破棄する。

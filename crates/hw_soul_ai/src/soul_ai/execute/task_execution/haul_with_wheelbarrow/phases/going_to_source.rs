@@ -18,6 +18,7 @@ pub fn handle(
 ) -> TaskHandlerControl {
     match navigate_to_pos(ctx, data.source_pos, soul_pos, ctx.env.world_map) {
         NavOutcome::Moving => return TaskHandlerControl::Continue,
+        NavOutcome::Deferred => return TaskHandlerControl::Continue,
         NavOutcome::Unreachable => {
             return cancel::cancel_wheelbarrow_task(ctx, &data, commands);
         }

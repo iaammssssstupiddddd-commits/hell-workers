@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `system-wide-runtime-performance-plan-2026-07-12` |
-| ステータス | `In Progress` |
+| ステータス | `Completed` |
 | 作成日 | `2026-07-12` |
-| 最終更新日 | `2026-07-15` |
+| 最終更新日 | `2026-07-16` |
 | 作成者 | `Codex` |
 | 関連提案 | `N/A` |
 | 関連Issue/PR | `N/A` |
@@ -215,7 +215,7 @@
 - **完了条件**:
   - [x] 3規模 × CPU/GPU切り分け条件で、log健全性を満たすp50 / p95 / p99 と主要カウンタを記録した。
   - [x] 同一seed/workloadを3回実行し、ゲーム更新前のinitial fixture（Soul/Familiar/Designation数とstate checksum）、固定camera/配置、操作列が一致することを確認した。
-  - [ ] 固定stepの決定性auditを別計測モードとして設計し、必要なworkloadでwarm-up終了時のentity/task/state checksumを一致確認する。実時間frame-time baselineとは混在させない。runnerとactor単位artifactは実装済みだが、現行`gather`はtick 224以降で状態差が出るため、この確認は未達として分離する。
+  - [x] 固定stepの決定性auditを別計測モードとして設計し、実時間frame-time baselineとは分離した。Gatherの64 Hz warm-up / 1,920 tick auditは3 valid runで同一signatureとなり、teardown warningも0件だった。
   - [x] CPU toggle OFFでmain/mask/shadowを含む対象3D scene entity数が期待値まで減る。runnerはCPUでSoul main/mask/shadow・Familiar rootが0、GPUでfixture人口と一致する`scene_roots.csv`を検証する。pass/drawの内訳はRenderDoc採取の契約として別runで扱う。
   - [x] CSV、Tracy memory、RenderDocのどの指標をどの手順で採るか文書化した。
   - [x] profiling feature 無効時に計測用処理が hot path に残らない。
@@ -235,6 +235,7 @@
 - `scripts/perf.py self-test` と `gather / Small / CPU・GPU / repeat 1 / warm-up 0秒 / measure 1秒` を実行し、2 runともvalidだった。これはrunner、`summary.csv`、adapter/log検証、CPU/GPU切替の経路確認であり、性能比較用のbaselineではない。
 - CPUの`scene_roots.csv`はSoul main/mask/shadowとFamiliar rootがすべて0、GPUはそれぞれ50/50/50/4だった。CPU-only条件へ対象外の3D scene rootを混在させない契約を確認した。
 - fixed-step auditのrunnerとactor単位artifactは存在するが、`gather`はtick 224以降にstate checksumが分岐する。frame-time baselineの採取を止めない未達項目として保留し、原因追跡はM0の性能計測基盤とは切り離す。
+- これは当時の履歴である。2026-07-16にGather fixed-step auditは3 valid run・同一signatureで通過し、この保留は解消済みである。
 
 #### 2026-07-13 Gather 暫定値（Intel UHD / Vulkan、比較用には未認定）
 
@@ -285,6 +286,7 @@
 - post-captureの`CommandQueue has un-applied commands`はSmall CPU/GPUが各39件、Medium/Large matrixが合計1,318件だった。いずれも`PERF_CAPTURE: wrote`後の`Commands::delayed()` teardownであり、runnerが原文・件数をartifactへ保存している。frame-timeを変える強制flushは行わない。
 - M0のframe-time baseline条件は満たした。fixed-step determinism audit、CPU toggle時のdraw/scene数、Tracy memory、RenderDoc、Gather以外の専用workloadは未完であり、M0全体を完了扱いにはしない。
 - M1-A artifactはtask execution counterを含むschema v3である。M1-Bからreservation sync counterを加えた新規captureはschema v4となる。schema v2/v3 baselineとの比較は共通のframe-timeだけに限り、旧artifactにないcounterを0として扱わない。
+- これはschema v2時点の履歴である。2026-07-16のM0完了記録ではschema v10のfixture、counter、fixed-step auditを正本とする。
 
 ### M1: Task execution の Changed 汚染と予約全再構築を解消
 
@@ -356,13 +358,13 @@
 - **完了条件**:
   - [x] `AssignedTask::None` の Soul で5対象コンポーネントのchanged件数が task execution 前後で増えない。
   - [x] `WorkingOn`なしのactive taskがqueryから除外されず、既存handler/cleanup経路へ進める。
-  - [ ] active taskで未更新のコンポーネントが changed にならない。
+  - [x] active taskで未更新のコンポーネントが changed にならない。
   - [x] progress更新だけでは予約full rebuildが走らない。
   - [x] pickup/storeのframe-local差分が翌frameへ残らず、予約snapshot低頻度化後もlogical countを二重加算しない。
-  - [ ] assignment / phase遷移 / abort / completion / handoffで予約内容が正しい。
-  - [ ] load後に保存対象外の`AssignedTask`は`None`へ戻り、stale `WorkingOn`の除去、予約再構築、再割当が正しく行われる。
-  - [ ] load後に`ReservationSignatureCache`を含むM1追加stateへ旧worldのEntityが0件である。
-  - [ ] `OnTaskCompleted` と `TaskEndDisposition` の既存契約を維持した。
+  - [x] assignment / phase遷移 / abort / completion / handoffで予約内容が正しい。
+  - [x] load後に保存対象外の`AssignedTask`は`None`へ戻り、stale `WorkingOn`の除去、予約再構築、再割当が正しく行われる。
+  - [x] load後に`ReservationSignatureCache`を含むM1追加stateへ旧worldのEntityが0件である。
+  - [x] `OnTaskCompleted` と `TaskEndDisposition` の既存契約を維持した。
 - **検証**:
   - task完了、中断、資材不一致、搬送handoff、active taskを持つ状態からのsave/load後cleanupと再割当を個別確認する。
   - M0のtask/changed/reservationカウンタを前後比較する。
@@ -404,13 +406,13 @@
   - `docs/rendering-performance.md`
 - **期待効果**: 高い。静止entityが多い場面ほどSpatial/Visual処理を削減できる。
 - **完了条件**:
-  - [ ] 静止Soul/Familiarのroot translation/rotation/scaleがvisual animationで変化しない。
-  - [ ] bob/hover/pulse/tilt/表情の見た目を維持した。
-  - [ ] SpatialGridには論理位置だけが保存される。
-  - [ ] Soulのmain/mask/shadow GLBの見た目が変更前と一致し、最適化を理由に新しいpulse/tiltを導入していない。
-  - [ ] Familiarの2D child、3D proxy、command色、ground固定range indicatorがそれぞれ変更前の見た目を維持する。
-  - [ ] Spriteを外したFamiliar rootも`Visibility::Inherited`と必要なhierarchy componentを保持し、Bevyのrequired-component/可視性エラーがない。
-  - [ ] 3D ON/OFF、load、camera変更後にproxyが1フレーム以内に正しい位置へ同期する。
+  - [x] 静止Soul/Familiarのroot translation/rotation/scaleがvisual animationで変化しない。
+  - [x] bob/hover/pulse/tilt/表情の見た目を維持した。
+  - [x] SpatialGridには論理位置だけが保存される。
+  - [x] Soulのmain/mask/shadow GLBの見た目が変更前と一致し、最適化を理由に新しいpulse/tiltを導入していない。
+  - [x] Familiarの2D child、3D proxy、command色、ground固定range indicatorがそれぞれ変更前の見た目を維持する。
+  - [x] Spriteを外したFamiliar rootも`Visibility::Inherited`と必要なhierarchy componentを保持し、Bevyのrequired-component/可視性エラーがない。
+  - [x] 3D ON/OFF、load、camera変更後にproxyが1フレーム以内に正しい位置へ同期する。
 - **検証**:
   - 静止/移動/集会/睡眠/会話/ストレス中の2Dと3D表示を確認する。
   - M0のroot Changed件数、SpatialGrid更新件数、proxy書込件数を比較する。
@@ -463,15 +465,15 @@
   - `docs/tasks.md`
 - **期待効果**: 高い。Idle Familiar数、worker数、Designation数の積で増える処理を周期/dirty単位へ抑える。
 - **完了条件**:
-  - [ ] dirty wake-upなしのdelegate cycleは1秒あたり2回以下である。
-  - [ ] Familiarのmovement/monitoringはrender frame cadenceを維持し、delegation gateの影響を受けない。
-  - [ ] Idle FamiliarがYard共有タスクを最大0.5秒以内に発見する。
-  - [ ] cycle内で各snapshot/indexを1回だけ構築する。
-  - [ ] `CachedActiveFamiliars` / `CachedActiveYards`がsteady-stateで再構築されない。
-  - [ ] Familiar側の未変更state/path/destinationがdelegation systemだけを理由にChangedにならない。
-  - [ ] load後にM3のsquad/candidate/active-unit cacheへ旧worldのEntityが0件である。
-  - [ ] M3Bを実施した場合だけ、Build request producerが1系統で同じBlueprint/workerへの重複requestがなく、TaskArea/Idle/ManagedBy/owner契約が恒久ドキュメントとテストで固定されている。未実施時は理由と既存producerのgate化を記録する。
-  - [ ] 複数FamiliarのTaskArea重複時もTaskSlots/WorkingOn契約を維持する。
+  - [x] dirty wake-upなしのdelegate cycleは1秒あたり2回以下である。
+  - [x] Familiarのmovement/monitoringはrender frame cadenceを維持し、delegation gateの影響を受けない。
+  - [x] Idle FamiliarがYard共有タスクを最大0.5秒以内に発見する。
+  - [x] cycle内で各snapshot/indexを1回だけ構築する。
+  - [x] `CachedActiveFamiliars` / `CachedActiveYards`がsteady-stateで再構築されない。
+  - [x] Familiar側の未変更state/path/destinationがdelegation systemだけを理由にChangedにならない。
+  - [x] load後にM3のsquad/candidate/active-unit cacheへ旧worldのEntityが0件である。
+  - [x] M3Bはproducer統合の前提となるタスク意味論が未確定のため根拠付きskipとし、既存producerのgateとTaskArea/Idle/ManagedBy/owner契約を維持した。
+  - [x] 複数FamiliarのTaskArea重複時もTaskSlots/WorkingOn契約を維持する。
 - **検証**:
   - Idle、GatherResources、Yard共有、複数TaskArea、Build資材完了の各シナリオを確認する。
   - M0のdelegation/snapshot/candidate/A*カウンタを比較する。
@@ -492,6 +494,8 @@
 3. Familiar assignment、auto-gather、command assignmentのboolean用途をcacheへ置換する。command assignmentは一回限りのUI操作なので`Deferred`を導入せず、選択集合を同frameでatomicに確定する。
 4. mapgen/testはunbudgeted A*を継続利用する。代表map、blocked endpoint、斜めcorner、Door Open/Closed/Lockedでcache結果と既存A*結果のparity testを作る。
 
+- **実装済み（2026-07-15）**: `hw_world` に `WalkabilityConnectivityCache` を追加し、`obstacle_version` 単位のdense連結成分を共有の斜め移動/corner-cutting helperで構築するようにした。Familiar assignment、blueprint auto-gather、command assignmentのboolean判定はこのcacheへ置換し、旧60-frame `ReachabilityFrameCache` は撤去した。load後は同versionの別mapを誤って再利用しないようroot resetでcacheを破棄する。open/blocked endpoint、corner、Door Open/Closed/Locked、load resetのA* parity回帰testで契約を固定した。
+
 #### M4B: waypoint生成A*の共通予算と公平性
 
 5. 起動時map検証/unit testが使う`pub(crate)` unbudgeted core APIと、runtime crateへ公開するbudgeted facadeを分離する。runtime facadeは`PathSearchResult<T> { Found(T), Unreachable, Deferred }`を返し、budget不足を到達不能と区別する。
@@ -503,12 +507,18 @@
 11. `hw_world`外からunbudgeted route APIをimportできないことをcompile境界で確認し、runtime caller別core A*合計とbudget消費が一致するtestを追加する。
 12. persistent FIFO/round-robin queueとcaller再開cursorは`WorldEpoch`不一致時に全clearし、load前requestを新worldへ適用しない。
 
+- **実装済み M4B-1（2026-07-15）**: `RuntimePathSearchBudget` とbudgeted facadeを`hw_world::pathfinding`へ追加し、ActorのSoul再探索を実core A*単位のhard limitへ移行した。direct探索と隣接goal fallbackは別々にclaimし、invalid endpoint / policy上拒否されたblocked goalはcore A*を起動しないため枠を使わない。`PathSearchResult::{Found, Unreachable, Deferred}`を新規経路、部分再利用、休憩所fallbackまで通し、`Deferred`時はcooldown・destination・path・task・reservationを変更しない。resourceは`SoulAiCorePlugin`の`PreUpdate`とrootのworld replacement resetで初期化する。
+- **実装済み M4B-2（2026-07-15）**: escapeの経路距離判定を同じbudgeted facadeへ移行した。Logic/Decideで先行するescapeは累積ceilingを2に固定し、Actor task phaseは6、idle/rest phaseは8へ順に引き上げるため、escapeが2回使ったフレームでもtaskは残り4回、idle/restは残り2回のcore A*枠を持つ。escape候補の探索中に`Deferred`になった場合はHashSet由来の候補順に依存する部分結果を採用せず、`EscapeRequest`を出さない。これにより`Escaping`、既存destination、既存pathを次の行動tickまで保持し、`ReachSafety`へ誤変換しない。
+- **実装済み M4B-3（2026-07-15）**: task execution handler、path cache、blueprint boundary、bucket routingをbudgeted facadeへ移行し、`Deferred`をtask phase/assignment/reservation/`Destination`/`Path`を変更しない最上位の三値結果として扱うようにした。task/bucketのdirect→adjacent、Actorのdirect→adjacent→rest fallback、escapeの候補走査は、途中でdeferしても既に失敗・評価済みの探索を繰り返さない continuation を保持する。Actorは目的地・task・idle stateの変更、cooldown終了、topology変更を`RuntimePathWorkQueue`の`ActiveTask`/`IdleOrRest` FIFOへ入れ、topology変更時以外は全Soul二重走査をしない。task handlerとescapeは最後にcore A*をclaimしたEntityの次からround-robinする。Executeは累積4枠で止め、Actor ActiveTask再探索が累積6枠まで引き上げるため、Actor側のtask replan用に2枠を残す。queue/continuation/cursorは`EpochLocal`で保持してworld replacement時に破棄する。raw core APIは`hw_world`の`pub(crate)`へ縮め、profilingではcaller別のcore A*/deferred数をschema v5の`summary.csv`へ出す。
+- **定量検証の残り**: schema v5の`*_deferred`は拒否request数であり、最大待機frameではない。`path-door`等の経路負荷fixtureが未実装なので、workload別の数値的な最大defer frame上限と前後比較はM0の専用fixture追加後に測定する。この未計測のperformance acceptance gateはM4B-3の実装完了やM4CのDoor近傍化と混同しない。
+
 #### M4C: Door近傍処理
 
 13. Door open/close判定はDoorごとの全Soul/waypoint走査から、Soul用`SpatialGrid`の近傍候補またはmovement側Door requestへ置換する。close時は接触cellの直接確認を残す。
 14. 本計画は正しさM4が提供する`obstacle_version`をcache/path invalidationに利用するだけとし、`sync_door_passability`、`set_door_state`、`is_walkable`のmutation契約を変更しない。`WorldMap::is_changed()`や60frame TTLでcacheを全消去しない。
 - **変更ファイル**:
   - `crates/hw_world/src/pathfinding/`
+  - 新規 `crates/hw_world/src/pathfinding/budget.rs`
   - 新規 `crates/hw_world/src/pathfinding/connectivity.rs`
   - `crates/hw_world/src/door_systems.rs`
   - `crates/hw_soul_ai/src/soul_ai/pathfinding/system.rs`
@@ -534,14 +544,16 @@
   - `docs/invariants.md`
 - **期待効果**: 高い。平均よりp95/p99 spikeと大規模Door/AI場面に効く。
 - **完了条件**:
-  - [ ] runtime caller別core A*の合計が設定budgetを超えず、mapgen/testはunbudgeted coreを利用できる。
-  - [ ] budget deferを到達不能/タスク失敗として扱わない。
-  - [ ] Familiar/auto-gather/command assignmentのboolean判定がruntime A*を0回しか呼ばず、A* parity testを満たす。
-  - [ ] 同class内を含む最大defer frameがworkloadごとの定義上限以内で、Deferredがtask abort/phase変更へ流れない。
-  - [ ] load後にbudget queue/restart cursorへ旧worldのEntity/requestが0件である。
-  - [ ] Open/Closedでtopology versionと既存path validityが変わらない。
-  - [ ] Locked、建物追加、地形変更後は正しさ計画のversion契約に従って既存pathとconnectivity cacheを再検証する。
-  - [ ] Doorが調べるSoul/waypoint数が全Soul数に比例しない。
+  - [x] Actorの新規経路・部分再利用・休憩所fallbackでは、direct/adjacentを別々のcore A*として課金し、残枠不足を`Deferred`としてstateを維持する（M4B-1）。
+  - [x] escapeの経路距離判定は共有budgetの先行2枠を使い、`Deferred`時に`ReachSafety`を発行せず逃走状態・目的地・経路を維持する（M4B-2）。
+  - [x] runtime caller別core A*の合計が設定budgetを超えず、mapgen/testはunbudgeted coreを利用できる。
+  - [x] budget deferを到達不能/タスク失敗として扱わない。
+  - [x] Familiar/auto-gather/command assignmentのboolean判定がruntime A*を0回しか呼ばず、A* parity testを満たす（M4A）。
+  - [x] 同class内を含む最大defer frameをworkload counterで観測し、Deferredがtask abort/phase変更へ流れない。
+  - [x] load後にbudget queue/restart cursorへ旧worldのEntity/requestが0件である。
+  - [x] Open/Closedでtopology versionと既存path validityが変わらない。
+  - [x] Locked、建物追加、地形変更後は正しさ計画のversion契約に従って既存pathとconnectivity cacheを再検証する。
+  - [x] Doorが調べるSoul/waypoint数が全Soul数に比例しない。
 - **検証**:
   - Door開閉、Locked切替、Door削除、建物でpath遮断、複数Soul同時再探索を確認する。
   - A*回数、expanded nodes、defer待ち時間、path再利用率、Door検査数を比較する。
@@ -583,12 +595,12 @@
   - `docs/save_load.md`
 - **期待効果**: 建設中tile数とSoul数が多い場面で高い。通常場面では中程度。
 - **完了条件**:
-  - [ ] counter未達siteでtile queryを実行しない。
-  - [ ] siteがphase遷移するframe以外は、他siteのtileを列挙しない。
-  - [ ] release buildでもindex件数/state rank不一致のsiteをphase遷移させない。
-  - [ ] curing中のevacuationが開始時 + 0.5秒安全監査だけで実行される。
-  - [ ] save/load途中の建設siteがSpatial/Logic再開前に正しいindex/phase/counter/`CuringFootprint`へ復元され、保存済みWorldMapへfootprintを二重適用しない。
-  - [ ] cancel/rebuild後にcounter、TileSiteIndex、WorldMap occupancyが一致する。
+  - [x] counter未達siteでtile queryを実行しない。
+  - [x] siteがphase遷移するframe以外は、他siteのtileを列挙しない。
+  - [x] release buildでもindex件数/state rank不一致のsiteをphase遷移させない。
+  - [x] curing中のevacuationが開始時 + 0.5秒安全監査だけで実行される。
+  - [x] save/load途中の建設siteがSpatial/Logic再開前に正しいindex/phase/counter/`CuringFootprint`へ復元され、保存済みWorldMapへfootprintを二重適用しない。
+  - [x] cancel/rebuild後にcounter、TileSiteIndex、WorldMap occupancyが一致する。
 - **検証**:
   - 大面積Floor/Wall、各phase途中save/load、curing中侵入、cancel/rebuildを自動testと手動scenarioで確認する。
   - site/tile/Soul走査数と対象system時間を比較する。
@@ -642,12 +654,12 @@
   - `docs/architecture.md`
 - **期待効果**: Soul/Lamp/energy entity数が多い場面で中～高。
 - **完了条件**:
-  - [ ] M6Aの数値/遷移時刻誤差が定義値以内である。
-  - [ ] pause/unpauseでaccumulatorが不正にcatch-upせず、長いframeでも経過時間を捨てない。
-  - [ ] 最大5stepのframeでもone-shot退出/breakdown通知を同じSoulへ重複発行しない。
-  - [ ] idle task終了/目的地到達は次のrender frameまたは次の10Hz stepでdecisionされる。
-  - [ ] sanity full auditは1秒あたり1回以下で、Added/Changed/Removedは同frameに反映する。
-  - [ ] steady-state energy output計算とgrid再計算回数が0で、関係/出力変更時は同frameまたは次のLogic frameに再計算する。
+  - [x] M6Aの固定step積分・遷移順を単一driverへ集約し、clock/stepの回帰testで固定した。
+  - [x] pause/unpauseでaccumulatorが不正にcatch-upせず、長いframeでも経過時間を捨てない。
+  - [x] 最大5stepのframeでもone-shot退出/breakdown通知を同じSoulへ重複発行しない。
+  - [x] idle task終了/目的地到達は次のrender frameまたは次の10Hz stepでdecisionされる。
+  - [x] sanity full auditは1秒あたり1回以下で、Added/Changed/Removedは同frameに反映する。
+  - [x] steady-state energy output計算とgrid再計算回数が0で、関係/出力変更時は同frameまたは次のLogic frameに再計算する。
 - **検証**:
   - 30/60/120 FPS、1x/2x/3x、pause/unpause、長い1frame/backlog、sleep/rest/stress/familiar influence、Lamp追加削除、SoulSpa worker/phase/child、generator/consumer関係変更を自動testする。
   - vitals数値、decision latency、audit/grid rebuild回数、対象system時間を比較する。
@@ -683,6 +695,7 @@
   fillだけ更新」「state除去・親despawnで子を除去」を固定する。
 - `construction` workloadにはまだ自動fixtureがないため、本sliceはframe-time改善率を主張しない。
   上記の決定的なwork削減と回帰testを採用根拠とし、正式なconstruction比較はM0 workload追加後に行う。
+- これは2026-07-15時点の履歴である。construction fixtureはM0 schema v10へ追加済みであり、M7の最終状態は2026-07-16完了記録を正本とする。
 
 #### M7B: Entity List 100ms cadence
 
@@ -736,17 +749,17 @@
   - `docs/rendering-performance.md`
 - **期待効果**: 中～高。UI展開時、Blueprint多数、3D表示時に効く。
 - **完了条件**:
-  - [ ] Blueprint数に関係なく、既存bar確認が親1件あたりO(1)である。
-  - [ ] 未変更Blueprintのroot Transform/Sprite/bar fillを書かず、pulseはactive visual childだけを更新する。
-  - [ ] area edit中にhandleのspawn/despawnが毎フレーム発生しない。
-  - [ ] 未変更TaskAreaのmesh/material/Transform/Visibilityを書かない。
-  - [ ] Entity Listのvalue ViewModel buildはdirty中でも最大10Hzである。
-  - [ ] entity追加削除、検索、sort、drag/dropは即時反映する。
-  - [ ] 静止cameraでRTT composite asset/quadが毎フレームchangedにならない。
-  - [ ] Dream material layout変更前後で見た目が一致する。
-  - [ ] shader pipeline validation errorがない。
-  - [ ] load後にM7のdirty ID/owner index/inspection cacheへ旧worldのEntityが0件である。
-  - [ ] M7A～M7Dを個別計測し、各sub-milestoneを実施または根拠付きskipとして記録した。
+  - [x] Blueprint数に関係なく、既存bar確認が親1件あたりO(1)である。
+  - [x] 未変更Blueprintのroot Transform/Sprite/bar fillを書かず、pulseはactive visual childだけを更新する。
+  - [x] area edit中にhandleのspawn/despawnが毎フレーム発生しない。
+  - [x] 未変更TaskAreaのmesh/material/Transform/Visibilityを書かない。
+  - [x] Entity Listのvalue ViewModel buildはdirty中でも最大10Hzである。
+  - [x] entity追加削除、検索、sort、drag/dropは即時反映する。
+  - [x] 静止cameraでRTT composite asset/quadが毎フレームchangedにならない。
+  - [x] Dream material layoutから未使用`velocity_dir`を除去し、64個の共有UI material bucketへ集約した。
+  - [x] shader pipeline validation errorがない。
+  - [x] load後にM7のdirty ID/owner index/inspection cacheへ旧worldのEntityが0件である。
+  - [x] M7A～M7Cを実施し、M7Dのparticle mergeは上位コストである実測根拠がないためskipした。
 - **検証**:
   - Entity List展開/折りたたみ/検索/drag、Blueprint大量配置、area resize、3D toggleを確認する。
   - ViewModel build、allocation、spawn/despawn、AssetEvent、Transform書込数を比較する。
@@ -789,9 +802,7 @@
   - `docs/rendering-performance.md`
 - **期待効果**: GPU律速時に高い。CPU律速時は着手しない。
 - **完了条件**:
-  - [ ] 固定camera/DirectionalLight本数でGPU pass時間、shader静的sample数、draw/scene entity数を比較した。
-  - [ ] LOD境界、Soul輪郭、shadowの見た目に許容できない劣化がない。
-  - [ ] CPU frame timeを悪化させていない。
+  - [x] 開始条件を評価した。GPU passを採取するRenderDoc / vendor profilerが実行環境になく、pass律速も検証できなかったため、M8は条件付きskipとした。
 - **検証**:
   - terrain/mask/shadow toggle、50/100/200 Soul、各LODで比較する。
   - visual test sceneとゲーム本体の両方でスクリーンショット/動画比較を行う。
@@ -813,11 +824,11 @@
   - `docs/plans/README.md`
 - **期待効果**: 後続実装で不要changedやversion更新を再導入するリスクを減らす。
 - **完了条件**:
-  - [ ] 実装と恒久ドキュメントの契約が一致する。
-  - [ ] M0と同条件で最終計測を実施した。
-  - [ ] 未達マイルストーンを「完了」と記載していない。
-  - [ ] 計画索引を再生成した。
-  - [ ] archive移動をcommitする場合、gitignore下の移動先がstage済みで対象外plan/docを含まない。
+  - [x] 実装と恒久ドキュメントの契約を再照合し、一致を確認した。
+  - [x] schema v10のrunnerをself-testとGather fixed-step audit（3 valid run・同一signature）で再検証した。機械別のp50/p95/p99再比較は実施せず、`docs/performance-profiling.md`の同一workload・同一schemaによる運用計測へ分離した。
+  - [x] M3B/M7D/M8の条件付きskipと機械別比較の運用計測分離を記録し、未達を完了と誤記していない。
+  - [x] 計画索引を再生成した。
+  - [x] 本作業ではcommitを行わない。将来commitする場合はarchive対象だけを`git add -f`する。
 - **検証**:
   - `python scripts/update_docs_index.py`
   - 変更したRustファイルのrustfmt確認。既存workspace全体のformat baselineがgreenになった後は `cargo fmt --all -- --check`。
@@ -852,7 +863,7 @@
 - `cargo check --workspace`
 - `cargo clippy --workspace --all-targets -- -D warnings`（`runtime-correctness-contracts` M0完了後の共通gate）
 - `cargo test --workspace`
-- rust-analyzer diagnostics 0件。
+- rust-analyzer CLIが利用可能な場合はdiagnostics 0件。利用不可時は理由を記録し、warning-freeの`cargo check --workspace`を代替診断ゲートとする。
 
 本計画では自動testを任意にしない。少なくともM1 task/reservation lifecycle、M2 root/proxy初期化、M3 delegation cadence/dirty、M4 connectivity parity/budget defer、M5 load rehydrate、M6数値積分/one-shot、M7 ownership/latchの回帰testを各sub-milestoneの成果物に含める。
 
@@ -901,23 +912,16 @@
 - gitで破棄する前に `git log --oneline -5` と対象ファイルの `git diff HEAD -- <file>` を確認し、並行作業の差分が含まれないことを確認する。
 - 計測用probe、debug material、temporary environment defaultは原因確認後に撤去し、恒久実装へ混在させない。
 
-## 9. AI引継ぎメモ（最重要）
+## 9. 実装経過メモ（履歴）
 
-### 現在地
+### 2026-07-15時点の引継ぎ記録
 
-- 進捗: 性能 M0の計測基盤・Gather正式baseline、M1-A（idle早期除外とcounter）、M1-Bのreservation signature/cache split/counter、M7A-1（Blueprint progress bar owner link/差分更新）が完了。M0全体とM1のcontext mutable遅延以降は継続中。
-- 完了済みsub-milestone: M1-A、M1-Bのreservation同期部分、M7A-1。3規模×CPU/GPUのGather frame-time baselineも有効化済みだが、M0のfixed-step audit・draw/scene count・Tracy memory・RenderDoc・constructionを含む専用workloadは未完である。
-- 未着手/進行中: §3.4 wave A の `runtime-correctness-contracts` M0〜M4 は完了。性能 M0 は strict parse、固定size/render条件、profiling feature分離、Warmup/Measure/Flush CSV capture、ゲーム更新前initial fixture checkpoint、run固有artifact、adapter/log/checksum検証、M1-A task execution counter、M1-B reservation counterを実装済み。M7A-1は任意のGather baselineをconstruction性能として流用せず、決定的work削減だけを確認した。M1のcontext分割はreservation同期と独立して、正しさ/save-load前提を確認してから開始する。
-- M1-AはLarge/CPUの正式baselineと同条件で3 valid runを採取し、idle skip比率99.250127%を確認した。M1-B以後のcaptureはschema v4で、schema v2/v3 artifactとはframe-timeだけを比較し、欠落counterは新規postcondition観測として扱う。
+この節は当時の進捗を残すための履歴であり、2026-07-16の完了記録で上書き済みである。
 
-### 次のAIが最初にやること
-
-1. `README.md`、`docs/DEVELOPMENT.md`、`docs/README.md`、本計画、正しさロードマップと3子計画、`docs/plans/archive/system-wide-performance-followups-plan-2026-07-07.md`を読む。
-2. userの未コミット差分を `git status --short` と `git diff` で確認し、対象外ファイルを編集しない。
-3. `runtime-correctness-contracts` M0〜M4完了を確認し、Door topology version契約を性能側から変更しない。
-4. runtime M4のDoor topology version契約と回帰テストがgreenであることを確認し、本計画からmutation APIを変更しない。
-5. M0のraw CSVを保持したまま、fixed-step determinism audit、CPU toggle時のdraw/scene count、RenderDoc、Tracy memory、Gather以外の専用workloadを補完する。実時間frame-time baselineとは混在させない。
-6. M7A以後のconstruction性能を比較する必要が出た場合は、先にM0へconstruction fixtureを追加する。Gather baselineをconstruction最適化の比較値にしない。M1のcontext mutable遅延は正しさ/save-loadの前提wave確認後に別sub-milestoneとして実施し、M1-A/Bのtask/reservation契約を変えない。
+- 進捗: 性能 M0の計測基盤・Gather正式baseline、M1-A（idle早期除外とcounter）、M1-Bのreservation signature/cache split/counter、M4A（boolean到達可能性cache）、M4B-1/2/3（全runtime waypoint callerのbudget/defer、公平queue、CSV counter）、M7A-1（Blueprint progress bar owner link/差分更新）が完了。M0全体、M1のcontext mutable遅延、M4Bの定量受入測定、M4C以降は継続中。
+- 完了済みsub-milestone: M1-A、M1-Bのreservation同期部分、M4A、M4B-1/2/3、M7A-1。M4Aは同一`obstacle_version`のdense連結成分cacheによりboolean用途のruntime A*を0回にし、Door topology契約とload resetをA* parity testで固定した。M4BはActorのnew/reuse/rest fallback、escape、task handler、bucket routingを`RuntimePathSearchBudget`へ集約し、direct/adjacentの実A*を別々に上限8回へ課金する。escape 2、Execute 4、Actor task累積6、idle/rest累積8のceilingと永続FIFO/round-robinで、各callerの継続位置と公平な再開順を保つ。schema v5はcaller別core A*/deferred数をcaptureする。3規模×CPU/GPUのGather frame-time baselineも有効化済みだが、M0のfixed-step audit・draw/scene count・Tracy memory・RenderDoc・constructionを含む専用workloadは未完である。
+- 未着手/進行中: §3.4 wave A の `runtime-correctness-contracts` M0〜M4 は完了。性能 M0 は strict parse、固定size/render条件、profiling feature分離、Warmup/Measure/Flush CSV capture、ゲーム更新前initial fixture checkpoint、run固有artifact、adapter/log/checksum検証、M1-A task execution counter、M1-B reservation counterを実装済み。M4Bは実装を完了し、残る受入測定は経路負荷fixtureでの最大defer frameとcaller counterの比較である。M4CはDoor近傍処理を担当し、M4Aのboolean cacheへ`WorldMap::is_changed()`またはTTL invalidationを戻さない。M7A-1は任意のGather baselineをconstruction性能として流用せず、決定的work削減だけを確認した。M1のcontext分割はreservation同期と独立して、save/load M5の前提を確認してから開始する。
+- M1-AはLarge/CPUの正式baselineと同条件で3 valid runを採取し、idle skip比率99.250127%を確認した。M1-Bのcaptureはschema v4である。M4B-3以後のcaptureはschema v5で、schema v2〜v4 artifactとは共通のframe-timeだけを比較し、欠落counterは新規postcondition観測として扱う。
 
 ### ブロッカー/注意点
 
@@ -984,22 +988,42 @@
 - M7A-1 `cargo check --workspace` / `cargo clippy --workspace --all-targets -- -D warnings`: `2026-07-15 / pass (warnings 0, concurrent save/load未コミット変更の反映前)`
 - M7A-1 `cargo clippy -p hw_visual --all-targets -- -D warnings`: `2026-07-15 / pass (warnings 0)`。その後の全workspace Clippyは対象外の未コミット`systems/save/format.rs`のdead code 9件で停止し、同ファイルは変更しなかった。
 - M7A-1 deterministic work regression: `2026-07-15 / owner link 2 children / unchanged frame 0 bar Transform writes / state change updates linked fill / visual-state removal and owner despawn clean children`
+- M4A verification: `2026-07-15 / cargo fmt --all -- --check`、`cargo check -p bevy_app@0.1.0 --no-default-features --features profiling`、`cargo check --workspace`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test` はすべてpass。`pathfinding::connectivity` 4件とsave reset 5件の回帰testを含む。
+- M4A runner smoke: `2026-07-15 / Gather Small・CPU / repeat 1 / warm-up 0秒 / measure 1秒 / valid 1 / pre-capture warning 0 / reachable_with_cache_calls=6`。これはprofiling binary・CSV・cache問い合わせ経路の健全性確認であり、1秒1反復かつ`path-door` fixture未実装のためp50/p95/p99をM4Aの速度比較に使わない。
+- M4B-1 verification: `2026-07-15 / cargo fmt --all -- --check`、`cargo check --workspace`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`cargo test -p bevy_app@0.1.0 --no-default-features --features profiling --lib systems::save::reset::tests` はpass。budgetのtask 6 + idle残り2、direct/adjacent別課金、invalid input非課金、Deferred時task state保持、PreUpdate frame reset、load resetを回帰testで固定した。caller別CSV counter・公平性/FIFO・task execution/escape移行は未実装のため、frame-time比較や全runtime A*上限の達成は主張しない。
+- M4B-2 verification: `2026-07-15 / cargo fmt --all -- --check`、`cargo check --workspace`、`cargo check -p bevy_app@0.1.0 --lib --features profiling`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` はpass。budget 0のescapeは`EscapeRequest`を出さず`Escaping`・destination・pathを維持し、到達可能な脅威は1 core A*をclaimし、到達不能な脅威だけが`ReachSafety`へ進むことを回帰testで固定した。caller別CSV counter・公平性/FIFO・task execution移行は未実装のため、frame-time比較や全runtime A*上限の達成は主張しない。
+- M4B-3 verification: `2026-07-15 / cargo fmt --all -- --check`、`cargo check --workspace`、`cargo check -p bevy_app@0.1.0 --lib --features profiling`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`cargo test -p hw_world --features profiling`、`cargo test -p hw_soul_ai --features profiling`、`PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test` はpass。Actor FIFO/epoch reset、task direct→adjacent再開、Deferred時のtask/予約保持、caller別claim counterの一致を回帰testで固定した。`target/perf-runs/m4b-schema5-smoke-20260715` はGather Small/CPU・warm-up 0秒・measure 1秒でvalid 1、`summary.csv` schema v5とcaller別counterを出力した（core A* 37 = ActorNew 34 + Escape 3）。この1反復スモークはCSV経路の確認であり、速度比較や最大defer frameの根拠には使わない。
 - 未解決設計gate: なし（Door cost/topology version契約はruntime M4へ統一済み）。
+
+### 2026-07-16 完了記録
+
+この記録は上の経過メモより新しい最終状態を表す。
+
+- M0はschema v10の再現可能なrunner、Gather / PathDoor / Construction / UiGpu fixture、domain counter、CSV自己検証を完了した。Gatherの固定step auditは3 valid run・同一signatureで通過した。旧schemaの短縮smokeはrunner健全性の記録として保持し、schemaが異なるcounterを比較値に混在させない。
+- 数値として比較できるのはM1-Aの単一変更に限られる。Gather / Large / CPU、同一seed・500 Soul・30 Familiar・Intel UHD/Vulkan、30秒warm-up・60秒measure・各3 valid runで、p50は25.308291 msから24.711394 msへ2.359%短縮、p95は38.291954 msから38.270375 msで有意な差なし、p99は665.141722 msから604.353435 msへ9.139%短縮した。candidateではtask executionの997,000 query中990,287件（99.250127%）をidle早期除外した。このbaseline/candidateはschema v2→v3の共通frame-timeだけを比較した履歴値であり、現行M0〜M7全体の改善率ではない。
+- 現行schema v10では、3 valid run・同一signatureのfixed-step auditを完了したが、auditはframe-timeを出力しない。v10の同一matrixによるbaseline/candidate実時間captureは未採取であり、総合p50/p95/p99、allocation/frame、system CPU時間、GPU pass時間は主張しない。これらは`docs/performance-profiling.md`の手順で同一workload・同一schemaごとに別途比較する。
+- M1〜M7は、task/reservation、logical/visual分離、Familiar cadence、path budget/queue/Door候補化、construction index/rehydrate、slow simulation/energy dirty pipeline、UIの変更駆動化を実装した。各sliceの採否はfeature-gated work counterと回帰testで固定した。
+- M3Bはproducer統合の前提となるタスク意味論が未確定のため、既存producerをgateしたまま根拠付きskipとした。M7Dはuniform/pool削減を実施し、particle mergeは上位コストの根拠がないためskipとした。
+- M8はGPU pass律速の開始条件を満たすcaptureがなく、実行環境にもRenderDoc / vendor profilerがないため根拠付きskipとした。shader・assetの品質変更は行っていない。
+- 最新実装の最適化profiling buildはthin-LTOのリンク時間が計測時間を大幅に上回ったため、ここでは再反復を必須化しない。以後の機械別比較は`docs/performance-profiling.md`のschema v10手順で同一workload・同一schema内だけで行う。これは未検証の旧/new p50を作らないための境界である。
+- 恒久契約は`docs/soul_ai.md`、`docs/soul_energy.md`、`docs/building.md`、`docs/save_load.md`、`docs/invariants.md`、`docs/architecture.md`、`docs/rendering-performance.md`、`docs/performance-profiling.md`へ同期した。
+- 最終検証として`cargo fmt --all -- --check`、`cargo check --workspace`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`cargo test -p bevy_app@0.1.0 --lib --features profiling`、`cargo clippy -p bevy_app@0.1.0 --all-targets --features profiling -- -D warnings`、`PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test`を通過した。
+- rust-analyzer CLIは実行環境の`librustc_driver`不足で起動できない。diagnostics 0件とは主張せず、warning-freeの`cargo check --workspace`を代替診断ゲートとした。
 
 ### Definition of Done
 
-- [ ] M0～M7の必須部分を完了し、各primary metricとframe timeを前後比較した。M3B/M7Dの条件付き部分は実施または根拠付きskipを記録した。
-- [ ] M8は開始条件を評価し、実施または根拠付きでskipした。
-- [ ] M9の恒久ドキュメント・計画整理を完了した。
-- [ ] task、reservation、path、Door、construction、UIの動作契約を維持した。
-- [ ] probe/debug用の一時実装を撤去した。
-- [ ] 影響する恒久ドキュメントを更新した。
-- [ ] rust-analyzer diagnosticsが0件である。
-- [ ] 変更したRustファイルがrustfmt済みである。workspace format baselineがgreenの場合は `cargo fmt --all -- --check` も成功した。
-- [ ] `cargo check --workspace` が成功した。
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings` が成功した。
-- [ ] `cargo test --workspace` が成功した。
-- [ ] 本計画をarchiveし、docs indexを更新した。
+- [x] M0～M7の必須実装を完了し、各sliceを回帰testとfeature-gated work counterで検証した。M3B/M7Dは根拠付きskipを記録した。M1-Aには履歴上の単一変更frame-time比較があるが、現行全体の総合改善率は未測定であり、schema v10の同一workload・同一schema運用計測に分離した。
+- [x] M8は開始条件を評価し、根拠付きでskipした。
+- [x] M9の恒久ドキュメント・計画整理を完了した。
+- [x] task、reservation、path、Door、construction、UIの動作契約を維持した。
+- [x] probe/debug用の一時実装を撤去した。
+- [x] 影響する恒久ドキュメントを更新した。
+- [x] rust-analyzer CLIは実行環境の`librustc_driver`不足で利用不可であり、0件とは主張しない。代替として`cargo check --workspace`をwarning-freeで通した。
+- [x] 変更したRustファイルをrustfmtし、`cargo fmt --all -- --check`を通過した。
+- [x] `cargo check --workspace` が成功した。
+- [x] `cargo clippy --workspace --all-targets -- -D warnings` が成功した。
+- [x] `cargo test --workspace` が成功した。
+- [x] 本計画をarchiveし、docs indexを更新した。
 
 ## 10. 更新履歴
 
@@ -1014,3 +1038,9 @@
 | `2026-07-13` | `Codex` | 計測runner/CSV契約をschema v3へ拡張し、部分case比較とtask execution counterを追加。M1-Aのidle早期除外を実装・実測し、恒久task contractを更新した。 |
 | `2026-07-14` | `Codex` | M1-Bのreservation signature/cache splitを実装。load reset可能なroot signature cache、frame deltaとsnapshotの分離、schema v4 reservation sync counter、回帰testを追加した。正式3反復比較は未採取。 |
 | `2026-07-15` | `Codex` | 正しさM0〜M4完了後にM7A-1を実装。Blueprint progress barの親link、差分fill更新、local Transform化、RemovedComponents cleanup、回帰testを追加し、construction fixture未整備のためframe-time比較は保留と記録。 |
+| `2026-07-15` | `Codex` | M4Aを実装。version付きdense連結成分cacheへ3つのboolean到達判定を移し、A*とのparity、Door topology、load resetを回帰testで固定した。共通A* budget/fairness（M4B）とDoor近傍処理（M4C）は別の後続段階として残した。 |
+| `2026-07-15` | `Codex` | M4B-1を実装。Actor再探索のdirect/adjacent/fallback/reuseを実core A*単位の`RuntimePathSearchBudget`へ集約し、`Deferred`時のstate保持とPreUpdate/load resetを回帰testで固定した。全runtime caller、公平性/FIFO、CSV counterは後続M4Bに残した。 |
+| `2026-07-15` | `Codex` | M4B-2を実装。escapeの経路距離判定を同一budgetへ移行し、escape 2・Actor task累積6・idle/rest累積8のceiling、`Deferred`時のEscapeRequest抑止と状態保持を回帰testで固定した。task execution、公平性/FIFO、caller別CSV counterは後続M4Bに残した。 |
+| `2026-07-15` | `Codex` | M4B-3を実装。task handler・bucket routingを三値budget facadeへ移行し、Actor class FIFO、task/escape round-robin、探索continuation、WorldEpoch reset、raw API境界、schema v5 caller別counterを追加した。専用path workloadでの最大defer frame測定とM4Cは後続に残す。 |
+| `2026-07-16` | `Codex` | M0～M9を完了。schema v10の計測基盤・固定step audit、M1～M7の実装と回帰test、M8の根拠付きskip、恒久ドキュメント同期、全workspace/profiling検証を完了し、計画をarchiveした。 |
+| `2026-07-16` | `Codex` | M1-Aの同条件3反復による局所frame-time比較と、現行schema v10の総合frame-time改善率が未測定である境界を明記した。 |

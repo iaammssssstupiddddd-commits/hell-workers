@@ -39,6 +39,7 @@ pub fn handle_collect_bone_task(
             ) {
                 NavOutcome::Moving => {}
                 NavOutcome::Ended(control) => return control,
+                NavOutcome::Deferred => return TaskHandlerControl::Continue,
                 NavOutcome::Unreachable => {
                     debug!(
                         "COLLECT_BONE: Soul {:?} cannot reach BonePile {:?}, canceling",

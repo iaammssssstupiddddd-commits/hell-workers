@@ -67,6 +67,19 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py run --skip-build \
 
 CPU条件では`data/scene_roots.csv`のSoul main/mask/shadowとFamiliar rootがすべて0、GPU条件ではSoul数・Familiar数と一致しなければrunnerが失格にする。これはCPU-only条件へ対象外の3D sceneを混ぜないための契約である。
 
+## 標準 workload
+
+すべての workload は初期 checkpoint より前に決定的に生成される。手操作や既存 save を前提にしてはならない。
+
+| workload | 固定負荷 | 主な counter |
+| --- | --- | --- |
+| `gather` | Gather designation と Familiar 指揮 | task / reservation / delegation |
+| `path-door` | corridor、Door 開閉、両方向の Soul traffic | core A*、defer frame、Door近傍候補 |
+| `construction` | Curing 中の Floor site（Small/Medium/Large = 16/64/128 tile） | construction site/tile、evacuation候補 |
+| `ui-gpu` | Blueprint（Small/Medium/Large = 64/160/320） | UI/visual の描画条件 |
+
+`construction` は Curing footprint の安全監査を含む。完成済みの別 workload の数値を construction の比較値として流用しない。
+
 固定step auditはsimulation状態の診断専用である。frame-timeを採取せず、`summary.csv`も生成しない。
 
 ```bash
@@ -103,7 +116,7 @@ python3 scripts/perf.py run --instrumentation memory --sizes medium --renders cp
 
 計測完了後のwarning/errorは有効性を失わせないが、`validation.json`の`teardown_warning_lines`、`aggregate.csv`の`post_capture_teardown_warning_counts`、`report.md`へ必ず記録される。現在確認されている`CommandQueue has un-applied commands`は、speech/conversationの`Commands::delayed()`が次の`PreUpdate`より前に`AppExit`で破棄されるteardown由来であり、強制flushして計測状態を変えてはならない。完了マーカー前の同種warningは従来どおり失格である。
 
-scenario driverは `Warmup → Measure → Flush → AppExit` を自動遷移する。各checkpointのinitial、warm-up終端、measure終端のentity数・Designation数・state checksum、実際のvirtual/real秒数、p50/p95/p99/maxは`summary.csv`に入る。既存`gather`以外の`path-door`、`construction`、`ui-gpu`は専用セットアップを実装するまでrunnerで失敗するため、Gather結果として記録しない。
+scenario driverは `Warmup → Measure → Flush → AppExit` を自動遷移する。各checkpointのinitial、warm-up終端、measure終端のentity数・Designation数・state checksum、実際のvirtual/real秒数、p50/p95/p99/maxは`summary.csv`に入る。`gather`、`path-door`、`construction`、`ui-gpu` はすべて専用 fixture を持つため、異なる workload の結果を相互の速度比較に使わない。
 
 ## Artifact形式と集約
 
@@ -127,9 +140,15 @@ target/perf-runs/<session>/
 
 fixed-step auditでは`frames.csv`と`summary.csv`の代わりに、`data/determinism.csv`と`data/determinism_records.csv`を出力する。
 
-`summary.csv` schema v4には、frame-timeに加えcapture期間全体の`task_execution_souls_queried`、`task_execution_idle_skips`、`task_execution_handler_runs`、`reservation_sync_full_rebuilds`、`reservation_sync_pending_tasks_scanned`、`reservation_sync_assigned_tasks_scanned`を入れる。`aggregate.csv`には各counterの中央値/MADと、run内で割り算してから集約したidle skip比率・handler到達比率を併記する。これらはframeあたりの値ではないため、比較時は同じmeasure秒数でのみ用いる。別々のcounterを独立に中央値化した値どうしを引き算して比率を作ってはならない。
+`summary.csv` schema v10には、frame-timeに加えcapture期間全体の task execution / reservation / delegation counter、caller別 runtime A* と defer counter、Door候補数、construction の site/tile/evacuation counter を入れる。さらに slow simulation の step / 更新Soul / idle decision / sanity audit と、energy の output / grid / lamp候補 counter を入れる。`aggregate.csv`には各counterの中央値/MADと、run内で割り算してから集約したidle skip比率・handler到達比率を併記する。これらはframeあたりの値ではないため、比較時は同じmeasure秒数でのみ用いる。別々のcounterを独立に中央値化した値どうしを引き算して比率を作ってはならない。
+
+`runtime_path_total_core_searches` は caller別 `*_core_searches` の和であり、capture中に budgeted facade がclaimした実core A*数である。`*_deferred` は枠不足で拒否されたcore A* request数であり、requestの待機frame数ではない。frameごとのhard limitは `RuntimePathSearchBudget` のclaim境界とunit testで保証し、capture合計だけから1フレームの上限を推定してはならない。
+
+`reachable_with_cache_calls` は schema v10でも互換のため名前を維持しているが、M4A以後は Familiar 委譲が version付き連結成分 cache に問い合わせた回数であり、core A* 呼び出し回数ではない。Boolean 到達判定が A* を呼ばないことは cache/A* parity test と topology version 回帰 test で保証する。既存schema v4以前の`reachable_with_cache_calls`や新しいcaller counterを、互いの代理指標にしてはならない。
 
 `aggregate.csv`はframe sampleをrun間で混ぜず、各runのp50/p95/p99/maxを先に出し、その値の中央値とMADをcaseごとに出す。initial fixture checksum、warm-up checksum群、post-capture teardown warning件数も併記する。invalid runを黙って除外せず、session全体をinvalidにする。schema v2の既存artifactにはtask execution counterがなく、schema v3以前のartifactにはreservation sync counterがない。frame-time比較は可能だが、存在しないcounterを0としてM1以降と比較してはならない。
+
+schemaが異なる過去artifactの共通frame-timeは、対応する単一変更の**履歴上の参考値**にだけ使える。現行実装全体の改善率を示す場合は、schema v10・同一workload/fixture・同一計測matrixで採ったbaselineとcandidateを比較し、異なるschemaや別workloadの結果を合算してはならない。
 
 既存artifactの再集約と、互換なsession同士の比較には次を使う。
 

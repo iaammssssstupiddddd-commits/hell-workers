@@ -4,7 +4,7 @@ use crate::soul_ai::execute::task_execution::common;
 use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
 use crate::soul_ai::execute::task_execution::transport_common::reservation;
 use crate::soul_ai::execute::task_execution::types::{
-    AssignedTask, BucketTransportData, BucketTransportDestination, BucketTransportSource,
+    AssignedTask, BucketTransportData, BucketTransportDestination,
 };
 use bevy::prelude::*;
 use hw_core::constants::BUCKET_CAPACITY;
@@ -28,11 +28,6 @@ pub fn handle(
                 let mixer = *mixer_entity;
                 if let Ok(res_item) = ctx.queries.reservation.resources.get(bucket_entity) {
                     if res_item.0 == ResourceType::BucketWater {
-                        let tank = match data.source {
-                            BucketTransportSource::Tank { tank, .. } => tank,
-                            _ => bucket_entity,
-                        };
-                        reservation::release_source(ctx, tank, 1);
                         let control = routing::transition_to_destination(
                             commands,
                             ctx,
@@ -47,6 +42,10 @@ pub fn handle(
                         // Filling フェーズをスキップしたため amount が 0 のまま。
                         // GoingToDestination/Pouring フェーズが正しく動作するよう補正する。
                         if let AssignedTask::BucketTransport(ref mut task_data) = *ctx.task
+                            && matches!(
+                                task_data.phase,
+                                crate::soul_ai::execute::task_execution::types::BucketTransportPhase::GoingToDestination
+                            )
                             && task_data.amount == 0
                         {
                             task_data.amount = BUCKET_CAPACITY;
@@ -77,28 +76,35 @@ pub fn handle(
                         ctx.queries.designation.targets.get(tank)
                 {
                     let tank_pos = tank_transform.translation.truncate();
-                    if routing::set_path_to_tank_boundary(
+                    match routing::set_path_to_tank_boundary(
                         ctx,
                         ctx.env.world_map,
                         tank_pos,
                         data,
                         crate::soul_ai::execute::task_execution::types::BucketTransportPhase::GoingToDestination,
-                    )
-                    .is_some()
-                    {
-                        commands
-                            .entity(bucket_entity)
-                            .try_insert(hw_core::relationships::DeliveringTo(tank));
-                        return TaskHandlerControl::Continue;
+                    ) {
+                        common::PathSearchResult::Found(()) => {
+                            commands
+                                .entity(bucket_entity)
+                                .try_insert(hw_core::relationships::DeliveringTo(tank));
+                            return TaskHandlerControl::Continue;
+                        }
+                        common::PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                        common::PathSearchResult::Unreachable => {}
                     }
                 }
 
-                if routing::set_path_to_river(ctx, ctx.env.world_map, data).is_none() {
-                    return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
+                match routing::set_path_to_river(ctx, ctx.env.world_map, data) {
+                    common::PathSearchResult::Found(()) => {
+                        commands
+                            .entity(bucket_entity)
+                            .remove::<hw_core::relationships::DeliveringTo>();
+                    }
+                    common::PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    common::PathSearchResult::Unreachable => {
+                        return abort::abort_with_bucket(commands, ctx, data, ctx.env.world_map);
+                    }
                 }
-                commands
-                    .entity(bucket_entity)
-                    .remove::<hw_core::relationships::DeliveringTo>();
             }
         }
         return TaskHandlerControl::Continue;
@@ -156,28 +162,27 @@ pub fn handle(
                         ctx.queries.designation.targets.get(tank)
                     {
                         let tank_pos = tank_transform.translation.truncate();
-                        if routing::set_path_to_tank_boundary(
+                        match routing::set_path_to_tank_boundary(
                             ctx,
                             ctx.env.world_map,
                             tank_pos,
                             data,
                             crate::soul_ai::execute::task_execution::types::BucketTransportPhase::GoingToDestination,
-                        )
-                        .is_some()
-                        {
-                            commands
-                                .entity(bucket_entity)
-                                .try_insert(hw_core::relationships::DeliveringTo(tank));
-                            return TaskHandlerControl::Continue;
+                        ) {
+                            common::PathSearchResult::Found(()) => {
+                                commands
+                                    .entity(bucket_entity)
+                                    .try_insert(hw_core::relationships::DeliveringTo(tank));
+                                return TaskHandlerControl::Continue;
+                            }
+                            common::PathSearchResult::Deferred => {
+                                return TaskHandlerControl::Continue;
+                            }
+                            common::PathSearchResult::Unreachable => {}
                         }
                     }
                 }
                 BucketTransportDestination::Mixer(_) => {
-                    let tank = match data.source {
-                        BucketTransportSource::Tank { tank, .. } => tank,
-                        _ => bucket_entity,
-                    };
-                    reservation::release_source(ctx, tank, 1);
                     let control = routing::transition_to_destination(
                         commands,
                         ctx,
@@ -190,6 +195,10 @@ pub fn handle(
                     }
 
                     if let AssignedTask::BucketTransport(ref mut task_data) = *ctx.task
+                        && matches!(
+                            task_data.phase,
+                            crate::soul_ai::execute::task_execution::types::BucketTransportPhase::GoingToDestination
+                        )
                         && task_data.amount == 0
                     {
                         task_data.amount = BUCKET_CAPACITY;
@@ -203,11 +212,12 @@ pub fn handle(
     }
 
     let bucket_grid = WorldMap::world_to_grid(bucket_pos);
-    if ctx.path.waypoints.is_empty()
-        && routing::set_path_to_grid_boundary(ctx, ctx.env.world_map, bucket_grid, bucket_pos)
-            .is_none()
-    {
-        ctx.dest.0 = bucket_pos;
+    if ctx.path.waypoints.is_empty() {
+        match routing::set_path_to_grid_boundary(ctx, ctx.env.world_map, bucket_grid, bucket_pos) {
+            common::PathSearchResult::Found(()) => {}
+            common::PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+            common::PathSearchResult::Unreachable => ctx.dest.0 = bucket_pos,
+        }
     }
 
     TaskHandlerControl::Continue

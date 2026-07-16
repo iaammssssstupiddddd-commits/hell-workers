@@ -58,9 +58,11 @@ mod tests {
         ActiveTaskIdentity, AssignedTask, Blueprint, BuildData, BuildPhase, BuildingType, WorkType,
     };
     use hw_logistics::{Inventory, SharedResourceCache};
+    #[cfg(feature = "profiling")]
+    use hw_soul_ai::soul_ai::execute::task_execution::TaskExecutionPerfMetrics;
     use hw_soul_ai::soul_ai::execute::task_execution_system::task_execution_system;
     use hw_soul_ai::soul_ai::execute::task_unassign_apply::handle_soul_task_unassign_system;
-    use hw_world::WorldMap;
+    use hw_world::{RuntimePathSearchBudget, WorldMap};
 
     #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
     struct UserCancelSet;
@@ -122,9 +124,12 @@ mod tests {
         app.add_plugins(MinimalPlugins)
             .insert_resource(WorldMap::default())
             .insert_resource(empty_soul_task_handles())
+            .init_resource::<RuntimePathSearchBudget>()
             .init_resource::<SharedResourceCache>()
-            .init_resource::<Receipts>()
-            .add_message::<hw_core::events::SoulTaskUnassignRequest>()
+            .init_resource::<Receipts>();
+        #[cfg(feature = "profiling")]
+        app.init_resource::<TaskExecutionPerfMetrics>();
+        app.add_message::<hw_core::events::SoulTaskUnassignRequest>()
             .add_message::<ResourceReservationRequest>()
             .add_message::<TaskCompletedVisualMessage>()
             .add_message::<OnTaskAbandoned>()

@@ -2,33 +2,44 @@
 
 use bevy::prelude::*;
 use hw_core::soul::Path;
-use hw_world::{PathfindingContext, WorldMap, find_path_world_waypoints};
+use hw_world::{
+    PathSearchCaller, PathSearchResult, PathfindingContext, RuntimePathSearchBudget, WorldMap,
+    find_path_world_waypoints_with_budget,
+};
 
 use super::PathCooldown;
 
-/// `try_reuse_existing_path` へのバジェット・エンティティ情報。
-pub(super) struct PathBudgetInfo<'a> {
+/// 既存パスの検証結果。
+pub(super) enum ReusePathResult {
+    Reused,
+    NotReused,
+    Deferred,
+}
+
+/// `try_reuse_existing_path` が使う探索状態。
+pub(super) struct ReusePfState<'a> {
     pub entity: Entity,
-    pub pathfind_count: &'a mut usize,
-    pub phase_budget_limit: usize,
+    pub budget: &'a mut RuntimePathSearchBudget,
+    pub world_map: &'a WorldMap,
+    pub pf_context: &'a mut PathfindingContext,
 }
 
 /// 既存パスを再利用できるか検証し、障害物で部分遮断されていれば再計算する。
-/// 再利用できた場合は true を返す。A* を呼んだ場合は pathfind_count を更新する。
+///
+/// `Deferred` では状態を変更せず、次フレームに再試行する。
 pub(super) fn try_reuse_existing_path(
     commands: &mut Commands,
-    budget: PathBudgetInfo<'_>,
+    pf: ReusePfState<'_>,
     path: &mut Path,
     destination: Vec2,
     goal_grid: (i32, i32),
-    world_map: &WorldMap,
-    pf_context: &mut PathfindingContext,
-) -> bool {
-    let PathBudgetInfo {
+) -> ReusePathResult {
+    let ReusePfState {
         entity,
-        pathfind_count,
-        phase_budget_limit,
-    } = budget;
+        budget,
+        world_map,
+        pf_context,
+    } = pf;
     // すでに有効なパスがあり、目的地も変わっていないならスキップ
     //
     // ただし、移動側が衝突で waypoint をスキップして `current_index == waypoints.len()` になっている場合、
@@ -37,11 +48,11 @@ pub(super) fn try_reuse_existing_path(
     //
     // また、パス上に新たな障害物が追加されていないかも確認する。
     if path.current_index >= path.waypoints.len() || path.waypoints.is_empty() {
-        return false;
+        return ReusePathResult::NotReused;
     }
 
     let Some(last) = path.waypoints.last() else {
-        return false;
+        return ReusePathResult::NotReused;
     };
     let goal_is_walkable = world_map.is_walkable(goal_grid.0, goal_grid.1);
     let goal_reached_by_path = if goal_is_walkable {
@@ -54,11 +65,11 @@ pub(super) fn try_reuse_existing_path(
     };
 
     if !goal_reached_by_path {
-        return false;
+        return ReusePathResult::NotReused;
     }
 
     if path.validated_obstacle_version == world_map.obstacle_version {
-        return true;
+        return ReusePathResult::Reused;
     }
 
     let blocked_relative = path.waypoints[path.current_index..].iter().position(|wp| {
@@ -69,32 +80,40 @@ pub(super) fn try_reuse_existing_path(
     let Some(rel_idx) = blocked_relative else {
         path.validated_obstacle_version = world_map.obstacle_version;
         path.planned_destination = Some(destination);
-        return true;
+        return ReusePathResult::Reused;
     };
 
-    if rel_idx > 0 && *pathfind_count < phase_budget_limit {
+    if rel_idx > 0 {
         let resume_wp = path.waypoints[path.current_index + rel_idx - 1];
         let resume_grid = WorldMap::world_to_grid(resume_wp);
-        *pathfind_count += 1;
 
-        if let Some(mut partial_world_path) =
-            find_path_world_waypoints(world_map, pf_context, resume_grid, goal_grid)
-        {
-            let resume_world = WorldMap::grid_to_world(resume_grid.0, resume_grid.1);
-            if partial_world_path.first().copied() == Some(resume_world)
-                && !partial_world_path.is_empty()
-            {
-                partial_world_path.remove(0);
+        match find_path_world_waypoints_with_budget(
+            world_map,
+            pf_context,
+            budget,
+            PathSearchCaller::ActorReuse,
+            resume_grid,
+            goal_grid,
+        ) {
+            PathSearchResult::Found(mut partial_world_path) => {
+                let resume_world = WorldMap::grid_to_world(resume_grid.0, resume_grid.1);
+                if partial_world_path.first().copied() == Some(resume_world)
+                    && !partial_world_path.is_empty()
+                {
+                    partial_world_path.remove(0);
+                }
+
+                let keep_len = path.current_index + rel_idx;
+                path.waypoints.truncate(keep_len);
+                path.waypoints.extend(partial_world_path);
+                path.validated_obstacle_version = world_map.obstacle_version;
+                path.planned_destination = Some(destination);
+                commands.entity(entity).remove::<PathCooldown>();
+                debug!("PATH: Soul {:?} reused partial path after blockage", entity);
+                return ReusePathResult::Reused;
             }
-
-            let keep_len = path.current_index + rel_idx;
-            path.waypoints.truncate(keep_len);
-            path.waypoints.extend(partial_world_path);
-            path.validated_obstacle_version = world_map.obstacle_version;
-            path.planned_destination = Some(destination);
-            commands.entity(entity).remove::<PathCooldown>();
-            debug!("PATH: Soul {:?} reused partial path after blockage", entity);
-            return true;
+            PathSearchResult::Deferred => return ReusePathResult::Deferred,
+            PathSearchResult::Unreachable => {}
         }
     }
 
@@ -102,5 +121,5 @@ pub(super) fn try_reuse_existing_path(
         "PATH: Soul {:?} path blocked by obstacle, recalculating",
         entity
     );
-    false
+    ReusePathResult::NotReused
 }

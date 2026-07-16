@@ -1,4 +1,6 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use std::time::Duration;
 
 use hw_core::area::TaskArea;
 use hw_core::familiar::{ActiveCommand, FamiliarCommand};
@@ -26,17 +28,76 @@ type DesignationsQuery<'w, 's> = Query<
     ),
 >;
 
+#[derive(SystemParam)]
+pub(crate) struct BlueprintAutoBuildParams<'w, 's> {
+    assignment_writer: MessageWriter<'w, TaskAssignmentRequest>,
+    blueprint_grid: Res<'w, BlueprintSpatialGrid>,
+    q_familiars: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static ActiveCommand,
+            &'static TaskArea,
+            Option<&'static Commanding>,
+        ),
+    >,
+    q_blueprints: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static Blueprint,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+    q_designations: DesignationsQuery<'w, 's>,
+    q_souls: AutoBuildSoulQuery<'w, 's>,
+    q_breakdown: Query<'w, 's, &'static StressBreakdown>,
+}
+
+/// Existing build producer cadence while ownership remains intentionally
+/// separate from Familiar task delegation.
+///
+/// The producer has different TaskArea/Idle/ManagedBy semantics from the
+/// general delegator, so M3 does not merge the two paths without a product
+/// contract. It does, however, avoid scanning them at render-frame cadence.
+#[derive(Resource)]
+pub(crate) struct BlueprintAutoBuildTimer {
+    timer: Timer,
+    first_run_done: bool,
+}
+
+impl Default for BlueprintAutoBuildTimer {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(0.5, TimerMode::Repeating),
+            first_run_done: false,
+        }
+    }
+}
+
+impl BlueprintAutoBuildTimer {
+    fn advance(&mut self, delta: Duration) -> bool {
+        let first_cycle = !self.first_run_done;
+        let elapsed = self.timer.tick(delta).just_finished();
+        self.first_run_done = true;
+        first_cycle || elapsed
+    }
+}
+
 /// 資材が揃った建築タスクの自動割り当てシステム
-pub fn blueprint_auto_build_system(
-    mut assignment_writer: MessageWriter<TaskAssignmentRequest>,
-    blueprint_grid: Res<BlueprintSpatialGrid>,
-    q_familiars: Query<(Entity, &ActiveCommand, &TaskArea, Option<&Commanding>)>,
-    q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
-    q_designations: DesignationsQuery,
-    mut q_souls: AutoBuildSoulQuery,
-    q_breakdown: Query<&StressBreakdown>,
+pub(crate) fn blueprint_auto_build_system(
+    time: Res<Time>,
+    mut cadence: ResMut<BlueprintAutoBuildTimer>,
+    mut params: BlueprintAutoBuildParams,
 ) {
-    for (fam_entity, active_command, task_area, commanding_opt) in q_familiars.iter() {
+    if !cadence.advance(time.delta()) {
+        return;
+    }
+
+    for (fam_entity, active_command, task_area, commanding_opt) in params.q_familiars.iter() {
         if matches!(active_command.command, FamiliarCommand::Idle) {
             continue;
         }
@@ -47,11 +108,14 @@ pub fn blueprint_auto_build_system(
         let mut already_requested_workers = std::collections::HashSet::new();
 
         // 最適化: タスクエリア内のブループリントのみを取得
-        let blueprints_in_area = blueprint_grid.get_in_area(task_area.min(), task_area.max());
+        let blueprints_in_area = params
+            .blueprint_grid
+            .get_in_area(task_area.min(), task_area.max());
 
         for bp_entity in blueprints_in_area {
             // クエリで詳細データを取得
-            let Ok((_, bp_transform, blueprint, workers_opt)) = q_blueprints.get(bp_entity) else {
+            let Ok((_, bp_transform, blueprint, workers_opt)) = params.q_blueprints.get(bp_entity)
+            else {
                 continue;
             };
             let bp_pos = bp_transform.translation.truncate();
@@ -67,7 +131,8 @@ pub fn blueprint_auto_build_system(
             }
 
             // Designationが存在し、ManagedByが付与されていないか確認
-            if let Ok((_, _, designation, managed_by_opt, _, _, _)) = q_designations.get(bp_entity)
+            if let Ok((_, _, designation, managed_by_opt, _, _, _)) =
+                params.q_designations.get(bp_entity)
             {
                 if designation.work_type != WorkType::Build {
                     continue;
@@ -90,7 +155,7 @@ pub fn blueprint_auto_build_system(
                         continue;
                     }
                     let Ok((_, soul_transform, soul, task, _, _, idle, uc_opt)) =
-                        q_souls.get_mut(soul_entity)
+                        params.q_souls.get_mut(soul_entity)
                     else {
                         continue;
                     };
@@ -104,7 +169,7 @@ pub fn blueprint_auto_build_system(
                         soul,
                         &task,
                         idle,
-                        q_breakdown.get(soul_entity).is_ok(),
+                        params.q_breakdown.get(soul_entity).is_ok(),
                         fatigue_threshold,
                     ) {
                         continue;
@@ -124,7 +189,7 @@ pub fn blueprint_auto_build_system(
                 // 見つかった魂に建築タスクを割り当て
                 if let Some(worker_entity) = best_worker
                     && let Ok((_, _, soul, assigned_task, _, _, idle, _)) =
-                        q_souls.get_mut(worker_entity)
+                        params.q_souls.get_mut(worker_entity)
                 {
                     if !helpers::is_soul_available_for_work(
                         soul,
@@ -136,7 +201,7 @@ pub fn blueprint_auto_build_system(
                         continue;
                     }
 
-                    assignment_writer.write(TaskAssignmentRequest {
+                    params.assignment_writer.write(TaskAssignmentRequest {
                         familiar_entity: fam_entity,
                         worker_entity,
                         task_entity: bp_entity,
@@ -158,5 +223,20 @@ pub fn blueprint_auto_build_system(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BlueprintAutoBuildTimer;
+    use std::time::Duration;
+
+    #[test]
+    fn producer_runs_immediately_then_at_half_second_cadence() {
+        let mut timer = BlueprintAutoBuildTimer::default();
+
+        assert!(timer.advance(Duration::ZERO));
+        assert!(!timer.advance(Duration::from_millis(499)));
+        assert!(timer.advance(Duration::from_millis(1)));
     }
 }

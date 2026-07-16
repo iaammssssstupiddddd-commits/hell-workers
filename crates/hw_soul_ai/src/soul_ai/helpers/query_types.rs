@@ -12,6 +12,11 @@ use hw_core::soul::{
 use hw_jobs::{ActiveTaskIdentity, AssignedTask};
 use hw_logistics::types::Inventory;
 
+/// Runtime-only wake-up marker for an idle decision that must not wait for the
+/// next 10 Hz cadence tick. It is intentionally not persisted across loads.
+#[derive(Component, Default)]
+pub struct NeedsIdleDecision;
+
 /// タスク割り当て要求の適用に使うソウルの標準クエリ型
 pub type TaskAssignmentSoulQuery<'w, 's> = Query<
     'w,
@@ -65,6 +70,7 @@ pub type IdleDecisionSoulQuery<'w, 's> = Query<
         Option<&'static RestingIn>,
         Option<&'static RestAreaReservedFor>,
         Option<&'static RestAreaCooldown>,
+        Option<&'static NeedsIdleDecision>,
     ),
     (Without<WorkingOn>, Without<CommandedBy>),
 >;

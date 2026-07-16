@@ -5,7 +5,7 @@ use hw_core::constants::*;
 use super::super::super::components::DreamTrailGhost;
 use super::super::super::ui_handles::{
     DreamBubbleUiHandles, DreamUiMaterialBucket, alpha_to_bucket, bucket_material_index,
-    mass_to_bucket, velocity_to_bucket,
+    mass_to_bucket,
 };
 
 pub(super) struct TrailGhostSpec {
@@ -42,7 +42,6 @@ pub(super) fn spawn_trail_ghost(
         alpha: alpha_to_bucket(DREAM_UI_TRAIL_ALPHA),
         mass: mass_to_bucket(0.5),
         color: 0,
-        velocity: velocity_to_bucket(vel_dir),
     };
     let material = handles.materials[bucket_material_index(bucket)].clone();
 

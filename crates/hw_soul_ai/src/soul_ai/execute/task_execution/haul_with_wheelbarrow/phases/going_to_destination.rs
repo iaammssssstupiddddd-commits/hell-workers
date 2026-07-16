@@ -8,11 +8,13 @@ use crate::soul_ai::execute::task_execution::{
 };
 use bevy::prelude::*;
 use hw_logistics::transport_request::WheelbarrowDestination;
+use hw_world::PathSearchResult;
 
 fn navigation_progress(outcome: NavOutcome) -> Result<(bool, bool), TaskHandlerControl> {
     match outcome {
         NavOutcome::Moving => Ok((true, false)),
         NavOutcome::Arrived => Ok((true, true)),
+        NavOutcome::Deferred => Err(TaskHandlerControl::Continue),
         NavOutcome::Unreachable => Ok((false, false)),
         NavOutcome::Ended(control) => Err(control),
     }
@@ -104,14 +106,19 @@ pub fn handle(
                 return cancel::drop_items_and_cancel(ctx, &data, commands);
             };
 
-            let reachable = update_destination_to_blueprint(
-                ctx.dest,
+            let reachable = match update_destination_to_blueprint(
+                &mut ctx.dest,
                 &blueprint.occupied_grids,
-                ctx.path,
+                &mut ctx.path,
                 soul_pos,
                 ctx.env.world_map,
                 ctx.pf_context,
-            );
+                ctx.path_budget,
+            ) {
+                PathSearchResult::Found(()) => true,
+                PathSearchResult::Unreachable => false,
+                PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+            };
             (
                 reachable,
                 is_near_blueprint(soul_pos, &blueprint.occupied_grids),

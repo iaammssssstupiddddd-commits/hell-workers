@@ -9,6 +9,7 @@ use crate::systems::jobs::Designation;
 use crate::systems::visual::task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
+use std::collections::HashSet;
 
 type TaskAreaIndicatorQuery<'w, 's> = Query<
     'w,
@@ -24,35 +25,47 @@ type TaskAreaIndicatorQuery<'w, 's> = Query<
 >;
 
 pub fn task_area_indicator_system(
-    q_familiars: Query<(Entity, &Transform, &TaskArea, &Familiar), With<Familiar>>,
+    q_familiars: Query<(Entity, Ref<TaskArea>, &Familiar), With<Familiar>>,
     mut q_indicators: TaskAreaIndicatorQuery,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TaskAreaMaterial>>,
 ) {
+    let mut indexed_owners = HashSet::new();
     for (indicator_entity, indicator, mut transform, mut visibility, material_handle) in
         q_indicators.iter_mut()
     {
-        if let Ok((_, _, task_area, _)) = q_familiars.get(indicator.0) {
-            transform.translation = task_area.center().extend(0.2);
-            transform.scale = task_area.size().extend(1.0);
-
-            if let Some(mut material) = materials.get_mut(&material_handle.0) {
-                material.size = task_area.size();
+        if let Ok((_, task_area, _)) = q_familiars.get(indicator.0) {
+            indexed_owners.insert(indicator.0);
+            if task_area.is_changed() {
+                let area = task_area.as_ref();
+                let translation = area.center().extend(0.2);
+                let scale = area.size().extend(1.0);
+                if transform.translation != translation {
+                    transform.translation = translation;
+                }
+                if transform.scale != scale {
+                    transform.scale = scale;
+                }
+                if *visibility != Visibility::Visible {
+                    *visibility = Visibility::Visible;
+                }
+                if let Some(mut material) = materials.get_mut(&material_handle.0)
+                    && material.size != area.size()
+                {
+                    material.size = area.size();
+                }
             }
-
-            *visibility = Visibility::Visible;
         } else {
             commands.entity(indicator_entity).try_despawn();
         }
     }
 
-    for (fam_entity, _, task_area, familiar_comp) in q_familiars.iter() {
-        let has_indicator = q_indicators
-            .iter()
-            .any(|(_, ind, _, _, _)| ind.0 == fam_entity);
-
-        if !has_indicator {
+    // The first frame of a TaskArea is the only time a missing indicator must
+    // be created. Existing indicators are owner-linked above, so this avoids
+    // the former Familiar × indicator scan every visual frame.
+    for (fam_entity, task_area, familiar_comp) in q_familiars.iter() {
+        if task_area.is_added() && !indexed_owners.contains(&fam_entity) {
             // 使い魔のコンポーネントに保持されている色インデックスを使用
             let palette = [
                 LinearRgba::from(Color::srgba(0.7, 0.3, 1.0, 1.0)), // Purple (鮮明化)
@@ -70,11 +83,11 @@ pub fn task_area_indicator_system(
                 Mesh2d(meshes.add(Rectangle::default().mesh())),
                 MeshMaterial2d(materials.add(TaskAreaMaterial {
                     color,
-                    size: task_area.size(),
+                    size: task_area.as_ref().size(),
                     state: 0,
                 })),
-                Transform::from_translation(task_area.center().extend(0.2))
-                    .with_scale(task_area.size().extend(1.0)),
+                Transform::from_translation(task_area.as_ref().center().extend(0.2))
+                    .with_scale(task_area.as_ref().size().extend(1.0)),
                 Visibility::Visible,
             ));
         }
@@ -85,22 +98,26 @@ pub fn area_edit_handles_visual_system(
     task_context: Res<TaskContext>,
     selected: Res<SelectedEntity>,
     q_task_areas: Query<&TaskArea, With<Familiar>>,
-    q_handles: Query<(Entity, &AreaEditHandleVisual)>,
+    mut q_handles: Query<(Entity, &AreaEditHandleVisual, &mut Transform)>,
     mut commands: Commands,
 ) {
-    for (handle_entity, handle) in q_handles.iter() {
-        let _ = (handle.owner, handle.kind);
-        commands.entity(handle_entity).try_despawn();
-    }
-
     if !matches!(task_context.0, TaskMode::AreaSelection(_)) {
+        for (handle_entity, _, _) in q_handles.iter_mut() {
+            commands.entity(handle_entity).try_despawn();
+        }
         return;
     }
 
     let Some(fam_entity) = selected.0 else {
+        for (handle_entity, _, _) in q_handles.iter_mut() {
+            commands.entity(handle_entity).try_despawn();
+        }
         return;
     };
     let Ok(area) = q_task_areas.get(fam_entity) else {
+        for (handle_entity, _, _) in q_handles.iter_mut() {
+            commands.entity(handle_entity).try_despawn();
+        }
         return;
     };
 
@@ -122,7 +139,27 @@ pub fn area_edit_handles_visual_system(
         (AreaEditHandleKind::Center, Vec2::new(mid_x, mid_y)),
     ];
 
+    let mut existing_kinds = Vec::with_capacity(handles.len());
+    for (handle_entity, handle, mut transform) in q_handles.iter_mut() {
+        let Some((_, position)) = handles.iter().find(|(kind, _)| *kind == handle.kind) else {
+            commands.entity(handle_entity).try_despawn();
+            continue;
+        };
+        if handle.owner != fam_entity || existing_kinds.contains(&handle.kind) {
+            commands.entity(handle_entity).try_despawn();
+            continue;
+        }
+        existing_kinds.push(handle.kind);
+        let translation = position.extend(0.36);
+        if transform.translation != translation {
+            transform.translation = translation;
+        }
+    }
+
     for (kind, pos) in handles {
+        if existing_kinds.contains(&kind) {
+            continue;
+        }
         commands.spawn((
             AreaEditHandleVisual {
                 owner: fam_entity,

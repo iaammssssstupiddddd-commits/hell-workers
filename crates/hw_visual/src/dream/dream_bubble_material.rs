@@ -33,8 +33,6 @@ pub struct DreamBubbleUiMaterial {
     pub alpha: f32,
     #[uniform(0)]
     pub mass: f32,
-    #[uniform(0)]
-    pub velocity_dir: Vec2,
 }
 
 impl UiMaterial for DreamBubbleUiMaterial {

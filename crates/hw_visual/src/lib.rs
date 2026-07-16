@@ -2,6 +2,7 @@ pub mod animations;
 pub mod blueprint;
 pub mod dream;
 pub mod fade;
+pub mod familiar;
 pub mod floating_text;
 pub mod floor_construction;
 pub mod gather;
@@ -48,6 +49,7 @@ pub use material::{
     make_terrain_surface_material_lod2, soul_face_uv_offset, soul_face_uv_scale, with_alpha_mode,
 };
 
+pub use familiar::{FamiliarVisualOffset, FamiliarVisualOwner};
 pub use visual3d::{
     Building3dVisual, FamiliarProxy3d, SoulAnimVisualState, SoulAnimationPlayer3d,
     SoulBodyAnimState, SoulFaceMaterial3d, SoulFaceState, SoulMaskProxy3d, SoulProxy3d,
@@ -61,6 +63,8 @@ use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
 use bevy::ui_render::prelude::UiMaterialPlugin;
 use hw_core::gathering::{GatheringSpot, GatheringVisuals};
+#[cfg(feature = "profiling")]
+use hw_core::simulation_rng::FixedAuditSeed;
 use hw_core::system_sets::{FamiliarAiSystemSet, GameSystemSet};
 use std::collections::HashSet;
 
@@ -68,6 +72,13 @@ pub struct HwVisualPlugin;
 
 impl Plugin for HwVisualPlugin {
     fn build(&self, app: &mut App) {
+        // A fixed-step audit verifies simulation state. Cosmetic systems can
+        // spawn/despawn entities and use presentation-only entropy (speech,
+        // dream particles, conversation bubbles), which would otherwise make
+        // allocator order leak back into an audit fixture. Normal profiling and
+        // every non-audit game mode keep the complete visual schedule.
+        app.configure_sets(Update, GameSystemSet::Visual.run_if(visual_updates_enabled));
+
         // Material plugins (型の所有者が登録)
         app.add_plugins((
             Material2dPlugin::<dream::DreamBubbleMaterial>::default(),
@@ -115,6 +126,7 @@ impl Plugin for HwVisualPlugin {
                 blueprint::spawn_progress_bar_system,
                 blueprint::update_progress_bar_fill_system,
                 blueprint::cleanup_progress_bars_system,
+                blueprint::cleanup_blueprint_pulse_overlays_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),
@@ -262,6 +274,16 @@ impl Plugin for HwVisualPlugin {
                 .in_set(FamiliarAiSystemSet::Execute),
         );
     }
+}
+
+#[cfg(feature = "profiling")]
+fn visual_updates_enabled(audit_seed: Option<Res<FixedAuditSeed>>) -> bool {
+    audit_seed.is_none()
+}
+
+#[cfg(not(feature = "profiling"))]
+fn visual_updates_enabled() -> bool {
+    true
 }
 
 /// Clears visual-only entities and owner caches that may retain simulation
