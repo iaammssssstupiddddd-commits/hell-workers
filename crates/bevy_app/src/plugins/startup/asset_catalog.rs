@@ -54,7 +54,6 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
             .load_builder()
             .with_settings(terrain_sampler)
             .load("textures/dirt.png"),
-        stone: asset_server.load("textures/stone.jpg"),
         river: asset_server
             .load_builder()
             .with_settings(terrain_sampler)
@@ -205,7 +204,7 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         icon_hammer: asset_server.load("textures/ui/hammer.png"),
         icon_wood_small: asset_server.load("textures/ui/wood_small.png"),
         icon_rock_small: asset_server.load("textures/ui/rock_small.png"),
-        icon_water_small: asset_server.load("textures/items/bucket/bucket_water.png"),
+        icon_water_small: asset_server.load("textures/items/bucket/bucket_full.png"),
         icon_sand_small: asset_server.load("textures/resources/sandpile/sandpile.png"),
         icon_bone_small: asset_server.load("textures/ui/bone_small.png"),
         icon_stasis_mud_small: asset_server.load("textures/resources/stasis_mud/stasis_mud.png"),

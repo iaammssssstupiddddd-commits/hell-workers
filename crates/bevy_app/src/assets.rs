@@ -72,7 +72,6 @@ pub struct GameAssets {
     pub white_pixel: Handle<Image>,
     pub grass: Handle<Image>,
     pub dirt: Handle<Image>,
-    pub stone: Handle<Image>,
     pub river: Handle<Image>,
     pub sand: Handle<Image>,
     pub terrain_macro_noise: Handle<Image>,
