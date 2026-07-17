@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -15,23 +19,37 @@ jobs:
   quality:
     name: Quality gates
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
       - name: Install native dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libudev-dev ripgrep
+          sudo apt-get install --yes libudev-dev mold ripgrep
+          mold --version
+      - name: Cache Cargo artifacts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', '.cargo/config.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
       - name: Verify Rust toolchain
         run: rustup show active-toolchain
       - name: Format
         run: cargo fmt --all --check
       - name: Compile check
-        run: cargo check --workspace
+        run: cargo check --workspace --locked
       - name: Compile profiling configuration
-        run: cargo check -p bevy_app@0.1.0 --lib --features profiling
+        run: cargo check -p bevy_app@0.1.0 --lib --no-default-features --features profiling --locked
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Disallow Clippy suppressions
         run: |
           set +e
@@ -44,4 +62,4 @@ jobs:
             *) exit "$status" ;;
           esac
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
