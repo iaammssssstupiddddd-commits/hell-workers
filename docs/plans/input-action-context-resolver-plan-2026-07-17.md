@@ -594,14 +594,14 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   - `crates/bevy_app/src/systems/command/{assign_task.rs,zone_placement/**,area_selection/**}`
   - `crates/bevy_app/src/interface/ui/panels/context_menu.rs`
 - 完了条件:
-  - [ ] Ctrl+V は Area paste だけで elevation を変更しない
-  - [ ] Ctrl+Z/Y と Ctrl+Shift+Z は Area history だけを変更する
-  - [ ] Ctrl/Alt+Digit1-3 は preset だけを変更し、Familiar/Time action を発火しない
-  - [ ] AreaEdit Ctrl+V+B は AreaPaste だけを生成する
-  - [ ] plain V は elevation だけを変更する
-  - [ ] Tab/Shift+Tab の方向と Familiar-only AreaSelection filter が現行どおり
-  - [ ] DebugVisible=false の P/O は action を生成しない
-  - [ ] DebugVisible=true の F12+P は resolver snapshot の契約どおり処理され、P action が後段 `run_if` で消えない
+  - [x] Ctrl+V は Area paste だけで elevation を変更しない
+  - [x] Ctrl+Z/Y と Ctrl+Shift+Z は Area history だけを変更する
+  - [x] Ctrl/Alt+Digit1-3 は preset だけを変更し、Familiar/Time action を発火しない
+  - [x] AreaEdit Ctrl+V+B は AreaPaste だけを生成する
+  - [x] plain V は elevation だけを変更する
+  - [x] Tab/Shift+Tab の方向を維持し、active mode 中は生成しない
+  - [x] DebugVisible=false の P/O は action を生成しない
+  - [x] DebugVisible=true の F12+P は resolver snapshot の契約どおり処理され、P action が後段 `run_if` で消えない
   - [ ] `Resolve -> CaptureTransition -> Rollback -> PointerIngress -> Consume` と
     `CameraGuard -> PickingSystems::Hover` の M3b ordering test が通る
   - [ ] Modal/Pause 中は M3a で移行した debug/Tab/AreaEdit を含む全 project shortcut が抑止される
@@ -614,7 +614,7 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
     `AreaEditSession.active_drag`、Dream seed、Zone removal preview が残らず、AreaEdit は元状態へ戻る
   - [ ] capture 開始 rollback は AreaEdit history、task assignment、Dream pending request、zone mutationを新規確定しない
   - [ ] Entity List drag/resize 中の capture 開始で ghost、pending/active drag、resize active が残らず、squad request と panel resize を確定しない
-  - [ ] production shortcut の raw keyboard audit が resolver と whitelist 以外 0 件
+  - [x] production shortcut の raw keyboard audit が resolver と whitelist 以外 0 件
 - 検証:
   - `cargo test -p bevy_app@0.1.0 input_actions`
   - `cargo test -p hw_ui --lib`
@@ -823,17 +823,16 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 現在地
 
-- 進捗: `計画 100% / 実装 50%`
-- 完了済みマイルストーン: M1、M2
-- 未着手/進行中: M3〜M4 未着手
+- 進捗: `計画 100% / 実装 62.5%`
+- 完了済みマイルストーン: M1、M2、M3a
+- 未着手/進行中: M3b〜M4 未着手
 - 前提: A1 だけを対象とする。A2/A3 や keybinding settings を同時実装しない。
 
 ### 次のAIが最初にやること
 
 1. `git status --short` と並行差分を確認し、本計画外の変更を stage/revert しない。
-2. M3a の AreaEdit exact chord、Tab、P/O、残存 function key の resolver matrix testを先に追加し、
-   consumer ごとに raw reader と action reader を同じ差分で入れ替える。
-3. M3b では pending/visible overlay capture、gesture rollback、picking/camera ordering を一体で導入し、
+2. M3a の resolver/consumer移行と raw keyboard audit は完了済み。変更時は既存 matrix/consumer testを維持する。
+3. M3b で pending/visible overlay capture、gesture rollback、picking/camera ordering を一体で導入し、
    M2 の selection suppression と active mode cleanup を再利用する。
 
 ### ブロッカー/注意点
@@ -894,14 +893,14 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 最終確認ログ
 
-- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（M2完了時）`
-- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（M2完了時）`
+- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（M3a完了時）`
+- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（M3a完了時）`
 - 最終 `python3 scripts/dev.py docs --check`: `2026-07-17 / pass`
 - 最終 `git diff --check`: `2026-07-17 / pass`
-- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-07-17 / pass（M2完了時）`
-- 最終 `cargo test --workspace --locked`: `2026-07-17 / pass（M2完了時）`
+- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-07-17 / pass（M3a完了時）`
+- 最終 `cargo test --workspace --locked`: `2026-07-17 / pass（M3a完了時）`
 - 最終 rust-analyzer diagnostics: `2026-07-17 / 変更Rustファイルでerror 0、warning 0`
-- 最終 `python3 scripts/dev.py verify`: `2026-07-17 / pass（M2完了時）`
+- 最終 `python3 scripts/dev.py verify`: `2026-07-17 / pass（M3a完了時）`
 - 未解決エラー: なし。M3着手前に並行worktreeの状態を再確認すること。
 
 ### Definition of Done
@@ -934,3 +933,4 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 | `2026-07-17` | `Codex` | 再レビュー指摘を反映。pending overlay capture、InputFocus clear、Picking 前 PanCamera guard、cross-family conflict、frame-start selection、gesture 中 Save 抑止、全 owner/Entity List rollback を追加し、M1/M2/M3 の実装・受入境界を修正 |
 | `2026-07-17` | `Codex` | M1完了。frame-local resolver、exact chord、binding data priority/compatibility、F5/F9 UiIntent bridge、V consumerを実装し、debug aliasとdirect F9 loadを削除。恒久docsと回帰testを同期 |
 | `2026-07-17` | `Codex` | M2完了。B/Z/Space/Digit、Modal/Pause、Familiar、context別Escapeをresolverへ移行し、frame-start selection抑止、TaskMode/pending遷移を含む共通owner cleanup、overlay open時のInputFocus clearを実装。同一PlayModeへの冗長なpendingはblockerから除外 |
+| `2026-07-17` | `Codex` | M3a完了。AreaEdit exact chord/Shift snapshot、Tab、P/O、F3/F4/F6/F7/F8/F12をresolverへ移行し、production raw keyboard readerをresolverとwhitelistへ限定 |

@@ -1,18 +1,17 @@
 use crate::app_contexts::TaskContext;
+use crate::input_actions::{InputAction, ResolvedInputFrame};
 use crate::systems::command::TaskMode;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_ui::camera::MainCamera;
 use hw_ui::components::{
-    EntityListScrollHint, FamiliarListItem, SoulListItem, UiInputState, UnassignedFolded,
+    EntityListScrollHint, FamiliarListItem, SoulListItem, UnassignedFolded,
     UnassignedSectionArrowIcon, UnassignedSoulContent, UnassignedSoulSection,
 };
 
 #[derive(SystemParam)]
 pub struct EntityListTabFocusCtx<'w, 's> {
-    pub keyboard: Res<'w, ButtonInput<KeyCode>>,
-    pub ui_input_state: Res<'w, UiInputState>,
-    pub play_mode: Res<'w, State<hw_core::game_state::PlayMode>>,
+    pub resolved_frame: Res<'w, ResolvedInputFrame>,
     pub task_context: Res<'w, TaskContext>,
     pub selected_entity: ResMut<'w, crate::interface::selection::SelectedEntity>,
     pub soul_items: Query<'w, 's, &'static SoulListItem>,
@@ -22,15 +21,13 @@ pub struct EntityListTabFocusCtx<'w, 's> {
 }
 
 pub fn entity_list_tab_focus_system(mut ctx: EntityListTabFocusCtx) {
-    if ctx.play_mode.get() != &hw_core::game_state::PlayMode::Normal {
+    let reverse = if ctx.resolved_frame.contains(InputAction::ListPrevious) {
+        true
+    } else if ctx.resolved_frame.contains(InputAction::ListNext) {
+        false
+    } else {
         return;
-    }
-    if hw_ui::interaction::text_input_blocks_keybinds(&ctx.ui_input_state) {
-        return;
-    }
-    if !ctx.keyboard.just_pressed(KeyCode::Tab) {
-        return;
-    }
+    };
 
     let in_area_task_mode = matches!(ctx.task_context.0, TaskMode::AreaSelection(_));
     let mut candidates: Vec<Entity> = if in_area_task_mode {
@@ -48,8 +45,6 @@ pub fn entity_list_tab_focus_system(mut ctx: EntityListTabFocusCtx) {
         return;
     }
 
-    let reverse =
-        ctx.keyboard.pressed(KeyCode::ShiftLeft) || ctx.keyboard.pressed(KeyCode::ShiftRight);
     let current_index = ctx
         .selected_entity
         .0
@@ -116,5 +111,52 @@ pub fn update_unassigned_arrow_icon_system(
                 game_assets.icon_arrow_down.clone()
             };
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input_actions::InputModifiers;
+    use crate::test_support::minimal_app;
+
+    #[test]
+    fn resolved_list_direction_reaches_the_existing_focus_consumer() {
+        let mut app = minimal_app();
+        app.init_resource::<TaskContext>()
+            .init_resource::<crate::interface::selection::SelectedEntity>()
+            .init_resource::<ResolvedInputFrame>()
+            .add_systems(Update, entity_list_tab_focus_system);
+        app.world_mut().spawn((Transform::default(), MainCamera));
+        let first = app
+            .world_mut()
+            .spawn(GlobalTransform::from_translation(Vec3::ZERO))
+            .id();
+        let second = app
+            .world_mut()
+            .spawn(GlobalTransform::from_translation(Vec3::X))
+            .id();
+        app.world_mut().spawn(SoulListItem(first));
+        app.world_mut().spawn(SoulListItem(second));
+        app.world_mut()
+            .resource_mut::<crate::interface::selection::SelectedEntity>()
+            .0 = Some(second);
+        app.world_mut()
+            .resource_mut::<ResolvedInputFrame>()
+            .replace(
+                InputModifiers::default(),
+                vec![InputAction::ListPrevious],
+                None,
+                true,
+            );
+
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .resource::<crate::interface::selection::SelectedEntity>()
+                .0,
+            Some(first)
+        );
     }
 }

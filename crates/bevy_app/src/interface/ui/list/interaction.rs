@@ -196,6 +196,7 @@ mod tests {
             .init_resource::<TaskContext>()
             .init_resource::<MenuState>()
             .init_resource::<crate::interface::selection::SelectedEntity>()
+            .init_resource::<crate::DebugVisible>()
             .init_resource::<Time<Virtual>>()
             .init_resource::<UiTheme>()
             .insert_resource(State::new(hw_core::game_state::PlayMode::Normal))

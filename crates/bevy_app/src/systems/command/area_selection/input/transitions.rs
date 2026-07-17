@@ -1,8 +1,6 @@
 use crate::systems::command::TaskMode;
-use bevy::prelude::*;
-
-pub(super) fn should_exit_after_apply(keyboard: &ButtonInput<KeyCode>) -> bool {
-    keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight)
+pub(super) fn should_exit_after_apply(shift_pressed: bool) -> bool {
+    shift_pressed
 }
 
 pub(super) fn reset_designation_mode(mode: TaskMode) -> TaskMode {
@@ -12,5 +10,16 @@ pub(super) fn reset_designation_mode(mode: TaskMode) -> TaskMode {
         TaskMode::DesignateHaul(_) => TaskMode::DesignateHaul(None),
         TaskMode::CancelDesignation(_) => TaskMode::CancelDesignation(None),
         _ => TaskMode::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolved_shift_snapshot_controls_area_mode_exit() {
+        assert!(should_exit_after_apply(true));
+        assert!(!should_exit_after_apply(false));
     }
 }

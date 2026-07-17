@@ -6,6 +6,14 @@ pub enum InputAction {
     SaveGame,
     RequestLoadGame,
     CycleElevation,
+    ToggleRender3d,
+    CycleRttQuality,
+    ToggleRttDirectionalLight,
+    ToggleRttTerrain,
+    ToggleRttSceneObjects,
+    ToggleDebug,
+    DebugSpawnSoul,
+    DebugSpawnFamiliar,
     ToggleArchitect,
     ToggleZones,
     TogglePause,
@@ -24,6 +32,18 @@ pub enum InputAction {
     CloseOperationDialog,
     CancelActiveMode,
     CloseOpenMenu,
+    AreaCopy,
+    AreaPaste,
+    AreaUndo,
+    AreaRedo,
+    AreaSavePreset1,
+    AreaSavePreset2,
+    AreaSavePreset3,
+    AreaLoadPreset1,
+    AreaLoadPreset2,
+    AreaLoadPreset3,
+    ListNext,
+    ListPrevious,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -32,6 +52,7 @@ pub enum InputActionFamily {
     TimeControl,
     MenuToggle,
     FamiliarCommand,
+    AreaEditCommand,
     CancelOrClose,
 }
 

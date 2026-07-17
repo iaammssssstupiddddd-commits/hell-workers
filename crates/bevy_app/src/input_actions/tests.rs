@@ -17,6 +17,28 @@ fn plain(key: KeyCode) -> InputChord {
     InputChord::plain(key)
 }
 
+fn modified(key: KeyCode, modifiers: InputModifiers) -> InputChord {
+    InputChord { key, modifiers }
+}
+
+fn ctrl(key: KeyCode) -> InputChord {
+    modified(
+        key,
+        InputModifiers {
+            ctrl: true,
+            ..default()
+        },
+    )
+}
+
+fn area_edit_context() -> InputContextSnapshot {
+    InputContextSnapshot {
+        play_mode: PlayMode::TaskDesignation,
+        task_mode: TaskMode::AreaSelection(None),
+        ..default()
+    }
+}
+
 fn familiar_context() -> InputContextSnapshot {
     InputContextSnapshot {
         has_selected_familiar: true,
@@ -56,13 +78,17 @@ fn default_bindings_have_unique_contextual_claims() {
 }
 
 #[test]
-fn every_m2_action_has_exactly_one_consumer_owner() {
+fn every_action_has_exactly_one_consumer_owner() {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum ConsumerOwner {
         UiIntentBridge,
         ElevationView,
+        RenderDebugToggle,
+        DebugSpawn,
         FamiliarCommand,
         ActiveModeCancel,
+        AreaEdit,
+        ListNavigation,
     }
 
     fn owner(action: InputAction) -> ConsumerOwner {
@@ -80,6 +106,15 @@ fn every_m2_action_has_exactly_one_consumer_owner() {
             | InputAction::CloseSettings
             | InputAction::CloseOperationDialog => ConsumerOwner::UiIntentBridge,
             InputAction::CycleElevation => ConsumerOwner::ElevationView,
+            InputAction::ToggleRender3d
+            | InputAction::CycleRttQuality
+            | InputAction::ToggleRttDirectionalLight
+            | InputAction::ToggleRttTerrain
+            | InputAction::ToggleRttSceneObjects
+            | InputAction::ToggleDebug => ConsumerOwner::RenderDebugToggle,
+            InputAction::DebugSpawnSoul | InputAction::DebugSpawnFamiliar => {
+                ConsumerOwner::DebugSpawn
+            }
             InputAction::FamiliarChop
             | InputAction::FamiliarMine
             | InputAction::FamiliarHaul
@@ -89,6 +124,17 @@ fn every_m2_action_has_exactly_one_consumer_owner() {
             InputAction::CancelActiveMode | InputAction::CloseOpenMenu => {
                 ConsumerOwner::ActiveModeCancel
             }
+            InputAction::AreaCopy
+            | InputAction::AreaPaste
+            | InputAction::AreaUndo
+            | InputAction::AreaRedo
+            | InputAction::AreaSavePreset1
+            | InputAction::AreaSavePreset2
+            | InputAction::AreaSavePreset3
+            | InputAction::AreaLoadPreset1
+            | InputAction::AreaLoadPreset2
+            | InputAction::AreaLoadPreset3 => ConsumerOwner::AreaEdit,
+            InputAction::ListNext | InputAction::ListPrevious => ConsumerOwner::ListNavigation,
         }
     }
 
@@ -96,6 +142,14 @@ fn every_m2_action_has_exactly_one_consumer_owner() {
         InputAction::SaveGame,
         InputAction::RequestLoadGame,
         InputAction::CycleElevation,
+        InputAction::ToggleRender3d,
+        InputAction::CycleRttQuality,
+        InputAction::ToggleRttDirectionalLight,
+        InputAction::ToggleRttTerrain,
+        InputAction::ToggleRttSceneObjects,
+        InputAction::ToggleDebug,
+        InputAction::DebugSpawnSoul,
+        InputAction::DebugSpawnFamiliar,
         InputAction::ToggleArchitect,
         InputAction::ToggleZones,
         InputAction::TogglePause,
@@ -114,6 +168,18 @@ fn every_m2_action_has_exactly_one_consumer_owner() {
         InputAction::CloseOperationDialog,
         InputAction::CancelActiveMode,
         InputAction::CloseOpenMenu,
+        InputAction::AreaCopy,
+        InputAction::AreaPaste,
+        InputAction::AreaUndo,
+        InputAction::AreaRedo,
+        InputAction::AreaSavePreset1,
+        InputAction::AreaSavePreset2,
+        InputAction::AreaSavePreset3,
+        InputAction::AreaLoadPreset1,
+        InputAction::AreaLoadPreset2,
+        InputAction::AreaLoadPreset3,
+        InputAction::ListNext,
+        InputAction::ListPrevious,
     ] {
         let _ = owner(action);
     }
@@ -144,6 +210,182 @@ fn exact_plain_chords_do_not_accept_modifiers() {
             .is_empty()
         );
     }
+}
+
+#[test]
+fn area_edit_exact_chords_do_not_fall_through_to_world_actions() {
+    assert_eq!(
+        resolve_input_chords(&[ctrl(KeyCode::KeyV)], area_edit_context()),
+        [InputAction::AreaPaste]
+    );
+    assert_eq!(
+        resolve_input_chords(&[ctrl(KeyCode::KeyZ)], area_edit_context()),
+        [InputAction::AreaUndo]
+    );
+    assert_eq!(
+        resolve_input_chords(
+            &[
+                modified(
+                    KeyCode::KeyZ,
+                    InputModifiers {
+                        ctrl: true,
+                        shift: true,
+                        ..default()
+                    },
+                ),
+                plain(KeyCode::KeyB),
+            ],
+            area_edit_context(),
+        ),
+        [InputAction::AreaRedo]
+    );
+}
+
+#[test]
+fn area_edit_preset_family_preserves_slot_and_operation_priority() {
+    assert_eq!(
+        resolve_input_chords(
+            &[ctrl(KeyCode::Digit1), ctrl(KeyCode::Digit2)],
+            area_edit_context(),
+        ),
+        [InputAction::AreaSavePreset1]
+    );
+    assert_eq!(
+        resolve_input_chords(
+            &[
+                ctrl(KeyCode::KeyC),
+                modified(
+                    KeyCode::Digit3,
+                    InputModifiers {
+                        alt: true,
+                        ..default()
+                    },
+                ),
+            ],
+            area_edit_context(),
+        ),
+        [InputAction::AreaLoadPreset3]
+    );
+}
+
+#[test]
+fn area_edit_requires_current_task_designation_state() {
+    assert!(
+        resolve_input_chords(
+            &[ctrl(KeyCode::KeyV)],
+            InputContextSnapshot {
+                task_mode: TaskMode::AreaSelection(None),
+                pending_play_mode: Some(PlayMode::TaskDesignation),
+                ..default()
+            },
+        )
+        .is_empty()
+    );
+    assert!(
+        resolve_input_chords(
+            &[ctrl(KeyCode::KeyV)],
+            InputContextSnapshot {
+                play_mode: PlayMode::TaskDesignation,
+                task_mode: TaskMode::DesignateChop(None),
+                ..default()
+            },
+        )
+        .is_empty()
+    );
+    assert!(
+        resolve_input_chords(
+            &[ctrl(KeyCode::KeyV)],
+            InputContextSnapshot {
+                logic_shortcuts_enabled: false,
+                ..area_edit_context()
+            },
+        )
+        .is_empty()
+    );
+}
+
+#[test]
+fn list_navigation_is_exact_and_world_normal_only() {
+    assert_eq!(
+        resolve_input_chords(&[plain(KeyCode::Tab)], InputContextSnapshot::default()),
+        [InputAction::ListNext]
+    );
+    assert_eq!(
+        resolve_input_chords(
+            &[modified(
+                KeyCode::Tab,
+                InputModifiers {
+                    shift: true,
+                    ..default()
+                },
+            )],
+            InputContextSnapshot::default(),
+        ),
+        [InputAction::ListPrevious]
+    );
+    assert!(resolve_input_chords(&[plain(KeyCode::Tab)], area_edit_context()).is_empty());
+}
+
+#[test]
+fn debug_spawn_uses_resolver_time_visibility_snapshot() {
+    assert!(
+        resolve_input_chords(
+            &[plain(KeyCode::KeyP), plain(KeyCode::KeyO)],
+            InputContextSnapshot::default(),
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        resolve_input_chords(
+            &[plain(KeyCode::F12), plain(KeyCode::KeyP)],
+            InputContextSnapshot {
+                debug_visible: true,
+                ..default()
+            },
+        ),
+        [InputAction::ToggleDebug, InputAction::DebugSpawnSoul]
+    );
+}
+
+#[test]
+fn migrated_debug_actions_are_modal_suppressed_and_world_compatible() {
+    let actions = resolve_input_chords(
+        &[plain(KeyCode::KeyB), plain(KeyCode::F3)],
+        InputContextSnapshot::default(),
+    );
+    assert_eq!(
+        actions,
+        [InputAction::ToggleArchitect, InputAction::ToggleRender3d]
+    );
+    assert!(
+        resolve_input_chords(
+            &[plain(KeyCode::F3), plain(KeyCode::Tab)],
+            InputContextSnapshot {
+                top_overlay: Some(InputOverlay::Settings),
+                ..default()
+            },
+        )
+        .is_empty()
+    );
+    assert!(resolve_input_chords(&[plain(KeyCode::F3)], paused_context()).is_empty());
+
+    let text_context = InputContextSnapshot {
+        text_input_blocks_keybinds: true,
+        debug_visible: true,
+        ..area_edit_context()
+    };
+    assert!(
+        resolve_input_chords(
+            &[
+                ctrl(KeyCode::KeyV),
+                plain(KeyCode::Tab),
+                plain(KeyCode::F12),
+                plain(KeyCode::KeyP),
+            ],
+            text_context,
+        )
+        .is_empty()
+    );
 }
 
 #[test]
@@ -514,6 +756,7 @@ fn resolver_app() -> App {
         .init_resource::<TaskContext>()
         .init_resource::<MenuState>()
         .init_resource::<SelectedEntity>()
+        .init_resource::<crate::DebugVisible>()
         .init_resource::<Time<Virtual>>()
         .insert_resource(State::new(PlayMode::Normal))
         .init_resource::<NextState<PlayMode>>();

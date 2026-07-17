@@ -56,19 +56,21 @@ graph TD
 `crates/bevy_app/src/lib.rs` は共有 Resource・公開 module・event re-exportと `HellWorkersGamePlugin` を提供し、focused unit testはここから対象systemだけを登録する：
 `Input` → `Spatial` → `Logic` → `Actor` → `Visual` → `Interface`
 
-keyboard action は段階的に `crates/bevy_app/src/input_actions/` へ移行している。M2 時点では
-F5/F9/V、B/Z/Space/Digit1-4、Familiar command、context 別 Escape を `InputPlugin` 所有の
+keyboard action は `crates/bevy_app/src/input_actions/` で一元解決する。M3a 時点では
+F5/F9/V、B/Z/Space/Digit1-4、Familiar command、context 別 Escape、AreaEdit、Tab、P/O、
+F3/F4/F6/F7/F8/F12 を `InputPlugin` 所有の
 `InputPreUpdateSet::Resolve` で exact chord として解決し、frame-local な `ResolvedInputFrame` を毎
 `PreUpdate` に置換する。snapshot は最前面 overlay、pause、current / current と異なる pending `PlayMode`、`TaskMode` /
-`MenuState`、frame 開始時の選択 Familiar を含む。non-`None` の `TaskMode` と pending non-Normal mode も
+`MenuState`、frame 開始時の選択 Familiar、`DebugVisible` を含む。non-`None` の `TaskMode` と pending non-Normal mode も
 active owner として扱い、同一 chord、排他的 family、非互換 conflict lane は consumer 前に 1 action へ絞る。
 
 `Update::GameSystemSet::Input` 内は `InputResolutionSet::PointerIngress → Consume` の順である。
 selection-dependent action がある frame は resolver が world / Entity List の選択 ingress を抑止し、
 後段の Familiar consumer は snapshot に保存した同じ Entity を操作する。UI action は既存 `UiIntent`
 handler、active mode / menu の Escape は共通 cleanup adapter、Familiar action は domain consumer が読む。
-`ResolvedInputFrame` は保存・Reflect・frame 越しの queue の対象にしない。AreaEdit、Tab、P/O、F3/F4/
-F6/F7/F8/F12 はまだ既存 owner が raw input を読むため、全 shortcut の移行完了とは扱わない。
+`ResolvedInputFrame` は保存・Reflect・frame 越しの queue の対象にしない。production の project-owned
+edge shortcut で `ButtonInput<KeyCode>` を直接読むのは resolver だけとし、AreaEdit、Entity List、debug の
+各 owner は semantic action または共通 modifier snapshot だけを読む。
 
 ### Global Cycle Framework (Logic Phase)
 

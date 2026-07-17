@@ -81,6 +81,14 @@ fn ui_intent_for_action(action: InputAction) -> Option<UiIntent> {
         InputAction::CloseSettings => Some(UiIntent::CloseSettings),
         InputAction::CloseOperationDialog => Some(UiIntent::CloseDialog),
         InputAction::CycleElevation
+        | InputAction::ToggleRender3d
+        | InputAction::CycleRttQuality
+        | InputAction::ToggleRttDirectionalLight
+        | InputAction::ToggleRttTerrain
+        | InputAction::ToggleRttSceneObjects
+        | InputAction::ToggleDebug
+        | InputAction::DebugSpawnSoul
+        | InputAction::DebugSpawnFamiliar
         | InputAction::FamiliarChop
         | InputAction::FamiliarMine
         | InputAction::FamiliarHaul
@@ -88,6 +96,18 @@ fn ui_intent_for_action(action: InputAction) -> Option<UiIntent> {
         | InputAction::FamiliarCancelDesignation
         | InputAction::ToggleFamiliarIdlePatrol
         | InputAction::CancelActiveMode
-        | InputAction::CloseOpenMenu => None,
+        | InputAction::CloseOpenMenu
+        | InputAction::AreaCopy
+        | InputAction::AreaPaste
+        | InputAction::AreaUndo
+        | InputAction::AreaRedo
+        | InputAction::AreaSavePreset1
+        | InputAction::AreaSavePreset2
+        | InputAction::AreaSavePreset3
+        | InputAction::AreaLoadPreset1
+        | InputAction::AreaLoadPreset2
+        | InputAction::AreaLoadPreset3
+        | InputAction::ListNext
+        | InputAction::ListPrevious => None,
     }
 }

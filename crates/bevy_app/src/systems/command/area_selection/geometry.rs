@@ -4,18 +4,6 @@ use hw_world::zones::Site;
 
 const AREA_CONTAINS_MARGIN: f32 = 0.1;
 
-pub(super) fn hotkey_slot_index(keyboard: &ButtonInput<KeyCode>) -> Option<usize> {
-    if keyboard.just_pressed(KeyCode::Digit1) {
-        Some(0)
-    } else if keyboard.just_pressed(KeyCode::Digit2) {
-        Some(1)
-    } else if keyboard.just_pressed(KeyCode::Digit3) {
-        Some(2)
-    } else {
-        None
-    }
-}
-
 pub(super) fn area_from_center_and_size(center: Vec2, size: Vec2) -> TaskArea {
     hw_core::area::area_from_center_and_size(center, size)
 }

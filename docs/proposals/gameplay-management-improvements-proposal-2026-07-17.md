@@ -21,9 +21,9 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 
 現状の主な問題は次のとおり。
 
-- 初期監査では同じキーが複数の操作に割り当てられていた。A1 の M1〜M2 で F5/F9/V、B/Z、
-  Space/Digit、Familiar command、context 別 Escape は resolver へ移行済み。AreaEdit、Tab、debug
-  shortcut と Modal/Pause の pointer/camera capture は後続マイルストーンで解消する。
+- 初期監査では同じキーが複数の操作に割り当てられていた。A1 の M1〜M3a で F5/F9/V、B/Z、
+  Space/Digit、Familiar command、context 別 Escape、AreaEdit、Tab、debug shortcut は resolver へ
+  移行済み。Modal/Pause の pointer/camera capture は M3b で解消する。
 - 配置不能理由は `PlacementRejectReason` として計算済みだが、ゴースト表示では
   可否の赤/緑だけに縮退している。セーブ/ロード結果もログ中心で、ゲーム画面から
   成否を確実に確認できない。

@@ -31,6 +31,7 @@ pub struct InputContextSnapshot {
     pub menu_state: MenuState,
     pub has_selected_familiar: bool,
     pub pending_play_mode: Option<PlayMode>,
+    pub debug_visible: bool,
 }
 
 impl Default for InputContextSnapshot {
@@ -46,6 +47,7 @@ impl Default for InputContextSnapshot {
             menu_state: MenuState::default(),
             has_selected_familiar: false,
             pending_play_mode: None,
+            debug_visible: false,
         }
     }
 }
@@ -96,6 +98,7 @@ pub(crate) struct InputContextParams<'w, 's> {
     task_context: Res<'w, TaskContext>,
     menu_state: Res<'w, MenuState>,
     selected: Res<'w, SelectedEntity>,
+    debug_visible: Res<'w, crate::DebugVisible>,
     q_familiars: Query<'w, 's, (), With<Familiar>>,
     q_load_confirm: Query<'w, 's, &'static Node, With<LoadConfirmDialog>>,
     q_settings: Query<'w, 's, &'static Node, With<SettingsPanel>>,
@@ -147,6 +150,7 @@ impl InputContextParams<'_, '_> {
                 menu_state: *self.menu_state,
                 has_selected_familiar: selected_familiar.is_some(),
                 pending_play_mode,
+                debug_visible: self.debug_visible.0,
             },
             selected_familiar,
         )

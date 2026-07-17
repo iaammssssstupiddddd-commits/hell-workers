@@ -18,7 +18,7 @@ pub(super) struct AreaReleaseCtx<'a> {
     pub(super) selected_entity: Option<Entity>,
     pub(super) world_pos: Vec2,
     pub(super) start_pos: Vec2,
-    pub(super) keyboard: &'a ButtonInput<KeyCode>,
+    pub(super) shift_pressed: bool,
     pub(super) next_play_mode: &'a mut NextState<PlayMode>,
     pub(super) area_edit_history: &'a mut AreaEditHistory,
 }
@@ -58,7 +58,7 @@ pub(super) fn handle_release_area_selection(
 
     despawn_indicators(indicator_entities, commands);
 
-    if should_exit_after_apply(ctx.keyboard) {
+    if should_exit_after_apply(ctx.shift_pressed) {
         ctx.task_context.0 = TaskMode::None;
         ctx.next_play_mode.set(PlayMode::Normal);
     } else {

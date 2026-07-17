@@ -2,7 +2,7 @@ use bevy::prelude::KeyCode;
 
 use super::{
     InputAction, InputActionFamily, InputChord, InputConflictLane, InputContextSnapshot,
-    InputOverlay,
+    InputModifiers, InputOverlay,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -16,6 +16,9 @@ pub(crate) enum InputBindingContext {
     OperationDialog,
     ActiveMode,
     OpenMenu,
+    AreaEdit,
+    Debug,
+    DebugVisible,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,8 +56,8 @@ const fn resolution(
     }
 }
 
-const fn binding(
-    key: KeyCode,
+const fn chord_binding(
+    chord: InputChord,
     action: InputAction,
     context: InputBindingContext,
     resolution: InputBindingResolution,
@@ -62,7 +65,7 @@ const fn binding(
     suppresses_pointer_selection: bool,
 ) -> InputBinding {
     InputBinding {
-        chord: InputChord::plain(key),
+        chord,
         action,
         context,
         context_priority: resolution.context_priority,
@@ -73,6 +76,68 @@ const fn binding(
         suppresses_pointer_selection,
     }
 }
+
+const fn binding(
+    key: KeyCode,
+    action: InputAction,
+    context: InputBindingContext,
+    resolution: InputBindingResolution,
+    conflict_lane: InputConflictLane,
+    suppresses_pointer_selection: bool,
+) -> InputBinding {
+    chord_binding(
+        InputChord::plain(key),
+        action,
+        context,
+        resolution,
+        conflict_lane,
+        suppresses_pointer_selection,
+    )
+}
+
+const fn modified_binding(
+    key: KeyCode,
+    modifiers: InputModifiers,
+    action: InputAction,
+    context: InputBindingContext,
+    resolution: InputBindingResolution,
+    conflict_lane: InputConflictLane,
+    suppresses_pointer_selection: bool,
+) -> InputBinding {
+    chord_binding(
+        InputChord { key, modifiers },
+        action,
+        context,
+        resolution,
+        conflict_lane,
+        suppresses_pointer_selection,
+    )
+}
+
+const CTRL: InputModifiers = InputModifiers {
+    ctrl: true,
+    alt: false,
+    shift: false,
+    super_key: false,
+};
+const CTRL_SHIFT: InputModifiers = InputModifiers {
+    ctrl: true,
+    alt: false,
+    shift: true,
+    super_key: false,
+};
+const ALT: InputModifiers = InputModifiers {
+    ctrl: false,
+    alt: true,
+    shift: false,
+    super_key: false,
+};
+const SHIFT: InputModifiers = InputModifiers {
+    ctrl: false,
+    alt: false,
+    shift: true,
+    super_key: false,
+};
 
 pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
     binding(
@@ -92,12 +157,192 @@ pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
         true,
     ),
     binding(
-        KeyCode::KeyV,
-        InputAction::CycleElevation,
-        InputBindingContext::Global,
+        KeyCode::F3,
+        InputAction::ToggleRender3d,
+        InputBindingContext::Debug,
         resolution(40, None, 0, 20),
         InputConflictLane::ViewDebug,
         false,
+    ),
+    binding(
+        KeyCode::F4,
+        InputAction::CycleRttQuality,
+        InputBindingContext::Debug,
+        resolution(40, None, 0, 20),
+        InputConflictLane::ViewDebug,
+        false,
+    ),
+    binding(
+        KeyCode::F6,
+        InputAction::ToggleRttDirectionalLight,
+        InputBindingContext::Debug,
+        resolution(40, None, 0, 20),
+        InputConflictLane::ViewDebug,
+        false,
+    ),
+    binding(
+        KeyCode::F7,
+        InputAction::ToggleRttTerrain,
+        InputBindingContext::Debug,
+        resolution(40, None, 0, 20),
+        InputConflictLane::ViewDebug,
+        false,
+    ),
+    binding(
+        KeyCode::F8,
+        InputAction::ToggleRttSceneObjects,
+        InputBindingContext::Debug,
+        resolution(40, None, 0, 20),
+        InputConflictLane::ViewDebug,
+        false,
+    ),
+    binding(
+        KeyCode::F12,
+        InputAction::ToggleDebug,
+        InputBindingContext::Debug,
+        resolution(40, None, 0, 20),
+        InputConflictLane::ViewDebug,
+        false,
+    ),
+    binding(
+        KeyCode::KeyP,
+        InputAction::DebugSpawnSoul,
+        InputBindingContext::DebugVisible,
+        resolution(45, None, 0, 20),
+        InputConflictLane::ViewDebug,
+        false,
+    ),
+    binding(
+        KeyCode::KeyO,
+        InputAction::DebugSpawnFamiliar,
+        InputBindingContext::DebugVisible,
+        resolution(45, None, 0, 20),
+        InputConflictLane::ViewDebug,
+        false,
+    ),
+    binding(
+        KeyCode::KeyV,
+        InputAction::CycleElevation,
+        InputBindingContext::WorldNormal,
+        resolution(40, None, 0, 20),
+        InputConflictLane::ViewDebug,
+        false,
+    ),
+    modified_binding(
+        KeyCode::KeyC,
+        CTRL,
+        InputAction::AreaCopy,
+        InputBindingContext::AreaEdit,
+        resolution(90, Some(InputActionFamily::AreaEditCommand), 6, 90),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    modified_binding(
+        KeyCode::KeyV,
+        CTRL,
+        InputAction::AreaPaste,
+        InputBindingContext::AreaEdit,
+        resolution(90, Some(InputActionFamily::AreaEditCommand), 5, 90),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    modified_binding(
+        KeyCode::KeyZ,
+        CTRL,
+        InputAction::AreaUndo,
+        InputBindingContext::AreaEdit,
+        resolution(90, Some(InputActionFamily::AreaEditCommand), 3, 90),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    modified_binding(
+        KeyCode::KeyY,
+        CTRL,
+        InputAction::AreaRedo,
+        InputBindingContext::AreaEdit,
+        resolution(90, Some(InputActionFamily::AreaEditCommand), 4, 90),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    modified_binding(
+        KeyCode::KeyZ,
+        CTRL_SHIFT,
+        InputAction::AreaRedo,
+        InputBindingContext::AreaEdit,
+        resolution(90, Some(InputActionFamily::AreaEditCommand), 4, 90),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    modified_binding(
+        KeyCode::Digit1,
+        CTRL,
+        InputAction::AreaSavePreset1,
+        InputBindingContext::AreaEdit,
+        resolution(90, Some(InputActionFamily::AreaEditCommand), 9, 90),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    modified_binding(
+        KeyCode::Digit2,
+        CTRL,
+        InputAction::AreaSavePreset2,
+        InputBindingContext::AreaEdit,
+        resolution(90, Some(InputActionFamily::AreaEditCommand), 8, 90),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    modified_binding(
+        KeyCode::Digit3,
+        CTRL,
+        InputAction::AreaSavePreset3,
+        InputBindingContext::AreaEdit,
+        resolution(90, Some(InputActionFamily::AreaEditCommand), 7, 90),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    modified_binding(
+        KeyCode::Digit1,
+        ALT,
+        InputAction::AreaLoadPreset1,
+        InputBindingContext::AreaEdit,
+        resolution(90, Some(InputActionFamily::AreaEditCommand), 12, 90),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    modified_binding(
+        KeyCode::Digit2,
+        ALT,
+        InputAction::AreaLoadPreset2,
+        InputBindingContext::AreaEdit,
+        resolution(90, Some(InputActionFamily::AreaEditCommand), 11, 90),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    modified_binding(
+        KeyCode::Digit3,
+        ALT,
+        InputAction::AreaLoadPreset3,
+        InputBindingContext::AreaEdit,
+        resolution(90, Some(InputActionFamily::AreaEditCommand), 10, 90),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    binding(
+        KeyCode::Tab,
+        InputAction::ListNext,
+        InputBindingContext::WorldNormal,
+        resolution(40, None, 0, 65),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    modified_binding(
+        KeyCode::Tab,
+        SHIFT,
+        InputAction::ListPrevious,
+        InputBindingContext::WorldNormal,
+        resolution(40, None, 0, 65),
+        InputConflictLane::SelectionOrMode,
+        true,
     ),
     binding(
         KeyCode::KeyB,
@@ -320,6 +565,16 @@ pub(crate) fn binding_matches_context(
         InputBindingContext::Familiar => context.familiar_shortcuts_enabled(),
         InputBindingContext::ActiveMode => context.active_mode(),
         InputBindingContext::OpenMenu => context.open_menu(),
+        InputBindingContext::AreaEdit => {
+            context.logic_shortcuts_enabled
+                && context.play_mode == hw_core::game_state::PlayMode::TaskDesignation
+                && matches!(
+                    context.task_mode,
+                    hw_core::game_state::TaskMode::AreaSelection(_)
+                )
+        }
+        InputBindingContext::Debug => true,
+        InputBindingContext::DebugVisible => context.debug_visible,
         InputBindingContext::LoadConfirm
         | InputBindingContext::Settings
         | InputBindingContext::Pause
@@ -359,6 +614,10 @@ pub(crate) fn actions_are_compatible(
         return true;
     }
 
+    if left.conflict_lane == ViewDebug && right.conflict_lane == ViewDebug {
+        return is_independent_view_debug_pair(left.action, right.action);
+    }
+
     if matches!(
         (left.conflict_lane, right.conflict_lane),
         (SelectionOrMode, SimulationControl) | (SimulationControl, SelectionOrMode)
@@ -367,6 +626,25 @@ pub(crate) fn actions_are_compatible(
     }
 
     is_save_time_pair(left.action, right.action)
+}
+
+fn is_independent_view_debug_pair(left: InputAction, right: InputAction) -> bool {
+    let is_current_view_debug_action = |action| {
+        matches!(
+            action,
+            InputAction::CycleElevation
+                | InputAction::ToggleRender3d
+                | InputAction::CycleRttQuality
+                | InputAction::ToggleRttDirectionalLight
+                | InputAction::ToggleRttTerrain
+                | InputAction::ToggleRttSceneObjects
+                | InputAction::ToggleDebug
+                | InputAction::DebugSpawnSoul
+                | InputAction::DebugSpawnFamiliar
+        )
+    };
+
+    left != right && is_current_view_debug_action(left) && is_current_view_debug_action(right)
 }
 
 fn is_save_time_pair(left: InputAction, right: InputAction) -> bool {

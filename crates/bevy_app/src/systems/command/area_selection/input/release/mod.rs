@@ -25,7 +25,7 @@ pub(super) struct ReleaseCtx<'a> {
     pub(super) task_context: &'a mut TaskContext,
     pub(super) selected_entity: Option<Entity>,
     pub(super) world_pos: Vec2,
-    pub(super) keyboard: &'a ButtonInput<KeyCode>,
+    pub(super) shift_pressed: bool,
     pub(super) next_play_mode: &'a mut NextState<PlayMode>,
     pub(super) area_edit_session: &'a mut AreaEditSession,
     pub(super) area_edit_history: &'a mut AreaEditHistory,
@@ -56,7 +56,7 @@ pub(super) fn handle_left_just_released_input(
                 selected_entity: ctx.selected_entity,
                 world_pos: ctx.world_pos,
                 start_pos,
-                keyboard: ctx.keyboard,
+                shift_pressed: ctx.shift_pressed,
                 next_play_mode: ctx.next_play_mode,
                 area_edit_history: ctx.area_edit_history,
             };

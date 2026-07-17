@@ -69,8 +69,9 @@ Normal ↔ ZonePlace（Zoneボタン/Esc）、Normal ↔ TaskDesignation（Order
 - `Esc` で `PlayMode::Normal` へ復帰
 
 ### 入力補足
-- Areaモード中の `Tab` / `Shift + Tab` は Familiar のみを循環対象にする
+- `Tab` / `Shift + Tab` は `PlayMode::Normal` の Entity List 巡回だけに使い、Areaモードを含む active mode 中は処理しない
 - `Ctrl + Z / Y`（および `Ctrl + Shift + Z`）で TaskArea の Undo/Redo を行う
+- Area shortcut と適用時の Shift 判定は frame-local resolver の exact chord / modifier snapshot を使い、raw keyboard を再読しない
 
 ## MenuState と Architect サブメニュー
 

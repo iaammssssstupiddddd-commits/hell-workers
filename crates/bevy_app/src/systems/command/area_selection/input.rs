@@ -6,6 +6,7 @@ use super::{AreaEditHistory, AreaEditSession};
 use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar};
+use crate::input_actions::ResolvedInputFrame;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{AreaSelectionIndicator, TaskArea, TaskMode};
@@ -31,7 +32,7 @@ pub struct AreaInputContext<'w, 's> {
     q_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
     ui_input_state: Res<'w, UiInputState>,
-    keyboard: Res<'w, ButtonInput<KeyCode>>,
+    resolved_frame: Res<'w, ResolvedInputFrame>,
 }
 
 #[derive(SystemParam)]
@@ -90,7 +91,7 @@ pub fn task_area_selection_system(
     if handle_active_drag_input(
         &mut ActiveDragCtx {
             buttons: &input.buttons,
-            keyboard: &input.keyboard,
+            shift_pressed: input.resolved_frame.modifiers.shift,
             task_context: &mut state.task_context,
             next_play_mode: &mut state.next_play_mode,
             area_edit_session: &mut state.area_edit_session,
@@ -133,7 +134,7 @@ pub fn task_area_selection_system(
             task_context: &mut state.task_context,
             selected_entity: state.selected.0,
             world_pos,
-            keyboard: &input.keyboard,
+            shift_pressed: input.resolved_frame.modifiers.shift,
             next_play_mode: &mut state.next_play_mode,
             area_edit_session: &mut state.area_edit_session,
             area_edit_history: &mut state.area_edit_history,

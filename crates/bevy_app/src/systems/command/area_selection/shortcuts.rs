@@ -1,21 +1,18 @@
 use super::apply::{apply_area_and_record_history, apply_task_area_to_familiar};
-use super::geometry::{area_from_center_and_size, hotkey_slot_index};
+use super::geometry::area_from_center_and_size;
 use super::{AreaEditClipboard, AreaEditHistory, AreaEditPresets};
-use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar};
+use crate::input_actions::{InputAction, ResolvedInputFrame};
 use crate::interface::selection::SelectedEntity;
-use crate::interface::ui::UiInputState;
-use crate::systems::command::{TaskArea, TaskMode};
+use crate::systems::command::TaskArea;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_world::zones::Site;
 
 #[derive(SystemParam)]
 pub struct ShortcutResources<'w> {
-    keyboard: Res<'w, ButtonInput<KeyCode>>,
-    ui_input_state: Res<'w, UiInputState>,
-    task_context: Res<'w, TaskContext>,
+    resolved_frame: Res<'w, ResolvedInputFrame>,
     selected_entity: ResMut<'w, SelectedEntity>,
     area_edit_history: ResMut<'w, AreaEditHistory>,
     area_edit_clipboard: ResMut<'w, AreaEditClipboard>,
@@ -36,19 +33,17 @@ pub fn task_area_edit_history_shortcuts_system(
     mut queries: ShortcutQueries,
     mut commands: Commands,
 ) {
-    if hw_ui::interaction::text_input_blocks_keybinds(&res.ui_input_state) {
+    let Some(action) = res
+        .resolved_frame
+        .actions()
+        .iter()
+        .copied()
+        .find(|action| is_area_edit_action(*action))
+    else {
         return;
-    }
-    if !matches!(res.task_context.0, TaskMode::AreaSelection(_)) {
-        return;
-    }
+    };
 
-    let ctrl_pressed =
-        res.keyboard.pressed(KeyCode::ControlLeft) || res.keyboard.pressed(KeyCode::ControlRight);
-    let alt_pressed =
-        res.keyboard.pressed(KeyCode::AltLeft) || res.keyboard.pressed(KeyCode::AltRight);
-
-    if alt_pressed && let Some(slot) = hotkey_slot_index(&res.keyboard) {
+    if let Some(slot) = load_preset_slot(action) {
         let Some(selected) = res.selected_entity.0 else {
             return;
         };
@@ -82,11 +77,7 @@ pub fn task_area_edit_history_shortcuts_system(
         return;
     }
 
-    if !ctrl_pressed {
-        return;
-    }
-
-    if let Some(slot) = hotkey_slot_index(&res.keyboard) {
+    if let Some(slot) = save_preset_slot(action) {
         if let Some(selected) = res.selected_entity.0
             && queries.q_familiar_exists.get(selected).is_ok()
             && let Ok(area) = queries.q_task_areas.get(selected)
@@ -96,7 +87,7 @@ pub fn task_area_edit_history_shortcuts_system(
         return;
     }
 
-    if res.keyboard.just_pressed(KeyCode::KeyC) {
+    if action == InputAction::AreaCopy {
         if let Some(selected) = res.selected_entity.0
             && queries.q_familiar_exists.get(selected).is_ok()
         {
@@ -105,7 +96,7 @@ pub fn task_area_edit_history_shortcuts_system(
         return;
     }
 
-    if res.keyboard.just_pressed(KeyCode::KeyV) {
+    if action == InputAction::AreaPaste {
         let Some(selected) = res.selected_entity.0 else {
             return;
         };
@@ -130,10 +121,7 @@ pub fn task_area_edit_history_shortcuts_system(
         return;
     }
 
-    let redo_via_shift_z = res.keyboard.just_pressed(KeyCode::KeyZ)
-        && (res.keyboard.pressed(KeyCode::ShiftLeft) || res.keyboard.pressed(KeyCode::ShiftRight));
-
-    if res.keyboard.just_pressed(KeyCode::KeyY) || redo_via_shift_z {
+    if action == InputAction::AreaRedo {
         if let Some(entry) = res.area_edit_history.redo_stack.pop() {
             let familiar_entity = entry.familiar_entity;
             apply_task_area_to_familiar(
@@ -148,7 +136,7 @@ pub fn task_area_edit_history_shortcuts_system(
         return;
     }
 
-    if res.keyboard.just_pressed(KeyCode::KeyZ)
+    if action == InputAction::AreaUndo
         && let Some(entry) = res.area_edit_history.undo_stack.pop()
     {
         let familiar_entity = entry.familiar_entity;
@@ -160,5 +148,91 @@ pub fn task_area_edit_history_shortcuts_system(
         );
         res.selected_entity.0 = Some(familiar_entity);
         res.area_edit_history.redo_stack.push(entry);
+    }
+}
+
+fn is_area_edit_action(action: InputAction) -> bool {
+    matches!(
+        action,
+        InputAction::AreaCopy
+            | InputAction::AreaPaste
+            | InputAction::AreaUndo
+            | InputAction::AreaRedo
+            | InputAction::AreaSavePreset1
+            | InputAction::AreaSavePreset2
+            | InputAction::AreaSavePreset3
+            | InputAction::AreaLoadPreset1
+            | InputAction::AreaLoadPreset2
+            | InputAction::AreaLoadPreset3
+    )
+}
+
+fn load_preset_slot(action: InputAction) -> Option<usize> {
+    match action {
+        InputAction::AreaLoadPreset1 => Some(0),
+        InputAction::AreaLoadPreset2 => Some(1),
+        InputAction::AreaLoadPreset3 => Some(2),
+        _ => None,
+    }
+}
+
+fn save_preset_slot(action: InputAction) -> Option<usize> {
+    match action {
+        InputAction::AreaSavePreset1 => Some(0),
+        InputAction::AreaSavePreset2 => Some(1),
+        InputAction::AreaSavePreset3 => Some(2),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input_actions::{InputModifiers, ResolvedInputFrame};
+    use crate::test_support::minimal_app;
+
+    fn shortcut_app(action: InputAction) -> (App, Entity) {
+        let mut app = minimal_app();
+        app.init_resource::<SelectedEntity>()
+            .init_resource::<ResolvedInputFrame>()
+            .init_resource::<AreaEditHistory>()
+            .init_resource::<AreaEditClipboard>()
+            .init_resource::<AreaEditPresets>()
+            .add_systems(Update, task_area_edit_history_shortcuts_system);
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                ActiveCommand::default(),
+                Destination(Vec2::ZERO),
+                TaskArea::from_points(Vec2::ZERO, Vec2::new(4.0, 6.0)),
+            ))
+            .id();
+        app.world_mut().resource_mut::<SelectedEntity>().0 = Some(familiar);
+        app.world_mut()
+            .resource_mut::<ResolvedInputFrame>()
+            .replace(InputModifiers::default(), vec![action], None, true);
+        (app, familiar)
+    }
+
+    #[test]
+    fn resolved_area_copy_reaches_the_existing_consumer() {
+        let (mut app, _) = shortcut_app(InputAction::AreaCopy);
+
+        app.update();
+
+        assert!(app.world().resource::<AreaEditClipboard>().area.is_some());
+    }
+
+    #[test]
+    fn resolved_preset_action_owns_its_exact_slot() {
+        let (mut app, _) = shortcut_app(InputAction::AreaSavePreset2);
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<AreaEditPresets>().slots,
+            [None, Some(Vec2::new(4.0, 6.0)), None]
+        );
     }
 }

@@ -1,5 +1,6 @@
 use crate::entities::damned_soul::DamnedSoulSpawnEvent;
 use crate::entities::familiar::{FamiliarSpawnEvent, FamiliarType};
+use crate::input_actions::{InputAction, ResolvedInputFrame};
 use crate::plugins::startup::Building3dHandles;
 use crate::systems::jobs::wall_construction::components::{
     WallConstructionPhase, WallConstructionSite, WallTileBlueprint, WallTileState,
@@ -10,18 +11,18 @@ use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_MAP};
 use hw_ui::camera::MainCamera;
-use hw_ui::components::UiInputState;
 use hw_visual::visual3d::Building3dVisual;
 
 pub fn debug_spawn_system(
-    buttons: Res<ButtonInput<KeyCode>>,
-    ui_input_state: Res<UiInputState>,
+    resolved_frame: Res<ResolvedInputFrame>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut soul_spawn_events: MessageWriter<DamnedSoulSpawnEvent>,
     mut familiar_spawn_events: MessageWriter<FamiliarSpawnEvent>,
 ) {
-    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
+    let spawn_soul = resolved_frame.contains(InputAction::DebugSpawnSoul);
+    let spawn_familiar = resolved_frame.contains(InputAction::DebugSpawnFamiliar);
+    if !spawn_soul && !spawn_familiar {
         return;
     }
     let mut spawn_pos = Vec2::ZERO;
@@ -34,14 +35,14 @@ pub fn debug_spawn_system(
         spawn_pos = pos;
     }
 
-    if buttons.just_pressed(KeyCode::KeyP) {
+    if spawn_soul {
         soul_spawn_events.write(DamnedSoulSpawnEvent {
             position: spawn_pos,
             simulation_random_key: None,
         });
     }
 
-    if buttons.just_pressed(KeyCode::KeyO) {
+    if spawn_familiar {
         familiar_spawn_events.write(FamiliarSpawnEvent {
             position: spawn_pos,
             familiar_type: FamiliarType::Imp,
@@ -122,5 +123,51 @@ pub fn debug_instant_complete_walls_system(
         site.tiles_coated = framed_count;
         // Coating フェーズに強制移行 → wall_construction_completion_system が同フレームで cleanup
         site.phase = WallConstructionPhase::Coating;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input_actions::InputModifiers;
+    use crate::test_support::minimal_app;
+
+    #[derive(Resource, Default)]
+    struct SpawnCounts {
+        souls: usize,
+        familiars: usize,
+    }
+
+    fn collect_spawns(
+        mut souls: MessageReader<DamnedSoulSpawnEvent>,
+        mut familiars: MessageReader<FamiliarSpawnEvent>,
+        mut counts: ResMut<SpawnCounts>,
+    ) {
+        counts.souls += souls.read().count();
+        counts.familiars += familiars.read().count();
+    }
+
+    #[test]
+    fn resolved_debug_spawn_is_not_regated_by_mutable_debug_visibility() {
+        let mut app = minimal_app();
+        app.add_message::<DamnedSoulSpawnEvent>()
+            .add_message::<FamiliarSpawnEvent>()
+            .init_resource::<ResolvedInputFrame>()
+            .init_resource::<SpawnCounts>()
+            .add_systems(Update, (debug_spawn_system, collect_spawns).chain());
+        app.world_mut()
+            .resource_mut::<ResolvedInputFrame>()
+            .replace(
+                InputModifiers::default(),
+                vec![InputAction::DebugSpawnSoul, InputAction::DebugSpawnFamiliar],
+                None,
+                false,
+            );
+
+        app.update();
+
+        let counts = app.world().resource::<SpawnCounts>();
+        assert_eq!(counts.souls, 1);
+        assert_eq!(counts.familiars, 1);
     }
 }

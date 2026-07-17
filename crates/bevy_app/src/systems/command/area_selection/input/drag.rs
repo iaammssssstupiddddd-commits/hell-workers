@@ -17,7 +17,7 @@ use hw_world::zones::Site;
 
 pub(super) struct ActiveDragCtx<'a> {
     pub(super) buttons: &'a ButtonInput<MouseButton>,
-    pub(super) keyboard: &'a ButtonInput<KeyCode>,
+    pub(super) shift_pressed: bool,
     pub(super) task_context: &'a mut TaskContext,
     pub(super) next_play_mode: &'a mut NextState<PlayMode>,
     pub(super) area_edit_session: &'a mut AreaEditSession,
@@ -86,7 +86,7 @@ pub(super) fn handle_active_drag_input(
         }
 
         ctx.area_edit_session.active_drag = None;
-        if should_exit_after_apply(ctx.keyboard) {
+        if should_exit_after_apply(ctx.shift_pressed) {
             ctx.task_context.0 = TaskMode::None;
             ctx.next_play_mode.set(PlayMode::Normal);
         } else {
