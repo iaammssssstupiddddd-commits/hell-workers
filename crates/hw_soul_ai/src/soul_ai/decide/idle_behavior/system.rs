@@ -5,25 +5,29 @@ use bevy::prelude::*;
 
 use hw_core::constants::*;
 use hw_core::events::{IdleBehaviorOperation, IdleBehaviorRequest};
-use hw_core::gathering::{GATHERING_LEAVE_RADIUS, GatheringSpot};
-use hw_core::relationships::{GatheringParticipants, RestAreaReservedFor, RestingIn, WorkingOn};
+use hw_core::gathering::GatheringSpot;
+use hw_core::relationships::GatheringParticipants;
 #[cfg(feature = "profiling")]
 use hw_core::simulation_rng::{FixedAuditSeed, SimulationRng};
-use hw_core::soul::{IdleBehavior, IdleState, RestAreaCooldown};
-use hw_jobs::ActiveTaskIdentity;
-use hw_spatial::{GatheringSpotSpatialGrid, SpatialGrid, SpatialGridOps};
+use hw_core::soul::IdleBehavior;
+use hw_spatial::{GatheringSpotSpatialGrid, SpatialGrid};
 use hw_world::WorldMap;
 
 #[cfg(feature = "profiling")]
 use crate::soul_ai::helpers::query_types::IdleDecisionRandomStateQuery;
 use crate::soul_ai::helpers::query_types::IdleDecisionSoulQuery;
-use crate::soul_ai::helpers::query_types::NeedsIdleDecision;
 use crate::soul_ai::update::slow_simulation::SlowSimulationClock;
 #[cfg(feature = "profiling")]
 use crate::soul_ai::update::slow_simulation::SlowSimulationPerfMetrics;
 
-use super::rest_area::{RestAreasQuery, find_nearest_available_rest_area};
+use super::rest_area::RestAreasQuery;
 use super::{exhausted_gathering, motion_dispatch, rest_decision, task_override, transitions};
+
+mod targets;
+mod wake;
+
+use targets::{resolve_gathering_target, resolve_rest_area_target};
+pub(crate) use wake::{clear_idle_decision_wake_system, mark_needs_idle_decision_system};
 
 #[cfg(feature = "profiling")]
 const IDLE_BEHAVIOR_DURATION_STREAM: u64 = 0x6964_6c65_5f64_7572;
@@ -56,90 +60,12 @@ pub(crate) struct IdleGatheringQueries<'w, 's> {
     soul_grid: Res<'w, SpatialGrid>,
 }
 
-type IdleDecisionTaskStartQuery<'w, 's> = Query<
-    'w,
-    's,
-    Entity,
-    (
-        With<IdleState>,
-        Or<(Added<WorkingOn>, Added<ActiveTaskIdentity>)>,
-    ),
->;
-
-type IdleDecisionRestChangedQuery<'w, 's> = Query<
-    'w,
-    's,
-    Entity,
-    (
-        With<IdleState>,
-        Or<(
-            Added<RestingIn>,
-            Added<RestAreaReservedFor>,
-            Added<RestAreaCooldown>,
-        )>,
-    ),
->;
-
-#[derive(SystemParam)]
-pub(crate) struct IdleDecisionWakeParams<'w, 's> {
-    q_initial_idle: Query<'w, 's, Entity, Added<IdleState>>,
-    q_task_started: IdleDecisionTaskStartQuery<'w, 's>,
-    q_rest_changed: IdleDecisionRestChangedQuery<'w, 's>,
-    q_idle: Query<'w, 's, (), With<IdleState>>,
-    removed_working: RemovedComponents<'w, 's, WorkingOn>,
-    removed_task_identity: RemovedComponents<'w, 's, ActiveTaskIdentity>,
-    removed_resting: RemovedComponents<'w, 's, RestingIn>,
-    removed_reserved: RemovedComponents<'w, 's, RestAreaReservedFor>,
-    removed_cooldown: RemovedComponents<'w, 's, RestAreaCooldown>,
-}
-
 #[cfg(feature = "profiling")]
 #[derive(SystemParam)]
 pub(crate) struct IdleDecisionProfiling<'w, 's> {
     audit_seed: Option<Res<'w, FixedAuditSeed>>,
     random_states: IdleDecisionRandomStateQuery<'w, 's>,
     metrics: ResMut<'w, SlowSimulationPerfMetrics>,
-}
-
-/// Marks only decision-relevant state transitions for an immediate `dt = 0`
-/// reevaluation. Timer writes to `IdleState` deliberately do not wake this
-/// path; cadence ticks own normal timer progression.
-pub(crate) fn mark_needs_idle_decision_system(
-    mut commands: Commands,
-    mut wake: IdleDecisionWakeParams,
-) {
-    for entity in wake
-        .q_initial_idle
-        .iter()
-        .chain(wake.q_task_started.iter())
-        .chain(wake.q_rest_changed.iter())
-    {
-        commands.entity(entity).insert(NeedsIdleDecision);
-    }
-    for entity in wake
-        .removed_working
-        .read()
-        .chain(wake.removed_task_identity.read())
-        .chain(wake.removed_resting.read())
-        .chain(wake.removed_reserved.read())
-        .chain(wake.removed_cooldown.read())
-    {
-        if wake.q_idle.get(entity).is_ok() {
-            commands.entity(entity).insert(NeedsIdleDecision);
-        }
-    }
-}
-
-/// Wake markers are one-frame notifications. Update→Decide `ApplyDeferred`
-/// makes them visible to the current decision pass; this cleanup runs after it
-/// so they cannot turn into a steady-state per-frame gate.
-pub(crate) fn clear_idle_decision_wake_system(
-    mut commands: Commands,
-    q_woken: Query<Entity, With<NeedsIdleDecision>>,
-) {
-    for entity in q_woken.iter() {
-        commands.entity(entity).remove::<NeedsIdleDecision>();
-    }
 }
 
 /// アイドル行動の決定システム (Decide Phase)
@@ -570,56 +496,4 @@ pub(crate) fn idle_behavior_decision_system(
             },
         );
     }
-}
-
-fn resolve_gathering_target(
-    participating_in: Option<&hw_core::relationships::ParticipatingIn>,
-    q_spots: &Query<(Entity, &GatheringSpot, &GatheringParticipants)>,
-    spot_grid: &GatheringSpotSpatialGrid,
-    transform: &Transform,
-    scratch: &mut Vec<Entity>,
-) -> (Option<Vec2>, Option<Entity>) {
-    if let Some(p) = participating_in {
-        let center = q_spots.get(p.0).ok().map(|(_, s, _)| s.center);
-        (center, Some(p.0))
-    } else {
-        let pos = transform.translation.truncate();
-        spot_grid.get_nearby_in_radius_into(pos, GATHERING_LEAVE_RADIUS * 2.0, scratch);
-        let nearest = scratch
-            .iter()
-            .filter_map(|&e| q_spots.get(e).ok())
-            .filter(|item| item.2.len() < item.1.max_capacity)
-            .min_by(|a, b| {
-                a.1.center
-                    .distance_squared(pos)
-                    .partial_cmp(&b.1.center.distance_squared(pos))
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-        match nearest {
-            Some((e, s, _)) => (Some(s.center), Some(e)),
-            None => (None, None),
-        }
-    }
-}
-
-fn resolve_rest_area_target(
-    reserved_rest_area: Option<Entity>,
-    pos_a: Vec2,
-    pos_b: Vec2,
-    q_rest_areas: &RestAreasQuery,
-    pending_rest_reservations: &HashMap<Entity, usize>,
-) -> Option<(Entity, Vec2)> {
-    reserved_rest_area
-        .and_then(|reserved_entity| {
-            q_rest_areas
-                .get(reserved_entity)
-                .ok()
-                .map(|(_, t, _, _, _)| (reserved_entity, t.translation.truncate()))
-        })
-        .or_else(|| {
-            find_nearest_available_rest_area(pos_a, q_rest_areas, pending_rest_reservations)
-        })
-        .or_else(|| {
-            find_nearest_available_rest_area(pos_b, q_rest_areas, pending_rest_reservations)
-        })
 }

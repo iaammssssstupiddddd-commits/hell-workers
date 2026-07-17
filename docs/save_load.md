@@ -191,6 +191,8 @@ rebuild systemが観測できる。
 セーブが復元するのはschema allow-listの simulation 状態のみで、spawn 関数がその場で挿入する
 実行時コンポーネントと随伴エンティティは含まれない。`rehydrate.rs` がロード直後に再付与する。
 
+物理構成では `schema.rs` に型inventoryと抽出入口を残し、`schema/validation.rs` がdeserialized worldの検証を担当する。`rehydrate.rs` は復元順とshell再付与の入口を保ち、`rehydrate/prerequisites.rs`、`presentation.rs`、`construction_runtime.rs`、`construction_shells.rs`、`obstacles.rs` が各フェーズを担当する。save schemaと復元順の正本は引き続きfacade側の入口である。
+
 | カテゴリ | shell の内容 | 実装 |
 | --- | --- | --- |
 | Soul | `Destination`/`Path`/`AnimationState`/UI リンク/speech 状態 + GLB 3D プロキシ×3 | `attach_soul_shell`（spawn と共用） |

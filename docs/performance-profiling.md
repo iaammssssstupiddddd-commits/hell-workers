@@ -1,6 +1,8 @@
 # パフォーマンス計測
 
-ランタイム最適化の比較は、`scripts/perf.py` を唯一の入口にする。スクリプトは profiling binary を計測外で一度だけbuildし、runごとに隔離したCSV・log・実行環境を保存してから、CSV契約、実GPU、ログ健全性、反復のcheckpointを検証する。raw artifact は `target/perf-runs/` 配下にだけ置き、commitしない。
+ランタイム最適化の比較は、`scripts/perf.py` を唯一の入口にする。このファイルは後方互換CLI shimであり、実装は `scripts/perf_tool/` の引数解析・実行・artifact・policy・集約・比較モジュールへ分割されている。runnerは profiling binary を計測外で一度だけbuildし、runごとに隔離したCSV・log・実行環境を保存してから、CSV契約、実GPU、ログ健全性、反復のcheckpointを検証する。raw artifact は `target/perf-runs/` 配下にだけ置き、commitしない。
+
+ゲーム側の入口は `crates/bevy_app/src/plugins/startup/perf_scenario.rs` に維持し、設定、fixture、workload driver、capture driver、audit checksum/encoding、出力処理は同名ディレクトリの子モジュールが担当する。CLI option、summary schema、checkpoint順序はこの物理分割に依存しない。
 
 再現性は二段階に分ける。通常の実時間ベンチマークは、ゲーム更新前の**初期 fixture**を必ず一致させ、warm-up/計測終端の状態は実測値として記録する。`Time<Virtual>`は実フレームのdeltaで進み、warm-up境界を越える最終frameがrunごとに異なるためである。完全に同じsimulation時刻での状態一致は、`scripts/perf.py audit` による固定stepの決定性auditとしてframe-time計測と別に扱う。auditは性能値を出力せず、通常の`summary.csv` baselineとも比較しない。
 
