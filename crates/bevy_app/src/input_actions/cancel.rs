@@ -143,7 +143,7 @@ mod tests {
     use crate::input_actions::InputModifiers;
     use crate::systems::command::TaskArea;
     use crate::test_support::minimal_app;
-    use hw_ui::area_edit::{AreaEditDrag, AreaEditOperation};
+    use hw_ui::area_edit::{AreaEditDrag, AreaEditHistory, AreaEditOperation};
 
     fn cleanup_app(action: InputAction) -> App {
         let mut app = minimal_app();
@@ -287,6 +287,148 @@ mod tests {
         assert_eq!(
             session.pending_dream_planting,
             Some((Vec2::ZERO, Vec2::ONE, 17))
+        );
+        assert!(matches!(
+            *app.world().resource::<NextState<PlayMode>>(),
+            NextState::Unchanged
+        ));
+    }
+
+    #[test]
+    fn capture_rollback_clears_only_drag_payload_variants() {
+        let point = Vec2::splat(3.0);
+        let cases = [
+            (
+                TaskMode::DesignateChop(Some(point)),
+                TaskMode::DesignateChop(None),
+            ),
+            (
+                TaskMode::DesignateMine(Some(point)),
+                TaskMode::DesignateMine(None),
+            ),
+            (
+                TaskMode::DesignateHaul(Some(point)),
+                TaskMode::DesignateHaul(None),
+            ),
+            (
+                TaskMode::CancelDesignation(Some(point)),
+                TaskMode::CancelDesignation(None),
+            ),
+            (
+                TaskMode::AreaSelection(Some(point)),
+                TaskMode::AreaSelection(None),
+            ),
+            (
+                TaskMode::AssignTask(Some(point)),
+                TaskMode::AssignTask(None),
+            ),
+            (
+                TaskMode::ZonePlacement(
+                    hw_core::game_state::TaskModeZoneType::Stockpile,
+                    Some(point),
+                ),
+                TaskMode::ZonePlacement(hw_core::game_state::TaskModeZoneType::Stockpile, None),
+            ),
+            (
+                TaskMode::ZoneRemoval(hw_core::game_state::TaskModeZoneType::Yard, Some(point)),
+                TaskMode::ZoneRemoval(hw_core::game_state::TaskModeZoneType::Yard, None),
+            ),
+            (
+                TaskMode::FloorPlace(Some(point)),
+                TaskMode::FloorPlace(None),
+            ),
+            (TaskMode::WallPlace(Some(point)), TaskMode::WallPlace(None)),
+            (
+                TaskMode::DreamPlanting(Some(point)),
+                TaskMode::DreamPlanting(None),
+            ),
+        ];
+
+        for (before, expected) in cases {
+            let mut app = cleanup_app(InputAction::CloseOpenMenu);
+            app.add_systems(Update, rollback_gesture);
+            app.world_mut().resource_mut::<TaskContext>().0 = before;
+
+            app.update();
+
+            assert_eq!(app.world().resource::<TaskContext>().0, expected);
+        }
+
+        for preserved in [
+            TaskMode::SelectBuildTarget,
+            TaskMode::SoulSpaPlace(Some(point)),
+        ] {
+            let mut app = cleanup_app(InputAction::CloseOpenMenu);
+            app.add_systems(Update, rollback_gesture);
+            app.world_mut().resource_mut::<TaskContext>().0 = preserved;
+
+            app.update();
+
+            assert_eq!(app.world().resource::<TaskContext>().0, preserved);
+        }
+    }
+
+    #[test]
+    fn capture_rollback_restores_area_snapshot_without_writing_history() {
+        let mut app = cleanup_app(InputAction::CloseOpenMenu);
+        app.init_resource::<AreaEditHistory>()
+            .add_systems(Update, rollback_gesture);
+        let original_area = TaskArea::from_points(Vec2::ZERO, Vec2::splat(2.0));
+        let changed_area = TaskArea::from_points(Vec2::splat(4.0), Vec2::splat(8.0));
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                ActiveCommand {
+                    command: FamiliarCommand::Patrol,
+                },
+                Destination(Vec2::splat(9.0)),
+                changed_area.clone(),
+            ))
+            .id();
+        app.world_mut().resource_mut::<AreaEditHistory>().push(
+            familiar,
+            Some(original_area.clone()),
+            Some(changed_area),
+        );
+        app.world_mut()
+            .resource_mut::<AreaEditSession>()
+            .active_drag = Some(AreaEditDrag {
+            familiar_entity: familiar,
+            operation: AreaEditOperation::Move,
+            original_area: original_area.clone(),
+            original_destination: Vec2::ONE,
+            original_command: FamiliarCommand::Idle,
+            drag_start: Vec2::ZERO,
+        });
+
+        app.update();
+
+        assert_eq!(
+            app.world().entity(familiar).get::<TaskArea>(),
+            Some(&original_area)
+        );
+        assert_eq!(
+            app.world().entity(familiar).get::<Destination>().unwrap().0,
+            Vec2::ONE
+        );
+        assert_eq!(
+            app.world()
+                .entity(familiar)
+                .get::<ActiveCommand>()
+                .unwrap()
+                .command,
+            FamiliarCommand::Idle
+        );
+        assert!(
+            app.world()
+                .resource::<AreaEditSession>()
+                .active_drag
+                .is_none()
+        );
+        assert_eq!(
+            app.world().resource::<AreaEditHistory>().undo_stack.len(),
+            1
         );
         assert!(matches!(
             *app.world().resource::<NextState<PlayMode>>(),

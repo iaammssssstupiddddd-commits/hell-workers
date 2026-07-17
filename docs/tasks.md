@@ -65,6 +65,11 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 
 **手動**: プレイヤーが UI/ドラッグ操作で指定。
 
+- edge-triggered keyboard shortcut は `input_actions` resolver が context と exact modifier を確定し、command consumer は semantic action だけを読む。
+- Modal/Pause capture 中は assignment、area/zone/designation の pointer ingress を遮断する。capture 開始時に
+  drag 中なら同じ `TaskMode` の待機状態へ戻し、AreaEdit の開始前 snapshot を復元するため、release edge が
+  capture 中に消えても designation/history/task assignment を新規確定しない。
+
 **自動（request エンティティ方式）**: anchor 位置にエンティティを生成し、ソースは割り当て時に遅延解決:
 - `task_area_auto_haul_system` → `DepositToStockpile`（Stockpile グループ単位）
 - `blueprint_auto_haul_system` → `DeliverToBlueprint`
@@ -220,7 +225,7 @@ Blueprint / FloorSite / WallSite への搬入完了直後、`chain::find_chain_o
 
 - 新規: 左ドラッグ矩形 / 直接編集: 既存エリアの内部ドラッグ（移動）・辺/角ドラッグ（リサイズ）
 - `Shift+左リリース`: 適用して Normal 復帰 / `Esc`: Normal 復帰
-- `Ctrl+Z/Y`: Undo/Redo / `Ctrl+C/V`: コピー/ペースト / `Ctrl+1..3`: プリセット保存 / `Alt+1..3`: プリセット適用
+- `Ctrl+Z/Y` または `Ctrl+Shift+Z`: Undo/Redo / `Ctrl+C/V`: コピー/ペースト / `Ctrl+1..3`: プリセット保存 / `Alt+1..3`: プリセット適用
 
 ## 9. バイタル（疲労・ストレス・やる気）
 

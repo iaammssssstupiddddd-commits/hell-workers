@@ -335,6 +335,7 @@ mod tests {
     use super::*;
     use crate::test_support::minimal_app;
     use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn capture_test_app() -> App {
         let mut app = minimal_app();
@@ -362,6 +363,39 @@ mod tests {
                 marker,
             ))
             .id()
+    }
+
+    fn assert_accepted_button_capture<T: Component>(
+        mut app: App,
+        marker: T,
+        action: MenuAction,
+        expected_overlay: InputOverlay,
+    ) {
+        let root = spawn_capture_root(&mut app, marker, Display::None);
+        let opener = app
+            .world_mut()
+            .spawn((Interaction::Pressed, Button, MenuButton(action)))
+            .id();
+        app.add_systems(
+            Update,
+            (
+                reset_pending_world_input_capture_system,
+                request_capture_from_menu_buttons_system,
+            )
+                .chain(),
+        );
+
+        app.update();
+
+        let request = app
+            .world()
+            .resource::<PendingWorldInputCapture>()
+            .request
+            .expect("capture request should be accepted");
+        assert_eq!(request.overlay, expected_overlay);
+        assert_eq!(request.root, root);
+        assert_eq!(request.opener, Some(opener));
+        assert!(app.world().resource::<InputFocus>().get().is_none());
     }
 
     #[test]
@@ -427,6 +461,51 @@ mod tests {
             rejected.world().resource::<InputFocus>().get(),
             Some(Entity::PLACEHOLDER)
         );
+    }
+
+    #[test]
+    fn accepted_button_requests_cover_every_capture_overlay() {
+        assert_accepted_button_capture(
+            capture_test_app(),
+            SettingsPanel,
+            MenuAction::ToggleSettings,
+            InputOverlay::Settings,
+        );
+        assert_accepted_button_capture(
+            capture_test_app(),
+            PauseMenu,
+            MenuAction::TogglePause,
+            InputOverlay::Pause,
+        );
+
+        let mut operation = capture_test_app();
+        let familiar = operation.world_mut().spawn(Familiar::default()).id();
+        operation.world_mut().resource_mut::<SelectedEntity>().0 = Some(familiar);
+        assert_accepted_button_capture(
+            operation,
+            OperationDialog,
+            MenuAction::OpenOperationDialog,
+            InputOverlay::OperationDialog,
+        );
+
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let save_file = std::env::temp_dir().join(format!(
+            "hell-workers-capture-{}-{unique}.ron",
+            std::process::id()
+        ));
+        std::fs::write(&save_file, b"capture test").unwrap();
+        let mut load = capture_test_app();
+        load.insert_resource(SavePath::new(save_file.clone()));
+        assert_accepted_button_capture(
+            load,
+            LoadConfirmDialog,
+            MenuAction::RequestLoadGame,
+            InputOverlay::LoadConfirm,
+        );
+        std::fs::remove_file(save_file).unwrap();
     }
 
     #[test]

@@ -145,6 +145,17 @@ let changed = query_dirty || removed_a || removed_b || removed_relevant;
 reader の cursor を進めるだけの `read().next()`、predicate の `read().any(...)`、
 および `read()` を含む短絡式を新規コードへ追加してはならない。
 
+### I-U4: project shortcut と world-input capture の所有権を分離する
+
+project-owned の edge-triggered keyboard shortcut は `bevy_app::input_actions` の resolver だけが raw
+`ButtonInput<KeyCode>` を読み、consumer は frame-local semantic action を読む。新しい shortcut は binding
+table、context/compatibility、owner classification test を同時に更新する。
+
+`UiInputState.pointer_over_ui` は通常 UI hover、`world_input_captured` は Modal/Pause ownership であり、
+同じ field に畳まない。world pointer/camera consumer は `world_input_blocked()` を使うが、UI 自身は hover で
+停止せず capture 中だけ foreground ancestry に従う。overlay open request の受理 frame から pending capture と
+`InputFocus` clear を成立させ、capture root の表示更新を待ってはならない。
+
 ---
 
 ## 6. ECS アーキテクチャの不変条件

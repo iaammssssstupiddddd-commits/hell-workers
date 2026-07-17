@@ -93,7 +93,9 @@
 - `IgnoreScroll` によりヘッダー要素はスクロール対象から除外
 
 ## 入力ガード
-- `UiInputBlocker` + `UiInputState` でUI上のワールド入力を抑止
+- `UiInputBlocker` + `UiInputState.pointer_over_ui` でリスト上のワールド入力を抑止する。hover は UI 自身の行クリックを止めない
+- Modal/Pause の `world_input_captured` 中は行クリック、長押し drag、resize、minimize、section toggle、task tab、rename を開始・継続しない
+- capture 開始 frame は Entity List の ghost、pending/active drop、resize edge を reset し、capture 中の release で squad request や panel resize を確定しない
 - スクロール領域上のホイール入力はリスト優先
 - `EditableText` フォーカス中は `text_input_focused` / `text_input_consumed_keyboard` によりゲーム側 shortcut（WASD パン、resolver action、Tab 巡回、Ctrl+C/V/Z/Y 等）を抑止
 - Escape でフォーカス解除した同フレームは `text_input_consumed_keyboard` latch によりゲーム Escape 処理へ伝播しない

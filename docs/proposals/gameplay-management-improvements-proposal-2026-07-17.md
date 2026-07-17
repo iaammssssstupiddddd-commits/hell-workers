@@ -21,9 +21,9 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 
 現状の主な問題は次のとおり。
 
-- 初期監査では同じキーが複数の操作に割り当てられていた。A1 の M1〜M3a で F5/F9/V、B/Z、
+- 初期監査では同じキーが複数の操作に割り当てられていた。A1 の M1〜M3b で F5/F9/V、B/Z、
   Space/Digit、Familiar command、context 別 Escape、AreaEdit、Tab、debug shortcut は resolver へ
-  移行済み。Modal/Pause の pointer/camera capture は M3b で解消する。
+  移行済み。Modal/Pause は open request frame から pointer/camera と背景 UI を capture し、未確定 gesture を rollback する。
 - 配置不能理由は `PlacementRejectReason` として計算済みだが、ゴースト表示では
   可否の赤/緑だけに縮退している。セーブ/ロード結果もログ中心で、ゲーム画面から
   成否を確実に確認できない。
@@ -452,14 +452,14 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 現在地
 
-- 進捗: `提案初版 100% / A1 採用済み・実装 50% / A2〜D 未採否`
-- 直近で完了したこと: A1 の M2 までを実装し、Global/Modal/Familiar/Escape の action 一意解決、
-  frame-start selection、active mode cleanup を成立させた。
+- 進捗: `提案初版 100% / A1 採用済み・実装 87.5% / A2〜D 未採否`
+- 直近で完了したこと: A1 の M3b 実装と M4 の恒久 docs・自動回帰を完了し、全 project shortcut の
+  resolver 移行、frame-start selection、Modal/Pause capture、gesture rollback、foreground UI ownership を成立させた。
 - 現在のブランチ/前提: `master`。A1 の進捗正本は関連実装計画を参照する。
 
 ### 次のAIが最初にやること
 
-1. A1 は関連実装計画の M3（AreaEdit、残存 shortcut、capture gate）から継続する。
+1. A1 は関連実装計画の manual scenario 1〜19 を実機確認し、成功後に M4 完了・計画 archive を行う。
 2. A2〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
 
 ### ブロッカー/注意点
@@ -503,3 +503,4 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | --- | --- | --- |
 | `2026-07-17` | `Codex` | 初版作成。操作、運営ポリシー、永続化、進行の 4 トラックを整理 |
 | `2026-07-17` | `Codex` | A1 M2 完了を反映。数字/B、Modal/Pause、Familiar、Escape の resolver 移行と次の M3 境界を同期 |
+| `2026-07-17` | `Codex` | A1 M3b 実装を反映。残存 shortcut の resolver 移行、Modal/Pause capture、gesture rollback、foreground UI ownership を同期。手動受入は関連計画を参照 |

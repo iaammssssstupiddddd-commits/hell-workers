@@ -2,8 +2,14 @@
 
 ## 役割
 
-プレイヤーからの入力（マウス・キーボード）処理、建物配置・選択システム、および UI の統合を担うディレクトリ。
-`GameSystemSet::Interface` フェーズで実行される。
+プレイヤーからの resolved keyboard action と mouse/pointer 入力、建物配置・選択システム、および UI の統合を担うディレクトリ。
+capture/resolver は `PreUpdate`、pointer ingress は `GameSystemSet::Input`、UI/placement mutation は主に
+`GameSystemSet::Interface` で実行される。
+
+project-owned edge keyboard の raw owner は crate root の `input_actions` resolver だけである。このディレクトリの
+consumer は `ResolvedInputFrame` を読み、mouse 系 consumer は `UiInputState::world_input_blocked()` と
+selection suppression に従う。Modal/Pause capture の pending/visible sync と rollback は
+`input_actions/capture.rs`、各 selection/placement の domain mutation はこのディレクトリが所有する。
 
 ## ディレクトリ構成
 

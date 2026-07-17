@@ -27,7 +27,7 @@ UI からの入力を受け取り、`Designation` や `TaskArea` コンポーネ
 |---|---|
 | `mod.rs` | 公開 API（crate 所有 helper と shell system に分けてコメント整理済み） |
 | `assign_task.rs` | `assign_task_system` — クリックによるタスク指定 |
-| `input.rs` | `familiar_command_input_system` — Familiar コマンド入力処理 |
+| `input.rs` | `familiar_command_input_system` — resolver が確定した Familiar action の consumer |
 | `indicators.rs` | タスクエリア・指定インジケーターの同期 |
 | `visualization.rs` | コマンド状態の視覚フィードバック |
 
@@ -46,7 +46,7 @@ UI からの入力を受け取り、`Designation` や `TaskArea` コンポーネ
 | `indicator.rs` | エリア選択ビジュアル（`GameAssets` + mesh/material spawn、root 残留） |
 | `manual_haul.rs` | 手動運搬の指定。選定アルゴリズムは `hw_logistics::manual_haul_selector` を呼ぶ thin adapter |
 | `queries.rs` | `DesignationTargetQuery` 型定義 |
-| `shortcuts.rs` | キーボードショートカット |
+| `shortcuts.rs` | resolver が確定した AreaEdit action の consumer（raw keyboard は読まない） |
 | `state.rs` | `AreaEditSession`, `AreaEditHistory`, `AreaEditClipboard`, `AreaEditPresets` Resource 型 |
 
 ## zone_placement/ ディレクトリ
@@ -69,3 +69,13 @@ TaskArea { bounds: AreaBounds }  // Familiar が管轄するエリア
 `count_positions_in_area` / `overlap_summary_from_areas` / `wall_line_area` / `get_drag_start` / `area_from_center_and_size`
 も同様に `hw_core::area` 由来の pure helper を `mod.rs` 経由で公開している。
 `TaskAreaIndicator` コンポーネントで視覚的インジケーターエンティティと紐付けられる。
+
+## 入力ownership
+
+- edge-triggered shortcut と Shift modifier snapshot は `crates/bevy_app/src/input_actions/` が解決する。
+  command system は `ButtonInput<KeyCode>` を直接読まない。
+- selection / assign / area / zone の pointer consumer は `UiInputState::world_input_blocked()` に従い、
+  Modal/Pause 中の panel 外 click/drag を無視する。
+- capture 開始時の未確定 Designation / Area / Assign / Zone / Floor / Wall / Dream gesture、AreaEdit drag、
+  Dream seed、Zone removal preview の rollback は `input_actions/capture.rs` から共通 owner helper を呼ぶ。
+  SoulSpa placement を含む mode ownerと、確定済み history/request は維持する。

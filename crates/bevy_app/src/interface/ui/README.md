@@ -38,7 +38,7 @@
 | `handlers/` | `UiIntent` 種別ごとの実処理（general / familiar_settings / mode_selection / mode_toggle） |
 | `menu_actions.rs` | メニューアクション処理 |
 | `mode.rs` | UI モード管理 |
-| `systems.rs` | インタラクションシステム |
+| `systems.rs` | インタラクションシステム（Modal/Pause 中は `ForegroundUiGate` で前景 ancestry を確認） |
 | `status_display.rs` | ステータス表示エントリポイント |
 | `status_display/` | ステータスバー描画（runtime, dream bar, mode panel） |
 | `tooltip/` | ツールチップ（target, layout, fade） |
@@ -62,9 +62,18 @@
 | `view_model.rs` | リストビューモデル（ゲーム固有クエリ） |
 | `change_detection.rs` | 変化検出 |
 | `dirty.rs` | ダーティフラグ |
-| `drag_drop.rs` | ドラッグ&ドロップ（`DragState` は hw_ui、システムはここ） |
+| `drag_drop.rs` | ドラッグ&ドロップ（`DragState` は hw_ui、システムと capture-start reset helper はここ） |
 | `interaction.rs` / `interaction/` | リストアイテムのゲーム側インタラクション（SectionToggle は hw_ui 側へ移設済み。`+/-` は target 付き `UiIntent` を発行し、navigation はここ残留） |
 | `selection_focus.rs` | camera focus helper |
+
+## 入力capture境界
+
+- `UiInputState.pointer_over_ui` は通常 hover なので UI 自身の row/button interaction を止めない。
+- `world_input_captured` 中は最前面 `foreground_capture_root` の descendant と、その frame に capture を
+  開いた opener だけを許可する。判定は `input_actions::ForegroundUiGate` が所有する。
+- Entity List は capture 開始時に drag ghost / pending drop / active drop / resize edge を reset する。
+  world selection、placement、context menu は `world_input_blocked()` を使い、UI 内 interaction は capture flag
+  だけで gate する。
 
 ## 公開方針
 

@@ -113,8 +113,8 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 
 代表例（主要モジュール）:
 
-- `setup/` — `UiAssets` trait, `setup_ui` fn（UI ツリー構築。bottom_bar / submenus / panels / entity_list / time_control / dialogs）
-- `components.rs` — MenuState, MenuButton, FamiliarListItem, SoulListItem 等 50+ 型（`UiNodeRegistry` / `UiSlot` / `UiMountSlot` / `UiRoot` は `hw_core::ui_nodes` から re-export）
+- `setup/` — `UiAssets` trait, `setup_ui` fn（UI ツリー構築。bottom_bar / submenus / panels / entity_list / time_control / dialogs）。Modal/Pause は full-viewport `UiInputCapture` root、構造 root/slot は picking-transparent にする
+- `components.rs` — MenuState, MenuButton, FamiliarListItem, SoulListItem、hover/captureを分離する `UiInputState` 等（`UiNodeRegistry` / `UiSlot` / `UiMountSlot` / `UiRoot` は `hw_core::ui_nodes` から re-export）
 - `theme.rs` — `UiTheme` Resource（カラーパレット・フォントサイズ・スペーシング・サイズ定数）
 - `intents.rs` — `UiIntent` enum（プレイヤー UI 操作メッセージ）
 - `text_input_intents.rs` — `TextInputIntent` enum（non-`Copy` テキスト確定イベント、例: `RenameSoul`）
@@ -317,6 +317,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `lib.rs`: 共有 Resource、公開 module、root re-export、library unit testの入口
 - `main.rs`: process設定の解釈と window / render / backend設定、`HellWorkersGamePlugin` の追加
 - `plugins/game.rs`: production game resource / state / `GameSystemSet` chain と parent game plugin の一意な登録
+- `input_actions/`: project-owned keyboard edge の唯一の resolver、pending/visible Modal/Pause capture、foreground UI gate、capture-start rollback
 
 ここに残すもの:
 

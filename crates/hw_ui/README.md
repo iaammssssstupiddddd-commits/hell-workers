@@ -110,8 +110,17 @@ impl UiAssets for GameAssets {
 
 ## 入力ゲーティング
 
-`UiInputState.pointer_over_ui` が UI 上にポインターがあるかどうかを共有フラグとして管理する。
-カメラ操作・ゲーム入力処理はこのフラグを確認してUI上でのクリックを無視する。
+`UiInputState` は通常の UI hover と Modal/Pause capture を別の事実として保持する。
+
+- `pointer_over_ui`: `UiInputBlocker` または hovered/pressed `Button` 上にポインターがある通常の hover 状態。
+- `world_input_captured`: LoadConfirm / Settings / Pause / OperationDialog が world input を所有する状態。
+- `world_input_capture_started`: effective capture の false→true を 1 frame だけ通知する rollback latch。
+- `world_input_blocked()`: world 側の選択・配置・カメラ用に hover と capture を合成する。
+
+UI 内のボタン、リスト、テキスト操作は `pointer_over_ui` では止めず、capture 中だけ最前面 overlay の
+ancestry に従う。capture root は viewport 全体の `FocusPolicy::Block + Pickable::default()`、構造用の
+`UiRoot` / `UiMountSlot` は `FocusPolicy::Pass + Pickable::IGNORE` とする。これにより通常時の world picking
+を維持しつつ、overlay 表示中は panel 外と背景 UI を遮断する。
 
 ## ここに置かないもの
 

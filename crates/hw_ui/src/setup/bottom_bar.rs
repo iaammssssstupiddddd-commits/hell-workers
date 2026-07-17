@@ -63,12 +63,7 @@ pub fn spawn_bottom_bar(
                 Some("Z"),
             ),
             ("Orders", "命令メニュー切替", MenuAction::ToggleOrders, None),
-            (
-                "Dream",
-                "Dreamメニュー切替 (D)",
-                MenuAction::ToggleDream,
-                Some("D"),
-            ),
+            ("Dream", "Dreamメニュー切替", MenuAction::ToggleDream, None),
             ("Settings", "設定", MenuAction::ToggleSettings, None),
         ];
 

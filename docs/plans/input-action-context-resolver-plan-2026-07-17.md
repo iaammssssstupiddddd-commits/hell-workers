@@ -648,10 +648,10 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   - `crates/hw_ui/src/setup/bottom_bar.rs`
   - `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
 - 完了条件:
-  - [ ] 恒久 docs と default binding table が一致する
-  - [ ] `python3 scripts/dev.py docs --check` が成功する
+  - [x] 恒久 docs と default binding table が一致する
+  - [x] `python3 scripts/dev.py docs --check` が成功する
   - [ ] manual scenario を全件確認する
-  - [ ] full repository quality gate が成功する
+  - [x] full repository quality gate が成功する
 - 検証:
   - `python3 scripts/dev.py docs --check`
   - `python3 scripts/dev.py verify`
@@ -823,17 +823,17 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 現在地
 
-- 進捗: `計画 100% / 実装 75%`
+- 進捗: `計画 100% / 実装 87.5%`
 - 完了済みマイルストーン: M1、M2、M3a、M3b（自動検証範囲）
-- 未着手/進行中: M4 と、M3b の実 mouse drag / gesture release 手動受入
+- 未着手/進行中: M4 の恒久 docs・自動回帰は完了。manual scenario 1〜19 と、M3b の実 mouse drag / gesture release 手動受入が残る
 - 前提: A1 だけを対象とする。A2/A3 や keybinding settings を同時実装しない。
 
 ### 次のAIが最初にやること
 
 1. `git status --short` と並行差分を確認し、本計画外の変更を stage/revert しない。
 2. M3a の resolver/consumer移行と raw keyboard audit は完了済み。変更時は既存 matrix/consumer testを維持する。
-3. M3b の pending/visible overlay capture、gesture rollback、picking/camera ordering は実装済み。M4 で
-   恒久 docs を同期し、実 mouse drag / gesture release の手動シナリオを確認する。
+3. 恒久 docs と自動回帰は同期済み。manual scenario 1〜19、特に実 mouse drag 中の camera Transform、
+   capture 中 release、背景 EditableText 非配送を確認し、成功後に M4 完了・計画 archive を行う。
 
 ### ブロッカー/注意点
 
@@ -893,34 +893,34 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 最終確認ログ
 
-- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（M3b完了時）`
-- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（M3b完了時）`
+- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（M4自動回帰時）`
+- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（M4自動回帰時）`
 - 最終 `python3 scripts/dev.py docs --check`: `2026-07-17 / pass`
 - 最終 `git diff --check`: `2026-07-17 / pass`
-- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-07-17 / pass（M3b完了時）`
-- 最終 `cargo test --workspace --locked`: `2026-07-17 / pass（M3b完了時、bevy_app 152件・hw_ui 8件を含む）`
-- 最終 rust-analyzer diagnostics: `2026-07-17 / 変更Rustファイルでerror 0、warning 0`
-- 最終 `python3 scripts/dev.py verify`: `2026-07-17 / pass（M3b完了時）`
-- 未解決エラー: なし。M4 完了前に実 mouse drag 中の PanCamera Transform 不変と、
-  AreaEdit / Zone / TaskMode gesture の capture→release を手動確認すること。
+- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-07-17 / pass（M4自動回帰時）`
+- 最終 `cargo test --workspace --locked`: `2026-07-17 / pass（M4自動回帰時、bevy_app 155件・hw_ui 8件を含む）`
+- 最終 rust-analyzer diagnostics: `2026-07-17 / workspace error 0、warning 0`
+- 最終 `python3 scripts/dev.py verify`: `2026-07-17 / pass（M4自動回帰時）`
+- 未解決エラー: なし。実 pointer/keyboard 操作を伴う manual scenario は未実施。M4 完了前に
+  PanCamera Transform 不変、capture→release、背景 EditableText 非配送を実機確認すること。
 
 ### Definition of Done
 
 - [ ] M1〜M4 が完了している
-- [ ] 同一 physical chord が複数 semantic action へ解決されない
-- [ ] 排他的 `InputActionFamily` が frame 内最大 1 件で、同時 chord の priority test が成功する
-- [ ] cross-family compatibility が default-deny で、非可換 action が consumer 到達前に 1 件へ絞られる
-- [ ] text/modal/mode/Familiar/World/debug の priority test が成功する
-- [ ] overlay open request が同 frame に pending capture と InputFocus clear を成立させる
+- [x] 同一 physical chord が複数 semantic action へ解決されない
+- [x] 排他的 `InputActionFamily` が frame 内最大 1 件で、同時 chord の priority test が成功する
+- [x] cross-family compatibility が default-deny で、非可換 action が consumer 到達前に 1 件へ絞られる
+- [x] text/modal/mode/Familiar/World/debug の priority test が成功する
+- [x] overlay open request が同 frame に pending capture と InputFocus clear を成立させる
 - [x] pause 中の skipped action が unpause 後へ遅延発火しない
 - [ ] Modal/Pause が open frame から world pointer/camera input を panel 外でも遮断し、PanCamera Transform が変化しない
 - [ ] capture 開始時の未確定 gesture が owner state ごとに rollback され、release edge 消失後も残らない
-- [ ] active gesture 中の SaveGame が抑止され、未確定 persisted state を保存しない
-- [ ] world/Entity List selection ingress と drag/resize が action/capture snapshot を破壊しない
+- [x] active gesture 中の SaveGame が抑止され、未確定 persisted state を保存しない
+- [x] world/Entity List selection ingress と drag/resize が action/capture snapshot を破壊しない
 - [x] 全 active PlayMode の Escape が owner state を残さず完了する
-- [ ] project-owned production keyboard shortcut が resolver 経由になっている
+- [x] project-owned production keyboard shortcut が resolver 経由になっている
 - [ ] PanCamera/TextInput/mouse/visual_test の非対象経路が回帰していない
-- [ ] 影響ドキュメントが更新済み
+- [x] 影響ドキュメントが更新済み
 - [x] rust-analyzer workspace diagnostics が error/warning 0 件
 - [x] `python3 scripts/dev.py verify` が成功
 
@@ -936,3 +936,4 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 | `2026-07-17` | `Codex` | M2完了。B/Z/Space/Digit、Modal/Pause、Familiar、context別Escapeをresolverへ移行し、frame-start selection抑止、TaskMode/pending遷移を含む共通owner cleanup、overlay open時のInputFocus clearを実装。同一PlayModeへの冗長なpendingはblockerから除外 |
 | `2026-07-17` | `Codex` | M3a完了。AreaEdit exact chord/Shift snapshot、Tab、P/O、F3/F4/F6/F7/F8/F12をresolverへ移行し、production raw keyboard readerをresolverとwhitelistへ限定 |
 | `2026-07-17` | `Codex` | M3b実装。pending/visible overlay capture、viewport blocking root、foreground UI gate、capture開始時gesture rollback、Entity List reset、PanCamera/Picking orderingを導入。自動検証を完了し、実drag/releaseはM4手動受入へ明記 |
+| `2026-07-17` | `Codex` | M4自動回帰と恒久docs同期を完了。全capture overlay受理と全gesture variant/AreaEdit history非破壊testを追加し、verify・docs・rust-analyzerを通過。実pointer/keyboardのmanual scenarioは未完了として維持 |

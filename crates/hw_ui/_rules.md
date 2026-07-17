@@ -71,6 +71,8 @@ hw_energy      ✗
   - 検索などのライブ同期は `EditableTextSystems` 後に `EditableText` 値を読む。Escape クリア時は state だけでなく `EditableText` 本体も空にする
   - クリップボード連携は workspace `bevy` features の `"system_clipboard"` で有効化（`EditableTextInputPlugin` 内蔵の Ctrl+C/V 等）
 - スクロール入力ブロック（`UiInputBlocker` + `RelativeCursorPosition`）はスクロール実装方式に関わらず、pointer-over 判定用として維持する。
+- `UiInputState.pointer_over_ui` は通常 UI hover、`world_input_captured` は Modal/Pause ownership として分離する。world consumer は `world_input_blocked()`、UI consumer は capture flag だけを使う。
+- viewport 全体を覆う構造用 `UiRoot` / `UiMountSlot` は `FocusPolicy::Pass + Pickable::IGNORE`、Modal/Pause の capture root は `FocusPolicy::Block + Pickable::default()` とする。
 
 ### text_field 追加チェックリスト
 
@@ -78,7 +80,7 @@ hw_energy      ✗
 2. `spawn_text_field` / `spawn_text_field_on_entity` で imperative spawn（BSN は root のみ可）
 3. `interaction/text_field.rs` に Enter/Escape / ライブ sync を追加
 4. ゲーム状態を変える確定処理は `TextInputIntent` または `bevy_app` handler へ委譲（hw_ui から `SoulIdentity` 等をクエリしない）
-5. `ButtonInput<KeyCode>` 系ショートカットに `text_input_blocks_keybinds` ガードを追加
+5. game shortcut が必要なら `bevy_app/src/input_actions/bindings.rs` と resolver matrix test に追加する。UI system で `ButtonInput<KeyCode>` を直接読まない
 
 ## 設定画面 UI（Slider / Checkbox / BSN）
 
@@ -110,10 +112,14 @@ hw_energy      ✗
 
 1. **`hw_ui/src/intents.rs`**: `UiIntent` バリアントを追加（hw_ui はゲーム状態を直接書かない）
 2. **`hw_ui/src/components.rs`**: パネル marker（例: `PauseMenu`, `LoadConfirmDialog`）を追加
-3. **`hw_ui/src/setup/`**: `MenuButton(MenuAction::…)` 付きボタンを spawn（`dialogs.rs` / `pause_menu.rs` 参照）
+3. **`hw_ui/src/setup/`**: `UiInputCapture` 付き full-viewport blocking root の子に前景 panel と `MenuButton(MenuAction::…)` 付きボタンを spawn（`dialogs.rs` / `pause_menu.rs` 参照）
 4. **`bevy_app/.../menu_actions.rs`**: `MenuAction` → `UiIntent` 変換
 5. **`bevy_app/.../handlers/`**: intent 実処理（例: `save_game.rs` → `SaveLoadState`）
 6. **`bevy_app/.../intent_handler.rs`**: 新 intent の match 分岐
+
+open request の成立条件は `bevy_app/src/input_actions/capture.rs` の pending capture adapter と intent handler
+で一致させる。受理 frame に `InputFocus` を clear し、前景 root の descendant またはその request を発生させた
+opener 以外の背景 action を処理しない。
 
 `bsn!` マクロは **ルート entity のみ採用**（`settings_panel.rs` の「設定画面 UI」節参照）。子ツリーやボタンは **`commands.spawn` + `MenuButton`** で統一する（`FontSource` / `MenuButton` は BSN 制約上 imperative spawn が必要）。
 

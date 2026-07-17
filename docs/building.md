@@ -139,6 +139,8 @@ Logic の次回同期へ委ねてはならない。
     - 配置確定時に有効タイルが 0 の場合、`Cannot Place` ツールチップを表示し、配置できない代表理由を示します（約2秒）。
     - 主な理由: `not walkable` / `occupied by a building` / `occupied by a stockpile` / `has no completed floor` / `area too large` / `must be 1xn line`
 - **サイズ対応**: 1x1（壁など）だけでなく、2x2（タンクなど）の建物も適切なオフセットで表示されます。
+- **Modal/Pause capture**: overlay 表示中は placement/move/SoulSpa の world click を遮断する。
+  BuildingPlace / BuildingMove / companion の mode state と ghost は維持し、overlay を閉じた後に同じ配置操作を再開できる。
 
 ### Companion 配置（Tank）
 一部の建物は、親Blueprint配置直後に companion 配置フローへ遷移します。
