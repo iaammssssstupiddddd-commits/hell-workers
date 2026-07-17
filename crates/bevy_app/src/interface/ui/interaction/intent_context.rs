@@ -1,8 +1,9 @@
 use bevy::ecs::system::SystemParam;
+use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 
-use crate::app_contexts::{BuildContext, TaskContext, ZoneContext};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
+use crate::input_actions::ActiveModeCleanupParams;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::{EntityListNodeIndex, InfoPanelPinState};
 use crate::systems::command::TaskArea;
@@ -10,16 +11,21 @@ use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::save::{SaveLoadState, SavePath};
 use hw_core::game_state::PlayMode;
 use hw_core::relationships::Commanding;
-use hw_ui::components::{LoadConfirmDialog, MenuState, OperationDialog};
+use hw_ui::components::{LoadConfirmDialog, OperationDialog};
 
 #[derive(SystemParam)]
-pub(crate) struct IntentModeCtx<'w> {
-    pub(crate) menu_state: ResMut<'w, MenuState>,
-    pub(crate) next_play_mode: ResMut<'w, NextState<PlayMode>>,
-    pub(crate) build_context: ResMut<'w, BuildContext>,
-    pub(crate) zone_context: ResMut<'w, ZoneContext>,
-    pub(crate) task_context: ResMut<'w, TaskContext>,
+pub(crate) struct IntentModeCtx<'w, 's> {
+    pub(crate) cleanup: ActiveModeCleanupParams<'w, 's>,
+    pub(crate) play_mode: Res<'w, State<PlayMode>>,
     pub(crate) time: ResMut<'w, Time<Virtual>>,
+}
+
+impl IntentModeCtx<'_, '_> {
+    pub(crate) fn cancel_active_mode_if_needed(&mut self) {
+        if self.cleanup.has_active_owner_state(self.play_mode.get()) {
+            self.cleanup.cancel_active_mode();
+        }
+    }
 }
 
 #[derive(SystemParam)]
@@ -27,6 +33,7 @@ pub(crate) struct IntentSelectionCtx<'w> {
     pub(crate) selected_entity: ResMut<'w, SelectedEntity>,
     pub(crate) info_panel_pin: ResMut<'w, InfoPanelPinState>,
     pub(crate) node_index: Res<'w, EntityListNodeIndex>,
+    pub(crate) resolved_frame: Res<'w, crate::input_actions::ResolvedInputFrame>,
 }
 
 #[derive(SystemParam)]
@@ -54,6 +61,7 @@ pub(crate) struct IntentUiQueries<'w, 's> {
     pub(crate) q_load_confirm:
         Query<'w, 's, &'static mut Node, (With<LoadConfirmDialog>, Without<OperationDialog>)>,
     pub(crate) q_text: Query<'w, 's, &'static mut Text>,
+    pub(crate) input_focus: ResMut<'w, InputFocus>,
     pub(crate) save_load_state: ResMut<'w, SaveLoadState>,
     pub(crate) save_path: Res<'w, SavePath>,
 }

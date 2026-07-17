@@ -10,5 +10,6 @@ pub(crate) mod placement;
 mod preview;
 mod system;
 
+pub(crate) use click_handlers::clear_move_states;
 pub use preview::building_move_preview_system;
 pub use system::building_move_system;

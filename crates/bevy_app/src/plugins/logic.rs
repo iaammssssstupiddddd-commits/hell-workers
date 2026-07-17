@@ -113,11 +113,7 @@ impl Plugin for LogicPlugin {
             Update,
             (
                 assign_task_system.run_if(in_state(PlayMode::TaskDesignation)),
-                familiar_command_input_system.run_if(
-                    |selected: Res<crate::interface::selection::SelectedEntity>| {
-                        selected.0.is_some()
-                    },
-                ),
+                familiar_command_input_system,
                 task_area_selection_system,
                 zone_placement_system.run_if(in_state(PlayMode::TaskDesignation)),
                 zone_removal_system.run_if(in_state(PlayMode::TaskDesignation)),

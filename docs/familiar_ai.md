@@ -2,6 +2,19 @@
 
 使い魔（Familiar）は、「地獄の監督官」として配下の魂（Damned Soul）を管理し、仕事を効率的に進めさせるための AI を備えています。
 
+## プレイヤー入力コマンド
+
+Familiar command の keyboard edge は `bevy_app::input_actions` が context 解決し、
+`systems/command/input.rs` は `ResolvedInputFrame` だけを読む。対象 Entity も resolver が frame 開始時の
+`SelectedEntity` から snapshot した Familiar を使い、同 frame の world / Entity List click は抑止する。
+
+- 非 pause、`PlayMode::Normal`、互換 `TaskMode` のときだけ有効。
+- `C/M/H/B` と `Digit1-4` は Chop/Mine/Haul/Build、`Digit0/Delete` は指定キャンセル。Escape は
+  `TaskMode::None` の Normal 時だけ Idle/Patrol toggle とし、non-`None` TaskMode は active owner cancel を優先する。
+- B と数字キーは Familiar context を World menu / 時間操作より優先する。Pause、in-progress gesture、
+  pending non-Normal mode、modal では Familiar command を生成せず、停止中の入力を次 frame へ保持しない。
+- 複数 command chord を同 frame に押した場合は旧 `else if` 順の優先度で 1 action に絞る。
+
 ## 1. AI 状態 (FamiliarAiState)
 
 使い魔は以下の 4 つの状態を持ち、状況に応じて遷移します。

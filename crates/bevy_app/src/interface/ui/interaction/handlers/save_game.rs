@@ -3,6 +3,7 @@ use hw_ui::UiIntent;
 use hw_ui::interaction::dialog::{close_load_confirm_dialog, open_load_confirm_dialog};
 
 use super::super::intent_context::IntentUiQueries;
+use super::begin_overlay_open;
 use crate::systems::save::SaveLoadState;
 
 pub(crate) fn handle(intent: UiIntent, ui: &mut IntentUiQueries) {
@@ -18,6 +19,7 @@ pub(crate) fn handle(intent: UiIntent, ui: &mut IntentUiQueries) {
                 warn!("No save file at {}", ui.save_path.as_path().display());
                 return;
             }
+            begin_overlay_open(&mut ui.input_focus);
             open_load_confirm_dialog(&mut ui.q_load_confirm);
         }
         UiIntent::ConfirmLoadGame => {
@@ -47,6 +49,7 @@ mod tests {
     use crate::systems::GameSystemSet;
     use crate::systems::save::SavePath;
     use crate::test_support::minimal_app;
+    use bevy::input_focus::InputFocus;
     use hw_ui::components::LoadConfirmDialog;
 
     fn request_save(mut ui: IntentUiQueries) {
@@ -81,6 +84,7 @@ mod tests {
     fn app_with_load_dialog(path: PathBuf, display: Display) -> (App, Entity) {
         let mut app = minimal_app();
         app.init_resource::<SaveLoadState>();
+        app.insert_resource(InputFocus::from_entity(Entity::PLACEHOLDER));
         app.insert_resource(SavePath::new(path));
         let dialog = app
             .world_mut()
@@ -124,6 +128,10 @@ mod tests {
             app.world().entity(dialog).get::<Node>().unwrap().display,
             Display::None
         );
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(Entity::PLACEHOLDER)
+        );
     }
 
     #[test]
@@ -143,6 +151,7 @@ mod tests {
             app.world().entity(dialog).get::<Node>().unwrap().display,
             Display::Flex
         );
+        assert!(app.world().resource::<InputFocus>().get().is_none());
         std::fs::remove_file(path).unwrap();
     }
 
@@ -176,6 +185,8 @@ mod tests {
             .replace(
                 InputModifiers::default(),
                 vec![InputAction::RequestLoadGame],
+                None,
+                true,
             );
         app.configure_sets(
             Update,

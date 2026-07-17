@@ -41,7 +41,6 @@ fn register_ui_core_plugin_systems(app: &mut App) {
     .add_systems(
         Update,
         (
-            crate::interface::ui::ui_keyboard_shortcuts_system,
             crate::interface::ui::ui_interaction_system,
             crate::interface::ui::interaction::handle_text_input_intents_system,
             handle_ui_intent,

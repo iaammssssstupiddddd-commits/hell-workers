@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
+use hw_core::familiar::FamiliarCommand;
 
 /// Which handle of a resize/move gizmo was interacted with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,6 +27,8 @@ pub struct AreaEditDrag {
     pub familiar_entity: Entity,
     pub operation: AreaEditOperation,
     pub original_area: TaskArea,
+    pub original_destination: Vec2,
+    pub original_command: FamiliarCommand,
     pub drag_start: Vec2,
 }
 

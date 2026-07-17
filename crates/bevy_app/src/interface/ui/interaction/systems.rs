@@ -1,12 +1,7 @@
-use crate::app_contexts::{
-    BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext,
-    ZoneContext,
-};
 use crate::entities::familiar::{Familiar, FamiliarOperation};
-use crate::systems::command::TaskMode;
+use crate::input_actions::ActiveModeCleanupParams;
 use crate::systems::jobs::{Door, DoorState, apply_door_state};
 use crate::world::map::WorldMapWrite;
-use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use hw_core::game_state::PlayMode;
@@ -17,7 +12,7 @@ use hw_ui::interaction::dialog::close_operation_dialog;
 use hw_ui::theme::UiTheme;
 use hw_world::DoorVisualHandles;
 
-use super::{menu_actions, mode};
+use super::menu_actions;
 
 type MenuButtonWithColorQuery<'w, 's> = Query<
     'w,
@@ -47,135 +42,6 @@ pub fn update_ui_input_state_system(
         .iter()
         .any(|interaction| matches!(*interaction, Interaction::Hovered | Interaction::Pressed));
     ui_input_state.pointer_over_ui = pointer_over_blocker || pointer_over_button;
-}
-
-#[derive(SystemParam)]
-pub struct KeyboardModeCtx<'w> {
-    menu_state: ResMut<'w, MenuState>,
-    next_play_mode: ResMut<'w, NextState<PlayMode>>,
-    build_context: ResMut<'w, BuildContext>,
-    zone_context: ResMut<'w, ZoneContext>,
-    task_context: ResMut<'w, TaskContext>,
-}
-
-#[derive(SystemParam)]
-pub struct KeyboardShortcutInputs<'w> {
-    keyboard: Res<'w, ButtonInput<KeyCode>>,
-    ui_input_state: Res<'w, UiInputState>,
-    time: ResMut<'w, Time<Virtual>>,
-    play_mode: Res<'w, State<PlayMode>>,
-    companion_state: ResMut<'w, CompanionPlacementState>,
-    ui_intent_writer: MessageWriter<'w, UiIntent>,
-}
-
-#[derive(SystemParam)]
-pub struct KeyboardShortcutQueries<'w, 's> {
-    q_load_confirm: Query<'w, 's, &'static Node, With<LoadConfirmDialog>>,
-    q_settings_panel: Query<'w, 's, &'static Node, With<SettingsPanel>>,
-}
-
-pub fn ui_keyboard_shortcuts_system(
-    mut inputs: KeyboardShortcutInputs,
-    mode_ctx: KeyboardModeCtx,
-    shortcut_queries: KeyboardShortcutQueries,
-) {
-    if hw_ui::interaction::text_input_blocks_keybinds(&inputs.ui_input_state) {
-        return;
-    }
-    let KeyboardModeCtx {
-        mut menu_state,
-        mut next_play_mode,
-        mut build_context,
-        mut zone_context,
-        mut task_context,
-    } = mode_ctx;
-    let keyboard = &inputs.keyboard;
-    let time = &mut inputs.time;
-    let play_mode = &inputs.play_mode;
-    let companion_state = &mut inputs.companion_state;
-    let ui_intent_writer = &mut inputs.ui_intent_writer;
-    // メニュートグル
-    if keyboard.just_pressed(KeyCode::KeyB) {
-        mode::toggle_menu_and_reset_mode(
-            &mut menu_state,
-            MenuState::Architect,
-            &mut next_play_mode,
-            &mut build_context,
-            &mut zone_context,
-            &mut task_context,
-            false,
-        );
-    }
-
-    if keyboard.just_pressed(KeyCode::KeyZ) {
-        mode::toggle_menu_and_reset_mode(
-            &mut menu_state,
-            MenuState::Zones,
-            &mut next_play_mode,
-            &mut build_context,
-            &mut zone_context,
-            &mut task_context,
-            true,
-        );
-    }
-
-    // 時間制御
-    if keyboard.just_pressed(KeyCode::Space) {
-        if time.is_paused() {
-            time.unpause();
-        } else {
-            time.pause();
-        }
-    }
-    // 時間制御（設定モーダル表示中は数字キーで unpause しない）
-    if *menu_state != MenuState::Settings {
-        if keyboard.just_pressed(KeyCode::Digit1) {
-            time.pause();
-        }
-        if keyboard.just_pressed(KeyCode::Digit2) {
-            time.unpause();
-            time.set_relative_speed(1.0);
-        }
-        if keyboard.just_pressed(KeyCode::Digit3) {
-            time.unpause();
-            time.set_relative_speed(2.0);
-        }
-        if keyboard.just_pressed(KeyCode::Digit4) {
-            time.unpause();
-            time.set_relative_speed(4.0);
-        }
-    }
-
-    // モードキャンセル (Escape)
-    if keyboard.just_pressed(KeyCode::Escape) {
-        if hw_ui::interaction::dialog::is_load_confirm_dialog_open(&shortcut_queries.q_load_confirm)
-        {
-            ui_intent_writer.write(UiIntent::CancelLoadConfirm);
-            return;
-        }
-
-        if hw_ui::interaction::settings::is_settings_panel_open(&shortcut_queries.q_settings_panel)
-        {
-            ui_intent_writer.write(UiIntent::CloseSettings);
-            return;
-        }
-
-        let current_mode = play_mode.get();
-        if *current_mode == PlayMode::BuildingPlace {
-            companion_state.0 = None;
-            build_context.0 = None;
-            next_play_mode.set(PlayMode::Normal);
-            *menu_state = MenuState::Hidden;
-        } else if *current_mode == PlayMode::ZonePlace {
-            zone_context.0 = None;
-            next_play_mode.set(PlayMode::Normal);
-            *menu_state = MenuState::Hidden;
-        } else if *current_mode == PlayMode::TaskDesignation {
-            task_context.0 = TaskMode::None;
-            next_play_mode.set(PlayMode::Normal);
-            *menu_state = MenuState::Hidden;
-        }
-    }
 }
 
 /// UI ボタンの操作を受け取り、`UiIntent` を発行する統合システム
@@ -224,11 +90,13 @@ pub fn arch_category_action_system(
 pub fn move_plant_building_action_system(
     interaction_query: MenuButtonQuery,
     mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
-    mut move_context: ResMut<MoveContext>,
-    mut move_placement_state: ResMut<MovePlacementState>,
-    mut companion_state: ResMut<CompanionPlacementState>,
-    mut next_play_mode: ResMut<NextState<PlayMode>>,
+    play_mode: Res<State<PlayMode>>,
+    resolved_frame: Res<crate::input_actions::ResolvedInputFrame>,
+    mut cleanup: ActiveModeCleanupParams,
 ) {
+    if resolved_frame.pointer_selection_suppressed() {
+        return;
+    }
     for (interaction, menu_button) in interaction_query.iter() {
         if *interaction != Interaction::Pressed {
             continue;
@@ -236,11 +104,14 @@ pub fn move_plant_building_action_system(
         let MenuAction::MovePlantBuilding(entity) = menu_button.0 else {
             continue;
         };
+        if cleanup.has_active_owner_state(play_mode.get()) {
+            cleanup.cancel_active_mode();
+        }
         selected_entity.0 = Some(entity);
-        move_context.0 = Some(entity);
-        move_placement_state.0 = None;
-        companion_state.0 = None;
-        next_play_mode.set(PlayMode::BuildingMove);
+        cleanup.move_context.0 = Some(entity);
+        cleanup.move_placement_state.0 = None;
+        cleanup.companion_state.0 = None;
+        cleanup.next_play_mode.set(PlayMode::BuildingMove);
     }
 }
 

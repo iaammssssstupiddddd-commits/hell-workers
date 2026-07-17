@@ -1,6 +1,7 @@
 use crate::app_contexts::TaskContext;
 use crate::entities::damned_soul::{DamnedSoul, Destination};
 use crate::entities::familiar::Familiar;
+use crate::input_actions::ResolvedInputFrame;
 use crate::interface::ui::UiInputState;
 use crate::systems::command::{TaskArea, TaskMode};
 use bevy::ecs::system::SystemParam;
@@ -34,6 +35,7 @@ pub struct SelectionInput<'w, 's> {
     pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
     pub q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
     pub ui_input_state: Res<'w, UiInputState>,
+    pub resolved_frame: Res<'w, ResolvedInputFrame>,
 }
 
 #[derive(SystemParam)]
@@ -113,6 +115,7 @@ pub fn handle_mouse_input(
         q_window,
         q_camera,
         ui_input_state,
+        resolved_frame,
     } = input;
     let SelectionWorldQueries {
         q_souls,
@@ -120,7 +123,7 @@ pub fn handle_mouse_input(
         q_task_areas,
         q_targets,
     } = world_queries;
-    if ui_input_state.pointer_over_ui {
+    if ui_input_state.pointer_over_ui || resolved_frame.pointer_selection_suppressed() {
         return;
     }
 
@@ -237,5 +240,85 @@ pub fn update_hover_entity(
 
     if found != hovered_entity.0 {
         hovered_entity.0 = found;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input_actions::{InputAction, InputModifiers, ResolvedInputFrame};
+    use crate::test_support::minimal_app;
+    use bevy::camera::{ComputedCameraValues, RenderTargetInfo};
+    use bevy::window::{PrimaryWindow, WindowResolution};
+
+    fn selection_app(pointer_selection_suppressed: bool) -> (App, Entity, Entity) {
+        let mut app = minimal_app();
+        app.init_resource::<ButtonInput<MouseButton>>()
+            .init_resource::<UiInputState>()
+            .init_resource::<ResolvedInputFrame>()
+            .init_resource::<SelectedEntity>()
+            .init_resource::<TaskContext>()
+            .init_resource::<NextState<PlayMode>>()
+            .add_systems(Update, handle_mouse_input);
+        let mut window = Window {
+            resolution: WindowResolution::new(100, 100),
+            ..default()
+        };
+        window.set_cursor_position(Some(Vec2::splat(50.0)));
+        app.world_mut().spawn((window, PrimaryWindow));
+        app.world_mut().spawn((
+            Camera {
+                computed: ComputedCameraValues {
+                    clip_from_view: Mat4::IDENTITY,
+                    target_info: Some(RenderTargetInfo {
+                        physical_size: UVec2::splat(100),
+                        scale_factor: 1.0,
+                    }),
+                    ..default()
+                },
+                ..default()
+            },
+            GlobalTransform::IDENTITY,
+            MainCamera,
+        ));
+        let originally_selected = app.world_mut().spawn_empty().id();
+        let clicked_soul = app
+            .world_mut()
+            .spawn((DamnedSoul::default(), GlobalTransform::IDENTITY))
+            .id();
+        app.world_mut().resource_mut::<SelectedEntity>().0 = Some(originally_selected);
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        if pointer_selection_suppressed {
+            app.world_mut()
+                .resource_mut::<ResolvedInputFrame>()
+                .replace(
+                    InputModifiers::default(),
+                    vec![InputAction::FamiliarChop],
+                    None,
+                    true,
+                );
+        }
+        (app, originally_selected, clicked_soul)
+    }
+
+    #[test]
+    fn resolved_action_suppresses_world_selection_ingress() {
+        let (mut suppressed, originally_selected, _) = selection_app(true);
+        suppressed.update();
+
+        assert_eq!(
+            suppressed.world().resource::<SelectedEntity>().0,
+            Some(originally_selected)
+        );
+
+        let (mut accepted, _, clicked_soul) = selection_app(false);
+        accepted.update();
+
+        assert_eq!(
+            accepted.world().resource::<SelectedEntity>().0,
+            Some(clicked_soul)
+        );
     }
 }

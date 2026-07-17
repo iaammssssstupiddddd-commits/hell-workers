@@ -53,7 +53,10 @@ pub(crate) fn handle_ui_intent(
                 false
             }
             UiIntent::OpenOperationDialog | UiIntent::CloseDialog => {
-                handlers::handle_dialog(intent, &mut ui_queries);
+                let can_open_operation = selection_ctx.selected_entity.0.is_some_and(|entity| {
+                    familiar_queries.q_familiars_for_area.get(entity).is_ok()
+                });
+                handlers::handle_dialog(intent, can_open_operation, &mut ui_queries);
                 false
             }
             UiIntent::AdjustFatigueThreshold(_)
@@ -69,7 +72,7 @@ pub(crate) fn handle_ui_intent(
                 false
             }
             UiIntent::TogglePause | UiIntent::SetTimeSpeed(_) => {
-                handlers::handle_time(intent, &mut mode_ctx.time);
+                handlers::handle_time(intent, &mut mode_ctx.time, &mut ui_queries.input_focus);
                 false
             }
             UiIntent::SaveGame
@@ -89,9 +92,10 @@ pub(crate) fn handle_ui_intent(
             | UiIntent::SetFpsDisplayEnabled(_) => handlers::handle_settings(
                 intent,
                 &mut settings_ctx.settings,
-                &mut mode_ctx.menu_state,
+                &mut mode_ctx.cleanup.menu_state,
                 &mut settings_ctx.debug_visible,
                 &mut settings_ctx.config_store,
+                &mut ui_queries.input_focus,
             ),
             UiIntent::ToggleDoorLock(_)
             | UiIntent::SelectArchitectCategory(_)
@@ -99,5 +103,20 @@ pub(crate) fn handle_ui_intent(
         };
 
         handlers::save_if_requested(should_save_settings, &settings_ctx.settings);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::minimal_app;
+    use bevy::ecs::system::{IntoSystem, System};
+
+    #[test]
+    fn handler_system_params_are_conflict_free() {
+        let mut app = minimal_app();
+        let mut system = IntoSystem::into_system(handle_ui_intent);
+
+        system.initialize(app.world_mut());
     }
 }

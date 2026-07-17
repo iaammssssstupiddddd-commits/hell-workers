@@ -85,6 +85,7 @@
 - `Tab`: 次の候補を選択
 - `Shift + Tab`: 前の候補を選択
 - `TaskArea` 編集モード中（`TaskMode::AreaSelection`）は、`Tab/Shift+Tab` の循環対象を **Familiar のみ** に制限
+- active `PlayMode` 中は World action への漏れを防ぐため Tab 巡回を行わない（resolver への完全移行は M3）
 - テキスト入力フォーカス中（検索バー・リネーム等）は `Tab` 巡回を含むゲーム keybind を抑止（`UiInputState::text_input_blocks_keybinds`）
 
 ## 補助表示
@@ -94,8 +95,11 @@
 ## 入力ガード
 - `UiInputBlocker` + `UiInputState` でUI上のワールド入力を抑止
 - スクロール領域上のホイール入力はリスト優先
-- `EditableText` フォーカス中は `text_input_focused` / `text_input_consumed_keyboard` によりゲーム側 `ButtonInput<KeyCode>` ショートカット（WASD パン、B/Z メニュー、Space/1-4 時間制御、Tab 巡回、Ctrl+C/V/Z/Y 等）を抑止
+- `EditableText` フォーカス中は `text_input_focused` / `text_input_consumed_keyboard` によりゲーム側 shortcut（WASD パン、resolver action、Tab 巡回、Ctrl+C/V/Z/Y 等）を抑止
 - Escape でフォーカス解除した同フレームは `text_input_consumed_keyboard` latch によりゲーム Escape 処理へ伝播しない
+- `ResolvedInputFrame.pointer_selection_suppressed()` が true の frame は、world click と同様に Entity List
+  の行選択・長押し drag を開始しない。Familiar command consumer は resolver が frame 開始時に保存した
+  Familiar Entity を使うため、同時 click で command 対象が入れ替わらない。
 
 ## 楽観的更新（体感改善）
 - 使役数上限の `-` / `+` 操作時、`FamiliarOperation.max_controlled_soul` 更新直後に

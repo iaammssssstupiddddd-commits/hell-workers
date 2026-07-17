@@ -1,8 +1,8 @@
 //! 入力関連のプラグイン
 
 use crate::input_actions::{
-    InputPreUpdateSet, InputResolutionSet, ResolvedInputFrame, configure_input_resolution_sets,
-    input_action_to_ui_intent_system, resolve_input_frame_system,
+    InputPreUpdateSet, InputResolutionSet, ResolvedInputFrame, cancel_or_close_input_action_system,
+    configure_input_resolution_sets, input_action_to_ui_intent_system, resolve_input_frame_system,
 };
 use crate::interface::selection::handle_mouse_input;
 use crate::interface::ui::UiInputState;
@@ -35,7 +35,12 @@ impl Plugin for InputPlugin {
         );
         app.add_systems(
             Update,
-            input_action_to_ui_intent_system.in_set(InputResolutionSet::Consume),
+            (
+                cancel_or_close_input_action_system,
+                input_action_to_ui_intent_system,
+            )
+                .chain()
+                .in_set(InputResolutionSet::Consume),
         );
         app.add_systems(
             Update,

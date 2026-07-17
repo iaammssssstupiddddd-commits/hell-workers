@@ -111,6 +111,7 @@ pub fn task_area_selection_system(
             &mut state.task_context,
             state.selected.0,
             &queries.q_familiar_areas,
+            &mut queries.q_familiars,
             &input.q_window,
             &input.q_camera,
             &mut state.area_edit_session,

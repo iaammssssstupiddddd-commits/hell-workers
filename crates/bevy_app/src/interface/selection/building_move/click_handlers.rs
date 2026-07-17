@@ -129,7 +129,7 @@ pub(super) fn handle_initial_click(
     st.next_play_mode.set(hw_core::game_state::PlayMode::Normal);
 }
 
-pub(super) fn clear_move_states(
+pub(crate) fn clear_move_states(
     move_context: &mut crate::app_contexts::MoveContext,
     move_placement_state: &mut crate::app_contexts::MovePlacementState,
     companion_state: &mut crate::app_contexts::CompanionPlacementState,

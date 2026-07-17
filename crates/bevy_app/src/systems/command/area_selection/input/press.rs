@@ -1,5 +1,6 @@
 use crate::app_contexts::TaskContext;
-use crate::entities::familiar::Familiar;
+use crate::entities::damned_soul::Destination;
+use crate::entities::familiar::{ActiveCommand, Familiar};
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
@@ -11,6 +12,7 @@ pub(super) fn try_start_direct_edit_drag(
     task_context: TaskMode,
     selected: Option<Entity>,
     q_familiar_areas: &Query<&TaskArea, With<Familiar>>,
+    q_familiar_state: &mut Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     world_pos: Vec2,
     snapped_pos: Vec2,
     area_edit_session: &mut AreaEditSession,
@@ -28,11 +30,16 @@ pub(super) fn try_start_direct_edit_drag(
     let Some(operation) = detect_area_edit_operation(existing_area, world_pos) else {
         return false;
     };
+    let Ok((active_command, destination)) = q_familiar_state.get_mut(fam_entity) else {
+        return false;
+    };
 
     area_edit_session.active_drag = Some(AreaEditDrag {
         familiar_entity: fam_entity,
         operation,
         original_area: existing_area.clone(),
+        original_destination: destination.0,
+        original_command: active_command.command,
         drag_start: snapped_pos,
     });
 
@@ -43,6 +50,7 @@ pub(super) fn handle_left_just_pressed_input(
     task_context: &mut TaskContext,
     selected_entity: Option<Entity>,
     q_familiar_areas: &Query<&TaskArea, With<Familiar>>,
+    q_familiar_state: &mut Query<(&mut ActiveCommand, &mut Destination), With<Familiar>>,
     q_window: &Query<&Window, With<PrimaryWindow>>,
     q_camera: &Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     area_edit_session: &mut AreaEditSession,
@@ -57,6 +65,7 @@ pub(super) fn handle_left_just_pressed_input(
         task_context.0,
         selected_entity,
         q_familiar_areas,
+        q_familiar_state,
         world_pos,
         snapped_pos,
         area_edit_session,

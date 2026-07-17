@@ -11,6 +11,10 @@ pub struct ZoneRemovalPreviewState {
 }
 
 impl ZoneRemovalPreviewState {
+    pub(crate) fn is_active(&self) -> bool {
+        !self.direct.is_empty() || !self.fragments.is_empty()
+    }
+
     pub(crate) fn clear(&mut self) {
         self.direct.clear();
         self.fragments.clear();

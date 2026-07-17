@@ -1,24 +1,44 @@
 use bevy::prelude::*;
 
 /// Project-owned semantic actions resolved from physical keyboard chords.
-///
-/// M1 intentionally contains only the migrated Save/Load and elevation slice.
-/// Later milestones extend this enum as each legacy consumer is migrated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputAction {
     SaveGame,
     RequestLoadGame,
     CycleElevation,
+    ToggleArchitect,
+    ToggleZones,
+    TogglePause,
+    TimePaused,
+    TimeNormal,
+    TimeFast,
+    TimeSuper,
+    FamiliarChop,
+    FamiliarMine,
+    FamiliarHaul,
+    FamiliarBuild,
+    FamiliarCancelDesignation,
+    ToggleFamiliarIdlePatrol,
+    CancelLoadConfirm,
+    CloseSettings,
+    CloseOperationDialog,
+    CancelActiveMode,
+    CloseOpenMenu,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputActionFamily {
     SaveLoad,
+    TimeControl,
+    MenuToggle,
+    FamiliarCommand,
+    CancelOrClose,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum InputConflictLane {
     OverlayTransition,
+    SelectionOrMode,
     SimulationControl,
     ViewDebug,
 }

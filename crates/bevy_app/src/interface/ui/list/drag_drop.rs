@@ -18,6 +18,7 @@ pub struct DragDropResources<'w> {
     ui_nodes: Res<'w, UiNodeRegistry>,
     game_assets: Res<'w, crate::assets::GameAssets>,
     theme: Res<'w, UiTheme>,
+    resolved_frame: Res<'w, crate::input_actions::ResolvedInputFrame>,
     drag_state: ResMut<'w, DragState>,
     squad_request_writer: MessageWriter<'w, SquadManagementRequest>,
 }
@@ -41,6 +42,7 @@ pub fn entity_list_drag_drop_system(
         ui_nodes,
         game_assets,
         theme,
+        resolved_frame,
         mut drag_state,
         mut squad_request_writer,
     } = resources;
@@ -50,6 +52,9 @@ pub fn entity_list_drag_drop_system(
         q_soul_names,
         q_commanded_by,
     } = queries;
+    if resolved_frame.pointer_selection_suppressed() {
+        return;
+    }
     if buttons.just_pressed(MouseButton::Left)
         && let Some(soul_entity) = hovered_soul_row(&q_soul_rows)
     {

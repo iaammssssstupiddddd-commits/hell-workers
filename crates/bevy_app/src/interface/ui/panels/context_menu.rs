@@ -46,6 +46,7 @@ pub struct ContextMenuInput<'w, 's> {
     q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
     hovered: Res<'w, HoveredEntity>,
     ui_input_state: Res<'w, UiInputState>,
+    resolved_frame: Res<'w, crate::input_actions::ResolvedInputFrame>,
 }
 
 #[derive(SystemParam)]
@@ -76,6 +77,7 @@ pub fn context_menu_system(
         q_window,
         hovered,
         ui_input_state,
+        resolved_frame,
     } = input;
     let ContextMenuClassifyQueries {
         q_familiars,
@@ -85,6 +87,9 @@ pub fn context_menu_system(
         q_resources,
     } = classify_queries;
     let ContextMenuRenderAssets { game_assets, theme } = render_assets;
+    if resolved_frame.pointer_selection_suppressed() {
+        return;
+    }
     if buttons.just_pressed(MouseButton::Left) {
         // UI上クリック時（メニュー項目クリック含む）は、ボタン処理側に委譲する。
         // ワールド上クリック時のみここでメニューを閉じる。

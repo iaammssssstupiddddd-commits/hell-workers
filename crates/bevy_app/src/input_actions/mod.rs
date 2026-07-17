@@ -1,4 +1,5 @@
 mod bindings;
+mod cancel;
 mod context;
 mod model;
 mod resolver;
@@ -12,7 +13,8 @@ use hw_ui::UiIntent;
 
 use crate::systems::GameSystemSet;
 
-pub use context::InputContextSnapshot;
+pub(crate) use cancel::{ActiveModeCleanupParams, cancel_or_close_input_action_system};
+pub use context::{InputContextSnapshot, InputOverlay};
 use model::InputConflictLane;
 pub use model::{InputAction, InputActionFamily, InputChord, InputModifiers};
 pub(crate) use resolver::resolve_input_frame_system;
@@ -62,6 +64,30 @@ fn ui_intent_for_action(action: InputAction) -> Option<UiIntent> {
     match action {
         InputAction::SaveGame => Some(UiIntent::SaveGame),
         InputAction::RequestLoadGame => Some(UiIntent::RequestLoadGame),
-        InputAction::CycleElevation => None,
+        InputAction::ToggleArchitect => Some(UiIntent::ToggleArchitect),
+        InputAction::ToggleZones => Some(UiIntent::ToggleZones),
+        InputAction::TogglePause => Some(UiIntent::TogglePause),
+        InputAction::TimePaused => Some(UiIntent::SetTimeSpeed(
+            hw_core::game_state::TimeSpeed::Paused,
+        )),
+        InputAction::TimeNormal => Some(UiIntent::SetTimeSpeed(
+            hw_core::game_state::TimeSpeed::Normal,
+        )),
+        InputAction::TimeFast => Some(UiIntent::SetTimeSpeed(hw_core::game_state::TimeSpeed::Fast)),
+        InputAction::TimeSuper => Some(UiIntent::SetTimeSpeed(
+            hw_core::game_state::TimeSpeed::Super,
+        )),
+        InputAction::CancelLoadConfirm => Some(UiIntent::CancelLoadConfirm),
+        InputAction::CloseSettings => Some(UiIntent::CloseSettings),
+        InputAction::CloseOperationDialog => Some(UiIntent::CloseDialog),
+        InputAction::CycleElevation
+        | InputAction::FamiliarChop
+        | InputAction::FamiliarMine
+        | InputAction::FamiliarHaul
+        | InputAction::FamiliarBuild
+        | InputAction::FamiliarCancelDesignation
+        | InputAction::ToggleFamiliarIdlePatrol
+        | InputAction::CancelActiveMode
+        | InputAction::CloseOpenMenu => None,
     }
 }

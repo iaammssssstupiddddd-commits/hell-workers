@@ -8,44 +8,45 @@ use crate::systems::command::TaskMode;
 
 pub(crate) fn handle_mode_select(
     intent: UiIntent,
-    mode_ctx: &mut IntentModeCtx<'_>,
+    mode_ctx: &mut IntentModeCtx<'_, '_>,
     sel_ctx: &mut IntentSelectionCtx<'_>,
     familiar_queries: &IntentFamiliarQueries<'_, '_>,
 ) {
+    mode_ctx.cancel_active_mode_if_needed();
     match intent {
         UiIntent::SelectBuild(kind) => {
             mode::set_build_mode(
                 kind,
-                &mut mode_ctx.next_play_mode,
-                &mut mode_ctx.build_context,
-                &mut mode_ctx.zone_context,
-                &mut mode_ctx.task_context,
+                &mut mode_ctx.cleanup.next_play_mode,
+                &mut mode_ctx.cleanup.build_context,
+                &mut mode_ctx.cleanup.zone_context,
+                &mut mode_ctx.cleanup.task_context,
             );
         }
         UiIntent::SelectFloorPlace => {
             mode::set_floor_place_mode(
-                &mut mode_ctx.next_play_mode,
-                &mut mode_ctx.build_context,
-                &mut mode_ctx.zone_context,
-                &mut mode_ctx.task_context,
+                &mut mode_ctx.cleanup.next_play_mode,
+                &mut mode_ctx.cleanup.build_context,
+                &mut mode_ctx.cleanup.zone_context,
+                &mut mode_ctx.cleanup.task_context,
             );
         }
         UiIntent::SelectZone(kind) => {
             mode::set_zone_mode(
                 kind,
-                &mut mode_ctx.next_play_mode,
-                &mut mode_ctx.build_context,
-                &mut mode_ctx.zone_context,
-                &mut mode_ctx.task_context,
+                &mut mode_ctx.cleanup.next_play_mode,
+                &mut mode_ctx.cleanup.build_context,
+                &mut mode_ctx.cleanup.zone_context,
+                &mut mode_ctx.cleanup.task_context,
             );
         }
         UiIntent::RemoveZone(kind) => {
             mode::set_zone_removal_mode(
                 kind,
-                &mut mode_ctx.next_play_mode,
-                &mut mode_ctx.build_context,
-                &mut mode_ctx.zone_context,
-                &mut mode_ctx.task_context,
+                &mut mode_ctx.cleanup.next_play_mode,
+                &mut mode_ctx.cleanup.build_context,
+                &mut mode_ctx.cleanup.zone_context,
+                &mut mode_ctx.cleanup.task_context,
             );
         }
         UiIntent::SelectTaskMode(task_mode) => {
@@ -56,10 +57,10 @@ pub(crate) fn handle_mode_select(
             );
             mode::set_task_mode(
                 task_mode,
-                &mut mode_ctx.next_play_mode,
-                &mut mode_ctx.build_context,
-                &mut mode_ctx.zone_context,
-                &mut mode_ctx.task_context,
+                &mut mode_ctx.cleanup.next_play_mode,
+                &mut mode_ctx.cleanup.build_context,
+                &mut mode_ctx.cleanup.zone_context,
+                &mut mode_ctx.cleanup.task_context,
             );
         }
         UiIntent::SelectAreaTask => {
@@ -69,19 +70,19 @@ pub(crate) fn handle_mode_select(
                 "Area Edit",
             );
             mode::set_area_task_mode(
-                &mut mode_ctx.next_play_mode,
-                &mut mode_ctx.build_context,
-                &mut mode_ctx.zone_context,
-                &mut mode_ctx.task_context,
+                &mut mode_ctx.cleanup.next_play_mode,
+                &mut mode_ctx.cleanup.build_context,
+                &mut mode_ctx.cleanup.zone_context,
+                &mut mode_ctx.cleanup.task_context,
             );
         }
         UiIntent::SelectDreamPlanting => {
             mode::set_task_mode(
                 TaskMode::DreamPlanting(None),
-                &mut mode_ctx.next_play_mode,
-                &mut mode_ctx.build_context,
-                &mut mode_ctx.zone_context,
-                &mut mode_ctx.task_context,
+                &mut mode_ctx.cleanup.next_play_mode,
+                &mut mode_ctx.cleanup.build_context,
+                &mut mode_ctx.cleanup.zone_context,
+                &mut mode_ctx.cleanup.task_context,
             );
         }
         _ => {}

@@ -12,6 +12,7 @@ use hw_ui::components::{
 pub struct EntityListTabFocusCtx<'w, 's> {
     pub keyboard: Res<'w, ButtonInput<KeyCode>>,
     pub ui_input_state: Res<'w, UiInputState>,
+    pub play_mode: Res<'w, State<hw_core::game_state::PlayMode>>,
     pub task_context: Res<'w, TaskContext>,
     pub selected_entity: ResMut<'w, crate::interface::selection::SelectedEntity>,
     pub soul_items: Query<'w, 's, &'static SoulListItem>,
@@ -21,6 +22,9 @@ pub struct EntityListTabFocusCtx<'w, 's> {
 }
 
 pub fn entity_list_tab_focus_system(mut ctx: EntityListTabFocusCtx) {
+    if ctx.play_mode.get() != &hw_core::game_state::PlayMode::Normal {
+        return;
+    }
     if hw_ui::interaction::text_input_blocks_keybinds(&ctx.ui_input_state) {
         return;
     }

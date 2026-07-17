@@ -56,13 +56,19 @@ graph TD
 `crates/bevy_app/src/lib.rs` は共有 Resource・公開 module・event re-exportと `HellWorkersGamePlugin` を提供し、focused unit testはここから対象systemだけを登録する：
 `Input` → `Spatial` → `Logic` → `Actor` → `Visual` → `Interface`
 
-keyboard action は段階的に `crates/bevy_app/src/input_actions/` へ移行している。現在は F5/F9/V を
-`InputPlugin` 所有の `InputPreUpdateSet::Resolve` で exact chord として解決し、frame-local な
-`ResolvedInputFrame` を毎 `PreUpdate` に置換する。`Update::GameSystemSet::Input` 内は
-`InputResolutionSet::PointerIngress → Consume` の順で、mouse selection の後に UiIntent bridge と
-elevation consumer が同じ snapshot を読む。`ResolvedInputFrame` は保存・Reflect・frame 越しの queue の
-対象にしない。B/Z/Space/Digit/Escape、Familiar、AreaEdit、Tab、P/O、残るdebug keyはまだ既存 owner が
-raw input を読むため、全 shortcut の移行完了とは扱わない。
+keyboard action は段階的に `crates/bevy_app/src/input_actions/` へ移行している。M2 時点では
+F5/F9/V、B/Z/Space/Digit1-4、Familiar command、context 別 Escape を `InputPlugin` 所有の
+`InputPreUpdateSet::Resolve` で exact chord として解決し、frame-local な `ResolvedInputFrame` を毎
+`PreUpdate` に置換する。snapshot は最前面 overlay、pause、current / current と異なる pending `PlayMode`、`TaskMode` /
+`MenuState`、frame 開始時の選択 Familiar を含む。non-`None` の `TaskMode` と pending non-Normal mode も
+active owner として扱い、同一 chord、排他的 family、非互換 conflict lane は consumer 前に 1 action へ絞る。
+
+`Update::GameSystemSet::Input` 内は `InputResolutionSet::PointerIngress → Consume` の順である。
+selection-dependent action がある frame は resolver が world / Entity List の選択 ingress を抑止し、
+後段の Familiar consumer は snapshot に保存した同じ Entity を操作する。UI action は既存 `UiIntent`
+handler、active mode / menu の Escape は共通 cleanup adapter、Familiar action は domain consumer が読む。
+`ResolvedInputFrame` は保存・Reflect・frame 越しの queue の対象にしない。AreaEdit、Tab、P/O、F3/F4/
+F6/F7/F8/F12 はまだ既存 owner が raw input を読むため、全 shortcut の移行完了とは扱わない。
 
 ### Global Cycle Framework (Logic Phase)
 
@@ -446,35 +452,39 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 ## キーボードショートカット
 
-### グローバルショートカット（段階移行中）
+### Resolver 移行済みショートカット（M2）
 
-F5/F9/V は `crates/bevy_app/src/input_actions/` の binding table と resolver が唯一の raw keyboard readerである。
-Save/Load action は既存 `UiIntent` handlerへ渡し、elevation actionは既存visual consumerが処理する。
-それ以外は現時点では `ui_keyboard_shortcuts_system` または各domain ownerに残り、後続マイルストーンで移行する。
-`interaction/mod.rs` は UI interaction の re-export shell として公開面を束ねる。
+次のキーは `crates/bevy_app/src/input_actions/` の binding table と resolver が raw keyboard edge の
+唯一の owner である。Save/Load・menu・時間 action は既存 `UiIntent` handler、elevation と Familiar は
+既存 domain consumerへ渡す。旧 `ui_keyboard_shortcuts_system` は削除済み。
+
+overlay は `LoadConfirm > Settings > Pause > OperationDialog` の順で最前面だけが Escape を claim する。
+Pause は Escape/Space、Digit1-4、F5/F9 だけを許可し、その他の M2 action を抑止する。overlay がない
+text input focus/latch 中は action を生成しない。accepted overlay open は同時に `InputFocus` を clear する。
 
 | キー | 機能 | 備考 |
 |:--|:--|:--|
-| `B` | Architectメニュートグル | |
-| `Z` | Zonesメニュートグル | |
-| `Space` | 一時停止/再開トグル | |
-| `1` | 一時停止 | |
-| `2` | 通常速度 (x1) | |
-| `3` | 高速 (x2) | |
-| `4` | 超高速 (x4) | |
-| `Escape` | BuildingPlace/ZonePlace/TaskDesignation キャンセル | PlayMode依存 |
+| `B` | Architectメニュートグル / Familiar Build | Normal で Familiar 選択中は command を優先 |
+| `Z` | Zonesメニュートグル | exact plain chord。ActiveMode 中は無効 |
+| `Space` | 一時停止/再開トグル | overlay transition のため同 frame の非互換 actionを抑止 |
+| `1` | 一時停止 / Familiar Chop | Normal で Familiar 選択中は command、Pause 中は時間を優先 |
+| `2` | 通常速度 (x1) / Familiar Mine | 同上 |
+| `3` | 高速 (x2) / Familiar Haul | 同上 |
+| `4` | 超高速 (x4) / Familiar Build | 同上 |
+| `Escape` | overlay close / resume / active owner cancel / menu close / Familiar Idle・Patrol | 左から context priority 順。Idle・Patrol は `TaskMode::None` の Normal 時だけ |
 | `F5` | Save | text input中とAreaEdit active drag中は生成しない。Soul mask aliasは廃止 |
 | `F9` | Load確認を要求 | save file不在時はwarning/no-op。追加light aliasは廃止 |
 | `V` | 矢視切替 | exact unmodified chordのみ |
 | `F12` | デバッグ表示トグル + Gizmo 切替 | `plugins/input.rs`。`GizmoConfigStore` の enabled も同期 |
 | `F3` | 3D 表示トグル | `plugins/input.rs`。`Render3dVisible` を反転し、Camera3dRtt と RttCompositeSprite を制御（**Dev 専用**） |
 
-### コンテキスト依存ショートカット（個別管理）
+### コンテキスト依存ショートカット
 
 | キー | 機能 | 条件 | 実装場所 |
 |:--|:--|:--|:--|
-| `C/M/H/B`, `Digit1-4` | Familiarコマンド | Familiar選択時 | `systems/command/input.rs` |
+| `C/M/H/B`, `Digit1-4` | Familiarコマンド | 非 pause・Normal・互換 TaskMode・Familiar選択時。resolver 経由 | `systems/command/input.rs` |
+| `Digit0/Delete` | Familiar 指定キャンセル | 同上 | `systems/command/input.rs` |
 | `Ctrl+C/V/Z/Y` | エリア編集操作 | AreaSelection時 | `systems/command/area_selection/shortcuts.rs` |
-| `Tab/Shift+Tab` | Entity Listフォーカス移動 | 常時 | `list/interaction/navigation.rs` |
+| `Tab/Shift+Tab` | Entity Listフォーカス移動 | text input / ActiveMode 以外。M3 で resolver 移行予定 | `list/interaction/navigation.rs` |
 | `P` | DamnedSoul スポーン（カーソル位置） | **Debug 時のみ** | `plugins/interface.rs` |
 | `O` | Familiar スポーン（カーソル位置） | **Debug 時のみ** | `plugins/interface.rs` |

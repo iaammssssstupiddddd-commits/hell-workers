@@ -503,10 +503,11 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   - OpenMenu の Escape を ActiveMode と Familiar の間で解決し、menu だけを閉じる。
   - Normal かつ Familiar 選択時の Escape は現行 Idle/Patrol toggle を維持する。
 - 変更ファイル:
-  - `crates/bevy_app/src/input_actions/{bindings.rs,context.rs,resolver.rs,tests.rs}`
-  - `crates/bevy_app/src/interface/ui/interaction/{systems.rs,mode.rs,intent_context.rs,handlers/{general.rs,save_game.rs,settings.rs,mode_toggle.rs}}`
+  - `crates/bevy_app/src/input_actions/{bindings.rs,cancel.rs,context.rs,mod.rs,model.rs,resolver.rs,tests.rs}`
+  - `crates/bevy_app/src/interface/ui/interaction/{systems.rs,intent_context.rs,intent_handler.rs,handlers/{general.rs,save_game.rs,settings.rs,mode_selection.rs,mode_toggle.rs}}`
   - `crates/bevy_app/src/interface/selection/input.rs`
-  - `crates/bevy_app/src/interface/ui/list/interaction.rs`
+  - `crates/bevy_app/src/interface/ui/list/{interaction.rs,interaction/navigation.rs,drag_drop.rs}`
+  - `crates/bevy_app/src/interface/ui/panels/context_menu.rs`
   - `crates/bevy_app/src/interface/selection/{building_place/,floor_place/,building_move/,soul_spa_place/}`
   - `crates/bevy_app/src/app_contexts.rs`（既存 state の参照のみ。型変更が不要なら編集しない）
   - `crates/bevy_app/src/systems/command/input.rs`
@@ -515,26 +516,26 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   - `crates/hw_ui/src/area_edit/state.rs`（AreaEdit rollback snapshot が必要な場合）
   - `crates/bevy_app/src/plugins/{input.rs,logic.rs}`（ordering/登録変更が必要な場合のみ）
 - 完了条件:
-  - [ ] Familiar 未選択の Digit1-4 は時間速度だけを変更する
-  - [ ] Familiar 選択中の Digit1-4 は Familiar command だけを変更する
-  - [ ] Familiar 選択中の B は Build command だけで、Architect menu を開かない
-  - [ ] Area/Placement 中は C/M/H/B/Digit が Familiar command として TaskMode を上書きしない
-  - [ ] pause 中の Digit2-4 は時間速度だけを変更し、選択 Familiar の command は変わらない
-  - [ ] pause 中の Escape は resume だけを行い、背景の active mode/Familiar state を変更しない
-  - [ ] Space/Escape の `TogglePause` と Digit1-4 が同 frame の場合は TimeControl priority の 1 action だけを処理する
-  - [ ] pause 中に押して離した Familiar/Area shortcut が unpause 後に発火しない
-  - [ ] plain Z は Zones、Ctrl+Z は plain Z として解決されない
-  - [ ] text input focus/latch 中は resolved action が空になる
-  - [ ] TextInput focus 中に LoadConfirm/Settings/OperationDialog/Pause を開くと InputFocus が clear される
-  - [ ] 各 modal 中は Escape が visual stack 最上位 overlay だけを閉じ、M2 移行済みの Space/B/Z/Digit/Familiar action は発火しない
-  - [ ] Familiar C+Z は FamiliarChop だけ、Space+F5 は TogglePause だけを生成する
-  - [ ] Familiar action と同 frame の world/Entity List click は click mutation を抑止し、resolver snapshot と consumer target が一致する
-  - [ ] ActiveMode 中の B/Z/Tab は World action を生成せず、UI button で mode を切り替える場合も stale owner state を残さない
-  - [ ] placement cancel と Familiar command toggle が同じ Escape で併発しない
-  - [ ] Normal + Familiar で C/M/B/Digit と Escape を同時押下しても現行 `else if` 順の Familiar action 1 件だけを処理する
-  - [ ] OpenMenu + Familiar の Escape は menu だけを閉じ、Idle/Patrol を変更しない
-  - [ ] ActiveMode + OpenMenu の Escape は owner cleanup と menu close を 1 action で行う
-  - [ ] 全 PlayMode の Escape で AreaEdit drag、Dream seed、Zone removal preview、pending companion、move state を残さず Normal へ戻る
+  - [x] Familiar 未選択の Digit1-4 は時間速度だけを変更する
+  - [x] Familiar 選択中の Digit1-4 は Familiar command だけを変更する
+  - [x] Familiar 選択中の B は Build command だけで、Architect menu を開かない
+  - [x] Area/Placement 中は C/M/H/B/Digit が Familiar command として TaskMode を上書きしない
+  - [x] pause 中の Digit2-4 は時間速度だけを変更し、選択 Familiar の command は変わらない
+  - [x] pause 中の Escape は resume だけを行い、背景の active mode/Familiar state を変更しない
+  - [x] Space/Escape の `TogglePause` と Digit1-4 が同 frame の場合は TimeControl priority の 1 action だけを処理する
+  - [x] pause 中に押して離した Familiar/Area shortcut が unpause 後に発火しない
+  - [x] plain Z は Zones、Ctrl+Z は plain Z として解決されない
+  - [x] text input focus/latch 中は resolved action が空になる
+  - [x] TextInput focus 中に LoadConfirm/Settings/OperationDialog/Pause を開くと InputFocus が clear される
+  - [x] 各 modal 中は Escape が visual stack 最上位 overlay だけを閉じ、M2 移行済みの Space/B/Z/Digit/Familiar action は発火しない
+  - [x] Familiar C+Z は FamiliarChop だけ、Space+F5 は TogglePause だけを生成する
+  - [x] Familiar action と同 frame の world/Entity List click は click mutation を抑止し、resolver snapshot と consumer target が一致する
+  - [x] ActiveMode 中の B/Z/Tab は World action を生成せず、UI button で mode を切り替える場合も stale owner state を残さない
+  - [x] placement cancel と Familiar command toggle が同じ Escape で併発しない
+  - [x] Normal + Familiar で C/M/B/Digit と Escape を同時押下しても現行 `else if` 順の Familiar action 1 件だけを処理する
+  - [x] OpenMenu + Familiar の Escape は menu だけを閉じ、Idle/Patrol を変更しない
+  - [x] ActiveMode + OpenMenu の Escape は owner cleanup と menu close を 1 action で行う
+  - [x] 全 PlayMode の Escape で AreaEdit drag、Dream seed、Zone removal preview、pending companion、move state を残さず Normal へ戻る
 - 検証:
   - `cargo test -p bevy_app@0.1.0 input_actions`
   - text input focus/latch と selection suppression の新規 schedule test
@@ -822,16 +823,18 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 現在地
 
-- 進捗: `計画 100% / 実装 25%`
-- 完了済みマイルストーン: M1
-- 未着手/進行中: M2〜M4 未着手
+- 進捗: `計画 100% / 実装 50%`
+- 完了済みマイルストーン: M1、M2
+- 未着手/進行中: M3〜M4 未着手
 - 前提: A1 だけを対象とする。A2/A3 や keybinding settings を同時実装しない。
 
 ### 次のAIが最初にやること
 
 1. `git status --short` と並行差分を確認し、本計画外の変更を stage/revert しない。
-2. M1 の `input_actions` model/binding table、frame置換test、Save/Load UiIntent bridgeを回帰させず、M2のresolver matrix testを先に追加する。
-3. M2のB/Z、Space、Digit1-4、Familiar、Escapeをowner単位で移行し、selection suppressionとowner cleanupを同じmilestone内で成立させる。capture系orderingは実処理を導入するM3bで追加する。
+2. M3a の AreaEdit exact chord、Tab、P/O、残存 function key の resolver matrix testを先に追加し、
+   consumer ごとに raw reader と action reader を同じ差分で入れ替える。
+3. M3b では pending/visible overlay capture、gesture rollback、picking/camera ordering を一体で導入し、
+   M2 の selection suppression と active mode cleanup を再利用する。
 
 ### ブロッカー/注意点
 
@@ -891,15 +894,15 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 最終確認ログ
 
-- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（M1完了時）`
-- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（M1完了時）`
+- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（M2完了時）`
+- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（M2完了時）`
 - 最終 `python3 scripts/dev.py docs --check`: `2026-07-17 / pass`
 - 最終 `git diff --check`: `2026-07-17 / pass`
-- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-07-17 / pass（M1完了時）`
-- 最終 `cargo test --workspace --locked`: `2026-07-17 / pass（M1完了時）`
+- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-07-17 / pass（M2完了時）`
+- 最終 `cargo test --workspace --locked`: `2026-07-17 / pass（M2完了時）`
 - 最終 rust-analyzer diagnostics: `2026-07-17 / 変更Rustファイルでerror 0、warning 0`
-- 最終 `python3 scripts/dev.py verify`: `2026-07-17 / pass（M1完了時）`
-- 未解決エラー: なし。M2着手前に並行worktreeの状態を再確認すること。
+- 最終 `python3 scripts/dev.py verify`: `2026-07-17 / pass（M2完了時）`
+- 未解決エラー: なし。M3着手前に並行worktreeの状態を再確認すること。
 
 ### Definition of Done
 
@@ -909,12 +912,12 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 - [ ] cross-family compatibility が default-deny で、非可換 action が consumer 到達前に 1 件へ絞られる
 - [ ] text/modal/mode/Familiar/World/debug の priority test が成功する
 - [ ] overlay open request が同 frame に pending capture と InputFocus clear を成立させる
-- [ ] pause 中の skipped action が unpause 後へ遅延発火しない
+- [x] pause 中の skipped action が unpause 後へ遅延発火しない
 - [ ] Modal/Pause が open frame から world pointer/camera input を panel 外でも遮断し、PanCamera Transform が変化しない
 - [ ] capture 開始時の未確定 gesture が owner state ごとに rollback され、release edge 消失後も残らない
 - [ ] active gesture 中の SaveGame が抑止され、未確定 persisted state を保存しない
 - [ ] world/Entity List selection ingress と drag/resize が action/capture snapshot を破壊しない
-- [ ] 全 active PlayMode の Escape が owner state を残さず完了する
+- [x] 全 active PlayMode の Escape が owner state を残さず完了する
 - [ ] project-owned production keyboard shortcut が resolver 経由になっている
 - [ ] PanCamera/TextInput/mouse/visual_test の非対象経路が回帰していない
 - [ ] 影響ドキュメントが更新済み
@@ -930,3 +933,4 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 | `2026-07-17` | `Codex` | 最終レビューを反映。`UiSystems::Focus` 後の capture 順序、drag rollback、OpenMenu Escape、AreaEdit current-state gate、排他的 action family を受入契約へ追加 |
 | `2026-07-17` | `Codex` | 再レビュー指摘を反映。pending overlay capture、InputFocus clear、Picking 前 PanCamera guard、cross-family conflict、frame-start selection、gesture 中 Save 抑止、全 owner/Entity List rollback を追加し、M1/M2/M3 の実装・受入境界を修正 |
 | `2026-07-17` | `Codex` | M1完了。frame-local resolver、exact chord、binding data priority/compatibility、F5/F9 UiIntent bridge、V consumerを実装し、debug aliasとdirect F9 loadを削除。恒久docsと回帰testを同期 |
+| `2026-07-17` | `Codex` | M2完了。B/Z/Space/Digit、Modal/Pause、Familiar、context別Escapeをresolverへ移行し、frame-start selection抑止、TaskMode/pending遷移を含む共通owner cleanup、overlay open時のInputFocus clearを実装。同一PlayModeへの冗長なpendingはblockerから除外 |

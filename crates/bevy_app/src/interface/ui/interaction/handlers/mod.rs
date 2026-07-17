@@ -1,3 +1,5 @@
+use bevy::input_focus::InputFocus;
+
 pub(super) mod familiar_settings;
 pub(super) mod general;
 pub(super) mod mode_selection;
@@ -12,3 +14,7 @@ pub(super) use mode_selection::handle_mode_select;
 pub(super) use mode_toggle::handle_toggle;
 pub(super) use save_game::handle as handle_save_game;
 pub(super) use settings::{handle as handle_settings, save_if_requested};
+
+pub(super) fn begin_overlay_open(input_focus: &mut InputFocus) {
+    input_focus.clear();
+}
