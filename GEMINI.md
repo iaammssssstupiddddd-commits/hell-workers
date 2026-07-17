@@ -18,7 +18,7 @@ This project uses **Bevy 0.19**. Adhere to the following rules and conventions.
 - **Inquiry vs. Directive**: 
   - **Inquiry**: Requests for analysis, review, or proposals. **DO NOT** modify files. Use only read tools.
   - **Directive**: Explicit instructions to implement, fix, or commit. File modifications are permitted.
-- **Stop & Wait**: Stop and wait for user confirmation after completing a milestone or a significant task. Do not proceed to the next milestone autonomously.
+- **Directive scope**: An explicit implementation directive covers the requested outcome, including its milestones and verification. Pause only for an explicit checkpoint, new authority/material choice, or a genuine blocker.
 
 ## 4. Engineering Standards
 - **Rust-analyzer**: Ensure no compilation errors (red squiggles) or significant warnings before reporting completion.
@@ -26,14 +26,13 @@ This project uses **Bevy 0.19**. Adhere to the following rules and conventions.
 - **Command Execution**: Prefer synchronous execution for short-lived commands (file ops, `cargo check`) to avoid unnecessary polling.
 
 ## 5. Build & Development Environment
-- **CARGO_HOME Prefix (CRITICAL)**: Always use the following prefix for `cargo` commands to ensure consistency and avoid full rebuilds:
-  `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check`
+- **Portable environment**: Do not hard-code personal `HOME` / `CARGO_HOME` paths. Run `python3 scripts/dev.py doctor` once and use `python3 scripts/dev.py check` during development.
 - **Dead Code**: Do not use `#[allow(dead_code)]` for future use. If code is unused, delete it.
-- **Plans**: Use `docs/plans/` for implementation plans. These are gitignored working documents. Name them in `kebab-case`.
+- **Plans**: Copy `docs/plans/plan-template.md` to `<topic>-plan-YYYY-MM-DD.md`; active plans are tracked. Run `python3 scripts/dev.py docs --write` after plan/proposal changes.
 
 ## 6. Implementation Conventions
-- **AssignedTask**: When adding variants to the `AssignedTask` enum, use **struct variants** (not tuple variants). Define structures in `crates/bevy_app/src/systems/soul_ai/execute/task_execution/types.rs`.
-- **Query Aggregation**: Aggregate task queries in the `TaskQueries` struct in `crates/bevy_app/src/systems/soul_ai/execute/task_execution/context.rs`.
+- **AssignedTask**: Define payload structs under `crates/hw_jobs/src/tasks/` and add `Variant(VariantData)` entries to `crates/hw_jobs/src/tasks/mod.rs`.
+- **Query Aggregation**: Aggregate Soul execution queries in `crates/hw_soul_ai/src/soul_ai/execute/task_execution/context/queries.rs` and Familiar assignment queries in `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/context.rs`.
 - **Execution Context**: Access data through `TaskExecutionContext` to keep system arguments minimal.
 
 ## 7. Image Generation Workflow
@@ -46,5 +45,5 @@ This project uses **Bevy 0.19**. Adhere to the following rules and conventions.
 2. **Strategy**: Formulate a plan and share a concise summary.
 3. **Execution**: Iterate through Plan -> Act -> Validate.
    - **Act**: Surgical, idiomatic updates.
-   - **Validate**: Run `cargo check` with the `CARGO_HOME` prefix.
+   - **Validate**: Run `python3 scripts/dev.py check` during implementation and `python3 scripts/dev.py verify` before broad completion.
 4. **Documentation**: Update all affected docs using `hell-workers-update-docs` before finishing.

@@ -1,105 +1,66 @@
-# ビルドキャッシュと容量最適化ガイド
+# Development Tools
 
-## 重要な質問：容量を削減するとビルド速度は遅くなりますか？
+ローカルとCIの品質ゲートは `scripts/dev.py` を正本とする。Python標準ライブラリ
+だけで動作し、workspace rootを自動解決するため、どのディレクトリから呼んでも
+同じCargo workspaceを対象にする。
 
-**答え：適切に最適化すれば、ビルド速度への影響は最小限です！**
-
-## target/ディレクトリの構造と重要性
-
-### 🔴 削除してもビルド速度にほとんど影響しない（安全に削除可能）
-
-1. **`x86_64-pc-windows-msvc/` (約7.37 GB)**
-   - クロスコンパイル用のビルド成果物
-   - 現在の開発環境（Windows）では通常不要
-   - 削除しても次回ビルド時に必要なら再生成される
-   - **推奨：削除可能**
-
-### 🟡 削除すると次回ビルドが遅くなるが、再生成可能
-
-2. **`debug/build/` (約293 MB)**
-   - ビルドスクリプトの成果物
-   - 削除すると次回ビルド時に再生成が必要（数分かかる場合あり）
-   - **推奨：容量に余裕がある場合は保持**
-
-### 🟢 ビルド速度に重要（保持すべき）
-
-3. **`debug/deps/` (約841 MB)**
-   - **依存関係のコンパイル済みコード**
-   - これを削除すると、すべての依存関係を再コンパイルする必要がある
-   - Bevyのような大きな依存関係がある場合、数十分かかることがある
-   - **推奨：絶対に保持**
-
-4. **`debug/incremental/` (現在はほぼ空)**
-   - **インクリメンタルコンパイルキャッシュ**
-   - コードを少し変更した時の再コンパイルを高速化
-   - 最新のキャッシュは保持すべき
-   - 古いキャッシュ（7日以上）は削除可能
-   - **推奨：最新のものは保持**
-
-## 推奨される最適化手順
-
-### Linux / bash 環境での基本コマンド
+## 基本コマンド
 
 ```bash
-./scripts/check.sh
-./scripts/build.sh
-./scripts/build.sh --release
+# 必須/任意ツール、Rust、mold、assetsのread-only診断
+python3 scripts/dev.py doctor
+
+# 日常の高速ゲート
+python3 scripts/dev.py check
+
+# package限定（必要ならtestsも実行）
+python3 scripts/dev.py check --package hw_jobs --tests
+
+# CIと同一の完全ゲート
+python3 scripts/dev.py verify
+
+# 暗黙cleanupを行わないbuild
+python3 scripts/dev.py build
+python3 scripts/dev.py build --release
 ```
 
-- これらの `.sh` は既定で `target/` を使います（必要なら `--target-dir` で上書き可能）。
+互換wrapperとして `scripts/check.sh` / `check.ps1`、`scripts/build.sh` /
+`build.ps1` も残している。wrapperは引数を `dev.py` へ渡すだけで、ログファイル作成、
+Cargo出力の再解釈、`target/`の削除を行わない。
 
-### 方法1: 安全な最適化（推奨）
+## ドキュメント契約
 
-```powershell
-.\scripts\optimize-target.ps1
+```bash
+# plan/proposal indexを明示更新し、link/indexも検査
+python3 scripts/dev.py docs --write
+
+# 非変更検査（CIで実行）
+python3 scripts/dev.py docs --check
 ```
 
-これにより：
-- ✅ `x86_64-pc-windows-msvc/`を削除（約7.37 GB削減）
-- ✅ 古いインクリメンタルキャッシュを削除（数MB～数百MB削減）
-- ✅ `debug/deps/`と最新の`incremental/`は保持（ビルド速度維持）
+AIルールだけを切り分ける場合は `python3 scripts/check_agent_rules.py`、secret・
+生成物・script modeは `python3 scripts/check_repo_hygiene.py`、Markdown linkは
+`python3 scripts/check_docs.py` で個別に確認できる。
+docs更新Skill本文は `.cursor` 版が正本で、adapterへの反映は
+`python3 scripts/sync_agent_skills.py --write` を使う。
 
-**結果：約7.37 GB削減、ビルド速度への影響はほとんどなし**
+## 容量メンテナンス
 
-### 方法2: より積極的な最適化
+通常のcheck/buildはビルドキャッシュを削除しない。容量整理が必要な時だけ、対象と
+影響を確認して `post-build-cleanup.sh` / `.ps1` や各OS向けmaintenance scriptを
+明示実行する。クロスターゲットの成果物を自動削除しないこと。
 
-```powershell
-.\scripts\optimize-target.ps1
-# build/も削除する場合は「y」を入力
+## その他
+
+```bash
+# performance runner自己検査
+python3 scripts/perf.py self-test
+
+# 画像変換
+python3 scripts/convert_to_png.py "source_path" "assets/textures/dest.png"
+
+# 外部asset exportsの反映
+python3 scripts/sync_external_assets.py --source <exports-dir>
 ```
 
-**結果：約7.66 GB削減、次回ビルド時に少し時間がかかる**
-
-## 容量とビルド速度のバランス
-
-| 削除する項目 | 削減容量 | ビルド速度への影響 |
-|------------|---------|------------------|
-| `x86_64-pc-windows-msvc/` | 約7.37 GB | なし（通常開発では不要） |
-| 古い`incremental/`キャッシュ | 数MB～数百MB | なし（最新は保持） |
-| `debug/build/` | 約293 MB | 中（次回ビルドで再生成必要） |
-| `debug/deps/` | 約841 MB | **大（すべての依存関係を再コンパイル）** |
-
-## 定期的なメンテナンス
-
-以下のコマンドで定期的に古いキャッシュをクリーンアップ：
-
-```powershell
-# サイズ確認
-.\scripts\check-size.ps1
-
-# 最適化（対話式）
-.\scripts\optimize-target.ps1
-
-# 詳細分析
-.\scripts\analyze-target.ps1
-```
-
-## 結論
-
-**`x86_64-pc-windows-msvc/`（約7.37 GB）を削除すれば、ビルド速度を維持したまま大幅に容量を削減できます。**
-
-これは通常の開発では使用されないため、削除しても問題ありません。必要になれば次回ビルド時に再生成されます。
-
-
-
-
+GitHub認証は [GITHUB_TOKEN_UPDATE.md](GITHUB_TOKEN_UPDATE.md) を参照する。

@@ -31,6 +31,7 @@
 - [fonts.md](fonts.md): フォントシステムの実装詳細。
 
 ## 世界観・アセット
+- [art-style-criteria.md](art-style-criteria.md): アートスタイルの受入基準と検証観点。
 - [world_lore.md](world_lore.md): 世界観設定書。アセットデザインのための世界観・視覚指針（アートスタイル含む）。
 - [assets_workflow.md](assets_workflow.md): `Syncthing` を前提にした原本共有、`exports/` 運用、`assets/` 反映手順。
 
@@ -40,6 +41,7 @@
 
 ## 開発ガイド
 - [architecture.md](architecture.md): 全体構造、システム依存関係、GameTime、空間グリッド一覧。
+- [crate-boundaries.md](crate-boundaries.md): crate 間の依存方向とコアロジック分離の原則。
 - [cargo_workspace.md](cargo_workspace.md): Cargo workspace の crate 責務、依存方向、分割ルール（hw_core / hw_world / hw_logistics / hw_jobs / hw_familiar_ai / hw_soul_ai / hw_spatial / hw_ui / hw_visual）。
 - [map_generation.md](map_generation.md): `generate_world_layout` を中心にしたマップ生成パイプラインの仕様。seed、WFC、validate、resource 配置、retry/fallback、startup 受け渡しの契約を扱う。
 - [world_layout.md](world_layout.md): マップ仕様、地形タイプ、固定アンカー、資源配置の意味、**座標変換関数**（`world_to_grid` 等）。生成パイプライン自体は `map_generation.md` を参照。

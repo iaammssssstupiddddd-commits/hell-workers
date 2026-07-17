@@ -24,7 +24,7 @@ After any code change, ensure zero compilation errors:
 3. Fix errors immediately before any other work
 4. Minimize warnings (remove unused imports/variables)
 
-**Completion criteria**: `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` shows "Finished" with no errors.
+**Completion criteria**: `python3 scripts/dev.py verify` succeeds.
 **Never report completion with errors remaining.**
 
 ### 1.5. Clippy Warnings (MAINTAIN ZERO)
@@ -47,7 +47,7 @@ Exception only when a false positive or external constraint makes it unavoidable
 
 **Check command:**
 ```bash
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace 2>&1 | grep "^warning:" | grep -v generated
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 ### 2. No Dead Code
@@ -87,7 +87,7 @@ Reasons:
   1. すでに正しく動いている他のプロジェクト内ソースコードの書き方を参考にする
   2. Web検索ツール等で `https://docs.rs/bevy/0.19.0/bevy/` や関連ドキュメントを確認する
   3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
-- 実装後は `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
+- 実装後は `python3 scripts/dev.py check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
 
 ### 6. WGSL シェーダー検証ルール
 
@@ -120,12 +120,12 @@ Reasons:
 
 ### AssignedTask Structure
 When adding new tasks to `AssignedTask` enum:
-- Use **struct variants** (not tuple variants)
-- Define data structures in `crates/bevy_app/src/systems/soul_ai/execute/task_execution/types.rs`
+- Define a payload struct in the matching feature file under `crates/hw_jobs/src/tasks/`.
+- Add the corresponding `Variant(VariantData)` entry in `crates/hw_jobs/src/tasks/mod.rs`.
 
 ### Query Aggregation
-- Aggregate task queries in `TaskQueries` struct at `crates/bevy_app/src/systems/soul_ai/execute/task_execution/context.rs`
-- Do not define individual queries separately
+- Aggregate Soul execution queries in `crates/hw_soul_ai/src/soul_ai/execute/task_execution/context/queries.rs`.
+- Aggregate Familiar assignment queries in `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/context.rs`.
 
 ### Execution Context
 - Access data (task state, path, inventory) through `TaskExecutionContext`
@@ -136,11 +136,11 @@ When adding new tasks to `AssignedTask` enum:
 ## Workflows
 
 ### Error Fixing Workflow
-1. Run `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check`
+1. Run `python3 scripts/dev.py check`
 2. Identify the first error
 3. Read the relevant code
 4. Fix the error
-5. Re-run `CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check`
+5. Re-run `python3 scripts/dev.py check`
 
 ### Image Generation Workflow
 1. **Generate**: Use `generate_image` with "solid pure magenta background (#FF00FF)"
@@ -161,15 +161,9 @@ Create an implementation plan in `docs/plans/` when:
 - The user explicitly requests a plan
 
 #### Plan File Management
-- **Location**: `docs/plans/` (gitignored - working documents only)
-- **Naming**: Use descriptive kebab-case names (e.g., `blueprint-spatial-grid.md`, `taskarea-optimization.md`)
-- **Format**: Markdown with clear sections:
-  - Problem description
-  - Solution approach
-  - Expected performance impact
-  - Implementation steps
-  - Files to modify
-  - Verification methods
+- **Location**: `docs/plans/` (current plans are tracked; only archive/rejected areas are ignored by policy)
+- **Naming**: Copy `docs/plans/plan-template.md` to `<topic>-plan-YYYY-MM-DD.md`.
+- **Format**: Fill in metadata, purpose, milestones, verification, and AI handoff sections from the template.
 
 #### Plan Lifecycle
 1. **Creation**: Write detailed plan before implementation
@@ -179,11 +173,9 @@ Create an implementation plan in `docs/plans/` when:
    - If relevant for future: Document in `docs/architecture.md` or system-specific docs
    - Plans are temporary working documents, not permanent documentation
 
-#### Why Plans are Gitignored
-- Plans are AI working documents for organizing complex tasks
-- Completed features should be documented in permanent docs (`docs/*.md`)
-- Prevents clutter in version control
-- User can manually commit specific plans if needed
+#### Index Maintenance
+- After adding, moving, or deleting a plan/proposal, run `python3 scripts/dev.py docs --write` and review both generated indexes.
+- CI verifies index freshness with `python3 scripts/dev.py docs --check`.
 
 ### Task Lifecycle
 **On task start**: Review `docs/` to understand current specs and implementation status
@@ -193,22 +185,15 @@ Create an implementation plan in `docs/plans/` when:
 
 ## Build Environment
 
-### CARGO_HOME の統一（重要）
-Claude Code はルートユーザーとして実行されるため、`CARGO_HOME=/root/.cargo` になる。
-これはユーザー `satotakumi` の `CARGO_HOME=/home/satotakumi/.cargo` と異なり、
-クレートのソースパスが変わって毎回フルリビルドが発生する。
-
-**全ての `cargo` コマンドは必ず以下のプレフィックスを付けること:**
-```bash
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
-CARGO_HOME=/home/satotakumi/.cargo cargo build
-```
+- 個人の `HOME` / `CARGO_HOME` / 絶対pathをルールや設定へ固定しない。
+- cargoはworkspace rootから実行し、`target-dir`は`.cargo/config.toml`へ一元化する。
+- 環境診断は `python3 scripts/dev.py doctor` を使う。
 
 ## Useful Commands
 
 ```bash
-# Check compilation (CARGO_HOME prefix required when running as root)
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
+# Fast repository gate
+python3 scripts/dev.py check
 
 # Convert image to transparent PNG
 python scripts/convert_to_png.py "source_path" "assets/textures/dest.png"
@@ -229,11 +214,10 @@ These directories contain build artifacts or logs that may cause issues:
 - `.trunk/` - Trunk cache
 - `logs/` - Log files
 - `.git/` - Git internal files
-- `docs/plans/` - Temporary AI working documents (gitignored)
 
 ### Documentation Directories
 - `docs/` - Permanent project documentation (version controlled)
-- `docs/plans/` - Temporary implementation plans (gitignored, AI working files)
+- `docs/plans/` - Tracked templates and active implementation plans; archive/rejected areas follow `.gitignore`
 
 ---
 

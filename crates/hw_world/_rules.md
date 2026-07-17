@@ -67,9 +67,9 @@ hw_visual      ✗
 ## 検証方法
 
 ```bash
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
+python3 scripts/dev.py check
 # パス探索テストが存在する場合
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo test
+cargo test -p hw_world --locked
 ```
 
 ## 参照ドキュメント

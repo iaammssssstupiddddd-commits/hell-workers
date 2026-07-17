@@ -1,165 +1,70 @@
-# soul_ai — Soul（魂）AI 意思決定システム
+# soul_ai — Soul（魂）AI の app shell
 
 ## 役割
 
-`DamnedSoul` エンティティの自律的な意思決定・行動を実装する。
-基本的な AI ロジックは `hw_soul_ai::soul_ai` に定義されており、このディレクトリは**ゲーム固有の拡張**（タスク実行・ドリフト・集会スポーン等）を担う。
+`DamnedSoul` の知覚・状態更新・意思決定・タスク実行の実装本体は
+`hw_soul_ai::soul_ai` が所有する。このディレクトリには、Bevy app の plugin 配線、
+root 固有 resource との adapter、および既存 import path を保つ薄い facade だけを置く。
 
-## ディレクトリ構成
+## 現在の構成
 
-このディレクトリに実際に存在するのは `execute/` のみ。
-`perceive/`・`update/`・`decide/`・`helpers/`・`visual/` の実装本体は `hw_soul_ai` クレートにある。
-
-| ディレクトリ | フェーズ | 実体 |
-|---|---|---|
-| `perceive/` | Perceive | **`hw_soul_ai` 内**（ローカルディレクトリなし） |
-| `update/` | Update | **`hw_soul_ai` 内**（ローカルディレクトリなし） |
-| `decide/` | Decide | **`hw_soul_ai` 内**（ローカルディレクトリなし） |
-| `execute/` | Execute | このディレクトリに存在（task_execution/, gathering_spawn.rs, adapters.rs 等） |
-| `helpers/` | 共通 | **`hw_soul_ai` 内**（ローカルディレクトリなし） |
-| `visual/` | Visual | **`hw_soul_ai` / `hw_visual` 内**（ローカルディレクトリなし） |
-
-## decide/ ディレクトリ
-
-| ファイル/ディレクトリ | 内容 |
+| パス | 所有する責務 |
 |---|---|
-| `idle_behavior/` | `hw_soul_ai` 実装を公開する薄い re-export（`mod.rs` のみ） |
-| `work/` | `hw_soul_ai` 実装を公開する薄い re-export（`auto_build.rs`, `auto_refine.rs`） |
-| `drifting.rs` | 漂流（自然脱走）行動決定 |
-| `escaping.rs` | 脱走行動決定 |
-| `gathering_mgmt.rs` | 集会行動管理 |
+| `mod.rs` | `SoulAiPlugin`、system set の順序、`hw_soul_ai::SoulAiCorePlugin` の登録 |
+| `adapters.rs` | drifting event を root 固有の `PopulationManager` に反映する observer |
+| `execute/gathering_spawn.rs` | `GameAssets` に依存する集会 visual spawn adapter |
+| `execute/task_execution/mod.rs` | task execution API の thin facade |
+| `_rules.md` | この境界の実装ルール |
 
-## execute/ ディレクトリ
+`perceive/`、`update/`、`decide/`、task handler の実装を root 側へ追加しない。
+共有ロジックと system 登録は `hw_soul_ai` に置き、描画専用ロジックは `hw_visual`
+に置く。
 
-| ファイル/ディレクトリ | 内容 |
-|---|---|
-| `task_execution/` | タスク実行コア（下表参照） |
-| `drifting` (inline) | 漂流実行の re-export shell。実装は `hw_soul_ai::soul_ai::execute::drifting`、公開位置は `execute/mod.rs` |
-| `gathering_apply.rs` | 集会場所への移動実行 |
-| `gathering_spawn.rs` | `GatheringSpawnRequest` を消費する visual adapter |
-| `cleanup.rs` | タスク完了後のクリーンアップ |
-| `escaping_apply` (inline) | `hw_soul_ai` から re-export（`execute/mod.rs` 内 inline module） |
-| `idle_behavior_apply` (inline) | `hw_soul_ai` から re-export（`execute/mod.rs` 内 inline module） |
+## task_execution facade
 
-## execute/task_execution/ ディレクトリ
+`execute/task_execution/mod.rs` は独自の実行ロジックを持たず、次の API を再公開する。
 
-タスク実行のコアサブシステム。**実装本体と context/query は `hw_soul_ai::soul_ai::execute::task_execution` に移設済み**。
-このディレクトリに残る root 側要素は 3 種類だけ:
+- `hw_soul_ai::soul_ai::execute::task_execution` の context、handler、types、helper
+- `hw_familiar_ai` の `FamiliarTaskAssignmentQueries`
+- `task_execution_system` と `apply_task_assignment_requests_system`
 
-- thin shell re-export
-- root 互換 API を維持する facade/helper
-- root adapter / visual apply
-
-| ファイル/ディレクトリ | 内容 |
-|---|---|
-| `mod.rs` | `task_execution_system` / `apply_task_assignment_requests_system` などの thin re-export |
-| `types.rs` | `hw_soul_ai` への thin shell re-export |
-| `common.rs` | `hw_soul_ai` への thin shell re-export |
-| `move_plant.rs` | `hw_soul_ai` への thin shell re-export（`PendingBuildingMove`, `MovePlantReservation`, `apply_pending_building_move_system`） |
-| `context/mod.rs` | `TaskExecutionContext`, `TaskQueries`, `TaskAssignmentQueries` などをまとめる root facade |
-| `context/execution.rs` | `TaskExecutionContext` の thin shell re-export |
-| `handler/` | `hw_soul_ai` への thin shell re-export（`TaskHandler`, `run_task_handler`, `execute_haul_with_wheelbarrow`） |
-| `transport_common/` | root 側互換 helper と `hw_jobs::lifecycle` re-export（`helpers/work.rs` などの root 実装が参照） |
-
-## 用語整理
-
-| 用語 | 定義 | 例 |
-|---|---|---|
-| thin shell | root 互換 import path のために `pub use` だけを残すモジュール。独自ロジックを持たない | `execute/task_execution/types.rs`, `common.rs`, `handler/`, `move_plant.rs`, `context/execution.rs` |
-| root facade/helper | 互換 API や helper を root 側 path で再公開する層 | `helpers/work.rs`, `execute/task_execution/context/mod.rs`, `execute/task_execution/transport_common/*` |
-| root adapter | request 消費時の再検証や root 固有 resource を伴うゲーム側 system | `execute/gathering_spawn.rs`, `decide/drifting.rs` |
+`AssignedTask` の正本は `crates/hw_jobs/src/tasks/mod.rs` にある。各 variant は
+`Variant(VariantData)` の payload 付き tuple variant とし、payload 型は
+`crates/hw_jobs/src/tasks/` の機能別ファイルに置く。
 
 ## 新しいタスクを追加する場合
 
-1. `crates/hw_soul_ai/src/soul_ai/execute/task_execution/types.rs` に struct variant を追加
-2. `crates/hw_soul_ai/src/soul_ai/execute/task_execution/context/queries.rs` の `TaskQueries` にクエリを追加
-3. `crates/hw_soul_ai/src/soul_ai/execute/task_execution/handler/` に対応するハンドラを実装
-4. `crates/hw_soul_ai/src/soul_ai/execute/task_execution/mod.rs` でモジュール宣言を追加
+1. `crates/hw_jobs/src/tasks/<feature>.rs` に payload と phase を定義し、
+   `crates/hw_jobs/src/tasks/mod.rs` の `AssignedTask` に `Variant(VariantData)` を追加する。
+2. 必要な ECS query を
+   `crates/hw_soul_ai/src/soul_ai/execute/task_execution/context/queries.rs` の
+   `TaskQueries` に集約する。
+3. `crates/hw_soul_ai/src/soul_ai/execute/task_execution/` に handler を実装し、
+   dispatcher と module 宣言へ接続する。
+4. task lifecycle、失敗時の disposition、save/load への影響を `docs/tasks.md` と
+   関連する恒久ドキュメントへ反映する。
 
----
+## root に実装を残せる条件
 
-## root-only 契約
+次のいずれかを満たす場合だけ root 側に実装を置く。
 
-`src/systems/soul_ai` にファイルを残してよい条件は、以下のいずれかを満たすものだけ。
-**条件を満たさない新規ロジックは `hw_soul_ai::soul_ai` に置くこと。**
+- `PopulationManager` や `GameAssets` など、app shell 固有の型へアクセスする adapter
+- plugin wiring や system set の境界
+- 既存 import path を維持する re-export のみの thin facade
 
-| 残留条件 | 代表例 |
-|---|---|
-| root 側の request 再検証と relationship / event 確定が必要 | `execute/gathering_spawn.rs` |
-| UI / camera / gizmo 依存 | `visual/gathering.rs`, `visual/vitals.rs` |
-| `PopulationManager` など root 固有リソースを直接読む | `decide/drifting.rs` |
-| 互換 import path の thin shell が必要 | `execute/task_execution/mod.rs`, `decide/idle_behavior/mod.rs`, `helpers/work.rs` |
-| root facade/helper として公開契約や互換 API を持つ | `execute/task_execution/context/mod.rs`, `execute/task_execution/transport_common/*` |
-| Plugin wiring（system 登録・`MessagesPlugin` 連携）| `mod.rs` |
+共有 model、task lifecycle、純粋な AI 判断、navigation、spatial resource だけで閉じる
+処理は、それぞれ `hw_core`、`hw_jobs`、`hw_soul_ai`、`hw_spatial` に置く。
 
-**逆に以下のものは `hw_soul_ai` または `hw_spatial`・`hw_core` へ移設する**:
-- shared model・shared events・`hw_world::WorldMap`・`hw_spatial` の resource だけで閉じるロジック
-- 純粋な Decide メッセージ生成（`GameAssets` / `WorldMapRead` wrapper 非依存のもの）
-- 空間グリッド定義（対応 Component が `hw_core` / `hw_jobs` にある場合）
+## system 登録
 
-> **thin shell の残し方**:  
-> `hw_soul_ai` 側に正式な実装がある場合でも、互換 import path のために root に **thin shell file** を残してよい。  
-> ただし root に残すのは re-export / wrapper のみとし、旧実装 file を未参照のまま残してはいけない。  
-> file と inline module が両方あると、Rust は file を **無視** するため stale file になる。
+`SoulAiPlugin` は `hw_soul_ai::SoulAiCorePlugin` を登録し、
+`FamiliarAiSystemSet::Execute` の後に Soul AI の
+`Perceive -> Update -> Decide -> Execute` を順序付ける。root 側で同じ core system を
+重複登録してはいけない。
 
----
+変更後は少なくとも次を実行する。
 
-## hw_soul_ai との境界
-
-Soul AI は `hw_soul_ai::soul_ai` と `src/systems/soul_ai` に分割されている。
-
-### hw_soul_ai に置かれているもの（純粋ロジック）
-
-| モジュール | 内容 |
-|---|---|
-| `update/` | バイタル更新・状態整合・夢更新・集会タイマー |
-| `decide/idle_behavior/mod.rs` | `idle_behavior_decision_system` 本体 |
-| `decide/work/auto_refine.rs` | MudMixer の自動精製指定発行 |
-| `decide/work/auto_build.rs` | 資材完了 Blueprint への自動割り当て |
-| `decide/separation.rs` | 分離行動（純粋空間計算） |
-| `execute/escaping_apply.rs` | 脱走移動実行 |
-| `execute/idle_behavior_apply.rs` | アイドル行動実行 |
-| `execute/designation_apply.rs` | 指定適用 |
-| `execute/gathering_apply.rs` | 集会移動実行 |
-| `execute/gathering_spawn.rs` | 集会発生判定と `GatheringSpawnRequest` 発行 |
-| `execute::drifting` | 漂流行動実行（`drifting_behavior_system`, `despawn_at_edge_system`）。公開は root の inline re-export、system 登録は `SoulAiCorePlugin` |
-| `helpers/gathering.rs` | `hw_core::gathering` の互換 re-export |
-| `helpers/drifting.rs` | 漂流の端選択・wander target・移動 target 計算 |
-| `helpers/navigation.rs` | 純粋距離・グリッド判定（`is_near_target`, `is_adjacent_grid`, `can_pickup_item`, `is_near_blueprint`, `update_destination_if_needed` 等） |
-| `helpers/work.rs` の `is_soul_available_for_work` | 純粋可否判定 |
-
-### src/ に置かれているもの（root wrapper / facade / adapter）
-
-| モジュール | 理由 |
-|---|---|
-| `execute/task_execution/mod.rs` | `hw_soul_ai::soul_ai::execute::{task_execution_system, task_assignment_apply}` への thin re-export |
-| `execute/task_execution/{common,handler,move_plant,types}` | `hw_soul_ai::soul_ai::execute::task_execution` への thin shell re-export |
-| `execute/task_execution/context/mod.rs` | context 系型を束ねる root facade |
-| `execute/task_execution/context/execution.rs` | `TaskExecutionContext` の thin shell re-export |
-| `execute/task_execution/transport_common/*` | root 側互換 helper と `hw_jobs::lifecycle` re-export |
-| `decide/drifting.rs` | `PopulationManager` など root 固有リソースを直接読む |
-| `execute::drifting` | `hw_soul_ai::soul_ai::execute::drifting` への inline re-export shell。実体ファイルは `src/systems/soul_ai/execute/mod.rs` |
-| `execute/gathering_spawn.rs` | `GatheringSpawnRequest` の stale 再検証、`ParticipatingIn` / `OnGatheringParticipated` の確定を行う（visual spawn 本体は `hw_visual::soul::gathering_spawn`） |
-| `helpers/work.rs` | `hw_soul_ai::soul_ai::helpers::work` への thin re-export |
-
-### 典型的な拡張パターン
-
-```rust
-// src/systems/soul_ai/execute/mod.rs
-// hw_soul_ai の純粋な Apply をそのまま公開
-pub mod escaping_apply {
-    pub use hw_soul_ai::soul_ai::execute::escaping_apply::*;
-}
-// root 側は互換 shell のみ保持
-pub mod task_execution;
+```bash
+python3 scripts/dev.py check
+python3 scripts/dev.py verify
 ```
-
-```rust
-// src/systems/soul_ai/helpers/work.rs
-// helpers/work.rs は crate 実装への thin re-export
-pub use hw_soul_ai::soul_ai::helpers::work::{
-    cleanup_task_assignment, is_soul_available_for_work, unassign_task,
-};
-```
-
-`decide/work/*.rs` と `decide/idle_behavior/mod.rs` は互換パス維持用の thin re-export で、実装本体と system 登録は `hw_soul_ai::*` と `hw_soul_ai::SoulAiCorePlugin` が担当する。`execute/task_execution::apply_task_assignment_requests_system` と `task_execution_system` も同様に root 側は re-export のみを持ち、system 登録は `hw_soul_ai::SoulAiCorePlugin` に一本化する。`helpers/work.rs` も thin shell で、`transport_common/*` は root 互換 helper 群として扱う。

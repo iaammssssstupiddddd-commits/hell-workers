@@ -13,11 +13,14 @@ docs/plans/README.md と docs/proposals/README.md のインデックス表を自
 - 削除済みファイルのエントリは除去する。
 
 使い方:
-  python scripts/update_docs_index.py
+  python3 scripts/update_docs_index.py --check
+  python3 scripts/update_docs_index.py --write
 """
 
+import argparse
 import re
 import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -291,13 +294,11 @@ def replace_section(
 
 
 # ---------------------------------------------------------------------------
-# docs/plans/README.md の更新
+# docs/plans/README.md の生成
 # ---------------------------------------------------------------------------
 
-def update_plans_readme() -> None:
-    readme = PLANS_DIR / "README.md"
-    content = readme.read_text(encoding="utf-8")
-
+def render_plans_readme(content: str) -> tuple[str, int, int]:
+    """Return the expected plans README and entry counts without writing."""
     # 現行計画書（サブディレクトリを含み、archive/archivedを除く）
     current_files = collect_current_files(PLANS_DIR)
     existing_current = parse_existing_plan_meta(content, "## 現行計画書")
@@ -309,39 +310,39 @@ def update_plans_readme() -> None:
     archive_rows = build_rows_3col(archive_files, PLANS_DIR, "Archived", existing_archive)
 
     # テーブル置換
-    content = replace_section(
+    rendered = replace_section(
         content,
         "## 現行計画書",
         "| Document | Status | Notes |",
         "|---|---|---|",
         current_rows,
     )
-    content = replace_section(
-        content,
+    rendered = replace_section(
+        rendered,
         "## アーカイブ計画書一覧",
         "| Document | Status | Notes |",
         "|---|---|---|",
         archive_rows,
     )
 
-    # 更新日を今日の日付に更新
-    today = date.today().strftime("%Y-%m-%d")
-    content = re.sub(r"（更新日: \d{4}-\d{2}-\d{2}）", f"（更新日: {today}）", content)
+    # テーブルが変わった時だけ日付を更新し、日付だけのchurnを防ぐ。
+    if rendered != content:
+        today = date.today().strftime("%Y-%m-%d")
+        rendered = re.sub(
+            r"（更新日: \d{4}-\d{2}-\d{2}）",
+            f"（更新日: {today}）",
+            rendered,
+        )
 
-    readme.write_text(content, encoding="utf-8")
-    print(f"Updated {readme.relative_to(REPO_ROOT)}")
-    print(f"  現行計画書: {len(current_files)} 件")
-    print(f"  アーカイブ: {len(archive_files)} 件")
+    return rendered, len(current_files), len(archive_files)
 
 
 # ---------------------------------------------------------------------------
-# docs/proposals/README.md の更新
+# docs/proposals/README.md の生成
 # ---------------------------------------------------------------------------
 
-def update_proposals_readme() -> None:
-    readme = PROPOSALS_DIR / "README.md"
-    content = readme.read_text(encoding="utf-8")
-
+def render_proposals_readme(content: str) -> tuple[str, int, int]:
+    """Return the expected proposals README and entry counts without writing."""
     # 現在の提案書（サブディレクトリを含み、archive/archivedを除く）
     current_files = collect_current_files(PROPOSALS_DIR)
     existing_current = parse_existing_plan_meta(content, "## 現在の提案書")
@@ -385,19 +386,70 @@ def update_proposals_readme() -> None:
         )
         content = content.rstrip() + "\n" + archive_section
 
-    readme.write_text(content, encoding="utf-8")
-    print(f"Updated {readme.relative_to(REPO_ROOT)}")
-    print(f"  現在の提案書: {len(current_files)} 件")
-    print(f"  アーカイブ:   {len(archive_files)} 件")
+    return content, len(current_files), len(archive_files)
 
 
 # ---------------------------------------------------------------------------
-# エントリポイント
+# check/write 適用とエントリポイント
 # ---------------------------------------------------------------------------
+
+def apply_index(
+    path: Path,
+    rendered: str,
+    *,
+    write: bool,
+    current_count: int,
+    archive_count: int,
+) -> bool:
+    """Apply or check one generated index. Return True when it was stale."""
+    current = path.read_text(encoding="utf-8")
+    try:
+        relative = path.relative_to(REPO_ROOT)
+    except ValueError:
+        relative = path
+    if current == rendered:
+        print(f"OK {relative} ({current_count} current, {archive_count} archived)")
+        return False
+    if write:
+        path.write_text(rendered, encoding="utf-8")
+        print(f"Updated {relative} ({current_count} current, {archive_count} archived)")
+    else:
+        print(f"Stale {relative}; run with --write", file=sys.stderr)
+    return True
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--check", action="store_true", help="validate without writing")
+    mode.add_argument("--write", action="store_true", help="update generated indexes")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    plans_path = PLANS_DIR / "README.md"
+    proposals_path = PROPOSALS_DIR / "README.md"
+
+    plans = render_plans_readme(plans_path.read_text(encoding="utf-8"))
+    proposals = render_proposals_readme(proposals_path.read_text(encoding="utf-8"))
+
+    stale = apply_index(
+        plans_path,
+        plans[0],
+        write=args.write,
+        current_count=plans[1],
+        archive_count=plans[2],
+    )
+    stale |= apply_index(
+        proposals_path,
+        proposals[0],
+        write=args.write,
+        current_count=proposals[1],
+        archive_count=proposals[2],
+    )
+    return 1 if stale and args.check else 0
+
 
 if __name__ == "__main__":
-    update_plans_readme()
-    print()
-    update_proposals_readme()
-    print()
-    print("Done. 差分を確認: git diff docs/plans/README.md docs/proposals/README.md")
+    raise SystemExit(main())

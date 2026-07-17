@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Run, validate, summarize, and compare Hell Workers performance captures.
 
 The game writes one CSV pair per run. This script owns the experiment-level

@@ -51,7 +51,7 @@ hw_visual    ✗
 ## 重要な設計メモ
 
 - **`unassign_task` は `hw_soul_ai` 側の契約**：このクレートに「タスク中断関数」を追加しない
-- `AssignedTask::None` への変化は `OnTaskCompleted` を発火させる（Change Detection）
+- **I-S3**: `AssignedTask::None` への変更だけでは `OnTaskCompleted` は発火しない。正常完了は `TaskExecutionContext::complete_task` または `complete_after_custom_cleanup` で確定した場合のみ発火する。`abort_retryable` / `abort_closed` / `abort_retryable_after_custom_cleanup` では発火しない（詳細: [docs/invariants.md §I-S3](../../docs/invariants.md)）。
 - `Designation` を削除するとタスクが消滅する（詳細: [docs/invariants.md §I-T4](../../docs/invariants.md)）
 - `WorkingOn` Relationship は Source 側操作で Target 側（`TaskWorkers`）が自動更新される（手動書き込み禁止）
 
@@ -65,7 +65,7 @@ hw_visual    ✗
 
 ```bash
 # コンパイル確認（必須）
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
+python3 scripts/dev.py check
 ```
 
 ## 参照ドキュメント

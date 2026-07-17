@@ -17,7 +17,7 @@
 
 ## フォントハンドル
 
-[assets.rs](crates/bevy_app/src/assets.rs) の `GameAssets` で管理:
+[assets.rs](../crates/bevy_app/src/assets.rs) の `GameAssets` で管理:
 
 ```rust
 pub font_ui: Handle<Font>,         // UI全般
@@ -30,7 +30,7 @@ pub font_soul_emoji: Handle<Font>, // Soulセリフ（絵文字）
 
 ## フォントサイズ定数
 
-[crates/bevy_app/src/constants/](crates/bevy_app/src/constants/) で定義（フォントサイズは `animation.rs` 等）:
+[animation.rs](../crates/hw_core/src/constants/animation.rs) など、各責務を所有する crate で定義:
 
 ```rust
 pub const FONT_SIZE_TITLE: f32 = 24.0;

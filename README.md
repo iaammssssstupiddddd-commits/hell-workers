@@ -30,7 +30,7 @@
 
 - **Engine**: Bevy 0.19
 - **Language**: Rust (Edition 2024)
-- **UI System**: Bevy UI + `bevy-inspector-egui` (debug)
+- **UI System**: Bevy UI + project-owned debug gizmos/dev panel
 - **Features**:
     - **ECS Relationships**: エンティティ間の複雑な関係（指揮、タスク、所持、格納）を効率的に管理。
     - **Optimized Task System**: 空間グリッドを活用した高速なタスク検索と割り当て。
@@ -57,11 +57,13 @@
 
 ### ビルドと実行
 ```bash
+python3 scripts/dev.py doctor
+python3 scripts/dev.py check
 cargo run
 ```
 
 ### デバッグ
-- `F12`: ワールドインスペクターのトグル
+- `F12`: デバッグ表示 / Gizmo のトグル
 - `Space`: ポーズ / 再開（Virtual Time）
 
 ### 開発ルール（抜粋）

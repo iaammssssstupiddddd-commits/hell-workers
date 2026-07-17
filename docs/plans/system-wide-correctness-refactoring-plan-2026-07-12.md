@@ -26,7 +26,7 @@
 | 正しさ | [archive/runtime-correctness-contracts-plan-2026-07-12.md](archive/runtime-correctness-contracts-plan-2026-07-12.md) | 最小test harness、通知transport、タスク終了/Relationship、RemovedComponents、障害物同期 | Completed |
 | 永続化 | [archive/save-load-hardening-plan-2026-07-12.md](archive/save-load-hardening-plan-2026-07-12.md) | 外部save header、schema、preflight/rollback、frame境界、load reset、legacy shim | Completed |
 | 構造・品質 | [archive/structural-maintainability-followups-plan-2026-07-12.md](archive/structural-maintainability-followups-plan-2026-07-12.md) | production App composition、SpatialIndex共通化、Clippy allow、toolchain/local quality gate、format baseline | Completed（GitHub CI 実行確認は対象外） |
-| 性能 | [system-wide-runtime-performance-plan-2026-07-12.md](system-wide-runtime-performance-plan-2026-07-12.md) | 計測基盤、変更検知、A*予算、低頻度化、描画hot path | 本依頼の対象外。M0はruntime M0後。M1〜M7は同計画§3.4のruntime/save-load前提完了後 |
+| 性能 | [system-wide-runtime-performance-plan-2026-07-12.md](archive/system-wide-runtime-performance-plan-2026-07-12.md) | 計測基盤、変更検知、A*予算、低頻度化、描画hot path | archive済みの履歴。再開時は新しい現行計画を作成する |
 
 ## 3. 分割理由
 
@@ -119,7 +119,7 @@ performance M0〜M7 + performance M8の実施/skip決定
 
 ### 次のAIが最初にやること
 
-1. 性能作業を再開する場合は [system-wide-runtime-performance-plan-2026-07-12.md](system-wide-runtime-performance-plan-2026-07-12.md) を正本にする。
+1. 性能作業を再開する場合は [system-wide-runtime-performance-plan-2026-07-12.md](archive/system-wide-runtime-performance-plan-2026-07-12.md) を履歴として確認し、必要なら新しい現行計画を作る。
 
 ### Definition of Done
 

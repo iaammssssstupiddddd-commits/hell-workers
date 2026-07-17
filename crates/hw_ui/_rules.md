@@ -53,7 +53,7 @@ hw_energy      ✗
 
 新しいアセット（フォント・アイコン等）が必要になった場合:
 1. `setup/mod.rs` の `UiAssets` trait にメソッドを追加
-2. `bevy_app/src/entities/game_assets.rs` の `impl UiAssets for GameAssets` に実装を追加
+2. `crates/bevy_app/src/assets.rs` の `impl UiAssets for GameAssets` に実装を追加
 3. このクレートに `GameAssets` への直接依存は追加しない
 
 ## テキスト入力・スクロール UI の方針（Bevy 0.19 標準 widget 利用）
@@ -127,7 +127,7 @@ hw_energy      ✗
 
 ```bash
 # コンパイル確認（必須）
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
+python3 scripts/dev.py check
 ```
 
 ## 参照ドキュメント

@@ -8,7 +8,7 @@
 - `crates/bevy_app/src/plugins/`: Bevy plugin wiring
 - `assets/`: sprites, fonts, and other game resources
 - `docs/`: technical specs and developer docs (start with `docs/README.md`)
-- `proposals/`: feature/refactor proposals
+- `docs/proposals/`: feature/refactor proposals
 - `scripts/`: utility scripts (image conversion, etc.)
 
 ## Tech Stack & Targets
@@ -18,7 +18,9 @@
 
 ## Build, Test, and Development Commands
 - `cargo run`: build and run the game locally.
-- `cargo check`: compile check only; required before reporting work as complete.
+- `python3 scripts/dev.py doctor`: diagnose required and optional local tools.
+- `python3 scripts/dev.py check`: fast local gate (format, policy, workspace compile).
+- `python3 scripts/dev.py verify`: full local/CI gate; required before reporting broad work as complete.
 - `python scripts/convert_to_png.py "src" "assets/textures/dest.png"`: convert magenta-backed images to transparent PNGs.
 - `trunk serve`: serve the web build using `Trunk.toml` (optional; for WASM workflows).
 
@@ -28,8 +30,8 @@
 - Avoid dead code and `#[allow(dead_code)]` unless actively justified by current usage.
 
 ## Testing Guidelines
-- There is no dedicated test suite yet; favor `cargo check` as the baseline verification step.
-- If adding tests, use standard Rust naming (`mod tests` and `*_test` functions) and note how to run them in the PR.
+- The workspace has Rust unit/integration tests and Python tooling tests; the full gate runs both.
+- If adding tests, use standard Rust naming (`mod tests` and `*_test` functions) and note any focused command in the PR.
 
 ## Commit & Pull Request Guidelines
 - Commit messages follow a simple conventional style (examples seen: `feat: ...`, `refactor: ...`). Keep summaries short; Japanese or English is acceptable.
@@ -40,7 +42,7 @@
 - Keep `cargo check` green; do not report completion with Rust-analyzer errors.
 - **Clippy**: The workspace maintains **0** `cargo clippy --workspace` warnings. Resolution patterns and the check command are in `CLAUDE.md` (Development Rules §1.5). Prefer fixing structure over `#[allow(clippy::...)]`.
 - Avoid dead code and `#[allow(dead_code)]` unless currently required. Do not leave implementations not documented in `docs/`.
-- Task system conventions: add new `AssignedTask` variants as struct variants and keep task queries aggregated in `TaskQueries` (see `crates/bevy_app/src/systems/soul_ai/execute/task_execution/`).
+- Task system conventions: define payload structs under `crates/hw_jobs/src/tasks/`, add `Variant(VariantData)` entries in `crates/hw_jobs/src/tasks/mod.rs`, and keep Soul/Familiar queries aggregated in their crate-owned context types.
 - Context hygiene: respect `.cursorignore` and `.geminiignore` by avoiding large build artifacts/logs (`target/`, `dist/`, `.trunk/`, `logs/`, `build_*.txt`, `*_output*.txt`) unless explicitly needed.
 
 ### Debugging and Verification Policy
@@ -85,15 +87,9 @@ Create an implementation plan in `docs/plans/` when:
 - The user explicitly requests a plan
 
 #### Plan File Management
-- **Location**: `docs/plans/` (gitignored - working documents only)
-- **Naming**: Use descriptive kebab-case names (e.g., `blueprint-spatial-grid.md`, `taskarea-optimization.md`)
-- **Format**: Markdown with clear sections:
-  - Problem description
-  - Solution approach
-  - Expected performance impact
-  - Implementation steps
-  - Files to modify
-  - Verification methods
+- **Location**: `docs/plans/` (current plans are tracked; only archive/rejected areas are ignored by policy)
+- **Naming**: Copy `docs/plans/plan-template.md` to a descriptive `<topic>-plan-YYYY-MM-DD.md` name.
+- **Format**: Fill in metadata, purpose, milestones, verification, and AI handoff sections from the template.
 
 #### Plan Lifecycle
 1. **Creation**: Write detailed plan before implementation
@@ -103,11 +99,9 @@ Create an implementation plan in `docs/plans/` when:
    - If relevant for future: Document in `docs/architecture.md` or system-specific docs
    - Plans are temporary working documents, not permanent documentation
 
-#### Why Plans are Gitignored
-- Plans are AI working documents for organizing complex tasks
-- Completed features should be documented in permanent docs (`docs/*.md`)
-- Prevents clutter in version control
-- User can manually commit specific plans if needed
+#### Index Maintenance
+- After adding, moving, or deleting a plan/proposal, run `python3 scripts/dev.py docs --write` and review both generated indexes.
+- CI verifies index freshness with `python3 scripts/dev.py docs --check`.
 
 ### Bevy バージョンの厳守とドキュメント確認
 - 本プロジェクトは **Bevy 0.19** を使用している。
@@ -115,7 +109,7 @@ Create an implementation plan in `docs/plans/` when:
 - 新しい機能やシステムを実装する（特に Window, UI, Query, Commands周りなど）際は、推測でコードを書く前に以下のいずれかを行うこと：
   1. すでに正しく動いている他のプロジェクト内ソースコードの書き方を参考にする
   2. Web検索ツール等で `https://docs.rs/bevy/0.19.0/bevy/` や関連ドキュメントを確認する
-  3. ローカルの `/home/satotakumi/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
+  3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
 - 実装後は `cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
 
 ### MCP ツール運用フロー（rust-analyzer-mcp / docsrs-mcp）

@@ -38,7 +38,7 @@
 ### task_management/ ディレクトリ
 
 root 側の `task_management/` は
-[mod.rs](/home/satotakumi/projects/hell-workers/crates/bevy_app/src/systems/familiar_ai/decide/mod.rs)
+[mod.rs](mod.rs)
 の inline module として thin bridge を残し、実装本体は
 `hw_familiar_ai::familiar_ai::decide::task_management` にある。
 

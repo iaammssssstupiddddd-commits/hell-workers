@@ -37,7 +37,7 @@
 - 最適化：Headless Blenderで自動（リダクション、原点合わせ、PBR整備など）。
 - アニメーション：Adobe Mixamoの流用を示唆。citeturn14view0
 
-リポジトリ側の現状（提案周辺の一次情報）として、プロジェクトはBevy 0.18 / Rust 2024で構成され、ドキュメント体系に「docs/proposals」が存在し、提案テンプレートも用意されている。fileciteturn6file0turn9file0turn19file0  
+リポジトリ側の現状（提案周辺の一次情報）として、プロジェクトはBevy 0.19 / Rust 2024で構成され、ドキュメント体系に「docs/proposals」が存在し、提案テンプレートも用意されている。fileciteturn6file0turn9file0turn19file0
 また、設計ドキュメントにはRtTインフラが明示され、実装も`StartupPlugin`でRenderTarget用テクスチャ生成とCamera3d/2dのセットアップが行われている。fileciteturn11file0turn18file0
 
 ## 要件と目的の整合性チェック

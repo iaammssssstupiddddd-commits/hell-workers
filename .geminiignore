@@ -30,10 +30,8 @@ run_output.log
 
 # Gitおよびバージョン管理
 .git/
-.gitignore
 
-# 依存関係・ロックファイル
-Cargo.lock
+# 依存関係
 node_modules/
 
 # IDE設定
@@ -44,9 +42,6 @@ node_modules/
 # OSファイル
 .DS_Store
 Thumbs.db
-
-# スクリプトディレクトリ（ユーティリティスクリプト）
-scripts/
 
 # assets（画像等の大きなバイナリファイル）
 assets/

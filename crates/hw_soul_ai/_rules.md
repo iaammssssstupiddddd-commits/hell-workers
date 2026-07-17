@@ -95,7 +95,7 @@ hw_visual      ✗
 
 ```bash
 # コンパイル確認（必須）
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
+python3 scripts/dev.py check
 ```
 
 ## 参照ドキュメント

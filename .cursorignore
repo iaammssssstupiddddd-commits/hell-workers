@@ -25,7 +25,6 @@ stderr.txt
 game_log.txt
 
 # 依存関係・キャッシュ
-Cargo.lock
 node_modules/
 .git/
 

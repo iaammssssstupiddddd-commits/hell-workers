@@ -50,15 +50,9 @@ Perceive → Update → Decide → Execute
 
 ## re-export facade ファイル（残存）
 
-以下のファイルは `hw_soul_ai` への移設完了済みの facade。実装はすべて leaf crate 側にある（これらのファイルの編集は原則不要）：
-
-- `execute/cleanup.rs` → `pub use hw_soul_ai::...`
-- `execute/task_execution/mod.rs` → `pub use hw_soul_ai::...`
-- `execute/task_execution/transport_common/*.rs` → `pub use hw_soul_ai::...`
-- `helpers/work.rs` → `pub use hw_soul_ai::...`
-- `decide/drifting.rs` → `pub use hw_soul_ai::...`
-
-これら facade 群の削除は別タスクとして管理する。
+- root側で残る互換facadeは `execute/task_execution/mod.rs`。
+- task modelは `hw_jobs`、実装とcontextは `hw_soul_ai` が正本。
+- root facadeへ新規ロジックを追加しない。
 
 ## docs 更新対象（変更時に必ず更新するドキュメント）
 
@@ -69,7 +63,7 @@ Perceive → Update → Decide → Execute
 ## 検証方法
 
 ```bash
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
+python3 scripts/dev.py check
 ```
 
 ## 参照ドキュメント

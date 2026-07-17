@@ -7,13 +7,12 @@ alwaysApply: true
 タスクの追加や変更を行う際は、以下のルールを遵守し、型安全性とデータの整合性を担保すること。
 
 ## 1. AssignedTask のデータ構造化
-新しいタスクを `AssignedTask` エナムに追加する際は、タプルバリアントではなく**構造体バリアント（Struct variants）**を使用すること。
-また、そのデータは `src/systems/soul_ai/execute/task_execution/types.rs` に専用の構造体として定義すること。
+タスクpayloadは `crates/hw_jobs/src/tasks/` のfeature別ファイルに専用structとして定義し、`crates/hw_jobs/src/tasks/mod.rs` の `AssignedTask` に `Variant(VariantData)` 形式で追加すること。
 
 **理由**: フィールド名の明示により引数の誤渡しを防止し、コードの可読性を高めるため。
 
 ## 2. クエリの集約（TaskQueries）
-タスクの検索（Familiar側）や実行（Soul側）に必要なクエリは、個別に定義するのではなく `src/systems/soul_ai/execute/task_execution/context.rs` の `TaskQueries` 構造体に集約すること。
+Soul実行側のクエリは `crates/hw_soul_ai/src/soul_ai/execute/task_execution/context/queries.rs`、Familiar検索・割当側のクエリは `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/context.rs` に集約すること。
 
 **理由**: 使い魔と魂の間で検索条件やアクセスするコンポーネントの整合性を強制し、一方の変更による他方の不整合を防止するため。
 

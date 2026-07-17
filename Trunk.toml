@@ -2,7 +2,15 @@
 address = "0.0.0.0"
 port = 8083
 # ファイルウォッチャーの除外設定（エージェントのクラッシュ防止）
-watch = ["crates/bevy_app/src/**", "assets/**", "index.html"]
+watch = [
+  "crates/**/src/**",
+  "crates/**/Cargo.toml",
+  "Cargo.toml",
+  "Cargo.lock",
+  "Trunk.toml",
+  "assets/**",
+  "index.html",
+]
 ignore = ["target/**", "dist/**", "logs/**", "*.log", "*.txt"]
 
 [build]
