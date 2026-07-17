@@ -1,5 +1,5 @@
 use crate::entities::familiar::{Familiar, FamiliarOperation};
-use crate::input_actions::ActiveModeCleanupParams;
+use crate::input_actions::{ActiveModeCleanupParams, ForegroundUiGate};
 use crate::systems::jobs::{Door, DoorState, apply_door_state};
 use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
@@ -18,6 +18,7 @@ type MenuButtonWithColorQuery<'w, 's> = Query<
     'w,
     's,
     (
+        Entity,
         &'static Interaction,
         &'static MenuButton,
         &'static mut BackgroundColor,
@@ -28,7 +29,7 @@ type MenuButtonWithColorQuery<'w, 's> = Query<
 type MenuButtonQuery<'w, 's> = Query<
     'w,
     's,
-    (&'static Interaction, &'static MenuButton),
+    (Entity, &'static Interaction, &'static MenuButton),
     (Changed<Interaction>, With<Button>),
 >;
 
@@ -51,10 +52,14 @@ pub fn ui_interaction_system(
     mut commands: Commands,
     mut ui_intent_writer: MessageWriter<UiIntent>,
     theme: Res<UiTheme>,
+    foreground_gate: ForegroundUiGate,
 ) {
-    for (interaction, menu_button, mut color) in interaction_query.iter_mut() {
+    for (entity, interaction, menu_button, mut color) in interaction_query.iter_mut() {
         update_interaction_color(*interaction, &mut color, &theme);
         if *interaction != Interaction::Pressed {
+            continue;
+        }
+        if !foreground_gate.allows(entity) {
             continue;
         }
 
@@ -69,9 +74,13 @@ pub fn ui_interaction_system(
 pub fn arch_category_action_system(
     interaction_query: MenuButtonQuery,
     mut arch_category_state: ResMut<hw_ui::components::ArchitectCategoryState>,
+    foreground_gate: ForegroundUiGate,
 ) {
-    for (interaction, menu_button) in interaction_query.iter() {
+    for (entity, interaction, menu_button) in interaction_query.iter() {
         if *interaction != Interaction::Pressed {
+            continue;
+        }
+        if !foreground_gate.allows(entity) {
             continue;
         }
         if let MenuAction::SelectArchitectCategory(category) = menu_button.0 {
@@ -93,12 +102,16 @@ pub fn move_plant_building_action_system(
     play_mode: Res<State<PlayMode>>,
     resolved_frame: Res<crate::input_actions::ResolvedInputFrame>,
     mut cleanup: ActiveModeCleanupParams,
+    foreground_gate: ForegroundUiGate,
 ) {
     if resolved_frame.pointer_selection_suppressed() {
         return;
     }
-    for (interaction, menu_button) in interaction_query.iter() {
+    for (entity, interaction, menu_button) in interaction_query.iter() {
         if *interaction != Interaction::Pressed {
+            continue;
+        }
+        if !foreground_gate.allows(entity) {
             continue;
         }
         let MenuAction::MovePlantBuilding(entity) = menu_button.0 else {
@@ -122,9 +135,13 @@ pub fn door_lock_action_system(
     mut q_doors: Query<(&Transform, &mut Door, &mut Sprite)>,
     mut world_map: WorldMapWrite,
     door_visual_handles: Res<DoorVisualHandles>,
+    foreground_gate: ForegroundUiGate,
 ) {
-    for (interaction, menu_button) in interaction_query.iter() {
+    for (entity, interaction, menu_button) in interaction_query.iter() {
         if *interaction != Interaction::Pressed {
+            continue;
+        }
+        if !foreground_gate.allows(entity) {
             continue;
         }
         let MenuAction::ToggleDoorLock(entity) = menu_button.0 else {

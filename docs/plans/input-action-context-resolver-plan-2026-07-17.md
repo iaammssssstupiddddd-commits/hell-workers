@@ -583,7 +583,7 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   - project-owned production shortcut consumer から `ButtonInput<KeyCode>` / `KeyCode` 分岐を除く。
   - `PanCameraPlugin`、Bevy text editing、test resource 初期化、`visual_test` は明示 whitelist とする。
 - 変更ファイル:
-  - `crates/bevy_app/src/input_actions/{bindings.rs,context.rs,resolver.rs,tests.rs}`
+  - `crates/bevy_app/src/input_actions/{bindings.rs,cancel.rs,capture.rs,context.rs,resolver.rs,tests.rs}`
   - `crates/bevy_app/src/systems/command/area_selection/{shortcuts.rs,geometry.rs,input.rs,input/**}`
   - `crates/bevy_app/src/interface/ui/list/interaction/navigation.rs`
   - `crates/bevy_app/src/interface/ui/list/{interaction.rs,drag_drop.rs}`
@@ -602,18 +602,18 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   - [x] Tab/Shift+Tab の方向を維持し、active mode 中は生成しない
   - [x] DebugVisible=false の P/O は action を生成しない
   - [x] DebugVisible=true の F12+P は resolver snapshot の契約どおり処理され、P action が後段 `run_if` で消えない
-  - [ ] `Resolve -> CaptureTransition -> Rollback -> PointerIngress -> Consume` と
+  - [x] `Resolve -> CaptureTransition -> Rollback -> PointerIngress -> Consume` と
     `CameraGuard -> PickingSystems::Hover` の M3b ordering test が通る
-  - [ ] Modal/Pause 中は M3a で移行した debug/Tab/AreaEdit を含む全 project shortcut が抑止される
+  - [x] Modal/Pause 中は M3a で移行した debug/Tab/AreaEdit を含む全 project shortcut が抑止される
   - [ ] Modal/Pause 中は panel 外の click/drag でも selection、placement、assignment、context menu が変化しない
-  - [ ] Modal/Pause 中は前景 panel 以外の UI button が反応せず、Pause の Resume/Save/Load/Settings は操作できる
+  - [x] Modal/Pause 中は前景 panel 以外の UI button が反応せず、Pause の Resume/Save/Load/Settings は操作できる
   - [ ] Modal/Pause 中は PanCamera が無効になり、capture 開始 frame の mouse drag でも camera Transform が変化せず、閉じた次 frame に既存設定どおり復帰する
-  - [ ] UI hover/capture は `UiSystems::Focus` と同 frame の値を使い、keyboard/UI button の open request 受理 frameから漏れがない
+  - [x] UI hover/capture は `UiSystems::Focus` と同 frame の値を使い、keyboard/UI button の open request 受理 frameから漏れがない
   - [ ] TextInput focus 中に各 overlay を開くと focus が同期的に clear され、背景 EditableText が文字/Escapeを受けない
   - [ ] drag 中に Modal/Pause を開いて capture 中に mouse release しても、再開後に `TaskMode::*Some`、
     `AreaEditSession.active_drag`、Dream seed、Zone removal preview が残らず、AreaEdit は元状態へ戻る
   - [ ] capture 開始 rollback は AreaEdit history、task assignment、Dream pending request、zone mutationを新規確定しない
-  - [ ] Entity List drag/resize 中の capture 開始で ghost、pending/active drag、resize active が残らず、squad request と panel resize を確定しない
+  - [x] Entity List drag/resize 中の capture 開始で ghost、pending/active drag、resize active が残らず、squad request と panel resize を確定しない
   - [x] production shortcut の raw keyboard audit が resolver と whitelist 以外 0 件
 - 検証:
   - `cargo test -p bevy_app@0.1.0 input_actions`
@@ -823,17 +823,17 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 現在地
 
-- 進捗: `計画 100% / 実装 62.5%`
-- 完了済みマイルストーン: M1、M2、M3a
-- 未着手/進行中: M3b〜M4 未着手
+- 進捗: `計画 100% / 実装 75%`
+- 完了済みマイルストーン: M1、M2、M3a、M3b（自動検証範囲）
+- 未着手/進行中: M4 と、M3b の実 mouse drag / gesture release 手動受入
 - 前提: A1 だけを対象とする。A2/A3 や keybinding settings を同時実装しない。
 
 ### 次のAIが最初にやること
 
 1. `git status --short` と並行差分を確認し、本計画外の変更を stage/revert しない。
 2. M3a の resolver/consumer移行と raw keyboard audit は完了済み。変更時は既存 matrix/consumer testを維持する。
-3. M3b で pending/visible overlay capture、gesture rollback、picking/camera ordering を一体で導入し、
-   M2 の selection suppression と active mode cleanup を再利用する。
+3. M3b の pending/visible overlay capture、gesture rollback、picking/camera ordering は実装済み。M4 で
+   恒久 docs を同期し、実 mouse drag / gesture release の手動シナリオを確認する。
 
 ### ブロッカー/注意点
 
@@ -893,15 +893,16 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 最終確認ログ
 
-- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（M3a完了時）`
-- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（M3a完了時）`
+- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（M3b完了時）`
+- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（M3b完了時）`
 - 最終 `python3 scripts/dev.py docs --check`: `2026-07-17 / pass`
 - 最終 `git diff --check`: `2026-07-17 / pass`
-- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-07-17 / pass（M3a完了時）`
-- 最終 `cargo test --workspace --locked`: `2026-07-17 / pass（M3a完了時）`
+- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-07-17 / pass（M3b完了時）`
+- 最終 `cargo test --workspace --locked`: `2026-07-17 / pass（M3b完了時、bevy_app 152件・hw_ui 8件を含む）`
 - 最終 rust-analyzer diagnostics: `2026-07-17 / 変更Rustファイルでerror 0、warning 0`
-- 最終 `python3 scripts/dev.py verify`: `2026-07-17 / pass（M3a完了時）`
-- 未解決エラー: なし。M3着手前に並行worktreeの状態を再確認すること。
+- 最終 `python3 scripts/dev.py verify`: `2026-07-17 / pass（M3b完了時）`
+- 未解決エラー: なし。M4 完了前に実 mouse drag 中の PanCamera Transform 不変と、
+  AreaEdit / Zone / TaskMode gesture の capture→release を手動確認すること。
 
 ### Definition of Done
 
@@ -920,8 +921,8 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 - [ ] project-owned production keyboard shortcut が resolver 経由になっている
 - [ ] PanCamera/TextInput/mouse/visual_test の非対象経路が回帰していない
 - [ ] 影響ドキュメントが更新済み
-- [ ] rust-analyzer workspace diagnostics が error/warning 0 件
-- [ ] `python3 scripts/dev.py verify` が成功
+- [x] rust-analyzer workspace diagnostics が error/warning 0 件
+- [x] `python3 scripts/dev.py verify` が成功
 
 ## 10. 更新履歴
 
@@ -934,3 +935,4 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 | `2026-07-17` | `Codex` | M1完了。frame-local resolver、exact chord、binding data priority/compatibility、F5/F9 UiIntent bridge、V consumerを実装し、debug aliasとdirect F9 loadを削除。恒久docsと回帰testを同期 |
 | `2026-07-17` | `Codex` | M2完了。B/Z/Space/Digit、Modal/Pause、Familiar、context別Escapeをresolverへ移行し、frame-start selection抑止、TaskMode/pending遷移を含む共通owner cleanup、overlay open時のInputFocus clearを実装。同一PlayModeへの冗長なpendingはblockerから除外 |
 | `2026-07-17` | `Codex` | M3a完了。AreaEdit exact chord/Shift snapshot、Tab、P/O、F3/F4/F6/F7/F8/F12をresolverへ移行し、production raw keyboard readerをresolverとwhitelistへ限定 |
+| `2026-07-17` | `Codex` | M3b実装。pending/visible overlay capture、viewport blocking root、foreground UI gate、capture開始時gesture rollback、Entity List reset、PanCamera/Picking orderingを導入。自動検証を完了し、実drag/releaseはM4手動受入へ明記 |

@@ -56,7 +56,7 @@ pub fn blueprint_placement(
     game_assets: Res<GameAssets>,
     mut commands: Commands,
 ) {
-    if input.ui_input_state.pointer_over_ui {
+    if input.ui_input_state.world_input_blocked() {
         return;
     }
 

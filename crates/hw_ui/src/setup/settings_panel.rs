@@ -4,12 +4,13 @@ use super::UiAssets;
 use crate::components::{
     MenuAction, MenuButton, SettingsCheckboxMarker, SettingsCheckmarkMarker,
     SettingsDefaultSpeedButton, SettingsField, SettingsPanel, SettingsSliderMarker,
-    SettingsSliderThumbMarker, UiInputBlocker,
+    SettingsSliderThumbMarker, UiInputBlocker, UiInputCapture,
 };
 use crate::theme::UiTheme;
+use bevy::picking::Pickable;
 use bevy::prelude::*;
 use bevy::scene::bsn;
-use bevy::ui::RelativeCursorPosition;
+use bevy::ui::{FocusPolicy, RelativeCursorPosition};
 use bevy::ui_widgets::{Checkbox, Slider, SliderRange, SliderStep, SliderValue};
 use hw_core::game_state::TimeSpeed;
 
@@ -40,36 +41,56 @@ pub fn spawn_settings_panel(
     parent_entity: Entity,
     initial: SettingsPanelInitial,
 ) {
-    let panel = commands
+    let capture_root = commands
         .spawn_scene(bsn! {
             SettingsPanel
         })
         .id();
 
-    commands.entity(panel).insert((
-        UiInputBlocker,
+    commands.entity(capture_root).insert((
+        UiInputCapture,
         ZIndex(36),
         Node {
             display: Display::None,
-            width: Val::Px(380.0),
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
             position_type: PositionType::Absolute,
-            left: Val::Percent(50.0),
-            top: Val::Percent(45.0),
-            margin: UiRect::left(Val::Px(-190.0)),
-            flex_direction: FlexDirection::Column,
-            padding: UiRect::all(Val::Px(16.0)),
-            border: UiRect::all(Val::Px(2.0)),
-            border_radius: BorderRadius::all(Val::Px(6.0)),
-            row_gap: Val::Px(10.0),
+            left: Val::Px(0.0),
+            top: Val::Px(0.0),
             ..default()
         },
-        BackgroundColor(theme.colors.dialog_bg),
-        BorderColor::all(theme.colors.dialog_border),
-        Interaction::default(),
-        RelativeCursorPosition::default(),
+        FocusPolicy::Block,
+        Pickable::default(),
+        Name::new("Settings Capture"),
     ));
 
-    commands.entity(parent_entity).add_child(panel);
+    commands.entity(parent_entity).add_child(capture_root);
+
+    let panel = commands
+        .spawn((
+            UiInputBlocker,
+            Node {
+                width: Val::Px(380.0),
+                position_type: PositionType::Absolute,
+                left: Val::Percent(50.0),
+                top: Val::Percent(45.0),
+                margin: UiRect::left(Val::Px(-190.0)),
+                flex_direction: FlexDirection::Column,
+                padding: UiRect::all(Val::Px(16.0)),
+                border: UiRect::all(Val::Px(2.0)),
+                border_radius: BorderRadius::all(Val::Px(6.0)),
+                row_gap: Val::Px(10.0),
+                ..default()
+            },
+            BackgroundColor(theme.colors.dialog_bg),
+            BorderColor::all(theme.colors.dialog_border),
+            Interaction::default(),
+            RelativeCursorPosition::default(),
+            Name::new("Settings Panel"),
+        ))
+        .id();
+
+    commands.entity(capture_root).add_child(panel);
 
     commands.entity(panel).with_children(|parent| {
         parent.spawn((

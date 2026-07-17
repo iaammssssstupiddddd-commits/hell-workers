@@ -1,5 +1,6 @@
 mod bindings;
 mod cancel;
+mod capture;
 mod context;
 mod model;
 mod resolver;
@@ -14,6 +15,11 @@ use hw_ui::UiIntent;
 use crate::systems::GameSystemSet;
 
 pub(crate) use cancel::{ActiveModeCleanupParams, cancel_or_close_input_action_system};
+pub(crate) use capture::{
+    ForegroundUiGate, PendingWorldInputCapture, request_capture_from_menu_buttons_system,
+    request_capture_from_resolved_actions_system, reset_pending_world_input_capture_system,
+    rollback_in_progress_gesture_system, sync_world_input_capture_system,
+};
 pub use context::{InputContextSnapshot, InputOverlay};
 use model::InputConflictLane;
 pub use model::{InputAction, InputActionFamily, InputChord, InputModifiers};
@@ -22,7 +28,11 @@ pub use resolver::{ResolvedInputFrame, resolve_input_chords};
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum InputPreUpdateSet {
+    CaptureRequest,
     Resolve,
+    CaptureTransition,
+    Rollback,
+    CameraGuard,
 }
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -34,9 +44,18 @@ pub(crate) enum InputResolutionSet {
 pub(crate) fn configure_input_resolution_sets(app: &mut App) {
     app.configure_sets(
         PreUpdate,
-        InputPreUpdateSet::Resolve
+        (
+            InputPreUpdateSet::CaptureRequest,
+            InputPreUpdateSet::Resolve,
+            InputPreUpdateSet::CaptureTransition,
+            InputPreUpdateSet::Rollback,
+            InputPreUpdateSet::CameraGuard,
+        )
+            .chain()
             .after(InputFocusSystems::Dispatch)
-            .after(hw_ui::interaction::text_input_focus_sync_system),
+            .after(hw_ui::interaction::text_input_focus_sync_system)
+            .after(bevy::ui::UiSystems::Focus)
+            .before(bevy::picking::PickingSystems::Hover),
     );
     app.configure_sets(
         Update,
@@ -47,6 +66,17 @@ pub(crate) fn configure_input_resolution_sets(app: &mut App) {
             .chain()
             .in_set(GameSystemSet::Input),
     );
+}
+
+impl InputOverlay {
+    pub(crate) const fn priority(self) -> u8 {
+        match self {
+            Self::LoadConfirm => 4,
+            Self::Settings => 3,
+            Self::Pause => 2,
+            Self::OperationDialog => 1,
+        }
+    }
 }
 
 pub(crate) fn input_action_to_ui_intent_system(

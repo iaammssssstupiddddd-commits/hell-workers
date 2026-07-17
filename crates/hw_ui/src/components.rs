@@ -26,11 +26,21 @@ pub struct UiInputState {
     pub pointer_over_ui: bool,
     pub text_input_focused: bool,
     pub text_input_consumed_keyboard: bool,
+    /// A modal/pause overlay owns all world input for this frame.
+    pub world_input_captured: bool,
+    /// One-frame latch raised on the false -> true capture transition.
+    pub world_input_capture_started: bool,
+    /// Highest-priority capture root allowed to receive UI interaction.
+    pub foreground_capture_root: Option<Entity>,
 }
 
 impl UiInputState {
     pub fn text_input_blocks_keybinds(&self) -> bool {
         self.text_input_focused || self.text_input_consumed_keyboard
+    }
+
+    pub fn world_input_blocked(&self) -> bool {
+        self.pointer_over_ui || self.world_input_captured
     }
 }
 
@@ -214,6 +224,10 @@ impl UiTooltip {
 
 #[derive(Component, Default)]
 pub struct UiInputBlocker;
+
+/// Marks a full-viewport UI root that captures world input while visible.
+#[derive(Component, Default)]
+pub struct UiInputCapture;
 
 #[derive(Component, Default)]
 pub struct DreamPoolPulse {

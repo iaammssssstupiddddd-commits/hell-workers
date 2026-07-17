@@ -31,7 +31,7 @@ pub fn zone_removal_system(
     mut q_sprites: Query<&mut Sprite>,
     mut preview_state: ResMut<ZoneRemovalPreviewState>,
 ) {
-    if input.ui_input_state.pointer_over_ui {
+    if input.ui_input_state.world_input_blocked() {
         return;
     }
 

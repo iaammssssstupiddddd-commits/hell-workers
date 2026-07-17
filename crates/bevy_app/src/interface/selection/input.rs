@@ -123,7 +123,7 @@ pub fn handle_mouse_input(
         q_task_areas,
         q_targets,
     } = world_queries;
-    if ui_input_state.pointer_over_ui || resolved_frame.pointer_selection_suppressed() {
+    if ui_input_state.world_input_blocked() || resolved_frame.pointer_selection_suppressed() {
         return;
     }
 
@@ -213,7 +213,7 @@ pub fn update_hover_entity(
         q_targets,
     } = params;
 
-    if ui_input_state.pointer_over_ui {
+    if ui_input_state.world_input_blocked() {
         hovered_entity.0 = None;
         hover_cache.0 = None;
         return;
@@ -319,6 +319,21 @@ mod tests {
         assert_eq!(
             accepted.world().resource::<SelectedEntity>().0,
             Some(clicked_soul)
+        );
+    }
+
+    #[test]
+    fn modal_capture_suppresses_world_selection_ingress() {
+        let (mut app, originally_selected, _) = selection_app(false);
+        app.world_mut()
+            .resource_mut::<UiInputState>()
+            .world_input_captured = true;
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<SelectedEntity>().0,
+            Some(originally_selected)
         );
     }
 }

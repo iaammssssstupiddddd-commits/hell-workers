@@ -1,4 +1,5 @@
 use crate::app_contexts::TaskContext;
+use bevy::picking::Pickable;
 use bevy::prelude::*;
 
 #[derive(Component)]
@@ -18,6 +19,7 @@ pub fn spawn_vignette_ui(commands: &mut Commands, overlay_parent: Entity) {
                 display: Display::None,
                 ..default()
             },
+            Pickable::IGNORE,
             BackgroundColor(Color::srgba(0.1, 0.2, 0.4, 0.0)), // より暗く彩度を落とした青
             ZIndex(-10), // オーバーレイの最背面（他のUIの邪魔にならないよう）
             DreamVignette { timer: 0.0 },

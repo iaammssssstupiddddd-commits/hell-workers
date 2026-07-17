@@ -33,6 +33,10 @@ impl ResolvedInputFrame {
         self.pointer_selection_suppressed
     }
 
+    pub(crate) fn suppress_pointer_selection(&mut self) {
+        self.pointer_selection_suppressed = true;
+    }
+
     pub(crate) fn replace(
         &mut self,
         modifiers: InputModifiers,

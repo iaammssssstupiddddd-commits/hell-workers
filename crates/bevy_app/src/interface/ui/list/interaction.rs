@@ -64,6 +64,7 @@ pub struct EntityListInteractionResources<'w> {
     ui_intents: MessageWriter<'w, UiIntent>,
     theme: Res<'w, UiTheme>,
     resolved_frame: Res<'w, crate::input_actions::ResolvedInputFrame>,
+    ui_input_state: Res<'w, UiInputState>,
 }
 
 fn focus_list_entity(
@@ -97,7 +98,11 @@ pub fn entity_list_interaction_system(
         mut ui_intents,
         theme,
         resolved_frame,
+        ui_input_state,
     } = resources;
+    if ui_input_state.world_input_captured {
+        return;
+    }
     if !resolved_frame.pointer_selection_suppressed() {
         for (interaction, item) in soul_list_interaction.iter_mut() {
             if *interaction == Interaction::Pressed {
@@ -162,6 +167,7 @@ mod tests {
         app.add_message::<UiIntent>()
             .init_resource::<crate::interface::selection::SelectedEntity>()
             .init_resource::<ResolvedInputFrame>()
+            .init_resource::<UiInputState>()
             .init_resource::<UiTheme>()
             .add_systems(Update, entity_list_interaction_system);
         let target = app.world_mut().spawn(GlobalTransform::default()).id();
@@ -180,6 +186,46 @@ mod tests {
 
         assert!(
             app.world()
+                .resource::<crate::interface::selection::SelectedEntity>()
+                .0
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn pointer_hover_allows_list_click_but_modal_capture_blocks_it() {
+        fn app_with_row(captured: bool) -> (App, Entity) {
+            let mut app = minimal_app();
+            app.add_message::<UiIntent>()
+                .init_resource::<crate::interface::selection::SelectedEntity>()
+                .init_resource::<ResolvedInputFrame>()
+                .init_resource::<UiInputState>()
+                .init_resource::<UiTheme>()
+                .add_systems(Update, entity_list_interaction_system);
+            let target = app.world_mut().spawn(GlobalTransform::default()).id();
+            app.world_mut()
+                .spawn((Interaction::Pressed, Button, SoulListItem(target)));
+            let mut state = app.world_mut().resource_mut::<UiInputState>();
+            state.pointer_over_ui = true;
+            state.world_input_captured = captured;
+            (app, target)
+        }
+
+        let (mut hovered, target) = app_with_row(false);
+        hovered.update();
+        assert_eq!(
+            hovered
+                .world()
+                .resource::<crate::interface::selection::SelectedEntity>()
+                .0,
+            Some(target)
+        );
+
+        let (mut captured, _) = app_with_row(true);
+        captured.update();
+        assert!(
+            captured
+                .world()
                 .resource::<crate::interface::selection::SelectedEntity>()
                 .0
                 .is_none()

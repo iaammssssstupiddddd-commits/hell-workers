@@ -9,6 +9,7 @@ mod interaction;
 mod sync;
 mod view_model;
 
+pub(crate) use drag_drop::reset_entity_list_drag_state;
 pub use drag_drop::{DragState, entity_list_drag_drop_system};
 pub use hw_ui::list::focus_camera_on_entity;
 pub use hw_ui::list::{EntityListMinimizeState, entity_list_minimize_toggle_system};

@@ -79,7 +79,7 @@ pub fn task_area_selection_system(
         state.area_edit_session.dream_planting_preview_seed = None;
     }
 
-    if input.ui_input_state.pointer_over_ui {
+    if input.ui_input_state.world_input_blocked() {
         return;
     }
 

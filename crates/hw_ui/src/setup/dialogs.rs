@@ -2,12 +2,13 @@
 
 use super::UiAssets;
 use crate::components::{
-    LoadConfirmDialog, MenuAction, MenuButton, OperationDialog, UiInputBlocker, UiNodeRegistry,
-    UiSlot,
+    LoadConfirmDialog, MenuAction, MenuButton, OperationDialog, UiInputBlocker, UiInputCapture,
+    UiNodeRegistry, UiSlot,
 };
 use crate::theme::UiTheme;
+use bevy::picking::Pickable;
 use bevy::prelude::*;
-use bevy::ui::RelativeCursorPosition;
+use bevy::ui::{FocusPolicy, RelativeCursorPosition};
 
 /// ダイアログをスポーン
 pub fn spawn_dialogs(
@@ -32,6 +33,26 @@ fn spawn_operation_dialog(
         .spawn((
             Node {
                 display: Display::None,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.0),
+                top: Val::Px(0.0),
+                ..default()
+            },
+            FocusPolicy::Block,
+            Pickable::default(),
+            UiInputCapture,
+            OperationDialog,
+            ZIndex(30),
+            Name::new("Operation Dialog Capture"),
+        ))
+        .id();
+    commands.entity(parent_entity).add_child(dialog_root);
+
+    let dialog_panel = commands
+        .spawn((
+            Node {
                 width: Val::Px(300.0),
                 height: Val::Auto,
                 position_type: PositionType::Absolute,
@@ -48,13 +69,12 @@ fn spawn_operation_dialog(
             Interaction::default(),
             RelativeCursorPosition::default(),
             UiInputBlocker,
-            OperationDialog,
-            ZIndex(30),
+            Name::new("Operation Dialog Panel"),
         ))
         .id();
-    commands.entity(parent_entity).add_child(dialog_root);
+    commands.entity(dialog_root).add_child(dialog_panel);
 
-    commands.entity(dialog_root).with_children(|parent| {
+    commands.entity(dialog_panel).with_children(|parent| {
         // Header with Close Button
         parent
             .spawn(Node {
@@ -344,6 +364,26 @@ fn spawn_load_confirm_dialog(
         .spawn((
             Node {
                 display: Display::None,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.0),
+                top: Val::Px(0.0),
+                ..default()
+            },
+            FocusPolicy::Block,
+            Pickable::default(),
+            UiInputCapture,
+            LoadConfirmDialog,
+            ZIndex(40),
+            Name::new("Load Confirm Capture"),
+        ))
+        .id();
+    commands.entity(parent_entity).add_child(dialog_root);
+
+    let dialog_panel = commands
+        .spawn((
+            Node {
                 width: Val::Px(360.0),
                 height: Val::Auto,
                 position_type: PositionType::Absolute,
@@ -361,13 +401,12 @@ fn spawn_load_confirm_dialog(
             Interaction::default(),
             RelativeCursorPosition::default(),
             UiInputBlocker,
-            LoadConfirmDialog,
-            ZIndex(40),
+            Name::new("Load Confirm Panel"),
         ))
         .id();
-    commands.entity(parent_entity).add_child(dialog_root);
+    commands.entity(dialog_root).add_child(dialog_panel);
 
-    commands.entity(dialog_root).with_children(|parent| {
+    commands.entity(dialog_panel).with_children(|parent| {
         parent.spawn((
             Text::new("Load saved game?"),
             TextFont {

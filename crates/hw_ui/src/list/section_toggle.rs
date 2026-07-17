@@ -1,7 +1,8 @@
 // エンティティリストのセクション折りたたみ操作（純UIロジック）
 
 use crate::components::{
-    EntityListSectionType, SectionFolded, SectionToggle, UnassignedFolded, UnassignedSoulSection,
+    EntityListSectionType, SectionFolded, SectionToggle, UiInputState, UnassignedFolded,
+    UnassignedSoulSection,
 };
 use crate::theme::UiTheme;
 use bevy::prelude::*;
@@ -25,7 +26,11 @@ pub fn entity_list_section_toggle_system(
     q_folded: Query<Has<SectionFolded>>,
     unassigned_folded_query: Query<(Entity, Has<UnassignedFolded>), With<UnassignedSoulSection>>,
     theme: Res<UiTheme>,
+    ui_input_state: Res<UiInputState>,
 ) {
+    if ui_input_state.world_input_captured {
+        return;
+    }
     for (interaction, toggle, mut color) in interaction_query.iter_mut() {
         match *interaction {
             Interaction::Pressed => {

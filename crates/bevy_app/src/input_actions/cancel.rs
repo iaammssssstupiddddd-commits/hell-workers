@@ -55,7 +55,7 @@ impl ActiveModeCleanupParams<'_, '_> {
             || self.zone_removal_preview.is_active()
     }
 
-    pub(crate) fn cancel_active_mode(&mut self) {
+    fn restore_active_area_edit_drag(&mut self) {
         if let Some(active_drag) = self.area_edit_session.active_drag.take() {
             self.commands
                 .entity(active_drag.familiar_entity)
@@ -67,6 +67,39 @@ impl ActiveModeCleanupParams<'_, '_> {
                 destination.0 = active_drag.original_destination;
             }
         }
+    }
+
+    /// Rolls back only an uncommitted pointer gesture while preserving its mode owner.
+    pub(crate) fn rollback_in_progress_gesture(&mut self) {
+        self.restore_active_area_edit_drag();
+
+        self.task_context.0 = match self.task_context.0 {
+            TaskMode::DesignateChop(Some(_)) => TaskMode::DesignateChop(None),
+            TaskMode::DesignateMine(Some(_)) => TaskMode::DesignateMine(None),
+            TaskMode::DesignateHaul(Some(_)) => TaskMode::DesignateHaul(None),
+            TaskMode::CancelDesignation(Some(_)) => TaskMode::CancelDesignation(None),
+            TaskMode::AreaSelection(Some(_)) => TaskMode::AreaSelection(None),
+            TaskMode::AssignTask(Some(_)) => TaskMode::AssignTask(None),
+            TaskMode::ZonePlacement(kind, Some(_)) => TaskMode::ZonePlacement(kind, None),
+            TaskMode::ZoneRemoval(kind, Some(_)) => TaskMode::ZoneRemoval(kind, None),
+            TaskMode::FloorPlace(Some(_)) => TaskMode::FloorPlace(None),
+            TaskMode::WallPlace(Some(_)) => TaskMode::WallPlace(None),
+            TaskMode::DreamPlanting(Some(_)) => TaskMode::DreamPlanting(None),
+            mode => mode,
+        };
+
+        self.area_edit_session.dream_planting_preview_seed = None;
+        if self.zone_removal_preview.is_active() {
+            clear_removal_preview(
+                &self.world_map,
+                &mut self.q_sprites,
+                &mut self.zone_removal_preview,
+            );
+        }
+    }
+
+    pub(crate) fn cancel_active_mode(&mut self) {
+        self.restore_active_area_edit_drag();
         self.area_edit_session.dream_planting_preview_seed = None;
 
         clear_removal_preview(
@@ -225,6 +258,40 @@ mod tests {
         if cleanup.has_active_owner_state(play_mode.get()) {
             cleanup.cancel_active_mode();
         }
+    }
+
+    fn rollback_gesture(mut cleanup: ActiveModeCleanupParams) {
+        cleanup.rollback_in_progress_gesture();
+    }
+
+    #[test]
+    fn capture_rollback_preserves_mode_owner_and_committed_dream_request() {
+        let mut app = cleanup_app(InputAction::CloseOpenMenu);
+        app.add_systems(Update, rollback_gesture);
+        app.world_mut().resource_mut::<TaskContext>().0 =
+            TaskMode::DreamPlanting(Some(Vec2::splat(3.0)));
+        {
+            let mut session = app.world_mut().resource_mut::<AreaEditSession>();
+            session.dream_planting_preview_seed = Some(41);
+            session.pending_dream_planting = Some((Vec2::ZERO, Vec2::ONE, 17));
+        }
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<TaskContext>().0,
+            TaskMode::DreamPlanting(None)
+        );
+        let session = app.world().resource::<AreaEditSession>();
+        assert_eq!(session.dream_planting_preview_seed, None);
+        assert_eq!(
+            session.pending_dream_planting,
+            Some((Vec2::ZERO, Vec2::ONE, 17))
+        );
+        assert!(matches!(
+            *app.world().resource::<NextState<PlayMode>>(),
+            NextState::Unchanged
+        ));
     }
 
     #[test]

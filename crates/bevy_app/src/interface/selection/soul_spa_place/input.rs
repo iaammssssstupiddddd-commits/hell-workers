@@ -34,7 +34,7 @@ pub fn soul_spa_place_input_system(
     handles_3d: Res<Building3dHandles>,
     mut commands: Commands,
 ) {
-    if p.ui_state.pointer_over_ui {
+    if p.ui_state.world_input_blocked() {
         return;
     }
 

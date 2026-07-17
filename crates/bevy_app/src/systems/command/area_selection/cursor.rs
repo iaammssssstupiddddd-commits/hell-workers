@@ -27,7 +27,7 @@ pub fn task_area_edit_cursor_system(
     mut q_cursor: Query<&mut CursorIcon, With<PrimaryWindow>>,
     mut commands: Commands,
 ) {
-    if state.ui_input_state.pointer_over_ui {
+    if state.ui_input_state.world_input_blocked() {
         return;
     }
 

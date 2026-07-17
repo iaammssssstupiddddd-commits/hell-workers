@@ -93,7 +93,7 @@ pub fn context_menu_system(
     if buttons.just_pressed(MouseButton::Left) {
         // UI上クリック時（メニュー項目クリック含む）は、ボタン処理側に委譲する。
         // ワールド上クリック時のみここでメニューを閉じる。
-        if !ui_input_state.pointer_over_ui {
+        if !ui_input_state.world_input_blocked() {
             despawn_context_menus(&mut commands, &q_context_menu);
         }
         return;
@@ -102,7 +102,7 @@ pub fn context_menu_system(
     if !buttons.just_pressed(MouseButton::Right) {
         return;
     }
-    if ui_input_state.pointer_over_ui {
+    if ui_input_state.world_input_blocked() {
         return;
     }
 

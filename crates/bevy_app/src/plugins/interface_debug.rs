@@ -15,11 +15,15 @@ use hw_visual::visual3d::Building3dVisual;
 
 pub fn debug_spawn_system(
     resolved_frame: Res<ResolvedInputFrame>,
+    ui_input_state: Res<hw_ui::components::UiInputState>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     q_window: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut soul_spawn_events: MessageWriter<DamnedSoulSpawnEvent>,
     mut familiar_spawn_events: MessageWriter<FamiliarSpawnEvent>,
 ) {
+    if ui_input_state.world_input_captured {
+        return;
+    }
     let spawn_soul = resolved_frame.contains(InputAction::DebugSpawnSoul);
     let spawn_familiar = resolved_frame.contains(InputAction::DebugSpawnFamiliar);
     if !spawn_soul && !spawn_familiar {
@@ -153,6 +157,7 @@ mod tests {
         app.add_message::<DamnedSoulSpawnEvent>()
             .add_message::<FamiliarSpawnEvent>()
             .init_resource::<ResolvedInputFrame>()
+            .init_resource::<hw_ui::components::UiInputState>()
             .init_resource::<SpawnCounts>()
             .add_systems(Update, (debug_spawn_system, collect_spawns).chain());
         app.world_mut()

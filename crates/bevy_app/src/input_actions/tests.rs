@@ -696,6 +696,22 @@ fn record_resolve(mut trace: ResMut<OrderingTrace>) {
     trace.0.push("resolve");
 }
 
+fn record_capture_transition(mut trace: ResMut<OrderingTrace>) {
+    trace.0.push("capture");
+}
+
+fn record_rollback(mut trace: ResMut<OrderingTrace>) {
+    trace.0.push("rollback");
+}
+
+fn record_camera_guard(mut trace: ResMut<OrderingTrace>) {
+    trace.0.push("camera");
+}
+
+fn record_picking_hover(mut trace: ResMut<OrderingTrace>) {
+    trace.0.push("hover");
+}
+
 fn record_pointer_ingress(mut trace: ResMut<OrderingTrace>) {
     trace.0.push("pointer");
 }
@@ -705,11 +721,20 @@ fn record_consume(mut trace: ResMut<OrderingTrace>) {
 }
 
 #[test]
-fn m2_schedule_orders_resolve_before_pointer_ingress_and_consume() {
+fn m3b_schedule_orders_capture_rollback_and_camera_before_pointer_consumers() {
     let mut app = minimal_app();
     app.init_resource::<OrderingTrace>();
     configure_input_resolution_sets(&mut app);
-    app.add_systems(PreUpdate, record_resolve.in_set(InputPreUpdateSet::Resolve));
+    app.add_systems(
+        PreUpdate,
+        (
+            record_resolve.in_set(InputPreUpdateSet::Resolve),
+            record_capture_transition.in_set(InputPreUpdateSet::CaptureTransition),
+            record_rollback.in_set(InputPreUpdateSet::Rollback),
+            record_camera_guard.in_set(InputPreUpdateSet::CameraGuard),
+            record_picking_hover.in_set(bevy::picking::PickingSystems::Hover),
+        ),
+    );
     app.add_systems(
         Update,
         (
@@ -722,7 +747,9 @@ fn m2_schedule_orders_resolve_before_pointer_ingress_and_consume() {
 
     assert_eq!(
         app.world().resource::<OrderingTrace>().0,
-        ["resolve", "pointer", "consume"]
+        [
+            "resolve", "capture", "rollback", "camera", "hover", "pointer", "consume"
+        ]
     );
 }
 

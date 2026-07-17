@@ -4,7 +4,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui::FocusPolicy;
 use hw_core::relationships::CommandedBy;
-use hw_ui::components::{FamiliarListItem, SoulListItem, UiNodeRegistry, UiSlot};
+use hw_ui::components::{FamiliarListItem, SoulListItem, UiInputState, UiNodeRegistry, UiSlot};
 pub use hw_ui::list::DragState;
 use hw_ui::theme::UiTheme;
 
@@ -19,6 +19,7 @@ pub struct DragDropResources<'w> {
     game_assets: Res<'w, crate::assets::GameAssets>,
     theme: Res<'w, UiTheme>,
     resolved_frame: Res<'w, crate::input_actions::ResolvedInputFrame>,
+    ui_input_state: Res<'w, UiInputState>,
     drag_state: ResMut<'w, DragState>,
     squad_request_writer: MessageWriter<'w, SquadManagementRequest>,
 }
@@ -43,6 +44,7 @@ pub fn entity_list_drag_drop_system(
         game_assets,
         theme,
         resolved_frame,
+        ui_input_state,
         mut drag_state,
         mut squad_request_writer,
     } = resources;
@@ -52,7 +54,8 @@ pub fn entity_list_drag_drop_system(
         q_soul_names,
         q_commanded_by,
     } = queries;
-    if resolved_frame.pointer_selection_suppressed() {
+    if ui_input_state.world_input_captured || resolved_frame.pointer_selection_suppressed() {
+        reset_entity_list_drag_state(&mut commands, &mut drag_state);
         return;
     }
     if buttons.just_pressed(MouseButton::Left)
@@ -81,7 +84,7 @@ pub fn entity_list_drag_drop_system(
                 );
             }
         } else {
-            reset_drag_state(&mut commands, &mut drag_state);
+            reset_entity_list_drag_state(&mut commands, &mut drag_state);
         }
     }
 
@@ -103,9 +106,9 @@ pub fn entity_list_drag_drop_system(
                     });
                 }
             }
-            reset_drag_state(&mut commands, &mut drag_state);
+            reset_entity_list_drag_state(&mut commands, &mut drag_state);
         } else if !buttons.pressed(MouseButton::Left) {
-            reset_drag_state(&mut commands, &mut drag_state);
+            reset_entity_list_drag_state(&mut commands, &mut drag_state);
         }
     }
 }
@@ -184,7 +187,7 @@ fn spawn_drag_ghost(
     drag_state.ghost_entity = Some(ghost);
 }
 
-fn reset_drag_state(commands: &mut Commands, drag_state: &mut DragState) {
+pub(crate) fn reset_entity_list_drag_state(commands: &mut Commands, drag_state: &mut DragState) {
     if let Some(ghost_entity) = drag_state.ghost_entity.take() {
         commands.entity(ghost_entity).despawn();
     }
@@ -192,4 +195,39 @@ fn reset_drag_state(commands: &mut Commands, drag_state: &mut DragState) {
     drag_state.active_soul = None;
     drag_state.drop_target = None;
     drag_state.reset_hold_timer();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::minimal_app;
+
+    fn reset(mut commands: Commands, mut drag_state: ResMut<DragState>) {
+        reset_entity_list_drag_state(&mut commands, &mut drag_state);
+    }
+
+    #[test]
+    fn capture_reset_removes_drag_ghost_and_all_pending_drop_state() {
+        let mut app = minimal_app();
+        app.init_resource::<DragState>().add_systems(Update, reset);
+        let soul = app.world_mut().spawn_empty().id();
+        let familiar = app.world_mut().spawn_empty().id();
+        let ghost = app.world_mut().spawn(DragGhost).id();
+        {
+            let mut state = app.world_mut().resource_mut::<DragState>();
+            state.pending_soul = Some(soul);
+            state.active_soul = Some(soul);
+            state.drop_target = Some(familiar);
+            state.ghost_entity = Some(ghost);
+        }
+
+        app.update();
+
+        let state = app.world().resource::<DragState>();
+        assert_eq!(state.pending_soul, None);
+        assert_eq!(state.active_soul, None);
+        assert_eq!(state.drop_target, None);
+        assert_eq!(state.ghost_entity, None);
+        assert!(app.world().get_entity(ghost).is_err());
+    }
 }

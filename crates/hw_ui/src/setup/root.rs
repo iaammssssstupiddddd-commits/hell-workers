@@ -1,6 +1,8 @@
 use crate::components::{InfoPanelNodes, UiMountSlot, UiNodeRegistry, UiRoot, UiSlot};
 use crate::theme::UiTheme;
+use bevy::picking::Pickable;
 use bevy::prelude::*;
+use bevy::ui::FocusPolicy;
 
 use super::{
     UiAssets, bottom_bar, dialogs, entity_list, panels, settings_panel, submenus, time_control,
@@ -56,6 +58,8 @@ fn spawn_ui_root(
                 top: Val::Px(0.0),
                 ..default()
             },
+            FocusPolicy::Pass,
+            Pickable::IGNORE,
             UiRoot,
         ))
         .id();
@@ -71,6 +75,8 @@ fn spawn_ui_root(
                 top: Val::Px(0.0),
                 ..default()
             },
+            FocusPolicy::Pass,
+            Pickable::IGNORE,
             UiMountSlot::DreamBubbleLayer,
             Name::new("Dream Bubble Layer"),
         ))
@@ -86,6 +92,8 @@ fn spawn_ui_root(
                 top: Val::Px(0.0),
                 ..default()
             },
+            FocusPolicy::Pass,
+            Pickable::IGNORE,
             UiMountSlot::LeftPanel,
         ))
         .id();
@@ -99,6 +107,8 @@ fn spawn_ui_root(
                 top: Val::Px(0.0),
                 ..default()
             },
+            FocusPolicy::Pass,
+            Pickable::IGNORE,
             UiMountSlot::RightPanel,
         ))
         .id();
@@ -112,6 +122,8 @@ fn spawn_ui_root(
                 top: Val::Px(0.0),
                 ..default()
             },
+            FocusPolicy::Pass,
+            Pickable::IGNORE,
             UiMountSlot::Bottom,
         ))
         .id();
@@ -125,6 +137,8 @@ fn spawn_ui_root(
                 top: Val::Px(0.0),
                 ..default()
             },
+            FocusPolicy::Pass,
+            Pickable::IGNORE,
             UiMountSlot::Overlay,
         ))
         .id();
@@ -138,6 +152,8 @@ fn spawn_ui_root(
                 top: Val::Px(0.0),
                 ..default()
             },
+            FocusPolicy::Pass,
+            Pickable::IGNORE,
             UiMountSlot::TopRight,
         ))
         .id();
@@ -151,6 +167,8 @@ fn spawn_ui_root(
                 top: Val::Px(0.0),
                 ..default()
             },
+            FocusPolicy::Pass,
+            Pickable::IGNORE,
             UiMountSlot::TopLeft,
         ))
         .id();
@@ -256,4 +274,37 @@ pub fn setup_ui<F, G>(
         &mut info_panel_nodes,
     );
     spawn_root_vignette(&mut commands, overlay_slot);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn spawn_roots(mut commands: Commands) {
+        spawn_ui_root(&mut commands);
+    }
+
+    #[test]
+    fn structural_fullscreen_roots_are_picking_transparent() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_systems(Startup, spawn_roots);
+
+        app.update();
+
+        let mut roots = app.world_mut().query::<(
+            Option<&UiRoot>,
+            Option<&UiMountSlot>,
+            &FocusPolicy,
+            &Pickable,
+        )>();
+        let structural: Vec<_> = roots
+            .iter(app.world())
+            .filter(|(root, slot, _, _)| root.is_some() || slot.is_some())
+            .collect();
+        assert_eq!(structural.len(), 8);
+        assert!(structural.iter().all(|(_, _, focus, pickable)| {
+            **focus == FocusPolicy::Pass && **pickable == Pickable::IGNORE
+        }));
+    }
 }

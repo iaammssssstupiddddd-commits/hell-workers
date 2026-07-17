@@ -31,7 +31,7 @@ pub fn zone_placement_system(
     q_yards: Query<(Entity, &Yard)>,
     q_sites: Query<&Site>,
 ) {
-    if input.ui_input_state.pointer_over_ui {
+    if input.ui_input_state.world_input_blocked() {
         return;
     }
 

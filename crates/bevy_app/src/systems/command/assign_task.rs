@@ -48,7 +48,7 @@ pub fn assign_task_system(
         q_designations,
         q_familiars,
     } = worker_queries;
-    if ui_input_state.pointer_over_ui {
+    if ui_input_state.world_input_blocked() {
         return;
     }
 

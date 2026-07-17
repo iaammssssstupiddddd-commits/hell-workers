@@ -12,7 +12,7 @@ pub fn building_move_system(
     game_assets: Res<crate::assets::GameAssets>,
     mut commands: Commands,
 ) {
-    if input.ui_input_state.pointer_over_ui {
+    if input.ui_input_state.world_input_blocked() {
         return;
     }
     if input.buttons.just_pressed(MouseButton::Right) {

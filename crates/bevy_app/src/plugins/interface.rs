@@ -17,6 +17,10 @@ use bevy::prelude::*;
 
 pub struct InterfacePlugin;
 
+fn world_ui_actions_enabled(ui_input_state: Res<hw_ui::components::UiInputState>) -> bool {
+    !ui_input_state.world_input_captured
+}
+
 impl Plugin for InterfacePlugin {
     fn build(&self, app: &mut App) {
         plugins::register_ui_plugins(app);
@@ -24,19 +28,19 @@ impl Plugin for InterfacePlugin {
         app.add_systems(
             Update,
             (
-                toggle_render3d_button_system,
+                toggle_render3d_button_system.run_if(world_ui_actions_enabled),
                 update_render3d_button_visual_system,
-                toggle_instant_build_button_system,
+                toggle_instant_build_button_system.run_if(world_ui_actions_enabled),
                 update_instant_build_button_visual_system,
-                toggle_soul_mask_button_system,
+                toggle_soul_mask_button_system.run_if(world_ui_actions_enabled),
                 update_soul_mask_button_visual_system,
-                toggle_rtt_light_button_system,
+                toggle_rtt_light_button_system.run_if(world_ui_actions_enabled),
                 update_rtt_light_button_visual_system,
-                toggle_rtt_extra_light_button_system,
+                toggle_rtt_extra_light_button_system.run_if(world_ui_actions_enabled),
                 update_rtt_extra_light_button_visual_system,
-                toggle_rtt_terrain_button_system,
+                toggle_rtt_terrain_button_system.run_if(world_ui_actions_enabled),
                 update_rtt_terrain_button_visual_system,
-                toggle_rtt_scene_objects_button_system,
+                toggle_rtt_scene_objects_button_system.run_if(world_ui_actions_enabled),
                 update_rtt_scene_objects_button_visual_system,
                 update_lod_indicator_system,
                 update_render_perf_status_system,

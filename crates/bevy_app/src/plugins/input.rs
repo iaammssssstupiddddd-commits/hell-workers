@@ -1,14 +1,17 @@
 //! 入力関連のプラグイン
 
 use crate::input_actions::{
-    InputAction, InputPreUpdateSet, InputResolutionSet, ResolvedInputFrame,
-    cancel_or_close_input_action_system, configure_input_resolution_sets,
-    input_action_to_ui_intent_system, resolve_input_frame_system,
+    InputAction, InputPreUpdateSet, InputResolutionSet, PendingWorldInputCapture,
+    ResolvedInputFrame, cancel_or_close_input_action_system, configure_input_resolution_sets,
+    input_action_to_ui_intent_system, request_capture_from_menu_buttons_system,
+    request_capture_from_resolved_actions_system, reset_pending_world_input_capture_system,
+    resolve_input_frame_system, rollback_in_progress_gesture_system,
+    sync_world_input_capture_system,
 };
 use crate::interface::selection::handle_mouse_input;
 use crate::interface::ui::UiInputState;
-use crate::systems::GameSystemSet;
 use bevy::camera_controller::pan_camera::{PanCamera, PanCameraPlugin};
+use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
 use hw_core::quality::QualitySettings;
@@ -20,12 +23,29 @@ impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(PanCameraPlugin);
         app.init_resource::<ResolvedInputFrame>();
+        app.init_resource::<PendingWorldInputCapture>();
+        app.init_resource::<UiInputState>();
         configure_input_resolution_sets(app);
         app.add_systems(
             PreUpdate,
             (
+                (
+                    reset_pending_world_input_capture_system,
+                    request_capture_from_menu_buttons_system,
+                )
+                    .chain()
+                    .in_set(InputPreUpdateSet::CaptureRequest),
                 resolve_input_frame_system.in_set(InputPreUpdateSet::Resolve),
-                pan_camera_ui_guard_system.in_set(GameSystemSet::Input),
+                (
+                    request_capture_from_resolved_actions_system,
+                    sync_world_input_capture_system,
+                )
+                    .chain()
+                    .in_set(InputPreUpdateSet::CaptureTransition),
+                rollback_in_progress_gesture_system.in_set(InputPreUpdateSet::Rollback),
+                pan_camera_ui_guard_system
+                    .in_set(InputPreUpdateSet::CameraGuard)
+                    .before(PickingSystems::Hover),
             ),
         );
         app.add_systems(
@@ -58,13 +78,13 @@ impl Plugin for InputPlugin {
     }
 }
 
-/// UI パネル上にカーソルがある間、またはテキスト入力中は PanCamera を無効化する
+/// UI が world input を遮断している間、またはテキスト入力中は PanCamera を無効化する。
 fn pan_camera_ui_guard_system(
     mut q_camera: Query<&mut PanCamera, With<MainCamera>>,
     ui_input_state: Res<UiInputState>,
 ) {
     if let Ok(mut pan_camera) = q_camera.single_mut() {
-        pan_camera.enabled = !ui_input_state.pointer_over_ui
+        pan_camera.enabled = !ui_input_state.world_input_blocked()
             && !hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state);
     }
 }
@@ -231,5 +251,33 @@ mod tests {
                 .resource::<hw_core::GameSettings>()
                 .debug_gizmos_enabled
         );
+    }
+
+    #[test]
+    fn pan_camera_capture_guard_restores_enabled_without_changing_mouse_setting() {
+        let mut app = minimal_app();
+        app.init_resource::<UiInputState>()
+            .add_systems(Update, pan_camera_ui_guard_system);
+        let mut controller = PanCamera::default();
+        controller.mouse_pan_settings.enabled = false;
+        let camera = app.world_mut().spawn((controller, MainCamera)).id();
+        app.world_mut()
+            .resource_mut::<UiInputState>()
+            .world_input_captured = true;
+
+        app.update();
+
+        let controller = app.world().entity(camera).get::<PanCamera>().unwrap();
+        assert!(!controller.enabled);
+        assert!(!controller.mouse_pan_settings.enabled);
+
+        app.world_mut()
+            .resource_mut::<UiInputState>()
+            .world_input_captured = false;
+        app.update();
+
+        let controller = app.world().entity(camera).get::<PanCamera>().unwrap();
+        assert!(controller.enabled);
+        assert!(!controller.mouse_pan_settings.enabled);
     }
 }

@@ -1,5 +1,5 @@
 use crate::components::{
-    SoulRenameActive, SoulRenameButton, SoulRenameFieldContainer, SoulRenameState,
+    SoulRenameActive, SoulRenameButton, SoulRenameFieldContainer, SoulRenameState, UiInputState,
 };
 use crate::models::inspection::EntityInspectionViewModel;
 use crate::setup::UiAssets;
@@ -26,6 +26,7 @@ pub struct SoulRenameButtonCtx<'w, 's, A: UiAssets + Resource + 'static> {
     pub theme: Res<'w, UiTheme>,
     pub inspection_vm: Res<'w, EntityInspectionViewModel>,
     pub input_focus: ResMut<'w, InputFocus>,
+    pub ui_input_state: Res<'w, UiInputState>,
 }
 
 /// Soul リネームボタンのクリック処理
@@ -33,6 +34,9 @@ pub fn soul_rename_button_system<A: UiAssets + Resource>(
     q_buttons: Query<&Interaction, (Changed<Interaction>, With<SoulRenameButton>)>,
     mut ctx: SoulRenameButtonCtx<A>,
 ) {
+    if ctx.ui_input_state.world_input_captured {
+        return;
+    }
     for interaction in q_buttons.iter() {
         if *interaction != Interaction::Pressed {
             continue;

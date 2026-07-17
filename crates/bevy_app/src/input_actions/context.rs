@@ -9,6 +9,8 @@ use crate::app_contexts::TaskContext;
 use crate::entities::familiar::Familiar;
 use crate::interface::selection::SelectedEntity;
 
+use super::capture::PendingWorldInputCapture;
+
 /// The visually highest overlay that owns keyboard input for the frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputOverlay {
@@ -99,6 +101,7 @@ pub(crate) struct InputContextParams<'w, 's> {
     menu_state: Res<'w, MenuState>,
     selected: Res<'w, SelectedEntity>,
     debug_visible: Res<'w, crate::DebugVisible>,
+    pending_capture: Option<Res<'w, PendingWorldInputCapture>>,
     q_familiars: Query<'w, 's, (), With<Familiar>>,
     q_load_confirm: Query<'w, 's, &'static Node, With<LoadConfirmDialog>>,
     q_settings: Query<'w, 's, &'static Node, With<SettingsPanel>>,
@@ -124,7 +127,7 @@ impl InputContextParams<'_, '_> {
         let simulation_paused = self.time.is_paused();
         let has_in_progress_gesture =
             has_active_area_edit_drag || task_mode_has_in_progress_gesture(self.task_context.0);
-        let top_overlay = if query_is_visible(&self.q_load_confirm) {
+        let visible_overlay = if query_is_visible(&self.q_load_confirm) {
             Some(InputOverlay::LoadConfirm)
         } else if query_is_visible(&self.q_settings) {
             Some(InputOverlay::Settings)
@@ -134,6 +137,17 @@ impl InputContextParams<'_, '_> {
             Some(InputOverlay::OperationDialog)
         } else {
             None
+        };
+        let pending_overlay = self
+            .pending_capture
+            .as_ref()
+            .and_then(|pending| pending.overlay());
+        let top_overlay = match (pending_overlay, visible_overlay) {
+            (Some(pending), Some(visible)) if pending.priority() < visible.priority() => {
+                Some(visible)
+            }
+            (Some(pending), _) => Some(pending),
+            (None, visible) => visible,
         };
 
         (

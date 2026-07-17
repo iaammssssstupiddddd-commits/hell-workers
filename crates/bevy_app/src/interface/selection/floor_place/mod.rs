@@ -47,7 +47,7 @@ pub fn floor_placement_system(
     mut world_map: WorldMapWrite,
     mut commands: Commands,
 ) {
-    if input.ui_input_state.pointer_over_ui {
+    if input.ui_input_state.world_input_blocked() {
         return;
     }
 

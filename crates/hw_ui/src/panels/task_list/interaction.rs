@@ -2,7 +2,7 @@
 
 use crate::camera::MainCamera;
 use crate::components::{
-    EntityListBody, LeftPanelMode, LeftPanelTabButton, TaskListBody, TaskListItem,
+    EntityListBody, LeftPanelMode, LeftPanelTabButton, TaskListBody, TaskListItem, UiInputState,
 };
 use crate::list::{RowHighlightState, apply_row_highlight, focus_camera_on_entity};
 use crate::panels::info_panel::InfoPanelPinState;
@@ -58,7 +58,11 @@ pub fn left_panel_tab_system(
     tab_buttons: Query<(Entity, &LeftPanelTabButton, &Children)>,
     mut text_colors: Query<&mut TextColor>,
     mut border_colors: Query<&mut BorderColor>,
+    ui_input_state: Res<UiInputState>,
 ) {
+    if ui_input_state.world_input_captured {
+        return;
+    }
     for (interaction, tab) in &interactions {
         if *interaction == Interaction::Pressed && *mode != tab.0 {
             *mode = tab.0;
@@ -132,7 +136,11 @@ pub fn task_list_click_system(
     interactions: Query<(&Interaction, &TaskListItem), Changed<Interaction>>,
     mut camera_query: Query<&mut Transform, With<MainCamera>>,
     target_transforms: Query<&GlobalTransform, Without<MainCamera>>,
+    ui_input_state: Res<UiInputState>,
 ) {
+    if ui_input_state.world_input_captured {
+        return;
+    }
     for (interaction, item) in &interactions {
         if *interaction != Interaction::Pressed {
             continue;

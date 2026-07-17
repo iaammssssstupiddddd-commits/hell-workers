@@ -1,6 +1,7 @@
 use super::resize::{ENTITY_LIST_DEFAULT_HEIGHT, ENTITY_LIST_MIN_HEIGHT};
 use crate::components::{
     EntityListBody, EntityListMinimizeButton, EntityListMinimizeButtonLabel, EntityListPanel,
+    UiInputState,
 };
 use crate::theme::UiTheme;
 use bevy::prelude::*;
@@ -42,7 +43,11 @@ pub fn entity_list_minimize_toggle_system(
     mut q_label_text: Query<&mut Text, With<EntityListMinimizeButtonLabel>>,
     mut state: ResMut<EntityListMinimizeState>,
     theme: Res<UiTheme>,
+    ui_input_state: Res<UiInputState>,
 ) {
+    if ui_input_state.world_input_captured {
+        return;
+    }
     let Ok(mut panel_node) = q_panel_node.single_mut() else {
         return;
     };

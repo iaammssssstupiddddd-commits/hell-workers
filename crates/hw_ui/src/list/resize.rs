@@ -1,5 +1,5 @@
 use super::minimize::EntityListMinimizeState;
-use crate::components::EntityListPanel;
+use crate::components::{EntityListPanel, UiInputState};
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::window::{CursorIcon, PrimaryWindow, SystemCursorIcon};
@@ -23,6 +23,17 @@ pub struct EntityListResizeState {
     start_top: f32,
     snap_step: f32,
     snap_anchor: f32,
+}
+
+impl EntityListResizeState {
+    pub fn reset_active(&mut self) {
+        self.active = false;
+        self.edge = None;
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
 }
 
 fn is_cursor_on_vertical_resize_edge(
@@ -98,7 +109,12 @@ pub fn entity_list_resize_system(
     mut resize_state: ResMut<EntityListResizeState>,
     mut minimize_state: ResMut<EntityListMinimizeState>,
     theme: Res<UiTheme>,
+    ui_input_state: Res<UiInputState>,
 ) {
+    if ui_input_state.world_input_captured {
+        resize_state.reset_active();
+        return;
+    }
     if minimize_state.minimized {
         resize_state.active = false;
         resize_state.edge = None;
@@ -225,6 +241,7 @@ pub fn entity_list_resize_cursor_system(
     q_panel: Query<(&ComputedNode, &UiGlobalTransform), With<EntityListPanel>>,
     resize_state: Res<EntityListResizeState>,
     minimize_state: Res<EntityListMinimizeState>,
+    ui_input_state: Res<UiInputState>,
     mut q_cursor: Query<&mut CursorIcon, With<PrimaryWindow>>,
     mut commands: Commands,
 ) {
@@ -235,7 +252,8 @@ pub fn entity_list_resize_cursor_system(
         return;
     };
 
-    let desired = if !minimize_state.minimized
+    let desired = if !ui_input_state.world_input_captured
+        && !minimize_state.minimized
         && (resize_state.active
             || window.cursor_position().is_some_and(|cursor| {
                 is_cursor_on_vertical_resize_edge(cursor, computed, transform)
@@ -251,5 +269,24 @@ pub fn entity_list_resize_cursor_system(
         }
     } else {
         commands.entity(window_entity).insert(desired);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_reset_clears_active_resize_edge() {
+        let mut state = EntityListResizeState {
+            active: true,
+            edge: Some(ResizeEdge::Top),
+            ..default()
+        };
+
+        state.reset_active();
+
+        assert!(!state.is_active());
+        assert!(state.edge.is_none());
     }
 }
