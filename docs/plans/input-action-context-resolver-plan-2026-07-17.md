@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `input-action-context-resolver-plan-2026-07-17` |
-| ステータス | `Draft` |
+| ステータス | `In Progress` |
 | 作成日 | `2026-07-17` |
 | 最終更新日 | `2026-07-17` |
 | 作成者 | `Codex` |
@@ -453,17 +453,21 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   - `crates/bevy_app/src/systems/save/{mod.rs,state.rs}`
   - `crates/bevy_app/src/systems/visual/elevation_view.rs`
   - `crates/bevy_app/src/interface/ui/interaction/`（UiIntent bridge の最小配線）
+  - `docs/architecture.md`
+  - `docs/save_load.md`
+  - `docs/debug-features.md`
+  - `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
 - 完了条件:
-  - [ ] F5 で Save だけが要求され、Soul mask は変わらない
-  - [ ] save file がある F9 で load confirm だけが開き、確認前に `LoadRequested` にならない
-  - [ ] save file がない F9 は既存 warning/no-op 契約を維持し、direct load を要求しない
-  - [ ] F5/F9 以外の操作と DevPanel から Soul mask / extra light を引き続き変更できる
-  - [ ] Ctrl+V では elevation が変わらないための exact chord test が先に通る
-  - [ ] `Resolve -> PointerIngress -> Consume` の M1 ordering test が通る
-  - [ ] AreaEdit active drag 中の F5 は SaveGame を生成しない
-  - [ ] 同じ action の alias を同 frame に押しても action/consumer は 1 回だけ処理する
-  - [ ] 異なる family は明示 compatible な組だけを安定順で返し、同じ排他的 family と非 compatible lane は priority の 1 action だけを返す
-  - [ ] M1 終了時点で unused type/system や `#[allow(dead_code)]` がない
+  - [x] F5 で Save だけが要求され、Soul mask は変わらない
+  - [x] save file がある F9 で load confirm だけが開き、確認前に `LoadRequested` にならない
+  - [x] save file がない F9 は既存 warning/no-op 契約を維持し、direct load を要求しない
+  - [x] F5/F9 以外の操作と DevPanel から Soul mask / extra light を引き続き変更できる
+  - [x] Ctrl+V では elevation が変わらないための exact chord test が先に通る
+  - [x] `Resolve -> PointerIngress -> Consume` の M1 ordering test が通る
+  - [x] AreaEdit active drag 中の F5 は SaveGame を生成しない
+  - [x] 同じ action の alias を同 frame に押しても action/consumer は 1 回だけ処理する
+  - [x] 異なる family は明示 compatible な組だけを安定順で返し、同じ排他的 family と非 compatible lane は priority の 1 action だけを返す
+  - [x] M1 終了時点で unused type/system や `#[allow(dead_code)]` がない
 - 検証:
   - `cargo test -p bevy_app@0.1.0 input_actions`
   - `cargo test -p bevy_app@0.1.0 systems::save`
@@ -818,16 +822,16 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 現在地
 
-- 進捗: `計画 100% / 実装 0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1〜M4 すべて未着手
+- 進捗: `計画 100% / 実装 25%`
+- 完了済みマイルストーン: M1
+- 未着手/進行中: M2〜M4 未着手
 - 前提: A1 だけを対象とする。A2/A3 や keybinding settings を同時実装しない。
 
 ### 次のAIが最初にやること
 
 1. `git status --short` と並行差分を確認し、本計画外の変更を stage/revert しない。
-2. 3.1 の keyboard consumer と `GameSystemSet` ordering を現行 HEAD で再確認する。
-3. M1 の resolver matrix と `Resolve -> PointerIngress -> Consume` ordering test を先に書き、F5/F9 vertical slice だけを実装する。capture 系 ordering test は実処理を導入する M3b で追加する。
+2. M1 の `input_actions` model/binding table、frame置換test、Save/Load UiIntent bridgeを回帰させず、M2のresolver matrix testを先に追加する。
+3. M2のB/Z、Space、Digit1-4、Familiar、Escapeをowner単位で移行し、selection suppressionとowner cleanupを同じmilestone内で成立させる。capture系orderingは実処理を導入するM3bで追加する。
 
 ### ブロッカー/注意点
 
@@ -887,14 +891,15 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 最終確認ログ
 
-- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（並行 worktree を含む）`
-- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（plan-only、並行 worktree を含む）`
+- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（M1完了時）`
+- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（M1完了時）`
 - 最終 `python3 scripts/dev.py docs --check`: `2026-07-17 / pass`
 - 最終 `git diff --check`: `2026-07-17 / pass`
-- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `未実行（実装 0%）`
-- 最終 `cargo test --workspace`: `未実行（実装 0%）`
-- 最終 rust-analyzer workspace diagnostics: `2026-07-17 / error 0、warning 0`
-- 未解決エラー: なし。実装着手前に並行 worktree の状態を再確認すること。
+- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-07-17 / pass（M1完了時）`
+- 最終 `cargo test --workspace --locked`: `2026-07-17 / pass（M1完了時）`
+- 最終 rust-analyzer diagnostics: `2026-07-17 / 変更Rustファイルでerror 0、warning 0`
+- 最終 `python3 scripts/dev.py verify`: `2026-07-17 / pass（M1完了時）`
+- 未解決エラー: なし。M2着手前に並行worktreeの状態を再確認すること。
 
 ### Definition of Done
 
@@ -924,3 +929,4 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 | `2026-07-17` | `Codex` | pause 中の frame lifetime、Modal/Pause capture、全 mode Escape cleanup、F5/F9/D の既定割当を現行コード照合後に確定 |
 | `2026-07-17` | `Codex` | 最終レビューを反映。`UiSystems::Focus` 後の capture 順序、drag rollback、OpenMenu Escape、AreaEdit current-state gate、排他的 action family を受入契約へ追加 |
 | `2026-07-17` | `Codex` | 再レビュー指摘を反映。pending overlay capture、InputFocus clear、Picking 前 PanCamera guard、cross-family conflict、frame-start selection、gesture 中 Save 抑止、全 owner/Entity List rollback を追加し、M1/M2/M3 の実装・受入境界を修正 |
+| `2026-07-17` | `Codex` | M1完了。frame-local resolver、exact chord、binding data priority/compatibility、F5/F9 UiIntent bridge、V consumerを実装し、debug aliasとdirect F9 loadを削除。恒久docsと回帰testを同期 |

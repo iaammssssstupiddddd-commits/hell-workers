@@ -56,6 +56,14 @@ graph TD
 `crates/bevy_app/src/lib.rs` は共有 Resource・公開 module・event re-exportと `HellWorkersGamePlugin` を提供し、focused unit testはここから対象systemだけを登録する：
 `Input` → `Spatial` → `Logic` → `Actor` → `Visual` → `Interface`
 
+keyboard action は段階的に `crates/bevy_app/src/input_actions/` へ移行している。現在は F5/F9/V を
+`InputPlugin` 所有の `InputPreUpdateSet::Resolve` で exact chord として解決し、frame-local な
+`ResolvedInputFrame` を毎 `PreUpdate` に置換する。`Update::GameSystemSet::Input` 内は
+`InputResolutionSet::PointerIngress → Consume` の順で、mouse selection の後に UiIntent bridge と
+elevation consumer が同じ snapshot を読む。`ResolvedInputFrame` は保存・Reflect・frame 越しの queue の
+対象にしない。B/Z/Space/Digit/Escape、Familiar、AreaEdit、Tab、P/O、残るdebug keyはまだ既存 owner が
+raw input を読むため、全 shortcut の移行完了とは扱わない。
+
 ### Global Cycle Framework (Logic Phase)
 
 `Logic` フェーズ内では、**AI** の動作順序を厳密に制御するための4フェーズサブセット（`FamiliarAiSystemSet` / `SoulAiSystemSet`、どちらも `hw_core::system_sets` で定義）が使われています。
@@ -135,7 +143,7 @@ Perceive → Update → Decide → Execute
 `crates/bevy_app/src/systems/save/` — `SavePlugin`（`HellWorkersGamePlugin` が登録する root 専用 plugin: 全クレートの型に届く必要があるため leaf へ移動不可）。
 
 - セーブ/ロードとも exclusive system（`&mut World`）で 1 フレーム内に完結する
-- Input / Interfaceは`Update`で`SaveLoadState`だけを発行し、exclusive applyは`Last::SaveLoadApplySet`へ固定する。`SettingsPersistenceSet`の後に順序付けられたproject-owned最終phaseであり、他のproject `Last` systemを追加する場合は前後関係を明示する
+- F5/F9 は `PreUpdate` の input resolver から `UiIntent::SaveGame` / `RequestLoadGame` へ bridge し、Interface handler が `SaveLoadState` を更新する。F9 は save file の存在確認と確認ダイアログを通り、`ConfirmLoadGame` の時だけ `LoadRequested` になる。exclusive applyは`Last::SaveLoadApplySet`へ固定する。`SettingsPersistenceSet`の後に順序付けられたproject-owned最終phaseであり、他のproject `Last` systemを追加する場合は前後関係を明示する
 - 保存対象は allow-list 方式（`saving.rs`）。ロード後は `rehydrate.rs` が spawn 共用の `attach_*_shell` 関数で通常の実行時コンポーネント・随伴エンティティを再付与し、`rehydrate_obstacle_runtime` が obstacle provenance / navigation cache を durable semantic source から再構築する
 - `LoadResetRegistry`はroot所有。leafは`reset_for_world_replace(&mut World)`だけを公開し、root facadeがcallbackを登録する。old simulation Entityを保持するResource/message/UI/visual cacheはreplace前にclearし、runtime-only `GatheringSpot`とlinked visualも同時にdespawnする。system-localは`hw_core::WorldEpoch`不一致でlazy clearする。old `RemovedComponents`はwrite前に二重bufferを破棄し、new `Added`/`Changed`は次frameへ保持する
 - **spawn 時コンポーネントを追加したら allow-list、shell、または source-aware rehydrate helper に必ず登録する**（I-P1）。タプルキーのコレクションは保存型に持ち込まない（I-P2）
@@ -259,7 +267,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 - `ELEVATION_DISTANCE = 800`（`pub const`、`elevation_view.rs` で定義）
 - TopDown の RtT は Camera3d の `OrthographicProjection.scale` を Camera2d 側のズーム量に同期する。
-- 矢視時の回転・Y 高度は `elevation_view_input_system`（V キー押下時）が設定し、`sync_camera3d_system` は上書きしない。
+- 矢視時の回転・Y 高度は `elevation_view_input_system`（resolver が生成した exact unmodified V の `CycleElevation` action）が設定し、`sync_camera3d_system` は上書きしない。Ctrl+V など修飾付き chord は矢視を変更しない。
 - `update_terrain_lod_metrics_system` は `sync_camera3d_system.after(...)` で登録され、更新済みの `Camera3dRtt` 投影から `tile_rtt_px` / `tile_screen_px` を観測する。現 runtime LOD は `Lod1 / Lod1Lite / Lod2` の 3 段を使い、`Lod0` は将来の高品質 variant 用に予約されている。
 
 ### Camera3d の向き
@@ -315,7 +323,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - `mesh_face` には `SOUL_FACE_SCALE_MULTIPLIER` を掛け、PoC 目視で顔が読み取りづらい問題を asset 非破壊で補正する。
 - `mesh_face` のローカル回転は GLB 側の初期姿勢をそのまま使い、PoC 段階では追加の billboard 回転を行わない。
 - `Camera3dRtt` には `AmbientLight` を付与し、GLB 付属の lit material が RtT 上で暗転しないようにする。
-- `startup_systems::setup` では RtT 用の主 `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 2048 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。追加の 2 本目 light は `RenderPerfToggles.extra_directional_light_enabled` で有効化するテスト用経路で、`F9` / DevPanel `Light2` から切り替える。receiver-side `Soul` projector はこの追加 light も含めて評価する。
+- `startup_systems::setup` では RtT 用の主 `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 2048 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。追加の 2 本目 light は `RenderPerfToggles.extra_directional_light_enabled` で有効化するテスト用経路で、DevPanel `Light2` または `HW_ENABLE_RTT_EXTRA_DIRECTIONAL_LIGHT` から切り替える。receiver-side `Soul` projector はこの追加 light も含めて評価する。
 - `Camera3dSoulMaskRtt` は Soul mask 専用 Camera3d で、通常の `Camera3dRtt` と同じ Transform / Projection を共有する。最終合成では `RttCompositeMaterial` が `soul_mask_texture`（`RttRuntime.soul_mask` と同期）を近傍サンプリングし、Soul シルエットだけを画面上で少し膨らませて角を丸める。
 - Familiar は 2D `Sprite` の 4 フレーム差し替え・左右反転・hover/wobble を本表示として維持する。Command radius オーラ・hover/selection・吹き出しも同じ 2D world transform を参照する。
 - Familiar は建築物 RtT 合成より手前に出す前提とし、Soul のような shadow proxy や shadow caster は持たない。
@@ -438,9 +446,12 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 ## キーボードショートカット
 
-### グローバルショートカット（統一管理）
+### グローバルショートカット（段階移行中）
 
-`crates/bevy_app/src/interface/ui/interaction/systems.rs` の `ui_keyboard_shortcuts_system` で一元管理する。`interaction/mod.rs` は re-export shell として公開面を束ねる。
+F5/F9/V は `crates/bevy_app/src/input_actions/` の binding table と resolver が唯一の raw keyboard readerである。
+Save/Load action は既存 `UiIntent` handlerへ渡し、elevation actionは既存visual consumerが処理する。
+それ以外は現時点では `ui_keyboard_shortcuts_system` または各domain ownerに残り、後続マイルストーンで移行する。
+`interaction/mod.rs` は UI interaction の re-export shell として公開面を束ねる。
 
 | キー | 機能 | 備考 |
 |:--|:--|:--|
@@ -452,6 +463,9 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 | `3` | 高速 (x2) | |
 | `4` | 超高速 (x4) | |
 | `Escape` | BuildingPlace/ZonePlace/TaskDesignation キャンセル | PlayMode依存 |
+| `F5` | Save | text input中とAreaEdit active drag中は生成しない。Soul mask aliasは廃止 |
+| `F9` | Load確認を要求 | save file不在時はwarning/no-op。追加light aliasは廃止 |
+| `V` | 矢視切替 | exact unmodified chordのみ |
 | `F12` | デバッグ表示トグル + Gizmo 切替 | `plugins/input.rs`。`GizmoConfigStore` の enabled も同期 |
 | `F3` | 3D 表示トグル | `plugins/input.rs`。`Render3dVisible` を反転し、Camera3dRtt と RttCompositeSprite を制御（**Dev 専用**） |
 

@@ -1,5 +1,9 @@
 //! 入力関連のプラグイン
 
+use crate::input_actions::{
+    InputPreUpdateSet, InputResolutionSet, ResolvedInputFrame, configure_input_resolution_sets,
+    input_action_to_ui_intent_system, resolve_input_frame_system,
+};
 use crate::interface::selection::handle_mouse_input;
 use crate::interface::ui::UiInputState;
 use crate::systems::GameSystemSet;
@@ -14,20 +18,32 @@ pub struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(PanCameraPlugin);
+        app.init_resource::<ResolvedInputFrame>();
+        configure_input_resolution_sets(app);
         app.add_systems(
             PreUpdate,
-            pan_camera_ui_guard_system.in_set(GameSystemSet::Input),
+            (
+                resolve_input_frame_system.in_set(InputPreUpdateSet::Resolve),
+                pan_camera_ui_guard_system.in_set(GameSystemSet::Input),
+            ),
+        );
+        app.add_systems(
+            Update,
+            handle_mouse_input
+                .run_if(in_state(PlayMode::Normal))
+                .in_set(InputResolutionSet::PointerIngress),
+        );
+        app.add_systems(
+            Update,
+            input_action_to_ui_intent_system.in_set(InputResolutionSet::Consume),
         );
         app.add_systems(
             Update,
             (
-                handle_mouse_input.run_if(in_state(PlayMode::Normal)),
                 debug_toggle_system,
                 render3d_toggle_system,
                 rtt_quality_cycle_system,
-                soul_mask_toggle_system,
                 rtt_directional_light_toggle_system,
-                rtt_extra_directional_light_toggle_system,
                 rtt_terrain_toggle_system,
                 rtt_scene_objects_toggle_system,
             )
@@ -76,21 +92,6 @@ fn rtt_quality_cycle_system(
     }
 }
 
-/// F5 キーで Soul mask RtT をトグルする。
-fn soul_mask_toggle_system(
-    buttons: Res<ButtonInput<KeyCode>>,
-    ui_input_state: Res<UiInputState>,
-    mut perf_toggles: ResMut<crate::RenderPerfToggles>,
-) {
-    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
-        return;
-    }
-    if buttons.just_pressed(KeyCode::F5) {
-        perf_toggles.soul_mask_enabled = !perf_toggles.soul_mask_enabled;
-        info!("Soul mask RtT enabled: {}", perf_toggles.soul_mask_enabled);
-    }
-}
-
 /// F6 キーで RtT 用 DirectionalLight をトグルする。
 fn rtt_directional_light_toggle_system(
     buttons: Res<ButtonInput<KeyCode>>,
@@ -105,25 +106,6 @@ fn rtt_directional_light_toggle_system(
         info!(
             "RtT directional light enabled: {}",
             perf_toggles.directional_light_enabled
-        );
-    }
-}
-
-/// F9 キーで追加の RtT DirectionalLight をトグルする。
-fn rtt_extra_directional_light_toggle_system(
-    buttons: Res<ButtonInput<KeyCode>>,
-    ui_input_state: Res<UiInputState>,
-    mut perf_toggles: ResMut<crate::RenderPerfToggles>,
-) {
-    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
-        return;
-    }
-    if buttons.just_pressed(KeyCode::F9) {
-        perf_toggles.extra_directional_light_enabled =
-            !perf_toggles.extra_directional_light_enabled;
-        info!(
-            "RtT extra directional light enabled: {}",
-            perf_toggles.extra_directional_light_enabled
         );
     }
 }

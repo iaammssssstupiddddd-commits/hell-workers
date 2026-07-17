@@ -44,14 +44,13 @@
 - Resource: `Render3dVisible(pub bool)`（定義: `crates/bevy_app/src/lib.rs`、production Appへの初期登録: `plugins/game.rs`）
 - マーカー: `ToggleRender3dButton`
 
-### 3D 固定費比較キー
+### 3D 固定費比較操作
 
 - `F4`: RtT 品質を `High -> Medium -> Low` で循環する
-- `F5`: Soul mask RtT pass を ON / OFF する
 - `F6`: RtT 用 DirectionalLight を ON / OFF する
 - `F7`: RtT terrain を ON / OFF する
 - `F8`: RtT の main scene object（建築物・Soul・Familiar）を ON / OFF する
-- `F9`: 追加テスト用の 2 本目の RtT `DirectionalLight` を ON / OFF する
+- Soul mask と追加テスト用の2本目のRtT `DirectionalLight` はDevPanelの `Mask` / `Light2` buttonから切り替える。F5/F9はplayer Save/Load専用で、debug aliasを持たない
 - 起動時に固定したい場合は `HW_DISABLE_SOUL_MASK=1` / `HW_DISABLE_RTT_DIRECTIONAL_LIGHT=1` / `HW_ENABLE_RTT_EXTRA_DIRECTIONAL_LIGHT=1` / `HW_DISABLE_RTT_TERRAIN=1` / `HW_DISABLE_RTT_SCENE_OBJECTS=1` を指定する
 
 ### IBuild: ON / OFF ボタン（Instant Build）

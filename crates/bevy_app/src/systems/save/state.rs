@@ -1,11 +1,11 @@
 //! セーブ/ロードのトリガー状態管理
 //!
-//! `SaveLoadState` はキー入力（F5=セーブ, F9=ロード）を検出した通常システムから
+//! `SaveLoadState` は入力アクションまたは UI intent handler から
 //! `SaveRequested` / `LoadRequested` にセットされ、`Last`のexclusive apply
-//! dispatcherがこれを実行後に`Idle`へ戻す。
+//! dispatcherがこれを実行後に`Idle`へ戻す。F9 は確認ダイアログを経由し、
+//! confirm 後にだけ `LoadRequested` になる。
 
 use bevy::prelude::*;
-use hw_ui::components::UiInputState;
 use std::path::{Path, PathBuf};
 
 /// セーブファイルの保存先（ワークスペースルートからの相対パス）
@@ -45,26 +45,4 @@ pub enum SaveLoadState {
     Idle,
     SaveRequested,
     LoadRequested,
-}
-
-/// F5 でセーブ要求、F9 でロード要求を `SaveLoadState` にセットする。
-/// 既にセーブ/ロードが要求中の場合は多重リクエストを無視する。
-pub fn save_load_keybind_system(
-    buttons: Res<ButtonInput<KeyCode>>,
-    ui_input_state: Res<UiInputState>,
-    mut state: ResMut<SaveLoadState>,
-) {
-    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
-        return;
-    }
-    if *state != SaveLoadState::Idle {
-        return;
-    }
-    if buttons.just_pressed(KeyCode::F5) {
-        *state = SaveLoadState::SaveRequested;
-        info!("Save requested (F5)");
-    } else if buttons.just_pressed(KeyCode::F9) {
-        *state = SaveLoadState::LoadRequested;
-        info!("Load requested (F9)");
-    }
 }

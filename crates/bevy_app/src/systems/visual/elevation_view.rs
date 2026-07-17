@@ -4,7 +4,7 @@
 //! Camera3d を各方向のプリセット Transform に切り替えることで側面視を実現する。
 //! camera_sync.rs は矢視中は XZ 平行移動のみ同期し、回転・Y は保持する。
 
-use crate::interface::ui::UiInputState;
+use crate::input_actions::{InputAction, ResolvedInputFrame};
 use crate::plugins::startup::Camera3dRtt;
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, VIEW_HEIGHT, Z_OFFSET};
@@ -93,16 +93,12 @@ type Cam2dQuery<'w, 's> = Query<
 
 /// V キーで矢視方向をサイクル切替する。
 pub fn elevation_view_input_system(
-    keys: Res<ButtonInput<KeyCode>>,
-    ui_input_state: Res<UiInputState>,
+    resolved_input: Res<ResolvedInputFrame>,
     mut state: ResMut<ElevationViewState>,
     mut q_cam3d: Query<&mut Transform, With<Camera3dRtt>>,
     mut q_cam2d: Cam2dQuery,
 ) {
-    if hw_ui::interaction::text_input_blocks_keybinds(&ui_input_state) {
-        return;
-    }
-    if !keys.just_pressed(KeyCode::KeyV) {
+    if !resolved_input.contains(InputAction::CycleElevation) {
         return;
     }
 

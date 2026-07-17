@@ -17,7 +17,6 @@ mod transaction;
 
 use bevy::prelude::*;
 
-use crate::systems::GameSystemSet;
 use crate::systems::settings::SettingsPersistenceSet;
 
 pub use state::{SAVE_FILE_PATH, SaveLoadState, SavePath};
@@ -28,7 +27,6 @@ pub(crate) use reset::{
 };
 use saving::save_world_system;
 use schema::register_save_types;
-use state::save_load_keybind_system;
 
 /// The sole project-owned final phase that may write or replace the persisted
 /// world. Input and UI systems only write `SaveLoadState` during `Update`.
@@ -52,10 +50,6 @@ impl Plugin for SavePlugin {
         register_load_reset_hook(app, "root-runtime-caches", reset_runtime_caches);
 
         app.configure_sets(Last, SaveLoadApplySet.after(SettingsPersistenceSet));
-        app.add_systems(
-            Update,
-            save_load_keybind_system.in_set(GameSystemSet::Input),
-        );
         app.add_systems(Last, save_load_apply_system.in_set(SaveLoadApplySet));
     }
 }
@@ -72,7 +66,6 @@ fn save_load_apply_system(world: &mut World) {
 mod tests {
     use super::*;
     use crate::test_support::minimal_app;
-    use hw_ui::components::UiInputState;
 
     fn request_load(mut state: ResMut<SaveLoadState>) {
         *state = SaveLoadState::LoadRequested;
@@ -81,13 +74,11 @@ mod tests {
     #[test]
     fn update_request_is_consumed_once_by_the_last_apply_phase() {
         let mut app = minimal_app();
-        app.init_resource::<ButtonInput<KeyCode>>();
-        app.init_resource::<UiInputState>();
         app.add_plugins(SavePlugin);
         app.insert_resource(SavePath::new(
             std::env::temp_dir().join("hell-workers-missing-load-test.ron"),
         ));
-        app.add_systems(Update, request_load.after(save_load_keybind_system));
+        app.add_systems(Update, request_load);
 
         app.update();
 

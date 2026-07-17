@@ -1,6 +1,7 @@
 //! ビジュアル関連のプラグイン
 
 use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
+use crate::input_actions::InputResolutionSet;
 use crate::plugins::startup::{
     Camera3dRtt, Camera3dSoulMaskRtt, RttCompositeSprite, RttDirectionalLight,
     RttExtraDirectionalLight,
@@ -237,7 +238,7 @@ impl Plugin for VisualPlugin {
         // 矢視モード入力
         app.add_systems(
             Update,
-            elevation_view_input_system.in_set(GameSystemSet::Input),
+            elevation_view_input_system.in_set(InputResolutionSet::Consume),
         );
 
         // Render3dVisible の変更を Camera3dRtt と RttCompositeSprite に反映

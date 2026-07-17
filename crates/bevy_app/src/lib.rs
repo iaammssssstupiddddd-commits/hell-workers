@@ -1,6 +1,7 @@
 pub mod app_contexts;
 mod assets;
 mod entities;
+pub mod input_actions;
 pub mod interface;
 pub mod plugins;
 pub mod systems;
