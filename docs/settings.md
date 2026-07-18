@@ -22,7 +22,7 @@
 ## 重要な制約
 
 - **`apply_settings_system` は `Time<Virtual>` を触らない**（D9）。`default_time_speed` は Startup の `load_settings_system` で一度だけ適用する。設定 UI の Default Speed ボタンは次回起動用の値のみ更新し、現在の pause/速度は変えない。
-- **`PanCamera.enabled`** は通常 UI hover、Modal/Pause capture、text input focus の一時 guard 専用。overlay を閉じると既存設定どおり復帰する。永続化するのは `mouse_pan_settings.enabled` と `pan_speed` のみ。
+- **`PanCamera.enabled`** は通常 UI hover、Modal/Pause capture、text input focus、task area の左ドラッグ中に使う一時 guard 専用。area gesture は押下から release frame まで claim を維持し、残る capture / text focus / pointer claim がなくなった次 frame に既存設定どおり復帰する。永続化するのは `mouse_pan_settings.enabled` と `pan_speed` のみ。
 - **crate 境界**: `GameSettings` 型は `hw_core`。ロード/保存/intent 処理は `bevy_app`。UI spawn は `hw_ui`（`SettingsPanelInitial` DTO 経由）。
 - **widget の見た目同期**: headless widget のため見た目は自前。スライダー thumb は `sync_settings_slider_thumbs_system`、チェックマークは `sync_settings_checkmarks_system`（`Checked` の有無 → `Display`、いずれも `hw_ui/src/interaction/settings.rs`）が毎フレーム同期する。F12 は `debug_toggle_system` が `GameSettings` に加えて Debug Gizmos チェックボックスの `Checked` も直接更新する。
 - **`settings/` は gitignore 済み**（ユーザーローカルファイル。`saves/` と同扱い）。

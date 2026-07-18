@@ -77,6 +77,16 @@ fn resolve_left_click_intent(
     }
 }
 
+/// Returns whether the current pointer position is on a task-area border that would start
+/// `AreaSelection` when the normal world-selection ingress handles the same press.
+pub(crate) fn pointer_hits_task_area_border(
+    world_pos: Vec2,
+    current_selected: Option<Entity>,
+    q_task_areas: &Query<(Entity, &TaskArea), With<Familiar>>,
+) -> bool {
+    hovered_task_area_border_entity(world_pos, current_selected, q_task_areas).is_some()
+}
+
 /// Determines the SelectionIntent for a right-click at `world_pos`.
 fn resolve_right_click_intent(
     world_pos: Vec2,

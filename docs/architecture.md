@@ -420,6 +420,13 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
   `FocusPolicy::Pass + Pickable::IGNORE` とし、通常時の world picking を遮らない。
 - capture 開始時は未確定 Area/Zone/Dream gesture と Entity List drag/resize を rollback/reset する。
   選択/配置系と `PanCamera` guard は root 側で維持し、確定済み操作や mode owner 自体は変更しない。
+- task area の各 mode は左ボタンを press から release frame まで world gesture に予約する。
+  `pan_camera_world_input_guard_system` は現在の `TaskMode::*` に加え、同 frame の Familiar resolver action と
+  Normal selection の TaskArea border hit を `PickingSystems::Hover` より前に先読みして
+  `PanCamera.enabled=false` とする。claim は途中で mode/capture が変わっても release まで保持するため、
+  同じ pointer gesture の開始時にも途中再開時にも camera pan は発生しない。
+  release edge が消えた次 frame には guard を解除し、mode 待機中の通常 camera 操作と
+  `PanCamera.mouse_pan_settings.enabled` の永続設定は変更しない。
 
 ### UI 実行順序
 

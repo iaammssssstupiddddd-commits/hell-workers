@@ -7,7 +7,7 @@
 | 計画ID | `input-action-context-resolver-plan-2026-07-17` |
 | ステータス | `In Progress` |
 | 作成日 | `2026-07-17` |
-| 最終更新日 | `2026-07-17` |
+| 最終更新日 | `2026-07-18` |
 | 作成者 | `Codex` |
 | 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track A1） |
 | 関連Issue/PR | `N/A` |
@@ -50,6 +50,7 @@
 | D23 | selection snapshot | resolver は pointer selection より前に frame-start の `SelectedEntity` を読む。selection-dependent / context-mutating action がある frame は world と Entity List の selection mutation を抑止する | world click と Entity List click の schedule 差をなくし、resolver が判定した Familiar と後段 consumer が操作する Familiar を一致させる。通常 click の結果は次 frame の resolver から有効 |
 | D24 | gesture 中の Save | `has_in_progress_gesture` 中は `SaveGame` を生成しない。overlay transition と SaveLoad は非 compatible とし、Space+F5 は transition だけにする | AreaEdit は release 前から persisted `TaskArea` を変更し、`Last` save が rollback より先に未確定値を保存できるため |
 | D25 | debug snapshot | P/O の可否は resolver 時点の `DebugVisible` だけで決め、consumer 側の mutable `run_if(DebugVisible)` を外す | F12+P で F12 consumer が visibility を変えても、同 frame に解決済みの spawn actionを後段 gate が捨てないようにする |
+| D26 | task area と camera の左ドラッグ競合 | Designation / Area / Assign / Zone / Floor / Wall / Dream mode では、左ボタンの press から release frame まで `PanCamera.enabled=false` とする。現在の `TaskMode` に加えて同 frame の Familiar resolver action と通常 selection の TaskArea border hit を先読みし、claim 後は owner が解除されても release まで保持する | Bevy 0.19 の `PanCamera` と task area gesture が同じ左ドラッグを読むため。後段で mode が始まる frame や途中 cancel に隙間を作らず、mode 全期間を無効化して指定間の camera 操作を失うことも避ける |
 
 ## 1. 目的
 
@@ -106,7 +107,7 @@
 - ユーザーによるキーバインド変更、binding の `settings.ron` 永続化、競合設定 UI。
 - gamepad、アクセシビリティ preset、キー表示 glyph の自動切替。
 - マウスクリック/ドラッグ/ホイールの action 化。既存 system には capture guard だけを追加する。
-- `PanCameraPlugin` 内部の held key 入力の置換。既存 `pan_camera_ui_guard_system` の enable 条件だけを共通 capture に合わせる。
+- `PanCameraPlugin` 内部の held key 入力の置換。既存 `pan_camera_world_input_guard_system` の enable 条件だけを共通 capture / pointer claim に合わせる。
 - `FocusedInput<KeyboardInput>` を使う Bevy text editing の置換。
 - `crates/visual_test` 独立 binary の入力体系変更。
 - button、context menu、selection を含む全 UI 操作の単一 action enum/dispatcher 化。
@@ -129,7 +130,7 @@
 | `plugins/interface_debug.rs` | P/O | DebugVisible、text input | debug context が resolver とは別管理 |
 | selection / placement / area 系 mouse system | 左右 click、drag | `pointer_over_ui` | Modal/Pause panel 外では false になり、背後の world 操作が発火する |
 | Entity List drag / resize / row selection | raw mouse、`Interaction` | 独自 `DragState` / resize state | fullscreen root だけでは進行中 gesture、ghost、同 frame selection mutation が止まらない |
-| `pan_camera_ui_guard_system` | held WASD/QE 等 | `pointer_over_ui`、text input | Modal/Pause panel 外で camera が動く。UI state 更新との PreUpdate 順序も未指定 |
+| `pan_camera_world_input_guard_system` | held WASD/QE 等 | `pointer_over_ui`、text input | Modal/Pause panel 外で camera が動く。UI state 更新との PreUpdate 順序も未指定 |
 
 `Logic` set は `Time<Virtual>` の pause 中に実行されない。一方、Input/Visual/Interface は実行されるため、
 Familiar/Area action を保持型 Message にすると、consumer が止まっている間の入力が unpause 後に
@@ -163,7 +164,7 @@ PreUpdate
     -> begin_world_input_capture（InputFocus clear を含む）
     -> UiInputState world_input_captured / world_input_capture_started
     -> rollback_in_progress_gesture_system
-    -> pan_camera_ui_guard_system
+    -> pan_camera_world_input_guard_system
   PickingSystems::Hover
     -> Pointer<Drag> observers
 
@@ -388,7 +389,7 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 | mode/menu Escape | root の cancel adapter + mode/menu 固有 helper | OpenMenu/全 active mode の priority 解決後、4.5 の owner 契約を一度だけ実行する。Modal/Pause は UiIntent bridge、Normal+Familiar は familiar consumer が所有し、旧 `ui_keyboard_shortcuts_system` の raw Escape path は削除する |
 | overlay capture transition | root の capture request adapter + `begin_world_input_capture` helper | keyboard/UI button の全 open path を同じ helper へ集約し、pending capture、InputFocus clear、selection suppression を mutation owner より前に確定する |
 | capture-start rollback | root の capture transition adapter + gesture 固有 helper | action ではなく `world_input_capture_started` を 1 回だけ処理し、4.5 の未確定 gesture だけを戻す |
-| pointer/camera capture | 既存 selection/placement/area/Entity List system と `pan_camera_ui_guard_system` | action 化せず `world_input_blocked()` と frame-local selection suppression を共通 guard として読む |
+| pointer/camera capture | 既存 selection/placement/area/Entity List system と `pan_camera_world_input_guard_system` | action 化せず `world_input_blocked()` と frame-local selection suppression / primary-pointer claim を共通 guard として読む |
 
 1 action variant の mutation owner は 1 system に限定する。binding table の一意性に加え、
 テスト用の owner classification が全 `InputAction` variant を一度だけ分類することを検証する。
@@ -419,7 +420,7 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 - `UiInputCapture` も `Node.display != Display::None` のものだけを active とし、hidden dialog を capture 扱いしない。
 - Bevy 0.19 の `UiSystems::Focus` が `RelativeCursorPosition` と `Interaction` を更新するため、
   `update_ui_input_state_system.after(UiSystems::Focus)` を明示する。その後に pending/visible capture と
-  text-focus latch を同期し、`pan_camera_ui_guard_system` は両同期より後かつ
+  text-focus latch を同期し、`pan_camera_world_input_guard_system` は両同期より後かつ
   `PickingSystems::Hover` より前へ固定する。
 - capture 前から window drag 中の `Pointer<Drag>` observer も `PanCamera.enabled == false` を読むよう、
   integration test は enabled flag だけでなく camera `Transform` 不変を確認する。
@@ -572,7 +573,7 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   - `ui_interaction_system` は pending/active overlay の foreground ancestry を確認し、open request を発生させた
     button と最前面 overlay 内 button 以外の背景 `MenuButton` / `UiIntent` を同 frame から無視する。
   - Entity List capture 開始時は `DragState` と ghost を reset し、`EntityListResizeState.active=false` にする。
-  - `pan_camera_ui_guard_system` も capture flag を使い、capture/text-focus sync 後かつ
+  - `pan_camera_world_input_guard_system` も capture flag を使い、capture/text-focus sync 後かつ
     `PickingSystems::Hover` より前に実行する。
   - capture 開始 frame に `rollback_in_progress_gesture_system` を一度だけ実行し、4.5 の owner helper で
     AreaEdit、designation、Dream、Floor/Wall、Zone placement/removal、Entity List の未確定 drag/previewを開始前へ戻す。
@@ -762,10 +763,13 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   で一致する。
 - TextInput focused 中に各 overlay の open request を受理すると `InputFocus` が clear され、背景 field へ
   文字/Escape が届かない。
-- capture sync / text-focus sync → `pan_camera_ui_guard_system` → `PickingSystems::Hover` の順で、
+- capture sync / text-focus sync → `pan_camera_world_input_guard_system` → `PickingSystems::Hover` の順で、
   capture または text focus 中は `PanCamera.enabled == false` かつ既存 window drag の camera Transform が変化せず、
   capture 解除後は pointer/text-focus 条件どおり `PanCamera.enabled` が戻り、設定側が所有する
   `PanCamera.mouse_pan_settings.enabled` を上書きしない。
+- task area mode 待機中、同 frame の Familiar area action、Normal からの TaskArea border press の各開始経路で
+  実 `PanCameraPlugin` の primary `Drag` を送っても camera Transform が変化しない。claim 後に owner を解除しても
+  release までは不変で、release 後の通常 world drag は再び Transform を更新する。
 - AreaEdit / designation / Dream / Floor / Wall / Zone placement/removal の drag 中に capture を開始し、
   capture 中に release してから再開しても `TaskMode::*Some`、`active_drag`、Dream seed、Zone preview が残らない。
 - AreaEdit は開始前の `TaskArea`、`Destination`、`ActiveCommand` へ戻り、history、task assignment、
@@ -784,7 +788,7 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 4. Familiar を選択して Digit1-4 と B を押し、時間速度/menu が変わらないことを確認する。
 5. pause 中に同じ Familiar shortcut を押して離してから再開し、遅延 command が発火しないことを確認する。
 6. Familiar 選択を外して Digit1-4 と B を押し、時間速度/menu が現行どおり変わることを確認する。
-7. AreaSelection で copy/paste/undo/redo/preset を実行し、elevation/menu/time が変わらないことを確認する。
+7. AreaSelection で copy/paste/undo/redo/preset を実行し、elevation/menu/time が変わらないことを確認する。新規指定と既存 TaskArea border からの直接編集を左ドラッグしても camera が動かず、release 後は通常の mouse pan が復帰することも確認する。
 8. 検索/rename text field で B/Z/V/Space/Digit/Tab/Ctrl+V/Escape を入力し、ゲーム操作へ漏れないことを確認する。focus 中に各 overlay を UI から開き、focus が解除されて背景 field に文字/Escape が届かないことも確認する。
 9. load confirm、Settings、operation dialog、Pause menu を keyboard/UI button から開き、open request を受理した同 frame を含めて panel 外の shortcut/click/drag/WASD と背景 UI button が world/UI state を変えないことを確認する。
 10. Pause panel の Resume/Save/Load/Settings が操作でき、pause 中の Escape は mode を壊さず resume だけを行うことを確認する。
@@ -893,16 +897,17 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 最終確認ログ
 
-- 最終 `cargo fmt --all -- --check`: `2026-07-17 / pass（M4自動回帰時）`
-- 最終 `cargo check --workspace --locked`: `2026-07-17 / pass（M4自動回帰時）`
-- 最終 `python3 scripts/dev.py docs --check`: `2026-07-17 / pass`
-- 最終 `git diff --check`: `2026-07-17 / pass`
-- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-07-17 / pass（M4自動回帰時）`
-- 最終 `cargo test --workspace --locked`: `2026-07-17 / pass（M4自動回帰時、bevy_app 155件・hw_ui 8件を含む）`
-- 最終 rust-analyzer diagnostics: `2026-07-17 / workspace error 0、warning 0`
-- 最終 `python3 scripts/dev.py verify`: `2026-07-17 / pass（M4自動回帰時）`
-- 未解決エラー: なし。実 pointer/keyboard 操作を伴う manual scenario は未実施。M4 完了前に
-  PanCamera Transform 不変、capture→release、背景 EditableText 非配送を実機確認すること。
+- 最終 `cargo fmt --all -- --check`: `2026-07-18 / pass（task-area camera 修正後）`
+- 最終 `cargo check --workspace --locked`: `2026-07-18 / pass（task-area camera 修正後）`
+- 最終 `python3 scripts/dev.py docs --check`: `2026-07-18 / pass`
+- 最終 `git diff --check`: `2026-07-18 / pass`
+- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-07-18 / pass（task-area camera 修正後）`
+- 最終 `cargo test --workspace --locked`: `2026-07-18 / pass（bevy_app 160件・hw_ui 8件を含む）`
+- 最終 rust-analyzer diagnostics: `2026-07-18 / workspace error 0、warning 0`
+- 最終 `python3 scripts/dev.py verify`: `2026-07-18 / pass（task-area camera 修正後）`
+- 未解決エラー: なし。manual scenario で判明した task-area 左ドラッグと PanCamera の競合は修正し、
+  実 `PanCameraPlugin` event の自動回帰を追加済み。M4 完了前に同操作の実機再確認と、残る
+  capture→release、背景 EditableText 非配送を確認すること。
 
 ### Definition of Done
 
@@ -937,3 +942,4 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 | `2026-07-17` | `Codex` | M3a完了。AreaEdit exact chord/Shift snapshot、Tab、P/O、F3/F4/F6/F7/F8/F12をresolverへ移行し、production raw keyboard readerをresolverとwhitelistへ限定 |
 | `2026-07-17` | `Codex` | M3b実装。pending/visible overlay capture、viewport blocking root、foreground UI gate、capture開始時gesture rollback、Entity List reset、PanCamera/Picking orderingを導入。自動検証を完了し、実drag/releaseはM4手動受入へ明記 |
 | `2026-07-17` | `Codex` | M4自動回帰と恒久docs同期を完了。全capture overlay受理と全gesture variant/AreaEdit history非破壊testを追加し、verify・docs・rust-analyzerを通過。実pointer/keyboardのmanual scenarioは未完了として維持 |
+| `2026-07-18` | `Codex` | M4手動確認で判明した task-area 左ドラッグと PanCamera の競合を修正。current mode、同 frame resolver action、TaskArea border press を先読みする release-sticky claim と実 PanCamera Transform 回帰を追加し、verify・docs・rust-analyzerを再通過。実機再確認は未完了として維持 |

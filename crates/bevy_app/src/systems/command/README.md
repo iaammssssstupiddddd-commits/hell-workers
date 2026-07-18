@@ -76,6 +76,10 @@ TaskArea { bounds: AreaBounds }  // Familiar が管轄するエリア
   command system は `ButtonInput<KeyCode>` を直接読まない。
 - selection / assign / area / zone の pointer consumer は `UiInputState::world_input_blocked()` に従い、
   Modal/Pause 中の panel 外 click/drag を無視する。
+- task area の左ドラッグは press から release frame まで一次ポインタを所有する。
+  `plugins/input.rs` の `pan_camera_world_input_guard_system` は現在の mode、同 frame の resolver action、
+  通常 selection の TaskArea border hit から claim を開始し、owner state が途中で解除されても release まで
+  `PanCamera.enabled` を一時的に落とす。
 - capture 開始時の未確定 Designation / Area / Assign / Zone / Floor / Wall / Dream gesture、AreaEdit drag、
   Dream seed、Zone removal preview の rollback は `input_actions/capture.rs` から共通 owner helper を呼ぶ。
   SoulSpa placement を含む mode ownerと、確定済み history/request は維持する。
