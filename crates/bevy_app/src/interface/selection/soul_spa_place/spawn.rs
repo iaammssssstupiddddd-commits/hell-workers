@@ -13,7 +13,7 @@ use hw_visual::visual3d::Building3dVisual;
 pub fn spawn_soul_spa(
     commands: &mut Commands,
     world_map: &mut WorldMapWrite,
-    tiles: [(i32, i32); 4],
+    tiles: &[(i32, i32)],
     center_pos: Vec2,
     power_grid_entity: Option<Entity>,
     game_assets: &GameAssets,
@@ -51,7 +51,7 @@ pub fn spawn_soul_spa(
             .insert(GeneratesFor(grid_entity));
     }
 
-    for (gx, gy) in tiles {
+    for &(gx, gy) in tiles {
         let tile_pos = WorldMap::grid_to_world(gx, gy);
         commands.spawn((
             SoulSpaTile {
@@ -78,7 +78,7 @@ pub fn spawn_soul_spa(
     ));
 
     // WorldMap footprint 登録（SoulSpa は obstacle なし — occupancy のみ。Soulがタイル上を歩ける）
-    for (gx, gy) in tiles {
+    for &(gx, gy) in tiles {
         world_map.set_building((gx, gy), site_entity);
     }
 }

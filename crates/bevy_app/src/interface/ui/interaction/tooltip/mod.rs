@@ -6,11 +6,10 @@ pub(crate) use hw_ui::interaction::tooltip::{
 
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use bevy::time::Real;
 use bevy::ui_widgets::popover::Popover;
 use hw_core::{EpochLocal, WorldEpoch};
-use hw_ui::components::{
-    HoverTooltip, MenuState, PlacementFailureTooltip, TooltipTemplate, UiNodeRegistry,
-};
+use hw_ui::components::{HoverTooltip, MenuState, TooltipTemplate, UiNodeRegistry};
 use hw_ui::interaction::tooltip;
 use hw_ui::models::inspection::EntityInspectionModel;
 use hw_ui::panels::tooltip_builder::TooltipBuildPayload;
@@ -53,8 +52,9 @@ impl TooltipContentRenderer for TooltipRenderer {
 #[derive(SystemParam)]
 pub(crate) struct TooltipStateInput<'w, 's> {
     pub time: Res<'w, Time>,
+    pub real_time: Res<'w, Time<Real>>,
     pub hovered: Res<'w, crate::interface::selection::HoveredEntity>,
-    pub placement_failure_tooltip: ResMut<'w, PlacementFailureTooltip>,
+    pub placement_feedback: Res<'w, hw_ui::selection::PlacementFeedbackState>,
     pub menu_state: Res<'w, MenuState>,
     pub ui_nodes: Res<'w, UiNodeRegistry>,
     pub game_assets: Res<'w, crate::assets::GameAssets>,
@@ -86,8 +86,9 @@ pub(crate) fn hover_tooltip_system(
 ) {
     let TooltipStateInput {
         time,
+        real_time,
         hovered,
-        mut placement_failure_tooltip,
+        placement_feedback,
         menu_state,
         ui_nodes,
         game_assets,
@@ -99,8 +100,9 @@ pub(crate) fn hover_tooltip_system(
         commands,
         tooltip::TooltipBevy {
             time: &time,
+            real_time: &real_time,
             hovered: &hovered,
-            placement_failure_tooltip: &mut placement_failure_tooltip,
+            placement_feedback: &placement_feedback,
             menu_state: &menu_state,
             ui_nodes: &ui_nodes,
         },

@@ -15,15 +15,25 @@ type TooltipProgressQuery<'w, 's> = Query<
     Without<HoverTooltip>,
 >;
 
+pub(crate) struct TooltipFadeStyle {
+    pub fade_alpha: f32,
+    pub border_base: Color,
+    pub interpolation: f32,
+}
+
 pub(crate) fn apply_fade_effects(
     tooltip_bg: &mut BackgroundColor,
     tooltip_border: &mut BorderColor,
     q_tooltip_text: &mut TooltipTextQuery<'_, '_>,
     q_tooltip_progress: &mut TooltipProgressQuery<'_, '_>,
-    fade_alpha: f32,
     theme: &UiTheme,
-    fade_t: f32,
+    style: TooltipFadeStyle,
 ) {
+    let TooltipFadeStyle {
+        fade_alpha,
+        border_base,
+        interpolation: fade_t,
+    } = style;
     let bg = theme.colors.tooltip_bg.to_srgba();
     let bg_target = Color::srgba(bg.red, bg.green, bg.blue, 0.95 * fade_alpha);
     tooltip_bg.0 = tooltip_bg
@@ -31,7 +41,7 @@ pub(crate) fn apply_fade_effects(
         .try_interpolate_stable(&bg_target, fade_t)
         .unwrap_or(bg_target);
 
-    let border = theme.colors.tooltip_border.to_srgba();
+    let border = border_base.to_srgba();
     let border_target = Color::srgba(
         border.red,
         border.green,

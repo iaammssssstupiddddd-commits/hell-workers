@@ -9,6 +9,7 @@ pub mod components;
 pub mod interaction;
 pub mod list;
 pub mod models;
+pub mod notifications;
 pub mod panels;
 pub mod plugins;
 pub mod setup;
@@ -22,7 +23,10 @@ pub struct HwUiPlugin;
 impl Plugin for HwUiPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<UiIntent>()
-            .add_message::<TextInputIntent>();
+            .add_message::<TextInputIntent>()
+            .add_message::<notifications::UserFacingNotification>()
+            .init_resource::<notifications::NotificationCenter>()
+            .init_resource::<notifications::NotificationUiRuntime>();
     }
 }
 
@@ -34,6 +38,7 @@ impl Plugin for HwUiPlugin {
 pub fn reset_for_world_replace(world: &mut World) {
     clear_message::<UiIntent>(world);
     clear_message::<TextInputIntent>(world);
+    clear_message::<notifications::UserFacingNotification>(world);
 
     let mut transient_nodes = collect_dynamic_list_nodes(world);
     transient_nodes.extend(collect_task_list_nodes(world));
@@ -67,6 +72,8 @@ pub fn reset_for_world_replace(world: &mut World) {
     reset_existing_resource::<area_edit::AreaEditHistory>(world);
     reset_existing_resource::<area_edit::AreaEditClipboard>(world);
     reset_existing_resource::<interaction::TextFieldPendingAction>(world);
+    reset_existing_resource::<selection::PlacementFeedbackState>(world);
+    notifications::reset_for_world_replace(world);
     mark_entity_list_dirty(world);
 
     if world.contains_resource::<InputFocus>() {
@@ -142,6 +149,29 @@ mod tests {
         let rename_field = world.spawn_empty().id();
         let drag_ghost = world.spawn_empty().id();
         let list_row = world.spawn_empty().id();
+        let toast_row = world.spawn(notifications::NotificationToastRow).id();
+        let history_row = world.spawn(notifications::NotificationHistoryRow).id();
+        let toast_root = world
+            .spawn((
+                Node {
+                    display: Display::Flex,
+                    ..default()
+                },
+                notifications::NotificationToastRoot,
+            ))
+            .id();
+        let history_panel = world
+            .spawn((
+                Node {
+                    display: Display::Flex,
+                    ..default()
+                },
+                notifications::NotificationHistoryPanel,
+            ))
+            .id();
+        let unread_text = world
+            .spawn((Text::new("通知 (1)"), notifications::NotificationUnreadText))
+            .id();
 
         world.insert_resource(components::SoulRenameState {
             active: Some(components::SoulRenameActive {
@@ -165,6 +195,16 @@ mod tests {
         world.insert_resource(list::EntityListDirty::default());
         world.init_resource::<Messages<UiIntent>>();
         world.init_resource::<Messages<TextInputIntent>>();
+        world.init_resource::<Messages<notifications::UserFacingNotification>>();
+        world.init_resource::<notifications::NotificationCenter>();
+        world.init_resource::<notifications::NotificationUiRuntime>();
+        let mut placement_feedback = selection::PlacementFeedbackState::default();
+        placement_feedback.show_recent_rejection(
+            selection::PlacementRejectReason::OutOfBounds,
+            (0, 0),
+            std::time::Duration::ZERO,
+        );
+        world.insert_resource(placement_feedback);
         world
             .resource_mut::<Messages<UiIntent>>()
             .write(UiIntent::InspectEntity(stale_simulation_entity));
@@ -174,6 +214,19 @@ mod tests {
                 entity: stale_simulation_entity,
                 name: "stale".to_string(),
             });
+        let notification = notifications::UserFacingNotification::new(
+            "stale",
+            notifications::NotificationSeverity::Warning,
+            "stale",
+            "stale",
+            notifications::NotificationRetention::Important,
+        );
+        world
+            .resource_mut::<Messages<notifications::UserFacingNotification>>()
+            .write(notification.clone());
+        world
+            .resource_mut::<notifications::NotificationCenter>()
+            .push(notification, std::time::Duration::ZERO);
 
         reset_for_world_replace(&mut world);
 
@@ -193,6 +246,8 @@ mod tests {
         assert!(world.get_entity(rename_field).is_err());
         assert!(world.get_entity(drag_ghost).is_err());
         assert!(world.get_entity(list_row).is_err());
+        assert!(world.get_entity(toast_row).is_err());
+        assert!(world.get_entity(history_row).is_err());
         assert!(
             world
                 .resource::<list::EntityListNodeIndex>()
@@ -206,6 +261,38 @@ mod tests {
         );
         assert!(world.resource::<Messages<UiIntent>>().is_empty());
         assert!(world.resource::<Messages<TextInputIntent>>().is_empty());
+        assert!(
+            world
+                .resource::<Messages<notifications::UserFacingNotification>>()
+                .is_empty()
+        );
+        assert_eq!(
+            world
+                .resource::<notifications::NotificationCenter>()
+                .toast_count(),
+            0
+        );
+        assert_eq!(
+            world
+                .resource::<notifications::NotificationCenter>()
+                .history_count(),
+            0
+        );
+        assert_eq!(
+            world.get::<Node>(toast_root).unwrap().display,
+            Display::None
+        );
+        assert_eq!(
+            world.get::<Node>(history_panel).unwrap().display,
+            Display::None
+        );
+        assert_eq!(world.get::<Text>(unread_text).unwrap().0, "通知");
+        assert!(
+            world
+                .resource::<selection::PlacementFeedbackState>()
+                .visible(std::time::Duration::ZERO)
+                .is_none()
+        );
     }
 }
 pub mod camera;

@@ -155,9 +155,9 @@ Perceive → Update → Decide → Execute
 `crates/bevy_app/src/systems/save/` — `SavePlugin`（`HellWorkersGamePlugin` が登録する root 専用 plugin: 全クレートの型に届く必要があるため leaf へ移動不可）。
 
 - セーブ/ロードとも exclusive system（`&mut World`）で 1 フレーム内に完結する
-- F5/F9 は `PreUpdate` の input resolver から `UiIntent::SaveGame` / `RequestLoadGame` へ bridge し、Interface handler が `SaveLoadState` を更新する。F9 は save file の存在確認と確認ダイアログを通り、`ConfirmLoadGame` の時だけ `LoadRequested` になる。exclusive applyは`Last::SaveLoadApplySet`へ固定する。`SettingsPersistenceSet`の後に順序付けられたproject-owned最終phaseであり、他のproject `Last` systemを追加する場合は前後関係を明示する
+- F5/F9 は `PreUpdate` の input resolver から `UiIntent::SaveGame` / `RequestLoadGame` へ bridge し、Interface handler が `SaveLoadState` を更新する。F9 は save file が存在すれば確認後、存在しなければdialogを省略してload ownerへ要求する。exclusive applyは`Last::SaveLoadApplySet`へ固定する。dispatcherは要求を先に`Idle`へ戻し、全処理とworld replacement resetの後でterminal `SaveLoadOutcome`を1件だけ発行する。`SettingsPersistenceSet`の後に順序付けられたproject-owned最終phaseであり、他のproject `Last` systemを追加する場合は前後関係を明示する
 - 保存対象は allow-list 方式（`saving.rs`）。ロード後は `rehydrate.rs` が spawn 共用の `attach_*_shell` 関数で通常の実行時コンポーネント・随伴エンティティを再付与し、`rehydrate_obstacle_runtime` が obstacle provenance / navigation cache を durable semantic source から再構築する
-- `LoadResetRegistry`はroot所有。leafは`reset_for_world_replace(&mut World)`だけを公開し、root facadeがcallbackを登録する。old simulation Entityを保持するResource/message/UI/visual cacheはreplace前にclearし、runtime-only `GatheringSpot`とlinked visualも同時にdespawnする。system-localは`hw_core::WorldEpoch`不一致でlazy clearする。old `RemovedComponents`はwrite前に二重bufferを破棄し、new `Added`/`Changed`は次frameへ保持する
+- `LoadResetRegistry`はroot所有。leafは`reset_for_world_replace(&mut World)`だけを公開し、root facadeがcallbackを登録する。old simulation Entityを保持するResource/message/UI/visual cacheはreplace前にclearし、runtime-only `GatheringSpot`とlinked visualも同時にdespawnする。notification historyと旧outcomeもclearし、reset後に書かれたload結果を新world最初の重要通知とする。system-localは`hw_core::WorldEpoch`不一致でlazy clearする。old `RemovedComponents`はwrite前に二重bufferを破棄し、new `Added`/`Changed`は次frameへ保持する
 - **spawn 時コンポーネントを追加したら allow-list、shell、または source-aware rehydrate helper に必ず登録する**（I-P1）。タプルキーのコレクションは保存型に持ち込まない（I-P2）
 - 仕様: [docs/save_load.md](save_load.md) / 不変条件: [docs/invariants.md §7](invariants.md)
 
@@ -379,8 +379,8 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 ### hw_ui と root の境界
 
-- `hw_ui` 側はUIノード生成・表示系システムの本体を集約する。具体的にはステータス表示、tooltip_builder、info_panel、task_list の render/interaction、エンティティリストの汎用メカニクス（resize/minimize/visual）を保持する。`UiRoot` / `UiMountSlot` / `UiSlot` / `UiNodeRegistry` のような**共有 UI 契約型**は `hw_core::ui_nodes` が所有し、`hw_ui` は re-export する。
-- root 側 (`bevy_app`) は `UiIntent` メッセージ受信、PlayMode 遷移、ゲームエンティティ ECS Query、WorldMapWrite/TaskContext など**ゲーム状態を持つ adapter** を担当する。
+- `hw_ui` 側はUIノード生成・表示系システムの本体を集約する。具体的にはステータス表示、tooltip_builder、info_panel、task_list、エンティティリストの汎用メカニクスに加え、有界な`UserFacingNotification` reducer/UIとtyped `PlacementFeedbackState`を保持する。`UiRoot` / `UiMountSlot` / `UiSlot` / `UiNodeRegistry` のような**共有 UI 契約型**は `hw_core::ui_nodes` が所有し、`hw_ui` は re-export する。
+- root 側 (`bevy_app`) は `UiIntent` メッセージ受信、PlayMode 遷移、ゲームエンティティ ECS Query、WorldMapWrite/TaskContext など**ゲーム状態を持つ adapter** を担当する。`SaveLoadOutcome`から安全な表示文言への変換と、WorldMap/Queryをtyped placement validatorへ渡す処理もroot adapterである。
 - `crates/bevy_app/src/interface/ui/mod.rs` は app shell の正規入口として機能し、外部から使われるシンボルのみを明示的に re-export する（wildcard `*` は使用しない）。
 
 ### アセット抽象化
@@ -432,6 +432,10 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 `ui_interaction_system → handle_text_input_intents_system → handle_ui_intent → specialized action → menu_visibility_system → pause/settings presentation → update_mode_text_system → update_area_edit_preview_ui_system` を同一 chain で固定する。keyboard shortcut はこの chain の前に resolver で解決済みである。`context_menu_system`、task summary、time/speed 表示、vignette などの後段更新は、この chain の後に実行する。
 
+結果通知は `NotificationSystemSet::Adapt → Reduce → Present` を同じInterface phase内でchainする。save/load adapterが
+`UserFacingNotification`を書いた同じUpdateでreducerとrendererまで到達する。配置feedbackは
+`PlacementFeedbackSet::Produce → Present → Commit`をchainし、previewで表示した同じvalidatorをcommitで再実行する。
+
 ### root 残留（境界維持）
 
 | ファイル | 理由 |
@@ -452,18 +456,18 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 | 区分 | 置き場所 | 内容 |
 | --- | --- | --- |
 | state resource | `hw_core::selection` + `hw_ui::selection` | `SelectedEntity`, `HoveredEntity`, `SelectionIndicator` は `hw_core` 所有、`cleanup_selection_references_system` は `hw_ui::selection` |
-| shared 型・validation | `hw_ui::selection::placement` | `PlacementRejectReason`（`NotStraightLine` 含む）, `PlacementValidation`, `PlacementGeometry`, `WorldReadApi`, `BuildingPlacementContext` |
+| shared 型・validation | `hw_ui::selection::placement` | `PlacementRejectReason`（14分類）, `PlacementValidation`, `PlacementTileRejection`, `PlacementFeedbackState`, `AreaPlacementPlan`, `PlacementGeometry`, `WorldReadApi`, `BuildingPlacementContext` |
 | placement geometry API | `hw_ui::selection::placement` | `building_geometry`, `building_occupied_grids`, `building_spawn_pos`, `building_size`, `bucket_storage_geometry`, `validate_building_placement`, `validate_bucket_storage_placement` |
-| move geometry API | `hw_ui::selection::placement` | `move_anchor_grid`, `move_occupied_grids`, `move_spawn_pos`, `can_place_moved_building`, `validate_moved_bucket_storage_placement` |
-| floor / wall validation | `hw_ui::selection::placement` | `validate_area_size`, `validate_wall_area`, `validate_floor_tile`, `validate_wall_tile` |
+| move geometry API | `hw_ui::selection::placement` | `move_anchor_grid`, `move_occupied_grids`, `move_spawn_pos`, `validate_moved_building_placement`, `validate_moved_bucket_storage_placement` |
+| floor / wall validation | `hw_ui::selection::placement` | `build_area_placement_plan`, `validate_area_size`, `validate_wall_area`, `validate_floor_tile`, `validate_wall_tile` |
 | selection intent | `hw_ui::selection::intent` | `SelectionIntent` |
 | root adapter | `crates/bevy_app/src/interface/selection/*` | Query/Res から intent 生成、ECS 状態・WorldMap 変更の適用 |
 
 - `SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は cross-crate で共有される interaction state として `hw_core::selection` に置き、`hw_ui::selection` は cleanup と placement validation の公開面を担う。`Commands`/`WorldMapWrite`/`NextState<PlayMode>` は使わない。
 - `update_selection_indicator` の実装本体は `hw_visual` にあるが、選択更新と同フレームで反映するため root `Interface` フェーズで登録する。
-- `hw_ui::selection::placement` は building placement/move の geometry, validation 共通ロジックを保持する。`crates/bevy_app/src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/click_handlers.rs`・`crates/bevy_app/src/systems/visual/placement_ghost.rs` が共有する。内部は private submodule に分離済み: `geometry.rs`（座標変換・形状計算）/ `validation.rs`（配置可否判定）/ `tests.rs`。`placement.rs` root はファサード + 共有型定義のみ。
+- `hw_ui::selection::placement` は building placement/move/SoulSpa/area placement の geometry, typed validation, live/recent feedback共通ロジックを保持する。`crates/bevy_app/src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/click_handlers.rs`・`floor_place/validation.rs`・`soul_spa_place/mod.rs`・`crates/bevy_app/src/systems/visual/placement_ghost.rs` が共有する。内部は private submodule に分離済み: `geometry.rs`（座標変換・形状計算）/ `validation.rs`（配置可否判定）/ `tests.rs`。`placement.rs` root はファサード + 共有型定義のみ。
 - `building_move/geometry.rs` は hw_ui 移動に伴い削除済み。`building_move/placement.rs` は bucket storage 所有グリッド解決だけを持つ薄い adapter で、判定本体は `validate_moved_bucket_storage_placement` を使う。
-- floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。`WorldMap` → `WorldReadApi` の adapter は `crates/bevy_app/src/world/map/mod.rs` の `WorldMapRef<'a>` 一箇所に集約済み（旧来の各ファイルのローカルラッパーは削除済み）。
+- floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。rootの`build_floor_placement_plan` / `build_wall_placement_plan`がpreviewとcommitの両方で同じ`AreaPlacementPlan`を再構築し、有効タイルが1件以上なら部分採用する。`WorldMap` → `WorldReadApi` の adapter は `crates/bevy_app/src/world/map/mod.rs` の `WorldMapRef<'a>` 一箇所に集約済み（旧来の各ファイルのローカルラッパーは削除済み）。
 - `handle_mouse_input` の selection 判定は `SelectionIntent` を返す helper へ分離済み（`apply_selection_intent` が ECS 変更を適用）。
 - `building_move/mod.rs` は root shell として `preview.rs` / `system.rs` / `context.rs` / `click_handlers.rs` / `finalization.rs` を束ねる。`system.rs` は entrypoint に縮小され、`MoveStateCtx` / `MoveOpCtx` は `context.rs`、クリック別分岐は `click_handlers.rs`、`finalize_move_request` / `cancel_tasks_and_requests_for_moved_building` は `finalization.rs` に分離済み。`TransportRequest`・`unassign_task` 依存を持つため crate 境界としては root adapter に残留する。
 
@@ -492,7 +496,7 @@ text input focus/latch 中は action を生成しない。accepted overlay open 
 | `4` | 超高速 (x4) / Familiar Build | 同上 |
 | `Escape` | overlay close / resume / active owner cancel / menu close / Familiar Idle・Patrol | 左から context priority 順。Idle・Patrol は `TaskMode::None` の Normal 時だけ |
 | `F5` | Save | text input中とin-progress gesture中は生成しない。Soul mask aliasは廃止 |
-| `F9` | Load確認を要求 | save file不在時はwarning/no-op。追加light aliasは廃止 |
+| `F9` | Load確認を要求 | save file存在時は確認dialog、不在時はowner readへ進み`Save not found`を通知。追加light aliasは廃止 |
 | `V` | 矢視切替 | exact unmodified chordのみ |
 | `F12` | デバッグ表示トグル + Gizmo 切替 | `plugins/input.rs`。`GizmoConfigStore` の enabled も同期 |
 | `F3` | 3D 表示トグル | `plugins/input.rs`。`Render3dVisible` を反転し、Camera3dRtt と RttCompositeSprite を制御（**Dev 専用**） |

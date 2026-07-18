@@ -5,6 +5,7 @@
 pub mod dev_panel;
 pub mod interaction;
 pub mod list;
+pub(crate) mod notifications;
 pub mod panels;
 pub mod plugins;
 pub mod presentation;
@@ -12,7 +13,8 @@ pub mod setup;
 pub mod vignette;
 
 // hw_ui::components から外部が使うシンボル
-pub use hw_ui::components::{InfoPanelNodes, MenuState, PlacementFailureTooltip, UiInputState};
+pub use hw_ui::components::{InfoPanelNodes, MenuState, UiInputState};
+pub use hw_ui::selection::PlacementFeedbackState;
 
 // interaction から外部が使うシンボル
 pub use interaction::{

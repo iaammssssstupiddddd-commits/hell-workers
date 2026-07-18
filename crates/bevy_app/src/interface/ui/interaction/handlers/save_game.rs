@@ -16,7 +16,13 @@ pub(crate) fn handle(intent: UiIntent, ui: &mut IntentUiQueries) {
         }
         UiIntent::RequestLoadGame => {
             if !ui.save_path.as_path().exists() {
-                warn!("No save file at {}", ui.save_path.as_path().display());
+                // Let the save owner perform the authoritative read and emit
+                // LoadNotFound. This also covers a file disappearing after
+                // the UI's existence check.
+                if *ui.save_load_state == SaveLoadState::Idle {
+                    *ui.save_load_state = SaveLoadState::LoadRequested;
+                    info!("Load requested without confirmation for a missing target");
+                }
                 return;
             }
             begin_overlay_open(&mut ui.input_focus);
@@ -113,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn load_request_without_save_is_a_noop() {
+    fn load_request_without_save_reaches_the_load_owner_without_a_dialog() {
         let (mut app, dialog) =
             app_with_load_dialog(unique_save_path("missing-load"), Display::None);
         app.add_systems(Update, request_load);
@@ -122,7 +128,7 @@ mod tests {
 
         assert_eq!(
             *app.world().resource::<SaveLoadState>(),
-            SaveLoadState::Idle
+            SaveLoadState::LoadRequested
         );
         assert_eq!(
             app.world().entity(dialog).get::<Node>().unwrap().display,
@@ -156,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn confirm_is_the_only_load_intent_that_requests_loading() {
+    fn confirm_requests_loading_for_an_existing_save() {
         let (mut app, dialog) =
             app_with_load_dialog(unique_save_path("confirmed-load"), Display::Flex);
         app.add_systems(Update, confirm_load);

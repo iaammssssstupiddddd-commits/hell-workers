@@ -13,8 +13,9 @@
 | ディレクトリ/ファイル | 内容 |
 |---|---|
 | `mod.rs` | app shell 側の正規 UI facade。外部に必要なシンボルだけを明示 re-export |
+| `notifications.rs` | `SaveLoadOutcome`をsafeな重要`UserFacingNotification`へ変換するroot adapter |
 | `vignette.rs` | 画面周辺ヴィネットエフェクト |
-| `plugins/` | UI プラグイン登録 |
+| `plugins/` | UI プラグイン登録。通知の`Adapt → Reduce → Present`と配置の`Produce → Present → Commit`を固定 |
 | `setup/` | UI 要素の初期スポーン・`UiAssets` アダプタ実装 |
 | `panels/` | 情報パネル facade / task_list / tooltip_builder |
 | `list/` | エンティティリスト（ゲーム固有実装 + hw_ui re-export） |
@@ -42,6 +43,9 @@
 | `status_display.rs` | ステータス表示エントリポイント |
 | `status_display/` | ステータスバー描画（runtime, dream bar, mode panel） |
 | `tooltip/` | ツールチップ（target, layout, fade） |
+
+配置tooltipは`PlacementFeedbackState`のliveを優先し、確定失敗のrecent latchへfallbackする。
+RejectedとPartialは見出しとsemantic colorを分ける。
 
 ## panels/ ディレクトリ
 
@@ -74,6 +78,7 @@
 - Entity List は capture 開始時に drag ghost / pending drop / active drop / resize edge を reset する。
   world selection、placement、context menu は `world_input_blocked()` を使い、UI 内 interaction は capture flag
   だけで gate する。
+- トーストは入力透過である。通知履歴button/panelだけが入力をblockし、Modal/Pause capture開始時は履歴を閉じる。
 
 ## 公開方針
 
@@ -88,6 +93,7 @@
 | `list/sync.rs` | `Res<GameAssets>` を受けて `hw_ui::list::sync::*` を呼ぶ thin shell |
 | `list/view_model.rs` | `Familiar` / `DamnedSoul` / `AssignedTask` / `FamiliarAiState` などゲーム固有 ECS Query に依存 |
 | `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | `UiIntent::AdjustMaxControlledSoul*` を含むゲーム固有 `UiIntent` を処理する root adapter。`intent_handler.rs` は dispatcher のみで、`FamiliarOperation` 更新や `PlayMode` / `TimeSpeed` / `WorldMapWrite` 依存は `intent_context.rs` と `handlers/` 側に残留 |
+| `notifications.rs` | `SaveLoadOutcome`はroot save owner型。raw error/pathを渡さず固定文言、severity、dedupe keyへ写像する |
 | `list/interaction/navigation.rs` | `Res<TaskContext>`（ルート定義型）に依存 |
 | `panels/task_list/update.rs` | `Res<GameAssets>` — Bevy は `Res<dyn Trait>` 不可 |
 | `panels/context_menu.rs` | `Familiar`/`DamnedSoul`/`Building` ECS クエリ |

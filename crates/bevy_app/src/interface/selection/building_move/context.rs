@@ -6,6 +6,7 @@ use crate::systems::soul_ai::execute::task_execution::context::TaskUnassignQueri
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use bevy::time::Real;
 use hw_core::game_state::PlayMode;
 use hw_ui::camera::MainCamera;
 
@@ -38,6 +39,8 @@ pub struct BuildMoveState<'w> {
     pub move_placement_state: ResMut<'w, MovePlacementState>,
     pub companion_state: ResMut<'w, CompanionPlacementState>,
     pub next_play_mode: ResMut<'w, NextState<PlayMode>>,
+    pub real_time: Res<'w, Time<Real>>,
+    pub placement_feedback: ResMut<'w, hw_ui::selection::PlacementFeedbackState>,
 }
 
 #[derive(SystemParam)]

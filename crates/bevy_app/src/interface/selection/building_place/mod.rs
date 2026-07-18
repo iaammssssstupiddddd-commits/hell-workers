@@ -16,7 +16,9 @@ use crate::systems::jobs::{Blueprint, Building, BuildingType};
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapWrite};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use bevy::time::Real;
 use hw_ui::camera::MainCamera;
+use hw_ui::selection::PlacementFeedbackState;
 use hw_ui::selection::building_spawn_pos;
 use hw_world::zones::{Site, Yard};
 
@@ -40,6 +42,15 @@ pub struct BuildingStateQueries<'w, 's> {
     pub q_buildings: Query<'w, 's, &'static Building>,
 }
 
+#[derive(SystemParam)]
+pub struct BuildPlaceState<'w> {
+    pub build_context: Res<'w, BuildContext>,
+    pub companion_state: ResMut<'w, CompanionPlacementState>,
+    pub game_assets: Res<'w, GameAssets>,
+    pub real_time: Res<'w, Time<Real>>,
+    pub placement_feedback: ResMut<'w, PlacementFeedbackState>,
+}
+
 pub(super) struct PlacementQueries<'a, 'w, 's> {
     pub q_buildings: &'a Query<'w, 's, &'static Building>,
     pub q_blueprints_by_entity: &'a Query<'w, 's, &'static Blueprint>,
@@ -50,10 +61,8 @@ pub(super) struct PlacementQueries<'a, 'w, 's> {
 pub fn blueprint_placement(
     input: BuildPlaceInput,
     mut world_map: WorldMapWrite,
-    build_context: Res<BuildContext>,
-    mut companion_state: ResMut<CompanionPlacementState>,
+    mut state: BuildPlaceState,
     queries: BuildingStateQueries,
-    game_assets: Res<GameAssets>,
     mut commands: Commands,
 ) {
     if input.ui_input_state.world_input_blocked() {
@@ -77,38 +86,53 @@ pub fn blueprint_placement(
     };
 
     // companion 配置中は通常建築を抑止
-    if handle_companion_flow(
-        &mut companion_state,
+    if let Some(result) = handle_companion_flow(
+        &mut state.companion_state,
         &mut commands,
         &mut world_map,
-        &game_assets,
+        &state.game_assets,
         &pq,
         world_pos,
         grid,
     ) {
+        match result {
+            Ok(()) => state.placement_feedback.clear_recent_failure(),
+            Err(rejection) => state.placement_feedback.show_recent_rejection(
+                rejection.reason,
+                rejection.grid,
+                state.real_time.elapsed(),
+            ),
+        }
         return;
     }
 
-    let Some(building_type) = build_context.0 else {
+    let Some(building_type) = state.build_context.0 else {
         return;
     };
     let spawn_pos = building_spawn_pos(building_type, grid, RIVER_Y_MIN);
 
     if building_type == BuildingType::Tank {
-        companion_state.0 = Some(make_companion_placement(
+        state.companion_state.0 = Some(make_companion_placement(
             CompanionParentKind::Tank,
             grid,
             CompanionPlacementKind::BucketStorage,
             spawn_pos,
         ));
     } else {
-        let _ = place_building_blueprint(
+        match place_building_blueprint(
             &mut commands,
             &mut world_map,
-            &game_assets,
+            &state.game_assets,
             building_type,
             grid,
             &pq,
-        );
+        ) {
+            Ok(_) => state.placement_feedback.clear_recent_failure(),
+            Err(rejection) => state.placement_feedback.show_recent_rejection(
+                rejection.reason,
+                rejection.grid,
+                state.real_time.elapsed(),
+            ),
+        }
     }
 }

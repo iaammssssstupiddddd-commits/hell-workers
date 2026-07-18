@@ -6,9 +6,11 @@ use crate::systems::command::TaskMode;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use bevy::time::Real;
 use bevy::window::PrimaryWindow;
 use hw_energy::YardPowerGrid;
 use hw_ui::camera::MainCamera;
+use hw_ui::selection::PlacementFeedbackState;
 use hw_world::zones::Yard;
 
 #[derive(SystemParam)]
@@ -26,12 +28,19 @@ pub struct SoulSpaPlaceQueries<'w, 's> {
     q_power_grids: Query<'w, 's, (Entity, &'static YardPowerGrid)>,
 }
 
+#[derive(SystemParam)]
+pub struct SoulSpaPlaceRuntime<'w> {
+    world_map: WorldMapWrite<'w>,
+    game_assets: Res<'w, GameAssets>,
+    handles_3d: Res<'w, Building3dHandles>,
+    real_time: Res<'w, Time<Real>>,
+    placement_feedback: ResMut<'w, PlacementFeedbackState>,
+}
+
 pub fn soul_spa_place_input_system(
     mut p: SoulSpaPlaceInput,
     q: SoulSpaPlaceQueries,
-    mut world_map: WorldMapWrite,
-    game_assets: Res<GameAssets>,
-    handles_3d: Res<Building3dHandles>,
+    mut runtime: SoulSpaPlaceRuntime,
     mut commands: Commands,
 ) {
     if p.ui_state.world_input_blocked() {
@@ -50,30 +59,35 @@ pub fn soul_spa_place_input_system(
         return;
     };
 
-    let (gx, gy) = WorldMap::world_to_grid(world_pos);
-    // 2×2 footprint: top-left=(gx,gy), top-right=(gx+1,gy), bottom-left=(gx,gy-1), bottom-right=(gx+1,gy-1)
-    let tiles: [(i32, i32); 4] = [(gx, gy), (gx + 1, gy), (gx, gy - 1), (gx + 1, gy - 1)];
-
-    let all_valid = tiles.iter().all(|&(tx, ty)| {
-        let wpos = WorldMap::grid_to_world(tx, ty);
-        let in_yard = q.q_yards.iter().any(|(_, y)| y.contains(wpos));
-        let walkable = world_map.is_walkable(tx, ty);
-        let no_building = world_map.building_entity((tx, ty)).is_none();
-        in_yard && walkable && no_building
-    });
-
-    if !all_valid {
-        return;
-    }
-
-    let center_grid = (gx, gy);
-    let center_pos = WorldMap::grid_to_world(center_grid.0, center_grid.1);
-
+    let anchor = WorldMap::world_to_grid(world_pos);
+    let candidate_geometry = hw_ui::selection::building_geometry(
+        crate::systems::jobs::BuildingType::SoulSpa,
+        anchor,
+        crate::world::map::RIVER_Y_MIN,
+    );
     let yard_entity = q
         .q_yards
         .iter()
-        .find(|(_, yard)| yard.contains(center_pos))
-        .map(|(e, _)| e);
+        .find(|(_, yard)| {
+            candidate_geometry
+                .occupied_grids
+                .iter()
+                .all(|&(gx, gy)| yard.contains(WorldMap::grid_to_world(gx, gy)))
+        })
+        .map(|(entity, _)| entity);
+    let (geometry, validation) =
+        super::validate_soul_spa_placement(&runtime.world_map, anchor, yard_entity.is_some());
+    if !validation.can_place {
+        let rejection = validation
+            .rejection(anchor)
+            .expect("rejected SoulSpa placement must carry a reason");
+        runtime.placement_feedback.show_recent_rejection(
+            rejection.reason,
+            rejection.grid,
+            runtime.real_time.elapsed(),
+        );
+        return;
+    }
 
     let power_grid_entity = yard_entity.and_then(|ye| {
         q.q_power_grids
@@ -84,13 +98,14 @@ pub fn soul_spa_place_input_system(
 
     super::spawn::spawn_soul_spa(
         &mut commands,
-        &mut world_map,
-        tiles,
-        center_pos,
+        &mut runtime.world_map,
+        &geometry.occupied_grids,
+        geometry.draw_pos,
         power_grid_entity,
-        &game_assets,
-        &handles_3d,
+        &runtime.game_assets,
+        &runtime.handles_3d,
     );
+    runtime.placement_feedback.clear_recent_failure();
 
     p.task_context.0 = TaskMode::None;
 }

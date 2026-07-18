@@ -205,6 +205,13 @@ mod tests {
         changed: usize,
     }
 
+    #[derive(Resource, Default)]
+    struct ResetCount(usize);
+
+    fn count_reset(world: &mut World) {
+        world.resource_mut::<ResetCount>().0 += 1;
+    }
+
     fn observe_replacement_lifecycle(
         mut removed: RemovedComponents<DamnedSoul>,
         added: Query<Entity, Added<DamnedSoul>>,
@@ -355,6 +362,89 @@ mod tests {
                 .count(),
             0
         );
+    }
+
+    #[test]
+    fn recovered_and_failed_recovery_outcomes_survive_both_transaction_resets() {
+        use crate::systems::save::{
+            SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadResult, SaveLoadState,
+            SavePath,
+        };
+
+        let cases = [
+            (false, SaveLoadFailureKind::ApplyRecovered),
+            (true, SaveLoadFailureKind::RecoveryFailed),
+        ];
+
+        for (recovery_fails, expected_failure) in cases {
+            let mut live = app_with_save_schema();
+            insert_persisted_resources(live.world_mut(), 1.0);
+            live.world_mut().spawn(DamnedSoul::default());
+            live.add_message::<SaveLoadOutcome>();
+            live.insert_resource(SaveLoadState::LoadRequested);
+            live.insert_resource(SavePath::new("slot-a.ron"));
+            live.init_resource::<ResetCount>();
+            super::super::register_load_reset_hook(&mut live, "test-count", count_reset);
+            super::super::register_load_reset_hook(
+                &mut live,
+                "save-load-outcomes",
+                super::super::clear_save_load_outcomes,
+            );
+            live.world_mut().write_message(SaveLoadOutcome {
+                operation: SaveLoadOperation::Save,
+                target: "old.ron".to_owned(),
+                result: SaveLoadResult::Succeeded,
+            });
+
+            let mut incoming_source = app_with_save_schema();
+            insert_persisted_resources(incoming_source.world_mut(), 99.0);
+            incoming_source.world_mut().spawn(DamnedSoul {
+                laziness: 0.25,
+                ..default()
+            });
+            let incoming = capture_from_app(&mut incoming_source);
+            let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+
+            super::super::save_load_apply_with(
+                live.world_mut(),
+                |_| panic!("save executor must not run"),
+                |world| {
+                    let registry = type_registry.read();
+                    let result = replace_persisted_world_with_post_write(
+                        world,
+                        &incoming,
+                        &registry,
+                        |_| Err("injected live apply failure".to_owned()),
+                        |_| {
+                            if recovery_fails {
+                                Err("injected recovery finalizer failure".to_owned())
+                            } else {
+                                Ok(())
+                            }
+                        },
+                    );
+                    match result {
+                        Ok(()) => SaveLoadResult::Succeeded,
+                        Err(error) => {
+                            SaveLoadResult::Failed(super::super::load::commit_failure_kind(&error))
+                        }
+                    }
+                },
+            );
+
+            assert_eq!(live.world().resource::<ResetCount>().0, 2);
+            assert_eq!(
+                live.world_mut()
+                    .resource_mut::<Messages<SaveLoadOutcome>>()
+                    .drain()
+                    .collect::<Vec<_>>(),
+                vec![SaveLoadOutcome {
+                    operation: SaveLoadOperation::Load,
+                    target: "slot-a.ron".to_owned(),
+                    result: SaveLoadResult::Failed(expected_failure),
+                }]
+            );
+        }
     }
 
     #[test]

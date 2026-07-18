@@ -34,8 +34,8 @@ use super::schema::{
     DynamicWorldSchemaError, discard_legacy_reserved_for_task, discard_runtime_derived_components,
     validate_persisted_world,
 };
-use super::state::{SavePath, SavedWorldgenSeed};
-use super::transaction::{preflight_dynamic_world, replace_persisted_world};
+use super::state::{SaveLoadFailureKind, SaveLoadResult, SavePath, SavedWorldgenSeed};
+use super::transaction::{CommitError, preflight_dynamic_world, replace_persisted_world};
 
 struct PreparedLoad {
     format: SaveFormat,
@@ -81,52 +81,111 @@ impl From<SaveFormatError> for LoadPreparationError {
     }
 }
 
-pub fn load_world_system(world: &mut World) {
-    // Reset the trigger immediately so a failure below doesn't leave the
-    // state stuck (which would block all future save/load requests).
-    *world.resource_mut::<super::state::SaveLoadState>() = super::state::SaveLoadState::Idle;
+#[derive(Debug)]
+enum LoadExecutionError {
+    Read(std::io::Error),
+    Preparation(LoadPreparationError),
+    MissingPrerequisite(&'static str),
+    Preflight(String),
+    RehydratePrerequisite(String),
+    Commit(CommitError),
+}
 
-    let save_path = world.resource::<SavePath>().as_path().to_path_buf();
-    let contents = match read_save_file(&save_path) {
-        Ok(s) => s,
-        Err(err) => {
-            error!("Failed to read save file {}: {err}", save_path.display());
-            return;
+impl LoadExecutionError {
+    fn failure_kind(&self) -> SaveLoadFailureKind {
+        match self {
+            Self::Read(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                SaveLoadFailureKind::LoadNotFound
+            }
+            Self::Read(_) => SaveLoadFailureKind::LoadRead,
+            Self::Preparation(LoadPreparationError::Format(
+                SaveFormatError::UnsupportedVersion { .. },
+            )) => SaveLoadFailureKind::UnsupportedFormat,
+            Self::Preparation(LoadPreparationError::MissingPrerequisite(_))
+            | Self::MissingPrerequisite(_)
+            | Self::RehydratePrerequisite(_) => SaveLoadFailureKind::MissingPrerequisite,
+            Self::Preparation(LoadPreparationError::SeedMismatch { .. }) => {
+                SaveLoadFailureKind::SeedMismatch
+            }
+            Self::Preparation(
+                LoadPreparationError::Format(_)
+                | LoadPreparationError::BodySyntax(_)
+                | LoadPreparationError::Deserialize(_)
+                | LoadPreparationError::Schema(_),
+            )
+            | Self::Preflight(_) => SaveLoadFailureKind::InvalidData,
+            Self::Commit(error) => commit_failure_kind(error),
         }
-    };
-
-    let prepared = match prepare_load_from_str(world, &contents) {
-        Ok(prepared) => prepared,
-        Err(err) => {
-            error!("Load aborted for {}: {err}", save_path.display());
-            return;
-        }
-    };
-
-    let Some(type_registry) = world.get_resource::<AppTypeRegistry>().cloned() else {
-        error!(
-            "Load aborted for {}: AppTypeRegistry is unavailable after preparation",
-            save_path.display()
-        );
-        return;
-    };
-    let registry = type_registry.read();
-    if let Err(error) = preflight_dynamic_world(&prepared.dynamic_world, &registry) {
-        error!(
-            "Load aborted for {}: preflight failed: {error}",
-            save_path.display()
-        );
-        return;
     }
+}
+
+pub(super) const fn commit_failure_kind(error: &CommitError) -> SaveLoadFailureKind {
+    match error {
+        CommitError::Recovered { .. } => SaveLoadFailureKind::ApplyRecovered,
+        CommitError::RecoveryFailed { .. } => SaveLoadFailureKind::RecoveryFailed,
+    }
+}
+
+impl fmt::Display for LoadExecutionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Read(error) => write!(formatter, "save file read failed: {error}"),
+            Self::Preparation(error) => error.fmt(formatter),
+            Self::MissingPrerequisite(resource) => {
+                write!(
+                    formatter,
+                    "load prerequisite resource is unavailable: {resource}"
+                )
+            }
+            Self::Preflight(error) => write!(formatter, "load preflight failed: {error}"),
+            Self::RehydratePrerequisite(error) => {
+                write!(formatter, "rehydrate prerequisites failed: {error}")
+            }
+            Self::Commit(error) => error.fmt(formatter),
+        }
+    }
+}
+
+pub(super) fn load_world_system(world: &mut World) -> SaveLoadResult {
+    let save_path = world.resource::<SavePath>().as_path().to_path_buf();
+    match execute_load(world, &save_path) {
+        Ok(format) => {
+            let format = match format {
+                SaveFormat::LegacyV0 => "legacy v0",
+                SaveFormat::V1(_) => "v1",
+            };
+            info!("World loaded from {} ({format})", save_path.display());
+            SaveLoadResult::Succeeded
+        }
+        Err(error) if error.failure_kind() == SaveLoadFailureKind::ApplyRecovered => {
+            warn!(
+                "Load failed after live apply for {}; rollback recovery completed: {error}",
+                save_path.display()
+            );
+            SaveLoadResult::Failed(error.failure_kind())
+        }
+        Err(error) => {
+            error!("Load aborted for {}: {error}", save_path.display());
+            SaveLoadResult::Failed(error.failure_kind())
+        }
+    }
+}
+
+fn execute_load(world: &mut World, save_path: &Path) -> Result<SaveFormat, LoadExecutionError> {
+    let contents = read_save_file(save_path).map_err(LoadExecutionError::Read)?;
+    let prepared =
+        prepare_load_from_str(world, &contents).map_err(LoadExecutionError::Preparation)?;
+
+    let type_registry = world.get_resource::<AppTypeRegistry>().cloned().ok_or(
+        LoadExecutionError::MissingPrerequisite(std::any::type_name::<AppTypeRegistry>()),
+    )?;
+    let registry = type_registry.read();
+    preflight_dynamic_world(&prepared.dynamic_world, &registry)
+        .map_err(|error| LoadExecutionError::Preflight(error.to_string()))?;
     drop(registry);
 
-    if let Err(error) = validate_rehydrate_prerequisites(world) {
-        error!(
-            "Load aborted for {}: rehydrate prerequisites failed: {error}",
-            save_path.display()
-        );
-        return;
-    }
+    validate_rehydrate_prerequisites(world)
+        .map_err(|error| LoadExecutionError::RehydratePrerequisite(error.to_string()))?;
 
     let registry = type_registry.read();
     let commit_result = replace_persisted_world(
@@ -136,28 +195,9 @@ pub fn load_world_system(world: &mut World) {
         finalize_loaded_world,
     );
     drop(registry);
+    commit_result.map_err(LoadExecutionError::Commit)?;
 
-    match commit_result {
-        Ok(()) => {
-            let format = match prepared.format {
-                SaveFormat::LegacyV0 => "legacy v0",
-                SaveFormat::V1(_) => "v1",
-            };
-            info!("World loaded from {} ({format})", save_path.display());
-        }
-        Err(error @ super::transaction::CommitError::Recovered { .. }) => {
-            warn!(
-                "Load failed after live apply for {}; rollback recovery completed: {error}",
-                save_path.display()
-            );
-        }
-        Err(error) => {
-            error!(
-                "Load failed after live apply for {}; rollback recovery failed: {error}",
-                save_path.display()
-            );
-        }
-    }
+    Ok(prepared.format)
 }
 
 fn read_save_file(path: &Path) -> std::io::Result<String> {
@@ -304,6 +344,10 @@ mod tests {
     use super::super::format::{SaveHeader, encode_save_file};
     use super::super::schema::{build_persisted_world, register_save_types};
 
+    fn classified(error: LoadExecutionError) -> SaveLoadFailureKind {
+        error.failure_kind()
+    }
+
     fn legacy_loader_test_app() -> App {
         let mut app = App::new();
         app.add_plugins(AssetPlugin::default());
@@ -356,6 +400,96 @@ mod tests {
                 current: 7,
             })
         ));
+    }
+
+    #[test]
+    fn execution_errors_map_exhaustively_to_display_safe_failure_kinds() {
+        assert_eq!(
+            classified(LoadExecutionError::Read(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "private path",
+            ))),
+            SaveLoadFailureKind::LoadNotFound
+        );
+        assert_eq!(
+            classified(LoadExecutionError::Read(std::io::Error::other(
+                "private path",
+            ))),
+            SaveLoadFailureKind::LoadRead
+        );
+        assert_eq!(
+            classified(LoadExecutionError::Preparation(
+                LoadPreparationError::Format(SaveFormatError::UnsupportedVersion {
+                    found: 2,
+                    current: 1,
+                })
+            )),
+            SaveLoadFailureKind::UnsupportedFormat
+        );
+        assert_eq!(
+            classified(LoadExecutionError::Preparation(
+                LoadPreparationError::BodySyntax("raw parser details".to_owned())
+            )),
+            SaveLoadFailureKind::InvalidData
+        );
+        assert_eq!(
+            classified(LoadExecutionError::Preparation(
+                LoadPreparationError::Format(SaveFormatError::InvalidHeader(
+                    "raw header details".to_owned()
+                ))
+            )),
+            SaveLoadFailureKind::InvalidData
+        );
+        assert_eq!(
+            classified(LoadExecutionError::Preparation(
+                LoadPreparationError::Deserialize("raw deserialize details".to_owned())
+            )),
+            SaveLoadFailureKind::InvalidData
+        );
+        assert_eq!(
+            classified(LoadExecutionError::Preflight(
+                "raw preflight details".to_owned()
+            )),
+            SaveLoadFailureKind::InvalidData
+        );
+        assert_eq!(
+            classified(LoadExecutionError::Preparation(
+                LoadPreparationError::SeedMismatch {
+                    saved: 1,
+                    current: 2,
+                }
+            )),
+            SaveLoadFailureKind::SeedMismatch
+        );
+        assert_eq!(
+            classified(LoadExecutionError::MissingPrerequisite("registry")),
+            SaveLoadFailureKind::MissingPrerequisite
+        );
+        assert_eq!(
+            classified(LoadExecutionError::Preparation(
+                LoadPreparationError::MissingPrerequisite("asset server")
+            )),
+            SaveLoadFailureKind::MissingPrerequisite
+        );
+        assert_eq!(
+            classified(LoadExecutionError::RehydratePrerequisite(
+                "raw prerequisite details".to_owned()
+            )),
+            SaveLoadFailureKind::MissingPrerequisite
+        );
+        assert_eq!(
+            classified(LoadExecutionError::Commit(CommitError::Recovered {
+                cause: "raw apply details".to_owned(),
+            })),
+            SaveLoadFailureKind::ApplyRecovered
+        );
+        assert_eq!(
+            classified(LoadExecutionError::Commit(CommitError::RecoveryFailed {
+                cause: "raw apply details".to_owned(),
+                recovery: "raw recovery details".to_owned(),
+            })),
+            SaveLoadFailureKind::RecoveryFailed
+        );
     }
 
     #[test]

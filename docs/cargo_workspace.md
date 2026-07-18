@@ -101,6 +101,7 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 | タスクリスト | `panels/task_list/view_model.rs`, `panels/task_list/dirty.rs` | `panels/task_list/presenter.rs`, `panels/task_list/update.rs` | `panels/task_list/render.rs`, `panels/task_list/interaction.rs` |
 | 操作 → ゲーム | — | `interaction/intent_handler.rs`, `interaction/handlers/`, `interaction/intent_context.rs` | `intents.rs`（型定義・発行元） |
 | 情報パネル | `presentation/`（EntityInspectionQuery） | `panels/info_panel` re-export + root wiring | `panels/info_panel/*`, `models/inspection/` |
+| 結果通知 | save/load等のroot outcome | `notifications.rs`（安全な表示文言adapter） | `notifications/`（Message、reducer、有界履歴、UI） |
 | 初期 UI ツリー | — | `setup/mod.rs`（`GameAssets` → `UiAssets`） | `setup/*` |
 
 ### `hw_ui`
@@ -129,7 +130,8 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 - `panels/task_list/` — TaskEntry, TaskListDirty, work_type_icon, render（rebuild_task_list_ui）, interaction システム群
 - `panels/menu.rs` — menu_visibility_system
 - `models/inspection/` — EntityInspectionModel, EntityInspectionViewModel, SoulInspectionFields
-- `selection/` — SelectionIntent, cleanup_selection_references_system, placement validation API（`SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は `hw_core` から re-export）
+- `notifications/` — `UserFacingNotification`、`NotificationCenter`、2秒dedupe、4秒toast expiry、toast 3件／重要履歴64件のreducerとUI。ゲーム固有outcome型には依存しない
+- `selection/` — SelectionIntent, cleanup_selection_references_system, typed placement validation / feedback / area plan API（`SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は `hw_core` から re-export）
 - `camera.rs` — `world_cursor_pos`（スクリーン座標→ワールド座標変換ユーティリティ。`MainCamera` は `hw_core` から re-export）
 - `plugins/` — UiCorePlugin / UiEntityListPlugin / UiFoundationPlugin / UiInfoPanelPlugin / UiTooltipPlugin（fn ポインタ受け付けシェル）
 - **`area_edit/`** — エリア選択・編集状態の純粋データ型（`AreaEditHandleKind`, `AreaEditOperation`, `AreaEditDrag`, `AreaEditSession`, `AreaEditHistory`, `AreaEditHistoryEntry`, `AreaEditClipboard`, `AreaEditPresets`）。`AreaEditClipboard` 等は `bevy_app/command/area_selection.rs` から直接 `pub use hw_ui::area_edit::*` として re-export。`AreaEditHandleKind` は `bevy_app/command/mod.rs` からも re-export。`area_edit/interaction.rs` に `detect_area_edit_operation`・`apply_area_edit_drag`・`cursor_icon_for_operation` の pure helper を所有（M1 移設済み）
@@ -154,6 +156,7 @@ root 側の `bevy_app/src/interface/ui/` 残留（Adapter 層 — ViewModel / Pr
 | `panels/task_list/presenter.rs`, `panels/task_list/update.rs` | Presenter | ViewModel → `hw_ui` render 橋渡し。`update.rs` は `Res<GameAssets>` 必須 |
 | `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | Intent | `BuildContext`, `ZoneContext`, `FamiliarOperation`, `TimeSpeed`, `WorldMapWrite` 等のゲーム依存 `UiIntent` 処理 |
 | `interaction/mode.rs` | Intent | `PlayMode` 遷移、`TaskMode`, `BuildingType` |
+| `notifications.rs` | Presenter | root-owned `SaveLoadOutcome`をsafeな`UserFacingNotification`へexhaustiveに変換 |
 | `list/interaction.rs`, `list/interaction/navigation.rs` | Intent | 行クリック・Tab 巡回・target 付き `UiIntent` 発行（SectionToggle は hw_ui 側） |
 | `list/drag_drop.rs` | Intent | `SquadManagementRequest`, `SoulIdentity`（`DragState` 型は hw_ui） |
 | `panels/context_menu.rs` | Intent | `Familiar`, `DamnedSoul`, `Building`, `Door` の分類 |
@@ -318,6 +321,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `main.rs`: process設定の解釈と window / render / backend設定、`HellWorkersGamePlugin` の追加
 - `plugins/game.rs`: production game resource / state / `GameSystemSet` chain と parent game plugin の一意な登録
 - `input_actions/`: project-owned keyboard edge の唯一の resolver、pending/visible Modal/Pause capture、foreground UI gate、capture-start rollback
+- `systems/save/`: persisted schema/transactionと、requestごとに全reset後1件だけ発行する`SaveLoadOutcome`
 
 ここに残すもの:
 

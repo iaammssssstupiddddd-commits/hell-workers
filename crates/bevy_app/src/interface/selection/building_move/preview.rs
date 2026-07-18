@@ -9,8 +9,10 @@ use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::game_state::PlayMode;
 use hw_ui::camera::MainCamera;
+use hw_ui::components::UiInputState;
 use hw_ui::selection::{
-    can_place_moved_building, move_anchor_grid, move_occupied_grids, move_spawn_pos,
+    PlacementFeedbackState, move_anchor_grid, move_occupied_grids, move_spawn_pos,
+    validate_moved_building_placement,
 };
 
 use super::placement::validate_tank_companion_for_move;
@@ -36,6 +38,7 @@ pub struct BuildMovePreviewState<'w, 's> {
     pub move_placement_state: Res<'w, MovePlacementState>,
     pub companion_state: Res<'w, CompanionPlacementState>,
     pub game_assets: Res<'w, crate::assets::GameAssets>,
+    pub ui_input_state: Res<'w, UiInputState>,
     pub q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
     pub q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
 }
@@ -58,6 +61,7 @@ pub fn building_move_preview_system(
     preview_queries: BuildMovePreviewQueries,
     mut q_ghost: Query<(Entity, &mut Transform, &mut Sprite), With<PlacementGhost>>,
     mut q_partner_ghost: PartnerGhostQuery,
+    mut placement_feedback: ResMut<PlacementFeedbackState>,
 ) {
     let BuildMovePreviewState {
         play_mode,
@@ -65,6 +69,7 @@ pub fn building_move_preview_system(
         move_placement_state,
         companion_state,
         game_assets,
+        ui_input_state,
         q_window,
         q_camera,
     } = state;
@@ -72,6 +77,10 @@ pub fn building_move_preview_system(
         q_buildings,
         q_bucket_storages,
     } = preview_queries;
+    if ui_input_state.world_input_blocked() {
+        despawn_move_ghosts(&mut commands, &q_ghost, &q_partner_ghost);
+        return;
+    }
     if *play_mode.get() != PlayMode::BuildingMove {
         despawn_move_ghosts(&mut commands, &q_ghost, &q_partner_ghost);
         return;
@@ -109,20 +118,26 @@ pub fn building_move_preview_system(
         let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
         let old_occupied = move_occupied_grids(building.kind, old_anchor);
         let destination_occupied = move_occupied_grids(building.kind, pending.destination_grid);
-        let can_place = can_place_moved_building(
+        let parent_validation = validate_moved_building_placement(
             &WorldMapRef(world_map.as_ref()),
             target_entity,
             &old_occupied,
             &destination_occupied,
-        ) && validate_tank_companion_for_move(
-            &world_map,
-            target_entity,
-            pending.destination_grid,
-            destination_grid,
-            &old_occupied,
-            &q_bucket_storages,
-        )
-        .can_place;
+        );
+        let validation = if parent_validation.can_place {
+            validate_tank_companion_for_move(
+                &world_map,
+                target_entity,
+                pending.destination_grid,
+                destination_grid,
+                &old_occupied,
+                &q_bucket_storages,
+            )
+        } else {
+            parent_validation
+        };
+        placement_feedback.set_live_validation(&validation, destination_grid);
+        let can_place = validation.can_place;
         let draw_base = WorldMap::grid_to_world(destination_grid.0, destination_grid.1);
         let draw_pos = draw_base + Vec2::new(TILE_SIZE * 0.5, 0.0);
         let color = if can_place {
@@ -158,12 +173,14 @@ pub fn building_move_preview_system(
     let old_anchor = move_anchor_grid(building.kind, transform.translation.truncate());
     let old_occupied = move_occupied_grids(building.kind, old_anchor);
     let destination_occupied = move_occupied_grids(building.kind, destination_grid);
-    let can_place = can_place_moved_building(
+    let validation = validate_moved_building_placement(
         &WorldMapRef(world_map.as_ref()),
         target_entity,
         &old_occupied,
         &destination_occupied,
     );
+    placement_feedback.set_live_validation(&validation, destination_grid);
+    let can_place = validation.can_place;
 
     let draw_pos = move_spawn_pos(building.kind, destination_grid);
     let (texture, size) = match building.kind {

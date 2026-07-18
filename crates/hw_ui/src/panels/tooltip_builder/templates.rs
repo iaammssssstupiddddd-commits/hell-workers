@@ -7,8 +7,41 @@ use crate::theme::UiTheme;
 use bevy::prelude::*;
 
 use super::widgets::{
-    spawn_body_line, spawn_divider, spawn_header, spawn_icon_text_row, spawn_progress_bar,
+    spawn_body_line, spawn_divider, spawn_header, spawn_header_colored, spawn_icon_text_row,
+    spawn_progress_bar,
 };
+
+pub fn build_placement_tooltip(
+    parent: &mut ChildSpawnerCommands,
+    model: Option<&EntityInspectionModel>,
+    partial: bool,
+    game_assets: &dyn UiAssets,
+    theme: &UiTheme,
+) {
+    let color = if partial {
+        theme.colors.status_warning
+    } else {
+        theme.colors.status_danger
+    };
+    let title = model
+        .map(|model| model.header.as_str())
+        .filter(|title| !title.is_empty())
+        .unwrap_or(if partial {
+            "Some tiles will be skipped"
+        } else {
+            "Cannot place"
+        });
+    spawn_header_colored(parent, title, color, game_assets, theme);
+    if let Some(model) = model {
+        for line in model
+            .tooltip_lines
+            .iter()
+            .filter(|line| !line.trim().is_empty())
+        {
+            spawn_body_line(parent, line, game_assets, theme);
+        }
+    }
+}
 
 fn parse_percent_value(text: &str) -> Option<f32> {
     let raw = text

@@ -136,8 +136,11 @@ Logic の次回同期へ委ねてはならない。
     - **緑色（半透明）**: 配置可能。
     - **赤色（半透明）**: 配置不可（障害物や他の建物と重複、または通行不可地形）。
 - **配置失敗理由ツールチップ**:
-    - 配置確定時に有効タイルが 0 の場合、`Cannot Place` ツールチップを表示し、配置できない代表理由を示します（約2秒）。
-    - 主な理由: `not walkable` / `occupied by a building` / `occupied by a stockpile` / `has no completed floor` / `area too large` / `must be 1xn line`
+    - 通常建築、Tank companion、BuildingMove、SoulSpa、Floor、Wall は確定前からカーソル付近に型付き理由を表示する。
+    - 全体拒否は `Cannot place`、Floor / Wall の一部だけを採用できる場合は `Some tiles will be skipped` として区別する。
+    - 確定失敗は同じ理由を約2秒保持する。成功時、UI上、cursor不在、mode終了時には古いlive理由を残さない。
+    - 主な理由: `not walkable` / `occupied by a building` / `occupied by a stockpile` / `out of bounds` / `not in yard/site` / `has no completed floor` / `area too large` / `must be 1xn line`
+- **判定の正本**: preview と commit は同じ `PlacementValidation` / `AreaPlacementPlan` を使い、commit 時にも再検証する。色だけを配置可否の正本にしない。
 - **サイズ対応**: 1x1（壁など）だけでなく、2x2（タンクなど）の建物も適切なオフセットで表示されます。
 - **Modal/Pause capture**: overlay 表示中は placement/move/SoulSpa の world click を遮断する。
   BuildingPlace / BuildingMove / companion の mode state と ghost は維持し、overlay を閉じた後に同じ配置操作を再開できる。
@@ -149,6 +152,7 @@ Logic の次回同期へ委ねてはならない。
   - `BucketStorage`（1x2）を即時配置するまで companion モードを継続します。
   - 親の `Tank` Blueprint は companion 配置が完了するまで確定しません（未確定状態では建築予約しない）。
   - `Esc` でキャンセルした場合は、親Blueprintと未確定 companion をまとめて取り消します。
+  - companion は親footprintとの重複、親からの距離、bounds、建物／Stockpile／walkabilityを同じtyped validatorで判定する。
 
 ### Plant 建物移動（BuildingMove）
 `BuildingType::Tank` / `BuildingType::MudMixer` は `PlayMode::BuildingMove` で移動できます。
@@ -164,6 +168,7 @@ Logic の次回同期へ委ねてはならない。
   - 既存の建物/Stockpile との重複不可
   - エリア外・非walkableタイル不可（移動元セルや自分の既存 companion セルは例外的に許可）
   - Tank companion は親本体の近傍制約（建築時と同等）を維持
+  - preview とclickは自己占有を除外する同じtyped validatorを使い、最初に拒否された実タイルを表示する
 - **予約と排他**:
   - 確定時に移動先（必要なら companion 含む）へ予約障害物を配置し、完了まで設計図配置を抑止
   - `MovePlanned` 中の建物は生産系リクエストを新規生成しない
@@ -321,6 +326,7 @@ Building3dVisual エンティティ（独立。Building の子ではない）
 ### 9.1 基本仕様
 
 - **配置方法**: ドラッグ&ドロップで矩形エリアを指定（最大 10×10 タイル）
+- **部分採用**: preview / release は同じ `AreaPlacementPlan` を再構築する。有効タイルが1件以上なら無効タイルだけをskipし、有効タイルだけでsiteを生成する。0件または構造的な範囲違反だけを全体失敗とする
 - **建設フェーズ**: 3段階の建設プロセス
   1. **Reinforcing Phase**: 骨（2個/タイル）を使って補強
   2. **Pouring Phase**: 泥（1個/タイル）を注ぐ
@@ -440,6 +446,7 @@ Wall の `Framing → Coating` も同じindex/counter契約を使い、`spawned_
 - `Curing` 相当フェーズは持たず、全タイル `Complete` 到達で site / tile / request を即時 cleanup する。
 - キャンセルは site 単位で処理され、搬入済み `Wood` / `StasisMud` を返却し、関連 request / 作業割り当てを解除する。
 - すべての候補が無効な場合は site を生成せず、`Cannot Place` ツールチップで最初に検出した無効理由を表示する。
+- 有効候補と無効候補が混在する場合は、無効タイル数と最初の理由をpreviewで表示し、有効タイルだけを生成する。
 
 ## 10. Soul Spa 建設
 
@@ -488,9 +495,11 @@ SoulSpaSite (root)
 
 ### 10.6 配置制約
 
-- 通行可能グリッド上に 2×2 の空きが必要
+- cursorを左上anchorとする下向き2×2の通行可能な空きが必要
 - 既存の建物・ストックパイルと重複不可
+- 単一のYardが4タイルすべてを含む必要がある。中心点だけ、または複数Yardの合算では成立しない
 - 完成済み `Floor` タイルは必須ではない（他の Plant 建物と同様）
+- ghostとclickは`building_geometry(BuildingType::SoulSpa)`と同じtyped validatorを共有する
 
 ### 10.7 システム登録（LogicPlugin）
 

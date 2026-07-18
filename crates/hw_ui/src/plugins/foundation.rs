@@ -1,6 +1,5 @@
 use crate::components::{
-    PlacementFailureTooltip, SectionFolded, SoulRenameState, UiInputState, UiNodeRegistry,
-    UnassignedFolded,
+    SectionFolded, SoulRenameState, UiInputState, UiNodeRegistry, UnassignedFolded,
 };
 use crate::interaction::{
     TextFieldPendingAction, apply_text_field_pending_action_system, on_text_field_focus_gained,
@@ -19,7 +18,7 @@ impl Plugin for UiFoundationPlugin {
         app.register_type::<SectionFolded>();
         app.register_type::<UnassignedFolded>();
         app.init_resource::<UiInputState>();
-        app.init_resource::<PlacementFailureTooltip>();
+        app.init_resource::<crate::selection::PlacementFeedbackState>();
         app.init_resource::<UiNodeRegistry>();
         app.init_resource::<UiTheme>();
         app.init_resource::<SoulRenameState>();

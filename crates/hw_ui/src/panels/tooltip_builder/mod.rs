@@ -50,6 +50,12 @@ pub fn rebuild_tooltip_content(
             TooltipTemplate::UiButton => {
                 templates::build_ui_button_tooltip(parent, ui_tooltip, game_assets, theme)
             }
+            TooltipTemplate::PlacementRejected => {
+                templates::build_placement_tooltip(parent, model, false, game_assets, theme)
+            }
+            TooltipTemplate::PlacementPartial => {
+                templates::build_placement_tooltip(parent, model, true, game_assets, theme)
+            }
             TooltipTemplate::Generic => {
                 templates::build_generic_tooltip(parent, model, ui_tooltip, game_assets, theme)
             }

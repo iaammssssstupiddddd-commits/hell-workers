@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-17` |
 | 最終更新日 | `2026-07-18` |
 | 作成者 | `Codex` |
-| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了。A2 以降は採用後にトラック単位で分割） |
+| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 背景と問題
@@ -24,9 +24,8 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 - 初期監査では同じキーが複数の操作に割り当てられていた。A1 の M1〜M4 で F5/F9/V、B/Z、
   Space/Digit、Familiar command、context 別 Escape、AreaEdit、Tab、debug shortcut は resolver へ
   移行した。Modal/Pause は open request frame から pointer/camera と背景 UI を capture し、未確定 gesture を rollback する。
-- 配置不能理由は `PlacementRejectReason` として計算済みだが、ゴースト表示では
-  可否の赤/緑だけに縮退している。セーブ/ロード結果もログ中心で、ゲーム画面から
-  成否を確実に確認できない。
+- A2で配置不能理由を全対象のtyped previewへ接続し、セーブ/ロード結果を有界なトーストと重要履歴へ
+  表示する実装を追加した。現在は重点実機受入を残す。
 - タスク一覧は件数と担当数を示せるが、「なぜ止まっているか」を説明しない。
   候補収集側がすでに判定している条件を UI へ安全に還元する仕組みがない。
 - Stockpile の `resource_type` は現在内容を表すため、受入方針には使えない。
@@ -100,6 +99,11 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 - 同一の物理入力が、意図せず複数の意味アクションへ解決されないことを自動テストできる。
 
 ##### A2. プレイヤー向け結果通知
+
+実装状態: `2026-07-18` にM1〜M4のコード、回帰テスト、恒久ドキュメント同期を完了。
+有界通知センター、全配置経路のtyped live feedback、save/load terminal outcomeとreset後の発行順を実装した。
+重点実機受入と計画archiveを残す。詳細な責務境界、world replacement順序、有界性、検証項目は
+`docs/plans/player-facing-result-notifications-plan-2026-07-18.md` を参照する。
 
 - 既存のプレゼンテーション用 Message 経路を利用し、短命のトーストと履歴型の重要通知を分ける。
 - 配置ゴーストは `PlacementRejectReason` を保持し、カーソル付近または情報領域に
@@ -455,14 +459,15 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 現在地
 
-- 進捗: `提案初版 100% / A1 採用済み・実装 100% / A2〜D 未採否`
-- 直近で完了したこと: A1 の全 project shortcut resolver 移行、frame-start selection、Modal/Pause capture、
-  gesture rollback、foreground UI ownership、task-area camera claim を実装し、自動回帰と重点実機受入を完了した。
-- 現在のブランチ/前提: `master`。A1 の設計記録はアーカイブ済み関連計画を参照する。
+- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3〜D 未採否`
+- 直近で完了したこと: A2 の通知センター、typed placement feedback、save/load outcome、reset順序、
+  failure injection回帰、恒久ドキュメント同期。
+- 現在のブランチ/前提: `master`。A1 の設計記録はアーカイブ済み計画、A2 の実装境界は現行計画を参照する。
 
 ### 次のAIが最初にやること
 
-1. A2〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
+1. A2 の重点実機項目を確認し、問題なければ関連計画をarchiveする。
+2. A3〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
 
 ### ブロッカー/注意点
 
@@ -498,7 +503,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - [ ] Track A〜D の採否と初回スコープが決定されている
 - [x] 実装へ進むサブトラックの `docs/plans/...` が作成されている
 - [x] A1 完了時に関連する恒久ドキュメントと自動回帰が更新されている
-- [ ] 実装完了時に関連する恒久ドキュメントと不変条件が更新されている
+- [x] 実装完了時に関連する恒久ドキュメントと不変条件が更新されている
 
 ## 13. 更新履歴
 
@@ -508,3 +513,5 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | `2026-07-17` | `Codex` | A1 M2 完了を反映。数字/B、Modal/Pause、Familiar、Escape の resolver 移行と次の M3 境界を同期 |
 | `2026-07-17` | `Codex` | A1 M3b 実装を反映。残存 shortcut の resolver 移行、Modal/Pause capture、gesture rollback、foreground UI ownership を同期。手動受入は関連計画を参照 |
 | `2026-07-18` | `Codex` | A1 M4 と重点実機受入の完了を反映。task-area camera 競合修正、自動回帰、恒久docs同期を完了し、関連計画をアーカイブ |
+| `2026-07-18` | `Codex` | A2 の計画作成と自己レビュー完了を反映。配置 feedback、通知上限、save/load terminal outcome、world replacement 後の発行順を関連計画へ固定 |
+| `2026-07-18` | `Codex` | A2 のコード・自動回帰・恒久docs同期を反映。有界通知、全配置typed feedback、save/load outcomeとrollback後の生存を実装。重点実機受入は関連計画へ残す |

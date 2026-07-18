@@ -135,6 +135,22 @@ pub fn spawn_header(
     game_assets: &dyn UiAssets,
     theme: &UiTheme,
 ) {
+    spawn_header_colored(
+        parent,
+        text,
+        theme.colors.text_accent_semantic,
+        game_assets,
+        theme,
+    );
+}
+
+pub fn spawn_header_colored(
+    parent: &mut ChildSpawnerCommands,
+    text: &str,
+    color: Color,
+    game_assets: &dyn UiAssets,
+    theme: &UiTheme,
+) {
     let display_text = wrap_tooltip_text(text, TOOLTIP_WRAP_LIMIT_BODY).join("\n");
     parent.spawn((
         Text::new(display_text),
@@ -145,7 +161,7 @@ pub fn spawn_header(
             ..default()
         },
         TextLayout::new(Justify::Left, LineBreak::WordOrCharacter),
-        TextColor(theme.colors.text_accent_semantic),
+        TextColor(color),
         Node {
             width: Val::Percent(100.0),
             ..default()

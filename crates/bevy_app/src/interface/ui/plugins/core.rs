@@ -2,6 +2,7 @@ use crate::interface::selection::SelectedEntity;
 use crate::interface::selection::blueprint_placement;
 use crate::interface::selection::building_move_preview_system;
 use crate::interface::selection::building_move_system;
+use crate::interface::selection::floor_placement_preview_system;
 use crate::interface::selection::floor_placement_system;
 use crate::interface::selection::soul_spa_place_input_system;
 use crate::interface::selection::{
@@ -14,6 +15,7 @@ use crate::systems::GameSystemSet;
 use crate::systems::time::game_time_system;
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
+use hw_ui::selection::PlacementFeedbackSet;
 
 pub type UiCorePlugin = hw_ui::plugins::core::UiCorePlugin;
 
@@ -22,6 +24,7 @@ pub fn ui_core_plugin() -> UiCorePlugin {
 }
 
 fn register_ui_core_plugin_systems(app: &mut App) {
+    configure_placement_feedback_sets(app);
     app.add_systems(
         Update,
         (
@@ -30,13 +33,26 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             cleanup_selection_references_system,
             update_selection_indicator,
             crate::interface::ui::hover_action_button_system,
-            blueprint_placement.run_if(in_state(PlayMode::BuildingPlace)),
+        )
+            .in_set(GameSystemSet::Interface),
+    )
+    .add_systems(
+        Update,
+        (
             building_move_preview_system.run_if(in_state(PlayMode::BuildingMove)),
+            floor_placement_preview_system.run_if(in_state(PlayMode::FloorPlace)),
+        )
+            .in_set(PlacementFeedbackSet::Produce),
+    )
+    .add_systems(
+        Update,
+        (
+            blueprint_placement.run_if(in_state(PlayMode::BuildingPlace)),
             floor_placement_system.run_if(in_state(PlayMode::FloorPlace)),
             building_move_system.run_if(in_state(PlayMode::BuildingMove)),
             soul_spa_place_input_system.run_if(in_state(PlayMode::TaskDesignation)),
         )
-            .in_set(GameSystemSet::Interface),
+            .in_set(PlacementFeedbackSet::Commit),
     )
     .add_systems(
         Update,
@@ -76,4 +92,55 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             .after(crate::interface::ui::update_area_edit_preview_ui_system)
             .in_set(GameSystemSet::Interface),
     );
+}
+
+fn configure_placement_feedback_sets(app: &mut App) {
+    app.configure_sets(
+        Update,
+        (
+            PlacementFeedbackSet::Produce,
+            PlacementFeedbackSet::Present,
+            PlacementFeedbackSet::Commit,
+        )
+            .chain()
+            .in_set(GameSystemSet::Interface),
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Resource, Default)]
+    struct PlacementOrder(Vec<&'static str>);
+
+    fn record_produce(mut order: ResMut<PlacementOrder>) {
+        order.0.push("produce");
+    }
+
+    fn record_present(mut order: ResMut<PlacementOrder>) {
+        order.0.push("present");
+    }
+
+    fn record_commit(mut order: ResMut<PlacementOrder>) {
+        order.0.push("commit");
+    }
+
+    #[test]
+    fn placement_feedback_sets_keep_produce_present_commit_order() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<PlacementOrder>();
+        configure_placement_feedback_sets(&mut app);
+        app.add_systems(Update, record_produce.in_set(PlacementFeedbackSet::Produce))
+            .add_systems(Update, record_present.in_set(PlacementFeedbackSet::Present))
+            .add_systems(Update, record_commit.in_set(PlacementFeedbackSet::Commit));
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<PlacementOrder>().0,
+            vec!["produce", "present", "commit"]
+        );
+    }
 }

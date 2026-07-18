@@ -64,34 +64,6 @@ pub struct SoulRenameFieldContainer;
 #[derive(Component)]
 pub struct EntityListSearchRow;
 
-#[derive(Resource, Default, Debug, Clone)]
-pub struct PlacementFailureTooltip {
-    pub message: Option<String>,
-    pub remaining_secs: f32,
-}
-
-impl PlacementFailureTooltip {
-    pub fn show(&mut self, message: impl Into<String>) {
-        self.message = Some(message.into());
-        self.remaining_secs = 2.0;
-    }
-
-    pub fn clear(&mut self) {
-        self.message = None;
-        self.remaining_secs = 0.0;
-    }
-
-    pub fn tick(&mut self, delta_secs: f32) {
-        if self.remaining_secs <= 0.0 {
-            return;
-        }
-        self.remaining_secs = (self.remaining_secs - delta_secs).max(0.0);
-        if self.remaining_secs <= f32::EPSILON {
-            self.clear();
-        }
-    }
-}
-
 pub use hw_core::ui_nodes::{UiMountSlot, UiNodeRegistry, UiRoot, UiSlot};
 
 #[derive(Resource, Default)]
@@ -170,6 +142,8 @@ pub enum TooltipTemplate {
     Building,
     Resource,
     UiButton,
+    PlacementRejected,
+    PlacementPartial,
     #[default]
     Generic,
 }

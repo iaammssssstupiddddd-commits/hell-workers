@@ -1,8 +1,7 @@
-use crate::interface::selection::blueprint_placement;
 use crate::interface::selection::update_selection_indicator;
 use crate::interface::ui::interaction::hover_tooltip_system;
-use crate::systems::GameSystemSet;
 use bevy::prelude::*;
+use hw_ui::selection::PlacementFeedbackSet;
 
 pub type UiTooltipPlugin = hw_ui::plugins::tooltip::UiTooltipPlugin;
 
@@ -15,7 +14,6 @@ fn register_ui_tooltip_plugin_systems(app: &mut App) {
         Update,
         hover_tooltip_system
             .after(update_selection_indicator)
-            .before(blueprint_placement)
-            .in_set(GameSystemSet::Interface),
+            .in_set(PlacementFeedbackSet::Present),
     );
 }

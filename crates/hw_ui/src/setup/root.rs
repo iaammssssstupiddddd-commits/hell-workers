@@ -244,6 +244,13 @@ pub fn setup_ui<F, G>(
         top_right_slot,
         &mut ui_nodes,
     );
+    crate::notifications::spawn_notification_ui(
+        &mut commands,
+        game_assets.font_ui().clone(),
+        theme,
+        top_right_slot,
+        overlay_slot,
+    );
     spawn_area_edit_preview(
         &mut commands,
         game_assets,

@@ -32,30 +32,39 @@ pub fn validate_wall_area(width: i32, height: i32) -> Option<PlacementRejectReas
 
 /// Validates whether a building can be placed at `dest_occupied` given its current
 /// `old_occupied` footprint. Ignores self-occupancy.
-pub fn can_place_moved_building<W>(
+pub fn validate_moved_building_placement<W>(
     world: &W,
     building_entity: Entity,
     old_occupied: &[(i32, i32)],
     dest_occupied: &[(i32, i32)],
-) -> bool
+) -> PlacementValidation
 where
     W: WorldReadApi,
 {
-    dest_occupied.iter().all(|&(gx, gy)| {
+    for &(gx, gy) in dest_occupied {
         if world.pos_to_idx(gx, gy).is_none() {
-            return false;
+            return PlacementValidation::rejected_at(PlacementRejectReason::OutOfBounds, (gx, gy));
         }
         let occupied_by_other = world
             .building_entity((gx, gy))
             .is_some_and(|e| e != building_entity);
         if occupied_by_other {
-            return false;
+            return PlacementValidation::rejected_at(
+                PlacementRejectReason::OccupiedByBuilding,
+                (gx, gy),
+            );
         }
         if world.has_stockpile((gx, gy)) {
-            return false;
+            return PlacementValidation::rejected_at(
+                PlacementRejectReason::OccupiedByStockpile,
+                (gx, gy),
+            );
         }
-        world.is_walkable(gx, gy) || old_occupied.contains(&(gx, gy))
-    })
+        if !world.is_walkable(gx, gy) && !old_occupied.contains(&(gx, gy)) {
+            return PlacementValidation::rejected_at(PlacementRejectReason::NotWalkable, (gx, gy));
+        }
+    }
+    PlacementValidation::ok()
 }
 
 fn reject_for_walkable_empty_tile<World>(
@@ -118,7 +127,7 @@ where
         BuildingType::Bridge => {
             for &candidate in &geometry.occupied_grids {
                 if let Some(reason) = reject_for_bridge_tile(world, candidate) {
-                    return PlacementValidation::rejected(reason);
+                    return PlacementValidation::rejected_at(reason, candidate);
                 }
             }
         }
@@ -126,12 +135,13 @@ where
             let replaceable_wall = (ctx.is_replaceable_wall_at)(grid);
             if replaceable_wall {
                 if world.has_stockpile(grid) {
-                    return PlacementValidation::rejected(
+                    return PlacementValidation::rejected_at(
                         PlacementRejectReason::OccupiedByStockpile,
+                        grid,
                     );
                 }
             } else if let Some(reason) = reject_for_walkable_empty_tile(world, grid) {
-                return PlacementValidation::rejected(reason);
+                return PlacementValidation::rejected_at(reason, grid);
             }
 
             if (!(ctx.is_wall_or_door_at)((grid.0 - 1, grid.1))
@@ -139,13 +149,16 @@ where
                 && (!(ctx.is_wall_or_door_at)((grid.0, grid.1 + 1))
                     || !(ctx.is_wall_or_door_at)((grid.0, grid.1 - 1)))
             {
-                return PlacementValidation::rejected(PlacementRejectReason::NoDoorAdjacentWall);
+                return PlacementValidation::rejected_at(
+                    PlacementRejectReason::NoDoorAdjacentWall,
+                    grid,
+                );
             }
         }
         _ => {
             for &candidate in &geometry.occupied_grids {
                 if let Some(reason) = reject_for_walkable_empty_tile(world, candidate) {
-                    return PlacementValidation::rejected(reason);
+                    return PlacementValidation::rejected_at(reason, candidate);
                 }
             }
         }
@@ -153,10 +166,10 @@ where
 
     match building_type.category() {
         BuildingCategory::Structure if !ctx.in_site => {
-            PlacementValidation::rejected(PlacementRejectReason::NotInSite)
+            PlacementValidation::rejected_at(PlacementRejectReason::NotInSite, grid)
         }
         BuildingCategory::Plant | BuildingCategory::Temporary if !ctx.in_yard => {
-            PlacementValidation::rejected(PlacementRejectReason::NotInYard)
+            PlacementValidation::rejected_at(PlacementRejectReason::NotInYard, grid)
         }
         _ => PlacementValidation::ok(),
     }
@@ -173,19 +186,31 @@ where
     World: WorldReadApi,
 {
     if !within_radius {
-        return PlacementValidation::rejected(PlacementRejectReason::TooFarFromParent);
+        return PlacementValidation::rejected_at(
+            PlacementRejectReason::TooFarFromParent,
+            geometry.occupied_grids.first().copied().unwrap_or_default(),
+        );
     }
 
     for &storage_grid in &geometry.occupied_grids {
+        if parent_occupied_grids.contains(&storage_grid) {
+            return PlacementValidation::rejected_at(
+                PlacementRejectReason::OccupiedByBuilding,
+                storage_grid,
+            );
+        }
         if !parent_occupied_grids
             .iter()
             .any(|&parent_grid| grid_is_nearby(parent_grid, storage_grid, nearby_tiles))
         {
-            return PlacementValidation::rejected(PlacementRejectReason::TooFarFromParent);
+            return PlacementValidation::rejected_at(
+                PlacementRejectReason::TooFarFromParent,
+                storage_grid,
+            );
         }
 
         if let Some(reason) = reject_for_walkable_empty_tile(world, storage_grid) {
-            return PlacementValidation::rejected(reason);
+            return PlacementValidation::rejected_at(reason, storage_grid);
         }
     }
 
@@ -204,27 +229,48 @@ where
     World: WorldReadApi,
 {
     for &storage_grid in &geometry.occupied_grids {
+        if parent_occupied_grids.contains(&storage_grid) {
+            return PlacementValidation::rejected_at(
+                PlacementRejectReason::OccupiedByBuilding,
+                storage_grid,
+            );
+        }
         if !parent_occupied_grids
             .iter()
             .any(|&parent_grid| grid_is_nearby(parent_grid, storage_grid, nearby_tiles))
         {
-            return PlacementValidation::rejected(PlacementRejectReason::TooFarFromParent);
+            return PlacementValidation::rejected_at(
+                PlacementRejectReason::TooFarFromParent,
+                storage_grid,
+            );
         }
 
         if world.pos_to_idx(storage_grid.0, storage_grid.1).is_none() {
-            return PlacementValidation::rejected(PlacementRejectReason::OutOfBounds);
+            return PlacementValidation::rejected_at(
+                PlacementRejectReason::OutOfBounds,
+                storage_grid,
+            );
         }
         if world.has_building(storage_grid) && !old_building_occupied.contains(&storage_grid) {
-            return PlacementValidation::rejected(PlacementRejectReason::OccupiedByBuilding);
+            return PlacementValidation::rejected_at(
+                PlacementRejectReason::OccupiedByBuilding,
+                storage_grid,
+            );
         }
         if world.has_stockpile(storage_grid) && !own_companion_grids.contains(&storage_grid) {
-            return PlacementValidation::rejected(PlacementRejectReason::OccupiedByStockpile);
+            return PlacementValidation::rejected_at(
+                PlacementRejectReason::OccupiedByStockpile,
+                storage_grid,
+            );
         }
         if !world.is_walkable(storage_grid.0, storage_grid.1)
             && !old_building_occupied.contains(&storage_grid)
             && !own_companion_grids.contains(&storage_grid)
         {
-            return PlacementValidation::rejected(PlacementRejectReason::NotWalkable);
+            return PlacementValidation::rejected_at(
+                PlacementRejectReason::NotWalkable,
+                storage_grid,
+            );
         }
     }
 
@@ -240,6 +286,9 @@ pub fn validate_floor_tile<World>(
 where
     World: WorldReadApi,
 {
+    if world.pos_to_idx(grid.0, grid.1).is_none() {
+        return Some(PlacementRejectReason::OutOfBounds);
+    }
     if !world.is_walkable(grid.0, grid.1) {
         return Some(PlacementRejectReason::NotWalkable);
     }
@@ -266,6 +315,9 @@ pub fn validate_wall_tile<World>(
 where
     World: WorldReadApi,
 {
+    if world.pos_to_idx(grid.0, grid.1).is_none() {
+        return Some(PlacementRejectReason::OutOfBounds);
+    }
     if !world.is_walkable(grid.0, grid.1) {
         return Some(PlacementRejectReason::NotWalkable);
     }

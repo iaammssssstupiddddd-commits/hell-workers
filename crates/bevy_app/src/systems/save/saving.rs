@@ -21,50 +21,55 @@ use bevy::prelude::*;
 
 use super::format::{SaveHeader, encode_save_file};
 use super::schema::{build_persisted_world, collect_persisted_entities};
-use super::state::SavePath;
+use super::state::{SaveLoadFailureKind, SaveLoadResult, SavePath};
 
 static NEXT_TEMP_SAVE_FILE_ID: AtomicU64 = AtomicU64::new(0);
 const TEMP_FILE_ATTEMPTS: usize = 16;
 
 #[derive(Debug)]
-enum SaveError {
+enum SaveExecutionError {
     Serialize(String),
+    Write(io::Error),
 }
 
-impl fmt::Display for SaveError {
+impl SaveExecutionError {
+    const fn failure_kind(&self) -> SaveLoadFailureKind {
+        match self {
+            Self::Serialize(_) => SaveLoadFailureKind::SaveSerialize,
+            Self::Write(_) => SaveLoadFailureKind::SaveWrite,
+        }
+    }
+}
+
+impl fmt::Display for SaveExecutionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Serialize(error) => {
                 write!(formatter, "DynamicWorld serialization failed: {error}")
             }
+            Self::Write(error) => write!(formatter, "save file write failed: {error}"),
         }
     }
 }
 
-pub fn save_world_system(world: &mut World) {
+pub(super) fn save_world_system(world: &mut World) -> SaveLoadResult {
     let started = Instant::now();
-
-    // Reset the trigger immediately so a failure below doesn't leave the
-    // state stuck (which would block all future save/load requests).
-    *world.resource_mut::<super::state::SaveLoadState>() = super::state::SaveLoadState::Idle;
-
     let master_seed = world
         .resource::<crate::world::map::GeneratedWorldLayoutResource>()
         .master_seed;
     let save_path = world.resource::<SavePath>().as_path().to_path_buf();
 
-    let body = match serialize_world_body(world) {
-        Ok(body) => body,
-        Err(err) => {
-            error!("Failed to serialize world for save: {err}");
-            return;
-        }
-    };
-    let contents = encode_save_file(SaveHeader::current(master_seed), &body);
+    let execution = execute_save_with(
+        || {
+            let body = serialize_world_body(world)?;
+            Ok(encode_save_file(SaveHeader::current(master_seed), &body))
+        },
+        |contents| write_save_file(&save_path, contents),
+    );
 
-    if let Err(err) = write_save_file(&save_path, &contents) {
-        error!("Failed to write save file {}: {err}", save_path.display());
-        return;
+    if let Err(error) = execution {
+        error!("Failed to save world to {}: {error}", save_path.display());
+        return SaveLoadResult::Failed(error.failure_kind());
     }
 
     let elapsed = started.elapsed();
@@ -73,10 +78,21 @@ pub fn save_world_system(world: &mut World) {
     } else {
         info!("World saved to {} in {elapsed:?}", save_path.display());
     }
+    SaveLoadResult::Succeeded
+}
+
+/// Runs the production encode/write branch behind a small injectable seam so
+/// both failure paths use the same classification in tests and at runtime.
+fn execute_save_with(
+    encode: impl FnOnce() -> Result<String, SaveExecutionError>,
+    write: impl FnOnce(&str) -> io::Result<()>,
+) -> Result<(), SaveExecutionError> {
+    let contents = encode()?;
+    write(&contents).map_err(SaveExecutionError::Write)
 }
 
 /// Serializes the persisted simulation state without doing filesystem I/O.
-fn serialize_world_body(world: &mut World) -> Result<String, SaveError> {
+fn serialize_world_body(world: &mut World) -> Result<String, SaveExecutionError> {
     let type_registry = world
         .resource::<bevy::ecs::reflect::AppTypeRegistry>()
         .clone();
@@ -88,7 +104,7 @@ fn serialize_world_body(world: &mut World) -> Result<String, SaveError> {
 
     dynamic_world
         .serialize(&registry)
-        .map_err(|error| SaveError::Serialize(error.to_string()))
+        .map_err(|error| SaveExecutionError::Serialize(error.to_string()))
 }
 
 /// 同じディレクトリ内の一意な一時ファイルへ書き込んでから rename する。
@@ -157,6 +173,13 @@ fn temporary_save_path(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    fn outcome(result: Result<(), SaveExecutionError>) -> SaveLoadResult {
+        match result {
+            Ok(()) => SaveLoadResult::Succeeded,
+            Err(error) => SaveLoadResult::Failed(error.failure_kind()),
+        }
+    }
+
     fn unique_test_directory() -> PathBuf {
         let unique_id = NEXT_TEMP_SAVE_FILE_ID.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir().join(format!(
@@ -171,6 +194,28 @@ mod tests {
         let path = Path::new("saves/world.scn.ron");
 
         assert_ne!(temporary_save_path(path), temporary_save_path(path));
+    }
+
+    #[test]
+    fn injectable_execution_classifies_success_and_both_failure_stages() {
+        assert_eq!(
+            outcome(execute_save_with(|| Ok("encoded".to_owned()), |_| Ok(()))),
+            SaveLoadResult::Succeeded
+        );
+        assert_eq!(
+            outcome(execute_save_with(
+                || Err(SaveExecutionError::Serialize("details".to_owned())),
+                |_| panic!("write must not run after encode failure")
+            )),
+            SaveLoadResult::Failed(SaveLoadFailureKind::SaveSerialize)
+        );
+        assert_eq!(
+            outcome(execute_save_with(
+                || Ok("encoded".to_owned()),
+                |_| Err(io::Error::other("details"))
+            )),
+            SaveLoadResult::Failed(SaveLoadFailureKind::SaveWrite)
+        );
     }
 
     #[test]

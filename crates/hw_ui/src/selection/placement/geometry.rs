@@ -102,6 +102,12 @@ pub fn building_occupied_grids(
             (grid.0, grid.1 + 1),
             (grid.0 + 1, grid.1 + 1),
         ],
+        BuildingType::SoulSpa => vec![
+            grid,
+            (grid.0 + 1, grid.1),
+            (grid.0, grid.1 - 1),
+            (grid.0 + 1, grid.1 - 1),
+        ],
         _ => vec![grid],
     }
 }
@@ -119,6 +125,7 @@ pub fn building_spawn_pos(building_type: BuildingType, grid: (i32, i32), river_y
         | BuildingType::WheelbarrowParking => {
             base_pos + Vec2::new(TILE_SIZE * 0.5, TILE_SIZE * 0.5)
         }
+        BuildingType::SoulSpa => base_pos + Vec2::new(TILE_SIZE * 0.5, -TILE_SIZE * 0.5),
         _ => base_pos,
     }
 }
@@ -129,7 +136,8 @@ pub fn building_size(building_type: BuildingType) -> Vec2 {
         BuildingType::Tank
         | BuildingType::MudMixer
         | BuildingType::RestArea
-        | BuildingType::WheelbarrowParking => Vec2::splat(TILE_SIZE * 2.0),
+        | BuildingType::WheelbarrowParking
+        | BuildingType::SoulSpa => Vec2::splat(TILE_SIZE * 2.0),
         _ => Vec2::splat(TILE_SIZE),
     }
 }

@@ -22,6 +22,7 @@
 - [soul_energy.md](soul_energy.md): Soul Energy システム（発電・消費・停電サイクル、Soul Spa、Outdoor Lamp）。
 
 ## UI & Visuals
+- [notifications.md](notifications.md): 有界なトースト／重要履歴、配置不能理由、セーブ／ロード終端結果の仕様。
 - [entity_list_ui.md](entity_list_ui.md): エンティティリストのフィルタリングと操作。
 - [task_list_ui.md](task_list_ui.md): タスクリストの表示・タブ切替・クリック操作。
 - [info_panel_ui.md](info_panel_ui.md): 選択されたエンティティの詳細情報表示。
@@ -53,6 +54,7 @@
 - [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン（コーディング規約・MCP活用）。
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
+- [plans/player-facing-result-notifications-plan-2026-07-18.md](plans/player-facing-result-notifications-plan-2026-07-18.md): Track A2 の有界な通知センター、配置不能理由、セーブ/ロード終端結果を導入する実装計画。
 - [plans/hvac-plumbing-plan-2026-07-13.md](plans/hvac-plumbing-plan-2026-07-13.md): 換気・導水・Room 認可を M0〜M4 で導入する実装計画。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。
 - [proposals/gameplay-management-improvements-proposal-2026-07-17.md](proposals/gameplay-management-improvements-proposal-2026-07-17.md): 操作、運営ポリシー、復旧・永続化、進行要素を 4 トラックで整理した総合改善提案。

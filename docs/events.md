@@ -34,6 +34,17 @@ dual 通知の Producer は `publish_*` helper を使う。
 | `SoulEscaped` | `Event` | `execute/drifting`（マップ端到達） | root adapter | `PopulationManager::total_escaped` インクリメント |
 | `TerrainChangedEvent` | `Message`（`hw_world::terrain_visual`） | `obstacle_sync_system`（`ObstacleSyncSet`、Actor phase） | `terrain_id_map_sync_system`（`MessageReader`、`GameSystemSet::Visual`） | 自然物由来 blocker の最後の削除で `WorldMap` 上の該当タイルが Dirt へ変わったとき `idx` を通知し、`TerrainIdMap` の対応ピクセルを書き換えて共有 `TerrainSurfaceMaterial` の見た目を更新する。**chunk entity（`TerrainChunk`）の再生成は不要**。shader が world-space で texture を参照するため、texture 1 ピクセル書き換えだけで全 chunk の見た目が更新される。登録は `VisualPlugin::add_message::<TerrainChangedEvent>()` |
 
+### プレイヤー向け結果通知
+
+| Message | 定義 / 登録owner | Producer | Consumer / Timing | 契約 |
+|:---|:---|:---|:---|:---|
+| `SaveLoadOutcome` | `bevy_app::systems::save` / `SavePlugin` | `Last::SaveLoadApplySet` dispatcher | root通知adapter（次の`Update::NotificationSystemSet::Adapt`） | requestごとにterminal resultを1件。world replacementの全reset後に発行し、targetは安全なファイル名label、failureはraw textを持たない10分類 |
+| `UserFacingNotification` | `hw_ui::notifications` / `HwUiPlugin` | save/load root adapterなど | `NotificationSystemSet::Reduce` → `Present`（同じUpdate） | 表示専用Message。stable key、severity、safe title/body、retentionを持つ。2秒dedupe、toast 3件、重要履歴64件へreduce |
+
+配置プレビューは連続状態であり、毎フレームMessageを発行しない。`PlacementFeedbackState` resourceの
+`live` / `recent_failure`を`PlacementFeedbackSet::Present`が直接読む。詳細は
+[notifications.md](notifications.md)を参照。
+
 ---
 
 ## 2. リクエストイベント（Request / Command）
@@ -96,4 +107,6 @@ presentation 専用通知は `write_message` のみを使い、visual-only Obser
 new worldへ適用してはならない。`MessagesPlugin`に登録するroot message型は単一typed macroから
 `add_message`と`Messages<T>::clear()`を生成し、`LoadResetRegistry`のreplace phaseで全bufferをclearする。
 leaf UI messageとroot facade登録の`TerrainChangedEvent`も同じphaseでclearする。`EntityEvent`のobserver配送は
-即時でありmessage bufferを持たないため、この対象には含めない。
+即時でありmessage bufferを持たないため、この対象には含めない。`SaveLoadOutcome`は`SavePlugin`専用hook、
+`UserFacingNotification`と通知履歴は`hw_ui` owner hookでclearする。load terminal outcomeは全reset後に
+dispatcherが書くため、新worldで消去されない。

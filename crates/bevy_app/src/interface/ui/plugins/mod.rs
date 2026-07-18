@@ -2,6 +2,7 @@ mod core;
 mod entity_list;
 mod foundation;
 mod info_panel;
+mod notifications;
 mod tooltip;
 use bevy::prelude::*;
 pub use core::ui_core_plugin;
@@ -9,6 +10,7 @@ pub use entity_list::ui_entity_list_plugin;
 pub use foundation::UiFoundationPlugin;
 use hw_ui::HwUiPlugin;
 pub use info_panel::ui_info_panel_plugin;
+use notifications::UiNotificationsPlugin;
 pub use tooltip::ui_tooltip_plugin;
 
 pub fn register_ui_plugins(app: &mut App) {
@@ -16,6 +18,7 @@ pub fn register_ui_plugins(app: &mut App) {
         HwUiPlugin,
         UiFoundationPlugin,
         ui_core_plugin(),
+        UiNotificationsPlugin,
         ui_tooltip_plugin(),
         ui_info_panel_plugin(),
         ui_entity_list_plugin(),

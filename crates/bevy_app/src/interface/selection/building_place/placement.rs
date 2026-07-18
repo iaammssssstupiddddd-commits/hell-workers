@@ -6,11 +6,12 @@ use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_core::visual_mirror::construction::BlueprintVisualState;
 use hw_ui::selection::{
-    BuildingPlacementContext, TANK_NEARBY_BUCKET_STORAGE_TILES, bucket_storage_geometry,
-    building_geometry, validate_bucket_storage_placement, validate_building_placement,
+    BuildingPlacementContext, PlacementTileRejection, TANK_NEARBY_BUCKET_STORAGE_TILES,
+    bucket_storage_geometry, building_geometry, validate_bucket_storage_placement,
+    validate_building_placement,
 };
 
-type PlaceBlueprintResult = Option<(Entity, Vec<(i32, i32)>, Vec2)>;
+type PlaceBlueprintResult = Result<(Entity, Vec<(i32, i32)>, Vec2), PlacementTileRejection>;
 
 fn is_replaceable_wall_at(
     world_map: &WorldMap,
@@ -79,7 +80,9 @@ pub(super) fn place_building_blueprint(
         };
         let validation = validate_building_placement(&ctx, building_type, grid, &geometry);
         if !validation.can_place {
-            return None;
+            return Err(validation
+                .rejection(grid)
+                .expect("rejected placement must carry a reason"));
         }
 
         (building_type == BuildingType::Door)
@@ -135,18 +138,18 @@ pub(super) fn place_building_blueprint(
         geometry.occupied_grids.iter().copied(),
     );
 
-    Some((entity, geometry.occupied_grids, geometry.draw_pos))
+    Ok((entity, geometry.occupied_grids, geometry.draw_pos))
 }
 
 /// Attempts to place the BucketStorage companion for a Tank blueprint.
-/// Returns true if placement succeeded.
+/// Returns `Ok(())` on success or the typed rejection from the shared validator.
 pub(super) fn try_place_bucket_storage_companion(
     commands: &mut Commands,
     world_map: &mut WorldMap,
     parent_blueprint: Entity,
     parent_occupied_grids: &[(i32, i32)],
     anchor_grid: (i32, i32),
-) -> bool {
+) -> Result<(), PlacementTileRejection> {
     let geometry = bucket_storage_geometry(anchor_grid);
     let read_world = WorldMapRef(world_map);
     let validation = validate_bucket_storage_placement(
@@ -157,7 +160,9 @@ pub(super) fn try_place_bucket_storage_companion(
         TANK_NEARBY_BUCKET_STORAGE_TILES,
     );
     if !validation.can_place {
-        return false;
+        return Err(validation
+            .rejection(anchor_grid)
+            .expect("rejected companion placement must carry a reason"));
     }
 
     for (gx, gy) in geometry.occupied_grids {
@@ -181,5 +186,5 @@ pub(super) fn try_place_bucket_storage_companion(
             .id();
         world_map.register_stockpile_tile((gx, gy), storage_entity);
     }
-    true
+    Ok(())
 }

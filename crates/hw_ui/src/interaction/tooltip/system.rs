@@ -5,6 +5,7 @@ use crate::models::inspection::EntityInspectionModel;
 use crate::panels::tooltip_builder::TooltipBuildPayload;
 use crate::theme::UiTheme;
 use bevy::prelude::*;
+use bevy::time::Real;
 use bevy::ui_widgets::popover::Popover;
 
 use super::target::TooltipTarget;
@@ -16,8 +17,9 @@ use super::{
 /// Bevy-extracted resources passed to hover_tooltip_system
 pub struct TooltipBevy<'a> {
     pub time: &'a Time,
+    pub real_time: &'a Time<Real>,
     pub hovered: &'a crate::selection::HoveredEntity,
-    pub placement_failure_tooltip: &'a mut crate::components::PlacementFailureTooltip,
+    pub placement_feedback: &'a crate::selection::PlacementFeedbackState,
     pub menu_state: &'a MenuState,
     pub ui_nodes: &'a UiNodeRegistry,
 }
@@ -60,8 +62,6 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
     I: TooltipInspectionSource,
     R: TooltipContentRenderer,
 {
-    bevy.placement_failure_tooltip.tick(bevy.time.delta_secs());
-
     let Ok(window) = queries.q_window.single() else {
         return;
     };
@@ -117,15 +117,27 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
             tooltip_data.text,
             tooltip_data.shortcut.unwrap_or_default()
         );
-    } else if let Some(reason) = bevy.placement_failure_tooltip.message.as_ref() {
+    } else if let Some(feedback) = bevy.placement_feedback.visible(bevy.real_time.elapsed()) {
         target = Some(TooltipTarget::PlacementFailure);
-        template = TooltipTemplate::Generic;
-        payload = format!("placement_failure:{reason}");
+        template = match feedback.status {
+            crate::selection::PlacementFeedbackStatus::Rejected => {
+                TooltipTemplate::PlacementRejected
+            }
+            crate::selection::PlacementFeedbackStatus::Partial => TooltipTemplate::PlacementPartial,
+        };
+        let body = feedback.body();
+        payload = format!(
+            "placement_feedback:{:?}:{}:{}:{}",
+            feedback.status,
+            feedback.header(),
+            body,
+            feedback.rejected_tile_count
+        );
         model = Some(EntityInspectionModel {
             entity: Entity::PLACEHOLDER,
-            header: "Cannot Place".to_string(),
+            header: feedback.header().to_string(),
             common_text: String::new(),
-            tooltip_lines: vec![reason.clone()],
+            tooltip_lines: vec![body],
             soul: None,
         });
     } else if let Some(entity) = bevy.hovered.0 {
@@ -287,13 +299,21 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
         }
     }
 
+    let placement_border = match template {
+        TooltipTemplate::PlacementRejected => handlers.theme.colors.status_danger,
+        TooltipTemplate::PlacementPartial => handlers.theme.colors.status_warning,
+        _ => handlers.theme.colors.tooltip_border,
+    };
     fade::apply_fade_effects(
         &mut tooltip_bg,
         &mut tooltip_border,
         &mut queries.render_queries.q_tooltip_text,
         &mut queries.render_queries.q_tooltip_progress,
-        tooltip.fade_alpha,
         handlers.theme,
-        fade_t,
+        fade::TooltipFadeStyle {
+            fade_alpha: tooltip.fade_alpha,
+            border_base: placement_border,
+            interpolation: fade_t,
+        },
     );
 }

@@ -121,6 +121,13 @@ impl Plugin for VisualPlugin {
         // Area indicators (app_contexts 依存のため root 残留)
         app.add_systems(
             Update,
+            hw_ui::selection::clear_live_placement_feedback_system
+                .before(crate::systems::visual::placement_ghost::placement_ghost_system)
+                .in_set(GameSystemSet::Visual),
+        );
+
+        app.add_systems(
+            Update,
             (
                 crate::systems::command::task_area_indicator_system,
                 area_edit_handles_visual_system,

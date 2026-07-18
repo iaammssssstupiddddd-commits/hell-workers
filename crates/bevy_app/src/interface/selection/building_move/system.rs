@@ -77,7 +77,7 @@ pub fn building_move_system(
     };
 
     if st.companion_state.0.is_some() {
-        handle_companion_click(
+        let result = handle_companion_click(
             &mut op,
             &mut st,
             destination_grid,
@@ -86,15 +86,30 @@ pub fn building_move_system(
             transform,
             &queries.q_bucket_storages,
         );
+        match result {
+            Ok(()) => state.placement_feedback.clear_recent_failure(),
+            Err(rejection) => state.placement_feedback.show_recent_rejection(
+                rejection.reason,
+                rejection.grid,
+                state.real_time.elapsed(),
+            ),
+        }
         return;
     }
 
-    handle_initial_click(
+    match handle_initial_click(
         &mut op,
         &mut st,
         destination_grid,
         target_entity,
         building,
         transform,
-    );
+    ) {
+        Ok(()) => state.placement_feedback.clear_recent_failure(),
+        Err(rejection) => state.placement_feedback.show_recent_rejection(
+            rejection.reason,
+            rejection.grid,
+            state.real_time.elapsed(),
+        ),
+    }
 }
