@@ -54,7 +54,6 @@
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
 - [plans/hvac-plumbing-plan-2026-07-13.md](plans/hvac-plumbing-plan-2026-07-13.md): 換気・導水・Room 認可を M0〜M4 で導入する実装計画。
-- [plans/input-action-context-resolver-plan-2026-07-17.md](plans/input-action-context-resolver-plan-2026-07-17.md): 離散キーボード入力の競合解決と Modal/Pause の背景入力遮断を行う Track A1 実装計画。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。
 - [proposals/gameplay-management-improvements-proposal-2026-07-17.md](proposals/gameplay-management-improvements-proposal-2026-07-17.md): 操作、運営ポリシー、復旧・永続化、進行要素を 4 トラックで整理した総合改善提案。
 - [proposals/hvac-plumbing-proposal.md](proposals/hvac-plumbing-proposal.md): 採用済みの空調・衛生インフラ提案（世界観・採否理由）。

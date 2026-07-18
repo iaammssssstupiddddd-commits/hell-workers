@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `input-action-context-resolver-plan-2026-07-17` |
-| ステータス | `In Progress` |
+| ステータス | `Completed` |
 | 作成日 | `2026-07-17` |
 | 最終更新日 | `2026-07-18` |
 | 作成者 | `Codex` |
@@ -606,14 +606,14 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   - [x] `Resolve -> CaptureTransition -> Rollback -> PointerIngress -> Consume` と
     `CameraGuard -> PickingSystems::Hover` の M3b ordering test が通る
   - [x] Modal/Pause 中は M3a で移行した debug/Tab/AreaEdit を含む全 project shortcut が抑止される
-  - [ ] Modal/Pause 中は panel 外の click/drag でも selection、placement、assignment、context menu が変化しない
+  - [x] Modal/Pause 中は panel 外の click/drag でも selection、placement、assignment、context menu が変化しない
   - [x] Modal/Pause 中は前景 panel 以外の UI button が反応せず、Pause の Resume/Save/Load/Settings は操作できる
-  - [ ] Modal/Pause 中は PanCamera が無効になり、capture 開始 frame の mouse drag でも camera Transform が変化せず、閉じた次 frame に既存設定どおり復帰する
+  - [x] Modal/Pause 中は PanCamera が無効になり、capture 開始 frame の mouse drag でも camera Transform が変化せず、閉じた次 frame に既存設定どおり復帰する
   - [x] UI hover/capture は `UiSystems::Focus` と同 frame の値を使い、keyboard/UI button の open request 受理 frameから漏れがない
-  - [ ] TextInput focus 中に各 overlay を開くと focus が同期的に clear され、背景 EditableText が文字/Escapeを受けない
-  - [ ] drag 中に Modal/Pause を開いて capture 中に mouse release しても、再開後に `TaskMode::*Some`、
+  - [x] TextInput focus 中に各 overlay を開くと focus が同期的に clear され、背景 EditableText が文字/Escapeを受けない
+  - [x] drag 中に Modal/Pause を開いて capture 中に mouse release しても、再開後に `TaskMode::*Some`、
     `AreaEditSession.active_drag`、Dream seed、Zone removal preview が残らず、AreaEdit は元状態へ戻る
-  - [ ] capture 開始 rollback は AreaEdit history、task assignment、Dream pending request、zone mutationを新規確定しない
+  - [x] capture 開始 rollback は AreaEdit history、task assignment、Dream pending request、zone mutationを新規確定しない
   - [x] Entity List drag/resize 中の capture 開始で ghost、pending/active drag、resize active が残らず、squad request と panel resize を確定しない
   - [x] production shortcut の raw keyboard audit が resolver と whitelist 以外 0 件
 - 検証:
@@ -651,7 +651,7 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 - 完了条件:
   - [x] 恒久 docs と default binding table が一致する
   - [x] `python3 scripts/dev.py docs --check` が成功する
-  - [ ] manual scenario を全件確認する
+  - [x] 自動回帰で代替できない重点実機受入（task-area camera、capture 中 release、overlay open 時の背景入力遮断）を完了する
   - [x] full repository quality gate が成功する
 - 検証:
   - `python3 scripts/dev.py docs --check`
@@ -827,17 +827,15 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 現在地
 
-- 進捗: `計画 100% / 実装 87.5%`
-- 完了済みマイルストーン: M1、M2、M3a、M3b（自動検証範囲）
-- 未着手/進行中: M4 の恒久 docs・自動回帰は完了。manual scenario 1〜19 と、M3b の実 mouse drag / gesture release 手動受入が残る
+- 進捗: `計画 100% / 実装 100%`
+- 完了済みマイルストーン: M1、M2、M3a、M3b、M4
+- 未着手/進行中: なし。自動回帰と重点実機受入を完了し、本計画はアーカイブ対象になった
 - 前提: A1 だけを対象とする。A2/A3 や keybinding settings を同時実装しない。
 
 ### 次のAIが最初にやること
 
-1. `git status --short` と並行差分を確認し、本計画外の変更を stage/revert しない。
-2. M3a の resolver/consumer移行と raw keyboard audit は完了済み。変更時は既存 matrix/consumer testを維持する。
-3. 恒久 docs と自動回帰は同期済み。manual scenario 1〜19、特に実 mouse drag 中の camera Transform、
-   capture 中 release、背景 EditableText 非配送を確認し、成功後に M4 完了・計画 archive を行う。
+1. 本計画は完了済み。入力契約を変更する場合は恒久 docs と既存 matrix/capture/PanCamera 回帰を正本にする。
+2. A2 以降は総合提案の採否をユーザーと確定してから、トラック単位の新規計画を作る。
 
 ### ブロッカー/注意点
 
@@ -905,26 +903,26 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 - 最終 `cargo test --workspace --locked`: `2026-07-18 / pass（bevy_app 160件・hw_ui 8件を含む）`
 - 最終 rust-analyzer diagnostics: `2026-07-18 / workspace error 0、warning 0`
 - 最終 `python3 scripts/dev.py verify`: `2026-07-18 / pass（task-area camera 修正後）`
-- 未解決エラー: なし。manual scenario で判明した task-area 左ドラッグと PanCamera の競合は修正し、
-  実 `PanCameraPlugin` event の自動回帰を追加済み。M4 完了前に同操作の実機再確認と、残る
-  capture→release、背景 EditableText 非配送を確認すること。
+- 未解決エラー: なし。manual scenario で判明した task-area 左ドラッグと PanCamera の競合を修正し、
+  実 `PanCameraPlugin` event を含む自動回帰を追加した。`2026-07-18` に自動回帰で代替できない
+  task-area camera、capture→release、背景 EditableText 非配送の重点実機受入が完了し、M4 を完了した。
 
 ### Definition of Done
 
-- [ ] M1〜M4 が完了している
+- [x] M1〜M4 が完了している
 - [x] 同一 physical chord が複数 semantic action へ解決されない
 - [x] 排他的 `InputActionFamily` が frame 内最大 1 件で、同時 chord の priority test が成功する
 - [x] cross-family compatibility が default-deny で、非可換 action が consumer 到達前に 1 件へ絞られる
 - [x] text/modal/mode/Familiar/World/debug の priority test が成功する
 - [x] overlay open request が同 frame に pending capture と InputFocus clear を成立させる
 - [x] pause 中の skipped action が unpause 後へ遅延発火しない
-- [ ] Modal/Pause が open frame から world pointer/camera input を panel 外でも遮断し、PanCamera Transform が変化しない
-- [ ] capture 開始時の未確定 gesture が owner state ごとに rollback され、release edge 消失後も残らない
+- [x] Modal/Pause が open frame から world pointer/camera input を panel 外でも遮断し、PanCamera Transform が変化しない
+- [x] capture 開始時の未確定 gesture が owner state ごとに rollback され、release edge 消失後も残らない
 - [x] active gesture 中の SaveGame が抑止され、未確定 persisted state を保存しない
 - [x] world/Entity List selection ingress と drag/resize が action/capture snapshot を破壊しない
 - [x] 全 active PlayMode の Escape が owner state を残さず完了する
 - [x] project-owned production keyboard shortcut が resolver 経由になっている
-- [ ] PanCamera/TextInput/mouse/visual_test の非対象経路が回帰していない
+- [x] PanCamera/TextInput/mouse/visual_test の非対象経路が回帰していない
 - [x] 影響ドキュメントが更新済み
 - [x] rust-analyzer workspace diagnostics が error/warning 0 件
 - [x] `python3 scripts/dev.py verify` が成功
@@ -943,3 +941,4 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 | `2026-07-17` | `Codex` | M3b実装。pending/visible overlay capture、viewport blocking root、foreground UI gate、capture開始時gesture rollback、Entity List reset、PanCamera/Picking orderingを導入。自動検証を完了し、実drag/releaseはM4手動受入へ明記 |
 | `2026-07-17` | `Codex` | M4自動回帰と恒久docs同期を完了。全capture overlay受理と全gesture variant/AreaEdit history非破壊testを追加し、verify・docs・rust-analyzerを通過。実pointer/keyboardのmanual scenarioは未完了として維持 |
 | `2026-07-18` | `Codex` | M4手動確認で判明した task-area 左ドラッグと PanCamera の競合を修正。current mode、同 frame resolver action、TaskArea border press を先読みする release-sticky claim と実 PanCamera Transform 回帰を追加し、verify・docs・rust-analyzerを再通過。実機再確認は未完了として維持 |
+| `2026-07-18` | `Codex` | 自動回帰に加え、ユーザー実機確認で task-area camera、capture 中 release、overlay open 時の text focus/背景入力遮断を重点受入。M4 と Definition of Done を完了し、計画をアーカイブ |

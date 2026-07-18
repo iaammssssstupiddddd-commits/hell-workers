@@ -7,9 +7,9 @@
 | ドキュメントID | `gameplay-management-improvements-proposal-2026-07-17` |
 | ステータス | `Draft` |
 | 作成日 | `2026-07-17` |
-| 最終更新日 | `2026-07-17` |
+| 最終更新日 | `2026-07-18` |
 | 作成者 | `Codex` |
-| 関連計画 | `docs/plans/input-action-context-resolver-plan-2026-07-17.md`（A1。A2 以降は採用後にトラック単位で分割） |
+| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了。A2 以降は採用後にトラック単位で分割） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 背景と問題
@@ -21,9 +21,9 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 
 現状の主な問題は次のとおり。
 
-- 初期監査では同じキーが複数の操作に割り当てられていた。A1 の M1〜M3b で F5/F9/V、B/Z、
+- 初期監査では同じキーが複数の操作に割り当てられていた。A1 の M1〜M4 で F5/F9/V、B/Z、
   Space/Digit、Familiar command、context 別 Escape、AreaEdit、Tab、debug shortcut は resolver へ
-  移行済み。Modal/Pause は open request frame から pointer/camera と背景 UI を capture し、未確定 gesture を rollback する。
+  移行した。Modal/Pause は open request frame から pointer/camera と背景 UI を capture し、未確定 gesture を rollback する。
 - 配置不能理由は `PlacementRejectReason` として計算済みだが、ゴースト表示では
   可否の赤/緑だけに縮退している。セーブ/ロード結果もログ中心で、ゲーム画面から
   成否を確実に確認できない。
@@ -81,6 +81,9 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 #### Track A: 操作とフィードバック（P0）
 
 ##### A1. コンテキスト付き入力アクション
+
+実装状態: `2026-07-18` に M1〜M4、自動回帰、重点実機受入を完了。詳細な設計判断と検証記録は
+`docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md` を参照する。
 
 - 物理キーを直接読む各システムの上に、狭い `InputAction` / `InputContext` 解決層を置く。
 - 想定コンテキストは少なくとも `World`, `Placement`, `AreaSelection`, `TextInput`,
@@ -438,7 +441,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 ## 11. 未解決事項（Open Questions）
 
 - [x] A1 の入力既定割当と将来のキーバインド設定との責務境界を確定した。
-  `docs/plans/input-action-context-resolver-plan-2026-07-17.md` の D8〜D21 を正本とする。
+  `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md` の D8〜D26 を設計記録とする。
 - [ ] タスク停止理由を保存せず導出する場合の、表示更新頻度と履歴保持範囲を決める。
 - [ ] `StockpilePolicy` の初版を単一資源指定にするか、資源カテゴリ/許可集合まで含めるか決める。
 - [ ] Familiar の活動範囲を空間領域、距離、TaskArea のどれで表現するか決める。
@@ -452,15 +455,14 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 現在地
 
-- 進捗: `提案初版 100% / A1 採用済み・実装 87.5% / A2〜D 未採否`
-- 直近で完了したこと: A1 の M3b 実装と M4 の恒久 docs・自動回帰を完了し、全 project shortcut の
-  resolver 移行、frame-start selection、Modal/Pause capture、gesture rollback、foreground UI ownership を成立させた。
-- 現在のブランチ/前提: `master`。A1 の進捗正本は関連実装計画を参照する。
+- 進捗: `提案初版 100% / A1 採用済み・実装 100% / A2〜D 未採否`
+- 直近で完了したこと: A1 の全 project shortcut resolver 移行、frame-start selection、Modal/Pause capture、
+  gesture rollback、foreground UI ownership、task-area camera claim を実装し、自動回帰と重点実機受入を完了した。
+- 現在のブランチ/前提: `master`。A1 の設計記録はアーカイブ済み関連計画を参照する。
 
 ### 次のAIが最初にやること
 
-1. A1 は関連実装計画の manual scenario 1〜19 を実機確認し、成功後に M4 完了・計画 archive を行う。
-2. A2〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
+1. A2〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
 
 ### ブロッカー/注意点
 
@@ -495,6 +497,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - [x] リスク・影響範囲・検証計画が埋まっている
 - [ ] Track A〜D の採否と初回スコープが決定されている
 - [x] 実装へ進むサブトラックの `docs/plans/...` が作成されている
+- [x] A1 完了時に関連する恒久ドキュメントと自動回帰が更新されている
 - [ ] 実装完了時に関連する恒久ドキュメントと不変条件が更新されている
 
 ## 13. 更新履歴
@@ -504,3 +507,4 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | `2026-07-17` | `Codex` | 初版作成。操作、運営ポリシー、永続化、進行の 4 トラックを整理 |
 | `2026-07-17` | `Codex` | A1 M2 完了を反映。数字/B、Modal/Pause、Familiar、Escape の resolver 移行と次の M3 境界を同期 |
 | `2026-07-17` | `Codex` | A1 M3b 実装を反映。残存 shortcut の resolver 移行、Modal/Pause capture、gesture rollback、foreground UI ownership を同期。手動受入は関連計画を参照 |
+| `2026-07-18` | `Codex` | A1 M4 と重点実機受入の完了を反映。task-area camera 競合修正、自動回帰、恒久docs同期を完了し、関連計画をアーカイブ |
