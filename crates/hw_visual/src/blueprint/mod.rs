@@ -167,13 +167,10 @@ pub fn blueprint_pulse_animation_system(
             let overlay = match visual.pulse_overlay {
                 Some(overlay) if q_overlays.get_mut(overlay.entity).is_ok() => overlay,
                 _ => {
+                    let overlay_sprite = (*sprite).clone();
                     let overlay_entity = commands
                         .spawn((
-                            Sprite {
-                                image: sprite.image.clone(),
-                                color: sprite.color,
-                                ..default()
-                            },
+                            overlay_sprite,
                             Transform::default(),
                             BlueprintPulseOverlayChild,
                             ChildOf(entity),
@@ -198,8 +195,7 @@ pub fn blueprint_pulse_animation_system(
             // again. Steady-state frames leave the root untouched.
             if sprite.color.alpha() > 0.0 {
                 if let Ok(mut overlay_sprite) = q_overlays.get_mut(overlay.entity) {
-                    overlay_sprite.image = sprite.image.clone();
-                    overlay_sprite.color = sprite.color;
+                    *overlay_sprite = (*sprite).clone();
                 }
                 visual.pulse_overlay = Some(BlueprintPulseOverlay {
                     base_color: sprite.color,
@@ -256,5 +252,70 @@ pub fn blueprint_scale_animation_system(mut q_blueprints: BlueprintScaleUpdateQu
         if transform.scale != scale {
             transform.scale = scale;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pulse_overlay_preserves_blueprint_sprite_geometry() {
+        let mut app = App::new();
+        app.insert_resource(Time::<()>::default())
+            .add_systems(Update, blueprint_pulse_animation_system);
+
+        let initial_size = Vec2::new(64.0, 160.0);
+        let initial_rect = Rect::new(4.0, 8.0, 68.0, 168.0);
+        let blueprint = app
+            .world_mut()
+            .spawn((
+                BlueprintVisual {
+                    state: BlueprintState::Building,
+                    ..default()
+                },
+                Sprite {
+                    color: Color::srgba(0.2, 0.4, 0.8, 0.75),
+                    flip_x: true,
+                    flip_y: true,
+                    custom_size: Some(initial_size),
+                    rect: Some(initial_rect),
+                    ..default()
+                },
+            ))
+            .id();
+
+        app.update();
+
+        let overlay = app
+            .world()
+            .get::<BlueprintVisual>(blueprint)
+            .and_then(|visual| visual.pulse_overlay)
+            .expect("building blueprint should own a pulse overlay");
+        let overlay_sprite = app
+            .world()
+            .get::<Sprite>(overlay.entity)
+            .expect("pulse overlay should have a sprite");
+        assert_eq!(overlay_sprite.custom_size, Some(initial_size));
+        assert_eq!(overlay_sprite.rect, Some(initial_rect));
+        assert!(overlay_sprite.flip_x);
+        assert!(overlay_sprite.flip_y);
+
+        let refreshed_size = Vec2::new(32.0, 32.0);
+        {
+            let mut root_sprite = app
+                .world_mut()
+                .get_mut::<Sprite>(blueprint)
+                .expect("blueprint should retain its root sprite");
+            root_sprite.custom_size = Some(refreshed_size);
+            root_sprite.color = Color::WHITE;
+        }
+        app.update();
+
+        let overlay_sprite = app
+            .world()
+            .get::<Sprite>(overlay.entity)
+            .expect("pulse overlay should survive visual refresh");
+        assert_eq!(overlay_sprite.custom_size, Some(refreshed_size));
     }
 }
