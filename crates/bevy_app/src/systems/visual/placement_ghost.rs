@@ -105,6 +105,12 @@ pub fn placement_ghost_system(
         q_yards,
     } = validation_queries;
 
+    let is_building_place = *play_mode.get() == PlayMode::BuildingPlace;
+    let is_soul_spa_place = matches!(task_context.0, TaskMode::SoulSpaPlace(_));
+    if !is_building_place || build_context.is_changed() {
+        placement_feedback.clear_live_feedback_blocker();
+    }
+
     if ui_input_state.world_input_blocked() {
         for (entity, _, _) in q_ghost.iter() {
             commands.entity(entity).despawn();
@@ -114,9 +120,6 @@ pub fn placement_ghost_system(
         }
         return;
     }
-
-    let is_building_place = *play_mode.get() == PlayMode::BuildingPlace;
-    let is_soul_spa_place = matches!(task_context.0, TaskMode::SoulSpaPlace(_));
 
     // Soul Spa ゴースト処理（TaskDesignation モード）
     if is_soul_spa_place {
@@ -299,7 +302,7 @@ pub fn placement_ghost_system(
         };
         validate_building_placement(&ctx, building_type, grid_pos, &geometry)
     };
-    placement_feedback.set_live_validation(&validation, grid_pos);
+    placement_feedback.set_live_building_validation(&validation, grid_pos);
     let can_place = validation.can_place;
 
     let draw_pos = geometry.draw_pos;

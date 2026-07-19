@@ -18,13 +18,12 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::time::Real;
 use hw_ui::camera::MainCamera;
-use hw_ui::selection::PlacementFeedbackState;
-use hw_ui::selection::building_spawn_pos;
+use hw_ui::selection::{PlacementFeedbackState, PlacementTileRejection, building_spawn_pos};
 use hw_world::zones::{Site, Yard};
 
 use companion::make_companion_placement;
 use flow::handle_companion_flow;
-use placement::place_building_blueprint;
+use placement::{place_building_blueprint, validate_building_blueprint_placement};
 
 #[derive(SystemParam)]
 pub struct BuildPlaceInput<'w, 's> {
@@ -58,6 +57,20 @@ pub(super) struct PlacementQueries<'a, 'w, 's> {
     pub q_yards: &'a Query<'w, 's, &'static Yard>,
 }
 
+fn record_placement_outcome(
+    feedback: &mut PlacementFeedbackState,
+    outcome: Result<(), PlacementTileRejection>,
+    attempted_grid: (i32, i32),
+    now: std::time::Duration,
+) {
+    match outcome {
+        Ok(()) => feedback.block_live_feedback_at(attempted_grid),
+        Err(rejection) => {
+            feedback.show_recent_rejection(rejection.reason, rejection.grid, now);
+        }
+    }
+}
+
 pub fn blueprint_placement(
     input: BuildPlaceInput,
     mut world_map: WorldMapWrite,
@@ -77,6 +90,7 @@ pub fn blueprint_placement(
         return;
     };
     let grid = WorldMap::world_to_grid(world_pos);
+    let now = state.real_time.elapsed();
 
     let pq = PlacementQueries {
         q_buildings: &queries.q_buildings,
@@ -95,14 +109,7 @@ pub fn blueprint_placement(
         world_pos,
         grid,
     ) {
-        match result {
-            Ok(()) => state.placement_feedback.clear_recent_failure(),
-            Err(rejection) => state.placement_feedback.show_recent_rejection(
-                rejection.reason,
-                rejection.grid,
-                state.real_time.elapsed(),
-            ),
-        }
+        record_placement_outcome(&mut state.placement_feedback, result, grid, now);
         return;
     }
 
@@ -112,27 +119,73 @@ pub fn blueprint_placement(
     let spawn_pos = building_spawn_pos(building_type, grid, RIVER_Y_MIN);
 
     if building_type == BuildingType::Tank {
+        let validation =
+            validate_building_blueprint_placement(&world_map, building_type, grid, &pq);
+        if !validation.can_place {
+            let rejection = validation
+                .rejection(grid)
+                .expect("rejected Tank placement must carry a reason");
+            record_placement_outcome(&mut state.placement_feedback, Err(rejection), grid, now);
+            return;
+        }
         state.companion_state.0 = Some(make_companion_placement(
             CompanionParentKind::Tank,
             grid,
             CompanionPlacementKind::BucketStorage,
             spawn_pos,
         ));
+        record_placement_outcome(&mut state.placement_feedback, Ok(()), grid, now);
     } else {
-        match place_building_blueprint(
+        let result = place_building_blueprint(
             &mut commands,
             &mut world_map,
             &state.game_assets,
             building_type,
             grid,
             &pq,
-        ) {
-            Ok(_) => state.placement_feedback.clear_recent_failure(),
-            Err(rejection) => state.placement_feedback.show_recent_rejection(
-                rejection.reason,
-                rejection.grid,
-                state.real_time.elapsed(),
-            ),
-        }
+        )
+        .map(|_| ());
+        record_placement_outcome(&mut state.placement_feedback, result, grid, now);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_ui::selection::{PlacementRejectReason, PlacementValidation};
+
+    #[test]
+    fn successful_building_outcome_arms_same_anchor_feedback_blocker() {
+        let anchor = (3, 4);
+        let mut feedback = PlacementFeedbackState::default();
+
+        record_placement_outcome(&mut feedback, Ok(()), anchor, std::time::Duration::ZERO);
+        feedback.set_live_building_validation(
+            &PlacementValidation::rejected(PlacementRejectReason::OccupiedByBuilding),
+            anchor,
+        );
+
+        assert!(feedback.visible(std::time::Duration::ZERO).is_none());
+    }
+
+    #[test]
+    fn rejected_building_outcome_remains_visible() {
+        let anchor = (3, 4);
+        let mut feedback = PlacementFeedbackState::default();
+
+        record_placement_outcome(
+            &mut feedback,
+            Err(PlacementTileRejection {
+                grid: anchor,
+                reason: PlacementRejectReason::OccupiedByBuilding,
+            }),
+            anchor,
+            std::time::Duration::ZERO,
+        );
+
+        assert_eq!(
+            feedback.visible(std::time::Duration::ZERO).unwrap().reason,
+            PlacementRejectReason::OccupiedByBuilding
+        );
     }
 }

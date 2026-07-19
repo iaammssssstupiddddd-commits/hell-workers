@@ -142,6 +142,9 @@ Logic の次回同期へ委ねてはならない。
     - 通常建築、Tank companion、BuildingMove、SoulSpa、Floor、Wall は確定前からカーソル付近に型付き理由を表示する。
     - 全体拒否は `Cannot place`、Floor / Wall の一部だけを採用できる場合は `Some tiles will be skipped` として区別する。
     - 確定失敗は同じ理由を約2秒保持する。成功時、UI上、cursor不在、mode終了時には古いlive理由を残さない。
+    - BuildingPlace の成功直後は、同じ anchor に残ったカーソルが新しい設計図自身と干渉しても文字理由を表示しない。
+      blocker は別 grid への移動、build kind / mode 変更、または同じ場所への明示的な再クリック失敗で解除する。
+      配置判定と赤いゴーストは継続するため、重複配置自体は許可しない。
     - 主な理由: `not walkable` / `occupied by a building` / `occupied by a stockpile` / `out of bounds` / `not in yard/site` / `has no completed floor` / `area too large` / `must be 1xn line`
 - **判定の正本**: preview と commit は同じ `PlacementValidation` / `AreaPlacementPlan` を使い、commit 時にも再検証する。色だけを配置可否の正本にしない。
 - **サイズ対応**: 1x1（壁など）だけでなく、2x2（タンクなど）の建物も適切なオフセットで表示されます。
@@ -154,6 +157,8 @@ Logic の次回同期へ委ねてはならない。
 - **Tank**:
   - `BucketStorage`（1x2）を即時配置するまで companion モードを継続します。
   - 親の `Tank` Blueprint は companion 配置が完了するまで確定しません（未確定状態では建築予約しない）。
+  - 親位置の1クリック目も共通 validator で再検証し、成功時だけ companion モードへ進む。同じ anchor で直後に生じる
+    parent footprint との自己干渉理由は、カーソルが別 grid へ動くまで live feedback blocker が抑止する。
   - `Esc` でキャンセルした場合は、親Blueprintと未確定 companion をまとめて取り消します。
   - companion は親footprintとの重複、親からの距離、bounds、建物／Stockpile／walkabilityを同じtyped validatorで判定する。
 

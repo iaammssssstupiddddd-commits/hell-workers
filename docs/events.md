@@ -42,7 +42,7 @@ dual 通知の Producer は `publish_*` helper を使う。
 | `UserFacingNotification` | `hw_ui::notifications` / `HwUiPlugin` | save/load root adapterなど | `NotificationSystemSet::Reduce` → `Present`（同じUpdate） | 表示専用Message。stable key、severity、safe title/body、retentionを持つ。2秒dedupe、toast 3件、重要履歴64件へreduce |
 
 配置プレビューは連続状態であり、毎フレームMessageを発行しない。`PlacementFeedbackState` resourceの
-`live` / `recent_failure`を`PlacementFeedbackSet::Present`が直接読む。詳細は
+`live` / `recent_failure`と成功anchor用live blockerから、`PlacementFeedbackSet::Present`がvisible feedbackを直接読む。詳細は
 [notifications.md](notifications.md)を参照。
 
 ---

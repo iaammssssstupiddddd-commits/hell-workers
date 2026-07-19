@@ -178,6 +178,9 @@ BuildingPlace、Tank companion、BuildingMove、SoulSpa、Floor、Wallは、prev
 
 配置feedbackは毎フレーム変わるresource stateであり、汎用`UserFacingNotification`を連続発行してはならない。
 Visual冒頭で古い`live`をclearし、`PlacementFeedbackSet::Produce → Present → Commit`の順を固定する。
+BuildingPlace のcommit成功とTank companion段階遷移は、成功anchorのlive feedback blockerをarmする。
+同じanchorに留まる間だけ成功直後の自己干渉テキストを抑止し、別gridへの移動または明示的なcommit失敗で解除する。
+blockerはvalidator結果、赤いghost、commit再検証を変更してはならない。
 
 ---
 

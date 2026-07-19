@@ -7,7 +7,7 @@
 | 計画ID | `player-facing-result-notifications-plan-2026-07-18` |
 | ステータス | `In Progress` |
 | 作成日 | `2026-07-18` |
-| 最終更新日 | `2026-07-18` |
+| 最終更新日 | `2026-07-20` |
 | 作成者 | `Codex` |
 | 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track A2） |
 | 関連Issue/PR | `N/A` |
@@ -327,6 +327,7 @@ rollback 経路では reset が複数回走っても、最後の reset 後に発
   - Floor / Wall の area plan を pure helper 化し、preview / commit で同じ valid tile 集合と最初の理由を使う。
   - Visual / Interface 内の produce、present、commit 順を system set で固定する。
   - 文字理由をカーソル付近に表示し、色だけを正本にしない。
+  - BuildingPlace 成功後の同一anchor自己干渉だけを、cursor gridが変わるまでlive feedback blockerで抑止する。
 - 変更ファイル:
   - `crates/hw_ui/src/selection/placement.rs`
   - `crates/hw_ui/src/selection/placement/validation.rs`
@@ -353,6 +354,7 @@ rollback 経路では reset が複数回走っても、最後の reset 後に発
   - [x] commit は cached preview を信用せず再検証する。
   - [x] Floor / Wall は valid tile 1 件以上なら従来どおり部分成功し、invalid tile を生成しない。
   - [x] 全体失敗は既存どおり recent reason を短時間表示する。
+  - [x] 通常Blueprint成功、Tank companion開始/完了後は同一anchorの自己干渉理由を抑止し、移動または明示失敗で解除する。
   - [x] live feedback から毎フレーム notification Message が増えない。
   - [x] 配置対象、typed validation、部分成功、system order が durable docs に記録されている。
 - 検証:
@@ -507,6 +509,7 @@ rollback 経路では reset が複数回走っても、最後の reset 後に発
 ### 7.3 手動確認シナリオ
 
 1. 通常建築、Bridge、Door、Tank companion を有効 / 無効 tile へ動かし、赤色だけでなく理由が確定前に見える。
+   有効配置直後に同じanchorで自己干渉理由が出ず、別gridへ動かすと通常の理由表示へ戻り、同じ場所への再クリック失敗は表示される。
 2. BuildingMove で元 footprint と重なる移動は可能、他建築 / stockpile / map 外は理由付きで拒否される。
 3. SoulSpa を Yard 内外、occupied tile へ動かし、ghost と click の結果が一致する。
 4. Floor / Wall をドラッグし、全無効では理由、部分有効では valid / skipped の要約が出て valid tile だけ生成される。
@@ -548,7 +551,8 @@ rollback 経路では reset が複数回走っても、最後の reset 後に発
 
 ### 次のAIが最初にやること
 
-1. §7.3の重点実機項目を確認する。特に全配置経路のpreview理由、Floor / Wall部分採用、F5/F9通知、load後の履歴resetを優先する。
+1. §7.3の重点実機項目を確認する。特に全配置経路のpreview理由、BuildingPlace成功後のsame-anchor blocker、
+   Floor / Wall部分採用、F5/F9通知、load後の履歴resetを優先する。
 2. 問題がなければ本計画を`docs/plans/archive/`へ移し、`python3 scripts/dev.py docs --write`と`verify`を再実行する。
 3. 問題があれば該当milestoneのcode / test / durable docsを同じ変更で直す。
 

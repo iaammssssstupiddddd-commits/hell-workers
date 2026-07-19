@@ -341,6 +341,87 @@ fn frame_start_clears_live_feedback_without_dropping_fresh_recent_failure() {
 }
 
 #[test]
+fn successful_commit_blocks_same_anchor_feedback_until_cursor_moves() {
+    let rejected = PlacementValidation::rejected(PlacementRejectReason::OccupiedByBuilding);
+    let blocked_anchor = (4, 5);
+    let mut state = PlacementFeedbackState::default();
+    state.block_live_feedback_at(blocked_anchor);
+
+    for now in [0, 1] {
+        state.begin_frame(std::time::Duration::from_secs(now));
+        state.set_live_building_validation(&rejected, blocked_anchor);
+        assert!(state.visible(std::time::Duration::from_secs(now)).is_none());
+    }
+
+    let moved_anchor = (5, 5);
+    state.begin_frame(std::time::Duration::from_secs(2));
+    state.set_live_building_validation(&rejected, moved_anchor);
+    assert_eq!(
+        state
+            .visible(std::time::Duration::from_secs(2))
+            .unwrap()
+            .target_grid,
+        moved_anchor
+    );
+
+    state.begin_frame(std::time::Duration::from_secs(3));
+    state.set_live_building_validation(&rejected, blocked_anchor);
+    assert_eq!(
+        state
+            .visible(std::time::Duration::from_secs(3))
+            .unwrap()
+            .target_grid,
+        blocked_anchor
+    );
+}
+
+#[test]
+fn successful_commit_blocker_does_not_hide_other_reject_reasons() {
+    let anchor = (4, 5);
+    let mut state = PlacementFeedbackState::default();
+    state.block_live_feedback_at(anchor);
+
+    state.set_live_building_validation(
+        &PlacementValidation::rejected(PlacementRejectReason::NotInSite),
+        anchor,
+    );
+
+    assert_eq!(
+        state.visible(std::time::Duration::ZERO).unwrap().reason,
+        PlacementRejectReason::NotInSite
+    );
+}
+
+#[test]
+fn explicit_commit_failure_releases_same_anchor_feedback_blocker() {
+    let blocked_anchor = (4, 5);
+    let mut state = PlacementFeedbackState::default();
+    state.block_live_feedback_at(blocked_anchor);
+    state.set_live_building_validation(
+        &PlacementValidation::rejected(PlacementRejectReason::OccupiedByBuilding),
+        blocked_anchor,
+    );
+    assert!(state.visible(std::time::Duration::ZERO).is_none());
+
+    state.show_recent_rejection(
+        PlacementRejectReason::OccupiedByBuilding,
+        blocked_anchor,
+        std::time::Duration::ZERO,
+    );
+    assert_eq!(
+        state.visible(std::time::Duration::ZERO).unwrap().reason,
+        PlacementRejectReason::OccupiedByBuilding
+    );
+
+    state.begin_frame(std::time::Duration::from_secs(1));
+    state.set_live_building_validation(
+        &PlacementValidation::rejected(PlacementRejectReason::OccupiedByBuilding),
+        blocked_anchor,
+    );
+    assert!(state.live.is_some());
+}
+
+#[test]
 fn soul_spa_geometry_matches_its_spawn_footprint() {
     let geometry = building_geometry(BuildingType::SoulSpa, (10, 10), 0);
     assert_eq!(

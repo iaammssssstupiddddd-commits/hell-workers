@@ -6,9 +6,9 @@ use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_core::visual_mirror::construction::BlueprintVisualState;
 use hw_ui::selection::{
-    BuildingPlacementContext, PlacementTileRejection, TANK_NEARBY_BUCKET_STORAGE_TILES,
-    bucket_storage_geometry, building_geometry, validate_bucket_storage_placement,
-    validate_building_placement,
+    BuildingPlacementContext, PlacementGeometry, PlacementTileRejection, PlacementValidation,
+    TANK_NEARBY_BUCKET_STORAGE_TILES, bucket_storage_geometry, building_geometry,
+    validate_bucket_storage_placement, validate_building_placement,
 };
 
 type PlaceBlueprintResult = Result<(Entity, Vec<(i32, i32)>, Vec2), PlacementTileRejection>;
@@ -43,8 +43,52 @@ fn is_wall_or_door_at(
     false
 }
 
+fn validate_blueprint_geometry(
+    world_map: &WorldMap,
+    building_type: BuildingType,
+    grid: (i32, i32),
+    geometry: &PlacementGeometry,
+    pq: &PlacementQueries<'_, '_, '_>,
+) -> PlacementValidation {
+    let read_world = WorldMapRef(world_map);
+    let ctx = BuildingPlacementContext {
+        world: &read_world,
+        in_site: pq
+            .q_sites
+            .iter()
+            .any(|site| site.contains(geometry.draw_pos)),
+        in_yard: pq
+            .q_yards
+            .iter()
+            .any(|yard| yard.contains(geometry.draw_pos)),
+        is_wall_or_door_at: &|candidate| {
+            is_wall_or_door_at(
+                world_map,
+                pq.q_buildings,
+                pq.q_blueprints_by_entity,
+                candidate,
+            )
+        },
+        is_replaceable_wall_at: &|candidate| {
+            is_replaceable_wall_at(world_map, pq.q_buildings, candidate)
+        },
+    };
+    validate_building_placement(&ctx, building_type, grid, geometry)
+}
+
+/// Revalidates a BuildingPlace candidate without mutating WorldMap or spawning a Blueprint.
+pub(super) fn validate_building_blueprint_placement(
+    world_map: &WorldMap,
+    building_type: BuildingType,
+    grid: (i32, i32),
+    pq: &PlacementQueries<'_, '_, '_>,
+) -> PlacementValidation {
+    let geometry = building_geometry(building_type, grid, RIVER_Y_MIN);
+    validate_blueprint_geometry(world_map, building_type, grid, &geometry, pq)
+}
+
 /// Attempts to spawn a Blueprint entity for the given building type at the given grid position.
-/// Returns `Some((entity, occupied_grids, spawn_pos))` on success, `None` if placement is blocked.
+/// Returns the spawned entity and geometry on success, or the typed rejection when blocked.
 pub(super) fn place_building_blueprint(
     commands: &mut Commands,
     world_map: &mut WorldMap,
@@ -55,30 +99,7 @@ pub(super) fn place_building_blueprint(
 ) -> PlaceBlueprintResult {
     let geometry = building_geometry(building_type, grid, RIVER_Y_MIN);
     let replace_wall_entity = {
-        let read_world = WorldMapRef(world_map);
-        let ctx = BuildingPlacementContext {
-            world: &read_world,
-            in_site: pq
-                .q_sites
-                .iter()
-                .any(|site| site.contains(geometry.draw_pos)),
-            in_yard: pq
-                .q_yards
-                .iter()
-                .any(|yard| yard.contains(geometry.draw_pos)),
-            is_wall_or_door_at: &|candidate| {
-                is_wall_or_door_at(
-                    world_map,
-                    pq.q_buildings,
-                    pq.q_blueprints_by_entity,
-                    candidate,
-                )
-            },
-            is_replaceable_wall_at: &|candidate| {
-                is_replaceable_wall_at(world_map, pq.q_buildings, candidate)
-            },
-        };
-        let validation = validate_building_placement(&ctx, building_type, grid, &geometry);
+        let validation = validate_blueprint_geometry(world_map, building_type, grid, &geometry, pq);
         if !validation.can_place {
             return Err(validation
                 .rejection(grid)

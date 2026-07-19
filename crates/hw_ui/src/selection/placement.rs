@@ -245,6 +245,7 @@ struct RecentPlacementFailure {
 pub struct PlacementFeedbackState {
     pub live: Option<PlacementFeedback>,
     recent_failure: Option<RecentPlacementFailure>,
+    blocked_live_target: Option<(i32, i32)>,
 }
 
 impl PlacementFeedbackState {
@@ -253,17 +254,49 @@ impl PlacementFeedbackState {
         validation: &PlacementValidation,
         target_grid: (i32, i32),
     ) {
+        self.blocked_live_target = None;
+        self.apply_live_validation(validation, target_grid);
+    }
+
+    /// Updates continuous BuildingPlace feedback while honoring the successful-commit blocker.
+    ///
+    /// A successful placement immediately makes its own anchor occupied. Suppress only that
+    /// same-anchor building/stockpile interference text until the cursor reaches another grid;
+    /// validation and ghost color remain owned by the caller and are not changed here.
+    pub fn set_live_building_validation(
+        &mut self,
+        validation: &PlacementValidation,
+        target_grid: (i32, i32),
+    ) {
+        let is_interference = matches!(
+            validation.reject_reason,
+            Some(
+                PlacementRejectReason::OccupiedByBuilding
+                    | PlacementRejectReason::OccupiedByStockpile
+            )
+        );
+        if self.blocked_live_target == Some(target_grid) && is_interference {
+            self.live = None;
+            return;
+        }
+        self.blocked_live_target = None;
+        self.apply_live_validation(validation, target_grid);
+    }
+
+    fn apply_live_validation(&mut self, validation: &PlacementValidation, target_grid: (i32, i32)) {
         self.live = validation
             .rejection(target_grid)
             .map(|rejection| PlacementFeedback::rejected(rejection.reason, rejection.grid));
     }
 
     pub fn set_live_area_plan(&mut self, plan: &AreaPlacementPlan) {
+        self.blocked_live_target = None;
         self.live = plan.feedback();
     }
 
     pub fn show_recent_failure(&mut self, feedback: PlacementFeedback, now: Duration) {
         debug_assert_eq!(feedback.status, PlacementFeedbackStatus::Rejected);
+        self.blocked_live_target = None;
         self.recent_failure = Some(RecentPlacementFailure {
             feedback,
             expires_at: now + RECENT_PLACEMENT_FAILURE_LIFETIME,
@@ -279,6 +312,18 @@ impl PlacementFeedbackState {
         self.show_recent_failure(PlacementFeedback::rejected(reason, target_grid), now);
     }
 
+    /// Suppresses automatic building/stockpile interference from the just-committed placement at
+    /// the same cursor grid. Moving to another grid or recording an explicit failure releases it.
+    pub fn block_live_feedback_at(&mut self, target_grid: (i32, i32)) {
+        self.live = None;
+        self.recent_failure = None;
+        self.blocked_live_target = Some(target_grid);
+    }
+
+    pub fn clear_live_feedback_blocker(&mut self) {
+        self.blocked_live_target = None;
+    }
+
     pub fn visible(&self, now: Duration) -> Option<&PlacementFeedback> {
         self.live.as_ref().or_else(|| {
             self.recent_failure
@@ -291,6 +336,7 @@ impl PlacementFeedbackState {
     pub fn clear(&mut self) {
         self.live = None;
         self.recent_failure = None;
+        self.blocked_live_target = None;
     }
 
     pub fn clear_recent_failure(&mut self) {
