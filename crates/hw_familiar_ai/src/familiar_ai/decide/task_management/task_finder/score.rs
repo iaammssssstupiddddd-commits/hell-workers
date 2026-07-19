@@ -4,7 +4,9 @@ use hw_jobs::{TargetBlueprint, WorkType};
 use hw_logistics::transport_request::TransportRequestKind;
 use hw_logistics::water::tank_can_accept_new_bucket;
 
-use crate::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
+use crate::familiar_ai::decide::task_management::{
+    CandidateRejectReason, FamiliarTaskAssignmentQueries,
+};
 
 pub(super) fn score_candidate(
     entity: Entity,
@@ -13,7 +15,7 @@ pub(super) fn score_candidate(
     in_stockpile_none: bool,
     queries: &FamiliarTaskAssignmentQueries,
     q_target_blueprints: &Query<&TargetBlueprint>,
-) -> Option<i32> {
+) -> Result<i32, CandidateRejectReason> {
     if queries
         .transport_requests
         .get(entity)
@@ -82,7 +84,7 @@ pub(super) fn score_candidate(
         };
 
         if !has_tank_space {
-            return None;
+            return Err(CandidateRejectReason::MissingResourceOrSource);
         }
 
         if in_stockpile_none {
@@ -90,5 +92,5 @@ pub(super) fn score_candidate(
         }
     }
 
-    Some(priority)
+    Ok(priority)
 }

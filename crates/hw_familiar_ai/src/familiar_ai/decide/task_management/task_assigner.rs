@@ -14,7 +14,8 @@ use std::collections::HashMap;
 
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 use crate::familiar_ai::decide::task_management::{
-    FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot,
+    CandidateRejectReason, FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot,
+    TaskAssignmentAttempt,
 };
 use hw_core::events::ResourceReservationOp;
 
@@ -142,12 +143,12 @@ pub fn assign_task_to_worker(
     construction_sites: &impl ConstructionSitePositions,
     q_souls: &mut FamiliarSoulQuery,
     shadow: &mut ReservationShadow,
-) -> bool {
+) -> TaskAssignmentAttempt {
     let Ok((_, _, soul, _assigned_task, _dest, _path, idle, _, uc_opt, _participating_opt)) =
         q_souls.get_mut(ctx.worker_entity)
     else {
         warn!("ASSIGN: Worker {:?} not found in query", ctx.worker_entity);
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::NoEligibleFamiliar);
     };
 
     if idle.behavior == hw_core::soul::IdleBehavior::ExhaustedGathering {
@@ -155,7 +156,7 @@ pub fn assign_task_to_worker(
             "ASSIGN: Worker {:?} is exhausted gathering",
             ctx.worker_entity
         );
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::NoEligibleFamiliar);
     }
 
     if soul.fatigue > ctx.fatigue_threshold {
@@ -163,7 +164,7 @@ pub fn assign_task_to_worker(
             "ASSIGN: Worker {:?} is too fatigued ({:.2} > {:.2})",
             ctx.worker_entity, soul.fatigue, ctx.fatigue_threshold
         );
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::NoEligibleFamiliar);
     }
 
     // タスクが存在するか最終確認
@@ -173,7 +174,7 @@ pub fn assign_task_to_worker(
         (transform.translation.truncate(), designation.work_type)
     } else {
         debug!("ASSIGN: Task designation {:?} disappeared", ctx.task_entity);
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::StaleInput);
     };
 
     // GeneratePower: Dream が閾値未満の Soul にはアサインしない（終了→即再アサインのループ防止）
@@ -182,7 +183,7 @@ pub fn assign_task_to_worker(
             "ASSIGN: Worker {:?} dream too low for GeneratePower ({:.1} < {:.1})",
             ctx.worker_entity, soul.dream, DREAM_GENERATE_ASSIGN_THRESHOLD
         );
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::NoEligibleFamiliar);
     }
 
     super::policy::assign_by_work_type(

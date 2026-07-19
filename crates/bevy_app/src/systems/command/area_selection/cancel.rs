@@ -1,6 +1,8 @@
 //! cancel_single_designation と補助処理
 
-use crate::systems::jobs::{Designation, TaskSlots};
+use crate::systems::jobs::{
+    BlueprintCancelRequested, Designation, PlayerIssuedDesignation, Priority, TaskSlots,
+};
 use crate::systems::logistics::transport_request::ManualHaulPinnedSource;
 use bevy::prelude::*;
 use hw_core::events::SoulTaskUnassignRequest;
@@ -33,12 +35,20 @@ pub fn cancel_single_designation(
             .try_remove::<ManualHaulPinnedSource>();
     }
 
-    if is_blueprint || is_transport_request {
-        commands.entity(target_entity).try_despawn();
-    } else {
+    if is_blueprint {
         commands
             .entity(target_entity)
-            .try_remove::<(Designation, TaskSlots, ManagedBy)>();
+            .try_insert(BlueprintCancelRequested);
+    } else if is_transport_request {
+        commands.entity(target_entity).try_despawn();
+    } else {
+        commands.entity(target_entity).try_remove::<(
+            Designation,
+            TaskSlots,
+            ManagedBy,
+            Priority,
+            PlayerIssuedDesignation,
+        )>();
     }
 }
 
@@ -124,6 +134,13 @@ mod tests {
         app.add_plugins(MinimalPlugins)
             .insert_resource(WorldMap::default())
             .insert_resource(empty_soul_task_handles())
+            .insert_resource(hw_logistics::ResourceItemVisualHandles {
+                icon_bone_small: default(),
+                icon_wood_small: default(),
+                icon_rock_small: default(),
+                icon_sand_small: default(),
+                icon_stasis_mud_small: default(),
+            })
             .init_resource::<RuntimePathSearchBudget>()
             .init_resource::<SharedResourceCache>()
             .init_resource::<Receipts>();
@@ -143,12 +160,16 @@ mod tests {
                 )
                     .chain(),
             )
-            .add_systems(Update, cancel_blueprint.in_set(UserCancelSet))
             .add_systems(
                 Update,
-                ApplyDeferred
-                    .after(UserCancelSet)
-                    .before(SoulAiSystemSet::Perceive),
+                (
+                    cancel_blueprint,
+                    ApplyDeferred,
+                    crate::systems::jobs::blueprint_cancellation_system,
+                    ApplyDeferred,
+                )
+                    .chain()
+                    .in_set(UserCancelSet),
             )
             .add_systems(
                 Update,

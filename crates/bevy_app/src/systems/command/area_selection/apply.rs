@@ -6,7 +6,7 @@ use super::queries::DesignationTargetQuery;
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand};
 use crate::systems::command::{TaskArea, TaskMode};
-use crate::systems::jobs::{Designation, Priority, TaskSlots, WorkType};
+use crate::systems::jobs::{Designation, PlayerIssuedDesignation, Priority, TaskSlots, WorkType};
 use crate::systems::logistics::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportPolicy,
     TransportPriority, TransportRequest, TransportRequestFixedSource, TransportRequestKind,
@@ -14,6 +14,7 @@ use crate::systems::logistics::transport_request::{
 };
 use bevy::prelude::*;
 use hw_core::relationships::ManagedBy;
+use hw_familiar_ai::AutoGatherDesignation;
 use hw_world::zones::Site;
 
 pub(super) fn apply_task_area_to_familiar(
@@ -200,18 +201,27 @@ pub(super) fn apply_designation_in_area(
             }
 
             if let Some(issuer) = issued_by {
-                commands.entity(target_entity).insert((
-                    Designation { work_type: wt },
-                    ManagedBy(issuer),
-                    TaskSlots::new(1),
-                    Priority(0),
-                ));
+                commands
+                    .entity(target_entity)
+                    .remove::<AutoGatherDesignation>()
+                    .insert((
+                        Designation { work_type: wt },
+                        PlayerIssuedDesignation,
+                        ManagedBy(issuer),
+                        TaskSlots::new(1),
+                        Priority(0),
+                    ));
             } else {
-                commands.entity(target_entity).insert((
-                    Designation { work_type: wt },
-                    TaskSlots::new(1),
-                    Priority(0),
-                ));
+                commands
+                    .entity(target_entity)
+                    .remove::<AutoGatherDesignation>()
+                    .remove::<ManagedBy>()
+                    .insert((
+                        Designation { work_type: wt },
+                        PlayerIssuedDesignation,
+                        TaskSlots::new(1),
+                        Priority(0),
+                    ));
             }
             continue;
         }

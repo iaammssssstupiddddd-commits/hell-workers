@@ -26,7 +26,10 @@ impl Plugin for HwUiPlugin {
             .add_message::<TextInputIntent>()
             .add_message::<notifications::UserFacingNotification>()
             .init_resource::<notifications::NotificationCenter>()
-            .init_resource::<notifications::NotificationUiRuntime>();
+            .init_resource::<notifications::NotificationUiRuntime>()
+            .init_resource::<panels::task_list::TaskDashboardViewState>()
+            .init_resource::<panels::task_list::TaskDashboardActionState>()
+            .init_resource::<panels::task_list::TaskListDirty>();
     }
 }
 
@@ -73,6 +76,8 @@ pub fn reset_for_world_replace(world: &mut World) {
     reset_existing_resource::<area_edit::AreaEditClipboard>(world);
     reset_existing_resource::<interaction::TextFieldPendingAction>(world);
     reset_existing_resource::<selection::PlacementFeedbackState>(world);
+    reset_existing_resource::<panels::task_list::TaskDashboardViewState>(world);
+    reset_existing_resource::<panels::task_list::TaskDashboardActionState>(world);
     notifications::reset_for_world_replace(world);
     mark_entity_list_dirty(world);
 
@@ -110,7 +115,7 @@ fn collect_dynamic_list_nodes(world: &World) -> HashSet<Entity> {
 }
 
 fn collect_task_list_nodes(world: &mut World) -> HashSet<Entity> {
-    let mut query = world.query_filtered::<Entity, With<components::TaskListItem>>();
+    let mut query = world.query_filtered::<Entity, With<panels::task_list::TaskListDynamicNode>>();
     query.iter(world).collect()
 }
 
@@ -149,6 +154,7 @@ mod tests {
         let rename_field = world.spawn_empty().id();
         let drag_ghost = world.spawn_empty().id();
         let list_row = world.spawn_empty().id();
+        let task_dynamic_row = world.spawn(panels::task_list::TaskListDynamicNode).id();
         let toast_row = world.spawn(notifications::NotificationToastRow).id();
         let history_row = world.spawn(notifications::NotificationHistoryRow).id();
         let toast_root = world
@@ -193,6 +199,17 @@ mod tests {
             .insert(stale_simulation_entity, list_row);
         world.insert_resource(node_index);
         world.insert_resource(list::EntityListDirty::default());
+        world.insert_resource(panels::task_list::TaskDashboardViewState {
+            status: panels::task_list::TaskStatusFilter::Blocked,
+            ..default()
+        });
+        world.insert_resource(panels::task_list::TaskDashboardActionState {
+            confirmation: Some(panels::task_list::PendingTaskCancellation {
+                target: stale_simulation_entity,
+                expected_work_type: hw_core::jobs::WorkType::Chop,
+                kind: panels::task_list::TaskCancelKind::GenericDesignation,
+            }),
+        });
         world.init_resource::<Messages<UiIntent>>();
         world.init_resource::<Messages<TextInputIntent>>();
         world.init_resource::<Messages<notifications::UserFacingNotification>>();
@@ -246,6 +263,15 @@ mod tests {
         assert!(world.get_entity(rename_field).is_err());
         assert!(world.get_entity(drag_ghost).is_err());
         assert!(world.get_entity(list_row).is_err());
+        assert!(world.get_entity(task_dynamic_row).is_err());
+        assert_eq!(
+            *world.resource::<panels::task_list::TaskDashboardViewState>(),
+            panels::task_list::TaskDashboardViewState::default()
+        );
+        assert_eq!(
+            *world.resource::<panels::task_list::TaskDashboardActionState>(),
+            panels::task_list::TaskDashboardActionState::default()
+        );
         assert!(world.get_entity(toast_row).is_err());
         assert!(world.get_entity(history_row).is_err());
         assert!(

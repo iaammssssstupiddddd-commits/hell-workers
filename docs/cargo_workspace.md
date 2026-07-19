@@ -98,7 +98,7 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 | 機能 | ViewModel | Presenter | Widget (`hw_ui`) |
 |:---|:---|:---|:---|
 | エンティティリスト | `list/view_model.rs`, `list/change_detection.rs` | `list/sync.rs` | `list/spawn`, `list/sync`, `list/visual`, `list/section_toggle` |
-| タスクリスト | `panels/task_list/view_model.rs`, `panels/task_list/dirty.rs` | `panels/task_list/presenter.rs`, `panels/task_list/update.rs` | `panels/task_list/render.rs`, `panels/task_list/interaction.rs` |
+| タスクリスト | `panels/task_list/view_model.rs`, `panels/task_list/dirty.rs` | `panels/task_list/presenter.rs`, `panels/task_list/update.rs`, `panels/task_list/actions.rs` | `panels/task_list/types.rs`, `render.rs`, `interaction.rs` |
 | 操作 → ゲーム | — | `interaction/intent_handler.rs`, `interaction/handlers/`, `interaction/intent_context.rs` | `intents.rs`（型定義・発行元） |
 | 情報パネル | `presentation/`（EntityInspectionQuery） | `panels/info_panel` re-export + root wiring | `panels/info_panel/*`, `models/inspection/` |
 | 結果通知 | save/load等のroot outcome | `notifications.rs`（安全な表示文言adapter） | `notifications/`（Message、reducer、有界履歴、UI） |
@@ -127,7 +127,8 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 - `list/` — EntityListDirty, EntityListViewModel, EntityListNodeIndex, FamiliarSectionNodes, EntityListMinimizeState, EntityListResizeState, DragState, spawn（`spawn_familiar_section`, `spawn_soul_list_item_entity` 等）, sync（`sync_familiar_sections`, `sync_unassigned_souls`）, section_toggle（`entity_list_section_toggle_system`）, selection_focus, tree_ops, visual（apply_row_highlight, entity_list_visual_feedback_system）
 - `panels/tooltip_builder/` — text_wrap, widgets (spawn_progress_bar 等), templates（Soul/Building/Resource/UiButton/Generic ツールチップ）
 - `panels/info_panel/` — InfoPanelPinState, InfoPanelState, spawn_info_panel_ui, info_panel_system
-- `panels/task_list/` — TaskEntry, TaskListDirty, work_type_icon, render（rebuild_task_list_ui）, interaction システム群
+- `panels/task_list/` — `TaskEntry`、status/reason、filter/sort、action capability/state、work_type_icon、
+  render（focus rowとaction barをsibling生成）、pure UI interaction。ゲームowner判定やcomponent mutationは持たない
 - `panels/menu.rs` — menu_visibility_system
 - `models/inspection/` — EntityInspectionModel, EntityInspectionViewModel, SoulInspectionFields
 - `notifications/` — `UserFacingNotification`、`NotificationCenter`、2秒dedupe、4秒toast expiry、toast 3件／重要履歴64件のreducerとUI。ゲーム固有outcome型には依存しない
@@ -150,10 +151,11 @@ root 側の `bevy_app/src/interface/ui/` 残留（Adapter 層 — ViewModel / Pr
 | ファイル/モジュール | 層 | 残留理由 |
 |:---|:---|:---|
 | `list/view_model.rs`, `list/change_detection.rs` | ViewModel | `Familiar`, `DamnedSoul`, `AssignedTask` 等の ECS Query |
-| `panels/task_list/view_model.rs`, `panels/task_list/dirty.rs` | ViewModel | `Designation`, `Blueprint`, `WorkType` 等のゲームクエリ |
+| `panels/task_list/view_model.rs`, `panels/task_list/dirty.rs` | ViewModel | `Designation`, producer diagnostics、owner marker 等のゲームクエリ |
 | `presentation/` | ViewModel | `EntityInspectionQuery`（ゲームエンティティ 10+ 型のクエリ集約） |
 | `list/sync.rs` | Presenter | `hw_ui::list::sync` への thin shell（`GameAssets` 注入） |
 | `panels/task_list/presenter.rs`, `panels/task_list/update.rs` | Presenter | ViewModel → `hw_ui` render 橋渡し。`update.rs` は `Res<GameAssets>` 必須 |
+| `panels/task_list/actions.rs` | Intent / Adapter | live capability再検証、owner別priority/cancel、`TaskActionOutcome`変換。`hw_ui`へゲーム型を逆依存させない |
 | `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | Intent | `BuildContext`, `ZoneContext`, `FamiliarOperation`, `TimeSpeed`, `WorldMapWrite` 等のゲーム依存 `UiIntent` 処理 |
 | `interaction/mode.rs` | Intent | `PlayMode` 遷移、`TaskMode`, `BuildingType` |
 | `notifications.rs` | Presenter | root-owned `SaveLoadOutcome`をsafeな`UserFacingNotification`へexhaustiveに変換 |
@@ -262,6 +264,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::execute::task_execution::{haul_with_wheelbarrow, bucket_transport, transport_common}` — 輸送系タスク実装
 - `soul_ai::decide::work::auto_refine` — MudMixer の自動精製指定発行
 - `soul_ai::decide::work::auto_build` — 資材完了 Blueprint への自動割り当て
+- `soul_ai::decide::work::auto_build_diagnostics` — auto-build producer の latest-only coverage / reason snapshot
 - `soul_ai::decide::escaping` / `soul_ai::perceive::escaping` — 逃走判断ロジック
 - `soul_ai::decide::gathering_mgmt` — 集会管理要求生成
 - `soul_ai::helpers::drifting::{choose_drift_edge, is_near_map_edge, random_wander_target, drift_move_target}` — 純粋 drifting 計算（`Commands` / root resource 不要）
@@ -278,6 +281,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `familiar_ai::decide::state_decision` — branch dispatch (`FamiliarDecisionPath`, `determine_decision_path`) と結果型 (`FamiliarStateDecisionResult`)、message emission を含む Decide system 本体。system 登録責務は `FamiliarAiCorePlugin`
 - `familiar_ai::decide::encouragement` — 激励対象選定・`EncouragementCooldown` + `encouragement_decision_system`（MessageWriter 使用）
 - `familiar_ai::decide::task_management` — Familiar の task search / scoring / source selector / reservation shadow / assignment build の core
+- `familiar_ai::decide::task_management::diagnostics` — internal typed rejection、Familiar-local 1票reducer、
+  `FamiliarTaskCandidateDiagnostics`。UI表示に依存せず通常delegation cycleで置換publishする
 - `familiar_ai::decide::auto_gather_for_blueprint::{planning,demand,supply,helpers,actions}` — Blueprint auto gather の純計画層（`is_reachable` を含む）
 - `familiar_ai::decide::blueprint_auto_gather::{BlueprintAutoGatherTimer, blueprint_auto_gather_system}` — auto-gather オーケストレーター（`WorldMapRead` / `PathfindingContext` / Bevy Query 依存を含む）。system 登録責務は `FamiliarAiCorePlugin`
 - `familiar_ai::decide::squad` / `scouting` / `supervising` / `state_handlers` — 使い魔の状態機械・分隊管理の純ロジック
@@ -443,6 +448,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 - `SpatialGrid`, `FamiliarSpatialGrid`, `BlueprintSpatialGrid`, `DesignationSpatialGrid`, `ResourceSpatialGrid`, `StockpileSpatialGrid`, `TransportRequestSpatialGrid`, `GatheringSpotSpatialGrid`, `FloorConstructionSpatialGrid`
 - `SoulIndexTag` などの index tag と `SpatialIndex<Tag>`。Resource の Visibility と Gathering の center / Added-only policy は専用 updater として保持する
+- `SpatialIndex<Tag>::generation()`。membershipまたは記録位置の実変更だけで進み、rootのtask availability revisionへ入力する
 
 ここに置かないもの:
 
@@ -462,6 +468,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - water / ground resource helper
 - `TransportRequest*`, `TransportRequestPlugin`, `TransportRequestSet`
 - transport metrics / state sync / lifecycle cleanup
+- `ManualTransportCloseContext` / `close_manual_transport_request` — UI cancelとanchor cleanupが共用するowner close API
+- `WheelbarrowArbitrationDiagnostics` — arbitration既存走査から公開するlatest-only typed outcome/header
 - `SharedResourceCache`（タスク間リソース予約 cache。frame-local delta と reservation snapshot を分離して保持）
 - `apply_reservation_op` / `apply_reservation_requests_system`（予約操作の反映 helper）
 - **`LogisticsPlugin`**：`apply_reservation_requests_system` を `SoulAiSystemSet::Execute` に登録する Plugin（`src/plugin.rs`）
@@ -491,6 +499,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 - `BuildingType`, `Building`, `Blueprint`
 - `Designation`, `Priority`, `TaskSlots`
+- `PlayerIssuedDesignation` — 手動 Chop / Mine の保存可能なpositive provenance marker
+- `diagnostics` — `TaskDiagnosticClass`、producer/coverage、fixed counter、input stamp/revisionの表示非依存共有契約
 - `MudMixerStorage`
 - `AssignedTask`（ワーカー実行中タスク状態 + 全フェーズ型）
 - `TaskAssignmentRequest`（`hw_jobs::events`）

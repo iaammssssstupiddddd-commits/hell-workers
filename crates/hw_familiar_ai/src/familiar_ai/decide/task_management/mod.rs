@@ -5,6 +5,7 @@
 pub mod builders;
 pub mod context;
 pub mod delegation;
+pub mod diagnostics;
 pub mod policy;
 pub mod task_assigner;
 pub mod task_finder;
@@ -21,6 +22,10 @@ pub use context::{
 };
 pub use delegation::TaskManager;
 pub use delegation::take_reachable_with_cache_calls;
+pub use diagnostics::{
+    CandidateRejectReason, FamiliarEvaluatorDiagnostics, FamiliarTaskCandidateDiagnostics,
+    FamiliarTaskDiagnosticCycle, TaskAssignmentAttempt,
+};
 pub use policy::take_source_selector_scan_snapshot;
 pub use task_assigner::AssignTaskContext;
 pub use task_assigner::FamiliarSoulQuery;

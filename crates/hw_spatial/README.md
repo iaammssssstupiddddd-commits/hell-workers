@@ -44,6 +44,8 @@ trait SpatialGridOps {
 `hw_spatial` が所有し、downstream domain component を tag にしない。
 custom cell size または内部 grid の検査・構成が必要な場合は、tuple field に依存せず
 `SpatialIndex::new(GridData)`、`data`、`data_mut`、`into_data` を使う。
+`generation()` は membership または記録位置が実際に変化したときだけ進む semantic generation であり、
+task diagnostics の availability revision bridge が stale reason の失効に使う。読み取りや同値 update では進めない。
 
 ## 更新タイミング
 

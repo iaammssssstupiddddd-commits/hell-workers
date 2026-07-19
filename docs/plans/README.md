@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-07-18）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-07-20）。
 
 ## 新規計画書の作り方
 
@@ -23,6 +23,7 @@
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Phase 3 進行中（未完: MS-3-5 / 7 / 8 / 9、受入残件: MS-3-6 / 10） | 3D-RtT 移行ロードマップ |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
+| [actionable-task-dashboard-plan-2026-07-19.md](actionable-task-dashboard-plan-2026-07-19.md) | Draft | 停滞理由を安全に可視化し、絞り込み・優先度変更・owner別キャンセルを追加する計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できない問題を解決する計画。 |
 

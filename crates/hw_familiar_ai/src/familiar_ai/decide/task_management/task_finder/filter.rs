@@ -8,7 +8,9 @@ use hw_spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::{WorldMap, Yard};
 use std::collections::HashSet;
 
-use crate::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
+use crate::familiar_ai::decide::task_management::{
+    CandidateRejectReason, FamiliarTaskAssignmentQueries,
+};
 
 pub(super) struct CandidateSnapshot {
     pub pos: Vec2,
@@ -67,7 +69,7 @@ pub(super) fn candidate_snapshot(
     managed_tasks: &ManagedTasks,
     world_map: &WorldMap,
     queries: &FamiliarTaskAssignmentQueries,
-) -> Option<CandidateSnapshot> {
+) -> Result<CandidateSnapshot, CandidateRejectReason> {
     let (
         _entity,
         transform,
@@ -77,7 +79,11 @@ pub(super) fn candidate_snapshot(
         workers,
         in_stockpile_opt,
         priority_opt,
-    ) = queries.designation.designations.get(entity).ok()?;
+    ) = queries
+        .designation
+        .designations
+        .get(entity)
+        .map_err(|_| CandidateRejectReason::StaleInput)?;
 
     let is_managed_by_me = managed_tasks.contains(entity);
     let is_unassigned = issued_by.is_none();
@@ -96,7 +102,11 @@ pub(super) fn candidate_snapshot(
             | WorkType::WheelbarrowHaul
     );
     if requires_transport_request && !is_transport_request {
-        return None;
+        warn!(
+            "TASK_FINDER: transport work {:?} is missing TransportRequest on {:?}",
+            designation.work_type, entity
+        );
+        return Err(CandidateRejectReason::MalformedTask);
     }
     let can_take_over_from_overlapping_owner = issued_by
         .filter(|issuer| issuer.0 != fam_entity)
@@ -126,12 +136,12 @@ pub(super) fn candidate_snapshot(
         && !in_yard
         && !can_take_over_from_overlapping_owner
     {
-        return None;
+        return Err(CandidateRejectReason::TemporaryContention);
     }
 
     let max_slots = slots.map(|s| s.max).unwrap_or(1) as usize;
     if current_workers >= max_slots {
-        return None;
+        return Err(CandidateRejectReason::NoEligibleFamiliar);
     }
 
     let is_mixer_task = queries.storage.target_mixers.get(entity).is_ok();
@@ -145,7 +155,7 @@ pub(super) fn candidate_snapshot(
             && !in_yard
             && !is_build_task
         {
-            return None;
+            return Err(CandidateRejectReason::StaleInput);
         }
     } else if !is_managed_by_me
         && !is_issued_by_yard
@@ -153,13 +163,13 @@ pub(super) fn candidate_snapshot(
         && !in_yard
         && !is_build_task
     {
-        return None;
+        return Err(CandidateRejectReason::StaleInput);
     }
 
     let mut target_grid = WorldMap::world_to_grid(pos);
     let mut target_walkable = world_map.is_walkable(target_grid.0, target_grid.1);
 
-    let is_valid = match designation.work_type {
+    let rejection = match designation.work_type {
         WorkType::Chop
         | WorkType::Mine
         | WorkType::Move
@@ -169,11 +179,11 @@ pub(super) fn candidate_snapshot(
         | WorkType::CollectBone
         | WorkType::Refine
         | WorkType::HaulWaterToMixer
-        | WorkType::WheelbarrowHaul => true,
+        | WorkType::WheelbarrowHaul => None,
         WorkType::Build => {
             if let Ok((_, bp, _)) = queries.storage.blueprints.get(entity) {
                 if !bp.materials_complete() {
-                    false
+                    Some(CandidateRejectReason::DependencyWaiting)
                 } else {
                     if !target_walkable {
                         let approach_grid = bp
@@ -201,55 +211,61 @@ pub(super) fn candidate_snapshot(
                             target_walkable = world_map.is_walkable(grid.0, grid.1);
                         }
                     }
-                    true
+                    None
                 }
             } else {
-                false
+                Some(CandidateRejectReason::StaleInput)
             }
         }
         WorkType::ReinforceFloorTile => {
             if let Ok(tile) = queries.storage.floor_tiles.get(entity) {
-                matches!(tile.state, FloorTileState::ReinforcingReady)
+                (!matches!(tile.state, FloorTileState::ReinforcingReady))
+                    .then_some(CandidateRejectReason::DependencyWaiting)
             } else {
-                false
+                Some(CandidateRejectReason::StaleInput)
             }
         }
         WorkType::PourFloorTile => {
             if let Ok(tile) = queries.storage.floor_tiles.get(entity) {
-                matches!(tile.state, FloorTileState::PouringReady)
+                (!matches!(tile.state, FloorTileState::PouringReady))
+                    .then_some(CandidateRejectReason::DependencyWaiting)
             } else {
-                false
+                Some(CandidateRejectReason::StaleInput)
             }
         }
         WorkType::FrameWallTile => {
             if let Ok(tile) = queries.storage.wall_tiles.get(entity) {
-                matches!(tile.state, WallTileState::FramingReady)
+                (!matches!(tile.state, WallTileState::FramingReady))
+                    .then_some(CandidateRejectReason::DependencyWaiting)
             } else {
-                false
+                Some(CandidateRejectReason::StaleInput)
             }
         }
         WorkType::CoatWall => {
             if let Ok(tile) = queries.storage.wall_tiles.get(entity) {
-                matches!(tile.state, WallTileState::CoatingReady) && tile.spawned_wall.is_some()
+                (!(matches!(tile.state, WallTileState::CoatingReady)
+                    && tile.spawned_wall.is_some()))
+                .then_some(CandidateRejectReason::DependencyWaiting)
             } else if let Ok((_, building, provisional_opt)) = queries.storage.buildings.get(entity)
             {
-                building.kind == BuildingType::Wall
+                (!(building.kind == BuildingType::Wall
                     && building.is_provisional
-                    && provisional_opt.is_some_and(|provisional| provisional.mud_delivered)
+                    && provisional_opt.is_some_and(|provisional| provisional.mud_delivered)))
+                .then_some(CandidateRejectReason::DependencyWaiting)
             } else {
-                false
+                Some(CandidateRejectReason::StaleInput)
             }
         }
-        WorkType::GeneratePower => true,
+        WorkType::GeneratePower => None,
     };
 
-    if !is_valid {
-        return None;
+    if let Some(rejection) = rejection {
+        return Err(rejection);
     }
 
     let base_priority = priority_opt.map(|p| p.0).unwrap_or(0) as i32;
     let in_stockpile_none = in_stockpile_opt.is_none();
-    Some(CandidateSnapshot {
+    Ok(CandidateSnapshot {
         pos,
         target_grid,
         target_walkable,

@@ -65,9 +65,10 @@ mod tests {
     use bevy::app::ScheduleRunnerPlugin;
 
     use super::*;
+    use crate::transport_request::arbitration::WheelbarrowArbitrationRuntime;
     use crate::transport_request::{
         TransportDemand, TransportPriority, TransportRequestKind, TransportRequestMetrics,
-        WheelbarrowLease, wheelbarrow_arbitration_system,
+        WheelbarrowArbitrationDiagnostics, WheelbarrowLease, wheelbarrow_arbitration_system,
     };
     use crate::{ResourceItem, ResourceType, SharedResourceCache, Stockpile, Wheelbarrow};
     use hw_core::relationships::{ParkedAt, WorkingOn};
@@ -106,7 +107,9 @@ mod tests {
         app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_once()));
         app.init_resource::<WorkerToRelease>()
             .init_resource::<SharedResourceCache>()
-            .init_resource::<TransportRequestMetrics>();
+            .init_resource::<TransportRequestMetrics>()
+            .init_resource::<WheelbarrowArbitrationRuntime>()
+            .init_resource::<WheelbarrowArbitrationDiagnostics>();
         app.configure_sets(Update, (GameSystemSet::Logic, GameSystemSet::Actor).chain());
         app.configure_sets(Update, SoulAiSystemSet::Actor.in_set(GameSystemSet::Actor));
         app.configure_sets(Update, TestSet::Arbitrate.in_set(GameSystemSet::Logic));

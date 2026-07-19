@@ -7,9 +7,9 @@
 | ドキュメントID | `gameplay-management-improvements-proposal-2026-07-17` |
 | ステータス | `Draft` |
 | 作成日 | `2026-07-17` |
-| 最終更新日 | `2026-07-18` |
+| 最終更新日 | `2026-07-20` |
 | 作成者 | `Codex` |
-| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち） |
+| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/actionable-task-dashboard-plan-2026-07-19.md`（A3実装・自動検証完了、手動受入待ち） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 背景と問題
@@ -120,6 +120,12 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 - 同一失敗の連続発生で通知領域が無制限に増えない。
 
 ##### A3. アクション可能なタスクダッシュボード
+
+実装状態: `2026-07-20` にコード、自動回帰、恒久文書同期まで完了し、重点実機受入待ち。
+task ごとの applicable evaluator / producer coverage、semantic input revision、既存 assignment/arbitration cycle 由来の
+latest-only 診断、flat filter/sort dashboard、positive capability allow-list、priority 0/5/10、owner別 cancellation、
+world replacement reset を実装した。詳細と手動シナリオは
+`docs/plans/actionable-task-dashboard-plan-2026-07-19.md` を参照する。
 
 - 現行 `TaskEntry` を、表示用の `TaskStatusSummary` と操作意図へ拡張する。
 - タスク候補収集時に判定済みの情報から、次のような有界な停止理由を導出する。
@@ -459,15 +465,15 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 現在地
 
-- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3〜D 未採否`
-- 直近で完了したこと: A2 の通知センター、typed placement feedback、save/load outcome、reset順序、
-  failure injection回帰、恒久ドキュメント同期。
-- 現在のブランチ/前提: `master`。A1 の設計記録はアーカイブ済み計画、A2 の実装境界は現行計画を参照する。
+- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 コード・自動検証・docs 100%（実機受入待ち）/ B〜D 未採否`
+- 直近で完了したこと: A3 の latest-only task diagnostics、filter/sort dashboard、安全な priority/cancel、
+  owner cancellation、save/reset回帰、恒久ドキュメント同期。
+- 現在のブランチ/前提: `master`。A1 はアーカイブ済み、A2/A3 は重点実機受入後に計画をarchiveする。
 
 ### 次のAIが最初にやること
 
-1. A2 の重点実機項目を確認し、問題なければ関連計画をarchiveする。
-2. A3〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
+1. A2/A3 の重点実機項目を確認し、問題なければ各計画をarchiveする。
+2. B〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
 
 ### ブロッカー/注意点
 
@@ -515,3 +521,4 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | `2026-07-18` | `Codex` | A1 M4 と重点実機受入の完了を反映。task-area camera 競合修正、自動回帰、恒久docs同期を完了し、関連計画をアーカイブ |
 | `2026-07-18` | `Codex` | A2 の計画作成と自己レビュー完了を反映。配置 feedback、通知上限、save/load terminal outcome、world replacement 後の発行順を関連計画へ固定 |
 | `2026-07-18` | `Codex` | A2 のコード・自動回帰・恒久docs同期を反映。有界通知、全配置typed feedback、save/load outcomeとrollback後の生存を実装。重点実機受入は関連計画へ残す |
+| `2026-07-20` | `Codex` | A3 のコード・自動回帰・恒久docs同期を反映。latest-only停止理由、filter/sort、priority/cancel、owner cleanup、reset境界を実装。重点実機受入は関連計画へ残す |

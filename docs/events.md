@@ -39,6 +39,7 @@ dual 通知の Producer は `publish_*` helper を使う。
 | Message | 定義 / 登録owner | Producer | Consumer / Timing | 契約 |
 |:---|:---|:---|:---|:---|
 | `SaveLoadOutcome` | `bevy_app::systems::save` / `SavePlugin` | `Last::SaveLoadApplySet` dispatcher | root通知adapter（次の`Update::NotificationSystemSet::Adapt`） | requestごとにterminal resultを1件。world replacementの全reset後に発行し、targetは安全なファイル名label、failureはraw textを持たない10分類 |
+| `TaskActionOutcome` | `bevy_app::interface::ui::panels::task_list::actions` / `MessagesPlugin` | `apply_task_action_intents_system` | task action通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | priority/cancel intentごとに1件。成功、stale、unsupported、pause、captureをtyped resultで表し、Entity/action/resultをdedupe keyへ含める |
 | `UserFacingNotification` | `hw_ui::notifications` / `HwUiPlugin` | save/load root adapterなど | `NotificationSystemSet::Reduce` → `Present`（同じUpdate） | 表示専用Message。stable key、severity、safe title/body、retentionを持つ。2秒dedupe、toast 3件、重要履歴64件へreduce |
 
 配置プレビューは連続状態であり、毎フレームMessageを発行しない。`PlacementFeedbackState` resourceの
@@ -65,6 +66,7 @@ dual 通知の Producer は `publish_*` helper を使う。
 | `FamiliarIdleVisualRequest` | `Message` | Familiar AI 状態遷移時 | visual アダプタ | Idle 遷移時の表示更新 |
 | `GatheringSpawnRequest` | `Message` | `hw_soul_ai` 内の集会ロジック | root visual アダプタ | 集会スポットの生成 |
 | `SoulTaskUnassignRequest` | `Message` | `hw_familiar_ai`（分隊解放・使役数超過）/ area_selection のユーザー取消 | `hw_soul_ai::handle_soul_task_unassign_system`（SoulAiSystemSet::Perceive）| 魂のタスク解除（`AssignedTask`リセット・インベントリ回収・予約解放）。area_selection は Perceive 前の `ApplyDeferred` を通し、同じ Update の Execute より先に適用する |
+| `UiIntent::AdjustTaskPriority` / `CancelTask` | `Message` variant (`hw_ui::UiIntent`) | task dashboard action button system | root `handle_ui_intent` 後の `apply_task_action_intents_system` | Entity、expected WorkType、adjustment/cancel kindを渡す。Pause/Modal中もreaderをdrainし、live capabilityを再検証して`TaskActionOutcome`を1件発行する |
 
 ---
 

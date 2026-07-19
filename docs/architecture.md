@@ -51,6 +51,16 @@ graph TD
 4.  **Execution**: `Soul AI` が `WorkingOn` を通じて目的地を特定し、移動・作業を開始。
 5.  **Completion**: 資源が尽きると実体が消滅。`Observer` が検知し、`魂` のタスクを解除。
 
+タスクダッシュボード用の診断はこのデータフローを複製しない。Familiar delegation、Blueprint auto-build、
+wheelbarrow arbitration が通常の判断中に fixed-width / latest-only snapshot を公開し、root adapter が current
+`TaskWorkers` と input revision を照合して `Working / Blocked / PendingEvaluation` へ縮約する。
+unowned Blueprint `Build` だけは Familiar / auto-build の両 producer を必要とし、`ManagedBy` 付き Blueprint は
+auto-build を適用外にする。各 blocker record は代表理由が使った task / roster / availability / topology domain だけを
+照合し、producer header の roster stamp は evaluator coverage の変更を検知する。これにより無関係な availability 更新で
+全タスクを一律 Pending に戻さず、新しい作業可能 Soul を旧 coverage から落とすこともない。
+`hw_jobs` は表示非依存の class / coverage / revision 契約、producer crate は内部 reason と snapshot、`hw_ui` は
+表示型だけを所有する。UI の表示・filter・sort は candidate/source/connectivity/pathfinding の走査を起動しない。
+
 ## システムセットの実行順序
 `GameSystemSet` は `hw_core::system_sets` で定義され、production App では `crates/bevy_app/src/plugins/game.rs` の `HellWorkersGamePlugin` がチェーンする。binary `main.rs` は Window / Log / Render backend を設定してこの plugin を追加するだけに留める。
 `crates/bevy_app/src/lib.rs` は共有 Resource・公開 module・event re-exportと `HellWorkersGamePlugin` を提供し、focused unit testはここから対象systemだけを登録する：
@@ -98,6 +108,9 @@ Perceive → Update → Decide → Execute
 
 - Group A: command 系 (`assign_task_system`, `familiar_command_input_system`, `task_area_selection_system`, `zone_placement_system`, `zone_removal_system`, `task_area_edit_history_shortcuts_system`) を `.chain()` で直列実行する。`TaskContext` / `AreaEdit*` / `WorldMapWrite` を共有するため、この並びが唯一の ordering 契約である。
 - Group B: maintenance / spawn 系 (`familiar_spawning_system`, `tree_regrowth_system`, `blueprint_cancel_cleanup_system`, `despawn_expired_items_system`, `dream_tree_planting_system`) は非 chain で登録し、Bevy scheduler に競合解決を委ねる。
+- task owner cancellation は `TaskOwnerCancellationSet::Cancel → Flush` を chain し、Blueprint / Floor / Wall owner cleanup と
+  `ApplyDeferred` を Familiar / Soul / TransportRequest の Perceive より前に完了する。construction phase system は
+  `Flush` 後だけを読み、cancel 済み task/request を同じ frame に再進行・再生成しない。
 - `building_completion_system` は `SoulAiSystemSet::Execute` 後の `BuildingCompletionSet` で実行する。続く Actor phase は `ApplyDeferred` により command を反映してから `ObstacleSyncSet` を実行し、`SoulAiSystemSet::Actor`（pathfinding を含む）より前に `obstacle_sync_system` が WorldMap を更新する。
 - Group C: floor construction 系 (`floor_construction_cancellation_system` → `floor_construction_phase_transition_system` → `floor_construction_completion_system`) はフェーズ順を保つため `.chain()` で登録する。
 - Group D: wall construction 系 (`wall_construction_cancellation_system` → `debug_instant_complete_walls_system` → `wall_framed_tile_spawn_system` → `wall_construction_phase_transition_system` → `wall_construction_completion_system`) はフェーズ順とデバッグ割り込み位置を保つため `.chain()` で登録する。
@@ -123,6 +136,10 @@ Perceive → Update → Decide → Execute
 - 建設完了後の WorldMap 更新・movement-blocking footprint marker spawn・Soul 押し出しは `BuildingCompletedEvent`（`hw_jobs::events`）の Pub/Sub パターンに移管済み。root の `building_completion_system` がイベントを `commands.trigger()` で発行し、`hw_soul_ai::soul_ai::building_completed::on_building_completed` Observer（`SoulAiCorePlugin` 登録）が受理・適用する。
 - `transport_request::producer` の floor/wall 搬入同期は `producer/mod.rs` の共通ヘルパー（`sync_construction_requests`, `sync_construction_delivery`）を利用して重複実装を避ける。全プロデューサーのオーナー解決は `AreaBounds`（`zones.rs` の共通矩形型）に統一し、`collect_all_area_owners` / `find_owner_for_position` で Familiar TaskArea と Yard 境界を同列に処理する。
 - UI/Visual の更新責務は `status_display/*` と `dream/ui_particle/*` に分離し、表示更新と演出更新を独立に保守する。UI 入力処理は `MenuAction` の汎用経路（`ui_interaction_system`）と専用経路（`arch_category_action_system` / `door_lock_action_system`）を分離して維持する。
+- task action は `hw_ui` の `UiIntent` と表示 capability から root `actions.rs` へ渡す。root は Entity generation、
+  expected `WorkType`、positive provenance / owner component を live 再検証し、generic designation、manual transport、
+  Blueprint、Floor / Wall site の各 owner API へ明示的に dispatch する。Pause / capture でも reader を drain し、
+  `TaskActionOutcome` だけを A2 の `ToastOnly` notification へ Adapt する。
 
 ## 建設タスク型の責務分離
 

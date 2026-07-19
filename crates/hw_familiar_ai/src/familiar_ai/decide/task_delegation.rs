@@ -9,6 +9,7 @@ use hw_core::familiar::Familiar;
 use hw_core::relationships::CommandedBy;
 use hw_core::soul::{DamnedSoul, IdleState};
 use hw_jobs::ConstructionSiteAccess;
+use hw_jobs::TaskDiagnosticInputRevisions;
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::{WalkabilityConnectivityCache, WorldMapRead};
@@ -23,6 +24,9 @@ use crate::familiar_ai::decide::query_types::{FamiliarSoulQuery, FamiliarTaskQue
 use crate::familiar_ai::decide::resources::FamiliarDelegationPerfMetrics;
 use crate::familiar_ai::decide::resources::FamiliarTaskDelegationTimer;
 use crate::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
+use crate::familiar_ai::decide::task_management::{
+    FamiliarEvaluatorDiagnostics, FamiliarTaskCandidateDiagnostics, FamiliarTaskDiagnosticCycle,
+};
 
 /// 使い魔AIのタスク委譲に必要なSystemParam
 #[derive(SystemParam)]
@@ -39,6 +43,8 @@ pub struct FamiliarAiTaskDelegationParams<'w, 's> {
     pub tile_site_index: Res<'w, TileSiteIndex>,
     pub world_map: WorldMapRead<'w>,
     pub connectivity_cache: ResMut<'w, WalkabilityConnectivityCache>,
+    pub diagnostic_revisions: Res<'w, TaskDiagnosticInputRevisions>,
+    pub published_diagnostics: ResMut<'w, FamiliarTaskCandidateDiagnostics>,
     #[cfg(feature = "profiling")]
     pub perf_metrics: ResMut<'w, FamiliarDelegationPerfMetrics>,
 }
@@ -60,12 +66,17 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         tile_site_index,
         world_map,
         mut connectivity_cache,
+        diagnostic_revisions,
+        mut published_diagnostics,
         #[cfg(feature = "profiling")]
         mut perf_metrics,
         ..
     } = params;
 
     let allow_task_delegation = delegation_timer.advance(time.delta());
+    let mut diagnostic_cycle = allow_task_delegation.then(|| {
+        FamiliarTaskDiagnosticCycle::new(published_diagnostics.next_cycle(), &diagnostic_revisions)
+    });
 
     let incoming_snapshot = if allow_task_delegation {
         crate::familiar_ai::decide::task_management::IncomingDeliverySnapshot::build(&task_queries)
@@ -91,6 +102,10 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         managed_tasks_opt,
     ) in q_familiars.iter_mut()
     {
+        let mut evaluator_diagnostics = FamiliarEvaluatorDiagnostics::new(0);
+        if let Some(cycle) = diagnostic_cycle.as_mut() {
+            cycle.begin_evaluator();
+        }
         #[cfg(feature = "profiling")]
         {
             if allow_task_delegation {
@@ -154,8 +169,17 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             reservation_shadow: &mut reservation_shadow,
             tile_site_index: &tile_site_index,
             incoming_snapshot: &incoming_snapshot,
+            diagnostics: &mut evaluator_diagnostics,
+            diagnostic_revisions: &diagnostic_revisions,
         };
         process_task_delegation_and_movement(&mut delegation_ctx);
+        if let Some(cycle) = diagnostic_cycle.as_mut() {
+            cycle.finish_evaluator(evaluator_diagnostics);
+        }
+    }
+
+    if let Some(cycle) = diagnostic_cycle {
+        published_diagnostics.publish(cycle);
     }
 
     #[cfg(feature = "profiling")]

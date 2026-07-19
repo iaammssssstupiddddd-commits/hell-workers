@@ -9,6 +9,8 @@ use hw_core::constants::{TILE_SIZE, Z_ITEM_PICKUP};
 pub struct ResourceItemVisualHandles {
     pub icon_bone_small: Handle<Image>,
     pub icon_wood_small: Handle<Image>,
+    pub icon_rock_small: Handle<Image>,
+    pub icon_sand_small: Handle<Image>,
     pub icon_stasis_mud_small: Handle<Image>,
 }
 
@@ -29,11 +31,16 @@ pub fn spawn_refund_items(
     let (image, name) = match resource_type {
         ResourceType::Bone => (handles.icon_bone_small.clone(), "Item (Bone, Refund)"),
         ResourceType::Wood => (handles.icon_wood_small.clone(), "Item (Wood, Refund)"),
+        ResourceType::Rock => (handles.icon_rock_small.clone(), "Item (Rock, Refund)"),
+        ResourceType::Sand => (handles.icon_sand_small.clone(), "Item (Sand, Refund)"),
         ResourceType::StasisMud => (
             handles.icon_stasis_mud_small.clone(),
             "Item (StasisMud, Refund)",
         ),
-        _ => return,
+        ResourceType::Water
+        | ResourceType::BucketEmpty
+        | ResourceType::BucketWater
+        | ResourceType::Wheelbarrow => return,
     };
 
     let columns = 8usize;

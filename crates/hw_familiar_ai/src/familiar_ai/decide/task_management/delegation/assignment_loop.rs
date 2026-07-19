@@ -1,17 +1,25 @@
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
+use hw_logistics::transport_request::{
+    TransportRequest, WheelbarrowArbitrationHeader, WheelbarrowArbitrationOutcome,
+    is_wheelbarrow_arbitration_applicable,
+};
 use hw_world::{WalkabilityConnectivityCache, WorldMap};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 #[cfg(feature = "profiling")]
 use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 
-use super::DelegationEnvCtx;
+use super::{DelegationDiagnosticsCtx, DelegationEnvCtx, DelegationScratchCtx};
+use crate::familiar_ai::decide::task_management::CandidateRejectReason;
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
+use crate::familiar_ai::decide::task_management::task_finder::{
+    FamiliarCandidateSources, collect_scored_candidates_with_diagnostics,
+};
 use crate::familiar_ai::decide::task_management::{
-    AssignTaskContext, DelegationCandidate, FamiliarSearchContext, FamiliarSoulQuery,
-    FamiliarTaskAssignmentQueries, ReservationShadow, ScoredDelegationCandidate,
-    assign_task_to_worker, collect_scored_candidates,
+    AssignTaskContext, DelegationCandidate, FamiliarEvaluatorDiagnostics, FamiliarSearchContext,
+    FamiliarSoulQuery, FamiliarTaskAssignmentQueries, ScoredDelegationCandidate,
+    TaskAssignmentAttempt, assign_task_to_worker,
 };
 
 const TASK_DELEGATION_TOP_K: usize = 24;
@@ -54,6 +62,22 @@ fn score_for_worker(candidate: &ScoredDelegationCandidate, worker_pos: Vec2) -> 
     let priority_norm = ((candidate.priority as f32 + 20.0) / 40.0).clamp(0.0, 1.0);
     let dist_norm = 1.0 - (worker_dist_sq / WORKER_SCORE_MAX_DIST_SQ).min(1.0);
     priority_norm * WORKER_PRIORITY_WEIGHT + dist_norm * WORKER_DISTANCE_WEIGHT
+}
+
+fn worker_distance_rejection(
+    worker_pos: Vec2,
+    candidate_pos: Vec2,
+) -> Option<CandidateRejectReason> {
+    (worker_pos.distance_squared(candidate_pos) > MAX_ASSIGNMENT_DIST_SQ)
+        .then_some(CandidateRejectReason::NoEligibleFamiliar)
+}
+
+const fn connectivity_rejection(reachable: bool) -> Option<CandidateRejectReason> {
+    if reachable {
+        None
+    } else {
+        Some(CandidateRejectReason::Unreachable)
+    }
 }
 
 /// 同点の候補をEntity IDで一意に順序付ける。
@@ -158,13 +182,15 @@ fn try_assign_from_candidates(
     queries: &mut FamiliarTaskAssignmentQueries,
     construction_sites: &impl ConstructionSitePositions,
     q_souls: &mut FamiliarSoulQuery,
-    connectivity_cache: &mut WalkabilityConnectivityCache,
-    reservation_shadow: &mut ReservationShadow,
+    scratch: &mut DelegationScratchCtx<'_>,
+    diagnostics: &mut FamiliarEvaluatorDiagnostics,
 ) -> Option<Entity> {
     for candidate in worker_ctx.candidates.iter().copied() {
+        let arbitration_reason = wheelbarrow_arbitration_reason(candidate, queries);
         let Ok((_, _, _, _, slots, workers, _, _)) =
             queries.designation.designations.get(candidate.entity)
         else {
+            diagnostics.mark_partial(candidate.entity);
             continue;
         };
         let current_workers = workers.map(|w| w.len()).unwrap_or(0);
@@ -175,21 +201,23 @@ fn try_assign_from_candidates(
             .copied()
             .unwrap_or(0);
         if current_workers + virtual_workers >= max_slots {
+            diagnostics.reject(candidate.entity, CandidateRejectReason::NoEligibleFamiliar);
             continue;
         }
 
         if !candidate.skip_reachability_check
-            && !reachable_with_cache(
+            && let Some(reason) = connectivity_rejection(reachable_with_cache(
                 worker_ctx.worker_grid,
                 candidate,
                 env.world_map,
-                connectivity_cache,
-            )
+                scratch.connectivity_cache,
+            ))
         {
+            diagnostics.reject(candidate.entity, reason);
             continue;
         }
 
-        if assign_task_to_worker(
+        let assignment = assign_task_to_worker(
             AssignTaskContext {
                 fam_entity: env.fam_entity,
                 task_entity: candidate.entity,
@@ -203,13 +231,92 @@ fn try_assign_from_candidates(
             queries,
             construction_sites,
             q_souls,
-            reservation_shadow,
-        ) {
-            return Some(candidate.entity);
+            scratch.reservation_shadow,
+        );
+        match assignment {
+            TaskAssignmentAttempt::Submitted => {
+                diagnostics.mark_submitted(candidate.entity);
+                return Some(candidate.entity);
+            }
+            TaskAssignmentAttempt::Rejected(reason) => {
+                diagnostics.reject(candidate.entity, arbitration_reason.unwrap_or(reason));
+            }
         }
     }
 
     None
+}
+
+fn wheelbarrow_arbitration_reason(
+    candidate: DelegationCandidate,
+    queries: &FamiliarTaskAssignmentQueries,
+) -> Option<CandidateRejectReason> {
+    let request = queries.transport_requests.get(candidate.entity).ok()?;
+    let diagnostics = &queries.wheelbarrow_arbitration_diagnostics;
+    wheelbarrow_arbitration_reason_from_evidence(
+        request,
+        queries.wheelbarrow_leases.get(candidate.entity).is_ok(),
+        diagnostics.header(),
+        diagnostics.outcome(candidate.entity),
+        queries.reservation.resource_cache.semantic_generation(),
+    )
+}
+
+fn wheelbarrow_arbitration_reason_from_evidence(
+    request: &TransportRequest,
+    has_lease: bool,
+    header: Option<&WheelbarrowArbitrationHeader>,
+    outcome: Option<WheelbarrowArbitrationOutcome>,
+    availability_generation: u64,
+) -> Option<CandidateRejectReason> {
+    if !is_wheelbarrow_arbitration_applicable(request) || has_lease {
+        return None;
+    }
+
+    let Some(header) = header else {
+        return Some(CandidateRejectReason::Unevaluated);
+    };
+    if header.availability_generation != availability_generation {
+        return Some(CandidateRejectReason::StaleInput);
+    }
+    if header.available_vehicle_count == 0 {
+        return Some(if header.any_vehicle_exists {
+            CandidateRejectReason::TemporaryContention
+        } else {
+            CandidateRejectReason::MissingResourceOrSource
+        });
+    }
+
+    match outcome {
+        // A granted outcome without a visible lease means Commands have not
+        // become observable yet. It is not evidence for a terminal blocker.
+        Some(WheelbarrowArbitrationOutcome::LeaseGranted) => {
+            Some(CandidateRejectReason::Unevaluated)
+        }
+        Some(WheelbarrowArbitrationOutcome::NoAvailableWheelbarrow) => {
+            Some(if header.any_vehicle_exists {
+                CandidateRejectReason::TemporaryContention
+            } else {
+                CandidateRejectReason::MissingResourceOrSource
+            })
+        }
+        Some(
+            WheelbarrowArbitrationOutcome::NoSourceItems
+            | WheelbarrowArbitrationOutcome::NoDestinationCapacity,
+        ) => Some(CandidateRejectReason::MissingResourceOrSource),
+        Some(
+            WheelbarrowArbitrationOutcome::SourceReserved
+            | WheelbarrowArbitrationOutcome::CapacityReserved
+            | WheelbarrowArbitrationOutcome::PreferredBatchWaiting
+            | WheelbarrowArbitrationOutcome::ArbitrationContention,
+        ) => Some(CandidateRejectReason::TemporaryContention),
+        Some(
+            WheelbarrowArbitrationOutcome::NotApplicable
+            | WheelbarrowArbitrationOutcome::DemandGone
+            | WheelbarrowArbitrationOutcome::StaleInput,
+        ) => Some(CandidateRejectReason::Unevaluated),
+        None => Some(CandidateRejectReason::Unevaluated),
+    }
 }
 
 pub(super) fn try_assign_for_workers(
@@ -218,21 +325,25 @@ pub(super) fn try_assign_for_workers(
     queries: &mut FamiliarTaskAssignmentQueries,
     construction_sites: &impl ConstructionSitePositions,
     q_souls: &mut FamiliarSoulQuery,
-    connectivity_cache: &mut WalkabilityConnectivityCache,
-    reservation_shadow: &mut ReservationShadow,
+    scratch: &mut DelegationScratchCtx<'_>,
+    diagnostics: &mut DelegationDiagnosticsCtx<'_>,
 ) -> Option<Entity> {
-    let scored_candidates = collect_scored_candidates(
+    let scored_candidates = collect_scored_candidates_with_diagnostics(
         FamiliarSearchContext {
             fam_entity: env.fam_entity,
             fam_pos: env.fam_pos,
             task_area_opt: env.task_area_opt,
         },
         queries,
-        env.designation_grid,
-        env.transport_request_grid,
-        env.managed_tasks,
+        FamiliarCandidateSources {
+            designation_grid: env.designation_grid,
+            transport_request_grid: env.transport_request_grid,
+            managed_tasks: env.managed_tasks,
+            world_map: env.world_map,
+        },
         &queries.storage.target_blueprints,
-        env.world_map,
+        diagnostics.evaluator,
+        diagnostics.revisions,
     );
     if scored_candidates.is_empty() {
         return None;
@@ -246,8 +357,22 @@ pub(super) fn try_assign_for_workers(
 
     for (worker_entity, worker_pos) in sorted_workers {
         let Some(worker_grid) = env.world_map.get_nearest_walkable_grid(worker_pos) else {
+            for candidate in &scored_candidates {
+                diagnostics.evaluator.reject(
+                    candidate.candidate.entity,
+                    CandidateRejectReason::NoEligibleFamiliar,
+                );
+            }
             continue;
         };
+
+        for candidate in &scored_candidates {
+            if let Some(reason) = worker_distance_rejection(worker_pos, candidate.pos) {
+                diagnostics
+                    .evaluator
+                    .reject(candidate.candidate.entity, reason);
+            }
+        }
 
         let (top_candidates, mut fallback_ranked) = build_worker_candidates(
             &scored_candidates,
@@ -270,12 +395,19 @@ pub(super) fn try_assign_for_workers(
             queries,
             construction_sites,
             q_souls,
-            connectivity_cache,
-            reservation_shadow,
+            scratch,
+            diagnostics.evaluator,
         ) {
             *task_virtual_workers.entry(task_entity).or_insert(0) += 1;
             if first_assigned_task.is_none() {
                 first_assigned_task = Some(task_entity);
+            }
+            for candidate in &scored_candidates {
+                if candidate.candidate.entity != task_entity {
+                    diagnostics
+                        .evaluator
+                        .mark_partial(candidate.candidate.entity);
+                }
             }
             continue;
         }
@@ -296,12 +428,19 @@ pub(super) fn try_assign_for_workers(
             queries,
             construction_sites,
             q_souls,
-            connectivity_cache,
-            reservation_shadow,
+            scratch,
+            diagnostics.evaluator,
         ) {
             *task_virtual_workers.entry(task_entity).or_insert(0) += 1;
             if first_assigned_task.is_none() {
                 first_assigned_task = Some(task_entity);
+            }
+            for candidate in &scored_candidates {
+                if candidate.candidate.entity != task_entity {
+                    diagnostics
+                        .evaluator
+                        .mark_partial(candidate.candidate.entity);
+                }
             }
         }
     }
@@ -311,8 +450,19 @@ pub(super) fn try_assign_for_workers(
 
 #[cfg(test)]
 mod tests {
-    use super::{DelegationCandidate, compare_ranked_candidates, compare_workers};
+    use super::{
+        DelegationCandidate, compare_ranked_candidates, compare_workers, connectivity_rejection,
+        wheelbarrow_arbitration_reason_from_evidence, worker_distance_rejection,
+    };
     use bevy::prelude::{Entity, Vec2};
+    use hw_jobs::WorkType;
+    use hw_logistics::ResourceType;
+    use hw_logistics::transport_request::{
+        TransportPriority, TransportRequest, TransportRequestKind, WheelbarrowArbitrationHeader,
+        WheelbarrowArbitrationOutcome, is_wheelbarrow_arbitration_applicable,
+    };
+
+    use crate::familiar_ai::decide::task_management::CandidateRejectReason;
 
     fn entity(index: u32) -> Entity {
         Entity::from_raw_u32(index).expect("test entity index is valid")
@@ -321,6 +471,7 @@ mod tests {
     fn candidate(index: u32) -> DelegationCandidate {
         DelegationCandidate {
             entity: entity(index),
+            work_type: WorkType::Chop,
             target_grid: (0, 0),
             target_walkable: true,
             skip_reachability_check: false,
@@ -364,5 +515,190 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![entity(1), entity(4), entity(8)]
         );
+    }
+
+    #[test]
+    fn distance_limit_and_connectivity_use_distinct_rejection_classes() {
+        assert_eq!(
+            worker_distance_rejection(Vec2::ZERO, Vec2::splat(f32::MAX)),
+            Some(CandidateRejectReason::NoEligibleFamiliar)
+        );
+        assert_eq!(
+            connectivity_rejection(false),
+            Some(CandidateRejectReason::Unreachable)
+        );
+        assert_eq!(connectivity_rejection(true), None);
+    }
+
+    #[test]
+    fn haul_work_types_use_transport_request_arbitration_evidence() {
+        let header = WheelbarrowArbitrationHeader {
+            generation: 1,
+            availability_generation: 7,
+            any_vehicle_exists: true,
+            available_vehicle_count: 1,
+            leased_vehicle_count: 0,
+        };
+        let cases = [
+            (
+                WorkType::Haul,
+                TransportRequestKind::DeliverToBlueprint,
+                ResourceType::Sand,
+            ),
+            (
+                WorkType::HaulToMixer,
+                TransportRequestKind::DeliverToMixerSolid,
+                ResourceType::Sand,
+            ),
+        ];
+
+        for (work_type, kind, resource_type) in cases {
+            assert!(matches!(work_type, WorkType::Haul | WorkType::HaulToMixer));
+            let request = TransportRequest {
+                kind,
+                anchor: entity(20),
+                resource_type,
+                issued_by: entity(21),
+                priority: TransportPriority::Normal,
+                stockpile_group: Vec::new(),
+            };
+            assert!(is_wheelbarrow_arbitration_applicable(&request));
+            assert_eq!(
+                wheelbarrow_arbitration_reason_from_evidence(
+                    &request,
+                    false,
+                    Some(&header),
+                    Some(WheelbarrowArbitrationOutcome::SourceReserved),
+                    7,
+                ),
+                Some(CandidateRejectReason::TemporaryContention)
+            );
+        }
+    }
+
+    #[test]
+    fn missing_or_stale_arbitration_evidence_remains_partial() {
+        let request = TransportRequest {
+            kind: TransportRequestKind::DeliverToBlueprint,
+            anchor: entity(20),
+            resource_type: ResourceType::Sand,
+            issued_by: entity(21),
+            priority: TransportPriority::Normal,
+            stockpile_group: Vec::new(),
+        };
+
+        assert_eq!(
+            wheelbarrow_arbitration_reason_from_evidence(&request, false, None, None, 0),
+            Some(CandidateRejectReason::Unevaluated)
+        );
+    }
+
+    #[test]
+    fn missing_wheelbarrow_inputs_are_distinct_from_temporary_contention() {
+        let request = TransportRequest {
+            kind: TransportRequestKind::DeliverToBlueprint,
+            anchor: entity(20),
+            resource_type: ResourceType::Sand,
+            issued_by: entity(21),
+            priority: TransportPriority::Normal,
+            stockpile_group: Vec::new(),
+        };
+        let available_header = WheelbarrowArbitrationHeader {
+            generation: 1,
+            availability_generation: 7,
+            any_vehicle_exists: true,
+            available_vehicle_count: 1,
+            leased_vehicle_count: 0,
+        };
+        let cases = [
+            (
+                WheelbarrowArbitrationHeader {
+                    any_vehicle_exists: false,
+                    available_vehicle_count: 0,
+                    ..available_header
+                },
+                None,
+                CandidateRejectReason::MissingResourceOrSource,
+            ),
+            (
+                WheelbarrowArbitrationHeader {
+                    available_vehicle_count: 0,
+                    ..available_header
+                },
+                None,
+                CandidateRejectReason::TemporaryContention,
+            ),
+            (
+                available_header,
+                Some(WheelbarrowArbitrationOutcome::NoSourceItems),
+                CandidateRejectReason::MissingResourceOrSource,
+            ),
+            (
+                available_header,
+                Some(WheelbarrowArbitrationOutcome::NoDestinationCapacity),
+                CandidateRejectReason::MissingResourceOrSource,
+            ),
+        ];
+
+        for (header, outcome, expected) in cases {
+            assert_eq!(
+                wheelbarrow_arbitration_reason_from_evidence(
+                    &request,
+                    false,
+                    Some(&header),
+                    outcome,
+                    7,
+                ),
+                Some(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn released_arbitration_contention_clears_on_the_next_evidence() {
+        let request = TransportRequest {
+            kind: TransportRequestKind::DeliverToBlueprint,
+            anchor: entity(20),
+            resource_type: ResourceType::Sand,
+            issued_by: entity(21),
+            priority: TransportPriority::Normal,
+            stockpile_group: Vec::new(),
+        };
+        let header = WheelbarrowArbitrationHeader {
+            generation: 1,
+            availability_generation: 7,
+            any_vehicle_exists: true,
+            available_vehicle_count: 1,
+            leased_vehicle_count: 0,
+        };
+
+        for contention in [
+            WheelbarrowArbitrationOutcome::SourceReserved,
+            WheelbarrowArbitrationOutcome::CapacityReserved,
+        ] {
+            assert_eq!(
+                wheelbarrow_arbitration_reason_from_evidence(
+                    &request,
+                    false,
+                    Some(&header),
+                    Some(contention),
+                    7,
+                ),
+                Some(CandidateRejectReason::TemporaryContention)
+            );
+            assert_eq!(
+                wheelbarrow_arbitration_reason_from_evidence(
+                    &request,
+                    true,
+                    Some(&WheelbarrowArbitrationHeader {
+                        generation: 2,
+                        ..header
+                    }),
+                    Some(WheelbarrowArbitrationOutcome::LeaseGranted),
+                    7,
+                ),
+                None
+            );
+        }
     }
 }

@@ -31,16 +31,16 @@ use crate::systems::jobs::wall_construction::{
     wall_construction_phase_transition_system, wall_framed_tile_spawn_system,
 };
 use crate::systems::jobs::{
-    BuildingCompletionSet, building_completion_system, door_auto_close_nearby_system,
-    door_auto_open_nearby_system,
+    BuildingCompletionSet, TaskOwnerCancellationSet, blueprint_cancellation_system,
+    building_completion_system, door_auto_close_nearby_system, door_auto_open_nearby_system,
 };
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
-use crate::systems::logistics::transport_request::TransportRequestPlugin;
+use crate::systems::logistics::transport_request::{TransportRequestPlugin, TransportRequestSet};
 use crate::systems::soul_ai::SoulAiPlugin;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
-use hw_core::system_sets::{ObstacleSyncSet, SoulAiSystemSet};
+use hw_core::system_sets::{FamiliarAiSystemSet, ObstacleSyncSet, SoulAiSystemSet};
 use hw_energy::{
     ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerConsumer, PowerGenerator,
     PowerGrid, SoulSpaPhase, SoulSpaSite, SoulSpaTile, Unpowered, YardPowerGrid,
@@ -90,6 +90,32 @@ impl Plugin for LogicPlugin {
         app.init_resource::<crate::systems::jobs::DoorPerfMetrics>()
             .init_resource::<crate::systems::jobs::ConstructionPerfMetrics>()
             .init_resource::<crate::systems::energy::grid_recalc::EnergyPerfMetrics>();
+
+        app.configure_sets(
+            Update,
+            (
+                TaskOwnerCancellationSet::Cancel,
+                TaskOwnerCancellationSet::Flush,
+            )
+                .chain()
+                .before(FamiliarAiSystemSet::Perceive)
+                .before(SoulAiSystemSet::Perceive)
+                .before(TransportRequestSet::Perceive)
+                .in_set(GameSystemSet::Logic),
+        );
+        app.add_systems(
+            Update,
+            (
+                blueprint_cancellation_system,
+                floor_construction_cancellation_system,
+                wall_construction_cancellation_system,
+            )
+                .in_set(TaskOwnerCancellationSet::Cancel),
+        )
+        .add_systems(
+            Update,
+            ApplyDeferred.in_set(TaskOwnerCancellationSet::Flush),
+        );
 
         // Soul Energy 型登録
         app.register_type::<PowerGrid>()
@@ -154,18 +180,17 @@ impl Plugin for LogicPlugin {
         .add_systems(
             Update,
             (
-                floor_construction_cancellation_system,
                 floor_construction_phase_transition_system,
                 floor_construction_completion_system,
             )
                 .chain()
+                .after(TaskOwnerCancellationSet::Flush)
                 .in_set(GameSystemSet::Logic),
         )
         // グループD: wall construction（フェーズ順序が必要）
         .add_systems(
             Update,
             (
-                wall_construction_cancellation_system,
                 crate::plugins::interface_debug::debug_instant_complete_walls_system
                     .run_if(|d: Res<crate::DebugInstantBuild>| d.0),
                 wall_framed_tile_spawn_system,
@@ -173,6 +198,7 @@ impl Plugin for LogicPlugin {
                 wall_construction_completion_system,
             )
                 .chain()
+                .after(TaskOwnerCancellationSet::Flush)
                 .in_set(GameSystemSet::Logic),
         )
         // グループE: Soul Spa construction + energy pipeline.

@@ -33,7 +33,7 @@
 | `mod.rs` | 公開 API 集約 |
 | `components.rs` | `TransportRequest`, `TransportDemand` コンポーネント |
 | `kinds.rs` | `TransportRequestKind` enum（輸送種別） |
-| `lifecycle.rs` | `transport_request_anchor_cleanup_system` |
+| `lifecycle.rs` | `transport_request_anchor_cleanup_system` と UI/anchor共用の `close_manual_transport_request` typed owner API |
 | `metrics.rs` | `TransportRequestMetrics`, 需要計算システム |
 | `state_machine.rs` | `TransportRequestState` (Pending/Claimed) 遷移 |
 | `wheelbarrow_completion.rs` | 手押し車輸送完了判定ヘルパー |
@@ -53,6 +53,7 @@
 | `metrics_update.rs` | 仲裁メトリクス更新 |
 | `system.rs` | `wheelbarrow_arbitration_system` の実装本体 |
 | `types.rs` | 仲裁内部型 (`WheelbarrowCandidate` 等) |
+| `diagnostics.rs` | latest-only `WheelbarrowArbitrationDiagnostics`、物理/available車両header、request別typed outcome |
 
 ### producer/
 
@@ -90,8 +91,13 @@
 |---|---|
 | 輸送要求の全 producer システム | `initial_spawn.rs`（GameAssets 依存） |
 | 手押し車仲裁システム | `ui.rs`（UI ロジスティクス表示） |
+| manual request close primitive / arbitration diagnostics | UI actionのroot adapter（owner APIを呼ぶだけ） |
 | `TransportRequestPlugin` + `TransportRequestSet` | `transport_request/` の thin shell / re-export |
 | 建設系需要計算ヘルパー | 後方互換の import path を保つ root shell |
 | `ResourceItemVisualHandles` と `spawn_refund_items` | `GameAssets` から handle Resource を注入する startup |
 | `TileSiteIndex` 型定義・更新システム | — |
 | `SharedResourceCache` | `sync_reservations_system`（ゲーム固有クエリ） |
+
+手押し車仲裁は source reservation を近傍 Top-K の投入前に除外する。実検索範囲内で予約を含めれば `hard_min` を
+満たせる場合は、全件予約・一部予約のどちらも `SourceReserved`、予約を含めても不足する場合は `NoSourceItems` とし、
+予約済み item を lease へ含めない。

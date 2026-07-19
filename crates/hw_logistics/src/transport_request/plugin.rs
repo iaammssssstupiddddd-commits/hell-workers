@@ -3,6 +3,7 @@
 use bevy::prelude::*;
 use hw_core::system_sets::{FamiliarAiSystemSet, GameSystemSet, SoulAiSystemSet};
 
+use super::arbitration::{WheelbarrowArbitrationDiagnostics, WheelbarrowArbitrationRuntime};
 use super::producer::{
     active_unit_cache::{
         CachedActiveFamiliars, CachedActiveYards, CachedStockpileGroups,
@@ -63,6 +64,8 @@ pub struct TransportRequestPlugin;
 impl Plugin for TransportRequestPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TransportRequestMetrics>();
+        app.init_resource::<WheelbarrowArbitrationRuntime>();
+        app.init_resource::<WheelbarrowArbitrationDiagnostics>();
         app.init_resource::<FloorTileWaitingCache>();
         app.init_resource::<WallTileWaitingCache>();
         app.init_resource::<CachedActiveFamiliars>();

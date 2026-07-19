@@ -3,6 +3,8 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_ui::components::{LeftPanelMode, TaskListBody};
+use hw_ui::panels::info_panel::InfoPanelPinState;
+use hw_ui::panels::task_list::{TaskDashboardActionState, TaskDashboardViewState};
 use hw_ui::theme::UiTheme;
 
 use super::{TaskListDirty, view_model::TaskListState};
@@ -13,6 +15,9 @@ pub struct TaskListRenderState<'w> {
     theme: Res<'w, UiTheme>,
     mode: Res<'w, LeftPanelMode>,
     state: Res<'w, TaskListState>,
+    view_state: Res<'w, TaskDashboardViewState>,
+    action_state: Res<'w, TaskDashboardActionState>,
+    pin_state: Res<'w, InfoPanelPinState>,
 }
 
 pub fn task_list_update_system(
@@ -44,6 +49,9 @@ pub fn task_list_update_system(
         hw_ui::panels::task_list::rebuild_task_list_ui(
             parent,
             &render_state.state.snapshot,
+            &render_state.view_state,
+            render_state.pin_state.entity,
+            &render_state.action_state,
             &*render_state.game_assets,
             &render_state.theme,
         );

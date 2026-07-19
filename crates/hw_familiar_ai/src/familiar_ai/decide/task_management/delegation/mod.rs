@@ -4,13 +4,15 @@ mod members;
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
 use hw_core::relationships::ManagedTasks;
+use hw_jobs::TaskDiagnosticInputRevisions;
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::{WalkabilityConnectivityCache, WorldMap};
 
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 use crate::familiar_ai::decide::task_management::{
-    FamiliarSoulQuery, FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot, ReservationShadow,
+    FamiliarEvaluatorDiagnostics, FamiliarSoulQuery, FamiliarTaskAssignmentQueries,
+    IncomingDeliverySnapshot, ReservationShadow,
 };
 
 pub use assignment_loop::take_reachable_with_cache_calls;
@@ -33,6 +35,18 @@ pub struct DelegationEnvCtx<'a> {
     pub incoming_snapshot: &'a IncomingDeliverySnapshot,
 }
 
+/// 委譲ループ内で更新するキャッシュと仮予約を一つの実行コンテキストに束ねる。
+pub struct DelegationScratchCtx<'a> {
+    pub connectivity_cache: &'a mut WalkabilityConnectivityCache,
+    pub reservation_shadow: &'a mut ReservationShadow,
+}
+
+/// 一回の委譲判定で共有する診断出力と入力 revision。
+pub struct DelegationDiagnosticsCtx<'a> {
+    pub evaluator: &'a mut FamiliarEvaluatorDiagnostics,
+    pub revisions: &'a TaskDiagnosticInputRevisions,
+}
+
 pub struct TaskManager;
 
 impl TaskManager {
@@ -41,10 +55,13 @@ impl TaskManager {
         queries: &mut FamiliarTaskAssignmentQueries,
         construction_sites: &impl ConstructionSitePositions,
         q_souls: &mut FamiliarSoulQuery,
-        connectivity_cache: &mut WalkabilityConnectivityCache,
-        reservation_shadow: &mut ReservationShadow,
+        mut scratch: DelegationScratchCtx<'_>,
+        mut diagnostics: DelegationDiagnosticsCtx<'_>,
     ) -> Option<Entity> {
         let idle_members = collect_idle_members(env.squad, env.fatigue_threshold, q_souls);
+        diagnostics
+            .evaluator
+            .set_idle_worker_count(idle_members.len());
 
         try_assign_for_workers(
             &idle_members,
@@ -52,8 +69,8 @@ impl TaskManager {
             queries,
             construction_sites,
             q_souls,
-            connectivity_cache,
-            reservation_shadow,
+            &mut scratch,
+            &mut diagnostics,
         )
     }
 }

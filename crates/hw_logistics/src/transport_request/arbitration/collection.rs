@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 use hw_core::constants::{
@@ -17,9 +17,10 @@ use crate::transport_request::{
 use crate::types::BelongsTo;
 use crate::zone::Stockpile;
 
+use super::WheelbarrowArbitrationOutcome;
 use super::candidates::{
     FreeItemsQuery, RequestEvalInput, build_free_item_buckets, build_request_eval_context,
-    collect_top_k_nearest, is_pick_drop_possible, score_candidate,
+    collect_top_k_unreserved_nearest, is_pick_drop_possible, score_candidate,
 };
 use super::types::{BatchCandidate, ItemBucketKey, RequestEvalContext};
 
@@ -46,14 +47,31 @@ pub(super) struct CollectCandidatesQueries<'a> {
     pub q_incoming: &'a Query<'a, 'a, &'static IncomingDeliveries>,
 }
 
+pub(super) struct CollectCandidatesContext<'a> {
+    pub available_wheelbarrows: &'a [(Entity, Vec2)],
+    pub stale_cleared_requests: &'a HashSet<Entity>,
+    pub cache: &'a SharedResourceCache,
+    pub now: f64,
+    pub outcomes: &'a mut HashMap<Entity, WheelbarrowArbitrationOutcome>,
+}
+
+fn insufficient_source_outcome(
+    available_count: usize,
+    reserved_count: usize,
+    hard_min: usize,
+) -> WheelbarrowArbitrationOutcome {
+    if available_count.saturating_add(reserved_count) >= hard_min {
+        WheelbarrowArbitrationOutcome::SourceReserved
+    } else {
+        WheelbarrowArbitrationOutcome::NoSourceItems
+    }
+}
+
 pub(super) fn collect_candidates(
     q_requests: &CollectCandidatesRequestQuery,
     q_free_items: &FreeItemsQuery,
     queries: CollectCandidatesQueries<'_>,
-    available_wheelbarrows: &[(Entity, Vec2)],
-    stale_cleared_requests: &HashSet<Entity>,
-    cache: &SharedResourceCache,
-    now: f64,
+    context: CollectCandidatesContext<'_>,
 ) -> (Vec<(BatchCandidate, f32)>, u32, u32, u32, f64) {
     struct EligibleRequest {
         eval: RequestEvalContext,
@@ -67,7 +85,7 @@ pub(super) fn collect_candidates(
     let mut candidates_after_top_k = 0u32;
     let mut pending_secs_total = 0.0f64;
 
-    if available_wheelbarrows.is_empty() {
+    if context.available_wheelbarrows.is_empty() {
         return (
             candidates,
             eligible_requests,
@@ -81,12 +99,12 @@ pub(super) fn collect_candidates(
     for (req_entity, req, state, demand, transform, lease_opt, pending_since_opt, manual_opt) in
         q_requests.iter()
     {
-        let effective_lease = if stale_cleared_requests.contains(&req_entity) {
+        let effective_lease = if context.stale_cleared_requests.contains(&req_entity) {
             None
         } else {
             lease_opt
         };
-        let Some(eval) = build_request_eval_context(
+        let eval = match build_request_eval_context(
             RequestEvalInput {
                 req_entity,
                 req,
@@ -96,14 +114,18 @@ pub(super) fn collect_candidates(
                 lease_opt: effective_lease,
                 pending_since_opt,
                 manual_opt,
-                now,
+                now: context.now,
             },
             queries.q_belongs,
             queries.q_stockpiles,
-            cache,
+            context.cache,
             queries.q_incoming,
-        ) else {
-            continue;
+        ) {
+            Ok(eval) => eval,
+            Err(outcome) => {
+                context.outcomes.insert(req_entity, outcome);
+                continue;
+            }
         };
 
         eligible.push(EligibleRequest {
@@ -145,12 +167,13 @@ pub(super) fn collect_candidates(
         };
         bucket_items_total += bucket.len() as u32;
 
-        let mut nearby_items = collect_top_k_nearest(
+        let (mut nearby_items, mut reserved_in_search) = collect_top_k_unreserved_nearest(
             bucket,
             &free_items,
             eval.request_pos,
             search_radius_sq,
             WHEELBARROW_ARBITRATION_TOP_K,
+            context.cache,
         );
 
         if nearby_items.is_empty()
@@ -158,26 +181,39 @@ pub(super) fn collect_candidates(
                 && req.kind == TransportRequestKind::DeliverToBlueprint)
                 || req.kind == TransportRequestKind::DeliverToMixerSolid)
         {
-            nearby_items = collect_top_k_nearest(
+            (nearby_items, reserved_in_search) = collect_top_k_unreserved_nearest(
                 bucket,
                 &free_items,
                 eval.request_pos,
                 f32::INFINITY,
                 WHEELBARROW_ARBITRATION_TOP_K,
+                context.cache,
             );
         }
 
         candidates_after_top_k += nearby_items.len() as u32;
         if nearby_items.is_empty() {
+            context.outcomes.insert(
+                eval.request_entity,
+                insufficient_source_outcome(0, reserved_in_search, eval.hard_min),
+            );
             continue;
         }
 
         if is_pick_drop_possible(&eval, &nearby_items, queries.q_blueprints) {
+            context.outcomes.insert(
+                eval.request_entity,
+                WheelbarrowArbitrationOutcome::NotApplicable,
+            );
             continue;
         }
 
         let selected_count = nearby_items.len().min(eval.max_items);
         if selected_count < eval.hard_min {
+            context.outcomes.insert(
+                eval.request_entity,
+                insufficient_source_outcome(selected_count, reserved_in_search, eval.hard_min),
+            );
             continue;
         }
 
@@ -185,6 +221,10 @@ pub(super) fn collect_candidates(
             && req.kind == TransportRequestKind::DeliverToBlueprint
             && selected_count < WHEELBARROW_PREFERRED_MIN_BATCH_SIZE;
         if is_small_batch && eval.pending_for < SINGLE_BATCH_WAIT_SECS {
+            context.outcomes.insert(
+                eval.request_entity,
+                WheelbarrowArbitrationOutcome::PreferredBatchWaiting,
+            );
             continue;
         }
 
@@ -196,7 +236,8 @@ pub(super) fn collect_candidates(
         }
         let source_pos = source_sum / selected_count as f32;
 
-        let min_wb_distance = available_wheelbarrows
+        let min_wb_distance = context
+            .available_wheelbarrows
             .iter()
             .map(|(_, wb_pos)| wb_pos.distance(source_pos))
             .min_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
@@ -243,4 +284,21 @@ pub(super) fn collect_candidates(
         candidates_after_top_k,
         pending_secs_total,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn partial_batch_blocked_by_reservations_is_contention() {
+        assert_eq!(
+            insufficient_source_outcome(1, 1, 2),
+            WheelbarrowArbitrationOutcome::SourceReserved
+        );
+        assert_eq!(
+            insufficient_source_outcome(1, 0, 2),
+            WheelbarrowArbitrationOutcome::NoSourceItems
+        );
+    }
 }

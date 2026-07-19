@@ -218,6 +218,8 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     commands.insert_resource(ResourceItemVisualHandles {
         icon_bone_small: game_assets.icon_bone_small.clone(),
         icon_wood_small: game_assets.icon_wood_small.clone(),
+        icon_rock_small: game_assets.icon_rock_small.clone(),
+        icon_sand_small: game_assets.icon_sand_small.clone(),
         icon_stasis_mud_small: game_assets.icon_stasis_mud_small.clone(),
     });
 

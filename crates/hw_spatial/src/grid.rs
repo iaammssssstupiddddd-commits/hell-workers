@@ -148,6 +148,7 @@ impl GridData {
 #[derive(Resource)]
 pub struct SpatialIndex<Tag> {
     data: GridData,
+    generation: u64,
     marker: PhantomData<fn() -> Tag>,
 }
 
@@ -155,6 +156,7 @@ impl<Tag> Default for SpatialIndex<Tag> {
     fn default() -> Self {
         Self {
             data: GridData::default(),
+            generation: 0,
             marker: PhantomData,
         }
     }
@@ -169,6 +171,7 @@ impl<Tag> SpatialIndex<Tag> {
     pub fn new(data: GridData) -> Self {
         Self {
             data,
+            generation: 0,
             marker: PhantomData,
         }
     }
@@ -181,6 +184,14 @@ impl<Tag> SpatialIndex<Tag> {
     /// Returns the underlying grid data for explicit grid configuration.
     pub fn data_mut(&mut self) -> &mut GridData {
         &mut self.data
+    }
+
+    /// Semantic generation used by readers that cache search results.
+    ///
+    /// It advances only when membership or the recorded position changes.
+    #[must_use]
+    pub const fn generation(&self) -> u64 {
+        self.generation
     }
 
     /// Consumes this index and returns its grid data.
@@ -203,15 +214,27 @@ impl<Tag> From<GridData> for SpatialIndex<Tag> {
 
 impl<Tag: Send + Sync + 'static> SpatialGridOps for SpatialIndex<Tag> {
     fn insert(&mut self, entity: Entity, pos: Vec2) {
+        let changed = self.data.positions.get(&entity).copied() != Some(pos);
         self.data.insert(entity, pos);
+        if changed {
+            self.generation = self.generation.wrapping_add(1);
+        }
     }
 
     fn remove(&mut self, entity: Entity) {
+        let changed = self.data.positions.contains_key(&entity);
         self.data.remove(entity);
+        if changed {
+            self.generation = self.generation.wrapping_add(1);
+        }
     }
 
     fn update(&mut self, entity: Entity, pos: Vec2) {
+        let changed = self.data.positions.get(&entity).copied() != Some(pos);
         self.data.update(entity, pos);
+        if changed {
+            self.generation = self.generation.wrapping_add(1);
+        }
     }
 
     fn get_nearby_in_radius(&self, pos: Vec2, radius: f32) -> Vec<Entity> {

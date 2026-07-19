@@ -24,6 +24,9 @@ pub struct SharedResourceCache {
     /// このフレームで取り出された数（コンポーネント未反映分）
     /// Entity -> 取り出し数
     frame_picked_count: HashMap<Entity, usize>,
+
+    /// Advances only when a reservation or logical availability changes.
+    semantic_generation: u64,
 }
 
 impl SharedResourceCache {
@@ -45,8 +48,13 @@ impl SharedResourceCache {
         mixer_dest_reservations: HashMap<(Entity, ResourceType), usize>,
         source_reservations: HashMap<Entity, usize>,
     ) {
+        let changed = self.mixer_dest_reservations != mixer_dest_reservations
+            || self.source_reservations != source_reservations;
         self.mixer_dest_reservations = mixer_dest_reservations;
         self.source_reservations = source_reservations;
+        if changed {
+            self.bump_semantic_generation();
+        }
     }
 
     /// ミキサーへの予約を追加
@@ -55,15 +63,20 @@ impl SharedResourceCache {
             .mixer_dest_reservations
             .entry((target, resource_type))
             .or_insert(0) += 1;
+        self.bump_semantic_generation();
     }
 
     /// ミキサーへの予約を解除
     pub fn release_mixer_destination(&mut self, target: Entity, resource_type: ResourceType) {
         let key = (target, resource_type);
         if let Some(count) = self.mixer_dest_reservations.get_mut(&key) {
+            let previous = *count;
             *count = count.saturating_sub(1);
             if *count == 0 {
                 self.mixer_dest_reservations.remove(&key);
+            }
+            if previous > 0 {
+                self.bump_semantic_generation();
             }
         }
     }
@@ -82,15 +95,23 @@ impl SharedResourceCache {
 
     /// リソース取り出し予約を追加 (Source Reservation)
     pub fn reserve_source(&mut self, source: Entity, amount: usize) {
+        if amount == 0 {
+            return;
+        }
         *self.source_reservations.entry(source).or_insert(0) += amount;
+        self.bump_semantic_generation();
     }
 
     /// リソース取り出し予約を解除
     pub fn release_source(&mut self, source: Entity, amount: usize) {
         if let Some(count) = self.source_reservations.get_mut(&source) {
+            let previous = *count;
             *count = count.saturating_sub(amount);
             if *count == 0 {
                 self.source_reservations.remove(&source);
+            }
+            if amount > 0 && previous > 0 {
+                self.bump_semantic_generation();
             }
         }
     }
@@ -105,14 +126,27 @@ impl SharedResourceCache {
     /// 取得アクション成功を記録 (Delta Update)
     /// ソース予約を減らし、フレーム内取得数を増やす（論理在庫減少）
     pub fn record_picked_source(&mut self, source: Entity, amount: usize) {
+        if amount == 0 {
+            return;
+        }
         self.release_source(source, amount);
         *self.frame_picked_count.entry(source).or_insert(0) += amount;
+        self.bump_semantic_generation();
     }
 
     /// 論理的な格納済み数（クエリ値 + フレーム内増加分）を取得
     pub fn get_logical_stored_count(&self, target: Entity, current_from_query: usize) -> usize {
         let frame_added = self.frame_stored_count.get(&target).cloned().unwrap_or(0);
         current_from_query + frame_added
+    }
+
+    #[must_use]
+    pub const fn semantic_generation(&self) -> u64 {
+        self.semantic_generation
+    }
+
+    fn bump_semantic_generation(&mut self) {
+        self.semantic_generation = self.semantic_generation.wrapping_add(1);
     }
 }
 
@@ -179,5 +213,15 @@ mod tests {
         cache.begin_frame();
 
         assert_eq!(cache.get_source_reservation(source), 2);
+    }
+
+    #[test]
+    fn beginning_frame_alone_does_not_advance_semantic_generation() {
+        let mut cache = SharedResourceCache::default();
+        let before = cache.semantic_generation();
+
+        cache.begin_frame();
+
+        assert_eq!(cache.semantic_generation(), before);
     }
 }

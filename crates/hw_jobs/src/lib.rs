@@ -1,4 +1,5 @@
 pub mod construction;
+pub mod diagnostics;
 pub mod events;
 pub mod lifecycle;
 pub mod model;
@@ -11,13 +12,18 @@ pub use construction::{
     WallConstructionSite, WallTileState, floor_construction_phase_transition_system,
     wall_construction_phase_transition_system,
 };
+pub use diagnostics::{
+    TaskDiagnosticClass, TaskDiagnosticCounters, TaskDiagnosticCoverage, TaskDiagnosticCycleHeader,
+    TaskDiagnosticDomainMask, TaskDiagnosticInputRevisions, TaskDiagnosticInputStamp,
+    TaskDiagnosticProducer, TaskDiagnosticProducerMask, TaskDiagnosticRecord,
+};
 pub use events::BuildingCompletedEvent;
 pub use model::{
-    Blueprint, BonePile, BridgeMarker, Building, BuildingCategory, BuildingType, Designation, Door,
-    DoorCloseTimer, DoorState, FlexibleMaterialRequirement, IssuedBy, MovePlanned,
-    ObstaclePosition, ObstacleSourceKind, Priority, ProvisionalWall, RestArea, Rock, SandPile,
-    TargetBlueprint, TargetSoulSpaSite, TaskSlots, Tree, TreeVariant, WorkType,
-    remove_tile_task_components,
+    Blueprint, BlueprintCancelRequested, BonePile, BridgeMarker, Building, BuildingCategory,
+    BuildingType, Designation, Door, DoorCloseTimer, DoorState, FlexibleMaterialRequirement,
+    IssuedBy, MovePlanned, ObstaclePosition, ObstacleSourceKind, PlayerIssuedDesignation, Priority,
+    ProvisionalWall, RestArea, Rock, SandPile, TargetBlueprint, TargetSoulSpaSite, TaskSlots, Tree,
+    TreeVariant, WorkType, remove_tile_task_components,
 };
 pub use mud_mixer::StoredByMixer;
 pub use mud_mixer::TargetMixer;

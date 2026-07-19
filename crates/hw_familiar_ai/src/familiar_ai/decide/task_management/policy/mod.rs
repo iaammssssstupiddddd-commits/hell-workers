@@ -10,7 +10,8 @@ use hw_jobs::WorkType;
 
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 use crate::familiar_ai::decide::task_management::{
-    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+    AssignTaskContext, CandidateRejectReason, FamiliarTaskAssignmentQueries, ReservationShadow,
+    TaskAssignmentAttempt,
 };
 
 pub fn assign_by_work_type(
@@ -21,7 +22,7 @@ pub fn assign_by_work_type(
     queries: &mut FamiliarTaskAssignmentQueries,
     construction_sites: &impl ConstructionSitePositions,
     shadow: &mut ReservationShadow,
-) -> bool {
+) -> TaskAssignmentAttempt {
     match work_type {
         WorkType::Chop | WorkType::Mine => {
             basic::assign_gather(work_type, task_pos, already_commanded, ctx, queries, shadow)
@@ -40,9 +41,13 @@ pub fn assign_by_work_type(
             construction_sites,
             shadow,
         ),
-        WorkType::HaulToMixer => {
-            haul::assign_haul_to_mixer(task_pos, already_commanded, ctx, queries, shadow)
-        }
+        WorkType::HaulToMixer => assignment_from_resource_policy(haul::assign_haul_to_mixer(
+            task_pos,
+            already_commanded,
+            ctx,
+            queries,
+            shadow,
+        )),
         WorkType::GatherWater => {
             water::assign_gather_water(task_pos, already_commanded, ctx, queries, shadow)
         }
@@ -64,5 +69,13 @@ pub fn assign_by_work_type(
         WorkType::GeneratePower => {
             basic::assign_generate_power(task_pos, already_commanded, ctx, queries, shadow)
         }
+    }
+}
+
+fn assignment_from_resource_policy(submitted: bool) -> TaskAssignmentAttempt {
+    if submitted {
+        TaskAssignmentAttempt::Submitted
+    } else {
+        TaskAssignmentAttempt::Rejected(CandidateRejectReason::MissingResourceOrSource)
     }
 }

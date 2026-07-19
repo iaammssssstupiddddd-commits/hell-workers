@@ -82,6 +82,22 @@ Logic の次回同期へ委ねてはならない。
 - `ObstaclePosition` は source-aware に同期される。Tree/Rock など `NaturalTerrainClearing` の最後の blocker が外れた場合だけ terrain を Dirt へ変更する。完成建物 footprint、移動予約、床の Curing 保護を外しても terrain type は変えない。
 - 建築完了後の marker と WorldMap 更新は Soul Execute の後に反映され、Actor/pathfinding より前の `ObstacleSyncSet` で最終 walkability が確定する。
 
+### Blueprint キャンセル
+
+タスクダッシュボードからの Blueprint cancel は即時 despawn せず、`BlueprintCancelRequested` を付けて
+owner lifecycle に委譲する。cleanup は次を一つの終端として扱う。
+
+1. 全 Soul の `AssignedTask` payload を走査し、対象 Blueprint の `Build`、`HaulToBlueprint`、
+   `HaulWithWheelbarrow(WheelbarrowDestination::Blueprint)` へ `SoulTaskUnassignRequest` を発行する。
+2. `TransportRequest.anchor` または `TargetBlueprint` が対象を指す request を除去する。
+3. `PendingBelongsToBlueprint` companion が Stockpile として登録した全 tile を owner 確認付きで `WorldMap` から外す。
+   companion 内に `StoredIn` item があれば relationship を外して可視の地面 item に戻し、companion を除去する。
+4. `Blueprint.delivered_materials` を resource type 順で exactly once 地面アイテムへ返却し、map を空にする。
+5. `WorldMap` の building slot がまだ当該 Blueprint を owner とする場合だけ占有を解除し、Blueprint を despawn する。
+
+cancel marker の処理と `ApplyDeferred` は Familiar / Soul / TransportRequest の Perceive より前に完了するため、
+同じ Logic frame でキャンセル済み owner を読んだ request の再生成・再割り当てを防ぐ。
+
 ## 4. 仮設建築 (Provisional Building)
 
 一部の建物（例: `Wall`）は、必要最低限の資材があれば「仮設状態」として建設を完了できます。
@@ -342,6 +358,10 @@ Building3dVisual エンティティ（独立。Building の子ではない）
 - **資材コスト**: 骨 × 2 + Stasis Mud × 1 per tile
 - **通行性**: 建築中の `FloorTileBlueprint` は通行可能（障害物として扱わない）。ただし `Curing` 中は立ち入り禁止（障害物扱い）
 - **キャンセル**: エリア全体を一括キャンセル（部分キャンセル不可）
+  - tile 行または `DeliverToFloorConstruction` request 行のどちらからでも parent site を解決する。
+  - 保存対象 `TransportRequest.kind + anchor` を正本にするため、load 後に非保存 target marker がなくても cleanup できる。
+  - `TileSiteIndex` が空/古い場合は authoritative `FloorTileBlueprint.parent_site` query へ fallback し、0 tile でも marker を残さない。
+  - worker 解除、搬入資材返却、request / tile / site 除去、WorldMap cleanup を site 単位で行う。
 
 ### 9.2 エンティティ構造
 
@@ -452,7 +472,11 @@ Wall の `Framing → Coating` も同じindex/counter契約を使い、`spawned_
 - `Framing` 完了タイルは即時に `Building { kind: Wall, is_provisional: true }` を生成し、通路分離・壁接続判定に参加する。
 - `Coating` 完了時に `Building.is_provisional = false` へ更新し、`ProvisionalWall` を除去する。
 - `Curing` 相当フェーズは持たず、全タイル `Complete` 到達で site / tile / request を即時 cleanup する。
-- キャンセルは site 単位で処理され、搬入済み `Wood` / `StasisMud` を返却し、関連 request / 作業割り当てを解除する。
+- キャンセルは tile または `DeliverToWallConstruction` request から parent site を解決し、site 単位で処理する。
+  搬入済み `Wood` / `StasisMud` を返却し、関連 request / 作業割り当てを解除する。保存済み
+  `TransportRequest.kind + anchor` から target marker なしでも request を列挙し、`TileSiteIndex` miss は
+  authoritative tile query へ fallback する。0 tile でも cancel marker を永久保持せず、WorldMap occupancy は
+  site または当該 spawned wall が現在 owner のセルだけを解除する。
 - すべての候補が無効な場合は site を生成せず、`Cannot Place` ツールチップで最初に検出した無効理由を表示する。
 - 有効候補と無効候補が混在する場合は、無効タイル数と最初の理由をpreviewで表示し、有効タイルだけを生成する。
 

@@ -8,9 +8,16 @@ use hw_core::jobs::WorkType;
 use hw_core::relationships::{Commanding, ManagedBy, TaskWorkers};
 use hw_core::soul::StressBreakdown;
 use hw_jobs::events::TaskAssignmentRequest;
-use hw_jobs::{AssignedTask, Blueprint, BuildData, BuildPhase, Designation, Priority, TaskSlots};
+use hw_jobs::{
+    AssignedTask, Blueprint, BuildData, BuildPhase, Designation, Priority, TaskDiagnosticClass,
+    TaskDiagnosticInputRevisions, TaskSlots,
+};
 use hw_spatial::BlueprintSpatialGrid;
 
+use super::auto_build_diagnostics::{
+    AutoBuildEvaluator, AutoBuildLocalOutcome, BlueprintAutoBuildDiagnosticCycle,
+    BlueprintAutoBuildDiagnostics,
+};
 use crate::soul_ai::helpers::query_types::AutoBuildSoulQuery;
 use crate::soul_ai::helpers::work as helpers;
 
@@ -91,11 +98,16 @@ impl BlueprintAutoBuildTimer {
 pub(crate) fn blueprint_auto_build_system(
     time: Res<Time>,
     mut cadence: ResMut<BlueprintAutoBuildTimer>,
+    revisions: Res<TaskDiagnosticInputRevisions>,
+    mut published_diagnostics: ResMut<BlueprintAutoBuildDiagnostics>,
     mut params: BlueprintAutoBuildParams,
 ) {
     if !cadence.advance(time.delta()) {
         return;
     }
+
+    let mut diagnostic_cycle =
+        BlueprintAutoBuildDiagnosticCycle::new(published_diagnostics.next_cycle(), &revisions);
 
     for (fam_entity, active_command, task_area, commanding_opt) in params.q_familiars.iter() {
         if matches!(active_command.command, FamiliarCommand::Idle) {
@@ -105,6 +117,8 @@ pub(crate) fn blueprint_auto_build_system(
         let Some(commanding) = commanding_opt else {
             continue;
         };
+        diagnostic_cycle.begin_evaluator();
+        let mut evaluator_diagnostics = AutoBuildEvaluator::new();
         let mut already_requested_workers = std::collections::HashSet::new();
 
         // 最適化: タスクエリア内のブループリントのみを取得
@@ -120,6 +134,16 @@ pub(crate) fn blueprint_auto_build_system(
             };
             let bp_pos = bp_transform.translation.truncate();
 
+            let Ok((_, _, designation, managed_by_opt, _, _, _)) =
+                params.q_designations.get(bp_entity)
+            else {
+                continue;
+            };
+            if designation.work_type != WorkType::Build {
+                continue;
+            }
+            evaluator_diagnostics.observe(bp_entity, &revisions);
+
             // 既に作業員が割り当てられている場合はスキップ（建築中）
             if workers_opt.map(|w| w.len()).unwrap_or(0) > 0 {
                 continue;
@@ -127,17 +151,15 @@ pub(crate) fn blueprint_auto_build_system(
 
             // 資材が揃っていて、まだManagedByが付与されていない場合のみ処理
             if !blueprint.materials_complete() {
+                evaluator_diagnostics.set(
+                    bp_entity,
+                    AutoBuildLocalOutcome::Rejected(TaskDiagnosticClass::DependencyWaiting),
+                );
                 continue;
             }
 
             // Designationが存在し、ManagedByが付与されていないか確認
-            if let Ok((_, _, designation, managed_by_opt, _, _, _)) =
-                params.q_designations.get(bp_entity)
             {
-                if designation.work_type != WorkType::Build {
-                    continue;
-                }
-
                 // 既に割り当てられている場合はスキップ
                 if managed_by_opt.is_some() {
                     continue;
@@ -172,6 +194,7 @@ pub(crate) fn blueprint_auto_build_system(
                         params.q_breakdown.get(soul_entity).is_ok(),
                         fatigue_threshold,
                     ) {
+                        evaluator_diagnostics.set(bp_entity, AutoBuildLocalOutcome::Partial);
                         continue;
                     }
 
@@ -215,15 +238,23 @@ pub(crate) fn blueprint_auto_build_system(
                         already_commanded: true,
                     });
                     already_requested_workers.insert(worker_entity);
+                    evaluator_diagnostics.set(bp_entity, AutoBuildLocalOutcome::Submitted);
 
                     info!(
                         "AUTO_BUILD: Assigned build task {:?} to worker {:?}",
                         bp_entity, worker_entity
                     );
+                } else {
+                    evaluator_diagnostics.set(
+                        bp_entity,
+                        AutoBuildLocalOutcome::Rejected(TaskDiagnosticClass::NoEligibleFamiliar),
+                    );
                 }
             }
         }
+        diagnostic_cycle.finish_evaluator(evaluator_diagnostics);
     }
+    published_diagnostics.publish(diagnostic_cycle);
 }
 
 #[cfg(test)]

@@ -131,7 +131,7 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
         ..default()
     });
 
-    let (expected_roots, familiar, soul, unmarked_transform, non_root_component) = {
+    let (expected_roots, familiar, soul, designation, unmarked_transform, non_root_component) = {
         let world = app.world_mut();
         let familiar = world
             .spawn((Familiar::default(), Transform::default()))
@@ -215,9 +215,13 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
         ]);
 
         let designation = world
-            .spawn(Designation {
-                work_type: WorkType::default(),
-            })
+            .spawn((
+                Designation {
+                    work_type: WorkType::Chop,
+                },
+                Priority(10),
+                PlayerIssuedDesignation,
+            ))
             .id();
         roots.insert(designation);
 
@@ -229,6 +233,7 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
             roots,
             familiar,
             soul,
+            designation,
             unmarked_transform,
             non_root_component,
         )
@@ -287,6 +292,7 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
 
     let mapped_familiar = entity_map[&familiar];
     let mapped_soul = entity_map[&soul];
+    let mapped_designation = entity_map[&designation];
     assert_eq!(
         destination.get::<CommandedBy>(mapped_soul).unwrap().0,
         mapped_familiar
@@ -299,6 +305,15 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
             .any(|entity| *entity == mapped_soul)
     );
     assert_eq!(destination.resource::<GameTime>().seconds, 42.0);
+    assert_eq!(
+        destination.get::<Priority>(mapped_designation).unwrap().0,
+        10
+    );
+    assert!(
+        destination
+            .get::<PlayerIssuedDesignation>(mapped_designation)
+            .is_some()
+    );
 }
 
 #[test]

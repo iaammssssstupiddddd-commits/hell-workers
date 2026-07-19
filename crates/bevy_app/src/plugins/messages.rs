@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::entities::damned_soul::DamnedSoulSpawnEvent;
 use crate::entities::familiar::FamiliarSpawnEvent;
+use crate::interface::ui::panels::task_list::TaskActionOutcome;
 use crate::{
     DesignationRequest, EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent,
     FamiliarIdleVisualRequest, FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest,
@@ -51,6 +52,7 @@ macro_rules! root_message_types {
             OnTaskAssigned,
             GatheringSpawnRequest,
             SoulTaskUnassignRequest,
+            TaskActionOutcome,
         );
     };
 }

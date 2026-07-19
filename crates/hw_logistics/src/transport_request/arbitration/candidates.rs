@@ -18,6 +18,7 @@ use crate::types::{BelongsTo, ResourceItem, ResourceType};
 use crate::zone::Stockpile;
 
 use super::types::{FreeItemSnapshot, HeapEntry, ItemBucketKey, NearbyItem, RequestEvalContext};
+use super::{WheelbarrowArbitrationOutcome, is_wheelbarrow_arbitration_applicable};
 
 pub type FreeItemsQuery<'w, 's> = Query<
     'w,
@@ -102,7 +103,7 @@ pub fn build_request_eval_context(
     q_stockpiles: &Query<(&Stockpile, Option<&StoredItems>)>,
     _cache: &SharedResourceCache,
     q_incoming: &Query<&hw_core::relationships::IncomingDeliveries>,
-) -> Option<RequestEvalContext> {
+) -> Result<RequestEvalContext, WheelbarrowArbitrationOutcome> {
     let RequestEvalInput {
         req_entity,
         req,
@@ -115,28 +116,19 @@ pub fn build_request_eval_context(
         now,
     } = input;
     if manual_opt.is_some() {
-        return None;
+        return Err(WheelbarrowArbitrationOutcome::NotApplicable);
     }
-    let eligible_kind = match req.kind {
-        TransportRequestKind::DepositToStockpile => true,
-        TransportRequestKind::DeliverToBlueprint => req.resource_type.requires_wheelbarrow(),
-        TransportRequestKind::DeliverToFloorConstruction => {
-            req.resource_type == ResourceType::StasisMud
-        }
-        TransportRequestKind::DeliverToMixerSolid => req.resource_type.requires_wheelbarrow(),
-        _ => false,
-    };
-    if !eligible_kind {
-        return None;
+    if !is_wheelbarrow_arbitration_applicable(req) {
+        return Err(WheelbarrowArbitrationOutcome::NotApplicable);
     }
     if *state != TransportRequestState::Pending {
-        return None;
+        return Err(WheelbarrowArbitrationOutcome::NotApplicable);
     }
     if lease_opt.is_some() {
-        return None;
+        return Err(WheelbarrowArbitrationOutcome::LeaseGranted);
     }
     if !req.resource_type.is_loadable() {
-        return None;
+        return Err(WheelbarrowArbitrationOutcome::NotApplicable);
     }
 
     let (destination, max_items, bucket_key) = match req.kind {
@@ -145,6 +137,7 @@ pub fn build_request_eval_context(
 
             let (dest_stockpile, dest_capacity) = if !req.stockpile_group.is_empty() {
                 let mut total_free = 0usize;
+                let mut total_physical_free = 0usize;
                 let mut best_cell = req.anchor;
                 let mut best_free = 0usize;
                 for &cell in &req.stockpile_group {
@@ -155,6 +148,7 @@ pub fn build_request_eval_context(
                             continue;
                         }
                         let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
+                        total_physical_free += stock.capacity.saturating_sub(current);
                         let incoming = q_incoming
                             .get(cell)
                             .ok()
@@ -169,12 +163,19 @@ pub fn build_request_eval_context(
                         }
                     }
                 }
+                if total_free == 0 {
+                    return Err(if total_physical_free > 0 {
+                        WheelbarrowArbitrationOutcome::CapacityReserved
+                    } else {
+                        WheelbarrowArbitrationOutcome::NoDestinationCapacity
+                    });
+                }
                 (best_cell, total_free)
             } else if let Ok((stock, stored_opt)) = q_stockpiles.get(req.anchor) {
                 let type_ok =
                     stock.resource_type.is_none() || stock.resource_type == Some(req.resource_type);
                 if !type_ok {
-                    return None;
+                    return Err(WheelbarrowArbitrationOutcome::NotApplicable);
                 }
                 let current = stored_opt.map(|stored| stored.len()).unwrap_or(0);
                 let incoming = q_incoming
@@ -183,9 +184,17 @@ pub fn build_request_eval_context(
                     .map(|inc: &hw_core::relationships::IncomingDeliveries| inc.len())
                     .unwrap_or(0);
                 let anticipated = current + incoming;
-                (req.anchor, stock.capacity.saturating_sub(anticipated))
+                let free = stock.capacity.saturating_sub(anticipated);
+                if free == 0 {
+                    return Err(if stock.capacity.saturating_sub(current) > 0 {
+                        WheelbarrowArbitrationOutcome::CapacityReserved
+                    } else {
+                        WheelbarrowArbitrationOutcome::NoDestinationCapacity
+                    });
+                }
+                (req.anchor, free)
             } else {
-                return None;
+                return Err(WheelbarrowArbitrationOutcome::StaleInput);
             };
 
             (
@@ -197,25 +206,40 @@ pub fn build_request_eval_context(
                 },
             )
         }
-        TransportRequestKind::DeliverToBlueprint => (
-            WheelbarrowDestination::Blueprint(req.anchor),
-            (demand.remaining() as usize).min(WHEELBARROW_CAPACITY),
-            ItemBucketKey::Resource(req.resource_type),
-        ),
-        TransportRequestKind::DeliverToFloorConstruction => (
-            WheelbarrowDestination::Blueprint(req.anchor),
-            (demand.remaining() as usize).min(WHEELBARROW_CAPACITY),
-            ItemBucketKey::Resource(req.resource_type),
-        ),
-        TransportRequestKind::DeliverToMixerSolid => (
-            WheelbarrowDestination::Mixer {
-                entity: req.anchor,
-                resource_type: req.resource_type,
-            },
-            (demand.remaining() as usize).min(WHEELBARROW_CAPACITY),
-            ItemBucketKey::Resource(req.resource_type),
-        ),
-        _ => return None,
+        TransportRequestKind::DeliverToBlueprint => {
+            if demand.remaining() == 0 {
+                return Err(WheelbarrowArbitrationOutcome::DemandGone);
+            }
+            (
+                WheelbarrowDestination::Blueprint(req.anchor),
+                (demand.remaining() as usize).min(WHEELBARROW_CAPACITY),
+                ItemBucketKey::Resource(req.resource_type),
+            )
+        }
+        TransportRequestKind::DeliverToFloorConstruction => {
+            if demand.remaining() == 0 {
+                return Err(WheelbarrowArbitrationOutcome::DemandGone);
+            }
+            (
+                WheelbarrowDestination::Blueprint(req.anchor),
+                (demand.remaining() as usize).min(WHEELBARROW_CAPACITY),
+                ItemBucketKey::Resource(req.resource_type),
+            )
+        }
+        TransportRequestKind::DeliverToMixerSolid => {
+            if demand.remaining() == 0 {
+                return Err(WheelbarrowArbitrationOutcome::DemandGone);
+            }
+            (
+                WheelbarrowDestination::Mixer {
+                    entity: req.anchor,
+                    resource_type: req.resource_type,
+                },
+                (demand.remaining() as usize).min(WHEELBARROW_CAPACITY),
+                ItemBucketKey::Resource(req.resource_type),
+            )
+        }
+        _ => return Err(WheelbarrowArbitrationOutcome::NotApplicable),
     };
 
     let hard_min = if req.resource_type.requires_wheelbarrow()
@@ -228,10 +252,15 @@ pub fn build_request_eval_context(
         WHEELBARROW_MIN_BATCH_SIZE
     };
     if max_items < hard_min {
-        return None;
+        return Err(match req.kind {
+            TransportRequestKind::DepositToStockpile => {
+                WheelbarrowArbitrationOutcome::NoDestinationCapacity
+            }
+            _ => WheelbarrowArbitrationOutcome::DemandGone,
+        });
     }
 
-    Some(RequestEvalContext {
+    Ok(RequestEvalContext {
         request_entity: req_entity,
         request_pos: transform.translation.truncate(),
         resource_type: req.resource_type,
@@ -246,22 +275,28 @@ pub fn build_request_eval_context(
     })
 }
 
-pub fn collect_top_k_nearest(
+pub fn collect_top_k_unreserved_nearest(
     bucket: &[usize],
     free_items: &[FreeItemSnapshot],
     request_pos: Vec2,
     search_radius_sq: f32,
     top_k: usize,
-) -> Vec<NearbyItem> {
+    cache: &SharedResourceCache,
+) -> (Vec<NearbyItem>, usize) {
     if top_k == 0 || bucket.is_empty() {
-        return Vec::new();
+        return (Vec::new(), 0);
     }
 
     let mut heap = BinaryHeap::new();
+    let mut reserved_in_range = 0usize;
     for &snapshot_idx in bucket {
         let snapshot = free_items[snapshot_idx];
         let dist_sq = snapshot.pos.distance_squared(request_pos);
         if dist_sq > search_radius_sq {
+            continue;
+        }
+        if cache.get_source_reservation(snapshot.entity) > 0 {
+            reserved_in_range = reserved_in_range.saturating_add(1);
             continue;
         }
 
@@ -297,7 +332,7 @@ pub fn collect_top_k_nearest(
         })
         .collect();
     nearby_items.sort_by(|a, b| a.dist_sq.partial_cmp(&b.dist_sq).unwrap_or(Ordering::Equal));
-    nearby_items
+    (nearby_items, reserved_in_range)
 }
 
 pub fn is_pick_drop_possible(
@@ -340,4 +375,73 @@ pub fn score_candidate(
     }
 
     score
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entity(index: u32) -> Entity {
+        Entity::from_raw_u32(index).expect("valid test entity")
+    }
+
+    #[test]
+    fn nearest_selection_skips_reserved_items_before_top_k() {
+        let reserved = entity(1);
+        let available = entity(2);
+        let far_reserved = entity(3);
+        let snapshots = vec![
+            FreeItemSnapshot {
+                entity: reserved,
+                pos: Vec2::new(1.0, 0.0),
+                resource_type: ResourceType::Wood,
+                owner: None,
+                is_ground: true,
+            },
+            FreeItemSnapshot {
+                entity: available,
+                pos: Vec2::new(2.0, 0.0),
+                resource_type: ResourceType::Wood,
+                owner: None,
+                is_ground: true,
+            },
+            FreeItemSnapshot {
+                entity: far_reserved,
+                pos: Vec2::new(100.0, 0.0),
+                resource_type: ResourceType::Wood,
+                owner: None,
+                is_ground: true,
+            },
+        ];
+        let mut cache = SharedResourceCache::default();
+        cache.reserve_source(reserved, 1);
+        cache.reserve_source(far_reserved, 1);
+
+        let (selected, reserved_count) =
+            collect_top_k_unreserved_nearest(&[0, 1, 2], &snapshots, Vec2::ZERO, 25.0, 1, &cache);
+
+        assert_eq!(reserved_count, 1);
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].entity, available);
+    }
+
+    #[test]
+    fn reservations_outside_the_actual_search_range_do_not_change_the_outcome() {
+        let far_reserved = entity(3);
+        let snapshots = vec![FreeItemSnapshot {
+            entity: far_reserved,
+            pos: Vec2::new(100.0, 0.0),
+            resource_type: ResourceType::Wood,
+            owner: None,
+            is_ground: true,
+        }];
+        let mut cache = SharedResourceCache::default();
+        cache.reserve_source(far_reserved, 1);
+
+        let (selected, reserved_count) =
+            collect_top_k_unreserved_nearest(&[0], &snapshots, Vec2::ZERO, 25.0, 1, &cache);
+
+        assert!(selected.is_empty());
+        assert_eq!(reserved_count, 0);
+    }
 }

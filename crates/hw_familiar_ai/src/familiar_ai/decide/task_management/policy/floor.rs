@@ -7,7 +7,8 @@ use super::super::builders::{
 };
 use super::super::validator::can_reserve_source;
 use crate::familiar_ai::decide::task_management::{
-    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+    AssignTaskContext, CandidateRejectReason, FamiliarTaskAssignmentQueries, ReservationShadow,
+    TaskAssignmentAttempt,
 };
 
 pub(super) fn assign_reinforce_floor(
@@ -16,28 +17,33 @@ pub(super) fn assign_reinforce_floor(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) -> bool {
+) -> TaskAssignmentAttempt {
     if let Ok(tile) = queries.storage.floor_tiles.get(ctx.task_entity) {
         if !matches!(tile.state, FloorTileState::ReinforcingReady) {
             debug!(
                 "ASSIGN: ReinforceFloorTile target {:?} not in ReinforcingReady state",
                 ctx.task_entity
             );
-            return false;
+            return TaskAssignmentAttempt::Rejected(CandidateRejectReason::DependencyWaiting);
         }
     } else {
         debug!(
             "ASSIGN: ReinforceFloorTile target {:?} is not a FloorTileBlueprint",
             ctx.task_entity
         );
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::MalformedTask);
     }
 
     if !can_reserve_source(ctx.task_entity, queries, shadow) {
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::TemporaryContention);
     }
-    issue_reinforce_floor(task_pos, already_commanded, ctx, queries, shadow);
-    true
+    assignment_from_builder(issue_reinforce_floor(
+        task_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    ))
 }
 
 pub(super) fn assign_pour_floor(
@@ -46,28 +52,33 @@ pub(super) fn assign_pour_floor(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) -> bool {
+) -> TaskAssignmentAttempt {
     if let Ok(tile) = queries.storage.floor_tiles.get(ctx.task_entity) {
         if !matches!(tile.state, FloorTileState::PouringReady) {
             debug!(
                 "ASSIGN: PourFloorTile target {:?} not in PouringReady state",
                 ctx.task_entity
             );
-            return false;
+            return TaskAssignmentAttempt::Rejected(CandidateRejectReason::DependencyWaiting);
         }
     } else {
         debug!(
             "ASSIGN: PourFloorTile target {:?} is not a FloorTileBlueprint",
             ctx.task_entity
         );
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::MalformedTask);
     }
 
     if !can_reserve_source(ctx.task_entity, queries, shadow) {
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::TemporaryContention);
     }
-    issue_pour_floor(task_pos, already_commanded, ctx, queries, shadow);
-    true
+    assignment_from_builder(issue_pour_floor(
+        task_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    ))
 }
 
 pub(super) fn assign_coat_wall(
@@ -76,7 +87,7 @@ pub(super) fn assign_coat_wall(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) -> bool {
+) -> TaskAssignmentAttempt {
     let is_ready = if let Ok(tile) = queries.storage.wall_tiles.get(ctx.task_entity) {
         matches!(tile.state, WallTileState::CoatingReady) && tile.spawned_wall.is_some()
     } else if let Ok((_, building, provisional_opt)) =
@@ -90,18 +101,23 @@ pub(super) fn assign_coat_wall(
             "ASSIGN: CoatWall target {:?} is not coatable",
             ctx.task_entity
         );
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::MalformedTask);
     };
     if !is_ready {
         debug!("ASSIGN: CoatWall target {:?} is not ready", ctx.task_entity);
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::DependencyWaiting);
     }
 
     if !can_reserve_source(ctx.task_entity, queries, shadow) {
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::TemporaryContention);
     }
-    issue_coat_wall(task_pos, already_commanded, ctx, queries, shadow);
-    true
+    assignment_from_builder(issue_coat_wall(
+        task_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    ))
 }
 
 pub(super) fn assign_frame_wall(
@@ -110,26 +126,39 @@ pub(super) fn assign_frame_wall(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) -> bool {
+) -> TaskAssignmentAttempt {
     if let Ok(tile) = queries.storage.wall_tiles.get(ctx.task_entity) {
         if !matches!(tile.state, WallTileState::FramingReady) {
             debug!(
                 "ASSIGN: FrameWallTile target {:?} not in FramingReady state",
                 ctx.task_entity
             );
-            return false;
+            return TaskAssignmentAttempt::Rejected(CandidateRejectReason::DependencyWaiting);
         }
     } else {
         debug!(
             "ASSIGN: FrameWallTile target {:?} is not a WallTileBlueprint",
             ctx.task_entity
         );
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::MalformedTask);
     }
 
     if !can_reserve_source(ctx.task_entity, queries, shadow) {
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::TemporaryContention);
     }
-    issue_frame_wall(task_pos, already_commanded, ctx, queries, shadow);
-    true
+    assignment_from_builder(issue_frame_wall(
+        task_pos,
+        already_commanded,
+        ctx,
+        queries,
+        shadow,
+    ))
+}
+
+fn assignment_from_builder(submitted: bool) -> TaskAssignmentAttempt {
+    if submitted {
+        TaskAssignmentAttempt::Submitted
+    } else {
+        TaskAssignmentAttempt::Rejected(CandidateRejectReason::MalformedTask)
+    }
 }

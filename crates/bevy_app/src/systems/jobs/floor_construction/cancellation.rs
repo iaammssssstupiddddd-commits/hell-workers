@@ -1,6 +1,6 @@
 //! Floor construction cancellation system
 
-use super::components::{FloorConstructionCancelRequested, TargetFloorConstructionSite};
+use super::components::FloorConstructionCancelRequested;
 use crate::entities::damned_soul::{DamnedSoul, Path};
 use crate::systems::jobs::{ResourceItemVisualHandles, spawn_refund_items};
 use crate::systems::logistics::{Inventory, ResourceType};
@@ -11,6 +11,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::relationships::WorkingOn;
 use hw_logistics::tile_index::TileSiteIndex;
+use hw_logistics::transport_request::{TransportRequest, TransportRequestKind};
 use hw_soul_ai::unassign_task;
 use std::collections::HashSet;
 
@@ -47,7 +48,7 @@ type SoulCancellationQuery<'w, 's> = Query<
 #[derive(SystemParam)]
 pub struct FloorCancellationQueries<'w, 's> {
     q_sites: Query<'w, 's, Entity, With<FloorConstructionCancelRequested>>,
-    q_floor_requests: Query<'w, 's, (Entity, &'static TargetFloorConstructionSite)>,
+    q_floor_requests: Query<'w, 's, (Entity, &'static TransportRequest)>,
     tile_site_index: Res<'w, TileSiteIndex>,
 }
 
@@ -76,30 +77,44 @@ pub fn floor_construction_cancellation_system(
             (site.material_center, site.tiles_total)
         };
 
-        let mut site_tiles = Vec::new();
-        let Some(tile_entities) = fl_queries
+        let indexed_tiles = fl_queries
             .tile_site_index
             .floor_tiles_by_site
             .get(&site_entity)
-        else {
-            continue;
-        };
-        for &entity in tile_entities {
-            let Ok((_, tile, _)) = reservation_queries.storage.floor_tiles.get_mut(entity) else {
-                continue;
-            };
-            site_tiles.push(SiteTileSnapshot {
-                entity,
-                grid_pos: tile.grid_pos,
-                bones_delivered: tile.bones_delivered,
-                mud_delivered: tile.mud_delivered,
-            });
+            .cloned()
+            .unwrap_or_default();
+        let mut site_tiles = Vec::with_capacity(indexed_tiles.len());
+        for entity in indexed_tiles {
+            if let Ok((_, tile, _)) = reservation_queries.storage.floor_tiles.get_mut(entity)
+                && tile.parent_site == site_entity
+            {
+                site_tiles.push(SiteTileSnapshot {
+                    entity,
+                    grid_pos: tile.grid_pos,
+                    bones_delivered: tile.bones_delivered,
+                    mud_delivered: tile.mud_delivered,
+                });
+            }
+        }
+        let mut seen_tiles: HashSet<Entity> = site_tiles.iter().map(|tile| tile.entity).collect();
+        for (entity, tile, _) in reservation_queries.storage.floor_tiles.iter_mut() {
+            if tile.parent_site == site_entity && seen_tiles.insert(entity) {
+                site_tiles.push(SiteTileSnapshot {
+                    entity,
+                    grid_pos: tile.grid_pos,
+                    bones_delivered: tile.bones_delivered,
+                    mud_delivered: tile.mud_delivered,
+                });
+            }
         }
 
         let site_requests: Vec<Entity> = fl_queries
             .q_floor_requests
             .iter()
-            .filter(|(_, target_site)| target_site.0 == site_entity)
+            .filter(|(_, request)| {
+                request.kind == TransportRequestKind::DeliverToFloorConstruction
+                    && request.anchor == site_entity
+            })
             .map(|(request_entity, _)| request_entity)
             .collect();
 
@@ -166,8 +181,9 @@ pub fn floor_construction_cancellation_system(
             commands.entity(request_entity).try_despawn();
         }
 
-        let cleared_grids: Vec<(i32, i32)> = site_tiles.iter().map(|tile| tile.grid_pos).collect();
-        world_map.clear_building_footprint(cleared_grids);
+        for grid in site_tiles.iter().map(|tile| tile.grid_pos) {
+            world_map.clear_building_occupancy_if_owned(grid, site_entity);
+        }
 
         for tile in site_tiles {
             commands.entity(tile.entity).try_despawn();
@@ -179,5 +195,142 @@ pub fn floor_construction_cancellation_system(
             "FLOOR_CANCEL: Site {:?} cancelled (tiles: {}, workers: {}, refund bone: {}, refund mud: {})",
             site_entity, site_tiles_total, released_workers, refunded_bones, refunded_mud
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::ecs::schedule::ApplyDeferred;
+    use hw_core::area::TaskArea;
+    use hw_core::events::{OnTaskAbandoned, ResourceReservationRequest};
+    use hw_jobs::construction::{FloorConstructionSite, FloorTileBlueprint};
+    use hw_jobs::{ReinforceFloorPhase, ReinforceFloorTileData};
+    use hw_logistics::SharedResourceCache;
+    use hw_logistics::transport_request::{TransportPriority, TransportRequest};
+
+    fn empty_handles() -> ResourceItemVisualHandles {
+        ResourceItemVisualHandles {
+            icon_bone_small: default(),
+            icon_wood_small: default(),
+            icon_rock_small: default(),
+            icon_sand_small: default(),
+            icon_stasis_mud_small: default(),
+        }
+    }
+
+    #[test]
+    fn construction_cancellation_floor_falls_back_from_empty_index_and_anchor_request() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(crate::world::map::WorldMap::default())
+            .init_resource::<TileSiteIndex>()
+            .init_resource::<SharedResourceCache>()
+            .insert_resource(empty_handles())
+            .add_message::<ResourceReservationRequest>()
+            .add_message::<OnTaskAbandoned>()
+            .add_systems(
+                Update,
+                (floor_construction_cancellation_system, ApplyDeferred).chain(),
+            );
+
+        let site = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                FloorConstructionSite::new(
+                    TaskArea::from_points(Vec2::ZERO, Vec2::splat(32.0)),
+                    Vec2::ZERO,
+                    1,
+                ),
+                FloorConstructionCancelRequested,
+            ))
+            .id();
+        let mut tile = FloorTileBlueprint::new(site, (4, 5));
+        tile.bones_delivered = 2;
+        tile.mud_delivered = 1;
+        let tile_entity = app.world_mut().spawn(tile).id();
+        let soul = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                DamnedSoul::default(),
+                AssignedTask::ReinforceFloorTile(ReinforceFloorTileData {
+                    tile: tile_entity,
+                    site,
+                    phase: ReinforceFloorPhase::GoingToTile,
+                }),
+                Path::default(),
+                Inventory::default(),
+                WorkingOn(tile_entity),
+            ))
+            .id();
+        let request = app
+            .world_mut()
+            .spawn(TransportRequest {
+                kind: TransportRequestKind::DeliverToFloorConstruction,
+                anchor: site,
+                resource_type: ResourceType::Bone,
+                issued_by: site,
+                priority: TransportPriority::Normal,
+                stockpile_group: vec![],
+            })
+            .id();
+        app.world_mut()
+            .resource_mut::<crate::world::map::WorldMap>()
+            .set_building_occupancy((4, 5), site);
+
+        app.update();
+
+        assert!(app.world().get_entity(site).is_err());
+        assert!(app.world().get_entity(tile_entity).is_err());
+        assert!(app.world().get_entity(request).is_err());
+        assert!(matches!(
+            app.world().get::<AssignedTask>(soul),
+            Some(AssignedTask::None)
+        ));
+        assert!(app.world().get::<WorkingOn>(soul).is_none());
+        assert_eq!(
+            app.world()
+                .resource::<crate::world::map::WorldMap>()
+                .building_entity((4, 5)),
+            None
+        );
+        let mut refunds = app.world_mut().query::<&hw_logistics::ResourceItem>();
+        assert_eq!(refunds.iter(app.world()).count(), 3);
+    }
+
+    #[test]
+    fn construction_cancellation_floor_handles_a_zero_tile_site() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(crate::world::map::WorldMap::default())
+            .init_resource::<TileSiteIndex>()
+            .init_resource::<SharedResourceCache>()
+            .insert_resource(empty_handles())
+            .add_message::<ResourceReservationRequest>()
+            .add_message::<OnTaskAbandoned>()
+            .add_systems(
+                Update,
+                (floor_construction_cancellation_system, ApplyDeferred).chain(),
+            );
+        let site = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                FloorConstructionSite::new(
+                    TaskArea::from_points(Vec2::ZERO, Vec2::ZERO),
+                    Vec2::ZERO,
+                    0,
+                ),
+                FloorConstructionCancelRequested,
+            ))
+            .id();
+
+        app.update();
+
+        assert!(app.world().get_entity(site).is_err());
+        let mut refunds = app.world_mut().query::<&hw_logistics::ResourceItem>();
+        assert_eq!(refunds.iter(app.world()).count(), 0);
     }
 }

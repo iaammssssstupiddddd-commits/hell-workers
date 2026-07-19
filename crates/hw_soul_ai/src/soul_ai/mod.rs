@@ -25,6 +25,7 @@ impl Plugin for SoulAiCorePlugin {
             .init_resource::<perceive::escaping::EscapeBehaviorTimer>()
             .init_resource::<decide::drifting::DriftingDecisionTimer>()
             .init_resource::<decide::work::auto_build::BlueprintAutoBuildTimer>()
+            .init_resource::<decide::work::auto_build_diagnostics::BlueprintAutoBuildDiagnostics>()
             .init_resource::<update::slow_simulation::SlowSimulationClock>()
             .init_resource::<update::state_sanity::StateSanityAudit>()
             .init_resource::<RuntimePathSearchBudget>()

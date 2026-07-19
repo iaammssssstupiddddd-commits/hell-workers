@@ -122,7 +122,7 @@ pub fn issue_reinforce_floor(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) {
+) -> bool {
     let site_entity = if let Ok(tile) = queries.storage.floor_tiles.get(ctx.task_entity) {
         tile.parent_site
     } else {
@@ -130,7 +130,7 @@ pub fn issue_reinforce_floor(
             "issue_reinforce_floor: Task entity {:?} is not a FloorTileBlueprint",
             ctx.task_entity
         );
-        return;
+        return false;
     };
 
     let assigned_task = AssignedTask::ReinforceFloorTile(ReinforceFloorTileData {
@@ -150,6 +150,7 @@ pub fn issue_reinforce_floor(
         &[ctx.task_entity],
         already_commanded,
     );
+    true
 }
 
 pub fn issue_pour_floor(
@@ -158,7 +159,7 @@ pub fn issue_pour_floor(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) {
+) -> bool {
     let site_entity = if let Ok(tile) = queries.storage.floor_tiles.get(ctx.task_entity) {
         tile.parent_site
     } else {
@@ -166,7 +167,7 @@ pub fn issue_pour_floor(
             "issue_pour_floor: Task entity {:?} is not a FloorTileBlueprint",
             ctx.task_entity
         );
-        return;
+        return false;
     };
 
     let assigned_task = AssignedTask::PourFloorTile(PourFloorTileData {
@@ -186,6 +187,7 @@ pub fn issue_pour_floor(
         &[ctx.task_entity],
         already_commanded,
     );
+    true
 }
 
 pub fn issue_coat_wall(
@@ -194,7 +196,7 @@ pub fn issue_coat_wall(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) {
+) -> bool {
     let (tile_entity, site_entity, wall_entity) =
         if let Ok(tile) = queries.storage.wall_tiles.get(ctx.task_entity) {
             let Some(wall_entity) = tile.spawned_wall else {
@@ -202,7 +204,7 @@ pub fn issue_coat_wall(
                     "issue_coat_wall: Tile {:?} has no spawned wall",
                     ctx.task_entity
                 );
-                return;
+                return false;
             };
             (ctx.task_entity, tile.parent_site, wall_entity)
         } else if let Ok((_, building, provisional_opt)) =
@@ -216,7 +218,7 @@ pub fn issue_coat_wall(
                     "issue_coat_wall: Legacy wall {:?} is not ready",
                     ctx.task_entity
                 );
-                return;
+                return false;
             }
             (ctx.task_entity, Entity::PLACEHOLDER, ctx.task_entity)
         } else {
@@ -224,7 +226,7 @@ pub fn issue_coat_wall(
                 "issue_coat_wall: Task entity {:?} is not coatable",
                 ctx.task_entity
             );
-            return;
+            return false;
         };
 
     let assigned_task = AssignedTask::CoatWall(CoatWallData {
@@ -245,6 +247,7 @@ pub fn issue_coat_wall(
         &[ctx.task_entity],
         already_commanded,
     );
+    true
 }
 
 pub fn issue_frame_wall(
@@ -253,7 +256,7 @@ pub fn issue_frame_wall(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) {
+) -> bool {
     let site_entity = if let Ok(tile) = queries.storage.wall_tiles.get(ctx.task_entity) {
         tile.parent_site
     } else {
@@ -261,7 +264,7 @@ pub fn issue_frame_wall(
             "issue_frame_wall: Task entity {:?} is not a WallTileBlueprint",
             ctx.task_entity
         );
-        return;
+        return false;
     };
 
     let assigned_task = AssignedTask::FrameWallTile(FrameWallTileData {
@@ -281,6 +284,7 @@ pub fn issue_frame_wall(
         &[ctx.task_entity],
         already_commanded,
     );
+    true
 }
 
 pub fn issue_move(
@@ -289,13 +293,13 @@ pub fn issue_move(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) {
+) -> bool {
     let Ok(task_template) = queries.move_plant_tasks.get(ctx.task_entity) else {
         warn!(
             "issue_move: Missing task template for {:?}",
             ctx.task_entity
         );
-        return;
+        return false;
     };
 
     let assigned_task = AssignedTask::MovePlant(MovePlantData {
@@ -319,6 +323,7 @@ pub fn issue_move(
         Vec::new(),
         already_commanded,
     );
+    true
 }
 
 pub fn issue_generate_power(

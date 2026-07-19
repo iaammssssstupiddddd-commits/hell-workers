@@ -186,6 +186,8 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
     pub task_slots: Query<'w, 's, &'static TaskSlots>,
     pub wheelbarrows: ParkedWheelbarrowsQuery<'w, 's>,
     pub wheelbarrow_leases: Query<'w, 's, &'static WheelbarrowLease>,
+    pub wheelbarrow_arbitration_diagnostics:
+        Res<'w, hw_logistics::transport_request::WheelbarrowArbitrationDiagnostics>,
     pub stored_items_query: StoredItemsQuery<'w, 's>,
 }
 

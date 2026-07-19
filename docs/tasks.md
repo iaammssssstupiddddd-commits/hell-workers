@@ -93,6 +93,28 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 - **Haul 系の需要再検証**: `DeliverToBlueprint` / `DepositToStockpile` / `DeliverToFloorConstruction` / `DeliverToWallConstruction` / `DeliverToProvisionalWall` は、`IncomingDeliveries` に加えて Think フェーズ内の `ReservationShadow` も差し引いた残需要が 0 の場合、新規 `AssignedTask` を発行しない。
 - 60タイル超の候補は到達判定前に除外。Familiar assignment の Boolean 到達判定は `WalkabilityConnectivityCache` の version付き連結成分を使い、waypoint が必要な実経路生成 A* は起動しない
 
+#### 4.2.1 タスク診断 snapshot
+
+割り当て producer は通常の判定 cycle の副産物として latest-only 診断を公開する。UI 専用の候補探索は行わない。
+
+- `hw_jobs` は表示非依存の 5 分類、producer mask、fixed-width counter、coverage、input stamp / revision を所有する。
+- Familiar delegation は candidate universe に含まれた task だけを applicable とし、Familiar ごとの worker / source 分岐を
+  1 terminal vote へ縮約する。submit、未評価、malformed / stale は blocker 票にしない。
+- `ManagedBy` のない Blueprint `Build` は Familiar delegation と Blueprint auto-build の両 producer が applicable。
+  `ManagedBy` 付き Blueprint と Blueprint ではない `Build` は auto-build が適用外で、Familiar delegation だけを使う。
+  applicable producer の snapshot が欠ける、stale、または coverage 不足なら `PendingEvaluation` のままにする。
+- `TaskWorkers` が現在 1 件以上なら診断より優先して `Working`。submit 済みでも worker がまだいなければ
+  accepted の証拠ではないため `PendingEvaluation`。
+- input revision は task、roster / TaskArea、resource / reservation availability、WorldMap topology を追跡する。
+  availability は resource grid/cache に加え、`StoredItems` / `IncomingDeliveries` / `Inventory`、資源種別、
+  loaded/stored/delivering/owner 関係、wheelbarrow の park/push/lease、transport demand、Stockpile / mixer / Blueprint 容量変更を含む。
+  task-local revision は Blueprint / Floor / Wall phase、`ManagedBy`、request / demand も含む。record は代表理由が実際に
+  依存する domain だけを持ち、producer header は Soul eligibility を表す roster stamp で evaluator coverage を検証する。
+- producer map は cycle ごとに置換し、task × evaluator の行列や履歴を保持しない。
+
+Familiar の auto-gather Commands は named flush で確定し、root revision sync を通ってから同じ Logic cycle の
+delegation が診断する。これにより新規 task を古い revision で `Blocked` にしない。
+
 ### 4.3 実行 (Execution)
 
 - `task_execution_system`は`AssignedTask::None`をread-onlyで早期除外し、idle Soulのtask context用mutable accessを作らない。`WorkingOn`はfilter条件にしないため、target消滅後の`AssignedTask::Some + Without<WorkingOn>`も既存handler/cleanupへ到達する。
@@ -234,3 +256,14 @@ Blueprint / FloorSite / WallSite への搬入完了直後、`chain::find_chain_o
 ## 10. UI
 
 詳細は [task_list_ui.md](task_list_ui.md) 参照。
+
+手動エリア指定で発行した Chop / Mine には保存対象 `PlayerIssuedDesignation` を付ける。既存の
+`AutoGatherDesignation` を手動指定で覆った場合は auto marker を除去し、選択 Familiar の有無に合わせて
+`ManagedBy` も置換または除去して、auto と manual の provenance を共存させない。
+タスクダッシュボードはこの positive provenance と live component を適用時に再検証し、そのタスクと
+`ManualTransportRequest` だけを 0 / 5 / 10 の priority tier で変更できる。Blueprint、Move、自動 gather、
+自動 TransportRequest、GeneratePower、旧 save 由来で provenance 不明な task は priority read-only とする。
+
+キャンセルは owner 別 lifecycle へルーティングする。generic manual designation、manual transport、Blueprint、
+Floor / Wall site の cleanup を汎用 despawn へ統合しない。Pause / Modal capture 中の intent は読み捨てず typed 拒否として
+drain し、capture 解除後に遅延適用しない。

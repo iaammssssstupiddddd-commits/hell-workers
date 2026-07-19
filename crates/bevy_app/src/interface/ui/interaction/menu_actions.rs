@@ -94,6 +94,28 @@ pub(super) fn handle_pressed_action(action: MenuAction, ui_intents: &mut Message
         MenuAction::MovePlantBuilding(entity) => {
             ui_intents.write(UiIntent::MovePlantBuilding(entity));
         }
+        MenuAction::AdjustTaskPriority {
+            entity,
+            expected_work_type,
+            adjustment,
+        } => {
+            ui_intents.write(UiIntent::AdjustTaskPriority {
+                entity,
+                expected_work_type,
+                adjustment,
+            });
+        }
+        MenuAction::CancelTask {
+            entity,
+            expected_work_type,
+            expected_kind,
+        } => {
+            ui_intents.write(UiIntent::CancelTask {
+                entity,
+                expected_work_type,
+                expected_kind,
+            });
+        }
         MenuAction::SetUiScale(_)
         | MenuAction::SetCameraPanSpeed(_)
         | MenuAction::SetCameraMousePanEnabled(_)

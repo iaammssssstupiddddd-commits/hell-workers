@@ -6,6 +6,7 @@
 
 mod candidates;
 mod collection;
+mod diagnostics;
 mod grants;
 mod lease_state;
 mod metrics_update;
@@ -24,9 +25,33 @@ use crate::transport_request::{
 use crate::types::{BelongsTo, ResourceItem, Wheelbarrow};
 use crate::zone::Stockpile;
 
+pub use diagnostics::{
+    WheelbarrowArbitrationDiagnostics, WheelbarrowArbitrationHeader, WheelbarrowArbitrationOutcome,
+};
 pub use system::wheelbarrow_arbitration_system;
 
-#[derive(Default)]
+/// Returns whether this request participates in wheelbarrow arbitration.
+///
+/// Keep this predicate at the arbitration boundary so producers and diagnostic
+/// consumers cannot drift to a `WorkType`-based approximation.
+#[must_use]
+pub fn is_wheelbarrow_arbitration_applicable(request: &TransportRequest) -> bool {
+    match request.kind {
+        crate::transport_request::TransportRequestKind::DepositToStockpile => true,
+        crate::transport_request::TransportRequestKind::DeliverToBlueprint => {
+            request.resource_type.requires_wheelbarrow()
+        }
+        crate::transport_request::TransportRequestKind::DeliverToFloorConstruction => {
+            request.resource_type == crate::types::ResourceType::StasisMud
+        }
+        crate::transport_request::TransportRequestKind::DeliverToMixerSolid => {
+            request.resource_type.requires_wheelbarrow()
+        }
+        _ => false,
+    }
+}
+
+#[derive(Resource, Default)]
 pub struct WheelbarrowArbitrationRuntime {
     initialized: bool,
     last_full_eval_secs: f64,

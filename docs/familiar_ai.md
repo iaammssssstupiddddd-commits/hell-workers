@@ -225,6 +225,32 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 - **到達性と代替資材**: 地面資材と既存指定は owner から到達可能で、地面資材は `DeliveringTo` のない未予約状態、手動未所有指定は task finder の探索範囲にある場合だけ供給として数えます。Bridge の flexible Wood/Rock 需要は到達可能な既存供給・候補へ配分し、到達不能な Wood で reachable Rock の `Mine` を妨げません。
 - **発見性と順序**: Yard-owned `Chop` / `Mine` は Yard 外でも補助全件走査から候補になります。AutoGather の Commands は `ApplyDeferred` で確定してから同じ Decide chain の task delegation が実行されます。
 
+### 7.9. latest-only タスク候補診断
+
+`familiar_task_delegation_system` は通常の 0.5 秒 cycle で `FamiliarTaskCandidateDiagnostics` を作り、
+前 cycle の map を置換する。dashboard 表示の有無は探索回数や割り当て判断を変えない。
+
+- candidate universe は空間 index、`ManagedTasks`、Yard-owned / global Build 補助 scan を統合して重複排除した集合。
+  static filter より前に membership を記録するため、材料待ちなどで落ちた task も applicable evaluator として扱える。
+- `CandidateRejectReason` は AI 内部の typed 分岐で、UI へは 5 つの `TaskDiagnosticClass` だけを公開する。
+  `MalformedTask` / `StaleInput` / `Unevaluated` は coverage を partial にし、推測した blocker を作らない。
+- 1 Familiar 内では worker / source の分岐回数ではなく reason presence を固定順で 1 票へ縮約する。
+  `submitted → partial → idle worker 0 → representative reason` の順で判定する。
+- assignment builder が `TaskAssignmentRequest` を実際に writer へ渡した場合だけ submitted とする。
+  submitted は accepted ではないため、root UI は current `TaskWorkers` が付くまで Pending と表示する。
+- worker 距離外、walkable start 不在、connectivity false、slot、依存フェーズ、source / capacity / reservation、
+  wheelbarrow arbitration の typed outcome を既存判定経路で記録する。Top-K や先行成功で未評価の候補は partial。
+
+`FamiliarTaskDecisionSet` は `BlueprintAutoGather → AutoGatherFlush → TaskRevisionSync → Delegation` を named seam として
+公開する。root revision bridge は `ResourceSpatialGrid::generation()`、`SharedResourceCache::semantic_generation()`、
+  roster/task change、保管・搬入・所持品・車両・設備容量の availability change、`WorldMap.obstacle_version` を同期してから
+delegation を実行する。Soul の roster revision は `AssignedTask`、所有者、休息・breakdown、疲労・Dream の
+作業可否境界だけで進め、idle timer や閾値内の疲労変動では進めない。代表理由は
+`NoEligibleFamiliar=task+roster`、資源/競合=`task+availability`、依存待ち=`task`、
+`Unreachable=task+topology` の domain mask を持つ。producer header の roster stamp は evaluator coverage 全体を
+失効させるため、構成人数が変わった旧 cycle を再利用しない。
+load 時は revisions と snapshot を default に戻し、新 world の最初の通常 cycle から再評価する。
+
 ## 8. ビジュアルとアニメーション (Visuals & Animation)
 
 使い魔の移動状況に応じて、視覚的なフィードバックを提供します。

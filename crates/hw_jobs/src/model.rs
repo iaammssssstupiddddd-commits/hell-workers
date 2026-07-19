@@ -236,6 +236,11 @@ pub struct Blueprint {
     pub occupied_grids: Vec<(i32, i32)>,
 }
 
+/// Runtime-only owner request for cancelling a blueprint and every task rooted
+/// at it. The cancellation system consumes this by despawning the owner.
+#[derive(Component, Debug, Clone, Copy, Default)]
+pub struct BlueprintCancelRequested;
+
 impl Blueprint {
     pub fn new(kind: BuildingType, occupied_grids: Vec<(i32, i32)>) -> Self {
         Self {
@@ -336,6 +341,12 @@ pub struct MovePlanned {
 pub struct Designation {
     pub work_type: WorkType,
 }
+
+/// Positive provenance for player-created, producer-independent Chop/Mine
+/// designations. Absence is intentionally not treated as player ownership.
+#[derive(Component, Debug, Clone, Copy, Reflect, Default)]
+#[reflect(Component, Default)]
+pub struct PlayerIssuedDesignation;
 
 #[derive(Component, Debug, Clone, Copy, Reflect, Default)]
 #[reflect(Component, Default)]

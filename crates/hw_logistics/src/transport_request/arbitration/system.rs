@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Instant;
 
 use bevy::ecs::system::SystemParam;
@@ -14,11 +15,14 @@ use crate::transport_request::{
 };
 use crate::types::{BelongsTo, ResourceItem, Wheelbarrow};
 
-use super::collection::{CollectCandidatesQueries, collect_candidates};
-use super::grants::{GrantStats, grant_leases};
+use super::collection::{CollectCandidatesContext, CollectCandidatesQueries, collect_candidates};
+use super::grants::{GrantLeaseQueries, GrantStats, grant_leases};
 use super::lease_state::update_lease_state;
 use super::metrics_update::{MetricsUpdateSpec, update_metrics};
-use super::{WheelbarrowArbitrationDirtyParams, WheelbarrowArbitrationRuntime};
+use super::{
+    WheelbarrowArbitrationDiagnostics, WheelbarrowArbitrationDirtyParams,
+    WheelbarrowArbitrationHeader, WheelbarrowArbitrationOutcome, WheelbarrowArbitrationRuntime,
+};
 
 fn removed_affects_resource_items<T: Component>(
     removed: &mut RemovedComponents<T>,
@@ -93,17 +97,24 @@ pub struct WheelbarrowArbitrationParams<'w, 's> {
     pub q_incoming: Query<'w, 's, &'static IncomingDeliveries>,
 }
 
+/// Arbitration の時刻・キャッシュ・公開状態を一貫した単位で借用する。
+#[derive(SystemParam)]
+pub struct WheelbarrowArbitrationResources<'w> {
+    time: Res<'w, Time>,
+    runtime: ResMut<'w, WheelbarrowArbitrationRuntime>,
+    metrics: ResMut<'w, TransportRequestMetrics>,
+    cache: Res<'w, crate::resource_cache::SharedResourceCache>,
+    diagnostics: ResMut<'w, WheelbarrowArbitrationDiagnostics>,
+}
+
 pub fn wheelbarrow_arbitration_system(
     mut commands: Commands,
-    time: Res<Time>,
-    mut runtime: Local<WheelbarrowArbitrationRuntime>,
     p: WheelbarrowArbitrationParams,
     mut dirty: WheelbarrowArbitrationDirtyParams,
-    mut metrics: ResMut<TransportRequestMetrics>,
-    cache: Res<crate::resource_cache::SharedResourceCache>,
+    mut resources: WheelbarrowArbitrationResources,
 ) {
     let arbitration_started_at = Instant::now();
-    let now = time.elapsed_secs_f64();
+    let now = resources.time.elapsed_secs_f64();
 
     let lease_state = update_lease_state(
         &mut commands,
@@ -149,8 +160,9 @@ pub fn wheelbarrow_arbitration_system(
         || removed_pushed_by;
     let stockpile_dirty =
         !dirty.q_stockpile_dirty.is_empty() || removed_stored_items || removed_incoming;
-    let interval_due = !runtime.initialized
-        || (now - runtime.last_full_eval_secs) >= WHEELBARROW_ARBITRATION_FALLBACK_INTERVAL_SECS;
+    let interval_due = !resources.runtime.initialized
+        || (now - resources.runtime.last_full_eval_secs)
+            >= WHEELBARROW_ARBITRATION_FALLBACK_INTERVAL_SECS;
     let stale_lease_removed = !lease_state.cleared_requests.is_empty();
     let should_rebuild = request_dirty
         || free_item_dirty
@@ -166,8 +178,8 @@ pub fn wheelbarrow_arbitration_system(
     let mut pending_secs_total = 0.0f64;
 
     if should_rebuild {
-        runtime.initialized = true;
-        runtime.last_full_eval_secs = now;
+        resources.runtime.initialized = true;
+        resources.runtime.last_full_eval_secs = now;
 
         let mut available_wheelbarrows: Vec<(Entity, Vec2)> = p
             .q_wheelbarrows
@@ -175,6 +187,14 @@ pub fn wheelbarrow_arbitration_system(
             .filter(|(e, _)| !lease_state.used_wheelbarrows.contains(e))
             .map(|(e, t)| (e, t.translation.truncate()))
             .collect();
+        let header = WheelbarrowArbitrationHeader {
+            generation: resources.diagnostics.next_generation(),
+            availability_generation: resources.cache.semantic_generation(),
+            any_vehicle_exists: !dirty.q_wheelbarrow_entities.is_empty(),
+            available_vehicle_count: available_wheelbarrows.len() as u32,
+            leased_vehicle_count: lease_state.used_wheelbarrows.len() as u32,
+        };
+        let mut outcomes = HashMap::<Entity, WheelbarrowArbitrationOutcome>::new();
 
         let (candidates, eligible, bucket_total, after_top_k, pending_total) = collect_candidates(
             &p.q_requests,
@@ -186,10 +206,13 @@ pub fn wheelbarrow_arbitration_system(
                 q_blueprints: &p.q_blueprints,
                 q_incoming: &p.q_incoming,
             },
-            &available_wheelbarrows,
-            &lease_state.cleared_requests,
-            &cache,
-            now,
+            CollectCandidatesContext {
+                available_wheelbarrows: &available_wheelbarrows,
+                stale_cleared_requests: &lease_state.cleared_requests,
+                cache: &resources.cache,
+                now,
+                outcomes: &mut outcomes,
+            },
         );
 
         eligible_requests = eligible;
@@ -201,14 +224,18 @@ pub fn wheelbarrow_arbitration_system(
             &mut available_wheelbarrows,
             now,
             &mut commands,
-            &p.q_stockpiles,
-            &p.q_incoming,
-            &p.q_transforms,
+            GrantLeaseQueries {
+                q_stockpiles: &p.q_stockpiles,
+                q_incoming: &p.q_incoming,
+                q_transforms: &p.q_transforms,
+            },
+            &mut outcomes,
         );
+        resources.diagnostics.publish(header, outcomes);
     }
 
     update_metrics(
-        &mut metrics,
+        &mut resources.metrics,
         MetricsUpdateSpec {
             active_leases: lease_state.used_wheelbarrows.len() as u32 + grant_stats.leases_granted,
             leases_granted: grant_stats.leases_granted,

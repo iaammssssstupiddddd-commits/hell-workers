@@ -6,6 +6,19 @@ pub mod decide;
 pub mod execute;
 pub mod perceive;
 
+/// Stable seams inside Familiar Decide. Root-owned bridges may register work
+/// in `TaskRevisionSync` without depending on anonymous `ApplyDeferred` order.
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FamiliarTaskDecisionSet {
+    StateDecision,
+    StateFlush,
+    BlueprintAutoGather,
+    AutoGatherFlush,
+    TaskRevisionSync,
+    Delegation,
+    Encouragement,
+}
+
 pub struct FamiliarAiCorePlugin;
 
 impl Plugin for FamiliarAiCorePlugin {
@@ -13,7 +26,11 @@ impl Plugin for FamiliarAiCorePlugin {
         app.init_resource::<decide::resources::FamiliarTaskDelegationTimer>()
             .init_resource::<decide::resources::FamiliarStateDecisionTimer>()
             .init_resource::<hw_world::WalkabilityConnectivityCache>()
-            .init_resource::<decide::blueprint_auto_gather::BlueprintAutoGatherTimer>();
+            .init_resource::<decide::blueprint_auto_gather::BlueprintAutoGatherTimer>()
+            .init_resource::<hw_jobs::TaskDiagnosticInputRevisions>()
+            .init_resource::<
+                decide::task_management::diagnostics::FamiliarTaskCandidateDiagnostics,
+            >();
 
         #[cfg(feature = "profiling")]
         app.init_resource::<decide::resources::FamiliarDelegationPerfMetrics>();
@@ -34,13 +51,42 @@ impl Plugin for FamiliarAiCorePlugin {
             )
             .add_systems(
                 Update,
+                decide::state_decision::familiar_ai_state_system
+                    .in_set(FamiliarTaskDecisionSet::StateDecision),
+            )
+            .add_systems(
+                Update,
+                ApplyDeferred.in_set(FamiliarTaskDecisionSet::StateFlush),
+            )
+            .add_systems(
+                Update,
+                decide::blueprint_auto_gather::blueprint_auto_gather_system
+                    .in_set(FamiliarTaskDecisionSet::BlueprintAutoGather),
+            )
+            .add_systems(
+                Update,
+                ApplyDeferred.in_set(FamiliarTaskDecisionSet::AutoGatherFlush),
+            )
+            .add_systems(
+                Update,
+                decide::task_delegation::familiar_task_delegation_system
+                    .in_set(FamiliarTaskDecisionSet::Delegation),
+            )
+            .add_systems(
+                Update,
+                decide::encouragement::encouragement_decision_system
+                    .in_set(FamiliarTaskDecisionSet::Encouragement),
+            )
+            .configure_sets(
+                Update,
                 (
-                    decide::state_decision::familiar_ai_state_system,
-                    ApplyDeferred,
-                    decide::blueprint_auto_gather::blueprint_auto_gather_system,
-                    ApplyDeferred,
-                    decide::task_delegation::familiar_task_delegation_system,
-                    decide::encouragement::encouragement_decision_system,
+                    FamiliarTaskDecisionSet::StateDecision,
+                    FamiliarTaskDecisionSet::StateFlush,
+                    FamiliarTaskDecisionSet::BlueprintAutoGather,
+                    FamiliarTaskDecisionSet::AutoGatherFlush,
+                    FamiliarTaskDecisionSet::TaskRevisionSync,
+                    FamiliarTaskDecisionSet::Delegation,
+                    FamiliarTaskDecisionSet::Encouragement,
                 )
                     .chain()
                     .in_set(FamiliarAiSystemSet::Decide),

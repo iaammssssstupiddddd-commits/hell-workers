@@ -6,7 +6,8 @@ use super::super::builders::{
 };
 use super::super::validator::can_reserve_source;
 use crate::familiar_ai::decide::task_management::{
-    AssignTaskContext, FamiliarTaskAssignmentQueries, ReservationShadow,
+    AssignTaskContext, CandidateRejectReason, FamiliarTaskAssignmentQueries, ReservationShadow,
+    TaskAssignmentAttempt,
 };
 
 pub(super) fn assign_gather(
@@ -16,12 +17,12 @@ pub(super) fn assign_gather(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) -> bool {
+) -> TaskAssignmentAttempt {
     if !can_reserve_source(ctx.task_entity, queries, shadow) {
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::TemporaryContention);
     }
     issue_gather(work_type, task_pos, already_commanded, ctx, queries, shadow);
-    true
+    TaskAssignmentAttempt::Submitted
 }
 
 pub(super) fn assign_build(
@@ -30,7 +31,7 @@ pub(super) fn assign_build(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) -> bool {
+) -> TaskAssignmentAttempt {
     if let Ok((_, bp, _)) = queries.storage.blueprints.get(ctx.task_entity)
         && !bp.materials_complete()
     {
@@ -38,10 +39,10 @@ pub(super) fn assign_build(
             "ASSIGN: Build target {:?} materials not complete",
             ctx.task_entity
         );
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::DependencyWaiting);
     }
     issue_build(task_pos, already_commanded, ctx, queries, shadow);
-    true
+    TaskAssignmentAttempt::Submitted
 }
 
 pub(super) fn assign_move(
@@ -50,9 +51,12 @@ pub(super) fn assign_move(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) -> bool {
-    issue_move(task_pos, already_commanded, ctx, queries, shadow);
-    true
+) -> TaskAssignmentAttempt {
+    if issue_move(task_pos, already_commanded, ctx, queries, shadow) {
+        TaskAssignmentAttempt::Submitted
+    } else {
+        TaskAssignmentAttempt::Rejected(CandidateRejectReason::MalformedTask)
+    }
 }
 
 pub(super) fn assign_refine(
@@ -61,12 +65,12 @@ pub(super) fn assign_refine(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) -> bool {
+) -> TaskAssignmentAttempt {
     if !can_reserve_source(ctx.task_entity, queries, shadow) {
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::TemporaryContention);
     }
     issue_refine(task_pos, already_commanded, ctx, queries, shadow);
-    true
+    TaskAssignmentAttempt::Submitted
 }
 
 pub(super) fn assign_collect_bone(
@@ -75,12 +79,12 @@ pub(super) fn assign_collect_bone(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) -> bool {
+) -> TaskAssignmentAttempt {
     if !can_reserve_source(ctx.task_entity, queries, shadow) {
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::TemporaryContention);
     }
     issue_collect_bone(task_pos, already_commanded, ctx, queries, shadow);
-    true
+    TaskAssignmentAttempt::Submitted
 }
 
 pub(super) fn assign_generate_power(
@@ -89,14 +93,14 @@ pub(super) fn assign_generate_power(
     ctx: &AssignTaskContext<'_>,
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
-) -> bool {
+) -> TaskAssignmentAttempt {
     // タイルの parent_site を引き、active_slots ゲートを確認
     let Ok((tile, _)) = queries.soul_spa_tiles.get(ctx.task_entity) else {
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::MalformedTask);
     };
     let parent_site = tile.parent_site;
     let Ok(site) = queries.soul_spa_sites.get(parent_site) else {
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::MalformedTask);
     };
     let occupied = queries
         .soul_spa_tiles
@@ -104,8 +108,8 @@ pub(super) fn assign_generate_power(
         .filter(|(t, w)| t.parent_site == parent_site && w.map(|w| !w.is_empty()).unwrap_or(false))
         .count() as u32;
     if !site.has_available_slot(occupied) {
-        return false;
+        return TaskAssignmentAttempt::Rejected(CandidateRejectReason::TemporaryContention);
     }
     issue_generate_power(task_pos, already_commanded, ctx, queries, shadow);
-    true
+    TaskAssignmentAttempt::Submitted
 }

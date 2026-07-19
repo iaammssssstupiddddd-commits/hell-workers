@@ -9,6 +9,7 @@ use hw_core::relationships::ManagedTasks;
 use hw_core::soul::{Destination, IdleBehavior, Path};
 use hw_jobs::AssignedTask;
 use hw_jobs::ConstructionSiteAccess;
+use hw_jobs::TaskDiagnosticInputRevisions;
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::WalkabilityConnectivityCache;
@@ -16,9 +17,12 @@ use hw_world::map::WorldMap;
 
 use super::query_types::FamiliarSoulQuery;
 use super::task_management::TaskManager;
-use super::task_management::delegation::DelegationEnvCtx;
+use super::task_management::delegation::{
+    DelegationDiagnosticsCtx, DelegationEnvCtx, DelegationScratchCtx,
+};
 use super::task_management::{
-    FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot, ReservationShadow,
+    FamiliarEvaluatorDiagnostics, FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot,
+    ReservationShadow,
 };
 use super::{state_handlers, supervising};
 
@@ -53,6 +57,8 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub reservation_shadow: &'a mut ReservationShadow,
     pub tile_site_index: &'a TileSiteIndex,
     pub incoming_snapshot: &'a IncomingDeliverySnapshot,
+    pub diagnostics: &'a mut FamiliarEvaluatorDiagnostics,
+    pub diagnostic_revisions: &'a TaskDiagnosticInputRevisions,
 }
 
 /// タスク委譲と移動制御を実行
@@ -80,8 +86,14 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
             ctx.task_queries,
             ctx.construction_sites,
             ctx.q_souls,
-            ctx.connectivity_cache,
-            ctx.reservation_shadow,
+            DelegationScratchCtx {
+                connectivity_cache: ctx.connectivity_cache,
+                reservation_shadow: ctx.reservation_shadow,
+            },
+            DelegationDiagnosticsCtx {
+                evaluator: ctx.diagnostics,
+                revisions: ctx.diagnostic_revisions,
+            },
         )
         .is_some()
     } else {

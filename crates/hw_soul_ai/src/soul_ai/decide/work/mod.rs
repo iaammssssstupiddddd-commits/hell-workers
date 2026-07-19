@@ -3,4 +3,5 @@
 //! 魂へのタスク自動割り当てロジック（Decide Phase）。
 
 pub mod auto_build;
+pub mod auto_build_diagnostics;
 pub mod auto_refine;

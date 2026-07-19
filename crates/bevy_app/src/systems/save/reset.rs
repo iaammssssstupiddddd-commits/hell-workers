@@ -123,6 +123,12 @@ pub(crate) fn reset_runtime_caches(world: &mut World) {
     world.insert_resource(ReservationSyncTimer::default());
     world.insert_resource(TileSiteIndex::default());
     world.insert_resource(TransportRequestMetrics::default());
+    world.insert_resource(
+        hw_logistics::transport_request::WheelbarrowArbitrationDiagnostics::default(),
+    );
+    world.insert_resource(
+        hw_logistics::transport_request::arbitration::WheelbarrowArbitrationRuntime::default(),
+    );
     world.insert_resource(CachedActiveFamiliars::default());
     world.insert_resource(CachedActiveYards::default());
     world.insert_resource(CachedStockpileGroups::default());

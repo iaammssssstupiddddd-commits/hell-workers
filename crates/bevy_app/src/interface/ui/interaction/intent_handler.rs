@@ -99,7 +99,9 @@ pub(crate) fn handle_ui_intent(
             ),
             UiIntent::ToggleDoorLock(_)
             | UiIntent::SelectArchitectCategory(_)
-            | UiIntent::MovePlantBuilding(_) => false,
+            | UiIntent::MovePlantBuilding(_)
+            | UiIntent::AdjustTaskPriority { .. }
+            | UiIntent::CancelTask { .. } => false,
         };
 
         handlers::save_if_requested(should_save_settings, &settings_ctx.settings);

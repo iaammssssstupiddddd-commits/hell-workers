@@ -124,7 +124,8 @@ HELL_WORKERS_SAVE
 マーカーコンポーネントで選別（`collect_persisted_entities`）。例:
 
 - Soul / Familiar（`DamnedSoul`, `SoulIdentity`, `Familiar`）
-- タスク・建築（`Designation`, `Blueprint`, `Building`, construction site 等）
+- タスク・建築（`Designation`, `Priority`, 手動 Chop / Mine の positive provenance
+  `PlayerIssuedDesignation`, `Blueprint`, `Building`, construction site 等）
 - 物流（`ResourceItem`, `Stockpile`, `TransportRequest`, `Wheelbarrow` 等）
 - エネルギー（`PowerGrid`, `SoulSpaSite` 等）
 - ワールド採取対象・ゾーン（`Tree`, `Rock`, `Tile`, `Site`, `Yard`, `PairedSite`/`PairedYard`）
@@ -138,7 +139,7 @@ HELL_WORKERS_SAVE
 | カテゴリ | 例 | ロード後 |
 | --- | --- | --- |
 | 実行中タスク状態 | `AssignedTask`, `Path`, `Destination`, `FamiliarAiState` | Soul へ `AssignedTask::None` を付与、shell 側で `FamiliarAiState` 等をデフォルト再挿入。Familiar AI が Designation から再割当 |
-| 派生キャッシュ | 空間グリッド、`SharedResourceCache`、`ReservationSignatureCache`、transport producer cache、`CachedStockpileGroups`、`ObstaclePositionIndex` | root reset hookでdefault化する。予約同期 timerもresetし、次のPerceiveが初回同期として完全snapshotを再構築 |
+| 派生キャッシュ | 空間グリッド、`SharedResourceCache`、`ReservationSignatureCache`、transport producer cache、`CachedStockpileGroups`、`ObstaclePositionIndex`、task input revisions、Familiar/Blueprint/wheelbarrow diagnostics | root reset hookでdefault化する。予約同期 timerもresetし、次のPerceiveが初回同期として完全snapshot/診断cycleを再構築 |
 | runtime obstacle provenance / navigation cache | `ObstacleSourceKind`、`BuildingFootprint`、`ObstaclePositionIndex`、raw `WorldMap.obstacles` / `doors` / `bridged_tiles` | `rehydrate_obstacle_runtime` が durable semantic source から marker / cache を再構築。保存済み Door state は最終 override として使う |
 | transient gathering | `GatheringSpot`、`GatheringVisuals`、`ParticipatingIn`、`GatheringParticipants` | v1 saveから除外。旧bodyのrelationship componentはschema検証前に破棄し、replace hookはspotとlinked aura/objectをdespawn。Soulは非参加状態から通常AIへ戻る |
 | legacy task marker | `ReservedForTask` | header 無し v0 body の deserialize だけで受け付け、schema 検証前に除去する。v1 save / load には含めず、v1 body の混入は reject |
@@ -224,8 +225,8 @@ root message型は`MessagesPlugin`の単一typed macroから初期化と`Message
 | --- | --- | --- |
 | root interaction | selection、hover、move placement、build/zone/task/companion context、pending PlayMode | default化し、`PlayMode::Normal`を予約 |
 | save outcome | `SaveLoadOutcome` Message | `SavePlugin`専用hookで旧bufferをclear。最終outcomeは全reset後にdispatcherが発行 |
-| `hw_ui` | rename、inspection/pin、drag、entity list model/index、area edit history、text pending、配置feedback、通知Message/center/history/unread、`UiIntent` / `TextInputIntent` | hookでclear。動的通知rowはdespawnし、static UI root、サイズ、theme、searchは保持 |
-| root task UI | task list snapshot | default化してdirty化し、次frameで再構築 |
+| `hw_ui` | rename、inspection/pin、drag、entity list model/index、area edit history、text pending、配置feedback、通知Message/center/history/unread、`UiIntent` / `TextInputIntent`、task filter/sort、inline cancel confirmation | hookでclear。task listの全`TaskListDynamicNode`と動的通知rowをdespawnし、static UI root、サイズ、theme、searchは保持 |
+| root task UI | task list snapshot、task input revisions、Familiar/Blueprint diagnostics | default化してdirty化し、新worldの次frame/cycleでPendingから再構築 |
 | `hw_visual` | owner cache、3D proxy、speech/dream/haul/task-area等の独立transient entity、`GatheringSpot`とlinked aura/object | hookでdespawn + cache clear。root固有のFamiliar range shellもrehydrate cleanupでdespawn |
 | root command visual | designation / task-area indicator、area-edit handle、area / dream preview | root VisualPlugin hookでdespawn。`DesignationIndicator`は通常の`RemovedComponents<Designation>` cleanupを使えないためreplace前に明示破棄 |
 | simulation cache | spatial/resource/tile/room/reservation/stockpile group/obstacle index | root cache hookでdefault化し、既存systemまたはrehydrateで再構築 |
@@ -237,6 +238,10 @@ root message型は`MessagesPlugin`の単一typed macroから初期化と`Message
 `World::clear_trackers()`を**2回**呼ぶ。1回目はbufferをswapするだけでold removalが残り得る。
 new worldを書いた後には手動でclearしない。これによりloaded componentの`Added`/`Changed`は次frameの
 rebuild systemが観測できる。
+
+`MessagesPlugin` の単一 inventory は `TaskActionOutcome` を含み、register と replace 時 clear を同じ型一覧から生成する。
+`PlayerIssuedDesignation` と `Priority` は durable なので load 後も許可された manual task の capability を復元するが、
+marker のない legacy / auto task を「auto marker が消えた manual task」と推測してはならず read-only とする。
 
 ## Rehydrate（ロード後の shell 再付与）
 

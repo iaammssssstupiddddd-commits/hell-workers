@@ -15,6 +15,7 @@ use crate::systems::GameSystemSet;
 use crate::systems::time::game_time_system;
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
+use hw_ui::notifications::NotificationSystemSet;
 use hw_ui::selection::PlacementFeedbackSet;
 
 pub type UiCorePlugin = hw_ui::plugins::core::UiCorePlugin;
@@ -59,7 +60,10 @@ fn register_ui_core_plugin_systems(app: &mut App) {
         (
             crate::interface::ui::ui_interaction_system,
             crate::interface::ui::interaction::handle_text_input_intents_system,
+            crate::interface::ui::panels::task_list::task_dashboard_action_button_system,
             handle_ui_intent,
+            crate::interface::ui::panels::task_list::apply_task_action_intents_system
+                .before(NotificationSystemSet::Adapt),
             crate::interface::ui::arch_category_action_system,
             crate::interface::ui::move_plant_building_action_system,
             crate::interface::ui::door_lock_action_system,

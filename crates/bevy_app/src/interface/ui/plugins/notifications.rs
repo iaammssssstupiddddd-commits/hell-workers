@@ -21,7 +21,10 @@ impl Plugin for UiNotificationsPlugin {
         )
         .add_systems(
             Update,
-            crate::interface::ui::notifications::adapt_save_load_outcomes
+            (
+                crate::interface::ui::notifications::adapt_save_load_outcomes,
+                crate::interface::ui::panels::task_list::adapt_task_action_outcomes,
+            )
                 .in_set(NotificationSystemSet::Adapt),
         )
         .add_systems(
@@ -43,6 +46,9 @@ impl Plugin for UiNotificationsPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::interface::ui::panels::task_list::{
+        TaskActionKind, TaskActionOutcome, TaskActionResult,
+    };
     use crate::systems::save::{
         SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadResult,
     };
@@ -51,6 +57,7 @@ mod tests {
     use hw_ui::notifications::{
         NotificationCenter, NotificationRetention, NotificationSeverity, UserFacingNotification,
     };
+    use hw_ui::panels::task_list::TaskPriorityTier;
     use hw_ui::theme::UiTheme;
 
     #[derive(Resource, Default)]
@@ -75,6 +82,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
             .add_message::<SaveLoadOutcome>()
+            .add_message::<TaskActionOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>()
             .init_resource::<PresentTrace>()
@@ -91,6 +99,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
             .add_message::<SaveLoadOutcome>()
+            .add_message::<TaskActionOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>();
         let outcome = SaveLoadOutcome {
@@ -106,5 +115,33 @@ mod tests {
         let center = app.world().resource::<NotificationCenter>();
         assert_eq!(center.history_count(), 1);
         assert_eq!(center.history_entries().next().unwrap().repeat_count, 2);
+    }
+
+    #[test]
+    fn task_action_outcome_becomes_one_toast_without_history() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
+            .add_message::<SaveLoadOutcome>()
+            .add_message::<TaskActionOutcome>()
+            .init_resource::<UiTheme>()
+            .init_resource::<UiInputState>();
+        let entity = app.world_mut().spawn_empty().id();
+        app.world_mut().write_message(TaskActionOutcome {
+            entity,
+            action: TaskActionKind::AdjustPriority(
+                hw_ui::panels::task_list::TaskPriorityAdjustment::Increase,
+            ),
+            result: TaskActionResult::PriorityChanged(TaskPriorityTier::High),
+        });
+
+        app.update();
+
+        let center = app.world().resource::<NotificationCenter>();
+        assert_eq!(center.toast_count(), 1);
+        assert_eq!(center.history_count(), 0);
+        assert_eq!(
+            center.toast_entries().next().unwrap().retention,
+            NotificationRetention::ToastOnly
+        );
     }
 }

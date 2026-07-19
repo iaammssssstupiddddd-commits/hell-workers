@@ -42,8 +42,9 @@ use hw_jobs::construction::{
 use hw_jobs::mud_mixer::{MudMixerStorage, StoredByMixer, TargetMixer};
 use hw_jobs::{
     Blueprint, BonePile, BridgeMarker, Building, BuildingType, Designation,
-    FlexibleMaterialRequirement, ObstaclePosition, Priority, ProvisionalWall, RestArea, Rock,
-    SandPile, TargetBlueprint, TargetSoulSpaSite, TaskSlots, Tree, TreeVariant, WorkType,
+    FlexibleMaterialRequirement, ObstaclePosition, PlayerIssuedDesignation, Priority,
+    ProvisionalWall, RestArea, Rock, SandPile, TargetBlueprint, TargetSoulSpaSite, TaskSlots, Tree,
+    TreeVariant, WorkType,
 };
 
 use hw_logistics::transport_request::{
@@ -97,6 +98,7 @@ macro_rules! for_each_persisted_component {
         $callback!(RestAreaReservedFor);
         $callback!(RestAreaReservations);
         $callback!(Designation);
+        $callback!(PlayerIssuedDesignation);
         $callback!(Priority);
         $callback!(TaskSlots);
         $callback!(TaskArea);

@@ -71,6 +71,19 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 
 `task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方を探索して候補を集約します。`Build` と Yard-owned Designation は、空間範囲外でも既存の補助全件走査から候補へ加えます。
 
+### 2.1 ManualTransportRequest の close owner
+
+手動搬送 request の UI cancel と anchor cleanup は、`transport_request::lifecycle` の
+`close_manual_transport_request` を共用する。root UI は request component を個別 remove しない。
+
+- live `ManualTransportRequest`、fixed source、worker、request が ResourceItem かを `ManualTransportCloseContext` で渡す。
+- worker ごとに `SoulTaskUnassignRequest` を発行し、予約・所持品・`AssignedTask` の cleanup は Soul AI owner を通す。
+- fixed source の `ManualHaulPinnedSource` を外す。
+- request entity なら despawn、ResourceItem と同居する場合は transport/request/assignment component 一式だけを除去する。
+- fixed source 欠落は `MalformedClosed` として安全に close し、非 manual request は `Unsupported` で変更しない。
+
+anchor 消失、需要 0、issuer 消失、manual source 消失/搬送済みの Maintain 経路も同じ除去 primitive を通る。
+
 ## 3. Request 種別と実装
 
 | kind | WorkType | producer | anchor | ソース解決 |
@@ -296,7 +309,12 @@ WheelbarrowLease {
      - `by_resource_owner_ground`
 5. **バッチ候補の評価** — 各 eligible request に対して:
    - request 種別に応じて対応バケットのみ参照（全 free item の再走査はしない）
-   - 半径 `TILE_SIZE * 10.0` 内で近傍 `Top-K`（`WHEELBARROW_ARBITRATION_TOP_K`）を抽出
+   - 半径 `TILE_SIZE * 10.0` 内で、source reservation 0 の近傍 `Top-K`
+     （`WHEELBARROW_ARBITRATION_TOP_K`）を抽出する。予約済み item は Top-K 枠を消費せず lease にも入らない
+   - 実際の検索範囲内で必要最小数を満たせる候補が予約で不足した場合は、全件予約だけでなく
+     「未予約1件 + 予約済み1件、hard_min=2」のような混在不足も `SourceReserved`。予約を含めても必要数に
+     届かなければ `NoSourceItems` とし、遠方 bucket 全体の予約状態を近傍判定へ混ぜない
+   - Blueprint / mixer の無限距離 fallback 対象では、近傍が全件予約済みでも遠方の未予約候補を再探索する
    - `DepositToStockpile` では「型互換セルのみ」で残容量を計算
    - 猫車必須資源は、`Top-K` 候補に対してピックドロップ完結可能判定を行い、成立時は仲裁候補から除外
    - 最小バッチ条件: 猫車必須資源は `1`、それ以外は `WHEELBARROW_MIN_BATCH_SIZE`
@@ -337,6 +355,20 @@ WheelbarrowLease {
 #### 5.2.6 メトリクス
 
 `TransportRequestMetrics` に `wheelbarrow_leases_active`, `wb_arb_*`（eligible/topk/dedup/pending/duration/elapsed）, `task_area_*`（groups/scanned/matched/elapsed）を追加。5秒間隔のデバッグログに出力。
+
+#### 5.2.7 latest-only 診断
+
+仲裁が dirty または fallback interval で rebuild したとき、同じ request / free-item / grant 走査から
+`WheelbarrowArbitrationDiagnostics` を公開する。診断のための追加全件走査は行わず、rebuild しない frame は前 snapshot を保持する。
+
+- header: generation、`SharedResourceCache::semantic_generation()`、物理車両の有無、available / leased 台数。
+- request outcome: `LeaseGranted`、`NotApplicable`、車両/source/capacity 不足、source/capacity reservation、
+  demand 消滅、preferred batch wait、arbitration contention、stale input。
+- 全車が使用中/`PushedBy` の場合も「車両自体が存在しない」と区別する。
+- Familiar producer は lease がない wheelbarrow task の upstream evidence として読み、cache generation が一致しない
+  snapshot を blocker に使わない。
+
+snapshot と `WheelbarrowArbitrationRuntime` は保存せず、world replacement で default に戻す。
 
 ## 6. 予約と競合回避
 

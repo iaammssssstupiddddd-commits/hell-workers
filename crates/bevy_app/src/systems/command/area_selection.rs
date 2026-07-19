@@ -9,6 +9,7 @@ mod manual_haul;
 mod queries;
 mod shortcuts;
 
+pub(crate) use cancel::cancel_single_designation;
 pub use cleanup::blueprint_cancel_cleanup_system;
 pub use cursor::task_area_edit_cursor_system;
 pub use hw_ui::area_edit::{AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession};

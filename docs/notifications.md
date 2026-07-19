@@ -91,23 +91,37 @@ world replacementのresetが通知Messageと旧履歴を消し、その全処理
 したがって次の `Update` でload結果が新world最初の重要通知になる。transaction開始前のload失敗は
 worldを置換しないため、現在の履歴へ追記される。
 
+## タスク操作結果
+
+task dashboard の priority/cancel は root が `TaskActionOutcome` を 1 intent につき 1 件発行する。
+結果は priority tier 変更、cancel request、malformed manual request の安全な close、stale、unsupported、pause、capture を
+exhaustive に分類し、raw component/debug 情報を表示文言へ渡さない。
+
+adapter は Entity、action kind、result kind を含む key で `ToastOnly` の `UserFacingNotification` へ変換する。
+そのため同じ結果の短時間連打だけを集約し、別 Entity、成功/拒否、priority up/down を誤って dedupe しない。
+`ToastOnly` は重要履歴へ残らず、1 操作が生成する visible notification は最大 1 件である。
+
+`Working / Blocked / PendingEvaluation` と blocker reason はライブ dashboard state であり、cycle ごとに
+notification Message を発行しない。
+
 ## Messageとsystem順
 
 ```text
-SaveLoadOutcome
+SaveLoadOutcome / TaskActionOutcome
   → NotificationSystemSet::Adapt（rootで安全な表示文言へ変換）
   → UserFacingNotification
   → NotificationSystemSet::Reduce（ingest / dedupe / expiry）
   → NotificationSystemSet::Present（revision差分だけ描画）
 ```
 
-`Adapt → Reduce → Present` は同じ `Update` 内でchainされる。`SaveLoadOutcome` は `Last` で発行されるため、
-次の `Update` でadapterに読まれる。
+`Adapt → Reduce → Present` は同じ `Update` 内でchainされる。`SaveLoadOutcome` は `Last` で発行されるため
+次の `Update`、task action outcome は Interface 内の apply 後に同じ `Update` の adapter に読まれる。
 
 ## world replacement reset
 
 - `SavePlugin` の専用hookが古い `SaveLoadOutcome` bufferを消す。
 - `hw_ui::reset_for_world_replace()` が `UserFacingNotification`、center、unread、履歴開閉、描画revisionを初期化する。
+- `MessagesPlugin` が旧 world の `TaskActionOutcome` buffer を clear し、task confirmation / `UiIntent` も UI owner hook が消す。
 - 動的toast/history rowはdespawnし、static root、panel、未読labelを非表示／初期表示へ戻す。
 - 配置の `live` / `recent_failure` も同じUI owner hookで消す。
 

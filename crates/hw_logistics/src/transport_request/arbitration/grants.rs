@@ -1,7 +1,7 @@
 //! 手押し車 lease の割り当て
 
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 use hw_core::constants::*;
@@ -10,6 +10,7 @@ use hw_core::relationships::{IncomingDeliveries, StoredItems};
 use crate::transport_request::{WheelbarrowDestination, WheelbarrowLease};
 use crate::zone::Stockpile;
 
+use super::WheelbarrowArbitrationOutcome;
 use super::types::BatchCandidate;
 
 #[derive(Default)]
@@ -20,14 +21,19 @@ pub(super) struct GrantStats {
     pub lease_duration_total_secs: f64,
 }
 
+pub(super) struct GrantLeaseQueries<'a> {
+    pub q_stockpiles: &'a Query<'a, 'a, (&'static Stockpile, Option<&'static StoredItems>)>,
+    pub q_incoming: &'a Query<'a, 'a, &'static IncomingDeliveries>,
+    pub q_transforms: &'a Query<'a, 'a, &'static Transform>,
+}
+
 pub fn grant_leases(
     candidates: &[(BatchCandidate, f32)],
     available_wheelbarrows: &mut Vec<(Entity, Vec2)>,
     now: f64,
     commands: &mut Commands,
-    q_stockpiles: &Query<(&Stockpile, Option<&StoredItems>)>,
-    q_incoming: &Query<&IncomingDeliveries>,
-    q_transforms: &Query<&Transform>,
+    queries: GrantLeaseQueries<'_>,
+    outcomes: &mut HashMap<Entity, WheelbarrowArbitrationOutcome>,
 ) -> GrantStats {
     let mut stats = GrantStats::default();
     let mut consumed_items = HashSet::<Entity>::new();
@@ -35,7 +41,11 @@ pub fn grant_leases(
 
     for (candidate, _score) in candidates {
         if available_wheelbarrows.is_empty() {
-            break;
+            outcomes.insert(
+                candidate.request_entity,
+                WheelbarrowArbitrationOutcome::ArbitrationContention,
+            );
+            continue;
         }
 
         let lease_items: Vec<Entity> = candidate
@@ -48,6 +58,10 @@ pub fn grant_leases(
         stats.items_deduped = stats.items_deduped.saturating_add(removed_by_dedup as u32);
         if lease_items.len() < candidate.hard_min {
             stats.candidates_dropped_by_dedup = stats.candidates_dropped_by_dedup.saturating_add(1);
+            outcomes.insert(
+                candidate.request_entity,
+                WheelbarrowArbitrationOutcome::ArbitrationContention,
+            );
             continue;
         }
 
@@ -59,10 +73,11 @@ pub fn grant_leases(
             let mut fallback_cell = None;
 
             for &cell in &candidate.group_cells {
-                if let Ok((stock, stored_opt)) = q_stockpiles.get(cell) {
+                if let Ok((stock, stored_opt)) = queries.q_stockpiles.get(cell) {
                     let current = stored_opt.map(|s| s.len()).unwrap_or(0);
 
-                    let incoming = q_incoming
+                    let incoming = queries
+                        .q_incoming
                         .get(cell)
                         .ok()
                         .map(|inc: &IncomingDeliveries| inc.len())
@@ -109,8 +124,8 @@ pub fn grant_leases(
             break;
         };
         let (wb_entity, wb_pos) = available_wheelbarrows.remove(idx);
-        let destination_pos =
-            destination_world_pos(final_destination, q_transforms).unwrap_or(candidate.source_pos);
+        let destination_pos = destination_world_pos(final_destination, queries.q_transforms)
+            .unwrap_or(candidate.source_pos);
         let lease_duration =
             compute_lease_duration_secs(wb_pos, candidate.source_pos, destination_pos);
         consumed_items.extend(lease_items.iter().copied());
@@ -124,6 +139,10 @@ pub fn grant_leases(
                 destination: final_destination,
                 lease_until: now + lease_duration,
             });
+        outcomes.insert(
+            candidate.request_entity,
+            WheelbarrowArbitrationOutcome::LeaseGranted,
+        );
 
         stats.leases_granted = stats.leases_granted.saturating_add(1);
         stats.lease_duration_total_secs += lease_duration;

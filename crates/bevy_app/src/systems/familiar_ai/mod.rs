@@ -2,6 +2,7 @@ use crate::systems::GameSystemSet;
 use crate::systems::soul_ai::scheduling::FamiliarAiSystemSet;
 use bevy::prelude::*;
 
+pub mod diagnostics;
 pub mod perceive;
 
 pub use hw_core::familiar::FamiliarAiState;
@@ -15,6 +16,13 @@ impl Plugin for FamiliarAiPlugin {
 
         #[cfg(feature = "profiling")]
         app.init_resource::<perceive::resource_sync::ReservationSyncPerfMetrics>();
+
+        app.init_resource::<diagnostics::TaskDiagnosticExternalRevisionState>();
+        crate::systems::save::register_load_reset_hook(
+            app,
+            "task-diagnostics",
+            diagnostics::reset_task_diagnostics_for_world_replace,
+        );
 
         app.configure_sets(
             Update,
@@ -30,6 +38,16 @@ impl Plugin for FamiliarAiPlugin {
         .init_resource::<perceive::resource_sync::SharedResourceCache>()
         .init_resource::<perceive::resource_sync::ReservationSyncTimer>()
         .init_resource::<perceive::resource_sync::ReservationSignatureCache>()
+        .add_systems(
+            Update,
+            diagnostics::sync_task_diagnostic_revisions_system
+                .in_set(hw_familiar_ai::FamiliarTaskDecisionSet::TaskRevisionSync),
+        )
+        .configure_sets(
+            Update,
+            hw_familiar_ai::FamiliarTaskDecisionSet::Delegation
+                .after(hw_logistics::transport_request::TransportRequestSet::Execute),
+        )
         .add_systems(
             Update,
             (

@@ -3,8 +3,9 @@ use crate::interface::ui::panels::task_list::{
     detect_task_list_removed_components, update_task_list_state_system,
 };
 use crate::interface::ui::panels::task_list::{
-    left_panel_tab_system, left_panel_visibility_system, task_list_click_system,
-    task_list_update_system, task_list_visual_feedback_system,
+    left_panel_tab_system, left_panel_visibility_system, task_dashboard_action_state_sync_system,
+    task_dashboard_control_system, task_list_click_system, task_list_update_system,
+    task_list_visual_feedback_system,
 };
 use crate::interface::ui::{
     InfoPanelNodes, InfoPanelPinState, InfoPanelState, info_panel_system,
@@ -89,7 +90,11 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
         (
             left_panel_tab_system,
             left_panel_visibility_system.after(left_panel_tab_system),
-            task_list_update_system.after(left_panel_tab_system),
+            task_dashboard_action_state_sync_system.after(left_panel_tab_system),
+            task_dashboard_control_system.after(task_dashboard_action_state_sync_system),
+            task_list_update_system
+                .after(task_dashboard_action_state_sync_system)
+                .after(task_dashboard_control_system),
             task_list_click_system,
             task_list_visual_feedback_system.after(task_list_click_system),
             soul_rename_button_system::<crate::assets::GameAssets>,
