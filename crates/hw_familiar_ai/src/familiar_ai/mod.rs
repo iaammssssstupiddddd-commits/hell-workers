@@ -37,20 +37,12 @@ impl Plugin for FamiliarAiCorePlugin {
                 (
                     decide::state_decision::familiar_ai_state_system,
                     ApplyDeferred,
-                    decide::task_delegation::familiar_task_delegation_system,
-                )
-                    .chain()
-                    .in_set(FamiliarAiSystemSet::Decide),
-            )
-            .add_systems(
-                Update,
-                (
                     decide::blueprint_auto_gather::blueprint_auto_gather_system,
                     ApplyDeferred,
+                    decide::task_delegation::familiar_task_delegation_system,
                     decide::encouragement::encouragement_decision_system,
                 )
                     .chain()
-                    .after(decide::state_decision::familiar_ai_state_system)
                     .in_set(FamiliarAiSystemSet::Decide),
             )
             .add_systems(

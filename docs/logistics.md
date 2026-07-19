@@ -69,7 +69,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 
 `Arbitrate` は `Reconcile` より前に実行済みであるため、最後の worker を失った request は次の Logic frame から再仲裁候補になる。
 
-`task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方を探索して候補を集約します。
+`task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方を探索して候補を集約します。`Build` と Yard-owned Designation は、空間範囲外でも既存の補助全件走査から候補へ加えます。
 
 ## 3. Request 種別と実装
 
@@ -115,6 +115,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 ### 4.2 Blueprint 搬入 (`DeliverToBlueprint`)
 - producer は `required_materials - delivered_materials` を demand として維持し、既存 request の `inflight` を別途保持する。
 - request は Blueprint 位置に生成し、ソースは割り当て時に探索。
+- `Site` 内の Blueprint は `PairedYard` の Yard を construction owner 候補に含める。Familiar が Idle で TaskArea owner が無い場合も、その Yard 名義で request を生成できる。
 - Familiar 割り当て時には `delivered + IncomingDeliveries + ReservationShadow` を差し引いた残需要を再計算し、需要 0 の request は stale 扱いで割り当てない。
 - Soul / wheelbarrow の搬入直前にも Blueprint の残需要を再確認し、充足済みなら Blueprint への消費を行わずタスクを中断する。
 - `Sand` 搬入は `collect_source` パスを使用し、**同一 Soul の `HaulWithWheelbarrow` 1タスク内で完結**する（`CollectSand` 別タスクは経由しない）。MudMixer への Sand 搬入も同じ設計。
@@ -124,12 +125,15 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   - ソース（砂置き場/砂タイル）は消費しない（無限ソース）。
   - 過剰割り当て防止のため、割り当て時に「必要量 - 予約済み」を再計算して積載量を決定する。
 
-#### 4.2.1 Blueprint / MudMixer不足時の自動伐採/採掘（Wood / Rock）
-- `familiar_ai` の `blueprint_auto_gather_system` が、`DeliverToBlueprint` request（Wood / Rock）と `DeliverToMixerSolid` request（Rock、`issued_by`）を需要起点に不足量を検知する。
+#### 4.2.1 Blueprint / WallConstruction / MudMixer不足時の自動伐採/採掘（Wood / Rock）
+- `familiar_ai` の `blueprint_auto_gather_system` が、`DeliverToBlueprint` request（Wood / Rock）、`DeliverToWallConstruction` request（Wood）、`DeliverToMixerSolid` request（Rock）の `issued_by` を需要 owner として不足量を検知する。
 - 不足判定は owner/resource 単位で以下を差し引いて算出する:
   - 地面の未予約資材
   - 既存の手動 `Chop` / `Mine` 指定の期待ドロップ量
   - 進行中の自動 Gather（AutoGather）の期待ドロップ量
+- 未指定 Tree/Rock と地面資材の owner 解決では、同じ resource に正の需要がある owner を優先する。資源が別 Familiar の TaskArea 内にあっても Yard 需要と別キーへ分断しない。該当需要がない場合だけ通常の位置ベース owner 解決へ戻る。
+- 地面資材と既存 `Chop` / `Mine` の期待量は、owner の `path_start` から到達可能なものだけを供給として数える。地面資材は `DeliveringTo` のない未予約状態に限定し、搬送中数との二重控除を避ける。`ManagedBy` のない手動指定は Active Familiar / Yard のいずれかの `AreaBounds` 内にあり、task finder が実際に発見できる場合に限って需要を相殺する。
+- Bridge の Wood/Rock 代替需要は、到達可能な既存供給と未指定候補の期待量へ配分する。Wood 候補が到達不能で Rock 候補だけが到達可能なら Rock 需要として `Mine` を選ぶ。
 - 候補探索は owner の `AreaBounds`（Familiar の TaskArea または Yard 境界）を起点とする段階走査:
   - Stage 0: owner の `AreaBounds` 内
   - Stage 1: 外周 `<= 10` タイル
@@ -138,6 +142,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   - Stage 4: それ以遠の到達可能全域
 - 各 Stage は近傍優先で処理し、必要量を満たした時点で終了。経路判定は Stage ごとの上限件数で制御する。
 - 自動付与対象には `AutoGatherDesignation { owner, resource_type }` marker を付け、不要になった未着手指定は marker ベースで回収する。
+- Yard-owned の `Chop` / `Mine` は Yard 境界外でも task finder の補助全件走査へ入り、60タイルの worker 距離制限と到達判定を通過した Soul へ割り当てられる。
 
 ### 4.3 MudMixer 固体搬入 (`DeliverToMixerSolid`)
 - `Sand` / `Rock` の不足量を `SharedResourceCache` を含めて判定。
@@ -218,6 +223,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 ### 4.10 壁建築搬入 (`DeliverToWallConstruction`)
 - `wall_construction_auto_haul_system` が site ごとに不足資材を算出し request を upsert。
 - `Framing` フェーズでは `Wood`、`Coating` フェーズでは `StasisMud` を要求。
+- `Site` 内の `WallConstructionSite` は `PairedYard` の Yard を construction owner 候補に含め、Familiar が Idle でも Wood request を維持する。
 - 搬入先は常に `WallConstructionSite.material_center`。
 - `wall_material_delivery_sync_system` が `material_center` 周辺の資材を消費し、各タイルの `wood_delivered` / `mud_delivered` を更新する。
 - 割り当て時と wheelbarrow 荷下ろし時に、対象 phase の残需要を再確認して不要な資材を搬入先へ置かない。
@@ -417,13 +423,14 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 
 ### 8.4.1 AreaBounds によるオーナー解決
 
-すべての transport request producer は `collect_all_area_owners` ヘルパーで **Familiar の TaskArea と Yard の境界を `AreaBounds`（共通矩形型）に統合** し、統一コードパスでオーナーを解決します。
+標準の transport request producer は `collect_all_area_owners` ヘルパーで **Familiar の TaskArea と Yard の境界を `AreaBounds`（共通矩形型）に統合** し、統一コードパスでオーナーを解決します。Blueprint / WallConstruction producer はさらに `collect_construction_area_owners` で `Site` 境界を対応する `PairedYard` の owner として追加します。
 
 - `AreaBounds`（`hw_core::area`）は `{ min: Vec2, max: Vec2 }` の plain struct で、`contains` / `center` / `size` 等の共通メソッドを持つ。Component ではない。
 - `TaskArea`、`Yard`、`Site` はそれぞれ `.bounds()` メソッドと `From` impl で `AreaBounds` に変換可能。
 - `collect_all_area_owners` は `Vec<(Entity, AreaBounds)>` を返し、Familiar TaskArea と Yard 境界を同列に扱う。
-- `find_owner` / `find_owner_for_position` は `AreaBounds` ベースで位置→オーナーを解決する。Yard 内の位置はその Yard 中心を含む TaskArea のオーナーを優先する。
-- `issued_by` に Yard エンティティが入った request は、タスクフィルターの `is_issued_by_yard = true` 判定により全 Familiar がアクセス可能になります。
+- `collect_construction_area_owners` は上記に `(PairedYard, Site.bounds())` を加え、Site 内の建築需要を Yard に帰属可能にする。
+- `find_owner` / `find_owner_for_position` は `AreaBounds` ベースで位置→オーナーを解決する。Yard 内では Yard 中心を含む owner 範囲のうち中心距離が最小のものを優先する。
+- `issued_by` に Yard エンティティが入った request / Designation は、補助全件走査とタスクフィルターの `is_issued_by_yard = true` 判定により全 Familiar がアクセス可能になる。
 - `task_finder/filter.rs` は複数 Yard すべてをチェックします（`yards.iter().any(|yard| yard.contains(pos))`）。
 
 ### 8.5 追加時に必ず更新する箇所

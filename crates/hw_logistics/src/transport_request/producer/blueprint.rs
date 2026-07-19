@@ -6,6 +6,7 @@ use hw_core::constants::WHEELBARROW_CAPACITY;
 use hw_core::relationships::{ManagedBy, TaskWorkers};
 use hw_jobs::{Blueprint, Designation, Priority, TargetBlueprint, TaskSlots, WorkType};
 use hw_spatial::BlueprintSpatialGrid;
+use hw_world::{PairedYard, Site};
 
 use crate::transport_request::producer::active_unit_cache::{
     CachedActiveFamiliars, CachedActiveYards,
@@ -21,6 +22,7 @@ pub fn blueprint_auto_haul_system(
     blueprint_grid: Res<BlueprintSpatialGrid>,
     familiars_cache: Res<CachedActiveFamiliars>,
     yards_cache: Res<CachedActiveYards>,
+    q_paired_sites: Query<(&Site, &PairedYard)>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
     q_bp_requests: Query<(
         Entity,
@@ -48,7 +50,12 @@ pub fn blueprint_auto_haul_system(
     let mut desired_requests =
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();
 
-    let all_owners = super::collect_all_area_owners(active_familiars, active_yards);
+    let paired_sites: Vec<_> = q_paired_sites
+        .iter()
+        .map(|(site, paired_yard)| (paired_yard.0, site.bounds()))
+        .collect();
+    let all_owners =
+        super::collect_construction_area_owners(active_familiars, active_yards, &paired_sites);
 
     let mut blueprints_to_process = std::collections::HashSet::new();
     for (_, area) in &all_owners {
@@ -211,5 +218,68 @@ pub fn blueprint_auto_haul_system(
             TransportRequestState::Pending,
             TransportPolicy::default(),
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_jobs::BuildingType;
+    use hw_spatial::SpatialGridOps;
+
+    #[test]
+    fn paired_yard_issues_blueprint_request_without_active_familiar() {
+        let mut app = App::new();
+        app.init_resource::<BlueprintSpatialGrid>()
+            .init_resource::<CachedActiveFamiliars>()
+            .init_resource::<CachedActiveYards>()
+            .add_systems(Update, blueprint_auto_haul_system);
+
+        let yard_bounds = hw_world::Yard {
+            min: Vec2::new(320.0, 0.0),
+            max: Vec2::new(640.0, 320.0),
+        };
+        let yard = app.world_mut().spawn(yard_bounds.clone()).id();
+        app.world_mut()
+            .resource_mut::<CachedActiveYards>()
+            .data
+            .push((yard, yard_bounds));
+        app.world_mut().spawn((
+            Site {
+                min: Vec2::ZERO,
+                max: Vec2::new(288.0, 320.0),
+            },
+            PairedYard(yard),
+        ));
+
+        let blueprint_pos = Vec2::new(128.0, 128.0);
+        let mut blueprint = Blueprint::new(BuildingType::Tank, vec![(4, 4)]);
+        blueprint.required_materials.clear();
+        blueprint.required_materials.insert(ResourceType::Wood, 1);
+        blueprint.flexible_material_requirement = None;
+        let blueprint_entity = app
+            .world_mut()
+            .spawn((
+                Transform::from_translation(blueprint_pos.extend(0.0)),
+                blueprint,
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<BlueprintSpatialGrid>()
+            .insert(blueprint_entity, blueprint_pos);
+
+        app.update();
+
+        let world = app.world_mut();
+        let mut requests = world.query::<(&TransportRequest, &TargetBlueprint, &ManagedBy)>();
+        let matching: Vec<_> = requests
+            .iter(world)
+            .filter(|(request, target, _)| {
+                target.0 == blueprint_entity && request.resource_type == ResourceType::Wood
+            })
+            .collect();
+        assert_eq!(matching.len(), 1);
+        assert_eq!(matching[0].0.issued_by, yard);
+        assert_eq!(matching[0].2.0, yard);
     }
 }

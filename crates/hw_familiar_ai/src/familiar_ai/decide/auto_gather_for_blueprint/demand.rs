@@ -12,6 +12,31 @@ use super::helpers::OwnerInfo;
 
 type RawDemandKey = (Entity, ResourceType);
 
+pub struct FlexibleAutoGatherDemand {
+    pub owner: Entity,
+    pub accepted_types: Vec<ResourceType>,
+    pub amount: u32,
+}
+
+pub struct AutoGatherDemand {
+    pub fixed_by_owner: HashMap<RawDemandKey, u32>,
+    pub flexible: Vec<FlexibleAutoGatherDemand>,
+}
+
+impl AutoGatherDemand {
+    pub fn owner_resource_interest(&self) -> HashMap<RawDemandKey, u32> {
+        let mut interest = self.fixed_by_owner.clone();
+        for flexible in &self.flexible {
+            for &resource_type in &flexible.accepted_types {
+                interest
+                    .entry((flexible.owner, resource_type))
+                    .or_insert(flexible.amount);
+            }
+        }
+        interest
+    }
+}
+
 #[derive(Default)]
 struct RawDemandAccumulator {
     by_owner: HashMap<RawDemandKey, u32>,
@@ -44,7 +69,7 @@ fn is_auto_gather_resource(resource_type: ResourceType) -> bool {
     matches!(resource_type, ResourceType::Wood | ResourceType::Rock)
 }
 
-pub fn collect_raw_demand_by_owner(
+pub fn collect_auto_gather_demand(
     owner_infos: &HashMap<Entity, OwnerInfo>,
     q_bp_requests: &Query<(&TransportRequest, &TargetBlueprint, Option<&TaskWorkers>)>,
     q_wall_requests: &Query<(
@@ -59,8 +84,9 @@ pub fn collect_raw_demand_by_owner(
         Option<&TransportDemand>,
     )>,
     q_blueprints: &Query<&Blueprint>,
-) -> HashMap<(Entity, ResourceType), u32> {
+) -> AutoGatherDemand {
     let mut raw_demand = RawDemandAccumulator::default();
+    let mut flexible_demand = Vec::new();
     let mut inflight_by_blueprint = HashMap::<(Entity, Entity), HashMap<ResourceType, u32>>::new();
 
     for (req, target_bp, workers_opt) in q_bp_requests.iter() {
@@ -119,12 +145,21 @@ pub fn collect_raw_demand_by_owner(
                 continue;
             }
 
-            let preferred_resource = if flexible.accepted_types.contains(&ResourceType::Wood) {
-                ResourceType::Wood
-            } else {
-                flexible.accepted_types[0]
-            };
-            raw_demand.add_if_supported(owner_infos, owner, preferred_resource, needed);
+            let mut accepted_types = Vec::new();
+            for &resource_type in &flexible.accepted_types {
+                if is_auto_gather_resource(resource_type)
+                    && !accepted_types.contains(&resource_type)
+                {
+                    accepted_types.push(resource_type);
+                }
+            }
+            if !accepted_types.is_empty() && owner_infos.contains_key(&owner) {
+                flexible_demand.push(FlexibleAutoGatherDemand {
+                    owner,
+                    accepted_types,
+                    amount: needed,
+                });
+            }
         }
     }
 
@@ -169,5 +204,8 @@ pub fn collect_raw_demand_by_owner(
         raw_demand.add_if_supported(owner_infos, owner, resource_type, needed);
     }
 
-    raw_demand.into_inner()
+    AutoGatherDemand {
+        fixed_by_owner: raw_demand.into_inner(),
+        flexible: flexible_demand,
+    }
 }

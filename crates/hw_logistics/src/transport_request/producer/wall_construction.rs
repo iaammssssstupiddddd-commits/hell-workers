@@ -11,6 +11,7 @@ use hw_core::relationships::TaskWorkers;
 use hw_jobs::construction::{TargetWallConstructionSite, WallConstructionPhase, WallTileBlueprint};
 use hw_jobs::{Designation, Priority, TaskSlots, WallConstructionSite, WallTileState, WorkType};
 use hw_spatial::ResourceSpatialGrid;
+use hw_world::{PairedYard, Site};
 use std::time::Instant;
 
 use crate::transport_request::producer::active_unit_cache::{
@@ -61,6 +62,7 @@ pub fn wall_construction_auto_haul_system(
     mut commands: Commands,
     familiars_cache: Res<CachedActiveFamiliars>,
     yards_cache: Res<CachedActiveYards>,
+    q_paired_sites: Query<(&Site, &PairedYard)>,
     q_sites: Query<(
         Entity,
         &Transform,
@@ -77,7 +79,12 @@ pub fn wall_construction_auto_haul_system(
 ) {
     let active_familiars = &familiars_cache.data;
     let active_yards = &yards_cache.data;
-    let all_owners = super::collect_all_area_owners(active_familiars, active_yards);
+    let paired_sites: Vec<_> = q_paired_sites
+        .iter()
+        .map(|(site, paired_yard)| (paired_yard.0, site.bounds()))
+        .collect();
+    let all_owners =
+        super::collect_construction_area_owners(active_familiars, active_yards, &paired_sites);
 
     let mut desired_requests =
         std::collections::HashMap::<(Entity, ResourceType), (Entity, u32, Vec2)>::new();

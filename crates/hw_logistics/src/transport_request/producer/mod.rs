@@ -39,6 +39,16 @@ pub fn collect_all_area_owners(
     all
 }
 
+pub fn collect_construction_area_owners(
+    familiars: &[(Entity, AreaBounds)],
+    yards: &[(Entity, Yard)],
+    paired_sites: &[(Entity, AreaBounds)],
+) -> Vec<(Entity, AreaBounds)> {
+    let mut all = collect_all_area_owners(familiars, yards);
+    all.extend(paired_sites.iter().cloned());
+    all
+}
+
 pub fn find_owner(pos: Vec2, owners: &[(Entity, AreaBounds)]) -> Option<(Entity, &AreaBounds)> {
     owners
         .iter()
@@ -345,4 +355,29 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
     }
 
     seen_existing_keys
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paired_site_is_owned_by_its_yard_for_construction() {
+        let yard_entity = Entity::from_bits(1);
+        let yard = Yard {
+            min: Vec2::new(20.0, 0.0),
+            max: Vec2::new(30.0, 10.0),
+        };
+        let site_bounds = AreaBounds::new(Vec2::ZERO, Vec2::splat(10.0));
+        let owners = collect_construction_area_owners(
+            &[],
+            &[(yard_entity, yard)],
+            &[(yard_entity, site_bounds)],
+        );
+
+        assert_eq!(
+            find_owner(Vec2::new(5.0, 5.0), &owners).map(|(owner, _)| owner),
+            Some(yard_entity)
+        );
+    }
 }

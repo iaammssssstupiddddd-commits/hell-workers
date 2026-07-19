@@ -2,12 +2,15 @@ use std::cmp::Ordering;
 
 use bevy::prelude::*;
 use hw_core::area::AreaBounds;
-use hw_core::constants::{ROCK_DROP_AMOUNT, WOOD_DROP_AMOUNT};
+use hw_core::constants::{
+    BLUEPRINT_AUTO_GATHER_STAGE1_RADIUS_TILES, BLUEPRINT_AUTO_GATHER_STAGE2_RADIUS_TILES,
+    BLUEPRINT_AUTO_GATHER_STAGE3_RADIUS_TILES, ROCK_DROP_AMOUNT, TILE_SIZE, WOOD_DROP_AMOUNT,
+};
 use hw_core::jobs::WorkType;
 use hw_core::logistics::ResourceType;
 use hw_world::Yard;
 
-pub const STAGE_COUNT: usize = 3;
+pub const STAGE_COUNT: usize = 5;
 
 #[derive(Clone)]
 pub struct OwnerInfo {
@@ -79,33 +82,65 @@ pub fn stage_for_pos(pos: Vec2, owner: &OwnerInfo) -> usize {
     if owner.area.contains(pos) {
         return 0;
     }
-    if let Some(yard) = owner.yard.as_ref()
-        && yard.contains(pos)
-    {
-        return 1;
+
+    let dist_sq = distance_sq_to_area_outside(pos, &owner.area);
+    let stage1_radius = BLUEPRINT_AUTO_GATHER_STAGE1_RADIUS_TILES * TILE_SIZE;
+    let stage2_radius = BLUEPRINT_AUTO_GATHER_STAGE2_RADIUS_TILES * TILE_SIZE;
+    let stage3_radius = BLUEPRINT_AUTO_GATHER_STAGE3_RADIUS_TILES * TILE_SIZE;
+
+    if dist_sq <= stage1_radius * stage1_radius {
+        1
+    } else if dist_sq <= stage2_radius * stage2_radius {
+        2
+    } else if dist_sq <= stage3_radius * stage3_radius {
+        3
+    } else {
+        4
     }
-    2
 }
 
 pub fn resolve_owner(
     pos: Vec2,
     owner_infos: &std::collections::HashMap<Entity, OwnerInfo>,
 ) -> Option<Entity> {
-    if owner_infos.is_empty() {
+    resolve_owner_matching(pos, owner_infos, |_| true)
+}
+
+pub fn resolve_demand_owner(
+    pos: Vec2,
+    resource_type: ResourceType,
+    owner_infos: &std::collections::HashMap<Entity, OwnerInfo>,
+    demand_by_owner: &std::collections::HashMap<(Entity, ResourceType), u32>,
+) -> Option<Entity> {
+    let demanded_owner = resolve_owner_matching(pos, owner_infos, |owner| {
+        demand_by_owner
+            .get(&(owner, resource_type))
+            .is_some_and(|amount| *amount > 0)
+    });
+
+    demanded_owner.or_else(|| resolve_owner(pos, owner_infos))
+}
+
+fn resolve_owner_matching(
+    pos: Vec2,
+    owner_infos: &std::collections::HashMap<Entity, OwnerInfo>,
+    include: impl Fn(Entity) -> bool,
+) -> Option<Entity> {
+    if !owner_infos.keys().copied().any(&include) {
         return None;
     }
 
     let mut inside_yard = Vec::<(Entity, &OwnerInfo)>::new();
     let mut inside_area = Vec::<(Entity, &OwnerInfo)>::new();
 
-    for (owner, owner_info) in owner_infos {
+    for (&owner, owner_info) in owner_infos.iter().filter(|(owner, _)| include(**owner)) {
         if owner_info.area.contains(pos) {
-            inside_area.push((*owner, owner_info));
+            inside_area.push((owner, owner_info));
         }
         if let Some(yard) = owner_info.yard.as_ref()
             && yard.contains(pos)
         {
-            inside_yard.push((*owner, owner_info));
+            inside_yard.push((owner, owner_info));
         }
     }
 
@@ -137,6 +172,7 @@ pub fn resolve_owner(
 
     owner_infos
         .iter()
+        .filter(|(owner, _)| include(**owner))
         .min_by(|(owner_a, info_a), (owner_b, info_b)| {
             let da = distance_sq_to_task_area_perimeter(pos, &info_a.area);
             let db = distance_sq_to_task_area_perimeter(pos, &info_b.area);
@@ -168,6 +204,14 @@ fn distance_sq_to_task_area_perimeter(pos: Vec2, area: &AreaBounds) -> f32 {
         let dy = pos.y - clamped_y;
         dx * dx + dy * dy
     }
+}
+
+fn distance_sq_to_area_outside(pos: Vec2, area: &AreaBounds) -> f32 {
+    let clamped_x = pos.x.clamp(area.min.x, area.max.x);
+    let clamped_y = pos.y.clamp(area.min.y, area.max.y);
+    let dx = pos.x - clamped_x;
+    let dy = pos.y - clamped_y;
+    dx * dx + dy * dy
 }
 
 fn distance_sq_to_yard_perimeter(pos: Vec2, yard: &Yard) -> f32 {
@@ -233,4 +277,42 @@ pub fn is_reachable(
         target_grid,
         world_map.is_walkable(target_grid.0, target_grid.1),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn owner() -> OwnerInfo {
+        OwnerInfo {
+            area: AreaBounds::new(Vec2::ZERO, Vec2::splat(TILE_SIZE * 2.0)),
+            center: Vec2::splat(TILE_SIZE),
+            path_start: (1, 1),
+            yard: None,
+        }
+    }
+
+    #[test]
+    fn auto_gather_stage_uses_documented_distance_bands() {
+        let owner = owner();
+        let area_edge = owner.area.max.x;
+
+        assert_eq!(stage_for_pos(owner.center, &owner), 0);
+        assert_eq!(
+            stage_for_pos(Vec2::new(area_edge + TILE_SIZE * 5.0, TILE_SIZE), &owner),
+            1
+        );
+        assert_eq!(
+            stage_for_pos(Vec2::new(area_edge + TILE_SIZE * 20.0, TILE_SIZE), &owner),
+            2
+        );
+        assert_eq!(
+            stage_for_pos(Vec2::new(area_edge + TILE_SIZE * 45.0, TILE_SIZE), &owner),
+            3
+        );
+        assert_eq!(
+            stage_for_pos(Vec2::new(area_edge + TILE_SIZE * 70.0, TILE_SIZE), &owner),
+            4
+        );
+    }
 }

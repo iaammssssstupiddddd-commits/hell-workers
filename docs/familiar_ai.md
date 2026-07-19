@@ -127,7 +127,7 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
   - **Resources**: `FamiliarTaskDelegationTimer` / `FamiliarDelegationPerfMetrics` / `hw_world::WalkabilityConnectivityCache` / `BlueprintAutoGatherTimer`
   - **RegisterType**: `FamiliarAiState` / `EncouragementCooldown`
   - **Perceive**: `detect_state_changes_system` / `detect_command_changes_system`
-  - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → task_delegation`（chain）、`blueprint_auto_gather → ApplyDeferred → encouragement_decision`（chain、`familiar_ai_state_system` の後）
+  - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → blueprint_auto_gather → ApplyDeferred → task_delegation → encouragement_decision`（chain）
   - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system` / `max_soul_logic_system` / `squad_logic_system` / `encouragement_apply_system` / `cleanup_encouragement_cooldowns_system`
 - `hw_familiar_ai` は `hw_soul_ai` に依存しない。分隊解放・使役数超過リリース時のタスク解除は `SoulTaskUnassignRequest`（`hw_core::events`）イベントを `MessageWriter` で送信し、`hw_soul_ai` 側の `handle_soul_task_unassign_system`（`SoulAiSystemSet::Perceive`）が処理する。
 - root に残るのは `perceive/resource_sync`（ECS 実状態の再構築）と `configure_sets` の配線のみ
@@ -216,12 +216,14 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 - **仕組み**: `familiar_task_delegation_system` は **0.5秒間隔（初回即時）** で実行されます。
 - **効果**: タスク候補ごとの Boolean 到達判定は連結成分 cache を使うため、実経路生成 A* を起動せずに判定できます。timer は候補収集・スコアリングの頻度を抑制します。
 
-### 7.8. Blueprint / Mixer不足資材の自動Gather
-- **仕組み**: `blueprint_auto_gather_system` が **1.0秒間隔（初回即時）** で実行され、`DeliverToBlueprint` request（Wood / Rock）と `DeliverToMixerSolid` request（Rock）から不足を検知します。
-- **オーナー**: Active な Familiar と **Yard エンティティの両方**を `owner_infos` に登録して需要・供給を集計します。Yard エンティティの `path_start` はヤード中心の最寄り歩行可能グリッドで算出されます。
+### 7.8. Blueprint / WallConstruction / Mixer不足資材の自動Gather
+- **仕組み**: `blueprint_auto_gather_system` が **1.0秒間隔（初回即時）** で実行され、`DeliverToBlueprint` request（Wood / Rock）、`DeliverToWallConstruction` request（Wood）、`DeliverToMixerSolid` request（Rock）から不足を検知します。
+- **オーナー**: Active な Familiar と **Yard エンティティの両方**を `owner_infos` に登録して需要・供給を集計します。Tree/Rock と地面資材は同じ resource に正の需要がある owner を優先して単一 owner へ結び付け、該当需要がない場合だけ位置ベース解決へ戻ります。Yard エンティティの `path_start` はヤード中心の最寄り歩行可能グリッドで算出されます。
 - **探索順**: `TaskArea`（または Yard 境界）内 -> 外周 10 タイル -> 30 -> 60 -> 到達可能な全域の順で候補を走査し、近傍優先で決定します。
 - **負荷制御**: 各段階で連結成分による到達判定件数に上限を設け、必要量が満たされた時点で探索を打ち切ります。判定そのものは waypoint A* を起動しません。
 - **整合性**: 既存の地面資材・手動指定・既発行AutoGatherを加味して過剰発行を抑制し、不要になった未着手AutoGatherは marker ベースで回収します。
+- **到達性と代替資材**: 地面資材と既存指定は owner から到達可能で、地面資材は `DeliveringTo` のない未予約状態、手動未所有指定は task finder の探索範囲にある場合だけ供給として数えます。Bridge の flexible Wood/Rock 需要は到達可能な既存供給・候補へ配分し、到達不能な Wood で reachable Rock の `Mine` を妨げません。
+- **発見性と順序**: Yard-owned `Chop` / `Mine` は Yard 外でも補助全件走査から候補になります。AutoGather の Commands は `ApplyDeferred` で確定してから同じ Decide chain の task delegation が実行されます。
 
 ## 8. ビジュアルとアニメーション (Visuals & Animation)
 

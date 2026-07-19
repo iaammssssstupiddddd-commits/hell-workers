@@ -2,15 +2,15 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
-use hw_core::relationships::{LoadedIn, ManagedBy, StoredIn, TaskWorkers};
+use hw_core::relationships::{DeliveringTo, LoadedIn, ManagedBy, StoredIn, TaskWorkers};
 use hw_jobs::{Designation, Rock, Tree};
 use hw_logistics::types::ResourceItem;
 
 use super::AutoGatherDesignation;
 use super::helpers::{
     AutoIdleEntry, OwnerInfo, STAGE_COUNT, SourceCandidate, SupplyBucket,
-    compare_source_candidates, drop_amount_for_resource, resolve_owner,
-    source_resource_from_components, stage_for_pos, work_type_for_resource,
+    compare_source_candidates, drop_amount_for_resource, is_reachable, resolve_demand_owner,
+    resolve_owner, source_resource_from_components, stage_for_pos, work_type_for_resource,
 };
 
 pub struct SupplyState {
@@ -33,6 +33,7 @@ type GroundItemsQuery<'w, 's> = Query<
         Without<TaskWorkers>,
         Without<StoredIn>,
         Without<LoadedIn>,
+        Without<DeliveringTo>,
     ),
 >;
 
@@ -54,8 +55,11 @@ type SourcesQuery<'w, 's> = Query<
 
 pub fn collect_supply_state(
     owner_infos: &HashMap<Entity, OwnerInfo>,
+    demand_interest_by_owner: &HashMap<(Entity, ResourceType), u32>,
     q_ground_items: &GroundItemsQuery,
     q_sources: &SourcesQuery,
+    world_map: &hw_world::WorldMap,
+    connectivity_cache: &mut hw_world::WalkabilityConnectivityCache,
 ) -> SupplyState {
     let mut supply_by_owner = HashMap::<(Entity, ResourceType), SupplyBucket>::new();
     let mut candidate_sources =
@@ -72,9 +76,16 @@ pub fn collect_supply_state(
         }
 
         let pos = transform.translation.truncate();
-        let Some(owner) = resolve_owner(pos, owner_infos) else {
+        let Some(owner) = resolve_demand_owner(pos, item.0, owner_infos, demand_interest_by_owner)
+        else {
             continue;
         };
+        let Some(owner_info) = owner_infos.get(&owner) else {
+            continue;
+        };
+        if !is_reachable(owner_info.path_start, pos, world_map, connectivity_cache) {
+            continue;
+        }
         let bucket = supply_by_owner.entry((owner, item.0)).or_default();
         bucket.ground_items = bucket.ground_items.saturating_add(1);
     }
@@ -119,16 +130,29 @@ pub fn collect_supply_state(
 
             let owner = if let Some(marker) = auto_opt {
                 marker.owner
-            } else if let Some(managed_by) =
-                managed_by_opt.filter(|m| owner_infos.contains_key(&m.0))
-            {
+            } else if let Some(managed_by) = managed_by_opt {
+                if !owner_infos.contains_key(&managed_by.0) {
+                    continue;
+                }
                 managed_by.0
             } else {
+                if !owner_infos.values().any(|info| info.area.contains(pos)) {
+                    continue;
+                }
                 let Some(resolved_owner) = resolve_owner(pos, owner_infos) else {
                     continue;
                 };
                 resolved_owner
             };
+
+            if let Some(owner_info) = owner_infos.get(&owner)
+                && !is_reachable(owner_info.path_start, pos, world_map, connectivity_cache)
+            {
+                if auto_opt.is_some() && workers == 0 {
+                    invalid_auto_idle.insert(entity);
+                }
+                continue;
+            }
 
             let bucket = supply_by_owner.entry((owner, resource_type)).or_default();
             if auto_opt.is_some() {
@@ -166,7 +190,9 @@ pub fn collect_supply_state(
             continue;
         }
 
-        let Some(owner) = resolve_owner(pos, owner_infos) else {
+        let Some(owner) =
+            resolve_demand_owner(pos, resource_type, owner_infos, demand_interest_by_owner)
+        else {
             continue;
         };
         let Some(owner_info) = owner_infos.get(&owner) else {

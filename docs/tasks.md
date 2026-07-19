@@ -51,11 +51,11 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 
 1. `Designation` コンポーネントがある
 2. `Transform` コンポーネントがある
-3. **`DesignationSpatialGrid` または `TransportRequestSpatialGrid` に登録されている**（Change Detection、スポーン後の次フレームで反映）、または `ManagedTasks` に入っている
+3. **`DesignationSpatialGrid` または `TransportRequestSpatialGrid` に登録されている**（Change Detection、スポーン後の次フレームで反映）、または `ManagedTasks` に入っている。例外として `Build` と Yard-owned Designation は補助全件走査からも収集される
 4. ⚠️ **Haul系 WorkType** (`Haul` / `HaulToMixer` / `GatherWater` / `HaulWaterToMixer` / `WheelbarrowHaul`) は **`TransportRequest` コンポーネントが必須** — なければサイレントにフィルタされ、エラー・ログなし
-5. ownership チェック通過: ManagedTasks 内 / unassigned / issued_by 一致 / エリア重複の引き継ぎ
+5. ownership チェック通過: ManagedTasks 内 / unassigned / issued_by 一致 / issued_by が Yard / エリア重複の引き継ぎ
 6. `TaskWorkers.len() < TaskSlots.max`（デフォルト 1）
-7. Mixer タスク以外は Familiar の `TaskArea` 内、Yard 内（全使い魔共通）、または ManagedTasks 内
+7. 通常タスクは Familiar の `TaskArea` 内、Yard 内（全使い魔共通）、または ManagedTasks 内。Mixer / Build / Yard-owned タスクはこの位置制約を越えて候補になれる
 8. WorkType 別の状態チェック通過（Build: 資材完了済み / ReinforceFloorTile: `ReinforcingReady` / CoatWall: `is_provisional == true` 等）
 9. スコア計算が `Some(priority)` を返す（None = スコア計算不能で除外）
 
@@ -82,7 +82,7 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 **自動（Designation 直発行）**: `DesignationRequest` で Designation を対象エンティティに直接付与する方式:
 - `mud_mixer_auto_refine_system` → `Refine`（材料が揃った MudMixer に発行。`collect_all_area_owners` により Familiar の TaskArea と Yard を統合し、使い魔が Idle でも Yard 内ミキサーへ精製タスクを発行できる）
 
-**自動（gather 指定）**: `blueprint_auto_gather_system` が Wood/Rock 不足を検知し、`Tree`/`Rock` に `Chop`/`Mine` を直付与（`AutoGatherDesignation` marker）。
+**自動（gather 指定）**: `blueprint_auto_gather_system` が Wood/Rock 不足を検知し、`Tree`/`Rock` に `Chop`/`Mine` を直付与（`AutoGatherDesignation` marker）。Decide 内では `ApplyDeferred` を挟んで `familiar_task_delegation_system` より先に確定する。
 
 ### 4.2 割り当て (Assignment)
 
@@ -184,7 +184,7 @@ Bevy 0.19 は削除イベントを持たないため、各システムが `Remov
 詳細は [logistics.md](logistics.md) 参照。
 
 ### 7.1 需要起点の自動Gather（Wood / Rock）
-`blueprint_auto_gather_system` が `DeliverToBlueprint` / `DeliverToMixerSolid` request の不足を需要起点に、`Tree` / `Rock` へ `Chop` / `Mine` を直付与（`AutoGatherDesignation` marker 付き）。需要解消後に未着手指定は自動回収。
+`blueprint_auto_gather_system` が `DeliverToBlueprint` / `DeliverToWallConstruction` / `DeliverToMixerSolid` request の不足を需要起点に、`Tree` / `Rock` へ `Chop` / `Mine` を直付与（`AutoGatherDesignation` marker 付き）。資源位置が別 Familiar の TaskArea 内でも、同じ resource を必要とする owner を優先して供給候補を結び付ける。到達不能な地面資材や発見不能な手動指定は供給として数えず、Bridge の Wood/Rock 代替需要は到達可能な供給・候補へ配分する。Yard-owned 指定は Yard 外でも補助全件走査から委譲候補になり、需要解消後の未着手指定は自動回収される。
 
 ### 7.2 採集後チェーン (gather chain)
 

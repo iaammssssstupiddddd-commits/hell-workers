@@ -117,7 +117,10 @@ Logic の次回同期へ委ねてはならない。
 3.  **過剰運搬の防止**: producer・Familiar 割り当て・Soul 実行の3段階で「配達済み + `IncomingDeliveries` + 当フレーム予約」を照合し、必要数を超える request / assignment / delivery を作らない。
 4.  **搬入**: Blueprint に到着した Soul / 猫車は、その場で残需要を再確認し、まだ必要な分だけ `deliver_material()` を実行します。到着時点で充足済みなら資材を消費しません。
 5.  **不足資材の自動採取（Wood / Rock）**:
+    - `Site` 内の Blueprint / WallConstructionSite は `PairedYard` の Yard を construction owner 候補に含めるため、使い魔が Idle でも不足 request を生成できます。
     - 地面に資材が無い場合は、`familiar_ai` の `blueprint_auto_gather_system` が `DeliverToBlueprint` request を需要起点に `Tree` / `Rock` へ `Chop` / `Mine` を自動発行します。
+    - 資源が別 Familiar の TaskArea 内にあっても、同じ resource を必要とする owner が優先されます。Yard-owned 指定は Yard 外でも委譲候補になります。
+    - Bridge の木材/岩代替要件は到達可能な供給・候補へ配分され、木へ到達できず岩へ到達できる場合は `Mine` を発行します。到達不能な地面資材は不足解消済みとして数えません。
     - 探索は `TaskArea` 内から外側へ段階的（10 / 30 / 60 タイル -> 到達可能全域）に拡大し、近い候補から決定されます。
     - これにより、建築開始時に木や岩の手動指定を都度打たなくても、搬入チェーンを継続できます。
 
