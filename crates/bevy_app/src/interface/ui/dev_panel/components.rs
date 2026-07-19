@@ -1,5 +1,17 @@
 use super::*;
 
+/// 最小化時に非表示にする DevPanel 本文のマーカー
+#[derive(Component)]
+pub struct DevPanelBody;
+
+/// DevPanel 最小化・復元ボタンのマーカー
+#[derive(Component)]
+pub struct DevPanelMinimizeButton;
+
+/// DevPanel 最小化・復元ボタンのラベルマーカー
+#[derive(Component)]
+pub struct DevPanelMinimizeButtonLabel;
+
 /// LOD インジケーターテキストのマーカー
 #[derive(Component)]
 pub struct LodIndicatorText;

@@ -6,13 +6,14 @@
 
 ## DevPanel（左上トグルパネル）
 
-`DevPanel` は画面左上に常時表示される開発用ボタン・インジケーター群。
+`DevPanel` は画面左上に表示される開発用ボタン・インジケーター群。
 `crates/bevy_app/src/interface/ui/dev_panel.rs` を公開facadeとし、`dev_panel/` 配下のcomponents、spawn、actions、presentationが定義・表示・操作を分担する。
 
 パネル内の表示順（上から）：
 
 | 行 | 内容 | 更新方法 |
 |---|---|---|
+| `-` / `+` | パネル本文の最小化 / 復元ボタン | クリック |
 | 3D: ON/OFF | Camera3d RTT 切り替えボタン | クリック |
 | IBuild: ON/OFF | 壁即時完成トグルボタン | クリック |
 | Mask / Light / Light2 / Terrain / Objs | 3D 固定費の切り分けボタン | クリック |
@@ -20,6 +21,12 @@
 | FPS: XX | フレームレート表示 | `update_fps_display_system`（1秒毎） |
 | LOD:X rtt:XX.Xpx | 地形 LOD レベルと tile_rtt_px | `update_lod_indicator_system`（毎フレーム） |
 | RTT:H Mask:ON Light:ON Light2:OFF Terrain:ON Objs:ON | RtT 品質と固定費トグル状態 | `update_render_perf_status_system`（変更時） |
+
+最小化ボタンはパネル本文の外側に常時残る。`-` を押すと既存ボタン、インジケーター、
+テキスト入力を含む本文を非表示にし、`+` を押すと同じentity群を復元する。
+本文内のテキスト入力がフォーカス中なら、最小化時にフォーカスも解除する。
+最小化中も FPS / LOD などの更新systemは動作し、復元時には最新値を表示する。
+初期状態は展開で、最小化状態は設定ファイルへ永続化しない。
 
 ### FPS インジケーター
 

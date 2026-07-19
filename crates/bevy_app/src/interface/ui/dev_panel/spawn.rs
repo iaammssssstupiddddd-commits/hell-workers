@@ -37,7 +37,54 @@ pub fn spawn_dev_panel_system(
         .id();
     commands.entity(top_left).add_child(panel);
 
-    commands.entity(panel).with_children(|parent| {
+    let minimize_button = commands
+        .spawn((
+            Button,
+            Node {
+                width: Val::Px(22.0),
+                height: Val::Px(22.0),
+                align_self: AlignSelf::FlexEnd,
+                border: UiRect::all(Val::Px(1.0)),
+                border_radius: BorderRadius::all(Val::Px(3.0)),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.18, 0.18, 0.18)),
+            BorderColor::all(Color::srgb(0.42, 0.42, 0.42)),
+            DevPanelMinimizeButton,
+            Name::new("DevPanelMinimizeButton"),
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new("-"),
+                TextFont {
+                    font_size: FontSize::Px(13.0),
+                    weight: FontWeight::BOLD,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+                DevPanelMinimizeButtonLabel,
+            ));
+        })
+        .id();
+
+    let body = commands
+        .spawn((
+            Node {
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(4.0),
+                ..default()
+            },
+            DevPanelBody,
+            Name::new("DevPanelBody"),
+        ))
+        .id();
+    commands
+        .entity(panel)
+        .add_children(&[minimize_button, body]);
+
+    commands.entity(body).with_children(|parent| {
         parent
             .spawn((
                 Button,

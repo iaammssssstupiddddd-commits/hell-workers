@@ -16,15 +16,16 @@ mod presentation;
 mod spawn;
 
 pub use actions::{
-    toggle_instant_build_button_system, toggle_render3d_button_system,
-    toggle_rtt_extra_light_button_system, toggle_rtt_light_button_system,
-    toggle_rtt_scene_objects_button_system, toggle_rtt_terrain_button_system,
-    toggle_soul_mask_button_system,
+    toggle_dev_panel_minimize_button_system, toggle_instant_build_button_system,
+    toggle_render3d_button_system, toggle_rtt_extra_light_button_system,
+    toggle_rtt_light_button_system, toggle_rtt_scene_objects_button_system,
+    toggle_rtt_terrain_button_system, toggle_soul_mask_button_system,
 };
 pub use components::{
-    InstantBuildButton, LodIndicatorText, RenderPerfStatusText, ToggleRender3dButton,
-    ToggleRttExtraLightButton, ToggleRttLightButton, ToggleRttSceneObjectsButton,
-    ToggleRttTerrainButton, ToggleSoulMaskButton,
+    DevPanelBody, DevPanelMinimizeButton, DevPanelMinimizeButtonLabel, InstantBuildButton,
+    LodIndicatorText, RenderPerfStatusText, ToggleRender3dButton, ToggleRttExtraLightButton,
+    ToggleRttLightButton, ToggleRttSceneObjectsButton, ToggleRttTerrainButton,
+    ToggleSoulMaskButton,
 };
 pub use presentation::{
     update_instant_build_button_visual_system, update_lod_indicator_system,
