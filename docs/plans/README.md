@@ -23,9 +23,9 @@
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Phase 3 進行中（未完: MS-3-5 / 7 / 8 / 9、受入残件: MS-3-6 / 10） | 3D-RtT 移行ロードマップ |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
-| [actionable-task-dashboard-plan-2026-07-19.md](actionable-task-dashboard-plan-2026-07-19.md) | Draft | 停滞理由を安全に可視化し、絞り込み・優先度変更・owner別キャンセルを追加する計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できない問題を解決する計画。 |
+| [task-dashboard-performance-validation-plan-2026-07-20.md](task-dashboard-performance-validation-plan-2026-07-20.md) | Draft | A3で未整備のdashboard mode別AI work counterと実renderer / allocator計測を、再現可能なperf harnessへ載せるの計画。 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 
@@ -62,6 +62,7 @@
 | [3d-rtt/archived/wfc-refactor-plan-2026-04-04.md](3d-rtt/archived/wfc-refactor-plan-2026-04-04.md) | Archived | WFC 関連リファクタ計画 |
 | [3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md](3d-rtt/archived/wfc-terrain-generation-plan-2026-04-01.md) | Archived | - 現状は [の計画。 |
 | [3d-rtt/archived/world-map-lod1-performance-plan-2026-04-09.md](3d-rtt/archived/world-map-lod1-performance-plan-2026-04-09.md) | Archived | ワールドマップの近景表示で使うの計画。 |
+| [archive/actionable-task-dashboard-plan-2026-07-19.md](archive/actionable-task-dashboard-plan-2026-07-19.md) | Archived | 停滞タスクの理由を安全に可視化し、絞り込み・優先度変更・owner別キャンセルを提供するの計画。 |
 | [archive/bevy-0-19-migration-plan-2026-07-05.md](archive/bevy-0-19-migration-plan-2026-07-05.md) | Archived | Bevy 0.18 のまま留まると、今後のエコシステム追随・バグ修正・パフォーマンス改善（render graph as systems, Parley テキスト等）を受けられないの計画。 |
 | [archive/dev-tools-debug-overlay-plan-2026-07-05.md](archive/dev-tools-debug-overlay-plan-2026-07-05.md) | Archived | Soul / Familiar の AI 状態（AssignedTask・フェーズ・Squad 状態）をワールド内で直接確認できず、デバッグがログ頼み。フレームスパイクの可視化手段がないの計画。 |
 | [archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md) | Archived | Familiar Task Management `hw_ai` 抽出 実装計画 |

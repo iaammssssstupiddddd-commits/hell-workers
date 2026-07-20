@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-17` |
 | 最終更新日 | `2026-07-20` |
 | 作成者 | `Codex` |
-| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/actionable-task-dashboard-plan-2026-07-19.md`（A3実装・自動検証完了、手動受入待ち） |
+| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能フォローアップ） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 背景と問題
@@ -121,11 +121,13 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 
 ##### A3. アクション可能なタスクダッシュボード
 
-実装状態: `2026-07-20` にコード、自動回帰、恒久文書同期まで完了し、重点実機受入待ち。
+実装状態: `2026-07-20` にコード、自動回帰、恒久文書同期、重点実機受入を完了し、計画をアーカイブした。
 task ごとの applicable evaluator / producer coverage、semantic input revision、既存 assignment/arbitration cycle 由来の
 latest-only 診断、flat filter/sort dashboard、positive capability allow-list、priority 0/5/10、owner別 cancellation、
-world replacement reset を実装した。詳細と手動シナリオは
-`docs/plans/actionable-task-dashboard-plan-2026-07-19.md` を参照する。
+world replacement reset を実装した。未計測だった dashboard mode 間の AI work counter と実 renderer / allocator は
+機能受入から切り離し、独立した性能フォローアップへ移管した。完了記録は
+`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`、性能計画は
+`docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md` を参照する。
 
 - 現行 `TaskEntry` を、表示用の `TaskStatusSummary` と操作意図へ拡張する。
 - タスク候補収集時に判定済みの情報から、次のような有界な停止理由を導出する。
@@ -452,7 +454,8 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 - [x] A1 の入力既定割当と将来のキーバインド設定との責務境界を確定した。
   `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md` の D8〜D26 を設計記録とする。
-- [ ] タスク停止理由を保存せず導出する場合の、表示更新頻度と履歴保持範囲を決める。
+- [x] タスク停止理由は producer の通常 0.5 秒 cycle で更新し、owner ごとの latest-only runtime snapshot として保持する。
+  保存・履歴化せず、world replacement で破棄する。
 - [ ] `StockpilePolicy` の初版を単一資源指定にするか、資源カテゴリ/許可集合まで含めるか決める。
 - [ ] Familiar の活動範囲を空間領域、距離、TaskArea のどれで表現するか決める。
 - [ ] 解体回収率を固定値、建築別、難易度/Edict 影響のどこまで初版へ含めるか決める。
@@ -465,15 +468,16 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 現在地
 
-- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 コード・自動検証・docs 100%（実機受入待ち）/ B〜D 未採否`
+- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（完了・archive済み）/ B〜D 未採否`
 - 直近で完了したこと: A3 の latest-only task diagnostics、filter/sort dashboard、安全な priority/cancel、
   owner cancellation、save/reset回帰、恒久ドキュメント同期。
-- 現在のブランチ/前提: `master`。A1 はアーカイブ済み、A2/A3 は重点実機受入後に計画をarchiveする。
+- 現在のブランチ/前提: `master`。A1/A3 はアーカイブ済み。A2 は重点実機受入後に計画をarchiveする。
 
 ### 次のAIが最初にやること
 
-1. A2/A3 の重点実機項目を確認し、問題なければ各計画をarchiveする。
-2. B〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
+1. A2 の重点実機項目を確認し、問題なければ計画をarchiveする。
+2. A3 の定量性能検証を進める場合は、独立した性能フォローアップを正本にする。
+3. B〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
 
 ### ブロッカー/注意点
 
@@ -522,3 +526,4 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | `2026-07-18` | `Codex` | A2 の計画作成と自己レビュー完了を反映。配置 feedback、通知上限、save/load terminal outcome、world replacement 後の発行順を関連計画へ固定 |
 | `2026-07-18` | `Codex` | A2 のコード・自動回帰・恒久docs同期を反映。有界通知、全配置typed feedback、save/load outcomeとrollback後の生存を実装。重点実機受入は関連計画へ残す |
 | `2026-07-20` | `Codex` | A3 のコード・自動回帰・恒久docs同期を反映。latest-only停止理由、filter/sort、priority/cancel、owner cleanup、reset境界を実装。重点実機受入は関連計画へ残す |
+| `2026-07-20` | `Codex` | A3 の重点実機受入と計画archiveを反映。未計測の dashboard mode counter / renderer / allocator は独立性能計画へ移管 |

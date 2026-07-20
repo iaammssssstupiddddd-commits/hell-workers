@@ -143,23 +143,24 @@ unowned manual task へ所有権を明示的に移してから `PlayerIssuedDesi
 
 ## 検証と実機受入
 
-状態判定、並び順、capability、owner cleanup、save/load、reset、AI work counter は決定的に再現できるため、
+状態判定、並び順、capability、owner cleanup、save/load、reset、latest-only map の構造上の有界性は決定的に再現できるため、
 自動テストを受入の正本にします。手動操作で正しそうに見えることを、未実装の回帰テストの代わりにはしません。
 
 - `cargo test -p hw_ui task_list`: 状態ラベル / semantic color token、全 filter / sort、camera / pin、capture 後の持越し防止
 - `cargo test -p bevy_app@0.1.0 task_dashboard`: status adapter、action capability、live revalidation、Pause / capture 時の drain
 - `python3 scripts/dev.py verify`: workspace 全体の unit / integration / clippy / docs gate
 
-現時点で実機へ残すのは次の 2 種類だけです。
+リリース前の実機 smoke check には次の 2 種類だけを残します。
 
 1. 実 renderer 上で状態・priority の色、文字、action bar が読みやすく崩れていないこと。
 2. 実 pointer で row と action button の hit-test が分離され、Pause / Modal が背後入力を遮断すること。
 
-同一 fixture の dashboard hidden / visible / active-filter capture による UI frame-time と実メモリ量は、
-再現可能な perf harness の完成後にだけ実施します。現時点では正式な実機確認項目に含めません。
+同一 fixture の dashboard hidden / visible / active-filter capture による AI work counter、UI frame-time、実メモリ量は、
+機能受入とは分離して `docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md` で追跡します。
+専用 perf harness が完成するまで性能値を受入済みとは扱いません。
 
-未整備の統合テストと実機手順の詳細は
-`docs/plans/actionable-task-dashboard-plan-2026-07-19.md` §7 を正本とします。
+A3 の完了判断と受入履歴は
+`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md` §7 を参照します。
 
 ## 関連ファイル（最終境界反映）
 
