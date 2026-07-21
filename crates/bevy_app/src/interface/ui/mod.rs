@@ -18,12 +18,11 @@ pub use hw_ui::selection::PlacementFeedbackState;
 
 // interaction から外部が使うシンボル
 pub use interaction::{
-    arch_category_action_system, door_lock_action_system, hover_action_button_system,
-    move_plant_building_action_system, task_summary_ui_system, ui_interaction_system,
+    hover_action_button_system, task_summary_ui_system, ui_interaction_system,
     update_area_edit_preview_ui_system, update_dream_loss_popup_ui_system,
     update_dream_pool_display_system, update_fps_display_system, update_mode_text_system,
-    update_operation_dialog_system, update_speed_button_highlight_system,
-    update_ui_input_state_system,
+    update_move_plant_hover_target_system, update_operation_dialog_system,
+    update_speed_button_highlight_system, update_ui_input_state_system,
 };
 
 // list から外部が使うシンボル

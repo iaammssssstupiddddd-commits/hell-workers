@@ -1,4 +1,5 @@
 pub mod construction_helpers;
+pub mod construction_phase_transition;
 pub mod floor_construction;
 pub mod ground_resources;
 pub mod item_lifetime;
@@ -20,6 +21,11 @@ pub use resource_cache::SharedResourceCache;
 pub use resource_cache::{apply_reservation_op, apply_reservation_requests_system};
 
 pub use construction_helpers::{ResourceItemVisualHandles, spawn_refund_items};
+#[cfg(feature = "profiling")]
+pub use construction_phase_transition::ConstructionPerfMetrics;
+pub use construction_phase_transition::{
+    floor_construction_phase_transition_system, wall_construction_phase_transition_system,
+};
 
 // Convenience re-exports for task_execution handlers
 pub use hw_core::logistics::ResourceType;

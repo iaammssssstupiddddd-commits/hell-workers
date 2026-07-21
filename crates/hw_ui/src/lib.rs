@@ -29,7 +29,8 @@ impl Plugin for HwUiPlugin {
             .init_resource::<notifications::NotificationUiRuntime>()
             .init_resource::<panels::task_list::TaskDashboardViewState>()
             .init_resource::<panels::task_list::TaskDashboardActionState>()
-            .init_resource::<panels::task_list::TaskListDirty>();
+            .init_resource::<panels::task_list::TaskListDirty>()
+            .init_resource::<interaction::HoverActionTarget>();
     }
 }
 
@@ -75,6 +76,7 @@ pub fn reset_for_world_replace(world: &mut World) {
     reset_existing_resource::<area_edit::AreaEditHistory>(world);
     reset_existing_resource::<area_edit::AreaEditClipboard>(world);
     reset_existing_resource::<interaction::TextFieldPendingAction>(world);
+    reset_existing_resource::<interaction::HoverActionTarget>(world);
     reset_existing_resource::<selection::PlacementFeedbackState>(world);
     reset_existing_resource::<panels::task_list::TaskDashboardViewState>(world);
     reset_existing_resource::<panels::task_list::TaskDashboardActionState>(world);
@@ -199,6 +201,9 @@ mod tests {
             .insert(stale_simulation_entity, list_row);
         world.insert_resource(node_index);
         world.insert_resource(list::EntityListDirty::default());
+        world.insert_resource(interaction::HoverActionTarget(Some(
+            stale_simulation_entity,
+        )));
         world.insert_resource(panels::task_list::TaskDashboardViewState {
             status: panels::task_list::TaskStatusFilter::Blocked,
             ..default()
@@ -246,6 +251,11 @@ mod tests {
             .push(notification, std::time::Duration::ZERO);
 
         reset_for_world_replace(&mut world);
+
+        assert_eq!(
+            *world.resource::<interaction::HoverActionTarget>(),
+            interaction::HoverActionTarget::default()
+        );
 
         assert!(
             world

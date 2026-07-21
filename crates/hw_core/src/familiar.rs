@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::constants::{FATIGUE_THRESHOLD, TILE_SIZE};
+use crate::constants::{FAMILIAR_RECRUIT_FATIGUE_HYSTERESIS, FATIGUE_THRESHOLD, TILE_SIZE};
 
 /// 使い魔の名前リスト
 const FAMILIAR_NAMES: [&str; 10] = [
@@ -87,6 +87,28 @@ impl Default for FamiliarOperation {
     }
 }
 
+impl FamiliarOperation {
+    /// 既存 member のreleaseとtask assignmentに使う疲労閾値。
+    ///
+    /// recruit用のヒステリシスと混同しないよう、AI consumerはこのAPIを介して
+    /// 保存値を取得する。
+    pub fn release_fatigue_threshold(&self) -> f32 {
+        self.fatigue_threshold
+    }
+
+    /// 新規 Soul の recruit に使う疲労閾値。
+    ///
+    /// 保存値は既存 member の release/task assignment 閾値としてそのまま扱い、
+    /// recruit だけを hysteresis 分厳しくする。0（および非有限値）は recruit 無効。
+    pub fn recruit_fatigue_threshold(&self) -> Option<f32> {
+        let release = self.fatigue_threshold;
+        if !release.is_finite() || release <= f32::EPSILON {
+            return None;
+        }
+        Some((release - FAMILIAR_RECRUIT_FATIGUE_HYSTERESIS).max(0.0))
+    }
+}
+
 #[derive(Component, Debug, Clone, PartialEq, Reflect)]
 #[reflect(Component)]
 #[derive(Default)]
@@ -101,4 +123,77 @@ pub enum FamiliarAiState {
         target: Option<Entity>,
         timer: f32,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_release_threshold_disables_recruitment() {
+        let operation = FamiliarOperation {
+            fatigue_threshold: 0.0,
+            ..default()
+        };
+
+        assert_eq!(operation.recruit_fatigue_threshold(), None);
+    }
+
+    #[test]
+    fn positive_release_threshold_has_strictly_lower_recruit_threshold() {
+        for release in [f32::EPSILON * 2.0, 0.1, 0.2, 0.8, 1.0] {
+            let operation = FamiliarOperation {
+                fatigue_threshold: release,
+                ..default()
+            };
+            let recruit = operation.recruit_fatigue_threshold().unwrap();
+            assert!(recruit < release);
+        }
+    }
+
+    #[test]
+    fn recruit_threshold_boundaries_are_defined() {
+        let expected = [(0.1, 0.0), (0.2, 0.0), (0.8, 0.6), (1.0, 0.8)];
+
+        for (release, expected_recruit) in expected {
+            let operation = FamiliarOperation {
+                fatigue_threshold: release,
+                ..default()
+            };
+            let actual = operation.recruit_fatigue_threshold().unwrap();
+            assert!((actual - expected_recruit).abs() <= f32::EPSILON);
+        }
+    }
+
+    #[test]
+    fn recruit_and_release_use_distinct_thresholds() {
+        let operation = FamiliarOperation {
+            fatigue_threshold: 0.8,
+            ..default()
+        };
+
+        assert!((operation.release_fatigue_threshold() - 0.8).abs() <= f32::EPSILON);
+        assert!((operation.recruit_fatigue_threshold().unwrap() - 0.6).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn member_task_assignment_keeps_release_threshold() {
+        let operation = FamiliarOperation {
+            fatigue_threshold: 0.8,
+            ..default()
+        };
+
+        assert_eq!(operation.release_fatigue_threshold(), 0.8);
+    }
+
+    #[test]
+    fn non_finite_release_threshold_disables_recruitment() {
+        for release in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let operation = FamiliarOperation {
+                fatigue_threshold: release,
+                ..default()
+            };
+            assert_eq!(operation.recruit_fatigue_threshold(), None);
+        }
+    }
 }

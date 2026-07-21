@@ -19,6 +19,9 @@
 | `GatheringSpotSpatialGrid` | `gathering.rs` | 集会スポット位置検索。`GatheringSpot.center` の Added-only policy |
 | `FloorConstructionSpatialGrid` | `floor_construction.rs` | 床建設サイト位置検索。標準 Transform policy |
 
+`door_proximity.rs`は`SpatialGrid`から近傍Soulだけを抽出するdoor auto-open/close adapterと
+`DoorPerfMetrics`を所有する。1候補の開閉ruleと`DoorState`適用は`hw_world`、production登録はrootが所有する。
+
 ## 主要型
 
 | ファイル | 内容 |
@@ -28,6 +31,9 @@
 | `lib.rs` | 全 alias、tag、共通 API の pub re-export |
 
 ### SpatialGridOps トレイト
+
+traitの正本は`hw_world/src/spatial.rs`です。`hw_spatial::grid`はこれをre-exportし、
+concreteな`SpatialIndex<Tag>`実装を一つだけ提供します。
 
 ```rust
 trait SpatialGridOps {
@@ -66,6 +72,7 @@ hw_spatial は grid resource 本体と汎用 update system を所有する。`cr
 
 | 置き場所 | 内容 |
 |---|---|
-| `hw_spatial` | `SpatialIndex<Tag>`、`GridData`、`SpatialGridOps`、crate 所有 tag、標準 Transform updater、Resource / Gathering 専用 policy |
+| `hw_world` | downstream AI helperも参照できる`SpatialGridOps` trait契約 |
+| `hw_spatial` | `SpatialIndex<Tag>`、`GridData`、traitのconcrete impl、crate所有tag、標準Transform updater、Resource/Gathering専用policy、door proximity adapter |
 | `hw_logistics` | `ResourceItem` / `Stockpile` / `TransportRequest` 向けの component 特化ラッパ（例: `update_resource_spatial_grid_system_resource_item`） |
 | `bevy_app::plugins::spatial` | 上記システムの登録のみ（adapter 用の `systems/spatial` モジュールはない） |

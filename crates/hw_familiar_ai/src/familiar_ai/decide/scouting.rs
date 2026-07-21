@@ -13,7 +13,7 @@ pub struct FamiliarScoutingContext<'a, 'w, 's> {
     pub fam_entity: Entity,
     pub fam_pos: Vec2,
     pub target_soul: Entity,
-    pub fatigue_threshold: f32,
+    pub fatigue_threshold: Option<f32>,
     pub max_workers: usize,
     pub squad: &'a mut Vec<Entity>,
     pub ai_state: &'a mut FamiliarAiState,
@@ -31,6 +31,18 @@ pub struct ScoutingOutcome {
 /// スカウト（Scouting）状態のロジック
 /// ターゲットに接近し、近づいたらリクルートする
 pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> ScoutingOutcome {
+    let Some(recruit_threshold) = ctx.fatigue_threshold else {
+        debug!(
+            "FAM_AI: {:?} scouting cancelled (recruitment disabled)",
+            ctx.fam_entity
+        );
+        *ctx.ai_state = FamiliarAiState::SearchingTask;
+        return ScoutingOutcome {
+            state_changed: true,
+            recruited_entity: None,
+        };
+    };
+
     // 早期退出: 分隊が既に満員なら監視モードへ
     if ctx.squad.len() >= ctx.max_workers {
         debug!(
@@ -53,8 +65,6 @@ pub fn scouting_logic(ctx: &mut FamiliarScoutingContext<'_, '_, '_>) -> Scouting
     if let Ok((_soul_entity, target_transform, soul, soul_task, uc)) =
         ctx.q_souls.get(ctx.target_soul)
     {
-        // リクルート閾値は委譲時と揃える（境界値も許容）
-        let recruit_threshold = ctx.fatigue_threshold;
         let fatigue_ok = soul.fatigue <= recruit_threshold;
         let stress_ok = ctx.q_breakdown.get(ctx.target_soul).is_err();
 

@@ -66,6 +66,7 @@
 | [archive/bevy-0-19-migration-plan-2026-07-05.md](archive/bevy-0-19-migration-plan-2026-07-05.md) | Archived | Bevy 0.18 のまま留まると、今後のエコシステム追随・バグ修正・パフォーマンス改善（render graph as systems, Parley テキスト等）を受けられないの計画。 |
 | [archive/dev-tools-debug-overlay-plan-2026-07-05.md](archive/dev-tools-debug-overlay-plan-2026-07-05.md) | Archived | Soul / Familiar の AI 状態（AssignedTask・フェーズ・Squad 状態）をワールド内で直接確認できず、デバッグがログ頼み。フレームスパイクの可視化手段がないの計画。 |
 | [archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md) | Archived | Familiar Task Management `hw_ai` 抽出 実装計画 |
+| [archive/implementation-spec-alignment-plan-2026-07-20.md](archive/implementation-spec-alignment-plan-2026-07-20.md) | Archived | - 現行実装と仕様文書の比較で、実装バグ、意図的な実装変更に追従していない文書、未登録の重複system、の計画。 |
 | [archive/input-action-context-resolver-plan-2026-07-17.md](archive/input-action-context-resolver-plan-2026-07-17.md) | Archived | Track A1: 離散キーボード競合解決と Modal/Pause の背景入力遮断計画 |
 | [archive/large-source-file-split-plan-2026-07-17.md](archive/large-source-file-split-plan-2026-07-17.md) | Archived | 500行以上の実装ファイル分割計画 |
 | [archive/runtime-correctness-contracts-plan-2026-07-12.md](archive/runtime-correctness-contracts-plan-2026-07-12.md) | Archived | 実行時正しさ契約リファクタリング計画 |

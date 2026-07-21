@@ -60,6 +60,8 @@
 - Soul mask と追加テスト用の2本目のRtT `DirectionalLight` はDevPanelの `Mask` / `Light2` buttonから切り替える。F5/F9はplayer Save/Load専用で、debug aliasを持たない
 - 起動時に固定したい場合は `HW_DISABLE_SOUL_MASK=1` / `HW_DISABLE_RTT_DIRECTIONAL_LIGHT=1` / `HW_ENABLE_RTT_EXTRA_DIRECTIONAL_LIGHT=1` / `HW_DISABLE_RTT_TERRAIN=1` / `HW_DISABLE_RTT_SCENE_OBJECTS=1` を指定する
 - F3/F4/F6/F7/F8/F12 は project-owned resolver が exact chord として解決し、Modal/Pause/TextInput 中は生成しない。各 consumer は既存 Resource mutation だけを担当する
+- `F12`は`DebugVisible`を切り替える。trueの間、`hw_visual::soul::task_link_system`が
+  `SoulTaskVisualState`のtask targetへGizmosの線と終点circleを描く。永続する`WorkLine` entity/componentは生成しない
 
 ### IBuild: ON / OFF ボタン（Instant Build）
 

@@ -1,15 +1,12 @@
 use super::components::{DreamParticle, DreamVisualState};
 use super::handles::{self, DreamBubbleHandles};
-use super::ui_handles::DreamBubbleUiHandles;
 use bevy::prelude::ChildOf;
 use bevy::prelude::*;
-use hw_core::camera::MainCamera;
 use hw_core::constants::*;
 use hw_core::relationships::{ParticipatingIn, RestAreaOccupants};
 use hw_core::soul::{
     DamnedSoul, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
 };
-use hw_core::ui_nodes::{UiMountSlot, UiNodeRegistry, UiSlot};
 use hw_core::visual_mirror::gather::RestAreaVisual;
 use rand::Rng;
 
@@ -147,49 +144,18 @@ pub struct RestAreaDreamParams<'w, 's> {
         's,
         (
             Entity,
-            &'static Transform,
             &'static RestAreaVisual,
             Option<&'static RestAreaOccupants>,
             &'static mut DreamVisualState,
         ),
     >,
-    q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
-    q_ui_bubble_layer: Query<'w, 's, (Entity, &'static UiMountSlot)>,
-    ui_nodes: Res<'w, UiNodeRegistry>,
-    q_ui_transform: Query<'w, 's, (&'static ComputedNode, &'static UiGlobalTransform)>,
-    ui_handles: Res<'w, DreamBubbleUiHandles>,
 }
 
 pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
     let dt = p.time.delta_secs();
     let mut rng = rand::thread_rng();
 
-    let Some((camera, camera_transform)) = p.q_camera.iter().next() else {
-        return;
-    };
-    let Some(dream_bubble_layer) = p
-        .q_ui_bubble_layer
-        .iter()
-        .find(|(_, slot)| matches!(slot, UiMountSlot::DreamBubbleLayer))
-        .map(|(e, _)| e)
-    else {
-        return;
-    };
-
-    let viewport_size = camera
-        .logical_viewport_size()
-        .unwrap_or(Vec2::new(1920.0, 1080.0));
-
-    let mut target_pos = Vec2::new(viewport_size.x - 80.0, 40.0);
-
-    if let Some(entity) = p.ui_nodes.get_slot(UiSlot::DreamPoolIcon)
-        && let Ok((computed, transform)) = p.q_ui_transform.get(entity)
-    {
-        let center = transform.translation * computed.inverse_scale_factor();
-        target_pos = center;
-    }
-
-    for (rest_area_entity, transform, rest_area_visual, occupants_opt, mut visual_state) in
+    for (rest_area_entity, rest_area_visual, occupants_opt, mut visual_state) in
         p.q_rest_areas.iter_mut()
     {
         let occupant_count = occupants_opt
@@ -249,18 +215,6 @@ pub fn rest_area_dream_particle_spawn_system(mut p: RestAreaDreamParams) {
             ChildOf(rest_area_entity),
             Name::new("RestAreaDreamParticle"),
         ));
-
-        let world_pos = transform.translation + Vec3::new(x_offset, y_offset, 0.0);
-        if let Ok(start_pos) = camera.world_to_viewport(camera_transform, world_pos) {
-            super::ui_particle::spawn_ui_particle(
-                &mut p.commands,
-                start_pos,
-                target_pos,
-                dream_bubble_layer,
-                &p.ui_handles,
-                0.5 * scale_factor,
-            );
-        }
 
         visual_state.active_particles = visual_state.active_particles.saturating_add(1);
         visual_state.particle_cooldown = current_interval;

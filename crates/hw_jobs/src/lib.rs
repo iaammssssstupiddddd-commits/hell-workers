@@ -9,8 +9,7 @@ pub mod visual_sync;
 
 pub use construction::{
     ConstructionSiteAccess, ConstructionSitePositions, FloorConstructionSite, FloorTileState,
-    WallConstructionSite, WallTileState, floor_construction_phase_transition_system,
-    wall_construction_phase_transition_system,
+    WallConstructionSite, WallTileState,
 };
 pub use diagnostics::{
     TaskDiagnosticClass, TaskDiagnosticCounters, TaskDiagnosticCoverage, TaskDiagnosticCycleHeader,

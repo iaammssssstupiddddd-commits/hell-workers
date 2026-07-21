@@ -1,7 +1,5 @@
 mod blueprint_cancellation;
 mod building_completion;
-mod construction_metrics;
-mod door_proximity;
 pub mod floor_construction;
 pub mod soul_spa_construction;
 pub mod wall_construction;
@@ -11,11 +9,6 @@ use bevy::prelude::SystemSet;
 pub use blueprint_cancellation::blueprint_cancellation_system;
 pub(crate) use building_completion::attach_building_shell;
 pub use building_completion::{BuildingCompletionSet, building_completion_system};
-#[cfg(feature = "profiling")]
-pub use construction_metrics::ConstructionPerfMetrics;
-#[cfg(feature = "profiling")]
-pub use door_proximity::DoorPerfMetrics;
-pub use door_proximity::{door_auto_close_nearby_system, door_auto_open_nearby_system};
 pub use hw_core::world::DoorState;
 pub use hw_jobs::model::{
     Blueprint, BlueprintCancelRequested, BonePile, BridgeMarker, Building, BuildingCategory,
@@ -26,6 +19,8 @@ pub use hw_jobs::model::{
 pub use hw_jobs::mud_mixer::{MudMixerStorage, StoredByMixer, TargetMixer};
 pub use hw_jobs::remove_tile_task_components;
 pub use hw_jobs::{Door, DoorCloseTimer};
+#[cfg(feature = "profiling")]
+pub use hw_logistics::ConstructionPerfMetrics;
 pub use hw_logistics::{ResourceItemVisualHandles, spawn_refund_items};
 pub use hw_world::apply_door_state;
 

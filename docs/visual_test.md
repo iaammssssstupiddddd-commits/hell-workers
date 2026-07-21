@@ -23,7 +23,7 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo run -p visual_t
 | ワールド上での建築物配置 | ゲーム本体と同一のゴーストプレビュー + クリック配置方式 |
 | 建築物 2D/3D 表示 | 2D スプライト + 3D メッシュの重ね描画を本番環境と同じ条件で確認 |
 | 影・ライト | DirectionalLight + CascadeShadowConfig による影をゲーム本体と同条件で検証 |
-| RtT パイプライン | Camera3d → オフスクリーンテクスチャ → composite sprite の描画経路 |
+| RtT パイプライン | scene Camera3d + Soul mask Camera3d → 2枚のオフスクリーンテクスチャ → composite sprite の描画経路 |
 
 ## 操作
 
@@ -119,15 +119,16 @@ CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo run -p visual_t
 | `hud.rs` | パネル表示制御・ボタン状態更新・動的テキスト更新 |
 | `input.rs` | キーボード入力ハンドラ（Soul モード / Build モード）|
 
-### カメラ 3 層構造（ゲーム本体と同構成）
+### カメラ 4 pass構造
 
 ```
-Camera3d          (LAYER_3D,      order=-1)  → RtT オフスクリーンテクスチャ
-TestMainCamera    (LAYER_2D,      order= 0)  ← PanCamera（パン・ズーム）
-Overlay Camera2d  (LAYER_OVERLAY, order= 1)  ← composite sprite をスクリーンに描画
+Camera3dRtt          (LAYER_3D,             order=-2) → scene RtT
+Camera3dSoulMaskTest (LAYER_3D_SOUL_MASK,   order=-1) → silhouette mask RtT
+TestMainCamera       (LAYER_2D,             order= 0) ← PanCamera（パン・ズーム）
+Overlay Camera2d     (LAYER_OVERLAY,        order= 1) ← composite sprite + UI
 ```
 
-`sync_test_camera3d` が毎フレーム TestMainCamera の Transform/scale を Camera3d へ反映する。
+`sync_test_camera3d` が毎フレーム TestMainCamera のTransform/scaleと矢視方向を2台のCamera3dへ反映する。
 
 ### ゴーストプレビュー（建築物配置）
 

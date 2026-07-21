@@ -330,7 +330,13 @@ pub fn process_recruitment<G: SpatialGridOps>(
 ) -> RecruitmentOutcome {
     let fam_pos = ctx.fam_transform.translation.truncate();
     let command_radius = ctx.familiar.command_radius;
-    let fatigue_threshold = ctx.familiar_op.fatigue_threshold;
+    let Some(fatigue_threshold) = ctx.familiar_op.recruit_fatigue_threshold() else {
+        debug!(
+            "FAM_AI: {:?} recruitment disabled by fatigue threshold",
+            ctx.fam_entity
+        );
+        return RecruitmentOutcome::NoRecruit;
+    };
     let task_area_center = ctx.task_area_opt.map(TaskArea::center);
 
     if ctx.squad_entities.len() < ctx.max_workers {

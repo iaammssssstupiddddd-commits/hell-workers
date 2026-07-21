@@ -124,7 +124,6 @@ pub fn update_mode_text_system(
             play_mode: play_mode.get(),
             build_context: &build_context,
             companion_state: &companion_state,
-            zone_context: &zone_context,
             task_context: &task_context,
         },
         mode::ModeDisplayInfo {

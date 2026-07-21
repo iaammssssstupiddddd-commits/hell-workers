@@ -1,5 +1,6 @@
 pub mod blueprint;
 pub mod designation;
+pub mod door_proximity;
 pub mod familiar;
 pub mod floor_construction;
 pub mod gathering;
@@ -17,6 +18,9 @@ pub use designation::{
     DesignationSpatialGrid, update_designation_spatial_grid_system,
     update_designation_spatial_grid_system_designation,
 };
+#[cfg(feature = "profiling")]
+pub use door_proximity::DoorPerfMetrics;
+pub use door_proximity::{door_auto_close_nearby_system, door_auto_open_nearby_system};
 pub use familiar::{
     FamiliarSpatialGrid, update_familiar_entity_spatial_grid_system,
     update_familiar_spatial_grid_system,

@@ -21,18 +21,17 @@ use crate::systems::energy::power_output::soul_spa_power_output_system;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
 use crate::systems::jobs::floor_construction::{
     floor_construction_cancellation_system, floor_construction_completion_system,
-    floor_construction_phase_transition_system,
 };
 use crate::systems::jobs::soul_spa_construction::{
     soul_spa_auto_haul_system, soul_spa_delivery_sync_system, soul_spa_tile_activate_system,
 };
 use crate::systems::jobs::wall_construction::{
     wall_construction_cancellation_system, wall_construction_completion_system,
-    wall_construction_phase_transition_system, wall_framed_tile_spawn_system,
+    wall_framed_tile_spawn_system,
 };
 use crate::systems::jobs::{
     BuildingCompletionSet, TaskOwnerCancellationSet, blueprint_cancellation_system,
-    building_completion_system, door_auto_close_nearby_system, door_auto_open_nearby_system,
+    building_completion_system,
 };
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
 use crate::systems::logistics::transport_request::{TransportRequestPlugin, TransportRequestSet};
@@ -58,6 +57,10 @@ use hw_logistics::visual_sync::{
     on_stockpile_added_sync_visual, on_wheelbarrow_added, sync_inventory_item_visual_system,
     sync_stockpile_visual_system,
 };
+use hw_logistics::{
+    floor_construction_phase_transition_system, wall_construction_phase_transition_system,
+};
+use hw_spatial::{door_auto_close_nearby_system, door_auto_open_nearby_system};
 use hw_world::{
     ObstaclePositionIndex, RoomDetectionState, RoomTileLookup, RoomValidationState,
     detect_rooms_system, mark_room_dirty_from_building_changes_system, obstacle_sync_system,
@@ -87,22 +90,11 @@ impl Plugin for LogicPlugin {
         app.init_resource::<ObstaclePositionIndex>();
         app.init_resource::<EnergyUpdateDirty>();
         #[cfg(feature = "profiling")]
-        app.init_resource::<crate::systems::jobs::DoorPerfMetrics>()
+        app.init_resource::<hw_spatial::DoorPerfMetrics>()
             .init_resource::<crate::systems::jobs::ConstructionPerfMetrics>()
             .init_resource::<crate::systems::energy::grid_recalc::EnergyPerfMetrics>();
 
-        app.configure_sets(
-            Update,
-            (
-                TaskOwnerCancellationSet::Cancel,
-                TaskOwnerCancellationSet::Flush,
-            )
-                .chain()
-                .before(FamiliarAiSystemSet::Perceive)
-                .before(SoulAiSystemSet::Perceive)
-                .before(TransportRequestSet::Perceive)
-                .in_set(GameSystemSet::Logic),
-        );
+        configure_task_owner_cancellation_schedule(app);
         app.add_systems(
             Update,
             (
@@ -111,10 +103,6 @@ impl Plugin for LogicPlugin {
                 wall_construction_cancellation_system,
             )
                 .in_set(TaskOwnerCancellationSet::Cancel),
-        )
-        .add_systems(
-            Update,
-            ApplyDeferred.in_set(TaskOwnerCancellationSet::Flush),
         );
 
         // Soul Energy 型登録
@@ -174,31 +162,6 @@ impl Plugin for LogicPlugin {
             building_completion_system
                 .after(SoulAiSystemSet::Execute)
                 .in_set(BuildingCompletionSet)
-                .in_set(GameSystemSet::Logic),
-        )
-        // グループC: floor construction（フェーズ順序が必要）
-        .add_systems(
-            Update,
-            (
-                floor_construction_phase_transition_system,
-                floor_construction_completion_system,
-            )
-                .chain()
-                .after(TaskOwnerCancellationSet::Flush)
-                .in_set(GameSystemSet::Logic),
-        )
-        // グループD: wall construction（フェーズ順序が必要）
-        .add_systems(
-            Update,
-            (
-                crate::plugins::interface_debug::debug_instant_complete_walls_system
-                    .run_if(|d: Res<crate::DebugInstantBuild>| d.0),
-                wall_framed_tile_spawn_system,
-                wall_construction_phase_transition_system,
-                wall_construction_completion_system,
-            )
-                .chain()
-                .after(TaskOwnerCancellationSet::Flush)
                 .in_set(GameSystemSet::Logic),
         )
         // グループE: Soul Spa construction + energy pipeline.
@@ -267,19 +230,10 @@ impl Plugin for LogicPlugin {
         .add_observer(on_unpowered_added)
         .add_observer(on_unpowered_removed);
 
-        configure_obstacle_sync_schedule(app);
+        register_construction_systems(app);
 
-        app.add_systems(
-            Update,
-            (
-                door_auto_open_nearby_system
-                    .before(crate::entities::damned_soul::movement::soul_movement),
-                familiar_movement,
-                door_auto_close_nearby_system
-                    .after(crate::entities::damned_soul::movement::soul_movement),
-            )
-                .in_set(GameSystemSet::Actor),
-        );
+        configure_obstacle_sync_schedule(app);
+        register_door_proximity_systems(app);
 
         #[cfg(feature = "profiling")]
         app.add_systems(
@@ -295,6 +249,67 @@ impl Plugin for LogicPlugin {
             familiar_spawning_system.in_set(GameSystemSet::Logic),
         );
     }
+}
+
+fn register_construction_systems(app: &mut App) {
+    // Group C: floor construction (phase order required).
+    app.add_systems(
+        Update,
+        (
+            floor_construction_phase_transition_system,
+            floor_construction_completion_system,
+        )
+            .chain()
+            .after(TaskOwnerCancellationSet::Flush)
+            .in_set(GameSystemSet::Logic),
+    )
+    // Group D: wall construction (phase order required).
+    .add_systems(
+        Update,
+        (
+            crate::plugins::interface_debug::debug_instant_complete_walls_system
+                .run_if(|d: Res<crate::DebugInstantBuild>| d.0),
+            wall_framed_tile_spawn_system,
+            wall_construction_phase_transition_system,
+            wall_construction_completion_system,
+        )
+            .chain()
+            .after(TaskOwnerCancellationSet::Flush)
+            .in_set(GameSystemSet::Logic),
+    );
+}
+
+fn register_door_proximity_systems(app: &mut App) {
+    app.add_systems(
+        Update,
+        (
+            door_auto_open_nearby_system
+                .before(crate::entities::damned_soul::movement::soul_movement),
+            familiar_movement,
+            door_auto_close_nearby_system
+                .after(crate::entities::damned_soul::movement::soul_movement),
+        )
+            .in_set(GameSystemSet::Actor),
+    );
+}
+
+fn configure_task_owner_cancellation_schedule(app: &mut App) {
+    app.configure_sets(
+        Update,
+        (
+            TaskOwnerCancellationSet::Cancel,
+            TaskOwnerCancellationSet::Flush,
+        )
+            .chain()
+            .before(FamiliarAiSystemSet::Perceive)
+            .before(SoulAiSystemSet::Perceive)
+            .before(TransportRequestSet::Perceive)
+            .in_set(GameSystemSet::Logic),
+    )
+    .add_systems(
+        Update,
+        ApplyDeferred.in_set(TaskOwnerCancellationSet::Flush),
+    );
 }
 
 fn configure_obstacle_sync_schedule(app: &mut App) {
@@ -317,10 +332,17 @@ fn configure_obstacle_sync_schedule(app: &mut App) {
 
 #[cfg(test)]
 mod tests {
-    use super::configure_obstacle_sync_schedule;
+    use super::{
+        configure_obstacle_sync_schedule, configure_task_owner_cancellation_schedule,
+        door_auto_close_nearby_system, door_auto_open_nearby_system,
+        floor_construction_phase_transition_system, register_construction_systems,
+        register_door_proximity_systems, wall_construction_phase_transition_system,
+    };
     use crate::systems::GameSystemSet;
+    use crate::systems::jobs::TaskOwnerCancellationSet;
     use bevy::prelude::*;
-    use hw_core::system_sets::SoulAiSystemSet;
+    use hw_core::system_sets::{FamiliarAiSystemSet, SoulAiSystemSet};
+    use hw_familiar_ai::FamiliarTaskDecisionSet;
     use hw_jobs::{ObstaclePosition, ObstacleSourceKind};
     use hw_world::{
         ObstaclePositionIndex, TerrainChangedEvent, WorldMap, seed_obstacle_position_index,
@@ -340,6 +362,180 @@ mod tests {
 
     fn record_pathfinding_input(world_map: Res<WorldMap>, mut probe: ResMut<PathfindingProbe>) {
         probe.0 = Some(world_map.is_walkable(21, 22));
+    }
+
+    fn registered_system_count(app: &App, target: std::any::TypeId) -> usize {
+        let schedules = app.world().resource::<Schedules>();
+        let update = schedules.get(Update).expect("Update schedule must exist");
+        update
+            .graph()
+            .systems
+            .iter()
+            .filter(|(_, system, _)| system.system_type() == target)
+            .count()
+    }
+
+    #[test]
+    fn construction_transition_has_single_production_registration() {
+        let mut app = App::new();
+        register_construction_systems(&mut app);
+
+        assert_eq!(
+            registered_system_count(
+                &app,
+                floor_construction_phase_transition_system.system_type_id(),
+            ),
+            1
+        );
+        assert_eq!(
+            registered_system_count(
+                &app,
+                wall_construction_phase_transition_system.system_type_id(),
+            ),
+            1
+        );
+    }
+
+    #[test]
+    fn door_proximity_has_single_production_registration() {
+        let mut app = App::new();
+        register_door_proximity_systems(&mut app);
+
+        assert_eq!(
+            registered_system_count(&app, door_auto_open_nearby_system.system_type_id()),
+            1
+        );
+        assert_eq!(
+            registered_system_count(&app, door_auto_close_nearby_system.system_type_id()),
+            1
+        );
+    }
+
+    #[derive(Component)]
+    struct PendingCancelledTask;
+
+    #[derive(Resource)]
+    struct CancellationTarget(Entity);
+
+    #[derive(Resource, Default)]
+    struct ExecuteCancellationProbe(bool);
+
+    fn request_task_cancellation(target: Res<CancellationTarget>, mut commands: Commands) {
+        commands.entity(target.0).remove::<PendingCancelledTask>();
+    }
+
+    fn observe_cancelled_task_before_execute(
+        target: Res<CancellationTarget>,
+        q_pending: Query<(), With<PendingCancelledTask>>,
+        mut probe: ResMut<ExecuteCancellationProbe>,
+    ) {
+        probe.0 = q_pending.get(target.0).is_err();
+    }
+
+    #[test]
+    fn user_cancellation_is_visible_before_execute() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<ExecuteCancellationProbe>()
+            .configure_sets(
+                Update,
+                (SoulAiSystemSet::Perceive, SoulAiSystemSet::Execute)
+                    .chain()
+                    .in_set(GameSystemSet::Logic),
+            );
+        configure_task_owner_cancellation_schedule(&mut app);
+        let task = app.world_mut().spawn(PendingCancelledTask).id();
+        app.insert_resource(CancellationTarget(task)).add_systems(
+            Update,
+            (
+                request_task_cancellation.in_set(TaskOwnerCancellationSet::Cancel),
+                observe_cancelled_task_before_execute.in_set(SoulAiSystemSet::Execute),
+            ),
+        );
+
+        app.update();
+
+        assert!(app.world().resource::<ExecuteCancellationProbe>().0);
+    }
+
+    #[derive(Component)]
+    struct AutoGatherVisible;
+
+    #[derive(Resource, Default)]
+    struct AutoGatherEntity(Option<Entity>);
+
+    #[derive(Resource, Default)]
+    struct AutoGatherProbe {
+        revision_saw_entity: bool,
+        delegation_saw_entity: bool,
+    }
+
+    fn create_auto_gather_designation(
+        mut commands: Commands,
+        mut entity: ResMut<AutoGatherEntity>,
+    ) {
+        entity.0 = Some(commands.spawn(AutoGatherVisible).id());
+    }
+
+    fn observe_auto_gather_at_revision(
+        entity: Res<AutoGatherEntity>,
+        q_visible: Query<(), With<AutoGatherVisible>>,
+        mut probe: ResMut<AutoGatherProbe>,
+    ) {
+        probe.revision_saw_entity = entity.0.is_some_and(|entity| q_visible.get(entity).is_ok());
+    }
+
+    fn observe_auto_gather_at_delegation(
+        entity: Res<AutoGatherEntity>,
+        q_visible: Query<(), With<AutoGatherVisible>>,
+        mut probe: ResMut<AutoGatherProbe>,
+    ) {
+        probe.delegation_saw_entity = entity.0.is_some_and(|entity| q_visible.get(entity).is_ok());
+    }
+
+    fn auto_gather_order_app() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<AutoGatherEntity>()
+            .init_resource::<AutoGatherProbe>()
+            .configure_sets(
+                Update,
+                FamiliarAiSystemSet::Decide.in_set(GameSystemSet::Logic),
+            );
+        hw_familiar_ai::familiar_ai::configure_familiar_task_decision_schedule(&mut app);
+        app.add_systems(
+            Update,
+            (
+                create_auto_gather_designation.in_set(FamiliarTaskDecisionSet::BlueprintAutoGather),
+                observe_auto_gather_at_revision.in_set(FamiliarTaskDecisionSet::TaskRevisionSync),
+                observe_auto_gather_at_delegation.in_set(FamiliarTaskDecisionSet::Delegation),
+            ),
+        );
+        app
+    }
+
+    #[test]
+    fn auto_gather_flush_is_visible_to_same_frame_delegation() {
+        let mut app = auto_gather_order_app();
+
+        app.update();
+
+        let probe = app.world().resource::<AutoGatherProbe>();
+        assert!(probe.revision_saw_entity);
+        assert!(probe.delegation_saw_entity);
+    }
+
+    #[test]
+    fn ai_barriers_match_documented_producer_consumer_pairs() {
+        let mut app = auto_gather_order_app();
+
+        app.update();
+
+        let probe = app.world().resource::<AutoGatherProbe>();
+        assert!(
+            probe.revision_saw_entity && probe.delegation_saw_entity,
+            "AutoGather Commands must flush before task revision sync and delegation"
+        );
     }
 
     #[test]

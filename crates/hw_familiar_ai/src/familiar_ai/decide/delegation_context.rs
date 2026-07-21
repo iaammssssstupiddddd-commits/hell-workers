@@ -64,7 +64,7 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
 /// タスク委譲と移動制御を実行
 pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<'_, '_, '_>) {
     let fam_pos = ctx.fam_transform.translation.truncate();
-    let fatigue_threshold = ctx.familiar_op.fatigue_threshold;
+    let fatigue_threshold = ctx.familiar_op.release_fatigue_threshold();
 
     // タスク委譲
     let has_available_task = if ctx.allow_task_delegation {

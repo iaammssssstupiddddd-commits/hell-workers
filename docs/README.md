@@ -54,6 +54,7 @@
 - [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン（コーディング規約・MCP活用）。
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
+- [plans/archive/implementation-spec-alignment-plan-2026-07-20.md](plans/archive/implementation-spec-alignment-plan-2026-07-20.md): Dream質量、Familiar疲労閾値、production経路、文書台帳の実装・仕様整合性回復計画。
 - [plans/player-facing-result-notifications-plan-2026-07-18.md](plans/player-facing-result-notifications-plan-2026-07-18.md): Track A2 の有界な通知センター、配置不能理由、セーブ/ロード終端結果を導入する実装計画。
 - [plans/hvac-plumbing-plan-2026-07-13.md](plans/hvac-plumbing-plan-2026-07-13.md): 換気・導水・Room 認可を M0〜M4 で導入する実装計画。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。

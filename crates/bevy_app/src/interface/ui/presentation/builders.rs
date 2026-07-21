@@ -95,10 +95,12 @@ impl EntityInspectionQuery<'_, '_> {
             "Range: {:.0} tiles",
             familiar.command_radius / 16.0
         ));
-        model.push_common(format!(
-            "Fatigue Threshold: {:.0}%",
-            op.fatigue_threshold * 100.0
-        ));
+        let threshold = if op.recruit_fatigue_threshold().is_some() {
+            format!("{:.0}%", op.fatigue_threshold * 100.0)
+        } else {
+            "0% (Recruit Off)".to_string()
+        };
+        model.push_common(format!("Fatigue Threshold: {threshold}"));
         model.push_tooltip(format!("Familiar: {}", familiar.name));
         true
     }

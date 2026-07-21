@@ -95,6 +95,16 @@ impl Plugin for HwVisualPlugin {
 
         app.add_plugins(speech::SpeechPlugin);
         app.init_resource::<TerrainFeatureLutUniformSyncState>();
+        app.init_resource::<dream::DreamPresentationLedger>();
+
+        // Message retention is intentionally independent from camera/UI and
+        // from the profiling-only Visual-set run condition.
+        app.add_systems(
+            Update,
+            dream::ingest_dream_transfers_system
+                .after(GameSystemSet::Logic)
+                .before(GameSystemSet::Visual),
+        );
 
         // Dream bubble shared handles (mesh + material pool)
         app.add_systems(Startup, dream::init_dream_bubble_handles);
@@ -303,6 +313,9 @@ pub fn reset_for_world_replace(world: &mut World) {
     if world.contains_resource::<SoulProxyOwnerCache>() {
         world.insert_resource(SoulProxyOwnerCache::default());
     }
+    if world.contains_resource::<dream::DreamPresentationLedger>() {
+        world.insert_resource(dream::DreamPresentationLedger::default());
+    }
 }
 
 fn collect_transient_visual_entities(world: &mut World) -> HashSet<Entity> {
@@ -363,8 +376,10 @@ fn collect_gathering_entities(world: &mut World) -> HashSet<Entity> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hw_core::events::{DreamTransferVisualSource, DreamTransferredVisualMessage};
     use hw_core::gathering::GatheringObjectType;
     use hw_core::relationships::{GatheringParticipants, ParticipatingIn};
+    use hw_core::soul::DreamQuality;
 
     #[test]
     fn world_replace_reset_removes_runtime_gathering_spot_and_visuals() {
@@ -392,5 +407,37 @@ mod tests {
             assert!(world.get_entity(entity).is_err());
         }
         assert!(world.get::<ParticipatingIn>(participant).is_none());
+    }
+
+    #[test]
+    fn dream_pending_ledger_clears_on_world_replacement() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_message::<DreamTransferredVisualMessage>()
+            .init_resource::<dream::DreamPresentationLedger>()
+            .add_systems(Update, dream::ingest_dream_transfers_system);
+        let soul = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .write_message(DreamTransferredVisualMessage {
+                soul,
+                amount: 0.25,
+                quality: DreamQuality::NormalDream,
+                source: DreamTransferVisualSource::Sleeping { origin: Vec2::ZERO },
+                is_final: false,
+            });
+        app.update();
+        assert!(
+            !app.world()
+                .resource::<dream::DreamPresentationLedger>()
+                .is_empty()
+        );
+
+        reset_for_world_replace(app.world_mut());
+
+        assert!(
+            app.world()
+                .resource::<dream::DreamPresentationLedger>()
+                .is_empty()
+        );
     }
 }

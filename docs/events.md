@@ -3,8 +3,10 @@
 全イベントの Producer / Consumer / Timing を一元管理します。
 イベントを追加・削除・変更する際は必ずこのファイルを更新してください。
 
-定義元: `crates/hw_core/src/events.rs` / `crates/hw_jobs/src/events.rs`（ほか、`hw_world` 固有の `Message` は各モジュールで定義）
-re-export: `crates/bevy_app/src/lib.rs`（直接 `pub use`）
+型の正本は`hw_core` / `hw_jobs`へ一律集約せず、domainごとに置く。
+`bevy_app`は互換性が必要な一部だけを選択的にre-exportし、全型の公開facadeにはしない。
+rootでbufferを所有する`Message`は`crates/bevy_app/src/plugins/messages.rs`の`root_message_types!`を
+登録・world replacement時clearの単一inventoryとする。leaf pluginが登録するMessageは各owner文書に登録箇所を明記する。
 
 ---
 
@@ -30,6 +32,9 @@ dual 通知の Producer は `publish_*` helper を使う。
 | `OnGatheringJoined` | `Message` | `IdleBehaviorOperation::ArriveAtGathering` 適用（`write_message`） | speech システム（`MessageReader<OnGatheringJoined>`） | 集会到着時の演出 |
 | `FamiliarAiStateChangedEvent` | `Message` | 状態遷移システム | ログ / ビジュアル | ログ記録 |
 | `FamiliarOperationMaxSoulChangedEvent` | `Message` | UI 操作（使役数変更ダイアログ） | Squad 管理システム | 超過分の Soul を自動リリース |
+| `DreamTransferredVisualMessage` | `Message` | `slow_simulation_driver_system`（全slow step後、Soulごと最大1件） | `hw_visual::ingest_dream_transfers_system`（Logic後・Visual前、Visual run condition外） | `DreamPool`へ実際に加算した量、drain時quality、Sleeping/RestArea source、fallback座標、producer確定の`is_final`を渡す。camera/UI不在時はdurable ledgerでchannel別に保持し、slow-step間の無Message frameは終了扱いしない |
+| `ConversationToneTriggered` | `Message`（`hw_visual::speech::conversation::events`、root inventory登録） | 会話phase処理 / speech observer | Soul表情event consumer | 発話者とPositive/Negative/Neutral toneを同frame以降の表情へ渡す |
+| `ConversationCompleted` | `Message`（`hw_visual::speech::conversation::events`、root inventory登録） | `process_conversation_logic` | `apply_conversation_rewards` / Soul表情event consumer | 参加者へstress reliefとmotivation penaltyを適用し、完了表情を通知 |
 | `DriftingEscapeStarted` | `Event` | `decide/drifting` | root adapter | `PopulationManager::start_escape_cooldown()` |
 | `SoulEscaped` | `Event` | `execute/drifting`（マップ端到達） | root adapter | `PopulationManager::total_escaped` インクリメント |
 | `TerrainChangedEvent` | `Message`（`hw_world::terrain_visual`） | `obstacle_sync_system`（`ObstacleSyncSet`、Actor phase） | `terrain_id_map_sync_system`（`MessageReader`、`GameSystemSet::Visual`） | 自然物由来 blocker の最後の削除で `WorldMap` 上の該当タイルが Dirt へ変わったとき `idx` を通知し、`TerrainIdMap` の対応ピクセルを書き換えて共有 `TerrainSurfaceMaterial` の見た目を更新する。**chunk entity（`TerrainChunk`）の再生成は不要**。shader が world-space で texture を参照するため、texture 1 ピクセル書き換えだけで全 chunk の見た目が更新される。登録は `VisualPlugin::add_message::<TerrainChangedEvent>()` |
@@ -66,6 +71,9 @@ dual 通知の Producer は `publish_*` helper を使う。
 | `FamiliarIdleVisualRequest` | `Message` | Familiar AI 状態遷移時 | visual アダプタ | Idle 遷移時の表示更新 |
 | `GatheringSpawnRequest` | `Message` | `hw_soul_ai` 内の集会ロジック | root visual アダプタ | 集会スポットの生成 |
 | `SoulTaskUnassignRequest` | `Message` | `hw_familiar_ai`（分隊解放・使役数超過）/ area_selection のユーザー取消 | `hw_soul_ai::handle_soul_task_unassign_system`（SoulAiSystemSet::Perceive）| 魂のタスク解除（`AssignedTask`リセット・インベントリ回収・予約解放）。area_selection は Perceive 前の `ApplyDeferred` を通し、同じ Update の Execute より先に適用する |
+| `DamnedSoulSpawnEvent` | `Message`（`bevy_app::entities::damned_soul`、root inventory登録） | startup / periodic population / debug spawn | `soul_spawning_system` | 位置と固定step fixture用random keyを渡し、Soul shellを生成 |
+| `FamiliarSpawnEvent` | `Message`（`bevy_app::entities::familiar`、root inventory登録） | startup / debug spawn | `familiar_spawning_system` | 位置・Familiar種別・fixture random keyを渡し、Familiar shellを生成 |
+| `RequestConversation` | `Message`（`hw_visual::speech::conversation::events`、root inventory登録） | `check_conversation_triggers` | `handle_conversation_requests` | initiator/targetを再検証して会話participant状態を開始 |
 | `UiIntent::AdjustTaskPriority` / `CancelTask` | `Message` variant (`hw_ui::UiIntent`) | task dashboard action button system | root `handle_ui_intent` 後の `apply_task_action_intents_system` | Entity、expected WorkType、adjustment/cancel kindを渡す。Pause/Modal中もreaderをdrainし、live capabilityを再検証して`TaskActionOutcome`を1件発行する |
 
 ---

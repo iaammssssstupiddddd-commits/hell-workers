@@ -118,6 +118,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
         let old_state = ai_state.clone();
         let mut next_state = old_state.clone();
         let max_workers = familiar_op.max_controlled_soul;
+        let recruit_fatigue_threshold = familiar_op.recruit_fatigue_threshold();
         let current_count = commanding.map(|c| c.len()).unwrap_or(0);
 
         let path = determine_decision_path(
@@ -149,7 +150,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         fam_entity,
                         fam_pos,
                         target_soul,
-                        fatigue_threshold: familiar_op.fatigue_threshold,
+                        fatigue_threshold: recruit_fatigue_threshold,
                         max_workers,
                         squad: &mut squad_entities,
                         ai_state: &mut next_state,
@@ -228,8 +229,6 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
 
             FamiliarDecisionPath::NonIdleScoutingContinue { target_soul } => {
                 let fam_pos = fam_transform.translation.truncate();
-                let fatigue_threshold = familiar_op.fatigue_threshold;
-
                 let SquadManagementOutcome {
                     mut squad_entities,
                     released_entities,
@@ -251,7 +250,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                         fam_entity,
                         fam_pos,
                         target_soul,
-                        fatigue_threshold,
+                        fatigue_threshold: recruit_fatigue_threshold,
                         max_workers,
                         squad: &mut squad_entities,
                         ai_state: &mut next_state,
@@ -278,9 +277,6 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
             }
 
             FamiliarDecisionPath::NonIdleRecruitOrTransition => {
-                let fatigue_threshold = familiar_op.fatigue_threshold;
-                let _ = fatigue_threshold;
-
                 let SquadManagementOutcome {
                     mut squad_entities,
                     released_entities,

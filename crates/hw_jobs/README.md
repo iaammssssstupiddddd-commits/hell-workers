@@ -42,31 +42,33 @@ Ready → Framed → ProvisionalReady → CoatedReady → Coated
 ## BuildingType
 
 ```rust
-Wall, Door, Floor, Tank, MudMixer, RestArea, Bridge, SandPile, BonePile, WheelbarrowParking
+Wall, Door, Floor, Tank, MudMixer, RestArea, Bridge, SandPile, BonePile,
+WheelbarrowParking, SoulSpa, OutdoorLamp
 ```
 
 `required_materials()` で各建物タイプに必要な `ResourceType → 数量` の HashMap を返す。
 
 ## 依存クレート
 
-- `hw_core` のみ（軽量な jobs/visual mirror crate）
+- `hw_core`
+- `hw_energy`（`GeneratePower` task payload）
 
 ---
 
 ## src/ との境界
 
-hw_jobs は**共有 model / state と visual mirror 同期関数**を提供する。
-建設フェーズを実際に進める system や、plugin への登録責務は root app shell 側に残す。
+hw_jobs は**共有 model / state、pure transition rule、visual mirror同期関数**を提供する。
+`TileSiteIndex`を使うECS adapterは`hw_logistics`、production登録とroot-only処理は`bevy_app`が所有する。
 
 | hw_jobs に置くもの | src/systems/jobs/ に置くもの |
 |---|---|
 | `AssignedTask` enum（バリアント定義） | タスクハンドラ（`gather.rs`, `build.rs` 等） |
-| `FloorConstructionPhase` / `WallConstructionPhase` 状態機械型 | `floor_construction_phase_transition_system` 等の実システム |
+| `FloorConstructionPhase` / `WallConstructionPhase` 状態機械型とsite/tileのpure transition method | cancel/completion、asset依存のprovisional wall spawn |
 | `BuildingType` と `required_materials()` | 建物完成後処理・ワールドマップ更新 |
-| `Door`, `DoorCloseTimer` | ドア自動開閉 system (`hw_world`) と UI からの状態変更適用 |
+| `Door`, `DoorCloseTimer` | ドアrule/state applyは`hw_world`、index adapterは`hw_spatial`、UI intent applyと登録はroot |
 | `MudMixerInputSlot` / `MudMixerOutputSlot` 型 | 泥ミキサーのフロー制御システム |
 | タスク予約ライフサイクル helper (`lifecycle.rs`) | 予約再構築を呼ぶゲーム側システム。`ReservationSignature` は active operation からのみ導出する |
-| `remove_tile_task_components` | 建設フェーズ遷移の apply system |
+| `remove_tile_task_components` | `hw_logistics::construction_phase_transition`がtransition適用時に呼ぶ |
 | 建設状態コンポーネント（`FloorTileState`, `WallTileState` 等） | コンポーネントの Bevy 登録・Observer 配線 |
 | `FloorTileBlueprint`, `WallTileBlueprint`, `FloorConstructionSite`, `WallConstructionSite` | これらを進行させる build / logistics / visual system |
 | `TargetFloorConstructionSite`, `TargetWallConstructionSite` | — |

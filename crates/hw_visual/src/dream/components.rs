@@ -16,8 +16,6 @@ pub struct DreamParticle {
 #[derive(Component, Default)]
 pub struct DreamVisualState {
     pub particle_cooldown: f32,
-    pub popup_accumulated: f32,
-    pub popup_timer: f32,
     pub active_particles: u8,
 }
 

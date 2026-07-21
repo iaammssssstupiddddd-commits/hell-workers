@@ -27,7 +27,8 @@ pub use coords::{
     grid_to_world, idx_to_pos, snap_to_grid_center, snap_to_grid_edge, world_to_grid,
 };
 pub use door_systems::{
-    DoorVisualHandles, apply_door_state, door_auto_close_system, door_auto_open_system,
+    DoorOpenEvaluation, DoorVisualHandles, apply_door_state, evaluate_door_auto_open,
+    soul_keeps_door_open,
 };
 pub use layout::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, SAND_WIDTH};
 pub use map::{WorldMap, WorldMapRead, WorldMapWrite};

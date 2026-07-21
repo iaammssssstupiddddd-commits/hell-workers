@@ -123,7 +123,8 @@ scriptを明示的に実行する。
 ### 7. TransportRequest の規約（M3〜M7 完了）
 運搬系は全て **Anchor Request パターン** に統一済み。request エンティティをアンカー位置（Blueprint/Mixer/Stockpile）に生成し、割り当て時にソースを遅延解決する。
 
-- **request 化済み**: `DepositToStockpile`, `DeliverToBlueprint`, `DeliverToFloorConstruction`, `DeliverToWallConstruction`, `DeliverToProvisionalWall`, `DeliverToMixerSolid`, `DeliverWaterToMixer`, `GatherWaterToTank`, `ReturnBucket`, `ReturnWheelbarrow`, `BatchWheelbarrow`, `ConsolidateStockpile`
+- **request 化済み**: `DepositToStockpile`, `DeliverToBlueprint`, `DeliverToFloorConstruction`, `DeliverToWallConstruction`, `DeliverToProvisionalWall`, `DeliverToMixerSolid`, `DeliverWaterToMixer`, `GatherWaterToTank`, `ReturnBucket`, `ReturnWheelbarrow`, `BatchWheelbarrow`, `ConsolidateStockpile`, `DeliverToSoulSpa`
+- 通常producerは`crates/hw_logistics/src/transport_request/producer/`に置く。`DeliverToSoulSpa`だけはroot固有の建設siteとorderingを扱うため`crates/bevy_app/src/systems/jobs/soul_spa_construction/auto_haul.rs`が生成する。
 - `task_finder` は `DesignationSpatialGrid` と `TransportRequestSpatialGrid` の両方から候補を収集。
 - 運搬系 WorkType（`Haul`, `HaulToMixer`, `GatherWater`, `HaulWaterToMixer`, `WheelbarrowHaul`）は request 付き候補のみを扱う。
 - request は需要 0 のとき `Designation` を外して休止、または despawn。
@@ -131,14 +132,14 @@ scriptを明示的に実行する。
 
 ### 8. 割り当て・搬送・UIの実装境界
 
-- Familiar の割り当て発行は `crates/bevy_app/src/systems/familiar_ai/decide/task_management/mod.rs` の `submit_assignment_with_source_entities(...)` / `submit_assignment_with_reservation_ops(...)`（または下位の `submit_assignment(...)`）を必ず経由する（`ReservationShadow` 反映を保証するため）。
+- Familiar の割り当て発行は `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/builders/submit.rs` の `submit_assignment_with_source_entities(...)` / `submit_assignment_with_reservation_ops(...)`（または下位の `submit_assignment(...)`）を必ず経由する（`ReservationShadow` 反映を保証するため）。
 - 予約オペレーション生成は `build_source_reservation_ops` / `build_mixer_destination_reservation_ops` / `build_wheelbarrow_reservation_ops` の共通ヘルパーを優先し、`issue_*` ごとの重複実装を増やさない。
 - `FamiliarTaskAssignmentQueries` は必要な Read Access を内包する構成になっている。Familiar 側の型参照は `task_management::FamiliarTaskAssignmentQueries` を優先し、`soul_ai` 実装詳細への直接依存を増やさない。
 - `apply_task_assignment_requests_system` を拡張する場合は、既存の責務分離ヘルパー（受理判定 / idle正規化 / 予約反映 / DeliveringTo / イベント）へ追記し、単一関数へ責務を戻さない。
 - `pathfinding_system` の変更は補助関数（再利用判定・再探索・休憩フォールバック・失敗時処理）単位で行い、分岐をインラインで肥大化させない。
-- floor/wall の搬入同期変更は `crates/bevy_app/src/systems/logistics/transport_request/producer/mod.rs` の共通ヘルパー（`sync_construction_requests`, `sync_construction_delivery`。内部で `group_tiles_by_site`, `consume_waiting_tile_resources` を利用）を再利用して重複実装を避ける。
-- UI/Visual の更新は `crates/bevy_app/src/interface/ui/interaction/status_display/` と `crates/bevy_app/src/systems/visual/dream/ui_particle/` の責務分割単位で行い、再び単一巨大ファイルに戻さない。
-- UI の `MenuAction` は「汎用アクション（`ui_interaction_system`）」と「専用アクション（`arch_category_action_system` / `door_lock_action_system`）」に責務分離する。`Changed<Interaction>` を読む複数システムは順序固定（`chain`）を維持する。
+- floor/wall の搬入同期変更は `crates/hw_logistics/src/transport_request/producer/mod.rs` の共通ヘルパー（`sync_construction_requests`, `sync_construction_delivery`。内部で `group_tiles_by_site`, `consume_waiting_tile_resources` を利用）を再利用して重複実装を避ける。
+- UI/Visual の更新は `crates/bevy_app/src/interface/ui/interaction/status_display/` と `crates/hw_visual/src/dream/ui_particle/` の責務分割単位で行い、再び単一巨大ファイルに戻さない。
+- UI buttonの`Changed<Interaction>`は`ui_interaction_system`が読み、`ForegroundUiGate`通過後に`UiIntent`を発行する。ゲーム副作用はrootの単一`handle_ui_intent`が適用する。`MovePlantBuilding` / `ToggleDoorLock` / `SelectArchitectCategory`向けの直接Interaction consumerを追加しない。
 
 ### 9. docs 直下ドキュメントの記述ルール
 

@@ -11,7 +11,10 @@ pub use components::{
     DreamVisualState,
 };
 pub use dream_bubble_material::{DreamBubbleMaterial, DreamBubbleUiMaterial};
-pub use gain_visual::{dream_popup_spawn_system, dream_popup_update_system};
+pub use gain_visual::{
+    DreamPresentationLedger, dream_popup_spawn_system, dream_popup_update_system,
+    ingest_dream_transfers_system,
+};
 pub use handles::{DreamBubbleHandles, init_dream_bubble_handles};
 pub use particle::{
     dream_particle_spawn_system, dream_particle_update_system, ensure_dream_visual_state_system,

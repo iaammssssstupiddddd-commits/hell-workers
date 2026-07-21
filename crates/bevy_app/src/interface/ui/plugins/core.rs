@@ -29,11 +29,19 @@ fn register_ui_core_plugin_systems(app: &mut App) {
     app.add_systems(
         Update,
         (
-            update_hover_entity,
-            clear_companion_state_outside_build_mode,
             cleanup_selection_references_system,
-            update_selection_indicator,
+            update_hover_entity,
+            crate::interface::ui::update_move_plant_hover_target_system,
             crate::interface::ui::hover_action_button_system,
+        )
+            .chain()
+            .in_set(GameSystemSet::Interface),
+    )
+    .add_systems(
+        Update,
+        (
+            clear_companion_state_outside_build_mode,
+            update_selection_indicator,
         )
             .in_set(GameSystemSet::Interface),
     )
@@ -64,9 +72,6 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             handle_ui_intent,
             crate::interface::ui::panels::task_list::apply_task_action_intents_system
                 .before(NotificationSystemSet::Adapt),
-            crate::interface::ui::arch_category_action_system,
-            crate::interface::ui::move_plant_building_action_system,
-            crate::interface::ui::door_lock_action_system,
             crate::interface::ui::menu_visibility_system,
             hw_ui::interaction::update_pause_menu_visibility_system,
             hw_ui::interaction::update_settings_panel_visibility,

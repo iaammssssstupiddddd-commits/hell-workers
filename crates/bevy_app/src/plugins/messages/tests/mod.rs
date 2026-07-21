@@ -25,6 +25,17 @@ fn root_message_reset_inventory_matches_registered_types() {
     clear_root_messages(app.world_mut());
 }
 
+#[test]
+fn messages_plugin_registers_dream_transfer_message() {
+    let mut app = minimal_app();
+    app.add_plugins(MessagesPlugin);
+
+    assert!(
+        app.world()
+            .contains_resource::<Messages<hw_core::events::DreamTransferredVisualMessage>>()
+    );
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NotificationCase {
     SoulRecruited,

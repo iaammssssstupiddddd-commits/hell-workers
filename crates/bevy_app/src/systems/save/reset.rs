@@ -213,6 +213,7 @@ mod tests {
     use super::*;
     use crate::app_contexts::PendingMovePlacement;
     use hw_core::constants::{MAP_HEIGHT, MAX_PATHFINDS_PER_FRAME};
+    use hw_core::game_state::TaskMode;
     use hw_world::WorldMap;
 
     #[derive(Resource, Default)]
@@ -278,6 +279,28 @@ mod tests {
         assert!(matches!(
             world.resource::<NextState<PlayMode>>(),
             NextState::Pending(PlayMode::Normal)
+        ));
+    }
+
+    #[test]
+    fn world_replace_clears_zone_placement_mode() {
+        let mut world = World::new();
+        world.insert_resource(ZoneContext(Some(
+            crate::systems::logistics::ZoneType::Stockpile,
+        )));
+        world.insert_resource(TaskContext(TaskMode::ZonePlacement(
+            hw_core::game_state::TaskModeZoneType::Stockpile,
+            Some(Vec2::ZERO),
+        )));
+        world.insert_resource(NextState::<PlayMode>::Pending(PlayMode::TaskDesignation));
+
+        reset_root_interaction_state(&mut world);
+
+        assert!(world.resource::<ZoneContext>().0.is_none());
+        assert_eq!(world.resource::<TaskContext>().0, TaskMode::None);
+        assert!(matches!(
+            world.resource::<NextState<PlayMode>>(),
+            NextState::Pending(PlayMode::Normal) | NextState::PendingIfNeq(PlayMode::Normal)
         ));
     }
 

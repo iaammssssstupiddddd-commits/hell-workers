@@ -34,6 +34,8 @@ pub const DREAM_UI_PULSE_BRIGHTNESS: f32 = 0.8;
 
 // UI Particle base (Physics V2)
 pub const DREAM_UI_PARTICLE_SIZE: f32 = 10.0; // sqrt(100) instead of sqrt(400) for half area
+/// 同時に存在できる獲得UI粒子。上限中のtransferはledgerへ残して再試行する。
+pub const DREAM_UI_PARTICLE_MAX_ACTIVE: usize = 128;
 pub const DREAM_UI_BUOYANCY: f32 = 110.0;
 pub const DREAM_UI_BASE_ATTRACTION: f32 = 50.0;
 pub const DREAM_UI_BASE_MASS_OFFSET: f32 = 0.5; // 質量にプラスする基本値 (最低限の移動とサイズを保証)

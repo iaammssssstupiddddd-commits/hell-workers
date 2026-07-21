@@ -15,7 +15,8 @@
 `Cargo.toml` の workspace member は以下です。
 
 ```text
-.
+crates/bevy_app
+crates/visual_test
 crates/hw_core
 crates/hw_energy
 crates/hw_world
@@ -28,47 +29,23 @@ crates/hw_ui
 crates/hw_visual
 ```
 
-依存の向きは次を基本とします。
+root `Cargo.toml`は`members = ["crates/*"]`、`default-members = ["crates/bevy_app"]`を使います。
+内部crate間の直接依存は各`Cargo.toml`を正本とし、現在は次の通りです。
 
-```text
-hw_core
-  ├─ hw_world
-  ├─ hw_logistics
-  ├─ hw_jobs
-  ├─ hw_spatial
-  ├─ hw_familiar_ai
-  ├─ hw_soul_ai
-  ├─ hw_ui
-  ├─ hw_visual
-  └─ bevy_app
-
-hw_energy
-  └─ bevy_app
-
-hw_world (hw_core + hw_jobs)
-  └─ bevy_app
-
-hw_logistics (hw_core + hw_world + hw_jobs + hw_spatial)
-  └─ bevy_app
-
-hw_jobs
-  └─ bevy_app
-
-hw_spatial (hw_core + hw_world + hw_jobs)
-  └─ bevy_app
-
-hw_familiar_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
-  └─ bevy_app
-
-hw_soul_ai (hw_core + hw_jobs + hw_logistics + hw_world + hw_spatial)
-  └─ bevy_app
-
-hw_ui (hw_core + hw_jobs + hw_logistics)
-  └─ bevy_app
-
-hw_visual (hw_core + hw_spatial + hw_world)
-  └─ bevy_app
-```
+| crate | workspace内の直接依存 |
+|:---|:---|
+| `hw_core` | — |
+| `hw_energy` | — |
+| `hw_jobs` | `hw_core`, `hw_energy` |
+| `hw_world` | `hw_core`, `hw_jobs` |
+| `hw_spatial` | `hw_core`, `hw_jobs`, `hw_world` |
+| `hw_logistics` | `hw_core`, `hw_jobs`, `hw_world`, `hw_spatial` |
+| `hw_familiar_ai` | `hw_core`, `hw_energy`, `hw_jobs`, `hw_logistics`, `hw_world`, `hw_spatial` |
+| `hw_soul_ai` | `hw_core`, `hw_energy`, `hw_jobs`, `hw_logistics`, `hw_world`, `hw_spatial` |
+| `hw_ui` | `hw_core`, `hw_jobs`, `hw_logistics` |
+| `hw_visual` | `hw_core`, `hw_spatial`, `hw_world` |
+| `visual_test` | `hw_core`, `hw_visual`, `hw_world` |
+| `bevy_app` | 全`hw_*` crate |
 
 重要な原則:
 
@@ -257,7 +234,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `soul_ai::helpers::gathering_positions` — 集会周辺ランダム位置生成・overlap 回避（`PathWorld + SpatialGridOps` 経由）
 - `soul_ai::helpers::gathering_motion` — 集会中移動先選定（Wandering / Still retreat）
 - `soul_ai::helpers::work::{is_soul_available_for_work, unassign_task, cleanup_task_assignment}` — 作業可否判定・タスク解除・後片付けヘルパー
-- `soul_ai::execute::task_execution::types::AssignedTask` — タスク実行バリアント定義
+- `hw_jobs::tasks::AssignedTask`（`crates/hw_jobs/src/tasks/mod.rs`）— タスク実行バリアントの正本。`soul_ai::execute::task_execution::types`はhandler向けの選択的re-export
 - `soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskQueries, TaskAssignmentQueries, ConstructionSiteAccess}` — タスク実行/割り当て用 context・SystemParam
 - `soul_ai::execute::task_execution::handler::{TaskHandler, run_task_handler, execute_haul_with_wheelbarrow}` — タスクハンドラトレイト・ディスパッチ
 - `soul_ai::execute::task_execution::{gather, build, coat_wall, collect_bone, collect_sand, frame_wall, haul, haul_to_blueprint, haul_to_mixer, move_plant, pour_floor, refine, reinforce_floor, common}` — 各タスク種別実装
@@ -419,7 +396,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `zone_ops::identify_removal_targets` — 削除対象タイル + 孤立フラグメント特定（Flood Fill）
 - `zone_ops::area_tile_size`, `rectangles_overlap_site`, `rectangles_overlap`, `expand_yard_area` — ゾーン geometry helper
 - `terrain_visual::{ObstaclePositionIndex, obstacle_sync_system, TerrainChangedEvent}` — runtime marker の旧位置/source を index し、source-aware に WorldMap を同期する。自然物由来の最後の blocker を外した場合だけ terrain visual 更新を通知する
-- `door_systems::{DoorVisualHandles, apply_door_state, door_auto_open_system, door_auto_close_system}` — ドア通行状態とスプライト更新を扱う world 系 system。`GameAssets` は root から専用 Resource で注入する
+- `door_systems::{DoorVisualHandles, apply_door_state, evaluate_door_auto_open, soul_keeps_door_open}` — ドア通行状態/スプライト更新と1候補のpure判定。近傍index adapterは`hw_spatial`、`GameAssets`はrootから専用Resourceで注入する
 - **`Room`, `RoomOverlayTile`（Component）** — Room ECS 型
 - **`RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`（Resource）** — Room 管理リソース
 - **`DreamTreePlantingPlan`（`tree_planting.rs`）** — Dream 植林計画の純粋データ構造。ビルダー関数（`build_dream_tree_planting_plan`）は `GameAssets`/`DreamPool` 依存のため bevy_app に残留
@@ -440,7 +417,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 役割:
 
-- `SpatialIndex<Tag>` の共通 storage / `SpatialGridOps` / 標準 Transform updater
+- `SpatialIndex<Tag>` の共通storage、`hw_world::SpatialGridOps`のconcrete impl、標準Transform updater
 - `GridData` と空間検索ヘルパの共通化、crate 所有 ZST tag
 - 2D 空間スナップショットの初期化時の query 補助
 
@@ -449,6 +426,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `SpatialGrid`, `FamiliarSpatialGrid`, `BlueprintSpatialGrid`, `DesignationSpatialGrid`, `ResourceSpatialGrid`, `StockpileSpatialGrid`, `TransportRequestSpatialGrid`, `GatheringSpotSpatialGrid`, `FloorConstructionSpatialGrid`
 - `SoulIndexTag` などの index tag と `SpatialIndex<Tag>`。Resource の Visibility と Gathering の center / Added-only policy は専用 updater として保持する
 - `SpatialIndex<Tag>::generation()`。membershipまたは記録位置の実変更だけで進み、rootのtask availability revisionへ入力する
+- `door_proximity` — Soul indexを使うdoor auto-open/close adapterと`DoorPerfMetrics`
 
 ここに置かないもの:
 
@@ -474,6 +452,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `apply_reservation_op` / `apply_reservation_requests_system`（予約操作の反映 helper）
 - **`LogisticsPlugin`**：`apply_reservation_requests_system` を `SoulAiSystemSet::Execute` に登録する Plugin（`src/plugin.rs`）
 - `TileSiteIndex`（タイル→サイト逆引き）
+- `construction_phase_transition` — index count/entity uniqueness/owner/stateを全検証してからfloor/wall phaseを原子的に進めるadapterと`ConstructionPerfMetrics`
 - `construction_helpers::{ResourceItemVisualHandles, spawn_refund_items}` — `GameAssets` 依存を root 注入 Resource に抽象化した建設キャンセル共通 helper
 - producer 全系（`blueprint`, `bucket`, `consolidation`, `mixer`, `task_area`, `wheelbarrow`, `floor_construction`, `wall_construction`, `provisional_wall` 等）
 - `manual_haul_selector::{select_stockpile_anchor, find_existing_request}` — 手動 haul 選定アルゴリズム（`DesignationTargetQuery` 非依存）
@@ -517,9 +496,9 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 ここに置かないもの:
 
-- floor / wall construction system
+- floor / wall constructionのcancel/completion、asset依存spawn、production ordering（rootが所有）
 - building completion shell
-- door system
+- doorのindex candidate抽出（`hw_spatial`）とproduction登録（root）
 - `add_systems` / `add_observer` の plugin 登録責務（`bevy_app/src/plugins/logic.rs` が担当）
 
 ## 4. どこに置くかの判断基準
@@ -622,7 +601,7 @@ root (`bevy_app`) は app shell として `init_resource::<WorldMap>()`、startu
 - mapgen / regrowth の純粋ロジック（地形境界オーバーレイ `borders` / `terrain_border` は MS-3-4 で廃止済み）
 - `WorldMapRead` / `WorldMapWrite` の `SystemParam`
 - `obstacle_sync_system` のような source-aware WorldMap 同期 + 地形ビジュアル通知（`TerrainChangedEvent` → bevy_app で `TerrainIdMap` 更新）
-- door 自動開閉のような world state 更新 system（`DoorVisualHandles` 注入）
+- door state/sprite/WorldMap適用と1候補のpure開閉rule（`DoorVisualHandles`注入）。index candidate抽出は`hw_spatial`
 
 `crates/bevy_app/src/world/map/spawn.rs`, `crates/bevy_app/src/world/regrowth.rs`, `crates/bevy_app/src/systems/logistics/initial_spawn/` は app shell です。地形スポーンは `spawn_map` が `WorldMap.tile_entities` に紐づく `Tile` 論理 anchor を登録し、`spawn_terrain_chunks` が `TerrainSurfaceMaterial` / `Terrain3dHandles` を使って chunk render entity を生成する構成になっています。これらは `GameAssets`, `Commands`, `Resource` を扱い、純粋ロジックと `WorldMap` access wrapper は `hw_world` から呼び出します。startup は `GeneratedWorldLayout` を root Resource に包んで 1 回だけ生成し、`TerrainFeatureMap` と `TerrainIdMap` をその snapshot から焼き、地形描画・初期木/岩・初期木材・猫車置き場・regrowth 初期化が同じ layout を共有します。
 

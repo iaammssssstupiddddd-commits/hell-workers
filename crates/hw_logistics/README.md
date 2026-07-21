@@ -18,6 +18,7 @@
 | `floor_construction.rs` | 床建設サイトへの需要計算・資材消費ヘルパー |
 | `wall_construction.rs` | 壁建設サイトへの需要計算・資材消費ヘルパー |
 | `tile_index.rs` | `TileSiteIndex` — タイル座標 → サイトエンティティ高速逆引き |
+| `construction_phase_transition.rs` | `TileSiteIndex`で当該siteだけを検証するfloor/wall phase transitionとprofiling metrics |
 | `resource_cache.rs` | `SharedResourceCache` — タスク間リソース予約キャッシュ。`begin_frame` は frame delta のみを clear し、`replace_reservation_snapshot` は予約 snapshot のみを置換する |
 | `construction_helpers.rs` | `ResourceItemVisualHandles`, `spawn_refund_items` — 建設キャンセル返却 helper |
 | `plugin.rs` | `LogisticsPlugin` — `apply_reservation_requests_system` のプラグイン登録 |
@@ -74,6 +75,9 @@
 | `wall_construction.rs` | `wall_construction_auto_haul_system`, `wall_material_delivery_sync_system`, `wall_tile_designation_system` |
 | `wheelbarrow.rs` | `wheelbarrow_auto_haul_system` |
 
+`DeliverToSoulSpa`は有効な`TransportRequestKind`だが、producerだけはroot固有のSoul Spa建設siteと
+energy orderingへ接続するため`bevy_app/src/systems/jobs/soul_spa_construction/auto_haul.rs`が所有する。
+
 ## 依存クレート
 
 - `bevy` (ECS)
@@ -96,6 +100,7 @@
 | 建設系需要計算ヘルパー | 後方互換の import path を保つ root shell |
 | `ResourceItemVisualHandles` と `spawn_refund_items` | `GameAssets` から handle Resource を注入する startup |
 | `TileSiteIndex` 型定義・更新システム | — |
+| `construction_phase_transition`（index-backed floor/wall adapter、`ConstructionPerfMetrics`） | transitionのproduction登録、cancel/completion、asset依存spawn |
 | `SharedResourceCache` | `sync_reservations_system`（ゲーム固有クエリ） |
 
 手押し車仲裁は source reservation を近傍 Top-K の投入前に除外する。実検索範囲内で予約を含めれば `hard_min` を

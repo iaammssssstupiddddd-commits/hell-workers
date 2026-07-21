@@ -7,6 +7,8 @@ pub const FATIGUE_THRESHOLD: f32 = 0.8;
 pub const MOTIVATION_THRESHOLD: f32 = 0.3;
 pub const FATIGUE_GATHERING_THRESHOLD: f32 = 0.9;
 pub const FATIGUE_IDLE_THRESHOLD: f32 = 0.8;
+/// 新規 recruit は release よりこの幅だけ低い疲労値に制限する。
+pub const FAMILIAR_RECRUIT_FATIGUE_HYSTERESIS: f32 = 0.2;
 
 // ----- 疲労 (Fatigue) -----
 pub const FATIGUE_WORK_RATE: f32 = 0.01;

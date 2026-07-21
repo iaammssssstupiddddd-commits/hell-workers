@@ -1,14 +1,29 @@
 use crate::camera::MainCamera;
 use crate::components::{HoverActionOverlay, MenuAction, MenuButton};
-use crate::selection::HoveredEntity;
 use bevy::prelude::*;
-use hw_jobs::{Building, BuildingCategory};
 
 const HOVER_ACTION_Y_OFFSET: f32 = 38.0;
 
+/// Root-produced, domain-validated target for the hover action widget.
+///
+/// `hw_ui` deliberately stores only an entity id; the root adapter decides
+/// whether the currently hovered simulation entity is a movable Plant.
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HoverActionTarget(pub Option<Entity>);
+
+fn effective_target(
+    candidate: Option<Entity>,
+    latched: Option<Entity>,
+    interaction: Interaction,
+) -> Option<Entity> {
+    candidate.or_else(|| {
+        matches!(interaction, Interaction::Hovered | Interaction::Pressed).then_some(latched)?
+    })
+}
+
 pub fn hover_action_button_system(
-    hovered: Res<HoveredEntity>,
-    q_buildings: Query<(Entity, &Building, &GlobalTransform)>,
+    target: Res<HoverActionTarget>,
+    q_transforms: Query<&GlobalTransform>,
     q_camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     mut q_overlay: Query<(
         &mut HoverActionOverlay,
@@ -21,21 +36,7 @@ pub fn hover_action_button_system(
         return;
     };
 
-    let hovered_target = hovered.0.and_then(|entity| {
-        q_buildings
-            .get(entity)
-            .ok()
-            .filter(|(_, building, _)| building.kind.category() == BuildingCategory::Plant)
-            .map(|(entity, _, _)| entity)
-    });
-
-    let effective_target = hovered_target.or_else(|| {
-        if matches!(*interaction, Interaction::Hovered | Interaction::Pressed) {
-            overlay.target
-        } else {
-            None
-        }
-    });
+    let effective_target = effective_target(target.0, overlay.target, *interaction);
 
     let Some(target_entity) = effective_target else {
         node.display = Display::None;
@@ -45,7 +46,7 @@ pub fn hover_action_button_system(
         return;
     };
 
-    let Ok((_, _, target_transform)) = q_buildings.get(target_entity) else {
+    let Ok(target_transform) = q_transforms.get(target_entity) else {
         node.display = Display::None;
         if !matches!(*interaction, Interaction::Hovered | Interaction::Pressed) {
             overlay.target = None;
@@ -70,4 +71,38 @@ pub fn hover_action_button_system(
     node.display = Display::Flex;
     menu_button.0 = MenuAction::MovePlantBuilding(target_entity);
     overlay.target = Some(target_entity);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hover_or_press_keeps_the_latched_target() {
+        let target = Entity::from_bits(42);
+
+        assert_eq!(
+            effective_target(None, Some(target), Interaction::Hovered),
+            Some(target)
+        );
+        assert_eq!(
+            effective_target(None, Some(target), Interaction::Pressed),
+            Some(target)
+        );
+        assert_eq!(
+            effective_target(None, Some(target), Interaction::None),
+            None
+        );
+    }
+
+    #[test]
+    fn fresh_candidate_replaces_the_latched_target() {
+        let old = Entity::from_bits(41);
+        let new = Entity::from_bits(42);
+
+        assert_eq!(
+            effective_target(Some(new), Some(old), Interaction::Hovered),
+            Some(new)
+        );
+    }
 }

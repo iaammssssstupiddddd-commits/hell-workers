@@ -50,7 +50,10 @@ Familiar command の keyboard edge は `bevy_app::input_actions` が context 解
 4. **休息中でない**: `RestingIn` が付与されておらず、`IdleBehavior` が `Resting` / `GoingToRest` / `ExhaustedGathering` でないこと
 5. **休憩クールダウン中でない**: `RestAreaCooldown.remaining_secs <= 0.0`
 
-> **Note**: リクルート閾値はリリース閾値より低下させて設定されており、リクルート直後にリリースされることを防ぎます。
+> **Note**: `FamiliarOperation.fatigue_threshold` は既存memberのreleaseとtask assignmentに使う。
+> 新規recruitはそこから`FAMILIAR_RECRUIT_FATIGUE_HYSTERESIS (0.2)`を引いた閾値を使う。
+> releaseが`0.0`（または`f32::EPSILON`以下）の場合は新規recruitを無効化し、進行中のScoutingも中止する。
+> 正のrelease値では常に`recruit < release`となる。設定UIの`0% (Recruit Off)`がこの特殊値を表す。
 
 ### リクルート挙動
 
@@ -140,7 +143,8 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 
 - `Familiar`: 使い魔の基本パラメータ（Radius, Speed 等）を保持。
     - `color_index`: 個体ごとに割り当てられた配色インデックス（0〜3）。タスクエリア等の描画に使用。
-- `FamiliarOperation`: 指揮下に入れる最大人数や、魂を解雇する疲労しきい値を保持。
+- `FamiliarOperation`: 指揮下に入れる最大人数や、既存memberを解放する疲労しきい値を保持。
+  `recruit_fatigue_threshold()`が新規recruit用の`Option<f32>`を導出する。このruntime componentは現在save対象ではなく、load時にdefaultで再構築される。
 - `ActiveCommand`: プレイヤーからの直接命令（Idle / Gather / Task）。
 - `FamiliarAiState`: AI の現在の状態（Idle, SearchingTask, Scouting, Supervising）。
 - `Commanding` (Relationship): 配下の魂への参照リスト。**オプショナル**（分隊が空のとき削除される）。

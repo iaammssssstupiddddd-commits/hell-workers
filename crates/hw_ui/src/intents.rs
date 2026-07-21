@@ -60,11 +60,35 @@ impl UiIntent {
     pub const fn is_specialized(&self) -> bool {
         matches!(
             self,
-            Self::ToggleDoorLock(_)
-                | Self::SelectArchitectCategory(_)
-                | Self::MovePlantBuilding(_)
-                | Self::AdjustTaskPriority { .. }
-                | Self::CancelTask { .. }
+            Self::AdjustTaskPriority { .. } | Self::CancelTask { .. }
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_task_dashboard_actions_have_a_specialized_consumer() {
+        assert!(
+            UiIntent::AdjustTaskPriority {
+                entity: Entity::PLACEHOLDER,
+                expected_work_type: WorkType::Chop,
+                adjustment: TaskPriorityAdjustment::Increase,
+            }
+            .is_specialized()
+        );
+        assert!(
+            UiIntent::CancelTask {
+                entity: Entity::PLACEHOLDER,
+                expected_work_type: WorkType::Chop,
+                expected_kind: TaskCancelKind::GenericDesignation,
+            }
+            .is_specialized()
+        );
+        assert!(!UiIntent::ToggleDoorLock(Entity::PLACEHOLDER).is_specialized());
+        assert!(!UiIntent::SelectArchitectCategory(Some(BuildingCategory::Plant)).is_specialized());
+        assert!(!UiIntent::MovePlantBuilding(Entity::PLACEHOLDER).is_specialized());
     }
 }

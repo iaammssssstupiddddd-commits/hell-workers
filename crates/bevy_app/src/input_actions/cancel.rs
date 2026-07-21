@@ -251,6 +251,26 @@ mod tests {
         );
     }
 
+    #[test]
+    fn escape_cancels_zone_placement_to_normal() {
+        let mut app = cleanup_app(InputAction::CancelActiveMode);
+        app.world_mut().resource_mut::<ZoneContext>().0 =
+            Some(crate::systems::logistics::ZoneType::Stockpile);
+        app.world_mut().resource_mut::<TaskContext>().0 = TaskMode::ZonePlacement(
+            hw_core::game_state::TaskModeZoneType::Stockpile,
+            Some(Vec2::ZERO),
+        );
+
+        app.update();
+
+        assert!(app.world().resource::<ZoneContext>().0.is_none());
+        assert_eq!(app.world().resource::<TaskContext>().0, TaskMode::None);
+        assert!(matches!(
+            *app.world().resource::<NextState<PlayMode>>(),
+            NextState::Pending(PlayMode::Normal) | NextState::PendingIfNeq(PlayMode::Normal)
+        ));
+    }
+
     fn cancel_if_owner_state_is_active(
         play_mode: Res<State<PlayMode>>,
         mut cleanup: ActiveModeCleanupParams,

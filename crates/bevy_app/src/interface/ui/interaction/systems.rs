@@ -1,16 +1,15 @@
 use crate::entities::familiar::{Familiar, FamiliarOperation};
-use crate::input_actions::{ActiveModeCleanupParams, ForegroundUiGate};
-use crate::systems::jobs::{Door, DoorState, apply_door_state};
-use crate::world::map::WorldMapWrite;
+use crate::input_actions::ForegroundUiGate;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
-use hw_core::game_state::PlayMode;
+use hw_jobs::{Building, BuildingCategory};
 use hw_ui::UiIntent;
 use hw_ui::components::*;
+use hw_ui::interaction::HoverActionTarget;
 use hw_ui::interaction::common::update_interaction_color;
 use hw_ui::interaction::dialog::close_operation_dialog;
+use hw_ui::selection::HoveredEntity;
 use hw_ui::theme::UiTheme;
-use hw_world::DoorVisualHandles;
 
 use super::menu_actions;
 
@@ -23,13 +22,6 @@ type MenuButtonWithColorQuery<'w, 's> = Query<
         &'static MenuButton,
         &'static mut BackgroundColor,
     ),
-    (Changed<Interaction>, With<Button>),
->;
-
-type MenuButtonQuery<'w, 's> = Query<
-    'w,
-    's,
-    (Entity, &'static Interaction, &'static MenuButton),
     (Changed<Interaction>, With<Button>),
 >;
 
@@ -68,103 +60,17 @@ pub fn ui_interaction_system(
     }
 }
 
-/// `SelectArchitectCategory` アクションを処理する専用システム
-/// `SelectArchitectCategory` を専用で処理するシステム
-/// 2回押下時のトグル仕様をここで維持する。
-pub fn arch_category_action_system(
-    interaction_query: MenuButtonQuery,
-    mut arch_category_state: ResMut<hw_ui::components::ArchitectCategoryState>,
-    foreground_gate: ForegroundUiGate,
+/// Root adapter that publishes only movable Plant buildings to the UI widget.
+pub fn update_move_plant_hover_target_system(
+    hovered: Res<HoveredEntity>,
+    q_buildings: Query<&Building>,
+    mut target: ResMut<HoverActionTarget>,
 ) {
-    for (entity, interaction, menu_button) in interaction_query.iter() {
-        if *interaction != Interaction::Pressed {
-            continue;
-        }
-        if !foreground_gate.allows(entity) {
-            continue;
-        }
-        if let MenuAction::SelectArchitectCategory(category) = menu_button.0 {
-            // 同じカテゴリを再度押した場合はトグルして非表示にする
-            arch_category_state.0 = if arch_category_state.0 == category {
-                None
-            } else {
-                category
-            };
-        }
-    }
-}
-
-/// `MovePlantBuilding` を専用で処理するシステム
-/// Plantの移動先選択モードへ遷移する。
-pub fn move_plant_building_action_system(
-    interaction_query: MenuButtonQuery,
-    mut selected_entity: ResMut<crate::interface::selection::SelectedEntity>,
-    play_mode: Res<State<PlayMode>>,
-    resolved_frame: Res<crate::input_actions::ResolvedInputFrame>,
-    mut cleanup: ActiveModeCleanupParams,
-    foreground_gate: ForegroundUiGate,
-) {
-    if resolved_frame.pointer_selection_suppressed() {
-        return;
-    }
-    for (entity, interaction, menu_button) in interaction_query.iter() {
-        if *interaction != Interaction::Pressed {
-            continue;
-        }
-        if !foreground_gate.allows(entity) {
-            continue;
-        }
-        let MenuAction::MovePlantBuilding(entity) = menu_button.0 else {
-            continue;
-        };
-        if cleanup.has_active_owner_state(play_mode.get()) {
-            cleanup.cancel_active_mode();
-        }
-        selected_entity.0 = Some(entity);
-        cleanup.move_context.0 = Some(entity);
-        cleanup.move_placement_state.0 = None;
-        cleanup.companion_state.0 = None;
-        cleanup.next_play_mode.set(PlayMode::BuildingMove);
-    }
-}
-
-/// `ToggleDoorLock` を専用で処理するシステム
-/// ドアのロック状態と見た目を即時反映する。
-pub fn door_lock_action_system(
-    interaction_query: MenuButtonQuery,
-    mut q_doors: Query<(&Transform, &mut Door, &mut Sprite)>,
-    mut world_map: WorldMapWrite,
-    door_visual_handles: Res<DoorVisualHandles>,
-    foreground_gate: ForegroundUiGate,
-) {
-    for (entity, interaction, menu_button) in interaction_query.iter() {
-        if *interaction != Interaction::Pressed {
-            continue;
-        }
-        if !foreground_gate.allows(entity) {
-            continue;
-        }
-        let MenuAction::ToggleDoorLock(entity) = menu_button.0 else {
-            continue;
-        };
-        if let Ok((transform, mut door, mut sprite)) = q_doors.get_mut(entity) {
-            let door_grid =
-                crate::world::map::WorldMap::world_to_grid(transform.translation.truncate());
-            let next_state = if door.state == DoorState::Locked {
-                DoorState::Closed
-            } else {
-                DoorState::Locked
-            };
-            apply_door_state(
-                &mut door,
-                &mut sprite,
-                &mut world_map,
-                &door_visual_handles,
-                door_grid,
-                next_state,
-            );
-        }
-    }
+    target.0 = hovered.0.filter(|entity| {
+        q_buildings
+            .get(*entity)
+            .is_ok_and(|building| building.kind.category() == BuildingCategory::Plant)
+    });
 }
 
 /// Operation Dialog のテキスト表示を更新するシステム
@@ -185,7 +91,11 @@ pub fn update_operation_dialog_system(
             if let Some(entity) = ui_nodes.get_slot(UiSlot::DialogThresholdText)
                 && let Ok(mut text) = q_text.get_mut(entity)
             {
-                let val_str = format!("{:.0}%", op.fatigue_threshold * 100.0);
+                let val_str = if op.recruit_fatigue_threshold().is_some() {
+                    format!("{:.0}%", op.fatigue_threshold * 100.0)
+                } else {
+                    "0% (Recruit Off)".to_string()
+                };
                 if text.0 != val_str {
                     text.0 = val_str;
                 }
@@ -203,5 +113,100 @@ pub fn update_operation_dialog_system(
         }
     } else {
         close_operation_dialog(&mut q_dialog);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input_actions::PendingWorldInputCapture;
+    use hw_jobs::BuildingType;
+
+    #[derive(Resource, Default)]
+    struct CollectedIntents(Vec<UiIntent>);
+
+    fn collect_intents(
+        mut reader: MessageReader<UiIntent>,
+        mut collected: ResMut<CollectedIntents>,
+    ) {
+        collected.0.extend(reader.read().copied());
+    }
+
+    #[test]
+    fn move_overlay_is_limited_to_plant_buildings() {
+        let mut app = App::new();
+        app.init_resource::<HoveredEntity>()
+            .init_resource::<HoverActionTarget>()
+            .add_systems(Update, update_move_plant_hover_target_system);
+        let tank = app
+            .world_mut()
+            .spawn(Building {
+                kind: BuildingType::Tank,
+                is_provisional: false,
+            })
+            .id();
+        let wall = app
+            .world_mut()
+            .spawn(Building {
+                kind: BuildingType::Wall,
+                is_provisional: false,
+            })
+            .id();
+        let non_building = app.world_mut().spawn_empty().id();
+
+        for (hovered, expected) in [
+            (Some(tank), Some(tank)),
+            (Some(wall), None),
+            (Some(non_building), None),
+            (None, None),
+        ] {
+            app.world_mut().resource_mut::<HoveredEntity>().0 = hovered;
+            app.update();
+            assert_eq!(app.world().resource::<HoverActionTarget>().0, expected);
+        }
+    }
+
+    #[test]
+    fn foreground_gate_blocks_background_menu_action() {
+        let mut app = App::new();
+        app.add_message::<UiIntent>()
+            .init_resource::<UiInputState>()
+            .init_resource::<PendingWorldInputCapture>()
+            .init_resource::<UiTheme>()
+            .init_resource::<CollectedIntents>()
+            .add_systems(Update, (ui_interaction_system, collect_intents).chain());
+        let root = app.world_mut().spawn(Node::default()).id();
+        let foreground = app
+            .world_mut()
+            .spawn((
+                Interaction::Pressed,
+                Button,
+                MenuButton(MenuAction::ToggleDoorLock(root)),
+                BackgroundColor::default(),
+                ChildOf(root),
+            ))
+            .id();
+        let background = app
+            .world_mut()
+            .spawn((
+                Interaction::Pressed,
+                Button,
+                MenuButton(MenuAction::ToggleDoorLock(root)),
+                BackgroundColor::default(),
+            ))
+            .id();
+        {
+            let mut state = app.world_mut().resource_mut::<UiInputState>();
+            state.world_input_captured = true;
+            state.foreground_capture_root = Some(root);
+        }
+
+        app.update();
+
+        let intents = &app.world().resource::<CollectedIntents>().0;
+        assert_eq!(intents.len(), 1);
+        assert!(matches!(intents[0], UiIntent::ToggleDoorLock(entity) if entity == root));
+        assert!(app.world().get_entity(foreground).is_ok());
+        assert!(app.world().get_entity(background).is_ok());
     }
 }

@@ -100,7 +100,12 @@ Perceive → Update → Decide → Execute
 3.  **Decide**: 次の行動の選択、要求の生成 (`DesignationRequest`, `TaskAssignmentRequest`, `IdleBehaviorRequest`)
 4.  **Execute**: 決定された行動の実行、コマンド発行 (`apply_designation_requests_system`, `apply_task_assignment_requests_system`, `task_execution`)
 
-各フェーズ間には `ApplyDeferred` が配置され、変更が次のフェーズで確実に反映されます。
+`ApplyDeferred` は一律のフェーズ装飾ではなく、後続systemが同じ`Update`でdeferred mutationを読む境界に置く。
+現行の主な境界は Familiar Perceive→Update、Update→Decide、Familiar Execute→Soul Perceive、
+Soul Perceive→Update、Update→Decide、Decide→Executeである。Familiar Decide内部は
+`StateDecision → StateFlush → BlueprintAutoGather → AutoGatherFlush → TaskRevisionSync → Delegation → Encouragement`
+のstable set列を使い、AutoGatherがspawnしたDesignationを同じtickの診断・委譲へ見せる。
+owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`でPerceive前に確定する。
 
 ### `LogicPlugin` 内の登録グループ
 
@@ -112,8 +117,8 @@ Perceive → Update → Decide → Execute
   `ApplyDeferred` を Familiar / Soul / TransportRequest の Perceive より前に完了する。construction phase system は
   `Flush` 後だけを読み、cancel 済み task/request を同じ frame に再進行・再生成しない。
 - `building_completion_system` は `SoulAiSystemSet::Execute` 後の `BuildingCompletionSet` で実行する。続く Actor phase は `ApplyDeferred` により command を反映してから `ObstacleSyncSet` を実行し、`SoulAiSystemSet::Actor`（pathfinding を含む）より前に `obstacle_sync_system` が WorldMap を更新する。
-- Group C: floor construction 系 (`floor_construction_cancellation_system` → `floor_construction_phase_transition_system` → `floor_construction_completion_system`) はフェーズ順を保つため `.chain()` で登録する。
-- Group D: wall construction 系 (`wall_construction_cancellation_system` → `debug_instant_complete_walls_system` → `wall_framed_tile_spawn_system` → `wall_construction_phase_transition_system` → `wall_construction_completion_system`) はフェーズ順とデバッグ割り込み位置を保つため `.chain()` で登録する。
+- Group C: floor construction 系 (`floor_construction_phase_transition_system` → `floor_construction_completion_system`) は`TaskOwnerCancellationSet::Flush`後にフェーズ順を保つため `.chain()` で登録する。
+- Group D: wall construction 系 (`debug_instant_complete_walls_system` → `wall_framed_tile_spawn_system` → `wall_construction_phase_transition_system` → `wall_construction_completion_system`) は`TaskOwnerCancellationSet::Flush`後にフェーズ順とデバッグ割り込み位置を保つため `.chain()` で登録する。
 - Soul Spa / energy 系は child・relationship の deferred mutation を先に適用し、`detect_energy_update_dirty_system` → output → grid recalculation → `Unpowered` 適用 → lamp buff を同じLogic frameで直列化する。lamp buff はSoul AIのslow update後にのみ実行し、steady-stateのoutput/grid全走査はdirty gateで止める。
 - room detection 系 (`mark_room_dirty_from_building_changes_system` → `validate_rooms_system` → `detect_rooms_system`) は `.chain().after(dream_tree_planting_system)` を維持し、DreamTree 反映後のワールド状態を入力にする。
 
@@ -135,7 +140,7 @@ Perceive → Update → Decide → Execute
 - `pathfinding_system` / `soul_stuck_escape_system` は `hw_soul_ai::soul_ai::pathfinding` に移管済み（`GameSystemSet::Actor` で登録）。既存パス再利用・再探索・休憩所フォールバック・到達不能時クリーンアップの補助関数群で構成し、挙動差分を局所化する。`hw_world::pathfinding`（`world/mod.rs` の inline `pub mod pathfinding` として re-export）側は `find_path_with_policy` を探索共通核として、通常探索・隣接探索・境界探索の差分をポリシー化する。`find_path` は `PathGoalPolicy` でゴール歩行性契約を明示し、`find_path_to_adjacent` は `allow_goal_blocked`（開始点が非歩行のケースを含む）で逆探索の許容条件を制御する。
 - 建設完了後の WorldMap 更新・movement-blocking footprint marker spawn・Soul 押し出しは `BuildingCompletedEvent`（`hw_jobs::events`）の Pub/Sub パターンに移管済み。root の `building_completion_system` がイベントを `commands.trigger()` で発行し、`hw_soul_ai::soul_ai::building_completed::on_building_completed` Observer（`SoulAiCorePlugin` 登録）が受理・適用する。
 - `transport_request::producer` の floor/wall 搬入同期は `producer/mod.rs` の共通ヘルパー（`sync_construction_requests`, `sync_construction_delivery`）を利用して重複実装を避ける。全プロデューサーのオーナー解決は `AreaBounds`（`zones.rs` の共通矩形型）に統一し、`collect_all_area_owners` / `find_owner_for_position` で Familiar TaskArea と Yard 境界を同列に処理する。
-- UI/Visual の更新責務は `status_display/*` と `dream/ui_particle/*` に分離し、表示更新と演出更新を独立に保守する。UI 入力処理は `MenuAction` の汎用経路（`ui_interaction_system`）と専用経路（`arch_category_action_system` / `door_lock_action_system`）を分離して維持する。
+- UI/Visual の更新責務は `status_display/*` と `hw_visual::dream::ui_particle/*` に分離し、表示更新と演出更新を独立に保守する。button interactionは`ui_interaction_system`が`UiIntent`へ変換し、rootの単一`handle_ui_intent`がゲーム副作用を適用する。Move/door/Architect用の直接`Changed<Interaction>` consumerは持たない。
 - task action は `hw_ui` の `UiIntent` と表示 capability から root `actions.rs` へ渡す。root は Entity generation、
   expected `WorkType`、positive provenance / owner component を live 再検証し、generic designation、manual transport、
   Blueprint、Floor / Wall site の各 owner API へ明示的に dispatch する。Pause / capture でも reader を drain し、
@@ -144,7 +149,9 @@ Perceive → Update → Decide → Execute
 ## 建設タスク型の責務分離
 
 - `FloorConstructionPhase` / `WallConstructionPhase` / `FloorTileState` / `WallTileState` は `hw_jobs` の `construction` モジュールへ集約されたデータ型として扱う。
-- `floor_construction_phase_transition_system` / `wall_construction_phase_transition_system` も `hw_jobs::construction` に移設済み。`bevy_app/floor_construction/mod.rs`・`wall_construction/mod.rs` に `pub use` を直接記載。`wall_framed_tile_spawn_system` は `Building3dHandles`（root 固有）依存のため `bevy_app` に残留。
+- site/tile単位のpure eligibility/transition methodは`hw_jobs::construction`が所有する。
+- `floor_construction_phase_transition_system` / `wall_construction_phase_transition_system`と`ConstructionPerfMetrics`は、`TileSiteIndex` ownerである`hw_logistics::construction_phase_transition`が所有する。rootは`plugins/logic.rs`から一度だけ登録する。
+- cancel/completionと`Building3dHandles`依存の`wall_framed_tile_spawn_system`は`bevy_app`に残す。
 - `AssignedTask` 側の worker オペレーション型（`ReinforceFloorPhase`, `PourFloorPhase`, `FrameWallPhase`, `CoatWallPhase`）は、現時点では「実行者視点の進捗」を表す独立型として維持する。
 - `hw_jobs::construction` 側の tile state は「サイト/タイルごとの状態」を表現し、AssignedTask phase は「魂がそのタスク内でどの段階にいるか」を表現する。
 - 今回の抽出では型を統合せず、2 系統の enum は役割分離したまま保持し、境界を越えた参照だけを `pub use` レイヤーで標準化する。
@@ -180,7 +187,7 @@ Perceive → Update → Decide → Execute
 
 ## 空間グリッド一覧 (Spatial Grids)
 
-`crates/hw_spatial` は `SpatialIndex<Tag>` を実体とし、9 個の公開名は crate 所有 ZST tag を使う type alias である（Soul 用の型名は **`SpatialGrid`** — `SoulSpatialGrid` という Rust 型はない）。`SpatialGridOps` と標準 Transform updater は `SpatialIndex<Tag>` に一度だけ実装する。custom cell sizeまたは内部 grid の検査・構成は `SpatialIndex::new(GridData)`、`data`、`data_mut`、`into_data` を通し、tuple fieldへ依存しない。`ResourceSpatialGrid` の Visibility policy と `GatheringSpotSpatialGrid` の center / Added-only policy は専用 system のまま保持する。`ResourceItem` / `Stockpile` / `TransportRequest` の component 特化 wrapper は `hw_logistics` にあり、`plugins/spatial.rs` から登録される。`crates/bevy_app/src/systems/spatial/` は削除済みで、`crates/bevy_app/src/plugins/spatial.rs` が `hw_spatial` / `hw_logistics` から直接 import する。
+`SpatialGridOps` trait契約の正本は`hw_world/src/spatial.rs`である。`crates/hw_spatial`はこれをre-exportし、`SpatialIndex<Tag>`に対する唯一のconcrete implと標準Transform updaterを持つ。9個の公開名はcrate所有ZST tagを使うtype aliasである（Soul用の型名は **`SpatialGrid`** — `SoulSpatialGrid`というRust型はない）。custom cell sizeまたは内部gridの検査・構成は`SpatialIndex::new(GridData)`、`data`、`data_mut`、`into_data`を通し、tuple fieldへ依存しない。`ResourceSpatialGrid`のVisibility policyと`GatheringSpotSpatialGrid`のcenter / Added-only policyは専用systemのまま保持する。`ResourceItem` / `Stockpile` / `TransportRequest`のcomponent特化wrapperは`hw_logistics`にあり、`plugins/spatial.rs`から登録される。`crates/bevy_app/src/systems/spatial/`は削除済みで、`crates/bevy_app/src/plugins/spatial.rs`が`hw_spatial` / `hw_logistics`から直接importする。
 標準 7 系統は `Added<Tracked>` / `Changed<Transform>` / `RemovedComponents<Tracked>` の Change Detection に基づく差分更新を使う。Resource と Gathering は上記の専用 policy を優先する。
 
 | グリッド | 用途 |
@@ -196,6 +203,12 @@ Perceive → Update → Decide → Execute
 | `FloorConstructionSpatialGrid` | 床建設サイトの近傍検索 |
 
 新しい標準グリッドを追加する場合は `hw_spatial` 所有 ZST tag と `SpatialIndex<Tag>` の alias を定義し、共通 Transform updater を具体 wrapper から登録する。座標正本や Change Detection policy が異なる場合だけ専用 updater を置き、その差分をテストする。
+
+### Door proximity adapter
+
+- `hw_world::door_systems`: door state/sprite/WorldMap同期と、1 Soul候補に対するpure open/keep-open rule。
+- `hw_spatial::door_proximity`: `SpatialGrid`から近傍Soulだけを抽出するopen/close systemと`DoorPerfMetrics`。
+- `bevy_app::plugins::logic`: `DoorVisualHandles`注入後のproduction登録とopen→close順序。一意登録し、全Soul scan版を併置しない。
 
 ## 定数管理 (`crates/hw_core/src/constants/`)
 

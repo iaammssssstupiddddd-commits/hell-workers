@@ -16,8 +16,8 @@ use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::perceive::resource_sync::ReservationSyncPerfMetrics;
 #[cfg(feature = "profiling")]
 use crate::systems::jobs::{
-    Blueprint, BuildingType, ConstructionPerfMetrics, Designation, Door, DoorPerfMetrics,
-    DoorState, Priority, Rock, TaskSlots, Tree, WorkType,
+    Blueprint, BuildingType, ConstructionPerfMetrics, Designation, Door, DoorState, Priority, Rock,
+    TaskSlots, Tree, WorkType,
 };
 #[cfg(feature = "profiling")]
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
@@ -49,6 +49,8 @@ use hw_soul_ai::soul_ai::execute::task_execution::TaskExecutionPerfMetrics;
 use hw_soul_ai::soul_ai::pathfinding::RuntimePathDeferMetrics;
 #[cfg(feature = "profiling")]
 use hw_soul_ai::soul_ai::update::slow_simulation::SlowSimulationPerfMetrics;
+#[cfg(feature = "profiling")]
+use hw_spatial::DoorPerfMetrics;
 #[cfg(feature = "profiling")]
 use hw_visual::visual3d::{
     Building3dVisual, FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d, SoulShadowProxy3d,

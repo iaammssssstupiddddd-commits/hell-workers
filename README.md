@@ -39,15 +39,18 @@
 
 ## ディレクトリ構成
 
-- `crates/bevy_app/src/`: Rust ソースコード
-    - `entities/`: 主要なエンティティ（Soul、Familiar、建物など）の定義
-    - `systems/`: ゲームロジック
-        - `familiar_ai/`: 使い魔の管理・指揮ロジック
-        - `soul_ai/`: Soulの作業・生命維持ロジック
-        - `visual/`: プログレスバー、エフェクト等の視覚演出
-        - `jobs/`: タスク発行・管理
-    - `interface/`: UI コンポーネント
-    - `plugins/`: Bevy プラグイン構成
+- `crates/bevy_app/`: App shell。アセット注入、root adapter、cross-crate scheduling、startup/save、plugin wiring
+- `crates/hw_core/`: 共有基礎型、イベント、Relationship、定数、game state
+- `crates/hw_energy/`: Soul Energyのmodel・定数・Relationship
+- `crates/hw_jobs/`: task payload、建物/Designation、建設状態機械のpure rule
+- `crates/hw_world/`: `WorldMap`、地形生成、経路探索、Room、ドア状態rule
+- `crates/hw_spatial/`: typed spatial indexとindex-backed door proximity adapter
+- `crates/hw_logistics/`: Inventory、資源/stockpile、TransportRequest、建設phaseのindex adapter
+- `crates/hw_familiar_ai/`: Familiarの知覚・判断・委譲・使役処理
+- `crates/hw_soul_ai/`: Soulのvitals、行動判断、task execution、移動
+- `crates/hw_ui/`: widget、theme、ViewModel表示、`UiIntent` producer
+- `crates/hw_visual/`: gameplay visual、speech、Dream presentation
+- `crates/visual_test/`: 独立した4-pass RtTビジュアル検証アプリ
 - `docs/`: 技術仕様書、要件ドキュメント
 - `docs/proposals/`: 機能追加やリファクタリングの提案書
 - `assets/`: スプライト、フォントなどのリソース

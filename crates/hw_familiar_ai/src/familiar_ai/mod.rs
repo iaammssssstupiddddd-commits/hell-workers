@@ -21,8 +21,37 @@ pub enum FamiliarTaskDecisionSet {
 
 pub struct FamiliarAiCorePlugin;
 
+/// Configures the stable Familiar Decide seams and their two required command
+/// flushes. Root adapters use the named sets; keeping the barriers here ties
+/// them directly to their producer/consumer pairs.
+pub fn configure_familiar_task_decision_schedule(app: &mut App) {
+    app.add_systems(
+        Update,
+        ApplyDeferred.in_set(FamiliarTaskDecisionSet::StateFlush),
+    )
+    .add_systems(
+        Update,
+        ApplyDeferred.in_set(FamiliarTaskDecisionSet::AutoGatherFlush),
+    )
+    .configure_sets(
+        Update,
+        (
+            FamiliarTaskDecisionSet::StateDecision,
+            FamiliarTaskDecisionSet::StateFlush,
+            FamiliarTaskDecisionSet::BlueprintAutoGather,
+            FamiliarTaskDecisionSet::AutoGatherFlush,
+            FamiliarTaskDecisionSet::TaskRevisionSync,
+            FamiliarTaskDecisionSet::Delegation,
+            FamiliarTaskDecisionSet::Encouragement,
+        )
+            .chain()
+            .in_set(FamiliarAiSystemSet::Decide),
+    );
+}
+
 impl Plugin for FamiliarAiCorePlugin {
     fn build(&self, app: &mut App) {
+        configure_familiar_task_decision_schedule(app);
         app.init_resource::<decide::resources::FamiliarTaskDelegationTimer>()
             .init_resource::<decide::resources::FamiliarStateDecisionTimer>()
             .init_resource::<hw_world::WalkabilityConnectivityCache>()
@@ -56,16 +85,8 @@ impl Plugin for FamiliarAiCorePlugin {
             )
             .add_systems(
                 Update,
-                ApplyDeferred.in_set(FamiliarTaskDecisionSet::StateFlush),
-            )
-            .add_systems(
-                Update,
                 decide::blueprint_auto_gather::blueprint_auto_gather_system
                     .in_set(FamiliarTaskDecisionSet::BlueprintAutoGather),
-            )
-            .add_systems(
-                Update,
-                ApplyDeferred.in_set(FamiliarTaskDecisionSet::AutoGatherFlush),
             )
             .add_systems(
                 Update,
@@ -76,20 +97,6 @@ impl Plugin for FamiliarAiCorePlugin {
                 Update,
                 decide::encouragement::encouragement_decision_system
                     .in_set(FamiliarTaskDecisionSet::Encouragement),
-            )
-            .configure_sets(
-                Update,
-                (
-                    FamiliarTaskDecisionSet::StateDecision,
-                    FamiliarTaskDecisionSet::StateFlush,
-                    FamiliarTaskDecisionSet::BlueprintAutoGather,
-                    FamiliarTaskDecisionSet::AutoGatherFlush,
-                    FamiliarTaskDecisionSet::TaskRevisionSync,
-                    FamiliarTaskDecisionSet::Delegation,
-                    FamiliarTaskDecisionSet::Encouragement,
-                )
-                    .chain()
-                    .in_set(FamiliarAiSystemSet::Decide),
             )
             .add_systems(
                 Update,

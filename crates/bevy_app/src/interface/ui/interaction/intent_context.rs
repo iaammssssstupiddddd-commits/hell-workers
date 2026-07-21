@@ -11,7 +11,10 @@ use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::save::{SaveLoadState, SavePath};
 use hw_core::game_state::PlayMode;
 use hw_core::relationships::Commanding;
-use hw_ui::components::{LoadConfirmDialog, OperationDialog};
+use hw_core::world::DoorState;
+use hw_jobs::{Building, BuildingCategory, Door};
+use hw_ui::components::{ArchitectCategoryState, LoadConfirmDialog, OperationDialog};
+use hw_world::{DoorVisualHandles, WorldMap, WorldMapWrite, apply_door_state};
 
 #[derive(SystemParam)]
 pub(crate) struct IntentModeCtx<'w, 's> {
@@ -25,6 +28,56 @@ impl IntentModeCtx<'_, '_> {
         if self.cleanup.has_active_owner_state(self.play_mode.get()) {
             self.cleanup.cancel_active_mode();
         }
+    }
+}
+
+/// Domain-side validation and mutation used by the generic UI intent handler.
+///
+/// This is placed in a `ParamSet` with `IntentModeCtx`: both need WorldMap and
+/// mutable Sprite access, but individual intents borrow only one side at a
+/// time.
+#[derive(SystemParam)]
+pub(crate) struct IntentDomainActionCtx<'w, 's> {
+    architect_category: ResMut<'w, ArchitectCategoryState>,
+    q_buildings: Query<'w, 's, &'static Building>,
+    q_doors: Query<'w, 's, (&'static Transform, &'static mut Door, &'static mut Sprite)>,
+    world_map: WorldMapWrite<'w>,
+    door_visual_handles: Res<'w, DoorVisualHandles>,
+}
+
+impl IntentDomainActionCtx<'_, '_> {
+    pub(crate) fn toggle_architect_category(&mut self, category: Option<BuildingCategory>) {
+        self.architect_category.0 = if self.architect_category.0 == category {
+            None
+        } else {
+            category
+        };
+    }
+
+    pub(crate) fn is_move_plant_target(&self, entity: Entity) -> bool {
+        self.q_buildings
+            .get(entity)
+            .is_ok_and(|building| building.kind.category() == BuildingCategory::Plant)
+    }
+
+    pub(crate) fn toggle_door_lock(&mut self, entity: Entity) {
+        let Ok((transform, mut door, mut sprite)) = self.q_doors.get_mut(entity) else {
+            return;
+        };
+        let door_grid = WorldMap::world_to_grid(transform.translation.truncate());
+        let next_state = if door.state == DoorState::Locked {
+            DoorState::Closed
+        } else {
+            DoorState::Locked
+        };
+        apply_door_state(
+            &mut door,
+            &mut sprite,
+            &mut self.world_map,
+            &self.door_visual_handles,
+            door_grid,
+            next_state,
+        );
     }
 }
 

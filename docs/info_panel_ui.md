@@ -29,6 +29,7 @@
   - Motivation
   - Stress
   - Fatigue
+  - Dream（`Dream: current/DREAM_MAX`、現行上限100）
 - Current Task
 - Inventory
 - 共通テキスト（補助情報）

@@ -6,6 +6,7 @@
 use bevy::prelude::*;
 
 use hw_core::constants::*;
+use hw_core::events::DreamTransferVisualSource;
 use hw_core::relationships::ParticipatingIn;
 use hw_core::soul::{
     DamnedSoul, DreamPool, DreamQuality, DreamState, GatheringBehavior, IdleBehavior, IdleState,
@@ -13,12 +14,14 @@ use hw_core::soul::{
 use hw_jobs::AssignedTask;
 use hw_jobs::tasks::GeneratePowerPhase;
 
-use super::slow_simulation::SlowSimulationClock;
+use super::slow_simulation::DreamTransferAccumulator;
 
 pub(crate) type DreamUpdateQuery<'w, 's> = Query<
     'w,
     's,
     (
+        Entity,
+        &'static Transform,
         &'static mut DamnedSoul,
         &'static IdleState,
         &'static mut DreamState,
@@ -27,23 +30,14 @@ pub(crate) type DreamUpdateQuery<'w, 's> = Query<
     ),
 >;
 
-/// SoulのDream蓄積・放出を処理するシステム
-pub fn dream_update_system(
-    clock: Res<SlowSimulationClock>,
-    mut dream_pool: ResMut<DreamPool>,
-    mut q_souls: DreamUpdateQuery,
-) {
-    for _ in 0..clock.steps_this_frame() {
-        dream_update_step(clock.step_secs(), &mut dream_pool, &mut q_souls);
-    }
-}
-
 pub(crate) fn dream_update_step(
     dt: f32,
     dream_pool: &mut DreamPool,
+    transfers: &mut DreamTransferAccumulator,
     q_souls: &mut DreamUpdateQuery,
 ) {
-    for (mut soul, idle, mut dream, task, participating_in) in q_souls.iter_mut() {
+    for (entity, transform, mut soul, idle, mut dream, task, participating_in) in q_souls.iter_mut()
+    {
         let is_sleeping = idle.behavior == IdleBehavior::Sleeping
             || (idle.behavior == IdleBehavior::Gathering
                 && idle.gathering_behavior == GatheringBehavior::Sleeping
@@ -87,8 +81,18 @@ pub(crate) fn dream_update_step(
         // 一律レートでsoul.dreamをDreamPoolへ放出
         let drain = (DREAM_DRAIN_RATE * dt).min(soul.dream);
         if drain > 0.0 {
+            let is_final = drain >= soul.dream;
             soul.dream -= drain;
             dream_pool.points += drain;
+            transfers.record(
+                entity,
+                drain,
+                dream.quality,
+                DreamTransferVisualSource::Sleeping {
+                    origin: transform.translation.truncate(),
+                },
+                is_final,
+            );
         }
     }
 }

@@ -11,9 +11,10 @@ use crate::{
     TaskAssignmentRequest,
 };
 use hw_core::events::{
-    OnGatheringJoined, OnGatheringParticipated, OnReleasedFromService, OnTaskAbandoned,
-    OnTaskAssigned, SoulEncouragedVisualMessage, SoulExhaustedVisualMessage,
-    SoulRecruitedVisualMessage, SoulStressBreakdownVisualMessage, TaskCompletedVisualMessage,
+    DreamTransferredVisualMessage, OnGatheringJoined, OnGatheringParticipated,
+    OnReleasedFromService, OnTaskAbandoned, OnTaskAssigned, SoulEncouragedVisualMessage,
+    SoulExhaustedVisualMessage, SoulRecruitedVisualMessage, SoulStressBreakdownVisualMessage,
+    TaskCompletedVisualMessage,
 };
 use hw_visual::speech::conversation::events::{
     ConversationCompleted, ConversationToneTriggered, RequestConversation,
@@ -45,6 +46,7 @@ macro_rules! root_message_types {
             SoulExhaustedVisualMessage,
             TaskCompletedVisualMessage,
             SoulEncouragedVisualMessage,
+            DreamTransferredVisualMessage,
             OnReleasedFromService,
             OnGatheringJoined,
             OnTaskAbandoned,

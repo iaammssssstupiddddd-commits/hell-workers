@@ -5,13 +5,14 @@
 ## 1. 概要
 
 Room 検出システムは、完成した壁・扉・床で構成された密閉空間を `Room` エンティティとして自動認識します。
-検出された Room は半透明オーバーレイで視覚的にフィードバックされ、将来の Room 系ゲームプレイ機能（温度・モラル・部屋品質バフ等）の基盤データを提供します。
+検出された Room は床を塗りつぶさず、床と外周壁の室内側に半透明の境界線を表示します。
+Roomデータは将来の温度・モラル・部屋品質バフ等の基盤になります。
 
 実装境界は次の 2 層です。
 
 - `crates/hw_world::room_detection`: pure core かつ ECS 型の所有者。入力分類、flood-fill、妥当性判定、`RoomBounds`、**`Room`/`RoomOverlayTile`（Component）**、**`RoomTileLookup`/`RoomDetectionState`/`RoomValidationState`（Resource）** を保持する。
 - `crates/hw_world::room_systems`: ECS adapter 層。`detect_rooms_system` / `validate_rooms_system` / `mark_room_dirty_from_building_changes_system` / `on_building_added` / `on_building_removed` / `on_door_added` / `on_door_removed` / `sync_room_overlay_tiles_system` の実装本体をすべて所有する。`Building + Transform` クエリから tile descriptor を収集して `Room` entity のスポーン/削除・`RoomTileLookup` 更新、dirty マーキング、オーバーレイ同期を行う。
-- `crates/bevy_app/src/systems/room/*`: `detection.rs`・`validation.rs`・`dirty_mark.rs`・`visual.rs` はすべて `hw_world` への re-export shell のみ。`components.rs`・`resources.rs` は `hw_world` からの re-export のみ。
+- `crates/bevy_app/src/plugins/logic.rs` / `plugins/visual.rs`: `hw_world`のsystemを直接登録し、cross-domain orderingだけを所有する。旧`systems/room/*` shellは存在しない。
 
 ## 2. Room の成立条件
 
@@ -34,7 +35,7 @@ Room 検出システムは、完成した壁・扉・床で構成された密閉
 |:---|:---|:---|
 | `Room` | `hw_world` | 検出された Room エンティティ。`tiles`, `wall_tiles`, `door_tiles`, `bounds`, `tile_count` を保持 |
 | `RoomBounds` | `hw_world` | Room の最小/最大グリッド座標（min_x, min_y, max_x, max_y） |
-| `RoomOverlayTile` | `hw_world` | 各床タイルに対応する半透明オーバーレイスプライト。`Room` エンティティの子として生成 |
+| `RoomOverlayTile` | `hw_world` | 床と外周壁の境界に置く細いline spriteのmarker。`Room` エンティティの子として生成 |
 
 ### リソース
 
@@ -103,12 +104,14 @@ Room 再検出は「dirty タイルが存在する」かつ「クールダウン
 - 不正な Room は despawn → dirty マーキング → 再検出へ戻す
 - 正常な Room の `RoomTileLookup` を再構築
 
-## 7. 視覚オーバーレイ（`sync_room_overlay_tiles_system`）
+## 7. 視覚境界線（`sync_room_overlay_tiles_system`）
 
-`Added<Room>` または `Changed<Room>` で起動し、Room の各床タイルに対して `RoomOverlayTile` スプライトを生成します。
+`Added<Room>` または `Changed<Room>` で起動し、各床タイルの4近傍に外周壁がある辺だけ
+`RoomOverlayTile` line spriteを生成します。隣接2辺のcornerは線を延長して隙間を埋めます。
 
-- `Z_ROOM_OVERLAY`（= 0.08）レイヤーに描画（床より上、拾得アイテムより下）
-- 色: `ROOM_OVERLAY_COLOR`（半透明）
+- `Z_ROOM_OVERLAY`レイヤーに描画
+- 色と太さ: `ROOM_BORDER_COLOR` / `ROOM_BORDER_THICKNESS`
+- Room内部の床面全体を塗るspriteは生成しない
 - Bevy 0.19 では親 Room を `try_despawn()` するだけで子 RoomOverlayTile も自動 despawn されます
 
 ## 8. システム実行順序
@@ -155,12 +158,6 @@ GameSystemSet::Visual（Visual ループ内）
 |:---|:---|
 | `crates/hw_world/src/room_detection.rs` | room detection core。`build_detection_input`・Flood-fill・validator・`RoomBounds` |
 | `crates/hw_world/src/room_systems.rs` | ECS adapter 層。`detect_rooms_system` / `validate_rooms_system` / `mark_room_dirty_from_building_changes_system` / dirty mark Observer 群 / `sync_room_overlay_tiles_system` の実装本体 |
-| `crates/bevy_app/src/systems/room/detection.rs` | `hw_world::detect_rooms_system` への re-export shell |
-| `crates/bevy_app/src/systems/room/dirty_mark.rs` | `hw_world::room_systems` の dirty mark 関数群への re-export shell |
-| `crates/bevy_app/src/systems/room/validation.rs` | `hw_world::validate_rooms_system` への re-export shell |
-| `crates/bevy_app/src/systems/room/visual.rs` | `hw_world::room_systems::sync_room_overlay_tiles_system` への re-export shell |
-| `crates/bevy_app/src/systems/room/components.rs` | `Room`, `RoomOverlayTile` 定義と `RoomBounds` re-export |
-| `crates/bevy_app/src/systems/room/resources.rs` | `RoomDetectionState`, `RoomTileLookup`, `RoomValidationState` 定義 |
 | `crates/bevy_app/src/plugins/logic.rs` | Room 検出システムの登録 |
 | `crates/bevy_app/src/plugins/visual.rs` | Room ビジュアルシステムの登録 |
 | `crates/hw_core/src/constants/building.rs` | Room 関連定数 |

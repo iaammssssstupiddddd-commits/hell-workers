@@ -217,7 +217,7 @@ cancel marker の処理と `ApplyDeferred` は Familiar / Soul / TransportReques
 | `DeliveryPopup` | 資材搬入時に表示される「+1」のフローティングテキスト |
 | `CompletionText` | 建築完了時に表示される「Construction Complete!」のテキスト |
 | `WorkerHammerIcon` | 建築中のワーカー頭上に表示されるアニメーション付きハンマー |
-| `WorkLine` | 建築中のワーカーと設計図を結ぶ視覚的な作業線 |
+| `task_link_system` | `SoulTaskVisualState`のtargetへ`Gizmos::line_2d`と終点circleを描くデバッグ表示。常設entity/componentではなく、`DebugVisible`時だけ実行 |
 
 ### 状態別表示
 
@@ -312,6 +312,7 @@ Building3dVisual エンティティ（独立。Building の子ではない）
 - 閉扉は通行可能ですが追加コスト（開扉待機コスト）が発生し、ロック中は通行不可です。
 - 魂は扉タイルへ進入する前に短時間待機し、通過後は一定時間で自動的に閉じます。
 - コンテキストメニューからロック/アンロックを切り替えられます。
+- 1候補の開閉ruleとstate適用は`hw_world`、Soul indexからの候補抽出は`hw_spatial::door_proximity`、production登録はrootが所有します。Familiarは自動開閉候補に含めません。
 
 ### Room 検出 (Room Detection)
 
@@ -322,7 +323,7 @@ Building3dVisual エンティティ（独立。Building の子ではない）
 - **検出方式**: 4近傍 Flood-fill（0.5 秒クールダウン）
 - **再判定トリガー**: `Building` / `Door` の追加・変更 / `WorldMap.buildings` 差分
 - **自己修復**: 2 秒ごとの検証で不正 Room を破棄し dirty 再検出に戻す
-- **可視化**: 成立 Room の床タイルに半透明オーバーレイを表示
+- **可視化**: 成立 Room の床と外周壁の室内側に半透明の境界線を表示（床面の塗りつぶしは行わない）
 
 ### MudMixer と Stasis Mud
 - **MudMixer**: 2x2 の生産施設。
@@ -429,6 +430,7 @@ FloorTileBlueprint (子エンティティ、タイルごと)
 
 **Reinforcing → Pouring の移行**:
 - `floor_construction_phase_transition_system` が実行
+- model/pure ruleは`hw_jobs::construction`、`TileSiteIndex` adapterとmetricsは`hw_logistics::construction_phase_transition`、production登録はrootが所有
 - 条件: `site.tiles_reinforced == site.tiles_total` かつ全タイルが `ReinforcedComplete`
 - `TileSiteIndex` で当該siteのタイルだけを読む。counter未達のsiteはタイルqueryを行わず、index件数・state rankが`tiles_total`と一致しない場合はrelease buildでも遷移させない
 - 処理:
@@ -537,10 +539,12 @@ SoulSpaSite (root)
 
 | システム | フェーズ | 役割 |
 |:---|:---|:---|
-| `soul_spa_auto_haul_system` | Logic::Decide | `DeliverToSoulSpa` TransportRequest を upsert |
-| `soul_spa_delivery_sync_system` | Logic::Execute | 周辺骨を消費・`bones_delivered` 更新・Operational 遷移 |
-| `soul_spa_tile_activate_system` | Logic::Execute（`delivery_sync` の後） | Operational 遷移時にタイルへ Designation 付与 |
-| `soul_spa_power_output_system` | FixedUpdate | 稼働タイル数から `current_output` 更新 |
+| `soul_spa_auto_haul_system` | Update / Logic（energy chain先頭） | `DeliverToSoulSpa` TransportRequest を upsert |
+| `soul_spa_delivery_sync_system` | Update / Logic（`auto_haul`の後） | 周辺骨を消費・`bones_delivered` 更新・Operational 遷移 |
+| `soul_spa_tile_activate_system` | Update / Logic（`delivery_sync` の後） | Operational 遷移時にタイルへ Designation 付与 |
+| `soul_spa_power_output_system` | Update / Logic（dirty時） | 稼働タイル数から `current_output` 更新 |
+
+production登録は`auto_haul → delivery_sync → tile_activate → ApplyDeferred → dirty detection → power output → grid recalc → ApplyDeferred → lamp buff`を`.chain()`で固定する。
 
 ### 10.8 インフォパネル表示
 
@@ -589,7 +593,8 @@ OutdoorLamp entity
 
 ### 11.4 バフシステム
 
-`lamp_buff_system`（`GameSystemSet::Logic`）が毎フレーム実行:
+`lamp_buff_system`は`GameSystemSet::Logic`に登録されるが、効果を適用するのは
+`SlowSimulationClock.steps_this_frame() > 0`の100 ms stepだけである。render deltaを別に積算しない:
 - `With<PowerConsumer>, Without<Unpowered>` でフィルタリング（通電中のランプのみ）
 - 半径 `OUTDOOR_LAMP_EFFECT_RADIUS` 内のソウルに:
   - `stress -= LAMP_STRESS_REDUCTION_RATE * dt`
@@ -618,6 +623,6 @@ Grid: gen/con [POWERED|BLACKOUT]   ← ConsumesFrom 接続時のみ
 | システム / Observer | フェーズ | 役割 |
 |:---|:---|:---|
 | `on_power_consumer_added` | Observer `On<Add, PowerConsumer>` | `ConsumesFrom` 付与 |
-| `grid_recalc_system` | Update（`soul_spa_power_output_system` の後） | generation/consumption 集計、停電管理 |
-| `lamp_buff_system` | `GameSystemSet::Logic` | 通電ランプ半径内ソウルへバフ適用 |
+| `grid_recalc_system` | Update / Logic（dirty時、`soul_spa_power_output_system` の後） | generation/consumption 集計、停電管理 |
+| `lamp_buff_system` | Update / Logic（gridの`Unpowered`反映後） | SlowSimulationClockのstepごとに通電ランプ半径内Soulへバフ適用 |
 | `sync_powered_visual_system` | `GameSystemSet::Visual` | `PoweredVisualState` → スプライト色同期 |

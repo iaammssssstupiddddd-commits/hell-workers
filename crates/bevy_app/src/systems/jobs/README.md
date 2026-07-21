@@ -1,56 +1,39 @@
-# jobs — 建設・建物管理システム
+# jobs — 建設・建物管理のroot adapter
 
 ## 役割
 
-建物の建設フェーズ遷移、完成処理、ドア管理、泥ミキサーワークフローを実装する。
-データ型（フェーズ enum・BuildingType 等）は `hw_jobs` クレートに定義されており、このディレクトリは**Bevy システムとして動作するロジック**を担う。
+このディレクトリは建設ownerのcancel/completion、`GameAssets`を使う完成spawn、Soul Spa建設、
+provisional wall spawnなど、App shell固有のadapterを保持する。共有modelやindex-backed transitionを
+rootへ戻さず、production登録とcross-crate orderingは`plugins/logic.rs`が一意に所有する。
 
-## 主要ファイル
+## 現行構成
 
 | ファイル/ディレクトリ | 内容 |
 |---|---|
-| `mod.rs` | `building_completion_system` 等の公開 API |
-| `door.rs` | `hw_jobs` / `hw_world` のドア型・system を再公開する shell |
-| `construction_shared.rs` | `hw_jobs::remove_tile_task_components` と `hw_logistics::{ResourceItemVisualHandles, spawn_refund_items}` を再公開する shell |
-| `mud_mixer.rs` | 泥ミキサーワークフロー管理 |
-| `floor_construction/` | 床建設フェーズシステム（下表） |
-| `wall_construction/` | 壁建設フェーズシステム（下表） |
-| `building_completion/` | 建物完成後処理（下表） |
+| `mod.rs` | 型の選択的re-export、`TaskOwnerCancellationSet`、root API |
+| `blueprint_cancellation.rs` | Blueprint owner cancellation |
+| `building_completion/` | 完成判定、root asset付きspawn、建物別post-process |
+| `floor_construction/cancellation.rs` | Floor siteのowner cancellation |
+| `floor_construction/completion.rs` | Floor完成・curing・WorldMap cleanup |
+| `wall_construction/cancellation.rs` | Wall siteのowner cancellation |
+| `wall_construction/phase_transition.rs` | `Building3dHandles`を使うprovisional wall spawnだけを所有 |
+| `wall_construction/completion.rs` | Wall完成・cleanup |
+| `soul_spa_construction/` | Soul SpaのBone request、delivery、tile activation |
 
-## floor_construction/ ディレクトリ
+## 建設phaseの責務境界
 
-```
-ReinforceReady → Reinforcing → PouredReady → Poured
-```
+| 層 | owner | 責務 |
+|---|---|---|
+| model / pure rule | `hw_jobs::construction` | site/tile state、eligibility、局所transition method |
+| indexed ECS adapter / metrics | `hw_logistics::construction_phase_transition` | `TileSiteIndex`で当該siteのtileだけを検証し、floor/wall phaseを原子的に進める |
+| root adapter / registration | `bevy_app` | cancel、completion、asset依存spawn、`TaskOwnerCancellationSet::Flush`後の一意登録 |
 
-| ファイル | 内容 |
-|---|---|
-| `mod.rs` | 公開 API |
-| `completion.rs` | 床完成処理 |
-| `cancellation.rs` | 床建設キャンセル |
+## Doorの責務境界
 
-## wall_construction/ ディレクトリ
+- `hw_world::door_systems`: `DoorState`適用と1候補に対するpure auto-open/keep-open rule。
+- `hw_spatial::door_proximity`: Soul spatial indexから候補を抽出するopen/close systemとprofiling metrics。
+- `bevy_app::plugins::logic`: startupから`DoorVisualHandles`を注入し、2 systemをproductionへ一度だけ登録。
 
-```
-Ready → Framed → ProvisionalReady → CoatedReady → Coated
-```
-
-| ファイル | 内容 |
-|---|---|
-| `mod.rs` | 公開 API |
-| `components.rs` | `WallConstructionSite`（root 固有）+ `hw_jobs` からの re-export（`WallTileBlueprint` 等） |
-| `phase_transition.rs` | フェーズ遷移システム |
-| `completion.rs` | 壁完成処理 |
-| `cancellation.rs` | 壁建設キャンセル |
-
-## building_completion/ ディレクトリ
-
-| ファイル | 内容 |
-|---|---|
-| `mod.rs` | `building_completion_system` |
-| `spawn.rs` | 完成後エンティティのスポーン |
-| `post_process.rs` | 建物種別ごとの完成後処理 |
-
-`building_completion_system` は `BuildingCompletionSet` で Soul AI Execute の後に走る。
-WorldMap の footprint 登録・movement blocker marker・Soul の押し出しは
-`BuildingCompletedEvent` を受ける `hw_soul_ai::building_completed::on_building_completed` が所有する。
+`building_completion_system`は`BuildingCompletionSet`でSoul AI Execute後に走る。
+WorldMap footprint登録・movement blocker・Soul押し出しは`BuildingCompletedEvent`を受ける
+`hw_soul_ai::building_completed::on_building_completed`が所有する。

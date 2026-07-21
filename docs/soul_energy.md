@@ -156,8 +156,11 @@ energy pipeline は `soul_spa` の relationship/child 更新を `ApplyDeferred` 
 ### 7.3 Power Status UI
 
 建物選択パネル（`append_building_model`）に PowerConsumer を持つ建物の電力情報を表示:
-- グリッド接続あり: `"Power: {gen}W / {cons}W [POWERED/BLACKOUT]"`
-- グリッド接続なし: `"Power: {demand}W demand [no grid]"`
+- 接続有無にかかわらず需要とconsumer自身の稼働状態を表示:
+  `"Demand: {demand}W [ACTIVE/UNPOWERED]"`
+- `ConsumesFrom`でグリッド接続されている場合だけ別行を追加:
+  `"Grid: {generation}/{consumption} [POWERED/BLACKOUT]"`
+- `ACTIVE/UNPOWERED`はconsumerの`Unpowered` component、`POWERED/BLACKOUT`は接続先`PowerGrid.powered`を表し、同じ状態値ではない。
 
 ## 8. サイレント失敗トラップ
 

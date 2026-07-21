@@ -37,7 +37,7 @@ pub fn process_squad_management(
     let released_entities = SquadManager::release_fatigued(
         &squad_entities,
         ctx.fam_entity,
-        ctx.familiar_op.fatigue_threshold,
+        ctx.familiar_op.release_fatigue_threshold(),
         ctx.q_souls,
     );
 

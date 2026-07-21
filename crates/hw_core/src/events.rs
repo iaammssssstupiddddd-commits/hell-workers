@@ -2,8 +2,33 @@ use crate::familiar::FamiliarAiState;
 use crate::gathering::GatheringObjectType;
 use crate::jobs::WorkType;
 use crate::logistics::ResourceType;
+use crate::soul::DreamQuality;
 use crate::world::GridPos;
 use bevy::prelude::*;
+
+/// Dream が共有 Pool へ移送された時点の presentation anchor。
+///
+/// Visual 側が Soul の現在状態や relationship を再計算せず、退出・despawn 後も
+/// producer が観測した位置を fallback として使えるよう snapshot を保持する。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DreamTransferVisualSource {
+    Sleeping { origin: Vec2 },
+    RestArea { rest_area: Entity, origin: Vec2 },
+}
+
+/// `DamnedSoul.dream` から `DreamPool` へ実際に移送された量の presentation 通知。
+///
+/// `amount` は producer が Pool に加算した同じ delta であり、Visual 側で
+/// drain rate や現在の Soul state から再計算してはならない。`is_final` は
+/// producer がこの transfer stream の終了を確定できた場合だけ立てる。
+#[derive(Message, Debug, Clone, Copy, PartialEq)]
+pub struct DreamTransferredVisualMessage {
+    pub soul: Entity,
+    pub amount: f32,
+    pub quality: DreamQuality,
+    pub source: DreamTransferVisualSource,
+    pub is_final: bool,
+}
 
 /// 魂が使い魔に勧誘（使役開始）された際の domain 通知。
 #[derive(EntityEvent, Debug, Clone, Copy, PartialEq, Eq)]

@@ -28,21 +28,16 @@ pub font_soul_emoji: Handle<Font>, // Soulセリフ（絵文字）
 
 ---
 
-## フォントサイズ定数
+## フォントサイズ
 
-[animation.rs](../crates/hw_core/src/constants/animation.rs) など、各責務を所有する crate で定義:
+Bevy UIの正本は[theme.rs](../crates/hw_ui/src/theme.rs)の`UiTheme.typography`です。
+基本のmodular scaleは`xs/sm/base/md/lg/xl = 9/11/13/15/18/22px`で、widgetはResourceから値を読みます。
+`title/header/item/small/clock/status/dialog_*`は既存画面向けのtheme aliasであり、グローバルな
+`FONT_SIZE_TITLE`等の定数ではありません。
 
-```rust
-pub const FONT_SIZE_TITLE: f32 = 24.0;
-pub const FONT_SIZE_HEADER: f32 = 20.0;
-pub const FONT_SIZE_BODY: f32 = 16.0;
-pub const FONT_SIZE_SMALL: f32 = 14.0;
-pub const FONT_SIZE_TINY: f32 = 10.0;
-
-// 吹き出し用
-pub const FONT_SIZE_BUBBLE_SOUL: f32 = 24.0;
-pub const FONT_SIZE_BUBBLE_FAMILIAR: f32 = 12.0;
-```
+world-space visualはUI themeとは別責務です。Soul status iconは
+`hw_core::constants::animation::FONT_SIZE_BODY = 16px`、speech bubbleは
+`hw_visual::speech::spawn`が発話priority別のサイズを決めます。
 
 ---
 

@@ -120,7 +120,6 @@ pub(super) struct ModeCtxRefs<'a> {
     pub play_mode: &'a PlayMode,
     pub build_context: &'a BuildContext,
     pub companion_state: &'a CompanionPlacementState,
-    pub zone_context: &'a ZoneContext,
     pub task_context: &'a TaskContext,
 }
 
@@ -139,7 +138,6 @@ pub(super) fn build_mode_text(ctx: ModeCtxRefs, info: ModeDisplayInfo) -> String
         play_mode,
         build_context,
         companion_state,
-        zone_context,
         task_context,
     } = ctx;
     let ModeDisplayInfo {
@@ -163,13 +161,6 @@ pub(super) fn build_mode_text(ctx: ModeCtxRefs, info: ModeDisplayInfo) -> String
                 format!("Mode: Build ({:?})", kind)
             } else {
                 "Mode: Build".to_string()
-            }
-        }
-        PlayMode::ZonePlace => {
-            if let Some(kind) = zone_context.0 {
-                format!("Mode: Zone ({:?})", kind)
-            } else {
-                "Mode: Zone".to_string()
             }
         }
         PlayMode::TaskDesignation => match task_context.0 {
@@ -258,5 +249,38 @@ pub(super) fn build_mode_text(ctx: ModeCtxRefs, info: ModeDisplayInfo) -> String
             _ => "Mode: Floor".to_string(),
         },
         PlayMode::BuildingMove => "Mode: Move Building".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zone_placement_flow_does_not_require_zone_place_state() {
+        let mut next_play_mode = NextState::<PlayMode>::Unchanged;
+        let mut build_context = BuildContext::default();
+        let mut zone_context = ZoneContext::default();
+        let mut task_context = TaskContext::default();
+
+        set_zone_mode(
+            ZoneType::Stockpile,
+            &mut next_play_mode,
+            &mut build_context,
+            &mut zone_context,
+            &mut task_context,
+        );
+
+        assert!(matches!(
+            next_play_mode,
+            NextState::Pending(PlayMode::TaskDesignation)
+                | NextState::PendingIfNeq(PlayMode::TaskDesignation)
+        ));
+        assert_eq!(zone_context.0, Some(ZoneType::Stockpile));
+        assert_eq!(
+            task_context.0,
+            TaskMode::ZonePlacement(hw_core::game_state::TaskModeZoneType::Stockpile, None)
+        );
+        assert!(build_context.0.is_none());
     }
 }

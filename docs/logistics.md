@@ -98,6 +98,7 @@ anchor 消失、需要 0、issuer 消失、manual source 消失/搬送済みの 
 | `DeliverWaterToMixer` | `BucketTransport` (source=Tank) | `mud_mixer_auto_haul_system` | Mixer | 割り当て時に tank + bucket を遅延解決 |
 | `GatherWaterToTank` | `BucketTransport` (source=River) | `tank_water_request_system` | Tank | 割り当て時に bucket を遅延解決 |
 | `ReturnBucket` | `Haul` | `bucket_auto_haul_system` | Tank | 割り当て時に dropped bucket と返却先 BucketStorage を同時遅延解決 |
+| `ReturnWheelbarrow` | `WheelbarrowHaul` | `wheelbarrow_auto_haul_system` | WheelbarrowParking | ownerの駐車場外で未使用になった猫車を固定sourceとして返却する |
 | `BatchWheelbarrow` | `WheelbarrowHaul` | `wheelbarrow_auto_haul_system` | Wheelbarrow | producer による生成停止済み。ファミリア AI も処理しないため実質無効。enum 値のみ残存 |
 | `ConsolidateStockpile` | `Haul` | `stockpile_consolidation_producer_system` | Stockpile（レシーバーセル） | 割り当て時にドナーセルの `StoredIn` アイテムを遅延解決 |
 

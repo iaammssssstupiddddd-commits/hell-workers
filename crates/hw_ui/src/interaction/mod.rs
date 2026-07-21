@@ -13,7 +13,7 @@ pub use dialog::{
     close_load_confirm_dialog, close_operation_dialog, is_load_confirm_dialog_open,
     open_load_confirm_dialog, open_operation_dialog,
 };
-pub use hover_action::hover_action_button_system;
+pub use hover_action::{HoverActionTarget, hover_action_button_system};
 pub use pause_menu::update_pause_menu_visibility as update_pause_menu_visibility_system;
 pub use settings::{
     sync_settings_checkmarks_system, sync_settings_slider_thumbs_system,

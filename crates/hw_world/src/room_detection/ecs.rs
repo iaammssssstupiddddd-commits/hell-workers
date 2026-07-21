@@ -14,7 +14,7 @@ use super::core::RoomBounds;
 // update these components/resources; they re-export these types for
 // convenience.
 
-/// ECS component attached to room entities. Populated by the root detection system.
+/// ECS component attached to room entities. Populated by `hw_world` room systems.
 #[derive(Component, Debug, Clone)]
 pub struct Room {
     pub tiles: Vec<(i32, i32)>,
@@ -24,7 +24,7 @@ pub struct Room {
     pub tile_count: usize,
 }
 
-/// Marker component for visual overlay tiles spawned per room floor tile.
+/// Marker component for border-line sprites spawned along a room's inner wall edge.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RoomOverlayTile {
     pub grid_pos: GridPos,

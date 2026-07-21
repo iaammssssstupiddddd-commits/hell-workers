@@ -7,7 +7,7 @@ use super::grid_recalc::EnergyPerfMetrics;
 use super::grid_recalc::EnergyUpdateDirty;
 
 /// Operational SoulSpaSite の稼働タイル数から `PowerGenerator.current_output` を更新する。
-/// FixedUpdate で実行し、Phase 1c の電力グリッド集計が `Changed<PowerGenerator>` を検知する。
+/// `Update` のdirty-gated energy pipelineで実行し、同じframeのgrid再計算へ変更を伝播する。
 pub fn soul_spa_power_output_system(
     mut q_sites: Query<(&SoulSpaSite, &Children, &mut PowerGenerator)>,
     q_tiles: Query<(Option<&TaskWorkers>,), With<SoulSpaTile>>,
