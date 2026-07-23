@@ -14,28 +14,29 @@ pub fn assign_consolidation_to_stockpile(
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    let Some((receiver, resource_type, donor_cells)) =
-        resolve_consolidation_inputs(ctx.task_entity, queries)
+    let Some(resolved) =
+        resolve_consolidation_inputs(ctx.task_entity, queries, shadow, ctx.incoming_snapshot)
     else {
         return false;
     };
 
     let Some((source_item, source_pos)) = source_selector::find_consolidation_source_item(
-        resource_type,
-        &donor_cells,
+        resolved.resource_type,
+        &resolved.donor_cells,
+        resolved.receiver_owner,
         queries,
         shadow,
     ) else {
         debug!(
             "ASSIGN: Consolidation request {:?} has no available {:?} source in donor cells",
-            ctx.task_entity, resource_type
+            ctx.task_entity, resolved.resource_type
         );
         return false;
     };
 
     issue_haul_to_stockpile_with_source(
         source_item,
-        receiver,
+        resolved.receiver,
         source_pos,
         already_commanded,
         ctx,

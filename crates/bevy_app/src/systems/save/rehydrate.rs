@@ -51,15 +51,15 @@ use hw_jobs::{
     Rock, Tree, TreeVariant,
 };
 use hw_logistics::tile_index::TileSiteIndex;
-use hw_logistics::zone::Stockpile;
-use hw_logistics::{Inventory, ResourceItem};
+use hw_logistics::zone::{Stockpile, StockpilePolicy};
+use hw_logistics::{BelongsTo, Inventory, ResourceItem};
 use hw_ui::selection::building_size;
 use hw_visual::SoulProxyOwnerCache;
 use hw_visual::blueprint::{BlueprintVisual, BuildingBounceEffect};
 use hw_visual::visual3d::{
     Building3dVisual, FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d, SoulShadowProxy3d,
 };
-use hw_world::seed_obstacle_position_index;
+use hw_world::{Yard, seed_obstacle_position_index};
 use std::collections::{HashMap, HashSet};
 
 type GridPosition = (i32, i32);
@@ -81,6 +81,7 @@ pub(super) use presentation::clear_rehydrate_presentation;
 /// ロード直後に呼び、裸のエンティティへ shell を再付与する。
 pub(super) fn rehydrate_after_load(world: &mut World) -> Result<(), RehydratePrerequisiteError> {
     validate_rehydrate_prerequisites(world)?;
+    rehydrate_stockpile_policies(world);
     drop_orphaned_inventory_items(world);
 
     world.resource_scope::<GameAssets, _>(|world, game_assets| {
@@ -96,6 +97,41 @@ pub(super) fn rehydrate_after_load(world: &mut World) -> Result<(), RehydratePre
     rehydrate_obstacle_runtime(world);
 
     Ok(())
+}
+
+/// Adds the compatibility policy only to ordinary stockpile cells owned by a durable Yard.
+///
+/// Tank companions lose their runtime-only `BucketStorage` marker in old save bodies, so the
+/// positive `BelongsTo -> Yard` ownership check is the migration boundary. Existing policy values
+/// are preserved except for the target/capacity invariant.
+pub(super) fn rehydrate_stockpile_policies(world: &mut World) {
+    let yard_entities: HashSet<Entity> = {
+        let mut yards = world.query_filtered::<Entity, With<Yard>>();
+        yards.iter(world).collect()
+    };
+    let missing: Vec<(Entity, usize)> = {
+        let mut stockpiles =
+            world.query_filtered::<(Entity, &Stockpile, &BelongsTo), Without<StockpilePolicy>>();
+        stockpiles
+            .iter(world)
+            .filter(|(_, _, owner)| yard_entities.contains(&owner.0))
+            .map(|(entity, stockpile, _)| (entity, stockpile.capacity))
+            .collect()
+    };
+
+    for (entity, capacity) in missing {
+        world
+            .entity_mut(entity)
+            .insert(StockpilePolicy::for_capacity(capacity));
+    }
+
+    let mut policies = world.query::<(&Stockpile, &mut StockpilePolicy)>();
+    for (stockpile, mut policy) in policies.iter_mut(world) {
+        let normalized = policy.normalized_for_capacity(stockpile.capacity);
+        if *policy != normalized {
+            *policy = normalized;
+        }
+    }
 }
 
 mod construction_runtime;

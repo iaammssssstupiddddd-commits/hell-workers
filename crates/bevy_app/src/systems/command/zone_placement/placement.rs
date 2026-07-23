@@ -9,10 +9,13 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::*;
 use hw_core::game_state::PlayMode;
+use hw_logistics::StockpilePolicy;
 use hw_ui::camera::MainCamera;
 use hw_world::zones::Site;
 use hw_world::zones::{AreaBounds, Yard};
 use hw_world::{area_tile_size, expand_yard_area, rectangles_overlap, rectangles_overlap_site};
+
+const STOCKPILE_CELL_CAPACITY: usize = 10;
 
 #[derive(SystemParam)]
 pub struct ZonePlacementInput<'w, 's> {
@@ -116,9 +119,10 @@ fn apply_zone_placement(
                     let entity = commands
                         .spawn((
                             Stockpile {
-                                capacity: 10,
+                                capacity: STOCKPILE_CELL_CAPACITY,
                                 resource_type: None,
                             },
+                            StockpilePolicy::for_capacity(STOCKPILE_CELL_CAPACITY),
                             BelongsTo(yard_entity),
                             Sprite {
                                 color: Color::srgba(1.0, 1.0, 0.0, 0.2),

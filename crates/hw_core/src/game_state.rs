@@ -38,6 +38,7 @@ pub enum TaskMode {
     FloorPlace(Option<Vec2>),
     WallPlace(Option<Vec2>),
     DreamPlanting(Option<Vec2>),
+    StockpilePolicyEdit(Option<Vec2>),
     SoulSpaPlace(Option<Vec2>),
 }
 

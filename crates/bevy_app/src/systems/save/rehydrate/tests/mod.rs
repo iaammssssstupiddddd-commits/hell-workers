@@ -1,7 +1,7 @@
 use super::{
     BlueprintSpriteHandles, clear_rehydrate_presentation, rehydrate_construction_runtime,
     rehydrate_construction_shells, rehydrate_obstacle_runtime, rehydrate_soul_shells,
-    validate_rehydrate_prerequisites,
+    rehydrate_stockpile_policies, validate_rehydrate_prerequisites,
 };
 use crate::entities::damned_soul::{Gender, SoulIdentity};
 use crate::plugins::startup::Building3dHandles;
@@ -93,3 +93,4 @@ fn component_count<T: Component>(world: &mut World) -> usize {
 mod construction;
 mod obstacles;
 mod presentation;
+mod stockpile_policy;

@@ -20,6 +20,9 @@ type SelectionTargetQuery<'w, 's> = Query<
     )>,
 >;
 
+type ManagedStockpileQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static GlobalTransform), With<hw_logistics::StockpilePolicy>>;
+
 pub(super) fn hovered_task_area_border_entity(
     world_pos: Vec2,
     selected_entity: Option<Entity>,
@@ -65,6 +68,7 @@ pub(super) fn hovered_entity_at_world_pos(
     world_pos: Vec2,
     q_souls: &Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: &Query<(Entity, &GlobalTransform), With<Familiar>>,
+    q_stockpile_cells: &ManagedStockpileQuery,
     q_targets: &SelectionTargetQuery,
 ) -> Option<Entity> {
     // 1. 使い魔（優先）
@@ -83,7 +87,42 @@ pub(super) fn hovered_entity_at_world_pos(
         }
     }
 
-    // 3. 資源・アイテム・建物
+    // 3. Player-managed Stockpile cells. Stored ResourceItem entities share the same position,
+    // so this dedicated tier must precede the generic target query.
+    if let Some((entity, _)) = q_stockpile_cells
+        .iter()
+        .filter(|(_, transform)| {
+            transform
+                .translation()
+                .truncate()
+                .distance_squared(world_pos)
+                < TILE_HALF_SIZE_SQ
+        })
+        .min_by(
+            |(left_entity, left_transform), (right_entity, right_transform)| {
+                left_transform
+                    .translation()
+                    .truncate()
+                    .distance_squared(world_pos)
+                    .total_cmp(
+                        &right_transform
+                            .translation()
+                            .truncate()
+                            .distance_squared(world_pos),
+                    )
+                    .then_with(|| {
+                        (left_entity.index_u32(), left_entity.generation().to_bits()).cmp(&(
+                            right_entity.index_u32(),
+                            right_entity.generation().to_bits(),
+                        ))
+                    })
+            },
+        )
+    {
+        return Some(entity);
+    }
+
+    // 4. 資源・アイテム・建物
     for (entity, transform, building_opt) in q_targets.iter() {
         let pos = transform.translation().truncate();
         let radius_sq = entity_hit_radius(building_opt);

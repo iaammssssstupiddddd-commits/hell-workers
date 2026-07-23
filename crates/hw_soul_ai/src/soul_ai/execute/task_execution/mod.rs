@@ -20,6 +20,7 @@ pub mod path_cache;
 pub mod pour_floor;
 pub mod refine;
 pub mod reinforce_floor;
+pub mod stockpile_policy;
 pub mod transport_common;
 pub mod types;
 

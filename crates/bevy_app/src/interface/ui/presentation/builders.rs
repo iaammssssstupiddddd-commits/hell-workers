@@ -6,7 +6,8 @@ use crate::entities::damned_soul::Gender;
 use bevy::prelude::*;
 use hw_core::constants::{DREAM_DRAIN_RATE_REST, DREAM_MAX, MUD_MIXER_MUD_CAPACITY};
 use hw_energy::SoulSpaPhase;
-use hw_ui::models::inspection::InspectionSoulGender;
+use hw_logistics::{StockpilePolicyState, derive_stockpile_policy_state};
+use hw_ui::models::inspection::{InspectionSoulGender, StockpileInspectionFields};
 
 impl EntityInspectionQuery<'_, '_> {
     pub(super) fn build_soul_model(
@@ -148,6 +149,60 @@ impl EntityInspectionQuery<'_, '_> {
         model.header = "Rock".to_string();
         model.push_common("Natural resource: Stone".to_string());
         model.push_tooltip("Target: Rock".to_string());
+        true
+    }
+
+    pub(super) fn build_stockpile_model(
+        &self,
+        entity: Entity,
+        model: &mut InspectionAccumulator,
+    ) -> bool {
+        let Ok((stockpile, policy, stored_items, incoming)) = self.q_stockpiles.get(entity) else {
+            return false;
+        };
+        let current_amount = stored_items.map_or(0, hw_core::relationships::StoredItems::len);
+        let incoming_amount = incoming.map_or(0, hw_core::relationships::IncomingDeliveries::len);
+        let state = derive_stockpile_policy_state(
+            *policy,
+            stockpile.capacity,
+            current_amount,
+            stockpile.resource_type,
+            incoming_amount,
+        );
+        let resource = stockpile
+            .resource_type
+            .map(|resource| format!("{resource:?}"))
+            .unwrap_or_else(|| "Empty".to_string());
+        let export = if state == StockpilePolicyState::Draining && !policy.allow_export {
+            "Off (draining override active)"
+        } else if policy.allow_export {
+            "On"
+        } else {
+            "Off"
+        };
+
+        model.header = "Stockpile".to_string();
+        model.push_common("Player-managed stockpile cell".to_string());
+        model.push_tooltip(format!("State: {state:?}"));
+        model.push_tooltip(format!(
+            "Stored: {current_amount}/{} ({resource}) | Incoming: {incoming_amount}",
+            stockpile.capacity
+        ));
+        model.push_tooltip(format!("Target: {}", policy.target_amount));
+        model.push_tooltip(format!("Acceptance: {:?}", policy.acceptance));
+        model.push_tooltip(format!("Inbound priority: {:?}", policy.inbound_priority));
+        model.push_tooltip(format!("Export: {export}"));
+        model.stockpile_fields = Some(StockpileInspectionFields {
+            state,
+            current_amount,
+            incoming_amount,
+            capacity: stockpile.capacity,
+            current_resource: stockpile.resource_type,
+            acceptance: policy.acceptance,
+            inbound_priority: policy.inbound_priority,
+            target_amount: policy.target_amount,
+            allow_export: policy.allow_export,
+        });
         true
     }
 

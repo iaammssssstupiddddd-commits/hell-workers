@@ -7,10 +7,41 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 
 ### 1.1 Stockpile
 - コンポーネント: `Stockpile { capacity, resource_type }`
+- 通常の Yard-owned セルには、現在内容とは独立した永続設定
+  `StockpilePolicy { acceptance, inbound_priority, target_amount, allow_export }` も付与する。
+  `StockpilePolicy` の存在が player-managed な通常セルの明示境界であり、Tank、Mud Mixer、
+  `BucketStorage` など `Stockpile` を容量表現として再利用する特殊設備には付与しない。
 - 初期配置（ゾーン配置）時:
   - `capacity = 10`
   - `resource_type = None`
+  - policy は `Any`、`Normal`、`target_amount = capacity`、`allow_export = true`
 - `resource_type` は最初の格納で確定し、最後の1個が取り出されると `None` に戻ります。
+- `target_amount` は常に `0..=capacity` に正規化する。0 は新規搬入を許可しない設定であり、
+  既存在庫を削除しない。
+- `evaluate_stockpile_policy` は `NewInbound` / `CommittedInbound` / `NewOutbound` と、stored、
+  incoming reservation、同一 cycle の reservation shadow を受け取る副作用のない共通判定である。
+  committed 搬入は自分が所有する予約を識別し、変更後の acceptance / target を grandfather する。
+  自動 producer、manual destination、wheelbarrow の候補化と grant 直前、Familiar の割当直前 resolver は
+  `NewInbound` を使う。通常 haul と wheelbarrow の荷下ろしは、実 item の `DeliveringTo` が同じ destination を
+  指す場合だけその item の予約を所有する `CommittedInbound` として扱う。通常セルでは owner 互換性も再確認し、
+  policy を持たない特殊 storage は既存専用規則を維持する。
+
+#### Policy editing
+
+- `StockpilePolicy` を持つ通常セルは、格納済み `ResourceItem` と同じ座標でもセル側を優先して選択・検査できる。
+  Tank、Mud Mixer、`BucketStorage` など policy を持たない特殊設備には editor を表示しない。
+- Info Panel は `Accepting` / `TargetReached` / `Draining`、現在量、搬入予約量、物理容量、現在資源、
+  acceptance、target、搬入優先度、搬出許可を live snapshot から表示する。`Draining` 中は
+  `allow_export = false` でも実効搬出が許可されることを明示する。
+- 単一セルでは acceptance、target、priority、export を部分 patch として変更する。`Apply Policy to Area` は
+  表示中セルの4設定を1つの patch に固定し、次の矩形ドラッグへ一括適用する。
+- widget は component を直接変更しない。単一・範囲の両操作は
+  `UiIntent::ApplyStockpilePolicy` → `StockpilePolicyChangeRequest` → domain handler →
+  `StockpilePolicyChangeOutcome` を通る。範囲対象は空間順に安定化・重複除去し、handler が生存と
+  `Stockpile + StockpilePolicy` 境界を再検証する。
+- handler はセルごとの物理容量へ target を clamp し、同値なら書き戻さない。在庫と
+  `StoredIn` / `DeliveringTo` / `IncomingDeliveries` は変更せず、stale・特殊設備・clamp を件数だけの
+  player-safe toast で報告する。
 
 ### 1.2 Relationship（Bevy 自動維持）
 
@@ -21,7 +52,8 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 | `StoredIn(stockpile)` ← item | `StoredItems` ← stockpile | Haul dropping フェーズ | haul picking フェーズ（ConsolidateStockpile 含む）|
 | `DeliveringTo(dest)` ← item | `IncomingDeliveries` ← dest | `apply_task_assignment_requests`（Execute）| `unassign_task` / タスク完了（tasks.md §2.1）|
 
-**容量判定**: `StoredItems.len() + IncomingDeliveries.len() < capacity`（詳細 §6.1）
+**容量判定**: 通常 Stockpile の新規搬入は `evaluate_stockpile_policy(NewInbound)` を使い、物理容量、
+目標量、資源互換性、`IncomingDeliveries`、同一 cycle shadow を同時に評価する（詳細 §6.1）。
 
 ### 1.3 物流関連コンポーネント（手動管理）
 
@@ -30,6 +62,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 | `WheelbarrowLease` ← TransportRequest | 仲裁システム（Arbitrate）| `assign_haul*` | 毎フレーム: 期限切れ・車消失・item 不足で自動 remove。消費後 request state が Claimed になるため次フレームの仲裁から自動除外 |
 | `BelongsTo(owner)` | entity spawn 時 | producer / `assign_haul*` | タンク・バケツ・バケツ返却先の所有判定。`issued_by` と照合してソース選定を制御 |
 | `BucketStorage` | entity spawn 時 | `bucket_auto_haul_system` | バケツ返却先マーカー。`BelongsTo` 一致チェックと組み合わせて判定 |
+| `ReceiverPolicyTier` ← policy-driven request | `task_area_auto_haul_system` / `stockpile_consolidation_producer_system` | Familiar task ranking / wheelbarrow arbitration | 保存しない runtime carrier。`TransportRequest.priority` の maintenance/manual 意味と receiver policy tier を分離し、producer が load 後に再導出する |
 
 ### 1.4 アイテムの寿命 (Item Lifetime)
 - 特定のアイテム（**StasisMud**, **Sand**）は、地面にドロップされた状態で放置されると **5秒後** に消滅します。
@@ -41,9 +74,11 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 - これにより、運搬されずに放置された余剰な中間素材が自動的にクリーンアップされます。
 
 ### 1.5 TransportRequest
-- `TransportRequest { kind, anchor, resource_type, issued_by, priority }`
+- `TransportRequest { kind, anchor, resource_type, issued_by, priority, stockpile_group }`
 - `TransportDemand { desired_slots, inflight }`
-- `desired_slots` は「目的地がまだ受け入れ可能な総量」、`inflight` は既存 request に付いた `TaskWorkers` / lease 状態を producer が毎フレーム再反映した値として扱う。
+- `desired_slots` は request が同時に持てる worker の総 ceiling、`inflight` は既存 request に付いた
+  `TaskWorkers` / lease 状態を producer が再反映した値として扱う。policy-driven Stockpile request では
+  `desired_slots = current_workers + new_assignable` とし、`remaining()` が新規割当可能量になる。
 - `TransportRequestState`:
   - `Pending` / `Claimed`
 - request エンティティには通常 `Designation`, `ManagedBy`, `TaskSlots`, `Priority` も付与されます。
@@ -55,10 +90,11 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
 1. `Perceive`（メトリクス集計 + フレームキャッシュ更新）
    - `update_floor_tile_waiting_cache_system`: `Changed<FloorTileBlueprint>` 検知時のみ `FloorTileWaitingCache`（site → bones/mud 不足量）を再構築
    - `update_wall_tile_waiting_cache_system`: `Changed<WallTileBlueprint>` 検知時のみ `WallTileWaitingCache`（site → wood/mud 不足量）を再構築
-   - `update_cached_active_familiars_system`: Idle 以外のアクティブ Familiar リストを `CachedActiveFamiliars` に毎フレーム更新（clear + extend）
-   - `update_cached_active_yards_system`: 全 Yard リストを `CachedActiveYards` に毎フレーム更新
-   - `update_cached_stockpile_groups_system`（`.after(update_cached_active_yards_system)`）: `CachedActiveYards` を元に stockpile group と group 空間インデックスを **1 フレーム 1 回だけ**構築し `CachedStockpileGroups` に格納
+   - `update_cached_active_familiars_system`: Familiar / command / TaskArea の追加・変更・削除時だけ、Idle 以外のリストを再構築
+   - `update_cached_active_yards_system`: Yard の追加・変更・削除時だけ全 Yard リストを再構築
+   - `update_cached_stockpile_groups_system`（`.after(update_cached_active_yards_system)`）: grid / Yard / `StockpilePolicy` membership が変わった時だけ、`With<StockpilePolicy>` の通常セルから group と空間インデックスを再構築
    - `FloorTileWaitingCache` / `WallTileWaitingCache` は変化のないフレームでは再構築をスキップする（Change Detection ベース）
+   - `CachedStockpileGroups` は membership と位置だけを保持する。policy 値、stored、incoming は live demand の正本にせず、変更のない tick では generation を進めない
    - `CachedActiveFamiliars` / `CachedActiveYards` / `CachedStockpileGroups` は全 producer が共有参照し、producer ごとの Vec / group 再構築を排除する
    - ⚠️ `task_area_auto_haul_system` と `stockpile_consolidation_producer_system` は `Decide` で `CachedStockpileGroups` を **読むだけ**にする。両 system が個別に `build_stockpile_groups` を呼ぶと同一フレームで重複構築になるため、Perceive の cache を経由すること
 2. `Decide`（各 producer が request を upsert）
@@ -106,25 +142,59 @@ anchor 消失、需要 0、issuer 消失、manual source 消失/搬送済みの 
 
 ### 4.1 Yard -> Stockpile (`DepositToStockpile`)
 - **グループ単位の発行**:
-  - **Yard 単位**で、Yard 境界内にある Stockpile をひとつのグループとして構成します。
-  - `TransportRequest` は**各 Yard のグループごとに別個に発行**されます（`anchor` = 代表セル, `issued_by` = Yard エンティティ）。
+  - **Yard 単位**で、Yard 境界内にある `Stockpile + StockpilePolicy` をひとつの構造 group として構成する。
+    policy を持たない Tank / Mixer / `BucketStorage` は通常 group へ入れない。
+  - 受入可能セルを `inbound_priority` ごとに分け、request identity を
+    **`(issued_by Yard, resource_type, priority tier)`** とする。`stockpile_group` は同 tier かつ同資源を
+    現在受け入れられるセルだけ、`anchor` はその subset 内の実セル、`priority` は tier と一致する。
+  - policy-driven request には保存しない `ReceiverPolicyTier` を付け、manual request や maintenance 用の
+    raw request priority と通常 Familiar の policy offset を混同しない。
   - **共有セルの扱い**: 複数の Yard が重複する場合、その領域内の Stockpile はそれぞれの Yard グループに含まれます。
-    - 結果として、同一セルに対する搬入リクエストが複数 Yard から並行して存在する可能性があります。
-    - **競合回避**: 実際の搬入（Assign時）には `IncomingDeliveries.len()` で搬入予約済み数を確認するため、同一セルへの容量超過は発生しません。
+    - producer は Yard / tier の安定順で cell 単位の資源別 cycle shadow を消費し、同じ物理枠を複数 request の
+      `new_assignable` に数えない。
+    - wheelbarrow grant も同じ cell 単位の資源別 shadow で直前再検証し、同じ空き枠を二重 lease しない。
 - **需要計算**:
-  - グループ全体の `total_capacity - total_stored` を producer が request 化し、既存 request の `TransportDemand.inflight` に現在 worker 数を保持する。
-  - Familiar の割り当て時には `IncomingDeliveries` と当フレーム `ReservationShadow` を使って残容量を再計算し、満杯になったセルは新規割り当てしない。
+  - producer は cycle ごとに各セルの live `StockpilePolicy`、現在内容、`StoredItems`、資源別
+    `IncomingDeliveries` を `NewInbound` evaluator へ渡す。
+  - tier subset の `new_assignable` は `min(physical remaining, target remaining)` から incoming と cycle shadow を
+    控除した合計である。既存 worker 数を加えた値を `TaskSlots.max` / `TransportDemand.desired_slots` とし、
+    `inflight` には worker 数を保持する。
+  - policy 不適合、目標到達、物理満杯、異種 contents / reservation のセルは request subset と需要へ入れない。
+    既存 worker を持つ旧 request は新規枠を 0 に絞り、committed lifecycle が終わるまで保持する。
+  - Pending request は `Designation` が外れた場合、または `Demand=0` の場合に arbitration が
+    `DemandGone` で候補外にする。既存 lease / pending timer も同じ更新で解放し、無効 request が
+    wheelbarrow を保持し続けない。Claimed request の lease は committed lifecycle のため維持する。
+  - 既存 request の component は semantic diff がある場合だけ更新する。初回 pending timer が確定した後の
+    policy / contents / incoming 不変 tick では arbitration generation を進めない。
 - **収集対象範囲**:
   - **Yard 外周から 10 タイル以内**。
   - ただし、Yard 外側の「外周+10」領域では、**他 Yard 内**の位置を除外します。
   - 複数グループの範囲に入るアイテムは、最寄りグループ（Yard 外周距離）に排他的に割り当てられます。
 - **搬入・ソース選定**:
-  - request の `resource_type` は、収集範囲内の近傍フリーアイテムから推定します。
-  - producer 内部では、グループ受入可否（空き容量/固定型）を前計算し、`q_free_items` を **1回だけ走査**して代表型を決定します。
-  - ただし、グループ内に「空き容量あり」かつ「`resource_type = None` または対象型と一致」のセルが1つ以上ある型のみ候補になります。
+  - request の `resource_type` は、収集範囲内の近傍フリーアイテムから tier ごとに推定する。
+  - producer は `q_free_items` を **1回だけ走査**し、同距離では位置と Entity key を使う安定順で代表型を決める。
+  - evaluator が新規搬入可能量を返すセルが1つ以上ある型だけを候補にする。
   - 搬入対象は `ResourceType::is_loadable() == true` の資材のみ。
-  - 割り当て時にグループ内の**型互換かつ空き容量があるセル**を動的に決定して搬入します。
+  - owner 付き通常 Stockpile は同 owner の地面資材を優先し、利用可能な同 owner 資材がなければ
+    owner 未設定資材だけへフォールバックする。他 owner の資材は混ぜない。
+  - 重複 Yard で request group に複数 owner のセルが含まれても、通常 Familiar は実際に選んだ destination cell の
+    owner を source 条件に使う。猫車 grant も実 lease item と再選択先セルの owner 互換性を再確認する。
+  - Familiar resolver は割当直前にも request の tier subset、live policy、contents、incoming、cycle shadow を
+    `NewInbound` で再評価し、stale request から新しい assignment を作らない。`WheelbarrowLease` がある場合は
+    lease が保持する単一 destination だけを評価し、そのセルが無効になっても同じ group の別セルへ付け替えない。
+  - 通常 Familiar の rank は従来の priority/distance base score を維持し、その後へ
+    Low=-10 / Normal=0 / High=+10 / Critical=+20 unit の transport offset を一度だけ加える。
+    1 unit は `0.65 / 40`、最終 score は clamp しないため、base priority 上限でも tier の単調順を保つ。
   - ソースは「地面アイテムのみ」（`StoredIn` 付きは除外）で、同一 Stockpile での pick-drop ループを防止します。
+
+- **manual haul**:
+  - 地面 item の明示搬送先も managed cell では `NewInbound` evaluator を通過した候補だけを選び、満杯・目標到達・
+    policy 不一致セルへフォールバックしない。
+  - 同じ area 操作内の複数 source は資源別 cycle shadow を共有する。policy を持たない `BucketStorage` は
+    既存の bucket 専用選定を維持し、manual request の明示 priority は上書きしない。
+  - owner 未設定の通常資材は owner 付き通常 Stockpile へ搬入でき、通常搬送・猫車搬送とも荷下ろし完了時に owner を確定する。
+    別 owner の資材と、owner 未設定 bucket の owner 付き `BucketStorage` への搬入は許可しない。
+  - area 内 source は位置、最後に Entity key の安定順で処理してから cycle shadow を消費する。
 
 ### 4.2 Blueprint 搬入 (`DeliverToBlueprint`)
 - producer は `required_materials - delivered_materials` を demand として維持し、既存 request の `inflight` を別途保持する。
@@ -192,24 +262,22 @@ anchor 消失、需要 0、issuer 消失、manual source 消失/搬送済みの 
   - 予約込み容量チェック
 
 ### 4.6 ストックパイル統合 (`ConsolidateStockpile`)
-- **概要**: 
-  - **Soul** が行う `Haul` タスクの一種です。
-  - グループ内で同種の資材が複数セルに分散している場合、それらを少数のセルに集約し、空きセル（`None` 状態の Stockpile）を確保することを目的とします。
-- **発動条件**:
-  - 同一グループ内に同じ資源タイプが2セル以上に分散していること。
-  - 移動によって **少なくとも1つのセルが完全に空になる** 見込みがあること。
-  - **並行動作**: 新規搬入タスク（`DepositToStockpile`）が存在する場合でも並行してリクエストが発行されます。優先度システムと予約システムにより、各 Soul は最適なタスクを選択します。
-- **優先度**: 
-  - `TransportPriority::Low`
-  - 建築や製造への搬入などの高優先度タスクがない場合に実行されます。
-- **統合ロジック (Greedy)**:
-  - **Receiver（搬入先）**: グループ内でその資源を格納しているセルのうち、**満杯でないセル**（`stored < capacity`）の中から最も多くアイテムが入っているセルを選択します。ここを満杯にすることを目指します。
-  - **Donor（搬出元）**: 受信先に選ばれたセル以外のすべてのセル。格納数が少ないセルから順に搬出元として選ばれます。
-  - `anchor` = Receiver セル, `stockpile_group` = Donor セル一覧 としてリクエストが発行されます。
-- **全セル満杯時の挙動**: グループ内のすべてのセルが満杯の場合は、統合の余地がないためリクエストは発行されません。
-- **ソース選定と実行**:
-  - 割り当て時に、Donor セルの `StoredIn` アイテムから未予約のものを選択します。
-  - 既存の `Haul` タスクロジックを再利用して実行されます。アイテムを持ち出すと `StoredIn` が外れ、Receiver に格納されると再付与されます。
+- **対象**: 同じ owner の `StockpilePolicy` 付き通常セルだけを扱う。同種資材が2セル以上に分散し、
+  1回の移動で少なくとも1つの donor を完全に空にできる場合に `Haul` request を作る。
+- **Receiver**: 現在量の多い順、位置、Entity key の安定順で候補化し、`NewInbound` evaluator へ acceptance、
+  target、物理容量、現在内容、資源別 `IncomingDeliveries`、同 cycle の receiver shadow を渡す。
+  evaluator の `available_amount` が最小 donor の全量未満なら、その receiver は使わず次候補を調べる。
+- **Donor**: `NewOutbound` evaluator を通過し、`SharedResourceCache` の source reservation を差し引いても
+  全在庫を搬出できるセルだけを、在庫の少ない順に選ぶ。方針適合中の `allow_export = false` は donor 化を止めるが、
+  acceptance と現在内容が不一致の `Draining` は override して搬出できる。
+- **需要量**: donor 合計と receiver の `available_amount` の小さい方へ clamp し、同 cycle shadow へ加算する。
+  `anchor` は receiver、`stockpile_group` は適格 donor 一覧。割当 resolver でも receiver の `NewInbound`、
+  donor の `NewOutbound`、owner、実 source item を再検証する。
+- **優先度**: 通常 Familiar 用 `Priority(0)` と猫車用 raw `TransportPriority::Low` は維持する。
+  receiver の policy tier は別の `ReceiverPolicyTier` として保持し、Normal=0 の policy contribution として合成する。
+- **ライフサイクル**: policy や在庫の変化で request が無効になった場合、worker なし request は無効化する。
+  既存 worker がいる request は `desired_slots = inflight = worker数`、`Claimed` に絞り、新規 assignment だけを止めて
+  committed 搬送を完了させる。既存 `Haul` が `StoredIn` を外し、receiver への格納時に再付与する。
 
 ### 4.7 Tank 自動補充 (`GatherWaterToTank`)
 - 水タンクの不足量を監視し、`BUCKET_CAPACITY` 単位で必要タスク数を算出して request 化。
@@ -316,21 +384,26 @@ WheelbarrowLease {
      「未予約1件 + 予約済み1件、hard_min=2」のような混在不足も `SourceReserved`。予約を含めても必要数に
      届かなければ `NoSourceItems` とし、遠方 bucket 全体の予約状態を近傍判定へ混ぜない
    - Blueprint / mixer の無限距離 fallback 対象では、近傍が全件予約済みでも遠方の未予約候補を再探索する
-   - `DepositToStockpile` では「型互換セルのみ」で残容量を計算
+   - `DepositToStockpile` では receiver tier と一致する各セルを `NewInbound` evaluator で評価し、
+     group 合計ではなく**単一セルの最大 available**を batch 上限にする
    - 猫車必須資源は、`Top-K` 候補に対してピックドロップ完結可能判定を行い、成立時は仲裁候補から除外
    - 最小バッチ条件: 猫車必須資源は `1`、それ以外は `WHEELBARROW_MIN_BATCH_SIZE`
 6. **スコア計算** — `score = batch_size * SCORE_BATCH_SIZE + priority * SCORE_PRIORITY - distance * SCORE_DISTANCE + pending_bonus`
    - `distance` = 最近の wheelbarrow からアイテム重心までの距離
    - `pending_bonus = min(pending_for, WHEELBARROW_SCORE_PENDING_TIME_MAX_SECS) * WHEELBARROW_SCORE_PENDING_TIME`
    - 小バッチ（1〜2個）には減点を適用
-7. **候補間重複除去** — スコア順処理時に、先行候補で消費した item を後続候補から除外。
+7. **候補間重複除去** — score と request Entity key の安定順で処理し、先行候補で消費した item を後続候補から除外。
    - 除外後の item 数が `hard_min` 未満になった候補はスキップ。
-8. **Greedy 割り当て** — スコア降順にソートし、各 request に最近の available wheelbarrow を割り当て。
+8. **grant 直前再検証** — live policy / contents / incoming と同一 arbitration cycle の資源別 cell shadow を再評価する。
+   - batch 全件が収まる最小 available cellを選び、なければ最大 available cellへ itemを truncateする。
+   - truncate 後に `hard_min` を満たさない、適格セルまたは destination Transform がない場合は lease を作らない。
+9. **Greedy 割り当て** — スコア降順にソートし、各 request に最近の available wheelbarrow を割り当て。
    - 割り当て済みの wheelbarrow は available set から除去。
-9. **小バッチ抑制** — 猫車必須資源で `batch_size < WHEELBARROW_PREFERRED_MIN_BATCH_SIZE` の場合:
+   - 同距離では wheelbarrow Entity key を最終 tie-break にする。
+10. **小バッチ抑制** — 猫車必須資源で `batch_size < WHEELBARROW_PREFERRED_MIN_BATCH_SIZE` の場合:
    - `pending_since` から `SINGLE_BATCH_WAIT_SECS` 経過前は候補から除外
    - 経過後にのみ割り当て可能
-10. **動的 lease 期間** — `wb -> source -> destination` の推定移動時間から期間を算出し、最小/最大値でクランプ。
+11. **動的 lease 期間** — `wb -> source -> destination` の推定移動時間から期間を算出し、最小/最大値でクランプ。
 
 #### 5.2.3 定数
 
@@ -381,7 +454,16 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 
 - タスク割り当て時に、搬入対象アイテムに `DeliveringTo(destination)` を自動挿入（`apply_task_assignment_requests_system`）。
 - 搬入先エンティティには Bevy が `IncomingDeliveries` を自動維持。
-- **容量判定**: `現在量 (StoredItems.len()) + 搬入予約 (IncomingDeliveries.len()) < capacity` で空き容量を確認。
+- 通常 Stockpile の**新規搬入**は `evaluate_stockpile_policy(NewInbound)` へ現在量、物理容量、target、
+  stored resource、transfer resource、資源別 `IncomingDeliveries`、同一 cycle shadow を渡す。
+- `available_amount = min(physical remaining, target remaining) - incoming - cycle shadow` を saturating 計算し、
+  空の `Any` セルでも別資源の予約があれば後続資源を拒否する。
+- 通常 haul / wheelbarrow の実行時は、搬送 item 集合と destination の live `IncomingDeliveries` を Entity 単位で
+  突き合わせる。自分の予約を持つ item だけを `CommittedInbound` とし、変更後の acceptance / target は
+  grandfather するが、物理容量、現在内容の互換性、owner 互換性は再検証する。
+- wheelbarrow の batch に committed item と予約を失った item が混在する場合、committed 分を先に評価し、
+  残りだけを現在 policy の `NewInbound` で評価する。未許可 item は安全に地面へ戻し、予約 relationship を除去する。
+- policy を持たない Tank / Mixer / `BucketStorage` は各専用容量判定を維持する。
 - タスク完了・中断時にアイテムの `DeliveringTo` を除去すると、搬入先の `IncomingDeliveries` も自動更新される。
 - HashMap による再構築が不要なため、**常に最新の予約状態**が ECS から直接取得可能。
 
@@ -440,7 +522,8 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 ### 8.2 Producer の upsert/cleanup 規約
 - 既存 request があれば再利用（upsert）し、不要時は以下で閉じる。
   - `TaskWorkers == 0` のときは `Designation` / `TaskSlots` / `Priority` を外す、または despawn。
-- 同一 key（anchor + resource_type など）の重複 request は許可しない。
+- 同一 key の重複 request は許可しない。policy-driven `DepositToStockpile` の key は
+  `(issued_by Yard, resource_type, receiver priority tier)` であり、anchor の変更で別 request にしない。
 - demand 計算は `current + in_flight(+ reservation)` を使い、過剰発行を防ぐ。
 
 ### 8.3 予約の責務を統一

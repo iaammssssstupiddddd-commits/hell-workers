@@ -83,6 +83,12 @@ pub fn task_area_selection_system(
         return;
     }
 
+    // The stockpile policy gesture shares TaskMode/input capture and the common rectangle
+    // indicator, but owns a separate release path that emits a policy UiIntent.
+    if matches!(state.task_context.0, TaskMode::StockpilePolicyEdit(_)) {
+        return;
+    }
+
     if state.task_context.0 == TaskMode::None {
         state.area_edit_session.active_drag = None;
         return;

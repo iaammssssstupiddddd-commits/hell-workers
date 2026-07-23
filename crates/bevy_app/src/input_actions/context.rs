@@ -185,6 +185,7 @@ fn task_mode_has_in_progress_gesture(task_mode: TaskMode) -> bool {
             | TaskMode::FloorPlace(Some(_))
             | TaskMode::WallPlace(Some(_))
             | TaskMode::DreamPlanting(Some(_))
+            | TaskMode::StockpilePolicyEdit(Some(_))
             | TaskMode::SoulSpaPlace(Some(_))
     )
 }

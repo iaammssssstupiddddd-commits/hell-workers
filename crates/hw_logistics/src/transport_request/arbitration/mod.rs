@@ -19,11 +19,11 @@ use hw_core::relationships::{IncomingDeliveries, ParkedAt, PushedBy, StoredIn, S
 use hw_jobs::Designation;
 
 use crate::transport_request::{
-    ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportRequest,
-    TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
+    ManualHaulPinnedSource, ManualTransportRequest, ReceiverPolicyTier, TransportDemand,
+    TransportRequest, TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
 use crate::types::{BelongsTo, ResourceItem, Wheelbarrow};
-use crate::zone::Stockpile;
+use crate::zone::{Stockpile, StockpilePolicy};
 
 pub use diagnostics::{
     WheelbarrowArbitrationDiagnostics, WheelbarrowArbitrationHeader, WheelbarrowArbitrationOutcome,
@@ -74,6 +74,8 @@ type RequestDirtyQuery<'w, 's> = Query<
             Added<WheelbarrowPendingSince>,
             Changed<WheelbarrowPendingSince>,
             Added<ManualTransportRequest>,
+            Added<ReceiverPolicyTier>,
+            Changed<ReceiverPolicyTier>,
         )>,
     ),
 >;
@@ -131,6 +133,8 @@ type StockpileDirtyQuery<'w, 's> = Query<
             Changed<StoredItems>,
             Added<IncomingDeliveries>,
             Changed<IncomingDeliveries>,
+            Added<StockpilePolicy>,
+            Changed<StockpilePolicy>,
         )>,
     ),
 >;
@@ -155,4 +159,6 @@ pub struct WheelbarrowArbitrationDirtyParams<'w, 's> {
     removed_pushed_by: RemovedComponents<'w, 's, PushedBy>,
     removed_stored_items: RemovedComponents<'w, 's, StoredItems>,
     removed_incoming: RemovedComponents<'w, 's, IncomingDeliveries>,
+    removed_stockpile_policy: RemovedComponents<'w, 's, StockpilePolicy>,
+    removed_receiver_policy_tier: RemovedComponents<'w, 's, ReceiverPolicyTier>,
 }

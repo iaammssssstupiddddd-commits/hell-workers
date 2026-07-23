@@ -85,6 +85,17 @@ pub(crate) fn handle_mode_select(
                 &mut mode_ctx.cleanup.task_context,
             );
         }
+        UiIntent::BeginStockpilePolicyRangeEdit { patch }
+            if mode_ctx.cleanup.begin_stockpile_policy_range_edit(patch) =>
+        {
+            mode::set_task_mode(
+                TaskMode::StockpilePolicyEdit(None),
+                &mut mode_ctx.cleanup.next_play_mode,
+                &mut mode_ctx.cleanup.build_context,
+                &mut mode_ctx.cleanup.zone_context,
+                &mut mode_ctx.cleanup.task_context,
+            );
+        }
         _ => {}
     }
 }

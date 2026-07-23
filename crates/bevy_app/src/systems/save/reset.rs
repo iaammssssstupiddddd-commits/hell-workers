@@ -34,6 +34,7 @@ use crate::app_contexts::{
     BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext,
     ZoneContext,
 };
+use crate::systems::command::StockpilePolicyRangeEditState;
 use crate::systems::energy::grid_recalc::EnergyUpdateDirty;
 use crate::systems::familiar_ai::perceive::resource_sync::{
     ReservationSignatureCache, ReservationSyncTimer,
@@ -104,6 +105,7 @@ pub(crate) fn reset_root_interaction_state(world: &mut World) {
     reset_existing_resource::<ZoneContext>(world);
     reset_existing_resource::<TaskContext>(world);
     reset_existing_resource::<CompanionPlacementState>(world);
+    reset_existing_resource::<StockpilePolicyRangeEditState>(world);
 
     if let Some(mut next_play_mode) = world.get_resource_mut::<NextState<PlayMode>>() {
         next_play_mode.set(PlayMode::Normal);
@@ -267,6 +269,12 @@ mod tests {
             building: stale,
             destination_grid: (4, 5),
         })));
+        world.insert_resource(StockpilePolicyRangeEditState {
+            patch: Some(hw_logistics::StockpilePolicyPatch {
+                target_amount: Some(4),
+                ..default()
+            }),
+        });
         world.insert_resource(TaskContext::default());
         world.insert_resource(NextState::<PlayMode>::Pending(PlayMode::BuildingMove));
 
@@ -276,6 +284,12 @@ mod tests {
         assert!(world.resource::<HoveredEntity>().0.is_none());
         assert!(world.resource::<MoveContext>().0.is_none());
         assert!(world.resource::<MovePlacementState>().0.is_none());
+        assert!(
+            world
+                .resource::<StockpilePolicyRangeEditState>()
+                .patch
+                .is_none()
+        );
         assert!(matches!(
             world.resource::<NextState<PlayMode>>(),
             NextState::Pending(PlayMode::Normal)

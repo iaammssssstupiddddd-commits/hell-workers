@@ -10,7 +10,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::ESCAPE_STRESS_THRESHOLD;
 use hw_core::relationships::CommandedBy;
-use hw_core::relationships::TaskWorkers;
+use hw_core::relationships::{IncomingDeliveries, StoredItems, TaskWorkers};
 use hw_energy::{
     ConsumesFrom, GeneratesFor, PowerConsumer, PowerGenerator, PowerGrid, SoulSpaSite, Unpowered,
 };
@@ -20,6 +20,7 @@ use hw_ui::components::TooltipTemplate;
 
 pub use hw_ui::models::inspection::{
     EntityInspectionModel, EntityInspectionViewModel, SoulInspectionFields,
+    StockpileInspectionFields,
 };
 
 type SoulInspectionQuery<'w, 's> = Query<
@@ -60,6 +61,17 @@ type BuildingInspectionQuery<'w, 's> = Query<
     ),
 >;
 
+type StockpileInspectionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static crate::systems::logistics::Stockpile,
+        &'static hw_logistics::StockpilePolicy,
+        Option<&'static StoredItems>,
+        Option<&'static IncomingDeliveries>,
+    ),
+>;
+
 #[derive(SystemParam)]
 pub struct EntityInspectionQuery<'w, 's> {
     q_souls: SoulInspectionQuery<'w, 's>,
@@ -79,6 +91,7 @@ pub struct EntityInspectionQuery<'w, 's> {
     q_rocks: Query<'w, 's, &'static crate::systems::jobs::Rock>,
     q_designations: DesignationInspectionQuery<'w, 's>,
     q_buildings: BuildingInspectionQuery<'w, 's>,
+    q_stockpiles: StockpileInspectionQuery<'w, 's>,
     pub(super) q_power_consumers: Query<
         'w,
         's,
@@ -106,6 +119,7 @@ struct InspectionAccumulator {
     common_lines: Vec<String>,
     tooltip_lines: Vec<String>,
     soul_fields: Option<SoulInspectionFields>,
+    stockpile_fields: Option<StockpileInspectionFields>,
 }
 
 impl InspectionAccumulator {
@@ -132,6 +146,7 @@ impl InspectionAccumulator {
             common_text: self.common_lines.join("\n"),
             tooltip_lines: self.tooltip_lines,
             soul: self.soul_fields,
+            stockpile: self.stockpile_fields,
         })
     }
 }
@@ -164,7 +179,8 @@ impl EntityInspectionQuery<'_, '_> {
             || self.build_familiar_model(entity, &mut model)
             || self.build_item_model(entity, &mut model)
             || self.build_tree_model(entity, &mut model)
-            || self.build_rock_model(entity, &mut model);
+            || self.build_rock_model(entity, &mut model)
+            || self.build_stockpile_model(entity, &mut model);
 
         self.append_soul_spa_model(entity, &mut model);
         self.append_building_model(entity, &mut model);
@@ -177,7 +193,10 @@ impl EntityInspectionQuery<'_, '_> {
     pub fn classify_template(&self, entity: Entity) -> TooltipTemplate {
         if self.q_souls.get(entity).is_ok() {
             TooltipTemplate::Soul
-        } else if self.q_buildings.get(entity).is_ok() || self.q_blueprints.get(entity).is_ok() {
+        } else if self.q_buildings.get(entity).is_ok()
+            || self.q_blueprints.get(entity).is_ok()
+            || self.q_stockpiles.get(entity).is_ok()
+        {
             TooltipTemplate::Building
         } else if self.q_items.get(entity).is_ok()
             || self.q_trees.get(entity).is_ok()
@@ -262,4 +281,118 @@ pub(super) fn format_escape_info(
         under_command.is_some(),
         idle.behavior == IdleBehavior::ExhaustedGathering
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::minimal_app;
+    use hw_core::relationships::{DeliveringTo, StoredIn};
+    use hw_logistics::transport_request::TransportPriority;
+    use hw_logistics::{
+        ResourceType, Stockpile, StockpileAcceptance, StockpilePolicy, StockpilePolicyState,
+    };
+
+    #[derive(Resource)]
+    struct InspectionTarget(Entity);
+
+    #[derive(Resource, Default)]
+    struct InspectionReceipt(Option<EntityInspectionModel>);
+
+    fn inspect(
+        target: Res<InspectionTarget>,
+        inspection: EntityInspectionQuery,
+        mut receipt: ResMut<InspectionReceipt>,
+    ) {
+        receipt.0 = inspection.build_model(target.0);
+    }
+
+    #[test]
+    fn stockpile_policy_inspection_reports_live_counts_and_draining_state() {
+        let mut app = minimal_app();
+        app.init_resource::<FamiliarSpatialGrid>()
+            .init_resource::<InspectionReceipt>()
+            .add_systems(Update, inspect);
+        let stockpile = app
+            .world_mut()
+            .spawn((
+                Stockpile {
+                    capacity: 10,
+                    resource_type: Some(ResourceType::Bone),
+                },
+                StockpilePolicy {
+                    acceptance: StockpileAcceptance::Only(ResourceType::Wood),
+                    inbound_priority: TransportPriority::High,
+                    target_amount: 8,
+                    allow_export: false,
+                },
+            ))
+            .id();
+        for _ in 0..3 {
+            app.world_mut().spawn(StoredIn(stockpile));
+        }
+        app.world_mut().spawn(DeliveringTo(stockpile));
+        app.insert_resource(InspectionTarget(stockpile));
+
+        app.update();
+
+        let model = app
+            .world()
+            .resource::<InspectionReceipt>()
+            .0
+            .as_ref()
+            .expect("managed stockpile must be inspectable");
+        let fields = model
+            .stockpile
+            .as_ref()
+            .expect("managed stockpile must expose an editor model");
+        assert_eq!(fields.state, StockpilePolicyState::Draining);
+        assert_eq!(fields.current_amount, 3);
+        assert_eq!(fields.incoming_amount, 1);
+        assert_eq!(fields.target_amount, 8);
+        assert_eq!(
+            fields.acceptance,
+            StockpileAcceptance::Only(ResourceType::Wood)
+        );
+        assert_eq!(fields.inbound_priority, TransportPriority::High);
+        assert!(!fields.allow_export);
+        assert!(
+            model
+                .tooltip_lines
+                .iter()
+                .any(|line| line.contains("draining override active"))
+        );
+    }
+
+    #[test]
+    fn special_storage_does_not_expose_the_stockpile_policy_editor() {
+        let mut app = minimal_app();
+        app.init_resource::<FamiliarSpatialGrid>()
+            .init_resource::<InspectionReceipt>()
+            .add_systems(Update, inspect);
+        let tank = app
+            .world_mut()
+            .spawn((
+                crate::systems::jobs::Building {
+                    kind: crate::systems::jobs::BuildingType::Tank,
+                    is_provisional: false,
+                },
+                Stockpile {
+                    capacity: 20,
+                    resource_type: Some(ResourceType::Water),
+                },
+            ))
+            .id();
+        app.insert_resource(InspectionTarget(tank));
+
+        app.update();
+
+        let model = app
+            .world()
+            .resource::<InspectionReceipt>()
+            .0
+            .as_ref()
+            .expect("building storage remains inspectable");
+        assert!(model.stockpile.is_none());
+    }
 }

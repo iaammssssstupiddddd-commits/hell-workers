@@ -11,6 +11,9 @@ use hw_spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::{WorldMap, Yard};
 use std::collections::HashSet;
 
+use crate::familiar_ai::decide::task_management::policy_score::{
+    PolicyScoreContributions, transport_policy_units,
+};
 use crate::familiar_ai::decide::task_management::{
     FamiliarEvaluatorDiagnostics, FamiliarTaskAssignmentQueries,
 };
@@ -32,6 +35,7 @@ pub struct ScoredDelegationCandidate {
     pub priority: i32,
     pub pos: Vec2,
     pub dist_sq: f32,
+    pub policy_contributions: PolicyScoreContributions,
 }
 
 /// `collect_scored_candidates` に渡す Familiar 固有の検索コンテキスト。
@@ -185,6 +189,10 @@ fn collect_scored_candidates_internal(
             priority,
             pos: snapshot.pos,
             dist_sq,
+            policy_contributions: queries.receiver_policy_tiers.get(entity).map_or_else(
+                |_| PolicyScoreContributions::default(),
+                |tier| PolicyScoreContributions::new(transport_policy_units(tier.0), 0),
+            ),
         });
     }
 

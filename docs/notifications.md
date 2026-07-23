@@ -1,6 +1,7 @@
 # プレイヤー向け結果通知
 
-配置できない理由とセーブ／ロードの終端結果を、ログを開かずゲーム画面で確認するための仕様。
+配置できない理由、セーブ／ロードの終端結果、タスク操作・Stockpile方針変更の結果を、
+ログを開かずゲーム画面で確認するための仕様。
 通知の表示基盤は `hw_ui::notifications`、ゲーム固有結果から表示文言への変換は
 `bevy_app::interface::ui::notifications` が所有する。
 
@@ -104,10 +105,26 @@ adapter は Entity、action kind、result kind を含む key で `ToastOnly` の
 `Working / Blocked / PendingEvaluation` と blocker reason はライブ dashboard state であり、cycle ごとに
 notification Message を発行しない。
 
+## Stockpile 方針変更結果
+
+単一セルと矩形範囲の両操作は `StockpilePolicyChangeRequest { targets, patch }` を共有し、domain handlerが
+1 requestにつき `StockpilePolicyChangeOutcome` を1件発行する。outcomeは入力件数、重複除去後件数、変更、
+変更なし、stale、policy非管理の特殊設備、capacity clampを件数だけで保持し、Entityや内部error文字列を表示へ渡さない。
+
+| 結果 | severity / title |
+| --- | --- |
+| managed対象が0件 | Warning / `Stockpile policy not applied` |
+| stale・特殊設備・clampを含む部分適用 | Warning / `Stockpile policy partially applied` |
+| managed対象がすべて同値 | Info / `Stockpile policy unchanged` |
+| 調整なしで1件以上変更 | Success / `Stockpile policy updated` |
+
+通知は `ToastOnly` であり重要履歴へ残さない。単一と範囲で同じadapterを通り、同じUpdateの
+`NotificationSystemSet::Adapt → Reduce → Present` で表示される。
+
 ## Messageとsystem順
 
 ```text
-SaveLoadOutcome / TaskActionOutcome
+SaveLoadOutcome / TaskActionOutcome / StockpilePolicyChangeOutcome
   → NotificationSystemSet::Adapt（rootで安全な表示文言へ変換）
   → UserFacingNotification
   → NotificationSystemSet::Reduce（ingest / dedupe / expiry）
@@ -115,15 +132,18 @@ SaveLoadOutcome / TaskActionOutcome
 ```
 
 `Adapt → Reduce → Present` は同じ `Update` 内でchainされる。`SaveLoadOutcome` は `Last` で発行されるため
-次の `Update`、task action outcome は Interface 内の apply 後に同じ `Update` の adapter に読まれる。
+次の `Update`、task action outcome と `StockpilePolicyChangeOutcome` は Interface 内の各domain apply後に
+同じ `Update` の adapter に読まれる。
 
 ## world replacement reset
 
 - `SavePlugin` の専用hookが古い `SaveLoadOutcome` bufferを消す。
 - `hw_ui::reset_for_world_replace()` が `UserFacingNotification`、center、unread、履歴開閉、描画revisionを初期化する。
-- `MessagesPlugin` が旧 world の `TaskActionOutcome` buffer を clear し、task confirmation / `UiIntent` も UI owner hook が消す。
+- `MessagesPlugin` が旧 world の `TaskActionOutcome`、`StockpilePolicyChangeRequest` / `Outcome` bufferをclearし、
+  task confirmation / `UiIntent` もUI owner hookが消す。
 - 動的toast/history rowはdespawnし、static root、panel、未読labelを非表示／初期表示へ戻す。
 - 配置の `live` / `recent_failure` も同じUI owner hookで消す。
+- Stockpile範囲編集modeと保留patchを破棄し、静的editor buttonに残る旧world Entityをplaceholderへ戻す。
 
 通知履歴はセーブ対象ではなく、現在のworldに属するruntime UI stateである。
 
@@ -136,6 +156,7 @@ cargo test -p bevy_app@0.1.0 notifications
 cargo test -p bevy_app@0.1.0 placement
 cargo test -p bevy_app@0.1.0 systems::save
 cargo test -p bevy_app@0.1.0 save_game
+cargo test -p bevy_app@0.1.0 stockpile_policy
 ```
 
 手動では、各配置モードの無効候補とFloor / Wallの部分採用、F5の成功通知、存在しない対象を含む

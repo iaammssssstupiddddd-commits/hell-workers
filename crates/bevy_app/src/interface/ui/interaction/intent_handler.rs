@@ -44,7 +44,8 @@ pub(crate) fn handle_ui_intent(
             | UiIntent::RemoveZone(_)
             | UiIntent::SelectTaskMode(_)
             | UiIntent::SelectAreaTask
-            | UiIntent::SelectDreamPlanting => {
+            | UiIntent::SelectDreamPlanting
+            | UiIntent::BeginStockpilePolicyRangeEdit { .. } => {
                 handlers::handle_mode_select(
                     intent,
                     &mut action_contexts.p0(),
@@ -130,6 +131,12 @@ pub(crate) fn handle_ui_intent(
                 }
                 false
             }
+            UiIntent::ApplyStockpilePolicy { target, patch } => {
+                action_contexts
+                    .p1()
+                    .request_stockpile_policy_change(target, patch);
+                false
+            }
             UiIntent::AdjustTaskPriority { .. } | UiIntent::CancelTask { .. } => false,
         };
 
@@ -147,13 +154,16 @@ mod tests {
     use crate::input_actions::{InputModifiers, ResolvedInputFrame};
     use crate::interface::selection::SelectedEntity;
     use crate::interface::ui::{EntityListNodeIndex, InfoPanelPinState};
-    use crate::systems::command::ZoneRemovalPreviewState;
+    use crate::systems::command::{StockpilePolicyRangeEditState, ZoneRemovalPreviewState};
     use crate::systems::save::{SaveLoadState, SavePath};
     use crate::test_support::minimal_app;
     use bevy::ecs::system::{IntoSystem, System};
     use bevy::input_focus::InputFocus;
     use hw_core::game_state::{PlayMode, TaskMode};
     use hw_jobs::{Building, BuildingCategory, BuildingType, Door};
+    use hw_spatial::SpatialGridOps;
+    use hw_spatial::StockpileSpatialGrid;
+    use hw_ui::StockpilePolicyEditTarget;
     use hw_ui::area_edit::AreaEditSession;
     use hw_ui::components::{ArchitectCategoryState, MenuState};
     use hw_world::{DoorVisualHandles, WorldMap};
@@ -171,6 +181,7 @@ mod tests {
         app.add_plugins(bevy::state::app::StatesPlugin)
             .add_message::<UiIntent>()
             .add_message::<FamiliarOperationMaxSoulChangedEvent>()
+            .add_message::<hw_logistics::StockpilePolicyChangeRequest>()
             .init_state::<PlayMode>()
             .init_resource::<BuildContext>()
             .init_resource::<MoveContext>()
@@ -180,6 +191,8 @@ mod tests {
             .init_resource::<CompanionPlacementState>()
             .init_resource::<AreaEditSession>()
             .init_resource::<ZoneRemovalPreviewState>()
+            .init_resource::<StockpilePolicyRangeEditState>()
+            .init_resource::<StockpileSpatialGrid>()
             .init_resource::<WorldMap>()
             .init_resource::<MenuState>()
             .init_resource::<SelectedEntity>()
@@ -215,6 +228,97 @@ mod tests {
                 is_provisional: false,
             })
             .id()
+    }
+
+    #[derive(Resource, Default)]
+    struct StockpilePolicyRequests(Vec<hw_logistics::StockpilePolicyChangeRequest>);
+
+    fn collect_stockpile_policy_requests(
+        mut requests: MessageReader<hw_logistics::StockpilePolicyChangeRequest>,
+        mut receipts: ResMut<StockpilePolicyRequests>,
+    ) {
+        receipts.0.extend(requests.read().cloned());
+    }
+
+    #[test]
+    fn single_and_area_stockpile_policy_intents_share_the_same_domain_request_type() {
+        let mut app = domain_action_app();
+        app.init_resource::<StockpilePolicyRequests>().add_systems(
+            Update,
+            collect_stockpile_policy_requests.after(handle_ui_intent),
+        );
+        let left = app.world_mut().spawn_empty().id();
+        let right = app.world_mut().spawn_empty().id();
+        {
+            let mut grid = app.world_mut().resource_mut::<StockpileSpatialGrid>();
+            grid.insert(right, Vec2::new(16.0, 0.0));
+            grid.insert(left, Vec2::ZERO);
+        }
+        let patch = hw_logistics::StockpilePolicyPatch {
+            allow_export: Some(false),
+            ..default()
+        };
+
+        write_intent(
+            &mut app,
+            UiIntent::ApplyStockpilePolicy {
+                target: StockpilePolicyEditTarget::Single(right),
+                patch,
+            },
+        );
+        write_intent(
+            &mut app,
+            UiIntent::ApplyStockpilePolicy {
+                target: StockpilePolicyEditTarget::Area {
+                    min: Vec2::splat(32.0),
+                    max: Vec2::splat(-1.0),
+                },
+                patch,
+            },
+        );
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<StockpilePolicyRequests>().0,
+            vec![
+                hw_logistics::StockpilePolicyChangeRequest {
+                    targets: vec![right],
+                    patch,
+                },
+                hw_logistics::StockpilePolicyChangeRequest {
+                    targets: vec![left, right],
+                    patch,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn begin_stockpile_policy_range_intent_owns_mode_and_patch() {
+        let mut app = domain_action_app();
+        let patch = hw_logistics::StockpilePolicyPatch {
+            target_amount: Some(4),
+            ..default()
+        };
+        write_intent(&mut app, UiIntent::BeginStockpilePolicyRangeEdit { patch });
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<TaskContext>().0,
+            TaskMode::StockpilePolicyEdit(None)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<StockpilePolicyRangeEditState>()
+                .patch,
+            Some(patch)
+        );
+        assert!(matches!(
+            *app.world().resource::<NextState<PlayMode>>(),
+            NextState::Pending(PlayMode::TaskDesignation)
+                | NextState::PendingIfNeq(PlayMode::TaskDesignation)
+        ));
     }
 
     #[test]

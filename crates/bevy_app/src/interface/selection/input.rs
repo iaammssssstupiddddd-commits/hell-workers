@@ -29,6 +29,9 @@ type SelectionTargetQuery<'w, 's> = Query<
     )>,
 >;
 
+type ManagedStockpileQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static GlobalTransform), With<hw_logistics::StockpilePolicy>>;
+
 #[derive(SystemParam)]
 pub struct SelectionInput<'w, 's> {
     pub buttons: Res<'w, ButtonInput<MouseButton>>,
@@ -43,6 +46,7 @@ pub struct SelectionWorldQueries<'w, 's> {
     pub q_souls: Query<'w, 's, (Entity, &'static GlobalTransform), With<DamnedSoul>>,
     pub q_familiars: Query<'w, 's, (Entity, &'static GlobalTransform), With<Familiar>>,
     pub q_task_areas: Query<'w, 's, (Entity, &'static TaskArea), With<Familiar>>,
+    pub q_stockpile_cells: ManagedStockpileQuery<'w, 's>,
     pub q_targets: SelectionTargetQuery<'w, 's>,
 }
 
@@ -53,6 +57,7 @@ pub struct HoverUpdateParams<'w, 's> {
     pub q_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<MainCamera>>,
     pub q_souls: Query<'w, 's, (Entity, &'static GlobalTransform), With<DamnedSoul>>,
     pub q_familiars: Query<'w, 's, (Entity, &'static GlobalTransform), With<Familiar>>,
+    pub q_stockpile_cells: ManagedStockpileQuery<'w, 's>,
     pub q_targets: SelectionTargetQuery<'w, 's>,
 }
 
@@ -63,6 +68,7 @@ fn resolve_left_click_intent(
     q_souls: &Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: &Query<(Entity, &GlobalTransform), With<Familiar>>,
     q_task_areas: &Query<(Entity, &TaskArea), With<Familiar>>,
+    q_stockpile_cells: &ManagedStockpileQuery,
     q_targets: &SelectionTargetQuery,
 ) -> SelectionIntent {
     if let Some(familiar) =
@@ -71,7 +77,13 @@ fn resolve_left_click_intent(
         return SelectionIntent::StartAreaSelection { familiar };
     }
 
-    match hovered_entity_at_world_pos(world_pos, q_souls, q_familiars, q_targets) {
+    match hovered_entity_at_world_pos(
+        world_pos,
+        q_souls,
+        q_familiars,
+        q_stockpile_cells,
+        q_targets,
+    ) {
         Some(entity) => SelectionIntent::Select(entity),
         None => SelectionIntent::ClearSelection,
     }
@@ -93,10 +105,19 @@ fn resolve_right_click_intent(
     current_selected: Option<Entity>,
     q_souls: &Query<(Entity, &GlobalTransform), With<DamnedSoul>>,
     q_familiars: &Query<(Entity, &GlobalTransform), With<Familiar>>,
+    q_stockpile_cells: &ManagedStockpileQuery,
     q_targets: &SelectionTargetQuery,
 ) -> SelectionIntent {
     // 右クリック対象がエンティティ上なら移動命令ではなくコンテキストメニューを優先
-    if hovered_entity_at_world_pos(world_pos, q_souls, q_familiars, q_targets).is_some() {
+    if hovered_entity_at_world_pos(
+        world_pos,
+        q_souls,
+        q_familiars,
+        q_stockpile_cells,
+        q_targets,
+    )
+    .is_some()
+    {
         return SelectionIntent::None;
     }
 
@@ -131,6 +152,7 @@ pub fn handle_mouse_input(
         q_souls,
         q_familiars,
         q_task_areas,
+        q_stockpile_cells,
         q_targets,
     } = world_queries;
     if ui_input_state.world_input_blocked() || resolved_frame.pointer_selection_suppressed() {
@@ -148,6 +170,7 @@ pub fn handle_mouse_input(
             &q_souls,
             &q_familiars,
             &q_task_areas,
+            &q_stockpile_cells,
             &q_targets,
         );
         apply_selection_intent(
@@ -165,6 +188,7 @@ pub fn handle_mouse_input(
             selected_entity.0,
             &q_souls,
             &q_familiars,
+            &q_stockpile_cells,
             &q_targets,
         );
         apply_selection_intent(
@@ -220,6 +244,7 @@ pub fn update_hover_entity(
         q_camera,
         q_souls,
         q_familiars,
+        q_stockpile_cells,
         q_targets,
     } = params;
 
@@ -246,7 +271,13 @@ pub fn update_hover_entity(
     hover_cache.0 = Some(world_pos);
     hover_cache.1 = camera_translation;
 
-    let found = hovered_entity_at_world_pos(world_pos, &q_souls, &q_familiars, &q_targets);
+    let found = hovered_entity_at_world_pos(
+        world_pos,
+        &q_souls,
+        &q_familiars,
+        &q_stockpile_cells,
+        &q_targets,
+    );
 
     if found != hovered_entity.0 {
         hovered_entity.0 = found;
@@ -330,6 +361,61 @@ mod tests {
             accepted.world().resource::<SelectedEntity>().0,
             Some(clicked_soul)
         );
+    }
+
+    #[test]
+    fn managed_stockpile_policy_cell_wins_over_a_colocated_stored_item() {
+        let mut app = minimal_app();
+        app.init_resource::<UiInputState>()
+            .init_resource::<HoveredEntity>()
+            .add_systems(Update, update_hover_entity);
+        let mut window = Window {
+            resolution: WindowResolution::new(100, 100),
+            ..default()
+        };
+        window.set_cursor_position(Some(Vec2::splat(50.0)));
+        app.world_mut().spawn((window, PrimaryWindow));
+        app.world_mut().spawn((
+            Camera {
+                computed: ComputedCameraValues {
+                    clip_from_view: Mat4::IDENTITY,
+                    target_info: Some(RenderTargetInfo {
+                        physical_size: UVec2::splat(100),
+                        scale_factor: 1.0,
+                    }),
+                    ..default()
+                },
+                ..default()
+            },
+            GlobalTransform::IDENTITY,
+            MainCamera,
+        ));
+        let item = app
+            .world_mut()
+            .spawn((
+                crate::systems::logistics::ResourceItem(
+                    crate::systems::logistics::ResourceType::Wood,
+                ),
+                GlobalTransform::IDENTITY,
+                Visibility::Hidden,
+            ))
+            .id();
+        let stockpile = app
+            .world_mut()
+            .spawn((
+                hw_logistics::Stockpile {
+                    capacity: 10,
+                    resource_type: Some(hw_logistics::ResourceType::Wood),
+                },
+                hw_logistics::StockpilePolicy::for_capacity(10),
+                GlobalTransform::IDENTITY,
+            ))
+            .id();
+
+        app.update();
+
+        assert_ne!(stockpile, item);
+        assert_eq!(app.world().resource::<HoveredEntity>().0, Some(stockpile));
     }
 
     #[test]

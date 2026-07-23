@@ -21,11 +21,11 @@ use hw_jobs::{
 };
 use hw_logistics::SharedResourceCache;
 use hw_logistics::transport_request::{
-    ManualHaulPinnedSource, TransportDemand, TransportRequest, TransportRequestFixedSource,
-    WheelbarrowLease,
+    ManualHaulPinnedSource, ReceiverPolicyTier, TransportDemand, TransportRequest,
+    TransportRequestFixedSource, WheelbarrowLease,
 };
 use hw_logistics::types::{BelongsTo, BucketStorage, ResourceItem, Wheelbarrow};
-use hw_logistics::zone::Stockpile;
+use hw_logistics::zone::{Stockpile, StockpilePolicy};
 use hw_world::WorldMapRead;
 
 pub use hw_jobs::construction::ConstructionSitePositions;
@@ -131,6 +131,7 @@ pub struct FamiliarStorageAccess<'w, 's> {
             Option<&'static StoredItems>,
         ),
     >,
+    pub stockpile_policies: Query<'w, 's, &'static StockpilePolicy>,
     pub loaded_in: Query<'w, 's, &'static LoadedIn>,
     pub loaded_items: Query<'w, 's, &'static LoadedItems>,
     pub bucket_storages: Query<'w, 's, (), With<BucketStorage>>,
@@ -178,6 +179,7 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
     pub task_state: Query<'w, 's, (Option<&'static Designation>, Option<&'static TaskWorkers>)>,
     pub move_plant_tasks: Query<'w, 's, &'static hw_jobs::MovePlantTask>,
     pub transport_requests: Query<'w, 's, &'static TransportRequest>,
+    pub receiver_policy_tiers: Query<'w, 's, &'static ReceiverPolicyTier>,
     pub transport_demands: Query<'w, 's, &'static TransportDemand>,
     pub transport_request_fixed_sources: Query<'w, 's, &'static TransportRequestFixedSource>,
     pub familiar_task_areas:

@@ -8,7 +8,8 @@ use crate::systems::logistics::transport_request::{
 };
 use crate::systems::logistics::{BelongsTo, BucketStorage, ResourceItem, Stockpile};
 use bevy::prelude::*;
-use hw_core::relationships::{StoredItems, TaskWorkers};
+use hw_core::relationships::{IncomingDeliveries, StoredItems, TaskWorkers};
+use hw_logistics::StockpilePolicy;
 
 /// apply.rs と input.rs で共有する designation target 用 Query の型
 pub type DesignationTargetQuery<'w, 's> = Query<
@@ -29,7 +30,11 @@ pub type DesignationTargetQuery<'w, 's> = Query<
         Option<&'static Stockpile>,
         Option<&'static StoredItems>,
         Option<&'static BucketStorage>,
-        Option<&'static ManualTransportRequest>,
+        (
+            Option<&'static ManualTransportRequest>,
+            Option<&'static StockpilePolicy>,
+            Option<&'static IncomingDeliveries>,
+        ),
     ),
 >;
 

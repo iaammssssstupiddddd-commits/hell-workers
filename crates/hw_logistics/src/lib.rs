@@ -8,6 +8,8 @@ pub mod plugin;
 pub mod provisional_wall;
 pub mod resource_cache;
 pub mod spatial_sync;
+pub mod stockpile_policy;
+pub mod stockpile_policy_change;
 pub mod tile_index;
 pub mod transport_request;
 pub mod types;
@@ -34,11 +36,23 @@ pub use spatial_sync::{
     update_stockpile_spatial_grid_system_stockpile,
     update_transport_request_spatial_grid_system_transport_request,
 };
+pub use stockpile_policy::{
+    StockpilePolicyEvaluation, StockpilePolicyInput, StockpilePolicyRejection,
+    StockpilePolicyState, StockpileTransferPhase, derive_stockpile_policy_state,
+    evaluate_stockpile_policy, stockpile_owner_accepts_item,
+};
+pub use stockpile_policy_change::{
+    StockpilePolicyChangeOutcome, StockpilePolicyChangeRequest,
+    apply_stockpile_policy_change_requests_system,
+};
 pub use types::{
     BelongsTo, BucketStorage, Inventory, PendingBelongsToBlueprint, ResourceItem, Wheelbarrow,
 };
 pub use water::tank_has_capacity_for_full_bucket;
-pub use zone::Stockpile;
+pub use zone::{
+    Stockpile, StockpileAcceptance, StockpilePolicy, StockpilePolicyPatch,
+    StockpilePolicyPatchResult,
+};
 // Functions used in dropping / unloading handlers
 pub use floor_construction::{floor_site_tile_demand, floor_site_tile_demand_from_index};
 pub use ground_resources::count_nearby_ground_resources;

@@ -4,32 +4,19 @@ use bevy::prelude::*;
 use std::collections::{HashMap, HashSet};
 
 use hw_core::constants::TILE_SIZE;
-use hw_core::relationships::StoredItems;
 use hw_world::zones::Yard;
 
-use crate::types::BucketStorage;
-use crate::zone::Stockpile;
+use crate::zone::{Stockpile, StockpilePolicy};
 use hw_spatial::StockpileSpatialGrid;
 
-type StockpilesQuery<'w, 's> = Query<
-    'w,
-    's,
-    (
-        Entity,
-        &'static Transform,
-        &'static Stockpile,
-        Option<&'static StoredItems>,
-        Option<&'static BucketStorage>,
-    ),
->;
+type StockpilesQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform), (With<Stockpile>, With<StockpilePolicy>)>;
 
 /// ファミリアのTaskArea内にあるStockpileのグループ
 pub struct StockpileGroup {
     pub cells: Vec<Entity>,
     pub owner_yard: Entity,
     pub representative: Entity,
-    pub total_capacity: usize,
-    pub total_stored: usize,
 }
 
 /// StockpileGroup の探索用空間インデックス
@@ -70,57 +57,68 @@ pub fn build_stockpile_groups(
     for (yard_entity, yard) in active_yards {
         let stock_entities = stockpile_grid.get_in_area(yard.min, yard.max);
 
-        let mut cells = Vec::new();
-        let mut positions = Vec::new();
-        let mut total_capacity: usize = 0;
-        let mut total_stored: usize = 0;
+        let mut cells_with_positions = Vec::new();
 
         for stock_entity in &stock_entities {
-            let Ok((entity, transform, stockpile, stored_opt, bucket_opt)) =
-                q_stockpiles.get(*stock_entity)
-            else {
+            let Ok((entity, transform)) = q_stockpiles.get(*stock_entity) else {
                 continue;
             };
 
-            if bucket_opt.is_some() {
-                continue;
-            }
-
             let pos = transform.translation.truncate();
-            cells.push(entity);
-            positions.push(pos);
-            total_capacity += stockpile.capacity;
-            total_stored += stored_opt.map(|s| s.len()).unwrap_or(0);
+            cells_with_positions.push((entity, pos));
         }
 
-        if cells.is_empty() {
+        if cells_with_positions.is_empty() {
             continue;
         }
 
-        let centroid = if positions.is_empty() {
-            Vec2::ZERO
-        } else {
-            let sum: Vec2 = positions.iter().copied().sum();
-            sum / positions.len() as f32
-        };
+        cells_with_positions.sort_unstable_by(
+            |(left_entity, left_pos), (right_entity, right_pos)| {
+                left_pos
+                    .x
+                    .total_cmp(&right_pos.x)
+                    .then_with(|| left_pos.y.total_cmp(&right_pos.y))
+                    .then_with(|| {
+                        (left_entity.index_u32(), left_entity.generation().to_bits()).cmp(&(
+                            right_entity.index_u32(),
+                            right_entity.generation().to_bits(),
+                        ))
+                    })
+            },
+        );
 
-        let representative_idx = positions
+        let centroid = cells_with_positions
             .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                let da = a.distance_squared(centroid);
-                let db = b.distance_squared(centroid);
-                da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+            .map(|(_, pos)| *pos)
+            .sum::<Vec2>()
+            / cells_with_positions.len() as f32;
+
+        let representative = cells_with_positions
+            .iter()
+            .min_by(|(left_entity, left_pos), (right_entity, right_pos)| {
+                left_pos
+                    .distance_squared(centroid)
+                    .total_cmp(&right_pos.distance_squared(centroid))
+                    .then_with(|| left_pos.x.total_cmp(&right_pos.x))
+                    .then_with(|| left_pos.y.total_cmp(&right_pos.y))
+                    .then_with(|| {
+                        (left_entity.index_u32(), left_entity.generation().to_bits()).cmp(&(
+                            right_entity.index_u32(),
+                            right_entity.generation().to_bits(),
+                        ))
+                    })
             })
-            .map(|(i, _)| i)
-            .unwrap_or(0);
+            .map(|(entity, _)| *entity)
+            .expect("non-empty stockpile group has a representative");
+        let cells = cells_with_positions
+            .into_iter()
+            .map(|(entity, _)| entity)
+            .collect();
 
         groups.push(StockpileGroup {
-            representative: cells[representative_idx],
+            representative,
             cells,
             owner_yard: *yard_entity,
-            total_capacity,
-            total_stored,
         });
     }
 

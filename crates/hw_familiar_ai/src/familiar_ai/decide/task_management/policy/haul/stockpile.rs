@@ -7,7 +7,6 @@ use super::super::super::builders::{
     WheelbarrowHaulSpec, issue_haul_to_stockpile_with_source, issue_haul_with_wheelbarrow,
 };
 use super::super::super::validator::resolve_haul_to_stockpile_inputs;
-use super::demand;
 use super::lease_validation;
 use super::source_selector;
 use super::wheelbarrow;
@@ -22,18 +21,16 @@ pub fn assign_haul_to_stockpile(
     queries: &mut FamiliarTaskAssignmentQueries,
     shadow: &mut ReservationShadow,
 ) -> bool {
-    let Some((stockpile, resource_type, item_owner, fixed_source)) =
-        resolve_haul_to_stockpile_inputs(ctx.task_entity, queries, shadow)
+    let Some(resolved) =
+        resolve_haul_to_stockpile_inputs(ctx.task_entity, queries, shadow, ctx.incoming_snapshot)
     else {
         return false;
     };
-    let demand_context =
-        demand::DemandReadContext::new(queries, shadow, ctx.tile_site_index, ctx.incoming_snapshot);
-    let remaining_capacity =
-        demand::compute_remaining_stockpile_capacity(stockpile, resource_type, &demand_context);
-    if remaining_capacity == 0 {
-        return false;
-    }
+    let stockpile = resolved.stockpile;
+    let resource_type = resolved.resource_type;
+    let item_owner = resolved.item_owner;
+    let fixed_source = resolved.fixed_source;
+    let remaining_capacity = resolved.available_amount;
 
     if let Some(fixed_source_item) = fixed_source {
         let Some((source_item, source_pos)) = source_selector::find_fixed_stockpile_source_item(
@@ -141,7 +138,7 @@ pub fn assign_haul_to_stockpile(
         }
     }
 
-    let max_items = remaining_capacity.max(1) as usize;
+    let max_items = remaining_capacity.max(1);
     let min_valid_items = if resource_type.requires_wheelbarrow() {
         1
     } else {

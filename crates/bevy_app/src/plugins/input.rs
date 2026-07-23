@@ -184,6 +184,7 @@ fn task_mode_uses_area_drag(task_mode: TaskMode) -> bool {
             | TaskMode::FloorPlace(_)
             | TaskMode::WallPlace(_)
             | TaskMode::DreamPlanting(_)
+            | TaskMode::StockpilePolicyEdit(_)
     )
 }
 

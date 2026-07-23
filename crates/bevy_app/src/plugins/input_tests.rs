@@ -406,6 +406,7 @@ fn all_task_area_drag_modes_reserve_the_primary_pointer() {
         TaskMode::FloorPlace(None),
         TaskMode::WallPlace(Some(point)),
         TaskMode::DreamPlanting(None),
+        TaskMode::StockpilePolicyEdit(Some(point)),
     ] {
         assert!(task_mode_uses_area_drag(mode), "mode: {mode:?}");
     }

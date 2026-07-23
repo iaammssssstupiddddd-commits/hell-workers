@@ -6,6 +6,9 @@ use crate::setup::UiAssets;
 use crate::theme::UiTheme;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
+use hw_logistics::StockpilePolicyPatch;
+
+use crate::intents::StockpilePolicyEditTarget;
 
 fn spawn_info_section_divider(
     parent: &mut ChildSpawnerCommands,
@@ -54,6 +57,49 @@ fn spawn_info_section_divider(
                 BackgroundColor(theme.colors.border_default),
             ));
         });
+}
+
+fn spawn_stockpile_editor_button(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &dyn UiAssets,
+    theme: &UiTheme,
+    width: Val,
+    label: &str,
+) -> (Entity, Entity) {
+    let mut text_entity = Entity::PLACEHOLDER;
+    let button = parent
+        .spawn((
+            Button,
+            Node {
+                width,
+                min_height: Val::Px(28.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                padding: UiRect::horizontal(Val::Px(6.0)),
+                ..default()
+            },
+            BackgroundColor(theme.colors.button_default),
+            MenuButton(MenuAction::ApplyStockpilePolicy {
+                target: StockpilePolicyEditTarget::Single(Entity::PLACEHOLDER),
+                patch: StockpilePolicyPatch::default(),
+            }),
+        ))
+        .with_children(|button| {
+            text_entity = button
+                .spawn((
+                    Text::new(label),
+                    TextFont {
+                        font: game_assets.font_ui().clone().into(),
+                        font_size: crate::theme::font_size_rem(theme.typography.font_size_xs),
+                        weight: FontWeight::SEMIBOLD,
+                        ..default()
+                    },
+                    TextColor(theme.colors.text_primary_semantic),
+                ))
+                .id();
+        })
+        .id();
+    (button, text_entity)
 }
 
 pub fn spawn_info_panel_ui(
@@ -384,6 +430,141 @@ pub fn spawn_info_panel_ui(
             .id();
         ui_nodes.set_slot(UiSlot::InfoPanelStatsGroup, stats);
         info_panel_nodes.stats_group = Some(stats);
+
+        let stockpile_group = parent
+            .spawn(Node {
+                display: Display::None,
+                width: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(5.0),
+                ..default()
+            })
+            .with_children(|column| {
+                spawn_info_section_divider(column, game_assets, theme, "Stockpile Policy");
+
+                info_panel_nodes.stockpile_state = Some(
+                    column
+                        .spawn((
+                            Text::new(""),
+                            TextFont {
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: crate::theme::font_size_rem(
+                                    theme.typography.font_size_small,
+                                ),
+                                weight: FontWeight::SEMIBOLD,
+                                ..default()
+                            },
+                            TextColor(theme.colors.text_primary_semantic),
+                        ))
+                        .id(),
+                );
+                info_panel_nodes.stockpile_current = Some(
+                    column
+                        .spawn((
+                            Text::new(""),
+                            TextFont {
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: crate::theme::font_size_rem(
+                                    theme.typography.font_size_small,
+                                ),
+                                ..default()
+                            },
+                            TextColor(theme.colors.text_primary_semantic),
+                        ))
+                        .id(),
+                );
+
+                let (acceptance_button, acceptance_text) = spawn_stockpile_editor_button(
+                    column,
+                    game_assets,
+                    theme,
+                    Val::Percent(100.0),
+                    "Acceptance",
+                );
+                info_panel_nodes.stockpile_acceptance_button = Some(acceptance_button);
+                info_panel_nodes.stockpile_acceptance_text = Some(acceptance_text);
+
+                column
+                    .spawn(Node {
+                        width: Val::Percent(100.0),
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        column_gap: Val::Px(5.0),
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        let (decrease_button, _) = spawn_stockpile_editor_button(
+                            row,
+                            game_assets,
+                            theme,
+                            Val::Px(30.0),
+                            "−",
+                        );
+                        info_panel_nodes.stockpile_target_decrease_button = Some(decrease_button);
+
+                        info_panel_nodes.stockpile_target_text = Some(
+                            row.spawn((
+                                Text::new("Target"),
+                                TextFont {
+                                    font: game_assets.font_ui().clone().into(),
+                                    font_size: crate::theme::font_size_rem(
+                                        theme.typography.font_size_small,
+                                    ),
+                                    weight: FontWeight::SEMIBOLD,
+                                    ..default()
+                                },
+                                TextColor(theme.colors.text_primary_semantic),
+                                Node {
+                                    flex_grow: 1.0,
+                                    justify_content: JustifyContent::Center,
+                                    ..default()
+                                },
+                            ))
+                            .id(),
+                        );
+
+                        let (increase_button, _) = spawn_stockpile_editor_button(
+                            row,
+                            game_assets,
+                            theme,
+                            Val::Px(30.0),
+                            "+",
+                        );
+                        info_panel_nodes.stockpile_target_increase_button = Some(increase_button);
+                    });
+
+                let (priority_button, priority_text) = spawn_stockpile_editor_button(
+                    column,
+                    game_assets,
+                    theme,
+                    Val::Percent(100.0),
+                    "Inbound Priority",
+                );
+                info_panel_nodes.stockpile_priority_button = Some(priority_button);
+                info_panel_nodes.stockpile_priority_text = Some(priority_text);
+
+                let (export_button, export_text) = spawn_stockpile_editor_button(
+                    column,
+                    game_assets,
+                    theme,
+                    Val::Percent(100.0),
+                    "Export",
+                );
+                info_panel_nodes.stockpile_export_button = Some(export_button);
+                info_panel_nodes.stockpile_export_text = Some(export_text);
+
+                spawn_info_section_divider(column, game_assets, theme, "Batch Edit");
+                let (area_button, _) = spawn_stockpile_editor_button(
+                    column,
+                    game_assets,
+                    theme,
+                    Val::Percent(100.0),
+                    "Apply Policy to Area",
+                );
+                info_panel_nodes.stockpile_area_button = Some(area_button);
+            })
+            .id();
+        info_panel_nodes.stockpile_group = Some(stockpile_group);
 
         let common = parent
             .spawn((

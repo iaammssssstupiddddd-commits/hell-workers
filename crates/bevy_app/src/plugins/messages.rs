@@ -16,6 +16,7 @@ use hw_core::events::{
     SoulExhaustedVisualMessage, SoulRecruitedVisualMessage, SoulStressBreakdownVisualMessage,
     TaskCompletedVisualMessage,
 };
+use hw_logistics::{StockpilePolicyChangeOutcome, StockpilePolicyChangeRequest};
 use hw_visual::speech::conversation::events::{
     ConversationCompleted, ConversationToneTriggered, RequestConversation,
 };
@@ -55,6 +56,8 @@ macro_rules! root_message_types {
             GatheringSpawnRequest,
             SoulTaskUnassignRequest,
             TaskActionOutcome,
+            StockpilePolicyChangeRequest,
+            StockpilePolicyChangeOutcome,
         );
     };
 }

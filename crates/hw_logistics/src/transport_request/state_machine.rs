@@ -73,6 +73,7 @@ mod tests {
     use crate::{ResourceItem, ResourceType, SharedResourceCache, Stockpile, Wheelbarrow};
     use hw_core::relationships::{ParkedAt, WorkingOn};
     use hw_core::system_sets::{GameSystemSet, SoulAiSystemSet};
+    use hw_jobs::{Designation, TaskSlots, WorkType};
 
     #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
     enum TestSet {
@@ -159,6 +160,10 @@ mod tests {
                     desired_slots: 1,
                     inflight: 0,
                 },
+                Designation {
+                    work_type: WorkType::Haul,
+                },
+                TaskSlots::new(1),
                 Transform::default(),
             ))
             .id();

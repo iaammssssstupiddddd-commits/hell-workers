@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 
 use bevy::prelude::*;
 
-use crate::transport_request::WheelbarrowDestination;
+use crate::transport_request::{TransportPriority, WheelbarrowDestination};
 use crate::types::ResourceType;
 
 #[derive(Clone)]
@@ -14,6 +14,8 @@ pub(super) struct BatchCandidate {
     pub source_pos: Vec2,
     pub destination: WheelbarrowDestination,
     pub group_cells: Vec<Entity>,
+    pub resource_type: ResourceType,
+    pub receiver_priority: TransportPriority,
     pub hard_min: usize,
     pub pending_for: f64,
     pub is_small_batch: bool,
@@ -46,6 +48,7 @@ pub(super) struct RequestEvalContext {
     pub hard_min: usize,
     pub pending_for: f64,
     pub priority: u32,
+    pub receiver_priority: TransportPriority,
     pub bucket_key: ItemBucketKey,
 }
 
@@ -60,12 +63,16 @@ pub(super) struct NearbyItem {
 pub(super) struct HeapEntry {
     pub snapshot_idx: usize,
     pub dist_sq: f32,
+    pub entity_index: u32,
+    pub entity_generation: u32,
 }
 
 impl PartialEq for HeapEntry {
     fn eq(&self, other: &Self) -> bool {
         self.snapshot_idx == other.snapshot_idx
             && self.dist_sq.total_cmp(&other.dist_sq) == Ordering::Equal
+            && self.entity_index == other.entity_index
+            && self.entity_generation == other.entity_generation
     }
 }
 
@@ -81,6 +88,8 @@ impl Ord for HeapEntry {
     fn cmp(&self, other: &Self) -> Ordering {
         self.dist_sq
             .total_cmp(&other.dist_sq)
+            .then_with(|| self.entity_index.cmp(&other.entity_index))
+            .then_with(|| self.entity_generation.cmp(&other.entity_generation))
             .then_with(|| self.snapshot_idx.cmp(&other.snapshot_idx))
     }
 }

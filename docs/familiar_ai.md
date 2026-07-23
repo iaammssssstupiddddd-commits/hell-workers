@@ -199,6 +199,14 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 委譲処理を「Familiar単位の候補収集」と「worker単位の再スコア・到達判定」に分割し、重複計算を削減しました。
 - **候補一回化**: `collect_scored_candidates` を1回だけ実行し、全アイドルワーカーで候補を使い回します。
 - **Worker基準再スコア**: 候補ごとに worker 距離を再評価し、worker ごとに最適候補順を作成します。
+- **方針スコアの合成**: base score は従来どおり priority `0.65` + 距離 `0.35` で計算し、その後に
+  policy contribution を一度だけ加えます。policy-driven `DepositToStockpile` は保存しない
+  `ReceiverPolicyTier` から Low=-10 / Normal=0 / High=+10 / Critical=+20 unit を得て、1 unit は
+  `0.65 / 40` です。最終 score は clamp せず、同じ合成済み score を Top-K と fallback の双方で使います。
+  これにより Normal は従来値と bit 単位で一致し、base priority が上限でも tier 差を維持します。
+- **優先度の分離**: manual haul の明示 priority や consolidation の maintenance 用 raw priority を
+  receiver policy と推測して通常候補へ再加算しません。B1/B2 の contribution は
+  `hw_jobs::Priority` へコピーせず、共有 scalar helper で合成します。
 - **距離フィルタ**: `MAX_ASSIGNMENT_DIST_SQ`（60タイル）を超える候補は連結成分判定前に除外します。
 - **version付き連結成分 cache**: `hw_world::WalkabilityConnectivityCache` が `WorldMap.obstacle_version` ごとに dense component ID 配列を一度だけ構築し、worker/target の Boolean 到達判定を O(1) にします。`WorldMap` の Bevy 変更検知や 60 frame TTL で全消去する旧 `ReachabilityFrameCache` は廃止しました。Open/Closed Door は cache を再構築せず、Locked 等の walkability topology 変更だけが次回問い合わせの flood-fill を発火します。save/load の world replacement では cache を明示 reset します。
 - **Top-K 先行評価**: 優先候補（`TASK_DELEGATION_TOP_K`）を先に評価し、必要時のみ残り候補を評価します。
@@ -207,8 +215,17 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 ### 7.5.1. 資材ソース探索の近傍優先化
 - **地面資材**: `ResourceSpatialGrid` から近傍候補を取り出し、半径 `10 -> 20 -> 40 -> 80` タイルの順で探索範囲を段階拡張します。近傍に候補がない場合のみ全域相当の半径へフォールバックします。
 - **ストックパイル内資材**: `(ResourceType, Stockpile)` 単位のフレームキャッシュを用い、必要な資材型とセルに限定して参照します。
-- **所有互換性**: owner 付きストックパイルは同 owner の地面資材を優先し、見つからない場合のみ owner 未設定資材へフォールバックします。
+- **所有互換性**: owner 付きストックパイルは同 owner の地面資材を優先し、見つからない場合のみ owner 未設定資材へフォールバックします。重複 Yard の mixed-owner group では、anchor ではなく実際に選んだ destination cell の owner をソース条件に使います。
 - **安全条件**: `StoredIn` 付きアイテムと予約済みアイテムは地面ソース候補から除外します。
+
+### 7.5.2. Stockpile 方針の割当直前再検証
+
+- `DepositToStockpile` は request の tier subset 内だけを対象にし、live policy、contents、incoming、同 cycle shadow を
+  `NewInbound` evaluator で再評価します。producer 後に target や acceptance が変わった stale request は割り当てません。
+- `WheelbarrowLease` がある request は lease に記録された Stockpile だけを再検証します。無効になった lease 先から
+  同じ group の別セルへ destination を付け替えません。
+- `ConsolidateStockpile` は receiver の `NewInbound`、donor の `NewOutbound` と owner を再検証します。
+  実 source item の owner が receiver と非互換、または donor が搬出禁止かつ draining でない場合は新規割当を止めます。
 
 ### 7.6. 状態遷移の自動検知（Bevy 標準機能の活用）
 `Changed<FamiliarAiState>` フィルタを使用して状態遷移を自動検知します。

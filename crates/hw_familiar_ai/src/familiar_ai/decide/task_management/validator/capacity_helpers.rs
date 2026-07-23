@@ -1,8 +1,10 @@
 use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
+use hw_logistics::transport_request::TransportPriority;
+use hw_logistics::{StockpilePolicyInput, StockpileTransferPhase, evaluate_stockpile_policy};
 
 use crate::familiar_ai::decide::task_management::{
-    FamiliarTaskAssignmentQueries, ReservationShadow,
+    FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot, ReservationShadow,
 };
 
 pub(super) fn stored_items_opt_to_count(
@@ -17,24 +19,32 @@ pub(super) fn check_stockpile_capacity(
     resource_type: ResourceType,
     queries: &FamiliarTaskAssignmentQueries,
     shadow: &ReservationShadow,
+    incoming_snapshot: &IncomingDeliverySnapshot,
+    expected_priority: Option<TransportPriority>,
 ) -> Option<usize> {
     let (_, _, stock, stored_opt) = queries.storage.stockpiles.get(cell).ok()?;
-    let stored = stored_items_opt_to_count(stored_opt);
-    let incoming = queries
-        .reservation
-        .incoming_deliveries_query
-        .get(cell)
-        .ok()
-        .map(|(_, inc)| inc.len())
-        .unwrap_or(0);
-    let shadow_incoming = shadow.destination_reserved_total(cell);
-    let effective_free = stock
-        .capacity
-        .saturating_sub(stored + incoming + shadow_incoming);
-    let type_ok = stock.resource_type.is_none() || stock.resource_type == Some(resource_type);
-    if effective_free > 0 && type_ok {
-        Some(effective_free)
-    } else {
-        None
+    let policy = *queries.storage.stockpile_policies.get(cell).ok()?;
+    if expected_priority.is_some_and(|expected| expected != policy.inbound_priority) {
+        return None;
     }
+    let stored = stored_items_opt_to_count(stored_opt);
+    let incoming = incoming_snapshot.count_total(cell) as usize;
+    let incoming_matching = incoming_snapshot.count_exact(cell, resource_type) as usize;
+    let shadow_incoming = shadow.destination_reserved_total(cell);
+    let shadow_matching = shadow.destination_reserved_resource(cell, resource_type);
+    let evaluation = evaluate_stockpile_policy(StockpilePolicyInput {
+        phase: StockpileTransferPhase::NewInbound,
+        policy,
+        capacity: stock.capacity,
+        stored_amount: stored,
+        stored_resource: stock.resource_type,
+        transfer_resource: resource_type,
+        requested_amount: 0,
+        incoming_reserved: incoming,
+        incoming_reserved_other_resource: incoming.saturating_sub(incoming_matching),
+        cycle_reserved: shadow_incoming,
+        cycle_reserved_other_resource: shadow_incoming.saturating_sub(shadow_matching),
+    });
+
+    (evaluation.available_amount > 0).then_some(evaluation.available_amount)
 }

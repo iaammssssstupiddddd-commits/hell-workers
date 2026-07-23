@@ -1,11 +1,17 @@
-use bevy::prelude::Entity;
-use bevy::prelude::Message;
+use bevy::prelude::{Entity, Message, Vec2};
 use hw_core::game_state::{TaskMode, TimeSpeed};
 use hw_core::jobs::WorkType;
 use hw_jobs::{BuildingCategory, BuildingType};
-use hw_logistics::zone::ZoneType;
+use hw_logistics::{StockpilePolicyPatch, zone::ZoneType};
 
 use crate::panels::task_list::{TaskCancelKind, TaskPriorityAdjustment};
+
+/// Copyable target descriptor resolved by the root adapter into concrete stockpile entities.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum StockpilePolicyEditTarget {
+    Single(Entity),
+    Area { min: Vec2, max: Vec2 },
+}
 
 #[derive(Message, Copy, Clone, Debug)]
 pub enum UiIntent {
@@ -44,6 +50,13 @@ pub enum UiIntent {
     CancelLoadConfirm,
     SelectArchitectCategory(Option<BuildingCategory>),
     MovePlantBuilding(Entity),
+    ApplyStockpilePolicy {
+        target: StockpilePolicyEditTarget,
+        patch: StockpilePolicyPatch,
+    },
+    BeginStockpilePolicyRangeEdit {
+        patch: StockpilePolicyPatch,
+    },
     AdjustTaskPriority {
         entity: Entity,
         expected_work_type: WorkType,
@@ -90,5 +103,18 @@ mod tests {
         assert!(!UiIntent::ToggleDoorLock(Entity::PLACEHOLDER).is_specialized());
         assert!(!UiIntent::SelectArchitectCategory(Some(BuildingCategory::Plant)).is_specialized());
         assert!(!UiIntent::MovePlantBuilding(Entity::PLACEHOLDER).is_specialized());
+        assert!(
+            !UiIntent::ApplyStockpilePolicy {
+                target: StockpilePolicyEditTarget::Single(Entity::PLACEHOLDER),
+                patch: StockpilePolicyPatch::default(),
+            }
+            .is_specialized()
+        );
+        assert!(
+            !UiIntent::BeginStockpilePolicyRangeEdit {
+                patch: StockpilePolicyPatch::default(),
+            }
+            .is_specialized()
+        );
     }
 }

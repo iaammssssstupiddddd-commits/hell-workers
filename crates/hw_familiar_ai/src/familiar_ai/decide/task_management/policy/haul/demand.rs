@@ -155,30 +155,6 @@ pub fn compute_remaining_wall_mud(
     compute_remaining_from_incoming(site_entity, base_demand, ResourceType::StasisMud, context)
 }
 
-pub fn compute_remaining_stockpile_capacity(
-    stockpile_entity: Entity,
-    resource_type: ResourceType,
-    context: &DemandReadContext<'_, '_, '_>,
-) -> u32 {
-    let Ok((_, _, stockpile, stored_items_opt)) =
-        context.queries.storage.stockpiles.get(stockpile_entity)
-    else {
-        return 0;
-    };
-    if stockpile.resource_type.is_some() && stockpile.resource_type != Some(resource_type) {
-        return 0;
-    }
-
-    let stored = stored_items_opt.map(|items| items.len()).unwrap_or(0);
-    let incoming = context
-        .incoming_snapshot
-        .count_exact(stockpile_entity, resource_type) as usize;
-    let shadow_incoming = context.shadow.destination_reserved_total(stockpile_entity);
-    stockpile
-        .capacity
-        .saturating_sub(stored + incoming + shadow_incoming) as u32
-}
-
 pub fn compute_remaining_provisional_wall_mud(
     wall_entity: Entity,
     context: &DemandReadContext<'_, '_, '_>,

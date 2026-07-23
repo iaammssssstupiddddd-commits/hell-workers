@@ -7,27 +7,16 @@
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
 use hw_core::familiar::{ActiveCommand, FamiliarCommand};
-use hw_core::relationships::StoredItems;
 use hw_spatial::StockpileSpatialGrid;
 use hw_world::zones::{AreaBounds, Yard};
 
 use crate::transport_request::producer::stockpile_group::{
     StockpileGroup, StockpileGroupSpatialIndex, build_group_spatial_index, build_stockpile_groups,
 };
-use crate::types::BucketStorage;
-use crate::zone::Stockpile;
+use crate::zone::{Stockpile, StockpilePolicy};
 
-type StockpilesQuery<'w, 's> = Query<
-    'w,
-    's,
-    (
-        Entity,
-        &'static Transform,
-        &'static Stockpile,
-        Option<&'static StoredItems>,
-        Option<&'static BucketStorage>,
-    ),
->;
+type StockpilesQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform), (With<Stockpile>, With<StockpilePolicy>)>;
 
 type ActiveFamiliarDirtyQuery<'w, 's> = Query<
     'w,
@@ -65,12 +54,22 @@ pub struct CachedActiveYards {
     initialized: bool,
 }
 
-/// Stockpile グループと空間インデックス。毎フレーム Perceive 時に 1 回だけ構築される。
+/// Stockpile の構造的な group membership と空間インデックス。
+///
+/// policy 値、内容量、搬入予約の動的集計は保持せず、producer が live component から読む。
 #[derive(Resource, Default)]
 pub struct CachedStockpileGroups {
     pub groups: Vec<StockpileGroup>,
     pub spatial_index: StockpileGroupSpatialIndex,
     initialized: bool,
+    generation: u64,
+}
+
+impl CachedStockpileGroups {
+    #[must_use]
+    pub const fn generation(&self) -> u64 {
+        self.generation
+    }
 }
 
 /// CachedActiveFamiliars を更新する。Idle の Familiar は除外する。
@@ -128,9 +127,17 @@ pub fn update_cached_stockpile_groups_system(
     stockpile_grid: Res<StockpileSpatialGrid>,
     yards_cache: Res<CachedActiveYards>,
     q_stockpiles: StockpilesQuery,
+    q_added_policies: Query<(), Added<StockpilePolicy>>,
+    mut removed_policies: RemovedComponents<StockpilePolicy>,
     mut cache: ResMut<CachedStockpileGroups>,
 ) {
-    if cache.initialized && !stockpile_grid.is_changed() && !yards_cache.is_changed() {
+    let policy_membership_changed =
+        !q_added_policies.is_empty() || removed_policies.read().count() != 0;
+    if cache.initialized
+        && !stockpile_grid.is_changed()
+        && !yards_cache.is_changed()
+        && !policy_membership_changed
+    {
         return;
     }
 
@@ -138,4 +145,94 @@ pub fn update_cached_stockpile_groups_system(
     cache.groups = build_stockpile_groups(&stockpile_grid, active_yards, &q_stockpiles);
     cache.spatial_index = build_group_spatial_index(&cache.groups, active_yards);
     cache.initialized = true;
+    cache.generation = cache.generation.wrapping_add(1);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transport_request::TransportPriority;
+    use crate::zone::StockpileAcceptance;
+    use hw_spatial::SpatialGridOps;
+
+    #[test]
+    fn group_cache_tracks_membership_but_not_live_policy_values() {
+        let mut app = App::new();
+        app.init_resource::<StockpileSpatialGrid>()
+            .init_resource::<CachedActiveYards>()
+            .init_resource::<CachedStockpileGroups>()
+            .add_systems(Update, update_cached_stockpile_groups_system);
+
+        let yard_entity = app.world_mut().spawn_empty().id();
+        let yard = Yard {
+            min: Vec2::splat(-16.0),
+            max: Vec2::splat(16.0),
+        };
+        {
+            let mut yards = app.world_mut().resource_mut::<CachedActiveYards>();
+            yards.data.push((yard_entity, yard));
+            yards.initialized = true;
+        }
+
+        let managed = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                Stockpile {
+                    capacity: 4,
+                    resource_type: None,
+                },
+                StockpilePolicy::for_capacity(4),
+            ))
+            .id();
+        let unmanaged_special = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(1.0, 0.0, 0.0),
+                Stockpile {
+                    capacity: 4,
+                    resource_type: None,
+                },
+            ))
+            .id();
+        {
+            let mut grid = app.world_mut().resource_mut::<StockpileSpatialGrid>();
+            grid.insert(managed, Vec2::ZERO);
+            grid.insert(unmanaged_special, Vec2::new(1.0, 0.0));
+        }
+
+        app.update();
+        let first_generation = app.world().resource::<CachedStockpileGroups>().generation();
+        assert_eq!(first_generation, 1);
+        assert_eq!(
+            app.world().resource::<CachedStockpileGroups>().groups[0].cells,
+            vec![managed]
+        );
+
+        app.update();
+        assert_eq!(
+            app.world().resource::<CachedStockpileGroups>().generation(),
+            first_generation
+        );
+
+        app.world_mut().entity_mut(managed).insert(StockpilePolicy {
+            acceptance: StockpileAcceptance::Any,
+            inbound_priority: TransportPriority::Critical,
+            target_amount: 2,
+            allow_export: false,
+        });
+        app.update();
+        assert_eq!(
+            app.world().resource::<CachedStockpileGroups>().generation(),
+            first_generation
+        );
+
+        app.world_mut()
+            .entity_mut(managed)
+            .remove::<StockpilePolicy>();
+        app.update();
+        let cache = app.world().resource::<CachedStockpileGroups>();
+        assert_eq!(cache.generation(), first_generation + 1);
+        assert!(cache.groups.is_empty());
+    }
 }

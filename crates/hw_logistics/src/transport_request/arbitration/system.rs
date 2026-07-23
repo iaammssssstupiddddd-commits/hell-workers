@@ -10,8 +10,8 @@ use hw_jobs::Designation;
 
 use crate::transport_request::metrics::TransportRequestMetrics;
 use crate::transport_request::{
-    ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportRequest,
-    TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
+    ManualHaulPinnedSource, ManualTransportRequest, ReceiverPolicyTier, TransportDemand,
+    TransportRequest, TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
 use crate::types::{BelongsTo, ResourceItem, Wheelbarrow};
 
@@ -50,6 +50,7 @@ type ArbitrationRequestQuery<'w, 's> = Query<
         Option<&'static WheelbarrowLease>,
         Option<&'static WheelbarrowPendingSince>,
         Option<&'static ManualTransportRequest>,
+        Option<&'static Designation>,
     ),
 >;
 
@@ -89,12 +90,15 @@ pub struct WheelbarrowArbitrationParams<'w, 's> {
         's,
         (
             &'static crate::zone::Stockpile,
+            Option<&'static crate::zone::StockpilePolicy>,
             Option<&'static StoredItems>,
         ),
     >,
     pub q_blueprints: Query<'w, 's, &'static hw_jobs::Blueprint>,
     pub q_transforms: Query<'w, 's, &'static Transform>,
     pub q_incoming: Query<'w, 's, &'static IncomingDeliveries>,
+    pub q_resource_items: Query<'w, 's, &'static ResourceItem>,
+    pub q_receiver_policy_tiers: Query<'w, 's, &'static ReceiverPolicyTier>,
 }
 
 /// Arbitration の時刻・キャッシュ・公開状態を一貫した単位で借用する。
@@ -146,8 +150,13 @@ pub fn wheelbarrow_arbitration_system(
         removed_affects_wheelbarrows(&mut dirty.removed_pushed_by, &dirty.q_wheelbarrow_entities);
     let removed_stored_items = drain_removed(&mut dirty.removed_stored_items);
     let removed_incoming = drain_removed(&mut dirty.removed_incoming);
+    let removed_stockpile_policy = drain_removed(&mut dirty.removed_stockpile_policy);
+    let removed_receiver_policy_tier = drain_removed(&mut dirty.removed_receiver_policy_tier);
 
-    let request_dirty = !dirty.q_request_dirty.is_empty() || removed_requests || removed_leases;
+    let request_dirty = !dirty.q_request_dirty.is_empty()
+        || removed_requests
+        || removed_leases
+        || removed_receiver_policy_tier;
     let free_item_dirty = !dirty.q_free_item_dirty.is_empty()
         || removed_resource_items
         || removed_pinned_source
@@ -158,8 +167,10 @@ pub fn wheelbarrow_arbitration_system(
         || removed_wheelbarrows
         || removed_parked_at
         || removed_pushed_by;
-    let stockpile_dirty =
-        !dirty.q_stockpile_dirty.is_empty() || removed_stored_items || removed_incoming;
+    let stockpile_dirty = !dirty.q_stockpile_dirty.is_empty()
+        || removed_stored_items
+        || removed_incoming
+        || removed_stockpile_policy;
     let interval_due = !resources.runtime.initialized
         || (now - resources.runtime.last_full_eval_secs)
             >= WHEELBARROW_ARBITRATION_FALLBACK_INTERVAL_SECS;
@@ -205,6 +216,8 @@ pub fn wheelbarrow_arbitration_system(
                 q_stockpiles: &p.q_stockpiles,
                 q_blueprints: &p.q_blueprints,
                 q_incoming: &p.q_incoming,
+                q_resource_items: &p.q_resource_items,
+                q_receiver_policy_tiers: &p.q_receiver_policy_tiers,
             },
             CollectCandidatesContext {
                 available_wheelbarrows: &available_wheelbarrows,
@@ -227,6 +240,8 @@ pub fn wheelbarrow_arbitration_system(
             GrantLeaseQueries {
                 q_stockpiles: &p.q_stockpiles,
                 q_incoming: &p.q_incoming,
+                q_resource_items: &p.q_resource_items,
+                q_belongs: &p.q_belongs,
                 q_transforms: &p.q_transforms,
             },
             &mut outcomes,
@@ -254,8 +269,15 @@ pub fn wheelbarrow_arbitration_system(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::ResourceType;
+    use crate::SharedResourceCache;
+    use crate::transport_request::{
+        TransportPolicy, TransportPriority, TransportRequestKind, WheelbarrowLease,
+    };
+    use crate::types::{BelongsTo, ResourceType, Wheelbarrow};
+    use crate::zone::{Stockpile, StockpileAcceptance, StockpilePolicy};
     use bevy::app::ScheduleRunnerPlugin;
+    use hw_core::relationships::ParkedAt;
+    use hw_jobs::{Designation, TaskSlots, WorkType};
 
     #[derive(Component)]
     struct DirtyMarker;
@@ -298,5 +320,275 @@ mod tests {
         let report = app.world().resource::<RemovalReport>();
         assert!(report.affects_resource_items);
         assert_eq!(report.unread_after_check, 0);
+    }
+
+    fn arbitration_test_app() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_once()));
+        app.init_resource::<SharedResourceCache>()
+            .init_resource::<TransportRequestMetrics>()
+            .init_resource::<WheelbarrowArbitrationRuntime>()
+            .init_resource::<WheelbarrowArbitrationDiagnostics>()
+            .add_systems(Update, wheelbarrow_arbitration_system);
+        app
+    }
+
+    fn spawn_managed_stockpile(app: &mut App, owner: Entity) -> Entity {
+        app.world_mut()
+            .spawn((
+                Transform::default(),
+                Stockpile {
+                    capacity: 3,
+                    resource_type: None,
+                },
+                StockpilePolicy {
+                    acceptance: StockpileAcceptance::Any,
+                    inbound_priority: TransportPriority::Normal,
+                    target_amount: 3,
+                    allow_export: true,
+                },
+                BelongsTo(owner),
+            ))
+            .id()
+    }
+
+    fn set_stockpile_capacity(app: &mut App, stockpile: Entity, capacity: usize) {
+        let mut stockpile_entity = app.world_mut().entity_mut(stockpile);
+        stockpile_entity
+            .get_mut::<Stockpile>()
+            .expect("stockpile")
+            .capacity = capacity;
+        stockpile_entity
+            .get_mut::<StockpilePolicy>()
+            .expect("stockpile policy")
+            .target_amount = capacity;
+    }
+
+    fn spawn_deposit_request(
+        app: &mut App,
+        anchor: Entity,
+        resource_type: ResourceType,
+        desired_slots: u32,
+        enabled: bool,
+    ) -> Entity {
+        let mut entity = app.world_mut().spawn((
+            Transform::default(),
+            TransportRequest {
+                kind: TransportRequestKind::DepositToStockpile,
+                anchor,
+                resource_type,
+                issued_by: Entity::PLACEHOLDER,
+                priority: TransportPriority::Normal,
+                stockpile_group: vec![anchor],
+            },
+            ReceiverPolicyTier(TransportPriority::Normal),
+            TransportDemand {
+                desired_slots,
+                inflight: 0,
+            },
+            TransportRequestState::Pending,
+            TransportPolicy::default(),
+        ));
+        if enabled {
+            entity.insert((
+                Designation {
+                    work_type: WorkType::Haul,
+                },
+                TaskSlots::new(desired_slots),
+            ));
+        }
+        entity.id()
+    }
+
+    fn spawn_unowned_items(app: &mut App, resource_type: ResourceType) -> Vec<Entity> {
+        (0..3)
+            .map(|offset| {
+                app.world_mut()
+                    .spawn((
+                        Transform::from_xyz(offset as f32, 0.0, 0.0),
+                        Visibility::Visible,
+                        ResourceItem(resource_type),
+                    ))
+                    .id()
+            })
+            .collect()
+    }
+
+    fn spawn_parked_wheelbarrow(app: &mut App) -> Entity {
+        let parking = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .spawn((
+                Transform::default(),
+                Wheelbarrow { capacity: 10 },
+                ParkedAt(parking),
+            ))
+            .id()
+    }
+
+    #[test]
+    fn owned_stockpile_request_grants_a_lease_from_unowned_ground_items() {
+        let mut app = arbitration_test_app();
+        let owner = app.world_mut().spawn_empty().id();
+        let stockpile = spawn_managed_stockpile(&mut app, owner);
+        let request = spawn_deposit_request(&mut app, stockpile, ResourceType::Wood, 3, true);
+        let items = spawn_unowned_items(&mut app, ResourceType::Wood);
+        spawn_parked_wheelbarrow(&mut app);
+
+        app.update();
+
+        let lease = app
+            .world()
+            .get::<WheelbarrowLease>(request)
+            .expect("unowned items must be eligible for an owned ordinary stockpile");
+        assert_eq!(lease.items.len(), 3);
+        assert!(lease.items.iter().all(|item| items.contains(item)));
+        assert_eq!(
+            app.world()
+                .resource::<WheelbarrowArbitrationDiagnostics>()
+                .outcome(request),
+            Some(WheelbarrowArbitrationOutcome::LeaseGranted)
+        );
+    }
+
+    #[test]
+    fn grant_time_shadow_prevents_two_requests_from_overbooking_one_physical_cell() {
+        let mut app = arbitration_test_app();
+        let owner = app.world_mut().spawn_empty().id();
+        let stockpile = spawn_managed_stockpile(&mut app, owner);
+        let wood_request = spawn_deposit_request(&mut app, stockpile, ResourceType::Wood, 3, true);
+        let rock_request = spawn_deposit_request(&mut app, stockpile, ResourceType::Rock, 3, true);
+        spawn_unowned_items(&mut app, ResourceType::Wood);
+        spawn_unowned_items(&mut app, ResourceType::Rock);
+        spawn_parked_wheelbarrow(&mut app);
+        spawn_parked_wheelbarrow(&mut app);
+
+        app.update();
+
+        let leases: Vec<_> = [wood_request, rock_request]
+            .into_iter()
+            .filter_map(|request| app.world().get::<WheelbarrowLease>(request))
+            .collect();
+        assert_eq!(leases.len(), 1);
+        assert_eq!(leases[0].items.len(), 3);
+        assert_eq!(
+            leases[0].destination,
+            crate::transport_request::WheelbarrowDestination::Stockpile(stockpile)
+        );
+
+        let diagnostics = app.world().resource::<WheelbarrowArbitrationDiagnostics>();
+        let outcomes = [
+            diagnostics.outcome(wood_request),
+            diagnostics.outcome(rock_request),
+        ];
+        assert_eq!(
+            outcomes
+                .iter()
+                .filter(|outcome| **outcome == Some(WheelbarrowArbitrationOutcome::LeaseGranted))
+                .count(),
+            1
+        );
+        assert_eq!(
+            outcomes
+                .iter()
+                .filter(|outcome| {
+                    **outcome == Some(WheelbarrowArbitrationOutcome::CapacityReserved)
+                })
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn grant_keeps_owned_items_with_a_compatible_cell_in_a_mixed_owner_group() {
+        let mut app = arbitration_test_app();
+        let owner_a = app.world_mut().spawn_empty().id();
+        let owner_b = app.world_mut().spawn_empty().id();
+        let stockpile_a = spawn_managed_stockpile(&mut app, owner_a);
+        let stockpile_b = spawn_managed_stockpile(&mut app, owner_b);
+        set_stockpile_capacity(&mut app, stockpile_a, 4);
+        let request = spawn_deposit_request(&mut app, stockpile_a, ResourceType::Wood, 3, true);
+        app.world_mut()
+            .get_mut::<TransportRequest>(request)
+            .expect("transport request")
+            .stockpile_group = vec![stockpile_a, stockpile_b];
+        for item in spawn_unowned_items(&mut app, ResourceType::Wood) {
+            app.world_mut().entity_mut(item).insert(BelongsTo(owner_a));
+        }
+        spawn_parked_wheelbarrow(&mut app);
+
+        app.update();
+
+        let lease = app
+            .world()
+            .get::<WheelbarrowLease>(request)
+            .expect("the compatible owner cell must receive the lease");
+        assert_eq!(
+            lease.destination,
+            crate::transport_request::WheelbarrowDestination::Stockpile(stockpile_a),
+            "the smaller best-fit cell owned by B must not receive A-owned items"
+        );
+    }
+
+    #[test]
+    fn pending_request_without_designation_releases_its_lease_and_reports_demand_gone() {
+        let mut app = arbitration_test_app();
+        let owner = app.world_mut().spawn_empty().id();
+        let stockpile = spawn_managed_stockpile(&mut app, owner);
+        let items = spawn_unowned_items(&mut app, ResourceType::Wood);
+        let wheelbarrow = spawn_parked_wheelbarrow(&mut app);
+        let request = spawn_deposit_request(&mut app, stockpile, ResourceType::Wood, 3, false);
+        let live_request = spawn_deposit_request(&mut app, stockpile, ResourceType::Rock, 3, true);
+        spawn_unowned_items(&mut app, ResourceType::Rock);
+        app.world_mut().entity_mut(request).insert((
+            WheelbarrowLease {
+                wheelbarrow,
+                items,
+                source_pos: Vec2::ZERO,
+                destination: crate::transport_request::WheelbarrowDestination::Stockpile(stockpile),
+                lease_until: f64::MAX,
+            },
+            WheelbarrowPendingSince(0.0),
+        ));
+
+        app.update();
+
+        let request_ref = app.world().entity(request);
+        assert!(!request_ref.contains::<WheelbarrowLease>());
+        assert!(!request_ref.contains::<WheelbarrowPendingSince>());
+        assert_eq!(
+            app.world()
+                .get::<WheelbarrowLease>(live_request)
+                .map(|lease| lease.wheelbarrow),
+            Some(wheelbarrow),
+            "the released wheelbarrow must be reusable by a live request in the same pass"
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WheelbarrowArbitrationDiagnostics>()
+                .outcome(request),
+            Some(WheelbarrowArbitrationOutcome::DemandGone)
+        );
+    }
+
+    #[test]
+    fn zero_demand_pending_request_with_designation_cannot_gain_a_lease() {
+        let mut app = arbitration_test_app();
+        let owner = app.world_mut().spawn_empty().id();
+        let stockpile = spawn_managed_stockpile(&mut app, owner);
+        let request = spawn_deposit_request(&mut app, stockpile, ResourceType::Wood, 0, true);
+        spawn_unowned_items(&mut app, ResourceType::Wood);
+        spawn_parked_wheelbarrow(&mut app);
+
+        app.update();
+
+        let request_ref = app.world().entity(request);
+        assert!(!request_ref.contains::<WheelbarrowLease>());
+        assert!(!request_ref.contains::<WheelbarrowPendingSince>());
+        assert_eq!(
+            app.world()
+                .resource::<WheelbarrowArbitrationDiagnostics>()
+                .outcome(request),
+            Some(WheelbarrowArbitrationOutcome::DemandGone)
+        );
     }
 }

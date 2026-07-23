@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 pub mod area_edit;
 pub mod intents;
-pub use intents::UiIntent;
+pub use intents::{StockpilePolicyEditTarget, UiIntent};
 pub mod components;
 pub mod interaction;
 pub mod list;
@@ -64,6 +64,7 @@ pub fn reset_for_world_replace(world: &mut World) {
     }
 
     clear_hover_action_targets(world);
+    clear_stockpile_policy_button_targets(world);
     reset_existing_resource::<components::UiInputState>(world);
     reset_existing_resource::<components::SoulRenameState>(world);
     reset_existing_resource::<panels::info_panel::InfoPanelState>(world);
@@ -87,6 +88,21 @@ pub fn reset_for_world_replace(world: &mut World) {
         // A fresh resource drops both the active focus and buffered focus
         // transitions that could otherwise mention a removed rename field.
         world.insert_resource(InputFocus::default());
+    }
+}
+
+fn clear_stockpile_policy_button_targets(world: &mut World) {
+    let mut query = world.query::<&mut components::MenuButton>();
+    for mut button in query.iter_mut(world) {
+        if matches!(
+            button.0,
+            UiIntent::ApplyStockpilePolicy { .. } | UiIntent::BeginStockpilePolicyRangeEdit { .. }
+        ) {
+            button.0 = UiIntent::ApplyStockpilePolicy {
+                target: StockpilePolicyEditTarget::Single(Entity::PLACEHOLDER),
+                patch: hw_logistics::StockpilePolicyPatch::default(),
+            };
+        }
     }
 }
 
@@ -179,6 +195,25 @@ mod tests {
             .id();
         let unread_text = world
             .spawn((Text::new("通知 (1)"), notifications::NotificationUnreadText))
+            .id();
+        let stockpile_policy_button = world
+            .spawn(components::MenuButton(UiIntent::ApplyStockpilePolicy {
+                target: StockpilePolicyEditTarget::Single(stale_simulation_entity),
+                patch: hw_logistics::StockpilePolicyPatch {
+                    target_amount: Some(12),
+                    ..default()
+                },
+            }))
+            .id();
+        let stockpile_policy_range_button = world
+            .spawn(components::MenuButton(
+                UiIntent::BeginStockpilePolicyRangeEdit {
+                    patch: hw_logistics::StockpilePolicyPatch {
+                        target_amount: Some(12),
+                        ..default()
+                    },
+                },
+            ))
             .id();
 
         world.insert_resource(components::SoulRenameState {
@@ -323,6 +358,18 @@ mod tests {
             Display::None
         );
         assert_eq!(world.get::<Text>(unread_text).unwrap().0, "通知");
+        for button in [stockpile_policy_button, stockpile_policy_range_button] {
+            let UiIntent::ApplyStockpilePolicy { target, patch } =
+                world.get::<components::MenuButton>(button).unwrap().0
+            else {
+                panic!("stockpile policy button retained its pre-reset action");
+            };
+            assert_eq!(
+                target,
+                StockpilePolicyEditTarget::Single(Entity::PLACEHOLDER)
+            );
+            assert_eq!(patch, hw_logistics::StockpilePolicyPatch::default());
+        }
         assert!(
             world
                 .resource::<selection::PlacementFeedbackState>()

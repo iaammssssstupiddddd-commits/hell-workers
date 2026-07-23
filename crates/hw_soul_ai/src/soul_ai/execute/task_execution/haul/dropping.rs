@@ -1,6 +1,9 @@
 use crate::soul_ai::execute::task_execution::chain;
 use crate::soul_ai::execute::task_execution::common::drop_item;
 use crate::soul_ai::execute::task_execution::context::{TaskExecutionContext, TaskHandlerControl};
+use crate::soul_ai::execute::task_execution::stockpile_policy::{
+    RuntimeStockpileInboundInput, evaluate_runtime_stockpile_inbound, inbound_reservation_snapshot,
+};
 use crate::soul_ai::execute::task_execution::transport_common::{cancel, reservation};
 use bevy::prelude::*;
 use hw_core::constants::Z_ITEM_PICKUP;
@@ -9,6 +12,7 @@ use hw_logistics::{
     ResourceType, count_nearby_ground_resources, floor_site_tile_demand,
     provisional_wall_mud_demand, wall_site_tile_demand,
 };
+use std::collections::HashSet;
 
 fn floor_site_can_accept(
     ctx: &TaskExecutionContext,
@@ -106,20 +110,26 @@ pub(super) fn handle_dropping_phase(
             .and_then(|(_, _, _, _, resource_item_opt, _, _)| {
                 resource_item_opt.map(|resource_item| resource_item.0)
             });
+    let is_bucket_storage = ctx.queries.storage.bucket_storages.get(stockpile).is_ok();
+    let current_policy = ctx.queries.stockpile_policies.get(stockpile).ok().copied();
+    let stock_belongs = q_belongs.get(stockpile).ok().map(|belongs| belongs.0);
+    let item_belongs = q_belongs.get(item).ok().map(|belongs| belongs.0);
+    let reservation_snapshot = item_resource_type.map(|resource_type| {
+        inbound_reservation_snapshot(
+            stockpile,
+            resource_type,
+            &HashSet::from([item]),
+            &ctx.queries.reservation.incoming_deliveries_query,
+            &ctx.queries.reservation.resources,
+        )
+    });
 
     if let Ok((_, stock_transform, mut stockpile_comp, stored_items_opt)) =
         ctx.queries.storage.stockpiles.get_mut(stockpile)
     {
         let current_count = stored_items_opt.map(|si| si.len()).unwrap_or(0);
-        let is_bucket_storage = ctx.queries.storage.bucket_storages.get(stockpile).is_ok();
-        let stock_belongs = q_belongs.get(stockpile).ok().map(|b| b.0);
-
-        let item_info = q_targets.get(item).ok().map(|(_, _, _, _, ri, _, _)| {
-            let res_type = ri.map(|r| r.0);
-            let belongs = q_belongs.get(item).ok().map(|b| b.0);
-            (res_type, belongs)
-        });
-        let can_drop = if let Some((Some(res_type), item_belongs)) = item_info {
+        let item_info = item_resource_type.map(|resource_type| (resource_type, item_belongs));
+        let can_drop = if let Some((res_type, item_belongs)) = item_info {
             let belongs_match = item_belongs == stock_belongs;
             let accepts_unowned_for_owned = item_belongs.is_none() && stock_belongs.is_some();
 
@@ -136,38 +146,52 @@ pub(super) fn handle_dropping_phase(
                 belongs_match || accepts_unowned_for_owned
             };
 
-            let type_allowed = if is_bucket_storage {
+            let incoming_count = reservation_snapshot
+                .map(|snapshot| snapshot.incoming_reserved)
+                .unwrap_or(0);
+            let type_and_capacity_allowed = if is_bucket_storage {
                 let bucket_storage_type_ok = matches!(
                     stockpile_comp.resource_type,
                     None | Some(hw_logistics::ResourceType::BucketEmpty)
                         | Some(hw_logistics::ResourceType::BucketWater)
                 );
-                is_bucket_item && bucket_storage_type_ok
+                is_bucket_item
+                    && bucket_storage_type_ok
+                    && (current_count + incoming_count) <= stockpile_comp.capacity
+            } else if let (Some(policy), Some(reservations)) =
+                (current_policy, reservation_snapshot)
+            {
+                res_type.can_store_in_stockpile()
+                    && evaluate_runtime_stockpile_inbound(RuntimeStockpileInboundInput {
+                        policy,
+                        capacity: stockpile_comp.capacity,
+                        stored_amount: current_count,
+                        stored_resource: stockpile_comp.resource_type,
+                        transfer_resource: res_type,
+                        requested_amount: 1,
+                        reservations,
+                        cycle_reserved: 0,
+                        cycle_reserved_other_resource: 0,
+                    })
+                    .allowed_amount
+                        == 1
             } else {
-                type_match && res_type.can_store_in_stockpile()
+                type_match
+                    && res_type.can_store_in_stockpile()
+                    && (current_count + incoming_count) <= stockpile_comp.capacity
             };
 
-            let incoming_count = ctx
-                .queries
-                .reservation
-                .incoming_deliveries_query
-                .get(stockpile)
-                .ok()
-                .map(|(_, incoming)| incoming.len())
-                .unwrap_or(0);
-            let capacity_ok = (current_count + incoming_count) <= stockpile_comp.capacity;
-
-            ownership_ok && type_allowed && capacity_ok
+            ownership_ok && type_and_capacity_allowed
         } else {
             false
         };
 
         if can_drop {
             if !is_bucket_storage
-                && stockpile_comp.resource_type.is_none()
+                && (current_count == 0 || stockpile_comp.resource_type.is_none())
                 && let Some((res_type, _)) = item_info
             {
-                stockpile_comp.resource_type = res_type;
+                stockpile_comp.resource_type = Some(res_type);
             }
 
             if !is_bucket_storage

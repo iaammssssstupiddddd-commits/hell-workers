@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-07-20）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-07-23）。
 
 ## 新規計画書の作り方
 
@@ -23,8 +23,11 @@
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Phase 3 進行中（未完: MS-3-5 / 7 / 8 / 9、受入残件: MS-3-6 / 10） | 3D-RtT 移行ロードマップ |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
+| [familiar-operation-policy-plan-2026-07-20.md](familiar-operation-policy-plan-2026-07-20.md) | Draft | Familiar の運用値を永続化し、WorkType ごとの役割方針を追加する計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できない問題を解決する計画。 |
+| [soul-energy-control-plan-2026-07-20.md](soul-energy-control-plan-2026-07-20.md) | Draft | Soul Spa 稼働枠と優先度付き個別給電を導入する計画。 |
+| [stockpile-policy-manual-acceptance-plan-2026-07-23.md](stockpile-policy-manual-acceptance-plan-2026-07-23.md) | Blocked | B1実装完了後の実機受入結果、不合格、残件を自動回帰と分離して追跡する計画。 |
 | [task-dashboard-performance-validation-plan-2026-07-20.md](task-dashboard-performance-validation-plan-2026-07-20.md) | Draft | A3で未整備のdashboard mode別AI work counterと実renderer / allocator計測を、再現可能なperf harnessへ載せるの計画。 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
@@ -71,6 +74,7 @@
 | [archive/large-source-file-split-plan-2026-07-17.md](archive/large-source-file-split-plan-2026-07-17.md) | Archived | 500行以上の実装ファイル分割計画 |
 | [archive/runtime-correctness-contracts-plan-2026-07-12.md](archive/runtime-correctness-contracts-plan-2026-07-12.md) | Archived | 実行時正しさ契約リファクタリング計画 |
 | [archive/save-load-hardening-plan-2026-07-12.md](archive/save-load-hardening-plan-2026-07-12.md) | Archived | Save/Load境界強化・互換性リファクタリング計画 |
+| [archive/stockpile-policy-plan-2026-07-20.md](archive/stockpile-policy-plan-2026-07-20.md) | Archived | 現在在庫と受入方針が未分離で、搬送経路ごとの判定も統一されていないの計画。 |
 | [archive/structural-maintainability-followups-plan-2026-07-12.md](archive/structural-maintainability-followups-plan-2026-07-12.md) | Archived | 構造・保守性・品質ゲート フォローアップ計画 |
 | [archive/system-wide-performance-followups-plan-2026-07-07.md](archive/system-wide-performance-followups-plan-2026-07-07.md) | Archived | 全体パフォーマンス改善フォローアップ計画書 |
 | [archive/system-wide-runtime-performance-plan-2026-07-12.md](archive/system-wide-runtime-performance-plan-2026-07-12.md) | Archived | 全体ランタイム・ホットパス性能改善計画書 |

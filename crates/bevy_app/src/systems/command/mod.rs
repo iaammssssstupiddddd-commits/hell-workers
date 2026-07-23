@@ -6,6 +6,7 @@ pub mod area_selection;
 pub mod assign_task;
 pub mod indicators;
 pub mod input;
+pub mod stockpile_policy;
 pub mod visualization;
 pub mod zone_placement;
 
@@ -70,6 +71,11 @@ pub use indicators::{
 };
 /// 入力: Familiar コマンド入力 orchestration
 pub use input::familiar_command_input_system;
+/// Stockpile policy: root target resolution and rectangular input ownership.
+pub use stockpile_policy::{
+    StockpilePolicyRangeEditState, resolve_stockpile_policy_targets,
+    stockpile_policy_range_selection_system,
+};
 /// 視覚フィードバック: designation / command visual
 pub use visualization::{designation_visual_system, familiar_command_visual_system};
 /// ゾーン操作: ECS apply（バリデーション helper は `hw_world::zone_ops` 所有）

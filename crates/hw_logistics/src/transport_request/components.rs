@@ -14,6 +14,14 @@ pub enum TransportPriority {
     Critical = 30,
 }
 
+/// Runtime carrier for the receiver policy tier that contributes to worker ranking.
+///
+/// This is intentionally separate from `TransportRequest::priority`: request priority also
+/// contains kind-specific maintenance/manual semantics, while this component exists only on
+/// policy-driven receiver requests. It is derived again by producers after load.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReceiverPolicyTier(pub TransportPriority);
+
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
 pub struct TransportRequest {

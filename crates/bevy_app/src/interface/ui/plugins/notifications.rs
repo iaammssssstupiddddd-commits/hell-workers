@@ -23,6 +23,7 @@ impl Plugin for UiNotificationsPlugin {
             Update,
             (
                 crate::interface::ui::notifications::adapt_save_load_outcomes,
+                crate::interface::ui::notifications::adapt_stockpile_policy_change_outcomes,
                 crate::interface::ui::panels::task_list::adapt_task_action_outcomes,
             )
                 .in_set(NotificationSystemSet::Adapt),
@@ -83,6 +84,7 @@ mod tests {
         app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
             .add_message::<SaveLoadOutcome>()
             .add_message::<TaskActionOutcome>()
+            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>()
             .init_resource::<PresentTrace>()
@@ -100,6 +102,7 @@ mod tests {
         app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
             .add_message::<SaveLoadOutcome>()
             .add_message::<TaskActionOutcome>()
+            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>();
         let outcome = SaveLoadOutcome {
@@ -123,6 +126,7 @@ mod tests {
         app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
             .add_message::<SaveLoadOutcome>()
             .add_message::<TaskActionOutcome>()
+            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>();
         let entity = app.world_mut().spawn_empty().id();
@@ -143,5 +147,34 @@ mod tests {
             center.toast_entries().next().unwrap().retention,
             NotificationRetention::ToastOnly
         );
+    }
+
+    #[test]
+    fn stockpile_policy_outcome_becomes_a_warning_toast_in_the_same_update() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
+            .add_message::<SaveLoadOutcome>()
+            .add_message::<TaskActionOutcome>()
+            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
+            .init_resource::<UiTheme>()
+            .init_resource::<UiInputState>();
+        app.world_mut()
+            .write_message(hw_logistics::StockpilePolicyChangeOutcome {
+                requested: 2,
+                unique: 2,
+                applied: 1,
+                unchanged: 0,
+                skipped_stale: 0,
+                skipped_unmanaged: 1,
+                target_clamped: 0,
+            });
+
+        app.update();
+
+        let center = app.world().resource::<NotificationCenter>();
+        let toast = center.toast_entries().next().expect("warning toast");
+        assert_eq!(toast.severity, NotificationSeverity::Warning);
+        assert_eq!(toast.retention, NotificationRetention::ToastOnly);
+        assert!(toast.body.contains("unsupported or special storage"));
     }
 }

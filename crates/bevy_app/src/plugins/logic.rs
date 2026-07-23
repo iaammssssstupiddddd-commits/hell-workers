@@ -3,10 +3,11 @@
 use crate::entities::familiar::{familiar_movement, familiar_spawning_system};
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
-    AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession, ZoneRemovalPreviewState,
-    assign_task_system, blueprint_cancel_cleanup_system, familiar_command_input_system,
-    task_area_edit_history_shortcuts_system, task_area_selection_system, zone_placement_system,
-    zone_removal_system,
+    AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession,
+    StockpilePolicyRangeEditState, ZoneRemovalPreviewState, assign_task_system,
+    blueprint_cancel_cleanup_system, familiar_command_input_system,
+    stockpile_policy_range_selection_system, task_area_edit_history_shortcuts_system,
+    task_area_selection_system, zone_placement_system, zone_removal_system,
 };
 use crate::systems::dream_tree_planting::dream_tree_planting_system;
 use crate::systems::energy::grid_lifecycle::{
@@ -83,6 +84,7 @@ impl Plugin for LogicPlugin {
         app.init_resource::<AreaEditClipboard>();
         app.init_resource::<AreaEditPresets>();
         app.init_resource::<ZoneRemovalPreviewState>();
+        app.init_resource::<StockpilePolicyRangeEditState>();
         app.init_resource::<crate::entities::familiar::FamiliarColorAllocator>();
         app.init_resource::<RoomDetectionState>();
         app.init_resource::<RoomTileLookup>();
@@ -128,6 +130,7 @@ impl Plugin for LogicPlugin {
             (
                 assign_task_system.run_if(in_state(PlayMode::TaskDesignation)),
                 familiar_command_input_system,
+                stockpile_policy_range_selection_system,
                 task_area_selection_system,
                 zone_placement_system.run_if(in_state(PlayMode::TaskDesignation)),
                 zone_removal_system.run_if(in_state(PlayMode::TaskDesignation)),

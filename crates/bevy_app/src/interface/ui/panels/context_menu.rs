@@ -18,6 +18,7 @@ type BuildingOrBlueprintQuery<'w, 's> = Query<
     Or<(
         With<crate::systems::jobs::Building>,
         With<crate::systems::jobs::Blueprint>,
+        With<hw_logistics::StockpilePolicy>,
     )>,
 >;
 

@@ -45,6 +45,7 @@ dual 通知の Producer は `publish_*` helper を使う。
 |:---|:---|:---|:---|:---|
 | `SaveLoadOutcome` | `bevy_app::systems::save` / `SavePlugin` | `Last::SaveLoadApplySet` dispatcher | root通知adapter（次の`Update::NotificationSystemSet::Adapt`） | requestごとにterminal resultを1件。world replacementの全reset後に発行し、targetは安全なファイル名label、failureはraw textを持たない10分類 |
 | `TaskActionOutcome` | `bevy_app::interface::ui::panels::task_list::actions` / `MessagesPlugin` | `apply_task_action_intents_system` | task action通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | priority/cancel intentごとに1件。成功、stale、unsupported、pause、captureをtyped resultで表し、Entity/action/resultをdedupe keyへ含める |
+| `StockpilePolicyChangeOutcome` | `hw_logistics::stockpile_policy_change` / `MessagesPlugin` | `apply_stockpile_policy_change_requests_system` | Stockpile policy通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | policy change requestごとに1件。変更、同値、stale、特殊設備、capacity clamp、重複を件数だけで表し、player-safeなToastOnly通知へ変換する |
 | `UserFacingNotification` | `hw_ui::notifications` / `HwUiPlugin` | save/load root adapterなど | `NotificationSystemSet::Reduce` → `Present`（同じUpdate） | 表示専用Message。stable key、severity、safe title/body、retentionを持つ。2秒dedupe、toast 3件、重要履歴64件へreduce |
 
 配置プレビューは連続状態であり、毎フレームMessageを発行しない。`PlacementFeedbackState` resourceの
@@ -75,6 +76,7 @@ dual 通知の Producer は `publish_*` helper を使う。
 | `FamiliarSpawnEvent` | `Message`（`bevy_app::entities::familiar`、root inventory登録） | startup / debug spawn | `familiar_spawning_system` | 位置・Familiar種別・fixture random keyを渡し、Familiar shellを生成 |
 | `RequestConversation` | `Message`（`hw_visual::speech::conversation::events`、root inventory登録） | `check_conversation_triggers` | `handle_conversation_requests` | initiator/targetを再検証して会話participant状態を開始 |
 | `UiIntent::AdjustTaskPriority` / `CancelTask` | `Message` variant (`hw_ui::UiIntent`) | task dashboard action button system | root `handle_ui_intent` 後の `apply_task_action_intents_system` | Entity、expected WorkType、adjustment/cancel kindを渡す。Pause/Modal中もreaderをdrainし、live capabilityを再検証して`TaskActionOutcome`を1件発行する |
+| `StockpilePolicyChangeRequest` | `Message` (`hw_logistics::stockpile_policy_change`、root inventory登録) | root `handle_ui_intent`（単一・矩形の `UiIntent::ApplyStockpilePolicy` を変換） | `apply_stockpile_policy_change_requests_system`（Interface、通知Adapt前） | targetsを決定的に重複除去し、生存と`Stockpile + StockpilePolicy`を再検証してpatchを適用。同値componentは書き戻さず、在庫relationshipを変更しない |
 
 ---
 

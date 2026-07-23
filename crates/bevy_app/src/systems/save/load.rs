@@ -337,12 +337,21 @@ mod tests {
     use hw_core::logistics::ResourceType;
     use hw_core::population::PopulationManager;
     use hw_core::soul::DreamPool;
-    use hw_logistics::types::{ReservedForTask, ResourceItem};
+    use hw_jobs::Building;
+    use hw_jobs::mud_mixer::MudMixerStorage;
+    use hw_logistics::types::{
+        BelongsTo, BucketStorage, PendingBelongsToBlueprint, ReservedForTask, ResourceItem,
+    };
+    use hw_logistics::{Stockpile, StockpilePolicy};
     use hw_world::GeneratedWorldLayout;
     use hw_world::WorldMap;
+    use hw_world::Yard;
 
     use super::super::format::{SaveHeader, encode_save_file};
-    use super::super::schema::{build_persisted_world, register_save_types};
+    use super::super::rehydrate::rehydrate_stockpile_policies;
+    use super::super::schema::{
+        build_persisted_world, collect_persisted_entities, register_save_types,
+    };
 
     fn classified(error: LoadExecutionError) -> SaveLoadFailureKind {
         error.failure_kind()
@@ -379,6 +388,13 @@ mod tests {
             .components
             .push(Box::new(ReservedForTask));
         dynamic_world.serialize(&registry).unwrap()
+    }
+
+    fn stockpile(capacity: usize) -> Stockpile {
+        Stockpile {
+            capacity,
+            resource_type: None,
+        }
     }
 
     #[test]
@@ -541,6 +557,82 @@ mod tests {
         let registry = type_registry.read();
         let resaved_v1_body = prepared.dynamic_world.serialize(&registry).unwrap();
         assert!(!resaved_v1_body.contains(ReservedForTask::type_path()));
+    }
+
+    #[test]
+    fn missing_stockpile_policy_migrates_only_yard_owned_cells_for_v0_and_v1() {
+        use bevy::ecs::entity::EntityHashMap;
+
+        let mut source = legacy_loader_test_app();
+        let (ordinary, tank, legacy_companion, mixer, pending_companion) = {
+            let world = source.world_mut();
+            let yard = world
+                .spawn(Yard {
+                    min: Vec2::ZERO,
+                    max: Vec2::splat(10.0),
+                })
+                .id();
+            let ordinary = world.spawn((stockpile(6), BelongsTo(yard))).id();
+            let tank = world.spawn((Building::default(), stockpile(4))).id();
+            let legacy_companion = world
+                .spawn((stockpile(2), BucketStorage, BelongsTo(tank)))
+                .id();
+            let mixer = world
+                .spawn((
+                    Building::default(),
+                    MudMixerStorage::default(),
+                    stockpile(3),
+                ))
+                .id();
+            let pending_companion = world
+                .spawn((stockpile(2), PendingBelongsToBlueprint(tank)))
+                .id();
+            (ordinary, tank, legacy_companion, mixer, pending_companion)
+        };
+        let type_registry = source.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let roots = collect_persisted_entities(source.world_mut());
+        let body = build_persisted_world(source.world(), &registry, roots.into_iter())
+            .serialize(&registry)
+            .unwrap();
+        drop(registry);
+
+        let fixtures = [
+            body.clone(),
+            encode_save_file(SaveHeader::current(42), &body),
+        ];
+        for contents in fixtures {
+            let loader = legacy_loader_test_app();
+            let prepared = prepare_load_from_str(loader.world(), &contents).unwrap();
+            let type_registry = loader.world().resource::<AppTypeRegistry>().clone();
+            let registry = type_registry.read();
+            let mut loaded = World::new();
+            let mut entity_map = EntityHashMap::default();
+            prepared
+                .dynamic_world
+                .write_to_world_with(&mut loaded, &mut entity_map, &registry)
+                .unwrap();
+            drop(registry);
+
+            rehydrate_stockpile_policies(&mut loaded);
+
+            assert_eq!(
+                loaded.get::<StockpilePolicy>(entity_map[&ordinary]),
+                Some(&StockpilePolicy::for_capacity(6))
+            );
+            for special in [tank, legacy_companion, mixer, pending_companion] {
+                assert!(
+                    loaded
+                        .get::<StockpilePolicy>(entity_map[&special])
+                        .is_none()
+                );
+            }
+            assert!(
+                loaded
+                    .get::<BucketStorage>(entity_map[&legacy_companion])
+                    .is_none()
+            );
+        }
     }
 
     #[test]

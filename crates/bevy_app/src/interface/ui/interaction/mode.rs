@@ -238,6 +238,12 @@ pub(super) fn build_mode_text(ctx: ModeCtxRefs, info: ModeDisplayInfo) -> String
                 "Mode: Dream Planting (Drag to select area)".to_string()
             }
             TaskMode::DreamPlanting(Some(_)) => "Mode: Dream Planting (Dragging...)".to_string(),
+            TaskMode::StockpilePolicyEdit(None) => {
+                "Mode: Stockpile Policy (Drag one area, Esc:Cancel)".to_string()
+            }
+            TaskMode::StockpilePolicyEdit(Some(_)) => {
+                "Mode: Stockpile Policy (Dragging...)".to_string()
+            }
             TaskMode::SoulSpaPlace(_) => "Mode: Soul Spa (Click to place 2×2)".to_string(),
             _ => "Mode: Task".to_string(),
         },

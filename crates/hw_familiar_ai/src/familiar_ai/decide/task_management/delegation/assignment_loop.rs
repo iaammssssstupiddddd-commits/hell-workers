@@ -13,6 +13,9 @@ use std::sync::atomic::{AtomicU32, Ordering as AtomicOrdering};
 use super::{DelegationDiagnosticsCtx, DelegationEnvCtx, DelegationScratchCtx};
 use crate::familiar_ai::decide::task_management::CandidateRejectReason;
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
+use crate::familiar_ai::decide::task_management::policy_score::{
+    WORKER_DISTANCE_WEIGHT, WORKER_PRIORITY_WEIGHT, compose_worker_score,
+};
 use crate::familiar_ai::decide::task_management::task_finder::{
     FamiliarCandidateSources, collect_scored_candidates_with_diagnostics,
 };
@@ -25,8 +28,6 @@ use crate::familiar_ai::decide::task_management::{
 const TASK_DELEGATION_TOP_K: usize = 24;
 const MAX_ASSIGNMENT_DIST_SQ: f32 = (TILE_SIZE * 60.0) * (TILE_SIZE * 60.0);
 const WORKER_SCORE_MAX_DIST_SQ: f32 = (TILE_SIZE * 80.0) * (TILE_SIZE * 80.0);
-const WORKER_PRIORITY_WEIGHT: f32 = 0.65;
-const WORKER_DISTANCE_WEIGHT: f32 = 0.35;
 
 #[cfg(feature = "profiling")]
 static REACHABLE_WITH_CACHE_CALLS: AtomicU32 = AtomicU32::new(0);
@@ -61,7 +62,8 @@ fn score_for_worker(candidate: &ScoredDelegationCandidate, worker_pos: Vec2) -> 
     let worker_dist_sq = worker_pos.distance_squared(candidate.pos);
     let priority_norm = ((candidate.priority as f32 + 20.0) / 40.0).clamp(0.0, 1.0);
     let dist_norm = 1.0 - (worker_dist_sq / WORKER_SCORE_MAX_DIST_SQ).min(1.0);
-    priority_norm * WORKER_PRIORITY_WEIGHT + dist_norm * WORKER_DISTANCE_WEIGHT
+    let base_score = priority_norm * WORKER_PRIORITY_WEIGHT + dist_norm * WORKER_DISTANCE_WEIGHT;
+    compose_worker_score(base_score, candidate.policy_contributions)
 }
 
 fn worker_distance_rejection(
@@ -123,7 +125,7 @@ fn build_worker_candidates(
     task_virtual_workers: &HashMap<Entity, usize>,
     queries: &FamiliarTaskAssignmentQueries,
 ) -> (Vec<DelegationCandidate>, Vec<(DelegationCandidate, f32)>) {
-    let mut ranked: Vec<(DelegationCandidate, f32)> = scored_candidates
+    let ranked: Vec<(DelegationCandidate, f32)> = scored_candidates
         .iter()
         .filter(|entry| {
             let virtual_count = task_virtual_workers
@@ -147,6 +149,12 @@ fn build_worker_candidates(
         .map(|entry| (entry.candidate, score_for_worker(entry, worker_pos)))
         .collect();
 
+    partition_ranked_candidates(ranked)
+}
+
+fn partition_ranked_candidates(
+    mut ranked: Vec<(DelegationCandidate, f32)>,
+) -> (Vec<DelegationCandidate>, Vec<(DelegationCandidate, f32)>) {
     if ranked.is_empty() {
         return (Vec::new(), Vec::new());
     }
@@ -452,6 +460,7 @@ pub(super) fn try_assign_for_workers(
 mod tests {
     use super::{
         DelegationCandidate, compare_ranked_candidates, compare_workers, connectivity_rejection,
+        partition_ranked_candidates, score_for_worker,
         wheelbarrow_arbitration_reason_from_evidence, worker_distance_rejection,
     };
     use bevy::prelude::{Entity, Vec2};
@@ -462,7 +471,12 @@ mod tests {
         WheelbarrowArbitrationOutcome, is_wheelbarrow_arbitration_applicable,
     };
 
-    use crate::familiar_ai::decide::task_management::CandidateRejectReason;
+    use crate::familiar_ai::decide::task_management::policy_score::{
+        POLICY_SCORE_UNIT, PolicyScoreContributions, transport_policy_units,
+    };
+    use crate::familiar_ai::decide::task_management::{
+        CandidateRejectReason, ScoredDelegationCandidate,
+    };
 
     fn entity(index: u32) -> Entity {
         Entity::from_raw_u32(index).expect("test entity index is valid")
@@ -476,6 +490,95 @@ mod tests {
             target_walkable: true,
             skip_reachability_check: false,
         }
+    }
+
+    fn scored_candidate(
+        index: u32,
+        transport_priority: TransportPriority,
+    ) -> ScoredDelegationCandidate {
+        ScoredDelegationCandidate {
+            candidate: candidate(index),
+            priority: 20,
+            pos: Vec2::ZERO,
+            dist_sq: 0.0,
+            policy_contributions: PolicyScoreContributions::new(
+                transport_policy_units(transport_priority),
+                0,
+            ),
+        }
+    }
+
+    fn scored_candidate_with_base_priority(
+        index: u32,
+        base_priority: i32,
+        transport_priority: TransportPriority,
+    ) -> ScoredDelegationCandidate {
+        ScoredDelegationCandidate {
+            priority: base_priority,
+            ..scored_candidate(index, transport_priority)
+        }
+    }
+
+    #[test]
+    fn worker_score_applies_candidate_policy_once_without_final_clamp() {
+        let normal = score_for_worker(&scored_candidate(1, TransportPriority::Normal), Vec2::ZERO);
+        let low = score_for_worker(&scored_candidate(2, TransportPriority::Low), Vec2::ZERO);
+        let high = score_for_worker(&scored_candidate(3, TransportPriority::High), Vec2::ZERO);
+        let critical = score_for_worker(
+            &scored_candidate(4, TransportPriority::Critical),
+            Vec2::ZERO,
+        );
+
+        assert_eq!(normal.to_bits(), 1.0f32.to_bits());
+        assert!(low < normal && normal < high && high < critical);
+        assert!((critical - (1.0 + 20.0 * POLICY_SCORE_UNIT)).abs() < f32::EPSILON * 2.0);
+        assert!(critical > 1.0);
+    }
+
+    #[test]
+    fn policy_score_changes_the_twenty_four_candidate_top_k_boundary() {
+        let mut scored: Vec<_> = (1..=24)
+            .map(|index| scored_candidate(index, TransportPriority::Normal))
+            .collect();
+        scored.push(scored_candidate_with_base_priority(
+            25,
+            19,
+            TransportPriority::Critical,
+        ));
+        let ranked = scored
+            .iter()
+            .map(|candidate| (candidate.candidate, score_for_worker(candidate, Vec2::ZERO)))
+            .collect();
+
+        let (top, fallback) = partition_ranked_candidates(ranked);
+
+        assert_eq!(top.len(), 24);
+        assert!(top.iter().any(|candidate| candidate.entity == entity(25)));
+        assert_eq!(fallback.len(), 1);
+        assert_eq!(fallback[0].0.entity, entity(24));
+    }
+
+    #[test]
+    fn fallback_keeps_the_same_composed_policy_rank() {
+        let mut scored: Vec<_> = (1..=24)
+            .map(|index| scored_candidate(index, TransportPriority::Critical))
+            .collect();
+        scored.extend([
+            scored_candidate_with_base_priority(25, -20, TransportPriority::Low),
+            scored_candidate_with_base_priority(26, -20, TransportPriority::Critical),
+        ]);
+        let ranked = scored
+            .iter()
+            .map(|candidate| (candidate.candidate, score_for_worker(candidate, Vec2::ZERO)))
+            .collect();
+
+        let (_, mut fallback) = partition_ranked_candidates(ranked);
+        fallback.sort_unstable_by(compare_ranked_candidates);
+
+        assert_eq!(fallback.len(), 2);
+        assert_eq!(fallback[0].0.entity, entity(26));
+        assert_eq!(fallback[1].0.entity, entity(25));
+        assert!(fallback[0].1 > fallback[1].1);
     }
 
     #[test]

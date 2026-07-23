@@ -524,6 +524,7 @@ fn every_task_mode_owner_claims_escape_before_the_familiar_toggle() {
         TaskMode::FloorPlace(None),
         TaskMode::WallPlace(None),
         TaskMode::DreamPlanting(None),
+        TaskMode::StockpilePolicyEdit(None),
         TaskMode::SoulSpaPlace(None),
     ] {
         assert_eq!(

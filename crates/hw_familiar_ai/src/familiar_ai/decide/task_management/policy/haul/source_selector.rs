@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use hw_core::logistics::ResourceType;
+use hw_logistics::stockpile_owner_accepts_item;
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 
 use crate::familiar_ai::decide::task_management::validator::source_not_reserved;
@@ -235,6 +236,7 @@ pub fn find_nearest_blueprint_source_item<'w, 's>(
 pub fn find_consolidation_source_item<'w, 's>(
     resource_type: ResourceType,
     donor_cells: &[Entity],
+    receiver_owner: Option<Entity>,
     queries: &TaskQueries<'w, 's>,
     shadow: &mut ReservationShadow,
 ) -> Option<(Entity, Vec2)> {
@@ -261,7 +263,16 @@ pub fn find_consolidation_source_item<'w, 's>(
             .iter()
             .copied()
             .inspect(|_| mark_candidate_scanned_item())
-            .find(|entity| source_not_reserved(*entity, queries, shadow));
+            .find(|entity| {
+                let item_owner = queries
+                    .designation
+                    .belongs
+                    .get(*entity)
+                    .ok()
+                    .map(|belongs| belongs.0);
+                source_not_reserved(*entity, queries, shadow)
+                    && stockpile_owner_accepts_item(item_owner, receiver_owner)
+            });
         if let Some(entity) = source_item {
             let pos = queries
                 .storage

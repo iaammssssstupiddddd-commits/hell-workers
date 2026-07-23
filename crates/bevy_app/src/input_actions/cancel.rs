@@ -1,6 +1,7 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::game_state::{PlayMode, TaskMode};
+use hw_logistics::StockpilePolicyPatch;
 use hw_ui::area_edit::AreaEditSession;
 use hw_ui::components::MenuState;
 
@@ -12,6 +13,7 @@ use crate::app_contexts::{
 use crate::entities::damned_soul::Destination;
 use crate::entities::familiar::{ActiveCommand, Familiar};
 use crate::interface::selection::building_move::clear_move_states;
+use crate::systems::command::StockpilePolicyRangeEditState;
 use crate::systems::command::zone_placement::ZoneRemovalPreviewState;
 use crate::systems::command::zone_placement::removal_preview::clear_removal_preview;
 use crate::world::map::WorldMap;
@@ -30,6 +32,7 @@ pub struct ActiveModeCleanupParams<'w, 's> {
     pub(crate) companion_state: ResMut<'w, CompanionPlacementState>,
     pub(crate) area_edit_session: ResMut<'w, AreaEditSession>,
     zone_removal_preview: ResMut<'w, ZoneRemovalPreviewState>,
+    stockpile_policy_range: Option<ResMut<'w, StockpilePolicyRangeEditState>>,
     world_map: Res<'w, WorldMap>,
     q_familiar_state:
         Query<'w, 's, (&'static mut ActiveCommand, &'static mut Destination), With<Familiar>>,
@@ -37,6 +40,17 @@ pub struct ActiveModeCleanupParams<'w, 's> {
 }
 
 impl ActiveModeCleanupParams<'_, '_> {
+    pub(crate) fn begin_stockpile_policy_range_edit(
+        &mut self,
+        patch: StockpilePolicyPatch,
+    ) -> bool {
+        let Some(range_state) = self.stockpile_policy_range.as_mut() else {
+            return false;
+        };
+        range_state.patch = Some(patch);
+        true
+    }
+
     pub(crate) fn has_active_owner_state(&self, current_play_mode: &PlayMode) -> bool {
         current_play_mode != &PlayMode::Normal
             || matches!(
@@ -85,6 +99,7 @@ impl ActiveModeCleanupParams<'_, '_> {
             TaskMode::FloorPlace(Some(_)) => TaskMode::FloorPlace(None),
             TaskMode::WallPlace(Some(_)) => TaskMode::WallPlace(None),
             TaskMode::DreamPlanting(Some(_)) => TaskMode::DreamPlanting(None),
+            TaskMode::StockpilePolicyEdit(Some(_)) => TaskMode::StockpilePolicyEdit(None),
             mode => mode,
         };
 
@@ -101,6 +116,9 @@ impl ActiveModeCleanupParams<'_, '_> {
     pub(crate) fn cancel_active_mode(&mut self) {
         self.restore_active_area_edit_drag();
         self.area_edit_session.dream_planting_preview_seed = None;
+        if let Some(range_state) = self.stockpile_policy_range.as_mut() {
+            range_state.patch = None;
+        }
 
         clear_removal_preview(
             &self.world_map,
@@ -158,6 +176,7 @@ mod tests {
             .init_resource::<CompanionPlacementState>()
             .init_resource::<AreaEditSession>()
             .init_resource::<ZoneRemovalPreviewState>()
+            .init_resource::<StockpilePolicyRangeEditState>()
             .init_resource::<WorldMap>()
             .add_systems(Update, cancel_or_close_input_action_system);
         app.world_mut()
@@ -201,6 +220,12 @@ mod tests {
         });
         *app.world_mut().resource_mut::<MenuState>() = MenuState::Architect;
         app.world_mut().resource_mut::<TaskContext>().0 = TaskMode::AreaSelection(Some(Vec2::ZERO));
+        app.world_mut()
+            .resource_mut::<StockpilePolicyRangeEditState>()
+            .patch = Some(StockpilePolicyPatch {
+            target_amount: Some(4),
+            ..default()
+        });
 
         app.update();
 
@@ -230,6 +255,12 @@ mod tests {
         assert!(app.world().resource::<MovePlacementState>().0.is_none());
         assert_eq!(*app.world().resource::<MenuState>(), MenuState::Hidden);
         assert_eq!(app.world().resource::<TaskContext>().0, TaskMode::None);
+        assert!(
+            app.world()
+                .resource::<StockpilePolicyRangeEditState>()
+                .patch
+                .is_none()
+        );
         assert!(matches!(
             *app.world().resource::<NextState<PlayMode>>(),
             NextState::Pending(PlayMode::Normal)
@@ -362,6 +393,10 @@ mod tests {
                 TaskMode::DreamPlanting(Some(point)),
                 TaskMode::DreamPlanting(None),
             ),
+            (
+                TaskMode::StockpilePolicyEdit(Some(point)),
+                TaskMode::StockpilePolicyEdit(None),
+            ),
         ];
 
         for (before, expected) in cases {
@@ -386,6 +421,34 @@ mod tests {
 
             assert_eq!(app.world().resource::<TaskContext>().0, preserved);
         }
+    }
+
+    #[test]
+    fn capture_rollback_preserves_stockpile_policy_patch_for_a_retry() {
+        let mut app = cleanup_app(InputAction::CloseOpenMenu);
+        app.add_systems(Update, rollback_gesture);
+        let patch = StockpilePolicyPatch {
+            allow_export: Some(false),
+            ..default()
+        };
+        app.world_mut().resource_mut::<TaskContext>().0 =
+            TaskMode::StockpilePolicyEdit(Some(Vec2::ONE));
+        app.world_mut()
+            .resource_mut::<StockpilePolicyRangeEditState>()
+            .patch = Some(patch);
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<TaskContext>().0,
+            TaskMode::StockpilePolicyEdit(None)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<StockpilePolicyRangeEditState>()
+                .patch,
+            Some(patch)
+        );
     }
 
     #[test]

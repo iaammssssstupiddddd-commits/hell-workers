@@ -94,6 +94,12 @@ pub(super) fn handle_pressed_action(action: MenuAction, ui_intents: &mut Message
         MenuAction::MovePlantBuilding(entity) => {
             ui_intents.write(UiIntent::MovePlantBuilding(entity));
         }
+        MenuAction::ApplyStockpilePolicy { target, patch } => {
+            ui_intents.write(UiIntent::ApplyStockpilePolicy { target, patch });
+        }
+        MenuAction::BeginStockpilePolicyRangeEdit { patch } => {
+            ui_intents.write(UiIntent::BeginStockpilePolicyRangeEdit { patch });
+        }
         MenuAction::AdjustTaskPriority {
             entity,
             expected_work_type,

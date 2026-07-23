@@ -13,7 +13,10 @@ use hw_core::game_state::PlayMode;
 use hw_core::relationships::Commanding;
 use hw_core::world::DoorState;
 use hw_jobs::{Building, BuildingCategory, Door};
+use hw_logistics::{StockpilePolicyChangeRequest, StockpilePolicyPatch};
+use hw_spatial::StockpileSpatialGrid;
 use hw_ui::components::{ArchitectCategoryState, LoadConfirmDialog, OperationDialog};
+use hw_ui::intents::StockpilePolicyEditTarget;
 use hw_world::{DoorVisualHandles, WorldMap, WorldMapWrite, apply_door_state};
 
 #[derive(SystemParam)]
@@ -43,6 +46,8 @@ pub(crate) struct IntentDomainActionCtx<'w, 's> {
     q_doors: Query<'w, 's, (&'static Transform, &'static mut Door, &'static mut Sprite)>,
     world_map: WorldMapWrite<'w>,
     door_visual_handles: Res<'w, DoorVisualHandles>,
+    stockpile_grid: Res<'w, StockpileSpatialGrid>,
+    stockpile_policy_requests: MessageWriter<'w, StockpilePolicyChangeRequest>,
 }
 
 impl IntentDomainActionCtx<'_, '_> {
@@ -78,6 +83,17 @@ impl IntentDomainActionCtx<'_, '_> {
             door_grid,
             next_state,
         );
+    }
+
+    pub(crate) fn request_stockpile_policy_change(
+        &mut self,
+        target: StockpilePolicyEditTarget,
+        patch: StockpilePolicyPatch,
+    ) {
+        let targets =
+            crate::systems::command::resolve_stockpile_policy_targets(target, &self.stockpile_grid);
+        self.stockpile_policy_requests
+            .write(StockpilePolicyChangeRequest { targets, patch });
     }
 }
 

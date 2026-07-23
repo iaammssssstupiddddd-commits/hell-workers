@@ -23,6 +23,7 @@ type LeaseRequestsQuery<'w, 's> = Query<
         Option<&'static WheelbarrowLease>,
         Option<&'static WheelbarrowPendingSince>,
         Option<&'static ManualTransportRequest>,
+        Option<&'static Designation>,
     ),
 >;
 
@@ -64,9 +65,33 @@ pub(super) fn update_lease_state(
     let mut used_wheelbarrows = HashSet::new();
     let mut cleared_requests = HashSet::new();
 
-    for (req_entity, req, state, _demand, _transform, lease_opt, pending_since_opt, _) in
-        q_requests.iter()
+    for (
+        req_entity,
+        req,
+        state,
+        demand,
+        _transform,
+        lease_opt,
+        pending_since_opt,
+        _,
+        designation_opt,
+    ) in q_requests.iter()
     {
+        let disabled_pending = *state == TransportRequestState::Pending
+            && (demand.remaining() == 0 || designation_opt.is_none());
+        if disabled_pending {
+            if lease_opt.is_some() {
+                commands.entity(req_entity).remove::<WheelbarrowLease>();
+                cleared_requests.insert(req_entity);
+            }
+            if pending_since_opt.is_some() {
+                commands
+                    .entity(req_entity)
+                    .remove::<WheelbarrowPendingSince>();
+            }
+            continue;
+        }
+
         if let Some(lease) = lease_opt {
             let min_valid_items = if req.resource_type.requires_wheelbarrow()
                 && req.kind == TransportRequestKind::DeliverToBlueprint

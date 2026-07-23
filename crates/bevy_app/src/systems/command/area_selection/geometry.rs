@@ -23,6 +23,7 @@ pub fn get_indicator_color(mode: TaskMode, is_valid: bool) -> LinearRgba {
         TaskMode::FloorPlace(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
         TaskMode::WallPlace(_) => LinearRgba::from(Color::srgba(1.0, 1.0, 1.0, 0.4)),
         TaskMode::DreamPlanting(_) => LinearRgba::from(Color::srgba(0.5, 0.5, 1.0, 0.5)), // Dream は青紫
+        TaskMode::StockpilePolicyEdit(_) => LinearRgba::from(Color::srgba(0.25, 0.85, 1.0, 0.5)),
         _ => LinearRgba::from(Color::srgba(0.2, 1.0, 0.2, 0.5)),
     }
 }

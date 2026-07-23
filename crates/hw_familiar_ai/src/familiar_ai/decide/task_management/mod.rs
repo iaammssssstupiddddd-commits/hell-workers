@@ -7,6 +7,7 @@ pub mod context;
 pub mod delegation;
 pub mod diagnostics;
 pub mod policy;
+pub(crate) mod policy_score;
 pub mod task_assigner;
 pub mod task_finder;
 pub mod validator;
@@ -40,12 +41,14 @@ pub use task_finder::collect_scored_candidates;
 #[derive(Default)]
 pub struct IncomingDeliverySnapshot {
     by_destination: HashMap<Entity, HashMap<ResourceType, u32>>,
+    total_by_destination: HashMap<Entity, u32>,
 }
 
 impl IncomingDeliverySnapshot {
     pub fn build<'w, 's>(queries: &FamiliarTaskAssignmentQueries<'w, 's>) -> Self {
         let mut snapshot = Self {
             by_destination: HashMap::new(),
+            total_by_destination: HashMap::new(),
         };
 
         for (destination, incoming_deliveries) in
@@ -53,6 +56,10 @@ impl IncomingDeliverySnapshot {
         {
             let destination_map = snapshot.by_destination.entry(destination).or_default();
             for item in incoming_deliveries.iter() {
+                *snapshot
+                    .total_by_destination
+                    .entry(destination)
+                    .or_insert(0) += 1;
                 let Ok(resource_item) = queries.reservation.resources.get(*item) else {
                     continue;
                 };
@@ -71,10 +78,7 @@ impl IncomingDeliverySnapshot {
     }
 
     pub fn count_total(&self, target: Entity) -> u32 {
-        self.by_destination
-            .get(&target)
-            .map(|counts| counts.values().copied().sum())
-            .unwrap_or(0)
+        self.total_by_destination.get(&target).copied().unwrap_or(0)
     }
 
     pub fn iter_counts(&self, target: Entity) -> impl Iterator<Item = (ResourceType, u32)> + '_ {

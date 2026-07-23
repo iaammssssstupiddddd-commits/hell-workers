@@ -317,6 +317,76 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
 }
 
 #[test]
+fn stockpile_policy_round_trips_with_yard_owner_entity_remap() {
+    use hw_logistics::transport_request::TransportPriority;
+    use hw_logistics::{BelongsTo, StockpileAcceptance, StockpilePolicy};
+
+    let mut app = App::new();
+    register_save_types(&mut app);
+    let yard = app
+        .world_mut()
+        .spawn(hw_world::zones::Yard {
+            min: Vec2::ZERO,
+            max: Vec2::splat(10.0),
+        })
+        .id();
+    let stockpile = app
+        .world_mut()
+        .spawn((
+            Stockpile {
+                capacity: 10,
+                resource_type: Some(ResourceType::Bone),
+            },
+            StockpilePolicy {
+                acceptance: StockpileAcceptance::Only(ResourceType::Bone),
+                inbound_priority: TransportPriority::High,
+                target_amount: 6,
+                allow_export: false,
+            },
+            BelongsTo(yard),
+        ))
+        .id();
+    app.world_mut().flush();
+
+    let roots = collect_persisted_entities(app.world_mut());
+    let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+    let registry = type_registry.read();
+    let dynamic_world = build_persisted_world(app.world(), &registry, roots.into_iter());
+    let body = dynamic_world.serialize(&registry).unwrap();
+    let mut ron_deserializer = ron::de::Deserializer::from_str(&body).unwrap();
+    let round_tripped = WorldDeserializer {
+        type_registry: &registry,
+        load_from_path: &mut NoAssetLoad,
+    }
+    .deserialize(&mut ron_deserializer)
+    .unwrap();
+    drop(registry);
+
+    let mut destination = World::new();
+    let mut entity_map = EntityHashMap::default();
+    let registry = type_registry.read();
+    round_tripped
+        .write_to_world_with(&mut destination, &mut entity_map, &registry)
+        .unwrap();
+
+    let mapped_yard = entity_map[&yard];
+    let mapped_stockpile = entity_map[&stockpile];
+    assert_eq!(
+        destination.get::<BelongsTo>(mapped_stockpile).unwrap().0,
+        mapped_yard
+    );
+    assert_eq!(
+        destination.get::<StockpilePolicy>(mapped_stockpile),
+        Some(&StockpilePolicy {
+            acceptance: StockpileAcceptance::Only(ResourceType::Bone),
+            inbound_priority: TransportPriority::High,
+            target_amount: 6,
+            allow_export: false,
+        })
+    );
+}
+
+#[test]
 fn gathering_relationships_are_excluded_from_new_saves_and_stripped_from_legacy_bodies() {
     let mut app = App::new();
     register_save_types(&mut app);

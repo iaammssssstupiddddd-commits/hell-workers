@@ -1,6 +1,6 @@
 # 情報パネルUI仕様
 
-最終更新: 2026-07-10
+最終更新: 2026-07-22
 
 ## 概要
 画面右側に表示される常駐パネルです。  
@@ -50,6 +50,27 @@
 - 共通テキスト（タイプ、指揮関連パラメータ）
 - ソウル専用ステータス列は非表示
 
+### 通常 Stockpile セル
+
+`Stockpile + StockpilePolicy` を持つ player-managed セルだけが専用 editor を表示する。
+同じ座標に格納済みの非表示 `ResourceItem` があっても、selection hit-test は managed セルを優先する。
+Tank、Mud Mixer、`BucketStorage` など `StockpilePolicy` を持たない特殊設備は従来の汎用表示のままである。
+
+| 項目 | 表示・操作 |
+|:---|:---|
+| State | `Accepting` / `Target Reached` / `Draining` |
+| Stored | 現在量 / 物理容量、現在資源、搬入予約量 |
+| Acceptance | `Any` と全 `ResourceType` の `Only(...)` をボタンで循環 |
+| Target | `-` / `+` で1ずつ変更。domain handlerでもセル容量へclamp |
+| Inbound Priority | `Low` → `Normal` → `High` → `Critical` を循環 |
+| Export | On / Off を切替。Draining中はOffでも実効搬出overrideを表示 |
+| Apply Policy to Area | 表示中セルの4設定を保持して一回限りの矩形編集modeを開始 |
+
+単一セルの各ボタンは対象フィールドだけの `StockpilePolicyPatch`、範囲ボタンは4フィールドを固定したpatchを
+`UiIntent` として発行する。ピン中は `SelectedEntity` ではなく、表示モデルが保持するピン対象Entityへ適用する。
+矩形操作は左ボタンpress/releaseを所有し、クリックだけなら1タイルとして扱う。Escapeはmodeとpatchを破棄し、
+Modal/Pause capture開始時のgesture rollbackはpatchを保持して再試行できる。
+
 ### 電力発電施設（Soul Spa）
 `SoulSpaSite` を持つエンティティは `append_soul_spa_model()` で追記される。
 
@@ -84,6 +105,8 @@
   - `update_entity_inspection_view_model_system` が `EntityInspectionViewModel` resource を更新
   - パネル側は描画責務に限定
 - `InfoPanelState` で前回モデルを保持し、同一内容の再描画を抑制
+- Stockpile editor の静的button actionは表示中の `EntityInspectionModel.entity` から毎回更新する。
+  world replacement時は旧Entityと保留patchをplaceholder/defaultへ戻す。
 - `InfoPanelState` はリネーム中の対象 entity も保持する。表示モデルが同一でも、`SoulRenameState.active` の開始/終了でフィールド表示が切り替わるため、この状態は再描画判定に含める
 - `Update` では `update_entity_inspection_view_model_system` → `info_panel_system` の順に固定し、selection / pin / entity 消滅の反映が 1 フレーム遅れないようにします。
 - `info_panel_system` は `menu_visibility_system` の後、`update_mode_text_system` の前で実行されます。
@@ -93,6 +116,7 @@
 ```rust
 build_soul_model || build_blueprint_model || build_familiar_model
     || build_item_model || build_tree_model || build_rock_model
+    || build_stockpile_model
 append_soul_spa_model      // SoulSpaSite: 発電情報
 append_building_model      // Building 汎用情報
 append_power_consumer_model // PowerConsumer: 需要・稼働状態
@@ -109,6 +133,7 @@ append_designation_model   // Designation: タスク情報
 
 ### `hw_ui` 側（実装本体）
 - `crates/hw_ui/src/panels/info_panel/` - `InfoPanelState`, `InfoPanelPinState`, `spawn_info_panel_ui`, `info_panel_system`（リネーム表示状態を含む差分更新）
+- `crates/hw_ui/src/intents.rs` - 単一Entityまたは矩形を表す `StockpilePolicyEditTarget` と policy編集Intent
 - `crates/hw_ui/src/panels/menu.rs` - `menu_visibility_system`
 - `crates/hw_ui/src/interaction/soul_rename.rs` - リネームボタン・フィールド spawn / cleanup
 - `crates/hw_ui/src/widgets/text_field.rs` - 再利用可能 `spawn_text_field` ヘルパー
@@ -123,5 +148,6 @@ append_designation_model   // Designation: タスク情報
   - `builders.rs` — 各 `build_*` / `append_*` メソッド実装
 - `crates/bevy_app/src/interface/ui/panels/context_menu.rs` - `Inspect (Pin)` メニュー
 - `crates/bevy_app/src/interface/ui/interaction/menu_actions.rs` - `InspectEntity` / `ClearInspectPin`
+- `crates/bevy_app/src/systems/command/stockpile_policy.rs` - 矩形gesture、安定した対象解決、保留patch resource
 - `crates/bevy_app/src/interface/ui/interaction/handlers/soul_rename.rs` - `TextInputIntent` → `SoulIdentity` 更新
 - `crates/bevy_app/src/interface/ui/setup/mod.rs` - `spawn_info_panel_ui` を `hw_ui` 実装へ委譲する setup adapter

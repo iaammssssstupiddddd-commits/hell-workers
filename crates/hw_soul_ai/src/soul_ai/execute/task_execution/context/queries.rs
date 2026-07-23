@@ -170,6 +170,7 @@ pub struct TaskQueries<'w, 's> {
     pub reservation: ReservationAccess<'w, 's>,
     pub designation: DesignationAccess<'w, 's>,
     pub storage: MutStorageAccess<'w, 's>,
+    pub stockpile_policies: Query<'w, 's, &'static hw_logistics::zone::StockpilePolicy>,
 
     // 固有フィールド
     pub resource_items: ResourceItemsQuery<'w, 's>,

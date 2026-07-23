@@ -10,7 +10,7 @@
 | ディレクトリ/ファイル | 内容 |
 |---|---|
 | `lib.rs` | `HwUiPlugin` — 全 UI プラグインの登録 |
-| `intents.rs` | `UiIntent` — ユーザー操作の意図メッセージ型（Entity List 用の Familiar 指定 variant を含む） |
+| `intents.rs` | `UiIntent` — ユーザー操作の意図メッセージ型（Entity List の Familiar 指定、Stockpile単一適用・範囲編集開始を含む） |
 | `theme.rs` | スタイリング・テーマ定数 |
 | `components.rs` | UI コンポーネントレジストリ・共有ユーティリティ |
 | `camera.rs` | `world_cursor_pos`（スクリーン座標→ワールド座標変換 utility。`MainCamera` は `hw_core::camera` から re-export） |
@@ -18,7 +18,7 @@
 | `setup/` | UI 要素の初期スポーン（下表） |
 | `plugins/` | UI システムの Bevy 登録（下表） |
 | `list/` | エンティティリスト共通ロジック（下表） |
-| `models/` | UI データモデル（エンティティ詳細ビューモデル等） |
+| `models/` | UI データモデル（`EntityInspectionViewModel`、`StockpileInspectionFields`等） |
 | `panels/` | 情報パネル・タスクリスト・メニュー（下表） |
 | `interaction/` | マウス・キーボード入力処理（下表） |
 | `selection/` | 建設配置プレビュー・エンティティ選択（下表） |
@@ -59,7 +59,7 @@
 |---|---|
 | `mod.rs` | 公開 API |
 | `menu.rs` | `menu_visibility_system` |
-| `info_panel/` | エンティティ詳細パネル（`InfoPanelState`, `InfoPanelPinState`, `info_panel_system`, `spawn_info_panel_ui`） |
+| `info_panel/` | エンティティ詳細パネル（`InfoPanelState`, `InfoPanelPinState`, Stockpile editor、`info_panel_system`, `spawn_info_panel_ui`） |
 | `task_list/` | task dashboard表示契約（status/reason、4 filter、4 sort key、priority tier、action capability/state）とrender/interaction |
 | `tooltip_builder/` | ツールチップコンテンツ生成（widgets, text_wrap, templates） |
 
@@ -125,6 +125,11 @@ ancestry に従う。capture root は viewport 全体の `FocusPolicy::Block + P
 task dashboard は focus行とaction barをsiblingとして生成し、nested `Button` を作らない。filter/sortと
 inline confirmationはruntime stateで、capture開始・選択/タブ変更・world replacementでresetする。
 ゲームownerのcapability判定、live再検証、priority/cancel適用はroot adapterが所有する。
+
+Stockpile editorは`StockpileInspectionFields`から現在値を表示し、button操作を`UiIntent`として発行するだけで
+domain componentを直接変更しない。単一・範囲の対象解決、範囲modeと保留patchはroot adapterが所有する。
+world replacementでは`hw_ui::reset_for_world_replace()`がinspection/runtime表示stateを初期化し、root側hookが
+範囲mode・保留patchと旧world Entityを保持するbutton bindingを破棄する。
 
 ## ここに置かないもの
 

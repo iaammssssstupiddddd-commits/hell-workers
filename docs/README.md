@@ -22,7 +22,7 @@
 - [soul_energy.md](soul_energy.md): Soul Energy システム（発電・消費・停電サイクル、Soul Spa、Outdoor Lamp）。
 
 ## UI & Visuals
-- [notifications.md](notifications.md): 有界なトースト／重要履歴、配置不能理由、セーブ／ロード終端結果の仕様。
+- [notifications.md](notifications.md): 有界なトースト／重要履歴、配置不能理由、セーブ／ロード終端結果、タスク操作・Stockpile方針変更結果の仕様。
 - [entity_list_ui.md](entity_list_ui.md): エンティティリストのフィルタリングと操作。
 - [task_list_ui.md](task_list_ui.md): タスクリストの表示・タブ切替・クリック操作。
 - [info_panel_ui.md](info_panel_ui.md): 選択されたエンティティの詳細情報表示。
