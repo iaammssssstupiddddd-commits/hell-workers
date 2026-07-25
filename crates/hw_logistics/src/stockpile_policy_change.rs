@@ -226,4 +226,34 @@ mod tests {
                 .is_changed()
         );
     }
+
+    #[test]
+    fn checklist_patch_applies_the_same_multi_resource_set_to_each_cell() {
+        let mut app = app();
+        let managed_a = managed_cell(&mut app, 5);
+        let managed_b = managed_cell(&mut app, 10);
+        let acceptance = StockpileAcceptance::none()
+            .with_resource(crate::ResourceType::Wood, true)
+            .with_resource(crate::ResourceType::Rock, true);
+
+        app.world_mut().write_message(StockpilePolicyChangeRequest {
+            targets: vec![managed_a, managed_b],
+            patch: StockpilePolicyPatch {
+                acceptance: Some(acceptance),
+                ..default()
+            },
+        });
+        app.update();
+
+        for entity in [managed_a, managed_b] {
+            assert_eq!(
+                app.world()
+                    .get::<StockpilePolicy>(entity)
+                    .unwrap()
+                    .acceptance,
+                acceptance
+            );
+        }
+        assert_eq!(app.world().resource::<Receipts>().0[0].applied, 2);
+    }
 }

@@ -50,8 +50,8 @@ pub use types::{
 };
 pub use water::tank_has_capacity_for_full_bucket;
 pub use zone::{
-    Stockpile, StockpileAcceptance, StockpilePolicy, StockpilePolicyPatch,
-    StockpilePolicyPatchResult,
+    STOCKPILE_ACCEPTANCE_RESOURCES, Stockpile, StockpileAcceptance, StockpilePolicy,
+    StockpilePolicyPatch, StockpilePolicyPatchResult, StockpileResourceSet,
 };
 // Functions used in dropping / unloading handlers
 pub use floor_construction::{floor_site_tile_demand, floor_site_tile_demand_from_index};

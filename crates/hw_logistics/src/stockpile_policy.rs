@@ -29,6 +29,7 @@ pub enum StockpilePolicyState {
     Accepting,
     TargetReached,
     Draining,
+    Disabled,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,6 +94,8 @@ pub fn derive_stockpile_policy_state(
         && stored_resource.is_none_or(|stored| !policy.acceptance.accepts(stored));
     if draining {
         StockpilePolicyState::Draining
+    } else if policy.acceptance.is_none() {
+        StockpilePolicyState::Disabled
     } else if policy
         .target_amount
         .saturating_sub(stored_amount)
@@ -498,6 +501,63 @@ mod tests {
         assert_eq!(
             reservation_rejection.rejection,
             Some(StockpilePolicyRejection::ReservedResourceMismatch)
+        );
+    }
+
+    #[test]
+    fn checklist_accepts_each_enabled_resource_and_drains_only_disabled_contents() {
+        let acceptance = StockpileAcceptance::none()
+            .with_resource(ResourceType::Wood, true)
+            .with_resource(ResourceType::Rock, true);
+        let policy = StockpilePolicy {
+            acceptance,
+            ..StockpilePolicy::for_capacity(10)
+        };
+
+        for resource_type in [ResourceType::Wood, ResourceType::Rock] {
+            let result = evaluate_stockpile_policy(StockpilePolicyInput {
+                policy,
+                transfer_resource: resource_type,
+                ..input(StockpileTransferPhase::NewInbound)
+            });
+            assert_eq!(result.rejection, None);
+            assert_eq!(result.allowed_amount, 1);
+            assert_eq!(
+                derive_stockpile_policy_state(policy, 10, 1, Some(resource_type), 0),
+                StockpilePolicyState::Accepting
+            );
+        }
+
+        let rejected = evaluate_stockpile_policy(StockpilePolicyInput {
+            policy,
+            transfer_resource: ResourceType::Bone,
+            ..input(StockpileTransferPhase::NewInbound)
+        });
+        assert_eq!(
+            rejected.rejection,
+            Some(StockpilePolicyRejection::ResourceNotAccepted)
+        );
+        assert_eq!(
+            derive_stockpile_policy_state(policy, 10, 1, Some(ResourceType::Bone), 0),
+            StockpilePolicyState::Draining
+        );
+
+        let disabled_policy = StockpilePolicy {
+            acceptance: StockpileAcceptance::none(),
+            ..policy
+        };
+        assert_eq!(
+            derive_stockpile_policy_state(disabled_policy, 10, 0, None, 0),
+            StockpilePolicyState::Disabled
+        );
+        let disabled = evaluate_stockpile_policy(StockpilePolicyInput {
+            policy: disabled_policy,
+            transfer_resource: ResourceType::Wood,
+            ..input(StockpileTransferPhase::NewInbound)
+        });
+        assert_eq!(
+            disabled.rejection,
+            Some(StockpilePolicyRejection::ResourceNotAccepted)
         );
     }
 

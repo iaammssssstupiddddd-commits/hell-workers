@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-07-23）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-07-25）。
 
 ## 新規計画書の作り方
 
@@ -27,7 +27,6 @@
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できない問題を解決する計画。 |
 | [soul-energy-control-plan-2026-07-20.md](soul-energy-control-plan-2026-07-20.md) | Draft | Soul Spa 稼働枠と優先度付き個別給電を導入する計画。 |
-| [stockpile-policy-manual-acceptance-plan-2026-07-23.md](stockpile-policy-manual-acceptance-plan-2026-07-23.md) | Blocked | B1実装完了後の実機受入結果、不合格、残件を自動回帰と分離して追跡する計画。 |
 | [task-dashboard-performance-validation-plan-2026-07-20.md](task-dashboard-performance-validation-plan-2026-07-20.md) | Draft | A3で未整備のdashboard mode別AI work counterと実renderer / allocator計測を、再現可能なperf harnessへ載せるの計画。 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
@@ -74,7 +73,9 @@
 | [archive/large-source-file-split-plan-2026-07-17.md](archive/large-source-file-split-plan-2026-07-17.md) | Archived | 500行以上の実装ファイル分割計画 |
 | [archive/runtime-correctness-contracts-plan-2026-07-12.md](archive/runtime-correctness-contracts-plan-2026-07-12.md) | Archived | 実行時正しさ契約リファクタリング計画 |
 | [archive/save-load-hardening-plan-2026-07-12.md](archive/save-load-hardening-plan-2026-07-12.md) | Archived | Save/Load境界強化・互換性リファクタリング計画 |
+| [archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md](archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md) | Archived | B1実装完了後の実機受入結果と、B1-R05修正後の再受入完了記録。 |
 | [archive/stockpile-policy-plan-2026-07-20.md](archive/stockpile-policy-plan-2026-07-20.md) | Archived | 現在在庫と受入方針が未分離で、搬送経路ごとの判定も統一されていないの計画。 |
+| [archive/stockpile-resource-checklist-plan-2026-07-24.md](archive/stockpile-resource-checklist-plan-2026-07-24.md) | Archived | Stockpile受入資材をチェックリスト化する計画。 |
 | [archive/structural-maintainability-followups-plan-2026-07-12.md](archive/structural-maintainability-followups-plan-2026-07-12.md) | Archived | 構造・保守性・品質ゲート フォローアップ計画 |
 | [archive/system-wide-performance-followups-plan-2026-07-07.md](archive/system-wide-performance-followups-plan-2026-07-07.md) | Archived | 全体パフォーマンス改善フォローアップ計画書 |
 | [archive/system-wide-runtime-performance-plan-2026-07-12.md](archive/system-wide-runtime-performance-plan-2026-07-12.md) | Archived | 全体ランタイム・ホットパス性能改善計画書 |
@@ -84,4 +85,3 @@
 | [soul-energy/archived/phase1a-data-model.md](soul-energy/archived/phase1a-data-model.md) | Archived | Phase 1a: Data Model + Grid Infrastructure |
 | [soul-energy/archived/phase1b-soul-spa.md](soul-energy/archived/phase1b-soul-spa.md) | Archived | Phase 1b: Soul Spa + GeneratePower Task |
 | [soul-energy/archived/phase1c-lamp-and-grid.md](soul-energy/archived/phase1c-lamp-and-grid.md) | Archived | Phase 1c: Outdoor Lamp + Grid Integration + Visual |
-

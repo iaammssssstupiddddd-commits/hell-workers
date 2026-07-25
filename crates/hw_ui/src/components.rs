@@ -5,6 +5,7 @@
 use bevy::prelude::*;
 use hw_core::game_state::TimeSpeed;
 use hw_jobs::BuildingCategory;
+use hw_logistics::ResourceType;
 
 // ============================================================
 // 左パネルモード
@@ -82,8 +83,10 @@ pub struct InfoPanelNodes {
     pub stockpile_group: Option<Entity>,
     pub stockpile_state: Option<Entity>,
     pub stockpile_current: Option<Entity>,
-    pub stockpile_acceptance_button: Option<Entity>,
-    pub stockpile_acceptance_text: Option<Entity>,
+    pub stockpile_acceptance_summary: Option<Entity>,
+    pub stockpile_acceptance_all_button: Option<Entity>,
+    pub stockpile_acceptance_none_button: Option<Entity>,
+    pub stockpile_acceptance_rows: Vec<StockpileAcceptanceRowNodes>,
     pub stockpile_target_decrease_button: Option<Entity>,
     pub stockpile_target_text: Option<Entity>,
     pub stockpile_target_increase_button: Option<Entity>,
@@ -95,6 +98,13 @@ pub struct InfoPanelNodes {
     pub common: Option<Entity>,
     pub rename_button: Option<Entity>,
     pub rename_field_container: Option<Entity>,
+}
+
+#[derive(Clone, Copy)]
+pub struct StockpileAcceptanceRowNodes {
+    pub resource_type: ResourceType,
+    pub button: Entity,
+    pub text: Entity,
 }
 
 #[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]

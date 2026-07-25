@@ -1,5 +1,6 @@
 use super::model::{
-    InfoPanelViewModel, next_stockpile_acceptance, next_stockpile_priority, to_view_model,
+    InfoPanelViewModel, next_stockpile_priority, stockpile_acceptance_row_label,
+    stockpile_acceptance_summary, to_view_model,
 };
 use super::state::{InfoPanelPinState, InfoPanelState};
 use crate::components::{
@@ -11,7 +12,7 @@ use crate::selection::SelectedEntity;
 use crate::setup::UiAssets;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use hw_logistics::{StockpilePolicyPatch, StockpilePolicyState};
+use hw_logistics::{StockpileAcceptance, StockpilePolicyPatch, StockpilePolicyState};
 
 #[derive(SystemParam)]
 pub struct InfoPanelRes<'w, A: UiAssets + Resource + 'static> {
@@ -367,10 +368,11 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 StockpilePolicyState::Accepting => "Accepting",
                 StockpilePolicyState::TargetReached => "Target Reached",
                 StockpilePolicyState::Draining => "Draining",
+                StockpilePolicyState::Disabled => "Disabled",
             };
             let resource_label = stockpile
                 .current_resource
-                .map(|resource| format!("{resource:?}"))
+                .map(|resource| resource.display_name().to_string())
                 .unwrap_or_else(|| "Empty".to_string());
             set_text_entity(
                 res.info_nodes.stockpile_state,
@@ -386,9 +388,9 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 ),
             );
             set_text_entity(
-                res.info_nodes.stockpile_acceptance_text,
+                res.info_nodes.stockpile_acceptance_summary,
                 &mut queries.q_text,
-                &format!("Acceptance: {:?} (cycle)", stockpile.acceptance),
+                &stockpile_acceptance_summary(stockpile.acceptance),
             );
             set_text_entity(
                 res.info_nodes.stockpile_target_text,
@@ -416,16 +418,48 @@ pub fn info_panel_system<A: UiAssets + Resource>(
 
             let single = StockpilePolicyEditTarget::Single(stockpile.entity);
             set_menu_action(
-                res.info_nodes.stockpile_acceptance_button,
+                res.info_nodes.stockpile_acceptance_all_button,
                 &mut queries.q_menu_button,
                 MenuAction::ApplyStockpilePolicy {
                     target: single,
                     patch: StockpilePolicyPatch {
-                        acceptance: Some(next_stockpile_acceptance(stockpile.acceptance)),
+                        acceptance: Some(StockpileAcceptance::Any),
                         ..default()
                     },
                 },
             );
+            set_menu_action(
+                res.info_nodes.stockpile_acceptance_none_button,
+                &mut queries.q_menu_button,
+                MenuAction::ApplyStockpilePolicy {
+                    target: single,
+                    patch: StockpilePolicyPatch {
+                        acceptance: Some(StockpileAcceptance::none()),
+                        ..default()
+                    },
+                },
+            );
+            for row in &res.info_nodes.stockpile_acceptance_rows {
+                set_text_entity(
+                    Some(row.text),
+                    &mut queries.q_text,
+                    &stockpile_acceptance_row_label(stockpile.acceptance, row.resource_type),
+                );
+                set_menu_action(
+                    Some(row.button),
+                    &mut queries.q_menu_button,
+                    MenuAction::ApplyStockpilePolicy {
+                        target: single,
+                        patch: StockpilePolicyPatch {
+                            acceptance: Some(stockpile.acceptance.with_resource(
+                                row.resource_type,
+                                !stockpile.acceptance.accepts(row.resource_type),
+                            )),
+                            ..default()
+                        },
+                    },
+                );
+            }
             set_menu_action(
                 res.info_nodes.stockpile_target_decrease_button,
                 &mut queries.q_menu_button,

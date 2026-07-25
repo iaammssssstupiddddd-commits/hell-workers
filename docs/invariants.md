@@ -126,6 +126,9 @@ StasisMud と Sand は地面にドロップされた状態で **5秒後に消滅
 通常 Stockpile の新規搬入可能量は `evaluate_stockpile_policy(NewInbound)` で決める。
 物理容量だけでなく `target_amount`、acceptance、現在内容の資源、資源別 `IncomingDeliveries`、
 同一 cycle の資源別 reservation shadow を同じ snapshot へ含める。
+acceptanceは複数資材の許可集合だが、同一セルのstored resourceと新規予約は引き続き単一資材へ限定する。
+全解除した空集合は全資材を拒否し、全許可として扱ってはならない。既存在庫をdrainしていない空セルの
+player-facing stateは `Disabled` とする。
 `StoredItems.len() < capacity`、`StoredItems + IncomingDeliveries < capacity`、または group 合計容量だけを
 managed cell の許可判定にしてはならない。
 

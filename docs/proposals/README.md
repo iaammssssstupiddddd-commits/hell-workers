@@ -39,4 +39,3 @@
 | [archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md) | Archived | `src/systems/familiar_ai/decide/task_management/` には、候補収集、優先度評価、搬送元選定、予約影反映、`AssignedTask` 構築など、使い魔 AI の中核ロジックがまとまっていたの提案。 |
 | [archived/08_visual_update_prompts.md](archived/08_visual_update_prompts.md) | Archived | ビジュアルアップデート用アセット生成プロンプト案 |
 | [archived/speech_optimization.md](archived/speech_optimization.md) | Archived | スピーチシステムの最適化提案 (Scale: Soul 300, Familiar 30) |
-

@@ -289,7 +289,10 @@ def replace_section(
     remainder = after_header[next_m.start():] if next_m else ""
 
     rows_str = "\n".join(data_rows)
-    new_section = f"{full_header}\n\n{header_row}\n{sep_row}\n{rows_str}\n\n"
+    trailing_newlines = "\n\n" if remainder else "\n"
+    new_section = (
+        f"{full_header}\n\n{header_row}\n{sep_row}\n{rows_str}{trailing_newlines}"
+    )
     return content[:sec_start] + new_section + remainder
 
 

@@ -7,9 +7,9 @@
 | ドキュメントID | `gameplay-management-improvements-proposal-2026-07-17` |
 | ステータス | `Draft` |
 | 作成日 | `2026-07-17` |
-| 最終更新日 | `2026-07-23` |
+| 最終更新日 | `2026-07-25` |
 | 作成者 | `Codex` |
-| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能フォローアップ）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機確認済み・R05修正待ち）、`docs/plans/familiar-operation-policy-plan-2026-07-20.md`（B2）、`docs/plans/soul-energy-control-plan-2026-07-20.md`（B3） |
+| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能フォローアップ）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/familiar-operation-policy-plan-2026-07-20.md`（B2）、`docs/plans/soul-energy-control-plan-2026-07-20.md`（B3） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 背景と問題
@@ -168,15 +168,22 @@ manual destination、wheelbarrow grant-time evaluator、通常 Familiar の共�
 単一セル・矩形 editorとtyped outcome / notification経路を実装した。固定tickの横断回帰と同一fixtureの
 UI開閉性能比較、恒久docs同期、全workspace検証も完了し、詳細計画はarchive済みである。
 `2026-07-23` に実機確認を完了し、policy値のF5/F9 round-trip、矩形編集とcapture、Toast、
-Draining完了、in-flight、特殊設備除外を確認した。一方、F9成功直後に旧情報パネルが残る不合格は
-現コードでも未修正のため、修正と再受入を
-`docs/plans/stockpile-policy-manual-acceptance-plan-2026-07-23.md` で追跡する。
+Draining完了、in-flight、特殊設備除外を確認した。F9成功直後に旧情報パネルが残る不合格は
+`2026-07-24` にInfoPanel rootの同期非表示と実Node回帰を追加して修正した。
+`2026-07-24` には単一資材cycleを廃止し、全選択・全解除・全9資材の静的チェックリストと
+複数許可集合へ拡張した。既存 `Any / Only(ResourceType)` saveを維持し、0件または複数選択は
+`Selected(StockpileResourceSet)` として同じevaluator、矩形patch、save経路を通す。
+同日のユーザー実機再受入で、チェックリスト表示・直接操作、複数集合の矩形適用とToast件数、
+F5/F9後の全チェック状態を確認し、B1-R14〜B1-R15を合格とした。
+`2026-07-25` にF9直後の旧パネル消去と再選択後の保存値復元も実機で確認し、
+B1のコード・自動回帰・恒久docs・実機受入を完了した。受入記録は
+`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md` を正本とする。
 
 ##### B1. Stockpile ポリシー
 
 - 現在の在庫内容を表す `Stockpile.resource_type` と、受入方針を分離する。
 - 新しい `StockpilePolicy` は、少なくとも次を持つ。
-  - 受入資源（初版は `Any` / 単一資源。許可集合は後続）
+  - 受入資源の許可集合（全選択、全解除、任意の複数選択）
   - 搬入優先度
   - 目標量
   - 搬出許可
@@ -478,7 +485,9 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
   `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md` の D8〜D26 を設計記録とする。
 - [x] タスク停止理由は producer の通常 0.5 秒 cycle で更新し、owner ごとの latest-only runtime snapshot として保持する。
   保存・履歴化せず、world replacement で破棄する。
-- [x] `StockpilePolicy` の初版は `Any` / `Only(ResourceType)` とし、資源カテゴリ/許可集合は後続へ送る。
+- [x] `StockpilePolicy` の初版は `Any` / `Only(ResourceType)` とし、`2026-07-24` の後続で
+  旧variant互換を維持した `Selected(StockpileResourceSet)` と資材別チェックリストへ拡張した。
+  資源カテゴリ階層は引き続き後続とする。
 - [x] Familiar の活動範囲は既存の persistent `TaskArea` を唯一の正本とし、新しい距離・領域型を追加しない。
 - [ ] 解体回収率を固定値、建築別、難易度/Edict 影響のどこまで初版へ含めるか決める。
 - [x] Track B の durable component 追加は container header v1 を維持する。新 executable は old v0/v1 の
@@ -494,26 +503,26 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 現在地
 
-- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（完了・archive済み）/ B1 コード・自動検証・docs・実機確認実施 100%（R05修正待ち）/ B2〜B3 計画 100%・実装 0% / C〜D 未採否`
+- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（完了・archive済み）/ B1 100%（完了・archive済み）/ B2〜B3 計画 100%・実装 0% / C〜D 未採否`
 - 直近で完了したこと: A3 の latest-only task diagnostics、filter/sort dashboard、安全な priority/cancel、
   owner cancellation、save/reset回帰、恒久ドキュメント同期。Track B はコード・save・UI の現状を再監査し、
   B1 Stockpile の M1〜M5（永続 policy、移行、tier 別需要、manual / wheelbarrow 判定、共有 score offset、
   Familiar live resolver、committed execution、draining 対応 consolidation、単一/矩形 editor、typed outcome通知、
   固定tick横断回帰、steady-state性能比較、恒久docs）を完了し計画をarchiveした。
   B2 Familiar、B3 Soul Energy は実装境界と移行・検証手順を別計画へ固定済みである。
-  B1の実機確認ではpolicy round-trip、range/capture、Toast、Draining、in-flight、特殊設備除外を確認した一方、
-  F9直後の旧情報パネル残留は未修正である。
-- 現在のブランチ/前提: `master`。A1/A3とB1実装計画はアーカイブ済み。A2とB1実機受入は現行計画で追跡する。
+  B1の実機確認ではpolicy round-trip、range/capture、Toast、Draining、in-flight、特殊設備除外を確認した。
+  F9直後の旧情報パネル残留はInfoPanel rootの同期非表示と実Node回帰を追加して修正し、実機再受入も完了した。
+  受入資材UIは全9資材の静的チェックリストと
+  複数許可集合へ拡張し、実機B1-R14〜R15も合格済みである。
+- 現在のブランチ/前提: `master`。A1/A3とB1はアーカイブ済み。A2実機受入を現行計画で追跡する。
 
 ### 次のAIが最初にやること
 
-1. B1実機受入のB1-R05を修正・再確認する。B1-R06〜B1-R12は合格済みとし、
-   reset修正が経路へ影響する場合だけ該当項目を再確認する。
-2. A2 の重点実機項目を確認し、問題なければ計画をarchiveする。
-3. A3 の定量性能検証を進める場合は、独立した性能フォローアップを正本にする。
-4. B2 は完了したB1のshared policy score compositionを再利用し、`FamiliarOperation` の非上書き永続化から始める。
+1. A2 の重点実機項目を確認し、問題なければ計画をarchiveする。
+2. A3 の定量性能検証を進める場合は、独立した性能フォローアップを正本にする。
+3. B2 は完了したB1のshared policy score compositionを再利用し、`FamiliarOperation` の非上書き永続化から始める。
    B3 は Soul Spa の pending slot 回帰を最初の failing test とする。
-5. Track C〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
+4. Track C〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
 
 ### ブロッカー/注意点
 
@@ -521,8 +530,8 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - HVAC/Plumbing は `docs/proposals/hvac-plumbing-proposal.md` と対応計画を正本とする。
 - タスク停止理由を得るため、UI から候補評価や A* を再実行しない。
 - `Stockpile.resource_type` は現在内容であり、受入ポリシーとして再利用しない。
-- B1のF9 load自体とpolicy値のround-tripは成功するが、load直後に旧情報パネルが残る。
-  `docs/plans/stockpile-policy-manual-acceptance-plan-2026-07-23.md` のB1-R05を参照する。
+- B1のF9 load、policy値のround-trip、旧情報パネル消去はコード・自動回帰・実機受入まで完了している。
+  完了記録は`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`を参照する。
 - `FamiliarOperation` は現状ロード時に既定値へ戻るため、方針追加前に永続化境界を修正する。
 - 新しい Bevy API は 0.19 の一次情報またはローカル crate source で確認する。
 
@@ -538,7 +547,8 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - `docs/world_lore.md`
 - `docs/proposals/hvac-plumbing-proposal.md`
 - `docs/plans/archive/stockpile-policy-plan-2026-07-20.md`
-- `docs/plans/stockpile-policy-manual-acceptance-plan-2026-07-23.md`
+- `docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`
+- `docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`
 - `docs/plans/familiar-operation-policy-plan-2026-07-20.md`
 - `docs/plans/soul-energy-control-plan-2026-07-20.md`
 - `crates/bevy_app/src/plugins/input.rs`
@@ -578,3 +588,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | `2026-07-22` | `Codex` | B1 M5 の固定tick横断回帰、UI開閉steady-state比較、恒久docs同期、全workspace検証を完了し計画をarchive |
 | `2026-07-23` | `Codex` | B1隔離実機受入を開始。policy round-trip、Draining表示、range lifecycleを確認し、F9直後の旧情報パネル残留を現行受入計画へ記録 |
 | `2026-07-23` | `User / Codex` | B1の残る実機項目を確認。range/capture、Toast、Draining完了、in-flight、特殊設備除外を合格とし、未修正の旧情報パネル残留だけを継続blockerとして記録 |
+| `2026-07-24` | `Codex` | B1受入資材をcycle式から全選択・全解除・9資材チェックリストへ変更。複数許可集合、旧save互換、矩形patch、横断回帰を同期 |
+| `2026-07-24` | `User / Codex` | B1チェックリストの実機再受入を完了。表示・直接操作、複数集合の矩形適用、Toast件数、F5/F9 round-tripを合格とし、残るblockerをB1-R05だけに更新 |
+| `2026-07-24` | `Codex` | B1-R05のInfoPanel root同期非表示と実Node回帰を追加。コード修正・自動確認を完了し、残件をF9実機再確認へ更新 |
+| `2026-07-25` | `User / Codex` | B1-R05の実機再受入でF9直後の旧パネル消去と再選択後の保存値復元を確認。B1を完了し受入計画をarchive |

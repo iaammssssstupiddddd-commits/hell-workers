@@ -14,7 +14,11 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 - 初期配置（ゾーン配置）時:
   - `capacity = 10`
   - `resource_type = None`
-  - policy は `Any`、`Normal`、`target_amount = capacity`、`allow_export = true`
+  - policy は全資材許可（互換表現は `Any`）、`Normal`、`target_amount = capacity`、`allow_export = true`
+- acceptance は全9資材の許可集合である。全許可は `Any`、単一許可は旧save互換の
+  `Only(ResourceType)`、0件または2〜8件は `Selected(StockpileResourceSet)` へ正規化する。
+  これは空セルが次に受け入れられる候補集合であり、1セルへ複数資材を混載する許可ではない。
+  全解除した空集合は新規搬入をすべて拒否し、空セルの表示stateは `Disabled` とする。
 - `resource_type` は最初の格納で確定し、最後の1個が取り出されると `None` に戻ります。
 - `target_amount` は常に `0..=capacity` に正規化する。0 は新規搬入を許可しない設定であり、
   既存在庫を削除しない。
@@ -30,10 +34,12 @@ Hell-Workers の物流は、`TransportRequest` を中心にした自動発行 + 
 
 - `StockpilePolicy` を持つ通常セルは、格納済み `ResourceItem` と同じ座標でもセル側を優先して選択・検査できる。
   Tank、Mud Mixer、`BucketStorage` など policy を持たない特殊設備には editor を表示しない。
-- Info Panel は `Accepting` / `TargetReached` / `Draining`、現在量、搬入予約量、物理容量、現在資源、
+- Info Panel は `Accepting` / `TargetReached` / `Draining` / `Disabled`、現在量、搬入予約量、物理容量、現在資源、
   acceptance、target、搬入優先度、搬出許可を live snapshot から表示する。`Draining` 中は
   `allow_export = false` でも実効搬出が許可されることを明示する。
-- 単一セルでは acceptance、target、priority、export を部分 patch として変更する。`Apply Policy to Area` は
+- acceptance は `Allow All` / `Clear All` と、全資材を常時表示する2列チェックリストで編集する。
+  各行は `[x] / [ ]` と資材名を表示し、cycle操作や候補の非表示を行わない。
+- 単一セルでは acceptance集合、target、priority、export を部分 patch として変更する。`Apply Policy to Area` は
   表示中セルの4設定を1つの patch に固定し、次の矩形ドラッグへ一括適用する。
 - widget は component を直接変更しない。単一・範囲の両操作は
   `UiIntent::ApplyStockpilePolicy` → `StockpilePolicyChangeRequest` → domain handler →
@@ -457,7 +463,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - 通常 Stockpile の**新規搬入**は `evaluate_stockpile_policy(NewInbound)` へ現在量、物理容量、target、
   stored resource、transfer resource、資源別 `IncomingDeliveries`、同一 cycle shadow を渡す。
 - `available_amount = min(physical remaining, target remaining) - incoming - cycle shadow` を saturating 計算し、
-  空の `Any` セルでも別資源の予約があれば後続資源を拒否する。
+  acceptanceが複数資材を許可する空セルでも、先に別資源の予約があれば後続資源を拒否する。
 - 通常 haul / wheelbarrow の実行時は、搬送 item 集合と destination の live `IncomingDeliveries` を Entity 単位で
   突き合わせる。自分の予約を持つ item だけを `CommittedInbound` とし、変更後の acceptance / target は
   grandfather するが、物理容量、現在内容の互換性、owner 互換性は再検証する。

@@ -82,12 +82,20 @@ pub fn reset_for_world_replace(world: &mut World) {
     reset_existing_resource::<panels::task_list::TaskDashboardViewState>(world);
     reset_existing_resource::<panels::task_list::TaskDashboardActionState>(world);
     notifications::reset_for_world_replace(world);
+    reset_info_panel_presentation(world);
     mark_entity_list_dirty(world);
 
     if world.contains_resource::<InputFocus>() {
         // A fresh resource drops both the active focus and buffered focus
         // transitions that could otherwise mention a removed rename field.
         world.insert_resource(InputFocus::default());
+    }
+}
+
+fn reset_info_panel_presentation(world: &mut World) {
+    let mut roots = world.query_filtered::<&mut Node, With<components::InfoPanel>>();
+    for mut node in roots.iter_mut(world) {
+        node.display = Display::None;
     }
 }
 
@@ -164,6 +172,27 @@ fn mark_entity_list_dirty(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn world_replace_reset_hides_visible_info_panel_root_immediately() {
+        let mut world = World::new();
+        let root = world
+            .spawn((
+                Node {
+                    display: Display::Flex,
+                    ..default()
+                },
+                components::InfoPanel,
+            ))
+            .id();
+
+        reset_for_world_replace(&mut world);
+
+        assert_eq!(
+            world.entity(root).get::<Node>().unwrap().display,
+            Display::None
+        );
+    }
 
     #[test]
     fn world_replace_reset_clears_entity_bearing_ui_state() {

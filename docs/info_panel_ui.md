@@ -1,6 +1,6 @@
 # 情報パネルUI仕様
 
-最終更新: 2026-07-22
+最終更新: 2026-07-24
 
 ## 概要
 画面右側に表示される常駐パネルです。  
@@ -58,9 +58,9 @@ Tank、Mud Mixer、`BucketStorage` など `StockpilePolicy` を持たない特�
 
 | 項目 | 表示・操作 |
 |:---|:---|
-| State | `Accepting` / `Target Reached` / `Draining` |
+| State | `Accepting` / `Target Reached` / `Draining` / `Disabled`。全解除した空集合は `Disabled` |
 | Stored | 現在量 / 物理容量、現在資源、搬入予約量 |
-| Acceptance | `Any` と全 `ResourceType` の `Only(...)` をボタンで循環 |
+| Accepted Resources | `Allow All` / `Clear All` と、全9資材を常時表示する2列の `[x] / [ ]` チェックリスト |
 | Target | `-` / `+` で1ずつ変更。domain handlerでもセル容量へclamp |
 | Inbound Priority | `Low` → `Normal` → `High` → `Critical` を循環 |
 | Export | On / Off を切替。Draining中はOffでも実効搬出overrideを表示 |
@@ -70,6 +70,11 @@ Tank、Mud Mixer、`BucketStorage` など `StockpilePolicy` を持たない特�
 `UiIntent` として発行する。ピン中は `SelectedEntity` ではなく、表示モデルが保持するピン対象Entityへ適用する。
 矩形操作は左ボタンpress/releaseを所有し、クリックだけなら1タイルとして扱う。Escapeはmodeとpatchを破棄し、
 Modal/Pause capture開始時のgesture rollbackはpatchを保持して再試行できる。
+
+Accepted Resourcesの各行は起動時に一度だけ生成する静的UI nodeであり、ViewModel更新時はTextと
+`MenuButton` actionだけを差分更新する。全許可、単一許可、空集合、複数許可は同じ集合契約で表示し、
+複数許可でも1セルの現在内容と搬入予約は1資材に限定する。全資材を一覧から隠すcycle操作は持たない。
+情報パネル全体はviewport高58%を上限に縦scrollし、`1280x720 / UiScale 1.25` でも下段操作へ到達できる。
 
 ### 電力発電施設（Soul Spa）
 `SoulSpaSite` を持つエンティティは `append_soul_spa_model()` で追記される。
@@ -105,8 +110,11 @@ Modal/Pause capture開始時のgesture rollbackはpatchを保持して再試行�
   - `update_entity_inspection_view_model_system` が `EntityInspectionViewModel` resource を更新
   - パネル側は描画責務に限定
 - `InfoPanelState` で前回モデルを保持し、同一内容の再描画を抑制
-- Stockpile editor の静的button actionは表示中の `EntityInspectionModel.entity` から毎回更新する。
-  world replacement時は旧Entityと保留patchをplaceholder/defaultへ戻す。
+- Stockpile editor の静的button action（資材チェックリスト9行を含む）は表示中の
+  `EntityInspectionModel.entity` から毎回更新する。
+  world replacement時は旧Entityと保留patchをplaceholder/defaultへ戻し、静的`InfoPanel` rootも
+  同じreplace phaseで同期的に`Display::None`へ戻す。ViewModelと`InfoPanelState`が同時にdefault化されると
+  次の`Update`はcache一致で早期returnできるため、旧worldの表示消去を次frameの差分更新へ委ねない。
 - `InfoPanelState` はリネーム中の対象 entity も保持する。表示モデルが同一でも、`SoulRenameState.active` の開始/終了でフィールド表示が切り替わるため、この状態は再描画判定に含める
 - `Update` では `update_entity_inspection_view_model_system` → `info_panel_system` の順に固定し、selection / pin / entity 消滅の反映が 1 フレーム遅れないようにします。
 - `info_panel_system` は `menu_visibility_system` の後、`update_mode_text_system` の前で実行されます。

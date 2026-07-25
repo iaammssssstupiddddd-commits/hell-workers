@@ -10,7 +10,7 @@
 | ファイル | 内容 |
 |---|---|
 | `types.rs` | `ResourceType` enum, `ResourceItem`, `Inventory`, `Wheelbarrow` 等 |
-| `zone.rs` | ゾーン管理・エリア制御、通常セルの永続 `StockpilePolicy` と共通 patch 型 |
+| `zone.rs` | ゾーン管理・エリア制御、通常セルの永続 `StockpilePolicy`、複数資材の `StockpileResourceSet`、共通 patch 型 |
 | `stockpile_policy.rs` | 搬入・確定済み搬入・搬出を予約込みで判定する副作用のない policy evaluator と、通常 Stockpile の owner 互換契約 |
 | `stockpile_policy_change.rs` | 単一セル・範囲編集で共有する typed request / outcome と、managed cell 境界を再検証する policy 適用システム |
 | `water.rs` | 水システムコンポーネント・ロジック |
@@ -105,7 +105,7 @@ energy orderingへ接続するため`bevy_app/src/systems/jobs/soul_spa_construc
 | `TileSiteIndex` 型定義・更新システム | — |
 | `construction_phase_transition`（index-backed floor/wall adapter、`ConstructionPerfMetrics`） | transitionのproduction登録、cancel/completion、asset依存spawn |
 | `SharedResourceCache` | `sync_reservations_system`（ゲーム固有クエリ） |
-| Stockpile policy のデータ型・純粋 evaluator・typed change handler | policy の保存移行、UI adapter、ゲーム固有の producer / execution 接続 |
+| Stockpile policy の受入集合・データ型・純粋 evaluator・typed change handler | policy の保存移行、チェックリストUI adapter、ゲーム固有の producer / execution 接続 |
 
 手押し車仲裁は source reservation を近傍 Top-K の投入前に除外する。実検索範囲内で予約を含めれば `hard_min` を
 満たせる場合は、全件予約・一部予約のどちらも `SourceReserved`、予約を含めても不足する場合は `NoSourceItems` とし、

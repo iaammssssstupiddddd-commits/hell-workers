@@ -225,7 +225,7 @@ root message型は`MessagesPlugin`の単一typed macroから初期化と`Message
 | --- | --- | --- |
 | root interaction | selection、hover、move placement、build/zone/task/companion context、Stockpile policy範囲編集patch、pending PlayMode | default化し、`PlayMode::Normal`を予約 |
 | save outcome | `SaveLoadOutcome` Message | `SavePlugin`専用hookで旧bufferをclear。最終outcomeは全reset後にdispatcherが発行 |
-| `hw_ui` | rename、inspection/pin、drag、entity list model/index、area edit history、text pending、配置feedback、通知Message/center/history/unread、`UiIntent` / `TextInputIntent`、task filter/sort、inline cancel confirmation、Stockpile policy editorの旧Entity付きbutton action | hookでclear。task listの全`TaskListDynamicNode`と動的通知rowをdespawnし、static UI root、サイズ、theme、searchは保持 |
+| `hw_ui` | rename、inspection/pin、drag、entity list model/index、area edit history、text pending、配置feedback、通知Message/center/history/unread、`UiIntent` / `TextInputIntent`、task filter/sort、inline cancel confirmation、Stockpile policy editorの旧Entity付きbutton action | hookでclear。InfoPanel rootを同期的に非表示化し、task listの全`TaskListDynamicNode`と動的通知rowをdespawnする。その他のstatic UI root、サイズ、theme、searchは保持 |
 | root task UI | task list snapshot、task input revisions、Familiar/Blueprint diagnostics | default化してdirty化し、新worldの次frame/cycleでPendingから再構築 |
 | `hw_visual` | owner cache、3D proxy、speech/dream/haul/task-area等の独立transient entity、`GatheringSpot`とlinked aura/object | hookでdespawn + cache clear。root固有のFamiliar range shellもrehydrate cleanupでdespawn |
 | root command visual | designation / task-area indicator、area-edit handle、area / dream preview | root VisualPlugin hookでdespawn。`DesignationIndicator`は通常の`RemovedComponents<Designation>` cleanupを使えないためreplace前に明示破棄 |
@@ -258,7 +258,7 @@ marker のない legacy / auto task を「auto marker が消えた manual task�
 | Blueprint | `Name`、`Sprite`、`BlueprintVisualState`、`BlueprintVisual` | durable `Blueprint` から mirror と搬入履歴を完成形で生成してから付与。資材アイコン・進捗バーはこの mirror を入力に Visual phase で再生成し、保存済み搬入を新規演出として再生しない |
 | Floor / wall construction | site / tile の `Name`、site の visual state、tile の visual mirror と Sprite | durable な site / tile state から直接生成。Logic 停止中でも床・壁タイルと進捗表示を復元 |
 | Tree / Rock / ResourceItem / Stockpile | Sprite（spawn 箇所と同じ画像・サイズ） | rehydrate 内で直接挿入 |
-| 旧形式の通常 Stockpile セル | 欠落した `StockpilePolicy` の互換既定値 | `BelongsTo(owner)` の owner が durable な `Yard` のセルだけへ `Any` / `Normal` / `target_amount = capacity` / export許可を挿入。既存 policy は target だけを capacity 以下へ正規化する。Tank / Mixer root、marker が保存されない Tank companion、owner 不明の storage へは推測で付与しない |
+| 旧形式の通常 Stockpile セル | 欠落した `StockpilePolicy` の互換既定値 | `BelongsTo(owner)` の owner が durable な `Yard` のセルだけへ `Any` / `Normal` / `target_amount = capacity` / export許可を挿入。既存の `Any` / `Only(ResourceType)` は意味を維持し、`Selected(StockpileResourceSet)` を含むpolicyはacceptance集合とtargetを正規化する。Tank / Mixer root、marker が保存されない Tank companion、owner 不明の storage へは推測で付与しない |
 | 障害物 provenance / pathfinding cache | source-aware marker、Building footprint mirror、`ObstaclePositionIndex`、raw obstacle / Door / Bridge cache | `rehydrate_obstacle_runtime` が Tree/Rock、construction、Building/Blueprint/site の semantic source matrix から再構築 |
 
 shell 欠落の判定は「shell が必ず挿入するコンポーネントの不在」
@@ -325,6 +325,8 @@ Phase B（実行中タスクの完全復元）は follow-up。
 `SavePlugin` は `schema::register_save_types` を呼ぶ。schema-owned type の `register_type` と allow-list は
 同じ X-macro から出力され、`Transform` のような external registration は production registry contract test
 で検査する。
+通常Stockpileの旧 `Any / Only(ResourceType)` 互換は、現行serializerで作り直さない固定pre-checklist
+RON bodyを `systems::save::schema` testでdeserializeして型pathとvariant表現まで固定する。
 
 ## 検証
 

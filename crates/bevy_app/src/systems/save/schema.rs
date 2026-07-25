@@ -52,7 +52,7 @@ use hw_logistics::transport_request::{
     TransportPriority, TransportRequest, TransportRequestFixedSource, TransportRequestKind,
 };
 use hw_logistics::types::{ReservedForTask, WheelbarrowParking};
-use hw_logistics::zone::{Stockpile, StockpileAcceptance, StockpilePolicy};
+use hw_logistics::zone::{Stockpile, StockpileAcceptance, StockpilePolicy, StockpileResourceSet};
 use hw_logistics::{BelongsTo, Inventory, PendingBelongsToBlueprint, ResourceItem, Wheelbarrow};
 
 use hw_world::{TerrainType, WorldMap};
@@ -203,6 +203,7 @@ macro_rules! for_each_reflect_dependency {
         $callback!(WallTileState);
         $callback!(ResourceType);
         $callback!(StockpileAcceptance);
+        $callback!(StockpileResourceSet);
         $callback!(TransportRequestKind);
         $callback!(TransportPriority);
         $callback!(SoulSpaPhase);

@@ -126,10 +126,13 @@ task dashboard は focus行とaction barをsiblingとして生成し、nested `B
 inline confirmationはruntime stateで、capture開始・選択/タブ変更・world replacementでresetする。
 ゲームownerのcapability判定、live再検証、priority/cancel適用はroot adapterが所有する。
 
-Stockpile editorは`StockpileInspectionFields`から現在値を表示し、button操作を`UiIntent`として発行するだけで
-domain componentを直接変更しない。単一・範囲の対象解決、範囲modeと保留patchはroot adapterが所有する。
-world replacementでは`hw_ui::reset_for_world_replace()`がinspection/runtime表示stateを初期化し、root側hookが
-範囲mode・保留patchと旧world Entityを保持するbutton bindingを破棄する。
+Stockpile editorは`StockpileInspectionFields`から現在値を表示し、全選択・全解除・全資材の静的2列チェックリストを
+button操作として`UiIntent`へ発行するだけでdomain componentを直接変更しない。チェック行は毎frame生成せず、
+表示中の許可集合に合わせてTextとactionだけを更新する。単一・範囲の対象解決、範囲modeと保留patchはroot adapterが所有する。
+world replacementでは`hw_ui::reset_for_world_replace()`がinspection/runtime表示stateを初期化し、
+静的`InfoPanel` rootを同じreplace phaseで同期的に非表示化する。これにより、次の`Update`でdefault化済み
+ViewModelと描画cacheが一致して早期returnしても旧worldの表示を残さない。root側hookは範囲mode・保留patchと
+旧world Entityを保持するbutton bindingを破棄する。
 
 ## ここに置かないもの
 

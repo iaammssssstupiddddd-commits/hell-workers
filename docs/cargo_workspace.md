@@ -444,7 +444,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 代表例:
 
-- `ResourceItem`, `Wheelbarrow`, `Stockpile`, `StockpilePolicy`, `StockpileAcceptance`, `StockpilePolicyPatch`
+- `ResourceItem`, `Wheelbarrow`, `Stockpile`, `StockpilePolicy`, `StockpileAcceptance`,
+  `StockpileResourceSet`, `StockpilePolicyPatch`
 - water / ground resource helper
 - `TransportRequest*`, `ReceiverPolicyTier`, `TransportRequestPlugin`, `TransportRequestSet`
 - transport metrics / state sync / lifecycle cleanup

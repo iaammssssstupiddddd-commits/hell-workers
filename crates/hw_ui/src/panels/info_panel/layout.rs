@@ -1,14 +1,32 @@
 use crate::components::{
     InfoPanel, InfoPanelNodes, MenuAction, MenuButton, SoulRenameButton, SoulRenameFieldContainer,
-    UiInputBlocker, UiNodeRegistry, UiSlot,
+    StockpileAcceptanceRowNodes, UiInputBlocker, UiNodeRegistry, UiSlot,
 };
 use crate::setup::UiAssets;
 use crate::theme::UiTheme;
+use bevy::input::mouse::MouseScrollUnit;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosition};
-use hw_logistics::StockpilePolicyPatch;
+use hw_logistics::{STOCKPILE_ACCEPTANCE_RESOURCES, StockpilePolicyPatch};
 
 use crate::intents::StockpilePolicyEditTarget;
+
+const INFO_PANEL_MAX_HEIGHT_VH: f32 = 58.0;
+
+fn scroll_info_panel(
+    on_scroll: On<Pointer<Scroll>>,
+    mut query: Query<(&mut ScrollPosition, &ComputedNode), With<InfoPanel>>,
+) {
+    let Ok((mut scroll_position, node)) = query.get_mut(on_scroll.entity) else {
+        return;
+    };
+    let delta_y = match on_scroll.unit {
+        MouseScrollUnit::Line => on_scroll.y * 20.0,
+        MouseScrollUnit::Pixel => on_scroll.y,
+    };
+    let max_offset = (node.content_size.y - node.size.y).max(0.0) * node.inverse_scale_factor;
+    scroll_position.y = (scroll_position.y - delta_y).clamp(0.0, max_offset);
+}
 
 fn spawn_info_section_divider(
     parent: &mut ChildSpawnerCommands,
@@ -102,6 +120,53 @@ fn spawn_stockpile_editor_button(
     (button, text_entity)
 }
 
+fn spawn_stockpile_acceptance_row(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &dyn UiAssets,
+    theme: &UiTheme,
+    resource_type: hw_logistics::ResourceType,
+) -> StockpileAcceptanceRowNodes {
+    let mut text_entity = Entity::PLACEHOLDER;
+    let button = parent
+        .spawn((
+            Button,
+            Node {
+                width: Val::Percent(48.5),
+                min_height: Val::Px(24.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::FlexStart,
+                padding: UiRect::horizontal(Val::Px(5.0)),
+                ..default()
+            },
+            BackgroundColor(theme.colors.button_default),
+            MenuButton(MenuAction::ApplyStockpilePolicy {
+                target: StockpilePolicyEditTarget::Single(Entity::PLACEHOLDER),
+                patch: StockpilePolicyPatch::default(),
+            }),
+        ))
+        .with_children(|button| {
+            text_entity = button
+                .spawn((
+                    Text::new(""),
+                    TextFont {
+                        font: game_assets.font_ui().clone().into(),
+                        font_size: crate::theme::font_size_rem(theme.typography.font_size_xs),
+                        weight: FontWeight::SEMIBOLD,
+                        ..default()
+                    },
+                    TextColor(theme.colors.text_primary_semantic),
+                ))
+                .id();
+        })
+        .id();
+
+    StockpileAcceptanceRowNodes {
+        resource_type,
+        button,
+        text: text_entity,
+    }
+}
+
 pub fn spawn_info_panel_ui(
     commands: &mut Commands,
     game_assets: &dyn UiAssets,
@@ -117,6 +182,7 @@ pub fn spawn_info_panel_ui(
                 min_width: Val::Px(theme.sizes.info_panel_min_width),
                 max_width: Val::Px(theme.sizes.info_panel_max_width),
                 height: Val::Auto,
+                max_height: Val::Vh(INFO_PANEL_MAX_HEIGHT_VH),
                 position_type: PositionType::Absolute,
                 right: Val::Px(theme.spacing.panel_margin_x),
                 top: Val::Px(theme.spacing.panel_top),
@@ -124,9 +190,11 @@ pub fn spawn_info_panel_ui(
                 padding: UiRect::all(Val::Px(theme.spacing.panel_padding)),
                 border: UiRect::all(Val::Px(theme.sizes.panel_border_width)),
                 border_radius: BorderRadius::all(Val::Px(theme.sizes.panel_corner_radius)),
+                overflow: Overflow::scroll_y(),
                 display: Display::None,
                 ..default()
             },
+            ScrollPosition::default(),
             BackgroundGradient::from(LinearGradient {
                 angle: 0.0,
                 stops: vec![
@@ -141,6 +209,7 @@ pub fn spawn_info_panel_ui(
             InfoPanel,
             UiSlot::InfoPanelRoot,
         ))
+        .observe(scroll_info_panel)
         .id();
     commands.entity(parent_entity).add_child(root);
     ui_nodes.set_slot(UiSlot::InfoPanelRoot, root);
@@ -474,15 +543,73 @@ pub fn spawn_info_panel_ui(
                         .id(),
                 );
 
-                let (acceptance_button, acceptance_text) = spawn_stockpile_editor_button(
-                    column,
-                    game_assets,
-                    theme,
-                    Val::Percent(100.0),
-                    "Acceptance",
+                spawn_info_section_divider(column, game_assets, theme, "Accepted Resources");
+
+                info_panel_nodes.stockpile_acceptance_summary = Some(
+                    column
+                        .spawn((
+                            Text::new(""),
+                            TextFont {
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: crate::theme::font_size_rem(
+                                    theme.typography.font_size_xs,
+                                ),
+                                weight: FontWeight::SEMIBOLD,
+                                ..default()
+                            },
+                            TextColor(theme.colors.text_secondary_semantic),
+                        ))
+                        .id(),
                 );
-                info_panel_nodes.stockpile_acceptance_button = Some(acceptance_button);
-                info_panel_nodes.stockpile_acceptance_text = Some(acceptance_text);
+
+                column
+                    .spawn(Node {
+                        width: Val::Percent(100.0),
+                        flex_direction: FlexDirection::Row,
+                        column_gap: Val::Px(5.0),
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        let (all_button, _) = spawn_stockpile_editor_button(
+                            row,
+                            game_assets,
+                            theme,
+                            Val::Percent(50.0),
+                            "Allow All",
+                        );
+                        info_panel_nodes.stockpile_acceptance_all_button = Some(all_button);
+
+                        let (none_button, _) = spawn_stockpile_editor_button(
+                            row,
+                            game_assets,
+                            theme,
+                            Val::Percent(50.0),
+                            "Clear All",
+                        );
+                        info_panel_nodes.stockpile_acceptance_none_button = Some(none_button);
+                    });
+
+                column
+                    .spawn(Node {
+                        width: Val::Percent(100.0),
+                        flex_direction: FlexDirection::Row,
+                        flex_wrap: FlexWrap::Wrap,
+                        row_gap: Val::Px(4.0),
+                        column_gap: Val::Px(5.0),
+                        ..default()
+                    })
+                    .with_children(|checklist| {
+                        for resource_type in STOCKPILE_ACCEPTANCE_RESOURCES {
+                            info_panel_nodes.stockpile_acceptance_rows.push(
+                                spawn_stockpile_acceptance_row(
+                                    checklist,
+                                    game_assets,
+                                    theme,
+                                    resource_type,
+                                ),
+                            );
+                        }
+                    });
 
                 column
                     .spawn(Node {
@@ -581,4 +708,205 @@ pub fn spawn_info_panel_ui(
         ui_nodes.set_slot(UiSlot::CommonText, common);
         info_panel_nodes.common = Some(common);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::components::SoulRenameState;
+    use crate::models::inspection::{
+        EntityInspectionModel, EntityInspectionViewModel, StockpileInspectionFields,
+    };
+    use crate::panels::info_panel::{InfoPanelPinState, InfoPanelState, info_panel_system};
+    use crate::selection::SelectedEntity;
+    use hw_logistics::transport_request::TransportPriority;
+    use hw_logistics::{ResourceType, StockpileAcceptance, StockpilePolicyState};
+
+    #[derive(Resource, Default)]
+    struct TestAssets {
+        font: Handle<Font>,
+        image: Handle<Image>,
+    }
+
+    impl UiAssets for TestAssets {
+        fn font_ui(&self) -> &Handle<Font> {
+            &self.font
+        }
+        fn font_familiar(&self) -> &Handle<Font> {
+            &self.font
+        }
+        fn font_soul_name(&self) -> &Handle<Font> {
+            &self.font
+        }
+        fn icon_arrow_down(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn icon_arrow_right(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn icon_idle(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn glow_circle(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn icon_stress(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn icon_fatigue(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn icon_male(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn icon_female(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn icon_axe(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn icon_pick(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn icon_hammer(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn icon_haul(&self) -> &Handle<Image> {
+            &self.image
+        }
+        fn icon_bone_small(&self) -> &Handle<Image> {
+            &self.image
+        }
+    }
+
+    fn spawn_panel(
+        mut commands: Commands,
+        theme: Res<UiTheme>,
+        mut ui_nodes: ResMut<UiNodeRegistry>,
+        mut info_nodes: ResMut<InfoPanelNodes>,
+    ) {
+        let parent = commands.spawn(Node::default()).id();
+        spawn_info_panel_ui(
+            &mut commands,
+            &TestAssets::default(),
+            &theme,
+            parent,
+            &mut ui_nodes,
+            &mut info_nodes,
+        );
+    }
+
+    #[test]
+    fn stockpile_acceptance_uses_static_resource_checklist_rows() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<UiTheme>()
+            .init_resource::<UiNodeRegistry>()
+            .init_resource::<InfoPanelNodes>()
+            .add_systems(Startup, spawn_panel);
+
+        app.update();
+
+        let info_nodes = app.world().resource::<InfoPanelNodes>();
+        assert!(info_nodes.stockpile_acceptance_summary.is_some());
+        assert!(info_nodes.stockpile_acceptance_all_button.is_some());
+        assert!(info_nodes.stockpile_acceptance_none_button.is_some());
+        assert_eq!(
+            info_nodes
+                .stockpile_acceptance_rows
+                .iter()
+                .map(|row| row.resource_type)
+                .collect::<Vec<_>>(),
+            STOCKPILE_ACCEPTANCE_RESOURCES
+        );
+        for row in &info_nodes.stockpile_acceptance_rows {
+            assert!(app.world().entity(row.button).contains::<Button>());
+            assert!(app.world().entity(row.button).contains::<MenuButton>());
+            assert!(app.world().entity(row.text).contains::<Text>());
+        }
+
+        let root = info_nodes.root.unwrap();
+        let root_entity = app.world().entity(root);
+        let root_node = root_entity.get::<Node>().unwrap();
+        assert_eq!(root_node.max_height, Val::Vh(INFO_PANEL_MAX_HEIGHT_VH));
+        assert_eq!(root_node.overflow.y, OverflowAxis::Scroll);
+        assert!(root_entity.contains::<ScrollPosition>());
+
+        let theme = app.world().resource::<UiTheme>();
+        let viewport_height = 720.0;
+        let max_supported_scale = 1.25;
+        let panel_bottom = theme.spacing.panel_top * max_supported_scale
+            + viewport_height * INFO_PANEL_MAX_HEIGHT_VH / 100.0;
+        let bottom_bar_top =
+            viewport_height - theme.spacing.bottom_bar_height * max_supported_scale;
+        assert!(
+            panel_bottom <= bottom_bar_top,
+            "info panel must stay above the bottom bar at 1280x720 / UiScale 1.25"
+        );
+    }
+
+    #[test]
+    fn stockpile_checklist_row_binds_target_and_toggled_acceptance_patch() {
+        let mut app = App::new();
+        let stockpile = app.world_mut().spawn_empty().id();
+
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(TestAssets::default())
+            .init_resource::<UiTheme>()
+            .init_resource::<UiNodeRegistry>()
+            .init_resource::<InfoPanelNodes>()
+            .init_resource::<SelectedEntity>()
+            .init_resource::<InfoPanelPinState>()
+            .init_resource::<InfoPanelState>()
+            .init_resource::<SoulRenameState>()
+            .insert_resource(EntityInspectionViewModel {
+                model: Some(EntityInspectionModel {
+                    entity: stockpile,
+                    header: "Stockpile".to_string(),
+                    common_text: String::new(),
+                    tooltip_lines: Vec::new(),
+                    soul: None,
+                    stockpile: Some(StockpileInspectionFields {
+                        state: StockpilePolicyState::Accepting,
+                        current_amount: 0,
+                        incoming_amount: 0,
+                        capacity: 5,
+                        current_resource: None,
+                        acceptance: StockpileAcceptance::Only(ResourceType::Wood),
+                        inbound_priority: TransportPriority::Normal,
+                        target_amount: 5,
+                        allow_export: true,
+                    }),
+                }),
+            })
+            .add_systems(Startup, spawn_panel)
+            .add_systems(Update, info_panel_system::<TestAssets>);
+
+        app.update();
+
+        let (button, text) = {
+            let nodes = app.world().resource::<InfoPanelNodes>();
+            let row = nodes
+                .stockpile_acceptance_rows
+                .iter()
+                .find(|row| row.resource_type == ResourceType::Rock)
+                .unwrap();
+            (row.button, row.text)
+        };
+        assert_eq!(app.world().get::<Text>(text).unwrap().0, "[ ] Rock");
+
+        let action = app.world().get::<MenuButton>(button).unwrap().0;
+        let MenuAction::ApplyStockpilePolicy { target, patch } = action else {
+            panic!("expected stockpile policy action");
+        };
+        assert_eq!(target, StockpilePolicyEditTarget::Single(stockpile));
+
+        let acceptance = patch.acceptance.expect("acceptance patch");
+        assert!(acceptance.accepts(ResourceType::Wood));
+        assert!(acceptance.accepts(ResourceType::Rock));
+        assert_eq!(acceptance.allowed_count(), 2);
+        assert_eq!(patch.inbound_priority, None);
+        assert_eq!(patch.target_amount, None);
+        assert_eq!(patch.allow_export, None);
+    }
 }

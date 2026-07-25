@@ -3,7 +3,9 @@ use crate::models::inspection::{
 };
 use bevy::prelude::*;
 use hw_logistics::transport_request::TransportPriority;
-use hw_logistics::{ResourceType, StockpileAcceptance, StockpilePolicyState};
+use hw_logistics::{
+    ResourceType, STOCKPILE_ACCEPTANCE_RESOURCES, StockpileAcceptance, StockpilePolicyState,
+};
 
 #[derive(Clone, PartialEq)]
 pub(super) enum InfoPanelViewModel {
@@ -48,35 +50,40 @@ pub(super) struct StockpileInfoViewModel {
     pub(super) common: String,
 }
 
-pub(super) const fn next_stockpile_acceptance(current: StockpileAcceptance) -> StockpileAcceptance {
-    match current {
-        StockpileAcceptance::Any => StockpileAcceptance::Only(ResourceType::Wood),
-        StockpileAcceptance::Only(ResourceType::Wood) => {
-            StockpileAcceptance::Only(ResourceType::Rock)
-        }
-        StockpileAcceptance::Only(ResourceType::Rock) => {
-            StockpileAcceptance::Only(ResourceType::Water)
-        }
-        StockpileAcceptance::Only(ResourceType::Water) => {
-            StockpileAcceptance::Only(ResourceType::BucketEmpty)
-        }
-        StockpileAcceptance::Only(ResourceType::BucketEmpty) => {
-            StockpileAcceptance::Only(ResourceType::BucketWater)
-        }
-        StockpileAcceptance::Only(ResourceType::BucketWater) => {
-            StockpileAcceptance::Only(ResourceType::Sand)
-        }
-        StockpileAcceptance::Only(ResourceType::Sand) => {
-            StockpileAcceptance::Only(ResourceType::Bone)
-        }
-        StockpileAcceptance::Only(ResourceType::Bone) => {
-            StockpileAcceptance::Only(ResourceType::StasisMud)
-        }
-        StockpileAcceptance::Only(ResourceType::StasisMud) => {
-            StockpileAcceptance::Only(ResourceType::Wheelbarrow)
-        }
-        StockpileAcceptance::Only(ResourceType::Wheelbarrow) => StockpileAcceptance::Any,
+pub(super) const fn stockpile_resource_label(resource_type: ResourceType) -> &'static str {
+    resource_type.display_name()
+}
+
+pub(super) fn stockpile_acceptance_summary(acceptance: StockpileAcceptance) -> String {
+    let allowed = acceptance.allowed_count();
+    if acceptance.is_all() {
+        format!(
+            "Allowed: All ({allowed}/{})",
+            STOCKPILE_ACCEPTANCE_RESOURCES.len()
+        )
+    } else if acceptance.is_none() {
+        format!(
+            "Allowed: None ({allowed}/{})",
+            STOCKPILE_ACCEPTANCE_RESOURCES.len()
+        )
+    } else {
+        format!(
+            "Allowed: {allowed}/{}",
+            STOCKPILE_ACCEPTANCE_RESOURCES.len()
+        )
     }
+}
+
+pub(super) fn stockpile_acceptance_row_label(
+    acceptance: StockpileAcceptance,
+    resource_type: ResourceType,
+) -> String {
+    let checked = if acceptance.accepts(resource_type) {
+        "[x]"
+    } else {
+        "[ ]"
+    };
+    format!("{checked} {}", stockpile_resource_label(resource_type))
 }
 
 pub(super) const fn next_stockpile_priority(current: TransportPriority) -> TransportPriority {
@@ -144,28 +151,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stockpile_acceptance_cycle_covers_every_resource_and_returns_to_any() {
-        let mut value = StockpileAcceptance::Any;
-        let mut visited = Vec::new();
-        for _ in 0..10 {
-            value = next_stockpile_acceptance(value);
-            visited.push(value);
-        }
+    fn stockpile_acceptance_checklist_labels_every_resource_without_cycling() {
+        let acceptance = StockpileAcceptance::none()
+            .with_resource(ResourceType::Wood, true)
+            .with_resource(ResourceType::Bone, true);
 
+        let labels = STOCKPILE_ACCEPTANCE_RESOURCES
+            .map(|resource| stockpile_acceptance_row_label(acceptance, resource));
+        assert_eq!(labels[0], "[x] Wood");
+        assert_eq!(labels[1], "[ ] Rock");
+        assert_eq!(labels[6], "[x] Bone");
+        assert_eq!(labels[8], "[ ] Wheelbarrow");
+        assert_eq!(stockpile_acceptance_summary(acceptance), "Allowed: 2/9");
         assert_eq!(
-            visited,
-            vec![
-                StockpileAcceptance::Only(ResourceType::Wood),
-                StockpileAcceptance::Only(ResourceType::Rock),
-                StockpileAcceptance::Only(ResourceType::Water),
-                StockpileAcceptance::Only(ResourceType::BucketEmpty),
-                StockpileAcceptance::Only(ResourceType::BucketWater),
-                StockpileAcceptance::Only(ResourceType::Sand),
-                StockpileAcceptance::Only(ResourceType::Bone),
-                StockpileAcceptance::Only(ResourceType::StasisMud),
-                StockpileAcceptance::Only(ResourceType::Wheelbarrow),
-                StockpileAcceptance::Any,
-            ]
+            stockpile_acceptance_summary(StockpileAcceptance::Any),
+            "Allowed: All (9/9)"
+        );
+        assert_eq!(
+            stockpile_acceptance_summary(StockpileAcceptance::none()),
+            "Allowed: None (0/9)"
         );
     }
 

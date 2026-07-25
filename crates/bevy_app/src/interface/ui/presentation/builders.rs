@@ -171,7 +171,7 @@ impl EntityInspectionQuery<'_, '_> {
         );
         let resource = stockpile
             .resource_type
-            .map(|resource| format!("{resource:?}"))
+            .map(|resource| resource.display_name().to_string())
             .unwrap_or_else(|| "Empty".to_string());
         let export = if state == StockpilePolicyState::Draining && !policy.allow_export {
             "Off (draining override active)"
@@ -189,7 +189,19 @@ impl EntityInspectionQuery<'_, '_> {
             stockpile.capacity
         ));
         model.push_tooltip(format!("Target: {}", policy.target_amount));
-        model.push_tooltip(format!("Acceptance: {:?}", policy.acceptance));
+        let acceptance = if policy.acceptance.is_all() {
+            "All".to_string()
+        } else if policy.acceptance.is_none() {
+            "None".to_string()
+        } else {
+            policy
+                .acceptance
+                .accepted_resources()
+                .map(|resource| resource.display_name())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        model.push_tooltip(format!("Acceptance: {acceptance}"));
         model.push_tooltip(format!("Inbound priority: {:?}", policy.inbound_priority));
         model.push_tooltip(format!("Export: {export}"));
         model.stockpile_fields = Some(StockpileInspectionFields {

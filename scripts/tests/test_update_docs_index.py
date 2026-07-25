@@ -50,6 +50,18 @@ class IndexRenderingTests(unittest.TestCase):
         )
         self.assertEqual(rendered, rerendered)
 
+    def test_replace_final_section_ends_with_single_newline(self) -> None:
+        content = "# Index\n\n## Archive\n\n| old |\n"
+        rendered = update_docs_index.replace_section(
+            content,
+            "## Archive",
+            "| Document | Status | Notes |",
+            "|---|---|---|",
+            ["| [a.md](a.md) | Archived | A |"],
+        )
+        self.assertTrue(rendered.endswith(" | A |\n"))
+        self.assertFalse(rendered.endswith("\n\n"))
+
 
 if __name__ == "__main__":
     unittest.main()

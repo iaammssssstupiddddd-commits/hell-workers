@@ -313,6 +313,9 @@ mod tests {
         app.init_resource::<FamiliarSpatialGrid>()
             .init_resource::<InspectionReceipt>()
             .add_systems(Update, inspect);
+        let acceptance = StockpileAcceptance::none()
+            .with_resource(ResourceType::BucketEmpty, true)
+            .with_resource(ResourceType::StasisMud, true);
         let stockpile = app
             .world_mut()
             .spawn((
@@ -321,7 +324,7 @@ mod tests {
                     resource_type: Some(ResourceType::Bone),
                 },
                 StockpilePolicy {
-                    acceptance: StockpileAcceptance::Only(ResourceType::Wood),
+                    acceptance,
                     inbound_priority: TransportPriority::High,
                     target_amount: 8,
                     allow_export: false,
@@ -350,10 +353,7 @@ mod tests {
         assert_eq!(fields.current_amount, 3);
         assert_eq!(fields.incoming_amount, 1);
         assert_eq!(fields.target_amount, 8);
-        assert_eq!(
-            fields.acceptance,
-            StockpileAcceptance::Only(ResourceType::Wood)
-        );
+        assert_eq!(fields.acceptance, acceptance);
         assert_eq!(fields.inbound_priority, TransportPriority::High);
         assert!(!fields.allow_export);
         assert!(
@@ -361,6 +361,12 @@ mod tests {
                 .tooltip_lines
                 .iter()
                 .any(|line| line.contains("draining override active"))
+        );
+        assert!(
+            model
+                .tooltip_lines
+                .iter()
+                .any(|line| line == "Acceptance: Empty Bucket, Stasis Mud")
         );
     }
 

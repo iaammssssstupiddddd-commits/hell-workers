@@ -244,6 +244,35 @@ mod tests {
     }
 
     #[test]
+    fn registered_hw_ui_reset_hides_visible_info_panel_root() {
+        let mut app = crate::test_support::minimal_app();
+        crate::interface::ui::plugins::register_ui_plugins(&mut app);
+        let root = app
+            .world_mut()
+            .spawn((
+                Node {
+                    display: Display::Flex,
+                    ..default()
+                },
+                hw_ui::components::InfoPanel,
+            ))
+            .id();
+
+        run_load_resets(app.world_mut());
+
+        assert!(
+            app.world()
+                .resource::<LoadResetRegistry>()
+                .names()
+                .any(|name| name == "hw-ui")
+        );
+        assert_eq!(
+            app.world().entity(root).get::<Node>().unwrap().display,
+            Display::None
+        );
+    }
+
+    #[test]
     #[should_panic(expected = "registered more than once")]
     fn registry_rejects_duplicate_hook_names() {
         let mut app = App::new();

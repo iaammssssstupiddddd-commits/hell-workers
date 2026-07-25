@@ -14,6 +14,20 @@ pub enum ResourceType {
 }
 
 impl ResourceType {
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::Wood => "Wood",
+            Self::Rock => "Rock",
+            Self::Water => "Water",
+            Self::BucketEmpty => "Empty Bucket",
+            Self::BucketWater => "Water Bucket",
+            Self::Sand => "Sand",
+            Self::Bone => "Bone",
+            Self::StasisMud => "Stasis Mud",
+            Self::Wheelbarrow => "Wheelbarrow",
+        }
+    }
+
     pub fn is_loadable(&self) -> bool {
         !matches!(
             self,
