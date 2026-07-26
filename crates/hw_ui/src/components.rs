@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use hw_core::game_state::TimeSpeed;
 use hw_jobs::BuildingCategory;
 use hw_logistics::ResourceType;
+use std::borrow::Cow;
 
 // ============================================================
 // 左パネルモード
@@ -197,24 +198,27 @@ pub struct TooltipBody;
 #[derive(Component)]
 pub struct TooltipProgressBar(pub f32);
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct UiTooltip {
-    pub text: &'static str,
-    pub shortcut: Option<&'static str>,
+    pub text: Cow<'static, str>,
+    pub shortcut: Option<Cow<'static, str>>,
 }
 
 impl UiTooltip {
-    pub const fn new(text: &'static str) -> Self {
+    pub fn new(text: impl Into<Cow<'static, str>>) -> Self {
         Self {
-            text,
+            text: text.into(),
             shortcut: None,
         }
     }
 
-    pub const fn with_shortcut(text: &'static str, shortcut: &'static str) -> Self {
+    pub fn with_shortcut(
+        text: impl Into<Cow<'static, str>>,
+        shortcut: impl Into<Cow<'static, str>>,
+    ) -> Self {
         Self {
-            text,
-            shortcut: Some(shortcut),
+            text: text.into(),
+            shortcut: Some(shortcut.into()),
         }
     }
 }

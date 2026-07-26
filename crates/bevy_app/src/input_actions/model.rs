@@ -3,6 +3,14 @@ use bevy::prelude::*;
 /// Project-owned semantic actions resolved from physical keyboard chords.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputAction {
+    OpenHelp,
+    CloseHelp,
+    HelpPreviousTopic,
+    HelpNextTopic,
+    HelpPageUp,
+    HelpPageDown,
+    HelpHome,
+    HelpEnd,
     SaveGame,
     RequestLoadGame,
     CycleElevation,

@@ -78,6 +78,28 @@ fn default_bindings_have_unique_contextual_claims() {
 }
 
 #[test]
+fn input_overlay_priority_matches_global_visual_layer_order() {
+    let overlays = [
+        (
+            InputOverlay::OperationDialog,
+            hw_ui::overlay::OPERATION_DIALOG_LAYER,
+        ),
+        (InputOverlay::Pause, hw_ui::overlay::PAUSE_LAYER),
+        (InputOverlay::Settings, hw_ui::overlay::SETTINGS_LAYER),
+        (InputOverlay::Help, hw_ui::overlay::HELP_LAYER),
+        (
+            InputOverlay::LoadConfirm,
+            hw_ui::overlay::LOAD_CONFIRM_LAYER,
+        ),
+    ];
+
+    for adjacent in overlays.windows(2) {
+        assert!(adjacent[0].0.priority() < adjacent[1].0.priority());
+        assert!(adjacent[0].1.0 < adjacent[1].1.0);
+    }
+}
+
+#[test]
 fn every_action_has_exactly_one_consumer_owner() {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum ConsumerOwner {
@@ -93,7 +115,15 @@ fn every_action_has_exactly_one_consumer_owner() {
 
     fn owner(action: InputAction) -> ConsumerOwner {
         match action {
-            InputAction::SaveGame
+            InputAction::OpenHelp
+            | InputAction::CloseHelp
+            | InputAction::HelpPreviousTopic
+            | InputAction::HelpNextTopic
+            | InputAction::HelpPageUp
+            | InputAction::HelpPageDown
+            | InputAction::HelpHome
+            | InputAction::HelpEnd
+            | InputAction::SaveGame
             | InputAction::RequestLoadGame
             | InputAction::ToggleArchitect
             | InputAction::ToggleZones
@@ -139,6 +169,14 @@ fn every_action_has_exactly_one_consumer_owner() {
     }
 
     for action in [
+        InputAction::OpenHelp,
+        InputAction::CloseHelp,
+        InputAction::HelpPreviousTopic,
+        InputAction::HelpNextTopic,
+        InputAction::HelpPageUp,
+        InputAction::HelpPageDown,
+        InputAction::HelpHome,
+        InputAction::HelpEnd,
         InputAction::SaveGame,
         InputAction::RequestLoadGame,
         InputAction::CycleElevation,
@@ -427,7 +465,10 @@ fn save_load_family_prefers_save_and_deduplicates_aliases() {
     );
     assert_eq!(actions, [InputAction::SaveGame]);
 
-    let first = DEFAULT_BINDINGS[0];
+    let first = *DEFAULT_BINDINGS
+        .iter()
+        .find(|binding| binding.action == InputAction::SaveGame)
+        .expect("canonical save binding");
     let alias_bindings = [
         first,
         InputBinding {
@@ -446,7 +487,7 @@ fn save_load_family_prefers_save_and_deduplicates_aliases() {
 }
 
 #[test]
-fn world_and_familiar_claims_resolve_to_one_semantic_action_per_chord() {
+fn world_and_familiar_claims_resolve_without_blocked_shortcuts() {
     assert_eq!(
         resolve_input_chords(&[plain(KeyCode::Digit1)], InputContextSnapshot::default()),
         [InputAction::TimePaused]
@@ -457,7 +498,11 @@ fn world_and_familiar_claims_resolve_to_one_semantic_action_per_chord() {
     );
     assert_eq!(
         resolve_input_chords(&[plain(KeyCode::KeyB)], familiar_context()),
-        [InputAction::FamiliarBuild]
+        [InputAction::ToggleArchitect]
+    );
+    assert_eq!(
+        resolve_input_chords(&[plain(KeyCode::Digit4)], familiar_context()),
+        [InputAction::TimeSuper]
     );
 }
 
@@ -618,6 +663,7 @@ fn pause_whitelist_and_time_priority_are_deterministic() {
 fn modal_overlay_owns_escape_even_with_stale_text_focus() {
     for (overlay, expected) in [
         (InputOverlay::LoadConfirm, InputAction::CancelLoadConfirm),
+        (InputOverlay::Help, InputAction::CloseHelp),
         (InputOverlay::Settings, InputAction::CloseSettings),
         (
             InputOverlay::OperationDialog,
@@ -635,6 +681,51 @@ fn modal_overlay_owns_escape_even_with_stale_text_focus() {
         );
         assert!(resolve_input_chords(&[plain(KeyCode::F5)], context).is_empty());
     }
+}
+
+#[test]
+fn help_binding_opens_from_world_and_pause_but_owns_navigation_when_visible() {
+    assert_eq!(
+        resolve_input_chords(&[plain(KeyCode::F1)], InputContextSnapshot::default()),
+        [InputAction::OpenHelp]
+    );
+    assert_eq!(
+        resolve_input_chords(&[plain(KeyCode::F1)], paused_context()),
+        [InputAction::OpenHelp]
+    );
+
+    let help_context = InputContextSnapshot {
+        top_overlay: Some(InputOverlay::Help),
+        simulation_paused: true,
+        logic_shortcuts_enabled: false,
+        ..default()
+    };
+    for (key, expected) in [
+        (KeyCode::F1, InputAction::CloseHelp),
+        (KeyCode::Escape, InputAction::CloseHelp),
+        (KeyCode::ArrowUp, InputAction::HelpPreviousTopic),
+        (KeyCode::ArrowDown, InputAction::HelpNextTopic),
+        (KeyCode::PageUp, InputAction::HelpPageUp),
+        (KeyCode::PageDown, InputAction::HelpPageDown),
+        (KeyCode::Home, InputAction::HelpHome),
+        (KeyCode::End, InputAction::HelpEnd),
+    ] {
+        assert_eq!(
+            resolve_input_chords(&[plain(key)], help_context.clone()),
+            [expected]
+        );
+    }
+    assert!(resolve_input_chords(&[plain(KeyCode::Space)], help_context).is_empty());
+    assert!(
+        resolve_input_chords(
+            &[plain(KeyCode::F1)],
+            InputContextSnapshot {
+                top_overlay: Some(InputOverlay::Settings),
+                ..default()
+            },
+        )
+        .is_empty()
+    );
 }
 
 #[test]
@@ -771,6 +862,14 @@ fn bridge_maps_ui_owned_actions() {
     assert!(matches!(
         ui_intent_for_action(InputAction::CloseOperationDialog),
         Some(UiIntent::CloseDialog)
+    ));
+    assert!(matches!(
+        ui_intent_for_action(InputAction::OpenHelp),
+        Some(UiIntent::OpenHelp { opener: None })
+    ));
+    assert!(matches!(
+        ui_intent_for_action(InputAction::HelpNextTopic),
+        Some(UiIntent::StepHelpTopic(hw_ui::help::HelpTopicStep::Next))
     ));
     assert!(ui_intent_for_action(InputAction::FamiliarChop).is_none());
     assert!(ui_intent_for_action(InputAction::CancelActiveMode).is_none());

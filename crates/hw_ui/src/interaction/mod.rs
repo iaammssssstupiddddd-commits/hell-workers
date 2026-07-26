@@ -1,5 +1,6 @@
 pub mod common;
 pub mod dialog;
+pub mod help;
 pub mod hover_action;
 pub mod pause_menu;
 pub mod settings;
@@ -12,6 +13,10 @@ pub use common::{despawn_context_menus, update_interaction_color};
 pub use dialog::{
     close_load_confirm_dialog, close_operation_dialog, is_load_confirm_dialog_open,
     open_load_confirm_dialog, open_operation_dialog,
+};
+pub use help::{
+    handle_help_navigation_system, update_help_panel_visibility_system,
+    update_help_topic_presentation_system,
 };
 pub use hover_action::{HoverActionTarget, hover_action_button_system};
 pub use pause_menu::update_pause_menu_visibility as update_pause_menu_visibility_system;

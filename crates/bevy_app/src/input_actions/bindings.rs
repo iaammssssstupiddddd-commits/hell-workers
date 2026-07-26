@@ -10,6 +10,7 @@ pub(crate) enum InputBindingContext {
     Global,
     WorldNormal,
     Familiar,
+    Help,
     LoadConfirm,
     Settings,
     Pause,
@@ -140,6 +141,14 @@ const SHIFT: InputModifiers = InputModifiers {
 };
 
 pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
+    binding(
+        KeyCode::F1,
+        InputAction::OpenHelp,
+        InputBindingContext::Global,
+        resolution(40, Some(InputActionFamily::MenuToggle), 9, 105),
+        InputConflictLane::OverlayTransition,
+        true,
+    ),
     binding(
         KeyCode::F5,
         InputAction::SaveGame,
@@ -449,22 +458,6 @@ pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
         true,
     ),
     binding(
-        KeyCode::KeyB,
-        InputAction::FamiliarBuild,
-        InputBindingContext::Familiar,
-        resolution(50, Some(InputActionFamily::FamiliarCommand), 3, 80),
-        InputConflictLane::SelectionOrMode,
-        true,
-    ),
-    binding(
-        KeyCode::Digit4,
-        InputAction::FamiliarBuild,
-        InputBindingContext::Familiar,
-        resolution(50, Some(InputActionFamily::FamiliarCommand), 3, 80),
-        InputConflictLane::SelectionOrMode,
-        true,
-    ),
-    binding(
         KeyCode::Digit0,
         InputAction::FamiliarCancelDesignation,
         InputBindingContext::Familiar,
@@ -494,6 +487,70 @@ pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
         InputBindingContext::LoadConfirm,
         resolution(100, Some(InputActionFamily::CancelOrClose), 6, 110),
         InputConflictLane::OverlayTransition,
+        true,
+    ),
+    binding(
+        KeyCode::F1,
+        InputAction::CloseHelp,
+        InputBindingContext::Help,
+        resolution(100, Some(InputActionFamily::CancelOrClose), 8, 120),
+        InputConflictLane::OverlayTransition,
+        true,
+    ),
+    binding(
+        KeyCode::Escape,
+        InputAction::CloseHelp,
+        InputBindingContext::Help,
+        resolution(100, Some(InputActionFamily::CancelOrClose), 8, 120),
+        InputConflictLane::OverlayTransition,
+        true,
+    ),
+    binding(
+        KeyCode::ArrowUp,
+        InputAction::HelpPreviousTopic,
+        InputBindingContext::Help,
+        resolution(100, None, 0, 100),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    binding(
+        KeyCode::ArrowDown,
+        InputAction::HelpNextTopic,
+        InputBindingContext::Help,
+        resolution(100, None, 0, 100),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    binding(
+        KeyCode::PageUp,
+        InputAction::HelpPageUp,
+        InputBindingContext::Help,
+        resolution(100, None, 0, 100),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    binding(
+        KeyCode::PageDown,
+        InputAction::HelpPageDown,
+        InputBindingContext::Help,
+        resolution(100, None, 0, 100),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    binding(
+        KeyCode::Home,
+        InputAction::HelpHome,
+        InputBindingContext::Help,
+        resolution(100, None, 0, 100),
+        InputConflictLane::SelectionOrMode,
+        true,
+    ),
+    binding(
+        KeyCode::End,
+        InputAction::HelpEnd,
+        InputBindingContext::Help,
+        resolution(100, None, 0, 100),
+        InputConflictLane::SelectionOrMode,
         true,
     ),
     binding(
@@ -545,6 +602,7 @@ pub(crate) fn binding_matches_context(
     if let Some(overlay) = context.top_overlay {
         return match overlay {
             InputOverlay::LoadConfirm => binding.context == InputBindingContext::LoadConfirm,
+            InputOverlay::Help => binding.context == InputBindingContext::Help,
             InputOverlay::Settings => binding.context == InputBindingContext::Settings,
             InputOverlay::Pause => {
                 binding.context == InputBindingContext::Pause
@@ -575,7 +633,8 @@ pub(crate) fn binding_matches_context(
         }
         InputBindingContext::Debug => true,
         InputBindingContext::DebugVisible => context.debug_visible,
-        InputBindingContext::LoadConfirm
+        InputBindingContext::Help
+        | InputBindingContext::LoadConfirm
         | InputBindingContext::Settings
         | InputBindingContext::Pause
         | InputBindingContext::OperationDialog => false,
@@ -586,6 +645,7 @@ fn action_allowed_while_paused(action: InputAction) -> bool {
     matches!(
         action,
         InputAction::SaveGame
+            | InputAction::OpenHelp
             | InputAction::RequestLoadGame
             | InputAction::TogglePause
             | InputAction::TimePaused

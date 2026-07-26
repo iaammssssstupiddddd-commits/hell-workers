@@ -3,6 +3,8 @@
 //! UIセットアップ、パネル、インタラクションを統合管理します。
 
 pub mod dev_panel;
+pub(crate) mod help_content;
+pub(crate) mod help_controller;
 pub mod interaction;
 pub mod list;
 pub(crate) mod notifications;

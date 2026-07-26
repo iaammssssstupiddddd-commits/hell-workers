@@ -216,8 +216,8 @@ pub fn build_ui_button_tooltip(
         return;
     };
 
-    spawn_header(parent, tooltip.text, game_assets, theme);
-    if let Some(shortcut) = tooltip.shortcut {
+    spawn_header(parent, tooltip.text.as_ref(), game_assets, theme);
+    if let Some(shortcut) = tooltip.shortcut.as_deref() {
         spawn_divider(parent, theme);
         spawn_icon_text_row(
             parent,
@@ -263,8 +263,8 @@ pub fn build_generic_tooltip(
     }
 
     if let Some(tooltip) = ui_tooltip {
-        spawn_header(parent, tooltip.text, game_assets, theme);
-        if let Some(shortcut) = tooltip.shortcut {
+        spawn_header(parent, tooltip.text.as_ref(), game_assets, theme);
+        if let Some(shortcut) = tooltip.shortcut.as_deref() {
             spawn_body_line(
                 parent,
                 &format!("Shortcut: {}", shortcut),

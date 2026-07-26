@@ -4,6 +4,7 @@ use hw_core::jobs::WorkType;
 use hw_jobs::{BuildingCategory, BuildingType};
 use hw_logistics::{StockpilePolicyPatch, zone::ZoneType};
 
+use crate::help::{HelpScrollCommand, HelpTopicId, HelpTopicStep};
 use crate::panels::task_list::{TaskCancelKind, TaskPriorityAdjustment};
 
 /// Copyable target descriptor resolved by the root adapter into concrete stockpile entities.
@@ -15,6 +16,13 @@ pub enum StockpilePolicyEditTarget {
 
 #[derive(Message, Copy, Clone, Debug)]
 pub enum UiIntent {
+    OpenHelp {
+        opener: Option<Entity>,
+    },
+    CloseHelp,
+    SelectHelpTopic(HelpTopicId),
+    StepHelpTopic(HelpTopicStep),
+    ScrollHelp(HelpScrollCommand),
     ToggleArchitect,
     ToggleZones,
     ToggleOrders,

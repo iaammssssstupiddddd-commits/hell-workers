@@ -41,8 +41,10 @@ python3 scripts/dev.py docs --check
 AIルールだけを切り分ける場合は `python3 scripts/check_agent_rules.py`、secret・
 生成物・script modeは `python3 scripts/check_repo_hygiene.py`、Markdown linkは
 `python3 scripts/check_docs.py` で個別に確認できる。
-docs更新Skill本文は `.cursor` 版が正本で、adapterへの反映は
-`python3 scripts/sync_agent_skills.py --write` を使う。
+共有Agent Skill本文は`.cursor/skills/`版が正本で、Codex、Gemini、Claude adapterへの反映は
+`python3 scripts/sync_agent_skills.py --write`を使う。新Skill追加時はscriptのmapping、
+`check_agent_rules.py`のactive skill一覧、`scripts/tests/test_sync_agent_skills.py`も同時に更新する。
+同期scriptは本文を書き換える前に、全adapterの期待`name`・非空`description`とCodex UI metadataを検証する。
 
 ## 容量メンテナンス
 

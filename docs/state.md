@@ -44,11 +44,11 @@ Normal ↔ TaskDesignation（Orders/Zoneボタン/Esc）。Zone配置は
 | `DesignateMine(Option<Vec2>)` | 採掘指示（矩形ドラッグ） | Some = ドラッグ中 |
 | `DesignateHaul(Option<Vec2>)` | 運搬指示（矩形ドラッグ） | Some = ドラッグ中 |
 | `CancelDesignation(Option<Vec2>)` | 指示キャンセル（矩形ドラッグ） | Some = ドラッグ中 |
-| `SelectBuildTarget` | 建築対象選択中 | — |
+| `SelectBuildTarget` | Familiar建築用の予約variant。現在の`FamiliarBuild`はBlockedで遷移せず、実consumerと完了経路を同時実装した後だけ到達可能にする | — |
 | `AreaSelection(Option<Vec2>)` | TaskArea 編集モード | Some = 新規矩形ドラッグ中 |
 | `AssignTask(Option<Vec2>)` | 未割当タスクを Familiar に割り当て | Some = ドラッグ中 |
 | `ZonePlacement(TaskModeZoneType, Option<Vec2>)` | Stockpile/Yard 配置 | Some = ドラッグ中 |
-| `ZoneRemoval(TaskModeZoneType, Option<Vec2>)` | Stockpile/Yard 解除 | Some = ドラッグ中 |
+| `ZoneRemoval(TaskModeZoneType, Option<Vec2>)` | ゾーン解除（現行player導線はStockpileのみ。Yard variantは公開導線なし） | Some = ドラッグ中 |
 | `FloorPlace(Option<Vec2>)` | 床エリア配置 | Some = ドラッグ中 |
 | `WallPlace(Option<Vec2>)` | 壁ライン配置 | Some = ドラッグ中 |
 | `DreamPlanting(Option<Vec2>)` | Dream 植林モード | Some = ドラッグ中 |
@@ -123,12 +123,23 @@ Architect メニューはカテゴリ列（左）と建物列（右）の横並�
 `handle_ui_intent`（`crates/bevy_app/src/interface/ui/interaction/intent_handler.rs`）が適用
 リセット元: `menu_visibility_system`（Architect以外のMenuStateに遷移した時）
 
+## HelpPanelState と HelpPauseGuard
+
+Helpは背景メニューを保持するため`MenuState` variantにせず、`hw_ui::help::HelpPanelState`で
+`open`と`active_topic`を管理する。open時は必ず先頭topicと本文scroll先頭へ戻り、前回表示位置は保持しない。
+
+rootの`HelpPauseGuard`は「Helpが実行中の時間をpauseしたか」だけを保持する。通常時から開いた場合は
+`paused_by_help=true`としてpauseし、close時にunpauseする。すでにPause中なら`false`のまま時間を変更せず、
+close後もPauseを維持する。Help open/closeは`PlayMode`、`TaskMode`、`MenuState`、
+`ArchitectCategoryState`を変更しない。
+
 ## 共通仕様
 
 ### Escキーによるキャンセル
 
-- 最前面 overlay がある場合は `LoadConfirm → Settings → Pause → OperationDialog` の優先順で、その
-  overlay だけを閉じる。Pause の Escape は resume だけを行い、背景 mode state は変更しない。
+- 最前面 overlay がある場合は `LoadConfirm → Help → Settings → Pause → OperationDialog` の優先順で、その
+  overlay だけを閉じる。HelpのEscapeはHelpが所有したpauseだけを解除し、PauseのEscapeはresumeだけを行う。
+  いずれも背景mode stateは変更しない。
 - overlay がない active owner（non-Normal `PlayMode`、non-`None` `TaskMode`、pending non-Normal 遷移）では
   共通 `ActiveModeCleanupParams` を通り、`Normal` を予約すると同時に
   `BuildContext` / `MoveContext` / `MovePlacementState` / `CompanionPlacementState` / `ZoneContext` /
@@ -142,7 +153,7 @@ Architect メニューはカテゴリ列（左）と建物列（右）の横並�
 
 ### Modal/Pause capture開始時のrollback
 
-- overlay open は mode cancel ではない。`PlayMode` と BuildingPlace / BuildingMove /
+- overlay open は mode cancel ではない。Helpを含め、`PlayMode` と BuildingPlace / BuildingMove /
   companion / SoulSpa の placement state は維持し、capture 中の新しい world click だけを止める。
 - capture の false→true frame では、AreaEdit の active drag を開始前の `TaskArea` / `Destination` /
   `ActiveCommand` へ戻し、Designation / Area / Assign / Zone / Floor / Wall / Dream のドラッグ中 variant を
@@ -172,5 +183,6 @@ Architect メニューはカテゴリ列（左）と建物列（右）の横並�
 - `crates/bevy_app/src/app_contexts.rs` - `BuildContext`、`MoveContext`、`ZoneContext`等のroot app context
 - `crates/bevy_app/src/plugins/game.rs` - PlayMode State登録と game system set の実行条件
 - `crates/bevy_app/src/input_actions/{bindings.rs,cancel.rs,capture.rs}` - context 別 Escape 解決、共通 owner cleanup、Modal/Pause capture rollback
+- `crates/bevy_app/src/interface/ui/{help_content/,help_controller.rs}` - Help catalog、accepted open、可逆pause
 - `crates/bevy_app/src/interface/ui/interaction/handlers/` - ボタンによる状態遷移と共通 cleanup 呼び出し
 - `crates/bevy_app/src/systems/command/zone_placement/` - zone_placement（ZoneContext使用）

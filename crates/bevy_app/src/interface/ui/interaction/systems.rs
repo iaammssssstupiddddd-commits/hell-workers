@@ -56,7 +56,7 @@ pub fn ui_interaction_system(
         }
 
         super::despawn_context_menus(&mut commands, &q_context_menu);
-        menu_actions::handle_pressed_action(menu_button.0, &mut ui_intent_writer);
+        menu_actions::handle_pressed_action(entity, menu_button.0, &mut ui_intent_writer);
     }
 }
 

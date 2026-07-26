@@ -23,6 +23,9 @@ This project uses **Bevy 0.19**. Adhere to the following rules and conventions.
 ## 4. Engineering Standards
 - **Rust-analyzer**: Ensure no compilation errors (red squiggles) or significant warnings before reporting completion.
 - **Documentation**: Use the `hell-workers-update-docs` skill to keep documentation, indices, and crate READMEs in sync after any structural or logic changes.
+- You MUST use the repository `hell-workers-review-help-impact` Skill after implementing, changing, or removing functionality, code, or runtime data and before reporting completion, committing, or publishing.
+- Complete the Skill's `Update required` / `No impact` decision from the actual player-visible path; a passing Help impact gate alone does not count as the review.
+- If the current product does not expose that Skill natively, read and follow `.cursor/skills/hell-workers-review-help-impact/SKILL.md` directly before completion.
 - **Command Execution**: Prefer synchronous execution for short-lived commands (file ops, `cargo check`) to avoid unnecessary polling.
 
 ## 5. Build & Development Environment

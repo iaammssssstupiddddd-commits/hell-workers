@@ -109,6 +109,7 @@ def verify() -> None:
 
     print("==> Repository contracts", flush=True)
     run_python_script(str(SCRIPTS_DIR / "check_agent_rules.py"))
+    run_python_script(str(SCRIPTS_DIR / "check_help_impact.py"))
     run_python_script(str(SCRIPTS_DIR / "check_repo_hygiene.py"))
     run_docs(write=False)
 

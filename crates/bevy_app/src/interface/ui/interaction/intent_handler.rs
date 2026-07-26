@@ -8,12 +8,29 @@ use super::intent_context::{
     IntentUiQueries,
 };
 use crate::FamiliarOperationMaxSoulChangedEvent;
+use crate::input_actions::PendingWorldInputCapture;
+use crate::interface::ui::help_controller::{HelpPauseGuard, HelpScrollAreas, handle_help_intent};
+
+#[derive(SystemParam)]
+pub(crate) struct IntentHelpCtx<'w, 's> {
+    pending: Res<'w, PendingWorldInputCapture>,
+    content: Res<'w, hw_ui::help::HelpPanelContent>,
+    state: ResMut<'w, hw_ui::help::HelpPanelState>,
+    guard: ResMut<'w, HelpPauseGuard>,
+    scroll_areas: HelpScrollAreas<'w, 's>,
+}
 
 #[derive(SystemParam)]
 pub(crate) struct IntentSettingsCtx<'w> {
     settings: ResMut<'w, hw_core::GameSettings>,
     debug_visible: ResMut<'w, crate::DebugVisible>,
     config_store: ResMut<'w, GizmoConfigStore>,
+}
+
+#[derive(SystemParam)]
+pub(crate) struct IntentAuxCtx<'w, 's> {
+    settings: IntentSettingsCtx<'w>,
+    help: IntentHelpCtx<'w, 's>,
 }
 
 pub(crate) fn handle_ui_intent(
@@ -23,10 +40,26 @@ pub(crate) fn handle_ui_intent(
     mut familiar_queries: IntentFamiliarQueries,
     mut ui_queries: IntentUiQueries,
     mut ev_max_soul_changed: MessageWriter<FamiliarOperationMaxSoulChangedEvent>,
-    mut settings_ctx: IntentSettingsCtx,
+    mut aux_ctx: IntentAuxCtx,
 ) {
     for intent in ui_intents.read().cloned() {
         let should_save_settings = match intent {
+            UiIntent::OpenHelp { .. } | UiIntent::CloseHelp => {
+                let mut mode_ctx = action_contexts.p0();
+                handle_help_intent(
+                    intent,
+                    &aux_ctx.help.pending,
+                    &aux_ctx.help.content,
+                    &mut aux_ctx.help.state,
+                    &mut aux_ctx.help.guard,
+                    &mut mode_ctx.time,
+                    &mut aux_ctx.help.scroll_areas,
+                );
+                false
+            }
+            UiIntent::SelectHelpTopic(_) | UiIntent::StepHelpTopic(_) | UiIntent::ScrollHelp(_) => {
+                false
+            }
             UiIntent::InspectEntity(_) | UiIntent::ClearInspectPin => {
                 handlers::handle_selection(intent, &mut selection_ctx);
                 false
@@ -99,10 +132,10 @@ pub(crate) fn handle_ui_intent(
                 let mut mode_ctx = action_contexts.p0();
                 handlers::handle_settings(
                     intent,
-                    &mut settings_ctx.settings,
+                    &mut aux_ctx.settings.settings,
                     &mut mode_ctx.cleanup.menu_state,
-                    &mut settings_ctx.debug_visible,
-                    &mut settings_ctx.config_store,
+                    &mut aux_ctx.settings.debug_visible,
+                    &mut aux_ctx.settings.config_store,
                     &mut ui_queries.input_focus,
                 )
             }
@@ -140,7 +173,7 @@ pub(crate) fn handle_ui_intent(
             UiIntent::AdjustTaskPriority { .. } | UiIntent::CancelTask { .. } => false,
         };
 
-        handlers::save_if_requested(should_save_settings, &settings_ctx.settings);
+        handlers::save_if_requested(should_save_settings, &aux_ctx.settings.settings);
     }
 }
 
@@ -151,6 +184,7 @@ mod tests {
         BuildContext, CompanionPlacementState, MoveContext, MovePlacementState, TaskContext,
         ZoneContext,
     };
+    use crate::entities::familiar::Familiar;
     use crate::input_actions::{InputModifiers, ResolvedInputFrame};
     use crate::interface::selection::SelectedEntity;
     use crate::interface::ui::{EntityListNodeIndex, InfoPanelPinState};
@@ -206,6 +240,20 @@ mod tests {
             .init_resource::<crate::DebugVisible>()
             .init_resource::<GizmoConfigStore>()
             .init_resource::<ArchitectCategoryState>()
+            .init_resource::<PendingWorldInputCapture>()
+            .init_resource::<hw_ui::help::HelpPanelState>()
+            .init_resource::<HelpPauseGuard>()
+            .insert_resource(hw_ui::help::HelpPanelContent::new([
+                hw_ui::help::HelpSection::new(
+                    hw_ui::help::HelpSectionId::new("test"),
+                    "Test",
+                    [hw_ui::help::HelpTopic::new(
+                        hw_ui::help::HelpTopicId::new("test"),
+                        "Test",
+                        [],
+                    )],
+                ),
+            ]))
             .insert_resource(DoorVisualHandles {
                 door_open: Handle::default(),
                 door_closed: Handle::default(),
@@ -319,6 +367,30 @@ mod tests {
             NextState::Pending(PlayMode::TaskDesignation)
                 | NextState::PendingIfNeq(PlayMode::TaskDesignation)
         ));
+    }
+
+    #[test]
+    fn blocked_familiar_build_intent_is_a_strict_no_op() {
+        let mut app = domain_action_app();
+        let existing_mode = TaskMode::DesignateMine(None);
+        app.world_mut().resource_mut::<TaskContext>().0 = existing_mode;
+        *app.world_mut().resource_mut::<MenuState>() = MenuState::Orders;
+        let familiar = app.world_mut().spawn(Familiar::default()).id();
+
+        write_intent(
+            &mut app,
+            UiIntent::SelectTaskMode(TaskMode::SelectBuildTarget),
+        );
+        app.update();
+
+        assert_eq!(app.world().resource::<TaskContext>().0, existing_mode);
+        assert_eq!(*app.world().resource::<MenuState>(), MenuState::Orders);
+        assert!(app.world().resource::<SelectedEntity>().0.is_none());
+        assert!(matches!(
+            *app.world().resource::<NextState<PlayMode>>(),
+            NextState::Unchanged
+        ));
+        assert!(app.world().get_entity(familiar).is_ok());
     }
 
     #[test]

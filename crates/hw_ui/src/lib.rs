@@ -3,6 +3,8 @@ use bevy::prelude::*;
 use std::collections::HashSet;
 
 pub mod area_edit;
+/// Game-agnostic Help content schema and presentation state.
+pub mod help;
 pub mod intents;
 pub use intents::{StockpilePolicyEditTarget, UiIntent};
 pub mod components;
@@ -10,6 +12,7 @@ pub mod interaction;
 pub mod list;
 pub mod models;
 pub mod notifications;
+pub mod overlay;
 pub mod panels;
 pub mod plugins;
 pub mod setup;
@@ -30,6 +33,7 @@ impl Plugin for HwUiPlugin {
             .init_resource::<panels::task_list::TaskDashboardViewState>()
             .init_resource::<panels::task_list::TaskDashboardActionState>()
             .init_resource::<panels::task_list::TaskListDirty>()
+            .init_resource::<help::HelpPanelState>()
             .init_resource::<interaction::HoverActionTarget>();
     }
 }
@@ -66,6 +70,7 @@ pub fn reset_for_world_replace(world: &mut World) {
     clear_hover_action_targets(world);
     clear_stockpile_policy_button_targets(world);
     reset_existing_resource::<components::UiInputState>(world);
+    reset_existing_resource::<help::HelpPanelState>(world);
     reset_existing_resource::<components::SoulRenameState>(world);
     reset_existing_resource::<panels::info_panel::InfoPanelState>(world);
     reset_existing_resource::<panels::info_panel::InfoPanelPinState>(world);
@@ -83,6 +88,7 @@ pub fn reset_for_world_replace(world: &mut World) {
     reset_existing_resource::<panels::task_list::TaskDashboardActionState>(world);
     notifications::reset_for_world_replace(world);
     reset_info_panel_presentation(world);
+    reset_help_presentation(world);
     mark_entity_list_dirty(world);
 
     if world.contains_resource::<InputFocus>() {
@@ -96,6 +102,21 @@ fn reset_info_panel_presentation(world: &mut World) {
     let mut roots = world.query_filtered::<&mut Node, With<components::InfoPanel>>();
     for mut node in roots.iter_mut(world) {
         node.display = Display::None;
+    }
+}
+
+fn reset_help_presentation(world: &mut World) {
+    let mut roots = world.query_filtered::<&mut Node, With<help::HelpPanel>>();
+    for mut node in roots.iter_mut(world) {
+        node.display = Display::None;
+    }
+
+    let mut scroll_areas = world.query_filtered::<&mut ScrollPosition, Or<(
+        With<help::HelpScrollArea>,
+        With<help::HelpNavigationScrollArea>,
+    )>>();
+    for mut scroll_position in scroll_areas.iter_mut(world) {
+        scroll_position.0 = Vec2::ZERO;
     }
 }
 
@@ -172,6 +193,56 @@ fn mark_entity_list_dirty(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn world_replace_reset_hides_help_and_clears_its_scroll_state() {
+        let mut world = World::new();
+        world.insert_resource(help::HelpPanelState {
+            open: true,
+            active_topic: Some(help::HelpTopicId::new("topic")),
+        });
+        let root = world
+            .spawn((
+                Node {
+                    display: Display::Flex,
+                    ..default()
+                },
+                help::HelpPanel,
+            ))
+            .id();
+        let scroll = world
+            .spawn((ScrollPosition(Vec2::new(0.0, 140.0)), help::HelpScrollArea))
+            .id();
+        let navigation_scroll = world
+            .spawn((
+                ScrollPosition(Vec2::new(0.0, 80.0)),
+                help::HelpNavigationScrollArea,
+            ))
+            .id();
+
+        reset_for_world_replace(&mut world);
+
+        assert_eq!(
+            *world.resource::<help::HelpPanelState>(),
+            help::HelpPanelState::default()
+        );
+        assert_eq!(
+            world.entity(root).get::<Node>().unwrap().display,
+            Display::None
+        );
+        assert_eq!(
+            world.entity(scroll).get::<ScrollPosition>().unwrap().0,
+            Vec2::ZERO
+        );
+        assert_eq!(
+            world
+                .entity(navigation_scroll)
+                .get::<ScrollPosition>()
+                .unwrap()
+                .0,
+            Vec2::ZERO
+        );
+    }
 
     #[test]
     fn world_replace_reset_hides_visible_info_panel_root_immediately() {

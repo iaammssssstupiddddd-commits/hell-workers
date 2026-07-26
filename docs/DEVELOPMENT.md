@@ -167,6 +167,29 @@ scriptを明示的に実行する。
 | 空間グリッドを追加/削除 | `architecture.md` のグリッド一覧を更新 |
 | crate の責務や定義場所が変わる | `cargo_workspace.md` と関連仕様書の参照先を更新 |
 | 移設済み system の登録責務や ordering が変わる | `architecture.md` / `cargo_workspace.md` / 関連仕様書に「唯一の登録元」と ordering 契約を追記 |
+| player-facing feature/input/UI label/workflowを追加・変更・削除 | `help-screen.md`の手順でmanifest/provider/coverageを更新するか、変更バッチへ理由付きHelp no-impact判断を残す |
+
+#### 9.2.1 Help impact contract
+
+`python3 scripts/dev.py verify`は`scripts/check_help_impact.py`で、diff base以後のproduction変更
+（test専用fileを除く`crates/*/src/**/*.rs`、Cargo/build、repository-owned runtime text data）を一つの
+change batchとして検査する。root所有のHelp catalog更新、または`Help-Impact: none`と空でない
+`Help-Impact-Reason: ...` trailerを持つcommitが、commit DAG上で全production commitの子孫にある必要がある。
+判断後のdirty変更や別branchのproduction変更を追加した場合は、新しいHelp更新または判断が必要になる。
+Help更新として数えるには`help_content/`配下のproduction Rustまたはsnapshot対象のtyped renderer
+`hw_ui/src/help.rs`と、`coverage_approval.snap`のexact snapshotを同じ判断commitまたはdirty batchで
+更新する必要がある。test、README、fixture、sourceだけ、
+approval snapshotだけではproduction batchを承認できない。merge commitは親差分のunionを再計上せず、
+Gitの自動merge treeから外れたresolution/追加編集だけをmerge固有変更として判定する。
+この再構築はGit標準の2-parent mergeを対象とする。octopus mergeまたは自動treeを再構築できない履歴では
+gateをfail-closedで停止し、標準と異なるmerge strategy/optionによるtree差分は安全側にmerge固有変更として扱う。
+
+dirtyなローカル検証だけは`HELL_WORKERS_HELP_IMPACT_REASON`を使用できるが、CIでは無効である。CIは
+non-zeroかつ解決可能で`HEAD`とmerge-baseを持つ`HELL_WORKERS_DIFF_BASE`を必須とする。rename、
+staged/unstaged、未追跡fileも検査する。localizationやdata-driven command/label用に新しいsource root/拡張子を
+追加する場合は、gateのpath分類とfixtureを同じ変更で更新する。ローカルでも`origin/master`とのmerge-baseを
+解決できない既存履歴では`HEAD^`へ縮退せず、fetchまたは`HELL_WORKERS_DIFF_BASE`の明示を要求してfail-closedにする。
+詳細なcatalog ownershipと追加/削除手順は[help-screen.md](help-screen.md)を参照する。
 
 #### 9.3 記述内容の優先順位（MCP-aware 原則）
 
@@ -217,10 +240,23 @@ ECS Relationship を追記する際は **tasks.md §2.1** と同じテーブル�
 - MCP が使えない場合の代替:
   - `~/.cargo/registry/src/` のクレートソースと `docs.rs` の一次情報で確認する。
 
-### 10.4 Cursor Agent Skills（任意）
+### 10.4 Repository Agent Skills
 
-- リポジトリ直下 `.cursor/skills/<name>/SKILL.md` に、ドキュメント同期など手順をまとめた Agent Skill を置ける（例: `hell-workers-update-docs`）。
-- docs更新Skillの本文正本は `.cursor/skills/hell-workers-update-docs/SKILL.md`。Codex、Gemini、Claude adapterのfrontmatterは保持し、本文を `python3 scripts/sync_agent_skills.py --write` で同期する。`check_agent_rules.py` は差分を非変更検査する。
+- リポジトリ直下`.cursor/skills/<name>/SKILL.md`を共有Skill本文の正本とする。現行Skillは
+  `hell-workers-update-docs`と、実装後にplayer-facing Help影響を判定する
+  `hell-workers-review-help-impact`。
+- 機能、code、runtime dataを実装・変更・削除した後は、完了報告・commit・publishより前に必ず
+  `hell-workers-review-help-impact`を使い、実際のplayer-visible経路から`Update required`または
+  `No impact`の判断を完了する。`Undetermined`のまま完了せず、Help impact gateの成功だけで代用しない。
+- productがSkillをnative公開しない場合も省略せず、
+  `.cursor/skills/hell-workers-review-help-impact/SKILL.md`の正本を直接読んで同じ手順を実行する。
+- Codex、Gemini、Claude adapterはproduct固有frontmatterを保持し、本文だけを
+  `python3 scripts/sync_agent_skills.py --write`で同期する。
+- 同期前に全adapterの`name`、非空`description`、Codexの`agents/openai.yaml`にある表示名・短い説明・
+  `$skill-name`を含むdefault promptを検証する。1件でも欠落・不正なら、他adapterを書き換える前に停止する。
+- 新しい共有Skillを追加するときは、`.cursor`正本、全adapter、`scripts/sync_agent_skills.py`のmapping、
+  `scripts/check_agent_rules.py`のactive skill一覧、同期testを同じ変更で追加する。
+- `check_agent_rules.py`は全Skillの本文同期とactive rule内容を非変更検査する。
 
 ### 10.5 デバッグ規約
 

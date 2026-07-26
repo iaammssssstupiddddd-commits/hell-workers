@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hell Workers Help Impact"
+  short_description: "Review feature changes and keep player Help synchronized"
+  default_prompt: "Use $hell-workers-review-help-impact to review this completed implementation and update player Help only when required."

@@ -11,6 +11,8 @@
 |---|---|
 | `lib.rs` | `HwUiPlugin` — 全 UI プラグインの登録 |
 | `intents.rs` | `UiIntent` — ユーザー操作の意図メッセージ型（Entity List の Familiar 指定、Stockpile単一適用・範囲編集開始を含む） |
+| `help.rs` | game型を含まないHelp本文/固定copy/shortcut chrome DTO、opaque ID、`HelpPanelState`、UI marker |
+| `overlay.rs` | full-viewport capture rootの共通`GlobalZIndex`定数 |
 | `theme.rs` | スタイリング・テーマ定数 |
 | `components.rs` | UI コンポーネントレジストリ・共有ユーティリティ |
 | `camera.rs` | `world_cursor_pos`（スクリーン座標→ワールド座標変換 utility。`MainCamera` は `hw_core::camera` から re-export） |
@@ -33,6 +35,7 @@
 | `panels.rs` | 情報パネル・メニュー |
 | `entity_list.rs` | エンティティ一覧 UI |
 | `dialogs.rs` | ダイアログボックス |
+| `help_panel.rs` | Helpのhidden tree、scroll可能navigation、共有本文ScrollArea |
 | `submenus.rs` | サブメニュー階層 |
 | `root.rs` | UI ルート構築と `setup_ui` 実装本体 |
 
@@ -70,6 +73,7 @@
 | `common.rs` | 共有インタラクションユーティリティ |
 | `dialog.rs` | ダイアログ操作 |
 | `hover_action.rs` | ホバーエフェクト |
+| `help.rs` | Help topic reducer、keyboard scroll、visibility/selection presentation |
 | `status_display/` | ステータスバー描画 (runtime, dream bar, mode panel) |
 | `tooltip/` | ツールチップ (`mod.rs` が共有型/re-export、`system.rs` が `hover_tooltip_system` 本体、`target`/`layout`/`fade` が補助) |
 
@@ -113,7 +117,7 @@ impl UiAssets for GameAssets {
 `UiInputState` は通常の UI hover と Modal/Pause capture を別の事実として保持する。
 
 - `pointer_over_ui`: `UiInputBlocker` または hovered/pressed `Button` 上にポインターがある通常の hover 状態。
-- `world_input_captured`: LoadConfirm / Settings / Pause / OperationDialog が world input を所有する状態。
+- `world_input_captured`: LoadConfirm / Help / Settings / Pause / OperationDialog が world input を所有する状態。
 - `world_input_capture_started`: effective capture の false→true を 1 frame だけ通知する rollback latch。
 - `world_input_blocked()`: world 側の選択・配置・カメラ用に hover と capture を合成する。
 
@@ -121,6 +125,13 @@ UI 内のボタン、リスト、テキスト操作は `pointer_over_ui` では�
 ancestry に従う。capture root は viewport 全体の `FocusPolicy::Block + Pickable::default()`、構造用の
 `UiRoot` / `UiMountSlot` は `FocusPolicy::Pass + Pickable::IGNORE` とする。これにより通常時の world picking
 を維持しつつ、overlay 表示中は panel 外と背景 UI を遮断する。
+
+Helpのstable ID値、owner、本文、固定chrome copy、canonical key labelはroot
+`bevy_app::interface::ui::help_content`が構築し、完成済み`HelpPanelContent`をsetup境界へ渡す。
+launcher、header/footer、entry shortcut接頭辞のcopyとshortcutはrootが`HelpPanelChrome`として構築する。
+`HelpPanelChrome`のtyped render helperはexact approval snapshotの検証対象であり、書式変更時も
+`hw_ui/src/help.rs`とsnapshotの同時更新をHelp impact gateが要求する。
+`hw_ui`はgame enumやroot bindingへ逆依存しない。Helpは独立`HelpPanelState`を使い、背景`MenuState`を保持する。
 
 task dashboard は focus行とaction barをsiblingとして生成し、nested `Button` を作らない。filter/sortと
 inline confirmationはruntime stateで、capture開始・選択/タブ変更・world replacementでresetする。

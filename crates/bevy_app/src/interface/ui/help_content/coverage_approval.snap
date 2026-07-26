@@ -1,0 +1,296 @@
+launcher|label="Help"|tooltip="操作とゲームのヘルプ"|shortcut="F1"
+chrome-copy|panel-title="Hell Workers ヘルプ"|close-label="閉じる"|topic-navigation-label="項目移動"|page-navigation-label="ページ移動"|document-bounds-label="先頭 / 末尾"|shortcut-label="操作"
+chrome-render|close-button="閉じる (F1 / Esc)"|footer="F1 / Esc: 閉じる  ↑ / ↓: 項目移動  PageUp / PageDown: ページ移動  Home / End: 先頭 / 末尾"|shortcut-sample="操作: <binding>"
+chrome|slot="close"|shortcut="F1 / Esc"
+chrome|slot="topic-previous"|shortcut="↑"
+chrome|slot="topic-next"|shortcut="↓"
+chrome|slot="page-up"|shortcut="PageUp"
+chrome|slot="page-down"|shortcut="PageDown"
+chrome|slot="document-start"|shortcut="Home"
+chrome|slot="document-end"|shortcut="End"
+section|id="getting-started"|title="はじめに"
+topic|feature="getting-started"|owner="root-onboarding"|section="getting-started"|id="getting-started"|title="基本の仕事ループ"
+entry|topic="getting-started"|id="getting-started-work-loop"|title="Familiar が仕事を管理します"|paragraphs=["Familiar を選び、担当範囲と命令を決めると、範囲内の Soul が必要な仕事へ自動で割り当てられます。", "資源・建築予定・作業範囲を整え、一覧と通知で詰まりを確認するのが基本です。"]|shortcut=None
+entry|topic="getting-started"|id="getting-started-first-steps"|title="最初に確認する場所"|paragraphs=["左の一覧で Familiar と未所属 Soul を確認し、下の Orders・Architect・Zones から仕事を作ります。", "対象を選ぶと右の情報パネルに状態と操作が表示されます。"]|shortcut=None
+section|id="basic-controls"|title="基本操作"
+topic|feature="camera-selection"|owner="input-camera"|section="basic-controls"|id="camera-selection"|title="カメラと選択"
+entry|topic="camera-selection"|id="camera-pan-zoom"|title="カメラ移動"|paragraphs=["W / A / S / D で移動し、マウスホイールで拡大・縮小します。", "Settings で Mouse Drag Pan が有効なら、左ドラッグでもカメラを移動できます。"]|shortcut=Some("W / A / S / D / Mouse Wheel")
+entry|topic="camera-selection"|id="camera-elevation"|title="表示階層"|paragraphs=["地表と地下の表示階層を切り替えます。"]|shortcut=Some("V")
+entry|topic="camera-selection"|id="world-selection"|title="選択と右クリック"|paragraphs=["左クリックで対象を選びます。右クリックは選択対象と現在のモードに応じた操作を開きます。", "入力欄を編集中は、ゲーム用ショートカットが抑止されます。"]|shortcut=None
+topic|feature="time-help"|owner="input-camera"|section="basic-controls"|id="time-help"|title="時間とヘルプ"
+entry|topic="time-help"|id="time-controls"|title="時間速度"|paragraphs=["一時停止を切り替えるか、Paused / Normal / Fast / Super を直接選択できます。"]|shortcut=Some("Space / Esc / 1 / 2 / 3 / 4")
+entry|topic="time-help"|id="help-pause-behavior"|title="ヘルプ中の時間"|paragraphs=["通常時にヘルプを開くと自動で一時停止し、閉じると直前の相対速度で再開します。", "すでに Pause 中なら、ヘルプを閉じても Pause を維持します。"]|shortcut=Some("F1")
+section|id="familiars-workers"|title="Familiar と作業員"
+topic|feature="entity-list-squads"|owner="familiar-management"|section="familiars-workers"|id="entity-list-squads"|title="一覧と所属"
+entry|topic="entity-list-squads"|id="entity-list-selection"|title="一覧から選択"|paragraphs=["左一覧の行を選ぶと対象へ注目できます。前後の候補を順に巡回することもできます。", "検索欄の入力中はショートカットが抑止されます。"]|shortcut=Some("Tab / Shift+Tab")
+entry|topic="entity-list-squads"|id="soul-assignment"|title="Soul の所属変更"|paragraphs=["Soul の行を Familiar セクションへドラッグすると所属を変更できます。", "Familiar の使役上限を超える場合は割り当てられません。"]|shortcut=None
+topic|feature="familiar-commands"|owner="familiar-management"|section="familiars-workers"|id="familiar-commands"|title="Familiar の命令"
+entry|topic="familiar-commands"|id="familiar-designations"|title="作業指定"|paragraphs=["Familiar を選択中に Chop / Mine / Haul を選び、対象範囲をクリックまたはドラッグします。", "Cancel は既存の指定を範囲で取り消します。"]|shortcut=Some("C / 1 / M / 2 / H / 3 / 0 / Delete")
+entry|topic="familiar-commands"|id="familiar-idle-patrol"|title="Idle / Patrol"|paragraphs=["通常状態の Familiar を選択中に、Idle と Patrol を切り替えられます。"]|shortcut=Some("Esc")
+topic|feature="soul-energy"|owner="soul-energy"|section="familiars-workers"|id="soul-energy"|title="Soul Energy"
+entry|topic="soul-energy"|id="soul-energy-status"|title="Yard の電力網を確認する"|paragraphs=["電力は Yard ごとのリアルタイムな発電量と需要で決まり、蓄電はしません。", "Outdoor Lamp を選ぶと Demand と Grid の発電量 / 消費量を確認できます。発電が需要を下回ると BLACKOUT になり、接続中の設備が停止します。"]|shortcut=None
+entry|topic="soul-energy"|id="soul-energy-recovery"|title="Soul Spa で発電する"|paragraphs=["Yard 内に Soul Spa を建てて Bone を搬入すると、Operational になった発電枠へ Soul が入れます。", "発電中の Soul は Dream を消費します。Lamp を増やしたら、発電量、Soul の Dream、Yard への接続を一緒に確認してください。"]|shortcut=None
+topic|feature="info-panel"|owner="familiar-management"|section="familiars-workers"|id="info-panel"|title="情報パネル"
+entry|topic="info-panel"|id="info-panel-pin"|title="表示を固定する"|paragraphs=["情報パネルを pin すると、ポインターを別の対象へ動かしても表示対象を維持します。", "unpin すると現在の hover / selection に追従します。"]|shortcut=None
+entry|topic="info-panel"|id="soul-rename"|title="Soul の名前変更"|paragraphs=["Soul の情報パネルから名前を編集できます。Enter で確定、Esc でキャンセルします。"]|shortcut=Some("Enter / Esc")
+section|id="orders-building-zones"|title="タスク・建築・ゾーン・Dream"
+topic|feature="orders-areas"|owner="orders-building"|section="orders-building-zones"|id="orders-areas"|title="Orders と範囲編集"
+entry|topic="orders-areas"|id="orders-designation"|title="タスクを指定する"|paragraphs=["下部の Orders から作業を選び、対象をクリックまたは範囲ドラッグします。", "未確定の操作または開いているメニューは、その時点の入力文脈に応じて解除できます。"]|shortcut=Some("Esc")
+entry|topic="orders-areas"|id="area-edit"|title="Task Area を編集する"|paragraphs=["範囲編集では copy / paste、undo / redo、3つの preset 保存・読込を利用できます。", "3つの preset は保存用と読込用のショートカットから使い分けます。"]|shortcut=Some("Ctrl+C / Ctrl+V / Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z / Ctrl+1 / Ctrl+2 / Ctrl+3 / Alt+1 / Alt+2 / Alt+3")
+topic|feature="building-zones-dream"|owner="orders-building"|section="orders-building-zones"|id="building-zones-dream"|title="建築・ゾーン・Dream"
+entry|topic="building-zones-dream"|id="architect-building"|title="Architect で建築"|paragraphs=["建物を選び、world 上で配置します。Floor と Wall は範囲を指定して施工予定を作ります。", "必要資源が届くと、担当可能な Soul が工程を進めます。"]|shortcut=Some("B")
+entry|topic="building-zones-dream"|id="zones-workflow"|title="Zones で保管範囲を作る"|paragraphs=["Stockpile は新しい保管範囲を作成でき、Yard は既存範囲を拡張できます。Remove は Stockpile の削除に使います。", "Stockpile の対象資源、目標量、優先度、持出可否は情報パネルから変更できます。"]|shortcut=Some("Z")
+entry|topic="building-zones-dream"|id="dream-planting"|title="Dream で植樹"|paragraphs=["Dream の Plant Trees を選び、植える範囲を指定します。必要な Dream と成立条件を確認してください。"]|shortcut=None
+topic|feature="task-dashboard"|owner="orders-building"|section="orders-building-zones"|id="task-dashboard"|title="タスク一覧"
+entry|topic="task-dashboard"|id="task-dashboard-focus"|title="仕事の場所を確認する"|paragraphs=["左パネルを Tasks に切り替え、行を選ぶと該当する仕事へフォーカスできます。"]|shortcut=None
+entry|topic="task-dashboard"|id="task-dashboard-filter-sort"|title="絞り込みと並べ替え"|paragraphs=["Type / State / Priority / Workers の条件を順に切り替えて、表示する仕事を絞り込めます。", "Sort と Order では、仕事種別・状態・優先度・担当数の並び順と昇順／降順を変更できます。"]|shortcut=None
+entry|topic="task-dashboard"|id="task-dashboard-actions"|title="優先度変更とキャンセル"|paragraphs=["変更可能なタスクだけ優先度を調整できます。キャンセルは確認を経て実行されます。"]|shortcut=None
+section|id="save-settings-notifications"|title="保存・設定・通知"
+topic|feature="save-settings-notifications"|owner="persistence-settings"|section="save-settings-notifications"|id="save-settings-notifications"|title="保存・設定・通知"
+entry|topic="save-settings-notifications"|id="save-load"|title="保存と読込"|paragraphs=["現在の単一セーブへ保存するか、読込確認を開きます。", "読込は現在の world を置き換えるため、確認ダイアログを経て実行されます。"]|shortcut=Some("F5 / F9")
+entry|topic="save-settings-notifications"|id="settings"|title="Settings"|paragraphs=["UI scale、カメラ速度、マウス移動、既定時間速度、デバッグ表示を変更できます。", "設定は変更時に保存され、次回起動でも利用されます。"]|shortcut=None
+entry|topic="save-settings-notifications"|id="notifications"|title="通知"|paragraphs=["短い結果は toast で表示されます。重要な履歴は通知一覧から後で確認できます。", "同じ失敗が続く場合は、対象・資源・経路・担当範囲を順に確認してください。"]|shortcut=None
+coverage|building-category::architecture|player|published:entry:architect-building
+coverage|building-category::plant|player|published:entry:architect-building
+coverage|building-category::structure|player|published:entry:architect-building
+coverage|building-category::temporary|player|published:entry:architect-building
+coverage|building-type::bone-pile|player|published:entry:architect-building
+coverage|building-type::bridge|player|published:entry:architect-building
+coverage|building-type::door|player|published:entry:architect-building
+coverage|building-type::floor|player|published:entry:architect-building
+coverage|building-type::mud-mixer|player|published:entry:architect-building
+coverage|building-type::outdoor-lamp|player|published:entry:architect-building
+coverage|building-type::rest-area|player|published:entry:architect-building
+coverage|building-type::sand-pile|player|published:entry:architect-building
+coverage|building-type::soul-spa|player|published:entry:architect-building
+coverage|building-type::tank|player|published:entry:architect-building
+coverage|building-type::wall|player|published:entry:architect-building
+coverage|building-type::wheelbarrow-parking|player|published:entry:architect-building
+coverage|dependency::default-camera-aliases|player|excluded:dependency-default
+coverage|descriptive::camera-pan-zoom|player|published:entry:camera-pan-zoom
+coverage|descriptive::getting-started-first-steps|player|published:entry:getting-started-first-steps
+coverage|descriptive::help-pause-behavior|player|published:entry:help-pause-behavior
+coverage|descriptive::notifications|player|published:entry:notifications
+coverage|descriptive::soul-energy-recovery|player|published:entry:soul-energy-recovery
+coverage|descriptive::soul-energy-status|player|published:entry:soul-energy-status
+coverage|descriptive::soul-rename|player|published:entry:soul-rename
+coverage|help-scroll::end|player|published:chrome:document-end
+coverage|help-scroll::page-down|player|published:chrome:page-down
+coverage|help-scroll::page-up|player|published:chrome:page-up
+coverage|help-scroll::start|player|published:chrome:document-start
+coverage|help-topic-step::next|player|published:chrome:topic-next
+coverage|help-topic-step::previous|player|published:chrome:topic-previous
+coverage|input::architect|player|published:entry:architect-building
+coverage|input::area-copy|player|published:entry:area-edit
+coverage|input::area-load-preset-1|player|published:entry:area-edit
+coverage|input::area-load-preset-2|player|published:entry:area-edit
+coverage|input::area-load-preset-3|player|published:entry:area-edit
+coverage|input::area-paste|player|published:entry:area-edit
+coverage|input::area-redo|player|published:entry:area-edit
+coverage|input::area-save-preset-1|player|published:entry:area-edit
+coverage|input::area-save-preset-2|player|published:entry:area-edit
+coverage|input::area-save-preset-3|player|published:entry:area-edit
+coverage|input::area-undo|player|published:entry:area-edit
+coverage|input::camera-elevation|player|published:entry:camera-elevation
+coverage|input::cancel-active-mode|player|published:entry:orders-designation
+coverage|input::close-open-menu|player|published:entry:orders-designation
+coverage|input::debug-spawn-familiar|debug|excluded:debug-only
+coverage|input::debug-spawn-soul|debug|excluded:debug-only
+coverage|input::debug-toggle|debug|excluded:debug-only
+coverage|input::familiar-build|player|blocked:entry:familiar-build:missing-completion-consumer:familiar-management
+coverage|input::familiar-cancel-designation|player|published:entry:familiar-designations
+coverage|input::familiar-chop|player|published:entry:familiar-designations
+coverage|input::familiar-haul|player|published:entry:familiar-designations
+coverage|input::familiar-idle-patrol|player|published:entry:familiar-idle-patrol
+coverage|input::familiar-mine|player|published:entry:familiar-designations
+coverage|input::help-close|player|published:chrome:close
+coverage|input::help-end|player|published:chrome:document-end
+coverage|input::help-home|player|published:chrome:document-start
+coverage|input::help-open|player|published:launcher
+coverage|input::help-page-down|player|published:chrome:page-down
+coverage|input::help-page-up|player|published:chrome:page-up
+coverage|input::help-topic-next|player|published:chrome:topic-next
+coverage|input::help-topic-previous|player|published:chrome:topic-previous
+coverage|input::list-next|player|published:entry:entity-list-selection
+coverage|input::list-previous|player|published:entry:entity-list-selection
+coverage|input::load-cancel|player|published:entry:save-load
+coverage|input::load|player|published:entry:save-load
+coverage|input::operation-close|player|published:entry:soul-assignment
+coverage|input::pause-toggle|player|published:entry:time-controls
+coverage|input::render-3d|debug|excluded:debug-only
+coverage|input::rtt-directional-light|debug|excluded:debug-only
+coverage|input::rtt-quality|debug|excluded:debug-only
+coverage|input::rtt-scene-objects|debug|excluded:debug-only
+coverage|input::rtt-terrain|debug|excluded:debug-only
+coverage|input::save|player|published:entry:save-load
+coverage|input::settings-close|player|published:entry:settings
+coverage|input::time-fast|player|published:entry:time-controls
+coverage|input::time-normal|player|published:entry:time-controls
+coverage|input::time-paused|player|published:entry:time-controls
+coverage|input::time-super|player|published:entry:time-controls
+coverage|input::zones|player|published:entry:zones-workflow
+coverage|menu-state::architect|player|published:entry:architect-building
+coverage|menu-state::dream|player|published:entry:dream-planting
+coverage|menu-state::hidden|internal|excluded:internal-mechanism
+coverage|menu-state::orders|player|published:entry:orders-designation
+coverage|menu-state::settings|player|published:entry:settings
+coverage|menu-state::zones|player|published:entry:zones-workflow
+coverage|play-mode::building-move|player|published:entry:architect-building
+coverage|play-mode::building-place|player|published:entry:architect-building
+coverage|play-mode::floor-place|player|published:entry:architect-building
+coverage|play-mode::normal|player|published:entry:getting-started-work-loop
+coverage|play-mode::task-designation|player|published:entry:orders-designation
+coverage|resource-type::bone|player|published:entry:zones-workflow
+coverage|resource-type::bucket-empty|player|published:entry:zones-workflow
+coverage|resource-type::bucket-water|player|published:entry:zones-workflow
+coverage|resource-type::rock|player|published:entry:zones-workflow
+coverage|resource-type::sand|player|published:entry:zones-workflow
+coverage|resource-type::stasis-mud|player|published:entry:zones-workflow
+coverage|resource-type::water|player|published:entry:zones-workflow
+coverage|resource-type::wheelbarrow|player|published:entry:zones-workflow
+coverage|resource-type::wood|player|published:entry:zones-workflow
+coverage|stockpile-acceptance::any|player|published:entry:zones-workflow
+coverage|stockpile-acceptance::only|player|published:entry:zones-workflow
+coverage|stockpile-acceptance::selected|player|published:entry:zones-workflow
+coverage|task-dashboard-control::priority|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::sort-direction|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::sort-key|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::status|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::work-type|player|published:entry:task-dashboard-filter-sort
+coverage|task-dashboard-control::worker|player|published:entry:task-dashboard-filter-sort
+coverage|task-mode-zone-type::stockpile|player|published:entry:zones-workflow
+coverage|task-mode-zone-type::yard|player|published:entry:zones-workflow
+coverage|task-mode::area-selection|player|published:entry:area-edit
+coverage|task-mode::assign-task|player|published:entry:orders-designation
+coverage|task-mode::cancel-designation|player|published:entry:orders-designation
+coverage|task-mode::designate-chop|player|published:entry:orders-designation
+coverage|task-mode::designate-haul|player|published:entry:orders-designation
+coverage|task-mode::designate-mine|player|published:entry:orders-designation
+coverage|task-mode::dream-planting|player|published:entry:dream-planting
+coverage|task-mode::familiar-build|player|blocked:entry:familiar-build:missing-completion-consumer:familiar-management
+coverage|task-mode::floor-place|player|published:entry:architect-building
+coverage|task-mode::none|internal|excluded:internal-mechanism
+coverage|task-mode::remove-stockpile|player|published:entry:zones-workflow
+coverage|task-mode::remove-yard|player|excluded:unreachable-player-flow
+coverage|task-mode::soul-spa-place|player|published:entry:architect-building
+coverage|task-mode::stockpile-policy|player|published:entry:zones-workflow
+coverage|task-mode::wall-place|player|published:entry:architect-building
+coverage|task-mode::zone-placement|player|published:entry:zones-workflow
+coverage|task-priority-filter::all|player|published:entry:task-dashboard-filter-sort
+coverage|task-priority-filter::critical|player|published:entry:task-dashboard-filter-sort
+coverage|task-priority-filter::high|player|published:entry:task-dashboard-filter-sort
+coverage|task-priority-filter::normal|player|published:entry:task-dashboard-filter-sort
+coverage|task-sort-direction::ascending|player|published:entry:task-dashboard-filter-sort
+coverage|task-sort-direction::descending|player|published:entry:task-dashboard-filter-sort
+coverage|task-sort-key::priority|player|published:entry:task-dashboard-filter-sort
+coverage|task-sort-key::status|player|published:entry:task-dashboard-filter-sort
+coverage|task-sort-key::work-type|player|published:entry:task-dashboard-filter-sort
+coverage|task-sort-key::worker-count|player|published:entry:task-dashboard-filter-sort
+coverage|task-status-filter::all|player|published:entry:task-dashboard-filter-sort
+coverage|task-status-filter::blocked|player|published:entry:task-dashboard-filter-sort
+coverage|task-status-filter::pending|player|published:entry:task-dashboard-filter-sort
+coverage|task-status-filter::working|player|published:entry:task-dashboard-filter-sort
+coverage|task-work-type-filter::all|player|published:entry:task-dashboard-filter-sort
+coverage|task-work-type-filter::only|player|published:entry:task-dashboard-filter-sort
+coverage|task-worker-filter::all|player|published:entry:task-dashboard-filter-sort
+coverage|task-worker-filter::assigned|player|published:entry:task-dashboard-filter-sort
+coverage|task-worker-filter::unassigned|player|published:entry:task-dashboard-filter-sort
+coverage|time-speed::fast|player|published:entry:time-controls
+coverage|time-speed::normal|player|published:entry:time-controls
+coverage|time-speed::paused|player|published:entry:time-controls
+coverage|time-speed::super|player|published:entry:time-controls
+coverage|transport-priority::critical|player|published:entry:zones-workflow
+coverage|transport-priority::high|player|published:entry:zones-workflow
+coverage|transport-priority::low|player|published:entry:zones-workflow
+coverage|transport-priority::normal|player|published:entry:zones-workflow
+coverage|transport-request-kind::batch-wheelbarrow|internal|excluded:internal-mechanism
+coverage|transport-request-kind::consolidate-stockpile|internal|excluded:internal-mechanism
+coverage|transport-request-kind::deliver-blueprint|internal|excluded:internal-mechanism
+coverage|transport-request-kind::deliver-floor|internal|excluded:internal-mechanism
+coverage|transport-request-kind::deliver-mixer-solid|internal|excluded:internal-mechanism
+coverage|transport-request-kind::deliver-provisional-wall|internal|excluded:internal-mechanism
+coverage|transport-request-kind::deliver-soul-spa|internal|excluded:internal-mechanism
+coverage|transport-request-kind::deliver-wall|internal|excluded:internal-mechanism
+coverage|transport-request-kind::deliver-water-mixer|internal|excluded:internal-mechanism
+coverage|transport-request-kind::deposit-stockpile|internal|excluded:internal-mechanism
+coverage|transport-request-kind::gather-water-tank|internal|excluded:internal-mechanism
+coverage|transport-request-kind::return-bucket|internal|excluded:internal-mechanism
+coverage|transport-request-kind::return-wheelbarrow|internal|excluded:internal-mechanism
+coverage|ui-intent::architect-category|player|published:entry:architect-building
+coverage|ui-intent::architect-toggle|player|published:entry:architect-building
+coverage|ui-intent::clear-inspect-pin|player|published:entry:info-panel-pin
+coverage|ui-intent::door-lock|player|published:entry:world-selection
+coverage|ui-intent::dream-toggle|player|published:entry:dream-planting
+coverage|ui-intent::help-close|player|published:chrome:close
+coverage|ui-intent::help-open|player|published:launcher
+coverage|ui-intent::help-scroll|internal|excluded:internal-mechanism
+coverage|ui-intent::help-topic-select|internal|excluded:internal-mechanism
+coverage|ui-intent::help-topic-step|internal|excluded:internal-mechanism
+coverage|ui-intent::inspect-entity|player|published:entry:info-panel-pin
+coverage|ui-intent::load-cancel|player|published:entry:save-load
+coverage|ui-intent::load-confirm|player|published:entry:save-load
+coverage|ui-intent::load-request|player|published:entry:save-load
+coverage|ui-intent::move-plant-building|player|published:entry:architect-building
+coverage|ui-intent::operation-close|player|published:entry:soul-assignment
+coverage|ui-intent::operation-familiar-max-souls|player|published:entry:soul-assignment
+coverage|ui-intent::operation-fatigue-threshold|player|published:entry:soul-assignment
+coverage|ui-intent::operation-max-souls|player|published:entry:soul-assignment
+coverage|ui-intent::operation-open|player|published:entry:soul-assignment
+coverage|ui-intent::orders-toggle|player|published:entry:orders-designation
+coverage|ui-intent::remove-stockpile-zone|player|published:entry:zones-workflow
+coverage|ui-intent::remove-yard-zone|player|excluded:unreachable-player-flow
+coverage|ui-intent::save|player|published:entry:save-load
+coverage|ui-intent::select-area-task|player|published:entry:orders-designation
+coverage|ui-intent::select-build|player|published:entry:architect-building
+coverage|ui-intent::select-dream-planting|player|published:entry:dream-planting
+coverage|ui-intent::select-floor-place|player|published:entry:architect-building
+coverage|ui-intent::select-zone|player|published:entry:zones-workflow
+coverage|ui-intent::settings-camera-mouse-pan|player|published:entry:settings
+coverage|ui-intent::settings-camera-pan-speed|player|published:entry:settings
+coverage|ui-intent::settings-close|player|published:entry:settings
+coverage|ui-intent::settings-debug-gizmos|player|published:entry:settings
+coverage|ui-intent::settings-default-time-speed|player|published:entry:settings
+coverage|ui-intent::settings-fps-display|player|published:entry:settings
+coverage|ui-intent::settings-toggle|player|published:entry:settings
+coverage|ui-intent::settings-ui-scale|player|published:entry:settings
+coverage|ui-intent::stockpile-policy-range|player|published:entry:zones-workflow
+coverage|ui-intent::stockpile-policy|player|published:entry:zones-workflow
+coverage|ui-intent::task-cancel|player|published:entry:task-dashboard-actions
+coverage|ui-intent::task-mode-area-selection|player|published:entry:area-edit
+coverage|ui-intent::task-mode-assign-task|player|published:entry:orders-designation
+coverage|ui-intent::task-mode-cancel-designation|player|published:entry:orders-designation
+coverage|ui-intent::task-mode-designate-chop|player|published:entry:orders-designation
+coverage|ui-intent::task-mode-designate-haul|player|published:entry:orders-designation
+coverage|ui-intent::task-mode-designate-mine|player|published:entry:orders-designation
+coverage|ui-intent::task-mode-dream-planting|player|published:entry:dream-planting
+coverage|ui-intent::task-mode-familiar-build|player|blocked:entry:familiar-build:missing-completion-consumer:familiar-management
+coverage|ui-intent::task-mode-floor-place|player|published:entry:architect-building
+coverage|ui-intent::task-mode-none|internal|excluded:internal-mechanism
+coverage|ui-intent::task-mode-remove-stockpile|player|published:entry:zones-workflow
+coverage|ui-intent::task-mode-remove-yard|player|excluded:unreachable-player-flow
+coverage|ui-intent::task-mode-soul-spa-place|player|published:entry:architect-building
+coverage|ui-intent::task-mode-stockpile-policy|player|published:entry:zones-workflow
+coverage|ui-intent::task-mode-wall-place|player|published:entry:architect-building
+coverage|ui-intent::task-mode-zone-placement|player|published:entry:zones-workflow
+coverage|ui-intent::task-priority|player|published:entry:task-dashboard-actions
+coverage|ui-intent::time-pause-toggle|player|published:entry:time-controls
+coverage|ui-intent::time-speed|player|published:entry:time-controls
+coverage|ui-intent::zones-toggle|player|published:entry:zones-workflow
+coverage|work-type::build|player|published:entry:task-dashboard-focus
+coverage|work-type::chop|player|published:entry:task-dashboard-focus
+coverage|work-type::coat-wall|player|published:entry:task-dashboard-focus
+coverage|work-type::collect-bone|player|published:entry:task-dashboard-focus
+coverage|work-type::frame-wall-tile|player|published:entry:task-dashboard-focus
+coverage|work-type::gather-water|player|published:entry:task-dashboard-focus
+coverage|work-type::generate-power|player|published:entry:task-dashboard-focus
+coverage|work-type::haul-to-mixer|player|published:entry:task-dashboard-focus
+coverage|work-type::haul-water-to-mixer|player|published:entry:task-dashboard-focus
+coverage|work-type::haul|player|published:entry:task-dashboard-focus
+coverage|work-type::mine|player|published:entry:task-dashboard-focus
+coverage|work-type::move|player|published:entry:task-dashboard-focus
+coverage|work-type::pour-floor-tile|player|published:entry:task-dashboard-focus
+coverage|work-type::refine|player|published:entry:task-dashboard-focus
+coverage|work-type::reinforce-floor-tile|player|published:entry:task-dashboard-focus
+coverage|work-type::wheelbarrow-haul|player|published:entry:task-dashboard-focus
+coverage|zone-type::stockpile|player|published:entry:zones-workflow
+coverage|zone-type::yard|player|published:entry:zones-workflow

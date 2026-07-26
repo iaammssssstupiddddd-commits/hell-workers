@@ -1,9 +1,30 @@
-use bevy::prelude::MessageWriter;
+use bevy::prelude::{Entity, MessageWriter};
 use hw_ui::UiIntent;
 use hw_ui::components::MenuAction;
 
-pub(super) fn handle_pressed_action(action: MenuAction, ui_intents: &mut MessageWriter<UiIntent>) {
+pub(super) fn handle_pressed_action(
+    opener: Entity,
+    action: MenuAction,
+    ui_intents: &mut MessageWriter<UiIntent>,
+) {
     match action {
+        MenuAction::OpenHelp { .. } => {
+            ui_intents.write(UiIntent::OpenHelp {
+                opener: Some(opener),
+            });
+        }
+        MenuAction::CloseHelp => {
+            ui_intents.write(UiIntent::CloseHelp);
+        }
+        MenuAction::SelectHelpTopic(topic) => {
+            ui_intents.write(UiIntent::SelectHelpTopic(topic));
+        }
+        MenuAction::StepHelpTopic(step) => {
+            ui_intents.write(UiIntent::StepHelpTopic(step));
+        }
+        MenuAction::ScrollHelp(command) => {
+            ui_intents.write(UiIntent::ScrollHelp(command));
+        }
         MenuAction::InspectEntity(entity) => {
             ui_intents.write(UiIntent::InspectEntity(entity));
         }

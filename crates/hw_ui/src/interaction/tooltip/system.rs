@@ -106,8 +106,8 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
         target = Some(TooltipTarget::UiButton(button_entity));
         template = TooltipTemplate::UiButton;
         ui_tooltip = Some(UiTooltip {
-            text: tooltip_data.text,
-            shortcut: tooltip_data.shortcut,
+            text: tooltip_data.text.clone(),
+            shortcut: tooltip_data.shortcut.clone(),
         });
         hovered_menu_action = menu_button.map(|mb| mb.0);
         hovered_button_x_span = Some(layout::compute_rect_x(computed, transform));
@@ -115,7 +115,7 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
         payload = format!(
             "ui:{}:{}",
             tooltip_data.text,
-            tooltip_data.shortcut.unwrap_or_default()
+            tooltip_data.shortcut.as_deref().unwrap_or_default()
         );
     } else if let Some(feedback) = bevy.placement_feedback.visible(bevy.real_time.elapsed()) {
         target = Some(TooltipTarget::PlacementFailure);

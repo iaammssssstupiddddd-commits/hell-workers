@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tomllib
+from collections.abc import Iterable
 from pathlib import Path
 
 
@@ -19,6 +20,35 @@ ROOT_RULE_FILES = (
     ".cursorrules",
     ".kilocoderules",
     ".github/copilot-instructions.md",
+    ".gemini/antigravity/project_rules.md",
+)
+
+MANDATORY_HELP_REVIEW_RULE = (
+    "You MUST use the repository `hell-workers-review-help-impact` Skill after "
+    "implementing, changing, or removing functionality, code, or runtime data "
+    "and before reporting completion, committing, or publishing."
+)
+MANDATORY_HELP_REVIEW_DECISION_RULE = (
+    "Complete the Skill's `Update required` / `No impact` decision from the "
+    "actual player-visible path; a passing Help impact gate alone does not "
+    "count as the review."
+)
+MANDATORY_HELP_REVIEW_FALLBACK_RULE = (
+    "If the current product does not expose that Skill natively, read and "
+    "follow `.cursor/skills/hell-workers-review-help-impact/SKILL.md` directly "
+    "before completion."
+)
+MANDATORY_HELP_REVIEW_FILES = (
+    *ROOT_RULE_FILES,
+    ".agent/rules/help-impact.md",
+    ".cursor/rules/help-impact.mdc",
+    ".agent/workflows/task-lifecycle.md",
+    ".cursor/workflows/task-lifecycle.md",
+)
+MANDATORY_HELP_REVIEW_MARKERS = (
+    MANDATORY_HELP_REVIEW_RULE,
+    MANDATORY_HELP_REVIEW_DECISION_RULE,
+    MANDATORY_HELP_REVIEW_FALLBACK_RULE,
 )
 
 SKILL_FILES = (
@@ -26,6 +56,12 @@ SKILL_FILES = (
     ".cursor/skills/hell-workers-update-docs/SKILL.md",
     ".gemini/skills/hell-workers-update-docs/SKILL.md",
     ".claude-plugin/skills/update-docs/SKILL.md",
+    ".codex/skills/hell-workers-review-help-impact/SKILL.md",
+    ".codex/skills/hell-workers-review-help-impact/agents/openai.yaml",
+    ".cursor/skills/hell-workers-review-help-impact/SKILL.md",
+    ".gemini/skills/hell-workers-review-help-impact/SKILL.md",
+    ".claude-plugin/skills/review-help-impact/SKILL.md",
+    ".codex/skills/hell-workers-update-docs/agents/openai.yaml",
 )
 
 CANONICAL_PATHS = (
@@ -80,6 +116,20 @@ def active_rule_files() -> list[Path]:
     files.extend(REPO_ROOT / path for path in SKILL_FILES)
     files.extend(sorted((REPO_ROOT / "crates").rglob("_rules.md")))
     return files
+
+
+def missing_mandatory_help_review_rules(
+    paths: Iterable[Path],
+) -> tuple[Path, ...]:
+    missing = []
+    for path in paths:
+        if not path.is_file():
+            missing.append(path)
+            continue
+        content = path.read_text(encoding="utf-8")
+        if any(marker not in content for marker in MANDATORY_HELP_REVIEW_MARKERS):
+            missing.append(path)
+    return tuple(missing)
 
 
 def find_violations() -> list[str]:
@@ -143,6 +193,17 @@ def find_violations() -> list[str]:
                     f"{relative}:{line_number}: contradicts docs/invariants.md I-S3"
                 )
 
+    mandatory_help_review_paths = tuple(
+        REPO_ROOT / path for path in MANDATORY_HELP_REVIEW_FILES
+    )
+    for path in missing_mandatory_help_review_rules(
+        mandatory_help_review_paths
+    ):
+        violations.append(
+            f"{path.relative_to(REPO_ROOT)}: mandatory Help impact review "
+            "rule is missing"
+        )
+
     for path in sorted((REPO_ROOT / "crates").rglob("*")):
         if path.name not in {"AGENTS.md", "CLAUDE.md"} or not path.is_symlink():
             continue
@@ -160,7 +221,7 @@ def find_violations() -> list[str]:
     )
     if skill_sync.returncode != 0:
         violations.append(
-            "agent docs skills differ from .cursor canonical; "
+            "agent skills differ from .cursor canonical; "
             "run python3 scripts/sync_agent_skills.py --write"
         )
 

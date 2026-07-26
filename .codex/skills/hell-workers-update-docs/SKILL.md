@@ -28,6 +28,7 @@ description: Update hell-workers documentation after code changes, crate boundar
 | Event/message producer, consumer, or timing | `docs/events.md` and the defining crate/root adapter docs |
 | `_rules.md` added or changed | Verify sibling `AGENTS.md` / `CLAUDE.md` symlinks, update only the active associated plan, then run `python3 scripts/check_agent_rules.py` |
 | Crate dependency added or removed | `docs/cargo_workspace.md`, `docs/crate-boundaries.md`, affected crate README/rules |
+| Player-facing feature, input, UI label, or workflow added/changed/removed | Update `docs/help-screen.md`; add/change/remove the root Help manifest/provider/coverage entry, or record a fresh reasoned Help no-impact decision for the whole change batch |
 
 ## Ownership References
 
@@ -36,6 +37,9 @@ description: Update hell-workers documentation after code changes, crate boundar
 - Familiar task assignment queries: `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/context.rs`.
 - Root `crates/bevy_app` files are composition/adapters unless current code proves otherwise.
 - Game invariants are canonical in `docs/invariants.md`; local `_rules.md` must not contradict them.
+- Player Help ownership is canonical in `docs/help-screen.md`; stable IDs and content live under `crates/bevy_app/src/interface/ui/help_content/`, while `hw_ui` owns only the sealed display schema and widgets.
+- A new runtime label/data source root or extension must update `scripts/check_help_impact.py` path classification and its fixtures in the same batch.
+- After implementation, use the repository Help impact review Skill to decide from the actual player-visible path whether Help must change; do not infer no-impact from filenames or a passing gate alone.
 
 ## Plan Lifecycle
 
@@ -49,6 +53,7 @@ description: Update hell-workers documentation after code changes, crate boundar
 1. Re-read edited docs for contradictions, stale paths, and removed-file references.
 2. Run `python3 scripts/dev.py docs --write` after plan/proposal navigation changes.
 3. Run `python3 scripts/check_agent_rules.py` after rule or skill changes.
-4. Run `python3 scripts/dev.py check` when Rust code changed and has not been verified.
-5. Before broad completion, run `python3 scripts/dev.py verify`.
-6. Report the changed files and the contract each update keeps in sync.
+4. Run `python3 scripts/check_help_impact.py`; if Help is unchanged, ensure one exact non-empty no-impact trailer decision descends from every production commit in the change batch.
+5. Run `python3 scripts/dev.py check` when Rust code changed and has not been verified.
+6. Before broad completion, run `python3 scripts/dev.py verify`.
+7. Report the changed files and the contract each update keeps in sync.

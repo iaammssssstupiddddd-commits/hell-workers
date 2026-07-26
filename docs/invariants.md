@@ -257,10 +257,15 @@ project-owned の edge-triggered keyboard shortcut は `bevy_app::input_actions`
 `ButtonInput<KeyCode>` を読み、consumer は frame-local semantic action を読む。新しい shortcut は binding
 table、context/compatibility、owner classification test を同時に更新する。
 
-`UiInputState.pointer_over_ui` は通常 UI hover、`world_input_captured` は Modal/Pause ownership であり、
+`UiInputState.pointer_over_ui` は通常 UI hover、`world_input_captured` は Modal/Help/Pause ownership であり、
 同じ field に畳まない。world pointer/camera consumer は `world_input_blocked()` を使うが、UI 自身は hover で
 停止せず capture 中だけ foreground ancestry に従う。overlay open request の受理 frame から pending capture と
 `InputFocus` clear を成立させ、capture root の表示更新を待ってはならない。
+
+Help openはpending captureで`InputOverlay::Help`が実際のpriority勝者になった場合だけ受理する。
+通常時のopenは`Input` phaseでsimulationより先にpauseし、`HelpPauseGuard`が所有したpauseだけをclose/resetで解除する。
+Pauseからのhandoffではpause ownershipとcapture-start latchを取り直さず、背景`MenuState`/mode ownerを変更しない。
+capture rootの`GlobalZIndex`は`LoadConfirm > Help > Settings > Pause > OperationDialog`のinput priorityと一致させる。
 
 ### I-U5: 配置previewとcommitは同じ型付き判定を使う
 

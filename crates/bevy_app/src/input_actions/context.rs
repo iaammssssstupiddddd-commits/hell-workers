@@ -4,6 +4,7 @@ use hw_core::game_state::{PlayMode, TaskMode};
 use hw_ui::components::{
     LoadConfirmDialog, MenuState, OperationDialog, SettingsPanel, UiInputState,
 };
+use hw_ui::help::HelpPanel;
 
 use crate::app_contexts::TaskContext;
 use crate::entities::familiar::Familiar;
@@ -15,6 +16,7 @@ use super::capture::PendingWorldInputCapture;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputOverlay {
     LoadConfirm,
+    Help,
     Settings,
     Pause,
     OperationDialog,
@@ -104,6 +106,7 @@ pub(crate) struct InputContextParams<'w, 's> {
     pending_capture: Option<Res<'w, PendingWorldInputCapture>>,
     q_familiars: Query<'w, 's, (), With<Familiar>>,
     q_load_confirm: Query<'w, 's, &'static Node, With<LoadConfirmDialog>>,
+    q_help: Query<'w, 's, &'static Node, With<HelpPanel>>,
     q_settings: Query<'w, 's, &'static Node, With<SettingsPanel>>,
     q_operation_dialog: Query<'w, 's, &'static Node, With<OperationDialog>>,
 }
@@ -129,6 +132,8 @@ impl InputContextParams<'_, '_> {
             has_active_area_edit_drag || task_mode_has_in_progress_gesture(self.task_context.0);
         let visible_overlay = if query_is_visible(&self.q_load_confirm) {
             Some(InputOverlay::LoadConfirm)
+        } else if query_is_visible(&self.q_help) {
+            Some(InputOverlay::Help)
         } else if query_is_visible(&self.q_settings) {
             Some(InputOverlay::Settings)
         } else if simulation_paused {

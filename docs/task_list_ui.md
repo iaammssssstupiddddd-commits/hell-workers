@@ -65,6 +65,8 @@ unowned Blueprint の `Build` だけが Familiar delegation と Blueprint auto-b
 ### ツールバー
 
 4 filter と 2 sort control を表示します。各ボタンは候補を順番に切り替えます。
+これらのcontrol/filter/sort variantはプレイヤーHelpの`task-dashboard-filter-sort` entryへ
+exhaustive coverageされ、追加・変更時は`docs/help-screen.md`の更新手順とexact approvalを同時に更新します。
 
 - Type: 全種別または単一 `WorkType`
 - State: All / Working / Blocked / Pending

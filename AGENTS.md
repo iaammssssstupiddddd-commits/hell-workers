@@ -44,6 +44,9 @@
 - Avoid dead code and `#[allow(dead_code)]` unless currently required. Do not leave implementations not documented in `docs/`.
 - Task system conventions: define payload structs under `crates/hw_jobs/src/tasks/`, add `Variant(VariantData)` entries in `crates/hw_jobs/src/tasks/mod.rs`, and keep Soul/Familiar queries aggregated in their crate-owned context types.
 - Context hygiene: respect `.cursorignore` and `.geminiignore` by avoiding large build artifacts/logs (`target/`, `dist/`, `.trunk/`, `logs/`, `build_*.txt`, `*_output*.txt`) unless explicitly needed.
+- You MUST use the repository `hell-workers-review-help-impact` Skill after implementing, changing, or removing functionality, code, or runtime data and before reporting completion, committing, or publishing.
+- Complete the Skill's `Update required` / `No impact` decision from the actual player-visible path; a passing Help impact gate alone does not count as the review.
+- If the current product does not expose that Skill natively, read and follow `.cursor/skills/hell-workers-review-help-impact/SKILL.md` directly before completion.
 
 ### Debugging and Verification Policy
 - ユーザーが報告した観測事実や、直前の検証で確定した事実は、以後の切り分けで **強い制約** として扱う。補助情報として軽く扱わない。

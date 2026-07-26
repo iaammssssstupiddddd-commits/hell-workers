@@ -225,7 +225,8 @@ root message型は`MessagesPlugin`の単一typed macroから初期化と`Message
 | --- | --- | --- |
 | root interaction | selection、hover、move placement、build/zone/task/companion context、Stockpile policy範囲編集patch、pending PlayMode | default化し、`PlayMode::Normal`を予約 |
 | save outcome | `SaveLoadOutcome` Message | `SavePlugin`専用hookで旧bufferをclear。最終outcomeは全reset後にdispatcherが発行 |
-| `hw_ui` | rename、inspection/pin、drag、entity list model/index、area edit history、text pending、配置feedback、通知Message/center/history/unread、`UiIntent` / `TextInputIntent`、task filter/sort、inline cancel confirmation、Stockpile policy editorの旧Entity付きbutton action | hookでclear。InfoPanel rootを同期的に非表示化し、task listの全`TaskListDynamicNode`と動的通知rowをdespawnする。その他のstatic UI root、サイズ、theme、searchは保持 |
+| `hw_ui` | rename、inspection/pin、drag、entity list model/index、area edit history、text pending、配置feedback、通知Message/center/history/unread、`UiIntent` / `TextInputIntent`、task filter/sort、inline cancel confirmation、Stockpile policy editorの旧Entity付きbutton action、`HelpPanelState`/navigation・本文scroll | hookでclear。InfoPanel rootとHelp rootを同期的に非表示化し、task listの全`TaskListDynamicNode`と動的通知rowをdespawnする。その他のstatic UI root、サイズ、theme、searchは保持 |
+| root Help | `HelpPauseGuard`、pending capture | Helpがpauseを所有した場合だけunpauseしてPause rootを同期的に非表示化する。pre-existing Pauseは維持し、guard/pendingをdefault化 |
 | root task UI | task list snapshot、task input revisions、Familiar/Blueprint diagnostics | default化してdirty化し、新worldの次frame/cycleでPendingから再構築 |
 | `hw_visual` | owner cache、3D proxy、speech/dream/haul/task-area等の独立transient entity、`GatheringSpot`とlinked aura/object | hookでdespawn + cache clear。root固有のFamiliar range shellもrehydrate cleanupでdespawn |
 | root command visual | designation / task-area indicator、area-edit handle、area / dream preview | root VisualPlugin hookでdespawn。`DesignationIndicator`は通常の`RemovedComponents<Designation>` cleanupを使えないためreplace前に明示破棄 |

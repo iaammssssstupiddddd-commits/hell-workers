@@ -12,6 +12,9 @@ Before starting any task, you MUST check the following documents to understand t
 - **Critical Mechanism**: ECS Relationships are used for most entity connections.
 - **Verification**: Always run `cargo check` before finishing a task.
 - **Visuals**: Use the specific magenta-background workflow for new images.
+- You MUST use the repository `hell-workers-review-help-impact` Skill after implementing, changing, or removing functionality, code, or runtime data and before reporting completion, committing, or publishing.
+- Complete the Skill's `Update required` / `No impact` decision from the actual player-visible path; a passing Help impact gate alone does not count as the review.
+- If the current product does not expose that Skill natively, read and follow `.cursor/skills/hell-workers-review-help-impact/SKILL.md` directly before completion.
 
 Refer to `docs/` for specific system details (AI, Tasks, Logistics, etc.).
 

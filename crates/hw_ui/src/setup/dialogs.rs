@@ -5,6 +5,7 @@ use crate::components::{
     LoadConfirmDialog, MenuAction, MenuButton, OperationDialog, UiInputBlocker, UiInputCapture,
     UiNodeRegistry, UiSlot,
 };
+use crate::overlay::{LOAD_CONFIRM_LAYER, OPERATION_DIALOG_LAYER};
 use crate::theme::UiTheme;
 use bevy::picking::Pickable;
 use bevy::prelude::*;
@@ -44,7 +45,7 @@ fn spawn_operation_dialog(
             Pickable::default(),
             UiInputCapture,
             OperationDialog,
-            ZIndex(30),
+            OPERATION_DIALOG_LAYER,
             Name::new("Operation Dialog Capture"),
         ))
         .id();
@@ -375,7 +376,7 @@ fn spawn_load_confirm_dialog(
             Pickable::default(),
             UiInputCapture,
             LoadConfirmDialog,
-            ZIndex(40),
+            LOAD_CONFIRM_LAYER,
             Name::new("Load Confirm Capture"),
         ))
         .id();

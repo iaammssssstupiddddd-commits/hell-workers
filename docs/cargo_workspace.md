@@ -79,6 +79,7 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 | 操作 → ゲーム | — | `interaction/intent_handler.rs`, `interaction/handlers/`, `interaction/intent_context.rs`（Stockpile editor intentをtyped domain requestへ変換） | `intents.rs`（型定義・発行元） |
 | 情報パネル | `presentation/`（EntityInspectionQuery、`StockpileInspectionFields`構築） | `panels/info_panel` re-export + root wiring | `panels/info_panel/*`, `models/inspection/`（Stockpile editor modelを含む） |
 | 結果通知 | save/load・task actionのroot outcome、`hw_logistics`のStockpile outcome | `notifications.rs`（安全な表示文言adapter） | `notifications/`（Message、reducer、有界履歴、UI） |
+| Player Help | `help_content/`（manifest/provider/coverageからsealed DTO構築） | `help_controller.rs`（accepted capture、可逆pause、reset） | `help.rs`、`setup/help_panel.rs`、`interaction/help.rs` |
 | 初期 UI ツリー | — | `setup/mod.rs`（`GameAssets` → `UiAssets`） | `setup/*` |
 
 ### `hw_ui`
@@ -91,7 +92,9 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 
 代表例（主要モジュール）:
 
-- `setup/` — `UiAssets` trait, `setup_ui` fn（UI ツリー構築。bottom_bar / submenus / panels / entity_list / time_control / dialogs）。Modal/Pause は full-viewport `UiInputCapture` root、構造 root/slot は picking-transparent にする
+- `setup/` — `UiAssets` trait, `setup_ui` fn（UI ツリー構築。bottom_bar / submenus / panels / entity_list / time_control / dialogs / help_panel）。Modal/Help/Pause は full-viewport `UiInputCapture` root、構造 root/slot は picking-transparent にする
+- `help.rs` — game型を含まないopaque ID、sealed `HelpPanelContent` / `HelpPanelChrome`、`HelpPanelState`、UI marker
+- `overlay.rs` — capture input priorityと一致する共通`GlobalZIndex`定数
 - `components.rs` — MenuState, MenuButton, FamiliarListItem, SoulListItem、hover/captureを分離する `UiInputState` 等（`UiNodeRegistry` / `UiSlot` / `UiMountSlot` / `UiRoot` は `hw_core::ui_nodes` から re-export）
 - `theme.rs` — `UiTheme` Resource（カラーパレット・フォントサイズ・スペーシング・サイズ定数）
 - `intents.rs` — `UiIntent` enum（プレイヤー UI 操作メッセージ。Stockpile単一適用・範囲編集開始を含む）
@@ -136,6 +139,7 @@ root 側の `bevy_app/src/interface/ui/` 残留（Adapter 層 — ViewModel / Pr
 | `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | Intent | `BuildContext`, `ZoneContext`, `FamiliarOperation`, `TimeSpeed`, `WorldMapWrite` 等のゲーム依存 `UiIntent` 処理。Stockpile操作はtyped requestへ変換し、domain mutationは`hw_logistics`へ委譲 |
 | `interaction/mode.rs` | Intent | `PlayMode` 遷移、`TaskMode`, `BuildingType` |
 | `notifications.rs` | Presenter | `SaveLoadOutcome` / `StockpilePolicyChangeOutcome`をsafeな`UserFacingNotification`へexhaustiveに変換（task action adapterは`panels/task_list/actions.rs`） |
+| `help_content/`, `help_controller.rs` | ViewModel / Adapter | root bindingとgame surfaceからvalidated catalogを構築し、accepted captureと`Time<Virtual>` pause ownershipを適用。`hw_ui`へgame型を持ち込まない |
 | `list/interaction.rs`, `list/interaction/navigation.rs` | Intent | 行クリック・Tab 巡回・target 付き `UiIntent` 発行（SectionToggle は hw_ui 側） |
 | `list/drag_drop.rs` | Intent | `SquadManagementRequest`, `SoulIdentity`（`DragState` 型は hw_ui） |
 | `panels/context_menu.rs` | Intent | `Familiar`, `DamnedSoul`, `Building`, `Door` の分類 |
@@ -304,7 +308,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `lib.rs`: 共有 Resource、公開 module、root re-export、library unit testの入口
 - `main.rs`: process設定の解釈と window / render / backend設定、`HellWorkersGamePlugin` の追加
 - `plugins/game.rs`: production game resource / state / `GameSystemSet` chain と parent game plugin の一意な登録
-- `input_actions/`: project-owned keyboard edge の唯一の resolver、pending/visible Modal/Pause capture、foreground UI gate、capture-start rollback
+- `input_actions/`: project-owned keyboard edge の唯一の resolver、pending/visible Modal/Help/Pause capture、foreground UI gate、capture-start rollback、canonical key label
 - `systems/save/`: persisted schema/transactionと、requestごとに全reset後1件だけ発行する`SaveLoadOutcome`
 
 ここに残すもの:

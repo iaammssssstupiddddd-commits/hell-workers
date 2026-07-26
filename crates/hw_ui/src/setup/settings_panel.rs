@@ -6,6 +6,7 @@ use crate::components::{
     SettingsDefaultSpeedButton, SettingsField, SettingsPanel, SettingsSliderMarker,
     SettingsSliderThumbMarker, UiInputBlocker, UiInputCapture,
 };
+use crate::overlay::SETTINGS_LAYER;
 use crate::theme::UiTheme;
 use bevy::picking::Pickable;
 use bevy::prelude::*;
@@ -49,7 +50,7 @@ pub fn spawn_settings_panel(
 
     commands.entity(capture_root).insert((
         UiInputCapture,
-        ZIndex(36),
+        SETTINGS_LAYER,
         Node {
             display: Display::None,
             width: Val::Percent(100.0),

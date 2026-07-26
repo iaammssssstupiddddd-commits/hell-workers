@@ -6,6 +6,7 @@ use hw_ui::components::{
     LoadConfirmDialog, MenuAction, MenuButton, MenuState, OperationDialog, PauseMenu,
     SettingsPanel, UiInputCapture, UiInputState,
 };
+use hw_ui::help::{HelpPanel, HelpPanelState};
 
 use super::{InputAction, InputOverlay, ResolvedInputFrame};
 use crate::entities::familiar::Familiar;
@@ -33,13 +34,24 @@ impl PendingWorldInputCapture {
         self.request.map(|request| request.overlay)
     }
 
-    fn request(&mut self, request: WorldInputCaptureRequest) {
+    fn request(&mut self, request: WorldInputCaptureRequest) -> bool {
         let replace = self
             .request
             .is_none_or(|current| request.overlay.priority() > current.overlay.priority());
         if replace {
             self.request = Some(request);
         }
+        replace
+    }
+
+    pub(crate) fn accepts(&self, overlay: InputOverlay, opener: Option<Entity>) -> bool {
+        self.request
+            .is_some_and(|request| request.overlay == overlay && request.opener == opener)
+    }
+
+    pub(crate) fn accepts_overlay(&self, overlay: InputOverlay) -> bool {
+        self.request
+            .is_some_and(|request| request.overlay == overlay)
     }
 
     fn foreground_opener(&self, foreground_root: Option<Entity>) -> Option<Entity> {
@@ -56,6 +68,7 @@ type CaptureRootQuery<'w, 's> = Query<
         Entity,
         &'static Node,
         Has<LoadConfirmDialog>,
+        Has<HelpPanel>,
         Has<SettingsPanel>,
         Has<PauseMenu>,
         Has<OperationDialog>,
@@ -72,12 +85,15 @@ type CaptureOpeningButtonQuery<'w, 's> = Query<
 
 fn capture_root_overlay(
     is_load: bool,
+    is_help: bool,
     is_settings: bool,
     is_pause: bool,
     is_operation: bool,
 ) -> Option<InputOverlay> {
     if is_load {
         Some(InputOverlay::LoadConfirm)
+    } else if is_help {
+        Some(InputOverlay::Help)
     } else if is_settings {
         Some(InputOverlay::Settings)
     } else if is_pause {
@@ -91,9 +107,10 @@ fn capture_root_overlay(
 
 fn root_for_overlay(roots: &CaptureRootQuery<'_, '_>, overlay: InputOverlay) -> Option<Entity> {
     roots.iter().find_map(
-        |(entity, _, is_load, is_settings, is_pause, is_operation)| {
-            (capture_root_overlay(is_load, is_settings, is_pause, is_operation) == Some(overlay))
-                .then_some(entity)
+        |(entity, _, is_load, is_help, is_settings, is_pause, is_operation)| {
+            (capture_root_overlay(is_load, is_help, is_settings, is_pause, is_operation)
+                == Some(overlay))
+            .then_some(entity)
         },
     )
 }
@@ -105,14 +122,36 @@ fn visible_capture(
     roots
         .iter()
         .filter_map(
-            |(entity, node, is_load, is_settings, is_pause, is_operation)| {
-                let overlay = capture_root_overlay(is_load, is_settings, is_pause, is_operation)?;
+            |(entity, node, is_load, is_help, is_settings, is_pause, is_operation)| {
+                let overlay =
+                    capture_root_overlay(is_load, is_help, is_settings, is_pause, is_operation)?;
                 let visible = node.display != Display::None
                     || (overlay == InputOverlay::Pause && simulation_paused);
                 visible.then_some((overlay, entity))
             },
         )
         .max_by_key(|(overlay, _)| overlay.priority())
+}
+
+fn effective_capture(
+    pending: &PendingWorldInputCapture,
+    roots: &CaptureRootQuery<'_, '_>,
+    simulation_paused: bool,
+) -> Option<(InputOverlay, Entity)> {
+    let pending_capture = pending
+        .request
+        .map(|request| (request.overlay, request.root));
+    let visible_capture = visible_capture(roots, simulation_paused);
+
+    match (pending_capture, visible_capture) {
+        (Some(pending), Some(visible)) if pending.0.priority() >= visible.0.priority() => {
+            Some(pending)
+        }
+        (Some(_), Some(visible)) => Some(visible),
+        (Some(pending), None) => Some(pending),
+        (None, Some(visible)) => Some(visible),
+        (None, None) => None,
+    }
 }
 
 fn begin_world_input_capture(
@@ -125,13 +164,15 @@ fn begin_world_input_capture(
     let Some(root) = root_for_overlay(roots, overlay) else {
         return false;
     };
-    pending.request(WorldInputCaptureRequest {
+    let accepted = pending.request(WorldInputCaptureRequest {
         overlay,
         root,
         opener,
     });
-    input_focus.clear();
-    true
+    if accepted {
+        input_focus.clear();
+    }
+    accepted
 }
 
 pub(crate) fn reset_pending_world_input_capture_system(
@@ -146,10 +187,12 @@ pub(crate) struct CaptureRequestParams<'w, 's> {
     input_focus: ResMut<'w, InputFocus>,
     time: Res<'w, Time<Virtual>>,
     menu_state: Res<'w, MenuState>,
+    help_state: Res<'w, HelpPanelState>,
     save_path: Res<'w, SavePath>,
     selected: Res<'w, SelectedEntity>,
     familiars: Query<'w, 's, (), With<Familiar>>,
     roots: CaptureRootQuery<'w, 's>,
+    parents: Query<'w, 's, &'static ChildOf>,
 }
 
 fn capture_overlay_for_menu_action(
@@ -157,6 +200,7 @@ fn capture_overlay_for_menu_action(
     params: &CaptureRequestParams<'_, '_>,
 ) -> Option<InputOverlay> {
     match action {
+        MenuAction::OpenHelp { .. } if !params.help_state.open => Some(InputOverlay::Help),
         MenuAction::RequestLoadGame if params.save_path.as_path().exists() => {
             Some(InputOverlay::LoadConfirm)
         }
@@ -188,6 +232,17 @@ pub(crate) fn request_capture_from_menu_buttons_system(
         if *interaction != Interaction::Pressed {
             continue;
         }
+        let foreground_root =
+            effective_capture(&params.pending, &params.roots, params.time.is_paused())
+                .map(|(_, root)| root);
+        if !foreground_ui_action_allowed_for_root(
+            entity,
+            foreground_root,
+            &params.pending,
+            &params.parents,
+        ) {
+            continue;
+        }
         let Some(overlay) = capture_overlay_for_menu_action(menu_button.0, &params) else {
             continue;
         };
@@ -210,6 +265,8 @@ pub(crate) fn request_capture_from_resolved_actions_system(
         && params.save_path.as_path().exists()
     {
         Some(InputOverlay::LoadConfirm)
+    } else if resolved_frame.contains(InputAction::OpenHelp) && !params.help_state.open {
+        Some(InputOverlay::Help)
     } else if (resolved_frame.contains(InputAction::TogglePause)
         || resolved_frame.contains(InputAction::TimePaused))
         && !params.time.is_paused()
@@ -240,22 +297,7 @@ pub(crate) fn sync_world_input_capture_system(
     mut ui_input_state: ResMut<UiInputState>,
     mut resolved_frame: ResMut<ResolvedInputFrame>,
 ) {
-    let pending_capture = pending
-        .request
-        .map(|request| (request.overlay, request.root));
-    let visible_capture = visible_capture(&roots, time.is_paused());
-    let foreground = match (pending_capture, visible_capture) {
-        (Some(pending), Some(visible)) => {
-            if pending.0.priority() >= visible.0.priority() {
-                Some(pending)
-            } else {
-                Some(visible)
-            }
-        }
-        (Some(pending), None) => Some(pending),
-        (None, Some(visible)) => Some(visible),
-        (None, None) => None,
-    };
+    let foreground = effective_capture(&pending, &roots, time.is_paused());
 
     let was_captured = ui_input_state.world_input_captured;
     ui_input_state.world_input_captured = foreground.is_some();
@@ -294,16 +336,30 @@ pub(crate) fn foreground_ui_action_allowed(
     pending: &PendingWorldInputCapture,
     parents: &Query<&ChildOf>,
 ) -> bool {
-    if !ui_input_state.world_input_captured {
+    foreground_ui_action_allowed_for_root(
+        entity,
+        ui_input_state
+            .world_input_captured
+            .then_some(ui_input_state.foreground_capture_root)
+            .flatten(),
+        pending,
+        parents,
+    )
+}
+
+fn foreground_ui_action_allowed_for_root(
+    entity: Entity,
+    foreground_root: Option<Entity>,
+    pending: &PendingWorldInputCapture,
+    parents: &Query<&ChildOf>,
+) -> bool {
+    let Some(root) = foreground_root else {
         return true;
-    }
-    if pending.foreground_opener(ui_input_state.foreground_capture_root) == Some(entity) {
+    };
+    if pending.foreground_opener(Some(root)) == Some(entity) {
         return true;
     }
 
-    let Some(root) = ui_input_state.foreground_capture_root else {
-        return false;
-    };
     let mut current = entity;
     for _ in 0..64 {
         if current == root {
@@ -344,6 +400,7 @@ mod tests {
             .init_resource::<ResolvedInputFrame>()
             .init_resource::<Time<Virtual>>()
             .init_resource::<MenuState>()
+            .init_resource::<HelpPanelState>()
             .init_resource::<SelectedEntity>()
             .insert_resource(SavePath::new(PathBuf::from(
                 "/definitely/missing/hell-workers-test-save.ron",
@@ -467,6 +524,12 @@ mod tests {
     fn accepted_button_requests_cover_every_capture_overlay() {
         assert_accepted_button_capture(
             capture_test_app(),
+            HelpPanel,
+            MenuAction::OpenHelp { opener: None },
+            InputOverlay::Help,
+        );
+        assert_accepted_button_capture(
+            capture_test_app(),
             SettingsPanel,
             MenuAction::ToggleSettings,
             InputOverlay::Settings,
@@ -506,6 +569,169 @@ mod tests {
             InputOverlay::LoadConfirm,
         );
         std::fs::remove_file(save_file).unwrap();
+    }
+
+    #[test]
+    fn rejected_lower_priority_request_does_not_replace_the_winner() {
+        let mut pending = PendingWorldInputCapture::default();
+        let load_root = Entity::from_bits(1 << 32 | 1);
+        let help_root = Entity::from_bits(2 << 32 | 1);
+        assert!(pending.request(WorldInputCaptureRequest {
+            overlay: InputOverlay::LoadConfirm,
+            root: load_root,
+            opener: None,
+        }));
+        assert!(!pending.request(WorldInputCaptureRequest {
+            overlay: InputOverlay::Help,
+            root: help_root,
+            opener: None,
+        }));
+        assert!(pending.accepts(InputOverlay::LoadConfirm, None));
+        assert!(!pending.accepts_overlay(InputOverlay::Help));
+    }
+
+    #[test]
+    fn background_help_button_cannot_steal_capture_from_settings() {
+        let mut app = capture_test_app();
+        let settings = spawn_capture_root(&mut app, SettingsPanel, Display::Flex);
+        spawn_capture_root(&mut app, HelpPanel, Display::None);
+        app.world_mut().spawn((
+            Interaction::Pressed,
+            Button,
+            MenuButton(MenuAction::OpenHelp { opener: None }),
+        ));
+        {
+            let mut state = app.world_mut().resource_mut::<UiInputState>();
+            state.world_input_captured = true;
+            state.foreground_capture_root = Some(settings);
+        }
+        app.add_systems(
+            Update,
+            (
+                reset_pending_world_input_capture_system,
+                request_capture_from_menu_buttons_system,
+            )
+                .chain(),
+        );
+
+        app.update();
+
+        assert!(
+            app.world()
+                .resource::<PendingWorldInputCapture>()
+                .request
+                .is_none()
+        );
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(Entity::PLACEHOLDER)
+        );
+    }
+
+    #[test]
+    fn stale_hidden_help_foreground_does_not_block_help_reopen() {
+        let mut app = capture_test_app();
+        let help = spawn_capture_root(&mut app, HelpPanel, Display::None);
+        let opener = app
+            .world_mut()
+            .spawn((
+                Interaction::Pressed,
+                Button,
+                MenuButton(MenuAction::OpenHelp { opener: None }),
+            ))
+            .id();
+        {
+            let mut state = app.world_mut().resource_mut::<UiInputState>();
+            state.world_input_captured = true;
+            state.foreground_capture_root = Some(help);
+        }
+        app.add_systems(
+            Update,
+            (
+                reset_pending_world_input_capture_system,
+                request_capture_from_menu_buttons_system,
+            )
+                .chain(),
+        );
+
+        app.update();
+
+        let request = app
+            .world()
+            .resource::<PendingWorldInputCapture>()
+            .request
+            .expect("hidden stale Help root must not block a fresh opener");
+        assert_eq!(request.overlay, InputOverlay::Help);
+        assert_eq!(request.root, help);
+        assert_eq!(request.opener, Some(opener));
+    }
+
+    #[test]
+    fn stale_help_foreground_falls_back_to_visible_pause_root() {
+        let mut app = capture_test_app();
+        let help = spawn_capture_root(&mut app, HelpPanel, Display::None);
+        let pause = spawn_capture_root(&mut app, PauseMenu, Display::Flex);
+        let opener = app
+            .world_mut()
+            .spawn((
+                Interaction::Pressed,
+                Button,
+                MenuButton(MenuAction::OpenHelp { opener: None }),
+                ChildOf(pause),
+            ))
+            .id();
+        app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        {
+            let mut state = app.world_mut().resource_mut::<UiInputState>();
+            state.world_input_captured = true;
+            state.foreground_capture_root = Some(help);
+        }
+        app.add_systems(
+            Update,
+            (
+                reset_pending_world_input_capture_system,
+                request_capture_from_menu_buttons_system,
+            )
+                .chain(),
+        );
+
+        app.update();
+
+        let request = app
+            .world()
+            .resource::<PendingWorldInputCapture>()
+            .request
+            .expect("Pause descendant should be accepted after Help closes");
+        assert_eq!(request.overlay, InputOverlay::Help);
+        assert_eq!(request.root, help);
+        assert_eq!(request.opener, Some(opener));
+    }
+
+    #[test]
+    fn missing_help_root_rejects_keyboard_open_without_clearing_focus() {
+        let mut app = capture_test_app();
+        app.world_mut()
+            .resource_mut::<ResolvedInputFrame>()
+            .replace(
+                super::super::InputModifiers::default(),
+                vec![InputAction::OpenHelp],
+                None,
+                false,
+            );
+        app.add_systems(Update, request_capture_from_resolved_actions_system);
+
+        app.update();
+
+        assert!(
+            app.world()
+                .resource::<PendingWorldInputCapture>()
+                .request
+                .is_none()
+        );
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(Entity::PLACEHOLDER)
+        );
     }
 
     #[test]
@@ -696,6 +922,41 @@ mod tests {
             Some(load)
         );
         assert_ne!(operation, settings);
+    }
+
+    #[test]
+    fn pause_to_help_handoff_does_not_restart_capture_latch() {
+        let mut app = capture_test_app();
+        let pause = spawn_capture_root(&mut app, PauseMenu, Display::Flex);
+        let help = spawn_capture_root(&mut app, HelpPanel, Display::None);
+        app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        app.add_systems(Update, sync_world_input_capture_system);
+
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<UiInputState>()
+                .foreground_capture_root,
+            Some(pause)
+        );
+        assert!(
+            app.world()
+                .resource::<UiInputState>()
+                .world_input_capture_started
+        );
+
+        app.world_mut()
+            .resource_mut::<PendingWorldInputCapture>()
+            .request(WorldInputCaptureRequest {
+                overlay: InputOverlay::Help,
+                root: help,
+                opener: None,
+            });
+        app.update();
+
+        let state = app.world().resource::<UiInputState>();
+        assert_eq!(state.foreground_capture_root, Some(help));
+        assert!(!state.world_input_capture_started);
     }
 
     #[derive(Resource)]

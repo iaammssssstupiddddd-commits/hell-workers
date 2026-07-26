@@ -70,7 +70,7 @@ pub use indicators::{
     update_designation_indicator_system,
 };
 /// 入力: Familiar コマンド入力 orchestration
-pub use input::familiar_command_input_system;
+pub(crate) use input::familiar_command_input_system;
 /// Stockpile policy: root target resolution and rectangular input ownership.
 pub use stockpile_policy::{
     StockpilePolicyRangeEditState, resolve_stockpile_policy_targets,

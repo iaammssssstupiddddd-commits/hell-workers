@@ -1,7 +1,11 @@
 //! 一時停止メニュー（Save / Load）
 
 use super::UiAssets;
-use crate::components::{MenuAction, MenuButton, PauseMenu, UiInputBlocker, UiInputCapture};
+use crate::components::{
+    MenuAction, MenuButton, PauseMenu, UiInputBlocker, UiInputCapture, UiTooltip,
+};
+use crate::help::HelpPanelChrome;
+use crate::overlay::PAUSE_LAYER;
 use crate::theme::UiTheme;
 use bevy::picking::Pickable;
 use bevy::prelude::*;
@@ -12,7 +16,9 @@ fn spawn_menu_button(
     game_assets: &dyn UiAssets,
     theme: &UiTheme,
     label: &str,
+    tooltip: &str,
     action: MenuAction,
+    shortcut: Option<&str>,
 ) {
     parent
         .spawn((
@@ -30,6 +36,10 @@ fn spawn_menu_button(
             BackgroundColor(theme.colors.button_default),
             BorderColor::all(theme.colors.dialog_border),
             MenuButton(action),
+            match shortcut {
+                Some(shortcut) => UiTooltip::with_shortcut(tooltip.to_owned(), shortcut.to_owned()),
+                None => UiTooltip::new(tooltip.to_owned()),
+            },
         ))
         .with_children(|button| {
             button.spawn((
@@ -50,6 +60,7 @@ pub fn spawn_pause_menu(
     game_assets: &dyn UiAssets,
     theme: &UiTheme,
     parent_entity: Entity,
+    help_chrome: &HelpPanelChrome,
 ) {
     let pause_menu = commands
         .spawn((
@@ -66,7 +77,7 @@ pub fn spawn_pause_menu(
             Pickable::default(),
             UiInputCapture,
             PauseMenu,
-            ZIndex(35),
+            PAUSE_LAYER,
             Name::new("Pause Capture"),
         ))
         .id();
@@ -118,28 +129,45 @@ pub fn spawn_pause_menu(
             game_assets,
             theme,
             "Resume",
+            "Resume",
             MenuAction::TogglePause,
+            None,
         );
         spawn_menu_button(
             parent,
             game_assets,
             theme,
             "Save Game",
+            "Save Game",
             MenuAction::SaveGame,
+            None,
         );
         spawn_menu_button(
             parent,
             game_assets,
             theme,
             "Load Game",
+            "Load Game",
             MenuAction::RequestLoadGame,
+            None,
         );
         spawn_menu_button(
             parent,
             game_assets,
             theme,
             "Settings",
+            "Settings",
             MenuAction::ToggleSettings,
+            None,
+        );
+        spawn_menu_button(
+            parent,
+            game_assets,
+            theme,
+            help_chrome.copy().launcher_label(),
+            help_chrome.copy().launcher_tooltip(),
+            MenuAction::OpenHelp { opener: None },
+            Some(help_chrome.launcher_shortcut()),
         );
     });
 }
@@ -148,67 +176,18 @@ pub fn spawn_pause_menu(
 mod tests {
     use super::*;
     use crate::components::UiInputCapture;
-
-    #[derive(Default)]
-    struct TestAssets {
-        font: Handle<Font>,
-        image: Handle<Image>,
-    }
-
-    impl UiAssets for TestAssets {
-        fn font_ui(&self) -> &Handle<Font> {
-            &self.font
-        }
-        fn font_familiar(&self) -> &Handle<Font> {
-            &self.font
-        }
-        fn font_soul_name(&self) -> &Handle<Font> {
-            &self.font
-        }
-        fn icon_arrow_down(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn icon_arrow_right(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn icon_idle(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn glow_circle(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn icon_stress(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn icon_fatigue(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn icon_male(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn icon_female(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn icon_axe(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn icon_pick(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn icon_hammer(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn icon_haul(&self) -> &Handle<Image> {
-            &self.image
-        }
-        fn icon_bone_small(&self) -> &Handle<Image> {
-            &self.image
-        }
-    }
+    use crate::setup::test_support::{TestAssets, sentinel_help_chrome};
 
     fn spawn_pause(mut commands: Commands, theme: Res<UiTheme>) {
         let parent = commands.spawn(Node::default()).id();
-        spawn_pause_menu(&mut commands, &TestAssets::default(), &theme, parent);
+        let chrome = sentinel_help_chrome();
+        spawn_pause_menu(
+            &mut commands,
+            &TestAssets::default(),
+            &theme,
+            parent,
+            &chrome,
+        );
     }
 
     #[test]
@@ -243,6 +222,28 @@ mod tests {
             buttons
                 .iter(app.world())
                 .any(|button| matches!(button.0, MenuAction::TogglePause))
+        );
+
+        let mut help_buttons = app
+            .world_mut()
+            .query::<(&MenuButton, &UiTooltip, &Children)>();
+        let (tooltip_text, shortcut, label_entity) = help_buttons
+            .iter(app.world())
+            .find_map(|(button, tooltip, children)| {
+                matches!(button.0, MenuAction::OpenHelp { .. }).then(|| {
+                    (
+                        tooltip.text.to_string(),
+                        tooltip.shortcut.as_deref().map(str::to_owned),
+                        children[0],
+                    )
+                })
+            })
+            .expect("Pause menu Help launcher");
+        assert_eq!(tooltip_text, "Injected Help Tooltip");
+        assert_eq!(shortcut.as_deref(), Some("Ctrl+F1"));
+        assert_eq!(
+            app.world().get::<Text>(label_entity).unwrap().0,
+            "Injected Help"
         );
     }
 }

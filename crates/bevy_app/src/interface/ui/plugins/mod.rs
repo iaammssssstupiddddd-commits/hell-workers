@@ -14,6 +14,9 @@ use notifications::UiNotificationsPlugin;
 pub use tooltip::ui_tooltip_plugin;
 
 pub fn register_ui_plugins(app: &mut App) {
+    let help_content = crate::interface::ui::help_content::build_help_panel_content()
+        .expect("player Help catalog must be valid");
+    app.insert_resource(help_content);
     app.add_plugins((
         HwUiPlugin,
         UiFoundationPlugin,
@@ -24,6 +27,11 @@ pub fn register_ui_plugins(app: &mut App) {
         ui_entity_list_plugin(),
     ));
     crate::systems::save::register_load_reset_hook(app, "hw-ui", hw_ui::reset_for_world_replace);
+    crate::systems::save::register_load_reset_hook(
+        app,
+        "root-help",
+        crate::interface::ui::help_controller::reset_root_help_state,
+    );
     crate::systems::save::register_load_reset_hook(
         app,
         "root-ui-task-list",

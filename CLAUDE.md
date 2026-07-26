@@ -27,6 +27,11 @@ After any code change, ensure zero compilation errors:
 **Completion criteria**: `python3 scripts/dev.py verify` succeeds.
 **Never report completion with errors remaining.**
 
+- You MUST use the repository `hell-workers-review-help-impact` Skill after implementing, changing, or removing functionality, code, or runtime data and before reporting completion, committing, or publishing.
+- Complete the Skill's `Update required` / `No impact` decision from the actual player-visible path; a passing Help impact gate alone does not count as the review.
+- Claude exposes this Skill as `review-help-impact`.
+- If the current product does not expose that Skill natively, read and follow `.cursor/skills/hell-workers-review-help-impact/SKILL.md` directly before completion.
+
 ### 1.5. Clippy Warnings (MAINTAIN ZERO)
 `cargo clippy --workspace` must produce **0 warnings**. This baseline was achieved 2026-03.
 

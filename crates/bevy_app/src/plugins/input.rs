@@ -14,6 +14,7 @@ use crate::interface::selection::{
     SelectedEntity, handle_mouse_input, pointer_hits_task_area_border,
 };
 use crate::interface::ui::UiInputState;
+use crate::interface::ui::help_controller::{HelpPauseGuard, apply_accepted_help_open_system};
 use crate::systems::command::TaskArea;
 use bevy::camera_controller::pan_camera::{PanCamera, PanCameraPlugin};
 use bevy::ecs::system::SystemParam;
@@ -33,6 +34,7 @@ impl Plugin for InputPlugin {
         app.init_resource::<PendingWorldInputCapture>();
         app.init_resource::<UiInputState>();
         app.init_resource::<TaskAreaPointerClaim>();
+        app.init_resource::<HelpPauseGuard>();
         configure_input_resolution_sets(app);
         app.add_systems(
             PreUpdate,
@@ -67,6 +69,7 @@ impl Plugin for InputPlugin {
             (
                 cancel_or_close_input_action_system,
                 input_action_to_ui_intent_system,
+                apply_accepted_help_open_system,
             )
                 .chain()
                 .in_set(InputResolutionSet::Consume),

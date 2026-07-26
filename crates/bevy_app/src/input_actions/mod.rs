@@ -2,6 +2,7 @@ mod bindings;
 mod cancel;
 mod capture;
 mod context;
+mod key_labels;
 mod model;
 mod resolver;
 
@@ -21,6 +22,7 @@ pub(crate) use capture::{
     rollback_in_progress_gesture_system, sync_world_input_capture_system,
 };
 pub use context::{InputContextSnapshot, InputOverlay};
+pub(crate) use key_labels::binding_labels_for_action;
 use model::InputConflictLane;
 pub use model::{InputAction, InputActionFamily, InputChord, InputModifiers};
 pub(crate) use resolver::resolve_input_frame_system;
@@ -71,7 +73,8 @@ pub(crate) fn configure_input_resolution_sets(app: &mut App) {
 impl InputOverlay {
     pub(crate) const fn priority(self) -> u8 {
         match self {
-            Self::LoadConfirm => 4,
+            Self::LoadConfirm => 5,
+            Self::Help => 4,
             Self::Settings => 3,
             Self::Pause => 2,
             Self::OperationDialog => 1,
@@ -92,6 +95,22 @@ pub(crate) fn input_action_to_ui_intent_system(
 
 fn ui_intent_for_action(action: InputAction) -> Option<UiIntent> {
     match action {
+        InputAction::OpenHelp => Some(UiIntent::OpenHelp { opener: None }),
+        InputAction::CloseHelp => Some(UiIntent::CloseHelp),
+        InputAction::HelpPreviousTopic => Some(UiIntent::StepHelpTopic(
+            hw_ui::help::HelpTopicStep::Previous,
+        )),
+        InputAction::HelpNextTopic => {
+            Some(UiIntent::StepHelpTopic(hw_ui::help::HelpTopicStep::Next))
+        }
+        InputAction::HelpPageUp => {
+            Some(UiIntent::ScrollHelp(hw_ui::help::HelpScrollCommand::PageUp))
+        }
+        InputAction::HelpPageDown => Some(UiIntent::ScrollHelp(
+            hw_ui::help::HelpScrollCommand::PageDown,
+        )),
+        InputAction::HelpHome => Some(UiIntent::ScrollHelp(hw_ui::help::HelpScrollCommand::Start)),
+        InputAction::HelpEnd => Some(UiIntent::ScrollHelp(hw_ui::help::HelpScrollCommand::End)),
         InputAction::SaveGame => Some(UiIntent::SaveGame),
         InputAction::RequestLoadGame => Some(UiIntent::RequestLoadGame),
         InputAction::ToggleArchitect => Some(UiIntent::ToggleArchitect),

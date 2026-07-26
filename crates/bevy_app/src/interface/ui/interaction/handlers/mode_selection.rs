@@ -12,6 +12,13 @@ pub(crate) fn handle_mode_select(
     sel_ctx: &mut IntentSelectionCtx<'_>,
     familiar_queries: &IntentFamiliarQueries<'_, '_>,
 ) {
+    if matches!(
+        &intent,
+        UiIntent::SelectTaskMode(TaskMode::SelectBuildTarget)
+    ) {
+        return;
+    }
+
     mode_ctx.cancel_active_mode_if_needed();
     match intent {
         UiIntent::SelectBuild(kind) => {

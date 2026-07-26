@@ -5,7 +5,7 @@ use crate::input_actions::{InputAction, ResolvedInputFrame};
 use bevy::prelude::*;
 
 /// Applies the single Familiar command resolved for the frame-start selection.
-pub fn familiar_command_input_system(
+pub(crate) fn familiar_command_input_system(
     resolved_frame: Res<ResolvedInputFrame>,
     q_familiars: Query<(), With<Familiar>>,
     mut q_active_commands: Query<(&mut ActiveCommand, Option<&TaskArea>), With<Familiar>>,
@@ -23,7 +23,9 @@ pub fn familiar_command_input_system(
             InputAction::FamiliarChop => task_context.0 = TaskMode::DesignateChop(None),
             InputAction::FamiliarMine => task_context.0 = TaskMode::DesignateMine(None),
             InputAction::FamiliarHaul => task_context.0 = TaskMode::DesignateHaul(None),
-            InputAction::FamiliarBuild => task_context.0 = TaskMode::SelectBuildTarget,
+            // Reserved binding: keep this unreachable until the target,
+            // assignment, and completion path are implemented together.
+            InputAction::FamiliarBuild => {}
             InputAction::FamiliarCancelDesignation => {
                 task_context.0 = TaskMode::CancelDesignation(None);
             }
@@ -73,6 +75,30 @@ mod tests {
             app.world().resource::<TaskContext>().0,
             TaskMode::DesignateMine(None)
         );
+    }
+
+    #[test]
+    fn familiar_build_binding_does_not_enter_incomplete_selection_mode() {
+        let mut app = minimal_app();
+        app.init_resource::<TaskContext>()
+            .init_resource::<ResolvedInputFrame>()
+            .add_systems(Update, familiar_command_input_system);
+        let familiar = app
+            .world_mut()
+            .spawn((Familiar::default(), ActiveCommand::default()))
+            .id();
+        app.world_mut()
+            .resource_mut::<ResolvedInputFrame>()
+            .replace(
+                InputModifiers::default(),
+                vec![InputAction::FamiliarBuild],
+                Some(familiar),
+                true,
+            );
+
+        app.update();
+
+        assert_eq!(app.world().resource::<TaskContext>().0, TaskMode::None);
     }
 
     #[test]

@@ -5,7 +5,8 @@ use bevy::prelude::*;
 use bevy::ui::FocusPolicy;
 
 use super::{
-    UiAssets, bottom_bar, dialogs, entity_list, panels, settings_panel, submenus, time_control,
+    UiAssets, bottom_bar, dialogs, entity_list, help_panel, panels, settings_panel, submenus,
+    time_control,
 };
 
 fn spawn_area_edit_preview(
@@ -200,6 +201,8 @@ pub struct SetupUiParams<'w> {
     pub ui_nodes: ResMut<'w, UiNodeRegistry>,
     pub info_panel_nodes: ResMut<'w, InfoPanelNodes>,
     pub settings_initial: settings_panel::SettingsPanelInitial,
+    pub help_content: &'w crate::help::HelpPanelContent,
+    pub help_chrome: &'w crate::help::HelpPanelChrome,
 }
 
 pub fn setup_ui<F, G>(
@@ -217,6 +220,8 @@ pub fn setup_ui<F, G>(
         mut ui_nodes,
         mut info_panel_nodes,
         settings_initial,
+        help_content,
+        help_chrome,
     } = params;
     let (_, left_slot, right_slot, bottom_slot, overlay_slot, top_right_slot, _dream_bubble_slot) =
         spawn_ui_root(&mut commands);
@@ -227,6 +232,7 @@ pub fn setup_ui<F, G>(
         theme,
         bottom_slot,
         &mut ui_nodes,
+        help_chrome,
     );
     submenus::spawn_submenus(&mut commands, game_assets, theme, bottom_slot);
     panels::spawn_panels(
@@ -265,13 +271,27 @@ pub fn setup_ui<F, G>(
         overlay_slot,
         &mut ui_nodes,
     );
-    super::pause_menu::spawn_pause_menu(&mut commands, game_assets, theme, overlay_slot);
+    super::pause_menu::spawn_pause_menu(
+        &mut commands,
+        game_assets,
+        theme,
+        overlay_slot,
+        help_chrome,
+    );
     settings_panel::spawn_settings_panel(
         &mut commands,
         game_assets,
         theme,
         overlay_slot,
         settings_initial,
+    );
+    help_panel::spawn_help_panel(
+        &mut commands,
+        game_assets,
+        theme,
+        overlay_slot,
+        help_content,
+        help_chrome,
     );
     spawn_root_panels(
         &mut commands,

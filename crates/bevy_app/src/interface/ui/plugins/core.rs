@@ -72,6 +72,7 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             crate::interface::ui::interaction::handle_text_input_intents_system,
             crate::interface::ui::panels::task_list::task_dashboard_action_button_system,
             handle_ui_intent,
+            hw_ui::interaction::handle_help_navigation_system,
             hw_logistics::apply_stockpile_policy_change_requests_system
                 .before(NotificationSystemSet::Adapt),
             crate::interface::ui::panels::task_list::apply_task_action_intents_system
@@ -79,6 +80,8 @@ fn register_ui_core_plugin_systems(app: &mut App) {
             crate::interface::ui::menu_visibility_system,
             hw_ui::interaction::update_pause_menu_visibility_system,
             hw_ui::interaction::update_settings_panel_visibility,
+            hw_ui::interaction::update_help_panel_visibility_system,
+            hw_ui::interaction::update_help_topic_presentation_system,
             hw_ui::interaction::sync_settings_slider_thumbs_system,
             hw_ui::interaction::sync_settings_checkmarks_system,
             crate::interface::ui::update_mode_text_system,

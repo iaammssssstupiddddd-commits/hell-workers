@@ -445,9 +445,12 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 - `UiInputState.pointer_over_ui` は通常 UI hover、`world_input_captured` は Modal/Pause の全域 ownership を表す。
   world 側 consumer は両者を合成する `world_input_blocked()` を使い、UI 自身は capture 中だけ前景 ancestry gate に従う。
-- `UiInputCapture` を持つ LoadConfirm / Settings / Pause / OperationDialog の root は viewport 全体を
+- `UiInputCapture` を持つ LoadConfirm / Help / Settings / Pause / OperationDialog の root は viewport 全体を
   `FocusPolicy::Block + Pickable::default()` で覆う。構造用 `UiRoot` / `UiMountSlot` は
   `FocusPolicy::Pass + Pickable::IGNORE` とし、通常時の world picking を遮らない。
+- capture rootは`LoadConfirm > Help > Settings > Pause > OperationDialog`と入力priorityが一致する
+  `GlobalZIndex`を共通定数から使用する。Helpは独立した`HelpPanelState`を持ち、背景`MenuState`とactive modeを
+  保持する。通常時だけ`HelpPauseGuard`がpauseを所有し、close/world replacement時に所有したpauseだけを解除する。
 - capture 開始時は未確定 Area/Zone/Dream gesture と Entity List drag/resize を rollback/reset する。
   選択/配置系と `PanCamera` guard は root 側で維持し、確定済み操作や mode owner 自体は変更しない。
 - task area と Stockpile 方針範囲編集の各 mode は左ボタンを press から release frame まで world gesture に予約する。
@@ -460,7 +463,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 ### UI 実行順序
 
-`ui_interaction_system → handle_text_input_intents_system → handle_ui_intent → specialized action → menu_visibility_system → pause/settings presentation → update_mode_text_system → update_area_edit_preview_ui_system` を同一 chain で固定する。keyboard shortcut はこの chain の前に resolver で解決済みである。`context_menu_system`、task summary、time/speed 表示、vignette などの後段更新は、この chain の後に実行する。
+`ui_interaction_system → handle_text_input_intents_system → handle_ui_intent → Help navigation → specialized action → menu_visibility_system → pause/settings/help presentation → update_mode_text_system → update_area_edit_preview_ui_system` を同一 chain で固定する。keyboard shortcut はこの chain の前に resolver で解決済みである。accepted Help openは`Input` phaseで先にpauseまで確定し、同frameのsimulationを進めない。`context_menu_system`、task summary、time/speed 表示、vignette などの後段更新は、この chain の後に実行する。
 
 Stockpile方針では`handle_ui_intent`が単一・範囲の両操作を同じtyped requestへ変換し、直後の
 `hw_logistics::apply_stockpile_policy_change_requests_system`がlive対象を再検証して変更とoutcome発行を行う。
@@ -515,12 +518,14 @@ Widget / root adapter は`StockpilePolicy`や在庫relationshipを直接変更�
 既存 domain consumerへ渡す。新しい shortcut は binding table、context/compatibility、owner classification
 test を同時に更新し、consumer に raw keyboard path を追加しない。
 
-overlay は `LoadConfirm > Settings > Pause > OperationDialog` の順で最前面だけが Escape を claim する。
-Pause は Escape/Space、Digit1-4、F5/F9 だけを許可し、その他の project action を抑止する。overlay がない
+overlay は `LoadConfirm > Help > Settings > Pause > OperationDialog` の順で最前面だけが Escape を claim する。
+Pause は Escape/Space、Digit1-4、F1、F5/F9 だけを許可し、その他の project action を抑止する。Helpは
+F1/Escape、ArrowUp/Down、PageUp/Down、Home/Endだけを許可する。overlay がない
 text input focus/latch 中は action を生成しない。accepted overlay open は同時に `InputFocus` を clear する。
 
 | キー | 機能 | 備考 |
 |:--|:--|:--|
+| `F1` | Helpを開く/閉じる | Normal、open menu、active mode、Pauseから開ける。上位overlay中は無効 |
 | `B` | Architectメニュートグル / Familiar Build | Normal で Familiar 選択中は command を優先 |
 | `Z` | Zonesメニュートグル | exact plain chord。ActiveMode 中は無効 |
 | `Space` | 一時停止/再開トグル | overlay transition のため同 frame の非互換 actionを抑止 |
