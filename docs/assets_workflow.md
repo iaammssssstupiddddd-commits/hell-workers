@@ -16,14 +16,22 @@
 ```text
 ~/Sync/hell-workers-assets/
 ├── source/
-│   ├── character/
-│   ├── buildings/
-│   ├── ui/
+│   ├── blender/
+│   ├── generated/
 │   └── references/
-└── exports/
-    ├── textures/
-    ├── models/
-    └── audio/
+├── staging/
+│   ├── imports/
+│   ├── blend/
+│   ├── exports/
+│   ├── renders/
+│   ├── reports/
+│   └── snapshots/
+├── exports/
+│   ├── textures/
+│   ├── models/
+│   └── audio/
+├── manifests/
+└── licenses/
 ```
 
 - `source/`
@@ -32,6 +40,11 @@
 - `exports/`
   - ゲーム投入前の最終出力物を置く。
   - `png`, `glb`, `ogg`, `wav` など、Bevy が直接読む形式に揃える。
+- `staging/`
+  - AI生成物・変換コピー・検証前exportを隔離する。ここは正本ではない。
+  - 自動化は `source/` と canonical `exports/` へ直接書かない。
+- `manifests/` / `licenses/`
+  - 生成元、hash、Blender/export条件、利用許諾、review結果を記録する。
 
 ## 3. リポジトリとの責務分離
 
@@ -48,10 +61,16 @@
 
 ## 4. 日常運用
 
-1. `source/` で原本を編集する。
-2. 最終形式へ書き出して `exports/` に置く。
-3. `python scripts/sync_external_assets.py --source ~/Sync/hell-workers-assets/exports` を実行する。
-4. `assets/` へ反映された内容をゲーム内で確認する。
+1. AI生成物や外部変換物を `staging/imports/` に置く。
+2. Blenderの作業コピーを `staging/blend/` に保存する。
+3. scene検査、`staging/exports/` へのGLB書き出し、Khronos検査を実行する。
+4. `staging/reports/`、render、license、provenanceを確認する。
+5. 人が明示承認した成果物だけを `source/` / canonical `exports/` へ昇格する。
+6. `scripts/sync_external_assets.py --dry-run` で差分を確認してから `assets/` へ反映する。
+7. ゲーム内またはvisual testで確認する。
+
+Blender AI編集、品質gate、MCPの安全境界は
+[`blender-setup.md`](blender-setup.md) を参照する。
 
 マゼンタ背景付き画像から透過 PNG を作る場合は、既存の `scripts/convert_to_png.py` を使ってから `exports/textures/` に置く。
 
@@ -71,7 +90,8 @@ python scripts/convert_to_png.py \
   "~/Sync/hell-workers-assets/exports/textures/ui/icon_idle.png"
 
 python scripts/sync_external_assets.py \
-  --source ~/Sync/hell-workers-assets/exports
+  --source ~/Sync/hell-workers-assets/exports \
+  --dry-run
 ```
 
 ## 5. `scripts/sync_external_assets.py` の責務

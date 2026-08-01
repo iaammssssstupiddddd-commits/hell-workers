@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MCP_VENDOR_ROOT="${BLENDER_MCP_ROOT:-${HOME}/tools/blender-mcp-server}"
+SERVER="${MCP_VENDOR_ROOT}/.venv/bin/blender-mcp-server"
+
+if [[ ! -x "${SERVER}" ]]; then
+    echo "error: Blender MCP server is not installed at ${SERVER}" >&2
+    exit 1
+fi
+
+export BLENDER_MCP_ALLOW_PYTHON_EXEC=0
+export BLENDER_MCP_ALLOW_HEADLESS=0
+exec "${SERVER}"

@@ -14,8 +14,15 @@
       "args": []
     },
     "blender": {
-      "type": "sse",
-      "url": "http://localhost:9876/sse"
+      "type": "stdio",
+      "command": "${CLAUDE_PROJECT_DIR:-.}/tools/blender_ai_workflow/bin/blender-mcp-server",
+      "args": [],
+      "env": {
+        "BLENDER_BIN": "${CLAUDE_PROJECT_DIR:-.}/tools/blender_ai_workflow/bin/blender-safe",
+        "BLENDER_MCP_ALLOW_HEADLESS": "0",
+        "BLENDER_MCP_ALLOW_PYTHON_EXEC": "0",
+        "HELL_WORKERS_ASSET_ROOT": "${HOME}/Sync/hell-workers-assets"
+      }
     }
   }
 }

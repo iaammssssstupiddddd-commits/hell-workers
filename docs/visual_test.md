@@ -5,7 +5,7 @@
 ## 起動
 
 ```bash
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo run -p visual_test
+cargo run -p visual_test
 ```
 
 ## 検証できること

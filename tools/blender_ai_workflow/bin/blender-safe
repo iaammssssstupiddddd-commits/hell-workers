@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${BIN_DIR}/../../.." && pwd)"
+ASSET_WORKSPACE_ROOT="${HELL_WORKERS_ASSET_ROOT:-${HOME}/Sync/hell-workers-assets}"
+MCP_VENDOR_ROOT="${BLENDER_MCP_ROOT:-${HOME}/tools/blender-mcp-server}"
+
+if ! command -v flatpak >/dev/null 2>&1; then
+    echo "error: flatpak is not installed" >&2
+    exit 1
+fi
+if ! flatpak info org.blender.Blender >/dev/null 2>&1; then
+    echo "error: org.blender.Blender is not installed" >&2
+    exit 1
+fi
+if [[ ! -d "${ASSET_WORKSPACE_ROOT}" ]]; then
+    echo "error: asset workspace does not exist: ${ASSET_WORKSPACE_ROOT}" >&2
+    exit 1
+fi
+
+export HELL_WORKERS_ASSET_ROOT="${ASSET_WORKSPACE_ROOT}"
+export BLENDER_MCP_ROOT="${MCP_VENDOR_ROOT}"
+
+NETWORK_ARGS=()
+if [[ "${BLENDER_SAFE_NO_NETWORK:-0}" == "1" ]]; then
+    NETWORK_ARGS+=(--unshare=network)
+fi
+
+exec flatpak run \
+    "${NETWORK_ARGS[@]}" \
+    --nofilesystem=host \
+    --filesystem="${ASSET_WORKSPACE_ROOT}" \
+    --filesystem="${PROJECT_ROOT}:ro" \
+    --filesystem="${MCP_VENDOR_ROOT}:ro" \
+    org.blender.Blender \
+    --disable-autoexec \
+    "$@"

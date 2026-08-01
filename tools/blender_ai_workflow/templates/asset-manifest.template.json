@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "asset_id": "",
+  "created_at_utc": "",
+  "generator": {
+    "service": "",
+    "model": "",
+    "version_or_checkpoint": ""
+  },
+  "inputs": {
+    "prompt_sha256": "",
+    "reference_sha256": [],
+    "source_file_sha256": []
+  },
+  "license": {
+    "name": "",
+    "terms_url": "",
+    "checked_at_utc": ""
+  },
+  "blender": {
+    "version": "5.1.1",
+    "flatpak_commit": "a55abdc01ce63065cc5c61bb14e83b89820ffe540bae514370a0b20cade4b24e",
+    "source_blend": "",
+    "export_settings": "GLB, +Y up, UV, normals, materials, animations, render-enabled objects"
+  },
+  "outputs": [
+    {
+      "path": "",
+      "sha256": ""
+    }
+  ],
+  "reports": {
+    "scene": "",
+    "khronos": "",
+    "render": ""
+  },
+  "approval": {
+    "reviewer": "",
+    "approved_at_utc": "",
+    "notes": ""
+  }
+}

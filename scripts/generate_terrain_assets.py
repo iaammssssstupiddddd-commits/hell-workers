@@ -1,8 +1,11 @@
 import os
 import random
+from pathlib import Path
+
 from PIL import Image, ImageFilter
 
-ASSETS_TEXTURES_DIR = "/home/satotakumi/projects/hell-workers/assets/textures"
+ASSETS_TEXTURES_DIR = Path(__file__).resolve().parents[1] / "assets" / "textures"
+
 
 def generate_tileable_noise(size, blur_radius, seed):
     random.seed(seed)

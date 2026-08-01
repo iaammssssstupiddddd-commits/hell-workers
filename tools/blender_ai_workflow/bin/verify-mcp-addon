@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKFLOW_ROOT="$(cd "${BIN_DIR}/.." && pwd)"
+export BLENDER_SAFE_NO_NETWORK=1
+
+exec "${BIN_DIR}/blender-safe" \
+    --background \
+    --python-exit-code 2 \
+    --python "${WORKFLOW_ROOT}/scripts/verify_mcp_addon.py"

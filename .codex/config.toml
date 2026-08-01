@@ -1,0 +1,102 @@
+[mcp_servers.rust-analyzer-mcp]
+command = "bash"
+args = [
+    "-lc",
+    "exec python3 scripts/rust_analyzer_mcp_stdio_adapter.py rust-analyzer-mcp",
+]
+enabled = true
+required = false
+startup_timeout_sec = 15
+tool_timeout_sec = 120
+default_tools_approval_mode = "approve"
+
+[mcp_servers.docsrs-mcp]
+command = "bash"
+args = ["-lc", "exec docsrs-mcp"]
+enabled = true
+required = false
+startup_timeout_sec = 15
+tool_timeout_sec = 180
+default_tools_approval_mode = "approve"
+
+[mcp_servers.blender]
+command = "./tools/blender_ai_workflow/bin/blender-mcp-server"
+enabled = true
+required = false
+startup_timeout_sec = 15
+tool_timeout_sec = 600
+default_tools_approval_mode = "auto"
+enabled_tools = [
+    "blender_scene_get_info",
+    "blender_scene_list_objects",
+    "blender_scene_save_as",
+    "blender_object_get_transform",
+    "blender_object_get_hierarchy",
+    "blender_material_list",
+    "blender_object_create",
+    "blender_object_delete",
+    "blender_object_translate",
+    "blender_object_rotate",
+    "blender_object_scale",
+    "blender_object_duplicate",
+    "blender_material_create",
+    "blender_material_assign",
+    "blender_material_set_color",
+    "blender_material_set_texture",
+    "blender_render_still",
+    "blender_render_animation",
+    "blender_history_undo",
+    "blender_history_redo",
+]
+
+[mcp_servers.blender.env]
+BLENDER_MCP_ALLOW_HEADLESS = "0"
+BLENDER_MCP_ALLOW_PYTHON_EXEC = "0"
+
+[mcp_servers.blender.tools.blender_object_create]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_scene_save_as]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_object_delete]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_object_translate]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_object_rotate]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_object_scale]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_object_duplicate]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_material_create]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_material_assign]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_material_set_color]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_material_set_texture]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_render_still]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_render_animation]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_history_undo]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_history_redo]
+approval_mode = "prompt"
+
+[mcp_servers.blender.tools.blender_scene_get_info]
+approval_mode = "approve"

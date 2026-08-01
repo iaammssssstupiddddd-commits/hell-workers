@@ -1,0 +1,481 @@
+diff --git a/addon/__init__.py b/addon/__init__.py
+index 2703ebc..d68fc4c 100644
+--- a/addon/__init__.py
++++ b/addon/__init__.py
+@@ -47,6 +47,7 @@ from .models import (
+     RenderAnimationParams,
+     RenderStillParams,
+     SceneListObjectsParams,
++    SceneSaveAsParams,
+ )
+
+ logger = logging.getLogger(__name__)
+@@ -56,12 +57,36 @@ PORT = 9876
+ BUFFER_SIZE = 65536
+
+ # Security: restrict file operations to these directories (set via addon preferences)
+-SAFE_MODE = False
++SAFE_MODE = True
+ ALLOWED_PATHS: list[str] = []
+-TOOL_WHITELIST: set[str] | None = None  # None = all tools allowed
++SAFE_TOOL_WHITELIST = frozenset(
++    {
++        "scene.get_info",
++        "scene.list_objects",
++        "scene.save_as",
++        "object.get_transform",
++        "object.get_hierarchy",
++        "material.list",
++        "object.create_mesh",
++        "object.delete",
++        "object.translate",
++        "object.rotate",
++        "object.scale",
++        "object.duplicate",
++        "material.create",
++        "material.assign",
++        "material.set_color",
++        "material.set_texture",
++        "render.still",
++        "render.animation",
++        "history.undo",
++        "history.redo",
++    }
++)
++TOOL_WHITELIST: set[str] | None = set(SAFE_TOOL_WHITELIST)
+
+ # Python execution settings (set via addon preferences)
+-ALLOW_INLINE_CODE = True
++ALLOW_INLINE_CODE = False
+ APPROVED_SCRIPT_ROOTS: list[str] = []
+ BLOCKED_MODULES: set[str] = {
+     "subprocess",
+@@ -374,6 +399,7 @@ class CommandHandler:
+     def _register_builtins(self):
+         self._handlers["scene.get_info"] = self._scene_get_info
+         self._handlers["scene.list_objects"] = self._scene_list_objects
++        self._handlers["scene.save_as"] = self._scene_save_as
+         self._handlers["object.get_transform"] = self._object_get_transform
+         self._handlers["object.get_hierarchy"] = self._object_get_hierarchy
+         self._handlers["material.list"] = self._material_list
+@@ -402,6 +428,7 @@ class CommandHandler:
+
+     _VALIDATORS: dict[str, type] = {
+         "scene.list_objects": SceneListObjectsParams,
++        "scene.save_as": SceneSaveAsParams,
+         "object.get_transform": ObjectGetTransformParams,
+         "object.get_hierarchy": ObjectGetHierarchyParams,
+         "object.create_mesh": ObjectCreateMeshParams,
+@@ -445,13 +472,18 @@ class CommandHandler:
+         """Security: validate that a filepath is within allowed directories."""
+         if not SAFE_MODE:
+             return filepath
+-        abs_path = os.path.abspath(bpy.path.abspath(filepath))
++        abs_path = os.path.realpath(os.path.abspath(bpy.path.abspath(filepath)))
+         if not ALLOWED_PATHS:
+             # In safe mode with no allowed paths, only allow the blend file directory
+             blend_dir = os.path.dirname(bpy.data.filepath) if bpy.data.filepath else os.getcwd()
+-            ALLOWED_PATHS.append(blend_dir)
++            ALLOWED_PATHS.append(os.path.realpath(blend_dir))
+         for allowed in ALLOWED_PATHS:
+-            if abs_path.startswith(os.path.abspath(allowed)):
++            allowed_path = os.path.realpath(os.path.abspath(allowed))
++            try:
++                within_allowed = os.path.commonpath((abs_path, allowed_path)) == allowed_path
++            except ValueError:
++                within_allowed = False
++            if within_allowed:
+                 return filepath
+         raise PermissionError(
+             f"File access denied: '{filepath}' is outside allowed directories. Allowed: {ALLOWED_PATHS}"
+@@ -470,6 +502,39 @@ class CommandHandler:
+             "object_count": len(scene.objects),
+         }
+
++    def _scene_save_as(self, params: dict) -> dict:
++        filepath = params["filepath"]
++        if os.path.splitext(filepath)[1].lower() != ".blend":
++            raise ValueError("Scene save path must use the .blend extension")
++        self._validate_filepath(filepath)
++        abs_path = os.path.realpath(os.path.abspath(bpy.path.abspath(filepath)))
++        allowed_blend_roots = [
++            os.path.realpath(os.path.join(root, "blend")) for root in ALLOWED_PATHS
++        ]
++        within_blend_root = False
++        for root in allowed_blend_roots:
++            try:
++                within_blend_root = os.path.commonpath((abs_path, root)) == root
++            except ValueError:
++                within_blend_root = False
++            if within_blend_root:
++                break
++        if not within_blend_root:
++            raise PermissionError(
++                "Scene saves are restricted to the staging/blend directory"
++            )
++        if not os.path.isdir(os.path.dirname(abs_path)):
++            raise FileNotFoundError(
++                f"Scene save directory does not exist: {os.path.dirname(abs_path)}"
++            )
++        result = bpy.ops.wm.save_as_mainfile(
++            filepath=abs_path,
++            check_existing=False,
++        )
++        if "FINISHED" not in result:
++            raise RuntimeError(f"Blender scene save did not finish: {result}")
++        return {"filepath": abs_path}
++
+     def _scene_list_objects(self, params: dict) -> dict:
+         type_filter = params.get("type")
+         objects = []
+@@ -1318,7 +1383,12 @@ def _ensure_server_running():
+
+ @persistent
+ def _on_load_post(_dummy):
+-    bpy.app.timers.register(_ensure_server_running, first_interval=0.1)
++    if _server_healthy():
++        _server._register_request_queue_timer()
++        return
++    prefs = _get_addon_preferences()
++    if prefs is not None and bool(getattr(prefs, "auto_start", False)):
++        bpy.app.timers.register(_ensure_server_running, first_interval=0.1)
+
+
+ class MCP_AddonPreferences(bpy.types.AddonPreferences):
+@@ -1326,8 +1396,8 @@ class MCP_AddonPreferences(bpy.types.AddonPreferences):
+
+     safe_mode: bpy.props.BoolProperty(
+         name="Safe Mode",
+-        description="Restrict file access to project directory and enable tool whitelist",
+-        default=False,
++        description="Restrict bridge file access to approved directories",
++        default=True,
+     )
+     port: bpy.props.IntProperty(
+         name="Port",
+@@ -1339,7 +1409,15 @@ class MCP_AddonPreferences(bpy.types.AddonPreferences):
+     allow_inline_code: bpy.props.BoolProperty(
+         name="Allow Inline Code",
+         description="Allow python.execute to run inline code strings. Disable to only allow script files",
+-        default=True,
++        default=False,
++    )
++    auto_start: bpy.props.BoolProperty(
++        name="Start Bridge Automatically",
++        description=(
++            "Start the unauthenticated localhost bridge whenever Blender starts. "
++            "Keep disabled and use the blender-ai launcher for explicit AI sessions"
++        ),
++        default=False,
+     )
+     approved_script_roots: bpy.props.StringProperty(
+         name="Approved Script Roots",
+@@ -1351,6 +1429,7 @@ class MCP_AddonPreferences(bpy.types.AddonPreferences):
+         layout = self.layout
+         layout.prop(self, "safe_mode")
+         layout.prop(self, "port")
++        layout.prop(self, "auto_start")
+         layout.separator()
+         layout.label(text="Python Execution")
+         layout.prop(self, "allow_inline_code")
+@@ -1422,7 +1501,9 @@ def register():
+         bpy.utils.register_class(cls)
+     if _on_load_post not in bpy.app.handlers.load_post:
+         bpy.app.handlers.load_post.append(_on_load_post)
+-    _ensure_server_running()
++    prefs = _get_addon_preferences()
++    if prefs is not None and bool(getattr(prefs, "auto_start", False)):
++        _ensure_server_running()
+
+
+ def unregister():
+diff --git a/addon/models.py b/addon/models.py
+index 1171e83..f4b318c 100644
+--- a/addon/models.py
++++ b/addon/models.py
+@@ -118,6 +118,10 @@ class SceneListObjectsParams(BridgeParams):
+     fields = {"type": field("str", allow_none=True)}
+
+
++class SceneSaveAsParams(BridgeParams):
++    fields = {"filepath": field("str", required=True)}
++
++
+ class ObjectGetTransformParams(BridgeParams):
+     fields = {"name": field("str", required=True)}
+
+@@ -179,13 +183,13 @@ class MaterialAssignParams(BridgeParams):
+
+ class MaterialSetColorParams(BridgeParams):
+     fields = {
+-        "material": field("str", required=True),
++        "name": field("str", required=True),
+         "color": field("number_list", required=True, min_length=3, max_length=3),
+     }
+
+
+ class MaterialSetTextureParams(BridgeParams):
+-    fields = {"material": field("str", required=True), "path": field("str", required=True)}
++    fields = {"name": field("str", required=True), "filepath": field("str", required=True)}
+
+
+ class RenderStillParams(BridgeParams):
+diff --git a/pyproject.toml b/pyproject.toml
+index 1589359..8463c61 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -26,7 +26,7 @@ classifiers = [
+     "Topic :: Software Development :: Libraries",
+ ]
+ dependencies = [
+-    "mcp>=1.0.0",
++    "mcp>=1.0.0,<2",
+     "pydantic>=2.0",
+ ]
+
+diff --git a/src/blender_mcp_server/server.py b/src/blender_mcp_server/server.py
+index 4d5483b..612689f 100644
+--- a/src/blender_mcp_server/server.py
++++ b/src/blender_mcp_server/server.py
+@@ -3,6 +3,7 @@
+ import asyncio
+ import json
+ import logging
++import os
+ import uuid
+ from contextlib import asynccontextmanager
+ from typing import Any
+@@ -18,6 +19,24 @@ BLENDER_PORT = 9876
+ HEADLESS_JOB_MANAGER = HeadlessJobManager()
+
+
++def _require_python_exec_enabled() -> None:
++    enabled = os.environ.get("BLENDER_MCP_ALLOW_PYTHON_EXEC", "").strip().lower()
++    if enabled not in {"1", "true", "yes"}:
++        raise PermissionError(
++            "Python execution is disabled. "
++            "Set BLENDER_MCP_ALLOW_PYTHON_EXEC=1 only for an explicitly trusted session."
++        )
++
++
++def _require_headless_enabled() -> None:
++    enabled = os.environ.get("BLENDER_MCP_ALLOW_HEADLESS", "").strip().lower()
++    if enabled not in {"1", "true", "yes"}:
++        raise PermissionError(
++            "Headless MCP transport is disabled. "
++            "Use the isolated workflow CLI for background rendering and export."
++        )
++
++
+ class BlenderConnection:
+     """Async TCP client that communicates with the Blender add-on."""
+
+@@ -120,6 +139,21 @@ async def scene_list_objects(ctx: Context, type: str | None = None) -> str:
+     return json.dumps(result, indent=2)
+
+
++@mcp.tool(
++    name="blender_scene_save_as",
++    description=(
++        "Save the current scene as a .blend file. "
++        "The hardened bridge accepts only paths under staging/blend."
++    ),
++)
++async def scene_save_as(ctx: Context, filepath: str) -> str:
++    result = await _get_conn(ctx).send_command(
++        "scene.save_as",
++        {"filepath": filepath},
++    )
++    return json.dumps(result, indent=2)
++
++
+ @mcp.tool(
+     name="blender_object_get_transform",
+     description="Get the position, rotation, and scale of a Blender object by name.",
+@@ -302,6 +336,7 @@ async def render_still(
+     factory_startup: bool | None = None,
+ ) -> str:
+     if transport == "headless":
++        _require_headless_enabled()
+         code = """
+ import bpy
+ scene = bpy.context.scene
+@@ -363,6 +398,7 @@ async def render_animation(
+     factory_startup: bool | None = None,
+ ) -> str:
+     if transport == "headless":
++        _require_headless_enabled()
+         code = """
+ import bpy
+ scene = bpy.context.scene
+@@ -481,7 +517,9 @@ async def python_exec(
+     blend_file: str | None = None,
+     factory_startup: bool | None = None,
+ ) -> str:
++    _require_python_exec_enabled()
+     if transport == "headless":
++        _require_headless_enabled()
+         executor = HeadlessBlenderExecutor()
+         result = await executor.execute(
+             code=code,
+@@ -526,7 +564,9 @@ async def python_exec_async(
+     blend_file: str | None = None,
+     factory_startup: bool | None = None,
+ ) -> str:
++    _require_python_exec_enabled()
+     if transport == "headless":
++        _require_headless_enabled()
+         executor = HeadlessBlenderExecutor()
+         job_id = await HEADLESS_JOB_MANAGER.create_job(
+             executor,
+diff --git a/tests/test_addon.py b/tests/test_addon.py
+index 3ca362c..66c226b 100644
+--- a/tests/test_addon.py
++++ b/tests/test_addon.py
+@@ -116,6 +116,10 @@ def addon_module(mock_bpy):
+     spec = importlib.util.spec_from_file_location("addon", "addon/__init__.py")
+     addon = importlib.util.module_from_spec(spec)
+     spec.loader.exec_module(addon)
++    # Most upstream execution tests exercise the opt-in inline-code path.
++    # The installed add-on keeps this disabled by default.
++    addon.ALLOW_INLINE_CODE = True
++    addon.TOOL_WHITELIST = None
+     return addon
+
+
+@@ -144,6 +148,12 @@ class TestSceneCommands:
+         assert len(result["objects"]) == 1
+         assert result["objects"][0]["name"] == "Cube"
+
++    def test_save_as_schema_requires_filepath(self, addon_module):
++        values = addon_module.SceneSaveAsParams.model_validate(
++            {"filepath": "/tmp/staging/blend/scene.blend"}
++        ).model_dump(exclude_none=True)
++        assert values == {"filepath": "/tmp/staging/blend/scene.blend"}
++
+
+ class TestObjectCommands:
+     def test_build_primitive_pydata_cube(self, addon_module):
+@@ -187,6 +197,18 @@ class TestMaterialCommands:
+         result = handler.handle("material.list", {})
+         assert result["materials"] == []
+
++    def test_set_color_schema_matches_handler_contract(self, addon_module):
++        values = addon_module.MaterialSetColorParams.model_validate(
++            {"name": "Basalt", "color": [0.1, 0.2, 0.3]}
++        ).model_dump(exclude_none=True)
++        assert values == {"name": "Basalt", "color": [0.1, 0.2, 0.3]}
++
++    def test_set_texture_schema_matches_handler_contract(self, addon_module):
++        values = addon_module.MaterialSetTextureParams.model_validate(
++            {"name": "Basalt", "filepath": "/tmp/basalt.png"}
++        ).model_dump(exclude_none=True)
++        assert values == {"name": "Basalt", "filepath": "/tmp/basalt.png"}
++
+
+ class TestServerExecution:
+     def test_mutation_request_skips_undo_when_poll_fails(self, addon_module, mock_bpy):
+@@ -439,6 +461,21 @@ class TestPythonExecute:
+
+
+ class TestPythonSandbox:
++    def test_safe_tool_whitelist_excludes_code_execution(self, addon_module):
++        assert "python.execute" not in addon_module.SAFE_TOOL_WHITELIST
++        assert "python.execute_async" not in addon_module.SAFE_TOOL_WHITELIST
++        assert "job.list" not in addon_module.SAFE_TOOL_WHITELIST
++
++    def test_safe_tool_whitelist_is_enforced_by_dispatch(self, handler, addon_module):
++        addon_module.TOOL_WHITELIST = set(addon_module.SAFE_TOOL_WHITELIST)
++        try:
++            with pytest.raises(PermissionError, match="whitelist"):
++                handler.handle("python.execute", {"code": "__result__ = 1"})
++            with pytest.raises(PermissionError, match="whitelist"):
++                handler.handle("job.list", {})
++        finally:
++            addon_module.TOOL_WHITELIST = None
++
+     """Tests for MCP-103 sandbox and path restrictions."""
+
+     def test_script_outside_roots_rejected(self, handler, addon_module):
+@@ -497,6 +534,23 @@ class TestPythonSandbox:
+         assert addon_module.APPROVED_SCRIPT_ROOTS == ["/tmp/a", "/tmp/b"]
+         assert addon_module.ALLOWED_PATHS == ["/tmp/a", "/tmp/b"]
+
++    def test_safe_mode_rejects_sibling_path_with_shared_prefix(self, addon_module):
++        with tempfile.TemporaryDirectory() as parent:
++            allowed_dir = os.path.join(parent, "assets")
++            sibling_dir = os.path.join(parent, "assets-escape")
++            os.makedirs(allowed_dir)
++            os.makedirs(sibling_dir)
++
++            addon_module.SAFE_MODE = True
++            addon_module.ALLOWED_PATHS = [allowed_dir]
++            try:
++                with pytest.raises(PermissionError, match="outside allowed"):
++                    addon_module.CommandHandler._validate_filepath(
++                        os.path.join(sibling_dir, "scene.glb")
++                    )
++            finally:
++                addon_module.ALLOWED_PATHS = []
++
+     def test_non_py_script_rejected(self, handler, addon_module):
+         with tempfile.TemporaryDirectory() as tmpdir:
+             script = os.path.join(tmpdir, "script.txt")
+diff --git a/tests/test_server.py b/tests/test_server.py
+index 3afe0dc..c4816a9 100644
+--- a/tests/test_server.py
++++ b/tests/test_server.py
+@@ -21,6 +21,13 @@ from blender_mcp_server.server import (
+ )
+
+
++@pytest.fixture(autouse=True)
++def enable_python_execution_for_upstream_contract_tests(monkeypatch):
++    """Upstream execution tests opt in; deployed environments stay disabled."""
++    monkeypatch.setenv("BLENDER_MCP_ALLOW_PYTHON_EXEC", "1")
++    monkeypatch.setenv("BLENDER_MCP_ALLOW_HEADLESS", "1")
++
++
+ class TestToolRegistration:
+     """Verify all expected tools are registered with correct metadata."""
+
+@@ -31,6 +38,7 @@ class TestToolRegistration:
+         names = self._get_tool_names()
+         assert "blender_scene_get_info" in names
+         assert "blender_scene_list_objects" in names
++        assert "blender_scene_save_as" in names
+
+     def test_object_read_tools_registered(self):
+         names = self._get_tool_names()
+@@ -91,7 +99,7 @@ class TestToolRegistration:
+         assert "blender_job_list" in names
+
+     def test_total_tool_count(self):
+-        assert len(self._get_tool_names()) == 27
++        assert len(self._get_tool_names()) == 28
+
+     def test_all_tools_have_descriptions(self):
+         for tool in mcp._tool_manager._tools.values():
+@@ -244,6 +252,22 @@ class TestHeadlessExecutor:
+
+
+ class TestHeadlessTransportTools:
++    @pytest.mark.asyncio
++    async def test_headless_render_is_disabled_without_explicit_opt_in(self, monkeypatch):
++        monkeypatch.delenv("BLENDER_MCP_ALLOW_HEADLESS", raising=False)
++        ctx = MagicMock()
++
++        with pytest.raises(PermissionError, match="disabled"):
++            await render_still(ctx, transport="headless")
++
++    @pytest.mark.asyncio
++    async def test_python_exec_is_disabled_without_explicit_opt_in(self, monkeypatch):
++        monkeypatch.delenv("BLENDER_MCP_ALLOW_PYTHON_EXEC", raising=False)
++        ctx = MagicMock()
++
++        with pytest.raises(PermissionError, match="disabled"):
++            await python_exec(ctx, code="pass", transport="headless")
++
+     @pytest.mark.asyncio
+     async def test_python_exec_uses_headless_transport(self):
+         ctx = MagicMock()

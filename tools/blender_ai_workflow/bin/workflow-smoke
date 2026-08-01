@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKFLOW_ROOT="$(cd "${BIN_DIR}/.." && pwd)"
+ASSET_WORKSPACE_ROOT="${HELL_WORKERS_ASSET_ROOT:-${HOME}/Sync/hell-workers-assets}"
+SMOKE_BLEND="${ASSET_WORKSPACE_ROOT}/staging/blend/ai_workflow_smoke.blend"
+SMOKE_GLB="ai_workflow_smoke.glb"
+export BLENDER_SAFE_NO_NETWORK=1
+
+"${BIN_DIR}/blender-safe" \
+    --background \
+    --factory-startup \
+    --python-exit-code 2 \
+    --python "${WORKFLOW_ROOT}/scripts/create_smoke_scene.py"
+
+"${BIN_DIR}/validate-blend" \
+    "${SMOKE_BLEND}" \
+    "ai_workflow_smoke.scene.json" \
+    10000
+
+exec "${BIN_DIR}/export-staging-glb" \
+    "${SMOKE_BLEND}" \
+    "${SMOKE_GLB}" \
+    10000

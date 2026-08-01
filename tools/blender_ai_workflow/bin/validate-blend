@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+    echo "usage: validate-blend <input.blend> <report-name.json> [max-triangles]" >&2
+    exit 2
+fi
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKFLOW_ROOT="$(cd "${BIN_DIR}/.." && pwd)"
+ASSET_WORKSPACE_ROOT="${HELL_WORKERS_ASSET_ROOT:-${HOME}/Sync/hell-workers-assets}"
+INPUT_BLEND="$1"
+REPORT="${ASSET_WORKSPACE_ROOT}/staging/reports/$2"
+MAX_TRIANGLES="${3:-}"
+export BLENDER_SAFE_NO_NETWORK=1
+
+EXTRA_ARGS=()
+if [[ -n "${MAX_TRIANGLES}" ]]; then
+    EXTRA_ARGS+=(--max-triangles "${MAX_TRIANGLES}")
+fi
+
+exec "${BIN_DIR}/blender-safe" \
+    --background \
+    --factory-startup \
+    "${INPUT_BLEND}" \
+    --python-exit-code 2 \
+    --python "${WORKFLOW_ROOT}/scripts/validate_scene.py" \
+    -- \
+    --report "${REPORT}" \
+    --require-uv \
+    --require-material \
+    "${EXTRA_ARGS[@]}"

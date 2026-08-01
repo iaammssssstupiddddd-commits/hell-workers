@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKFLOW_ROOT="$(cd "${BIN_DIR}/.." && pwd)"
+
+exec "${BIN_DIR}/blender-safe" \
+    "$@" \
+    --python "${WORKFLOW_ROOT}/scripts/start_mcp_session.py"

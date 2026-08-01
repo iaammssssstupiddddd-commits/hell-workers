@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKFLOW_ROOT="$(cd "${BIN_DIR}/.." && pwd)"
+MCP_VENDOR_ROOT="${BLENDER_MCP_ROOT:-${HOME}/tools/blender-mcp-server}"
+ASSET_WORKSPACE_ROOT="${HELL_WORKERS_ASSET_ROOT:-${HOME}/Sync/hell-workers-assets}"
+export BLENDER_SAFE_NO_NETWORK=1
+
+"${MCP_VENDOR_ROOT}/scripts/build_addon_zip.sh"
+
+exec "${BIN_DIR}/blender-safe" \
+    --background \
+    --python-exit-code 2 \
+    --python "${WORKFLOW_ROOT}/scripts/configure_mcp_addon.py" \
+    -- \
+    --zip "${MCP_VENDOR_ROOT}/dist/blender_mcp_bridge.zip" \
+    --asset-root "${ASSET_WORKSPACE_ROOT}"

@@ -36,6 +36,7 @@
 - [art-style-criteria.md](art-style-criteria.md): アートスタイルの受入基準と検証観点。
 - [world_lore.md](world_lore.md): 世界観設定書。アセットデザインのための世界観・視覚指針（アートスタイル含む）。
 - [assets_workflow.md](assets_workflow.md): `Syncthing` を前提にした原本共有、`exports/` 運用、`assets/` 反映手順。
+- [blender-setup.md](blender-setup.md): AI支援Blender編集、MCP安全境界、staging品質gate、GLB検証の手順。
 
 ## 不変条件 & イベント（AI 必読）
 - [invariants.md](invariants.md): **ゲーム不変条件**。コード変更前に必ず確認すること（Soul/Familiar/タスク/Logistics 各不変条件）。

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VALIDATOR_ROOT="${GLTF_VALIDATOR_ROOT:-${HOME}/tools/gltf-validator}"
+VALIDATOR="${VALIDATOR_ROOT}/validate.mjs"
+
+if [[ ! -f "${VALIDATOR}" ]]; then
+    echo "error: glTF validator wrapper is not installed at ${VALIDATOR}" >&2
+    exit 1
+fi
+
+exec node "${VALIDATOR}" "$@"
