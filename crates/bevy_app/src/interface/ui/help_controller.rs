@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use hw_ui::components::OperationDialogScroll;
 use hw_ui::help::{HelpNavigationScrollArea, HelpPanelContent, HelpPanelState, HelpScrollArea};
 
 use crate::input_actions::{InputOverlay, PendingWorldInputCapture};
@@ -7,7 +8,10 @@ pub(crate) type HelpScrollAreas<'w, 's> = Query<
     'w,
     's,
     &'static mut ScrollPosition,
-    Or<(With<HelpScrollArea>, With<HelpNavigationScrollArea>)>,
+    (
+        Or<(With<HelpScrollArea>, With<HelpNavigationScrollArea>)>,
+        Without<OperationDialogScroll>,
+    ),
 >;
 
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -17,13 +21,18 @@ pub(crate) struct HelpPauseGuard {
 
 pub(crate) fn apply_accepted_help_open_system(
     pending: Res<PendingWorldInputCapture>,
+    mut settings_requests: MessageReader<hw_familiar_ai::FamiliarSettingsChangeRequest>,
     content: Option<Res<HelpPanelContent>>,
     state: Option<ResMut<HelpPanelState>>,
     guard: Option<ResMut<HelpPauseGuard>>,
     mut time: ResMut<Time<Virtual>>,
     mut scroll_areas: HelpScrollAreas,
 ) {
+    let has_unread_settings_request = settings_requests.read().count() > 0;
     if !pending.accepts_overlay(InputOverlay::Help) {
+        return;
+    }
+    if has_unread_settings_request {
         return;
     }
     let (Some(content), Some(mut state), Some(mut guard)) = (content, state, guard) else {
@@ -129,7 +138,7 @@ mod tests {
 
     use crate::input_actions::{
         InputAction, InputModifiers, ResolvedInputFrame,
-        request_capture_from_resolved_actions_system,
+        request_capture_from_resolved_actions_system, reset_pending_world_input_capture_system,
     };
     use crate::interface::selection::SelectedEntity;
     use crate::systems::save::SavePath;
@@ -216,6 +225,7 @@ mod tests {
     fn open_test_app(paused: bool) -> App {
         let mut app = minimal_app();
         app.init_resource::<PendingWorldInputCapture>()
+            .add_message::<hw_familiar_ai::FamiliarSettingsChangeRequest>()
             .init_resource::<ResolvedInputFrame>()
             .init_resource::<UiInputState>()
             .init_resource::<MenuState>()
@@ -306,5 +316,163 @@ mod tests {
         assert!(app.world().resource::<HelpPanelState>().open);
         assert!(app.world().resource::<Time<Virtual>>().is_paused());
         assert!(!app.world().resource::<HelpPauseGuard>().paused_by_help);
+    }
+
+    #[derive(Resource)]
+    struct LateHelpIntent(Option<hw_ui::UiIntent>);
+
+    #[derive(Resource, Default)]
+    struct LogicCommitObservedUnpaused(bool);
+
+    fn handle_late_help_intent(
+        mut intent: ResMut<LateHelpIntent>,
+        pending: Res<PendingWorldInputCapture>,
+        content: Res<HelpPanelContent>,
+        mut state: ResMut<HelpPanelState>,
+        mut guard: ResMut<HelpPauseGuard>,
+        mut time: ResMut<Time<Virtual>>,
+        mut scroll_areas: HelpScrollAreas,
+    ) {
+        let Some(intent) = intent.0.take() else {
+            return;
+        };
+        handle_help_intent(
+            intent,
+            &pending,
+            &content,
+            &mut state,
+            &mut guard,
+            &mut time,
+            &mut scroll_areas,
+        );
+    }
+
+    fn observe_settings_commit_time(
+        time: Res<Time<Virtual>>,
+        mut observed: ResMut<LogicCommitObservedUnpaused>,
+    ) {
+        observed.0 = !time.is_paused();
+    }
+
+    #[test]
+    fn unread_settings_request_delays_f1_pause_until_after_same_frame_logic_commit() {
+        use crate::entities::familiar::{Familiar, FamiliarOperation, FamiliarPolicy};
+        use crate::systems::GameSystemSet;
+        use hw_core::events::{FamiliarRosterReleasedVisualMessage, SoulTaskUnassignRequest};
+        use hw_core::familiar::FamiliarSettingsPatch;
+
+        let mut app = minimal_app();
+        app.init_resource::<PendingWorldInputCapture>()
+            .init_resource::<ResolvedInputFrame>()
+            .init_resource::<UiInputState>()
+            .init_resource::<MenuState>()
+            .init_resource::<HelpPanelState>()
+            .init_resource::<HelpPauseGuard>()
+            .init_resource::<Time<Virtual>>()
+            .init_resource::<LogicCommitObservedUnpaused>()
+            .insert_resource(content())
+            .insert_resource(SavePath::new(
+                "/definitely/missing/help-settings-race-save.ron",
+            ))
+            .insert_resource(InputFocus::default())
+            .insert_resource(LateHelpIntent(Some(hw_ui::UiIntent::OpenHelp {
+                opener: None,
+            })))
+            .add_message::<hw_familiar_ai::FamiliarSettingsChangeRequest>()
+            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
+            .add_message::<SoulTaskUnassignRequest>()
+            .add_message::<FamiliarRosterReleasedVisualMessage>()
+            .configure_sets(
+                Update,
+                (
+                    GameSystemSet::Input,
+                    GameSystemSet::Logic.run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
+                    GameSystemSet::Interface,
+                )
+                    .chain(),
+            )
+            .add_systems(
+                Update,
+                (
+                    reset_pending_world_input_capture_system,
+                    request_capture_from_resolved_actions_system,
+                    apply_accepted_help_open_system,
+                )
+                    .chain()
+                    .in_set(GameSystemSet::Input),
+            )
+            .add_systems(
+                Update,
+                (
+                    hw_familiar_ai::apply_familiar_settings_change_requests_system,
+                    ApplyDeferred,
+                    observe_settings_commit_time,
+                )
+                    .chain()
+                    .in_set(GameSystemSet::Logic),
+            )
+            .add_systems(
+                Update,
+                handle_late_help_intent.in_set(GameSystemSet::Interface),
+            );
+        app.world_mut().spawn((
+            Node {
+                display: Display::None,
+                ..default()
+            },
+            UiInputCapture,
+            hw_ui::help::HelpPanel,
+        ));
+        app.world_mut()
+            .spawn((ScrollPosition(Vec2::new(0.0, 80.0)), HelpScrollArea));
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                FamiliarOperation::default(),
+                FamiliarPolicy::default(),
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<ResolvedInputFrame>()
+            .replace(
+                InputModifiers::default(),
+                vec![InputAction::OpenHelp],
+                None,
+                false,
+            );
+        app.world_mut()
+            .write_message(hw_familiar_ai::FamiliarSettingsChangeRequest {
+                target: familiar,
+                patch: FamiliarSettingsPatch::SetAllWorkAllowed { allowed: false },
+            });
+
+        app.update();
+
+        assert!(
+            app.world()
+                .get::<FamiliarPolicy>(familiar)
+                .unwrap()
+                .all_work_disabled()
+        );
+        assert!(app.world().resource::<LogicCommitObservedUnpaused>().0);
+        assert!(app.world().resource::<HelpPanelState>().open);
+        assert!(app.world().resource::<Time<Virtual>>().is_paused());
+        assert!(app.world().resource::<HelpPauseGuard>().paused_by_help);
+
+        for _ in 0..3 {
+            app.update();
+        }
+        app.world_mut().resource_mut::<LateHelpIntent>().0 = Some(hw_ui::UiIntent::CloseHelp);
+        app.update();
+
+        assert!(!app.world().resource::<HelpPanelState>().open);
+        assert!(!app.world().resource::<Time<Virtual>>().is_paused());
+        assert!(
+            app.world()
+                .get::<FamiliarPolicy>(familiar)
+                .unwrap()
+                .all_work_disabled()
+        );
     }
 }

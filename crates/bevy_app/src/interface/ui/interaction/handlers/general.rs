@@ -3,9 +3,11 @@ use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use hw_core::game_state::TimeSpeed;
 use hw_ui::UiIntent;
+use hw_ui::components::OperationDialogState;
 
-use super::super::intent_context::{IntentSelectionCtx, IntentUiQueries};
+use super::super::intent_context::{IntentFamiliarQueries, IntentSelectionCtx, IntentUiQueries};
 use super::begin_overlay_open;
+use crate::input_actions::PendingWorldInputCapture;
 
 pub(crate) fn handle_selection(intent: UiIntent, ctx: &mut IntentSelectionCtx<'_>) {
     match intent {
@@ -25,19 +27,30 @@ pub(crate) fn handle_selection(intent: UiIntent, ctx: &mut IntentSelectionCtx<'_
 
 pub(crate) fn handle_dialog(
     intent: UiIntent,
-    can_open_operation: bool,
+    pending: &PendingWorldInputCapture,
+    familiar_queries: &IntentFamiliarQueries<'_, '_>,
+    dialog_state: &mut OperationDialogState,
     ui_queries: &mut IntentUiQueries<'_, '_>,
 ) {
     match intent {
-        UiIntent::OpenOperationDialog => {
+        UiIntent::OpenOperationDialog { opener, target } => {
+            let accepted = pending.accepts_operation(opener, target)
+                && familiar_queries.q_familiar_settings.contains(target);
+            if accepted {
+                dialog_state.target = Some(target);
+            }
             open_operation_dialog_with_focus(
-                can_open_operation,
+                accepted,
                 &mut ui_queries.q_dialog,
                 &mut ui_queries.input_focus,
             );
         }
         UiIntent::CloseDialog => {
+            dialog_state.target = None;
             hw_ui::interaction::dialog::close_operation_dialog(&mut ui_queries.q_dialog);
+            for mut scroll in &mut ui_queries.q_operation_scroll {
+                scroll.0 = Vec2::ZERO;
+            }
         }
         _ => {}
     }

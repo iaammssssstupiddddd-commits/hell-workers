@@ -4,7 +4,11 @@ pub mod movement;
 pub use animation::FamiliarAnimation;
 pub use familiar_ai::decide::auto_gather_for_blueprint::AutoGatherDesignation;
 pub use familiar_ai::decide::task_management::FamiliarTaskCandidateDiagnostics;
-pub use familiar_ai::execute::max_soul_logic::max_soul_logic_system;
 pub use familiar_ai::execute::squad_logic::squad_logic_system;
+pub use familiar_ai::settings::{
+    FamiliarSettingsApplySet, FamiliarSettingsChangeOutcome, FamiliarSettingsChangeRequest,
+    FamiliarSettingsChangeStatus, FamiliarSettingsRejection,
+    apply_familiar_settings_change_requests_system,
+};
 pub use familiar_ai::{FamiliarAiCorePlugin, FamiliarTaskDecisionSet};
 pub use movement::familiar_movement;

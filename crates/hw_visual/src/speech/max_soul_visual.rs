@@ -1,7 +1,7 @@
 //! 使役数上限変更時のビジュアル演出：Familiar の "Abi" セリフ表示。
 
 use bevy::prelude::*;
-use hw_core::events::FamiliarOperationMaxSoulChangedEvent;
+use hw_core::events::FamiliarRosterReleasedVisualMessage;
 use hw_core::familiar::Familiar;
 
 use super::components::{BubbleEmotion, BubblePriority, FamiliarBubble, SpeechBubble};
@@ -13,7 +13,7 @@ use crate::handles::SpeechHandles;
 
 /// 使役数上限変更時のビジュアル演出システム（"Abi" セリフを表示）
 pub fn max_soul_visual_system(
-    mut ev_max_soul_changed: MessageReader<FamiliarOperationMaxSoulChangedEvent>,
+    mut releases: MessageReader<FamiliarRosterReleasedVisualMessage>,
     mut q_familiars: Query<
         (&Transform, &FamiliarVoice, Option<&mut SpeechHistory>),
         With<Familiar>,
@@ -23,11 +23,7 @@ pub fn max_soul_visual_system(
     time: Res<Time>,
     mut commands: Commands,
 ) {
-    for event in ev_max_soul_changed.read() {
-        if event.new_value >= event.old_value {
-            continue;
-        }
-
+    for event in releases.read() {
         let Ok((_fam_transform, voice_opt, history_opt)) =
             q_familiars.get_mut(event.familiar_entity)
         else {

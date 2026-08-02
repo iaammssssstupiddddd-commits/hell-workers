@@ -470,7 +470,9 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 - wheelbarrow の batch に committed item と予約を失った item が混在する場合、committed 分を先に評価し、
   残りだけを現在 policy の `NewInbound` で評価する。未許可 item は安全に地面へ戻し、予約 relationship を除去する。
 - policy を持たない Tank / Mixer / `BucketStorage` は各専用容量判定を維持する。
-- タスク完了・中断時にアイテムの `DeliveringTo` を除去すると、搬入先の `IncomingDeliveries` も自動更新される。
+- タスク完了・中断時は、pickup済みの`Inventory`だけでなく`AssignedTask` payloadが指すitemからも
+  `DeliveringTo`を除去する。pickup前の解除や到達不能でも搬入先の`IncomingDeliveries`が自動更新され、
+  ghost搬入予定が残需要を相殺し続けない。
 - HashMap による再構築が不要なため、**常に最新の予約状態**が ECS から直接取得可能。
 
 ### 6.2 ソース／ミキサー予約（SharedResourceCache）
@@ -535,6 +537,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 ### 8.3 予約の責務を統一
 - **搬入先予約**: タスク割り当て時に `DeliveringTo` が自動挿入される。手動で `ResourceReservationOp` を発行する必要はない。
 - **ソース予約**: 「割り当て時」に `ResourceReservationOp::ReserveSource` で付与し、成功・失敗・中断の全経路で解放する。
+- pickup前の`Unreachable`やroster解除も同じ中断契約を通し、source予約と`DeliveringTo`の片方だけを残してはならない。
 - タスク実行でソース取得が成功したら `RecordPickedSource` を使う。
 - 共有ソース（例: tank 取水）は `ReserveSource` で排他を取る。
 

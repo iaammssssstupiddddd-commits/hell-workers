@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-08-01）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-08-02）。
 
 ## 新規計画書の作り方
 
@@ -24,9 +24,9 @@
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Phase 3 進行中（未完: MS-3-5 / 7 / 8 / 9、受入残件: MS-3-6 / 10） | 3D-RtT 移行ロードマップ |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
-| [familiar-operation-policy-plan-2026-07-20.md](familiar-operation-policy-plan-2026-07-20.md) | Draft | Familiar の運用値を永続化し、WorkType ごとの役割方針を追加する計画。 |
+| [familiar-operation-policy-validation-plan-2026-07-26.md](familiar-operation-policy-validation-plan-2026-07-26.md) | In Progress | B2 の実renderer受入と controlled fixture の性能artifactを採取する計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
-| [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できない問題を解決する計画。 |
+| [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できないの計画。 |
 | [soul-energy-control-plan-2026-07-20.md](soul-energy-control-plan-2026-07-20.md) | Draft | Soul Spa 稼働枠と優先度付き個別給電を導入する計画。 |
 | [task-dashboard-performance-validation-plan-2026-07-20.md](task-dashboard-performance-validation-plan-2026-07-20.md) | Draft | A3で未整備のdashboard mode別AI work counterと実renderer / allocator計測を、再現可能なperf harnessへ載せるの計画。 |
 

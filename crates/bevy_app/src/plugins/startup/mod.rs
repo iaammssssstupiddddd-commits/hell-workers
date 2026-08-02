@@ -9,8 +9,11 @@ mod rtt_setup;
 mod startup_systems;
 mod visual_handles;
 
+#[cfg(test)]
+pub(crate) use asset_catalog::create_game_assets;
 pub use perf_scenario::{
-    PerfRenderMode, PerfScenarioConfig, PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
+    PerfFamiliarPolicyMode, PerfOperationDialogMode, PerfRenderMode, PerfScenarioConfig,
+    PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use perf_scenario::{is_fixed_step_audit, is_not_fixed_step_audit};
@@ -26,7 +29,7 @@ use crate::world::map::{build_terrain_feature_map, build_terrain_id_map, spawn_b
 #[cfg(feature = "profiling")]
 use perf_scenario::{
     PerfScenarioApplied, PerfScenarioSet, setup_perf_scenario_if_enabled,
-    setup_perf_scenario_runtime_if_enabled,
+    setup_perf_scenario_runtime_if_enabled, setup_perf_ui_mode_if_enabled,
 };
 use startup_systems::{
     initial_resource_spawner_timed, initialize_gizmo_config, populate_resource_spatial_grid, setup,
@@ -131,6 +134,7 @@ impl Plugin for StartupPlugin {
                         PerfScenarioSet::FixtureApply,
                         PerfScenarioSet::Setup,
                         PerfScenarioSet::Apply,
+                        PerfScenarioSet::UiSetup,
                         PerfScenarioSet::InitialCheckpoint,
                         PerfScenarioSet::Driver,
                     )
@@ -157,6 +161,10 @@ impl Plugin for StartupPlugin {
                 .add_systems(
                     Update,
                     bevy::ecs::schedule::ApplyDeferred.in_set(PerfScenarioSet::Apply),
+                )
+                .add_systems(
+                    Update,
+                    setup_perf_ui_mode_if_enabled.in_set(PerfScenarioSet::UiSetup),
                 )
                 .init_resource::<perf_scenario::PerfCapture>()
                 .configure_sets(

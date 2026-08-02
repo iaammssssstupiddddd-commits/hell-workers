@@ -13,6 +13,8 @@ fn random_streams_are_stable_and_independent() {
         soul_count: 50,
         familiar_count: 4,
         render_mode: super::PerfRenderMode::Cpu,
+        familiar_policy_mode: super::PerfFamiliarPolicyMode::Baseline,
+        operation_dialog_mode: super::PerfOperationDialogMode::Hidden,
         warmup_secs: 30.0,
         measure_secs: 60.0,
         output_dir: None,
@@ -66,4 +68,29 @@ fn fixed_clock_mode_is_explicit() {
     );
     assert_eq!(PerfClockMode::parse("auto"), None);
     assert_eq!(PerfClockMode::Fixed.as_str(), "fixed");
+}
+
+#[test]
+fn familiar_policy_and_dialog_modes_are_explicit() {
+    assert_eq!(
+        super::PerfFamiliarPolicyMode::parse("baseline"),
+        Some(super::PerfFamiliarPolicyMode::Baseline)
+    );
+    assert_eq!(
+        super::PerfFamiliarPolicyMode::parse("default"),
+        Some(super::PerfFamiliarPolicyMode::Default)
+    );
+    assert_eq!(
+        super::PerfFamiliarPolicyMode::parse("disabled"),
+        Some(super::PerfFamiliarPolicyMode::Disabled)
+    );
+    assert_eq!(super::PerfFamiliarPolicyMode::parse("all"), None);
+    assert_eq!(
+        super::PerfOperationDialogMode::parse("hidden"),
+        Some(super::PerfOperationDialogMode::Hidden)
+    );
+    assert_eq!(
+        super::PerfOperationDialogMode::parse("open"),
+        Some(super::PerfOperationDialogMode::Open)
+    );
 }

@@ -49,6 +49,26 @@ pub struct SoulDropCtx<'a> {
     pub dropped_item_res: Option<ResourceType>,
 }
 
+fn clear_task_delivery_relationships(commands: &mut Commands, task: &AssignedTask) {
+    let mut clear_item = |item: Entity| {
+        if let Ok(mut item_commands) = commands.get_entity(item) {
+            item_commands.remove::<DeliveringTo>();
+        }
+    };
+
+    match task {
+        AssignedTask::Haul(data) => clear_item(data.item),
+        AssignedTask::HaulToBlueprint(data) => clear_item(data.item),
+        AssignedTask::HaulToMixer(data) => clear_item(data.item),
+        AssignedTask::HaulWithWheelbarrow(data) => {
+            for &item in &data.items {
+                clear_item(item);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// タスク解除時の crate 内部 low-level cleanup を適用する。
 ///
 /// `AssignedTask` / インベントリ / 予約状態 / runtime identity の cleanup を行うが、
@@ -101,11 +121,16 @@ pub(crate) fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
             .write(ResourceReservationRequest { op });
     }
 
+    // DeliveringTo is attached when the assignment is accepted, before the
+    // Soul picks the item up. Generic unassignment must therefore clear the
+    // task payload's delivery edges even when Inventory is still empty;
+    // otherwise IncomingDeliveries keeps suppressing replacement work.
+    clear_task_delivery_relationships(commands, task);
+
     if let AssignedTask::HaulWithWheelbarrow(data) = task {
         for &item_entity in &data.items {
             if let Ok(mut entity_commands) = commands.get_entity(item_entity) {
                 entity_commands.remove::<LoadedIn>();
-                entity_commands.remove::<DeliveringTo>();
                 entity_commands.try_insert((
                     Visibility::Visible,
                     Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),

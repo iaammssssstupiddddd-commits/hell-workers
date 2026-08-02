@@ -157,6 +157,8 @@ fn spawn_familiar_at(
     let fam_entity = commands
         .spawn((
             familiar,
+            FamiliarOperation::default(),
+            FamiliarPolicy::default(),
             hw_core::relationships::Commanding::default(),
             hw_core::relationships::ManagedTasks::default(),
             Transform::from_xyz(actual_pos.x, actual_pos.y, Z_CHARACTER + 0.5),
@@ -194,8 +196,9 @@ fn spawn_familiar_at(
 /// （3D プロキシ・指揮範囲インジケーター）。
 ///
 /// spawn 時とセーブデータのロード後（rehydrate）の両方から呼ばれる。
-/// 永続化される simulation 状態（`Familiar` / `Commanding` / `ManagedTasks` /
-/// `Transform`）はここに含めないこと（`systems/save/schema.rs` の allow-list 参照）。
+/// 永続化される simulation 状態（`Familiar` / `FamiliarOperation` /
+/// `FamiliarPolicy` / `Commanding` / `ManagedTasks` / `Transform`）はここに
+/// 含めないこと（`systems/save/schema.rs` の allow-list 参照）。
 pub fn attach_familiar_shell(
     commands: &mut Commands,
     fam_entity: Entity,
@@ -228,7 +231,6 @@ fn attach_familiar_shell_with_voice(
 ) {
     commands.entity(input.entity).insert((
         Name::new(input.name.to_string()),
-        FamiliarOperation::default(),
         ActiveCommand::default(),
         crate::systems::familiar_ai::FamiliarAiState::default(),
         hw_familiar_ai::familiar_ai::perceive::state_detection::FamiliarAiStateHistory::default(),
@@ -309,4 +311,125 @@ fn attach_familiar_shell_with_voice(
         },
         Transform::from_translation(input.position.extend(Z_AURA + 0.03)),
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::asset::{AssetApp, AssetPlugin};
+    use bevy::ecs::world::CommandQueue;
+    use bevy::prelude::*;
+    use hw_core::familiar::{FamiliarWorkPriority, FamiliarWorkRule};
+    use hw_core::jobs::WorkType;
+    use hw_core::relationships::{Commanding, ManagedTasks};
+
+    use super::*;
+    use crate::plugins::startup::{Building3dHandles, create_game_assets};
+
+    fn empty_building_3d_handles() -> Building3dHandles {
+        Building3dHandles {
+            wall_mesh: Handle::default(),
+            wall_material: Handle::default(),
+            wall_provisional_material: Handle::default(),
+            wall_orientation_aid_mesh: Handle::default(),
+            wall_orientation_aid_material: Handle::default(),
+            floor_mesh: Handle::default(),
+            floor_material: Handle::default(),
+            door_mesh: Handle::default(),
+            door_material: Handle::default(),
+            equipment_1x1_mesh: Handle::default(),
+            equipment_2x2_mesh: Handle::default(),
+            equipment_material: Handle::default(),
+            soul_scene: Handle::default(),
+            familiar_mesh: Handle::default(),
+            familiar_material: Handle::default(),
+            render_layers: bevy::camera::visibility::RenderLayers::default(),
+        }
+    }
+
+    #[test]
+    fn repeated_shell_attach_does_not_overwrite_durable_familiar_settings() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        app.init_asset::<Image>()
+            .init_asset::<Font>()
+            .init_asset::<Gltf>()
+            .init_asset::<WorldAsset>();
+
+        let asset_server = app.world().resource::<AssetServer>().clone();
+        let game_assets = {
+            let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+            create_game_assets(&asset_server, &mut images)
+        };
+        let handles_3d = empty_building_3d_handles();
+
+        let expected_operation = FamiliarOperation {
+            fatigue_threshold: 0.7,
+            max_controlled_soul: 5,
+        };
+        let mut expected_policy = FamiliarPolicy::default();
+        expected_policy.set_rule(
+            WorkType::Mine,
+            FamiliarWorkRule {
+                allowed: false,
+                priority: FamiliarWorkPriority::High,
+            },
+        );
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                expected_operation.clone(),
+                expected_policy.clone(),
+                Commanding::default(),
+                ManagedTasks::default(),
+                Transform::default(),
+            ))
+            .id();
+
+        let mut command_queue = CommandQueue::default();
+        {
+            let mut commands = Commands::new(&mut command_queue, app.world());
+            for _ in 0..2 {
+                attach_familiar_shell_with_voice(
+                    &mut commands,
+                    FamiliarShellInput {
+                        entity: familiar,
+                        name: "Saved Familiar",
+                        command_radius: TILE_SIZE * 7.0,
+                        position: Vec2::ZERO,
+                        voice: FamiliarVoice::random(),
+                        spawn_3d_scene_root: false,
+                    },
+                    &game_assets,
+                    &handles_3d,
+                );
+            }
+        }
+        command_queue.apply(app.world_mut());
+
+        assert_eq!(
+            app.world().get::<FamiliarOperation>(familiar),
+            Some(&expected_operation)
+        );
+        assert_eq!(
+            app.world().get::<FamiliarPolicy>(familiar),
+            Some(&expected_policy)
+        );
+        assert_eq!(
+            app.world()
+                .get::<Commanding>(familiar)
+                .unwrap()
+                .iter()
+                .count(),
+            0
+        );
+        assert_eq!(
+            app.world()
+                .get::<ManagedTasks>(familiar)
+                .unwrap()
+                .iter()
+                .count(),
+            0
+        );
+    }
 }

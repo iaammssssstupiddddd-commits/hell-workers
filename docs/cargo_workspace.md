@@ -76,9 +76,9 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 |:---|:---|:---|:---|
 | エンティティリスト | `list/view_model.rs`, `list/change_detection.rs` | `list/sync.rs` | `list/spawn`, `list/sync`, `list/visual`, `list/section_toggle` |
 | タスクリスト | `panels/task_list/view_model.rs`, `panels/task_list/dirty.rs` | `panels/task_list/presenter.rs`, `panels/task_list/update.rs`, `panels/task_list/actions.rs` | `panels/task_list/types.rs`, `render.rs`, `interaction.rs` |
-| 操作 → ゲーム | — | `interaction/intent_handler.rs`, `interaction/handlers/`, `interaction/intent_context.rs`（Stockpile editor intentをtyped domain requestへ変換） | `intents.rs`（型定義・発行元） |
+| 操作 → ゲーム | — | `interaction/intent_handler.rs`, `interaction/handlers/`, `interaction/intent_context.rs`（Stockpile / Familiar settings intentをtyped domain requestへ変換） | `intents.rs`（型定義・発行元）、`setup/dialogs.rs`（Operation editor） |
 | 情報パネル | `presentation/`（EntityInspectionQuery、`StockpileInspectionFields`構築） | `panels/info_panel` re-export + root wiring | `panels/info_panel/*`, `models/inspection/`（Stockpile editor modelを含む） |
-| 結果通知 | save/load・task actionのroot outcome、`hw_logistics`のStockpile outcome | `notifications.rs`（安全な表示文言adapter） | `notifications/`（Message、reducer、有界履歴、UI） |
+| 結果通知 | save/load・task actionのroot outcome、`hw_logistics`のStockpile outcome、`hw_familiar_ai`のsettings outcome | `notifications.rs`（安全な表示文言adapter） | `notifications/`（Message、reducer、有界履歴、UI） |
 | Player Help | `help_content/`（manifest/provider/coverageからsealed DTO構築） | `help_controller.rs`（accepted capture、可逆pause、reset） | `help.rs`、`setup/help_panel.rs`、`interaction/help.rs` |
 | 初期 UI ツリー | — | `setup/mod.rs`（`GameAssets` → `UiAssets`） | `setup/*` |
 
@@ -95,15 +95,15 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 - `setup/` — `UiAssets` trait, `setup_ui` fn（UI ツリー構築。bottom_bar / submenus / panels / entity_list / time_control / dialogs / help_panel）。Modal/Help/Pause は full-viewport `UiInputCapture` root、構造 root/slot は picking-transparent にする
 - `help.rs` — game型を含まないopaque ID、sealed `HelpPanelContent` / `HelpPanelChrome`、`HelpPanelState`、UI marker
 - `overlay.rs` — capture input priorityと一致する共通`GlobalZIndex`定数
-- `components.rs` — MenuState, MenuButton, FamiliarListItem, SoulListItem、hover/captureを分離する `UiInputState` 等（`UiNodeRegistry` / `UiSlot` / `UiMountSlot` / `UiRoot` は `hw_core::ui_nodes` から re-export）
+- `components.rs` — MenuState, MenuButton, FamiliarListItem, SoulListItem、latched `OperationDialogState`、hover/captureを分離する `UiInputState` 等（`UiNodeRegistry` / `UiSlot` / `UiMountSlot` / `UiRoot` は `hw_core::ui_nodes` から re-export）
 - `theme.rs` — `UiTheme` Resource（カラーパレット・フォントサイズ・スペーシング・サイズ定数）
-- `intents.rs` — `UiIntent` enum（プレイヤー UI 操作メッセージ。Stockpile単一適用・範囲編集開始を含む）
+- `intents.rs` — `UiIntent` enum（プレイヤー UI 操作メッセージ。Stockpile単一適用・範囲編集開始、Familiar Operationのexact-target open / settings patchを含む）
 - `text_input_intents.rs` — `TextInputIntent` enum（non-`Copy` テキスト確定イベント、例: `RenameSoul`）
 - `widgets/text_field.rs` — 再利用可能 `spawn_text_field` ヘルパー、`TextFieldRole`
 - `interaction/text_field.rs` — フォーカス枠・Enter/Escape・検索ライブ sync
   - `text_input_consumed_keyboard` は `InputFocusSystems::Dispatch` 前にリセットし、Enter/Escape 適用は dispatch 後に行う
   - 検索 sync の登録責務は `bevy_app` の entity list plugin 側が持ち、`EditableTextSystems` 後に値を読む
-- `interaction/` — tooltip/dialog/hover_action/status_display システム群（FPS, speed, dream pool, area_edit_preview 等）
+- `interaction/` — tooltip/dialog/hover_action/status_display システム群（FPS, speed, dream pool, area_edit_preview 等）。Operation editorはdomain componentを書かずtyped intentだけを発行する
 - `list/` — EntityListDirty, EntityListViewModel, EntityListNodeIndex, FamiliarSectionNodes, EntityListMinimizeState, EntityListResizeState, DragState, spawn（`spawn_familiar_section`, `spawn_soul_list_item_entity` 等）, sync（`sync_familiar_sections`, `sync_unassigned_souls`）, section_toggle（`entity_list_section_toggle_system`）, selection_focus, tree_ops, visual（apply_row_highlight, entity_list_visual_feedback_system）
 - `panels/tooltip_builder/` — text_wrap, widgets (spawn_progress_bar 等), templates（Soul/Building/Resource/UiButton/Generic ツールチップ）
 - `panels/info_panel/` — InfoPanelPinState, InfoPanelState, spawn_info_panel_ui, info_panel_system
@@ -136,9 +136,9 @@ root 側の `bevy_app/src/interface/ui/` 残留（Adapter 層 — ViewModel / Pr
 | `list/sync.rs` | Presenter | `hw_ui::list::sync` への thin shell（`GameAssets` 注入） |
 | `panels/task_list/presenter.rs`, `panels/task_list/update.rs` | Presenter | ViewModel → `hw_ui` render 橋渡し。`update.rs` は `Res<GameAssets>` 必須 |
 | `panels/task_list/actions.rs` | Intent / Adapter | live capability再検証、owner別priority/cancel、`TaskActionOutcome`変換。`hw_ui`へゲーム型を逆依存させない |
-| `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | Intent | `BuildContext`, `ZoneContext`, `FamiliarOperation`, `TimeSpeed`, `WorldMapWrite` 等のゲーム依存 `UiIntent` 処理。Stockpile操作はtyped requestへ変換し、domain mutationは`hw_logistics`へ委譲 |
+| `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | Intent | `BuildContext`, `ZoneContext`, `TimeSpeed`, `WorldMapWrite` 等のゲーム依存 `UiIntent` 処理。Stockpile / Familiar settings操作はtyped requestへ変換し、domain mutationを所有leaf crateへ委譲 |
 | `interaction/mode.rs` | Intent | `PlayMode` 遷移、`TaskMode`, `BuildingType` |
-| `notifications.rs` | Presenter | `SaveLoadOutcome` / `StockpilePolicyChangeOutcome`をsafeな`UserFacingNotification`へexhaustiveに変換（task action adapterは`panels/task_list/actions.rs`） |
+| `notifications.rs` | Presenter | `SaveLoadOutcome` / `StockpilePolicyChangeOutcome` / `FamiliarSettingsChangeOutcome`をsafeな`UserFacingNotification`へexhaustiveに変換（task action adapterは`panels/task_list/actions.rs`） |
 | `help_content/`, `help_controller.rs` | ViewModel / Adapter | root bindingとgame surfaceからvalidated catalogを構築し、accepted captureと`Time<Virtual>` pause ownershipを適用。`hw_ui`へgame型を持ち込まない |
 | `list/interaction.rs`, `list/interaction/navigation.rs` | Intent | 行クリック・Tab 巡回・target 付き `UiIntent` 発行（SectionToggle は hw_ui 側） |
 | `list/drag_drop.rs` | Intent | `SquadManagementRequest`, `SoulIdentity`（`DragState` 型は hw_ui） |
@@ -170,7 +170,7 @@ root 側の `bevy_app/src/interface/ui/` 残留（Adapter 層 — ViewModel / Pr
 - `soul::*` — Soul プログレスバー、ステータスビジュアル、タスクリンク表示
 - `soul::gathering_spawn::spawn_gathering_spot` — 集会スポット ECS entity 生成（aura + object sprite）。`GatheringVisualHandles` 経由で `GameAssets` に依存しない
 - `speech::*` — 吹き出し、ラテン語フレーズ、FamiliarVoice、SpeechPlugin
-- `speech::max_soul_visual::max_soul_visual_system` — 使役数上限減少時の "Abi" セリフバブル（ロジックは `hw_familiar_ai::max_soul_logic_system` が担当）
+- `speech::max_soul_visual::max_soul_visual_system` — 原子的なFamiliar settings commit後の `FamiliarRosterReleasedVisualMessage` を消費し、使役数上限減少時の "Abi" セリフバブルを表示
 - `speech::squad_visual::squad_visual_system` — Fatigued リリース時の "Abi" セリフバブル（ロジックは `hw_familiar_ai::squad_logic_system` が担当）
 - `mud_mixer::*`, `tank::*` — 建物アニメーション
 - `wall_connection::*` — 壁接続スプライト切替
@@ -263,16 +263,20 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `familiar_ai::decide::state_decision` — branch dispatch (`FamiliarDecisionPath`, `determine_decision_path`) と結果型 (`FamiliarStateDecisionResult`)、message emission を含む Decide system 本体。system 登録責務は `FamiliarAiCorePlugin`
 - `familiar_ai::decide::encouragement` — 激励対象選定・`EncouragementCooldown` + `encouragement_decision_system`（MessageWriter 使用）
 - `familiar_ai::decide::task_management` — Familiar の task search / scoring / source selector / reservation shadow / assignment build の core
-- `familiar_ai::decide::task_management::policy_score` — base worker score後にtransport / Familiarのscalar contributionを合成する共有no-clamp score helper
+- `familiar_ai::decide::task_management::policy_score` — base worker score後にtransport / Familiar policyのscalar contribution（Low / Normal / High = -5 / 0 / +5）を合成する共有no-clamp score helper
 - `familiar_ai::decide::task_management::diagnostics` — internal typed rejection、Familiar-local 1票reducer、
   `FamiliarTaskCandidateDiagnostics`。UI表示に依存せず通常delegation cycleで置換publishする
+- `familiar_ai::settings` — `FamiliarSettingsChangeRequest` / terminal outcome、target単位のFIFO replay、
+  operation / policyのatomic commit、最大数減少時のroster releaseを所有する。production scheduleへの登録と
+  `ApplyDeferred` / Perceive orderingはroot `FamiliarAiPlugin`が一度だけ行う
+- Familiar task finder は `observe_applicable` 後 / `candidate_snapshot` 前にdurable policyのallowed gateを通し、
+  禁止候補を後段のsource / reachability / scoreへ流さず `PolicyDisabled` evidenceとして記録する
 - `familiar_ai::decide::auto_gather_for_blueprint::{planning,demand,supply,helpers,actions}` — Blueprint auto gather の純計画層（`is_reachable` を含む）
 - `familiar_ai::decide::blueprint_auto_gather::{BlueprintAutoGatherTimer, blueprint_auto_gather_system}` — auto-gather オーケストレーター（`WorldMapRead` / `PathfindingContext` / Bevy Query 依存を含む）。system 登録責務は `FamiliarAiCorePlugin`
 - `familiar_ai::decide::squad` / `scouting` / `supervising` / `state_handlers` — 使い魔の状態機械・分隊管理の純ロジック
 - `familiar_ai::execute::state_apply` — `FamiliarStateRequest` 適用
 - `familiar_ai::execute::state_log` — 状態遷移ログ出力
 - `familiar_ai::execute::encouragement_apply` — `EncouragementRequest` 適用と cooldown クリーンアップ
-- `familiar_ai::execute::max_soul_logic::max_soul_logic_system` — 使役数上限減少時に超過 Soul のタスク解除・`CommandedBy` 削除（ビジュアルは `hw_visual::max_soul_visual_system` が担当）
 - `familiar_ai::execute::squad_logic::squad_logic_system` — `SquadManagementRequest` の AddMember/ReleaseMember ECS 操作（Fatigued セリフは `hw_visual::squad_visual_system` が担当）
 
 ここに置かないもの:
@@ -288,6 +292,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 移設済み system の登録ルール:
 
 - 実装本体を `hw_familiar_ai` / `hw_soul_ai` / `hw_visual` / `hw_jobs` へ移した system は、原則として所有 crate の Plugin が唯一の登録者になる。
+- 例外として `hw_familiar_ai::apply_familiar_settings_change_requests_system` はleafがdomain実装を所有し、
+  root `FamiliarAiPlugin`が `GameSystemSet::Logic` / Perceive前のorderingとflushを含めて唯一のproduction登録元になる。
 - root 側の `pub use` / thin shell は互換パス維持と ordering 参照のために残してよいが、同じ system function を再登録してはいけない。
 - root shell は `.after(...)` / `.before(...)` で移設済み system に順序制約を付けるだけにとどめる。二重登録すると Bevy 0.19 の schedule 初期化で `SystemTypeSet` が曖昧になり panic する。
 - 用語は次のように使い分ける:
@@ -310,6 +316,9 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `plugins/game.rs`: production game resource / state / `GameSystemSet` chain と parent game plugin の一意な登録
 - `input_actions/`: project-owned keyboard edge の唯一の resolver、pending/visible Modal/Help/Pause capture、foreground UI gate、capture-start rollback、canonical key label
 - `systems/save/`: persisted schema/transactionと、requestごとに全reset後1件だけ発行する`SaveLoadOutcome`
+- `systems/familiar_ai/`: Familiar settings apply + flushをPerceive前へ置く唯一のproduction wiring、
+  task diagnostic revision adapter、root resource同期
+- `interface/ui/`: Operation dialogのexact target認証、typed settings request変換、terminal outcome通知adapter
 
 ここに残すもの:
 
@@ -336,7 +345,9 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `gathering`
 - `relationships`
 - `events`
-- `WorkType`
+- `WorkType::ALL` / `stable_index()`を含む安定した作業種別契約
+- `FamiliarOperation`, `FamiliarPolicy`, `FamiliarWorkRule`, `FamiliarWorkPriority`,
+  `FamiliarSettingsPatch` というdurable値・patch契約
 - `ResourceType`
 - `DoorState`
 - `AreaBounds`, `TaskArea`（矩形エリア抽象型）
@@ -488,7 +499,8 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `BuildingType`, `Building`, `Blueprint`
 - `Designation`, `Priority`, `TaskSlots`
 - `PlayerIssuedDesignation` — 手動 Chop / Mine の保存可能なpositive provenance marker
-- `diagnostics` — `TaskDiagnosticClass`、producer/coverage、fixed counter、input stamp/revisionの表示非依存共有契約
+- `diagnostics` — `PolicyDisabled`を含む固定6分類の`TaskDiagnosticClass`、producer/coverage、
+  fixed counter、input stamp/revisionの表示非依存共有契約
 - `MudMixerStorage`
 - `AssignedTask`（ワーカー実行中タスク状態 + 全フェーズ型）
 - `TaskAssignmentRequest`（`hw_jobs::events`）

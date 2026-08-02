@@ -142,6 +142,22 @@ pub(super) fn write_assigned_task(
                 .map_err(|_| "gather task references an entity without a transform".to_string())?;
             write_transform(record, target, "gather target transform")?;
         }
+        AssignedTask::Haul(data) => {
+            record.push(2);
+            record.push(match data.phase {
+                HaulPhase::GoingToItem => 0,
+                HaulPhase::GoingToStockpile => 1,
+                HaulPhase::Dropping => 2,
+            });
+            let item = target_transforms
+                .get(data.item)
+                .map_err(|_| "haul task references an item without a transform".to_string())?;
+            write_transform(record, item, "haul item transform")?;
+            let stockpile = target_transforms
+                .get(data.stockpile)
+                .map_err(|_| "haul task references a stockpile without a transform".to_string())?;
+            write_transform(record, stockpile, "haul stockpile transform")?;
+        }
         _ => {
             return Err(
                 "gather determinism audit encountered an unsupported AssignedTask variant"
@@ -158,6 +174,7 @@ pub(super) fn write_familiar_state(
     familiar: &Familiar,
     command: &ActiveCommand,
     operation: &FamiliarOperation,
+    policy: &FamiliarPolicy,
     ai_state: &FamiliarAiState,
 ) -> Result<(), String> {
     record.push(match familiar.familiar_type {
@@ -177,6 +194,15 @@ pub(super) fn write_familiar_state(
         "familiar fatigue threshold",
     )?;
     write_u64(record, operation.max_controlled_soul as u64);
+    for work_type in WorkType::ALL {
+        let rule = policy.rule_for(work_type);
+        record.push(u8::from(rule.allowed));
+        record.push(match rule.priority {
+            hw_core::familiar::FamiliarWorkPriority::Low => 0,
+            hw_core::familiar::FamiliarWorkPriority::Normal => 1,
+            hw_core::familiar::FamiliarWorkPriority::High => 2,
+        });
+    }
     match ai_state {
         FamiliarAiState::Idle => record.push(0),
         FamiliarAiState::SearchingTask => record.push(1),
@@ -266,4 +292,91 @@ pub(super) fn write_building_type(record: &mut Vec<u8>, kind: BuildingType) {
 pub(super) fn write_grid_pos(record: &mut Vec<u8>, grid: (i32, i32)) {
     record.extend_from_slice(&grid.0.to_le_bytes());
     record.extend_from_slice(&grid.1.to_le_bytes());
+}
+
+#[cfg(all(test, feature = "profiling"))]
+mod tests {
+    use super::*;
+    use bevy::ecs::system::SystemState;
+    use hw_core::familiar::{FamiliarWorkPriority, FamiliarWorkRule, FamiliarWorkRuleOverride};
+    use hw_jobs::HaulData;
+
+    fn encoded(policy: &FamiliarPolicy) -> Vec<u8> {
+        let mut record = Vec::new();
+        write_familiar_state(
+            &mut record,
+            &Familiar::default(),
+            &ActiveCommand::default(),
+            &FamiliarOperation::default(),
+            policy,
+            &FamiliarAiState::default(),
+        )
+        .unwrap();
+        record
+    }
+
+    #[test]
+    fn familiar_audit_encodes_effective_policy_not_raw_override_shape() {
+        let disabled_high = FamiliarWorkRule {
+            allowed: false,
+            priority: FamiliarWorkPriority::High,
+        };
+        let mut canonical = FamiliarPolicy::default();
+        canonical.set_rule(WorkType::Chop, disabled_high);
+        let noncanonical_same = FamiliarPolicy {
+            default_rule: FamiliarWorkRule::default(),
+            overrides: vec![
+                FamiliarWorkRuleOverride {
+                    work_type: WorkType::Mine,
+                    rule: FamiliarWorkRule::default(),
+                },
+                FamiliarWorkRuleOverride {
+                    work_type: WorkType::Chop,
+                    rule: FamiliarWorkRule::default(),
+                },
+                FamiliarWorkRuleOverride {
+                    work_type: WorkType::Chop,
+                    rule: disabled_high,
+                },
+            ],
+        };
+
+        assert_eq!(encoded(&canonical), encoded(&noncanonical_same));
+        assert_ne!(encoded(&canonical), encoded(&FamiliarPolicy::default()));
+    }
+
+    #[test]
+    fn haul_audit_encodes_each_phase_without_entity_ids() {
+        let mut world = World::new();
+        let item = world.spawn(Transform::from_xyz(1.0, 2.0, 3.0)).id();
+        let stockpile = world.spawn(Transform::from_xyz(4.0, 5.0, 6.0)).id();
+        let mut query_state = SystemState::<Query<&Transform>>::new(&mut world);
+        let query = query_state.get(&world).expect("transform query validates");
+
+        let mut encodings = Vec::new();
+        for phase in [
+            HaulPhase::GoingToItem,
+            HaulPhase::GoingToStockpile,
+            HaulPhase::Dropping,
+        ] {
+            let mut record = Vec::new();
+            write_assigned_task(
+                &mut record,
+                &AssignedTask::Haul(HaulData {
+                    item,
+                    stockpile,
+                    phase,
+                }),
+                &query,
+            )
+            .unwrap();
+            encodings.push(record);
+        }
+
+        assert_eq!(encodings[0][0..2], [2, 0]);
+        assert_eq!(encodings[1][0..2], [2, 1]);
+        assert_eq!(encodings[2][0..2], [2, 2]);
+        assert_ne!(encodings[0], encodings[1]);
+        assert_ne!(encodings[1], encodings[2]);
+    }
 }

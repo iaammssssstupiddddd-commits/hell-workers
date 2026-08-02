@@ -10,6 +10,7 @@ pub enum TaskBlockerReason {
     Unreachable,
     TemporaryContention,
     DependencyWaiting,
+    PolicyDisabled,
 }
 
 impl TaskBlockerReason {
@@ -21,6 +22,7 @@ impl TaskBlockerReason {
             Self::Unreachable => "Unreachable",
             Self::TemporaryContention => "Waiting for reservation",
             Self::DependencyWaiting => "Waiting for dependency",
+            Self::PolicyDisabled => "Disabled by familiar policy",
         }
     }
 }
@@ -348,7 +350,10 @@ impl TaskDashboardViewState {
 
 fn compare_entries(left: &TaskEntry, right: &TaskEntry, key: TaskSortKey) -> Ordering {
     match key {
-        TaskSortKey::WorkType => (left.work_type as u8).cmp(&(right.work_type as u8)),
+        TaskSortKey::WorkType => left
+            .work_type
+            .stable_index()
+            .cmp(&right.work_type.stable_index()),
         TaskSortKey::Status => left.status.rank().cmp(&right.status.rank()),
         TaskSortKey::Priority => left
             .priority_tier()
@@ -366,32 +371,13 @@ fn compare_entity_keys(left: Entity, right: Entity) -> Ordering {
     })
 }
 
-const WORK_TYPES: [WorkType; 16] = [
-    WorkType::Chop,
-    WorkType::Mine,
-    WorkType::Build,
-    WorkType::Move,
-    WorkType::Haul,
-    WorkType::HaulToMixer,
-    WorkType::GatherWater,
-    WorkType::CollectBone,
-    WorkType::Refine,
-    WorkType::HaulWaterToMixer,
-    WorkType::WheelbarrowHaul,
-    WorkType::ReinforceFloorTile,
-    WorkType::PourFloorTile,
-    WorkType::FrameWallTile,
-    WorkType::CoatWall,
-    WorkType::GeneratePower,
-];
-
 fn next_work_type_filter(current: TaskWorkTypeFilter) -> TaskWorkTypeFilter {
     match current {
-        TaskWorkTypeFilter::All => TaskWorkTypeFilter::Only(WORK_TYPES[0]),
-        TaskWorkTypeFilter::Only(current) => WORK_TYPES
+        TaskWorkTypeFilter::All => TaskWorkTypeFilter::Only(WorkType::ALL[0]),
+        TaskWorkTypeFilter::Only(current) => WorkType::ALL
             .iter()
             .position(|work_type| *work_type == current)
-            .and_then(|index| WORK_TYPES.get(index + 1).copied())
+            .and_then(|index| WorkType::ALL.get(index + 1).copied())
             .map_or(TaskWorkTypeFilter::All, TaskWorkTypeFilter::Only),
     }
 }
@@ -573,6 +559,10 @@ mod tests {
         assert_eq!(
             TaskStatusSummary::Blocked(TaskBlockerReason::DependencyWaiting).label(),
             "Blocked: Waiting for dependency"
+        );
+        assert_eq!(
+            TaskStatusSummary::Blocked(TaskBlockerReason::PolicyDisabled).label(),
+            "Blocked: Disabled by familiar policy"
         );
     }
 
@@ -756,7 +746,10 @@ mod tests {
     #[test]
     fn dashboard_controls_cycle_back_to_their_defaults() {
         let cases = [
-            (TaskDashboardControl::WorkTypeFilter, WORK_TYPES.len() + 1),
+            (
+                TaskDashboardControl::WorkTypeFilter,
+                WorkType::ALL.len() + 1,
+            ),
             (TaskDashboardControl::StatusFilter, 4),
             (TaskDashboardControl::PriorityFilter, 4),
             (TaskDashboardControl::WorkerFilter, 3),

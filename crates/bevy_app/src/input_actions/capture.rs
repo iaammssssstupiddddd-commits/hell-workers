@@ -10,7 +10,6 @@ use hw_ui::help::{HelpPanel, HelpPanelState};
 
 use super::{InputAction, InputOverlay, ResolvedInputFrame};
 use crate::entities::familiar::Familiar;
-use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::list::reset_entity_list_drag_state;
 use crate::systems::save::SavePath;
 
@@ -21,6 +20,7 @@ struct WorldInputCaptureRequest {
     overlay: InputOverlay,
     root: Entity,
     opener: Option<Entity>,
+    target: Option<Entity>,
 }
 
 /// Frame-local bridge between an accepted open request and overlay visibility.
@@ -47,6 +47,14 @@ impl PendingWorldInputCapture {
     pub(crate) fn accepts(&self, overlay: InputOverlay, opener: Option<Entity>) -> bool {
         self.request
             .is_some_and(|request| request.overlay == overlay && request.opener == opener)
+    }
+
+    pub(crate) fn accepts_operation(&self, opener: Option<Entity>, target: Entity) -> bool {
+        self.request.is_some_and(|request| {
+            request.overlay == InputOverlay::OperationDialog
+                && request.opener == opener
+                && request.target == Some(target)
+        })
     }
 
     pub(crate) fn accepts_overlay(&self, overlay: InputOverlay) -> bool {
@@ -157,6 +165,7 @@ fn effective_capture(
 fn begin_world_input_capture(
     overlay: InputOverlay,
     opener: Option<Entity>,
+    target: Option<Entity>,
     roots: &CaptureRootQuery<'_, '_>,
     pending: &mut PendingWorldInputCapture,
     input_focus: &mut InputFocus,
@@ -168,6 +177,7 @@ fn begin_world_input_capture(
         overlay,
         root,
         opener,
+        target,
     });
     if accepted {
         input_focus.clear();
@@ -189,35 +199,29 @@ pub(crate) struct CaptureRequestParams<'w, 's> {
     menu_state: Res<'w, MenuState>,
     help_state: Res<'w, HelpPanelState>,
     save_path: Res<'w, SavePath>,
-    selected: Res<'w, SelectedEntity>,
     familiars: Query<'w, 's, (), With<Familiar>>,
     roots: CaptureRootQuery<'w, 's>,
     parents: Query<'w, 's, &'static ChildOf>,
 }
 
-fn capture_overlay_for_menu_action(
+fn capture_request_for_menu_action(
     action: MenuAction,
     params: &CaptureRequestParams<'_, '_>,
-) -> Option<InputOverlay> {
+) -> Option<(InputOverlay, Option<Entity>)> {
     match action {
-        MenuAction::OpenHelp { .. } if !params.help_state.open => Some(InputOverlay::Help),
+        MenuAction::OpenHelp { .. } if !params.help_state.open => Some((InputOverlay::Help, None)),
         MenuAction::RequestLoadGame if params.save_path.as_path().exists() => {
-            Some(InputOverlay::LoadConfirm)
+            Some((InputOverlay::LoadConfirm, None))
         }
         MenuAction::ToggleSettings if *params.menu_state != MenuState::Settings => {
-            Some(InputOverlay::Settings)
+            Some((InputOverlay::Settings, None))
         }
-        MenuAction::TogglePause if !params.time.is_paused() => Some(InputOverlay::Pause),
+        MenuAction::TogglePause if !params.time.is_paused() => Some((InputOverlay::Pause, None)),
         MenuAction::SetTimeSpeed(TimeSpeed::Paused) if !params.time.is_paused() => {
-            Some(InputOverlay::Pause)
+            Some((InputOverlay::Pause, None))
         }
-        MenuAction::OpenOperationDialog
-            if params
-                .selected
-                .0
-                .is_some_and(|entity| params.familiars.get(entity).is_ok()) =>
-        {
-            Some(InputOverlay::OperationDialog)
+        MenuAction::OpenOperationDialog { target, .. } if params.familiars.get(target).is_ok() => {
+            Some((InputOverlay::OperationDialog, Some(target)))
         }
         _ => None,
     }
@@ -243,12 +247,14 @@ pub(crate) fn request_capture_from_menu_buttons_system(
         ) {
             continue;
         }
-        let Some(overlay) = capture_overlay_for_menu_action(menu_button.0, &params) else {
+        let Some((overlay, target)) = capture_request_for_menu_action(menu_button.0, &params)
+        else {
             continue;
         };
         begin_world_input_capture(
             overlay,
             Some(entity),
+            target,
             &params.roots,
             &mut params.pending,
             &mut params.input_focus,
@@ -279,6 +285,7 @@ pub(crate) fn request_capture_from_resolved_actions_system(
     if let Some(overlay) = overlay
         && begin_world_input_capture(
             overlay,
+            None,
             None,
             &params.roots,
             &mut params.pending,
@@ -401,7 +408,6 @@ mod tests {
             .init_resource::<Time<Virtual>>()
             .init_resource::<MenuState>()
             .init_resource::<HelpPanelState>()
-            .init_resource::<SelectedEntity>()
             .insert_resource(SavePath::new(PathBuf::from(
                 "/definitely/missing/hell-workers-test-save.ron",
             )))
@@ -428,6 +434,10 @@ mod tests {
         action: MenuAction,
         expected_overlay: InputOverlay,
     ) {
+        let expected_target = match action {
+            MenuAction::OpenOperationDialog { target, .. } => Some(target),
+            _ => None,
+        };
         let root = spawn_capture_root(&mut app, marker, Display::None);
         let opener = app
             .world_mut()
@@ -452,6 +462,7 @@ mod tests {
         assert_eq!(request.overlay, expected_overlay);
         assert_eq!(request.root, root);
         assert_eq!(request.opener, Some(opener));
+        assert_eq!(request.target, expected_target);
         assert!(app.world().resource::<InputFocus>().get().is_none());
     }
 
@@ -543,11 +554,13 @@ mod tests {
 
         let mut operation = capture_test_app();
         let familiar = operation.world_mut().spawn(Familiar::default()).id();
-        operation.world_mut().resource_mut::<SelectedEntity>().0 = Some(familiar);
         assert_accepted_button_capture(
             operation,
             OperationDialog,
-            MenuAction::OpenOperationDialog,
+            MenuAction::OpenOperationDialog {
+                opener: None,
+                target: familiar,
+            },
             InputOverlay::OperationDialog,
         );
 
@@ -580,14 +593,35 @@ mod tests {
             overlay: InputOverlay::LoadConfirm,
             root: load_root,
             opener: None,
+            target: None,
         }));
         assert!(!pending.request(WorldInputCaptureRequest {
             overlay: InputOverlay::Help,
             root: help_root,
             opener: None,
+            target: None,
         }));
         assert!(pending.accepts(InputOverlay::LoadConfirm, None));
         assert!(!pending.accepts_overlay(InputOverlay::Help));
+    }
+
+    #[test]
+    fn operation_capture_authenticates_the_exact_opener_and_target() {
+        let mut pending = PendingWorldInputCapture::default();
+        let root = Entity::from_bits(1 << 32 | 1);
+        let opener = Entity::from_bits(2 << 32 | 1);
+        let accepted_target = Entity::from_bits(3 << 32 | 1);
+        let other_target = Entity::from_bits(4 << 32 | 1);
+        pending.request(WorldInputCaptureRequest {
+            overlay: InputOverlay::OperationDialog,
+            root,
+            opener: Some(opener),
+            target: Some(accepted_target),
+        });
+
+        assert!(pending.accepts_operation(Some(opener), accepted_target));
+        assert!(!pending.accepts_operation(Some(opener), other_target));
+        assert!(!pending.accepts_operation(None, accepted_target));
     }
 
     #[test]
@@ -743,7 +777,10 @@ mod tests {
         app.world_mut().resource_mut::<Time<Virtual>>().pause();
         for action in [
             MenuAction::RequestLoadGame,
-            MenuAction::OpenOperationDialog,
+            MenuAction::OpenOperationDialog {
+                opener: None,
+                target: Entity::PLACEHOLDER,
+            },
             MenuAction::TogglePause,
         ] {
             app.world_mut()
@@ -813,6 +850,7 @@ mod tests {
                 overlay: InputOverlay::Settings,
                 root,
                 opener: None,
+                target: None,
             });
         app.add_systems(Update, sync_world_input_capture_system);
 
@@ -870,6 +908,7 @@ mod tests {
                 overlay: InputOverlay::Settings,
                 root,
                 opener: None,
+                target: None,
             });
 
         app.update();
@@ -899,6 +938,7 @@ mod tests {
                 overlay: InputOverlay::Settings,
                 root: settings,
                 opener: None,
+                target: None,
             });
 
         app.update();
@@ -951,6 +991,7 @@ mod tests {
                 overlay: InputOverlay::Help,
                 root: help,
                 opener: None,
+                target: None,
             });
         app.update();
 
@@ -1001,6 +1042,7 @@ mod tests {
                 overlay: InputOverlay::Settings,
                 root,
                 opener: Some(opener),
+                target: None,
             });
         app.insert_resource(GateTargets {
             descendant,

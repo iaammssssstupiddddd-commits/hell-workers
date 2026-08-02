@@ -40,11 +40,21 @@ pub fn handle_haul_to_blueprint_task(
             if let Ok((item_transform, _, _, _, _, _, stored_in_opt)) = q_targets.get(item_entity) {
                 let item_pos = item_transform.translation.truncate();
                 let stored_in_entity = stored_in_opt.map(|stored_in| stored_in.0);
-                if matches!(
-                    update_task_destination_to_adjacent(ctx, item_pos),
-                    PathSearchResult::Deferred
-                ) {
-                    return TaskHandlerControl::Continue;
+                match update_task_destination_to_adjacent(ctx, item_pos) {
+                    PathSearchResult::Found(()) => {}
+                    PathSearchResult::Deferred => return TaskHandlerControl::Continue,
+                    PathSearchResult::Unreachable => {
+                        debug!(
+                            "HAUL_TO_BP: Cancelled for {:?} - Item {:?} unreachable",
+                            ctx.soul_entity, item_entity
+                        );
+                        return cancel::cancel_haul_to_blueprint(
+                            ctx,
+                            item_entity,
+                            blueprint_entity,
+                            commands,
+                        );
+                    }
                 }
                 let is_near = can_pickup_item(soul_pos, item_pos);
 

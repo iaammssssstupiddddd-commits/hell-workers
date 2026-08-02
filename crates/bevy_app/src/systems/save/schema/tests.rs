@@ -131,10 +131,35 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
         ..default()
     });
 
-    let (expected_roots, familiar, soul, designation, unmarked_transform, non_root_component) = {
+    let (
+        expected_roots,
+        familiar,
+        soul,
+        task_area,
+        designation,
+        unmarked_transform,
+        non_root_component,
+    ) = {
         let world = app.world_mut();
         let familiar = world
-            .spawn((Familiar::default(), Transform::default()))
+            .spawn((
+                Familiar::default(),
+                FamiliarOperation {
+                    fatigue_threshold: 0.7,
+                    max_controlled_soul: 4,
+                },
+                FamiliarPolicy {
+                    default_rule: FamiliarWorkRule::default(),
+                    overrides: vec![FamiliarWorkRuleOverride {
+                        work_type: WorkType::Haul,
+                        rule: FamiliarWorkRule {
+                            allowed: true,
+                            priority: FamiliarWorkPriority::High,
+                        },
+                    }],
+                },
+                Transform::default(),
+            ))
             .id();
         let soul = world
             .spawn((
@@ -147,12 +172,13 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
             .spawn((Building::default(), hw_jobs::Door::default()))
             .id();
         let area = TaskArea::from_points(Vec2::ZERO, Vec2::ONE);
+        let task_area = world.spawn(area.clone()).id();
         let mut roots = HashSet::from([
             familiar,
             soul,
             building_door,
             world.spawn(RestArea { capacity: 1 }).id(),
-            world.spawn(area.clone()).id(),
+            task_area,
             world
                 .spawn(Blueprint::new(BuildingType::Wall, Vec::new()))
                 .id(),
@@ -233,6 +259,7 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
             roots,
             familiar,
             soul,
+            task_area,
             designation,
             unmarked_transform,
             non_root_component,
@@ -272,6 +299,8 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
     assert!(has_component(soul, TypeId::of::<Transform>()));
     assert!(has_component(soul, TypeId::of::<CommandedBy>()));
     assert!(has_component(familiar, TypeId::of::<Commanding>()));
+    assert!(has_component(familiar, TypeId::of::<FamiliarOperation>()));
+    assert!(has_component(familiar, TypeId::of::<FamiliarPolicy>()));
 
     let body = dynamic_world.serialize(&registry).unwrap();
     let mut ron_deserializer = ron::de::Deserializer::from_str(&body).unwrap();
@@ -292,6 +321,7 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
 
     let mapped_familiar = entity_map[&familiar];
     let mapped_soul = entity_map[&soul];
+    let mapped_task_area = entity_map[&task_area];
     let mapped_designation = entity_map[&designation];
     assert_eq!(
         destination.get::<CommandedBy>(mapped_soul).unwrap().0,
@@ -303,6 +333,30 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
             .unwrap()
             .iter()
             .any(|entity| *entity == mapped_soul)
+    );
+    assert_eq!(
+        destination.get::<FamiliarOperation>(mapped_familiar),
+        Some(&FamiliarOperation {
+            fatigue_threshold: 0.7,
+            max_controlled_soul: 4,
+        })
+    );
+    assert_eq!(
+        destination.get::<FamiliarPolicy>(mapped_familiar),
+        Some(&FamiliarPolicy {
+            default_rule: FamiliarWorkRule::default(),
+            overrides: vec![FamiliarWorkRuleOverride {
+                work_type: WorkType::Haul,
+                rule: FamiliarWorkRule {
+                    allowed: true,
+                    priority: FamiliarWorkPriority::High,
+                },
+            }],
+        })
+    );
+    assert_eq!(
+        destination.get::<TaskArea>(mapped_task_area),
+        Some(&TaskArea::from_points(Vec2::ZERO, Vec2::ONE))
     );
     assert_eq!(destination.resource::<GameTime>().seconds, 42.0);
     assert_eq!(

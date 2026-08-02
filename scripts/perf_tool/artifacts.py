@@ -138,6 +138,16 @@ def read_determinism(
             "souls",
             "familiars",
             "designations",
+            "delegation_cycles",
+            "delegation_familiars_processed",
+            "candidate_membership_checks",
+            "policy_disabled_rejections",
+            "candidate_snapshot_attempts",
+            "candidate_score_attempts",
+            "worker_score_attempts",
+            "source_selector_calls",
+            "source_selector_scanned_items",
+            "reachable_with_cache_calls",
         ):
             try:
                 if int(row[field]) < 0:
@@ -148,6 +158,9 @@ def read_determinism(
         checksum = row.get("state_checksum", "")
         if not re.fullmatch(r"[0-9a-f]{16}", checksum):
             errors.append(f"determinism.csv row {index} has invalid state_checksum")
+        structural_checksum = row.get("structural_checksum", "")
+        if not re.fullmatch(r"[0-9a-f]{16}", structural_checksum):
+            errors.append(f"determinism.csv row {index} has invalid structural_checksum")
         if row.get("virtual_paused") not in {"0", "1"}:
             errors.append(f"determinism.csv row {index} has invalid virtual_paused")
         for field in ("virtual_relative_speed_bits", "virtual_effective_speed_bits"):
@@ -341,6 +354,8 @@ def validate_run(
             f"workload={expected_case.workload}",
             f"size={expected_case.size}",
             f"render={expected_case.render}",
+            f"familiar_policy={expected_case.familiar_policy}",
+            f"operation_dialog={expected_case.operation_dialog}",
         ):
             if marker not in log_text:
                 reasons.append(f"PERF_SCENARIO marker is absent: {marker}")

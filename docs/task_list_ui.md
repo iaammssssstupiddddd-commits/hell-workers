@@ -1,6 +1,6 @@
 # タスクリストUI仕様
 
-最終更新: 2026-07-20
+最終更新: 2026-07-26
 
 ## 概要
 画面左側に表示される常駐パネルのモードの1つです（エンティティリストとタブ切替）。
@@ -24,8 +24,9 @@ AI 判定 cycle から得た停止理由、絞り込み・並べ替え、安全�
 `[WorkTypeアイコン] [説明] [状態] [priority tier] [ワーカーカウント ×N]`
 
 #### 1. WorkType アイコン (16px)
-`WorkType`の正本は`crates/hw_core/src/jobs.rs`で、`hw_ui::panels::task_list::work_type_icon`が
-全variantをexhaustive matchしてアイコンとテーマ色を決めます：
+`WorkType`の正本は`crates/hw_core/src/jobs.rs`です。`WorkType::ALL` と
+`stable_index()` が policy editor、filter、normalization の共通安定順を定め、
+`hw_ui::panels::task_list::work_type_icon`が全variantをexhaustive matchしてアイコンとテーマ色を決めます：
 - **Chop**: 斧アイコン / `chop` 色
 - **Mine**: ピッケルアイコン / `mine` 色
 - **Build / Move / Refine / ReinforceFloorTile / PourFloorTile / FrameWallTile / CoatWall / GeneratePower**: ハンマーアイコン / `build` 色
@@ -54,10 +55,14 @@ AI 判定 cycle から得た停止理由、絞り込み・並べ替え、安全�
 - `Evaluating...`: snapshot 不在、input revision 不一致、coverage 不足、割り当て要求 submit 後で worker 未反映など。
 
 停止理由は `No eligible familiar`、`Missing resource or source`、`Unreachable`、
-`Waiting for reservation`、`Waiting for dependency` の 5 分類です。UI は候補探索や経路探索を再実行せず、
+`Waiting for reservation`、`Waiting for dependency`、`Disabled by familiar policy` の 6 分類です。
+policy blocker は、idle worker を持つ全 applicable Familiar evaluator が current cycle を完走し、
+全 terminal vote が policy-only の場合だけ表示します。UI は候補探索や経路探索を再実行せず、
 Familiar delegation / Blueprint auto-build / wheelbarrow arbitration が通常処理中に公開した latest-only snapshot を読みます。
 unowned Blueprint の `Build` だけが Familiar delegation と Blueprint auto-build の両 producer を必要とし、
 `ManagedBy` 付き Blueprint は auto-build が適用外なので Familiar delegation だけで判定します。
+Familiar 側の policy-only 一票で、unowned Blueprint の missing / stale / submitted / complete な
+auto-build evidence を上書きしません。
 各 blocker record は理由が参照した domain（task / roster / availability / topology）だけを鮮度判定に使います。
 ただし producer cycle の evaluator coverage は roster stamp も照合し、作業可能 Soul / Familiar 構成が変わった旧 cycle は
 `Evaluating...` に戻します。
@@ -99,6 +104,8 @@ exhaustive coverageされ、追加・変更時は`docs/help-screen.md`の更新�
 - `state_dirty` は snapshot と summary の再計算要求、`list_dirty` は左パネル本文の再描画要求、`summary_dirty` は画面上部 summary の更新要求です。
 - `TaskListState.snapshot` は最新観測済みデータを保持し、未描画の `pending` snapshot は持ちません。
 - diagnostics の cycle ID 自体は `TaskEntry` に含めず、表示内容が同じなら周期評価だけで UI を再構築しません。
+- `Changed<FamiliarPolicy>` / `RemovedComponents<FamiliarPolicy>` は task diagnostic の roster revision を進めます。
+  task list の dirty 検知は policy 本体を再評価せず、更新された diagnostics / revision を通常の dirty source として読みます。
 - 左パネルを `TaskList` に切り替えたフレームは `mark_all()` で `state_dirty` / `list_dirty` を両方立て、最新スナップショットで再描画します（タスクデータが変わっていない場合も含む）。
 - 画面上部の task summary は `TaskListState.summary_total` / `summary_high` を参照し、タスクリストと同じ dirty source を共有します。
 

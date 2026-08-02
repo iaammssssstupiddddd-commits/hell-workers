@@ -24,6 +24,16 @@ def add_run_arguments(parser: argparse.ArgumentParser, *, fixed_step_audit: bool
         parser.add_argument("--fixed-hz", type=int, default=64)
         parser.add_argument("--warmup-ticks", type=int, default=1920)
         parser.add_argument("--audit-ticks", type=int, default=128)
+        parser.add_argument(
+            "--familiar-policies",
+            default="baseline",
+            help="comma-separated: baseline,default,disabled",
+        )
+        parser.add_argument(
+            "--operation-dialog-modes",
+            default="hidden",
+            help="comma-separated: hidden,open",
+        )
         parser.set_defaults(
             capture_kind="fixed-step-determinism",
             clock_mode="fixed",
@@ -40,6 +50,8 @@ def add_run_arguments(parser: argparse.ArgumentParser, *, fixed_step_audit: bool
         parser.set_defaults(
             capture_kind="frame-time",
             clock_mode="realtime",
+            familiar_policies="baseline",
+            operation_dialog_modes="hidden",
         )
     parser.add_argument(
         "--allow-log-pattern",
@@ -102,3 +114,28 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError("--warmup-ticks must be greater than 128")
         if args.audit_ticks <= 0:
             raise ValueError("--audit-ticks must be positive")
+    familiar_policies = parse_csv_list(
+        args.familiar_policies,
+        {"baseline", "default", "disabled"},
+        "familiar policies",
+    )
+    operation_dialog_modes = parse_csv_list(
+        args.operation_dialog_modes,
+        {"hidden", "open"},
+        "operation dialog modes",
+    )
+    uses_controlled_b2_mode = any(
+        mode != "baseline" for mode in familiar_policies
+    ) or any(mode != "hidden" for mode in operation_dialog_modes)
+    if uses_controlled_b2_mode and (
+        args.command != "audit" or args.workload != "gather"
+    ):
+        raise ValueError(
+            "controlled familiar policy and operation dialog modes require `audit --workload gather`"
+        )
+    if any(mode in {"default", "disabled"} for mode in familiar_policies) and (
+        args.souls == 0 or args.familiars == 0
+    ):
+        raise ValueError(
+            "controlled familiar policy modes require at least one Soul and one Familiar"
+        )

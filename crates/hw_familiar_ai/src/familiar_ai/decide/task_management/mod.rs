@@ -8,6 +8,7 @@ pub mod delegation;
 pub mod diagnostics;
 pub mod policy;
 pub(crate) mod policy_score;
+mod profiling_metrics;
 pub mod task_assigner;
 pub mod task_finder;
 pub mod validator;
@@ -28,6 +29,7 @@ pub use diagnostics::{
     FamiliarTaskDiagnosticCycle, TaskAssignmentAttempt,
 };
 pub use policy::take_source_selector_scan_snapshot;
+pub use profiling_metrics::{CandidatePipelinePerfSnapshot, take_candidate_pipeline_perf_snapshot};
 pub use task_assigner::AssignTaskContext;
 pub use task_assigner::FamiliarSoulQuery;
 pub use task_assigner::ReservationShadow;

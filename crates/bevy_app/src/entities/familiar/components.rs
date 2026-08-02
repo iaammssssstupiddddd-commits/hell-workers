@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 // コアコンポーネントは hw_core::familiar から再エクスポート
 pub use hw_core::familiar::{
-    ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarType,
+    ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarPolicy, FamiliarType,
 };
 // アニメーション状態は hw_familiar_ai から再エクスポート
 pub use hw_familiar_ai::FamiliarAnimation;

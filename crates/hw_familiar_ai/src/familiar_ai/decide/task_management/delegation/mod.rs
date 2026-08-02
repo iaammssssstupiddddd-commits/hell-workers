@@ -3,6 +3,7 @@ mod members;
 
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
+use hw_core::familiar::FamiliarPolicy;
 use hw_core::relationships::ManagedTasks;
 use hw_jobs::TaskDiagnosticInputRevisions;
 use hw_logistics::tile_index::TileSiteIndex;
@@ -26,6 +27,7 @@ pub struct DelegationEnvCtx<'a> {
     pub squad: &'a [Entity],
     pub task_area_opt: Option<&'a TaskArea>,
     pub fatigue_threshold: f32,
+    pub familiar_policy: &'a FamiliarPolicy,
     pub designation_grid: &'a DesignationSpatialGrid,
     pub transport_request_grid: &'a TransportRequestSpatialGrid,
     pub managed_tasks: &'a ManagedTasks,

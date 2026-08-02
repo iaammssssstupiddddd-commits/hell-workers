@@ -230,3 +230,25 @@ pub fn build_entity_list_view_model_system(
         unassigned_folded,
     };
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn familiar_label_reflects_current_roster_and_operation_max() {
+        let familiar = Familiar {
+            name: "A".to_string(),
+            ..default()
+        };
+        let operation = FamiliarOperation {
+            max_controlled_soul: 1,
+            ..default()
+        };
+
+        assert_eq!(
+            familiar_label(&familiar, &operation, &FamiliarAiState::Idle, 3),
+            "A (3/1) [Idle]"
+        );
+    }
+}

@@ -1,6 +1,6 @@
 # エンティティリストUI仕様
 
-最終更新: 2026-07-10
+最終更新: 2026-07-26
 
 ## 概要
 画面左側のパネルで、使い魔とソウル一覧を表示します。  
@@ -103,12 +103,34 @@
   の行選択・長押し drag を開始しない。Familiar command consumer は resolver が frame 開始時に保存した
   Familiar Entity を使うため、同時 click で command 対象が入れ替わらない。
 
-## 楽観的更新（体感改善）
-- 使役数上限の `-` / `+` 操作時、`FamiliarOperation.max_controlled_soul` 更新直後に
-  使い魔ヘッダー表示（`現在/最大`）を即時更新する
-- Entity List の `-` / `+` と operation dialog の `-` / `+` はどちらも `UiIntent` を経由し、
-  `handle_ui_intent` dispatcher から `interaction/handlers/familiar_settings.rs` の共通経路へ委譲されて `FamiliarOperation` 更新・ヘッダー即時更新・`FamiliarOperationMaxSoulChangedEvent` 発行を行う
-- 最終的な整合は通常の100ms差分同期と `FamiliarOperationMaxSoulChangedEvent` の処理で維持する
+## Familiar 設定の domain 同期
+
+- 使役数上限の `-` / `+` は target Entity と `AdjustMaxControlledSoul { delta: i8 }` を持つ
+  `UiIntent::ApplyFamiliarSettingsFor` を発行します。Entity List は
+  `FamiliarOperation` やヘッダー text を直接変更しません。
+- root adapter は foreground / pause / modal と live target を再検証し、
+  `FamiliarSettingsChangeRequest` へ変換します。domain consumer は次の非 pause Logic 冒頭で
+  operation と必要な roster 解放を一括 commit します。
+- 表示は commit 済み durable state から通常の100ms value syncで更新します。同値 patch は
+  component を書き戻さず、stale / missing / pause-modal は typed outcome になります。
+- Operation dialog も同じ request / outcome 経路を使うため、Entity List と別の writer や
+  楽観的表示状態を持ちません。
+
+## Familiar Operation dialog
+
+- Familiar のコンテキストメニューにある `Open Operation` は、受理された opener とクリック対象が同じ
+  live Familiar であることを確認してから対象を latch します。開いた後の `SelectedEntity` や
+  InfoPanel の pin 変更では対象を切り替えません。
+- 中央ダイアログは幅 `640px`（viewport の最大92%）、高さは viewport の88%を上限とし、本文だけを
+  標準 scrollbar 付きで縦スクロールします。
+- 疲労閾値、最大使役 Soul 数、`Enable all` / `Disable all`、`WorkType::ALL` の安定順に並ぶ
+  16行の許可設定と `Low / Normal / High` を編集します。全禁止は有効な待機方針であり、警告文を表示します。
+- Pause またはより優先度の高い modal が前面にある間、pointer 操作は発生元で抑止します。
+  synthetic intent も domain request を保留せず `Rejected(PausedOrModal)` で終端します。
+- `Close` / `X` / `Esc` は target と scroll を同時に消去します。target が stale、または durable
+  operation / policy が欠落した場合も自動で閉じ、scroll を先頭へ戻します。
+- world replacement では `OperationDialogState`、target、scroll を default 化し、static root を
+  同期的に `Display::None` へ戻します。旧 world の Entity や表示を次フレームへ持ち越しません。
 
 ## 主な関連ファイル（最終境界反映）
 
@@ -122,7 +144,7 @@
 - `crates/bevy_app/src/interface/ui/list/interaction.rs`, `interaction/navigation.rs` - 行クリック・Tab 巡回・target 付き `UiIntent` 発行（`FamiliarOperation` 直接更新は行わない）
 - `crates/bevy_app/src/interface/ui/interaction/intent_handler.rs` - `UiIntent` dispatcher
 - `crates/bevy_app/src/interface/ui/interaction/intent_context.rs` - `UiIntent` 処理が共有する `SystemParam` / query 集約
-- `crates/bevy_app/src/interface/ui/interaction/handlers/familiar_settings.rs` - dialog/list button 共通の `FamiliarOperation` 更新、即時ヘッダー更新、`FamiliarOperationMaxSoulChangedEvent` 発行
+- `crates/bevy_app/src/interface/ui/interaction/handlers/familiar_settings.rs` - dialog/list button 共通の foreground / target 再検証と `FamiliarSettingsChangeRequest` 変換
 
 ### `hw_ui` 側（移設済み）
 - `crates/hw_ui/src/list/models.rs` - ビューモデル型・`EntityListNodeIndex`・`FamiliarSectionNodes`
@@ -137,6 +159,9 @@
 - `crates/hw_ui/src/list/tree_ops.rs` - `clear_children`
 - `crates/hw_ui/src/list/visual.rs` - `apply_row_highlight`, `entity_list_visual_feedback_system`
 - `crates/hw_ui/src/list/search.rs` - `EntityListSearchState`、検索 sync system
+- `crates/hw_ui/src/components.rs` - `OperationDialogState` と dialog marker
+- `crates/hw_ui/src/setup/dialogs.rs` - Operation dialog の静的レイアウト、scroll editor、16行の操作部品
+- `crates/hw_ui/src/intents.rs` - target 付き open intent と settings patch intent
 - `crates/hw_ui/src/widgets/text_field.rs` - 検索バー用 `spawn_text_field`
 - `crates/hw_ui/src/interaction/text_field.rs` - フォーカス枠・Enter/Escape・検索ライブ sync（Escape 検索クリア含む）
 - `crates/hw_ui/src/list/mod.rs` - `hw_ui` 対外エクスポート

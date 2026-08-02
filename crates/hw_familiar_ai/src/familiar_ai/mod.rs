@@ -5,6 +5,7 @@ use hw_core::system_sets::FamiliarAiSystemSet;
 pub mod decide;
 pub mod execute;
 pub mod perceive;
+pub mod settings;
 
 /// Stable seams inside Familiar Decide. Root-owned bridges may register work
 /// in `TaskRevisionSync` without depending on anonymous `ApplyDeferred` order.
@@ -109,7 +110,6 @@ impl Plugin for FamiliarAiCorePlugin {
             .add_systems(
                 Update,
                 (
-                    execute::max_soul_logic::max_soul_logic_system,
                     execute::squad_logic::squad_logic_system,
                     execute::encouragement_apply::encouragement_apply_system,
                     execute::encouragement_apply::cleanup_encouragement_cooldowns_system,

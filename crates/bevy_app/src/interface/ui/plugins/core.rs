@@ -1,4 +1,3 @@
-use crate::interface::selection::SelectedEntity;
 use crate::interface::selection::blueprint_placement;
 use crate::interface::selection::building_move_preview_system;
 use crate::interface::selection::building_move_system;
@@ -95,8 +94,7 @@ fn register_ui_core_plugin_systems(app: &mut App) {
         (
             crate::interface::ui::context_menu_system,
             crate::interface::ui::task_summary_ui_system,
-            crate::interface::ui::update_operation_dialog_system
-                .run_if(|selected: Res<SelectedEntity>| selected.0.is_some()),
+            crate::interface::ui::update_operation_dialog_system,
             game_time_system,
             crate::interface::ui::update_fps_display_system,
             crate::interface::ui::update_dream_pool_display_system,

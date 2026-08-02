@@ -5,19 +5,41 @@ from .fixtures import *
 def run_suite(args: argparse.Namespace) -> int:
     sizes = parse_csv_list(args.sizes, {"small", "medium", "large"}, "sizes")
     renders = parse_csv_list(args.renders, {"cpu", "gpu"}, "renders")
+    familiar_policies = parse_csv_list(
+        args.familiar_policies,
+        {"baseline", "default", "disabled"},
+        "familiar policies",
+    )
+    operation_dialog_modes = parse_csv_list(
+        args.operation_dialog_modes,
+        {"hidden", "open"},
+        "operation dialog modes",
+    )
     if (args.souls is None) != (args.familiars is None):
         raise ValueError("--souls and --familiars must be provided together")
     cases = [
-        Case(args.workload, size, render, args.seed, args.souls, args.familiars)
+        Case(
+            args.workload,
+            size,
+            render,
+            args.seed,
+            args.souls,
+            args.familiars,
+            familiar_policy,
+            operation_dialog,
+        )
         for size in sizes
         for render in renders
+        for familiar_policy in familiar_policies
+        for operation_dialog in operation_dialog_modes
     ]
     if args.dry_run:
         binary = Path(args.binary or "target/profiling/bevy_app")
         for case in cases:
             print(
                 f"{case.identifier}: {binary} --perf-scenario --perf-seed {case.seed} "
-                f"--perf-clock {args.clock_mode} ..."
+                f"--perf-clock {args.clock_mode} --perf-familiar-policy "
+                f"{case.familiar_policy} --perf-operation-dialog {case.operation_dialog} ..."
             )
         return 0
 

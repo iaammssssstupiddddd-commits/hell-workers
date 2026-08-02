@@ -16,6 +16,7 @@ use crate::familiar_ai::decide::task_management::context::ConstructionSitePositi
 use crate::familiar_ai::decide::task_management::policy_score::{
     WORKER_DISTANCE_WEIGHT, WORKER_PRIORITY_WEIGHT, compose_worker_score,
 };
+use crate::familiar_ai::decide::task_management::profiling_metrics::mark_worker_score_attempt;
 use crate::familiar_ai::decide::task_management::task_finder::{
     FamiliarCandidateSources, collect_scored_candidates_with_diagnostics,
 };
@@ -59,6 +60,7 @@ fn reachable_with_cache(
 }
 
 fn score_for_worker(candidate: &ScoredDelegationCandidate, worker_pos: Vec2) -> f32 {
+    mark_worker_score_attempt();
     let worker_dist_sq = worker_pos.distance_squared(candidate.pos);
     let priority_norm = ((candidate.priority as f32 + 20.0) / 40.0).clamp(0.0, 1.0);
     let dist_norm = 1.0 - (worker_dist_sq / WORKER_SCORE_MAX_DIST_SQ).min(1.0);
@@ -341,6 +343,7 @@ pub(super) fn try_assign_for_workers(
             fam_entity: env.fam_entity,
             fam_pos: env.fam_pos,
             task_area_opt: env.task_area_opt,
+            policy: env.familiar_policy,
         },
         queries,
         FamiliarCandidateSources {
@@ -464,6 +467,7 @@ mod tests {
         wheelbarrow_arbitration_reason_from_evidence, worker_distance_rejection,
     };
     use bevy::prelude::{Entity, Vec2};
+    use hw_core::familiar::FamiliarWorkPriority;
     use hw_jobs::WorkType;
     use hw_logistics::ResourceType;
     use hw_logistics::transport_request::{
@@ -472,7 +476,7 @@ mod tests {
     };
 
     use crate::familiar_ai::decide::task_management::policy_score::{
-        POLICY_SCORE_UNIT, PolicyScoreContributions, transport_policy_units,
+        POLICY_SCORE_UNIT, PolicyScoreContributions, familiar_policy_units, transport_policy_units,
     };
     use crate::familiar_ai::decide::task_management::{
         CandidateRejectReason, ScoredDelegationCandidate,
@@ -533,6 +537,31 @@ mod tests {
         assert!(low < normal && normal < high && high < critical);
         assert!((critical - (1.0 + 20.0 * POLICY_SCORE_UNIT)).abs() < f32::EPSILON * 2.0);
         assert!(critical > 1.0);
+    }
+
+    #[test]
+    fn familiar_priority_changes_final_score_and_normal_keeps_exact_bits() {
+        let base = scored_candidate(1, TransportPriority::Normal);
+        let with_priority = |priority| ScoredDelegationCandidate {
+            policy_contributions: PolicyScoreContributions::new(0, familiar_policy_units(priority)),
+            ..base
+        };
+        let low = score_for_worker(&with_priority(FamiliarWorkPriority::Low), Vec2::ZERO);
+        let normal = score_for_worker(&with_priority(FamiliarWorkPriority::Normal), Vec2::ZERO);
+        let high = score_for_worker(&with_priority(FamiliarWorkPriority::High), Vec2::ZERO);
+
+        assert_eq!(normal.to_bits(), 1.0f32.to_bits());
+        assert!(low < normal && normal < high);
+        assert!((high - low - 10.0 * POLICY_SCORE_UNIT).abs() < f32::EPSILON * 2.0);
+
+        let critical_high = ScoredDelegationCandidate {
+            policy_contributions: PolicyScoreContributions::new(
+                transport_policy_units(TransportPriority::Critical),
+                familiar_policy_units(FamiliarWorkPriority::High),
+            ),
+            ..base
+        };
+        assert!(score_for_worker(&critical_high, Vec2::ZERO) > 1.0);
     }
 
     #[test]

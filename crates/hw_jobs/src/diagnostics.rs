@@ -19,10 +19,11 @@ pub enum TaskDiagnosticClass {
     Unreachable = 2,
     TemporaryContention = 3,
     DependencyWaiting = 4,
+    PolicyDisabled = 5,
 }
 
 impl TaskDiagnosticClass {
-    pub const COUNT: usize = 5;
+    pub const COUNT: usize = 6;
 
     /// Tie-break order used after normalized producer votes are counted.
     pub const REPRESENTATIVE_ORDER: [Self; Self::COUNT] = [
@@ -31,6 +32,7 @@ impl TaskDiagnosticClass {
         Self::Unreachable,
         Self::DependencyWaiting,
         Self::TemporaryContention,
+        Self::PolicyDisabled,
     ];
 
     #[must_use]
@@ -54,6 +56,10 @@ impl TaskDiagnosticCounters {
         for (target, source) in self.0.iter_mut().zip(other.0) {
             *target = target.saturating_add(source);
         }
+    }
+
+    pub fn clear(&mut self, class: TaskDiagnosticClass) {
+        self.0[class.index()] = 0;
     }
 
     #[must_use]
@@ -165,6 +171,7 @@ impl TaskDiagnosticDomainMask {
             | TaskDiagnosticClass::TemporaryContention => Self::TASK.union(Self::AVAILABILITY),
             TaskDiagnosticClass::DependencyWaiting => Self::TASK,
             TaskDiagnosticClass::Unreachable => Self::TASK.union(Self::TOPOLOGY),
+            TaskDiagnosticClass::PolicyDisabled => Self::TASK.union(Self::ROSTER),
         }
     }
 }
@@ -379,5 +386,28 @@ mod tests {
             !std::mem::needs_drop::<TaskDiagnosticRecord>(),
             "a task record must not retain a task-by-evaluator heap collection",
         );
+    }
+
+    #[test]
+    fn diagnostic_class_indices_are_stable_and_policy_is_last() {
+        assert_eq!(TaskDiagnosticClass::NoEligibleFamiliar.index(), 0);
+        assert_eq!(TaskDiagnosticClass::MissingResourceOrSource.index(), 1);
+        assert_eq!(TaskDiagnosticClass::Unreachable.index(), 2);
+        assert_eq!(TaskDiagnosticClass::TemporaryContention.index(), 3);
+        assert_eq!(TaskDiagnosticClass::DependencyWaiting.index(), 4);
+        assert_eq!(TaskDiagnosticClass::PolicyDisabled.index(), 5);
+        assert_eq!(
+            TaskDiagnosticClass::REPRESENTATIVE_ORDER.last(),
+            Some(&TaskDiagnosticClass::PolicyDisabled)
+        );
+    }
+
+    #[test]
+    fn policy_disabled_uses_task_and_roster_domains() {
+        let domains = TaskDiagnosticDomainMask::for_class(TaskDiagnosticClass::PolicyDisabled);
+        assert!(domains.contains(TaskDiagnosticDomainMask::TASK));
+        assert!(domains.contains(TaskDiagnosticDomainMask::ROSTER));
+        assert!(!domains.contains(TaskDiagnosticDomainMask::AVAILABILITY));
+        assert!(!domains.contains(TaskDiagnosticDomainMask::TOPOLOGY));
     }
 }

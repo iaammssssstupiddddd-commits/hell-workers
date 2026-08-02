@@ -42,6 +42,12 @@ struct TaskStatusEvidence<'a> {
     revisions: &'a TaskDiagnosticInputRevisions,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct CompleteProducerEvidence {
+    counters: TaskDiagnosticCounters,
+    policy_only: bool,
+}
+
 type DesignationQuery<'w, 's> = Query<
     'w,
     's,
@@ -198,31 +204,41 @@ fn derive_task_status(
     }
 
     let producers = TaskDiagnosticProducerMask::for_task(work_type, auto_build_applicable);
-    let mut counters = TaskDiagnosticCounters::default();
-    if producer_evidence(
+    let Some(familiar) = producer_evidence(
         entity,
         TaskDiagnosticProducer::FamiliarDelegation,
         evidence.familiar_header,
         evidence.familiar_record,
         evidence.revisions,
-        &mut counters,
-    )
-    .is_none()
-    {
+    ) else {
         return TaskStatusSummary::PendingEvaluation;
-    }
-    if producers.contains(TaskDiagnosticProducer::BlueprintAutoBuild)
-        && producer_evidence(
+    };
+
+    let auto_build = if producers.contains(TaskDiagnosticProducer::BlueprintAutoBuild) {
+        let Some(auto_build) = producer_evidence(
             entity,
             TaskDiagnosticProducer::BlueprintAutoBuild,
             evidence.auto_build_header,
             evidence.auto_build_record,
             evidence.revisions,
-            &mut counters,
-        )
-        .is_none()
-    {
-        return TaskStatusSummary::PendingEvaluation;
+        ) else {
+            return TaskStatusSummary::PendingEvaluation;
+        };
+        Some(auto_build)
+    } else {
+        None
+    };
+
+    if auto_build.is_none() && familiar.policy_only {
+        return TaskStatusSummary::Blocked(TaskBlockerReason::PolicyDisabled);
+    }
+
+    let mut counters = familiar.counters;
+    if familiar.policy_only {
+        counters.clear(TaskDiagnosticClass::PolicyDisabled);
+    }
+    if let Some(auto_build) = auto_build {
+        counters.merge(&auto_build.counters);
     }
 
     counters.representative().map(map_blocker_reason).map_or(
@@ -237,8 +253,7 @@ fn producer_evidence(
     header: Option<&TaskDiagnosticCycleHeader>,
     record: Option<&TaskDiagnosticRecord>,
     revisions: &TaskDiagnosticInputRevisions,
-    counters: &mut TaskDiagnosticCounters,
-) -> Option<()> {
+) -> Option<CompleteProducerEvidence> {
     let header = header?;
     if header.producer != producer
         || header.completed_evaluators != header.eligible_evaluators
@@ -247,8 +262,12 @@ fn producer_evidence(
         return None;
     }
     if header.eligible_evaluators == 0 {
+        let mut counters = TaskDiagnosticCounters::default();
         counters.increment(TaskDiagnosticClass::NoEligibleFamiliar);
-        return Some(());
+        return Some(CompleteProducerEvidence {
+            counters,
+            policy_only: false,
+        });
     }
 
     let record = record?;
@@ -259,8 +278,18 @@ fn producer_evidence(
     {
         return None;
     }
-    counters.merge(&record.counters);
-    Some(())
+    let policy_only = producer == TaskDiagnosticProducer::FamiliarDelegation
+        && record.coverage.terminal_votes > 0
+        && record.counters.count(TaskDiagnosticClass::PolicyDisabled)
+            == record.coverage.terminal_votes;
+    let mut counters = record.counters;
+    if !policy_only {
+        counters.clear(TaskDiagnosticClass::PolicyDisabled);
+    }
+    Some(CompleteProducerEvidence {
+        counters,
+        policy_only,
+    })
 }
 
 fn map_blocker_reason(class: TaskDiagnosticClass) -> TaskBlockerReason {
@@ -270,6 +299,7 @@ fn map_blocker_reason(class: TaskDiagnosticClass) -> TaskBlockerReason {
         TaskDiagnosticClass::Unreachable => TaskBlockerReason::Unreachable,
         TaskDiagnosticClass::TemporaryContention => TaskBlockerReason::TemporaryContention,
         TaskDiagnosticClass::DependencyWaiting => TaskBlockerReason::DependencyWaiting,
+        TaskDiagnosticClass::PolicyDisabled => TaskBlockerReason::PolicyDisabled,
     }
 }
 
@@ -348,8 +378,15 @@ mod tests {
     }
 
     fn header(eligible: u16) -> TaskDiagnosticCycleHeader {
+        producer_header(TaskDiagnosticProducer::FamiliarDelegation, eligible)
+    }
+
+    fn producer_header(
+        producer: TaskDiagnosticProducer,
+        eligible: u16,
+    ) -> TaskDiagnosticCycleHeader {
         TaskDiagnosticCycleHeader {
-            producer: TaskDiagnosticProducer::FamiliarDelegation,
+            producer,
             cycle: 1,
             eligible_evaluators: eligible,
             completed_evaluators: eligible,
@@ -358,16 +395,37 @@ mod tests {
     }
 
     fn record(class: TaskDiagnosticClass, submitted_count: u16) -> TaskDiagnosticRecord {
+        producer_record(
+            TaskDiagnosticProducer::FamiliarDelegation,
+            &[class],
+            submitted_count,
+            false,
+        )
+    }
+
+    fn producer_record(
+        producer: TaskDiagnosticProducer,
+        classes: &[TaskDiagnosticClass],
+        submitted_count: u16,
+        partial: bool,
+    ) -> TaskDiagnosticRecord {
         let mut counters = TaskDiagnosticCounters::default();
-        counters.increment(class);
+        for class in classes {
+            counters.increment(*class);
+        }
+        let terminal_votes = if submitted_count == 0 && !partial {
+            classes.len() as u16
+        } else {
+            0
+        };
         TaskDiagnosticRecord {
-            producer: TaskDiagnosticProducer::FamiliarDelegation,
+            producer,
             coverage: TaskDiagnosticCoverage {
-                applicable_evaluators: 1,
-                evaluated_evaluators: 1,
-                terminal_votes: u16::from(submitted_count == 0),
+                applicable_evaluators: classes.len().max(1) as u16,
+                evaluated_evaluators: classes.len().max(1) as u16,
+                terminal_votes,
                 submitted_count,
-                partial: false,
+                partial,
             },
             counters,
             stamp: TaskDiagnosticInputStamp::default(),
@@ -564,6 +622,10 @@ mod tests {
                 TaskDiagnosticClass::DependencyWaiting,
                 TaskBlockerReason::DependencyWaiting,
             ),
+            (
+                TaskDiagnosticClass::PolicyDisabled,
+                TaskBlockerReason::PolicyDisabled,
+            ),
         ];
 
         for (diagnostic, blocker) in cases {
@@ -607,6 +669,149 @@ mod tests {
                 familiar_evidence(Some(&header(0)), None, &revisions),
             ),
             TaskStatusSummary::Blocked(TaskBlockerReason::NoEligibleFamiliar)
+        );
+    }
+
+    #[test]
+    fn familiar_policy_is_blocking_only_when_every_terminal_vote_is_policy() {
+        let revisions = TaskDiagnosticInputRevisions::default();
+        let policy_only = producer_record(
+            TaskDiagnosticProducer::FamiliarDelegation,
+            &[TaskDiagnosticClass::PolicyDisabled],
+            0,
+            false,
+        );
+        assert_eq!(
+            derive_task_status(
+                entity(),
+                WorkType::Chop,
+                0,
+                false,
+                familiar_evidence(Some(&header(1)), Some(&policy_only), &revisions),
+            ),
+            TaskStatusSummary::Blocked(TaskBlockerReason::PolicyDisabled)
+        );
+
+        let mixed = producer_record(
+            TaskDiagnosticProducer::FamiliarDelegation,
+            &[
+                TaskDiagnosticClass::PolicyDisabled,
+                TaskDiagnosticClass::Unreachable,
+            ],
+            0,
+            false,
+        );
+        assert_eq!(
+            derive_task_status(
+                entity(),
+                WorkType::Chop,
+                0,
+                false,
+                familiar_evidence(Some(&header(2)), Some(&mixed), &revisions),
+            ),
+            TaskStatusSummary::Blocked(TaskBlockerReason::Unreachable)
+        );
+    }
+
+    #[test]
+    fn unowned_build_never_uses_familiar_policy_as_its_only_final_reason() {
+        let revisions = TaskDiagnosticInputRevisions::default();
+        let familiar_header = header(1);
+        let familiar_record = producer_record(
+            TaskDiagnosticProducer::FamiliarDelegation,
+            &[TaskDiagnosticClass::PolicyDisabled],
+            0,
+            false,
+        );
+        let zero_auto = producer_header(TaskDiagnosticProducer::BlueprintAutoBuild, 0);
+
+        assert_eq!(
+            derive_task_status(
+                entity(),
+                WorkType::Build,
+                0,
+                true,
+                TaskStatusEvidence {
+                    familiar_header: Some(&familiar_header),
+                    familiar_record: Some(&familiar_record),
+                    auto_build_header: Some(&zero_auto),
+                    auto_build_record: None,
+                    revisions: &revisions,
+                },
+            ),
+            TaskStatusSummary::Blocked(TaskBlockerReason::NoEligibleFamiliar)
+        );
+
+        let auto_header = producer_header(TaskDiagnosticProducer::BlueprintAutoBuild, 1);
+        let auto_record = producer_record(
+            TaskDiagnosticProducer::BlueprintAutoBuild,
+            &[TaskDiagnosticClass::DependencyWaiting],
+            0,
+            false,
+        );
+        assert_eq!(
+            derive_task_status(
+                entity(),
+                WorkType::Build,
+                0,
+                true,
+                TaskStatusEvidence {
+                    familiar_header: Some(&familiar_header),
+                    familiar_record: Some(&familiar_record),
+                    auto_build_header: Some(&auto_header),
+                    auto_build_record: Some(&auto_record),
+                    revisions: &revisions,
+                },
+            ),
+            TaskStatusSummary::Blocked(TaskBlockerReason::DependencyWaiting)
+        );
+    }
+
+    #[test]
+    fn submitted_partial_and_missing_multi_producer_evidence_stay_pending() {
+        let revisions = TaskDiagnosticInputRevisions::default();
+        let familiar_header = header(1);
+        let submitted = producer_record(TaskDiagnosticProducer::FamiliarDelegation, &[], 1, false);
+        let partial = producer_record(
+            TaskDiagnosticProducer::FamiliarDelegation,
+            &[TaskDiagnosticClass::PolicyDisabled],
+            0,
+            true,
+        );
+        for record in [&submitted, &partial] {
+            assert_eq!(
+                derive_task_status(
+                    entity(),
+                    WorkType::Chop,
+                    0,
+                    false,
+                    familiar_evidence(Some(&familiar_header), Some(record), &revisions),
+                ),
+                TaskStatusSummary::PendingEvaluation
+            );
+        }
+
+        let policy = producer_record(
+            TaskDiagnosticProducer::FamiliarDelegation,
+            &[TaskDiagnosticClass::PolicyDisabled],
+            0,
+            false,
+        );
+        assert_eq!(
+            derive_task_status(
+                entity(),
+                WorkType::Build,
+                0,
+                true,
+                TaskStatusEvidence {
+                    familiar_header: Some(&familiar_header),
+                    familiar_record: Some(&policy),
+                    auto_build_header: None,
+                    auto_build_record: None,
+                    revisions: &revisions,
+                },
+            ),
+            TaskStatusSummary::PendingEvaluation
         );
     }
 

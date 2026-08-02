@@ -36,6 +36,50 @@ fn messages_plugin_registers_dream_transfer_message() {
     );
 }
 
+#[test]
+fn root_message_reset_clears_familiar_settings_buffers() {
+    let mut app = minimal_app();
+    app.add_plugins(MessagesPlugin);
+    let target = app.world_mut().spawn_empty().id();
+    app.world_mut()
+        .write_message(FamiliarSettingsChangeRequest {
+            target,
+            patch: hw_core::familiar::FamiliarSettingsPatch::SetAllWorkAllowed { allowed: false },
+        });
+    app.world_mut()
+        .write_message(FamiliarSettingsChangeOutcome {
+            target,
+            status: hw_familiar_ai::FamiliarSettingsChangeStatus::Applied {
+                requested_patches: 1,
+                released_souls: 1,
+                entered_all_work_disabled: true,
+            },
+        });
+    app.world_mut()
+        .write_message(FamiliarRosterReleasedVisualMessage {
+            familiar_entity: target,
+            released_souls: 1,
+        });
+
+    clear_root_messages(app.world_mut());
+
+    assert!(
+        app.world()
+            .resource::<Messages<FamiliarSettingsChangeRequest>>()
+            .is_empty()
+    );
+    assert!(
+        app.world()
+            .resource::<Messages<FamiliarSettingsChangeOutcome>>()
+            .is_empty()
+    );
+    assert!(
+        app.world()
+            .resource::<Messages<FamiliarRosterReleasedVisualMessage>>()
+            .is_empty()
+    );
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NotificationCase {
     SoulRecruited,

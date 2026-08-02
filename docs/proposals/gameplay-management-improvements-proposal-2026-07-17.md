@@ -7,9 +7,9 @@
 | ドキュメントID | `gameplay-management-improvements-proposal-2026-07-17` |
 | ステータス | `Draft` |
 | 作成日 | `2026-07-17` |
-| 最終更新日 | `2026-07-25` |
+| 最終更新日 | `2026-07-26` |
 | 作成者 | `Codex` |
-| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能フォローアップ）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/familiar-operation-policy-plan-2026-07-20.md`（B2）、`docs/plans/soul-energy-control-plan-2026-07-20.md`（B3） |
+| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能フォローアップ）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`（B2実装・自動検証完了）、`docs/plans/familiar-operation-policy-validation-plan-2026-07-26.md`（B2実機・性能フォローアップ）、`docs/plans/soul-energy-control-plan-2026-07-20.md`（B3） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 背景と問題
@@ -28,8 +28,8 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
   表示する実装を追加した。現在は重点実機受入を残す。
 - タスク一覧は件数と担当数を示せるが、「なぜ止まっているか」を説明しない。
   候補収集側がすでに判定している条件を UI へ安全に還元する仕組みがない。
-- Stockpile の `resource_type` は現在内容を表すため、受入方針には使えない。
-  Familiar の運用設定はセーブ対象外で、ロード時に既定値へ戻る。
+- 初期状態ではStockpileの受入方針とFamiliarの運用設定が永続化されていなかった。
+  Track B1/B2で現在内容と方針を分離し、Familiar operation / WorkType policyもsave/loadへ接続した。
 - Soul Energy、解体、セーブスロットなど、運営ゲームとして必要な管理操作が部分的である。
 - Dream は資源として存在する一方、継続的な判断や目標へ結び付く用途が少ない。
   Familiar の階級設定も、現状は世界観上の記述が中心である。
@@ -178,6 +178,12 @@ F5/F9後の全チェック状態を確認し、B1-R14〜B1-R15を合格とした
 `2026-07-25` にF9直後の旧パネル消去と再選択後の保存値復元も実機で確認し、
 B1のコード・自動回帰・恒久docs・実機受入を完了した。受入記録は
 `docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md` を正本とする。
+
+B2は`2026-07-26`にdurable operation / policy、旧save補完、atomic settings request、
+WorkType allowed gate、共有-5/0/+5 score、`PolicyDisabled`診断、latched scrollable dialog、
+notification / Help、world-replace resetを実装した。自動回帰、恒久docs、workspace gateまで完了し、
+実装計画をarchiveした。未実施の実renderer受入と性能artifactは
+`docs/plans/familiar-operation-policy-validation-plan-2026-07-26.md`へ分離した。
 
 ##### B1. Stockpile ポリシー
 
@@ -503,13 +509,14 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 現在地
 
-- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（完了・archive済み）/ B1 100%（完了・archive済み）/ B2〜B3 計画 100%・実装 0% / C〜D 未採否`
+- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（完了・archive済み）/ B1 100%（完了・archive済み）/ B2 コード・自動検証・docs 100%（実機・性能フォローアップ）/ B3 計画 100%・実装 0% / C〜D 未採否`
 - 直近で完了したこと: A3 の latest-only task diagnostics、filter/sort dashboard、安全な priority/cancel、
   owner cancellation、save/reset回帰、恒久ドキュメント同期。Track B はコード・save・UI の現状を再監査し、
   B1 Stockpile の M1〜M5（永続 policy、移行、tier 別需要、manual / wheelbarrow 判定、共有 score offset、
   Familiar live resolver、committed execution、draining 対応 consolidation、単一/矩形 editor、typed outcome通知、
   固定tick横断回帰、steady-state性能比較、恒久docs）を完了し計画をarchiveした。
-  B2 Familiar、B3 Soul Energy は実装境界と移行・検証手順を別計画へ固定済みである。
+  B2 Familiarはproduction実装・自動回帰・Help・恒久docsを完了し、B3 Soul Energyは
+  実装境界と移行・検証手順を計画へ固定済みである。
   B1の実機確認ではpolicy round-trip、range/capture、Toast、Draining、in-flight、特殊設備除外を確認した。
   F9直後の旧情報パネル残留はInfoPanel rootの同期非表示と実Node回帰を追加して修正し、実機再受入も完了した。
   受入資材UIは全9資材の静的チェックリストと
@@ -520,7 +527,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 1. A2 の重点実機項目を確認し、問題なければ計画をarchiveする。
 2. A3 の定量性能検証を進める場合は、独立した性能フォローアップを正本にする。
-3. B2 は完了したB1のshared policy score compositionを再利用し、`FamiliarOperation` の非上書き永続化から始める。
+3. B2の実機・性能検証を進める場合は独立follow-upを正本にする。
    B3 は Soul Spa の pending slot 回帰を最初の failing test とする。
 4. Track C〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
 
@@ -532,7 +539,8 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - `Stockpile.resource_type` は現在内容であり、受入ポリシーとして再利用しない。
 - B1のF9 load、policy値のround-trip、旧情報パネル消去はコード・自動回帰・実機受入まで完了している。
   完了記録は`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`を参照する。
-- `FamiliarOperation` は現状ロード時に既定値へ戻るため、方針追加前に永続化境界を修正する。
+- `FamiliarOperation` / `FamiliarPolicy` はdurableである。runtime shellへ戻して保存値を上書きしない。
+  B2の実renderer受入と性能artifactは独立follow-upで追跡する。
 - 新しい Bevy API は 0.19 の一次情報またはローカル crate source で確認する。
 
 ### 参照必須ファイル
@@ -549,7 +557,8 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - `docs/plans/archive/stockpile-policy-plan-2026-07-20.md`
 - `docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`
 - `docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`
-- `docs/plans/familiar-operation-policy-plan-2026-07-20.md`
+- `docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`
+- `docs/plans/familiar-operation-policy-validation-plan-2026-07-26.md`
 - `docs/plans/soul-energy-control-plan-2026-07-20.md`
 - `crates/bevy_app/src/plugins/input.rs`
 - `crates/hw_ui/src/selection/placement.rs`
@@ -592,3 +601,4 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | `2026-07-24` | `User / Codex` | B1チェックリストの実機再受入を完了。表示・直接操作、複数集合の矩形適用、Toast件数、F5/F9 round-tripを合格とし、残るblockerをB1-R05だけに更新 |
 | `2026-07-24` | `Codex` | B1-R05のInfoPanel root同期非表示と実Node回帰を追加。コード修正・自動確認を完了し、残件をF9実機再確認へ更新 |
 | `2026-07-25` | `User / Codex` | B1-R05の実機再受入でF9直後の旧パネル消去と再選択後の保存値復元を確認。B1を完了し受入計画をarchive |
+| `2026-07-26` | `Codex` | B2のdurable operation/policy、atomic settings、AI gate/score、PolicyDisabled、Operation dialog、Help、自動回帰、恒久docs、workspace gateを完了。実機・性能検証を独立follow-upへ移管し実装計画をarchive |

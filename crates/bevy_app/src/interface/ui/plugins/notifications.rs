@@ -24,6 +24,7 @@ impl Plugin for UiNotificationsPlugin {
             (
                 crate::interface::ui::notifications::adapt_save_load_outcomes,
                 crate::interface::ui::notifications::adapt_stockpile_policy_change_outcomes,
+                crate::interface::ui::notifications::adapt_familiar_settings_change_outcomes,
                 crate::interface::ui::panels::task_list::adapt_task_action_outcomes,
             )
                 .in_set(NotificationSystemSet::Adapt),
@@ -85,6 +86,7 @@ mod tests {
             .add_message::<SaveLoadOutcome>()
             .add_message::<TaskActionOutcome>()
             .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
+            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>()
             .init_resource::<PresentTrace>()
@@ -103,6 +105,7 @@ mod tests {
             .add_message::<SaveLoadOutcome>()
             .add_message::<TaskActionOutcome>()
             .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
+            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>();
         let outcome = SaveLoadOutcome {
@@ -127,6 +130,7 @@ mod tests {
             .add_message::<SaveLoadOutcome>()
             .add_message::<TaskActionOutcome>()
             .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
+            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>();
         let entity = app.world_mut().spawn_empty().id();
@@ -156,6 +160,7 @@ mod tests {
             .add_message::<SaveLoadOutcome>()
             .add_message::<TaskActionOutcome>()
             .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
+            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>();
         app.world_mut()
@@ -176,5 +181,34 @@ mod tests {
         assert_eq!(toast.severity, NotificationSeverity::Warning);
         assert_eq!(toast.retention, NotificationRetention::ToastOnly);
         assert!(toast.body.contains("unsupported or special storage"));
+    }
+
+    #[test]
+    fn familiar_all_disabled_outcome_becomes_one_warning_in_the_same_update() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
+            .add_message::<SaveLoadOutcome>()
+            .add_message::<TaskActionOutcome>()
+            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
+            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
+            .init_resource::<UiTheme>()
+            .init_resource::<UiInputState>();
+        app.world_mut()
+            .write_message(hw_familiar_ai::FamiliarSettingsChangeOutcome {
+                target: Entity::PLACEHOLDER,
+                status: hw_familiar_ai::FamiliarSettingsChangeStatus::Applied {
+                    requested_patches: 16,
+                    released_souls: 0,
+                    entered_all_work_disabled: true,
+                },
+            });
+
+        app.update();
+
+        let center = app.world().resource::<NotificationCenter>();
+        assert_eq!(center.toast_count(), 1);
+        let toast = center.toast_entries().next().unwrap();
+        assert_eq!(toast.severity, NotificationSeverity::Warning);
+        assert!(toast.body.contains("No new work"));
     }
 }

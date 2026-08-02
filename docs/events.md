@@ -31,7 +31,7 @@ dual 通知の Producer は `publish_*` helper を使う。
 | `OnGatheringParticipated` | `Message` | 集会参加処理（`write_message`） | 表情システム（`MessageReader<OnGatheringParticipated>`） | 集会オブジェクトに応じた表情ロック。`GatheringParticipants` は `ParticipatingIn` の Relationship が自動更新 |
 | `OnGatheringJoined` | `Message` | `IdleBehaviorOperation::ArriveAtGathering` 適用（`write_message`） | speech システム（`MessageReader<OnGatheringJoined>`） | 集会到着時の演出 |
 | `FamiliarAiStateChangedEvent` | `Message` | 状態遷移システム | ログ / ビジュアル | ログ記録 |
-| `FamiliarOperationMaxSoulChangedEvent` | `Message` | UI 操作（使役数変更ダイアログ） | Squad 管理システム | 超過分の Soul を自動リリース |
+| `FamiliarRosterReleasedVisualMessage` | `Message` (`hw_core::events`、root inventory登録) | `apply_familiar_settings_change_requests_system` が operation / roster commit 後に発行 | `hw_visual::max_soul_visual_system` | 解放人数と Familiar Entity を渡す presentation-only 通知。タスク解除と `CommandedBy` removal は発行前に確定済み |
 | `DreamTransferredVisualMessage` | `Message` | `slow_simulation_driver_system`（全slow step後、Soulごと最大1件） | `hw_visual::ingest_dream_transfers_system`（Logic後・Visual前、Visual run condition外） | `DreamPool`へ実際に加算した量、drain時quality、Sleeping/RestArea source、fallback座標、producer確定の`is_final`を渡す。camera/UI不在時はdurable ledgerでchannel別に保持し、slow-step間の無Message frameは終了扱いしない |
 | `ConversationToneTriggered` | `Message`（`hw_visual::speech::conversation::events`、root inventory登録） | 会話phase処理 / speech observer | Soul表情event consumer | 発話者とPositive/Negative/Neutral toneを同frame以降の表情へ渡す |
 | `ConversationCompleted` | `Message`（`hw_visual::speech::conversation::events`、root inventory登録） | `process_conversation_logic` | `apply_conversation_rewards` / Soul表情event consumer | 参加者へstress reliefとmotivation penaltyを適用し、完了表情を通知 |
@@ -46,6 +46,7 @@ dual 通知の Producer は `publish_*` helper を使う。
 | `SaveLoadOutcome` | `bevy_app::systems::save` / `SavePlugin` | `Last::SaveLoadApplySet` dispatcher | root通知adapter（次の`Update::NotificationSystemSet::Adapt`） | requestごとにterminal resultを1件。world replacementの全reset後に発行し、targetは安全なファイル名label、failureはraw textを持たない10分類 |
 | `TaskActionOutcome` | `bevy_app::interface::ui::panels::task_list::actions` / `MessagesPlugin` | `apply_task_action_intents_system` | task action通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | priority/cancel intentごとに1件。成功、stale、unsupported、pause、captureをtyped resultで表し、Entity/action/resultをdedupe keyへ含める |
 | `StockpilePolicyChangeOutcome` | `hw_logistics::stockpile_policy_change` / `MessagesPlugin` | `apply_stockpile_policy_change_requests_system` | Stockpile policy通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | policy change requestごとに1件。変更、同値、stale、特殊設備、capacity clamp、重複を件数だけで表し、player-safeなToastOnly通知へ変換する |
+| `FamiliarSettingsChangeOutcome` | `hw_familiar_ai::familiar_ai::settings` / root `MessagesPlugin` | UI adapter の pause/modal rejection、または `apply_familiar_settings_change_requests_system` | Familiar settings通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | target batchごとに1件。通常Applied/Unchangedは通知しない。全作業禁止はWarning、roster解放はInfo、stale/missing/pause-modal rejectionはtyped Warning/Errorへ変換する |
 | `UserFacingNotification` | `hw_ui::notifications` / `HwUiPlugin` | save/load root adapterなど | `NotificationSystemSet::Reduce` → `Present`（同じUpdate） | 表示専用Message。stable key、severity、safe title/body、retentionを持つ。2秒dedupe、toast 3件、重要履歴64件へreduce |
 
 配置プレビューは連続状態であり、毎フレームMessageを発行しない。`PlacementFeedbackState` resourceの
@@ -71,12 +72,13 @@ dual 通知の Producer は `publish_*` helper を使う。
 | `EncouragementRequest` | `Message` | Familiar AI execute 層 | 激励システム | Soul へのバイタル改善 |
 | `FamiliarIdleVisualRequest` | `Message` | Familiar AI 状態遷移時 | visual アダプタ | Idle 遷移時の表示更新 |
 | `GatheringSpawnRequest` | `Message` | `hw_soul_ai` 内の集会ロジック | root visual アダプタ | 集会スポットの生成 |
-| `SoulTaskUnassignRequest` | `Message` | `hw_familiar_ai`（分隊解放・使役数超過）/ area_selection のユーザー取消 | `hw_soul_ai::handle_soul_task_unassign_system`（SoulAiSystemSet::Perceive）| 魂のタスク解除（`AssignedTask`リセット・インベントリ回収・予約解放）。area_selection は Perceive 前の `ApplyDeferred` を通し、同じ Update の Execute より先に適用する |
+| `SoulTaskUnassignRequest` | `Message` | `hw_familiar_ai`（分隊解放・settings commitによるroster縮小）/ area_selection のユーザー取消 | `hw_soul_ai::handle_soul_task_unassign_system`（SoulAiSystemSet::Perceive）| 魂のタスク解除（`AssignedTask`リセット・インベントリ回収・予約解放）。area_selection と settings commit は Perceive 前の `ApplyDeferred` を通し、同じ Update の Execute より先に適用する |
 | `DamnedSoulSpawnEvent` | `Message`（`bevy_app::entities::damned_soul`、root inventory登録） | startup / periodic population / debug spawn | `soul_spawning_system` | 位置と固定step fixture用random keyを渡し、Soul shellを生成 |
 | `FamiliarSpawnEvent` | `Message`（`bevy_app::entities::familiar`、root inventory登録） | startup / debug spawn | `familiar_spawning_system` | 位置・Familiar種別・fixture random keyを渡し、Familiar shellを生成 |
 | `RequestConversation` | `Message`（`hw_visual::speech::conversation::events`、root inventory登録） | `check_conversation_triggers` | `handle_conversation_requests` | initiator/targetを再検証して会話participant状態を開始 |
 | `UiIntent::AdjustTaskPriority` / `CancelTask` | `Message` variant (`hw_ui::UiIntent`) | task dashboard action button system | root `handle_ui_intent` 後の `apply_task_action_intents_system` | Entity、expected WorkType、adjustment/cancel kindを渡す。Pause/Modal中もreaderをdrainし、live capabilityを再検証して`TaskActionOutcome`を1件発行する |
 | `StockpilePolicyChangeRequest` | `Message` (`hw_logistics::stockpile_policy_change`、root inventory登録) | root `handle_ui_intent`（単一・矩形の `UiIntent::ApplyStockpilePolicy` を変換） | `apply_stockpile_policy_change_requests_system`（Interface、通知Adapt前） | targetsを決定的に重複除去し、生存と`Stockpile + StockpilePolicy`を再検証してpatchを適用。同値componentは書き戻さず、在庫relationshipを変更しない |
+| `FamiliarSettingsChangeRequest` | `Message` (`hw_familiar_ai::familiar_ai::settings`、root inventory登録) | root `handle_ui_intent`（Entity List / Operation dialog の typed patchを変換） | `apply_familiar_settings_change_requests_system`（Logic冒頭の`FamiliarSettingsApplySet`、Familiar Perceive前） | targetを安定順、同targetのpatchをFIFOで再生してfinal operation/policyとroster解放を一括commitする。target batchごとにoutcomeを1件発行し、world replacementでは未消費requestをclearする |
 
 ---
 

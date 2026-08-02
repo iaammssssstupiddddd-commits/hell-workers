@@ -133,7 +133,11 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 - `TaskAssignmentQueries` は `ReservationAccess` / `DesignationAccess` / `StorageAccess` と `TaskAssignmentReadAccess` に分割し、読み取り系と更新系の境界を明確化する。
 - `apply_task_assignment_requests_system` は「ワーカー受理判定」「idle正規化」「予約適用」「DeliveringTo付与」「イベント発火」の責務に分けて拡張する。
 - `apply_task_assignment_requests_system` の登録責務は `hw_soul_ai::SoulAiCorePlugin` が持つ。`task_execution_system` / `apply_pending_building_move_system` / `idle_behavior_apply_system` / `escaping_apply_system` / `cleanup_commanded_souls_system` / `gathering_separation_system` / `escaping_decision_system` / `drifting_decision_system` / `gathering_mgmt_*` / `familiar_influence_unified_system` も `SoulAiCorePlugin` に一本化済み（2026-03-17）。root 側の `SoulAiPlugin` は `ApplyDeferred` フェーズ間同期マーカーと `gathering_spawn_system`（`GameAssets` 依存）のみを登録する。
-- `hw_familiar_ai` から `hw_soul_ai` への直接依存は排除済み（2026-03-17）。分隊解放（`squad_logic_system`）・使役数超過リリース（`max_soul_logic_system`）でのタスク解除は `SoulTaskUnassignRequest`（`hw_core::events`）イベントで Pub/Sub パターンに移行。`hw_familiar_ai` がイベントを送信し、`hw_soul_ai::execute::task_unassign_apply::handle_soul_task_unassign_system`（`SoulAiSystemSet::Perceive` 登録）が受信・処理する。
+- `hw_familiar_ai` から `hw_soul_ai` への直接依存は排除済み（2026-03-17）。分隊解放
+  （`squad_logic_system`）とFamiliar settingsの最大数減少によるroster releaseは
+  `SoulTaskUnassignRequest`（`hw_core::events`）で受け渡す。`hw_familiar_ai` がrequestを送信し、
+  `hw_soul_ai::execute::task_unassign_apply::handle_soul_task_unassign_system`
+  （`SoulAiSystemSet::Perceive` 登録）が受信・処理する。
 - `apply_reservation_requests_system` の登録責務は `hw_logistics::LogisticsPlugin`（`SoulAiSystemSet::Execute`）に移設済み（2026-03-17）。
 - `DesignationSpatialGrid` / `TransportRequestSpatialGrid` の `init_resource` は `bevy_app::SpatialPlugin` に移設済み（2026-03-17）。
 - Soul 側の集会発生は `hw_soul_ai::soul_ai::execute::gathering_spawn::gathering_spawn_logic_system` が `GatheringSpawnRequest` を emit し、root `execute/gathering_spawn.rs` が `GameAssets` を使う visual spawn を担当する。adapter 側は request 消費時に initiator の task / relationship / idle 状態を再検証し、同一フレームで stale になった要求を破棄する。
@@ -471,6 +475,12 @@ Stockpile方針では`handle_ui_intent`が単一・範囲の両操作を同じty
 `hw_logistics::apply_stockpile_policy_change_requests_system`がlive対象を再検証して変更とoutcome発行を行う。
 Widget / root adapter は`StockpilePolicy`や在庫relationshipを直接変更しない。
 
+Familiar OperationではInterfaceのhandlerがexact targetを再検証して
+`FamiliarSettingsChangeRequest`へ変換する。次の非pause Logic冒頭でroot登録の
+`FamiliarSettingsApplySet`がtarget単位のFIFO batchを一度だけcommitし、`ApplyDeferred`後に
+Familiar Perceiveへ進む。Widget / root adapterは`FamiliarOperation` / `FamiliarPolicy` /
+roster relationshipを直接変更しない。
+
 結果通知は `NotificationSystemSet::Adapt → Reduce → Present` を同じInterface phase内でchainする。save/load adapterが
 `UserFacingNotification`を書いた同じUpdateでreducerとrendererまで到達する。配置feedbackは
 `PlacementFeedbackSet::Produce → Present → Commit`をchainし、previewで表示した同じvalidatorをcommitで再実行する。
@@ -479,10 +489,10 @@ Widget / root adapter は`StockpilePolicy`や在庫relationshipを直接変更�
 
 | ファイル | 理由 |
 |:---|:---|
-| `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs`, `mode.rs` | PlayMode 遷移、app_contexts、`FamiliarOperation` などのゲーム依存 state / handler |
+| `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs`, `mode.rs` | PlayMode 遷移、app_contexts、Familiar settingsのtyped request変換などのゲーム依存 state / handler |
 | `list/change_detection.rs` | ゲームコンポーネントの Changed 監視 |
 | `list/view_model.rs`, `spawn/`, `sync/` | ゲームエンティティ → UI ノード変換 |
-| `list/drag_drop.rs`, `list/interaction.rs`, `navigation.rs` | FamiliarOperation, TaskContext 等 |
+| `list/drag_drop.rs`, `list/interaction.rs`, `navigation.rs` | Familiar settings intent、TaskContext 等 |
 | `panels/context_menu.rs` | Familiar, DamnedSoul, Building, Door 分類 |
 | `panels/task_list/view_model.rs`, `presenter.rs`, `update.rs` | ゲームクエリ、`Res<GameAssets>` |
 | `presentation/` | EntityInspectionQuery（ゲームエンティティ集約）|

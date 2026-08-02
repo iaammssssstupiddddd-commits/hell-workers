@@ -341,6 +341,74 @@ mod tests {
     }
 
     #[test]
+    fn two_rest_area_demands_designate_two_trees_for_one_familiar() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<WorldMap>()
+            .init_resource::<WalkabilityConnectivityCache>()
+            .init_resource::<BlueprintAutoGatherTimer>()
+            .add_systems(Update, blueprint_auto_gather_system);
+
+        let area_min = WorldMap::grid_to_world(35, 35);
+        let area_max = WorldMap::grid_to_world(45, 45);
+        let familiar = app
+            .world_mut()
+            .spawn((
+                ActiveCommand {
+                    command: FamiliarCommand::Patrol,
+                },
+                TaskArea::from_points(area_min, area_max),
+                Transform::from_translation(WorldMap::grid_to_world(40, 40).extend(0.0)),
+            ))
+            .id();
+
+        for occupied_grid in [(38, 38), (42, 38)] {
+            let blueprint = app
+                .world_mut()
+                .spawn(Blueprint::new(BuildingType::RestArea, vec![occupied_grid]))
+                .id();
+            app.world_mut().spawn((
+                TransportRequest {
+                    kind: TransportRequestKind::DeliverToBlueprint,
+                    anchor: blueprint,
+                    resource_type: ResourceType::Wood,
+                    issued_by: familiar,
+                    priority: TransportPriority::Normal,
+                    stockpile_group: Vec::new(),
+                },
+                TargetBlueprint(blueprint),
+            ));
+        }
+
+        let trees = [(39, 41), (41, 41)].map(|grid| {
+            app.world_mut()
+                .spawn((
+                    Tree,
+                    Transform::from_translation(
+                        WorldMap::grid_to_world(grid.0, grid.1).extend(0.0),
+                    ),
+                ))
+                .id()
+        });
+
+        app.update();
+
+        for tree in trees {
+            let tree_ref = app.world().entity(tree);
+            assert_eq!(
+                tree_ref
+                    .get::<Designation>()
+                    .map(|designation| designation.work_type),
+                Some(WorkType::Chop)
+            );
+            assert_eq!(
+                tree_ref.get::<ManagedBy>().map(|owner| owner.0),
+                Some(familiar)
+            );
+        }
+    }
+
+    #[test]
     fn bridge_flexible_demand_uses_reachable_rock_over_unreachable_trees() {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)

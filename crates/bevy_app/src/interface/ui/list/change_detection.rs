@@ -106,6 +106,7 @@ pub fn advance_entity_list_value_cadence_system(
 mod tests {
     use super::*;
     use crate::test_support::minimal_app;
+    use hw_ui::list::dirty::ENTITY_LIST_VALUE_SYNC_INTERVAL;
 
     #[test]
     fn consumes_all_structure_removal_readers_in_one_update() {
@@ -145,5 +146,35 @@ mod tests {
                 .resource::<EntityListDirty>()
                 .needs_structure_sync()
         );
+    }
+
+    #[test]
+    fn familiar_operation_change_requests_entity_list_value_sync() {
+        let mut app = minimal_app();
+        app.init_resource::<EntityListDirty>()
+            .init_resource::<EntityListSearchState>()
+            .add_systems(Update, detect_entity_list_changes);
+        let familiar = app
+            .world_mut()
+            .spawn((Familiar::default(), FamiliarOperation::default()))
+            .id();
+        app.update();
+        app.world_mut()
+            .resource_mut::<EntityListDirty>()
+            .clear_all();
+
+        app.world_mut()
+            .get_mut::<FamiliarOperation>(familiar)
+            .unwrap()
+            .max_controlled_soul = 1;
+        app.update();
+        {
+            let mut dirty = app.world_mut().resource_mut::<EntityListDirty>();
+            dirty.advance_value_gate(ENTITY_LIST_VALUE_SYNC_INTERVAL);
+        }
+
+        let dirty = app.world().resource::<EntityListDirty>();
+        assert!(!dirty.needs_structure_sync());
+        assert!(dirty.needs_value_sync_only());
     }
 }

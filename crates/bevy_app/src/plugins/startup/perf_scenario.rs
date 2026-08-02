@@ -5,7 +5,9 @@ use crate::entities::damned_soul::{
     DamnedSoul, Destination, GatheringBehavior, IdleBehavior, IdleState, Path,
 };
 #[cfg(feature = "profiling")]
-use crate::entities::familiar::{ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation};
+use crate::entities::familiar::{
+    ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarPolicy,
+};
 #[cfg(feature = "profiling")]
 use crate::systems::command::TaskArea;
 #[cfg(feature = "profiling")]
@@ -38,11 +40,11 @@ use hw_core::visual_mirror::construction::BlueprintVisualState;
 #[cfg(feature = "profiling")]
 use hw_familiar_ai::familiar_ai::decide::resources::FamiliarDelegationPerfMetrics;
 #[cfg(feature = "profiling")]
-use hw_jobs::GatherPhase;
-#[cfg(feature = "profiling")]
 use hw_jobs::construction::{
     FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
 };
+#[cfg(feature = "profiling")]
+use hw_jobs::{GatherPhase, HaulPhase};
 #[cfg(feature = "profiling")]
 use hw_soul_ai::soul_ai::execute::task_execution::TaskExecutionPerfMetrics;
 #[cfg(feature = "profiling")]
@@ -80,14 +82,18 @@ mod workload_driver;
 #[cfg(feature = "profiling")]
 pub(crate) use capture_driver::{drive_perf_capture_system, start_perf_capture_system};
 pub use config::{
-    PerfRenderMode, PerfScenarioConfig, PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
+    PerfFamiliarPolicyMode, PerfOperationDialogMode, PerfRenderMode, PerfScenarioConfig,
+    PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use config::{is_fixed_step_audit, is_not_fixed_step_audit};
 #[cfg(feature = "profiling")]
 pub(crate) use fixture::{PerfScenarioApplied, PerfScenarioDriverState, PerfScenarioSet};
 #[cfg(feature = "profiling")]
-pub use fixture::{setup_perf_scenario_if_enabled, setup_perf_scenario_runtime_if_enabled};
+pub use fixture::{
+    setup_perf_scenario_if_enabled, setup_perf_scenario_runtime_if_enabled,
+    setup_perf_ui_mode_if_enabled,
+};
 #[cfg(feature = "profiling")]
 pub(crate) use workload_driver::drive_perf_workload_system;
 
@@ -99,7 +105,10 @@ use audit_checksum::{
 #[cfg(feature = "profiling")]
 use audit_encoding::*;
 #[cfg(feature = "profiling")]
-use config::{FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS, PERF_SUMMARY_SCHEMA_VERSION};
+use config::{
+    FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS, PERF_DETERMINISM_SCHEMA_VERSION,
+    PERF_SUMMARY_SCHEMA_VERSION,
+};
 #[cfg(feature = "profiling")]
 use fixture::{PerfFixtureKind, PerfFixtureMarker};
 #[cfg(feature = "profiling")]
@@ -176,7 +185,42 @@ struct PerfDeterminismCheckpoint {
     virtual_paused: bool,
     virtual_relative_speed_bits: u64,
     virtual_effective_speed_bits: u64,
+    structural_checksum: PerfScenarioChecksum,
     checksum: PerfScenarioChecksum,
+    familiar_ai_work: PerfFamiliarAiWorkSnapshot,
+}
+
+#[cfg(feature = "profiling")]
+#[derive(Clone, Copy)]
+struct PerfFamiliarAiWorkSnapshot {
+    delegation_cycles: u32,
+    familiars_processed: u32,
+    candidate_membership_checks: u32,
+    policy_disabled_rejections: u32,
+    candidate_snapshot_attempts: u32,
+    candidate_score_attempts: u32,
+    worker_score_attempts: u32,
+    source_selector_calls: u32,
+    source_selector_scanned_items: u32,
+    reachable_with_cache_calls: u32,
+}
+
+#[cfg(feature = "profiling")]
+impl From<&FamiliarDelegationPerfMetrics> for PerfFamiliarAiWorkSnapshot {
+    fn from(metrics: &FamiliarDelegationPerfMetrics) -> Self {
+        Self {
+            delegation_cycles: metrics.delegation_cycles,
+            familiars_processed: metrics.familiars_processed,
+            candidate_membership_checks: metrics.candidate_membership_checks,
+            policy_disabled_rejections: metrics.policy_disabled_rejections,
+            candidate_snapshot_attempts: metrics.candidate_snapshot_attempts,
+            candidate_score_attempts: metrics.candidate_score_attempts,
+            worker_score_attempts: metrics.worker_score_attempts,
+            source_selector_calls: metrics.source_selector_calls,
+            source_selector_scanned_items: metrics.source_selector_scanned_items,
+            reachable_with_cache_calls: metrics.reachable_with_cache_calls,
+        }
+    }
 }
 
 /// 固定 step auditでchecksumの差分をactor単位まで追跡するための記録。
@@ -226,6 +270,7 @@ type PerfAuditFamiliarQuery<'w, 's> = Query<
         &'static Path,
         &'static ActiveCommand,
         &'static FamiliarOperation,
+        &'static FamiliarPolicy,
         &'static FamiliarAiState,
         Option<&'static SimulationRandomState>,
     ),

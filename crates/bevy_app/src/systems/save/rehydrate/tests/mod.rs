@@ -1,7 +1,8 @@
 use super::{
     BlueprintSpriteHandles, clear_rehydrate_presentation, rehydrate_construction_runtime,
-    rehydrate_construction_shells, rehydrate_obstacle_runtime, rehydrate_soul_shells,
-    rehydrate_stockpile_policies, validate_rehydrate_prerequisites,
+    rehydrate_construction_shells, rehydrate_familiar_settings, rehydrate_obstacle_runtime,
+    rehydrate_shells, rehydrate_soul_shells, rehydrate_stockpile_policies,
+    validate_rehydrate_prerequisites,
 };
 use crate::entities::damned_soul::{Gender, SoulIdentity};
 use crate::plugins::startup::Building3dHandles;
@@ -78,6 +79,19 @@ fn empty_material_icon_handles() -> MaterialIconHandles {
     }
 }
 
+fn empty_soul_task_handles() -> hw_core::visual::SoulTaskHandles {
+    hw_core::visual::SoulTaskHandles {
+        wood: Handle::default(),
+        tree_animes: Vec::new(),
+        rock: Handle::default(),
+        icon_bone_small: Handle::default(),
+        icon_sand_small: Handle::default(),
+        icon_stasis_mud_small: Handle::default(),
+        bucket_water: Handle::default(),
+        bucket_empty: Handle::default(),
+    }
+}
+
 #[derive(Resource, Default)]
 struct LogicRunCount(u32);
 
@@ -91,6 +105,7 @@ fn component_count<T: Component>(world: &mut World) -> usize {
 }
 
 mod construction;
+mod familiar_settings;
 mod obstacles;
 mod presentation;
 mod stockpile_policy;

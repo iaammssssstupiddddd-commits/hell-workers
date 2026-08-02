@@ -182,7 +182,10 @@ mod tests {
     use bevy::reflect::Reflect;
 
     use hw_core::GameTime;
-    use hw_core::familiar::Familiar;
+    use hw_core::familiar::{
+        Familiar, FamiliarOperation, FamiliarPolicy, FamiliarWorkPriority, FamiliarWorkRule,
+    };
+    use hw_core::jobs::WorkType;
     use hw_core::population::PopulationManager;
     use hw_core::relationships::{CommandedBy, Commanding};
     use hw_core::soul::{DamnedSoul, DreamPool};
@@ -190,6 +193,7 @@ mod tests {
     use hw_world::WorldMap;
 
     use super::*;
+    use crate::systems::save::rehydrate::rehydrate_familiar_settings;
     use crate::systems::save::schema::{
         build_persisted_world, collect_persisted_entities, register_save_types,
     };
@@ -361,6 +365,102 @@ mod tests {
                 .iter(live.world())
                 .count(),
             0
+        );
+    }
+
+    #[test]
+    fn invalid_saved_familiar_roster_recovers_the_previous_durable_settings_and_relationships() {
+        let mut live = app_with_save_schema();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        let mut expected_policy = FamiliarPolicy::default();
+        expected_policy.set_rule(
+            WorkType::Haul,
+            FamiliarWorkRule {
+                allowed: false,
+                priority: FamiliarWorkPriority::High,
+            },
+        );
+        let expected_operation = FamiliarOperation {
+            fatigue_threshold: 0.7,
+            max_controlled_soul: 3,
+        };
+        let live_familiar = live
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                expected_operation.clone(),
+                expected_policy.clone(),
+            ))
+            .id();
+        live.world_mut()
+            .spawn((DamnedSoul::default(), CommandedBy(live_familiar)));
+        live.world_mut().flush();
+
+        let mut incoming_source = app_with_save_schema();
+        insert_persisted_resources(incoming_source.world_mut(), 99.0);
+        let incoming_familiar = incoming_source
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                FamiliarOperation {
+                    fatigue_threshold: 0.2,
+                    max_controlled_soul: 1,
+                },
+                FamiliarPolicy::default(),
+            ))
+            .id();
+        for _ in 0..2 {
+            incoming_source
+                .world_mut()
+                .spawn((DamnedSoul::default(), CommandedBy(incoming_familiar)));
+        }
+        incoming_source.world_mut().flush();
+        let incoming = capture_from_app(&mut incoming_source);
+
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let result = replace_persisted_world(live.world_mut(), &incoming, &registry, |world| {
+            rehydrate_familiar_settings(world).map_err(|error| error.to_string())
+        });
+
+        assert!(matches!(
+            result,
+            Err(CommitError::Recovered { ref cause })
+                if cause.contains("must cover its Commanding roster")
+        ));
+        assert_eq!(live.world().resource::<GameTime>().seconds, 1.0);
+
+        let restored_familiars: Vec<_> = live
+            .world_mut()
+            .query_filtered::<Entity, With<Familiar>>()
+            .iter(live.world())
+            .collect();
+        assert_eq!(restored_familiars.len(), 1);
+        let restored_familiar = restored_familiars[0];
+        assert_eq!(
+            live.world().get::<FamiliarOperation>(restored_familiar),
+            Some(&expected_operation)
+        );
+        assert_eq!(
+            live.world().get::<FamiliarPolicy>(restored_familiar),
+            Some(&expected_policy)
+        );
+        assert_eq!(
+            live.world()
+                .get::<Commanding>(restored_familiar)
+                .unwrap()
+                .iter()
+                .count(),
+            1
+        );
+        let restored_soul = live
+            .world_mut()
+            .query_filtered::<Entity, With<DamnedSoul>>()
+            .single(live.world())
+            .unwrap();
+        assert_eq!(
+            live.world().get::<CommandedBy>(restored_soul).unwrap().0,
+            restored_familiar
         );
     }
 

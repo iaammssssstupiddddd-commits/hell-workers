@@ -334,8 +334,10 @@ mod tests {
     use super::*;
     use crate::world::map::GeneratedWorldLayoutResource;
     use hw_core::GameTime;
+    use hw_core::familiar::{Familiar, FamiliarOperation, FamiliarPolicy};
     use hw_core::logistics::ResourceType;
     use hw_core::population::PopulationManager;
+    use hw_core::relationships::{CommandedBy, Commanding};
     use hw_core::soul::DreamPool;
     use hw_jobs::Building;
     use hw_jobs::mud_mixer::MudMixerStorage;
@@ -348,7 +350,7 @@ mod tests {
     use hw_world::Yard;
 
     use super::super::format::{SaveHeader, encode_save_file};
-    use super::super::rehydrate::rehydrate_stockpile_policies;
+    use super::super::rehydrate::{rehydrate_familiar_settings, rehydrate_stockpile_policies};
     use super::super::schema::{
         build_persisted_world, collect_persisted_entities, register_save_types,
     };
@@ -631,6 +633,71 @@ mod tests {
                 loaded
                     .get::<BucketStorage>(entity_map[&legacy_companion])
                     .is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn missing_familiar_settings_migrate_from_serialized_v0_and_v1_rosters() {
+        use bevy::ecs::entity::EntityHashMap;
+
+        let mut source = legacy_loader_test_app();
+        let familiar = source.world_mut().spawn(Familiar::default()).id();
+        let souls = [
+            source.world_mut().spawn(CommandedBy(familiar)).id(),
+            source.world_mut().spawn(CommandedBy(familiar)).id(),
+            source.world_mut().spawn(CommandedBy(familiar)).id(),
+        ];
+        source.world_mut().flush();
+
+        let type_registry = source.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let roots = collect_persisted_entities(source.world_mut());
+        let body = build_persisted_world(source.world(), &registry, roots.into_iter())
+            .serialize(&registry)
+            .unwrap();
+        drop(registry);
+        assert!(!body.contains(FamiliarOperation::type_path()));
+        assert!(!body.contains(FamiliarPolicy::type_path()));
+
+        let fixtures = [
+            body.clone(),
+            encode_save_file(SaveHeader::current(42), &body),
+        ];
+        for contents in fixtures {
+            let loader = legacy_loader_test_app();
+            let prepared = prepare_load_from_str(loader.world(), &contents).unwrap();
+            let type_registry = loader.world().resource::<AppTypeRegistry>().clone();
+            let registry = type_registry.read();
+            let mut loaded = World::new();
+            let mut entity_map = EntityHashMap::default();
+            prepared
+                .dynamic_world
+                .write_to_world_with(&mut loaded, &mut entity_map, &registry)
+                .unwrap();
+            drop(registry);
+
+            rehydrate_familiar_settings(&mut loaded).unwrap();
+
+            let loaded_familiar = entity_map[&familiar];
+            assert_eq!(
+                loaded
+                    .get::<FamiliarOperation>(loaded_familiar)
+                    .unwrap()
+                    .max_controlled_soul,
+                souls.len()
+            );
+            assert_eq!(
+                loaded.get::<FamiliarPolicy>(loaded_familiar),
+                Some(&FamiliarPolicy::default())
+            );
+            assert_eq!(
+                loaded
+                    .get::<Commanding>(loaded_familiar)
+                    .unwrap()
+                    .iter()
+                    .count(),
+                souls.len()
             );
         }
     }

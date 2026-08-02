@@ -19,7 +19,7 @@ Bevy 0.19 の Relationship は **Source 側を操作すれば Target 側が自�
 | `WorkingOn(task)` ← Soul | `TaskWorkers` ← task | `apply_task_assignment_requests` (Execute) | `task_execution_system` 完了時 / `unassign_task` |
 | `ManagedBy(familiar)` ← task | `ManagedTasks` ← familiar | request producer / `apply_designation_requests` | task despawn 時 |
 | `StoredIn(stockpile)` ← item | `StoredItems` ← stockpile | Haul dropping フェーズ | 持ち出し時 (`unassign_task` / haul picking) |
-| `DeliveringTo(dest)` ← item | `IncomingDeliveries` ← dest | `apply_task_assignment_requests` (Execute) | タスク完了・`unassign_task` |
+| `DeliveringTo(dest)` ← item | `IncomingDeliveries` ← dest | `apply_task_assignment_requests` (Execute) | タスク完了・中断・`unassign_task`（pickup 前も task payload から除去） |
 | `CommandedBy(familiar)` ← Soul | `Commanding` ← familiar | squad加入 / `prepare_worker_for_task_apply` | squad release・使役数超過・`OnExhausted`・`OnStressBreakdown` 等のowner lifecycle |
 
 **エンティティ despawn 時**: そのエンティティの全 Relationship が Bevy によって自動除去され、Target 側も自動更新される（例: Soul が despawn すると `TaskWorkers` から自動削除）。
@@ -33,7 +33,7 @@ Bevy 0.19 の Relationship は **Source 側を操作すれば Target 側が自�
 | `Designation` | request producer (Decide) / `apply_designation_requests` (Execute) | `DesignationSpatialGrid`（Change Detection、次フレームで反映）| **削除 = タスク消滅**。`unassign_task` は削除しない（再試行を許可）|
 | `AssignedTask` | `apply_task_assignment_requests` (Execute) | `task_execution_system` (Execute) | `complete_task` / `complete_after_custom_cleanup` が context 内で正常終了を確定した場合だけ `OnTaskCompleted` を発行 |
 | `Inventory(Option<Entity>)` | Haul系のpickup/drop handler、`unassign_task` | task execution / visual mirror | Soulの携行品の正本。Relationshipではなく1slot componentで、pickup時に`Some(item)`、drop/cleanup時に`None`へ更新する |
-| `TaskSlots` | request producer | `task_finder/filter` | `TaskWorkers.len()` と照合される（Target は自動） |
+| `TaskSlots` | request producer | `task_finder/filter` / `apply_task_assignment_requests` | 候補時と確定時の両方で `TaskWorkers.len()` と照合する。確定systemは同じmessage batchで先に受理した人数も加算する（Target は自動） |
 
 ### 2.3 SharedResourceCache（予約の調整点）
 
@@ -54,10 +54,13 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 3. **`DesignationSpatialGrid` または `TransportRequestSpatialGrid` に登録されている**（Change Detection、スポーン後の次フレームで反映）、または `ManagedTasks` に入っている。例外として `Build` と Yard-owned Designation は補助全件走査からも収集される
 4. ⚠️ **Haul系 WorkType** (`Haul` / `HaulToMixer` / `GatherWater` / `HaulWaterToMixer` / `WheelbarrowHaul`) は **`TransportRequest` コンポーネントが必須** — なければサイレントにフィルタされ、エラー・ログなし
 5. ownership チェック通過: ManagedTasks 内 / unassigned / issued_by 一致 / issued_by が Yard / エリア重複の引き継ぎ
-6. `TaskWorkers.len() < TaskSlots.max`（デフォルト 1）
-7. 通常タスクは Familiar の `TaskArea` 内、Yard 内（全使い魔共通）、または ManagedTasks 内。Mixer / Build / Yard-owned タスクはこの位置制約を越えて候補になれる
-8. WorkType 別の状態チェック通過（Build: 資材完了済み / ReinforceFloorTile: `ReinforcingReady` / CoatWall: `is_provisional == true` 等）
-9. スコア計算が `Some(priority)` を返す（None = スコア計算不能で除外）
+6. candidate universe への membership と diagnostics の applicable evidence を記録した後、
+   `FamiliarPolicy.rule_for(work_type).allowed` が true。false の候補は `PolicyDisabled` を記録し、
+   `candidate_snapshot`、source / reachability / score 評価へ進まない
+7. `TaskWorkers.len() < TaskSlots.max`（デフォルト 1）
+8. 通常タスクは Familiar の `TaskArea` 内、Yard 内（全使い魔共通）、または ManagedTasks 内。Mixer / Build / Yard-owned タスクはこの位置制約を越えて候補になれる
+9. WorkType 別の状態チェック通過（Build: 資材完了済み / ReinforceFloorTile: `ReinforcingReady` / CoatWall: `is_provisional == true` 等）
+10. スコア計算が `Some(priority)` を返す（None = スコア計算不能で除外）
 
 ## 4. タスクのライフサイクル
 
@@ -89,7 +92,14 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 ### 4.2 割り当て (Assignment)
 
 - `familiar_task_delegation_system`（0.5秒間隔）が root 側 orchestration を担当し、`hw_familiar_ai::familiar_ai::decide::task_management` の core に候補収集・worker 別再スコア（priority 0.65 + 距離 0.35）・assignment build を委譲して `TaskAssignmentRequest` を発行する（Execute で適用）
+- worker base score の後へ、transport policy の -10 / 0 / +10 / +20 unit と
+  Familiar policy の -5 / 0 / +5 unit を共有 helper で一度だけ加算する。1 unit は `0.65 / 40`、
+  最終 score は clamp しない。default / Normal の Familiar policy は 0 unit なので従来 score と
+  bit 単位で一致し、Top-K と fallback は同じ合成済み score を使う
 - 割り当て時に `DeliveringTo`・`WorkingOn`・`CommandedBy` を設定し、ソース（資材・バケツ等）を遅延解決
+- Execute の確定時に `TaskSlots.max` を current `TaskWorkers` と同じ message batch 内の先行受理数へ
+  再照合する。Familiar delegation / Blueprint auto-build など複数 producer が同時に要求しても、
+  1枠 task を過剰確定しない
 - `ConstructionSiteAccess` は root から注入され、floor / wall / provisional wall の construction site 座標解決だけを補助する
 - **排他制御**: `SharedResourceCache` を参照（§2.3 参照）
 - **Haul 系の需要再検証**: `DeliverToBlueprint` / `DepositToStockpile` / `DeliverToFloorConstruction` / `DeliverToWallConstruction` / `DeliverToProvisionalWall` は、`IncomingDeliveries` に加えて Think フェーズ内の `ReservationShadow` も差し引いた残需要が 0 の場合、新規 `AssignedTask` を発行しない。
@@ -99,17 +109,24 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 
 割り当て producer は通常の判定 cycle の副産物として latest-only 診断を公開する。UI 専用の候補探索は行わない。
 
-- `hw_jobs` は表示非依存の 5 分類、producer mask、fixed-width counter、coverage、input stamp / revision を所有する。
+- `hw_jobs` は表示非依存の 6 分類、producer mask、fixed-width counter、coverage、input stamp / revision を所有する。
+  `PolicyDisabled` は固定 index 5、`TASK | ROSTER` domain を持ち、UI では
+  `Blocked: Disabled by familiar policy` と表示する。
 - Familiar delegation は candidate universe に含まれた task だけを applicable とし、Familiar ごとの worker / source 分岐を
   1 terminal vote へ縮約する。submit、未評価、malformed / stale は blocker 票にしない。
+- idle worker を持つ applicable Familiar evaluator がすべて complete rejection となり、その全 terminal vote が
+  policy-only の場合だけ Familiar producer を `PolicyDisabled` とする。idle worker 0 は
+  `NoEligibleFamiliar`、別 terminal reason、submit、partial、stale の混在は policy-only にしない。
 - `ManagedBy` のない Blueprint `Build` は Familiar delegation と Blueprint auto-build の両 producer が applicable。
   `ManagedBy` 付き Blueprint と Blueprint ではない `Build` は auto-build が適用外で、Familiar delegation だけを使う。
-  applicable producer の snapshot が欠ける、stale、または coverage 不足なら `PendingEvaluation` のままにする。
+  applicable producer の snapshot が欠ける、stale、または coverage 不足なら `PendingEvaluation` のままにし、
+  Familiar の policy-only 一票で auto-build producer の結果を上書きしない。
 - `TaskWorkers` が現在 1 件以上なら診断より優先して `Working`。submit 済みでも worker がまだいなければ
   accepted の証拠ではないため `PendingEvaluation`。
 - input revision は task、roster / TaskArea、resource / reservation availability、WorldMap topology を追跡する。
   availability は resource grid/cache に加え、`StoredItems` / `IncomingDeliveries` / `Inventory`、資源種別、
   loaded/stored/delivering/owner 関係、wheelbarrow の park/push/lease、transport demand、Stockpile / mixer / Blueprint 容量変更を含む。
+  `Changed/Removed<FamiliarPolicy>` は新しい revision domain を増やさず roster revision を進める。
   task-local revision は Blueprint / Floor / Wall phase、`ManagedBy`、request / demand も含む。record は代表理由が実際に
   依存する domain だけを持ち、producer header は Soul eligibility を表す roster stamp で evaluator coverage を検証する。
 - producer map は cycle ごとに置換し、task × evaluator の行列や履歴を保持しない。
@@ -121,6 +138,7 @@ delegation が診断する。これにより新規 task を古い revision で `
 
 - `task_execution_system`は`AssignedTask::None`をread-onlyで早期除外し、idle Soulのtask context用mutable accessを作らない。`WorkingOn`はfilter条件にしないため、target消滅後の`AssignedTask::Some + Without<WorkingOn>`も既存handler/cleanupへ到達する。
 - Actor移動の再探索、task handler、bucket routing が `RuntimePathSearchBudget` 不足で `Deferred` になった場合は、到達不能・タスク中断ではない。`AssignedTask`、phase、予約、`WorkingOn`、`Destination`、`Path`を維持して次フレームに再試行する。task/bucket の direct 探索が失敗後に adjacent 探索で defer した場合は、direct を繰り返さず adjacent 段階から再開する。
+- すべての経路探索を実行して `Unreachable` になった運搬は retryable abort へ流す。特に Blueprint 運搬の pickup 前に資材へ到達できない場合は、source予約、`DeliveringTo` / `IncomingDeliveries`、`WorkingOn`を同時に解放し、requestを再割り当て可能に戻す。
 - **採取**: 木=Wood×5、岩=Rock×10ドロップ。Sand/BonePile/砂タイル/河川は無限ソース（即時完了）
 - **運搬 (Haul)**: GoingToSource → Picking → GoingToDestination → Dropping
 - **猫車運搬 (HaulWithWheelbarrow)**: GoingToParking → PickingUpWheelbarrow → GoingToSource → Loading → GoingToDestination → Unloading → ReturningWheelbarrow
@@ -171,10 +189,11 @@ inventory 不整合等の先頭ガードは `unassign_task` を経由する（`A
 **実行すること**:
 1. `emit_abandoned_event=true` なら `OnTaskAbandoned` Message を write（音声のみ）
 2. `SharedResourceCache` の予約を解放（`ResourceReservationOp::Release*` を発行）
-3. `HaulWithWheelbarrow` 中なら積載アイテムを可視化・座標復元、猫車を駐車に戻す
-4. `Inventory` に通常 Haul の携行品があれば地面にドロップしてslotを`None`へ戻す（Designation は **残す** → 再試行可能）
-5. `AssignedTask` を `None` にリセット
-6. `WorkingOn` を削除
+3. Haul系taskのpayloadが保持するitemから`DeliveringTo`を除去する。pickup前で`Inventory == None`でも省略せず、target側`IncomingDeliveries`を解放する
+4. `HaulWithWheelbarrow` 中なら積載アイテムを可視化・座標復元、猫車を駐車に戻す
+5. `Inventory` に通常 Haul の携行品があれば地面にドロップしてslotを`None`へ戻す（Designation は **残す** → 再試行可能）
+6. `AssignedTask` を `None` にリセット
+7. `WorkingOn` を削除
 
 **実行しないこと（呼び出し元の責務）**:
 - `CommandedBy` の削除 → squad release・使役数超過・`OnExhausted` / `OnStressBreakdown`等、使役関係を終了するowner lifecycleが担当

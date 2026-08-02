@@ -92,7 +92,7 @@ RejectedとPartialは見出しとsemantic colorを分ける。
 |---|---|
 | `list/sync.rs` | `Res<GameAssets>` を受けて `hw_ui::list::sync::*` を呼ぶ thin shell |
 | `list/view_model.rs` | `Familiar` / `DamnedSoul` / `AssignedTask` / `FamiliarAiState` などゲーム固有 ECS Query に依存 |
-| `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | `UiIntent::AdjustMaxControlledSoul*` を含むゲーム固有 `UiIntent` を処理する root adapter。`intent_handler.rs` は dispatcher のみで、`FamiliarOperation` 更新や `PlayMode` / `TimeSpeed` / `WorldMapWrite` 依存は `intent_context.rs` と `handlers/` 側に残留 |
+| `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | `UiIntent::ApplyFamiliarSettings*` を含むゲーム固有 `UiIntent` を処理する root adapter。`intent_handler.rs` は dispatcher のみで、Familiar 設定は typed request への変換だけを行う。`PlayMode` / `TimeSpeed` / `WorldMapWrite` 依存は `intent_context.rs` と `handlers/` 側に残留 |
 | `notifications.rs` | `SaveLoadOutcome`はroot save owner型。raw error/pathを渡さず固定文言、severity、dedupe keyへ写像する |
 | `list/interaction/navigation.rs` | `Res<TaskContext>`（ルート定義型）に依存 |
 | `panels/task_list/update.rs` | `Res<GameAssets>` — Bevy は `Res<dyn Trait>` 不可 |

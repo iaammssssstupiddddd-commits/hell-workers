@@ -52,6 +52,29 @@ Familiar エンティティ自身が `WorkingOn` を持ってはならない。
 リリース閾値`0.0`は新規リクルート無効を表し、数値リクルート閾値`0.0`とは区別する。
 既存memberの解放とtask assignmentは保存中のリリース閾値を使い、recruit閾値へ狭めてはならない。
 
+### I-F3: FamiliarPolicy は新規候補だけを制御する
+
+`FamiliarPolicy` の許可・優先度変更は、次の通常 delegation cycleから未割当候補へ反映する。
+実行中の `AssignedTask` / `ActiveTaskIdentity` / `WorkingOn`、予約、`CommandedBy` / `ManagedTasks` を
+方針変更だけで破棄してはならない。休息、recruitment、supervision、stress / escape など
+`WorkType` 外の自己維持処理も policy gate の対象にしない。
+
+### I-F4: Familiar settings の domain writer は原子的な apply systemだけ
+
+UI widget / root adapter は `FamiliarOperation` / `FamiliarPolicy` / roster relationship を直接変更せず、
+`FamiliarSettingsChangeRequest` へ変換する。domain consumerは同targetのpatchをMessage順にFIFO replayし、
+final stateへ一度だけcommitする。最大数減少時はcurrent rosterのreverse orderから超過Soulを一度だけ選び、
+task unassign requestと`CommandedBy`削除を同じcommitで行う。
+
+applyと`ApplyDeferred`は`FamiliarAiSystemSet::Perceive`より前に完了させる。commit後に
+`FamiliarOperation.max_controlled_soul < Commanding.len()`となる保存可能な中間状態を作らない。
+
+### I-F5: 全作業禁止は有効な待機方針
+
+全 `WorkType` の `allowed = false` はrejectしない。Familiarは現在のtaskと自己維持を継続し、
+新規候補だけを `observe_applicable` 後 / `candidate_snapshot` 前のgateで拒否する。
+禁止中もpriorityを保持し、再許可時に以前の`Low / Normal / High`を復元する。
+
 ---
 
 ## 3. タスクシステムの不変条件
@@ -70,6 +93,8 @@ Soulの携行品はRelationshipではなく`hw_logistics::Inventory(Option<Entit
 
 ### I-T3: タスクの二重割当禁止
 1つの task エンティティに対して `TaskWorkers.len() < TaskSlots.max`（デフォルト 1）を超える割り当てをしてはならない。
+producer 側の仮想割当だけを正本にせず、`apply_task_assignment_requests_system` は current
+`TaskWorkers` と同じ message batch で既に受理した人数を合算して確定前に再検証する。
 `SharedResourceCache` による排他制御を迂回してはならない。
 
 ### I-T4: Designation 削除 = タスク消滅
@@ -95,6 +120,9 @@ AutoGather では `ApplyDeferred` 後の同じ Decide tick に `Chop` / `Mine` �
 - snapshot / record 不在、stale、partial、submitted、未評価、malformed は `PendingEvaluation` とし、理由を推測しない。
 - `ManagedBy` のない Blueprint `Build` は Familiar delegation と Blueprint auto-build の両方を必要とする。
   `ManagedBy` 付き Blueprint / 非 Blueprint の `Build` は auto-build の適用外なので Familiar delegation だけを必要とする。
+- `PolicyDisabled` は current / complete な Familiar evaluator の terminal vote がすべてpolicy-onlyの場合だけ成立する。
+  unowned Blueprint `Build` ではauto-build producerのcurrent / submitted / partial / stale / non-policy evidenceを
+  Familiarのpolicy voteで上書きしない。
 - record は代表理由に必要な domain だけを検証する。availability の変更で roster-only / task-only 理由を
   無条件に stale にしない。一方、producer cycle の evaluator coverage は roster に依存するため、Soul eligibility や
   Familiar 構成が変わった旧 cycle は理由種別にかかわらず stale にする。
@@ -115,6 +143,9 @@ AutoGather では `ApplyDeferred` 後の同じ Decide tick に `Chop` / `Mine` �
 `unassign_task` は `SharedResourceCache` の予約を解放する責務を持つ。
 タスクを中断・放棄する全経路で `unassign_task` を呼ぶこと。
 直接 `AssignedTask` を `None` にリセットすると、`unassign_task` が行う `Release*` 要求の送信と task cleanup を飛ばす。signature 同期は次の Perceive/audit で snapshot を回復する安全網であり、中断経路の代替にしてはならない。
+受理済みHaulはpickup前からitemへ`DeliveringTo`を持つため、中断時は`Inventory`の有無に依存せず
+`AssignedTask` payloadが指すitemのrelationshipも除去しなければならない。source予約だけを解放して
+`IncomingDeliveries`を残すと、存在しない搬入予定が不足需要を相殺し、再割り当てを永久に止める。
 
 ### I-L2: StasisMud / Sand の地面放置制限
 StasisMud と Sand は地面にドロップされた状態で **5秒後に消滅** する。
@@ -309,6 +340,10 @@ root (`bevy_app`) は、window / asset / UI adapter / production plugin wiring �
 セーブ対象エンティティ（Soul / Familiar / Building 等）へ spawn 時に付与するコンポーネントを追加したら、
 永続化すべき simulation 状態なら `systems/save/schema.rs` の型分類へ、
 通常の実行時状態なら対応する `attach_*_shell`（spawn とロード後 rehydrate の共用関数）へ追加する。
+`FamiliarOperation` / `FamiliarPolicy` はdurableであり、root spawnとsave schemaだけが所有する。
+`attach_familiar_shell`へ挿入して保存値をdefaultで上書きしてはならない。
+runtime-only の `ActiveCommand` は durable な `TaskArea` の有無から、load rehydrate 時に
+`Patrol` / `Idle` を再構築する。保存済み TaskArea を持つ Familiar を無条件に Idle へ戻してはならない。
 source-aware obstacle provenance / navigation cache は `rehydrate_obstacle_runtime` の durable source matrix から
 再構築する。どの経路にも登録しないと**ロード後にだけ**そのコンポーネントが欠落するサイレントバグになる。
 `Blueprint` と floor / wall construction の visual mirror は durable component から完成形を作る rehydrate helperへ
@@ -330,6 +365,10 @@ apply時の`EntityHashMap`に記録されたpartial entityを掃除し、同一s
 通常loadと同じreset/finalize（cache reset、runtime正規化、rehydrate）を通す。raw Entity IDやRON bytesではなく、
 Entity remap後のpersistent graphが回復対象である。詳細: [docs/save_load.md](save_load.md)
 
+旧saveで `FamiliarOperation` / `FamiliarPolicy` が欠落している場合だけ互換defaultを補完する。
+保存済みoperationのmaxが保存済みrosterより小さい不整合は推測修復せずapply errorとし、
+pre-loadのoperation / policy / relationshipをtransaction rollbackで復元する。
+
 ### I-P4: world replacementはLastで完結し、旧Entity参照を次frameへ渡さない
 save/loadのapplyは`Last::SaveLoadApplySet`だけが実行し、`Update`のInput/Interfaceは
 `SaveLoadState`への要求発行だけを行う。replace開始後はroot/plugin hookでmessage、selection、UI、visual、
@@ -341,6 +380,8 @@ loaded componentの`Added`/`Changed`は次frameの差分rebuildに残す。syste
 `WorldEpoch`不一致時に最初の利用前にclearし、scratch bufferが毎回clearされる場合だけ例外とする。
 `GatheringSpot`と`ParticipatingIn` / `GatheringParticipants`はruntime-onlyであり、新規saveへ含めず、
 legacy bodyからはschema検証前に除去する。replace hookは旧spotとlinked visualを同時にdespawnする。
+root message inventoryのFamiliar settings request / outcome / roster release visualと、`hw_ui`の
+`OperationDialogState` / target / scroll / static root presentationも同じreplace phaseで同期resetする。
 
 ### I-P5: construction runtime cacheはload中に再構築し、WorldMapを再予約しない
 Floor / Wall construction の `TileSiteIndex`、工程counter、Curing中の`CuringFootprint`は保存しない
@@ -405,6 +446,6 @@ budgeted facadeは実際にcore A*を開始する直前にだけ1枠をclaimす�
 `find_path` / `find_path_to_adjacent` / `find_path_to_boundary` 等は `pub(crate)` とし、
 `hw_world` 内の mapgen validation と unit test だけが unbudgeted core を使う。
 
-枠がない場合の `PathSearchResult::Deferred` は `Unreachable` と同一視してはならない。Actor再探索では`Deferred`時に`PathCooldown`、`Destination`、`Path`、`AssignedTask`、reservation、task dispositionを変更せず、同じ探索段階から再試行する。task handler と bucket routing でも phase、assignment、reservation、`Destination`、`Path` を維持し、direct 探索が失敗して adjacent 探索で defer した場合は adjacent から再開する。escapeの経路距離判定では`EscapeRequest`を出さず、`Escaping`、`Destination`、既存`Path`と評価済み候補を次の行動tickまで維持する。一方、すべての試行が実行されて`Unreachable`となったときだけ従来の到達不能cleanupまたは`ReachSafety`を許可する。
+枠がない場合の `PathSearchResult::Deferred` は `Unreachable` と同一視してはならない。Actor再探索では`Deferred`時に`PathCooldown`、`Destination`、`Path`、`AssignedTask`、reservation、task dispositionを変更せず、同じ探索段階から再試行する。task handler と bucket routing でも phase、assignment、reservation、`Destination`、`Path` を維持し、direct 探索が失敗して adjacent 探索で defer した場合は adjacent から再開する。escapeの経路距離判定では`EscapeRequest`を出さず、`Escaping`、`Destination`、既存`Path`と評価済み候補を次の行動tickまで維持する。一方、すべての試行が実行されて`Unreachable`となったときだけ従来の到達不能cleanupまたは`ReachSafety`を許可する。Blueprint運搬のpickup先が`Unreachable`なら、taskを保持して枠を占有せずretryable cleanupでsource予約と搬入先relationshipを解放する。
 
 escapeはLogic/DecideでActorより先に最大2枠を使う。Execute の task handler / bucket routing は累積4枠まで、続く Actor の `ActiveTask` 再探索は累積6枠まで、idle/rest は累積8枠まで引き上げる。これにより Execute が全枠を使い切らず、Actor 側の task replan に2枠を残す。Actor は `RuntimePathWorkQueue` の `ActiveTask` / `IdleOrRest` class 別 FIFO へ、目的地・task・idle state の変更、cooldown 終了、topology version 変更を投入し、topology 変更時以外に全 Soul を二重走査しない。task handler と escape は最後に core A* を claim した Entity の次から round-robin する。これらの queue、continuation、cursor はすべて `EpochLocal` で保持し、`WorldEpoch` 変更時に旧 world の Entity/request を破棄する。

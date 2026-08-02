@@ -14,11 +14,15 @@ use bevy::prelude::*;
 pub use entities::damned_soul::DamnedSoulPlugin;
 pub use hw_core::events::{
     DesignationRequest, EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent,
-    FamiliarIdleVisualRequest, FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest,
+    FamiliarIdleVisualRequest, FamiliarRosterReleasedVisualMessage, FamiliarStateRequest,
     GatheringManagementRequest, GatheringSpawnRequest, IdleBehaviorRequest, OnExhausted,
     OnGatheringParticipated, OnSoulRecruited, OnStressBreakdown, OnTaskAbandoned, OnTaskAssigned,
     OnTaskCompleted, ResourceReservationRequest, SoulTaskUnassignRequest, SquadManagementOperation,
     SquadManagementRequest,
+};
+pub use hw_familiar_ai::{
+    FamiliarSettingsChangeOutcome, FamiliarSettingsChangeRequest, FamiliarSettingsChangeStatus,
+    FamiliarSettingsRejection,
 };
 pub use hw_jobs::events::TaskAssignmentRequest;
 pub use plugins::game::HellWorkersGamePlugin;

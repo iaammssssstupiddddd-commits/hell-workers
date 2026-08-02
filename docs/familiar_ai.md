@@ -34,11 +34,31 @@ Familiar command の keyboard edge は `bevy_app::input_actions` が context 解
 
 使い魔の使役数上限（`max_controlled_soul`）は、オペレーションダイアログから変更可能です（範囲: 1〜8）。
 
-- **イベント駆動**: 使役数の変更は `FamiliarOperationMaxSoulChangedEvent` イベントで通知されます。
-- **自動リリース**: 使役数を減少させた場合、超過分の魂が自動的にリリースされます。
+- **typed request**: Entity List とオペレーションダイアログは
+  `FamiliarSettingsChangeRequest { target, patch }` だけを発行し、`FamiliarOperation` を直接変更しません。
+- **原子的な適用**: 次の非 pause Logic 冒頭にある `FamiliarSettingsApplySet` が、同じ Familiar 宛ての
+  patch を FIFO で再生し、最終 operation / policy と必要な解放対象を一つの commit として確定します。
+  同じ batch の max `4 → 2 → 4` では Soul を解放しません。
+- **自動リリース**: 最終上限を現在の roster より小さくした場合、roster の逆順から超過分だけを
+  一度リリースします。
   - タスクが割り当てられている場合は、タスクを解除してからリリースされます。
-  - リリース時には使い魔がフレーズを表示します。
-- **パフォーマンス**: 毎フレームチェックではなく、変更時のみ処理が実行されるため、パフォーマンスに優れています。
+  - `SoulTaskUnassignRequest` と `CommandedBy` removal は同じ Update 内に反映されます。
+  - commit 後に `FamiliarRosterReleasedVisualMessage` を発行し、使い魔がフレーズを表示します。
+- **終端結果**: target batch ごとに `FamiliarSettingsChangeOutcome` を一件発行します。通常の成功・同値変更は
+  toast を出さず、全作業禁止、Soul 解放、stale / missing component / pause・modal 拒否だけを通知します。
+
+### 作業ポリシー
+
+各 Familiar は durable な `FamiliarPolicy` を持ち、`WorkType::ALL` の各作業について
+許可状態と `Low / Normal / High` を設定できます。
+
+- 既定値は全 WorkType が `allowed = true / Normal` で、導入前の候補集合と score を維持します。
+- 禁止した WorkType は新しい割り当て候補からだけ除外します。実行中 task、reservation、
+  `ManagedTasks`、roster は変更しません。
+- 全 WorkType 禁止も有効な待機方針です。recruitment、supervision、休息、stress / escape など
+  WorkType 外の自己維持処理は継続します。
+- 活動範囲は既存の durable `TaskArea` が唯一の正本です。policy に別の範囲や座標は保存しません。
+- priority は禁止中も保持されるため、再許可すると以前の `Low / Normal / High` が戻ります。
 
 ### リクルート条件
 
@@ -97,7 +117,13 @@ Familiar command の keyboard edge は `bevy_app::input_actions` が context 解
 
 ### 5.1. 実行サイクル (Execution Cycle)
 
-4フェーズ（[ai-system-phases.md](ai-system-phases.md) 参照）。主要システム: Perceive=`detect_state_changes_system`/`sync_reservations_system`（予約 dirty 時は即時、0.2秒ごとの安全監査あり）, Decide=`familiar_ai_state_system`/`blueprint_auto_gather_system`（1.0秒）/`familiar_task_delegation_system`（0.5秒）, Execute=`familiar_state_apply_system`/`apply_squad_management_requests_system`等。
+4フェーズ（[ai-system-phases.md](ai-system-phases.md) 参照）。Logic 冒頭の
+`FamiliarSettingsApplySet` は settings request と relationship removal を commit / flush してから
+Familiar Perceive を開始します。主要システム: Perceive=`detect_state_changes_system` /
+`sync_reservations_system`（予約 dirty 時は即時、0.2秒ごとの安全監査あり）、
+Decide=`familiar_ai_state_system` / `blueprint_auto_gather_system`（1.0秒） /
+`familiar_task_delegation_system`（0.5秒）、Execute=`familiar_state_apply_system` /
+`apply_squad_management_requests_system`等。
 
 ### 5.2. 主要モジュール
 
@@ -131,7 +157,12 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
   - **RegisterType**: `FamiliarAiState` / `EncouragementCooldown`
   - **Perceive**: `detect_state_changes_system` / `detect_command_changes_system`
   - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → blueprint_auto_gather → ApplyDeferred → task_delegation → encouragement_decision`（chain）
-  - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system` / `max_soul_logic_system` / `squad_logic_system` / `encouragement_apply_system` / `cleanup_encouragement_cooldowns_system`
+  - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system` /
+    `squad_logic_system` / `encouragement_apply_system` /
+    `cleanup_encouragement_cooldowns_system`
+- `settings::apply_familiar_settings_change_requests_system` は root が
+  `FamiliarSettingsApplySet` として Perceive 前へ配線します。使役数変更の domain writer と
+  超過 roster 解放はこの system に統合されています。
 - `hw_familiar_ai` は `hw_soul_ai` に依存しない。分隊解放・使役数超過リリース時のタスク解除は `SoulTaskUnassignRequest`（`hw_core::events`）イベントを `MessageWriter` で送信し、`hw_soul_ai` 側の `handle_soul_task_unassign_system`（`SoulAiSystemSet::Perceive`）が処理する。
 - root に残るのは `perceive/resource_sync`（ECS 実状態の再構築）と `configure_sets` の配線のみ
 - `ConstructionSiteAccess` は **`hw_jobs::construction`** に移設済み（`hw_soul_ai` ではない）
@@ -144,8 +175,13 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 - `Familiar`: 使い魔の基本パラメータ（Radius, Speed 等）を保持。
     - `color_index`: 個体ごとに割り当てられた配色インデックス（0〜3）。タスクエリア等の描画に使用。
 - `FamiliarOperation`: 指揮下に入れる最大人数や、既存memberを解放する疲労しきい値を保持。
-  `recruit_fatigue_threshold()`が新規recruit用の`Option<f32>`を導出する。このruntime componentは現在save対象ではなく、load時にdefaultで再構築される。
-- `ActiveCommand`: プレイヤーからの直接命令（Idle / Gather / Task）。
+  `recruit_fatigue_threshold()`が新規recruit用の`Option<f32>`を導出する。durable component として保存し、
+  旧 v0/v1 save で欠落した場合だけ default threshold と `max(default, roster_len)` を補います。
+- `FamiliarPolicy`: WorkType ごとの許可と priority を保持する durable component。default rule と
+  sparse override を持ち、override は `WorkType::ALL` 順、重複は後勝ち、default と同値の entry は
+  除去した canonical form で保存します。
+- `ActiveCommand`: プレイヤーからの直接命令（Idle / Gather / Task）。runtime-only であり、ロード時は
+  durable な `TaskArea` がある Familiar を `Patrol`、ない Familiar を `Idle` として再構築する。
 - `FamiliarAiState`: AI の現在の状態（Idle, SearchingTask, Scouting, Supervising）。
 - `Commanding` (Relationship): 配下の魂への参照リスト。**オプショナル**（分隊が空のとき削除される）。
 - `ManagedTasks` (Relationship Target): 管理下のタスクリスト。**オプショナル**（タスクがゼロのとき削除されるため、AI クエリでは `Option` として扱う）。
@@ -190,10 +226,15 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 スカウト時の検索範囲を 20 → 40 → 80 → 160 タイルと段階的に拡大します。
 - **効果**: 毎フレーム広範囲を検索するのではなく、近い場所から順に探して「十分スコア（0.72）」で早期終了することで、1フレームあたりのクエリ負荷を分散させています。
 
-### 7.4. 使役数上限変更のイベント駆動処理
-使役数の上限変更をイベント駆動で処理します。
-- **仕組み**: UIで使役数が変更されたときのみ `FamiliarOperationMaxSoulChangedEvent` を発火し、超過分の魂をリリースします。
-- **効果**: 毎フレーム全使い魔の使役数をチェックするコストを排除し、変更時のみ処理を実行することでパフォーマンスを向上させています。
+### 7.4. Familiar 設定の batch commit
+
+operation / policy の変更は request がある Logic tick だけ処理します。
+
+- target Entity の安定順で処理し、同 target 内の patch 順序を維持します。
+- local copy へ全 patch を適用してから final max と roster を比較するため、途中状態を保存しません。
+- final state と同値の component は書き戻さず、不要な `Changed<T>` を発生させません。
+- settings commit、relationship flush、Soul Perceive の task cleanup は Familiar の通常 Perceive /
+  Decide / Execute より前に完了します。
 
 ### 7.5. 委譲候補の一回収集と到達判定 cache
 委譲処理を「Familiar単位の候補収集」と「worker単位の再スコア・到達判定」に分割し、重複計算を削減しました。
@@ -202,11 +243,15 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 - **方針スコアの合成**: base score は従来どおり priority `0.65` + 距離 `0.35` で計算し、その後に
   policy contribution を一度だけ加えます。policy-driven `DepositToStockpile` は保存しない
   `ReceiverPolicyTier` から Low=-10 / Normal=0 / High=+10 / Critical=+20 unit を得て、1 unit は
-  `0.65 / 40` です。最終 score は clamp せず、同じ合成済み score を Top-K と fallback の双方で使います。
+  `0.65 / 40`、Familiar policy は Low=-5 / Normal=0 / High=+5 unit です。両方の最大 span は
+  40 unit です。最終 score は clamp せず、同じ合成済み score を Top-K と fallback の双方で使います。
   これにより Normal は従来値と bit 単位で一致し、base priority が上限でも tier 差を維持します。
 - **優先度の分離**: manual haul の明示 priority や consolidation の maintenance 用 raw priority を
   receiver policy と推測して通常候補へ再加算しません。B1/B2 の contribution は
   `hw_jobs::Priority` へコピーせず、共有 scalar helper で合成します。
+- **早期 policy gate**: candidate universe と diagnostics の applicable membership を記録した後、
+  `candidate_snapshot`、source scan、reachability、worker score より前に effective rule を確認します。
+  禁止候補は `PolicyDisabled` evidence を残して後段へ進みません。
 - **距離フィルタ**: `MAX_ASSIGNMENT_DIST_SQ`（60タイル）を超える候補は連結成分判定前に除外します。
 - **version付き連結成分 cache**: `hw_world::WalkabilityConnectivityCache` が `WorldMap.obstacle_version` ごとに dense component ID 配列を一度だけ構築し、worker/target の Boolean 到達判定を O(1) にします。`WorldMap` の Bevy 変更検知や 60 frame TTL で全消去する旧 `ReachabilityFrameCache` は廃止しました。Open/Closed Door は cache を再構築せず、Locked 等の walkability topology 変更だけが次回問い合わせの flood-fill を発火します。save/load の world replacement では cache を明示 reset します。
 - **Top-K 先行評価**: 優先候補（`TASK_DELEGATION_TOP_K`）を先に評価し、必要時のみ残り候補を評価します。
@@ -253,10 +298,13 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 
 - candidate universe は空間 index、`ManagedTasks`、Yard-owned / global Build 補助 scan を統合して重複排除した集合。
   static filter より前に membership を記録するため、材料待ちなどで落ちた task も applicable evaluator として扱える。
-- `CandidateRejectReason` は AI 内部の typed 分岐で、UI へは 5 つの `TaskDiagnosticClass` だけを公開する。
+- `CandidateRejectReason` は AI 内部の typed 分岐で、UI へは 6 つの `TaskDiagnosticClass` だけを公開する。
   `MalformedTask` / `StaleInput` / `Unevaluated` は coverage を partial にし、推測した blocker を作らない。
 - 1 Familiar 内では worker / source の分岐回数ではなく reason presence を固定順で 1 票へ縮約する。
   `submitted → partial → idle worker 0 → representative reason` の順で判定する。
+- `PolicyDisabled` は idle worker を持つ applicable Familiar evaluator がすべて完走し、全 terminal vote が
+  policy-only の場合だけ確定します。idle worker がいない場合は `NoEligibleFamiliar`、別理由や
+  submit / partial が混ざる場合は policy-only blocker にしません。
 - assignment builder が `TaskAssignmentRequest` を実際に writer へ渡した場合だけ submitted とする。
   submitted は accepted ではないため、root UI は current `TaskWorkers` が付くまで Pending と表示する。
 - worker 距離外、walkable start 不在、connectivity false、slot、依存フェーズ、source / capacity / reservation、
@@ -264,7 +312,8 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
 
 `FamiliarTaskDecisionSet` は `BlueprintAutoGather → AutoGatherFlush → TaskRevisionSync → Delegation` を named seam として
 公開する。root revision bridge は `ResourceSpatialGrid::generation()`、`SharedResourceCache::semantic_generation()`、
-  roster/task change、保管・搬入・所持品・車両・設備容量の availability change、`WorldMap.obstacle_version` を同期してから
+  roster/task change、`Changed/Removed<FamiliarPolicy>`、保管・搬入・所持品・車両・設備容量の
+  availability change、`WorldMap.obstacle_version` を同期してから
 delegation を実行する。Soul の roster revision は `AssignedTask`、所有者、休息・breakdown、疲労・Dream の
 作業可否境界だけで進め、idle timer や閾値内の疲労変動では進めない。代表理由は
 `NoEligibleFamiliar=task+roster`、資源/競合=`task+availability`、依存待ち=`task`、

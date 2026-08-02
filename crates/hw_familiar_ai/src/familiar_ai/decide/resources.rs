@@ -84,6 +84,16 @@ pub struct FamiliarDelegationPerfMetrics {
     pub reachable_with_cache_calls: u32,
     /// 委譲対象として処理した Familiar 数（期間集計）
     pub familiars_processed: u32,
+    /// policy gate へ到達した候補数（期間集計）
+    pub candidate_membership_checks: u32,
+    /// Familiar policy で拒否した候補数（期間集計）
+    pub policy_disabled_rejections: u32,
+    /// policy gate 通過後の candidate snapshot 試行数（期間集計）
+    pub candidate_snapshot_attempts: u32,
+    /// candidate base score 試行数（期間集計）
+    pub candidate_score_attempts: u32,
+    /// worker ごとの最終 score 合成回数（期間集計）
+    pub worker_score_attempts: u32,
 }
 
 #[cfg(feature = "profiling")]
@@ -99,6 +109,11 @@ impl Default for FamiliarDelegationPerfMetrics {
             source_selector_scanned_items: 0,
             reachable_with_cache_calls: 0,
             familiars_processed: 0,
+            candidate_membership_checks: 0,
+            policy_disabled_rejections: 0,
+            candidate_snapshot_attempts: 0,
+            candidate_score_attempts: 0,
+            worker_score_attempts: 0,
         }
     }
 }

@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use hw_core::familiar::{FamiliarSettingsPatch, FamiliarWorkPriority};
 use hw_core::game_state::{PlayMode, TaskMode, TaskModeZoneType, TimeSpeed};
 use hw_core::jobs::WorkType;
 use hw_jobs::{BuildingCategory, BuildingType};
@@ -230,7 +231,7 @@ coverage_table! {
         "input::load-cancel" => unit(CancelLoadConfirm) => published("save-load"),
         "input::settings-close" => unit(CloseSettings) => published("settings"),
         "input::operation-close" => unit(CloseOperationDialog) => {
-            published("soul-assignment")
+            published("familiar-operation-policy")
         },
         "input::cancel-active-mode" => unit(CancelActiveMode) => {
             published("orders-designation")
@@ -355,17 +356,18 @@ coverage_table! {
             published("dream-planting")
         },
         "ui-intent::door-lock" => tuple(ToggleDoorLock(_)) => published("world-selection"),
-        "ui-intent::operation-open" => unit(OpenOperationDialog) => published("soul-assignment"),
-        "ui-intent::operation-fatigue-threshold" => tuple(AdjustFatigueThreshold(_)) => {
-            published("soul-assignment")
+        "ui-intent::operation-open" => record(OpenOperationDialog { .. }) => {
+            published("familiar-operation-policy")
         },
-        "ui-intent::operation-max-souls" => tuple(AdjustMaxControlledSoul(_)) => {
-            published("soul-assignment")
+        "ui-intent::operation-settings-dialog" => record(ApplyFamiliarSettings { .. }) => {
+            published("familiar-operation-policy")
         },
-        "ui-intent::operation-familiar-max-souls" => tuple(AdjustMaxControlledSoulFor(_, _)) => {
-            published("soul-assignment")
+        "ui-intent::operation-settings-explicit" => record(ApplyFamiliarSettingsFor { .. }) => {
+            published("familiar-operation-policy")
         },
-        "ui-intent::operation-close" => unit(CloseDialog) => published("soul-assignment"),
+        "ui-intent::operation-close" => unit(CloseDialog) => {
+            published("familiar-operation-policy")
+        },
         "ui-intent::time-speed" => tuple(SetTimeSpeed(_)) => published("time-controls"),
         "ui-intent::time-pause-toggle" => unit(TogglePause) => published("time-controls"),
         "ui-intent::save" => unit(SaveGame) => published("save-load"),
@@ -389,6 +391,46 @@ coverage_table! {
         },
         "ui-intent::task-cancel" => record(CancelTask { .. }) => {
             published("task-dashboard-actions")
+        }
+    }
+}
+
+coverage_table! {
+    enum FamiliarSettingsPatch;
+    fn familiar_settings_patch_coverage(patch: FamiliarSettingsPatch);
+    fn familiar_settings_patch_decisions();
+    {
+        "familiar-settings-patch::fatigue-threshold" => record(
+            AdjustFatigueThreshold { .. }
+        ) => published("familiar-operation-policy"),
+        "familiar-settings-patch::max-controlled-soul" => record(
+            AdjustMaxControlledSoul { .. }
+        ) => published("familiar-operation-policy"),
+        "familiar-settings-patch::work-allowed" => record(
+            SetWorkAllowed { .. }
+        ) => published("familiar-operation-policy"),
+        "familiar-settings-patch::work-priority" => record(
+            SetWorkPriority { .. }
+        ) => published("familiar-operation-policy"),
+        "familiar-settings-patch::all-work-allowed" => record(
+            SetAllWorkAllowed { .. }
+        ) => published("familiar-operation-policy")
+    }
+}
+
+coverage_table! {
+    enum FamiliarWorkPriority;
+    fn familiar_work_priority_coverage(priority: FamiliarWorkPriority);
+    fn familiar_work_priority_decisions();
+    {
+        "familiar-work-priority::low" => unit(Low) => {
+            published("familiar-operation-policy")
+        },
+        "familiar-work-priority::normal" => unit(Normal) => {
+            published("familiar-operation-policy")
+        },
+        "familiar-work-priority::high" => unit(High) => {
+            published("familiar-operation-policy")
         }
     }
 }
@@ -760,17 +802,19 @@ enum DescriptiveSurface {
     HelpPauseBehavior,
     SoulEnergyStatus,
     SoulEnergyRecovery,
+    SoulAssignment,
     SoulRename,
     Notifications,
 }
 
 impl DescriptiveSurface {
-    const ALL: [Self; 7] = [
+    const ALL: [Self; 8] = [
         Self::GettingStartedFirstSteps,
         Self::CameraPanZoom,
         Self::HelpPauseBehavior,
         Self::SoulEnergyStatus,
         Self::SoulEnergyRecovery,
+        Self::SoulAssignment,
         Self::SoulRename,
         Self::Notifications,
     ];
@@ -782,6 +826,7 @@ impl DescriptiveSurface {
             Self::HelpPauseBehavior => "descriptive::help-pause-behavior",
             Self::SoulEnergyStatus => "descriptive::soul-energy-status",
             Self::SoulEnergyRecovery => "descriptive::soul-energy-recovery",
+            Self::SoulAssignment => "descriptive::soul-assignment",
             Self::SoulRename => "descriptive::soul-rename",
             Self::Notifications => "descriptive::notifications",
         }
@@ -795,6 +840,7 @@ const fn descriptive_surface_coverage(surface: DescriptiveSurface) -> SurfaceCov
         DescriptiveSurface::HelpPauseBehavior => published("help-pause-behavior"),
         DescriptiveSurface::SoulEnergyStatus => published("soul-energy-status"),
         DescriptiveSurface::SoulEnergyRecovery => published("soul-energy-recovery"),
+        DescriptiveSurface::SoulAssignment => published("soul-assignment"),
         DescriptiveSurface::SoulRename => published("soul-rename"),
         DescriptiveSurface::Notifications => published("notifications"),
     }
@@ -910,6 +956,8 @@ fn validate_unique_surface_ids(records: &[CoverageRecord]) -> Result<(), HelpCat
 fn all_coverage_records() -> Vec<CoverageRecord> {
     let mut decisions = input_action_decisions();
     decisions.extend(ui_intent_decisions());
+    decisions.extend(familiar_settings_patch_decisions());
+    decisions.extend(familiar_work_priority_decisions());
     decisions.extend(help_topic_step_decisions());
     decisions.extend(help_scroll_command_decisions());
     decisions.extend(menu_state_decisions());

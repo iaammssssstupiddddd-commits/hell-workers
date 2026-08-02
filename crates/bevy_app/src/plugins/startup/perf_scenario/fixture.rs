@@ -1,8 +1,30 @@
 use super::*;
 
 #[cfg(feature = "profiling")]
+use hw_core::relationships::{CommandedBy, ManagedBy};
+#[cfg(feature = "profiling")]
+use hw_logistics::transport_request::{
+    ManualTransportRequest, ReceiverPolicyTier, TransportDemand, TransportPolicy,
+    TransportPriority, TransportRequest, TransportRequestKind, TransportRequestState,
+};
+#[cfg(feature = "profiling")]
+use hw_logistics::{ResourceItem, ResourceType, Stockpile, StockpilePolicy};
+#[cfg(feature = "profiling")]
+use hw_ui::components::{OperationDialog, OperationDialogState};
+
+#[cfg(feature = "profiling")]
 #[derive(Resource, Default)]
-pub(crate) struct PerfScenarioApplied(pub(crate) bool);
+pub(crate) struct PerfScenarioApplied {
+    workload: bool,
+    ui_mode: bool,
+}
+
+#[cfg(feature = "profiling")]
+impl PerfScenarioApplied {
+    pub(crate) const fn complete(&self) -> bool {
+        self.workload && self.ui_mode
+    }
+}
 
 /// Stable fixture identity used by fixed-step audit records. The marker avoids
 /// treating allocator-dependent Entity IDs as part of the reproducibility
@@ -43,14 +65,21 @@ pub(crate) struct PerfScenarioDriverState {
 }
 
 #[cfg(feature = "profiling")]
+type PerfSetupFamiliarFilter = (With<Familiar>, Without<DamnedSoul>);
+#[cfg(feature = "profiling")]
+type PerfSetupSoulFilter = (With<DamnedSoul>, Without<Familiar>);
+#[cfg(feature = "profiling")]
 type PerfSetupFamiliarQuery<'w, 's> = Query<
     'w,
     's,
     (
         Entity,
+        &'static Transform,
         &'static mut ActiveCommand,
         &'static mut FamiliarOperation,
+        &'static mut FamiliarPolicy,
     ),
+    PerfSetupFamiliarFilter,
 >;
 #[cfg(feature = "profiling")]
 type PerfSetupSoulQuery<'w, 's> = Query<
@@ -63,6 +92,7 @@ type PerfSetupSoulQuery<'w, 's> = Query<
         &'static mut Path,
         &'static mut AssignedTask,
     ),
+    PerfSetupSoulFilter,
 >;
 #[cfg(feature = "profiling")]
 type PerfTreeQuery<'w, 's> = Query<'w, 's, Entity, With<Tree>>;
@@ -83,12 +113,23 @@ pub struct PerfWorkloadSetupParams<'w, 's> {
 }
 
 #[cfg(feature = "profiling")]
+#[derive(SystemParam)]
+pub struct PerfUiModeSetupParams<'w, 's> {
+    config: Res<'w, PerfScenarioConfig>,
+    applied: ResMut<'w, PerfScenarioApplied>,
+    dialog_state: ResMut<'w, OperationDialogState>,
+    q_familiars: Query<'w, 's, Entity, With<Familiar>>,
+    q_dialog: Query<'w, 's, &'static mut Node, With<OperationDialog>>,
+}
+
+#[cfg(feature = "profiling")]
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum PerfScenarioSet {
     FixtureSpawn,
     FixtureApply,
     Setup,
     Apply,
+    UiSetup,
     InitialCheckpoint,
     Driver,
     #[cfg(feature = "profiling")]
@@ -113,11 +154,11 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
         mut world_map,
     } = params;
 
-    if applied.0 || !config.enabled() || q_familiars.is_empty() {
+    if applied.workload || !config.enabled() || q_familiars.is_empty() {
         return;
     }
 
-    applied.0 = configure_perf_workload(
+    applied.workload = configure_perf_workload(
         &config,
         &mut commands,
         &mut q_familiars,
@@ -134,24 +175,68 @@ pub fn setup_perf_scenario_runtime_if_enabled(params: PerfWorkloadSetupParams) {
 }
 
 #[cfg(feature = "profiling")]
+pub fn setup_perf_ui_mode_if_enabled(params: PerfUiModeSetupParams) {
+    let PerfUiModeSetupParams {
+        config,
+        mut applied,
+        mut dialog_state,
+        q_familiars,
+        mut q_dialog,
+    } = params;
+    if applied.ui_mode || !config.enabled() || !applied.workload {
+        return;
+    }
+    let Ok(mut dialog) = q_dialog.single_mut() else {
+        return;
+    };
+
+    match config.operation_dialog_mode {
+        PerfOperationDialogMode::Hidden => {
+            dialog_state.target = None;
+            dialog.display = Display::None;
+        }
+        PerfOperationDialogMode::Open => {
+            let Some(target) = q_familiars.iter().min_by_key(|entity| entity.to_bits()) else {
+                return;
+            };
+            dialog_state.target = Some(target);
+            dialog.display = Display::Flex;
+        }
+    }
+    applied.ui_mode = true;
+}
+
+#[cfg(feature = "profiling")]
 fn configure_perf_workload(
     config: &PerfScenarioConfig,
     commands: &mut Commands,
-    q_familiars: &mut Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
-    q_souls: &mut Query<(
-        Entity,
-        &mut Transform,
-        &mut Destination,
-        &mut Path,
-        &mut AssignedTask,
-    )>,
+    q_familiars: &mut Query<
+        (
+            Entity,
+            &Transform,
+            &mut ActiveCommand,
+            &mut FamiliarOperation,
+            &mut FamiliarPolicy,
+        ),
+        PerfSetupFamiliarFilter,
+    >,
+    q_souls: &mut Query<
+        (
+            Entity,
+            &mut Transform,
+            &mut Destination,
+            &mut Path,
+            &mut AssignedTask,
+        ),
+        PerfSetupSoulFilter,
+    >,
     q_trees: &Query<Entity, With<Tree>>,
     q_rocks: &Query<Entity, With<Rock>>,
     world_map: &mut WorldMapWrite,
 ) -> bool {
     match config.workload {
         PerfWorkload::Gather => {
-            configure_gather_baseline(commands, q_familiars, q_trees, q_rocks);
+            configure_gather_baseline(config, commands, q_familiars, q_souls, q_trees, q_rocks);
             true
         }
         PerfWorkload::PathDoor => {
@@ -168,51 +253,198 @@ fn configure_perf_workload(
 
 #[cfg(feature = "profiling")]
 fn configure_gather_baseline(
+    config: &PerfScenarioConfig,
     commands: &mut Commands,
-    q_familiars: &mut Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
+    q_familiars: &mut Query<
+        (
+            Entity,
+            &Transform,
+            &mut ActiveCommand,
+            &mut FamiliarOperation,
+            &mut FamiliarPolicy,
+        ),
+        PerfSetupFamiliarFilter,
+    >,
+    q_souls: &mut Query<
+        (
+            Entity,
+            &mut Transform,
+            &mut Destination,
+            &mut Path,
+            &mut AssignedTask,
+        ),
+        PerfSetupSoulFilter,
+    >,
     q_trees: &Query<Entity, With<Tree>>,
     q_rocks: &Query<Entity, With<Rock>>,
 ) {
     let area = TaskArea::from_points(Vec2::new(-1600.0, -1600.0), Vec2::new(1600.0, 1600.0));
+    let mut familiar_positions = Vec::new();
 
-    for (fam_entity, mut command, mut operation) in q_familiars.iter_mut() {
+    for (fam_entity, transform, mut command, mut operation, mut policy) in q_familiars.iter_mut() {
         command.command = FamiliarCommand::GatherResources;
-        operation.max_controlled_soul = 20;
+        if config.familiar_policy_mode.uses_controlled_fixture() {
+            let policy = policy.bypass_change_detection();
+            *policy = FamiliarPolicy::default();
+            if matches!(
+                config.familiar_policy_mode,
+                PerfFamiliarPolicyMode::Disabled
+            ) {
+                policy.set_all_allowed(false);
+            }
+            familiar_positions.push((fam_entity, transform.translation.truncate()));
+        } else {
+            operation.max_controlled_soul = 20;
+        }
         commands.entity(fam_entity).insert(area.clone());
     }
+    familiar_positions.sort_unstable_by_key(|(entity, _)| entity.to_bits());
 
-    for tree_entity in q_trees.iter() {
-        commands.entity(tree_entity).insert((
-            Designation {
-                work_type: WorkType::Chop,
-            },
-            TaskSlots::new(1),
-            Priority(0),
-        ));
+    if config.familiar_policy_mode.uses_controlled_fixture() {
+        if let Some(tree_entity) = q_trees.iter().min_by_key(|entity| entity.to_bits()) {
+            commands.entity(tree_entity).insert((
+                Designation {
+                    work_type: WorkType::Chop,
+                },
+                TaskSlots::new(1),
+                Priority(0),
+            ));
+        }
+    } else {
+        for tree_entity in q_trees.iter() {
+            commands.entity(tree_entity).insert((
+                Designation {
+                    work_type: WorkType::Chop,
+                },
+                TaskSlots::new(1),
+                Priority(0),
+            ));
+        }
+
+        for rock_entity in q_rocks.iter() {
+            commands.entity(rock_entity).insert((
+                Designation {
+                    work_type: WorkType::Mine,
+                },
+                TaskSlots::new(1),
+                Priority(0),
+            ));
+        }
     }
 
-    for rock_entity in q_rocks.iter() {
-        commands.entity(rock_entity).insert((
-            Designation {
-                work_type: WorkType::Mine,
-            },
-            TaskSlots::new(1),
-            Priority(0),
-        ));
+    if config.familiar_policy_mode.uses_controlled_fixture() {
+        configure_controlled_familiar_policy_fixture(commands, q_souls, &familiar_positions);
     }
+}
+
+#[cfg(feature = "profiling")]
+fn configure_controlled_familiar_policy_fixture(
+    commands: &mut Commands,
+    q_souls: &mut Query<
+        (
+            Entity,
+            &mut Transform,
+            &mut Destination,
+            &mut Path,
+            &mut AssignedTask,
+        ),
+        PerfSetupSoulFilter,
+    >,
+    familiar_positions: &[(Entity, Vec2)],
+) {
+    let Some((owner, fixture_pos)) = familiar_positions.first().copied() else {
+        return;
+    };
+    let mut souls = q_souls
+        .iter()
+        .map(|(entity, _, _, _, _)| entity)
+        .collect::<Vec<_>>();
+    souls.sort_unstable_by_key(|entity| entity.to_bits());
+    if souls.len() < 2 {
+        return;
+    }
+    for soul in souls.into_iter().take(2) {
+        if let Ok((_, mut transform, mut destination, mut path, mut task)) = q_souls.get_mut(soul) {
+            transform.translation.x = fixture_pos.x;
+            transform.translation.y = fixture_pos.y;
+            destination.0 = fixture_pos;
+            path.waypoints.clear();
+            path.current_index = 0;
+            path.planned_destination = None;
+            *task = AssignedTask::None;
+            commands.entity(soul).insert(CommandedBy(owner));
+        }
+    }
+
+    let stockpile = commands
+        .spawn((
+            Name::new("PerfFamiliarPolicyStockpile"),
+            Transform::from_translation(fixture_pos.extend(Z_MAP)),
+            Stockpile {
+                capacity: 8,
+                resource_type: None,
+            },
+            StockpilePolicy::for_capacity(8),
+        ))
+        .id();
+    commands.spawn((
+        Name::new("PerfFamiliarPolicySource"),
+        Transform::from_translation((fixture_pos + Vec2::new(4.0, 0.0)).extend(Z_MAP)),
+        Visibility::Visible,
+        ResourceItem(ResourceType::Wood),
+    ));
+    commands.spawn((
+        Name::new("PerfFamiliarPolicyRequest"),
+        Transform::from_translation(fixture_pos.extend(Z_MAP)),
+        Visibility::Hidden,
+        Designation {
+            work_type: WorkType::Haul,
+        },
+        ManagedBy(owner),
+        ManualTransportRequest,
+        TaskSlots::new(1),
+        Priority(10),
+        ReceiverPolicyTier(TransportPriority::Normal),
+        TransportRequest {
+            kind: TransportRequestKind::DepositToStockpile,
+            anchor: stockpile,
+            resource_type: ResourceType::Wood,
+            issued_by: owner,
+            priority: TransportPriority::Normal,
+            stockpile_group: vec![stockpile],
+        },
+        TransportDemand {
+            desired_slots: 1,
+            inflight: 0,
+        },
+        TransportPolicy::default(),
+        TransportRequestState::Pending,
+    ));
 }
 
 #[cfg(feature = "profiling")]
 fn configure_path_door_fixture(
     commands: &mut Commands,
-    q_familiars: &mut Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
-    q_souls: &mut Query<(
-        Entity,
-        &mut Transform,
-        &mut Destination,
-        &mut Path,
-        &mut AssignedTask,
-    )>,
+    q_familiars: &mut Query<
+        (
+            Entity,
+            &Transform,
+            &mut ActiveCommand,
+            &mut FamiliarOperation,
+            &mut FamiliarPolicy,
+        ),
+        PerfSetupFamiliarFilter,
+    >,
+    q_souls: &mut Query<
+        (
+            Entity,
+            &mut Transform,
+            &mut Destination,
+            &mut Path,
+            &mut AssignedTask,
+        ),
+        PerfSetupSoulFilter,
+    >,
     world_map: &mut WorldMapWrite,
 ) -> bool {
     let Some((left_grid, door_grid, right_grid)) = find_fixture_corridor(world_map.as_ref()) else {
@@ -220,7 +452,7 @@ fn configure_path_door_fixture(
         return false;
     };
 
-    for (_, mut command, mut operation) in q_familiars.iter_mut() {
+    for (_, _, mut command, mut operation, _) in q_familiars.iter_mut() {
         command.command = FamiliarCommand::Idle;
         operation.max_controlled_soul = 0;
     }
@@ -279,7 +511,16 @@ fn configure_path_door_fixture(
 #[cfg(feature = "profiling")]
 fn configure_construction_fixture(
     commands: &mut Commands,
-    q_familiars: &mut Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
+    q_familiars: &mut Query<
+        (
+            Entity,
+            &Transform,
+            &mut ActiveCommand,
+            &mut FamiliarOperation,
+            &mut FamiliarPolicy,
+        ),
+        PerfSetupFamiliarFilter,
+    >,
     world_map: &mut WorldMapWrite,
     size: PerfScenarioSize,
 ) -> bool {
@@ -297,7 +538,7 @@ fn configure_construction_fixture(
         return false;
     }
     grids.sort_unstable();
-    for (_, mut command, mut operation) in q_familiars.iter_mut() {
+    for (_, _, mut command, mut operation, _) in q_familiars.iter_mut() {
         command.command = FamiliarCommand::Idle;
         operation.max_controlled_soul = 0;
     }
@@ -357,11 +598,20 @@ fn configure_construction_fixture(
 #[cfg(feature = "profiling")]
 fn configure_ui_gpu_fixture(
     commands: &mut Commands,
-    q_familiars: &mut Query<(Entity, &mut ActiveCommand, &mut FamiliarOperation)>,
+    q_familiars: &mut Query<
+        (
+            Entity,
+            &Transform,
+            &mut ActiveCommand,
+            &mut FamiliarOperation,
+            &mut FamiliarPolicy,
+        ),
+        PerfSetupFamiliarFilter,
+    >,
     world_map: &mut WorldMapWrite,
     size: PerfScenarioSize,
 ) -> bool {
-    for (_, mut command, mut operation) in q_familiars.iter_mut() {
+    for (_, _, mut command, mut operation, _) in q_familiars.iter_mut() {
         command.command = FamiliarCommand::Idle;
         operation.max_controlled_soul = 0;
     }

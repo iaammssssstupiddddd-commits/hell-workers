@@ -1,5 +1,6 @@
-use crate::entities::familiar::{Familiar, FamiliarOperation};
+use crate::entities::familiar::{Familiar, FamiliarOperation, FamiliarPolicy};
 use crate::input_actions::ForegroundUiGate;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use hw_jobs::{Building, BuildingCategory};
@@ -24,6 +25,91 @@ type MenuButtonWithColorQuery<'w, 's> = Query<
     ),
     (Changed<Interaction>, With<Button>),
 >;
+
+type OperationDialogTextQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Text,
+    (
+        Without<OperationPolicyAllowedText>,
+        Without<OperationPolicyPriorityText>,
+    ),
+>;
+
+type OperationWarningQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Node,
+    (
+        With<OperationPolicyAllDisabledWarning>,
+        Without<OperationDialog>,
+    ),
+>;
+
+type OperationAllowedButtonQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static OperationPolicyAllowedButton,
+        &'static mut MenuButton,
+        &'static mut BackgroundColor,
+    ),
+    Without<OperationPolicyPriorityButton>,
+>;
+
+type OperationAllowedTextQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static OperationPolicyAllowedText, &'static mut Text),
+    (
+        Without<OperationPolicyPriorityText>,
+        Without<OperationPolicyAllowedButton>,
+    ),
+>;
+
+type OperationPriorityButtonQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static OperationPolicyPriorityButton,
+        &'static mut MenuButton,
+    ),
+    Without<OperationPolicyAllowedButton>,
+>;
+
+type OperationPriorityTextQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static OperationPolicyPriorityText, &'static mut Text),
+    (
+        Without<OperationPolicyAllowedText>,
+        Without<OperationPolicyPriorityButton>,
+    ),
+>;
+
+#[derive(SystemParam)]
+pub struct OperationDialogParams<'w, 's> {
+    dialog_state: ResMut<'w, OperationDialogState>,
+    ui_nodes: Res<'w, UiNodeRegistry>,
+    theme: Res<'w, UiTheme>,
+    q_familiars: Query<
+        'w,
+        's,
+        (
+            &'static Familiar,
+            &'static FamiliarOperation,
+            &'static FamiliarPolicy,
+        ),
+    >,
+    q_dialog: Query<'w, 's, &'static mut Node, With<OperationDialog>>,
+    q_scroll: Query<'w, 's, &'static mut ScrollPosition, With<OperationDialogScroll>>,
+    q_text: OperationDialogTextQuery<'w, 's>,
+    q_warning: OperationWarningQuery<'w, 's>,
+    q_allowed_buttons: OperationAllowedButtonQuery<'w, 's>,
+    q_allowed_text: OperationAllowedTextQuery<'w, 's>,
+    q_priority_buttons: OperationPriorityButtonQuery<'w, 's>,
+    q_priority_text: OperationPriorityTextQuery<'w, 's>,
+}
 
 pub fn update_ui_input_state_system(
     mut ui_input_state: ResMut<UiInputState>,
@@ -74,15 +160,24 @@ pub fn update_move_plant_hover_target_system(
 }
 
 /// Operation Dialog のテキスト表示を更新するシステム
-pub fn update_operation_dialog_system(
-    selected_entity: Res<crate::interface::selection::SelectedEntity>,
-    ui_nodes: Res<UiNodeRegistry>,
-    q_familiars: Query<(&Familiar, &FamiliarOperation)>,
-    mut q_dialog: Query<&mut Node, With<OperationDialog>>,
-    mut q_text: Query<&mut Text>,
-) {
-    if let Some(selected) = selected_entity.0 {
-        if let Ok((familiar, op)) = q_familiars.get(selected) {
+pub fn update_operation_dialog_system(params: OperationDialogParams) {
+    let OperationDialogParams {
+        mut dialog_state,
+        ui_nodes,
+        theme,
+        q_familiars,
+        mut q_dialog,
+        mut q_scroll,
+        mut q_text,
+        mut q_warning,
+        mut q_allowed_buttons,
+        mut q_allowed_text,
+        mut q_priority_buttons,
+        mut q_priority_text,
+    } = params;
+
+    if let Some(target) = dialog_state.target {
+        if let Ok((familiar, op, policy)) = q_familiars.get(target) {
             if let Some(entity) = ui_nodes.get_slot(UiSlot::DialogFamiliarName)
                 && let Ok(mut text) = q_text.get_mut(entity)
             {
@@ -108,11 +203,73 @@ pub fn update_operation_dialog_system(
                     text.0 = val_str;
                 }
             }
+            for mut node in &mut q_warning {
+                node.display = if policy.all_work_disabled() {
+                    Display::Flex
+                } else {
+                    Display::None
+                };
+            }
+            for (marker, mut action, mut color) in &mut q_allowed_buttons {
+                let rule = policy.rule_for(marker.0);
+                action.0 = UiIntent::ApplyFamiliarSettings {
+                    patch: hw_core::familiar::FamiliarSettingsPatch::SetWorkAllowed {
+                        work_type: marker.0,
+                        allowed: !rule.allowed,
+                    },
+                };
+                color.0 = if rule.allowed {
+                    theme.colors.status_healthy
+                } else {
+                    theme.colors.status_danger
+                };
+            }
+            for (marker, mut text) in &mut q_allowed_text {
+                text.0 = if policy.rule_for(marker.0).allowed {
+                    "Enabled".to_string()
+                } else {
+                    "Disabled".to_string()
+                };
+            }
+            for (marker, mut action) in &mut q_priority_buttons {
+                let next = match policy.rule_for(marker.0).priority {
+                    hw_core::familiar::FamiliarWorkPriority::Low => {
+                        hw_core::familiar::FamiliarWorkPriority::Normal
+                    }
+                    hw_core::familiar::FamiliarWorkPriority::Normal => {
+                        hw_core::familiar::FamiliarWorkPriority::High
+                    }
+                    hw_core::familiar::FamiliarWorkPriority::High => {
+                        hw_core::familiar::FamiliarWorkPriority::Low
+                    }
+                };
+                action.0 = UiIntent::ApplyFamiliarSettings {
+                    patch: hw_core::familiar::FamiliarSettingsPatch::SetWorkPriority {
+                        work_type: marker.0,
+                        priority: next,
+                    },
+                };
+            }
+            for (marker, mut text) in &mut q_priority_text {
+                text.0 = match policy.rule_for(marker.0).priority {
+                    hw_core::familiar::FamiliarWorkPriority::Low => "Low",
+                    hw_core::familiar::FamiliarWorkPriority::Normal => "Normal",
+                    hw_core::familiar::FamiliarWorkPriority::High => "High",
+                }
+                .to_string();
+            }
         } else {
+            dialog_state.target = None;
             close_operation_dialog(&mut q_dialog);
+            for mut scroll in &mut q_scroll {
+                scroll.0 = Vec2::ZERO;
+            }
         }
     } else {
         close_operation_dialog(&mut q_dialog);
+        for mut scroll in &mut q_scroll {
+            scroll.0 = Vec2::ZERO;
+        }
     }
 }
 
@@ -120,6 +277,7 @@ pub fn update_operation_dialog_system(
 mod tests {
     use super::*;
     use crate::input_actions::PendingWorldInputCapture;
+    use hw_core::familiar::{FamiliarSettingsPatch, FamiliarWorkPriority, FamiliarWorkRule};
     use hw_jobs::BuildingType;
 
     #[derive(Resource, Default)]
@@ -208,5 +366,226 @@ mod tests {
         assert!(matches!(intents[0], UiIntent::ToggleDoorLock(entity) if entity == root));
         assert!(app.world().get_entity(foreground).is_ok());
         assert!(app.world().get_entity(background).is_ok());
+    }
+
+    #[test]
+    fn stale_operation_target_closes_without_retargeting_and_resets_scroll() {
+        let mut app = App::new();
+        let stale_target = app.world_mut().spawn_empty().id();
+        app.world_mut().despawn(stale_target);
+        app.init_resource::<UiNodeRegistry>()
+            .init_resource::<UiTheme>()
+            .insert_resource(OperationDialogState {
+                target: Some(stale_target),
+            })
+            .add_systems(Update, update_operation_dialog_system);
+        let root = app
+            .world_mut()
+            .spawn((
+                Node {
+                    display: Display::Flex,
+                    ..default()
+                },
+                OperationDialog,
+            ))
+            .id();
+        let scroll = app
+            .world_mut()
+            .spawn((ScrollPosition(Vec2::new(0.0, 240.0)), OperationDialogScroll))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            *app.world().resource::<OperationDialogState>(),
+            OperationDialogState::default()
+        );
+        assert_eq!(
+            app.world().get::<Node>(root).unwrap().display,
+            Display::None
+        );
+        assert_eq!(
+            app.world().get::<ScrollPosition>(scroll).unwrap().0,
+            Vec2::ZERO
+        );
+    }
+
+    #[test]
+    fn operation_dialog_binds_each_exact_target_value_and_next_action() {
+        let mut app = App::new();
+        app.init_resource::<UiNodeRegistry>()
+            .init_resource::<UiTheme>()
+            .add_systems(Update, update_operation_dialog_system);
+
+        let familiar_name = app.world_mut().spawn(Text::new("stale name")).id();
+        let threshold = app.world_mut().spawn(Text::new("stale threshold")).id();
+        let max_soul = app.world_mut().spawn(Text::new("stale max")).id();
+        {
+            let mut nodes = app.world_mut().resource_mut::<UiNodeRegistry>();
+            nodes.set_slot(UiSlot::DialogFamiliarName, familiar_name);
+            nodes.set_slot(UiSlot::DialogThresholdText, threshold);
+            nodes.set_slot(UiSlot::DialogMaxSoulText, max_soul);
+        }
+
+        let warning = app
+            .world_mut()
+            .spawn((Node::default(), OperationPolicyAllDisabledWarning))
+            .id();
+        let allowed_button = app
+            .world_mut()
+            .spawn((
+                OperationPolicyAllowedButton(hw_jobs::WorkType::Chop),
+                MenuButton(UiIntent::CloseDialog),
+                BackgroundColor::default(),
+            ))
+            .id();
+        let allowed_text = app
+            .world_mut()
+            .spawn((
+                OperationPolicyAllowedText(hw_jobs::WorkType::Chop),
+                Text::new("stale allowed"),
+            ))
+            .id();
+        let priority_button = app
+            .world_mut()
+            .spawn((
+                OperationPolicyPriorityButton(hw_jobs::WorkType::Chop),
+                MenuButton(UiIntent::CloseDialog),
+            ))
+            .id();
+        let priority_text = app
+            .world_mut()
+            .spawn((
+                OperationPolicyPriorityText(hw_jobs::WorkType::Chop),
+                Text::new("stale priority"),
+            ))
+            .id();
+
+        let mut first_policy = FamiliarPolicy::default();
+        first_policy.set_all_allowed(false);
+        first_policy.set_rule(
+            hw_jobs::WorkType::Chop,
+            FamiliarWorkRule {
+                allowed: false,
+                priority: FamiliarWorkPriority::High,
+            },
+        );
+        let first = app
+            .world_mut()
+            .spawn((
+                Familiar {
+                    name: "A".to_string(),
+                    ..default()
+                },
+                FamiliarOperation {
+                    fatigue_threshold: 0.7,
+                    max_controlled_soul: 3,
+                },
+                first_policy,
+            ))
+            .id();
+        let second = app
+            .world_mut()
+            .spawn((
+                Familiar {
+                    name: "B".to_string(),
+                    ..default()
+                },
+                FamiliarOperation {
+                    fatigue_threshold: 0.0,
+                    max_controlled_soul: 5,
+                },
+                FamiliarPolicy::default(),
+            ))
+            .id();
+
+        app.insert_resource(OperationDialogState {
+            target: Some(first),
+        });
+        app.update();
+
+        assert_eq!(
+            app.world().get::<Text>(familiar_name).unwrap().0,
+            "Editing: A"
+        );
+        assert_eq!(app.world().get::<Text>(threshold).unwrap().0, "70%");
+        assert_eq!(app.world().get::<Text>(max_soul).unwrap().0, "3");
+        assert_eq!(
+            app.world().get::<Node>(warning).unwrap().display,
+            Display::Flex
+        );
+        assert_eq!(app.world().get::<Text>(allowed_text).unwrap().0, "Disabled");
+        assert_eq!(app.world().get::<Text>(priority_text).unwrap().0, "High");
+        assert!(matches!(
+            app.world().get::<MenuButton>(allowed_button).unwrap().0,
+            UiIntent::ApplyFamiliarSettings {
+                patch: FamiliarSettingsPatch::SetWorkAllowed {
+                    work_type: hw_jobs::WorkType::Chop,
+                    allowed: true,
+                },
+            }
+        ));
+        assert!(matches!(
+            app.world().get::<MenuButton>(priority_button).unwrap().0,
+            UiIntent::ApplyFamiliarSettings {
+                patch: FamiliarSettingsPatch::SetWorkPriority {
+                    work_type: hw_jobs::WorkType::Chop,
+                    priority: FamiliarWorkPriority::Low,
+                },
+            }
+        ));
+        assert_eq!(
+            app.world()
+                .get::<BackgroundColor>(allowed_button)
+                .unwrap()
+                .0,
+            app.world().resource::<UiTheme>().colors.status_danger
+        );
+
+        app.world_mut()
+            .resource_mut::<OperationDialogState>()
+            .target = Some(second);
+        app.update();
+
+        assert_eq!(
+            app.world().get::<Text>(familiar_name).unwrap().0,
+            "Editing: B"
+        );
+        assert_eq!(
+            app.world().get::<Text>(threshold).unwrap().0,
+            "0% (Recruit Off)"
+        );
+        assert_eq!(app.world().get::<Text>(max_soul).unwrap().0, "5");
+        assert_eq!(
+            app.world().get::<Node>(warning).unwrap().display,
+            Display::None
+        );
+        assert_eq!(app.world().get::<Text>(allowed_text).unwrap().0, "Enabled");
+        assert_eq!(app.world().get::<Text>(priority_text).unwrap().0, "Normal");
+        assert!(matches!(
+            app.world().get::<MenuButton>(allowed_button).unwrap().0,
+            UiIntent::ApplyFamiliarSettings {
+                patch: FamiliarSettingsPatch::SetWorkAllowed {
+                    work_type: hw_jobs::WorkType::Chop,
+                    allowed: false,
+                },
+            }
+        ));
+        assert!(matches!(
+            app.world().get::<MenuButton>(priority_button).unwrap().0,
+            UiIntent::ApplyFamiliarSettings {
+                patch: FamiliarSettingsPatch::SetWorkPriority {
+                    work_type: hw_jobs::WorkType::Chop,
+                    priority: FamiliarWorkPriority::High,
+                },
+            }
+        ));
+        assert_eq!(
+            app.world()
+                .get::<BackgroundColor>(allowed_button)
+                .unwrap()
+                .0,
+            app.world().resource::<UiTheme>().colors.status_healthy
+        );
     }
 }

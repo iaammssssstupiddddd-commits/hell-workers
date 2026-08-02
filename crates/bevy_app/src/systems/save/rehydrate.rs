@@ -26,11 +26,14 @@ use crate::systems::jobs::attach_building_shell;
 use crate::systems::jobs::floor_construction::CuringFootprint;
 use crate::world::map::WorldMap;
 
+use hw_core::area::TaskArea;
 use hw_core::constants::{TILE_SIZE, Z_ITEM_PICKUP};
-use hw_core::familiar::Familiar;
+use hw_core::familiar::{
+    ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarPolicy,
+};
 use hw_core::jobs::WorkType;
 use hw_core::logistics::ResourceType;
-use hw_core::relationships::LoadedIn;
+use hw_core::relationships::{Commanding, LoadedIn};
 use hw_core::soul::DamnedSoul;
 use hw_core::visual::SoulTaskHandles;
 use hw_core::visual_mirror::construction::{
@@ -81,6 +84,7 @@ pub(super) use presentation::clear_rehydrate_presentation;
 /// ロード直後に呼び、裸のエンティティへ shell を再付与する。
 pub(super) fn rehydrate_after_load(world: &mut World) -> Result<(), RehydratePrerequisiteError> {
     validate_rehydrate_prerequisites(world)?;
+    rehydrate_familiar_settings(world)?;
     rehydrate_stockpile_policies(world);
     drop_orphaned_inventory_items(world);
 
@@ -95,6 +99,78 @@ pub(super) fn rehydrate_after_load(world: &mut World) -> Result<(), RehydratePre
     world.flush();
     rehydrate_construction_runtime(world);
     rehydrate_obstacle_runtime(world);
+
+    Ok(())
+}
+
+/// Adds operation and work policy defaults to saves created before those
+/// components became durable, while preserving every explicitly saved value.
+///
+/// A save produced by a B2-aware executable can never contain a roster larger
+/// than its saved maximum. Treat that state as corruption so the surrounding
+/// load transaction restores the previous live world instead of guessing
+/// which Soul should be released.
+pub(super) fn rehydrate_familiar_settings(
+    world: &mut World,
+) -> Result<(), RehydratePrerequisiteError> {
+    let settings: Vec<(
+        Entity,
+        Option<FamiliarOperation>,
+        Option<FamiliarPolicy>,
+        usize,
+    )> = {
+        let mut query = world.query_filtered::<(
+            Entity,
+            Option<&FamiliarOperation>,
+            Option<&FamiliarPolicy>,
+            Option<&Commanding>,
+        ), With<Familiar>>();
+        query
+            .iter(world)
+            .map(|(entity, operation, policy, commanding)| {
+                (
+                    entity,
+                    operation.cloned(),
+                    policy.cloned(),
+                    commanding.map_or(0, |roster| roster.iter().count()),
+                )
+            })
+            .collect()
+    };
+
+    if settings.iter().any(|(_, operation, _, roster_len)| {
+        operation
+            .as_ref()
+            .is_some_and(|operation| operation.max_controlled_soul < *roster_len)
+    }) {
+        return Err(RehydratePrerequisiteError {
+            missing_resources: Vec::new(),
+            invalid_conditions: vec![
+                "saved FamiliarOperation.max_controlled_soul must cover its Commanding roster",
+            ],
+        });
+    }
+
+    for (entity, operation, policy, roster_len) in settings {
+        let mut entity_mut = world.entity_mut(entity);
+        if operation.is_none() {
+            let mut operation = FamiliarOperation::default();
+            operation.max_controlled_soul = operation.max_controlled_soul.max(roster_len);
+            entity_mut.insert(operation);
+        }
+
+        match policy {
+            Some(policy) => {
+                let normalized = policy.clone().normalized();
+                if normalized != policy {
+                    entity_mut.insert(normalized);
+                }
+            }
+            None => {
+                entity_mut.insert(FamiliarPolicy::default());
+            }
+        }
+    }
 
     Ok(())
 }
@@ -183,15 +259,19 @@ fn rehydrate_shells(
     let blueprint_sprite_handles = BlueprintSpriteHandles::from(game_assets);
     rehydrate_construction_shells(world, &blueprint_sprite_handles);
 
-    let mut familiars: Vec<(Entity, String, f32, Vec3)> = Vec::new();
+    let mut familiars: Vec<(Entity, String, f32, Vec3, bool)> = Vec::new();
     {
-        let mut q = world.query_filtered::<(Entity, &Familiar, &Transform), Without<Destination>>();
-        for (entity, familiar, transform) in q.iter(world) {
+        let mut q = world.query_filtered::<
+            (Entity, &Familiar, &Transform, Option<&TaskArea>),
+            Without<Destination>,
+        >();
+        for (entity, familiar, transform, task_area) in q.iter(world) {
             familiars.push((
                 entity,
                 familiar.name.clone(),
                 familiar.command_radius,
                 transform.translation,
+                task_area.is_some(),
             ));
         }
     }
@@ -251,7 +331,7 @@ fn rehydrate_shells(
     // ---- 適用フェーズ（Commands 経由、rehydrate_after_load 側で flush） ----
     let mut commands = world.commands();
 
-    for (entity, name, command_radius, translation) in familiars {
+    for (entity, name, command_radius, translation, has_task_area) in familiars {
         // root rotation / scale は旧visual animationの残骸であり、論理座標の
         // consumer は translation だけを読む。ロード直後に正規化して
         // Spatial / proxy の余分な Changed 連鎖を持ち越さない。
@@ -269,6 +349,14 @@ fn rehydrate_shells(
             game_assets,
             handles_3d,
         );
+        // ActiveCommand is intentionally runtime-only, while TaskArea is
+        // durable. Reconstruct the operational command from that durable
+        // capability so F9 does not silently disable every area producer.
+        if has_task_area {
+            commands.entity(entity).insert(ActiveCommand {
+                command: FamiliarCommand::Patrol,
+            });
+        }
     }
 
     for (entity, variant) in trees {

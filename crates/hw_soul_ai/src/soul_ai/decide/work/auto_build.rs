@@ -259,7 +259,22 @@ pub(crate) fn blueprint_auto_build_system(
 
 #[cfg(test)]
 mod tests {
-    use super::BlueprintAutoBuildTimer;
+    use super::{
+        BlueprintAutoBuildDiagnostics, BlueprintAutoBuildTimer, blueprint_auto_build_system,
+    };
+    use bevy::prelude::*;
+    use hw_core::area::TaskArea;
+    use hw_core::familiar::{ActiveCommand, Familiar, FamiliarCommand};
+    use hw_core::relationships::CommandedBy;
+    use hw_core::soul::{DamnedSoul, Destination, IdleState, Path};
+    use hw_jobs::events::TaskAssignmentRequest;
+    use hw_jobs::{
+        AssignedTask, Blueprint, BuildingType, Designation, Priority, TaskDiagnosticInputRevisions,
+        TaskSlots, WorkType,
+    };
+    use hw_logistics::ResourceType;
+    use hw_spatial::BlueprintSpatialGrid;
+    use hw_world::SpatialGridOps;
     use std::time::Duration;
 
     #[test]
@@ -269,5 +284,97 @@ mod tests {
         assert!(timer.advance(Duration::ZERO));
         assert!(!timer.advance(Duration::from_millis(499)));
         assert!(timer.advance(Duration::from_millis(1)));
+    }
+
+    #[test]
+    fn one_auto_build_cycle_submits_two_blueprints_to_two_idle_souls() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<BlueprintAutoBuildTimer>()
+            .init_resource::<BlueprintSpatialGrid>()
+            .init_resource::<TaskDiagnosticInputRevisions>()
+            .init_resource::<BlueprintAutoBuildDiagnostics>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_systems(Update, blueprint_auto_build_system);
+
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                ActiveCommand {
+                    command: FamiliarCommand::Patrol,
+                },
+                TaskArea::from_points(Vec2::splat(-96.0), Vec2::splat(96.0)),
+            ))
+            .id();
+        let souls = [
+            app.world_mut()
+                .spawn((
+                    Transform::from_xyz(-16.0, 0.0, 0.0),
+                    DamnedSoul::default(),
+                    AssignedTask::None,
+                    Destination(Vec2::ZERO),
+                    Path::default(),
+                    IdleState::default(),
+                    CommandedBy(familiar),
+                ))
+                .id(),
+            app.world_mut()
+                .spawn((
+                    Transform::from_xyz(16.0, 0.0, 0.0),
+                    DamnedSoul::default(),
+                    AssignedTask::None,
+                    Destination(Vec2::ZERO),
+                    Path::default(),
+                    IdleState::default(),
+                    CommandedBy(familiar),
+                ))
+                .id(),
+        ];
+
+        let mut blueprint_grid_entries = Vec::new();
+        for pos in [Vec2::new(-32.0, 32.0), Vec2::new(32.0, 32.0)] {
+            let mut blueprint = Blueprint::new(BuildingType::RestArea, vec![(0, 0)]);
+            blueprint.deliver_material(ResourceType::Wood, 5);
+            let entity = app
+                .world_mut()
+                .spawn((
+                    Transform::from_translation(pos.extend(0.0)),
+                    blueprint,
+                    Designation {
+                        work_type: WorkType::Build,
+                    },
+                    TaskSlots::new(1),
+                    Priority::default(),
+                ))
+                .id();
+            blueprint_grid_entries.push((entity, pos));
+        }
+        app.world_mut().flush();
+        {
+            let mut grid = app.world_mut().resource_mut::<BlueprintSpatialGrid>();
+            for &(entity, pos) in &blueprint_grid_entries {
+                grid.insert(entity, pos);
+            }
+        }
+
+        app.update();
+
+        let requests = app
+            .world()
+            .resource::<Messages<TaskAssignmentRequest>>()
+            .iter_current_update_messages()
+            .collect::<Vec<_>>();
+        assert_eq!(requests.len(), 2);
+        assert!(souls.iter().all(|soul| {
+            requests
+                .iter()
+                .any(|request| request.worker_entity == *soul)
+        }));
+        assert!(blueprint_grid_entries.iter().all(|(blueprint, _)| {
+            requests
+                .iter()
+                .any(|request| request.task_entity == *blueprint)
+        }));
     }
 }

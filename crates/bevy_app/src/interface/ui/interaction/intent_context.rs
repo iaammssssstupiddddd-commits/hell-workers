@@ -2,15 +2,13 @@ use bevy::ecs::system::SystemParam;
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 
-use crate::entities::familiar::{Familiar, FamiliarOperation};
+use crate::entities::familiar::{Familiar, FamiliarOperation, FamiliarPolicy};
 use crate::input_actions::ActiveModeCleanupParams;
 use crate::interface::selection::SelectedEntity;
-use crate::interface::ui::{EntityListNodeIndex, InfoPanelPinState};
+use crate::interface::ui::InfoPanelPinState;
 use crate::systems::command::TaskArea;
-use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::save::{SaveLoadState, SavePath};
 use hw_core::game_state::PlayMode;
-use hw_core::relationships::Commanding;
 use hw_core::world::DoorState;
 use hw_jobs::{Building, BuildingCategory, Door};
 use hw_logistics::{StockpilePolicyChangeRequest, StockpilePolicyPatch};
@@ -101,22 +99,23 @@ impl IntentDomainActionCtx<'_, '_> {
 pub(crate) struct IntentSelectionCtx<'w> {
     pub(crate) selected_entity: ResMut<'w, SelectedEntity>,
     pub(crate) info_panel_pin: ResMut<'w, InfoPanelPinState>,
-    pub(crate) node_index: Res<'w, EntityListNodeIndex>,
     pub(crate) resolved_frame: Res<'w, crate::input_actions::ResolvedInputFrame>,
 }
 
+type FamiliarSettingsTargetQuery<'w, 's> = Query<
+    'w,
+    's,
+    (),
+    (
+        With<Familiar>,
+        With<FamiliarOperation>,
+        With<FamiliarPolicy>,
+    ),
+>;
+
 #[derive(SystemParam)]
 pub(crate) struct IntentFamiliarQueries<'w, 's> {
-    pub(crate) q_familiar_ops: Query<'w, 's, &'static mut FamiliarOperation>,
-    pub(crate) q_familiar_meta: Query<
-        'w,
-        's,
-        (
-            &'static Familiar,
-            &'static FamiliarAiState,
-            Option<&'static Commanding>,
-        ),
-    >,
+    pub(crate) q_familiar_settings: FamiliarSettingsTargetQuery<'w, 's>,
     pub(crate) q_familiars_for_area:
         Query<'w, 's, (Entity, Option<&'static TaskArea>), With<Familiar>>,
 }
@@ -129,7 +128,8 @@ pub(crate) struct IntentUiQueries<'w, 's> {
         Query<'w, 's, &'static mut Node, (With<OperationDialog>, Without<LoadConfirmDialog>)>,
     pub(crate) q_load_confirm:
         Query<'w, 's, &'static mut Node, (With<LoadConfirmDialog>, Without<OperationDialog>)>,
-    pub(crate) q_text: Query<'w, 's, &'static mut Text>,
+    pub(crate) q_operation_scroll:
+        Query<'w, 's, &'static mut ScrollPosition, With<hw_ui::components::OperationDialogScroll>>,
     pub(crate) input_focus: ResMut<'w, InputFocus>,
     pub(crate) save_load_state: ResMut<'w, SaveLoadState>,
     pub(crate) save_path: Res<'w, SavePath>,

@@ -24,6 +24,7 @@ section|id="familiars-workers"|title="Familiar と作業員"
 topic|feature="entity-list-squads"|owner="familiar-management"|section="familiars-workers"|id="entity-list-squads"|title="一覧と所属"
 entry|topic="entity-list-squads"|id="entity-list-selection"|title="一覧から選択"|paragraphs=["左一覧の行を選ぶと対象へ注目できます。前後の候補を順に巡回することもできます。", "検索欄の入力中はショートカットが抑止されます。"]|shortcut=Some("Tab / Shift+Tab")
 entry|topic="entity-list-squads"|id="soul-assignment"|title="Soul の所属変更"|paragraphs=["Soul の行を Familiar セクションへドラッグすると所属を変更できます。", "Familiar の使役上限を超える場合は割り当てられません。"]|shortcut=None
+entry|topic="entity-list-squads"|id="familiar-operation-policy"|title="Familiar の運用ポリシー"|paragraphs=["Familiar のコンテキストメニューから Open Operation を選ぶと、疲労閾値、最大使役 Soul 数、作業種別ごとの許可と Low / Normal / High の優先度を設定できます。", "Disable all は新しい作業の割り当てだけを止めます。すでに実行中の作業と休息などの自己維持は継続します。", "方針だけで新しい割り当てが止まった仕事は Tasks に Blocked: Disabled by familiar policy と表示されます。", "設定は Familiar ごとに保存されます。最大数を現在の使役数より下げると、超過した Soul は所属と作業から解放されます。"]|shortcut=Some("Esc")
 topic|feature="familiar-commands"|owner="familiar-management"|section="familiars-workers"|id="familiar-commands"|title="Familiar の命令"
 entry|topic="familiar-commands"|id="familiar-designations"|title="作業指定"|paragraphs=["Familiar を選択中に Chop / Mine / Haul を選び、対象範囲をクリックまたはドラッグします。", "Cancel は既存の指定を範囲で取り消します。"]|shortcut=Some("C / 1 / M / 2 / H / 3 / 0 / Delete")
 entry|topic="familiar-commands"|id="familiar-idle-patrol"|title="Idle / Patrol"|paragraphs=["通常状態の Familiar を選択中に、Idle と Patrol を切り替えられます。"]|shortcut=Some("Esc")
@@ -71,9 +72,18 @@ coverage|descriptive::camera-pan-zoom|player|published:entry:camera-pan-zoom
 coverage|descriptive::getting-started-first-steps|player|published:entry:getting-started-first-steps
 coverage|descriptive::help-pause-behavior|player|published:entry:help-pause-behavior
 coverage|descriptive::notifications|player|published:entry:notifications
+coverage|descriptive::soul-assignment|player|published:entry:soul-assignment
 coverage|descriptive::soul-energy-recovery|player|published:entry:soul-energy-recovery
 coverage|descriptive::soul-energy-status|player|published:entry:soul-energy-status
 coverage|descriptive::soul-rename|player|published:entry:soul-rename
+coverage|familiar-settings-patch::all-work-allowed|player|published:entry:familiar-operation-policy
+coverage|familiar-settings-patch::fatigue-threshold|player|published:entry:familiar-operation-policy
+coverage|familiar-settings-patch::max-controlled-soul|player|published:entry:familiar-operation-policy
+coverage|familiar-settings-patch::work-allowed|player|published:entry:familiar-operation-policy
+coverage|familiar-settings-patch::work-priority|player|published:entry:familiar-operation-policy
+coverage|familiar-work-priority::high|player|published:entry:familiar-operation-policy
+coverage|familiar-work-priority::low|player|published:entry:familiar-operation-policy
+coverage|familiar-work-priority::normal|player|published:entry:familiar-operation-policy
 coverage|help-scroll::end|player|published:chrome:document-end
 coverage|help-scroll::page-down|player|published:chrome:page-down
 coverage|help-scroll::page-up|player|published:chrome:page-up
@@ -115,7 +125,7 @@ coverage|input::list-next|player|published:entry:entity-list-selection
 coverage|input::list-previous|player|published:entry:entity-list-selection
 coverage|input::load-cancel|player|published:entry:save-load
 coverage|input::load|player|published:entry:save-load
-coverage|input::operation-close|player|published:entry:soul-assignment
+coverage|input::operation-close|player|published:entry:familiar-operation-policy
 coverage|input::pause-toggle|player|published:entry:time-controls
 coverage|input::render-3d|debug|excluded:debug-only
 coverage|input::rtt-directional-light|debug|excluded:debug-only
@@ -231,11 +241,10 @@ coverage|ui-intent::load-cancel|player|published:entry:save-load
 coverage|ui-intent::load-confirm|player|published:entry:save-load
 coverage|ui-intent::load-request|player|published:entry:save-load
 coverage|ui-intent::move-plant-building|player|published:entry:architect-building
-coverage|ui-intent::operation-close|player|published:entry:soul-assignment
-coverage|ui-intent::operation-familiar-max-souls|player|published:entry:soul-assignment
-coverage|ui-intent::operation-fatigue-threshold|player|published:entry:soul-assignment
-coverage|ui-intent::operation-max-souls|player|published:entry:soul-assignment
-coverage|ui-intent::operation-open|player|published:entry:soul-assignment
+coverage|ui-intent::operation-close|player|published:entry:familiar-operation-policy
+coverage|ui-intent::operation-open|player|published:entry:familiar-operation-policy
+coverage|ui-intent::operation-settings-dialog|player|published:entry:familiar-operation-policy
+coverage|ui-intent::operation-settings-explicit|player|published:entry:familiar-operation-policy
 coverage|ui-intent::orders-toggle|player|published:entry:orders-designation
 coverage|ui-intent::remove-stockpile-zone|player|published:entry:zones-workflow
 coverage|ui-intent::remove-yard-zone|player|excluded:unreachable-player-flow

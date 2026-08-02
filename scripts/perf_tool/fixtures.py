@@ -8,6 +8,10 @@ def write_fixture_run(
     warning: bool = False,
     teardown_warning: bool = False,
     fixed_step_audit: bool = False,
+    familiar_policy: str = "baseline",
+    operation_dialog: str = "hidden",
+    controlled_work: dict[str, str] | None = None,
+    determinism_state_checksum: str = "0000000000000000",
 ) -> None:
     run_dir = root / "data"
     run_dir.mkdir(parents=True)
@@ -41,7 +45,19 @@ def write_fixture_run(
                         "souls": "0",
                         "familiars": "0",
                         "designations": "0",
-                        "state_checksum": "0000000000000000",
+                        "structural_checksum": "0000000000000000",
+                        "state_checksum": determinism_state_checksum,
+                        "delegation_cycles": "0",
+                        "delegation_familiars_processed": "0",
+                        "candidate_membership_checks": "0",
+                        "policy_disabled_rejections": "0",
+                        "candidate_snapshot_attempts": "0",
+                        "candidate_score_attempts": "0",
+                        "worker_score_attempts": "0",
+                        "source_selector_calls": "0",
+                        "source_selector_scanned_items": "0",
+                        "reachable_with_cache_calls": "0",
+                        **({} if index == 0 else (controlled_work or {})),
                     }
                 )
     else:
@@ -74,10 +90,12 @@ def write_fixture_run(
     (root / "run.log").write_text(
         (
             "PERF_SCENARIO: seed=20260712 workload=gather size=small souls=50 familiars=4 "
-            "render=cpu clock=fixed fixed_hz=64 fixed_warmup_ticks=1920 fixed_audit_ticks=128\n"
+            f"render=cpu clock=fixed familiar_policy={familiar_policy} "
+            f"operation_dialog={operation_dialog} fixed_hz=64 "
+            "fixed_warmup_ticks=1920 fixed_audit_ticks=128\n"
             if fixed_step_audit
             else "PERF_SCENARIO: seed=20260712 workload=gather size=small souls=50 familiars=4 "
-            "render=cpu clock=realtime\n"
+            "render=cpu clock=realtime familiar_policy=baseline operation_dialog=hidden\n"
         )
         + "AdapterInfo { name: \"Test GPU\", driver: \"test\", driver_info: \"test\", backend: Vulkan }\n"
         + extra
@@ -253,12 +271,111 @@ def self_test() -> int:
         invalidated = json.loads((fixed_run_dirs[0] / "validation.json").read_text(encoding="utf-8"))
         assert any("determinism checkpoints differ" in reason for reason in invalidated["reasons"])
 
+        controlled_session = root / "controlled-session"
+        controlled_cases = [
+            Case(
+                "gather",
+                "small",
+                "cpu",
+                DEFAULT_SEED,
+                None,
+                None,
+                familiar_policy,
+                operation_dialog,
+            )
+            for familiar_policy in ("default", "disabled")
+            for operation_dialog in ("hidden", "open")
+        ]
+        default_work = {
+            "delegation_cycles": "2",
+            "delegation_familiars_processed": "8",
+            "candidate_membership_checks": "8",
+            "policy_disabled_rejections": "0",
+            "candidate_snapshot_attempts": "8",
+            "candidate_score_attempts": "8",
+            "worker_score_attempts": "8",
+            "source_selector_calls": "1",
+            "source_selector_scanned_items": "1",
+            "reachable_with_cache_calls": "1",
+        }
+        disabled_work = {
+            "delegation_cycles": "2",
+            "delegation_familiars_processed": "8",
+            "candidate_membership_checks": "8",
+            "policy_disabled_rejections": "8",
+            "candidate_snapshot_attempts": "0",
+            "candidate_score_attempts": "0",
+            "worker_score_attempts": "0",
+            "source_selector_calls": "0",
+            "source_selector_scanned_items": "0",
+            "reachable_with_cache_calls": "0",
+        }
+        for case in controlled_cases:
+            run_dir = controlled_session / "cases" / case.identifier / "run-001"
+            write_fixture_run(
+                run_dir,
+                fixed_step_audit=True,
+                familiar_policy=case.familiar_policy,
+                operation_dialog=case.operation_dialog,
+                controlled_work=(
+                    default_work
+                    if case.familiar_policy == "default"
+                    else disabled_work
+                ),
+                determinism_state_checksum=(
+                    "0000000000000001"
+                    if case.familiar_policy == "default"
+                    else "0000000000000002"
+                ),
+            )
+            validation = validate_run(
+                run_dir,
+                returncode=0,
+                expected_case=case,
+                expected_adapter="Test",
+                expected_backend="vulkan",
+                allow_log_patterns=[],
+                capture_kind="fixed-step-determinism",
+                expected_fixed_hz=64,
+                expected_warmup_ticks=1920,
+                expected_audit_ticks=128,
+            )
+            assert validation.valid, validation.reasons
+            write_json(run_dir / "validation.json", validation.to_json())
+        write_json(
+            controlled_session / "manifest.json",
+            {
+                "matrix": {
+                    "capture_kind": "fixed-step-determinism",
+                    "fixed_hz": 64,
+                    "warmup_ticks": 1920,
+                    "audit_ticks": 128,
+                    "familiar_policies": ["default", "disabled"],
+                    "operation_dialog_modes": ["hidden", "open"],
+                },
+                "cases": [
+                    asdict(case) | {"id": case.identifier}
+                    for case in controlled_cases
+                ],
+                "actual_adapters": [],
+            },
+        )
+        assert summarize_session(controlled_session)
+        controlled_result = json.loads(
+            (controlled_session / "familiar_policy_comparison.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert controlled_result["status"] == "pass"
+
         audit_args = build_parser().parse_args(["audit", "--dry-run"])
         assert audit_args.clock_mode == "fixed"
         assert audit_args.capture_kind == "fixed-step-determinism"
         assert audit_args.fixed_hz == 64
         assert audit_args.warmup_ticks == 1920
         assert audit_args.audit_ticks == 128
+        assert audit_args.familiar_policies == "baseline"
+        assert audit_args.operation_dialog_modes == "hidden"
 
         def write_comparison_fixture(
             session_dir: Path, *, sizes: list[str], renders: list[str], case_ids: list[str]

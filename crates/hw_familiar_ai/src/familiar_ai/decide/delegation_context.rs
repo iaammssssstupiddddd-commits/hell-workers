@@ -4,7 +4,7 @@
 //! hw_familiar_ai から直接参照できる。
 
 use bevy::prelude::*;
-use hw_core::familiar::{Familiar, FamiliarAiState, FamiliarOperation};
+use hw_core::familiar::{Familiar, FamiliarAiState, FamiliarOperation, FamiliarPolicy};
 use hw_core::relationships::ManagedTasks;
 use hw_core::soul::{Destination, IdleBehavior, Path};
 use hw_jobs::AssignedTask;
@@ -37,6 +37,7 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub fam_entity: Entity,
     pub fam_transform: &'a Transform,
     pub familiar_op: &'a FamiliarOperation,
+    pub familiar_policy: &'a FamiliarPolicy,
     pub ai_state: &'a mut FamiliarAiState,
     pub fam_dest: &'a mut Destination,
     pub fam_path: &'a mut Path,
@@ -75,6 +76,7 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
                 squad: ctx.squad_entities,
                 task_area_opt: ctx.task_area_opt,
                 fatigue_threshold,
+                familiar_policy: ctx.familiar_policy,
                 designation_grid: ctx.designation_grid,
                 transport_request_grid: ctx.transport_request_grid,
                 managed_tasks: ctx.managed_tasks,

@@ -4,6 +4,7 @@
 
 use bevy::prelude::*;
 use hw_core::game_state::TimeSpeed;
+use hw_core::jobs::WorkType;
 use hw_jobs::BuildingCategory;
 use hw_logistics::ResourceType;
 use std::borrow::Cow;
@@ -258,6 +259,32 @@ pub struct SpeedButtonMarker(pub TimeSpeed);
 pub struct OperationDialog;
 
 #[derive(Component)]
+pub struct OperationDialogScroll;
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OperationPolicyRow(pub WorkType);
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OperationPolicyAllowedButton(pub WorkType);
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OperationPolicyAllowedText(pub WorkType);
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OperationPolicyPriorityButton(pub WorkType);
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OperationPolicyPriorityText(pub WorkType);
+
+#[derive(Component)]
+pub struct OperationPolicyAllDisabledWarning;
+
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OperationDialogState {
+    pub target: Option<Entity>,
+}
+
+#[derive(Component)]
 pub struct PauseMenu;
 
 #[derive(Component, Default, Clone)]
@@ -323,7 +350,7 @@ pub struct FamiliarListItem(pub Entity);
 #[derive(Component, Clone, Copy)]
 pub struct FamiliarMaxSoulAdjustButton {
     pub familiar: Entity,
-    pub delta: isize,
+    pub delta: i8,
 }
 
 #[derive(Component)]

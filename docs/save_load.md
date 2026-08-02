@@ -109,6 +109,8 @@ HELL_WORKERS_SAVE
 - magic 無しの既存ファイルだけを legacy v0 として読む。v0 は body の `SavedWorldgenSeed` を後方互換の seed guard として使用し、存在しない場合は警告して継続する。
 - v0 の `SavedWorldgenSeed` は seed 照合だけに使い、照合後にDynamicWorldから除去する。live worldへは適用しない。
 - `ReservedForTask` は header 無し v0 body を読む間だけ registry に登録する legacy shim である。v0 deserialize 後、schema 検証より前に全 entity から除去する。v1 の allow-list には含めず、v1 body に混入した同型は schema reject とする。
+- Familiar operation / policy の追加は container header を変えない additive component migration である。
+  header は v1 のまま維持し、旧 v0 / v1 body の component 欠落を rehydrate 境界で補完する。
 - 書き込みは同一ディレクトリの `create_new` で確保した一意 temp file を `sync_all` した後に rename する。固定 `.tmp` 名を共有しないため、並列 test や別プロセスと temp file 名が衝突しない。保存先そのものの複数プロセス排他はこの機構の対象外である。
 
 ## 保存対象
@@ -123,7 +125,8 @@ HELL_WORKERS_SAVE
 
 マーカーコンポーネントで選別（`collect_persisted_entities`）。例:
 
-- Soul / Familiar（`DamnedSoul`, `SoulIdentity`, `Familiar`）
+- Soul / Familiar（`DamnedSoul`, `SoulIdentity`, `Familiar`）。Familiar ごとの
+  `FamiliarOperation` と `FamiliarPolicy` は durable simulation state として保存する
 - タスク・建築（`Designation`, `Priority`, 手動 Chop / Mine の positive provenance
   `PlayerIssuedDesignation`, `Blueprint`, `Building`, construction site 等）
 - 物流（`ResourceItem`, `Stockpile`, `StockpilePolicy`, `TransportRequest`, `Wheelbarrow` 等）
@@ -138,7 +141,7 @@ HELL_WORKERS_SAVE
 
 | カテゴリ | 例 | ロード後 |
 | --- | --- | --- |
-| 実行中タスク状態 | `AssignedTask`, `Path`, `Destination`, `FamiliarAiState` | Soul へ `AssignedTask::None` を付与、shell 側で `FamiliarAiState` 等をデフォルト再挿入。Familiar AI が Designation から再割当 |
+| 実行中タスク状態 | `AssignedTask`, `Path`, `Destination`, `FamiliarAiState`, `ActiveCommand` | Soul へ `AssignedTask::None` を付与し、shell 側で runtime state を再挿入する。Familiar は durable な `TaskArea` があれば `Patrol`、なければ `Idle` として再開し、Designation から再割当する |
 | 派生キャッシュ | 空間グリッド、`SharedResourceCache`、`ReservationSignatureCache`、transport producer cache、`CachedStockpileGroups`、`ObstaclePositionIndex`、task input revisions、Familiar/Blueprint/wheelbarrow diagnostics | root reset hookでdefault化する。予約同期 timerもresetし、次のPerceiveが初回同期として完全snapshot/診断cycleを再構築 |
 | runtime obstacle provenance / navigation cache | `ObstacleSourceKind`、`BuildingFootprint`、`ObstaclePositionIndex`、raw `WorldMap.obstacles` / `doors` / `bridged_tiles` | `rehydrate_obstacle_runtime` が durable semantic source から marker / cache を再構築。保存済み Door state は最終 override として使う |
 | transient gathering | `GatheringSpot`、`GatheringVisuals`、`ParticipatingIn`、`GatheringParticipants` | v1 saveから除外。旧bodyのrelationship componentはschema検証前に破棄し、replace hookはspotとlinked aura/objectをdespawn。Soulは非参加状態から通常AIへ戻る |
@@ -216,6 +219,12 @@ orphan inventoryのdrop、Move designation除去、obstacle cache再構築、pre
 exclusive dispatcherが一度だけ要求を消費する。新しいproject-owned `Last` systemを追加する場合は、
 このsetとの前後関係を明示する。
 
+Familiar settings の UI intent は Interface で `FamiliarSettingsChangeRequest` へ変換され、次の
+unpaused Logic 冒頭で target ごとの FIFO replay後の final stateへ一度だけ commitされる。
+`FamiliarSettingsApplySet` の apply と `ApplyDeferred`、続く Soul Perceive の task cleanup が
+完了してから同じ Update の `Last` saveへ到達する。intent発行と同frameのF5は、request適用前の
+直前の整合済み状態を保存し、operationだけが変わった中間状態を保存しない。
+
 `LoadResetRegistry`はrootが所有するcallback一覧である。leaf crateはroot型をimportせず、
 自crate状態だけを消去する`reset_for_world_replace(&mut World)`を公開し、root plugin facadeが登録する。
 root message型は`MessagesPlugin`の単一typed macroから初期化と`Messages<T>::clear()`の両方を生成する。
@@ -225,7 +234,7 @@ root message型は`MessagesPlugin`の単一typed macroから初期化と`Message
 | --- | --- | --- |
 | root interaction | selection、hover、move placement、build/zone/task/companion context、Stockpile policy範囲編集patch、pending PlayMode | default化し、`PlayMode::Normal`を予約 |
 | save outcome | `SaveLoadOutcome` Message | `SavePlugin`専用hookで旧bufferをclear。最終outcomeは全reset後にdispatcherが発行 |
-| `hw_ui` | rename、inspection/pin、drag、entity list model/index、area edit history、text pending、配置feedback、通知Message/center/history/unread、`UiIntent` / `TextInputIntent`、task filter/sort、inline cancel confirmation、Stockpile policy editorの旧Entity付きbutton action、`HelpPanelState`/navigation・本文scroll | hookでclear。InfoPanel rootとHelp rootを同期的に非表示化し、task listの全`TaskListDynamicNode`と動的通知rowをdespawnする。その他のstatic UI root、サイズ、theme、searchは保持 |
+| `hw_ui` | rename、inspection/pin、drag、entity list model/index、area edit history、text pending、配置feedback、通知Message/center/history/unread、`UiIntent` / `TextInputIntent`、task filter/sort、inline cancel confirmation、Stockpile policy editorの旧Entity付きbutton action、`HelpPanelState`/navigation・本文scroll、`OperationDialogState`/target/本文scroll | hookでclear。InfoPanel / Help / Operation dialog rootを同期的に非表示化し、task listの全`TaskListDynamicNode`と動的通知rowをdespawnする。その他のstatic UI root、サイズ、theme、searchは保持 |
 | root Help | `HelpPauseGuard`、pending capture | Helpがpauseを所有した場合だけunpauseしてPause rootを同期的に非表示化する。pre-existing Pauseは維持し、guard/pendingをdefault化 |
 | root task UI | task list snapshot、task input revisions、Familiar/Blueprint diagnostics | default化してdirty化し、新worldの次frame/cycleでPendingから再構築 |
 | `hw_visual` | owner cache、3D proxy、speech/dream/haul/task-area等の独立transient entity、`GatheringSpot`とlinked aura/object | hookでdespawn + cache clear。root固有のFamiliar range shellもrehydrate cleanupでdespawn |
@@ -240,7 +249,9 @@ root message型は`MessagesPlugin`の単一typed macroから初期化と`Message
 new worldを書いた後には手動でclearしない。これによりloaded componentの`Added`/`Changed`は次frameの
 rebuild systemが観測できる。
 
-`MessagesPlugin` の単一 inventory は `TaskActionOutcome` を含み、register と replace 時 clear を同じ型一覧から生成する。
+`MessagesPlugin` の単一 inventory は `TaskActionOutcome`、`FamiliarSettingsChangeRequest` /
+`FamiliarSettingsChangeOutcome`、`FamiliarRosterReleasedVisualMessage` を含み、register と replace 時 clear を
+同じ型一覧から生成する。
 `PlayerIssuedDesignation` と `Priority` は durable なので load 後も許可された manual task の capability を復元するが、
 marker のない legacy / auto task を「auto marker が消えた manual task」と推測してはならず read-only とする。
 
@@ -254,11 +265,12 @@ marker のない legacy / auto task を「auto marker が消えた manual task�
 | カテゴリ | shell の内容 | 実装 |
 | --- | --- | --- |
 | Soul | `Destination`/`Path`/`AnimationState`/UI リンク/speech 状態 + GLB 3D プロキシ×3 | `attach_soul_shell`（spawn と共用） |
-| Familiar | `FamiliarAiState`/`FamiliarOperation`/`ActiveCommand`/Sprite + 3D プロキシ + 指揮範囲インジケーター×3 | `attach_familiar_shell`（同上） |
+| Familiar | `FamiliarAiState`/`ActiveCommand`/Sprite + 3D プロキシ + 指揮範囲インジケーター×3 | `attach_familiar_shell`（同上）。durable operation / policy は挿入しない。runtime-only の `ActiveCommand` は保存済み `TaskArea` があれば `Patrol`、なければ `Idle` へ再構築する |
 | Building（SoulSpa 含む） | `Name`/バウンス演出 + VisualLayer 子 Sprite + 独立 3D ビジュアル | `attach_building_shell`（同上） |
 | Blueprint | `Name`、`Sprite`、`BlueprintVisualState`、`BlueprintVisual` | durable `Blueprint` から mirror と搬入履歴を完成形で生成してから付与。資材アイコン・進捗バーはこの mirror を入力に Visual phase で再生成し、保存済み搬入を新規演出として再生しない |
 | Floor / wall construction | site / tile の `Name`、site の visual state、tile の visual mirror と Sprite | durable な site / tile state から直接生成。Logic 停止中でも床・壁タイルと進捗表示を復元 |
 | Tree / Rock / ResourceItem / Stockpile | Sprite（spawn 箇所と同じ画像・サイズ） | rehydrate 内で直接挿入 |
+| 旧形式の Familiar 設定 | 欠落した `FamiliarOperation` / `FamiliarPolicy` | shell より前に `rehydrate_familiar_settings` を実行。operation 欠落時は default threshold と `max(default max, Commanding roster数)`、policy 欠落時は全許可 / Normal を補完する。保存済み operation は維持し、保存済み policy は effective semantics を変えず正規化する |
 | 旧形式の通常 Stockpile セル | 欠落した `StockpilePolicy` の互換既定値 | `BelongsTo(owner)` の owner が durable な `Yard` のセルだけへ `Any` / `Normal` / `target_amount = capacity` / export許可を挿入。既存の `Any` / `Only(ResourceType)` は意味を維持し、`Selected(StockpileResourceSet)` を含むpolicyはacceptance集合とtargetを正規化する。Tank / Mixer root、marker が保存されない Tank companion、owner 不明の storage へは推測で付与しない |
 | 障害物 provenance / pathfinding cache | source-aware marker、Building footprint mirror、`ObstaclePositionIndex`、raw obstacle / Door / Bridge cache | `rehydrate_obstacle_runtime` が Tree/Rock、construction、Building/Blueprint/site の semantic source matrix から再構築 |
 
@@ -266,6 +278,11 @@ shell 欠落の判定は「shell が必ず挿入するコンポーネントの�
 （Soul/Familiar は `Without<Destination>`、Building は `Without<BuildingBounceEffect>`、Blueprint は mirror / Sprite /
 `BlueprintVisual` / `Name`、construction tile は mirror / Sprite / `Name`、construction site は mirror / `Name` を個別に検査する）。
 既に存在する shell は再作成しない。
+
+保存済み `FamiliarOperation.max_controlled_soul` が保存済み `Commanding` roster数より小さい場合は、
+B2-aware writerでは生成不能な破損状態としてloadを失敗させる。Soulを推測で解放して修復せず、
+transaction rollbackでpre-loadのoperation / policy / relationshipを復元し、terminal outcomeを
+`ApplyRecovered` とする。
 
 Blueprint と construction の mirror を `default()` で付与して次 frame の Logic 同期へ委ねてはならない。
 load は virtual time が pause 中でも成立し、Visual phase は停止しないため、mirror は durable state から完成形として
@@ -332,15 +349,18 @@ RON bodyを `systems::save::schema` testでdeserializeして型pathとvariant表
 ## 検証
 
 ```bash
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo check
-CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo clippy --workspace 2>&1 | grep "^warning:" | grep -v generated
+cargo check
+cargo clippy --workspace -- -D warnings
 cargo test -p bevy_app@0.1.0 --lib systems::save::schema
 cargo test -p bevy_app@0.1.0 --lib systems::save
 cargo test -p hw_core --lib world_epoch
 cargo test -p hw_ui --lib world_replace_reset
 ```
 
-手動: プレイ → F5で成功通知 → 再起動 → F9 → 確認ダイアログで Confirm。確認前にはロードされず、Confirm後にSoul 数・Stockpile 内容・建築進捗・`GameTime` が復元され、旧通知履歴が消えてload成功が新しい先頭になること。save fileを退避した状態のF9ではダイアログを開かず`Save not found`が通知されることも確認する。
+手動: プレイ → Familiar の fatigue threshold / max / 複数 WorkType の許可・priorityを変更 → F5で成功通知
+→ 値を変える → F9 → 確認ダイアログで Confirm。確認前にはロードされず、Confirm後にFamiliar設定、Soul 数、
+Stockpile 内容、建築進捗、`GameTime` が復元され、旧通知履歴が消えてload成功が新しい先頭になること。
+save fileを退避した状態のF9ではダイアログを開かず`Save not found`が通知されることも確認する。
 
 ## 未実装
 

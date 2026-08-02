@@ -18,6 +18,7 @@ pub enum CandidateRejectReason {
     Unreachable,
     TemporaryContention,
     DependencyWaiting,
+    PolicyDisabled,
     MalformedTask,
     StaleInput,
     Unevaluated,
@@ -32,6 +33,7 @@ impl CandidateRejectReason {
             Self::Unreachable => Some(TaskDiagnosticClass::Unreachable),
             Self::TemporaryContention => Some(TaskDiagnosticClass::TemporaryContention),
             Self::DependencyWaiting => Some(TaskDiagnosticClass::DependencyWaiting),
+            Self::PolicyDisabled => Some(TaskDiagnosticClass::PolicyDisabled),
             Self::MalformedTask | Self::StaleInput | Self::Unevaluated => None,
         }
     }
@@ -327,6 +329,50 @@ mod tests {
             !record
                 .domains
                 .contains(TaskDiagnosticDomainMask::AVAILABILITY)
+        );
+    }
+
+    #[test]
+    fn policy_disabled_is_terminal_only_when_idle_worker_can_evaluate_it() {
+        let task = entity(1);
+        let revisions = TaskDiagnosticInputRevisions::default();
+        let mut evaluator = FamiliarEvaluatorDiagnostics::new(1);
+        evaluator.observe_applicable(task, &revisions);
+        evaluator.reject(task, CandidateRejectReason::PolicyDisabled);
+
+        let mut cycle = FamiliarTaskDiagnosticCycle::new(1, &revisions);
+        cycle.begin_evaluator();
+        cycle.finish_evaluator(evaluator);
+        let record = cycle.records.get(&task).expect("task was observed");
+
+        assert!(record.coverage.is_complete_rejection());
+        assert_eq!(
+            record.counters.count(TaskDiagnosticClass::PolicyDisabled),
+            1
+        );
+        assert!(record.domains.contains(TaskDiagnosticDomainMask::ROSTER));
+    }
+
+    #[test]
+    fn zero_worker_normalizes_policy_disabled_to_no_eligible() {
+        let task = entity(1);
+        let revisions = TaskDiagnosticInputRevisions::default();
+        let mut evaluator = FamiliarEvaluatorDiagnostics::new(0);
+        evaluator.observe_applicable(task, &revisions);
+        evaluator.reject(task, CandidateRejectReason::PolicyDisabled);
+
+        let mut cycle = FamiliarTaskDiagnosticCycle::new(1, &revisions);
+        cycle.begin_evaluator();
+        cycle.finish_evaluator(evaluator);
+        let record = cycle.records.get(&task).expect("task was observed");
+
+        assert_eq!(
+            record.counters.representative(),
+            Some(TaskDiagnosticClass::NoEligibleFamiliar)
+        );
+        assert_eq!(
+            record.counters.count(TaskDiagnosticClass::PolicyDisabled),
+            0
         );
     }
 

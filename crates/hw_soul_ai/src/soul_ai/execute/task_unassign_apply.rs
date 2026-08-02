@@ -61,11 +61,17 @@ mod tests {
     use super::handle_soul_task_unassign_system;
     use bevy::ecs::schedule::ApplyDeferred;
     use bevy::prelude::*;
-    use hw_core::events::{OnTaskAbandoned, ResourceReservationRequest, SoulTaskUnassignRequest};
-    use hw_core::relationships::WorkingOn;
+    use hw_core::events::{
+        OnTaskAbandoned, ResourceReservationOp, ResourceReservationRequest, SoulTaskUnassignRequest,
+    };
+    use hw_core::logistics::ResourceType;
+    use hw_core::relationships::{DeliveringTo, IncomingDeliveries, TaskWorkers, WorkingOn};
     use hw_core::soul::{DamnedSoul, Path};
-    use hw_jobs::{ActiveTaskIdentity, GeneratePowerData, GeneratePowerPhase, WorkType};
-    use hw_logistics::SharedResourceCache;
+    use hw_jobs::{
+        ActiveTaskIdentity, GeneratePowerData, GeneratePowerPhase, HaulToBlueprintData,
+        HaulToBpPhase, WorkType,
+    };
+    use hw_logistics::{Inventory, ResourceItem, SharedResourceCache};
     use hw_world::WorldMap;
 
     use crate::soul_ai::execute::task_execution::AssignedTask;
@@ -137,5 +143,91 @@ mod tests {
         ));
         assert!(app.world().get::<ActiveTaskIdentity>(soul).is_none());
         assert!(app.world().get::<WorkingOn>(soul).is_none());
+    }
+
+    #[test]
+    fn prepick_blueprint_haul_unassign_releases_incoming_delivery() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(WorldMap::default())
+            .init_resource::<SharedResourceCache>()
+            .add_message::<SoulTaskUnassignRequest>()
+            .add_message::<ResourceReservationRequest>()
+            .add_message::<OnTaskAbandoned>()
+            .add_systems(
+                Update,
+                (handle_soul_task_unassign_system, ApplyDeferred).chain(),
+            );
+
+        let blueprint = app.world_mut().spawn_empty().id();
+        let item = app
+            .world_mut()
+            .spawn((ResourceItem(ResourceType::Wood), DeliveringTo(blueprint)))
+            .id();
+        let assignment = app.world_mut().spawn_empty().id();
+        let soul = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                DamnedSoul::default(),
+                AssignedTask::HaulToBlueprint(HaulToBlueprintData {
+                    item,
+                    blueprint,
+                    phase: HaulToBpPhase::GoingToItem,
+                }),
+                Path::default(),
+                Inventory::default(),
+                ActiveTaskIdentity::new(assignment, assignment, WorkType::Haul),
+                WorkingOn(assignment),
+            ))
+            .id();
+        app.world_mut().flush();
+        assert_eq!(
+            app.world()
+                .get::<IncomingDeliveries>(blueprint)
+                .map(IncomingDeliveries::len),
+            Some(1)
+        );
+        assert_eq!(
+            app.world()
+                .get::<TaskWorkers>(assignment)
+                .map(TaskWorkers::len),
+            Some(1)
+        );
+
+        app.world_mut().write_message(SoulTaskUnassignRequest {
+            soul_entity: soul,
+            emit_abandoned: false,
+        });
+        app.update();
+
+        assert!(app.world().get::<DeliveringTo>(item).is_none());
+        assert!(
+            app.world()
+                .get::<IncomingDeliveries>(blueprint)
+                .is_none_or(IncomingDeliveries::is_empty)
+        );
+        assert!(
+            app.world()
+                .get::<TaskWorkers>(assignment)
+                .is_none_or(TaskWorkers::is_empty)
+        );
+        assert!(matches!(
+            app.world().get::<AssignedTask>(soul),
+            Some(AssignedTask::None)
+        ));
+        assert!(app.world().get::<ActiveTaskIdentity>(soul).is_none());
+        assert!(app.world().get::<WorkingOn>(soul).is_none());
+        assert_eq!(
+            app.world()
+                .resource::<Messages<ResourceReservationRequest>>()
+                .iter_current_update_messages()
+                .map(|request| request.op.clone())
+                .collect::<Vec<_>>(),
+            vec![ResourceReservationOp::ReleaseSource {
+                source: item,
+                amount: 1,
+            }]
+        );
     }
 }

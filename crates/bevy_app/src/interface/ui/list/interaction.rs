@@ -133,10 +133,12 @@ pub fn entity_list_interaction_system(
         match *interaction {
             Interaction::Pressed => {
                 *color = BackgroundColor(theme.colors.button_pressed);
-                ui_intents.write(UiIntent::AdjustMaxControlledSoulFor(
-                    button.familiar,
-                    button.delta,
-                ));
+                ui_intents.write(UiIntent::ApplyFamiliarSettingsFor {
+                    target: button.familiar,
+                    patch: hw_core::familiar::FamiliarSettingsPatch::AdjustMaxControlledSoul {
+                        delta: button.delta,
+                    },
+                });
             }
             Interaction::Hovered => {
                 *color = BackgroundColor(theme.colors.button_hover);

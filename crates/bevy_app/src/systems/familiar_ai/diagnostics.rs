@@ -6,7 +6,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
 use hw_core::constants::FATIGUE_THRESHOLD;
-use hw_core::familiar::{ActiveCommand, Familiar, FamiliarOperation};
+use hw_core::familiar::{ActiveCommand, Familiar, FamiliarOperation, FamiliarPolicy};
 use hw_core::relationships::{
     CommandedBy, Commanding, DeliveringTo, IncomingDeliveries, LoadedIn, LoadedItems, ManagedBy,
     ManagedTasks, ParkedAt, PushedBy, StoredIn, StoredItems, TaskWorkers,
@@ -111,6 +111,7 @@ type ChangedFamiliarsQuery<'w, 's> = Query<
     Or<(
         Changed<Familiar>,
         Changed<FamiliarOperation>,
+        Changed<FamiliarPolicy>,
         Changed<ActiveCommand>,
         Changed<TaskArea>,
         Changed<Commanding>,
@@ -194,6 +195,7 @@ pub struct TaskRevisionRemovals<'w, 's> {
     transport_requests: RemovedComponents<'w, 's, TransportRequest>,
     familiars: RemovedComponents<'w, 's, Familiar>,
     familiar_operations: RemovedComponents<'w, 's, FamiliarOperation>,
+    familiar_policies: RemovedComponents<'w, 's, FamiliarPolicy>,
     active_commands: RemovedComponents<'w, 's, ActiveCommand>,
     task_areas: RemovedComponents<'w, 's, TaskArea>,
     commandings: RemovedComponents<'w, 's, Commanding>,
@@ -284,6 +286,7 @@ pub(crate) fn sync_task_diagnostic_revisions_system(
     }
     roster_changed |= removed.familiars.read().count() > 0;
     roster_changed |= removed.familiar_operations.read().count() > 0;
+    roster_changed |= removed.familiar_policies.read().count() > 0;
     roster_changed |= removed.active_commands.read().count() > 0;
     roster_changed |= removed.task_areas.read().count() > 0;
     roster_changed |= removed.commandings.read().count() > 0;
@@ -487,6 +490,53 @@ mod tests {
                 .resource::<TaskDiagnosticInputRevisions>()
                 .roster,
             initial_revision
+        );
+    }
+
+    #[test]
+    fn familiar_policy_change_and_removal_each_advance_roster_revision() {
+        let mut app = App::new();
+        app.init_resource::<TaskDiagnosticInputRevisions>()
+            .init_resource::<TaskDiagnosticExternalRevisionState>()
+            .init_resource::<ResourceSpatialGrid>()
+            .init_resource::<SharedResourceCache>()
+            .init_resource::<WorldMap>()
+            .add_systems(Update, sync_task_diagnostic_revisions_system);
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                FamiliarOperation::default(),
+                FamiliarPolicy::default(),
+            ))
+            .id();
+        app.update();
+        let initial = app
+            .world()
+            .resource::<TaskDiagnosticInputRevisions>()
+            .roster;
+
+        app.world_mut()
+            .entity_mut(familiar)
+            .get_mut::<FamiliarPolicy>()
+            .unwrap()
+            .set_all_allowed(false);
+        app.update();
+        let after_change = app
+            .world()
+            .resource::<TaskDiagnosticInputRevisions>()
+            .roster;
+        assert_ne!(after_change, initial);
+
+        app.world_mut()
+            .entity_mut(familiar)
+            .remove::<FamiliarPolicy>();
+        app.update();
+        assert_ne!(
+            app.world()
+                .resource::<TaskDiagnosticInputRevisions>()
+                .roster,
+            after_change
         );
     }
 }

@@ -320,11 +320,20 @@ pub(super) fn write_determinism_audit(
         "schema_version,checkpoint,update_tick,fixed_timestep_ns,virtual_delta_ns,",
         "virtual_elapsed_ns,fixed_delta_ns,fixed_elapsed_ns,fixed_overstep_ns,virtual_paused,",
         "virtual_relative_speed_bits,virtual_effective_speed_bits,souls,familiars,designations,",
-        "state_checksum\n"
+        "structural_checksum,state_checksum,delegation_cycles,delegation_familiars_processed,",
+        "candidate_membership_checks,policy_disabled_rejections,candidate_snapshot_attempts,",
+        "candidate_score_attempts,worker_score_attempts,source_selector_calls,",
+        "source_selector_scanned_items,reachable_with_cache_calls\n"
     ));
     for checkpoint in checkpoints {
+        let work = checkpoint.familiar_ai_work;
         csv.push_str(&format!(
-            "1,{},{},{},{},{},{},{},{},{},{:016x},{:016x},{},{},{},{:016x}\n",
+            concat!(
+                "{},{},{},{},{},{},{},{},{},{},",
+                "{:016x},{:016x},{},{},{},{:016x},{:016x},",
+                "{},{},{},{},{},{},{},{},{},{}\n"
+            ),
+            PERF_DETERMINISM_SCHEMA_VERSION,
             checkpoint.checkpoint,
             checkpoint.update_tick,
             checkpoint.fixed_timestep_ns,
@@ -339,7 +348,18 @@ pub(super) fn write_determinism_audit(
             checkpoint.checksum.souls,
             checkpoint.checksum.familiars,
             checkpoint.checksum.designations,
+            checkpoint.structural_checksum.value,
             checkpoint.checksum.value,
+            work.delegation_cycles,
+            work.familiars_processed,
+            work.candidate_membership_checks,
+            work.policy_disabled_rejections,
+            work.candidate_snapshot_attempts,
+            work.candidate_score_attempts,
+            work.worker_score_attempts,
+            work.source_selector_calls,
+            work.source_selector_scanned_items,
+            work.reachable_with_cache_calls,
         ));
     }
     std::fs::write(&determinism_path, csv)?;
@@ -348,7 +368,8 @@ pub(super) fn write_determinism_audit(
         String::from("schema_version,checkpoint,update_tick,actor_kind,actor_key,record_hex\n");
     for record in actor_records {
         records_csv.push_str(&format!(
-            "1,{},{},{},{},{}\n",
+            "{},{},{},{},{},{}\n",
+            PERF_DETERMINISM_SCHEMA_VERSION,
             record.checkpoint,
             record.update_tick,
             record.actor_kind,

@@ -5,10 +5,10 @@ use crate::entities::familiar::FamiliarSpawnEvent;
 use crate::interface::ui::panels::task_list::TaskActionOutcome;
 use crate::{
     DesignationRequest, EncouragementRequest, EscapeRequest, FamiliarAiStateChangedEvent,
-    FamiliarIdleVisualRequest, FamiliarOperationMaxSoulChangedEvent, FamiliarStateRequest,
-    GatheringManagementRequest, GatheringSpawnRequest, IdleBehaviorRequest,
-    ResourceReservationRequest, SoulTaskUnassignRequest, SquadManagementRequest,
-    TaskAssignmentRequest,
+    FamiliarIdleVisualRequest, FamiliarRosterReleasedVisualMessage, FamiliarSettingsChangeOutcome,
+    FamiliarSettingsChangeRequest, FamiliarStateRequest, GatheringManagementRequest,
+    GatheringSpawnRequest, IdleBehaviorRequest, ResourceReservationRequest,
+    SoulTaskUnassignRequest, SquadManagementRequest, TaskAssignmentRequest,
 };
 use hw_core::events::{
     DreamTransferredVisualMessage, OnGatheringJoined, OnGatheringParticipated,
@@ -27,7 +27,9 @@ macro_rules! root_message_types {
             $argument;
             DamnedSoulSpawnEvent,
             FamiliarSpawnEvent,
-            FamiliarOperationMaxSoulChangedEvent,
+            FamiliarSettingsChangeRequest,
+            FamiliarSettingsChangeOutcome,
+            FamiliarRosterReleasedVisualMessage,
             FamiliarAiStateChangedEvent,
             TaskAssignmentRequest,
             ResourceReservationRequest,

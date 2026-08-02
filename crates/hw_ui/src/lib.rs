@@ -34,6 +34,7 @@ impl Plugin for HwUiPlugin {
             .init_resource::<panels::task_list::TaskDashboardActionState>()
             .init_resource::<panels::task_list::TaskListDirty>()
             .init_resource::<help::HelpPanelState>()
+            .init_resource::<components::OperationDialogState>()
             .init_resource::<interaction::HoverActionTarget>();
     }
 }
@@ -71,6 +72,7 @@ pub fn reset_for_world_replace(world: &mut World) {
     clear_stockpile_policy_button_targets(world);
     reset_existing_resource::<components::UiInputState>(world);
     reset_existing_resource::<help::HelpPanelState>(world);
+    reset_existing_resource::<components::OperationDialogState>(world);
     reset_existing_resource::<components::SoulRenameState>(world);
     reset_existing_resource::<panels::info_panel::InfoPanelState>(world);
     reset_existing_resource::<panels::info_panel::InfoPanelPinState>(world);
@@ -89,6 +91,7 @@ pub fn reset_for_world_replace(world: &mut World) {
     notifications::reset_for_world_replace(world);
     reset_info_panel_presentation(world);
     reset_help_presentation(world);
+    reset_operation_dialog_presentation(world);
     mark_entity_list_dirty(world);
 
     if world.contains_resource::<InputFocus>() {
@@ -115,6 +118,19 @@ fn reset_help_presentation(world: &mut World) {
         With<help::HelpScrollArea>,
         With<help::HelpNavigationScrollArea>,
     )>>();
+    for mut scroll_position in scroll_areas.iter_mut(world) {
+        scroll_position.0 = Vec2::ZERO;
+    }
+}
+
+fn reset_operation_dialog_presentation(world: &mut World) {
+    let mut roots = world.query_filtered::<&mut Node, With<components::OperationDialog>>();
+    for mut node in roots.iter_mut(world) {
+        node.display = Display::None;
+    }
+
+    let mut scroll_areas =
+        world.query_filtered::<&mut ScrollPosition, With<components::OperationDialogScroll>>();
     for mut scroll_position in scroll_areas.iter_mut(world) {
         scroll_position.0 = Vec2::ZERO;
     }
@@ -262,6 +278,45 @@ mod tests {
         assert_eq!(
             world.entity(root).get::<Node>().unwrap().display,
             Display::None
+        );
+    }
+
+    #[test]
+    fn world_replace_reset_clears_operation_target_root_and_scroll() {
+        let mut world = World::new();
+        let stale_target = world.spawn_empty().id();
+        world.insert_resource(components::OperationDialogState {
+            target: Some(stale_target),
+        });
+        let root = world
+            .spawn((
+                Node {
+                    display: Display::Flex,
+                    ..default()
+                },
+                components::OperationDialog,
+            ))
+            .id();
+        let scroll = world
+            .spawn((
+                ScrollPosition(Vec2::new(0.0, 320.0)),
+                components::OperationDialogScroll,
+            ))
+            .id();
+
+        reset_for_world_replace(&mut world);
+
+        assert_eq!(
+            *world.resource::<components::OperationDialogState>(),
+            components::OperationDialogState::default()
+        );
+        assert_eq!(
+            world.entity(root).get::<Node>().unwrap().display,
+            Display::None
+        );
+        assert_eq!(
+            world.entity(scroll).get::<ScrollPosition>().unwrap().0,
+            Vec2::ZERO
         );
     }
 

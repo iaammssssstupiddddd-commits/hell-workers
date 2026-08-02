@@ -73,20 +73,20 @@ pub(super) fn handle_pressed_action(
         MenuAction::SelectDreamPlanting => {
             ui_intents.write(UiIntent::SelectDreamPlanting);
         }
-        MenuAction::OpenOperationDialog => {
-            ui_intents.write(UiIntent::OpenOperationDialog);
+        MenuAction::OpenOperationDialog { target, .. } => {
+            ui_intents.write(UiIntent::OpenOperationDialog {
+                opener: Some(opener),
+                target,
+            });
         }
         MenuAction::CloseDialog => {
             ui_intents.write(UiIntent::CloseDialog);
         }
-        MenuAction::AdjustFatigueThreshold(delta) => {
-            ui_intents.write(UiIntent::AdjustFatigueThreshold(delta));
+        MenuAction::ApplyFamiliarSettings { patch } => {
+            ui_intents.write(UiIntent::ApplyFamiliarSettings { patch });
         }
-        MenuAction::AdjustMaxControlledSoul(delta) => {
-            ui_intents.write(UiIntent::AdjustMaxControlledSoul(delta));
-        }
-        MenuAction::AdjustMaxControlledSoulFor(entity, delta) => {
-            ui_intents.write(UiIntent::AdjustMaxControlledSoulFor(entity, delta));
+        MenuAction::ApplyFamiliarSettingsFor { target, patch } => {
+            ui_intents.write(UiIntent::ApplyFamiliarSettingsFor { target, patch });
         }
         MenuAction::SetTimeSpeed(speed) => {
             ui_intents.write(UiIntent::SetTimeSpeed(speed));

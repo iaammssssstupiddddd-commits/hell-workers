@@ -1,5 +1,6 @@
 //! Worker ranking に B1/B2 の方針寄与を一度だけ合成する共有スカラー。
 
+use hw_core::familiar::FamiliarWorkPriority;
 use hw_logistics::transport_request::TransportPriority;
 
 pub(crate) const WORKER_PRIORITY_WEIGHT: f32 = 0.65;
@@ -10,6 +11,9 @@ pub(crate) const TRANSPORT_LOW_UNITS: i16 = -10;
 pub(crate) const TRANSPORT_NORMAL_UNITS: i16 = 0;
 pub(crate) const TRANSPORT_HIGH_UNITS: i16 = 10;
 pub(crate) const TRANSPORT_CRITICAL_UNITS: i16 = 20;
+pub(crate) const FAMILIAR_LOW_UNITS: i16 = -5;
+pub(crate) const FAMILIAR_NORMAL_UNITS: i16 = 0;
+pub(crate) const FAMILIAR_HIGH_UNITS: i16 = 5;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PolicyScoreContributions {
@@ -43,6 +47,15 @@ pub(crate) const fn transport_policy_units(priority: TransportPriority) -> i16 {
 }
 
 #[must_use]
+pub(crate) const fn familiar_policy_units(priority: FamiliarWorkPriority) -> i16 {
+    match priority {
+        FamiliarWorkPriority::Low => FAMILIAR_LOW_UNITS,
+        FamiliarWorkPriority::Normal => FAMILIAR_NORMAL_UNITS,
+        FamiliarWorkPriority::High => FAMILIAR_HIGH_UNITS,
+    }
+}
+
+#[must_use]
 pub(crate) fn compose_worker_score(
     base_score: f32,
     contributions: PolicyScoreContributions,
@@ -64,6 +77,13 @@ mod tests {
         assert_eq!(transport_policy_units(TransportPriority::Normal), 0);
         assert_eq!(transport_policy_units(TransportPriority::High), 10);
         assert_eq!(transport_policy_units(TransportPriority::Critical), 20);
+    }
+
+    #[test]
+    fn familiar_mapping_is_the_named_minus_five_to_plus_five_contract() {
+        assert_eq!(familiar_policy_units(FamiliarWorkPriority::Low), -5);
+        assert_eq!(familiar_policy_units(FamiliarWorkPriority::Normal), 0);
+        assert_eq!(familiar_policy_units(FamiliarWorkPriority::High), 5);
     }
 
     #[test]

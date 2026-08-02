@@ -103,13 +103,14 @@ pub(super) fn collect_audit_actor_records(
         path,
         command,
         operation,
+        policy,
         ai_state,
         random_state,
     ) in checksum_queries.audit_familiars.iter()
     {
         let mut record = vec![b'F'];
         write_transform(&mut record, transform, "familiar transform")?;
-        write_familiar_state(&mut record, familiar, command, operation, ai_state)?;
+        write_familiar_state(&mut record, familiar, command, operation, policy, ai_state)?;
         write_vec2(&mut record, destination.0, "familiar destination")?;
         write_path(&mut record, path, "familiar path")?;
         write_option_u64(

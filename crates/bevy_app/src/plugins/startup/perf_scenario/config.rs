@@ -7,6 +7,8 @@ const DEFAULT_WARMUP_SECS: f32 = 30.0;
 const DEFAULT_MEASURE_SECS: f32 = 60.0;
 #[cfg(feature = "profiling")]
 pub(super) const PERF_SUMMARY_SCHEMA_VERSION: u32 = 10;
+#[cfg(feature = "profiling")]
+pub(super) const PERF_DETERMINISM_SCHEMA_VERSION: u32 = 3;
 pub(super) const FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS: [u64; 4] = [1, 8, 32, 128];
 const DEFAULT_FIXED_STEP_HZ: u32 = 64;
 const DEFAULT_FIXED_WARMUP_TICKS: u64 = 1_920;
@@ -104,6 +106,59 @@ impl PerfRenderMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PerfFamiliarPolicyMode {
+    Baseline,
+    Default,
+    Disabled,
+}
+
+impl PerfFamiliarPolicyMode {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "baseline" => Some(Self::Baseline),
+            "default" => Some(Self::Default),
+            "disabled" => Some(Self::Disabled),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Baseline => "baseline",
+            Self::Default => "default",
+            Self::Disabled => "disabled",
+        }
+    }
+
+    pub const fn uses_controlled_fixture(self) -> bool {
+        !matches!(self, Self::Baseline)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PerfOperationDialogMode {
+    Hidden,
+    Open,
+}
+
+impl PerfOperationDialogMode {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "hidden" => Some(Self::Hidden),
+            "open" => Some(Self::Open),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Hidden => "hidden",
+            Self::Open => "open",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PerfClockMode {
     Realtime,
     Fixed,
@@ -155,6 +210,8 @@ pub struct PerfScenarioConfig {
     pub soul_count: u32,
     pub familiar_count: u32,
     pub render_mode: PerfRenderMode,
+    pub familiar_policy_mode: PerfFamiliarPolicyMode,
+    pub operation_dialog_mode: PerfOperationDialogMode,
     pub warmup_secs: f32,
     pub measure_secs: f32,
     pub output_dir: Option<PathBuf>,
@@ -213,6 +270,20 @@ impl PerfScenarioConfig {
             PerfRenderMode::parse,
             PerfRenderMode::Gpu,
         )?;
+        let familiar_policy_mode = parse_value_or_default(
+            value_from_args_or_env(&args, "--perf-familiar-policy", "HW_PERF_FAMILIAR_POLICY")?,
+            "--perf-familiar-policy",
+            "baseline|default|disabled",
+            PerfFamiliarPolicyMode::parse,
+            PerfFamiliarPolicyMode::Baseline,
+        )?;
+        let operation_dialog_mode = parse_value_or_default(
+            value_from_args_or_env(&args, "--perf-operation-dialog", "HW_PERF_OPERATION_DIALOG")?,
+            "--perf-operation-dialog",
+            "hidden|open",
+            PerfOperationDialogMode::parse,
+            PerfOperationDialogMode::Hidden,
+        )?;
         let clock_mode = parse_value_or_default(
             value_from_args_or_env(&args, "--perf-clock", "HW_PERF_CLOCK")?,
             "--perf-clock",
@@ -264,6 +335,24 @@ impl PerfScenarioConfig {
             "--spawn-familiars",
             default_familiars,
         )?;
+        let uses_b2_controlled_mode = familiar_policy_mode.uses_controlled_fixture()
+            || matches!(operation_dialog_mode, PerfOperationDialogMode::Open);
+        if uses_b2_controlled_mode
+            && (!matches!(clock_mode, PerfClockMode::Fixed) || workload != PerfWorkload::Gather)
+        {
+            return Err(PerfScenarioConfigError(
+                "--perf-familiar-policy default|disabled and --perf-operation-dialog open require the gather fixed-step audit"
+                    .to_string(),
+            ));
+        }
+        if familiar_policy_mode.uses_controlled_fixture()
+            && (soul_count == 0 || familiar_count == 0)
+        {
+            return Err(PerfScenarioConfigError(
+                "the controlled familiar policy fixture requires at least one Soul and one Familiar"
+                    .to_string(),
+            ));
+        }
         let master_seed = parse_u64_value_or_random(
             value_from_args_or_env(&args, "--perf-seed", "HW_PERF_SEED")?
                 .or_else(|| env::var("HELL_WORKERS_WORLDGEN_SEED").ok()),
@@ -293,6 +382,8 @@ impl PerfScenarioConfig {
             soul_count,
             familiar_count,
             render_mode,
+            familiar_policy_mode,
+            operation_dialog_mode,
             warmup_secs,
             measure_secs,
             output_dir,
@@ -382,6 +473,8 @@ impl Default for PerfScenarioConfig {
             soul_count,
             familiar_count,
             render_mode: PerfRenderMode::Gpu,
+            familiar_policy_mode: PerfFamiliarPolicyMode::Baseline,
+            operation_dialog_mode: PerfOperationDialogMode::Hidden,
             warmup_secs: DEFAULT_WARMUP_SECS,
             measure_secs: DEFAULT_MEASURE_SECS,
             output_dir: None,

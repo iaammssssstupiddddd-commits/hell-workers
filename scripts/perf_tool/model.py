@@ -30,7 +30,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = SCRIPT_DIR.parent
 PERF_DESCRIPTION = __doc__
 SUMMARY_SCHEMA_VERSION = "10"
-DETERMINISM_SCHEMA_VERSION = "1"
+DETERMINISM_SCHEMA_VERSION = "3"
 DEFAULT_SEED = 20_260_712
 SCENE_ROOT_COLUMNS = (
     "soul_proxy_3d",
@@ -132,6 +132,7 @@ CHECKSUM_POLICY_REASON_PREFIXES = (
     "warmup_state_checksum differs across repeated runs:",
     "measure_end_state_checksum differs across repeated runs:",
     "determinism checkpoints differ across repeated runs:",
+    "familiar policy controlled comparison failed:",
 )
 DETERMINISM_COLUMNS = (
     "schema_version",
@@ -149,7 +150,18 @@ DETERMINISM_COLUMNS = (
     "souls",
     "familiars",
     "designations",
+    "structural_checksum",
     "state_checksum",
+    "delegation_cycles",
+    "delegation_familiars_processed",
+    "candidate_membership_checks",
+    "policy_disabled_rejections",
+    "candidate_snapshot_attempts",
+    "candidate_score_attempts",
+    "worker_score_attempts",
+    "source_selector_calls",
+    "source_selector_scanned_items",
+    "reachable_with_cache_calls",
 )
 DETERMINISM_EARLY_CHECKPOINTS = (
     ("post-update-1", 1),
@@ -169,13 +181,24 @@ class Case:
     seed: int
     souls: int | None
     familiars: int | None
+    familiar_policy: str = "baseline"
+    operation_dialog: str = "hidden"
 
     @property
     def identifier(self) -> str:
         population = ""
         if self.souls is not None:
             population = f"-souls-{self.souls}-familiars-{self.familiars}"
-        return f"{self.workload}-{self.size}-{self.render}-seed-{self.seed}{population}"
+        familiar_policy = (
+            "" if self.familiar_policy == "baseline" else f"-policy-{self.familiar_policy}"
+        )
+        operation_dialog = (
+            "" if self.operation_dialog == "hidden" else f"-dialog-{self.operation_dialog}"
+        )
+        return (
+            f"{self.workload}-{self.size}-{self.render}-seed-{self.seed}"
+            f"{population}{familiar_policy}{operation_dialog}"
+        )
 
 
 @dataclass

@@ -113,12 +113,14 @@ pub struct TaskCompletedVisualMessage {
     pub current_work_type: WorkType,
 }
 
-/// 使い魔の使役数上限が変更された
-#[derive(Message)]
-pub struct FamiliarOperationMaxSoulChangedEvent {
+/// A Familiar settings commit released one or more Souls from its roster.
+///
+/// This is presentation-only. Durable operation and relationship state are
+/// already consistent when the message is emitted.
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FamiliarRosterReleasedVisualMessage {
     pub familiar_entity: Entity,
-    pub old_value: usize,
-    pub new_value: usize,
+    pub released_souls: usize,
 }
 
 /// 魂が集会に参加した（スポット管理用）

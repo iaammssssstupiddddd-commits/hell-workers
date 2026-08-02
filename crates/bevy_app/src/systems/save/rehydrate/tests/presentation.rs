@@ -151,3 +151,141 @@ fn soul_shell_rehydrate_is_idempotent() {
         1
     );
 }
+
+#[test]
+fn familiar_shell_rehydrate_restores_patrol_from_durable_task_area() {
+    use bevy::asset::{AssetApp, AssetPlugin};
+    use hw_core::familiar::{ActiveCommand, Familiar, FamiliarCommand};
+
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+    app.init_asset::<Image>()
+        .init_asset::<Font>()
+        .init_asset::<Gltf>()
+        .init_asset::<WorldAsset>();
+
+    let asset_server = app.world().resource::<AssetServer>().clone();
+    let game_assets = {
+        let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+        crate::plugins::startup::create_game_assets(&asset_server, &mut images)
+    };
+    let handles_3d = empty_building_3d_handles();
+    let soul_handles = empty_soul_task_handles();
+    let patrol = app
+        .world_mut()
+        .spawn((
+            Familiar::default(),
+            Transform::default(),
+            TaskArea::from_points(Vec2::splat(-32.0), Vec2::splat(32.0)),
+        ))
+        .id();
+    let idle = app
+        .world_mut()
+        .spawn((Familiar::default(), Transform::from_xyz(64.0, 0.0, 0.0)))
+        .id();
+
+    rehydrate_shells(app.world_mut(), &game_assets, &handles_3d, &soul_handles);
+    app.world_mut().flush();
+
+    assert_eq!(
+        app.world().get::<ActiveCommand>(patrol).unwrap().command,
+        FamiliarCommand::Patrol
+    );
+    assert_eq!(
+        app.world().get::<ActiveCommand>(idle).unwrap().command,
+        FamiliarCommand::Idle
+    );
+}
+
+#[test]
+fn familiar_rehydrate_keeps_two_rest_area_supply_sources_active() {
+    use bevy::asset::{AssetApp, AssetPlugin};
+    use hw_core::familiar::Familiar;
+    use hw_core::logistics::ResourceType;
+    use hw_core::relationships::ManagedBy;
+    use hw_familiar_ai::familiar_ai::decide::blueprint_auto_gather::{
+        BlueprintAutoGatherTimer, blueprint_auto_gather_system,
+    };
+    use hw_jobs::{TargetBlueprint, TaskSlots};
+    use hw_logistics::transport_request::{
+        TransportPriority, TransportRequest, TransportRequestKind,
+    };
+    use hw_world::WalkabilityConnectivityCache;
+
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+    app.init_asset::<Image>()
+        .init_asset::<Font>()
+        .init_asset::<Gltf>()
+        .init_asset::<WorldAsset>()
+        .init_resource::<WorldMap>()
+        .init_resource::<WalkabilityConnectivityCache>()
+        .init_resource::<BlueprintAutoGatherTimer>()
+        .add_systems(Update, blueprint_auto_gather_system);
+
+    let asset_server = app.world().resource::<AssetServer>().clone();
+    let game_assets = {
+        let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+        crate::plugins::startup::create_game_assets(&asset_server, &mut images)
+    };
+    let handles_3d = empty_building_3d_handles();
+    let soul_handles = empty_soul_task_handles();
+    let familiar_pos = WorldMap::grid_to_world(40, 40);
+    let familiar = app
+        .world_mut()
+        .spawn((
+            Familiar::default(),
+            Transform::from_translation(familiar_pos.extend(0.0)),
+            TaskArea::from_points(
+                WorldMap::grid_to_world(35, 35),
+                WorldMap::grid_to_world(45, 45),
+            ),
+        ))
+        .id();
+
+    rehydrate_shells(app.world_mut(), &game_assets, &handles_3d, &soul_handles);
+    app.world_mut().flush();
+
+    for occupied_grid in [(38, 38), (42, 38)] {
+        let blueprint = app
+            .world_mut()
+            .spawn(Blueprint::new(BuildingType::RestArea, vec![occupied_grid]))
+            .id();
+        app.world_mut().spawn((
+            TransportRequest {
+                kind: TransportRequestKind::DeliverToBlueprint,
+                anchor: blueprint,
+                resource_type: ResourceType::Wood,
+                issued_by: familiar,
+                priority: TransportPriority::Normal,
+                stockpile_group: Vec::new(),
+            },
+            TargetBlueprint(blueprint),
+        ));
+    }
+    let trees = [(39, 41), (41, 41)].map(|grid| {
+        app.world_mut()
+            .spawn((
+                Tree,
+                Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+            ))
+            .id()
+    });
+
+    app.update();
+
+    for tree in trees {
+        let tree_ref = app.world().entity(tree);
+        assert_eq!(
+            tree_ref
+                .get::<Designation>()
+                .map(|designation| designation.work_type),
+            Some(WorkType::Chop)
+        );
+        assert_eq!(
+            tree_ref.get::<ManagedBy>().map(|owner| owner.0),
+            Some(familiar)
+        );
+        assert!(tree_ref.contains::<TaskSlots>());
+    }
+}

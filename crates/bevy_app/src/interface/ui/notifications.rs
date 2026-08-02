@@ -4,6 +4,9 @@ use hw_ui::notifications::{NotificationRetention, NotificationSeverity, UserFaci
 use crate::systems::save::{
     SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadResult,
 };
+use hw_familiar_ai::{
+    FamiliarSettingsChangeOutcome, FamiliarSettingsChangeStatus, FamiliarSettingsRejection,
+};
 use hw_logistics::StockpilePolicyChangeOutcome;
 
 pub(crate) fn adapt_save_load_outcomes(
@@ -22,6 +25,92 @@ pub(crate) fn adapt_stockpile_policy_change_outcomes(
     for outcome in outcomes.read().copied() {
         notifications.write(stockpile_policy_notification(outcome));
     }
+}
+
+pub(crate) fn adapt_familiar_settings_change_outcomes(
+    mut outcomes: MessageReader<FamiliarSettingsChangeOutcome>,
+    mut notifications: MessageWriter<UserFacingNotification>,
+) {
+    for outcome in outcomes.read().copied() {
+        if let Some(notification) = familiar_settings_notification(outcome) {
+            notifications.write(notification);
+        }
+    }
+}
+
+fn familiar_settings_notification(
+    outcome: FamiliarSettingsChangeOutcome,
+) -> Option<UserFacingNotification> {
+    let target = outcome.target.to_bits();
+    let (key, severity, title, body) = match outcome.status {
+        FamiliarSettingsChangeStatus::Applied {
+            released_souls,
+            entered_all_work_disabled,
+            ..
+        } if entered_all_work_disabled => (
+            format!("familiar-settings:{target}:all-disabled:{released_souls}"),
+            NotificationSeverity::Warning,
+            "Familiar work disabled",
+            if released_souls > 0 {
+                format!(
+                    "No new work will be assigned. Released {released_souls} excess Soul(s); current work and self-maintenance continue."
+                )
+            } else {
+                "No new work will be assigned. Current work and self-maintenance continue."
+                    .to_string()
+            },
+        ),
+        FamiliarSettingsChangeStatus::Applied { released_souls, .. } if released_souls > 0 => (
+            format!("familiar-settings:{target}:released:{released_souls}"),
+            NotificationSeverity::Info,
+            "Familiar roster reduced",
+            format!("Released {released_souls} excess Soul(s)."),
+        ),
+        FamiliarSettingsChangeStatus::Applied { .. }
+        | FamiliarSettingsChangeStatus::Unchanged { .. } => return None,
+        FamiliarSettingsChangeStatus::Rejected { reason, .. } => {
+            let (severity, title, body, reason_key) = match reason {
+                FamiliarSettingsRejection::StaleTarget => (
+                    NotificationSeverity::Warning,
+                    "Familiar setting not applied",
+                    "The selected Familiar no longer exists.",
+                    "stale",
+                ),
+                FamiliarSettingsRejection::PausedOrModal => (
+                    NotificationSeverity::Warning,
+                    "Familiar setting not applied",
+                    "Close the foreground menu or resume the simulation before editing.",
+                    "blocked",
+                ),
+                FamiliarSettingsRejection::MissingOperation => (
+                    NotificationSeverity::Error,
+                    "Familiar setting unavailable",
+                    "The Familiar is missing durable operation settings.",
+                    "missing-operation",
+                ),
+                FamiliarSettingsRejection::MissingPolicy => (
+                    NotificationSeverity::Error,
+                    "Familiar setting unavailable",
+                    "The Familiar is missing its durable work policy.",
+                    "missing-policy",
+                ),
+            };
+            (
+                format!("familiar-settings:{target}:rejected:{reason_key}"),
+                severity,
+                title,
+                body.to_string(),
+            )
+        }
+    };
+
+    Some(UserFacingNotification::new(
+        key,
+        severity,
+        title,
+        body,
+        NotificationRetention::ToastOnly,
+    ))
 }
 
 fn stockpile_policy_notification(outcome: StockpilePolicyChangeOutcome) -> UserFacingNotification {
@@ -277,5 +366,104 @@ mod tests {
         assert_eq!(success.retention, NotificationRetention::ToastOnly);
         assert!(partial.body.contains("unsupported or special storage"));
         assert!(partial.body.contains("Clamped target amount"));
+    }
+
+    #[test]
+    fn ordinary_familiar_settings_commits_do_not_spam_toasts() {
+        let target = Entity::PLACEHOLDER;
+        assert!(
+            familiar_settings_notification(FamiliarSettingsChangeOutcome {
+                target,
+                status: FamiliarSettingsChangeStatus::Applied {
+                    requested_patches: 1,
+                    released_souls: 0,
+                    entered_all_work_disabled: false,
+                },
+            })
+            .is_none()
+        );
+        assert!(
+            familiar_settings_notification(FamiliarSettingsChangeOutcome {
+                target,
+                status: FamiliarSettingsChangeStatus::Unchanged {
+                    requested_patches: 2,
+                },
+            })
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn familiar_settings_warn_for_all_disabled_and_report_released_roster_once() {
+        let target = Entity::PLACEHOLDER;
+        let disabled = familiar_settings_notification(FamiliarSettingsChangeOutcome {
+            target,
+            status: FamiliarSettingsChangeStatus::Applied {
+                requested_patches: 1,
+                released_souls: 0,
+                entered_all_work_disabled: true,
+            },
+        })
+        .unwrap();
+        let released = familiar_settings_notification(FamiliarSettingsChangeOutcome {
+            target,
+            status: FamiliarSettingsChangeStatus::Applied {
+                requested_patches: 1,
+                released_souls: 2,
+                entered_all_work_disabled: false,
+            },
+        })
+        .unwrap();
+        let combined = familiar_settings_notification(FamiliarSettingsChangeOutcome {
+            target,
+            status: FamiliarSettingsChangeStatus::Applied {
+                requested_patches: 2,
+                released_souls: 2,
+                entered_all_work_disabled: true,
+            },
+        })
+        .unwrap();
+
+        assert_eq!(disabled.severity, NotificationSeverity::Warning);
+        assert_eq!(released.severity, NotificationSeverity::Info);
+        assert_eq!(combined.severity, NotificationSeverity::Warning);
+        assert_eq!(disabled.retention, NotificationRetention::ToastOnly);
+        assert!(released.body.contains("2 excess Soul"));
+        assert!(combined.body.contains("2 excess Soul"));
+        assert_ne!(disabled.key, released.key);
+    }
+
+    #[test]
+    fn familiar_settings_rejections_use_warning_or_error_by_recoverability() {
+        let target = Entity::PLACEHOLDER;
+        for (reason, expected) in [
+            (
+                FamiliarSettingsRejection::StaleTarget,
+                NotificationSeverity::Warning,
+            ),
+            (
+                FamiliarSettingsRejection::PausedOrModal,
+                NotificationSeverity::Warning,
+            ),
+            (
+                FamiliarSettingsRejection::MissingOperation,
+                NotificationSeverity::Error,
+            ),
+            (
+                FamiliarSettingsRejection::MissingPolicy,
+                NotificationSeverity::Error,
+            ),
+        ] {
+            let notification = familiar_settings_notification(FamiliarSettingsChangeOutcome {
+                target,
+                status: FamiliarSettingsChangeStatus::Rejected {
+                    requested_patches: 1,
+                    reason,
+                },
+            })
+            .unwrap();
+            assert_eq!(notification.severity, expected);
+            assert_eq!(notification.retention, NotificationRetention::ToastOnly);
+        }
     }
 }

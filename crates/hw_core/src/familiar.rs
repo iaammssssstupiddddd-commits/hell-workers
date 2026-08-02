@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use rand::Rng;
 
 use crate::constants::{FAMILIAR_RECRUIT_FATIGUE_HYSTERESIS, FATIGUE_THRESHOLD, TILE_SIZE};
+use crate::jobs::WorkType;
 
 /// 使い魔の名前リスト
 const FAMILIAR_NAMES: [&str; 10] = [
@@ -72,7 +73,8 @@ pub struct ActiveCommand {
 }
 
 /// 使い魔の運用設定
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Reflect, Debug, Clone, PartialEq)]
+#[reflect(Component)]
 pub struct FamiliarOperation {
     pub fatigue_threshold: f32,
     pub max_controlled_soul: usize,
@@ -106,6 +108,164 @@ impl FamiliarOperation {
             return None;
         }
         Some((release - FAMILIAR_RECRUIT_FATIGUE_HYSTERESIS).max(0.0))
+    }
+}
+
+#[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FamiliarWorkPriority {
+    Low,
+    #[default]
+    Normal,
+    High,
+}
+
+#[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FamiliarWorkRule {
+    pub allowed: bool,
+    pub priority: FamiliarWorkPriority,
+}
+
+impl Default for FamiliarWorkRule {
+    fn default() -> Self {
+        Self {
+            allowed: true,
+            priority: FamiliarWorkPriority::Normal,
+        }
+    }
+}
+
+#[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FamiliarWorkRuleOverride {
+    pub work_type: WorkType,
+    pub rule: FamiliarWorkRule,
+}
+
+#[derive(Component, Reflect, Debug, Clone, PartialEq, Eq, Default)]
+#[reflect(Component)]
+pub struct FamiliarPolicy {
+    pub default_rule: FamiliarWorkRule,
+    pub overrides: Vec<FamiliarWorkRuleOverride>,
+}
+
+impl FamiliarPolicy {
+    #[must_use]
+    pub fn rule_for(&self, work_type: WorkType) -> FamiliarWorkRule {
+        self.overrides
+            .iter()
+            .rev()
+            .find(|entry| entry.work_type == work_type)
+            .map_or(self.default_rule, |entry| entry.rule)
+    }
+
+    pub fn set_rule(&mut self, work_type: WorkType, rule: FamiliarWorkRule) {
+        self.normalize();
+        self.overrides.retain(|entry| entry.work_type != work_type);
+        if rule != self.default_rule {
+            self.overrides
+                .push(FamiliarWorkRuleOverride { work_type, rule });
+            self.overrides
+                .sort_unstable_by_key(|entry| entry.work_type.stable_index());
+        }
+    }
+
+    pub fn set_all_allowed(&mut self, allowed: bool) {
+        let priorities = WorkType::ALL.map(|work_type| self.rule_for(work_type).priority);
+        self.default_rule.allowed = allowed;
+        self.overrides = WorkType::ALL
+            .into_iter()
+            .zip(priorities)
+            .filter_map(|(work_type, priority)| {
+                let rule = FamiliarWorkRule { allowed, priority };
+                (rule != self.default_rule).then_some(FamiliarWorkRuleOverride { work_type, rule })
+            })
+            .collect();
+    }
+
+    pub fn normalize(&mut self) {
+        let mut last_rules = [None; WorkType::COUNT];
+        for entry in &self.overrides {
+            last_rules[entry.work_type.stable_index()] = Some(entry.rule);
+        }
+
+        self.overrides = WorkType::ALL
+            .into_iter()
+            .filter_map(|work_type| {
+                last_rules[work_type.stable_index()]
+                    .filter(|rule| *rule != self.default_rule)
+                    .map(|rule| FamiliarWorkRuleOverride { work_type, rule })
+            })
+            .collect();
+    }
+
+    #[must_use]
+    pub fn normalized(mut self) -> Self {
+        self.normalize();
+        self
+    }
+
+    #[must_use]
+    pub fn all_work_disabled(&self) -> bool {
+        WorkType::ALL
+            .into_iter()
+            .all(|work_type| !self.rule_for(work_type).allowed)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FamiliarSettingsPatch {
+    AdjustFatigueThreshold {
+        steps: i8,
+    },
+    AdjustMaxControlledSoul {
+        delta: i8,
+    },
+    SetWorkAllowed {
+        work_type: WorkType,
+        allowed: bool,
+    },
+    SetWorkPriority {
+        work_type: WorkType,
+        priority: FamiliarWorkPriority,
+    },
+    SetAllWorkAllowed {
+        allowed: bool,
+    },
+}
+
+impl FamiliarSettingsPatch {
+    pub fn apply(self, operation: &mut FamiliarOperation, policy: &mut FamiliarPolicy) {
+        match self {
+            Self::AdjustFatigueThreshold { steps } => {
+                let next = (operation.fatigue_threshold + f32::from(steps) * 0.1).clamp(0.0, 1.0);
+                operation.fatigue_threshold = (next * 10.0).round() / 10.0;
+            }
+            Self::AdjustMaxControlledSoul { delta } => {
+                let next = if delta.is_negative() {
+                    operation
+                        .max_controlled_soul
+                        .saturating_sub(usize::from(delta.unsigned_abs()))
+                } else {
+                    operation
+                        .max_controlled_soul
+                        .saturating_add(usize::from(delta as u8))
+                };
+                operation.max_controlled_soul = next.clamp(1, 8);
+            }
+            Self::SetWorkAllowed { work_type, allowed } => {
+                let mut rule = policy.rule_for(work_type);
+                rule.allowed = allowed;
+                policy.set_rule(work_type, rule);
+            }
+            Self::SetWorkPriority {
+                work_type,
+                priority,
+            } => {
+                let mut rule = policy.rule_for(work_type);
+                rule.priority = priority;
+                policy.set_rule(work_type, rule);
+            }
+            Self::SetAllWorkAllowed { allowed } => policy.set_all_allowed(allowed),
+        }
     }
 }
 
@@ -195,5 +355,139 @@ mod tests {
             };
             assert_eq!(operation.recruit_fatigue_threshold(), None);
         }
+    }
+
+    #[test]
+    fn familiar_policy_defaults_to_all_allowed_normal() {
+        let policy = FamiliarPolicy::default();
+
+        for work_type in WorkType::ALL {
+            assert_eq!(policy.rule_for(work_type), FamiliarWorkRule::default());
+        }
+        assert!(!policy.all_work_disabled());
+        assert!(policy.overrides.is_empty());
+    }
+
+    #[test]
+    fn familiar_policy_normalization_is_last_wins_stable_and_sparse() {
+        let low = FamiliarWorkRule {
+            allowed: true,
+            priority: FamiliarWorkPriority::Low,
+        };
+        let disabled = FamiliarWorkRule {
+            allowed: false,
+            priority: FamiliarWorkPriority::High,
+        };
+        let mut policy = FamiliarPolicy {
+            default_rule: FamiliarWorkRule::default(),
+            overrides: vec![
+                FamiliarWorkRuleOverride {
+                    work_type: WorkType::Mine,
+                    rule: low,
+                },
+                FamiliarWorkRuleOverride {
+                    work_type: WorkType::Chop,
+                    rule: disabled,
+                },
+                FamiliarWorkRuleOverride {
+                    work_type: WorkType::Mine,
+                    rule: FamiliarWorkRule::default(),
+                },
+            ],
+        };
+
+        policy.normalize();
+
+        assert_eq!(
+            policy.overrides,
+            vec![FamiliarWorkRuleOverride {
+                work_type: WorkType::Chop,
+                rule: disabled,
+            }]
+        );
+        assert_eq!(policy.rule_for(WorkType::Mine), FamiliarWorkRule::default());
+    }
+
+    #[test]
+    fn set_all_allowed_preserves_effective_priorities_and_future_default() {
+        let mut policy = FamiliarPolicy::default();
+        policy.set_rule(
+            WorkType::Haul,
+            FamiliarWorkRule {
+                allowed: true,
+                priority: FamiliarWorkPriority::High,
+            },
+        );
+        policy.set_rule(
+            WorkType::Build,
+            FamiliarWorkRule {
+                allowed: false,
+                priority: FamiliarWorkPriority::Low,
+            },
+        );
+
+        policy.set_all_allowed(false);
+
+        assert!(policy.all_work_disabled());
+        assert!(!policy.default_rule.allowed);
+        assert_eq!(
+            policy.rule_for(WorkType::Haul).priority,
+            FamiliarWorkPriority::High
+        );
+        assert_eq!(
+            policy.rule_for(WorkType::Build).priority,
+            FamiliarWorkPriority::Low
+        );
+
+        policy.set_all_allowed(true);
+        assert!(!policy.all_work_disabled());
+        assert!(policy.default_rule.allowed);
+        assert_eq!(
+            policy.rule_for(WorkType::Haul).priority,
+            FamiliarWorkPriority::High
+        );
+        assert_eq!(
+            policy.rule_for(WorkType::Build).priority,
+            FamiliarWorkPriority::Low
+        );
+    }
+
+    #[test]
+    fn settings_patch_clamps_and_preserves_disabled_priority() {
+        let mut operation = FamiliarOperation {
+            fatigue_threshold: 0.95,
+            max_controlled_soul: 8,
+        };
+        let mut policy = FamiliarPolicy::default();
+
+        FamiliarSettingsPatch::AdjustFatigueThreshold { steps: 1 }
+            .apply(&mut operation, &mut policy);
+        FamiliarSettingsPatch::AdjustMaxControlledSoul { delta: 1 }
+            .apply(&mut operation, &mut policy);
+        FamiliarSettingsPatch::SetWorkPriority {
+            work_type: WorkType::Chop,
+            priority: FamiliarWorkPriority::High,
+        }
+        .apply(&mut operation, &mut policy);
+        FamiliarSettingsPatch::SetWorkAllowed {
+            work_type: WorkType::Chop,
+            allowed: false,
+        }
+        .apply(&mut operation, &mut policy);
+        FamiliarSettingsPatch::SetWorkAllowed {
+            work_type: WorkType::Chop,
+            allowed: true,
+        }
+        .apply(&mut operation, &mut policy);
+
+        assert_eq!(operation.fatigue_threshold, 1.0);
+        assert_eq!(operation.max_controlled_soul, 8);
+        assert_eq!(
+            policy.rule_for(WorkType::Chop),
+            FamiliarWorkRule {
+                allowed: true,
+                priority: FamiliarWorkPriority::High,
+            }
+        );
     }
 }

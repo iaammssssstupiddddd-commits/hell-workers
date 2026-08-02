@@ -15,7 +15,10 @@ use crate::world::map::Tile;
 
 use hw_core::GameTime;
 use hw_core::area::{AreaBounds, TaskArea};
-use hw_core::familiar::{Familiar, FamiliarType};
+use hw_core::familiar::{
+    Familiar, FamiliarOperation, FamiliarPolicy, FamiliarType, FamiliarWorkPriority,
+    FamiliarWorkRule, FamiliarWorkRuleOverride,
+};
 use hw_core::logistics::ResourceType;
 use hw_core::population::PopulationManager;
 use hw_core::relationships::{
@@ -77,6 +80,8 @@ macro_rules! for_each_persisted_component {
         $callback!(RestAreaCooldown);
         $callback!(DriftingState);
         $callback!(Familiar);
+        $callback!(FamiliarOperation);
+        $callback!(FamiliarPolicy);
         $callback!(CommandedBy);
         $callback!(Commanding);
         $callback!(WorkingOn);
@@ -192,6 +197,9 @@ macro_rules! for_each_reflect_dependency {
         $callback!(DriftPhase);
         $callback!(DriftEdge);
         $callback!(FamiliarType);
+        $callback!(FamiliarWorkPriority);
+        $callback!(FamiliarWorkRule);
+        $callback!(FamiliarWorkRuleOverride);
         $callback!(WorkType);
         $callback!(AreaBounds);
         $callback!(BuildingType);

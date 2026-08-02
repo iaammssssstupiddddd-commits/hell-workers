@@ -2,7 +2,9 @@
 
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
-use hw_core::familiar::{ActiveCommand, Familiar, FamiliarAiState, FamiliarOperation};
+use hw_core::familiar::{
+    ActiveCommand, Familiar, FamiliarAiState, FamiliarOperation, FamiliarPolicy,
+};
 use hw_core::relationships::{CommandedBy, Commanding, ManagedTasks, ParticipatingIn};
 use hw_core::soul::{DamnedSoul, Destination, IdleState, Path};
 use hw_jobs::AssignedTask;
@@ -122,6 +124,7 @@ pub type FamiliarTaskQuery<'w, 's> = Query<
         Entity,
         &'static Transform,
         &'static FamiliarOperation,
+        &'static FamiliarPolicy,
         &'static ActiveCommand,
         &'static mut FamiliarAiState,
         &'static mut Destination,

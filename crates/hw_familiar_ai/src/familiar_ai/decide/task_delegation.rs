@@ -93,6 +93,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         fam_entity,
         fam_transform,
         familiar_op,
+        familiar_policy,
         _active_command,
         mut ai_state,
         mut fam_dest,
@@ -147,6 +148,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             fam_entity,
             fam_transform,
             familiar_op,
+            familiar_policy,
             ai_state: &mut ai_state,
             fam_dest: &mut fam_dest,
             fam_path: &mut fam_path,
@@ -193,6 +195,8 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             .saturating_add(source_selector_candidate_scanned_items);
         let reachable_with_cache_calls =
             crate::familiar_ai::decide::task_management::take_reachable_with_cache_calls();
+        let candidate_metrics =
+            crate::familiar_ai::decide::task_management::take_candidate_pipeline_perf_snapshot();
 
         perf_metrics.latest_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
         if allow_task_delegation {
@@ -218,5 +222,147 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         perf_metrics.familiars_processed = perf_metrics
             .familiars_processed
             .saturating_add(familiars_processed);
+        perf_metrics.candidate_membership_checks = perf_metrics
+            .candidate_membership_checks
+            .saturating_add(candidate_metrics.membership_checks);
+        perf_metrics.policy_disabled_rejections = perf_metrics
+            .policy_disabled_rejections
+            .saturating_add(candidate_metrics.policy_disabled_rejections);
+        perf_metrics.candidate_snapshot_attempts = perf_metrics
+            .candidate_snapshot_attempts
+            .saturating_add(candidate_metrics.snapshot_attempts);
+        perf_metrics.candidate_score_attempts = perf_metrics
+            .candidate_score_attempts
+            .saturating_add(candidate_metrics.score_attempts);
+        perf_metrics.worker_score_attempts = perf_metrics
+            .worker_score_attempts
+            .saturating_add(candidate_metrics.worker_score_attempts);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::events::ResourceReservationRequest;
+    use hw_core::familiar::{
+        ActiveCommand, FamiliarAiState, FamiliarCommand, FamiliarOperation, FamiliarPolicy,
+    };
+    use hw_core::relationships::{CommandedBy, ManagedBy};
+    use hw_core::soul::{DamnedSoul, Destination, IdleState, Path};
+    use hw_jobs::events::TaskAssignmentRequest;
+    use hw_jobs::{AssignedTask, Designation, Priority, Rock, TaskSlots, WorkType};
+    use hw_logistics::SharedResourceCache;
+    use hw_logistics::tile_index::TileSiteIndex;
+    use hw_logistics::transport_request::WheelbarrowArbitrationDiagnostics;
+    use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
+    use hw_world::{WalkabilityConnectivityCache, WorldMap};
+
+    #[test]
+    fn one_delegation_cycle_submits_two_owned_mines_to_two_idle_souls() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<FamiliarTaskDelegationTimer>()
+            .init_resource::<DesignationSpatialGrid>()
+            .init_resource::<TransportRequestSpatialGrid>()
+            .init_resource::<ResourceSpatialGrid>()
+            .init_resource::<TileSiteIndex>()
+            .init_resource::<WorldMap>()
+            .init_resource::<WalkabilityConnectivityCache>()
+            .init_resource::<SharedResourceCache>()
+            .init_resource::<WheelbarrowArbitrationDiagnostics>()
+            .init_resource::<TaskDiagnosticInputRevisions>()
+            .init_resource::<FamiliarTaskCandidateDiagnostics>()
+            .add_message::<ResourceReservationRequest>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_systems(Update, familiar_task_delegation_system);
+
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                Transform::default(),
+                FamiliarOperation {
+                    max_controlled_soul: 2,
+                    ..default()
+                },
+                FamiliarPolicy::default(),
+                ActiveCommand {
+                    command: FamiliarCommand::Patrol,
+                },
+                FamiliarAiState::SearchingTask,
+                Destination(Vec2::ZERO),
+                Path::default(),
+            ))
+            .id();
+        let souls = [
+            app.world_mut()
+                .spawn((
+                    Transform::from_xyz(-16.0, 0.0, 0.0),
+                    DamnedSoul::default(),
+                    AssignedTask::None,
+                    Destination(Vec2::ZERO),
+                    Path::default(),
+                    IdleState::default(),
+                    CommandedBy(familiar),
+                ))
+                .id(),
+            app.world_mut()
+                .spawn((
+                    Transform::from_xyz(16.0, 0.0, 0.0),
+                    DamnedSoul::default(),
+                    AssignedTask::None,
+                    Destination(Vec2::ZERO),
+                    Path::default(),
+                    IdleState::default(),
+                    CommandedBy(familiar),
+                ))
+                .id(),
+        ];
+        let mine_positions = [Vec2::new(-32.0, 32.0), Vec2::new(32.0, 32.0)];
+        {
+            let mut world_map = app.world_mut().resource_mut::<WorldMap>();
+            for pos in mine_positions {
+                world_map.add_grid_obstacle(WorldMap::world_to_grid(pos));
+            }
+        }
+        let mines = mine_positions.map(|pos| {
+            app.world_mut()
+                .spawn((
+                    Transform::from_translation(pos.extend(0.0)),
+                    Designation {
+                        work_type: WorkType::Mine,
+                    },
+                    ManagedBy(familiar),
+                    TaskSlots::new(1),
+                    Priority::default(),
+                    Rock,
+                ))
+                .id()
+        });
+        app.world_mut().flush();
+
+        app.update();
+
+        let requests = app
+            .world()
+            .resource::<Messages<TaskAssignmentRequest>>()
+            .iter_current_update_messages()
+            .collect::<Vec<_>>();
+        assert_eq!(requests.len(), 2);
+        assert!(
+            requests
+                .iter()
+                .all(|request| request.work_type == WorkType::Mine)
+        );
+        assert!(souls.iter().all(|soul| {
+            requests
+                .iter()
+                .any(|request| request.worker_entity == *soul)
+        }));
+        assert!(
+            mines
+                .iter()
+                .all(|mine| { requests.iter().any(|request| request.task_entity == *mine) })
+        );
     }
 }

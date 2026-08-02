@@ -205,7 +205,10 @@ pub fn context_menu_system(
                     spawn_menu_item(
                         menu,
                         "Open Operation",
-                        MenuAction::OpenOperationDialog,
+                        MenuAction::OpenOperationDialog {
+                            opener: None,
+                            target: entity,
+                        },
                         &game_assets,
                         &theme,
                     );

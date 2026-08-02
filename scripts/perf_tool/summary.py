@@ -58,6 +58,36 @@ def summarize_determinism_session(
         + str(sum(len(validation.teardown_warning_lines) for _, validation in runs)),
         "",
     ]
+    comparison_path = session_dir / "familiar_policy_comparison.json"
+    if comparison_path.is_file():
+        comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
+        report_lines.extend(
+            [
+                "## Familiar policy controlled comparison",
+                "",
+                f"- Status: `{comparison['status'].upper()}`",
+                f"- Counter checkpoint: `{comparison['checkpoint']}`",
+                "- Dialog hidden/open requires exact simulation checksum and AI work equality.",
+                "- Disabled policy requires every candidate to stop at the policy gate and all downstream counters to be zero.",
+                "",
+                "| Case | Status | Default snapshot | Disabled snapshot | Default source calls | Disabled source calls |",
+                "| --- | --- | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for group in comparison["groups"]:
+            counters = group.get("post_warmup_counters", {})
+            default = counters.get("default", {})
+            disabled = counters.get("disabled", {})
+            contract = group["contract"]
+            report_lines.append(
+                f"| {contract['workload']}-{contract['size']}-{contract['render']} "
+                f"| {group['status']} "
+                f"| {default.get('candidate_snapshot_attempts', 'N/A')} "
+                f"| {disabled.get('candidate_snapshot_attempts', 'N/A')} "
+                f"| {default.get('source_selector_calls', 'N/A')} "
+                f"| {disabled.get('source_selector_calls', 'N/A')} |"
+            )
+        report_lines.append("")
     if aggregate_rows:
         report_lines.extend(
             [
@@ -97,6 +127,8 @@ def summarize_session(
         reset_checksum_policy(runs)
         runs = load_valid_runs(session_dir)
         apply_determinism_policy(runs)
+        runs = load_valid_runs(session_dir)
+        apply_familiar_policy_controlled_audit(session_dir, manifest, runs)
         runs = load_valid_runs(session_dir)
         return summarize_determinism_session(session_dir, manifest, runs)
 

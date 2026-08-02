@@ -16,13 +16,16 @@ Perceive / Decide / Execute の各フェーズでの状態遷移・タスク探�
 | `familiar_ai/decide/task_management/policy/` | タスク種別ごとのアサイン戦略（basic, haul, soul_spa 等） |
 | `familiar_ai/decide/task_management/policy_score.rs` | base worker score後にtransport / Familiarのscalar contributionを合成する共有no-clamp score helper |
 | `familiar_ai/decide/task_management/diagnostics.rs` | typed rejection、Familiar-local 1票reducer、latest-only `FamiliarTaskCandidateDiagnostics` |
+| `familiar_ai/settings.rs` | Familiar settings request / outcome、target単位FIFO replay、operation / policyのatomic commitとroster release |
 | `familiar_ai/execute/` | 決定結果の ECS への反映 |
 
 ## plugin 登録
 
-- `FamiliarAiCorePlugin`（`src/lib.rs`）がシステムを登録する唯一の登録元
+- 通常のAI systemは `FamiliarAiCorePlugin`（`src/lib.rs`）が唯一の登録元
 - `bevy_app/plugins/logic.rs` から `add_plugins(FamiliarAiPlugin)` で組み込まれる
 - `FamiliarTaskDecisionSet` が auto-gather flush → root task revision sync → delegation の named seam を公開する
+- `apply_familiar_settings_change_requests_system`だけはleafがdomain実装を所有し、root
+  `FamiliarAiPlugin`が`GameSystemSet::Logic`のPerceive前へflush込みで一度だけ登録する
 
 診断は通常の delegation cycle だけから採取し、UI表示のために候補探索を再実行しない。snapshotはcycleごとに
 置換し、load/world replacement時はroot登録のcrate-owned reset hookで破棄する。最終 assignment policy は

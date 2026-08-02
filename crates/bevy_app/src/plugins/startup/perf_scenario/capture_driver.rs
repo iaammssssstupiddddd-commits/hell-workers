@@ -13,6 +13,7 @@ pub(crate) fn start_perf_capture_system(
     mut capture: ResMut<PerfCapture>,
     virtual_time: ResMut<Time<Virtual>>,
     fixed_time: Res<Time<Fixed>>,
+    familiar_metrics: Res<FamiliarDelegationPerfMetrics>,
     mut exit: MessageWriter<AppExit>,
 ) {
     if !config.enabled() || !matches!(capture.phase, PerfCapturePhase::WaitingForScenario) {
@@ -28,7 +29,7 @@ pub(crate) fn start_perf_capture_system(
         exit.write(AppExit::error());
         return;
     }
-    if !applied.0 {
+    if !applied.complete() {
         if config.uses_fixed_timesteps() && !capture.fixture_wait_reported {
             eprintln!(
                 "PERF_DETERMINISM_AUDIT: waiting for fixture setup while virtual time remains paused"
@@ -69,6 +70,7 @@ pub(crate) fn start_perf_capture_system(
             &virtual_time,
             &fixed_time,
             &checksum_queries,
+            &familiar_metrics,
             true,
         ) {
             error!("PERF_DETERMINISM_AUDIT: invalid initial checkpoint: {error}");
@@ -125,6 +127,7 @@ pub(crate) fn drive_perf_capture_system(
                     &params.time,
                     &params.fixed_time,
                     &params.checksum_queries,
+                    &params.familiar_metrics,
                 ) {
                     error!("PERF_DETERMINISM_AUDIT: invalid warmup checkpoint: {error}");
                     capture.phase = PerfCapturePhase::Finished;
@@ -163,6 +166,7 @@ pub(crate) fn drive_perf_capture_system(
                     &params.time,
                     &params.fixed_time,
                     &params.checksum_queries,
+                    &params.familiar_metrics,
                 ) {
                     error!("PERF_DETERMINISM_AUDIT: invalid audit checkpoint: {error}");
                     capture.phase = PerfCapturePhase::Finished;
@@ -246,6 +250,7 @@ fn advance_fixed_audit_warmup(
     virtual_time: &Time<Virtual>,
     fixed_time: &Time<Fixed>,
     checksum_queries: &PerfChecksumQueries<'_, '_>,
+    familiar_metrics: &FamiliarDelegationPerfMetrics,
 ) -> Result<(), String> {
     capture.fixed_update_tick += 1;
     let tick = capture.fixed_update_tick;
@@ -257,6 +262,7 @@ fn advance_fixed_audit_warmup(
             virtual_time,
             fixed_time,
             checksum_queries,
+            familiar_metrics,
             false,
         )?;
     }
@@ -268,6 +274,7 @@ fn advance_fixed_audit_warmup(
             virtual_time,
             fixed_time,
             checksum_queries,
+            familiar_metrics,
             false,
         )?;
         capture.phase = PerfCapturePhase::Measure;
@@ -283,6 +290,7 @@ fn advance_fixed_audit_measure(
     virtual_time: &Time<Virtual>,
     fixed_time: &Time<Fixed>,
     checksum_queries: &PerfChecksumQueries<'_, '_>,
+    familiar_metrics: &FamiliarDelegationPerfMetrics,
 ) -> Result<(), String> {
     capture.fixed_update_tick += 1;
     let tick = capture.fixed_update_tick;
@@ -294,6 +302,7 @@ fn advance_fixed_audit_measure(
             virtual_time,
             fixed_time,
             checksum_queries,
+            familiar_metrics,
             false,
         )?;
         capture.phase = PerfCapturePhase::Flush;
@@ -320,6 +329,7 @@ fn record_determinism_checkpoint(
     virtual_time: &Time<Virtual>,
     fixed_time: &Time<Fixed>,
     checksum_queries: &PerfChecksumQueries<'_, '_>,
+    familiar_metrics: &FamiliarDelegationPerfMetrics,
     expects_paused_virtual_time: bool,
 ) -> Result<(), String> {
     if virtual_time.is_paused() != expects_paused_virtual_time {
@@ -359,6 +369,7 @@ fn record_determinism_checkpoint(
         }
     }
 
+    let structural_checksum = calculate_checksum(checksum_queries);
     let audit_records = collect_audit_actor_records(checksum_queries)?;
     let checksum = checksum_from_audit_records(&audit_records);
     capture
@@ -375,7 +386,9 @@ fn record_determinism_checkpoint(
             virtual_paused: virtual_time.is_paused(),
             virtual_relative_speed_bits: virtual_time.relative_speed_f64().to_bits(),
             virtual_effective_speed_bits: virtual_time.effective_speed_f64().to_bits(),
+            structural_checksum,
             checksum,
+            familiar_ai_work: PerfFamiliarAiWorkSnapshot::from(familiar_metrics),
         });
     capture
         .determinism_actor_records

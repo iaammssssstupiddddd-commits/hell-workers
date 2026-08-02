@@ -94,6 +94,41 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 
 audit artifactの`data/determinism.csv`はcheckpointごとの状態checksum、`data/determinism_records.csv`は差分調査用のactor単位recordである。失敗時はそのaudit sessionを失格にするが、実時間baselineの`summary.csv`を置き換えたり、frame-time比較に混ぜたりしない。
 
+fixed-step determinism artifactはschema v3である。Familiar actor recordにはoperationと、
+`WorkType::ALL`の安定順に並べた全effective rule（allowed / priority）を含む。raw override vectorの
+格納形が違ってもeffective policyが同じなら同じbytesを生成する。Gatherに加え、Haul assignmentは
+phaseとitem / stockpileのTransformをEntity ID非依存で符号化する。
+`determinism.csv`にはpolicyを除外した`structural_checksum`、policyを含む`state_checksum`と、
+delegation / candidate policy gate / snapshot / score / worker score / source selector / connectivity counterを
+checkpointごとの累積値として記録する。Rust writerとPython runnerはどちらもdeterminism schema v3を
+要求するため、旧determinism schema v1 / v2 artifactは現行runnerではinvalidになる。
+これは後述の`summary.csv` schema v10とは独立したversionである。
+
+Familiar policyのcontrolled auditは`gather`固定step専用で、次のexact matrixを使う。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
+  --workload gather --sizes small --renders cpu \
+  --familiar-policies default,disabled \
+  --operation-dialog-modes hidden,open \
+  --repeat 2 --preflight-runs 1 --seed 20260731 \
+  --fixed-hz 64 --warmup-ticks 129 --audit-ticks 16 \
+  --backend vulkan --window-backend x11 \
+  --output target/perf-runs/familiar-policy-controlled-audit
+```
+
+controlled fixtureは通常`gather`負荷を置き換え、同じFamiliar rosterにmanual Haul 1件とChop 1件を与える。
+Haulはsource selector、Chopはconnectivity cacheを正規経路で通す。runnerは4 caseが揃った場合だけ
+`familiar_policy_comparison.json`を生成し、次をfail-closedで検証する。
+
+- policyごとにdialog hidden / openの全checkpoint checksumとAI work counterが完全一致する。
+- fixture初期`structural_checksum`はdefault / disabledで一致し、policyを含む`state_checksum`は異なる。
+- defaultはcandidate gate以後のsnapshot / score / worker / source / connectivity counterがすべて正になる。
+- disabledは全candidateをpolicy gateでrejectし、後段counterがすべて0になる。
+
+`--familiar-policies`と`--operation-dialog-modes`のcontrolled値は、通常`run`や`gather`以外では拒否する。
+dashboard表示条件はこのmatrixへ混ぜず、Task Dashboard性能計画が所有する。
+
 Tracyやallocationは標準baselineと混ぜない。
 
 ```bash
@@ -148,7 +183,7 @@ fixed-step auditでは`frames.csv`と`summary.csv`の代わりに、`data/determ
 
 `reachable_with_cache_calls` は schema v10でも互換のため名前を維持しているが、M4A以後は Familiar 委譲が version付き連結成分 cache に問い合わせた回数であり、core A* 呼び出し回数ではない。Boolean 到達判定が A* を呼ばないことは cache/A* parity test と topology version 回帰 test で保証する。既存schema v4以前の`reachable_with_cache_calls`や新しいcaller counterを、互いの代理指標にしてはならない。
 
-`aggregate.csv`はframe sampleをrun間で混ぜず、各runのp50/p95/p99/maxを先に出し、その値の中央値とMADをcaseごとに出す。initial fixture checksum、warm-up checksum群、post-capture teardown warning件数も併記する。invalid runを黙って除外せず、session全体をinvalidにする。schema v2の既存artifactにはtask execution counterがなく、schema v3以前のartifactにはreservation sync counterがない。frame-time比較は可能だが、存在しないcounterを0としてM1以降と比較してはならない。
+`aggregate.csv`はframe sampleをrun間で混ぜず、各runのp50/p95/p99/maxを先に出し、その値の中央値とMADをcaseごとに出す。initial fixture checksum、warm-up checksum群、post-capture teardown warning件数も併記する。invalid runを黙って除外せず、session全体をinvalidにする。`summary.csv` schema v2の既存artifactにはtask execution counterがなく、schema v3以前のartifactにはreservation sync counterがない。frame-time比較は可能だが、存在しないcounterを0としてM1以降と比較してはならない。
 
 schemaが異なる過去artifactの共通frame-timeは、対応する単一変更の**履歴上の参考値**にだけ使える。現行実装全体の改善率を示す場合は、schema v10・同一workload/fixture・同一計測matrixで採ったbaselineとcandidateを比較し、異なるschemaや別workloadの結果を合算してはならない。
 

@@ -1,4 +1,5 @@
 use bevy::prelude::{Entity, Message, Vec2};
+use hw_core::familiar::FamiliarSettingsPatch;
 use hw_core::game_state::{TaskMode, TimeSpeed};
 use hw_core::jobs::WorkType;
 use hw_jobs::{BuildingCategory, BuildingType};
@@ -45,10 +46,17 @@ pub enum UiIntent {
     SelectAreaTask,
     SelectDreamPlanting,
     ToggleDoorLock(Entity),
-    OpenOperationDialog,
-    AdjustFatigueThreshold(f32),
-    AdjustMaxControlledSoul(isize),
-    AdjustMaxControlledSoulFor(Entity, isize),
+    OpenOperationDialog {
+        opener: Option<Entity>,
+        target: Entity,
+    },
+    ApplyFamiliarSettings {
+        patch: FamiliarSettingsPatch,
+    },
+    ApplyFamiliarSettingsFor {
+        target: Entity,
+        patch: FamiliarSettingsPatch,
+    },
     CloseDialog,
     SetTimeSpeed(TimeSpeed),
     TogglePause,

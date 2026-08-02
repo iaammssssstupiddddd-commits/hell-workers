@@ -5,6 +5,7 @@ mod score;
 
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
+use hw_core::familiar::FamiliarPolicy;
 use hw_core::relationships::ManagedTasks;
 use hw_jobs::{TargetBlueprint, TaskDiagnosticInputRevisions, WorkType};
 use hw_spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
@@ -12,10 +13,14 @@ use hw_world::{WorldMap, Yard};
 use std::collections::HashSet;
 
 use crate::familiar_ai::decide::task_management::policy_score::{
-    PolicyScoreContributions, transport_policy_units,
+    PolicyScoreContributions, familiar_policy_units, transport_policy_units,
+};
+use crate::familiar_ai::decide::task_management::profiling_metrics::{
+    mark_candidate_membership_check, mark_candidate_score_attempt, mark_candidate_snapshot_attempt,
+    mark_policy_disabled_rejection,
 };
 use crate::familiar_ai::decide::task_management::{
-    FamiliarEvaluatorDiagnostics, FamiliarTaskAssignmentQueries,
+    CandidateRejectReason, FamiliarEvaluatorDiagnostics, FamiliarTaskAssignmentQueries,
 };
 use filter::{candidate_snapshot, collect_candidate_entities};
 use score::score_candidate;
@@ -43,6 +48,7 @@ pub struct FamiliarSearchContext<'a> {
     pub fam_entity: Entity,
     pub fam_pos: Vec2,
     pub task_area_opt: Option<&'a TaskArea>,
+    pub policy: &'a FamiliarPolicy,
 }
 
 /// Familiar の候補母集団を構成する空間 index と所有集合。
@@ -122,13 +128,25 @@ fn collect_scored_candidates_internal(
     for entity in candidates {
         // Stale spatial entries are not members of the current candidate
         // universe and must not create a diagnostic row.
-        if queries.designation.designations.get(entity).is_err() {
+        let Ok((_, _, designation, _, _, _, _, _)) = queries.designation.designations.get(entity)
+        else {
             continue;
-        }
+        };
+        mark_candidate_membership_check();
         if let Some((diagnostics, revisions)) = diagnostics.as_mut() {
             diagnostics.observe_applicable(entity, revisions);
         }
 
+        let familiar_rule = ctx.policy.rule_for(designation.work_type);
+        if !familiar_rule.allowed {
+            mark_policy_disabled_rejection();
+            if let Some((diagnostics, _)) = diagnostics.as_mut() {
+                diagnostics.reject(entity, CandidateRejectReason::PolicyDisabled);
+            }
+            continue;
+        }
+
+        mark_candidate_snapshot_attempt();
         let snapshot = match candidate_snapshot(
             ctx.fam_entity,
             entity,
@@ -152,6 +170,7 @@ fn collect_scored_candidates_internal(
             debug!("TASK_FINDER: HaulWaterToMixer {:?} passed filter", entity);
         }
 
+        mark_candidate_score_attempt();
         let priority = match score_candidate(
             entity,
             work_type,
@@ -189,9 +208,12 @@ fn collect_scored_candidates_internal(
             priority,
             pos: snapshot.pos,
             dist_sq,
-            policy_contributions: queries.receiver_policy_tiers.get(entity).map_or_else(
-                |_| PolicyScoreContributions::default(),
-                |tier| PolicyScoreContributions::new(transport_policy_units(tier.0), 0),
+            policy_contributions: PolicyScoreContributions::new(
+                queries
+                    .receiver_policy_tiers
+                    .get(entity)
+                    .map_or(0, |tier| transport_policy_units(tier.0)),
+                familiar_policy_units(familiar_rule.priority),
             ),
         });
     }
@@ -217,19 +239,36 @@ mod tests {
     struct CandidateProbe(Vec<Entity>);
 
     #[derive(Resource, Default)]
+    struct ContributionProbe(std::collections::HashMap<Entity, super::PolicyScoreContributions>);
+
+    #[derive(Resource, Default)]
     struct MembershipProbe(
-        std::collections::HashMap<Entity, (u16, Option<hw_jobs::TaskDiagnosticClass>)>,
+        std::collections::HashMap<Entity, (u16, Option<hw_jobs::TaskDiagnosticClass>, bool)>,
     );
+
+    type TestFamiliarPolicyQuery<'w, 's> = Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            Option<&'static TaskArea>,
+            &'static ManagedTasks,
+            &'static FamiliarPolicy,
+        ),
+        With<Familiar>,
+    >;
 
     fn capture_candidates(
         queries: FamiliarTaskAssignmentQueries,
         designation_grid: Res<DesignationSpatialGrid>,
         transport_request_grid: Res<TransportRequestSpatialGrid>,
         q_target_blueprints: Query<&TargetBlueprint>,
-        familiars: Query<(Entity, &Transform, Option<&TaskArea>, &ManagedTasks), With<Familiar>>,
+        familiars: TestFamiliarPolicyQuery,
         mut probe: ResMut<CandidateProbe>,
     ) {
-        let Ok((fam_entity, transform, task_area_opt, managed_tasks)) = familiars.single() else {
+        let Ok((fam_entity, transform, task_area_opt, managed_tasks, policy)) = familiars.single()
+        else {
             return;
         };
         probe.0 = collect_scored_candidates(
@@ -237,6 +276,7 @@ mod tests {
                 fam_entity,
                 fam_pos: transform.translation.truncate(),
                 task_area_opt,
+                policy,
             },
             &queries,
             FamiliarCandidateSources {
@@ -257,12 +297,12 @@ mod tests {
         designation_grid: Res<DesignationSpatialGrid>,
         transport_request_grid: Res<TransportRequestSpatialGrid>,
         q_target_blueprints: Query<&TargetBlueprint>,
-        familiars: Query<(Entity, &Transform, Option<&TaskArea>, &ManagedTasks), With<Familiar>>,
+        familiars: TestFamiliarPolicyQuery,
         revisions: Res<TaskDiagnosticInputRevisions>,
         mut probe: ResMut<MembershipProbe>,
     ) {
         let mut cycle = super::super::FamiliarTaskDiagnosticCycle::new(1, &revisions);
-        for (fam_entity, transform, task_area_opt, managed_tasks) in &familiars {
+        for (fam_entity, transform, task_area_opt, managed_tasks, policy) in &familiars {
             cycle.begin_evaluator();
             let mut diagnostics = FamiliarEvaluatorDiagnostics::new(1);
             collect_scored_candidates_with_diagnostics(
@@ -270,6 +310,7 @@ mod tests {
                     fam_entity,
                     fam_pos: transform.translation.truncate(),
                     task_area_opt,
+                    policy,
                 },
                 &queries,
                 FamiliarCandidateSources {
@@ -298,11 +339,45 @@ mod tests {
                         (
                             record.coverage.applicable_evaluators,
                             record.counters.representative(),
+                            record.coverage.is_complete_rejection(),
                         ),
                     )
                 })
             })
             .collect();
+    }
+
+    fn capture_policy_contributions(
+        queries: FamiliarTaskAssignmentQueries,
+        designation_grid: Res<DesignationSpatialGrid>,
+        transport_request_grid: Res<TransportRequestSpatialGrid>,
+        q_target_blueprints: Query<&TargetBlueprint>,
+        familiars: TestFamiliarPolicyQuery,
+        mut probe: ResMut<ContributionProbe>,
+    ) {
+        let Ok((fam_entity, transform, task_area_opt, managed_tasks, policy)) = familiars.single()
+        else {
+            return;
+        };
+        probe.0 = collect_scored_candidates(
+            FamiliarSearchContext {
+                fam_entity,
+                fam_pos: transform.translation.truncate(),
+                task_area_opt,
+                policy,
+            },
+            &queries,
+            FamiliarCandidateSources {
+                designation_grid: &designation_grid,
+                transport_request_grid: &transport_request_grid,
+                managed_tasks,
+                world_map: queries.read.world_map.as_ref(),
+            },
+            &q_target_blueprints,
+        )
+        .into_iter()
+        .map(|candidate| (candidate.candidate.entity, candidate.policy_contributions))
+        .collect();
     }
 
     #[test]
@@ -315,6 +390,143 @@ mod tests {
     #[test]
     fn build_designations_keep_global_scan_fallback() {
         assert!(include_in_global_designation_scan(WorkType::Build, false));
+    }
+
+    #[test]
+    fn disabled_malformed_candidate_records_policy_before_snapshot_validation() {
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<SharedResourceCache>()
+            .init_resource::<hw_logistics::transport_request::WheelbarrowArbitrationDiagnostics>()
+            .init_resource::<DesignationSpatialGrid>()
+            .init_resource::<TransportRequestSpatialGrid>()
+            .init_resource::<TaskDiagnosticInputRevisions>()
+            .init_resource::<MembershipProbe>()
+            .add_message::<ResourceReservationRequest>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_systems(Update, capture_candidate_membership);
+
+        let mut policy = FamiliarPolicy::default();
+        policy.set_rule(
+            WorkType::Haul,
+            hw_core::familiar::FamiliarWorkRule {
+                allowed: false,
+                priority: hw_core::familiar::FamiliarWorkPriority::High,
+            },
+        );
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                policy,
+                Transform::default(),
+                ManagedTasks::default(),
+            ))
+            .id();
+        let malformed_haul = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                Designation {
+                    work_type: WorkType::Haul,
+                },
+                ManagedBy(familiar),
+            ))
+            .id();
+        app.world_mut().flush();
+
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .resource::<MembershipProbe>()
+                .0
+                .get(&malformed_haul)
+                .copied(),
+            Some((1, Some(hw_jobs::TaskDiagnosticClass::PolicyDisabled), true,))
+        );
+    }
+
+    #[test]
+    fn effective_familiar_priority_populates_candidate_policy_contributions() {
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<SharedResourceCache>()
+            .init_resource::<hw_logistics::transport_request::WheelbarrowArbitrationDiagnostics>()
+            .init_resource::<DesignationSpatialGrid>()
+            .init_resource::<TransportRequestSpatialGrid>()
+            .init_resource::<ContributionProbe>()
+            .add_message::<ResourceReservationRequest>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_systems(Update, capture_policy_contributions);
+
+        let yard = app
+            .world_mut()
+            .spawn(Yard {
+                min: Vec2::ZERO,
+                max: Vec2::splat(64.0),
+            })
+            .id();
+        let mut policy = FamiliarPolicy::default();
+        for (work_type, priority) in [
+            (
+                WorkType::Chop,
+                hw_core::familiar::FamiliarWorkPriority::High,
+            ),
+            (WorkType::Mine, hw_core::familiar::FamiliarWorkPriority::Low),
+        ] {
+            policy.set_rule(
+                work_type,
+                hw_core::familiar::FamiliarWorkRule {
+                    allowed: true,
+                    priority,
+                },
+            );
+        }
+        app.world_mut().spawn((
+            Familiar::default(),
+            policy,
+            Transform::default(),
+            ManagedTasks::default(),
+        ));
+        let chop = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(16.0, 16.0, 0.0),
+                Designation {
+                    work_type: WorkType::Chop,
+                },
+                ManagedBy(yard),
+                TaskSlots::new(1),
+                Priority::default(),
+                Tree,
+            ))
+            .id();
+        let mine = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(32.0, 16.0, 0.0),
+                Designation {
+                    work_type: WorkType::Mine,
+                },
+                ManagedBy(yard),
+                TaskSlots::new(1),
+                Priority::default(),
+                Rock,
+            ))
+            .id();
+
+        app.update();
+
+        let contributions = &app.world().resource::<ContributionProbe>().0;
+        assert_eq!(
+            contributions.get(&chop),
+            Some(&super::PolicyScoreContributions::new(0, 5))
+        );
+        assert_eq!(
+            contributions.get(&mine),
+            Some(&super::PolicyScoreContributions::new(0, -5))
+        );
     }
 
     #[test]
@@ -339,6 +551,7 @@ mod tests {
             .id();
         app.world_mut().spawn((
             Familiar::default(),
+            FamiliarPolicy::default(),
             Transform::default(),
             ManagedTasks::default(),
         ));
@@ -394,12 +607,14 @@ mod tests {
         let second_area = TaskArea::from_points(Vec2::splat(1024.0), Vec2::splat(1152.0));
         app.world_mut().spawn((
             Familiar::default(),
+            FamiliarPolicy::default(),
             Transform::from_xyz(32.0, 32.0, 0.0),
             first_area,
             ManagedTasks::default(),
         ));
         app.world_mut().spawn((
             Familiar::default(),
+            FamiliarPolicy::default(),
             Transform::from_xyz(1056.0, 1056.0, 0.0),
             second_area,
             ManagedTasks::default(),

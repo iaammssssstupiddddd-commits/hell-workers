@@ -1,14 +1,16 @@
 use bevy::prelude::*;
+use std::collections::HashMap;
 
 use hw_core::constants::REST_AREA_RECRUIT_COOLDOWN_SECS;
 use hw_core::events::{OnTaskAssigned, publish_soul_recruited};
 use hw_core::logistics::WheelbarrowDestination;
 use hw_core::relationships::{
-    CommandedBy, DeliveringTo, ParticipatingIn, RestAreaReservedFor, RestingIn, WorkingOn,
+    CommandedBy, DeliveringTo, ParticipatingIn, RestAreaReservedFor, RestingIn, TaskWorkers,
+    WorkingOn,
 };
 use hw_core::soul::{DamnedSoul, DriftingState, IdleBehavior, IdleState, RestAreaCooldown};
 use hw_jobs::events::TaskAssignmentRequest;
-use hw_jobs::{ActiveTaskIdentity, AssignedTask, IssuedBy, WorkType};
+use hw_jobs::{ActiveTaskIdentity, AssignedTask, IssuedBy, TaskSlots, WorkType};
 use hw_logistics::{SharedResourceCache, apply_reservation_op};
 
 use crate::soul_ai::helpers::query_types::TaskAssignmentSoulQuery;
@@ -165,13 +167,27 @@ pub fn apply_task_assignment_requests_system(
     mut cache: ResMut<SharedResourceCache>,
     mut q_souls: TaskAssignmentSoulQuery,
     mut q_visibility: Query<&mut Visibility, With<DamnedSoul>>,
-    q_entities: Query<Entity>,
+    q_tasks: Query<(Option<&TaskSlots>, Option<&TaskWorkers>)>,
 ) {
+    let mut accepted_workers_by_task = HashMap::<Entity, usize>::new();
     for request in requests.read() {
-        if q_entities.get(request.task_entity).is_err() {
+        let Ok((slots_opt, workers_opt)) = q_tasks.get(request.task_entity) else {
             debug!(
                 "ASSIGN_REQUEST: Task entity {:?} already gone, skipping",
                 request.task_entity
+            );
+            continue;
+        };
+        let max_workers = slots_opt.map_or(1, |slots| slots.max as usize);
+        let current_workers = workers_opt.map_or(0, TaskWorkers::len);
+        let accepted_workers = accepted_workers_by_task
+            .get(&request.task_entity)
+            .copied()
+            .unwrap_or(0);
+        if current_workers.saturating_add(accepted_workers) >= max_workers {
+            debug!(
+                "ASSIGN_REQUEST: Task {:?} has no free slots, skipping worker {:?}",
+                request.task_entity, request.worker_entity
             );
             continue;
         }
@@ -222,6 +238,10 @@ pub fn apply_task_assignment_requests_system(
         apply_assignment_reservations(&mut cache, &request.reservation_ops);
         attach_delivering_to_relationship(&mut commands, &request.assigned_task);
         trigger_task_assigned_event(&mut commands, worker_entity, request);
+        accepted_workers_by_task
+            .entry(request.task_entity)
+            .and_modify(|count| *count = count.saturating_add(1))
+            .or_insert(1);
 
         debug!(
             "ASSIGN_REQUEST: Assigned {:?} to {:?} at {:?}",
@@ -278,6 +298,27 @@ mod tests {
         assert_eq!(identity.current_work_type, WorkType::GeneratePower);
     }
 
+    fn generate_power_request(
+        familiar: Entity,
+        worker: Entity,
+        task: Entity,
+    ) -> TaskAssignmentRequest {
+        TaskAssignmentRequest {
+            familiar_entity: familiar,
+            worker_entity: worker,
+            task_entity: task,
+            work_type: WorkType::GeneratePower,
+            task_pos: Vec2::ZERO,
+            assigned_task: AssignedTask::GeneratePower(GeneratePowerData {
+                tile: task,
+                tile_pos: Vec2::ZERO,
+                phase: GeneratePowerPhase::GoingToTile,
+            }),
+            reservation_ops: Vec::new(),
+            already_commanded: true,
+        }
+    }
+
     #[test]
     fn assignment_defer_makes_identity_available_to_same_frame_execution() {
         let mut app = App::new();
@@ -317,5 +358,135 @@ mod tests {
         );
 
         app.update();
+    }
+
+    #[test]
+    fn assignment_apply_keeps_one_slot_task_at_one_worker_across_competing_requests() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<SharedResourceCache>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_message::<OnTaskAssigned>()
+            .add_systems(
+                Update,
+                (apply_task_assignment_requests_system, ApplyDeferred).chain(),
+            );
+
+        let familiar = app.world_mut().spawn_empty().id();
+        let task = app.world_mut().spawn(TaskSlots::new(1)).id();
+        let workers = [
+            app.world_mut()
+                .spawn((
+                    Transform::default(),
+                    Visibility::Visible,
+                    DamnedSoul::default(),
+                    AssignedTask::None,
+                    Destination(Vec2::ZERO),
+                    Path::default(),
+                    IdleState::default(),
+                ))
+                .id(),
+            app.world_mut()
+                .spawn((
+                    Transform::default(),
+                    Visibility::Visible,
+                    DamnedSoul::default(),
+                    AssignedTask::None,
+                    Destination(Vec2::ZERO),
+                    Path::default(),
+                    IdleState::default(),
+                ))
+                .id(),
+        ];
+        for worker in workers {
+            app.world_mut()
+                .write_message(generate_power_request(familiar, worker, task));
+        }
+
+        app.update();
+
+        let assigned_count = workers
+            .iter()
+            .filter(|worker| {
+                !matches!(
+                    app.world().get::<AssignedTask>(**worker),
+                    Some(AssignedTask::None)
+                )
+            })
+            .count();
+        assert_eq!(assigned_count, 1);
+        assert_eq!(
+            app.world().get::<TaskWorkers>(task).map(TaskWorkers::len),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn rejected_slot_competitor_can_take_the_next_open_task() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<SharedResourceCache>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_message::<OnTaskAssigned>()
+            .add_systems(
+                Update,
+                (apply_task_assignment_requests_system, ApplyDeferred).chain(),
+            );
+
+        let familiar = app.world_mut().spawn_empty().id();
+        let tasks = [
+            app.world_mut().spawn(TaskSlots::new(1)).id(),
+            app.world_mut().spawn(TaskSlots::new(1)).id(),
+        ];
+        let workers = [
+            app.world_mut()
+                .spawn((
+                    Transform::default(),
+                    Visibility::Visible,
+                    DamnedSoul::default(),
+                    AssignedTask::None,
+                    Destination(Vec2::ZERO),
+                    Path::default(),
+                    IdleState::default(),
+                ))
+                .id(),
+            app.world_mut()
+                .spawn((
+                    Transform::default(),
+                    Visibility::Visible,
+                    DamnedSoul::default(),
+                    AssignedTask::None,
+                    Destination(Vec2::ZERO),
+                    Path::default(),
+                    IdleState::default(),
+                ))
+                .id(),
+        ];
+
+        // Simulate overlapping producers: both first target task 0, then the
+        // second producer offers worker 1 the still-open task 1.
+        for (worker, task) in [
+            (workers[0], tasks[0]),
+            (workers[1], tasks[0]),
+            (workers[1], tasks[1]),
+        ] {
+            app.world_mut()
+                .write_message(generate_power_request(familiar, worker, task));
+        }
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<WorkingOn>(workers[0]).map(|task| task.0),
+            Some(tasks[0])
+        );
+        assert_eq!(
+            app.world().get::<WorkingOn>(workers[1]).map(|task| task.0),
+            Some(tasks[1])
+        );
+        assert_eq!(
+            tasks.map(|task| app.world().get::<TaskWorkers>(task).map(TaskWorkers::len)),
+            [Some(1), Some(1)]
+        );
     }
 }

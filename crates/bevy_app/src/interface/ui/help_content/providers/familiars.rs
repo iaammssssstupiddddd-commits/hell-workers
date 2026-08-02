@@ -39,6 +39,17 @@ pub(crate) fn entity_list_and_squads() -> Result<HelpContribution, HelpCatalogEr
                         "Familiar の使役上限を超える場合は割り当てられません。",
                     ],
                 ),
+                HelpEntry::new(
+                    HelpEntryId::new("familiar-operation-policy"),
+                    "Familiar の運用ポリシー",
+                    [
+                        "Familiar のコンテキストメニューから Open Operation を選ぶと、疲労閾値、最大使役 Soul 数、作業種別ごとの許可と Low / Normal / High の優先度を設定できます。",
+                        "Disable all は新しい作業の割り当てだけを止めます。すでに実行中の作業と休息などの自己維持は継続します。",
+                        "方針だけで新しい割り当てが止まった仕事は Tasks に Blocked: Disabled by familiar policy と表示されます。",
+                        "設定は Familiar ごとに保存されます。最大数を現在の使役数より下げると、超過した Soul は所属と作業から解放されます。",
+                    ],
+                )
+                .with_shortcut(shortcut(InputAction::CloseOperationDialog)?),
             ],
         ),
     })

@@ -53,7 +53,9 @@ Perceive → (ApplyDeferred) → Update → (ApplyDeferred) → Decide → Execu
 - `decide/auto_gather_for_blueprint.rs` → `pub use hw_familiar_ai::...`
 - `execute/encouragement_apply.rs` → `pub use hw_familiar_ai::...`
 - `execute/idle_visual_apply.rs` → `pub use hw_visual::familiar_idle_visual_apply_system`
-- `execute/max_soul_apply.rs` → logic: `hw_familiar_ai::max_soul_logic_system`, visual: `hw_visual::max_soul_visual_system`
+- Familiar settings domain logic → `hw_familiar_ai::apply_familiar_settings_change_requests_system`。
+  root `FamiliarAiPlugin` が Perceive 前の apply + flush を唯一登録し、
+  `hw_visual::max_soul_visual_system` は roster release visual Message だけを消費する
 - `execute/squad_apply.rs` → logic: `hw_familiar_ai::squad_logic_system`, visual: `hw_visual::squad_visual_system`
 
 これら facade 群の削除は別タスクとして管理する。
