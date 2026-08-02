@@ -28,10 +28,11 @@ AI モデリングは次の二つを分離します。
 | Khronos validator | `gltf-validator 2.0.0-dev.3.10` |
 | Asset root | `~/Sync/hell-workers-assets` |
 
-旧 Blender 端末の exact version と canonical Soul `.blend` は未回収です。
-したがって、この表は現端末の再現可能な基準であり、旧端末との移行同一性の合格を
-意味しません。旧原本を発見するまで、既存 `assets/models/characters/soul.glb` を
-Blender 原本へ逆変換して正本扱いしないでください。
+`2026-08-01`のユーザー判断により、旧 Blender 端末からasset、設定、addon、presetを
+引き継がず、この表を現端末の新規canonical authoring baselineとします。
+`source/`と`exports/`は空から開始し、stagingで新規制作・検証・目視承認した成果物だけを
+正本へ昇格します。既存 `assets/models/characters/soul.glb` はruntime比較用referenceであり、
+Blenderへ逆変換して正本扱いしません。
 
 ## 3. ディレクトリ
 
@@ -224,6 +225,7 @@ upstream tag を動かす場合は、既存patchを無条件で当てず、差�
 - `Material.use_nodes` は Blender 5.1.1 では動作しますが、6.0向けdeprecation warningが
   出ます。Blender upgradeとは別作業で移行します。
 - 既存 `soul.glb` は Khronos validatorで既知errorがあるため、環境のgreen fixtureには
-  使いません。canonical `.blend` と旧Blender条件を回収後に専用修復します。
+  使いません。現PCで新規canonical `.blend`を作る場合も、既存GLBは構造・見た目の
+  comparison referenceに限定し、importしたcopyを正本化しません。
 - この構成は一般scene品質を検査します。Soul固有の8 animation clips、face atlas、
   Bevy visual testは別のM4受入gateです。

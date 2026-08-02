@@ -1,4 +1,4 @@
-# 新PC開発環境・Blender統一移行計画
+# 新PC開発環境移行・Blender新規構築計画
 
 ## メタ情報
 
@@ -13,6 +13,19 @@
 | 関連Issue/PR | `N/A` |
 
 ## 0. ここから始める（ユーザー用の操作票）
+
+> **2026-08-01 方針変更（現在の実行基準）**
+>
+> ユーザー判断により、別の旧Blender PCから資産、`.blend`、設定、addon、presetを
+> 引き継がない。旧Blender PCはsource PC、G0/G1、旧access失効、secure eraseの対象外とし、
+> このPCを唯一の新規Blender／asset authoring hostとして開始する。旧環境とのversion一致、
+> asset snapshot照合、Syncthing pairing／writer切替は受け入れ条件ではない。
+> `~/Sync/hell-workers-assets/source/` と `exports/` が空なのは正常な初期状態であり、
+> repo内`assets/`は実行用referenceとして保持するがBlender正本へ逆変換しない。
+> 旧開発PCのGit/WIP M0／M1証跡と外付けbackupは引き続き有効で、廃棄しない。
+>
+> 以下の旧source PC向けM0／M1手順は、完了済みの開発環境移行の監査記録として残す。
+> 現在の作業はM3の新規workspace基準化から再開し、§10の引継ぎメモを正とする。
 
 この章だけ読めば移行を開始できる。以降のM0〜M6はAIが実行時に参照する技術手順であり、
 ユーザーがコマンドを手入力して順番を管理する前提ではない。
@@ -78,10 +91,10 @@ Blender PCでも繰り返す。最初はM0の読み取り専用監査だけを�
 | M0／各source PC | 入力票、検索許可root、正本・WIP・旧PC処遇の判断 | 端末ごとのGit、Blender、Syncthing、asset、saveの読み取り専用棚卸し、容量見積、台帳、blocker一覧 | 全source PCが列挙され、ユーザーが原本／fallback、WIP、backup方針を承認 |
 | M1／各source PC | 外付け媒体の接続・unlock、編集停止、commit／pushを行う場合の明示承認 | 端末別のGit全状態とGit外データのsnapshot、SHA-256 manifest、実restore test | 全source PCのG1証跡が揃い、ユーザーが全source PCのfreezeを宣言 |
 | M2／新PC | OS初期設定、再起動、管理者承認、GitHub等の対話認証 | package／Rust／MCP導入、fresh clone、WIPの隔離復元、`doctor`／`check` | AIがG2の自動検証結果を提示 |
-| M3／旧PC＋新PC | Syncthingのdevice pairingを承認し、表示されたfolder rootを確認する | offline復元、manifest比較、新device／folder設定、空destination asset再構築 | 同期開始・role変更の直前にユーザーが明示承認し、AIがG3合格を確認 |
-| M4／新PC | addon account認証、Blender画面とSoulの見た目、canonical原本／fallbackの最終判断 | exact Blender導入、選択的設定復元、staging export、validator／構造／MCP検査、文書化 | validatorだけでなくユーザーの目視も合格 |
-| M5／新PC＋旧PC | visual test、F5/F9の最終目視とsingle-writer切替の明示承認 | 全自動gate、manifest、cutover手順、role切替、切替後の再検証 | ユーザーが新PCを唯一のwriterにすると承認 |
-| M6／新PC | 14日または2開発サイクルの利用、問題報告、access失効と旧PC処遇の承認 | 最終restore test、安定化監査、恒久docs、plan完了処理 | secure eraseは実行直前の明示承認がある場合だけ実行 |
+| M3／新PC | 新規asset workspace方針と、このPCを唯一のwriterにする判断 | 空の`source/`／`exports/`、staging、manifest、license領域を初期化し、smoke一周と基準記録 | G3の新規workspace基準が合格 |
+| M4／新PC | 最初のcanonical assetと見た目の承認 | 現PCで新規`.blend`を制作し、staging export、validator／構造／MCP検査、文書化 | validatorだけでなくユーザーの目視も合格 |
+| M5／新PC | visual test、F5/F9、最初のcanonical promoteの明示承認 | 全自動gate、manifest、backup、promote後の再検証 | ユーザーが新規assetを正本として承認 |
+| M6／新PC | 14日または2開発サイクルの利用と問題報告 | 最終restore test、安定化監査、恒久docs、plan完了処理 | 新PCだけで開発・Blender一周と独立backup復元が成功 |
 
 次の操作は、AIが技術的に実行できる場合でもユーザーの明示承認なしに行わない。
 
@@ -187,11 +200,11 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
 
 ## 1. 目的
 
-- 解決したい課題: PC買い替えに伴い、Git管理対象だけでなく、未コミット作業、Git管理外アセット、Blender原本、ローカル設定、認証を失わずに新PCへ移行する。
+- 解決したい課題: PC買い替えに伴う開発状態を保全して新PCへ移し、Blender／asset制作は旧環境を移送せずこのPCで再現可能な新規環境として開始する。
 - 到達したい状態:
   - 新PCだけでコード開発、ゲーム実行、Soul GLBのBlender編集・書き出し、外部アセット同期を完結できる。
-  - 旧PCは移行中の唯一のロールバック元として凍結し、受入完了後に編集端末から外す。
-  - Git、外部アセット原本、実行用アセット、ローカルユーザーデータの正本と復元経路が明確である。
+  - 旧開発PCのM1 backupは開発WIPのロールバック元として保持し、旧Blender PCには依存しない。
+  - Git、現PCで新規作成する外部アセット原本、実行用アセット、ローカルユーザーデータの正本と復元経路が明確である。
   - Blenderの正確なバージョン、配布経路、アドオン、書き出し条件が記録され、別PCでも再現できる。
 - 成功指標:
   - byte-for-byteで移すsnapshotについて、旧PC側と新PC側のファイル一覧・サイズ・SHA-256照合が完了する。
@@ -200,10 +213,10 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
   - `cargo run --locked -p visual_test` と `cargo run --locked` で、
     GLB、runtime用フォント、テクスチャ、GPU描画を確認でき、audio backend初期化errorがない。
     現状はruntime音声asset／参照がないため、音声再生自体は `N/A` とする。
-  - 現行 `soul.glb` に対応する原本のコピーからGLBを書き出し、
+  - 現PCで新規作成したcanonical `.blend` からGLBを書き出し、
     staging、`exports/`、`assets/`、Bevy読込まで一周できる。
-  - Syncthing競合がなく、新PCが唯一のBlender／アセット編集端末になる。
-  - 旧PCを消去する前に、独立バックアップから `.blend` とGit管理外データの復元テストが成功する。
+  - Syncthingを移行条件にせず、現PCが唯一のBlender／アセット編集端末になる。
+  - 最初のcanonical promote後、独立バックアップから `.blend` とmanifestの復元テストが成功する。
 
 ## 2. スコープ
 
@@ -214,9 +227,9 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
 - Rust、Bevy向けOS依存パッケージ、Python、Git、`rg`、IDE、MCPツール、
   Linux x86_64選択時の `mold` の再構築。
 - GitHub認証、必要時のGCP/TRELLIS接続、SSH、ローカルAIツールの再認証。
-- OS固有の `<ASSET_ROOT>/source/` と `exports/` の復元、Syncthingの新規device／folder登録。
+- OS固有の `<ASSET_ROOT>/source/`、`staging/`、`exports/`、`manifests/`、`licenses/` の新規初期化。
 - Git管理外の `assets/`、`saves/`、`settings/` と、必要な性能artifactの移行。
-- Blender本体、設定、アドオン、asset library、外部参照、glTF書き出し条件、Blender MCPの移行。
+- Blender本体、プロジェクト用設定、アドオン、asset library、外部参照、glTF書き出し条件、Blender MCPの新規構築。
 - 新PCでのコード品質ゲート、実ゲーム、visual test、save/load、Blender往復の受入。
 - 実測後の移行先OS用setup文書、`docs/assets_workflow.md`、Blenderセットアップ文書の恒久化。
 - 最低14日または通常開発2サイクルのうち長い方の安定化期間と、旧PCの安全な廃止。
@@ -224,6 +237,8 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
 ### 非対象（Out of Scope）
 
 - 移行と同時のBevy、Rust、Blenderの機能アップグレード。
+- 旧Blender PCの棚卸し、asset／設定／addon／preset移送、access失効、初期化。
+- 移行目的のSyncthing pairing、旧folder ID再利用、writer role切替。複数端末共有が必要になった場合は別計画で導入する。
 - 建築GLB量産やHeadless Blender品質ゲートそのものの実装。
   - これは既存の `docs/plans/3d-rtt/asset-milestones-2026-03-17.md` にある
     `MS-Asset-Pipeline` の責務とする。
@@ -255,7 +270,7 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
 - 外部アセット:
   - 文書上の正本は `~/Sync/hell-workers-assets/source/` と `exports/` だが、現在調査できたホストでは実データがほぼない。
   - 現行Syncthing設定はLinux上でWindows形式のfolder pathを参照しており、正規Linuxパスと分裂している。
-  - 調査範囲では `.blend` 原本が見つからない。実際にBlenderを使っていた旧PCからの回収がP0ブロッカーである。
+  - `2026-08-01`のユーザー判断により旧`.blend`は回収しない。`source/`／`exports/`は空から開始し、現PCで承認した最初の成果物だけを正本化する。
   - `scripts/sync_external_assets.py` は `textures`、`models`、`audio` だけを同期する。
   - Git管理外の `assets/fonts/` には、現在の同期スクリプトだけでは復元経路がない。
     13ファイル中、runtimeが直接読む4フォントは有効だが、未使用候補にはplaceholderやHTML内容の
@@ -286,11 +301,11 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
 | --- | --- | --- | --- |
 | Git追跡済みコード／文書／WGSL | GitHub remote | clean clone | branch、commit SHA、`git status` |
 | 未コミット／未追跡作業 | 現在作業中のPC | scoped commit/push、または暗号化bundle／patch／archive | 復元先のdiffとファイル一覧 |
-| Blender原本／参照素材 | 実際に編集していた旧PC | point-in-time snapshot + 外部媒体 + Syncthing | SHA-256、missing fileなし |
-| `exports/` | 旧PCの確定出力 | snapshot後に新PCへ受信 | manifest一致、conflict 0 |
+| Blender原本／参照素材 | 現PCの新規`<ASSET_ROOT>/source/` | staging検証後の明示promote + 独立backup | provenance、SHA-256、missing fileなし |
+| `exports/` | 現PCで検証済みのstaging出力 | 明示promote | manifest、validator、目視一致 |
 | repo内 `assets/` | 現ローカルの既知実行コピー | 安全用snapshot後、原則 `exports/` から再生成 | runtime path、visual test、ゲーム |
 | `saves/`／`settings/` | 現在利用中のPC | 個別archive | F9 load、F5 save、設定再起動 |
-| Blender設定／アドオン | 実際に編集していた旧PC | 台帳を作り、新PCへ選択再構築 | version、addon、MCP、export往復 |
+| Blender設定／アドオン | 現PCの固定baseline | project toolingから新規構築 | version、addon、MCP、export往復 |
 | 認証／秘密情報 | 各サービス | 新PCを新端末として再認証 | read／push権限。値は台帳に書かない |
 | build cache／ログ | なし | 移行しない | 新PCで再生成 |
 | 必要なperf artifact | 旧PC | 選別archive | metadata付きで参照専用 |
@@ -497,122 +512,79 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
   - GitHub APIのrepository permissionまたは安全な `git push --dry-run` によるpush権限確認
   - `python3 scripts/dev.py check`
 
-## M3: 外部アセット正本・Syncthing・runtime assetの復元
+## M3: 新規asset workspaceの基準化
 
 - 変更内容:
-  - 現行のWindows形式path、folder ID、削除履歴、device identityを新PCへコピーしない。
-  - 最初の復元は両PCのSyncthingを止めた状態で行う。M1の検証済みsnapshotから、
-    旧PCの新しいcanonical folder rootと新PCのoffline staging rootをそれぞれ構築し、
-    両rootがM1 snapshotのmanifestと一致するまでfolder IDを共有しない。
-    旧PCの現行folder pathが空／不整合のまま `sendonly` にすることや、
-    `receiveonly` だけをremote deletion対策にすることを禁止する。
-  - offline復元成功後、新PCを新しいdevice identityとしてpairし、新しいfolder IDを作る。
-    旧PCは `sendonly`、新PCは `receiveonly` で初回rescanし、旧いfolder IDを再利用しない。
-  - logical folderを `hell-workers-assets/` に統一する。Linuxの推奨rootは
-    `~/Sync/hell-workers-assets/` とし、他OSでは同じ内部構成を持つ `<ASSET_ROOT>` を台帳へ記録する。
-  - canonical rootを最低限次の構成にする:
-    - `source/`: `.blend`、制作原本、参照画像、再利用prompt。
-    - `exports/`: `textures/`、`models/`、将来音声を導入した場合の `audio/`。
-    - `licenses/`: フォント、生成モデル、外部素材の出典／許諾。
-    - `manifest/`: version、provenance、SHA-256、書き出し条件。
-  - `source/` と `exports/` を互いに同一視せず、それぞれについて
-    M1旧snapshotと新PC復元先のmanifestが一致することを確認する。
-  - `exports/models/characters/soul.glb`、face atlas、runtimeが参照する必須textureが
-    存在しなければ停止する。空の `exports/` や必須directoryの `SKIP` を成功扱いにしない。
-  - 空の一時destinationへ `sync_external_assets.py` を実行し、
-    既存 `assets/` に隠されず `exports/` だけから、script管理対象の
-    `textures/`、`models/`、`audio/` subsetを再構築できることを確認する。
-    必須exportがある初回の空destinationで `copied=0` なら不合格とする。
-  - そのsubsetをfresh cloneのGit管理assetと合成し、M0で選んだ経路から
-    runtime font／faviconも復元した完全な受入用 `assets/` treeを作る。
-    この合成後にruntime asset catalogの全参照pathと基本形式を検証する。
-  - 一時destinationで合格した後に限り、repo内 `assets/` はM1 snapshotを保持したまま、
-    `sync_external_assets.py --dry-run` で差分を確認してから通常同期する。
-  - 初回受入完了までは `--delete-missing` を禁止する。
-  - runtime asset catalogが参照する全pathの存在と基本形式をone-shot manifestで検証する。
-    runtime用4フォントだけをfont parserで検査し、それぞれのlicense／provenanceを対応付ける。
-    残りの未使用font候補は移行snapshotに残し、placeholder／HTML内容を正規fontとして承認しない。
-  - Web／WASMを使用する場合、0 byteのroot `favicon.ico` は有効なICOへ置換するか
-    `index.html` の参照を除去し、`trunk build` または形式検査を行う。
-    Webを使わない場合は本移行で `N/A` とし、別follow-upへ記録する。
-  - one-shot manifestの恒久自動化や同期scriptのfont対応は、移行中に実装するか、
-    owner付きfollow-upとして残す。どちらの場合も今回のfresh clone受入自体は省略しない。
-  - TRELLISのfork／checkpoint、Mixamo、入力画像、4 runtime fontの出典と許諾を
-    `licenses/`／`manifest/` に記録する。GLB内のBlender exporter名だけを利用許諾の根拠にしない。
-  - G5のwriter切替までは、新PCからcanonical `source/`／`exports/` を編集しない。
+  - 旧Blender PC、旧Syncthing folder、旧`.blend`、旧`exports/`からデータを受信しない。
+  - `~/Sync/hell-workers-assets/`を現PCだけが書く新規canonical rootとする。
+    `Sync`というpath名は移行中の同期実施を意味せず、Syncthingは本計画の必須要素にしない。
+  - `source/`、`staging/`、`exports/`、`manifests/`、`licenses/`を
+    `init-asset-workspace`で冪等初期化する。
+  - 初期状態の`source/`と`exports/`は空を正とする。自動化はstagingだけへ書き、
+    人の明示承認前にcanonicalへpromoteしない。
+  - repo内`assets/`は現在動くruntime referenceとして保持し、新しいBlender原本の正本扱いや
+    逆変換元にはしない。`--delete-missing`は最初のcanonical export受入まで禁止する。
+  - deterministic smokeで`.blend`作成、scene gate、GLB export、Khronos validatorを一周し、
+    hashとreportをbaseline manifestへ記録する。
+  - 最初のcanonical assetを作る前に、provenance／license／review templateと独立backup先を固定する。
 - 変更ファイル:
   - `docs/assets_workflow.md`
-  - 必要時 `scripts/sync_external_assets.py` と `scripts/tests/`
-  - 自動化を分離する場合はowner付きfollow-up plan
+  - `docs/blender-setup.md`
+  - repo外`<ASSET_ROOT>/manifests/workspace-baseline-2026-08-01.md`
 - 完了条件:
-  - [ ] canonical rootに回収済みの現行Soul原本と外部参照、またはユーザー承認済みfallbackの
-    入力一式（現行GLB、face atlas、構造manifest）が揃っている。
-  - [ ] 空の一時destinationで、`exports/` からsync管理対象subsetを再構築できる。
-  - [ ] fresh cloneのGit管理asset、sync管理対象subset、選択したfont／favicon復元経路を
-    合成した完全な受入用treeでasset catalog検査が成功する。
-  - [ ] asset catalog参照pathが全て存在し、基本形式検査に成功する。
-  - [ ] runtime用4フォントがparserを通り、license／provenanceと対応している。
-  - [ ] faviconは有効化／参照除去／Web `N/A` のいずれかが記録されている。
-  - [ ] Syncthing conflictが0で、manifest照合が成功している。
-  - [ ] 新しいdevice identity／folder IDと `sendonly → receiveonly` の初期役割が記録されている。
-  - [ ] 初回同期で削除操作を行っていない。
+  - [x] 新規workspaceの必須directoryとtemplateが存在する。
+  - [x] `source/`／`exports/`が空で、旧PC由来のcanonical dataが混入していない。
+  - [x] staging smokeのscene検査がerror 0／warning 0である。
+  - [x] staging GLBのKhronos検査がerror 0／warning 0で、hashが再現する。
+  - [x] Syncthing pairing／writer切替が受け入れ条件から除外されている。
+  - [x] 独立backup先と復元手順が記録され、baseline snapshotの実restore testが成功している。
 - 検証:
-  - `python3 scripts/sync_external_assets.py --source <ASSET_ROOT>/exports --dest <EMPTY_TEMP_ASSETS>`
-  - 一時destination合格後:
-    `python3 scripts/sync_external_assets.py --source <ASSET_ROOT>/exports --dry-run`
-  - dry-runレビュー後:
-    `python3 scripts/sync_external_assets.py --source <ASSET_ROOT>/exports`
-  - runtime asset manifest検証
-  - runtime用4フォントのparser検証
-  - `python3 scripts/dev.py doctor`
+  - `tools/blender_ai_workflow/bin/init-asset-workspace`
+  - `tools/blender_ai_workflow/bin/workflow-smoke`
+  - `find <ASSET_ROOT>/source <ASSET_ROOT>/exports -type f`
+  - staging reportとGLB SHA-256確認
+  - `<MIGRATION_ROOT>/snapshots/fedora-new-asset-workspace-20260801/files.sha256`のrestore検証
 - Help影響:
-  - scriptやruntime dataを変更した場合は、完了前に
-    `hell-workers-review-help-impact` Skillで実経路から `Update required` / `No impact` を判断する。
+  - workspace／文書だけの変更はplayer-visible契約を変えない。runtime dataをpromoteするM4/M5で
+    `hell-workers-review-help-impact` Skillから改めて判断する。
 
-## M4: Blender exact version統一・選択的設定移行
+## M4: Blender新規canonical asset制作・受入
 
 - 変更内容:
-  - 旧PCのexact versionを、新PCでの最初の基準versionとして導入する。
-  - package managerの自動最新版ではなく、配布元とarchive checksumを記録できる方法を使う。
-  - 移行受入中はBlender major/minor upgradeを行わない。
-  - addon／extensionは台帳から再インストールし、native binaryやPython環境を盲目的にコピーしない。
-  - 次の設定だけを内容確認して移行する:
-    - `startup.blend`、`userpref.blend`、keymap。
-    - asset libraries、scripts、presets。
-    - unit、axis、color management、render device、glTF export preset。
-    - font、ICC／OCIO、外部texture path。
-  - 現行 `soul.glb` に対応する `.blend` の移行用コピーを開き、missing external fileを0にする。
-    原本喪失fallbackを選んだ場合は、現行GLBをimportして同期外stagingに
-    新しいcanonical原本候補を作り、喪失した編集情報と再構築手順を記録する。
-  - 外部pathは原則 `source/` 内の相対pathにし、原本の初回保存は別名コピーで行う。
-  - 現行Soul GLBを直接上書きせず、stagingへexportする。
+  - 現PCのBlender `5.1.1` Flatpak exact commitを最初のcanonical authoring baselineとし、
+    旧PCとのversion一致を要求しない。major/minor upgradeは最初のasset受入後の別作業にする。
+  - addon／extensionはproject toolingから新規構築し、旧設定やPython環境をコピーしない。
+  - unit、axis、color management、render device、glTF export条件、外部texture pathを
+    新規asset用manifestへ記録する。
+  - 最初のcanonical `.blend` はstagingで新規作成する。既存`assets/models/characters/soul.glb`を
+    import／逆変換して正本候補にせず、runtime比較用referenceとしてだけ扱う。
+  - 外部pathは原則 `source/` 内へpromote可能な相対pathにし、canonicalへは目視承認後にだけ昇格する。
+  - repo内の現行Soul GLBを直接上書きせず、stagingへexportする。
   - staging GLBについて次を確認する:
     - M0で固定したvalidatorでerror 0となり、warningを全件レビュー済みである。
-    - scene index `0`、face mesh `Soul_Face_Mesh`、body mesh `Soul_Mesh.010`、
-      rig `Soul_Rig` が維持される。
-    - 8 animation clip名が完全一致する。
+    - asset固有のnode／mesh／rig／animation契約がmanifestと一致する。
+      Soulを新規制作する場合はscene index `0`、face mesh `Soul_Face_Mesh`、
+      body mesh `Soul_Mesh.010`、rig `Soul_Rig`、8 animation clip名をruntime契約として検証する。
     - embedded imageが存在し、external textureも欠落しない。
-    - 原点、単位、scale、向き、material、face atlas UVが移行前構造manifestと一致する。
-    - triangle数は監査時点の約162を移行baselineとして比較する。
-      既存計画のLOD目安へ合わせる調整は移行と分離する。
+    - 原点、単位、scale、向き、material、face atlas UVが新規asset manifestの契約と一致する。
+    - triangle数は用途ごとのbudgetに収まり、既存GLBとの一致は要求しない。
     - バイナリSHAの一致だけを要求せず、構造manifestと目視を合否基準にする。
-  - staging GLBの目視は、隔離clone／一時asset treeの
-    `assets/models/characters/soul.glb` へ配置してから実行する。
+  - staging GLBの目視は、隔離clone／一時asset treeの対象runtime pathへ配置してから実行する。
     canonical assetを指したまま既知良好な旧GLBを誤って確認しない。
-  - Blender MCP addon／serverを復元し、
-    `.mcp.json` の `http://localhost:9876/sse` へread-only scene queryできることを確認する。
-  - exact version、導入元、checksum、addon、presetを `docs/blender-setup.md` に恒久化する。
+  - hardened Blender MCP addon／serverを起動し、project-scoped stdio serverから
+    localhost bridgeへread-only scene queryできることを確認する。
+  - exact version、導入元、commit、addon、export条件を `docs/blender-setup.md` に恒久化する。
 - 変更ファイル:
   - `docs/blender-setup.md`（新規）。
   - `docs/assets_workflow.md`
-  - repo外のBlender原本、preset、manifest。
+  - repo外の新規Blender原本、reference、manifest。
 - 完了条件:
-  - [ ] 新旧PCの基準Blender exact versionが一致する。
-  - [ ] 現行Soul GLBの原本または承認済み再構築原本候補をmissing resourceなしで開ける。
+  - [x] 現PCの基準Blender exact version／配布commitが固定されている。
+  - [ ] 新規canonical候補をmissing resourceなしで開ける。
   - [ ] staging GLBがvalidator error 0、warningレビュー済みで、構造検証に成功する。
   - [ ] staging GLBそのものを隔離cloneで目視確認できている。
-  - [ ] Blender MCPのread-only接続が成功する。
-  - [ ] exact version、addon、preset、path契約が文書化されている。
+  - [x] Blender MCPのread-only接続が成功する。
+  - [ ] exact version、addon、export条件、path契約が文書化されている。
 - 検証:
   - `blender --version`
   - M0で固定したglTF validatorと構造manifest
@@ -622,7 +594,7 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
 ## M5: End-to-End受入と主端末切替
 
 - 変更内容:
-  - clean clone + external asset復元だけで開発環境を再構築する。
+  - clean clone + 新規external asset workspaceだけで開発環境を再構築する。
   - コード品質ゲートを順に実行する。
   - visual testで次を目視する:
     - `Q` で8 animation clip。
@@ -639,17 +611,10 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
     - 独立backupから作った検証用saveコピーをF9で読み、F5で新規保存できる。
       唯一の移行元saveを上書きしない。
     - settings変更が再起動後に維持される。
-  - 現行Soul原本を別名保存し、同期外staging export →
+  - 新規canonical候補をstaging保存し、staging export →
     disposable cloneの `assets/` → visual test／ゲームの一周を先に行う。
-  - staging受入成功後、次の順でSyncthing writerを切り替える:
-    1. 旧PCをpauseする。
-    2. 旧新両rootの最終snapshotとmanifestを取得する。
-    3. 両manifest一致を確認してから、新PCを `sendreceive` に変更して再開する。
-    4. 旧PCはpauseしたまま `receiveonly` に変更して自動起動を無効化し、
-       そのfolderを再開せず、cutover時点のrollback imageを変更しない。
-    5. 新PCのfull rescan後もcutover manifestと一致し、conflict fileが0であることを確認する。
-    6. 旧PCを電源OFFにし、安定化期間中はSyncthingを再開しない。
-  - writer切替後、検証済みGLBを新PCのcanonical `exports/` へ、
+  - staging受入成功後、canonical候補とmanifestを独立backupへ保存して実restore testする。
+  - restore test後、検証済みGLBを現PCのcanonical `exports/` へ、
     検証済み `.blend` と外部参照をcanonical `source/` へpromoteし、
     source／export両manifestを更新する。その後dry-run → repo `assets/` →
     visual test／ゲームまで再確認する。
@@ -663,9 +628,9 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
   - [ ] visual testとゲーム本体の手動受入が成功する。
   - [ ] F5/F9とsettings再起動確認が成功する。
   - [ ] BlenderからBevyまでの一周が成功する。
-  - [ ] Syncthing writer切替後もconflict 0で、promoteしたGLBの一周が成功する。
+  - [ ] 独立backupのrestore test後も、promoteしたGLBの一周が成功する。
   - [ ] GitHubのread／pushと必須外部接続が新PCだけで成立する。
-  - [ ] 新PCを唯一の開発／Blender編集端末に切り替える判断記録がある。
+  - [x] 新PCを唯一の開発／Blender編集端末として新規開始する判断記録がある。
 - 検証:
   - `python3 scripts/dev.py doctor`
   - `python3 scripts/dev.py check`
@@ -680,14 +645,14 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
 ## M6: 恒久化・安定化期間・旧PC廃止
 
 - 変更内容:
-  - 実測した移行先OS手順、Blender手順、Syncthingのsingle-writer／restore手順を恒久docsへ反映する。
+  - 実測した移行先OS手順、Blender新規構築手順、独立backup／restore手順を恒久docsへ反映する。
   - 新設した `docs/blender-setup.md` を `docs/README.md` へ登録する。
-  - 旧PCはG5から引き続きSyncthingをpauseし、自動起動を無効化した電源OFF状態で保持する。
-    安定化期間中は `receiveonly` を含めて同期を再開せず、Blender編集も禁止する。
-  - 旧PCを電源OFFで保持し、最低14日または通常開発2サイクルのうち長い方を観察する。
+  - 旧開発PCはGit/WIP rollback sourceとして電源OFFで保持し、
+    最低14日または通常開発2サイクルのうち長い方を観察する。
+    対象外とした旧Blender PCの保持／access／初期化は本計画のgateに含めない。
   - 観察期間中に、コード変更1件とBlender export 1件を新PCだけで完了する。
   - 独立backupからSoul `.blend`、Git WIP、runtime asset、save/settingsを最終復元テストする。
-  - 不足がなければ、旧PCのGitHub／GCP／Syncthing／Blender addon等のaccessを失効する。
+  - 不足がなければ、旧開発PCのGitHub／GCP等の開発accessを必要に応じて失効する。
   - M0で消去対象と決めた場合だけ、最終復元とaccess失効の完了後、実行直前に
     ユーザーの明示承認を得て旧PCをsecure erase／初期化する。
     消去対象でない場合は、電源OFF保持／転用など確定した最終処遇を記録する。
@@ -702,7 +667,7 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
 - 完了条件:
   - [ ] 新PCだけで通常開発2サイクルとBlender作業1サイクルが完了している。
   - [ ] 独立backupからの最終復元テストが成功している。
-  - [ ] 旧PCの外部accessが失効している。
+  - [ ] 必要な旧開発PCの外部accessが失効している。
   - [ ] M0で決めた旧PCの最終処遇（承認済みsecure eraseまたは保持／転用）が完了している。
   - [ ] active docs／scriptsから旧PC固有の絶対pathが除去され、hook方針も文書と整合している。
   - [ ] `docs/blender-setup.md` が `docs/README.md` に登録されている。
@@ -718,23 +683,22 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
 
 | ゲート | 進める条件 | 不合格時 |
 | --- | --- | --- |
-| G0 棚卸し | 新旧PC、Blender／MCP／validator version、全データownerが判明 | 旧PCを保持し、検索と台帳化を継続 |
-| G1 保全 | Git全状態、Soul原本またはfallback入力、assets、save/settingsのbackupと復元成功 | 新PCへの同期を開始しない |
+| G0 棚卸し | 旧開発PCと新PC、Blender／MCP／validator version、移すデータownerが判明 | 旧開発PCを保持し、検索と台帳化を継続 |
+| G1 保全 | 旧開発PCのGit全状態、runtime assets、save/settingsのbackupと復元成功 | M2を開始しない |
 | G2 開発基盤 | 保存容量、GPU、toolchain、MCP実query、doctor、rust-analyzer、check、Git read/push成功 | OS依存、toolchain、driver、認証を修正 |
-| G3 asset復元 | offline snapshot、空destination再構築、runtime manifest、新folder ID、conflict 0 | Syncthing停止、旧folderを再利用しない |
-| G4 Blender | 同version、Soul原本missing 0、staging GLB validator／構造／目視／MCP成功 | 原本を上書きせず旧version／snapshotへ戻す |
-| G5 主端末切替 | verify、visual test、game、save/load、export往復、writer切替成功 | 旧PCをwriterのまま維持 |
-| G6 安定化・最終処遇 | 安定化期間と最終restore成功、旧access失効、M0で決めた処遇完了 | 旧PCを消去せず、planも完了扱いにしない |
+| G3 asset新規基盤 | 空のcanonical領域、staging smoke、manifest／license template、旧資産混入0 | canonical promoteを開始しない |
+| G4 Blender | 新規原本missing 0、staging GLB validator／構造／目視／MCP成功 | canonicalへpromoteしない |
+| G5 主端末受入 | verify、visual test、game、save/load、export往復、backup restore成功 | staging候補を維持しruntimeへ反映しない |
+| G6 安定化・最終処遇 | 安定化期間と最終restore成功、必要な旧開発access／処遇完了 | 旧開発PCを消去せず、planも完了扱いにしない |
 
 ## 7. リスクと対策
 
 | リスク | 影響 | 対策 |
 | --- | --- | --- |
 | M0のworktree manifestがcloneで消える | 実装・文書の喪失 | M1で全Git状態を保全し、M2の隔離branch／worktreeで復元照合 |
-| 空のSyncthing folderが正本扱いされる | 原本／export削除 | daemon停止中にoffline snapshotを復元し、新folder作成前にmanifest照合 |
-| Syncthing device identity／folder IDを複製する | device衝突、削除履歴の持込み | 新device／新folder IDを作り、config/keyをコピーしない |
-| `--delete-missing` の早期実行 | repo内runtime asset削除 | G3完了まで禁止し、常にdry-runを先行 |
-| `.blend` 原本を回収できない | 今後のGLB修正不能 | G0で停止。ユーザー承認時だけ喪失記録と現行GLBからの原本再構築へ移る |
+| 空の`source/`／`exports/`を移行失敗と誤認する | 旧資産を不要に回収／逆変換する | 空を承認済みbaselineとしてmanifest化し、最初の新規promoteまで維持 |
+| `--delete-missing` の早期実行 | repo内runtime asset削除 | 最初のcanonical export受入まで禁止し、常にdry-runを先行 |
+| 既存runtime GLBをBlender正本へ逆変換する | 編集情報の欠落した偽正本が固定される | 既存GLBはreference限定とし、新規`.blend`をstagingから作る |
 | Git管理外assetsがfresh cloneにない | 起動時のmissing asset | assets snapshot、external exports、manifest、実ゲーム受入 |
 | runtime fontが同期対象外／未使用fontが壊れている | UI文字欠落、誤った正本化 | runtime 4件だけをparser／license検証し、未使用候補は別分類 |
 | root faviconが0 byte | Web build／ブラウザ表示不備 | Web使用時は有効化または参照除去。未使用なら `N/A` とfollow-up |
@@ -767,7 +731,7 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
   - visual testの8 clip、6表情、全Elevation View、影、mask、RtT。
   - 日本語UI、Familiar font、Soul名、絵文字、主要terrain／building／icon。
   - 検証用saveコピーでF9 load、F5 save、settings再起動。
-  - 現行Soul原本のcopy-open、missing file 0、staging export、asset sync、Bevy読込。
+  - 新規canonical候補のcopy-open、missing file 0、staging export、asset反映、Bevy読込。
   - audio backend初期化errorがないこと。runtime音声再生は現状 `N/A`。
   - Blender MCP read-only query。
 - セキュリティ確認:
@@ -793,23 +757,21 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
 ## 9. ロールバック方針
 
 - M0〜M4:
-  - 旧PCを唯一のwriterとして保持する。
-  - 新PCのSyncthingはreceive-onlyとし、Blender原本を直接上書きしない。
+  - 現PCのstagingだけを書き込み先とし、明示承認まで`source/`／`exports/`／repo `assets/`を上書きしない。
+  - 旧Blender PCへ戻る経路は持たず、既知良好なrepo runtime assetを比較用に保持する。
 - ロールバック条件:
-  - checksum不一致、Syncthing conflict、missing `.blend` dependency。
+  - checksum不一致、missing `.blend` dependency、provenance／license不足。
   - staging GLBがBevyで読めない、clip／mesh／見た目が退行する。
   - `check`／`verify`が移行環境固有の理由で失敗する。
   - GitHubまたは必須外部接続を復元できない。
 - 手順:
-  1. 新PCのSyncthingとBlender編集を停止する。
-  2. 新PCで生じた変更を隔離し、旧PCへ自動逆同期しない。
-  3. cutover manifestと旧PCのoffline rootを照合し、必要ならM1の独立snapshotから復元する。
-  4. 旧PCを `sendonly`、新PCを `receiveonly` に戻し、旧PCを再び唯一のwriterとして明記する。
-  5. 旧PC、新PCの順で同期を再開し、旧PCから新PCへの一方向復元とmanifest一致を確認する。
-  6. 原因を修正し、直前のゲートから再実施する。
+  1. canonical promoteとrepo asset同期を停止する。
+  2. 現PCで生じたstaging変更を隔離し、承認済みsource／exportsへ混ぜない。
+  3. cutover manifestと独立backupを照合し、必要なら最後の承認済みcanonical snapshotを復元する。
+  4. repo runtime assetは既知良好なcopyへ戻し、原因を修正して直前のゲートから再実施する。
 - G5後:
-  - 旧PCはpause／電源OFFの変更されないfallbackとして最低14日保持する。
-  - 新PC側で問題が出たら、旧PCを直接編集再開する前に新PCの差分を隔離する。
+  - 旧開発PCは電源OFFのGit/WIP fallbackとして最低14日保持する。
+  - asset問題は旧Blender PCへ戻さず、現PCの独立backupと承認済みmanifestから復旧する。
 - G6後:
   - secure erase後は旧PCへ戻せない。
   - 独立backupの最終復元成功なしにG6を実行しない。
@@ -821,12 +783,16 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
 - ゲート進捗:
   - 旧開発PC `dell-latitude-5511-fedora` のM0／M1とdevelopment-only G1は
     `2026-07-29` に完了し、外付け媒体のrestore evidenceまで合格した。
-  - 別のBlender source PCはユーザー判断で延期中であり、Blender統一に対するfull G0／G1は未完了。
+  - `2026-08-01`のユーザー判断で旧Blender PCからの資産引継ぎを廃止し、
+    その端末のM0／M1とfull G0／G1依存を受け入れ条件から削除した。
   - 新PCのdevelopment-only M2は完了し、G2は `PASS`。内蔵disk暗号化は
     `2026-08-01` のユーザー判断で受け入れ条件から削除されており、gate判定に使用しない。
+  - 新規asset workspaceの初期化、空canonical baseline、staging smoke、外付けsnapshotの
+    実restore testが完了し、G3は`PASS`。
 - 完了済みマイルストーン:
   - 旧開発PC M0／M1、development-only G1。
   - 新PC development-only M2／G2。
+  - M3の新規asset workspace初期化、staging smoke、独立backup／restore test。
 - 完了済みの先行準備:
   - `~/Sync/hell-workers-assets`へ`source`／`staging`／`exports`／`manifests`／
     `licenses`を分離した作業領域を作成した。
@@ -853,26 +819,27 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
     `rust-analyzer-mcp 0.2.0`をcrates.io install record付きで再構築済み。
   - rust-analyzer MCPはsymbol queryとworkspace error `0`、docsrs MCPは
     `bevy_app@0.19.0::App`実queryに成功。Codex project configにも両serverを登録した。
-  - GitHub認証はkeyring、repository read/push/admin権限あり。remote `HEAD/master`も上記SHAに一致。
+  - Git remoteのread／pushは成功し、移行ブランチもoriginへ公開済み。
+    その後`gh auth status`でCLI token無効を観測したため、GitHub API／PR操作前に再認証が必要。
   - active script／docsの旧home絶対pathをportable path／commandへ修正し、
     GCP/TRELLIS固有の承認済み歴史資料は今回 `N/A` とした。
 - 未着手/進行中:
-  - M4は上記の現PC向け準備だけ完了し、旧Blender sourceとの正式受入は未着手。
-  - M3／M5／M6は未着手。M3は別Blender source PCのM0／M1完了まで開始しない。
+  - M3／G3は完了。新しいproduction assetごとに同じpoint-in-time backup契約を適用する。
+  - M4は現PC向け基盤だけ完了し、新規canonical assetの制作・目視受入は未着手。
+  - M5／M6は未着手。旧Blender PC待ちはなく、最初の制作assetを決めればM4へ進める。
 
 ### 次の担当
 
 ユーザー:
 
-1. Blender source PCを利用可能になった時点で、その端末のM0／M1を再開する。
-2. その端末でcanonical Soul `.blend`、外部参照、Blender exact version／addon／presetを
-   読み取り専用で棚卸しできる状態にする。
+1. 最初にこの環境で新規制作するassetを決める。
+2. staging render／visual testを確認し、canonical promote時に明示承認する。
 
 AI:
 
-1. Blender source PCのM0／M1を端末別manifestと実restore testまで完了する。
-2. full G1合格後にM3のoffline asset復元へ進む。
-3. それまではSyncthing pairing、canonical asset切替、Blender原本promoteを行わない。
+1. ユーザーが選んだ最初のassetをstagingで制作し、scene／Khronos／目視gateを実行する。
+2. point-in-time backup／restore test後、明示承認された成果物だけをcanonicalへpromoteする。
+3. 明示承認前はcanonical asset切替、repo runtime asset上書きを行わない。
 
 ### AIの実行契約
 
@@ -884,21 +851,21 @@ AI:
   対応するgateで対象と影響を示し、その操作に対するユーザーの明示承認を得てから行う。
 - 各セッションは `<MIGRATION_ROOT>/ledger.md` を更新し、次のPC／AIが
   会話履歴なしでも再開できる状態で終了する。
-- development-only M2は旧開発PCのG1で実施できる。Blender sourceを含む全source PCの
-  G1が揃うまでは、M3以降のcanonical asset／Blender移行を開始しない。
+- 旧開発PCのG1は開発WIP保全に対して有効。旧Blender PCは対象外であり、
+  その監査やbackupを待たずに現PCの新規asset制作へ進める。
 
 ### ブロッカー/注意点
 
-- 現PCにはBlender `5.1.1`とhardened MCP環境を構築済みだが、旧Blender端末の
-  exact version／設定／export presetとcanonical Soul `.blend`原本は未回収である。
-  現PC baselineの成功を旧端末との移行同一性やG4合格として扱わない。
-- external `source/` / `exports/` は実データがなく、現行Syncthing pathも不整合である。
+- 現PCにはBlender `5.1.1`とhardened MCP環境を構築済みであり、これを新規baselineとする。
+  旧Blender端末との一致や旧canonical Soul `.blend`回収は要求しない。
+- external `source/` / `exports/` は承認済みの空baselineである。最初のassetはstagingから作り、
+  provenance／license／目視承認なしにcanonicalへ置かない。
 - repo内 `assets/` は現時点の唯一の既知runtime一式なので、backup前に削除・再同期しない。
-- `--delete-missing` はG3まで使用禁止。
+- `--delete-missing` は最初のcanonical export受入まで使用禁止。
 - 現worktreeには別作業の大きな未コミット変更がある。移行作業へ混ぜない。
 - Blender upgradeとPC移行を同時に行わない。
-- 現PC用Blender MCP／glTF validatorの導入元は固定済みだが、旧端末と同じ条件かは
-  M0で照合する。rust-analyzer MCP／docsrs MCPは新PC側のversion／source／実queryを確認済み。
+- 現PC用Blender MCP／glTF validatorの導入元は固定済み。旧端末との照合は行わない。
+  rust-analyzer MCP／docsrs MCPは新PC側のversion／source／実queryを確認済み。
 - 現Blender FlatpakはOCIO config `2.5`をruntime OCIO `2.4.2`で読めずfallbackする。
   geometry smokeには使えるが、色再現性の受入はこの不一致を解消するまでblockerである。
 
@@ -934,8 +901,8 @@ AI:
 - 新PC MCP:
   - rust-analyzer MCP `10 tools`、`rust_analyzer_symbols`成功、workspace error `0`
   - docsrs MCP `4 tools`、`bevy_app@0.19.0::App`成功
-- 新PC GitHub: `gh auth status` pass、`HEAD/master` remote SHA一致、
-  repository permission `read/push/admin = true`
+- 新PC GitHub: Git remote read／pushとbranch SHA一致はpass。
+  `gh` CLI tokenは後続確認で無効となっており、API／PR操作前の再認証が必要。
 - 新PC GPU: Intel Arc (Meteor Lake)、Mesa `26.1.5`、Vulkan `1.4` adapter query pass
 - Blender AI workflow focused検証（`2026-08-01`）:
   - vendor: `110 passed`、ruff pass、mypy pass
@@ -947,38 +914,39 @@ AI:
     `a818b962edd7e4addf12c83e32f8571455f09291be1f4c631eaff0922e37e94d`
   - direct stdio MCP: `28 tools`、scene read／staging save成功、
     Python／headless／direct export拒否
+  - 新規workspace baseline backup:
+    `snapshots/fedora-new-asset-workspace-20260801/`、5 artifact checksum／実restore test pass
 - 未解決エラー:
-  - 旧PCのBlender exact version／設定／原本が未取得。
-  - external asset source／exportsが未復元。
-  - fonts／faviconの恒久的な復元経路が未確定。
+  - 最初の新規canonical assetが未作成。backup／restore手順はbaselineで実証済み。
+  - fonts／faviconのlicense／provenanceと恒久的な管理経路が未確定。
   - 現Blender FlatpakのOCIO version不一致により色再現性が未受入。
+  - `gh` CLI tokenが無効。Git remote pushは成功済みだが、API／PR操作には再認証が必要。
 
 ### Definition of Done
 
 - [ ] Gitの全refs、stash、staged／unstaged、untracked内容が移行または明示廃棄済み
 - [ ] archiveしたWIPを新PCの隔離branch／worktreeへ復元し、M1 manifestと照合済み
 - [ ] 対象branchのremote divergenceとGitHub read／push権限を非破壊確認済み
-- [ ] 外部asset、Blender原本またはfallback入力、repo内assets、save/settingsのbackupと復元テストが成功
+- [ ] 新規external asset、repo内assets、save/settingsのbackupと復元テストが成功
 - [x] 新PCの保存容量、GPU／Vulkan、active Rust toolchain、rustfmt、Clippyを確認済み
 - [x] 新PCで `doctor`、rust-analyzer、`check`、`verify` が成功
 - [x] rust-analyzer MCPとdocsrs MCPのversion／sourceが固定され、実queryが成功
 - [x] glTF validatorのversion／sourceが固定され、staging GLBがerror 0、warningレビュー済み
 - [ ] `cargo run --locked` と `cargo run --locked -p visual_test` がGPU込みで起動し、audio初期化errorがない
-- [ ] Syncthing完全同期、conflict 0、single-writer切替済み
-- [ ] 新しいSyncthing device／folder IDを使用し、空destinationからruntime treeを再構築済み
+- [x] 旧Blender PC／Syncthingに依存しない空のcanonical workspaceを現PCに初期化済み
 - [ ] asset catalog参照path、runtime 4フォント、license／provenanceを検証済み
-- [ ] Blender exact version、配布経路、addon、設定、export presetが台帳化
-- [ ] 現行Soul原本または承認済み再構築原本にmissing resourceがない
+- [x] Blender exact version、配布経路、addon、安全設定、export条件が台帳化
+- [ ] 最初の新規canonical原本にmissing resourceがない
 - [ ] staging Soul GLBのexport、asset sync、Bevy読込が成功
-- [ ] Blender MCPのread-only接続が成功
+- [x] Blender MCPのread-only接続が成功
 - [ ] GitHub read／pushと必須外部接続を新PCだけで利用可能
 - [ ] secretがrepo、remote URL、平文credential fileへ混入していない
 - [ ] global Git設定とhookがportable化または不採用としてdocsと整合済み
 - [ ] active docs／scriptsから旧PC固有のhome／drive／SDK絶対pathを除去済み
 - [ ] 検証用copyでF9/F5とsettings再起動確認が成功
-- [ ] 新PCが唯一の開発／Blender編集端末
+- [x] 新PCが唯一の開発／Blender編集端末
 - [ ] 安定化期間と最終restore testが完了
-- [ ] 旧PCのaccess失効と、必要時のsecure eraseが完了
+- [ ] 必要な旧開発PCのaccess失効と、必要時のsecure eraseが完了
 - [ ] 恒久情報と `docs/blender-setup.md` のroot index登録が完了
 - [ ] `python3 scripts/dev.py docs --write` と `python3 scripts/dev.py docs --check` が成功
 - [ ] 本計画がarchiveまたは削除済み
@@ -987,8 +955,9 @@ AI:
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-01` | `Codex` | ユーザー判断により旧Blender PCからの資産／設定引継ぎを廃止。このPCを唯一の新規authoring hostとし、M3を空workspace基準化、M4を新規canonical asset制作へ再定義 |
 | `2026-08-01` | `Codex` | ユーザー判断により内蔵disk暗号化をM2／G2の受け入れ条件そのものから削除。既完了の自動受け入れ結果に基づき、development-only G2を`PASS`へ更新 |
 | `2026-08-01` | `Codex` | 外部M1台帳から正しい現在地を復元し、新PC M2のfresh clone、WIP隔離復元、toolchain、MCP実query、GitHub、Vulkan、portable pathを受入。当初はLUKS欠落をG2 blockとして記録したが、上記のユーザー判断で解消 |
-| `2026-08-01` | `Codex` | 現PCのBlender/MCP/validator先行基盤とfocused検証結果を記録。G0/G1未完のためM2/M4合格には数えず、旧原本・OCIOをblockerとして維持 |
+| `2026-08-01` | `Codex` | 現PCのBlender/MCP/validator先行基盤とfocused検証結果を記録。当初は旧原本回収待ちとしたが、上記の新規構築判断で解消。OCIOは未解決 |
 | `2026-07-29` | `Codex` | ユーザー用Start Here、全source PCのM0／M1、M0〜M6担当分担、固定成果物、AI引継ぎprompt／報告契約を追加 |
 | `2026-07-29` | `Codex` | 現行repo、開発環境、Syncthing、Blender／asset経路の監査結果を反映して初版作成 |

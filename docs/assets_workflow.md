@@ -46,6 +46,10 @@
 - `manifests/` / `licenses/`
   - 生成元、hash、Blender/export条件、利用許諾、review結果を記録する。
 
+新規authoring環境では`source/`と`exports/`を空から開始してよい。repo内`assets/`は
+実行用referenceであり、GLBやtextureを制作原本へ逆変換してcanonical扱いしない。
+最初の原本はstagingで新規作成し、検査・license／provenance・目視承認後にだけ昇格する。
+
 ## 3. リポジトリとの責務分離
 
 - リポジトリ外の `~/Sync/hell-workers-assets/source/`
