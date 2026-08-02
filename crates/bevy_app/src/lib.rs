@@ -4,6 +4,8 @@ mod entities;
 pub mod input_actions;
 pub mod interface;
 pub mod plugins;
+#[cfg(feature = "profiling-memory")]
+pub(crate) mod profiling_allocator;
 pub mod systems;
 pub mod world;
 

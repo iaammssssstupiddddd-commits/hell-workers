@@ -6,9 +6,9 @@ use parse::*;
 const DEFAULT_WARMUP_SECS: f32 = 30.0;
 const DEFAULT_MEASURE_SECS: f32 = 60.0;
 #[cfg(feature = "profiling")]
-pub(super) const PERF_SUMMARY_SCHEMA_VERSION: u32 = 10;
+pub(super) const PERF_SUMMARY_SCHEMA_VERSION: u32 = 11;
 #[cfg(feature = "profiling")]
-pub(super) const PERF_DETERMINISM_SCHEMA_VERSION: u32 = 3;
+pub(super) const PERF_DETERMINISM_SCHEMA_VERSION: u32 = 4;
 pub(super) const FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS: [u64; 4] = [1, 8, 32, 128];
 const DEFAULT_FIXED_STEP_HZ: u32 = 64;
 const DEFAULT_FIXED_WARMUP_TICKS: u64 = 1_920;
@@ -20,6 +20,7 @@ pub enum PerfWorkload {
     PathDoor,
     Construction,
     UiGpu,
+    TaskDashboard,
 }
 
 impl PerfWorkload {
@@ -29,6 +30,7 @@ impl PerfWorkload {
             "path-door" => Some(Self::PathDoor),
             "construction" => Some(Self::Construction),
             "ui-gpu" => Some(Self::UiGpu),
+            "task-dashboard" => Some(Self::TaskDashboard),
             _ => None,
         }
     }
@@ -39,6 +41,7 @@ impl PerfWorkload {
             Self::PathDoor => "path-door",
             Self::Construction => "construction",
             Self::UiGpu => "ui-gpu",
+            Self::TaskDashboard => "task-dashboard",
         }
     }
 
@@ -141,6 +144,32 @@ pub enum PerfOperationDialogMode {
     Open,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PerfDashboardMode {
+    Hidden,
+    Visible,
+    ActiveFilter,
+}
+
+impl PerfDashboardMode {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "hidden" => Some(Self::Hidden),
+            "visible" => Some(Self::Visible),
+            "active-filter" => Some(Self::ActiveFilter),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Hidden => "hidden",
+            Self::Visible => "visible",
+            Self::ActiveFilter => "active-filter",
+        }
+    }
+}
+
 impl PerfOperationDialogMode {
     fn parse(value: &str) -> Option<Self> {
         match value {
@@ -212,6 +241,7 @@ pub struct PerfScenarioConfig {
     pub render_mode: PerfRenderMode,
     pub familiar_policy_mode: PerfFamiliarPolicyMode,
     pub operation_dialog_mode: PerfOperationDialogMode,
+    pub dashboard_mode: PerfDashboardMode,
     pub warmup_secs: f32,
     pub measure_secs: f32,
     pub output_dir: Option<PathBuf>,
@@ -252,7 +282,7 @@ impl PerfScenarioConfig {
         let workload = parse_value_or_default(
             value_from_args_or_env(&args, "--perf-workload", "HW_PERF_WORKLOAD")?,
             "--perf-workload",
-            "gather|path-door|construction|ui-gpu",
+            "gather|path-door|construction|ui-gpu|task-dashboard",
             PerfWorkload::parse,
             PerfWorkload::Gather,
         )?;
@@ -283,6 +313,13 @@ impl PerfScenarioConfig {
             "hidden|open",
             PerfOperationDialogMode::parse,
             PerfOperationDialogMode::Hidden,
+        )?;
+        let dashboard_mode = parse_value_or_default(
+            value_from_args_or_env(&args, "--perf-dashboard", "HW_PERF_DASHBOARD")?,
+            "--perf-dashboard",
+            "hidden|visible|active-filter",
+            PerfDashboardMode::parse,
+            PerfDashboardMode::Hidden,
         )?;
         let clock_mode = parse_value_or_default(
             value_from_args_or_env(&args, "--perf-clock", "HW_PERF_CLOCK")?,
@@ -353,6 +390,23 @@ impl PerfScenarioConfig {
                     .to_string(),
             ));
         }
+        if !matches!(dashboard_mode, PerfDashboardMode::Hidden)
+            && workload != PerfWorkload::TaskDashboard
+        {
+            return Err(PerfScenarioConfigError(
+                "--perf-dashboard visible|active-filter requires --perf-workload task-dashboard"
+                    .to_string(),
+            ));
+        }
+        if workload == PerfWorkload::TaskDashboard
+            && (!matches!(familiar_policy_mode, PerfFamiliarPolicyMode::Baseline)
+                || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden))
+        {
+            return Err(PerfScenarioConfigError(
+                "the task-dashboard workload requires familiar policy baseline and operation dialog hidden"
+                    .to_string(),
+            ));
+        }
         let master_seed = parse_u64_value_or_random(
             value_from_args_or_env(&args, "--perf-seed", "HW_PERF_SEED")?
                 .or_else(|| env::var("HELL_WORKERS_WORLDGEN_SEED").ok()),
@@ -384,6 +438,7 @@ impl PerfScenarioConfig {
             render_mode,
             familiar_policy_mode,
             operation_dialog_mode,
+            dashboard_mode,
             warmup_secs,
             measure_secs,
             output_dir,
@@ -475,6 +530,7 @@ impl Default for PerfScenarioConfig {
             render_mode: PerfRenderMode::Gpu,
             familiar_policy_mode: PerfFamiliarPolicyMode::Baseline,
             operation_dialog_mode: PerfOperationDialogMode::Hidden,
+            dashboard_mode: PerfDashboardMode::Hidden,
             warmup_secs: DEFAULT_WARMUP_SECS,
             measure_secs: DEFAULT_MEASURE_SECS,
             output_dir: None,

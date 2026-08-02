@@ -11,6 +11,19 @@ use crate::theme::UiTheme;
 use bevy::prelude::*;
 use hw_core::jobs::WorkType;
 
+#[cfg(feature = "profiling")]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TaskListRenderStats {
+    pub input_rows: u32,
+    pub visible_rows: u32,
+    pub group_headers: u32,
+}
+
+#[cfg(feature = "profiling")]
+type TaskListRenderResult = TaskListRenderStats;
+#[cfg(not(feature = "profiling"))]
+type TaskListRenderResult = ();
+
 pub fn rebuild_task_list_ui(
     parent: &mut ChildSpawnerCommands,
     snapshot: &[TaskEntry],
@@ -19,10 +32,16 @@ pub fn rebuild_task_list_ui(
     action_state: &TaskDashboardActionState,
     game_assets: &dyn UiAssets,
     theme: &UiTheme,
-) {
+) -> TaskListRenderResult {
     spawn_toolbar(parent, view_state, game_assets, theme);
 
     let visible = view_state.visible_entries(snapshot);
+    #[cfg(feature = "profiling")]
+    let mut stats = TaskListRenderStats {
+        input_rows: u32::try_from(snapshot.len()).unwrap_or(u32::MAX),
+        visible_rows: u32::try_from(visible.len()).unwrap_or(u32::MAX),
+        group_headers: 0,
+    };
     if visible.is_empty() {
         parent.spawn((
             TaskListDynamicNode,
@@ -38,6 +57,9 @@ pub fn rebuild_task_list_ui(
             },
             TextColor(theme.colors.empty_text),
         ));
+        #[cfg(feature = "profiling")]
+        return stats;
+        #[cfg(not(feature = "profiling"))]
         return;
     }
 
@@ -50,6 +72,10 @@ pub fn rebuild_task_list_ui(
                 .filter(|candidate| candidate.work_type == entry.work_type)
                 .count();
             spawn_group_header(parent, entry.work_type, count, game_assets, theme);
+            #[cfg(feature = "profiling")]
+            {
+                stats.group_headers = stats.group_headers.saturating_add(1);
+            }
             previous_work_type = Some(entry.work_type);
         }
         spawn_task_row(
@@ -61,6 +87,8 @@ pub fn rebuild_task_list_ui(
             theme,
         );
     }
+    #[cfg(feature = "profiling")]
+    return stats;
 }
 
 fn spawn_toolbar(

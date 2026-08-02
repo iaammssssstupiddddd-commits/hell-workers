@@ -5,13 +5,13 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `familiar-operation-policy-validation-plan-2026-07-26` |
-| ステータス | `In Progress` |
+| ステータス | `Completed` |
 | 作成日 | `2026-07-26` |
 | 最終更新日 | `2026-08-02` |
 | 作成者 | `Codex` |
 | 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track B2） |
 | 実装完了記録 | `docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md` |
-| 関連計画 | `docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md` |
+| 関連計画 | `docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md` |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的
@@ -101,7 +101,7 @@
   残留する2経路をそれぞれ失敗する回帰testで再現し、source予約、搬入relationship、worker枠を
   retryable cleanupで同時解放するよう修正した。元checklist全体は再実施せず、狭い`V09`実機再確認で
   pickup前解除後に同じ不足分が再割り当てされることを確認した。
-- dashboard表示比較はA3性能計画の所有範囲に残す。
+- dashboard表示比較はA3性能計画のfixed / Capture / Memory artifactで完了した。
 
 ## 4. 実装方針（高レベル）
 
@@ -264,10 +264,14 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 - [x] disabled policyがcandidate snapshot / source / connectivity / score workを減らし、
       代替の全件scanを追加しないことをcounterで確認する。
 - [x] dialog hidden / openでsimulation checksumとAI work counterが一致する。
-- [ ] dashboard hidden / visible / active-filterはA3性能計画のartifactを参照する。
+- [x] dashboard hidden / visible / active-filterはA3性能計画のartifactを参照する。
 - [x] invalid run、schema不一致、warning / errorを黙って除外しない。
 
-B2所有のcontrolled policy / dialog検証は完了した。残るdashboard項目はA3性能計画のartifactを待つ。
+B2所有のcontrolled policy / dialog検証に加え、A3所有dashboard artifactの参照も完了した。
+`/tmp/hw-task-dashboard-audit-20260802-headless-v5`は3 modeのAI work同一性、
+`/tmp/hw-task-dashboard-capture-20260802-x11-native-v2`と
+`/tmp/hw-task-dashboard-memory-20260802-x11-native-v2`はIntel Vulkan / X11の各9 valid runと
+mode cost comparison PASSを記録する。raw artifactはcommitしない。
 
 ## M3: 記録・完了
 
@@ -281,7 +285,7 @@ B2所有のcontrolled policy / dialog検証は完了した。残るdashboard項�
   - [x] M2のcontrolled policy / dialog UI mode artifactがvalidである。
   - [x] 恒久仕様の変更が発生した場合だけ関連docs / Helpを同期している。
   - [x] `python3 scripts/dev.py verify`が成功する。
-  - [ ] 本計画を`docs/plans/archive/`へ移し、indexがfreshである。
+  - [x] 本計画を`docs/plans/archive/`へ移し、indexがfreshである。
 - 検証:
   - `python3 scripts/dev.py docs --write`
   - `python3 scripts/dev.py verify`
@@ -324,14 +328,14 @@ B2所有のcontrolled policy / dialog検証は完了した。残るdashboard項�
 
 ### 現在地
 
-- 進捗: 自動correctness整理、通常fixed-stepスモーク、B2 controlled policy / dialog監査、実機`V01` / `V02` / `V04`〜`V09`は完了。
-- 完了済み: `M1-A`、player-visible checklist、`V04`不具合修正とfocused回帰、follow-up運搬停止2経路の修正・focused回帰・`V09`実機再確認、M2のschema v2通常`gather`スモーク、schema v3 controlled監査。
-- 未着手/進行中: A3所有のdashboard artifact参照、`M3`。
+- 進捗: `100%`。自動correctness、B2 controlled policy / dialog監査、実機`V01` / `V02` / `V04`〜`V09`、A3 dashboard artifact参照、`M3`を完了。
+- 完了済み: `M1-A`〜`M3`。
+- 未着手/進行中: なし。
 
 ### 次のAIが最初にやること
 
-1. A3性能計画の進捗を確認し、dashboard harnessを本計画へ重複実装しない。
-2. A3 artifact参照が揃った時点でM3の完了処理を行う。
+1. B2仕様を変更する場合はarchive済み実装計画と本受入記録を参照する。
+2. 新しい性能比較はA3性能artifactと同じschema / fixture / matrixで採る。
 
 ### ブロッカー/注意点
 
@@ -347,7 +351,7 @@ B2所有のcontrolled policy / dialog検証は完了した。残るdashboard項�
 ### 参照必須ファイル
 
 - `docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`
-- `docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md`
+- `docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`
 - `docs/familiar_ai.md`
 - `docs/task_list_ui.md`
 - `docs/save_load.md`
@@ -366,7 +370,8 @@ B2所有のcontrolled policy / dialog検証は完了した。残るdashboard項�
 - fixed-step audit: `2 valid; 0 invalid`（有効session）
 - controlled fixed-step audit: `8 valid; 0 invalid`、comparison `PASS`
 - 最終 `python3 scripts/dev.py verify`: PASS（2026-08-02、全quality gate成功）
-- 未解決エラー: 自動回帰なし。`V01` / `V02` / `V04`〜`V09`は実機合格。残件はA3所有のdashboard性能artifact参照のみ
+- A3 dashboard artifact: fixed 3 valid / 0 invalid、Capture 9 valid / 0 invalid、Memory 9 valid / 0 invalid、各comparison `PASS`
+- 未解決エラー: なし
 
 ### Definition of Done
 
@@ -376,7 +381,7 @@ B2所有のcontrolled policy / dialog検証は完了した。残るdashboard項�
 - [x] A3性能計画とのownership重複がない
 - [x] 影響ドキュメントが更新済み
 - [x] `python3 scripts/dev.py verify`が成功
-- [ ] 完了後に本計画をarchive
+- [x] 完了後に本計画をarchive
 
 ## 10. 更新履歴
 
@@ -389,3 +394,4 @@ B2所有のcontrolled policy / dialog検証は完了した。残るdashboard項�
 | `2026-08-02` | `Codex` | 意味のない`V03`手動項目を削除。F9後のTaskArea→Patrol復元と割当確定時のTaskSlots競合を修正し、Mine / Rest Area供給 / Buildの2件並列回帰を追加。`V04`を修正版の実機再確認待ちへ更新 |
 | `2026-08-02` | `Codex` | 元の実機`V04`〜`V08` Passを記録。follow-upの運搬停止をpickup前解除時のghost搬入予定と到達不能pickup task残留に分離し、2件の自動回帰と狭い`V09`へ整理 |
 | `2026-08-02` | `Codex` | follow-up修正版の`V09`実機再確認Passを記録し、M1-Bのplayer-visible checklistを完了。残件をA3所有のdashboard性能artifact参照に限定 |
+| `2026-08-02` | `Codex` | A3のfixed / Intel Vulkan X11 Capture / native Memory artifact参照を完了し、B2実機・性能フォローアップをarchive |

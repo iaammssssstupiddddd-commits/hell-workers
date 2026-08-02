@@ -7,30 +7,25 @@ use super::*;
 /// deferred command を適用した直後にこの checkpoint を置く。
 #[cfg(feature = "profiling")]
 pub(crate) fn start_perf_capture_system(
-    config: Res<PerfScenarioConfig>,
-    applied: Res<PerfScenarioApplied>,
-    checksum_queries: PerfChecksumQueries,
+    params: PerfCaptureStartParams,
     mut capture: ResMut<PerfCapture>,
-    virtual_time: ResMut<Time<Virtual>>,
-    fixed_time: Res<Time<Fixed>>,
-    familiar_metrics: Res<FamiliarDelegationPerfMetrics>,
     mut exit: MessageWriter<AppExit>,
 ) {
-    if !config.enabled() || !matches!(capture.phase, PerfCapturePhase::WaitingForScenario) {
+    if !params.config.enabled() || !matches!(capture.phase, PerfCapturePhase::WaitingForScenario) {
         return;
     }
 
-    if !config.workload.has_automated_setup() {
+    if !params.config.workload.has_automated_setup() {
         error!(
             "PERF_CAPTURE: workload '{}' has no automated setup yet; use gather",
-            config.workload.as_str()
+            params.config.workload.as_str()
         );
         capture.phase = PerfCapturePhase::Finished;
         exit.write(AppExit::error());
         return;
     }
-    if !applied.complete() {
-        if config.uses_fixed_timesteps() && !capture.fixture_wait_reported {
+    if !params.applied.complete() {
+        if params.config.uses_fixed_timesteps() && !capture.fixture_wait_reported {
             eprintln!(
                 "PERF_DETERMINISM_AUDIT: waiting for fixture setup while virtual time remains paused"
             );
@@ -39,15 +34,15 @@ pub(crate) fn start_perf_capture_system(
         return;
     }
 
-    let initial_checksum = calculate_checksum(&checksum_queries);
-    let expected_souls = config.soul_count as usize;
-    let expected_familiars = config.familiar_count as usize;
+    let initial_checksum = calculate_checksum(&params.checksum_queries);
+    let expected_souls = params.config.soul_count as usize;
+    let expected_familiars = params.config.familiar_count as usize;
     if initial_checksum.souls != expected_souls || initial_checksum.familiars != expected_familiars
     {
         if !capture.fixture_wait_reported {
             eprintln!(
                 "{}: waiting for fixture expected_souls={expected_souls} expected_familiars={expected_familiars} observed_souls={} observed_familiars={}",
-                if config.uses_fixed_timesteps() {
+                if params.config.uses_fixed_timesteps() {
                     "PERF_DETERMINISM_AUDIT"
                 } else {
                     "PERF_CAPTURE"
@@ -61,17 +56,25 @@ pub(crate) fn start_perf_capture_system(
     }
 
     capture.initial_checksum = Some(initial_checksum);
-    capture.initial_scene_roots = Some(calculate_scene_root_counts(&checksum_queries));
-    if config.uses_fixed_timesteps() {
+    capture.initial_scene_roots = Some(calculate_scene_root_counts(&params.checksum_queries));
+    if params.config.uses_fixed_timesteps() {
         if let Err(error) = record_determinism_checkpoint(
             &mut capture,
-            "fixture-pre-update",
-            0,
-            &virtual_time,
-            &fixed_time,
-            &checksum_queries,
-            &familiar_metrics,
-            true,
+            PerfCheckpointRequest {
+                checkpoint: "fixture-pre-update",
+                update_tick: 0,
+                expects_paused_virtual_time: true,
+            },
+            &params.virtual_time,
+            &params.fixed_time,
+            &params.checksum_queries,
+            PerfWorkSnapshot::from_resources(
+                &params.familiar_metrics,
+                &params.arbitration_metrics,
+                params.runtime_path_budget.metrics(),
+                &params.runtime_path_defer_metrics,
+                &params.dashboard_metrics,
+            ),
         ) {
             error!("PERF_DETERMINISM_AUDIT: invalid initial checkpoint: {error}");
             capture.phase = PerfCapturePhase::Finished;
@@ -81,16 +84,16 @@ pub(crate) fn start_perf_capture_system(
         capture.phase = PerfCapturePhase::ArmFixedAudit;
         eprintln!(
             "PERF_DETERMINISM_AUDIT: fixture checkpoint captured; arming fixed_hz={} warmup_ticks={} audit_ticks={}",
-            config.fixed_step_hz(),
-            config.fixed_warmup_ticks(),
-            config.fixed_audit_ticks(),
+            params.config.fixed_step_hz(),
+            params.config.fixed_warmup_ticks(),
+            params.config.fixed_audit_ticks(),
         );
     } else {
         capture.phase = PerfCapturePhase::Warmup;
         capture.elapsed_secs = 0.0;
         eprintln!(
             "PERF_CAPTURE: phase=warmup virtual_speed=1.0 target_secs={}",
-            config.warmup_secs
+            params.config.warmup_secs
         );
     }
 }
@@ -127,7 +130,13 @@ pub(crate) fn drive_perf_capture_system(
                     &params.time,
                     &params.fixed_time,
                     &params.checksum_queries,
-                    &params.familiar_metrics,
+                    PerfWorkSnapshot::from_resources(
+                        &params.familiar_metrics,
+                        &params.arbitration_metrics,
+                        params.runtime_path_budget.metrics(),
+                        &params.runtime_path_defer_metrics,
+                        &params.dashboard_metrics,
+                    ),
                 ) {
                     error!("PERF_DETERMINISM_AUDIT: invalid warmup checkpoint: {error}");
                     capture.phase = PerfCapturePhase::Finished;
@@ -143,6 +152,12 @@ pub(crate) fn drive_perf_capture_system(
                     capture.elapsed_secs = 0.0;
                     capture.frame_times_ms.clear();
                     *params.familiar_metrics = FamiliarDelegationPerfMetrics::default();
+                    *params.arbitration_metrics = WheelbarrowArbitrationPerfMetrics::default();
+                    *params.dashboard_metrics = TaskDashboardPerfMetrics::default();
+                    *params.dashboard_timing_metrics = TaskDashboardTimingMetrics {
+                        active: true,
+                        ..default()
+                    };
                     *params.task_execution_metrics = TaskExecutionPerfMetrics::default();
                     *params.reservation_sync_metrics = ReservationSyncPerfMetrics::default();
                     *params.door_metrics = DoorPerfMetrics::default();
@@ -155,6 +170,8 @@ pub(crate) fn drive_perf_capture_system(
                         "PERF_CAPTURE: phase=measure target_secs={}",
                         params.config.measure_secs
                     );
+                    #[cfg(feature = "profiling-memory")]
+                    crate::profiling_allocator::begin_measurement();
                 }
             }
         }
@@ -166,7 +183,13 @@ pub(crate) fn drive_perf_capture_system(
                     &params.time,
                     &params.fixed_time,
                     &params.checksum_queries,
-                    &params.familiar_metrics,
+                    PerfWorkSnapshot::from_resources(
+                        &params.familiar_metrics,
+                        &params.arbitration_metrics,
+                        params.runtime_path_budget.metrics(),
+                        &params.runtime_path_defer_metrics,
+                        &params.dashboard_metrics,
+                    ),
                 ) {
                     error!("PERF_DETERMINISM_AUDIT: invalid audit checkpoint: {error}");
                     capture.phase = PerfCapturePhase::Finished;
@@ -182,8 +205,13 @@ pub(crate) fn drive_perf_capture_system(
                     capture.frame_times_ms.push(frame_time_ms);
                 }
                 if capture.elapsed_secs >= params.config.measure_secs {
+                    #[cfg(feature = "profiling-memory")]
+                    {
+                        capture.memory_measurement = crate::profiling_allocator::end_measurement();
+                    }
                     capture.measure_end_checksum =
                         Some(calculate_checksum(&params.checksum_queries));
+                    params.dashboard_timing_metrics.active = false;
                     capture.phase = PerfCapturePhase::Flush;
                 }
             }
@@ -215,6 +243,11 @@ pub(crate) fn drive_perf_capture_system(
                             measure_virtual_secs: capture.measure_virtual_secs,
                             measure_real_secs: capture.measure_real_secs,
                             familiar_metrics: &params.familiar_metrics,
+                            arbitration_metrics: &params.arbitration_metrics,
+                            dashboard_metrics: &params.dashboard_metrics,
+                            dashboard_timing_metrics: &params.dashboard_timing_metrics,
+                            #[cfg(feature = "profiling-memory")]
+                            memory_measurement: &capture.memory_measurement,
                             task_execution_metrics: &params.task_execution_metrics,
                             reservation_sync_metrics: &params.reservation_sync_metrics,
                             door_metrics: &params.door_metrics,
@@ -250,32 +283,36 @@ fn advance_fixed_audit_warmup(
     virtual_time: &Time<Virtual>,
     fixed_time: &Time<Fixed>,
     checksum_queries: &PerfChecksumQueries<'_, '_>,
-    familiar_metrics: &FamiliarDelegationPerfMetrics,
+    work: PerfWorkSnapshot,
 ) -> Result<(), String> {
     capture.fixed_update_tick += 1;
     let tick = capture.fixed_update_tick;
     if let Some(checkpoint) = early_checkpoint_name(tick) {
         record_determinism_checkpoint(
             capture,
-            checkpoint,
-            tick,
+            PerfCheckpointRequest {
+                checkpoint,
+                update_tick: tick,
+                expects_paused_virtual_time: false,
+            },
             virtual_time,
             fixed_time,
             checksum_queries,
-            familiar_metrics,
-            false,
+            work,
         )?;
     }
     if tick == config.fixed_warmup_ticks() {
         record_determinism_checkpoint(
             capture,
-            "post-warmup",
-            tick,
+            PerfCheckpointRequest {
+                checkpoint: "post-warmup",
+                update_tick: tick,
+                expects_paused_virtual_time: false,
+            },
             virtual_time,
             fixed_time,
             checksum_queries,
-            familiar_metrics,
-            false,
+            work,
         )?;
         capture.phase = PerfCapturePhase::Measure;
         eprintln!("PERF_DETERMINISM_AUDIT: phase=audit");
@@ -290,20 +327,22 @@ fn advance_fixed_audit_measure(
     virtual_time: &Time<Virtual>,
     fixed_time: &Time<Fixed>,
     checksum_queries: &PerfChecksumQueries<'_, '_>,
-    familiar_metrics: &FamiliarDelegationPerfMetrics,
+    work: PerfWorkSnapshot,
 ) -> Result<(), String> {
     capture.fixed_update_tick += 1;
     let tick = capture.fixed_update_tick;
     if tick == config.fixed_audit_end_tick() {
         record_determinism_checkpoint(
             capture,
-            "post-audit-end",
-            tick,
+            PerfCheckpointRequest {
+                checkpoint: "post-audit-end",
+                update_tick: tick,
+                expects_paused_virtual_time: false,
+            },
             virtual_time,
             fixed_time,
             checksum_queries,
-            familiar_metrics,
-            false,
+            work,
         )?;
         capture.phase = PerfCapturePhase::Flush;
     }
@@ -322,16 +361,26 @@ fn early_checkpoint_name(tick: u64) -> Option<&'static str> {
 }
 
 #[cfg(feature = "profiling")]
-fn record_determinism_checkpoint(
-    capture: &mut PerfCapture,
+struct PerfCheckpointRequest {
     checkpoint: &'static str,
     update_tick: u64,
+    expects_paused_virtual_time: bool,
+}
+
+#[cfg(feature = "profiling")]
+fn record_determinism_checkpoint(
+    capture: &mut PerfCapture,
+    request: PerfCheckpointRequest,
     virtual_time: &Time<Virtual>,
     fixed_time: &Time<Fixed>,
     checksum_queries: &PerfChecksumQueries<'_, '_>,
-    familiar_metrics: &FamiliarDelegationPerfMetrics,
-    expects_paused_virtual_time: bool,
+    work: PerfWorkSnapshot,
 ) -> Result<(), String> {
+    let PerfCheckpointRequest {
+        checkpoint,
+        update_tick,
+        expects_paused_virtual_time,
+    } = request;
     if virtual_time.is_paused() != expects_paused_virtual_time {
         return Err(format!(
             "{checkpoint}: virtual pause state is {}, expected {}",
@@ -388,7 +437,7 @@ fn record_determinism_checkpoint(
             virtual_effective_speed_bits: virtual_time.effective_speed_f64().to_bits(),
             structural_checksum,
             checksum,
-            familiar_ai_work: PerfFamiliarAiWorkSnapshot::from(familiar_metrics),
+            work,
         });
     capture
         .determinism_actor_records

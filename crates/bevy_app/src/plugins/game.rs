@@ -107,7 +107,7 @@ impl Plugin for HellWorkersGamePlugin {
 fn report_perf_scenario(perf_config: &PerfScenarioConfig) {
     if perf_config.enabled() {
         eprintln!(
-            "PERF_SCENARIO: seed={} workload={} size={} souls={} familiars={} render={} clock={} familiar_policy={} operation_dialog={} warmup={}s measure={}s fixed_hz={} fixed_warmup_ticks={} fixed_audit_ticks={} virtual_speed=1.0 output_dir={}",
+            "PERF_SCENARIO: seed={} workload={} size={} souls={} familiars={} render={} clock={} familiar_policy={} operation_dialog={} dashboard_mode={} warmup={}s measure={}s fixed_hz={} fixed_warmup_ticks={} fixed_audit_ticks={} virtual_speed=1.0 output_dir={}",
             perf_config.master_seed,
             perf_config.workload.as_str(),
             perf_config.size.as_str(),
@@ -117,6 +117,7 @@ fn report_perf_scenario(perf_config: &PerfScenarioConfig) {
             perf_config.clock_mode_as_str(),
             perf_config.familiar_policy_mode.as_str(),
             perf_config.operation_dialog_mode.as_str(),
+            perf_config.dashboard_mode.as_str(),
             perf_config.warmup_secs,
             perf_config.measure_secs,
             perf_config.fixed_step_hz(),

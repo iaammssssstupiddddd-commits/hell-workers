@@ -15,6 +15,11 @@ def run_suite(args: argparse.Namespace) -> int:
         {"hidden", "open"},
         "operation dialog modes",
     )
+    dashboard_modes = parse_csv_list(
+        args.dashboard_modes,
+        {"hidden", "visible", "active-filter"},
+        "dashboard modes",
+    )
     if (args.souls is None) != (args.familiars is None):
         raise ValueError("--souls and --familiars must be provided together")
     cases = [
@@ -27,11 +32,13 @@ def run_suite(args: argparse.Namespace) -> int:
             args.familiars,
             familiar_policy,
             operation_dialog,
+            dashboard_mode,
         )
         for size in sizes
         for render in renders
         for familiar_policy in familiar_policies
         for operation_dialog in operation_dialog_modes
+        for dashboard_mode in dashboard_modes
     ]
     if args.dry_run:
         binary = Path(args.binary or "target/profiling/bevy_app")
@@ -40,6 +47,7 @@ def run_suite(args: argparse.Namespace) -> int:
                 f"{case.identifier}: {binary} --perf-scenario --perf-seed {case.seed} "
                 f"--perf-clock {args.clock_mode} --perf-familiar-policy "
                 f"{case.familiar_policy} --perf-operation-dialog {case.operation_dialog} ..."
+                f" --perf-dashboard {case.dashboard_mode}"
             )
         return 0
 
@@ -81,6 +89,8 @@ def main() -> int:
             ) else 1
         if args.command == "compare":
             return compare_sessions(args)
+        if args.command == "compare-dashboard-modes":
+            return compare_dashboard_modes(args)
         return self_test()
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
         print(f"perf.py: {error}", file=sys.stderr)

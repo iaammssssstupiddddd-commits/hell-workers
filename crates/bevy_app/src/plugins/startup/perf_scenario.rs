@@ -9,6 +9,10 @@ use crate::entities::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarPolicy,
 };
 #[cfg(feature = "profiling")]
+use crate::interface::ui::panels::task_list::{
+    TaskDashboardPerfMetrics, TaskDashboardTimingMetrics,
+};
+#[cfg(feature = "profiling")]
 use crate::systems::command::TaskArea;
 #[cfg(feature = "profiling")]
 use crate::systems::energy::grid_recalc::EnergyPerfMetrics;
@@ -19,7 +23,7 @@ use crate::systems::familiar_ai::perceive::resource_sync::ReservationSyncPerfMet
 #[cfg(feature = "profiling")]
 use crate::systems::jobs::{
     Blueprint, BuildingType, ConstructionPerfMetrics, Designation, Door, DoorState, Priority, Rock,
-    TaskSlots, Tree, WorkType,
+    TargetBlueprint, TaskSlots, Tree, WorkType,
 };
 #[cfg(feature = "profiling")]
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
@@ -45,6 +49,8 @@ use hw_jobs::construction::{
 };
 #[cfg(feature = "profiling")]
 use hw_jobs::{GatherPhase, HaulPhase};
+#[cfg(feature = "profiling")]
+use hw_logistics::transport_request::WheelbarrowArbitrationPerfMetrics;
 #[cfg(feature = "profiling")]
 use hw_soul_ai::soul_ai::execute::task_execution::TaskExecutionPerfMetrics;
 #[cfg(feature = "profiling")]
@@ -81,6 +87,8 @@ mod workload_driver;
 
 #[cfg(feature = "profiling")]
 pub(crate) use capture_driver::{drive_perf_capture_system, start_perf_capture_system};
+#[cfg(feature = "profiling")]
+pub(crate) use config::PerfDashboardMode;
 pub use config::{
     PerfFamiliarPolicyMode, PerfOperationDialogMode, PerfRenderMode, PerfScenarioConfig,
     PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
@@ -134,6 +142,8 @@ pub(crate) struct PerfCapture {
     fixed_update_tick: u64,
     determinism_checkpoints: Vec<PerfDeterminismCheckpoint>,
     determinism_actor_records: Vec<PerfDeterminismActorRecord>,
+    #[cfg(feature = "profiling-memory")]
+    memory_measurement: crate::profiling_allocator::MemoryMeasurement,
 }
 
 #[cfg(feature = "profiling")]
@@ -187,13 +197,14 @@ struct PerfDeterminismCheckpoint {
     virtual_effective_speed_bits: u64,
     structural_checksum: PerfScenarioChecksum,
     checksum: PerfScenarioChecksum,
-    familiar_ai_work: PerfFamiliarAiWorkSnapshot,
+    work: PerfWorkSnapshot,
 }
 
 #[cfg(feature = "profiling")]
 #[derive(Clone, Copy)]
-struct PerfFamiliarAiWorkSnapshot {
+struct PerfWorkSnapshot {
     delegation_cycles: u32,
+    incoming_snapshot_builds: u32,
     familiars_processed: u32,
     candidate_membership_checks: u32,
     policy_disabled_rejections: u32,
@@ -201,15 +212,59 @@ struct PerfFamiliarAiWorkSnapshot {
     candidate_score_attempts: u32,
     worker_score_attempts: u32,
     source_selector_calls: u32,
+    source_selector_cache_build_scanned_items: u32,
+    source_selector_candidate_scanned_items: u32,
     source_selector_scanned_items: u32,
     reachable_with_cache_calls: u32,
+    top_k_partition_runs: u32,
+    top_k_retained_candidates: u32,
+    top_k_fallback_candidates: u32,
+    wheelbarrow_arbitration_rebuilds: u32,
+    wheelbarrow_request_bucket_builds: u32,
+    wheelbarrow_bucket_items_scanned: u32,
+    wheelbarrow_candidates_after_top_k: u32,
+    runtime_path_actor_new_core_searches: u64,
+    runtime_path_actor_new_deferred: u64,
+    runtime_path_actor_reuse_core_searches: u64,
+    runtime_path_actor_reuse_deferred: u64,
+    runtime_path_actor_rest_fallback_core_searches: u64,
+    runtime_path_actor_rest_fallback_deferred: u64,
+    runtime_path_escape_core_searches: u64,
+    runtime_path_escape_deferred: u64,
+    runtime_path_task_execution_core_searches: u64,
+    runtime_path_task_execution_deferred: u64,
+    runtime_path_bucket_transport_core_searches: u64,
+    runtime_path_bucket_transport_deferred: u64,
+    runtime_path_total_core_searches: u64,
+    runtime_path_expanded_nodes: u64,
+    runtime_path_max_expanded_nodes_per_search: u64,
+    runtime_path_active_task_max_defer_frames: u64,
+    runtime_path_idle_or_rest_max_defer_frames: u64,
+    runtime_path_deferred_actor_retries: u64,
+    dashboard_state_rebuilds: u32,
+    dashboard_snapshot_rows_scanned: u32,
+    dashboard_summary_rows_scanned: u32,
+    dashboard_snapshot_changes: u32,
+    dashboard_summary_changes: u32,
+    dashboard_render_rebuilds: u32,
+    dashboard_render_input_rows: u32,
+    dashboard_render_visible_rows: u32,
+    dashboard_render_group_headers: u32,
+    dashboard_despawn_roots_requested: u32,
 }
 
 #[cfg(feature = "profiling")]
-impl From<&FamiliarDelegationPerfMetrics> for PerfFamiliarAiWorkSnapshot {
-    fn from(metrics: &FamiliarDelegationPerfMetrics) -> Self {
+impl PerfWorkSnapshot {
+    fn from_resources(
+        metrics: &FamiliarDelegationPerfMetrics,
+        arbitration: &WheelbarrowArbitrationPerfMetrics,
+        runtime_path: &RuntimePathSearchMetrics,
+        runtime_defer: &RuntimePathDeferMetrics,
+        dashboard: &TaskDashboardPerfMetrics,
+    ) -> Self {
         Self {
             delegation_cycles: metrics.delegation_cycles,
+            incoming_snapshot_builds: metrics.incoming_snapshot_builds,
             familiars_processed: metrics.familiars_processed,
             candidate_membership_checks: metrics.candidate_membership_checks,
             policy_disabled_rejections: metrics.policy_disabled_rejections,
@@ -217,8 +272,49 @@ impl From<&FamiliarDelegationPerfMetrics> for PerfFamiliarAiWorkSnapshot {
             candidate_score_attempts: metrics.candidate_score_attempts,
             worker_score_attempts: metrics.worker_score_attempts,
             source_selector_calls: metrics.source_selector_calls,
+            source_selector_cache_build_scanned_items: metrics
+                .source_selector_cache_build_scanned_items,
+            source_selector_candidate_scanned_items: metrics
+                .source_selector_candidate_scanned_items,
             source_selector_scanned_items: metrics.source_selector_scanned_items,
             reachable_with_cache_calls: metrics.reachable_with_cache_calls,
+            top_k_partition_runs: metrics.top_k_partition_runs,
+            top_k_retained_candidates: metrics.top_k_retained_candidates,
+            top_k_fallback_candidates: metrics.top_k_fallback_candidates,
+            wheelbarrow_arbitration_rebuilds: arbitration.rebuilds,
+            wheelbarrow_request_bucket_builds: arbitration.request_bucket_builds,
+            wheelbarrow_bucket_items_scanned: arbitration.bucket_items_scanned,
+            wheelbarrow_candidates_after_top_k: arbitration.candidates_after_top_k,
+            runtime_path_actor_new_core_searches: runtime_path.actor_new_core_searches,
+            runtime_path_actor_new_deferred: runtime_path.actor_new_deferred,
+            runtime_path_actor_reuse_core_searches: runtime_path.actor_reuse_core_searches,
+            runtime_path_actor_reuse_deferred: runtime_path.actor_reuse_deferred,
+            runtime_path_actor_rest_fallback_core_searches: runtime_path
+                .actor_rest_fallback_core_searches,
+            runtime_path_actor_rest_fallback_deferred: runtime_path.actor_rest_fallback_deferred,
+            runtime_path_escape_core_searches: runtime_path.escape_core_searches,
+            runtime_path_escape_deferred: runtime_path.escape_deferred,
+            runtime_path_task_execution_core_searches: runtime_path.task_execution_core_searches,
+            runtime_path_task_execution_deferred: runtime_path.task_execution_deferred,
+            runtime_path_bucket_transport_core_searches: runtime_path
+                .bucket_transport_core_searches,
+            runtime_path_bucket_transport_deferred: runtime_path.bucket_transport_deferred,
+            runtime_path_total_core_searches: runtime_path.total_core_searches(),
+            runtime_path_expanded_nodes: runtime_path.expanded_nodes,
+            runtime_path_max_expanded_nodes_per_search: runtime_path.max_expanded_nodes_per_search,
+            runtime_path_active_task_max_defer_frames: runtime_defer.active_task_max_defer_frames,
+            runtime_path_idle_or_rest_max_defer_frames: runtime_defer.idle_or_rest_max_defer_frames,
+            runtime_path_deferred_actor_retries: runtime_defer.deferred_actor_retries,
+            dashboard_state_rebuilds: dashboard.state_rebuilds,
+            dashboard_snapshot_rows_scanned: dashboard.snapshot_rows_scanned,
+            dashboard_summary_rows_scanned: dashboard.summary_rows_scanned,
+            dashboard_snapshot_changes: dashboard.snapshot_changes,
+            dashboard_summary_changes: dashboard.summary_changes,
+            dashboard_render_rebuilds: dashboard.render_rebuilds,
+            dashboard_render_input_rows: dashboard.render_input_rows,
+            dashboard_render_visible_rows: dashboard.render_visible_rows,
+            dashboard_render_group_headers: dashboard.render_group_headers,
+            dashboard_despawn_roots_requested: dashboard.despawn_roots_requested,
         }
     }
 }
@@ -322,6 +418,21 @@ pub(crate) struct PerfChecksumQueries<'w, 's> {
 }
 
 #[cfg(feature = "profiling")]
+#[derive(SystemParam)]
+pub(crate) struct PerfCaptureStartParams<'w, 's> {
+    config: Res<'w, PerfScenarioConfig>,
+    applied: Res<'w, PerfScenarioApplied>,
+    checksum_queries: PerfChecksumQueries<'w, 's>,
+    virtual_time: ResMut<'w, Time<Virtual>>,
+    fixed_time: Res<'w, Time<Fixed>>,
+    familiar_metrics: Res<'w, FamiliarDelegationPerfMetrics>,
+    arbitration_metrics: Res<'w, WheelbarrowArbitrationPerfMetrics>,
+    runtime_path_budget: Res<'w, RuntimePathSearchBudget>,
+    runtime_path_defer_metrics: Res<'w, RuntimePathDeferMetrics>,
+    dashboard_metrics: Res<'w, TaskDashboardPerfMetrics>,
+}
+
+#[cfg(feature = "profiling")]
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct PerfCaptureParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
@@ -331,6 +442,9 @@ pub(crate) struct PerfCaptureParams<'w, 's> {
     diagnostics: Option<Res<'w, bevy::diagnostic::DiagnosticsStore>>,
     checksum_queries: PerfChecksumQueries<'w, 's>,
     familiar_metrics: ResMut<'w, FamiliarDelegationPerfMetrics>,
+    arbitration_metrics: ResMut<'w, WheelbarrowArbitrationPerfMetrics>,
+    dashboard_metrics: ResMut<'w, TaskDashboardPerfMetrics>,
+    dashboard_timing_metrics: ResMut<'w, TaskDashboardTimingMetrics>,
     task_execution_metrics: ResMut<'w, TaskExecutionPerfMetrics>,
     reservation_sync_metrics: ResMut<'w, ReservationSyncPerfMetrics>,
     door_metrics: ResMut<'w, DoorPerfMetrics>,

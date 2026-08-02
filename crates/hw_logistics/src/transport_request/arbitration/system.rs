@@ -9,6 +9,8 @@ use hw_core::relationships::{IncomingDeliveries, ParkedAt, PushedBy, StoredIn, S
 use hw_jobs::Designation;
 
 use crate::transport_request::metrics::TransportRequestMetrics;
+#[cfg(feature = "profiling")]
+use crate::transport_request::metrics::WheelbarrowArbitrationPerfMetrics;
 use crate::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, ReceiverPolicyTier, TransportDemand,
     TransportRequest, TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
@@ -107,6 +109,8 @@ pub struct WheelbarrowArbitrationResources<'w> {
     time: Res<'w, Time>,
     runtime: ResMut<'w, WheelbarrowArbitrationRuntime>,
     metrics: ResMut<'w, TransportRequestMetrics>,
+    #[cfg(feature = "profiling")]
+    perf_metrics: ResMut<'w, WheelbarrowArbitrationPerfMetrics>,
     cache: Res<'w, crate::resource_cache::SharedResourceCache>,
     diagnostics: ResMut<'w, WheelbarrowArbitrationDiagnostics>,
 }
@@ -189,6 +193,10 @@ pub fn wheelbarrow_arbitration_system(
     let mut pending_secs_total = 0.0f64;
 
     if should_rebuild {
+        #[cfg(feature = "profiling")]
+        {
+            resources.perf_metrics.rebuilds = resources.perf_metrics.rebuilds.saturating_add(1);
+        }
         resources.runtime.initialized = true;
         resources.runtime.last_full_eval_secs = now;
 
@@ -232,6 +240,23 @@ pub fn wheelbarrow_arbitration_system(
         bucket_items_total = bucket_total;
         candidates_after_top_k = after_top_k;
         pending_secs_total = pending_total;
+        #[cfg(feature = "profiling")]
+        {
+            if eligible_requests > 0 {
+                resources.perf_metrics.request_bucket_builds = resources
+                    .perf_metrics
+                    .request_bucket_builds
+                    .saturating_add(1);
+            }
+            resources.perf_metrics.bucket_items_scanned = resources
+                .perf_metrics
+                .bucket_items_scanned
+                .saturating_add(bucket_items_total);
+            resources.perf_metrics.candidates_after_top_k = resources
+                .perf_metrics
+                .candidates_after_top_k
+                .saturating_add(candidates_after_top_k);
+        }
         grant_stats = grant_leases(
             &candidates,
             &mut available_wheelbarrows,

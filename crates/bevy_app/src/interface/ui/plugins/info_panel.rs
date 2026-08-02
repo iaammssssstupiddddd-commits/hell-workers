@@ -78,6 +78,9 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
     app.init_resource::<InspectionRefreshCadence>();
     app.init_resource::<TaskListDirty>();
     app.init_resource::<TaskListState>();
+    #[cfg(feature = "profiling")]
+    app.init_resource::<crate::interface::ui::panels::task_list::TaskDashboardPerfMetrics>()
+        .init_resource::<crate::interface::ui::panels::task_list::TaskDashboardTimingMetrics>();
     app.add_systems(
         PreUpdate,
         (

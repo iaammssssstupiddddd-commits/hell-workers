@@ -15,6 +15,7 @@ def load_valid_runs(session_dir: Path) -> list[tuple[Path, Validation]]:
             teardown_warning_lines=list(payload.get("teardown_warning_lines", [])),
             determinism=payload.get("determinism"),
             scene_roots=payload.get("scene_roots"),
+            profile_artifact=payload.get("profile_artifact"),
         )
         runs.append((validation_path.parent, validation))
     return runs
@@ -141,6 +142,33 @@ CONTROLLED_POLICY_DOWNSTREAM_COUNTERS = (
     "source_selector_calls",
     "source_selector_scanned_items",
     "reachable_with_cache_calls",
+)
+
+DASHBOARD_RENDER_COUNTERS = (
+    "dashboard_render_rebuilds",
+    "dashboard_render_input_rows",
+    "dashboard_render_visible_rows",
+    "dashboard_render_group_headers",
+    "dashboard_despawn_roots_requested",
+)
+DASHBOARD_NON_VACUOUS_AI_COUNTERS = (
+    "candidate_membership_checks",
+    "candidate_snapshot_attempts",
+    "candidate_score_attempts",
+    "worker_score_attempts",
+    "top_k_partition_runs",
+    "top_k_retained_candidates",
+    "reachable_with_cache_calls",
+    "wheelbarrow_arbitration_rebuilds",
+    "wheelbarrow_request_bucket_builds",
+    "wheelbarrow_bucket_items_scanned",
+    "wheelbarrow_candidates_after_top_k",
+    "runtime_path_total_core_searches",
+)
+DASHBOARD_EQUALITY_FIELDS = tuple(
+    field
+    for field in DETERMINISM_COLUMNS
+    if field not in {"schema_version", "dashboard_mode", *DASHBOARD_RENDER_COUNTERS}
 )
 
 
@@ -350,6 +378,171 @@ def apply_familiar_policy_controlled_audit(
         "required_operation_dialog_modes": ["hidden", "open"],
         "groups": group_results,
         "failures": all_reasons,
+    }
+    write_json(comparison_path, result)
+    return changed
+
+
+def apply_dashboard_mode_controlled_audit(
+    session_dir: Path,
+    manifest: dict[str, Any],
+    runs: list[tuple[Path, Validation]],
+) -> bool:
+    matrix = manifest["matrix"]
+    modes = set(matrix.get("dashboard_modes", ["hidden"]))
+    comparison_path = session_dir / "dashboard_mode_comparison.json"
+    expected_modes = {"hidden", "visible", "active-filter"}
+    if matrix.get("workload") != "task-dashboard" or modes != expected_modes:
+        if comparison_path.exists():
+            comparison_path.unlink()
+        return False
+
+    case_metadata = {case["id"]: case for case in manifest.get("cases", [])}
+    groups: dict[tuple[Any, ...], dict[str, str]] = {}
+    for case_id, case in case_metadata.items():
+        contract = (
+            case["workload"],
+            case["size"],
+            case["render"],
+            case["seed"],
+            case.get("souls"),
+            case.get("familiars"),
+            case.get("familiar_policy", "baseline"),
+            case.get("operation_dialog", "hidden"),
+        )
+        groups.setdefault(contract, {})[case.get("dashboard_mode", "hidden")] = case_id
+
+    valid_by_case: dict[str, Validation] = {}
+    for run_dir, validation in runs:
+        if validation.valid and validation.determinism is not None:
+            valid_by_case.setdefault(run_dir.parent.name, validation)
+
+    changed = False
+    all_failures: list[str] = []
+    group_results: list[dict[str, Any]] = []
+    for contract, mode_cases in sorted(groups.items()):
+        case_ids = set(mode_cases.values())
+        failures: list[str] = []
+        if set(mode_cases) != expected_modes:
+            failures.append("matrix does not contain the three required dashboard modes")
+        validations = {
+            mode: valid_by_case.get(case_id) for mode, case_id in mode_cases.items()
+        }
+        if any(validation is None for validation in validations.values()):
+            failures.append("one or more dashboard cases has no valid deterministic run")
+
+        post_warmup: dict[str, dict[str, str]] = {}
+        if not failures:
+            for checkpoint_name in (
+                "fixture-pre-update",
+                "post-update-1",
+                "post-update-8",
+                "post-update-32",
+                "post-update-128",
+                "post-warmup",
+                "post-audit-end",
+            ):
+                rows = {
+                    mode: _checkpoint(validation, checkpoint_name)
+                    for mode, validation in validations.items()
+                    if validation is not None
+                }
+                if len(rows) != len(expected_modes) or any(row is None for row in rows.values()):
+                    failures.append(f"{checkpoint_name} is absent from one or more modes")
+                    continue
+                hidden = rows["hidden"]
+                assert hidden is not None
+                for mode in ("visible", "active-filter"):
+                    row = rows[mode]
+                    assert row is not None
+                    differences = [
+                        field
+                        for field in DASHBOARD_EQUALITY_FIELDS
+                        if row[field] != hidden[field]
+                    ]
+                    if differences:
+                        failures.append(
+                            f"{checkpoint_name} {mode} differs from hidden in "
+                            + ", ".join(differences)
+                        )
+            post_warmup = {
+                mode: _checkpoint(validation, "post-warmup") or {}
+                for mode, validation in validations.items()
+                if validation is not None
+            }
+
+        counters: dict[str, dict[str, int]] = {}
+        if not failures:
+            counters = {
+                mode: {
+                    field: int(row[field])
+                    for field in (
+                        *DASHBOARD_NON_VACUOUS_AI_COUNTERS,
+                        *DASHBOARD_RENDER_COUNTERS,
+                        "dashboard_state_rebuilds",
+                        "dashboard_snapshot_rows_scanned",
+                        "dashboard_summary_rows_scanned",
+                    )
+                }
+                for mode, row in post_warmup.items()
+            }
+            for field in DASHBOARD_NON_VACUOUS_AI_COUNTERS:
+                if counters["hidden"][field] <= 0:
+                    failures.append(f"task-dashboard fixture did not exercise {field}")
+            if any(counters["hidden"][field] != 0 for field in DASHBOARD_RENDER_COUNTERS):
+                failures.append("hidden mode performed Task Dashboard render work")
+            for mode in ("visible", "active-filter"):
+                if counters[mode]["dashboard_render_rebuilds"] <= 0:
+                    failures.append(f"{mode} mode never rebuilt the Task Dashboard")
+                if counters[mode]["dashboard_render_input_rows"] <= 0:
+                    failures.append(f"{mode} mode rendered no dashboard input rows")
+                if counters[mode]["dashboard_render_visible_rows"] <= 0:
+                    failures.append(f"{mode} mode rendered no visible dashboard rows")
+            if (
+                counters["visible"]["dashboard_render_rebuilds"]
+                != counters["active-filter"]["dashboard_render_rebuilds"]
+            ):
+                failures.append("visible and active-filter rebuild counts differ")
+            if (
+                counters["visible"]["dashboard_render_input_rows"]
+                != counters["active-filter"]["dashboard_render_input_rows"]
+            ):
+                failures.append("visible and active-filter input row counts differ")
+            if (
+                counters["active-filter"]["dashboard_render_visible_rows"]
+                >= counters["visible"]["dashboard_render_visible_rows"]
+            ):
+                failures.append("active-filter did not reduce visible dashboard rows")
+
+        if failures:
+            reason = "dashboard mode controlled comparison failed: " + "; ".join(failures)
+            changed |= _invalidate_controlled_cases(runs, case_ids, reason)
+            all_failures.extend(failures)
+        group_results.append(
+            {
+                "contract": {
+                    "workload": contract[0],
+                    "size": contract[1],
+                    "render": contract[2],
+                    "seed": contract[3],
+                    "souls": contract[4],
+                    "familiars": contract[5],
+                    "familiar_policy": contract[6],
+                    "operation_dialog": contract[7],
+                },
+                "status": "fail" if failures else "pass",
+                "failures": failures,
+                "post_warmup_counters": counters,
+            }
+        )
+
+    result = {
+        "schema_version": 1,
+        "status": "fail" if all_failures else "pass",
+        "checkpoint": "post-warmup",
+        "required_dashboard_modes": ["hidden", "visible", "active-filter"],
+        "groups": group_results,
+        "failures": all_failures,
     }
     write_json(comparison_path, result)
     return changed

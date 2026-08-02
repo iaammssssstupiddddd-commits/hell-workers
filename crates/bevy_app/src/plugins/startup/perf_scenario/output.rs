@@ -13,6 +13,11 @@ pub(super) struct PerfCaptureWriteInput<'a> {
     pub(super) measure_virtual_secs: f64,
     pub(super) measure_real_secs: f64,
     pub(super) familiar_metrics: &'a FamiliarDelegationPerfMetrics,
+    pub(super) arbitration_metrics: &'a WheelbarrowArbitrationPerfMetrics,
+    pub(super) dashboard_metrics: &'a TaskDashboardPerfMetrics,
+    pub(super) dashboard_timing_metrics: &'a TaskDashboardTimingMetrics,
+    #[cfg(feature = "profiling-memory")]
+    pub(super) memory_measurement: &'a crate::profiling_allocator::MemoryMeasurement,
     pub(super) task_execution_metrics: &'a TaskExecutionPerfMetrics,
     pub(super) reservation_sync_metrics: &'a ReservationSyncPerfMetrics,
     pub(super) door_metrics: &'a DoorPerfMetrics,
@@ -37,6 +42,11 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
         measure_virtual_secs,
         measure_real_secs,
         familiar_metrics,
+        arbitration_metrics,
+        dashboard_metrics,
+        dashboard_timing_metrics,
+        #[cfg(feature = "profiling-memory")]
+        memory_measurement,
         task_execution_metrics,
         reservation_sync_metrics,
         door_metrics,
@@ -66,11 +76,16 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
     let frames_path = directory.join("frames.csv");
     let summary_path = directory.join("summary.csv");
     let scene_roots_path = directory.join("scene_roots.csv");
+    let dashboard_cpu_path = directory.join("task_dashboard_cpu.csv");
+    #[cfg(feature = "profiling-memory")]
+    let memory_path = directory.join("memory.csv");
     if frames_path.exists()
         || summary_path.exists()
         || scene_roots_path.exists()
         || directory.join("determinism.csv").exists()
         || directory.join("determinism_records.csv").exists()
+        || (config.workload == PerfWorkload::TaskDashboard && dashboard_cpu_path.exists())
+        || (cfg!(feature = "profiling-memory") && directory.join("memory.csv").exists())
     {
         return Err(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
@@ -97,18 +112,57 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
     );
     std::fs::write(&scene_roots_path, scene_roots_csv)?;
 
+    if config.workload == PerfWorkload::TaskDashboard {
+        let dashboard_cpu_csv = format!(
+            "schema_version,system_invocations,total_elapsed_ns\n1,{},{}\n",
+            dashboard_timing_metrics.system_invocations, dashboard_timing_metrics.total_elapsed_ns,
+        );
+        std::fs::write(&dashboard_cpu_path, dashboard_cpu_csv)?;
+    }
+
+    #[cfg(feature = "profiling-memory")]
+    {
+        let memory_csv = format!(
+            concat!(
+                "schema_version,baseline_live_bytes,peak_live_bytes,final_live_bytes,",
+                "allocated_bytes,deallocated_bytes,allocation_calls,deallocation_calls,",
+                "reallocation_calls,accounting_errors\n",
+                "1,{},{},{},{},{},{},{},{},{}\n"
+            ),
+            memory_measurement.baseline_live_bytes,
+            memory_measurement.peak_live_bytes,
+            memory_measurement.final_live_bytes,
+            memory_measurement.allocated_bytes,
+            memory_measurement.deallocated_bytes,
+            memory_measurement.allocation_calls,
+            memory_measurement.deallocation_calls,
+            memory_measurement.reallocation_calls,
+            memory_measurement.accounting_errors,
+        );
+        std::fs::write(&memory_path, memory_csv)?;
+    }
+
     let (p50, p95, p99) = percentile_summary(samples);
     let max = samples.iter().copied().fold(f64::NEG_INFINITY, f64::max);
     let summary_header = concat!(
-        "schema_version,seed,workload,size,render,configured_souls,configured_familiars,",
+        "schema_version,seed,workload,size,render,dashboard_mode,configured_souls,configured_familiars,",
         "initial_souls,initial_familiars,initial_designations,initial_state_checksum,",
         "warmup_souls,warmup_familiars,warmup_designations,warmup_state_checksum,",
         "measure_end_souls,measure_end_familiars,measure_end_designations,measure_end_state_checksum,",
         "samples,p50_ms,p95_ms,p99_ms,max_ms,warmup_virtual_secs,warmup_real_secs,",
         "measure_virtual_secs,measure_real_secs,virtual_time_speed,delegation_latest_ms,",
         "delegation_cycles,incoming_snapshot_builds,delegation_familiars_processed,",
-        "source_selector_calls,source_selector_scanned_items,",
-        "reachable_with_cache_calls,task_execution_souls_queried,task_execution_idle_skips,",
+        "candidate_membership_checks,policy_disabled_rejections,candidate_snapshot_attempts,",
+        "candidate_score_attempts,worker_score_attempts,top_k_partition_runs,",
+        "top_k_retained_candidates,top_k_fallback_candidates,source_selector_calls,",
+        "source_selector_cache_build_scanned_items,source_selector_candidate_scanned_items,",
+        "source_selector_scanned_items,reachable_with_cache_calls,",
+        "wheelbarrow_arbitration_rebuilds,wheelbarrow_request_bucket_builds,",
+        "wheelbarrow_bucket_items_scanned,wheelbarrow_candidates_after_top_k,",
+        "dashboard_state_rebuilds,dashboard_snapshot_rows_scanned,dashboard_summary_rows_scanned,",
+        "dashboard_snapshot_changes,dashboard_summary_changes,dashboard_render_rebuilds,",
+        "dashboard_render_input_rows,dashboard_render_visible_rows,dashboard_render_group_headers,",
+        "dashboard_despawn_roots_requested,task_execution_souls_queried,task_execution_idle_skips,",
         "task_execution_handler_runs,reservation_sync_full_rebuilds,",
         "reservation_sync_pending_tasks_scanned,reservation_sync_assigned_tasks_scanned,",
         "runtime_path_actor_new_core_searches,runtime_path_actor_new_deferred,",
@@ -137,6 +191,7 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
         config.workload.as_str().to_string(),
         config.size.as_str().to_string(),
         config.render_mode.as_str().to_string(),
+        config.dashboard_mode.as_str().to_string(),
         config.soul_count.to_string(),
         config.familiar_count.to_string(),
         initial_checksum.souls.to_string(),
@@ -165,9 +220,37 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
         familiar_metrics.delegation_cycles.to_string(),
         familiar_metrics.incoming_snapshot_builds.to_string(),
         familiar_metrics.familiars_processed.to_string(),
+        familiar_metrics.candidate_membership_checks.to_string(),
+        familiar_metrics.policy_disabled_rejections.to_string(),
+        familiar_metrics.candidate_snapshot_attempts.to_string(),
+        familiar_metrics.candidate_score_attempts.to_string(),
+        familiar_metrics.worker_score_attempts.to_string(),
+        familiar_metrics.top_k_partition_runs.to_string(),
+        familiar_metrics.top_k_retained_candidates.to_string(),
+        familiar_metrics.top_k_fallback_candidates.to_string(),
         familiar_metrics.source_selector_calls.to_string(),
+        familiar_metrics
+            .source_selector_cache_build_scanned_items
+            .to_string(),
+        familiar_metrics
+            .source_selector_candidate_scanned_items
+            .to_string(),
         familiar_metrics.source_selector_scanned_items.to_string(),
         familiar_metrics.reachable_with_cache_calls.to_string(),
+        arbitration_metrics.rebuilds.to_string(),
+        arbitration_metrics.request_bucket_builds.to_string(),
+        arbitration_metrics.bucket_items_scanned.to_string(),
+        arbitration_metrics.candidates_after_top_k.to_string(),
+        dashboard_metrics.state_rebuilds.to_string(),
+        dashboard_metrics.snapshot_rows_scanned.to_string(),
+        dashboard_metrics.summary_rows_scanned.to_string(),
+        dashboard_metrics.snapshot_changes.to_string(),
+        dashboard_metrics.summary_changes.to_string(),
+        dashboard_metrics.render_rebuilds.to_string(),
+        dashboard_metrics.render_input_rows.to_string(),
+        dashboard_metrics.render_visible_rows.to_string(),
+        dashboard_metrics.render_group_headers.to_string(),
+        dashboard_metrics.despawn_roots_requested.to_string(),
         task_execution_metrics.souls_queried.to_string(),
         task_execution_metrics.idle_skips.to_string(),
         task_execution_metrics.handler_runs.to_string(),
@@ -254,11 +337,12 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
 fn perf_output_directory(config: &PerfScenarioConfig) -> PathBuf {
     config.output_dir.clone().unwrap_or_else(|| {
         PathBuf::from(format!(
-            "target/perf/{}-{}-{}-seed-{}",
+            "target/perf/{}-{}-{}-seed-{}-dashboard-{}",
             config.workload.as_str(),
             config.size.as_str(),
             config.render_mode.as_str(),
-            config.master_seed
+            config.master_seed,
+            config.dashboard_mode.as_str()
         ))
     })
 }
@@ -316,51 +400,150 @@ pub(super) fn write_determinism_audit(
         ));
     }
 
-    let mut csv = String::from(concat!(
-        "schema_version,checkpoint,update_tick,fixed_timestep_ns,virtual_delta_ns,",
-        "virtual_elapsed_ns,fixed_delta_ns,fixed_elapsed_ns,fixed_overstep_ns,virtual_paused,",
-        "virtual_relative_speed_bits,virtual_effective_speed_bits,souls,familiars,designations,",
-        "structural_checksum,state_checksum,delegation_cycles,delegation_familiars_processed,",
-        "candidate_membership_checks,policy_disabled_rejections,candidate_snapshot_attempts,",
-        "candidate_score_attempts,worker_score_attempts,source_selector_calls,",
-        "source_selector_scanned_items,reachable_with_cache_calls\n"
-    ));
+    let columns = [
+        "schema_version",
+        "dashboard_mode",
+        "checkpoint",
+        "update_tick",
+        "fixed_timestep_ns",
+        "virtual_delta_ns",
+        "virtual_elapsed_ns",
+        "fixed_delta_ns",
+        "fixed_elapsed_ns",
+        "fixed_overstep_ns",
+        "virtual_paused",
+        "virtual_relative_speed_bits",
+        "virtual_effective_speed_bits",
+        "souls",
+        "familiars",
+        "designations",
+        "structural_checksum",
+        "state_checksum",
+        "delegation_cycles",
+        "incoming_snapshot_builds",
+        "delegation_familiars_processed",
+        "candidate_membership_checks",
+        "policy_disabled_rejections",
+        "candidate_snapshot_attempts",
+        "candidate_score_attempts",
+        "worker_score_attempts",
+        "top_k_partition_runs",
+        "top_k_retained_candidates",
+        "top_k_fallback_candidates",
+        "source_selector_calls",
+        "source_selector_cache_build_scanned_items",
+        "source_selector_candidate_scanned_items",
+        "source_selector_scanned_items",
+        "reachable_with_cache_calls",
+        "wheelbarrow_arbitration_rebuilds",
+        "wheelbarrow_request_bucket_builds",
+        "wheelbarrow_bucket_items_scanned",
+        "wheelbarrow_candidates_after_top_k",
+        "runtime_path_actor_new_core_searches",
+        "runtime_path_actor_new_deferred",
+        "runtime_path_actor_reuse_core_searches",
+        "runtime_path_actor_reuse_deferred",
+        "runtime_path_actor_rest_fallback_core_searches",
+        "runtime_path_actor_rest_fallback_deferred",
+        "runtime_path_escape_core_searches",
+        "runtime_path_escape_deferred",
+        "runtime_path_task_execution_core_searches",
+        "runtime_path_task_execution_deferred",
+        "runtime_path_bucket_transport_core_searches",
+        "runtime_path_bucket_transport_deferred",
+        "runtime_path_total_core_searches",
+        "runtime_path_expanded_nodes",
+        "runtime_path_max_expanded_nodes_per_search",
+        "runtime_path_active_task_max_defer_frames",
+        "runtime_path_idle_or_rest_max_defer_frames",
+        "runtime_path_deferred_actor_retries",
+        "dashboard_state_rebuilds",
+        "dashboard_snapshot_rows_scanned",
+        "dashboard_summary_rows_scanned",
+        "dashboard_snapshot_changes",
+        "dashboard_summary_changes",
+        "dashboard_render_rebuilds",
+        "dashboard_render_input_rows",
+        "dashboard_render_visible_rows",
+        "dashboard_render_group_headers",
+        "dashboard_despawn_roots_requested",
+    ];
+    let mut csv = columns.join(",");
+    csv.push('\n');
     for checkpoint in checkpoints {
-        let work = checkpoint.familiar_ai_work;
-        csv.push_str(&format!(
-            concat!(
-                "{},{},{},{},{},{},{},{},{},{},",
-                "{:016x},{:016x},{},{},{},{:016x},{:016x},",
-                "{},{},{},{},{},{},{},{},{},{}\n"
-            ),
-            PERF_DETERMINISM_SCHEMA_VERSION,
-            checkpoint.checkpoint,
-            checkpoint.update_tick,
-            checkpoint.fixed_timestep_ns,
-            checkpoint.virtual_delta_ns,
-            checkpoint.virtual_elapsed_ns,
-            checkpoint.fixed_delta_ns,
-            checkpoint.fixed_elapsed_ns,
-            checkpoint.fixed_overstep_ns,
-            u8::from(checkpoint.virtual_paused),
-            checkpoint.virtual_relative_speed_bits,
-            checkpoint.virtual_effective_speed_bits,
-            checkpoint.checksum.souls,
-            checkpoint.checksum.familiars,
-            checkpoint.checksum.designations,
-            checkpoint.structural_checksum.value,
-            checkpoint.checksum.value,
-            work.delegation_cycles,
-            work.familiars_processed,
-            work.candidate_membership_checks,
-            work.policy_disabled_rejections,
-            work.candidate_snapshot_attempts,
-            work.candidate_score_attempts,
-            work.worker_score_attempts,
-            work.source_selector_calls,
-            work.source_selector_scanned_items,
-            work.reachable_with_cache_calls,
-        ));
+        let work = checkpoint.work;
+        let fields = vec![
+            PERF_DETERMINISM_SCHEMA_VERSION.to_string(),
+            config.dashboard_mode.as_str().to_string(),
+            checkpoint.checkpoint.to_string(),
+            checkpoint.update_tick.to_string(),
+            checkpoint.fixed_timestep_ns.to_string(),
+            checkpoint.virtual_delta_ns.to_string(),
+            checkpoint.virtual_elapsed_ns.to_string(),
+            checkpoint.fixed_delta_ns.to_string(),
+            checkpoint.fixed_elapsed_ns.to_string(),
+            checkpoint.fixed_overstep_ns.to_string(),
+            u8::from(checkpoint.virtual_paused).to_string(),
+            format!("{:016x}", checkpoint.virtual_relative_speed_bits),
+            format!("{:016x}", checkpoint.virtual_effective_speed_bits),
+            checkpoint.checksum.souls.to_string(),
+            checkpoint.checksum.familiars.to_string(),
+            checkpoint.checksum.designations.to_string(),
+            format!("{:016x}", checkpoint.structural_checksum.value),
+            format!("{:016x}", checkpoint.checksum.value),
+            work.delegation_cycles.to_string(),
+            work.incoming_snapshot_builds.to_string(),
+            work.familiars_processed.to_string(),
+            work.candidate_membership_checks.to_string(),
+            work.policy_disabled_rejections.to_string(),
+            work.candidate_snapshot_attempts.to_string(),
+            work.candidate_score_attempts.to_string(),
+            work.worker_score_attempts.to_string(),
+            work.top_k_partition_runs.to_string(),
+            work.top_k_retained_candidates.to_string(),
+            work.top_k_fallback_candidates.to_string(),
+            work.source_selector_calls.to_string(),
+            work.source_selector_cache_build_scanned_items.to_string(),
+            work.source_selector_candidate_scanned_items.to_string(),
+            work.source_selector_scanned_items.to_string(),
+            work.reachable_with_cache_calls.to_string(),
+            work.wheelbarrow_arbitration_rebuilds.to_string(),
+            work.wheelbarrow_request_bucket_builds.to_string(),
+            work.wheelbarrow_bucket_items_scanned.to_string(),
+            work.wheelbarrow_candidates_after_top_k.to_string(),
+            work.runtime_path_actor_new_core_searches.to_string(),
+            work.runtime_path_actor_new_deferred.to_string(),
+            work.runtime_path_actor_reuse_core_searches.to_string(),
+            work.runtime_path_actor_reuse_deferred.to_string(),
+            work.runtime_path_actor_rest_fallback_core_searches
+                .to_string(),
+            work.runtime_path_actor_rest_fallback_deferred.to_string(),
+            work.runtime_path_escape_core_searches.to_string(),
+            work.runtime_path_escape_deferred.to_string(),
+            work.runtime_path_task_execution_core_searches.to_string(),
+            work.runtime_path_task_execution_deferred.to_string(),
+            work.runtime_path_bucket_transport_core_searches.to_string(),
+            work.runtime_path_bucket_transport_deferred.to_string(),
+            work.runtime_path_total_core_searches.to_string(),
+            work.runtime_path_expanded_nodes.to_string(),
+            work.runtime_path_max_expanded_nodes_per_search.to_string(),
+            work.runtime_path_active_task_max_defer_frames.to_string(),
+            work.runtime_path_idle_or_rest_max_defer_frames.to_string(),
+            work.runtime_path_deferred_actor_retries.to_string(),
+            work.dashboard_state_rebuilds.to_string(),
+            work.dashboard_snapshot_rows_scanned.to_string(),
+            work.dashboard_summary_rows_scanned.to_string(),
+            work.dashboard_snapshot_changes.to_string(),
+            work.dashboard_summary_changes.to_string(),
+            work.dashboard_render_rebuilds.to_string(),
+            work.dashboard_render_input_rows.to_string(),
+            work.dashboard_render_visible_rows.to_string(),
+            work.dashboard_render_group_headers.to_string(),
+            work.dashboard_despawn_roots_requested.to_string(),
+        ];
+        debug_assert_eq!(fields.len(), columns.len());
+        csv.push_str(&fields.join(","));
+        csv.push('\n');
     }
     std::fs::write(&determinism_path, csv)?;
 

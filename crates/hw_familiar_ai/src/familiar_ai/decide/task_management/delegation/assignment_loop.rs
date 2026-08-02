@@ -16,6 +16,7 @@ use crate::familiar_ai::decide::task_management::context::ConstructionSitePositi
 use crate::familiar_ai::decide::task_management::policy_score::{
     WORKER_DISTANCE_WEIGHT, WORKER_PRIORITY_WEIGHT, compose_worker_score,
 };
+use crate::familiar_ai::decide::task_management::profiling_metrics::mark_top_k_partition;
 use crate::familiar_ai::decide::task_management::profiling_metrics::mark_worker_score_attempt;
 use crate::familiar_ai::decide::task_management::task_finder::{
     FamiliarCandidateSources, collect_scored_candidates_with_diagnostics,
@@ -162,6 +163,7 @@ fn partition_ranked_candidates(
     }
 
     let top_k = ranked.len().min(TASK_DELEGATION_TOP_K);
+    mark_top_k_partition(top_k, ranked.len().saturating_sub(top_k));
     if ranked.len() <= top_k {
         ranked.sort_unstable_by(compare_ranked_candidates);
         return (

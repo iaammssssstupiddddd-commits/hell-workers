@@ -13,6 +13,7 @@ use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::{
     ManualTransportRequest, TransportRequest, TransportRequestFixedSource,
 };
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::relationships::{ManagedBy, TaskWorkers};
 use hw_familiar_ai::{AutoGatherDesignation, FamiliarTaskCandidateDiagnostics};
@@ -32,6 +33,34 @@ pub struct TaskListState {
     pub summary_total: usize,
     pub summary_high: usize,
     initialized: bool,
+}
+
+/// Production Task Dashboard 経路の期間累積 work counter。
+#[cfg(feature = "profiling")]
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TaskDashboardPerfMetrics {
+    pub state_rebuilds: u32,
+    pub snapshot_rows_scanned: u32,
+    pub summary_rows_scanned: u32,
+    pub snapshot_changes: u32,
+    pub summary_changes: u32,
+    pub render_rebuilds: u32,
+    pub render_input_rows: u32,
+    pub render_visible_rows: u32,
+    pub render_group_headers: u32,
+    pub despawn_roots_requested: u32,
+}
+
+/// Task Dashboard update system 全体の実CPU経過時間。
+///
+/// work counter と異なり決定的ではないため fixed-step checksum には含めず、
+/// realtime capture の measure 区間だけを別artifactへ出力する。
+#[cfg(feature = "profiling")]
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TaskDashboardTimingMetrics {
+    pub active: bool,
+    pub system_invocations: u64,
+    pub total_elapsed_ns: u64,
 }
 
 struct TaskStatusEvidence<'a> {
@@ -86,6 +115,17 @@ type TaskCapabilityQuery<'w, 's> = Query<
         Option<&'static TransportRequest>,
     ),
 >;
+
+#[derive(SystemParam)]
+pub struct TaskListStateUpdateContext<'w> {
+    familiar_diagnostics: Res<'w, FamiliarTaskCandidateDiagnostics>,
+    auto_build_diagnostics: Res<'w, BlueprintAutoBuildDiagnostics>,
+    revisions: Res<'w, TaskDiagnosticInputRevisions>,
+    dirty: ResMut<'w, TaskListDirty>,
+    state: ResMut<'w, TaskListState>,
+    #[cfg(feature = "profiling")]
+    perf_metrics: Option<ResMut<'w, TaskDashboardPerfMetrics>>,
+}
 
 pub fn build_task_list_snapshot(
     designations: &DesignationQuery,
@@ -323,45 +363,58 @@ pub fn build_task_summary(designations: &DesignationQuery) -> (usize, usize) {
 pub fn update_task_list_state_system(
     designations: DesignationQuery,
     capabilities: TaskCapabilityQuery,
-    familiar_diagnostics: Res<FamiliarTaskCandidateDiagnostics>,
-    auto_build_diagnostics: Res<BlueprintAutoBuildDiagnostics>,
-    revisions: Res<TaskDiagnosticInputRevisions>,
-    mut dirty: ResMut<TaskListDirty>,
-    mut state: ResMut<TaskListState>,
+    mut context: TaskListStateUpdateContext,
 ) {
-    if state.initialized && !dirty.state_dirty() {
+    if context.state.initialized && !context.dirty.state_dirty() {
         return;
     }
 
     let snapshot = build_task_list_snapshot(
         &designations,
         &capabilities,
-        &familiar_diagnostics,
-        &auto_build_diagnostics,
-        &revisions,
+        &context.familiar_diagnostics,
+        &context.auto_build_diagnostics,
+        &context.revisions,
     );
     let (summary_total, summary_high) = build_task_summary(&designations);
-    let list_changed = !state.initialized || snapshot != state.snapshot;
-    let summary_changed = !state.initialized
-        || summary_total != state.summary_total
-        || summary_high != state.summary_high;
+    let list_changed = !context.state.initialized || snapshot != context.state.snapshot;
+    let summary_changed = !context.state.initialized
+        || summary_total != context.state.summary_total
+        || summary_high != context.state.summary_high;
 
-    state.snapshot = snapshot;
-    state.summary_total = summary_total;
-    state.summary_high = summary_high;
-    let was_initialized = state.initialized;
-    state.initialized = true;
-    dirty.clear_state();
+    #[cfg(feature = "profiling")]
+    if let Some(perf_metrics) = context.perf_metrics.as_deref_mut() {
+        perf_metrics.state_rebuilds = perf_metrics.state_rebuilds.saturating_add(1);
+        perf_metrics.snapshot_rows_scanned = perf_metrics
+            .snapshot_rows_scanned
+            .saturating_add(u32::try_from(snapshot.len()).unwrap_or(u32::MAX));
+        perf_metrics.summary_rows_scanned = perf_metrics
+            .summary_rows_scanned
+            .saturating_add(u32::try_from(summary_total).unwrap_or(u32::MAX));
+        if list_changed {
+            perf_metrics.snapshot_changes = perf_metrics.snapshot_changes.saturating_add(1);
+        }
+        if summary_changed {
+            perf_metrics.summary_changes = perf_metrics.summary_changes.saturating_add(1);
+        }
+    }
+
+    context.state.snapshot = snapshot;
+    context.state.summary_total = summary_total;
+    context.state.summary_high = summary_high;
+    let was_initialized = context.state.initialized;
+    context.state.initialized = true;
+    context.dirty.clear_state();
 
     if !was_initialized || list_changed {
-        dirty.mark_list();
+        context.dirty.mark_list();
     } else {
-        dirty.clear_list();
+        context.dirty.clear_list();
     }
     if !was_initialized || summary_changed {
-        dirty.mark_summary();
+        context.dirty.mark_summary();
     } else {
-        dirty.clear_summary();
+        context.dirty.clear_summary();
     }
 }
 

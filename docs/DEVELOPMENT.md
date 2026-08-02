@@ -449,7 +449,7 @@ python3 scripts/perf.py run \
 - `scripts/perf.py run` が profiling binary の計測外build、runごとの隔離、CSV/log/adapter/checksumの検証、集約を行う。比較用の計測はこの runner だけを使う。
 - `--sizes`: `small`（50/4）、`medium`（200/12）、`large`（500/30）のSoul/Familiar数を選ぶ。`--souls`と`--familiars`は組で個別上書きする。
 - `--renders cpu|gpu`: CPU-only寄りまたは3D RtT込みの固定描画条件を選ぶ。`--repeat 3`、backend、adapter、window backend、present modeを明示して比較する。
-- binary の直接起動は起動経路のデバッグ用途だけにし、最終比較には使わない。CSV、Tracy memory、RenderDocの採取条件と出力形式は[performance-profiling.md](performance-profiling.md)を正本とする。
+- binary の直接起動は起動経路のデバッグ用途だけにし、最終比較には使わない。CSV、native allocator / RSS、Tracy、RenderDocの採取条件と出力形式は[performance-profiling.md](performance-profiling.md)を正本とする。
 
 ## トラブルシューティング
 

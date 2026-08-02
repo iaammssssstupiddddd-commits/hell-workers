@@ -78,6 +78,26 @@ SKILL_SYNCS = (
             ),
         ),
     ),
+    SkillSync(
+        canonical=_skill(
+            ".cursor/skills/hell-workers-run-native-acceptance/SKILL.md",
+            "hell-workers-run-native-acceptance",
+        ),
+        targets=(
+            _skill(
+                ".codex/skills/hell-workers-run-native-acceptance/SKILL.md",
+                "hell-workers-run-native-acceptance",
+            ),
+            _skill(
+                ".gemini/skills/hell-workers-run-native-acceptance/SKILL.md",
+                "hell-workers-run-native-acceptance",
+            ),
+            _skill(
+                ".claude-plugin/skills/run-native-acceptance/SKILL.md",
+                "run-native-acceptance",
+            ),
+        ),
+    ),
 )
 
 CODEX_SKILL_METADATA = (
@@ -90,6 +110,11 @@ CODEX_SKILL_METADATA = (
         REPO_ROOT
         / ".codex/skills/hell-workers-review-help-impact/agents/openai.yaml",
         "hell-workers-review-help-impact",
+    ),
+    CodexSkillMetadata(
+        REPO_ROOT
+        / ".codex/skills/hell-workers-run-native-acceptance/agents/openai.yaml",
+        "hell-workers-run-native-acceptance",
     ),
 )
 

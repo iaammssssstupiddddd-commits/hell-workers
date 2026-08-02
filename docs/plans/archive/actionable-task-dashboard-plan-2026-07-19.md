@@ -16,7 +16,7 @@
 
 - `2026-07-20` のユーザー受入により、R01（表示の可読性）と R02（実 pointer hit-test / overlay）を完了とする。
 - T11 と R03 は未計測のまま完了扱いにはしない。A3 の機能受入から切り離し、
-  `docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md` へ正式に移管した。
+  `docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md` へ正式に移管した。
 - A3 の production 責務、操作仕様、correctness / cleanup / reset の自動回帰は完了しているため、
   本計画をクローズして archive する。性能フォローアップは A3 を再オープンせず独立して追跡する。
 
@@ -973,7 +973,7 @@ load 後は task list が `PendingEvaluation` から開始し、Spatial / Logic 
 - 値、状態遷移、Entity cleanup、並び順、保存値、counter は再現可能なので、自動テストを受入の正本にする。
 - A3 の実機受入は実 renderer の可読性と、実 pointer hit-test / overlay の重なりに限定し、ユーザー確認済みとする。
 - 実時間・実メモリと AI work counter の mode 間比較は、A3 の機能受入から分離して
-  `docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md` で追跡する。
+  `docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md` で追跡する。
 - 「自動テスト追加待ち」を手動確認で代替しない。該当テストが通るまで未受入のままとする。
 - unit / headless integration で保証済みの項目を、実機チェックリストへ重複掲載しない。
 - performance 比較は同じ binary、feature、seed、fixture、fixed tick 数、counter schema だけを使う。
@@ -1010,7 +1010,7 @@ T01〜T10 と T12 を自動化済みで、T11 は手動確認へ戻さず性能�
 | T11 | 性能 | perf fixture に dashboard hidden / visible / active-filter mode と不足 counter を追加し、同一 fixed tick で AI work counter が完全一致することを検証 | [x] `task-dashboard-performance-validation-plan-2026-07-20.md` へ移管 |
 | T12 | 性能 | active task 数を段階的に増やし、各 latest-only map が active task 数以下、record が固定幅で evaluator 行列を保持しないことを検証 | [x] `published_map_scales_with_current_tasks_not_evaluator_history`、`published_task_records_are_fixed_width_and_heap_free`、各 producer の latest-only test |
 
-T11 の実装・検証は `docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md` を正本とする。
+T11 の実装・検証は `docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md` を正本とする。
 既存の source selector、`reachable_with_cache_calls`、runtime A* / deferred counter を再利用し、不足している
 candidate snapshot / score attempt と wheelbarrow arbitration rebuild / bucket build / Top-K scan の profiling counter、
 capture schema、UI system 時間を同計画で分離して扱う。
@@ -1043,8 +1043,8 @@ headless test は system routing と capture 後の持越し防止までを保�
 
 #### R03 実 renderer / allocator の性能（移管済み）
 
-`docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md` へ移管した。現時点で性能値を
-受入済みとは扱わず、dashboard mode 付き perf harness 完成後に同計画の受入として実施する。
+`docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md` へ移管し、dashboard mode付き
+fixed / Capture / Memory harnessと実測受入まで完了した。
 
 1. 同一 binary / seed / fixture / measure 秒数で hidden / visible / active-filter を取得する。
 2. UI system CPU、frame-time、allocation / peak memory を比較し、既存 perf policy の回帰判定を通す。
@@ -1101,7 +1101,7 @@ headless test は system routing と capture 後の持越し防止までを保�
 
 ### 次のAIが最初にやること
 
-1. 性能検証へ着手する場合は `docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md` を正本にする。
+1. 性能検証結果は `docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md` を正本にする。
 2. A3 の priority / cancellation / blocker 仕様を性能計測の都合で再設計しない。
 3. current worktree の `docs/plans/implementation-spec-alignment-plan-2026-07-20.md` は別作業なので、
    A3 の commit へ混入させない。

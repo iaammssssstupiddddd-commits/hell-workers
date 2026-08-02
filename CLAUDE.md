@@ -31,6 +31,10 @@ After any code change, ensure zero compilation errors:
 - Complete the Skill's `Update required` / `No impact` decision from the actual player-visible path; a passing Help impact gate alone does not count as the review.
 - Claude exposes this Skill as `review-help-impact`.
 - If the current product does not expose that Skill natively, read and follow `.cursor/skills/hell-workers-review-help-impact/SKILL.md` directly before completion.
+- You MUST use the repository `hell-workers-run-native-acceptance` Skill whenever a task requires real-machine or native acceptance, actual-window, renderer/GPU/backend, or native performance verification, including requests for `実機確認` or `実機テスト`.
+- Use the Skill's established no-prompt launcher and fail-closed artifact verification; do not ask the user for repeated display or GUI permissions while that launcher is available.
+- Claude exposes this Skill as `run-native-acceptance`.
+- If the current product does not expose that Skill natively, read and follow `.cursor/skills/hell-workers-run-native-acceptance/SKILL.md` directly.
 
 ### 1.5. Clippy Warnings (MAINTAIN ZERO)
 `cargo clippy --workspace` must produce **0 warnings**. This baseline was achieved 2026-03.

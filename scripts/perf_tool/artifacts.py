@@ -20,17 +20,43 @@ def read_summary(path: Path) -> tuple[dict[str, str] | None, list[str]]:
         return None, [f"missing {path.name}"]
     try:
         with path.open(newline="", encoding="utf-8") as handle:
-            rows = list(csv.DictReader(handle))
-            headers = set(rows[0].keys()) if rows else set()
+            reader = csv.DictReader(handle)
+            rows = list(reader)
+            fieldnames = reader.fieldnames or []
+            headers = set(fieldnames)
     except (csv.Error, OSError, UnicodeError) as error:
         return None, [f"cannot parse summary.csv: {error}"]
     missing = sorted(EXPECTED_SUMMARY_COLUMNS - headers)
     if missing:
         errors.append("summary.csv missing columns: " + ", ".join(missing))
+    unexpected = sorted(headers - EXPECTED_SUMMARY_COLUMNS)
+    if unexpected:
+        errors.append("summary.csv has unexpected columns: " + ", ".join(unexpected))
+    if len(fieldnames) != len(headers):
+        errors.append("summary.csv has duplicate columns")
     if len(rows) != 1:
         errors.append(f"summary.csv must contain exactly one data row; got {len(rows)}")
         return None, errors
-    return rows[0], errors
+    row = rows[0]
+    if None in row:
+        errors.append("summary.csv row has more values than columns")
+    for column in sorted(SUMMARY_INTEGER_COLUMNS):
+        try:
+            if int(row[column]) < 0:
+                raise ValueError
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"summary.csv {column} must be a nonnegative integer")
+    for column in sorted(SUMMARY_FLOAT_COLUMNS):
+        try:
+            value = float(row[column])
+            if not math.isfinite(value) or value < 0:
+                raise ValueError
+        except (KeyError, TypeError, ValueError):
+            errors.append(f"summary.csv {column} must be a finite nonnegative number")
+    for column in sorted(SUMMARY_CHECKSUM_COLUMNS):
+        if not re.fullmatch(r"[0-9a-f]{16}", row.get(column, "")):
+            errors.append(f"summary.csv {column} must be a 16-digit lowercase hex checksum")
+    return row, errors
 
 
 def read_scene_roots(path: Path) -> tuple[dict[str, str] | None, list[str]]:
@@ -139,15 +165,53 @@ def read_determinism(
             "familiars",
             "designations",
             "delegation_cycles",
+            "incoming_snapshot_builds",
             "delegation_familiars_processed",
             "candidate_membership_checks",
             "policy_disabled_rejections",
             "candidate_snapshot_attempts",
             "candidate_score_attempts",
             "worker_score_attempts",
+            "top_k_partition_runs",
+            "top_k_retained_candidates",
+            "top_k_fallback_candidates",
             "source_selector_calls",
+            "source_selector_cache_build_scanned_items",
+            "source_selector_candidate_scanned_items",
             "source_selector_scanned_items",
             "reachable_with_cache_calls",
+            "wheelbarrow_arbitration_rebuilds",
+            "wheelbarrow_request_bucket_builds",
+            "wheelbarrow_bucket_items_scanned",
+            "wheelbarrow_candidates_after_top_k",
+            "runtime_path_actor_new_core_searches",
+            "runtime_path_actor_new_deferred",
+            "runtime_path_actor_reuse_core_searches",
+            "runtime_path_actor_reuse_deferred",
+            "runtime_path_actor_rest_fallback_core_searches",
+            "runtime_path_actor_rest_fallback_deferred",
+            "runtime_path_escape_core_searches",
+            "runtime_path_escape_deferred",
+            "runtime_path_task_execution_core_searches",
+            "runtime_path_task_execution_deferred",
+            "runtime_path_bucket_transport_core_searches",
+            "runtime_path_bucket_transport_deferred",
+            "runtime_path_total_core_searches",
+            "runtime_path_expanded_nodes",
+            "runtime_path_max_expanded_nodes_per_search",
+            "runtime_path_active_task_max_defer_frames",
+            "runtime_path_idle_or_rest_max_defer_frames",
+            "runtime_path_deferred_actor_retries",
+            "dashboard_state_rebuilds",
+            "dashboard_snapshot_rows_scanned",
+            "dashboard_summary_rows_scanned",
+            "dashboard_snapshot_changes",
+            "dashboard_summary_changes",
+            "dashboard_render_rebuilds",
+            "dashboard_render_input_rows",
+            "dashboard_render_visible_rows",
+            "dashboard_render_group_headers",
+            "dashboard_despawn_roots_requested",
         ):
             try:
                 if int(row[field]) < 0:
@@ -298,6 +362,7 @@ def validate_run(
             "workload": expected_case.workload,
             "size": expected_case.size,
             "render": expected_case.render,
+            "dashboard_mode": expected_case.dashboard_mode,
         }
         for key, expected in expected_values.items():
             if summary.get(key) != expected:
@@ -331,6 +396,15 @@ def validate_run(
                         f"expected {expected!r} for {expected_case.render}"
                     )
 
+    if determinism is not None:
+        for index, row in enumerate(determinism):
+            if row.get("dashboard_mode") != expected_case.dashboard_mode:
+                reasons.append(
+                    "determinism.csv row "
+                    f"{index} dashboard_mode is {row.get('dashboard_mode')!r}, "
+                    f"expected {expected_case.dashboard_mode!r}"
+                )
+
     log_path = run_dir / "run.log"
     if not log_path.is_file():
         log_text = ""
@@ -356,6 +430,7 @@ def validate_run(
             f"render={expected_case.render}",
             f"familiar_policy={expected_case.familiar_policy}",
             f"operation_dialog={expected_case.operation_dialog}",
+            f"dashboard_mode={expected_case.dashboard_mode}",
         ):
             if marker not in log_text:
                 reasons.append(f"PERF_SCENARIO marker is absent: {marker}")
@@ -391,4 +466,5 @@ def validate_run(
         teardown_warning_lines=teardown_warnings,
         determinism=determinism,
         scene_roots=scene_roots,
+        profile_artifact=None,
     )

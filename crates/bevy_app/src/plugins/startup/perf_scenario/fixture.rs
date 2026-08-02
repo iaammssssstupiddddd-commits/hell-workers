@@ -1,16 +1,18 @@
 use super::*;
 
 #[cfg(feature = "profiling")]
-use hw_core::relationships::{CommandedBy, ManagedBy};
+use hw_core::relationships::{CommandedBy, ManagedBy, ParkedAt};
 #[cfg(feature = "profiling")]
 use hw_logistics::transport_request::{
     ManualTransportRequest, ReceiverPolicyTier, TransportDemand, TransportPolicy,
     TransportPriority, TransportRequest, TransportRequestKind, TransportRequestState,
 };
 #[cfg(feature = "profiling")]
-use hw_logistics::{ResourceItem, ResourceType, Stockpile, StockpilePolicy};
+use hw_logistics::{ResourceItem, ResourceType, Stockpile, StockpilePolicy, Wheelbarrow};
 #[cfg(feature = "profiling")]
-use hw_ui::components::{OperationDialog, OperationDialogState};
+use hw_ui::components::{LeftPanelMode, OperationDialog, OperationDialogState};
+#[cfg(feature = "profiling")]
+use hw_ui::panels::task_list::{TaskDashboardViewState, TaskListDirty, TaskWorkTypeFilter};
 
 #[cfg(feature = "profiling")]
 #[derive(Resource, Default)]
@@ -43,6 +45,11 @@ pub(super) enum PerfFixtureKind {
     ConstructionSite,
     ConstructionTile,
     UiBlueprint,
+    DashboardStockpile,
+    DashboardResource,
+    DashboardWheelbarrow,
+    DashboardTransportRequest,
+    DashboardDesignation,
 }
 
 #[cfg(feature = "profiling")]
@@ -53,6 +60,11 @@ impl PerfFixtureKind {
             Self::ConstructionSite => 1,
             Self::ConstructionTile => 2,
             Self::UiBlueprint => 3,
+            Self::DashboardStockpile => 4,
+            Self::DashboardResource => 5,
+            Self::DashboardWheelbarrow => 6,
+            Self::DashboardTransportRequest => 7,
+            Self::DashboardDesignation => 8,
         }
     }
 }
@@ -118,6 +130,9 @@ pub struct PerfUiModeSetupParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
     applied: ResMut<'w, PerfScenarioApplied>,
     dialog_state: ResMut<'w, OperationDialogState>,
+    left_panel_mode: ResMut<'w, LeftPanelMode>,
+    dashboard_view_state: ResMut<'w, TaskDashboardViewState>,
+    task_list_dirty: ResMut<'w, TaskListDirty>,
     q_familiars: Query<'w, 's, Entity, With<Familiar>>,
     q_dialog: Query<'w, 's, &'static mut Node, With<OperationDialog>>,
 }
@@ -180,6 +195,9 @@ pub fn setup_perf_ui_mode_if_enabled(params: PerfUiModeSetupParams) {
         config,
         mut applied,
         mut dialog_state,
+        mut left_panel_mode,
+        mut dashboard_view_state,
+        mut task_list_dirty,
         q_familiars,
         mut q_dialog,
     } = params;
@@ -203,6 +221,16 @@ pub fn setup_perf_ui_mode_if_enabled(params: PerfUiModeSetupParams) {
             dialog.display = Display::Flex;
         }
     }
+
+    *dashboard_view_state = TaskDashboardViewState::default();
+    *left_panel_mode = match config.dashboard_mode {
+        PerfDashboardMode::Hidden => LeftPanelMode::EntityList,
+        PerfDashboardMode::Visible | PerfDashboardMode::ActiveFilter => LeftPanelMode::TaskList,
+    };
+    if matches!(config.dashboard_mode, PerfDashboardMode::ActiveFilter) {
+        dashboard_view_state.work_type = TaskWorkTypeFilter::Only(WorkType::Chop);
+    }
+    task_list_dirty.mark_all();
     applied.ui_mode = true;
 }
 
@@ -248,7 +276,234 @@ fn configure_perf_workload(
         PerfWorkload::UiGpu => {
             configure_ui_gpu_fixture(commands, q_familiars, world_map, config.size)
         }
+        PerfWorkload::TaskDashboard => {
+            configure_task_dashboard_fixture(commands, q_familiars, config.size)
+        }
     }
+}
+
+#[cfg(feature = "profiling")]
+fn configure_task_dashboard_fixture(
+    commands: &mut Commands,
+    q_familiars: &mut Query<
+        (
+            Entity,
+            &Transform,
+            &mut ActiveCommand,
+            &mut FamiliarOperation,
+            &mut FamiliarPolicy,
+        ),
+        PerfSetupFamiliarFilter,
+    >,
+    size: PerfScenarioSize,
+) -> bool {
+    let per_work_type = match size {
+        PerfScenarioSize::Small => 32,
+        PerfScenarioSize::Medium => 80,
+        PerfScenarioSize::Large => 160,
+    };
+    let area = TaskArea::from_points(Vec2::new(-1600.0, -1600.0), Vec2::new(1600.0, 1600.0));
+    let mut familiar_positions = Vec::new();
+    for (entity, transform, mut command, mut operation, _) in q_familiars.iter_mut() {
+        command.command = FamiliarCommand::GatherResources;
+        operation.max_controlled_soul = 20;
+        commands.entity(entity).insert(area.clone());
+        familiar_positions.push((entity, transform.translation.truncate()));
+    }
+    familiar_positions.sort_unstable_by_key(|(entity, _)| entity.to_bits());
+
+    let Some((owner, position)) = familiar_positions.first().copied() else {
+        return false;
+    };
+    for ordinal in 0..per_work_type {
+        let offset = Vec2::new(
+            ((ordinal % 16) as f32 - 8.0) * 8.0,
+            ((ordinal / 16) as f32 - 5.0) * 8.0,
+        );
+        let priority = Priority([0, 5, 10][ordinal % 3]);
+        commands.spawn((
+            Name::new("PerfTaskDashboardChopDesignation"),
+            Tree,
+            Transform::from_translation((position + offset).extend(Z_MAP)),
+            Designation {
+                work_type: WorkType::Chop,
+            },
+            TaskSlots::new(1),
+            priority,
+            PerfFixtureMarker {
+                kind: PerfFixtureKind::DashboardDesignation,
+                ordinal: ordinal as u32,
+            },
+        ));
+        commands.spawn((
+            Name::new("PerfTaskDashboardMineDesignation"),
+            Rock,
+            Transform::from_translation((position - offset).extend(Z_MAP)),
+            Designation {
+                work_type: WorkType::Mine,
+            },
+            TaskSlots::new(1),
+            priority,
+            PerfFixtureMarker {
+                kind: PerfFixtureKind::DashboardDesignation,
+                ordinal: (per_work_type + ordinal) as u32,
+            },
+        ));
+    }
+
+    configure_task_dashboard_transport_fixture(commands, owner, position);
+    true
+}
+
+#[cfg(feature = "profiling")]
+fn configure_task_dashboard_transport_fixture(
+    commands: &mut Commands,
+    owner: Entity,
+    position: Vec2,
+) {
+    let stockpile = commands
+        .spawn((
+            Name::new("PerfTaskDashboardStockpile"),
+            Transform::from_translation(position.extend(Z_MAP)),
+            Stockpile {
+                capacity: 16,
+                resource_type: None,
+            },
+            StockpilePolicy::for_capacity(16),
+            PerfFixtureMarker {
+                kind: PerfFixtureKind::DashboardStockpile,
+                ordinal: 0,
+            },
+        ))
+        .id();
+    for ordinal in 0..3 {
+        commands.spawn((
+            Name::new("PerfTaskDashboardArbitrationSource"),
+            Transform::from_translation(
+                (position + Vec2::new(4.0 + ordinal as f32, 0.0)).extend(Z_MAP),
+            ),
+            Visibility::Visible,
+            ResourceItem(ResourceType::Rock),
+            PerfFixtureMarker {
+                kind: PerfFixtureKind::DashboardResource,
+                ordinal,
+            },
+        ));
+    }
+    // Keep the blueprint just inside the familiar TaskArea so the production
+    // blueprint producer maintains its request, while the source remains just
+    // outside the area so normal haul selection cannot designate it first. Sand
+    // is intentional: DeliverToBlueprint participates in wheelbarrow arbitration
+    // only for resources that require a wheelbarrow.
+    let blueprint_position = Vec2::new(1550.0, 0.0);
+    let direct_source_position = Vec2::new(1650.0, 0.0);
+    commands.spawn((
+        Name::new("PerfTaskDashboardDirectSource"),
+        Transform::from_translation(direct_source_position.extend(Z_MAP)),
+        Visibility::Visible,
+        ResourceItem(ResourceType::Sand),
+        PerfFixtureMarker {
+            kind: PerfFixtureKind::DashboardResource,
+            ordinal: 3,
+        },
+    ));
+    let parking = commands
+        .spawn((
+            Name::new("PerfTaskDashboardWheelbarrowParking"),
+            Transform::from_translation((position + Vec2::new(-2.0, 0.0)).extend(Z_MAP)),
+        ))
+        .id();
+    commands.spawn((
+        Name::new("PerfTaskDashboardWheelbarrow"),
+        Transform::from_translation((position + Vec2::new(-1.0, 0.0)).extend(Z_MAP)),
+        Wheelbarrow { capacity: 10 },
+        ParkedAt(parking),
+        PerfFixtureMarker {
+            kind: PerfFixtureKind::DashboardWheelbarrow,
+            ordinal: 0,
+        },
+    ));
+    commands.spawn((
+        Name::new("PerfTaskDashboardArbitrationRequest"),
+        Transform::from_translation(position.extend(Z_MAP)),
+        Visibility::Hidden,
+        Designation {
+            work_type: WorkType::Haul,
+        },
+        ManagedBy(owner),
+        TaskSlots::new(1),
+        Priority(10),
+        ReceiverPolicyTier(TransportPriority::Normal),
+        TransportRequest {
+            kind: TransportRequestKind::DepositToStockpile,
+            anchor: stockpile,
+            resource_type: ResourceType::Rock,
+            issued_by: owner,
+            priority: TransportPriority::Normal,
+            stockpile_group: vec![stockpile],
+        },
+        TransportDemand {
+            desired_slots: 1,
+            inflight: 0,
+        },
+        TransportPolicy::default(),
+        TransportRequestState::Pending,
+        PerfFixtureMarker {
+            kind: PerfFixtureKind::DashboardTransportRequest,
+            ordinal: 0,
+        },
+    ));
+    let mut blueprint_fixture = Blueprint::new(BuildingType::Wall, vec![]);
+    blueprint_fixture.required_materials.clear();
+    blueprint_fixture
+        .required_materials
+        .insert(ResourceType::Sand, 1);
+    let blueprint = commands
+        .spawn((
+            Name::new("PerfTaskDashboardBlueprint"),
+            blueprint_fixture,
+            Transform::from_translation(blueprint_position.extend(Z_MAP)),
+            Designation {
+                work_type: WorkType::Build,
+            },
+            TaskSlots::new(1),
+            Priority(5),
+            PerfFixtureMarker {
+                kind: PerfFixtureKind::UiBlueprint,
+                ordinal: 0,
+            },
+        ))
+        .id();
+    commands.spawn((
+        Name::new("PerfTaskDashboardDirectHaulRequest"),
+        Transform::from_translation(blueprint_position.extend(Z_MAP)),
+        Visibility::Hidden,
+        Designation {
+            work_type: WorkType::Haul,
+        },
+        ManagedBy(owner),
+        TaskSlots::new(1),
+        Priority(5),
+        TargetBlueprint(blueprint),
+        TransportRequest {
+            kind: TransportRequestKind::DeliverToBlueprint,
+            anchor: blueprint,
+            resource_type: ResourceType::Sand,
+            issued_by: owner,
+            priority: TransportPriority::Normal,
+            stockpile_group: vec![],
+        },
+        TransportDemand {
+            desired_slots: 1,
+            inflight: 0,
+        },
+        TransportPolicy::default(),
+        TransportRequestState::Pending,
+        PerfFixtureMarker {
+            kind: PerfFixtureKind::DashboardTransportRequest,
+            ordinal: 1,
+        },
+    ));
 }
 
 #[cfg(feature = "profiling")]

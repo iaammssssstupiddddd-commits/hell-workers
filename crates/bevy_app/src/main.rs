@@ -1,53 +1,82 @@
+use bevy::app::ScheduleRunnerPlugin;
+use bevy::gilrs::GilrsPlugin;
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuFeatures, WgpuSettings};
-use bevy::window::PresentMode;
+use bevy::window::{ExitCondition, PresentMode};
+use bevy::winit::WinitPlugin;
 use bevy_app::{HellWorkersGamePlugin, plugins::startup::PerfScenarioConfig};
 use std::env;
 #[cfg(target_os = "linux")]
 use std::os::unix::net::UnixStream;
 #[cfg(target_os = "linux")]
 use std::path::PathBuf;
+use std::time::Duration;
 
 fn main() {
     let perf_config = PerfScenarioConfig::try_from_process().unwrap_or_else(|error| {
         eprintln!("Invalid performance scenario configuration: {error}");
         std::process::exit(2);
     });
+    let use_headless_runner = headless_runner_requested(&perf_config);
     let game_plugin = HellWorkersGamePlugin::new(perf_config);
     let log_filter = game_plugin.log_filter().to_string();
     configure_linux_window_backend();
     let backends = select_backends();
     let present_mode = select_present_mode();
     let mut app = App::new();
-    app.add_plugins(
-        DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "Hell Workers".into(),
-                    resolution: (1280, 720).into(),
-                    present_mode,
-                    ..default()
-                }),
-                ..default()
-            })
-            .set(bevy::log::LogPlugin {
-                level: bevy::log::Level::INFO,
-                filter: log_filter,
-                ..default()
-            })
-            .set(RenderPlugin {
-                render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
-                    backends: Some(backends), // WSL は GL を優先
-                    features: WgpuFeatures::CLIP_DISTANCES,
-                    ..default()
-                })),
+    let default_plugins = DefaultPlugins
+        .set(WindowPlugin {
+            primary_window: (!use_headless_runner).then(|| Window {
+                title: "Hell Workers".into(),
+                resolution: (1280, 720).into(),
+                present_mode,
                 ..default()
             }),
-    )
-    .add_plugins(game_plugin);
+            exit_condition: if use_headless_runner {
+                ExitCondition::DontExit
+            } else {
+                ExitCondition::OnAllClosed
+            },
+            ..default()
+        })
+        .set(bevy::log::LogPlugin {
+            level: bevy::log::Level::INFO,
+            filter: log_filter,
+            ..default()
+        })
+        .set(RenderPlugin {
+            render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
+                backends: Some(backends), // WSL は GL を優先
+                features: WgpuFeatures::CLIP_DISTANCES,
+                ..default()
+            })),
+            ..default()
+        });
+    if use_headless_runner {
+        eprintln!("Using headless renderer (HW_WINDOW_BACKEND=headless).");
+        app.add_plugins(
+            default_plugins
+                .disable::<WinitPlugin>()
+                .disable::<GilrsPlugin>(),
+        )
+        .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::ZERO));
+    } else {
+        app.add_plugins(default_plugins);
+    }
+    app.add_plugins(game_plugin);
 
     app.run();
+}
+
+fn headless_runner_requested(perf_config: &PerfScenarioConfig) -> bool {
+    let requested =
+        env::var("HW_WINDOW_BACKEND").is_ok_and(|value| value.eq_ignore_ascii_case("headless"));
+    if requested && !perf_config.enabled() {
+        eprintln!("HW_WINDOW_BACKEND=headless is reserved for --perf-scenario profiling runs.");
+        std::process::exit(2);
+    }
+    requested
 }
 
 #[cfg(target_os = "linux")]
@@ -59,14 +88,16 @@ fn configure_linux_window_backend() {
 
     match backend.as_str() {
         "x11" => force_x11_backend("HW_WINDOW_BACKEND=x11"),
-        "wayland" => {}
+        "wayland" | "headless" => {}
         "auto" => {
             if should_fallback_to_x11() {
                 force_x11_backend("auto fallback (Wayland socket unavailable)");
             }
         }
         _ => {
-            eprintln!("Unknown HW_WINDOW_BACKEND={backend}. Supported values: auto, x11, wayland.");
+            eprintln!(
+                "Unknown HW_WINDOW_BACKEND={backend}. Supported values: auto, x11, wayland, headless."
+            );
             if should_fallback_to_x11() {
                 force_x11_backend("auto fallback (Wayland socket unavailable)");
             }

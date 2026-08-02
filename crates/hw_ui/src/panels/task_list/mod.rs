@@ -7,6 +7,8 @@ pub use interaction::{
     left_panel_tab_system, left_panel_visibility_system, task_dashboard_action_state_sync_system,
     task_dashboard_control_system, task_list_click_system, task_list_visual_feedback_system,
 };
+#[cfg(feature = "profiling")]
+pub use render::TaskListRenderStats;
 pub use render::rebuild_task_list_ui;
 pub use types::{
     PendingTaskCancellation, TaskActionButton, TaskActionButtonKind, TaskActionCapabilities,

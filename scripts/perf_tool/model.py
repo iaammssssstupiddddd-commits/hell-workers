@@ -12,14 +12,17 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 import os
 import platform
 import re
+import signal
 import shutil
 import statistics
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,8 +32,8 @@ from typing import Any, Iterable
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = SCRIPT_DIR.parent
 PERF_DESCRIPTION = __doc__
-SUMMARY_SCHEMA_VERSION = "10"
-DETERMINISM_SCHEMA_VERSION = "3"
+SUMMARY_SCHEMA_VERSION = "11"
+DETERMINISM_SCHEMA_VERSION = "4"
 DEFAULT_SEED = 20_260_712
 SCENE_ROOT_COLUMNS = (
     "soul_proxy_3d",
@@ -45,6 +48,7 @@ EXPECTED_SUMMARY_COLUMNS = {
     "workload",
     "size",
     "render",
+    "dashboard_mode",
     "configured_souls",
     "configured_familiars",
     "initial_souls",
@@ -73,9 +77,33 @@ EXPECTED_SUMMARY_COLUMNS = {
     "delegation_cycles",
     "incoming_snapshot_builds",
     "delegation_familiars_processed",
+    "candidate_membership_checks",
+    "policy_disabled_rejections",
+    "candidate_snapshot_attempts",
+    "candidate_score_attempts",
+    "worker_score_attempts",
+    "top_k_partition_runs",
+    "top_k_retained_candidates",
+    "top_k_fallback_candidates",
     "source_selector_calls",
+    "source_selector_cache_build_scanned_items",
+    "source_selector_candidate_scanned_items",
     "source_selector_scanned_items",
     "reachable_with_cache_calls",
+    "wheelbarrow_arbitration_rebuilds",
+    "wheelbarrow_request_bucket_builds",
+    "wheelbarrow_bucket_items_scanned",
+    "wheelbarrow_candidates_after_top_k",
+    "dashboard_state_rebuilds",
+    "dashboard_snapshot_rows_scanned",
+    "dashboard_summary_rows_scanned",
+    "dashboard_snapshot_changes",
+    "dashboard_summary_changes",
+    "dashboard_render_rebuilds",
+    "dashboard_render_input_rows",
+    "dashboard_render_visible_rows",
+    "dashboard_render_group_headers",
+    "dashboard_despawn_roots_requested",
     "task_execution_souls_queried",
     "task_execution_idle_skips",
     "task_execution_handler_runs",
@@ -122,6 +150,33 @@ EXPECTED_SUMMARY_COLUMNS = {
     "energy_lamp_steps",
     "energy_lamp_candidates_scanned",
 }
+SUMMARY_TEXT_COLUMNS = {
+    "schema_version",
+    "workload",
+    "size",
+    "render",
+    "dashboard_mode",
+}
+SUMMARY_CHECKSUM_COLUMNS = {
+    "initial_state_checksum",
+    "warmup_state_checksum",
+    "measure_end_state_checksum",
+}
+SUMMARY_FLOAT_COLUMNS = {
+    "p50_ms",
+    "p95_ms",
+    "p99_ms",
+    "max_ms",
+    "warmup_virtual_secs",
+    "warmup_real_secs",
+    "measure_virtual_secs",
+    "measure_real_secs",
+    "virtual_time_speed",
+    "delegation_latest_ms",
+}
+SUMMARY_INTEGER_COLUMNS = EXPECTED_SUMMARY_COLUMNS - (
+    SUMMARY_TEXT_COLUMNS | SUMMARY_CHECKSUM_COLUMNS | SUMMARY_FLOAT_COLUMNS
+)
 ADAPTER_RE = re.compile(
     r'AdapterInfo \{ name: "(?P<name>[^"]+)".*?driver: "(?P<driver>[^"]*)", '
     r'driver_info: "(?P<driver_info>[^"]*)", backend: (?P<backend>[A-Za-z0-9_]+)'
@@ -133,9 +188,11 @@ CHECKSUM_POLICY_REASON_PREFIXES = (
     "measure_end_state_checksum differs across repeated runs:",
     "determinism checkpoints differ across repeated runs:",
     "familiar policy controlled comparison failed:",
+    "dashboard mode controlled comparison failed:",
 )
 DETERMINISM_COLUMNS = (
     "schema_version",
+    "dashboard_mode",
     "checkpoint",
     "update_tick",
     "fixed_timestep_ns",
@@ -153,15 +210,53 @@ DETERMINISM_COLUMNS = (
     "structural_checksum",
     "state_checksum",
     "delegation_cycles",
+    "incoming_snapshot_builds",
     "delegation_familiars_processed",
     "candidate_membership_checks",
     "policy_disabled_rejections",
     "candidate_snapshot_attempts",
     "candidate_score_attempts",
     "worker_score_attempts",
+    "top_k_partition_runs",
+    "top_k_retained_candidates",
+    "top_k_fallback_candidates",
     "source_selector_calls",
+    "source_selector_cache_build_scanned_items",
+    "source_selector_candidate_scanned_items",
     "source_selector_scanned_items",
     "reachable_with_cache_calls",
+    "wheelbarrow_arbitration_rebuilds",
+    "wheelbarrow_request_bucket_builds",
+    "wheelbarrow_bucket_items_scanned",
+    "wheelbarrow_candidates_after_top_k",
+    "runtime_path_actor_new_core_searches",
+    "runtime_path_actor_new_deferred",
+    "runtime_path_actor_reuse_core_searches",
+    "runtime_path_actor_reuse_deferred",
+    "runtime_path_actor_rest_fallback_core_searches",
+    "runtime_path_actor_rest_fallback_deferred",
+    "runtime_path_escape_core_searches",
+    "runtime_path_escape_deferred",
+    "runtime_path_task_execution_core_searches",
+    "runtime_path_task_execution_deferred",
+    "runtime_path_bucket_transport_core_searches",
+    "runtime_path_bucket_transport_deferred",
+    "runtime_path_total_core_searches",
+    "runtime_path_expanded_nodes",
+    "runtime_path_max_expanded_nodes_per_search",
+    "runtime_path_active_task_max_defer_frames",
+    "runtime_path_idle_or_rest_max_defer_frames",
+    "runtime_path_deferred_actor_retries",
+    "dashboard_state_rebuilds",
+    "dashboard_snapshot_rows_scanned",
+    "dashboard_summary_rows_scanned",
+    "dashboard_snapshot_changes",
+    "dashboard_summary_changes",
+    "dashboard_render_rebuilds",
+    "dashboard_render_input_rows",
+    "dashboard_render_visible_rows",
+    "dashboard_render_group_headers",
+    "dashboard_despawn_roots_requested",
 )
 DETERMINISM_EARLY_CHECKPOINTS = (
     ("post-update-1", 1),
@@ -171,6 +266,7 @@ DETERMINISM_EARLY_CHECKPOINTS = (
 )
 ONE_F64_BITS = "3ff0000000000000"
 ZERO_F64_BITS = "0000000000000000"
+TRACY_DASHBOARD_ZONE_FILTER = "task_list"
 
 
 @dataclass(frozen=True)
@@ -183,6 +279,7 @@ class Case:
     familiars: int | None
     familiar_policy: str = "baseline"
     operation_dialog: str = "hidden"
+    dashboard_mode: str = "hidden"
 
     @property
     def identifier(self) -> str:
@@ -195,9 +292,14 @@ class Case:
         operation_dialog = (
             "" if self.operation_dialog == "hidden" else f"-dialog-{self.operation_dialog}"
         )
+        dashboard_mode = (
+            f"-dashboard-{self.dashboard_mode}"
+            if self.workload == "task-dashboard" or self.dashboard_mode != "hidden"
+            else ""
+        )
         return (
             f"{self.workload}-{self.size}-{self.render}-seed-{self.seed}"
-            f"{population}{familiar_policy}{operation_dialog}"
+            f"{population}{familiar_policy}{operation_dialog}{dashboard_mode}"
         )
 
 
@@ -211,6 +313,7 @@ class Validation:
     teardown_warning_lines: list[str]
     determinism: list[dict[str, str]] | None = None
     scene_roots: dict[str, str] | None = None
+    profile_artifact: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -222,6 +325,7 @@ class Validation:
             "teardown_warning_lines": self.teardown_warning_lines,
             "determinism": self.determinism,
             "scene_roots": self.scene_roots,
+            "profile_artifact": self.profile_artifact,
         }
 
 

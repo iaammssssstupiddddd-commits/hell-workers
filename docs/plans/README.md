@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-08-02）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-08-03）。
 
 ## 新規計画書の作り方
 
@@ -24,11 +24,9 @@
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Phase 3 進行中（未完: MS-3-5 / 7 / 8 / 9、受入残件: MS-3-6 / 10） | 3D-RtT 移行ロードマップ |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
-| [familiar-operation-policy-validation-plan-2026-07-26.md](familiar-operation-policy-validation-plan-2026-07-26.md) | In Progress | B2 の実renderer受入と controlled fixture の性能artifactを採取する計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できないの計画。 |
 | [soul-energy-control-plan-2026-07-20.md](soul-energy-control-plan-2026-07-20.md) | Draft | Soul Spa 稼働枠と優先度付き個別給電を導入する計画。 |
-| [task-dashboard-performance-validation-plan-2026-07-20.md](task-dashboard-performance-validation-plan-2026-07-20.md) | Draft | A3で未整備のdashboard mode別AI work counterと実renderer / allocator計測を、再現可能なperf harnessへ載せるの計画。 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 
@@ -68,6 +66,8 @@
 | [archive/actionable-task-dashboard-plan-2026-07-19.md](archive/actionable-task-dashboard-plan-2026-07-19.md) | Archived | 停滞タスクの理由を安全に可視化し、絞り込み・優先度変更・owner別キャンセルを提供するの計画。 |
 | [archive/bevy-0-19-migration-plan-2026-07-05.md](archive/bevy-0-19-migration-plan-2026-07-05.md) | Archived | Bevy 0.18 のまま留まると、今後のエコシステム追随・バグ修正・パフォーマンス改善（render graph as systems, Parley テキスト等）を受けられないの計画。 |
 | [archive/dev-tools-debug-overlay-plan-2026-07-05.md](archive/dev-tools-debug-overlay-plan-2026-07-05.md) | Archived | Soul / Familiar の AI 状態（AssignedTask・フェーズ・Squad 状態）をワールド内で直接確認できず、デバッグがログ頼み。フレームスパイクの可視化手段がないの計画。 |
+| [archive/familiar-operation-policy-plan-2026-07-20.md](archive/familiar-operation-policy-plan-2026-07-20.md) | Archived | Track B2 Familiar 運用ポリシー・永続化 実装計画 |
+| [archive/familiar-operation-policy-validation-plan-2026-07-26.md](archive/familiar-operation-policy-validation-plan-2026-07-26.md) | Archived | B2の受入項目が、既存自動テストで確定済みの契約、追加harnessが必要な客観検証、の計画。 |
 | [archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-plan-2026-03-11.md) | Archived | Familiar Task Management `hw_ai` 抽出 実装計画 |
 | [archive/implementation-spec-alignment-plan-2026-07-20.md](archive/implementation-spec-alignment-plan-2026-07-20.md) | Archived | - 現行実装と仕様文書の比較で、実装バグ、意図的な実装変更に追従していない文書、未登録の重複system、の計画。 |
 | [archive/input-action-context-resolver-plan-2026-07-17.md](archive/input-action-context-resolver-plan-2026-07-17.md) | Archived | Track A1: 離散キーボード競合解決と Modal/Pause の背景入力遮断計画 |
@@ -80,6 +80,7 @@
 | [archive/structural-maintainability-followups-plan-2026-07-12.md](archive/structural-maintainability-followups-plan-2026-07-12.md) | Archived | 構造・保守性・品質ゲート フォローアップ計画 |
 | [archive/system-wide-performance-followups-plan-2026-07-07.md](archive/system-wide-performance-followups-plan-2026-07-07.md) | Archived | 全体パフォーマンス改善フォローアップ計画書 |
 | [archive/system-wide-runtime-performance-plan-2026-07-12.md](archive/system-wide-runtime-performance-plan-2026-07-12.md) | Archived | 全体ランタイム・ホットパス性能改善計画書 |
+| [archive/task-dashboard-performance-validation-plan-2026-07-20.md](archive/task-dashboard-performance-validation-plan-2026-07-20.md) | Archived | A3で未整備のdashboard mode別AI work counterと実renderer / allocator計測を、再現可能なperf harnessへ載せるの計画。 |
 | [archive/task-execution-refactor-plan-2026-07-07.md](archive/task-execution-refactor-plan-2026-07-07.md) | Archived | task_execution リファクタリング計画（コンテキスト集約・完了/中断区別・ログ降格・boundary.rs 分割） |
 | [archive/text-input-ui-plan-2026-07-05.md](archive/text-input-ui-plan-2026-07-05.md) | Archived | テキスト入力 UI — EditableText + clipboard 実装計画 |
 | [soul-energy/archived/milestone-roadmap.md](soul-energy/archived/milestone-roadmap.md) | Archived | Soul Energy System — Milestone Roadmap |

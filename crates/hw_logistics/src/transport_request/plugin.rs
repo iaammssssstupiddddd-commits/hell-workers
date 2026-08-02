@@ -3,6 +3,8 @@
 use bevy::prelude::*;
 use hw_core::system_sets::{FamiliarAiSystemSet, GameSystemSet, SoulAiSystemSet};
 
+#[cfg(feature = "profiling")]
+use super::WheelbarrowArbitrationPerfMetrics;
 use super::arbitration::{WheelbarrowArbitrationDiagnostics, WheelbarrowArbitrationRuntime};
 use super::producer::{
     active_unit_cache::{
@@ -64,6 +66,8 @@ pub struct TransportRequestPlugin;
 impl Plugin for TransportRequestPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TransportRequestMetrics>();
+        #[cfg(feature = "profiling")]
+        app.init_resource::<WheelbarrowArbitrationPerfMetrics>();
         app.init_resource::<WheelbarrowArbitrationRuntime>();
         app.init_resource::<WheelbarrowArbitrationDiagnostics>();
         app.init_resource::<FloorTileWaitingCache>();

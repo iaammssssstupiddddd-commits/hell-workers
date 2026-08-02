@@ -15,6 +15,7 @@ fn random_streams_are_stable_and_independent() {
         render_mode: super::PerfRenderMode::Cpu,
         familiar_policy_mode: super::PerfFamiliarPolicyMode::Baseline,
         operation_dialog_mode: super::PerfOperationDialogMode::Hidden,
+        dashboard_mode: super::PerfDashboardMode::Hidden,
         warmup_secs: 30.0,
         measure_secs: 60.0,
         output_dir: None,
@@ -93,4 +94,17 @@ fn familiar_policy_and_dialog_modes_are_explicit() {
         super::PerfOperationDialogMode::parse("open"),
         Some(super::PerfOperationDialogMode::Open)
     );
+    assert_eq!(
+        super::PerfDashboardMode::parse("hidden"),
+        Some(super::PerfDashboardMode::Hidden)
+    );
+    assert_eq!(
+        super::PerfDashboardMode::parse("visible"),
+        Some(super::PerfDashboardMode::Visible)
+    );
+    assert_eq!(
+        super::PerfDashboardMode::parse("active-filter"),
+        Some(super::PerfDashboardMode::ActiveFilter)
+    );
+    assert_eq!(super::PerfDashboardMode::parse("all"), None);
 }

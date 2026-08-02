@@ -3,7 +3,11 @@ from __future__ import annotations
 from .model import *
 
 def add_run_arguments(parser: argparse.ArgumentParser, *, fixed_step_audit: bool = False) -> None:
-    parser.add_argument("--workload", default="gather", choices=["gather", "path-door", "construction", "ui-gpu"])
+    parser.add_argument(
+        "--workload",
+        default="gather",
+        choices=["gather", "path-door", "construction", "ui-gpu", "task-dashboard"],
+    )
     parser.add_argument("--sizes", default="medium", help="comma-separated: small,medium,large")
     parser.add_argument("--renders", default="cpu", help="comma-separated: cpu,gpu")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
@@ -14,9 +18,32 @@ def add_run_arguments(parser: argparse.ArgumentParser, *, fixed_step_audit: bool
     parser.add_argument("--output", help="new artifact directory, relative to the repository when not absolute")
     parser.add_argument("--adapter", help="required substring of the actual WGPU adapter name")
     parser.add_argument("--backend", default="auto", choices=["auto", "vulkan", "gl", "dx12", "metal"])
-    parser.add_argument("--window-backend", default="auto", choices=["auto", "wayland", "x11"])
+    parser.add_argument(
+        "--window-backend",
+        default="auto",
+        choices=["auto", "wayland", "x11", "headless"],
+        help="window backend; headless omits Winit, the primary window, and display sockets for CPU-only audits",
+    )
     parser.add_argument("--present-mode", default="novsync")
     parser.add_argument("--instrumentation", default="capture", choices=["capture", "tracy", "memory"])
+    parser.add_argument(
+        "--tracy-capture-binary",
+        default=os.environ.get("TRACY_CAPTURE_BINARY"),
+        help="Tracy 0.13.1 capture executable; required for Tracy runs",
+    )
+    parser.add_argument(
+        "--tracy-csvexport-binary",
+        default=os.environ.get("TRACY_CSVEXPORT_BINARY"),
+        help="Tracy 0.13.1 csvexport executable; required for Tracy runs",
+    )
+    parser.add_argument(
+        "--tracy-capture-secs",
+        type=int,
+        help=(
+            "diagnostic-only fixed Tracy duration; validated runs omit it and stop after "
+            "the game writes the complete measure artifacts"
+        ),
+    )
     parser.add_argument("--binary", help="prebuilt profiling binary path")
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--timeout-secs", type=float, default=600.0)
@@ -60,6 +87,11 @@ def add_run_arguments(parser: argparse.ArgumentParser, *, fixed_step_audit: bool
         help="regular expression for a known, explicitly allowed pre-capture warning",
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--dashboard-modes",
+        default="hidden",
+        help="comma-separated: hidden,visible,active-filter",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -88,6 +120,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="allow a candidate that measures a size/render subset of the baseline; all other settings must match",
     )
+    compare_dashboard_parser = subparsers.add_parser(
+        "compare-dashboard-modes",
+        help="validate and report the three dashboard modes within one session",
+    )
+    compare_dashboard_parser.add_argument("--session", required=True)
+    compare_dashboard_parser.add_argument("--min-runs", type=int, default=3)
+    compare_dashboard_parser.add_argument("--output")
     subparsers.add_parser("self-test", help="run stdlib-only validation fixtures")
     return parser
 
@@ -105,8 +144,34 @@ def validate_arguments(args: argparse.Namespace) -> None:
         raise ValueError("--warmup-secs must be nonnegative and --measure-secs must be positive")
     if args.timeout_secs <= 0:
         raise ValueError("--timeout-secs must be positive")
+    if args.tracy_capture_secs is not None and args.tracy_capture_secs <= 0:
+        raise ValueError("--tracy-capture-secs must be positive")
+    if args.tracy_capture_secs is not None and args.instrumentation != "tracy":
+        raise ValueError("--tracy-capture-secs is only valid with --instrumentation tracy")
+    if (
+        args.tracy_capture_secs is not None
+        and args.instrumentation == "tracy"
+        and not args.dry_run
+    ):
+        raise ValueError(
+            "validated Tracy runs must omit --tracy-capture-secs so the runner can "
+            "disconnect Tracy at the measure-artifact boundary"
+        )
     if args.command == "audit" and args.instrumentation != "capture":
         raise ValueError("fixed-step audit only supports --instrumentation capture")
+    if args.instrumentation == "tracy" and not args.dry_run:
+        missing_tools = [
+            option
+            for option, value in (
+                ("--tracy-capture-binary", args.tracy_capture_binary),
+                ("--tracy-csvexport-binary", args.tracy_csvexport_binary),
+            )
+            if not value
+        ]
+        if missing_tools:
+            raise ValueError(
+                f"--instrumentation {args.instrumentation} requires " + ", ".join(missing_tools)
+            )
     if args.command == "audit":
         if args.fixed_hz <= 0:
             raise ValueError("--fixed-hz must be positive")
@@ -124,6 +189,14 @@ def validate_arguments(args: argparse.Namespace) -> None:
         {"hidden", "open"},
         "operation dialog modes",
     )
+    dashboard_modes = parse_csv_list(
+        args.dashboard_modes,
+        {"hidden", "visible", "active-filter"},
+        "dashboard modes",
+    )
+    renders = parse_csv_list(args.renders, {"cpu", "gpu"}, "renders")
+    if args.window_backend == "headless" and any(render != "cpu" for render in renders):
+        raise ValueError("--window-backend headless only supports --renders cpu")
     uses_controlled_b2_mode = any(
         mode != "baseline" for mode in familiar_policies
     ) or any(mode != "hidden" for mode in operation_dialog_modes)
@@ -138,4 +211,14 @@ def validate_arguments(args: argparse.Namespace) -> None:
     ):
         raise ValueError(
             "controlled familiar policy modes require at least one Soul and one Familiar"
+        )
+    if any(mode != "hidden" for mode in dashboard_modes) and args.workload != "task-dashboard":
+        raise ValueError(
+            "visible and active-filter dashboard modes require --workload task-dashboard"
+        )
+    if args.workload == "task-dashboard" and (
+        familiar_policies != ["baseline"] or operation_dialog_modes != ["hidden"]
+    ):
+        raise ValueError(
+            "task-dashboard requires familiar policy baseline and operation dialog hidden"
         )

@@ -196,6 +196,11 @@ pub(super) fn collect_audit_actor_records(
                     write_grid_pos(&mut record, *grid);
                 }
             }
+            PerfFixtureKind::DashboardStockpile
+            | PerfFixtureKind::DashboardResource
+            | PerfFixtureKind::DashboardWheelbarrow
+            | PerfFixtureKind::DashboardTransportRequest
+            | PerfFixtureKind::DashboardDesignation => {}
         }
         records.push(PerfAuditActorRecord {
             actor_kind: "fixture",

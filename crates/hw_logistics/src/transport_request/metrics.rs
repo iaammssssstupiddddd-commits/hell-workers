@@ -52,6 +52,20 @@ impl TransportRequestMetrics {
     }
 }
 
+/// Wheelbarrow arbitration の期間累積 work counter。
+///
+/// `TransportRequestMetrics` の arbitration fields は最新フレームの gauge であり、
+/// fixed-step checkpoint や capture window の比較には使えない。この resource は
+/// profiling build だけで登録し、計測境界でまとめて reset する。
+#[cfg(feature = "profiling")]
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WheelbarrowArbitrationPerfMetrics {
+    pub rebuilds: u32,
+    pub request_bucket_builds: u32,
+    pub bucket_items_scanned: u32,
+    pub candidates_after_top_k: u32,
+}
+
 pub fn transport_request_metrics_system(
     q_requests: Query<(Entity, &TransportRequest, Option<&TransportRequestState>)>,
     mut metrics: ResMut<TransportRequestMetrics>,

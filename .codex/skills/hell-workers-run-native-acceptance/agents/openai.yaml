@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hell Workers Native Acceptance"
+  short_description: "Run native checks without permission prompts"
+  default_prompt: "Use $hell-workers-run-native-acceptance to run and validate the required native acceptance checks without repeated permission prompts."

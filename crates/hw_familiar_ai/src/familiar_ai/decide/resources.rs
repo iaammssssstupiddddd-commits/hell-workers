@@ -94,6 +94,12 @@ pub struct FamiliarDelegationPerfMetrics {
     pub candidate_score_attempts: u32,
     /// worker ごとの最終 score 合成回数（期間集計）
     pub worker_score_attempts: u32,
+    /// worker候補 partition の実行回数（期間集計）
+    pub top_k_partition_runs: u32,
+    /// Top-K primary window に残した候補数（期間集計）
+    pub top_k_retained_candidates: u32,
+    /// Top-K fallback 側へ送った候補数（期間集計）
+    pub top_k_fallback_candidates: u32,
 }
 
 #[cfg(feature = "profiling")]
@@ -114,6 +120,9 @@ impl Default for FamiliarDelegationPerfMetrics {
             candidate_snapshot_attempts: 0,
             candidate_score_attempts: 0,
             worker_score_attempts: 0,
+            top_k_partition_runs: 0,
+            top_k_retained_candidates: 0,
+            top_k_fallback_candidates: 0,
         }
     }
 }

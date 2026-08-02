@@ -2,6 +2,36 @@ from __future__ import annotations
 
 from .policy import *
 
+DASHBOARD_REALTIME_COUNTERS = (
+    "candidate_membership_checks",
+    "policy_disabled_rejections",
+    "candidate_snapshot_attempts",
+    "candidate_score_attempts",
+    "worker_score_attempts",
+    "top_k_partition_runs",
+    "top_k_retained_candidates",
+    "top_k_fallback_candidates",
+    "source_selector_calls",
+    "source_selector_cache_build_scanned_items",
+    "source_selector_candidate_scanned_items",
+    "source_selector_scanned_items",
+    "reachable_with_cache_calls",
+    "wheelbarrow_arbitration_rebuilds",
+    "wheelbarrow_request_bucket_builds",
+    "wheelbarrow_bucket_items_scanned",
+    "wheelbarrow_candidates_after_top_k",
+    "dashboard_state_rebuilds",
+    "dashboard_snapshot_rows_scanned",
+    "dashboard_summary_rows_scanned",
+    "dashboard_snapshot_changes",
+    "dashboard_summary_changes",
+    "dashboard_render_rebuilds",
+    "dashboard_render_input_rows",
+    "dashboard_render_visible_rows",
+    "dashboard_render_group_headers",
+    "dashboard_despawn_roots_requested",
+)
+
 def summarize_determinism_session(
     session_dir: Path, manifest: dict[str, Any], runs: list[tuple[Path, Validation]]
 ) -> bool:
@@ -88,6 +118,20 @@ def summarize_determinism_session(
                 f"| {disabled.get('source_selector_calls', 'N/A')} |"
             )
         report_lines.append("")
+    dashboard_comparison_path = session_dir / "dashboard_mode_comparison.json"
+    if dashboard_comparison_path.is_file():
+        comparison = json.loads(dashboard_comparison_path.read_text(encoding="utf-8"))
+        report_lines.extend(
+            [
+                "## Task Dashboard controlled comparison",
+                "",
+                f"- Status: `{comparison['status'].upper()}`",
+                f"- Counter checkpoint: `{comparison['checkpoint']}`",
+                "- Simulation, producer, candidate, arbitration, and runtime A* work must match exactly.",
+                "- Hidden render work must be zero; active-filter must render fewer rows than visible.",
+                "",
+            ]
+        )
     if aggregate_rows:
         report_lines.extend(
             [
@@ -130,6 +174,8 @@ def summarize_session(
         runs = load_valid_runs(session_dir)
         apply_familiar_policy_controlled_audit(session_dir, manifest, runs)
         runs = load_valid_runs(session_dir)
+        apply_dashboard_mode_controlled_audit(session_dir, manifest, runs)
+        runs = load_valid_runs(session_dir)
         return summarize_determinism_session(session_dir, manifest, runs)
 
     warmup_policy = warmup_policy or matrix["warmup_checksum_policy"]
@@ -166,6 +212,11 @@ def summarize_session(
         "warmup_checksums",
         "measure_end_checksums",
         "post_capture_teardown_warning_counts",
+        *[
+            column
+            for counter in DASHBOARD_REALTIME_COUNTERS
+            for column in (f"{counter}_median", f"{counter}_mad")
+        ],
         "task_execution_souls_queried_median",
         "task_execution_souls_queried_mad",
         "task_execution_idle_skips_median",
@@ -270,6 +321,7 @@ def summarize_session(
         }
         work_counter_values = {}
         for counter in (
+            *DASHBOARD_REALTIME_COUNTERS,
             "task_execution_souls_queried",
             "task_execution_idle_skips",
             "task_execution_handler_runs",
@@ -384,14 +436,36 @@ def summarize_session(
     report_lines.append(f"- Warm-up checksum policy: `{warmup_policy}`")
     report_lines.append(f"- Measure-end checksum policy: `{measure_end_policy}`")
     capture_kind = matrix.get("capture_kind", "frame-time")
+    instrumentation = manifest.get("binary", {}).get("instrumentation", "capture")
     report_lines.append(f"- Capture kind: `{capture_kind}`")
+    report_lines.append(f"- Instrumentation: `{instrumentation}`")
     report_lines.append(
         "- Post-capture teardown warnings (recorded, not validity failures): "
         + str(sum(len(validation.teardown_warning_lines) for _, validation in runs))
     )
     report_lines.append("")
     if aggregate_rows:
-        report_lines.extend(["## Aggregate", "", "| Case | Valid runs | p50 median ms | p95 median ms | p99 median ms |", "| --- | ---: | ---: | ---: | ---: |"])
+        aggregate_heading = (
+            "## Frame-time aggregate"
+            if instrumentation == "capture"
+            else "## Instrumented frame timing (diagnostic only)"
+        )
+        report_lines.extend(
+            [
+                aggregate_heading,
+                "",
+                *(
+                    []
+                    if instrumentation == "capture"
+                    else [
+                        "These values include instrumentation overhead and must not be used for mode or baseline comparison.",
+                        "",
+                    ]
+                ),
+                "| Case | Valid runs | p50 median ms | p95 median ms | p99 median ms |",
+                "| --- | ---: | ---: | ---: | ---: |",
+            ]
+        )
         for row in aggregate_rows:
             report_lines.append(
                 f"| {row['case_id']} | {row['valid_runs']} | {row['p50_median_ms']} | {row['p95_median_ms']} | {row['p99_median_ms']} |"

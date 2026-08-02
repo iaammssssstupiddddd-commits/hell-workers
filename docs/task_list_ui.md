@@ -164,12 +164,17 @@ unowned manual task へ所有権を明示的に移してから `PlayerIssuedDesi
 1. 実 renderer 上で状態・priority の色、文字、action bar が読みやすく崩れていないこと。
 2. 実 pointer で row と action button の hit-test が分離され、Pause / Modal が背後入力を遮断すること。
 
-同一 fixture の dashboard hidden / visible / active-filter capture による AI work counter、UI frame-time、実メモリ量は、
-機能受入とは分離して `docs/plans/task-dashboard-performance-validation-plan-2026-07-20.md` で追跡します。
-専用 perf harness が完成するまで性能値を受入済みとは扱いません。
+同一fixtureのdashboard hidden / visible / active-filterは、`task-dashboard` perf workloadで比較します。
+fixed-step auditはsimulation checksumとAI work counterの一致、Captureは実renderer frame-timeと
+`task_dashboard_cpu.csv`のUI system実CPU、Memoryはmeasure区間のallocator量とprocess最大RSSを所有します。
+dashboard mode比較はhiddenのrender workが0、visible / active-filterの入力行数が同等、active-filterの表示行数が
+減ることもfail-closedで検証します。Memory buildのframe-timeはallocator計数の擾乱を含むため性能値にしません。
+採取・有効性契約は`docs/performance-profiling.md`を正本とします。
 
 A3 の完了判断と受入履歴は
 `docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md` §7 を参照します。
+定量性能フォローアップの完了記録は
+`docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`を参照します。
 
 ## 関連ファイル（最終境界反映）
 

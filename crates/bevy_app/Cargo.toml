@@ -37,4 +37,4 @@ profiling = [
     "hw_visual/profiling",
 ]
 profiling-tracy = ["profiling", "bevy/trace_tracy"]
-profiling-memory = ["profiling-tracy", "bevy/trace_tracy_memory"]
+profiling-memory = ["profiling"]

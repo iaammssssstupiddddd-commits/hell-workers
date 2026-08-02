@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `task-dashboard-performance-validation-plan-2026-07-20` |
-| ステータス | `Draft` |
+| ステータス | `Completed` |
 | 作成日 | `2026-07-20` |
-| 最終更新日 | `2026-07-20` |
+| 最終更新日 | `2026-08-02` |
 | 作成者 | `Codex` |
 | 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track A3 性能フォローアップ） |
 | 関連Issue/PR | `N/A` |
@@ -17,12 +17,13 @@
 - 解決したい課題: A3で未整備のdashboard mode別AI work counterと実renderer / allocator計測を、再現可能なperf harnessへ載せる
   - A3 は UI から候補評価や A* を呼ばない責務境界と、latest-only / fixed-width の有界性を実装・自動検証したが、
     dashboard hidden / visible / active-filter を同一 fixture で比較する専用 perf mode と全 counter は未整備である。
-  - `summary.csv` schema v10 には source selector、connectivity、runtime A* はある一方、candidate snapshot / score、
-    Top-K、wheelbarrow arbitration rebuild / bucket build の回数がない。
+  - 旧`summary.csv` schema v10には source selector、connectivity、runtime A* はある一方、candidate snapshot / score、
+    Top-K、wheelbarrow arbitration rebuild / bucket build の回数がなかった。
   - 実 renderer の frame-time と allocator の計測は、手操作ではなく既存 `scripts/perf.py` の有効性契約へ載せる必要がある。
 - 到達したい状態:
   - 同一 seed / fixture / fixed tick で dashboard mode だけを変え、AI work counter が完全一致することを自動判定できる。
-  - Capture / Tracy / Memory を混同せず、実 frame-time、UI system CPU、allocation / peak memory を再現可能に採取できる。
+  - Capture / Memoryを混同せず、実frame-time、UI system CPU、allocation / peak memoryを再現可能に採取できる。
+    Tracyは任意のzone cross-checkに限定する。
   - A3 の機能仕様や production AI 挙動を変更せず、計測基盤だけを独立して導入・撤去できる。
 - 成功指標:
   - hidden / visible / active-filter の初期 fixture checksum と fixed-step audit checksum が一致する。
@@ -45,7 +46,7 @@
   - wheelbarrow arbitration rebuild / request bucket build / candidate scan
   - caller 別 runtime A* / deferred（既存）
 - fixed-step audit による mode 間の simulation / AI work 同一性検証。
-- Capture、Tracy、Memory の分離採取と `docs/performance-profiling.md` の契約同期。
+- Capture、任意Tracy、Memory の分離採取と `docs/performance-profiling.md` の契約同期。
 
 ### 非対象（Out of Scope）
 
@@ -58,8 +59,8 @@
 ## 3. 現状とギャップ
 
 - `PerfWorkload` は `gather` / `path-door` / `construction` / `ui-gpu` の4種で、dashboard mode を持たない。
-- `summary.csv` schema v10 は source selector、connectivity、runtime path の counter を持つが、A3 が追加した
-  candidate / arbitration の全作業量を比較できない。
+- `summary.csv` schema v11はsource selector、connectivity、runtime pathに加え、candidate / Top-K / arbitration / dashboardの
+  作業量を同一artifactで比較できる。
 - A3 の unit / headless integration test は状態、操作、reset、latest-only map の有界性を保証済みである。
 - したがって本計画は機能 correctness を再試験するのではなく、mode 間の作業量同一性と実コストを計測可能にする。
 
@@ -69,16 +70,37 @@
 - hidden / visible / active-filter は task / Soul / Familiar / seed を変えない。active-filter も同じ row 集合を入力にし、
   `TaskDashboardViewState` だけを変更する。
 - counter は既存 hot path の branch に profiling feature 限定の整数加算だけを置き、通常 build の型・Query・分岐を増やさない。
-- fixed-step audit で work counter equality を先に受け入れ、実時間 Capture / Tracy / Memory は別 run にする。
+- fixed-step audit で work counter equality を先に受け入れ、実時間 Capture / 任意Tracy / Memory は別 run にする。
 - schema を更新するときは Rust writer、Python expected columns、fixture、aggregate、文書を同じ変更単位で更新する。
 - mode 間の correctness / cost 比較は、同一 session の matrix から作る
-  `dashboard_mode_comparison.json` を正本にする。通常の最適化前後を比べる汎用 `compare` の
+  fixed auditは`dashboard_mode_comparison.json`、実時間costは`dashboard_mode_cost_comparison.json`を正本にする。通常の最適化前後を比べる汎用 `compare` の
   case identity 制約は緩めない。
 - Bevy 0.19 の UI visibility / interaction state は既存 production code の設定経路を再利用し、perf 専用 UI 実装を作らない。
 
 ## 5. マイルストーン
 
 ## M1: mode・counter・schema 契約の固定
+
+### 計測契約
+
+| 区分 | counter / dimension | 増加地点 | reset / snapshot 境界 | mode 間の判定 |
+| --- | --- | --- | --- | --- |
+| case | `dashboard_mode` | fixture の UI setup | run ごと | `hidden` / `visible` / `active-filter` を必須記録 |
+| candidate | `candidate_membership_checks` | policy gate 到達 | realtime measure 開始で reset、fixed checkpoint で累積 snapshot | 完全一致、正値 |
+| candidate | `candidate_snapshot_attempts` | policy 通過後の semantic filter / snapshot 試行 | 同上 | 完全一致、正値 |
+| candidate | `candidate_score_attempts` / `worker_score_attempts` | base score / worker score 合成 | 同上 | 完全一致、正値 |
+| Top-K | `top_k_partition_runs` / `top_k_retained_candidates` / `top_k_fallback_candidates` | worker 候補の partition | 同上 | 完全一致、partition / retained は正値 |
+| source | `source_selector_calls` / cache-build scan / candidate scan | Haul source selector | 同上 | 完全一致 |
+| connectivity | `reachable_with_cache_calls` | assignment 前の連結性判定 | 同上 | 完全一致、正値 |
+| arbitration | rebuild / request bucket build / bucket item scan / retained after Top-K | wheelbarrow arbitration の実 rebuild | 同上 | 完全一致、rebuild は正値 |
+| runtime A* | caller 別 core search / deferred と expanded / defer | runtime path budget / path metrics | 同上 | 完全一致 |
+| dashboard producer | state rebuild / snapshot row / summary row | production view-model adapter | 同上 | 3 mode 完全一致 |
+| dashboard render | rebuild / input row / visible row / despawn root | production TaskList renderer | 同上 | hidden は 0、visible と active-filter は同じ input、active-filter の visible row は少ない |
+
+`candidate_snapshot_attempts` は `candidate_snapshot` が担う semantic filter の試行数であり、別名の
+`candidate_filter_attempts` は設けない。同じ branch を二重計上せず、membership / snapshot / score の
+境界を明示する。既存 `TransportRequestMetrics` は最新フレームの gauge なので監査には使わず、
+profiling 専用の累積 arbitration resource を正本にする。
 
 - 変更内容:
   - dashboard mode と必要 counter の名前、増加地点、reset / snapshot 境界を表にする。
@@ -92,10 +114,10 @@
   - `scripts/perf_tool/arguments.py`
   - `scripts/tests/`
 - 完了条件:
-  - [ ] 3 mode が case identity と artifact に必ず記録される。
-  - [ ] Rust / Python の schema column 集合が一致する。
-  - [ ] counter の同義重複や runtime A* との誤った代理関係がない。
-  - [ ] 汎用 baseline/candidate 比較は dashboard mode 不一致を拒否し、専用比較だけが3 modeを横断する。
+  - [x] 3 mode が case identity と artifact に必ず記録される。
+  - [x] Rust / Python の schema column 集合が一致する。
+  - [x] counter の同義重複や runtime A* との誤った代理関係がない。
+  - [x] 汎用 baseline/candidate 比較は dashboard mode 不一致を拒否し、専用比較だけが3 modeを横断する。
 - 検証:
   - `python3 scripts/perf.py self-test`
   - `python3 -m unittest discover -s scripts/tests -p 'test_*.py'`
@@ -112,9 +134,9 @@
   - `crates/hw_familiar_ai/src/familiar_ai/decide/task_management/`
   - `crates/hw_logistics/src/transport_request/arbitration/`
 - 完了条件:
-  - [ ] fixture の task / Soul / Familiar 数と初期 checksum が3 modeで一致する。
-  - [ ] candidate / source / connectivity / arbitration / runtime A* counter が3 modeで一致する。
-  - [ ] dashboard mode が AI system parameter、producer gate、timerへ入らない。
+  - [x] fixture の task / Soul / Familiar 数と初期 checksum が3 modeで一致する。
+  - [x] candidate / source / connectivity / arbitration / runtime A* counter が3 modeで一致する。
+  - [x] dashboard mode が AI system parameter、producer gate、timerへ入らない。
 - 検証:
   - `cargo test -p bevy_app@0.1.0 perf_scenario`
   - `cargo test -p hw_familiar_ai task_management`
@@ -124,15 +146,16 @@
 ## M3: 実時間・system CPU・memoryの分離採取
 
 - 変更内容:
-  - Capture で frame-time、Tracy で UI system CPU、Memory で allocation / peak memory を採取する。
+  - Captureでframe-timeとmeasure同期済みUI system CPU、Memoryでallocator / peak memoryを採取する。
+    Tracyはsocketを利用できる環境での任意cross-checkとし、完了条件へ含めない。
   - 同一 session 内の mode 間比較コマンドと有効性判定を文書化する。
 - 変更ファイル:
   - `scripts/perf_tool/`
   - `docs/performance-profiling.md`
 - 完了条件:
-  - [ ] 各 mode 3 valid run の同一 matrix 比較が成立する。
-  - [ ] Capture / Tracy / Memory の値を同じ baseline として混在させない。
-  - [ ] 失格 run を黙って除外せず、理由を artifact に残す。
+  - [x] 各 mode 3 valid run の同一 matrix 比較が成立する。
+  - [x] Capture / Tracy / Memory の値を同じ baseline として混在させない。
+  - [x] 失格 run を黙って除外せず、理由を artifact に残す。
 - 検証:
   - `python3 scripts/perf.py run --workload task-dashboard --dashboard-modes hidden,visible,active-filter ...`
   - `python3 scripts/perf.py compare-dashboard-modes --session <run-dir>`
@@ -145,7 +168,7 @@
 | mode ごとに fixture が変わる | UI以外の差を性能差と誤認する | initial checksum と fixed-step checksum を必須一致にする |
 | counter 自体が hot path を歪める | 通常buildの性能を悪化させる | profiling feature限定の整数counterにする |
 | schemaだけ片側で更新する | runnerが誤集約する | Rust writer / Python validator / fixtureを同一変更にする |
-| UI frame-timeとAI作業量を混同する | 原因を誤診する | work counter、Capture、Tracy、Memoryを別の判定軸にする |
+| UI frame-timeとAI作業量を混同する | 原因を誤診する | work counter、Capture、任意Tracy、Memoryを別の判定軸にする |
 | 過去artifactと比較する | schema欠落を0と誤認する | 同一schema・fixture・matrix以外は履歴参考値に限定する |
 
 ## 7. 検証計画
@@ -156,9 +179,9 @@
   - Rust / Python schema self-test
   - profiling feature check、workspace clippy / test
 - 実機:
-  - Capture 3反復で frame-time
-  - Tracy別runでUI system CPU
-  - Memory別runでallocation / peak memory
+  - Capture 3反復でframe-timeとnative UI system CPU
+  - Memory 3反復でmeasure区間allocation / live peakとprocess peak RSS
+  - Tracyは任意cross-checkであり、正式値へ混ぜない
 - 計画完了時:
   - `python3 scripts/dev.py docs --write`
   - `python3 scripts/dev.py verify`
@@ -170,19 +193,37 @@
 - A3 production機能と恒久UI仕様は本計画のrollback対象にしない。
 - schemaを戻す場合はRust writerとPython validatorを同時に戻し、互換しないartifactを混在させない。
 
+## 8.1 完了artifact（raw、commit対象外）
+
+| 判定軸 | artifact | 結果 |
+| --- | --- | --- |
+| fixed-step correctness | `/tmp/hw-task-dashboard-audit-20260802-headless-v5` | 3 mode各1 run、3 valid / 0 invalid、`dashboard_mode_comparison.json` PASS |
+| 実renderer Capture | `/tmp/hw-task-dashboard-capture-20260802-x11-native-v2` | Intel Vulkan / X11、各mode 3 run、9 valid / 0 invalid、cost comparison PASS |
+| native Memory | `/tmp/hw-task-dashboard-memory-20260802-x11-native-v2` | Intel Vulkan / X11、各mode 3 run、9 valid / 0 invalid、cost comparison PASS、全run accounting error 0・収支一致 |
+
+fixed auditのpost-warmupでは、AI側counterが3 modeで完全一致した。membership `1320`、snapshot `1320`、
+score `1264`、worker score `195`、Top-K partition / retained `3 / 72`、connectivity `3`、
+wheelbarrow rebuild / bucket / scanned / retained `129 / 129 / 129 / 129`、runtime core A* `53`である。
+hiddenのdashboard renderは0、visibleは入力 / 表示`661 / 661`、active-filterは`661 / 320`だった。
+
+Capture中央値はhidden / visible / active-filterのp50が`18.729823 / 19.043225 / 19.117661 ms`、
+Task Dashboard CPUが`266.5 / 6259.5 / 4096.2 ns/invocation`だった。Memory中央値はallocated bytes/frameが
+`3,531,955 / 4,971,800 / 3,738,212`、process peak RSSが`1,334,428 / 1,316,132 / 1,358,060 KiB`だった。
+Memory sessionのframe quantileはallocator計数の擾乱を含むため、比較結果と受入値に使わない。
+
 ## 9. AI引継ぎメモ（最重要）
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手: `M1`〜`M3`
+- 進捗: `100%`
+- 完了済みマイルストーン: `M1`〜`M3`
+- 未着手: なし
 
 ### 次のAIが最初にやること
 
-1. `PerfScenarioConfig`、`output.rs`、`scripts/perf_tool/model.py` の現行schema v10を照合する。
-2. modeを新workload名へ埋め込まず、比較可能な明示dimensionとして設計する。
-3. counter追加前に3 modeのfixture identity testを作る。
+1. 新しいdashboard最適化を行う場合は、同じschema / fixture / matrixで新baselineを採る。
+2. Memoryのframe-timeを性能回帰値へ流用しない。
+3. raw artifactをcommitしない。
 
 ### ブロッカー/注意点
 
@@ -203,22 +244,24 @@
 
 ### 最終確認ログ
 
-- 最終 `cargo check --workspace`: 未実施
-- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: 未実施
-- 最終 `cargo test --workspace`: 未実施
-- 未解決エラー: なし（未着手）
+- 最終 `cargo check --workspace`: `python3 scripts/dev.py verify`で実施
+- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `python3 scripts/dev.py verify`で実施
+- 最終 `cargo test --workspace`: `python3 scripts/dev.py verify`で実施
+- 未解決エラー: なし
 
 ### Definition of Done
 
-- [ ] M1〜M3が完了
-- [ ] 3 modeのfixed-step checksumとAI work counterが一致
-- [ ] Capture / Tracy / Memoryの有効なartifactと比較結果がある
-- [ ] `docs/performance-profiling.md`が新schemaと正式手順に同期
-- [ ] `python3 scripts/dev.py verify`が成功
-- [ ] 完了後に本計画をarchive
+- [x] M1〜M3が完了
+- [x] 3 modeのfixed-step checksumとAI work counterが一致
+- [x] Capture / Memoryの有効なartifactと比較結果があり、Tracyを任意cross-checkへ限定
+- [x] `docs/performance-profiling.md`が新schemaと正式手順に同期
+- [x] `python3 scripts/dev.py verify`が成功
+- [x] 完了後に本計画をarchive
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-07-20` | `Codex` | A3クローズ時にT11/R03を独立移管。dashboard mode、AI work counter、実renderer/allocator計測の境界を定義 |
+| `2026-08-02` | `Codex` | B2クローズ依頼を受けてA3残件を巻き取り、dashboard mode別harnessとartifact採取へ着手 |
+| `2026-08-02` | `Codex` | schema v11 / determinism v4、3 mode fixed audit、Intel Vulkan/X11 Capture・native Memory各9-run比較を完了。Tracy socket依存をMemoryから除外し、計画をarchive |

@@ -237,6 +237,15 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         perf_metrics.worker_score_attempts = perf_metrics
             .worker_score_attempts
             .saturating_add(candidate_metrics.worker_score_attempts);
+        perf_metrics.top_k_partition_runs = perf_metrics
+            .top_k_partition_runs
+            .saturating_add(candidate_metrics.top_k_partition_runs);
+        perf_metrics.top_k_retained_candidates = perf_metrics
+            .top_k_retained_candidates
+            .saturating_add(candidate_metrics.top_k_retained_candidates);
+        perf_metrics.top_k_fallback_candidates = perf_metrics
+            .top_k_fallback_candidates
+            .saturating_add(candidate_metrics.top_k_fallback_candidates);
     }
 }
 

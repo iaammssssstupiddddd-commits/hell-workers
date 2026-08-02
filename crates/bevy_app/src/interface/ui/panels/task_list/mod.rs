@@ -16,4 +16,6 @@ pub use hw_ui::panels::task_list::{
     task_list_click_system, task_list_visual_feedback_system,
 };
 pub use update::task_list_update_system;
+#[cfg(feature = "profiling")]
+pub use view_model::{TaskDashboardPerfMetrics, TaskDashboardTimingMetrics};
 pub use view_model::{TaskListState, build_task_summary, update_task_list_state_system};

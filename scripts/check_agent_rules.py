@@ -50,6 +50,26 @@ MANDATORY_HELP_REVIEW_MARKERS = (
     MANDATORY_HELP_REVIEW_DECISION_RULE,
     MANDATORY_HELP_REVIEW_FALLBACK_RULE,
 )
+MANDATORY_NATIVE_ACCEPTANCE_RULE = (
+    "You MUST use the repository `hell-workers-run-native-acceptance` Skill "
+    "whenever a task requires real-machine or native acceptance, actual-window, "
+    "renderer/GPU/backend, or native performance verification, including requests "
+    "for `実機確認` or `実機テスト`."
+)
+MANDATORY_NATIVE_ACCEPTANCE_LAUNCHER_RULE = (
+    "Use the Skill's established no-prompt launcher and fail-closed artifact "
+    "verification; do not ask the user for repeated display or GUI permissions "
+    "while that launcher is available."
+)
+MANDATORY_NATIVE_ACCEPTANCE_FALLBACK_RULE = (
+    "If the current product does not expose that Skill natively, read and follow "
+    "`.cursor/skills/hell-workers-run-native-acceptance/SKILL.md` directly."
+)
+MANDATORY_NATIVE_ACCEPTANCE_MARKERS = (
+    MANDATORY_NATIVE_ACCEPTANCE_RULE,
+    MANDATORY_NATIVE_ACCEPTANCE_LAUNCHER_RULE,
+    MANDATORY_NATIVE_ACCEPTANCE_FALLBACK_RULE,
+)
 
 SKILL_FILES = (
     ".codex/skills/hell-workers-update-docs/SKILL.md",
@@ -61,6 +81,11 @@ SKILL_FILES = (
     ".cursor/skills/hell-workers-review-help-impact/SKILL.md",
     ".gemini/skills/hell-workers-review-help-impact/SKILL.md",
     ".claude-plugin/skills/review-help-impact/SKILL.md",
+    ".codex/skills/hell-workers-run-native-acceptance/SKILL.md",
+    ".codex/skills/hell-workers-run-native-acceptance/agents/openai.yaml",
+    ".cursor/skills/hell-workers-run-native-acceptance/SKILL.md",
+    ".gemini/skills/hell-workers-run-native-acceptance/SKILL.md",
+    ".claude-plugin/skills/run-native-acceptance/SKILL.md",
     ".codex/skills/hell-workers-update-docs/agents/openai.yaml",
 )
 
@@ -203,6 +228,18 @@ def find_violations() -> list[str]:
             f"{path.relative_to(REPO_ROOT)}: mandatory Help impact review "
             "rule is missing"
         )
+
+    for path in (REPO_ROOT / relative for relative in ROOT_RULE_FILES):
+        if not path.is_file():
+            violations.append(
+                f"{path.relative_to(REPO_ROOT)}: mandatory native acceptance rule is missing"
+            )
+            continue
+        content = path.read_text(encoding="utf-8")
+        if any(marker not in content for marker in MANDATORY_NATIVE_ACCEPTANCE_MARKERS):
+            violations.append(
+                f"{path.relative_to(REPO_ROOT)}: mandatory native acceptance rule is missing"
+            )
 
     for path in sorted((REPO_ROOT / "crates").rglob("*")):
         if path.name not in {"AGENTS.md", "CLAUDE.md"} or not path.is_symlink():
