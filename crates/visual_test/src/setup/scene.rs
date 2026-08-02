@@ -22,24 +22,35 @@ pub fn setup_scene(
 ) {
     commands.insert_resource(DirectionalLightShadowMap { size: 4096 });
 
-    let (w, h) = q_window
+    let (physical_size, target_scale_factor) = q_window
         .single()
-        .map(|win| (win.physical_width().max(1), win.physical_height().max(1)))
-        .unwrap_or((1280, 720));
+        .map(|win| {
+            (
+                UVec2::new(win.physical_width().max(1), win.physical_height().max(1)),
+                win.scale_factor(),
+            )
+        })
+        .unwrap_or((UVec2::new(1280, 720), 1.0));
 
     // --- RtT テクスチャ ---
     let rtt_handle = render_assets.images.add(Image::new_target_texture(
-        w,
-        h,
+        physical_size.x,
+        physical_size.y,
         TextureFormat::Rgba8Unorm,
         Some(TextureFormat::Rgba8UnormSrgb),
     ));
     let mask_handle = render_assets.images.add(Image::new_target_texture(
-        w,
-        h,
+        physical_size.x,
+        physical_size.y,
         TextureFormat::Rgba8Unorm,
         Some(TextureFormat::Rgba8UnormSrgb),
     ));
+    let runtime = VisualTestRttRuntime {
+        physical_size,
+        target_scale_factor,
+        scene: rtt_handle,
+        soul_mask: mask_handle,
+    };
 
     let cam3d_transform =
         Transform::from_xyz(0.0, VIEW_HEIGHT, Z_OFFSET).looking_at(Vec3::ZERO, Vec3::NEG_Z);
@@ -58,7 +69,7 @@ pub fn setup_scene(
         },
         Projection::Orthographic(OrthographicProjection::default_3d()),
         cam3d_transform,
-        RenderTarget::Image(rtt_handle.clone().into()),
+        runtime.scene_target(),
         RenderLayers::layer(LAYER_3D),
         Camera3dRtt,
     ));
@@ -73,7 +84,7 @@ pub fn setup_scene(
         },
         Projection::Orthographic(OrthographicProjection::default_3d()),
         cam3d_transform,
-        RenderTarget::Image(mask_handle.clone().into()),
+        runtime.soul_mask_target(),
         RenderLayers::layer(LAYER_3D_SOUL_MASK),
         Camera3dSoulMaskTest,
     ));
@@ -119,15 +130,15 @@ pub fn setup_scene(
         .composite_materials
         .add(LocalRttCompositeMaterial {
             params: RttCompositeParams {
-                pixel_size: Vec2::new(1.0 / win_size.x.max(1.0), 1.0 / win_size.y.max(1.0)),
+                pixel_size: runtime.pixel_size(),
                 mask_radius_px: 2.25,
                 mask_feather: 0.28,
                 shadow_offset_uv: Vec2::ZERO,
                 shadow_width_px: 0.0,
                 shadow_strength: 0.0,
             },
-            scene_texture: rtt_handle,
-            soul_mask_texture: mask_handle,
+            scene_texture: runtime.scene.clone(),
+            soul_mask_texture: runtime.soul_mask.clone(),
         });
     commands.spawn((
         Mesh2d(mesh),
@@ -140,6 +151,7 @@ pub fn setup_scene(
         RenderLayers::layer(LAYER_OVERLAY),
         LocalRttComposite,
     ));
+    commands.insert_resource(runtime);
 
     // --- アセット ---
     let soul_scene = render_assets

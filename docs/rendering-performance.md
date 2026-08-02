@@ -81,10 +81,14 @@ entity はこれを clone して参照するため、インスタンス数が増
 
 | 変数 | 値 |
 |---|---|
-| RtT 解像度 (High/FHD) | 1920 × 1080 |
-| tile_rtt_px（LOD0 仮定） | 32 px |
-| 1 world unit | 1 RtT px |
+| RtT 解像度 (High/FHD、DPI 1.0) | 1920 × 1080 |
+| tile_rtt_px（LOD0 仮定、DPI 1.0） | 32 px |
+| 1 world unit（orthographic scale 1.0） | 1 logical px = `Window DPI × RtT quality` physical RtT px |
 | カメラ仰角 | 59°（VIEW_HEIGHT=150, Z_OFFSET=90） |
+
+RtT Camera3d の `ImageRenderTarget.scale_factor` は `Window DPI × RtT quality` であり、
+`world_to_viewport` の logical target px は LOD 観測時に同じ倍率を掛けて physical `tile_rtt_px` へ戻す。
+したがって上の面積・triangle 概算は DPI 1.0 / High の基準値である。
 
 ### 可視ピクセル数（59° 投影係数）
 

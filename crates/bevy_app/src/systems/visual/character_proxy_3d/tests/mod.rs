@@ -22,6 +22,49 @@ fn familiar_proxy_projection_includes_visual_hover_offset() {
 }
 
 #[test]
+fn familiar_proxy_reads_hover_offset_from_the_owned_visual_child() {
+    let mut app = App::new();
+    app.init_resource::<SoulProxyOwnerCache>().add_systems(
+        Update,
+        (
+            register_familiar_proxy_3d_system,
+            sync_familiar_proxy_3d_system,
+        )
+            .chain(),
+    );
+
+    app.world_mut().spawn((Camera3dRtt, Transform::default()));
+    let owner = app
+        .world_mut()
+        .spawn((Familiar::default(), Transform::from_xyz(3.0, 8.0, 0.0)))
+        .id();
+    let visual = app
+        .world_mut()
+        .spawn((
+            FamiliarVisualOwner { owner },
+            FamiliarVisualOffset::default(),
+        ))
+        .id();
+    let proxy = app
+        .world_mut()
+        .spawn((FamiliarProxy3d { owner }, Transform::default()))
+        .id();
+
+    app.update();
+    app.world_mut()
+        .entity_mut(visual)
+        .get_mut::<FamiliarVisualOffset>()
+        .unwrap()
+        .hover_offset = 1.25;
+    app.update();
+
+    assert_eq!(
+        app.world().get::<Transform>(proxy).unwrap().translation,
+        Vec3::new(3.0, 0.0, -9.25)
+    );
+}
+
+#[test]
 fn soul_proxy_cache_registers_and_cleans_up_with_owner() {
     let mut app = App::new();
     app.init_resource::<SoulProxyOwnerCache>().add_systems(

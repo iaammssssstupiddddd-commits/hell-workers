@@ -115,7 +115,8 @@ pub struct TerrainLodState {
 
 // ── LOD 更新システム ──────────────────────────────────────────────────────────
 
-/// `Camera3dRtt` の `world_to_viewport` で `tile_rtt_px` を算出し、
+/// `Camera3dRtt` の `world_to_viewport` で論理 target px を算出し、
+/// target scale factor で物理 RtT px の `tile_rtt_px` へ戻してから、
 /// `TerrainLodMetrics` と `TerrainLodState.level` を更新する。
 ///
 /// このシステムは `sync_camera3d_system` の後に実行される必要がある（投影が更新済みであるため）。
@@ -142,7 +143,7 @@ pub fn update_terrain_lod_metrics_system(
         let dx = (vx - v0).length();
         let dz = (vz - v0).length();
         // East/West 矢視で world X 辺が視線方向へ潰れるため、2 軸の大きい方を採用する。
-        metrics.tile_rtt_px = dx.max(dz);
+        metrics.tile_rtt_px = logical_target_px_to_rtt_px(dx.max(dz), runtime.target_scale_factor);
     }
 
     // tile_screen_px: tile_rtt_px × composite 表示倍率（デバッグ補助用）
@@ -158,6 +159,10 @@ pub fn update_terrain_lod_metrics_system(
     if new_level != state.level {
         state.level = new_level;
     }
+}
+
+fn logical_target_px_to_rtt_px(logical_px: f32, target_scale_factor: f32) -> f32 {
+    logical_px * target_scale_factor
 }
 
 /// hysteresis 付き LOD 遷移ロジック。
@@ -341,5 +346,11 @@ mod tests {
     fn hysteresis_lod1lite_does_not_exit_to_lod1_below_exit_threshold() {
         let result = resolve_lod_level(LodLevel::Lod1Lite, 24.0, ElevationDirection::TopDown);
         assert_eq!(result, LodLevel::Lod1Lite);
+    }
+
+    #[test]
+    fn logical_target_pixels_are_converted_back_to_physical_rtt_pixels() {
+        assert_eq!(logical_target_px_to_rtt_px(20.0, 0.5), 10.0);
+        assert_eq!(logical_target_px_to_rtt_px(20.0, 1.5), 30.0);
     }
 }

@@ -15,7 +15,7 @@ use crate::world::map::{
     prepare_generated_world_layout_resource, spawn_map, spawn_terrain_chunks,
 };
 use crate::world::regrowth::{RegrowthManager, configure_regrowth_from_generated_layout};
-use bevy::camera::{RenderTarget, visibility::RenderLayers};
+use bevy::camera::visibility::RenderLayers;
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
 use bevy::prelude::*;
@@ -79,15 +79,15 @@ pub(super) fn setup(
 
     // --- RtT オフスクリーンテクスチャ生成 ---
     let runtime = rtt_setup::initialize_rtt_runtime(q_window.single().ok(), *quality, &mut images);
-    let rtt_handle = runtime.scene.clone();
-    let soul_mask_handle = runtime.soul_mask.clone();
+    let rtt_target = runtime.scene_render_target();
+    let soul_mask_target = runtime.soul_mask_render_target();
     commands.insert_resource(runtime);
 
     // --- Camera2d（既存: メイン描画・スクリーン出力） ---
     commands.spawn((
         Camera2d,
         MainCamera,
-        PanCamera::default(),
+        gameplay_pan_camera(),
         RenderLayers::layer(LAYER_2D),
     ));
 
@@ -142,7 +142,7 @@ pub(super) fn setup(
             transform.rotation = ElevationDirection::TopDown.camera_rotation();
             transform
         },
-        RenderTarget::Image(rtt_handle.into()),
+        rtt_target,
         RenderLayers::layer(LAYER_3D),
         Camera3dRtt,
     ));
@@ -211,7 +211,7 @@ pub(super) fn setup(
             transform.rotation = ElevationDirection::TopDown.camera_rotation();
             transform
         },
-        RenderTarget::Image(soul_mask_handle.into()),
+        soul_mask_target,
         RenderLayers::layer(LAYER_3D_SOUL_MASK),
         Camera3dSoulMaskRtt,
     ));
@@ -219,6 +219,16 @@ pub(super) fn setup(
     // --- asset catalog 生成 ---
     let game_assets = create_game_assets(&asset_server, &mut images);
     commands.insert_resource(game_assets);
+}
+
+fn gameplay_pan_camera() -> PanCamera {
+    PanCamera {
+        // Camera3d/RtT は固定 TopDown 姿勢を正本とするため、Camera2d だけを
+        // 回す既定 Q/E 入力は無効化する。
+        key_rotate_ccw: None,
+        key_rotate_cw: None,
+        ..default()
+    }
 }
 
 pub(super) fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>) {
@@ -257,4 +267,17 @@ pub(super) fn spawn_familiar_wrapper(
     perf_rngs: ResMut<PerfScenarioRandomStreams>,
 ) {
     crate::entities::familiar::spawn_familiar(spawn_events, perf_config, perf_rngs);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gameplay_pan_camera_disables_rotation_that_rtt_cannot_follow() {
+        let controller = gameplay_pan_camera();
+
+        assert_eq!(controller.key_rotate_ccw, None);
+        assert_eq!(controller.key_rotate_cw, None);
+    }
 }

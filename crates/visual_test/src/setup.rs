@@ -1,6 +1,6 @@
 use bevy::asset::RenderAssetUsages;
+use bevy::camera::ClearColorConfig;
 use bevy::camera::visibility::RenderLayers;
-use bevy::camera::{ClearColorConfig, RenderTarget};
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::ecs::system::SystemParam;
 use bevy::light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};

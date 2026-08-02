@@ -1,7 +1,9 @@
+use bevy::camera::RenderTarget;
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::ecs::system::SystemParam;
 use bevy::input::mouse::{AccumulatedMouseScroll, MouseScrollUnit};
 use bevy::prelude::*;
+use bevy::render::render_resource::TextureFormat;
 use bevy::sprite_render::MeshMaterial2d;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::{SOUL_GLB_SCALE, VIEW_HEIGHT, Z_OFFSET, Z_RTT_COMPOSITE};
@@ -379,17 +381,71 @@ pub fn sync_test_camera3d(
     }
 }
 
+pub fn sync_test_rtt_to_window(
+    q_window: Query<Ref<Window>, With<PrimaryWindow>>,
+    mut runtime: ResMut<VisualTestRttRuntime>,
+    mut images: ResMut<Assets<Image>>,
+    mut scene_target: Query<&mut RenderTarget, (With<Camera3dRtt>, Without<Camera3dSoulMaskTest>)>,
+    mut soul_mask_target: Query<
+        &mut RenderTarget,
+        (With<Camera3dSoulMaskTest>, Without<Camera3dRtt>),
+    >,
+    q_composite: Query<&MeshMaterial2d<LocalRttCompositeMaterial>, With<LocalRttComposite>>,
+    mut composite_materials: ResMut<Assets<LocalRttCompositeMaterial>>,
+) {
+    let Ok(window) = q_window.single() else {
+        return;
+    };
+    if !window.is_changed() {
+        return;
+    }
+
+    let physical_size = UVec2::new(
+        window.physical_width().max(1),
+        window.physical_height().max(1),
+    );
+    let target_scale_factor = window.scale_factor();
+    if runtime.physical_size == physical_size && runtime.target_scale_factor == target_scale_factor
+    {
+        return;
+    }
+
+    runtime.physical_size = physical_size;
+    runtime.target_scale_factor = target_scale_factor;
+    runtime.scene = create_test_rtt_texture(physical_size, &mut images);
+    runtime.soul_mask = create_test_rtt_texture(physical_size, &mut images);
+
+    if let Ok(mut target) = scene_target.single_mut() {
+        *target = runtime.scene_target();
+    }
+    if let Ok(mut target) = soul_mask_target.single_mut() {
+        *target = runtime.soul_mask_target();
+    }
+    if let Ok(material_handle) = q_composite.single()
+        && let Some(mut material) = composite_materials.get_mut(&material_handle.0)
+    {
+        material.scene_texture = runtime.scene.clone();
+        material.soul_mask_texture = runtime.soul_mask.clone();
+        material.params.pixel_size = runtime.pixel_size();
+    }
+}
+
+fn create_test_rtt_texture(size: UVec2, images: &mut Assets<Image>) -> Handle<Image> {
+    images.add(Image::new_target_texture(
+        size.x,
+        size.y,
+        TextureFormat::Rgba8Unorm,
+        Some(TextureFormat::Rgba8UnormSrgb),
+    ))
+}
+
 pub fn apply_composite_sprite(
     state: Res<TestState>,
     elev: Res<TestElev>,
     q_window: Query<&Window, With<PrimaryWindow>>,
-    mut q_composite: Query<
-        (&mut Transform, &MeshMaterial2d<LocalRttCompositeMaterial>),
-        With<LocalRttComposite>,
-    >,
-    mut composite_materials: ResMut<Assets<LocalRttCompositeMaterial>>,
+    mut q_composite: Query<&mut Transform, With<LocalRttComposite>>,
 ) {
-    let Ok((mut tf, mat_handle)) = q_composite.single_mut() else {
+    let Ok(mut tf) = q_composite.single_mut() else {
         return;
     };
     let Ok(win) = q_window.single() else { return };
@@ -401,9 +457,6 @@ pub fn apply_composite_sprite(
     };
     tf.scale = Vec3::new(s.x, s.y * comp, 1.0);
     tf.translation.z = Z_RTT_COMPOSITE;
-    if let Some(mut mat) = composite_materials.get_mut(&mat_handle.0) {
-        mat.params.pixel_size = Vec2::new(1.0 / s.x.max(1.0), 1.0 / s.y.max(1.0));
-    }
 }
 
 /// パネル上でスクロールしたとき: パネルコンテンツをスクロール & カメラズームを無効化。
@@ -436,6 +489,81 @@ pub fn handle_panel_scroll(
         };
         if let Ok(mut pos) = q_scroll.single_mut() {
             pos.0.y = (pos.0.y - delta_px).max(0.0);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::asset::{AssetApp, AssetPlugin};
+    use bevy::window::WindowResolution;
+
+    #[test]
+    fn visual_test_rtt_rebinds_after_resize_and_dpi_change() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Image>()
+            .init_asset::<LocalRttCompositeMaterial>()
+            .add_systems(Update, sync_test_rtt_to_window);
+
+        let initial_size = UVec2::new(1280, 720);
+        let (scene, soul_mask) = {
+            let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+            (
+                create_test_rtt_texture(initial_size, &mut images),
+                create_test_rtt_texture(initial_size, &mut images),
+            )
+        };
+        let runtime = VisualTestRttRuntime {
+            physical_size: initial_size,
+            target_scale_factor: 1.0,
+            scene,
+            soul_mask,
+        };
+        let initial_scene = runtime.scene.clone();
+        let scene_camera = app
+            .world_mut()
+            .spawn((Camera3dRtt, runtime.scene_target()))
+            .id();
+        let soul_mask_camera = app
+            .world_mut()
+            .spawn((Camera3dSoulMaskTest, runtime.soul_mask_target()))
+            .id();
+        app.insert_resource(runtime);
+        let window = app
+            .world_mut()
+            .spawn((
+                Window {
+                    resolution: WindowResolution::new(1280, 720),
+                    ..default()
+                },
+                PrimaryWindow,
+            ))
+            .id();
+
+        app.update();
+        {
+            let mut window = app.world_mut().get_mut::<Window>(window).unwrap();
+            window.resolution.set_physical_resolution(1920, 1080);
+            window.resolution.set_scale_factor_override(Some(1.5));
+        }
+        app.update();
+
+        let runtime = app.world().resource::<VisualTestRttRuntime>();
+        assert_eq!(runtime.physical_size, UVec2::new(1920, 1080));
+        assert_eq!(runtime.target_scale_factor, 1.5);
+        assert_ne!(runtime.scene, initial_scene);
+
+        for camera_entity in [scene_camera, soul_mask_camera] {
+            let RenderTarget::Image(target) = app
+                .world()
+                .get::<RenderTarget>(camera_entity)
+                .expect("test camera should keep an image render target")
+            else {
+                panic!("test camera should keep an image render target");
+            };
+            assert_eq!(target.scale_factor, 1.5);
         }
     }
 }

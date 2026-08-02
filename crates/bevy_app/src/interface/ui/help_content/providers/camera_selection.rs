@@ -24,6 +24,7 @@ pub(crate) fn camera_and_selection() -> Result<HelpContribution, HelpCatalogErro
                     [
                         "W / A / S / D で移動し、マウスホイールで拡大・縮小します。",
                         "Settings で Mouse Drag Pan が有効なら、左ドラッグでもカメラを移動できます。",
+                        "パン操作では画面を回転させません。表示方向は「表示階層」の切り替えで変更します。",
                     ],
                 )
                 .with_shortcut("W / A / S / D / Mouse Wheel"),

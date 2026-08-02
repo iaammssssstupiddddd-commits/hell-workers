@@ -1,4 +1,5 @@
 use super::*;
+use bevy::camera::{ImageRenderTarget, RenderTarget};
 
 // ─── 顔アトラス UV ────────────────────────────────────────────────────────────
 
@@ -68,6 +69,38 @@ pub struct Camera3dSoulMaskTest;
 pub struct Camera3dRtt;
 #[derive(Component)]
 pub struct TestMainCamera;
+
+#[derive(Resource)]
+pub struct VisualTestRttRuntime {
+    pub physical_size: UVec2,
+    pub target_scale_factor: f32,
+    pub scene: Handle<Image>,
+    pub soul_mask: Handle<Image>,
+}
+
+impl VisualTestRttRuntime {
+    pub fn scene_target(&self) -> RenderTarget {
+        image_target(self.scene.clone(), self.target_scale_factor)
+    }
+
+    pub fn soul_mask_target(&self) -> RenderTarget {
+        image_target(self.soul_mask.clone(), self.target_scale_factor)
+    }
+
+    pub fn pixel_size(&self) -> Vec2 {
+        Vec2::new(
+            1.0 / self.physical_size.x.max(1) as f32,
+            1.0 / self.physical_size.y.max(1) as f32,
+        )
+    }
+}
+
+fn image_target(handle: Handle<Image>, scale_factor: f32) -> RenderTarget {
+    RenderTarget::Image(ImageRenderTarget {
+        handle,
+        scale_factor,
+    })
+}
 
 // ─── コンポーネント / リソース ────────────────────────────────────────────────
 

@@ -236,14 +236,14 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 
 | カメラ | マーカー | レイヤー | `order` | レンダー先 | 用途 |
 |:--|:--|:--|:--|:--|:--|
-| `Camera2d` | `MainCamera` | `LAYER_2D`(0) | 0 | スクリーン | `PanCamera` が更新するメインビュー。矢視モード時は `is_active=false` |
+| `Camera2d` | `MainCamera` | `LAYER_2D`(0) | 0 | スクリーン | `PanCamera` がパン・ズームを更新するメインビュー。既定 Q/E 回転は無効。矢視モード時は `is_active=false` |
 | `Camera2d` | OverlayCamera（マーカーなし） | `LAYER_OVERLAY`(2) | 1 | スクリーン | RtT composite sprite 専用。常時アクティブ |
 | `Camera3d` | `Camera3dRtt` | `LAYER_3D`(1) | -1 | オフスクリーンテクスチャ (RtT) | 地形・建物・Soul 等の 3D オフスクリーン描画 |
 | `Camera2d` | `WorldForeground2dCamera` | `LAYER_2D`(0) | 2 | スクリーン | composite（order 1）**より後**に同じ `LAYER_2D` を再描画。木・資源・Familiar 等を RtT の上に載せる。`clear_color: None` |
 
 - Camera3d は `order: -1` で最初に描画され、結果をオフスクリーンテクスチャに書き込む。
 - OverlayCamera は MainCamera が無効化される矢視モード時も composite sprite を描画し続ける。
-- **World Foreground Camera** は `PanCamera` の対象外のため、`sync_world_foreground_2d_camera_system`（`systems/visual/camera_sync.rs`）が毎フレーム **`MainCamera` の `Transform` と `Camera::is_active` をコピー**する。`GameSystemSet::Visual` では `sync_camera3d_system` と **`.chain()`** で直列（Query は `Without<MainCamera>` / `Without<WorldForeground2dCamera>` で B0001 回避）。
+- **World Foreground Camera** は `PanCamera` の対象外のため、`sync_world_foreground_2d_camera_system`（`systems/visual/camera_sync.rs`）が毎フレーム **`MainCamera` の `Transform` と `Camera::is_active` をコピー**する。`GameSystemSet::Visual` では `sync_camera3d_system` と **`.chain()`** で直列（Query は `Without<MainCamera>` / `Without<WorldForeground2dCamera>` で B0001 回避）。TopDown では RtT Camera3d の固定姿勢を正本とし、MainCamera だけが回転して前景と地形がずれないよう `PanCamera.key_rotate_ccw/cw` は `None` にする。表示方向は V の `ElevationDirection` プリセットだけが変更する。
 
 ### RtT テクスチャ管理
 
@@ -252,11 +252,12 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 ```
 RttRuntime
   .viewport: RttViewportSize   // 現在の RtT 実解像度
+  .target_scale_factor: f32    // Window DPI × RtT quality
   .scene: Handle<Image>        // 3D シーン描画先
   .soul_mask: Handle<Image>    // Soul シルエット mask 描画先
 ```
 
-テクスチャ生成は `create_rtt_texture(width, height, images)` 関数（`rtt_setup.rs`）に切り出されている。起動時は `initialize_rtt_runtime(window, quality, images)` helper が `PrimaryWindow` の物理解像度と `hw_core::quality::QualitySettings` の `rtt_scale()` を掛けたサイズで `RttRuntime` を構築し、`startup_systems::setup()` が Resource として挿入する。`sync_rtt_texture_size_to_window_and_quality` がウィンドウの物理解像度変化または品質変更を検知したフレームに `runtime.recreate()` を呼び、scene RtT / soul mask RtT を同時再生成する（`Rgba8Unorm` / `Rgba8UnormSrgb`）。
+テクスチャ生成は `create_rtt_texture(width, height, images)` 関数（`rtt_setup.rs`）に切り出されている。起動時は `initialize_rtt_runtime(window, quality, images)` helper が `PrimaryWindow` の物理解像度と `hw_core::quality::QualitySettings` の `rtt_scale()` を掛けたサイズで `RttRuntime` を構築し、`startup_systems::setup()` が Resource として挿入する。2 台の Camera3d の `ImageRenderTarget.scale_factor` は `Window scale factor × rtt_scale()` を明示し、整数 pixel の丸め誤差内で RtT の論理 viewport を Window の論理サイズへ揃える。`sync_rtt_texture_size_to_window_and_quality` は物理解像度・DPI・品質のいずれかが変わったフレームに `runtime.recreate()` を呼び、scene RtT / soul mask RtT を同時再生成する（`Rgba8Unorm` / `Rgba8UnormSrgb`）。DPI だけが変わって texture size が同じ場合も新しい image handle を発行し、Bevy 0.19 の camera target info / projection 更新を確実に発火させる。
 
 - `QualitySettings.rtt` は `High / Medium / Low` を持ち、係数は `1.0 / 0.75 / 0.5`。
 - `RttRuntime.pixel_size()` は shader 側へ渡す `1 / texture_size` を返し、logical な表示サイズではなく実際の RtT 解像度を基準にする。
@@ -291,7 +292,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 **`terrain_feature_lut` uniform 高速化**（LUT constant-ization, M4）: `sync_terrain_feature_lut_uniforms_system`（`hw_visual`、`Visual` フェーズ毎フレーム実行）が `TerrainSurfaceLutImageHandle`（bridge Resource、`bevy_app` の `init_visual_handles` が挿入）経由で LUT テクスチャを CPU サンプリングし、`TerrainSurfaceUniform.lut_shore/inland/rock` uniform に焼き込む。`feature_lut_constants_ready` フラグが `1.0` になると全シェーダーが `textureSample(terrain_feature_lut, ...)` の代わりに uniform 定数を参照する。これによりフレームごとの LUT テクスチャサンプルが 0 になる。
 
-`TerrainChangedEvent` の consumer は `terrain_id_map_sync_system` で、`Assets<Image>` 上の id map ピクセルを書き換えるだけで見た目を更新する（chunk entity の再生成は不要）。M1 では `TerrainLodMetrics` / `TerrainLodState` を追加し、`update_terrain_lod_metrics_system` が `Camera3dRtt` の viewport から `tile_rtt_px` を算出する。LOD 判定は `tile_rtt_px` を正本に行い、`tile_screen_px` は `composite_logical_size(window)` 由来の補助観測値としてのみ扱う。LOD 遷移は 3 段 hysteresis で管理する（詳細は `docs/rendering-performance.md` §8）。詳細は `docs/world_layout.md` の地形レンダリング節。
+`TerrainChangedEvent` の consumer は `terrain_id_map_sync_system` で、`Assets<Image>` 上の id map ピクセルを書き換えるだけで見た目を更新する（chunk entity の再生成は不要）。M1 では `TerrainLodMetrics` / `TerrainLodState` を追加し、`update_terrain_lod_metrics_system` が `Camera3dRtt::world_to_viewport` の論理 target px に `RttRuntime.target_scale_factor` を掛けて物理 RtT px の `tile_rtt_px` を算出する。LOD 判定は `tile_rtt_px` を正本に行い、`tile_screen_px` は `composite_logical_size(window)` 由来の補助観測値としてのみ扱う。LOD 遷移は 3 段 hysteresis で管理する（詳細は `docs/rendering-performance.md` §8）。詳細は `docs/world_layout.md` の地形レンダリング節。
 
 ### Camera2d ↔ Camera3d 同期
 
@@ -334,7 +335,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - TopDown の主光源方向は `hw_core::constants::topdown_sun_direction_world()` を単一の真実とし、RtT の主 `DirectionalLight` と `CharacterMaterial` の body shader が同じ方向を使う。現在は画面手前側の壁面が完全な日陰にならないよう、真上寄りではなく前方寄りの斜光を採用している。
 - Bevy 0.19 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 light は `LAYER_3D` を含み、`Camera3dRtt` 視点で有効な light として GPU light 配列に入る。`Soul` projected shadow もこの view 内の shadow-enabled directional light だけを使う。
 
-`sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は合成メッシュのスケールをウィンドウリサイズに常時追従させ、`RttRuntime.is_changed()` のときのみカメラ `RenderTarget` と `RttCompositeMaterial` の参照テクスチャを更新する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttRuntime.viewport` の実サイズから再計算し、品質スケール時でも Soul silhouette 合成がずれないようにしている。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ変更フレームや品質変更フレーム内で再生成後のテクスチャへ差し替わる。
+`sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は合成メッシュのスケールをウィンドウリサイズに常時追従させ、`RttRuntime.is_changed()` のときのみカメラ `RenderTarget` と `RttCompositeMaterial` の参照テクスチャを更新する。target の再 bind では image handle と `target_scale_factor` を同時に反映する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttRuntime.viewport` の実サイズから再計算し、品質スケール時でも Soul silhouette 合成がずれないようにしている。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ・DPI・品質変更フレーム内で再生成後のテクスチャへ差し替わる。
 
 ### キャラクター表示（Soul GLB + Familiar 2D 前面表示）
 
@@ -368,6 +369,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - `startup_systems::setup` では RtT 用の主 `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 2048 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。追加の 2 本目 light は `RenderPerfToggles.extra_directional_light_enabled` で有効化するテスト用経路で、DevPanel `Light2` または `HW_ENABLE_RTT_EXTRA_DIRECTIONAL_LIGHT` から切り替える。receiver-side `Soul` projector はこの追加 light も含めて評価する。
 - `Camera3dSoulMaskRtt` は Soul mask 専用 Camera3d で、通常の `Camera3dRtt` と同じ Transform / Projection を共有する。最終合成では `RttCompositeMaterial` が `soul_mask_texture`（`RttRuntime.soul_mask` と同期）を近傍サンプリングし、Soul シルエットだけを画面上で少し膨らませて角を丸める。
 - Familiar は 2D `Sprite` の 4 フレーム差し替え・左右反転・hover/wobble を本表示として維持する。Command radius オーラ・hover/selection・吹き出しも同じ 2D world transform を参照する。
+- Familiar の論理 root は movement / spatial index 用座標を保持し、hover/wobble は `FamiliarVisualOwner` で owner を指す 2D child の `FamiliarVisualOffset` にだけ書く。移行期の `sync_familiar_proxy_3d_system` は owner→offset をフレーム内で一度索引化し、`familiar_animation_system` の後に同じ offset を proxy へ反映する。
 - Familiar は建築物 RtT 合成より手前に出す前提とし、Soul のような shadow proxy や shadow caster は持たない。
 - `FamiliarProxy3d` は移行期の検証用経路として残っているが、Phase 3 の恒久方針ではない。多層階導入時は `FloorLevel` 等の所属階 state を導入し、「現在表示中の階に属する Familiar だけを 2D 前面表示する」ルールを別マイルストーンで定義する。
 

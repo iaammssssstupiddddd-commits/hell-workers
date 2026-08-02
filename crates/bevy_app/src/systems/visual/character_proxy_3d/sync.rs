@@ -1,4 +1,5 @@
 use super::*;
+use bevy::ecs::entity::EntityHashMap;
 
 type SoulProxy3dQuery<'w, 's> = Query<
     'w,
@@ -27,23 +28,16 @@ type FamiliarProxy3dQuery<'w, 's> = Query<
 type SoulTransformQuery<'w, 's> = Query<'w, 's, &'static Transform, With<DamnedSoul>>;
 type ChangedSoulTransformQuery<'w, 's> =
     Query<'w, 's, (Entity, &'static Transform), (With<DamnedSoul>, Changed<Transform>)>;
-type FamiliarTransformQuery<'w, 's> =
-    Query<'w, 's, (&'static Transform, Option<&'static FamiliarVisualOffset>), With<Familiar>>;
-type ChangedFamiliarTransformQuery<'w, 's> = Query<
+type FamiliarTransformQuery<'w, 's> = Query<'w, 's, &'static Transform, With<Familiar>>;
+type ChangedFamiliarTransformQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform), (With<Familiar>, Changed<Transform>)>;
+type FamiliarVisualOffsetQuery<'w, 's> = Query<
     'w,
     's,
     (
-        Entity,
-        &'static Transform,
-        Option<&'static FamiliarVisualOffset>,
+        &'static FamiliarVisualOwner,
+        Ref<'static, FamiliarVisualOffset>,
     ),
-    (With<Familiar>, Changed<Transform>),
->;
-type ChangedFamiliarVisualOffsetQuery<'w, 's> = Query<
-    'w,
-    's,
-    (Entity, &'static FamiliarVisualOffset),
-    (With<Familiar>, Changed<FamiliarVisualOffset>),
 >;
 type Camera3dTransformQuery<'w, 's> = Query<'w, 's, Ref<'static, Transform>, With<Camera3dRtt>>;
 type NewSoulProxyQuery<'w, 's> = Query<'w, 's, (Entity, &'static SoulProxy3d), Added<SoulProxy3d>>;
@@ -238,7 +232,7 @@ pub fn sync_soul_shadow_proxy_3d_system(
 /// FamiliarProxy3d を対応する Familiar の論理rootとvisual hoverに同期する。
 pub fn sync_familiar_proxy_3d_system(
     q_changed_familiars: ChangedFamiliarTransformQuery,
-    q_changed_visual_offsets: ChangedFamiliarVisualOffsetQuery,
+    q_visual_offsets: FamiliarVisualOffsetQuery,
     q_familiars: FamiliarTransformQuery,
     q_new_proxies: NewFamiliarProxyQuery,
     q_cam3d: Camera3dTransformQuery,
@@ -248,13 +242,25 @@ pub fn sync_familiar_proxy_3d_system(
     let Ok(camera) = q_cam3d.single() else {
         return;
     };
+    let mut visual_offsets_by_owner = EntityHashMap::default();
+    let mut changed_visual_offsets = Vec::new();
+    for (visual_owner, visual_offset) in q_visual_offsets.iter() {
+        visual_offsets_by_owner.insert(visual_owner.owner, *visual_offset);
+        if visual_offset.is_changed() {
+            changed_visual_offsets.push((visual_owner.owner, *visual_offset));
+        }
+    }
+
     let camera_rotation = camera.rotation;
     if camera.is_changed() {
         for (proxy, mut proxy_transform) in q_proxies.iter_mut() {
-            if let Ok((familiar_transform, visual_offset)) = q_familiars.get(proxy.owner) {
+            if let Ok(familiar_transform) = q_familiars.get(proxy.owner) {
                 apply_proxy_transform(
                     &mut proxy_transform,
-                    familiar_proxy_transform(familiar_transform, visual_offset),
+                    familiar_proxy_transform(
+                        familiar_transform,
+                        visual_offsets_by_owner.get(&proxy.owner),
+                    ),
                     camera_rotation,
                 );
             }
@@ -262,31 +268,31 @@ pub fn sync_familiar_proxy_3d_system(
         return;
     }
 
-    for (owner, familiar_transform, visual_offset) in q_changed_familiars.iter() {
+    for (owner, familiar_transform) in q_changed_familiars.iter() {
         sync_familiar_proxy_for_owner(
             owner,
             familiar_transform,
-            visual_offset,
+            visual_offsets_by_owner.get(&owner),
             camera_rotation,
             &cache,
             &mut q_proxies,
         );
     }
-    for (owner, visual_offset) in q_changed_visual_offsets.iter() {
-        let Ok((familiar_transform, _)) = q_familiars.get(owner) else {
+    for (owner, visual_offset) in changed_visual_offsets {
+        let Ok(familiar_transform) = q_familiars.get(owner) else {
             continue;
         };
         sync_familiar_proxy_for_owner(
             owner,
             familiar_transform,
-            Some(visual_offset),
+            Some(&visual_offset),
             camera_rotation,
             &cache,
             &mut q_proxies,
         );
     }
     for (proxy_entity, proxy) in q_new_proxies.iter() {
-        let Ok((familiar_transform, visual_offset)) = q_familiars.get(proxy.owner) else {
+        let Ok(familiar_transform) = q_familiars.get(proxy.owner) else {
             continue;
         };
         let Ok((_proxy, mut proxy_transform)) = q_proxies.get_mut(proxy_entity) else {
@@ -294,7 +300,10 @@ pub fn sync_familiar_proxy_3d_system(
         };
         apply_proxy_transform(
             &mut proxy_transform,
-            familiar_proxy_transform(familiar_transform, visual_offset),
+            familiar_proxy_transform(
+                familiar_transform,
+                visual_offsets_by_owner.get(&proxy.owner),
+            ),
             camera_rotation,
         );
     }

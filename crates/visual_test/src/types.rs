@@ -42,7 +42,7 @@ pub use render::{
     AnimPlayerQuery, Cam2dQuery, Cam3dSyncQuery, Camera3dRtt, Camera3dSoulMaskTest,
     LocalRttComposite, LocalRttCompositeMaterial, RttCompositeParams, SoulAnimHandle,
     SoulBlobShadowProxy3d, SoulLayoutEntities, SoulMaskConfig, SoulShadowConfig, TestAssets,
-    TestMainCamera, TestSoulConfig, face_uv_offset, face_uv_scale,
+    TestMainCamera, TestSoulConfig, VisualTestRttRuntime, face_uv_offset, face_uv_scale,
 };
 pub use state::{FaceMode, TestState};
 pub use ui::{

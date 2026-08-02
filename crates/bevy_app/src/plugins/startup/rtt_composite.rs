@@ -134,10 +134,10 @@ pub fn sync_rtt_output_bindings(
     }
 
     if let Ok(mut target) = main_camera_targets.single_mut() {
-        *target = RenderTarget::Image(runtime.scene.clone().into());
+        *target = runtime.scene_render_target();
     }
     if let Ok(mut target) = soul_mask_targets.single_mut() {
-        *target = RenderTarget::Image(runtime.soul_mask.clone().into());
+        *target = runtime.soul_mask_render_target();
     }
     for (material_handle, _) in quads.iter() {
         if let Some(mut material) = materials.get_mut(&material_handle.0) {

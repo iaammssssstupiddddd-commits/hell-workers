@@ -129,6 +129,7 @@ Overlay Camera2d     (LAYER_OVERLAY,        order= 1) ← composite sprite + UI
 ```
 
 `sync_test_camera3d` が毎フレーム TestMainCamera のTransform/scaleと矢視方向を2台のCamera3dへ反映する。
+2 枚の RtT は Window の物理解像度で生成し、各 `ImageRenderTarget.scale_factor` に Window の scale factor を設定する。これにより高 DPI 環境でも RtT Camera3d の論理 viewport と TestMainCamera が一致する。resize または DPI 変更時は scene / Soul mask texture と target、composite material を同時に再生成・再 bind する。`PanCamera` の Q/E 回転はゲーム本体と同様に無効で、表示方向は V の矢視プリセットだけが変更する。
 
 ### ゴーストプレビュー（建築物配置）
 

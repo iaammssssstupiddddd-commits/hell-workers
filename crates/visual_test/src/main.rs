@@ -56,6 +56,7 @@ impl Plugin for VisualTestPlugin {
         .add_systems(
             Update,
             ((
+                systems::sync_test_rtt_to_window,
                 systems::sync_test_camera3d,
                 soul::sync_mask_proxies,
                 soul::sync_shadow_proxies,

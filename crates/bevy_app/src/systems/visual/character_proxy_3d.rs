@@ -18,7 +18,7 @@ use hw_core::constants::{
 };
 use hw_core::familiar::Familiar;
 use hw_core::soul::DamnedSoul;
-use hw_visual::familiar::FamiliarVisualOffset;
+use hw_visual::familiar::{FamiliarVisualOffset, FamiliarVisualOwner};
 use hw_visual::visual3d::{FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d, SoulShadowProxy3d};
 use hw_visual::{
     CharacterMaterial, SoulAnimationPlayer3d, SoulBodyAnimState, SoulFaceMaterial3d,

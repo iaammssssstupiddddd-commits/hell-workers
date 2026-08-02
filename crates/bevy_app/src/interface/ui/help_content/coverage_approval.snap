@@ -14,7 +14,7 @@ entry|topic="getting-started"|id="getting-started-work-loop"|title="Familiar が
 entry|topic="getting-started"|id="getting-started-first-steps"|title="最初に確認する場所"|paragraphs=["左の一覧で Familiar と未所属 Soul を確認し、下の Orders・Architect・Zones から仕事を作ります。", "対象を選ぶと右の情報パネルに状態と操作が表示されます。"]|shortcut=None
 section|id="basic-controls"|title="基本操作"
 topic|feature="camera-selection"|owner="input-camera"|section="basic-controls"|id="camera-selection"|title="カメラと選択"
-entry|topic="camera-selection"|id="camera-pan-zoom"|title="カメラ移動"|paragraphs=["W / A / S / D で移動し、マウスホイールで拡大・縮小します。", "Settings で Mouse Drag Pan が有効なら、左ドラッグでもカメラを移動できます。"]|shortcut=Some("W / A / S / D / Mouse Wheel")
+entry|topic="camera-selection"|id="camera-pan-zoom"|title="カメラ移動"|paragraphs=["W / A / S / D で移動し、マウスホイールで拡大・縮小します。", "Settings で Mouse Drag Pan が有効なら、左ドラッグでもカメラを移動できます。", "パン操作では画面を回転させません。表示方向は「表示階層」の切り替えで変更します。"]|shortcut=Some("W / A / S / D / Mouse Wheel")
 entry|topic="camera-selection"|id="camera-elevation"|title="表示階層"|paragraphs=["地表と地下の表示階層を切り替えます。"]|shortcut=Some("V")
 entry|topic="camera-selection"|id="world-selection"|title="選択と右クリック"|paragraphs=["左クリックで対象を選びます。右クリックは選択対象と現在のモードに応じた操作を開きます。", "入力欄を編集中は、ゲーム用ショートカットが抑止されます。"]|shortcut=None
 topic|feature="time-help"|owner="input-camera"|section="basic-controls"|id="time-help"|title="時間とヘルプ"

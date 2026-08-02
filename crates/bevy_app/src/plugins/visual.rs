@@ -218,7 +218,7 @@ impl Plugin for VisualPlugin {
                     sync_soul_proxy_3d_system,
                     sync_soul_mask_proxy_3d_system,
                     sync_soul_shadow_proxy_3d_system,
-                    sync_familiar_proxy_3d_system,
+                    sync_familiar_proxy_3d_system.after(familiar_animation_system),
                 )
                     .run_if(render3d_sync_enabled),
                 prepare_soul_animation_library_system,
