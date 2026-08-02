@@ -100,7 +100,7 @@ fn on_settings_slider_value_change(
     intents.write(intent);
 }
 
-fn on_settings_checkbox_value_change(
+pub(crate) fn on_settings_checkbox_value_change(
     change: On<ValueChange<bool>>,
     q_checkboxes: Query<&SettingsCheckboxMarker>,
     mut intents: MessageWriter<UiIntent>,
@@ -113,6 +113,7 @@ fn on_settings_checkbox_value_change(
         SettingsField::CameraMousePan => UiIntent::SetCameraMousePanEnabled(change.value),
         SettingsField::DebugGizmos => UiIntent::SetDebugGizmosEnabled(change.value),
         SettingsField::FpsDisplay => UiIntent::SetFpsDisplayEnabled(change.value),
+        SettingsField::PowerPriority => UiIntent::SetPowerPriorityEnabled(change.value),
         _ => return,
     };
     intents.write(intent);

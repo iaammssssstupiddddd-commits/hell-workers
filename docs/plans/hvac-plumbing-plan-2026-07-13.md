@@ -98,7 +98,8 @@ provided = Room に属する稼働中 VentilationSource の capacity 合計
 - 初期実装は即時判定とする。猶予 Timer は持たせない。
 - `ScreamingVent` は接する全 Room へ能力を配る。共有壁で 2 Room に接する場合、能力を Room 数で均等分割する。
 - `SighChimney` は「隣接 Room が 1 つだけ」の外周壁にのみ置け、全能力をその Room へ与える。
-- `ScourgeFan` は設置床を `RoomTileLookup` で逆引きし、`Unpowered` がない場合だけ能力を与える。
+- `ScourgeFan` は設置床を `RoomTileLookup` で逆引きし、共通`PowerConsumer + PowerConsumerPolicy`へ登録する。
+  換気能力は個別`PowerSupplyState::Supplied`（互換上は`Unpowered`なし）の場合だけ与え、独自の全体停電判定を持たない。
 - PowerGrid entity は従来どおり Yard が所有するが、Consumer のサービス範囲をその Yard と paired Site の union へ広げる。Room 単位 grid は作らない。
 - 川岸の Intake は通常の位置包含では grid を引けないため、配置時に「取水門 footprint と水平に重なり、規定距離内にある Site」を 1 件に解決し、その `PairedYard` の PowerGrid へ `ConsumesFrom` を明示接続する。0件または複数候補は配置拒否する。
 
@@ -220,7 +221,10 @@ Room overlay geometry sync
 
 - Observer は leaf で完結する場合 `hw_infra` plugin に一元登録し、root との二重登録を禁止する。
 - `Commands` で生成された Room と同 frame で recalc する必要がある箇所は、Bevy 0.19 の deferred command 適用点を一次ソースまたは回帰 test で確認してから順序を固定する。
-- 既存 `PowerConsumer + #[require(Unpowered)] + on_power_consumer_added` を再利用する。M2 で consumer lookup を Yard 内だけから paired Site まで拡張し、M3 の Intake は配置時に対応 Yard grid を明示する。どちらでも grid を解決できない場合は `No Power Grid` を表示する。
+- 既存 `PowerConsumer + #[require(Unpowered, PowerConsumerPolicy)]` とroot energy topology reconcilerを再利用する。
+  M2でreconcilerのconsumer owner解決をYard内だけからpaired Siteまで拡張し、M3のIntakeは一意なSite/
+  `PairedYard`を同じresolverへ入力する。reconcilerと競合する`ConsumesFrom`の直接挿入だけで済ませない。
+  初期priorityは設備ごとに明示し、解決不能なら`Disconnected / No Power Grid`を表示する。
 - `BuildingType` 追加時は `rg -n "BuildingType::|BuildingCategory::" crates -g '*.rs'` で exhaustive match を全件確認する。
 - `crates/bevy_app/src/assets.rs` と `plugins/startup/asset_catalog.rs` は本計画作成時点で別作業の差分がある。実装時は current diff を読み、無関係な変更を上書きしない。
 
@@ -316,7 +320,8 @@ Room overlay geometry sync
 
 1. `SighChimney` と `ScourgeFan` を追加する。
 2. Chimney は 1 Room のみに接する外周壁だけを許可し、共有壁では明示的に配置拒否する。
-3. Fan は `Architecture` とし、Site の Room 内床にのみ置け、完成時に `PowerConsumer { demand: 0.5 }` を付与する。
+3. Fan は `Architecture` とし、Site の Room 内床にのみ置け、完成時に
+   `PowerConsumer { demand: 0.5 } + PowerConsumerPolicy`を付与する。共通priority allocatorとinfo panelを使う。
 4. `on_power_consumer_added` の grid 解決を Yard 内だけでなく、その Yard と paired な Site 内まで拡張する。PowerGrid の所有 entity は Yard のまま変えない。
 5. `Unpowered` の Added/Removed で ventilation dirty を立て、paired Yard grid の通電状態を次の換気再計算へ反映する。
 6. paired Site / Yard を解決できない Fan に placement warning と info-panel reason を表示する。
@@ -355,7 +360,8 @@ Room overlay geometry sync
 2. `OssuaryConduit`、`ConduitTileLookup`、`ConduitBlueprintLookup`、topology / supply dirty、FluidGrid Relationship を実装する。
 3. Conduit line drag / erase drag、独立 overlay、重ね敷設、重複拒否を実装する。Blueprint 段階から WorldMap building footprint を予約しない。
 4. Conduit completion を generic Building spawn / footprint release より前に分岐し、WorldMap occupancy / obstacle を変更しない。
-5. Intake の川岸 3×2 placement と `PowerConsumer { demand: 1.0 }` を実装し、一意に解決した Site の `PairedYard` PowerGrid へ明示接続する。
+5. Intake の川岸 3×2 placement と`PowerConsumer { demand: 1.0 } + PowerConsumerPolicy`を実装し、
+   一意に解決したSiteの`PairedYard`を共通energy owner resolverへ渡す。接続はtopology reconcilerが確定する。
 6. Purifier の Room 内 placement、同一 FluidGrid 接続、Purifier 不在も含む `RoomDrainageState::Unwatered / Drained` を実装する。
 7. topology dirty と supply dirty を分離し、Intake の停電で flood fill を再実行しない。
 8. Conduit 物理 entity と新設備を save 対象へ追加し、FluidGrid / lookup / dirty / Room state はロード後に再構築する。
@@ -519,6 +525,8 @@ pure test では少なくとも次を固定する。
 - `RoomTileLookup` は床専用であり、壁設備には `RoomBoundaryLookup` を使う。
 - Conduit 完成時に `Building` を付けたり `WorldMap.add_building` を呼んだりしない。
 - PowerConsumer lifecycle は root adapter にあり、`hw_energy` 内だけを見て実装しない。
+- B3以後は`PowerConsumerPolicy`がdurable、`PowerSupplyState` / `Unpowered` / grid summaryがruntime-derivedである。
+  HVACは共通strict-prefix allocator、restore margin、Legacy modeを利用し、独自配電やruntime state保存を追加しない。
 - M3 時点の Save API は active hardening plan により変わる可能性がある。手動 allow-list の現行形を計画から固定しない。
 - 現在の asset catalog 差分は本計画外。ユーザー変更を preserve する。
 

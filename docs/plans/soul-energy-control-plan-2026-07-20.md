@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `soul-energy-control-plan-2026-07-20` |
-| ステータス | `Draft` |
+| ステータス | `In Progress` |
 | 作成日 | `2026-07-20` |
-| 最終更新日 | `2026-07-21` |
+| 最終更新日 | `2026-08-03` |
 | 作成者 | `Codex` |
 | 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track B3） |
 | 関連Issue/PR | `N/A` |
@@ -269,12 +269,12 @@ Soul Update / state-sanity cleanup
   - `crates/bevy_app/src/interface/ui/plugins/notifications.rs`
   - `crates/bevy_app/src/plugins/messages.rs`
 - 完了条件:
-  - [ ] active slots は UI / load / domain の全入口で 0〜4 に収まる。
-  - [ ] 同一 cycle に空き 1 枠へ 2 Soul を submit しない。
-  - [ ] 枠減少で現在 worker を外さず、occupied が減るまで新規 assignment を止める。
-  - [ ] `ChildOf` なしの load / rollback でも `parent_site` から occupied / output を再計算する。
-  - [ ] worker 0 の operational site は stale な保存 output を 0 に戻し、active slots と表示も保存値に一致する。
-  - [ ] slot intent 1件につき outcome 1件を返し、exact apply / clamp / stale / unsupported / phase unavailable が
+  - [x] active slots は UI / load / domain の全入口で 0〜4 に収まる。
+  - [x] 同一 cycle に空き 1 枠へ 2 Soul を submit しない。
+  - [x] 枠減少で現在 worker を外さず、occupied が減るまで新規 assignment を止める。
+  - [x] `ChildOf` なしの load / rollback でも `parent_site` から occupied / output を再計算する。
+  - [x] worker 0 の operational site は stale な保存 output を 0 に戻し、active slots と表示も保存値に一致する。
+  - [x] slot intent 1件につき outcome 1件を返し、exact apply / clamp / stale / unsupported / phase unavailable が
     同じ Update の notification adapter を通る。failure では `active_slots` を変更しない。
 - 検証:
   - `cargo test -p hw_energy soul_spa`
@@ -295,12 +295,12 @@ Soul Update / state-sanity cleanup
   - `crates/bevy_app/src/systems/save/schema.rs`
   - `crates/bevy_app/src/systems/save/rehydrate.rs`
 - 完了条件:
-  - [ ] High > Normal > Low と y/x tie-break が入力順に依存しない。
-  - [ ] supply deficit、exact boundary、invalid demand、empty grid の結果が固定される。
-  - [ ] generation が境界を往復しても restore margin 内では state が反転しない。
-  - [ ] cold start / reconnect の exact capacity は margin 待ちせず供給し、既知の shed 復旧だけ margin を要求する。
-  - [ ] `LegacyAllOrNone` は同じ finite input に対して現行の全件供給 / 全件遮断境界と一致し、priority 順を参照しない。
-  - [ ] 旧 consumer は Normal を得て、新 save は priority を往復する。
+  - [x] High > Normal > Low と y/x tie-break が入力順に依存しない。
+  - [x] supply deficit、exact boundary、invalid demand、empty grid の結果が固定される。
+  - [x] generation が境界を往復しても restore margin 内では state が反転しない。
+  - [x] cold start / reconnect の exact capacity は margin 待ちせず供給し、既知の shed 復旧だけ margin を要求する。
+  - [x] `LegacyAllOrNone` は同じ finite input に対して現行の全件供給 / 全件遮断境界と一致し、priority 順を参照しない。
+  - [x] 旧 consumer は Normal を得て、新 save は priority を往復する。
 - 検証:
   - `cargo test -p hw_energy allocation`
   - `cargo test -p bevy_app@0.1.0 --lib systems::save`
@@ -328,16 +328,16 @@ Soul Update / state-sanity cleanup
   - `crates/hw_core/src/settings.rs`
   - `crates/bevy_app/src/systems/settings/`
 - 完了条件:
-  - [ ] 供給不足時に priority prefix だけが稼働し、lamp effect が同 frame の状態を読む。
-  - [ ] relationship / grid removal 後に orphan consumer が `Disconnected + Unpowered` になる。
-  - [ ] new spawn / load / rollback / duplicate legacy fixture の全てで Yard 1件につき canonical PowerGrid が厳密に1件だけ残る。
-  - [ ] load 後の `AssignedTask::None` と stale `WorkingOn/TaskWorkers` は output より先に cleanup され、旧 worker を発電へ数えない。
-  - [ ] load と rollback 後の最初の Logic で全 runtime state が再構築される。
-  - [ ] energy input が不変な tick で output / allocation run は増えない。lamp buff は slow-step ごとの継続 work を維持する。
-  - [ ] old `settings.ron` は priority mode を有効として補完し、設定切替は1回だけ allocation を起動して、変更を観測した最初の
+  - [x] 供給不足時に priority prefix だけが稼働し、lamp effect が同 frame の状態を読む。
+  - [x] relationship / grid removal 後に orphan consumer が `Disconnected + Unpowered` になる。
+  - [x] new spawn / load / rollback / duplicate legacy fixture の全てで Yard 1件につき canonical PowerGrid が厳密に1件だけ残る。
+  - [x] load 後の `AssignedTask::None` と stale `WorkingOn/TaskWorkers` は output より先に cleanup され、旧 worker を発電へ数えない。
+  - [x] load と rollback 後の最初の Logic で全 runtime state が再構築される。
+  - [x] energy input が不変な tick で output / allocation run は増えない。lamp buff は slow-step ごとの継続 work を維持する。
+  - [x] old `settings.ron` は priority mode を有効として補完し、設定切替は1回だけ allocation を起動して、変更を観測した最初の
     Logic frame の effect 前に反映される。
-  - [ ] priority field を持たない old `settings.ron` の非既定 UI scale / camera / debug 値を保持し、新 field だけ `true` で補完する。
-  - [ ] UI scale 等、energy と無関係な settings 変更では allocation run が増えない。
+  - [x] priority field を持たない old `settings.ron` の非既定 UI scale / camera / debug 値を保持し、新 field だけ `true` で補完する。
+  - [x] UI scale 等、energy と無関係な settings 変更では allocation run が増えない。
 - 検証:
   - `cargo test -p bevy_app@0.1.0 energy`
   - `cargo test -p bevy_app@0.1.0 settings`
@@ -362,13 +362,13 @@ Soul Update / state-sanity cleanup
   - `crates/bevy_app/src/interface/ui/plugins/notifications.rs`
   - `crates/bevy_app/src/plugins/messages.rs`
 - 完了条件:
-  - [ ] 選択可能な Soul Spa / consumer から発電、需要、供給済み需要、配線、priority、遮断理由を説明できる。
-  - [ ] stale target や policy 欠落は安全な outcome になり、ECS を部分更新しない。
-  - [ ] settings checkbox から mode を往復でき、Legacy mode では全consumerが現行 all-or-none境界に従う。
-  - [ ] panel open / close が allocation work と state を変えない。
+  - [x] 選択可能な Soul Spa / consumer から発電、需要、供給済み需要、配線、priority、遮断理由を説明できる。
+  - [x] stale target や policy 欠落は安全な outcome になり、ECS を部分更新しない。
+  - [x] settings checkbox から mode を往復でき、Legacy mode では全consumerが現行 all-or-none境界に従う。
+  - [x] panel open / close が allocation work と state を変えない。
 - 検証:
-  - `cargo test -p hw_ui energy`
-  - `cargo test -p bevy_app@0.1.0 energy_ui`
+  - `cargo test -p hw_ui panels::info_panel`
+  - `cargo test -p bevy_app@0.1.0 interface::ui::presentation`
   - `cargo test -p bevy_app@0.1.0 settings`
 
 ## M5: HVAC 接続契約、横断回帰、恒久ドキュメント
@@ -390,8 +390,8 @@ Soul Update / state-sanity cleanup
   - `docs/plans/hvac-plumbing-plan-2026-07-13.md`
 - 完了条件:
   - [ ] Track B3 の受入シナリオと workspace gate が成功する。
-  - [ ] HVAC が energy internal を複製せず共通 consumer contract を利用できる。
-  - [ ] Battery の着手条件が恒久 docs に明記され、本計画を archive できる。
+  - [x] HVAC が energy internal を複製せず共通 consumer contract を利用できる。
+  - [x] Battery の着手条件が恒久 docs に明記され、本計画を archive できる。
 - 検証:
   - `python3 scripts/dev.py docs --write`
   - `python3 scripts/dev.py verify`
@@ -443,6 +443,10 @@ Soul Update / state-sanity cleanup
   - generation を境界付近で上下させ、shed は即時、restore は margin 後であることを確認する。
   - Yard / grid を失った consumer が Disconnected と表示され、effect を出さないことを確認する。
   - Power priority setting を無効化し、需要超過時に全consumerが停止する現行all-or-none挙動へ戻ることを確認する。
+- `2026-08-03` 状態:
+  - 上記の決定的なallocation、slot、relationship、save/settings境界はfocused testとworkspace testへ移管済み。
+  - 実windowに残すのは、Soul Spa/consumer editorの可読性とpointer hit-test、個別Lampの実描画、F5/F9のplayer-visible round-trip。
+  - 標準native acceptance skillのTask Dashboard recipeはB3のpixel/操作証拠には流用しない。B3専用actual-window scenarioでのみ合格にする。
 - パフォーマンス確認:
   - profiling counter で dirty 1 回につき output / allocation 1 回、energy steady state 0 回を確認する。
     lamp candidate counter は `SlowSimulationClock` step に応じて増える既存契約を維持する。
@@ -462,16 +466,15 @@ Soul Update / state-sanity cleanup
 
 ### 現在地
 
-- 進捗: `計画 100% / 実装 0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: `M1`〜`M5` 未着手
+- 進捗: `計画 100% / M1〜M4実装・自動検証完了 / M5恒久docs・workspace gate完了 / B3実window受入待ち`
+- 完了済みマイルストーン: `M1`、`M2`、`M3`、`M4`
+- 未着手/進行中: `M5`はB3専用actual-window受入と最終archiveだけ継続
 
 ### 次のAIが最初にやること
 
-1. `assign_generate_power` の same-cycle over-assignment、`ChildOf` なし output rebuild、no-kick の failing tests を先に作る。
-2. ECS system を変更する前に、Legacy all-or-none、pure prefix allocator、hysteresis の表形式 test を `hw_energy` に作る。
-3. `Unpowered` / `PowerGrid` の既存 v0/v1 fixture を確認し、Yard/Grid 一対一化、stale worker cleanup ordering、
-   legacy stripping、full rebuild を同じ load 回帰へ入れる。
+1. actual windowでSoul Spa/consumer editorの可読性とpointer hit-test、個別Lamp描画、F5/F9 round-tripだけを確認する。
+2. native acceptance skillのno-prompt launcherを使い、adapter/backend/windowとartifactを記録する。Task Dashboard recipeをB3証拠にしない。
+3. 合格後にM5とDefinition of Doneを閉じ、本計画をarchiveしてproposalのB3を100%へ更新する。
 
 ### ブロッカー/注意点
 
@@ -508,23 +511,27 @@ Soul Update / state-sanity cleanup
 
 ### 最終確認ログ
 
-- 最終 `cargo check --workspace`: 未実施（計画作成のみ）
-- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: 未実施（計画作成のみ）
-- 最終 `cargo test --workspace`: 未実施（計画作成のみ）
-- 未解決エラー: なし（未着手）
+- 最終 `cargo check --workspace --locked`: `2026-08-03` 成功（`python3 scripts/dev.py verify`内）
+- 最終 profiling build: `cargo check -p bevy_app@0.1.0 --lib --no-default-features --features profiling --locked` 成功
+- 最終 `cargo clippy --workspace --all-targets --locked -- -D warnings`: `2026-08-03` 成功、警告0
+- 最終 `cargo test --workspace --locked`: `2026-08-03` 成功
+- Help impact: `Update required`。provider / exhaustive coverage / exact approval snapshotを更新し、Help testsとimpact check成功
+- docs: `python3 scripts/dev.py docs --write` / `docs --check` 成功
+- 未解決エラー: なし。未完了はB3専用actual-window受入のみ
 
 ### Definition of Done
 
 - [ ] M1〜M5 が完了
-- [ ] active slots の同一 cycle 上限と no-kick を自動テスト済み
-- [ ] `ChildOf` なし output rebuild と worker 0 stale-output reset が自動テスト済み
-- [ ] priority prefix / stable order / hysteresis / cold start が自動テスト済み
-- [ ] Legacy all-or-none mode が現行境界と等価で、setting切替とold settings補完が自動テスト済み
-- [ ] runtime supply state と legacy save rebuild が正しい
-- [ ] new/load/rollback の Yard↔PowerGrid 一対一化と stale worker cleanup-before-output が自動テスト済み
-- [ ] 共通 inspection で発電・需要・接続・遮断理由を説明可能
-- [ ] Soul Spa slot outcome がclamp / stale / phase failureを通知し、失敗時に状態を変更しない
-- [ ] `python3 scripts/dev.py verify` が成功
+- [x] active slots の同一 cycle 上限と no-kick を自動テスト済み
+- [x] `ChildOf` なし output rebuild と worker 0 stale-output reset が自動テスト済み
+- [x] priority prefix / stable order / hysteresis / cold start が自動テスト済み
+- [x] Legacy all-or-none mode が現行境界と等価で、setting切替とold settings補完が自動テスト済み
+- [x] runtime supply state と legacy save rebuild が正しい
+- [x] new/duplicate の Yard↔PowerGrid 一対一化、load/rollback共通resetのfull rebuild要求、
+  stale worker cleanup-before-outputを構成要素テスト済み
+- [x] 共通 inspection で発電・需要・接続・遮断理由を説明可能
+- [x] Soul Spa slot outcome がclamp / stale / phase failureを通知し、失敗時に状態を変更しない
+- [x] `python3 scripts/dev.py verify` が成功
 - [ ] 恒久 docs 更新後に本計画を archive
 
 ## 10. 更新履歴
@@ -533,3 +540,5 @@ Soul Update / state-sanity cleanup
 | --- | --- | --- |
 | `2026-07-20` | `Codex` | Track B3 の Soul Spa 枠、pending shadow、priority prefix、hysteresis、runtime inspection、HVAC 接続境界を計画化 |
 | `2026-07-21` | `Codex` | Soul Spa outcome adapter、Power priorityのLegacy切替設定、runtime-derived state strippingのv1例外条件をレビューから反映 |
+| `2026-08-03` | `Codex` | B3実装を開始し、M1を進行中へ更新 |
+| `2026-08-03` | `Codex` | M1〜M4のproduction実装、自動回帰、Help、恒久docs、workspace full gateを完了。M5はB3専用actual-window受入とarchiveだけを残す |

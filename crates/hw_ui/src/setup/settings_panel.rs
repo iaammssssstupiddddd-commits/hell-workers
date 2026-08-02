@@ -24,6 +24,7 @@ pub struct SettingsPanelInitial {
     pub default_time_speed: TimeSpeed,
     pub debug_gizmos_enabled: bool,
     pub fps_display_enabled: bool,
+    pub power_priority_enabled: bool,
 }
 
 struct SliderRowSpec<'a> {
@@ -162,6 +163,14 @@ pub fn spawn_settings_panel(
             "Show FPS",
             SettingsField::FpsDisplay,
             initial.fps_display_enabled,
+        );
+        spawn_checkbox_row(
+            parent,
+            game_assets,
+            theme,
+            "Power priority allocation",
+            SettingsField::PowerPriority,
+            initial.power_priority_enabled,
         );
 
         parent

@@ -470,6 +470,129 @@ fn stockpile_policy_round_trips_with_yard_owner_entity_remap() {
 }
 
 #[test]
+fn power_policy_round_trips_while_supply_markers_and_summary_stay_runtime_only() {
+    let mut app = App::new();
+    register_save_types(&mut app);
+    let consumer = app
+        .world_mut()
+        .spawn((
+            PowerConsumer { demand: 0.75 },
+            PowerConsumerPolicy {
+                priority: PowerPriority::High,
+            },
+            PowerSupplyState::Shed {
+                reason: PowerShedReason::RestoreMargin,
+            },
+            PowerGridAllocationSummary::default(),
+        ))
+        .id();
+    app.world_mut().flush();
+
+    let roots = collect_persisted_entities(app.world_mut());
+    let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+    let registry = type_registry.read();
+    let dynamic_world = build_persisted_world(app.world(), &registry, roots.into_iter());
+    let dynamic_consumer = dynamic_world
+        .entities
+        .iter()
+        .find(|entity| entity.entity == consumer)
+        .expect("consumer root");
+    assert!(dynamic_consumer.components.iter().any(|component| {
+        component
+            .get_represented_type_info()
+            .is_some_and(|info| info.type_id() == TypeId::of::<PowerConsumerPolicy>())
+    }));
+    assert!(!dynamic_consumer.components.iter().any(|component| {
+        component
+            .get_represented_type_info()
+            .is_some_and(|info| info.type_id() == TypeId::of::<PowerSupplyState>())
+    }));
+    assert!(!dynamic_consumer.components.iter().any(|component| {
+        component
+            .get_represented_type_info()
+            .is_some_and(|info| info.type_id() == TypeId::of::<Unpowered>())
+    }));
+    assert!(!dynamic_consumer.components.iter().any(|component| {
+        component
+            .get_represented_type_info()
+            .is_some_and(|info| info.type_id() == TypeId::of::<PowerGridAllocationSummary>())
+    }));
+
+    let body = dynamic_world.serialize(&registry).unwrap();
+    let mut ron_deserializer = ron::de::Deserializer::from_str(&body).unwrap();
+    let round_tripped = WorldDeserializer {
+        type_registry: &registry,
+        load_from_path: &mut NoAssetLoad,
+    }
+    .deserialize(&mut ron_deserializer)
+    .unwrap();
+    drop(registry);
+
+    let mut destination = World::new();
+    let mut entity_map = EntityHashMap::default();
+    let registry = type_registry.read();
+    round_tripped
+        .write_to_world_with(&mut destination, &mut entity_map, &registry)
+        .unwrap();
+    let mapped = entity_map[&consumer];
+    assert_eq!(
+        destination.get::<PowerConsumerPolicy>(mapped),
+        Some(&PowerConsumerPolicy {
+            priority: PowerPriority::High,
+        })
+    );
+    assert!(destination.get::<PowerSupplyState>(mapped).is_none());
+    assert!(
+        destination.get::<Unpowered>(mapped).is_some(),
+        "PowerConsumer requirement must recreate the fail-closed marker"
+    );
+    assert!(
+        destination
+            .get::<PowerGridAllocationSummary>(mapped)
+            .is_none()
+    );
+}
+
+#[test]
+fn legacy_power_summary_deserializes_then_is_stripped_before_schema_validation() {
+    let mut app = App::new();
+    register_save_types(&mut app);
+    let grid = Entity::from_raw_u32(42).expect("fixture entity");
+    let legacy_body = DynamicWorld {
+        resources: Vec::new(),
+        entities: vec![bevy_world_serialization::DynamicEntity {
+            entity: grid,
+            components: vec![Box::new(PowerGridAllocationSummary {
+                mode: PowerAllocationMode::LegacyAllOrNone,
+                generation: 1.0,
+                total_demand: 2.0,
+                served_demand: 0.0,
+                consumer_count: 1,
+                supplied_count: 0,
+                shed_count: 1,
+                invalid_count: 0,
+                shed_order: vec![Entity::from_raw_u32(43).expect("fixture consumer")],
+            })],
+        }],
+    };
+
+    let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+    let registry = type_registry.read();
+    let body = legacy_body.serialize(&registry).unwrap();
+    let mut ron_deserializer = ron::de::Deserializer::from_str(&body).unwrap();
+    let mut deserialized = WorldDeserializer {
+        type_registry: &registry,
+        load_from_path: &mut NoAssetLoad,
+    }
+    .deserialize(&mut ron_deserializer)
+    .unwrap();
+
+    assert_eq!(deserialized.entities[0].components.len(), 1);
+    discard_runtime_derived_components(&mut deserialized);
+    assert!(deserialized.entities[0].components.is_empty());
+}
+
+#[test]
 fn pre_checklist_stockpile_acceptance_ron_body_deserializes() {
     use hw_logistics::transport_request::TransportPriority;
     use hw_logistics::{StockpileAcceptance, StockpilePolicy};

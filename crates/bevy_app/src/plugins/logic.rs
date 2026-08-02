@@ -11,11 +11,13 @@ use crate::systems::command::{
 };
 use crate::systems::dream_tree_planting::dream_tree_planting_system;
 use crate::systems::energy::grid_lifecycle::{
-    on_power_consumer_added, on_yard_added, on_yard_removed,
+    on_power_consumer_added, on_power_generator_added, on_yard_added, on_yard_removed,
+    reconcile_power_grid_topology_system,
 };
 use crate::systems::energy::grid_recalc::{
     EnergyUpdateDirty, detect_energy_update_dirty_system, energy_grid_recalc_should_run,
-    energy_power_output_should_run, grid_recalc_system,
+    energy_power_output_should_run, energy_topology_should_run, grid_recalc_system,
+    sync_power_allocation_mode_from_settings_system,
 };
 use crate::systems::energy::lamp_buff::lamp_buff_system;
 use crate::systems::energy::power_output::soul_spa_power_output_system;
@@ -40,10 +42,14 @@ use crate::systems::soul_ai::SoulAiPlugin;
 use crate::world::regrowth::{RegrowthManager, tree_regrowth_system};
 use bevy::prelude::*;
 use hw_core::game_state::PlayMode;
-use hw_core::system_sets::{FamiliarAiSystemSet, ObstacleSyncSet, SoulAiSystemSet};
+use hw_core::system_sets::{
+    FamiliarAiSystemSet, ObstacleSyncSet, SoulAiSystemSet, StateSanityFlushSet,
+};
 use hw_energy::{
-    ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerConsumer, PowerGenerator,
-    PowerGrid, SoulSpaPhase, SoulSpaSite, SoulSpaTile, Unpowered, YardPowerGrid,
+    ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerAllocationMode, PowerConsumer,
+    PowerConsumerPolicy, PowerGenerator, PowerGrid, PowerGridAllocationSummary, PowerPriority,
+    PowerShedReason, PowerSupplyState, SoulSpaPhase, SoulSpaSite, SoulSpaTile, Unpowered,
+    YardPowerGrid,
 };
 use hw_jobs::visual_sync::{
     on_building_added_sync_visual, on_designation_added, on_designation_removed,
@@ -91,6 +97,7 @@ impl Plugin for LogicPlugin {
         app.init_resource::<RoomValidationState>();
         app.init_resource::<ObstaclePositionIndex>();
         app.init_resource::<EnergyUpdateDirty>();
+        app.init_resource::<PowerAllocationMode>();
         #[cfg(feature = "profiling")]
         app.init_resource::<hw_spatial::DoorPerfMetrics>()
             .init_resource::<crate::systems::jobs::ConstructionPerfMetrics>()
@@ -111,6 +118,12 @@ impl Plugin for LogicPlugin {
         app.register_type::<PowerGrid>()
             .register_type::<PowerGenerator>()
             .register_type::<PowerConsumer>()
+            .register_type::<PowerConsumerPolicy>()
+            .register_type::<PowerPriority>()
+            .register_type::<PowerSupplyState>()
+            .register_type::<PowerShedReason>()
+            .register_type::<PowerAllocationMode>()
+            .register_type::<PowerGridAllocationSummary>()
             .register_type::<Unpowered>()
             .register_type::<YardPowerGrid>()
             .register_type::<GeneratesFor>()
@@ -178,14 +191,17 @@ impl Plugin for LogicPlugin {
                 soul_spa_delivery_sync_system,
                 soul_spa_tile_activate_system,
                 bevy::ecs::schedule::ApplyDeferred,
+                sync_power_allocation_mode_from_settings_system,
                 detect_energy_update_dirty_system,
+                reconcile_power_grid_topology_system.run_if(energy_topology_should_run),
+                bevy::ecs::schedule::ApplyDeferred,
                 soul_spa_power_output_system.run_if(energy_power_output_should_run),
                 grid_recalc_system.run_if(energy_grid_recalc_should_run),
                 bevy::ecs::schedule::ApplyDeferred,
                 lamp_buff_system,
             )
                 .chain()
-                .after(SoulAiSystemSet::Update)
+                .after(StateSanityFlushSet)
                 .in_set(GameSystemSet::Logic),
         )
         .add_systems(
@@ -229,6 +245,7 @@ impl Plugin for LogicPlugin {
         .add_observer(on_yard_added)
         .add_observer(on_yard_removed)
         .add_observer(on_power_consumer_added)
+        .add_observer(on_power_generator_added)
         .add_observer(on_power_consumer_visual_added)
         .add_observer(on_unpowered_added)
         .add_observer(on_unpowered_removed);

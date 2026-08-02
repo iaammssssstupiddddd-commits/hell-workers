@@ -7,6 +7,7 @@ use hw_logistics::{StockpilePolicyPatch, zone::ZoneType};
 
 use crate::help::{HelpScrollCommand, HelpTopicId, HelpTopicStep};
 use crate::panels::task_list::{TaskCancelKind, TaskPriorityAdjustment};
+use crate::power::PowerPriorityValue;
 
 /// Copyable target descriptor resolved by the root adapter into concrete stockpile entities.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -36,6 +37,7 @@ pub enum UiIntent {
     SetDefaultTimeSpeed(TimeSpeed),
     SetDebugGizmosEnabled(bool),
     SetFpsDisplayEnabled(bool),
+    SetPowerPriorityEnabled(bool),
     InspectEntity(Entity),
     ClearInspectPin,
     SelectBuild(BuildingType),
@@ -69,6 +71,14 @@ pub enum UiIntent {
     ApplyStockpilePolicy {
         target: StockpilePolicyEditTarget,
         patch: StockpilePolicyPatch,
+    },
+    SetSoulSpaActiveSlots {
+        target: Entity,
+        active_slots: u32,
+    },
+    SetPowerConsumerPriority {
+        target: Entity,
+        priority: PowerPriorityValue,
     },
     BeginStockpilePolicyRangeEdit {
         patch: StockpilePolicyPatch,

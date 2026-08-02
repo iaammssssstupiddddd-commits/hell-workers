@@ -5,9 +5,18 @@ use super::{
 use crate::entities::damned_soul::Gender;
 use bevy::prelude::*;
 use hw_core::constants::{DREAM_DRAIN_RATE_REST, DREAM_MAX, MUD_MIXER_MUD_CAPACITY};
-use hw_energy::SoulSpaPhase;
+use hw_energy::{
+    PowerAllocationMode, PowerGridAllocationSummary, PowerPriority, PowerShedReason,
+    PowerSupplyState, SOUL_SPA_MAX_ACTIVE_SLOTS, SoulSpaPhase,
+};
 use hw_logistics::{StockpilePolicyState, derive_stockpile_policy_state};
-use hw_ui::models::inspection::{InspectionSoulGender, StockpileInspectionFields};
+use hw_ui::models::inspection::{
+    InspectionSoulGender, PowerInspectionFields, SoulSpaInspectionFields, StockpileInspectionFields,
+};
+use hw_ui::power::{
+    PowerAllocationModeValue, PowerInspectionRole, PowerPriorityValue, PowerShedReasonValue,
+    PowerSupplyStateValue,
+};
 
 impl EntityInspectionQuery<'_, '_> {
     pub(super) fn build_soul_model(
@@ -346,28 +355,58 @@ impl EntityInspectionQuery<'_, '_> {
         entity: Entity,
         model: &mut InspectionAccumulator,
     ) {
-        let Ok((consumer, consumes_from_opt, unpowered_opt)) = self.q_power_consumers.get(entity)
+        let Ok((consumer, policy, supply_state, consumes_from, _unpowered, _transform)) =
+            self.q_power_consumers.get(entity)
         else {
             return;
         };
 
-        let status = if unpowered_opt.is_some() {
-            "UNPOWERED"
-        } else {
-            "ACTIVE"
-        };
-        model.push_tooltip(format!("Demand: {:.1}W [{}]", consumer.demand, status));
-
-        if let Some(cf) = consumes_from_opt
-            && let Ok(grid) = self.q_power_grids.get(cf.0)
-        {
-            model.push_tooltip(format!(
-                "Grid: {:.1}W / {:.1}W [{}]",
-                grid.generation,
-                grid.consumption,
-                if grid.powered { "POWERED" } else { "BLACKOUT" }
-            ));
+        if model.header.is_empty() {
+            model.header = "Power Consumer".to_string();
         }
+
+        model.push_tooltip(format!("Demand: {:.1}W", consumer.demand));
+        model.push_tooltip(format!(
+            "Priority: {}",
+            policy
+                .map(|policy| format!("{:?}", policy.priority))
+                .unwrap_or_else(|| "Missing policy".to_string())
+        ));
+        model.push_tooltip(format!(
+            "Supply: {}",
+            supply_state_label(supply_state.copied())
+        ));
+
+        let grid_snapshot =
+            consumes_from.and_then(|relation| self.q_power_grids.get(relation.0).ok());
+        let shed_order_labels = grid_snapshot
+            .and_then(|(_, summary)| summary)
+            .map(|summary| self.power_shed_order_labels(summary))
+            .unwrap_or_default();
+        if let Some((grid, summary)) = grid_snapshot {
+            model.push_tooltip(format!(
+                "Grid: {:.1}W generation / {:.1}W demand",
+                grid.generation, grid.consumption,
+            ));
+            if let Some(summary) = summary {
+                model.push_tooltip(format!(
+                    "Allocated: {:.1}W [{:?}]",
+                    summary.served_demand, summary.mode
+                ));
+            }
+        } else {
+            model.push_tooltip("Connection: Disconnected".to_string());
+        }
+
+        model.power_fields = Some(power_inspection_fields(
+            PowerInspectionRole::Consumer,
+            consumes_from.map(|relation| relation.0),
+            grid_snapshot,
+            Some(consumer.demand),
+            policy.map(|policy| policy.priority),
+            supply_state.copied(),
+            shed_order_labels,
+        ));
     }
 
     pub(super) fn append_soul_spa_model(&self, entity: Entity, model: &mut InspectionAccumulator) {
@@ -379,6 +418,14 @@ impl EntityInspectionQuery<'_, '_> {
             model.header = "Soul Spa".to_string();
         }
 
+        let occupied_slots = self
+            .q_soul_spa_tiles
+            .iter()
+            .filter(|(tile, workers)| {
+                tile.parent_site == entity && workers.is_some_and(|workers| !workers.is_empty())
+            })
+            .count() as u32;
+
         match site.phase {
             SoulSpaPhase::Constructing => {
                 model.push_tooltip(format!(
@@ -387,28 +434,178 @@ impl EntityInspectionQuery<'_, '_> {
                 ));
             }
             SoulSpaPhase::Operational => {
-                let active_souls = if generator.output_per_soul > f32::EPSILON {
-                    (generator.current_output / generator.output_per_soul).round() as u32
+                if occupied_slots > site.active_slots {
+                    model.push_tooltip(format!(
+                        "Draining ({occupied_slots} active / {} configured)",
+                        site.active_slots
+                    ));
                 } else {
-                    0
-                };
-                model.push_tooltip("Status: Operational".to_string());
-                model.push_tooltip(format!(
-                    "Active: {}/{} souls",
-                    active_souls, site.active_slots
-                ));
+                    model.push_tooltip("Status: Operational".to_string());
+                    model.push_tooltip(format!(
+                        "Active: {occupied_slots}/{} souls",
+                        site.active_slots
+                    ));
+                }
                 model.push_tooltip(format!("Output: {:.1}W", generator.current_output));
                 if let Some(gen_for) = generates_for_opt
-                    && let Ok(grid) = self.q_power_grids.get(gen_for.0)
+                    && let Ok((grid, summary)) = self.q_power_grids.get(gen_for.0)
                 {
                     model.push_tooltip(format!(
-                        "Grid: {:.1}W / {:.1}W [{}]",
-                        grid.generation,
-                        grid.consumption,
-                        if grid.powered { "POWERED" } else { "BLACKOUT" }
+                        "Grid: {:.1}W generation / {:.1}W demand",
+                        grid.generation, grid.consumption,
                     ));
+                    if let Some(summary) = summary {
+                        model.push_tooltip(format!(
+                            "Allocated: {:.1}W [{:?}]",
+                            summary.served_demand, summary.mode
+                        ));
+                    }
                 }
             }
         }
+
+        model.soul_spa_fields = Some(SoulSpaInspectionFields {
+            operational: site.phase == SoulSpaPhase::Operational,
+            bones_delivered: site.bones_delivered,
+            bones_required: site.bones_required,
+            occupied_slots,
+            active_slots: site.active_slots,
+            max_active_slots: SOUL_SPA_MAX_ACTIVE_SLOTS,
+            output_watts: generator.current_output,
+        });
+        if site.phase != SoulSpaPhase::Operational {
+            return;
+        }
+        let grid_snapshot =
+            generates_for_opt.and_then(|relation| self.q_power_grids.get(relation.0).ok());
+        let shed_order_labels = grid_snapshot
+            .and_then(|(_, summary)| summary)
+            .map(|summary| self.power_shed_order_labels(summary))
+            .unwrap_or_default();
+        model.power_fields = Some(power_inspection_fields(
+            PowerInspectionRole::Generator,
+            generates_for_opt.map(|relation| relation.0),
+            grid_snapshot,
+            None,
+            None,
+            None,
+            shed_order_labels,
+        ));
+    }
+
+    fn power_shed_order_labels(&self, summary: &PowerGridAllocationSummary) -> Vec<String> {
+        summary
+            .shed_order
+            .iter()
+            .map(|entity| {
+                self.q_power_consumers
+                    .get(*entity)
+                    .ok()
+                    .and_then(|(_, _, _, _, _, transform)| transform)
+                    .map(|transform| {
+                        let (x, y) = hw_world::WorldMap::world_to_grid(transform.translation.xy());
+                        format!("({x}, {y})")
+                    })
+                    .unwrap_or_else(|| format!("consumer {}", entity.to_bits()))
+            })
+            .collect()
+    }
+}
+
+fn power_inspection_fields(
+    role: PowerInspectionRole,
+    grid_entity: Option<Entity>,
+    grid_snapshot: Option<(&hw_energy::PowerGrid, Option<&PowerGridAllocationSummary>)>,
+    demand_watts: Option<f32>,
+    priority: Option<PowerPriority>,
+    supply_state: Option<PowerSupplyState>,
+    shed_order_labels: Vec<String>,
+) -> PowerInspectionFields {
+    let mut fields = PowerInspectionFields {
+        role,
+        grid: grid_entity,
+        allocation_mode: None,
+        generation_watts: None,
+        total_demand_watts: None,
+        served_demand_watts: None,
+        reserve_watts: None,
+        deficit_watts: None,
+        consumer_count: None,
+        supplied_count: None,
+        shed_count: None,
+        invalid_count: None,
+        shed_order_labels,
+        demand_watts,
+        priority: priority.map(power_priority_value),
+        supply_state: supply_state.map(power_supply_state_value),
+    };
+    if let Some((grid, summary)) = grid_snapshot {
+        fields.generation_watts = Some(grid.generation);
+        fields.total_demand_watts = Some(grid.consumption);
+        if let Some(summary) = summary {
+            fields.allocation_mode = Some(power_allocation_mode_value(summary.mode));
+            fields.generation_watts = Some(summary.generation);
+            fields.total_demand_watts = Some(summary.total_demand);
+            fields.served_demand_watts = Some(summary.served_demand);
+            fields.reserve_watts = Some((summary.generation - summary.total_demand).max(0.0));
+            fields.deficit_watts = Some((summary.total_demand - summary.generation).max(0.0));
+            fields.consumer_count = Some(summary.consumer_count);
+            fields.supplied_count = Some(summary.supplied_count);
+            fields.shed_count = Some(summary.shed_count);
+            fields.invalid_count = Some(summary.invalid_count);
+        }
+    }
+    fields
+}
+
+const fn power_priority_value(priority: PowerPriority) -> PowerPriorityValue {
+    match priority {
+        PowerPriority::Low => PowerPriorityValue::Low,
+        PowerPriority::Normal => PowerPriorityValue::Normal,
+        PowerPriority::High => PowerPriorityValue::High,
+    }
+}
+
+const fn power_allocation_mode_value(mode: PowerAllocationMode) -> PowerAllocationModeValue {
+    match mode {
+        PowerAllocationMode::LegacyAllOrNone => PowerAllocationModeValue::LegacyAllOrNone,
+        PowerAllocationMode::PriorityPrefix => PowerAllocationModeValue::PriorityPrefix,
+    }
+}
+
+const fn power_supply_state_value(state: PowerSupplyState) -> PowerSupplyStateValue {
+    match state {
+        PowerSupplyState::Supplied => PowerSupplyStateValue::Supplied,
+        PowerSupplyState::Shed { reason } => PowerSupplyStateValue::Shed {
+            reason: power_shed_reason_value(reason),
+        },
+        PowerSupplyState::Disconnected => PowerSupplyStateValue::Disconnected,
+        PowerSupplyState::InvalidDemand => PowerSupplyStateValue::InvalidDemand,
+    }
+}
+
+const fn power_shed_reason_value(reason: PowerShedReason) -> PowerShedReasonValue {
+    match reason {
+        PowerShedReason::InsufficientGeneration => PowerShedReasonValue::InsufficientGeneration,
+        PowerShedReason::RestoreMargin => PowerShedReasonValue::RestoreMargin,
+        PowerShedReason::LegacyGlobalDeficit => PowerShedReasonValue::LegacyGlobalDeficit,
+    }
+}
+
+fn supply_state_label(state: Option<PowerSupplyState>) -> &'static str {
+    match state {
+        Some(PowerSupplyState::Supplied) => "Supplied",
+        Some(PowerSupplyState::Shed {
+            reason: hw_energy::PowerShedReason::InsufficientGeneration,
+        }) => "Shed: insufficient generation",
+        Some(PowerSupplyState::Shed {
+            reason: hw_energy::PowerShedReason::RestoreMargin,
+        }) => "Shed: waiting for restore margin",
+        Some(PowerSupplyState::Shed {
+            reason: hw_energy::PowerShedReason::LegacyGlobalDeficit,
+        }) => "Shed: legacy grid deficit",
+        Some(PowerSupplyState::Disconnected) => "Disconnected",
+        Some(PowerSupplyState::InvalidDemand) => "Invalid demand",
+        None => "Rebuilding",
     }
 }

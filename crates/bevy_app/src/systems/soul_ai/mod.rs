@@ -11,6 +11,7 @@ pub mod scheduling {
 }
 
 use crate::systems::GameSystemSet;
+use hw_core::system_sets::StateSanityFlushSet;
 use scheduling::{FamiliarAiSystemSet, SoulAiSystemSet};
 
 pub struct SoulAiPlugin;
@@ -53,7 +54,8 @@ impl Plugin for SoulAiPlugin {
                 // Update → Decide 間の同期
                 bevy::ecs::schedule::ApplyDeferred
                     .after(SoulAiSystemSet::Update)
-                    .before(SoulAiSystemSet::Decide),
+                    .before(SoulAiSystemSet::Decide)
+                    .in_set(StateSanityFlushSet),
                 // Decide → Execute 間の同期
                 bevy::ecs::schedule::ApplyDeferred
                     .after(SoulAiSystemSet::Decide)

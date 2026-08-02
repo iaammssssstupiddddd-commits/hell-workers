@@ -513,8 +513,10 @@ SoulSpaSite (root)
 
 - 魂が `GeneratePower` タスクを取得 → タイルへ移動（`GoingToTile`）→ 発電中（`Generating`）
 - 発電中は毎秒 Dream を 0.5 消費し、Dream が 10 以下になると自動離脱
-- `soul_spa_power_output_system` が稼働タイル数 × `output_per_soul` で `PowerGenerator.current_output` を更新
-- `SoulSpaSite.active_slots` で同時稼働上限（最大 4）を制限できる
+- `soul_spa_power_output_system` が保存対象の `SoulSpaTile.parent_site` と `TaskWorkers` から稼働数を集計し、
+  稼働タイル数 × `output_per_soul` で `PowerGenerator.current_output` を更新する。表示用 `Children` は論理集計に使わない
+- `SoulSpaSite.active_slots` は情報パネルから 0〜4 で設定できる。同一委譲cycleのpending割当も枠へ数え、
+  枠を減らした時は既存workerを追い出さず、occupiedが設定値まで減る間の新規割当だけを止める
 
 ### 10.5 発電量
 
@@ -544,7 +546,9 @@ SoulSpaSite (root)
 | `soul_spa_tile_activate_system` | Update / Logic（`delivery_sync` の後） | Operational 遷移時にタイルへ Designation 付与 |
 | `soul_spa_power_output_system` | Update / Logic（dirty時） | 稼働タイル数から `current_output` 更新 |
 
-production登録は`auto_haul → delivery_sync → tile_activate → ApplyDeferred → dirty detection → power output → grid recalc → ApplyDeferred → lamp buff`を`.chain()`で固定する。
+production登録はSoul state-sanity flush後に
+`auto_haul → delivery_sync → tile_activate → ApplyDeferred → settings mode sync → dirty detection → topology reconciliation → ApplyDeferred → power output → individual allocation → ApplyDeferred → lamp buff`
+を`.chain()`で固定する。
 
 ### 10.8 インフォパネル表示
 
@@ -553,7 +557,7 @@ Soul Spa を選択すると以下が表示される（`append_soul_spa_model` �
 | フェーズ | 表示 |
 |:---|:---|
 | Constructing | `Status: Constructing (bones_delivered/bones_required)` |
-| Operational | `Status: Operational` → `Active: N/M souls` → `Output: X.XW` → `Grid: gen/con [POWERED\|BLACKOUT]` |
+| Operational | `Status: Operational` → `Active: N/M souls`（超過中はDraining）→ `Output: X.XW` → Grid generation / served / demand / mode |
 
 ---
 
@@ -570,26 +574,27 @@ Phase 1c で実装された `BuildingType::OutdoorLamp` の電力消費施設（
 資材: `Bone × 2`
 
 完成時に `post_process.rs` の `setup_outdoor_lamp` が `PowerConsumer { demand: OUTDOOR_LAMP_DEMAND }` を付与。  
-`on_power_consumer_added` Observer が Yard を検索し、対応する `PowerGrid` への `ConsumesFrom` を自動付与する。  
-Yard 外に配置した場合は `ConsumesFrom` なし → 常時 `Unpowered`。
+`on_power_consumer_added` Observer はenergy topologyをdirtyにし、ordered reconcilerが位置を含むYardのcanonical
+`PowerGrid`へ`ConsumesFrom`を接続する。Yard外では`ConsumesFrom`なし、`PowerSupplyState::Disconnected + Unpowered`となる。
 
 ### 11.3 電力グリッド統合
 
 ```
 OutdoorLamp entity
   ├─ PowerConsumer { demand }
-  ├─ ConsumesFrom(grid_entity)   ← on_power_consumer_added Observer が付与
-  └─ Unpowered                   ← #[require(Unpowered)]、通電時に除去
+  ├─ PowerConsumerPolicy { priority } ← 保存対象、既定Normal
+  ├─ ConsumesFrom(grid_entity)   ← topology reconcilerが付与・修復
+  ├─ PowerSupplyState            ← runtime配電結果と遮断理由
+  └─ Unpowered                   ← #[require]のfail-closed mirror、通電時に除去
 ```
 
-`grid_recalc_system` がグリッドの generation/consumption を集計し、停電状態を更新する:
-- `new_cons == 0 || generation >= consumption` → `powered: true`、全コンシューマーから `Unpowered` 除去
-- それ以外 → `powered: false`（BLACKOUT）、全コンシューマーに `Unpowered` 挿入
+`grid_recalc_system` はグリッドのgenerationと有効需要を集計し、既定では
+`High → Normal → Low → y/x座標`のstrict prefixで個別配電する。途中で需要が収まらなくなったconsumer以降は
+bin-packingせず`Shed`となり、既知のshed復旧だけrestore marginを要求する。Settingsで優先配電を無効にした場合は
+Legacy all-or-noneへ切り替わる。`PowerGrid.powered`は「全consumer供給済み」の互換値であり、個別状態の正本ではない。
 
-**実装上の注意**: `Unpowered` 同期は `powered_changed`（電力状態遷移）時だけでなく、  
-グリッドが通電中にコンシューマーが追加された場合（`new_powered && cons_changed`）にも実行する。  
-`PowerConsumer` は `#[require(Unpowered)]` によりデフォルトで `Unpowered` が付与されるため、  
-状態変化なしでもコンシューマー追加時に明示的に `Unpowered` を除去する必要がある。
+`PowerConsumer`は`#[require(Unpowered, PowerConsumerPolicy)]`により未接続時をfail-closedにする。
+allocation transactionが`PowerSupplyState`と`Unpowered`を同時に同期し、`ApplyDeferred`後のeffectだけがこれを読む。
 
 ### 11.4 バフシステム
 
@@ -612,17 +617,16 @@ OutdoorLamp entity
 
 Outdoor Lamp を選択すると以下が表示される（`append_power_consumer_model` が出力）。
 
-```
-Demand: X.XW [ACTIVE]        ← Unpowered なし
-Demand: X.XW [UNPOWERED]     ← Unpowered あり
-Grid: gen/con [POWERED|BLACKOUT]   ← ConsumesFrom 接続時のみ
-```
+情報パネルは需要、priority、接続先、個別供給状態・遮断理由、Gridのgeneration / served / total demand、
+`Priority prefix` / `Legacy all-or-none` modeを表示する。Priorityボタンは表示中Entityを固定targetとして
+`Low → Normal → High`を循環し、rootでliveなconsumer/policyを再検証してから適用する。
 
 ### 11.7 システム登録（LogicPlugin）
 
 | システム / Observer | フェーズ | 役割 |
 |:---|:---|:---|
-| `on_power_consumer_added` | Observer `On<Add, PowerConsumer>` | `ConsumesFrom` 付与 |
-| `grid_recalc_system` | Update / Logic（dirty時、`soul_spa_power_output_system` の後） | generation/consumption 集計、停電管理 |
+| `on_power_consumer_added` | Observer `On<Add, PowerConsumer>` | topology dirty通知 |
+| `reconcile_power_grid_topology_system` | Update / Logic（topology dirty時） | Yard/Grid一意化、orphan/duplicate整理、generator/consumer接続修復 |
+| `grid_recalc_system` | Update / Logic（dirty時、`soul_spa_power_output_system` の後） | generation/demand集計、個別配電、summaryとruntime state同期 |
 | `lamp_buff_system` | Update / Logic（gridの`Unpowered`反映後） | SlowSimulationClockのstepごとに通電ランプ半径内Soulへバフ適用 |
 | `sync_powered_visual_system` | `GameSystemSet::Visual` | `PoweredVisualState` → スプライト色同期 |

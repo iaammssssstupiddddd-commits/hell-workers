@@ -20,14 +20,16 @@ pub(crate) fn soul_energy() -> Result<HelpContribution, super::super::HelpCatalo
                     "Yard の電力網を確認する",
                     [
                         "電力は Yard ごとのリアルタイムな発電量と需要で決まり、蓄電はしません。",
-                        "Outdoor Lamp を選ぶと Demand と Grid の発電量 / 消費量を確認できます。発電が需要を下回ると BLACKOUT になり、接続中の設備が停止します。",
+                        "Outdoor Lamp を選ぶと、接続、発電・供給済み需要・予備力または不足量、設備件数、供給状態と遮断順を確認できます。供給不足時は High、Normal、Low の順で給電し、同じ優先度では位置順に遮断します。",
+                        "情報パネルの Priority ボタンで設備の優先度を変更できます。Settings の Power priority allocation を無効にすると、需要超過時は接続中の全設備が停止する従来方式へ戻ります。",
                     ],
                 ),
                 HelpEntry::new(
                     HelpEntryId::new("soul-energy-recovery"),
                     "Soul Spa で発電する",
                     [
-                        "Yard 内に Soul Spa を建てて Bone を搬入すると、Operational になった発電枠へ Soul が入れます。",
+                        "Yard 内に Soul Spa を建てて選択すると Bone の搬入進捗を確認できます。Operational になると出力と電力網が表示され、発電枠へ Soul が入れます。",
+                        "情報パネルの Active slots は 0〜4 で変更できます。稼働数より小さくしても作業中の Soul は追い出さず、終了後の新規割り当てだけを設定枠まで止めます。",
                         "発電中の Soul は Dream を消費します。Lamp を増やしたら、発電量、Soul の Dream、Yard への接続を一緒に確認してください。",
                     ],
                 ),

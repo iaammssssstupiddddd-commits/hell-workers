@@ -180,7 +180,7 @@
 | グリッド実体 | `PowerGrid`（Yard 単位） | `Room` 自体 | `FluidGrid`（配管連結成分単位） |
 | 供給側 Relationship | `GeneratesFor(grid)` | —（床 / 壁 lookup から毎回集計）※ | `SuppliesTo(grid)` |
 | 消費側 Relationship | `ConsumesFrom(grid)` | —（部屋内判定） | `DrainsFrom(grid)` |
-| 派生状態 | `Unpowered` | `RoomVentilationState` | `RoomDrainageState` / Purifier の `Unwatered` |
+| 派生状態 | `PowerSupplyState` + 互換`Unpowered` | `RoomVentilationState` | `RoomDrainageState` / Purifier の `Unwatered` |
 | 本設設備への停止反映 | 消費設備自身を停止 | Room の `MiasmaInfested` を理由に `InfrastructureDisabled` | 個体 `Unwatered` は該当 Purifier、Room state の `Unwatered` は Room 内本設設備へ `InfrastructureDisabled` |
 | 再計算システム | `grid_recalc_system` | `room_ventilation_recalc_system` | `fluid_grid_recalc_system` |
 | 視覚反映 | `PoweredVisualState`（VisualMirror） | Room overlay 色変更 | 同 VisualMirror パターン |
@@ -189,7 +189,9 @@
 - Room を Target とする Relationship（`VentilatesFor` 等）は再検出のたびに消滅する。素直に永続 Relationship を張るのではなく、**床設備は `RoomTileLookup`、壁設備は計画で追加する `RoomBoundaryLookup` から Room を毎回逆引きする**（電力と違い供給側の永続登録が不要になり、despawn 問題を回避できる）。
 - 初期実装は `provided == 0` を即時 `MiasmaInfested` とする。follow-up で猶予タイマーを導入する場合も Room エンティティには持たせず、タイル集合をキーとする Resource 等で再検出をまたいで保持する。
 
-- **Scourge Fan の電力接続**: 既存の `PowerConsumer` + `#[require(Unpowered)]` + `on_power_consumer_added` Observer を使う。PowerGrid entity は Yard 所有のまま、Consumer lookup を paired Site まで拡張する。pair を解決できない送風機は `Unpowered` のままなので、設置時 UI で警告を出すこと。
+- **Scourge Fan の電力接続**: 既存の`PowerConsumer + PowerConsumerPolicy`とroot energy topology reconcilerを使う。
+  PowerGrid entityはYard所有のまま、owner resolverをpaired Siteまで拡張する。pairを解決できない送風機は
+  `Disconnected + Unpowered`のままとし、設置時UIで警告する。HVAC側でallocatorを複製しない。
 - **配管の dirty 追跡**: 導水管の追加・削除では topology dirty、取水門の通電変化では supply dirty を立てる。連結成分の再構築は topology dirty frame に限定し、停電だけで flood fill を再実行しない。
 
 ### 6.5 進行段階（プレイヤー体験）

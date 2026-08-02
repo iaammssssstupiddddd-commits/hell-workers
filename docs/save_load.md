@@ -111,6 +111,9 @@ HELL_WORKERS_SAVE
 - `ReservedForTask` は header 無し v0 body を読む間だけ registry に登録する legacy shim である。v0 deserialize 後、schema 検証より前に全 entity から除去する。v1 の allow-list には含めず、v1 body に混入した同型は schema reject とする。
 - Familiar operation / policy の追加は container header を変えない additive component migration である。
   header は v1 のまま維持し、旧 v0 / v1 body の component 欠落を rehydrate 境界で補完する。
+- Soul Spa `active_slots` と `PowerConsumerPolicy` も同じv1 additive migrationである。旧consumerの欠落policyは
+  `Normal`、Soul Spaの範囲外slotは0〜4へ正規化する。`PowerSupplyState`、`Unpowered`、grid allocation summaryは
+  正本ではないため保存せず、load/rollback後のenergy transactionで再構築する。
 - 書き込みは同一ディレクトリの `create_new` で確保した一意 temp file を `sync_all` した後に rename する。固定 `.tmp` 名を共有しないため、並列 test や別プロセスと temp file 名が衝突しない。保存先そのものの複数プロセス排他はこの機構の対象外である。
 
 ## 保存対象
@@ -130,7 +133,7 @@ HELL_WORKERS_SAVE
 - タスク・建築（`Designation`, `Priority`, 手動 Chop / Mine の positive provenance
   `PlayerIssuedDesignation`, `Blueprint`, `Building`, construction site 等）
 - 物流（`ResourceItem`, `Stockpile`, `StockpilePolicy`, `TransportRequest`, `Wheelbarrow` 等）
-- エネルギー（`PowerGrid`, `SoulSpaSite` 等）
+- エネルギー（`PowerGrid`, `SoulSpaSite.active_slots`, `PowerConsumerPolicy` 等）
 - ワールド採取対象・ゾーン（`Tree`, `Rock`, `Tile`, `Site`, `Yard`, `PairedSite`/`PairedYard`）
 
 各 Entity に付く **永続 simulation state の Relationship Source / Target**（runtime-derived obstacle marker / mirror と transient gathering relationship を除く）、および `Transform` 等の allow-list コンポーネントも保存する。
@@ -145,6 +148,7 @@ HELL_WORKERS_SAVE
 | 派生キャッシュ | 空間グリッド、`SharedResourceCache`、`ReservationSignatureCache`、transport producer cache、`CachedStockpileGroups`、`ObstaclePositionIndex`、task input revisions、Familiar/Blueprint/wheelbarrow diagnostics | root reset hookでdefault化する。予約同期 timerもresetし、次のPerceiveが初回同期として完全snapshot/診断cycleを再構築 |
 | runtime obstacle provenance / navigation cache | `ObstacleSourceKind`、`BuildingFootprint`、`ObstaclePositionIndex`、raw `WorldMap.obstacles` / `doors` / `bridged_tiles` | `rehydrate_obstacle_runtime` が durable semantic source から marker / cache を再構築。保存済み Door state は最終 override として使う |
 | transient gathering | `GatheringSpot`、`GatheringVisuals`、`ParticipatingIn`、`GatheringParticipants` | v1 saveから除外。旧bodyのrelationship componentはschema検証前に破棄し、replace hookはspotとlinked aura/objectをdespawn。Soulは非参加状態から通常AIへ戻る |
+| runtime energy state | `PowerSupplyState`、`Unpowered`、`PowerGridAllocationSummary`、`PowerAllocationMode` | 旧bodyのcomponentはschema検証前に除去。`PowerConsumer` requirementがload直後を`Unpowered`へfail-closed化し、runtime modeとfull energy rebuildがtopology・個別供給・summaryをeffect前に確定 |
 | legacy task marker | `ReservedForTask` | header 無し v0 body の deserialize だけで受け付け、schema 検証前に除去する。v1 save / load には含めず、v1 body の混入は reject |
 | ビジュアル / UI | `hw_visual/*`, `hw_ui/*`, `SoulUiLinks`, Sprite / 3D プロキシ | **rehydrate**（下記）と observer / startup で再生成 |
 | 地形描画 | `TerrainChunk` | 起動時 seed から生成（v1 header の seed 照合で整合を保証） |
@@ -167,9 +171,10 @@ Reflect 登録、`DynamicWorldBuilder` の allow-list、root entity の収集を
 `reflect_auto_register` で登録する `external_registered_component` として別記する。schema はこれを
 重複登録せず、通常の `App` の registry に `ReflectComponent` data があることをテストで固定する。
 
-`ParticipatingIn` / `GatheringParticipants` は `runtime_derived_exclusion` inventoryに置く。型登録は
+`ParticipatingIn` / `GatheringParticipants` / `PowerSupplyState` / `Unpowered` /
+`PowerGridAllocationSummary` は `runtime_derived_component` inventoryに置く。型登録は
 legacy bodyのdeserializeのため維持するが、新規saveのallow-listには含めない。deserialize後かつschema
-検証前にこれらを除去するため、旧bodyが持つ消滅済み`GatheringSpot`へのEntity参照をlive worldへ渡さない。
+検証前にこれらを除去するため、旧bodyが持つ消滅済みEntity参照やstale供給結果をlive worldへ渡さない。
 
 `ReservedForTask` も同じ TypePath を保つ loader 専用の Reflect component として別登録する。ただし
 `persisted_component` には入れない。legacy v0 のみ deserialize 後に除去し、v1 body に同型があれば
@@ -234,7 +239,7 @@ root message型は`MessagesPlugin`の単一typed macroから初期化と`Message
 | --- | --- | --- |
 | root interaction | selection、hover、move placement、build/zone/task/companion context、Stockpile policy範囲編集patch、pending PlayMode | default化し、`PlayMode::Normal`を予約 |
 | save outcome | `SaveLoadOutcome` Message | `SavePlugin`専用hookで旧bufferをclear。最終outcomeは全reset後にdispatcherが発行 |
-| `hw_ui` | rename、inspection/pin、drag、entity list model/index、area edit history、text pending、配置feedback、通知Message/center/history/unread、`UiIntent` / `TextInputIntent`、task filter/sort、inline cancel confirmation、Stockpile policy editorの旧Entity付きbutton action、`HelpPanelState`/navigation・本文scroll、`OperationDialogState`/target/本文scroll | hookでclear。InfoPanel / Help / Operation dialog rootを同期的に非表示化し、task listの全`TaskListDynamicNode`と動的通知rowをdespawnする。その他のstatic UI root、サイズ、theme、searchは保持 |
+| `hw_ui` | rename、inspection/pin、drag、entity list model/index、area edit history、text pending、配置feedback、通知Message/center/history/unread、`UiIntent` / `TextInputIntent`、task filter/sort、inline cancel confirmation、Stockpile policy / Soul Spa slot / Power priority editorの旧Entity付きbutton action、`HelpPanelState`/navigation・本文scroll、`OperationDialogState`/target/本文scroll | hookでclearし、静的editor actionをplaceholder/defaultへ戻す。InfoPanel / Help / Operation dialog rootを同期的に非表示化し、task listの全`TaskListDynamicNode`と動的通知rowをdespawnする。その他のstatic UI root、サイズ、theme、searchは保持 |
 | root Help | `HelpPauseGuard`、pending capture | Helpがpauseを所有した場合だけunpauseしてPause rootを同期的に非表示化する。pre-existing Pauseは維持し、guard/pendingをdefault化 |
 | root task UI | task list snapshot、task input revisions、Familiar/Blueprint diagnostics | default化してdirty化し、新worldの次frame/cycleでPendingから再構築 |
 | `hw_visual` | owner cache、3D proxy、speech/dream/haul/task-area等の独立transient entity、`GatheringSpot`とlinked aura/object | hookでdespawn + cache clear。root固有のFamiliar range shellもrehydrate cleanupでdespawn |
@@ -250,7 +255,8 @@ new worldを書いた後には手動でclearしない。これによりloaded co
 rebuild systemが観測できる。
 
 `MessagesPlugin` の単一 inventory は `TaskActionOutcome`、`FamiliarSettingsChangeRequest` /
-`FamiliarSettingsChangeOutcome`、`FamiliarRosterReleasedVisualMessage` を含み、register と replace 時 clear を
+`FamiliarSettingsChangeOutcome`、`FamiliarRosterReleasedVisualMessage`、`SoulSpaSlotsChangeOutcome`、
+`PowerConsumerPolicyChangeOutcome`を含み、register と replace 時 clear を
 同じ型一覧から生成する。
 `PlayerIssuedDesignation` と `Priority` は durable なので load 後も許可された manual task の capability を復元するが、
 marker のない legacy / auto task を「auto marker が消えた manual task」と推測してはならず read-only とする。
@@ -271,6 +277,8 @@ marker のない legacy / auto task を「auto marker が消えた manual task�
 | Floor / wall construction | site / tile の `Name`、site の visual state、tile の visual mirror と Sprite | durable な site / tile state から直接生成。Logic 停止中でも床・壁タイルと進捗表示を復元 |
 | Tree / Rock / ResourceItem / Stockpile | Sprite（spawn 箇所と同じ画像・サイズ） | rehydrate 内で直接挿入 |
 | 旧形式の Familiar 設定 | 欠落した `FamiliarOperation` / `FamiliarPolicy` | shell より前に `rehydrate_familiar_settings` を実行。operation 欠落時は default threshold と `max(default max, Commanding roster数)`、policy 欠落時は全許可 / Normal を補完する。保存済み operation は維持し、保存済み policy は effective semantics を変えず正規化する |
+| 旧形式のSoul Energy設定 | 範囲外`SoulSpaSite.active_slots`、欠落`PowerConsumerPolicy` | active slotsを0〜4へclampし、旧consumerだけNormal policyを補完する。保存済みLow/Normal/Highは維持する |
+| runtime energy | Yard/Grid一対一、generator/consumer relationship、個別供給stateとsummary | reset時に`EnergyUpdateDirty::request_full_rebuild()`。最初のLogicでduplicate/orphan cleanupとrewireを行い、output/allocationをeffect前に再構築する |
 | 旧形式の通常 Stockpile セル | 欠落した `StockpilePolicy` の互換既定値 | `BelongsTo(owner)` の owner が durable な `Yard` のセルだけへ `Any` / `Normal` / `target_amount = capacity` / export許可を挿入。既存の `Any` / `Only(ResourceType)` は意味を維持し、`Selected(StockpileResourceSet)` を含むpolicyはacceptance集合とtargetを正規化する。Tank / Mixer root、marker が保存されない Tank companion、owner 不明の storage へは推測で付与しない |
 | 障害物 provenance / pathfinding cache | source-aware marker、Building footprint mirror、`ObstaclePositionIndex`、raw obstacle / Door / Bridge cache | `rehydrate_obstacle_runtime` が Tree/Rock、construction、Building/Blueprint/site の semantic source matrix から再構築 |
 
@@ -336,7 +344,10 @@ Phase B（実行中タスクの完全復元）は follow-up。
 
 ## Relationship と reconcile
 
-計画書は `RelationshipHookMode::Skip` 前提の reconcile pass を想定していたが、本実装では **Relationship Target 型も allow-list に含めて保存** する。保存時点で Source/Target が整合したスナップショットとして書き出されるため、追加の reconcile pass は不要。
+Relationship Target型もallow-listへ含め、通常はSource/Targetが整合したsnapshotとして保存する。
+ただしSoul Energyは通常spawn・load・rollback・旧重複fixtureを同じ経路に通すため、保存値を盲信せず
+`reconcile_power_grid_topology_system`でYardごとのcanonical Gridを1件にし、`GeneratesFor` / `ConsumesFrom`を
+Transform位置から再接続する。これはruntime topology repairであり、durable policyの変換ではない。
 
 ## Reflect 登録
 

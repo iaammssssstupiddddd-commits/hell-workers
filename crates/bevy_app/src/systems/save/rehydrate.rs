@@ -86,6 +86,8 @@ pub(super) fn rehydrate_after_load(world: &mut World) -> Result<(), RehydratePre
     validate_rehydrate_prerequisites(world)?;
     rehydrate_familiar_settings(world)?;
     rehydrate_stockpile_policies(world);
+    rehydrate_power_consumer_policies(world);
+    rehydrate_soul_spas(world);
     drop_orphaned_inventory_items(world);
 
     world.resource_scope::<GameAssets, _>(|world, game_assets| {
@@ -207,6 +209,30 @@ pub(super) fn rehydrate_stockpile_policies(world: &mut World) {
         if *policy != normalized {
             *policy = normalized;
         }
+    }
+}
+
+/// Normalizes durable Soul Spa controls before the rebuilt energy pipeline can observe them.
+pub(super) fn rehydrate_soul_spas(world: &mut World) {
+    let mut sites = world.query::<&mut hw_energy::SoulSpaSite>();
+    for mut site in sites.iter_mut(world) {
+        site.normalize_active_slots();
+    }
+}
+
+/// Adds the compatibility Normal policy to consumers saved before B3.
+pub(super) fn rehydrate_power_consumer_policies(world: &mut World) {
+    let missing: Vec<Entity> = {
+        let mut consumers = world.query_filtered::<Entity, (
+            With<hw_energy::PowerConsumer>,
+            Without<hw_energy::PowerConsumerPolicy>,
+        )>();
+        consumers.iter(world).collect()
+    };
+    for entity in missing {
+        world
+            .entity_mut(entity)
+            .insert(hw_energy::PowerConsumerPolicy::default());
     }
 }
 

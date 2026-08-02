@@ -121,6 +121,18 @@ pub(super) fn handle_pressed_action(
         MenuAction::BeginStockpilePolicyRangeEdit { patch } => {
             ui_intents.write(UiIntent::BeginStockpilePolicyRangeEdit { patch });
         }
+        MenuAction::SetSoulSpaActiveSlots {
+            target,
+            active_slots,
+        } => {
+            ui_intents.write(UiIntent::SetSoulSpaActiveSlots {
+                target,
+                active_slots,
+            });
+        }
+        MenuAction::SetPowerConsumerPriority { target, priority } => {
+            ui_intents.write(UiIntent::SetPowerConsumerPriority { target, priority });
+        }
         MenuAction::AdjustTaskPriority {
             entity,
             expected_work_type,
@@ -147,7 +159,8 @@ pub(super) fn handle_pressed_action(
         | MenuAction::SetCameraPanSpeed(_)
         | MenuAction::SetCameraMousePanEnabled(_)
         | MenuAction::SetDebugGizmosEnabled(_)
-        | MenuAction::SetFpsDisplayEnabled(_) => {
+        | MenuAction::SetFpsDisplayEnabled(_)
+        | MenuAction::SetPowerPriorityEnabled(_) => {
             // Slider/Checkbox observer 経由で発行される
         }
     }

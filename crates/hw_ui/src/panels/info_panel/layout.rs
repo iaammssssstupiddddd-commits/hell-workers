@@ -10,6 +10,7 @@ use bevy::ui::{BackgroundGradient, ColorStop, LinearGradient, RelativeCursorPosi
 use hw_logistics::{STOCKPILE_ACCEPTANCE_RESOURCES, StockpilePolicyPatch};
 
 use crate::intents::StockpilePolicyEditTarget;
+use crate::power::PowerPriorityValue;
 
 const INFO_PANEL_MAX_HEIGHT_VH: f32 = 58.0;
 
@@ -106,6 +107,83 @@ fn spawn_stockpile_editor_button(
             text_entity = button
                 .spawn((
                     Text::new(label),
+                    TextFont {
+                        font: game_assets.font_ui().clone().into(),
+                        font_size: crate::theme::font_size_rem(theme.typography.font_size_xs),
+                        weight: FontWeight::SEMIBOLD,
+                        ..default()
+                    },
+                    TextColor(theme.colors.text_primary_semantic),
+                ))
+                .id();
+        })
+        .id();
+    (button, text_entity)
+}
+
+fn spawn_soul_spa_slot_button(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &dyn UiAssets,
+    theme: &UiTheme,
+    label: &str,
+) -> Entity {
+    parent
+        .spawn((
+            Button,
+            Node {
+                width: Val::Px(30.0),
+                min_height: Val::Px(28.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            BackgroundColor(theme.colors.button_default),
+            MenuButton(MenuAction::SetSoulSpaActiveSlots {
+                target: Entity::PLACEHOLDER,
+                active_slots: 0,
+            }),
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new(label),
+                TextFont {
+                    font: game_assets.font_ui().clone().into(),
+                    font_size: crate::theme::font_size_rem(theme.typography.font_size_small),
+                    weight: FontWeight::SEMIBOLD,
+                    ..default()
+                },
+                TextColor(theme.colors.text_primary_semantic),
+            ));
+        })
+        .id()
+}
+
+fn spawn_power_priority_button(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &dyn UiAssets,
+    theme: &UiTheme,
+) -> (Entity, Entity) {
+    let mut text_entity = Entity::PLACEHOLDER;
+    let button = parent
+        .spawn((
+            Button,
+            Node {
+                width: Val::Percent(100.0),
+                min_height: Val::Px(28.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            BackgroundColor(theme.colors.button_default),
+            MenuButton(MenuAction::SetPowerConsumerPriority {
+                target: Entity::PLACEHOLDER,
+                priority: PowerPriorityValue::Normal,
+            }),
+        ))
+        .with_children(|button| {
+            text_entity = button
+                .spawn((
+                    Text::new("Priority"),
                     TextFont {
                         font: game_assets.font_ui().clone().into(),
                         font_size: crate::theme::font_size_rem(theme.typography.font_size_xs),
@@ -693,6 +771,124 @@ pub fn spawn_info_panel_ui(
             .id();
         info_panel_nodes.stockpile_group = Some(stockpile_group);
 
+        let soul_spa_group = parent
+            .spawn(Node {
+                display: Display::None,
+                width: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(5.0),
+                ..default()
+            })
+            .with_children(|column| {
+                spawn_info_section_divider(column, game_assets, theme, "Soul Energy");
+                info_panel_nodes.soul_spa_status = Some(
+                    column
+                        .spawn((
+                            Text::new(""),
+                            TextFont {
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: crate::theme::font_size_rem(
+                                    theme.typography.font_size_small,
+                                ),
+                                weight: FontWeight::SEMIBOLD,
+                                ..default()
+                            },
+                            TextColor(theme.colors.text_primary_semantic),
+                        ))
+                        .id(),
+                );
+                info_panel_nodes.soul_spa_output = Some(
+                    column
+                        .spawn((
+                            Text::new(""),
+                            TextFont {
+                                font: game_assets.font_ui().clone().into(),
+                                font_size: crate::theme::font_size_rem(
+                                    theme.typography.font_size_small,
+                                ),
+                                ..default()
+                            },
+                            TextColor(theme.colors.text_primary_semantic),
+                        ))
+                        .id(),
+                );
+
+                info_panel_nodes.soul_spa_controls = Some(
+                    column
+                        .spawn(Node {
+                            width: Val::Percent(100.0),
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: Val::Px(5.0),
+                            ..default()
+                        })
+                        .with_children(|row| {
+                            info_panel_nodes.soul_spa_slots_decrease_button =
+                                Some(spawn_soul_spa_slot_button(row, game_assets, theme, "−"));
+                            info_panel_nodes.soul_spa_slots_text = Some(
+                                row.spawn((
+                                    Text::new("Active slots"),
+                                    TextFont {
+                                        font: game_assets.font_ui().clone().into(),
+                                        font_size: crate::theme::font_size_rem(
+                                            theme.typography.font_size_small,
+                                        ),
+                                        weight: FontWeight::SEMIBOLD,
+                                        ..default()
+                                    },
+                                    TextColor(theme.colors.text_primary_semantic),
+                                    Node {
+                                        flex_grow: 1.0,
+                                        justify_content: JustifyContent::Center,
+                                        ..default()
+                                    },
+                                ))
+                                .id(),
+                            );
+                            info_panel_nodes.soul_spa_slots_increase_button =
+                                Some(spawn_soul_spa_slot_button(row, game_assets, theme, "+"));
+                        })
+                        .id(),
+                );
+            })
+            .id();
+        info_panel_nodes.soul_spa_group = Some(soul_spa_group);
+
+        let power_group = parent
+            .spawn(Node {
+                display: Display::None,
+                width: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(5.0),
+                ..default()
+            })
+            .with_children(|column| {
+                spawn_info_section_divider(column, game_assets, theme, "Power Grid");
+                let text_bundle = || {
+                    (
+                        TextFont {
+                            font: game_assets.font_ui().clone().into(),
+                            font_size: crate::theme::font_size_rem(
+                                theme.typography.font_size_small,
+                            ),
+                            ..default()
+                        },
+                        TextColor(theme.colors.text_primary_semantic),
+                    )
+                };
+                info_panel_nodes.power_connection =
+                    Some(column.spawn((Text::new(""), text_bundle())).id());
+                info_panel_nodes.power_flow =
+                    Some(column.spawn((Text::new(""), text_bundle())).id());
+                info_panel_nodes.power_state =
+                    Some(column.spawn((Text::new(""), text_bundle())).id());
+                let (button, text) = spawn_power_priority_button(column, game_assets, theme);
+                info_panel_nodes.power_priority_button = Some(button);
+                info_panel_nodes.power_priority_text = Some(text);
+            })
+            .id();
+        info_panel_nodes.power_group = Some(power_group);
+
         let common = parent
             .spawn((
                 Text::new(""),
@@ -715,7 +911,8 @@ mod tests {
     use super::*;
     use crate::components::SoulRenameState;
     use crate::models::inspection::{
-        EntityInspectionModel, EntityInspectionViewModel, StockpileInspectionFields,
+        EntityInspectionModel, EntityInspectionViewModel, PowerInspectionFields,
+        SoulSpaInspectionFields, StockpileInspectionFields,
     };
     use crate::panels::info_panel::{InfoPanelPinState, InfoPanelState, info_panel_system};
     use crate::selection::SelectedEntity;
@@ -877,6 +1074,8 @@ mod tests {
                         target_amount: 5,
                         allow_export: true,
                     }),
+                    soul_spa: None,
+                    power: None,
                 }),
             })
             .add_systems(Startup, spawn_panel)
@@ -908,5 +1107,206 @@ mod tests {
         assert_eq!(patch.inbound_priority, None);
         assert_eq!(patch.target_amount, None);
         assert_eq!(patch.allow_export, None);
+    }
+
+    #[test]
+    fn soul_spa_editor_shows_draining_and_binds_exact_slot_intents() {
+        let mut app = App::new();
+        let soul_spa = app.world_mut().spawn_empty().id();
+
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(TestAssets::default())
+            .init_resource::<UiTheme>()
+            .init_resource::<UiNodeRegistry>()
+            .init_resource::<InfoPanelNodes>()
+            .init_resource::<SelectedEntity>()
+            .init_resource::<InfoPanelPinState>()
+            .init_resource::<InfoPanelState>()
+            .init_resource::<SoulRenameState>()
+            .insert_resource(EntityInspectionViewModel {
+                model: Some(EntityInspectionModel {
+                    entity: soul_spa,
+                    header: "Soul Spa".to_string(),
+                    common_text: String::new(),
+                    tooltip_lines: Vec::new(),
+                    soul: None,
+                    stockpile: None,
+                    soul_spa: Some(SoulSpaInspectionFields {
+                        operational: true,
+                        bones_delivered: 10,
+                        bones_required: 10,
+                        occupied_slots: 4,
+                        active_slots: 2,
+                        max_active_slots: 4,
+                        output_watts: 4.0,
+                    }),
+                    power: None,
+                }),
+            })
+            .add_systems(Startup, spawn_panel)
+            .add_systems(Update, info_panel_system::<TestAssets>);
+
+        app.update();
+
+        let (status, decrease, increase, controls) = {
+            let nodes = app.world().resource::<InfoPanelNodes>();
+            (
+                nodes.soul_spa_status.unwrap(),
+                nodes.soul_spa_slots_decrease_button.unwrap(),
+                nodes.soul_spa_slots_increase_button.unwrap(),
+                nodes.soul_spa_controls.unwrap(),
+            )
+        };
+        assert_eq!(
+            app.world().get::<Text>(status).unwrap().0,
+            "Draining (4 active / 2 configured)"
+        );
+        assert_eq!(
+            app.world().get::<Node>(controls).unwrap().display,
+            Display::Flex
+        );
+
+        assert!(matches!(
+            app.world().get::<MenuButton>(decrease).unwrap().0,
+            MenuAction::SetSoulSpaActiveSlots {
+                target,
+                active_slots: 1,
+            } if target == soul_spa
+        ));
+        assert!(matches!(
+            app.world().get::<MenuButton>(increase).unwrap().0,
+            MenuAction::SetSoulSpaActiveSlots {
+                target,
+                active_slots: 3,
+            } if target == soul_spa
+        ));
+
+        {
+            let mut view_model = app.world_mut().resource_mut::<EntityInspectionViewModel>();
+            let fields = view_model
+                .model
+                .as_mut()
+                .and_then(|model| model.soul_spa.as_mut())
+                .unwrap();
+            fields.operational = false;
+            fields.bones_delivered = 7;
+            fields.bones_required = 20;
+            fields.output_watts = 0.0;
+        }
+        app.update();
+
+        assert_eq!(
+            app.world().get::<Text>(status).unwrap().0,
+            "Status: Constructing (7/20 bones)"
+        );
+        let nodes = app.world().resource::<InfoPanelNodes>();
+        assert_eq!(
+            app.world()
+                .get::<Node>(nodes.soul_spa_output.unwrap())
+                .unwrap()
+                .display,
+            Display::None
+        );
+        assert_eq!(
+            app.world().get::<Node>(controls).unwrap().display,
+            Display::None
+        );
+    }
+
+    #[test]
+    fn power_consumer_section_explains_shed_reason_and_binds_next_priority() {
+        use crate::power::{
+            PowerAllocationModeValue, PowerInspectionRole, PowerPriorityValue,
+            PowerShedReasonValue, PowerSupplyStateValue,
+        };
+
+        let mut app = App::new();
+        let consumer = app.world_mut().spawn_empty().id();
+        let grid = app.world_mut().spawn_empty().id();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(TestAssets::default())
+            .init_resource::<UiTheme>()
+            .init_resource::<UiNodeRegistry>()
+            .init_resource::<InfoPanelNodes>()
+            .init_resource::<SelectedEntity>()
+            .init_resource::<InfoPanelPinState>()
+            .init_resource::<InfoPanelState>()
+            .init_resource::<SoulRenameState>()
+            .insert_resource(EntityInspectionViewModel {
+                model: Some(EntityInspectionModel {
+                    entity: consumer,
+                    header: "Outdoor Lamp".to_string(),
+                    common_text: String::new(),
+                    tooltip_lines: Vec::new(),
+                    soul: None,
+                    stockpile: None,
+                    soul_spa: None,
+                    power: Some(PowerInspectionFields {
+                        role: PowerInspectionRole::Consumer,
+                        grid: Some(grid),
+                        allocation_mode: Some(PowerAllocationModeValue::PriorityPrefix),
+                        generation_watts: Some(1.0),
+                        total_demand_watts: Some(1.5),
+                        served_demand_watts: Some(1.0),
+                        reserve_watts: Some(0.0),
+                        deficit_watts: Some(0.5),
+                        consumer_count: Some(2),
+                        supplied_count: Some(1),
+                        shed_count: Some(1),
+                        invalid_count: Some(0),
+                        shed_order_labels: vec!["(2, 1)".to_string()],
+                        demand_watts: Some(0.5),
+                        priority: Some(PowerPriorityValue::Normal),
+                        supply_state: Some(PowerSupplyStateValue::Shed {
+                            reason: PowerShedReasonValue::RestoreMargin,
+                        }),
+                    }),
+                }),
+            })
+            .add_systems(Startup, spawn_panel)
+            .add_systems(Update, info_panel_system::<TestAssets>);
+
+        app.update();
+
+        let nodes = app.world().resource::<InfoPanelNodes>();
+        assert_eq!(
+            app.world()
+                .get::<Node>(nodes.power_group.unwrap())
+                .unwrap()
+                .display,
+            Display::Flex
+        );
+        assert!(
+            app.world()
+                .get::<Text>(nodes.power_flow.unwrap())
+                .unwrap()
+                .0
+                .contains("1.0W of 1.5W served [Priority prefix]")
+        );
+        let flow = &app
+            .world()
+            .get::<Text>(nodes.power_flow.unwrap())
+            .unwrap()
+            .0;
+        assert!(flow.contains("0.5W deficit"));
+        assert!(flow.contains("Consumers: 1/2 supplied, 1 shed, 0 invalid"));
+        assert!(flow.contains("Shed order: (2, 1)"));
+        assert!(
+            app.world()
+                .get::<Text>(nodes.power_state.unwrap())
+                .unwrap()
+                .0
+                .contains("waiting for restore margin")
+        );
+        assert!(matches!(
+            app.world()
+                .get::<MenuButton>(nodes.power_priority_button.unwrap())
+                .unwrap()
+                .0,
+            MenuAction::SetPowerConsumerPriority {
+                target,
+                priority: PowerPriorityValue::High,
+            } if target == consumer
+        ));
     }
 }

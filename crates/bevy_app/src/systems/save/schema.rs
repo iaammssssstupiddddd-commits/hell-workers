@@ -34,8 +34,10 @@ use hw_core::soul::{
 use hw_core::world::DoorState;
 
 use hw_energy::{
-    ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerConsumer, PowerGenerator,
-    PowerGrid, SoulSpaPhase, SoulSpaSite, SoulSpaTile, Unpowered, YardPowerGrid,
+    ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerAllocationMode, PowerConsumer,
+    PowerConsumerPolicy, PowerGenerator, PowerGrid, PowerGridAllocationSummary, PowerPriority,
+    PowerShedReason, PowerSupplyState, SoulSpaPhase, SoulSpaSite, SoulSpaTile, Unpowered,
+    YardPowerGrid,
 };
 
 use hw_jobs::construction::{
@@ -141,7 +143,7 @@ macro_rules! for_each_persisted_component {
         $callback!(PowerGrid);
         $callback!(PowerGenerator);
         $callback!(PowerConsumer);
-        $callback!(Unpowered);
+        $callback!(PowerConsumerPolicy);
         $callback!(YardPowerGrid);
         $callback!(GeneratesFor);
         $callback!(GridGenerators);
@@ -169,6 +171,9 @@ macro_rules! for_each_runtime_derived_component {
     ($callback:ident) => {
         $callback!(ParticipatingIn);
         $callback!(GatheringParticipants);
+        $callback!(Unpowered);
+        $callback!(PowerSupplyState);
+        $callback!(PowerGridAllocationSummary);
     };
 }
 
@@ -215,6 +220,9 @@ macro_rules! for_each_reflect_dependency {
         $callback!(TransportRequestKind);
         $callback!(TransportPriority);
         $callback!(SoulSpaPhase);
+        $callback!(PowerAllocationMode);
+        $callback!(PowerPriority);
+        $callback!(PowerShedReason);
         $callback!(TerrainType);
         $callback!(Gender);
         $callback!(SavedWorldgenSeed);

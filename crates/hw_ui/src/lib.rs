@@ -15,6 +15,7 @@ pub mod notifications;
 pub mod overlay;
 pub mod panels;
 pub mod plugins;
+pub mod power;
 pub mod setup;
 pub mod text_input_intents;
 pub use text_input_intents::TextInputIntent;
@@ -69,7 +70,7 @@ pub fn reset_for_world_replace(world: &mut World) {
     }
 
     clear_hover_action_targets(world);
-    clear_stockpile_policy_button_targets(world);
+    clear_entity_bearing_button_targets(world);
     reset_existing_resource::<components::UiInputState>(world);
     reset_existing_resource::<help::HelpPanelState>(world);
     reset_existing_resource::<components::OperationDialogState>(world);
@@ -136,18 +137,25 @@ fn reset_operation_dialog_presentation(world: &mut World) {
     }
 }
 
-fn clear_stockpile_policy_button_targets(world: &mut World) {
+fn clear_entity_bearing_button_targets(world: &mut World) {
     let mut query = world.query::<&mut components::MenuButton>();
     for mut button in query.iter_mut(world) {
-        if matches!(
-            button.0,
-            UiIntent::ApplyStockpilePolicy { .. } | UiIntent::BeginStockpilePolicyRangeEdit { .. }
-        ) {
-            button.0 = UiIntent::ApplyStockpilePolicy {
+        button.0 = match button.0 {
+            UiIntent::ApplyStockpilePolicy { .. }
+            | UiIntent::BeginStockpilePolicyRangeEdit { .. } => UiIntent::ApplyStockpilePolicy {
                 target: StockpilePolicyEditTarget::Single(Entity::PLACEHOLDER),
                 patch: hw_logistics::StockpilePolicyPatch::default(),
-            };
-        }
+            },
+            UiIntent::SetSoulSpaActiveSlots { .. } => UiIntent::SetSoulSpaActiveSlots {
+                target: Entity::PLACEHOLDER,
+                active_slots: 0,
+            },
+            UiIntent::SetPowerConsumerPriority { .. } => UiIntent::SetPowerConsumerPriority {
+                target: Entity::PLACEHOLDER,
+                priority: power::PowerPriorityValue::default(),
+            },
+            action => action,
+        };
     }
 }
 
@@ -370,6 +378,18 @@ mod tests {
                 },
             ))
             .id();
+        let soul_spa_slots_button = world
+            .spawn(components::MenuButton(UiIntent::SetSoulSpaActiveSlots {
+                target: stale_simulation_entity,
+                active_slots: 3,
+            }))
+            .id();
+        let power_priority_button = world
+            .spawn(components::MenuButton(UiIntent::SetPowerConsumerPriority {
+                target: stale_simulation_entity,
+                priority: power::PowerPriorityValue::High,
+            }))
+            .id();
 
         world.insert_resource(components::SoulRenameState {
             active: Some(components::SoulRenameActive {
@@ -525,6 +545,28 @@ mod tests {
             );
             assert_eq!(patch, hw_logistics::StockpilePolicyPatch::default());
         }
+        let UiIntent::SetSoulSpaActiveSlots {
+            target,
+            active_slots,
+        } = world
+            .get::<components::MenuButton>(soul_spa_slots_button)
+            .unwrap()
+            .0
+        else {
+            panic!("Soul Spa slot button retained its pre-reset action");
+        };
+        assert_eq!(target, Entity::PLACEHOLDER);
+        assert_eq!(active_slots, 0);
+
+        let UiIntent::SetPowerConsumerPriority { target, priority } = world
+            .get::<components::MenuButton>(power_priority_button)
+            .unwrap()
+            .0
+        else {
+            panic!("power priority button retained its pre-reset action");
+        };
+        assert_eq!(target, Entity::PLACEHOLDER);
+        assert_eq!(priority, power::PowerPriorityValue::Normal);
         assert!(
             world
                 .resource::<selection::PlacementFeedbackState>()

@@ -25,6 +25,8 @@ impl Plugin for UiNotificationsPlugin {
                 crate::interface::ui::notifications::adapt_save_load_outcomes,
                 crate::interface::ui::notifications::adapt_stockpile_policy_change_outcomes,
                 crate::interface::ui::notifications::adapt_familiar_settings_change_outcomes,
+                crate::interface::ui::notifications::adapt_soul_spa_slots_change_outcomes,
+                crate::interface::ui::notifications::adapt_power_consumer_policy_change_outcomes,
                 crate::interface::ui::panels::task_list::adapt_task_action_outcomes,
             )
                 .in_set(NotificationSystemSet::Adapt),
@@ -87,6 +89,8 @@ mod tests {
             .add_message::<TaskActionOutcome>()
             .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
             .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
+            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
+            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>()
             .init_resource::<PresentTrace>()
@@ -106,6 +110,8 @@ mod tests {
             .add_message::<TaskActionOutcome>()
             .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
             .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
+            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
+            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>();
         let outcome = SaveLoadOutcome {
@@ -131,6 +137,8 @@ mod tests {
             .add_message::<TaskActionOutcome>()
             .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
             .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
+            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
+            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>();
         let entity = app.world_mut().spawn_empty().id();
@@ -161,6 +169,8 @@ mod tests {
             .add_message::<TaskActionOutcome>()
             .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
             .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
+            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
+            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>();
         app.world_mut()
@@ -191,6 +201,8 @@ mod tests {
             .add_message::<TaskActionOutcome>()
             .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
             .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
+            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
+            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
             .init_resource::<UiTheme>()
             .init_resource::<UiInputState>();
         app.world_mut()
@@ -210,5 +222,95 @@ mod tests {
         let toast = center.toast_entries().next().unwrap();
         assert_eq!(toast.severity, NotificationSeverity::Warning);
         assert!(toast.body.contains("No new work"));
+    }
+
+    #[test]
+    fn soul_spa_clamped_outcome_becomes_one_warning_in_the_same_update() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
+            .add_message::<SaveLoadOutcome>()
+            .add_message::<TaskActionOutcome>()
+            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
+            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
+            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
+            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
+            .init_resource::<UiTheme>()
+            .init_resource::<UiInputState>();
+        app.world_mut()
+            .write_message(hw_energy::SoulSpaSlotsChangeOutcome {
+                target: Entity::PLACEHOLDER,
+                status: hw_energy::SoulSpaSlotsChangeStatus::Applied {
+                    requested: 99,
+                    applied: 4,
+                    clamped: true,
+                },
+            });
+
+        app.update();
+
+        let center = app.world().resource::<NotificationCenter>();
+        assert_eq!(center.toast_count(), 1);
+        let toast = center.toast_entries().next().unwrap();
+        assert_eq!(toast.severity, NotificationSeverity::Warning);
+        assert!(toast.body.contains("clamped to 4"));
+    }
+
+    #[test]
+    fn soul_spa_exact_outcome_becomes_one_success_toast_in_the_same_update() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
+            .add_message::<SaveLoadOutcome>()
+            .add_message::<TaskActionOutcome>()
+            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
+            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
+            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
+            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
+            .init_resource::<UiTheme>()
+            .init_resource::<UiInputState>();
+        app.world_mut()
+            .write_message(hw_energy::SoulSpaSlotsChangeOutcome {
+                target: Entity::PLACEHOLDER,
+                status: hw_energy::SoulSpaSlotsChangeStatus::Applied {
+                    requested: 2,
+                    applied: 2,
+                    clamped: false,
+                },
+            });
+
+        app.update();
+
+        let center = app.world().resource::<NotificationCenter>();
+        assert_eq!(center.toast_count(), 1);
+        let toast = center.toast_entries().next().unwrap();
+        assert_eq!(toast.severity, NotificationSeverity::Success);
+        assert_eq!(toast.retention, NotificationRetention::ToastOnly);
+        assert!(toast.body.contains("set to 2"));
+    }
+
+    #[test]
+    fn missing_power_policy_becomes_one_error_in_the_same_update() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
+            .add_message::<SaveLoadOutcome>()
+            .add_message::<TaskActionOutcome>()
+            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
+            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
+            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
+            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
+            .init_resource::<UiTheme>()
+            .init_resource::<UiInputState>();
+        app.world_mut()
+            .write_message(hw_energy::PowerConsumerPolicyChangeOutcome {
+                target: Entity::PLACEHOLDER,
+                status: hw_energy::PowerConsumerPolicyChangeStatus::MissingPolicy,
+            });
+
+        app.update();
+
+        let center = app.world().resource::<NotificationCenter>();
+        assert_eq!(center.toast_count(), 1);
+        let toast = center.toast_entries().next().unwrap();
+        assert_eq!(toast.severity, NotificationSeverity::Error);
+        assert!(toast.body.contains("missing its durable power policy"));
     }
 }

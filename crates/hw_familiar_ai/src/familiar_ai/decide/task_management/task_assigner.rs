@@ -56,6 +56,7 @@ pub struct ReservationShadow {
     destination_total: HashMap<Entity, usize>,
     destination_by_resource: HashMap<(Entity, ResourceType), usize>,
     source: HashMap<Entity, usize>,
+    soul_spa_assignments: HashMap<Entity, u32>,
     pub(crate) source_selector_cache: Option<SourceSelectorFrameCache>,
 }
 
@@ -84,6 +85,14 @@ impl ReservationShadow {
             .get(&(target, resource_type))
             .cloned()
             .unwrap_or(0)
+    }
+
+    pub fn pending_soul_spa_assignments(&self, site: Entity) -> u32 {
+        self.soul_spa_assignments.get(&site).copied().unwrap_or(0)
+    }
+
+    pub fn reserve_soul_spa_assignment(&mut self, site: Entity) {
+        *self.soul_spa_assignments.entry(site).or_insert(0) += 1;
     }
 
     pub fn reserve_destination(

@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use hw_core::familiar::{FamiliarSettingsPatch, FamiliarWorkPriority};
 use hw_core::game_state::{PlayMode, TaskMode, TaskModeZoneType, TimeSpeed};
 use hw_core::jobs::WorkType;
+use hw_energy::{PowerAllocationMode, PowerPriority, PowerShedReason, PowerSupplyState};
 use hw_jobs::{BuildingCategory, BuildingType};
 use hw_logistics::transport_request::{TransportPriority, TransportRequestKind};
 use hw_logistics::zone::ZoneType;
@@ -290,6 +291,9 @@ coverage_table! {
         "ui-intent::settings-fps-display" => tuple(SetFpsDisplayEnabled(_)) => {
             published("settings")
         },
+        "ui-intent::settings-power-priority" => tuple(SetPowerPriorityEnabled(_)) => {
+            published("settings")
+        },
         "ui-intent::inspect-entity" => tuple(InspectEntity(_)) => published("info-panel-pin"),
         "ui-intent::clear-inspect-pin" => unit(ClearInspectPin) => published("info-panel-pin"),
         "ui-intent::select-build" => tuple(SelectBuild(_)) => published("architect-building"),
@@ -386,6 +390,12 @@ coverage_table! {
         "ui-intent::stockpile-policy-range" => record(BeginStockpilePolicyRangeEdit { .. }) => {
             published("zones-workflow")
         },
+        "ui-intent::soul-spa-active-slots" => record(SetSoulSpaActiveSlots { .. }) => {
+            published("soul-energy-recovery")
+        },
+        "ui-intent::power-consumer-priority" => record(SetPowerConsumerPriority { .. }) => {
+            published("soul-energy-status")
+        },
         "ui-intent::task-priority" => record(AdjustTaskPriority { .. }) => {
             published("task-dashboard-actions")
         },
@@ -431,6 +441,64 @@ coverage_table! {
         },
         "familiar-work-priority::high" => unit(High) => {
             published("familiar-operation-policy")
+        }
+    }
+}
+
+coverage_table! {
+    enum PowerPriority;
+    fn power_priority_coverage(priority: PowerPriority);
+    fn power_priority_decisions();
+    {
+        "power-priority::low" => unit(Low) => published("soul-energy-status"),
+        "power-priority::normal" => unit(Normal) => published("soul-energy-status"),
+        "power-priority::high" => unit(High) => published("soul-energy-status")
+    }
+}
+
+coverage_table! {
+    enum PowerAllocationMode;
+    fn power_allocation_mode_coverage(mode: PowerAllocationMode);
+    fn power_allocation_mode_decisions();
+    {
+        "power-allocation-mode::legacy-all-or-none" => unit(LegacyAllOrNone) => {
+            published("soul-energy-status")
+        },
+        "power-allocation-mode::priority-prefix" => unit(PriorityPrefix) => {
+            published("soul-energy-status")
+        }
+    }
+}
+
+coverage_table! {
+    enum PowerShedReason;
+    fn power_shed_reason_coverage(reason: PowerShedReason);
+    fn power_shed_reason_decisions();
+    {
+        "power-shed-reason::insufficient-generation" => unit(InsufficientGeneration) => {
+            published("soul-energy-status")
+        },
+        "power-shed-reason::restore-margin" => unit(RestoreMargin) => {
+            published("soul-energy-status")
+        },
+        "power-shed-reason::legacy-global-deficit" => unit(LegacyGlobalDeficit) => {
+            published("soul-energy-status")
+        }
+    }
+}
+
+coverage_table! {
+    enum PowerSupplyState;
+    fn power_supply_state_coverage(state: PowerSupplyState);
+    fn power_supply_state_decisions();
+    {
+        "power-supply-state::supplied" => unit(Supplied) => published("soul-energy-status"),
+        "power-supply-state::shed" => record(Shed { .. }) => published("soul-energy-status"),
+        "power-supply-state::disconnected" => unit(Disconnected) => {
+            published("soul-energy-status")
+        },
+        "power-supply-state::invalid-demand" => unit(InvalidDemand) => {
+            published("soul-energy-status")
         }
     }
 }
@@ -958,6 +1026,10 @@ fn all_coverage_records() -> Vec<CoverageRecord> {
     decisions.extend(ui_intent_decisions());
     decisions.extend(familiar_settings_patch_decisions());
     decisions.extend(familiar_work_priority_decisions());
+    decisions.extend(power_priority_decisions());
+    decisions.extend(power_allocation_mode_decisions());
+    decisions.extend(power_shed_reason_decisions());
+    decisions.extend(power_supply_state_decisions());
     decisions.extend(help_topic_step_decisions());
     decisions.extend(help_scroll_command_decisions());
     decisions.extend(menu_state_decisions());

@@ -1,13 +1,18 @@
 use super::model::{
-    InfoPanelViewModel, next_stockpile_priority, stockpile_acceptance_row_label,
-    stockpile_acceptance_summary, to_view_model,
+    InfoPanelViewModel, next_power_priority, next_stockpile_priority,
+    stockpile_acceptance_row_label, stockpile_acceptance_summary, to_view_model,
 };
 use super::state::{InfoPanelPinState, InfoPanelState};
 use crate::components::{
     InfoPanelNodes, MenuAction, MenuButton, SoulRenameState, UiNodeRegistry, UiSlot,
 };
 use crate::intents::StockpilePolicyEditTarget;
-use crate::models::inspection::{EntityInspectionViewModel, InspectionSoulGender};
+use crate::models::inspection::{
+    EntityInspectionViewModel, InspectionSoulGender, PowerInspectionFields,
+};
+use crate::power::{
+    PowerAllocationModeValue, PowerInspectionRole, PowerShedReasonValue, PowerSupplyStateValue,
+};
 use crate::selection::SelectedEntity;
 use crate::setup::UiAssets;
 use bevy::ecs::system::SystemParam;
@@ -83,6 +88,164 @@ fn set_menu_action(
     };
     if let Ok(mut button) = q_menu_button.get_mut(entity) {
         button.0 = action;
+    }
+}
+
+fn power_supply_label(fields: &PowerInspectionFields) -> &'static str {
+    if fields.role == PowerInspectionRole::Generator {
+        return if fields.grid.is_none() {
+            "Supply: Generator / disconnected"
+        } else if fields.allocation_mode.is_none() {
+            "Supply: Generator / grid rebuilding"
+        } else {
+            "Supply: Generator"
+        };
+    }
+
+    match fields.supply_state {
+        Some(PowerSupplyStateValue::Supplied) => "Supply: Supplied",
+        Some(PowerSupplyStateValue::Shed {
+            reason: PowerShedReasonValue::InsufficientGeneration,
+        }) => "Supply: Shed — insufficient generation",
+        Some(PowerSupplyStateValue::Shed {
+            reason: PowerShedReasonValue::RestoreMargin,
+        }) => "Supply: Shed — waiting for restore margin",
+        Some(PowerSupplyStateValue::Shed {
+            reason: PowerShedReasonValue::LegacyGlobalDeficit,
+        }) => "Supply: Shed — legacy grid deficit",
+        Some(PowerSupplyStateValue::Disconnected) => "Supply: Disconnected",
+        Some(PowerSupplyStateValue::InvalidDemand) => "Supply: Invalid demand",
+        None => "Supply: Rebuilding",
+    }
+}
+
+fn power_mode_label(mode: PowerAllocationModeValue) -> &'static str {
+    match mode {
+        PowerAllocationModeValue::PriorityPrefix => "Priority prefix",
+        PowerAllocationModeValue::LegacyAllOrNone => "Legacy all-or-none",
+    }
+}
+
+fn soul_spa_status_label(soul_spa: &super::model::SoulSpaInfoViewModel) -> String {
+    if !soul_spa.operational {
+        format!(
+            "Status: Constructing ({}/{} bones)",
+            soul_spa.bones_delivered, soul_spa.bones_required
+        )
+    } else if soul_spa.occupied_slots > soul_spa.active_slots {
+        format!(
+            "Draining ({} active / {} configured)",
+            soul_spa.occupied_slots, soul_spa.active_slots
+        )
+    } else {
+        format!(
+            "Operational ({} active / {} configured)",
+            soul_spa.occupied_slots, soul_spa.active_slots
+        )
+    }
+}
+
+fn update_power_section(
+    target: Entity,
+    fields: Option<&PowerInspectionFields>,
+    nodes: &InfoPanelNodes,
+    q_text: &mut Query<&mut Text>,
+    q_node: &mut Query<&mut Node>,
+    q_menu_button: &mut Query<&mut MenuButton>,
+) {
+    set_node_display(
+        nodes.power_group,
+        q_node,
+        if fields.is_some() {
+            Display::Flex
+        } else {
+            Display::None
+        },
+    );
+    let Some(fields) = fields else {
+        return;
+    };
+
+    set_text_entity(
+        nodes.power_connection,
+        q_text,
+        if fields.grid.is_some() {
+            "Connection: Connected"
+        } else {
+            "Connection: Disconnected"
+        },
+    );
+    let mut flow = match (
+        fields.generation_watts,
+        fields.total_demand_watts,
+        fields.served_demand_watts,
+        fields.allocation_mode,
+    ) {
+        (Some(generation), Some(total), Some(served), Some(mode)) => format!(
+            "Grid: {generation:.1}W generated / {served:.1}W of {total:.1}W served [{}]",
+            power_mode_label(mode)
+        ),
+        (Some(generation), Some(total), _, _) => {
+            format!("Grid: {generation:.1}W generated / {total:.1}W demand (rebuilding)")
+        }
+        _ => "Grid: unavailable".to_string(),
+    };
+    match (fields.reserve_watts, fields.deficit_watts) {
+        (Some(_reserve), Some(deficit)) if deficit > 0.0 => {
+            flow.push_str(&format!("\nBalance: {deficit:.1}W deficit"));
+        }
+        (Some(reserve), Some(_)) => {
+            flow.push_str(&format!("\nBalance: {reserve:.1}W reserve"));
+        }
+        _ => {}
+    }
+    if let (Some(consumers), Some(supplied), Some(shed), Some(invalid)) = (
+        fields.consumer_count,
+        fields.supplied_count,
+        fields.shed_count,
+        fields.invalid_count,
+    ) {
+        flow.push_str(&format!(
+            "\nConsumers: {supplied}/{consumers} supplied, {shed} shed, {invalid} invalid"
+        ));
+        let shed_order = if fields.shed_order_labels.is_empty() {
+            "none".to_string()
+        } else {
+            fields.shed_order_labels.join(" → ")
+        };
+        flow.push_str(&format!("\nShed order: {shed_order}"));
+    }
+    set_text_entity(nodes.power_flow, q_text, &flow);
+    let mut state = power_supply_label(fields).to_string();
+    if let Some(demand) = fields.demand_watts {
+        state.push_str(&format!(" / Demand: {demand:.1}W"));
+    }
+    set_text_entity(nodes.power_state, q_text, &state);
+
+    set_node_display(
+        nodes.power_priority_button,
+        q_node,
+        if fields.priority.is_some() {
+            Display::Flex
+        } else {
+            Display::None
+        },
+    );
+    if let Some(priority) = fields.priority {
+        let next = next_power_priority(priority);
+        set_text_entity(
+            nodes.power_priority_text,
+            q_text,
+            &format!("Priority: {priority:?} → {next:?}"),
+        );
+        set_menu_action(
+            nodes.power_priority_button,
+            q_menu_button,
+            MenuAction::SetPowerConsumerPriority {
+                target,
+                priority: next,
+            },
+        );
     }
 }
 
@@ -204,10 +367,29 @@ pub fn info_panel_system<A: UiAssets + Resource>(
         if pinned { Display::Flex } else { Display::None },
     );
 
+    let (power_target, power_fields) = match &next_model {
+        Some(InfoPanelViewModel::SoulSpa(soul_spa)) => (soul_spa.entity, soul_spa.power.as_ref()),
+        Some(InfoPanelViewModel::Power(power)) => (power.entity, Some(&power.fields)),
+        _ => (Entity::PLACEHOLDER, None),
+    };
+    update_power_section(
+        power_target,
+        power_fields,
+        &res.info_nodes,
+        &mut queries.q_text,
+        &mut queries.q_node,
+        &mut queries.q_menu_button,
+    );
+
     match &next_model {
         Some(InfoPanelViewModel::Soul(soul)) => {
             set_node_display(
                 res.info_nodes.stockpile_group,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_node_display(
+                res.info_nodes.soul_spa_group,
                 &mut queries.q_node,
                 Display::None,
             );
@@ -312,6 +494,11 @@ pub fn info_panel_system<A: UiAssets + Resource>(
             );
         }
         Some(InfoPanelViewModel::Stockpile(stockpile)) => {
+            set_node_display(
+                res.info_nodes.soul_spa_group,
+                &mut queries.q_node,
+                Display::None,
+            );
             set_node_display(
                 res.info_nodes.rename_button,
                 &mut queries.q_node,
@@ -522,9 +709,183 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 },
             );
         }
+        Some(InfoPanelViewModel::SoulSpa(soul_spa)) => {
+            set_node_display(
+                res.info_nodes.stockpile_group,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_node_display(
+                res.info_nodes.soul_spa_group,
+                &mut queries.q_node,
+                Display::Flex,
+            );
+            set_node_display(
+                res.info_nodes.rename_button,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_node_display(
+                res.info_nodes.rename_field_container,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_display_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_node,
+                UiSlot::InfoPanelStatsGroup,
+                Display::None,
+            );
+            set_display_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_node,
+                UiSlot::Header,
+                Display::Flex,
+            );
+            set_text_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
+                UiSlot::Header,
+                &soul_spa.header,
+            );
+            set_text_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
+                UiSlot::CommonText,
+                &soul_spa.common,
+            );
+            update_gender_icon(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_gender,
+                &mut queries.q_node,
+                &*res.game_assets,
+                None,
+            );
+
+            let status = soul_spa_status_label(soul_spa);
+            set_text_entity(res.info_nodes.soul_spa_status, &mut queries.q_text, &status);
+            set_node_display(
+                res.info_nodes.soul_spa_output,
+                &mut queries.q_node,
+                if soul_spa.operational {
+                    Display::Flex
+                } else {
+                    Display::None
+                },
+            );
+            set_text_entity(
+                res.info_nodes.soul_spa_output,
+                &mut queries.q_text,
+                &format!("Output: {:.1}W", soul_spa.output_watts),
+            );
+            set_text_entity(
+                res.info_nodes.soul_spa_slots_text,
+                &mut queries.q_text,
+                &format!(
+                    "Active slots: {}/{}",
+                    soul_spa.active_slots, soul_spa.max_active_slots
+                ),
+            );
+            set_node_display(
+                res.info_nodes.soul_spa_controls,
+                &mut queries.q_node,
+                if soul_spa.operational {
+                    Display::Flex
+                } else {
+                    Display::None
+                },
+            );
+            set_menu_action(
+                res.info_nodes.soul_spa_slots_decrease_button,
+                &mut queries.q_menu_button,
+                MenuAction::SetSoulSpaActiveSlots {
+                    target: soul_spa.entity,
+                    active_slots: soul_spa.active_slots.saturating_sub(1),
+                },
+            );
+            set_menu_action(
+                res.info_nodes.soul_spa_slots_increase_button,
+                &mut queries.q_menu_button,
+                MenuAction::SetSoulSpaActiveSlots {
+                    target: soul_spa.entity,
+                    active_slots: soul_spa
+                        .active_slots
+                        .saturating_add(1)
+                        .min(soul_spa.max_active_slots),
+                },
+            );
+        }
+        Some(InfoPanelViewModel::Power(power)) => {
+            set_node_display(
+                res.info_nodes.stockpile_group,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_node_display(
+                res.info_nodes.soul_spa_group,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_node_display(
+                res.info_nodes.rename_button,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_node_display(
+                res.info_nodes.rename_field_container,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_display_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_node,
+                UiSlot::InfoPanelStatsGroup,
+                Display::None,
+            );
+            set_display_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_node,
+                UiSlot::Header,
+                Display::Flex,
+            );
+            set_text_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
+                UiSlot::Header,
+                &power.header,
+            );
+            set_text_slot(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_text,
+                UiSlot::CommonText,
+                &power.common,
+            );
+            update_gender_icon(
+                &res.info_nodes,
+                &res.ui_nodes,
+                &mut queries.q_gender,
+                &mut queries.q_node,
+                &*res.game_assets,
+                None,
+            );
+        }
         Some(InfoPanelViewModel::Simple(simple)) => {
             set_node_display(
                 res.info_nodes.stockpile_group,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_node_display(
+                res.info_nodes.soul_spa_group,
                 &mut queries.q_node,
                 Display::None,
             );
@@ -617,6 +978,11 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 Display::None,
             );
             set_node_display(
+                res.info_nodes.soul_spa_group,
+                &mut queries.q_node,
+                Display::None,
+            );
+            set_node_display(
                 res.info_nodes.rename_button,
                 &mut queries.q_node,
                 Display::None,
@@ -647,4 +1013,55 @@ pub fn info_panel_system<A: UiAssets + Resource>(
     panel_state.last = next_model;
     panel_state.last_pinned = pinned;
     panel_state.last_rename_target = rename_target;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn constructing_soul_spa_status_includes_material_progress() {
+        let model = super::super::model::SoulSpaInfoViewModel {
+            entity: Entity::PLACEHOLDER,
+            header: "Soul Spa".to_string(),
+            operational: false,
+            bones_delivered: 7,
+            bones_required: 20,
+            occupied_slots: 0,
+            active_slots: 4,
+            max_active_slots: 4,
+            output_watts: 0.0,
+            power: None,
+            common: String::new(),
+        };
+
+        assert_eq!(
+            soul_spa_status_label(&model),
+            "Status: Constructing (7/20 bones)"
+        );
+    }
+
+    #[test]
+    fn stable_generator_is_not_labeled_as_rebuilding() {
+        let fields = PowerInspectionFields {
+            role: PowerInspectionRole::Generator,
+            grid: Some(Entity::PLACEHOLDER),
+            allocation_mode: Some(PowerAllocationModeValue::PriorityPrefix),
+            generation_watts: Some(2.0),
+            total_demand_watts: Some(1.0),
+            served_demand_watts: Some(1.0),
+            reserve_watts: Some(1.0),
+            deficit_watts: Some(0.0),
+            consumer_count: Some(1),
+            supplied_count: Some(1),
+            shed_count: Some(0),
+            invalid_count: Some(0),
+            shed_order_labels: Vec::new(),
+            demand_watts: None,
+            priority: None,
+            supply_state: None,
+        };
+
+        assert_eq!(power_supply_label(&fields), "Supply: Generator");
+    }
 }

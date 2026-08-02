@@ -1,3 +1,6 @@
 pub mod inspection;
 
-pub use inspection::{EntityInspectionModel, EntityInspectionViewModel, InspectionSoulGender};
+pub use inspection::{
+    EntityInspectionModel, EntityInspectionViewModel, InspectionSoulGender, PowerInspectionFields,
+    SoulSpaInspectionFields,
+};

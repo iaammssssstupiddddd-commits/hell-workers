@@ -97,6 +97,19 @@ pub struct InfoPanelNodes {
     pub stockpile_export_button: Option<Entity>,
     pub stockpile_export_text: Option<Entity>,
     pub stockpile_area_button: Option<Entity>,
+    pub soul_spa_group: Option<Entity>,
+    pub soul_spa_status: Option<Entity>,
+    pub soul_spa_output: Option<Entity>,
+    pub soul_spa_controls: Option<Entity>,
+    pub soul_spa_slots_decrease_button: Option<Entity>,
+    pub soul_spa_slots_text: Option<Entity>,
+    pub soul_spa_slots_increase_button: Option<Entity>,
+    pub power_group: Option<Entity>,
+    pub power_connection: Option<Entity>,
+    pub power_flow: Option<Entity>,
+    pub power_state: Option<Entity>,
+    pub power_priority_button: Option<Entity>,
+    pub power_priority_text: Option<Entity>,
     pub common: Option<Entity>,
     pub rename_button: Option<Entity>,
     pub rename_field_container: Option<Entity>,
@@ -297,6 +310,7 @@ pub enum SettingsField {
     CameraMousePan,
     DebugGizmos,
     FpsDisplay,
+    PowerPriority,
 }
 
 #[derive(Component, Clone, Copy)]

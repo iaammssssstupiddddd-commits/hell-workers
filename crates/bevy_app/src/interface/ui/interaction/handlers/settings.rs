@@ -57,6 +57,10 @@ pub fn handle(
             settings.fps_display_enabled = enabled;
             false
         }
+        UiIntent::SetPowerPriorityEnabled(enabled) => {
+            settings.power_priority_enabled = enabled;
+            false
+        }
         _ => false,
     }
 }

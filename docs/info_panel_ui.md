@@ -86,21 +86,28 @@ Accepted Resourcesの各行は起動時に一度だけ生成する静的UI node�
 | フェーズ | 表示内容 |
 |:---|:---|
 | Constructing | `Status: Constructing (搬入済み/必要数)` |
-| Operational | `Status: Operational` / `Active: N/M souls` / `Output: X.XW` / `Grid: gen/con [POWERED\|BLACKOUT]` |
+| Operational | `Operational (N active / M configured)` または `Draining` / `Output: X.XW` / 共通Power Grid section |
 
-- `Active` は `PowerGenerator.current_output / output_per_soul` から算出
-- Grid 行は `GeneratesFor` でグリッドに接続されている場合のみ表示
+- `Active` は保存される`SoulSpaTile.parent_site`と`TaskWorkers`から数え、表示用`Children`へ依存しない。
+- `−` / `+` は0〜4のexact `SetSoulSpaActiveSlots` intentを表示中Entityへ発行する。Constructing中は非表示。
+- `occupied > configured`はno-kickの`Draining`。作業中Soulは継続し、新規割当だけが止まる。
 
 ### 電力消費施設（Outdoor Lamp 等）
 `PowerConsumer` を持つエンティティは `append_power_consumer_model()` で追記される。
 
-| 項目 | 表示 |
+| 項目 | 表示・操作 |
 |:---|:---|
-| 需要と稼働状態 | `Demand: X.XW [ACTIVE]` または `Demand: X.XW [UNPOWERED]` |
-| グリッド情報 | `Grid: gen/con [POWERED\|BLACKOUT]`（`ConsumesFrom` 接続時のみ） |
+| Connection | `Connected` / `Disconnected` |
+| Grid flow | generated / served / total demand、reserve / deficit、consumer / supplied / shed / invalid件数、座標順のshed order、`Priority prefix` / `Legacy all-or-none` |
+| Supply | `Supplied`、需要不足、restore margin待ち、legacy deficit、disconnected、invalid demandを別表示 |
+| Priority | `Low → Normal → High → Low`を循環し、表示モデルが保持するEntityへexact intentを発行 |
 
-- `ACTIVE` = `Unpowered` コンポーネントなし
-- `UNPOWERED` = `Unpowered` コンポーネントあり（`#[require(Unpowered)]` または停電時に付与）
+共通sectionはtyped `PowerInspectionFields`を受け取り、`PowerGridAllocationSummary`と
+`PowerSupplyState`を表示の正本にする。`PowerGrid.powered` / `Unpowered`だけから個別理由を推測しない。
+`hw_ui::power`はgame-agnosticなpriority / mode / supply / role mirrorだけを持ち、root presentation adapterが
+`hw_energy`のdomain型とshed Entity列をUI値・座標labelへ明示変換する。`hw_ui`は`hw_energy`へ依存しない。
+priority変更はrootでtarget、`PowerConsumer`、durable policyを再検証し、stale/unsupported/missing policyを
+専用outcomeとtoastへ変換する。
 
 ### その他
 - Blueprint / Building / Resource / Tree / Rock / Designation などを
@@ -114,9 +121,9 @@ Accepted Resourcesの各行は起動時に一度だけ生成する静的UI node�
   - `update_entity_inspection_view_model_system` が `EntityInspectionViewModel` resource を更新
   - パネル側は描画責務に限定
 - `InfoPanelState` で前回モデルを保持し、同一内容の再描画を抑制
-- Stockpile editor の静的button action（資材チェックリスト9行を含む）は表示中の
+- Stockpile editor、Soul Spa slot −/+、Power priorityの静的button actionは表示中の
   `EntityInspectionModel.entity` から毎回更新する。
-  world replacement時は旧Entityと保留patchをplaceholder/defaultへ戻し、静的`InfoPanel` rootも
+  world replacement時は旧Entity、slot値、priority、保留patchをplaceholder/defaultへ戻し、静的`InfoPanel` rootも
   同じreplace phaseで同期的に`Display::None`へ戻す。ViewModelと`InfoPanelState`が同時にdefault化されると
   次の`Update`はcache一致で早期returnできるため、旧worldの表示消去を次frameの差分更新へ委ねない。
 - `InfoPanelState` はリネーム中の対象 entity も保持する。表示モデルが同一でも、`SoulRenameState.active` の開始/終了でフィールド表示が切り替わるため、この状態は再描画判定に含める
@@ -129,9 +136,9 @@ Accepted Resourcesの各行は起動時に一度だけ生成する静的UI node�
 build_soul_model || build_blueprint_model || build_familiar_model
     || build_item_model || build_tree_model || build_rock_model
     || build_stockpile_model
-append_soul_spa_model      // SoulSpaSite: 発電情報
+append_soul_spa_model      // SoulSpaSite: 発電・枠・Grid summary
 append_building_model      // Building 汎用情報
-append_power_consumer_model // PowerConsumer: 需要・稼働状態
+append_power_consumer_model // PowerConsumer: policy・接続・個別supply state
 append_designation_model   // Designation: タスク情報
 ```
 

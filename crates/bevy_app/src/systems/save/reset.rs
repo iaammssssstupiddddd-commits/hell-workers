@@ -392,6 +392,7 @@ mod tests {
         reset_runtime_caches(&mut world);
 
         let dirty = world.resource::<EnergyUpdateDirty>();
+        assert!(dirty.topology_reconcile_due);
         assert!(dirty.power_output_due);
         assert!(dirty.grid_recalc_due);
     }

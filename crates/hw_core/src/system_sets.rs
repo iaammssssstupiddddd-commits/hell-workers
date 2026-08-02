@@ -49,6 +49,10 @@ pub enum SoulAiSystemSet {
     Actor,
 }
 
+/// Soul AI Update が発行した状態修正 Commands を後続ロジックへ公開する境界。
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StateSanityFlushSet;
+
 /// Source-aware obstacle cache synchronization before pathfinding.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObstacleSyncSet;

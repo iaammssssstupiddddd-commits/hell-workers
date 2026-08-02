@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-/// Yard の電力網エンティティ。定期的に再計算される。
-/// Yard 追加 Observer によって 1 対 1 で自動生成される。
+/// Yard ごとに reconciler が一意化する電力網エンティティ。
+/// topology / output / policy の dirty transaction で集計値を再計算する。
 /// 初期状態: generation=0, consumption=0, powered=true（消費者なし＝停電ではない）
 #[derive(Component, Reflect, Debug, Clone)]
 #[reflect(Component)]
@@ -10,7 +10,7 @@ pub struct PowerGrid {
     pub generation: f32,
     /// 接続全 PowerConsumer の demand 合計
     pub consumption: f32,
-    /// generation >= consumption のとき true
+    /// 接続 consumer がすべて給電中のとき true
     pub powered: bool,
 }
 
@@ -51,10 +51,111 @@ impl Default for PowerGenerator {
 /// `#[require(Unpowered)]` により、グリッド接続前はデフォルトで停電状態になる。
 #[derive(Component, Reflect, Debug, Clone)]
 #[reflect(Component)]
-#[require(Unpowered)]
+#[require(Unpowered, PowerConsumerPolicy)]
 pub struct PowerConsumer {
     /// 稼働時の消費電力（/秒）
     pub demand: f32,
+}
+
+#[derive(Reflect, Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum PowerPriority {
+    Low,
+    #[default]
+    Normal,
+    High,
+}
+
+impl PowerPriority {
+    pub const fn allocation_rank(self) -> u8 {
+        match self {
+            Self::High => 0,
+            Self::Normal => 1,
+            Self::Low => 2,
+        }
+    }
+}
+
+/// Consumerごとの永続配電方針。
+#[derive(Component, Reflect, Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[reflect(Component)]
+pub struct PowerConsumerPolicy {
+    pub priority: PowerPriority,
+}
+
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PowerConsumerPolicyChangeOutcome {
+    pub target: Entity,
+    pub status: PowerConsumerPolicyChangeStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PowerConsumerPolicyChangeStatus {
+    Applied {
+        previous: PowerPriority,
+        applied: PowerPriority,
+    },
+    StaleTarget,
+    UnsupportedTarget,
+    MissingPolicy,
+}
+
+#[derive(Reflect, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PowerShedReason {
+    InsufficientGeneration,
+    RestoreMargin,
+    LegacyGlobalDeficit,
+}
+
+/// 配電transactionから再構築されるconsumerのruntime状態。
+#[derive(Component, Reflect, Debug, Clone, Copy, PartialEq, Eq)]
+#[reflect(Component)]
+pub enum PowerSupplyState {
+    Supplied,
+    Shed { reason: PowerShedReason },
+    Disconnected,
+    InvalidDemand,
+}
+
+/// 直近の配電 transaction が PowerGrid ごとに確定した集計値。
+///
+/// セーブ対象ではなく、ロード後の topology/配電再構築で再生成する。
+#[derive(Component, Reflect, Debug, Clone, PartialEq)]
+#[reflect(Component)]
+pub struct PowerGridAllocationSummary {
+    pub mode: PowerAllocationMode,
+    pub generation: f32,
+    pub total_demand: f32,
+    pub served_demand: f32,
+    pub consumer_count: usize,
+    pub supplied_count: usize,
+    pub shed_count: usize,
+    pub invalid_count: usize,
+    #[entities]
+    pub shed_order: Vec<Entity>,
+}
+
+impl Default for PowerGridAllocationSummary {
+    fn default() -> Self {
+        Self {
+            mode: PowerAllocationMode::default(),
+            generation: 0.0,
+            total_demand: 0.0,
+            served_demand: 0.0,
+            consumer_count: 0,
+            supplied_count: 0,
+            shed_count: 0,
+            invalid_count: 0,
+            shed_order: Vec::new(),
+        }
+    }
+}
+
+#[derive(Resource, Reflect, Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[reflect(Resource)]
+pub enum PowerAllocationMode {
+    LegacyAllOrNone,
+    #[default]
+    PriorityPrefix,
 }
 
 /// マーカー: この Consumer は電力供給を受けていない。

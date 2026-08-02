@@ -5,6 +5,7 @@
 ## 責務（このクレートがやること）
 
 - Soul Energy システムの **型・定数・Relationship** を定義するドメインクレート
+- ECS worldへ触れない決定的なpure allocator（priority prefix / legacy all-or-none）
 - `PowerGrid`, `PowerGenerator`, `PowerConsumer`, `Unpowered` 等のコンポーネント定義
 - `GeneratesFor` / `ConsumesFrom` Relationship（Bevy 0.19 ECS Relationships）
 - `SoulSpaSite` / `SoulSpaTile` / `SoulSpaPhase` の構造定義
@@ -14,7 +15,9 @@
 
 - **`bevy_app` への逆依存禁止**（Cargo 循環依存制約）
 - **他の hw_* クレートへの依存禁止**（このクレートは `bevy` のみに依存する最軽量 leaf crate）
-- **Grid 再計算やバフ等のシステムロジックをこのクレートに書かない**（システムは `bevy_app/src/systems/energy/` が担当）
+- **Bevy System / Plugin、Grid topology再構築、runtime state同期、バフ処理を書かない**
+  （worldを読む/書く処理は `bevy_app/src/systems/energy/` が担当）
+- pure allocatorはEntity・座標・需要・policy・直前stateを明示入力にし、Query / Resource / Commandsへ依存させない
 - **`#[allow(dead_code)]` を使用しない**（使われないコードは削除する）
 - **Bevy 0.14 以前の API を推測で使わない**（0.19 の変更点が多い。既存コードまたは docs.rs/bevy/0.19.0 で確認する）
 
@@ -46,20 +49,23 @@ bevy_app       ✗
 
 ## plugin / system 登録責務
 
-- このクレートは **Plugin を持たない**（型・定数・Relationship の定義のみ）
+- このクレートは **Plugin / System を持たない**（domain型とECS非依存のpure policyのみ）
 - システム登録は `bevy_app/src/plugins/logic.rs` が担う
 - Relationship 型の Reflect 登録は `bevy_app/src/plugins/logic.rs` で行う
 
 ## 主要な不変条件
 
-- **PowerGrid は Yard と 1:1**: `on_yard_added` Observer が自動スポーン、`on_yard_removed` が自動 despawn
-- **PowerConsumer は初期 Unpowered**: `#[require(Unpowered)]` によりグリッド接続前はデフォルト停電。`grid_recalc_system` が通電時に除去する
+- **PowerGrid は Yard と 1:1**: Observerはdirty通知だけを行い、rootのordered reconcilerが欠落作成・重複/orphan除去・connection修復を一括で行う
+- **PowerConsumer は初期 fail-closed**: `#[require(Unpowered, PowerConsumerPolicy)]`。rootのallocation transactionだけが`PowerSupplyState`と`Unpowered` mirrorを同期する
 - **空グリッドは powered**: `consumption == 0` のとき `powered = true`（消費者なし = 停電ではない）
+- **runtime stateは非保存**: `PowerSupplyState`、`PowerGridAllocationSummary`、`Unpowered`はload後に再構築する
+- **Soul Spa集計の正本は `SoulSpaTile.parent_site`**: 表示用`ChildOf`を発電量・占有数の成立条件にしない
 
 ## 既知のサイレント失敗トラップ
 
-- Yard 外に配置された PowerConsumer は `on_power_consumer_added` Observer で ConsumesFrom が付与されず、`grid_recalc_system` の対象外 → 常時 Unpowered（ログなし）
-- `SoulSpaSite` が `GeneratesFor` なしだと `GridGenerators` に含まれず発電が集計されない（`soul_spa_place/input.rs` の `power_grid_entity` が None のとき発生）
+- Yard外または有効gridを失ったPowerConsumerは`Disconnected + Unpowered`へ正規化される。未接続を`Shed`として扱わない
+- `GeneratesFor` / `ConsumesFrom`を直接補修せず、TransformとYardからordered reconcilerに再判定させる
+- `LegacyAllOrNone`由来のshedはPriority modeへ戻す際のhysteresis履歴ではない。mode復帰はcold startとしてraw prefixを再構築する
 
 ## docs 更新対象（変更時に必ず更新するドキュメント）
 
@@ -73,6 +79,9 @@ bevy_app       ✗
 ```bash
 # コンパイル確認（必須）
 python3 scripts/dev.py check
+
+# pure allocation契約
+cargo test -p hw_energy allocation
 ```
 
 ## 参照ドキュメント

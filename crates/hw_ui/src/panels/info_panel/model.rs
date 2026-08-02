@@ -1,6 +1,8 @@
 use crate::models::inspection::{
-    EntityInspectionModel, InspectionSoulGender, StockpileInspectionFields,
+    EntityInspectionModel, InspectionSoulGender, PowerInspectionFields, SoulSpaInspectionFields,
+    StockpileInspectionFields,
 };
+use crate::power::PowerPriorityValue;
 use bevy::prelude::*;
 use hw_logistics::transport_request::TransportPriority;
 use hw_logistics::{
@@ -11,6 +13,8 @@ use hw_logistics::{
 pub(super) enum InfoPanelViewModel {
     Soul(SoulInfoViewModel),
     Stockpile(StockpileInfoViewModel),
+    SoulSpa(SoulSpaInfoViewModel),
+    Power(PowerInfoViewModel),
     Simple(SimpleInfoViewModel),
 }
 
@@ -47,6 +51,29 @@ pub(super) struct StockpileInfoViewModel {
     pub(super) inbound_priority: TransportPriority,
     pub(super) target_amount: usize,
     pub(super) allow_export: bool,
+    pub(super) common: String,
+}
+
+#[derive(Clone, PartialEq)]
+pub(super) struct SoulSpaInfoViewModel {
+    pub(super) entity: Entity,
+    pub(super) header: String,
+    pub(super) operational: bool,
+    pub(super) bones_delivered: u32,
+    pub(super) bones_required: u32,
+    pub(super) occupied_slots: u32,
+    pub(super) active_slots: u32,
+    pub(super) max_active_slots: u32,
+    pub(super) output_watts: f32,
+    pub(super) power: Option<PowerInspectionFields>,
+    pub(super) common: String,
+}
+
+#[derive(Clone, PartialEq)]
+pub(super) struct PowerInfoViewModel {
+    pub(super) entity: Entity,
+    pub(super) header: String,
+    pub(super) fields: PowerInspectionFields,
     pub(super) common: String,
 }
 
@@ -103,6 +130,14 @@ pub(super) fn to_view_model(model: EntityInspectionModel) -> InfoPanelViewModel 
             model.common_text,
             stockpile,
         ))
+    } else if let Some(soul_spa) = model.soul_spa {
+        InfoPanelViewModel::SoulSpa(soul_spa_view_model(
+            model.entity,
+            model.header,
+            model.common_text,
+            soul_spa,
+            model.power,
+        ))
     } else if let Some(soul) = model.soul {
         InfoPanelViewModel::Soul(SoulInfoViewModel {
             entity: model.entity,
@@ -116,11 +151,48 @@ pub(super) fn to_view_model(model: EntityInspectionModel) -> InfoPanelViewModel 
             inventory: soul.inventory,
             common: soul.common,
         })
+    } else if let Some(power) = model.power {
+        InfoPanelViewModel::Power(PowerInfoViewModel {
+            entity: model.entity,
+            header: model.header,
+            fields: power,
+            common: model.common_text,
+        })
     } else {
         InfoPanelViewModel::Simple(SimpleInfoViewModel {
             header: model.header,
             common: model.common_text,
         })
+    }
+}
+
+fn soul_spa_view_model(
+    entity: Entity,
+    header: String,
+    common: String,
+    fields: SoulSpaInspectionFields,
+    power: Option<PowerInspectionFields>,
+) -> SoulSpaInfoViewModel {
+    SoulSpaInfoViewModel {
+        entity,
+        header,
+        operational: fields.operational,
+        bones_delivered: fields.bones_delivered,
+        bones_required: fields.bones_required,
+        occupied_slots: fields.occupied_slots,
+        active_slots: fields.active_slots,
+        max_active_slots: fields.max_active_slots,
+        output_watts: fields.output_watts,
+        power,
+        common,
+    }
+}
+
+pub(super) const fn next_power_priority(current: PowerPriorityValue) -> PowerPriorityValue {
+    match current {
+        PowerPriorityValue::Low => PowerPriorityValue::Normal,
+        PowerPriorityValue::Normal => PowerPriorityValue::High,
+        PowerPriorityValue::High => PowerPriorityValue::Low,
     }
 }
 
@@ -193,6 +265,8 @@ mod tests {
                 target_amount: 6,
                 allow_export: false,
             }),
+            soul_spa: None,
+            power: None,
         });
 
         let InfoPanelViewModel::Stockpile(stockpile) = view else {

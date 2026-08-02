@@ -339,6 +339,7 @@ mod tests {
     use hw_core::population::PopulationManager;
     use hw_core::relationships::{CommandedBy, Commanding};
     use hw_core::soul::DreamPool;
+    use hw_energy::{PowerConsumer, PowerShedReason, PowerSupplyState, Unpowered};
     use hw_jobs::Building;
     use hw_jobs::mud_mixer::MudMixerStorage;
     use hw_logistics::types::{
@@ -389,6 +390,26 @@ mod tests {
             .expect("resource item root must be persisted")
             .components
             .push(Box::new(ReservedForTask));
+        dynamic_world.serialize(&registry).unwrap()
+    }
+
+    fn legacy_body_with_power_runtime_state(app: &mut App) -> String {
+        let consumer = app.world_mut().spawn(PowerConsumer { demand: 1.0 }).id();
+        let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let mut dynamic_world =
+            build_persisted_world(app.world(), &registry, std::iter::once(consumer));
+        let dynamic_consumer = dynamic_world
+            .entities
+            .iter_mut()
+            .find(|entity| entity.entity == consumer)
+            .expect("power consumer root must be persisted");
+        dynamic_consumer.components.push(Box::new(Unpowered));
+        dynamic_consumer
+            .components
+            .push(Box::new(PowerSupplyState::Shed {
+                reason: PowerShedReason::RestoreMargin,
+            }));
         dynamic_world.serialize(&registry).unwrap()
     }
 
@@ -559,6 +580,35 @@ mod tests {
         let registry = type_registry.read();
         let resaved_v1_body = prepared.dynamic_world.serialize(&registry).unwrap();
         assert!(!resaved_v1_body.contains(ReservedForTask::type_path()));
+    }
+
+    #[test]
+    fn legacy_power_runtime_state_is_stripped_for_v0_and_v1_before_resave() {
+        let mut app = legacy_loader_test_app();
+        let body = legacy_body_with_power_runtime_state(&mut app);
+        let fixtures = [
+            body.clone(),
+            encode_save_file(SaveHeader::current(42), &body),
+        ];
+
+        for fixture in fixtures {
+            let prepared = prepare_load_from_str(app.world(), &fixture)
+                .expect("legacy runtime power state must remain loadable");
+            assert!(prepared.dynamic_world.entities.iter().all(|entity| {
+                entity.components.iter().all(|component| {
+                    component.get_represented_type_info().is_none_or(|info| {
+                        info.type_id() != TypeId::of::<Unpowered>()
+                            && info.type_id() != TypeId::of::<PowerSupplyState>()
+                    })
+                })
+            }));
+
+            let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+            let registry = type_registry.read();
+            let resaved_v1_body = prepared.dynamic_world.serialize(&registry).unwrap();
+            assert!(!resaved_v1_body.contains(Unpowered::type_path()));
+            assert!(!resaved_v1_body.contains(PowerSupplyState::type_path()));
+        }
     }
 
     #[test]

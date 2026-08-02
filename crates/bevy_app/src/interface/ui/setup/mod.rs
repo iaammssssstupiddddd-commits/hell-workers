@@ -18,6 +18,7 @@ pub fn setup_ui(
         default_time_speed: settings.default_time_speed,
         debug_gizmos_enabled: settings.debug_gizmos_enabled,
         fps_display_enabled: settings.fps_display_enabled,
+        power_priority_enabled: settings.power_priority_enabled,
     };
     let help_chrome = crate::interface::ui::help_content::build_help_panel_chrome()
         .expect("validated Help chrome");

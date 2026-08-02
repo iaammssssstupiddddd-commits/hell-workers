@@ -29,8 +29,8 @@ topic|feature="familiar-commands"|owner="familiar-management"|section="familiars
 entry|topic="familiar-commands"|id="familiar-designations"|title="作業指定"|paragraphs=["Familiar を選択中に Chop / Mine / Haul を選び、対象範囲をクリックまたはドラッグします。", "Cancel は既存の指定を範囲で取り消します。"]|shortcut=Some("C / 1 / M / 2 / H / 3 / 0 / Delete")
 entry|topic="familiar-commands"|id="familiar-idle-patrol"|title="Idle / Patrol"|paragraphs=["通常状態の Familiar を選択中に、Idle と Patrol を切り替えられます。"]|shortcut=Some("Esc")
 topic|feature="soul-energy"|owner="soul-energy"|section="familiars-workers"|id="soul-energy"|title="Soul Energy"
-entry|topic="soul-energy"|id="soul-energy-status"|title="Yard の電力網を確認する"|paragraphs=["電力は Yard ごとのリアルタイムな発電量と需要で決まり、蓄電はしません。", "Outdoor Lamp を選ぶと Demand と Grid の発電量 / 消費量を確認できます。発電が需要を下回ると BLACKOUT になり、接続中の設備が停止します。"]|shortcut=None
-entry|topic="soul-energy"|id="soul-energy-recovery"|title="Soul Spa で発電する"|paragraphs=["Yard 内に Soul Spa を建てて Bone を搬入すると、Operational になった発電枠へ Soul が入れます。", "発電中の Soul は Dream を消費します。Lamp を増やしたら、発電量、Soul の Dream、Yard への接続を一緒に確認してください。"]|shortcut=None
+entry|topic="soul-energy"|id="soul-energy-status"|title="Yard の電力網を確認する"|paragraphs=["電力は Yard ごとのリアルタイムな発電量と需要で決まり、蓄電はしません。", "Outdoor Lamp を選ぶと、接続、発電・供給済み需要・予備力または不足量、設備件数、供給状態と遮断順を確認できます。供給不足時は High、Normal、Low の順で給電し、同じ優先度では位置順に遮断します。", "情報パネルの Priority ボタンで設備の優先度を変更できます。Settings の Power priority allocation を無効にすると、需要超過時は接続中の全設備が停止する従来方式へ戻ります。"]|shortcut=None
+entry|topic="soul-energy"|id="soul-energy-recovery"|title="Soul Spa で発電する"|paragraphs=["Yard 内に Soul Spa を建てて選択すると Bone の搬入進捗を確認できます。Operational になると出力と電力網が表示され、発電枠へ Soul が入れます。", "情報パネルの Active slots は 0〜4 で変更できます。稼働数より小さくしても作業中の Soul は追い出さず、終了後の新規割り当てだけを設定枠まで止めます。", "発電中の Soul は Dream を消費します。Lamp を増やしたら、発電量、Soul の Dream、Yard への接続を一緒に確認してください。"]|shortcut=None
 topic|feature="info-panel"|owner="familiar-management"|section="familiars-workers"|id="info-panel"|title="情報パネル"
 entry|topic="info-panel"|id="info-panel-pin"|title="表示を固定する"|paragraphs=["情報パネルを pin すると、ポインターを別の対象へ動かしても表示対象を維持します。", "unpin すると現在の hover / selection に追従します。"]|shortcut=None
 entry|topic="info-panel"|id="soul-rename"|title="Soul の名前変更"|paragraphs=["Soul の情報パネルから名前を編集できます。Enter で確定、Esc でキャンセルします。"]|shortcut=Some("Enter / Esc")
@@ -49,7 +49,7 @@ entry|topic="task-dashboard"|id="task-dashboard-actions"|title="優先度変更�
 section|id="save-settings-notifications"|title="保存・設定・通知"
 topic|feature="save-settings-notifications"|owner="persistence-settings"|section="save-settings-notifications"|id="save-settings-notifications"|title="保存・設定・通知"
 entry|topic="save-settings-notifications"|id="save-load"|title="保存と読込"|paragraphs=["現在の単一セーブへ保存するか、読込確認を開きます。", "読込は現在の world を置き換えるため、確認ダイアログを経て実行されます。"]|shortcut=Some("F5 / F9")
-entry|topic="save-settings-notifications"|id="settings"|title="Settings"|paragraphs=["UI scale、カメラ速度、マウス移動、既定時間速度、デバッグ表示を変更できます。", "設定は変更時に保存され、次回起動でも利用されます。"]|shortcut=None
+entry|topic="save-settings-notifications"|id="settings"|title="Settings"|paragraphs=["UI scale、カメラ速度、マウス移動、既定時間速度、電力の優先配電、デバッグ表示を変更できます。", "設定は変更時に保存され、次回起動でも利用されます。"]|shortcut=None
 entry|topic="save-settings-notifications"|id="notifications"|title="通知"|paragraphs=["短い結果は toast で表示されます。重要な履歴は通知一覧から後で確認できます。", "同じ失敗が続く場合は、対象・資源・経路・担当範囲を順に確認してください。"]|shortcut=None
 coverage|building-category::architecture|player|published:entry:architect-building
 coverage|building-category::plant|player|published:entry:architect-building
@@ -150,6 +150,18 @@ coverage|play-mode::building-place|player|published:entry:architect-building
 coverage|play-mode::floor-place|player|published:entry:architect-building
 coverage|play-mode::normal|player|published:entry:getting-started-work-loop
 coverage|play-mode::task-designation|player|published:entry:orders-designation
+coverage|power-allocation-mode::legacy-all-or-none|player|published:entry:soul-energy-status
+coverage|power-allocation-mode::priority-prefix|player|published:entry:soul-energy-status
+coverage|power-priority::high|player|published:entry:soul-energy-status
+coverage|power-priority::low|player|published:entry:soul-energy-status
+coverage|power-priority::normal|player|published:entry:soul-energy-status
+coverage|power-shed-reason::insufficient-generation|player|published:entry:soul-energy-status
+coverage|power-shed-reason::legacy-global-deficit|player|published:entry:soul-energy-status
+coverage|power-shed-reason::restore-margin|player|published:entry:soul-energy-status
+coverage|power-supply-state::disconnected|player|published:entry:soul-energy-status
+coverage|power-supply-state::invalid-demand|player|published:entry:soul-energy-status
+coverage|power-supply-state::shed|player|published:entry:soul-energy-status
+coverage|power-supply-state::supplied|player|published:entry:soul-energy-status
 coverage|resource-type::bone|player|published:entry:zones-workflow
 coverage|resource-type::bucket-empty|player|published:entry:zones-workflow
 coverage|resource-type::bucket-water|player|published:entry:zones-workflow
@@ -246,6 +258,7 @@ coverage|ui-intent::operation-open|player|published:entry:familiar-operation-pol
 coverage|ui-intent::operation-settings-dialog|player|published:entry:familiar-operation-policy
 coverage|ui-intent::operation-settings-explicit|player|published:entry:familiar-operation-policy
 coverage|ui-intent::orders-toggle|player|published:entry:orders-designation
+coverage|ui-intent::power-consumer-priority|player|published:entry:soul-energy-status
 coverage|ui-intent::remove-stockpile-zone|player|published:entry:zones-workflow
 coverage|ui-intent::remove-yard-zone|player|excluded:unreachable-player-flow
 coverage|ui-intent::save|player|published:entry:save-load
@@ -260,8 +273,10 @@ coverage|ui-intent::settings-close|player|published:entry:settings
 coverage|ui-intent::settings-debug-gizmos|player|published:entry:settings
 coverage|ui-intent::settings-default-time-speed|player|published:entry:settings
 coverage|ui-intent::settings-fps-display|player|published:entry:settings
+coverage|ui-intent::settings-power-priority|player|published:entry:settings
 coverage|ui-intent::settings-toggle|player|published:entry:settings
 coverage|ui-intent::settings-ui-scale|player|published:entry:settings
+coverage|ui-intent::soul-spa-active-slots|player|published:entry:soul-energy-recovery
 coverage|ui-intent::stockpile-policy-range|player|published:entry:zones-workflow
 coverage|ui-intent::stockpile-policy|player|published:entry:zones-workflow
 coverage|ui-intent::task-cancel|player|published:entry:task-dashboard-actions

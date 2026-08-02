@@ -14,6 +14,12 @@ pub struct GameSettingsFile {
     pub default_time_speed: TimeSpeedFile,
     pub debug_gizmos_enabled: bool,
     pub fps_display_enabled: bool,
+    #[serde(default = "default_power_priority_enabled")]
+    pub power_priority_enabled: bool,
+}
+
+const fn default_power_priority_enabled() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -33,6 +39,7 @@ impl From<GameSettings> for GameSettingsFile {
             default_time_speed: settings.default_time_speed.into(),
             debug_gizmos_enabled: settings.debug_gizmos_enabled,
             fps_display_enabled: settings.fps_display_enabled,
+            power_priority_enabled: settings.power_priority_enabled,
         }
     }
 }
@@ -46,6 +53,7 @@ impl From<GameSettingsFile> for GameSettings {
             default_time_speed: file.default_time_speed.into(),
             debug_gizmos_enabled: file.debug_gizmos_enabled,
             fps_display_enabled: file.fps_display_enabled,
+            power_priority_enabled: file.power_priority_enabled,
         }
     }
 }
@@ -101,4 +109,45 @@ pub fn save_settings_to_disk(settings: &GameSettings) -> Result<(), String> {
     let contents = ron::ser::to_string_pretty(&file, ron::ser::PrettyConfig::default())
         .map_err(|err| err.to_string())?;
     std::fs::write(SETTINGS_FILE, contents).map_err(|err| err.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_settings_file_preserves_existing_values_and_enables_priority() {
+        let old = r#"(
+            ui_scale: 1.15,
+            camera_pan_speed: 750.0,
+            camera_mouse_pan_enabled: false,
+            default_time_speed: Fast,
+            debug_gizmos_enabled: true,
+            fps_display_enabled: false,
+        )"#;
+
+        let file: GameSettingsFile = ron::from_str(old).expect("old settings must migrate");
+        let settings: GameSettings = file.into();
+
+        assert_eq!(settings.ui_scale, 1.15);
+        assert_eq!(settings.camera_pan_speed, 750.0);
+        assert!(!settings.camera_mouse_pan_enabled);
+        assert_eq!(settings.default_time_speed, TimeSpeed::Fast);
+        assert!(settings.debug_gizmos_enabled);
+        assert!(!settings.fps_display_enabled);
+        assert!(settings.power_priority_enabled);
+    }
+
+    #[test]
+    fn priority_setting_round_trips() {
+        let settings = GameSettings {
+            power_priority_enabled: false,
+            ..default()
+        };
+        let file: GameSettingsFile = settings.into();
+        let body = ron::to_string(&file).unwrap();
+        let loaded: GameSettings = ron::from_str::<GameSettingsFile>(&body).unwrap().into();
+
+        assert!(!loaded.power_priority_enabled);
+    }
 }

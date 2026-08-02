@@ -121,10 +121,23 @@ notification Message を発行しない。
 通知は `ToastOnly` であり重要履歴へ残さない。単一と範囲で同じadapterを通り、同じUpdateの
 `NotificationSystemSet::Adapt → Reduce → Present` で表示される。
 
+## Soul Energy 操作結果
+
+Soul Spaの枠操作は`UiIntent::SetSoulSpaActiveSlots`ごとに`SoulSpaSlotsChangeOutcome`を1件返す。
+exact適用はSuccess、0〜4へのclampはWarning、stale / unsupported / Constructing中の操作はWarningまたはErrorへ
+安全な固定文言で変換する。失敗時は`active_slots`を変更せず、枠減少時も既存workerを解除しない。
+
+Power priority操作は`UiIntent::SetPowerConsumerPriority`ごとに`PowerConsumerPolicyChangeOutcome`を1件返す。
+rootがtargetの生存、`PowerConsumer`、既存policyを再検証し、stale / unsupported / missing policyを区別する。
+missing policyはロード互換処理の責務であり、UI操作中に部分修復しない。両outcomeは同じUpdateのadapterで
+`ToastOnly`へ変換され、Entityとresult kindを含むkeyで別対象・別失敗を誤ってdedupeしない。
+
 ## Messageとsystem順
 
 ```text
 SaveLoadOutcome / TaskActionOutcome / StockpilePolicyChangeOutcome
+  / FamiliarSettingsChangeOutcome / SoulSpaSlotsChangeOutcome
+  / PowerConsumerPolicyChangeOutcome
   → NotificationSystemSet::Adapt（rootで安全な表示文言へ変換）
   → UserFacingNotification
   → NotificationSystemSet::Reduce（ingest / dedupe / expiry）
@@ -132,14 +145,15 @@ SaveLoadOutcome / TaskActionOutcome / StockpilePolicyChangeOutcome
 ```
 
 `Adapt → Reduce → Present` は同じ `Update` 内でchainされる。`SaveLoadOutcome` は `Last` で発行されるため
-次の `Update`、task action outcome と `StockpilePolicyChangeOutcome` は Interface 内の各domain apply後に
+次の `Update`、その他の操作outcomeはInterface内の各domain apply後に
 同じ `Update` の adapter に読まれる。
 
 ## world replacement reset
 
 - `SavePlugin` の専用hookが古い `SaveLoadOutcome` bufferを消す。
 - `hw_ui::reset_for_world_replace()` が `UserFacingNotification`、center、unread、履歴開閉、描画revisionを初期化する。
-- `MessagesPlugin` が旧 world の `TaskActionOutcome`、`StockpilePolicyChangeRequest` / `Outcome` bufferをclearし、
+- `MessagesPlugin` が旧 world の `TaskActionOutcome`、Stockpile/Familiar settingsのrequest/outcome、
+  `SoulSpaSlotsChangeOutcome`、`PowerConsumerPolicyChangeOutcome` bufferをclearし、
   task confirmation / `UiIntent` もUI owner hookが消す。
 - 動的toast/history rowはdespawnし、static root、panel、未読labelを非表示／初期表示へ戻す。
 - 配置の `live` / `recent_failure` も同じUI owner hookで消す。

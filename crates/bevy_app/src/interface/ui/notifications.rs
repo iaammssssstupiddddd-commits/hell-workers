@@ -4,6 +4,10 @@ use hw_ui::notifications::{NotificationRetention, NotificationSeverity, UserFaci
 use crate::systems::save::{
     SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadResult,
 };
+use hw_energy::{
+    PowerConsumerPolicyChangeOutcome, PowerConsumerPolicyChangeStatus, SoulSpaSlotsChangeOutcome,
+    SoulSpaSlotsChangeStatus,
+};
 use hw_familiar_ai::{
     FamiliarSettingsChangeOutcome, FamiliarSettingsChangeStatus, FamiliarSettingsRejection,
 };
@@ -36,6 +40,122 @@ pub(crate) fn adapt_familiar_settings_change_outcomes(
             notifications.write(notification);
         }
     }
+}
+
+pub(crate) fn adapt_soul_spa_slots_change_outcomes(
+    mut outcomes: MessageReader<SoulSpaSlotsChangeOutcome>,
+    mut notifications: MessageWriter<UserFacingNotification>,
+) {
+    for outcome in outcomes.read().copied() {
+        notifications.write(soul_spa_slots_notification(outcome));
+    }
+}
+
+pub(crate) fn adapt_power_consumer_policy_change_outcomes(
+    mut outcomes: MessageReader<PowerConsumerPolicyChangeOutcome>,
+    mut notifications: MessageWriter<UserFacingNotification>,
+) {
+    for outcome in outcomes.read().copied() {
+        notifications.write(power_consumer_policy_notification(outcome));
+    }
+}
+
+fn power_consumer_policy_notification(
+    outcome: PowerConsumerPolicyChangeOutcome,
+) -> UserFacingNotification {
+    let target = outcome.target.to_bits();
+    let (severity, title, body, status_key) = match outcome.status {
+        PowerConsumerPolicyChangeStatus::Applied { previous, applied } if previous == applied => (
+            NotificationSeverity::Info,
+            "Power priority unchanged",
+            format!("Priority remains {applied:?}."),
+            format!("unchanged:{applied:?}"),
+        ),
+        PowerConsumerPolicyChangeStatus::Applied { applied, .. } => (
+            NotificationSeverity::Success,
+            "Power priority updated",
+            format!("Priority set to {applied:?}."),
+            format!("applied:{applied:?}"),
+        ),
+        PowerConsumerPolicyChangeStatus::StaleTarget => (
+            NotificationSeverity::Warning,
+            "Power priority not changed",
+            "The selected consumer no longer exists.".to_string(),
+            "stale".to_string(),
+        ),
+        PowerConsumerPolicyChangeStatus::UnsupportedTarget => (
+            NotificationSeverity::Warning,
+            "Power priority not changed",
+            "The selected entity does not consume power.".to_string(),
+            "unsupported".to_string(),
+        ),
+        PowerConsumerPolicyChangeStatus::MissingPolicy => (
+            NotificationSeverity::Error,
+            "Power priority unavailable",
+            "The consumer is missing its durable power policy.".to_string(),
+            "missing-policy".to_string(),
+        ),
+    };
+
+    UserFacingNotification::new(
+        format!("power-consumer-priority:{target}:{status_key}"),
+        severity,
+        title,
+        body,
+        NotificationRetention::ToastOnly,
+    )
+}
+
+fn soul_spa_slots_notification(outcome: SoulSpaSlotsChangeOutcome) -> UserFacingNotification {
+    let target = outcome.target.to_bits();
+    let (severity, title, body, status_key) = match outcome.status {
+        SoulSpaSlotsChangeStatus::Applied {
+            requested,
+            applied,
+            clamped: false,
+        } => (
+            NotificationSeverity::Success,
+            "Soul Spa slots updated",
+            format!("Active slots set to {applied}."),
+            format!("applied:{requested}:{applied}"),
+        ),
+        SoulSpaSlotsChangeStatus::Applied {
+            requested,
+            applied,
+            clamped: true,
+        } => (
+            NotificationSeverity::Warning,
+            "Soul Spa slots adjusted",
+            format!("Requested {requested}; active slots were clamped to {applied}."),
+            format!("clamped:{requested}:{applied}"),
+        ),
+        SoulSpaSlotsChangeStatus::StaleTarget => (
+            NotificationSeverity::Warning,
+            "Soul Spa slots not changed",
+            "The selected Soul Spa no longer exists.".to_string(),
+            "stale".to_string(),
+        ),
+        SoulSpaSlotsChangeStatus::UnsupportedTarget => (
+            NotificationSeverity::Warning,
+            "Soul Spa slots not changed",
+            "The selected entity is not a Soul Spa.".to_string(),
+            "unsupported".to_string(),
+        ),
+        SoulSpaSlotsChangeStatus::PhaseUnavailable => (
+            NotificationSeverity::Warning,
+            "Soul Spa slots unavailable",
+            "Active slots can be changed after construction is complete.".to_string(),
+            "phase".to_string(),
+        ),
+    };
+
+    UserFacingNotification::new(
+        format!("soul-spa-slots:{target}:{status_key}"),
+        severity,
+        title,
+        body,
+        NotificationRetention::ToastOnly,
+    )
 }
 
 fn familiar_settings_notification(

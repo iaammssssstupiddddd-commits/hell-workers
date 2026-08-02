@@ -22,6 +22,15 @@ pub const OUTDOOR_LAMP_EFFECT_RADIUS: f32 = 5.0;
 /// Soul Spa のタイル 1 枚あたり建設コスト（Bone）。2×2 = 合計 12
 pub const SOUL_SPA_BONE_COST_PER_TILE: u32 = 3;
 
+/// Soul Spa 1施設で設定できる最大稼働枠数（2×2タイル）。
+pub const SOUL_SPA_MAX_ACTIVE_SLOTS: u32 = 4;
+
+/// 配電容量比較でのみ使う丸め誤差許容値。
+pub const POWER_ALLOCATION_EPSILON: f32 = 0.0001;
+
+/// 一度shedされたconsumerを再投入するために必要な追加余力（W）。
+pub const POWER_RESTORE_MARGIN: f32 = 0.05;
+
 /// 発電中の疲労蓄積レート（/秒）
 /// 参考: hw_core/constants/ai.rs の FATIGUE_WORK_RATE = 0.01。瞑想的な行為のため半分程度
 pub const FATIGUE_RATE_GENERATING: f32 = 0.005;

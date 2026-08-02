@@ -26,7 +26,7 @@
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できないの計画。 |
-| [soul-energy-control-plan-2026-07-20.md](soul-energy-control-plan-2026-07-20.md) | Draft | Soul Spa 稼働枠と優先度付き個別給電を導入する計画。 |
+| [soul-energy-control-plan-2026-07-20.md](soul-energy-control-plan-2026-07-20.md) | In Progress | Soul Spa 稼働枠と優先度付き個別給電を導入する計画。 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 

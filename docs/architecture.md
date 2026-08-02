@@ -119,7 +119,12 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 - `building_completion_system` は `SoulAiSystemSet::Execute` 後の `BuildingCompletionSet` で実行する。続く Actor phase は `ApplyDeferred` により command を反映してから `ObstacleSyncSet` を実行し、`SoulAiSystemSet::Actor`（pathfinding を含む）より前に `obstacle_sync_system` が WorldMap を更新する。
 - Group C: floor construction 系 (`floor_construction_phase_transition_system` → `floor_construction_completion_system`) は`TaskOwnerCancellationSet::Flush`後にフェーズ順を保つため `.chain()` で登録する。
 - Group D: wall construction 系 (`debug_instant_complete_walls_system` → `wall_framed_tile_spawn_system` → `wall_construction_phase_transition_system` → `wall_construction_completion_system`) は`TaskOwnerCancellationSet::Flush`後にフェーズ順とデバッグ割り込み位置を保つため `.chain()` で登録する。
-- Soul Spa / energy 系は child・relationship の deferred mutation を先に適用し、`detect_energy_update_dirty_system` → output → grid recalculation → `Unpowered` 適用 → lamp buff を同じLogic frameで直列化する。lamp buff はSoul AIのslow update後にのみ実行し、steady-stateのoutput/grid全走査はdirty gateで止める。
+- Soul Spa / energy系はSoul AI Updateのstate-sanity Commandsを`StateSanityFlushSet`で先に公開する。その後
+  `settings mode sync → dirty検出 → Yard/Grid topology reconciliation → ApplyDeferred → output → individual allocation/disconnected normalization → ApplyDeferred → lamp buff`
+  を同じLogic frameで直列化する。durable policy/slotはleaf `hw_energy`、world topologyとcross-domain orderingはroot
+  `bevy_app`が所有する。lamp buffは個別`Unpowered` mirrorだけを読み、steady-stateのtopology/output/allocation全走査はdirty gateで止める。
+  Soul Spaのderived `current_output` writeは同じtransactionへ明示伝播してchange detectionだけを抑え、外部の
+  `PowerGenerator` writeは通常のdirty sourceとして残すため、direct changeとsteady-state zero-workを両立する。
 - room detection 系 (`mark_room_dirty_from_building_changes_system` → `validate_rooms_system` → `detect_rooms_system`) は `.chain().after(dream_tree_planting_system)` を維持し、DreamTree 反映後のワールド状態を入力にする。
 
 ## タスク割り当て・物流・UIの責務境界
@@ -229,7 +234,8 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 | 移動・アニメーション | `SOUL_SPEED_BASE`, `ANIM_BOB_SPEED` |
 
 > **例外: Soul Energy 定数**
-> `OUTPUT_PER_SOUL`, `DREAM_CONSUME_RATE_GENERATING`, `OUTDOOR_LAMP_DEMAND` など Soul Energy 系の定数は
+> `OUTPUT_PER_SOUL`, `DREAM_CONSUME_RATE_GENERATING`, `OUTDOOR_LAMP_DEMAND`,
+> `POWER_RESTORE_MARGIN` など Soul Energy 系の定数は
 > ドメイン専用 crate `hw_energy::constants` に集約されています（`hw_core` には含まれません）。
 
 ## RtT（Render-to-Texture）インフラ
@@ -417,6 +423,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 - `hw_ui` 側はUIノード生成・表示系システムの本体を集約する。具体的にはステータス表示、tooltip_builder、info_panel、task_list、エンティティリストの汎用メカニクスに加え、有界な`UserFacingNotification` reducer/UIとtyped `PlacementFeedbackState`を保持する。`UiRoot` / `UiMountSlot` / `UiSlot` / `UiNodeRegistry` のような**共有 UI 契約型**は `hw_core::ui_nodes` が所有し、`hw_ui` は re-export する。
 - root 側 (`bevy_app`) は `UiIntent` メッセージ受信、PlayMode 遷移、ゲームエンティティ ECS Query、WorldMapWrite/TaskContext など**ゲーム状態を持つ adapter** を担当する。`SaveLoadOutcome`から安全な表示文言への変換と、WorldMap/Queryをtyped placement validatorへ渡す処理もroot adapterである。
+- energy inspection / editでは`hw_ui::power`がgame-agnosticなUI mirrorを所有し、rootが`hw_energy`のdomain型、grid summary、shed Entity列をmirror・座標labelへ変換する。`hw_ui → hw_energy`依存は作らない。
 - `crates/bevy_app/src/interface/ui/mod.rs` は app shell の正規入口として機能し、外部から使われるシンボルのみを明示的に re-export する（wildcard `*` は使用しない）。
 
 ### アセット抽象化

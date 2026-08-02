@@ -76,9 +76,9 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 |:---|:---|:---|:---|
 | エンティティリスト | `list/view_model.rs`, `list/change_detection.rs` | `list/sync.rs` | `list/spawn`, `list/sync`, `list/visual`, `list/section_toggle` |
 | タスクリスト | `panels/task_list/view_model.rs`, `panels/task_list/dirty.rs` | `panels/task_list/presenter.rs`, `panels/task_list/update.rs`, `panels/task_list/actions.rs` | `panels/task_list/types.rs`, `render.rs`, `interaction.rs` |
-| 操作 → ゲーム | — | `interaction/intent_handler.rs`, `interaction/handlers/`, `interaction/intent_context.rs`（Stockpile / Familiar settings intentをtyped domain requestへ変換） | `intents.rs`（型定義・発行元）、`setup/dialogs.rs`（Operation editor） |
-| 情報パネル | `presentation/`（EntityInspectionQuery、`StockpileInspectionFields`構築） | `panels/info_panel` re-export + root wiring | `panels/info_panel/*`, `models/inspection/`（Stockpile editor modelを含む） |
-| 結果通知 | save/load・task actionのroot outcome、`hw_logistics`のStockpile outcome、`hw_familiar_ai`のsettings outcome | `notifications.rs`（安全な表示文言adapter） | `notifications/`（Message、reducer、有界履歴、UI） |
+| 操作 → ゲーム | — | `interaction/intent_handler.rs`, `interaction/handlers/`, `interaction/intent_context.rs`（Stockpile / Familiar settings / Soul Spa slot / Power priority intentをlive再検証） | `intents.rs`（型定義・発行元）、`setup/dialogs.rs`（Operation editor） |
+| 情報パネル | `presentation/`（EntityInspectionQuery、Stockpile / SoulSpa / Power inspection構築） | `panels/info_panel` re-export + root wiring | `panels/info_panel/*`, `models/inspection/`（各typed editor modelを含む） |
+| 結果通知 | save/load・task actionのroot outcome、Stockpile / Familiar settings / Soul Spa slot / Power policy outcome | `notifications.rs`（安全な表示文言adapter） | `notifications/`（Message、reducer、有界履歴、UI） |
 | Player Help | `help_content/`（manifest/provider/coverageからsealed DTO構築） | `help_controller.rs`（accepted capture、可逆pause、reset） | `help.rs`、`setup/help_panel.rs`、`interaction/help.rs` |
 | 初期 UI ツリー | — | `setup/mod.rs`（`GameAssets` → `UiAssets`） | `setup/*` |
 
@@ -97,7 +97,8 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 - `overlay.rs` — capture input priorityと一致する共通`GlobalZIndex`定数
 - `components.rs` — MenuState, MenuButton, FamiliarListItem, SoulListItem、latched `OperationDialogState`、hover/captureを分離する `UiInputState` 等（`UiNodeRegistry` / `UiSlot` / `UiMountSlot` / `UiRoot` は `hw_core::ui_nodes` から re-export）
 - `theme.rs` — `UiTheme` Resource（カラーパレット・フォントサイズ・スペーシング・サイズ定数）
-- `intents.rs` — `UiIntent` enum（プレイヤー UI 操作メッセージ。Stockpile単一適用・範囲編集開始、Familiar Operationのexact-target open / settings patchを含む）
+- `intents.rs` — `UiIntent` enum（プレイヤー UI 操作メッセージ。Stockpile単一適用・範囲編集開始、Familiar Operationのexact-target open / settings patch、Soul Spa slot / Power priorityを含む）
+- `power.rs` — energy domainへ依存しない`PowerPriorityValue` / mode / supply / shed reason / inspection roleのUI mirror。root adapterが`hw_energy`から明示変換する
 - `text_input_intents.rs` — `TextInputIntent` enum（non-`Copy` テキスト確定イベント、例: `RenameSoul`）
 - `widgets/text_field.rs` — 再利用可能 `spawn_text_field` ヘルパー、`TextFieldRole`
 - `interaction/text_field.rs` — フォーカス枠・Enter/Escape・検索ライブ sync
@@ -110,7 +111,7 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 - `panels/task_list/` — `TaskEntry`、status/reason、filter/sort、action capability/state、work_type_icon、
   render（focus rowとaction barをsibling生成）、pure UI interaction。ゲームowner判定やcomponent mutationは持たない
 - `panels/menu.rs` — menu_visibility_system
-- `models/inspection/` — EntityInspectionModel, EntityInspectionViewModel, SoulInspectionFields, StockpileInspectionFields
+- `models/inspection/` — EntityInspectionModel, EntityInspectionViewModel, Soul / Stockpile / Soul Spa / Powerのtyped inspection fields
 - `notifications/` — `UserFacingNotification`、`NotificationCenter`、2秒dedupe、4秒toast expiry、toast 3件／重要履歴64件のreducerとUI。ゲーム固有outcome型には依存しない
 - `selection/` — SelectionIntent, cleanup_selection_references_system, typed placement validation / feedback / area plan API（`SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は `hw_core` から re-export）
 - `camera.rs` — `world_cursor_pos`（スクリーン座標→ワールド座標変換ユーティリティ。`MainCamera` は `hw_core` から re-export）
@@ -125,6 +126,7 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 - `Res<GameAssets>` をシステム引数に取るシステム関数（Bevy の `Res<T>` はトレイトオブジェクト不可）
 - PlayMode 遷移ロジック（`NextState<PlayMode>`）
 - WorldMap / WorldMapWrite への依存
+- `hw_energy`等のgame domain crateへの依存（必要な表示値はUI mirror/DTOへ変換する）
 
 root 側の `bevy_app/src/interface/ui/` 残留（Adapter 層 — ViewModel / Presenter / Intent）:
 
@@ -138,7 +140,7 @@ root 側の `bevy_app/src/interface/ui/` 残留（Adapter 層 — ViewModel / Pr
 | `panels/task_list/actions.rs` | Intent / Adapter | live capability再検証、owner別priority/cancel、`TaskActionOutcome`変換。`hw_ui`へゲーム型を逆依存させない |
 | `interaction/intent_context.rs`, `interaction/handlers/`, `interaction/intent_handler.rs` | Intent | `BuildContext`, `ZoneContext`, `TimeSpeed`, `WorldMapWrite` 等のゲーム依存 `UiIntent` 処理。Stockpile / Familiar settings操作はtyped requestへ変換し、domain mutationを所有leaf crateへ委譲 |
 | `interaction/mode.rs` | Intent | `PlayMode` 遷移、`TaskMode`, `BuildingType` |
-| `notifications.rs` | Presenter | `SaveLoadOutcome` / `StockpilePolicyChangeOutcome` / `FamiliarSettingsChangeOutcome`をsafeな`UserFacingNotification`へexhaustiveに変換（task action adapterは`panels/task_list/actions.rs`） |
+| `notifications.rs` | Presenter | `SaveLoadOutcome` / `StockpilePolicyChangeOutcome` / `FamiliarSettingsChangeOutcome` / Soul Spa slot / Power policy outcomeをsafeな`UserFacingNotification`へexhaustiveに変換（task action adapterは`panels/task_list/actions.rs`） |
 | `help_content/`, `help_controller.rs` | ViewModel / Adapter | root bindingとgame surfaceからvalidated catalogを構築し、accepted captureと`Time<Virtual>` pause ownershipを適用。`hw_ui`へgame型を持ち込まない |
 | `list/interaction.rs`, `list/interaction/navigation.rs` | Intent | 行クリック・Tab 巡回・target 付き `UiIntent` 発行（SectionToggle は hw_ui 側） |
 | `list/drag_drop.rs` | Intent | `SquadManagementRequest`, `SoulIdentity`（`DragState` 型は hw_ui） |
@@ -364,13 +366,16 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 
 代表例:
 
-- `constants::{OUTPUT_PER_SOUL, DREAM_CONSUME_RATE_GENERATING, DREAM_GENERATE_FLOOR, OUTDOOR_LAMP_DEMAND, OUTDOOR_LAMP_EFFECT_RADIUS, SOUL_SPA_BONE_COST_PER_TILE, FATIGUE_RATE_GENERATING}`
-- `components::{PowerGrid, PowerGenerator, PowerConsumer, Unpowered, YardPowerGrid}`
+- `constants::{OUTPUT_PER_SOUL, DREAM_CONSUME_RATE_GENERATING, DREAM_GENERATE_FLOOR, OUTDOOR_LAMP_DEMAND, OUTDOOR_LAMP_EFFECT_RADIUS, SOUL_SPA_BONE_COST_PER_TILE, SOUL_SPA_MAX_ACTIVE_SLOTS, POWER_ALLOCATION_EPSILON, POWER_RESTORE_MARGIN, FATIGUE_RATE_GENERATING}`
+- `components::{PowerGrid, PowerGenerator, PowerConsumer, PowerConsumerPolicy, PowerSupplyState, PowerGridAllocationSummary, Unpowered, YardPowerGrid}`
   - `PowerGrid` — Yard に 1 対 1 で存在する電力網エンティティ（generation / consumption / powered を保持）
   - `PowerGenerator` — SoulSpaSite に付与するサイト単位の発電集計コンポーネント（Phase 1b で使用開始）
-  - `PowerConsumer` — 電力消費建物に付与。`#[require(Unpowered)]` で未接続時のデフォルトを停電側に設定
-  - `Unpowered` — 停電マーカー。グリッド再計算で除去/再挿入される
+  - `PowerConsumer` — 電力消費建物に付与。`#[require(Unpowered, PowerConsumerPolicy)]`で未接続をfail-closed、policyをNormalへ設定
+  - `PowerConsumerPolicy` — 保存対象のLow / Normal / High priority
+  - `PowerSupplyState` / `PowerGridAllocationSummary` — runtime由来の個別供給結果・遮断理由とGrid配電集計
+  - `Unpowered` — downstream effect互換marker。個別供給結果から除去/再挿入される
   - `YardPowerGrid` — PowerGrid エンティティ上に付与。所属 Yard への逆参照
+- `allocation::{allocate_power, PowerConsumerAllocationInput, PowerAllocationResult}` — Legacy all-or-noneとpriority strict prefix / stable order / restore marginのpure allocator
 - `relationships::{GeneratesFor, GridGenerators, ConsumesFrom, GridConsumers}`
   - `GeneratesFor` — SoulSpaSite → PowerGrid（発電機グリッド登録）
   - `ConsumesFrom` — OutdoorLamp 等 → PowerGrid（消費者グリッド登録）

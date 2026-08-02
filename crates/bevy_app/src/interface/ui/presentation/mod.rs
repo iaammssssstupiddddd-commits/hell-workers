@@ -12,15 +12,16 @@ use hw_core::constants::ESCAPE_STRESS_THRESHOLD;
 use hw_core::relationships::CommandedBy;
 use hw_core::relationships::{IncomingDeliveries, StoredItems, TaskWorkers};
 use hw_energy::{
-    ConsumesFrom, GeneratesFor, PowerConsumer, PowerGenerator, PowerGrid, SoulSpaSite, Unpowered,
+    ConsumesFrom, GeneratesFor, PowerConsumer, PowerConsumerPolicy, PowerGenerator, PowerGrid,
+    PowerGridAllocationSummary, PowerSupplyState, SoulSpaSite, SoulSpaTile, Unpowered,
 };
 use hw_soul_ai::soul_ai::perceive::escaping::is_escape_threat_close;
 use hw_spatial::FamiliarSpatialGrid;
 use hw_ui::components::TooltipTemplate;
 
 pub use hw_ui::models::inspection::{
-    EntityInspectionModel, EntityInspectionViewModel, SoulInspectionFields,
-    StockpileInspectionFields,
+    EntityInspectionModel, EntityInspectionViewModel, PowerInspectionFields, SoulInspectionFields,
+    SoulSpaInspectionFields, StockpileInspectionFields,
 };
 
 type SoulInspectionQuery<'w, 's> = Query<
@@ -72,6 +73,19 @@ type StockpileInspectionQuery<'w, 's> = Query<
     ),
 >;
 
+type PowerConsumerInspectionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static PowerConsumer,
+        Option<&'static PowerConsumerPolicy>,
+        Option<&'static PowerSupplyState>,
+        Option<&'static ConsumesFrom>,
+        Option<&'static Unpowered>,
+        Option<&'static Transform>,
+    ),
+>;
+
 #[derive(SystemParam)]
 pub struct EntityInspectionQuery<'w, 's> {
     q_souls: SoulInspectionQuery<'w, 's>,
@@ -92,16 +106,15 @@ pub struct EntityInspectionQuery<'w, 's> {
     q_designations: DesignationInspectionQuery<'w, 's>,
     q_buildings: BuildingInspectionQuery<'w, 's>,
     q_stockpiles: StockpileInspectionQuery<'w, 's>,
-    pub(super) q_power_consumers: Query<
+    pub(super) q_power_consumers: PowerConsumerInspectionQuery<'w, 's>,
+    pub(super) q_power_grids: Query<
         'w,
         's,
         (
-            &'static PowerConsumer,
-            Option<&'static ConsumesFrom>,
-            Option<&'static Unpowered>,
+            &'static PowerGrid,
+            Option<&'static PowerGridAllocationSummary>,
         ),
     >,
-    pub(super) q_power_grids: Query<'w, 's, &'static PowerGrid>,
     pub(super) q_soul_spas: Query<
         'w,
         's,
@@ -111,6 +124,8 @@ pub struct EntityInspectionQuery<'w, 's> {
             Option<&'static GeneratesFor>,
         ),
     >,
+    pub(super) q_soul_spa_tiles:
+        Query<'w, 's, (&'static SoulSpaTile, Option<&'static TaskWorkers>)>,
 }
 
 #[derive(Default)]
@@ -120,6 +135,8 @@ struct InspectionAccumulator {
     tooltip_lines: Vec<String>,
     soul_fields: Option<SoulInspectionFields>,
     stockpile_fields: Option<StockpileInspectionFields>,
+    soul_spa_fields: Option<SoulSpaInspectionFields>,
+    power_fields: Option<PowerInspectionFields>,
 }
 
 impl InspectionAccumulator {
@@ -147,6 +164,8 @@ impl InspectionAccumulator {
             tooltip_lines: self.tooltip_lines,
             soul: self.soul_fields,
             stockpile: self.stockpile_fields,
+            soul_spa: self.soul_spa_fields,
+            power: self.power_fields,
         })
     }
 }
@@ -287,7 +306,7 @@ pub(super) fn format_escape_info(
 mod tests {
     use super::*;
     use crate::test_support::minimal_app;
-    use hw_core::relationships::{DeliveringTo, StoredIn};
+    use hw_core::relationships::{DeliveringTo, StoredIn, WorkingOn};
     use hw_logistics::transport_request::TransportPriority;
     use hw_logistics::{
         ResourceType, Stockpile, StockpileAcceptance, StockpilePolicy, StockpilePolicyState,
@@ -400,5 +419,185 @@ mod tests {
             .as_ref()
             .expect("building storage remains inspectable");
         assert!(model.stockpile.is_none());
+    }
+
+    #[test]
+    fn soul_spa_inspection_counts_parent_site_workers_and_reports_draining() {
+        use hw_energy::{PowerGenerator, SoulSpaPhase, SoulSpaSite, SoulSpaTile};
+
+        let mut app = minimal_app();
+        app.init_resource::<FamiliarSpatialGrid>()
+            .init_resource::<InspectionReceipt>()
+            .add_systems(Update, inspect);
+        let site = app
+            .world_mut()
+            .spawn((
+                SoulSpaSite {
+                    phase: SoulSpaPhase::Operational,
+                    active_slots: 2,
+                    ..default()
+                },
+                PowerGenerator {
+                    current_output: 4.0,
+                    ..default()
+                },
+            ))
+            .id();
+        for x in 0..4 {
+            let tile = app
+                .world_mut()
+                .spawn(SoulSpaTile {
+                    parent_site: site,
+                    grid_pos: (x, 0),
+                })
+                .id();
+            app.world_mut().spawn(WorkingOn(tile));
+        }
+        app.insert_resource(InspectionTarget(site));
+
+        app.update();
+
+        let model = app
+            .world()
+            .resource::<InspectionReceipt>()
+            .0
+            .as_ref()
+            .expect("Soul Spa must be inspectable");
+        let fields = model
+            .soul_spa
+            .as_ref()
+            .expect("Soul Spa must expose slot controls");
+        assert!(fields.operational);
+        assert_eq!(fields.occupied_slots, 4);
+        assert_eq!(fields.active_slots, 2);
+        assert_eq!(fields.output_watts, 4.0);
+        assert!(
+            model
+                .tooltip_lines
+                .iter()
+                .any(|line| line == "Draining (4 active / 2 configured)")
+        );
+        assert!(app.world().get::<Children>(site).is_none());
+    }
+
+    #[test]
+    fn constructing_soul_spa_exposes_progress_without_operational_power_controls() {
+        use hw_energy::SoulSpaSite;
+
+        let mut app = minimal_app();
+        app.init_resource::<FamiliarSpatialGrid>()
+            .init_resource::<InspectionReceipt>()
+            .add_systems(Update, inspect);
+        let site = app
+            .world_mut()
+            .spawn(SoulSpaSite {
+                bones_delivered: 7,
+                bones_required: 20,
+                ..default()
+            })
+            .id();
+        app.insert_resource(InspectionTarget(site));
+
+        app.update();
+
+        let model = app
+            .world()
+            .resource::<InspectionReceipt>()
+            .0
+            .as_ref()
+            .expect("constructing Soul Spa must be inspectable");
+        let fields = model.soul_spa.as_ref().expect("typed Soul Spa progress");
+        assert!(!fields.operational);
+        assert_eq!(fields.bones_delivered, 7);
+        assert_eq!(fields.bones_required, 20);
+        assert!(model.power.is_none());
+        assert!(
+            model
+                .tooltip_lines
+                .iter()
+                .any(|line| line == "Status: Constructing (7/20)")
+        );
+    }
+
+    #[test]
+    fn power_consumer_inspection_exposes_policy_connection_and_shed_reason() {
+        use hw_energy::{
+            ConsumesFrom, PowerAllocationMode, PowerConsumer, PowerConsumerPolicy, PowerGrid,
+            PowerGridAllocationSummary, PowerPriority, PowerShedReason, PowerSupplyState,
+        };
+        use hw_ui::power::{PowerPriorityValue, PowerShedReasonValue, PowerSupplyStateValue};
+
+        let mut app = minimal_app();
+        app.init_resource::<FamiliarSpatialGrid>()
+            .init_resource::<InspectionReceipt>()
+            .add_systems(Update, inspect);
+        let grid = app
+            .world_mut()
+            .spawn((
+                PowerGrid {
+                    generation: 1.0,
+                    consumption: 1.5,
+                    powered: false,
+                },
+                PowerGridAllocationSummary {
+                    mode: PowerAllocationMode::PriorityPrefix,
+                    generation: 1.0,
+                    total_demand: 1.5,
+                    served_demand: 1.0,
+                    consumer_count: 2,
+                    supplied_count: 1,
+                    shed_count: 1,
+                    invalid_count: 0,
+                    shed_order: Vec::new(),
+                },
+            ))
+            .id();
+        let consumer = app
+            .world_mut()
+            .spawn((
+                PowerConsumer { demand: 0.5 },
+                PowerConsumerPolicy {
+                    priority: PowerPriority::Low,
+                },
+                PowerSupplyState::Shed {
+                    reason: PowerShedReason::RestoreMargin,
+                },
+                ConsumesFrom(grid),
+                Transform::from_translation(hw_world::WorldMap::grid_to_world(2, 1).extend(0.0)),
+            ))
+            .id();
+        app.world_mut()
+            .get_mut::<PowerGridAllocationSummary>(grid)
+            .unwrap()
+            .shed_order = vec![consumer];
+        app.insert_resource(InspectionTarget(consumer));
+
+        app.update();
+
+        let model = app
+            .world()
+            .resource::<InspectionReceipt>()
+            .0
+            .as_ref()
+            .expect("power consumer must be inspectable");
+        let power = model.power.as_ref().expect("typed power inspection");
+        assert_eq!(power.grid, Some(grid));
+        assert_eq!(power.priority, Some(PowerPriorityValue::Low));
+        assert_eq!(
+            power.supply_state,
+            Some(PowerSupplyStateValue::Shed {
+                reason: PowerShedReasonValue::RestoreMargin,
+            })
+        );
+        assert_eq!(power.served_demand_watts, Some(1.0));
+        assert_eq!(power.deficit_watts, Some(0.5));
+        assert_eq!(power.consumer_count, Some(2));
+        assert_eq!(power.shed_order_labels, vec!["(2, 1)"]);
+        assert!(
+            model
+                .tooltip_lines
+                .iter()
+                .any(|line| line == "Supply: Shed: waiting for restore margin")
+        );
     }
 }

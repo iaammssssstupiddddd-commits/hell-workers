@@ -35,7 +35,7 @@ pub(crate) fn save_settings_notifications() -> Result<HelpContribution, HelpCata
                     HelpEntryId::new("settings"),
                     "Settings",
                     [
-                        "UI scale、カメラ速度、マウス移動、既定時間速度、デバッグ表示を変更できます。",
+                        "UI scale、カメラ速度、マウス移動、既定時間速度、電力の優先配電、デバッグ表示を変更できます。",
                         "設定は変更時に保存され、次回起動でも利用されます。",
                     ],
                 ),

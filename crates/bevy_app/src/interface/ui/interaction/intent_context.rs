@@ -10,11 +10,17 @@ use crate::systems::command::TaskArea;
 use crate::systems::save::{SaveLoadState, SavePath};
 use hw_core::game_state::PlayMode;
 use hw_core::world::DoorState;
+use hw_energy::{
+    PowerConsumer, PowerConsumerPolicy, PowerConsumerPolicyChangeOutcome,
+    PowerConsumerPolicyChangeStatus, PowerPriority, SoulSpaPhase, SoulSpaSite,
+    SoulSpaSlotsChangeOutcome, SoulSpaSlotsChangeStatus,
+};
 use hw_jobs::{Building, BuildingCategory, Door};
 use hw_logistics::{StockpilePolicyChangeRequest, StockpilePolicyPatch};
 use hw_spatial::StockpileSpatialGrid;
 use hw_ui::components::{ArchitectCategoryState, LoadConfirmDialog, OperationDialog};
 use hw_ui::intents::StockpilePolicyEditTarget;
+use hw_ui::power::PowerPriorityValue;
 use hw_world::{DoorVisualHandles, WorldMap, WorldMapWrite, apply_door_state};
 
 #[derive(SystemParam)]
@@ -46,6 +52,11 @@ pub(crate) struct IntentDomainActionCtx<'w, 's> {
     door_visual_handles: Res<'w, DoorVisualHandles>,
     stockpile_grid: Res<'w, StockpileSpatialGrid>,
     stockpile_policy_requests: MessageWriter<'w, StockpilePolicyChangeRequest>,
+    soul_spa_slot_outcomes: MessageWriter<'w, SoulSpaSlotsChangeOutcome>,
+    power_consumer_policy_outcomes: MessageWriter<'w, PowerConsumerPolicyChangeOutcome>,
+    q_soul_spas: Query<'w, 's, &'static mut SoulSpaSite>,
+    q_power_consumers: Query<'w, 's, Option<&'static mut PowerConsumerPolicy>, With<PowerConsumer>>,
+    q_entities: Query<'w, 's, ()>,
 }
 
 impl IntentDomainActionCtx<'_, '_> {
@@ -92,6 +103,62 @@ impl IntentDomainActionCtx<'_, '_> {
             crate::systems::command::resolve_stockpile_policy_targets(target, &self.stockpile_grid);
         self.stockpile_policy_requests
             .write(StockpilePolicyChangeRequest { targets, patch });
+    }
+
+    pub(crate) fn set_soul_spa_active_slots(&mut self, target: Entity, requested: u32) {
+        let status = match self.q_soul_spas.get_mut(target) {
+            Ok(site) if site.phase != SoulSpaPhase::Operational => {
+                SoulSpaSlotsChangeStatus::PhaseUnavailable
+            }
+            Ok(mut site) => {
+                let applied = SoulSpaSite::clamped_active_slots(requested);
+                if site.active_slots != applied {
+                    site.set_active_slots(applied);
+                }
+                SoulSpaSlotsChangeStatus::Applied {
+                    requested,
+                    applied,
+                    clamped: requested != applied,
+                }
+            }
+            Err(_) if self.q_entities.get(target).is_ok() => {
+                SoulSpaSlotsChangeStatus::UnsupportedTarget
+            }
+            Err(_) => SoulSpaSlotsChangeStatus::StaleTarget,
+        };
+        self.soul_spa_slot_outcomes
+            .write(SoulSpaSlotsChangeOutcome { target, status });
+    }
+
+    pub(crate) fn set_power_consumer_priority(
+        &mut self,
+        target: Entity,
+        requested: PowerPriorityValue,
+    ) {
+        let requested = match requested {
+            PowerPriorityValue::Low => PowerPriority::Low,
+            PowerPriorityValue::Normal => PowerPriority::Normal,
+            PowerPriorityValue::High => PowerPriority::High,
+        };
+        let status = match self.q_power_consumers.get_mut(target) {
+            Ok(Some(mut policy)) => {
+                let previous = policy.priority;
+                if previous != requested {
+                    policy.priority = requested;
+                }
+                PowerConsumerPolicyChangeStatus::Applied {
+                    previous,
+                    applied: requested,
+                }
+            }
+            Ok(None) => PowerConsumerPolicyChangeStatus::MissingPolicy,
+            Err(_) if self.q_entities.get(target).is_ok() => {
+                PowerConsumerPolicyChangeStatus::UnsupportedTarget
+            }
+            Err(_) => PowerConsumerPolicyChangeStatus::StaleTarget,
+        };
+        self.power_consumer_policy_outcomes
+            .write(PowerConsumerPolicyChangeOutcome { target, status });
     }
 }
 

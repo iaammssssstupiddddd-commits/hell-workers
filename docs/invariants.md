@@ -247,6 +247,36 @@ domain handler は Entity を決定的な順序へ正規化・重複除去し、
 
 ---
 
+## 4.1 Soul Energy の不変条件
+
+### I-E1: Soul Spa枠は同一cycleのpending割当を含め、減少時に既存workerを追い出さない
+
+`active_slots`は0〜4。GeneratePower候補判定は保存済み`TaskWorkers`と、その割当cycleでsubmit済みの
+site単位reservation shadowを合算し、tile自身の`TaskSlots` / source reservationも同じshadowで検証する。
+同じtileへの二重submitで別tileの空き枠を失ってはならない。設定値を稼働中数より下げても`WorkingOn`、`TaskWorkers`、taskを
+解除せず、新規割当だけを止める。
+
+### I-E2: Priority配電は安定したstrict prefixであり、bin-packingしない
+
+順序はHigh → Normal → Low、同順位はgrid座標`(y, x)`、同一座標時だけEntity IDである。
+最初にcapacityを超えたconsumer以降を全てShedにし、小需要を後から詰めない。cold start/reconnectは
+exact capacityを許可し、既知priority-mode Shedの復旧だけ`POWER_RESTORE_MARGIN`を要求する。
+`LegacyAllOrNone`からPriorityへ戻す場合はcold startであり、legacy deficitをhysteresis履歴に使わない。
+
+### I-E3: durable policyとruntime供給結果を混在させない
+
+`SoulSpaSite.active_slots`と`PowerConsumerPolicy`は保存する。`PowerSupplyState`、`Unpowered`、
+`PowerGridAllocationSummary`、`PowerAllocationMode`はruntimeであり、load/rollback後にYard/Grid一対一化、
+relationship repair、output、allocationの順で再構築する。`Unpowered`はeffect互換markerで、遮断理由の正本ではない。
+runtime state欠落とpolicy removalはallocation dirtyを起こす。Soul Spaのderived output writeは同frameへ明示伝播して
+自己dirtyを抑えるが、外部の`PowerGenerator`直接変更はdirty sourceとして維持する。
+
+### I-E4: allocation結果はeffectより前にflushする
+
+Soul state-sanity Commandsを名前付き境界でflushした後にenergy transactionを開始し、個別stateと
+`Unpowered`のCommandsを`ApplyDeferred`してからlamp等のeffectを実行する。接続外・不正需要を
+1 frameでも給電中として扱わない。
+
 ## 5. UI / Visual の不変条件
 
 ### I-U1: UI は simulation state を直接変更しない
@@ -381,7 +411,8 @@ loaded componentの`Added`/`Changed`は次frameの差分rebuildに残す。syste
 `GatheringSpot`と`ParticipatingIn` / `GatheringParticipants`はruntime-onlyであり、新規saveへ含めず、
 legacy bodyからはschema検証前に除去する。replace hookは旧spotとlinked visualを同時にdespawnする。
 root message inventoryのFamiliar settings request / outcome / roster release visualと、`hw_ui`の
-`OperationDialogState` / target / scroll / static root presentationも同じreplace phaseで同期resetする。
+`OperationDialogState` / target / scroll / static root presentation、Stockpile / Soul Spa / Power editorの
+static button targetも同じreplace phaseで同期resetする。
 
 ### I-P5: construction runtime cacheはload中に再構築し、WorldMapを再予約しない
 Floor / Wall construction の `TileSiteIndex`、工程counter、Curing中の`CuringFootprint`は保存しない

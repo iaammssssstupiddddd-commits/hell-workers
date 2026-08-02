@@ -140,6 +140,8 @@ pub fn hover_tooltip_system<'w, 's, I, R>(
             tooltip_lines: vec![body],
             soul: None,
             stockpile: None,
+            soul_spa: None,
+            power: None,
         });
     } else if let Some(entity) = bevy.hovered.0 {
         let world_target = Some(TooltipTarget::WorldEntity(entity));

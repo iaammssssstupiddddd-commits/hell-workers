@@ -18,6 +18,8 @@ pub struct GameSettings {
     pub debug_gizmos_enabled: bool,
     /// DevPanel 内 FPS テキスト表示
     pub fps_display_enabled: bool,
+    /// 電力不足時に consumer 優先度で配電する。false は旧 all-or-none 動作。
+    pub power_priority_enabled: bool,
 }
 
 impl Default for GameSettings {
@@ -29,6 +31,7 @@ impl Default for GameSettings {
             default_time_speed: TimeSpeed::Normal,
             debug_gizmos_enabled: false,
             fps_display_enabled: true,
+            power_priority_enabled: true,
         }
     }
 }

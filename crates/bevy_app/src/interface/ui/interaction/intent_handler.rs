@@ -129,7 +129,8 @@ pub(crate) fn handle_ui_intent(
             | UiIntent::SetCameraMousePanEnabled(_)
             | UiIntent::SetDefaultTimeSpeed(_)
             | UiIntent::SetDebugGizmosEnabled(_)
-            | UiIntent::SetFpsDisplayEnabled(_) => {
+            | UiIntent::SetFpsDisplayEnabled(_)
+            | UiIntent::SetPowerPriorityEnabled(_) => {
                 let mut mode_ctx = action_contexts.p0();
                 handlers::handle_settings(
                     intent,
@@ -169,6 +170,21 @@ pub(crate) fn handle_ui_intent(
                 action_contexts
                     .p1()
                     .request_stockpile_policy_change(target, patch);
+                false
+            }
+            UiIntent::SetSoulSpaActiveSlots {
+                target,
+                active_slots,
+            } => {
+                action_contexts
+                    .p1()
+                    .set_soul_spa_active_slots(target, active_slots);
+                false
+            }
+            UiIntent::SetPowerConsumerPriority { target, priority } => {
+                action_contexts
+                    .p1()
+                    .set_power_consumer_priority(target, priority);
                 false
             }
             UiIntent::AdjustTaskPriority { .. } | UiIntent::CancelTask { .. } => false,
@@ -224,6 +240,8 @@ mod tests {
             .add_message::<hw_familiar_ai::FamiliarSettingsChangeRequest>()
             .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
             .add_message::<hw_logistics::StockpilePolicyChangeRequest>()
+            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
+            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
             .init_state::<PlayMode>()
             .init_resource::<BuildContext>()
             .init_resource::<MoveContext>()
@@ -311,6 +329,268 @@ mod tests {
     ) {
         receipts.requests.extend(requests.read().copied());
         receipts.outcomes.extend(outcomes.read().copied());
+    }
+
+    #[derive(Resource, Default)]
+    struct SoulSpaSlotReceipts(Vec<hw_energy::SoulSpaSlotsChangeOutcome>);
+
+    fn collect_soul_spa_slot_receipts(
+        mut outcomes: MessageReader<hw_energy::SoulSpaSlotsChangeOutcome>,
+        mut receipts: ResMut<SoulSpaSlotReceipts>,
+    ) {
+        receipts.0.extend(outcomes.read().copied());
+    }
+
+    #[derive(Resource, Default)]
+    struct PowerPolicyReceipts(Vec<hw_energy::PowerConsumerPolicyChangeOutcome>);
+
+    fn collect_power_policy_receipts(
+        mut outcomes: MessageReader<hw_energy::PowerConsumerPolicyChangeOutcome>,
+        mut receipts: ResMut<PowerPolicyReceipts>,
+    ) {
+        receipts.0.extend(outcomes.read().copied());
+    }
+
+    #[test]
+    fn soul_spa_slot_intents_are_terminal_clamped_and_do_not_kick_workers() {
+        use hw_core::relationships::{TaskWorkers, WorkingOn};
+        use hw_energy::{
+            SOUL_SPA_MAX_ACTIVE_SLOTS, SoulSpaPhase, SoulSpaSite, SoulSpaSlotsChangeOutcome,
+            SoulSpaSlotsChangeStatus, SoulSpaTile,
+        };
+
+        let mut app = domain_action_app();
+        app.init_resource::<SoulSpaSlotReceipts>().add_systems(
+            Update,
+            collect_soul_spa_slot_receipts.after(handle_ui_intent),
+        );
+        let site = app
+            .world_mut()
+            .spawn(SoulSpaSite {
+                phase: SoulSpaPhase::Operational,
+                ..default()
+            })
+            .id();
+        let tile = app
+            .world_mut()
+            .spawn(SoulSpaTile {
+                parent_site: site,
+                grid_pos: (0, 0),
+            })
+            .id();
+        let worker = app.world_mut().spawn(WorkingOn(tile)).id();
+        let constructing = app.world_mut().spawn(SoulSpaSite::default()).id();
+        let unsupported = app.world_mut().spawn_empty().id();
+        let stale = app.world_mut().spawn_empty().id();
+        app.world_mut().despawn(stale);
+
+        write_intent(
+            &mut app,
+            UiIntent::SetSoulSpaActiveSlots {
+                target: site,
+                active_slots: u32::MAX,
+            },
+        );
+        write_intent(
+            &mut app,
+            UiIntent::SetSoulSpaActiveSlots {
+                target: site,
+                active_slots: 2,
+            },
+        );
+        write_intent(
+            &mut app,
+            UiIntent::SetSoulSpaActiveSlots {
+                target: constructing,
+                active_slots: 1,
+            },
+        );
+        write_intent(
+            &mut app,
+            UiIntent::SetSoulSpaActiveSlots {
+                target: unsupported,
+                active_slots: 1,
+            },
+        );
+        write_intent(
+            &mut app,
+            UiIntent::SetSoulSpaActiveSlots {
+                target: stale,
+                active_slots: 1,
+            },
+        );
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<SoulSpaSite>(site).unwrap().active_slots,
+            2
+        );
+        assert_eq!(
+            app.world()
+                .get::<WorkingOn>(worker)
+                .map(|working| working.0),
+            Some(tile)
+        );
+        assert_eq!(app.world().get::<TaskWorkers>(tile).unwrap().len(), 1);
+        assert_eq!(
+            app.world()
+                .get::<SoulSpaSite>(constructing)
+                .unwrap()
+                .active_slots,
+            SOUL_SPA_MAX_ACTIVE_SLOTS
+        );
+        assert_eq!(
+            app.world().resource::<SoulSpaSlotReceipts>().0,
+            vec![
+                SoulSpaSlotsChangeOutcome {
+                    target: site,
+                    status: SoulSpaSlotsChangeStatus::Applied {
+                        requested: u32::MAX,
+                        applied: SOUL_SPA_MAX_ACTIVE_SLOTS,
+                        clamped: true,
+                    },
+                },
+                SoulSpaSlotsChangeOutcome {
+                    target: site,
+                    status: SoulSpaSlotsChangeStatus::Applied {
+                        requested: 2,
+                        applied: 2,
+                        clamped: false,
+                    },
+                },
+                SoulSpaSlotsChangeOutcome {
+                    target: constructing,
+                    status: SoulSpaSlotsChangeStatus::PhaseUnavailable,
+                },
+                SoulSpaSlotsChangeOutcome {
+                    target: unsupported,
+                    status: SoulSpaSlotsChangeStatus::UnsupportedTarget,
+                },
+                SoulSpaSlotsChangeOutcome {
+                    target: stale,
+                    status: SoulSpaSlotsChangeStatus::StaleTarget,
+                },
+            ]
+        );
+    }
+
+    #[derive(Resource, Default)]
+    struct ChangedSoulSpaCount(usize);
+
+    fn count_changed_soul_spas(
+        q_changed: Query<(), Changed<hw_energy::SoulSpaSite>>,
+        mut count: ResMut<ChangedSoulSpaCount>,
+    ) {
+        count.0 += q_changed.iter().count();
+    }
+
+    #[test]
+    fn exact_same_soul_spa_slot_intent_does_not_dirty_the_site() {
+        use hw_energy::{SoulSpaPhase, SoulSpaSite};
+
+        let mut app = domain_action_app();
+        app.init_resource::<ChangedSoulSpaCount>()
+            .add_systems(Update, count_changed_soul_spas.after(handle_ui_intent));
+        let site = app
+            .world_mut()
+            .spawn(SoulSpaSite {
+                phase: SoulSpaPhase::Operational,
+                active_slots: 4,
+                ..default()
+            })
+            .id();
+        app.update();
+        app.world_mut().resource_mut::<ChangedSoulSpaCount>().0 = 0;
+
+        write_intent(
+            &mut app,
+            UiIntent::SetSoulSpaActiveSlots {
+                target: site,
+                active_slots: 4,
+            },
+        );
+        app.update();
+
+        assert_eq!(app.world().resource::<ChangedSoulSpaCount>().0, 0);
+    }
+
+    #[test]
+    fn power_priority_intents_revalidate_target_and_never_repair_missing_policy() {
+        use hw_energy::{
+            PowerConsumer, PowerConsumerPolicy, PowerConsumerPolicyChangeOutcome,
+            PowerConsumerPolicyChangeStatus, PowerPriority,
+        };
+        use hw_ui::power::PowerPriorityValue;
+
+        let mut app = domain_action_app();
+        app.init_resource::<PowerPolicyReceipts>().add_systems(
+            Update,
+            collect_power_policy_receipts.after(handle_ui_intent),
+        );
+        let consumer = app
+            .world_mut()
+            .spawn((
+                PowerConsumer { demand: 1.0 },
+                PowerConsumerPolicy {
+                    priority: PowerPriority::Normal,
+                },
+            ))
+            .id();
+        let missing_policy = app.world_mut().spawn(PowerConsumer { demand: 1.0 }).id();
+        app.world_mut()
+            .entity_mut(missing_policy)
+            .remove::<PowerConsumerPolicy>();
+        let unsupported = app.world_mut().spawn_empty().id();
+        let stale = app.world_mut().spawn_empty().id();
+        app.world_mut().despawn(stale);
+
+        for target in [consumer, missing_policy, unsupported, stale] {
+            write_intent(
+                &mut app,
+                UiIntent::SetPowerConsumerPriority {
+                    target,
+                    priority: PowerPriorityValue::High,
+                },
+            );
+        }
+        app.update();
+
+        assert_eq!(
+            app.world().get::<PowerConsumerPolicy>(consumer),
+            Some(&PowerConsumerPolicy {
+                priority: PowerPriority::High,
+            })
+        );
+        assert!(
+            app.world()
+                .get::<PowerConsumerPolicy>(missing_policy)
+                .is_none()
+        );
+        assert_eq!(
+            app.world().resource::<PowerPolicyReceipts>().0,
+            vec![
+                PowerConsumerPolicyChangeOutcome {
+                    target: consumer,
+                    status: PowerConsumerPolicyChangeStatus::Applied {
+                        previous: PowerPriority::Normal,
+                        applied: PowerPriority::High,
+                    },
+                },
+                PowerConsumerPolicyChangeOutcome {
+                    target: missing_policy,
+                    status: PowerConsumerPolicyChangeStatus::MissingPolicy,
+                },
+                PowerConsumerPolicyChangeOutcome {
+                    target: unsupported,
+                    status: PowerConsumerPolicyChangeStatus::UnsupportedTarget,
+                },
+                PowerConsumerPolicyChangeOutcome {
+                    target: stale,
+                    status: PowerConsumerPolicyChangeStatus::StaleTarget,
+                },
+            ]
+        );
     }
 
     #[test]
@@ -693,5 +973,132 @@ mod tests {
             app.world().resource::<ArchitectCategoryState>().0,
             Some(BuildingCategory::Plant)
         );
+    }
+
+    #[test]
+    fn power_priority_checkbox_reaches_the_next_logic_allocation() {
+        use bevy::ui_widgets::ValueChange;
+        use hw_energy::{
+            ConsumesFrom, GeneratesFor, PowerAllocationMode, PowerConsumer, PowerConsumerPolicy,
+            PowerGenerator, PowerGrid, PowerPriority, PowerShedReason, PowerSupplyState,
+        };
+        use hw_ui::components::{SettingsCheckboxMarker, SettingsField};
+
+        use crate::systems::energy::grid_recalc::{
+            EnergyUpdateDirty, energy_grid_recalc_should_run, grid_recalc_system,
+            sync_power_allocation_mode_from_settings_system,
+        };
+
+        let mut app = domain_action_app();
+        app.init_resource::<PowerAllocationMode>()
+            .init_resource::<EnergyUpdateDirty>()
+            .add_observer(crate::systems::settings::on_settings_checkbox_value_change)
+            .add_systems(
+                Update,
+                (
+                    sync_power_allocation_mode_from_settings_system,
+                    grid_recalc_system.run_if(energy_grid_recalc_should_run),
+                    ApplyDeferred,
+                )
+                    .chain()
+                    .after(handle_ui_intent),
+            );
+        let checkbox = app
+            .world_mut()
+            .spawn(SettingsCheckboxMarker(SettingsField::PowerPriority))
+            .id();
+        let grid = app.world_mut().spawn(PowerGrid::default()).id();
+        app.world_mut().spawn((
+            PowerGenerator {
+                current_output: 0.6,
+                output_per_soul: 1.0,
+            },
+            GeneratesFor(grid),
+        ));
+        let high = app
+            .world_mut()
+            .spawn((
+                PowerConsumer { demand: 0.6 },
+                PowerConsumerPolicy {
+                    priority: PowerPriority::High,
+                },
+                Transform::from_xyz(0.0, 0.0, 0.0),
+                ConsumesFrom(grid),
+            ))
+            .id();
+        let low = app
+            .world_mut()
+            .spawn((
+                PowerConsumer { demand: 0.6 },
+                PowerConsumerPolicy {
+                    priority: PowerPriority::Low,
+                },
+                Transform::from_xyz(16.0, 0.0, 0.0),
+                ConsumesFrom(grid),
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<EnergyUpdateDirty>()
+            .grid_recalc_due = true;
+        app.update();
+        assert_eq!(
+            app.world().get::<PowerSupplyState>(high),
+            Some(&PowerSupplyState::Supplied)
+        );
+
+        app.world_mut().commands().trigger(ValueChange {
+            source: checkbox,
+            value: false,
+            is_final: true,
+        });
+        app.world_mut().flush();
+        app.update();
+
+        assert!(
+            !app.world()
+                .resource::<hw_core::GameSettings>()
+                .power_priority_enabled
+        );
+        assert_eq!(
+            *app.world().resource::<PowerAllocationMode>(),
+            PowerAllocationMode::LegacyAllOrNone
+        );
+        for consumer in [high, low] {
+            assert_eq!(
+                app.world().get::<PowerSupplyState>(consumer),
+                Some(&PowerSupplyState::Shed {
+                    reason: PowerShedReason::LegacyGlobalDeficit,
+                })
+            );
+        }
+
+        app.world_mut().commands().trigger(ValueChange {
+            source: checkbox,
+            value: true,
+            is_final: true,
+        });
+        app.world_mut().flush();
+        app.update();
+
+        assert!(
+            app.world()
+                .resource::<hw_core::GameSettings>()
+                .power_priority_enabled
+        );
+        assert_eq!(
+            *app.world().resource::<PowerAllocationMode>(),
+            PowerAllocationMode::PriorityPrefix
+        );
+        assert_eq!(
+            app.world().get::<PowerSupplyState>(high),
+            Some(&PowerSupplyState::Supplied),
+            "returning from Legacy must rebuild Priority as a cold start"
+        );
+        assert!(matches!(
+            app.world().get::<PowerSupplyState>(low),
+            Some(PowerSupplyState::Shed {
+                reason: PowerShedReason::InsufficientGeneration,
+            })
+        ));
     }
 }
