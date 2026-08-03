@@ -123,6 +123,36 @@ fn construction_shell_rehydrate_restores_saved_state_while_logic_is_paused() {
 }
 
 #[test]
+fn construction_normalization_precedes_shell_mirroring() {
+    let mut world = World::new();
+    let mut site = floor_site(FloorConstructionPhase::Reinforcing);
+    site.tiles_total = 1;
+    let site_entity = world.spawn(site).id();
+    let mut tile = FloorTileBlueprint::new(site_entity, (2, 3));
+    tile.state = FloorTileState::Complete;
+    world.spawn(tile);
+
+    normalize_construction_state(&mut world);
+    rehydrate_construction_shells(&mut world, &BlueprintSpriteHandles::default());
+    world.flush();
+
+    assert_eq!(
+        world
+            .get::<FloorConstructionSite>(site_entity)
+            .unwrap()
+            .phase,
+        FloorConstructionPhase::Curing
+    );
+    assert_eq!(
+        world
+            .get::<FloorSiteVisualState>(site_entity)
+            .unwrap()
+            .phase,
+        FloorConstructionPhaseMirror::Curing
+    );
+}
+
+#[test]
 fn paused_visual_phase_rebuilds_construction_without_delivery_replay() {
     let mut app = App::new();
     app.init_resource::<Time<Virtual>>();
@@ -273,10 +303,24 @@ fn construction_runtime_rehydrate_rebuilds_indexes_counters_and_curing_cache() {
     );
     wall_site.tiles_framed = 0;
     let wall_site_entity = world.spawn(wall_site).id();
+    let mut wall_tile_entities = Vec::new();
     for grid_pos in [(7, 8), (8, 8)] {
+        let wall_entity = world
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: true,
+                },
+                ProvisionalWall::default(),
+            ))
+            .id();
         let mut tile = WallTileBlueprint::new(wall_site_entity, grid_pos);
         tile.state = WallTileState::FramedProvisional;
-        world.spawn(tile);
+        tile.spawned_wall = Some(wall_entity);
+        wall_tile_entities.push(world.spawn(tile).id());
+        world
+            .resource_mut::<WorldMap>()
+            .set_building(grid_pos, wall_entity);
     }
 
     rehydrate_construction_runtime(&mut world);
@@ -297,6 +341,12 @@ fn construction_runtime_rehydrate_rebuilds_indexes_counters_and_curing_cache() {
     assert_eq!(wall.tiles_framed, 2);
     assert_eq!(wall.tiles_coated, 0);
     assert_eq!(wall.phase, WallConstructionPhase::Coating);
+    for tile in wall_tile_entities {
+        assert_eq!(
+            world.get::<WallTileBlueprint>(tile).unwrap().state,
+            WallTileState::WaitingMud
+        );
+    }
     assert_eq!(
         world.resource::<WorldMap>().obstacle_version,
         original_obstacle_version
@@ -311,4 +361,175 @@ fn construction_runtime_rehydrate_rebuilds_indexes_counters_and_curing_cache() {
         original_obstacle_count,
         "construction cache rehydration must not reserve the durable map again",
     );
+}
+
+#[test]
+fn construction_boundary_normalization_restores_mud_demand_and_is_idempotent() {
+    use hw_logistics::transport_request::producer::tile_wait_cache::{
+        FloorTileWaitingCache, WallTileWaitingCache, update_floor_tile_waiting_cache_system,
+        update_wall_tile_waiting_cache_system,
+    };
+
+    let mut app = App::new();
+    app.init_resource::<TileSiteIndex>()
+        .init_resource::<FloorTileWaitingCache>()
+        .init_resource::<WallTileWaitingCache>()
+        .add_systems(
+            Update,
+            (
+                update_floor_tile_waiting_cache_system,
+                update_wall_tile_waiting_cache_system,
+            ),
+        );
+
+    let floor_site_entity = app
+        .world_mut()
+        .spawn(floor_site(FloorConstructionPhase::Reinforcing))
+        .id();
+    let mut floor_tile = FloorTileBlueprint::new(floor_site_entity, (2, 3));
+    floor_tile.state = FloorTileState::ReinforcedComplete;
+    let floor_tile_entity = app
+        .world_mut()
+        .spawn((
+            floor_tile,
+            Designation {
+                work_type: WorkType::ReinforceFloorTile,
+            },
+            TaskSlots::new(1),
+            Priority(1),
+        ))
+        .id();
+
+    let wall_site_entity = app
+        .world_mut()
+        .spawn(WallConstructionSite::new(
+            TaskArea::from_points(Vec2::ZERO, Vec2::ONE),
+            Vec2::ZERO,
+            1,
+        ))
+        .id();
+    let wall_entity = app
+        .world_mut()
+        .spawn((
+            Building {
+                kind: BuildingType::Wall,
+                is_provisional: true,
+            },
+            ProvisionalWall::default(),
+        ))
+        .id();
+    let mut wall_tile = WallTileBlueprint::new(wall_site_entity, (4, 5));
+    wall_tile.state = WallTileState::FramedProvisional;
+    wall_tile.spawned_wall = Some(wall_entity);
+    let wall_tile_entity = app
+        .world_mut()
+        .spawn((
+            wall_tile,
+            Designation {
+                work_type: WorkType::FrameWallTile,
+            },
+            TaskSlots::new(1),
+            Priority(1),
+        ))
+        .id();
+
+    rehydrate_construction_runtime(app.world_mut());
+    rehydrate_construction_runtime(app.world_mut());
+    app.update();
+
+    assert_eq!(
+        app.world()
+            .get::<FloorConstructionSite>(floor_site_entity)
+            .unwrap()
+            .phase,
+        FloorConstructionPhase::Pouring
+    );
+    assert_eq!(
+        app.world()
+            .get::<FloorTileBlueprint>(floor_tile_entity)
+            .unwrap()
+            .state,
+        FloorTileState::WaitingMud
+    );
+    assert_eq!(
+        app.world().resource::<FloorTileWaitingCache>().map[&floor_site_entity].1,
+        1
+    );
+    assert!(app.world().get::<Designation>(floor_tile_entity).is_none());
+    assert!(app.world().get::<TaskSlots>(floor_tile_entity).is_none());
+    assert!(app.world().get::<Priority>(floor_tile_entity).is_none());
+
+    assert_eq!(
+        app.world()
+            .get::<WallConstructionSite>(wall_site_entity)
+            .unwrap()
+            .phase,
+        WallConstructionPhase::Coating
+    );
+    let normalized_wall_tile = app
+        .world()
+        .get::<WallTileBlueprint>(wall_tile_entity)
+        .unwrap();
+    assert_eq!(normalized_wall_tile.state, WallTileState::WaitingMud);
+    assert_eq!(normalized_wall_tile.spawned_wall, Some(wall_entity));
+    assert_eq!(
+        app.world().resource::<WallTileWaitingCache>().map[&wall_site_entity].1,
+        1
+    );
+    assert!(app.world().get::<Designation>(wall_tile_entity).is_none());
+    assert!(app.world().get::<TaskSlots>(wall_tile_entity).is_none());
+    assert!(app.world().get::<Priority>(wall_tile_entity).is_none());
+}
+
+#[test]
+fn wall_boundary_without_spawned_wall_waits_for_the_normal_runtime_chain() {
+    let mut app = App::new();
+    app.init_resource::<TileSiteIndex>()
+        .init_resource::<WorldMap>()
+        .insert_resource(empty_building_3d_handles())
+        .add_systems(
+            Update,
+            (
+                crate::systems::jobs::wall_construction::wall_framed_tile_spawn_system,
+                hw_logistics::wall_construction_phase_transition_system,
+            )
+                .chain(),
+        );
+
+    let site_entity = app
+        .world_mut()
+        .spawn(WallConstructionSite::new(
+            TaskArea::from_points(Vec2::ZERO, Vec2::ONE),
+            Vec2::ZERO,
+            1,
+        ))
+        .id();
+    let mut tile = WallTileBlueprint::new(site_entity, (8, 9));
+    tile.state = WallTileState::FramedProvisional;
+    let tile_entity = app.world_mut().spawn(tile).id();
+
+    rehydrate_construction_runtime(app.world_mut());
+    assert_eq!(
+        app.world()
+            .get::<WallConstructionSite>(site_entity)
+            .unwrap()
+            .phase,
+        WallConstructionPhase::Framing
+    );
+
+    app.update();
+
+    assert_eq!(
+        app.world()
+            .get::<WallConstructionSite>(site_entity)
+            .unwrap()
+            .phase,
+        WallConstructionPhase::Coating
+    );
+    let tile = app.world().get::<WallTileBlueprint>(tile_entity).unwrap();
+    assert_eq!(tile.state, WallTileState::WaitingMud);
+    let wall = tile
+        .spawned_wall
+        .expect("normal runtime must spawn the wall");
+    assert!(app.world().get::<ProvisionalWall>(wall).is_some());
 }

@@ -243,8 +243,9 @@ ECS Relationship を追記する際は **tasks.md §2.1** と同じテーブル�
 ### 10.4 Repository Agent Skills
 
 - リポジトリ直下`.cursor/skills/<name>/SKILL.md`を共有Skill本文の正本とする。現行Skillは
-  `hell-workers-update-docs`と、実装後にplayer-facing Help影響を判定する
-  `hell-workers-review-help-impact`。
+  `hell-workers-update-docs`、実装後にplayer-facing Help影響を判定する
+  `hell-workers-review-help-impact`、no-prompt launcherで実機受入を実行する
+  `hell-workers-run-native-acceptance`。
 - 機能、code、runtime dataを実装・変更・削除した後は、完了報告・commit・publishより前に必ず
   `hell-workers-review-help-impact`を使い、実際のplayer-visible経路から`Update required`または
   `No impact`の判断を完了する。`Undetermined`のまま完了せず、Help impact gateの成功だけで代用しない。

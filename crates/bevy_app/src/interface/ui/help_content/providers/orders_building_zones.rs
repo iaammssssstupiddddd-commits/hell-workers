@@ -69,6 +69,7 @@ pub(crate) fn building_zones_dream() -> Result<HelpContribution, HelpCatalogErro
                     [
                         "建物を選び、world 上で配置します。Floor と Wall は範囲を指定して施工予定を作ります。",
                         "必要資源が届くと、担当可能な Soul が工程を進めます。",
+                        "Outdoor Lamp は通行できますが建物としてタイルを占有するため、同じ場所へ別の建物を重ねて配置できません。",
                     ],
                 )
                 .with_shortcut(shortcut(InputAction::ToggleArchitect)?),

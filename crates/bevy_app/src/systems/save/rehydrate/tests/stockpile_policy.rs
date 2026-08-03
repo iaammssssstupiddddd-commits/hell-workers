@@ -1,9 +1,10 @@
 use bevy::prelude::*;
-use hw_jobs::Building;
 use hw_jobs::mud_mixer::MudMixerStorage;
+use hw_jobs::{Blueprint, Building, BuildingType};
 use hw_logistics::transport_request::TransportPriority;
 use hw_logistics::{
-    BelongsTo, PendingBelongsToBlueprint, Stockpile, StockpileAcceptance, StockpilePolicy,
+    BelongsTo, BucketStorage, PendingBelongsToBlueprint, Stockpile, StockpileAcceptance,
+    StockpilePolicy,
 };
 use hw_world::Yard;
 
@@ -25,7 +26,18 @@ fn old_save_policy_migration_only_updates_yard_owned_stockpiles() {
             max: Vec2::splat(10.0),
         })
         .id();
-    let tank = world.spawn((Building::default(), stockpile(4))).id();
+    let tank = world
+        .spawn((
+            Building {
+                kind: BuildingType::Tank,
+                ..default()
+            },
+            stockpile(4),
+        ))
+        .id();
+    let tank_blueprint = world
+        .spawn(Blueprint::new(BuildingType::Tank, vec![(0, 0)]))
+        .id();
     let ordinary = world.spawn((stockpile(6), BelongsTo(yard))).id();
     let legacy_tank_companion_without_marker = world.spawn((stockpile(2), BelongsTo(tank))).id();
     let mixer = world
@@ -36,7 +48,7 @@ fn old_save_policy_migration_only_updates_yard_owned_stockpiles() {
         ))
         .id();
     let pending_tank_companion = world
-        .spawn((stockpile(2), PendingBelongsToBlueprint(tank)))
+        .spawn((stockpile(2), PendingBelongsToBlueprint(tank_blueprint)))
         .id();
     let existing_policy = world
         .spawn((
@@ -70,6 +82,9 @@ fn old_save_policy_migration_only_updates_yard_owned_stockpiles() {
             .get::<StockpilePolicy>(pending_tank_companion)
             .is_none()
     );
+    for companion in [legacy_tank_companion_without_marker, pending_tank_companion] {
+        assert!(world.get::<BucketStorage>(companion).is_some());
+    }
     assert_eq!(
         world.get::<StockpilePolicy>(existing_policy),
         Some(&StockpilePolicy {

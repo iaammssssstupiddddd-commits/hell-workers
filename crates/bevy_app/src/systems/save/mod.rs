@@ -8,6 +8,7 @@
 
 mod format;
 mod load;
+mod native_acceptance;
 mod rehydrate;
 mod reset;
 mod saving;
@@ -19,12 +20,16 @@ use bevy::prelude::*;
 
 use crate::systems::settings::SettingsPersistenceSet;
 
+pub use native_acceptance::NativeSaveLoadAcceptancePlugin;
 pub use state::{
     SAVE_FILE_PATH, SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadResult,
-    SaveLoadState, SavePath,
+    SaveLoadState, SavePath, SaveRecoveryMode,
 };
 
-use load::load_world_system;
+use load::{load_world_system, recover_world_system};
+#[cfg(test)]
+pub(crate) use rehydrate::resolved_rehydrate_plan_names;
+pub(crate) use rehydrate::{register_logic_rehydrate_pipeline, register_visual_rehydrate_pipeline};
 pub(crate) use reset::{
     register_load_reset_hook, reset_root_interaction_state, reset_runtime_caches,
 };
@@ -41,8 +46,8 @@ pub struct SavePlugin;
 impl Plugin for SavePlugin {
     fn build(&self, app: &mut App) {
         register_save_types(app);
-
         app.init_resource::<SaveLoadState>();
+        app.init_resource::<SaveRecoveryMode>();
         app.init_resource::<SavePath>();
         app.init_resource::<hw_core::WorldEpoch>();
         app.add_message::<SaveLoadOutcome>();
@@ -57,22 +62,34 @@ impl Plugin for SavePlugin {
         app.configure_sets(Last, SaveLoadApplySet.after(SettingsPersistenceSet));
         app.add_systems(Last, save_load_apply_system.in_set(SaveLoadApplySet));
     }
+
+    fn finish(&self, app: &mut App) {
+        rehydrate::freeze_rehydrate_pipeline(app);
+    }
 }
 
 fn save_load_apply_system(world: &mut World) {
-    save_load_apply_with(world, save_world_system, load_world_system);
+    save_load_apply_with(
+        world,
+        save_world_system,
+        load_world_system,
+        recover_world_system,
+    );
 }
 
 fn save_load_apply_with(
     world: &mut World,
     mut save: impl FnMut(&mut World) -> SaveLoadResult,
     mut load: impl FnMut(&mut World) -> SaveLoadResult,
+    mut recover: impl FnMut(&mut World) -> SaveLoadResult,
 ) {
     let request = *world.resource::<SaveLoadState>();
     let operation = match request {
         SaveLoadState::Idle => return,
         SaveLoadState::SaveRequested => SaveLoadOperation::Save,
-        SaveLoadState::LoadRequested => SaveLoadOperation::Load,
+        SaveLoadState::LoadRequested | SaveLoadState::RecoveryLoadRequested => {
+            SaveLoadOperation::Load
+        }
     };
 
     // Clear the trigger before entering fallible work so failures cannot block
@@ -80,9 +97,20 @@ fn save_load_apply_with(
     // resets and rollback work have completed.
     *world.resource_mut::<SaveLoadState>() = SaveLoadState::Idle;
     let target = state::save_target_label(world.resource::<SavePath>().as_path());
-    let result = match operation {
-        SaveLoadOperation::Save => save(world),
-        SaveLoadOperation::Load => load(world),
+    let recovery_required = world
+        .get_resource::<SaveRecoveryMode>()
+        .is_some_and(|mode| *mode == SaveRecoveryMode::RecoveryFailed);
+    let result = match request {
+        SaveLoadState::SaveRequested | SaveLoadState::LoadRequested if recovery_required => {
+            SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed)
+        }
+        SaveLoadState::RecoveryLoadRequested if !recovery_required => {
+            SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed)
+        }
+        SaveLoadState::SaveRequested => save(world),
+        SaveLoadState::LoadRequested => load(world),
+        SaveLoadState::RecoveryLoadRequested => recover(world),
+        SaveLoadState::Idle => unreachable!("Idle requests return before dispatch"),
     };
     world.write_message(SaveLoadOutcome {
         operation,
@@ -163,6 +191,7 @@ mod tests {
                 SaveLoadResult::Failed(SaveLoadFailureKind::SaveWrite)
             },
             |_| panic!("load executor must not run"),
+            |_| panic!("recovery executor must not run"),
         );
 
         assert_eq!(calls.get(), 1);
@@ -197,6 +226,7 @@ mod tests {
                 &mut world,
                 |_| result,
                 |_| panic!("load executor must not run"),
+                |_| panic!("recovery executor must not run"),
             );
 
             assert_eq!(
@@ -208,6 +238,107 @@ mod tests {
                     operation: SaveLoadOperation::Save,
                     target: "slot-a.ron".to_owned(),
                     result,
+                }]
+            );
+        }
+    }
+
+    #[test]
+    fn dispatcher_rejects_save_while_recovery_is_required() {
+        let mut world = World::new();
+        world.insert_resource(SaveLoadState::SaveRequested);
+        world.insert_resource(SaveRecoveryMode::RecoveryFailed);
+        world.insert_resource(SavePath::new("slot-a.ron"));
+        world.init_resource::<Messages<SaveLoadOutcome>>();
+
+        save_load_apply_with(
+            &mut world,
+            |_| panic!("save executor must stay disabled in recovery mode"),
+            |_| panic!("load executor must not run for a save request"),
+            |_| panic!("recovery executor must not run for a save request"),
+        );
+
+        assert_eq!(
+            world
+                .resource_mut::<Messages<SaveLoadOutcome>>()
+                .drain()
+                .collect::<Vec<_>>(),
+            vec![SaveLoadOutcome {
+                operation: SaveLoadOperation::Save,
+                target: "slot-a.ron".to_owned(),
+                result: SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed),
+            }]
+        );
+    }
+
+    #[test]
+    fn dispatcher_rejects_normal_load_while_recovery_is_required() {
+        let mut world = World::new();
+        world.insert_resource(SaveLoadState::LoadRequested);
+        world.insert_resource(SaveRecoveryMode::RecoveryFailed);
+        world.insert_resource(SavePath::new("slot-a.ron"));
+        world.init_resource::<Messages<SaveLoadOutcome>>();
+
+        save_load_apply_with(
+            &mut world,
+            |_| panic!("save executor must not run for a load request"),
+            |_| panic!("normal load executor must stay disabled in recovery mode"),
+            |_| panic!("recovery executor requires the dedicated trigger"),
+        );
+
+        assert_eq!(*world.resource::<SaveLoadState>(), SaveLoadState::Idle);
+        assert_eq!(
+            world
+                .resource_mut::<Messages<SaveLoadOutcome>>()
+                .drain()
+                .collect::<Vec<_>>(),
+            vec![SaveLoadOutcome {
+                operation: SaveLoadOperation::Load,
+                target: "slot-a.ron".to_owned(),
+                result: SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed),
+            }]
+        );
+    }
+
+    #[test]
+    fn dispatcher_allows_only_the_dedicated_recovery_trigger_in_recovery_mode() {
+        for (mode, should_recover) in [
+            (SaveRecoveryMode::Healthy, false),
+            (SaveRecoveryMode::RecoveryFailed, true),
+        ] {
+            let mut world = World::new();
+            world.insert_resource(SaveLoadState::RecoveryLoadRequested);
+            world.insert_resource(mode);
+            world.insert_resource(SavePath::new("slot-a.ron"));
+            world.init_resource::<Messages<SaveLoadOutcome>>();
+            let recover_calls = Cell::new(0);
+
+            save_load_apply_with(
+                &mut world,
+                |_| panic!("save executor must not run for a recovery request"),
+                |_| panic!("normal load executor must not run for a recovery request"),
+                |_| {
+                    recover_calls.set(recover_calls.get() + 1);
+                    SaveLoadResult::Succeeded
+                },
+            );
+
+            assert_eq!(recover_calls.get(), usize::from(should_recover));
+            assert_eq!(*world.resource::<SaveLoadState>(), SaveLoadState::Idle);
+            let expected_result = if should_recover {
+                SaveLoadResult::Succeeded
+            } else {
+                SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed)
+            };
+            assert_eq!(
+                world
+                    .resource_mut::<Messages<SaveLoadOutcome>>()
+                    .drain()
+                    .collect::<Vec<_>>(),
+                vec![SaveLoadOutcome {
+                    operation: SaveLoadOperation::Load,
+                    target: "slot-a.ron".to_owned(),
+                    result: expected_result,
                 }]
             );
         }
@@ -232,6 +363,7 @@ mod tests {
                 clear_save_load_outcomes(world);
                 SaveLoadResult::Failed(SaveLoadFailureKind::ApplyRecovered)
             },
+            |_| panic!("recovery executor must not run"),
         );
 
         assert_eq!(
@@ -294,6 +426,7 @@ mod tests {
                     hw_ui::reset_for_world_replace(world);
                     result
                 },
+                |_| panic!("recovery executor must not run"),
             );
             app.update();
 

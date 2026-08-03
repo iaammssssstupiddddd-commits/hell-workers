@@ -45,6 +45,14 @@ Bevy 0.19 の Relationship は **Source 側を操作すれば Target 側が自�
 - **DeliveringTo との関係**: 搬入先予約は `DeliveringTo` / `IncomingDeliveries` の Relationship が所有する。`SharedResourceCache` には積まず、二重カウントしない。
 - **load 後**: `SharedResourceCache`、reservation signature cache、同期 timer をまとめて reset し、次の Perceive で完全 snapshot を再構築する。
 
+### 2.4 セーブ／ロード境界
+
+- `Designation`、`Priority`、`PlayerIssuedDesignation`、`ManagedBy` / `ManagedTasks`はタスクのdurableな正本として保存する。
+- `AssignedTask`、`WorkingOn` / `TaskWorkers`、`DeliveringTo` / `IncomingDeliveries`は実行中claimなので保存しない。旧v0/v1 bodyではschema検証前にsource/target対で除去する。
+- load直後は全Soulが`AssignedTask::None`、全`TransportRequest`が`Pending`、`TransportDemand.inflight = 0`となる。Familiar AIとproducerがdurable Designation/Requestから通常cycleで再割当する。
+- `Inventory(Some(item))`はcandidateで存在、一意owner、container非競合、近傍walkable cellを検証し、rehydrateでowner helperを通してdropして`None`へ戻す。実行中タスクの完全な途中復元は行わない。
+- `LoadedIn` / `LoadedItems`はcarrier位置をEntity remap後まで渡すstaging handoffとしてだけ保存する。candidate検証後はcarrier（運搬中ならcarrying Soul）近傍へcargoを荷下ろしして両Relationshipを除去し、古い搬送先/claimを再利用しない。
+
 ## 3. タスク発見性チェックリスト
 
 Familiar の `task_finder` がタスクを発見できる条件（**全て満たす必要がある**）:

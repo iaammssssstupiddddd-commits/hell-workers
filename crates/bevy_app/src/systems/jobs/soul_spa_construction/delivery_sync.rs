@@ -62,16 +62,16 @@ pub fn soul_spa_delivery_sync_system(
 /// `Designation(GeneratePower)` と `TaskSlots { max: 1 }` を挿入する。
 pub fn soul_spa_tile_activate_system(
     mut commands: Commands,
-    q_sites: Query<(&SoulSpaSite, &Children), Changed<SoulSpaSite>>,
-    q_tiles: Query<&SoulSpaTile>,
+    q_sites: Query<(Entity, &SoulSpaSite), Changed<SoulSpaSite>>,
+    q_tiles: Query<(Entity, &SoulSpaTile)>,
 ) {
-    for (site, children) in q_sites.iter() {
+    for (site_entity, site) in q_sites.iter() {
         if site.phase != SoulSpaPhase::Operational {
             continue;
         }
-        for child in children.iter() {
-            if q_tiles.get(child).is_ok() {
-                commands.entity(child).insert((
+        for (tile_entity, tile) in q_tiles.iter() {
+            if tile.parent_site == site_entity {
+                commands.entity(tile_entity).insert((
                     Designation {
                         work_type: WorkType::GeneratePower,
                     },
@@ -79,5 +79,47 @@ pub fn soul_spa_tile_activate_system(
                 ));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn operational_activation_uses_durable_parent_site_without_hierarchy() {
+        let mut app = App::new();
+        app.add_systems(Update, soul_spa_tile_activate_system);
+
+        let site = app.world_mut().spawn(SoulSpaSite::default()).id();
+        let other_site = app.world_mut().spawn(SoulSpaSite::default()).id();
+        let tile = app
+            .world_mut()
+            .spawn(SoulSpaTile {
+                parent_site: site,
+                grid_pos: (4, 5),
+            })
+            .id();
+        let other_tile = app
+            .world_mut()
+            .spawn(SoulSpaTile {
+                parent_site: other_site,
+                grid_pos: (6, 7),
+            })
+            .id();
+
+        app.update();
+        assert!(app.world().get::<Designation>(tile).is_none());
+
+        app.world_mut().get_mut::<SoulSpaSite>(site).unwrap().phase = SoulSpaPhase::Operational;
+        app.update();
+
+        assert_eq!(
+            app.world().get::<Designation>(tile).unwrap().work_type,
+            WorkType::GeneratePower
+        );
+        assert_eq!(app.world().get::<TaskSlots>(tile).unwrap().max, 1);
+        assert!(app.world().get::<Designation>(other_tile).is_none());
+        assert!(app.world().get::<ChildOf>(tile).is_none());
     }
 }

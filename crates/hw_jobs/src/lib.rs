@@ -21,8 +21,8 @@ pub use model::{
     Blueprint, BlueprintCancelRequested, BonePile, BridgeMarker, Building, BuildingCategory,
     BuildingType, Designation, Door, DoorCloseTimer, DoorState, FlexibleMaterialRequirement,
     IssuedBy, MovePlanned, ObstaclePosition, ObstacleSourceKind, PlayerIssuedDesignation, Priority,
-    ProvisionalWall, RestArea, Rock, SandPile, TargetBlueprint, TargetSoulSpaSite, TaskSlots, Tree,
-    TreeVariant, WorkType, remove_tile_task_components,
+    ProvisionalWall, RestArea, Rock, RoomDetectionRole, SandPile, TargetBlueprint,
+    TargetSoulSpaSite, TaskSlots, Tree, TreeVariant, WorkType, remove_tile_task_components,
 };
 pub use mud_mixer::StoredByMixer;
 pub use mud_mixer::TargetMixer;

@@ -151,6 +151,26 @@ MS-WFC-4 以降、`Startup` の `setup()` が `prepare_generated_world_layout_re
 
 ---
 
+## セーブ／ロード actual-window受入ドライバ
+
+`NativeSaveLoadAcceptancePlugin`は通常バイナリに含まれる開発専用のopt-in driverであり、
+`HW_NATIVE_SAVE_LOAD_ACCEPTANCE_ARTIFACT`が未設定ならpluginを追加せず、通常起動へ影響しない。
+実機確認はrepositoryの`hell-workers-run-native-acceptance` Skillが定めるno-prompt `kitty` launcher、
+fresh artifact、source fingerprint、bounded monitor契約から起動する。
+
+- `HW_NATIVE_SAVE_LOAD_ACCEPTANCE_ARTIFACT`: 既存の空ディレクトリを絶対pathで指定する。
+- `HW_NATIVE_SAVE_LOAD_ACCEPTANCE_RUN_ID`: path separatorや改行を含まないfresh run IDを指定する。
+- `HW_WINDOW_BACKEND=headless`およびperformance scenarioとの併用は拒否する。
+- `driver-result.json`、capture marker、screenshot、隔離saveが既に存在するartifactはstaleとして起動前に拒否する。
+- driverは実windowと永続worldの成立後にvirtual timeをpauseし、productionの`Last` dispatcherからsave/loadを実行する。正常loadによる`WorldEpoch`のexactly-once更新、pause維持、収束後の連続saveの意味的一致、破損saveの事前拒否とepoch不変、拒否後worldの意味的不変を検査する。
+- 外側monitorはrun ID付き`capture-ready.txt`を受け、実renderer screenshotを採取してsize・dimensions・SHA-256値付き`capture.done.txt`を返す。driverはrun IDとfilename、PNG header、640×360以上、16 MiB以下、size・dimensionsのack一致、SHA-256値の形式を検証してから、その値をcreate-newの`driver-result.json`へ記録してPASSを確定する。
+- driver全体は180秒でfail-closedに終了する。失敗artifactは上書き・自動削除せず診断用に保持する。
+
+検査対象と結果schemaの正本は`crates/bevy_app/src/systems/save/native_acceptance.rs`、
+一般のsave/load契約は[save_load.md](save_load.md)を参照する。
+
+---
+
 ## 関連ファイル
 
 - `crates/bevy_app/src/lib.rs` — デバッグ resource 定義
@@ -161,3 +181,4 @@ MS-WFC-4 以降、`Startup` の `setup()` が `prepare_generated_world_layout_re
 - `crates/bevy_app/src/plugins/interface_debug.rs` — デバッグシステム本体
 - `crates/bevy_app/src/plugins/interface.rs` — Interface セット登録
 - `crates/bevy_app/src/plugins/logic.rs` — Logic セット登録
+- `crates/bevy_app/src/systems/save/native_acceptance.rs` — opt-in actual-window save/load受入driver

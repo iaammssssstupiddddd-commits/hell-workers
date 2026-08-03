@@ -1,5 +1,5 @@
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, ROOM_MAX_TILES};
-use hw_jobs::BuildingType;
+use hw_jobs::RoomDetectionRole;
 use std::collections::{HashSet, VecDeque};
 
 const CARDINAL_OFFSETS: [(i32, i32); 4] = [(0, 1), (1, 0), (0, -1), (-1, 0)];
@@ -35,19 +35,10 @@ impl RoomBounds {
     }
 }
 
-/// Descriptor produced by the root adapter from a single building entity.
-///
-/// The root collects these from `Query<(Entity, &Building, &Transform)>` and
-/// passes the resulting slice to [`build_detection_input`].
+/// Descriptor produced by the ECS adapter from a single building entity.
 pub struct RoomDetectionBuildingTile {
     pub grid: (i32, i32),
-    pub kind: BuildingType,
-    pub is_provisional: bool,
-    /// `true` when another building occupies the same grid cell (i.e.,
-    /// `world_map.has_building(grid)` returned `true` for a Floor tile).
-    /// Used to exclude floor tiles that are shadowed by a wall or other
-    /// structure placed on top.
-    pub has_building_on_top: bool,
+    pub role: RoomDetectionRole,
 }
 
 /// Pre-classified tile sets fed into room detection.
@@ -78,26 +69,31 @@ pub struct DetectedRoom {
 /// required by room detection.
 pub fn build_detection_input(tiles: &[RoomDetectionBuildingTile]) -> RoomDetectionInput {
     let mut input = RoomDetectionInput::default();
+    let mut floor_invalidators = HashSet::new();
 
     for tile in tiles {
-        match tile.kind {
-            BuildingType::Floor => {
-                // Completed floor tiles are not registered in world_map.buildings.
-                // If another building (e.g. a wall) occupies the same cell,
-                // exclude it from floor_tiles and let the wall side handle it.
-                if !tile.has_building_on_top {
-                    input.floor_tiles.insert(tile.grid);
-                }
+        match tile.role {
+            RoomDetectionRole::Floor => {
+                input.floor_tiles.insert(tile.grid);
             }
-            BuildingType::Wall if !tile.is_provisional => {
+            RoomDetectionRole::SolidBoundary => {
                 input.solid_wall_tiles.insert(tile.grid);
+                floor_invalidators.insert(tile.grid);
             }
-            BuildingType::Door => {
+            RoomDetectionRole::DoorBoundary => {
                 input.door_tiles.insert(tile.grid);
+                floor_invalidators.insert(tile.grid);
             }
-            _ => {}
+            RoomDetectionRole::InteriorFixture => {}
+            RoomDetectionRole::FloorInvalidator => {
+                floor_invalidators.insert(tile.grid);
+            }
         }
     }
+
+    input
+        .floor_tiles
+        .retain(|grid| !floor_invalidators.contains(grid));
 
     input
 }

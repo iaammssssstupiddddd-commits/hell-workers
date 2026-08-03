@@ -57,14 +57,19 @@ open request を受理しない F9 は focus を変更しない。
     → SavePath から read
     → external header を decode（v1 の version / worldgen seed を body deserialize 前に照合）
     → RON body deserialize (WorldDeserializer) → legacy v0 だけ body 内 seed を照合
-    → PreparedLoad schema検証 → staging World preflight → rehydrate prerequisite検証
-    → rollback snapshot を取得
+    → PreparedLoad normalization（legacy/runtime-derived stateをstrip）→ schema検証
+    → live presentation prerequisite検証
+    → incomingをstaging Worldへ1回だけ適用 → domain candidate validatorを全実行
+    → rollback snapshotを取得 → 同じschema/staging/domain検証を完了
     → LoadResetRegistry（message / selection / UI / visual / cache）を実行
     → stale presentation と persisted entityをdespawn → flush → WorldEpochを進める
     → old RemovedComponents bufferを2回clear_trackersして破棄
     → DynamicWorld::write_to_world_with (Entity remap)
-    → finalize: runtime cache reset → AssignedTask::None → rehydrate
-    → live apply失敗時: partial entityを掃除 → resetを再実行 → snapshot復元 → 同じfinalize
+    → ResolvedRehydratePlan（normalize → shell → derived rebuild → wake）を1回実行
+    → live apply失敗時: partial entityを掃除 → resetを再実行 → snapshot復元 → 同じplanを1回実行
+    → rollback失敗時: RecoveryFailedへ遷移してTime<Virtual>をpause
+    → RecoveryFailed専用ownerがRecoveryLoadRequestedを発行した場合だけ、incomingをfull preflightし、
+      rollback snapshotなしのrecovery-only replace（通常F9は拒否。専用UI producerはTrack C2）
   → 全処理とresetの完了後、terminal SaveLoadOutcomeを1件発行
 
 [次のUpdate::NotificationSystemSet]
@@ -79,7 +84,10 @@ missing fileだけはownerで結果を確定するため確認なしで`LoadRequ
 
 ## 終端結果とプレイヤー通知
 
-`SaveLoadState` は `Idle / SaveRequested / LoadRequested` の一回限りのtriggerであり、成功・失敗を保持しない。
+`SaveLoadState` は `Idle / SaveRequested / LoadRequested / RecoveryLoadRequested` の一回限りのtriggerであり、
+成功・失敗を保持しない。`RecoveryLoadRequested`はrollback失敗後のforeground recovery owner専用で、通常の
+F9/UI load経路からは発行しない。Track C3時点のproductionにはこの専用triggerのproducerはなく、Track C2が
+専用画面と入力gateと合わせて接続する。
 dispatcherは要求を実行する前に`Idle`へ戻し、save / loadの返り値から
 `SaveLoadOutcome { operation, target, result }`を要求ごとに1件だけ書く。
 
@@ -145,6 +153,8 @@ HELL_WORKERS_SAVE
 | カテゴリ | 例 | ロード後 |
 | --- | --- | --- |
 | 実行中タスク状態 | `AssignedTask`, `Path`, `Destination`, `FamiliarAiState`, `ActiveCommand` | Soul へ `AssignedTask::None` を付与し、shell 側で runtime state を再挿入する。Familiar は durable な `TaskArea` があれば `Patrol`、なければ `Idle` として再開し、Designation から再割当する |
+| タスク／物流の実行edge | `WorkingOn` / `TaskWorkers`、`DeliveringTo` / `IncomingDeliveries`、`PushedBy` / `PushingWheelbarrow`、`TransportRequestState`、`WheelbarrowLease`、`WheelbarrowPendingSince` | legacy bodyではschema検証前に除去する。全requestを`Pending`、`TransportDemand.inflight = 0`へ戻し、Soul inventoryとwheelbarrowをowner契約に沿って解放して通常の割当・仲裁へ戻す |
+| 期限付きitem runtime | `ItemDespawnTimer` | 保存せず、全Sand/StasisMudへload時にfresh 5秒timerを1つ付与する。通常runtimeでは`LoadedIn` / `StoredIn` / `DeliveringTo` / `StoredByMixer`中に既存lifetime systemが停止するが、load境界の積載物は安全に荷下ろしされるためtimerが地面で開始する |
 | 派生キャッシュ | 空間グリッド、`SharedResourceCache`、`ReservationSignatureCache`、transport producer cache、`CachedStockpileGroups`、`ObstaclePositionIndex`、task input revisions、Familiar/Blueprint/wheelbarrow diagnostics | root reset hookでdefault化する。予約同期 timerもresetし、次のPerceiveが初回同期として完全snapshot/診断cycleを再構築 |
 | runtime obstacle provenance / navigation cache | `ObstacleSourceKind`、`BuildingFootprint`、`ObstaclePositionIndex`、raw `WorldMap.obstacles` / `doors` / `bridged_tiles` | `rehydrate_obstacle_runtime` が durable semantic source から marker / cache を再構築。保存済み Door state は最終 override として使う |
 | transient gathering | `GatheringSpot`、`GatheringVisuals`、`ParticipatingIn`、`GatheringParticipants` | v1 saveから除外。旧bodyのrelationship componentはschema検証前に破棄し、replace hookはspotとlinked aura/objectをdespawn。Soulは非参加状態から通常AIへ戻る |
@@ -172,9 +182,14 @@ Reflect 登録、`DynamicWorldBuilder` の allow-list、root entity の収集を
 重複登録せず、通常の `App` の registry に `ReflectComponent` data があることをテストで固定する。
 
 `ParticipatingIn` / `GatheringParticipants` / `PowerSupplyState` / `Unpowered` /
-`PowerGridAllocationSummary` は `runtime_derived_component` inventoryに置く。型登録は
+`PowerGridAllocationSummary`に加え、task/logisticsの実行edge、request claim/lease/pending timer、
+`ItemDespawnTimer`は`runtime_derived_component` inventoryに置く。型登録は
 legacy bodyのdeserializeのため維持するが、新規saveのallow-listには含めない。deserialize後かつschema
-検証前にこれらを除去するため、旧bodyが持つ消滅済みEntity参照やstale供給結果をlive worldへ渡さない。
+検証前にこれらを除去するため、旧bodyが持つ消滅済みEntity参照、stale claim、stale供給結果をlive worldへ渡さない。
+`ManagedBy` / `ManagedTasks`、`ParkedAt` / `ParkedWheelbarrows`はload後も残すdurableなowner関係として保存する。
+`LoadedIn` / `LoadedItems`もcarrierのremap済み位置をRuntimeNormalizeへ渡すstaging handoffとして保存し、
+candidate validatorがsource/target対称性、carrier種別、容量を検証する。ただし実行中の搬送先とclaimは保存しないため、
+live worldでは全積載物をcarrier（運搬中ならcarrying Soul）の最寄りwalkable cellへ荷下ろしして両Relationshipを除去する。
 
 `ReservedForTask` も同じ TypePath を保つ loader 専用の Reflect component として別登録する。ただし
 `persisted_component` には入れない。legacy v0 のみ deserialize 後に除去し、v1 body に同型があれば
@@ -202,20 +217,28 @@ root marker matrix は collect、extract、RON serialize/deserialize、Relations
 `PreparedLoad` はheader分類済みの`SaveFormat`とdeserialize済み`DynamicWorld`を保持する。live worldを
 変更する前に、次を順に完了しなければならない。
 
-1. header/seed、RON deserialize、legacy v0 の runtime-derived component / shim の除去、schema allow-list、必須Resourceを検証する。
-2. 空のstaging `World`へ`write_to_world_with`を実行し、registry、`ReflectComponent`、`ReflectResource`、Entity remapの静的契約を検証する。
-3. `AssetServer`、`GeneratedWorldLayoutResource`、`GameAssets`、`Building3dHandles`、`SoulTaskHandles`、`WorldMap`と、Tree再水和に必要な非空の`GameAssets.trees`を検証する。
+1. header/seed、RON deserialize、legacy v0 shimとv0/v1 runtime-derived componentの除去、schema allow-listを検証する。このdecode境界で`GeneratedWorldLayoutResource`をseed照合に、`AssetServer`をreflect asset path解決に要求する。
+2. freeze済みplanのlive prerequisiteとして`GameAssets`、`Building3dHandles`、`SoulTaskHandles`、`Time<Virtual>`と、Tree再水和に必要な非空の`GameAssets.trees`を検証する。
+3. incomingを空のstaging `World`へ1回だけ`write_to_world_with`し、registry、Reflect data、Entity remapを検証する。同じstagingをimmutableなdomain candidate validatorへ渡し、Familiar roster、task/logisticsのowner・容量・drop成立条件、自然障害物の`ObstaclePosition`を含む全durable topologyを検証する。`WorldMap.tile_entities`は全slotが一意な`Tile + Transform`を指すこと、`Blueprint.occupied_grids`、Wall tileの`spawned_wall.unwrap_or(parent_site)`、Soul Spa tileの`parent_site`が`WorldMap.buildings`と双方向に一致することもここで要求する。
+4. live worldからrollback snapshotを取得し、incomingと同じschema/staging/domain validatorを通す。どちらかが失敗した場合はreset、WorldEpoch、UI/visual、persisted worldを一切変更しない。`WorldMap`は各candidate自身のshapeと全Entity参照を検証し、旧live worldを新world再水和の前提にはしない。
 
 staging preflightの成功はtransaction成功を保証しない。live applyは別境界であり、write開始後に
 `Result`エラーが返った場合は、apply時の`EntityHashMap`に記録された全entityを直接despawnして
-partial entityを除去する。finalizeが途中まで生成したrehydrate所有presentation shellもこの時点で
-掃除してから、despawn前に取得した同じschemaのrollback snapshotを適用し、success時と同じfinalize
-経路を通す。
+partial entityを除去する。runnerが途中まで生成したrehydrate所有presentation shellもこの時点で
+掃除してから、despawn前に検証済みのrollback snapshotを適用し、success時と同じimmutable
+`ResolvedRehydratePlan`を通す。
 
 rollback成功時の保証は「persistent graphを復元し、非保存runtime stateを通常loadと同じ初期化済み
 状態へ正規化する」ことである。raw Entity IDやRON byte列の一致は保証しない。`AssignedTask`、
-orphan inventoryのdrop、Move designation除去、obstacle cache再構築、presentation shellはfinalizeで
+inventoryのdrop、task/logistics claim除去、obstacle cache再構築、presentation shellはrunnerで
 意図的に正規化される。reflect applyのpanicはtransactionの回復対象ではない。
+
+rollback自体に失敗した場合だけcoordinator-owned `SaveRecoveryMode`を`RecoveryFailed`へ遷移し、
+`Time<Virtual>`を即時pauseする。この状態ではsaveと通常transactionを拒否し、通常F9もrecovery-onlyへ
+暗黙昇格しない。専用ownerが`RecoveryLoadRequested`を発行した場合だけincomingのfull preflight、
+idempotent reset、同じrehydrate planを通す。成功時だけ`Healthy`へ戻すが自動unpauseはしない。
+Track C3はこの低位境界とfail-closed回帰だけを提供し、production producer、専用画面、別slot選択、
+world input全体のallow-listはTrack C2の責務である。
 
 ## フレーム境界と reset ownership
 
@@ -245,6 +268,7 @@ root message型は`MessagesPlugin`の単一typed macroから初期化と`Message
 | `hw_visual` | owner cache、3D proxy、speech/dream/haul/task-area等の独立transient entity、`GatheringSpot`とlinked aura/object | hookでdespawn + cache clear。root固有のFamiliar range shellもrehydrate cleanupでdespawn |
 | root command visual | designation / task-area indicator、area-edit handle、area / dream preview | root VisualPlugin hookでdespawn。`DesignationIndicator`は通常の`RemovedComponents<Designation>` cleanupを使えないためreplace前に明示破棄 |
 | simulation cache | spatial/resource/tile/room/reservation/stockpile group/obstacle index | root cache hookでdefault化し、既存systemまたはrehydrateで再構築 |
+| `hw_world` room owner | runtime `Room` root、`RoomOverlayTile`、`RoomTileLookup`、detection/validation state | leafのidempotent `reset_for_world_replace`がentityをdespawnしResourceをdefault化する。root `LogicPlugin`は`hw-world-rooms` hookを1回だけ登録 |
 | `Local<HashMap<Entity, _>>` | Soul移動のdoor wait、world tooltip runtime | `WorldEpoch`不一致を最初の利用前に検出してclear |
 | scratch `Local<Vec<Entity>>` / frame map | nearby検索buffer、idleのpending rest reservation | 使用前またはsystem先頭で必ずclearするためretain |
 
@@ -266,7 +290,15 @@ marker のない legacy / auto task を「auto marker が消えた manual task�
 セーブが復元するのはschema allow-listの simulation 状態のみで、spawn 関数がその場で挿入する
 実行時コンポーネントと随伴エンティティは含まれない。`rehydrate.rs` がロード直後に再付与する。
 
-物理構成では `schema.rs` に型inventoryと抽出入口を残し、`schema/validation.rs` がdeserialized worldの検証を担当する。`rehydrate.rs` は復元順とshell再付与の入口を保ち、`rehydrate/prerequisites.rs`、`presentation.rs`、`construction_runtime.rs`、`construction_shells.rs`、`obstacles.rs` が各フェーズを担当する。save schemaと復元順の正本は引き続きfacade側の入口である。
+物理構成では `schema.rs` に型inventoryと抽出入口を残し、`schema/validation.rs` がdeserialized worldの検証を担当する。
+`rehydrate.rs`はdomain adapterだけを登録し、`rehydrate/registry.rs`のraw graphを全plugin build後の
+`SavePlugin::finish`で検証・freezeする。transactionが読む正本はimmutableな`ResolvedRehydratePlan`であり、
+通常loadとrollbackは同じsnapshotをexactly once実行する。
+
+stepは`DurableNormalize → RuntimeNormalize → AttachShells → RebuildDerived → WakeDomains`の5 phaseで
+固定する。重複名、未知依存、循環、後phaseへの逆依存はApp finish時にpanicしてload開始前に構成不正を止める。
+独立stepはphase・名前順で安定化し、`AttachShells`後から`RebuildDerived`へ移るbarrierと最終`flush()`は
+runnerだけが所有する。
 
 | カテゴリ | shell の内容 | 実装 |
 | --- | --- | --- |
@@ -280,7 +312,19 @@ marker のない legacy / auto task を「auto marker が消えた manual task�
 | 旧形式のSoul Energy設定 | 範囲外`SoulSpaSite.active_slots`、欠落`PowerConsumerPolicy` | active slotsを0〜4へclampし、旧consumerだけNormal policyを補完する。保存済みLow/Normal/Highは維持する |
 | runtime energy | Yard/Grid一対一、generator/consumer relationship、個別供給stateとsummary | reset時に`EnergyUpdateDirty::request_full_rebuild()`。最初のLogicでduplicate/orphan cleanupとrewireを行い、output/allocationをeffect前に再構築する |
 | 旧形式の通常 Stockpile セル | 欠落した `StockpilePolicy` の互換既定値 | `BelongsTo(owner)` の owner が durable な `Yard` のセルだけへ `Any` / `Normal` / `target_amount = capacity` / export許可を挿入。既存の `Any` / `Only(ResourceType)` は意味を維持し、`Selected(StockpileResourceSet)` を含むpolicyはacceptance集合とtargetを正規化する。Tank / Mixer root、marker が保存されない Tank companion、owner 不明の storage へは推測で付与しない |
+| task / logistics runtime | assignment、delivery claim、tool use、request claim/lease、inflight、inventory、積載handoff、volatile item timer | runtime relationshipを除去し全Soulをunassignedへ戻す。requestは`Pending`、`inflight = 0`、lease/pending timerなし。inventory itemは近傍walkable cellへdropし、保存済み積載物もremap済みcarrier位置へ荷下ろしする。wheelbarrowはdurable `BelongsTo`のparkingへ戻し、Sand/StasisMudへfresh timerを付与 |
 | 障害物 provenance / pathfinding cache | source-aware marker、Building footprint mirror、`ObstaclePositionIndex`、raw obstacle / Door / Bridge cache | `rehydrate_obstacle_runtime` が Tree/Rock、construction、Building/Blueprint/site の semantic source matrix から再構築 |
+
+### Domain ledger
+
+| Domain | durable source | replace reset | compatibility normalization | runtime-derived rebuild | presentation | wake timing |
+| --- | --- | --- | --- | --- | --- | --- |
+| Familiar | `FamiliarOperation` / `FamiliarPolicy` / `TaskArea` / `Commanding` | AI・proxy・range shell | 欠落設定を補完しpolicyを正規化 | `FamiliarAiState` / `ActiveCommand` | sprite、proxy、range | runner内 |
+| Stockpile | `Stockpile` / `StockpilePolicy` / `BelongsTo(Yard)` | group / producer cache | 旧通常セルだけpolicy補完 | 次Perceiveでgroup/需要 | sprite | 次Perceive |
+| Construction | site/tile phase、Blueprint、Building | shell、index、obstacle cache | counter/phaseをdurable tileから正規化 | `TileSiteIndex` / `CuringFootprint` / obstacle | site/tile mirror、sprite | runner内 |
+| Soul Energy | site/policy/durable relationship | grid/allocation runtime | slot clamp、欠落policy補完 | grid topology、供給state、summary | building shell/inspection入力 | 次Logicのfull rebuild |
+| Room | Wall/Door/Floor/`WorldMap` | Room root、overlay、lookup、detection state | なし | room/lookup | boundary/overlay | 次Logicのroom detection |
+| Task/Logistics | Designation/Request、`ManagedBy`、`ParkedAt`、`BelongsTo`、staging handoffの`LoadedIn` | cache/diagnostic/runtime claim | legacy runtime edge strip、積載物をcarrier近傍へ荷下ろし | request Pending、parking、item lifetime | item/tool shell | runner内〜次Perceive |
 
 shell 欠落の判定は「shell が必ず挿入するコンポーネントの不在」
 （Soul/Familiar は `Without<Destination>`、Building は `Without<BuildingBounceEffect>`、Blueprint は mirror / Sprite /
@@ -288,15 +332,20 @@ shell 欠落の判定は「shell が必ず挿入するコンポーネントの�
 既に存在する shell は再作成しない。
 
 保存済み `FamiliarOperation.max_controlled_soul` が保存済み `Commanding` roster数より小さい場合は、
-B2-aware writerでは生成不能な破損状態としてloadを失敗させる。Soulを推測で解放して修復せず、
-transaction rollbackでpre-loadのoperation / policy / relationshipを復元し、terminal outcomeを
-`ApplyRecovered` とする。
+B2-aware writerでは生成不能な破損状態としてincoming candidateをlive置換前に拒否する。Soulを推測で
+解放せず、pre-load world、WorldEpoch、UI/visualを不変に保ち、terminal outcomeを`InvalidData`とする。
 
 Blueprint と construction の mirror を `default()` で付与して次 frame の Logic 同期へ委ねてはならない。
 load は virtual time が pause 中でも成立し、Visual phase は停止しないため、mirror は durable state から完成形として
 構築して Visual phase が最初に読む値を正しくする。
 
-Floor / Wall construction は shell の後、Spatial/Logicを再開する前に durable tile から `TileSiteIndex` を同期的に再構築する。同じpassでtile state rankからsite counterを再計算し、Curing siteだけに保存対象外の `CuringFootprint` を作り直す。この処理は保存済み `WorldMap` を正本とし、養生footprintを再reserveしない。
+Floor / Wall construction は`DurableNormalize`でtile state rankからsite counter/phaseを正規化する。
+`ReinforcedComplete -> WaitingMud` / 有効な仮壁を持つ`FramedProvisional -> WaitingMud`はsite phaseの
+昇格と同じexclusive stepで行い、旧task trioも除去する。仮壁生成前の正当な
+`FramedProvisional + spawned_wall=None`はFramingのまま保持し、次Logicの通常spawn→transitionへ委ねる。
+phaseに対して回復不能なearly/late tile混在はlive置換前にrejectする。その正規化値から`AttachShells`で
+mirrorを作り、shell barrier後の`RebuildDerived`で`TileSiteIndex`とCuring siteの`CuringFootprint`を
+同期再構築する。この処理は保存済み`WorldMap`を正本とし、養生footprintを再reserveしない。
 
 rehydrateは先に前提Resourceを検証して`Result`を返す。前提不備ではinventoryやentityを変更しない。
 replace phaseではregistryが全pluginのtransient stateを先にclearし、さらにrehydrate所有の独立
@@ -306,8 +355,10 @@ finalizerが残したowner shellはrollback snapshotのrehydrate前に残らな�
 
 付随処理:
 
-- **孤児インベントリのドロップ**: Phase A ではロード後の全 Soul が `AssignedTask::None` になるため、`Inventory(Some)` のアイテムは Soul の足元へドロップして物流ループに戻す
-- **猫車積載アイテム**: `LoadedIn` 付きアイテムは `Visibility::Hidden` で復元
+- **Soul inventory**: candidateでitem存在、一意owner、durable containerとの非競合、Soul近傍のwalkable cellを検証する。ResourceItemは既存owner helperで最寄りcellへdropし、`Inventory(None)`へ戻す
+- **Wheelbarrow**: Soulが押していた車両をinventoryから外し、全車両をdurableな`BelongsTo -> WheelbarrowParking`へparkする。車両自身の`LoadedIn` / `StoredIn` / `StoredByMixer`は許可せず、home欠落、不正owner、容量超過もcandidate rejectする
+- **猫車積載アイテム**: candidateでは`LoadedIn` / `LoadedItems`の対称性、carrier、容量を検証する。RuntimeNormalizeでは保存しない搬送先へ古いcargoを持ち越さないため、remap済みcarrier位置（Soulが車両を運搬中ならそのSoulの位置）の最寄りwalkable cellへitemを表示状態で荷下ろしし、両Relationshipを除去する
+- **期限付きitem**: 全Sand/StasisMudへfresh 5秒`ItemDespawnTimer`を付け直す。保存済み積載物はload時にground化するため直後からtimerが進行し、`StoredIn` / `DeliveringTo` / `StoredByMixer`等の保護relationshipが残るitemだけ停止する
 - **旧形式セーブ**: `SoulIdentity` が無い場合はランダム生成でフォールバック（名前は失われる）
 
 **新しい spawn 時コンポーネントを追加する時の規約**: 永続化すべき simulation 状態なら
@@ -337,14 +388,23 @@ magic 無し v0 だけは、deserialize 後に body 内 `SavedWorldgenSeed` を�
 計画書の Phase A は「セーブ前に `unassign_task` で正規化」を想定していたが、本実装では **allow-list から除外** する方式を採用している。
 
 - セーブ中もライブワールドのタスク実行状態は変更しない
-- ロード後は `AssignedTask` が無い Soul に `None` を挿入
-- `Designation` + `TransportRequest` が残っていれば Familiar AI が再割当する
+- current writerは`AssignedTask`に加えて`WorkingOn` / `TaskWorkers`、`DeliveringTo` /
+  `IncomingDeliveries`、`PushedBy` / `PushingWheelbarrow`、request claim/lease/timerを保存しない
+- v0/v1 legacy bodyはschema検証前に同じruntime stateをsource/target対でstripする
+- ロード後は全Soulを`AssignedTask::None`へ揃え、全requestを`Pending`、
+  `TransportDemand.inflight = 0`へ戻す
+- durableな`Designation` + `TransportRequest` + `ManagedBy`が残るため、Familiar AIとwheelbarrow仲裁が通常cycleで再割当する
 
 Phase B（実行中タスクの完全復元）は follow-up。
 
 ## Relationship と reconcile
 
-Relationship Target型もallow-listへ含め、通常はSource/Targetが整合したsnapshotとして保存する。
+schema-persisted Relationship Target型もallow-listへ含め、Source/Targetが整合したsnapshotとして保存する。
+candidate validatorは`ManagedBy` / `ManagedTasks`、`LoadedIn` / `LoadedItems`、`ParkedAt` /
+`ParkedWheelbarrows`の対称性とowner/capacityを検証する。runtime task execution Relationshipは
+writerから除外し、legacy payloadでもsource/targetを対で破棄するため、paused load直後からstale worker/
+delivery/tool claimは0件である。`LoadedIn` / `LoadedItems`だけはremap済みcarrier位置を使うstaging handoffであり、
+検証後のRuntimeNormalizeで荷下ろししてlive graphから除去する。
 ただしSoul Energyは通常spawn・load・rollback・旧重複fixtureを同じ経路に通すため、保存値を盲信せず
 `reconcile_power_grid_topology_system`でYardごとのcanonical Gridを1件にし、`GeneratesFor` / `ConsumesFrom`を
 Transform位置から再接続する。これはruntime topology repairであり、durable policyの変換ではない。
@@ -364,6 +424,7 @@ cargo check
 cargo clippy --workspace -- -D warnings
 cargo test -p bevy_app@0.1.0 --lib systems::save::schema
 cargo test -p bevy_app@0.1.0 --lib systems::save
+cargo test -p hw_world --lib world_replace
 cargo test -p hw_core --lib world_epoch
 cargo test -p hw_ui --lib world_replace_reset
 ```
@@ -372,17 +433,26 @@ cargo test -p hw_ui --lib world_replace_reset
 → 値を変える → F9 → 確認ダイアログで Confirm。確認前にはロードされず、Confirm後にFamiliar設定、Soul 数、
 Stockpile 内容、建築進捗、`GameTime` が復元され、旧通知履歴が消えてload成功が新しい先頭になること。
 save fileを退避した状態のF9ではダイアログを開かず`Save not found`が通知されることも確認する。
+load直前にSoulが運搬中でも、load後はstale worker/delivery/tool claimが残らず、requestが再度割り当てられること、
+猫車の積載数を失わずremap済みcarrier/Soul近傍へ荷下ろしされることを確認する。積載されていたSand/StasisMudは
+load後にfresh 5秒timerがgroundで進行し、storage/mixer等の保護relationshipが残るitemだけ停止することも確認する。
+
+実window、production dispatcher、renderer screenshotを含む自動受入は
+[debug-features.md のセーブ／ロード actual-window受入ドライバ](debug-features.md#セーブロード-actual-window受入ドライバ)
+を使う。通常起動では無効で、no-prompt launcherとartifact監視は`hell-workers-run-native-acceptance` Skillを正本とする。
 
 ## 未実装
 
 - 複数スロット・オートセーブ・バージョンマイグレーション
+- `RecoveryFailed`専用画面、別slot再試行、resume/world inputのfail-closed allow-list（Track C2）
 - 設定画面からのセーブ/ロード（settings-screen-plan 側）
 
 ## 既知の制限
 
 - **別 seed セッションへのロード不可**: seed ガードで中止される（`HELL_WORKERS_WORLDGEN_SEED` 指定で再起動すれば可）。地形チャンクをロード時に再生成できれば解消するが未対応
-- **runtime obstacle source / footprint mirror**（`ObstacleSourceKind` と `BuildingFootprint` / `PlacementReservation` / `ConstructionProtection` の非保存 marker）は保存しない。load 時は raw `WorldMap.obstacles` を正本にせず、Tree/Rock、movement-blocking な完成 Building、non-Bridge Blueprint、`WallConstructionSite`、Curing 中 FloorTile の durable semantic source から bitmap を再構築する。Door cache は保存済み state を最終 override とし、`bridged_tiles` は完成 `BuildingType::Bridge` から再構築する。raw blocker / Door / Bridge cache は一括更新して、最終 walkability が変わる場合だけ `obstacle_version` を1回進める。Building mirror と `ObstaclePositionIndex` を再生成し、未完了 Move designation とその予約 bit は復元しない
-- **SoulSpaTile の `ChildOf` 階層**は復元されない（`parent_site` フィールドで論理は維持。Transform は絶対値保存のため表示影響なし）
+- **実行中搬送のphase/destinationは復元しない**: request/claimを再仲裁するため、保存時の猫車積載物はload境界でcarrier近傍へ安全に荷下ろしする
+- **runtime obstacle source / footprint mirror**（`ObstacleSourceKind` と `BuildingFootprint` / `PlacementReservation` / `ConstructionProtection` の非保存 marker）は保存しない。load 時は raw `WorldMap.obstacles` を正本にせず、Tree/Rock、movement-blocking な完成 Building、non-Bridge Blueprint、`WallConstructionSite`、Curing 中 FloorTile の durable semantic source から bitmap を再構築する。Door cache は保存済み state を最終 override とし、`bridged_tiles` は完成 `BuildingType::Bridge` から再構築する。raw blocker / Door / Bridge cache は一括更新して、最終 walkability が変わる場合だけ `obstacle_version` を1回進める。Building mirror と `ObstaclePositionIndex` を再生成し、未完了 Move designation とその予約 bit は復元しない。Outdoor Lamp等の通行可能建物はBlueprint完成時に予約bitだけを解除し、`WorldMap.buildings` ownerを完成建物へ同frameで移譲する
+- **SoulSpaTile の `ChildOf` 階層**は保存・復元しない。tile activationを含むsimulation logicはdurableな`SoulSpaTile.parent_site`を正本として検索し、絶対値`Transform`の表示にもhierarchyを要求しない
 - **header 無し v0 セーブ**: `SoulIdentity` を含まなければ Soul 名はランダム再生成される。`SavedWorldgenSeed` も無い場合は seed 照合を warn のみにする
 
 ## UI 構成

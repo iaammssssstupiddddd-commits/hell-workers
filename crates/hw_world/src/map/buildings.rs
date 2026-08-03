@@ -149,7 +149,38 @@ impl WorldMap {
                     self.register_door(grid, entity, DoorState::Closed);
                 }
             }
-            _ => self.set_building_occupancies(entity, grids),
+            kind if kind.blocks_movement() => self.set_building_occupancies(entity, grids),
+            _ => {
+                for grid in grids {
+                    // Every non-Bridge Blueprint reserves a raw obstacle while
+                    // it exists. Passable completed buildings retain logical
+                    // occupancy but must release that placement reservation.
+                    self.clear_building_occupancy(grid);
+                    self.set_building(grid, entity);
+                }
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn passable_completion_transfers_owner_and_releases_blueprint_obstacle() {
+        let mut map = WorldMap::default();
+        let grid = (12, 13);
+        let blueprint = Entity::from_bits(1);
+        let building = Entity::from_bits(2);
+        map.reserve_building_footprint(BuildingType::OutdoorLamp, blueprint, [grid]);
+        assert_eq!(map.building_entity(grid), Some(blueprint));
+        assert!(map.has_raw_obstacle(grid.0, grid.1));
+
+        map.register_completed_building_footprint(BuildingType::OutdoorLamp, building, [grid]);
+
+        assert_eq!(map.building_entity(grid), Some(building));
+        assert!(!map.has_raw_obstacle(grid.0, grid.1));
+        assert!(map.is_walkable(grid.0, grid.1));
     }
 }

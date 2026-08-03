@@ -11,9 +11,10 @@ use bevy::prelude::*;
 use bevy::reflect::TypeRegistry;
 use bevy_world_serialization::DynamicWorld;
 
-use super::rehydrate::clear_rehydrate_presentation;
+use super::rehydrate::{ResolvedRehydratePlan, clear_rehydrate_presentation};
 use super::reset::{advance_world_epoch, discard_old_removed_components, run_load_resets};
-use super::schema::{build_persisted_world, collect_persisted_entities};
+use super::schema::{build_persisted_world, collect_persisted_entities, validate_persisted_world};
+use super::state::SaveRecoveryMode;
 
 #[derive(Debug)]
 pub(super) struct PreflightError(String);
@@ -34,30 +35,50 @@ impl fmt::Display for PreflightError {
 pub(super) fn preflight_dynamic_world(
     dynamic_world: &DynamicWorld,
     type_registry: &TypeRegistry,
-) -> Result<(), PreflightError> {
+) -> Result<World, PreflightError> {
     let mut staging = World::new();
     let mut entity_map = EntityHashMap::default();
     dynamic_world
         .write_to_world_with(&mut staging, &mut entity_map, type_registry)
-        .map_err(|error| PreflightError(error.to_string()))
+        .map_err(|error| PreflightError(error.to_string()))?;
+    staging.flush();
+    Ok(staging)
 }
 
 #[derive(Debug)]
 pub(super) enum CommitError {
-    Recovered { cause: String },
-    RecoveryFailed { cause: String, recovery: String },
+    Rejected {
+        candidate: &'static str,
+        cause: String,
+    },
+    RecoveryModeRequired,
+    Recovered {
+        cause: String,
+    },
+    RecoveryFailed {
+        cause: String,
+        recovery: String,
+    },
 }
 
 impl fmt::Display for CommitError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Rejected { candidate, cause } => write!(
+                formatter,
+                "{candidate} candidate was rejected before live replacement: {cause}"
+            ),
+            Self::RecoveryModeRequired => write!(
+                formatter,
+                "requested world replacement mode is invalid for the current recovery state"
+            ),
             Self::Recovered { cause } => write!(
                 formatter,
                 "live apply failed ({cause}); restored the persisted rollback snapshot"
             ),
             Self::RecoveryFailed { cause, recovery } => write!(
                 formatter,
-                "live apply failed ({cause}) and rollback recovery also failed ({recovery})"
+                "world replacement failed ({cause}); recovery did not complete ({recovery})"
             ),
         }
     }
@@ -70,19 +91,36 @@ pub(super) fn replace_persisted_world(
     world: &mut World,
     incoming: &DynamicWorld,
     type_registry: &TypeRegistry,
-    finalize: impl FnMut(&mut World) -> Result<(), String>,
+    plan: &ResolvedRehydratePlan,
 ) -> Result<(), CommitError> {
-    replace_persisted_world_with_post_write(world, incoming, type_registry, |_| Ok(()), finalize)
+    replace_persisted_world_with_post_write(
+        world,
+        incoming,
+        type_registry,
+        plan,
+        |_| Ok(()),
+        |world| {
+            plan.run(world);
+            Ok(())
+        },
+    )
 }
 
 fn replace_persisted_world_with_post_write(
     world: &mut World,
     incoming: &DynamicWorld,
     type_registry: &TypeRegistry,
+    plan: &ResolvedRehydratePlan,
     mut post_write: impl FnMut(&mut World) -> Result<(), String>,
     mut finalize: impl FnMut(&mut World) -> Result<(), String>,
 ) -> Result<(), CommitError> {
+    if recovery_mode(world) != SaveRecoveryMode::Healthy {
+        return Err(CommitError::RecoveryModeRequired);
+    }
+    validate_dynamic_candidate(incoming, type_registry, plan, "incoming")?;
     let rollback_snapshot = capture_persisted_world(world, type_registry);
+    validate_dynamic_candidate(&rollback_snapshot, type_registry, plan, "rollback")?;
+
     run_load_resets(world);
     clear_rehydrate_presentation(world);
     despawn_persisted_entities(world);
@@ -97,7 +135,7 @@ fn replace_persisted_world_with_post_write(
         .and_then(|()| finalize(world));
 
     if let Err(cause) = apply_error {
-        return recover_persisted_world(
+        let recovery = recover_persisted_world(
             world,
             &rollback_snapshot,
             type_registry,
@@ -105,10 +143,83 @@ fn replace_persisted_world_with_post_write(
             cause,
             &mut finalize,
         );
+        if matches!(recovery, Err(CommitError::RecoveryFailed { .. })) {
+            enter_recovery_failed(world);
+        }
+        return recovery;
     }
 
     world.flush();
     Ok(())
+}
+
+/// Replaces an untrusted live world without attempting to snapshot it. This is
+/// deliberately available only after transactional rollback has failed.
+pub(super) fn replace_recovery_only_world(
+    world: &mut World,
+    incoming: &DynamicWorld,
+    type_registry: &TypeRegistry,
+    plan: &ResolvedRehydratePlan,
+) -> Result<(), CommitError> {
+    replace_recovery_only_world_with_post_write(world, incoming, type_registry, plan, |_| Ok(()))
+}
+
+fn replace_recovery_only_world_with_post_write(
+    world: &mut World,
+    incoming: &DynamicWorld,
+    type_registry: &TypeRegistry,
+    plan: &ResolvedRehydratePlan,
+    mut post_write: impl FnMut(&mut World) -> Result<(), String>,
+) -> Result<(), CommitError> {
+    if recovery_mode(world) != SaveRecoveryMode::RecoveryFailed {
+        return Err(CommitError::RecoveryModeRequired);
+    }
+    validate_dynamic_candidate(incoming, type_registry, plan, "recovery")?;
+
+    run_load_resets(world);
+    clear_rehydrate_presentation(world);
+    despawn_persisted_entities(world);
+    advance_world_epoch(world);
+    discard_old_removed_components(world);
+
+    let mut entity_map = EntityHashMap::default();
+    let apply_result = incoming
+        .write_to_world_with(world, &mut entity_map, type_registry)
+        .map_err(|error| error.to_string())
+        .and_then(|()| post_write(world));
+    if let Err(error) = apply_result {
+        despawn_mapped_entities(world, entity_map.values().copied());
+        enter_recovery_failed(world);
+        return Err(CommitError::RecoveryFailed {
+            cause: "recovery-only apply failed".to_owned(),
+            recovery: error,
+        });
+    }
+
+    plan.run(world);
+    world.flush();
+    set_recovery_mode(world, SaveRecoveryMode::Healthy);
+    Ok(())
+}
+
+fn validate_dynamic_candidate(
+    dynamic_world: &DynamicWorld,
+    type_registry: &TypeRegistry,
+    plan: &ResolvedRehydratePlan,
+    candidate: &'static str,
+) -> Result<(), CommitError> {
+    validate_persisted_world(dynamic_world).map_err(|error| CommitError::Rejected {
+        candidate,
+        cause: error.to_string(),
+    })?;
+    let staging = preflight_dynamic_world(dynamic_world, type_registry).map_err(|error| {
+        CommitError::Rejected {
+            candidate,
+            cause: error.to_string(),
+        }
+    })?;
+    plan.validate_candidate(&staging)
+        .map_err(|cause| CommitError::Rejected { candidate, cause })
 }
 
 fn capture_persisted_world(world: &mut World, type_registry: &TypeRegistry) -> DynamicWorld {
@@ -158,6 +269,7 @@ fn recover_persisted_world(
     if let Err(error) =
         rollback_snapshot.write_to_world_with(world, &mut rollback_entity_map, type_registry)
     {
+        despawn_mapped_entities(world, rollback_entity_map.values().copied());
         return Err(CommitError::RecoveryFailed {
             cause,
             recovery: error.to_string(),
@@ -176,6 +288,38 @@ fn recover_persisted_world(
     Err(CommitError::Recovered { cause })
 }
 
+fn despawn_mapped_entities(world: &mut World, entities: impl Iterator<Item = Entity>) {
+    for entity in entities {
+        if let Ok(entity_mut) = world.get_entity_mut(entity) {
+            entity_mut.despawn();
+        }
+    }
+    world.flush();
+}
+
+fn recovery_mode(world: &World) -> SaveRecoveryMode {
+    world
+        .get_resource::<SaveRecoveryMode>()
+        .copied()
+        .unwrap_or_default()
+}
+
+fn set_recovery_mode(world: &mut World, mode: SaveRecoveryMode) {
+    if world.contains_resource::<SaveRecoveryMode>() {
+        *world.resource_mut::<SaveRecoveryMode>() = mode;
+    } else {
+        world.insert_resource(mode);
+    }
+}
+
+fn enter_recovery_failed(world: &mut World) {
+    set_recovery_mode(world, SaveRecoveryMode::RecoveryFailed);
+    if !world.contains_resource::<Time<Virtual>>() {
+        world.insert_resource(Time::<Virtual>::default());
+    }
+    world.resource_mut::<Time<Virtual>>().pause();
+}
+
 #[cfg(test)]
 mod tests {
     use bevy::ecs::reflect::AppTypeRegistry;
@@ -188,12 +332,13 @@ mod tests {
     use hw_core::jobs::WorkType;
     use hw_core::population::PopulationManager;
     use hw_core::relationships::{CommandedBy, Commanding};
+    use hw_core::selection::SelectedEntity;
     use hw_core::soul::{DamnedSoul, DreamPool};
     use hw_jobs::Building;
-    use hw_world::WorldMap;
+    use hw_world::{Room, RoomBounds, RoomOverlayTile, WorldMap};
 
     use super::*;
-    use crate::systems::save::rehydrate::rehydrate_familiar_settings;
+    use crate::systems::save::rehydrate::validate_familiar_candidate;
     use crate::systems::save::schema::{
         build_persisted_world, collect_persisted_entities, register_save_types,
     };
@@ -212,8 +357,34 @@ mod tests {
     #[derive(Resource, Default)]
     struct ResetCount(usize);
 
+    #[derive(Resource, Default)]
+    struct MutationTrace(Vec<&'static str>);
+
     fn count_reset(world: &mut World) {
         world.resource_mut::<ResetCount>().0 += 1;
+    }
+
+    fn record_rehydrate_step(world: &mut World) {
+        world.resource_mut::<MutationTrace>().0.push("rehydrate");
+    }
+
+    fn spawn_runtime_room(world: &mut World) -> (Entity, Entity) {
+        let room = world
+            .spawn(Room {
+                tiles: vec![(1, 1)],
+                wall_tiles: Vec::new(),
+                door_tiles: Vec::new(),
+                bounds: RoomBounds {
+                    min_x: 1,
+                    max_x: 1,
+                    min_y: 1,
+                    max_y: 1,
+                },
+                tile_count: 1,
+            })
+            .id();
+        let overlay = world.spawn(RoomOverlayTile { grid_pos: (1, 1) }).id();
+        (room, overlay)
     }
 
     fn observe_replacement_lifecycle(
@@ -298,10 +469,12 @@ mod tests {
         preflight_dynamic_world(&incoming, &registry).unwrap();
 
         let mut finalize_count = 0;
+        let plan = ResolvedRehydratePlan::default();
         let result = replace_persisted_world_with_post_write(
             live.world_mut(),
             &incoming,
             &registry,
+            &plan,
             |world| {
                 world.spawn(hw_visual::visual3d::SoulProxy3d {
                     owner: Entity::PLACEHOLDER,
@@ -369,7 +542,106 @@ mod tests {
     }
 
     #[test]
-    fn invalid_saved_familiar_roster_recovers_the_previous_durable_settings_and_relationships() {
+    fn normal_apply_and_rollback_run_the_same_immutable_plan_once() {
+        let mut live = app_with_save_schema();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        live.world_mut().spawn(DamnedSoul::default());
+        live.init_resource::<MutationTrace>();
+
+        let mut incoming_source = app_with_save_schema();
+        insert_persisted_resources(incoming_source.world_mut(), 2.0);
+        incoming_source.world_mut().spawn(DamnedSoul {
+            laziness: 0.25,
+            ..default()
+        });
+        let incoming = capture_from_app(&mut incoming_source);
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let plan =
+            ResolvedRehydratePlan::with_step_for_test("test.rehydrate", record_rehydrate_step);
+
+        replace_persisted_world(live.world_mut(), &incoming, &registry, &plan).unwrap();
+        assert_eq!(
+            live.world().resource::<MutationTrace>().0,
+            vec!["rehydrate"]
+        );
+        live.world_mut().resource_mut::<MutationTrace>().0.clear();
+
+        let rollback_plan = plan.clone();
+        let result = replace_persisted_world_with_post_write(
+            live.world_mut(),
+            &incoming,
+            &registry,
+            &plan,
+            |_| Err("injected post-write failure".to_owned()),
+            move |world| {
+                rollback_plan.run(world);
+                Ok(())
+            },
+        );
+
+        assert!(matches!(result, Err(CommitError::Recovered { .. })));
+        assert_eq!(
+            live.world().resource::<MutationTrace>().0,
+            vec!["rehydrate"]
+        );
+    }
+
+    #[test]
+    fn room_runtime_reset_covers_normal_rollback_and_recovery_only_replacement() {
+        let mut live = app_with_save_schema();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        live.world_mut().spawn(DamnedSoul::default());
+        super::super::register_load_reset_hook(
+            &mut live,
+            "hw-world-rooms",
+            hw_world::reset_for_world_replace,
+        );
+
+        let mut incoming_source = app_with_save_schema();
+        insert_persisted_resources(incoming_source.world_mut(), 2.0);
+        incoming_source.world_mut().spawn(DamnedSoul::default());
+        let incoming = capture_from_app(&mut incoming_source);
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let plan = ResolvedRehydratePlan::default();
+
+        let normal_room = spawn_runtime_room(live.world_mut());
+        replace_persisted_world(live.world_mut(), &incoming, &registry, &plan).unwrap();
+        for entity in [normal_room.0, normal_room.1] {
+            assert!(live.world().get_entity(entity).is_err());
+        }
+
+        let mut partial_room = None;
+        let rollback_result = replace_persisted_world_with_post_write(
+            live.world_mut(),
+            &incoming,
+            &registry,
+            &plan,
+            |world| {
+                partial_room = Some(spawn_runtime_room(world));
+                Err("injected post-write failure after room spawn".to_owned())
+            },
+            |_| Ok(()),
+        );
+        assert!(matches!(
+            rollback_result,
+            Err(CommitError::Recovered { .. })
+        ));
+        for entity in [partial_room.unwrap().0, partial_room.unwrap().1] {
+            assert!(live.world().get_entity(entity).is_err());
+        }
+
+        let recovery_room = spawn_runtime_room(live.world_mut());
+        live.insert_resource(SaveRecoveryMode::RecoveryFailed);
+        replace_recovery_only_world(live.world_mut(), &incoming, &registry, &plan).unwrap();
+        for entity in [recovery_room.0, recovery_room.1] {
+            assert!(live.world().get_entity(entity).is_err());
+        }
+    }
+
+    #[test]
+    fn invalid_saved_familiar_roster_is_rejected_before_live_replacement() {
         let mut live = app_with_save_schema();
         insert_persisted_resources(live.world_mut(), 1.0);
         let mut expected_policy = FamiliarPolicy::default();
@@ -395,6 +667,18 @@ mod tests {
         live.world_mut()
             .spawn((DamnedSoul::default(), CommandedBy(live_familiar)));
         live.world_mut().flush();
+        live.init_resource::<hw_core::WorldEpoch>();
+        live.insert_resource(SelectedEntity(Some(live_familiar)));
+        let info_panel = live
+            .world_mut()
+            .spawn((
+                Node {
+                    display: Display::Flex,
+                    ..default()
+                },
+                hw_ui::components::InfoPanel,
+            ))
+            .id();
 
         let mut incoming_source = app_with_save_schema();
         insert_persisted_resources(incoming_source.world_mut(), 99.0);
@@ -419,16 +703,29 @@ mod tests {
 
         let type_registry = live.world().resource::<AppTypeRegistry>().clone();
         let registry = type_registry.read();
-        let result = replace_persisted_world(live.world_mut(), &incoming, &registry, |world| {
-            rehydrate_familiar_settings(world).map_err(|error| error.to_string())
-        });
+        let plan = ResolvedRehydratePlan::with_validator_for_test(
+            "familiar.roster",
+            validate_familiar_candidate,
+        );
+        let result = replace_persisted_world(live.world_mut(), &incoming, &registry, &plan);
 
         assert!(matches!(
             result,
-            Err(CommitError::Recovered { ref cause })
-                if cause.contains("must cover its Commanding roster")
+            Err(CommitError::Rejected {
+                candidate: "incoming",
+                ref cause,
+            }) if cause.contains("roster contains 2")
         ));
         assert_eq!(live.world().resource::<GameTime>().seconds, 1.0);
+        assert_eq!(live.world().resource::<hw_core::WorldEpoch>().get(), 0);
+        assert_eq!(
+            live.world().resource::<SelectedEntity>().0,
+            Some(live_familiar)
+        );
+        assert_eq!(
+            live.world().get::<Node>(info_panel).unwrap().display,
+            Display::Flex
+        );
 
         let restored_familiars: Vec<_> = live
             .world_mut()
@@ -465,6 +762,62 @@ mod tests {
     }
 
     #[test]
+    fn invalid_rollback_candidate_is_rejected_before_any_reset_or_epoch_change() {
+        let mut live = app_with_save_schema();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        live.init_resource::<ResetCount>();
+        live.init_resource::<hw_core::WorldEpoch>();
+        super::super::register_load_reset_hook(&mut live, "test-count", count_reset);
+        let familiar = live
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                FamiliarOperation {
+                    max_controlled_soul: 1,
+                    ..default()
+                },
+            ))
+            .id();
+        live.world_mut()
+            .spawn((DamnedSoul::default(), CommandedBy(familiar)));
+        live.world_mut()
+            .spawn((DamnedSoul::default(), CommandedBy(familiar)));
+        live.world_mut().flush();
+
+        let mut incoming_source = app_with_save_schema();
+        insert_persisted_resources(incoming_source.world_mut(), 2.0);
+        incoming_source.world_mut().spawn(DamnedSoul::default());
+        let incoming = capture_from_app(&mut incoming_source);
+        let plan = ResolvedRehydratePlan::with_validator_for_test(
+            "familiar.roster",
+            validate_familiar_candidate,
+        );
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+
+        let result = replace_persisted_world(live.world_mut(), &incoming, &registry, &plan);
+
+        assert!(matches!(
+            result,
+            Err(CommitError::Rejected {
+                candidate: "rollback",
+                ..
+            })
+        ));
+        assert_eq!(live.world().resource::<ResetCount>().0, 0);
+        assert_eq!(live.world().resource::<hw_core::WorldEpoch>().get(), 0);
+        assert_eq!(live.world().resource::<GameTime>().seconds, 1.0);
+        assert_eq!(
+            live.world()
+                .get::<Commanding>(familiar)
+                .unwrap()
+                .iter()
+                .count(),
+            2
+        );
+    }
+
+    #[test]
     fn recovered_and_failed_recovery_outcomes_survive_both_transaction_resets() {
         use crate::systems::save::{
             SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadResult, SaveLoadState,
@@ -483,6 +836,8 @@ mod tests {
             live.add_message::<SaveLoadOutcome>();
             live.insert_resource(SaveLoadState::LoadRequested);
             live.insert_resource(SavePath::new("slot-a.ron"));
+            live.insert_resource(SaveRecoveryMode::Healthy);
+            live.insert_resource(Time::<Virtual>::default());
             live.init_resource::<ResetCount>();
             super::super::register_load_reset_hook(&mut live, "test-count", count_reset);
             super::super::register_load_reset_hook(
@@ -504,6 +859,7 @@ mod tests {
             });
             let incoming = capture_from_app(&mut incoming_source);
             let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+            let plan = ResolvedRehydratePlan::default();
 
             super::super::save_load_apply_with(
                 live.world_mut(),
@@ -514,6 +870,7 @@ mod tests {
                         world,
                         &incoming,
                         &registry,
+                        &plan,
                         |_| Err("injected live apply failure".to_owned()),
                         |_| {
                             if recovery_fails {
@@ -530,9 +887,22 @@ mod tests {
                         }
                     }
                 },
+                |_| panic!("recovery executor must not run for a normal request"),
             );
 
             assert_eq!(live.world().resource::<ResetCount>().0, 2);
+            if recovery_fails {
+                assert_eq!(
+                    *live.world().resource::<SaveRecoveryMode>(),
+                    SaveRecoveryMode::RecoveryFailed
+                );
+                assert!(live.world().resource::<Time<Virtual>>().is_paused());
+            } else {
+                assert_eq!(
+                    *live.world().resource::<SaveRecoveryMode>(),
+                    SaveRecoveryMode::Healthy
+                );
+            }
             assert_eq!(
                 live.world_mut()
                     .resource_mut::<Messages<SaveLoadOutcome>>()
@@ -545,6 +915,62 @@ mod tests {
                 }]
             );
         }
+    }
+
+    #[test]
+    fn recovery_only_retry_is_fail_closed_then_succeeds_without_unpausing() {
+        let mut live = app_with_save_schema();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        live.world_mut().spawn(DamnedSoul::default());
+        live.insert_resource(SaveRecoveryMode::RecoveryFailed);
+        live.insert_resource(Time::<Virtual>::default());
+        live.world_mut().resource_mut::<Time<Virtual>>().pause();
+
+        let mut incoming_source = app_with_save_schema();
+        insert_persisted_resources(incoming_source.world_mut(), 7.0);
+        incoming_source.world_mut().spawn(DamnedSoul {
+            laziness: 0.25,
+            ..default()
+        });
+        let incoming = capture_from_app(&mut incoming_source);
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let plan = ResolvedRehydratePlan::default();
+
+        let first = replace_recovery_only_world_with_post_write(
+            live.world_mut(),
+            &incoming,
+            &registry,
+            &plan,
+            |_| Err("injected recovery-only post-write failure".to_owned()),
+        );
+        assert!(matches!(first, Err(CommitError::RecoveryFailed { .. })));
+        assert_eq!(
+            *live.world().resource::<SaveRecoveryMode>(),
+            SaveRecoveryMode::RecoveryFailed
+        );
+        assert!(live.world().resource::<Time<Virtual>>().is_paused());
+
+        replace_recovery_only_world(live.world_mut(), &incoming, &registry, &plan).unwrap();
+
+        assert_eq!(
+            *live.world().resource::<SaveRecoveryMode>(),
+            SaveRecoveryMode::Healthy
+        );
+        assert!(live.world().resource::<Time<Virtual>>().is_paused());
+        assert_eq!(live.world().resource::<GameTime>().seconds, 7.0);
+        assert_eq!(
+            live.world_mut()
+                .query_filtered::<Entity, With<DamnedSoul>>()
+                .iter(live.world())
+                .count(),
+            1
+        );
+
+        assert!(matches!(
+            replace_recovery_only_world(live.world_mut(), &incoming, &registry, &plan),
+            Err(CommitError::RecoveryModeRequired)
+        ));
     }
 
     #[test]
@@ -572,7 +998,13 @@ mod tests {
         let type_registry = live.world().resource::<AppTypeRegistry>().clone();
         {
             let registry = type_registry.read();
-            replace_persisted_world(live.world_mut(), &incoming, &registry, |_| Ok(())).unwrap();
+            replace_persisted_world(
+                live.world_mut(),
+                &incoming,
+                &registry,
+                &ResolvedRehydratePlan::default(),
+            )
+            .unwrap();
         }
 
         live.update();

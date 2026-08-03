@@ -108,6 +108,7 @@ Bevy固有のAPI（`Query`, `Commands`, `Res`）をどのように扱うかは�
 |:---|:---|:---|:---|
 | Floor/Wall construction phase | `hw_jobs::construction` | `hw_logistics::construction_phase_transition`（`TileSiteIndex` owner） | `bevy_app::plugins::logic`。cancel/completionとasset依存wall spawnもroot |
 | Door auto open/close | `hw_world::door_systems` | `hw_spatial::door_proximity`（Soul `SpatialGrid` owner） | `bevy_app::plugins::logic`。`DoorVisualHandles`をstartupから注入 |
+| Room world replacement reset | `hw_world::room_detection` | `hw_world::world_replace`（Room entity/lookup owner） | `bevy_app::plugins::logic`が`LoadResetRegistry`へleaf callbackを登録 |
 
 `SpatialGridOps` trait契約は`hw_world`、`SpatialIndex<Tag>` storageとconcrete implは`hw_spatial`が所有する。
 index利用を理由にmodel ownerへECS adapterを置かず、index型を持つcrateへ置く。rootは同じsystemを重複登録しない。

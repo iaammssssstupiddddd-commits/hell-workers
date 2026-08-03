@@ -133,6 +133,21 @@ rootの`HelpPauseGuard`は「Helpが実行中の時間をpauseしたか」だけ
 close後もPauseを維持する。Help open/closeは`PlayMode`、`TaskMode`、`MenuState`、
 `ArchitectCategoryState`を変更しない。
 
+## SaveRecoveryMode
+
+`SaveRecoveryMode`はBevy `State`ではなく、save transaction coordinatorが所有するtrust Resourceである。
+
+| 値 | 意味 |
+|:--|:--|
+| `Healthy` | 通常のsave/load transactionを許可する |
+| `RecoveryFailed` | live apply後のrollback自体が失敗し、worldを信頼できない。virtual timeをpauseし、saveと通常loadを拒否する |
+
+`RecoveryFailed`中も通常のF9/`LoadRequested`は拒否する。専用foreground ownerが
+`RecoveryLoadRequested`を発行した場合だけ、incomingをfull preflightしてrollback snapshotなしで置換する
+recovery-only経路へ送る。再失敗時はpaused fail-closedを維持し、成功時だけ`Healthy`へ戻すが自動unpauseしない。
+Track C3時点のproductionにはこのtriggerのproducerを置かず、専用画面、別slot選択、resume/world inputの
+allow-listと同時にTrack C2で接続する。
+
 ## 共通仕様
 
 ### Escキーによるキャンセル

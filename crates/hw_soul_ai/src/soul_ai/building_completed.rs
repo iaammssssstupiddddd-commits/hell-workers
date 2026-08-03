@@ -23,11 +23,7 @@ pub fn on_building_completed(
 
     let is_obstacle = kind.blocks_movement() || kind == BuildingType::Bridge;
 
-    if !is_obstacle {
-        return;
-    }
-
-    if kind != BuildingType::Bridge {
+    if is_obstacle && kind != BuildingType::Bridge {
         commands.entity(building_entity).with_children(|parent| {
             for &(gx, gy) in occupied_grids {
                 parent.spawn((
@@ -44,6 +40,10 @@ pub fn on_building_completed(
         building_entity,
         occupied_grids.iter().copied(),
     );
+
+    if !is_obstacle {
+        return;
+    }
 
     for &(gx, gy) in occupied_grids {
         for (mut soul_transform, soul_entity) in q_souls.iter_mut() {

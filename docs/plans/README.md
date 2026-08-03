@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-08-03）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-08-04）。
 
 ## 新規計画書の作り方
 
@@ -23,9 +23,11 @@
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Draft | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Phase 3 進行中（未完: MS-3-5 / 7 / 8 / 9、受入残件: MS-3-6 / 10） | 3D-RtT 移行ロードマップ |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
+| [building-deconstruction-plan-2026-08-03.md](building-deconstruction-plan-2026-08-03.md) | Draft | 完成建物の安全な撤去、固定資源回収、owner別cleanupを導入するTrack C1計画。 |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できないの計画。 |
+| [save-catalog-autosave-plan-2026-08-03.md](save-catalog-autosave-plan-2026-08-03.md) | Draft | 手動slot、bounded catalog、世代autosaveを段階導入するTrack C2計画。 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 
@@ -73,6 +75,7 @@
 | [archive/large-source-file-split-plan-2026-07-17.md](archive/large-source-file-split-plan-2026-07-17.md) | Archived | 500行以上の実装ファイル分割計画 |
 | [archive/runtime-correctness-contracts-plan-2026-07-12.md](archive/runtime-correctness-contracts-plan-2026-07-12.md) | Archived | 実行時正しさ契約リファクタリング計画 |
 | [archive/save-load-hardening-plan-2026-07-12.md](archive/save-load-hardening-plan-2026-07-12.md) | Archived | Save/Load境界強化・互換性リファクタリング計画 |
+| [archive/save-rehydration-registry-plan-2026-08-03.md](archive/save-rehydration-registry-plan-2026-08-03.md) | Archived | ロード後再構築の暗黙順序と通常ロード／rollbackの追従漏れを機械的に防げないの計画。 |
 | [archive/soul-energy-control-plan-2026-07-20.md](archive/soul-energy-control-plan-2026-07-20.md) | Archived | Soul Spa の稼働枠を操作できず、供給不足時の grid が全設備を一律停止するの計画。 |
 | [archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md](archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md) | Archived | B1実装完了後の実機受入結果と、B1-R05修正後の再受入完了記録。 |
 | [archive/stockpile-policy-plan-2026-07-20.md](archive/stockpile-policy-plan-2026-07-20.md) | Archived | 現在在庫と受入方針が未分離で、搬送経路ごとの判定も統一されていないの計画。 |

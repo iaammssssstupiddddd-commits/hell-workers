@@ -89,6 +89,22 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   - `Pending` / `Claimed`
 - request エンティティには通常 `Designation`, `ManagedBy`, `TaskSlots`, `Priority` も付与されます。
 
+### 1.6 セーブ／ロード境界
+
+- durable: request本体、`Designation`、`ManagedBy` / `ManagedTasks`、`ParkedAt` /
+  `ParkedWheelbarrows`、wheelbarrowの`BelongsTo`。`LoadedIn` / `LoadedItems`もremap済みcarrier位置を
+  RuntimeNormalizeへ渡す **staging handoff** として保存し、load candidateでsource/target対称性、
+  owner種別、容量を検証するが、load後のlive graphには残さない。
+- runtime-derived: `DeliveringTo` / `IncomingDeliveries`、`PushedBy` / `PushingWheelbarrow`、
+  `TransportRequestState`、`WheelbarrowLease`、`WheelbarrowPendingSince`、`ItemDespawnTimer`。current writerには含めず、
+  legacy bodyでもschema検証前に除去する。
+- load normalizeは全requestを`Pending`、`TransportDemand.inflight = 0`へ戻し、lease/pending時刻を消去する。
+  全wheelbarrowをdurable home parkingへ戻す前に、保存済み積載物はremap済みcarrier位置（運搬中なら
+  carrying Soul位置）の最寄りwalkable cellへ表示状態で荷下ろしし、`LoadedIn` / `LoadedItems`を除去する。
+- Sand/StasisMudにはload時にfresh 5秒timerを1つ付け直す。通常runtimeでは`LoadedIn` / `StoredIn` /
+  `DeliveringTo` / `StoredByMixer`の保護中にtimerを停止するが、保存済み積載物はload時にground化するため
+  timerが直後から進む。storage/mixer等の保護relationshipが残るitemだけ停止する。
+
 ## 2. TransportRequest 基盤
 
 `TransportRequestPlugin` は以下の順で実行されます。
@@ -431,6 +447,7 @@ WheelbarrowLease {
 - **消費**: `assign_haul` が lease を読み取り `HaulWithWheelbarrow` タスクを発行。割り当て後は request の state が Pending でなくなるため、次フレームの仲裁で自動的に対象外。
 - **失効/無効化**: 仲裁システムが毎フレーム `lease_until < now`、手押し車消失、有効 item 数不足をチェックして remove。
 - **request close**: `transport_request_anchor_cleanup_system` が request を閉じる際に `WheelbarrowLease` も除去。
+- **world load**: leaseとpending時刻は保存せず、全requestを`Pending`へ戻した後に次のArbitrateで再計算する。
 
 #### 5.2.6 メトリクス
 

@@ -1,8 +1,9 @@
 use super::{
-    BlueprintSpriteHandles, clear_rehydrate_presentation, rehydrate_construction_runtime,
-    rehydrate_construction_shells, rehydrate_familiar_settings, rehydrate_obstacle_runtime,
-    rehydrate_power_consumer_policies, rehydrate_shells, rehydrate_soul_shells,
-    rehydrate_soul_spas, rehydrate_stockpile_policies, validate_rehydrate_prerequisites,
+    BlueprintSpriteHandles, clear_rehydrate_presentation, normalize_construction_state,
+    rehydrate_construction_runtime, rehydrate_construction_shells, rehydrate_familiar_settings,
+    rehydrate_obstacle_runtime, rehydrate_power_consumer_policies, rehydrate_shells,
+    rehydrate_soul_shells, rehydrate_soul_spas, rehydrate_stockpile_policies,
+    validate_rehydrate_prerequisites,
 };
 use crate::entities::damned_soul::{Gender, SoulIdentity};
 use crate::plugins::startup::Building3dHandles;
@@ -28,7 +29,7 @@ use hw_jobs::construction::{
 };
 use hw_jobs::{
     Blueprint, Building, BuildingType, Designation, Door, ObstaclePosition, ObstacleSourceKind,
-    Rock, Tree, TreeVariant,
+    Priority, ProvisionalWall, Rock, TaskSlots, Tree, TreeVariant,
 };
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_visual::MaterialIconHandles;

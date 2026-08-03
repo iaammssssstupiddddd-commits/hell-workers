@@ -48,3 +48,58 @@ pub fn blueprint_cancel_cleanup_system(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::systems::jobs::{Building, BuildingType};
+    use hw_jobs::BuildingCompletedEvent;
+    use hw_world::WorldMap;
+
+    #[test]
+    fn passable_completion_owner_survives_removed_blueprint_cleanup() {
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .add_observer(hw_soul_ai::soul_ai::building_completed::on_building_completed)
+            .add_systems(Update, blueprint_cancel_cleanup_system);
+
+        let grid = (14, 15);
+        let blueprint = app
+            .world_mut()
+            .spawn(Blueprint::new(BuildingType::OutdoorLamp, vec![grid]))
+            .id();
+        let building = app
+            .world_mut()
+            .spawn(Building {
+                kind: BuildingType::OutdoorLamp,
+                is_provisional: false,
+            })
+            .id();
+        app.world_mut()
+            .resource_mut::<WorldMap>()
+            .reserve_building_footprint(BuildingType::OutdoorLamp, blueprint, [grid]);
+
+        app.world_mut().trigger(BuildingCompletedEvent {
+            building_entity: building,
+            kind: BuildingType::OutdoorLamp,
+            occupied_grids: vec![grid],
+        });
+        assert_eq!(
+            app.world().resource::<WorldMap>().building_entity(grid),
+            Some(building)
+        );
+        assert!(
+            !app.world()
+                .resource::<WorldMap>()
+                .has_raw_obstacle(grid.0, grid.1)
+        );
+
+        app.world_mut().despawn(blueprint);
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<WorldMap>().building_entity(grid),
+            Some(building)
+        );
+    }
+}

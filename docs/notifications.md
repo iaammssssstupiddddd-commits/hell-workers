@@ -66,9 +66,12 @@ validator の結果と赤い ghost は変更しない。別の grid へ移動す
 
 ## セーブ／ロード結果
 
-`SavePlugin` は `SaveLoadState` を要求用の3状態のまま保ち、各要求に対して
+`SavePlugin` は `SaveLoadState` を要求用の4状態（`Idle` / `SaveRequested` / `LoadRequested` /
+`RecoveryLoadRequested`）に限定し、各要求に対して
 `SaveLoadOutcome { operation, target, result }` を1件だけ発行する。`target` は `SavePath` の
 安全なファイル名だけを使い、取得できなければ `Current save` とする。
+`RecoveryLoadRequested`はrollback失敗後の専用recovery ownerだけが使う。通常のF9/UI loadからは発行せず、
+Track C3時点ではproduction producerを持たない。
 
 | `SaveLoadFailureKind` | 意味 | UI severity |
 | --- | --- | --- |

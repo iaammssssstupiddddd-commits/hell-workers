@@ -317,7 +317,9 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `main.rs`: process設定の解釈と window / render / backend設定、`HellWorkersGamePlugin` の追加
 - `plugins/game.rs`: production game resource / state / `GameSystemSet` chain と parent game plugin の一意な登録
 - `input_actions/`: project-owned keyboard edge の唯一の resolver、pending/visible Modal/Help/Pause capture、foreground UI gate、capture-start rollback、canonical key label
-- `systems/save/`: persisted schema/transactionと、requestごとに全reset後1件だけ発行する`SaveLoadOutcome`
+- `systems/save/`: persisted schema/transaction、candidate/live prerequisite、phase/dependency付きrehydrate registry、
+  requestごとに全reset後1件だけ発行する`SaveLoadOutcome`。raw registryは`SavePlugin::finish`でfreezeし、
+  `LogicPlugin` / `VisualPlugin`はleaf/root domain callbackを型消去して登録する
 - `systems/familiar_ai/`: Familiar settings apply + flushをPerceive前へ置く唯一のproduction wiring、
   task diagnostic revision adapter、root resource同期
 - `interface/ui/`: Operation dialogのexact target認証、typed settings request変換、terminal outcome通知adapter
@@ -423,6 +425,7 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - **`RoomTileLookup`, `RoomDetectionState`, `RoomValidationState`（Resource）** — Room 管理リソース
 - **`DreamTreePlantingPlan`（`tree_planting.rs`）** — Dream 植林計画の純粋データ構造。ビルダー関数（`build_dream_tree_planting_plan`）は `GameAssets`/`DreamPool` 依存のため bevy_app に残留
 - **`room_systems::{detect_rooms_system, validate_rooms_system, mark_room_dirty_from_building_changes_system, on_building_added, on_building_removed, on_door_added, on_door_removed, sync_room_overlay_tiles_system}`** — Room ECS adapter 層（検出・検証・dirty マーキング・オーバーレイ同期をすべて所有）。`bevy_app/src/systems/room/` は削除済みで、`plugins/logic.rs`・`plugins/visual.rs` が直接 import する
+- **`world_replace::reset_for_world_replace`** — runtime `Room` / overlay entityとRoom lookup/detection Resourceのidempotent cleanup。root `LogicPlugin`がsave側の`LoadResetRegistry`へcallbackだけを登録し、leafはroot save型へ依存しない
 
 ここに置かないもの:
 

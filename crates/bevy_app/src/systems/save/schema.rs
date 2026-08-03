@@ -19,7 +19,7 @@ use hw_core::familiar::{
     Familiar, FamiliarOperation, FamiliarPolicy, FamiliarType, FamiliarWorkPriority,
     FamiliarWorkRule, FamiliarWorkRuleOverride,
 };
-use hw_core::logistics::ResourceType;
+use hw_core::logistics::{ResourceType, WheelbarrowDestination};
 use hw_core::population::PopulationManager;
 use hw_core::relationships::{
     CommandedBy, Commanding, DeliveringTo, GatheringParticipants, IncomingDeliveries, LoadedIn,
@@ -42,7 +42,8 @@ use hw_energy::{
 
 use hw_jobs::construction::{
     FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
-    WallConstructionPhase, WallConstructionSite, WallTileBlueprint, WallTileState,
+    TargetFloorConstructionSite, TargetWallConstructionSite, WallConstructionPhase,
+    WallConstructionSite, WallTileBlueprint, WallTileState,
 };
 use hw_jobs::mud_mixer::{MudMixerStorage, StoredByMixer, TargetMixer};
 use hw_jobs::{
@@ -52,9 +53,11 @@ use hw_jobs::{
     TreeVariant, WorkType,
 };
 
+use hw_logistics::item_lifetime::ItemDespawnTimer;
 use hw_logistics::transport_request::{
     ManualHaulPinnedSource, ManualTransportRequest, TransportDemand, TransportPolicy,
     TransportPriority, TransportRequest, TransportRequestFixedSource, TransportRequestKind,
+    TransportRequestState, WheelbarrowLease, WheelbarrowPendingSince,
 };
 use hw_logistics::types::{ReservedForTask, WheelbarrowParking};
 use hw_logistics::zone::{Stockpile, StockpileAcceptance, StockpilePolicy, StockpileResourceSet};
@@ -86,20 +89,14 @@ macro_rules! for_each_persisted_component {
         $callback!(FamiliarPolicy);
         $callback!(CommandedBy);
         $callback!(Commanding);
-        $callback!(WorkingOn);
-        $callback!(TaskWorkers);
         $callback!(ManagedBy);
         $callback!(ManagedTasks);
-        $callback!(StoredIn);
-        $callback!(StoredItems);
         $callback!(LoadedIn);
         $callback!(LoadedItems);
+        $callback!(StoredIn);
+        $callback!(StoredItems);
         $callback!(ParkedAt);
         $callback!(ParkedWheelbarrows);
-        $callback!(PushedBy);
-        $callback!(PushingWheelbarrow);
-        $callback!(DeliveringTo);
-        $callback!(IncomingDeliveries);
         $callback!(RestingIn);
         $callback!(RestAreaOccupants);
         $callback!(RestAreaReservedFor);
@@ -121,8 +118,10 @@ macro_rules! for_each_persisted_component {
         $callback!(TargetSoulSpaSite);
         $callback!(FloorConstructionSite);
         $callback!(FloorTileBlueprint);
+        $callback!(TargetFloorConstructionSite);
         $callback!(WallConstructionSite);
         $callback!(WallTileBlueprint);
+        $callback!(TargetWallConstructionSite);
         $callback!(ResourceItem);
         $callback!(BelongsTo);
         $callback!(PendingBelongsToBlueprint);
@@ -164,11 +163,22 @@ macro_rules! for_each_persisted_component {
     };
 }
 
-// Gathering spots and their relationship endpoints are short-lived behavior
-// state. Keep the types registered to read older bodies, but never include
-// them in a new durable DynamicWorld.
+// Task execution edges, claims, leases, gathering state, and energy results
+// belong to the discarded runtime world. Keep these types registered so old
+// bodies can be decoded, strip them before schema validation, and never write
+// them into a new durable DynamicWorld.
 macro_rules! for_each_runtime_derived_component {
     ($callback:ident) => {
+        $callback!(WorkingOn);
+        $callback!(TaskWorkers);
+        $callback!(DeliveringTo);
+        $callback!(IncomingDeliveries);
+        $callback!(PushedBy);
+        $callback!(PushingWheelbarrow);
+        $callback!(TransportRequestState);
+        $callback!(WheelbarrowLease);
+        $callback!(WheelbarrowPendingSince);
+        $callback!(ItemDespawnTimer);
         $callback!(ParticipatingIn);
         $callback!(GatheringParticipants);
         $callback!(Unpowered);
@@ -215,6 +225,8 @@ macro_rules! for_each_reflect_dependency {
         $callback!(WallConstructionPhase);
         $callback!(WallTileState);
         $callback!(ResourceType);
+        $callback!(WheelbarrowDestination);
+        $callback!(Timer);
         $callback!(StockpileAcceptance);
         $callback!(StockpileResourceSet);
         $callback!(TransportRequestKind);

@@ -18,6 +18,17 @@ fn main() {
         eprintln!("Invalid performance scenario configuration: {error}");
         std::process::exit(2);
     });
+    let native_acceptance_plugin =
+        bevy_app::systems::save::NativeSaveLoadAcceptancePlugin::try_from_process().unwrap_or_else(
+            |error| {
+                eprintln!("Invalid native save/load acceptance configuration: {error}");
+                std::process::exit(2);
+            },
+        );
+    if native_acceptance_plugin.is_some() && perf_config.enabled() {
+        eprintln!("Native save/load acceptance cannot be combined with a performance scenario.");
+        std::process::exit(2);
+    }
     let use_headless_runner = headless_runner_requested(&perf_config);
     let game_plugin = HellWorkersGamePlugin::new(perf_config);
     let log_filter = game_plugin.log_filter().to_string();
@@ -65,6 +76,9 @@ fn main() {
         app.add_plugins(default_plugins);
     }
     app.add_plugins(game_plugin);
+    if let Some(plugin) = native_acceptance_plugin {
+        app.add_plugins(plugin);
+    }
 
     app.run();
 }

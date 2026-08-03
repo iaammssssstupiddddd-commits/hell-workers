@@ -256,5 +256,38 @@ mod tests {
         assert_eq!(app.get_added_plugins::<InterfacePlugin>().len(), 1);
         assert_eq!(app.get_added_plugins::<SettingsPlugin>().len(), 1);
         assert_eq!(app.get_added_plugins::<SavePlugin>().len(), 1);
+
+        // Freeze the graph built by the actual production plugin composition.
+        // This catches a missing LogicPlugin/VisualPlugin adapter even when a
+        // registry unit test could still register the same callbacks directly.
+        app.finish();
+        let (steps, validators, prerequisites) =
+            crate::systems::save::resolved_rehydrate_plan_names(app.world());
+        assert_eq!(
+            steps,
+            vec![
+                "construction.normalize",
+                "familiar.settings",
+                "power-consumer.policy",
+                "soul-spa.normalize",
+                "stockpile.policy",
+                "transport-request.targets",
+                "task-logistics.runtime",
+                "presentation.shells",
+                "construction.runtime",
+                "obstacle.runtime",
+                "domains.wake",
+            ]
+        );
+        assert_eq!(
+            validators,
+            vec![
+                "durable.topology",
+                "familiar.roster",
+                "presentation.spatial-roots",
+                "task-logistics.owners",
+            ]
+        );
+        assert_eq!(prerequisites, vec!["presentation.assets-time"]);
     }
 }

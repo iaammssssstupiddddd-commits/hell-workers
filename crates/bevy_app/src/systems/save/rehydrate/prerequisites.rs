@@ -20,9 +20,10 @@ impl fmt::Display for RehydratePrerequisiteError {
     }
 }
 
-/// Validates resources consumed by rehydration before the live persisted world is despawned.
-pub(crate) fn validate_rehydrate_prerequisites(
+fn validate_resources(
     world: &World,
+    include_simulation: bool,
+    include_presentation: bool,
 ) -> Result<(), RehydratePrerequisiteError> {
     let mut missing_resources = Vec::new();
 
@@ -34,13 +35,19 @@ pub(crate) fn validate_rehydrate_prerequisites(
         };
     }
 
-    require_resource!(GameAssets);
-    require_resource!(Building3dHandles);
-    require_resource!(SoulTaskHandles);
-    require_resource!(WorldMap);
+    if include_presentation {
+        require_resource!(GameAssets);
+        require_resource!(Building3dHandles);
+        require_resource!(SoulTaskHandles);
+        require_resource!(Time<Virtual>);
+    }
+    if include_simulation {
+        require_resource!(WorldMap);
+    }
 
     let mut invalid_conditions = Vec::new();
-    if let Some(game_assets) = world.get_resource::<GameAssets>()
+    if include_presentation
+        && let Some(game_assets) = world.get_resource::<GameAssets>()
         && game_assets.trees.is_empty()
     {
         invalid_conditions.push("GameAssets.trees must not be empty");
@@ -54,4 +61,15 @@ pub(crate) fn validate_rehydrate_prerequisites(
             invalid_conditions,
         })
     }
+}
+
+pub(super) fn validate_presentation_prerequisites(world: &World) -> Result<(), String> {
+    validate_resources(world, false, true).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+pub(in crate::systems::save) fn validate_rehydrate_prerequisites(
+    world: &World,
+) -> Result<(), RehydratePrerequisiteError> {
+    validate_resources(world, true, true)
 }

@@ -7,13 +7,14 @@
 | 計画ID | `hvac-plumbing-plan-2026-07-13` |
 | ステータス | `Draft` |
 | 作成日 | `2026-07-13` |
-| 最終更新日 | `2026-07-13` |
+| 最終更新日 | `2026-08-04` |
 | 作成者 | `Codex` |
 | 関連提案 | [hvac-plumbing-proposal.md](../proposals/hvac-plumbing-proposal.md)（採用済み。世界観・採否理由の正本） |
 | 関連Issue/PR | `N/A` |
-| 前提ドキュメント | [room_detection.md](../room_detection.md) / [soul_energy.md](../soul_energy.md) / [building.md](../building.md) / [save_load.md](../save_load.md) / [crate-boundaries.md](../crate-boundaries.md) |
+| 前提ドキュメント | [room_detection.md](../room_detection.md) / [soul_energy.md](../soul_energy.md) / [building.md](../building.md) / [save_load.md](../save_load.md) / [crate-boundaries.md](../crate-boundaries.md) / [Track C3 ロード後再構築レジストリ計画](archive/save-rehydration-registry-plan-2026-08-03.md)（完了済み） |
 
-> 本計画を実装契約の正本とする。関連提案と矛盾する場合は、2026-07-13 時点のコードを再確認して作成した本計画を優先する。
+> 本計画を実装契約の正本とする。関連提案と矛盾する場合は、2026-08-03 時点の現行コード、B3電力契約、
+> Track C3再構築契約へ再照合した本計画を優先する。
 
 ## 1. 目的
 
@@ -101,7 +102,9 @@ provided = Room に属する稼働中 VentilationSource の capacity 合計
 - `ScourgeFan` は設置床を `RoomTileLookup` で逆引きし、共通`PowerConsumer + PowerConsumerPolicy`へ登録する。
   換気能力は個別`PowerSupplyState::Supplied`（互換上は`Unpowered`なし）の場合だけ与え、独自の全体停電判定を持たない。
 - PowerGrid entity は従来どおり Yard が所有するが、Consumer のサービス範囲をその Yard と paired Site の union へ広げる。Room 単位 grid は作らない。
-- 川岸の Intake は通常の位置包含では grid を引けないため、配置時に「取水門 footprint と水平に重なり、規定距離内にある Site」を 1 件に解決し、その `PairedYard` の PowerGrid へ `ConsumesFrom` を明示接続する。0件または複数候補は配置拒否する。
+- 川岸の Intake は通常の位置包含では grid を引けないため、「取水門 footprint と水平に重なり、規定距離内にある Site」を
+  1件に解決し、その`PairedYard`を共通energy owner resolverへ渡す。`ConsumesFrom`はtopology reconcilerだけが確定し、
+  placement/loadが直接挿入しない。0件または複数候補は配置拒否する。
 
 #### 排泥と認可
 
@@ -354,6 +357,10 @@ Room overlay geometry sync
 
 ## M3: 導水配置層と FluidGrid
 
+> M0〜M2 は Track C3 と独立して進めてよい。Track C3は完了済みであり、M3では
+> [Track C3 ロード後再構築レジストリ計画](archive/save-rehydration-registry-plan-2026-08-03.md) の完成registryを使って、
+> 物理設備の保存と派生状態の再構築を production registry へ登録する。
+
 ### 変更内容
 
 1. `BuildingCategory::Permanent` と Intake / Conduit / Purifier の建設種別を追加し、Architect category、validation、geometry、visual mirror を同期する。
@@ -364,7 +371,22 @@ Room overlay geometry sync
    一意に解決したSiteの`PairedYard`を共通energy owner resolverへ渡す。接続はtopology reconcilerが確定する。
 6. Purifier の Room 内 placement、同一 FluidGrid 接続、Purifier 不在も含む `RoomDrainageState::Unwatered / Drained` を実装する。
 7. topology dirty と supply dirty を分離し、Intake の停電で flood fill を再実行しない。
-8. Conduit 物理 entity と新設備を save 対象へ追加し、FluidGrid / lookup / dirty / Room state はロード後に再構築する。
+8. Conduit物理entityと新設備だけをsave対象へ追加する。`OssuaryConduit`は`Building`を持たないため、
+   persisted component登録だけで済ませずschemaのroot marker/collection対象へ明示追加する。
+9. durable/derived境界を次に固定する。
+   - durable: Conduit/Intake/Purifier物理entity、Transform/footprint、`PowerConsumerPolicy`、既存Site/`PairedYard`。
+   - runtime-derived: `ConsumesFrom`、Fluid supplier/drain relationship、FluidGrid entity、lookup、topology/supply dirty、
+     Room drainage/sanction/overlay state。Intake ownerはload/rollback後もdurable Transform/footprint + Site/`PairedYard`から再解決する。
+10. `hw_infra` ownerの`LoadResetRegistry` hookを追加し、normal/rollback各replace前に旧FluidGrid entity、
+    fluid/energy runtime Relationship、ConduitTile/Blueprint lookup、topology/supply cache、infra overlayを破棄する。
+    M4導入後はRoomSanctionHistory/派生overlayも同hookのcoverageへ追加する。
+11. C3 `RebuildDerived`では`ConduitTileLookup -> ConduitBlueprintLookup -> FluidGrid/Relationship topology`を
+    明示依存で1回だけ構築する。`WakeDomains`はenergy full rebuild、room full detection、infra supply/ventilation dirtyだけを立て、
+    infra topology dirtyを再度立てない。root adapterはplugin `build`中にstepを登録し、全plugin build後の
+    `SavePlugin::finish` coverage/freezeへ必ず含める。通常ロード、rollback、RecoveryFailed専用replaceで同じimmutable planを通す。
+12. 最初のunpaused Logic順を
+    `energy topology/allocation -> flush -> room detection/boundary -> flush -> ventilation -> fluid supply -> drainage/sanction`
+    に固定する。paused load中はdirtyを保持し、runtime表示は`Rebuilding / Unpowered / Unwatered`へfail-closedにする。
 
 ### 主な変更ファイル
 
@@ -374,10 +396,11 @@ Room overlay geometry sync
 - `crates/hw_ui/src/{setup/submenus.rs,selection/placement/}`
 - `crates/bevy_app/src/interface/{selection,ui/interaction,ui/presentation}/`
 - `crates/bevy_app/src/systems/jobs/building_completion/`
-- `crates/bevy_app/src/systems/save/{entities.rs,register.rs,saving.rs,load.rs,rehydrate.rs}`（実装開始時の現行 Save API に追従）
+- `crates/bevy_app/src/systems/save/{schema.rs,saving.rs,load.rs,transaction.rs,rehydrate.rs}`
+- `crates/bevy_app/src/systems/save/rehydrate/registry.rs`（Track C3 で導入）
 - `crates/bevy_app/src/plugins/{logic.rs,visual.rs}`
 - `assets/textures/buildings/infrastructure/`
-- `docs/{building.md,infrastructure.md,save_load.md,state.md,invariants.md}`
+- `docs/{building.md,infrastructure.md,save_load.md,state.md,invariants.md,soul_energy.md,room_detection.md,architecture.md,cargo_workspace.md,crate-boundaries.md}`
 
 ### 完了条件
 
@@ -386,15 +409,23 @@ Room overlay geometry sync
 - [ ] Conduit blueprint の配置・cancel・完成・load の全経路で WorldMap building footprint を予約・解放しない
 - [ ] Intake → Conduit → Purifier が同じ FluidGrid に接続される
 - [ ] Intake が対応する Site / paired Yard を一意に解決できない場所では配置拒否される
+- [ ] load/rollback後もdurable footprint + Site/PairedYardから同じIntake energy ownerへ再解決される
 - [ ] 途中 1 tile の erase で Purifier が `Unwatered` になる
 - [ ] Intake blackout / recovery は topology entity 数を変えない
 - [ ] load 後に Conduit lookup / FluidGrid が stale entity なしで再構築される
+- [ ] duplicate Conduitを含むcandidateはlive entity/WorldEpoch/UI不変でpreflight rejectされる
+- [ ] normal/rollback/paused loadの各replaceで旧FluidGrid/relationship/lookup/overlay entityが0件になる
+- [ ] load 1回につきFluid topology rebuildは1回だけで、WakeDomainsはtopologyを再dirty化しない
+- [ ] paused中はfail-closed表示とdirtyを保持し、unpause最初のLogicでenergy確定後にsupply/drainageが収束する
+- [ ] `hw_infra` の durable / derived / wake 契約が C3 の domain ledger と production registry coverage に含まれる
+- [ ] `SavePlugin::finish`のproduction snapshotにinfra stepが含まれ、freeze後のlate registrationはrejectされる
+- [ ] 通常ロード、rollback、RecoveryFailed専用replaceでinfrastructure stepの順序と実行回数が一致する
 - [ ] 1,000 tile 配管の rebuild が dirty frame にだけ発生する
 
 ### 検証
 
 - `cargo test -p hw_infra fluid`
-- Save/Load round-trip test
+- Save/Load: duplicate candidate preflight、normal/rollback/recovery-only同一step、paused stale runtime 0、first Logic収束、topology exactly once
 - `cargo check --workspace`
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - 手動: line drag、壁下表示、erase 分断、停電、save → load
@@ -455,8 +486,10 @@ Room overlay geometry sync
 | Room 再生成ごとに認可 stamp を出す | 壁編集や load で演出が連打される | canonical footprint history で実遷移だけを検出し、load seed 時は抑止する |
 | 停電 → 換気停止 → 本設停止 | 復旧不能 | Vent / Chimney と既存仮設設備は対象外。手動水搬送も維持する |
 | Site と Yard が別領域のため Fan が常時停電する | 電動換気が成立しない | Yard 所有 grid の consumer lookup を paired Site へ拡張する |
-| 川岸 Intake が Yard / Site の外にある | 位置包含では grid へ接続できない | 配置時に対応 Site と `PairedYard` を一意解決し、`ConsumesFrom` を明示する |
-| Save/Load hardening 計画との競合 | 古い allow-list 前提で二重修正 | M3 開始時に現行 Save API と active plan を再確認し、物理 / 派生分類だけを契約として維持する |
+| 川岸 Intake が Yard / Site の外にある | 位置包含では grid へ接続できない | footprintからSite/`PairedYard`を一意解決し、共通reconcilerへ渡す。`ConsumesFrom`を直接挿入しない |
+| 完成済みC3 registryを迂回してM3の手書き再構築を追加する | root のrehydrateとregistry登録が二重化する | infra stepをproduction coverageとnormal / rollback / recovery-only traceへ同時追加し、別runnerを作らない |
+| runtime Gridをpersisted root削除へ任せる | paused load/rollback後に旧FluidGridが残る | hw_infra LoadReset hookでentity/relationship/lookup/cache/overlayを各replace前に破棄 |
+| RebuildDerived後にtopology dirtyを再設定 | load 1回でflood fillが二重実行 | RebuildDerivedはtopologyを1回構築、WakeDomainsはsupply/energy/room dirtyだけに限定 |
 | `BuildingType` exhaustive match 漏れ | compile error、誤 sprite、選択不能 | variant 追加ごとに全参照を `rg` で棚卸しし、check / all-target clippy を通す |
 | asset catalog の別作業差分と衝突 | ユーザー変更を上書きする | 実装開始時に status / diff を再確認し、対象 field だけ patch する |
 | workspace-wide rustfmt baseline が既に不一致 | HVAC と無関係な大量 format 差分が混ざる | structural maintenance 計画と調整し、HVAC 実装 commit で全体 format を行わない |
@@ -511,6 +544,7 @@ pure test では少なくとも次を固定する。
 - 進捗: `0%`
 - 完了済みマイルストーン: なし
 - 未着手: M0〜M4
+- 前提状態: Track C3は完了・archive済み。M3のregistry着手条件は満たしたが、M0〜M2を含む本計画は未着手。
 - 採用済み提案を現行コードへ照合し、実装不能だった Room 床占有、壁 lookup、Conduit 重層、状態モデルを本計画で修正済み。
 
 ### 次のAIが最初にやること
@@ -527,7 +561,11 @@ pure test では少なくとも次を固定する。
 - PowerConsumer lifecycle は root adapter にあり、`hw_energy` 内だけを見て実装しない。
 - B3以後は`PowerConsumerPolicy`がdurable、`PowerSupplyState` / `Unpowered` / grid summaryがruntime-derivedである。
   HVACは共通strict-prefix allocator、restore margin、Legacy modeを利用し、独自配電やruntime state保存を追加しない。
-- M3 時点の Save API は active hardening plan により変わる可能性がある。手動 allow-list の現行形を計画から固定しない。
+- M3 は完成済みTrack C3 registryを使用する。Conduit / Intake / Purifier の物理 entity を durable、
+  FluidGrid / lookup / Relationship topology / dirty / Room state を runtime-derived として C3 台帳へ追加し、
+  hw_infra reset hookと通常ロード/rollback/recovery-onlyの共通runnerから再構築する。stepはplugin build中に登録して
+  `SavePlugin::finish` freezeへ含める。RebuildDerivedでtopologyを1回構築し、
+  WakeDomainsで再topology dirtyを立てない。
 - 現在の asset catalog 差分は本計画外。ユーザー変更を preserve する。
 
 ### 参照必須ファイル
@@ -536,6 +574,7 @@ pure test では少なくとも次を固定する。
 - `docs/room_detection.md`
 - `docs/soul_energy.md`
 - `docs/invariants.md`
+- `docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`
 - `crates/hw_world/src/room_detection/{core.rs,ecs.rs,tests.rs}`
 - `crates/hw_world/src/room_systems.rs`
 - `crates/hw_jobs/src/model.rs`
@@ -568,4 +607,7 @@ pure test では少なくとも次を固定する。
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-04` | `Codex` | Track C3の実装・実機受入・archive完了を反映。M3 prerequisiteを充足済みに更新し、完成registryを迂回する手書き再構築を禁止 |
+| `2026-08-03` | `Codex` | Track C3 採用に合わせ、M0〜M2 は独立、M3 は C3 完了後という依存を固定。Conduit root marker、hw_infra reset、phase別exactly-once rebuild、normal/rollback/paused回帰へ更新 |
+| `2026-08-03` | `Codex` | C3自己レビューへ同期し、infra stepの`SavePlugin::finish` freeze coverageとRecoveryFailed専用replace回帰をM3へ追加 |
 | `2026-07-13` | `Codex` | 採用済み HVAC / plumbing 提案を現行コードへ照合し、Room 占有、壁 lookup、Conduit 重層、状態モデル、Save/Load 境界を修正した M0〜M4 計画として昇格 |

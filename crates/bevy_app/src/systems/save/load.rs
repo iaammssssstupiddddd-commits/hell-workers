@@ -19,23 +19,19 @@ use std::path::Path;
 use bevy::ecs::reflect::AppTypeRegistry;
 use bevy::prelude::*;
 
-use hw_core::soul::DamnedSoul;
-use hw_jobs::AssignedTask;
-
 use bevy_world_serialization::DynamicWorld;
 use bevy_world_serialization::serde::WorldDeserializer;
 
 use crate::world::map::GeneratedWorldLayoutResource;
 
 use super::format::{SaveFormat, SaveFormatError, decode_save_file};
-use super::rehydrate::{rehydrate_after_load, validate_rehydrate_prerequisites};
-use super::reset::reset_runtime_caches;
+use super::rehydrate::ResolvedRehydratePlan;
 use super::schema::{
     DynamicWorldSchemaError, discard_legacy_reserved_for_task, discard_runtime_derived_components,
     validate_persisted_world,
 };
 use super::state::{SaveLoadFailureKind, SaveLoadResult, SavePath, SavedWorldgenSeed};
-use super::transaction::{CommitError, preflight_dynamic_world, replace_persisted_world};
+use super::transaction::{CommitError, replace_persisted_world, replace_recovery_only_world};
 
 struct PreparedLoad {
     format: SaveFormat,
@@ -86,7 +82,6 @@ enum LoadExecutionError {
     Read(std::io::Error),
     Preparation(LoadPreparationError),
     MissingPrerequisite(&'static str),
-    Preflight(String),
     RehydratePrerequisite(String),
     Commit(CommitError),
 }
@@ -112,8 +107,7 @@ impl LoadExecutionError {
                 | LoadPreparationError::BodySyntax(_)
                 | LoadPreparationError::Deserialize(_)
                 | LoadPreparationError::Schema(_),
-            )
-            | Self::Preflight(_) => SaveLoadFailureKind::InvalidData,
+            ) => SaveLoadFailureKind::InvalidData,
             Self::Commit(error) => commit_failure_kind(error),
         }
     }
@@ -121,6 +115,8 @@ impl LoadExecutionError {
 
 pub(super) const fn commit_failure_kind(error: &CommitError) -> SaveLoadFailureKind {
     match error {
+        CommitError::Rejected { .. } => SaveLoadFailureKind::InvalidData,
+        CommitError::RecoveryModeRequired => SaveLoadFailureKind::RecoveryFailed,
         CommitError::Recovered { .. } => SaveLoadFailureKind::ApplyRecovered,
         CommitError::RecoveryFailed { .. } => SaveLoadFailureKind::RecoveryFailed,
     }
@@ -137,7 +133,6 @@ impl fmt::Display for LoadExecutionError {
                     "load prerequisite resource is unavailable: {resource}"
                 )
             }
-            Self::Preflight(error) => write!(formatter, "load preflight failed: {error}"),
             Self::RehydratePrerequisite(error) => {
                 write!(formatter, "rehydrate prerequisites failed: {error}")
             }
@@ -147,8 +142,22 @@ impl fmt::Display for LoadExecutionError {
 }
 
 pub(super) fn load_world_system(world: &mut World) -> SaveLoadResult {
+    load_world_with_mode(world, LoadCommitMode::Normal)
+}
+
+pub(super) fn recover_world_system(world: &mut World) -> SaveLoadResult {
+    load_world_with_mode(world, LoadCommitMode::RecoveryOnly)
+}
+
+#[derive(Clone, Copy)]
+enum LoadCommitMode {
+    Normal,
+    RecoveryOnly,
+}
+
+fn load_world_with_mode(world: &mut World, mode: LoadCommitMode) -> SaveLoadResult {
     let save_path = world.resource::<SavePath>().as_path().to_path_buf();
-    match execute_load(world, &save_path) {
+    match execute_load(world, &save_path, mode) {
         Ok(format) => {
             let format = match format {
                 SaveFormat::LegacyV0 => "legacy v0",
@@ -171,7 +180,11 @@ pub(super) fn load_world_system(world: &mut World) -> SaveLoadResult {
     }
 }
 
-fn execute_load(world: &mut World, save_path: &Path) -> Result<SaveFormat, LoadExecutionError> {
+fn execute_load(
+    world: &mut World,
+    save_path: &Path,
+    mode: LoadCommitMode,
+) -> Result<SaveFormat, LoadExecutionError> {
     let contents = read_save_file(save_path).map_err(LoadExecutionError::Read)?;
     let prepared =
         prepare_load_from_str(world, &contents).map_err(LoadExecutionError::Preparation)?;
@@ -179,21 +192,25 @@ fn execute_load(world: &mut World, save_path: &Path) -> Result<SaveFormat, LoadE
     let type_registry = world.get_resource::<AppTypeRegistry>().cloned().ok_or(
         LoadExecutionError::MissingPrerequisite(std::any::type_name::<AppTypeRegistry>()),
     )?;
-    let registry = type_registry.read();
-    preflight_dynamic_world(&prepared.dynamic_world, &registry)
-        .map_err(|error| LoadExecutionError::Preflight(error.to_string()))?;
-    drop(registry);
+    let plan = world
+        .get_resource::<ResolvedRehydratePlan>()
+        .cloned()
+        .ok_or(LoadExecutionError::MissingPrerequisite(
+            std::any::type_name::<ResolvedRehydratePlan>(),
+        ))?;
 
-    validate_rehydrate_prerequisites(world)
-        .map_err(|error| LoadExecutionError::RehydratePrerequisite(error.to_string()))?;
+    plan.validate_live(world)
+        .map_err(LoadExecutionError::RehydratePrerequisite)?;
 
     let registry = type_registry.read();
-    let commit_result = replace_persisted_world(
-        world,
-        &prepared.dynamic_world,
-        &registry,
-        finalize_loaded_world,
-    );
+    let commit_result = match mode {
+        LoadCommitMode::Normal => {
+            replace_persisted_world(world, &prepared.dynamic_world, &registry, &plan)
+        }
+        LoadCommitMode::RecoveryOnly => {
+            replace_recovery_only_world(world, &prepared.dynamic_world, &registry, &plan)
+        }
+    };
     drop(registry);
     commit_result.map_err(LoadExecutionError::Commit)?;
 
@@ -309,22 +326,6 @@ fn extract_saved_worldgen_seed(dynamic_world: &DynamicWorld) -> Option<u64> {
     })
 }
 
-/// セーブ対象外の `AssignedTask` を、`DamnedSoul` を持つ全エンティティへ
-/// `None` で再挿入する（既に持っている場合は上書きしない）。
-fn restore_default_assigned_task(world: &mut World) {
-    let mut query = world.query_filtered::<Entity, (With<DamnedSoul>, Without<AssignedTask>)>();
-    let souls_without_task: Vec<Entity> = query.iter(world).collect();
-    for entity in souls_without_task {
-        world.entity_mut(entity).insert(AssignedTask::default());
-    }
-}
-
-fn finalize_loaded_world(world: &mut World) -> Result<(), String> {
-    reset_runtime_caches(world);
-    restore_default_assigned_task(world);
-    rehydrate_after_load(world).map_err(|error| error.to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use std::any::TypeId;
@@ -337,21 +338,32 @@ mod tests {
     use hw_core::familiar::{Familiar, FamiliarOperation, FamiliarPolicy};
     use hw_core::logistics::ResourceType;
     use hw_core::population::PopulationManager;
-    use hw_core::relationships::{CommandedBy, Commanding};
-    use hw_core::soul::DreamPool;
+    use hw_core::relationships::{
+        CommandedBy, Commanding, DeliveringTo, IncomingDeliveries, LoadedIn, LoadedItems, PushedBy,
+        PushingWheelbarrow, TaskWorkers, WorkingOn,
+    };
+    use hw_core::soul::{DamnedSoul, DreamPool};
     use hw_energy::{PowerConsumer, PowerShedReason, PowerSupplyState, Unpowered};
-    use hw_jobs::Building;
+    use hw_jobs::construction::FloorTileBlueprint;
     use hw_jobs::mud_mixer::MudMixerStorage;
+    use hw_jobs::{Building, BuildingType};
+    use hw_logistics::item_lifetime::ItemDespawnTimer;
+    use hw_logistics::transport_request::{
+        TransportRequestState, WheelbarrowDestination, WheelbarrowLease, WheelbarrowPendingSince,
+    };
     use hw_logistics::types::{
         BelongsTo, BucketStorage, PendingBelongsToBlueprint, ReservedForTask, ResourceItem,
     };
-    use hw_logistics::{Stockpile, StockpilePolicy};
+    use hw_logistics::{Stockpile, StockpilePolicy, Wheelbarrow};
     use hw_world::GeneratedWorldLayout;
     use hw_world::WorldMap;
     use hw_world::Yard;
 
     use super::super::format::{SaveHeader, encode_save_file};
-    use super::super::rehydrate::{rehydrate_familiar_settings, rehydrate_stockpile_policies};
+    use super::super::rehydrate::{
+        rehydrate_familiar_settings, rehydrate_stockpile_policies,
+        validate_durable_topology_candidate, validate_task_logistics_candidate,
+    };
     use super::super::schema::{
         build_persisted_world, collect_persisted_entities, register_save_types,
     };
@@ -410,6 +422,80 @@ mod tests {
             .push(Box::new(PowerSupplyState::Shed {
                 reason: PowerShedReason::RestoreMargin,
             }));
+        dynamic_world.serialize(&registry).unwrap()
+    }
+
+    fn legacy_body_with_task_runtime_state(app: &mut App) -> String {
+        fn dynamic_entity_mut(
+            dynamic_world: &mut DynamicWorld,
+            entity: Entity,
+        ) -> &mut bevy_world_serialization::DynamicEntity {
+            dynamic_world
+                .entities
+                .iter_mut()
+                .find(|dynamic| dynamic.entity == entity)
+                .expect("runtime fixture entity must be persisted")
+        }
+
+        let (task, soul, wheelbarrow, item) = {
+            let world = app.world_mut();
+            let task = world.spawn(Building::default()).id();
+            let soul = world.spawn(DamnedSoul::default()).id();
+            let wheelbarrow = world
+                .spawn((
+                    ResourceItem(ResourceType::Wheelbarrow),
+                    Wheelbarrow { capacity: 4 },
+                    Transform::default(),
+                ))
+                .id();
+            let item = world
+                .spawn((ResourceItem(ResourceType::Wood), Transform::default()))
+                .id();
+            world.entity_mut(item).insert(LoadedIn(wheelbarrow));
+            world.flush();
+            (task, soul, wheelbarrow, item)
+        };
+
+        let roots = collect_persisted_entities(app.world_mut());
+        let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let mut dynamic_world = build_persisted_world(app.world(), &registry, roots.into_iter());
+        dynamic_entity_mut(&mut dynamic_world, soul)
+            .components
+            .push(Box::new(WorkingOn(task)));
+        dynamic_entity_mut(&mut dynamic_world, soul)
+            .components
+            .push(Box::new(PushingWheelbarrow::default()));
+        dynamic_entity_mut(&mut dynamic_world, task)
+            .components
+            .push(Box::new(TaskWorkers::default()));
+        dynamic_entity_mut(&mut dynamic_world, task)
+            .components
+            .push(Box::new(IncomingDeliveries::default()));
+        dynamic_entity_mut(&mut dynamic_world, task)
+            .components
+            .push(Box::new(TransportRequestState::Claimed));
+        dynamic_entity_mut(&mut dynamic_world, task)
+            .components
+            .push(Box::new(WheelbarrowPendingSince(3.0)));
+        dynamic_entity_mut(&mut dynamic_world, task)
+            .components
+            .push(Box::new(WheelbarrowLease {
+                wheelbarrow,
+                items: vec![item],
+                source_pos: Vec2::ZERO,
+                destination: WheelbarrowDestination::Stockpile(task),
+                lease_until: 8.0,
+            }));
+        dynamic_entity_mut(&mut dynamic_world, wheelbarrow)
+            .components
+            .push(Box::new(PushedBy(soul)));
+        dynamic_entity_mut(&mut dynamic_world, item)
+            .components
+            .push(Box::new(DeliveringTo(task)));
+        dynamic_entity_mut(&mut dynamic_world, item)
+            .components
+            .push(Box::new(ItemDespawnTimer::new(5.0)));
         dynamic_world.serialize(&registry).unwrap()
     }
 
@@ -486,9 +572,10 @@ mod tests {
             SaveLoadFailureKind::InvalidData
         );
         assert_eq!(
-            classified(LoadExecutionError::Preflight(
-                "raw preflight details".to_owned()
-            )),
+            classified(LoadExecutionError::Commit(CommitError::Rejected {
+                candidate: "incoming",
+                cause: "raw preflight details".to_owned(),
+            })),
             SaveLoadFailureKind::InvalidData
         );
         assert_eq!(
@@ -515,6 +602,12 @@ mod tests {
                 "raw prerequisite details".to_owned()
             )),
             SaveLoadFailureKind::MissingPrerequisite
+        );
+        assert_eq!(
+            classified(LoadExecutionError::Commit(
+                CommitError::RecoveryModeRequired
+            )),
+            SaveLoadFailureKind::RecoveryFailed
         );
         assert_eq!(
             classified(LoadExecutionError::Commit(CommitError::Recovered {
@@ -612,6 +705,126 @@ mod tests {
     }
 
     #[test]
+    fn serialized_task_runtime_state_is_stripped_but_loaded_cargo_remaps_for_v0_and_v1() {
+        use bevy::ecs::entity::EntityHashMap;
+
+        let mut app = legacy_loader_test_app();
+        let body = legacy_body_with_task_runtime_state(&mut app);
+        let fixtures = [
+            body.clone(),
+            encode_save_file(SaveHeader::current(42), &body),
+        ];
+        let runtime_types = [
+            TypeId::of::<WorkingOn>(),
+            TypeId::of::<TaskWorkers>(),
+            TypeId::of::<DeliveringTo>(),
+            TypeId::of::<IncomingDeliveries>(),
+            TypeId::of::<PushedBy>(),
+            TypeId::of::<PushingWheelbarrow>(),
+            TypeId::of::<TransportRequestState>(),
+            TypeId::of::<WheelbarrowPendingSince>(),
+            TypeId::of::<WheelbarrowLease>(),
+            TypeId::of::<ItemDespawnTimer>(),
+        ];
+
+        for fixture in fixtures {
+            let prepared = prepare_load_from_str(app.world(), &fixture)
+                .expect("historical task runtime payload must remain loadable");
+            assert!(prepared.dynamic_world.entities.iter().all(|entity| {
+                entity.components.iter().all(|component| {
+                    component
+                        .get_represented_type_info()
+                        .is_none_or(|info| !runtime_types.contains(&info.type_id()))
+                })
+            }));
+            assert!(prepared.dynamic_world.entities.iter().any(|entity| {
+                entity.components.iter().any(|component| {
+                    component
+                        .get_represented_type_info()
+                        .is_some_and(|info| info.type_id() == TypeId::of::<LoadedIn>())
+                })
+            }));
+            assert!(prepared.dynamic_world.entities.iter().any(|entity| {
+                entity.components.iter().any(|component| {
+                    component
+                        .get_represented_type_info()
+                        .is_some_and(|info| info.type_id() == TypeId::of::<LoadedItems>())
+                })
+            }));
+
+            let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+            let registry = type_registry.read();
+            let mut candidate = World::new();
+            for _ in 0..32 {
+                candidate.spawn_empty();
+            }
+            let mut entity_map = EntityHashMap::default();
+            prepared
+                .dynamic_world
+                .write_to_world_with(&mut candidate, &mut entity_map, &registry)
+                .unwrap();
+            drop(registry);
+
+            let item = candidate
+                .iter_entities()
+                .find(|entity| {
+                    entity
+                        .get::<ResourceItem>()
+                        .is_some_and(|item| item.0 == ResourceType::Wood)
+                })
+                .map(|entity| entity.id())
+                .expect("loaded item must be remapped into the candidate");
+            let carrier = candidate.get::<LoadedIn>(item).unwrap().0;
+            assert!(candidate.get::<Wheelbarrow>(carrier).is_some());
+            assert!(!candidate.get::<LoadedItems>(carrier).unwrap().is_empty());
+        }
+    }
+
+    #[test]
+    fn serialized_orphan_construction_link_is_rejected_after_entity_remap() {
+        use bevy::ecs::entity::EntityHashMap;
+
+        let mut source = legacy_loader_test_app();
+        let missing_site = source.world_mut().spawn_empty().id();
+        source.world_mut().despawn(missing_site);
+        source.world_mut().spawn((
+            FloorTileBlueprint::new(missing_site, (3, 4)),
+            Transform::default(),
+        ));
+        let type_registry = source.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let roots = collect_persisted_entities(source.world_mut());
+        let body = build_persisted_world(source.world(), &registry, roots.into_iter())
+            .serialize(&registry)
+            .unwrap();
+        drop(registry);
+
+        for contents in [
+            body.clone(),
+            encode_save_file(SaveHeader::current(42), &body),
+        ] {
+            let loader = legacy_loader_test_app();
+            let prepared = prepare_load_from_str(loader.world(), &contents)
+                .expect("orphan Entity IDs remain syntactically and schematically valid");
+            let type_registry = loader.world().resource::<AppTypeRegistry>().clone();
+            let registry = type_registry.read();
+            let mut candidate = World::new();
+            let mut entity_map = EntityHashMap::default();
+            prepared
+                .dynamic_world
+                .write_to_world_with(&mut candidate, &mut entity_map, &registry)
+                .unwrap();
+            drop(registry);
+
+            assert!(
+                validate_durable_topology_candidate(&candidate)
+                    .unwrap_err()
+                    .contains("references missing parent site")
+            );
+        }
+    }
+
+    #[test]
     fn missing_stockpile_policy_migrates_only_yard_owned_cells_for_v0_and_v1() {
         use bevy::ecs::entity::EntityHashMap;
 
@@ -685,6 +898,75 @@ mod tests {
                     .is_none()
             );
         }
+    }
+
+    #[test]
+    fn serialized_bucket_storage_is_validated_and_restored_from_its_tank_owner() {
+        use bevy::ecs::entity::EntityHashMap;
+        use hw_core::relationships::StoredIn;
+
+        let mut source = legacy_loader_test_app();
+        let (storage, bucket) = {
+            let world = source.world_mut();
+            let tank = world
+                .spawn((
+                    Building {
+                        kind: BuildingType::Tank,
+                        ..default()
+                    },
+                    Transform::default(),
+                ))
+                .id();
+            let storage = world
+                .spawn((stockpile(2), BelongsTo(tank), Transform::default()))
+                .id();
+            let bucket = world
+                .spawn((
+                    ResourceItem(ResourceType::BucketEmpty),
+                    BelongsTo(tank),
+                    StoredIn(storage),
+                    Transform::default(),
+                ))
+                .id();
+            world.flush();
+            (storage, bucket)
+        };
+        let type_registry = source.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let roots = collect_persisted_entities(source.world_mut());
+        let body = build_persisted_world(source.world(), &registry, roots.into_iter())
+            .serialize(&registry)
+            .unwrap();
+        drop(registry);
+
+        let loader = legacy_loader_test_app();
+        let prepared = prepare_load_from_str(
+            loader.world(),
+            &encode_save_file(SaveHeader::current(42), &body),
+        )
+        .expect("current bucket storage fixture must prepare");
+        let type_registry = loader.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let mut loaded = World::new();
+        let mut entity_map = EntityHashMap::default();
+        prepared
+            .dynamic_world
+            .write_to_world_with(&mut loaded, &mut entity_map, &registry)
+            .unwrap();
+        drop(registry);
+
+        validate_task_logistics_candidate(&loaded).unwrap();
+        assert!(loaded.get::<BucketStorage>(entity_map[&storage]).is_none());
+        assert_eq!(
+            loaded
+                .get::<ResourceItem>(entity_map[&bucket])
+                .map(|item| item.0),
+            Some(ResourceType::BucketEmpty)
+        );
+
+        rehydrate_stockpile_policies(&mut loaded);
+
+        assert!(loaded.get::<BucketStorage>(entity_map[&storage]).is_some());
     }
 
     #[test]

@@ -722,6 +722,157 @@ fn gathering_relationships_are_excluded_from_new_saves_and_stripped_from_legacy_
 }
 
 #[test]
+fn task_execution_edges_are_runtime_only_but_loaded_cargo_survives_staging() {
+    let mut app = App::new();
+    register_save_types(&mut app);
+
+    let (soul, item, wheelbarrow) = {
+        let world = app.world_mut();
+        let task = world.spawn(Building::default()).id();
+        let soul = world.spawn((DamnedSoul::default(), WorkingOn(task))).id();
+        let wheelbarrow = world
+            .spawn((Wheelbarrow { capacity: 4 }, PushedBy(soul)))
+            .id();
+        let item = world
+            .spawn((
+                ResourceItem(ResourceType::Wood),
+                DeliveringTo(task),
+                LoadedIn(wheelbarrow),
+                ItemDespawnTimer::new(5.0),
+            ))
+            .id();
+        world.flush();
+        world.entity_mut(task).insert((
+            TransportRequestState::Claimed,
+            WheelbarrowPendingSince(3.0),
+            WheelbarrowLease {
+                wheelbarrow,
+                items: vec![item],
+                source_pos: Vec2::ZERO,
+                destination: WheelbarrowDestination::Stockpile(task),
+                lease_until: 8.0,
+            },
+        ));
+        world.flush();
+        (soul, item, wheelbarrow)
+    };
+
+    let roots = collect_persisted_entities(app.world_mut());
+    let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+    let registry = type_registry.read();
+    let persisted = build_persisted_world(app.world(), &registry, roots.into_iter());
+    let runtime_types = [
+        TypeId::of::<WorkingOn>(),
+        TypeId::of::<TaskWorkers>(),
+        TypeId::of::<DeliveringTo>(),
+        TypeId::of::<IncomingDeliveries>(),
+        TypeId::of::<PushedBy>(),
+        TypeId::of::<PushingWheelbarrow>(),
+        TypeId::of::<TransportRequestState>(),
+        TypeId::of::<WheelbarrowPendingSince>(),
+        TypeId::of::<WheelbarrowLease>(),
+        TypeId::of::<ItemDespawnTimer>(),
+    ];
+    for entity in &persisted.entities {
+        assert!(entity.components.iter().all(|component| {
+            component
+                .get_represented_type_info()
+                .is_none_or(|info| !runtime_types.contains(&info.type_id()))
+        }));
+    }
+    assert!(
+        persisted
+            .entities
+            .iter()
+            .any(|entity| entity.entity == soul)
+    );
+    assert!(
+        persisted
+            .entities
+            .iter()
+            .any(|entity| entity.entity == item)
+    );
+    assert!(
+        persisted
+            .entities
+            .iter()
+            .any(|entity| entity.entity == wheelbarrow)
+    );
+    assert!(
+        persisted
+            .entities
+            .iter()
+            .find(|entity| entity.entity == item)
+            .expect("persisted item")
+            .components
+            .iter()
+            .any(|component| {
+                component
+                    .get_represented_type_info()
+                    .is_some_and(|info| info.type_id() == TypeId::of::<LoadedIn>())
+            })
+    );
+    assert!(
+        persisted
+            .entities
+            .iter()
+            .find(|entity| entity.entity == wheelbarrow)
+            .expect("persisted wheelbarrow")
+            .components
+            .iter()
+            .any(|component| {
+                component
+                    .get_represented_type_info()
+                    .is_some_and(|info| info.type_id() == TypeId::of::<LoadedItems>())
+            })
+    );
+
+    let target = Entity::from_raw_u32(41).expect("fixture target");
+    let mut legacy_body = DynamicWorld {
+        resources: Vec::new(),
+        entities: vec![bevy_world_serialization::DynamicEntity {
+            entity: soul,
+            components: vec![
+                Box::new(DamnedSoul::default()),
+                Box::new(WorkingOn(target)),
+                Box::new(TaskWorkers::default()),
+                Box::new(DeliveringTo(target)),
+                Box::new(IncomingDeliveries::default()),
+                Box::new(LoadedIn(target)),
+                Box::new(LoadedItems::default()),
+                Box::new(PushedBy(target)),
+                Box::new(PushingWheelbarrow::default()),
+                Box::new(TransportRequestState::Claimed),
+                Box::new(WheelbarrowPendingSince(3.0)),
+                Box::new(WheelbarrowLease {
+                    wheelbarrow: target,
+                    items: vec![item],
+                    source_pos: Vec2::ZERO,
+                    destination: WheelbarrowDestination::Stockpile(target),
+                    lease_until: 8.0,
+                }),
+                Box::new(ItemDespawnTimer::new(5.0)),
+            ],
+        }],
+    };
+    discard_runtime_derived_components(&mut legacy_body);
+
+    let remaining: HashSet<_> = legacy_body.entities[0]
+        .components
+        .iter()
+        .map(|component| component.get_represented_type_info().unwrap().type_id())
+        .collect();
+    assert_eq!(
+        remaining,
+        HashSet::from([
+            TypeId::of::<DamnedSoul>(),
+            TypeId::of::<LoadedIn>(),
+            TypeId::of::<LoadedItems>(),
+        ])
+    );
+}
+
+#[test]
 fn reserved_for_task_is_loader_registered_but_excluded_from_v1_schema() {
     let mut app = App::new();
     register_save_types(&mut app);

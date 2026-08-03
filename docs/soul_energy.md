@@ -59,7 +59,7 @@ PowerGrid エンティティは Yard と厳密に 1 対 1 で存在する。Obse
 ### 4.1 施設構造
 
 - **SoulSpaSite**: 2x2 ルートエンティティ。`#[require(PowerGenerator)]` で自動付与
-- **SoulSpaTile**: 4 枚の子エンティティ。Operational 時に `Designation(GeneratePower)` + `TaskSlots{max:1}` が付与される
+- **SoulSpaTile**: 通常spawnでは4枚の子エンティティ。保存対象の`parent_site`が論理ownerであり、`ChildOf` / `Children`はload時に復元しない。Operational 時に `Designation(GeneratePower)` + `TaskSlots{max:1}` が付与される
 
 ### 4.2 建設フロー
 

@@ -24,6 +24,8 @@ pub(crate) fn save_settings_notifications() -> Result<HelpContribution, HelpCata
                     [
                         "現在の単一セーブへ保存するか、読込確認を開きます。",
                         "読込は現在の world を置き換えるため、確認ダイアログを経て実行されます。",
+                        "読込後は建築進捗と Familiar 設定を復元し、進行中の担当・運搬を安全な待機状態へ戻して再割り当てします。猫車の積載資材は車両付近へ荷下ろしされます。",
+                        "不正なセーブ内容は現在の world を置き換える前に拒否します。適用途中で失敗した場合は、直前の world の復旧を試みます。",
                     ],
                 )
                 .with_shortcut(format!(

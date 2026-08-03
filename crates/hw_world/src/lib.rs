@@ -20,6 +20,7 @@ pub mod terrain_zones;
 pub(crate) mod test_seeds;
 pub mod tree_planting;
 pub mod world_masks;
+mod world_replace;
 pub mod zone_ops;
 pub mod zones;
 pub use anchor::{AnchorLayout, AnchorLayoutError, GridRect};
@@ -64,6 +65,7 @@ pub use terrain_visual::{
 };
 pub use tree_planting::DreamTreePlantingPlan;
 pub use world_masks::{BitGrid, WorldMasks};
+pub use world_replace::reset_for_world_replace;
 pub use zone_ops::{
     area_tile_size, expand_yard_area, identify_removal_targets, rectangles_overlap,
     rectangles_overlap_site,

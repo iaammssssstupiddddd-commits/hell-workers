@@ -78,6 +78,12 @@ pub struct LogicPlugin;
 
 impl Plugin for LogicPlugin {
     fn build(&self, app: &mut App) {
+        crate::systems::save::register_logic_rehydrate_pipeline(app);
+        crate::systems::save::register_load_reset_hook(
+            app,
+            "hw-world-rooms",
+            hw_world::reset_for_world_replace,
+        );
         app.add_plugins(SoulAiPlugin);
         app.add_plugins(FamiliarAiPlugin);
         app.add_plugins(TransportRequestPlugin);

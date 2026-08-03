@@ -39,7 +39,7 @@ topic|feature="orders-areas"|owner="orders-building"|section="orders-building-zo
 entry|topic="orders-areas"|id="orders-designation"|title="タスクを指定する"|paragraphs=["下部の Orders から作業を選び、対象をクリックまたは範囲ドラッグします。", "未確定の操作または開いているメニューは、その時点の入力文脈に応じて解除できます。"]|shortcut=Some("Esc")
 entry|topic="orders-areas"|id="area-edit"|title="Task Area を編集する"|paragraphs=["範囲編集では copy / paste、undo / redo、3つの preset 保存・読込を利用できます。", "3つの preset は保存用と読込用のショートカットから使い分けます。"]|shortcut=Some("Ctrl+C / Ctrl+V / Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z / Ctrl+1 / Ctrl+2 / Ctrl+3 / Alt+1 / Alt+2 / Alt+3")
 topic|feature="building-zones-dream"|owner="orders-building"|section="orders-building-zones"|id="building-zones-dream"|title="建築・ゾーン・Dream"
-entry|topic="building-zones-dream"|id="architect-building"|title="Architect で建築"|paragraphs=["建物を選び、world 上で配置します。Floor と Wall は範囲を指定して施工予定を作ります。", "必要資源が届くと、担当可能な Soul が工程を進めます。"]|shortcut=Some("B")
+entry|topic="building-zones-dream"|id="architect-building"|title="Architect で建築"|paragraphs=["建物を選び、world 上で配置します。Floor と Wall は範囲を指定して施工予定を作ります。", "必要資源が届くと、担当可能な Soul が工程を進めます。", "Outdoor Lamp は通行できますが建物としてタイルを占有するため、同じ場所へ別の建物を重ねて配置できません。"]|shortcut=Some("B")
 entry|topic="building-zones-dream"|id="zones-workflow"|title="Zones で保管範囲を作る"|paragraphs=["Stockpile は新しい保管範囲を作成でき、Yard は既存範囲を拡張できます。Remove は Stockpile の削除に使います。", "Stockpile の対象資源、目標量、優先度、持出可否は情報パネルから変更できます。"]|shortcut=Some("Z")
 entry|topic="building-zones-dream"|id="dream-planting"|title="Dream で植樹"|paragraphs=["Dream の Plant Trees を選び、植える範囲を指定します。必要な Dream と成立条件を確認してください。"]|shortcut=None
 topic|feature="task-dashboard"|owner="orders-building"|section="orders-building-zones"|id="task-dashboard"|title="タスク一覧"
@@ -48,7 +48,7 @@ entry|topic="task-dashboard"|id="task-dashboard-filter-sort"|title="絞り込み
 entry|topic="task-dashboard"|id="task-dashboard-actions"|title="優先度変更とキャンセル"|paragraphs=["変更可能なタスクだけ優先度を調整できます。キャンセルは確認を経て実行されます。"]|shortcut=None
 section|id="save-settings-notifications"|title="保存・設定・通知"
 topic|feature="save-settings-notifications"|owner="persistence-settings"|section="save-settings-notifications"|id="save-settings-notifications"|title="保存・設定・通知"
-entry|topic="save-settings-notifications"|id="save-load"|title="保存と読込"|paragraphs=["現在の単一セーブへ保存するか、読込確認を開きます。", "読込は現在の world を置き換えるため、確認ダイアログを経て実行されます。"]|shortcut=Some("F5 / F9")
+entry|topic="save-settings-notifications"|id="save-load"|title="保存と読込"|paragraphs=["現在の単一セーブへ保存するか、読込確認を開きます。", "読込は現在の world を置き換えるため、確認ダイアログを経て実行されます。", "読込後は建築進捗と Familiar 設定を復元し、進行中の担当・運搬を安全な待機状態へ戻して再割り当てします。猫車の積載資材は車両付近へ荷下ろしされます。", "不正なセーブ内容は現在の world を置き換える前に拒否します。適用途中で失敗した場合は、直前の world の復旧を試みます。"]|shortcut=Some("F5 / F9")
 entry|topic="save-settings-notifications"|id="settings"|title="Settings"|paragraphs=["UI scale、カメラ速度、マウス移動、既定時間速度、電力の優先配電、デバッグ表示を変更できます。", "設定は変更時に保存され、次回起動でも利用されます。"]|shortcut=None
 entry|topic="save-settings-notifications"|id="notifications"|title="通知"|paragraphs=["短い結果は toast で表示されます。重要な履歴は通知一覧から後で確認できます。", "同じ失敗が続く場合は、対象・資源・経路・担当範囲を順に確認してください。"]|shortcut=None
 coverage|building-category::architecture|player|published:entry:architect-building

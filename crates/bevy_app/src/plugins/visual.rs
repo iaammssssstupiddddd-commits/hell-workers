@@ -69,6 +69,7 @@ pub struct VisualPlugin;
 
 impl Plugin for VisualPlugin {
     fn build(&self, app: &mut App) {
+        crate::systems::save::register_visual_rehydrate_pipeline(app);
         app.add_plugins(HwVisualPlugin);
         crate::systems::save::register_load_reset_hook(
             app,

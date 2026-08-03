@@ -387,17 +387,24 @@ source-aware obstacle provenance / navigation cache は `rehydrate_obstacle_runt
 `WorldMap` と同様に serde derive + `#[reflect(Serialize, Deserialize)]` で型全体を
 serde 経路にする（`crates/hw_world/src/map/mod.rs` 参照）。
 
-### I-P3: loadのpreflight成功はlive apply成功を保証しない
-loadは、header/seed/schema検証、staging `World`への静的preflight、rehydrate prerequisite検証を
-**live persisted entityのdespawn前**に完了する。staging成功はReflect registry / component/resource
-contractだけを保証し、live適用のtransaction保証ではない。live apply開始後に`Result`エラーが発生したら、
-apply時の`EntityHashMap`に記録されたpartial entityを掃除し、同一schemaのrollback snapshotを復元して
-通常loadと同じreset/finalize（cache reset、runtime正規化、rehydrate）を通す。raw Entity IDやRON bytesではなく、
-Entity remap後のpersistent graphが回復対象である。詳細: [docs/save_load.md](save_load.md)
+### I-P3: loadのcandidate検証はincomingとrollbackの両方をlive reset前に完了する
+loadは、header/seed/schema検証、staging `World`への適用、immutable domain validator、rehydrate prerequisiteを
+**live persisted entityのdespawn前**に完了する。incomingだけでなく同一schemaから取得したrollback snapshotも
+同じcandidate pipelineへ通し、どちらかが不正ならWorldEpoch、Resource、UI/visualを変更しない。validatorは
+全persisted Entity link、Relationship対称性、owner/role/capacityに加え、candidate自身の`WorldMap` shapeと
+tile/building/door/stockpile参照を検証する。全tile anchorは一意な`Tile + Transform`を持ち、Blueprint、Wall tile、
+Soul Spa tileのdurable footprintは`WorldMap.buildings`と双方向一致しなければならない。旧live `WorldMap`を
+新worldの前提として要求しない。validatorごとに
+Worldをcloneせず、1 candidateにつき1 stagingを共有し、staging EntityやQueryStateをlive runnerへ持ち出さない。
+
+staging成功はlive適用のtransaction保証ではない。live apply開始後に`Result`エラーが発生したら、apply時の
+`EntityHashMap`に記録されたpartial entityを掃除し、検証済みrollback snapshotを復元して通常loadと同じ
+resetとimmutable rehydrate planを通す。raw Entity IDやRON bytesではなく、Entity remap後のpersistent graphが
+回復対象である。詳細: [docs/save_load.md](save_load.md)
 
 旧saveで `FamiliarOperation` / `FamiliarPolicy` が欠落している場合だけ互換defaultを補完する。
-保存済みoperationのmaxが保存済みrosterより小さい不整合は推測修復せずapply errorとし、
-pre-loadのoperation / policy / relationshipをtransaction rollbackで復元する。
+保存済みoperationのmaxが保存済みrosterより小さい不整合は推測修復せずcandidate errorとし、
+pre-loadのoperation / policy / relationshipを変更しない。
 
 ### I-P4: world replacementはLastで完結し、旧Entity参照を次frameへ渡さない
 save/loadのapplyは`Last::SaveLoadApplySet`だけが実行し、`Update`のInput/Interfaceは
@@ -410,15 +417,21 @@ loaded componentの`Added`/`Changed`は次frameの差分rebuildに残す。syste
 `WorldEpoch`不一致時に最初の利用前にclearし、scratch bufferが毎回clearされる場合だけ例外とする。
 `GatheringSpot`と`ParticipatingIn` / `GatheringParticipants`はruntime-onlyであり、新規saveへ含めず、
 legacy bodyからはschema検証前に除去する。replace hookは旧spotとlinked visualを同時にdespawnする。
+`WorkingOn` / `TaskWorkers`、`DeliveringTo` / `IncomingDeliveries`、`PushedBy` /
+`PushingWheelbarrow`もruntime-onlyであり、writerから除外しlegacy bodyではsource/target対でstripする。
+`hw_world` owner hookはruntime `Room` / `RoomOverlayTile` entityとlookup/detection stateをidempotentに消去する。
 root message inventoryのFamiliar settings request / outcome / roster release visualと、`hw_ui`の
 `OperationDialogState` / target / scroll / static root presentation、Stockpile / Soul Spa / Power editorの
 static button targetも同じreplace phaseで同期resetする。
 
-### I-P5: construction runtime cacheはload中に再構築し、WorldMapを再予約しない
+### I-P5: construction normalizeはshellより先、derived cacheはshell barrierより後に行う
 Floor / Wall construction の `TileSiteIndex`、工程counter、Curing中の`CuringFootprint`は保存しない
-runtime stateである。loadのexclusive rehydrateはSpatial/Logicの再開前に、tileからindex、工程rankから
-counter、Curing siteからfootprintの順で同期再構築する。保存済み`WorldMap`はoccupancyの正本なので、
-この再構築でobstacle/occupancyをreserveしてはならない。
+runtime stateである。loadのexclusive rehydrateは`DurableNormalize`でtile rankからcounter/phaseを確定し、
+phase昇格境界の`ReinforcedComplete` / 仮壁生成済み`FramedProvisional`をsiteと原子的に`WaitingMud`へ進める。
+仮壁生成前の`FramedProvisional`はFraming counterだけを復元して次Logicの通常chainへ渡し、回復不能な
+phase/tile混在はcandidateで拒否する。その後の`AttachShells`だけがmirrorを作る。runner-owned flush barrier後の`RebuildDerived`でtileからindex、
+Curing siteからfootprintを同期再構築する。保存済み`WorldMap`はoccupancyの正本なので、この再構築で
+obstacle/occupancyをreserveしてはならない。
 
 ### I-P6: save/load terminal outcomeはtrigger stateと分離し、全reset後に一度だけ発行する
 
@@ -435,6 +448,37 @@ worldを置換しないため現在の通知履歴を保持する。詳細: [not
 task revision map、Familiar/Blueprint/wheelbarrow diagnostics、task list snapshot、filter/sort、inline confirmation、
 `BlueprintCancelRequested`、action/message bufferは保存せず replace hook で消去する。`Priority` と
 `PlayerIssuedDesignation` だけを durable schema で往復し、load 後は Pending から新 world の通常 cycle で再評価する。
+
+### I-P8: rehydrateの順序とflushはfreeze済みroot planだけが所有する
+
+domain adapterは名前、phase、依存、immutable candidate validatorまたはinfallible mutation callbackをrootの
+`RehydrateRegistry`へ登録する。`SavePlugin::finish`だけが全plugin build後にgraphをfreezeし、重複名、未知依存、
+循環、later-phase dependencyをload開始前にrejectする。独立step順はphaseと名前で安定化し、normal/rollback/
+recovery-onlyは同じ`ResolvedRehydratePlan`を使う。mutation callbackは外部I/O、`Result`、任意の`flush()`を持たず、
+`AttachShells`後のbarrierと最終flushはrunnerだけが行う。production step集合はexact snapshot testで固定する。
+
+### I-P9: task/logisticsのdurable owner、staging handoff、runtime claimを混在させない
+
+`ManagedBy` / `ManagedTasks`、`ParkedAt` / `ParkedWheelbarrows`、wheelbarrowの`BelongsTo`は
+load後も残すdurable source/targetとして保存する。`LoadedIn` / `LoadedItems`はcarrierのremap済み位置を
+RuntimeNormalizeへ渡すstaging handoffとして保存し、candidateでcarrier種別、対称性、容量を検証するが、
+live graphでは全cargoをcarrier（運搬中ならcarrying Soul）の最寄りwalkable cellへ荷下ろしして除去する。
+Wheelbarrow自身が`LoadedIn` / `StoredIn` / `StoredByMixer`を持つcontainer-owned shapeは、load後parkingとの
+二重ownerになるためcandidateで拒否する。
+一方、assignment/delivery/tool-use edge、`TransportRequestState`、`WheelbarrowLease`、
+`WheelbarrowPendingSince`、`ItemDespawnTimer`は保存しない。load後は全Soulをunassigned、requestを`Pending`、
+`TransportDemand.inflight = 0`へ揃え、inventory itemをowner helperでwalkable cellへdropし、wheelbarrowをhomeへparkする。
+Sand/StasisMudにはfresh 5秒timerを1つだけ付与する。load境界で荷下ろしされたcargoはgroundとして直後から進み、
+storage/mixer等の保護relationshipが残るitemだけ停止する。
+
+### I-P10: rollback失敗だけがRecoveryFailedへ入り、復帰しても自動再開しない
+
+coordinator-owned `SaveRecoveryMode`は`Healthy`と`RecoveryFailed`だけを持つ。rollback失敗時にのみ後者へ遷移して
+`Time<Virtual>`をpauseし、saveと通常transactionを拒否する。recovery-only replaceは`RecoveryFailed`からだけ
+呼べ、incoming full preflight、idempotent reset、同じrehydrate planを必須とする。再失敗時はpartial entityを掃除して
+paused fail-closedを維持し、成功時だけ`Healthy`へ戻す。ただし成功は自動unpauseの権限を持たない。
+通常F9/`LoadRequested`をrecovery-onlyへ暗黙昇格せず、専用ownerだけが`RecoveryLoadRequested`を発行する。
+Track C3時点のproductionにはproducerを置かず、Track C2が専用UI/input gateと同時に接続する。
 
 ---
 

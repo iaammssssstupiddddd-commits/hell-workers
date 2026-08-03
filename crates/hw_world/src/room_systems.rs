@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use hw_core::constants::{ROOM_BORDER_COLOR, ROOM_BORDER_THICKNESS, TILE_SIZE, Z_ROOM_OVERLAY};
 use hw_jobs::{Building, Door};
 
-use crate::map::{WorldMap, WorldMapRead};
+use crate::map::WorldMap;
 use crate::room_detection::{
     DetectedRoom, Room, RoomDetectionBuildingTile, RoomDetectionState, RoomOverlayTile,
     RoomTileLookup, RoomValidationState, build_detection_input, detect_rooms,
@@ -36,7 +36,6 @@ type ChangedRoomsQuery<'w, 's> = Query<
 pub fn detect_rooms_system(
     mut commands: Commands,
     time: Res<Time>,
-    world_map: WorldMapRead,
     mut detection_state: ResMut<RoomDetectionState>,
     mut room_tile_lookup: ResMut<RoomTileLookup>,
     q_buildings: Query<(Entity, &Building, &Transform)>,
@@ -48,7 +47,7 @@ pub fn detect_rooms_system(
         return;
     }
 
-    let tiles = collect_building_tiles(&q_buildings, &world_map);
+    let tiles = collect_building_tiles(&q_buildings);
     let input = build_detection_input(&tiles);
     let detected_rooms = detect_rooms(&input);
 
@@ -102,7 +101,6 @@ pub struct ValidateRoomsParams<'w, 's> {
     room_tile_lookup: ResMut<'w, RoomTileLookup>,
     q_rooms: Query<'w, 's, (Entity, &'static Room)>,
     q_buildings: Query<'w, 's, (Entity, &'static Building, &'static Transform)>,
-    world_map: WorldMapRead<'w>,
 }
 
 /// 既存 Room の整合性を定期検証し、無効なものを再検出キューへ送るシステム
@@ -119,9 +117,7 @@ pub fn validate_rooms_system(mut p: ValidateRoomsParams) {
             let grid = WorldMap::world_to_grid(transform.translation.truncate());
             RoomDetectionBuildingTile {
                 grid,
-                kind: building.kind,
-                is_provisional: building.is_provisional,
-                has_building_on_top: p.world_map.has_building(grid),
+                role: building.kind.room_detection_role(building.is_provisional),
             }
         })
         .collect();
@@ -151,7 +147,6 @@ pub fn validate_rooms_system(mut p: ValidateRoomsParams) {
 
 fn collect_building_tiles(
     q_buildings: &Query<(Entity, &Building, &Transform)>,
-    world_map: &WorldMapRead,
 ) -> Vec<RoomDetectionBuildingTile> {
     q_buildings
         .iter()
@@ -159,9 +154,7 @@ fn collect_building_tiles(
             let grid = WorldMap::world_to_grid(transform.translation.truncate());
             RoomDetectionBuildingTile {
                 grid,
-                kind: building.kind,
-                is_provisional: building.is_provisional,
-                has_building_on_top: world_map.has_building(grid),
+                role: building.kind.room_detection_role(building.is_provisional),
             }
         })
         .collect()

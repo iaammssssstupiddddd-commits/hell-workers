@@ -1,5 +1,126 @@
 use super::*;
 
+type DurableFloorTile = ((i32, i32), FloorTileState);
+type DurableFloorTilesBySite = HashMap<Entity, Vec<DurableFloorTile>>;
+
+/// Read-only view of the navigation topology that `rehydrate_obstacle_runtime`
+/// will install. Persisted `WorldMap` navigation bitmaps are caches, so load
+/// validation and runtime normalization must not consult them directly.
+pub(super) struct DurableNavigationView<'a> {
+    map: &'a WorldMap,
+    blockers: HashSet<(i32, i32)>,
+    door_states: HashMap<(i32, i32), DoorState>,
+    bridged_tiles: HashSet<(i32, i32)>,
+}
+
+impl<'a> DurableNavigationView<'a> {
+    pub(super) fn from_world(world: &'a World) -> Result<Self, String> {
+        let map = world
+            .get_resource::<WorldMap>()
+            .ok_or_else(|| "persisted WorldMap is unavailable".to_owned())?;
+        let mut blockers = durable_natural_blockers(world);
+        blockers.extend(durable_curing_floor_blockers(world));
+        let sources = collect_world_map_obstacle_sources(world);
+        blockers.extend(sources.blockers.iter().copied());
+
+        Ok(Self {
+            map,
+            blockers,
+            door_states: sources
+                .doors
+                .into_iter()
+                .map(|(grid, (_, state))| (grid, state))
+                .collect(),
+            bridged_tiles: sources.bridged_tiles,
+        })
+    }
+
+    pub(super) fn nearest_walkable_position(&self, position: Vec2) -> Option<Vec2> {
+        let origin = WorldMap::world_to_grid(position);
+        if self.is_walkable(origin) {
+            return Some(WorldMap::grid_to_world(origin.0, origin.1));
+        }
+        for radius in 1..=5 {
+            for dx in -radius..=radius {
+                for dy in -radius..=radius {
+                    let grid = (origin.0 + dx, origin.1 + dy);
+                    if self.is_walkable(grid) {
+                        return Some(WorldMap::grid_to_world(grid.0, grid.1));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn is_walkable(&self, grid: (i32, i32)) -> bool {
+        let Some(index) = self.map.pos_to_idx(grid.0, grid.1) else {
+            return false;
+        };
+        if let Some(state) = self.door_states.get(&grid) {
+            return *state != DoorState::Locked;
+        }
+        if self.blockers.contains(&grid) {
+            return false;
+        }
+        if self.bridged_tiles.contains(&grid) {
+            return true;
+        }
+        self.map
+            .terrain_at_idx(index)
+            .is_some_and(|terrain| terrain.is_walkable())
+    }
+}
+
+fn durable_natural_blockers(world: &World) -> HashSet<(i32, i32)> {
+    world
+        .iter_entities()
+        .filter(|entity| entity.contains::<Tree>() || entity.contains::<Rock>())
+        .filter_map(|entity| {
+            entity
+                .get::<ObstaclePosition>()
+                .map(|position| (position.0, position.1))
+        })
+        .collect()
+}
+
+fn durable_curing_floor_blockers(world: &World) -> HashSet<(i32, i32)> {
+    let mut tiles_by_site = DurableFloorTilesBySite::new();
+    for entity in world.iter_entities() {
+        if let Some(tile) = entity.get::<FloorTileBlueprint>() {
+            tiles_by_site
+                .entry(tile.parent_site)
+                .or_default()
+                .push((tile.grid_pos, tile.state));
+        }
+    }
+
+    let mut blockers = HashSet::new();
+    for entity in world.iter_entities() {
+        let Some(site) = entity.get::<FloorConstructionSite>() else {
+            continue;
+        };
+        let tiles = tiles_by_site
+            .get(&entity.id())
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let reinforced = tiles
+            .iter()
+            .filter(|(_, state)| construction_runtime::floor_tile_is_reinforced(*state))
+            .count() as u32;
+        let poured = tiles
+            .iter()
+            .filter(|(_, state)| *state == FloorTileState::Complete)
+            .count() as u32;
+        let phase =
+            construction_runtime::normalized_floor_phase(site, tiles.len(), reinforced, poured);
+        if phase == FloorConstructionPhase::Curing {
+            blockers.extend(tiles.iter().map(|(grid, _)| *grid));
+        }
+    }
+    blockers
+}
+
 /// Restores runtime obstacle provenance and derives the raw bitmap from durable
 /// load state. `WorldMap.obstacles` is a cache, not a save-format authority.
 pub(super) fn rehydrate_obstacle_runtime(world: &mut World) {

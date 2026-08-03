@@ -27,13 +27,13 @@ use crate::systems::jobs::floor_construction::CuringFootprint;
 use crate::world::map::WorldMap;
 
 use hw_core::area::TaskArea;
-use hw_core::constants::{TILE_SIZE, Z_ITEM_PICKUP};
+use hw_core::constants::TILE_SIZE;
 use hw_core::familiar::{
     ActiveCommand, Familiar, FamiliarCommand, FamiliarOperation, FamiliarPolicy,
 };
 use hw_core::jobs::WorkType;
 use hw_core::logistics::ResourceType;
-use hw_core::relationships::{Commanding, LoadedIn};
+use hw_core::relationships::{Commanding, LoadedIn, RestingIn, StoredIn};
 use hw_core::soul::DamnedSoul;
 use hw_core::visual::SoulTaskHandles;
 use hw_core::visual_mirror::construction::{
@@ -55,7 +55,7 @@ use hw_jobs::{
 };
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_logistics::zone::{Stockpile, StockpilePolicy};
-use hw_logistics::{BelongsTo, Inventory, ResourceItem};
+use hw_logistics::{BelongsTo, BucketStorage, PendingBelongsToBlueprint, ResourceItem};
 use hw_ui::selection::building_size;
 use hw_visual::SoulProxyOwnerCache;
 use hw_visual::blueprint::{BlueprintVisual, BuildingBounceEffect};
@@ -73,36 +73,168 @@ type CuringFootprintTile = (Entity, GridPosition);
 type CuringFootprintSpec = (Entity, Vec<CuringFootprintTile>);
 type CuringFootprints = Vec<CuringFootprintSpec>;
 
+mod candidate;
+mod registry;
+mod task_runtime;
+
 mod prerequisites;
 
-pub(super) use prerequisites::{RehydratePrerequisiteError, validate_rehydrate_prerequisites};
+#[cfg(test)]
+use prerequisites::RehydratePrerequisiteError;
+#[cfg(test)]
+pub(super) use prerequisites::validate_rehydrate_prerequisites;
 
 mod presentation;
 
 pub(super) use presentation::clear_rehydrate_presentation;
 
-/// ロード直後に呼び、裸のエンティティへ shell を再付与する。
-pub(super) fn rehydrate_after_load(world: &mut World) -> Result<(), RehydratePrerequisiteError> {
-    validate_rehydrate_prerequisites(world)?;
-    rehydrate_familiar_settings(world)?;
-    rehydrate_stockpile_policies(world);
-    rehydrate_power_consumer_policies(world);
-    rehydrate_soul_spas(world);
-    drop_orphaned_inventory_items(world);
+#[cfg(test)]
+pub(super) use candidate::{
+    validate_durable_topology_candidate, validate_familiar_candidate,
+    validate_task_logistics_candidate,
+};
+pub(super) use registry::ResolvedRehydratePlan;
+use registry::{
+    RehydratePhase, register_candidate_validator, register_live_prerequisite,
+    register_rehydrate_step,
+};
 
-    world.resource_scope::<GameAssets, _>(|world, game_assets| {
-        world.resource_scope::<Building3dHandles, _>(|world, handles_3d| {
-            world.resource_scope::<SoulTaskHandles, _>(|world, soul_handles| {
-                rehydrate_shells(world, &game_assets, &handles_3d, &soul_handles);
-            });
-        });
-    });
+/// Logic-domain adapter. Leaf crates expose callbacks without depending on the
+/// root registry; `LogicPlugin` owns this type-erased registration boundary.
+pub(crate) fn register_logic_rehydrate_pipeline(app: &mut App) {
+    register_candidate_validator(
+        app,
+        "durable.topology",
+        candidate::validate_durable_topology_candidate,
+    );
+    register_candidate_validator(
+        app,
+        "familiar.roster",
+        candidate::validate_familiar_candidate,
+    );
+    register_candidate_validator(
+        app,
+        "task-logistics.owners",
+        candidate::validate_task_logistics_candidate,
+    );
+    register_rehydrate_step(
+        app,
+        "construction.normalize",
+        RehydratePhase::DurableNormalize,
+        &[],
+        &[],
+        construction_runtime::normalize_construction_state,
+    );
+    register_rehydrate_step(
+        app,
+        "familiar.settings",
+        RehydratePhase::DurableNormalize,
+        &[],
+        &[],
+        normalize_familiar_settings,
+    );
+    register_rehydrate_step(
+        app,
+        "power-consumer.policy",
+        RehydratePhase::DurableNormalize,
+        &[],
+        &[],
+        rehydrate_power_consumer_policies,
+    );
+    register_rehydrate_step(
+        app,
+        "soul-spa.normalize",
+        RehydratePhase::DurableNormalize,
+        &[],
+        &[],
+        rehydrate_soul_spas,
+    );
+    register_rehydrate_step(
+        app,
+        "stockpile.policy",
+        RehydratePhase::DurableNormalize,
+        &[],
+        &[],
+        rehydrate_stockpile_policies,
+    );
+    register_rehydrate_step(
+        app,
+        "transport-request.targets",
+        RehydratePhase::DurableNormalize,
+        &[],
+        &[],
+        task_runtime::normalize_transport_request_targets,
+    );
+    register_rehydrate_step(
+        app,
+        "task-logistics.runtime",
+        RehydratePhase::RuntimeNormalize,
+        &["transport-request.targets"],
+        &[],
+        task_runtime::normalize_task_logistics_runtime,
+    );
+    register_rehydrate_step(
+        app,
+        "construction.runtime",
+        RehydratePhase::RebuildDerived,
+        &["construction.normalize", "presentation.shells"],
+        &[],
+        construction_runtime::rebuild_construction_runtime,
+    );
+    register_rehydrate_step(
+        app,
+        "obstacle.runtime",
+        RehydratePhase::RebuildDerived,
+        &["construction.runtime"],
+        &[],
+        rehydrate_obstacle_runtime,
+    );
+    register_rehydrate_step(
+        app,
+        "domains.wake",
+        RehydratePhase::WakeDomains,
+        &["obstacle.runtime"],
+        &[],
+        wake_domains_after_load,
+    );
+}
 
-    world.flush();
-    rehydrate_construction_runtime(world);
-    rehydrate_obstacle_runtime(world);
+/// Presentation-domain adapter registered by `VisualPlugin`.
+pub(crate) fn register_visual_rehydrate_pipeline(app: &mut App) {
+    register_candidate_validator(
+        app,
+        "presentation.spatial-roots",
+        candidate::validate_shell_candidate,
+    );
+    register_live_prerequisite(
+        app,
+        "presentation.assets-time",
+        prerequisites::validate_presentation_prerequisites,
+    );
+    register_rehydrate_step(
+        app,
+        "presentation.shells",
+        RehydratePhase::AttachShells,
+        &["task-logistics.runtime"],
+        &["presentation.assets-time"],
+        rehydrate_shell_step,
+    );
+}
 
-    Ok(())
+pub(super) fn freeze_rehydrate_pipeline(app: &mut App) {
+    registry::freeze_rehydrate_registry(app);
+}
+
+#[cfg(test)]
+pub(crate) fn resolved_rehydrate_plan_names(
+    world: &World,
+) -> (Vec<&'static str>, Vec<&'static str>, Vec<&'static str>) {
+    let plan = world.resource::<ResolvedRehydratePlan>();
+    (
+        plan.step_names(),
+        plan.validator_names(),
+        plan.prerequisite_names(),
+    )
 }
 
 /// Adds operation and work policy defaults to saves created before those
@@ -112,6 +244,7 @@ pub(super) fn rehydrate_after_load(world: &mut World) -> Result<(), RehydratePre
 /// than its saved maximum. Treat that state as corruption so the surrounding
 /// load transaction restores the previous live world instead of guessing
 /// which Soul should be released.
+#[cfg(test)]
 pub(super) fn rehydrate_familiar_settings(
     world: &mut World,
 ) -> Result<(), RehydratePrerequisiteError> {
@@ -153,6 +286,48 @@ pub(super) fn rehydrate_familiar_settings(
         });
     }
 
+    normalize_familiar_settings_from_snapshot(world, settings);
+
+    Ok(())
+}
+
+fn normalize_familiar_settings(world: &mut World) {
+    let settings: Vec<(
+        Entity,
+        Option<FamiliarOperation>,
+        Option<FamiliarPolicy>,
+        usize,
+    )> = {
+        let mut query = world.query_filtered::<(
+            Entity,
+            Option<&FamiliarOperation>,
+            Option<&FamiliarPolicy>,
+            Option<&Commanding>,
+        ), With<Familiar>>();
+        query
+            .iter(world)
+            .map(|(entity, operation, policy, commanding)| {
+                (
+                    entity,
+                    operation.cloned(),
+                    policy.cloned(),
+                    commanding.map_or(0, |roster| roster.iter().count()),
+                )
+            })
+            .collect()
+    };
+    normalize_familiar_settings_from_snapshot(world, settings);
+}
+
+fn normalize_familiar_settings_from_snapshot(
+    world: &mut World,
+    settings: Vec<(
+        Entity,
+        Option<FamiliarOperation>,
+        Option<FamiliarPolicy>,
+        usize,
+    )>,
+) {
     for (entity, operation, policy, roster_len) in settings {
         let mut entity_mut = world.entity_mut(entity);
         if operation.is_none() {
@@ -173,8 +348,6 @@ pub(super) fn rehydrate_familiar_settings(
             }
         }
     }
-
-    Ok(())
 }
 
 /// Adds the compatibility policy only to ordinary stockpile cells owned by a durable Yard.
@@ -183,6 +356,34 @@ pub(super) fn rehydrate_familiar_settings(
 /// positive `BelongsTo -> Yard` ownership check is the migration boundary. Existing policy values
 /// are preserved except for the target/capacity invariant.
 pub(super) fn rehydrate_stockpile_policies(world: &mut World) {
+    let bucket_storages: Vec<Entity> = {
+        let mut stockpiles = world.query::<(
+            Entity,
+            &Stockpile,
+            Option<&BelongsTo>,
+            Option<&PendingBelongsToBlueprint>,
+        )>();
+        stockpiles
+            .iter(world)
+            .filter_map(|(entity, _, owner, pending_owner)| {
+                let completed_tank = owner.is_some_and(|owner| {
+                    world
+                        .get::<Building>(owner.0)
+                        .is_some_and(|building| building.kind == BuildingType::Tank)
+                });
+                let pending_tank = pending_owner.is_some_and(|owner| {
+                    world
+                        .get::<Blueprint>(owner.0)
+                        .is_some_and(|blueprint| blueprint.kind == BuildingType::Tank)
+                });
+                (completed_tank || pending_tank).then_some(entity)
+            })
+            .collect()
+    };
+    for entity in bucket_storages {
+        world.entity_mut(entity).insert(BucketStorage);
+    }
+
     let yard_entities: HashSet<Entity> = {
         let mut yards = world.query_filtered::<Entity, With<Yard>>();
         yards.iter(world).collect()
@@ -238,40 +439,28 @@ pub(super) fn rehydrate_power_consumer_policies(world: &mut World) {
 
 mod construction_runtime;
 
-use construction_runtime::rehydrate_construction_runtime;
+#[cfg(test)]
+use construction_runtime::{normalize_construction_state, rehydrate_construction_runtime};
 
 mod obstacles;
 
 use obstacles::rehydrate_obstacle_runtime;
 
-/// Phase A ではロード後の全 Soul が `AssignedTask::None` になるため、
-/// インベントリに残ったアイテムは誰にも消費されない孤児になる。
-/// Soul の足元へドロップして通常の物流ループに戻す。
-fn drop_orphaned_inventory_items(world: &mut World) {
-    let mut drops: Vec<(Entity, Entity, Vec3)> = Vec::new();
-    let mut q_souls = world.query_filtered::<(Entity, &Inventory, &Transform), With<DamnedSoul>>();
-    for (soul, inventory, transform) in q_souls.iter(world) {
-        if let Some(item) = inventory.0 {
-            drops.push((soul, item, transform.translation));
-        }
-    }
+fn rehydrate_shell_step(world: &mut World) {
+    world.resource_scope::<GameAssets, _>(|world, game_assets| {
+        world.resource_scope::<Building3dHandles, _>(|world, handles_3d| {
+            world.resource_scope::<SoulTaskHandles, _>(|world, soul_handles| {
+                rehydrate_shells(world, &game_assets, &handles_3d, &soul_handles);
+            });
+        });
+    });
+}
 
-    let drop_count = drops.len();
-    for (soul, item, soul_pos) in drops {
-        if let Some(mut inventory) = world.get_mut::<Inventory>(soul) {
-            inventory.0 = None;
-        }
-        if let Ok(mut item_mut) = world.get_entity_mut(item) {
-            if let Some(mut transform) = item_mut.get_mut::<Transform>() {
-                transform.translation = Vec3::new(soul_pos.x, soul_pos.y, Z_ITEM_PICKUP);
-            }
-        } else {
-            warn!("REHYDRATE: inventory item {item:?} of soul {soul:?} no longer exists");
-        }
-    }
-    if drop_count > 0 {
-        info!("REHYDRATE: dropped {drop_count} orphaned inventory item(s)");
-    }
+fn wake_domains_after_load(world: &mut World) {
+    world.init_resource::<crate::systems::energy::grid_recalc::EnergyUpdateDirty>();
+    world
+        .resource_mut::<crate::systems::energy::grid_recalc::EnergyUpdateDirty>()
+        .request_full_rebuild();
 }
 
 fn rehydrate_shells(
@@ -317,10 +506,14 @@ fn rehydrate_shells(
 
     let mut items: Vec<(Entity, ResourceType, bool)> = Vec::new();
     {
-        let mut q =
-            world.query_filtered::<(Entity, &ResourceItem, Option<&LoadedIn>), Without<Sprite>>();
-        for (entity, item, loaded_in) in q.iter(world) {
-            items.push((entity, item.0, loaded_in.is_some()));
+        let mut q = world.query_filtered::<
+            (Entity, &ResourceItem, Option<&LoadedIn>, Option<&StoredIn>),
+            Without<Sprite>,
+        >();
+        for (entity, item, loaded_in, stored_in) in q.iter(world) {
+            let hidden =
+                loaded_in.is_some() || (item.0 == ResourceType::Water && stored_in.is_some());
+            items.push((entity, item.0, hidden));
         }
     }
 
@@ -402,12 +595,12 @@ fn rehydrate_shells(
         });
     }
 
-    for (entity, resource_type, is_loaded) in items {
+    for (entity, resource_type, is_hidden) in items {
         commands
             .entity(entity)
             .insert(item_sprite(resource_type, game_assets, soul_handles));
         // 猫車積載中のアイテムは地面に描画しない（積載ビジュアルは haul 系システムが担う）
-        if is_loaded {
+        if is_hidden {
             commands.entity(entity).insert(Visibility::Hidden);
         }
     }
@@ -446,21 +639,35 @@ use construction_shells::{BlueprintSpriteHandles, rehydrate_construction_shells}
 /// the second call on the same world a no-op for both the owner and its 3D
 /// presentation roots.
 fn rehydrate_soul_shells(world: &mut World, handles_3d: &Building3dHandles) -> usize {
-    let mut souls: Vec<(Entity, Option<SoulIdentity>, String, Vec3)> = Vec::new();
+    let mut souls: Vec<(Entity, Option<SoulIdentity>, String, Vec3, bool)> = Vec::new();
     {
-        let mut query = world.query_filtered::<(Entity, Option<&SoulIdentity>, &Transform), (
-            With<DamnedSoul>,
-            Without<Destination>,
-        )>();
-        for (entity, identity, transform) in query.iter(world) {
+        let mut query = world.query_filtered::<(
+            Entity,
+            Option<&SoulIdentity>,
+            &Transform,
+            Option<&RestingIn>,
+        ), (With<DamnedSoul>, Without<Destination>)>();
+        for (entity, identity, transform, resting_in) in query.iter(world) {
             let translation = transform.translation;
             match identity {
-                Some(identity) => souls.push((entity, None, identity.name.clone(), translation)),
+                Some(identity) => souls.push((
+                    entity,
+                    None,
+                    identity.name.clone(),
+                    translation,
+                    resting_in.is_some(),
+                )),
                 None => {
                     // 旧形式セーブ（SoulIdentity 未保存）へのフォールバック
                     let identity = SoulIdentity::random();
                     let name = identity.name.clone();
-                    souls.push((entity, Some(identity), name, translation));
+                    souls.push((
+                        entity,
+                        Some(identity),
+                        name,
+                        translation,
+                        resting_in.is_some(),
+                    ));
                 }
             }
         }
@@ -468,7 +675,7 @@ fn rehydrate_soul_shells(world: &mut World, handles_3d: &Building3dHandles) -> u
 
     let count = souls.len();
     let mut commands = world.commands();
-    for (entity, new_identity, name, translation) in souls {
+    for (entity, new_identity, name, translation, is_resting) in souls {
         if let Some(identity) = new_identity {
             commands.entity(entity).insert(identity);
         }
@@ -484,6 +691,9 @@ fn rehydrate_soul_shells(world: &mut World, handles_3d: &Building3dHandles) -> u
             translation.truncate(),
             handles_3d,
         );
+        if is_resting {
+            commands.entity(entity).insert(Visibility::Hidden);
+        }
     }
     count
 }

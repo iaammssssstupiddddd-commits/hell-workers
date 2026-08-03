@@ -4,8 +4,9 @@ use super::*;
 use hw_core::relationships::{CommandedBy, ManagedBy, ParkedAt};
 #[cfg(feature = "profiling")]
 use hw_logistics::transport_request::{
-    ManualTransportRequest, ReceiverPolicyTier, TransportDemand, TransportPolicy,
-    TransportPriority, TransportRequest, TransportRequestKind, TransportRequestState,
+    ManualHaulPinnedSource, ManualTransportRequest, ReceiverPolicyTier, TransportDemand,
+    TransportPolicy, TransportPriority, TransportRequest, TransportRequestFixedSource,
+    TransportRequestKind, TransportRequestState,
 };
 #[cfg(feature = "profiling")]
 use hw_logistics::{ResourceItem, ResourceType, Stockpile, StockpilePolicy, Wheelbarrow};
@@ -642,12 +643,15 @@ fn configure_controlled_familiar_policy_fixture(
             StockpilePolicy::for_capacity(8),
         ))
         .id();
-    commands.spawn((
-        Name::new("PerfFamiliarPolicySource"),
-        Transform::from_translation((fixture_pos + Vec2::new(4.0, 0.0)).extend(Z_MAP)),
-        Visibility::Visible,
-        ResourceItem(ResourceType::Wood),
-    ));
+    let fixed_source = commands
+        .spawn((
+            Name::new("PerfFamiliarPolicySource"),
+            Transform::from_translation((fixture_pos + Vec2::new(4.0, 0.0)).extend(Z_MAP)),
+            Visibility::Visible,
+            ResourceItem(ResourceType::Wood),
+            ManualHaulPinnedSource,
+        ))
+        .id();
     commands.spawn((
         Name::new("PerfFamiliarPolicyRequest"),
         Transform::from_translation(fixture_pos.extend(Z_MAP)),
@@ -657,6 +661,7 @@ fn configure_controlled_familiar_policy_fixture(
         },
         ManagedBy(owner),
         ManualTransportRequest,
+        TransportRequestFixedSource(fixed_source),
         TaskSlots::new(1),
         Priority(10),
         ReceiverPolicyTier(TransportPriority::Normal),
@@ -666,7 +671,7 @@ fn configure_controlled_familiar_policy_fixture(
             resource_type: ResourceType::Wood,
             issued_by: owner,
             priority: TransportPriority::Normal,
-            stockpile_group: vec![stockpile],
+            stockpile_group: vec![],
         },
         TransportDemand {
             desired_slots: 1,

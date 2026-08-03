@@ -79,6 +79,8 @@ Logic の次回同期へ委ねてはならない。
 ### 通行性と障害物同期
 
 - non-Bridge の Blueprint は建設中の予約として通行を塞ぐ。完成後は `BuildingType::blocks_movement()` が true の Building だけが movement blocker を維持し、Bridge は川を歩行可能にする。
+- `blocks_movement() == false` の完成建物も論理的な配置占有は維持する。Blueprint 完成時は `WorldMap.buildings` の owner を同じセルの完成 Building へ移譲し、予約 obstacle だけを解除する。したがって Outdoor Lamp などは通行できても別建物を同じタイルへ重ねられない。
+- 配置占有とRoom内部判定は別契約である。完成Floor上のPlant / Temporary建物は`RoomDetectionRole::InteriorFixture`として床を無効化せず、完成Wall / Door、仮設Wall、Bridgeだけをboundaryまたはfloor invalidatorとして扱う。
 - `ObstaclePosition` は source-aware に同期される。Tree/Rock など `NaturalTerrainClearing` の最後の blocker が外れた場合だけ terrain を Dirt へ変更する。完成建物 footprint、移動予約、床の Curing 保護を外しても terrain type は変えない。
 - 建築完了後の marker と WorldMap 更新は Soul Execute の後に反映され、Actor/pathfinding より前の `ObstacleSyncSet` で最終 walkability が確定する。
 
@@ -360,7 +362,7 @@ Building3dVisual エンティティ（独立。Building の子ではない）
 - **通行性**: 建築中の `FloorTileBlueprint` は通行可能（障害物として扱わない）。ただし `Curing` 中は立ち入り禁止（障害物扱い）
 - **キャンセル**: エリア全体を一括キャンセル（部分キャンセル不可）
   - tile 行または `DeliverToFloorConstruction` request 行のどちらからでも parent site を解決する。
-  - 保存対象 `TransportRequest.kind + anchor` を正本にするため、load 後に非保存 target marker がなくても cleanup できる。
+  - `TransportRequest.kind + anchor` と対応する `TargetFloorConstructionSite` は保存対象で、load candidate は marker が同じ anchor を指すことを検証する。pre-C3 saveでmarkerが欠落していても、RuntimeNormalizeがkind + anchorから正規化してcleanup経路を揃える。
   - `TileSiteIndex` が空/古い場合は authoritative `FloorTileBlueprint.parent_site` query へ fallback し、0 tile でも marker を残さない。
   - worker 解除、搬入資材返却、request / tile / site 除去、WorldMap cleanup を site 単位で行う。
 
@@ -476,7 +478,8 @@ Wall の `Framing → Coating` も同じindex/counter契約を使い、`spawned_
 - `Curing` 相当フェーズは持たず、全タイル `Complete` 到達で site / tile / request を即時 cleanup する。
 - キャンセルは tile または `DeliverToWallConstruction` request から parent site を解決し、site 単位で処理する。
   搬入済み `Wood` / `StasisMud` を返却し、関連 request / 作業割り当てを解除する。保存済み
-  `TransportRequest.kind + anchor` から target marker なしでも request を列挙し、`TileSiteIndex` miss は
+  `TransportRequest.kind + anchor + TargetWallConstructionSite` の整合をcandidateで検証し、pre-C3 saveの欠落markerは
+  RuntimeNormalizeでkind + anchorから補う。`TileSiteIndex` miss は
   authoritative tile query へ fallback する。0 tile でも cancel marker を永久保持せず、WorldMap occupancy は
   site または当該 spawned wall が現在 owner のセルだけを解除する。
 - すべての候補が無効な場合は site を生成せず、`Cannot Place` ツールチップで最初に検出した無効理由を表示する。
@@ -495,10 +498,13 @@ Soul Spa（ソウルスパ）は Phase 1b で実装された `BuildingType::Soul
 
 ```
 SoulSpaSite (root)
-  ├─ ChildOf relationships
-  ├─ SoulSpaTile × 4  ← Operational 時に Designation(GeneratePower) + TaskSlots{max:1} が付与される
+  ├─ SoulSpaTile × 4  ← 通常spawn時だけChildOfも持つ。durable ownerはparent_site
+  │                      Operational 時に Designation(GeneratePower) + TaskSlots{max:1} が付与される
   └─ PowerGenerator   ← #[require] により SoulSpaSite に自動付与
 ```
+
+`ChildOf` / `Children` は表示階層であり、save/loadでは復元しない。tile activation、発電集計、candidateの
+2×2 footprint検証は保存対象の`SoulSpaTile.parent_site`を正本にするため、ロード直後も階層に依存しない。
 
 ### 10.3 建設フェーズ（Constructing → Operational）
 

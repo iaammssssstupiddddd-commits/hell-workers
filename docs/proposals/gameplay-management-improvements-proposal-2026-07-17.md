@@ -7,9 +7,9 @@
 | ドキュメントID | `gameplay-management-improvements-proposal-2026-07-17` |
 | ステータス | `Draft` |
 | 作成日 | `2026-07-17` |
-| 最終更新日 | `2026-08-03` |
+| 最終更新日 | `2026-08-04` |
 | 作成者 | `Codex` |
-| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能検証完了）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`（B2実装・自動検証完了）、`docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`（B2実機・性能検証完了）、`docs/plans/archive/soul-energy-control-plan-2026-07-20.md`（B3実装・実機受入完了） |
+| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能検証完了）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`（B2実装・自動検証完了）、`docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`（B2実機・性能検証完了）、`docs/plans/archive/soul-energy-control-plan-2026-07-20.md`（B3実装・実機受入完了）、`docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`（C3完了）、`docs/plans/building-deconstruction-plan-2026-08-03.md`（C1計画）、`docs/plans/save-catalog-autosave-plan-2026-08-03.md`（C2計画） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 背景と問題
@@ -245,10 +245,20 @@ workspace gateに加え、Soul Spa editor/no-kick、個別Lamp描画、priority/
 
 #### Track C: 復旧と永続化（P1）
 
+計画状態: `2026-08-03` にTrack Cを採用し、C3再構築基盤、C1解体、C2セーブカタログの
+3計画へ分割した。実装順は `C3 → C1 → C2` とし、C2はmanual slot完成後にautosaveへ進む。
+C3は現行の`LoadResetRegistry`とrehydrate物理分割を前提に、domain step登録、依存順、preflight、
+normal/rollback共通runner、runtime task edge/lifetime再構築、fail-closed再ロード境界を完成させるrefactorとして再定義した。
+C1初版は単体指定、全既存完成建物、建築別固定回収、storage/tool保全を対象とする。C2初版は3 manual slot、
+load-only legacy path、bounded header catalog、default offの世代autosaveとし、container v1を維持する。
+
 ##### C1. 一般建築物の解体と資源回収
 
-- 明示的な `AssignedTask::Deconstruct { ... }` と対応 `WorkType` / `TaskMode` を追加する。
+- repository規約どおりstruct payloadを持つ `AssignedTask::Deconstruct(DeconstructData)` と対応 `WorkType` / `TaskMode` を追加する。
+- 完成building rootの既存Designationと競合させず、専用のdurable `DeconstructionOrder` rootとtarget Relationshipを正本にする。
 - 対象指定、作業予約、解体実行、関係解除、資源返却、再描画を一つの状態遷移として扱う。
+- commit requestはworkerのexact `ActiveTaskIdentity`を含め、root finalizerがwinner/loser/cancel/staleの全workerを
+  order/target消去前にowner-safeなterminalへ進める。
 - 解体時は建築種別に応じて、少なくとも次をクリーンアップする。
   - タスク要求と担当
   - 物流要求、予約、Stockpile 関係
@@ -256,6 +266,8 @@ workspace gateに加え、Soul Spa editor/no-kick、個別Lamp描画、priority/
   - 親子 Entity とビジュアル
 - 回収量は専用の回収テーブルを正本とする。床、橋、Soul Spa など構築方式が異なる対象へ
   `required_materials()` を一律に逆適用しない。
+- SandPileのsalvageは無限生成を防ぐため明示0とする。通常Stockpileが受け付けないSand/StasisMudは地面へ落とさず、
+  別MudMixerの容量を事前確保してnumeric/entityを直接移送する。parking撤去時のwheelbarrow積載物は積載状態を維持する。
 - 解体不能な特殊対象は理由を A2 の通知経路で表示する。
 
 ##### C2. セーブカタログ、手動スロット、オートセーブ
@@ -269,16 +281,29 @@ workspace gateに加え、Soul Spa editor/no-kick、個別Lamp描画、priority/
 - 第 2 段階でオートセーブの保存先、世代数、間隔を追加する。
 - 現行の同期的な排他保存の所要時間を計測し、許容時間を超える場合は
   バックグラウンド化より先にスナップショット境界を設計する。
-- ロード失敗時は現在 World を破壊せず、失敗結果を A2 へ通知する。
+- manualは自身のSave catalog/confirm capture中でも実行できるorigin別eligibility、autosaveはmanual優先のsingle request、
+  `Absent/Exact`再検査、mtime欠落時round-robin、全terminal failureのfull-interval backoffを使う。
+- fileはheader/bodyを二重buffer化せず順次writeし、fileと対応platformの親directoryをsyncしてから完了扱いにする。
+- ロード失敗は段階別に扱う。live置換前の失敗は現在Worldを不変に保ち、置換後のapply失敗はrollbackで復旧する。
+  rollback自体も失敗した場合だけpaused fail-closedへ移り、いずれも区別した結果をA2へ通知する。
+  fail-closed中はsave/resume/world操作を止め、C3専用recovery-only replaceによる別slot loadまたは終了だけを許可する。
 - 現行 v1 `SaveHeader.format_version` と schema allow-list を前提に、container format と
   world schema evolution の責務境界、および v1 から次形式への移行方針を、
-  新しい永続コンポーネント導入前に確定する。
+  Track CのC0判断として新しい永続コンポーネント導入前に確定する。C1のadditive order/variantはこの判断に従うため、
+  C2 M1実装までは待たせない。
 
 ##### C3. 再構築レジストリの分割
 
-- ロード後の大きな rehydrate root を、ドメイン別の再構築ステップへ分割する。
-- 実行順序をレジストリまたは明示的な system set として管理し、依存関係をテストする。
+実装状態: `2026-08-04` にcandidate/live preflight、phase-aware registry、normal/rollback/recovery-only共通runner、
+runtime task/cargo正常化、construction/WorldMap/Soul Spa再構築、Help・恒久docs・全自動/実機受入を完了し、計画をarchiveした。
+詳細は `docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md` を参照する。
+
+- 既に物理分割済みのrehydrate処理を、ドメイン別登録、phase、依存、coverageを持つ再構築stepへ昇格する。
+- 全plugin build後の`SavePlugin::finish`でregistryをfreezeし、実行順序と依存関係をテストする。
 - セーブされる正本と、ロード後に再生成する index/cache/visual を文書化する。
+- runtime task edgeはwriterから除外してlegacy source/targetを対でstripし、Sand/StasisMudのruntime lifetime timerを再付与する。
+- 通常load/rollbackの事前validation契約を維持したまま、`RecoveryFailed`からだけrollback候補なしでincomingをfull preflightして
+  再適用できる低位replace modeを提供する。
 - C3 は既存 HVAC/Plumbing 計画の M0〜M2 の前提にしない。C3 を採用する場合は、
   M3 の Conduit 保存と FluidGrid/lookup 再構築へ入る前に実装し、
   `docs/plans/hvac-plumbing-plan-2026-07-13.md` の M3 手順と変更対象を同時に改訂する。
@@ -286,8 +311,12 @@ workspace gateに加え、Soul Spa editor/no-kick、個別Lamp描画、priority/
 受入条件:
 
 - 解体後に孤立 Entity、予約、要求、経路障害物が残らない。
+- 解体commitのwinner/loser/cancel/stale全workerがexact identityで一度だけ終端し、volatile資源が消失しない。
 - 手動スロットの保存/読込/上書き/破損が、それぞれ明示的な結果になる。
 - 旧セーブに既定値を補い、新セーブの方針値を失わずロードできる。
+- registry構成不正とcandidate invariantをlive replace前に拒否できる。
+- 通常ロードとrollbackが同じimmutable planのmutation step列をexactly once通り、stale runtime entity/Relationshipが残らない。
+- `RecoveryFailed`では別slot成功時だけ通常操作へ復帰し、再失敗時はload/quit以外をfail-closedに保つ。
 
 #### Track D: 進行と選択（P2）
 
@@ -326,8 +355,9 @@ workspace gateに加え、Soul Spa editor/no-kick、個別Lamp描画、priority/
 #### トラック間の必須依存
 
 ```text
-C3 を採用する場合 ───── B2 / D1 / D2 / D3 の world schema 追加
-                   └── HVAC M3 の保存・再構築変更
+C3 ───── C1 ───── C2
+ ├────── D1 / D2 / D3 の world schema 追加
+ └────── HVAC M3 の保存・再構築変更
 
 D2 Contract ─────────── D3 Familiar 昇格
                          （Contract を昇格条件に使う場合）
@@ -342,7 +372,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 1. A1 で既知の入力競合を除去する。
 2. A2 の共通結果通知を作り、A3 の診断 UI へ展開する。
 3. A2/A3 を再利用して B1/B2、C1/C2、D1 の操作結果と停止理由を表示する。
-4. 新しい world 永続データへ進む前に移行方針を確定し、C3 を採用する場合は先に導入する。
+4. 新しいworld永続データへ進む前にv1 additive/v2 migration境界をC0判断として確定し、C3を先に導入する。
 5. B3 と HVAC 消費設備の運用を確認した後に Battery を設計する。
 6. D2 の Contract を昇格条件として採用した場合は、D3 を後続させる。
 
@@ -387,8 +417,8 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - `StockpilePolicy`
 - `FamiliarPolicy` または永続化対応した `FamiliarOperation`
 - 消費設備優先度、Power inspection 用導出状態
-- `AssignedTask::Deconstruct { ... }` と解体回収テーブル
-- `SaveSlotId`, `SaveSlotMetadata`, `SaveCatalog`
+- `AssignedTask::Deconstruct(DeconstructData)`、専用order root、worker identity付きcommit request、target単位commit claim、解体回収テーブル
+- `SaveSlotId`, `SaveSlotMetadata`, `SaveCatalog`, `SaveRecoveryMode`
 - `DreamEdict`, `Contract`, `ContractProgress`, `FamiliarRank`
 
 変更候補:
@@ -504,13 +534,18 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
   旧variant互換を維持した `Selected(StockpileResourceSet)` と資材別チェックリストへ拡張した。
   資源カテゴリ階層は引き続き後続とする。
 - [x] Familiar の活動範囲は既存の persistent `TaskArea` を唯一の正本とし、新しい距離・領域型を追加しない。
-- [ ] 解体回収率を固定値、建築別、難易度/Edict 影響のどこまで初版へ含めるか決める。
+- [x] C1初版の解体回収は建築別固定tableとし、difficulty/Edictと投入履歴は対象外にする。
+  storage内容と付属toolはsalvage率を適用せず100%安全な回収先へ戻す。SandPile salvageは明示0、
+  Sand/StasisMudは地面/通常Stockpileへ移さず別MudMixerの全量容量を確保できない場合に解体を拒否する。具体値は
+  `docs/plans/building-deconstruction-plan-2026-08-03.md`を正本とする。
 - [x] Track B の durable component 追加は container header v1 を維持する。新 executable は old v0/v1 の
   missing component だけを既定補完し、old executable は未知型を含む new v1 を live apply 前の `InvalidData` として
   拒否するため forward compatibility は保証しない。例外として、`Unpowered` のように正本ではない legacy runtime-derived
   component は、旧型登録を残し、既存 `discard_runtime_derived_components()` で allow-list 検証前に明示的に strip し、
   effect より前に完全再構築し、v0/v1 fixture を固定する場合だけ v1 body normalization として除去できる。
   durable state の削除・変換が必要になった時点で world schema version を別計画にする。
+- [x] Track Cも同じC0方針を継承する。C1の`DeconstructionOrder`/Relationship/`WorkType`はv1 additive、
+  C2のslot/catalog/settingsはworld body外とし、rename/field shape変換が必要になるまでcontainer v2へ進めない。
 - [ ] Dream Edict の効果対象を World 全体、Room、Familiar 管轄のどれから始めるか決める。
 - [ ] Contract を手書きデータ、RON asset、コード定義のどれで管理するか決める。
 
@@ -518,7 +553,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 現在地
 
-- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（機能・性能完了、archive済み）/ B1 100%（完了・archive済み）/ B2 100%（実装・実機・性能完了、archive済み）/ B3 100%（実装・自動検証・実機受入完了、archive済み）/ C〜D 未採否`
+- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（機能・性能完了、archive済み）/ B1 100%（完了・archive済み）/ B2 100%（実装・実機・性能完了、archive済み）/ B3 100%（実装・自動検証・実機受入完了、archive済み）/ C3 100%（実装・実機完了、archive済み）/ C1・C2 計画 100%・実装 0% / D 未採否`
 - 直近で完了したこと: A3 の latest-only task diagnostics、filter/sort dashboard、安全な priority/cancel、
   owner cancellation、save/reset回帰、恒久ドキュメント同期。Track B はコード・save・UI の現状を再監査し、
   B1 Stockpile の M1〜M5（永続 policy、移行、tier 別需要、manual / wheelbarrow 判定、共有 score offset、
@@ -527,6 +562,10 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
   B2 Familiarはproduction実装・自動回帰・Help・恒久docs・実機受入・controlled性能監査を完了した。
   B3 Soul Energyはactive slotのsame-cycle/no-kick、priority strict-prefix配電、Yard/Grid再構築、save/settings互換、
   typed inspection/outcome、横断自動検証、V1〜V4実機受入を完了し、計画をarchiveした。
+  Track C3はcandidate/live validation、plugin finishでfreezeするphase-aware registry、normal/rollback/recovery-only共通runner、
+  runtime task/cargo正常化、construction/WorldMap/Soul Spa再構築を実装した。Help・恒久docs・workspace全ゲートと、
+  実X11/Vulkanでの正常load、paused維持、破損load事前拒否、world意味不変を確認してarchive済みである。
+  C1のowner-safe解体cleanupとC2のtyped slot/catalog/autosaveは独立計画のまま未着手である。
   B1の実機確認ではpolicy round-trip、range/capture、Toast、Draining、in-flight、特殊設備除外を確認した。
   F9直後の旧情報パネル残留はInfoPanel rootの同期非表示と実Node回帰を追加して修正し、実機再受入も完了した。
   受入資材UIは全9資材の静的チェックリストと
@@ -535,8 +574,9 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 次のAIが最初にやること
 
-1. A2 の重点実機項目を確認し、問題なければ計画をarchiveする。
-2. Track C〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
+1. `docs/plans/building-deconstruction-plan-2026-08-03.md` のC1 M1から着手する。
+2. C1の全建物cleanup matrixと実機受入を完了する。
+3. C2はC1完了後、manual catalogを先に完成させ、同期save計測後にautosaveへ進む。A2の重点実機受入は独立残件として維持する。
 
 ### ブロッカー/注意点
 
@@ -548,6 +588,11 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
   完了記録は`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`を参照する。
 - `FamiliarOperation` / `FamiliarPolicy` はdurableである。runtime shellへ戻して保存値を上書きしない。
   B2の実renderer受入と性能artifactはarchive済み検証follow-upを参照する。
+- C3は完了済み。既存`LoadResetRegistry`と、`SavePlugin::finish`でfreezeするrehydrate phase/dependency/coverageを後続Trackでも併用する。
+- runtime task edgeとSand/StasisMud timerを保存正本に戻さず、C1のdurable orderをC3 registry/schema coverageへ追加する。
+- C1のcompleted salvageとconstruction cancelのactual delivered refundを混同せず、Sand/StasisMudの退避先に通常Stockpileを使わない。
+- C2のUIへpathを渡さず、origin/dialog session/operation/typed slot/revisionを同じone-shot requestへ束縛する。
+- `RecoveryFailed`では通常transaction用rollback snapshotを要求せず、専用recovery-only replace以外を許可しない。
 - 新しい Bevy API は 0.19 の一次情報またはローカル crate source で確認する。
 
 ### 参照必須ファイル
@@ -568,6 +613,9 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - `docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`
 - `docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`
 - `docs/plans/archive/soul-energy-control-plan-2026-07-20.md`
+- `docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`
+- `docs/plans/building-deconstruction-plan-2026-08-03.md`
+- `docs/plans/save-catalog-autosave-plan-2026-08-03.md`
 - `crates/bevy_app/src/plugins/input.rs`
 - `crates/hw_ui/src/selection/placement.rs`
 - `crates/hw_ui/src/panels/task_list/types.rs`
@@ -579,8 +627,9 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 - [x] 提案内容がレビュー可能な粒度で記述されている
 - [x] リスク・影響範囲・検証計画が埋まっている
-- [ ] Track A〜D の採否と初回スコープが決定されている
+- [ ] Track D の採否と初回スコープが決定されている
 - [x] Track B1〜B3 の初回スコープ、正本、移行、実装順、受入条件が別計画に固定されている
+- [x] Track C1〜C3 の初回スコープ、正本、実装順、受入条件が別計画に固定されている
 - [x] 実装へ進むサブトラックの `docs/plans/...` が作成されている
 - [x] A1 完了時に関連する恒久ドキュメントと自動回帰が更新されている
 - [x] 実装完了時に関連する恒久ドキュメントと不変条件が更新されている
@@ -614,3 +663,6 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | `2026-08-03` | `Codex` | B3 M1〜M4のSoul Spa枠、priority配電、topology/load再構築、設定互換、inspection/outcomeを実装し、M5検証へ移行 |
 | `2026-08-03` | `Codex` | B3のHelp・恒久docs・workspace full gateを完了し、残件をB3専用actual-window受入とarchiveへ限定 |
 | `2026-08-03` | `User / Codex` | B3 V1〜V4の実機受入を全件合格とし、M5を完了してSoul Energy制御計画をarchive |
+| `2026-08-03` | `Codex` | Track Cを採用し、C3のlive前検証/immutable rehydrate、C1の排他的解体/安全回収、C2のno-clobber slot/catalog/autosaveを3計画へ固定。実装順をC3→C1→C2とし、HVAC M3依存も同期 |
+| `2026-08-03` | `Codex` | Track C計画を自己レビューし、C3のfinish/lifetime/recovery-only、C1のexact worker終端/別Mixer回収、C2のorigin別eligibility/atomic streaming/fail-closed再ロードへ同期 |
+| `2026-08-04` | `Codex` | Track C3のcandidate/live validation、phase-aware registry、normal/rollback/recovery-only共通runner、task/cargo・construction・WorldMap/Soul Spa正常化を実装。Help・恒久docs・workspace gate・実X11/Vulkan受入を完了してarchiveし、次をC1へ更新 |

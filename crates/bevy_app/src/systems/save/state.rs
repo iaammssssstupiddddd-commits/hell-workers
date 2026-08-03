@@ -4,6 +4,8 @@
 //! `SaveRequested` / `LoadRequested` にセットされ、`Last`のexclusive apply
 //! dispatcherが処理前に`Idle`へ戻す。F9 は対象が存在する場合は確認後、
 //! 存在しない場合はowner側のread結果を得るため確認なしで`LoadRequested`になる。
+//! `RecoveryLoadRequested` は rollback 失敗後の foreground recovery ownerだけが
+//! 発行できる専用triggerで、通常のF9経路からは使用しない。
 
 use bevy::prelude::*;
 use std::path::{Path, PathBuf};
@@ -45,6 +47,18 @@ pub enum SaveLoadState {
     Idle,
     SaveRequested,
     LoadRequested,
+    RecoveryLoadRequested,
+}
+
+/// Coordinator-owned trust state for the live simulation world.
+///
+/// Only a rollback failure enters `RecoveryFailed`. Normal save/load requests
+/// remain disabled until a fully preflighted recovery-only replacement succeeds.
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveRecoveryMode {
+    #[default]
+    Healthy,
+    RecoveryFailed,
 }
 
 /// A terminal save/load operation. This remains separate from

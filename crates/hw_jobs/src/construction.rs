@@ -108,8 +108,9 @@ impl FloorTileBlueprint {
 }
 
 /// Marker component linking a TransportRequest to a FloorConstructionSite
-#[derive(Component, Clone, Copy, Debug)]
-pub struct TargetFloorConstructionSite(pub Entity);
+#[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
+pub struct TargetFloorConstructionSite(#[entities] pub Entity);
 
 /// Marker component requesting cancellation of an entire floor construction site.
 #[derive(Component, Clone, Copy, Debug, Default)]
@@ -166,8 +167,9 @@ impl WallTileBlueprint {
 }
 
 /// Marker component linking a TransportRequest to a WallConstructionSite
-#[derive(Component, Clone, Copy, Debug)]
-pub struct TargetWallConstructionSite(pub Entity);
+#[derive(Component, Clone, Copy, Debug, Reflect)]
+#[reflect(Component)]
+pub struct TargetWallConstructionSite(#[entities] pub Entity);
 
 /// Marker component requesting cancellation of an entire wall construction site.
 #[derive(Component, Clone, Copy, Debug, Default)]

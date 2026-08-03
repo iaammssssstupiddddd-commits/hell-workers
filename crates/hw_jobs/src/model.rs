@@ -33,6 +33,20 @@ pub enum BuildingCategory {
     Temporary,
 }
 
+/// How a completed building participates in room detection.
+///
+/// This is intentionally independent from pathfinding occupancy. Interior
+/// fixtures may block movement while the completed floor below them remains a
+/// valid room tile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoomDetectionRole {
+    Floor,
+    SolidBoundary,
+    DoorBoundary,
+    InteriorFixture,
+    FloorInvalidator,
+}
+
 impl BuildingCategory {
     pub fn label(&self) -> &'static str {
         match self {
@@ -45,6 +59,44 @@ impl BuildingCategory {
 }
 
 impl BuildingType {
+    pub const ALL: [Self; 12] = [
+        Self::Wall,
+        Self::Door,
+        Self::Floor,
+        Self::Tank,
+        Self::MudMixer,
+        Self::RestArea,
+        Self::Bridge,
+        Self::SandPile,
+        Self::BonePile,
+        Self::WheelbarrowParking,
+        Self::SoulSpa,
+        Self::OutdoorLamp,
+    ];
+
+    /// Classifies this building for room detection.
+    ///
+    /// Provisional walls invalidate an underlying floor but cannot close a
+    /// room. Plant and temporary buildings are interior fixtures: they do not
+    /// remove a completed floor from the room interior.
+    pub const fn room_detection_role(self, is_provisional: bool) -> RoomDetectionRole {
+        match self {
+            Self::Floor => RoomDetectionRole::Floor,
+            Self::Wall if is_provisional => RoomDetectionRole::FloorInvalidator,
+            Self::Wall => RoomDetectionRole::SolidBoundary,
+            Self::Door => RoomDetectionRole::DoorBoundary,
+            Self::Tank
+            | Self::MudMixer
+            | Self::RestArea
+            | Self::SandPile
+            | Self::BonePile
+            | Self::WheelbarrowParking
+            | Self::SoulSpa
+            | Self::OutdoorLamp => RoomDetectionRole::InteriorFixture,
+            Self::Bridge => RoomDetectionRole::FloorInvalidator,
+        }
+    }
+
     /// Whether the completed building occupies an impassable pathfinding tile.
     ///
     /// Blueprint reservations use their own policy: every non-Bridge blueprint
