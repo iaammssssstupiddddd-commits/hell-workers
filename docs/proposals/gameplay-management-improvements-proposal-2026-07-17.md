@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-17` |
 | 最終更新日 | `2026-08-03` |
 | 作成者 | `Codex` |
-| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能検証完了）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`（B2実装・自動検証完了）、`docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`（B2実機・性能検証完了）、`docs/plans/soul-energy-control-plan-2026-07-20.md`（B3） |
+| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能検証完了）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`（B2実装・自動検証完了）、`docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`（B2実機・性能検証完了）、`docs/plans/archive/soul-energy-control-plan-2026-07-20.md`（B3実装・実機受入完了） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 背景と問題
@@ -185,6 +185,11 @@ notification / Help、world-replace resetを実装した。自動回帰、恒久
 controlled policy / dialog監査、A3 dashboard artifact参照まで完了し、実装計画と検証follow-upをarchiveした。
 完了記録は`docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`を参照する。
 
+B3は`2026-08-03`にSoul Spa稼働枠、same-cycle assignment上限、priority strict-prefix配電、
+Yard/Grid再構築、save/settings互換、共通inspectionとtyped outcomeを実装した。自動回帰、Help、恒久docs、
+workspace gateに加え、Soul Spa editor/no-kick、個別Lamp描画、priority/Legacy往復、F5/F9 round-tripの
+ユーザー実機受入を完了し、実装計画をarchiveした。
+
 ##### B1. Stockpile ポリシー
 
 - 現在の在庫内容を表す `Stockpile.resource_type` と、受入方針を分離する。
@@ -217,6 +222,10 @@ controlled policy / dialog監査、A3 dashboard artifact参照まで完了し、
 - 方針不一致で実行中タスクを即時破棄せず、既存の安全な中断点または次回判断時に反映する。
 
 ##### B3. Soul Energy 制御
+
+実装状態: `2026-08-03` にM1〜M5、自動回帰、Help、恒久docs、workspace gate、V1〜V4の
+ユーザー実機受入を完了した。完了記録は
+`docs/plans/archive/soul-energy-control-plan-2026-07-20.md`を参照する。
 
 - 第 1 段階では、既存 `SoulSpaSite.active_slots` を UI から設定できるようにする。
   slot 変更は typed outcome を返し、clamp・stale target・phase不一致を A2 の通知経路で説明する。
@@ -509,7 +518,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 現在地
 
-- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（機能・性能完了、archive済み）/ B1 100%（完了・archive済み）/ B2 100%（実装・実機・性能完了、archive済み）/ B3 M1〜M4とM5自動検証・docs完了（実window受入待ち）/ C〜D 未採否`
+- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（機能・性能完了、archive済み）/ B1 100%（完了・archive済み）/ B2 100%（実装・実機・性能完了、archive済み）/ B3 100%（実装・自動検証・実機受入完了、archive済み）/ C〜D 未採否`
 - 直近で完了したこと: A3 の latest-only task diagnostics、filter/sort dashboard、安全な priority/cancel、
   owner cancellation、save/reset回帰、恒久ドキュメント同期。Track B はコード・save・UI の現状を再監査し、
   B1 Stockpile の M1〜M5（永続 policy、移行、tier 別需要、manual / wheelbarrow 判定、共有 score offset、
@@ -517,18 +526,17 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
   固定tick横断回帰、steady-state性能比較、恒久docs）を完了し計画をarchiveした。
   B2 Familiarはproduction実装・自動回帰・Help・恒久docs・実機受入・controlled性能監査を完了した。
   B3 Soul Energyはactive slotのsame-cycle/no-kick、priority strict-prefix配電、Yard/Grid再構築、save/settings互換、
-  typed inspection/outcomeを実装し、M5の横断検証を進行中である。
+  typed inspection/outcome、横断自動検証、V1〜V4実機受入を完了し、計画をarchiveした。
   B1の実機確認ではpolicy round-trip、range/capture、Toast、Draining、in-flight、特殊設備除外を確認した。
   F9直後の旧情報パネル残留はInfoPanel rootの同期非表示と実Node回帰を追加して修正し、実機再受入も完了した。
   受入資材UIは全9資材の静的チェックリストと
   複数許可集合へ拡張し、実機B1-R14〜R15も合格済みである。
-- 現在のブランチ/前提: `agent/workstation-blender-migration`。B3実装計画は専用actual-window受入待ちで、archiveしていない。
+- 現在のブランチ/前提: `agent/workstation-blender-migration`。Track B1〜B3は完了・archive済みである。
 
 ### 次のAIが最初にやること
 
 1. A2 の重点実機項目を確認し、問題なければ計画をarchiveする。
-2. B3 は専用actual-window受入を完了し、結果を実装計画へ記録する。
-3. Track C〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
+2. Track C〜D はユーザーと採否を確定してから、サブトラック単位の別計画を作る。
 
 ### ブロッカー/注意点
 
@@ -559,7 +567,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - `docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`
 - `docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`
 - `docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`
-- `docs/plans/soul-energy-control-plan-2026-07-20.md`
+- `docs/plans/archive/soul-energy-control-plan-2026-07-20.md`
 - `crates/bevy_app/src/plugins/input.rs`
 - `crates/hw_ui/src/selection/placement.rs`
 - `crates/hw_ui/src/panels/task_list/types.rs`
@@ -605,3 +613,4 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | `2026-08-02` | `User / Codex` | B2の実機V01/V02/V04〜V09、controlled policy / dialog監査、A3のfixed / Intel Vulkan X11 Capture / native Memory検証を完了し、A3性能・B2検証follow-upをarchive |
 | `2026-08-03` | `Codex` | B3 M1〜M4のSoul Spa枠、priority配電、topology/load再構築、設定互換、inspection/outcomeを実装し、M5検証へ移行 |
 | `2026-08-03` | `Codex` | B3のHelp・恒久docs・workspace full gateを完了し、残件をB3専用actual-window受入とarchiveへ限定 |
+| `2026-08-03` | `User / Codex` | B3 V1〜V4の実機受入を全件合格とし、M5を完了してSoul Energy制御計画をarchive |

@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `soul-energy-control-plan-2026-07-20` |
-| ステータス | `In Progress` |
+| ステータス | `Archived` |
 | 作成日 | `2026-07-20` |
 | 最終更新日 | `2026-08-03` |
 | 作成者 | `Codex` |
@@ -389,7 +389,7 @@ Soul Update / state-sanity cleanup
   - `docs/architecture.md`
   - `docs/plans/hvac-plumbing-plan-2026-07-13.md`
 - 完了条件:
-  - [ ] Track B3 の受入シナリオと workspace gate が成功する。
+  - [x] Track B3 の受入シナリオと workspace gate が成功する。
   - [x] HVAC が energy internal を複製せず共通 consumer contract を利用できる。
   - [x] Battery の着手条件が恒久 docs に明記され、本計画を archive できる。
 - 検証:
@@ -437,16 +437,17 @@ Soul Update / state-sanity cleanup
   - `python3 scripts/dev.py docs --write`
   - `python3 scripts/dev.py verify`
   - `git diff --check`
-- 手動確認シナリオ:
-  - Soul Spa を 4/4 稼働中に 2 枠へ下げ、4体が継続し、終了後は2体までしか再割当されないことを確認する。
-  - 供給不足の Lamp 群で High、Normal、Low の順に点灯し、同順位は同じ座標順になることを確認する。
-  - generation を境界付近で上下させ、shed は即時、restore は margin 後であることを確認する。
-  - Yard / grid を失った consumer が Disconnected と表示され、effect を出さないことを確認する。
-  - Power priority setting を無効化し、需要超過時に全consumerが停止する現行all-or-none挙動へ戻ることを確認する。
-- `2026-08-03` 状態:
-  - 上記の決定的なallocation、slot、relationship、save/settings境界はfocused testとworkspace testへ移管済み。
-  - 実windowに残すのは、Soul Spa/consumer editorの可読性とpointer hit-test、個別Lampの実描画、F5/F9のplayer-visible round-trip。
-  - 標準native acceptance skillのTask Dashboard recipeはB3のpixel/操作証拠には流用しない。B3専用actual-window scenarioでのみ合格にする。
+- 実機確認はplayer-facingな表示、pointer操作、no-kick、個別Lamp描画、mode切替、保存往復だけに限定した。
+  stable tie-break、hysteresis境界、stale/invalid target、Yard/Grid消失、steady-state counterは
+  決定的な自動テストへ移管し、通常プレイから成立しない操作を手動受入条件にしていない。
+- `2026-08-03` 実機受入結果（User確認）:
+  - [x] V1: 建設中/稼働中Soul Spaの表示切替、editorの可読性、slot buttonのpointer操作。
+  - [x] V2: 4/4から2枠へ下げた時の`Draining`表示、no-kick、終了後2体までの再割当と出力追従。
+  - [x] V3: High/Normal/Lowの優先配電、個別Lamp描画、inspection値、`Priority prefix`と
+    `Legacy all-or-none`の設定往復。
+  - [x] V4: F5/F9後のslot/priority復元、旧selectionの解除、再選択後の新Entity操作、runtime state再構築。
+  - 全項目に問題がないことをユーザーが確認した。Task Dashboard性能recipeはB3の機能受入証拠に流用していない。
+    この記録はplayer-facing機能の手動受入であり、renderer性能baselineやnative Memory計測を表すものではない。
 - パフォーマンス確認:
   - profiling counter で dirty 1 回につき output / allocation 1 回、energy steady state 0 回を確認する。
     lamp candidate counter は `SlowSimulationClock` step に応じて増える既存契約を維持する。
@@ -466,15 +467,14 @@ Soul Update / state-sanity cleanup
 
 ### 現在地
 
-- 進捗: `計画 100% / M1〜M4実装・自動検証完了 / M5恒久docs・workspace gate完了 / B3実window受入待ち`
-- 完了済みマイルストーン: `M1`、`M2`、`M3`、`M4`
-- 未着手/進行中: `M5`はB3専用actual-window受入と最終archiveだけ継続
+- 進捗: `M1〜M5、恒久docs、workspace gate、B3実機受入を完了`
+- 完了済みマイルストーン: `M1`、`M2`、`M3`、`M4`、`M5`
+- 未着手/進行中: なし
 
 ### 次のAIが最初にやること
 
-1. actual windowでSoul Spa/consumer editorの可読性とpointer hit-test、個別Lamp描画、F5/F9 round-tripだけを確認する。
-2. native acceptance skillのno-prompt launcherを使い、adapter/backend/windowとartifactを記録する。Task Dashboard recipeをB3証拠にしない。
-3. 合格後にM5とDefinition of Doneを閉じ、本計画をarchiveしてproposalのB3を100%へ更新する。
+1. B3の残作業はない。恒久仕様は`docs/soul_energy.md`、UI契約は`docs/info_panel_ui.md`を正本とする。
+2. BatteryはB3だけを根拠に着手せず、HVAC consumerの運用確認後に別計画で設計する。
 
 ### ブロッカー/注意点
 
@@ -517,11 +517,12 @@ Soul Update / state-sanity cleanup
 - 最終 `cargo test --workspace --locked`: `2026-08-03` 成功
 - Help impact: `Update required`。provider / exhaustive coverage / exact approval snapshotを更新し、Help testsとimpact check成功
 - docs: `python3 scripts/dev.py docs --write` / `docs --check` 成功
-- 未解決エラー: なし。未完了はB3専用actual-window受入のみ
+- 実機受入: `2026-08-03` にUserがV1〜V4をすべて確認し、問題なしと判定
+- 未解決エラー: なし
 
 ### Definition of Done
 
-- [ ] M1〜M5 が完了
+- [x] M1〜M5 が完了
 - [x] active slots の同一 cycle 上限と no-kick を自動テスト済み
 - [x] `ChildOf` なし output rebuild と worker 0 stale-output reset が自動テスト済み
 - [x] priority prefix / stable order / hysteresis / cold start が自動テスト済み
@@ -532,7 +533,7 @@ Soul Update / state-sanity cleanup
 - [x] 共通 inspection で発電・需要・接続・遮断理由を説明可能
 - [x] Soul Spa slot outcome がclamp / stale / phase failureを通知し、失敗時に状態を変更しない
 - [x] `python3 scripts/dev.py verify` が成功
-- [ ] 恒久 docs 更新後に本計画を archive
+- [x] 恒久 docs 更新後に本計画を archive
 
 ## 10. 更新履歴
 
@@ -542,3 +543,4 @@ Soul Update / state-sanity cleanup
 | `2026-07-21` | `Codex` | Soul Spa outcome adapter、Power priorityのLegacy切替設定、runtime-derived state strippingのv1例外条件をレビューから反映 |
 | `2026-08-03` | `Codex` | B3実装を開始し、M1を進行中へ更新 |
 | `2026-08-03` | `Codex` | M1〜M4のproduction実装、自動回帰、Help、恒久docs、workspace full gateを完了。M5はB3専用actual-window受入とarchiveだけを残す |
+| `2026-08-03` | `User / Codex` | V1〜V4の実機受入を全件合格とし、M5とDefinition of Doneを完了して計画をarchive |
