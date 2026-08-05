@@ -10,7 +10,7 @@ use hw_visual::visual3d::Building3dVisual;
 
 /// SoulSpaSite + 4× SoulSpaTile をスポーンし、WorldMap に footprint を登録する。
 /// 2D Sprite + 3D メッシュの両方を付与して即座に可視にする。
-pub fn spawn_soul_spa(
+pub(crate) fn spawn_soul_spa(
     commands: &mut Commands,
     world_map: &mut WorldMapWrite,
     tiles: &[(i32, i32)],
@@ -18,7 +18,7 @@ pub fn spawn_soul_spa(
     power_grid_entity: Option<Entity>,
     game_assets: &GameAssets,
     handles_3d: &Building3dHandles,
-) {
+) -> (Entity, Vec<Entity>) {
     let site_entity = commands
         .spawn((
             SoulSpaSite::default(),
@@ -51,18 +51,23 @@ pub fn spawn_soul_spa(
             .insert(GeneratesFor(grid_entity));
     }
 
+    let mut tile_entities = Vec::with_capacity(tiles.len());
     for &(gx, gy) in tiles {
         let tile_pos = WorldMap::grid_to_world(gx, gy);
-        commands.spawn((
-            SoulSpaTile {
-                parent_site: site_entity,
-                grid_pos: (gx, gy),
-            },
-            Transform::from_translation(tile_pos.extend(Z_BUILDING_STRUCT)),
-            Visibility::default(),
-            Name::new("SoulSpaTile"),
-            ChildOf(site_entity),
-        ));
+        tile_entities.push(
+            commands
+                .spawn((
+                    SoulSpaTile {
+                        parent_site: site_entity,
+                        grid_pos: (gx, gy),
+                    },
+                    Transform::from_translation(tile_pos.extend(Z_BUILDING_STRUCT)),
+                    Visibility::default(),
+                    Name::new("SoulSpaTile"),
+                    ChildOf(site_entity),
+                ))
+                .id(),
+        );
     }
 
     // 3D ビジュアル（独立エンティティ — building_completion/spawn.rs と同パターン）
@@ -81,4 +86,6 @@ pub fn spawn_soul_spa(
     for &(gx, gy) in tiles {
         world_map.set_building((gx, gy), site_entity);
     }
+
+    (site_entity, tile_entities)
 }

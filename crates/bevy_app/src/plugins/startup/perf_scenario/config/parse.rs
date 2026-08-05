@@ -40,6 +40,40 @@ pub(super) fn parse_u32_value_or_default(
     }
 }
 
+pub(super) fn parse_optional_u32(
+    value: Option<String>,
+    flag: &str,
+) -> Result<Option<u32>, PerfScenarioConfigError> {
+    value
+        .map(|value| {
+            value.parse::<u32>().map_err(|_| {
+                PerfScenarioConfigError(format!(
+                    "{flag} must be an unsigned integer; got '{value}'"
+                ))
+            })
+        })
+        .transpose()
+}
+
+pub(super) fn parse_optional_positive_f32(
+    value: Option<String>,
+    flag: &str,
+) -> Result<Option<f32>, PerfScenarioConfigError> {
+    value
+        .map(|value| {
+            let parsed = value.parse::<f32>().map_err(|_| {
+                PerfScenarioConfigError(format!("{flag} must be a finite number; got '{value}'"))
+            })?;
+            if !parsed.is_finite() || parsed <= 0.0 {
+                return Err(PerfScenarioConfigError(format!(
+                    "{flag} must be finite and greater than 0; got '{value}'"
+                )));
+            }
+            Ok(parsed)
+        })
+        .transpose()
+}
+
 pub(super) fn parse_u64_value_or_random(
     value: Option<String>,
     flag: &str,

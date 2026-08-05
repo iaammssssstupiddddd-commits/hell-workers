@@ -36,6 +36,24 @@ pub struct RoomTileLookup {
     pub tile_to_room: HashMap<(i32, i32), Entity>,
 }
 
+/// Reverse lookup from a wall or door grid position to every adjacent room.
+///
+/// A shared boundary may belong to two rooms, so values are sorted,
+/// deduplicated entity lists rather than a single entity.
+#[derive(Resource, Default, Debug)]
+pub struct RoomBoundaryLookup {
+    pub boundary_to_rooms: HashMap<(i32, i32), Vec<Entity>>,
+}
+
+impl RoomBoundaryLookup {
+    pub fn rooms_at(&self, grid: (i32, i32)) -> &[Entity] {
+        self.boundary_to_rooms
+            .get(&grid)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    }
+}
+
 /// Runtime state for room detection scheduling and dirty-tile tracking.
 #[derive(Resource)]
 pub struct RoomDetectionState {

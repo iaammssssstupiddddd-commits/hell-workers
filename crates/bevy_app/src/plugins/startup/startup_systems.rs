@@ -271,7 +271,13 @@ pub(super) fn spawn_familiar_wrapper(
 
 #[cfg(test)]
 mod tests {
+    use super::super::rtt_composite::{self, RttCompositeMaterial, RttCompositeSprite};
     use super::*;
+    use bevy::asset::{AssetApp, AssetPlugin};
+    use bevy::camera::RenderTarget;
+    use bevy::render::render_resource::TextureFormat;
+    use bevy::sprite_render::MeshMaterial2d;
+    use bevy::window::WindowResolution;
 
     #[test]
     fn gameplay_pan_camera_disables_rotation_that_rtt_cannot_follow() {
@@ -279,5 +285,189 @@ mod tests {
 
         assert_eq!(controller.key_rotate_ccw, None);
         assert_eq!(controller.key_rotate_cw, None);
+    }
+
+    #[test]
+    fn current_rtt_startup_inventory_is_explicit() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Image>()
+            .init_asset::<Mesh>()
+            .init_asset::<Font>()
+            .init_asset::<Gltf>()
+            .init_asset::<WorldAsset>()
+            .init_asset::<RttCompositeMaterial>()
+            .insert_resource(QualitySettings::default())
+            .insert_resource(crate::RenderPerfToggles::gpu_baseline())
+            .insert_resource(PerfScenarioConfig::default())
+            .add_systems(
+                Update,
+                (setup, rtt_composite::spawn_rtt_composite_sprite).chain(),
+            );
+        app.world_mut().spawn((
+            Window {
+                resolution: WindowResolution::new(1920, 1080).with_scale_factor_override(1.0),
+                ..default()
+            },
+            PrimaryWindow,
+        ));
+
+        app.update();
+
+        let world = app.world_mut();
+        let camera_2d_count = world
+            .query_filtered::<Entity, With<Camera2d>>()
+            .iter(world)
+            .count();
+        let camera_3d_count = world
+            .query_filtered::<Entity, With<Camera3d>>()
+            .iter(world)
+            .count();
+        let main_camera_count = world
+            .query_filtered::<Entity, With<MainCamera>>()
+            .iter(world)
+            .count();
+        let foreground_camera_count = world
+            .query_filtered::<Entity, With<WorldForeground2dCamera>>()
+            .iter(world)
+            .count();
+        let main_rtt_count = world
+            .query_filtered::<Entity, With<Camera3dRtt>>()
+            .iter(world)
+            .count();
+        let mask_rtt_count = world
+            .query_filtered::<Entity, With<Camera3dSoulMaskRtt>>()
+            .iter(world)
+            .count();
+        let directional_count = world
+            .query_filtered::<Entity, With<DirectionalLight>>()
+            .iter(world)
+            .count();
+        let composite_count = world
+            .query_filtered::<Entity, With<RttCompositeSprite>>()
+            .iter(world)
+            .count();
+
+        assert_eq!(camera_2d_count, 3);
+        assert_eq!(camera_3d_count, 2);
+        assert_eq!(main_camera_count, 1);
+        assert_eq!(foreground_camera_count, 1);
+        assert_eq!(main_rtt_count, 1);
+        assert_eq!(mask_rtt_count, 1);
+        assert_eq!(directional_count, 2);
+        assert_eq!(composite_count, 1);
+
+        let mut main_2d_query =
+            world.query_filtered::<(&Camera, &RenderLayers), (With<Camera2d>, With<MainCamera>)>();
+        let (main_2d, main_2d_layers) = main_2d_query.single(world).unwrap();
+        assert_eq!(main_2d.order, 0);
+        assert!(main_2d.is_active);
+        assert_eq!(*main_2d_layers, RenderLayers::layer(LAYER_2D));
+
+        let mut overlay_query = world.query_filtered::<(&Camera, &RenderLayers), (
+            With<Camera2d>,
+            Without<MainCamera>,
+            Without<WorldForeground2dCamera>,
+        )>();
+        let (overlay, overlay_layers) = overlay_query.single(world).unwrap();
+        assert_eq!(overlay.order, 1);
+        assert!(overlay.is_active);
+        assert_eq!(*overlay_layers, RenderLayers::layer(LAYER_OVERLAY));
+
+        let mut foreground_query = world.query_filtered::<
+            (&Camera, &RenderLayers),
+            (With<Camera2d>, With<WorldForeground2dCamera>),
+        >();
+        let (foreground, foreground_layers) = foreground_query.single(world).unwrap();
+        assert_eq!(foreground.order, 2);
+        assert!(foreground.is_active);
+        assert!(matches!(foreground.clear_color, ClearColorConfig::None));
+        assert_eq!(*foreground_layers, RenderLayers::layer(LAYER_2D));
+
+        let layer_2d_pass_count = world
+            .query_filtered::<&RenderLayers, With<Camera2d>>()
+            .iter(world)
+            .filter(|layers| **layers == RenderLayers::layer(LAYER_2D))
+            .count();
+        assert_eq!(layer_2d_pass_count, 2);
+
+        let (viewport, scene, soul_mask) = {
+            let runtime = world.resource::<rtt_setup::RttRuntime>();
+            (
+                runtime.viewport,
+                runtime.scene.clone(),
+                runtime.soul_mask.clone(),
+            )
+        };
+        assert_eq!(viewport.width, 1920);
+        assert_eq!(viewport.height, 1080);
+        assert_ne!(scene, soul_mask);
+
+        let mut main_target_query =
+            world.query_filtered::<(&Camera, &RenderLayers, &RenderTarget), With<Camera3dRtt>>();
+        let (main_camera, main_layers, RenderTarget::Image(main_target)) =
+            main_target_query.single(world).unwrap()
+        else {
+            panic!("main RtT camera must target an image");
+        };
+        assert_eq!(main_camera.order, -1);
+        assert!(main_camera.is_active);
+        assert_eq!(*main_layers, RenderLayers::layer(LAYER_3D));
+        assert_eq!(main_target.handle, scene);
+
+        let mut mask_target_query = world
+            .query_filtered::<(&Camera, &RenderLayers, &RenderTarget), With<Camera3dSoulMaskRtt>>();
+        let (mask_camera, mask_layers, RenderTarget::Image(mask_target)) =
+            mask_target_query.single(world).unwrap()
+        else {
+            panic!("mask RtT camera must target an image");
+        };
+        assert_eq!(mask_camera.order, -2);
+        assert!(mask_camera.is_active);
+        assert_eq!(*mask_layers, RenderLayers::layer(LAYER_3D_SOUL_MASK));
+        assert_eq!(mask_target.handle, soul_mask);
+
+        let expected_light_layers =
+            RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]);
+        let mut primary_light_query =
+            world.query_filtered::<(&DirectionalLight, &RenderLayers), With<RttDirectionalLight>>();
+        let (primary_light, primary_light_layers) = primary_light_query.single(world).unwrap();
+        assert!(primary_light.shadow_maps_enabled);
+        assert_eq!(primary_light.illuminance, 12_000.0);
+        assert_eq!(*primary_light_layers, expected_light_layers);
+
+        let mut extra_light_query = world
+            .query_filtered::<(&DirectionalLight, &RenderLayers), With<RttExtraDirectionalLight>>();
+        let (extra_light, extra_light_layers) = extra_light_query.single(world).unwrap();
+        assert!(!extra_light.shadow_maps_enabled);
+        assert_eq!(extra_light.illuminance, 0.0);
+        assert_eq!(*extra_light_layers, expected_light_layers);
+
+        let mut composite_query = world.query_filtered::<(
+            &MeshMaterial2d<RttCompositeMaterial>,
+            &RenderLayers,
+            &Visibility,
+        ), With<RttCompositeSprite>>();
+        let (material_handle, composite_layers, visibility) =
+            composite_query.single(world).unwrap();
+        assert_eq!(*composite_layers, RenderLayers::layer(LAYER_OVERLAY));
+        assert_eq!(*visibility, Visibility::Visible);
+        let material_handle = material_handle.0.clone();
+        let material = world
+            .resource::<Assets<RttCompositeMaterial>>()
+            .get(&material_handle)
+            .unwrap();
+        assert_eq!(material.scene_texture, scene);
+        assert_eq!(material.soul_mask_texture, soul_mask);
+
+        let images = world.resource::<Assets<Image>>();
+        for handle in [&scene, &soul_mask] {
+            let image = images.get(handle).unwrap();
+            assert_eq!(image.texture_descriptor.size.width, 1920);
+            assert_eq!(image.texture_descriptor.size.height, 1080);
+            assert_eq!(image.texture_descriptor.size.depth_or_array_layers, 1);
+            assert_eq!(image.texture_descriptor.format, TextureFormat::Rgba8Unorm);
+            assert_eq!(image.data.as_ref().map(Vec::len), Some(8_294_400));
+        }
     }
 }

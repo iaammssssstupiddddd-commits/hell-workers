@@ -30,31 +30,7 @@ pub fn wall_framed_tile_spawn_system(
             continue;
         }
 
-        let world_pos = WorldMap::grid_to_world(tile.grid_pos.0, tile.grid_pos.1);
-        let wall_entity = commands
-            .spawn((
-                Building {
-                    kind: BuildingType::Wall,
-                    is_provisional: true,
-                },
-                ProvisionalWall::default(),
-                Transform::from_translation(world_pos.extend(Z_MAP + 0.01)),
-                Visibility::default(),
-                Name::new("Building (Wall, Provisional)"),
-            ))
-            .id();
-
-        let visual_entity = commands
-            .spawn((
-                Mesh3d(handles_3d.wall_mesh.clone()),
-                MeshMaterial3d(handles_3d.wall_provisional_material.clone()),
-                Transform::from_xyz(world_pos.x, TILE_SIZE / 2.0, -world_pos.y),
-                handles_3d.render_layers.clone(),
-                Building3dVisual { owner: wall_entity },
-                Name::new("Building3dVisual (Wall, Provisional)"),
-            ))
-            .id();
-        attach_wall_orientation_aid(&mut commands, visual_entity, &handles_3d);
+        let wall_entity = spawn_wall_shell(&mut commands, &handles_3d, tile.grid_pos, true);
 
         tile.spawned_wall = Some(wall_entity);
         world_map.reserve_building_footprint(
@@ -63,4 +39,60 @@ pub fn wall_framed_tile_spawn_system(
             std::iter::once(tile.grid_pos),
         );
     }
+}
+
+/// Spawns the production Wall root and owner-linked 3D shell.
+///
+/// Area construction uses the provisional form and later promotes the same
+/// root. Profiling fixtures use the completed form so their final topology is
+/// identical without creating synthetic Sprite children.
+pub(crate) fn spawn_wall_shell(
+    commands: &mut Commands,
+    handles_3d: &Building3dHandles,
+    grid: (i32, i32),
+    is_provisional: bool,
+) -> Entity {
+    let world_pos = WorldMap::grid_to_world(grid.0, grid.1);
+    let wall_entity = commands
+        .spawn((
+            Building {
+                kind: BuildingType::Wall,
+                is_provisional,
+            },
+            Transform::from_translation(world_pos.extend(Z_MAP + 0.01)),
+            Visibility::default(),
+            Name::new(if is_provisional {
+                "Building (Wall, Provisional)"
+            } else {
+                "Building (Wall)"
+            }),
+        ))
+        .id();
+    if is_provisional {
+        commands
+            .entity(wall_entity)
+            .insert(ProvisionalWall::default());
+    }
+
+    let material = if is_provisional {
+        handles_3d.wall_provisional_material.clone()
+    } else {
+        handles_3d.wall_material.clone()
+    };
+    let visual_entity = commands
+        .spawn((
+            Mesh3d(handles_3d.wall_mesh.clone()),
+            MeshMaterial3d(material),
+            Transform::from_xyz(world_pos.x, TILE_SIZE / 2.0, -world_pos.y),
+            handles_3d.render_layers.clone(),
+            Building3dVisual { owner: wall_entity },
+            Name::new(if is_provisional {
+                "Building3dVisual (Wall, Provisional)"
+            } else {
+                "Building3dVisual (Wall)"
+            }),
+        ))
+        .id();
+    attach_wall_orientation_aid(commands, visual_entity, handles_3d);
+    wall_entity
 }

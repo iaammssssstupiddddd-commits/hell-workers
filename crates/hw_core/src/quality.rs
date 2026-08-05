@@ -10,6 +10,14 @@ pub enum RttQualityPreset {
 }
 
 impl RttQualityPreset {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::High => "high",
+            Self::Medium => "medium",
+            Self::Low => "low",
+        }
+    }
+
     pub fn rtt_scale(self) -> f32 {
         match self {
             Self::High => 1.0,

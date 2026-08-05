@@ -54,7 +54,7 @@ pub(super) fn handle_companion_flow(
                 &parent_occupied_grids,
                 grid,
             ) {
-                Ok(()) => {
+                Ok(_) => {
                     companion_state.0 = None;
                     Some(Ok(()))
                 }

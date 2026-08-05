@@ -3,6 +3,8 @@
 //! Phase 5: 責務を分割し、システム配線 + 呼び出しに集中。
 
 mod asset_catalog;
+#[cfg(feature = "profiling")]
+mod perf_render_environment;
 mod perf_scenario;
 mod rtt_composite;
 mod rtt_setup;
@@ -16,7 +18,7 @@ pub use perf_scenario::{
     PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
 };
 #[cfg(feature = "profiling")]
-pub(crate) use perf_scenario::{is_fixed_step_audit, is_not_fixed_step_audit};
+pub(crate) use perf_scenario::{is_fixed_step_behavior, is_not_fixed_step_audit};
 pub use rtt_composite::RttCompositeSprite;
 pub(crate) use rtt_composite::composite_logical_size;
 pub use rtt_setup::{
@@ -119,8 +121,12 @@ impl Plugin for StartupPlugin {
 
         #[cfg(feature = "profiling")]
         {
+            perf_render_environment::install(app);
+            perf_scenario::install_renderdoc_capture(app);
             app.init_resource::<PerfScenarioApplied>()
                 .init_resource::<perf_scenario::PerfScenarioDriverState>()
+                .init_resource::<perf_scenario::IndoorLightFixtureState>()
+                .init_resource::<perf_scenario::PerfBehaviorCapture>()
                 .add_systems(
                     PostStartup,
                     setup_perf_scenario_if_enabled
@@ -134,8 +140,10 @@ impl Plugin for StartupPlugin {
                         PerfScenarioSet::FixtureApply,
                         PerfScenarioSet::Setup,
                         PerfScenarioSet::Apply,
+                        PerfScenarioSet::IndoorSettle,
                         PerfScenarioSet::UiSetup,
-                        PerfScenarioSet::InitialCheckpoint,
+                        PerfScenarioSet::InitialCheckpoint
+                            .after(rtt_setup::sync_rtt_texture_size_to_window_and_quality),
                         PerfScenarioSet::Driver,
                     )
                         .chain()
@@ -148,7 +156,7 @@ impl Plugin for StartupPlugin {
                         crate::entities::familiar::familiar_spawning_system,
                     )
                         .in_set(PerfScenarioSet::FixtureSpawn)
-                        .run_if(is_fixed_step_audit),
+                        .run_if(perf_scenario::is_fixed_step_scenario),
                 )
                 .add_systems(
                     Update,
@@ -164,6 +172,33 @@ impl Plugin for StartupPlugin {
                 )
                 .add_systems(
                     Update,
+                    (
+                        crate::systems::jobs::building_completion_system,
+                        bevy::ecs::schedule::ApplyDeferred,
+                        perf_scenario::stabilize_indoor_light_actors_system,
+                        perf_scenario::seed_indoor_light_static_door_states_system,
+                        perf_scenario::prepare_indoor_light_soul_spa_system,
+                        crate::systems::jobs::soul_spa_construction::soul_spa_tile_activate_system,
+                        bevy::ecs::schedule::ApplyDeferred,
+                        perf_scenario::assign_indoor_light_generator_system,
+                        bevy::ecs::schedule::ApplyDeferred,
+                        crate::systems::energy::grid_recalc::sync_power_allocation_mode_from_settings_system,
+                        crate::systems::energy::grid_recalc::detect_energy_update_dirty_system,
+                        crate::systems::energy::grid_lifecycle::reconcile_power_grid_topology_system,
+                        bevy::ecs::schedule::ApplyDeferred,
+                        crate::systems::energy::power_output::soul_spa_power_output_system,
+                        crate::systems::energy::grid_recalc::grid_recalc_system,
+                        bevy::ecs::schedule::ApplyDeferred,
+                        hw_world::detect_rooms_immediately_system,
+                        bevy::ecs::schedule::ApplyDeferred,
+                        perf_scenario::validate_indoor_light_fixture_system,
+                    )
+                        .chain()
+                        .in_set(PerfScenarioSet::IndoorSettle)
+                        .run_if(perf_scenario::should_settle_indoor_light_fixture),
+                )
+                .add_systems(
+                    Update,
                     setup_perf_ui_mode_if_enabled.in_set(PerfScenarioSet::UiSetup),
                 )
                 .init_resource::<perf_scenario::PerfCapture>()
@@ -174,6 +209,13 @@ impl Plugin for StartupPlugin {
                 .add_systems(
                     Update,
                     perf_scenario::start_perf_capture_system
+                        .in_set(PerfScenarioSet::InitialCheckpoint)
+                        .run_if(perf_scenario::is_not_fixed_step_behavior)
+                        .run_if(perf_scenario::is_not_renderdoc_capture),
+                )
+                .add_systems(
+                    Update,
+                    perf_scenario::arm_renderdoc_checkpoint_system
                         .in_set(PerfScenarioSet::InitialCheckpoint),
                 )
                 .add_systems(
@@ -182,7 +224,32 @@ impl Plugin for StartupPlugin {
                 )
                 .add_systems(
                     Update,
-                    perf_scenario::drive_perf_capture_system.in_set(PerfScenarioSet::Capture),
+                    perf_scenario::drive_perf_behavior_system
+                        .in_set(PerfScenarioSet::Driver)
+                        .run_if(is_fixed_step_behavior),
+                )
+                .add_systems(
+                    Update,
+                    perf_scenario::drive_perf_capture_system
+                        .in_set(PerfScenarioSet::Capture)
+                        .run_if(perf_scenario::is_not_fixed_step_behavior)
+                        .run_if(perf_scenario::is_not_renderdoc_capture),
+                )
+                .add_systems(
+                    Update,
+                    perf_scenario::poll_renderdoc_capture_system
+                        .in_set(PerfScenarioSet::Capture),
+                )
+                .add_systems(
+                    Update,
+                    perf_scenario::observe_perf_behavior_system
+                        .in_set(PerfScenarioSet::Capture)
+                        .run_if(is_fixed_step_behavior),
+                )
+                .add_systems(
+                    FixedUpdate,
+                    perf_scenario::count_perf_behavior_fixed_tick_system
+                        .run_if(is_fixed_step_behavior),
                 );
         }
     }

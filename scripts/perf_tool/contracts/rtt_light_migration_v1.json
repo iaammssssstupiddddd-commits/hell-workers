@@ -1,0 +1,1009 @@
+{
+  "schema_version": 1,
+  "contract_id": "rtt-light-v1",
+  "lifecycle": {
+    "status": "frozen",
+    "formal_registration_allowed": true,
+    "freeze_blockers": []
+  },
+  "description": "Frozen baseline and migration contract for the single Scene RtT and CPU indoor radial light field.",
+  "fixture": {
+    "fixture_id": "indoor-light-grid-v1",
+    "layout_rule": "N x N modules; each module has a 6x6 interior and boundary lines every 7 tiles; rooms enumerate y-major then x-major",
+    "origin": [16, 20],
+    "door_rule": "north boundary lower-center at local x=3; doors enumerate with rooms",
+    "lamp_rule": "supplied lamps use the first distinct floor cells in fixture enumeration order",
+    "preflight_rule": "every canonical occupied cell must be in bounds and free of pre-existing building, door, stockpile, or Yard ownership; Floor, Wall, Door, lamp, SoulSpa, equipment, and Tank companion cells must also be terrain-walkable; Bridge is a fixture-seeded completion probe against the exact current 2x5 production completion geometry and does not claim that current player authoring validation accepts the generated river; reject the fixture instead of deleting or replacing world-generation content",
+    "outdoor_lamp_demand": 0.2,
+    "indoor_mask_contract": {
+      "cell_source": "canonical completed floor cells in fixture enumeration order",
+      "checksum_algorithm": "sha256 of canonical JSON object {\"cells\":[[x,y],...]} using the contract canonical encoder"
+    },
+    "current_presentation": {
+      "Floor": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 0, "owner_3d_per_entity": 1},
+      "Wall": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 0, "owner_3d_per_entity": 1},
+      "Door": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 1, "owner_3d_per_entity": 1},
+      "OutdoorLamp": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 1, "owner_3d_per_entity": 1},
+      "Tank": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 1, "owner_3d_per_entity": 1},
+      "MudMixer": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 1, "owner_3d_per_entity": 1},
+      "RestArea": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 1, "owner_3d_per_entity": 1},
+      "Bridge": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 1, "owner_3d_per_entity": 0},
+      "SandPile": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 1, "owner_3d_per_entity": 1},
+      "BonePile": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 1, "owner_3d_per_entity": 1},
+      "WheelbarrowParking": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 1, "owner_3d_per_entity": 1},
+      "SoulSpa": {"root_sprite_per_entity": 0, "child_sprite_per_entity": 1, "owner_3d_per_entity": 1}
+    },
+    "runtime_fixture_support": {
+      "small": "current/static production-topology vertical slice",
+      "medium": "current/static production-topology all-building showcase",
+      "large": "current/static production-topology all-building showcase"
+    },
+    "actor_enumeration": {
+      "rule": "floor cells enumerate room y-major, room x-major, local y-major, local x-major; wrap only after every floor cell",
+      "soul_floor_offset": 0,
+      "familiar_floor_offset": 18
+    },
+    "building_types": [
+      "Wall",
+      "Door",
+      "Floor",
+      "Tank",
+      "MudMixer",
+      "RestArea",
+      "Bridge",
+      "SandPile",
+      "BonePile",
+      "WheelbarrowParking",
+      "SoulSpa",
+      "OutdoorLamp"
+    ],
+    "building_showcase_id": "all-building-showcase-v1",
+    "building_showcase_rule": "medium and large enumerate BuildingType order exactly once; canonical Floor, Wall, Door, SoulSpa, and OutdoorLamp entities are referenced, while the other seven roots are fixture-seeded through their current production completion route; every anchor and occupied cell is semantic fixture data",
+    "showcase_companion_entity_rule": "showcase_companions counts logical placements; Tank BucketStorage creates one ECS entity per occupied grid",
+    "showcase_component_contract": {
+      "Wall": {"required_components": ["Building"], "owned_entities": {}},
+      "Door": {"required_components": ["Building", "Door"], "owned_entities": {}},
+      "Floor": {"required_components": ["Building"], "owned_entities": {}},
+      "Tank": {"required_components": ["Building", "Stockpile:Water:50"], "owned_entities": {"BucketStorage": 2, "BucketEmpty": 5}},
+      "MudMixer": {"required_components": ["Building", "MudMixerStorage", "Stockpile:Water"], "owned_entities": {}},
+      "RestArea": {"required_components": ["Building", "RestArea"], "owned_entities": {}},
+      "Bridge": {"required_components": ["Building", "BridgeMarker"], "owned_entities": {}},
+      "SandPile": {"required_components": ["Building", "SandPile"], "owned_entities": {}},
+      "BonePile": {"required_components": ["Building", "BonePile"], "owned_entities": {}},
+      "WheelbarrowParking": {"required_components": ["Building", "WheelbarrowParking"], "owned_entities": {"Wheelbarrow": 2}},
+      "SoulSpa": {"required_components": ["Building", "SoulSpaSite", "PowerGenerator"], "owned_entities": {"SoulSpaTile": 4}},
+      "OutdoorLamp": {"required_components": ["Building", "PowerConsumer:0.2"], "owned_entities": {}}
+    },
+    "sizes": {
+      "small": {
+        "module_count": 1,
+        "main_yard_grid_bounds": {"min": [16, 20], "max": [23, 27]},
+        "control_yard_grid_bounds": {"min": [80, 80], "max": [80, 80]},
+        "door_states": ["closed"],
+        "supplied_lamp_candidates": 1,
+        "unsupplied_lamp_cell": [80, 80],
+        "souls": 50,
+        "familiars": 4,
+        "operational_soul_spas": 1,
+        "generator_souls": 1,
+        "generation": 1.0,
+        "active_lamp_demand": 0.2,
+        "headroom": 0.8,
+        "runtime_f32_active_lamp_demand": 0.20000000298023224,
+        "runtime_f32_headroom": 0.800000011920929,
+        "indoor_mask_checksum": "5a8aa70044f3b944c838eab0a7043344db71abcbf5f93532f1bb1e5ad11d9960",
+        "soul_spas": [
+          {
+            "anchor": [21, 26],
+            "tiles": [[21, 26], [22, 26], [21, 25], [22, 25]],
+            "worker_ordinals": [28],
+            "worker_tiles": [[21, 25]]
+          }
+        ],
+        "showcase_buildings": [],
+        "expected_counts": {
+          "rooms": 1,
+          "completed_floors": 36,
+          "completed_walls": 27,
+          "doors": 1,
+          "supplied_lamp_candidates": 1,
+          "unsupplied_lamp_candidates": 1,
+          "souls": 50,
+          "familiars": 4,
+          "room_boundary_lookup_cells": 24,
+          "yards": 2,
+          "operational_soul_spas": 1,
+          "generator_souls": 1,
+          "showcase_buildings": 0,
+          "showcase_extra_buildings": 0,
+          "showcase_footprint_cells": 0,
+          "showcase_companions": 0
+        }
+      },
+      "medium": {
+        "module_count": 2,
+        "main_yard_grid_bounds": {"min": [16, 20], "max": [30, 34]},
+        "control_yard_grid_bounds": {"min": [82, 80], "max": [82, 80]},
+        "door_states": ["open", "open", "closed", "locked"],
+        "supplied_lamp_candidates": 10,
+        "unsupplied_lamp_cell": [82, 80],
+        "souls": 200,
+        "familiars": 12,
+        "operational_soul_spas": 1,
+        "generator_souls": 3,
+        "generation": 3.0,
+        "active_lamp_demand": 2.0,
+        "headroom": 1.0,
+        "runtime_f32_active_lamp_demand": 2.000000238418579,
+        "runtime_f32_headroom": 0.9999997615814209,
+        "indoor_mask_checksum": "574f63940b48f33ec4f0179041a72649b235608983a64c6242dcf5664d589a16",
+        "soul_spas": [
+          {
+            "anchor": [27, 25],
+            "tiles": [[27, 25], [28, 25], [27, 24], [28, 24]],
+            "worker_ordinals": [57, 58, 63],
+            "worker_tiles": [[27, 24], [28, 24], [27, 25]]
+          }
+        ],
+        "showcase_buildings": [
+          {"kind": "Wall", "source": "canonical-wall", "source_ordinal": 0, "anchor": [16, 20], "occupied_grids": [[16, 20]], "production_route": "area-wall-completion"},
+          {"kind": "Door", "source": "canonical-door", "source_ordinal": 0, "anchor": [19, 27], "occupied_grids": [[19, 27]], "production_route": "completed-blueprint"},
+          {"kind": "Floor", "source": "canonical-floor", "source_ordinal": 0, "anchor": [17, 21], "occupied_grids": [[17, 21]], "production_route": "area-floor-completion"},
+          {"kind": "Tank", "source": "dedicated-showcase", "anchor": [17, 28], "occupied_grids": [[17, 28], [18, 28], [17, 29], [18, 29]], "production_route": "completed-blueprint", "companion": {"kind": "BucketStorage", "anchor": [17, 30], "occupied_grids": [[17, 30], [18, 30]], "production_route": "tank-companion-placement"}},
+          {"kind": "MudMixer", "source": "dedicated-showcase", "anchor": [20, 28], "occupied_grids": [[20, 28], [21, 28], [20, 29], [21, 29]], "production_route": "completed-blueprint"},
+          {"kind": "RestArea", "source": "dedicated-showcase", "anchor": [17, 31], "occupied_grids": [[17, 31], [18, 31], [17, 32], [18, 32]], "production_route": "completed-blueprint"},
+          {"kind": "Bridge", "source": "dedicated-showcase", "anchor": [90, 65], "occupied_grids": [[90, 65], [91, 65], [90, 66], [91, 66], [90, 67], [91, 67], [90, 68], [91, 68], [90, 69], [91, 69]], "production_route": "fixture-seeded-completed-blueprint"},
+          {"kind": "SandPile", "source": "dedicated-showcase", "anchor": [27, 28], "occupied_grids": [[27, 28]], "production_route": "completed-blueprint"},
+          {"kind": "BonePile", "source": "dedicated-showcase", "anchor": [28, 28], "occupied_grids": [[28, 28]], "production_route": "completed-blueprint"},
+          {"kind": "WheelbarrowParking", "source": "dedicated-showcase", "anchor": [24, 28], "occupied_grids": [[24, 28], [25, 28], [24, 29], [25, 29]], "production_route": "completed-blueprint"},
+          {"kind": "SoulSpa", "source": "canonical-soul-spa", "source_ordinal": 0, "anchor": [27, 25], "occupied_grids": [[27, 25], [28, 25], [27, 24], [28, 24]], "production_route": "soul-spa-placement"},
+          {"kind": "OutdoorLamp", "source": "canonical-supplied-lamp", "source_ordinal": 0, "anchor": [17, 21], "occupied_grids": [[17, 21]], "production_route": "completed-blueprint"}
+        ],
+        "expected_counts": {
+          "rooms": 4,
+          "completed_floors": 144,
+          "completed_walls": 77,
+          "doors": 4,
+          "supplied_lamp_candidates": 10,
+          "unsupplied_lamp_candidates": 1,
+          "souls": 200,
+          "familiars": 12,
+          "room_boundary_lookup_cells": 72,
+          "yards": 2,
+          "operational_soul_spas": 1,
+          "generator_souls": 3,
+          "showcase_buildings": 12,
+          "showcase_extra_buildings": 7,
+          "showcase_footprint_cells": 36,
+          "showcase_companions": 1
+        }
+      },
+      "large": {
+        "module_count": 4,
+        "main_yard_grid_bounds": {"min": [16, 20], "max": [44, 48]},
+        "control_yard_grid_bounds": {"min": [84, 80], "max": [84, 80]},
+        "door_states": [
+          "open", "open", "open", "open",
+          "closed", "closed", "closed", "closed",
+          "closed", "closed", "closed", "closed",
+          "locked", "locked", "locked", "locked"
+        ],
+        "supplied_lamp_candidates": 50,
+        "unsupplied_lamp_cell": [84, 80],
+        "souls": 500,
+        "familiars": 30,
+        "operational_soul_spas": 3,
+        "generator_souls": 11,
+        "generation": 11.0,
+        "active_lamp_demand": 10.0,
+        "headroom": 1.0,
+        "runtime_f32_active_lamp_demand": 9.999995231628418,
+        "runtime_f32_headroom": 1.000004768371582,
+        "indoor_mask_checksum": "11008aa69297a381263083d0dfe2c444e3076a3eb9b73a06d2185a317f4759d0",
+        "soul_spas": [
+          {
+            "anchor": [20, 39],
+            "tiles": [[20, 39], [21, 39], [20, 38], [21, 38]],
+            "worker_ordinals": [309, 310, 315, 316],
+            "worker_tiles": [[20, 38], [21, 38], [20, 39], [21, 39]]
+          },
+          {
+            "anchor": [27, 39],
+            "tiles": [[27, 39], [28, 39], [27, 38], [28, 38]],
+            "worker_ordinals": [345, 346, 351, 352],
+            "worker_tiles": [[27, 38], [28, 38], [27, 39], [28, 39]]
+          },
+          {
+            "anchor": [34, 39],
+            "tiles": [[34, 39], [35, 39], [34, 38], [35, 38]],
+            "worker_ordinals": [381, 382, 387],
+            "worker_tiles": [[34, 38], [35, 38], [34, 39]]
+          }
+        ],
+        "showcase_buildings": [
+          {"kind": "Wall", "source": "canonical-wall", "source_ordinal": 0, "anchor": [16, 20], "occupied_grids": [[16, 20]], "production_route": "area-wall-completion"},
+          {"kind": "Door", "source": "canonical-door", "source_ordinal": 0, "anchor": [19, 27], "occupied_grids": [[19, 27]], "production_route": "completed-blueprint"},
+          {"kind": "Floor", "source": "canonical-floor", "source_ordinal": 0, "anchor": [17, 21], "occupied_grids": [[17, 21]], "production_route": "area-floor-completion"},
+          {"kind": "Tank", "source": "dedicated-showcase", "anchor": [17, 28], "occupied_grids": [[17, 28], [18, 28], [17, 29], [18, 29]], "production_route": "completed-blueprint", "companion": {"kind": "BucketStorage", "anchor": [17, 30], "occupied_grids": [[17, 30], [18, 30]], "production_route": "tank-companion-placement"}},
+          {"kind": "MudMixer", "source": "dedicated-showcase", "anchor": [20, 28], "occupied_grids": [[20, 28], [21, 28], [20, 29], [21, 29]], "production_route": "completed-blueprint"},
+          {"kind": "RestArea", "source": "dedicated-showcase", "anchor": [17, 31], "occupied_grids": [[17, 31], [18, 31], [17, 32], [18, 32]], "production_route": "completed-blueprint"},
+          {"kind": "Bridge", "source": "dedicated-showcase", "anchor": [90, 65], "occupied_grids": [[90, 65], [91, 65], [90, 66], [91, 66], [90, 67], [91, 67], [90, 68], [91, 68], [90, 69], [91, 69]], "production_route": "fixture-seeded-completed-blueprint"},
+          {"kind": "SandPile", "source": "dedicated-showcase", "anchor": [27, 28], "occupied_grids": [[27, 28]], "production_route": "completed-blueprint"},
+          {"kind": "BonePile", "source": "dedicated-showcase", "anchor": [28, 28], "occupied_grids": [[28, 28]], "production_route": "completed-blueprint"},
+          {"kind": "WheelbarrowParking", "source": "dedicated-showcase", "anchor": [24, 28], "occupied_grids": [[24, 28], [25, 28], [24, 29], [25, 29]], "production_route": "completed-blueprint"},
+          {"kind": "SoulSpa", "source": "canonical-soul-spa", "source_ordinal": 0, "anchor": [20, 39], "occupied_grids": [[20, 39], [21, 39], [20, 38], [21, 38]], "production_route": "soul-spa-placement"},
+          {"kind": "OutdoorLamp", "source": "canonical-supplied-lamp", "source_ordinal": 0, "anchor": [17, 21], "occupied_grids": [[17, 21]], "production_route": "completed-blueprint"}
+        ],
+        "expected_counts": {
+          "rooms": 16,
+          "completed_floors": 576,
+          "completed_walls": 249,
+          "doors": 16,
+          "supplied_lamp_candidates": 50,
+          "unsupplied_lamp_candidates": 1,
+          "souls": 500,
+          "familiars": 30,
+          "room_boundary_lookup_cells": 240,
+          "yards": 2,
+          "operational_soul_spas": 3,
+          "generator_souls": 11,
+          "showcase_buildings": 12,
+          "showcase_extra_buildings": 7,
+          "showcase_footprint_cells": 36,
+          "showcase_companions": 1
+        }
+      }
+    }
+  },
+  "formal_matrix": {
+    "seed": 20260803,
+    "backend": "vulkan",
+    "present_mode": "novsync",
+    "fixed_hz": 64,
+    "window": {
+      "logical_width": 1920,
+      "logical_height": 1080,
+      "physical_width": 1920,
+      "physical_height": 1080,
+      "scale_factor": 1.0,
+      "rtt_quality": "high",
+      "scene_target_width": 1920,
+      "scene_target_height": 1080
+    },
+    "repeat": 3,
+    "audit": {"preflight_runs": 0, "warmup_ticks": 1920, "audit_ticks": 128},
+    "behavior": {"preflight_runs": 0},
+    "capture": {"preflight_runs": 1, "warmup_secs": 30.0, "measure_secs": 60.0},
+    "memory": {"preflight_runs": 1, "warmup_secs": 30.0, "measure_secs": 60.0},
+    "field_core": {"warmup_calls": 32, "measure_calls": 256, "steady_updates": 600},
+    "consumer_core": {"warmup_calls": 32, "measure_calls": 256},
+    "renderdoc": {"size": "medium", "render": "gpu", "settle_frames": 4, "capture_frame": 4, "repeat": 1}
+  },
+  "formal_legs": [
+    {
+      "leg_id": "audit",
+      "lane": "static",
+      "row_scope": "leg-session-aggregate",
+      "first_required_stage": "current",
+      "sizes": ["small", "medium", "large"],
+      "renders": ["cpu"],
+      "environment": "headless",
+      "repeat": 3
+    },
+    {
+      "leg_id": "behavior",
+      "lane": "behavior",
+      "row_scope": "leg-session-aggregate",
+      "first_required_stage": "current",
+      "sizes": ["small"],
+      "renders": ["cpu"],
+      "environment": "headless",
+      "repeat": 3,
+      "case_source": "stage-required-behavior-cases"
+    },
+    {
+      "leg_id": "capture",
+      "lane": "static",
+      "row_scope": "leg-session-aggregate",
+      "first_required_stage": "current",
+      "sizes": ["small", "medium", "large"],
+      "renders": ["cpu", "gpu"],
+      "environment": "windowed",
+      "repeat": 3
+    },
+    {
+      "leg_id": "renderdoc",
+      "lane": "static",
+      "row_scope": "leg-session-aggregate",
+      "first_required_stage": "current",
+      "sizes": ["medium"],
+      "renders": ["gpu"],
+      "environment": "windowed",
+      "repeat": 1
+    },
+    {
+      "leg_id": "memory",
+      "lane": "static",
+      "row_scope": "leg-session-aggregate",
+      "first_required_stage": "current",
+      "sizes": ["small", "medium", "large"],
+      "renders": ["cpu", "gpu"],
+      "environment": "windowed",
+      "repeat": 3
+    },
+    {
+      "leg_id": "field-core",
+      "lane": "field-core",
+      "row_scope": "leg-session-aggregate",
+      "first_required_stage": "p03",
+      "sizes": ["large"],
+      "renders": ["cpu"],
+      "environment": "headless",
+      "repeat": 3
+    },
+    {
+      "leg_id": "consumer-core",
+      "lane": "consumer-core",
+      "row_scope": "leg-session-aggregate",
+      "first_required_stage": "p07",
+      "sizes": ["large"],
+      "renders": ["cpu"],
+      "environment": "headless",
+      "repeat": 3
+    }
+  ],
+  "allow_log_patterns": {
+    "headless_audit": ["driver that only supports software rendering"],
+    "windowed": []
+  },
+  "behavior_cases": [
+    {"case_id": "door-state-v1", "first_required_stage": "current", "expected_wake_current": null},
+    {"case_id": "load-normal-v1", "first_required_stage": "current", "expected_wake_current": null, "expected_wake_p05": 1},
+    {"case_id": "load-preflight-reject-v1", "first_required_stage": "p05", "expected_wake_p05": 0},
+    {"case_id": "load-rollback-v1", "first_required_stage": "p05", "expected_wake_p05": 1},
+    {"case_id": "load-recovery-only-v1", "first_required_stage": "p05", "expected_wake_p05": 1},
+    {"case_id": "load-recovery-failed-v1", "first_required_stage": "p05", "expected_wake_p05": 0},
+    {"case_id": "load-duplicate-reset-v1", "first_required_stage": "p05", "expected_wake_p05": 1}
+  ],
+  "behavior_fixture": {
+    "size": "small",
+    "render": "cpu",
+    "clock": "fixed-step-behavior",
+    "repeat": 3,
+    "save_storage": "job-owned-private-path",
+    "timeline": {
+      "schema_version": 1,
+      "file": "data/timeline.json",
+      "row_scope": "script-step",
+      "primary_key": ["case_id", "step_index"],
+      "columns": [
+        "case_id", "step_index", "script_update", "simulation_tick", "pause_state",
+        "world_epoch", "intent", "attempted", "applied", "semantic_state",
+        "active_presentation_state", "registry_phase", "registry_step_id", "wake_count",
+        "field_availability", "field_input_revision", "field_output_revision", "field_read_count",
+        "old_epoch_field_read_count", "field_is_dark", "field_checksum", "gpu_availability",
+        "gpu_upload_epoch", "gpu_checksum", "fixture_checksum", "terminal_outcome"
+      ],
+      "availability_values": [
+        "available", "stage_before_field_owner", "stage_before_registry_owner",
+        "stage_before_gpu_owner"
+      ],
+      "terminal_outcomes": ["in_progress", "succeeded", "rejected", "failed_dark"]
+    },
+    "door_state_v1": {
+      "subject_door_ordinal": 0,
+      "production_topology": {
+        "domain_root_door": 1,
+        "domain_root_sprite": 0,
+        "child_sprite": 1,
+        "owner_3d": 1
+      },
+      "steps": [
+        {
+          "step_index": 0,
+          "script_update": 0,
+          "intent": "observe-initial",
+          "pause_state": "running",
+          "attempted": false,
+          "current_applied": false,
+          "current_semantic_state": "closed",
+          "current_active_presentation_state": "closed",
+          "p02_applied": false,
+          "p02_semantic_state": "closed",
+          "p02_active_presentation_state": "closed"
+        },
+        {
+          "step_index": 1,
+          "script_update": 1,
+          "intent": "auto-open-nearby-soul",
+          "pause_state": "running",
+          "attempted": true,
+          "current_applied": false,
+          "current_semantic_state": "closed",
+          "current_active_presentation_state": "closed",
+          "p02_applied": true,
+          "p02_semantic_state": "open",
+          "p02_active_presentation_state": "open"
+        },
+        {
+          "step_index": 2,
+          "script_update": 2,
+          "intent": "pause",
+          "pause_state": "paused",
+          "attempted": false,
+          "current_applied": false,
+          "current_semantic_state": "closed",
+          "current_active_presentation_state": "closed",
+          "p02_applied": false,
+          "p02_semantic_state": "open",
+          "p02_active_presentation_state": "open"
+        },
+        {
+          "step_index": 3,
+          "script_update": 3,
+          "intent": "manual-lock-while-paused",
+          "pause_state": "paused",
+          "attempted": true,
+          "current_applied": false,
+          "current_semantic_state": "closed",
+          "current_active_presentation_state": "closed",
+          "p02_applied": true,
+          "p02_semantic_state": "locked",
+          "p02_active_presentation_state": "locked"
+        },
+        {
+          "step_index": 4,
+          "script_update": 4,
+          "intent": "resume",
+          "pause_state": "running",
+          "attempted": false,
+          "current_applied": false,
+          "current_semantic_state": "closed",
+          "current_active_presentation_state": "closed",
+          "p02_applied": false,
+          "p02_semantic_state": "locked",
+          "p02_active_presentation_state": "locked"
+        }
+      ]
+    },
+    "load_normal_v1": {
+      "world_epoch_delta": 1,
+      "save_outcomes": 1,
+      "load_outcomes": 1,
+      "pause_state_after_load": "unchanged",
+      "entity_rebind_key": "building-kind-grid-owner-relation",
+      "terminal_checksum_scope": "durable-fixture-after-semantic-rebind",
+      "steps": [
+        {"step_index": 0, "intent": "observe-initial", "terminal_outcome": "in_progress"},
+        {"step_index": 1, "intent": "request-save", "terminal_outcome": "in_progress"},
+        {"step_index": 2, "intent": "observe-save-succeeded", "terminal_outcome": "in_progress"},
+        {"step_index": 3, "intent": "request-load", "terminal_outcome": "in_progress"},
+        {"step_index": 4, "intent": "observe-load-succeeded", "terminal_outcome": "in_progress"},
+        {"step_index": 5, "intent": "verify-semantic-rebind", "terminal_outcome": "succeeded"}
+      ]
+    }
+  },
+  "statistics": {
+    "run_quantile_method": "sorted-index-round-half-up",
+    "run_quantile_index_formula": "floor((sample_count - 1) * ratio + 0.5)",
+    "ratios": {"p50": 0.5, "p95": 0.95, "p99": 0.99},
+    "session_aggregate": "median-of-run-values",
+    "dispersion": "median-absolute-deviation"
+  },
+  "projection": {
+    "schema_version": 1,
+    "file": "data/rtt_light_migration.csv",
+    "row_scope": "leg-session-aggregate",
+    "primary_key": ["stage_id", "lane", "leg_id", "case_id"],
+    "availability_values": [
+      "available",
+      "stage_before_field_owner",
+      "stage_before_emitter_owner",
+      "stage_before_gpu_owner",
+      "stage_without_gpu_owner",
+      "stage_before_consumer_owner",
+      "render_not_selected",
+      "leg_not_selected",
+      "headless_window_axis"
+    ],
+    "columns": [
+      {"name": "schema_version", "type": "u32", "unit": "none"},
+      {"name": "contract_id", "type": "string", "unit": "none"},
+      {"name": "stage_id", "type": "string", "unit": "none"},
+      {"name": "lane", "type": "string", "unit": "none"},
+      {"name": "leg_id", "type": "string", "unit": "none"},
+      {"name": "case_id", "type": "string", "unit": "none"},
+      {"name": "fixture_availability", "type": "availability", "unit": "none"},
+      {"name": "fixture_checksum", "type": "sha256", "unit": "none"},
+      {"name": "rooms", "type": "u32", "unit": "entities"},
+      {"name": "completed_floors", "type": "u32", "unit": "entities"},
+      {"name": "completed_walls", "type": "u32", "unit": "entities"},
+      {"name": "doors", "type": "u32", "unit": "entities"},
+      {"name": "supplied_lamp_candidates", "type": "u32", "unit": "entities"},
+      {"name": "unsupplied_lamp_candidates", "type": "u32", "unit": "entities"},
+      {"name": "typed_emitter_availability", "type": "availability", "unit": "none"},
+      {"name": "typed_emitter_components", "type": "u32_or_empty", "unit": "entities"},
+      {"name": "eligible_emitter_availability", "type": "availability", "unit": "none"},
+      {"name": "eligible_supplied_emitters", "type": "u32_or_empty", "unit": "entities"},
+      {"name": "indoor_mask_availability", "type": "availability", "unit": "none"},
+      {"name": "indoor_mask_cells", "type": "u32_or_empty", "unit": "cells"},
+      {"name": "indoor_mask_checksum", "type": "sha256_or_empty", "unit": "none"},
+      {"name": "render_inventory_availability", "type": "availability", "unit": "none"},
+      {"name": "scene_target_count", "type": "u32_or_empty", "unit": "images"},
+      {"name": "mask_target_count", "type": "u32_or_empty", "unit": "images"},
+      {"name": "camera_3d_rtt_count", "type": "u32_or_empty", "unit": "entities"},
+      {"name": "camera_2d_count", "type": "u32_or_empty", "unit": "entities"},
+      {"name": "layer_2d_pass_count", "type": "u32_or_empty", "unit": "passes"},
+      {"name": "soul_proxy_3d", "type": "u32_or_empty", "unit": "entities"},
+      {"name": "soul_mask_proxy_3d", "type": "u32_or_empty", "unit": "entities"},
+      {"name": "soul_shadow_proxy_3d", "type": "u32_or_empty", "unit": "entities"},
+      {"name": "familiar_proxy_3d", "type": "u32_or_empty", "unit": "entities"},
+      {"name": "wall_frame_availability", "type": "availability", "unit": "none"},
+      {"name": "wall_frame_p50_ms", "type": "f64_or_empty", "unit": "ms"},
+      {"name": "wall_frame_p95_ms", "type": "f64_or_empty", "unit": "ms"},
+      {"name": "wall_frame_p99_ms", "type": "f64_or_empty", "unit": "ms"},
+      {"name": "wall_frame_max_ms", "type": "f64_or_empty", "unit": "ms"},
+      {"name": "memory_availability", "type": "availability", "unit": "none"},
+      {"name": "process_max_rss_kib", "type": "u64_or_empty", "unit": "KiB"},
+      {"name": "allocation_peak_live_bytes", "type": "u64_or_empty", "unit": "bytes"},
+      {"name": "field_core_availability", "type": "availability", "unit": "none"},
+      {"name": "field_rebuild_p95_ms", "type": "f64_or_empty", "unit": "ms"},
+      {"name": "field_rebuild_p99_ms", "type": "f64_or_empty", "unit": "ms"},
+      {"name": "field_allocation_availability", "type": "availability", "unit": "none"},
+      {"name": "emitter_collect_allocation_events", "type": "u64_or_empty", "unit": "events"},
+      {"name": "emitter_collect_allocation_bytes", "type": "u64_or_empty", "unit": "bytes"},
+      {"name": "field_rebuild_allocation_availability", "type": "availability", "unit": "none"},
+      {"name": "field_rebuild_allocation_events", "type": "u64_or_empty", "unit": "events"},
+      {"name": "field_rebuild_allocation_bytes", "type": "u64_or_empty", "unit": "bytes"},
+      {"name": "gpu_upload_availability", "type": "availability", "unit": "none"},
+      {"name": "gpu_upload_count", "type": "u64_or_empty", "unit": "uploads"},
+      {"name": "gpu_upload_payload_bytes", "type": "u64_or_empty", "unit": "bytes"},
+      {"name": "gpu_upload_allocation_events", "type": "u64_or_empty", "unit": "events"},
+      {"name": "gpu_upload_allocation_bytes", "type": "u64_or_empty", "unit": "bytes"},
+      {"name": "consumer_core_availability", "type": "availability", "unit": "none"},
+      {"name": "consumer_p95_ms", "type": "f64_or_empty", "unit": "ms"},
+      {"name": "consumer_p99_ms", "type": "f64_or_empty", "unit": "ms"},
+      {"name": "consumer_scoped_allocation_events", "type": "u64_or_empty", "unit": "events"},
+      {"name": "consumer_scoped_allocation_bytes", "type": "u64_or_empty", "unit": "bytes"}
+    ],
+    "field_groups": {
+      "fixture": {
+        "availability_column": "fixture_availability",
+        "value_columns": [
+          "fixture_checksum", "rooms", "completed_floors", "completed_walls", "doors",
+          "supplied_lamp_candidates", "unsupplied_lamp_candidates"
+        ],
+        "required_stages": ["current", "p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08"],
+        "required_legs": ["audit", "behavior", "capture", "memory", "renderdoc", "field-core", "consumer-core"],
+        "not_applicable_reason": "leg_not_selected"
+      },
+      "emitter": {
+        "availability_column": "typed_emitter_availability",
+        "value_columns": ["typed_emitter_components"],
+        "required_stages": ["p04", "p05", "p06", "p07", "p08"],
+        "required_legs": ["audit", "behavior", "capture", "memory", "renderdoc"],
+        "stage_not_applicable_reason": "stage_before_emitter_owner",
+        "leg_not_applicable_reason": "leg_not_selected"
+      },
+      "eligible_emitter": {
+        "availability_column": "eligible_emitter_availability",
+        "value_columns": ["eligible_supplied_emitters"],
+        "required_stages": ["p04", "p05", "p06", "p07", "p08"],
+        "required_legs": ["audit", "behavior", "capture", "memory", "renderdoc"],
+        "stage_not_applicable_reason": "stage_before_emitter_owner",
+        "leg_not_applicable_reason": "leg_not_selected"
+      },
+      "indoor_mask": {
+        "availability_column": "indoor_mask_availability",
+        "value_columns": ["indoor_mask_cells", "indoor_mask_checksum"],
+        "required_stages": ["p04", "p05", "p06", "p07", "p08"],
+        "required_legs": ["audit", "behavior", "capture", "memory", "renderdoc"],
+        "stage_not_applicable_reason": "stage_before_emitter_owner",
+        "leg_not_applicable_reason": "leg_not_selected"
+      },
+      "render_inventory": {
+        "availability_column": "render_inventory_availability",
+        "value_columns": [
+          "scene_target_count", "mask_target_count", "camera_3d_rtt_count", "camera_2d_count",
+          "layer_2d_pass_count", "soul_proxy_3d", "soul_mask_proxy_3d",
+          "soul_shadow_proxy_3d", "familiar_proxy_3d"
+        ],
+        "required_stages": ["current", "p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08"],
+        "required_legs": ["capture", "memory", "renderdoc"],
+        "not_applicable_reason": "headless_window_axis"
+      },
+      "wall_frame": {
+        "availability_column": "wall_frame_availability",
+        "value_columns": ["wall_frame_p50_ms", "wall_frame_p95_ms", "wall_frame_p99_ms", "wall_frame_max_ms"],
+        "required_stages": ["current", "p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08"],
+        "required_legs": ["capture"],
+        "not_applicable_reason": "leg_not_selected"
+      },
+      "memory": {
+        "availability_column": "memory_availability",
+        "value_columns": ["process_max_rss_kib", "allocation_peak_live_bytes"],
+        "required_stages": ["current", "p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08"],
+        "required_legs": ["memory"],
+        "not_applicable_reason": "leg_not_selected"
+      },
+      "field_core": {
+        "availability_column": "field_core_availability",
+        "value_columns": ["field_rebuild_p95_ms", "field_rebuild_p99_ms"],
+        "required_stages": ["p03", "p04", "p05", "p06", "p07", "p08"],
+        "required_legs": ["field-core"],
+        "stage_not_applicable_reason": "stage_before_field_owner",
+        "leg_not_applicable_reason": "leg_not_selected"
+      },
+      "emitter_collect_allocation": {
+        "availability_column": "field_allocation_availability",
+        "value_columns": [
+          "emitter_collect_allocation_events", "emitter_collect_allocation_bytes"
+        ],
+        "required_stages": ["p04", "p05", "p06", "p07", "p08"],
+        "required_legs": ["field-core"],
+        "required_renders": ["cpu"],
+        "stage_not_applicable_reason": "stage_before_emitter_owner",
+        "leg_not_applicable_reason": "leg_not_selected",
+        "render_not_applicable_reason": "render_not_selected"
+      },
+      "field_rebuild_allocation": {
+        "availability_column": "field_rebuild_allocation_availability",
+        "value_columns": [
+          "field_rebuild_allocation_events", "field_rebuild_allocation_bytes"
+        ],
+        "required_stages": ["p03", "p04", "p05", "p06", "p07", "p08"],
+        "required_legs": ["field-core"],
+        "required_renders": ["cpu"],
+        "stage_not_applicable_reason": "stage_before_field_owner",
+        "leg_not_applicable_reason": "leg_not_selected",
+        "render_not_applicable_reason": "render_not_selected"
+      },
+      "gpu_upload": {
+        "availability_column": "gpu_upload_availability",
+        "value_columns": [
+          "gpu_upload_count", "gpu_upload_payload_bytes",
+          "gpu_upload_allocation_events", "gpu_upload_allocation_bytes"
+        ],
+        "required_stages": ["p06", "p08"],
+        "required_legs": ["capture", "memory", "renderdoc"],
+        "required_renders": ["gpu"],
+        "stage_not_applicable_reasons": {
+          "current": "stage_before_gpu_owner",
+          "p01": "stage_before_gpu_owner",
+          "p02": "stage_before_gpu_owner",
+          "p03": "stage_before_gpu_owner",
+          "p04": "stage_before_gpu_owner",
+          "p05": "stage_before_gpu_owner",
+          "p07": "stage_without_gpu_owner"
+        },
+        "leg_not_applicable_reason": "leg_not_selected",
+        "render_not_applicable_reason": "render_not_selected"
+      },
+      "consumer_core": {
+        "availability_column": "consumer_core_availability",
+        "value_columns": [
+          "consumer_p95_ms", "consumer_p99_ms",
+          "consumer_scoped_allocation_events", "consumer_scoped_allocation_bytes"
+        ],
+        "required_stages": ["p07", "p08"],
+        "required_legs": ["consumer-core"],
+        "stage_not_applicable_reason": "stage_before_consumer_owner",
+        "leg_not_applicable_reason": "leg_not_selected"
+      }
+    }
+  },
+  "gate_result": {
+    "schema_version": 1,
+    "file": "data/rtt_light_gate_results.csv",
+    "primary_key": ["gate_id", "stage_id", "case_id", "metric_id"],
+    "columns": [
+      "gate_id", "stage_id", "case_id", "metric_id", "status", "unit", "observed",
+      "comparator", "threshold", "reference_artifact", "subject_artifact", "reason_code"
+    ],
+    "statuses": ["pass", "fail", "invalid", "not_applicable"],
+    "unit_types": {
+      "boolean": "boolean",
+      "digest": "sha256",
+      "bytes": "u64",
+      "bytes_delta": "i64",
+      "cells": "u64",
+      "count": "u64",
+      "effects": "u64",
+      "entities": "u64",
+      "epochs": "u64",
+      "errors": "u64",
+      "events": "u64",
+      "frames": "u64",
+      "handles": "u64",
+      "images": "u64",
+      "KiB": "u64",
+      "lines": "u64",
+      "ms": "f64",
+      "passes": "u64",
+      "percent": "f64",
+      "ratio": "f64",
+      "reads": "u64",
+      "revisions": "u64",
+      "runs": "u64",
+      "samples": "u64",
+      "signatures": "u64",
+      "tiles": "u64",
+      "transitions": "u64",
+      "uploads": "u64",
+      "wakes": "u64",
+      "bindings": "u64",
+      "bindings-per-pipeline": "u64",
+      "calls": "u64"
+    },
+    "reason_codes": [
+      "none", "missing_artifact", "schema_mismatch", "source_dirty", "source_changed",
+      "run_count_mismatch", "invalid_run", "determinism_mismatch", "unexpected_log",
+      "environment_mismatch", "missing_reference", "threshold_exceeded", "value_mismatch"
+    ],
+    "artifact_locators": {
+      "subject": "rtt-light-v1/baseline-index.json#/stages/{stage_id}/cases/{case_id}",
+      "reference": "rtt-light-v1/baseline-index.json#/stages/{reference_stage_id}/cases/{case_id}"
+    },
+    "case_sets": {
+      "attempt": ["attempt"],
+      "audit-all": ["audit-small-cpu", "audit-medium-cpu", "audit-large-cpu"],
+      "behavior-door": ["behavior-door-state-v1"],
+      "behavior-load-preflight": ["behavior-load-preflight-reject-v1"],
+      "behavior-lifecycle-replacement": [
+        "behavior-load-normal-v1", "behavior-load-rollback-v1",
+        "behavior-load-recovery-only-v1", "behavior-load-recovery-failed-v1",
+        "behavior-load-duplicate-reset-v1"
+      ],
+      "capture-all": [
+        "capture-small-cpu", "capture-small-gpu", "capture-medium-cpu",
+        "capture-medium-gpu", "capture-large-cpu", "capture-large-gpu"
+      ],
+      "memory-all": [
+        "memory-small-cpu", "memory-small-gpu", "memory-medium-cpu",
+        "memory-medium-gpu", "memory-large-cpu", "memory-large-gpu"
+      ],
+      "renderdoc-medium-gpu": ["renderdoc-medium-gpu"],
+      "field-core-large-cpu": ["field-core-large-cpu"],
+      "consumer-core-large-cpu": ["consumer-core-large-cpu"],
+      "stage-repeat-three": "all-required-cases-except-renderdoc",
+      "stage-all": "all-required-cases"
+    },
+    "metric_templates": {
+      "RLV1-VALID-SOURCE": [
+        {"case_set": "attempt", "metric_id": "clean_commit", "unit": "boolean", "aggregation": "exact", "comparator": "eq", "threshold": "true"},
+        {"case_set": "attempt", "metric_id": "source_fingerprint_unchanged", "unit": "boolean", "aggregation": "exact", "comparator": "eq", "threshold": "true"}
+      ],
+      "RLV1-VALID-RUNS": [
+        {"case_set": "stage-repeat-three", "metric_id": "valid_runs", "unit": "runs", "aggregation": "count", "comparator": "eq", "threshold": "3"},
+        {"case_set": "stage-repeat-three", "metric_id": "invalid_runs", "unit": "runs", "aggregation": "count", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "validated_frames", "unit": "frames", "aggregation": "count", "comparator": "eq", "threshold": "1"}
+      ],
+      "RLV1-VALID-AUDIT": [
+        {"case_set": "audit-all", "metric_id": "determinism_signature_count", "unit": "signatures", "aggregation": "distinct-count", "comparator": "eq", "threshold": "1"}
+      ],
+      "RLV1-VALID-LOG": [
+        {"case_set": "stage-all", "metric_id": "unexpected_log_lines", "unit": "lines", "aggregation": "sum", "comparator": "eq", "threshold": "0"}
+      ],
+      "RLV1-VALID-ENV": [
+        {"case_set": "stage-all", "metric_id": "environment_contract_match", "unit": "boolean", "aggregation": "exact", "comparator": "eq", "threshold": "true"}
+      ],
+      "RLV1-VALID-SIDECAR": [
+        {"case_set": "stage-all", "metric_id": "required_sidecars_valid", "unit": "boolean", "aggregation": "exact", "comparator": "eq", "threshold": "true"}
+      ],
+      "RLV1-P01-RTT": [
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "scene_target_count", "unit": "images", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "mask_target_count", "unit": "images", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "camera_3d_rtt_count", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "mask_camera_count", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "mask_pass_count", "unit": "passes", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "mask_binding_count", "unit": "bindings", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "mask_sample_count", "unit": "samples", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "mask_proxy_count", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "explicit_color_bytes", "unit": "bytes", "aggregation": "exact", "comparator": "eq", "threshold": "8294400"}
+      ],
+      "RLV1-P01-PERF": [
+        {"case_set": "capture-all", "metric_id": "wall_frame_p95_relative_pct", "unit": "percent", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p95_relative_pct_max", "reference_stage": "current"},
+        {"case_set": "capture-all", "metric_id": "wall_frame_p99_relative_pct", "unit": "percent", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p99_relative_pct_max", "reference_stage": "current"},
+        {"case_set": "memory-all", "metric_id": "max_rss_relative_pct", "unit": "percent", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "rss_relative_pct_max", "reference_stage": "current"},
+        {"case_set": "memory-all", "metric_id": "large_peak_live_delta_bytes", "unit": "bytes_delta", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "large_peak_live_delta_bytes_max", "case_filter": "large", "reference_stage": "current"}
+      ],
+      "RLV1-P02-DOOR-DOMAIN": [
+        {"case_set": "behavior-door", "metric_id": "auto_attempted", "unit": "transitions", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "behavior-door", "metric_id": "auto_applied", "unit": "transitions", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "behavior-door", "metric_id": "manual_attempted", "unit": "transitions", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "behavior-door", "metric_id": "manual_applied", "unit": "transitions", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "behavior-door", "metric_id": "mutation_requires_root_sprite", "unit": "boolean", "aggregation": "exact", "comparator": "eq", "threshold": "false"},
+        {"case_set": "behavior-door", "metric_id": "active_presentation_matches_semantic", "unit": "boolean", "aggregation": "all", "comparator": "eq", "threshold": "true"}
+      ],
+      "RLV1-P02-PRESENT": [
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "layer_2d_camera_count", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "layer_2d_pass_count", "unit": "passes", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "duplicate_presentation_count", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "building_exactly_one_presentation", "unit": "boolean", "aggregation": "all", "comparator": "eq", "threshold": "true"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "soul_billboard_per_soul", "unit": "ratio", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "familiar_3d_count", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "state_and_bounce_probes_pass", "unit": "boolean", "aggregation": "all", "comparator": "eq", "threshold": "true"}
+      ],
+      "RLV1-P02-PERF": [
+        {"case_set": "capture-all", "metric_id": "wall_frame_p95_relative_pct", "unit": "percent", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p95_relative_pct_max", "reference_stage": "p01"},
+        {"case_set": "capture-all", "metric_id": "wall_frame_p99_relative_pct", "unit": "percent", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p99_relative_pct_max", "reference_stage": "p01"}
+      ],
+      "RLV1-P03-FIELD": [
+        {"case_set": "field-core-large-cpu", "metric_id": "grid_cells", "unit": "cells", "aggregation": "exact", "comparator": "eq", "threshold": "10000"},
+        {"case_set": "field-core-large-cpu", "metric_id": "logical_payload_bytes", "unit": "bytes", "aggregation": "exact", "comparator": "eq", "threshold": "80000"},
+        {"case_set": "field-core-large-cpu", "metric_id": "supplied_emitters", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "50"},
+        {"case_set": "field-core-large-cpu", "metric_id": "radius_tiles", "unit": "tiles", "aggregation": "exact", "comparator": "eq", "threshold": "5"},
+        {"case_set": "field-core-large-cpu", "metric_id": "field_rebuild_p95_ms", "unit": "ms", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p95_ms_max"},
+        {"case_set": "field-core-large-cpu", "metric_id": "field_rebuild_p99_ms", "unit": "ms", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p99_ms_max"}
+      ],
+      "RLV1-P04-EMITTER": [
+        {"case_set": "audit-all", "metric_id": "typed_emitter_components", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "fixture-size-contract"},
+        {"case_set": "audit-all", "metric_id": "eligible_supplied_emitters", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "fixture-size-contract"},
+        {"case_set": "audit-all", "metric_id": "indoor_mask_cells", "unit": "cells", "aggregation": "exact", "comparator": "eq", "threshold": "fixture-size-contract"},
+        {"case_set": "audit-all", "metric_id": "indoor_mask_checksum", "unit": "digest", "aggregation": "exact", "comparator": "eq", "threshold": "fixture-mask-contract"},
+        {"case_set": "audit-all", "metric_id": "unsupplied_snapshot_adoptions", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "0"}
+      ],
+      "RLV1-P04-STEADY": [
+        {"case_set": "field-core-large-cpu", "metric_id": "steady_updates", "unit": "calls", "aggregation": "exact", "comparator": "eq", "threshold": "600"},
+        {"case_set": "field-core-large-cpu", "metric_id": "steady_full_scans", "unit": "calls", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "field-core-large-cpu", "metric_id": "steady_field_rebuilds", "unit": "calls", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "field-core-large-cpu", "metric_id": "steady_revision_increments", "unit": "revisions", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "field-core-large-cpu", "metric_id": "steady_scoped_allocation_events", "unit": "events", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "field-core-large-cpu", "metric_id": "steady_scoped_allocation_bytes", "unit": "bytes", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "field-core-large-cpu", "metric_id": "max_rebuilds_per_update", "unit": "calls", "aggregation": "max", "comparator": "le", "threshold": "1"}
+      ],
+      "RLV1-P05-LIFECYCLE": [
+        {"case_set": "behavior-load-preflight", "metric_id": "live_field_unchanged", "unit": "boolean", "aggregation": "all", "comparator": "eq", "threshold": "true"},
+        {"case_set": "behavior-load-preflight", "metric_id": "world_epoch_delta", "unit": "epochs", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "behavior-load-preflight", "metric_id": "wake_count", "unit": "wakes", "aggregation": "exact", "comparator": "eq", "threshold": "behavior-case-contract"},
+        {"case_set": "behavior-lifecycle-replacement", "metric_id": "old_epoch_field_reads", "unit": "reads", "aggregation": "sum", "comparator": "eq", "threshold": "0"},
+        {"case_set": "behavior-lifecycle-replacement", "metric_id": "reset_is_dark", "unit": "boolean", "aggregation": "all", "comparator": "eq", "threshold": "true"},
+        {"case_set": "behavior-lifecycle-replacement", "metric_id": "wake_count", "unit": "wakes", "aggregation": "exact", "comparator": "eq", "threshold": "behavior-case-contract"},
+        {"case_set": "behavior-lifecycle-replacement", "metric_id": "terminal_checksum_match", "unit": "boolean", "aggregation": "all", "comparator": "eq", "threshold": "true"},
+        {"case_set": "behavior-lifecycle-replacement", "metric_id": "old_epoch_gpu_uploads", "unit": "uploads", "aggregation": "sum", "comparator": "eq", "threshold": "0", "required_stages": ["p06", "p08"]}
+      ],
+      "RLV1-P06-UPLOAD": [
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "field_image_count", "unit": "images", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "field_handle_count", "unit": "handles", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "logical_payload_bytes", "unit": "bytes", "aggregation": "exact", "comparator": "eq", "threshold": "40000"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "staging_bytes", "unit": "bytes", "aggregation": "exact", "comparator": "le", "threshold": "51200"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "uploads_per_changed_revision", "unit": "uploads", "aggregation": "max", "comparator": "le", "threshold": "1"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "changed_revision_samples", "unit": "samples", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "steady_updates", "unit": "calls", "aggregation": "exact", "comparator": "eq", "threshold": "600"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "steady_uploads", "unit": "uploads", "aggregation": "sum", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "steady_scoped_allocation_events", "unit": "events", "aggregation": "sum", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "steady_scoped_allocation_bytes", "unit": "bytes", "aggregation": "sum", "comparator": "eq", "threshold": "0"}
+      ],
+      "RLV1-P06-RENDER": [
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "point_light_count_increment", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "spot_light_count_increment", "unit": "entities", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "shadow_map_count_increment", "unit": "images", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "local_light_pass_increment", "unit": "passes", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "receiver_binding_count", "unit": "bindings-per-pipeline", "aggregation": "exact", "comparator": "eq", "threshold": "1"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "shared_field_image", "unit": "boolean", "aggregation": "all", "comparator": "eq", "threshold": "true"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "mask_pass_count", "unit": "passes", "aggregation": "exact", "comparator": "eq", "threshold": "0"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "duplicate_2d_pass_count", "unit": "passes", "aggregation": "exact", "comparator": "eq", "threshold": "0"}
+      ],
+      "RLV1-P06-COLOR": [
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "cpu_golden_vectors_pass", "unit": "boolean", "aggregation": "all", "comparator": "eq", "threshold": "true"},
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "pixel_probes_pass", "unit": "boolean", "aggregation": "all", "comparator": "eq", "threshold": "true"}
+      ],
+      "RLV1-P06-PERF": [
+        {"case_set": "capture-all", "metric_id": "wall_frame_p95_relative_pct", "unit": "percent", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p95_relative_pct_max", "reference_stage": "p02"},
+        {"case_set": "capture-all", "metric_id": "wall_frame_p99_relative_pct", "unit": "percent", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p99_relative_pct_max", "reference_stage": "p02"},
+        {"case_set": "memory-all", "metric_id": "max_rss_relative_pct", "unit": "percent", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "rss_relative_pct_max", "reference_stage": "p02"},
+        {"case_set": "memory-all", "metric_id": "large_peak_live_delta_bytes", "unit": "bytes_delta", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "large_peak_live_delta_bytes_max", "case_filter": "large", "reference_stage": "p02"}
+      ],
+      "RLV1-P07-CPU-CONSUMERS": [
+        {"case_set": "consumer-core-large-cpu", "metric_id": "samples_per_soul_slow_step", "unit": "samples", "aggregation": "max", "comparator": "eq", "threshold": "1"},
+        {"case_set": "consumer-core-large-cpu", "metric_id": "effects_per_soul_slow_step", "unit": "effects", "aggregation": "max", "comparator": "le", "threshold": "1"},
+        {"case_set": "consumer-core-large-cpu", "metric_id": "revision_epoch_consistency", "unit": "boolean", "aggregation": "all", "comparator": "eq", "threshold": "true"},
+        {"case_set": "consumer-core-large-cpu", "metric_id": "mask_or_stale_effects", "unit": "effects", "aggregation": "sum", "comparator": "eq", "threshold": "0"}
+      ],
+      "RLV1-P07-CONSUMER-CPU": [
+        {"case_set": "consumer-core-large-cpu", "metric_id": "consumer_p95_ms", "unit": "ms", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p95_ms_max"},
+        {"case_set": "consumer-core-large-cpu", "metric_id": "consumer_p99_ms", "unit": "ms", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p99_ms_max"},
+        {"case_set": "consumer-core-large-cpu", "metric_id": "scoped_allocation_events", "unit": "events", "aggregation": "sum", "comparator": "eq", "threshold": "0"},
+        {"case_set": "consumer-core-large-cpu", "metric_id": "scoped_allocation_bytes", "unit": "bytes", "aggregation": "sum", "comparator": "eq", "threshold": "0"}
+      ],
+      "RLV1-P08-CROSS-CONSUMER": [
+        {"case_set": "renderdoc-medium-gpu", "metric_id": "revision_epoch_consistency", "unit": "boolean", "aggregation": "all", "comparator": "eq", "threshold": "true"}
+      ],
+      "RLV1-P08-FRAME": [
+        {"case_set": "capture-all", "metric_id": "wall_frame_p95_relative_pct", "unit": "percent", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p95_relative_pct_max", "reference_stage": "current"},
+        {"case_set": "capture-all", "metric_id": "wall_frame_p99_relative_pct", "unit": "percent", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "p99_relative_pct_max", "reference_stage": "current"},
+        {"case_set": "capture-all", "metric_id": "large_gpu_p95_ms", "unit": "ms", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "large_gpu_p95_ms_max", "case_filter": "large-gpu"},
+        {"case_set": "capture-all", "metric_id": "large_gpu_p99_ms", "unit": "ms", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "large_gpu_p99_ms_max", "case_filter": "large-gpu"}
+      ],
+      "RLV1-P08-MEMORY": [
+        {"case_set": "memory-all", "metric_id": "allocator_accounting_errors", "unit": "errors", "aggregation": "sum", "comparator": "eq", "threshold": "0"},
+        {"case_set": "memory-all", "metric_id": "max_rss_relative_pct", "unit": "percent", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "rss_relative_pct_max", "reference_stage": "current"},
+        {"case_set": "memory-all", "metric_id": "large_peak_live_delta_bytes", "unit": "bytes_delta", "aggregation": "median-of-run-values", "comparator": "le", "threshold_ref": "large_peak_live_delta_bytes_max", "case_filter": "large", "reference_stage_by_render": {"cpu": "p07", "gpu": "p06"}}
+      ]
+    }
+  },
+  "gate_bundles": {
+    "RLV1-BUNDLE-VALID": [
+      "RLV1-VALID-SOURCE",
+      "RLV1-VALID-RUNS",
+      "RLV1-VALID-AUDIT",
+      "RLV1-VALID-LOG",
+      "RLV1-VALID-ENV",
+      "RLV1-VALID-SIDECAR"
+    ]
+  },
+  "gates": [
+    {"gate_id": "RLV1-BUNDLE-VALID", "kind": "bundle"},
+    {"gate_id": "RLV1-VALID-SOURCE", "kind": "validity"},
+    {"gate_id": "RLV1-VALID-RUNS", "kind": "validity"},
+    {"gate_id": "RLV1-VALID-AUDIT", "kind": "validity"},
+    {"gate_id": "RLV1-VALID-LOG", "kind": "validity"},
+    {"gate_id": "RLV1-VALID-ENV", "kind": "validity"},
+    {"gate_id": "RLV1-VALID-SIDECAR", "kind": "validity"},
+    {"gate_id": "RLV1-P01-RTT", "kind": "stage"},
+    {"gate_id": "RLV1-P01-PERF", "kind": "stage", "p95_relative_pct_max": 5.0, "p99_relative_pct_max": 5.0, "rss_relative_pct_max": 5.0, "large_peak_live_delta_bytes_max": 4194304},
+    {"gate_id": "RLV1-P02-DOOR-DOMAIN", "kind": "stage"},
+    {"gate_id": "RLV1-P02-PRESENT", "kind": "stage"},
+    {"gate_id": "RLV1-P02-PERF", "kind": "stage", "p95_relative_pct_max": 5.0, "p99_relative_pct_max": 5.0},
+    {"gate_id": "RLV1-P03-FIELD", "kind": "stage", "p95_ms_max": 2.0, "p99_ms_max": 4.0},
+    {"gate_id": "RLV1-P04-EMITTER", "kind": "stage"},
+    {"gate_id": "RLV1-P04-STEADY", "kind": "stage"},
+    {"gate_id": "RLV1-P05-LIFECYCLE", "kind": "stage"},
+    {"gate_id": "RLV1-P06-UPLOAD", "kind": "stage"},
+    {"gate_id": "RLV1-P06-RENDER", "kind": "stage"},
+    {"gate_id": "RLV1-P06-COLOR", "kind": "stage"},
+    {"gate_id": "RLV1-P06-PERF", "kind": "stage", "p95_relative_pct_max": 5.0, "p99_relative_pct_max": 5.0, "rss_relative_pct_max": 5.0, "large_peak_live_delta_bytes_max": 4194304},
+    {"gate_id": "RLV1-P07-CPU-CONSUMERS", "kind": "stage"},
+    {"gate_id": "RLV1-P07-CONSUMER-CPU", "kind": "stage", "p95_ms_max": 1.0, "p99_ms_max": 2.0},
+    {"gate_id": "RLV1-P08-CROSS-CONSUMER", "kind": "stage"},
+    {"gate_id": "RLV1-P08-FRAME", "kind": "stage", "p95_relative_pct_max": 5.0, "p99_relative_pct_max": 5.0, "large_gpu_p95_ms_max": 16.667, "large_gpu_p99_ms_max": 25.0},
+    {"gate_id": "RLV1-P08-MEMORY", "kind": "stage", "rss_relative_pct_max": 5.0, "large_peak_live_delta_bytes_max": 4194304}
+  ],
+  "stages": {
+    "current": {
+      "required_lanes": ["static", "behavior"],
+      "required_behavior_cases": ["door-state-v1", "load-normal-v1"],
+      "required_gate_ids": ["RLV1-BUNDLE-VALID"]
+    },
+    "p01": {
+      "required_lanes": ["static", "behavior"],
+      "required_behavior_cases": ["door-state-v1", "load-normal-v1"],
+      "required_gate_ids": ["RLV1-BUNDLE-VALID", "RLV1-P01-RTT", "RLV1-P01-PERF"]
+    },
+    "p02": {
+      "required_lanes": ["static", "behavior"],
+      "required_behavior_cases": ["door-state-v1", "load-normal-v1"],
+      "required_gate_ids": ["RLV1-BUNDLE-VALID", "RLV1-P01-RTT", "RLV1-P02-DOOR-DOMAIN", "RLV1-P02-PRESENT", "RLV1-P02-PERF"]
+    },
+    "p03": {
+      "required_lanes": ["static", "behavior", "field-core"],
+      "required_behavior_cases": ["door-state-v1", "load-normal-v1"],
+      "required_gate_ids": ["RLV1-BUNDLE-VALID", "RLV1-P03-FIELD"]
+    },
+    "p04": {
+      "required_lanes": ["static", "behavior", "field-core"],
+      "required_behavior_cases": ["door-state-v1", "load-normal-v1"],
+      "required_gate_ids": ["RLV1-BUNDLE-VALID", "RLV1-P01-RTT", "RLV1-P02-DOOR-DOMAIN", "RLV1-P03-FIELD", "RLV1-P04-EMITTER", "RLV1-P04-STEADY"]
+    },
+    "p05": {
+      "required_lanes": ["static", "behavior", "field-core"],
+      "required_behavior_cases": ["door-state-v1", "load-normal-v1", "load-preflight-reject-v1", "load-rollback-v1", "load-recovery-only-v1", "load-recovery-failed-v1", "load-duplicate-reset-v1"],
+      "required_gate_ids": ["RLV1-BUNDLE-VALID", "RLV1-P01-RTT", "RLV1-P02-DOOR-DOMAIN", "RLV1-P03-FIELD", "RLV1-P04-EMITTER", "RLV1-P04-STEADY", "RLV1-P05-LIFECYCLE"]
+    },
+    "p06": {
+      "required_lanes": ["static", "behavior", "field-core"],
+      "required_behavior_cases": ["door-state-v1", "load-normal-v1", "load-preflight-reject-v1", "load-rollback-v1", "load-recovery-only-v1", "load-recovery-failed-v1", "load-duplicate-reset-v1"],
+      "required_gate_ids": ["RLV1-BUNDLE-VALID", "RLV1-P01-RTT", "RLV1-P02-DOOR-DOMAIN", "RLV1-P02-PRESENT", "RLV1-P03-FIELD", "RLV1-P04-EMITTER", "RLV1-P04-STEADY", "RLV1-P05-LIFECYCLE", "RLV1-P06-UPLOAD", "RLV1-P06-RENDER", "RLV1-P06-COLOR", "RLV1-P06-PERF"]
+    },
+    "p07": {
+      "required_lanes": ["static", "behavior", "field-core", "consumer-core"],
+      "required_behavior_cases": ["door-state-v1", "load-normal-v1", "load-preflight-reject-v1", "load-rollback-v1", "load-recovery-only-v1", "load-recovery-failed-v1", "load-duplicate-reset-v1"],
+      "required_gate_ids": ["RLV1-BUNDLE-VALID", "RLV1-P01-RTT", "RLV1-P02-DOOR-DOMAIN", "RLV1-P03-FIELD", "RLV1-P04-EMITTER", "RLV1-P04-STEADY", "RLV1-P05-LIFECYCLE", "RLV1-P07-CPU-CONSUMERS", "RLV1-P07-CONSUMER-CPU"]
+    },
+    "p08": {
+      "required_lanes": ["static", "behavior", "field-core", "consumer-core"],
+      "required_behavior_cases": ["door-state-v1", "load-normal-v1", "load-preflight-reject-v1", "load-rollback-v1", "load-recovery-only-v1", "load-recovery-failed-v1", "load-duplicate-reset-v1"],
+      "required_gate_ids": ["RLV1-BUNDLE-VALID", "RLV1-P01-RTT", "RLV1-P02-DOOR-DOMAIN", "RLV1-P02-PRESENT", "RLV1-P03-FIELD", "RLV1-P04-EMITTER", "RLV1-P04-STEADY", "RLV1-P05-LIFECYCLE", "RLV1-P06-UPLOAD", "RLV1-P06-RENDER", "RLV1-P06-COLOR", "RLV1-P07-CPU-CONSUMERS", "RLV1-P07-CONSUMER-CPU", "RLV1-P08-CROSS-CONSUMER", "RLV1-P08-FRAME", "RLV1-P08-MEMORY"]
+    }
+  }
+}

@@ -163,14 +163,15 @@ pub(super) fn place_building_blueprint(
 }
 
 /// Attempts to place the BucketStorage companion for a Tank blueprint.
-/// Returns `Ok(())` on success or the typed rejection from the shared validator.
-pub(super) fn try_place_bucket_storage_companion(
+/// Returns the one-entity-per-tile storage roots on success, or the typed rejection from the
+/// shared validator.
+pub(crate) fn try_place_bucket_storage_companion(
     commands: &mut Commands,
     world_map: &mut WorldMap,
     parent_blueprint: Entity,
     parent_occupied_grids: &[(i32, i32)],
     anchor_grid: (i32, i32),
-) -> Result<(), PlacementTileRejection> {
+) -> Result<Vec<Entity>, PlacementTileRejection> {
     let geometry = bucket_storage_geometry(anchor_grid);
     let read_world = WorldMapRef(world_map);
     let validation = validate_bucket_storage_placement(
@@ -186,6 +187,7 @@ pub(super) fn try_place_bucket_storage_companion(
             .expect("rejected companion placement must carry a reason"));
     }
 
+    let mut storage_entities = Vec::with_capacity(geometry.occupied_grids.len());
     for (gx, gy) in geometry.occupied_grids {
         let pos = WorldMap::grid_to_world(gx, gy);
         let storage_entity = commands
@@ -206,6 +208,7 @@ pub(super) fn try_place_bucket_storage_companion(
             ))
             .id();
         world_map.register_stockpile_tile((gx, gy), storage_entity);
+        storage_entities.push(storage_entity);
     }
-    Ok(())
+    Ok(storage_entities)
 }

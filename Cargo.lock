@@ -464,9 +464,13 @@ dependencies = [
  "hw_ui",
  "hw_visual",
  "hw_world",
+ "libloading",
  "rand 0.8.5",
+ "renderdoc-sys",
  "ron",
  "serde",
+ "serde_json",
+ "wgpu",
 ]
 
 [[package]]

@@ -58,6 +58,9 @@ impl Plugin for HellWorkersGamePlugin {
         report_perf_scenario(&self.perf_config);
 
         let (render3d_visible, render_perf_toggles) = self.perf_config.initial_render_resources();
+        if let Some(rtt) = self.perf_config.requested_rtt_quality() {
+            app.insert_resource(hw_core::quality::QualitySettings { rtt });
+        }
 
         #[cfg(feature = "profiling")]
         let fixed_step_audit = self.perf_config.uses_fixed_timesteps();
@@ -107,7 +110,7 @@ impl Plugin for HellWorkersGamePlugin {
 fn report_perf_scenario(perf_config: &PerfScenarioConfig) {
     if perf_config.enabled() {
         eprintln!(
-            "PERF_SCENARIO: seed={} workload={} size={} souls={} familiars={} render={} clock={} familiar_policy={} operation_dialog={} dashboard_mode={} warmup={}s measure={}s fixed_hz={} fixed_warmup_ticks={} fixed_audit_ticks={} virtual_speed=1.0 output_dir={}",
+            "PERF_SCENARIO: seed={} workload={} size={} souls={} familiars={} render={} clock={} behavior_case={} familiar_policy={} operation_dialog={} dashboard_mode={} warmup={}s measure={}s fixed_hz={} fixed_warmup_ticks={} fixed_audit_ticks={} virtual_speed=1.0 output_dir={}",
             perf_config.master_seed,
             perf_config.workload.as_str(),
             perf_config.size.as_str(),
@@ -115,6 +118,7 @@ fn report_perf_scenario(perf_config: &PerfScenarioConfig) {
             perf_config.familiar_count,
             perf_config.render_mode.as_str(),
             perf_config.clock_mode_as_str(),
+            perf_config.behavior_case_as_str().unwrap_or("none"),
             perf_config.familiar_policy_mode.as_str(),
             perf_config.operation_dialog_mode.as_str(),
             perf_config.dashboard_mode.as_str(),

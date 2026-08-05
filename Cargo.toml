@@ -19,9 +19,13 @@ bevy = { version = "0.19", default-features = false, features = [
 rand = "0.8"
 ron = "0.12"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 bevy_world_serialization = "0.19"
 wfc = "0.10"        # gridbugs/wfc — MIT, seed + ForbidPattern hard constraint
 direction = "0.18"  # gridbugs/direction — CardinalDirectionTable (wfc の推移依存だが明示追加)
+wgpu = { version = "29.0.4", default-features = false }
+libloading = "0.8.9"
+renderdoc-sys = "1.1.0"
 
 [profile.release]
 opt-level = 3

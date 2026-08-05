@@ -3,7 +3,7 @@ use bevy::gilrs::GilrsPlugin;
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 use bevy::render::settings::{Backends, RenderCreation, WgpuFeatures, WgpuSettings};
-use bevy::window::{ExitCondition, PresentMode};
+use bevy::window::{ExitCondition, PresentMode, WindowResolution};
 use bevy::winit::WinitPlugin;
 use bevy_app::{HellWorkersGamePlugin, plugins::startup::PerfScenarioConfig};
 use std::env;
@@ -30,6 +30,7 @@ fn main() {
         std::process::exit(2);
     }
     let use_headless_runner = headless_runner_requested(&perf_config);
+    let window_resolution = perf_window_resolution(&perf_config);
     let game_plugin = HellWorkersGamePlugin::new(perf_config);
     let log_filter = game_plugin.log_filter().to_string();
     configure_linux_window_backend();
@@ -40,7 +41,7 @@ fn main() {
         .set(WindowPlugin {
             primary_window: (!use_headless_runner).then(|| Window {
                 title: "Hell Workers".into(),
-                resolution: (1280, 720).into(),
+                resolution: window_resolution,
                 present_mode,
                 ..default()
             }),
@@ -81,6 +82,15 @@ fn main() {
     }
 
     app.run();
+}
+
+fn perf_window_resolution(perf_config: &PerfScenarioConfig) -> WindowResolution {
+    let (width, height) = perf_config.requested_window_size().unwrap_or((1280, 720));
+    let resolution = WindowResolution::new(width, height);
+    match perf_config.requested_window_scale_factor() {
+        Some(scale_factor) => resolution.with_scale_factor_override(scale_factor),
+        None => resolution,
+    }
 }
 
 fn headless_runner_requested(perf_config: &PerfScenarioConfig) -> bool {

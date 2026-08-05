@@ -27,7 +27,9 @@ use hw_spatial::resource::ResourceSpatialGrid;
 use hw_spatial::soul::SpatialGrid;
 use hw_spatial::stockpile::StockpileSpatialGrid;
 use hw_spatial::transport_request::TransportRequestSpatialGrid;
-use hw_world::room_detection::{RoomDetectionState, RoomTileLookup, RoomValidationState};
+use hw_world::room_detection::{
+    RoomBoundaryLookup, RoomDetectionState, RoomTileLookup, RoomValidationState,
+};
 use hw_world::{ObstaclePositionIndex, RuntimePathSearchBudget, WalkabilityConnectivityCache};
 
 use crate::app_contexts::{
@@ -138,6 +140,7 @@ pub(crate) fn reset_runtime_caches(world: &mut World) {
     world.insert_resource(WallTileWaitingCache::default());
     world.insert_resource(RoomDetectionState::default());
     world.insert_resource(RoomTileLookup::default());
+    world.insert_resource(RoomBoundaryLookup::default());
     world.insert_resource(RoomValidationState::default());
     world.insert_resource(ObstaclePositionIndex::default());
     world.insert_resource(GatheringSpotSpatialGrid::default());

@@ -48,10 +48,12 @@ pub use query::{find_nearest_river_grid, find_nearest_walkable_grid};
 pub use regrowth::{ForestZone, default_forest_zones, find_regrowth_position};
 pub use river::{generate_fixed_river_tiles, generate_sand_tiles};
 pub use room_detection::{
-    DetectedRoom, Room, RoomBounds, RoomDetectionBuildingTile, RoomDetectionInput,
-    RoomDetectionState, RoomOverlayTile, RoomTileLookup, RoomValidationState,
+    DetectedRoom, Room, RoomBoundaryLookup, RoomBounds, RoomDetectionBuildingTile,
+    RoomDetectionInput, RoomDetectionState, RoomOverlayTile, RoomTileLookup, RoomValidationState,
     build_detection_input, detect_rooms, room_is_valid_against_input,
 };
+#[cfg(feature = "profiling")]
+pub use room_systems::detect_rooms_immediately_system;
 pub use room_systems::{
     detect_rooms_system, mark_room_dirty_from_building_changes_system, on_building_added,
     on_building_removed, on_door_added, on_door_removed, sync_room_overlay_tiles_system,

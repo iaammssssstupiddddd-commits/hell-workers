@@ -16,6 +16,22 @@ use hw_core::constants::{
     LAYER_OVERLAY, Z_RTT_COMPOSITE, topdown_rtt_vertical_compensation, topdown_sun_direction_world,
 };
 
+/// Vulkan/WGSL descriptor location used by the RtT composite material.
+///
+/// The formal RenderDoc evidence records this tuple to prove that one
+/// composite draw samples both current RtT targets.  Keep it in sync with
+/// `assets/shaders/rtt_composite_material.wgsl`.
+#[cfg(feature = "profiling")]
+pub(crate) const RTT_COMPOSITE_BIND_SET_OR_SPACE: u32 = 2;
+#[cfg(feature = "profiling")]
+pub(crate) const RTT_COMPOSITE_SCENE_TEXTURE_BINDING: u32 = 1;
+#[cfg(feature = "profiling")]
+pub(crate) const RTT_COMPOSITE_SCENE_SAMPLER_BINDING: u32 = 2;
+#[cfg(feature = "profiling")]
+pub(crate) const RTT_COMPOSITE_MASK_TEXTURE_BINDING: u32 = 3;
+#[cfg(feature = "profiling")]
+pub(crate) const RTT_COMPOSITE_MASK_SAMPLER_BINDING: u32 = 4;
+
 /// RtT composite entity のマーカー。3D表示切り替えで可視性を制御する。
 #[derive(Component)]
 pub struct RttCompositeSprite;

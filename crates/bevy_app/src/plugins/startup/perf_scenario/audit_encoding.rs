@@ -158,10 +158,21 @@ pub(super) fn write_assigned_task(
                 .map_err(|_| "haul task references a stockpile without a transform".to_string())?;
             write_transform(record, stockpile, "haul stockpile transform")?;
         }
+        AssignedTask::GeneratePower(data) => {
+            record.push(3);
+            record.push(match data.phase {
+                GeneratePowerPhase::GoingToTile => 0,
+                GeneratePowerPhase::Generating => 1,
+            });
+            write_vec2(record, data.tile_pos, "generate-power tile position")?;
+            let tile = target_transforms.get(data.tile).map_err(|_| {
+                "generate-power task references a tile without a transform".to_string()
+            })?;
+            write_transform(record, tile, "generate-power tile transform")?;
+        }
         _ => {
             return Err(
-                "gather determinism audit encountered an unsupported AssignedTask variant"
-                    .to_string(),
+                "determinism audit encountered an unsupported AssignedTask variant".to_string(),
             );
         }
     }
@@ -299,7 +310,7 @@ mod tests {
     use super::*;
     use bevy::ecs::system::SystemState;
     use hw_core::familiar::{FamiliarWorkPriority, FamiliarWorkRule, FamiliarWorkRuleOverride};
-    use hw_jobs::HaulData;
+    use hw_jobs::{GeneratePowerData, HaulData};
 
     fn encoded(policy: &FamiliarPolicy) -> Vec<u8> {
         let mut record = Vec::new();
@@ -378,5 +389,36 @@ mod tests {
         assert_eq!(encodings[2][0..2], [2, 2]);
         assert_ne!(encodings[0], encodings[1]);
         assert_ne!(encodings[1], encodings[2]);
+    }
+
+    #[test]
+    fn generate_power_audit_encodes_each_phase_without_entity_ids() {
+        let mut world = World::new();
+        let tile = world.spawn(Transform::from_xyz(7.0, 8.0, 9.0)).id();
+        let mut query_state = SystemState::<Query<&Transform>>::new(&mut world);
+        let query = query_state.get(&world).expect("transform query validates");
+
+        let mut encodings = Vec::new();
+        for phase in [
+            GeneratePowerPhase::GoingToTile,
+            GeneratePowerPhase::Generating,
+        ] {
+            let mut record = Vec::new();
+            write_assigned_task(
+                &mut record,
+                &AssignedTask::GeneratePower(GeneratePowerData {
+                    tile,
+                    tile_pos: Vec2::new(10.0, 11.0),
+                    phase,
+                }),
+                &query,
+            )
+            .unwrap();
+            encodings.push(record);
+        }
+
+        assert_eq!(encodings[0][0..2], [3, 0]);
+        assert_eq!(encodings[1][0..2], [3, 1]);
+        assert_ne!(encodings[0], encodings[1]);
     }
 }

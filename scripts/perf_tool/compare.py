@@ -7,7 +7,49 @@ DASHBOARD_INPUT_ROWS_PER_REBUILD_REL_TOLERANCE = 0.05
 
 def read_aggregate(path: Path) -> dict[str, dict[str, str]]:
     with path.open(newline="", encoding="utf-8") as handle:
-        return {row["case_id"]: row for row in csv.DictReader(handle)}
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None or "case_id" not in reader.fieldnames:
+            raise RuntimeError(f"aggregate is missing case_id: {path}")
+        rows: dict[str, dict[str, str]] = {}
+        for row in reader:
+            case_id = row["case_id"]
+            if case_id in rows:
+                raise RuntimeError(f"aggregate contains duplicate case_id {case_id}: {path}")
+            rows[case_id] = row
+        return rows
+
+
+def manifest_case_ids(manifest: dict[str, Any]) -> set[str]:
+    cases = manifest.get("cases")
+    if not isinstance(cases, list) or not cases:
+        raise RuntimeError("session manifest has no case contract")
+    case_ids = [case.get("id") for case in cases if isinstance(case, dict)]
+    if len(case_ids) != len(cases) or any(not isinstance(case_id, str) for case_id in case_ids):
+        raise RuntimeError("session manifest contains an invalid case id")
+    if len(set(case_ids)) != len(case_ids):
+        raise RuntimeError("session manifest contains duplicate case ids")
+    return set(case_ids)
+
+
+def require_valid_comparison_manifest(manifest: dict[str, Any], label: str) -> None:
+    if manifest.get("schema_version") != SESSION_MANIFEST_SCHEMA_VERSION:
+        raise RuntimeError(
+            f"{label} manifest schema must be {SESSION_MANIFEST_SCHEMA_VERSION} for comparison"
+        )
+    if manifest.get("status") != "valid":
+        raise RuntimeError(f"{label} session status is not valid")
+    if manifest.get("artifact_set_errors"):
+        raise RuntimeError(f"{label} manifest retains artifact-set errors")
+
+
+def finite_aggregate_float(row: dict[str, str], field: str, case_id: str) -> float:
+    try:
+        value = float(row[field])
+    except (KeyError, TypeError, ValueError) as error:
+        raise RuntimeError(f"{case_id} aggregate has invalid {field}") from error
+    if not math.isfinite(value):
+        raise RuntimeError(f"{case_id} aggregate {field} must be finite")
+    return value
 
 
 def load_profile_artifacts(session: Path, case_id: str) -> list[dict[str, Any]]:
@@ -52,10 +94,16 @@ def ensure_comparison_contract(
 
 
 def compare_sessions(args: argparse.Namespace) -> int:
+    if args.min_runs < 1:
+        raise ValueError("--min-runs must be at least 1")
+    if not math.isfinite(args.max_regression_pct) or args.max_regression_pct < 0:
+        raise ValueError("--max-regression-pct must be finite and nonnegative")
     baseline = Path(args.baseline).resolve()
     candidate = Path(args.candidate).resolve()
     baseline_manifest = json.loads((baseline / "manifest.json").read_text(encoding="utf-8"))
     candidate_manifest = json.loads((candidate / "manifest.json").read_text(encoding="utf-8"))
+    require_valid_comparison_manifest(baseline_manifest, "baseline")
+    require_valid_comparison_manifest(candidate_manifest, "candidate")
     if (
         baseline_manifest.get("matrix", {}).get("capture_kind", "frame-time") != "frame-time"
         or candidate_manifest.get("matrix", {}).get("capture_kind", "frame-time") != "frame-time"
@@ -68,6 +116,24 @@ def compare_sessions(args: argparse.Namespace) -> int:
     )
     baseline_rows = read_aggregate(baseline / "aggregate.csv")
     candidate_rows = read_aggregate(candidate / "aggregate.csv")
+    baseline_expected = manifest_case_ids(baseline_manifest)
+    candidate_expected = manifest_case_ids(candidate_manifest)
+    if set(baseline_rows) != baseline_expected:
+        missing = sorted(baseline_expected - set(baseline_rows))
+        unknown = sorted(set(baseline_rows) - baseline_expected)
+        raise RuntimeError(
+            "baseline aggregate case set mismatch"
+            + (f"; missing: {', '.join(missing)}" if missing else "")
+            + (f"; unknown: {', '.join(unknown)}" if unknown else "")
+        )
+    if set(candidate_rows) != candidate_expected:
+        missing = sorted(candidate_expected - set(candidate_rows))
+        unknown = sorted(set(candidate_rows) - candidate_expected)
+        raise RuntimeError(
+            "candidate aggregate case set mismatch"
+            + (f"; missing: {', '.join(missing)}" if missing else "")
+            + (f"; unknown: {', '.join(unknown)}" if unknown else "")
+        )
     if args.allow_case_subset:
         missing_baseline_cases = sorted(set(candidate_rows) - set(baseline_rows))
         if missing_baseline_cases:
@@ -76,7 +142,9 @@ def compare_sessions(args: argparse.Namespace) -> int:
             )
         common_cases = sorted(candidate_rows)
     else:
-        common_cases = sorted(set(baseline_rows) & set(candidate_rows))
+        if set(baseline_rows) != set(candidate_rows):
+            raise RuntimeError("sessions have different aggregate case sets")
+        common_cases = sorted(baseline_rows)
     if not common_cases:
         raise RuntimeError("sessions have no common valid cases")
     output = Path(args.output).resolve() if args.output else candidate / "comparison.csv"
@@ -88,9 +156,13 @@ def compare_sessions(args: argparse.Namespace) -> int:
         current = candidate_rows[case_id]
         if int(base["valid_runs"]) < args.min_runs or int(current["valid_runs"]) < args.min_runs:
             raise RuntimeError(f"{case_id} has fewer than {args.min_runs} valid runs")
-        baseline_value = float(base[metric_column])
-        candidate_value = float(current[metric_column])
-        percent = ((candidate_value / baseline_value) - 1.0) * 100.0 if baseline_value else 0.0
+        baseline_value = finite_aggregate_float(base, metric_column, case_id)
+        candidate_value = finite_aggregate_float(current, metric_column, case_id)
+        if baseline_value <= 0.0:
+            raise RuntimeError(f"{case_id} baseline {metric_column} must be positive")
+        if candidate_value < 0.0:
+            raise RuntimeError(f"{case_id} candidate {metric_column} must be nonnegative")
+        percent = ((candidate_value / baseline_value) - 1.0) * 100.0
         is_regression = percent > args.max_regression_pct
         regressed |= is_regression
         rows.append(
@@ -113,6 +185,7 @@ def compare_sessions(args: argparse.Namespace) -> int:
 def compare_dashboard_modes(args: argparse.Namespace) -> int:
     session = Path(args.session).resolve()
     manifest = json.loads((session / "manifest.json").read_text(encoding="utf-8"))
+    require_valid_comparison_manifest(manifest, "dashboard")
     matrix = manifest.get("matrix", {})
     expected_modes = {"hidden", "visible", "active-filter"}
     instrumentation = manifest.get("binary", {}).get("instrumentation", "capture")
@@ -266,6 +339,14 @@ def compare_dashboard_modes(args: argparse.Namespace) -> int:
                                 float(artifact["process_memory"]["max_rss_kib"])
                                 for artifact in artifacts
                             ]
+                        )
+            for mode, values in mode_values.items():
+                for metric, value in values.items():
+                    if isinstance(value, float) and (
+                        not math.isfinite(value) or value < 0.0
+                    ):
+                        group_failures.append(
+                            f"{mode} has invalid non-finite or negative {metric}"
                         )
             if group_failures:
                 mode_values.clear()

@@ -5,13 +5,16 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `lighting-visual-plan-2026-04-04` |
-| ステータス | `Draft` |
+| ステータス | `Superseded` |
 | 作成日 | `2026-04-04` |
-| 最終更新日 | `2026-07-13` |
+| 最終更新日 | `2026-08-03` |
 | 作成者 | `Codex` |
 | レビュー | `Claude Sonnet 4.6 (2026-04-04)` / `Cursor 追記 (2026-04-04)` |
 | 関連計画 | `docs/plans/3d-rtt/milestone-roadmap.md` |
+| 置換先 | [`single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 関連Issue/PR | `N/A` |
+
+> **Superseded (2026-08-03):** 標準の建築照明をSoul shadow付きSpotLightで実装する方針は採用しない。放射状光源、完成WallとDoorStateによる遮光、Soul非caster / 非receiver、map-space `IndoorLightField`を置換先計画の正本とする。本書は過去の比較・実装調査としてのみ保持し、M1〜M3へ着手しない。
 
 ## 1. 目的
 
@@ -263,3 +266,4 @@
 | `2026-04-04` | `Claude Sonnet 4.6` | コードベース調査に基づき全節をブラッシュアップ：spawn設計（Building3dVisual の子エンティティ化）、RenderLayers 具体値の明記、M1-M3 の変更ファイルと実装詳細の精緻化、M4をM3に統合、AI引継ぎメモに実装要点テーブル追加 |
 | `2026-04-04` | `Cursor` | レビュー反映：`spawn.rs` 共通 match arm の明記、メッシュ高とライト子のオフセット、Spot shadow の一次情報確認、M2 のクエリ方針（`hw_visual` 境界）、見出し `### M1-M3`、検証・引継ぎの追記、更新履歴の誤字修正 |
 | `2026-07-13` | `Codex` | Bevy 0.19 API、workspace 検証、影付き local light の同時有効数予算を反映 |
+| `2026-08-03` | `Codex` | 放射状IndoorLightField方針への変更によりSuperseded化。実装正本を単一Scene RtT移行計画へ移した |

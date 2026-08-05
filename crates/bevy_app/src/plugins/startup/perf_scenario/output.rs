@@ -29,6 +29,155 @@ pub(super) struct PerfCaptureWriteInput<'a> {
 }
 
 #[cfg(feature = "profiling")]
+pub(super) fn write_window_observation(
+    config: &PerfScenarioConfig,
+    initial: &PerfWindowObservation,
+    final_observation: &PerfWindowObservation,
+) -> std::io::Result<()> {
+    let directory = perf_output_directory(config);
+    std::fs::create_dir_all(&directory)?;
+    let path = directory.join("window.csv");
+    if path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!(
+                "perf window observation already exists at {}",
+                path.display()
+            ),
+        ));
+    }
+
+    let optional_f32 =
+        |value: Option<f32>| value.map(|value| format!("{value:.6}")).unwrap_or_default();
+    let optional_u32 =
+        |value: Option<u32>| value.map(|value| value.to_string()).unwrap_or_default();
+    let optional_text = |value: Option<&str>| {
+        value
+            .map(|value| format!("\"{}\"", value.replace('"', "\"\"")))
+            .unwrap_or_default()
+    };
+    let header = concat!(
+        "schema_version,window_present,logical_width,logical_height,physical_width,",
+        "physical_height,scale_factor,rtt_quality,scene_target_width,scene_target_height,",
+        "mask_target_width,mask_target_height,target_scale_factor,resolved_window_backend,",
+        "adapter_name,adapter_backend,requested_present_mode,effective_present_mode,",
+        "end_window_present,end_logical_width,end_logical_height,end_physical_width,",
+        "end_physical_height,end_scale_factor,end_rtt_quality,end_scene_target_width,",
+        "end_scene_target_height,end_mask_target_width,end_mask_target_height,",
+        "end_target_scale_factor,end_resolved_window_backend,end_adapter_name,",
+        "end_adapter_backend,end_requested_present_mode,end_effective_present_mode"
+    );
+    let values = vec![
+        "2".to_string(),
+        initial.window_present.to_string(),
+        optional_f32(initial.logical_width),
+        optional_f32(initial.logical_height),
+        optional_u32(initial.physical_width),
+        optional_u32(initial.physical_height),
+        optional_f32(initial.scale_factor),
+        initial.rtt_quality.to_string(),
+        initial.scene_target_width.to_string(),
+        initial.scene_target_height.to_string(),
+        initial.mask_target_width.to_string(),
+        initial.mask_target_height.to_string(),
+        format!("{:.6}", initial.target_scale_factor),
+        optional_text(initial.resolved_window_backend),
+        optional_text(initial.adapter_name.as_deref()),
+        optional_text(initial.adapter_backend),
+        optional_text(initial.requested_present_mode),
+        optional_text(initial.effective_present_mode),
+        final_observation.window_present.to_string(),
+        optional_f32(final_observation.logical_width),
+        optional_f32(final_observation.logical_height),
+        optional_u32(final_observation.physical_width),
+        optional_u32(final_observation.physical_height),
+        optional_f32(final_observation.scale_factor),
+        final_observation.rtt_quality.to_string(),
+        final_observation.scene_target_width.to_string(),
+        final_observation.scene_target_height.to_string(),
+        final_observation.mask_target_width.to_string(),
+        final_observation.mask_target_height.to_string(),
+        format!("{:.6}", final_observation.target_scale_factor),
+        optional_text(final_observation.resolved_window_backend),
+        optional_text(final_observation.adapter_name.as_deref()),
+        optional_text(final_observation.adapter_backend),
+        optional_text(final_observation.requested_present_mode),
+        optional_text(final_observation.effective_present_mode),
+    ];
+    let csv = format!("{header}\n{}\n", values.join(","));
+    std::fs::write(path, csv)
+}
+
+#[cfg(feature = "profiling")]
+pub(super) fn write_indoor_light_fixture_sidecars(
+    config: &PerfScenarioConfig,
+    state: &IndoorLightFixtureState,
+) -> std::io::Result<()> {
+    if config.workload != PerfWorkload::IndoorLight {
+        return Ok(());
+    }
+    let directory = perf_output_directory(config);
+    std::fs::create_dir_all(&directory)?;
+    let summary_path = directory.join("indoor_light_fixture.csv");
+    let layout_path = directory.join("indoor_light_layout.csv");
+    let presentation_path = directory.join("indoor_light_presentation.csv");
+    if summary_path.exists() || layout_path.exists() || presentation_path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!(
+                "indoor-light fixture sidecar already exists in {}",
+                directory.display()
+            ),
+        ));
+    }
+    let selection = config.rtt_light_selection().ok_or_else(|| {
+        std::io::Error::other("indoor-light sidecar requested without an RtT-light selection")
+    })?;
+    let (summary, layout, presentation) =
+        state.sidecar_csvs(selection.stage_id(), selection.lane())?;
+    std::fs::write(summary_path, summary)?;
+    std::fs::write(layout_path, layout)?;
+    std::fs::write(presentation_path, presentation)
+}
+
+#[cfg(feature = "profiling")]
+pub(super) fn write_render_inventory(
+    config: &PerfScenarioConfig,
+    inventory: &PerfRenderInventory,
+) -> std::io::Result<()> {
+    if config.workload != PerfWorkload::IndoorLight || config.uses_fixed_timesteps() {
+        return Ok(());
+    }
+    let directory = perf_output_directory(config);
+    std::fs::create_dir_all(&directory)?;
+    let path = directory.join("render_inventory.csv");
+    if path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("render inventory already exists at {}", path.display()),
+        ));
+    }
+    let csv = format!(
+        concat!(
+            "schema_version,scene_target_count,mask_target_count,camera_3d_rtt_count,",
+            "camera_2d_count,layer_2d_pass_count,soul_proxy_3d,soul_mask_proxy_3d,",
+            "soul_shadow_proxy_3d,familiar_proxy_3d\n",
+            "1,{},{},{},{},{},{},{},{},{}\n"
+        ),
+        inventory.scene_target_count,
+        inventory.mask_target_count,
+        inventory.camera_3d_rtt_count,
+        inventory.camera_2d_count,
+        inventory.layer_2d_pass_count,
+        inventory.soul_proxy_3d,
+        inventory.soul_mask_proxy_3d,
+        inventory.soul_shadow_proxy_3d,
+        inventory.familiar_proxy_3d,
+    );
+    std::fs::write(path, csv)
+}
+
+#[cfg(feature = "profiling")]
 pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::Result<()> {
     let PerfCaptureWriteInput {
         config,
@@ -334,7 +483,7 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
 }
 
 #[cfg(feature = "profiling")]
-fn perf_output_directory(config: &PerfScenarioConfig) -> PathBuf {
+pub(super) fn perf_output_directory(config: &PerfScenarioConfig) -> PathBuf {
     config.output_dir.clone().unwrap_or_else(|| {
         PathBuf::from(format!(
             "target/perf/{}-{}-{}-seed-{}-dashboard-{}",

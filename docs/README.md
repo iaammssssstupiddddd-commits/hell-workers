@@ -63,6 +63,7 @@
 - [plans/archive/soul-energy-control-plan-2026-07-20.md](plans/archive/soul-energy-control-plan-2026-07-20.md): Track B3のSoul Spa稼働枠、優先配電、保存互換、実機受入の完了記録。
 - [plans/player-facing-result-notifications-plan-2026-07-18.md](plans/player-facing-result-notifications-plan-2026-07-18.md): Track A2 の有界な通知センター、配置不能理由、セーブ/ロード終端結果を導入する実装計画。
 - [plans/hvac-plumbing-plan-2026-07-13.md](plans/hvac-plumbing-plan-2026-07-13.md): 換気・導水・Room 認可を M0〜M4 で導入する実装計画。
+- [plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md): Scene RtT 1枚、TopDown表示、Wall / Door遮光の放射状Indoor Light Fieldへ移行する9分割計画の親ロードマップ。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。
 - [proposals/gameplay-management-improvements-proposal-2026-07-17.md](proposals/gameplay-management-improvements-proposal-2026-07-17.md): 操作、運営ポリシー、復旧・永続化、進行要素を 4 トラックで整理した総合改善提案。
 - [proposals/hvac-plumbing-proposal.md](proposals/hvac-plumbing-proposal.md): 採用済みの空調・衛生インフラ提案（世界観・採否理由）。

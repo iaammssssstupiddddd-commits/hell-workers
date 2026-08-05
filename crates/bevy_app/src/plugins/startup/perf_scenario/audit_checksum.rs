@@ -63,6 +63,34 @@ pub(super) fn calculate_scene_root_counts(
 }
 
 #[cfg(feature = "profiling")]
+pub(super) fn calculate_render_inventory(
+    checksum_queries: &PerfChecksumQueries<'_, '_>,
+) -> PerfRenderInventory {
+    let scene_target_count = checksum_queries.scene_rtt_cameras.iter().count();
+    let mask_target_count = checksum_queries.mask_rtt_cameras.iter().count();
+    let layer_2d = RenderLayers::layer(LAYER_2D);
+    let camera_2d_count = checksum_queries.cameras_2d.iter().count();
+    let layer_2d_pass_count = checksum_queries
+        .cameras_2d
+        .iter()
+        .filter(|(camera, layers)| {
+            camera.is_active && layers.unwrap_or_default().intersects(&layer_2d)
+        })
+        .count();
+    PerfRenderInventory {
+        scene_target_count,
+        mask_target_count,
+        camera_3d_rtt_count: scene_target_count + mask_target_count,
+        camera_2d_count,
+        layer_2d_pass_count,
+        soul_proxy_3d: checksum_queries.soul_proxy_3d.iter().count(),
+        soul_mask_proxy_3d: checksum_queries.soul_mask_proxy_3d.iter().count(),
+        soul_shadow_proxy_3d: checksum_queries.soul_shadow_proxy_3d.iter().count(),
+        familiar_proxy_3d: checksum_queries.familiar_proxy_3d.iter().count(),
+    }
+}
+
+#[cfg(feature = "profiling")]
 pub(super) fn collect_audit_actor_records(
     checksum_queries: &PerfChecksumQueries<'_, '_>,
 ) -> Result<Vec<PerfAuditActorRecord>, String> {
@@ -208,6 +236,10 @@ pub(super) fn collect_audit_actor_records(
             record,
         });
     }
+
+    records.extend(indoor_light_fixture::collect_indoor_light_audit_records(
+        &checksum_queries.indoor_light,
+    )?);
 
     records.sort_unstable_by(|left, right| {
         left.actor_kind

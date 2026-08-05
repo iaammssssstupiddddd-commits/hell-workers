@@ -31,12 +31,19 @@ use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use crate::{Render3dVisible, RenderPerfToggles};
 #[cfg(feature = "profiling")]
+use bevy::camera::visibility::RenderLayers;
+#[cfg(feature = "profiling")]
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 #[cfg(feature = "profiling")]
 use bevy::time::{Fixed, Real};
 #[cfg(feature = "profiling")]
-use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, Z_MAP};
+use bevy::window::PrimaryWindow;
+#[cfg(feature = "profiling")]
+use hw_core::constants::{LAYER_2D, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, Z_MAP};
+#[cfg(feature = "profiling")]
+use hw_core::quality::QualitySettings;
+use hw_core::quality::RttQualityPreset;
 #[cfg(feature = "profiling")]
 use hw_core::simulation_rng::SimulationRandomState;
 #[cfg(feature = "profiling")]
@@ -48,7 +55,7 @@ use hw_jobs::construction::{
     FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
 };
 #[cfg(feature = "profiling")]
-use hw_jobs::{GatherPhase, HaulPhase};
+use hw_jobs::{GatherPhase, GeneratePowerPhase, HaulPhase};
 #[cfg(feature = "profiling")]
 use hw_logistics::transport_request::WheelbarrowArbitrationPerfMetrics;
 #[cfg(feature = "profiling")]
@@ -72,19 +79,38 @@ use std::fmt;
 use std::path::PathBuf;
 
 #[cfg(feature = "profiling")]
+use super::perf_render_environment::{
+    PerfRenderEnvironment, PerfRenderEnvironmentEvidence, PerfRenderEnvironmentState,
+};
+#[cfg(feature = "profiling")]
+use super::rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime};
+
+#[cfg(feature = "profiling")]
 mod audit_checksum;
 #[cfg(feature = "profiling")]
 mod audit_encoding;
 #[cfg(feature = "profiling")]
+mod behavior_driver;
+#[cfg(feature = "profiling")]
 mod capture_driver;
 mod config;
 #[cfg(feature = "profiling")]
+#[cfg(feature = "profiling")]
 mod fixture;
+#[cfg(feature = "profiling")]
+mod indoor_light_fixture;
 #[cfg(feature = "profiling")]
 mod output;
 #[cfg(feature = "profiling")]
+mod renderdoc_capture;
+#[cfg(feature = "profiling")]
 mod workload_driver;
 
+#[cfg(feature = "profiling")]
+pub(crate) use behavior_driver::{
+    PerfBehaviorCapture, count_perf_behavior_fixed_tick_system, drive_perf_behavior_system,
+    observe_perf_behavior_system,
+};
 #[cfg(feature = "profiling")]
 pub(crate) use capture_driver::{drive_perf_capture_system, start_perf_capture_system};
 #[cfg(feature = "profiling")]
@@ -94,7 +120,10 @@ pub use config::{
     PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
 };
 #[cfg(feature = "profiling")]
-pub(crate) use config::{is_fixed_step_audit, is_not_fixed_step_audit};
+pub(crate) use config::{
+    is_fixed_step_behavior, is_fixed_step_scenario, is_not_fixed_step_audit,
+    is_not_fixed_step_behavior, is_not_renderdoc_capture,
+};
 #[cfg(feature = "profiling")]
 pub(crate) use fixture::{PerfScenarioApplied, PerfScenarioDriverState, PerfScenarioSet};
 #[cfg(feature = "profiling")]
@@ -103,25 +132,39 @@ pub use fixture::{
     setup_perf_ui_mode_if_enabled,
 };
 #[cfg(feature = "profiling")]
+pub(crate) use indoor_light_fixture::{
+    IndoorLightFixtureState, assign_indoor_light_generator_system,
+    prepare_indoor_light_soul_spa_system, seed_indoor_light_static_door_states_system,
+    should_settle_indoor_light_fixture, stabilize_indoor_light_actors_system,
+    validate_indoor_light_fixture_system,
+};
+#[cfg(feature = "profiling")]
+pub(crate) use renderdoc_capture::{
+    arm_renderdoc_checkpoint_system, install as install_renderdoc_capture,
+    poll_renderdoc_capture_system,
+};
+#[cfg(feature = "profiling")]
 pub(crate) use workload_driver::drive_perf_workload_system;
 
 #[cfg(feature = "profiling")]
 use audit_checksum::{
-    calculate_checksum, calculate_scene_root_counts, checksum_from_audit_records,
-    collect_audit_actor_records, latest_frame_time_ms,
+    calculate_checksum, calculate_render_inventory, calculate_scene_root_counts,
+    checksum_from_audit_records, collect_audit_actor_records, latest_frame_time_ms,
 };
 #[cfg(feature = "profiling")]
 use audit_encoding::*;
 #[cfg(feature = "profiling")]
 use config::{
     FIXED_STEP_AUDIT_EARLY_UPDATE_TICKS, PERF_DETERMINISM_SCHEMA_VERSION,
-    PERF_SUMMARY_SCHEMA_VERSION,
+    PERF_SUMMARY_SCHEMA_VERSION, PerfBehaviorCase,
 };
 #[cfg(feature = "profiling")]
 use fixture::{PerfFixtureKind, PerfFixtureMarker};
 #[cfg(feature = "profiling")]
 use output::{
-    PerfCaptureWriteInput, fnv1a, fnv1a_bytes, write_determinism_audit, write_perf_capture,
+    PerfCaptureWriteInput, fnv1a, fnv1a_bytes, write_determinism_audit,
+    write_indoor_light_fixture_sidecars, write_perf_capture, write_render_inventory,
+    write_window_observation,
 };
 
 #[cfg(feature = "profiling")]
@@ -133,6 +176,8 @@ pub(crate) struct PerfCapture {
     fixture_wait_reported: bool,
     initial_checksum: Option<PerfScenarioChecksum>,
     initial_scene_roots: Option<PerfSceneRootCounts>,
+    initial_render_inventory: Option<PerfRenderInventory>,
+    initial_window: Option<PerfWindowObservation>,
     warmup_checksum: Option<PerfScenarioChecksum>,
     measure_end_checksum: Option<PerfScenarioChecksum>,
     warmup_virtual_secs: f64,
@@ -179,6 +224,73 @@ struct PerfSceneRootCounts {
     soul_shadow_proxy_3d: usize,
     familiar_proxy_3d: usize,
     building_3d_visual: usize,
+}
+
+/// 実際にspawnされたcurrent rendererの構成を固定するprofiling-only inventory。
+#[cfg(feature = "profiling")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PerfRenderInventory {
+    scene_target_count: usize,
+    mask_target_count: usize,
+    camera_3d_rtt_count: usize,
+    camera_2d_count: usize,
+    layer_2d_pass_count: usize,
+    soul_proxy_3d: usize,
+    soul_mask_proxy_3d: usize,
+    soul_shadow_proxy_3d: usize,
+    familiar_proxy_3d: usize,
+}
+
+#[cfg(feature = "profiling")]
+#[derive(Clone, Debug, PartialEq)]
+struct PerfWindowObservation {
+    window_present: bool,
+    logical_width: Option<f32>,
+    logical_height: Option<f32>,
+    physical_width: Option<u32>,
+    physical_height: Option<u32>,
+    scale_factor: Option<f32>,
+    rtt_quality: &'static str,
+    scene_target_width: u32,
+    scene_target_height: u32,
+    mask_target_width: u32,
+    mask_target_height: u32,
+    target_scale_factor: f32,
+    resolved_window_backend: Option<&'static str>,
+    adapter_name: Option<String>,
+    adapter_backend: Option<&'static str>,
+    requested_present_mode: Option<&'static str>,
+    effective_present_mode: Option<&'static str>,
+}
+
+#[cfg(feature = "profiling")]
+impl PerfWindowObservation {
+    fn capture(
+        window: Option<&Window>,
+        runtime: &RttRuntime,
+        quality: &QualitySettings,
+        environment: Option<&PerfRenderEnvironment>,
+    ) -> Self {
+        Self {
+            window_present: window.is_some(),
+            logical_width: window.map(Window::width),
+            logical_height: window.map(Window::height),
+            physical_width: window.map(Window::physical_width),
+            physical_height: window.map(Window::physical_height),
+            scale_factor: window.map(Window::scale_factor),
+            rtt_quality: quality.rtt.as_str(),
+            scene_target_width: runtime.viewport.width,
+            scene_target_height: runtime.viewport.height,
+            mask_target_width: runtime.viewport.width,
+            mask_target_height: runtime.viewport.height,
+            target_scale_factor: runtime.target_scale_factor,
+            resolved_window_backend: environment.map(|value| value.window_backend),
+            adapter_name: environment.map(|value| value.adapter_name.clone()),
+            adapter_backend: environment.map(|value| value.adapter_backend),
+            requested_present_mode: environment.map(|value| value.requested_present_mode),
+            effective_present_mode: environment.map(|value| value.effective_present_mode),
+        }
+    }
 }
 
 #[cfg(feature = "profiling")]
@@ -402,6 +514,7 @@ type PerfAuditFixtureQuery<'w, 's> = Query<
 #[cfg(feature = "profiling")]
 #[derive(SystemParam)]
 pub(crate) struct PerfChecksumQueries<'w, 's> {
+    indoor_light: indoor_light_fixture::IndoorLightAuditQueries<'w, 's>,
     souls: Query<'w, 's, (Entity, &'static Transform), With<DamnedSoul>>,
     familiars: Query<'w, 's, (Entity, &'static Transform), With<Familiar>>,
     designations: Query<'w, 's, Entity, With<Designation>>,
@@ -415,6 +528,9 @@ pub(crate) struct PerfChecksumQueries<'w, 's> {
     soul_shadow_proxy_3d: Query<'w, 's, (), With<SoulShadowProxy3d>>,
     familiar_proxy_3d: Query<'w, 's, (), With<FamiliarProxy3d>>,
     building_3d_visual: Query<'w, 's, (), With<Building3dVisual>>,
+    scene_rtt_cameras: Query<'w, 's, (), With<Camera3dRtt>>,
+    mask_rtt_cameras: Query<'w, 's, (), With<Camera3dSoulMaskRtt>>,
+    cameras_2d: Query<'w, 's, (&'static Camera, Option<&'static RenderLayers>), With<Camera2d>>,
 }
 
 #[cfg(feature = "profiling")]
@@ -430,12 +546,17 @@ pub(crate) struct PerfCaptureStartParams<'w, 's> {
     runtime_path_budget: Res<'w, RuntimePathSearchBudget>,
     runtime_path_defer_metrics: Res<'w, RuntimePathDeferMetrics>,
     dashboard_metrics: Res<'w, TaskDashboardPerfMetrics>,
+    primary_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    rtt_runtime: Res<'w, RttRuntime>,
+    quality: Res<'w, QualitySettings>,
+    render_environment: Res<'w, PerfRenderEnvironmentEvidence>,
 }
 
 #[cfg(feature = "profiling")]
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct PerfCaptureParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
+    indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
     time: ResMut<'w, Time<Virtual>>,
     fixed_time: Res<'w, Time<Fixed>>,
     real_time: Res<'w, Time<Real>>,
@@ -453,4 +574,8 @@ pub(crate) struct PerfCaptureParams<'w, 's> {
     energy_metrics: ResMut<'w, EnergyPerfMetrics>,
     runtime_path_budget: ResMut<'w, RuntimePathSearchBudget>,
     runtime_path_defer_metrics: ResMut<'w, RuntimePathDeferMetrics>,
+    primary_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    rtt_runtime: Res<'w, RttRuntime>,
+    quality: Res<'w, QualitySettings>,
+    render_environment: Res<'w, PerfRenderEnvironmentEvidence>,
 }

@@ -21,6 +21,7 @@ pub enum PerfWorkload {
     Construction,
     UiGpu,
     TaskDashboard,
+    IndoorLight,
 }
 
 impl PerfWorkload {
@@ -31,6 +32,7 @@ impl PerfWorkload {
             "construction" => Some(Self::Construction),
             "ui-gpu" => Some(Self::UiGpu),
             "task-dashboard" => Some(Self::TaskDashboard),
+            "indoor-light" => Some(Self::IndoorLight),
             _ => None,
         }
     }
@@ -42,12 +44,68 @@ impl PerfWorkload {
             Self::Construction => "construction",
             Self::UiGpu => "ui-gpu",
             Self::TaskDashboard => "task-dashboard",
+            Self::IndoorLight => "indoor-light",
         }
     }
 
     #[cfg(feature = "profiling")]
     pub(super) const fn has_automated_setup(self) -> bool {
         true
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PerfRttLightSelection {
+    contract_id: &'static str,
+    stage_id: &'static str,
+    lane: &'static str,
+}
+
+impl PerfRttLightSelection {
+    const CURRENT_STATIC_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "current",
+        lane: "static",
+    };
+    const CURRENT_BEHAVIOR_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "current",
+        lane: "behavior",
+    };
+
+    pub const fn contract_id(self) -> &'static str {
+        self.contract_id
+    }
+
+    pub const fn stage_id(self) -> &'static str {
+        self.stage_id
+    }
+
+    pub const fn lane(self) -> &'static str {
+        self.lane
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PerfBehaviorCase {
+    DoorStateV1,
+    LoadNormalV1,
+}
+
+impl PerfBehaviorCase {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "door-state-v1" => Some(Self::DoorStateV1),
+            "load-normal-v1" => Some(Self::LoadNormalV1),
+            _ => None,
+        }
+    }
+
+    pub(super) const fn as_str(self) -> &'static str {
+        match self {
+            Self::DoorStateV1 => "door-state-v1",
+            Self::LoadNormalV1 => "load-normal-v1",
+        }
     }
 }
 
@@ -191,6 +249,7 @@ impl PerfOperationDialogMode {
 enum PerfClockMode {
     Realtime,
     Fixed,
+    FixedBehavior,
 }
 
 impl PerfClockMode {
@@ -198,6 +257,7 @@ impl PerfClockMode {
         match value {
             "realtime" => Some(Self::Realtime),
             "fixed" => Some(Self::Fixed),
+            "fixed-behavior" => Some(Self::FixedBehavior),
             _ => None,
         }
     }
@@ -206,6 +266,7 @@ impl PerfClockMode {
         match self {
             Self::Realtime => "realtime",
             Self::Fixed => "fixed",
+            Self::FixedBehavior => "fixed-behavior",
         }
     }
 }
@@ -245,6 +306,14 @@ pub struct PerfScenarioConfig {
     pub warmup_secs: f32,
     pub measure_secs: f32,
     pub output_dir: Option<PathBuf>,
+    #[cfg(feature = "profiling")]
+    renderdoc_capture: bool,
+    rtt_light: Option<PerfRttLightSelection>,
+    behavior_case: Option<PerfBehaviorCase>,
+    window_width: Option<u32>,
+    window_height: Option<u32>,
+    window_scale_factor: Option<f32>,
+    rtt_quality: Option<RttQualityPreset>,
     clock_mode: PerfClockMode,
     fixed_step_hz: u32,
     fixed_warmup_ticks: u64,
@@ -282,7 +351,7 @@ impl PerfScenarioConfig {
         let workload = parse_value_or_default(
             value_from_args_or_env(&args, "--perf-workload", "HW_PERF_WORKLOAD")?,
             "--perf-workload",
-            "gather|path-door|construction|ui-gpu|task-dashboard",
+            "gather|path-door|construction|ui-gpu|task-dashboard|indoor-light",
             PerfWorkload::parse,
             PerfWorkload::Gather,
         )?;
@@ -324,7 +393,7 @@ impl PerfScenarioConfig {
         let clock_mode = parse_value_or_default(
             value_from_args_or_env(&args, "--perf-clock", "HW_PERF_CLOCK")?,
             "--perf-clock",
-            "realtime|fixed",
+            "realtime|fixed|fixed-behavior",
             PerfClockMode::parse,
             PerfClockMode::Realtime,
         )?;
@@ -343,7 +412,10 @@ impl PerfScenarioConfig {
             "--perf-audit-ticks",
             DEFAULT_FIXED_AUDIT_TICKS,
         )?;
-        if matches!(clock_mode, PerfClockMode::Fixed) {
+        if matches!(
+            clock_mode,
+            PerfClockMode::Fixed | PerfClockMode::FixedBehavior
+        ) {
             if fixed_step_hz == 0 || fixed_warmup_ticks == 0 || fixed_audit_ticks == 0 {
                 return Err(PerfScenarioConfigError(
                     "--perf-fixed-hz, --perf-warmup-ticks, and --perf-audit-ticks must be greater than 0 for --perf-clock fixed".to_string(),
@@ -372,6 +444,14 @@ impl PerfScenarioConfig {
             "--spawn-familiars",
             default_familiars,
         )?;
+        if workload == PerfWorkload::IndoorLight
+            && (soul_count, familiar_count) != (default_souls, default_familiars)
+        {
+            return Err(PerfScenarioConfigError(format!(
+                "the indoor-light {} fixture requires exactly {default_souls} Souls and {default_familiars} Familiars",
+                size.as_str()
+            )));
+        }
         let uses_b2_controlled_mode = familiar_policy_mode.uses_controlled_fixture()
             || matches!(operation_dialog_mode, PerfOperationDialogMode::Open);
         if uses_b2_controlled_mode
@@ -407,6 +487,16 @@ impl PerfScenarioConfig {
                     .to_string(),
             ));
         }
+        if workload == PerfWorkload::IndoorLight
+            && (!matches!(familiar_policy_mode, PerfFamiliarPolicyMode::Baseline)
+                || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
+                || !matches!(dashboard_mode, PerfDashboardMode::Hidden))
+        {
+            return Err(PerfScenarioConfigError(
+                "the indoor-light workload requires familiar policy baseline, operation dialog hidden, and dashboard hidden"
+                .to_string(),
+            ));
+        }
         let master_seed = parse_u64_value_or_random(
             value_from_args_or_env(&args, "--perf-seed", "HW_PERF_SEED")?
                 .or_else(|| env::var("HELL_WORKERS_WORLDGEN_SEED").ok()),
@@ -427,6 +517,112 @@ impl PerfScenarioConfig {
         let output_dir = value_from_args_or_env(&args, "--perf-output-dir", "HW_PERF_OUTPUT_DIR")?
             .map(PathBuf::from)
             .filter(|path| !path.as_os_str().is_empty());
+        let renderdoc_capture = has_flag(&args, "--perf-renderdoc-capture")
+            || env::var("HW_PERF_RENDERDOC_CAPTURE").is_ok_and(|value| value == "1");
+        let rtt_light = parse_rtt_light_selection(&args, workload)?;
+        let behavior_case_value =
+            value_from_args_or_env(&args, "--perf-behavior-case", "HW_PERF_BEHAVIOR_CASE")?;
+        let behavior_case = match behavior_case_value {
+            Some(value) => Some(PerfBehaviorCase::parse(&value).ok_or_else(|| {
+                PerfScenarioConfigError(format!(
+                    "--perf-behavior-case must be door-state-v1|load-normal-v1; got '{value}'"
+                ))
+            })?),
+            None => None,
+        };
+        match rtt_light.map(PerfRttLightSelection::lane) {
+            Some("behavior") if behavior_case.is_none() => {
+                return Err(PerfScenarioConfigError(
+                    "the rtt-light behavior lane requires --perf-behavior-case".to_string(),
+                ));
+            }
+            Some("behavior")
+                if size != PerfScenarioSize::Small
+                    || render_mode != PerfRenderMode::Cpu
+                    || !matches!(clock_mode, PerfClockMode::FixedBehavior) =>
+            {
+                return Err(PerfScenarioConfigError(
+                    "the rtt-light behavior lane requires small/cpu/fixed-behavior".to_string(),
+                ));
+            }
+            Some(_) if behavior_case.is_some() => {
+                return Err(PerfScenarioConfigError(
+                    "--perf-behavior-case is only valid for --perf-lane behavior".to_string(),
+                ));
+            }
+            Some(_) if matches!(clock_mode, PerfClockMode::FixedBehavior) => {
+                return Err(PerfScenarioConfigError(
+                    "--perf-clock fixed-behavior is only valid for --perf-lane behavior"
+                        .to_string(),
+                ));
+            }
+            None if behavior_case.is_some()
+                || matches!(clock_mode, PerfClockMode::FixedBehavior) =>
+            {
+                return Err(PerfScenarioConfigError(
+                    "behavior selection is reserved for the rtt-light behavior lane".to_string(),
+                ));
+            }
+            _ => {}
+        }
+        let window_width = parse_optional_u32(
+            value_from_args_or_env(&args, "--perf-window-width", "HW_PERF_WINDOW_WIDTH")?,
+            "--perf-window-width",
+        )?;
+        let window_height = parse_optional_u32(
+            value_from_args_or_env(&args, "--perf-window-height", "HW_PERF_WINDOW_HEIGHT")?,
+            "--perf-window-height",
+        )?;
+        if (window_width.is_some()) != (window_height.is_some()) {
+            return Err(PerfScenarioConfigError(
+                "--perf-window-width and --perf-window-height must be provided together"
+                    .to_string(),
+            ));
+        }
+        if matches!(window_width, Some(0)) || matches!(window_height, Some(0)) {
+            return Err(PerfScenarioConfigError(
+                "--perf-window-width and --perf-window-height must be greater than 0".to_string(),
+            ));
+        }
+        let window_scale_factor = parse_optional_positive_f32(
+            value_from_args_or_env(
+                &args,
+                "--perf-window-scale-factor",
+                "HW_PERF_WINDOW_SCALE_FACTOR",
+            )?,
+            "--perf-window-scale-factor",
+        )?;
+        let rtt_quality =
+            match value_from_args_or_env(&args, "--perf-rtt-quality", "HW_PERF_RTT_QUALITY")? {
+                Some(value) => Some(match value.as_str() {
+                    "high" => RttQualityPreset::High,
+                    "medium" => RttQualityPreset::Medium,
+                    "low" => RttQualityPreset::Low,
+                    _ => {
+                        return Err(PerfScenarioConfigError(format!(
+                            "--perf-rtt-quality must be one of high|medium|low; got '{value}'"
+                        )));
+                    }
+                }),
+                None => None,
+            };
+        if renderdoc_capture
+            && (workload != PerfWorkload::IndoorLight
+                || rtt_light != Some(PerfRttLightSelection::CURRENT_STATIC_V1)
+                || size != PerfScenarioSize::Medium
+                || render_mode != PerfRenderMode::Gpu
+                || !matches!(clock_mode, PerfClockMode::Fixed)
+                || output_dir.is_none()
+                || window_width != Some(1920)
+                || window_height != Some(1080)
+                || window_scale_factor != Some(1.0)
+                || rtt_quality != Some(RttQualityPreset::High))
+        {
+            return Err(PerfScenarioConfigError(
+                "--perf-renderdoc-capture requires rtt-light-v1/current/static medium/gpu/fixed, an output directory, and the exact 1920x1080/scale-1/high window contract"
+                    .to_string(),
+            ));
+        }
 
         Ok(Self {
             enabled,
@@ -442,6 +638,14 @@ impl PerfScenarioConfig {
             warmup_secs,
             measure_secs,
             output_dir,
+            #[cfg(feature = "profiling")]
+            renderdoc_capture,
+            rtt_light,
+            behavior_case,
+            window_width,
+            window_height,
+            window_scale_factor,
+            rtt_quality,
             clock_mode,
             fixed_step_hz,
             fixed_warmup_ticks,
@@ -453,8 +657,54 @@ impl PerfScenarioConfig {
         self.enabled
     }
 
+    pub const fn requested_window_size(&self) -> Option<(u32, u32)> {
+        if !self.enabled {
+            return None;
+        }
+        match (self.window_width, self.window_height) {
+            (Some(width), Some(height)) => Some((width, height)),
+            _ => None,
+        }
+    }
+
+    pub const fn rtt_light_selection(&self) -> Option<PerfRttLightSelection> {
+        self.rtt_light
+    }
+
+    #[cfg(feature = "profiling")]
+    pub(crate) const fn renderdoc_capture_enabled(&self) -> bool {
+        self.enabled && self.renderdoc_capture
+    }
+
+    #[cfg(feature = "profiling")]
+    pub(super) const fn behavior_case(&self) -> Option<PerfBehaviorCase> {
+        self.behavior_case
+    }
+
+    pub const fn behavior_case_as_str(&self) -> Option<&'static str> {
+        match self.behavior_case {
+            Some(case) => Some(case.as_str()),
+            None => None,
+        }
+    }
+
+    pub const fn requested_window_scale_factor(&self) -> Option<f32> {
+        if self.enabled {
+            self.window_scale_factor
+        } else {
+            None
+        }
+    }
+
+    pub const fn requested_rtt_quality(&self) -> Option<RttQualityPreset> {
+        if self.enabled { self.rtt_quality } else { None }
+    }
+
     pub const fn uses_fixed_timesteps(&self) -> bool {
-        matches!(self.clock_mode, PerfClockMode::Fixed)
+        matches!(
+            self.clock_mode,
+            PerfClockMode::Fixed | PerfClockMode::FixedBehavior
+        )
     }
 
     /// 自動 perf の CPU 条件では、計測対象外の 3D scene root を生成しない。
@@ -509,12 +759,72 @@ impl PerfScenarioConfig {
 /// 専用経路と通常経路を相互排他的にするために使う。
 #[cfg(feature = "profiling")]
 pub(crate) fn is_fixed_step_audit(config: Option<Res<PerfScenarioConfig>>) -> bool {
-    config.is_some_and(|config| config.enabled() && config.uses_fixed_timesteps())
+    config
+        .is_some_and(|config| config.enabled() && matches!(config.clock_mode, PerfClockMode::Fixed))
 }
 
 #[cfg(feature = "profiling")]
 pub(crate) fn is_not_fixed_step_audit(config: Option<Res<PerfScenarioConfig>>) -> bool {
     !is_fixed_step_audit(config)
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn is_fixed_step_behavior(config: Option<Res<PerfScenarioConfig>>) -> bool {
+    config.is_some_and(|config| {
+        config.enabled() && matches!(config.clock_mode, PerfClockMode::FixedBehavior)
+    })
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn is_not_fixed_step_behavior(config: Option<Res<PerfScenarioConfig>>) -> bool {
+    !is_fixed_step_behavior(config)
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn is_fixed_step_scenario(config: Option<Res<PerfScenarioConfig>>) -> bool {
+    config.is_some_and(|config| config.enabled() && config.uses_fixed_timesteps())
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn is_not_renderdoc_capture(config: Option<Res<PerfScenarioConfig>>) -> bool {
+    !config.is_some_and(|config| config.renderdoc_capture_enabled())
+}
+
+fn parse_rtt_light_selection(
+    args: &[String],
+    workload: PerfWorkload,
+) -> Result<Option<PerfRttLightSelection>, PerfScenarioConfigError> {
+    let contract = value_from_args_or_env(args, "--perf-contract", "HW_PERF_CONTRACT")?;
+    let stage = value_from_args_or_env(args, "--perf-stage", "HW_PERF_STAGE")?;
+    let lane = value_from_args_or_env(args, "--perf-lane", "HW_PERF_LANE")?;
+    let any_selected = contract.is_some() || stage.is_some() || lane.is_some();
+
+    if workload != PerfWorkload::IndoorLight {
+        if any_selected {
+            return Err(PerfScenarioConfigError(
+                "--perf-contract, --perf-stage, and --perf-lane are reserved for --perf-workload indoor-light"
+                    .to_string(),
+            ));
+        }
+        return Ok(None);
+    }
+
+    let (Some(contract), Some(stage), Some(lane)) = (contract, stage, lane) else {
+        return Err(PerfScenarioConfigError(
+            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current --perf-lane static"
+                .to_string(),
+        ));
+    };
+    let selection = match (contract.as_str(), stage.as_str(), lane.as_str()) {
+        ("rtt-light-v1", "current", "static") => PerfRttLightSelection::CURRENT_STATIC_V1,
+        ("rtt-light-v1", "current", "behavior") => PerfRttLightSelection::CURRENT_BEHAVIOR_V1,
+        _ => {
+            return Err(PerfScenarioConfigError(format!(
+                "this binary supports only rtt-light-v1/current/static|behavior; got {contract}/{stage}/{lane}"
+            )));
+        }
+    };
+    Ok(Some(selection))
 }
 
 impl Default for PerfScenarioConfig {
@@ -534,6 +844,14 @@ impl Default for PerfScenarioConfig {
             warmup_secs: DEFAULT_WARMUP_SECS,
             measure_secs: DEFAULT_MEASURE_SECS,
             output_dir: None,
+            #[cfg(feature = "profiling")]
+            renderdoc_capture: false,
+            rtt_light: None,
+            behavior_case: None,
+            window_width: None,
+            window_height: None,
+            window_scale_factor: None,
+            rtt_quality: None,
             clock_mode: PerfClockMode::Realtime,
             fixed_step_hz: DEFAULT_FIXED_STEP_HZ,
             fixed_warmup_ticks: DEFAULT_FIXED_WARMUP_TICKS,

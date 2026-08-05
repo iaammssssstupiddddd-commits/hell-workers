@@ -18,7 +18,7 @@ use hw_ui::panels::task_list::{TaskDashboardViewState, TaskListDirty, TaskWorkTy
 #[cfg(feature = "profiling")]
 #[derive(Resource, Default)]
 pub(crate) struct PerfScenarioApplied {
-    workload: bool,
+    pub(super) workload: bool,
     ui_mode: bool,
 }
 
@@ -78,11 +78,11 @@ pub(crate) struct PerfScenarioDriverState {
 }
 
 #[cfg(feature = "profiling")]
-type PerfSetupFamiliarFilter = (With<Familiar>, Without<DamnedSoul>);
+pub(super) type PerfSetupFamiliarFilter = (With<Familiar>, Without<DamnedSoul>);
 #[cfg(feature = "profiling")]
-type PerfSetupSoulFilter = (With<DamnedSoul>, Without<Familiar>);
+pub(super) type PerfSetupSoulFilter = (With<DamnedSoul>, Without<Familiar>);
 #[cfg(feature = "profiling")]
-type PerfSetupFamiliarQuery<'w, 's> = Query<
+pub(super) type PerfSetupFamiliarQuery<'w, 's> = Query<
     'w,
     's,
     (
@@ -95,7 +95,7 @@ type PerfSetupFamiliarQuery<'w, 's> = Query<
     PerfSetupFamiliarFilter,
 >;
 #[cfg(feature = "profiling")]
-type PerfSetupSoulQuery<'w, 's> = Query<
+pub(super) type PerfSetupSoulQuery<'w, 's> = Query<
     'w,
     's,
     (
@@ -122,7 +122,13 @@ pub struct PerfWorkloadSetupParams<'w, 's> {
     q_souls: PerfSetupSoulQuery<'w, 's>,
     q_trees: PerfTreeQuery<'w, 's>,
     q_rocks: PerfRockQuery<'w, 's>,
+    q_yards: Query<'w, 's, &'static hw_world::Yard>,
     world_map: WorldMapWrite<'w>,
+    game_assets: Res<'w, crate::assets::GameAssets>,
+    handles_3d: Res<'w, crate::plugins::startup::Building3dHandles>,
+    settings: ResMut<'w, hw_core::GameSettings>,
+    indoor_light: ResMut<'w, super::indoor_light_fixture::IndoorLightFixtureState>,
+    exit: MessageWriter<'w, AppExit>,
 }
 
 #[cfg(feature = "profiling")]
@@ -145,6 +151,7 @@ pub(crate) enum PerfScenarioSet {
     FixtureApply,
     Setup,
     Apply,
+    IndoorSettle,
     UiSetup,
     InitialCheckpoint,
     Driver,
@@ -167,10 +174,35 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
         mut q_souls,
         q_trees,
         q_rocks,
+        q_yards,
         mut world_map,
+        game_assets,
+        handles_3d,
+        mut settings,
+        mut indoor_light,
+        mut exit,
     } = params;
 
     if applied.workload || !config.enabled() || q_familiars.is_empty() {
+        return;
+    }
+
+    if config.workload == PerfWorkload::IndoorLight {
+        settings.power_priority_enabled = true;
+        super::indoor_light_fixture::begin_indoor_light_fixture(
+            &config,
+            super::indoor_light_fixture::IndoorLightFixtureSetupContext {
+                commands: &mut commands,
+                state: &mut indoor_light,
+                q_familiars: &mut q_familiars,
+                q_souls: &mut q_souls,
+                world_map: &mut world_map,
+                q_existing_yards: &q_yards,
+                game_assets: &game_assets,
+                handles_3d: &handles_3d,
+                exit: &mut exit,
+            },
+        );
         return;
     }
 
@@ -279,6 +311,9 @@ fn configure_perf_workload(
         }
         PerfWorkload::TaskDashboard => {
             configure_task_dashboard_fixture(commands, q_familiars, config.size)
+        }
+        PerfWorkload::IndoorLight => {
+            unreachable!("indoor-light uses the production-topology settle pipeline")
         }
     }
 }

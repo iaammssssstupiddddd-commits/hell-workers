@@ -88,6 +88,52 @@ impl CuringFootprint {
     }
 }
 
+/// Spawn one completed Floor through the same presentation path used by the
+/// area-construction completion transaction.
+///
+/// Registration in `WorldMap` remains transaction-owned by the caller so a
+/// whole construction site can transfer its footprint atomically.
+pub(crate) fn spawn_completed_floor_tile(
+    commands: &mut Commands,
+    handles_3d: &Building3dHandles,
+    grid: (i32, i32),
+) -> Entity {
+    let world_pos = WorldMap::grid_to_world(grid.0, grid.1);
+    let building_entity = commands
+        .spawn((
+            Building {
+                kind: BuildingType::Floor,
+                is_provisional: false,
+            },
+            BuildingBounceEffect {
+                bounce_animation: BounceAnimation {
+                    timer: 0.0,
+                    config: BounceAnimationConfig {
+                        duration: BOUNCE_DURATION,
+                        min_scale: 1.0,
+                        max_scale: 1.2,
+                    },
+                },
+            },
+            Transform::from_translation(world_pos.extend(Z_MAP + 0.01)),
+            Visibility::default(),
+            Name::new("Building (Floor)"),
+        ))
+        .id();
+
+    commands.spawn((
+        Mesh3d(handles_3d.floor_mesh.clone()),
+        MeshMaterial3d(handles_3d.floor_material.clone()),
+        Transform::from_xyz(world_pos.x, 0.0, -world_pos.y),
+        handles_3d.render_layers.clone(),
+        Building3dVisual {
+            owner: building_entity,
+        },
+        Name::new("Building3dVisual (Floor)"),
+    ));
+    building_entity
+}
+
 /// Returns a circle covering all footprint tiles plus one tile of movement
 /// margin. The spatial query is a candidate filter only; exact grid membership
 /// remains the evacuation condition below.
@@ -309,55 +355,21 @@ pub(crate) fn floor_construction_completion_system(
             continue;
         }
 
-        let completed_grids: Vec<(i32, i32)> =
-            footprint.tiles.iter().map(|(_, grid)| *grid).collect();
-
         // For each tile: spawn Building entity with Floor type
         let mut tile_count = 0;
+        let mut completed_buildings = Vec::with_capacity(footprint.tiles.len());
         for (tile_entity, (gx, gy)) in &footprint.tiles {
-            let world_pos = WorldMap::grid_to_world(*gx, *gy);
-
-            let building_entity = commands
-                .spawn((
-                    Building {
-                        kind: BuildingType::Floor,
-                        is_provisional: false,
-                    },
-                    BuildingBounceEffect {
-                        bounce_animation: BounceAnimation {
-                            timer: 0.0,
-                            config: BounceAnimationConfig {
-                                duration: BOUNCE_DURATION,
-                                min_scale: 1.0,
-                                max_scale: 1.2,
-                            },
-                        },
-                    },
-                    Transform::from_translation(world_pos.extend(Z_MAP + 0.01)),
-                    Visibility::default(),
-                    Name::new("Building (Floor)"),
-                ))
-                .id();
-
-            // 3D ビジュアルエンティティを独立 spawn（Floor は y=0 の地面レベル）
-            commands.spawn((
-                Mesh3d(handles_3d.floor_mesh.clone()),
-                MeshMaterial3d(handles_3d.floor_material.clone()),
-                Transform::from_xyz(world_pos.x, 0.0, -world_pos.y),
-                handles_3d.render_layers.clone(),
-                Building3dVisual {
-                    owner: building_entity,
-                },
-                Name::new("Building3dVisual (Floor)"),
-            ));
+            let building_entity =
+                spawn_completed_floor_tile(&mut commands, &handles_3d, (*gx, *gy));
+            completed_buildings.push((building_entity, (*gx, *gy)));
 
             // Despawn tile blueprint
             commands.entity(*tile_entity).despawn();
             tile_count += 1;
         }
 
-        // Curing is complete: tile becomes walkable again.
-        world_map.clear_building_footprint(completed_grids);
+        // Curing is complete: the completed floor becomes durable map state.
+        register_completed_floors(&mut world_map, &completed_buildings);
 
         // Despawn site
         commands.entity(site_entity).despawn();
@@ -375,12 +387,26 @@ pub(crate) fn floor_construction_completion_system(
     }
 }
 
+pub(crate) fn register_completed_floors(
+    world_map: &mut WorldMap,
+    completed_buildings: &[(Entity, (i32, i32))],
+) {
+    world_map.clear_building_footprint(completed_buildings.iter().map(|(_, grid)| *grid));
+    for &(building, grid) in completed_buildings {
+        world_map.set_floor(grid, building);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{CuringFootprint, collect_curing_soul_candidates};
-    use crate::world::map::WorldMap;
+    use super::{CuringFootprint, collect_curing_soul_candidates, register_completed_floors};
+    use crate::world::map::{WorldMap, WorldMapRef};
     use bevy::prelude::*;
+    use hw_jobs::BuildingType;
     use hw_spatial::{SpatialGrid, SpatialGridOps};
+    use hw_ui::selection::{
+        BuildingPlacementContext, building_geometry, validate_building_placement,
+    };
 
     #[test]
     fn curing_candidates_are_local_and_stably_deduplicated() {
@@ -398,5 +424,36 @@ mod tests {
         collect_curing_soul_candidates(&grid, &footprint, &mut candidates);
 
         assert_eq!(candidates, vec![second, first]);
+    }
+
+    #[test]
+    fn completed_floor_tiles_use_the_stackable_floor_layer_and_allow_building_placement() {
+        let mut map = WorldMap::default();
+        let first = Entity::from_bits(10);
+        let second = Entity::from_bits(11);
+        map.reserve_building_footprint_tiles([(3, 4), (4, 4)]);
+
+        register_completed_floors(&mut map, &[(first, (3, 4)), (second, (4, 4))]);
+
+        assert_eq!(map.floor_entity((3, 4)), Some(first));
+        assert_eq!(map.floor_entity((4, 4)), Some(second));
+        assert_eq!(map.building_entity((3, 4)), None);
+        assert_eq!(map.building_entity((4, 4)), None);
+        assert!(map.is_walkable(3, 4));
+        assert!(map.is_walkable(4, 4));
+
+        let world = WorldMapRef(&map);
+        let geometry = building_geometry(BuildingType::OutdoorLamp, (3, 4), 0);
+        let context = BuildingPlacementContext {
+            world: &world,
+            in_site: true,
+            in_yard: true,
+            is_wall_or_door_at: &|_| false,
+            is_replaceable_wall_at: &|_| false,
+        };
+        assert!(
+            validate_building_placement(&context, BuildingType::OutdoorLamp, (3, 4), &geometry,)
+                .can_place
+        );
     }
 }

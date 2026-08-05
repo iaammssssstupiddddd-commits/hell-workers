@@ -4,6 +4,8 @@ mod input;
 mod spawn;
 
 pub use input::soul_spa_place_input_system;
+#[cfg(feature = "profiling")]
+pub(crate) use spawn::spawn_soul_spa;
 
 use crate::systems::jobs::BuildingType;
 use crate::world::map::{RIVER_Y_MIN, WorldMap, WorldMapRef};

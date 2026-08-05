@@ -69,9 +69,10 @@ use hw_logistics::{
 };
 use hw_spatial::{door_auto_close_nearby_system, door_auto_open_nearby_system};
 use hw_world::{
-    ObstaclePositionIndex, RoomDetectionState, RoomTileLookup, RoomValidationState,
-    detect_rooms_system, mark_room_dirty_from_building_changes_system, obstacle_sync_system,
-    on_building_added, on_building_removed, on_door_added, on_door_removed, validate_rooms_system,
+    ObstaclePositionIndex, RoomBoundaryLookup, RoomDetectionState, RoomTileLookup,
+    RoomValidationState, detect_rooms_system, mark_room_dirty_from_building_changes_system,
+    obstacle_sync_system, on_building_added, on_building_removed, on_door_added, on_door_removed,
+    validate_rooms_system,
 };
 
 pub struct LogicPlugin;
@@ -100,6 +101,7 @@ impl Plugin for LogicPlugin {
         app.init_resource::<crate::entities::familiar::FamiliarColorAllocator>();
         app.init_resource::<RoomDetectionState>();
         app.init_resource::<RoomTileLookup>();
+        app.init_resource::<RoomBoundaryLookup>();
         app.init_resource::<RoomValidationState>();
         app.init_resource::<ObstaclePositionIndex>();
         app.init_resource::<EnergyUpdateDirty>();

@@ -1,14 +1,14 @@
 # 3D-RtT 移行ロードマップ
 
 作成日: 2026-03-15
-最終更新: 2026-07-13（既存計画の統合・現行コード照合）
-ステータス: Phase 3 進行中（未完: MS-3-5 / 7 / 8 / 9、受入残件: MS-3-6 / 10）
+最終更新: 2026-08-03（TopDown hybrid方針への置換）
+ステータス: Superseded（完了済み実装の履歴。未完項目は凍結）
 
 ---
 
-## 現行バックログ（2026-07-13）
+## 凍結バックログ（2026-08-03）
 
-このロードマップを 3D-RtT の実装順序と未完条件の正本とする。完了済みの詳細計画・採用提案は `archived/` に移し、恒久仕様は `docs/architecture.md` と各システム文書を正とする。過去の完了記録にある Bevy 0.18 表記は当時の検証履歴であり、新規実装・再検証は **Bevy 0.19** を前提とする。
+本ロードマップは完了済み3D-RtT実装の履歴として保持する。下表の未完項目へは着手せず、現行の移行順序と未完条件は[`single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md)を正本とする。特にfull RtT、Soul mask拡張、section / 矢視、多層階を新規実装の前提にしない。過去の完了記録にあるBevy 0.18表記は当時の検証履歴である。
 
 | 優先 | 対象 | 現在の残件 |
 | --- | --- | --- |
@@ -20,9 +20,9 @@
 | P2 | MS-3-10 | Soul mask ring PoC、アウトライン値と壁ノーマル方針の受入確定 |
 | 独立 | 配置 ghost | マウス移動時の配置検証を計測し、必要な場合だけ差分再計算を計画化 |
 
-## ビジョン
+## 旧ビジョン（履歴）
 
-**最終ゴール**: 地形・建築物・キャラクターをすべて3D空間に配置し、Camera3dの正射影レンダリング結果をRtT（Render-to-Texture）で2D UIと合成する「フルRtT」アーキテクチャへの移行。
+**当時の最終ゴール**: 地形・建築物・キャラクターをすべて3D空間に配置し、Camera3dの正射影レンダリング結果をRtT（Render-to-Texture）で2D UIと合成する「フルRtT」アーキテクチャへの移行。この目標は2026-08-03にTopDown hybridへ置換されており、新規作業の判断根拠にしない。
 
 **基本方針**: ロジック層（ECS・AI・パスファインディング）は一切変更しない。描画層のみを段階的にすげ替える。
 
@@ -617,6 +617,7 @@ MS-WFC-1 → MS-WFC-2 → MS-WFC-2d → MS-WFC-2e → MS-WFC-3 → MS-WFC-4 → 
 
 | ドキュメント | 内容 |
 |------------|------|
+| `docs/plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md` | 現行の単一Scene RtT・TopDown hybrid・IndoorLightField移行正本 |
 | `docs/plans/3d-rtt/asset-milestones-2026-03-17.md` | アセット制作マイルストーン（スプライト・GLB・シェーダー・テクスチャ） |
 | `docs/plans/3d-rtt/lighting-visual-plan-2026-04-04.md` | Outdoor Lamp の局所光・影・通電同期 |
 | `docs/plans/3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md` | terrain LOD 切替ポップの観測と遷移導入 |

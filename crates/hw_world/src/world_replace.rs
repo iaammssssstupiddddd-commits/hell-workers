@@ -2,7 +2,10 @@
 
 use bevy::prelude::*;
 
-use crate::{Room, RoomDetectionState, RoomOverlayTile, RoomTileLookup, RoomValidationState};
+use crate::{
+    Room, RoomBoundaryLookup, RoomDetectionState, RoomOverlayTile, RoomTileLookup,
+    RoomValidationState,
+};
 
 /// Removes runtime-only room entities and drops every entity reference held by
 /// room scheduling resources. The operation is intentionally idempotent so a
@@ -19,6 +22,7 @@ pub fn reset_for_world_replace(world: &mut World) {
     }
     world.insert_resource(RoomDetectionState::default());
     world.insert_resource(RoomTileLookup::default());
+    world.insert_resource(RoomBoundaryLookup::default());
     world.insert_resource(RoomValidationState::default());
 }
 
@@ -49,6 +53,9 @@ mod tests {
         let mut lookup = RoomTileLookup::default();
         lookup.tile_to_room.insert((1, 1), room);
         world.insert_resource(lookup);
+        let mut boundary_lookup = RoomBoundaryLookup::default();
+        boundary_lookup.boundary_to_rooms.insert((0, 1), vec![room]);
+        world.insert_resource(boundary_lookup);
 
         reset_for_world_replace(&mut world);
         reset_for_world_replace(&mut world);
@@ -57,5 +64,11 @@ mod tests {
         assert!(world.get_entity(overlay).is_err());
         assert!(world.get_entity(durable).is_ok());
         assert!(world.resource::<RoomTileLookup>().tile_to_room.is_empty());
+        assert!(
+            world
+                .resource::<RoomBoundaryLookup>()
+                .boundary_to_rooms
+                .is_empty()
+        );
     }
 }

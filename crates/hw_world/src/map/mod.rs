@@ -2,6 +2,7 @@ mod access;
 mod bridges;
 mod buildings;
 mod doors;
+mod floors;
 mod obstacles;
 mod stockpiles;
 mod tiles;
@@ -40,6 +41,9 @@ pub struct WorldMap {
     pub tiles: Vec<TerrainType>,
     pub tile_entities: Vec<Option<Entity>>,
     pub buildings: HashMap<(i32, i32), Entity>,
+    /// Completed Floor occupancy, kept separate from ordinary building cells.
+    #[serde(default)]
+    pub floors: HashMap<(i32, i32), Entity>,
     pub doors: HashMap<(i32, i32), Entity>,
     pub door_states: HashMap<(i32, i32), DoorState>,
     pub stockpiles: HashMap<(i32, i32), Entity>,
@@ -58,6 +62,7 @@ impl Default for WorldMap {
             tiles: vec![TerrainType::Grass; size],
             tile_entities: vec![None; size],
             buildings: HashMap::new(),
+            floors: HashMap::new(),
             doors: HashMap::new(),
             door_states: HashMap::new(),
             stockpiles: HashMap::new(),
@@ -81,6 +86,9 @@ fn map_world_map_entities<M: EntityMapper>(this: &mut WorldMap, mapper: &mut M) 
         *entity = mapper.get_mapped(*entity);
     }
     for entity in this.buildings.values_mut() {
+        *entity = mapper.get_mapped(*entity);
+    }
+    for entity in this.floors.values_mut() {
         *entity = mapper.get_mapped(*entity);
     }
     for entity in this.doors.values_mut() {

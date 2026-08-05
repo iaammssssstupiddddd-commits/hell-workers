@@ -8,6 +8,7 @@ bevy = { workspace = true }
 rand = { workspace = true }
 ron = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
 bevy_world_serialization = { workspace = true }
 hw_core = { path = "../hw_core" }
 hw_energy = { path = "../hw_energy" }
@@ -19,12 +20,19 @@ hw_familiar_ai   = { path = "../hw_familiar_ai" }
 hw_soul_ai       = { path = "../hw_soul_ai" }
 hw_spatial = { path = "../hw_spatial" }
 hw_visual = { path = "../hw_visual" }
+wgpu = { workspace = true, optional = true }
+libloading = { workspace = true, optional = true }
+renderdoc-sys = { workspace = true, optional = true }
 
 
 [features]
 default = ["dynamic_linking"]
 dynamic_linking = ["bevy/dynamic_linking"]
 profiling = [
+    "dep:wgpu",
+    "dep:libloading",
+    "dep:renderdoc-sys",
+    "dep:serde_json",
     "hw_core/profiling",
     "hw_energy/profiling",
     "hw_jobs/profiling",

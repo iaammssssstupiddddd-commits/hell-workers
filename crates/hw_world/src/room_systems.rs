@@ -12,8 +12,8 @@ use hw_jobs::{Building, Door};
 
 use crate::map::WorldMap;
 use crate::room_detection::{
-    DetectedRoom, Room, RoomDetectionBuildingTile, RoomDetectionState, RoomOverlayTile,
-    RoomTileLookup, RoomValidationState, build_detection_input, detect_rooms,
+    DetectedRoom, Room, RoomBoundaryLookup, RoomDetectionBuildingTile, RoomDetectionState,
+    RoomOverlayTile, RoomTileLookup, RoomValidationState, build_detection_input, detect_rooms,
     room_is_valid_against_input,
 };
 
@@ -31,6 +31,9 @@ type ChangedRoomsQuery<'w, 's> = Query<
     (Entity, &'static Room, Option<&'static Children>),
     Or<(Added<Room>, Changed<Room>)>,
 >;
+type RoomDetectionBuildingQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Building, &'static Transform)>;
+type ExistingRoomQuery<'w, 's> = Query<'w, 's, Entity, With<Room>>;
 
 /// 建物タイルを収集し Room ECS エンティティを再構築するシステム
 pub fn detect_rooms_system(
@@ -38,8 +41,9 @@ pub fn detect_rooms_system(
     time: Res<Time>,
     mut detection_state: ResMut<RoomDetectionState>,
     mut room_tile_lookup: ResMut<RoomTileLookup>,
-    q_buildings: Query<(Entity, &Building, &Transform)>,
-    q_rooms: Query<Entity, With<Room>>,
+    mut room_boundary_lookup: ResMut<RoomBoundaryLookup>,
+    q_buildings: RoomDetectionBuildingQuery,
+    q_rooms: ExistingRoomQuery,
 ) {
     detection_state.cooldown.tick(time.delta());
 
@@ -47,15 +51,75 @@ pub fn detect_rooms_system(
         return;
     }
 
-    let tiles = collect_building_tiles(&q_buildings);
+    rebuild_rooms(
+        &mut commands,
+        &mut detection_state,
+        &mut room_tile_lookup,
+        &mut room_boundary_lookup,
+        &q_buildings,
+        &q_rooms,
+    );
+}
+
+/// Profiling fixtures need the production Room adapter before virtual time is
+/// unpaused. This bypasses only the cooldown; collection, detection, lookup
+/// construction, and ECS Room spawning are shared with normal runtime.
+#[cfg(feature = "profiling")]
+pub fn detect_rooms_immediately_system(
+    mut commands: Commands,
+    mut detection_state: ResMut<RoomDetectionState>,
+    mut room_tile_lookup: ResMut<RoomTileLookup>,
+    mut room_boundary_lookup: ResMut<RoomBoundaryLookup>,
+    q_buildings: RoomDetectionBuildingQuery,
+    q_rooms: ExistingRoomQuery,
+) {
+    if detection_state.dirty_tiles.is_empty() {
+        return;
+    }
+    rebuild_rooms(
+        &mut commands,
+        &mut detection_state,
+        &mut room_tile_lookup,
+        &mut room_boundary_lookup,
+        &q_buildings,
+        &q_rooms,
+    );
+}
+
+fn rebuild_rooms(
+    commands: &mut Commands,
+    detection_state: &mut RoomDetectionState,
+    room_tile_lookup: &mut RoomTileLookup,
+    room_boundary_lookup: &mut RoomBoundaryLookup,
+    q_buildings: &RoomDetectionBuildingQuery,
+    q_rooms: &ExistingRoomQuery,
+) {
+    let tiles = collect_building_tiles(q_buildings);
     let input = build_detection_input(&tiles);
-    let detected_rooms = detect_rooms(&input);
+    let mut detected_rooms = detect_rooms(&input);
+    detected_rooms.sort_by(|left, right| {
+        (
+            left.bounds.min_y,
+            left.bounds.min_x,
+            left.bounds.max_y,
+            left.bounds.max_x,
+            &left.tiles,
+        )
+            .cmp(&(
+                right.bounds.min_y,
+                right.bounds.min_x,
+                right.bounds.max_y,
+                right.bounds.max_x,
+                &right.tiles,
+            ))
+    });
 
     for room_entity in q_rooms.iter() {
         commands.entity(room_entity).try_despawn();
     }
 
     let mut tile_to_room = HashMap::new();
+    let mut boundary_to_rooms = HashMap::new();
     for (index, detected) in detected_rooms.into_iter().enumerate() {
         let DetectedRoom {
             tiles,
@@ -66,20 +130,26 @@ pub fn detect_rooms_system(
         let tile_count = tiles.len();
         let room_tiles_for_lookup = tiles.clone();
 
-        let room_entity = commands
-            .spawn((
-                Room {
-                    tiles,
-                    wall_tiles,
-                    door_tiles,
-                    bounds,
-                    tile_count,
-                },
+        let room_entity = commands.spawn_empty().id();
+        insert_room_boundaries(
+            &mut boundary_to_rooms,
+            room_entity,
+            &wall_tiles,
+            &door_tiles,
+        );
+
+        commands.entity(room_entity).insert((
+            Room {
+                tiles,
+                wall_tiles,
+                door_tiles,
                 bounds,
-                Transform::default(),
-                Name::new(format!("Room #{}", index + 1)),
-            ))
-            .id();
+                tile_count,
+            },
+            bounds,
+            Transform::default(),
+            Name::new(format!("Room #{}", index + 1)),
+        ));
 
         for tile in room_tiles_for_lookup {
             tile_to_room.insert(tile, room_entity);
@@ -87,6 +157,7 @@ pub fn detect_rooms_system(
     }
 
     room_tile_lookup.tile_to_room = tile_to_room;
+    room_boundary_lookup.boundary_to_rooms = boundary_to_rooms;
     detection_state.dirty_tiles.clear();
 }
 
@@ -99,6 +170,7 @@ pub struct ValidateRoomsParams<'w, 's> {
     validation_state: ResMut<'w, RoomValidationState>,
     detection_state: ResMut<'w, RoomDetectionState>,
     room_tile_lookup: ResMut<'w, RoomTileLookup>,
+    room_boundary_lookup: ResMut<'w, RoomBoundaryLookup>,
     q_rooms: Query<'w, 's, (Entity, &'static Room)>,
     q_buildings: Query<'w, 's, (Entity, &'static Building, &'static Transform)>,
 }
@@ -124,12 +196,19 @@ pub fn validate_rooms_system(mut p: ValidateRoomsParams) {
 
     let input = build_detection_input(&tiles);
     let mut tile_to_room = HashMap::new();
+    let mut boundary_to_rooms = HashMap::new();
 
     for (room_entity, room) in p.q_rooms.iter() {
         if room_is_valid_against_input(&room.tiles, &input) {
             for &tile in &room.tiles {
                 tile_to_room.insert(tile, room_entity);
             }
+            insert_room_boundaries(
+                &mut boundary_to_rooms,
+                room_entity,
+                &room.wall_tiles,
+                &room.door_tiles,
+            );
             continue;
         }
 
@@ -143,6 +222,7 @@ pub fn validate_rooms_system(mut p: ValidateRoomsParams) {
     }
 
     p.room_tile_lookup.tile_to_room = tile_to_room;
+    p.room_boundary_lookup.boundary_to_rooms = boundary_to_rooms;
 }
 
 fn collect_building_tiles(
@@ -158,6 +238,20 @@ fn collect_building_tiles(
             }
         })
         .collect()
+}
+
+fn insert_room_boundaries(
+    lookup: &mut HashMap<(i32, i32), Vec<Entity>>,
+    room_entity: Entity,
+    wall_tiles: &[(i32, i32)],
+    door_tiles: &[(i32, i32)],
+) {
+    for grid in wall_tiles.iter().chain(door_tiles) {
+        let rooms = lookup.entry(*grid).or_default();
+        rooms.push(room_entity);
+        rooms.sort_unstable_by_key(|entity| entity.to_bits());
+        rooms.dedup();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -356,5 +450,26 @@ pub fn sync_room_overlay_tiles_system(
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_boundary_lookup_keeps_both_rooms_once() {
+        let mut world = World::new();
+        let first = world.spawn_empty().id();
+        let second = world.spawn_empty().id();
+        let mut lookup = HashMap::new();
+
+        insert_room_boundaries(&mut lookup, second, &[(5, 5)], &[]);
+        insert_room_boundaries(&mut lookup, first, &[(5, 5)], &[]);
+        insert_room_boundaries(&mut lookup, first, &[(5, 5)], &[]);
+
+        let mut expected = vec![first, second];
+        expected.sort_unstable_by_key(|entity| entity.to_bits());
+        assert_eq!(lookup.get(&(5, 5)), Some(&expected));
     }
 }

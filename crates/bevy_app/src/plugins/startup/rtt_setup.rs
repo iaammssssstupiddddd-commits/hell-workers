@@ -27,8 +27,20 @@ impl RttRuntime {
         images: &mut Assets<Image>,
     ) -> Self {
         Self {
-            scene: create_rtt_texture(viewport.width, viewport.height, images),
-            soul_mask: create_rtt_texture(viewport.width, viewport.height, images),
+            scene: create_rtt_texture(
+                viewport.width,
+                viewport.height,
+                "hell-workers-rtt-scene",
+                "hell-workers-rtt-scene-view",
+                images,
+            ),
+            soul_mask: create_rtt_texture(
+                viewport.width,
+                viewport.height,
+                "hell-workers-rtt-soul-mask",
+                "hell-workers-rtt-soul-mask-view",
+                images,
+            ),
             viewport,
             target_scale_factor,
         }
@@ -42,8 +54,20 @@ impl RttRuntime {
     ) {
         self.viewport = viewport;
         self.target_scale_factor = target_scale_factor;
-        self.scene = create_rtt_texture(viewport.width, viewport.height, images);
-        self.soul_mask = create_rtt_texture(viewport.width, viewport.height, images);
+        self.scene = create_rtt_texture(
+            viewport.width,
+            viewport.height,
+            "hell-workers-rtt-scene",
+            "hell-workers-rtt-scene-view",
+            images,
+        );
+        self.soul_mask = create_rtt_texture(
+            viewport.width,
+            viewport.height,
+            "hell-workers-rtt-soul-mask",
+            "hell-workers-rtt-soul-mask-view",
+            images,
+        );
     }
 
     pub fn scene_render_target(&self) -> RenderTarget {
@@ -108,13 +132,23 @@ pub struct RttExtraDirectionalLight;
 
 /// RtT テクスチャを生成して Assets に登録し、ハンドルを返す。
 /// ウィンドウリサイズ時に呼び直すことで全参照箇所が追従する。
-pub fn create_rtt_texture(width: u32, height: u32, images: &mut Assets<Image>) -> Handle<Image> {
-    let image = Image::new_target_texture(
+pub fn create_rtt_texture(
+    width: u32,
+    height: u32,
+    texture_label: &'static str,
+    view_label: &'static str,
+    images: &mut Assets<Image>,
+) -> Handle<Image> {
+    let mut image = Image::new_target_texture(
         width,
         height,
         TextureFormat::Rgba8Unorm,
         Some(TextureFormat::Rgba8UnormSrgb),
     );
+    image.texture_descriptor.label = Some(texture_label);
+    if let Some(view) = image.texture_view_descriptor.as_mut() {
+        view.label = Some(view_label);
+    }
     images.add(image)
 }
 

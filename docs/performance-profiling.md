@@ -26,6 +26,108 @@ Memory buildは`profiling-memory`限定のglobal allocator wrapperを使う。`d
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test
 ```
 
+### RtT / 室内照明 migration contract
+
+P00以降の比較正本は`scripts/perf_tool/contracts/rtt_light_migration_v1.json`である。fixtureのsmall /
+medium / large exact count、座標生成順、behavior case、stageごとのrequired lane / gate、projection列、
+formal matrixを一つのcanonical hashへまとめる。stage別のrequired / forbidden /
+`not_applicable`規則、gate resultのexpected metric row、production Door behavior fixtureまで実装済みで、
+`lifecycle.status`は`frozen`、`formal_registration_allowed`は`true`である。v1を変更する場合は既存JSONを
+書き換えず、v2を追加してreferenceとcandidateを同じversionで再採取する。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py \
+  validate-rtt-light-contract \
+  --contract rtt-light-v1 --stage current --lane static
+```
+
+`current`では`static`と`behavior`がrequiredであり、behavior caseは`door-state-v1`と
+`load-normal-v1`である。`field-core`はP03より前、`consumer-core`はP07より前では失格になる。validatorは
+canonical JSONをpinし、意図しない変更を検出する。canonical measurement contract hashは
+`121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`、fixture hashは
+`a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed`である。layout hashはsmall
+`e87a3b1aeb7ee1fbe334d311ad731bef24ce90ec80066af1e35c006ef4273af2`、medium
+`e18320b3bcf8089c1ea2743003eadd79a0c938caa44682ed414e9d9d54af8f2d`、large
+`3dec65d6c30ee9b88678af28a818a05fa70ededc66f20242ff78dcb6772c56fd`である。session manifestは
+選択したsizeごとのchecksum mapを持ち、run metadataは当該caseのchecksumを持つ。
+
+frame-time / fixed-stepの両runは`data/window.csv` schema v1を必須sidecarとして出力する。windowed runは
+開始・終了時のlogical / physical size、scale factor、RtT品質、Scene / mask target寸法、resolved window
+backend、actual adapter/backend、requested / effective present modeを記録し、途中で1項目でも変化したrunを
+失格にする。`--window-width` / `--window-height`はBevy 0.19
+`WindowResolution::new`へ渡すphysical pixelである。headless runではprimary-window fieldを空にし、
+`window_present=false`を要求する。fallback RtT寸法は経路診断として検証するが、actual window / surface /
+present能力の証拠には数えない。
+
+session manifest schema v2はmanifestのcase集合と`preflight-NNN` / `run-NNN` directory集合をexact比較し、
+欠損、未知directory、invalid preflight、欠損`validation.json`を集約前に拒否する。比較もschema v2かつ
+`status=valid`のsessionだけを受理し、NaN / infinityや0以下のreference値を拒否する。各frame summaryの
+p50 / p95 / p99 / maxは`frames.csv`から同じround-half-up式で再計算する。fixed-stepは
+`determinism.csv`だけでなくactor record sidecarのschema、checkpoint、stable order、population countを
+`determinism_records.csv`から検証し、各checkpointのrecord payloadからRustと同じFNV-1aで
+`state_checksum`を再計算する。
+
+`indoor-light`はcurrent stageで`static`と`behavior`を実行できる。staticはsmall / medium / large、
+behaviorは上記2 caseのfixed-step artifactであり、field / consumer coreはstage成立前に捏造しない。
+3規模ともFloor / Wall / Door、給電Lamp、無給電control Lamp、SoulSpa、Yard / PowerGrid、Roomを
+production spawn / completion / energy / Room再構築経路で作り、契約したSoul / Familiarを固定する。
+Door状態はsmallがClosed 1、mediumがOpen 2 / Closed 1 / Locked 1、largeがOpen 4 / Closed 8 /
+Locked 4である。
+
+medium / largeの`all-building-showcase-v1`はRust runtimeとoffline validatorの両方でexact化済みである。
+`BuildingType::ALL`順の12 root、各anchor / footprint、追加7棟のcompletion route、Tank用BucketStorage
+companion、post-process component、current presentationを固定する。既存のFloor / Wall / Door /
+SoulSpa / OutdoorLampを再利用し、追加7棟をexact rootとして数える。Bridgeは現行2×5 completion geometryを
+観測するfixture専用probeであり、蛇行するgenerated riverに対してplayer authoring validationが成立するとは
+主張しない。Tank companionは論理配置1件だが、現行production topologyどおり1 tileずつ2つの
+`BucketStorage` entityを作り、空Bucket 5個を3 / 2へ決定的に格納する。Doorの動的遷移はbehavior artifactで
+別に閉じる。
+
+runtime sidecar期待値はmediumがlayout 722行 / presentation 12行 / indoor semantic actor 258件、largeが
+2306行 / 12行 / 936件である。通常actorのうちSoul / Familiarはsize契約、Designationは各checkpointの
+`determinism.csv`宣言値と照合し、indoor semantic actorとは別に増減を記録する。
+Python self-testは3規模を生成・再読込し、Bridge footprint改変、size別actor欠落、presentation topology差を
+fail-closedに扱う。fixed auditは各checkpointでDoor state / child image / WorldMap、Room reverse lookup、
+電力網、SoulSpa worker、showcase componentを再検証する。realtime Capture / Memoryもwarmup終端とmeasure終端で
+同じsemantic validatorを通し、初期sidecarだけが正しいstale artifactを成功扱いしない。
+
+各規模は`indoor_light_fixture.csv` 1行と、small 187 / 5、medium 722 / 12、large 2306 / 12行の
+`indoor_light_layout.csv` / `indoor_light_presentation.csv`を必須出力する。indoor semantic actorはsmall 78、
+medium 258、large 936件を全checkpointでexact検証する。generic actorはSoul / Familiar / Designationを
+checkpoint宣言値へ照合し、fixture外のproduction designationをindoor契約へ誤って固定しない。
+Room entityはproduction検出で再生成され得るため、Entity IDをhashせず、floor cell集合、wall / Door境界、
+bounds、reverse lookupから毎checkpoint一意に再同定する。
+
+短縮headless smokeは次のshapeで実行できる。dev profile binaryと129 + 16 tickは経路確認専用であり、
+formal baselineやrenderer / GPU性能証跡には使わない。
+
+```bash
+cargo build -p bevy_app@0.1.0 --no-default-features --features profiling
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
+  --workload indoor-light --contract rtt-light-v1 \
+  --stage current --lane static --sizes small,medium,large --renders cpu \
+  --seed 20260803 --repeat 1 --preflight-runs 0 \
+  --backend auto --window-backend headless --present-mode novsync \
+  --fixed-hz 64 --warmup-ticks 129 --audit-ticks 16 \
+  --skip-build --binary target/debug/bevy_app \
+  --allow-log-pattern 'driver that only supports software rendering' \
+  --output /tmp/rtt-light-current-static
+```
+
+ローカルVulkan loader由来の追加ERRORを診断用regexで許可したrunはformal evidenceに昇格させない。
+formal artifactはまだ未採取である。登録にはclean subject commit、ancestor correctness commit、同一sourceの
+S0 / S1、actual-window Capture / Memory、medium/gpuのRenderDoc replay、offline bundle validationが必要である。
+`plan-rtt-light`が`blocked`を返した場合は実行へ進めない。登録済みattemptはnative helperの
+`verify-rtt-light --repo … --attempt …`、baseline rootは`python3 scripts/perf.py
+verify-rtt-light-baseline --baseline …`で再検証する。
+
+RenderDoc runtime checkpoint / replay extractionはschema v2である。checkpointはScene / Soul mask targetの
+labelに加え、compositeのVulkan descriptor contract（fragment set 2: Scene texture / sampler = binding 1 / 2、
+mask texture / sampler = binding 3 / 4）を固定する。extractorは`vkCmdNextSubpass`の
+`EndPass | BeginPass`を旧subpassのclose後に次subpassへ開き、globalなsampler件数ではなく、同一draw上の
+2 texture + 2 samplerがこのexact `(set, binding)`を満たすことを要求する。別drawで同じsamplerを繰り返しても
+合格しない。schema v1のcheckpoint / extractionはformal baselineへ登録できない。
+
 ### 許可ダイアログなし実機受入
 
 実機確認、実機テスト、actual window、renderer / GPU / backend、native performanceの受入では、repository Skill `hell-workers-run-native-acceptance`を毎回使う。Skillを利用できないagentは`.cursor/skills/hell-workers-run-native-acceptance/SKILL.md`を直接読む。Task Dashboardの標準recipeは次のplan commandを入口にし、返された`launcher_command`を先頭の`kitty`を変えずに直接実行する。
@@ -254,6 +356,13 @@ fixed-step auditでは`frames.csv`と`summary.csv`の代わりに、`data/determ
 `reachable_with_cache_calls` は schema v11でも互換のため名前を維持しているが、M4A以後は Familiar 委譲が version付き連結成分 cache に問い合わせた回数であり、core A* 呼び出し回数ではない。Boolean 到達判定が A* を呼ばないことは cache/A* parity test と topology version 回帰 test で保証する。既存schema v4以前の`reachable_with_cache_calls`や新しいcaller counterを、互いの代理指標にしてはならない。
 
 `aggregate.csv`はframe sampleをrun間で混ぜず、各runのp50/p95/p99/maxを先に出し、その値の中央値とMADをcaseごとに出す。initial fixture checksum、warm-up checksum群、post-capture teardown warning件数も併記する。invalid runを黙って除外せず、session全体をinvalidにする。`summary.csv` schema v2の既存artifactにはtask execution counterがなく、schema v3以前のartifactにはreservation sync counterがない。frame-time比較は可能だが、存在しないcounterを0としてM1以降と比較してはならない。
+
+新規sessionの`manifest.json`はschema v2である。manifestに列挙したcase、`repeat`、
+`preflight_runs`と実ディレクトリ集合をaggregation前にexact比較し、case/run欠落、未知run、
+重複case、`validation.json`欠落、invalid preflightをsession全体の失格にする。preflight値は
+aggregateへ含めないが、その失敗を無視して本測定だけをvalidにはしない。`frames.csv`もexact header、
+0始まりの連続index、finiteかつ非負のframe timeを要求する。schema v1以前の既存manifestは再集約互換を
+維持するが、v2のformal bundleとしては扱わない。
 
 schemaが異なる過去artifactの共通frame-timeは、対応する単一変更の**履歴上の参考値**にだけ使える。現行実装全体の改善率を示す場合は、schema v11・同一workload/fixture・同一計測matrixで採ったbaselineとcandidateを比較し、異なるschemaや別workloadの結果を合算してはならない。
 

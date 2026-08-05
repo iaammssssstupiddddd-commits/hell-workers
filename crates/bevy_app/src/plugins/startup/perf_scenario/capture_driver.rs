@@ -55,8 +55,41 @@ pub(crate) fn start_perf_capture_system(
         return;
     }
 
+    let render_environment = match params.render_environment.snapshot() {
+        PerfRenderEnvironmentState::Disabled => {
+            if params.primary_window.single().is_ok() {
+                error!("PERF_CAPTURE: renderer evidence is disabled for a windowed profiling run");
+                capture.phase = PerfCapturePhase::Finished;
+                exit.write(AppExit::error());
+                return;
+            }
+            None
+        }
+        PerfRenderEnvironmentState::Pending => {
+            if !capture.fixture_wait_reported {
+                eprintln!("PERF_CAPTURE: waiting for resolved render environment evidence");
+                capture.fixture_wait_reported = true;
+            }
+            return;
+        }
+        PerfRenderEnvironmentState::Ready(environment) => Some(environment),
+        PerfRenderEnvironmentState::Failed(reason) => {
+            error!("PERF_CAPTURE: failed to resolve render environment: {reason}");
+            capture.phase = PerfCapturePhase::Finished;
+            exit.write(AppExit::error());
+            return;
+        }
+    };
+
     capture.initial_checksum = Some(initial_checksum);
     capture.initial_scene_roots = Some(calculate_scene_root_counts(&params.checksum_queries));
+    capture.initial_render_inventory = Some(calculate_render_inventory(&params.checksum_queries));
+    capture.initial_window = Some(PerfWindowObservation::capture(
+        params.primary_window.single().ok(),
+        &params.rtt_runtime,
+        &params.quality,
+        render_environment.as_ref(),
+    ));
     if params.config.uses_fixed_timesteps() {
         if let Err(error) = record_determinism_checkpoint(
             &mut capture,
@@ -147,6 +180,16 @@ pub(crate) fn drive_perf_capture_system(
                 capture.warmup_virtual_secs += params.time.delta_secs_f64();
                 capture.warmup_real_secs += params.real_time.delta_secs_f64();
                 if capture.elapsed_secs >= params.config.warmup_secs {
+                    if let Err(error) = validate_realtime_indoor_light_checkpoint(
+                        &params.config,
+                        &params.checksum_queries,
+                        "warmup-end",
+                    ) {
+                        error!("PERF_CAPTURE: invalid indoor-light checkpoint: {error}");
+                        capture.phase = PerfCapturePhase::Finished;
+                        exit.write(AppExit::error());
+                        return;
+                    }
                     capture.warmup_checksum = Some(calculate_checksum(&params.checksum_queries));
                     capture.phase = PerfCapturePhase::Measure;
                     capture.elapsed_secs = 0.0;
@@ -209,6 +252,16 @@ pub(crate) fn drive_perf_capture_system(
                     {
                         capture.memory_measurement = crate::profiling_allocator::end_measurement();
                     }
+                    if let Err(error) = validate_realtime_indoor_light_checkpoint(
+                        &params.config,
+                        &params.checksum_queries,
+                        "measure-end",
+                    ) {
+                        error!("PERF_CAPTURE: invalid indoor-light checkpoint: {error}");
+                        capture.phase = PerfCapturePhase::Finished;
+                        exit.write(AppExit::error());
+                        return;
+                    }
                     capture.measure_end_checksum =
                         Some(calculate_checksum(&params.checksum_queries));
                     params.dashboard_timing_metrics.active = false;
@@ -217,7 +270,29 @@ pub(crate) fn drive_perf_capture_system(
             }
         }
         PerfCapturePhase::Flush => {
-            let result = if params.config.uses_fixed_timesteps() {
+            let render_environment = match params.render_environment.snapshot() {
+                PerfRenderEnvironmentState::Disabled => None,
+                PerfRenderEnvironmentState::Ready(environment) => Some(environment),
+                PerfRenderEnvironmentState::Pending => {
+                    error!("PERF_CAPTURE: render environment remained pending at Flush");
+                    capture.phase = PerfCapturePhase::Finished;
+                    exit.write(AppExit::error());
+                    return;
+                }
+                PerfRenderEnvironmentState::Failed(reason) => {
+                    error!("PERF_CAPTURE: render environment failed at Flush: {reason}");
+                    capture.phase = PerfCapturePhase::Finished;
+                    exit.write(AppExit::error());
+                    return;
+                }
+            };
+            let final_window = PerfWindowObservation::capture(
+                params.primary_window.single().ok(),
+                &params.rtt_runtime,
+                &params.quality,
+                render_environment.as_ref(),
+            );
+            let capture_result = if params.config.uses_fixed_timesteps() {
                 write_determinism_audit(
                     &params.config,
                     &capture.determinism_checkpoints,
@@ -263,6 +338,25 @@ pub(crate) fn drive_perf_capture_system(
                     )),
                 }
             };
+            let result = capture_result.and_then(|()| {
+                let initial_window = capture.initial_window.as_ref().ok_or_else(|| {
+                    std::io::Error::other(
+                        "capture reached Flush without the initial window observation",
+                    )
+                })?;
+                write_window_observation(&params.config, initial_window, &final_window)
+            });
+            let result = result.and_then(|()| {
+                write_indoor_light_fixture_sidecars(&params.config, &params.indoor_light_fixture)
+            });
+            let result = result.and_then(|()| {
+                let inventory = capture.initial_render_inventory.as_ref().ok_or_else(|| {
+                    std::io::Error::other(
+                        "capture reached Flush without the initial render inventory",
+                    )
+                })?;
+                write_render_inventory(&params.config, inventory)
+            });
 
             capture.phase = PerfCapturePhase::Finished;
             if let Err(error) = result {
@@ -274,6 +368,20 @@ pub(crate) fn drive_perf_capture_system(
         }
         PerfCapturePhase::Finished => {}
     }
+}
+
+#[cfg(feature = "profiling")]
+fn validate_realtime_indoor_light_checkpoint(
+    config: &PerfScenarioConfig,
+    checksum_queries: &PerfChecksumQueries<'_, '_>,
+    checkpoint: &str,
+) -> Result<(), String> {
+    if config.workload != PerfWorkload::IndoorLight {
+        return Ok(());
+    }
+    indoor_light_fixture::collect_indoor_light_audit_records(&checksum_queries.indoor_light)
+        .map(|_| ())
+        .map_err(|reason| format!("{checkpoint}: {reason}"))
 }
 
 #[cfg(feature = "profiling")]

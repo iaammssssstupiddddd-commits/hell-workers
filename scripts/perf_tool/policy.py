@@ -2,6 +2,182 @@ from __future__ import annotations
 
 from .execution import *
 
+def validate_session_artifact_set(
+    session_dir: Path, manifest: dict[str, Any]
+) -> list[str]:
+    """Validate the exact case/run set before any aggregation.
+
+    Manifest schema v2 makes missing runs, unknown cases, invalid preflights,
+    and duplicate case identifiers session-fatal. Older artifacts retain their
+    legacy summarization behavior and cannot be used as a v2 formal bundle.
+    """
+    if manifest.get("schema_version", 1) < SESSION_MANIFEST_SCHEMA_VERSION:
+        return []
+
+    errors: list[str] = []
+    matrix = manifest.get("matrix")
+    cases = manifest.get("cases")
+    if not isinstance(matrix, dict):
+        return ["manifest schema v2 requires a matrix object"]
+    if not isinstance(cases, list) or not cases:
+        return ["manifest schema v2 requires a nonempty cases list"]
+
+    rtt_light_matrix = matrix.get("rtt_light_contract")
+    behavior_manifest = (
+        matrix.get("capture_kind") == "fixed-step-behavior"
+        or (
+            isinstance(rtt_light_matrix, dict)
+            and rtt_light_matrix.get("lane") == "behavior"
+        )
+        or any(
+            isinstance(case, dict) and case.get("behavior_case") is not None
+            for case in cases
+        )
+    )
+    if behavior_manifest:
+        contract = load_rtt_light_contract("rtt-light-v1")
+        expected_behavior_cases = contract["stages"]["current"][
+            "required_behavior_cases"
+        ]
+        rtt_selection = matrix.get("rtt_light_contract")
+        exact_matrix = {
+            "capture_kind": matrix.get("capture_kind"),
+            "workload": matrix.get("workload"),
+            "sizes": matrix.get("sizes"),
+            "renders": matrix.get("renders"),
+            "seed": matrix.get("seed"),
+            "repeat": matrix.get("repeat"),
+            "preflight_runs": matrix.get("preflight_runs"),
+            "fixed_hz": matrix.get("fixed_hz"),
+            "clock_mode": matrix.get("clock_mode"),
+            "behavior_cases": matrix.get("behavior_cases"),
+        }
+        if exact_matrix != {
+            "capture_kind": "fixed-step-behavior",
+            "workload": "indoor-light",
+            "sizes": ["small"],
+            "renders": ["cpu"],
+            "seed": contract["formal_matrix"]["seed"],
+            "repeat": contract["behavior_fixture"]["repeat"],
+            "preflight_runs": contract["formal_matrix"]["behavior"][
+                "preflight_runs"
+            ],
+            "fixed_hz": contract["formal_matrix"]["fixed_hz"],
+            "clock_mode": "fixed-behavior",
+            "behavior_cases": expected_behavior_cases,
+        }:
+            errors.append("behavior manifest matrix differs from the canonical contract")
+        if not isinstance(rtt_selection, dict) or (
+            rtt_selection.get("contract_id"),
+            rtt_selection.get("stage_id"),
+            rtt_selection.get("lane"),
+        ) != ("rtt-light-v1", "current", "behavior"):
+            errors.append("behavior manifest has the wrong RtT-light selection")
+        requested_environment = manifest.get("requested_environment")
+        if not isinstance(requested_environment, dict) or {
+            key: requested_environment.get(key)
+            for key in ("HW_PRESENT_MODE", "HW_WINDOW_BACKEND", "WGPU_BACKEND")
+        } != {
+            "HW_PRESENT_MODE": contract["formal_matrix"]["present_mode"],
+            "HW_WINDOW_BACKEND": "headless",
+            "WGPU_BACKEND": contract["formal_matrix"]["backend"],
+        }:
+            errors.append("behavior manifest environment differs from the canonical contract")
+        binary = manifest.get("binary")
+        if not isinstance(binary, dict) or binary.get("instrumentation") != "capture":
+            errors.append("behavior manifest instrumentation must be capture")
+        observed_behavior_cases = [
+            case.get("behavior_case") for case in cases if isinstance(case, dict)
+        ]
+        if observed_behavior_cases != expected_behavior_cases:
+            errors.append("behavior manifest cases differ from the canonical contract")
+        for case in cases:
+            if not isinstance(case, dict):
+                continue
+            if any(
+                (
+                    case.get("workload") != "indoor-light",
+                    case.get("size") != "small",
+                    case.get("render") != "cpu",
+                    case.get("seed") != contract["formal_matrix"]["seed"],
+                    case.get("souls") is not None,
+                    case.get("familiars") is not None,
+                    case.get("familiar_policy") != "baseline",
+                    case.get("operation_dialog") != "hidden",
+                    case.get("dashboard_mode") != "hidden",
+                )
+            ):
+                errors.append("behavior manifest case metadata differs from the contract")
+                break
+
+    case_ids = [case.get("id") for case in cases if isinstance(case, dict)]
+    if len(case_ids) != len(cases) or any(not isinstance(case_id, str) for case_id in case_ids):
+        errors.append("manifest cases must each contain a string id")
+        return errors
+    duplicate_case_ids = sorted(
+        case_id for case_id in set(case_ids) if case_ids.count(case_id) > 1
+    )
+    if duplicate_case_ids:
+        errors.append("manifest contains duplicate case ids: " + ", ".join(duplicate_case_ids))
+
+    cases_dir = session_dir / "cases"
+    actual_case_ids = (
+        {path.name for path in cases_dir.iterdir() if path.is_dir()}
+        if cases_dir.is_dir()
+        else set()
+    )
+    expected_case_ids = set(case_ids)
+    missing_cases = sorted(expected_case_ids - actual_case_ids)
+    unknown_cases = sorted(actual_case_ids - expected_case_ids)
+    if missing_cases:
+        errors.append("missing case directories: " + ", ".join(missing_cases))
+    if unknown_cases:
+        errors.append("unknown case directories: " + ", ".join(unknown_cases))
+
+    repeat = matrix.get("repeat")
+    preflight_runs = matrix.get("preflight_runs")
+    if not isinstance(repeat, int) or repeat < 1:
+        errors.append("matrix repeat must be a positive integer")
+        return errors
+    if not isinstance(preflight_runs, int) or preflight_runs < 0:
+        errors.append("matrix preflight_runs must be a nonnegative integer")
+        return errors
+
+    expected_labels = {
+        *(f"run-{index:03d}" for index in range(1, repeat + 1)),
+        *(f"preflight-{index:03d}" for index in range(1, preflight_runs + 1)),
+    }
+    for case_id in sorted(expected_case_ids & actual_case_ids):
+        case_dir = cases_dir / case_id
+        actual_labels = {
+            path.name
+            for path in case_dir.iterdir()
+            if path.is_dir() and not path.name.startswith(".")
+        }
+        missing_labels = sorted(expected_labels - actual_labels)
+        unknown_labels = sorted(actual_labels - expected_labels)
+        if missing_labels:
+            errors.append(f"{case_id} missing runs: " + ", ".join(missing_labels))
+        if unknown_labels:
+            errors.append(f"{case_id} has unknown runs: " + ", ".join(unknown_labels))
+
+        for label in sorted(expected_labels & actual_labels):
+            validation_path = case_dir / label / "validation.json"
+            if not validation_path.is_file():
+                errors.append(f"{case_id}/{label} is missing validation.json")
+                continue
+            try:
+                payload = json.loads(validation_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as error:
+                errors.append(f"{case_id}/{label} has invalid validation.json: {error}")
+                continue
+            if label.startswith("preflight-") and payload.get("valid") is not True:
+                reasons = payload.get("reasons")
+                reason_text = "; ".join(reasons) if isinstance(reasons, list) else "invalid"
+                errors.append(f"{case_id}/{label} failed: {reason_text}")
+
+    return errors
+
 def load_valid_runs(session_dir: Path) -> list[tuple[Path, Validation]]:
     runs: list[tuple[Path, Validation]] = []
     for validation_path in sorted((session_dir / "cases").glob("*/run-*/validation.json")):
@@ -14,7 +190,15 @@ def load_valid_runs(session_dir: Path) -> list[tuple[Path, Validation]]:
             warning_lines=list(payload.get("warning_lines", [])),
             teardown_warning_lines=list(payload.get("teardown_warning_lines", [])),
             determinism=payload.get("determinism"),
+            determinism_records=payload.get("determinism_records"),
             scene_roots=payload.get("scene_roots"),
+            render_inventory=payload.get("render_inventory"),
+            window=payload.get("window"),
+            indoor_light_fixture=payload.get("indoor_light_fixture"),
+            indoor_light_layout=payload.get("indoor_light_layout"),
+            indoor_light_presentation=payload.get("indoor_light_presentation"),
+            timeline=payload.get("timeline"),
+            behavior_save_artifact=payload.get("behavior_save_artifact"),
             profile_artifact=payload.get("profile_artifact"),
         )
         runs.append((validation_path.parent, validation))

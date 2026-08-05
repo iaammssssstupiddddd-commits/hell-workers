@@ -14,6 +14,36 @@
 | **2D world** | 夢の泡パーティクル・前景スプライト | `Material2d` / `Sprite` を持つ 2D entity |
 | **UI** | DreamBubbleUiMaterial・UI ノード | UI パイプライン（`UiMaterial` 等） |
 
+### P00 current inventory（source/startup固定）
+
+single Scene RtT / indoor light migration前のcurrent構成は次である。`startup_systems`の
+`current_rtt_startup_inventory_is_explicit`が実際にstartup / composite spawn systemを実行し、カメラの
+order / active / RenderLayers、RtT image descriptor、DirectionalLight marker / 有効状態、compositeの
+2 texture参照、`LAYER_2D` 2 passを検証する。source-derived値はRenderDoc formal legで照合するまで
+GPU pass実測とは呼ばない。
+
+| 項目 | current |
+|---|---:|
+| Camera3d RtT | 2（Scene 1、Soul mask 1） |
+| world color target | 2（Scene 1、Soul mask 1） |
+| Camera2d | 3（Main、Overlay、WorldForeground） |
+| FHD High target | 各1920×1080、2 handleはdistinct |
+| DirectionalLight entity | 2（標準1 active、extra 1 default disabled） |
+| composite sampled texture | 2（Scene + Soul mask） |
+
+P00のmeasurement contractはfrozenの`rtt-light-v1`である。canonical contract hashは
+`121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`、fixture hashは
+`a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed`である。stage別projection義務と
+gate expected row、resolved window backend / effective present modeの開始・終了検証、formal attempt
+validatorは実装済みである。freeze後の変更は同じv1を編集せず新generationを追加する。formal artifact /
+RenderDoc値はまだ未採取であり、ここへ推定値をbaselineとして追記しない。
+
+RenderDoc evidence schema v2はこのsource inventoryをGPU replayで厳密化する。composite drawはfragment
+descriptor set 2のScene texture / sampler `(1, 2)`、Soul mask texture / sampler `(3, 4)`を同じ1 drawで
+使うことを要求する。抽出はVulkan subpass transitionを正しく分割し、全drawに散らばったsampler数では代用しない。
+この値は`rtt_composite_material.wgsl`とsource contractから得た期待値であり、formal captureを採取するまでは
+実測値ではない。
+
 ---
 
 ## 2. draw call の基本規則

@@ -82,6 +82,65 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   --adapter Intel --backend vulkan --window-backend x11 --min-runs 3
 ```
 
+## Run the RtT-light migration recipe
+
+Use this path for the frozen `rtt-light-v1` baseline. Do not substitute a
+generic Task Dashboard run, a headless audit, or a RenderDoc screenshot for one
+of its required legs.
+
+Run the prerequisites in order on the same clean subject commit and source
+fingerprint:
+
+1. Run the Task Dashboard S0 recipe and retain its valid job root.
+2. Generate an RtT S1 plan, execute its returned direct `kitty` command, and
+   retain its valid job root:
+
+   ```bash
+   PYTHONDONTWRITEBYTECODE=1 python3 \
+     .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+     plan-rtt-light --repo "$PWD" --level s1 --adapter Intel --window-backend x11
+   ```
+
+   S1 is a 51-process smoke: fixed audit, then Capture and Memory over the
+   three size × CPU/GPU matrix. It verifies Capture/audit binary identity,
+   Memory binary separation, actual Vulkan adapter, exact window backend, and
+   artifact matrix before it becomes a formal prerequisite.
+
+3. Only after S0 and S1 are valid, generate the formal plan with the required
+   correctness ancestor and actual RenderDoc tool paths:
+
+   ```bash
+   PYTHONDONTWRITEBYTECODE=1 python3 \
+     .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+     plan-rtt-light --repo "$PWD" --level formal --adapter Intel --window-backend x11 \
+     --prerequisite-commit <full-correctness-sha> \
+     --s0-job-root /tmp/<s0-job> --s1-job-root /tmp/<s1-job> \
+     --renderdoccmd /path/to/renderdoccmd --qrenderdoc /path/to/qrenderdoc \
+     --renderdoc-library /path/to/librenderdoc.so
+   ```
+
+Treat a `blocked` plan as a stop condition. Formal execution requires the frozen
+contract, a clean committed subject, same-source S0/S1 evidence, resource
+preflight, and usable RenderDoc tools. Run only the returned `launcher_command`
+directly; poll its `status_command` every 15–30 seconds.
+
+The formal job is 64 sequential game processes under the repository lock:
+audit, behavior, Capture, one fixed RenderDoc replay capture, and Memory. It
+settles after behavior and RenderDoc, retains every artifact, and registers an
+attempt only after the offline bundle validation passes. Revalidate a registered
+attempt without launching the game with:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+  verify-rtt-light --repo "$PWD" --attempt target/perf-runs/rtt-light/<contract>/<generation>/attempts/<uuid>
+```
+
+Report audit, behavior, Capture, RenderDoc, and Memory independently. Include
+the actual adapter/backend, subject commit, artifact attempt path, and any
+blocked prerequisite; never call S1 or an unregistered attempt a formal
+baseline.
+
 ## Preserve the no-prompt boundary
 
 - Use the direct `kitty` launcher already established for this repository. The

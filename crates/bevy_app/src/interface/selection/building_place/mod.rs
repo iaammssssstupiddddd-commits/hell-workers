@@ -23,6 +23,8 @@ use hw_world::zones::{Site, Yard};
 
 use companion::make_companion_placement;
 use flow::handle_companion_flow;
+#[cfg(feature = "profiling")]
+pub(crate) use placement::try_place_bucket_storage_companion;
 use placement::{place_building_blueprint, validate_building_blueprint_placement};
 
 #[derive(SystemParam)]

@@ -1,29 +1,31 @@
 # アセット作成マイルストーン
 
 作成日: 2026-03-17
-最終更新: 2026-07-13（実装・外部アセット受入状況を再照合）
-ステータス: 進行中（Soul・terrain・shader 完了、建築 GLB pipeline 未着手）
+最終更新: 2026-08-03（単一Scene RtT・TopDown hybrid方針へ再接続）
+ステータス: 進行中（建築・terrain track継続、Soul GLB runtime trackはSuperseded）
 
 ---
 
 ## 概要
 
-Phase 3 の正本（`docs/plans/3d-rtt/milestone-roadmap.md`）と連動するアセット制作のマイルストーン。統合前の詳細計画は `archived/phase3-implementation-plan-2026-03-16.md` に保存する。
+単一Scene RtT移行計画と連動するアセット制作のマイルストーン。旧Phase 3の完了履歴は`docs/plans/3d-rtt/milestone-roadmap.md`と`archived/phase3-implementation-plan-2026-03-16.md`に保存する。
+
+> **2026-08-03 方針変更:** Soul visible GLB固定、billboard廃止、全BuildingTypeのGLB化、section view用LOD0を新規作業の前提にしない。Soul GLB / animation / face atlasは完了履歴とfallback assetとして保持し、runtime表示は[`single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) M2の共有unlit billboardで再評価する。建築trackは同計画のpresentation mappingで`Structural3d`に分類された種類だけを対象に継続する。
 
 **基本方針**:
-- Soul は GLB モデル + ボーンアニメーション（Bevy AnimationGraph）で Camera3d に直接レンダリングする。Familiar の 3D 化は `MS-3-Fam-R` で価値を再検討する
-- Soul についてはスプライトシート・ビルボード・プロキシ並走を段階的に廃止する。Phase 2 の既存スプライト（`soul.png` 等）は移行完了まで維持するが新規整備は行わない
-- 建築物・地形は 3D GLB / テクスチャへ移行する（Phase 3 中盤以降）
+- Soul GLB / AnimationGraph / face atlasは既存成果物として保持するが、新規runtime拡張は行わない。通常表示は共有unlit billboard PoCを正本候補とし、失敗時だけvisible GLB 1系統へfallbackする
+- Familiarは2D foregroundを維持し、Wall depthが必要になった場合だけ共有billboard経路へ移す
+- 地形、Wall、Door、Floor、大型またはdepth /遮光が必要な建築物だけを3D asset対象にし、小型・装飾建物を一律GLB化しない
 - コードMSをアンブロックするために必要な最小アセットを先行制作し、品質向上は後続MSで行う
 
 ### 2026-07-13 棚卸し結果
 
 | 区分 | 状態 | 次の作業 |
 | --- | --- | --- |
-| Soul GLB / AnimationGraph / P1 clips / face atlas | ✅ runtime 接続完了 | LOD1 ポリゴン予算を外部原本側で再確認 |
-| `section_material.wgsl` / TerrainSurfaceMaterial / 3 LOD | ✅ 実装完了 | roadmap MS-3-6 の目視受入だけ継続 |
-| Familiar | ✅ Phase 3 は 2D 前面表示を維持 | 3D 化しない。多層階可視ルールは Phase 4 |
-| 建築 GLB pipeline / wall PoC / 全 BuildingType | ❌ 未着手 | MS-Asset-Pipeline → Build-A → Build-B の順で進める |
+| Soul GLB / AnimationGraph / P1 clips / face atlas | ✅ 既存runtime成果物 | P02 billboardのfallback / animation sourceとしてのみ再利用を判断 |
+| `section_material.wgsl` / TerrainSurfaceMaterial / 3 LOD | ✅ 既存実装 | P00 baselineとP06 Light Field接続でTopDown表示を再受入 |
+| Familiar | ✅ 2D foregroundを維持 | 3D化しない。Wall depthが必要になった場合だけ別判断でbillboardへ移す |
+| 建築 GLB pipeline / wall PoC / `Structural3d` BuildingType | ❌ 未着手 | M2分類後、MS-Asset-Pipeline → Build-A → Build-B の順で進める |
 
 `assets/` のバイナリは外部同期・gitignore 運用のため、「ファイル制作」と「コード側 runtime 接続」を分けて判定する。コード側の正は HEAD、バイナリ受入は外部 asset manifest と実機読込で確認する。
 
@@ -31,23 +33,23 @@ Phase 3 の正本（`docs/plans/3d-rtt/milestone-roadmap.md`）と連動する�
 
 ## 現状サマリー
 
-### キャラクタースプライト（legacy / Familiar 前面表示）
+### キャラクター表示asset（Soul billboard再評価 / Familiar前面表示）
 
-> Soul は GLB へ移行済み。Familiar は Phase 3 でも `WorldForeground2dCamera` の 2D 前面表示を維持する。
+> Soulの現行表示はGLBだが、単一Scene RtT移行P02で共有unlit billboardへ再評価する。FamiliarはCamera2d foregroundを維持する。
 
 | ファイル | 状態 | 備考 |
 | --- | --- | --- |
-| `character/soul.png` | legacy | Soul の通常表示は GLB。新規整備不要 |
-| `character/soul_move_spritesheet.png` | legacy | GLB animation に置換済み。新規整備不要 |
-| `character/soul_exhausted.png` 他感情系 | legacy | face atlas / GLB animation に置換済み |
+| `character/soul.png` | billboard候補 | M2で足元anchor・alpha silhouette・atlas共有を評価 |
+| `character/soul_move_spritesheet.png` | billboard候補 | M2でanimation sourceとして再利用可否を評価 |
+| `character/soul_exhausted.png` 他感情系 | billboard候補 | state variantの共有atlas化を評価 |
 | `character/familiar/imp anime 1〜4.png` | ✅ 現役 | Phase 3 の 2D 前面表示で維持 |
 
 ### 建築テクスチャ
 
 | ディレクトリ | 状態 | 備考 |
 | --- | --- | --- |
-| `buildings/wooden_wall/` | ✅ 2D完備 | 全16バリアント。Phase 3 では GLB に置換 |
-| `buildings/door/` | ✅ 2D完備 | open/closed。Phase 3 では GLB に置換 |
+| `buildings/wooden_wall/` | ✅ 2D完備 | 全16バリアント。M2分類後もfallback / connection参照として保持 |
+| `buildings/door/` | ✅ 2D完備 | open/closed。M2で3D DoorState同期とfallback用途を整理 |
 | `buildings/tank/` | ✅ 2D完備 | empty/half/full |
 | `buildings/mud_mixer/` | ✅ 2D完備 | アニメ4フレーム |
 | 建築 GLBモデル | ❌ 未受入 | placeholder mesh は現役。建築 GLB は Build-A/B で制作 |
@@ -71,7 +73,7 @@ Phase 3 の正本（`docs/plans/3d-rtt/milestone-roadmap.md`）と連動する�
 
 ## アセット制作パイプライン
 
-### 3D GLBモデル（キャラクター）
+### 3D GLBモデル（キャラクター、完了履歴 / fallback）
 
 ```
 入力画像制作（Camera3d 確定角度に対してモデルが自然に見える正面・側面参照画像）
@@ -121,7 +123,18 @@ assets/models/ に配置
 
 ## マイルストーン
 
-### 全体フロー
+### 現行フロー
+
+```text
+単一Scene RtT P00（契約 / baseline）
+  -> P02（presentation mapping確定）
+       -> MS-Asset-Pipeline
+            -> MS-Asset-Build-A（Wall PoC）
+            -> MS-Asset-Build-B（Structural3dのみ）
+       -> Soul billboard atlas / alpha silhouette PoC
+```
+
+### 旧Phase 3フロー（完了・凍結依存の履歴）
 
 ```
 今すぐ着手可
@@ -172,7 +185,7 @@ MS-P3-Pre-C（Camera角度確定）
 ### MS-Asset-0: アートスタイル受入基準確定
 
 > **依存**: MS-P3-Pre-C（Camera3d 角度確定後、実際の見え方で判断する）
-> **ブロック先**: MS-Asset-Char-A・MS-Asset-Build-A・MS-Asset-Terrain・MS-3-10（アウトライン計画）
+> **ブロック先**: MS-Asset-Char-A・MS-Asset-Build-A・MS-Asset-Terrain・単一Scene RtT移行P02（billboard silhouette）
 
 **やること**:
 `world_lore.md` §6.2 の記述をベースに、以下の未定義項目を確定して `docs/art-style-criteria.md` として文書化する。
@@ -192,7 +205,7 @@ MS-P3-Pre-C（Camera角度確定）
 - [x] キャラクタースプライトの方向数が確定している（GLB/3D化により左右ミラーのみで対応。スプライト方向数は廃止）
 - [x] アウトライン受入基準（線幅・揺らぎ・色・閾値）が数値または比較サンプルで記述されている（仮基準: 2px・中・暗茶 #1a0a00。PoC後に確定）
 
-**ステータス**: [x] 完了（2026-03-21 / `docs/art-style-criteria.md` 作成済み。アウトライン詳細はPoC後に更新）
+**ステータス**: [x] 完了（2026-03-21 / `docs/art-style-criteria.md` 作成済み。外周受入はM2 billboard PoCへ再接続）
 
 ---
 
@@ -306,9 +319,9 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 3. 生成 → Blender 品質確認 → LOD 調整 → `assets/models/` 配置の手順を文書化する
 4. テスト用（最も単純な形状：直線壁）でパイプラインを 1 周させる
 
-**Blender 品質ゲート（LOD1 基準）**:
+**Blender 品質ゲート（TopDown LOD1 基準）**:
 - LOD1: 100 三角形以下を目安（`section-material-proposal` §8.5 より）
-- LOD0: セクションビュー用（高品質・上限なし）
+- LOD0: 現計画では制作要件にしない
 
 **成果物**: `docs/asset-pipeline-glb.md`（手順書）
 
@@ -323,7 +336,7 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 ### MS-Asset-Build-A: 壁GLB PoC（4バリアント）
 
 > **依存**: MS-Asset-Pipeline 完了・MS-Asset-0 完了
-> **ブロック先**: MS-3-5（Building3dHandles SectionMaterial 移行）の前提となる PoC
+> **ブロック先**: 単一Scene RtT移行P02 / P06（構造3D分類とWall Light Field receiver）のPoC
 
 `billboard-camera-angle-proposal` §7 の壁メッシュ構成に従い、最初の 4 バリアントを制作する。
 
@@ -335,31 +348,33 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 | `assets/models/wall_t_junction.glb` | T字 | 外側稜線あり |
 | `assets/models/wall_cross.glb` | 十字 | 外側稜線あり |
 
-**2層構造の仕様**（`section-material-proposal` §8 より）:
-- `completed` 層: 外側・`build_progress` ユニフォームで Y 方向クリップ（下から生える表現）
-- `blueprint` 層: 内側・常に全高表示（`wall_height=0.0` でクリップ無効）
-- セクションビューで壁を切断すると内側に blueprint 層が見える
+**TopDown構造の仕様**:
+- `completed`層はWall接続形状、depth、directional shadow、Light Field receiverを成立させる
+- 建設中表現を3Dで維持する場合だけ`build_progress`によるY方向クリップを再利用する
+- section cutで見せる内側層は制作要件にしない
 
 **LOD**:
-- LOD0: セクションビュー用（高品質）
-- LOD1: 通常プレイ用（100 三角形以下目安）
+- LOD0: 現計画では予約のみ
+- LOD1: TopDown通常プレイ用（100三角形以下目安）
 - LOD2: ズームアウト時（後回し可）
 
 **完了条件**:
 - [ ] 4 バリアントが `assets/models/` に存在する
-- [ ] `SectionMaterial` を付けてスラブクリップが正しく動作する（目視）
+- [ ] shared light-field対応materialでWall両側の照度が正しく見える（目視）
 - [ ] `build_progress` クリップで施工中アニメーションが動作する（目視）
-- [ ] 通常ビュー（斜め約53°）で「黒い石積み」の見た目が成立する
+- [ ] 現行TopDown斜視で「黒い石積み」の見た目が成立する
 - [ ] ポリゴン数が LOD1 基準（100 三角形以下）を満たす
 
 **ステータス**: [ ] 未着手
 
 ---
 
-### MS-Asset-Build-B: 建築GLBフルセット
+### MS-Asset-Build-B: 構造3D建築GLBセット
 
 > **依存**: MS-Asset-Build-A（パイプライン確立・品質ゲート定義済み）
-> **ブロック先**: MS-3-5（全 BuildingType の SectionMaterial 移行完了）
+> **ブロック先**: 単一Scene RtT移行P02 / P06（presentation mappingとLight Field receiver）
+
+下表は制作候補であり、全件必須ではない。M2のpresentation mappingで`Structural3d`またはdepth / Room境界 / light receiverに分類された種類だけを制作対象に確定し、`Foreground2d`は既存spriteを維持する。
 
 | ファイル | BuildingType | 備考 |
 | --- | --- | --- |
@@ -374,11 +389,11 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 | `assets/models/bone_pile.glb` | BonePile | 1x1 temporary building |
 | `assets/models/wheelbarrow_parking.glb` | WheelbarrowParking | 1x1 temporary building |
 | `assets/models/soul_spa.glb` | SoulSpa | site / tile 構造との接続を確認 |
-| `assets/models/outdoor_lamp.glb` | OutdoorLamp | local light child の取付点を定義 |
+| `assets/models/outdoor_lamp.glb` | OutdoorLamp | 3D分類された場合のみ。発光原点・mount sideはGLB childではなくlogical emitter契約を正本にする |
 
 **完了条件**:
-- [ ] 全 BuildingType の GLB が `assets/models/` に存在する
-- [ ] `SectionMaterial` 付きで矢視断面確認が可能
+- [ ] `Structural3d`に分類された全BuildingTypeのGLBまたは受入済みplaceholderが存在する
+- [ ] TopDownでdepth、Door状態、Light Field receiverの表示が成立する
 - [ ] LOD1 ポリゴン基準を満たす
 
 **ステータス**: [ ] 未着手
@@ -402,11 +417,11 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 - [x] 4 種（草・砂・土・川）が `TerrainSurfaceMaterial` に接続されている
 - [x] 境界ブレンドと 3 LOD shader が実装されている
 
-**ステータス**: [x] 実装完了（最終目視受入は roadmap MS-3-6）
+**ステータス**: [x] 実装完了（TopDown最終目視とLight Field接続は移行計画P00 / P06）
 
 ---
 
-## Phase 3 コードMSとの依存関係
+## 旧Phase 3コードMSとの依存関係（履歴）
 
 | アセットMS | アンブロックするコードMS | 備考 |
 | --- | --- | --- |
@@ -417,7 +432,7 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 | MS-Asset-Terrain | MS-3-4・MS-3-6 | 実装済み。MS-3-6 の最終目視受入だけ継続 |
 | MS-Asset-Pipeline | MS-Asset-Build-A | 建築 GLB の品質向上を開始する前提。MS-3-5 の material 契約は placeholder で先行可能 |
 | MS-Asset-Build-A | 建築 visual quality | 壁 4 バリアントの品質ゲート。MS-3-5 の material 契約は placeholder で先行可能 |
-| MS-Asset-Build-B | 建築 visual quality | 全 BuildingType の placeholder を最終 GLB に置換する |
+| MS-Asset-Build-B | 建築 visual quality | `Structural3d`に分類された種類だけを最終GLBへ置換する |
 | MS-Asset-0 | MS-3-10 | 仮基準は完了。outline と壁ノーマルの PoC 受入が残る |
 
 ---
@@ -428,9 +443,9 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 | --- | --- | --- |
 | P0 | MS-Asset-Pipeline | 建築 GLB の生成・Blender 品質確認・外部同期手順を確立する |
 | P1 | MS-Asset-Build-A | 直線・corner・T・cross の wall PoC で品質ゲートを固定する |
-| P2 | MS-Asset-Build-B | 現行 12 `BuildingType` の placeholder を順次 GLB へ置換する |
-| P2 | MS-Asset-0 residual | Soul outline と壁ノーマルの PoC 受入値を確定する |
-| 完了 | Shader / Soul GLB / clips / face / terrain | runtime 接続済み。履歴は各マイルストーンに残す |
+| P2 | MS-Asset-Build-B | M2で`Structural3d`に分類された建物だけを順次GLBへ置換する |
+| P2 | MS-Asset-0 residual | billboard alpha silhouetteと壁ノーマルのPoC受入値を確定する |
+| 完了 / fallback | Shader / Soul GLB / clips / face / terrain | 既存runtime接続済み。Soul系は新規本線にせず履歴とfallbackとして保持 |
 
 ---
 
@@ -438,11 +453,12 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 
 | ドキュメント | 内容 |
 | --- | --- |
+| `docs/plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md` | 現行のpresentation分類・Soul billboard・構造3D asset正本 |
 | `docs/plans/3d-rtt/archived/phase3-implementation-plan-2026-03-16.md` | 統合前の Phase 3 コード実装計画（履歴） |
 | `docs/plans/3d-rtt/milestone-roadmap.md` | Phase 全体の依存グラフ |
 | `docs/proposals/3d-rtt/archived/billboard-camera-angle-proposal-2026-03-16.md` | Camera3d / 壁メッシュ採用判断の履歴 |
 | `docs/proposals/3d-rtt/archived/section-material-proposal-2026-03-16.md` | 壁 2 層構造・build_progress・WGSL 採用判断の履歴 |
-| `docs/proposals/soul-outline-mask-ring-proposal-2026-04-16.md` | Soul outline の現行提案 |
+| `docs/proposals/soul-outline-mask-ring-proposal-2026-04-16.md` | Soul mask outlineのSuperseded比較履歴 |
 | `docs/proposals/3d-rtt/archived/character-3d-rendering-proposal-2026-03-16.md` | CharacterMaterial・AnimationGraph・顔 atlas 採用判断の履歴 |
 | `docs/world_lore.md` §6.2〜6.3・§8 | アートスタイル仕様・アセットリスト |
 | `docs/DEVELOPMENT.md` | 2D スプライト制作パイプライン（generate_image → convert_to_png.py） |

@@ -2,6 +2,18 @@ from __future__ import annotations
 
 from .artifacts import *
 
+
+SOURCE_FINGERPRINT_FILES = {
+    ".cargo/config.toml",
+    "Cargo.lock",
+    "Cargo.toml",
+    "rust-toolchain",
+    "rust-toolchain.toml",
+    "scripts/perf.py",
+}
+SOURCE_FINGERPRINT_PREFIXES = ("crates/", "scripts/perf_tool/")
+SOURCE_FINGERPRINT_ASSET_PREFIX = "assets/"
+
 def command_output(command: list[str], *, cwd: Path = REPO_ROOT) -> str:
     completed = subprocess.run(
         command,
@@ -13,6 +25,168 @@ def command_output(command: list[str], *, cwd: Path = REPO_ROOT) -> str:
     if completed.returncode != 0:
         return "<unavailable>"
     return completed.stdout.strip()
+
+
+def tracked_source_paths() -> list[str]:
+    completed = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError("git ls-files failed while fingerprinting the source")
+    return sorted(filter(None, completed.stdout.splitlines()))
+
+
+def source_fingerprint() -> str:
+    """Match the native acceptance source boundary exactly.
+
+    Rust/Python sources and build configuration are content-hashed. Assets use
+    size and mtime so large trees remain cheap to sample at every session
+    boundary while still detecting in-session mutation.
+    """
+    digest = hashlib.sha256()
+    for relative in tracked_source_paths():
+        source = REPO_ROOT / relative
+        if not source.is_file():
+            continue
+        if relative in SOURCE_FINGERPRINT_FILES or relative.startswith(
+            SOURCE_FINGERPRINT_PREFIXES
+        ):
+            digest.update(b"content\0")
+            digest.update(relative.encode())
+            digest.update(b"\0")
+            with source.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        elif relative.startswith(SOURCE_FINGERPRINT_ASSET_PREFIX):
+            stats = source.stat()
+            digest.update(b"asset-stat\0")
+            digest.update(relative.encode())
+            digest.update(f"\0{stats.st_size}\0{stats.st_mtime_ns}\0".encode())
+    return digest.hexdigest()
+
+
+def finalize_session_source(manifest: dict[str, Any]) -> list[str]:
+    source = manifest.get("source")
+    if source is None:
+        return []
+    if not isinstance(source, dict):
+        return ["manifest source provenance is not an object"]
+    started = source.get("fingerprint_start")
+    if not isinstance(started, str) or not re.fullmatch(r"[0-9a-f]{64}", started):
+        return ["manifest source fingerprint_start is invalid"]
+    ended = source_fingerprint()
+    unchanged = ended == started
+    source.update(
+        {
+            "fingerprint_end": ended,
+            "unchanged": unchanged,
+            "finished_at": datetime.now(UTC).isoformat(),
+        }
+    )
+    return [] if unchanged else ["source fingerprint changed during the session"]
+
+
+ENVIRONMENT_LOCK_WINDOW_FIELDS = (
+    "logical_width",
+    "logical_height",
+    "physical_width",
+    "physical_height",
+    "scale_factor",
+    "rtt_quality",
+    "scene_target_width",
+    "scene_target_height",
+    "mask_target_width",
+    "mask_target_height",
+    "target_scale_factor",
+)
+
+
+def environment_lock_payload(
+    *,
+    manifest: dict[str, Any],
+    validation: Validation,
+    contract_id: str,
+    stage_id: str,
+) -> dict[str, Any]:
+    if validation.window is None or validation.adapter is None:
+        raise RuntimeError("environment lock requires validated window and adapter evidence")
+    window = validation.window
+    return {
+        "schema_version": 1,
+        "contract_id": contract_id,
+        "stage_id": stage_id,
+        "subject_commit": manifest["git"]["commit"],
+        "source_fingerprint": manifest["source"]["fingerprint_start"],
+        "host": manifest["host"],
+        "adapter": validation.adapter,
+        "resolved_window_backend": window["resolved_window_backend"],
+        "adapter_backend": window["adapter_backend"],
+        "requested_present_mode": window["requested_present_mode"],
+        "effective_present_mode": window["effective_present_mode"],
+        "window": {field: window[field] for field in ENVIRONMENT_LOCK_WINDOW_FIELDS},
+        "capture_binary_sha256": manifest["binary"]["sha256"],
+    }
+
+
+def write_json_exclusive(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(value, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+
+
+def enforce_environment_lock(
+    *,
+    args: argparse.Namespace,
+    session_dir: Path,
+    validation: Validation,
+    preflight: bool,
+) -> list[str]:
+    if args.environment_lock is None:
+        return []
+    lock_path = Path(args.environment_lock).resolve()
+    manifest = json.loads((session_dir / "manifest.json").read_text(encoding="utf-8"))
+    try:
+        observed = environment_lock_payload(
+            manifest=manifest,
+            validation=validation,
+            contract_id=args.contract,
+            stage_id=args.stage,
+        )
+    except (KeyError, RuntimeError) as error:
+        return [str(error)]
+    if not lock_path.exists():
+        if args.instrumentation != "capture" or not preflight:
+            return ["environment lock is missing before a non-Capture-preflight run"]
+        if not validation.valid:
+            return ["invalid Capture preflight cannot create the environment lock"]
+        try:
+            write_json_exclusive(lock_path, observed)
+        except FileExistsError:
+            pass
+        except OSError as error:
+            return [f"cannot create environment lock: {error}"]
+    try:
+        expected = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return [f"cannot read environment lock: {error}"]
+    comparable = dict(observed)
+    if args.instrumentation == "memory":
+        comparable["capture_binary_sha256"] = expected.get("capture_binary_sha256")
+    if expected != comparable:
+        return ["run environment differs from the generation environment lock"]
+    return []
 
 
 def git_metadata() -> dict[str, Any]:
@@ -137,10 +311,30 @@ def prepare_session(args: argparse.Namespace, binary: Path, cases: list[Case]) -
     session_dir.mkdir(parents=True)
     (session_dir / "cases").mkdir()
 
+    rtt_light_contract = None
+    if args.contract is not None:
+        contract = load_rtt_light_contract(args.contract)
+        selected_sizes = list(dict.fromkeys(case.size for case in cases))
+        fixture_layouts = {
+            size: build_fixture_layout(contract, size) for size in selected_sizes
+        }
+        rtt_light_contract = {
+            "contract_id": args.contract,
+            "stage_id": args.stage,
+            "lane": args.lane,
+            **contract_fingerprints(contract),
+            "fixture_id": contract["fixture"]["fixture_id"],
+            "layout_checksums": {
+                size: layout["layout_checksum"]
+                for size, layout in fixture_layouts.items()
+            },
+            "lifecycle": contract["lifecycle"],
+        }
+
     matrix = {
         "workload": args.workload,
-        "sizes": [case.size for case in cases],
-        "renders": [case.render for case in cases],
+        "sizes": list(dict.fromkeys(case.size for case in cases)),
+        "renders": list(dict.fromkeys(case.render for case in cases)),
         "seed": args.seed,
         "repeat": args.repeat,
         "warmup_secs": getattr(args, "warmup_secs", None),
@@ -154,18 +348,45 @@ def prepare_session(args: argparse.Namespace, binary: Path, cases: list[Case]) -
         "familiar_policies": sorted({case.familiar_policy for case in cases}),
         "operation_dialog_modes": sorted({case.operation_dialog for case in cases}),
         "dashboard_modes": sorted({case.dashboard_mode for case in cases}),
+        "behavior_cases": list(
+            dict.fromkeys(
+                case.behavior_case
+                for case in cases
+                if case.behavior_case is not None
+            )
+        ),
         "capture_kind": args.capture_kind,
         "clock_mode": args.clock_mode,
         "warmup_checksum_policy": getattr(args, "warmup_checksum_policy", None),
         "measure_end_checksum_policy": getattr(args, "measure_end_checksum_policy", None),
+        "allow_log_patterns": list(args.allow_log_pattern),
         "tracy_capture_secs": args.tracy_capture_secs,
+        "window_width": args.window_width,
+        "window_height": args.window_height,
+        "window_scale_factor": args.window_scale_factor,
+        "rtt_quality": args.rtt_quality,
+        "environment_lock": (
+            str(Path(args.environment_lock).resolve())
+            if args.environment_lock is not None
+            else None
+        ),
+        "rtt_light_contract": rtt_light_contract,
     }
     write_json(session_dir / "matrix.json", matrix)
+    source_start = source_fingerprint()
     manifest = {
-        "schema_version": 1,
+        "schema_version": SESSION_MANIFEST_SCHEMA_VERSION,
         "created_at": datetime.now(UTC).isoformat(),
         "repo_root": str(REPO_ROOT),
         "git": git_metadata(),
+        "source": {
+            "algorithm": "hell-workers-source-v1",
+            "fingerprint_start": source_start,
+            "fingerprint_end": None,
+            "unchanged": None,
+            "started_at": datetime.now(UTC).isoformat(),
+            "finished_at": None,
+        },
         "host": host_metadata(),
         "binary": {
             "path": str(binary),
@@ -506,6 +727,19 @@ def run_one(
         "--perf-output-dir",
         str(data_dir),
     ]
+    if args.contract is not None:
+        command.extend(
+            [
+                "--perf-contract",
+                args.contract,
+                "--perf-stage",
+                args.stage,
+                "--perf-lane",
+                args.lane,
+            ]
+        )
+    if case.behavior_case is not None:
+        command.extend(["--perf-behavior-case", case.behavior_case])
     if args.capture_kind == "frame-time":
         command.extend(
             [
@@ -515,7 +749,7 @@ def run_one(
                 str(args.measure_secs),
             ]
         )
-    else:
+    elif args.capture_kind == "fixed-step-determinism":
         command.extend(
             [
                 "--perf-fixed-hz",
@@ -526,9 +760,20 @@ def run_one(
                 str(args.audit_ticks),
             ]
         )
+    else:
+        command.extend(["--perf-fixed-hz", str(args.fixed_hz)])
     if case.souls is not None:
         command.extend(["--spawn-souls", str(case.souls)])
         command.extend(["--spawn-familiars", str(case.familiars)])
+    if args.window_width is not None:
+        command.extend(["--perf-window-width", str(args.window_width)])
+        command.extend(["--perf-window-height", str(args.window_height)])
+    if args.window_scale_factor is not None:
+        command.extend(
+            ["--perf-window-scale-factor", str(args.window_scale_factor)]
+        )
+    if args.rtt_quality is not None:
+        command.extend(["--perf-rtt-quality", args.rtt_quality])
     env = os.environ.copy()
     env.update(fixed_environment(args))
     launch_command = command
@@ -666,6 +911,15 @@ def run_one(
         expected_fixed_hz=getattr(args, "fixed_hz", None),
         expected_warmup_ticks=getattr(args, "warmup_ticks", None),
         expected_audit_ticks=getattr(args, "audit_ticks", None),
+        expected_window_backend=args.window_backend,
+        expected_present_mode=args.present_mode,
+        expected_window_width=args.window_width,
+        expected_window_height=args.window_height,
+        expected_window_scale_factor=args.window_scale_factor,
+        expected_rtt_quality=args.rtt_quality,
+        expected_contract=args.contract,
+        expected_stage=args.stage,
+        expected_lane=args.lane,
     )
     frame_samples = None
     if validation.summary is not None:
@@ -683,16 +937,39 @@ def run_one(
     validation.profile_artifact = profile_artifact
     validation.reasons.extend(profile_errors)
     validation.valid = not validation.reasons
+    validation.reasons.extend(
+        enforce_environment_lock(
+            args=args,
+            session_dir=session_dir,
+            validation=validation,
+            preflight=preflight,
+        )
+    )
+    validation.valid = not validation.reasons
     write_json(temporary_dir / "validation.json", validation.to_json())
     write_json(
         temporary_dir / "run-metadata.json",
         {
             "case": asdict(case),
+            "rtt_light_contract": (
+                {
+                    "contract_id": args.contract,
+                    "stage_id": args.stage,
+                    "lane": args.lane,
+                    "layout_checksum": build_fixture_layout(
+                        load_rtt_light_contract(args.contract), case.size
+                    )["layout_checksum"],
+                }
+                if args.contract is not None
+                else None
+            ),
             "preflight": preflight,
             "returncode": returncode,
             "trace_returncode": trace_returncode,
             "started_by": "scripts/perf.py",
             "actual_adapter": validation.adapter,
+            "actual_window": validation.window,
+            "actual_render_inventory": validation.render_inventory,
         },
     )
     temporary_dir.replace(final_dir)

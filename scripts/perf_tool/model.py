@@ -34,6 +34,13 @@ REPO_ROOT = SCRIPT_DIR.parent
 PERF_DESCRIPTION = __doc__
 SUMMARY_SCHEMA_VERSION = "11"
 DETERMINISM_SCHEMA_VERSION = "4"
+SESSION_MANIFEST_SCHEMA_VERSION = 2
+WINDOW_SCHEMA_VERSION = "2"
+RENDER_INVENTORY_SCHEMA_VERSION = "1"
+INDOOR_LIGHT_FIXTURE_SCHEMA_VERSION = "1"
+INDOOR_LIGHT_LAYOUT_SCHEMA_VERSION = "1"
+INDOOR_LIGHT_PRESENTATION_SCHEMA_VERSION = "1"
+BEHAVIOR_TIMELINE_SCHEMA_VERSION = 1
 DEFAULT_SEED = 20_260_712
 SCENE_ROOT_COLUMNS = (
     "soul_proxy_3d",
@@ -41,6 +48,109 @@ SCENE_ROOT_COLUMNS = (
     "soul_shadow_proxy_3d",
     "familiar_proxy_3d",
     "building_3d_visual",
+)
+RENDER_INVENTORY_COLUMNS = (
+    "schema_version",
+    "scene_target_count",
+    "mask_target_count",
+    "camera_3d_rtt_count",
+    "camera_2d_count",
+    "layer_2d_pass_count",
+    "soul_proxy_3d",
+    "soul_mask_proxy_3d",
+    "soul_shadow_proxy_3d",
+    "familiar_proxy_3d",
+)
+WINDOW_COLUMNS = (
+    "schema_version",
+    "window_present",
+    "logical_width",
+    "logical_height",
+    "physical_width",
+    "physical_height",
+    "scale_factor",
+    "rtt_quality",
+    "scene_target_width",
+    "scene_target_height",
+    "mask_target_width",
+    "mask_target_height",
+    "target_scale_factor",
+    "resolved_window_backend",
+    "adapter_name",
+    "adapter_backend",
+    "requested_present_mode",
+    "effective_present_mode",
+    "end_window_present",
+    "end_logical_width",
+    "end_logical_height",
+    "end_physical_width",
+    "end_physical_height",
+    "end_scale_factor",
+    "end_rtt_quality",
+    "end_scene_target_width",
+    "end_scene_target_height",
+    "end_mask_target_width",
+    "end_mask_target_height",
+    "end_target_scale_factor",
+    "end_resolved_window_backend",
+    "end_adapter_name",
+    "end_adapter_backend",
+    "end_requested_present_mode",
+    "end_effective_present_mode",
+)
+INDOOR_LIGHT_FIXTURE_COLUMNS = (
+    "schema_version",
+    "contract_id",
+    "stage_id",
+    "lane",
+    "checkpoint",
+    "case_id",
+    "fixture_id",
+    "size",
+    "layout_checksum",
+    "measurement_contract_sha256",
+    "fixture_contract_sha256",
+    "completed_floors",
+    "completed_walls",
+    "doors",
+    "supplied_lamp_candidates",
+    "unsupplied_lamp_candidates",
+    "rooms",
+    "room_tiles",
+    "room_boundary_lookup_cells",
+    "souls",
+    "familiars",
+    "yards",
+    "operational_soul_spas",
+    "generator_souls",
+    "main_generation",
+    "main_demand",
+    "main_headroom",
+    "main_supplied_count",
+    "main_shed_count",
+    "control_generation",
+    "control_demand",
+    "control_supplied_count",
+    "control_shed_count",
+)
+INDOOR_LIGHT_LAYOUT_COLUMNS = (
+    "schema_version",
+    "record_kind",
+    "ordinal",
+    "grid_x",
+    "grid_y",
+    "grid_x2",
+    "grid_y2",
+    "state",
+    "relation",
+)
+INDOOR_LIGHT_PRESENTATION_COLUMNS = (
+    "schema_version",
+    "building_kind",
+    "entity_count",
+    "root_sprite_count",
+    "child_sprite_count",
+    "owner_3d_count",
 )
 EXPECTED_SUMMARY_COLUMNS = {
     "schema_version",
@@ -258,6 +368,14 @@ DETERMINISM_COLUMNS = (
     "dashboard_render_group_headers",
     "dashboard_despawn_roots_requested",
 )
+DETERMINISM_RECORD_COLUMNS = (
+    "schema_version",
+    "checkpoint",
+    "update_tick",
+    "actor_kind",
+    "actor_key",
+    "record_hex",
+)
 DETERMINISM_EARLY_CHECKPOINTS = (
     ("post-update-1", 1),
     ("post-update-8", 8),
@@ -280,6 +398,7 @@ class Case:
     familiar_policy: str = "baseline"
     operation_dialog: str = "hidden"
     dashboard_mode: str = "hidden"
+    behavior_case: str | None = None
 
     @property
     def identifier(self) -> str:
@@ -297,9 +416,12 @@ class Case:
             if self.workload == "task-dashboard" or self.dashboard_mode != "hidden"
             else ""
         )
+        behavior_case = (
+            "" if self.behavior_case is None else f"-behavior-{self.behavior_case}"
+        )
         return (
             f"{self.workload}-{self.size}-{self.render}-seed-{self.seed}"
-            f"{population}{familiar_policy}{operation_dialog}{dashboard_mode}"
+            f"{population}{familiar_policy}{operation_dialog}{dashboard_mode}{behavior_case}"
         )
 
 
@@ -312,7 +434,15 @@ class Validation:
     warning_lines: list[str]
     teardown_warning_lines: list[str]
     determinism: list[dict[str, str]] | None = None
+    determinism_records: list[dict[str, str]] | None = None
     scene_roots: dict[str, str] | None = None
+    render_inventory: dict[str, str] | None = None
+    window: dict[str, str] | None = None
+    indoor_light_fixture: dict[str, str] | None = None
+    indoor_light_layout: list[dict[str, str]] | None = None
+    indoor_light_presentation: list[dict[str, str]] | None = None
+    timeline: list[dict[str, Any]] | None = None
+    behavior_save_artifact: dict[str, Any] | None = None
     profile_artifact: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
@@ -324,7 +454,15 @@ class Validation:
             "warning_lines": self.warning_lines,
             "teardown_warning_lines": self.teardown_warning_lines,
             "determinism": self.determinism,
+            "determinism_records": self.determinism_records,
             "scene_roots": self.scene_roots,
+            "render_inventory": self.render_inventory,
+            "window": self.window,
+            "indoor_light_fixture": self.indoor_light_fixture,
+            "indoor_light_layout": self.indoor_light_layout,
+            "indoor_light_presentation": self.indoor_light_presentation,
+            "timeline": self.timeline,
+            "behavior_save_artifact": self.behavior_save_artifact,
             "profile_artifact": self.profile_artifact,
         }
 
