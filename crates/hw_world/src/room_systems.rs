@@ -148,6 +148,7 @@ fn rebuild_rooms(
             },
             bounds,
             Transform::default(),
+            Visibility::Visible,
             Name::new(format!("Room #{}", index + 1)),
         ));
 
