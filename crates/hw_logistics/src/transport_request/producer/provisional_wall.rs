@@ -153,11 +153,12 @@ pub fn provisional_wall_auto_haul_system(
         });
     }
 
-    for (wall_entity, (issued_by, wall_pos, slots)) in desired_requests {
-        if seen_existing.contains(&wall_entity) {
-            continue;
-        }
-
+    let mut missing_requests = desired_requests
+        .into_iter()
+        .filter(|(wall_entity, _)| !seen_existing.contains(wall_entity))
+        .collect::<Vec<_>>();
+    missing_requests.sort_unstable_by_key(|(wall_entity, _)| super::entity_sort_key(*wall_entity));
+    for (wall_entity, (issued_by, wall_pos, slots)) in missing_requests {
         commands.spawn((
             Name::new("TransportRequest::DeliverToProvisionalWall"),
             Transform::from_xyz(wall_pos.x, wall_pos.y, 0.0),

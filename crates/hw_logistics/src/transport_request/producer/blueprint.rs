@@ -187,11 +187,12 @@ pub fn blueprint_auto_haul_system(
         }
     }
 
-    for (key, (issued_by, slots, bp_pos)) in desired_requests {
-        if seen_existing_keys.contains(&key) {
-            continue;
-        }
-
+    let mut missing_requests = desired_requests
+        .into_iter()
+        .filter(|(key, _)| !seen_existing_keys.contains(key))
+        .collect::<Vec<_>>();
+    missing_requests.sort_unstable_by_key(|(key, _)| super::request_key_sort_key(*key));
+    for (key, (issued_by, slots, bp_pos)) in missing_requests {
         commands.spawn((
             Name::new("TransportRequest::DeliverToBlueprint"),
             Transform::from_xyz(bp_pos.x, bp_pos.y, 0.0),

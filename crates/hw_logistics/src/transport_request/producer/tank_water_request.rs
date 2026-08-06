@@ -115,11 +115,12 @@ pub fn tank_water_request_system(
         }
     }
 
-    for (tank_entity, (issued_by, slots, tank_pos)) in desired_requests {
-        if seen_existing.contains(&tank_entity) {
-            continue;
-        }
-
+    let mut missing_requests = desired_requests
+        .into_iter()
+        .filter(|(tank_entity, _)| !seen_existing.contains(tank_entity))
+        .collect::<Vec<_>>();
+    missing_requests.sort_unstable_by_key(|(tank_entity, _)| super::entity_sort_key(*tank_entity));
+    for (tank_entity, (issued_by, slots, tank_pos)) in missing_requests {
         commands.spawn((
             Name::new("TransportRequest::GatherWaterToTank"),
             Transform::from_xyz(tank_pos.x, tank_pos.y, 0.0),
@@ -145,5 +146,76 @@ pub fn tank_water_request_system(
             TransportRequestState::Pending,
             TransportPolicy::default(),
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transport_request::producer::active_unit_cache::{
+        CachedActiveFamiliars, CachedActiveYards,
+    };
+    use crate::zone::Stockpile;
+    use hw_world::Yard;
+
+    #[test]
+    fn new_gather_water_requests_follow_the_stable_tank_entity_order() {
+        let mut app = App::new();
+        app.init_resource::<CachedActiveFamiliars>()
+            .init_resource::<CachedActiveYards>()
+            .add_systems(Update, tank_water_request_system);
+
+        let yard = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .resource_mut::<CachedActiveYards>()
+            .data
+            .push((
+                yard,
+                Yard {
+                    min: Vec2::splat(-128.0),
+                    max: Vec2::splat(128.0),
+                },
+            ));
+        let first_tank = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(64.0, 0.0, 0.0),
+                Stockpile {
+                    capacity: 5,
+                    resource_type: Some(ResourceType::Water),
+                },
+            ))
+            .id();
+        let second_tank = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(-64.0, 0.0, 0.0),
+                Stockpile {
+                    capacity: 50,
+                    resource_type: Some(ResourceType::Water),
+                },
+            ))
+            .id();
+
+        app.update();
+
+        let mut requests = app
+            .world_mut()
+            .query::<(Entity, &TransportRequest, &TaskSlots)>()
+            .iter(app.world())
+            .filter(|(_, request, _)| request.kind == TransportRequestKind::GatherWaterToTank)
+            .map(|(entity, request, slots)| (entity, request.anchor, slots.max))
+            .collect::<Vec<_>>();
+        requests.sort_unstable_by_key(|(entity, _, _)| super::super::entity_sort_key(*entity));
+
+        assert_eq!(requests.len(), 2);
+        assert_eq!(
+            requests
+                .iter()
+                .map(|(_, anchor, slots)| (*anchor, *slots))
+                .collect::<Vec<_>>(),
+            vec![(first_tank, 1), (second_tank, 10)],
+            "spawn order must be keyed by the stable tank Entity order, not HashMap iteration"
+        );
     }
 }

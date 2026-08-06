@@ -28,6 +28,36 @@ pub fn to_u32_saturating(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }
 
+/// Entity を生成順・HashMap の hash seed から独立して並べるための安定キー。
+///
+/// transport request producer は同一 update で複数の要求を spawn する。そこで
+/// HashMap の走査順を Commands の spawn 順へ流すと、同じ論理要求が run ごとに
+/// 異なる Entity を得て後段の task tie-break まで変わり得る。既存 Entity の
+/// index/generation は world 内で一意なので、要求キーの全順序に使う。
+pub(crate) fn entity_sort_key(entity: Entity) -> (u32, u32) {
+    (entity.index_u32(), entity.generation().to_bits())
+}
+
+/// ResourceType を transport request の spawn 順に使う安定キーへ写す。
+pub(crate) const fn resource_type_sort_key(resource_type: ResourceType) -> u8 {
+    match resource_type {
+        ResourceType::Wood => 0,
+        ResourceType::Rock => 1,
+        ResourceType::Water => 2,
+        ResourceType::BucketEmpty => 3,
+        ResourceType::BucketWater => 4,
+        ResourceType::Sand => 5,
+        ResourceType::Bone => 6,
+        ResourceType::StasisMud => 7,
+        ResourceType::Wheelbarrow => 8,
+    }
+}
+
+/// `(target entity, resource type)` request key の全順序。
+pub(crate) fn request_key_sort_key(key: (Entity, ResourceType)) -> ((u32, u32), u8) {
+    (entity_sort_key(key.0), resource_type_sort_key(key.1))
+}
+
 pub fn collect_all_area_owners(
     familiars: &[(Entity, AreaBounds)],
     yards: &[(Entity, Yard)],
@@ -333,11 +363,12 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
         upsert::disable_request_with_demand(commands, request_entity, inflight);
     }
 
-    for (key, (issued_by, slots, site_pos)) in desired_requests.iter() {
-        if seen_existing_keys.contains(key) {
-            continue;
-        }
-
+    let mut missing_requests = desired_requests
+        .iter()
+        .filter(|(key, _)| !seen_existing_keys.contains(*key))
+        .collect::<Vec<_>>();
+    missing_requests.sort_unstable_by_key(|(key, _)| request_key_sort_key(**key));
+    for (key, (issued_by, slots, site_pos)) in missing_requests {
         upsert::spawn_transport_request(
             commands,
             SpawnRequestSpec {

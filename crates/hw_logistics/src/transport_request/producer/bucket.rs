@@ -257,11 +257,12 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
         }
     }
 
-    for (tank_entity, desired) in desired_requests {
-        if seen_existing.contains(&tank_entity) {
-            continue;
-        }
-
+    let mut missing_requests = desired_requests
+        .into_iter()
+        .filter(|(tank_entity, _)| !seen_existing.contains(tank_entity))
+        .collect::<Vec<_>>();
+    missing_requests.sort_unstable_by_key(|(tank_entity, _)| super::entity_sort_key(*tank_entity));
+    for (tank_entity, desired) in missing_requests {
         commands.spawn((
             Name::new("TransportRequest::ReturnBucket"),
             Transform::from_xyz(desired.tank_pos.x, desired.tank_pos.y, 0.0),

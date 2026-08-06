@@ -135,11 +135,12 @@ pub fn wheelbarrow_auto_haul_system(
         }
     }
 
-    for (wb_entity, desired) in desired_return_requests {
-        if seen_return.contains(&wb_entity) {
-            continue;
-        }
-
+    let mut missing_requests = desired_return_requests
+        .into_iter()
+        .filter(|(wb_entity, _)| !seen_return.contains(wb_entity))
+        .collect::<Vec<_>>();
+    missing_requests.sort_unstable_by_key(|(wb_entity, _)| super::entity_sort_key(*wb_entity));
+    for (wb_entity, desired) in missing_requests {
         commands.spawn((
             Name::new("TransportRequest::ReturnWheelbarrow"),
             Transform::from_xyz(desired.wb_pos.x, desired.wb_pos.y, 0.0),

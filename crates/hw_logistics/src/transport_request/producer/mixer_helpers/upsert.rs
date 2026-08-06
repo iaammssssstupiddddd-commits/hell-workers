@@ -45,11 +45,12 @@ pub(crate) fn upsert_mixer_requests(
         TransportRequestKind::DeliverToMixerSolid,
     );
 
-    for (key, (issued_by, slots, mixer_pos)) in desired_requests.iter() {
-        if seen_existing_keys.contains(key) {
-            continue;
-        }
-
+    let mut missing_requests = desired_requests
+        .iter()
+        .filter(|(key, _)| !seen_existing_keys.contains(*key))
+        .collect::<Vec<_>>();
+    missing_requests.sort_unstable_by_key(|(key, _)| super::super::request_key_sort_key(**key));
+    for (key, (issued_by, slots, mixer_pos)) in missing_requests {
         let (work_type, kind, name) = mixer_request_profile(key.1);
         upsert::spawn_transport_request(
             commands,
