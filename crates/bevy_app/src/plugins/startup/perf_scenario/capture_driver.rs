@@ -130,8 +130,8 @@ pub(crate) fn start_perf_capture_system(
             params.config.fixed_audit_ticks(),
         );
     } else {
-        // `load_settings_system` holds realtime scenarios paused while the
-        // asynchronous renderer evidence resolves.  Release that gate only
+        // This capture system holds realtime scenarios paused while the
+        // asynchronous renderer evidence resolves. Release that gate only
         // after the initial checksum above has captured the unadvanced fixture.
         params.virtual_time.unpause();
         capture.phase = PerfCapturePhase::Warmup;
