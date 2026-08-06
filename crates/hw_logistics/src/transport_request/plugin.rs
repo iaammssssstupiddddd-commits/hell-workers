@@ -132,6 +132,10 @@ impl Plugin for TransportRequestPlugin {
                     .after(update_cached_active_yards_system)
                     .in_set(TransportRequestSet::Perceive),
                 (
+                    // Each producer can enqueue new request entities.  Keep the queue order
+                    // stable across producers as well as within a producer: otherwise two
+                    // independently deterministic producers can still assign their request
+                    // Entity IDs in scheduler-dependent order, which leaks into task ties.
                     blueprint_auto_haul_system,
                     bucket_auto_haul_system,
                     floor_construction_auto_haul_system,
@@ -151,6 +155,7 @@ impl Plugin for TransportRequestPlugin {
                     wheelbarrow_auto_haul_system,
                     stockpile_consolidation_producer_system.after(task_area_auto_haul_system),
                 )
+                    .chain()
                     .in_set(TransportRequestSet::Decide),
                 wheelbarrow_arbitration_system.in_set(TransportRequestSet::Arbitrate),
                 transport_request_state_sync_system.in_set(TransportRequestSet::Execute),
