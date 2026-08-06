@@ -7,7 +7,7 @@ use super::*;
 /// deferred command を適用した直後にこの checkpoint を置く。
 #[cfg(feature = "profiling")]
 pub(crate) fn start_perf_capture_system(
-    params: PerfCaptureStartParams,
+    mut params: PerfCaptureStartParams,
     mut capture: ResMut<PerfCapture>,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -53,6 +53,14 @@ pub(crate) fn start_perf_capture_system(
             capture.fixture_wait_reported = true;
         }
         return;
+    }
+
+    // Realtime setup needs the normal spawn path to be live, but renderer
+    // readiness can take a variable number of later frames.  Freeze exactly
+    // here—after the fixture is complete and before GameSystemSet::Input—so
+    // those waiting frames cannot move the initial checksum's actors.
+    if !params.config.uses_fixed_timesteps() {
+        params.virtual_time.pause();
     }
 
     let render_environment = match params.render_environment.snapshot() {
@@ -122,6 +130,10 @@ pub(crate) fn start_perf_capture_system(
             params.config.fixed_audit_ticks(),
         );
     } else {
+        // `load_settings_system` holds realtime scenarios paused while the
+        // asynchronous renderer evidence resolves.  Release that gate only
+        // after the initial checksum above has captured the unadvanced fixture.
+        params.virtual_time.unpause();
         capture.phase = PerfCapturePhase::Warmup;
         capture.elapsed_secs = 0.0;
         eprintln!(

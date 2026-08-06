@@ -53,9 +53,10 @@ fn load_settings_system(
         // 計測はローカルの settings.ron にある一時停止・倍速設定の影響を受けない。
         time.set_relative_speed(1.0);
         if config.uses_fixed_timesteps() {
-            // fixed-step audit は fixture checkpoint が採れた後に capture system が
-            // 明示的に unpause する。Startup から最初の Update までのゲーム更新を
-            // 混入させないための gate である。
+            // Fixed-step audits and RenderDoc have a dedicated checkpoint
+            // arming path.  Realtime fixtures must remain unpaused here so
+            // their normal spawn/setup path can complete; their capture
+            // system freezes them as soon as that setup is ready.
             time.pause();
         } else {
             time.unpause();
