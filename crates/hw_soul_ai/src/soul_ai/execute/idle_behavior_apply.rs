@@ -43,7 +43,17 @@ pub fn idle_behavior_apply_system(
 ) {
     let mut pending_rest_reservations: HashMap<Entity, usize> = HashMap::new();
     let mut pending_rest_entries: HashMap<Entity, usize> = HashMap::new();
-    for request in request_reader.read() {
+    let mut requests = request_reader.read().collect::<Vec<_>>();
+    // Multiple decision systems can append requests in scheduler-dependent order.  Apply them
+    // in a stable Soul order so capacity-limited rest areas choose the same winners every run.
+    // `sort_by_key` is stable, therefore requests emitted for one Soul keep their original order.
+    requests.sort_by_key(|request| {
+        (
+            request.entity.index_u32(),
+            request.entity.generation().to_bits(),
+        )
+    });
+    for request in requests {
         match &request.operation {
             IdleBehaviorOperation::JoinGathering { spot_entity } => {
                 commands
@@ -215,5 +225,48 @@ pub fn idle_behavior_apply_system(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rest_area_reservations_use_stable_soul_order() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_message::<IdleBehaviorRequest>()
+            .add_systems(Update, (idle_behavior_apply_system, ApplyDeferred).chain());
+
+        let rest_area = app.world_mut().spawn(RestArea { capacity: 2 }).id();
+        let first_soul = app.world_mut().spawn_empty().id();
+        let second_soul = app.world_mut().spawn_empty().id();
+        let third_soul = app.world_mut().spawn_empty().id();
+
+        for entity in [third_soul, second_soul, first_soul] {
+            app.world_mut().write_message(IdleBehaviorRequest {
+                entity,
+                operation: IdleBehaviorOperation::ReserveRestArea {
+                    rest_area_entity: rest_area,
+                },
+            });
+        }
+
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .get::<RestAreaReservedFor>(first_soul)
+                .map(|reserved| reserved.0),
+            Some(rest_area)
+        );
+        assert_eq!(
+            app.world()
+                .get::<RestAreaReservedFor>(second_soul)
+                .map(|reserved| reserved.0),
+            Some(rest_area)
+        );
+        assert!(app.world().get::<RestAreaReservedFor>(third_soul).is_none());
     }
 }
