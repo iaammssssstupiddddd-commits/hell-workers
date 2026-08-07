@@ -3,6 +3,14 @@ from __future__ import annotations
 from .fixtures import *
 from .rtt_light_bundle import finalize_attempt, verify_attempt, verify_baseline
 
+try:
+    from scripts.build_coordination import acquire_activity
+except ModuleNotFoundError:
+    try:
+        from build_coordination import acquire_activity
+    except ModuleNotFoundError:
+        from ..build_coordination import acquire_activity
+
 
 def validate_rtt_light_contract_command(args: argparse.Namespace) -> int:
     contract = load_rtt_light_contract(args.contract)
@@ -29,6 +37,14 @@ def validate_rtt_light_contract_command(args: argparse.Namespace) -> int:
     return 0
 
 def run_suite(args: argparse.Namespace) -> int:
+    """Run a performance recipe under the workspace-wide exclusive lease."""
+    if args.dry_run:
+        return _run_suite(args)
+    with acquire_activity(REPO_ROOT, "exclusive"):
+        return _run_suite(args)
+
+
+def _run_suite(args: argparse.Namespace) -> int:
     sizes = parse_csv_list(args.sizes, {"small", "medium", "large"}, "sizes")
     renders = parse_csv_list(args.renders, {"cpu", "gpu"}, "renders")
     familiar_policies = parse_csv_list(
