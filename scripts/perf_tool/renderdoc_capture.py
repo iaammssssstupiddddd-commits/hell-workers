@@ -32,6 +32,9 @@ SOURCE_FILES = {
 SOURCE_PREFIXES = ("crates/", "scripts/perf_tool/")
 ASSET_PREFIX = "assets/"
 RENDERDOC_API_VERSION = "1.6.0"
+RENDERDOC_VULKAN_MANIFEST = Path(
+    "share/vulkan/implicit_layer.d/renderdoc_capture.json"
+)
 LOG_PROBLEM_RE = re.compile(
     r"\b(?:WARN(?:ING)?|ERROR|FATAL|CRITICAL|panicked)\b|bevy_ecs::error::handler",
     re.IGNORECASE,
@@ -206,6 +209,63 @@ def inspect_tools(
         "renderdoc_version": renderdoc_version,
         "qrenderdoc_version": qrenderdoc_version,
     }
+
+
+def _portable_vulkan_manifest_source(tools: dict[str, Any]) -> Path:
+    """Locate the manifest shipped with the selected RenderDoc toolchain."""
+
+    renderdoccmd = tools["renderdoccmd"]
+    library = tools["library"]
+    candidates = (
+        renderdoccmd.parent.parent / RENDERDOC_VULKAN_MANIFEST,
+        library.parent.parent.parent / RENDERDOC_VULKAN_MANIFEST,
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise CaptureError(
+        "RenderDoc Vulkan implicit-layer manifest is unavailable next to the "
+        f"selected tools: {candidates[0]}"
+    )
+
+
+def prepare_portable_vulkan_layer(tools: dict[str, Any], work: Path) -> Path:
+    """Write a per-run manifest that points at the inspected RenderDoc library.
+
+    Portable RenderDoc bundles retain the distribution's absolute library path
+    in their manifest.  That path is invalid after the bundle is unpacked in
+    the workspace, so do not register it globally.  The Vulkan loader instead
+    discovers this short-lived, rewritten manifest through
+    ``VK_ADD_IMPLICIT_LAYER_PATH`` for the capture child only.
+    """
+
+    source = _portable_vulkan_manifest_source(tools)
+    manifest = read_json(source)
+    layer = manifest.get("layer")
+    if (
+        not isinstance(layer, dict)
+        or layer.get("name") != "VK_LAYER_RENDERDOC_Capture"
+        or layer.get("type") != "GLOBAL"
+        or not isinstance(layer.get("library_path"), str)
+        or not layer["library_path"]
+    ):
+        raise CaptureError(f"RenderDoc Vulkan manifest is invalid: {source}")
+    layer["library_path"] = str(tools["library"])
+    directory = work / "vulkan" / "implicit_layer.d"
+    directory.mkdir(parents=True)
+    _write_json_exclusive(directory / "renderdoc_capture.json", manifest)
+    return directory
+
+
+def _retain_renderdoc_diagnostics(work: Path, output: Path, message: str) -> CaptureError:
+    """Keep transient capture evidence when RenderDoc fails before publication."""
+
+    destination = output.parent / f"renderdoc-failure-{uuid.uuid4()}"
+    try:
+        shutil.copytree(work, destination)
+    except OSError:
+        return CaptureError(message)
+    return CaptureError(f"{message}; retained RenderDoc diagnostics: {destination}")
 
 
 def _tracked_paths(repo: Path) -> list[str]:
@@ -854,6 +914,7 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
         runtime_dir = work / "runtime"
         raw_dir.mkdir()
         runtime_dir.mkdir()
+        vulkan_layer_directory = prepare_portable_vulkan_layer(tools, work)
         capture_template = raw_dir / "indoor-light"
         combined_log = work / "capture.log"
         environment = os.environ.copy()
@@ -866,6 +927,8 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                 "WGPU_ADAPTER_NAME": args.adapter,
                 "HW_RENDERDOC_LIBRARY": str(tools["library"]),
                 "HW_RENDERDOC_CAPTURE_TEMPLATE": str(capture_template),
+                "VK_ADD_IMPLICIT_LAYER_PATH": str(vulkan_layer_directory),
+                "ENABLE_VULKAN_RENDERDOC_CAPTURE": "1",
                 "RUST_BACKTRACE": "1",
             }
         )
@@ -888,14 +951,22 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                 timeout=600,
             )
         if completed.returncode != 0:
-            raise CaptureError(f"renderdoccmd capture failed with {completed.returncode}")
+            raise _retain_renderdoc_diagnostics(
+                work,
+                output,
+                f"renderdoccmd capture failed with {completed.returncode}",
+            )
         captures = [
             path
             for path in raw_dir.rglob("*.rdc")
             if path.is_file() and not path.is_symlink() and path.stat().st_size > 0
         ]
         if len(captures) != 1:
-            raise CaptureError(f"RenderDoc produced {len(captures)} nonempty .rdc files")
+            raise _retain_renderdoc_diagnostics(
+                work,
+                output,
+                f"RenderDoc produced {len(captures)} nonempty .rdc files",
+            )
         capture = captures[0].resolve()
         checkpoint_path = runtime_dir / "renderdoc-checkpoint.json"
         runtime = _runtime_checkpoint(
@@ -926,8 +997,10 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                 timeout=600,
             )
         if replay.returncode != 0 or not extraction_path.is_file():
-            raise CaptureError(
-                f"qrenderdoc extraction failed with {replay.returncode}"
+            raise _retain_renderdoc_diagnostics(
+                work,
+                output,
+                f"qrenderdoc extraction failed with {replay.returncode}",
             )
         capture_hash = sha256(capture)
         _validate_extraction(
@@ -1037,9 +1110,14 @@ def self_test() -> int:
         raise CaptureError("capture and perf source fingerprint boundaries differ")
     with tempfile.TemporaryDirectory(prefix="renderdoc-capture-self-test-") as name:
         root = Path(name)
-        renderdoccmd = root / "renderdoccmd"
-        qrenderdoc = root / "qrenderdoc"
-        library = root / "librenderdoc.so"
+        prefix = root / "portable" / "usr"
+        renderdoccmd = prefix / "bin" / "renderdoccmd"
+        qrenderdoc = prefix / "bin" / "qrenderdoc"
+        library = prefix / "lib64" / "renderdoc" / "librenderdoc.so"
+        manifest_source = prefix / RENDERDOC_VULKAN_MANIFEST
+        renderdoccmd.parent.mkdir(parents=True)
+        library.parent.mkdir(parents=True)
+        manifest_source.parent.mkdir(parents=True)
         renderdoccmd.write_text(
             "#!/bin/sh\n"
             "if [ \"$1\" = version ]; then echo 'RenderDoc v1.99'; exit 0; fi\n"
@@ -1058,12 +1136,42 @@ def self_test() -> int:
         renderdoccmd.chmod(0o755)
         qrenderdoc.chmod(0o755)
         library.write_bytes(b"\x7fELFformal-probe")
+        manifest_source.write_text(
+            json.dumps(
+                {
+                    "file_format_version": "1.1.2",
+                    "layer": {
+                        "name": "VK_LAYER_RENDERDOC_Capture",
+                        "type": "GLOBAL",
+                        "library_path": "/usr/lib64/renderdoc/librenderdoc.so",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
         tools = inspect_tools(str(renderdoccmd), str(qrenderdoc), str(library))
         if (
             tools["renderdoc_version"] != "RenderDoc v1.99"
             or tools["qrenderdoc_version"] != "QRenderDoc v1.99"
         ):
             raise CaptureError("tool probe versions differ in self-test")
+        layer_directory = prepare_portable_vulkan_layer(tools, root / "layer")
+        rewritten_manifest = read_json(layer_directory / "renderdoc_capture.json")
+        if rewritten_manifest["layer"]["library_path"] != str(library):
+            raise CaptureError("portable Vulkan manifest did not use inspected library")
+        failure_work = root / "failure-work"
+        failure_work.mkdir()
+        (failure_work / "capture.log").write_text("capture failure\n", encoding="utf-8")
+        failure_output = root / "attempt" / "renderdoc"
+        failure_output.parent.mkdir()
+        failure = _retain_renderdoc_diagnostics(
+            failure_work, failure_output, "expected self-test failure"
+        )
+        retained = sorted(failure_output.parent.glob("renderdoc-failure-*"))
+        if len(retained) != 1 or not (retained[0] / "capture.log").is_file():
+            raise CaptureError("RenderDoc failure diagnostics were not retained")
+        if str(retained[0]) not in str(failure):
+            raise CaptureError("RenderDoc failure diagnostics path was not reported")
         capture = root / "capture.rdc"
         capture.write_bytes(b"RenderDoc self-test capture")
         capture_hash = sha256(capture)
