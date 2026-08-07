@@ -1,10 +1,23 @@
 use bevy::prelude::*;
 
-use hw_core::events::{GatheringManagementOp, GatheringManagementRequest, OnGatheringParticipated};
+use hw_core::events::{
+    GatheringManagementOp, GatheringManagementRequest, OnGatheringJoined, OnGatheringParticipated,
+};
 use hw_core::relationships::{GatheringParticipants, ParticipatingIn};
 use std::collections::HashSet;
 
-fn queue_gathering_join(commands: &mut Commands, soul: Entity, spot: Entity) {
+/// Queue a gathering relation only while both endpoints are still live.
+///
+/// Gathering decisions can retire a spot in the same deferred-command batch as
+/// a Soul join. Checking at command-application time keeps Bevy from receiving
+/// a Relationship whose target has already been despawned. Any presentation
+/// message is emitted only after the relation is successfully inserted.
+pub(super) fn queue_gathering_join(
+    commands: &mut Commands,
+    soul: Entity,
+    spot: Entity,
+    on_joined: Option<OnGatheringJoined>,
+) {
     commands.queue(move |world: &mut World| {
         // The request may have outlived either entity while deferred commands from
         // other Execute systems were applied. Check both at the point that the
@@ -33,6 +46,9 @@ fn queue_gathering_join(commands: &mut Commands, soul: Entity, spot: Entity) {
             entity: soul,
             spot_entity: spot,
         });
+        if let Some(on_joined) = on_joined {
+            world.write_message(on_joined);
+        }
     });
 }
 
@@ -112,7 +128,7 @@ pub fn gathering_apply_system(
                 // participants added after the decision snapshot as well.
                 detach_gathering_participants(&mut commands, &q_gathering_participants, *absorbed);
                 for soul_entity in participants_to_move {
-                    queue_gathering_join(&mut commands, *soul_entity, *absorber);
+                    queue_gathering_join(&mut commands, *soul_entity, *absorber, None);
                 }
 
                 commands.entity(*absorbed_aura).try_despawn();
@@ -129,7 +145,7 @@ pub fn gathering_apply_system(
                     continue;
                 }
 
-                queue_gathering_join(&mut commands, *soul, *spot);
+                queue_gathering_join(&mut commands, *soul, *spot, None);
             }
             GatheringManagementOp::Leave { soul, spot: _ } => {
                 commands.entity(*soul).try_remove::<ParticipatingIn>();

@@ -116,7 +116,10 @@ impl Plugin for SoulAiCorePlugin {
                         .after(execute::drifting::drifting_behavior_system),
                     execute::task_execution::move_plant::apply_pending_building_move_system
                         .after(execute::task_execution_system::task_execution_system),
-                    execute::idle_behavior_apply::idle_behavior_apply_system,
+                    // Gathering retirement must queue before an idle join so the
+                    // deferred-time liveness guard can reject a retired spot.
+                    execute::idle_behavior_apply::idle_behavior_apply_system
+                        .after(execute::gathering_apply::gathering_apply_system),
                     execute::escaping_apply::escaping_apply_system,
                     execute::cleanup::cleanup_commanded_souls_system,
                 )

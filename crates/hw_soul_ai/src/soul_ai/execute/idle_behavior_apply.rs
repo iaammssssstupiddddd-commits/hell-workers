@@ -3,14 +3,14 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 
 use hw_core::constants::{REST_AREA_RECRUIT_COOLDOWN_SECS, REST_AREA_RESTING_DURATION};
-use hw_core::events::{
-    IdleBehaviorOperation, IdleBehaviorRequest, OnGatheringJoined, OnGatheringParticipated,
-};
+use hw_core::events::{IdleBehaviorOperation, IdleBehaviorRequest, OnGatheringJoined};
 use hw_core::relationships::{
     ParticipatingIn, RestAreaOccupants, RestAreaReservations, RestAreaReservedFor, RestingIn,
 };
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState, Path, RestAreaCooldown};
 use hw_jobs::RestArea;
+
+use super::gathering_apply::queue_gathering_join;
 
 #[derive(SystemParam)]
 pub struct RestAreaCheckQueries<'w, 's> {
@@ -62,13 +62,7 @@ pub fn idle_behavior_apply_system(
                 if let Ok(mut visibility) = q_visibility.get_mut(request.entity) {
                     *visibility = Visibility::Visible;
                 }
-                commands
-                    .entity(request.entity)
-                    .insert(ParticipatingIn(*spot_entity));
-                commands.write_message(OnGatheringParticipated {
-                    entity: request.entity,
-                    spot_entity: *spot_entity,
-                });
+                queue_gathering_join(&mut commands, request.entity, *spot_entity, None);
             }
             IdleBehaviorOperation::LeaveGathering { spot_entity: _ } => {
                 commands.entity(request.entity).remove::<ParticipatingIn>();
@@ -80,16 +74,14 @@ pub fn idle_behavior_apply_system(
                 if let Ok(mut visibility) = q_visibility.get_mut(request.entity) {
                     *visibility = Visibility::Visible;
                 }
-                commands
-                    .entity(request.entity)
-                    .insert(ParticipatingIn(*spot_entity));
-                commands.write_message(OnGatheringParticipated {
-                    entity: request.entity,
-                    spot_entity: *spot_entity,
-                });
-                commands.write_message(OnGatheringJoined {
-                    entity: request.entity,
-                });
+                queue_gathering_join(
+                    &mut commands,
+                    request.entity,
+                    *spot_entity,
+                    Some(OnGatheringJoined {
+                        entity: request.entity,
+                    }),
+                );
             }
             IdleBehaviorOperation::ReserveRestArea { rest_area_entity } => {
                 let cooldown_active = rest_queries
@@ -230,7 +222,87 @@ pub fn idle_behavior_apply_system(
 
 #[cfg(test)]
 mod tests {
+    use super::super::gathering_apply::gathering_apply_system;
     use super::*;
+    use hw_core::events::{
+        GatheringManagementOp, GatheringManagementRequest, OnGatheringParticipated,
+    };
+    use hw_core::relationships::GatheringParticipants;
+
+    #[derive(Debug, Default, PartialEq, Eq, Resource)]
+    struct GatheringEventCounts {
+        participated: usize,
+        joined: usize,
+    }
+
+    fn count_gathering_events(
+        mut participated: MessageReader<OnGatheringParticipated>,
+        mut joined: MessageReader<OnGatheringJoined>,
+        mut counts: ResMut<GatheringEventCounts>,
+    ) {
+        counts.participated += participated.read().count();
+        counts.joined += joined.read().count();
+    }
+
+    fn assert_retired_spot_discards_idle_join(
+        operation: impl FnOnce(Entity) -> IdleBehaviorOperation,
+    ) {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_message::<GatheringManagementRequest>()
+            .add_message::<IdleBehaviorRequest>()
+            .add_message::<OnGatheringParticipated>()
+            .add_message::<OnGatheringJoined>()
+            .init_resource::<GatheringEventCounts>()
+            .add_systems(
+                Update,
+                (
+                    gathering_apply_system,
+                    idle_behavior_apply_system,
+                    ApplyDeferred,
+                    count_gathering_events,
+                )
+                    .chain(),
+            );
+
+        let soul = app.world_mut().spawn_empty().id();
+        let spot = app.world_mut().spawn(GatheringParticipants::default()).id();
+        let aura = app.world_mut().spawn_empty().id();
+        app.world_mut().write_message(GatheringManagementRequest {
+            operation: GatheringManagementOp::Dissolve {
+                spot_entity: spot,
+                aura_entity: aura,
+                object_entity: None,
+            },
+        });
+        app.world_mut().write_message(IdleBehaviorRequest {
+            entity: soul,
+            operation: operation(spot),
+        });
+
+        app.update();
+
+        assert!(app.world().get_entity(spot).is_err());
+        assert!(app.world().get::<ParticipatingIn>(soul).is_none());
+        assert_eq!(
+            *app.world().resource::<GatheringEventCounts>(),
+            GatheringEventCounts::default()
+        );
+    }
+
+    #[test]
+    fn retired_spot_discards_join_gathering_without_participation_message() {
+        assert_retired_spot_discards_idle_join(|spot_entity| {
+            IdleBehaviorOperation::JoinGathering { spot_entity }
+        });
+    }
+
+    #[test]
+    fn retired_spot_discards_arrive_gathering_without_joined_message() {
+        assert_retired_spot_discards_idle_join(|spot_entity| {
+            IdleBehaviorOperation::ArriveAtGathering { spot_entity }
+        });
+    }
 
     #[test]
     fn rest_area_reservations_use_stable_soul_order() {
