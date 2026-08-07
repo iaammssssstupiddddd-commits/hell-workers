@@ -172,7 +172,7 @@ use output::{
 #[derive(Resource, Default)]
 pub(crate) struct PerfCapture {
     phase: PerfCapturePhase,
-    elapsed_secs: f32,
+    elapsed_secs: f64,
     frame_times_ms: Vec<f64>,
     fixture_wait_reported: bool,
     initial_checksum: Option<PerfScenarioChecksum>,

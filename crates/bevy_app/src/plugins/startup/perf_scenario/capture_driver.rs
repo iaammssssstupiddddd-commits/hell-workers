@@ -188,10 +188,11 @@ pub(crate) fn drive_perf_capture_system(
                     exit.write(AppExit::error());
                 }
             } else {
-                capture.elapsed_secs += params.time.delta_secs();
-                capture.warmup_virtual_secs += params.time.delta_secs_f64();
+                let virtual_delta_secs = params.time.delta_secs_f64();
+                capture.elapsed_secs += virtual_delta_secs;
+                capture.warmup_virtual_secs += virtual_delta_secs;
                 capture.warmup_real_secs += params.real_time.delta_secs_f64();
-                if capture.elapsed_secs >= params.config.warmup_secs {
+                if capture.elapsed_secs >= f64::from(params.config.warmup_secs) {
                     if let Err(error) = validate_realtime_indoor_light_checkpoint(
                         &params.config,
                         &params.checksum_queries,
@@ -251,15 +252,16 @@ pub(crate) fn drive_perf_capture_system(
                     exit.write(AppExit::error());
                 }
             } else {
-                capture.elapsed_secs += params.time.delta_secs();
-                capture.measure_virtual_secs += params.time.delta_secs_f64();
+                let virtual_delta_secs = params.time.delta_secs_f64();
+                capture.elapsed_secs += virtual_delta_secs;
+                capture.measure_virtual_secs += virtual_delta_secs;
                 capture.measure_real_secs += params.real_time.delta_secs_f64();
                 if let Some(frame_time_ms) =
                     params.diagnostics.as_deref().and_then(latest_frame_time_ms)
                 {
                     capture.frame_times_ms.push(frame_time_ms);
                 }
-                if capture.elapsed_secs >= params.config.measure_secs {
+                if capture.elapsed_secs >= f64::from(params.config.measure_secs) {
                     #[cfg(feature = "profiling-memory")]
                     {
                         capture.memory_measurement = crate::profiling_allocator::end_measurement();
