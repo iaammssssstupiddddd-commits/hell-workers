@@ -5,7 +5,7 @@
 ## 起動
 
 ```bash
-cargo run -p visual_test
+python3 scripts/dev.py cargo -- run -p visual_test
 ```
 
 ## 検証できること

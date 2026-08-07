@@ -35,10 +35,10 @@ sudo apt-get install -y mold
 ### ビルドと実行
 ```bash
 # 通常の実行
-cargo run
+python3 scripts/dev.py cargo -- run
 
 # 動的リンクを有効にして高速にビルド・実行
-cargo run --features dynamic_linking
+python3 scripts/dev.py cargo -- run --features dynamic_linking
 ```
 
 ## 4. トラブルシューティング

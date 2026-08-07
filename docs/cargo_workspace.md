@@ -8,7 +8,7 @@
 - root crate (`bevy_app`) を Bevy の app shell に寄せる
 - `bevy_app` の library は共有 Resource・公開 module・root re-export・`HellWorkersGamePlugin` を所有し、binary `main.rs` は platform/backend/window の起動設定だけを持つ
 - 純粋ロジックや共有 model を責務ごとに別 crate へ置く
-- `cargo check --workspace` を常に green に保ちながら段階的に分割する
+- `python3 scripts/dev.py check` を常に green に保ちながら段階的に分割する
 
 ## 2. 現在の workspace 構成
 
@@ -640,7 +640,7 @@ root (`bevy_app`) は app shell として `init_resource::<WorldMap>()`、startu
 2. root `Cargo.toml` に path dependency を追加する
 3. shared model / helper から移す
 4. root 側を re-export または import 修正でつなぐ
-5. `cargo check --workspace` を通す
+5. `python3 scripts/dev.py check` を通す
 6. docs の責務表と `docs/README.md` を更新する
 
 ## 8. 検証コマンド
@@ -648,31 +648,31 @@ root (`bevy_app`) は app shell として `init_resource::<WorldMap>()`、startu
 全体確認:
 
 ```bash
-cargo check --workspace
+python3 scripts/dev.py check
 ```
 
 timing 記録:
 
 ```bash
-cargo check --workspace --timings
+python3 scripts/dev.py cargo -- check --workspace --timings
 ```
 
 root app 起動:
 
 ```bash
-cargo run
+python3 scripts/dev.py cargo -- run
 ```
 
 個別 crate の確認:
 
 ```bash
-cargo check -p hw_core
-cargo check -p hw_world
-cargo check -p hw_logistics
-cargo check -p hw_jobs
-cargo check -p hw_familiar_ai
-cargo check -p hw_soul_ai
-cargo check -p hw_visual
+python3 scripts/dev.py cargo -- check -p hw_core
+python3 scripts/dev.py cargo -- check -p hw_world
+python3 scripts/dev.py cargo -- check -p hw_logistics
+python3 scripts/dev.py cargo -- check -p hw_jobs
+python3 scripts/dev.py cargo -- check -p hw_familiar_ai
+python3 scripts/dev.py cargo -- check -p hw_soul_ai
+python3 scripts/dev.py cargo -- check -p hw_visual
 ```
 
 ## 9. やらないこと
@@ -680,4 +680,4 @@ cargo check -p hw_visual
 - `jobs` / `logistics` / `world` / `UI` を一度に全部分割する
 - 広すぎる共通 crate に型をまとめて押し込む
 - root wrapper に再びロジックを戻す
-- `cargo check` を通さずに crate 分割を進める
+- `python3 scripts/dev.py check` を通さずに crate 分割を進める

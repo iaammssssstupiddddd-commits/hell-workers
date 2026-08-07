@@ -69,7 +69,7 @@ hw_visual      ✗
 ```bash
 python3 scripts/dev.py check
 # パス探索テストが存在する場合
-cargo test -p hw_world --locked
+python3 scripts/dev.py cargo -- test -p hw_world --locked
 ```
 
 ## 参照ドキュメント

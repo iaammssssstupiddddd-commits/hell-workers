@@ -81,7 +81,7 @@ bevy_app       ✗
 python3 scripts/dev.py check
 
 # pure allocation契約
-cargo test -p hw_energy allocation
+python3 scripts/dev.py cargo -- test -p hw_energy allocation
 ```
 
 ## 参照ドキュメント
