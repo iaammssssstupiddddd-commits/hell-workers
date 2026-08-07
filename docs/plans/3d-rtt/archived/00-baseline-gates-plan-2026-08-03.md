@@ -711,6 +711,8 @@ sampler `(1, 2)`とSoul mask texture / sampler `(3, 4)`を同時に束縛して�
   その更新の承認をP00判断で代用しない
 - formal offline verification: `2026-08-07` / `verify-rtt-light`と`verify-rtt-light-baseline`がともにpass。
   registered file 886、baseline root `rtt-light-v1` status `valid`
+- final quality gates: `2026-08-08` / `python3 scripts/dev.py verify` pass（Python 47、perf self-test、
+  workspace check / Clippy / test、Help impact、docs index / link、diff hygieneを含む）
 
 ### Definition of Done
 
