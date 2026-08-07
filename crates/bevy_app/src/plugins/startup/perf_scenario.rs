@@ -121,8 +121,8 @@ pub use config::{
 };
 #[cfg(feature = "profiling")]
 pub(crate) use config::{
-    is_fixed_step_behavior, is_fixed_step_scenario, is_not_fixed_step_audit,
-    is_not_fixed_step_behavior, is_not_renderdoc_capture,
+    is_fixed_step_behavior, is_fixed_step_scenario, is_not_fixed_step_behavior,
+    is_not_fixed_step_scenario, is_not_renderdoc_capture,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use fixture::{PerfScenarioApplied, PerfScenarioDriverState, PerfScenarioSet};

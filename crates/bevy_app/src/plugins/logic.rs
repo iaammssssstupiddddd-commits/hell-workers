@@ -268,7 +268,7 @@ impl Plugin for LogicPlugin {
             Update,
             familiar_spawning_system
                 .in_set(GameSystemSet::Logic)
-                .run_if(crate::plugins::startup::is_not_fixed_step_audit),
+                .run_if(crate::plugins::startup::is_not_fixed_step_scenario),
         );
 
         #[cfg(not(feature = "profiling"))]

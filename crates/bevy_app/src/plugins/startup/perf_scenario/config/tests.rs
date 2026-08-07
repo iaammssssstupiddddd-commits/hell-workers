@@ -219,3 +219,32 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
     );
     assert_eq!(super::PerfBehaviorCase::parse("unknown"), None);
 }
+
+#[test]
+fn behavior_lane_accepts_the_canonical_behavior_fixture() {
+    let args = [
+        "perf-test",
+        "--perf-contract",
+        "rtt-light-v1",
+        "--perf-stage",
+        "current",
+        "--perf-lane",
+        "behavior",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect::<Vec<_>>();
+    let selection = super::parse_rtt_light_selection(&args, super::PerfWorkload::IndoorLight)
+        .expect("current/behavior v1 is implemented");
+
+    assert!(
+        super::validate_behavior_lane(
+            selection,
+            Some(super::PerfBehaviorCase::DoorStateV1),
+            super::PerfScenarioSize::Small,
+            super::PerfRenderMode::Cpu,
+            PerfClockMode::FixedBehavior,
+        )
+        .is_ok()
+    );
+}

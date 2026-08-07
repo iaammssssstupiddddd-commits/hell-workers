@@ -18,7 +18,7 @@ pub use perf_scenario::{
     PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
 };
 #[cfg(feature = "profiling")]
-pub(crate) use perf_scenario::{is_fixed_step_behavior, is_not_fixed_step_audit};
+pub(crate) use perf_scenario::{is_fixed_step_behavior, is_not_fixed_step_scenario};
 pub use rtt_composite::RttCompositeSprite;
 pub(crate) use rtt_composite::composite_logical_size;
 pub use rtt_setup::{

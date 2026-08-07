@@ -530,41 +530,7 @@ impl PerfScenarioConfig {
             })?),
             None => None,
         };
-        match rtt_light.map(PerfRttLightSelection::lane) {
-            Some("behavior") if behavior_case.is_none() => {
-                return Err(PerfScenarioConfigError(
-                    "the rtt-light behavior lane requires --perf-behavior-case".to_string(),
-                ));
-            }
-            Some("behavior")
-                if size != PerfScenarioSize::Small
-                    || render_mode != PerfRenderMode::Cpu
-                    || !matches!(clock_mode, PerfClockMode::FixedBehavior) =>
-            {
-                return Err(PerfScenarioConfigError(
-                    "the rtt-light behavior lane requires small/cpu/fixed-behavior".to_string(),
-                ));
-            }
-            Some(_) if behavior_case.is_some() => {
-                return Err(PerfScenarioConfigError(
-                    "--perf-behavior-case is only valid for --perf-lane behavior".to_string(),
-                ));
-            }
-            Some(_) if matches!(clock_mode, PerfClockMode::FixedBehavior) => {
-                return Err(PerfScenarioConfigError(
-                    "--perf-clock fixed-behavior is only valid for --perf-lane behavior"
-                        .to_string(),
-                ));
-            }
-            None if behavior_case.is_some()
-                || matches!(clock_mode, PerfClockMode::FixedBehavior) =>
-            {
-                return Err(PerfScenarioConfigError(
-                    "behavior selection is reserved for the rtt-light behavior lane".to_string(),
-                ));
-            }
-            _ => {}
-        }
+        validate_behavior_lane(rtt_light, behavior_case, size, render_mode, clock_mode)?;
         let window_width = parse_optional_u32(
             value_from_args_or_env(&args, "--perf-window-width", "HW_PERF_WINDOW_WIDTH")?,
             "--perf-window-width",
@@ -752,22 +718,6 @@ impl PerfScenarioConfig {
     }
 }
 
-/// 固定 step 監査では、初期 fixture を通常の Logic ゲートより先に適用する。
-///
-/// 監査開始時は `Time<Virtual>` を停止したままにするため、通常の `Logic`
-/// system set に置かれた spawn consumer は実行できない。この条件は、その
-/// 専用経路と通常経路を相互排他的にするために使う。
-#[cfg(feature = "profiling")]
-pub(crate) fn is_fixed_step_audit(config: Option<Res<PerfScenarioConfig>>) -> bool {
-    config
-        .is_some_and(|config| config.enabled() && matches!(config.clock_mode, PerfClockMode::Fixed))
-}
-
-#[cfg(feature = "profiling")]
-pub(crate) fn is_not_fixed_step_audit(config: Option<Res<PerfScenarioConfig>>) -> bool {
-    !is_fixed_step_audit(config)
-}
-
 #[cfg(feature = "profiling")]
 pub(crate) fn is_fixed_step_behavior(config: Option<Res<PerfScenarioConfig>>) -> bool {
     config.is_some_and(|config| {
@@ -781,8 +731,18 @@ pub(crate) fn is_not_fixed_step_behavior(config: Option<Res<PerfScenarioConfig>>
 }
 
 #[cfg(feature = "profiling")]
+/// 固定 step シナリオでは、初期 fixture を通常の Logic ゲートより先に適用する。
+///
+/// 監査開始時は `Time<Virtual>` を停止したままにするため、通常の `Logic`
+/// system set に置かれた spawn consumer は実行できない。この条件は、固定
+/// 監査・固定挙動の両方で専用経路と通常経路を相互排他的にするために使う。
 pub(crate) fn is_fixed_step_scenario(config: Option<Res<PerfScenarioConfig>>) -> bool {
     config.is_some_and(|config| config.enabled() && config.uses_fixed_timesteps())
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn is_not_fixed_step_scenario(config: Option<Res<PerfScenarioConfig>>) -> bool {
+    !is_fixed_step_scenario(config)
 }
 
 #[cfg(feature = "profiling")]
@@ -825,6 +785,52 @@ fn parse_rtt_light_selection(
         }
     };
     Ok(Some(selection))
+}
+
+fn validate_behavior_lane(
+    rtt_light: Option<PerfRttLightSelection>,
+    behavior_case: Option<PerfBehaviorCase>,
+    size: PerfScenarioSize,
+    render_mode: PerfRenderMode,
+    clock_mode: PerfClockMode,
+) -> Result<(), PerfScenarioConfigError> {
+    match rtt_light.map(PerfRttLightSelection::lane) {
+        Some("behavior") => {
+            if behavior_case.is_none() {
+                return Err(PerfScenarioConfigError(
+                    "the rtt-light behavior lane requires --perf-behavior-case".to_string(),
+                ));
+            }
+            if size != PerfScenarioSize::Small
+                || render_mode != PerfRenderMode::Cpu
+                || !matches!(clock_mode, PerfClockMode::FixedBehavior)
+            {
+                return Err(PerfScenarioConfigError(
+                    "the rtt-light behavior lane requires small/cpu/fixed-behavior".to_string(),
+                ));
+            }
+        }
+        Some(_) => {
+            if behavior_case.is_some() {
+                return Err(PerfScenarioConfigError(
+                    "--perf-behavior-case is only valid for --perf-lane behavior".to_string(),
+                ));
+            }
+            if matches!(clock_mode, PerfClockMode::FixedBehavior) {
+                return Err(PerfScenarioConfigError(
+                    "--perf-clock fixed-behavior is only valid for --perf-lane behavior"
+                        .to_string(),
+                ));
+            }
+        }
+        None if behavior_case.is_some() || matches!(clock_mode, PerfClockMode::FixedBehavior) => {
+            return Err(PerfScenarioConfigError(
+                "behavior selection is reserved for the rtt-light behavior lane".to_string(),
+            ));
+        }
+        None => {}
+    }
+    Ok(())
 }
 
 impl Default for PerfScenarioConfig {

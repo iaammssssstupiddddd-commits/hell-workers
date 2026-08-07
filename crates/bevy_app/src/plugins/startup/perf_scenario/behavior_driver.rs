@@ -23,6 +23,9 @@ use super::*;
 
 const BEHAVIOR_TIMEOUT_UPDATES: u64 = 512;
 const SMALL_DOOR_GRID: (i32, i32) = (19, 27);
+// The normal startup world contains one Yard; the indoor-light fixture adds a
+// main and a control Yard around it.
+const SMALL_GLOBAL_YARD_COUNT: usize = 3;
 
 #[derive(Resource, Default)]
 pub(crate) struct PerfBehaviorCapture {
@@ -663,7 +666,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
     params.capture.phase = BehaviorPhase::Finished;
     match result {
         Ok(()) => {
-            info!(
+            eprintln!(
                 "PERF_BEHAVIOR: wrote {} timeline rows",
                 params.capture.rows.len()
             );
@@ -715,7 +718,7 @@ fn validate_loaded_small_fixture(
         souls.iter().count(),
         familiars.iter().count(),
         yards.iter().count(),
-    ) != (50, 4, 2)
+    ) != (50, 4, SMALL_GLOBAL_YARD_COUNT)
     {
         return Err("Soul/Familiar/Yard counts have not converged".to_string());
     }
@@ -766,7 +769,9 @@ fn validate_loaded_small_fixture(
     {
         return Err("Door WorldMap owner/state relation differs after load".to_string());
     }
-    if lamps != BTreeSet::from([(17, 21), (80, 80)]) || spas != BTreeSet::from([(21, 26)]) {
+    // SoulSpa's root is centered on its two-tile-wide footprint; its placement
+    // anchor is `(21, 26)`, while the root `Transform` maps to `(22, 26)`.
+    if lamps != BTreeSet::from([(17, 21), (80, 80)]) || spas != BTreeSet::from([(22, 26)]) {
         return Err("Lamp or SoulSpa semantic grids differ after load".to_string());
     }
     Ok(())
