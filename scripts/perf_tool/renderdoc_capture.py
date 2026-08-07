@@ -35,6 +35,8 @@ RENDERDOC_API_VERSION = "1.6.0"
 RENDERDOC_VULKAN_MANIFEST = Path(
     "share/vulkan/implicit_layer.d/renderdoc_capture.json"
 )
+QRENDERDOC_CONFIG_MAGIC = "rdocConfigData"
+QRENDERDOC_CONFIG_VERSION = 1
 LOG_PROBLEM_RE = re.compile(
     r"\b(?:WARN(?:ING)?|ERROR|FATAL|CRITICAL|panicked)\b|bevy_ecs::error::handler",
     re.IGNORECASE,
@@ -560,6 +562,40 @@ def _write_json_exclusive(path: Path, value: dict[str, Any]) -> None:
         raise
 
 
+def _prepare_noninteractive_qrenderdoc(work: Path) -> dict[str, str]:
+    """Create an isolated QRenderDoc profile that cannot show first-run UI.
+
+    QRenderDoc runs its analytics prompt before executing ``--python``.  A
+    default profile therefore deadlocks an unattended offscreen replay.  Its
+    documented persistent configuration is a JSON object with this magic
+    marker, so seed only the explicit analytics opt-out in a per-capture XDG
+    data home rather than reading or changing the user's profile.
+    """
+
+    data_home = work / "qrenderdoc-data"
+    config_home = work / "qrenderdoc-config"
+    application_data = data_home / "qrenderdoc"
+    application_data.mkdir(parents=True)
+    config_home.mkdir()
+    _write_json_exclusive(
+        application_data / "UI.config",
+        {
+            "Analytics_TotalOptOut": True,
+            QRENDERDOC_CONFIG_MAGIC: QRENDERDOC_CONFIG_VERSION,
+        },
+    )
+    return {
+        "XDG_DATA_HOME": str(data_home),
+        "XDG_CONFIG_HOME": str(config_home),
+    }
+
+
+def _append_log_marker(log_handle: Any, message: str) -> None:
+    log_handle.write(f"HW_RENDERDOC: {message}\n".encode("utf-8"))
+    log_handle.flush()
+    os.fsync(log_handle.fileno())
+
+
 def _copy_regular(source: Path, destination: Path) -> None:
     if not source.is_file() or source.is_symlink() or source.stat().st_size <= 0:
         raise CaptureError(f"capture artifact is not a nonempty regular file: {source}")
@@ -908,13 +944,23 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
         binary_hash=binary_hash,
     )
 
-    with tempfile.TemporaryDirectory(prefix="hell-workers-renderdoc-") as temporary_name:
+    staging_root = repo / "target" / ".renderdoc-tmp"
+    if staging_root.is_symlink() or (
+        staging_root.exists() and not staging_root.is_dir()
+    ):
+        raise CaptureError(f"RenderDoc staging root is not a directory: {staging_root}")
+    staging_root.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory(
+        prefix="hell-workers-renderdoc-", dir=staging_root
+    ) as temporary_name:
         work = Path(temporary_name)
         raw_dir = work / "raw"
         runtime_dir = work / "runtime"
         raw_dir.mkdir()
         runtime_dir.mkdir()
         vulkan_layer_directory = prepare_portable_vulkan_layer(tools, work)
+        qrenderdoc_environment = _prepare_noninteractive_qrenderdoc(work)
         capture_template = raw_dir / "indoor-light"
         combined_log = work / "capture.log"
         environment = os.environ.copy()
@@ -940,16 +986,28 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
             capture_template=capture_template,
             contract=contract,
         )
-        with combined_log.open("xb") as log_handle:
-            completed = subprocess.run(
-                command,
-                cwd=repo,
-                env=environment,
-                check=False,
-                stdout=log_handle,
-                stderr=subprocess.STDOUT,
-                timeout=600,
-            )
+        try:
+            with combined_log.open("xb") as log_handle:
+                _append_log_marker(log_handle, "renderdoccmd capture started")
+                completed = subprocess.run(
+                    command,
+                    cwd=repo,
+                    env=environment,
+                    check=False,
+                    stdout=log_handle,
+                    stderr=subprocess.STDOUT,
+                    timeout=600,
+                )
+                _append_log_marker(
+                    log_handle,
+                    f"renderdoccmd capture exited with {completed.returncode}",
+                )
+        except subprocess.TimeoutExpired as error:
+            raise _retain_renderdoc_diagnostics(
+                work,
+                output,
+                f"renderdoccmd capture timed out after {error.timeout} seconds",
+            ) from error
         if completed.returncode != 0:
             raise _retain_renderdoc_diagnostics(
                 work,
@@ -981,21 +1039,34 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                 "HW_RENDERDOC_RUNTIME_CHECKPOINT": str(checkpoint_path),
             }
         )
-        with combined_log.open("ab") as log_handle:
-            replay = subprocess.run(
-                [
-                    str(tools["qrenderdoc"]),
-                    "--python",
-                    str(tools["extractor"]),
-                    str(capture),
-                ],
-                cwd=repo,
-                env=replay_environment,
-                check=False,
-                stdout=log_handle,
-                stderr=subprocess.STDOUT,
-                timeout=600,
-            )
+        replay_environment.update(qrenderdoc_environment)
+        try:
+            with combined_log.open("ab") as log_handle:
+                _append_log_marker(log_handle, "qrenderdoc replay started")
+                replay = subprocess.run(
+                    [
+                        str(tools["qrenderdoc"]),
+                        "--python",
+                        str(tools["extractor"]),
+                        str(capture),
+                    ],
+                    cwd=repo,
+                    env=replay_environment,
+                    check=False,
+                    stdout=log_handle,
+                    stderr=subprocess.STDOUT,
+                    timeout=600,
+                )
+                _append_log_marker(
+                    log_handle,
+                    f"qrenderdoc replay exited with {replay.returncode}",
+                )
+        except subprocess.TimeoutExpired as error:
+            raise _retain_renderdoc_diagnostics(
+                work,
+                output,
+                f"qrenderdoc replay timed out after {error.timeout} seconds",
+            ) from error
         if replay.returncode != 0 or not extraction_path.is_file():
             raise _retain_renderdoc_diagnostics(
                 work,
@@ -1159,6 +1230,17 @@ def self_test() -> int:
         rewritten_manifest = read_json(layer_directory / "renderdoc_capture.json")
         if rewritten_manifest["layer"]["library_path"] != str(library):
             raise CaptureError("portable Vulkan manifest did not use inspected library")
+        qrenderdoc_environment = _prepare_noninteractive_qrenderdoc(
+            root / "qrenderdoc-settings"
+        )
+        qrenderdoc_config = read_json(
+            Path(qrenderdoc_environment["XDG_DATA_HOME"]) / "qrenderdoc" / "UI.config"
+        )
+        if qrenderdoc_config != {
+            "Analytics_TotalOptOut": True,
+            QRENDERDOC_CONFIG_MAGIC: QRENDERDOC_CONFIG_VERSION,
+        }:
+            raise CaptureError("QRenderDoc noninteractive profile differs from the contract")
         failure_work = root / "failure-work"
         failure_work.mkdir()
         (failure_work / "capture.log").write_text("capture failure\n", encoding="utf-8")

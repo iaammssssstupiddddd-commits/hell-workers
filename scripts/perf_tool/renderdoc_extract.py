@@ -613,6 +613,10 @@ def _write_json_exclusive(path: Path, value: dict[str, Any]) -> None:
         raise
 
 
+def _progress(phase: str) -> None:
+    print(f"HW_RENDERDOC_EXTRACT: {phase}", flush=True)
+
+
 def self_test() -> int:
     """Exercise replay-schema logic without requiring a RenderDoc install.
 
@@ -809,6 +813,7 @@ def self_test() -> int:
 
 
 def main() -> int:
+    _progress("script started")
     capture = _required_path(CAPTURE_ENV, must_exist=True)
     output = _required_path(OUTPUT_ENV, must_exist=False)
     checkpoint_path = _required_path(CHECKPOINT_ENV, must_exist=True)
@@ -817,25 +822,34 @@ def main() -> int:
     if capture.stat().st_size <= 0:
         raise RuntimeError("capture is empty")
 
+    _progress("inputs validated")
     import renderdoc as rd
 
+    _progress("renderdoc module imported")
     capture_file = rd.OpenCaptureFile()
     controller = None
     try:
+        _progress("opening capture file")
         result = capture_file.OpenFile(str(capture), "", None)
         if result != rd.ResultCode.Succeeded:
             raise RuntimeError(f"cannot open capture: {result}")
         if not capture_file.LocalReplaySupport():
             raise RuntimeError("capture does not support local replay")
+        _progress("initialising replay")
         result, controller = capture_file.OpenCapture(rd.ReplayOptions(), None)
         if result != rd.ResultCode.Succeeded:
             raise RuntimeError(f"cannot initialise capture replay: {result}")
+        _progress("extracting replay structure")
         payload = _extract(rd, controller, _read_checkpoint(checkpoint_path))
+        _progress("writing extraction")
         _write_json_exclusive(output, payload)
     finally:
         if controller is not None:
+            _progress("shutting down replay controller")
             controller.Shutdown()
+        _progress("shutting down capture file")
         capture_file.Shutdown()
+    _progress("script completed")
     return 0
 
 
