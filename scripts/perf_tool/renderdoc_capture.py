@@ -596,6 +596,31 @@ def _append_log_marker(log_handle: Any, message: str) -> None:
     os.fsync(log_handle.fileno())
 
 
+def _replay_failure_message(
+    *, replay_returncode: int, extraction_path: Path, error_path: Path
+) -> str:
+    message = f"qrenderdoc extraction failed with {replay_returncode}"
+    if error_path.exists():
+        if not error_path.is_file() or error_path.is_symlink():
+            return message + "; replay error report is not a regular file"
+        try:
+            report = read_json(error_path)
+        except CaptureError as error:
+            return message + f"; cannot read replay error report: {error}"
+        if (
+            set(report) != {"error", "schema_version", "status"}
+            or report["schema_version"] != 1
+            or report["status"] != "failed"
+            or not isinstance(report["error"], str)
+            or not report["error"]
+        ):
+            return message + "; replay error report is invalid"
+        return message + f": {report['error']}"
+    if not extraction_path.is_file():
+        return message + "; extractor produced no output or error report"
+    return message + "; extractor reported failure after writing output"
+
+
 def _copy_regular(source: Path, destination: Path) -> None:
     if not source.is_file() or source.is_symlink() or source.stat().st_size <= 0:
         raise CaptureError(f"capture artifact is not a nonempty regular file: {source}")
@@ -1031,12 +1056,14 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
             checkpoint_path, contract=contract, capture_path=capture
         )
         extraction_path = work / "extraction.json"
+        replay_error_path = work / "replay-error.json"
         replay_environment = environment.copy()
         replay_environment.update(
             {
                 "HW_RENDERDOC_CAPTURE": str(capture),
                 "HW_RENDERDOC_EXTRACTION": str(extraction_path),
                 "HW_RENDERDOC_RUNTIME_CHECKPOINT": str(checkpoint_path),
+                "HW_RENDERDOC_REPLAY_ERROR": str(replay_error_path),
             }
         )
         replay_environment.update(qrenderdoc_environment)
@@ -1067,11 +1094,19 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                 output,
                 f"qrenderdoc replay timed out after {error.timeout} seconds",
             ) from error
-        if replay.returncode != 0 or not extraction_path.is_file():
+        if (
+            replay.returncode != 0
+            or not extraction_path.is_file()
+            or replay_error_path.exists()
+        ):
             raise _retain_renderdoc_diagnostics(
                 work,
                 output,
-                f"qrenderdoc extraction failed with {replay.returncode}",
+                _replay_failure_message(
+                    replay_returncode=replay.returncode,
+                    extraction_path=extraction_path,
+                    error_path=replay_error_path,
+                ),
             )
         capture_hash = sha256(capture)
         _validate_extraction(

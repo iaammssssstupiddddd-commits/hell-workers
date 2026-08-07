@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,8 @@ RUNTIME_CHECKPOINT_SCHEMA_VERSION = 2
 CAPTURE_ENV = "HW_RENDERDOC_CAPTURE"
 OUTPUT_ENV = "HW_RENDERDOC_EXTRACTION"
 CHECKPOINT_ENV = "HW_RENDERDOC_RUNTIME_CHECKPOINT"
+ERROR_ENV = "HW_RENDERDOC_REPLAY_ERROR"
+ERROR_SCHEMA_VERSION = 1
 
 EXPECTED_RENDER_RESOURCES = {
     "scene_target_label": "hell-workers-rtt-scene",
@@ -185,8 +188,12 @@ def _draw_passes(rd: Any, roots: Any) -> tuple[list[tuple[Any, list[Any]]], list
     active: tuple[Any, list[Any]] | None = None
     for action in flattened:
         flags = action.flags
-        begins = bool(flags & rd.ActionFlags.BeginPass)
-        ends = bool(flags & rd.ActionFlags.EndPass)
+        # Vulkan command-buffer markers carry BeginPass / EndPass too.  They
+        # bracket submitted command buffers, not render passes, so only apply
+        # pass state transitions to non-marker actions.
+        command_buffer_boundary = bool(flags & rd.ActionFlags.CommandBufferBoundary)
+        begins = not command_buffer_boundary and bool(flags & rd.ActionFlags.BeginPass)
+        ends = not command_buffer_boundary and bool(flags & rd.ActionFlags.EndPass)
         # RenderDoc represents Vulkan vkCmdNextSubpass as one action carrying
         # both flags.  Close the old subpass before opening the next one.
         if ends:
@@ -270,30 +277,113 @@ def _render_resources(checkpoint: dict[str, Any]) -> dict[str, Any]:
     return expected
 
 
+def _composite_binding_groups(
+    render_resources: dict[str, Any], bindings: list[dict[str, Any]]
+) -> list[tuple[str, int, list[dict[str, Any]], list[dict[str, Any]]]]:
+    expected_texture_locations = {
+        (
+            binding["stage"],
+            binding["fixed_bind_set_or_space"],
+            binding["fixed_bind_number"],
+        )
+        for binding in render_resources["composite_texture_bindings"]
+    }
+    expected_sampler_locations = {
+        (
+            binding["stage"],
+            binding["fixed_bind_set_or_space"],
+            binding["fixed_bind_number"],
+        )
+        for binding in render_resources["composite_sampler_bindings"]
+    }
+    bindings_by_draw: dict[tuple[str, int], list[dict[str, Any]]] = {}
+    for binding in bindings:
+        key = (binding["pass_id"], binding["event_id"])
+        bindings_by_draw.setdefault(key, []).append(binding)
+
+    groups: list[tuple[str, int, list[dict[str, Any]], list[dict[str, Any]]]] = []
+    for (pass_id, event_id), draw_bindings in bindings_by_draw.items():
+        texture_rows = [
+            row for row in draw_bindings if row["category"] == "fragment:read-only"
+        ]
+        sampler_rows = [
+            row for row in draw_bindings if row["category"] == "fragment:sampler"
+        ]
+        texture_locations = {
+            (
+                row["category"].split(":", 1)[0],
+                row["fixed_bind_set_or_space"],
+                row["fixed_bind_number"],
+            )
+            for row in texture_rows
+        }
+        sampler_locations = {
+            (
+                row["category"].split(":", 1)[0],
+                row["fixed_bind_set_or_space"],
+                row["fixed_bind_number"],
+            )
+            for row in sampler_rows
+        }
+        if (
+            len(texture_rows)
+            != len(render_resources["composite_texture_bindings"])
+            or len(texture_locations) != len(texture_rows)
+            or texture_locations != expected_texture_locations
+            or len(sampler_rows)
+            != len(render_resources["composite_sampler_bindings"])
+            or len(sampler_locations) != len(sampler_rows)
+            or sampler_locations != expected_sampler_locations
+        ):
+            continue
+        groups.append((pass_id, event_id, texture_rows, sampler_rows))
+    return groups
+
+
 def _tracked_resources(
-    rd: Any, controller: Any, render_resources: dict[str, Any]
+    render_resources: dict[str, Any], bindings: list[dict[str, Any]]
 ) -> dict[str, dict[str, str]]:
+    """Map runtime labels to replay IDs through the exact composite descriptor.
+
+    The Vulkan capture's ``GetResources`` inventory can omit Bevy's object
+    labels.  The fixed runtime checkpoint retains those labels, while the one
+    source-defined composite draw identifies their replay IDs by its exact
+    descriptor positions.  Later topology checks require each resolved ID to
+    have both attachment and binding evidence.
+    """
+
     labels = {
         "scene_target": render_resources["scene_target_label"],
         "mask_target": render_resources["mask_target_label"],
     }
-    matches: dict[str, list[str]] = {key: [] for key in labels}
-    for resource in controller.GetResources():
-        resource_id = _resource_id(rd, getattr(resource, "resourceId", resource))
-        name = str(getattr(resource, "name", "")).strip()
-        if resource_id is None:
-            continue
-        for key, label in labels.items():
-            if name == label:
-                matches[key].append(resource_id)
+    groups = _composite_binding_groups(render_resources, bindings)
+    if len(groups) != render_resources["composite_draw_count"]:
+        raise RuntimeError(
+            "RenderDoc replay does not prove the exact source-defined RtT composite draw"
+        )
+    _, _, texture_rows, _ = groups[0]
     tracked: dict[str, dict[str, str]] = {}
-    for key, label in labels.items():
-        ids = matches[key]
-        if len(ids) != 1:
+    for expected in render_resources["composite_texture_bindings"]:
+        matching = [
+            row
+            for row in texture_rows
+            if row["category"] == f"{expected['stage']}:read-only"
+            and row["fixed_bind_set_or_space"]
+            == expected["fixed_bind_set_or_space"]
+            and row["fixed_bind_number"] == expected["fixed_bind_number"]
+        ]
+        if len(matching) != 1:
             raise RuntimeError(
-                f"RenderDoc resource label {label!r} resolved to {len(ids)} resources"
+                "RenderDoc replay does not resolve one resource for an exact RtT "
+                "composite descriptor"
             )
-        tracked[key] = {"label": label, "resource_id": ids[0]}
+        target = expected["target"]
+        tracked[target] = {
+            "label": labels[target],
+            "resource_id": matching[0]["resource_id"],
+        }
+    if len({value["resource_id"] for value in tracked.values()}) != len(tracked):
+        raise RuntimeError("RenderDoc composite maps scene and mask to one resource")
     return tracked
 
 
@@ -340,19 +430,10 @@ def _composite_topology(
         )
         for binding in expected_samplers
     }
-    bindings_by_draw: dict[tuple[str, int], list[dict[str, Any]]] = {}
-    for binding in bindings:
-        key = (binding["pass_id"], binding["event_id"])
-        bindings_by_draw.setdefault(key, []).append(binding)
-
     draws: list[dict[str, Any]] = []
-    for (pass_id, event_id), draw_bindings in bindings_by_draw.items():
-        texture_rows = [
-            row for row in draw_bindings if row["category"] == "fragment:read-only"
-        ]
-        sampler_rows = [
-            row for row in draw_bindings if row["category"] == "fragment:sampler"
-        ]
+    for pass_id, event_id, texture_rows, sampler_rows in _composite_binding_groups(
+        render_resources, bindings
+    ):
         texture_signatures = {
             (
                 row["category"].split(":", 1)[0],
@@ -477,7 +558,6 @@ def _extract(rd: Any, controller: Any, checkpoint: dict[str, Any]) -> dict[str, 
     groups, flattened = _draw_passes(rd, roots)
     structured_file = controller.GetStructuredFile()
     render_resources = _render_resources(checkpoint)
-    tracked_resources = _tracked_resources(rd, controller, render_resources)
     passes: list[dict[str, Any]] = []
     attachments: list[dict[str, Any]] = []
     bindings: list[dict[str, Any]] = []
@@ -561,6 +641,7 @@ def _extract(rd: Any, controller: Any, checkpoint: dict[str, Any]) -> dict[str, 
                             }
                         )
 
+    tracked_resources = _tracked_resources(render_resources, bindings)
     event_ids = {
         int(action.eventId) for action in flattened if int(action.eventId) > 0
     }
@@ -617,6 +698,33 @@ def _progress(phase: str) -> None:
     print(f"HW_RENDERDOC_EXTRACT: {phase}", flush=True)
 
 
+def _write_error_report(error: Exception) -> None:
+    """Persist a replay exception because QRenderDoc maps SystemExit to exit 0.
+
+    QRenderDoc owns the Python interpreter and consumes script stderr in its UI,
+    so a nonzero ``SystemExit`` is not observable by the parent process.  The
+    capture helper supplies an attempt-local report path to make the actual
+    replay failure available to the fail-closed diagnostics bundle.
+    """
+
+    value = os.environ.get(ERROR_ENV)
+    if not value:
+        return
+    try:
+        _write_json_exclusive(
+            Path(value).resolve(),
+            {
+                "error": str(error),
+                "schema_version": ERROR_SCHEMA_VERSION,
+                "status": "failed",
+            },
+        )
+    except (OSError, ValueError):
+        # Never conceal the original replay exception if its diagnostic path is
+        # malformed or unavailable.
+        return
+
+
 def self_test() -> int:
     """Exercise replay-schema logic without requiring a RenderDoc install.
 
@@ -628,6 +736,27 @@ def self_test() -> int:
 
     from enum import IntFlag
     from types import SimpleNamespace
+
+    with tempfile.TemporaryDirectory(prefix="renderdoc-extract-self-test-") as name:
+        report_path = Path(name) / "replay-error.json"
+        previous_error_path = os.environ.get(ERROR_ENV)
+        os.environ[ERROR_ENV] = str(report_path)
+        try:
+            _write_error_report(RuntimeError("deterministic replay failure"))
+        finally:
+            if previous_error_path is None:
+                os.environ.pop(ERROR_ENV, None)
+            else:
+                os.environ[ERROR_ENV] = previous_error_path
+        _require(
+            json.loads(report_path.read_text(encoding="utf-8"))
+            == {
+                "error": "deterministic replay failure",
+                "schema_version": ERROR_SCHEMA_VERSION,
+                "status": "failed",
+            },
+            "replay failure report differs from the contract",
+        )
 
     class ResourceId:
         def __init__(self, value: int):
@@ -647,6 +776,7 @@ def self_test() -> int:
         BeginPass = 1
         EndPass = 2
         Drawcall = 4
+        CommandBufferBoundary = 8
 
     rd = SimpleNamespace(ResourceId=ResourceId, ActionFlags=ActionFlags)
 
@@ -658,6 +788,7 @@ def self_test() -> int:
         )
 
     roots = [
+        action(0, ActionFlags.BeginPass | ActionFlags.CommandBufferBoundary),
         action(1, ActionFlags.BeginPass, [action(2, ActionFlags.Drawcall)]),
         action(
             3,
@@ -665,11 +796,12 @@ def self_test() -> int:
             [action(4, ActionFlags.Drawcall)],
         ),
         action(5, ActionFlags.EndPass),
+        action(6, ActionFlags.EndPass | ActionFlags.CommandBufferBoundary),
     ]
     passes, flattened = _draw_passes(rd, roots)
     _require(
-        len(passes) == 2 and len(flattened) == 5,
-        "subpass-boundary grouping regressed",
+        len(passes) == 2 and len(flattened) == 7,
+        "subpass and command-buffer boundary grouping regressed",
     )
 
     reflection = SimpleNamespace(
@@ -703,23 +835,8 @@ def self_test() -> int:
         "descriptor resource lookup regressed",
     )
 
-    resources = [
-        SimpleNamespace(resourceId=ResourceId(21), name="hell-workers-rtt-scene"),
-        SimpleNamespace(resourceId=ResourceId(22), name="hell-workers-rtt-soul-mask"),
-    ]
-    controller = SimpleNamespace(GetResources=lambda: resources)
     render_resources = _render_resources(
         {"render_resources": EXPECTED_RENDER_RESOURCES}
-    )
-    tracked = _tracked_resources(
-        rd,
-        controller,
-        render_resources,
-    )
-    _require(
-        tracked["scene_target"]["resource_id"] == "ResourceId::21"
-        and tracked["mask_target"]["resource_id"] == "ResourceId::22",
-        "resource-label lookup regressed",
     )
     bindings = [
         {
@@ -759,6 +876,17 @@ def self_test() -> int:
             "resource_id": "ResourceId::11",
         },
     ]
+    tracked = _tracked_resources(render_resources, bindings)
+    _require(
+        tracked["scene_target"]
+        == {"label": "hell-workers-rtt-scene", "resource_id": "ResourceId::21"}
+        and tracked["mask_target"]
+        == {
+            "label": "hell-workers-rtt-soul-mask",
+            "resource_id": "ResourceId::22",
+        },
+        "composite descriptor resource mapping regressed",
+    )
     composite_topology = _composite_topology(
         render_resources=render_resources,
         bindings=bindings,
@@ -853,11 +981,12 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" or "pyrenderdoc" in globals():
     try:
         if sys.argv[1:] == ["--self-test"]:
             raise SystemExit(self_test())
         raise SystemExit(main())
     except Exception as error:
+        _write_error_report(error)
         print(f"renderdoc extraction failed: {error}", file=sys.stderr)
         raise SystemExit(1) from error
