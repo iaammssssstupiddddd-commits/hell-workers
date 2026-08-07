@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-00-baseline-gates-plan-2026-08-03` |
-| ステータス | `In Progress` |
+| ステータス | `Completed` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-05` |
+| 最終更新日 | `2026-08-07` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | C00-Aはなし。C00-B以降はHVAC計画M0または同等の単一owner correctness commit |
@@ -485,7 +485,7 @@ P06の増分costはP02完了時のcompatible referenceとも比較し、P01 / P0
 - [x] audit → behavior → stage-required field-core / consumer-core → Capture → RenderDoc → Memoryが同一job / lockで逐次実行される
 - [x] raw `.rdc`または抽出manifest欠落時に成功扱いしない
 - [x] resource下限、bounded Cargo jobs、`CARGO_INCREMENTAL=0`、repository lock、build順、自動cleanup禁止が既存Skill contractと一致する
-- [ ] 実機S0と同一sourceのS1がvalidになり、formal launcherがその証跡なしには開始しない
+- [x] 実機S0と同一sourceのS1がvalidになり、formal launcherがその証跡なしには開始しない
 
 #### 2026-08-05 実装済みslice
 
@@ -546,10 +546,33 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 
 #### 完了条件
 
-- [ ] audit / behavior / Capture / Memory / RenderDocの5 formal legが§4.6のvalidity gateを満たす
-- [ ] source inventoryとRenderDocのpass / attachment / bindingが一致する
-- [ ] current known defectがtimelineへ記録され、target expectationと混ざっていない
-- [ ] baseline indexから全command、manifest、raw artifactを再検証できる
+- [x] audit / behavior / Capture / Memory / RenderDocの5 formal legが§4.6のvalidity gateを満たす
+- [x] source inventoryとRenderDocのpass / attachment / bindingが一致する
+- [x] current known defectがtimelineへ記録され、target expectationと混ざっていない
+- [x] baseline indexから全command、manifest、raw artifactを再検証できる
+
+#### 2026-08-07 registered current evidence
+
+S0 job `hell-workers-native-acceptance-20260807T162442Z-a3bc42df` とS1 job
+`62a16697-f788-40c3-b315-35e4e78b2f4d` は、subject commit / source fingerprintともに下表のformal
+bundleと一致してvalidとなった。formal bundleはrunnerが登録したものだけを比較referenceとして使う。
+
+| 項目 | 登録値 |
+| --- | --- |
+| formal attempt | `0e0b8d96-d757-4505-9cd8-c5f093387f8c` / `current-43e353eeb90f6c93/attempts/0e0b8d96-d757-4505-9cd8-c5f093387f8c` |
+| subject / correctness ancestor | `43e353eeb90f6c930366b8e9e275088e55275c16` / `1b84f3165094c134960c8d3a8abc643f649339c9` |
+| source / contract / fixture | `a47fa2318c76a5c1331a285dcfe750e7092477874128c1511575c2a051ac5b86` / `121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11` / `a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed` |
+| actual environment | Intel(R) Arc(tm) Graphics (MTL), Intel open-source Mesa driver / Mesa 26.1.5, Vulkan, X11, 1920×1080, scale 1.0, High, effective immediate present |
+| environment lock / raw directory | `c87c01f9286bf035414ef365c4d5cde15340d8b1178ec6619ed4b527c9d08d99` / 881 files, `c9f1fedb59a274ed92909ecc127bb8260ae6c28f41b5c1bd9becae53c1c54a7a` |
+| audit / behavior | 9 / 0 valid / invalid、6 / 0 valid / invalid。3規模のdeterminism signatureと2 behavior timelineが各3反復で一致 |
+| Capture / Memory | 各18 / 0 valid / invalid。small / medium / large × cpu / gpuを各3反復、CaptureとMemoryは別binary SHA |
+| RenderDoc | medium / gpuの固定frame 1 / 1 valid。raw capture SHA `278b2d7f866b39f56648966ebd7d5994b689f2023f7253682b84aaca6bf2356f` |
+| gate / projection / root sum | current必須94 rowがすべてpass。gate CSV `1cf6cc99d5da07d1fcd7f3217cfddda86dba6bee1f1ddbf0333a3ed889b45327`、projection CSV `07ad74b228b32894add4bbad1b32f4967237772f32b0da020a980b12a6013e8e`、`SHA256SUMS` `67e305c9518e8ee0a3bdeb6446bd15e632177e2e519ed502b57dc29c15a67a3b` |
+
+RenderDoc replayはcurrent inventoryどおりScene / Soul mask target各1、Camera3d RtT 2、Camera2d 3、
+`LAYER_2D` pass 2を確認した。compositeはevent 1109の1 drawで、fragment set 2のScene texture /
+sampler `(1, 2)`とSoul mask texture / sampler `(3, 4)`を同時に束縛している。これはP01の削除後に
+`RLV1-P01-RTT`で変化を比較するためのcurrent実測値である。
 
 ### M5 / C00-E: gate ledgerとhandoffを確定する
 
@@ -563,10 +586,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 
 #### 完了条件
 
-- [ ] hard targetに`TBD`がない
-- [ ] 全current値がartifact path / hashへ追跡できる
-- [ ] stageごとのreference lineageとrequired fieldが一意である
-- [ ] P01以降の着手者が追加の製品判断を必要としない
+- [x] hard targetに`TBD`がない
+- [x] 全current値がartifact path / hashへ追跡できる
+- [x] stageごとのreference lineageとrequired fieldが一意である
+- [x] P01以降の着手者が追加の製品判断を必要としない
 
 ## 6. commit / stop-go規則
 
@@ -640,33 +663,21 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 
 ### 現在地
 
-- 進捗: `75%`（C00-A / C00-B完了、C00-C実装完了。C00-Dのformal環境待ち）
-- 完了済み: Room interior role / `RoomBoundaryLookup` correctness、current RtT startup inventory test、frozen
-  `rtt-light-v1` contract、3規模fixture、Door / load behavior、stable projection / gate expected row、manifest / raw
-  artifact / ledger validator、window / adapter / present evidence、S1 / formal native recipe、RenderDoc capture /
-  replay extractor、Runtime target label / topology verification、Skill手順、self-test群。
-- 未完了: actual S0、同一sourceのS1、clean subjectでのformal audit / behavior / Capture / RenderDoc / Memory、
-  registered `baseline-index.json`、current測定値を持つC00-E gate ledger。P01〜P08は未着手。
+- ステータス: `Completed`。C00-A〜C00-E、same-source S0 / S1、formal 5 leg、registered baseline index、
+  current gate ledgerを完了した。P01〜P08は未着手である。
+- registered baseline: `target/perf-runs/rtt-light/rtt-light-v1/`のcurrent stage。`baseline-index.json`、
+  `SHA256SUMS`、attempt manifestを2系統のoffline verifierで再検証済み。
+- 次の着手: P01またはP03。どちらもP00のregistered current attemptをreferenceとして読取り、contract v1の
+  gateを変更しない。
 
-### 次のAIが最初にやること
+### 注意点
 
-1. formal対象のclean commitを作り、Room / HVAC M0相当のcorrectness ancestor commitを一つ以上指定する。
-2. 8 GiB以上のavailable memoryとRenderDoc一式を用意して、同一commit / source fingerprintでS0、S1を順に採取する。
-3. `plan-rtt-light --level formal`が`ready`になることを確認して返却された`kitty` launcherのみを実行し、5 legと
-   registered baselineをoffline revalidateする。
-
-### ブロッカー/注意点
-
-- formalはclean commit必須であり、現在のdirty worktreeをそのままbaselineにしない。最低一つのancestor
-  correctness commitと同一sourceのS0 / S1も必要である。
-- 2026-08-05のformal planは`MemAvailable 7.0 GiB < 8 GiB`、dirty worktree、`renderdoccmd`不在でblockedだった。
-  S0 / S1 job rootもまだない。これらはheadless smokeで代用しない。
-- contract v1はfrozenである。変更が必要ならv2を追加してreference / candidateを同条件で再採取する。
-- RenderDoc実装はraw `.rdc`とreplay topologyをfail-closedで検証するが、実toolによるcapture未採取のため
-  actual GPU pass値はまだ存在しない。
-- Room interior correctnessと3規模production spawn / energy settleは実装済み。今後もsynthetic Buildingや
-  直接`PowerSupplyState::Supplied` insertへ戻さない。
-- 現在のhostでloader / ICDのunexpected logが出る場合はformal contractへ追加せず、発生源を是正する。
+- contract v1はfrozenである。fixture、primary matrix、gate、measurement semanticsを変える場合はv2を追加し、
+  reference / candidateを同条件で再採取する。
+- current baselineは比較referenceであり、currentのDoor / Lamp / radius / stacking既知ギャップをtarget仕様として
+  承認するものではない。修正ownerは§3.4のままとする。
+- Room interior correctnessと3規模production spawn / energy settleを維持し、synthetic Buildingや直接
+  `PowerSupplyState::Supplied` insertへ戻さない。
 
 ### 最終確認ログ
 
@@ -686,8 +697,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 - indoor-light realtime smoke: `2026-08-04` / `current / static / medium / cpu`、warmup / measure各0.1秒、
   warmup終端 / measure終端のsemantic再検証とsidecar出力を通してmanifest valid。software adapter警告と
   既知のRoomBorderLine B0004を診断用にallowしたため性能値・formal evidenceには不使用
-- native acceptance: `2026-08-04` / actual S0 / S1は未実行（当時のheadless smokeのみ。2026-08-05時点では
-  `rtt-light` recipe / RenderDoc実装済み）
+- native acceptance: `2026-08-07` / actual S0、same-source S1、formal currentはすべてvalid。formalは
+  audit 9、behavior 6、Capture 18、RenderDoc 1、Memory 18 valid run、invalid 0で登録
 - docs gate: `2026-08-04` / `scripts/dev.py docs --check` pass
 - tooling self-test: `2026-08-05` / `python3 scripts/perf.py self-test`、native helper self-test、RenderDoc
   capture / extractor self-test、AI rule contract、docs index pass。RenderDoc schema v2はsubpass close→open、
@@ -698,22 +709,24 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 - Help impact: `2026-08-05` / P00 scopeはprofiling-only capture metadata、offline validator、開発docsだけであり、
   通常の入力 / UI label / workflow / gameplayは不変としてNo impact。worktree全体には並行するHelp catalog更新が含まれるため、
   その更新の承認をP00判断で代用しない
-- formal plan: `2026-08-05` / blocked（7.0 GiB < 8 GiB、dirty tree、`renderdoccmd`不在、S0 / S1未採取）
+- formal offline verification: `2026-08-07` / `verify-rtt-light`と`verify-rtt-light-baseline`がともにpass。
+  registered file 886、baseline root `rtt-light-v1` status `valid`
 
 ### Definition of Done
 
-- [ ] M1〜M5が完了
-- [ ] contract v1、fixture、stable projection、native validatorがgreen
-- [ ] 5 formal legとbaseline indexがfail-closed検証済み
-- [ ] hard targetに`TBD`がなく、downstreamが同じgate IDを参照
-- [ ] current known defectsとtarget expectationが分離されている
-- [ ] Help impact review、workspace、native、docs gateが完了
-- [ ] 影響docsが更新済み
+- [x] M1〜M5が完了
+- [x] contract v1、fixture、stable projection、native validatorがgreen
+- [x] 5 formal legとbaseline indexがfail-closed検証済み
+- [x] hard targetに`TBD`がなく、downstreamが同じgate IDを参照
+- [x] current known defectsとtarget expectationが分離されている
+- [x] Help impact review、workspace、native、docs gateが完了
+- [x] 影響docsが更新済み
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-07` | `Codex` | same-source S0 / S1、actual Intel Arc / Vulkan / X11 formal 5 leg、RenderDoc replay、registered baseline index、2系統のoffline verifierを完了。current値とハッシュを恒久docsへ転記し、P00をarchiveした |
 | `2026-08-05` | `Codex` | RenderDoc runtime / extraction schema v2へ更新し、Vulkan subpass境界、`(set, binding)`、同一composite drawのScene / mask texture・samplerをfail-closedに固定。formal環境再評価のblock条件も記録 |
 | `2026-08-05` | `Codex` | contract freeze、behavior / projection / gate row、window environment、S1 / formal native recipe、RenderDoc replay validatorを反映。formal baselineは環境条件未達のため未採取として明記 |
 | `2026-08-04` | `Codex` | medium/large production runtime、Door静的state同期、全Building component audit、Tankの論理1配置/ECS 2 storage、realtime終端再検証を反映 |

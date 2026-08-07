@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `Draft` |
+| ステータス | `In Progress` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-04` |
+| 最終更新日 | `2026-08-07` |
 | 作成者 | `Codex` |
 | 採用判断 | TopDown 2.5D、Scene RtT 1枚、map-space radial Light Field |
 | 関連提案 | `N/A` |
@@ -93,7 +93,7 @@ P00 baseline / contract
 
 | ID | 実装計画 | 直接依存 | 独立した完了成果 |
 | --- | --- | --- | --- |
-| P00 | [`00-baseline-gates-plan-2026-08-03.md`](single-scene-light-field/00-baseline-gates-plan-2026-08-03.md) | C00-Aはなし。C00-B以降はHVAC M0または同等correctness commit | current capture、安定比較schema、数値gate、表示分類、system-order contract |
+| P00 | [`00-baseline-gates-plan-2026-08-03.md`](archived/00-baseline-gates-plan-2026-08-03.md) | C00-Aはなし。C00-B以降はHVAC M0または同等correctness commit | registered current formal baseline、安定比較schema、数値gate、表示分類、system-order contract |
 | P01 | [`01-single-scene-rtt-plan-2026-08-03.md`](single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md) | P00 | Soul mask target / camera / proxy / metricを除去したScene RtT 1枚 |
 | P02 | [`02-topdown-presentation-plan-2026-08-03.md`](single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md) | P00, P01 | Door実経路修復、world 2D pass 1回、表示分類、Soul billboard / Familiar前景、Soul shadow動作停止、V入力停止 |
 | P03 | [`03-indoor-light-domain-core-plan-2026-08-03.md`](single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md) | P00 | `hw_infra`のdeterministicな論理fieldとpure LOS |
@@ -105,7 +105,7 @@ P00 baseline / contract
 
 ### 3.1 着手とmergeの規則
 
-- P00完了前にP01以降のproduction変更へ着手しない。
+- P01以降はP00のregistered current formal baselineをread-only referenceとして確認してからproduction変更へ着手する。contract v1やcurrent evidenceをcandidate結果に合わせて変更しない。
 - P00 C00-BとP04は、室内設備が占有するfloor cellをRoom interiorとして維持するHVAC M0がmerge済み、または同じcorrectness変更を単一ownerで先行するまで開始しない。
 - P03とP01はP00後に並行可能だが、同じファイルを触る作業は同時に実行しない。
 - P04はsave / rehydrateを編集せずruntime transactionだけを所有する。
@@ -118,7 +118,7 @@ P00 baseline / contract
 
 | batch | work package | merge可能条件 |
 | --- | --- | --- |
-| B00 | P00契約・fixture・4 evidence family / 5 current leg・stable gate ID・数値gate | Room interior-role owner確定後、clean commitのformal baselineが揃う |
+| B00 | P00契約・fixture・4 evidence family / 5 current leg・stable gate ID・数値gate（完了） | `2026-08-07`にclean commitのregistered formal baselineを登録済み |
 | B01 | P01 M1 Scene-only runtime / composite | P00完了 |
 | B02 | P01 M2〜M4 mask camera / proxy / tooling / schema撤去 | B01 green |
 | B03 | P02 M1 production Door経路修復 | P01完了。照明とは独立したcorrectness commit |
@@ -233,18 +233,18 @@ Interface:
 
 ### 現在地
 
-- 進捗: `10%`（P00の実装はC00-D formal baseline採取待ち、P01〜P08は未着手）
+- 進捗: `11%`（P00 / B00完了、P01〜P08は未着手）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
-  environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator
-- 未完了: same-source S0 / S1、clean commit上のformal 5 leg、registered baseline index / current gate ledger、P01〜P08
+  environment evidence、same-source S0 / S1、actual-window formal 5 leg、RenderDoc capture / replay validator、
+  registered `baseline-index.json`、runtime / offline ledger validator
+- 未完了: P01〜P08
 
 ### 次のAIが最初にやること
 
-1. `git status --short`を確認し、直近commit後のfixture / save ownerとP00未コミット差分を分離する。
-2. P00 formal要件を満たすclean commitとancestor correctness commitを用意し、S0 / S1を同一source fingerprintで採取する。
-3. `plan-rtt-light --level formal`がreadyになった後だけ、native acceptance Skillに従ってcurrent baselineを採取する。
-4. P00完了後にのみP01またはP03へ進む。
+1. archive済みP00のregistered attempt、`baseline-index.json`、contract / fixture hash、current gate IDを確認する。
+2. P01またはP03を開始し、candidate artifactをP00 current referenceと同じcontract v1で比較する。
+3. save / rehydrate、HVAC M0、shared Cargo ownerの並行作業と対象ファイルを分離する。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
@@ -263,6 +263,8 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - 最終 `cargo test --workspace`: `2026-08-04` / `pass`
 - 最終 `python3 scripts/dev.py verify`: `2026-08-04` / `pass`
 - 最終 docs gate: `2026-08-04` / `pass (docs --write / --check, check_docs, diff --check)`
+- P00 formal: `2026-08-07` / Intel Arc / Vulkan / X11 actual windowでaudit 9、behavior 6、Capture 18、RenderDoc 1、Memory 18の全formal legがvalid。current required gate 94 rowは全pass
+- P00 offline verification: `2026-08-07` / `verify-rtt-light`、`verify-rtt-light-baseline`ともにpass。registered file 886、baseline root `rtt-light-v1` status `valid`
 
 ### Definition of Done
 
@@ -276,6 +278,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-07` | `Codex` | P00/B00を完了。same-source S0 / S1、actual formal 5 leg、RenderDoc replay、registered baseline index、offline verifierを記録し、P00をarchiveした |
 | `2026-08-05` | `Codex` | P00 contract / behavior / projection / native / RenderDoc実装完了と、formal baseline未採取の環境条件を現在地へ同期 |
 | `2026-08-04` | `Codex` | P00の3規模static production fixture、全Building runtime audit、Door初期状態、Tank companion、realtime終端再検証を現在地へ反映 |
 | `2026-08-04` | `Codex` | P00 medium/large全Building showcaseのexact contract、size別artifact validator、Bridge completion-only境界を現在地へ反映 |

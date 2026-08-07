@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-08-04）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-08-08）。
 
 ## 新規計画書の作り方
 
@@ -22,7 +22,6 @@
 | [3d-rtt/asset-milestones-2026-03-17.md](3d-rtt/asset-milestones-2026-03-17.md) | 進行中（建築・terrain track継続、Soul GLB runtime trackはSuperseded） | アセット作成マイルストーン |
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Superseded | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Superseded（完了済み実装の履歴。未完項目は凍結） | 3D-RtT 移行ロードマップ |
-| [3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md](3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md) | In Progress | Audit、Capture、Memory、RenderDocのbaselineと数値gateを実装前に固定するP00。 |
 | [3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md](3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md) | Draft | Soul mask target／camera／proxyを撤去し、Scene RtT 1枚へ移行するP01。 |
 | [3d-rtt/single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md](3d-rtt/single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md) | Draft | Door実経路、TopDown camera、Building分類、Soul billboard／Familiar前景を統合するP02。 |
 | [3d-rtt/single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md](3d-rtt/single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md) | Draft | 固定精度のradial field、遮光grid、supercover LOSを`hw_infra`へ実装するP03。 |
@@ -31,7 +30,7 @@
 | [3d-rtt/single-scene-light-field/06-indoor-light-rendering-plan-2026-08-03.md](3d-rtt/single-scene-light-field/06-indoor-light-rendering-plan-2026-08-03.md) | Draft | 100×100共有textureとTerrain／構造物receiverへLight Fieldを表示するP06。 |
 | [3d-rtt/single-scene-light-field/07-indoor-light-gameplay-room-plan-2026-08-03.md](3d-rtt/single-scene-light-field/07-indoor-light-gameplay-room-plan-2026-08-03.md) | Draft | Soul回復とRoom照度summaryを同じCPU field revisionへ統合するP07。 |
 | [3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md](3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | Draft | Soul projector／section／legacy mirrorを撤去し、最終性能・Help gateを閉じるP08。 |
-| [3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) | Draft | Scene RtT 1枚、TopDown表示、放射状Indoor Light Fieldへの9分割親ロードマップ。 |
+| [3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) | In Progress | Scene RtT 1枚、TopDown表示、放射状Indoor Light Fieldへの9分割親ロードマップ。 |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
 | [building-deconstruction-plan-2026-08-03.md](building-deconstruction-plan-2026-08-03.md) | Draft | 完成建物の安全な撤去、固定資源回収、owner別cleanupを導入するTrack C1計画。 |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
@@ -43,6 +42,7 @@
 
 | Document | Status | Notes |
 |---|---|---|
+| [3d-rtt/archived/00-baseline-gates-plan-2026-08-03.md](3d-rtt/archived/00-baseline-gates-plan-2026-08-03.md) | Archived | 実装後の結果を見て性能閾値、fixture、表示分類、光の意味論を都合よく変えられる状態をなくすの計画。 |
 | [3d-rtt/archived/blob-shadow-tim-burton-2026-04-12.md](3d-rtt/archived/blob-shadow-tim-burton-2026-04-12.md) | Archived | 影スタイル 2D 化計画（床・壁接続維持） 2026-04-12 |
 | [3d-rtt/archived/blueprint-terrain-surface-material.md](3d-rtt/archived/blueprint-terrain-surface-material.md) | Archived | TerrainSurfaceMaterial 統合（MS-3-6 Phase 3 ブループリント） |
 | [3d-rtt/archived/building-visual-layer-implementation-plan-2026-03-15.md](3d-rtt/archived/building-visual-layer-implementation-plan-2026-03-15.md) | Archived | - 建築物が1エンティティ=1スプライトに固定されており、床・壁・配線などの重層的な表現ができないの計画。 |

@@ -7,10 +7,10 @@
 | 計画ID | `single-scene-light-field-02-topdown-presentation-plan-2026-08-03` |
 | ステータス | `Draft` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-04` |
+| 最終更新日 | `2026-08-07` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
-| 直接依存 | [P00](00-baseline-gates-plan-2026-08-03.md)、[P01](01-single-scene-rtt-plan-2026-08-03.md) |
+| 直接依存 | [P00](../archived/00-baseline-gates-plan-2026-08-03.md)（registered `rtt-light-v1` current formal baseline）、[P01](01-single-scene-rtt-plan-2026-08-03.md) |
 | 後続 | [P04](04-indoor-light-runtime-integration-plan-2026-08-03.md)、[P06](06-indoor-light-rendering-plan-2026-08-03.md)、[P08](08-legacy-cleanup-release-plan-2026-08-03.md) |
 | 関連Issue/PR | `N/A` |
 
@@ -344,5 +344,6 @@ UI -> final
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-07` | `Codex` | archive済みP00のregistered current formal baseline locatorへ同期。P02は未着手のDraftを維持 |
 | `2026-08-04` | `Codex` | P00のstable presentation / performance gateと共通validity bundle参照へ同期 |
 | `2026-08-03` | `Codex` | 統合計画M2をcamera、Building分類、billboard、TopDown-onlyへ具体化 |

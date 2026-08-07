@@ -115,18 +115,38 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 ```
 
 ローカルVulkan loader由来の追加ERRORを診断用regexで許可したrunはformal evidenceに昇格させない。
-formal artifactはまだ未採取である。登録にはclean subject commit、ancestor correctness commit、同一sourceの
-S0 / S1、actual-window Capture / Memory、medium/gpuのRenderDoc replay、offline bundle validationが必要である。
-`plan-rtt-light`が`blocked`を返した場合は実行へ進めない。登録済みattemptはnative helperの
-`verify-rtt-light --repo … --attempt …`、baseline rootは`python3 scripts/perf.py
-verify-rtt-light-baseline --baseline …`で再検証する。
+P00 current formal baselineは`2026-08-07`に登録済みである。subjectは
+`43e353eeb90f6c930366b8e9e275088e55275c16`、attemptは
+`target/perf-runs/rtt-light/rtt-light-v1/current-43e353eeb90f6c93/attempts/0e0b8d96-d757-4505-9cd8-c5f093387f8c`
+で、same-source S0 / S1、actual-window Capture / Memory、medium/gpu RenderDoc replay、offline bundle
+validationを満たす。実測matrixとprovenanceは[レンダリングパフォーマンス](rendering-performance.md)を正本とする。
+
+登録済みattemptの再検証は次で行う。verifierはsource checkpoint、全required case、binary provenance、actual
+environment、RenderDoc topology、CSV再生成、artifact directory digest、baseline locatorをfail-closedに照合する。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+  verify-rtt-light --repo "$PWD" \
+  --attempt target/perf-runs/rtt-light/rtt-light-v1/current-43e353eeb90f6c93/attempts/0e0b8d96-d757-4505-9cd8-c5f093387f8c
+
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py \
+  verify-rtt-light-baseline \
+  --baseline target/perf-runs/rtt-light/rtt-light-v1
+```
+
+invalid / interrupted attemptは診断artifactを残すが、比較referenceへ登録しない。`plan-rtt-light`が`blocked`を
+返した場合も実行へ進めない。
 
 RenderDoc runtime checkpoint / replay extractionはschema v2である。checkpointはScene / Soul mask targetの
 labelに加え、compositeのVulkan descriptor contract（fragment set 2: Scene texture / sampler = binding 1 / 2、
-mask texture / sampler = binding 3 / 4）を固定する。extractorは`vkCmdNextSubpass`の
-`EndPass | BeginPass`を旧subpassのclose後に次subpassへ開き、globalなsampler件数ではなく、同一draw上の
-2 texture + 2 samplerがこのexact `(set, binding)`を満たすことを要求する。別drawで同じsamplerを繰り返しても
-合格しない。schema v1のcheckpoint / extractionはformal baselineへ登録できない。
+mask texture / sampler = binding 3 / 4）を固定する。extractorは`vkCmdNextSubpass`の`EndPass | BeginPass`を
+旧subpassのclose後に次subpassへ開く。`CommandBufferBoundary`のvirtual markerはrender-pass state遷移として
+扱わない。globalなsampler件数ではなく、同一draw上の2 texture + 2 samplerがこのexact `(set, binding)`を
+満たすことを要求する。runtime labelを解決できない場合にもcomposite descriptor位置からresource対応を照合し、
+checkpointが欠けたfailureでは`renderdoc-failure-*`診断を保持する。isolated QRenderDoc profileとanalytics
+opt-outを使うため、replayは対話ダイアログに依存しない。schema v1のcheckpoint / extractionはformal baselineへ
+登録できない。
 
 ### 許可ダイアログなし実機受入
 

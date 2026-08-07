@@ -7,10 +7,10 @@
 | 計画ID | `single-scene-light-field-03-indoor-light-domain-core-plan-2026-08-03` |
 | ステータス | `Draft` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-04` |
+| 最終更新日 | `2026-08-07` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
-| 直接依存 | [P00](00-baseline-gates-plan-2026-08-03.md) |
+| 直接依存 | [P00](../archived/00-baseline-gates-plan-2026-08-03.md)（registered `rtt-light-v1` current formal baseline） |
 | 後続 | [P04](04-indoor-light-runtime-integration-plan-2026-08-03.md)、[P05](05-indoor-light-save-lifecycle-plan-2026-08-03.md)、[P06](06-indoor-light-rendering-plan-2026-08-03.md)、[P07](07-indoor-light-gameplay-room-plan-2026-08-03.md) |
 | 関連Issue/PR | `N/A` |
 
@@ -259,5 +259,6 @@ P04が次の意味論を構築し、P03はbool / enum gridとして消費する�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-07` | `Codex` | archive済みP00のregistered current formal baseline locatorへ同期。P03は未着手のDraftを維持 |
 | `2026-08-04` | `Codex` | 固定精度・falloff・CPU payloadをP00へ統一し、field-core artifactと`RLV1-P03-FIELD` ownerを確定 |
 | `2026-08-03` | `Codex` | 統合計画の論理計算をECS / save / renderから分離して具体化 |

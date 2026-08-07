@@ -19,8 +19,8 @@
 single Scene RtT / indoor light migration前のcurrent構成は次である。`startup_systems`の
 `current_rtt_startup_inventory_is_explicit`が実際にstartup / composite spawn systemを実行し、カメラの
 order / active / RenderLayers、RtT image descriptor、DirectionalLight marker / 有効状態、compositeの
-2 texture参照、`LAYER_2D` 2 passを検証する。source-derived値はRenderDoc formal legで照合するまで
-GPU pass実測とは呼ばない。
+2 texture参照、`LAYER_2D` 2 passを検証する。これはsource/startup側の契約であり、GPU replayのpass構造は
+下記のformal evidenceで別に照合する。
 
 | 項目 | current |
 |---|---:|
@@ -33,16 +33,53 @@ GPU pass実測とは呼ばない。
 
 P00のmeasurement contractはfrozenの`rtt-light-v1`である。canonical contract hashは
 `121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`、fixture hashは
-`a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed`である。stage別projection義務と
-gate expected row、resolved window backend / effective present modeの開始・終了検証、formal attempt
-validatorは実装済みである。freeze後の変更は同じv1を編集せず新generationを追加する。formal artifact /
-RenderDoc値はまだ未採取であり、ここへ推定値をbaselineとして追記しない。
+`a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed`である。freeze後の変更は同じv1を
+編集せず新generationを追加する。
 
-RenderDoc evidence schema v2はこのsource inventoryをGPU replayで厳密化する。composite drawはfragment
-descriptor set 2のScene texture / sampler `(1, 2)`、Soul mask texture / sampler `(3, 4)`を同じ1 drawで
-使うことを要求する。抽出はVulkan subpass transitionを正しく分割し、全drawに散らばったsampler数では代用しない。
-この値は`rtt_composite_material.wgsl`とsource contractから得た期待値であり、formal captureを採取するまでは
-実測値ではない。
+### P00 registered current formal baseline（2026-08-07）
+
+正式artifactはGitへ追加せず、`target/perf-runs/rtt-light/rtt-light-v1/`に保持する。比較referenceは
+`current-43e353eeb90f6c93/attempts/0e0b8d96-d757-4505-9cd8-c5f093387f8c`だけであり、invalid / interrupted
+attemptは削除もreference登録もしない。
+
+| 項目 | 登録値 |
+|---|---|
+| subject / source fingerprint | `43e353eeb90f6c930366b8e9e275088e55275c16` / `a47fa2318c76a5c1331a285dcfe750e7092477874128c1511575c2a051ac5b86` |
+| environment | Intel(R) Arc(tm) Graphics (MTL)、Intel open-source Mesa driver / Mesa 26.1.5、Vulkan、X11、1920×1080、scale 1.0、High、effective immediate present |
+| environment lock | `c87c01f9286bf035414ef365c4d5cde15340d8b1178ec6619ed4b527c9d08d99` |
+| five formal legs | audit 9、behavior 6、Capture 18、RenderDoc 1、Memory 18 valid run。invalid 0 |
+| gate / raw provenance | required gate 94 row pass。gate CSV `1cf6cc99d5da07d1fcd7f3217cfddda86dba6bee1f1ddbf0333a3ed889b45327`、raw directory 881 files / `c9f1fedb59a274ed92909ecc127bb8260ae6c28f41b5c1bd9becae53c1c54a7a`、root `SHA256SUMS` `67e305c9518e8ee0a3bdeb6446bd15e632177e2e519ed502b57dc29c15a67a3b` |
+| offline revalidation | `verify-rtt-light`、`verify-rtt-light-baseline`ともにpass。baseline rootは886 filesで`status=valid` |
+
+Captureのp50は診断値、p95 / p99はfrozen gateに対する比較値である。`cpu` / `gpu`は描画構成の切替名であり、
+CPU / GPU時間そのものではない。
+
+| size | render | p50 ms | p95 ms | p99 ms |
+|---|---|---:|---:|---:|
+| small | cpu | 5.790177 | 7.042881 | 7.885782 |
+| small | gpu | 41.877964 | 47.355937 | 49.723764 |
+| medium | cpu | 27.266096 | 42.250438 | 47.900270 |
+| medium | gpu | 43.056060 | 48.749744 | 50.982734 |
+| large | cpu | 28.525122 | 61.455438 | 76.117119 |
+| large | gpu | 46.272950 | 61.974057 | 76.575507 |
+
+Memory legのframe値は性能比較には使わず、Rust allocatorのpeak live bytesとGNU timeのprocess peak RSSを
+allocation / process-footprint referenceとして使う。全caseでallocator accounting errorは0だった。
+
+| size | render | peak live bytes | peak RSS KiB |
+|---|---|---:|---:|
+| small | cpu | 667496702 | 1399992 |
+| small | gpu | 690490522 | 1521448 |
+| medium | cpu | 715549403 | 1438772 |
+| medium | gpu | 749008908 | 1579848 |
+| large | cpu | 755769242 | 1384100 |
+| large | gpu | 820362477 | 1640684 |
+
+RenderDoc evidence schema v2はこのsource inventoryをGPU replayで厳密化する。registered replayは18 render
+pass、212 draw、582 event、516 attachment、1996 bindingを確認した。composite event 1109は1 drawで、fragment
+descriptor set 2のScene texture / sampler `(1, 2)`とSoul mask texture / sampler `(3, 4)`を同時に使う。
+raw RDC SHA-256は`278b2d7f866b39f56648966ebd7d5994b689f2023f7253682b84aaca6bf2356f`である。抽出はVulkan
+subpass transitionを正しく分割し、全drawに散らばったsampler数では代用しない。
 
 ---
 

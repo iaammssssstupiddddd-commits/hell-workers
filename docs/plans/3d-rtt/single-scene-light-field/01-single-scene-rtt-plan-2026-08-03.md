@@ -7,10 +7,10 @@
 | 計画ID | `single-scene-light-field-01-single-scene-rtt-plan-2026-08-03` |
 | ステータス | `Draft` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-04` |
+| 最終更新日 | `2026-08-07` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
-| 直接依存 | [P00](00-baseline-gates-plan-2026-08-03.md) |
+| 直接依存 | [P00](../archived/00-baseline-gates-plan-2026-08-03.md)（registered `rtt-light-v1` current formal baseline） |
 | 後続 | [P02](02-topdown-presentation-plan-2026-08-03.md)、[P06](06-indoor-light-rendering-plan-2026-08-03.md)、[P08](08-legacy-cleanup-release-plan-2026-08-03.md) |
 | 関連Issue/PR | `N/A` |
 
@@ -207,12 +207,12 @@
 ### 現在地
 
 - 進捗: `0%`
-- 完了済み: 計画作成
+- 完了済み: 計画作成、P00 registered current formal baseline
 - 未着手: M1〜M4
 
 ### 次のAIが最初にやること
 
-1. P00の`RLV1-P01-RTT` / `RLV1-P01-PERF`、`RLV1-BUNDLE-VALID`、artifact pathを確認する。
+1. archive済みP00のregistered current attempt、`RLV1-P01-RTT` / `RLV1-P01-PERF`、`RLV1-BUNDLE-VALID`、artifact pathを確認する。
 2. `rg`でmask inventoryを更新し、本計画の変更ファイルとの差を確認する。
 3. M1のruntime / composite focused testから着手する。
 
@@ -240,5 +240,6 @@
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-07` | `Codex` | P00 registered current formal baselineのarchive locatorへ同期。P01は未着手のDraftを維持 |
 | `2026-08-04` | `Codex` | P00のstable RtT / performance gateと共通validity bundle参照へ同期 |
 | `2026-08-03` | `Codex` | 統合計画M1をruntime / proxy / tooling / native gateへ具体化 |
