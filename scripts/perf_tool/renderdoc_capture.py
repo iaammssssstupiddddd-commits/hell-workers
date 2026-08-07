@@ -1052,9 +1052,12 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
             )
         capture = captures[0].resolve()
         checkpoint_path = runtime_dir / "renderdoc-checkpoint.json"
-        runtime = _runtime_checkpoint(
-            checkpoint_path, contract=contract, capture_path=capture
-        )
+        try:
+            runtime = _runtime_checkpoint(
+                checkpoint_path, contract=contract, capture_path=capture
+            )
+        except CaptureError as error:
+            raise _retain_renderdoc_diagnostics(work, output, str(error)) from error
         extraction_path = work / "extraction.json"
         replay_error_path = work / "replay-error.json"
         replay_environment = environment.copy()
