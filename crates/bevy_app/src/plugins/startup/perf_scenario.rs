@@ -134,7 +134,8 @@ pub use fixture::{
 #[cfg(feature = "profiling")]
 pub(crate) use indoor_light_fixture::{
     IndoorLightFixtureState, assign_indoor_light_generator_system,
-    prepare_indoor_light_soul_spa_system, seed_indoor_light_static_door_states_system,
+    maintain_indoor_light_generator_vitals_system, prepare_indoor_light_soul_spa_system,
+    seed_indoor_light_static_door_states_system, should_maintain_indoor_light_generator_vitals,
     should_settle_indoor_light_fixture, stabilize_indoor_light_actors_system,
     validate_indoor_light_fixture_system,
 };

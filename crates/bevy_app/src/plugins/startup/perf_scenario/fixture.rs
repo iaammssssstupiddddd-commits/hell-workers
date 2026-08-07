@@ -152,6 +152,7 @@ pub(crate) enum PerfScenarioSet {
     Setup,
     Apply,
     IndoorSettle,
+    FixtureSustain,
     UiSetup,
     InitialCheckpoint,
     Driver,

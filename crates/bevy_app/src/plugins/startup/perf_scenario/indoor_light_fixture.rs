@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use bevy::app::AppExit;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use hw_core::constants::DREAM_MAX;
 use hw_core::relationships::{StoredIn, TaskWorkers, WorkingOn};
 use hw_energy::{
     ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerAllocationMode, PowerConsumer,
@@ -918,6 +919,18 @@ pub(crate) fn should_settle_indoor_light_fixture(
         && state.phase == IndoorLightFixturePhase::Settling
 }
 
+/// Keep the fixture's production workers in their static, powered state while
+/// the realtime baseline runs. The fixture intentionally profiles lighting and
+/// rendering under a fixed power topology, not depletion or exhaustion gameplay.
+pub(crate) fn should_maintain_indoor_light_generator_vitals(
+    config: Res<PerfScenarioConfig>,
+    state: Res<IndoorLightFixtureState>,
+) -> bool {
+    config.enabled()
+        && config.workload == PerfWorkload::IndoorLight
+        && state.phase == IndoorLightFixturePhase::Ready
+}
+
 pub(super) struct IndoorLightFixtureSetupContext<'a, 'w, 's> {
     pub(super) commands: &'a mut Commands<'w, 's>,
     pub(super) state: &'a mut IndoorLightFixtureState,
@@ -1359,6 +1372,35 @@ pub(crate) fn assign_indoor_light_generator_system(
                 WorkingOn(tile_entity),
                 ActiveTaskIdentity::new(tile_entity, tile_entity, WorkType::GeneratePower),
             ));
+        }
+    }
+}
+
+/// Replenish only canonical generator Souls before normal game logic can
+/// exhaust them. Their `WorkingOn` relations remain production-owned, so Soul
+/// Spa output and Lamp allocation continue to use the normal energy pipeline.
+pub(crate) fn maintain_indoor_light_generator_vitals_system(
+    state: Res<IndoorLightFixtureState>,
+    mut q_souls: Query<&mut DamnedSoul>,
+) {
+    if state.phase != IndoorLightFixturePhase::Ready {
+        return;
+    }
+    let Some(fixture) = state.fixture.as_ref() else {
+        return;
+    };
+
+    for spa in &fixture.layout.spas {
+        for worker in &spa.workers {
+            let Some(&soul_entity) = fixture.soul_entities.get(worker.soul_ordinal) else {
+                continue;
+            };
+            let Ok(mut soul) = q_souls.get_mut(soul_entity) else {
+                continue;
+            };
+            let soul = soul.bypass_change_detection();
+            soul.dream = DREAM_MAX;
+            soul.fatigue = 0.0;
         }
     }
 }
@@ -2532,8 +2574,10 @@ pub(super) fn collect_indoor_light_audit_records(
                     || unpowered != expected_unpowered
                 {
                     return Err(format!(
-                        "indoor-light Lamp {} changed production supply topology",
-                        expected.ordinal
+                        "indoor-light Lamp {} changed production supply topology: expected supply={expected_supply:?}, grid={expected_grid_entity:?}, unpowered={expected_unpowered}; observed supply={:?}, grid={:?}, unpowered={unpowered}",
+                        expected.ordinal,
+                        supply.copied(),
+                        consumes_from.map(|relation| relation.0),
                     ));
                 };
             }
@@ -3241,6 +3285,63 @@ mod tests {
                 .map(|companion| companion.occupied_grids.as_slice()),
             Some(&[(17, 30), (18, 30)][..])
         );
+    }
+
+    #[test]
+    fn ready_fixture_sustains_only_canonical_generator_vitals() {
+        let layout = IndoorLightLayout::build(PerfScenarioSize::Medium);
+        let generator_ordinals = layout
+            .spas
+            .iter()
+            .flat_map(|spa| spa.workers.iter().map(|worker| worker.soul_ordinal))
+            .collect::<BTreeSet<_>>();
+        let non_generator_ordinal = (0..layout.soul_cells.len())
+            .find(|ordinal| !generator_ordinals.contains(ordinal))
+            .expect("medium fixture must retain non-generator Souls");
+
+        let mut app = App::new();
+        let soul_entities = (0..layout.soul_cells.len())
+            .map(|ordinal| {
+                app.world_mut()
+                    .spawn(DamnedSoul {
+                        dream: ordinal as f32,
+                        fatigue: 0.95,
+                        ..default()
+                    })
+                    .id()
+            })
+            .collect::<Vec<_>>();
+        app.insert_resource(IndoorLightFixtureState {
+            phase: IndoorLightFixturePhase::Ready,
+            fixture: Some(IndoorLightFixtureEntities {
+                layout,
+                soul_entities: soul_entities.clone(),
+                familiar_entities: Vec::new(),
+                main_yard: Entity::PLACEHOLDER,
+                control_yard: Entity::PLACEHOLDER,
+                spas: Vec::new(),
+                bucket_storages: Vec::new(),
+            }),
+            ..default()
+        });
+        app.add_systems(Update, maintain_indoor_light_generator_vitals_system);
+
+        app.update();
+
+        for ordinal in generator_ordinals {
+            let soul = app
+                .world()
+                .get::<DamnedSoul>(soul_entities[ordinal])
+                .unwrap();
+            assert_eq!(soul.dream, DREAM_MAX);
+            assert_eq!(soul.fatigue, 0.0);
+        }
+        let non_generator = app
+            .world()
+            .get::<DamnedSoul>(soul_entities[non_generator_ordinal])
+            .unwrap();
+        assert_eq!(non_generator.dream, non_generator_ordinal as f32);
+        assert_eq!(non_generator.fatigue, 0.95);
     }
 
     #[test]

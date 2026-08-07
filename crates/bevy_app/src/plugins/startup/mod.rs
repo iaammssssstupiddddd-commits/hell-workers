@@ -141,6 +141,7 @@ impl Plugin for StartupPlugin {
                         PerfScenarioSet::Setup,
                         PerfScenarioSet::Apply,
                         PerfScenarioSet::IndoorSettle,
+                        PerfScenarioSet::FixtureSustain,
                         PerfScenarioSet::UiSetup,
                         PerfScenarioSet::InitialCheckpoint
                             .after(rtt_setup::sync_rtt_texture_size_to_window_and_quality),
@@ -196,6 +197,12 @@ impl Plugin for StartupPlugin {
                         .chain()
                         .in_set(PerfScenarioSet::IndoorSettle)
                         .run_if(perf_scenario::should_settle_indoor_light_fixture),
+                )
+                .add_systems(
+                    Update,
+                    perf_scenario::maintain_indoor_light_generator_vitals_system
+                        .in_set(PerfScenarioSet::FixtureSustain)
+                        .run_if(perf_scenario::should_maintain_indoor_light_generator_vitals),
                 )
                 .add_systems(
                     Update,
