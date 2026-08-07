@@ -54,6 +54,7 @@
 - [performance-profiling.md](performance-profiling.md): 決定的なランタイム計測シナリオ、CSV、native allocation / RSS、Tracy、RenderDocの採取手順。
 - [visual_test.md](visual_test.md): Soul GLB Visual Test Scene の操作・アーキテクチャ・UV 計算。
 - [DEVELOPMENT.md](DEVELOPMENT.md): AIエージェントおよび開発者向けガイドライン（コーディング規約・MCP活用）。
+- [development-infra/rust-analyzer-mcp.md](development-infra/rust-analyzer-mcp.md): 複数エージェントでrust-analyzer MCP backendを共有するadapter、idle解放、IDE側の常駐コスト削減設定。
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
 - [plans/archive/save-rehydration-registry-plan-2026-08-03.md](plans/archive/save-rehydration-registry-plan-2026-08-03.md): Track C3 のロード前検証、phase-aware 再構築 registry、通常ロード／rollback共通化の完了記録。
