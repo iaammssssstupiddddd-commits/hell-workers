@@ -27,7 +27,10 @@ use std::sync::{Arc, Mutex};
 
 const RENDERDOC_SETTLE_FRAMES: u32 = 4;
 const RENDERDOC_CHECKPOINT_NAME: &str = "indoor-light-fixture-ready-v1";
+// This is the ABI table requested from `RENDERDOC_GetAPI`, not the maximum
+// implementation version reported by `GetAPIVersion`.
 const RENDERDOC_API_VERSION: &str = "1.6.0";
+const RENDERDOC_API_VERSION_TUPLE: (i32, i32, i32) = (1, 6, 0);
 const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 2;
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
 const RTT_MASK_LABEL: &str = "hell-workers-rtt-soul-mask";
@@ -591,6 +594,13 @@ fn validate_current_medium_inventory(inventory: PerfRenderInventory) -> Result<(
     }
 }
 
+fn renderdoc_api_is_compatible(major: i32, minor: i32, patch: i32) -> bool {
+    major == RENDERDOC_API_VERSION_TUPLE.0
+        && minor >= 0
+        && patch >= 0
+        && (minor, patch) >= (RENDERDOC_API_VERSION_TUPLE.1, RENDERDOC_API_VERSION_TUPLE.2)
+}
+
 impl LoadedRenderDoc {
     fn start_capture(&self) -> Result<(), String> {
         let functions = &self.functions;
@@ -683,7 +693,9 @@ fn load_renderdoc(capture_template: &Path) -> Result<LoadedRenderDoc, String> {
     if result != 1 || raw_api.is_null() {
         return Err(format!("RENDERDOC_GetAPI(1.6.0) failed: result={result}"));
     }
-    // SAFETY: A successful GetAPI call for 1.6 returns this exact table type.
+    // SAFETY: A successful GetAPI call returns a table whose stable 1.6
+    // prefix has this layout. Newer compatible RenderDoc APIs append entries
+    // after that prefix, which this code intentionally does not access.
     let api = unsafe { *raw_api.cast::<renderdoc_sys::RENDERDOC_API_1_6_0>() };
     let get_api_version = api.GetAPIVersion.ok_or("GetAPIVersion is null")?;
     let mut major = 0;
@@ -691,9 +703,12 @@ fn load_renderdoc(capture_template: &Path) -> Result<LoadedRenderDoc, String> {
     let mut patch = 0;
     // SAFETY: Function pointer was checked for null and arguments are valid.
     unsafe { get_api_version(&mut major, &mut minor, &mut patch) };
-    if (major, minor, patch) != (1, 6, 0) {
+    // RenderDoc may return a newer backwards-compatible table than the 1.6
+    // ABI requested above.  We only use the 1.6 prefix, so accept later v1
+    // minor/patch versions and reject an incompatible major or an older API.
+    if !renderdoc_api_is_compatible(major, minor, patch) {
         return Err(format!(
-            "unexpected RenderDoc App API {major}.{minor}.{patch}"
+            "RenderDoc App API {major}.{minor}.{patch} is incompatible with requested {RENDERDOC_API_VERSION}"
         ));
     }
     // SAFETY: These union fields are aliases retained for API compatibility;
@@ -939,5 +954,16 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn renderdoc_api_version_accepts_backwards_compatible_v1_updates() {
+        assert!(renderdoc_api_is_compatible(1, 6, 0));
+        assert!(renderdoc_api_is_compatible(1, 7, 0));
+        assert!(renderdoc_api_is_compatible(1, 8, 4));
+        assert!(!renderdoc_api_is_compatible(1, 5, 99));
+        assert!(!renderdoc_api_is_compatible(1, 6, -1));
+        assert!(!renderdoc_api_is_compatible(1, 7, -1));
+        assert!(!renderdoc_api_is_compatible(2, 0, 0));
     }
 }
