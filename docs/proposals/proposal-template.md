@@ -74,8 +74,8 @@
 
 ## 9. 検証計画
 
-- `cargo check --workspace`
-- `cargo clippy --workspace --all-targets -- -D warnings`
+- `python3 scripts/dev.py check`
+- `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
 - 手動確認シナリオ:
 - 計測/ログ確認:
 

@@ -51,8 +51,8 @@
 - 完了条件:
   - [ ] 
 - 検証:
-  - `cargo check --workspace`
-  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `python3 scripts/dev.py check`
+  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
 
 ## M2: [マイルストーン名]
 
@@ -63,8 +63,8 @@
 - 完了条件:
   - [ ] 
 - 検証:
-  - `cargo check --workspace`
-  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `python3 scripts/dev.py check`
+  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
 
 ## M3: [マイルストーン名]
 
@@ -75,8 +75,8 @@
 - 完了条件:
   - [ ] 
 - 検証:
-  - `cargo check --workspace`
-  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `python3 scripts/dev.py check`
+  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
 
 ## 6. リスクと対策
 
@@ -87,10 +87,10 @@
 ## 7. 検証計画
 
 - 必須:
-  - `cargo check --workspace`
-  - `cargo clippy --workspace --all-targets -- -D warnings`
+  - `python3 scripts/dev.py check`
+  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
 - 計画完了時:
-  - `cargo test --workspace`
+  - `python3 scripts/dev.py cargo -- test --workspace`
   - `git diff --check`
 - 手動確認シナリオ:
 - パフォーマンス確認（必要時）:
@@ -125,18 +125,18 @@
 
 ### 最終確認ログ
 
-- 最終 `cargo check --workspace`: `YYYY-MM-DD` / `pass or fail`
-- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `YYYY-MM-DD` / `pass or fail`
-- 最終 `cargo test --workspace`: `YYYY-MM-DD` / `pass or fail`
+- 最終 `python3 scripts/dev.py check`: `YYYY-MM-DD` / `pass or fail`
+- 最終 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `YYYY-MM-DD` / `pass or fail`
+- 最終 `python3 scripts/dev.py cargo -- test --workspace`: `YYYY-MM-DD` / `pass or fail`
 - 未解決エラー:
 
 ### Definition of Done
 
 - [ ] 目的に対応するマイルストーンが全て完了
 - [ ] 影響ドキュメントが更新済み
-- [ ] `cargo check --workspace` が成功
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings` が成功
-- [ ] `cargo test --workspace` が成功
+- [ ] `python3 scripts/dev.py check` が成功
+- [ ] `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings` が成功
+- [ ] `python3 scripts/dev.py cargo -- test --workspace` が成功
 
 ## 10. 更新履歴
 
