@@ -5,31 +5,51 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+from functools import wraps
 import hashlib
 import json
 import os
 import re
 import secrets
+import signal
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
 import uuid
+import zlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+try:
+    from scripts.build_coordination import acquire_activity
+except ModuleNotFoundError:
+    repository_root = Path(__file__).resolve().parents[4]
+    sys.path.insert(0, str(repository_root))
+    from scripts.build_coordination import acquire_activity
 
 
 GIB = 1024**3
 SCHEMA_VERSION = 1
 RUNNING_EXIT_CODE = 2
-MIN_MEMORY_GIB = 8
-TWO_JOB_MEMORY_GIB = 12
+MIN_START_MEMORY_GIB = 10
+MIN_RUNTIME_MEMORY_GIB = 8
+TWO_JOB_MEMORY_GIB = 16
 MIN_WORKSPACE_FREE_GIB = 15
-MIN_TMP_FREE_GIB = 1
+RESOURCE_POLL_SECONDS = 1.0
+PROCESS_GROUP_POLL_SECONDS = 0.1
+PROCESS_GROUP_TERM_GRACE_SECONDS = 10.0
+PROCESS_GROUP_KILL_GRACE_SECONDS = 10.0
+MAX_NATIVE_SCREENSHOT_BYTES = 16 * 1024 * 1024
 DEFAULT_SEED = 20260802
 LOCK_PATH = Path("/tmp/hell-workers-native-acceptance.lock")
+MEMORY_FILESYSTEM_TYPES = frozenset({"tmpfs", "ramfs", "devtmpfs"})
+TMP_ROOT = Path("/tmp")
+TMP_CARGO_TARGET_GLOB = "hell-workers-*-target"
+NATIVE_JOB_DIRECTORY = "native-acceptance"
+NATIVE_TEMP_DIRECTORY = ".native-acceptance-tmp"
 DASHBOARD_MODES = {"hidden", "visible", "active-filter"}
 SOURCE_FILES = {
     ".cargo/config.toml",
@@ -44,6 +64,7 @@ SOURCE_PREFIXES = (
     "scripts/perf_tool/",
 )
 ASSET_PREFIX = "assets/"
+DECONSTRUCTION_CHECKS = {"V1", "V2", "V3", "V4", "V5"}
 RTT_LIGHT_CONTRACT_ID = "rtt-light-v1"
 RTT_LIGHT_STAGE = "current"
 RTT_LIGHT_LEGS = ("audit", "behavior", "capture", "renderdoc", "memory")
@@ -62,6 +83,17 @@ RTT_LIGHT_SETTLE_SECS = 8.0
 
 class AcceptanceError(RuntimeError):
     """A fail-closed acceptance error."""
+
+
+def activity_locked(function):
+    """Keep the whole native recipe exclusive of interactive Cargo activity."""
+    @wraps(function)
+    def wrapped(args: argparse.Namespace) -> int:
+        repo = Path(args.repo).resolve()
+        with acquire_activity(repo, "exclusive"):
+            return function(args)
+
+    return wrapped
 
 
 def utc_now() -> str:
@@ -102,15 +134,46 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def meminfo_bytes() -> dict[str, int]:
+    """Read the Linux memory counters used by the native resource guard."""
+    try:
+        lines = Path("/proc/meminfo").read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise AcceptanceError(f"cannot read /proc/meminfo: {error}") from error
+
+    values: dict[str, int] = {}
+    for line in lines:
+        key, separator, remainder = line.partition(":")
+        fields = remainder.split()
+        if not separator or not fields or not fields[0].isdigit():
+            continue
+        values[key] = int(fields[0]) * 1024
+    return values
+
+
+def memory_snapshot() -> dict[str, int | None]:
+    values = meminfo_bytes()
+    available = values.get("MemAvailable")
+    if available is None:
+        raise AcceptanceError("/proc/meminfo does not expose MemAvailable")
+    return {
+        "mem_available_bytes": available,
+        "swap_total_bytes": values.get("SwapTotal"),
+        "swap_free_bytes": values.get("SwapFree"),
+    }
+
+
 def mem_available_bytes() -> int:
-    for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
-        if line.startswith("MemAvailable:"):
-            return int(line.split()[1]) * 1024
-    raise AcceptanceError("/proc/meminfo does not expose MemAvailable")
+    available = memory_snapshot()["mem_available_bytes"]
+    assert available is not None
+    return available
 
 
 def free_bytes(path: Path) -> int:
-    stats = os.statvfs(path)
+    probe = path
+    while not probe.exists() and probe.parent != probe:
+        probe = probe.parent
+    stats = os.statvfs(probe)
     return stats.f_bavail * stats.f_frsize
 
 
@@ -118,40 +181,368 @@ def gib(value: int) -> float:
     return round(value / GIB, 2)
 
 
+def optional_gib(value: int | None) -> float | None:
+    return gib(value) if value is not None else None
+
+
+def memory_safety_failures(
+    snapshot: dict[str, int | None],
+    *,
+    minimum_memory_gib: int,
+    phase: str,
+) -> list[str]:
+    """Return deterministic host-memory guard failures for one native phase."""
+    available = snapshot["mem_available_bytes"]
+    assert available is not None
+    failures: list[str] = []
+    if available < minimum_memory_gib * GIB:
+        failures.append(
+            f"MemAvailable {gib(available)} GiB is below {minimum_memory_gib} GiB "
+            f"native {phase} floor"
+        )
+
+    # MemAvailable is the primary admission signal: it estimates how much
+    # memory the kernel can provide without swapping. Swap counters remain in
+    # the snapshot for diagnosis, but a low/unknown swap balance does not block
+    # a run while the RAM floor is satisfied.
+    return failures
+
+
+def runtime_resource_failure() -> tuple[str, dict[str, float | None]] | None:
+    """Return live evidence when a launched native stage must stop safely."""
+    try:
+        snapshot = memory_snapshot()
+    except AcceptanceError as error:
+        return f"native runtime resource monitoring failed: {error}", {}
+    failures = memory_safety_failures(
+        snapshot,
+        minimum_memory_gib=MIN_RUNTIME_MEMORY_GIB,
+        phase="runtime",
+    )
+    if not failures:
+        return None
+    return (
+        "; ".join(failures),
+        {
+            "mem_available_gib": optional_gib(snapshot["mem_available_bytes"]),
+            "swap_total_gib": optional_gib(snapshot["swap_total_bytes"]),
+            "swap_free_gib": optional_gib(snapshot["swap_free_bytes"]),
+        },
+    )
+
+
+def decode_mount_path(value: str) -> str:
+    return re.sub(
+        r"\\([0-7]{3})",
+        lambda match: chr(int(match.group(1), 8)),
+        value,
+    )
+
+
+def path_is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def filesystem_type(path: Path, *, mountinfo_path: Path = Path("/proc/self/mountinfo")) -> str:
+    target = path.resolve()
+    matched: tuple[int, str] | None = None
+    try:
+        lines = mountinfo_path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise AcceptanceError(f"cannot inspect mount table for {target}: {error}") from error
+    for line in lines:
+        left, separator, right = line.partition(" - ")
+        if not separator:
+            continue
+        left_fields = left.split()
+        right_fields = right.split()
+        if len(left_fields) < 5 or not right_fields:
+            continue
+        mount_point = Path(decode_mount_path(left_fields[4])).resolve()
+        if not path_is_within(target, mount_point):
+            continue
+        candidate = (len(str(mount_point)), right_fields[0])
+        if matched is None or candidate[0] > matched[0]:
+            matched = candidate
+    if matched is None:
+        raise AcceptanceError(f"cannot resolve filesystem type for {target}")
+    return matched[1]
+
+
+def workspace_cargo_target(repo: Path) -> Path:
+    return (repo / "target").resolve()
+
+
+def workspace_process_temp_dir(repo: Path) -> Path:
+    return workspace_cargo_target(repo) / NATIVE_TEMP_DIRECTORY
+
+
+def native_job_directory(repo: Path) -> Path:
+    return workspace_cargo_target(repo) / NATIVE_JOB_DIRECTORY
+
+
+def persistent_storage_error(
+    path: Path,
+    *,
+    label: str,
+    mountinfo_path: Path = Path("/proc/self/mountinfo"),
+    temporary_root: Path = TMP_ROOT,
+) -> str | None:
+    resolved = path.resolve()
+    if path_is_within(resolved, temporary_root):
+        return f"{label} must not be placed under {temporary_root}: {resolved}"
+    filesystem = filesystem_type(resolved, mountinfo_path=mountinfo_path)
+    if filesystem in MEMORY_FILESYSTEM_TYPES:
+        return (
+            f"{label} must use persistent storage, not {filesystem}: {resolved}"
+        )
+    return None
+
+
+def require_persistent_storage(path: Path, *, label: str) -> None:
+    error = persistent_storage_error(path, label=label)
+    if error:
+        raise AcceptanceError(error)
+
+
+def account_home() -> Path:
+    """Resolve the account home without trusting an inherited ``HOME`` value."""
+    try:
+        import pwd
+
+        return Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()
+    except (ImportError, KeyError, OSError):
+        return Path.home().resolve()
+
+
+def environment_path(repo: Path, value: str) -> Path:
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        candidate = repo / candidate
+    return candidate.resolve()
+
+
+def persistent_toolchain_home(
+    repo: Path,
+    environment: dict[str, str],
+    *,
+    variable: str,
+    default_name: str,
+    label: str,
+) -> Path:
+    """Keep Cargo/rustup caches on disk while preserving safe custom homes."""
+    inherited = environment.get(variable)
+    if inherited:
+        candidate = environment_path(repo, inherited)
+        if persistent_storage_error(candidate, label=label) is None:
+            return candidate
+    fallback = account_home() / default_name
+    require_persistent_storage(fallback, label=label)
+    return fallback
+
+
+def cargo_environment(
+    repo: Path, environment: dict[str, str] | None = None
+) -> dict[str, str]:
+    values = os.environ.copy() if environment is None else environment.copy()
+    cargo_target = workspace_cargo_target(repo)
+    temporary = workspace_process_temp_dir(repo)
+    require_persistent_storage(cargo_target, label="workspace Cargo target")
+    require_persistent_storage(temporary, label="native process temporary directory")
+    temporary.mkdir(parents=True, exist_ok=True)
+    cargo_home = persistent_toolchain_home(
+        repo,
+        values,
+        variable="CARGO_HOME",
+        default_name=".cargo",
+        label="Cargo home",
+    )
+    rustup_home = persistent_toolchain_home(
+        repo,
+        values,
+        variable="RUSTUP_HOME",
+        default_name=".rustup",
+        label="rustup home",
+    )
+    values.update(
+        {
+            "CARGO_TARGET_DIR": str(cargo_target),
+            "CARGO_HOME": str(cargo_home),
+            "RUSTUP_HOME": str(rustup_home),
+            "CARGO_INCREMENTAL": "0",
+            "CARGO_BUILD_JOBS": "1",
+            "TMPDIR": str(temporary),
+            "TMP": str(temporary),
+            "TEMP": str(temporary),
+        }
+    )
+    return values
+
+
+def directory_allocated_bytes(directory: Path) -> int:
+    total = 0
+    for root, directories, files in os.walk(directory, followlinks=False):
+        root_path = Path(root)
+        directories[:] = [
+            name for name in directories if not (root_path / name).is_symlink()
+        ]
+        for name in files:
+            path = root_path / name
+            try:
+                total += path.lstat().st_blocks * 512
+            except FileNotFoundError:
+                continue
+    return total
+
+
+def legacy_tmp_cargo_targets(tmp_root: Path = TMP_ROOT) -> list[dict[str, Any]]:
+    targets = []
+    for candidate in sorted(tmp_root.glob(TMP_CARGO_TARGET_GLOB)):
+        if candidate.is_symlink() or not candidate.is_dir():
+            continue
+        profiles = ("debug", "profiling", "release")
+        has_profile_lock = any(
+            (candidate / profile / ".cargo-lock").is_file()
+            for profile in profiles
+        )
+        if not (candidate / ".rustc_info.json").is_file() and not has_profile_lock:
+            continue
+        allocated = directory_allocated_bytes(candidate)
+        if allocated:
+            targets.append(
+                {
+                    "path": str(candidate.resolve()),
+                    "bytes": allocated,
+                    "gib": gib(allocated),
+                }
+            )
+    return targets
+
+
 def resource_snapshot(repo: Path, *, require_launcher: bool) -> dict[str, Any]:
-    memory = mem_available_bytes()
+    memory = memory_snapshot()
+    available_memory = memory["mem_available_bytes"]
+    assert available_memory is not None
     workspace_free = free_bytes(repo)
-    tmp_free = free_bytes(Path("/tmp"))
+    tmp_free = free_bytes(TMP_ROOT)
+    cargo_target = workspace_cargo_target(repo)
+    cargo_target_free = free_bytes(cargo_target)
+    process_temp = workspace_process_temp_dir(repo)
+    native_jobs = native_job_directory(repo)
+    performance_artifacts = cargo_target / "perf-runs"
+    renderdoc_temp = cargo_target / ".renderdoc-tmp"
+    cargo_target_filesystem = filesystem_type(cargo_target)
+    process_temp_filesystem = filesystem_type(process_temp)
+    inherited_target = os.environ.get("CARGO_TARGET_DIR")
+    inherited_temp = {
+        key: os.environ[key]
+        for key in ("TMPDIR", "TMP", "TEMP")
+        if key in os.environ
+    }
+    inherited_toolchain_homes = {
+        key: os.environ[key]
+        for key in ("CARGO_HOME", "RUSTUP_HOME")
+        if key in os.environ
+    }
+    stale_tmp_targets = legacy_tmp_cargo_targets()
     launcher = shutil.which("kitty")
     failures: list[str] = []
-    if memory < MIN_MEMORY_GIB * GIB:
-        failures.append(
-            f"MemAvailable {gib(memory)} GiB is below {MIN_MEMORY_GIB} GiB"
+    try:
+        cargo_home = persistent_toolchain_home(
+            repo,
+            os.environ,
+            variable="CARGO_HOME",
+            default_name=".cargo",
+            label="Cargo home",
         )
-    if workspace_free < MIN_WORKSPACE_FREE_GIB * GIB:
+        rustup_home = persistent_toolchain_home(
+            repo,
+            os.environ,
+            variable="RUSTUP_HOME",
+            default_name=".rustup",
+            label="rustup home",
+        )
+    except AcceptanceError as error:
+        failures.append(str(error))
+        cargo_home = account_home() / ".cargo"
+        rustup_home = account_home() / ".rustup"
+    failures.extend(
+        memory_safety_failures(
+            memory,
+            minimum_memory_gib=MIN_START_MEMORY_GIB,
+            phase="start",
+        )
+    )
+    if cargo_target_free < MIN_WORKSPACE_FREE_GIB * GIB:
         failures.append(
-            f"workspace free {gib(workspace_free)} GiB is below "
+            f"Cargo target free {gib(cargo_target_free)} GiB is below "
             f"{MIN_WORKSPACE_FREE_GIB} GiB"
         )
-    if tmp_free < MIN_TMP_FREE_GIB * GIB:
+    for path, label in (
+        (cargo_target, "workspace Cargo target"),
+        (process_temp, "native process temporary directory"),
+        (cargo_home, "Cargo home"),
+        (rustup_home, "rustup home"),
+        (native_jobs, "native acceptance job directory"),
+        (performance_artifacts, "performance artifact root"),
+        (renderdoc_temp, "RenderDoc temporary directory"),
+    ):
+        storage_error = persistent_storage_error(path, label=label)
+        if storage_error:
+            failures.append(storage_error)
+    for stale_target in stale_tmp_targets:
         failures.append(
-            f"/tmp free {gib(tmp_free)} GiB is below {MIN_TMP_FREE_GIB} GiB"
+            "legacy Cargo target under /tmp uses "
+            f"{stale_target['gib']} GiB: {stale_target['path']} "
+            "(preserved; clean up separately)"
         )
     if require_launcher and launcher is None:
         failures.append("kitty launcher is unavailable")
     return {
         "status": "ready" if not failures else "blocked",
         "failures": failures,
-        "mem_available_gib": gib(memory),
+        "mem_available_gib": gib(available_memory),
+        "swap_total_gib": optional_gib(memory["swap_total_bytes"]),
+        "swap_free_gib": optional_gib(memory["swap_free_bytes"]),
         "workspace_free_gib": gib(workspace_free),
         "tmp_free_gib": gib(tmp_free),
-        "cargo_jobs": 2 if memory >= TWO_JOB_MEMORY_GIB * GIB else 1,
+        "cargo_jobs": 2 if available_memory >= TWO_JOB_MEMORY_GIB * GIB else 1,
         "cargo_incremental": 0,
+        "cargo_target": {
+            "path": str(cargo_target),
+            "filesystem": cargo_target_filesystem,
+            "free_gib": gib(cargo_target_free),
+            "inherited_target_dir": inherited_target,
+            "enforced": True,
+        },
+        "process_temp": {
+            "path": str(process_temp),
+            "filesystem": process_temp_filesystem,
+            "inherited_temp_dirs": inherited_temp,
+            "enforced": True,
+        },
+        "toolchain_homes": {
+            "cargo": {
+                "path": str(cargo_home),
+                "filesystem": filesystem_type(cargo_home),
+            },
+            "rustup": {
+                "path": str(rustup_home),
+                "filesystem": filesystem_type(rustup_home),
+            },
+            "inherited": inherited_toolchain_homes,
+            "enforced": True,
+        },
+        "legacy_tmp_cargo_targets": stale_tmp_targets,
         "launcher": launcher,
         "thresholds_gib": {
-            "mem_available": MIN_MEMORY_GIB,
-            "workspace_free": MIN_WORKSPACE_FREE_GIB,
-            "tmp_free": MIN_TMP_FREE_GIB,
+            "native_start_mem_available": MIN_START_MEMORY_GIB,
+            "native_runtime_mem_available": MIN_RUNTIME_MEMORY_GIB,
+            "cargo_target_free": MIN_WORKSPACE_FREE_GIB,
         },
     }
 
@@ -334,9 +725,9 @@ def source_checkpoint(
     }
 
 
-def unique_job_root() -> Path:
+def unique_job_root(repo: Path, profile: str) -> Path:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    return Path(f"/tmp/hell-workers-native-acceptance-{stamp}-{secrets.token_hex(4)}")
+    return native_job_directory(repo) / f"{profile}-{stamp}-{secrets.token_hex(4)}"
 
 
 def common_dashboard_args(args: argparse.Namespace) -> list[str]:
@@ -729,9 +1120,21 @@ def rtt_light_session_commands(
 def plan_task_dashboard(args: argparse.Namespace) -> int:
     repo = validate_repo(args.repo)
     resources = resource_snapshot(repo, require_launcher=True)
-    job_root = Path(args.job_root).resolve() if args.job_root else unique_job_root()
+    job_root = (
+        Path(args.job_root).resolve()
+        if args.job_root
+        else unique_job_root(repo, "task-dashboard")
+    )
     if job_root.exists():
         raise AcceptanceError(f"job root already exists: {job_root}")
+    failures = list(resources["failures"])
+    storage_error = persistent_storage_error(
+        job_root,
+        label="native acceptance job root",
+    )
+    if storage_error:
+        failures.append(storage_error)
+    status = "ready" if not failures else "blocked"
     command = [
         "kitty",
         "--directory",
@@ -768,13 +1171,13 @@ def plan_task_dashboard(args: argparse.Namespace) -> int:
     ]
     payload = {
         "schema_version": SCHEMA_VERSION,
-        "status": resources["status"],
+        "status": status,
         "profile": "task-dashboard",
         "measurement_kind": (
             "formal" if args.warmup_secs >= 30 and args.measure_secs >= 60 else "acceptance-smoke"
         ),
         "job_root": str(job_root),
-        "resources": resources,
+        "resources": {**resources, "status": status, "failures": failures},
         "launcher_command": command,
         "status_command": [
             "python3",
@@ -794,8 +1197,81 @@ def plan_task_dashboard(args: argparse.Namespace) -> int:
         },
     }
     print_json(payload)
-    return 0 if resources["status"] == "ready" else 1
+    return 0 if status == "ready" else 1
 
+
+def plan_deconstruction(args: argparse.Namespace) -> int:
+    repo = validate_repo(args.repo)
+    resources = resource_snapshot(repo, require_launcher=True)
+    job_root = (
+        Path(args.job_root).resolve()
+        if args.job_root
+        else unique_job_root(repo, "building-deconstruction")
+    )
+    if job_root.exists():
+        raise AcceptanceError(f"job root already exists: {job_root}")
+    failures = list(resources["failures"])
+    storage_error = persistent_storage_error(
+        job_root,
+        label="native acceptance job root",
+    )
+    if storage_error:
+        failures.append(storage_error)
+    status = "ready" if not failures else "blocked"
+    command = [
+        "kitty",
+        "--directory",
+        str(repo),
+        "--detach",
+        "env",
+        "HW_NATIVE_ACCEPTANCE_LAUNCHED=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "python3",
+        str(Path(__file__).resolve()),
+        "run-deconstruction",
+        "--repo",
+        str(repo),
+        "--job-root",
+        str(job_root),
+        "--seed",
+        str(args.seed),
+        "--adapter",
+        args.adapter,
+        "--backend",
+        args.backend,
+        "--window-backend",
+        args.window_backend,
+        "--present-mode",
+        args.present_mode,
+    ]
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "status": status,
+        "profile": "building-deconstruction",
+        "measurement_kind": "native-functional-acceptance",
+        "job_root": str(job_root),
+        "resources": {**resources, "status": status, "failures": failures},
+        "launcher_command": command,
+        "status_command": [
+            "python3",
+            str(Path(__file__).resolve()),
+            "status",
+            "--job-root",
+            str(job_root),
+        ],
+        "execution_contract": {
+            "game_processes": 1,
+            "parallel_game_processes": 1,
+            "actual_feature_builds": 1,
+            "actual_window_required": True,
+            "renderer_evidence_required": True,
+            "in_game_screenshot_required": True,
+            "synthetic_desktop_input": False,
+            "automatic_cleanup": False,
+        },
+    }
+    print_json(payload)
+    return 0 if status == "ready" else 1
 
 
 def plan_rtt_light(args: argparse.Namespace) -> int:
@@ -808,9 +1284,15 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
     state_root = (
         Path(args.job_root).resolve()
         if args.job_root
-        else Path(f"/tmp/hell-workers-rtt-light-{args.level}-{attempt_id}")
+        else unique_job_root(repo, f"rtt-light-{args.level}")
     )
     failures = list(resources["failures"])
+    state_root_error = persistent_storage_error(
+        state_root,
+        label="RtT-light state root",
+    )
+    if state_root_error:
+        failures.append(state_root_error)
     tooling: dict[str, Any] | None = None
     if args.level == "formal":
         failures.extend(formal_contract_ready(contract))
@@ -846,6 +1328,12 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
         )
     else:
         output_root = state_root / "artifacts"
+    output_root_error = persistent_storage_error(
+        output_root,
+        label="RtT-light artifact root",
+    )
+    if output_root_error:
+        failures.append(output_root_error)
     if state_root.exists():
         failures.append(f"state root already exists: {state_root}")
     launcher_command = [
@@ -959,6 +1447,63 @@ def update_state(job_file: Path, state: dict[str, Any], **changes: Any) -> None:
     atomic_write_json(job_file, state)
 
 
+def process_group_exists(process_group: int) -> bool:
+    try:
+        os.killpg(process_group, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def signal_process_group(process: subprocess.Popen[str], signal_number: int) -> None:
+    try:
+        os.killpg(process.pid, signal_number)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        process.send_signal(signal_number)
+
+
+def wait_for_process_group_exit(
+    process: subprocess.Popen[str], *, timeout_seconds: float
+) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while process_group_exists(process.pid):
+        process.poll()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(PROCESS_GROUP_POLL_SECONDS, remaining))
+    process.poll()
+    return True
+
+
+def stop_command_process(
+    process: subprocess.Popen[str],
+    *,
+    term_grace_seconds: float = PROCESS_GROUP_TERM_GRACE_SECONDS,
+    kill_grace_seconds: float = PROCESS_GROUP_KILL_GRACE_SECONDS,
+) -> None:
+    """Stop a stage and every child it launched without touching other jobs."""
+    signal_process_group(process, signal.SIGTERM)
+    if not wait_for_process_group_exit(
+        process,
+        timeout_seconds=term_grace_seconds,
+    ):
+        signal_process_group(process, signal.SIGKILL)
+        if not wait_for_process_group_exit(
+            process,
+            timeout_seconds=kill_grace_seconds,
+        ):
+            raise AcceptanceError(
+                f"stage process group {process.pid} did not exit after SIGKILL"
+            )
+    if process.poll() is None:
+        process.wait(timeout=kill_grace_seconds)
+
+
 def run_command(
     stage: str,
     command: list[str],
@@ -983,30 +1528,69 @@ def run_command(
             stdout=log,
             stderr=subprocess.STDOUT,
             text=True,
+            start_new_session=True,
         )
-        deadline = (
-            time.monotonic() + timeout_seconds
-            if timeout_seconds is not None
-            else None
-        )
-        while process.poll() is None:
-            if deadline is not None and time.monotonic() >= deadline:
-                process.terminate()
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-                raise AcceptanceError(
-                    f"stage {stage} exceeded its {timeout_seconds:g}s timeout"
-                )
+        try:
             update_state(job_file, state, child_pid=process.pid)
-            time.sleep(5)
-    if process.returncode != 0:
-        raise AcceptanceError(f"stage {stage} failed with exit code {process.returncode}")
-    completed = state.setdefault("completed_stages", [])
-    completed.append(stage)
-    update_state(job_file, state, child_pid=None)
+            deadline = (
+                time.monotonic() + timeout_seconds
+                if timeout_seconds is not None
+                else None
+            )
+            while process.poll() is None:
+                runtime_failure = runtime_resource_failure()
+                if runtime_failure is not None:
+                    reason, evidence = runtime_failure
+                    event = {
+                        "at": utc_now(),
+                        "stage": stage,
+                        "child_pid": process.pid,
+                        "reason": reason,
+                        **evidence,
+                    }
+                    state.setdefault("resource_guard_events", []).append(event)
+                    update_state(job_file, state, child_pid=process.pid)
+                    log.write(
+                        f"[{event['at']}] resource guard stopped stage={stage}: {reason}\n"
+                    )
+                    log.flush()
+                    stop_command_process(process)
+                    update_state(job_file, state, child_pid=None)
+                    raise AcceptanceError(
+                        f"stage {stage} stopped to preserve host resources: {reason}"
+                    )
+                if deadline is not None and time.monotonic() >= deadline:
+                    stop_command_process(process)
+                    update_state(job_file, state, child_pid=None)
+                    raise AcceptanceError(
+                        f"stage {stage} exceeded its {timeout_seconds:g}s timeout"
+                    )
+                update_state(job_file, state, child_pid=process.pid)
+                time.sleep(RESOURCE_POLL_SECONDS)
+            if process.returncode != 0:
+                raise AcceptanceError(
+                    f"stage {stage} failed with exit code {process.returncode}"
+                )
+            completed = state.setdefault("completed_stages", [])
+            completed.append(stage)
+            update_state(job_file, state, child_pid=None)
+        finally:
+            if process.poll() is None:
+                cleanup_event = {
+                    "at": utc_now(),
+                    "stage": stage,
+                    "child_pid": process.pid,
+                    "reason": "stage interrupted before normal completion",
+                }
+                state.setdefault("cleanup_events", []).append(cleanup_event)
+                log.write(
+                    f"[{cleanup_event['at']}] stopping interrupted stage={stage} "
+                    f"process_group={process.pid}\n"
+                )
+                log.flush()
+                stop_command_process(process)
+            if state.get("child_pid") == process.pid:
+                update_state(job_file, state, child_pid=None)
 
 
 def settle(
@@ -1288,6 +1872,7 @@ def verify_rtt_light_prerequisites(
     }
 
 
+@activity_locked
 def run_rtt_light(args: argparse.Namespace) -> int:
     if os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") != "1":
         raise AcceptanceError(
@@ -1302,6 +1887,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
     if fingerprint != args.source_fingerprint:
         raise AcceptanceError("planned RtT-light source fingerprint changed before launch")
     state_root = Path(args.state_root).resolve()
+    require_persistent_storage(state_root, label="RtT-light state root")
     if state_root.exists():
         raise AcceptanceError(f"state root already exists: {state_root}")
     state_root.mkdir(parents=True)
@@ -1315,6 +1901,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
         if formal
         else state_root / "artifacts"
     )
+    require_persistent_storage(attempt, label="RtT-light artifact root")
     environment_lock = (
         attempt.parent.parent / "environment-lock.json"
         if formal
@@ -1387,7 +1974,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
             )
             return 1
 
-    env = os.environ.copy()
+    env = cargo_environment(repo)
     env.update(
         {
             "PYTHONDONTWRITEBYTECODE": "1",
@@ -1655,13 +2242,15 @@ def run_rtt_light(args: argparse.Namespace) -> int:
             return 1
 
 
+@activity_locked
 def run_task_dashboard(args: argparse.Namespace) -> int:
     if os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") != "1":
         raise AcceptanceError(
             "run-task-dashboard must be launched by the planned direct kitty command"
-        )
+    )
     repo = validate_repo(args.repo)
     job_root = Path(args.job_root).resolve()
+    require_persistent_storage(job_root, label="native acceptance job root")
     if job_root.exists():
         raise AcceptanceError(f"job root already exists: {job_root}")
     job_root.mkdir(parents=True)
@@ -1711,7 +2300,7 @@ def run_task_dashboard(args: argparse.Namespace) -> int:
         )
         return 1
 
-    env = os.environ.copy()
+    env = cargo_environment(repo)
     env.update(
         {
             "PYTHONDONTWRITEBYTECODE": "1",
@@ -1845,6 +2434,142 @@ def run_task_dashboard(args: argparse.Namespace) -> int:
             return 1
 
 
+@activity_locked
+def run_deconstruction(args: argparse.Namespace) -> int:
+    if os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") != "1":
+        raise AcceptanceError(
+            "run-deconstruction must be launched by the planned direct kitty command"
+    )
+    repo = validate_repo(args.repo)
+    job_root = Path(args.job_root).resolve()
+    require_persistent_storage(job_root, label="native acceptance job root")
+    if job_root.exists():
+        raise AcceptanceError(f"job root already exists: {job_root}")
+    job_root.mkdir(parents=True)
+    artifact = job_root / "artifact"
+    artifact.mkdir()
+    job_file = job_root / "job.json"
+    log_path = job_root / "orchestrator.log"
+    resources = resource_snapshot(repo, require_launcher=False)
+    source = source_fingerprint(repo)
+    run_id = f"c1-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{secrets.token_hex(4)}"
+    state: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "profile": "building-deconstruction",
+        "status": "running",
+        "started_at": utc_now(),
+        "heartbeat_at": utc_now(),
+        "pid": os.getpid(),
+        "repo": str(repo),
+        "job_root": str(job_root),
+        "run_id": run_id,
+        "source_fingerprint": source,
+        "resources": resources,
+        "completed_stages": [],
+        "paths": {
+            "artifact": str(artifact),
+            "driver_result": str(artifact / "driver-result.json"),
+            "screenshot": str(artifact / "deconstruction-v1-v5.png"),
+            "save": str(artifact / "runtime/saves/world.scn.ron"),
+            "log": str(log_path),
+        },
+        "parameters": {
+            "seed": args.seed,
+            "adapter": args.adapter,
+            "backend": args.backend,
+            "window_backend": args.window_backend,
+            "present_mode": args.present_mode,
+        },
+    }
+    atomic_write_json(job_file, state)
+    if resources["status"] != "ready":
+        update_state(
+            job_file,
+            state,
+            status="invalid",
+            current_stage=None,
+            error="; ".join(resources["failures"]),
+            finished_at=utc_now(),
+        )
+        return 1
+
+    env = cargo_environment(repo)
+    for key in list(env):
+        if key.startswith("HW_PERF_") or key in {
+            "HW_NATIVE_SAVE_LOAD_ACCEPTANCE_ARTIFACT",
+            "HW_NATIVE_SAVE_LOAD_ACCEPTANCE_RUN_ID",
+        }:
+            env.pop(key, None)
+    env = cargo_environment(repo, env)
+    env.update(
+        {
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "CARGO_BUILD_JOBS": str(resources["cargo_jobs"]),
+            "CARGO_INCREMENTAL": "0",
+            "HELL_WORKERS_WORLDGEN_SEED": str(args.seed),
+            "HW_WINDOW_BACKEND": args.window_backend,
+            "WGPU_BACKEND": args.backend,
+            "HW_PRESENT_MODE": args.present_mode,
+            "HW_NATIVE_DECONSTRUCTION_ACCEPTANCE_ARTIFACT": str(artifact),
+            "HW_NATIVE_DECONSTRUCTION_ACCEPTANCE_RUN_ID": run_id,
+        }
+    )
+    command = ["cargo", "run", "--locked", "-p", "bevy_app@0.1.0"]
+    LOCK_PATH.touch(exist_ok=True)
+    with LOCK_PATH.open("r+", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            update_state(
+                job_file,
+                state,
+                status="invalid",
+                current_stage=None,
+                error=f"another native acceptance job holds {LOCK_PATH}",
+                finished_at=utc_now(),
+            )
+            return 1
+        try:
+            run_command(
+                "native-deconstruction",
+                command,
+                repo=repo,
+                env=env,
+                log_path=log_path,
+                job_file=job_file,
+                state=state,
+                timeout_seconds=360,
+            )
+            assert_source_unchanged(repo, source)
+            verification = verify_deconstruction_artifact(
+                artifact,
+                run_id=run_id,
+                adapter=args.adapter,
+                backend=args.backend,
+                window_backend=args.window_backend,
+            )
+            update_state(
+                job_file,
+                state,
+                status="valid",
+                current_stage=None,
+                child_pid=None,
+                verification=verification,
+                finished_at=utc_now(),
+            )
+            return 0
+        except Exception as error:
+            update_state(
+                job_file,
+                state,
+                status="invalid",
+                current_stage=None,
+                child_pid=None,
+                error=str(error),
+                finished_at=utc_now(),
+            )
+            return 1
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -1962,6 +2687,190 @@ def verify_artifact_set(
     }
 
 
+def verify_deconstruction_artifact(
+    artifact: Path,
+    *,
+    run_id: str,
+    adapter: str,
+    backend: str,
+    window_backend: str,
+) -> dict[str, Any]:
+    artifact = artifact.resolve()
+    result_path = artifact / "driver-result.json"
+    screenshot_path = artifact / "deconstruction-v1-v5.png"
+    save_path = artifact / "runtime/saves/world.scn.ron"
+    result = read_json(result_path)
+    require(result.get("status") == "PASS", f"driver did not pass: {result_path}")
+    require(
+        result.get("profile") == "building-deconstruction",
+        f"wrong native profile in {result_path}",
+    )
+    actual_run_id = result.get("run_id")
+    require(isinstance(actual_run_id, str) and actual_run_id, "driver run_id is missing")
+    require(run_id, "verification requires the launched run_id")
+    require(actual_run_id == run_id, "driver run_id does not match the launched job")
+    checks = result.get("checks")
+    require(isinstance(checks, dict), "driver checks are missing")
+    require(set(checks) == DECONSTRUCTION_CHECKS, "driver V1-V5 check set is incomplete")
+    require(
+        all(checks.get(check) == "PASS" for check in DECONSTRUCTION_CHECKS),
+        "one or more driver V1-V5 checks did not pass",
+    )
+    before_epoch = result.get("world_epoch_before_load")
+    after_epoch = result.get("world_epoch_after_load")
+    require(
+        isinstance(before_epoch, int)
+        and isinstance(after_epoch, int)
+        and after_epoch == before_epoch + 1,
+        "WorldEpoch did not advance exactly once",
+    )
+
+    save = result.get("save")
+    require(isinstance(save, dict), "save evidence is missing")
+    require(save_path.is_file(), f"native save artifact is missing: {save_path}")
+    require(
+        Path(str(save.get("path"))).resolve() == save_path,
+        "driver save path does not match the artifact contract",
+    )
+    save_bytes = save_path.stat().st_size
+    require(save_bytes > 0, "native save artifact is empty")
+    require(save.get("bytes") == save_bytes, "driver save byte count is stale")
+
+    screenshot = result.get("screenshot")
+    require(isinstance(screenshot, dict), "screenshot evidence is missing")
+    require(screenshot_path.is_file(), f"native screenshot is missing: {screenshot_path}")
+    require(
+        Path(str(screenshot.get("path"))).resolve() == screenshot_path,
+        "driver screenshot path does not match the artifact contract",
+    )
+    screenshot_bytes = screenshot_path.stat().st_size
+    require(
+        0 < screenshot_bytes <= MAX_NATIVE_SCREENSHOT_BYTES,
+        "native screenshot size is outside the fail-closed limit",
+    )
+    png = screenshot_path.read_bytes()
+    width, height = validate_png_structure(png)
+    require(width >= 640 and height >= 360, f"screenshot is too small: {width}x{height}")
+    require(screenshot.get("width") == width, "driver screenshot width is stale")
+    require(screenshot.get("height") == height, "driver screenshot height is stale")
+    require(screenshot.get("bytes") == screenshot_bytes, "driver screenshot byte count is stale")
+
+    renderer = result.get("renderer")
+    require(isinstance(renderer, dict), "renderer evidence is missing")
+    adapter_name = str(renderer.get("adapter_name", ""))
+    actual_backend = str(renderer.get("backend", ""))
+    display_handle = str(renderer.get("display_handle", ""))
+    require(adapter_name, "renderer adapter name is empty")
+    if adapter:
+        require(
+            adapter.lower() in adapter_name.lower(),
+            f"actual adapter does not contain {adapter!r}: {adapter_name}",
+        )
+    require(
+        actual_backend.lower() == backend.lower(),
+        f"actual renderer backend is {actual_backend!r}, expected {backend!r}",
+    )
+    display_lower = display_handle.lower()
+    if window_backend == "x11":
+        require(
+            "xlib" in display_lower or "xcb" in display_lower,
+            f"actual display handle is not X11: {display_handle}",
+        )
+    else:
+        require("wayland" in display_lower, f"actual display handle is not Wayland: {display_handle}")
+
+    return {
+        "status": "pass",
+        "profile": "building-deconstruction",
+        "run_id": actual_run_id,
+        "checks": checks,
+        "world_epoch_before_load": before_epoch,
+        "world_epoch_after_load": after_epoch,
+        "save": {"path": str(save_path), "bytes": save_bytes, "sha256": sha256(save_path)},
+        "screenshot": {
+            "path": str(screenshot_path),
+            "width": width,
+            "height": height,
+            "bytes": len(png),
+            "sha256": sha256(screenshot_path),
+        },
+        "renderer": {
+            "adapter_name": adapter_name,
+            "backend": actual_backend,
+            "display_handle": display_handle,
+        },
+    }
+
+
+def validate_png_structure(png: bytes) -> tuple[int, int]:
+    signature = b"\x89PNG\r\n\x1a\n"
+    require(
+        0 < len(png) <= MAX_NATIVE_SCREENSHOT_BYTES,
+        "PNG size is outside the fail-closed limit",
+    )
+    require(png.startswith(signature), "invalid PNG signature")
+    offset = len(signature)
+    dimensions: tuple[int, int] | None = None
+    saw_idat = False
+    while offset < len(png):
+        require(offset + 8 <= len(png), "truncated PNG chunk header")
+        data_len = int.from_bytes(png[offset : offset + 4], "big")
+        chunk_type = png[offset + 4 : offset + 8]
+        data_end = offset + 8 + data_len
+        chunk_end = data_end + 4
+        require(chunk_end <= len(png), "truncated PNG chunk")
+        expected_crc = int.from_bytes(png[data_end:chunk_end], "big")
+        actual_crc = zlib.crc32(png[offset + 4 : data_end]) & 0xFFFFFFFF
+        require(actual_crc == expected_crc, "corrupt PNG chunk CRC")
+        if chunk_type == b"IHDR":
+            require(
+                offset == len(signature) and data_len == 13 and dimensions is None,
+                "invalid PNG IHDR",
+            )
+            width = int.from_bytes(png[offset + 8 : offset + 12], "big")
+            height = int.from_bytes(png[offset + 12 : offset + 16], "big")
+            require(width > 0 and height > 0, "PNG dimensions must be non-zero")
+            dimensions = (width, height)
+        elif chunk_type == b"IDAT":
+            saw_idat = True
+        elif chunk_type == b"IEND":
+            require(
+                data_len == 0
+                and dimensions is not None
+                and saw_idat
+                and chunk_end == len(png),
+                "invalid terminal PNG IEND",
+            )
+            return dimensions
+        else:
+            require(dimensions is not None, "PNG does not start with IHDR")
+        offset = chunk_end
+    raise AcceptanceError("PNG is missing terminal IEND")
+
+
+def png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    require(len(chunk_type) == 4, "PNG chunk type must have four bytes")
+    payload = chunk_type + data
+    return (
+        len(data).to_bytes(4, "big")
+        + payload
+        + (zlib.crc32(payload) & 0xFFFFFFFF).to_bytes(4, "big")
+    )
+
+
+def structural_png(width: int, height: int) -> bytes:
+    ihdr = (
+        width.to_bytes(4, "big")
+        + height.to_bytes(4, "big")
+        + bytes((8, 6, 0, 0, 0))
+    )
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + png_chunk(b"IHDR", ihdr)
+        + png_chunk(b"IDAT", b"\x78\x9c\x03\x00\x00\x00\x00\x01")
+        + png_chunk(b"IEND", b"")
+    )
+
 
 def verify_artifacts_command(args: argparse.Namespace) -> int:
     result = verify_artifact_set(
@@ -1994,6 +2903,17 @@ def verify_rtt_light_command(args: argparse.Namespace) -> int:
     )
     return 0
 
+
+def verify_deconstruction_command(args: argparse.Namespace) -> int:
+    result = verify_deconstruction_artifact(
+        Path(args.artifact).resolve(),
+        run_id=args.run_id,
+        adapter=args.adapter,
+        backend=args.backend,
+        window_backend=args.window_backend,
+    )
+    print_json(result)
+    return 0
 
 
 def parse_utc(value: str) -> datetime:
@@ -2038,7 +2958,21 @@ def status_command(args: argparse.Namespace) -> int:
                 return 1
         print_json(summary)
         return RUNNING_EXIT_CODE
-
+    if status == "valid" and state.get("profile") == "building-deconstruction":
+        parameters = state.get("parameters", {})
+        try:
+            summary["verification"] = verify_deconstruction_artifact(
+                Path(state["paths"]["artifact"]),
+                run_id=str(state["run_id"]),
+                adapter=str(parameters.get("adapter", "Intel")),
+                backend=str(parameters.get("backend", "vulkan")),
+                window_backend=str(parameters.get("window_backend", "x11")),
+            )
+        except (AcceptanceError, KeyError, TypeError, ValueError) as error:
+            summary["status"] = "invalid"
+            summary["error"] = f"artifact revalidation failed: {error}"
+            print_json(summary)
+            return 1
     print_json(summary)
     return 0 if status == "valid" else 1
 
@@ -2129,8 +3063,277 @@ def self_test() -> int:
         source_fingerprint(repo) == perf_execution.source_fingerprint(),
         "native and perf source fingerprints differ",
     )
-    with tempfile.TemporaryDirectory(prefix="native-acceptance-self-test-") as temporary:
+    temporary_root = workspace_process_temp_dir(repo)
+    temporary_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="native-acceptance-self-test-",
+        dir=temporary_root,
+    ) as temporary:
         root = Path(temporary)
+        workspace = root / "workspace"
+        tmp_root = root / "tmp"
+        workspace.mkdir()
+        tmp_root.mkdir()
+        mountinfo = root / "mountinfo"
+        mountinfo.write_text(
+            f"36 25 0:32 / {workspace} rw - ext4 /dev/fake rw\n"
+            f"37 36 0:33 / {tmp_root} rw - tmpfs tmpfs rw\n",
+            encoding="utf-8",
+        )
+        require(
+            filesystem_type(workspace_cargo_target(workspace), mountinfo_path=mountinfo)
+            == "ext4",
+            "workspace target filesystem detection failed",
+        )
+        require(
+            filesystem_type(tmp_root / "target", mountinfo_path=mountinfo) == "tmpfs",
+            "tmpfs target filesystem detection failed",
+        )
+        require(
+            decode_mount_path("/tmp/with\\040space") == "/tmp/with space",
+            "mount path decoding failed",
+        )
+        require(
+            persistent_storage_error(
+                workspace_cargo_target(workspace),
+                label="workspace Cargo target",
+                mountinfo_path=mountinfo,
+                temporary_root=tmp_root,
+            )
+            is None,
+            "persistent workspace target was rejected",
+        )
+        require(
+            persistent_storage_error(
+                tmp_root / "unsafe-target",
+                label="workspace Cargo target",
+                mountinfo_path=mountinfo,
+                temporary_root=tmp_root,
+            )
+            is not None,
+            "tmpfs target was not rejected",
+        )
+        guarded_env = cargo_environment(
+            workspace,
+            {
+                "CARGO_TARGET_DIR": "/tmp/hell-workers-self-test-target",
+                "CARGO_HOME": "/tmp/hell-workers-self-test-cargo-home",
+                "RUSTUP_HOME": "/tmp/hell-workers-self-test-rustup-home",
+            },
+        )
+        require(
+            guarded_env["CARGO_TARGET_DIR"] == str(workspace_cargo_target(workspace))
+            and guarded_env["CARGO_INCREMENTAL"] == "0"
+            and guarded_env["CARGO_BUILD_JOBS"] == "1"
+            and guarded_env["TMPDIR"] == str(workspace_process_temp_dir(workspace))
+            and guarded_env["TMP"] == guarded_env["TMPDIR"]
+            and guarded_env["TEMP"] == guarded_env["TMPDIR"]
+            and not path_is_within(Path(guarded_env["CARGO_HOME"]), TMP_ROOT)
+            and not path_is_within(Path(guarded_env["RUSTUP_HOME"]), TMP_ROOT),
+            "Cargo target environment was not normalized to the workspace",
+        )
+        require(
+            not path_is_within(unique_job_root(workspace, "self-test"), tmp_root),
+            "native job root is still placed under tmpfs",
+        )
+        stale_target = tmp_root / "hell-workers-self-test-target"
+        stale_target.mkdir()
+        (stale_target / ".rustc_info.json").write_text("{}\n", encoding="utf-8")
+        stale_targets = legacy_tmp_cargo_targets(tmp_root)
+        require(
+            len(stale_targets) == 1
+            and stale_targets[0]["path"] == str(stale_target.resolve())
+            and stale_targets[0]["bytes"] > 0,
+            "temporary Cargo target inventory failed",
+        )
+        healthy_memory = {
+            "mem_available_bytes": 10 * GIB,
+            "swap_total_bytes": 8 * GIB,
+            "swap_free_bytes": 2 * GIB,
+        }
+        require(
+            not memory_safety_failures(
+                healthy_memory,
+                minimum_memory_gib=MIN_START_MEMORY_GIB,
+                phase="start",
+            ),
+            "healthy native start resources were rejected",
+        )
+        depleted_swap = {
+            "mem_available_bytes": 12 * GIB,
+            "swap_total_bytes": 8 * GIB,
+            "swap_free_bytes": 0,
+        }
+        require(
+            not memory_safety_failures(
+                depleted_swap,
+                minimum_memory_gib=MIN_START_MEMORY_GIB,
+                phase="start",
+            ),
+            "depleted swap blocked a native start despite healthy RAM",
+        )
+        low_runtime_memory = {
+            "mem_available_bytes": (MIN_RUNTIME_MEMORY_GIB - 1) * GIB,
+            "swap_total_bytes": 0,
+            "swap_free_bytes": 0,
+        }
+        require(
+            any(
+                "MemAvailable" in failure
+                for failure in memory_safety_failures(
+                    low_runtime_memory,
+                    minimum_memory_gib=MIN_RUNTIME_MEMORY_GIB,
+                    phase="runtime",
+                )
+            ),
+            "low runtime memory did not block a native stage",
+        )
+        unknown_swap = {
+            "mem_available_bytes": 12 * GIB,
+            "swap_total_bytes": None,
+            "swap_free_bytes": None,
+        }
+        require(
+            not memory_safety_failures(
+                unknown_swap,
+                minimum_memory_gib=MIN_START_MEMORY_GIB,
+                phase="start",
+            ),
+            "missing swap counters blocked a native start despite healthy RAM",
+        )
+        original_meminfo_bytes = meminfo_bytes
+        try:
+            globals()["meminfo_bytes"] = lambda: {}
+            unavailable_monitor = runtime_resource_failure()
+        finally:
+            globals()["meminfo_bytes"] = original_meminfo_bytes
+        require(
+            unavailable_monitor is not None
+            and "resource monitoring failed" in unavailable_monitor[0],
+            "unavailable runtime resource monitor did not fail closed",
+        )
+
+        resource_guard_job = root / "resource-guard-job.json"
+        resource_guard_log = root / "resource-guard.log"
+        resource_guard_state: dict[str, Any] = {
+            "status": "running",
+            "completed_stages": [],
+        }
+        original_runtime_resource_failure = runtime_resource_failure
+        try:
+            globals()["runtime_resource_failure"] = lambda: (
+                "forced resource guard failure",
+                {
+                    "mem_available_gib": 7.0,
+                    "swap_total_gib": 8.0,
+                    "swap_free_gib": 0.0,
+                },
+            )
+            try:
+                run_command(
+                    "resource-guard-self-test",
+                    [sys.executable, "-c", "import time; time.sleep(60)"],
+                    repo=workspace,
+                    env=guarded_env,
+                    log_path=resource_guard_log,
+                    job_file=resource_guard_job,
+                    state=resource_guard_state,
+                )
+            except AcceptanceError as error:
+                require(
+                    "stopped to preserve host resources" in str(error),
+                    "resource guard returned the wrong failure",
+                )
+            else:
+                raise AcceptanceError("resource guard did not stop its stage")
+        finally:
+            globals()["runtime_resource_failure"] = original_runtime_resource_failure
+        resource_guard_events = resource_guard_state.get("resource_guard_events", [])
+        require(
+            len(resource_guard_events) == 1
+            and resource_guard_state.get("child_pid") is None
+            and not process_group_exists(resource_guard_events[0]["child_pid"]),
+            "resource guard left a stage process behind",
+        )
+
+        ignore_term_child = (
+            "import signal, time; "
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+            "time.sleep(60)"
+        )
+        ignore_term_parent = (
+            "import signal, subprocess, sys, time; "
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+            f"child = subprocess.Popen([sys.executable, '-c', {ignore_term_child!r}]); "
+            "print(child.pid, flush=True); time.sleep(60)"
+        )
+        ignored_term_process = subprocess.Popen(
+            [sys.executable, "-c", ignore_term_parent],
+            cwd=workspace,
+            env=guarded_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            start_new_session=True,
+        )
+        try:
+            require(
+                bool(ignored_term_process.stdout and ignored_term_process.stdout.readline()),
+                "SIGTERM-ignoring child did not start",
+            )
+            stop_command_process(
+                ignored_term_process,
+                term_grace_seconds=0.1,
+                kill_grace_seconds=2,
+            )
+            require(
+                not process_group_exists(ignored_term_process.pid),
+                "SIGKILL did not clear the stage process group",
+            )
+        finally:
+            if ignored_term_process.poll() is None:
+                stop_command_process(
+                    ignored_term_process,
+                    term_grace_seconds=0.1,
+                    kill_grace_seconds=2,
+                )
+
+        interrupted_job = root / "interrupted-command-job.json"
+        interrupted_log = root / "interrupted-command.log"
+        interrupted_state: dict[str, Any] = {
+            "status": "running",
+            "completed_stages": [],
+        }
+
+        def interrupting_monitor() -> tuple[str, dict[str, float | None]] | None:
+            raise KeyboardInterrupt
+
+        original_runtime_resource_failure = runtime_resource_failure
+        try:
+            globals()["runtime_resource_failure"] = interrupting_monitor
+            try:
+                run_command(
+                    "interrupted-command-self-test",
+                    [sys.executable, "-c", "import time; time.sleep(60)"],
+                    repo=workspace,
+                    env=guarded_env,
+                    log_path=interrupted_log,
+                    job_file=interrupted_job,
+                    state=interrupted_state,
+                )
+            except KeyboardInterrupt:
+                pass
+            else:
+                raise AcceptanceError("interrupted stage did not propagate the interrupt")
+        finally:
+            globals()["runtime_resource_failure"] = original_runtime_resource_failure
+        interrupted_events = interrupted_state.get("cleanup_events", [])
+        require(
+            len(interrupted_events) == 1
+            and interrupted_state.get("child_pid") is None
+            and not process_group_exists(interrupted_events[0]["child_pid"]),
+            "interrupted stage left a process group behind",
+        )
         write_fake_session(
             root / "audit",
             instrumentation="capture",
@@ -2226,7 +3429,73 @@ def self_test() -> int:
         else:
             raise AcceptanceError("invalid S1 clock mode fixture unexpectedly passed")
 
-
+        native = root / "deconstruction"
+        (native / "runtime/saves").mkdir(parents=True)
+        save = native / "runtime/saves/world.scn.ron"
+        screenshot = native / "deconstruction-v1-v5.png"
+        save.write_text("native-save\n", encoding="utf-8")
+        screenshot.write_bytes(structural_png(1280, 720))
+        atomic_write_json(
+            native / "driver-result.json",
+            {
+                "status": "PASS",
+                "profile": "building-deconstruction",
+                "run_id": "self-test",
+                "checks": {check: "PASS" for check in DECONSTRUCTION_CHECKS},
+                "world_epoch_before_load": 7,
+                "world_epoch_after_load": 8,
+                "save": {"path": str(save), "bytes": save.stat().st_size},
+                "screenshot": {
+                    "path": str(screenshot),
+                    "width": 1280,
+                    "height": 720,
+                    "bytes": screenshot.stat().st_size,
+                },
+                "renderer": {
+                    "adapter_name": "Intel(R) Arc Graphics",
+                    "backend": "Vulkan",
+                    "display_handle": "Xlib(XlibDisplayHandle)",
+                },
+            },
+        )
+        native_result = verify_deconstruction_artifact(
+            native,
+            run_id="self-test",
+            adapter="Intel",
+            backend="vulkan",
+            window_backend="x11",
+        )
+        require(native_result["status"] == "pass", "valid V1-V5 fixture did not pass")
+        corrupted = bytearray(screenshot.read_bytes())
+        corrupted[41] ^= 0x01
+        screenshot.write_bytes(corrupted)
+        try:
+            verify_deconstruction_artifact(
+                native,
+                run_id="self-test",
+                adapter="Intel",
+                backend="vulkan",
+                window_backend="x11",
+            )
+        except AcceptanceError:
+            pass
+        else:
+            raise AcceptanceError("corrupt native PNG fixture unexpectedly passed")
+        screenshot.write_bytes(structural_png(1280, 720))
+        truncated = screenshot.read_bytes()[:24]
+        screenshot.write_bytes(truncated)
+        try:
+            verify_deconstruction_artifact(
+                native,
+                run_id="self-test",
+                adapter="Intel",
+                backend="vulkan",
+                window_backend="x11",
+            )
+        except AcceptanceError:
+            pass
+        else:
+            raise AcceptanceError("truncated native PNG fixture unexpectedly passed")
     print("native_acceptance self-test: PASS")
     return 0
 
@@ -2244,6 +3513,17 @@ def add_recipe_arguments(parser: argparse.ArgumentParser, *, require_job_root: b
     parser.add_argument("--window-backend", default="x11", choices=["x11", "wayland"])
     parser.add_argument("--present-mode", default="novsync")
 
+
+def add_deconstruction_arguments(
+    parser: argparse.ArgumentParser, *, require_job_root: bool
+) -> None:
+    parser.add_argument("--repo", required=True)
+    parser.add_argument("--job-root", required=require_job_root)
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--adapter", default="Intel")
+    parser.add_argument("--backend", default="vulkan", choices=["vulkan", "gl"])
+    parser.add_argument("--window-backend", default="x11", choices=["x11", "wayland"])
+    parser.add_argument("--present-mode", default="novsync")
 
 
 def add_rtt_light_arguments(
@@ -2275,6 +3555,14 @@ def parser() -> argparse.ArgumentParser:
     add_recipe_arguments(plan, require_job_root=False)
     run = commands.add_parser("run-task-dashboard", help="run the planned recipe inside kitty")
     add_recipe_arguments(run, require_job_root=True)
+    deconstruction_plan = commands.add_parser(
+        "plan-deconstruction", help="emit the no-prompt V1-V5 launcher plan"
+    )
+    add_deconstruction_arguments(deconstruction_plan, require_job_root=False)
+    deconstruction_run = commands.add_parser(
+        "run-deconstruction", help="run V1-V5 inside the planned actual window"
+    )
+    add_deconstruction_arguments(deconstruction_run, require_job_root=True)
     rtt_plan = commands.add_parser(
         "plan-rtt-light", help="emit the S1 or formal RtT-light no-prompt launcher plan"
     )
@@ -2294,6 +3582,16 @@ def parser() -> argparse.ArgumentParser:
     verify.add_argument("--backend", default="vulkan")
     verify.add_argument("--window-backend", default="x11", choices=["x11", "wayland"])
     verify.add_argument("--min-runs", type=int, default=3)
+    verify_deconstruction = commands.add_parser(
+        "verify-deconstruction", help="fail-closed validation of one V1-V5 artifact"
+    )
+    verify_deconstruction.add_argument("--artifact", required=True)
+    verify_deconstruction.add_argument("--run-id", required=True)
+    verify_deconstruction.add_argument("--adapter", default="Intel")
+    verify_deconstruction.add_argument("--backend", default="vulkan")
+    verify_deconstruction.add_argument(
+        "--window-backend", default="x11", choices=["x11", "wayland"]
+    )
     verify_rtt = commands.add_parser(
         "verify-rtt-light", help="revalidate a registered formal RtT-light attempt"
     )
@@ -2347,6 +3645,10 @@ def main() -> int:
         return plan_task_dashboard(args)
     if args.command == "run-task-dashboard":
         return run_task_dashboard(args)
+    if args.command == "plan-deconstruction":
+        return plan_deconstruction(args)
+    if args.command == "run-deconstruction":
+        return run_deconstruction(args)
     if args.command == "plan-rtt-light":
         return plan_rtt_light(args)
     if args.command == "run-rtt-light":
@@ -2355,6 +3657,8 @@ def main() -> int:
         return status_command(args)
     if args.command == "verify-artifacts":
         return verify_artifacts_command(args)
+    if args.command == "verify-deconstruction":
+        return verify_deconstruction_command(args)
     if args.command == "verify-rtt-light":
         return verify_rtt_light_command(args)
     if args.command == "self-test":

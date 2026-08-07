@@ -1,6 +1,10 @@
 # パフォーマンス計測
 
-ランタイム最適化の比較は、`scripts/perf.py` を唯一の入口にする。このファイルは後方互換CLI shimであり、実装は `scripts/perf_tool/` の引数解析・実行・artifact・policy・集約・比較モジュールへ分割されている。runnerは profiling binary を計測外で一度だけbuildし、runごとに隔離したCSV・log・実行環境を保存してから、CSV契約、実GPU、ログ健全性、反復のcheckpointを検証する。長期保存する正式artifactの既定配置は`target/perf-runs/`とする。隔離した受入セッションや短縮smokeは`/tmp`へ置いてよいが、どちらもcommitしない。
+ランタイム最適化の比較は、`scripts/perf.py` を唯一の入口にする。このファイルは後方互換CLI shimであり、実装は `scripts/perf_tool/` の引数解析・実行・artifact・policy・集約・比較モジュールへ分割されている。runnerは profiling binary を計測外で一度だけbuildし、runごとに隔離したCSV・log・実行環境を保存してから、CSV契約、実GPU、ログ健全性、反復のcheckpointを検証する。正式artifactは`target/perf-runs/`、短縮smokeとnative acceptance jobは`target/native-acceptance/`または`target/perf-runs/`へ置く。`/tmp`は小さいlock以外に使わず、Cargo target、compiler temporary、binary、trace、session artifactを置かない。どちらもcommitしない。
+
+interactive Cargoとは `target/.cargo-activity.lock` を共有し、performance recipe全体は
+exclusive leaseを保持する。lease取得に失敗した場合はCargo/game/RenderDoc childを起動せず、
+対話Cargo完了後に再試行する。既存のnative acceptance lockは内側で引き続き保持する。
 
 ゲーム側の入口は `crates/bevy_app/src/plugins/startup/perf_scenario.rs` に維持し、設定、fixture、workload driver、capture driver、audit checksum/encoding、出力処理は同名ディレクトリの子モジュールが担当する。CLI option、summary schema、checkpoint順序はこの物理分割に依存しない。
 
@@ -98,20 +102,18 @@ checkpoint宣言値へ照合し、fixture外のproduction designationをindoor�
 Room entityはproduction検出で再生成され得るため、Entity IDをhashせず、floor cell集合、wall / Door境界、
 bounds、reverse lookupから毎checkpoint一意に再同定する。
 
-短縮headless smokeは次のshapeで実行できる。dev profile binaryと129 + 16 tickは経路確認専用であり、
+短縮headless smokeは次のshapeで実行できる。129 + 16 tickは経路確認専用であり、
 formal baselineやrenderer / GPU性能証跡には使わない。
 
 ```bash
-cargo build -p bevy_app@0.1.0 --no-default-features --features profiling
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
   --workload indoor-light --contract rtt-light-v1 \
   --stage current --lane static --sizes small,medium,large --renders cpu \
   --seed 20260803 --repeat 1 --preflight-runs 0 \
   --backend auto --window-backend headless --present-mode novsync \
   --fixed-hz 64 --warmup-ticks 129 --audit-ticks 16 \
-  --skip-build --binary target/debug/bevy_app \
   --allow-log-pattern 'driver that only supports software rendering' \
-  --output /tmp/rtt-light-current-static
+  --output target/perf-runs/rtt-light-current-static
 ```
 
 ローカルVulkan loader由来の追加ERRORを診断用regexで許可したrunはformal evidenceに昇格させない。
@@ -141,7 +143,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
 
 helperはUUID付きの一意なartifact rootとatomicな`job.json`を使い、fixed audit、実window Capture、native Memoryをrepository-wide lockの内側で逐次実行する。各sessionは`perf.py`自身に対応featureのbuildを行わせ、`--skip-build`と任意`--binary`を使わない。これにより、`target/profiling/bevy_app`が直前のMemory flavorであるのにCaptureとして記録する取り違えを防ぐ。CaptureとMemoryの間ではbinary hashが変わり、fixed auditとCaptureでは一致することをfail-closedで検証する。
 
-resource preflightは`MemAvailable` 8 GiB、workspace空き15 GiB、`/tmp`空き1 GiBを開始下限とする。12 GiB以上ではCargo 2 job、未満では1 jobとし、`CARGO_INCREMENTAL=0`を固定する。`/tmp`はtmpfsなのでbinaryやfull Tracy traceを置かず、小さいmanifest / CSV / logだけを置く。通常のMemory受入はnative allocator + GNU timeを使い、Cargo/game/Capture/Memoryは並列化しない。artifactやCargo cacheの自動削除、別target directory、routineな`cargo clean`、`nice` / `ionice` / CPU affinityは行わない。
+resource preflightはnative recipe開始時に`MemAvailable` 10 GiBと実際のCargo target filesystem空き15 GiBを要求する。16 GiB以上ではCargo 2 job、未満では1 jobとし、`CARGO_INCREMENTAL=0`を固定する。swapの使用量はmanifestへ診断情報として記録するが、RAMの下限を満たす場合の開始・実行条件にはしない。Linuxで`MemAvailable`を読めない場合は開始を拒否する。開始後もhelperは1秒ごとに`MemAvailable` 8 GiBを監視し、下回った場合はそのstageのprocess group全体を停止してartifactへ理由を残す。helperは親環境の`CARGO_TARGET_DIR`を無視してworkspace `target/`へ、`TMPDIR` / `TMP` / `TEMP`を`target/.native-acceptance-tmp`へ固定し、`CARGO_HOME` / `RUSTUP_HOME`は安全な永続overrideだけを保持してtmpfs指定をaccount既定cacheへ戻す。job rootも`target/native-acceptance/`へ生成する。formal RenderDocのraw capture / replay workも`target/.renderdoc-tmp`へ置く。`/tmp`またはmemory-backed filesystemのjob / artifactを、default path・明示pathともに解決済みsymlink/mountまで検査して拒否し、残存`/tmp/hell-workers-*-target`はサイズを出して停止するが自動削除しない。`scripts/perf.py`と`scripts/dev.py`も同じくworkspace target・disk temporary・toolchain cache・最大2 Cargo jobsへ正規化し、Cargo compilationは`MemAvailable` 8 GiB未満では開始しない。Tracy capture / csvexportとRenderDocの子processもこのtemporary環境を継承する。通常のMemory受入はnative allocator + GNU timeを使い、Cargo/game/Capture/Memoryは並列化しない。artifactやCargo cacheの自動削除、別target directory、routineな`cargo clean`、`nice` / `ionice` / CPU affinityは行わない。
 
 既承認launcherが利用可能な間は、displayやGUIの追加許可をユーザーへ求めない。helperが返す`status_command`だけを15〜30秒間隔でpollし、通常は大きなbuild/game logを会話へ読み込まない。headlessはfixed correctnessまたはCPU-only route smokeに限定し、実renderer / adapter / presentの証拠にはしない。
 
@@ -157,7 +159,7 @@ kitty --directory "$PWD" --detach \
   --workload task-dashboard --sizes small --renders cpu \
   --dashboard-modes hidden,visible,active-filter --repeat 3 \
   --backend vulkan --adapter Intel --window-backend x11 \
-  --present-mode novsync --output /tmp/task-dashboard-x11
+  --present-mode novsync --output target/native-acceptance/task-dashboard-x11
 ```
 
 launcher経路でも`--adapter`と`--backend`を省略せず、manifestの実adapter/backend一致をrunnerに検証させる。headless成功を理由に実window runを省略しない。
@@ -218,8 +220,41 @@ CPU条件では`data/scene_roots.csv`のSoul main/mask/shadowとFamiliar rootが
 | `construction` | Curing 中の Floor site（Small/Medium/Large = 16/64/128 tile） | construction site/tile、evacuation候補 |
 | `ui-gpu` | Blueprint（Small/Medium/Large = 64/160/320） | UI/visual の描画条件 |
 | `task-dashboard` | 同一task / Soul / Familiar集合とdashboard 3 mode | AI work、dashboard producer / render、Task Dashboard CPU / memory |
+| `deconstruction` | Medium固定の完成済み建築100棟（`BuildingType::ALL`の12種類を安定順で反復）からBonePileを1件だけcommit | deconstruction commit elapsed、target/order cleanup、回収Bone、steady-state scan |
 
 `construction` は Curing footprint の安全監査を含む。完成済みの別 workload の数値を construction の比較値として流用しない。
+
+`deconstruction` は fixed-step audit 専用のCPU/headless workloadである。fixtureは100棟を生成し、
+全12種類が少なくとも1棟ずつ存在すること、実際の `DeconstructionCommitRequest` が1件だけ
+`Committed` になること、対象を除いた完成棟数が99になること、固定salvage表どおりBoneが5個増えることを
+sidecarへ記録する。targetだけを`WorldMap`へ登録し、残り99棟は安定したECS人口として配置するため、
+deconstruction対象のowner snapshotやroom/path topologyへfixture外のノイズを混ぜない。
+`data/deconstruction_fixture.csv` は次の不変条件を満たさないrunを失格にする。
+
+- `initial_completed_buildings=100`, `final_completed_buildings=99`, `building_type_count=12`
+- `commit_requests=1`, `committed=1`, `recovery_items=5`, `commit_validation_passes=1`,
+  `successful_cleanup_transactions=1`, `recovery_items_spawned=5`
+- `post_commit_updates>0`, `steady_state_validation_delta=0`,
+  `successful_transaction_elapsed_ns>0`
+
+`commit_validation_passes` と `successful_cleanup_transactions` は、fixtureが値を埋める定数ではない。
+profiling buildのfinalizerがcurrent-worldかつ非cancel/非duplicateなcommitを実際に検証した時だけ前者を、
+cleanupを実際にapplyした時だけ後者と `recovery_items_spawned` を更新する。
+`successful_transaction_elapsed_ns` はrequestの発行待ちを含めず、同じfinalizer呼出し内のvalidation + applyを
+`Instant`で計測した経過時間である。`steady_state_validation_delta=0`はcommit後の更新で新たなvalidation passが
+走らなかったことを示す（frame-timeやOS CPU時間の代替値ではない）。
+
+このsidecarはframe-timeの速度値ではなく、fixed-stepで一度だけ通すowner transactionの経路証跡である。
+したがって`summary.csv`やframe quantileは出力せず、他workloadのbaselineと混ぜない。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
+  --workload deconstruction --sizes medium --renders cpu \
+  --repeat 20 --preflight-runs 0 --seed 20260805 \
+  --backend vulkan --window-backend headless --present-mode novsync \
+  --fixed-hz 64 --warmup-ticks 1920 --audit-ticks 128 \
+  --output target/perf-runs/deconstruction-medium-fixed-20260805
+```
 
 固定step auditはsimulation状態の診断専用である。frame-timeを採取せず、`summary.csv`も生成しない。
 
@@ -269,33 +304,15 @@ dashboard表示条件はこのmatrixへ混ぜず、Task Dashboard性能計画が
 Task Dashboardの正式matrixは、固定step監査、Capture、Memoryを別sessionで採る。
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit --skip-build \
-  --workload task-dashboard --sizes small --renders cpu \
-  --dashboard-modes hidden,visible,active-filter --repeat 1 --seed 20260802 \
-  --fixed-hz 64 --warmup-ticks 129 --audit-ticks 16 \
-  --backend vulkan --window-backend headless \
-  --allow-log-pattern 'driver that only supports software rendering' \
-  --binary target/profiling/bevy_app --output /tmp/task-dashboard-fixed
-
-python3 scripts/perf.py run --skip-build --instrumentation capture \
-  --workload task-dashboard --sizes small --renders cpu \
-  --dashboard-modes hidden,visible,active-filter --repeat 3 --seed 20260802 \
-  --backend vulkan --adapter Intel --window-backend x11 --present-mode novsync \
-  --binary target/profiling/bevy_app --output /tmp/task-dashboard-capture
-
-python3 scripts/perf.py run --skip-build --instrumentation memory \
-  --workload task-dashboard --sizes small --renders cpu \
-  --dashboard-modes hidden,visible,active-filter --repeat 3 --seed 20260802 \
-  --backend vulkan --adapter Intel --window-backend x11 --present-mode novsync \
-  --binary target/profiling/bevy_app --output /tmp/task-dashboard-memory
-
-python3 scripts/perf.py compare-dashboard-modes \
-  --session /tmp/task-dashboard-capture --min-runs 3
-python3 scripts/perf.py compare-dashboard-modes \
-  --session /tmp/task-dashboard-memory --min-runs 3
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+  plan-task-dashboard --repo "$PWD" --adapter Intel \
+  --backend vulkan --window-backend x11
 ```
 
-Capture / Tracy / Memoryは標準baselineとして混ぜない。特に同じ`target/profiling/bevy_app`をfeature別buildが上書きするため、各sessionの直前に対応する`profiling` / `profiling-tracy` / `profiling-memory` featureでbuildし、manifestのbinary hashを証跡にする。
+返されたdirect `kitty` launcherを実行する。個別の`--skip-build` / `--binary` / `/tmp` outputを組み合わせてmatrixを手作業で組まない。helperが安全なworkspace target、disk temporary、逐次build、job root、Capture/Memoryのbinary hash契約をまとめて所有する。
+
+Capture / Tracy / Memoryは標準baselineとして混ぜない。各sessionの直前に対応する`profiling` / `profiling-tracy` / `profiling-memory` featureでbuildし、manifestのbinary hashを証跡にする。
 
 ```bash
 python3 scripts/perf.py run --instrumentation tracy --sizes medium --renders cpu \
@@ -343,6 +360,7 @@ target/perf-runs/<session>/
       data/scene_roots.csv
       data/task_dashboard_cpu.csv # task-dashboard Capture / Tracy
       data/memory.csv              # Memory build
+      data/deconstruction_fixture.csv # deconstruction fixed-step owner-transaction contract
       profile-artifact.json
       resource-usage.txt           # Memory build
 ```
@@ -403,20 +421,18 @@ python3 scripts/perf.py compare \
 
 marker前のwarning/errorは、allowlistへ追加して通すのではなく、発火したsystem・deferred command順・target/sourceの存続条件を特定してから修正する。特にBevy Relationship警告は「存在しないtargetへのinsert」を示すため、targetのdespawn処理だけでなく、同じmessage/deferred command batch内の後続insertも監査する。
 
-## 直接実行のデバッグ
+## 起動経路のデバッグ
 
-runnerを使わない調査時も、asset rootと出力先は必ず固定する。
+raw Cargoやprofiling binaryの直接起動は、親shellのtarget / temporary設定を取り込んで
+resource contractを壊しやすいため、通常の調査でもrunnerを使う。
 
 ```bash
-cargo build --profile profiling -p bevy_app@0.1.0 --no-default-features --features profiling
-
-BEVY_ASSET_ROOT="$PWD" \
-WGPU_BACKEND=vulkan WGPU_ADAPTER_NAME=Intel \
-HW_WINDOW_BACKEND=wayland HW_PRESENT_MODE=novsync \
-target/profiling/bevy_app \
-  --perf-scenario --perf-seed 20260712 --perf-size medium \
-  --perf-workload gather --perf-render cpu \
-  --perf-output-dir "$PWD/target/perf-runs/manual-debug/data"
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py run \
+  --workload gather --sizes medium --renders cpu --repeat 1 \
+  --warmup-secs 0 --measure-secs 1 --seed 20260712 \
+  --backend vulkan --adapter Intel --window-backend wayland \
+  --present-mode novsync --output target/native-acceptance/manual-debug
 ```
 
-直接実行はartifact manifest、adapter検証、反復集約を作らないため、最終比較には使用しない。
+この短縮runもworkspace target、disk temporary、adapter検証、artifact manifestを持つ。性能比較や
+正式baselineには使用しない。

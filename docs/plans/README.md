@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-08-04）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-08-08）。
 
 ## 新規計画書の作り方
 
@@ -8,6 +8,13 @@
    `cp docs/plans/plan-template.md docs/plans/<topic>-plan-YYYY-MM-DD.md`
 2. `メタ情報`、`目的`、`マイルストーン`、`AI引継ぎメモ` を最低限埋める。
 3. 進捗に応じて `ステータス` と `更新履歴` を更新する。
+
+## 実行コマンドの安全契約
+
+計画内のCargo実行は `python3 scripts/dev.py check` または
+`python3 scripts/dev.py cargo -- <subcommand> ...` を使う。古い計画中のraw `cargo`表記は
+現行の実行手順ではなく、`/tmp`へのbuild / trace / artifact出力も使わない。実window確認は
+`hell-workers-run-native-acceptance` Skillのno-prompt launcherを正本とする。
 
 ## テンプレート
 
@@ -23,7 +30,7 @@
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Superseded | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Superseded（完了済み実装の履歴。未完項目は凍結） | 3D-RtT 移行ロードマップ |
 | [3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md](3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md) | In Progress | Audit、Capture、Memory、RenderDocのbaselineと数値gateを実装前に固定するP00。 |
-| [3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md](3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md) | Draft | Soul mask target／camera／proxyを撤去し、Scene RtT 1枚へ移行するP01。 |
+| [3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md](3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md) | Blocked — P00 current formal baseline / baseline-index registration pending | Soul mask target／camera／proxyを撤去し、Scene RtT 1枚へ移行するP01。 |
 | [3d-rtt/single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md](3d-rtt/single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md) | Draft | Door実経路、TopDown camera、Building分類、Soul billboard／Familiar前景を統合するP02。 |
 | [3d-rtt/single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md](3d-rtt/single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md) | Draft | 固定精度のradial field、遮光grid、supercover LOSを`hw_infra`へ実装するP03。 |
 | [3d-rtt/single-scene-light-field/04-indoor-light-runtime-integration-plan-2026-08-03.md](3d-rtt/single-scene-light-field/04-indoor-light-runtime-integration-plan-2026-08-03.md) | Draft | Wall／Door／給電／Roomのsnapshot、dirty管理、更新順を接続するP04。 |
@@ -33,9 +40,10 @@
 | [3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md](3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | Draft | Soul projector／section／legacy mirrorを撤去し、最終性能・Help gateを閉じるP08。 |
 | [3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) | Draft | Scene RtT 1枚、TopDown表示、放射状Indoor Light Fieldへの9分割親ロードマップ。 |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
-| [building-deconstruction-plan-2026-08-03.md](building-deconstruction-plan-2026-08-03.md) | Draft | 完成建物の安全な撤去、固定資源回収、owner別cleanupを導入するTrack C1計画。 |
+| [building-deconstruction-plan-2026-08-03.md](building-deconstruction-plan-2026-08-03.md) | In Progress | 完成建物の安全な撤去、固定資源回収、owner別cleanupを導入するTrack C1計画。 |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
+| [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
 | [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できないの計画。 |
 | [save-catalog-autosave-plan-2026-08-03.md](save-catalog-autosave-plan-2026-08-03.md) | Draft | 手動slot、bounded catalog、世代autosaveを段階導入するTrack C2計画。 |
 

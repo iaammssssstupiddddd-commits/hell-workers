@@ -22,7 +22,31 @@ python3 scripts/dev.py verify
 # 暗黙cleanupを行わないbuild
 python3 scripts/dev.py build
 python3 scripts/dev.py build --release
+
+# 2窓運用: 空いているlaneを開始時に取得し、shell終了まで固定
+python3 scripts/dev.py lane status
+python3 scripts/dev.py lane shell
+# shellを開かずに1コマンドだけlaneを使う場合
+python3 scripts/dev.py lane shell -- python3 scripts/dev.py check
 ```
+
+`lane shell` は `target/lanes/a` または `target/lanes/b` をOSの `flock` で占有し、
+そのshellから起動した `scripts/dev.py` のCargoを同じlaneへ固定する。セッション中に
+別laneへ移動したり、2 laneとも使用中に標準 `target/`へfallbackしたりしない。3つ目の
+sessionは明示的なbusyエラーで終了する。laneごとのCargo jobは1に固定されるため、2窓
+合計のcompile fan-outは2を超えない。native acceptanceとperformance runnerは引き続き
+canonical `target/`を使う。lane leaseはPOSIXの`flock`を使い、未対応hostでは共有targetへ
+fallbackせず明示的に停止する。
+
+lane cacheは自動削除しない。容量を確認するときは `du -sh target/lanes/a target/lanes/b`
+と `python3 scripts/dev.py lane status` を明示的に実行し、不要になったlane成果物だけを
+確認後に保守作業で整理する。
+
+対話Cargoのcompile / run / test / clippyは `target/.cargo-activity.lock` のshared leaseを
+Cargo childの生存中だけ保持する。performance runnerとnative acceptance recipeは同じlockの
+exclusive leaseをrecipe全体で保持し、競合時は子processを起動せずbusyとして終了する。
+lane lease（session所有）とactivity lease（実行中資源）は別物であり、idleなlane shellは
+performance/nativeを妨げない。
 
 互換wrapperとして `scripts/check.sh` / `check.ps1`、`scripts/build.sh` /
 `build.ps1` も残している。wrapperは引数を `dev.py` へ渡すだけで、ログファイル作成、

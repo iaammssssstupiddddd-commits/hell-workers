@@ -62,8 +62,20 @@
 ```bash
 python3 scripts/dev.py doctor
 python3 scripts/dev.py check
-cargo run
+python3 scripts/dev.py cargo -- run
 ```
+
+`scripts/dev.py` は Cargo の出力、コンパイラ一時ファイル、Cargo/rustup cache を永続ストレージへ固定し、`MemAvailable` が低いとビルド開始前に停止します。swapの使用量は診断情報として記録しますが、RAMに余裕がある場合の開始条件にはしません。`cargo` を直接実行せず、追加の Cargo subcommand も `python3 scripts/dev.py cargo -- <subcommand> ...` を使ってください。
+
+2窓で同時に作業する場合は、各ターミナルで `python3 scripts/dev.py lane shell` を最初に
+実行してください。空いている `target/lanes/a` / `target/lanes/b` をセッション開始時に
+取得し、shellを閉じるまで同じlaneを使うため、セッション途中の差分ビルドcacheの入れ替え
+を避けられます。両方が使用中の場合はcanonical `target/`へfallbackせず、busyとして停止
+します。native acceptanceとperformance runnerは従来どおりcanonical `target/`を使います。
+lane leaseはPOSIXの`flock`を使い、未対応hostでは共有targetへfallbackせず停止します。
+対話Cargoとperformance/native recipeの実行中資源は `target/.cargo-activity.lock` で調停し、
+競合時は子processを起動せず停止します。native acceptanceとperformance runnerのcanonical
+`target/`契約は変更しません。
 
 ### デバッグ
 - `F12`: デバッグ表示 / Gizmo のトグル

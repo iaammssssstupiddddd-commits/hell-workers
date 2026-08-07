@@ -20,6 +20,21 @@ import tomllib
 from pathlib import Path
 from typing import Sequence
 
+try:
+    from cargo_runtime import cargo_environment, require_cargo_memory
+except ModuleNotFoundError:
+    from scripts.cargo_runtime import cargo_environment, require_cargo_memory
+
+try:
+    from build_lane import lane_states, run_lane_shell, validate_inherited_lease
+except ModuleNotFoundError:
+    from scripts.build_lane import lane_states, run_lane_shell, validate_inherited_lease
+
+try:
+    from build_coordination import acquire_activity
+except ModuleNotFoundError:
+    from scripts.build_coordination import acquire_activity
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -27,11 +42,49 @@ RUST_ATTRIBUTE = re.compile(r"#\s*!?\[(?P<body>.*?)]", re.DOTALL)
 CLIPPY_SUPPRESSION = re.compile(
     r"\b(?:allow|expect)\s*\([^)]*\bclippy::", re.DOTALL
 )
+CARGO_OUTPUT_CONFIG = re.compile(
+    r"(?:target-dir|build-dir)",
+    re.IGNORECASE,
+)
 
 
 def command_text(command: Sequence[str]) -> str:
     """Return a shell-readable representation without invoking a shell."""
     return " ".join(subprocess.list2cmdline([part]) for part in command)
+
+
+def reject_cargo_output_overrides(arguments: Sequence[str]) -> None:
+    """Keep Cargo CLI options from bypassing the controlled output roots."""
+    for index, argument in enumerate(arguments):
+        if argument == "--target-dir" or argument.startswith("--target-dir="):
+            raise RuntimeError(
+                "Cargo target-dir overrides are not supported; use the controlled workspace or lane"
+            )
+        config_value: str | None = None
+        if argument == "--config":
+            if index + 1 < len(arguments):
+                config_value = arguments[index + 1]
+        elif argument.startswith("--config="):
+            config_value = argument.removeprefix("--config=")
+        if config_value is None:
+            continue
+        config_text = config_value.strip()
+        config_override = CARGO_OUTPUT_CONFIG.search(config_text) is not None
+        config_path = Path(config_text).expanduser()
+        if not config_override and config_path.is_file():
+            try:
+                config_override = (
+                    CARGO_OUTPUT_CONFIG.search(config_path.read_text(encoding="utf-8"))
+                    is not None
+                )
+            except OSError as error:
+                raise RuntimeError(
+                    f"cannot inspect Cargo config override {config_path}: {error}"
+                ) from error
+        if config_override:
+            raise RuntimeError(
+                "Cargo target/build-dir config overrides are not supported; use the controlled workspace or lane"
+            )
 
 
 def run_command(
@@ -45,7 +98,41 @@ def run_command(
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     if extra_env:
         env.update(extra_env)
-    subprocess.run(command, cwd=REPO_ROOT, env=env, check=True)
+    lane = None
+    requires_activity = False
+    if command and Path(command[0]).name == "cargo":
+        reject_cargo_output_overrides(command[1:])
+        lane = validate_inherited_lease(REPO_ROOT, env)
+        if len(command) > 1 and command[1] in {
+            "bench",
+            "build",
+            "check",
+            "clippy",
+            "doc",
+            "fix",
+            "install",
+            "run",
+            "rustc",
+            "test",
+        }:
+            requires_activity = True
+    activity = None
+    try:
+        if requires_activity:
+            activity = acquire_activity(REPO_ROOT, "shared")
+            require_cargo_memory()
+        if command and Path(command[0]).name == "cargo":
+            env = cargo_environment(
+                REPO_ROOT,
+                namespace=".dev-tmp",
+                environment=env,
+                incremental=None,
+                lane=lane,
+            )
+        subprocess.run(command, cwd=REPO_ROOT, env=env, check=True)
+    finally:
+        if activity is not None:
+            activity.close()
 
 
 def run_python_script(*arguments: str) -> None:
@@ -301,10 +388,36 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser = subparsers.add_parser("build", help="build without implicit cleanup")
     build_parser.add_argument("--release", action="store_true", help="build release mode")
 
+    cargo_parser = subparsers.add_parser(
+        "cargo",
+        help="run a Cargo subcommand through the persistent-storage guard",
+    )
+    cargo_parser.add_argument(
+        "arguments",
+        nargs=argparse.REMAINDER,
+        help="arguments after `cargo --`, for example `-- test -p hw_world`",
+    )
+
     docs_parser = subparsers.add_parser("docs", help="check or update docs indexes")
     docs_mode = docs_parser.add_mutually_exclusive_group(required=True)
     docs_mode.add_argument("--check", action="store_true", help="check without writing")
     docs_mode.add_argument("--write", action="store_true", help="update generated indexes")
+
+    lane_parser = subparsers.add_parser(
+        "lane",
+        help="inspect or enter a session-fixed interactive Cargo build lane",
+    )
+    lane_subparsers = lane_parser.add_subparsers(dest="lane_command", required=True)
+    lane_subparsers.add_parser("status", help="show whether lane a and b are free")
+    shell_parser = lane_subparsers.add_parser(
+        "shell",
+        help="enter a shell that keeps one lane until the shell exits",
+    )
+    shell_parser.add_argument(
+        "arguments",
+        nargs=argparse.REMAINDER,
+        help="optional command after `--`, for example `-- python3 scripts/dev.py check`",
+    )
 
     return parser
 
@@ -320,13 +433,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             verify()
         elif args.command == "build":
             build(release=args.release)
+        elif args.command == "cargo":
+            cargo_arguments = list(args.arguments)
+            if cargo_arguments[:1] == ["--"]:
+                cargo_arguments.pop(0)
+            if not cargo_arguments:
+                raise RuntimeError(
+                    "cargo requires a Cargo subcommand, for example: cargo -- check --workspace"
+                )
+            run_command(["cargo", *cargo_arguments])
         elif args.command == "docs":
             run_docs(write=args.write)
+        elif args.command == "lane":
+            if args.lane_command == "status":
+                for lane, state, path in lane_states(REPO_ROOT):
+                    print(f"{lane}: {state} ({path})")
+            else:
+                command = list(args.arguments)
+                if command[:1] == ["--"]:
+                    command.pop(0)
+                return run_lane_shell(REPO_ROOT, command or None)
     except subprocess.CalledProcessError as error:
         return error.returncode
     except FileNotFoundError as error:
         print(f"Required command not found: {error.filename}", file=sys.stderr)
         return 127
+    except (RuntimeError, ValueError) as error:
+        print(str(error), file=sys.stderr)
+        return 1
     except KeyboardInterrupt:
         print("Interrupted.", file=sys.stderr)
         return 130

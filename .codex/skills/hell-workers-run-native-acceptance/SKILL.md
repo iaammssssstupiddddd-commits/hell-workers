@@ -76,9 +76,9 @@ To revalidate existing artifacts without launching the game:
 PYTHONDONTWRITEBYTECODE=1 python3 \
   .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
   verify-artifacts \
-  --audit /tmp/example/audit \
-  --capture /tmp/example/capture \
-  --memory /tmp/example/memory \
+  --audit target/native-acceptance/example/audit \
+  --capture target/native-acceptance/example/capture \
+  --memory target/native-acceptance/example/memory \
   --adapter Intel --backend vulkan --window-backend x11 --min-runs 3
 ```
 
@@ -114,7 +114,8 @@ fingerprint:
      .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
      plan-rtt-light --repo "$PWD" --level formal --adapter Intel --window-backend x11 \
      --prerequisite-commit <full-correctness-sha> \
-     --s0-job-root /tmp/<s0-job> --s1-job-root /tmp/<s1-job> \
+     --s0-job-root target/native-acceptance/<s0-job> \
+     --s1-job-root target/native-acceptance/<s1-job> \
      --renderdoccmd /path/to/renderdoccmd --qrenderdoc /path/to/qrenderdoc \
      --renderdoc-library /path/to/librenderdoc.so
    ```
@@ -158,15 +159,36 @@ baseline.
 ## Keep memory and disk bounded
 
 - Keep Cargo builds, game processes, Capture, and Memory fully sequential. The
-  helper holds `/tmp/hell-workers-native-acceptance.lock` across the whole recipe.
-- Use two Cargo jobs when `MemAvailable` is at least 12 GiB and one job below
-  that. Refuse to start below 8 GiB available RAM, 15 GiB workspace free space,
-  or 1 GiB `/tmp` free space.
-- Keep `CARGO_INCREMENTAL=0` for profiling. Do not create per-feature target
-  directories, copy the roughly 748 MiB binary into `/tmp`, enable profiling
-  incremental state, add a new compiler cache, or run `cargo clean` routinely.
-- Keep only small manifests, CSVs, and logs under `/tmp`. It is tmpfs on the
-  standard workstation, so never place binaries or full Tracy traces there.
+  helper holds only its tiny `/tmp/hell-workers-native-acceptance.lock` across
+  the whole recipe.
+- Use two Cargo jobs only when `MemAvailable` is at least 16 GiB and one job
+  below that. Refuse a native recipe start below 10 GiB available RAM or 15 GiB
+  free on the actual Cargo target filesystem; do not use `/tmp` capacity as a
+  build budget. While a stage is running, sample `MemAvailable` every second
+  and terminate that stage's isolated process group if RAM falls below 8 GiB.
+  SwapTotal/SwapFree are recorded as diagnostic telemetry only: a low or
+  unavailable swap balance does not block a run while the RAM floor is met.
+  On Linux, unavailable `MemAvailable` is a failure, not an exemption.
+- Every native build and game process must set `CARGO_TARGET_DIR` to the
+  repository `target/`, `CARGO_INCREMENTAL=0`, and `TMPDIR`/`TMP`/`TEMP` to
+  `target/.native-acceptance-tmp`. `CARGO_HOME` and `RUSTUP_HOME` retain only
+  safe persistent overrides; inherited tmpfs values are replaced with the
+  account defaults. The helper normalizes these values; do not run a raw Cargo
+  command or pass an alternate target for acceptance.
+- Job roots and all performance artifacts belong under
+  `target/native-acceptance/` or `target/perf-runs/`. The plan rejects an
+  explicit `/tmp` or memory-backed job/artifact path and reports
+  legacy `/tmp/hell-workers-*-target` directories by allocated size without
+  deleting them. Formal RenderDoc capture/replay staging belongs in
+  `target/.renderdoc-tmp`.
+- `scripts/perf.py` and `scripts/dev.py` apply the same disk-backed target,
+  temporary-directory, toolchain-cache, and one/two-job normalization, and
+  refuse Cargo compilation below 8 GiB `MemAvailable`. Swap counters remain
+  diagnostic telemetry and do not add a second start gate while the RAM floor
+  is met. They validate default and explicit artifact roots, including resolved
+  symlink/mount paths; Tracy, csvexport, and RenderDoc child processes inherit
+  the controlled temporary directory. Do not bypass them with inherited Cargo
+  variables or a copied binary.
 - Use native allocator counters plus GNU time for routine Memory evidence. Do not
   run full Tracy allocation traces or RenderDoc unless the task explicitly needs
   those distinct measurements.

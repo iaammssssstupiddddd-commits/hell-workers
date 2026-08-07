@@ -6,16 +6,16 @@
 
 1.  **Planning**: 変更対象をどのクレートに置くべきか、**[クレート境界とコアロジック分離の原則 (crate-boundaries.md)](crate-boundaries.md)** に従って先に決める。crate 境界に影響する変更は `docs/cargo_workspace.md` と関連仕様書の更新範囲も同時に決める。
 2.  **Execution**: 責務に合う crate で実装し、root 側は app shell と薄い互換層に保つ。初回は `python3 scripts/dev.py doctor` で環境を診断し、作業中は `python3 scripts/dev.py check` を使う。
-3.  **Verification**: 完了前は `python3 scripts/dev.py verify` を通す。挙動変更がある場合は `cargo run` でも確認し、仕様変更を対応する `docs/*.md` に反映する。
+3.  **Verification**: 完了前は `python3 scripts/dev.py verify` を通す。挙動変更がある場合は `python3 scripts/dev.py cargo -- run` でも確認し、仕様変更を対応する `docs/*.md` に反映する。
 
 ## 開発ルール
 
 ### 1. Rust-analyzer 診断の厳守
 - コンパイルエラー（赤い波線）を一つも残したまま完了報告をしてはいけない。
-- `cargo check --workspace` が通ることを必ず確認する。
+- `python3 scripts/dev.py check` が通ることを必ず確認する。
 
 ### 1.5. Clippy 警告ゼロの維持
-本プロジェクトは `cargo clippy --workspace` で **警告0件** を目標としている（2026-03達成）。
+本プロジェクトは Clippy で **警告0件** を目標としている（2026-03達成）。
 
 **新規コードの規約:**
 
@@ -38,12 +38,12 @@
 
 **Clippy 確認コマンド:**
 ```bash
-cargo clippy --workspace --all-targets -- -D warnings
+python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings
 ```
 
 **厳格運用ルール:**
 
-- `cargo check --workspace` だけで完了扱いにしない。完了前に `cargo clippy --workspace` を必ず通す。
+- `python3 scripts/dev.py check` だけで完了扱いにしない。完了前に `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings` を必ず通す。
 - `#[allow(clippy::...)]` / `#[expect(clippy::...)]` を追加して警告を黙らせる修正は、構造的な解消が不可能と確認できる場合を除き不可。
 - 既存コードに allow が残っているのを見つけた場合も、その場しのぎで追従せず、除去できる設計に寄せる。
 
@@ -58,7 +58,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 具体的な対象ファイルを調べるには：
 ```bash
-cargo clippy --workspace --all-targets -- -D warnings
+python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings
 # allow / expect は結果が空でなければ品質ゲート失敗
 ! rg -n '#\[(allow|expect)\(clippy::' crates --glob '*.rs'
 ```
@@ -82,7 +82,24 @@ python3 scripts/dev.py verify
 fmt、workspace check、profiling最小feature check、Clippy、全test、diff hygieneを順に実行する。
 diff hygiene はローカルでは `HEAD` からの作業差分、CIではeventのbaseから`HEAD`までを検査する。
 通常のcheck/buildは暗黙のログ作成や`target/`削除を行わない。容量整理は専用maintenance
-scriptを明示的に実行する。
+scriptを明示的に実行する。`scripts/dev.py`が起動するCargoは、親shellの`CARGO_TARGET_DIR`、
+`CARGO_BUILD_TARGET_DIR`、`CARGO_BUILD_BUILD_DIR`、`TMPDIR`、`CARGO_HOME`、`RUSTUP_HOME`を
+安全な永続領域へ正規化し、通常はworkspace `target/`、`target/.dev-tmp`、既定のaccount
+toolchain cacheへ固定する。2窓の対話作業では各ターミナルで`python3 scripts/dev.py lane shell`
+を開始し、`target/lanes/a`または`target/lanes/b`をshell終了まで固定する。lane内のbuild
+jobは1、laneなしは従来の安全計算（最大2）とし、2窓の合計compile fan-outを2に抑える。
+incrementalは各runnerの用途に応じて明示する。Cargo compilationを伴うgateは`MemAvailable`
+8 GiB未満では開始前に停止する。swapの使用量はmanifestへ診断情報として記録するが、RAMの
+下限を満たす場合の開始条件にはしない。Linuxでは`/proc/meminfo`の`MemAvailable`を読めない
+場合に開始前に停止する。
+対話Cargoのcompile / run / test / clippyは `target/.cargo-activity.lock` のshared leaseを
+Cargo childの生存中だけ保持する。performance runnerとnative acceptance recipeは同じlockの
+exclusive leaseをrecipe全体で保持し、競合時はchildを起動せず明確なbusy理由で停止する。
+lane leaseはsession所有、activity leaseは実行中資源の所有であり、idle lane shellだけでは
+native/performanceを妨げない。
+**このcheckoutでは、compile/run/test/clippyのためにraw Cargoを実行しない。** 追加のCargo subcommandも
+`python3 scripts/dev.py cargo -- <subcommand> ...`を使う。品質ゲートをraw Cargoへ置き換えたり、`/tmp`
+target・cache・成果物を指定したりしない。
 
 ### 2. 死蔵コードの禁止 ([deadcode.md])
 - 将来使う予定があっても、現在使われていないコードや `#[allow(dead_code)]` は残さない。
@@ -235,7 +252,7 @@ ECS Relationship を追記する際は **tasks.md §2.1** と同じテーブル�
   - API 仕様確認は `docsrs-mcp` を優先し、推測でメソッド名や引数を書かない。
   - Bevy API は必ず 0.19 系のドキュメント/シグネチャで確認する。
 - 実装後:
-  - rust-analyzer 診断を確認し、`cargo check --workspace` を必ず実行する。
+  - rust-analyzer 診断を確認し、`python3 scripts/dev.py check` を必ず実行する。
   - MCP の結果と実コードが不一致の場合は、`~/.cargo/registry/src/` の実ソースを確認して整合を取る。
 - MCP が使えない場合の代替:
   - `~/.cargo/registry/src/` のクレートソースと `docs.rs` の一次情報で確認する。
@@ -374,7 +391,7 @@ pub fn is_soul_available_for_work(assigned: &AssignedTask) -> bool { ... }
 
 | ツール | 用途 | インストール |
 |:---|:---|:---|
-| **bacon** | ファイル変更監視 + 自動 `cargo check` | `cargo install bacon` |
+| **bacon** | ファイル変更監視 + `scripts/dev.py check` | `cargo install bacon` |
 | **cargo-expand** | Bevy derive マクロの展開確認 | `cargo install cargo-expand` |
 | **cargo-udeps** | 未使用依存クレートの検出 | `cargo install cargo-udeps` |
 | **cargo-flamegraph** | フレームグラフによるプロファイリング | `cargo install flamegraph` |
@@ -384,18 +401,16 @@ pub fn is_soul_available_for_work(assigned: &AssignedTask) -> bool { ... }
 
 ### コンパイル確認
 ```bash
-cargo check --workspace
+python3 scripts/dev.py check
 ```
 
 ### マクロ展開確認
 ```bash
-cargo expand --package hw_core
+python3 scripts/dev.py cargo -- expand --package hw_core
 ```
 
-### 変更監視（自動 cargo check）
-```bash
-bacon
-```
+### 変更監視（自動 check）
+`bacon`を使う場合も、jobをraw Cargoのcheckではなく`python3 scripts/dev.py check`に設定する。
 
 ### 画像変換
 ```bash
@@ -423,7 +438,7 @@ python3 scripts/dev.py docs --check
 
 ### Visual Test Scene（Soul GLB・建築物 2D/3D 検証）
 ```bash
-cargo run -p visual_test
+python3 scripts/dev.py cargo -- run -p visual_test
 ```
 
 ゲーム本体とは独立した `visual_test` クレート。Soul GLB レンダリングと建築物配置を本番同条件で検証する。詳細は `docs/visual_test.md` を参照。
@@ -460,12 +475,27 @@ Windows の PE 形式では、一つの DLL からエクスポートできるシ
 - 静的リンクであってもデバッグビルドが遅い場合は、依存関係の `opt-level` を 3 に設定したままにする。
 
 ### 2. File Lock エラー
-`cargo` コマンドが「Blocking waiting for file lock」で止まる場合は、別のターミナルや IDE、あるいはゲーム自体が `target/` ディレクトリを使用中（ロック中）です。それらを終了してから再度実行してください。
+2窓で対話Cargoを使うときは、raw Cargoや通常のshellから実行せず、各ターミナルで次を
+最初に実行してください。
+
+```bash
+python3 scripts/dev.py lane status
+python3 scripts/dev.py lane shell
+```
+
+`lane shell` は開始時に空いている一方のlaneを取得し、shell終了まで同じlaneを保持します。
+`lane status` が両方とも`busy`の場合、3つ目のsessionはcanonical `target/`へfallbackせず
+終了します。既存のnative acceptance / performance runnerがcanonical `target/`を使う間は、activity lockが
+busyを返し、対話Cargoのchildは起動しません。同様に対話Cargo実行中はnative/performance
+recipeがexclusive取得に失敗してchildを起動しません。`--target-dir`、
+`--config build.target-dir=...`、`--config build.build-dir=...`による出力先変更もwrapperで
+拒否されます。lane leaseはPOSIXの`flock`を使い、未対応hostでは共有targetへfallbackせず
+停止します。
 
 ### 3. Bevy ECS `error[B0001]`（Query 競合パニック）
-`cargo run` で `error[B0001]` が出る場合、同一システム内で Query のアクセス競合（例: `&mut T` と別 Query の `&T`）が発生しています。
+`python3 scripts/dev.py cargo -- run` で `error[B0001]` が出る場合、同一システム内で Query のアクセス競合（例: `&mut T` と別 Query の `&T`）が発生しています。
 
-- 原因調査: `cargo run -p bevy_app --features bevy/dynamic_linking` で実行し、衝突した system/query 名を表示して特定する。
+- 原因調査: `python3 scripts/dev.py cargo -- run -p bevy_app --features bevy/dynamic_linking` で実行し、衝突した system/query 名を表示して特定する。
 - 修正方針: `Without<T>` で Query を排他的に分離するか、`ParamSet` に統合して同時借用を避ける。
 - 既存共通クエリ（`TaskQueries` など）がある箇所では、同種コンポーネントへの重複 Query を新設しない。
 
@@ -478,9 +508,9 @@ Windows の PE 形式では、一つの DLL からエクスポートできるシ
   # ✅ 正しい（ワークスペースルートから）
   python3 scripts/dev.py check
   
-  # ❌ 誤り（サブディレクトリ内から実行すると src/ 内に target/ が生成される）
+  # ❌ 誤り（サブディレクトリ内でraw Cargoを実行すると src/ 内に target/ が生成される）
   cd crates/bevy_app/src/systems/logistics
-  cargo check
+  # direct Cargo compilation here is unsupported
   ```
 - 混入した `target/` を削除するには:
   ```bash
@@ -492,6 +522,6 @@ Windows の PE 形式では、一つの DLL からエクスポートできるシ
 `Failed to build event loop: ... WaylandError(Connection(NoCompositor))` が出る場合、無効な `WAYLAND_DISPLAY` を優先してしまっている可能性があります。
 
 - 実行時に `HW_WINDOW_BACKEND=x11` を指定すると、Wayland を無効化して X11 を強制できます。
-  - 例: `HW_WINDOW_BACKEND=x11 cargo run -p bevy_app`
+  - 例: `HW_WINDOW_BACKEND=x11 python3 scripts/dev.py cargo -- run -p bevy_app`
 - `HW_WINDOW_BACKEND=auto`（既定）では、Wayland ソケットへ接続できない場合に自動で X11 へフォールバックします。
 - Wayland を明示使用する場合は `HW_WINDOW_BACKEND=wayland` を指定してください。
