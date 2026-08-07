@@ -42,6 +42,27 @@ const IDLE_SELECT_BEHAVIOR_STREAM: u64 = 0x6964_6c65_5f73_656c;
 pub(crate) struct IdleLocalState<'s> {
     pending_rest_reservations: Local<'s, HashMap<Entity, usize>>,
     nearby_buf: Local<'s, Vec<Entity>>,
+    decision_entities: Local<'s, Vec<Entity>>,
+}
+
+fn stable_entity_order_key(entity: Entity) -> (u32, u32) {
+    (entity.index_u32(), entity.generation().to_bits())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn idle_decision_order_is_stable_for_reversed_entities() {
+        let lower_entity = Entity::from_raw_u32(3).expect("valid lower entity");
+        let higher_entity = Entity::from_raw_u32(7).expect("valid higher entity");
+        let mut entities = vec![higher_entity, lower_entity];
+
+        entities.sort_unstable_by_key(|entity| stable_entity_order_key(*entity));
+
+        assert_eq!(entities, vec![lower_entity, higher_entity]);
+    }
 }
 
 #[derive(SystemParam)]
@@ -97,7 +118,22 @@ pub(crate) fn idle_behavior_decision_system(
     let dt = clock.step_secs() * f32::from(periodic_steps);
     local.pending_rest_reservations.clear();
 
-    for (
+    // Rest-area capacity is reserved while this system emits requests. Query
+    // iteration order is not stable across runs, so make that arbitration
+    // explicitly Entity-ordered before updating the local reservation count.
+    if !periodic_due && !query.iter().any(|item| item.11.is_some()) {
+        return;
+    }
+    local.decision_entities.clear();
+    local
+        .decision_entities
+        .extend(query.iter().map(|item| item.0));
+    local
+        .decision_entities
+        .sort_unstable_by_key(|entity| stable_entity_order_key(*entity));
+
+    let mut decisions = query.iter_many_mut(local.decision_entities.iter().copied());
+    while let Some((
         entity,
         transform,
         mut idle,
@@ -110,7 +146,7 @@ pub(crate) fn idle_behavior_decision_system(
         rest_reserved_for,
         rest_cooldown,
         wake_up,
-    ) in query.iter_mut()
+    )) = decisions.fetch_next()
     {
         if !periodic_due && wake_up.is_none() {
             continue;
