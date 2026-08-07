@@ -1377,8 +1377,9 @@ pub(crate) fn assign_indoor_light_generator_system(
 }
 
 /// Replenish only canonical generator Souls before normal game logic can
-/// exhaust them. Their `WorkingOn` relations remain production-owned, so Soul
-/// Spa output and Lamp allocation continue to use the normal energy pipeline.
+/// exhaust or stress-break them. Their `WorkingOn` relations remain
+/// production-owned, so Soul Spa output and Lamp allocation continue to use
+/// the normal energy pipeline.
 pub(crate) fn maintain_indoor_light_generator_vitals_system(
     state: Res<IndoorLightFixtureState>,
     mut q_souls: Query<&mut DamnedSoul>,
@@ -1401,6 +1402,7 @@ pub(crate) fn maintain_indoor_light_generator_vitals_system(
             let soul = soul.bypass_change_detection();
             soul.dream = DREAM_MAX;
             soul.fatigue = 0.0;
+            soul.stress = 0.0;
         }
     }
 }
@@ -3306,6 +3308,7 @@ mod tests {
                     .spawn(DamnedSoul {
                         dream: ordinal as f32,
                         fatigue: 0.95,
+                        stress: 0.95,
                         ..default()
                     })
                     .id()
@@ -3335,6 +3338,7 @@ mod tests {
                 .unwrap();
             assert_eq!(soul.dream, DREAM_MAX);
             assert_eq!(soul.fatigue, 0.0);
+            assert_eq!(soul.stress, 0.0);
         }
         let non_generator = app
             .world()
@@ -3342,6 +3346,7 @@ mod tests {
             .unwrap();
         assert_eq!(non_generator.dream, non_generator_ordinal as f32);
         assert_eq!(non_generator.fatigue, 0.95);
+        assert_eq!(non_generator.stress, 0.95);
     }
 
     #[test]
