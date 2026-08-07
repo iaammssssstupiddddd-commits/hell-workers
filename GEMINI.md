@@ -5,7 +5,7 @@ This project uses **Bevy 0.19**. Adhere to the following rules and conventions.
 ## 1. Bevy Version & Documentation
 - **Bevy 0.19** is strictly required. Avoid using APIs from older versions (0.14 or earlier).
 - Verify API signatures using `docs.rs/bevy/0.19.0` or local source code in `~/.cargo/registry/src/` if unsure.
-- Always run `cargo check` after implementation to verify API compatibility.
+- Always run `python3 scripts/dev.py check` after implementation to verify API compatibility.
 
 ## 2. Crate Boundaries & Architecture
 - Follow `docs/crate-boundaries.md` for all structural changes.
@@ -29,10 +29,10 @@ This project uses **Bevy 0.19**. Adhere to the following rules and conventions.
 - You MUST use the repository `hell-workers-run-native-acceptance` Skill whenever a task requires real-machine or native acceptance, actual-window, renderer/GPU/backend, or native performance verification, including requests for `実機確認` or `実機テスト`.
 - Use the Skill's established no-prompt launcher and fail-closed artifact verification; do not ask the user for repeated display or GUI permissions while that launcher is available.
 - If the current product does not expose that Skill natively, read and follow `.cursor/skills/hell-workers-run-native-acceptance/SKILL.md` directly.
-- **Command Execution**: Prefer synchronous execution for short-lived commands (file ops, `cargo check`) to avoid unnecessary polling.
+- **Command Execution**: Prefer synchronous execution for short-lived commands (file ops, `python3 scripts/dev.py check`) to avoid unnecessary polling.
 
 ## 5. Build & Development Environment
-- **Portable environment**: Do not hard-code personal `HOME` / `CARGO_HOME` paths. Run `python3 scripts/dev.py doctor` once and use `python3 scripts/dev.py check` during development.
+- **Portable environment**: Do not hard-code personal `HOME` / `CARGO_HOME` paths. Run `python3 scripts/dev.py doctor` once and use `python3 scripts/dev.py check` during development. Route every additional Cargo command through `python3 scripts/dev.py cargo -- <subcommand> ...` so target, temporary files, and toolchain caches cannot move onto tmpfs.
 - **Dead Code**: Do not use `#[allow(dead_code)]` for future use. If code is unused, delete it.
 - **Plans**: Copy `docs/plans/plan-template.md` to `<topic>-plan-YYYY-MM-DD.md`; active plans are tracked. Run `python3 scripts/dev.py docs --write` after plan/proposal changes.
 

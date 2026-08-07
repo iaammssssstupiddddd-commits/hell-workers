@@ -7,7 +7,7 @@
 短時間（通常1分以内）で終了する以下のコマンドについては、`run_command` の `WaitMsBeforeAsync` を十分に大きく（例: `5000`〜`30000`）設定し、同期的に結果を受け取るようにしてください。
 
 - `ls`, `grep`, `cat`, `find` などのファイル操作・検索
-- `cargo check`, `cargo fmt` などの高速なコンパイルチェック
+- `python3 scripts/dev.py check`、`python3 scripts/dev.py cargo -- fmt --all -- --check` などの高速なコンパイルチェック
 - スクリプト実行 (`python scripts/...`, `powershell scripts/...`)
 
 **理由**: `WaitMsBeforeAsync: 0` でバックグラウンド実行にすると、コマンドが即座に終わっているにもかかわらず、エージェントがポーリングを続けて「実行中（RUNNING）」と誤判定し、作業が不必要に停滞する可能性があるため。
@@ -16,7 +16,7 @@
 
 以下のケースに限り、バックグラウンド実行を検討してください。
 
-- `trunk serve` やサーバー起動など、エージェントが結果を待たずに次の作業に進む必要がある長時間プロセス
+- `trunk serve` やサーバー起動など、native/performance acceptanceではない長時間プロセス
 - 明らかに数分以上の時間を要する重いビルド処理
 
 ## 3. ステータス監視の注意点

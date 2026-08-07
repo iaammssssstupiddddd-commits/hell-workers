@@ -123,6 +123,16 @@ STALE_PATTERNS = (
     ),
 )
 
+RAW_CARGO_COMMAND = re.compile(
+    r"\bcargo\s+(?:bench|build|check|clippy|fmt|run|rustc|test)\b",
+    re.IGNORECASE,
+)
+
+
+def has_raw_cargo_command(line: str) -> bool:
+    """Reject agent-facing Cargo commands that bypass the resource guard."""
+    return RAW_CARGO_COMMAND.search(line) is not None
+
 
 def bevy_version() -> str:
     with (REPO_ROOT / "Cargo.toml").open("rb") as source:
@@ -180,6 +190,10 @@ def find_violations() -> list[str]:
             for label, pattern in STALE_PATTERNS:
                 if pattern.search(line):
                     violations.append(f"{relative}:{line_number}: {label}")
+            if has_raw_cargo_command(line):
+                violations.append(
+                    f"{relative}:{line_number}: raw Cargo command bypasses scripts/dev.py"
+                )
 
             declares_current_bevy = any(
                 marker in line

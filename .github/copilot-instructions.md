@@ -11,8 +11,8 @@ editing. The project uses Bevy 0.19 and Rust 2024.
 - `python3 scripts/dev.py doctor` — read-only environment diagnosis.
 - `python3 scripts/dev.py check` — fast format/policy/workspace compile gate.
 - `python3 scripts/dev.py verify` — full local/CI gate; run before completion.
-- `cargo run` — native game run.
-- `trunk serve` — optional WASM workflow.
+- `python3 scripts/dev.py cargo -- run` — native game run through the persistent-storage guard.
+- `trunk serve` — optional WASM workflow; not a native/performance acceptance route and not a substitute for the guarded Cargo workflow.
 
 Do not add Clippy suppressions or dead code. Do not hard-code personal
 `HOME`, `CARGO_HOME`, project, or tool paths.

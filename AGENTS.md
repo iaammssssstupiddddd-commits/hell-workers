@@ -14,10 +14,11 @@
 ## Tech Stack & Targets
 - Engine: Bevy 0.19 (see `Cargo.toml`).
 - Language: Rust 2024 edition.
-- Build target: use native `cargo run` by default.
+- Build target: use native `python3 scripts/dev.py cargo -- run` by default.
 
 ## Build, Test, and Development Commands
-- `cargo run`: build and run the game locally.
+- `python3 scripts/dev.py cargo -- run`: build and run the game locally through the persistent-storage guard.
+- `python3 scripts/dev.py cargo -- <subcommand> ...`: run any other Cargo subcommand through the same guard.
 - `python3 scripts/dev.py doctor`: diagnose required and optional local tools.
 - `python3 scripts/dev.py check`: fast local gate (format, policy, workspace compile).
 - `python3 scripts/dev.py verify`: full local/CI gate; required before reporting broad work as complete.
@@ -35,12 +36,12 @@
 
 ## Commit & Pull Request Guidelines
 - Commit messages follow a simple conventional style (examples seen: `feat: ...`, `refactor: ...`). Keep summaries short; Japanese or English is acceptable.
-- PRs should include a concise description, the testing/verification command(s) run (e.g., `cargo check`), and screenshots or clips for UI/visual changes.
+- PRs should include a concise description, the testing/verification command(s) run (e.g., `python3 scripts/dev.py check`), and screenshots or clips for UI/visual changes.
 
 ## AI/Agent-Specific Instructions
 - Before starting work, skim `README.md`, `docs/DEVELOPMENT.md`, and `docs/README.md` for current rules and specs.
-- Keep `cargo check` green; do not report completion with Rust-analyzer errors.
-- **Clippy**: The workspace maintains **0** `cargo clippy --workspace` warnings. Resolution patterns and the check command are in `CLAUDE.md` (Development Rules §1.5). Prefer fixing structure over `#[allow(clippy::...)]`.
+- Keep the workspace check green; do not report completion with Rust-analyzer errors.
+- **Clippy**: The workspace maintains **0** Clippy warnings. Run it through `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`; resolution patterns are in `CLAUDE.md` (Development Rules §1.5). Prefer fixing structure over `#[allow(clippy::...)]`.
 - Avoid dead code and `#[allow(dead_code)]` unless currently required. Do not leave implementations not documented in `docs/`.
 - Task system conventions: define payload structs under `crates/hw_jobs/src/tasks/`, add `Variant(VariantData)` entries in `crates/hw_jobs/src/tasks/mod.rs`, and keep Soul/Familiar queries aggregated in their crate-owned context types.
 - Context hygiene: respect `.cursorignore` and `.geminiignore` by avoiding large build artifacts/logs (`target/`, `dist/`, `.trunk/`, `logs/`, `build_*.txt`, `*_output*.txt`) unless explicitly needed.
@@ -116,13 +117,13 @@ Create an implementation plan in `docs/plans/` when:
   1. すでに正しく動いている他のプロジェクト内ソースコードの書き方を参考にする
   2. Web検索ツール等で `https://docs.rs/bevy/0.19.0/bevy/` や関連ドキュメントを確認する
   3. ローカルの `~/.cargo/registry/src/` にあるBevyのソースコード（関数のシグネチャ）を検索して直接確認する
-- 実装後は `cargo check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
+- 実装後は `python3 scripts/dev.py check` を実行し、APIの変更によるエラー（メソッドが存在しない等）がないか必ず確認すること。
 
 ### MCP ツール運用フロー（rust-analyzer-mcp / docsrs-mcp）
 - ローカルコード解析（定義ジャンプ、参照、型確認）は `rust-analyzer-mcp` を優先する。
 - 外部 crate API の仕様確認は `docsrs-mcp` を優先し、推測で実装しない。
 - Bevy API は必ず 0.19 系の情報で確認する（`docsrs-mcp` / `~/.cargo/registry/src/`）。
-- 実装後は rust-analyzer 診断確認に加えて `cargo check` を実行する。
+- 実装後は rust-analyzer 診断確認に加えて `python3 scripts/dev.py check` を実行する。
 - MCP が利用できない場合は、`~/.cargo/registry/src/` と `docs.rs` の一次情報を使って代替確認する。
 
 ## Assets & Configuration Tips

@@ -5,5 +5,5 @@
     "**/.trunk/**": true,
     "**/logs/**": true
   },
-  "rust-analyzer.files.excludeDirs": ["target", "dist", ".trunk", "logs"]
+  "rust-analyzer.files.exclude": ["target", "dist", ".trunk", "logs"]
 }

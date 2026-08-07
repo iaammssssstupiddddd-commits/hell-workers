@@ -68,5 +68,19 @@ class MandatoryHelpReviewRuleTests(unittest.TestCase):
         )
 
 
+class CargoGuardRuleTests(unittest.TestCase):
+    def test_raw_cargo_command_is_rejected_but_guarded_command_is_allowed(self) -> None:
+        self.assertTrue(check_agent_rules.has_raw_cargo_command("cargo check --workspace"))
+        self.assertTrue(check_agent_rules.has_raw_cargo_command("Cargo run -p bevy_app"))
+        self.assertFalse(
+            check_agent_rules.has_raw_cargo_command(
+                "python3 scripts/dev.py cargo -- check --workspace"
+            )
+        )
+        self.assertFalse(
+            check_agent_rules.has_raw_cargo_command("CARGO_HOME=/srv/cargo-cache")
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

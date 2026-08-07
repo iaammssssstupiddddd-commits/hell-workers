@@ -20,7 +20,7 @@
 ### 1. Rust-analyzer Diagnostics (STRICT)
 After any code change, ensure zero compilation errors:
 1. Wait a few seconds for IDE diagnostics after editing
-2. If no IDE feedback, run `cargo check` manually
+2. If no IDE feedback, run `python3 scripts/dev.py check` manually
 3. Fix errors immediately before any other work
 4. Minimize warnings (remove unused imports/variables)
 
@@ -37,7 +37,7 @@ After any code change, ensure zero compilation errors:
 - If the current product does not expose that Skill natively, read and follow `.cursor/skills/hell-workers-run-native-acceptance/SKILL.md` directly.
 
 ### 1.5. Clippy Warnings (MAINTAIN ZERO)
-`cargo clippy --workspace` must produce **0 warnings**. This baseline was achieved 2026-03.
+The workspace Clippy gate must produce **0 warnings**. This baseline was achieved 2026-03.
 
 **`#[allow(clippy::...)]` is prohibited in principle.** Fix the code structure instead.
 Exception only when a false positive or external constraint makes it unavoidable — requires a brief reason comment.
@@ -56,7 +56,7 @@ Exception only when a false positive or external constraint makes it unavoidable
 
 **Check command:**
 ```bash
-cargo clippy --workspace --all-targets -- -D warnings
+python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings
 ```
 
 ### 2. No Dead Code
@@ -114,13 +114,13 @@ Reasons:
 # Bevy の #import を含むファイルには使えない
 ```
 
-**シェーダー編集後の完了条件**: `cargo check` 通過 + ゲーム起動時にコンソールに wgpu エラーなし
+**シェーダー編集後の完了条件**: `python3 scripts/dev.py check` 通過 + ゲーム起動時にコンソールに wgpu エラーなし
 
 ### 7. MCP ツール運用フロー（rust-analyzer-mcp / docsrs-mcp）
 - ローカルコード解析（定義ジャンプ、参照、型確認）は `rust-analyzer-mcp` を優先する。
 - 外部 crate API の仕様確認は `docsrs-mcp` を優先し、推測で実装しない。
 - Bevy API は必ず 0.19 系の情報で確認する（`docsrs-mcp` / `~/.cargo/registry/src/`）。
-- 実装後は rust-analyzer 診断確認に加えて `cargo check` を実行する。
+- 実装後は rust-analyzer 診断確認に加えて `python3 scripts/dev.py check` を実行する。
 - MCP が利用できない場合は、`~/.cargo/registry/src/` と `docs.rs` の一次情報を使って代替確認する。
 
 ---

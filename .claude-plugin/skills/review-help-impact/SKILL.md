@@ -48,7 +48,7 @@ Helpへ反映済みである証拠にしない。
 6. root生成器からexact snapshotを再生成する。
 
 ```bash
-cargo test -p bevy_app@0.1.0 regenerate_help_approval_snapshot -- --ignored
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 regenerate_help_approval_snapshot -- --ignored
 ```
 
 7. 通常のexact testはwriter化しない。更新専用testを明示実行した後、`coverage_approval.snap`の全差分を読み、
@@ -90,10 +90,10 @@ no-impact変更でHelp sourceやsnapshotへ空変更を加えない。commitのa
 Helpを更新した場合は次を実行する。
 
 ```bash
-cargo test -p bevy_app@0.1.0 \
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 \
   exact_snapshot_approves_all_player_visible_help_copy_and_coverage
-cargo test -p bevy_app@0.1.0 help_
-cargo test -p hw_ui help
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 help_
+python3 scripts/dev.py cargo -- test -p hw_ui help
 python3 -m unittest scripts.tests.test_check_help_impact
 python3 scripts/check_help_impact.py
 python3 scripts/dev.py verify
