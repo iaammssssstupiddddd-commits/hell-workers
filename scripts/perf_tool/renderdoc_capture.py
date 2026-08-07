@@ -17,6 +17,13 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
+SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
+
+from cargo_runtime import persistent_storage_error
+
+
 SCHEMA_VERSION = 1
 RUNTIME_CHECKPOINT_SCHEMA_VERSION = 2
 EXTRACTION_SCHEMA_VERSION = 2
@@ -32,6 +39,7 @@ SOURCE_FILES = {
 SOURCE_PREFIXES = ("crates/", "scripts/perf_tool/")
 ASSET_PREFIX = "assets/"
 RENDERDOC_API_VERSION = "1.6.0"
+RENDERDOC_TEMP_DIRECTORY = ".renderdoc-tmp"
 LOG_PROBLEM_RE = re.compile(
     r"\b(?:WARN(?:ING)?|ERROR|FATAL|CRITICAL|panicked)\b|bevy_ecs::error::handler",
     re.IGNORECASE,
@@ -72,6 +80,23 @@ EXPECTED_RENDER_RESOURCES = {
 
 class CaptureError(RuntimeError):
     """A formal capture prerequisite or evidence validation failed."""
+
+
+def workspace_temp_dir(repo: Path) -> Path:
+    return (repo / "target" / RENDERDOC_TEMP_DIRECTORY).resolve()
+
+
+def require_within(path: Path, root: Path, *, label: str) -> None:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError as error:
+        raise CaptureError(f"{label} must be under {root}: {path}") from error
+
+
+def require_persistent_storage(path: Path, *, label: str) -> None:
+    storage_error = persistent_storage_error(path, label=label)
+    if storage_error:
+        raise CaptureError(storage_error)
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -815,7 +840,11 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
     if not (repo / "Cargo.toml").is_file():
         raise CaptureError(f"not a repository root: {repo}")
     binary = _regular_file(args.binary, "Capture profiling binary", executable=True)
+    require_within(binary, repo / "target", label="Capture profiling binary")
+    require_persistent_storage(binary, label="Capture profiling binary")
     output = Path(args.output).resolve()
+    require_within(output, repo / "target" / "perf-runs", label="RenderDoc output")
+    require_persistent_storage(output, label="RenderDoc output")
     if output.exists() or output.name != "renderdoc" or not output.parent.is_dir():
         raise CaptureError(f"RenderDoc output must be a new attempt/renderdoc path: {output}")
     environment_lock_path = Path(args.environment_lock).resolve()
@@ -848,7 +877,13 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
         binary_hash=binary_hash,
     )
 
-    with tempfile.TemporaryDirectory(prefix="hell-workers-renderdoc-") as temporary_name:
+    temporary_root = workspace_temp_dir(repo)
+    require_persistent_storage(temporary_root, label="RenderDoc temporary directory")
+    temporary_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="hell-workers-renderdoc-",
+        dir=temporary_root,
+    ) as temporary_name:
         work = Path(temporary_name)
         raw_dir = work / "raw"
         runtime_dir = work / "runtime"
@@ -867,6 +902,9 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                 "HW_RENDERDOC_LIBRARY": str(tools["library"]),
                 "HW_RENDERDOC_CAPTURE_TEMPLATE": str(capture_template),
                 "RUST_BACKTRACE": "1",
+                "TMPDIR": str(work),
+                "TMP": str(work),
+                "TEMP": str(work),
             }
         )
         command = _capture_command(
@@ -1035,7 +1073,31 @@ def self_test() -> int:
         or source_fingerprint(repo) != perf_execution.source_fingerprint()
     ):
         raise CaptureError("capture and perf source fingerprint boundaries differ")
-    with tempfile.TemporaryDirectory(prefix="renderdoc-capture-self-test-") as name:
+    temporary_root = workspace_temp_dir(repo)
+    temporary_root.mkdir(parents=True, exist_ok=True)
+    try:
+        require_within(
+            Path("/tmp/hell-workers-renderdoc-self-test"),
+            repo / "target" / "perf-runs",
+            label="RenderDoc output",
+        )
+    except CaptureError:
+        pass
+    else:
+        raise CaptureError("RenderDoc output outside target/perf-runs was accepted")
+    try:
+        require_persistent_storage(
+            Path("/tmp/hell-workers-renderdoc-self-test"),
+            label="RenderDoc temporary directory",
+        )
+    except CaptureError:
+        pass
+    else:
+        raise CaptureError("RenderDoc temporary directory under /tmp was accepted")
+    with tempfile.TemporaryDirectory(
+        prefix="renderdoc-capture-self-test-",
+        dir=temporary_root,
+    ) as name:
         root = Path(name)
         renderdoccmd = root / "renderdoccmd"
         qrenderdoc = root / "qrenderdoc"

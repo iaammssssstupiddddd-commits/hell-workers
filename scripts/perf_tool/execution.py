@@ -2,6 +2,23 @@ from __future__ import annotations
 
 from .artifacts import *
 
+try:
+    from cargo_runtime import (
+        cargo_environment as controlled_cargo_environment,
+        persistent_storage_error,
+        require_cargo_memory,
+        resource_policy as cargo_resource_policy,
+        workspace_cargo_target,
+    )
+except ModuleNotFoundError:
+    from scripts.cargo_runtime import (
+        cargo_environment as controlled_cargo_environment,
+        persistent_storage_error,
+        require_cargo_memory,
+        resource_policy as cargo_resource_policy,
+        workspace_cargo_target,
+    )
+
 
 SOURCE_FINGERPRINT_FILES = {
     ".cargo/config.toml",
@@ -231,6 +248,15 @@ def fixed_environment(args: argparse.Namespace) -> dict[str, str]:
     return values
 
 
+def performance_environment() -> dict[str, str]:
+    """Use one disk-backed, bounded environment for build and game processes."""
+    return controlled_cargo_environment(
+        REPO_ROOT,
+        namespace=".perf-tmp",
+        incremental=False,
+    )
+
+
 def cargo_features(instrumentation: str) -> str:
     return {
         "capture": "profiling",
@@ -240,7 +266,14 @@ def cargo_features(instrumentation: str) -> str:
 
 
 def build_binary(args: argparse.Namespace) -> Path:
-    binary = Path(args.binary).resolve() if args.binary else REPO_ROOT / "target/profiling/bevy_app"
+    binary = (
+        Path(args.binary).resolve()
+        if args.binary
+        else workspace_cargo_target(REPO_ROOT) / "profiling/bevy_app"
+    )
+    storage_error = persistent_storage_error(binary, label="profiling binary")
+    if storage_error:
+        raise RuntimeError(storage_error)
     if args.skip_build:
         if not binary.is_file():
             raise RuntimeError(f"profiling binary does not exist: {binary}")
@@ -258,7 +291,12 @@ def build_binary(args: argparse.Namespace) -> Path:
         cargo_features(args.instrumentation),
     ]
     print("+", " ".join(command), flush=True)
-    completed = subprocess.run(command, cwd=REPO_ROOT, check=False)
+    completed = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        env=performance_environment(),
+        check=False,
+    )
     if completed.returncode != 0:
         raise RuntimeError("profiling binary build failed")
     if not binary.is_file():
@@ -298,14 +336,41 @@ def profiling_tool_metadata(args: argparse.Namespace) -> dict[str, Any]:
     return metadata
 
 
+def explicit_session_dir(args: argparse.Namespace) -> Path | None:
+    if not args.output:
+        return None
+    output = Path(args.output)
+    return (output if output.is_absolute() else REPO_ROOT / output).resolve()
+
+
+def default_output_root() -> Path:
+    return (REPO_ROOT / "target" / "perf-runs").resolve()
+
+
+def require_persistent_output(path: Path) -> None:
+    storage_error = persistent_storage_error(
+        path,
+        label="performance artifact output",
+    )
+    if storage_error:
+        raise RuntimeError(storage_error)
+
+
+def validate_requested_output(args: argparse.Namespace) -> None:
+    session_dir = explicit_session_dir(args)
+    require_persistent_output(
+        session_dir if session_dir is not None else default_output_root()
+    )
+
+
 def prepare_session(args: argparse.Namespace, binary: Path, cases: list[Case]) -> Path:
-    if args.output:
-        output = Path(args.output)
-        session_dir = output if output.is_absolute() else REPO_ROOT / output
-    else:
+    session_dir = explicit_session_dir(args)
+    if session_dir is None:
         timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-        session_dir = REPO_ROOT / "target/perf-runs" / f"{timestamp}-{git_metadata()['short_commit']}"
-    session_dir = session_dir.resolve()
+        session_dir = default_output_root() / f"{timestamp}-{git_metadata()['short_commit']}"
+        session_dir = session_dir.resolve()
+    validate_requested_output(args)
+    require_persistent_output(session_dir)
     if session_dir.exists():
         raise RuntimeError(f"output directory already exists: {session_dir}")
     session_dir.mkdir(parents=True)
@@ -394,6 +459,14 @@ def prepare_session(args: argparse.Namespace, binary: Path, cases: list[Case]) -
             "instrumentation": args.instrumentation,
         },
         "profiling_tools": profiling_tool_metadata(args),
+        "resource_policy": {
+            **cargo_resource_policy(
+                REPO_ROOT,
+                namespace=".perf-tmp",
+                incremental=False,
+            ),
+            "artifact_root": str(session_dir),
+        },
         "requested_environment": fixed_environment(args),
         "matrix": matrix,
         "cases": [asdict(case) | {"id": case.identifier} for case in cases],
@@ -411,6 +484,7 @@ def run_csvexport(
     log_path: Path,
     arguments: list[str],
     timeout_secs: float,
+    environment: dict[str, str],
 ) -> tuple[int, str | None]:
     with output_path.open("w", encoding="utf-8") as output_handle, log_path.open(
         "w", encoding="utf-8"
@@ -419,6 +493,7 @@ def run_csvexport(
             completed = subprocess.run(
                 [str(csvexport), *arguments, str(trace_path)],
                 cwd=REPO_ROOT,
+                env=environment,
                 stdout=output_handle,
                 stderr=log_handle,
                 check=False,
@@ -620,6 +695,7 @@ def collect_profile_artifact(
     run_dir: Path,
     trace_returncode: int | None,
     frame_samples: int | None,
+    environment: dict[str, str],
 ) -> tuple[dict[str, Any] | None, list[str]]:
     if args.instrumentation == "capture":
         if args.capture_kind != "frame-time" or case.workload != "task-dashboard":
@@ -672,6 +748,7 @@ def collect_profile_artifact(
             run_dir / "tracy-task-dashboard-zones.log",
             ["-f", TRACY_DASHBOARD_ZONE_FILTER],
             min(args.timeout_secs, 120.0),
+            environment,
         )
         if timeout_error:
             errors.append(timeout_error)
@@ -694,6 +771,7 @@ def run_one(
     run_number: int,
     preflight: bool,
 ) -> Validation:
+    require_persistent_output(session_dir)
     case_dir = session_dir / "cases" / case.identifier
     case_dir.mkdir(exist_ok=True)
     label = ("preflight-" if preflight else "run-") + f"{run_number:03d}"
@@ -774,7 +852,7 @@ def run_one(
         )
     if args.rtt_quality is not None:
         command.extend(["--perf-rtt-quality", args.rtt_quality])
-    env = os.environ.copy()
+    env = performance_environment()
     env.update(fixed_environment(args))
     launch_command = command
     if args.instrumentation == "memory":
@@ -815,6 +893,7 @@ def run_one(
         trace_process = subprocess.Popen(
             trace_command,
             cwd=REPO_ROOT,
+            env=env,
             stdout=trace_log_handle,
             stderr=subprocess.STDOUT,
             creationflags=(
@@ -933,6 +1012,7 @@ def run_one(
         run_dir=temporary_dir,
         trace_returncode=trace_returncode,
         frame_samples=frame_samples,
+        environment=env,
     )
     validation.profile_artifact = profile_artifact
     validation.reasons.extend(profile_errors)

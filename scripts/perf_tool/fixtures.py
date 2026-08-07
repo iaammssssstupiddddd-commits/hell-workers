@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import tempfile
+
 from .compare import *
 from .rtt_light_contract import (
     expected_formal_cases,
@@ -16,6 +18,11 @@ from .rtt_light_bundle import (
     directory_digest,
     resolve_baseline_locator,
 )
+
+try:
+    from cargo_runtime import workspace_temp_dir
+except ModuleNotFoundError:
+    from scripts.cargo_runtime import workspace_temp_dir
 
 def write_fixture_run(
     root: Path,
@@ -413,7 +420,9 @@ def write_behavior_fixture_run(root: Path, case: Case) -> None:
 
 
 def self_test() -> int:
-    with tempfile.TemporaryDirectory() as temporary:
+    temporary_root = workspace_temp_dir(REPO_ROOT, ".perf-self-test-tmp")
+    temporary_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=temporary_root) as temporary:
         root = Path(temporary)
         rtt_contract = load_rtt_light_contract("rtt-light-v1")
         rtt_layouts = {
@@ -1615,6 +1624,7 @@ def self_test() -> int:
             run_dir=root,
             trace_returncode=None,
             frame_samples=None,
+            environment={},
         )
         assert fixed_profile is None
         assert not fixed_profile_errors

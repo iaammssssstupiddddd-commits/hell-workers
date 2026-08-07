@@ -117,6 +117,8 @@ def _run_suite(args: argparse.Namespace) -> int:
             )
         return 0
 
+    validate_requested_output(args)
+    require_cargo_memory()
     binary = build_binary(args)
     session_dir = prepare_session(args, binary, cases)
     print(f"Artifacts: {session_dir}", flush=True)

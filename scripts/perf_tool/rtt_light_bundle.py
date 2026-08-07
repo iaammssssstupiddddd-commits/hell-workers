@@ -16,7 +16,11 @@ from pathlib import Path
 from typing import Any
 
 from .artifacts import sha256, validate_run
-from .execution import read_native_memory, read_resource_usage
+from .execution import (
+    read_native_memory,
+    read_resource_usage,
+    require_persistent_output,
+)
 from .model import Case, REPO_ROOT, SESSION_MANIFEST_SCHEMA_VERSION, Validation
 from .policy import determinism_signature, validate_session_artifact_set
 from .rtt_light_contract import (
@@ -251,6 +255,8 @@ def _validate_attempt_location(
         raise RuntimeError("generation directory differs from stage and subject commit")
     baseline_root = generation.parent
     expected_root = (REPO_ROOT / "target/perf-runs/rtt-light" / contract_id).resolve()
+    require_persistent_output(expected_root)
+    require_persistent_output(attempt)
     if baseline_root.resolve() != expected_root:
         raise RuntimeError("attempt is outside the canonical RtT-light baseline root")
     return generation, baseline_root
@@ -2400,6 +2406,7 @@ def _verify_stage_gate_locators(
 
 def verify_baseline(baseline_root: Path) -> dict[str, Any]:
     baseline_root = baseline_root.resolve()
+    require_persistent_output(baseline_root)
     if (baseline_root / ".registration-in-progress").exists():
         raise RuntimeError("baseline registration is incomplete")
     index = read_json_object(baseline_root / "baseline-index.json")
