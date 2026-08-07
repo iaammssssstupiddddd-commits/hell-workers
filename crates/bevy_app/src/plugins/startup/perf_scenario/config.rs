@@ -654,6 +654,23 @@ impl PerfScenarioConfig {
         }
     }
 
+    /// Whether this process is the fixed-step normal-save RtT behavior fixture.
+    ///
+    /// Its normal-save step validates persistence semantics and the emitted
+    /// artifact. It is not the save-latency benchmark, so callers can keep a
+    /// successful slow save diagnostic without turning the behavior lane's
+    /// fail-closed unexpected-log check into a timing gate.
+    pub(crate) fn is_rtt_light_normal_load_behavior_run(&self) -> bool {
+        self.enabled
+            && matches!(self.workload, PerfWorkload::IndoorLight)
+            && matches!(
+                self.rtt_light,
+                Some(PerfRttLightSelection::CURRENT_BEHAVIOR_V1)
+            )
+            && matches!(self.behavior_case, Some(PerfBehaviorCase::LoadNormalV1))
+            && matches!(self.clock_mode, PerfClockMode::FixedBehavior)
+    }
+
     pub const fn requested_window_scale_factor(&self) -> Option<f32> {
         if self.enabled {
             self.window_scale_factor

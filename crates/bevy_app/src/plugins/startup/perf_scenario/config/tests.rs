@@ -248,3 +248,31 @@ fn behavior_lane_accepts_the_canonical_behavior_fixture() {
         .is_ok()
     );
 }
+
+#[test]
+fn rtt_light_normal_load_behavior_run_is_explicit() {
+    let mut config = PerfScenarioConfig::default();
+    assert!(!config.is_rtt_light_normal_load_behavior_run());
+
+    config.enabled = true;
+    config.workload = super::PerfWorkload::IndoorLight;
+    config.rtt_light = Some(super::PerfRttLightSelection::CURRENT_BEHAVIOR_V1);
+    config.behavior_case = Some(super::PerfBehaviorCase::LoadNormalV1);
+    config.clock_mode = super::PerfClockMode::FixedBehavior;
+    assert!(config.is_rtt_light_normal_load_behavior_run());
+
+    config.behavior_case = Some(super::PerfBehaviorCase::DoorStateV1);
+    assert!(!config.is_rtt_light_normal_load_behavior_run());
+
+    config.behavior_case = Some(super::PerfBehaviorCase::LoadNormalV1);
+    config.rtt_light = Some(super::PerfRttLightSelection::CURRENT_STATIC_V1);
+    assert!(!config.is_rtt_light_normal_load_behavior_run());
+
+    config.rtt_light = Some(super::PerfRttLightSelection::CURRENT_BEHAVIOR_V1);
+    config.clock_mode = super::PerfClockMode::Fixed;
+    assert!(!config.is_rtt_light_normal_load_behavior_run());
+
+    config.clock_mode = super::PerfClockMode::FixedBehavior;
+    config.workload = super::PerfWorkload::Gather;
+    assert!(!config.is_rtt_light_normal_load_behavior_run());
+}

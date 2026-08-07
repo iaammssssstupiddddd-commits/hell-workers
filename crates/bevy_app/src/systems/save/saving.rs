@@ -19,6 +19,8 @@ use std::time::Instant;
 
 use bevy::prelude::*;
 
+use crate::plugins::startup::PerfScenarioConfig;
+
 use super::format::{SaveHeader, encode_save_file};
 use super::schema::{build_persisted_world, collect_persisted_entities};
 use super::state::{SaveLoadFailureKind, SaveLoadResult, SavePath};
@@ -73,8 +75,18 @@ pub(super) fn save_world_system(world: &mut World) -> SaveLoadResult {
     }
 
     let elapsed = started.elapsed();
+    let is_rtt_light_normal_load_behavior_run = world
+        .get_resource::<PerfScenarioConfig>()
+        .is_some_and(PerfScenarioConfig::is_rtt_light_normal_load_behavior_run);
     if elapsed.as_millis() > 100 {
-        warn!("Save took {elapsed:?} (>100ms)");
+        if is_rtt_light_normal_load_behavior_run {
+            info!(
+                "PERF_BEHAVIOR: normal save completed in {elapsed:?} \
+                 (slow-save warning suppressed for semantic fixture)"
+            );
+        } else {
+            warn!("Save took {elapsed:?} (>100ms)");
+        }
     } else {
         info!("World saved to {} in {elapsed:?}", save_path.display());
     }
