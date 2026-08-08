@@ -50,7 +50,11 @@ pub(super) fn resolve_rest_area_target(
             q_rest_areas
                 .get(reserved_entity)
                 .ok()
-                .map(|(_, t, _, _, _)| (reserved_entity, t.translation.truncate()))
+                .and_then(|(_, t, _, _, _, pending)| {
+                    pending
+                        .is_none()
+                        .then_some((reserved_entity, t.translation.truncate()))
+                })
         })
         .or_else(|| {
             find_nearest_available_rest_area(pos_a, q_rest_areas, pending_rest_reservations)

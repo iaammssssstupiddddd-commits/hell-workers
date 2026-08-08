@@ -156,6 +156,20 @@ Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し�
 - **プロセス**: アイテムへ移動 → `Inventory(Option<Entity>)`へ拾い上げる → 備蓄場所へ移動 → 配置してslotを空にする。
 - **搬入後チェーン（haul chain）**: Blueprint / FloorSite / WallSite への搬入完了直後に `find_chain_opportunity` が呼ばれ、スロットに空きがあれば同一 Soul が Build / ReinforceFloor / PourFloor / FrameWall / CoatWall へ即移行する（tasks.md §7.3 参照）。
 
+### 3.3. 解体 (Deconstruct)
+
+- `DeconstructData`はdurable order、canonical target、`GoingToTarget → Dismantling → AwaitingCommit` phaseを持つ。
+- targetがnon-walkableでも既存navigation helperで隣接到達し、到達不能はretryable abortとしてworker/relationshipを解放する。
+- dismantling完了時はtargetを直接despawnせず、world epoch、worker、`ActiveTaskIdentity`、order、targetを持つ
+  `DeconstructionCommitRequest`を1件発行して`AwaitingCommit`へ入る。同identityでは再発行しない。
+- root finalizerはcommit前にexact identityを再検証し、winnerだけを正常完了する。duplicate、cancel、stale、
+  owner/recovery/Move failureは完了通知を出さず、再試行可能な経路ではworkerを通常cleanupへ戻す。
+- 実行対象は全`BuildingType`の完成済みbuildingと`Operational` Soul Spaである。Wall / Door / Floor /
+  Bridgeはowner-safeなmap/cache/Room/wall visual cleanup、Soul Spa / Outdoor Lampはworker/request/Power/visual
+  cleanupまでを同じroot finalizer transactionで閉じる。Constructing Soul Spaは`Deconstruct`ではなく専用cancelを使う。
+- facility固有の資材・tool・occupant・wheelbarrow回収はroot finalizerが事前snapshotし、Soul executorは引き続き
+  cross-domain stateを直接変更しない。
+
 ## 4. 関連 Relationship
 
 タスク系 Relationship（`CommandedBy` / `WorkingOn`）と携行品`Inventory`の書き込み元・削除元は **tasks.md §2** を参照。
@@ -215,6 +229,15 @@ root 側の shell には `PopulationManager`・visual/UI 依存・request 再検
 `perceive/` (`is_escape_threat_close` 等) も `hw_soul_ai` に移設済みであり、root 側 `perceive/` ディレクトリは削除済み（2026-03-22）。callers は `hw_soul_ai::soul_ai::perceive::escaping` を直接参照する。
 `task_execution` が使う `SoulTaskHandles` と visual marker（`FadeOut`, `WheelbarrowMovement`）は `hw_core::visual` に置かれ、`hw_soul_ai` が `hw_visual` に逆依存しないようにしている。
 `apply_task_assignment_requests_system` の実装と system 登録責務は `hw_soul_ai::soul_ai::execute::task_assignment_apply` / `hw_soul_ai::SoulAiCorePlugin` 側に一本化されている。`task_execution_system` も `hw_soul_ai::soul_ai::execute::task_execution_system` が所有し、root 側の `crates/bevy_app/src/systems/soul_ai/execute/task_execution/mod.rs` は互換 import path の thin re-export にとどまる。`SoulAiPlugin` は system 本体を再登録せず、`ApplyDeferred` フェーズ間同期マーカーと `gathering_spawn_system`（`GameAssets` 依存）のみを登録する。移設済み system を root 側で再登録すると Bevy の schedule 初期化で ordering 対象が曖昧になり panic する。
+root-ownedな解体transactionは`hw_soul_ai::terminalize_exact_tasks`を使う。adapterはrequest batch全件の
+`AssignedTask + ActiveTaskIdentity`と、存在する`WorkingOn` / task固有Transform要件を先に検証し、1件でも
+不整合なら全件を変更しない。適用時は通常の`unassign_task`を同期実行し、missing `Path`だけはdefault shellを補う。
+order despawn等で`DamnedSoul` markerまたは`WorkingOn`が先に消えたexact shellも終端する。Transform欠損は
+資源・予約を所有しないDeconstruct taskだけを直接cleanupし、inventoryやdrop位置を変更しない。
+task payload、identityのassignment/current target、存在する`WorkingOn`をowner参照edgeとして扱い、rootが
+order/targetをdespawnする前に`TaskWorkers`と予約cleanupを可視化する。
+空の`Inventory`はimmutableに先行確認し、実在itemをdropする場合だけmutable borrowする。空値の再代入で
+availability revisionを進め、`NoSafeRecovery` blockerをroot transaction自身が起こすことはない。
 `execute/task_execution/common.rs` は `NavOutcome` / `navigate_to_adjacent` / `navigate_to_pos` の facade を維持しつつ、パスキャッシュ検証と destination 更新の実体は `execute/task_execution/path_cache.rs` に分離された。`gather`・`collect_*`・`haul`・`haul_with_wheelbarrow` は従来どおり同系統の移動 helper を共有し、各 task ハンドラは到達判定の差分と副作用に集中する。予約解放や cancel 契約は task 側で保持する。
 
 ### 境界用語の整理

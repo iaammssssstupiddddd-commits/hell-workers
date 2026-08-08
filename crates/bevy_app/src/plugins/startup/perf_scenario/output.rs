@@ -141,6 +141,30 @@ pub(super) fn write_indoor_light_fixture_sidecars(
 }
 
 #[cfg(feature = "profiling")]
+pub(super) fn write_deconstruction_fixture_sidecar(
+    config: &PerfScenarioConfig,
+    state: &DeconstructionPerfFixtureState,
+) -> std::io::Result<()> {
+    if config.workload != PerfWorkload::Deconstruction {
+        return Ok(());
+    }
+    let directory = perf_output_directory(config);
+    std::fs::create_dir_all(&directory)?;
+    let path = directory.join("deconstruction_fixture.csv");
+    if path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!(
+                "deconstruction fixture sidecar already exists at {}",
+                path.display()
+            ),
+        ));
+    }
+    let csv = state.sidecar_csv().map_err(std::io::Error::other)?;
+    std::fs::write(path, csv)
+}
+
+#[cfg(feature = "profiling")]
 pub(super) fn write_render_inventory(
     config: &PerfScenarioConfig,
     inventory: &PerfRenderInventory,

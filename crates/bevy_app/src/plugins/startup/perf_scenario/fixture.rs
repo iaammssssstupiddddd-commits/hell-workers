@@ -127,6 +127,8 @@ pub struct PerfWorkloadSetupParams<'w, 's> {
     game_assets: Res<'w, crate::assets::GameAssets>,
     handles_3d: Res<'w, crate::plugins::startup::Building3dHandles>,
     settings: ResMut<'w, hw_core::GameSettings>,
+    deconstruction_fixture:
+        ResMut<'w, super::deconstruction_fixture::DeconstructionPerfFixtureState>,
     indoor_light: ResMut<'w, super::indoor_light_fixture::IndoorLightFixtureState>,
     exit: MessageWriter<'w, AppExit>,
 }
@@ -179,6 +181,7 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
         game_assets,
         handles_3d,
         mut settings,
+        mut deconstruction_fixture,
         mut indoor_light,
         mut exit,
     } = params;
@@ -208,12 +211,15 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
 
     applied.workload = configure_perf_workload(
         &config,
-        &mut commands,
-        &mut q_familiars,
-        &mut q_souls,
-        &q_trees,
-        &q_rocks,
-        &mut world_map,
+        PerfWorkloadConfigureContext {
+            commands: &mut commands,
+            q_familiars: &mut q_familiars,
+            q_souls: &mut q_souls,
+            q_trees: &q_trees,
+            q_rocks: &q_rocks,
+            world_map: &mut world_map,
+            deconstruction_fixture: &mut deconstruction_fixture,
+        },
     );
 }
 
@@ -268,33 +274,30 @@ pub fn setup_perf_ui_mode_if_enabled(params: PerfUiModeSetupParams) {
 }
 
 #[cfg(feature = "profiling")]
+struct PerfWorkloadConfigureContext<'a, 'w, 's> {
+    commands: &'a mut Commands<'w, 's>,
+    q_familiars: &'a mut PerfSetupFamiliarQuery<'w, 's>,
+    q_souls: &'a mut PerfSetupSoulQuery<'w, 's>,
+    q_trees: &'a PerfTreeQuery<'w, 's>,
+    q_rocks: &'a PerfRockQuery<'w, 's>,
+    world_map: &'a mut WorldMapWrite<'w>,
+    deconstruction_fixture: &'a mut DeconstructionPerfFixtureState,
+}
+
+#[cfg(feature = "profiling")]
 fn configure_perf_workload(
     config: &PerfScenarioConfig,
-    commands: &mut Commands,
-    q_familiars: &mut Query<
-        (
-            Entity,
-            &Transform,
-            &mut ActiveCommand,
-            &mut FamiliarOperation,
-            &mut FamiliarPolicy,
-        ),
-        PerfSetupFamiliarFilter,
-    >,
-    q_souls: &mut Query<
-        (
-            Entity,
-            &mut Transform,
-            &mut Destination,
-            &mut Path,
-            &mut AssignedTask,
-        ),
-        PerfSetupSoulFilter,
-    >,
-    q_trees: &Query<Entity, With<Tree>>,
-    q_rocks: &Query<Entity, With<Rock>>,
-    world_map: &mut WorldMapWrite,
+    context: PerfWorkloadConfigureContext<'_, '_, '_>,
 ) -> bool {
+    let PerfWorkloadConfigureContext {
+        commands,
+        q_familiars,
+        q_souls,
+        q_trees,
+        q_rocks,
+        world_map,
+        deconstruction_fixture,
+    } = context;
     match config.workload {
         PerfWorkload::Gather => {
             configure_gather_baseline(config, commands, q_familiars, q_souls, q_trees, q_rocks);
@@ -315,6 +318,14 @@ fn configure_perf_workload(
         PerfWorkload::IndoorLight => {
             unreachable!("indoor-light uses the production-topology settle pipeline")
         }
+        PerfWorkload::Deconstruction => deconstruction_fixture::configure_deconstruction_fixture(
+            commands,
+            q_familiars,
+            q_souls,
+            world_map,
+            config.size,
+            deconstruction_fixture,
+        ),
     }
 }
 
@@ -971,7 +982,7 @@ fn find_fixture_corridor(world_map: &WorldMap) -> Option<PerfFixtureCorridor> {
 }
 
 #[cfg(feature = "profiling")]
-fn fixture_free_grids(world_map: &WorldMap, count: usize) -> Vec<(i32, i32)> {
+pub(super) fn fixture_free_grids(world_map: &WorldMap, count: usize) -> Vec<(i32, i32)> {
     let mut grids = Vec::with_capacity(count);
     for y in 1..MAP_HEIGHT.saturating_sub(1) {
         for x in 1..MAP_WIDTH.saturating_sub(1) {

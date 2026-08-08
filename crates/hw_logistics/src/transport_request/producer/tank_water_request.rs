@@ -1,10 +1,11 @@
 //! Tank water request system
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::BUCKET_CAPACITY;
 
 use hw_core::relationships::{IncomingDeliveries, StoredItems, TaskWorkers};
-use hw_jobs::{Designation, MovePlanned, Priority, TaskSlots, WorkType};
+use hw_jobs::{DeconstructionPending, Designation, MovePlanned, Priority, TaskSlots, WorkType};
 
 use crate::transport_request::producer::active_unit_cache::{
     CachedActiveFamiliars, CachedActiveYards,
@@ -17,15 +18,46 @@ use crate::types::ResourceType;
 use crate::water::tank_can_accept_new_bucket;
 use crate::zone::Stockpile;
 
-pub fn tank_water_request_system(
-    mut commands: Commands,
-    q_incoming: Query<&IncomingDeliveries>,
-    familiars_cache: Res<CachedActiveFamiliars>,
-    yards_cache: Res<CachedActiveYards>,
-    q_tanks: Query<(Entity, &Transform, &Stockpile, Option<&StoredItems>)>,
-    q_tank_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
-    q_move_planned: Query<(), With<MovePlanned>>,
-) {
+#[derive(SystemParam)]
+pub struct TankWaterRequestParams<'w, 's> {
+    commands: Commands<'w, 's>,
+    q_incoming: Query<'w, 's, &'static IncomingDeliveries>,
+    familiars_cache: Res<'w, CachedActiveFamiliars>,
+    yards_cache: Res<'w, CachedActiveYards>,
+    q_tanks: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Transform,
+            &'static Stockpile,
+            Option<&'static StoredItems>,
+        ),
+    >,
+    q_tank_requests: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static TransportRequest,
+            Option<&'static TaskWorkers>,
+        ),
+    >,
+    q_move_planned: Query<'w, 's, (), With<MovePlanned>>,
+    q_deconstruction_pending: Query<'w, 's, (), With<DeconstructionPending>>,
+}
+
+pub fn tank_water_request_system(params: TankWaterRequestParams) {
+    let TankWaterRequestParams {
+        mut commands,
+        q_incoming,
+        familiars_cache,
+        yards_cache,
+        q_tanks,
+        q_tank_requests,
+        q_move_planned,
+        q_deconstruction_pending,
+    } = params;
     let active_familiars = &familiars_cache.data;
     let active_yards = &yards_cache.data;
     let all_owners = super::collect_all_area_owners(active_familiars, active_yards);
@@ -33,7 +65,9 @@ pub fn tank_water_request_system(
     let mut desired_requests = std::collections::HashMap::<Entity, (Entity, u32, Vec2)>::new();
 
     for (tank_entity, tank_transform, tank_stock, stored_opt) in q_tanks.iter() {
-        if q_move_planned.get(tank_entity).is_ok() {
+        if q_move_planned.get(tank_entity).is_ok()
+            || q_deconstruction_pending.get(tank_entity).is_ok()
+        {
             continue;
         }
         if tank_stock.resource_type != Some(ResourceType::Water) {
@@ -145,5 +179,58 @@ pub fn tank_water_request_system(
             TransportRequestState::Pending,
             TransportPolicy::default(),
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_world::Yard;
+
+    #[test]
+    fn pending_tank_produces_no_water_request_while_live_tank_does() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<CachedActiveFamiliars>()
+            .init_resource::<CachedActiveYards>()
+            .add_systems(Update, tank_water_request_system);
+        let yard_entity = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .resource_mut::<CachedActiveYards>()
+            .data
+            .push((
+                yard_entity,
+                Yard {
+                    min: Vec2::splat(-100.0),
+                    max: Vec2::splat(100.0),
+                },
+            ));
+        let spawn_tank = |app: &mut App, x: f32| {
+            app.world_mut()
+                .spawn((
+                    Transform::from_xyz(x, 0.0, 0.0),
+                    Stockpile {
+                        capacity: 12,
+                        resource_type: Some(ResourceType::Water),
+                    },
+                ))
+                .id()
+        };
+        let pending = spawn_tank(&mut app, 0.0);
+        let live = spawn_tank(&mut app, 20.0);
+        let order = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .entity_mut(pending)
+            .insert(DeconstructionPending { order });
+
+        app.update();
+
+        let mut requests = app.world_mut().query::<&TransportRequest>();
+        let anchors = requests
+            .iter(app.world())
+            .filter(|request| request.kind == TransportRequestKind::GatherWaterToTank)
+            .map(|request| request.anchor)
+            .collect::<Vec<_>>();
+        assert_eq!(anchors, vec![live]);
     }
 }

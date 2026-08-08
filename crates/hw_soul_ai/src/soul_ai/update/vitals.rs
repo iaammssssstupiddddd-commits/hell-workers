@@ -26,7 +26,8 @@ pub fn on_task_completed_motivation_bonus(
             | WorkType::PourFloorTile
             | WorkType::FrameWallTile
             | WorkType::CoatWall
-            | WorkType::GeneratePower => MOTIVATION_BONUS_BUILD,
+            | WorkType::GeneratePower
+            | WorkType::Deconstruct => MOTIVATION_BONUS_BUILD,
         };
 
         if bonus > 0.0 {

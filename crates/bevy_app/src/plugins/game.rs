@@ -271,12 +271,14 @@ mod tests {
             steps,
             vec![
                 "construction.normalize",
+                "deconstruction.floor-ownership",
                 "familiar.settings",
                 "power-consumer.policy",
                 "soul-spa.normalize",
                 "stockpile.policy",
                 "transport-request.targets",
                 "task-logistics.runtime",
+                "deconstruction.runtime",
                 "presentation.shells",
                 "construction.runtime",
                 "obstacle.runtime",
@@ -286,6 +288,7 @@ mod tests {
         assert_eq!(
             validators,
             vec![
+                "deconstruction.orders",
                 "durable.topology",
                 "familiar.roster",
                 "presentation.spatial-roots",

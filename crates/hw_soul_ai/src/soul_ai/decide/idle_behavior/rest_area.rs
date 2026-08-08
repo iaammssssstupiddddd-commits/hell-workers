@@ -6,7 +6,7 @@ use bevy::prelude::*;
 
 use hw_core::constants::TILE_SIZE;
 use hw_core::relationships::{RestAreaOccupants, RestAreaReservations};
-use hw_jobs::RestArea;
+use hw_jobs::{DeconstructionPending, RestArea};
 use hw_world::WorldMap;
 use hw_world::coords::{grid_to_world, world_to_grid};
 
@@ -38,6 +38,7 @@ pub type RestAreasQuery<'w, 's> = Query<
         &'static RestArea,
         Option<&'static RestAreaOccupants>,
         Option<&'static RestAreaReservations>,
+        Option<&'static DeconstructionPending>,
     ),
 >;
 
@@ -49,14 +50,15 @@ pub fn find_nearest_available_rest_area(
     q_rest_areas
         .iter()
         .filter(
-            |(rest_area_entity, _, rest_area, occupants, reservations)| {
-                rest_area_has_capacity(
-                    *rest_area_entity,
-                    rest_area,
-                    *occupants,
-                    *reservations,
-                    pending_reservations,
-                )
+            |(rest_area_entity, _, rest_area, occupants, reservations, pending)| {
+                pending.is_none()
+                    && rest_area_has_capacity(
+                        *rest_area_entity,
+                        rest_area,
+                        *occupants,
+                        *reservations,
+                        pending_reservations,
+                    )
             },
         )
         .min_by(|a, b| {
@@ -66,7 +68,7 @@ pub fn find_nearest_available_rest_area(
                 .partial_cmp(&b.1.translation.truncate().distance_squared(pos))
                 .unwrap_or(std::cmp::Ordering::Equal)
         })
-        .map(|(entity, transform, _, _, _)| (entity, transform.translation.truncate()))
+        .map(|(entity, transform, _, _, _, _)| (entity, transform.translation.truncate()))
 }
 
 fn rest_area_occupied_grids_from_center(center: Vec2) -> [(i32, i32); 4] {
@@ -126,4 +128,47 @@ pub fn has_arrived_at_rest_area(current_pos: Vec2, rest_area_center: Vec2) -> bo
         let dy = (current_grid.1 - gy).abs();
         dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Resource, Default)]
+    struct SelectedRestArea(Option<Entity>);
+
+    fn select_nearest(q_rest_areas: RestAreasQuery, mut selected: ResMut<SelectedRestArea>) {
+        selected.0 =
+            find_nearest_available_rest_area(Vec2::ZERO, &q_rest_areas, &HashMap::default())
+                .map(|(entity, _)| entity);
+    }
+
+    #[test]
+    fn nearest_rest_area_ignores_a_pending_deconstruction_target() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<SelectedRestArea>()
+            .add_systems(Update, select_nearest);
+        let order = app.world_mut().spawn_empty().id();
+        let pending = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(1.0, 0.0, 0.0),
+                RestArea { capacity: 1 },
+                DeconstructionPending { order },
+            ))
+            .id();
+        let live = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(100.0, 0.0, 0.0),
+                RestArea { capacity: 1 },
+            ))
+            .id();
+
+        app.update();
+
+        assert_ne!(pending, live);
+        assert_eq!(app.world().resource::<SelectedRestArea>().0, Some(live));
+    }
 }

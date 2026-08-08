@@ -21,6 +21,7 @@ Bevy 0.19 の Relationship は **Source 側を操作すれば Target 側が自�
 | `StoredIn(stockpile)` ← item | `StoredItems` ← stockpile | Haul dropping フェーズ | 持ち出し時 (`unassign_task` / haul picking) |
 | `DeliveringTo(dest)` ← item | `IncomingDeliveries` ← dest | `apply_task_assignment_requests` (Execute) | タスク完了・中断・`unassign_task`（pickup 前も task payload から除去） |
 | `CommandedBy(familiar)` ← Soul | `Commanding` ← familiar | squad加入 / `prepare_worker_for_task_apply` | squad release・使役数超過・`OnExhausted`・`OnStressBreakdown` 等のowner lifecycle |
+| `TargetDeconstructionRoot(target)` ← order | `DeconstructionOrders` ← completed building / Operational Soul Spa root | 解体order producer（Track C1 M3） | order cancel / 解体commit。Target collectionは直接編集しない |
 
 **エンティティ despawn 時**: そのエンティティの全 Relationship が Bevy によって自動除去され、Target 側も自動更新される（例: Soul が despawn すると `TaskWorkers` から自動削除）。
 
@@ -52,6 +53,7 @@ Bevy 0.19 の Relationship は **Source 側を操作すれば Target 側が自�
 - load直後は全Soulが`AssignedTask::None`、全`TransportRequest`が`Pending`、`TransportDemand.inflight = 0`となる。Familiar AIとproducerがdurable Designation/Requestから通常cycleで再割当する。
 - `Inventory(Some(item))`はcandidateで存在、一意owner、container非競合、近傍walkable cellを検証し、rehydrateでowner helperを通してdropして`None`へ戻す。実行中タスクの完全な途中復元は行わない。
 - `LoadedIn` / `LoadedItems`はcarrier位置をEntity remap後まで渡すstaging handoffとしてだけ保存する。candidate検証後はcarrier（運搬中ならcarrying Soul）近傍へcargoを荷下ろしして両Relationshipを除去し、古い搬送先/claimを再利用しない。
+- `DeconstructionOrder`、`Designation::Deconstruct`、`TargetDeconstructionRoot` / `DeconstructionOrders`はdurableな解体指定として保存する。`DeconstructionPending`と`DeconstructionCommitClaim`はruntime-onlyで、load時にclaimを破棄してvalidated orderからpending gateだけを再構築する。
 
 ## 3. タスク発見性チェックリスト
 
@@ -70,6 +72,13 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 9. WorkType 別の状態チェック通過（Build: 資材完了済み / ReinforceFloorTile: `ReinforcingReady` / CoatWall: `is_provisional == true` 等）
 10. スコア計算が `Some(priority)` を返す（None = スコア計算不能で除外）
 
+`WorkType::Deconstruct`は専用orderのcanonical target、pending/claim/blocker、marker、completed stateを候補時と
+assignment apply時の両方で再検証する。Track C1 M4では全12種の`BuildingType`とOperational Soul Spaを実行でき、
+Wall / Door / Floor / Bridgeはexact map/cache cleanup、Soul Spa / Outdoor Lampはpower owner cleanupが
+成立する場合だけ候補になる。activeなMoveはmarkerやdurable taskだけでなく、全Soulの
+`AssignedTask::MovePlant`も候補cycleとapply batchで除外する。Operation dialogのpolicy行、Task Dashboardの
+filter・priority・cancel、Ordersの単一建物指定は同じM3公開境界で有効になる。
+
 ## 4. タスクのライフサイクル
 
 ### 4.1 指定 (Designation)
@@ -80,6 +89,10 @@ Familiar の `task_finder` がタスクを発見できる条件（**全て満た
 - Modal/Pause capture 中は assignment、area/zone/designation の pointer ingress を遮断する。capture 開始時に
   drag 中なら同じ `TaskMode` の待機状態へ戻し、AreaEdit の開始前 snapshot を復元するため、release edge が
   capture 中に消えても designation/history/task assignment を新規確定しない。
+- 解体はcompleted building rootへ`Designation`を直付けせず、専用`DeconstructionOrder` entityへ
+  `Designation::Deconstruct`、player provenance、priority、1 slot、canonical target Relationshipを持たせる。
+  Ordersのsingle-click producerはhitしたbuilding/floor ownerからcanonical rootを解決し、logical requestごとに
+  typed outcomeを1件返す。同じgestureからorderを重複生成せず、targetの既存Designationも変更しない。
 
 **自動（request エンティティ方式）**: anchor 位置にエンティティを生成し、ソースは割り当て時に遅延解決:
 - `task_area_auto_haul_system` → `DepositToStockpile`（Stockpile グループ単位）
@@ -154,6 +167,7 @@ delegation が診断する。これにより新規 task を古い revision で `
 - **水搬送 (BucketTransport)**: `AssignedTask::BucketTransport(BucketTransportData)` の単一バリアントで表現。`source`（`River` / `Tank`）と `destination`（`Tank` / `Mixer`）に応じて `bucket_transport/phases/` の共通フェーズハンドラで実行される。`WorkType` は River→Tank が `GatherWater`、Tank→Mixer が `HaulWaterToMixer` として返される。
 - **運搬先ガード**: Blueprint / construction / provisional wall / stockpile は Dropping / Unloading 直前に受入可能量を再確認し、到着時点で需要が消えた cargo を搬入先へ反映しない。
 - **精製 (Refine)**: MudMixer で Sand+Water+Rock → StasisMud×5。`mud_mixer_auto_refine_system` が `has_materials_for_refining` を確認し、`collect_all_area_owners`（Familiar TaskArea + Yard 統合）で `issued_by` を決定して `DesignationRequest` を発行する。使い魔が Idle でも Yard 経由でタスクが発行される。
+- **解体 (Deconstruct)**: runtime payloadは`order`、canonical `target`、`GoingToTarget → Dismantling { progress } → AwaitingCommit`を持つ。`AwaitingCommit`へ入ると同identityで再発行せず、Soulはtargetを直接despawnしない。root finalizerがworld epochとexact identityを再検証し、全12種の`BuildingType`とOperational Soul Spaをkind別owner transactionでcommitする。structureはmap/cache/Room/wall visual、Soul Spa/Lampはworker/request/Power/visualまで同じ終端へ含める。対象facilityが`DeconstructionPending`の間は新しい補充・返却・精製・運搬割当を作らない。
 - **壁**: FrameWallTile（material_center で木材受領 → フレーミング）/ CoatWall（塗布 → `is_provisional = false`）
 - **⚠️ 消滅**: 地面に放置された Sand / StasisMud は **5秒で消滅**（LoadedIn / StoredIn / DeliveringTo / StoredByMixer のいずれかがあれば維持）
 
@@ -173,6 +187,17 @@ terminal state は `TaskExecutionContext` の内部状態で一度だけ確定�
 `task_execution_system` は正常完了が確定したときだけ `publish_task_completed` を呼び、domain
 `OnTaskCompleted` と presentation `TaskCompletedVisualMessage` を発行する。
 inventory 不整合等の先頭ガードは `unassign_task` を経由する（`AbortedRetryable` 相当、完了イベントなし）。
+
+root owner transactionは`terminalize_exact_tasks`へworker、expected identity、task expectation、完了/中断種別を渡す。
+全requestを先に検証し、exact task/identityのmissing/mismatch、unsafeなTransform欠損、duplicateが1件でもあれば
+batch全体を変更しない。適用時は通常の`unassign_task`を同期実行して`AssignedTask`、予約、`WorkingOn`、
+`TaskWorkers`、identityを解放し、runtime `Path`だけが欠落しているworkerはdefault shellを補う。
+order despawn等で`DamnedSoul` markerまたは`WorkingOn`が先に消えていても、taskとidentityがexactなら残ったshellを
+終端する。Transform欠損は、drop位置を必要とする資源・予約を所有しないDeconstruct taskだけを直接shell cleanupし、
+座標やinventoryを捏造しない。payload、identityのassignment/current target、存在する`WorkingOn`のいずれも
+owner参照edgeとして扱うため、TransportRequest workerをpayloadだけで見落とさない。
+空の`Inventory`はimmutableに確認し、実在itemをdropする場合だけmutable borrowする。これによりroot transaction自身の
+空Inventory cleanupをavailability変更として誤検知し、`NoSafeRecovery` blockerを自己再試行させない。
 
 **イベントチェーン**:
 
@@ -296,3 +321,7 @@ Blueprint / FloorSite / WallSite への搬入完了直後、`chain::find_chain_o
 キャンセルは owner 別 lifecycle へルーティングする。generic manual designation、manual transport、Blueprint、
 Floor / Wall site の cleanup を汎用 despawn へ統合しない。Pause / Modal capture 中の intent は読み捨てず typed 拒否として
 drain し、capture 解除後に遅延適用しない。
+
+Constructing Soul Spaの`DeliverToSoulSpa`行は`TransportRequest.kind`、Bone、anchor、
+`TargetSoulSpaSite`が同じlive siteを指す場合だけcancel可能にする。Task Dashboardはrequestを直接despawnせず
+`SoulSpaConstructionCancelRequest`をsite ownerへ送り、情報パネルと同じexact cleanup・実搬入Bone返却へ合流する。

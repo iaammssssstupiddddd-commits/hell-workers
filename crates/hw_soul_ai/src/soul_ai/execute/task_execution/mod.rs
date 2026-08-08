@@ -5,6 +5,7 @@ pub mod coat_wall;
 pub mod collect_bone;
 pub mod common;
 pub mod context;
+pub mod deconstruct;
 pub mod frame_wall;
 pub mod gather;
 pub mod generate_power;

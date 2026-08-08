@@ -6,7 +6,7 @@ use hw_core::visual::SoulTaskHandles;
 use hw_logistics::types::Inventory;
 use hw_world::{PathfindingContext, RuntimePathSearchBudget, WorldMap};
 
-use hw_jobs::{ActiveTaskIdentity, AssignedTask, WorkType, lifecycle};
+use hw_jobs::{ActiveTaskIdentity, AssignedTask, DeconstructionCommitRequest, WorkType, lifecycle};
 
 use super::queries::TaskQueries;
 use crate::soul_ai::execute::task_execution::path_cache::TaskPathSearchProgress;
@@ -84,6 +84,8 @@ pub struct TaskExecutionContext<'a, 'w, 's> {
     pub path_budget: &'a mut RuntimePathSearchBudget,
     pub(crate) path_search_progress: &'a mut TaskPathSearchProgress,
     pub queries: &'a mut TaskQueries<'w, 's>,
+    pub world_epoch: u64,
+    pub(crate) deconstruction_commit_request: Option<DeconstructionCommitRequest>,
     pub env: TaskExecEnv<'a>,
     pub(crate) end_state: TaskEndState,
 }
@@ -105,6 +107,10 @@ impl<'a, 'w, 's> TaskExecutionContext<'a, 'w, 's> {
     /// 現在 segment の identity を返す。
     pub fn task_identity(&self) -> ActiveTaskIdentity {
         *self.identity
+    }
+
+    pub fn queue_deconstruction_commit(&mut self, request: DeconstructionCommitRequest) {
+        self.deconstruction_commit_request = Some(request);
     }
 
     /// 同じ assignment 内で current target と work type を更新する。

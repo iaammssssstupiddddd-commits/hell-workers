@@ -115,6 +115,75 @@ fn validate_world_map_candidate(candidate: &World) -> Result<(), String> {
             ));
         }
     }
+
+    let mut completed_floors = HashMap::new();
+    for entity_ref in candidate.iter_entities() {
+        let Some(building) = entity_ref.get::<Building>() else {
+            continue;
+        };
+        if building.kind != BuildingType::Floor {
+            continue;
+        }
+        if building.is_provisional {
+            return Err(format!(
+                "Floor Building {:?} cannot be provisional",
+                entity_ref.id()
+            ));
+        }
+        let transform = entity_ref
+            .get::<Transform>()
+            .ok_or_else(|| format!("completed Floor {:?} has no Transform", entity_ref.id()))?;
+        let grid = WorldMap::world_to_grid(transform.translation.truncate());
+        validate_world_map_grid("floors", grid)?;
+        let canonical = WorldMap::grid_to_world(grid.0, grid.1);
+        if transform.translation.truncate() != canonical {
+            return Err(format!(
+                "completed Floor {:?} has non-canonical position {:?}; expected {canonical:?} for grid {grid:?}",
+                entity_ref.id(),
+                transform.translation.truncate()
+            ));
+        }
+        if let Some(existing) = completed_floors.insert(grid, entity_ref.id()) {
+            return Err(format!(
+                "completed Floors {existing:?} and {:?} share grid {grid:?}",
+                entity_ref.id()
+            ));
+        }
+    }
+
+    let mut mapped_floor_entities = HashSet::new();
+    for (&grid, &floor) in &map.floors {
+        validate_world_map_grid("floors", grid)?;
+        if !mapped_floor_entities.insert(floor) {
+            return Err(format!(
+                "WorldMap.floors references completed Floor {floor:?} more than once"
+            ));
+        }
+        if completed_floors.get(&grid) != Some(&floor) {
+            return Err(format!(
+                "WorldMap.floors[{grid:?}] target {floor:?} is not the completed Floor at that grid"
+            ));
+        }
+    }
+    let mut legacy_floor_entities = HashSet::new();
+    for (&grid, &owner) in &map.buildings {
+        if candidate
+            .get::<Building>(owner)
+            .is_none_or(|building| building.kind != BuildingType::Floor)
+        {
+            continue;
+        }
+        if !legacy_floor_entities.insert(owner) {
+            return Err(format!(
+                "WorldMap.buildings references completed Floor {owner:?} more than once"
+            ));
+        }
+        if completed_floors.get(&grid) != Some(&owner) {
+            return Err(format!(
+                "WorldMap.buildings[{grid:?}] legacy Floor target {owner:?} is not the completed Floor at that grid"
+            ));
+        }
+    }
     for (&grid, &door) in &map.doors {
         validate_world_map_grid("doors", grid)?;
         let door_ref = candidate
@@ -2099,6 +2168,80 @@ mod tests {
                 .unwrap_err()
                 .contains("WorldMap.obstacles has length")
         );
+    }
+
+    #[test]
+    fn world_map_validation_accepts_legacy_completed_floor_without_floor_lookup() {
+        let mut world = candidate_world();
+        let grid = (6, 7);
+        let floor = world
+            .spawn((
+                Building {
+                    kind: BuildingType::Floor,
+                    is_provisional: false,
+                },
+                Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+            ))
+            .id();
+        world.resource_mut::<WorldMap>().set_building(grid, floor);
+
+        validate_world_map_candidate(&world).unwrap();
+        assert!(world.resource::<WorldMap>().floors.is_empty());
+    }
+
+    #[test]
+    fn world_map_validation_rejects_provisional_or_noncanonical_completed_floor() {
+        let mut provisional = candidate_world();
+        provisional.spawn((
+            Building {
+                kind: BuildingType::Floor,
+                is_provisional: true,
+            },
+            Transform::default(),
+        ));
+        assert!(
+            validate_world_map_candidate(&provisional)
+                .unwrap_err()
+                .contains("cannot be provisional")
+        );
+
+        let mut noncanonical = candidate_world();
+        noncanonical.spawn((
+            Building {
+                kind: BuildingType::Floor,
+                is_provisional: false,
+            },
+            Transform::from_xyz(1.0, 1.0, 0.0),
+        ));
+        assert!(
+            validate_world_map_candidate(&noncanonical)
+                .unwrap_err()
+                .contains("non-canonical position")
+        );
+    }
+
+    #[test]
+    fn world_map_validation_rejects_wrong_completed_floor_lookup() {
+        let mut world = candidate_world();
+        let actual_grid = (8, 9);
+        let floor = world
+            .spawn((
+                Building {
+                    kind: BuildingType::Floor,
+                    is_provisional: false,
+                },
+                Transform::from_translation(
+                    WorldMap::grid_to_world(actual_grid.0, actual_grid.1).extend(0.0),
+                ),
+            ))
+            .id();
+        world
+            .resource_mut::<WorldMap>()
+            .set_floor((actual_grid.0 + 1, actual_grid.1), floor);
+
+        let error = validate_world_map_candidate(&world).unwrap_err();
+
+        assert!(error.contains("is not the completed Floor at that grid"));
     }
 
     #[test]

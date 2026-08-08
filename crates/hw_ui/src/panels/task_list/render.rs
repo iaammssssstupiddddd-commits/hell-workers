@@ -410,7 +410,8 @@ fn spawn_action_bar(
                 let label = if action_state.confirmation == Some(pending) {
                     match kind {
                         super::types::TaskCancelKind::FloorSite(_)
-                        | super::types::TaskCancelKind::WallSite(_) => "Confirm cancel site",
+                        | super::types::TaskCancelKind::WallSite(_)
+                        | super::types::TaskCancelKind::SoulSpaSite(_) => "Confirm cancel site",
                         _ => "Confirm cancel",
                     }
                 } else {

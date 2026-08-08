@@ -57,11 +57,13 @@ pub(crate) fn handle_mode_select(
             );
         }
         UiIntent::SelectTaskMode(task_mode) => {
-            ensure_familiar_selected(
-                &mut sel_ctx.selected_entity,
-                &familiar_queries.q_familiars_for_area,
-                "Task designation",
-            );
+            if !matches!(task_mode, TaskMode::DesignateDeconstruct(_)) {
+                ensure_familiar_selected(
+                    &mut sel_ctx.selected_entity,
+                    &familiar_queries.q_familiars_for_area,
+                    "Task designation",
+                );
+            }
             mode::set_task_mode(
                 task_mode,
                 &mut mode_ctx.cleanup.next_play_mode,

@@ -5,11 +5,18 @@ use crate::systems::save::{
     SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadResult,
 };
 use hw_energy::{
-    PowerConsumerPolicyChangeOutcome, PowerConsumerPolicyChangeStatus, SoulSpaSlotsChangeOutcome,
+    PowerConsumerPolicyChangeOutcome, PowerConsumerPolicyChangeStatus,
+    SoulSpaConstructionCancelOutcome, SoulSpaConstructionCancelResult, SoulSpaSlotsChangeOutcome,
     SoulSpaSlotsChangeStatus,
 };
 use hw_familiar_ai::{
     FamiliarSettingsChangeOutcome, FamiliarSettingsChangeStatus, FamiliarSettingsRejection,
+};
+use hw_jobs::{
+    DeconstructionCancelOutcome, DeconstructionCancelResult, DeconstructionCommitOutcome,
+    DeconstructionCommitResult, DeconstructionDesignationOutcome,
+    DeconstructionDesignationRejectReason, DeconstructionDesignationResult,
+    DeconstructionRejectReason,
 };
 use hw_logistics::StockpilePolicyChangeOutcome;
 
@@ -51,12 +58,232 @@ pub(crate) fn adapt_soul_spa_slots_change_outcomes(
     }
 }
 
+pub(crate) fn adapt_soul_spa_construction_cancel_outcomes(
+    mut outcomes: MessageReader<SoulSpaConstructionCancelOutcome>,
+    mut notifications: MessageWriter<UserFacingNotification>,
+) {
+    for outcome in outcomes.read().copied() {
+        notifications.write(soul_spa_construction_cancel_notification(outcome));
+    }
+}
+
 pub(crate) fn adapt_power_consumer_policy_change_outcomes(
     mut outcomes: MessageReader<PowerConsumerPolicyChangeOutcome>,
     mut notifications: MessageWriter<UserFacingNotification>,
 ) {
     for outcome in outcomes.read().copied() {
         notifications.write(power_consumer_policy_notification(outcome));
+    }
+}
+
+pub(crate) fn adapt_deconstruction_designation_outcomes(
+    mut outcomes: MessageReader<DeconstructionDesignationOutcome>,
+    mut notifications: MessageWriter<UserFacingNotification>,
+) {
+    for outcome in outcomes.read().copied() {
+        notifications.write(deconstruction_designation_notification(outcome));
+    }
+}
+
+pub(crate) fn adapt_deconstruction_cancel_outcomes(
+    mut outcomes: MessageReader<DeconstructionCancelOutcome>,
+    mut notifications: MessageWriter<UserFacingNotification>,
+) {
+    for outcome in outcomes.read().copied() {
+        notifications.write(deconstruction_cancel_notification(outcome));
+    }
+}
+
+pub(crate) fn adapt_deconstruction_commit_outcomes(
+    mut outcomes: MessageReader<DeconstructionCommitOutcome>,
+    mut notifications: MessageWriter<UserFacingNotification>,
+) {
+    for outcome in outcomes.read().copied() {
+        if let Some(notification) = deconstruction_commit_notification(outcome) {
+            notifications.write(notification);
+        }
+    }
+}
+
+fn deconstruction_designation_notification(
+    outcome: DeconstructionDesignationOutcome,
+) -> UserFacingNotification {
+    let (severity, title, body, result_key) = match outcome.result {
+        DeconstructionDesignationResult::Designated { class, .. } => (
+            NotificationSeverity::Success,
+            "Deconstruction designated",
+            format!(
+                "A {:?} deconstruction order was created.",
+                class.building_type()
+            ),
+            "designated",
+        ),
+        DeconstructionDesignationResult::Rejected(reason) => (
+            NotificationSeverity::Warning,
+            "Deconstruction not designated",
+            deconstruction_designation_reject_label(reason).to_string(),
+            deconstruction_designation_reject_key(reason),
+        ),
+    };
+    UserFacingNotification::new(
+        format!(
+            "deconstruction-designation:{}:{}:{}",
+            outcome.request_id,
+            outcome.hit.map_or(0, Entity::to_bits),
+            result_key,
+        ),
+        severity,
+        title,
+        body,
+        NotificationRetention::ToastOnly,
+    )
+}
+
+fn deconstruction_cancel_notification(
+    outcome: DeconstructionCancelOutcome,
+) -> UserFacingNotification {
+    let (severity, title, body, result_key) = match outcome.result {
+        DeconstructionCancelResult::Canceled => (
+            NotificationSeverity::Success,
+            "Deconstruction canceled",
+            "The order and any assigned work were cleaned up safely.",
+            "canceled",
+        ),
+        DeconstructionCancelResult::ClaimInProgress => (
+            NotificationSeverity::Warning,
+            "Deconstruction already finishing",
+            "The building commit has already started and cannot be canceled.",
+            "claim-in-progress",
+        ),
+        DeconstructionCancelResult::StaleWorld => (
+            NotificationSeverity::Warning,
+            "Deconstruction changed",
+            "The world changed before the cancel request was applied.",
+            "stale-world",
+        ),
+        DeconstructionCancelResult::StaleOrder => (
+            NotificationSeverity::Warning,
+            "Deconstruction changed",
+            "The selected order is no longer available.",
+            "stale-order",
+        ),
+    };
+    UserFacingNotification::new(
+        format!(
+            "deconstruction-cancel:{}:{result_key}",
+            outcome.order.to_bits()
+        ),
+        severity,
+        title,
+        body,
+        NotificationRetention::ToastOnly,
+    )
+}
+
+fn deconstruction_commit_notification(
+    outcome: DeconstructionCommitOutcome,
+) -> Option<UserFacingNotification> {
+    let (severity, title, body, result_key) = match outcome.result {
+        DeconstructionCommitResult::Committed => (
+            NotificationSeverity::Success,
+            "Deconstruction complete",
+            "The building was removed and its recoverable contents were preserved.",
+            "committed",
+        ),
+        DeconstructionCommitResult::OwnerMismatch => (
+            NotificationSeverity::Error,
+            "Deconstruction blocked",
+            "The building owner state is inconsistent. The target was left unchanged.",
+            "owner-mismatch",
+        ),
+        DeconstructionCommitResult::NoSafeRecovery => (
+            NotificationSeverity::Warning,
+            "Deconstruction blocked",
+            "No safe recovery destination is available. The target was left unchanged.",
+            "no-safe-recovery",
+        ),
+        DeconstructionCommitResult::InconsistentMixerInventory => (
+            NotificationSeverity::Error,
+            "Deconstruction blocked",
+            "Mixer inventory is inconsistent. The target was left unchanged.",
+            "mixer-inconsistent",
+        ),
+        DeconstructionCommitResult::Moving => (
+            NotificationSeverity::Warning,
+            "Deconstruction blocked",
+            "The building is moving. The order remains available for retry.",
+            "moving",
+        ),
+        DeconstructionCommitResult::UnsupportedTarget => (
+            NotificationSeverity::Warning,
+            "Deconstruction blocked",
+            "Safe cleanup is unavailable for this target.",
+            "unsupported",
+        ),
+        DeconstructionCommitResult::Canceled
+        | DeconstructionCommitResult::Duplicate
+        | DeconstructionCommitResult::StaleWorld
+        | DeconstructionCommitResult::StaleIdentity
+        | DeconstructionCommitResult::StaleTarget => return None,
+    };
+    Some(UserFacingNotification::new(
+        format!(
+            "deconstruction-commit:{}:{}:{result_key}",
+            outcome.order.to_bits(),
+            outcome.target.to_bits(),
+        ),
+        severity,
+        title,
+        body,
+        NotificationRetention::ToastOnly,
+    ))
+}
+
+const fn deconstruction_designation_reject_label(
+    reason: DeconstructionDesignationRejectReason,
+) -> &'static str {
+    match reason {
+        DeconstructionDesignationRejectReason::StaleWorld => {
+            "The world changed; select the building again."
+        }
+        DeconstructionDesignationRejectReason::NoTarget => "No completed building was selected.",
+        DeconstructionDesignationRejectReason::CleanupUnavailable => {
+            "Safe cleanup is not available for that building."
+        }
+        DeconstructionDesignationRejectReason::Target(reason) => match reason {
+            DeconstructionRejectReason::StaleTarget => "The selected building no longer exists.",
+            DeconstructionRejectReason::UnsupportedTarget => {
+                "The selected entity is not a supported completed building."
+            }
+            DeconstructionRejectReason::ConstructionInProgress => {
+                "Construction is still in progress; use its cancel action instead."
+            }
+            DeconstructionRejectReason::Moving => "Wait until the building stops moving.",
+            DeconstructionRejectReason::AlreadyDesignated => {
+                "That building already has a deconstruction order."
+            }
+            DeconstructionRejectReason::OwnerMismatch => {
+                "The selected building has an invalid owner state."
+            }
+        },
+    }
+}
+
+const fn deconstruction_designation_reject_key(
+    reason: DeconstructionDesignationRejectReason,
+) -> &'static str {
+    match reason {
+        DeconstructionDesignationRejectReason::StaleWorld => "stale-world",
+        DeconstructionDesignationRejectReason::NoTarget => "no-target",
+        DeconstructionDesignationRejectReason::CleanupUnavailable => "cleanup-unavailable",
+        DeconstructionDesignationRejectReason::Target(reason) => match reason {
+            DeconstructionRejectReason::StaleTarget => "stale-target",
+            DeconstructionRejectReason::UnsupportedTarget => "unsupported-target",
+            DeconstructionRejectReason::ConstructionInProgress => "construction-in-progress",
+            DeconstructionRejectReason::Moving => "moving",
+            DeconstructionRejectReason::AlreadyDesignated => "already-designated",
+            DeconstructionRejectReason::OwnerMismatch => "owner-mismatch",
+        },
     }
 }
 
@@ -151,6 +378,58 @@ fn soul_spa_slots_notification(outcome: SoulSpaSlotsChangeOutcome) -> UserFacing
 
     UserFacingNotification::new(
         format!("soul-spa-slots:{target}:{status_key}"),
+        severity,
+        title,
+        body,
+        NotificationRetention::ToastOnly,
+    )
+}
+
+fn soul_spa_construction_cancel_notification(
+    outcome: SoulSpaConstructionCancelOutcome,
+) -> UserFacingNotification {
+    let target = outcome.target.to_bits();
+    let (severity, title, body, result_key) = match outcome.result {
+        SoulSpaConstructionCancelResult::Canceled { refunded_bones } => (
+            NotificationSeverity::Success,
+            "Soul Spa construction canceled",
+            format!("Refunded {refunded_bones} delivered Bone."),
+            format!("canceled:{refunded_bones}"),
+        ),
+        SoulSpaConstructionCancelResult::Paused => (
+            NotificationSeverity::Warning,
+            "Soul Spa cancellation paused",
+            "Resume the simulation before canceling construction.".to_string(),
+            "paused".to_string(),
+        ),
+        SoulSpaConstructionCancelResult::StaleTarget => (
+            NotificationSeverity::Warning,
+            "Soul Spa cancellation expired",
+            "The selected Soul Spa no longer exists.".to_string(),
+            "stale".to_string(),
+        ),
+        SoulSpaConstructionCancelResult::PhaseUnavailable => (
+            NotificationSeverity::Warning,
+            "Soul Spa construction not canceled",
+            "Only a Soul Spa still under construction can be canceled.".to_string(),
+            "phase".to_string(),
+        ),
+        SoulSpaConstructionCancelResult::OwnerMismatch => (
+            NotificationSeverity::Error,
+            "Soul Spa construction not canceled",
+            "The construction footprint changed; no resources were modified.".to_string(),
+            "owner-mismatch".to_string(),
+        ),
+        SoulSpaConstructionCancelResult::ActiveTaskMismatch => (
+            NotificationSeverity::Error,
+            "Soul Spa construction not canceled",
+            "Related hauling work changed; retry after the task state settles.".to_string(),
+            "task-mismatch".to_string(),
+        ),
+    };
+
+    UserFacingNotification::new(
+        format!("soul-spa-construction-cancel:{target}:{result_key}"),
         severity,
         title,
         body,
@@ -585,5 +864,77 @@ mod tests {
             assert_eq!(notification.severity, expected);
             assert_eq!(notification.retention, NotificationRetention::ToastOnly);
         }
+    }
+
+    #[test]
+    fn deconstruction_terminal_notifications_keep_success_and_recovery_failures_distinct() {
+        let order = Entity::from_raw_u32(10).expect("order");
+        let target = Entity::from_raw_u32(11).expect("target");
+        let canceled = deconstruction_cancel_notification(DeconstructionCancelOutcome {
+            order,
+            target: Some(target),
+            result: DeconstructionCancelResult::Canceled,
+        });
+        let blocked = deconstruction_commit_notification(DeconstructionCommitOutcome {
+            worker: Entity::PLACEHOLDER,
+            order,
+            target,
+            result: DeconstructionCommitResult::NoSafeRecovery,
+        })
+        .unwrap();
+        let internal = deconstruction_commit_notification(DeconstructionCommitOutcome {
+            worker: Entity::PLACEHOLDER,
+            order,
+            target,
+            result: DeconstructionCommitResult::Duplicate,
+        });
+
+        assert_eq!(canceled.severity, NotificationSeverity::Success);
+        assert_eq!(blocked.severity, NotificationSeverity::Warning);
+        assert!(blocked.body.contains("left unchanged"));
+        assert!(internal.is_none());
+        assert_ne!(canceled.key, blocked.key);
+    }
+
+    #[test]
+    fn soul_spa_construction_cancel_notifications_preserve_terminal_meaning() {
+        let target = Entity::from_raw_u32(12).expect("target");
+        let notification = |result| {
+            soul_spa_construction_cancel_notification(SoulSpaConstructionCancelOutcome {
+                target,
+                result,
+            })
+        };
+
+        let canceled =
+            notification(SoulSpaConstructionCancelResult::Canceled { refunded_bones: 7 });
+        let paused = notification(SoulSpaConstructionCancelResult::Paused);
+        let stale = notification(SoulSpaConstructionCancelResult::StaleTarget);
+        let phase = notification(SoulSpaConstructionCancelResult::PhaseUnavailable);
+        let owner = notification(SoulSpaConstructionCancelResult::OwnerMismatch);
+        let task = notification(SoulSpaConstructionCancelResult::ActiveTaskMismatch);
+
+        assert_eq!(canceled.severity, NotificationSeverity::Success);
+        assert!(canceled.body.contains('7'));
+        assert_eq!(paused.severity, NotificationSeverity::Warning);
+        assert!(paused.body.contains("Resume"));
+        assert_eq!(stale.severity, NotificationSeverity::Warning);
+        assert_eq!(phase.severity, NotificationSeverity::Warning);
+        assert_eq!(owner.severity, NotificationSeverity::Error);
+        assert_eq!(task.severity, NotificationSeverity::Error);
+        for notification in [&canceled, &paused, &stale, &phase, &owner, &task] {
+            assert_eq!(notification.retention, NotificationRetention::ToastOnly);
+        }
+        let keys = [
+            &canceled.key,
+            &paused.key,
+            &stale.key,
+            &phase.key,
+            &owner.key,
+            &task.key,
+        ]
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+        assert_eq!(keys.len(), 6);
     }
 }

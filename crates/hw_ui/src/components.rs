@@ -104,6 +104,7 @@ pub struct InfoPanelNodes {
     pub soul_spa_slots_decrease_button: Option<Entity>,
     pub soul_spa_slots_text: Option<Entity>,
     pub soul_spa_slots_increase_button: Option<Entity>,
+    pub soul_spa_cancel_button: Option<Entity>,
     pub power_group: Option<Entity>,
     pub power_connection: Option<Entity>,
     pub power_flow: Option<Entity>,

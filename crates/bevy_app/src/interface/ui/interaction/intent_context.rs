@@ -12,10 +12,11 @@ use hw_core::game_state::PlayMode;
 use hw_core::world::DoorState;
 use hw_energy::{
     PowerConsumer, PowerConsumerPolicy, PowerConsumerPolicyChangeOutcome,
-    PowerConsumerPolicyChangeStatus, PowerPriority, SoulSpaPhase, SoulSpaSite,
+    PowerConsumerPolicyChangeStatus, PowerPriority, SoulSpaConstructionCancelOutcome,
+    SoulSpaConstructionCancelRequest, SoulSpaConstructionCancelResult, SoulSpaPhase, SoulSpaSite,
     SoulSpaSlotsChangeOutcome, SoulSpaSlotsChangeStatus,
 };
-use hw_jobs::{Building, BuildingCategory, Door};
+use hw_jobs::{Building, BuildingCategory, DeconstructionPending, Door};
 use hw_logistics::{StockpilePolicyChangeRequest, StockpilePolicyPatch};
 use hw_spatial::StockpileSpatialGrid;
 use hw_ui::components::{ArchitectCategoryState, LoadConfirmDialog, OperationDialog};
@@ -46,13 +47,15 @@ impl IntentModeCtx<'_, '_> {
 #[derive(SystemParam)]
 pub(crate) struct IntentDomainActionCtx<'w, 's> {
     architect_category: ResMut<'w, ArchitectCategoryState>,
-    q_buildings: Query<'w, 's, &'static Building>,
+    q_buildings: Query<'w, 's, &'static Building, Without<DeconstructionPending>>,
     q_doors: Query<'w, 's, (&'static Transform, &'static mut Door, &'static mut Sprite)>,
     world_map: WorldMapWrite<'w>,
     door_visual_handles: Res<'w, DoorVisualHandles>,
     stockpile_grid: Res<'w, StockpileSpatialGrid>,
     stockpile_policy_requests: MessageWriter<'w, StockpilePolicyChangeRequest>,
     soul_spa_slot_outcomes: MessageWriter<'w, SoulSpaSlotsChangeOutcome>,
+    soul_spa_cancel_requests: MessageWriter<'w, SoulSpaConstructionCancelRequest>,
+    soul_spa_cancel_outcomes: MessageWriter<'w, SoulSpaConstructionCancelOutcome>,
     power_consumer_policy_outcomes: MessageWriter<'w, PowerConsumerPolicyChangeOutcome>,
     q_soul_spas: Query<'w, 's, &'static mut SoulSpaSite>,
     q_power_consumers: Query<'w, 's, Option<&'static mut PowerConsumerPolicy>, With<PowerConsumer>>,
@@ -128,6 +131,19 @@ impl IntentDomainActionCtx<'_, '_> {
         };
         self.soul_spa_slot_outcomes
             .write(SoulSpaSlotsChangeOutcome { target, status });
+    }
+
+    pub(crate) fn cancel_soul_spa_construction(&mut self, target: Entity, paused: bool) {
+        if paused {
+            self.soul_spa_cancel_outcomes
+                .write(SoulSpaConstructionCancelOutcome {
+                    target,
+                    result: SoulSpaConstructionCancelResult::Paused,
+                });
+        } else {
+            self.soul_spa_cancel_requests
+                .write(SoulSpaConstructionCancelRequest { target });
+        }
     }
 
     pub(crate) fn set_power_consumer_priority(

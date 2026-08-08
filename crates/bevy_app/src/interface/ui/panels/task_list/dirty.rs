@@ -1,7 +1,8 @@
 use crate::systems::jobs::floor_construction::FloorTileBlueprint;
 use crate::systems::jobs::wall_construction::WallTileBlueprint;
 use crate::systems::jobs::{
-    Blueprint, BonePile, Designation, PlayerIssuedDesignation, Priority, Rock, SandPile, Tree,
+    Blueprint, BonePile, Building, Designation, PlayerIssuedDesignation, Priority, Rock, SandPile,
+    Tree,
 };
 use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::{
@@ -12,7 +13,10 @@ use bevy::prelude::*;
 use hw_core::ecs::drain_removed;
 use hw_core::relationships::TaskWorkers;
 use hw_familiar_ai::FamiliarTaskCandidateDiagnostics;
-use hw_jobs::TaskDiagnosticInputRevisions;
+use hw_jobs::{
+    DeconstructionBlocker, DeconstructionCommitClaim, DeconstructionOrder, DeconstructionPending,
+    TargetDeconstructionRoot, TargetSoulSpaSite, TaskDiagnosticInputRevisions, TaskSlots,
+};
 use hw_soul_ai::BlueprintAutoBuildDiagnostics;
 use hw_ui::components::LeftPanelMode;
 
@@ -31,11 +35,19 @@ pub struct TaskChangedDetectors<'w, 's> {
     q_fixed_sources: Query<'w, 's, (), Changed<TransportRequestFixedSource>>,
     q_floor_tiles: Query<'w, 's, (), Changed<FloorTileBlueprint>>,
     q_wall_tiles: Query<'w, 's, (), Changed<WallTileBlueprint>>,
+    q_soul_spa_targets: Query<'w, 's, (), Changed<TargetSoulSpaSite>>,
     q_resource_items: Query<'w, 's, (), Changed<ResourceItem>>,
     q_trees: Query<'w, 's, (), Changed<Tree>>,
     q_rocks: Query<'w, 's, (), Changed<Rock>>,
     q_sand_piles: Query<'w, 's, (), Changed<SandPile>>,
     q_bone_piles: Query<'w, 's, (), Changed<BonePile>>,
+    q_deconstruction_orders: Query<'w, 's, (), Changed<DeconstructionOrder>>,
+    q_task_slots: Query<'w, 's, (), Changed<TaskSlots>>,
+    q_deconstruction_targets: Query<'w, 's, (), Changed<TargetDeconstructionRoot>>,
+    q_deconstruction_pending: Query<'w, 's, (), Changed<DeconstructionPending>>,
+    q_deconstruction_claims: Query<'w, 's, (), Changed<DeconstructionCommitClaim>>,
+    q_deconstruction_blockers: Query<'w, 's, (), Changed<DeconstructionBlocker>>,
+    q_buildings: Query<'w, 's, (), Changed<Building>>,
 }
 
 pub fn detect_task_list_changed_components(
@@ -58,11 +70,19 @@ pub fn detect_task_list_changed_components(
         q_fixed_sources,
         q_floor_tiles,
         q_wall_tiles,
+        q_soul_spa_targets,
         q_resource_items,
         q_trees,
         q_rocks,
         q_sand_piles,
         q_bone_piles,
+        q_deconstruction_orders,
+        q_task_slots,
+        q_deconstruction_targets,
+        q_deconstruction_pending,
+        q_deconstruction_claims,
+        q_deconstruction_blockers,
+        q_buildings,
     } = detectors;
     let task_data_changed = !q_designations.is_empty()
         || !q_added_designations.is_empty()
@@ -75,11 +95,19 @@ pub fn detect_task_list_changed_components(
         || !q_fixed_sources.is_empty()
         || !q_floor_tiles.is_empty()
         || !q_wall_tiles.is_empty()
+        || !q_soul_spa_targets.is_empty()
         || !q_resource_items.is_empty()
         || !q_trees.is_empty()
         || !q_rocks.is_empty()
         || !q_sand_piles.is_empty()
         || !q_bone_piles.is_empty()
+        || !q_deconstruction_orders.is_empty()
+        || !q_task_slots.is_empty()
+        || !q_deconstruction_targets.is_empty()
+        || !q_deconstruction_pending.is_empty()
+        || !q_deconstruction_claims.is_empty()
+        || !q_deconstruction_blockers.is_empty()
+        || !q_buildings.is_empty()
         || diagnostics.is_changed()
         || auto_build_diagnostics.is_changed()
         || revisions.is_changed();
@@ -104,11 +132,19 @@ pub struct TaskRemovedDetectors<'w, 's> {
     removed_fixed_sources: RemovedComponents<'w, 's, TransportRequestFixedSource>,
     removed_floor_tiles: RemovedComponents<'w, 's, FloorTileBlueprint>,
     removed_wall_tiles: RemovedComponents<'w, 's, WallTileBlueprint>,
+    removed_soul_spa_targets: RemovedComponents<'w, 's, TargetSoulSpaSite>,
     removed_resource_items: RemovedComponents<'w, 's, ResourceItem>,
     removed_trees: RemovedComponents<'w, 's, Tree>,
     removed_rocks: RemovedComponents<'w, 's, Rock>,
     removed_sand_piles: RemovedComponents<'w, 's, SandPile>,
     removed_bone_piles: RemovedComponents<'w, 's, BonePile>,
+    removed_deconstruction_orders: RemovedComponents<'w, 's, DeconstructionOrder>,
+    removed_task_slots: RemovedComponents<'w, 's, TaskSlots>,
+    removed_deconstruction_targets: RemovedComponents<'w, 's, TargetDeconstructionRoot>,
+    removed_deconstruction_pending: RemovedComponents<'w, 's, DeconstructionPending>,
+    removed_deconstruction_claims: RemovedComponents<'w, 's, DeconstructionCommitClaim>,
+    removed_deconstruction_blockers: RemovedComponents<'w, 's, DeconstructionBlocker>,
+    removed_buildings: RemovedComponents<'w, 's, Building>,
 }
 
 pub fn detect_task_list_removed_components(
@@ -127,11 +163,19 @@ pub fn detect_task_list_removed_components(
     removed_any |= drain_removed(&mut removed.removed_fixed_sources);
     removed_any |= drain_removed(&mut removed.removed_floor_tiles);
     removed_any |= drain_removed(&mut removed.removed_wall_tiles);
+    removed_any |= drain_removed(&mut removed.removed_soul_spa_targets);
     removed_any |= drain_removed(&mut removed.removed_resource_items);
     removed_any |= drain_removed(&mut removed.removed_trees);
     removed_any |= drain_removed(&mut removed.removed_rocks);
     removed_any |= drain_removed(&mut removed.removed_sand_piles);
     removed_any |= drain_removed(&mut removed.removed_bone_piles);
+    removed_any |= drain_removed(&mut removed.removed_deconstruction_orders);
+    removed_any |= drain_removed(&mut removed.removed_task_slots);
+    removed_any |= drain_removed(&mut removed.removed_deconstruction_targets);
+    removed_any |= drain_removed(&mut removed.removed_deconstruction_pending);
+    removed_any |= drain_removed(&mut removed.removed_deconstruction_claims);
+    removed_any |= drain_removed(&mut removed.removed_deconstruction_blockers);
+    removed_any |= drain_removed(&mut removed.removed_buildings);
 
     if removed_any {
         dirty.mark_all();

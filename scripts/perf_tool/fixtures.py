@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 
 from .compare import *
+from .arguments import DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING
 from .rtt_light_contract import (
     expected_formal_cases,
     expected_gate_result_rows,
@@ -2280,6 +2281,39 @@ def self_test() -> int:
             ]
         )
         validate_arguments(supported_indoor_size)
+        deconstruction_args = build_parser().parse_args(
+            [
+                "audit",
+                "--dry-run",
+                "--workload",
+                "deconstruction",
+                "--window-backend",
+                "headless",
+            ]
+        )
+        validate_arguments(deconstruction_args)
+        validate_arguments(deconstruction_args)
+        assert deconstruction_args.allow_log_pattern == [
+            DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING
+        ]
+        rejected_deconstruction_allowance = build_parser().parse_args(
+            [
+                "audit",
+                "--dry-run",
+                "--workload",
+                "deconstruction",
+                "--window-backend",
+                "headless",
+                "--allow-log-pattern",
+                "unexpected warning",
+            ]
+        )
+        try:
+            validate_arguments(rejected_deconstruction_allowance)
+        except ValueError as error:
+            assert "custom --allow-log-pattern is forbidden" in str(error)
+        else:
+            raise AssertionError("deconstruction unexpectedly accepted a custom log allowance")
         rejected_headless_gpu = build_parser().parse_args(
             ["run", "--dry-run", "--window-backend", "headless", "--renders", "gpu"]
         )

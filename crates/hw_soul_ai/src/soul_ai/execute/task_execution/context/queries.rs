@@ -176,6 +176,16 @@ pub struct TaskQueries<'w, 's> {
     pub resource_items: ResourceItemsQuery<'w, 's>,
     pub mixer_stored_mud: Query<'w, 's, &'static hw_jobs::mud_mixer::StoredByMixer>,
     pub transport_request_status: TransportRequestStatusQuery<'w, 's>,
+    pub deconstruction_order_targets: Query<
+        'w,
+        's,
+        &'static hw_jobs::TargetDeconstructionRoot,
+        With<hw_jobs::DeconstructionOrder>,
+    >,
+    pub deconstruction_pending: Query<'w, 's, &'static hw_jobs::DeconstructionPending>,
+    pub deconstruction_claims: Query<'w, 's, (), With<hw_jobs::DeconstructionCommitClaim>>,
+    pub deconstruction_blockers: Query<'w, 's, &'static hw_jobs::DeconstructionBlocker>,
+    pub move_planned: Query<'w, 's, (), With<hw_jobs::MovePlanned>>,
 }
 
 pub trait TaskReservationAccess<'w, 's> {

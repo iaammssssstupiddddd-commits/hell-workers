@@ -8,6 +8,7 @@ use crate::components::{
     UiInputCapture, UiNodeRegistry, UiSlot,
 };
 use crate::overlay::{LOAD_CONFIRM_LAYER, OPERATION_DIALOG_LAYER};
+use crate::panels::task_list::player_reachable_work_types;
 use crate::theme::UiTheme;
 use bevy::picking::Pickable;
 use bevy::prelude::*;
@@ -440,7 +441,7 @@ fn spawn_policy_editor(
         OperationPolicyAllDisabledWarning,
     ));
 
-    for work_type in WorkType::ALL {
+    for work_type in player_reachable_work_types() {
         spawn_policy_row(parent, game_assets, theme, work_type);
     }
 }
@@ -773,8 +774,9 @@ mod tests {
             .iter(app.world())
             .map(|row| row.0)
             .collect::<HashSet<_>>();
-        assert_eq!(rows.len(), WorkType::ALL.len());
-        assert_eq!(rows, WorkType::ALL.into_iter().collect());
+        let expected = player_reachable_work_types().collect::<HashSet<_>>();
+        assert_eq!(rows, expected);
+        assert!(rows.contains(&WorkType::Deconstruct));
 
         let all_actions_are_targetless = app
             .world_mut()

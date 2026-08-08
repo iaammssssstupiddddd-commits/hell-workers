@@ -4,7 +4,7 @@ use hw_core::events::publish_task_completed;
 use hw_core::relationships::WorkingOn;
 use hw_core::visual::SoulTaskHandles;
 use hw_core::{EpochLocal, WorldEpoch};
-use hw_jobs::{ActiveTaskIdentity, AssignedTask};
+use hw_jobs::{ActiveTaskIdentity, AssignedTask, DeconstructionCommitRequest};
 use hw_logistics::Wheelbarrow;
 use hw_world::pathfinding::PathfindingContext;
 use hw_world::{RuntimePathSearchBudget, WorldMapRead};
@@ -28,6 +28,7 @@ pub struct TaskExecResources<'w, 's> {
     pf_context: Local<'s, PathfindingContext>,
     path_budget: ResMut<'w, RuntimePathSearchBudget>,
     world_epoch: Option<Res<'w, WorldEpoch>>,
+    deconstruction_commit_writer: MessageWriter<'w, DeconstructionCommitRequest>,
     path_search_progress: Local<'s, EpochLocal<TaskPathSearchProgress>>,
     task_round_robin: Local<'s, EpochLocal<TaskExecutionRoundRobin>>,
 }
@@ -175,7 +176,7 @@ pub fn task_execution_system(
         }
 
         let budget_used_before = res.path_budget.used();
-        let completed_identity = {
+        let (completed_identity, deconstruction_commit_request) = {
             let mut ctx = TaskExecutionContext {
                 soul_entity,
                 soul_transform,
@@ -189,6 +190,8 @@ pub fn task_execution_system(
                 path_budget: &mut res.path_budget,
                 path_search_progress,
                 queries: &mut queries,
+                world_epoch: world_epoch.get(),
+                deconstruction_commit_request: None,
                 env: TaskExecEnv {
                     soul_handles: &res.soul_handles,
                     time: res.time.as_ref(),
@@ -210,12 +213,12 @@ pub fn task_execution_system(
                 );
             }
 
-            if ctx.is_completed() {
-                Some(ctx.task_identity())
-            } else {
-                None
-            }
+            let completed_identity = ctx.is_completed().then(|| ctx.task_identity());
+            (completed_identity, ctx.deconstruction_commit_request)
         };
+        if let Some(request) = deconstruction_commit_request {
+            res.deconstruction_commit_writer.write(request);
+        }
         if res.path_budget.used() > budget_used_before {
             task_round_robin.last_core_search_claimant = Some(soul_entity);
         }

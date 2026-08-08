@@ -4,6 +4,46 @@ use hw_core::relationships::{DeliveringTo, IncomingDeliveries, TaskWorkers};
 use hw_jobs::{HaulToBlueprintData, HaulToBpPhase};
 
 #[test]
+fn unconnected_deconstruction_assignment_retryably_aborts_without_holding_claims() {
+    let mut app = task_execution_test_app();
+    let order = app.world_mut().spawn_empty().id();
+    let target = app.world_mut().spawn_empty().id();
+    let assignment = app.world_mut().spawn_empty().id();
+    let soul = spawn_task_execution_soul(
+        app.world_mut(),
+        AssignedTask::Deconstruct(DeconstructData {
+            order,
+            target,
+            phase: DeconstructPhase::GoingToTarget,
+        }),
+    );
+    app.world_mut().entity_mut(soul).insert((
+        ActiveTaskIdentity::new(assignment, target, WorkType::Deconstruct),
+        WorkingOn(target),
+    ));
+
+    app.update();
+
+    let receipts = app.world().resource::<TaskNotificationReceipts>();
+    assert!(receipts.completed_domain.is_empty());
+    assert!(receipts.completed_visual.is_empty());
+    assert!(receipts.abandoned.is_empty());
+    assert!(matches!(
+        app.world().get::<AssignedTask>(soul),
+        Some(AssignedTask::None)
+    ));
+    assert!(app.world().get::<ActiveTaskIdentity>(soul).is_none());
+    assert!(app.world().get::<WorkingOn>(soul).is_none());
+    assert!(
+        app.world()
+            .get::<TaskWorkers>(target)
+            .is_none_or(TaskWorkers::is_empty)
+    );
+    assert!(app.world().get_entity(order).is_ok());
+    assert!(app.world().get_entity(target).is_ok());
+}
+
+#[test]
 fn unreachable_blueprint_haul_source_retryably_releases_assignment_and_delivery() {
     let mut app = task_execution_test_app();
     {

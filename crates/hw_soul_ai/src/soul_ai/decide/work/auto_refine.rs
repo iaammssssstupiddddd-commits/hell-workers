@@ -11,7 +11,7 @@ use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::logistics::ResourceType;
 use hw_core::relationships::{StoredItems, TaskWorkers};
 use hw_jobs::mud_mixer::MudMixerStorage;
-use hw_jobs::{AssignedTask, Designation, MovePlanned};
+use hw_jobs::{AssignedTask, DeconstructionPending, Designation, MovePlanned};
 use hw_logistics::transport_request::producer::{collect_all_area_owners, find_owner_for_position};
 use hw_logistics::zone::Stockpile;
 use hw_world::Yard;
@@ -28,6 +28,7 @@ type MixersQuery<'w, 's> = Query<
         Option<&'static Stockpile>,
         Option<&'static StoredItems>,
         Option<&'static MovePlanned>,
+        Option<&'static DeconstructionPending>,
     ),
 >;
 
@@ -66,9 +67,10 @@ pub fn mud_mixer_auto_refine_system(
         stockpile_opt,
         stored_opt,
         move_planned_opt,
+        deconstruction_pending,
     ) in q_mixers.iter()
     {
-        if move_planned_opt.is_some() {
+        if move_planned_opt.is_some() || deconstruction_pending.is_some() {
             continue;
         }
         let mixer_pos = mixer_transform.translation.truncate();
@@ -126,5 +128,62 @@ pub fn mud_mixer_auto_refine_system(
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::relationships::StoredIn;
+    use hw_logistics::{ResourceItem, Stockpile};
+
+    fn spawn_ready_mixer(app: &mut App, x: f32) -> Entity {
+        let mixer = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(x, 0.0, 0.0),
+                MudMixerStorage {
+                    sand: 1,
+                    rock: 1,
+                    mud: 0,
+                },
+                Stockpile {
+                    capacity: 4,
+                    resource_type: Some(ResourceType::Water),
+                },
+            ))
+            .id();
+        app.world_mut()
+            .spawn((ResourceItem(ResourceType::Water), StoredIn(mixer)));
+        mixer
+    }
+
+    #[test]
+    fn auto_refine_skips_pending_mixer_and_keeps_live_control() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_message::<DesignationRequest>()
+            .add_systems(Update, mud_mixer_auto_refine_system);
+        app.world_mut().spawn(Yard {
+            min: Vec2::splat(-100.0),
+            max: Vec2::splat(100.0),
+        });
+        let pending = spawn_ready_mixer(&mut app, 0.0);
+        let live = spawn_ready_mixer(&mut app, 20.0);
+        let order = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .entity_mut(pending)
+            .insert(DeconstructionPending { order });
+        app.world_mut().flush();
+
+        app.update();
+
+        let requests = app
+            .world_mut()
+            .resource_mut::<Messages<DesignationRequest>>()
+            .drain()
+            .collect::<Vec<_>>();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].entity, live);
     }
 }

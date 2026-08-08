@@ -722,6 +722,7 @@ def _revalidate_run(
         "indoor_light_fixture",
         "indoor_light_layout",
         "indoor_light_presentation",
+        "deconstruction_fixture",
         "timeline",
         "behavior_save_artifact",
     )

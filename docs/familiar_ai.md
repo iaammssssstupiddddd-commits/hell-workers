@@ -60,6 +60,21 @@ Familiar command の keyboard edge は `bevy_app::input_actions` が context 解
 - 活動範囲は既存の durable `TaskArea` が唯一の正本です。policy に別の範囲や座標は保存しません。
 - priority は禁止中も保持されるため、再許可すると以前の `Low / Normal / High` が戻ります。
 
+### 解体候補と公開policy境界
+
+`DeconstructionOrder`は通常のFamiliar policyとpriority scoreを使い、Operation dialogにも`Deconstruct`行を表示する。
+候補時にcanonical targetの`DeconstructionPending`、commit claim、blocker、完成/marker状態を再検証する。
+割り当て可能なのは全`BuildingType`の完成済みbuildingと`Operational` Soul Spaである。structureは
+owner-safeなmap/cache/Room/wall visual cleanup、Soul Spa / Outdoor Lampはworker/request/Power/visual cleanupが
+成立する場合だけ候補になる。Constructing Soul Spaは専用cancel経路を使い、`Deconstruct`候補には含めない。
+`MovePlanned`、pending move apply、durable `MovePlantTask`に加え、全Soulのactive
+`AssignedTask::MovePlant` targetも0.5秒のdelegation cycleごとに一度だけ集合化して競合を防ぐ。
+
+非walkableなtargetは候補target自身ではなく隣接walkable componentへの到達可能性を
+`WalkabilityConnectivityCache`で判定し、候補評価のためのA*を追加しない。Thinkで有効でもExecuteまでに
+Moveやclaimが始まったrequestはSoul側のapply-time再検証で拒否する。Orders、Operation dialog、Task Dashboardは
+M3で同時公開され、UIの表示能力を割当権限として使わずlive ruleを再検証する。
+
 ### リクルート条件
 
 魂がリクルート対象となるための条件（詳細は [soul_ai.md](soul_ai.md) 参照）：
@@ -271,6 +286,13 @@ operation / policy の変更は request がある Logic tick だけ処理しま�
   同じ group の別セルへ destination を付け替えません。
 - `ConsolidateStockpile` は receiver の `NewInbound`、donor の `NewOutbound` と owner を再検証します。
   実 source item の owner が receiver と非互換、または donor が搬出禁止かつ draining でない場合は新規割当を止めます。
+
+### 7.5.3. 解体の候補・apply二重検証
+
+解体候補はFamiliar単位の収集時にtarget rootへ解決し、workerごとの到達判定ではそのroot位置を使う。
+active Move target集合はdelegation timerが発火したcycleだけ構築し、steady-stateの追加全Soul走査を作らない。
+assignment message適用時は同batch開始時のactive Move集合、order/pending/claim/blocker、marker、phase、
+reservation operationが空であることを再確認し、stale requestから`WorkingOn`やreservationを作らない。
 
 ### 7.6. 状態遷移の自動検知（Bevy 標準機能の活用）
 `Changed<FamiliarAiState>` フィルタを使用して状態遷移を自動検知します。

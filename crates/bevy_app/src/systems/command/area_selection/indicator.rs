@@ -41,7 +41,9 @@ pub fn area_selection_indicator_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TaskAreaMaterial>>,
 ) {
-    let drag_start = get_drag_start(ctx.task_context.0);
+    let drag_start = (!matches!(ctx.task_context.0, TaskMode::DesignateDeconstruct(_)))
+        .then(|| get_drag_start(ctx.task_context.0))
+        .flatten();
 
     if let Some(start_pos) = drag_start
         && let Some(world_pos) = world_cursor_pos(&ctx.q_window, &ctx.q_camera)

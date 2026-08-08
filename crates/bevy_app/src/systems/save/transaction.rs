@@ -330,15 +330,28 @@ mod tests {
         Familiar, FamiliarOperation, FamiliarPolicy, FamiliarWorkPriority, FamiliarWorkRule,
     };
     use hw_core::jobs::WorkType;
+    use hw_core::logistics::ResourceType;
     use hw_core::population::PopulationManager;
-    use hw_core::relationships::{CommandedBy, Commanding};
-    use hw_core::selection::SelectedEntity;
+    use hw_core::relationships::{CommandedBy, Commanding, LoadedIn, LoadedItems, WorkingOn};
+    use hw_core::selection::{HoveredEntity, SelectedEntity};
     use hw_core::soul::{DamnedSoul, DreamPool};
-    use hw_jobs::Building;
+    use hw_jobs::{
+        ActiveTaskIdentity, AssignedTask, Building, BuildingType, DeconstructData,
+        DeconstructPhase, DeconstructionCancelOutcome, DeconstructionCancelRequest,
+        DeconstructionCommitClaim, DeconstructionCommitOutcome, DeconstructionCommitRequest,
+        DeconstructionCommitResult, DeconstructionOrder, DeconstructionOrders,
+        DeconstructionPending, Designation, PlayerIssuedDesignation, Priority,
+        TargetDeconstructionRoot, TaskSlots,
+    };
+    use hw_logistics::types::WheelbarrowParking;
+    use hw_logistics::{BelongsTo, ResourceItem, Wheelbarrow};
     use hw_world::{Room, RoomBounds, RoomOverlayTile, WorldMap};
 
     use super::*;
-    use crate::systems::save::rehydrate::validate_familiar_candidate;
+    use crate::systems::save::rehydrate::{
+        normalize_task_logistics_runtime_for_test, rebuild_deconstruction_runtime,
+        validate_familiar_candidate,
+    };
     use crate::systems::save::schema::{
         build_persisted_world, collect_persisted_entities, register_save_types,
     };
@@ -360,12 +373,291 @@ mod tests {
     #[derive(Resource, Default)]
     struct MutationTrace(Vec<&'static str>);
 
+    #[derive(Clone, Copy)]
+    struct MidDeconstructionFixture {
+        grid: (i32, i32),
+        target: Entity,
+        order: Entity,
+        worker: Entity,
+        carrier: Entity,
+        cargo: Entity,
+        request: DeconstructionCommitRequest,
+    }
+
     fn count_reset(world: &mut World) {
         world.resource_mut::<ResetCount>().0 += 1;
     }
 
     fn record_rehydrate_step(world: &mut World) {
         world.resource_mut::<MutationTrace>().0.push("rehydrate");
+    }
+
+    fn normalize_mid_deconstruction_runtime(world: &mut World) {
+        normalize_task_logistics_runtime_for_test(world);
+        rebuild_deconstruction_runtime(world);
+    }
+
+    fn spawn_mid_deconstruction_fixture(world: &mut World) -> MidDeconstructionFixture {
+        let grid = (3, 4);
+        let position = WorldMap::grid_to_world(grid.0, grid.1);
+        let target = world
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: false,
+                },
+                Transform::from_translation(position.extend(0.0)),
+            ))
+            .id();
+        let order = world
+            .spawn((
+                DeconstructionOrder,
+                Designation {
+                    work_type: WorkType::Deconstruct,
+                },
+                PlayerIssuedDesignation,
+                Priority(7),
+                TaskSlots::new(1),
+                TargetDeconstructionRoot(target),
+                Transform::from_translation(position.extend(0.0)),
+            ))
+            .id();
+        let identity = ActiveTaskIdentity::new(order, order, WorkType::Deconstruct);
+        let worker = world
+            .spawn((
+                DamnedSoul::default(),
+                AssignedTask::Deconstruct(DeconstructData {
+                    order,
+                    target,
+                    phase: DeconstructPhase::AwaitingCommit,
+                }),
+                identity,
+                WorkingOn(order),
+                Transform::from_translation(position.extend(0.0)),
+            ))
+            .id();
+        let parking = world
+            .spawn((
+                WheelbarrowParking { capacity: 1 },
+                Transform::from_translation(WorldMap::grid_to_world(6, 4).extend(0.0)),
+            ))
+            .id();
+        let carrier_position = WorldMap::grid_to_world(5, 4);
+        let carrier = world
+            .spawn((
+                ResourceItem(ResourceType::Wheelbarrow),
+                Wheelbarrow { capacity: 2 },
+                BelongsTo(parking),
+                Transform::from_translation(carrier_position.extend(0.0)),
+            ))
+            .id();
+        let cargo = world
+            .spawn((
+                ResourceItem(ResourceType::Wood),
+                LoadedIn(carrier),
+                Transform::from_translation(WorldMap::grid_to_world(-8, -8).extend(0.0)),
+            ))
+            .id();
+        world.flush();
+        world.resource_mut::<WorldMap>().set_building(grid, target);
+        world.entity_mut(target).insert((
+            DeconstructionPending { order },
+            DeconstructionCommitClaim {
+                world_epoch: 0,
+                order,
+            },
+        ));
+        let request = DeconstructionCommitRequest {
+            world_epoch: 0,
+            worker,
+            identity,
+            order,
+            target,
+        };
+
+        MidDeconstructionFixture {
+            grid,
+            target,
+            order,
+            worker,
+            carrier,
+            cargo,
+            request,
+        }
+    }
+
+    fn configure_mid_deconstruction_resets(app: &mut App, fixture: MidDeconstructionFixture) {
+        use crate::app_contexts::TaskContext;
+        use crate::systems::command::TaskMode;
+        use crate::systems::jobs::deconstruction::{
+            DeconstructionHoverPreview, DeconstructionHoverStatus,
+        };
+
+        app.init_resource::<hw_core::WorldEpoch>()
+            .add_message::<DeconstructionCommitRequest>()
+            .add_message::<DeconstructionCommitOutcome>()
+            .add_message::<DeconstructionCancelRequest>()
+            .add_message::<DeconstructionCancelOutcome>();
+        app.insert_resource(SelectedEntity(Some(fixture.target)));
+        app.insert_resource(HoveredEntity(Some(fixture.target)));
+        app.insert_resource(TaskContext(TaskMode::DesignateDeconstruct(None)));
+        app.insert_resource(DeconstructionHoverPreview {
+            cursor: Some(Vec2::splat(32.0)),
+            status: Some(DeconstructionHoverStatus::Available {
+                target: fixture.target,
+                kind: BuildingType::Wall,
+            }),
+        });
+        super::super::register_load_reset_hook(
+            app,
+            "test-root-interaction",
+            super::super::reset_root_interaction_state,
+        );
+        super::super::register_load_reset_hook(
+            app,
+            "test-root-messages",
+            crate::plugins::messages::clear_root_messages,
+        );
+        app.world_mut().write_message(fixture.request);
+    }
+
+    fn loaded_deconstruction_entities(
+        world: &mut World,
+    ) -> (Entity, Entity, Entity, Entity, Entity) {
+        let (order, target) = {
+            let mut orders = world
+                .query_filtered::<(Entity, &TargetDeconstructionRoot), With<DeconstructionOrder>>();
+            let (order, target) = orders.single(world).unwrap();
+            (order, target.0)
+        };
+        let worker = world
+            .query_filtered::<Entity, With<DamnedSoul>>()
+            .single(world)
+            .unwrap();
+        let carrier = world
+            .query_filtered::<Entity, With<Wheelbarrow>>()
+            .single(world)
+            .unwrap();
+        let cargo = {
+            let mut items = world.query::<(Entity, &ResourceItem)>();
+            items
+                .iter(world)
+                .find_map(|(entity, item)| (item.0 == ResourceType::Wood).then_some(entity))
+                .unwrap()
+        };
+        (order, target, worker, carrier, cargo)
+    }
+
+    fn assert_mid_deconstruction_normalized(
+        world: &mut World,
+        fixture: MidDeconstructionFixture,
+    ) -> (Entity, Entity) {
+        use crate::app_contexts::TaskContext;
+        use crate::systems::command::TaskMode;
+        use crate::systems::jobs::deconstruction::DeconstructionHoverPreview;
+
+        let (order, target, worker, carrier, cargo) = loaded_deconstruction_entities(world);
+        assert_ne!(order, fixture.order);
+        assert_ne!(target, fixture.target);
+        assert_ne!(worker, fixture.worker);
+        assert_ne!(carrier, fixture.carrier);
+        assert_ne!(cargo, fixture.cargo);
+        assert_eq!(
+            world.get::<Priority>(order).map(|priority| priority.0),
+            Some(7)
+        );
+        assert_eq!(
+            world
+                .get::<TargetDeconstructionRoot>(order)
+                .map(|root| root.0),
+            Some(target)
+        );
+        assert_eq!(
+            world
+                .get::<DeconstructionOrders>(target)
+                .unwrap()
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![order]
+        );
+        assert_eq!(
+            world.get::<DeconstructionPending>(target),
+            Some(&DeconstructionPending { order })
+        );
+        assert!(world.get::<DeconstructionCommitClaim>(target).is_none());
+        assert!(matches!(
+            world.get::<AssignedTask>(worker),
+            Some(AssignedTask::None)
+        ));
+        assert!(world.get::<ActiveTaskIdentity>(worker).is_none());
+        assert!(world.get::<WorkingOn>(worker).is_none());
+        assert!(
+            world
+                .get::<hw_core::relationships::TaskWorkers>(order)
+                .is_none()
+        );
+
+        assert!(world.get::<LoadedIn>(cargo).is_none());
+        assert!(
+            world
+                .get::<LoadedItems>(carrier)
+                .is_none_or(LoadedItems::is_empty)
+        );
+        let carrier_position = world
+            .get::<Transform>(carrier)
+            .unwrap()
+            .translation
+            .truncate();
+        let cargo_position = world
+            .get::<Transform>(cargo)
+            .unwrap()
+            .translation
+            .truncate();
+        assert_eq!(cargo_position, carrier_position);
+        assert_eq!(
+            world.resource::<WorldMap>().building_entity(fixture.grid),
+            Some(target)
+        );
+
+        assert!(world.resource::<SelectedEntity>().0.is_none());
+        assert!(world.resource::<HoveredEntity>().0.is_none());
+        assert_eq!(world.resource::<TaskContext>().0, TaskMode::None);
+        assert_eq!(
+            *world.resource::<DeconstructionHoverPreview>(),
+            DeconstructionHoverPreview::default()
+        );
+        assert_eq!(
+            world
+                .resource_mut::<Messages<DeconstructionCommitRequest>>()
+                .drain()
+                .count(),
+            0
+        );
+
+        (order, target)
+    }
+
+    fn replay_stale_deconstruction_request(
+        world: &mut World,
+        request: DeconstructionCommitRequest,
+        order: Entity,
+        target: Entity,
+    ) {
+        world.write_message(request);
+        crate::systems::jobs::deconstruction::deconstruction_finalizer_system(world);
+        let outcomes: Vec<_> = world
+            .resource_mut::<Messages<DeconstructionCommitOutcome>>()
+            .drain()
+            .collect();
+        assert_eq!(outcomes.len(), 1);
+        assert_eq!(outcomes[0].result, DeconstructionCommitResult::StaleWorld);
+        assert!(world.get::<DeconstructionOrder>(order).is_some());
+        assert!(world.get::<Building>(target).is_some());
+        assert_eq!(
+            world.get::<DeconstructionPending>(target),
+            Some(&DeconstructionPending { order })
+        );
     }
 
     fn spawn_runtime_room(world: &mut World) -> (Entity, Entity) {
@@ -422,6 +714,60 @@ mod tests {
     }
 
     #[test]
+    fn mid_deconstruction_load_rebuilds_the_order_and_drops_runtime_and_cargo_state() {
+        let mut live = app_with_save_schema();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        let fixture = spawn_mid_deconstruction_fixture(live.world_mut());
+        configure_mid_deconstruction_resets(&mut live, fixture);
+        let incoming = capture_from_app(&mut live);
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let plan = ResolvedRehydratePlan::with_step_for_test(
+            "test.deconstruction-runtime",
+            normalize_mid_deconstruction_runtime,
+        );
+
+        replace_persisted_world(live.world_mut(), &incoming, &registry, &plan).unwrap();
+
+        assert_eq!(live.world().resource::<hw_core::WorldEpoch>().get(), 1);
+        let (order, target) = assert_mid_deconstruction_normalized(live.world_mut(), fixture);
+        replay_stale_deconstruction_request(live.world_mut(), fixture.request, order, target);
+    }
+
+    #[test]
+    fn rollback_rebuilds_the_order_and_rejects_the_pre_replace_commit_request() {
+        let mut live = app_with_save_schema();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        let fixture = spawn_mid_deconstruction_fixture(live.world_mut());
+        configure_mid_deconstruction_resets(&mut live, fixture);
+        let incoming = capture_from_app(&mut live);
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let plan = ResolvedRehydratePlan::with_step_for_test(
+            "test.deconstruction-runtime",
+            normalize_mid_deconstruction_runtime,
+        );
+        let recovery_plan = plan.clone();
+
+        let result = replace_persisted_world_with_post_write(
+            live.world_mut(),
+            &incoming,
+            &registry,
+            &plan,
+            |_| Err("injected post-write failure".to_owned()),
+            move |world| {
+                recovery_plan.run(world);
+                Ok(())
+            },
+        );
+
+        assert!(matches!(result, Err(CommitError::Recovered { .. })));
+        assert_eq!(live.world().resource::<hw_core::WorldEpoch>().get(), 1);
+        let (order, target) = assert_mid_deconstruction_normalized(live.world_mut(), fixture);
+        replay_stale_deconstruction_request(live.world_mut(), fixture.request, order, target);
+    }
+
+    #[test]
     fn preflight_failure_leaves_the_live_world_unchanged() {
         let mut app = App::empty();
         app.init_resource::<AppTypeRegistry>();
@@ -451,9 +797,19 @@ mod tests {
         live.world_mut()
             .spawn((DamnedSoul::default(), CommandedBy(familiar)));
         let building = live.world_mut().spawn(Building::default()).id();
+        let floor = live
+            .world_mut()
+            .spawn(Building {
+                kind: BuildingType::Floor,
+                is_provisional: false,
+            })
+            .id();
         live.world_mut()
             .resource_mut::<WorldMap>()
             .set_building((3, 4), building);
+        live.world_mut()
+            .resource_mut::<WorldMap>()
+            .set_floor((3, 4), floor);
         live.world_mut().flush();
 
         let mut incoming_source = app_with_save_schema();
@@ -532,6 +888,16 @@ mod tests {
             .building_entity((3, 4))
             .unwrap();
         assert!(live.world().get::<Building>(restored_building).is_some());
+        let restored_floor = live
+            .world()
+            .resource::<WorldMap>()
+            .floor_entity((3, 4))
+            .unwrap();
+        assert_eq!(
+            live.world().get::<Building>(restored_floor).unwrap().kind,
+            BuildingType::Floor
+        );
+        assert_ne!(restored_floor, restored_building);
         assert_eq!(
             live.world_mut()
                 .query_filtered::<Entity, With<hw_visual::visual3d::SoulProxy3d>>()

@@ -16,15 +16,19 @@ use hw_core::relationships::{
 use hw_jobs::construction::{FloorTileBlueprint, WallTileBlueprint};
 use hw_jobs::mud_mixer::{MudMixerStorage, TargetMixer};
 use hw_jobs::{
-    Blueprint, BonePile, Building, Designation, Priority, ProvisionalWall, SandPile,
-    TargetBlueprint, TaskSlots, Tree,
+    Blueprint, BonePile, BridgeMarker, Building, DeconstructionBlocker, DeconstructionCommitClaim,
+    DeconstructionOrder, DeconstructionPending, Designation, Door, MovePlanned,
+    PendingBuildingMove, Priority, ProvisionalWall, RestArea, SandPile, TargetBlueprint,
+    TargetDeconstructionRoot, TaskSlots, Tree,
 };
 use hw_logistics::SharedResourceCache;
 use hw_logistics::transport_request::{
     ManualHaulPinnedSource, ReceiverPolicyTier, TransportDemand, TransportRequest,
     TransportRequestFixedSource, WheelbarrowLease,
 };
-use hw_logistics::types::{BelongsTo, BucketStorage, ResourceItem, Wheelbarrow};
+use hw_logistics::types::{
+    BelongsTo, BucketStorage, ResourceItem, Wheelbarrow, WheelbarrowParking,
+};
 use hw_logistics::zone::{Stockpile, StockpilePolicy};
 use hw_world::WorldMapRead;
 
@@ -67,6 +71,7 @@ type PileQuery<'w, 's, F> = Query<
         &'static Transform,
         Option<&'static Designation>,
         Option<&'static TaskWorkers>,
+        Option<&'static DeconstructionPending>,
     ),
     F,
 >;
@@ -116,6 +121,7 @@ pub struct DesignationAccess<'w, 's> {
     pub targets: TargetsQuery<'w, 's>,
     pub designations: DesignationsQuery<'w, 's>,
     pub belongs: Query<'w, 's, &'static BelongsTo>,
+    pub parked_at: Query<'w, 's, &'static ParkedAt>,
 }
 
 /// 倉庫・設備・ブループリントへの読み取り専用アクセス（Familiar AI向け・建設サイト除く）
@@ -176,6 +182,12 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
     pub items: Query<'w, 's, (&'static ResourceItem, Option<&'static Designation>)>,
     pub sand_piles: PileQuery<'w, 's, With<SandPile>>,
     pub bone_piles: PileQuery<'w, 's, With<BonePile>>,
+    pub rest_areas: Query<'w, 's, (), With<RestArea>>,
+    pub wheelbarrow_parkings: Query<'w, 's, (), With<WheelbarrowParking>>,
+    pub doors: Query<'w, 's, (), With<Door>>,
+    pub bridges: Query<'w, 's, (), With<BridgeMarker>>,
+    pub power_consumers: Query<'w, 's, (), With<hw_energy::PowerConsumer>>,
+    pub power_generators: Query<'w, 's, (), With<hw_energy::PowerGenerator>>,
     pub task_state: Query<'w, 's, (Option<&'static Designation>, Option<&'static TaskWorkers>)>,
     pub move_plant_tasks: Query<'w, 's, &'static hw_jobs::MovePlantTask>,
     pub transport_requests: Query<'w, 's, &'static TransportRequest>,
@@ -186,6 +198,13 @@ pub struct TaskAssignmentReadAccess<'w, 's> {
         Query<'w, 's, &'static hw_core::area::TaskArea, With<hw_core::familiar::Familiar>>,
     pub free_resource_items: FreeResourceItemsQuery<'w, 's>,
     pub task_slots: Query<'w, 's, &'static TaskSlots>,
+    pub deconstruction_order_targets:
+        Query<'w, 's, &'static TargetDeconstructionRoot, With<DeconstructionOrder>>,
+    pub deconstruction_pending: Query<'w, 's, &'static DeconstructionPending>,
+    pub deconstruction_claims: Query<'w, 's, (), With<DeconstructionCommitClaim>>,
+    pub deconstruction_blockers: Query<'w, 's, &'static DeconstructionBlocker>,
+    pub move_planned: Query<'w, 's, (), With<MovePlanned>>,
+    pub pending_building_moves: Query<'w, 's, (), With<PendingBuildingMove>>,
     pub wheelbarrows: ParkedWheelbarrowsQuery<'w, 's>,
     pub wheelbarrow_leases: Query<'w, 's, &'static WheelbarrowLease>,
     pub wheelbarrow_arbitration_diagnostics:

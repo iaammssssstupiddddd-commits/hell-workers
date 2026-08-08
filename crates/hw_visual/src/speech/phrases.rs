@@ -124,7 +124,7 @@ impl LatinPhrase {
             WorkType::CollectBone => LatinPhrase::Colligere,
             WorkType::Refine => LatinPhrase::Misce,
             WorkType::HaulWaterToMixer => LatinPhrase::Haurire,
-            WorkType::GeneratePower => LatinPhrase::Laborare,
+            WorkType::GeneratePower | WorkType::Deconstruct => LatinPhrase::Laborare,
         }
     }
 }

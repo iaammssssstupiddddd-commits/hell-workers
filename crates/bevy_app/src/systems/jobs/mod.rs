@@ -1,5 +1,7 @@
 mod blueprint_cancellation;
 mod building_completion;
+pub mod deconstruction;
+mod exact_task_cleanup;
 pub mod floor_construction;
 pub mod soul_spa_construction;
 pub mod wall_construction;
@@ -9,6 +11,14 @@ use bevy::prelude::SystemSet;
 pub use blueprint_cancellation::blueprint_cancellation_system;
 pub(crate) use building_completion::attach_building_shell;
 pub use building_completion::{BuildingCompletionSet, building_completion_system};
+#[cfg(feature = "profiling")]
+pub(crate) use deconstruction::DeconstructionPerfMetrics;
+pub(crate) use deconstruction::deconstruction_hover_preview_system;
+pub use deconstruction::{
+    DeconstructionFinalizerSet, NativeDeconstructionAcceptancePlugin,
+    deconstruction_designation_input_system, deconstruction_designation_system,
+    deconstruction_finalizer_system,
+};
 pub use hw_core::world::DoorState;
 pub use hw_jobs::model::{
     Blueprint, BlueprintCancelRequested, BonePile, BridgeMarker, Building, BuildingCategory,

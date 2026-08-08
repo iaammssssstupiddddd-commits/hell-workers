@@ -4,8 +4,8 @@ use bevy::prelude::*;
 
 use hw_core::constants::{BUCKET_CAPACITY, MUD_MIXER_CAPACITY};
 use hw_core::relationships::{StoredItems, TaskWorkers};
-use hw_jobs::MovePlanned;
 use hw_jobs::mud_mixer::MudMixerStorage;
+use hw_jobs::{DeconstructionPending, MovePlanned};
 use hw_world::zones::{AreaBounds, Yard};
 
 use crate::resource_cache::SharedResourceCache;
@@ -22,6 +22,7 @@ type MixerQuery<'w, 's> = Query<
         &'static MudMixerStorage,
         Option<&'static TaskWorkers>,
         Option<&'static MovePlanned>,
+        Option<&'static DeconstructionPending>,
     ),
 >;
 
@@ -51,9 +52,16 @@ pub(crate) fn compute_mixer_desired_requests(
     q_stockpiles_detailed: &StockpilesDetailedQuery,
     inflight: MixerInflightContext<'_>,
 ) {
-    for (mixer_entity, mixer_transform, storage, _workers_opt, move_planned_opt) in q_mixers.iter()
+    for (
+        mixer_entity,
+        mixer_transform,
+        storage,
+        _workers_opt,
+        move_planned_opt,
+        deconstruction_pending,
+    ) in q_mixers.iter()
     {
-        if move_planned_opt.is_some() {
+        if move_planned_opt.is_some() || deconstruction_pending.is_some() {
             continue;
         }
         active_mixers.insert(mixer_entity);

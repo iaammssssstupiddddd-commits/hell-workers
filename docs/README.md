@@ -58,7 +58,7 @@
 - [linux-setup.md](linux-setup.md): Linux ネイティブ環境でのビルド・実行セットアップ手順。
 - [plans/README.md](plans/README.md): フェーズ分割した実装計画ドキュメント。
 - [plans/archive/save-rehydration-registry-plan-2026-08-03.md](plans/archive/save-rehydration-registry-plan-2026-08-03.md): Track C3 のロード前検証、phase-aware 再構築 registry、通常ロード／rollback共通化の完了記録。
-- [plans/building-deconstruction-plan-2026-08-03.md](plans/building-deconstruction-plan-2026-08-03.md): Track C1 の一般建築物解体、固定資源回収、owner-safe cleanup 計画。
+- [plans/archive/building-deconstruction-plan-2026-08-03.md](plans/archive/building-deconstruction-plan-2026-08-03.md): Track C1 の一般建築物解体、固定資源回収、owner-safe cleanup の完了記録。
 - [plans/save-catalog-autosave-plan-2026-08-03.md](plans/save-catalog-autosave-plan-2026-08-03.md): Track C2 の手動セーブスロット、catalog、世代オートセーブ計画。
 - [plans/archive/implementation-spec-alignment-plan-2026-07-20.md](plans/archive/implementation-spec-alignment-plan-2026-07-20.md): Dream質量、Familiar疲労閾値、production経路、文書台帳の実装・仕様整合性回復計画。
 - [plans/archive/soul-energy-control-plan-2026-07-20.md](plans/archive/soul-energy-control-plan-2026-07-20.md): Track B3のSoul Spa稼働枠、優先配電、保存互換、実機受入の完了記録。

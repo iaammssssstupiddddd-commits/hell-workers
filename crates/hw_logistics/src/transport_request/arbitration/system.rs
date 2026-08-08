@@ -86,6 +86,8 @@ pub struct WheelbarrowArbitrationParams<'w, 's> {
     pub q_wheelbarrows: ArbitrationWheelbarrowQuery<'w, 's>,
     pub q_free_items: ArbitrationFreeItemQuery<'w, 's>,
     pub q_belongs: Query<'w, 's, &'static BelongsTo>,
+    pub q_parked_at: Query<'w, 's, &'static ParkedAt>,
+    pub q_deconstruction_pending: Query<'w, 's, (), With<hw_jobs::DeconstructionPending>>,
     pub q_stored_in: Query<'w, 's, &'static StoredIn>,
     pub q_stockpiles: Query<
         'w,
@@ -203,7 +205,12 @@ pub fn wheelbarrow_arbitration_system(
         let mut available_wheelbarrows: Vec<(Entity, Vec2)> = p
             .q_wheelbarrows
             .iter()
-            .filter(|(e, _)| !lease_state.used_wheelbarrows.contains(e))
+            .filter(|(entity, _)| {
+                !lease_state.used_wheelbarrows.contains(entity)
+                    && p.q_parked_at
+                        .get(*entity)
+                        .is_ok_and(|parked| p.q_deconstruction_pending.get(parked.0).is_err())
+            })
             .map(|(e, t)| (e, t.translation.truncate()))
             .collect();
         let header = WheelbarrowArbitrationHeader {
@@ -302,7 +309,7 @@ mod tests {
     use crate::zone::{Stockpile, StockpileAcceptance, StockpilePolicy};
     use bevy::app::ScheduleRunnerPlugin;
     use hw_core::relationships::ParkedAt;
-    use hw_jobs::{Designation, TaskSlots, WorkType};
+    use hw_jobs::{DeconstructionPending, Designation, TaskSlots, WorkType};
 
     #[derive(Component)]
     struct DirtyMarker;
@@ -472,6 +479,34 @@ mod tests {
                 .resource::<WheelbarrowArbitrationDiagnostics>()
                 .outcome(request),
             Some(WheelbarrowArbitrationOutcome::LeaseGranted)
+        );
+    }
+
+    #[test]
+    fn wheelbarrow_at_pending_parking_is_not_available_for_a_new_lease() {
+        let mut app = arbitration_test_app();
+        let owner = app.world_mut().spawn_empty().id();
+        let stockpile = spawn_managed_stockpile(&mut app, owner);
+        let request = spawn_deposit_request(&mut app, stockpile, ResourceType::Wood, 3, true);
+        spawn_unowned_items(&mut app, ResourceType::Wood);
+        let order = app.world_mut().spawn_empty().id();
+        let parking = app.world_mut().spawn(DeconstructionPending { order }).id();
+        app.world_mut().spawn((
+            Transform::default(),
+            Wheelbarrow { capacity: 10 },
+            ParkedAt(parking),
+        ));
+        app.world_mut().flush();
+
+        app.update();
+
+        assert!(app.world().get::<WheelbarrowLease>(request).is_none());
+        let diagnostics = app.world().resource::<WheelbarrowArbitrationDiagnostics>();
+        assert_eq!(
+            diagnostics
+                .header()
+                .map(|header| header.available_vehicle_count),
+            Some(0)
         );
     }
 

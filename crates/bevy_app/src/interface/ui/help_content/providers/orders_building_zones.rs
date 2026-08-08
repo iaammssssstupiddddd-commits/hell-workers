@@ -28,6 +28,17 @@ pub(crate) fn orders_and_areas() -> Result<HelpContribution, HelpCatalogError> {
                 )
                 .with_shortcut(shortcut(InputAction::CancelActiveMode)?),
                 HelpEntry::new(
+                    HelpEntryId::new("building-deconstruction"),
+                    "完成した建物を解体する",
+                    [
+                        "Orders の Deconstruct を選び、完成した建物をクリックします。カーソル表示で対象にできるかと、指定できない理由を確認できます。",
+                        "指示は専用タスクとして Tasks に追加されます。優先度の変更と確認付きキャンセルができ、解体を許可した Familiar が担当します。",
+                        "カーソルには固定回収量も表示されます。Wall・Door・Tank・WheelbarrowParking は Wood×1、MudMixer・RestArea は Wood×2、Floor・OutdoorLamp は Bone×1、BonePile は Bone×5、SoulSpa は Bone×6、Bridge は Rock×3、SandPile は回収なしです。",
+                        "設備内の資材や利用中の対象を安全に退避できない間は、建物を残したまま理由付きで待機します。Wall、Door、Floor、Bridge、Operational Soul Spa、Outdoor Lamp も対象になり、通路・部屋・電力網は撤去後に再計算されます。指定結果と解体結果は通知にも表示されます。",
+                    ],
+                )
+                .with_shortcut(shortcut(InputAction::CancelActiveMode)?),
+                HelpEntry::new(
                     HelpEntryId::new("area-edit"),
                     "Task Area を編集する",
                     [
@@ -69,6 +80,7 @@ pub(crate) fn building_zones_dream() -> Result<HelpContribution, HelpCatalogErro
                     [
                         "建物を選び、world 上で配置します。Floor と Wall は範囲を指定して施工予定を作ります。",
                         "必要資源が届くと、担当可能な Soul が工程を進めます。",
+                        "Floor を Wall と Door で囲むと Room の境界が表示されます。完成した設備を床上に置いても Room は維持されます。",
                         "Outdoor Lamp は通行できますが建物としてタイルを占有するため、同じ場所へ別の建物を重ねて配置できません。",
                     ],
                 )
@@ -121,7 +133,7 @@ pub(crate) fn task_dashboard() -> Result<HelpContribution, HelpCatalogError> {
                     HelpEntryId::new("task-dashboard-actions"),
                     "優先度変更とキャンセル",
                     [
-                        "変更可能なタスクだけ優先度を調整できます。キャンセルは確認を経て実行されます。",
+                        "変更可能なタスクだけ優先度を調整できます。Deconstruct を含むキャンセルは確認を経て実行され、状態が変わって受理できない場合は理由が通知されます。",
                     ],
                 ),
             ],

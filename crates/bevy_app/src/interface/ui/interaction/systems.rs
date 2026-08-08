@@ -149,7 +149,7 @@ pub fn ui_interaction_system(
 /// Root adapter that publishes only movable Plant buildings to the UI widget.
 pub fn update_move_plant_hover_target_system(
     hovered: Res<HoveredEntity>,
-    q_buildings: Query<&Building>,
+    q_buildings: Query<&Building, Without<hw_jobs::DeconstructionPending>>,
     mut target: ResMut<HoverActionTarget>,
 ) {
     target.0 = hovered.0.filter(|entity| {
@@ -311,9 +311,21 @@ mod tests {
             })
             .id();
         let non_building = app.world_mut().spawn_empty().id();
+        let order = app.world_mut().spawn_empty().id();
+        let pending_tank = app
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Tank,
+                    is_provisional: false,
+                },
+                hw_jobs::DeconstructionPending { order },
+            ))
+            .id();
 
         for (hovered, expected) in [
             (Some(tank), Some(tank)),
+            (Some(pending_tank), None),
             (Some(wall), None),
             (Some(non_building), None),
             (None, None),
@@ -366,6 +378,40 @@ mod tests {
         assert!(matches!(intents[0], UiIntent::ToggleDoorLock(entity) if entity == root));
         assert!(app.world().get_entity(foreground).is_ok());
         assert!(app.world().get_entity(background).is_ok());
+    }
+
+    #[test]
+    fn soul_spa_cancel_button_emits_one_exact_intent_per_press() {
+        let mut app = App::new();
+        app.add_message::<UiIntent>()
+            .init_resource::<UiInputState>()
+            .init_resource::<PendingWorldInputCapture>()
+            .init_resource::<UiTheme>()
+            .init_resource::<CollectedIntents>()
+            .add_systems(Update, (ui_interaction_system, collect_intents).chain());
+        let target = app.world_mut().spawn_empty().id();
+        app.world_mut().spawn((
+            Interaction::Pressed,
+            Button,
+            MenuButton(MenuAction::CancelSoulSpaConstruction { target }),
+            BackgroundColor::default(),
+        ));
+        app.world_mut().spawn((
+            Interaction::Hovered,
+            Button,
+            MenuButton(MenuAction::CancelSoulSpaConstruction { target }),
+            BackgroundColor::default(),
+        ));
+
+        app.update();
+        app.update();
+
+        let intents = &app.world().resource::<CollectedIntents>().0;
+        assert_eq!(intents.len(), 1);
+        assert!(matches!(
+            intents[0],
+            UiIntent::CancelSoulSpaConstruction { target: actual } if actual == target
+        ));
     }
 
     #[test]

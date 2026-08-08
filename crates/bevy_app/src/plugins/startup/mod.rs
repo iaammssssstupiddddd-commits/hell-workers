@@ -125,6 +125,7 @@ impl Plugin for StartupPlugin {
             perf_scenario::install_renderdoc_capture(app);
             app.init_resource::<PerfScenarioApplied>()
                 .init_resource::<perf_scenario::PerfScenarioDriverState>()
+                .init_resource::<perf_scenario::DeconstructionPerfFixtureState>()
                 .init_resource::<perf_scenario::IndoorLightFixtureState>()
                 .init_resource::<perf_scenario::PerfBehaviorCapture>()
                 .add_systems(
@@ -220,7 +221,11 @@ impl Plugin for StartupPlugin {
                 )
                 .add_systems(
                     Update,
-                    perf_scenario::drive_perf_workload_system.in_set(PerfScenarioSet::Driver),
+                    (
+                        perf_scenario::drive_perf_workload_system,
+                        perf_scenario::drive_deconstruction_perf_workload_system,
+                    )
+                        .in_set(PerfScenarioSet::Driver),
                 )
                 .add_systems(
                     Update,

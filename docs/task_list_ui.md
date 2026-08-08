@@ -1,6 +1,6 @@
 # タスクリストUI仕様
 
-最終更新: 2026-07-26
+最終更新: 2026-08-05
 
 ## 概要
 画面左側に表示される常駐パネルのモードの1つです（エンティティリストとタブ切替）。
@@ -29,7 +29,7 @@ AI 判定 cycle から得た停止理由、絞り込み・並べ替え、安全�
 `hw_ui::panels::task_list::work_type_icon`が全variantをexhaustive matchしてアイコンとテーマ色を決めます：
 - **Chop**: 斧アイコン / `chop` 色
 - **Mine**: ピッケルアイコン / `mine` 色
-- **Build / Move / Refine / ReinforceFloorTile / PourFloorTile / FrameWallTile / CoatWall / GeneratePower**: ハンマーアイコン / `build` 色
+- **Build / Move / Refine / ReinforceFloorTile / PourFloorTile / FrameWallTile / CoatWall / GeneratePower / Deconstruct**: ハンマーアイコン / `build` 色
 - **Haul / HaulToMixer / WheelbarrowHaul**: 運搬アイコン / `haul` 色
 - **GatherWater / HaulWaterToMixer**: 運搬アイコン / `water` 色
 - **CollectBone**: 骨アイコン / `gather_default` 色
@@ -40,7 +40,9 @@ AI 判定 cycle から得た停止理由、絞り込み・並べ替え、安全�
 - **採掘**: `Mine Rock`
 - **伐採**: `Chop Tree`
 - **運搬**: `Haul [Resource]` (手動), `Haul [Resource] to Mixer` (自動)
+- **Soul Spa建設搬入**: `Haul Bone to Soul Spa`
 - **水汲み**: `Gather Water`
+- **解体**: `Deconstruct [BuildingType]` (例: `Deconstruct Tank`)
 
 優先度は `Normal = 0..=4`、`High = 5..=9`、`Critical = 10..` の共通 tier へ正規化します。
 説明色、filter、sort、summary、変更ボタンはすべて `TaskPriorityTier::from_priority` を正本にします。
@@ -56,6 +58,8 @@ AI 判定 cycle から得た停止理由、絞り込み・並べ替え、安全�
 
 停止理由は `No eligible familiar`、`Missing resource or source`、`Unreachable`、
 `Waiting for reservation`、`Waiting for dependency`、`Disabled by familiar policy` の 6 分類です。
+Deconstruction orderはowner finalizerのtyped blockerを優先して、target変更、owner不整合、安全な回収先不足、
+Mixer在庫不整合、移動中、未対応targetを個別表示します。
 policy blocker は、idle worker を持つ全 applicable Familiar evaluator が current cycle を完走し、
 全 terminal vote が policy-only の場合だけ表示します。UI は候補探索や経路探索を再実行せず、
 Familiar delegation / Blueprint auto-build / wheelbarrow arbitration が通常処理中に公開した latest-only snapshot を読みます。
@@ -127,7 +131,7 @@ exhaustive coverageされ、追加・変更時は`docs/help-screen.md`の更新�
 - **ホバー**: 背景色がハイライト
 - **クリック**: カメラをそのタスク（対象エンティティ）の位置へ移動し、InfoPanel にピン留め
 - **選択状態**: ピン留めされたエンティティに対応するアイテムに選択ボーダーと背景色が表示
-- **優先度**: 許可された手動 Chop / Mine と ManualTransportRequest だけを `0 / 5 / 10` で上下する
+- **優先度**: 許可された手動 Chop / Mine、ManualTransportRequest、DeconstructionOrderだけを `0 / 5 / 10` で上下する
 - **キャンセル**: 1 回目で行内確認、同じ対象・種別の 2 回目で intent を発行する。Floor / Wall は site 全体を対象にする
 
 フォーカス行の `Button` と action bar の各 `Button` は sibling であり、nested Button にしません。
@@ -142,10 +146,19 @@ Pause / Modal capture 中も action intent reader は drain して拒否結果�
 | `ManualTransportRequest` + fixed source | 可 | `hw_logistics` typed close API |
 | Blueprint | 不可 | Blueprint 専用 cancellation lifecycle |
 | Floor / Wall tile または対応 material request | 不可 | parent site 全体 |
+| `DeliverToSoulSpa` + `TargetSoulSpaSite` + Constructing site | 不可 | `SoulSpaConstructionCancelRequest`をsite ownerへ発行 |
+| player-issued `DeconstructionOrder` + canonical pending + claim未取得 | 可 | `DeconstructionCancelRequest`をowner finalizerへ発行 |
 | Move、自動 gather、自動 request、GeneratePower、provenance 不明 | 不可 | 不可 |
 
 表示時の capability はヒントに過ぎません。適用時に Entity generation、`WorkType`、owner marker、必要 component を
 再確認し、stale / unsupported / pause / capture は simulation state を変更せず `TaskActionOutcome` にします。
+Deconstruct cancelのUI adapterはorder/pending/worker componentを直接変更しない。canonical
+`DeconstructionCancelOutcome`だけが成功・claim中・staleを確定し、dashboardの二段階確認はlive capabilityが
+消えた時点で破棄するため、claim取得後に古い確認操作を再表示しません。
+Soul Spa搬入行もrequestの`kind=DeliverToSoulSpa`、Bone、anchor、`TargetSoulSpaSite`が同じConstructing siteを
+指す場合だけcancel可能とし、malformed requestから別siteを取消しません。通常時はownerの
+`SoulSpaConstructionCancelOutcome`だけを通知し、Pause / Modal capture中は`TaskActionOutcome`でその場で拒否して
+解除後へrequestを持ち越しません。
 手動エリア指定が既存 auto-gather 対象を覆う場合は `AutoGatherDesignation` を外し、選択中 Familiar または
 unowned manual task へ所有権を明示的に移してから `PlayerIssuedDesignation` を付与します。
 操作結果だけを A2 通知の `ToastOnly` へ変換し、blocker の周期更新は通知履歴へ送りません。
@@ -155,8 +168,8 @@ unowned manual task へ所有権を明示的に移してから `PlayerIssuedDesi
 状態判定、並び順、capability、owner cleanup、save/load、reset、latest-only map の構造上の有界性は決定的に再現できるため、
 自動テストを受入の正本にします。手動操作で正しそうに見えることを、未実装の回帰テストの代わりにはしません。
 
-- `cargo test -p hw_ui task_list`: 状態ラベル / semantic color token、全 filter / sort、camera / pin、capture 後の持越し防止
-- `cargo test -p bevy_app@0.1.0 task_dashboard`: status adapter、action capability、live revalidation、Pause / capture 時の drain
+- `python3 scripts/dev.py cargo -- test -p hw_ui task_list`: 状態ラベル / semantic color token、全 filter / sort、camera / pin、capture 後の持越し防止
+- `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 task_dashboard`: status adapter、action capability、live revalidation、Pause / capture 時の drain
 - `python3 scripts/dev.py verify`: workspace 全体の unit / integration / clippy / docs gate
 
 リリース前の実機 smoke check には次の 2 種類だけを残します。

@@ -179,6 +179,7 @@ fn task_mode_uses_area_drag(task_mode: TaskMode) -> bool {
         TaskMode::DesignateChop(_)
             | TaskMode::DesignateMine(_)
             | TaskMode::DesignateHaul(_)
+            | TaskMode::DesignateDeconstruct(_)
             | TaskMode::CancelDesignation(_)
             | TaskMode::AreaSelection(_)
             | TaskMode::AssignTask(_)

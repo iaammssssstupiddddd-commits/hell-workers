@@ -108,6 +108,9 @@ pub(crate) fn reset_root_interaction_state(world: &mut World) {
     reset_existing_resource::<TaskContext>(world);
     reset_existing_resource::<CompanionPlacementState>(world);
     reset_existing_resource::<StockpilePolicyRangeEditState>(world);
+    reset_existing_resource::<crate::systems::jobs::deconstruction::DeconstructionHoverPreview>(
+        world,
+    );
 
     if let Some(mut next_play_mode) = world.get_resource_mut::<NextState<PlayMode>>() {
         next_play_mode.set(PlayMode::Normal);
@@ -308,6 +311,17 @@ mod tests {
             }),
         });
         world.insert_resource(TaskContext::default());
+        world.insert_resource(
+            crate::systems::jobs::deconstruction::DeconstructionHoverPreview {
+                cursor: Some(Vec2::splat(32.0)),
+                status: Some(
+                    crate::systems::jobs::deconstruction::DeconstructionHoverStatus::Available {
+                        target: stale,
+                        kind: hw_jobs::BuildingType::Wall,
+                    },
+                ),
+            },
+        );
         world.insert_resource(NextState::<PlayMode>::Pending(PlayMode::BuildingMove));
 
         reset_root_interaction_state(&mut world);
@@ -316,6 +330,10 @@ mod tests {
         assert!(world.resource::<HoveredEntity>().0.is_none());
         assert!(world.resource::<MoveContext>().0.is_none());
         assert!(world.resource::<MovePlacementState>().0.is_none());
+        assert_eq!(
+            *world.resource::<crate::systems::jobs::deconstruction::DeconstructionHoverPreview>(),
+            crate::systems::jobs::deconstruction::DeconstructionHoverPreview::default()
+        );
         assert!(
             world
                 .resource::<StockpilePolicyRangeEditState>()

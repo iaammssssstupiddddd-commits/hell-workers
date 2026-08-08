@@ -103,6 +103,29 @@ pub struct SoulSpaTile {
     pub grid_pos: (i32, i32),
 }
 
+/// Requests one owner-safe cancellation of a constructing Soul Spa.
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SoulSpaConstructionCancelRequest {
+    pub target: Entity,
+}
+
+/// Terminal result for one Soul Spa construction cancellation request.
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SoulSpaConstructionCancelOutcome {
+    pub target: Entity,
+    pub result: SoulSpaConstructionCancelResult,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SoulSpaConstructionCancelResult {
+    Canceled { refunded_bones: u32 },
+    Paused,
+    StaleTarget,
+    PhaseUnavailable,
+    OwnerMismatch,
+    ActiveTaskMismatch,
+}
+
 /// Soul Spa稼働枠UI操作1件に対する終端結果。
 #[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SoulSpaSlotsChangeOutcome {

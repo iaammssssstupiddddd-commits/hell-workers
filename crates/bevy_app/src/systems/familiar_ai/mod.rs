@@ -55,7 +55,11 @@ impl Plugin for FamiliarAiPlugin {
         .init_resource::<perceive::resource_sync::ReservationSignatureCache>()
         .add_systems(
             Update,
-            diagnostics::sync_task_diagnostic_revisions_system
+            (
+                diagnostics::sync_task_diagnostic_revisions_system,
+                diagnostics::refresh_deconstruction_blockers_after_revision_sync_system,
+            )
+                .chain()
                 .in_set(hw_familiar_ai::FamiliarTaskDecisionSet::TaskRevisionSync),
         )
         .configure_sets(

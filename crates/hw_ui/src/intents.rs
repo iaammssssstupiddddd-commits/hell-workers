@@ -76,6 +76,9 @@ pub enum UiIntent {
         target: Entity,
         active_slots: u32,
     },
+    CancelSoulSpaConstruction {
+        target: Entity,
+    },
     SetPowerConsumerPriority {
         target: Entity,
         priority: PowerPriorityValue,

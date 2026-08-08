@@ -651,12 +651,14 @@ mod tests {
             app.world().resource::<ResolvedRehydratePlan>().step_names(),
             vec![
                 "construction.normalize",
+                "deconstruction.floor-ownership",
                 "familiar.settings",
                 "power-consumer.policy",
                 "soul-spa.normalize",
                 "stockpile.policy",
                 "transport-request.targets",
                 "task-logistics.runtime",
+                "deconstruction.runtime",
                 "presentation.shells",
                 "construction.runtime",
                 "obstacle.runtime",
@@ -669,6 +671,7 @@ mod tests {
                 .resource::<ResolvedRehydratePlan>()
                 .validator_names(),
             vec![
+                "deconstruction.orders",
                 "durable.topology",
                 "familiar.roster",
                 "presentation.spatial-roots",

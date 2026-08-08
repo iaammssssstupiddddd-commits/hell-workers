@@ -37,12 +37,13 @@ Normal ↔ TaskDesignation（Orders/Zoneボタン/Esc）。Zone配置は
 正本: `crates/hw_core/src/game_state.rs`。rootの`crates/bevy_app/src/systems/command/mod.rs`は
 `TaskMode` / `TaskModeZoneType`を選択的にre-exportします。
 
-| バリアント | 用途 | ドラッグ開始位置 |
+| バリアント | 用途 | `Option<Vec2>` の状態 |
 |:--|:--|:--|
 | `None` | 通常モード（デフォルト） | — |
 | `DesignateChop(Option<Vec2>)` | 伐採指示（矩形ドラッグ） | Some = ドラッグ中 |
 | `DesignateMine(Option<Vec2>)` | 採掘指示（矩形ドラッグ） | Some = ドラッグ中 |
 | `DesignateHaul(Option<Vec2>)` | 運搬指示（矩形ドラッグ） | Some = ドラッグ中 |
+| `DesignateDeconstruct(Option<Vec2>)` | Ordersから完成建物を単体解体指定。release後は`None`へ戻って連続指定を待ち、右クリック/Escapeでmode終了 | Some = press済み・release待ち |
 | `CancelDesignation(Option<Vec2>)` | 指示キャンセル（矩形ドラッグ） | Some = ドラッグ中 |
 | `SelectBuildTarget` | Familiar建築用の予約variant。現在の`FamiliarBuild`はBlockedで遷移せず、実consumerと完了経路を同時実装した後だけ到達可能にする | — |
 | `AreaSelection(Option<Vec2>)` | TaskArea 編集モード | Some = 新規矩形ドラッグ中 |
@@ -55,7 +56,8 @@ Normal ↔ TaskDesignation（Orders/Zoneボタン/Esc）。Zone配置は
 | `StockpilePolicyEdit(Option<Vec2>)` | Stockpile 方針の矩形編集 | Some = ドラッグ中 |
 | `SoulSpaPlace(Option<Vec2>)` | Soul Spa 配置（2×2） | Some = ドラッグ中 |
 
-`Option<Vec2>` は `None` = 待機、`Some(pos)` = ドラッグ開始位置（進行中）を示す。
+`Option<Vec2>` は `None` = 待機、`Some(pos)` = pointer gesture進行中を示す。area系ではドラッグ開始位置、
+Deconstructではpress位置として使い、release時に単一requestへ確定する。
 
 ## TaskDesignation の補足（TaskArea 編集）
 
@@ -172,7 +174,8 @@ allow-listと同時にTrack C2で接続する。
   companion / SoulSpa の placement state は維持し、capture 中の新しい world click だけを止める。
 - capture の false→true frame では、AreaEdit の active drag を開始前の `TaskArea` / `Destination` /
   `ActiveCommand` へ戻し、Designation / Area / Assign / Zone / Floor / Wall / Dream のドラッグ中 variant を
-  同じ mode の待機状態へ戻す。Dream preview seed と Zone removal preview も破棄するが、SoulSpa の
+  同じ mode の待機状態へ戻す。単体Deconstructのpress済みgestureもorderを発行せず待機状態へ戻す。
+  Dream preview seed と Zone removal preview も破棄するが、SoulSpa の
   placement state と release 済みの history、assignment、`pending_dream_planting` は変更しない。
 - `StockpilePolicyEdit(Some(start))` も capture 開始時は `StockpilePolicyEdit(None)` へ戻すが、
   `StockpilePolicyRangeEditState.patch` は保持する。overlay を閉じた後、同じ patch で矩形選択をやり直せる。
@@ -180,7 +183,7 @@ allow-listと同時にTrack C2で接続する。
 
 ### エリア指定中のカメラ入力
 
-- Designation / Area / Assign / Zone / Floor / Wall / Dream / Stockpile 方針編集の各 task area mode は、左ボタンの press から
+- Designation / Deconstruct / Area / Assign / Zone / Floor / Wall / Dream / Stockpile 方針編集の各 task mode は、左ボタンの press から
   release frame まで一次ポインタを指定 gesture に予約する。待機中の `TaskMode::* (None)`、同 frame に
   mode を始める Familiar action、通常 selection からの TaskArea border press を開始条件に含める。
   一度得た claim は Escape/capture 等で owner state が先に変わっても release まで維持するため、drag の

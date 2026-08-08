@@ -91,6 +91,7 @@ impl ActiveModeCleanupParams<'_, '_> {
             TaskMode::DesignateChop(Some(_)) => TaskMode::DesignateChop(None),
             TaskMode::DesignateMine(Some(_)) => TaskMode::DesignateMine(None),
             TaskMode::DesignateHaul(Some(_)) => TaskMode::DesignateHaul(None),
+            TaskMode::DesignateDeconstruct(Some(_)) => TaskMode::DesignateDeconstruct(None),
             TaskMode::CancelDesignation(Some(_)) => TaskMode::CancelDesignation(None),
             TaskMode::AreaSelection(Some(_)) => TaskMode::AreaSelection(None),
             TaskMode::AssignTask(Some(_)) => TaskMode::AssignTask(None),
@@ -360,6 +361,10 @@ mod tests {
             (
                 TaskMode::DesignateHaul(Some(point)),
                 TaskMode::DesignateHaul(None),
+            ),
+            (
+                TaskMode::DesignateDeconstruct(Some(point)),
+                TaskMode::DesignateDeconstruct(None),
             ),
             (
                 TaskMode::CancelDesignation(Some(point)),

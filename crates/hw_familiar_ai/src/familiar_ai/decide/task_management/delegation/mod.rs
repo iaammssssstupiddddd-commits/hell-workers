@@ -9,6 +9,7 @@ use hw_jobs::TaskDiagnosticInputRevisions;
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::{WalkabilityConnectivityCache, WorldMap};
+use std::collections::HashSet;
 
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 use crate::familiar_ai::decide::task_management::{
@@ -35,6 +36,7 @@ pub struct DelegationEnvCtx<'a> {
     pub world_map: &'a WorldMap,
     pub tile_site_index: &'a TileSiteIndex,
     pub incoming_snapshot: &'a IncomingDeliverySnapshot,
+    pub active_move_targets: &'a HashSet<Entity>,
 }
 
 /// 委譲ループ内で更新するキャッシュと仮予約を一つの実行コンテキストに束ねる。

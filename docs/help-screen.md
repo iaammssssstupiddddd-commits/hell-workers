@@ -79,6 +79,13 @@ exhaustive matchで分類します。各top-level variantは1つ以上のstable 
 approval snapshotを同じ変更で追加します。現在は部分実装だけで公開へ切り替えられるcapability switchを持ちません。
 Architectから始める建築workflowは別の完了可能flowとして掲載します。
 
+`TaskMode::DesignateDeconstruct`はTrack C1 M3〜M4でplayer入力、hover preview、結果通知、Operation dialog、
+Task Dashboardと全BuildingType / Operational Soul Spaのowner cleanupまで接続済みです。`WorkType::Deconstruct`、TaskMode、UiIntentは
+`building-deconstruction` entryへ`Published`として紐づきます。HelpはOrdersからの単一建物指定、
+Familiarごとの許可、優先度変更・確認付きキャンセル、安全な資材退避を待つblocked state、
+structure / Room / Powerの撤去後再計算を説明します。Constructing Soul Spaの専用cancelは
+`soul-energy-recovery` entryで実搬入Bone返却とpause中の操作条件を説明します。
+
 project-owned shortcut文字列は`DEFAULT_BINDINGS`から生成します。provider本文へ同じキー名を重複記載せず、
 新しいpublic keyをformatterが扱えない場合はcatalog構築を失敗させます。カメラのdependency既定入力や
 rename widget固有の編集キーは、型付き`InputAction`を持たない明示的な例外です。
@@ -101,8 +108,8 @@ player-facing featureを追加する場合は、同じ変更バッチで次を�
 6. blocker/reachability、入力競合、成功・失敗結果のbehavior testを更新する。
 
 ```bash
-cargo test -p bevy_app@0.1.0 regenerate_help_approval_snapshot -- --ignored
-cargo test -p bevy_app@0.1.0 \
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 regenerate_help_approval_snapshot -- --ignored
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 \
   exact_snapshot_approves_all_player_visible_help_copy_and_coverage
 ```
 
@@ -155,7 +162,7 @@ runtime label/dataの新しいsource rootまたは拡張子を導入する場合
 ```bash
 python3 scripts/check_help_impact.py
 python3 -m unittest scripts.tests.test_check_help_impact
-cargo test -p hw_ui help
-cargo test -p bevy_app@0.1.0 help_
+python3 scripts/dev.py cargo -- test -p hw_ui help
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 help_
 python3 scripts/dev.py verify
 ```

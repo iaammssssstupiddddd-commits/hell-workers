@@ -1,6 +1,8 @@
 // WorkType の説明文言
 
-use crate::systems::jobs::{Blueprint, BonePile, BuildingType, Rock, SandPile, Tree, WorkType};
+use crate::systems::jobs::{
+    Blueprint, BonePile, Building, BuildingType, Rock, SandPile, Tree, WorkType,
+};
 use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::{TransportRequest, TransportRequestKind};
 use bevy::prelude::*;
@@ -13,6 +15,7 @@ pub struct TaskComponentRefs<'a> {
     pub rock: Option<&'a Rock>,
     pub _sand_pile: Option<&'a SandPile>,
     pub bone_pile: Option<&'a BonePile>,
+    pub deconstruction_target: Option<&'a Building>,
 }
 
 pub fn generate_task_description(wt: WorkType, entity: Entity, refs: TaskComponentRefs) -> String {
@@ -24,6 +27,7 @@ pub fn generate_task_description(wt: WorkType, entity: Entity, refs: TaskCompone
         rock,
         _sand_pile: _,
         bone_pile,
+        deconstruction_target,
     } = refs;
     match wt {
         WorkType::Build => {
@@ -69,6 +73,8 @@ pub fn generate_task_description(wt: WorkType, entity: Entity, refs: TaskCompone
                     format!("Haul {:?} to Wall", req.resource_type)
                 } else if req.kind == TransportRequestKind::DeliverToProvisionalWall {
                     "Haul StasisMud to Wall".to_string()
+                } else if req.kind == TransportRequestKind::DeliverToSoulSpa {
+                    format!("Haul {:?} to Soul Spa", req.resource_type)
                 } else {
                     format!("Haul {:?} (Req)", req.resource_type)
                 }
@@ -101,5 +107,63 @@ pub fn generate_task_description(wt: WorkType, entity: Entity, refs: TaskCompone
         WorkType::FrameWallTile => "Frame Wall".to_string(),
         WorkType::CoatWall => "Coat Wall".to_string(),
         WorkType::GeneratePower => "Generate Power".to_string(),
+        WorkType::Deconstruct => deconstruction_target.map_or_else(
+            || "Deconstruct Building".to_string(),
+            |building| format!("Deconstruct {}", building_type_label(building.kind)),
+        ),
+    }
+}
+
+const fn building_type_label(kind: BuildingType) -> &'static str {
+    match kind {
+        BuildingType::Wall => "Wall",
+        BuildingType::Door => "Door",
+        BuildingType::Floor => "Floor",
+        BuildingType::Tank => "Tank",
+        BuildingType::MudMixer => "Mixer",
+        BuildingType::RestArea => "Rest Area",
+        BuildingType::Bridge => "Bridge",
+        BuildingType::SandPile => "Sand Pile",
+        BuildingType::BonePile => "Bone Pile",
+        BuildingType::WheelbarrowParking => "Wheelbarrow Parking",
+        BuildingType::SoulSpa => "Soul Spa",
+        BuildingType::OutdoorLamp => "Outdoor Lamp",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_logistics::ResourceType;
+    use hw_logistics::transport_request::TransportPriority;
+
+    #[test]
+    fn soul_spa_delivery_identifies_its_owner_in_the_dashboard() {
+        let request = TransportRequest {
+            kind: TransportRequestKind::DeliverToSoulSpa,
+            anchor: Entity::PLACEHOLDER,
+            resource_type: ResourceType::Bone,
+            issued_by: Entity::PLACEHOLDER,
+            priority: TransportPriority::Normal,
+            stockpile_group: Vec::new(),
+        };
+
+        assert_eq!(
+            generate_task_description(
+                WorkType::Haul,
+                Entity::PLACEHOLDER,
+                TaskComponentRefs {
+                    blueprint: None,
+                    transport_req: Some(&request),
+                    resource_item: None,
+                    tree: None,
+                    rock: None,
+                    _sand_pile: None,
+                    bone_pile: None,
+                    deconstruction_target: None,
+                },
+            ),
+            "Haul Bone to Soul Spa"
+        );
     }
 }

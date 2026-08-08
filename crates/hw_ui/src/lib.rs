@@ -93,6 +93,7 @@ pub fn reset_for_world_replace(world: &mut World) {
     reset_info_panel_presentation(world);
     reset_help_presentation(world);
     reset_operation_dialog_presentation(world);
+    reset_area_edit_preview_presentation(world);
     mark_entity_list_dirty(world);
 
     if world.contains_resource::<InputFocus>() {
@@ -137,6 +138,17 @@ fn reset_operation_dialog_presentation(world: &mut World) {
     }
 }
 
+fn reset_area_edit_preview_presentation(world: &mut World) {
+    let preview = world
+        .get_resource::<components::UiNodeRegistry>()
+        .and_then(|registry| registry.get_slot(components::UiSlot::AreaEditPreview));
+    if let Some(preview) = preview
+        && let Some(mut node) = world.get_mut::<Node>(preview)
+    {
+        node.display = Display::None;
+    }
+}
+
 fn clear_entity_bearing_button_targets(world: &mut World) {
     let mut query = world.query::<&mut components::MenuButton>();
     for mut button in query.iter_mut(world) {
@@ -149,6 +161,9 @@ fn clear_entity_bearing_button_targets(world: &mut World) {
             UiIntent::SetSoulSpaActiveSlots { .. } => UiIntent::SetSoulSpaActiveSlots {
                 target: Entity::PLACEHOLDER,
                 active_slots: 0,
+            },
+            UiIntent::CancelSoulSpaConstruction { .. } => UiIntent::CancelSoulSpaConstruction {
+                target: Entity::PLACEHOLDER,
             },
             UiIntent::SetPowerConsumerPriority { .. } => UiIntent::SetPowerConsumerPriority {
                 target: Entity::PLACEHOLDER,
@@ -290,6 +305,27 @@ mod tests {
     }
 
     #[test]
+    fn world_replace_reset_hides_visible_area_edit_preview_immediately() {
+        let mut world = World::new();
+        let preview = world
+            .spawn(Node {
+                display: Display::Flex,
+                ..default()
+            })
+            .id();
+        let mut registry = components::UiNodeRegistry::default();
+        registry.set_slot(components::UiSlot::AreaEditPreview, preview);
+        world.insert_resource(registry);
+
+        reset_for_world_replace(&mut world);
+
+        assert_eq!(
+            world.entity(preview).get::<Node>().unwrap().display,
+            Display::None
+        );
+    }
+
+    #[test]
     fn world_replace_reset_clears_operation_target_root_and_scroll() {
         let mut world = World::new();
         let stale_target = world.spawn_empty().id();
@@ -383,6 +419,13 @@ mod tests {
                 target: stale_simulation_entity,
                 active_slots: 3,
             }))
+            .id();
+        let soul_spa_cancel_button = world
+            .spawn(components::MenuButton(
+                UiIntent::CancelSoulSpaConstruction {
+                    target: stale_simulation_entity,
+                },
+            ))
             .id();
         let power_priority_button = world
             .spawn(components::MenuButton(UiIntent::SetPowerConsumerPriority {
@@ -557,6 +600,15 @@ mod tests {
         };
         assert_eq!(target, Entity::PLACEHOLDER);
         assert_eq!(active_slots, 0);
+
+        let UiIntent::CancelSoulSpaConstruction { target } = world
+            .get::<components::MenuButton>(soul_spa_cancel_button)
+            .unwrap()
+            .0
+        else {
+            panic!("Soul Spa cancel button retained its pre-reset action");
+        };
+        assert_eq!(target, Entity::PLACEHOLDER);
 
         let UiIntent::SetPowerConsumerPriority { target, priority } = world
             .get::<components::MenuButton>(power_priority_button)

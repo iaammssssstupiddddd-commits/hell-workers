@@ -318,6 +318,69 @@ def read_indoor_light_sidecars(
     return fixture, layout_rows, presentation_rows, errors
 
 
+def read_deconstruction_fixture(
+    path: Path,
+) -> tuple[dict[str, str] | None, list[str]]:
+    rows, errors = read_exact_csv_rows(
+        path,
+        columns=DECONSTRUCTION_FIXTURE_COLUMNS,
+        artifact_name="deconstruction_fixture.csv",
+    )
+    if rows is None:
+        return None, errors
+    if len(rows) != 1:
+        return None, [
+            *errors,
+            "deconstruction_fixture.csv must contain exactly one data row; "
+            f"got {len(rows)}",
+        ]
+    row = rows[0]
+    if row.get("schema_version") != DECONSTRUCTION_FIXTURE_SCHEMA_VERSION:
+        errors.append(
+            "deconstruction_fixture.csv schema_version is "
+            f"{row.get('schema_version')!r}, expected {DECONSTRUCTION_FIXTURE_SCHEMA_VERSION}"
+        )
+    expected = {
+        "initial_completed_buildings": 100,
+        "final_completed_buildings": 99,
+        "building_type_count": 12,
+        "commit_requests": 1,
+        "committed": 1,
+        "recovery_items": 5,
+        "commit_validation_passes": 1,
+        "successful_cleanup_transactions": 1,
+        "recovery_items_spawned": 5,
+        "steady_state_validation_delta": 0,
+    }
+    for column, expected_value in expected.items():
+        value = row.get(column, "")
+        try:
+            parsed = int(value)
+            if parsed < 0 or str(parsed) != value:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append(
+                f"deconstruction_fixture.csv {column} must be a canonical nonnegative integer"
+            )
+            continue
+        if parsed != expected_value:
+            errors.append(
+                f"deconstruction_fixture.csv {column} is {parsed}, expected {expected_value}"
+            )
+    for column, label in (
+        ("post_commit_updates", "post_commit_updates"),
+        ("successful_transaction_elapsed_ns", "successful_transaction_elapsed_ns"),
+    ):
+        value = row.get(column, "")
+        try:
+            parsed = int(value)
+            if parsed <= 0 or str(parsed) != value:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append(
+                f"deconstruction_fixture.csv {label} must be a canonical positive integer"
+            )
+    return (row if not errors else None), errors
 
 
 def read_window(
@@ -1264,6 +1327,7 @@ def validate_run(
     indoor_light_fixture = None
     indoor_light_layout = None
     indoor_light_presentation = None
+    deconstruction_fixture = None
     timeline = None
     behavior_save_artifact = None
     window, window_errors = read_window(
@@ -1302,6 +1366,13 @@ def validate_run(
                 lane=expected_lane,
             )
             reasons.extend(indoor_errors)
+    elif expected_case.workload == "deconstruction":
+        if capture_kind != "fixed-step-determinism":
+            reasons.append("deconstruction validation requires fixed-step determinism capture")
+        deconstruction_fixture, deconstruction_errors = read_deconstruction_fixture(
+            data_dir / "deconstruction_fixture.csv"
+        )
+        reasons.extend(deconstruction_errors)
     else:
         unexpected_sidecars = [path.name for path in indoor_sidecar_paths if path.exists()]
         if unexpected_sidecars:
@@ -1309,6 +1380,10 @@ def validate_run(
                 "non-indoor workload must not write indoor-light sidecars: "
                 + ", ".join(unexpected_sidecars)
             )
+    if expected_case.workload != "deconstruction" and (
+        data_dir / "deconstruction_fixture.csv"
+    ).exists():
+        reasons.append("non-deconstruction workload must not write deconstruction_fixture.csv")
     if capture_kind == "frame-time":
         summary, summary_errors = read_summary(data_dir / "summary.csv")
         reasons.extend(summary_errors)
@@ -1615,6 +1690,7 @@ def validate_run(
         indoor_light_fixture=indoor_light_fixture,
         indoor_light_layout=indoor_light_layout,
         indoor_light_presentation=indoor_light_presentation,
+        deconstruction_fixture=deconstruction_fixture,
         timeline=timeline,
         behavior_save_artifact=behavior_save_artifact,
         profile_artifact=None,

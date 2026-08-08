@@ -144,6 +144,9 @@ impl Plugin for TransportRequestPlugin {
                         .after(provisional_wall_material_delivery_sync_system),
                     mud_mixer_auto_haul_system,
                     tank_water_request_system,
+                )
+                    .in_set(TransportRequestSet::Decide),
+                (
                     task_area_auto_haul_system,
                     wall_construction_auto_haul_system,
                     wall_material_delivery_sync_system.after(wall_construction_auto_haul_system),

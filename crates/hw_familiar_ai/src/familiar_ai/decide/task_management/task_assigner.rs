@@ -11,6 +11,7 @@ use hw_jobs::WorkType;
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_logistics::types::Inventory;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
 use crate::familiar_ai::decide::task_management::{
@@ -143,6 +144,7 @@ pub struct AssignTaskContext<'a> {
     pub resource_grid: &'a hw_spatial::ResourceSpatialGrid,
     pub tile_site_index: &'a TileSiteIndex,
     pub incoming_snapshot: &'a IncomingDeliverySnapshot,
+    pub active_move_targets: &'a HashSet<Entity>,
 }
 
 /// ワーカーにタスクを割り当てる

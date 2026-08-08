@@ -104,9 +104,22 @@ exhaustive に分類し、raw component/debug 情報を表示文言へ渡さな�
 adapter は Entity、action kind、result kind を含む key で `ToastOnly` の `UserFacingNotification` へ変換する。
 そのため同じ結果の短時間連打だけを集約し、別 Entity、成功/拒否、priority up/down を誤って dedupe しない。
 `ToastOnly` は重要履歴へ残らず、1 操作が生成する visible notification は最大 1 件である。
+Deconstruct cancelではdashboard adapterの`AwaitingOwnerOutcome`を通知せず、owner finalizerが返す
+`DeconstructionCancelOutcome`だけを表示する。これにより1回の確認付きcancelから中間成功と終端成功の二重toastを出さない。
 
 `Working / Blocked / PendingEvaluation` と blocker reason はライブ dashboard state であり、cycle ごとに
 notification Message を発行しない。
+
+## 解体結果
+
+Ordersの1 logical clickは`DeconstructionDesignationOutcome`を1件返し、指定成功とno target、construction、
+unsupported、moving、already designated、stale target/world、owner mismatch、cleanup unavailableを固定文言へ変換する。commit/cancelは
+`DeconstructionCommitOutcome` / `DeconstructionCancelOutcome`がcanonicalな終端結果を所有する。
+
+commit成功、owner mismatch、安全な回収先不足、Mixer在庫不整合、Move競合、未対応targetは通知する。
+duplicate request、stale replay、cancel競合など内部のexactly-once排他結果はプレイヤーが対処できないため
+toastへ変換しない。cancelは成功、claim取得済み、stale order/worldを区別する。すべて`ToastOnly`で、
+target/result kindをkeyへ含め、dashboard blockerの周期更新は通知しない。
 
 ## Stockpile 方針変更結果
 
@@ -130,6 +143,16 @@ Soul Spaの枠操作は`UiIntent::SetSoulSpaActiveSlots`ごとに`SoulSpaSlotsCh
 exact適用はSuccess、0〜4へのclampはWarning、stale / unsupported / Constructing中の操作はWarningまたはErrorへ
 安全な固定文言で変換する。失敗時は`active_slots`を変更せず、枠減少時も既存workerを解除しない。
 
+Constructing Soul Spaのcancelは`SoulSpaConstructionCancelOutcome`だけが表示上の終端を所有する。
+情報パネルのcancelと、well-formedな`DeliverToSoulSpa + TargetSoulSpaSite`行の確認付きcancelは同じowner lifecycleへ
+合流する。通常時はexact footprint、tile、関連worker/request、power shapeを事前検証してからsiteを一括除去し、
+実際の`bones_delivered`だけを返す。Task Dashboardの`AwaitingOwnerOutcome`は中間toastへ変換しない。
+
+結果は`Canceled { refunded_bones }`、`Paused`、`StaleTarget`、`PhaseUnavailable`、`OwnerMismatch`、
+`ActiveTaskMismatch`の6分類で、1操作につき最大1件の`ToastOnly`となる。Virtual Timeがpause中の情報パネル操作は、
+停止中のLogic bufferへrequestを残さずroot adapterが即座に`Paused`へ終端するため、resume後に遅延適用されない。
+失敗時はsite、搬入資材、worker/requestを変更しない。
+
 Power priority操作は`UiIntent::SetPowerConsumerPriority`ごとに`PowerConsumerPolicyChangeOutcome`を1件返す。
 rootがtargetの生存、`PowerConsumer`、既存policyを再検証し、stale / unsupported / missing policyを区別する。
 missing policyはロード互換処理の責務であり、UI操作中に部分修復しない。両outcomeは同じUpdateのadapterで
@@ -140,7 +163,9 @@ missing policyはロード互換処理の責務であり、UI操作中に部分�
 ```text
 SaveLoadOutcome / TaskActionOutcome / StockpilePolicyChangeOutcome
   / FamiliarSettingsChangeOutcome / SoulSpaSlotsChangeOutcome
-  / PowerConsumerPolicyChangeOutcome
+  / SoulSpaConstructionCancelOutcome
+  / PowerConsumerPolicyChangeOutcome / DeconstructionDesignationOutcome
+  / DeconstructionCancelOutcome / DeconstructionCommitOutcome
   → NotificationSystemSet::Adapt（rootで安全な表示文言へ変換）
   → UserFacingNotification
   → NotificationSystemSet::Reduce（ingest / dedupe / expiry）
@@ -156,7 +181,9 @@ SaveLoadOutcome / TaskActionOutcome / StockpilePolicyChangeOutcome
 - `SavePlugin` の専用hookが古い `SaveLoadOutcome` bufferを消す。
 - `hw_ui::reset_for_world_replace()` が `UserFacingNotification`、center、unread、履歴開閉、描画revisionを初期化する。
 - `MessagesPlugin` が旧 world の `TaskActionOutcome`、Stockpile/Familiar settingsのrequest/outcome、
-  `SoulSpaSlotsChangeOutcome`、`PowerConsumerPolicyChangeOutcome` bufferをclearし、
+  `SoulSpaSlotsChangeOutcome`、Soul Spa construction cancel request/outcome、
+  `PowerConsumerPolicyChangeOutcome`、解体designation/cancel/commitの
+  request/outcome bufferをclearし、
   task confirmation / `UiIntent` もUI owner hookが消す。
 - 動的toast/history rowはdespawnし、static root、panel、未読labelを非表示／初期表示へ戻す。
 - 配置の `live` / `recent_failure` も同じUI owner hookで消す。
@@ -167,13 +194,13 @@ SaveLoadOutcome / TaskActionOutcome / StockpilePolicyChangeOutcome
 ## 検証
 
 ```bash
-cargo test -p hw_ui notifications
-cargo test -p hw_ui placement
-cargo test -p bevy_app@0.1.0 notifications
-cargo test -p bevy_app@0.1.0 placement
-cargo test -p bevy_app@0.1.0 systems::save
-cargo test -p bevy_app@0.1.0 save_game
-cargo test -p bevy_app@0.1.0 stockpile_policy
+python3 scripts/dev.py cargo -- test -p hw_ui notifications
+python3 scripts/dev.py cargo -- test -p hw_ui placement
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 notifications
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 placement
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 systems::save
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 save_game
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 stockpile_policy
 ```
 
 手動では、各配置モードの無効候補とFloor / Wallの部分採用、F5の成功通知、存在しない対象を含む

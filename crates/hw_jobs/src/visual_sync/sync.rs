@@ -16,8 +16,8 @@ use crate::construction::{
 };
 use crate::model::{Blueprint, Building, BuildingType};
 use crate::tasks::{
-    AssignedTask, CoatWallPhase, FrameWallPhase, GatherPhase, HaulPhase, PourFloorPhase,
-    RefinePhase, ReinforceFloorPhase,
+    AssignedTask, CoatWallPhase, DeconstructPhase, FrameWallPhase, GatherPhase, HaulPhase,
+    PourFloorPhase, RefinePhase, ReinforceFloorPhase,
 };
 
 use super::building_type_to_visual;
@@ -159,6 +159,19 @@ pub fn sync_soul_task_visual_system(mut q: SoulTaskSyncQuery) {
             ),
             AssignedTask::GeneratePower(d) => {
                 (SoulTaskPhaseVisual::GeneratePower, None, Some(d.tile), None)
+            }
+            AssignedTask::Deconstruct(d) => {
+                let progress = if let DeconstructPhase::Dismantling { progress } = d.phase {
+                    Some(progress)
+                } else {
+                    None
+                };
+                (
+                    SoulTaskPhaseVisual::Deconstruct,
+                    progress,
+                    Some(d.target),
+                    None,
+                )
             }
         };
 

@@ -7,8 +7,8 @@ use hw_core::soul::{DamnedSoul, Destination, Path};
 use hw_core::visual::SoulTaskHandles;
 use hw_jobs::{
     Blueprint, BucketTransportData, BucketTransportDestination, BucketTransportPhase,
-    BucketTransportSource, BuildData, BuildPhase, BuildingType, Designation, GeneratePowerData,
-    GeneratePowerPhase, HaulData, HaulPhase, WorkType,
+    BucketTransportSource, BuildData, BuildPhase, BuildingType, DeconstructData, DeconstructPhase,
+    Designation, GeneratePowerData, GeneratePowerPhase, HaulData, HaulPhase, WorkType,
 };
 use hw_logistics::zone::Stockpile;
 use hw_logistics::{Inventory, ResourceItem, ResourceType, SharedResourceCache};
@@ -20,6 +20,7 @@ struct TaskNotificationReceipts {
     completed_visual: Vec<TaskCompletedVisualMessage>,
     abandoned: Vec<OnTaskAbandoned>,
     reservation_ops: Vec<ResourceReservationOp>,
+    deconstruction_commits: Vec<hw_jobs::DeconstructionCommitRequest>,
 }
 
 fn empty_soul_task_handles() -> SoulTaskHandles {
@@ -46,6 +47,7 @@ fn collect_task_notification_messages(
     mut completed: MessageReader<TaskCompletedVisualMessage>,
     mut abandoned: MessageReader<OnTaskAbandoned>,
     mut reservations: MessageReader<ResourceReservationRequest>,
+    mut deconstruction_commits: MessageReader<hw_jobs::DeconstructionCommitRequest>,
     mut receipts: ResMut<TaskNotificationReceipts>,
 ) {
     receipts.completed_visual.extend(completed.read().copied());
@@ -53,6 +55,9 @@ fn collect_task_notification_messages(
     receipts
         .reservation_ops
         .extend(reservations.read().map(|request| request.op.clone()));
+    receipts
+        .deconstruction_commits
+        .extend(deconstruction_commits.read().copied());
 }
 
 fn task_execution_test_app() -> App {
@@ -64,6 +69,7 @@ fn task_execution_test_app() -> App {
         .init_resource::<SharedResourceCache>()
         .init_resource::<TaskNotificationReceipts>()
         .add_message::<ResourceReservationRequest>()
+        .add_message::<hw_jobs::DeconstructionCommitRequest>()
         .add_message::<TaskCompletedVisualMessage>()
         .add_message::<OnTaskAbandoned>()
         .add_observer(record_task_completed)
@@ -132,5 +138,6 @@ fn assert_component_unchanged<T: Component>(world: &mut World, entity: Entity) {
 
 mod aborts;
 mod completion;
+mod deconstruct;
 mod guards;
 mod stockpile_policy;

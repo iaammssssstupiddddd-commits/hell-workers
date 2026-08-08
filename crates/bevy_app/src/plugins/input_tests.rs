@@ -398,6 +398,7 @@ fn all_task_area_drag_modes_reserve_the_primary_pointer() {
         TaskMode::DesignateChop(None),
         TaskMode::DesignateMine(Some(point)),
         TaskMode::DesignateHaul(None),
+        TaskMode::DesignateDeconstruct(Some(point)),
         TaskMode::CancelDesignation(Some(point)),
         TaskMode::AreaSelection(None),
         TaskMode::AssignTask(Some(point)),

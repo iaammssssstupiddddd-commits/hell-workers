@@ -74,6 +74,7 @@ type CuringFootprintSpec = (Entity, Vec<CuringFootprintTile>);
 type CuringFootprints = Vec<CuringFootprintSpec>;
 
 mod candidate;
+mod deconstruction;
 mod registry;
 mod task_runtime;
 
@@ -93,6 +94,15 @@ pub(super) use candidate::{
     validate_durable_topology_candidate, validate_familiar_candidate,
     validate_task_logistics_candidate,
 };
+#[cfg(test)]
+pub(super) use deconstruction::{
+    normalize_completed_floor_ownership, rebuild_deconstruction_runtime,
+    validate_deconstruction_orders,
+};
+#[cfg(test)]
+pub(super) fn normalize_task_logistics_runtime_for_test(world: &mut World) {
+    task_runtime::normalize_task_logistics_runtime(world);
+}
 pub(super) use registry::ResolvedRehydratePlan;
 use registry::{
     RehydratePhase, register_candidate_validator, register_live_prerequisite,
@@ -117,6 +127,11 @@ pub(crate) fn register_logic_rehydrate_pipeline(app: &mut App) {
         "task-logistics.owners",
         candidate::validate_task_logistics_candidate,
     );
+    register_candidate_validator(
+        app,
+        "deconstruction.orders",
+        deconstruction::validate_deconstruction_orders,
+    );
     register_rehydrate_step(
         app,
         "construction.normalize",
@@ -124,6 +139,14 @@ pub(crate) fn register_logic_rehydrate_pipeline(app: &mut App) {
         &[],
         &[],
         construction_runtime::normalize_construction_state,
+    );
+    register_rehydrate_step(
+        app,
+        "deconstruction.floor-ownership",
+        RehydratePhase::DurableNormalize,
+        &[],
+        &[],
+        deconstruction::normalize_completed_floor_ownership,
     );
     register_rehydrate_step(
         app,
@@ -172,6 +195,14 @@ pub(crate) fn register_logic_rehydrate_pipeline(app: &mut App) {
         &["transport-request.targets"],
         &[],
         task_runtime::normalize_task_logistics_runtime,
+    );
+    register_rehydrate_step(
+        app,
+        "deconstruction.runtime",
+        RehydratePhase::RuntimeNormalize,
+        &["deconstruction.floor-ownership", "task-logistics.runtime"],
+        &[],
+        deconstruction::rebuild_deconstruction_runtime,
     );
     register_rehydrate_step(
         app,

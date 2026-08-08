@@ -336,6 +336,7 @@ mod tests {
     use crate::world::map::GeneratedWorldLayoutResource;
     use hw_core::GameTime;
     use hw_core::familiar::{Familiar, FamiliarOperation, FamiliarPolicy};
+    use hw_core::jobs::WorkType;
     use hw_core::logistics::ResourceType;
     use hw_core::population::PopulationManager;
     use hw_core::relationships::{
@@ -346,7 +347,10 @@ mod tests {
     use hw_energy::{PowerConsumer, PowerShedReason, PowerSupplyState, Unpowered};
     use hw_jobs::construction::FloorTileBlueprint;
     use hw_jobs::mud_mixer::MudMixerStorage;
-    use hw_jobs::{Building, BuildingType};
+    use hw_jobs::{
+        Building, BuildingType, DeconstructionOrder, DeconstructionOrders, DeconstructionPending,
+        Designation, PlayerIssuedDesignation, Priority, TargetDeconstructionRoot, TaskSlots,
+    };
     use hw_logistics::item_lifetime::ItemDespawnTimer;
     use hw_logistics::transport_request::{
         TransportRequestState, WheelbarrowDestination, WheelbarrowLease, WheelbarrowPendingSince,
@@ -361,7 +365,8 @@ mod tests {
 
     use super::super::format::{SaveHeader, encode_save_file};
     use super::super::rehydrate::{
-        rehydrate_familiar_settings, rehydrate_stockpile_policies,
+        normalize_completed_floor_ownership, rebuild_deconstruction_runtime,
+        rehydrate_familiar_settings, rehydrate_stockpile_policies, validate_deconstruction_orders,
         validate_durable_topology_candidate, validate_task_logistics_candidate,
     };
     use super::super::schema::{
@@ -778,6 +783,174 @@ mod tests {
             assert!(candidate.get::<Wheelbarrow>(carrier).is_some());
             assert!(!candidate.get::<LoadedItems>(carrier).unwrap().is_empty());
         }
+    }
+
+    #[test]
+    fn current_v1_deconstruction_order_preflights_remaps_and_rebuilds_pending() {
+        use bevy::ecs::entity::EntityHashMap;
+
+        let mut source = legacy_loader_test_app();
+        let grid = (3, 4);
+        let position = WorldMap::grid_to_world(grid.0, grid.1);
+        let target = source
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: false,
+                },
+                Transform::from_translation(position.extend(0.0)),
+            ))
+            .id();
+        let order = source
+            .world_mut()
+            .spawn((
+                DeconstructionOrder,
+                Designation {
+                    work_type: WorkType::Deconstruct,
+                },
+                PlayerIssuedDesignation,
+                Priority::default(),
+                TaskSlots::new(1),
+                TargetDeconstructionRoot(target),
+                Transform::from_translation(position.extend(0.0)),
+            ))
+            .id();
+        source.world_mut().flush();
+        source
+            .world_mut()
+            .resource_mut::<WorldMap>()
+            .set_building(grid, target);
+
+        let type_registry = source.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let roots = collect_persisted_entities(source.world_mut());
+        let body = build_persisted_world(source.world(), &registry, roots.into_iter())
+            .serialize(&registry)
+            .unwrap();
+        drop(registry);
+        let contents = encode_save_file(SaveHeader::current(42), &body);
+
+        let loader = legacy_loader_test_app();
+        let prepared = prepare_load_from_str(loader.world(), &contents)
+            .expect("current v1 deconstruction order must prepare");
+        assert_eq!(prepared.format, SaveFormat::V1(SaveHeader::current(42)));
+
+        let type_registry = loader.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let mut candidate = World::new();
+        for _ in 0..32 {
+            candidate.spawn_empty();
+        }
+        let mut entity_map = EntityHashMap::default();
+        prepared
+            .dynamic_world
+            .write_to_world_with(&mut candidate, &mut entity_map, &registry)
+            .unwrap();
+        drop(registry);
+
+        validate_deconstruction_orders(&candidate).unwrap();
+        rebuild_deconstruction_runtime(&mut candidate);
+
+        let mapped_target = entity_map[&target];
+        let mapped_order = entity_map[&order];
+        assert_ne!(mapped_target, target);
+        assert_ne!(mapped_order, order);
+        assert_eq!(
+            candidate
+                .get::<TargetDeconstructionRoot>(mapped_order)
+                .unwrap()
+                .0,
+            mapped_target
+        );
+        assert_eq!(
+            candidate
+                .get::<DeconstructionOrders>(mapped_target)
+                .unwrap()
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![mapped_order]
+        );
+        assert_eq!(
+            candidate.get::<DeconstructionPending>(mapped_target),
+            Some(&DeconstructionPending {
+                order: mapped_order,
+            })
+        );
+    }
+
+    #[test]
+    fn legacy_v1_world_map_without_floors_field_rebuilds_completed_floor_lookup() {
+        use bevy::ecs::entity::EntityHashMap;
+
+        let mut source = legacy_loader_test_app();
+        let grid = (5, 6);
+        let floor = source
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Floor,
+                    is_provisional: false,
+                },
+                Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+            ))
+            .id();
+        source
+            .world_mut()
+            .resource_mut::<WorldMap>()
+            .set_building(grid, floor);
+
+        let type_registry = source.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let roots = collect_persisted_entities(source.world_mut());
+        let body = build_persisted_world(source.world(), &registry, roots.into_iter())
+            .serialize(&registry)
+            .unwrap();
+        drop(registry);
+        let mut removed = 0;
+        let legacy_body = body
+            .lines()
+            .filter(|line| {
+                let is_floors_field = line.trim_start().starts_with("floors: {}");
+                removed += usize::from(is_floors_field);
+                !is_floors_field
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(
+            removed, 1,
+            "fixture must omit exactly one WorldMap.floors field"
+        );
+        let contents = encode_save_file(SaveHeader::current(42), &legacy_body);
+
+        let loader = legacy_loader_test_app();
+        let prepared = prepare_load_from_str(loader.world(), &contents)
+            .expect("legacy v1 WorldMap without floors must deserialize");
+        let type_registry = loader.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let mut candidate = World::new();
+        let mut entity_map = EntityHashMap::default();
+        prepared
+            .dynamic_world
+            .write_to_world_with(&mut candidate, &mut entity_map, &registry)
+            .unwrap();
+        drop(registry);
+
+        let mapped_floor = entity_map[&floor];
+        assert_eq!(
+            candidate.resource::<WorldMap>().building_entity(grid),
+            Some(mapped_floor)
+        );
+        assert_eq!(candidate.resource::<WorldMap>().floor_entity(grid), None);
+
+        normalize_completed_floor_ownership(&mut candidate);
+
+        assert_eq!(candidate.resource::<WorldMap>().building_entity(grid), None);
+        assert_eq!(
+            candidate.resource::<WorldMap>().floor_entity(grid),
+            Some(mapped_floor)
+        );
     }
 
     #[test]

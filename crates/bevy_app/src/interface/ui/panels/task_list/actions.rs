@@ -2,11 +2,15 @@
 
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use hw_core::WorldEpoch;
 use hw_core::jobs::WorkType;
 use hw_core::relationships::TaskWorkers;
+use hw_energy::{SoulSpaConstructionCancelRequest, SoulSpaPhase, SoulSpaSite};
 use hw_familiar_ai::AutoGatherDesignation;
 use hw_jobs::{
-    Blueprint, BlueprintCancelRequested, Designation, PlayerIssuedDesignation, Priority, Rock, Tree,
+    Blueprint, BlueprintCancelRequested, DeconstructionCancelRequest, DeconstructionCommitClaim,
+    DeconstructionOrder, DeconstructionPending, Designation, PlayerIssuedDesignation, Priority,
+    Rock, TargetDeconstructionRoot, TargetSoulSpaSite, TaskSlots, Tree,
 };
 use hw_logistics::ResourceItem;
 use hw_logistics::transport_request::{
@@ -45,12 +49,28 @@ pub(super) struct TaskCapabilityRefs<'a> {
     pub floor_tile: Option<&'a FloorTileBlueprint>,
     pub wall_tile: Option<&'a WallTileBlueprint>,
     pub transport_request: Option<&'a TransportRequest>,
+    pub soul_spa_target: Option<&'a TargetSoulSpaSite>,
+    pub deconstruction_order_actionable: bool,
 }
 
 pub(super) fn resolve_task_action_capabilities(
     refs: TaskCapabilityRefs<'_>,
 ) -> TaskActionCapabilities {
     let work_type = refs.designation.work_type;
+    if work_type == WorkType::Deconstruct {
+        return if refs.player_issued.is_some()
+            && refs.has_priority
+            && refs.deconstruction_order_actionable
+        {
+            TaskActionCapabilities {
+                focus: true,
+                priority: true,
+                cancel: Some(TaskCancelKind::DeconstructionOrder),
+            }
+        } else {
+            TaskActionCapabilities::READ_ONLY
+        };
+    }
     let manual_chop_or_mine = refs.player_issued.is_some()
         && refs.auto_gather.is_none()
         && refs.manual_transport.is_none()
@@ -108,6 +128,15 @@ pub(super) fn resolve_task_action_capabilities(
             }
             TransportRequestKind::DeliverToWallConstruction => {
                 Some(TaskCancelKind::WallSite(request.anchor))
+            }
+            TransportRequestKind::DeliverToSoulSpa
+                if work_type == WorkType::Haul
+                    && request.resource_type == hw_core::logistics::ResourceType::Bone
+                    && refs
+                        .soul_spa_target
+                        .is_some_and(|target| target.0 == request.anchor) =>
+            {
+                Some(TaskCancelKind::SoulSpaSite(request.anchor))
             }
             _ => None,
         };
@@ -189,6 +218,7 @@ pub enum TaskActionKind {
 pub enum TaskActionResult {
     PriorityChanged(TaskPriorityTier),
     CancellationRequested,
+    AwaitingOwnerOutcome,
     MalformedRequestClosed,
     Stale,
     Unsupported,
@@ -222,17 +252,71 @@ pub struct TaskActionApplyQueries<'w, 's> {
     targets: TaskActionTargetQuery<'w, 's>,
     floor_sites: Query<'w, 's, (), With<FloorConstructionSite>>,
     wall_sites: Query<'w, 's, (), With<WallConstructionSite>>,
+    soul_spa_sites: Query<'w, 's, &'static SoulSpaSite>,
+    soul_spa_request_targets: Query<'w, 's, &'static TargetSoulSpaSite>,
+    deconstruction_orders: DeconstructionOrderActionQuery<'w, 's>,
+    deconstruction_targets: DeconstructionTargetActionQuery<'w, 's>,
 }
 
-pub fn apply_task_action_intents_system(
-    mut commands: Commands,
-    mut intents: MessageReader<UiIntent>,
-    mut outcomes: MessageWriter<TaskActionOutcome>,
-    time: Res<Time<Virtual>>,
-    ui_input_state: Res<UiInputState>,
-    pending_capture: Res<PendingWorldInputCapture>,
-    mut queries: TaskActionApplyQueries,
-) {
+pub(super) type DeconstructionOrderActionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static TaskSlots, &'static TargetDeconstructionRoot),
+    With<DeconstructionOrder>,
+>;
+
+pub(super) type DeconstructionTargetActionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Option<&'static DeconstructionPending>,
+        Option<&'static DeconstructionCommitClaim>,
+    ),
+>;
+
+#[derive(SystemParam)]
+pub struct TaskActionIntentParams<'w, 's> {
+    commands: Commands<'w, 's>,
+    intents: MessageReader<'w, 's, UiIntent>,
+    outcomes: MessageWriter<'w, TaskActionOutcome>,
+    time: Res<'w, Time<Virtual>>,
+    ui_input_state: Res<'w, UiInputState>,
+    pending_capture: Res<'w, PendingWorldInputCapture>,
+    world_epoch: Res<'w, WorldEpoch>,
+    deconstruction_cancel_requests: MessageWriter<'w, DeconstructionCancelRequest>,
+    soul_spa_cancel_requests: MessageWriter<'w, SoulSpaConstructionCancelRequest>,
+    queries: TaskActionApplyQueries<'w, 's>,
+}
+
+pub(super) fn deconstruction_order_is_actionable(
+    order: Entity,
+    orders: &DeconstructionOrderActionQuery<'_, '_>,
+    targets: &DeconstructionTargetActionQuery<'_, '_>,
+) -> bool {
+    let Ok((slots, target)) = orders.get(order) else {
+        return false;
+    };
+    if slots.max != 1 || target.0 == order {
+        return false;
+    }
+    targets.get(target.0).is_ok_and(|(pending, claim)| {
+        pending.is_some_and(|pending| pending.order == order) && claim.is_none()
+    })
+}
+
+pub fn apply_task_action_intents_system(params: TaskActionIntentParams) {
+    let TaskActionIntentParams {
+        mut commands,
+        mut intents,
+        mut outcomes,
+        time,
+        ui_input_state,
+        pending_capture,
+        world_epoch,
+        mut deconstruction_cancel_requests,
+        mut soul_spa_cancel_requests,
+        mut queries,
+    } = params;
     for intent in intents.read().copied() {
         let request = match intent {
             UiIntent::AdjustTaskPriority {
@@ -265,13 +349,14 @@ pub fn apply_task_action_intents_system(
         } else if ui_input_state.world_input_captured || pending_capture.overlay().is_some() {
             TaskActionResult::Captured
         } else {
-            apply_live_task_action(
-                &mut commands,
-                &mut queries,
-                entity,
-                expected_work_type,
-                request,
-            )
+            let mut live_context = TaskActionLiveContext {
+                commands: &mut commands,
+                queries: &mut queries,
+                world_epoch: world_epoch.get(),
+                deconstruction_cancel_requests: &mut deconstruction_cancel_requests,
+                soul_spa_cancel_requests: &mut soul_spa_cancel_requests,
+            };
+            apply_live_task_action(&mut live_context, entity, expected_work_type, request)
         };
         outcomes.write(TaskActionOutcome {
             entity,
@@ -296,9 +381,16 @@ impl TaskActionRequest {
     }
 }
 
+struct TaskActionLiveContext<'a, 'w, 's> {
+    commands: &'a mut Commands<'w, 's>,
+    queries: &'a mut TaskActionApplyQueries<'w, 's>,
+    world_epoch: u64,
+    deconstruction_cancel_requests: &'a mut MessageWriter<'w, DeconstructionCancelRequest>,
+    soul_spa_cancel_requests: &'a mut MessageWriter<'w, SoulSpaConstructionCancelRequest>,
+}
+
 fn apply_live_task_action(
-    commands: &mut Commands,
-    queries: &mut TaskActionApplyQueries<'_, '_>,
+    context: &mut TaskActionLiveContext<'_, '_, '_>,
     entity: Entity,
     expected_work_type: WorkType,
     request: TaskActionRequest,
@@ -318,7 +410,7 @@ fn apply_live_task_action(
         floor_tile,
         wall_tile,
         transport_request,
-    )) = queries.targets.get_mut(entity)
+    )) = context.queries.targets.get_mut(entity)
     else {
         return TaskActionResult::Stale;
     };
@@ -326,6 +418,11 @@ fn apply_live_task_action(
         return TaskActionResult::Stale;
     }
 
+    let deconstruction_order_actionable = deconstruction_order_is_actionable(
+        entity,
+        &context.queries.deconstruction_orders,
+        &context.queries.deconstruction_targets,
+    );
     let capabilities = resolve_task_action_capabilities(TaskCapabilityRefs {
         designation,
         has_priority: priority.is_some(),
@@ -339,6 +436,8 @@ fn apply_live_task_action(
         floor_tile,
         wall_tile,
         transport_request,
+        soul_spa_target: context.queries.soul_spa_request_targets.get(entity).ok(),
+        deconstruction_order_actionable,
     });
 
     match request {
@@ -359,12 +458,28 @@ fn apply_live_task_action(
             }
             match expected_kind {
                 TaskCancelKind::GenericDesignation => {
-                    cancel_single_designation(commands, entity, workers, false, false, None);
+                    cancel_single_designation(
+                        context.commands,
+                        entity,
+                        workers,
+                        false,
+                        false,
+                        None,
+                    );
                     TaskActionResult::CancellationRequested
+                }
+                TaskCancelKind::DeconstructionOrder => {
+                    context
+                        .deconstruction_cancel_requests
+                        .write(DeconstructionCancelRequest {
+                            world_epoch: context.world_epoch,
+                            order: entity,
+                        });
+                    TaskActionResult::AwaitingOwnerOutcome
                 }
                 TaskCancelKind::ManualTransportRequest => {
                     match close_manual_transport_request(
-                        commands,
+                        context.commands,
                         ManualTransportCloseContext {
                             request_entity: entity,
                             manual: manual_transport,
@@ -383,26 +498,45 @@ fn apply_live_task_action(
                     }
                 }
                 TaskCancelKind::Blueprint => {
-                    commands.entity(entity).try_insert(BlueprintCancelRequested);
+                    context
+                        .commands
+                        .entity(entity)
+                        .try_insert(BlueprintCancelRequested);
                     TaskActionResult::CancellationRequested
                 }
                 TaskCancelKind::FloorSite(site) => {
-                    if queries.floor_sites.get(site).is_err() {
+                    if context.queries.floor_sites.get(site).is_err() {
                         return TaskActionResult::Stale;
                     }
-                    commands
+                    context
+                        .commands
                         .entity(site)
                         .try_insert(FloorConstructionCancelRequested);
                     TaskActionResult::CancellationRequested
                 }
                 TaskCancelKind::WallSite(site) => {
-                    if queries.wall_sites.get(site).is_err() {
+                    if context.queries.wall_sites.get(site).is_err() {
                         return TaskActionResult::Stale;
                     }
-                    commands
+                    context
+                        .commands
                         .entity(site)
                         .try_insert(WallConstructionCancelRequested);
                     TaskActionResult::CancellationRequested
+                }
+                TaskCancelKind::SoulSpaSite(site) => {
+                    if !context
+                        .queries
+                        .soul_spa_sites
+                        .get(site)
+                        .is_ok_and(|site| site.phase == SoulSpaPhase::Constructing)
+                    {
+                        return TaskActionResult::Stale;
+                    }
+                    context
+                        .soul_spa_cancel_requests
+                        .write(SoulSpaConstructionCancelRequest { target: site });
+                    TaskActionResult::AwaitingOwnerOutcome
                 }
             }
         }
@@ -425,6 +559,7 @@ pub fn adapt_task_action_outcomes(
                 "Cancellation requested",
                 "The task owner will finish cleanup.".to_string(),
             ),
+            TaskActionResult::AwaitingOwnerOutcome => continue,
             TaskActionResult::MalformedRequestClosed => (
                 NotificationSeverity::Warning,
                 "Task closed",
@@ -481,6 +616,7 @@ const fn result_key(result: TaskActionResult) -> &'static str {
         TaskActionResult::PriorityChanged(TaskPriorityTier::High) => "priority-high",
         TaskActionResult::PriorityChanged(TaskPriorityTier::Critical) => "priority-critical",
         TaskActionResult::CancellationRequested => "cancel-requested",
+        TaskActionResult::AwaitingOwnerOutcome => "owner-outcome-pending",
         TaskActionResult::MalformedRequestClosed => "malformed-closed",
         TaskActionResult::Stale => "stale",
         TaskActionResult::Unsupported => "unsupported",
@@ -499,6 +635,12 @@ mod tests {
     #[derive(Resource, Default)]
     struct IntentReceiptCount(usize);
 
+    #[derive(Resource, Default)]
+    struct DeconstructionCancelReceipts(Vec<DeconstructionCancelRequest>);
+
+    #[derive(Resource, Default)]
+    struct SoulSpaCancelReceipts(Vec<SoulSpaConstructionCancelRequest>);
+
     fn collect_outcomes(
         mut outcomes: MessageReader<TaskActionOutcome>,
         mut receipts: ResMut<OutcomeReceipts>,
@@ -511,6 +653,20 @@ mod tests {
         mut receipts: ResMut<IntentReceiptCount>,
     ) {
         receipts.0 += intents.read().count();
+    }
+
+    fn collect_deconstruction_cancel_requests(
+        mut requests: MessageReader<DeconstructionCancelRequest>,
+        mut receipts: ResMut<DeconstructionCancelReceipts>,
+    ) {
+        receipts.0.extend(requests.read().copied());
+    }
+
+    fn collect_soul_spa_cancel_requests(
+        mut requests: MessageReader<SoulSpaConstructionCancelRequest>,
+        mut receipts: ResMut<SoulSpaCancelReceipts>,
+    ) {
+        receipts.0.extend(requests.read().copied());
     }
 
     fn empty_capability_refs(designation: &Designation) -> TaskCapabilityRefs<'_> {
@@ -527,6 +683,8 @@ mod tests {
             floor_tile: None,
             wall_tile: None,
             transport_request: None,
+            soul_spa_target: None,
+            deconstruction_order_actionable: false,
         }
     }
 
@@ -551,6 +709,8 @@ mod tests {
             floor_tile: None,
             wall_tile: None,
             transport_request: None,
+            soul_spa_target: None,
+            deconstruction_order_actionable: false,
         });
         assert!(allowed.priority);
         assert_eq!(allowed.cancel, Some(TaskCancelKind::GenericDesignation));
@@ -570,6 +730,8 @@ mod tests {
                 floor_tile: None,
                 wall_tile: None,
                 transport_request: None,
+                soul_spa_target: None,
+                deconstruction_order_actionable: false,
             }
         });
         assert_eq!(denied, TaskActionCapabilities::READ_ONLY);
@@ -591,6 +753,8 @@ mod tests {
             floor_tile: None,
             wall_tile: None,
             transport_request: None,
+            soul_spa_target: None,
+            deconstruction_order_actionable: false,
         });
         assert_eq!(denied_auto, TaskActionCapabilities::READ_ONLY);
     }
@@ -717,6 +881,31 @@ mod tests {
             .cancel,
             Some(TaskCancelKind::WallSite(wall_site))
         );
+        let soul_spa_site = Entity::from_raw_u32(43).expect("valid Soul Spa site");
+        let soul_spa_request = TransportRequest {
+            kind: TransportRequestKind::DeliverToSoulSpa,
+            anchor: soul_spa_site,
+            resource_type: hw_core::logistics::ResourceType::Bone,
+            ..request.clone()
+        };
+        assert_eq!(
+            resolve_task_action_capabilities(TaskCapabilityRefs {
+                transport_request: Some(&soul_spa_request),
+                ..empty_capability_refs(&haul)
+            }),
+            TaskActionCapabilities::READ_ONLY,
+            "a malformed Soul Spa request must not expose owner cancellation",
+        );
+        let soul_spa_target = TargetSoulSpaSite(soul_spa_site);
+        assert_eq!(
+            resolve_task_action_capabilities(TaskCapabilityRefs {
+                transport_request: Some(&soul_spa_request),
+                soul_spa_target: Some(&soul_spa_target),
+                ..empty_capability_refs(&haul)
+            })
+            .cancel,
+            Some(TaskCancelKind::SoulSpaSite(soul_spa_site))
+        );
 
         for work_type in [WorkType::Move, WorkType::GeneratePower] {
             let designation = Designation { work_type };
@@ -729,6 +918,235 @@ mod tests {
                 TaskActionCapabilities::READ_ONLY,
             );
         }
+
+        let deconstruct = Designation {
+            work_type: WorkType::Deconstruct,
+        };
+        assert_eq!(
+            resolve_task_action_capabilities(TaskCapabilityRefs {
+                has_priority: true,
+                player_issued: Some(&player),
+                deconstruction_order_actionable: true,
+                ..empty_capability_refs(&deconstruct)
+            }),
+            TaskActionCapabilities {
+                focus: true,
+                priority: true,
+                cancel: Some(TaskCancelKind::DeconstructionOrder),
+            }
+        );
+        for refs in [
+            TaskCapabilityRefs {
+                has_priority: false,
+                player_issued: Some(&player),
+                deconstruction_order_actionable: true,
+                ..empty_capability_refs(&deconstruct)
+            },
+            TaskCapabilityRefs {
+                has_priority: true,
+                player_issued: None,
+                deconstruction_order_actionable: true,
+                ..empty_capability_refs(&deconstruct)
+            },
+            TaskCapabilityRefs {
+                has_priority: true,
+                player_issued: Some(&player),
+                deconstruction_order_actionable: false,
+                ..empty_capability_refs(&deconstruct)
+            },
+        ] {
+            assert_eq!(
+                resolve_task_action_capabilities(refs),
+                TaskActionCapabilities::READ_ONLY
+            );
+        }
+    }
+
+    #[test]
+    fn task_dashboard_deconstruction_cancel_routes_only_through_the_owner_request() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<UiInputState>()
+            .init_resource::<PendingWorldInputCapture>()
+            .init_resource::<WorldEpoch>()
+            .init_resource::<OutcomeReceipts>()
+            .init_resource::<DeconstructionCancelReceipts>()
+            .add_message::<UiIntent>()
+            .add_message::<TaskActionOutcome>()
+            .add_message::<DeconstructionCancelRequest>()
+            .add_message::<SoulSpaConstructionCancelRequest>()
+            .add_systems(
+                Update,
+                (
+                    apply_task_action_intents_system,
+                    collect_deconstruction_cancel_requests,
+                    collect_outcomes,
+                )
+                    .chain(),
+            );
+
+        let target = app.world_mut().spawn_empty().id();
+        let order = app
+            .world_mut()
+            .spawn((
+                DeconstructionOrder,
+                Designation {
+                    work_type: WorkType::Deconstruct,
+                },
+                PlayerIssuedDesignation,
+                Priority(5),
+                TaskSlots::new(1),
+                TargetDeconstructionRoot(target),
+            ))
+            .id();
+        app.world_mut().flush();
+        app.world_mut()
+            .entity_mut(target)
+            .insert(DeconstructionPending { order });
+
+        app.world_mut().write_message(UiIntent::CancelTask {
+            entity: order,
+            expected_work_type: WorkType::Deconstruct,
+            expected_kind: TaskCancelKind::DeconstructionOrder,
+        });
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<DeconstructionCancelReceipts>().0,
+            vec![DeconstructionCancelRequest {
+                world_epoch: 0,
+                order,
+            }]
+        );
+        assert!(app.world().get::<DeconstructionOrder>(order).is_some());
+        assert!(app.world().get::<Designation>(order).is_some());
+        assert_eq!(
+            app.world().get::<DeconstructionPending>(target),
+            Some(&DeconstructionPending { order })
+        );
+        assert_eq!(
+            app.world().resource::<OutcomeReceipts>().0.last(),
+            Some(&TaskActionOutcome {
+                entity: order,
+                action: TaskActionKind::Cancel,
+                result: TaskActionResult::AwaitingOwnerOutcome,
+            })
+        );
+
+        app.world_mut()
+            .entity_mut(target)
+            .insert(DeconstructionCommitClaim {
+                world_epoch: 0,
+                order,
+            });
+        app.world_mut().write_message(UiIntent::CancelTask {
+            entity: order,
+            expected_work_type: WorkType::Deconstruct,
+            expected_kind: TaskCancelKind::DeconstructionOrder,
+        });
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .resource::<DeconstructionCancelReceipts>()
+                .0
+                .len(),
+            1,
+            "a newly acquired commit claim must invalidate the previewed cancel action",
+        );
+        assert_eq!(
+            app.world()
+                .resource::<OutcomeReceipts>()
+                .0
+                .last()
+                .unwrap()
+                .result,
+            TaskActionResult::Stale
+        );
+    }
+
+    #[test]
+    fn task_dashboard_soul_spa_cancel_routes_through_the_live_site_owner() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<UiInputState>()
+            .init_resource::<PendingWorldInputCapture>()
+            .init_resource::<WorldEpoch>()
+            .init_resource::<OutcomeReceipts>()
+            .init_resource::<SoulSpaCancelReceipts>()
+            .add_message::<UiIntent>()
+            .add_message::<TaskActionOutcome>()
+            .add_message::<DeconstructionCancelRequest>()
+            .add_message::<SoulSpaConstructionCancelRequest>()
+            .add_systems(
+                Update,
+                (
+                    apply_task_action_intents_system,
+                    collect_soul_spa_cancel_requests,
+                    collect_outcomes,
+                )
+                    .chain(),
+            );
+
+        let site = app.world_mut().spawn(SoulSpaSite::default()).id();
+        let request = app
+            .world_mut()
+            .spawn((
+                Designation {
+                    work_type: WorkType::Haul,
+                },
+                TransportRequest {
+                    kind: TransportRequestKind::DeliverToSoulSpa,
+                    anchor: site,
+                    resource_type: hw_core::logistics::ResourceType::Bone,
+                    issued_by: site,
+                    priority: hw_logistics::transport_request::TransportPriority::Normal,
+                    stockpile_group: Vec::new(),
+                },
+                TargetSoulSpaSite(site),
+            ))
+            .id();
+        let intent = UiIntent::CancelTask {
+            entity: request,
+            expected_work_type: WorkType::Haul,
+            expected_kind: TaskCancelKind::SoulSpaSite(site),
+        };
+        app.world_mut().write_message(intent);
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<SoulSpaCancelReceipts>().0,
+            vec![SoulSpaConstructionCancelRequest { target: site }]
+        );
+        assert!(app.world().get_entity(request).is_ok());
+        assert_eq!(
+            app.world().resource::<OutcomeReceipts>().0.last(),
+            Some(&TaskActionOutcome {
+                entity: request,
+                action: TaskActionKind::Cancel,
+                result: TaskActionResult::AwaitingOwnerOutcome,
+            })
+        );
+
+        app.world_mut().get_mut::<SoulSpaSite>(site).unwrap().phase = SoulSpaPhase::Operational;
+        app.world_mut().write_message(intent);
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<SoulSpaCancelReceipts>().0.len(),
+            1,
+            "the previewed site action must be invalidated after activation",
+        );
+        assert_eq!(
+            app.world()
+                .resource::<OutcomeReceipts>()
+                .0
+                .last()
+                .unwrap()
+                .result,
+            TaskActionResult::Stale
+        );
     }
 
     #[test]
@@ -804,9 +1222,12 @@ mod tests {
         app.add_plugins(MinimalPlugins)
             .init_resource::<UiInputState>()
             .init_resource::<PendingWorldInputCapture>()
+            .init_resource::<WorldEpoch>()
             .init_resource::<OutcomeReceipts>()
             .add_message::<UiIntent>()
             .add_message::<TaskActionOutcome>()
+            .add_message::<DeconstructionCancelRequest>()
+            .add_message::<SoulSpaConstructionCancelRequest>()
             .add_message::<hw_core::events::SoulTaskUnassignRequest>()
             .add_systems(
                 Update,
@@ -908,9 +1329,12 @@ mod tests {
         app.add_plugins(MinimalPlugins)
             .init_resource::<UiInputState>()
             .init_resource::<PendingWorldInputCapture>()
+            .init_resource::<WorldEpoch>()
             .init_resource::<OutcomeReceipts>()
             .add_message::<UiIntent>()
             .add_message::<TaskActionOutcome>()
+            .add_message::<DeconstructionCancelRequest>()
+            .add_message::<SoulSpaConstructionCancelRequest>()
             .add_systems(
                 Update,
                 (apply_task_action_intents_system, collect_outcomes).chain(),

@@ -40,7 +40,6 @@
 | [3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md](3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | Draft | Soul projector／section／legacy mirrorを撤去し、最終性能・Help gateを閉じるP08。 |
 | [3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) | Draft | Scene RtT 1枚、TopDown表示、放射状Indoor Light Fieldへの9分割親ロードマップ。 |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
-| [building-deconstruction-plan-2026-08-03.md](building-deconstruction-plan-2026-08-03.md) | In Progress | 完成建物の安全な撤去、固定資源回収、owner別cleanupを導入するTrack C1計画。 |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
@@ -84,6 +83,7 @@
 | [3d-rtt/archived/world-map-lod1-performance-plan-2026-04-09.md](3d-rtt/archived/world-map-lod1-performance-plan-2026-04-09.md) | Archived | ワールドマップの近景表示で使うの計画。 |
 | [archive/actionable-task-dashboard-plan-2026-07-19.md](archive/actionable-task-dashboard-plan-2026-07-19.md) | Archived | 停滞タスクの理由を安全に可視化し、絞り込み・優先度変更・owner別キャンセルを提供するの計画。 |
 | [archive/bevy-0-19-migration-plan-2026-07-05.md](archive/bevy-0-19-migration-plan-2026-07-05.md) | Archived | Bevy 0.18 のまま留まると、今後のエコシステム追随・バグ修正・パフォーマンス改善（render graph as systems, Parley テキスト等）を受けられないの計画。 |
+| [archive/building-deconstruction-plan-2026-08-03.md](archive/building-deconstruction-plan-2026-08-03.md) | Archived | 完成建物を安全に撤去して配置ミスや区画変更から復旧するplayer workflowがないの計画。 |
 | [archive/dev-tools-debug-overlay-plan-2026-07-05.md](archive/dev-tools-debug-overlay-plan-2026-07-05.md) | Archived | Soul / Familiar の AI 状態（AssignedTask・フェーズ・Squad 状態）をワールド内で直接確認できず、デバッグがログ頼み。フレームスパイクの可視化手段がないの計画。 |
 | [archive/familiar-operation-policy-plan-2026-07-20.md](archive/familiar-operation-policy-plan-2026-07-20.md) | Archived | Track B2 Familiar 運用ポリシー・永続化 実装計画 |
 | [archive/familiar-operation-policy-validation-plan-2026-07-26.md](archive/familiar-operation-policy-validation-plan-2026-07-26.md) | Archived | B2の受入項目が、既存自動テストで確定済みの契約、追加harnessが必要な客観検証、の計画。 |

@@ -76,6 +76,23 @@ fn generate_power_reserves_its_tile_until_terminal_transition() {
 }
 
 #[test]
+fn collect_bone_done_keeps_source_reservation_until_terminal_cleanup() {
+    let target = Entity::PLACEHOLDER;
+    let task = AssignedTask::CollectBone(CollectBoneData {
+        target,
+        phase: CollectBonePhase::Done,
+    });
+
+    assert_eq!(
+        collect_release_reservation_ops(&task, |_, fallback| fallback),
+        vec![ResourceReservationOp::ReleaseSource {
+            source: target,
+            amount: 1,
+        }]
+    );
+}
+
+#[test]
 fn wheelbarrow_item_source_reservations_end_after_loading() {
     let mut world = World::new();
     let wheelbarrow = world.spawn_empty().id();
@@ -223,6 +240,15 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 destination_pos: Vec2::ZERO,
                 companion_anchor: None,
                 phase: MovePlantPhase::GoToBuilding,
+            }),
+            Vec::new(),
+        ),
+        (
+            "deconstruct",
+            AssignedTask::Deconstruct(DeconstructData {
+                order: target,
+                target: wall,
+                phase: DeconstructPhase::GoingToTarget,
             }),
             Vec::new(),
         ),

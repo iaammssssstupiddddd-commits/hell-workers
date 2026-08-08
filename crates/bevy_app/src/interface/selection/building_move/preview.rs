@@ -21,7 +21,11 @@ type MoveBuildingQuery<'w, 's> = Query<
     'w,
     's,
     (Entity, &'static Building, &'static Transform),
-    (Without<PlacementGhost>, Without<PlacementPartnerGhost>),
+    (
+        Without<PlacementGhost>,
+        Without<PlacementPartnerGhost>,
+        Without<hw_jobs::DeconstructionPending>,
+    ),
 >;
 
 type PartnerGhostQuery<'w, 's> = Query<

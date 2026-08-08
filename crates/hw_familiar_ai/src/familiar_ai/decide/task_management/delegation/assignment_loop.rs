@@ -239,6 +239,7 @@ fn try_assign_from_candidates(
                 resource_grid: env.resource_grid,
                 tile_site_index: env.tile_site_index,
                 incoming_snapshot: env.incoming_snapshot,
+                active_move_targets: env.active_move_targets,
             },
             queries,
             construction_sites,
@@ -353,6 +354,7 @@ pub(super) fn try_assign_for_workers(
             transport_request_grid: env.transport_request_grid,
             managed_tasks: env.managed_tasks,
             world_map: env.world_map,
+            active_move_targets: env.active_move_targets,
         },
         &queries.storage.target_blueprints,
         diagnostics.evaluator,
@@ -465,7 +467,7 @@ pub(super) fn try_assign_for_workers(
 mod tests {
     use super::{
         DelegationCandidate, compare_ranked_candidates, compare_workers, connectivity_rejection,
-        partition_ranked_candidates, score_for_worker,
+        partition_ranked_candidates, reachable_with_cache, score_for_worker,
         wheelbarrow_arbitration_reason_from_evidence, worker_distance_rejection,
     };
     use bevy::prelude::{Entity, Vec2};
@@ -476,6 +478,7 @@ mod tests {
         TransportPriority, TransportRequest, TransportRequestKind, WheelbarrowArbitrationHeader,
         WheelbarrowArbitrationOutcome, is_wheelbarrow_arbitration_applicable,
     };
+    use hw_world::{WalkabilityConnectivityCache, WorldMap};
 
     use crate::familiar_ai::decide::task_management::policy_score::{
         POLICY_SCORE_UNIT, PolicyScoreContributions, familiar_policy_units, transport_policy_units,
@@ -662,6 +665,53 @@ mod tests {
             Some(CandidateRejectReason::Unreachable)
         );
         assert_eq!(connectivity_rejection(true), None);
+    }
+
+    #[test]
+    fn blocked_deconstruction_target_uses_reachable_adjacent_component() {
+        let mut map = WorldMap::default();
+        let target_grid = (10, 10);
+        map.set_building_occupancy(target_grid, entity(30));
+        let candidate = DelegationCandidate {
+            entity: entity(31),
+            work_type: WorkType::Deconstruct,
+            target_grid,
+            target_walkable: false,
+            skip_reachability_check: false,
+        };
+        let mut connectivity = WalkabilityConnectivityCache::default();
+
+        assert!(reachable_with_cache(
+            (9, 10),
+            candidate,
+            &map,
+            &mut connectivity,
+        ));
+    }
+
+    #[test]
+    fn isolated_deconstruction_target_is_unreachable_without_path_search() {
+        let mut map = WorldMap::default();
+        let target_grid = (10, 10);
+        map.set_building_occupancy(target_grid, entity(32));
+        for neighbor in [(9, 10), (11, 10), (10, 9), (10, 11)] {
+            map.add_grid_obstacle(neighbor);
+        }
+        let candidate = DelegationCandidate {
+            entity: entity(33),
+            work_type: WorkType::Deconstruct,
+            target_grid,
+            target_walkable: false,
+            skip_reachability_check: false,
+        };
+        let mut connectivity = WalkabilityConnectivityCache::default();
+        let reachable = reachable_with_cache((8, 10), candidate, &map, &mut connectivity);
+
+        assert!(!reachable);
+        assert_eq!(
+            connectivity_rejection(reachable),
+            Some(CandidateRejectReason::Unreachable)
+        );
     }
 
     #[test]

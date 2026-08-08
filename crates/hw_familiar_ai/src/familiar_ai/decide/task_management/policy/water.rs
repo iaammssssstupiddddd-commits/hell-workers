@@ -154,6 +154,7 @@ mod tests {
                 resource_grid: &resource_grid,
                 tile_site_index: &tile_site_index,
                 incoming_snapshot: &incoming,
+                active_move_targets: &std::collections::HashSet::new(),
             },
             &mut queries,
             &mut shadow,

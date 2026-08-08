@@ -123,6 +123,27 @@ impl SharedResourceCache {
         reserved + picked
     }
 
+    /// Removes every reservation keyed by an owner that is being destroyed.
+    ///
+    /// Root-owned world transactions use this after exact worker cleanup so a
+    /// stale reservation cannot survive until the next perceive rebuild.
+    pub fn clear_owner_reservations(&mut self, owner: Entity) -> bool {
+        let removed_source = self.source_reservations.remove(&owner).is_some();
+        let removed_picked = self.frame_picked_count.remove(&owner).is_some();
+        let removed_stored = self.frame_stored_count.remove(&owner).is_some();
+        let destinations_before = self.mixer_dest_reservations.len();
+        self.mixer_dest_reservations
+            .retain(|(target, _), _| *target != owner);
+        let changed = removed_source
+            || removed_picked
+            || removed_stored
+            || self.mixer_dest_reservations.len() != destinations_before;
+        if changed {
+            self.bump_semantic_generation();
+        }
+        changed
+    }
+
     /// 取得アクション成功を記録 (Delta Update)
     /// ソース予約を減らし、フレーム内取得数を増やす（論理在庫減少）
     pub fn record_picked_source(&mut self, source: Entity, amount: usize) {
@@ -223,5 +244,26 @@ mod tests {
         cache.begin_frame();
 
         assert_eq!(cache.semantic_generation(), before);
+    }
+
+    #[test]
+    fn clearing_owner_reservations_removes_source_and_destinations_once() {
+        let mut cache = SharedResourceCache::default();
+        let owner = Entity::from_raw_u32(1).expect("valid owner");
+        cache.reserve_source(owner, 2);
+        cache.record_picked_source(owner, 1);
+        cache.frame_stored_count.insert(owner, 1);
+        cache.reserve_mixer_destination(owner, ResourceType::Sand);
+        let before = cache.semantic_generation();
+
+        assert!(cache.clear_owner_reservations(owner));
+        assert_eq!(cache.get_source_reservation(owner), 0);
+        assert_eq!(
+            cache.get_mixer_destination_reservation(owner, ResourceType::Sand),
+            0
+        );
+        assert_eq!(cache.semantic_generation(), before.wrapping_add(1));
+        assert!(!cache.clear_owner_reservations(owner));
+        assert_eq!(cache.semantic_generation(), before.wrapping_add(1));
     }
 }

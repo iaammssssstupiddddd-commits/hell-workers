@@ -26,15 +26,18 @@ use crate::systems::jobs::floor_construction::{
     floor_construction_cancellation_system, floor_construction_completion_system,
 };
 use crate::systems::jobs::soul_spa_construction::{
-    soul_spa_auto_haul_system, soul_spa_delivery_sync_system, soul_spa_tile_activate_system,
+    soul_spa_auto_haul_system, soul_spa_construction_cancellation_system,
+    soul_spa_delivery_sync_system, soul_spa_tile_activate_system,
 };
 use crate::systems::jobs::wall_construction::{
     wall_construction_cancellation_system, wall_construction_completion_system,
     wall_framed_tile_spawn_system,
 };
 use crate::systems::jobs::{
-    BuildingCompletionSet, TaskOwnerCancellationSet, blueprint_cancellation_system,
-    building_completion_system,
+    BuildingCompletionSet, DeconstructionFinalizerSet, TaskOwnerCancellationSet,
+    blueprint_cancellation_system, building_completion_system,
+    deconstruction_designation_input_system, deconstruction_designation_system,
+    deconstruction_finalizer_system, deconstruction_hover_preview_system,
 };
 use crate::systems::logistics::item_lifetime::despawn_expired_items_system;
 use crate::systems::logistics::transport_request::{TransportRequestPlugin, TransportRequestSet};
@@ -106,12 +109,15 @@ impl Plugin for LogicPlugin {
         app.init_resource::<ObstaclePositionIndex>();
         app.init_resource::<EnergyUpdateDirty>();
         app.init_resource::<PowerAllocationMode>();
+        app.init_resource::<crate::systems::jobs::deconstruction::DeconstructionHoverPreview>();
         #[cfg(feature = "profiling")]
         app.init_resource::<hw_spatial::DoorPerfMetrics>()
             .init_resource::<crate::systems::jobs::ConstructionPerfMetrics>()
+            .init_resource::<crate::systems::jobs::DeconstructionPerfMetrics>()
             .init_resource::<crate::systems::energy::grid_recalc::EnergyPerfMetrics>();
 
         configure_task_owner_cancellation_schedule(app);
+        configure_deconstruction_finalizer_schedule(app);
         app.add_systems(
             Update,
             (
@@ -120,7 +126,12 @@ impl Plugin for LogicPlugin {
                 wall_construction_cancellation_system,
             )
                 .in_set(TaskOwnerCancellationSet::Cancel),
+        )
+        .add_systems(
+            Update,
+            soul_spa_construction_cancellation_system.in_set(TaskOwnerCancellationSet::Cancel),
         );
+        register_soul_energy_pipeline(app);
 
         // Soul Energy 型登録
         app.register_type::<PowerGrid>()
@@ -153,12 +164,16 @@ impl Plugin for LogicPlugin {
                 familiar_command_input_system,
                 stockpile_policy_range_selection_system,
                 task_area_selection_system,
+                deconstruction_designation_input_system,
+                deconstruction_designation_system,
+                deconstruction_hover_preview_system,
                 zone_placement_system.run_if(in_state(PlayMode::TaskDesignation)),
                 zone_removal_system.run_if(in_state(PlayMode::TaskDesignation)),
                 task_area_edit_history_shortcuts_system.run_if(in_state(PlayMode::TaskDesignation)),
             )
                 .chain()
                 .before(SoulAiSystemSet::Perceive)
+                .before(TransportRequestSet::Perceive)
                 .in_set(GameSystemSet::Logic),
         )
         // User cancellation writes SoulTaskUnassignRequest through Commands.
@@ -188,30 +203,6 @@ impl Plugin for LogicPlugin {
                 .in_set(BuildingCompletionSet)
                 .in_set(GameSystemSet::Logic),
         )
-        // グループE: Soul Spa construction + energy pipeline.
-        // Commands that attach workers/children are visible before dirty
-        // detection. A changed generator then propagates through grid state
-        // and `Unpowered` before the 10 Hz lamp effect reads it.
-        .add_systems(
-            Update,
-            (
-                soul_spa_auto_haul_system,
-                soul_spa_delivery_sync_system,
-                soul_spa_tile_activate_system,
-                bevy::ecs::schedule::ApplyDeferred,
-                sync_power_allocation_mode_from_settings_system,
-                detect_energy_update_dirty_system,
-                reconcile_power_grid_topology_system.run_if(energy_topology_should_run),
-                bevy::ecs::schedule::ApplyDeferred,
-                soul_spa_power_output_system.run_if(energy_power_output_should_run),
-                grid_recalc_system.run_if(energy_grid_recalc_should_run),
-                bevy::ecs::schedule::ApplyDeferred,
-                lamp_buff_system,
-            )
-                .chain()
-                .after(StateSanityFlushSet)
-                .in_set(GameSystemSet::Logic),
-        )
         .add_systems(
             Update,
             (
@@ -237,6 +228,7 @@ impl Plugin for LogicPlugin {
             )
                 .chain()
                 .after(dream_tree_planting_system)
+                .after(DeconstructionFinalizerSet::Finalize)
                 .in_set(GameSystemSet::Logic),
         )
         .add_observer(on_building_added)
@@ -307,6 +299,36 @@ fn register_construction_systems(app: &mut App) {
     );
 }
 
+/// Registers the production Soul Energy transaction as one reusable ordered
+/// boundary. Tests call this helper directly so same-update cleanup coverage
+/// cannot drift from the runtime schedule.
+pub(crate) fn register_soul_energy_pipeline(app: &mut App) {
+    // Commands that attach workers/children are visible before dirty
+    // detection. A changed generator then propagates through grid state and
+    // `Unpowered` before the lamp effect or Visual set reads it.
+    app.add_systems(
+        Update,
+        (
+            soul_spa_auto_haul_system,
+            soul_spa_delivery_sync_system,
+            soul_spa_tile_activate_system,
+            bevy::ecs::schedule::ApplyDeferred,
+            sync_power_allocation_mode_from_settings_system,
+            detect_energy_update_dirty_system,
+            reconcile_power_grid_topology_system.run_if(energy_topology_should_run),
+            bevy::ecs::schedule::ApplyDeferred,
+            soul_spa_power_output_system.run_if(energy_power_output_should_run),
+            grid_recalc_system.run_if(energy_grid_recalc_should_run),
+            bevy::ecs::schedule::ApplyDeferred,
+            lamp_buff_system,
+        )
+            .chain()
+            .after(StateSanityFlushSet)
+            .after(DeconstructionFinalizerSet::Finalize)
+            .in_set(GameSystemSet::Logic),
+    );
+}
+
 fn register_door_proximity_systems(app: &mut App) {
     app.add_systems(
         Update,
@@ -356,6 +378,29 @@ fn configure_obstacle_sync_schedule(app: &mut App) {
             .in_set(GameSystemSet::Actor),
     )
     .add_systems(Update, obstacle_sync_system.in_set(ObstacleSyncSet));
+}
+
+fn configure_deconstruction_finalizer_schedule(app: &mut App) {
+    app.configure_sets(
+        Update,
+        (
+            DeconstructionFinalizerSet::Flush,
+            DeconstructionFinalizerSet::Finalize,
+        )
+            .chain()
+            .after(SoulAiSystemSet::Execute)
+            .after(BuildingCompletionSet)
+            .before(ObstacleSyncSet)
+            .in_set(GameSystemSet::Logic),
+    )
+    .add_systems(
+        Update,
+        ApplyDeferred.in_set(DeconstructionFinalizerSet::Flush),
+    )
+    .add_systems(
+        Update,
+        deconstruction_finalizer_system.in_set(DeconstructionFinalizerSet::Finalize),
+    );
 }
 
 #[cfg(test)]

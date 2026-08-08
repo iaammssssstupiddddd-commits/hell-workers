@@ -7,6 +7,26 @@ use hw_core::visual_mirror::construction::BlueprintVisualState;
 use hw_world::{WorldMap, WorldMapRead};
 use std::collections::HashSet;
 
+/// Runtime wake-up for wall/door removals whose visual mirror disappears
+/// before the regular `Changed<BuildingVisualState>` query can observe it.
+#[derive(Resource, Debug, Default)]
+pub struct WallConnectionDirty {
+    removed_grids: HashSet<(i32, i32)>,
+}
+
+impl WallConnectionDirty {
+    pub fn mark_removed<I>(&mut self, grids: I)
+    where
+        I: IntoIterator<Item = (i32, i32)>,
+    {
+        self.removed_grids.extend(grids);
+    }
+
+    fn take_removed(&mut self) -> HashSet<(i32, i32)> {
+        std::mem::take(&mut self.removed_grids)
+    }
+}
+
 type ChangedBuildingQuery<'w, 's> = Query<
     'w,
     's,
@@ -41,9 +61,14 @@ pub fn wall_connections_system(
         Added<BlueprintVisualState>,
     >,
     q_walls_check: WallCheckQuery,
+    mut dirty: ResMut<WallConnectionDirty>,
     mut queries: WallConnectionQueries,
 ) {
     let mut update_targets = HashSet::new();
+
+    for (x, y) in dirty.take_removed() {
+        add_neighbors_to_update(x, y, &mut update_targets);
+    }
 
     for (_entity, transform, building_visual) in q_new_buildings.iter() {
         if matches!(
@@ -220,4 +245,114 @@ fn is_wall(x: i32, y: i32, world_map: &WorldMap, q_walls_check: &WallCheckQuery<
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_handles(
+        mud_isolated: Handle<Image>,
+        mud_end_right: Handle<Image>,
+    ) -> WallVisualHandles {
+        let unused = Handle::default();
+        WallVisualHandles {
+            stone_isolated: unused.clone(),
+            stone_horizontal_left: unused.clone(),
+            stone_horizontal_right: unused.clone(),
+            stone_horizontal_both: unused.clone(),
+            stone_vertical_top: unused.clone(),
+            stone_vertical_bottom: unused.clone(),
+            stone_vertical_both: unused.clone(),
+            stone_corner_tl: unused.clone(),
+            stone_corner_tr: unused.clone(),
+            stone_corner_bl: unused.clone(),
+            stone_corner_br: unused.clone(),
+            stone_t_up: unused.clone(),
+            stone_t_down: unused.clone(),
+            stone_t_left: unused.clone(),
+            stone_t_right: unused.clone(),
+            stone_cross: unused.clone(),
+            door_closed: unused.clone(),
+            door_open: unused.clone(),
+            mud_isolated,
+            mud_horizontal: unused.clone(),
+            mud_vertical: unused.clone(),
+            mud_corner_tl: unused.clone(),
+            mud_corner_tr: unused.clone(),
+            mud_corner_bl: unused.clone(),
+            mud_corner_br: unused.clone(),
+            mud_t_up: unused.clone(),
+            mud_t_down: unused.clone(),
+            mud_t_left: unused.clone(),
+            mud_t_right: unused.clone(),
+            mud_cross: unused.clone(),
+            mud_end_top: unused.clone(),
+            mud_end_bottom: unused.clone(),
+            mud_end_left: unused.clone(),
+            mud_end_right,
+            mud_floor: unused,
+        }
+    }
+
+    fn spawn_completed_wall(app: &mut App, grid: (i32, i32)) -> (Entity, Entity) {
+        let wall = app
+            .world_mut()
+            .spawn((
+                Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+                BuildingVisualState {
+                    kind: BuildingTypeVisual::Wall,
+                    is_provisional: false,
+                },
+            ))
+            .id();
+        let sprite = app
+            .world_mut()
+            .spawn((VisualLayerKind::Struct, Sprite::default(), ChildOf(wall)))
+            .id();
+        app.world_mut()
+            .resource_mut::<WorldMap>()
+            .set_building(grid, wall);
+        (wall, sprite)
+    }
+
+    #[test]
+    fn removed_wall_dirty_refreshes_surviving_neighbor_sprite() {
+        let mut images = Assets::<Image>::default();
+        let isolated = images.add(Image::default());
+        let connected = images.add(Image::default());
+
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<WallConnectionDirty>()
+            .insert_resource(test_handles(isolated.clone(), connected.clone()))
+            .add_systems(Update, wall_connections_system);
+
+        let removed_grid = (10, 10);
+        let survivor_grid = (11, 10);
+        let (removed_wall, _) = spawn_completed_wall(&mut app, removed_grid);
+        let (_, survivor_sprite) = spawn_completed_wall(&mut app, survivor_grid);
+
+        app.update();
+        assert_eq!(
+            app.world().get::<Sprite>(survivor_sprite).unwrap().image,
+            connected
+        );
+
+        assert!(
+            app.world_mut()
+                .resource_mut::<WorldMap>()
+                .clear_building_if_owned(removed_grid, removed_wall)
+        );
+        app.world_mut().despawn(removed_wall);
+        app.world_mut()
+            .resource_mut::<WallConnectionDirty>()
+            .mark_removed([removed_grid]);
+
+        app.update();
+        assert_eq!(
+            app.world().get::<Sprite>(survivor_sprite).unwrap().image,
+            isolated
+        );
+    }
 }

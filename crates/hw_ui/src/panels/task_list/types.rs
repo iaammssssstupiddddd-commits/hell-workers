@@ -3,6 +3,8 @@ use std::cmp::Ordering;
 use bevy::prelude::*;
 use hw_core::jobs::WorkType;
 
+use super::work_type_icon::player_reachable_work_types;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TaskBlockerReason {
     NoEligibleFamiliar,
@@ -11,6 +13,12 @@ pub enum TaskBlockerReason {
     TemporaryContention,
     DependencyWaiting,
     PolicyDisabled,
+    DeconstructionStaleTarget,
+    DeconstructionOwnerMismatch,
+    DeconstructionNoSafeRecovery,
+    DeconstructionInconsistentInventory,
+    DeconstructionMoving,
+    DeconstructionUnsupportedTarget,
 }
 
 impl TaskBlockerReason {
@@ -23,6 +31,12 @@ impl TaskBlockerReason {
             Self::TemporaryContention => "Waiting for reservation",
             Self::DependencyWaiting => "Waiting for dependency",
             Self::PolicyDisabled => "Disabled by familiar policy",
+            Self::DeconstructionStaleTarget => "Deconstruction target changed",
+            Self::DeconstructionOwnerMismatch => "Deconstruction owner state is invalid",
+            Self::DeconstructionNoSafeRecovery => "No safe recovery destination",
+            Self::DeconstructionInconsistentInventory => "Mixer inventory is inconsistent",
+            Self::DeconstructionMoving => "Building is moving",
+            Self::DeconstructionUnsupportedTarget => "Safe deconstruction is unavailable",
         }
     }
 }
@@ -101,18 +115,23 @@ pub enum TaskPriorityAdjustment {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TaskCancelKind {
     GenericDesignation,
+    DeconstructionOrder,
     Blueprint,
     ManualTransportRequest,
     FloorSite(Entity),
     WallSite(Entity),
+    SoulSpaSite(Entity),
 }
 
 impl TaskCancelKind {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::FloorSite(_) | Self::WallSite(_) => "Cancel site",
-            Self::GenericDesignation | Self::Blueprint | Self::ManualTransportRequest => "Cancel",
+            Self::FloorSite(_) | Self::WallSite(_) | Self::SoulSpaSite(_) => "Cancel site",
+            Self::GenericDesignation
+            | Self::DeconstructionOrder
+            | Self::Blueprint
+            | Self::ManualTransportRequest => "Cancel",
         }
     }
 }
@@ -373,12 +392,16 @@ fn compare_entity_keys(left: Entity, right: Entity) -> Ordering {
 
 fn next_work_type_filter(current: TaskWorkTypeFilter) -> TaskWorkTypeFilter {
     match current {
-        TaskWorkTypeFilter::All => TaskWorkTypeFilter::Only(WorkType::ALL[0]),
-        TaskWorkTypeFilter::Only(current) => WorkType::ALL
-            .iter()
-            .position(|work_type| *work_type == current)
-            .and_then(|index| WorkType::ALL.get(index + 1).copied())
+        TaskWorkTypeFilter::All => player_reachable_work_types()
+            .next()
             .map_or(TaskWorkTypeFilter::All, TaskWorkTypeFilter::Only),
+        TaskWorkTypeFilter::Only(current) => {
+            let mut types = player_reachable_work_types();
+            types
+                .find(|work_type| *work_type == current)
+                .and_then(|_| types.next())
+                .map_or(TaskWorkTypeFilter::All, TaskWorkTypeFilter::Only)
+        }
     }
 }
 
@@ -748,7 +771,7 @@ mod tests {
         let cases = [
             (
                 TaskDashboardControl::WorkTypeFilter,
-                WorkType::ALL.len() + 1,
+                player_reachable_work_types().count() + 1,
             ),
             (TaskDashboardControl::StatusFilter, 4),
             (TaskDashboardControl::PriorityFilter, 4),

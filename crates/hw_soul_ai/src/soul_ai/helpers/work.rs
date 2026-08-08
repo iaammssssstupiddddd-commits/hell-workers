@@ -49,6 +49,18 @@ pub struct SoulDropCtx<'a> {
     pub dropped_item_res: Option<ResourceType>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WheelbarrowCargoCleanup {
+    Drop,
+    PreserveLoaded,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CleanupPolicy {
+    emit_abandoned_event: bool,
+    wheelbarrow_cargo_cleanup: WheelbarrowCargoCleanup,
+}
+
 fn clear_task_delivery_relationships(commands: &mut Commands, task: &AssignedTask) {
     let mut clear_item = |item: Entity| {
         if let Ok(mut item_commands) = commands.get_entity(item) {
@@ -83,12 +95,39 @@ pub(crate) fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     world_map: &WorldMap,
     emit_abandoned_event: bool,
 ) {
+    cleanup_task_assignment_with_wheelbarrow_policy(
+        commands,
+        ctx,
+        task,
+        path,
+        queries,
+        world_map,
+        CleanupPolicy {
+            emit_abandoned_event,
+            wheelbarrow_cargo_cleanup: WheelbarrowCargoCleanup::Drop,
+        },
+    );
+}
+
+fn cleanup_task_assignment_with_wheelbarrow_policy<'w, 's, Q: TaskReservationAccess<'w, 's>>(
+    commands: &mut Commands,
+    ctx: SoulDropCtx<'_>,
+    task: &mut AssignedTask,
+    path: &mut hw_core::soul::Path,
+    queries: &mut Q,
+    world_map: &WorldMap,
+    policy: CleanupPolicy,
+) {
     let SoulDropCtx {
         soul_entity,
         drop_pos,
         inventory,
         dropped_item_res,
     } = ctx;
+    let CleanupPolicy {
+        emit_abandoned_event,
+        wheelbarrow_cargo_cleanup,
+    } = policy;
     if !matches!(*task, AssignedTask::None) && emit_abandoned_event {
         commands.write_message(OnTaskAbandoned {
             entity: soul_entity,
@@ -128,13 +167,15 @@ pub(crate) fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
     clear_task_delivery_relationships(commands, task);
 
     if let AssignedTask::HaulWithWheelbarrow(data) = task {
-        for &item_entity in &data.items {
-            if let Ok(mut entity_commands) = commands.get_entity(item_entity) {
-                entity_commands.remove::<LoadedIn>();
-                entity_commands.try_insert((
-                    Visibility::Visible,
-                    Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
-                ));
+        if wheelbarrow_cargo_cleanup == WheelbarrowCargoCleanup::Drop {
+            for &item_entity in &data.items {
+                if let Ok(mut entity_commands) = commands.get_entity(item_entity) {
+                    entity_commands.remove::<LoadedIn>();
+                    entity_commands.try_insert((
+                        Visibility::Visible,
+                        Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
+                    ));
+                }
             }
         }
         if let Ok(mut wb_commands) = commands.get_entity(data.wheelbarrow) {
@@ -150,10 +191,10 @@ pub(crate) fn cleanup_task_assignment<'w, 's, Q: TaskReservationAccess<'w, 's>>(
         skip_inventory_drop_for = Some(data.wheelbarrow);
     }
 
-    if let Some(inventory) = inventory {
-        if let Some(item_entity) = inventory.0
-            && Some(item_entity) != skip_inventory_drop_for
-        {
+    if let Some(inventory) = inventory
+        && let Some(item_entity) = inventory.0
+    {
+        if Some(item_entity) != skip_inventory_drop_for {
             commands.entity(item_entity).try_insert((
                 Visibility::Visible,
                 Transform::from_xyz(snapped_pos.x, snapped_pos.y, Z_ITEM_PICKUP),
@@ -202,6 +243,41 @@ pub fn unassign_task<'w, 's, Q: TaskReservationAccess<'w, 's>>(
         emit_abandoned_event,
     );
 
+    commands
+        .entity(soul_entity)
+        .remove::<hw_core::relationships::WorkingOn>();
+}
+
+/// Owner finalizers may remove a parking owner while keeping the carrier and
+/// its already-loaded cargo alive. This follows normal task cleanup but does
+/// not churn `LoadedIn` or item presentation before the owner transaction
+/// relocates the wheelbarrow.
+pub(crate) fn unassign_task_preserving_wheelbarrow_cargo<
+    'w,
+    's,
+    Q: TaskReservationAccess<'w, 's>,
+>(
+    commands: &mut Commands,
+    ctx: SoulDropCtx<'_>,
+    task: &mut AssignedTask,
+    path: &mut hw_core::soul::Path,
+    queries: &mut Q,
+    world_map: &WorldMap,
+    emit_abandoned_event: bool,
+) {
+    let soul_entity = ctx.soul_entity;
+    cleanup_task_assignment_with_wheelbarrow_policy(
+        commands,
+        ctx,
+        task,
+        path,
+        queries,
+        world_map,
+        CleanupPolicy {
+            emit_abandoned_event,
+            wheelbarrow_cargo_cleanup: WheelbarrowCargoCleanup::PreserveLoaded,
+        },
+    );
     commands
         .entity(soul_entity)
         .remove::<hw_core::relationships::WorkingOn>();

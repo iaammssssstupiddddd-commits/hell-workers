@@ -16,8 +16,10 @@ pub use arbitration::{
 pub use components::*;
 pub use kinds::*;
 pub use lifecycle::{
-    ManualTransportCloseContext, ManualTransportCloseResult, close_manual_transport_request,
-    transport_request_anchor_cleanup_system,
+    ManualTransportCloseContext, ManualTransportCloseResult, OwnerTransportCleanupResult,
+    close_manual_transport_request, close_transport_requests_for_removed_owner,
+    close_transport_requests_for_removed_owners, transport_request_anchor_cleanup_system,
+    transport_requests_referencing_owner, transport_requests_referencing_removed_owners,
 };
 pub use metrics::*;
 pub use plugin::{TransportRequestPlugin, TransportRequestSet};

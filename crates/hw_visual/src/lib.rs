@@ -96,6 +96,7 @@ impl Plugin for HwVisualPlugin {
         app.add_plugins(speech::SpeechPlugin);
         app.init_resource::<TerrainFeatureLutUniformSyncState>();
         app.init_resource::<dream::DreamPresentationLedger>();
+        app.init_resource::<wall_connection::WallConnectionDirty>();
 
         // Message retention is intentionally independent from camera/UI and
         // from the profiling-only Visual-set run condition.

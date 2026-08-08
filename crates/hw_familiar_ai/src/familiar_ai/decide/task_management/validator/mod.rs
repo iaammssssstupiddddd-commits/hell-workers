@@ -1,10 +1,12 @@
 mod capacity_helpers;
+mod deconstruction;
 mod finder;
 mod reservation;
 mod resolver;
 mod water_resolver;
 mod wheelbarrow;
 
+pub use deconstruction::resolve_assignable_deconstruction_target;
 pub use finder::find_bucket_return_assignment;
 pub use reservation::{can_reserve_source, source_not_reserved};
 pub use resolver::{

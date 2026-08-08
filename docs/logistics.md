@@ -144,6 +144,24 @@ anchor 消失、需要 0、issuer 消失、manual source 消失/搬送済みの 
 
 ## 3. Request 種別と実装
 
+`WorkType::Deconstruct`は`TransportRequest`ではなく、専用`DeconstructionOrder`上のdurable Designationである。
+解体task自身は搬入先・source・`SharedResourceCache`予約を作らない。root finalizerは
+対象ownerを参照する既存TransportRequestをsnapshotし、workerをexact identityで先に終端してから
+共通owner lifecycleでrequestをcloseする。payloadにownerが出ない通常Haulでも`ActiveTaskIdentity` / `WorkingOn`を
+参照edgeとして扱い、owner keyのsource/mixer予約と同frame pickup/store deltaを同期的に除去する。
+
+pileはstorage内容を持たず、SandPileはsalvageなし、BonePileは安全なground cellへBone×5を生成する。
+M3のTank / Mixer / RestArea / Parking cleanupは保管内容100%退避とbuilding salvageを別集計する。
+`FacilityRecoveryPlan`がstorage / tool / occupant / receiver容量をsnapshotし、`RecoveryPlacementPlan`は
+footprint外のground item / carrier用安全cellだけをapply前に確定する。
+Mixer sandはnumericのまま、mudは既存`StoredByMixer` entityとnumeric mirrorを揃えて移し、rockだけをitem化する。
+Parkingのwheelbarrowはunparkするがvalidな`LoadedIn` cargoを降ろさない。Sand/StasisMudの5秒寿命と通常Stockpile
+非対応契約は迂回せず、全量退避不能またはMixer mirror不一致ならtargetを変更しない。
+
+`DeconstructionPending`のfacilityにはMixer solid/water、Tank water、bucket return、wheelbarrow returnのproducerと
+assignment arbitrationが新しいrequest/workerを追加しない。既存in-flight workはcommit時にowner lifecycleを通して
+終端し、pending markerを直接task component剥離の代わりに使わない。
+
 | kind | WorkType | producer | anchor | ソース解決 |
 | :--- | :--- | :--- | :--- | :--- |
 | `DepositToStockpile` | `Haul` | `task_area_auto_haul_system` | Stockpile | 割り当て時にアイテムを遅延解決 |
@@ -514,6 +532,8 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 #### cache の寿命
 - `SharedResourceCache::begin_frame()` は Perceive の先頭で pickup/store の frame-local delta だけを clear する。
 - `replace_reservation_snapshot()` はソース/ミキサー予約 map だけを置換し、同一フレームにまだコンポーネントへ反映されていない delta を clear しない。
+- ownerを同一transactionで除去するroot lifecycleは`clear_owner_reservations(owner)`を使い、そのowner keyの
+  source/mixer予約とframe-local pickup/store deltaをまとめて除去する。別ownerのcache entryは変更しない。
 - load 時は cache、reservation signature cache、同期 timer を default に戻す。次の Perceive は初回同期として完全 snapshot を構築し、旧 world の Entity を cache に残さない。
 
 ### 6.3 水搬送の排他
@@ -585,7 +605,7 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
   - `transport_request_anchor_cleanup_system` で cleanup 要件を満たすこと
 
 ### 8.6 動作確認の最低ライン
-- `cargo check --workspace` を通す。
+- `python3 scripts/dev.py check` を通す。
 - 少なくとも以下を確認する:
   - request が1フレームで増殖しない
   - 同一ソースへの二重割り当てがない

@@ -819,6 +819,22 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                         .min(soul_spa.max_active_slots),
                 },
             );
+            set_node_display(
+                res.info_nodes.soul_spa_cancel_button,
+                &mut queries.q_node,
+                if soul_spa.operational {
+                    Display::None
+                } else {
+                    Display::Flex
+                },
+            );
+            set_menu_action(
+                res.info_nodes.soul_spa_cancel_button,
+                &mut queries.q_menu_button,
+                MenuAction::CancelSoulSpaConstruction {
+                    target: soul_spa.entity,
+                },
+            );
         }
         Some(InfoPanelViewModel::Power(power)) => {
             set_node_display(

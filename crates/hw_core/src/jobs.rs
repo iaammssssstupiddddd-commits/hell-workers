@@ -19,10 +19,11 @@ pub enum WorkType {
     FrameWallTile,
     CoatWall,
     GeneratePower,
+    Deconstruct,
 }
 
 impl WorkType {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::Chop,
         Self::Mine,
         Self::Build,
@@ -39,6 +40,7 @@ impl WorkType {
         Self::FrameWallTile,
         Self::CoatWall,
         Self::GeneratePower,
+        Self::Deconstruct,
     ];
 
     pub const COUNT: usize = Self::ALL.len();
@@ -62,6 +64,7 @@ impl WorkType {
             Self::FrameWallTile => 13,
             Self::CoatWall => 14,
             Self::GeneratePower => 15,
+            Self::Deconstruct => 16,
         }
     }
 }
@@ -83,5 +86,6 @@ mod tests {
         for (index, work_type) in WorkType::ALL.into_iter().enumerate() {
             assert_eq!(work_type.stable_index(), index);
         }
+        assert_eq!(WorkType::Deconstruct.stable_index(), 16);
     }
 }

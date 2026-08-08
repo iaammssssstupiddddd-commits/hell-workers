@@ -3,6 +3,39 @@ use crate::theme::UiTheme;
 use bevy::prelude::*;
 use hw_core::jobs::WorkType;
 
+/// Work types whose producer and completion path are currently player-reachable.
+///
+/// Keep this exhaustive so adding a domain variant requires an explicit UI
+/// publication decision. Deconstruct is player-reachable through its Orders
+/// producer and dedicated completion consumer.
+pub(crate) const fn has_player_workflow(work_type: WorkType) -> bool {
+    match work_type {
+        WorkType::Chop
+        | WorkType::Mine
+        | WorkType::Build
+        | WorkType::Move
+        | WorkType::Haul
+        | WorkType::HaulToMixer
+        | WorkType::GatherWater
+        | WorkType::CollectBone
+        | WorkType::Refine
+        | WorkType::HaulWaterToMixer
+        | WorkType::WheelbarrowHaul
+        | WorkType::ReinforceFloorTile
+        | WorkType::PourFloorTile
+        | WorkType::FrameWallTile
+        | WorkType::CoatWall
+        | WorkType::GeneratePower
+        | WorkType::Deconstruct => true,
+    }
+}
+
+pub(crate) fn player_reachable_work_types() -> impl Iterator<Item = WorkType> {
+    WorkType::ALL
+        .into_iter()
+        .filter(|work_type| has_player_workflow(*work_type))
+}
+
 pub fn work_type_label(wt: &WorkType) -> &'static str {
     match wt {
         WorkType::Chop => "Chop",
@@ -21,6 +54,7 @@ pub fn work_type_label(wt: &WorkType) -> &'static str {
         WorkType::FrameWallTile => "Frame",
         WorkType::CoatWall => "Coat",
         WorkType::GeneratePower => "Generate",
+        WorkType::Deconstruct => "Deconstruct",
     }
 }
 
@@ -49,6 +83,19 @@ pub fn work_type_icon(
         | WorkType::PourFloorTile
         | WorkType::FrameWallTile
         | WorkType::CoatWall
-        | WorkType::GeneratePower => (assets.icon_hammer().clone(), theme.colors.build),
+        | WorkType::GeneratePower
+        | WorkType::Deconstruct => (assets.icon_hammer().clone(), theme.colors.build),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deconstruction_is_published_with_the_connected_player_workflow() {
+        let visible: Vec<_> = player_reachable_work_types().collect();
+        assert_eq!(visible, WorkType::ALL);
+        assert_eq!(visible.last(), Some(&WorkType::Deconstruct));
     }
 }

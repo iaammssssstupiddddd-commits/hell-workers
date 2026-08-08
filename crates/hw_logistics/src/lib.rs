@@ -1,5 +1,6 @@
 pub mod construction_helpers;
 pub mod construction_phase_transition;
+pub mod deconstruction;
 pub mod floor_construction;
 pub mod ground_resources;
 pub mod item_lifetime;
@@ -28,6 +29,7 @@ pub use construction_phase_transition::ConstructionPerfMetrics;
 pub use construction_phase_transition::{
     floor_construction_phase_transition_system, wall_construction_phase_transition_system,
 };
+pub use deconstruction::{RecoveryPlacementPlan, build_recovery_placement_plan};
 
 // Convenience re-exports for task_execution handlers
 pub use hw_core::logistics::ResourceType;

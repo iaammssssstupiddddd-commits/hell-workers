@@ -29,6 +29,7 @@ impl Plugin for SoulAiCorePlugin {
             .init_resource::<update::slow_simulation::SlowSimulationClock>()
             .init_resource::<update::state_sanity::StateSanityAudit>()
             .init_resource::<RuntimePathSearchBudget>()
+            .add_message::<hw_jobs::DeconstructionCommitRequest>()
             .register_type::<helpers::gathering::GatheringSpot>()
             .register_type::<execute::task_execution::types::AssignedTask>()
             .add_systems(

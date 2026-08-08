@@ -8,9 +8,12 @@ use hw_spatial::{DesignationSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::{WorldMap, Yard};
 use std::collections::HashSet;
 
+use crate::familiar_ai::decide::task_management::validator::resolve_assignable_deconstruction_target;
 use crate::familiar_ai::decide::task_management::{
     CandidateRejectReason, FamiliarTaskAssignmentQueries,
 };
+
+use super::FamiliarCandidateSources;
 
 pub(super) struct CandidateSnapshot {
     pub pos: Vec2,
@@ -66,8 +69,7 @@ pub(super) fn candidate_snapshot(
     entity: Entity,
     task_area_opt: Option<&TaskArea>,
     yards: &[Yard],
-    managed_tasks: &ManagedTasks,
-    world_map: &WorldMap,
+    sources: &FamiliarCandidateSources<'_>,
     queries: &FamiliarTaskAssignmentQueries,
 ) -> Result<CandidateSnapshot, CandidateRejectReason> {
     let (
@@ -85,11 +87,11 @@ pub(super) fn candidate_snapshot(
         .get(entity)
         .map_err(|_| CandidateRejectReason::StaleInput)?;
 
-    let is_managed_by_me = managed_tasks.contains(entity);
+    let is_managed_by_me = sources.managed_tasks.contains(entity);
     let is_unassigned = issued_by.is_none();
     let is_issued_by_me = issued_by.map(|ib| ib.0) == Some(fam_entity);
     let is_issued_by_yard = issued_by.is_some_and(|issuer| queries.yards.get(issuer.0).is_ok());
-    let pos = transform.translation.truncate();
+    let mut pos = transform.translation.truncate();
     let in_yard = yards.iter().any(|yard| yard.contains(pos));
     let current_workers = workers.map(|w| w.len()).unwrap_or(0);
     let is_transport_request = queries.transport_requests.get(entity).is_ok();
@@ -107,6 +109,11 @@ pub(super) fn candidate_snapshot(
             designation.work_type, entity
         );
         return Err(CandidateRejectReason::MalformedTask);
+    }
+    if designation.work_type != WorkType::Deconstruct
+        && candidate_targets_pending_deconstruction(entity, queries)
+    {
+        return Err(CandidateRejectReason::DependencyWaiting);
     }
     let can_take_over_from_overlapping_owner = issued_by
         .filter(|issuer| issuer.0 != fam_entity)
@@ -167,7 +174,7 @@ pub(super) fn candidate_snapshot(
     }
 
     let mut target_grid = WorldMap::world_to_grid(pos);
-    let mut target_walkable = world_map.is_walkable(target_grid.0, target_grid.1);
+    let mut target_walkable = sources.world_map.is_walkable(target_grid.0, target_grid.1);
 
     let rejection = match designation.work_type {
         WorkType::Chop
@@ -202,13 +209,13 @@ pub(super) fn candidate_snapshot(
                                     (-1, -1),
                                 ]
                                 .iter()
-                                .any(|&(dx, dy)| world_map.is_walkable(gx + dx, gy + dy))
+                                .any(|&(dx, dy)| sources.world_map.is_walkable(gx + dx, gy + dy))
                             })
                             .or_else(|| bp.occupied_grids.first().copied());
 
                         if let Some(grid) = approach_grid {
                             target_grid = grid;
-                            target_walkable = world_map.is_walkable(grid.0, grid.1);
+                            target_walkable = sources.world_map.is_walkable(grid.0, grid.1);
                         }
                     }
                     None
@@ -256,7 +263,36 @@ pub(super) fn candidate_snapshot(
                 Some(CandidateRejectReason::StaleInput)
             }
         }
-        WorkType::GeneratePower => None,
+        WorkType::GeneratePower => queries
+            .soul_spa_tiles
+            .get(entity)
+            .ok()
+            .and_then(|(tile, _)| {
+                queries
+                    .deconstruction_pending
+                    .get(tile.parent_site)
+                    .is_ok()
+                    .then_some(CandidateRejectReason::DependencyWaiting)
+            }),
+        WorkType::Deconstruct => {
+            match resolve_assignable_deconstruction_target(
+                entity,
+                queries,
+                sources.active_move_targets,
+            ) {
+                Ok(target) => match queries.storage.buildings.get(target) {
+                    Ok((target_transform, _, _)) => {
+                        pos = target_transform.translation.truncate();
+                        target_grid = WorldMap::world_to_grid(pos);
+                        target_walkable =
+                            sources.world_map.is_walkable(target_grid.0, target_grid.1);
+                        None
+                    }
+                    Err(_) => Some(CandidateRejectReason::StaleInput),
+                },
+                Err(reason) => Some(reason),
+            }
+        }
     };
 
     if let Some(rejection) = rejection {
@@ -275,4 +311,62 @@ pub(super) fn candidate_snapshot(
         base_priority,
         in_stockpile_none,
     })
+}
+
+fn candidate_targets_pending_deconstruction(
+    entity: Entity,
+    queries: &FamiliarTaskAssignmentQueries<'_, '_>,
+) -> bool {
+    let entity_or_owner_is_pending = |target: Entity| {
+        queries.deconstruction_pending.get(target).is_ok()
+            || queries
+                .designation
+                .belongs
+                .get(target)
+                .is_ok_and(|owner| queries.deconstruction_pending.get(owner.0).is_ok())
+            || queries
+                .designation
+                .parked_at
+                .get(target)
+                .is_ok_and(|owner| queries.deconstruction_pending.get(owner.0).is_ok())
+    };
+
+    if entity_or_owner_is_pending(entity) {
+        return true;
+    }
+    if queries
+        .move_plant_tasks
+        .get(entity)
+        .is_ok_and(|task| entity_or_owner_is_pending(task.building))
+    {
+        return true;
+    }
+    if let Ok(request) = queries.transport_requests.get(entity)
+        && entity_or_owner_is_pending(request.anchor)
+    {
+        return true;
+    }
+    if queries
+        .transport_request_fixed_sources
+        .get(entity)
+        .is_ok_and(|source| entity_or_owner_is_pending(source.0))
+    {
+        return true;
+    }
+    if let Ok(lease) = queries.wheelbarrow_leases.get(entity) {
+        if entity_or_owner_is_pending(lease.wheelbarrow)
+            || lease.items.iter().copied().any(entity_or_owner_is_pending)
+        {
+            return true;
+        }
+        let destination = match lease.destination {
+            hw_core::logistics::WheelbarrowDestination::Stockpile(target)
+            | hw_core::logistics::WheelbarrowDestination::Blueprint(target) => target,
+            hw_core::logistics::WheelbarrowDestination::Mixer { entity, .. } => entity,
+        };
+        if entity_or_owner_is_pending(destination) {
+            return true;
+        }
+    }
+    false
 }

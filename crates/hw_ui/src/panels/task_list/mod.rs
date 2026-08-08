@@ -17,4 +17,5 @@ pub use types::{
     TaskPriorityFilter, TaskPriorityTier, TaskSortDirection, TaskSortKey, TaskStatusFilter,
     TaskStatusSummary, TaskWorkTypeFilter, TaskWorkerFilter,
 };
+pub(crate) use work_type_icon::player_reachable_work_types;
 pub use work_type_icon::{work_type_icon, work_type_label};

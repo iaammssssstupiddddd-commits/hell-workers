@@ -197,6 +197,7 @@ def load_valid_runs(session_dir: Path) -> list[tuple[Path, Validation]]:
             indoor_light_fixture=payload.get("indoor_light_fixture"),
             indoor_light_layout=payload.get("indoor_light_layout"),
             indoor_light_presentation=payload.get("indoor_light_presentation"),
+            deconstruction_fixture=payload.get("deconstruction_fixture"),
             timeline=payload.get("timeline"),
             behavior_save_artifact=payload.get("behavior_save_artifact"),
             profile_artifact=payload.get("profile_artifact"),

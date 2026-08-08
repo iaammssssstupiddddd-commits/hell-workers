@@ -28,7 +28,7 @@ pub(crate) fn soul_energy() -> Result<HelpContribution, super::super::HelpCatalo
                     HelpEntryId::new("soul-energy-recovery"),
                     "Soul Spa で発電する",
                     [
-                        "Yard 内に Soul Spa を建てて選択すると Bone の搬入進捗を確認できます。Operational になると出力と電力網が表示され、発電枠へ Soul が入れます。",
+                        "Yard 内に Soul Spa を建てて選択すると Bone の搬入進捗を確認できます。建設中は情報パネルまたは搬入タスクからキャンセルでき、実際に搬入済みの Bone だけをすべて返します。一時停止中は再開してからキャンセルしてください。Operational になると出力と電力網が表示され、発電枠へ Soul が入れます。",
                         "情報パネルの Active slots は 0〜4 で変更できます。稼働数より小さくしても作業中の Soul は追い出さず、終了後の新規割り当てだけを設定枠まで止めます。",
                         "発電中の Soul は Dream を消費します。Lamp を増やしたら、発電量、Soul の Dream、Yard への接続を一緒に確認してください。",
                     ],

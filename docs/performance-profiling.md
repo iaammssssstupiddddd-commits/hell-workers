@@ -228,7 +228,10 @@ CPU条件では`data/scene_roots.csv`のSoul main/mask/shadowとFamiliar rootが
 全12種類が少なくとも1棟ずつ存在すること、実際の `DeconstructionCommitRequest` が1件だけ
 `Committed` になること、対象を除いた完成棟数が99になること、固定salvage表どおりBoneが5個増えることを
 sidecarへ記録する。targetだけを`WorldMap`へ登録し、残り99棟は安定したECS人口として配置するため、
-deconstruction対象のowner snapshotやroom/path topologyへfixture外のノイズを混ぜない。
+deconstruction対象のowner snapshotやroom/path topologyへfixture外のノイズを混ぜない。選択workerだけを直接
+`AwaitingCommit`へ置き、残りのSoulは既存の`CommandedBy`待機経路へ固定する。owner Familiarは`Idle`かつ
+`max_controlled_soul = 0`のため、warm-up境界で解体と無関係なidle/rest/pathfindingがfixed-step checksumへ混入しない。
+この固定はplayer-facingな割当や解体経路を置き換えず、owner transactionだけを監査するfixtureの人口制御である。
 `data/deconstruction_fixture.csv` は次の不変条件を満たさないrunを失格にする。
 
 - `initial_completed_buildings=100`, `final_completed_buildings=99`, `building_type_count=12`

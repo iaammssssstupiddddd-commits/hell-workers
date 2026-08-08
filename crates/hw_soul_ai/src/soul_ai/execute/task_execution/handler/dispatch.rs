@@ -89,6 +89,11 @@ pub fn run_task_handler(
             data.clone(),
             commands,
         ),
+        AssignedTask::Deconstruct(data) => crate::soul_ai::execute::task_execution::deconstruct::handle_deconstruct_task(
+            ctx,
+            data.clone(),
+            commands,
+        ),
         AssignedTask::None => TaskHandlerControl::Continue,
     }
 }

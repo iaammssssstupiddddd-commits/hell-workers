@@ -16,7 +16,15 @@ use hw_core::events::{
     SoulExhaustedVisualMessage, SoulRecruitedVisualMessage, SoulStressBreakdownVisualMessage,
     TaskCompletedVisualMessage,
 };
-use hw_energy::{PowerConsumerPolicyChangeOutcome, SoulSpaSlotsChangeOutcome};
+use hw_energy::{
+    PowerConsumerPolicyChangeOutcome, SoulSpaConstructionCancelOutcome,
+    SoulSpaConstructionCancelRequest, SoulSpaSlotsChangeOutcome,
+};
+use hw_jobs::{
+    DeconstructionCancelOutcome, DeconstructionCancelRequest, DeconstructionCommitOutcome,
+    DeconstructionCommitRequest, DeconstructionDesignationOutcome,
+    DeconstructionDesignationRequest,
+};
 use hw_logistics::{StockpilePolicyChangeOutcome, StockpilePolicyChangeRequest};
 use hw_visual::speech::conversation::events::{
     ConversationCompleted, ConversationToneTriggered, RequestConversation,
@@ -62,7 +70,15 @@ macro_rules! root_message_types {
             StockpilePolicyChangeRequest,
             StockpilePolicyChangeOutcome,
             SoulSpaSlotsChangeOutcome,
+            SoulSpaConstructionCancelRequest,
+            SoulSpaConstructionCancelOutcome,
             PowerConsumerPolicyChangeOutcome,
+            DeconstructionCommitRequest,
+            DeconstructionCommitOutcome,
+            DeconstructionCancelRequest,
+            DeconstructionCancelOutcome,
+            DeconstructionDesignationRequest,
+            DeconstructionDesignationOutcome,
         );
     };
 }

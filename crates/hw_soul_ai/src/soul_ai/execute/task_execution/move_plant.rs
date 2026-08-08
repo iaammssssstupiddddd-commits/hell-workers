@@ -5,17 +5,10 @@ use crate::soul_ai::execute::task_execution::{
 };
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
-use hw_jobs::{Building, BuildingType, Designation};
+use hw_jobs::{Building, BuildingType, Designation, PendingBuildingMove};
 use hw_world::{PathSearchResult, WorldMap, WorldMapWrite};
 
 pub use hw_jobs::MovePlanned;
-
-#[derive(Component, Debug, Clone)]
-pub struct PendingBuildingMove {
-    pub old_occupied: Vec<(i32, i32)>,
-    pub new_occupied: Vec<(i32, i32)>,
-    pub companion_anchor: Option<(i32, i32)>,
-}
 
 #[derive(Component, Debug, Clone)]
 pub struct MovePlantReservation {

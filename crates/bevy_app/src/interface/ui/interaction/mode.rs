@@ -244,6 +244,12 @@ pub(super) fn build_mode_text(ctx: ModeCtxRefs, info: ModeDisplayInfo) -> String
             TaskMode::StockpilePolicyEdit(Some(_)) => {
                 "Mode: Stockpile Policy (Dragging...)".to_string()
             }
+            TaskMode::DesignateDeconstruct(None) => {
+                "Mode: Deconstruct (Click one completed building, Esc:Exit)".to_string()
+            }
+            TaskMode::DesignateDeconstruct(Some(_)) => {
+                "Mode: Deconstruct (Release to designate, Esc:Exit)".to_string()
+            }
             TaskMode::SoulSpaPlace(_) => "Mode: Soul Spa (Click to place 2×2)".to_string(),
             _ => "Mode: Task".to_string(),
         },

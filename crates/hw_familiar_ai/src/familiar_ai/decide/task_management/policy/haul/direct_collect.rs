@@ -77,18 +77,21 @@ fn find_sand_pile(
     queries
         .sand_piles
         .iter()
-        .filter(|(entity, transform, designation_opt, workers_opt)| {
-            designation_opt.is_none()
-                && workers_opt.map(|w| w.len()).unwrap_or(0) == 0
-                && source_not_reserved(*entity, queries, shadow)
-                && area_filter.is_none_or(|a| a.contains(transform.translation.truncate()))
-        })
-        .min_by(|(_, t1, _, _), (_, t2, _, _)| {
+        .filter(
+            |(entity, transform, designation_opt, workers_opt, pending_opt)| {
+                designation_opt.is_none()
+                    && workers_opt.map(|w| w.len()).unwrap_or(0) == 0
+                    && pending_opt.is_none()
+                    && source_not_reserved(*entity, queries, shadow)
+                    && area_filter.is_none_or(|a| a.contains(transform.translation.truncate()))
+            },
+        )
+        .min_by(|(_, t1, _, _, _), (_, t2, _, _, _)| {
             let d1 = t1.translation.truncate().distance_squared(target_pos);
             let d2 = t2.translation.truncate().distance_squared(target_pos);
             d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
         })
-        .map(|(entity, transform, _, _)| (entity, transform.translation.truncate()))
+        .map(|(entity, transform, _, _, _)| (entity, transform.translation.truncate()))
 }
 
 fn find_bone_pile(
@@ -100,18 +103,21 @@ fn find_bone_pile(
     queries
         .bone_piles
         .iter()
-        .filter(|(entity, transform, designation_opt, workers_opt)| {
-            designation_opt.is_none()
-                && workers_opt.map(|w| w.len()).unwrap_or(0) == 0
-                && source_not_reserved(*entity, queries, shadow)
-                && area_filter.is_none_or(|a| a.contains(transform.translation.truncate()))
-        })
-        .min_by(|(_, t1, _, _), (_, t2, _, _)| {
+        .filter(
+            |(entity, transform, designation_opt, workers_opt, pending_opt)| {
+                designation_opt.is_none()
+                    && workers_opt.map(|w| w.len()).unwrap_or(0) == 0
+                    && pending_opt.is_none()
+                    && source_not_reserved(*entity, queries, shadow)
+                    && area_filter.is_none_or(|a| a.contains(transform.translation.truncate()))
+            },
+        )
+        .min_by(|(_, t1, _, _, _), (_, t2, _, _, _)| {
             let d1 = t1.translation.truncate().distance_squared(target_pos);
             let d2 = t2.translation.truncate().distance_squared(target_pos);
             d1.partial_cmp(&d2).unwrap_or(std::cmp::Ordering::Equal)
         })
-        .map(|(entity, transform, _, _)| (entity, transform.translation.truncate()))
+        .map(|(entity, transform, _, _, _)| (entity, transform.translation.truncate()))
 }
 
 fn scan_terrain_tiles(
@@ -176,4 +182,54 @@ fn scan_terrain_tiles(
     }
 
     best.map(|(entity, pos, _)| (entity, pos))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::events::ResourceReservationRequest;
+    use hw_jobs::events::TaskAssignmentRequest;
+    use hw_jobs::{BonePile, DeconstructionPending};
+    use hw_logistics::SharedResourceCache;
+    use hw_logistics::transport_request::WheelbarrowArbitrationDiagnostics;
+
+    #[derive(Resource, Default)]
+    struct SourceProbe(Option<Entity>);
+
+    fn capture_bone_source(queries: FamiliarTaskAssignmentQueries, mut probe: ResMut<SourceProbe>) {
+        probe.0 =
+            find_collect_bone_source(Vec2::ZERO, None, &queries, &ReservationShadow::default())
+                .map(|(entity, _)| entity);
+    }
+
+    #[test]
+    fn pending_bone_pile_is_not_a_direct_collect_source() {
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<SharedResourceCache>()
+            .init_resource::<WheelbarrowArbitrationDiagnostics>()
+            .init_resource::<SourceProbe>()
+            .add_message::<ResourceReservationRequest>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_systems(Update, capture_bone_source);
+
+        let order = app.world_mut().spawn_empty().id();
+        let pending = app
+            .world_mut()
+            .spawn((
+                BonePile,
+                Transform::from_xyz(4.0, 0.0, 0.0),
+                DeconstructionPending { order },
+            ))
+            .id();
+        let available = app
+            .world_mut()
+            .spawn((BonePile, Transform::from_xyz(32.0, 0.0, 0.0)))
+            .id();
+
+        app.update();
+
+        assert_ne!(app.world().resource::<SourceProbe>().0, Some(pending));
+        assert_eq!(app.world().resource::<SourceProbe>().0, Some(available));
+    }
 }

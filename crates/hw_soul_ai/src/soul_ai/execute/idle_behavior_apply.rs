@@ -10,22 +10,25 @@ use hw_core::relationships::{
     ParticipatingIn, RestAreaOccupants, RestAreaReservations, RestAreaReservedFor, RestingIn,
 };
 use hw_core::soul::{DamnedSoul, IdleBehavior, IdleState, Path, RestAreaCooldown};
-use hw_jobs::RestArea;
+use hw_jobs::{DeconstructionPending, RestArea};
+
+type RestAreaEntities<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static RestArea,
+        Option<&'static RestAreaOccupants>,
+        Option<&'static RestAreaReservations>,
+        Option<&'static DeconstructionPending>,
+    ),
+>;
 
 #[derive(SystemParam)]
 pub struct RestAreaCheckQueries<'w, 's> {
     pub q_rest_reserved: Query<'w, 's, &'static RestAreaReservedFor>,
     pub q_rest_cooldown: Query<'w, 's, &'static RestAreaCooldown>,
     pub q_participating: Query<'w, 's, (), With<ParticipatingIn>>,
-    pub q_rest_areas: Query<
-        'w,
-        's,
-        (
-            &'static RestArea,
-            Option<&'static RestAreaOccupants>,
-            Option<&'static RestAreaReservations>,
-        ),
-    >,
+    pub q_rest_areas: RestAreaEntities<'w, 's>,
 }
 
 /// アイドル行動の適用システム (Execute Phase)
@@ -96,15 +99,18 @@ pub fn idle_behavior_apply_system(
                 let can_reserve = rest_queries
                     .q_rest_areas
                     .get(*rest_area_entity)
-                    .map(|(rest_area, occupants, reservations)| {
-                        let current = occupants.map_or(0, RestAreaOccupants::len);
-                        let reserved = reservations.map_or(0, RestAreaReservations::len);
-                        let pending = pending_rest_reservations
-                            .get(rest_area_entity)
-                            .copied()
-                            .unwrap_or(0);
-                        current + reserved + pending < rest_area.capacity
-                    })
+                    .map(
+                        |(rest_area, occupants, reservations, deconstruction_pending)| {
+                            let current = occupants.map_or(0, RestAreaOccupants::len);
+                            let reserved = reservations.map_or(0, RestAreaReservations::len);
+                            let pending = pending_rest_reservations
+                                .get(rest_area_entity)
+                                .copied()
+                                .unwrap_or(0);
+                            deconstruction_pending.is_none()
+                                && current + reserved + pending < rest_area.capacity
+                        },
+                    )
                     .unwrap_or(false);
                 if !can_reserve {
                     continue;
@@ -142,22 +148,26 @@ pub fn idle_behavior_apply_system(
                 let can_enter = rest_queries
                     .q_rest_areas
                     .get(*rest_area_entity)
-                    .map(|(rest_area, occupants, reservations)| {
-                        let current = occupants.map_or(0, RestAreaOccupants::len);
-                        let mut reserved = reservations.map_or(0, RestAreaReservations::len);
-                        if has_reservation_for_target {
-                            reserved = reserved.saturating_sub(1);
-                        }
-                        let pending_reservations = pending_rest_reservations
-                            .get(rest_area_entity)
-                            .copied()
-                            .unwrap_or(0);
-                        let pending = pending_rest_entries
-                            .get(rest_area_entity)
-                            .copied()
-                            .unwrap_or(0);
-                        current + reserved + pending_reservations + pending < rest_area.capacity
-                    })
+                    .map(
+                        |(rest_area, occupants, reservations, deconstruction_pending)| {
+                            let current = occupants.map_or(0, RestAreaOccupants::len);
+                            let mut reserved = reservations.map_or(0, RestAreaReservations::len);
+                            if has_reservation_for_target {
+                                reserved = reserved.saturating_sub(1);
+                            }
+                            let pending_reservations = pending_rest_reservations
+                                .get(rest_area_entity)
+                                .copied()
+                                .unwrap_or(0);
+                            let pending = pending_rest_entries
+                                .get(rest_area_entity)
+                                .copied()
+                                .unwrap_or(0);
+                            deconstruction_pending.is_none()
+                                && current + reserved + pending_reservations + pending
+                                    < rest_area.capacity
+                        },
+                    )
                     .unwrap_or(false);
                 if !can_enter {
                     continue;
@@ -215,5 +225,66 @@ pub fn idle_behavior_apply_system(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::events::{IdleBehaviorOperation, IdleBehaviorRequest};
+
+    #[test]
+    fn pending_rest_area_rejects_queued_reserve_and_enter_operations() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_message::<IdleBehaviorRequest>()
+            .add_message::<OnGatheringJoined>()
+            .add_message::<OnGatheringParticipated>()
+            .add_systems(Update, (idle_behavior_apply_system, ApplyDeferred).chain());
+
+        let order = app.world_mut().spawn_empty().id();
+        let rest_area = app
+            .world_mut()
+            .spawn((RestArea { capacity: 2 }, DeconstructionPending { order }))
+            .id();
+        let souls = [
+            app.world_mut()
+                .spawn((
+                    DamnedSoul::default(),
+                    IdleState::default(),
+                    Path::default(),
+                    Visibility::Visible,
+                ))
+                .id(),
+            app.world_mut()
+                .spawn((
+                    DamnedSoul::default(),
+                    IdleState::default(),
+                    Path::default(),
+                    Visibility::Visible,
+                ))
+                .id(),
+        ];
+        app.world_mut().write_message(IdleBehaviorRequest {
+            entity: souls[0],
+            operation: IdleBehaviorOperation::ReserveRestArea {
+                rest_area_entity: rest_area,
+            },
+        });
+        app.world_mut().write_message(IdleBehaviorRequest {
+            entity: souls[1],
+            operation: IdleBehaviorOperation::EnterRestArea {
+                rest_area_entity: rest_area,
+            },
+        });
+
+        app.update();
+
+        assert!(app.world().get::<RestAreaReservedFor>(souls[0]).is_none());
+        assert!(app.world().get::<RestingIn>(souls[1]).is_none());
+        assert_eq!(
+            app.world().get::<Visibility>(souls[1]),
+            Some(&Visibility::Visible)
+        );
     }
 }

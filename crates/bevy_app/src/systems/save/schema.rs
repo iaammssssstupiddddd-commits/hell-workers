@@ -47,10 +47,10 @@ use hw_jobs::construction::{
 };
 use hw_jobs::mud_mixer::{MudMixerStorage, StoredByMixer, TargetMixer};
 use hw_jobs::{
-    Blueprint, BonePile, BridgeMarker, Building, BuildingType, Designation,
-    FlexibleMaterialRequirement, ObstaclePosition, PlayerIssuedDesignation, Priority,
-    ProvisionalWall, RestArea, Rock, SandPile, TargetBlueprint, TargetSoulSpaSite, TaskSlots, Tree,
-    TreeVariant, WorkType,
+    Blueprint, BonePile, BridgeMarker, Building, BuildingType, DeconstructionOrder,
+    DeconstructionOrders, Designation, FlexibleMaterialRequirement, ObstaclePosition,
+    PlayerIssuedDesignation, Priority, ProvisionalWall, RestArea, Rock, SandPile, TargetBlueprint,
+    TargetDeconstructionRoot, TargetSoulSpaSite, TaskSlots, Tree, TreeVariant, WorkType,
 };
 
 use hw_logistics::item_lifetime::ItemDespawnTimer;
@@ -102,6 +102,9 @@ macro_rules! for_each_persisted_component {
         $callback!(RestAreaReservedFor);
         $callback!(RestAreaReservations);
         $callback!(Designation);
+        $callback!(DeconstructionOrder);
+        $callback!(TargetDeconstructionRoot);
+        $callback!(DeconstructionOrders);
         $callback!(PlayerIssuedDesignation);
         $callback!(Priority);
         $callback!(TaskSlots);
@@ -246,6 +249,7 @@ macro_rules! for_each_root_marker {
         $callback!(DamnedSoul);
         $callback!(Familiar);
         $callback!(Designation);
+        $callback!(DeconstructionOrder);
         $callback!(Building);
         $callback!(hw_jobs::Door);
         $callback!(RestArea);

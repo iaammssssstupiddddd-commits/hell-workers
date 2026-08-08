@@ -65,7 +65,8 @@ mod tests {
     use hw_core::system_sets::SoulAiSystemSet;
     use hw_core::visual::SoulTaskHandles;
     use hw_jobs::{
-        ActiveTaskIdentity, AssignedTask, Blueprint, BuildData, BuildPhase, BuildingType, WorkType,
+        ActiveTaskIdentity, AssignedTask, Blueprint, BuildData, BuildPhase, BuildingType,
+        DeconstructionCommitRequest, WorkType,
     };
     use hw_logistics::{Inventory, SharedResourceCache};
     #[cfg(feature = "profiling")]
@@ -150,6 +151,7 @@ mod tests {
             .add_message::<ResourceReservationRequest>()
             .add_message::<TaskCompletedVisualMessage>()
             .add_message::<OnTaskAbandoned>()
+            .add_message::<DeconstructionCommitRequest>()
             .add_observer(record_completed)
             .configure_sets(
                 Update,

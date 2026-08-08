@@ -51,15 +51,18 @@ fn inspection_refresh_should_run(
     rename_state: Res<SoulRenameState>,
     cadence: Res<InspectionRefreshCadence>,
     changed_stockpiles: Query<(), Changed<hw_logistics::StockpilePolicy>>,
+    changed_soul_spas: Query<(), Changed<hw_energy::SoulSpaSite>>,
 ) -> bool {
-    let inspected_policy_changed = pin_state
-        .entity
-        .or(selected.0)
-        .is_some_and(|entity| changed_stockpiles.get(entity).is_ok());
+    let inspected_entity = pin_state.entity.or(selected.0);
+    let inspected_policy_changed =
+        inspected_entity.is_some_and(|entity| changed_stockpiles.get(entity).is_ok());
+    let inspected_soul_spa_changed =
+        inspected_entity.is_some_and(|entity| changed_soul_spas.get(entity).is_ok());
     selected.is_changed()
         || pin_state.is_changed()
         || rename_state.is_changed()
         || inspected_policy_changed
+        || inspected_soul_spa_changed
         || (cadence.due && (selected.0.is_some() || pin_state.entity.is_some()))
 }
 
@@ -153,6 +156,45 @@ mod tests {
     use hw_world::Yard;
 
     const MEASURE_TICKS: u64 = 40;
+
+    #[derive(Resource, Default)]
+    struct InspectionRefreshRuns(usize);
+
+    fn count_inspection_refresh(mut runs: ResMut<InspectionRefreshRuns>) {
+        runs.0 += 1;
+    }
+
+    #[test]
+    fn inspected_soul_spa_phase_change_wakes_before_the_cadence() {
+        let mut app = minimal_app();
+        app.init_resource::<SelectedEntity>()
+            .init_resource::<InfoPanelPinState>()
+            .init_resource::<SoulRenameState>()
+            .init_resource::<InspectionRefreshCadence>()
+            .init_resource::<InspectionRefreshRuns>()
+            .add_systems(
+                Update,
+                count_inspection_refresh.run_if(inspection_refresh_should_run),
+            );
+        let site = app
+            .world_mut()
+            .spawn(hw_energy::SoulSpaSite::default())
+            .id();
+        app.world_mut().resource_mut::<SelectedEntity>().0 = Some(site);
+        app.update();
+        app.world_mut().resource_mut::<InspectionRefreshRuns>().0 = 0;
+        app.world_mut()
+            .resource_mut::<InspectionRefreshCadence>()
+            .due = false;
+
+        app.world_mut()
+            .get_mut::<hw_energy::SoulSpaSite>(site)
+            .unwrap()
+            .phase = hw_energy::SoulSpaPhase::Operational;
+        app.update();
+
+        assert_eq!(app.world().resource::<InspectionRefreshRuns>().0, 1);
+    }
 
     #[derive(Debug, Default, PartialEq, Eq)]
     struct SteadyStateTotals {

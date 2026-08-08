@@ -14,6 +14,7 @@ use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::WalkabilityConnectivityCache;
 use hw_world::map::WorldMap;
+use std::collections::HashSet;
 
 use super::query_types::FamiliarSoulQuery;
 use super::task_management::TaskManager;
@@ -43,6 +44,7 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub fam_path: &'a mut Path,
     pub task_area_opt: Option<&'a hw_core::area::TaskArea>,
     pub squad_entities: &'a [Entity],
+    pub active_move_targets: &'a HashSet<Entity>,
     pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
     pub task_queries: &'a mut FamiliarTaskAssignmentQueries<'w, 's>,
     pub construction_sites: &'a ConstructionSiteAccess<'w, 's>,
@@ -84,6 +86,7 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
                 world_map: ctx.world_map,
                 tile_site_index: ctx.tile_site_index,
                 incoming_snapshot: ctx.incoming_snapshot,
+                active_move_targets: ctx.active_move_targets,
             },
             ctx.task_queries,
             ctx.construction_sites,

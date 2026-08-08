@@ -10,8 +10,8 @@ Roomデータは将来の温度・モラル・部屋品質バフ等の基盤に�
 
 実装境界は次の 4 つの責務境界です。
 
-- `crates/hw_world::room_detection`: pure core かつ ECS 型の所有者。入力分類、flood-fill、妥当性判定、`RoomBounds`、**`Room`/`RoomOverlayTile`（Component）**、**`RoomTileLookup`/`RoomDetectionState`/`RoomValidationState`（Resource）** を保持する。
-- `crates/hw_world::room_systems`: ECS adapter 層。`detect_rooms_system` / `validate_rooms_system` / `mark_room_dirty_from_building_changes_system` / `on_building_added` / `on_building_removed` / `on_door_added` / `on_door_removed` / `sync_room_overlay_tiles_system` の実装本体をすべて所有する。`Building + Transform` クエリから明示的なroom-detection roleを収集して `Room` entity のスポーン/削除・`RoomTileLookup` 更新、dirty マーキング、オーバーレイ同期を行う。
+- `crates/hw_world::room_detection`: pure core かつ ECS 型の所有者。入力分類、flood-fill、妥当性判定、`RoomBounds`、**`Room`/`RoomOverlayTile`（Component）**、**`RoomTileLookup`/`RoomBoundaryLookup`/`RoomDetectionState`/`RoomValidationState`（Resource）** を保持する。
+- `crates/hw_world::room_systems`: ECS adapter 層。`detect_rooms_system` / `validate_rooms_system` / `mark_room_dirty_from_building_changes_system` / `on_building_added` / `on_building_removed` / `on_door_added` / `on_door_removed` / `sync_room_overlay_tiles_system` の実装本体をすべて所有する。`Building + Transform` クエリから明示的なroom-detection roleを収集して `Room` entity のスポーン/削除・床/境界lookup更新、dirtyマーキング、オーバーレイ同期を行う。
 - `crates/hw_world::world_replace`: world replacement時にruntime-onlyのRoom root／overlayを除去し、lookup・detection・validation resourceを初期化するidempotent resetを所有する。
 - `crates/bevy_app/src/plugins/logic.rs` / `plugins/visual.rs`: `hw_world`のsystemとload reset hookを直接登録し、cross-domain orderingだけを所有する。旧`systems/room/*` shellは存在しない。
 
@@ -44,6 +44,7 @@ Roomデータは将来の温度・モラル・部屋品質バフ等の基盤に�
 |:---|:---|:---|
 | `RoomDetectionState` | `hw_world` | dirty タイルセットとクールダウンタイマー |
 | `RoomTileLookup` | `hw_world` | `(i32, i32)` グリッド座標 → `Entity`（Room エンティティ）の逆引きマップ |
+| `RoomBoundaryLookup` | `hw_world` | 完成壁/扉グリッド → 隣接する全Roomの逆引き。共有壁では2 Roomを保持 |
 | `RoomValidationState` | `hw_world` | 定期検証タイマー |
 
 ## 4. 検出アルゴリズム
@@ -81,7 +82,7 @@ Room内部から除外しない。この分類をpathfindingの`blocks_movement(
 ↓
 `DetectedRoom` を `Room` component に変換して新規 Room エンティティをスポーン（Transform::default() を必ず含める）
 ↓
-RoomTileLookup を再構築
+RoomTileLookup と RoomBoundaryLookup を再構築
 ```
 
 > **`Transform` が必須な理由**:  
@@ -101,13 +102,20 @@ Room 再検出は「dirty タイルが存在する」かつ「クールダウン
 - `Add` / `Remove` Observer が Building / Door の追加・削除タイルを dirty 化する
 - 削除系の変化は `On<Remove, Building>` / `On<Remove, Door>` で補足する
 
+### トリガー（owner finalizer）
+
+- Deconstruction finalizerはdespawn前にsnapshotしたexact owner footprintを`RoomDetectionState`へ直接渡す。
+- Wall / Door / Floor / BridgeのWorldMap layerを解除した同じcommitでdirty化するため、Remove observerが
+  despawn後のTransformを取得できることへ依存しない。
+- Wall / Doorは同じfootprintを`WallConnectionDirty`にも渡し、Room再検出とは独立して残存壁spriteを次のVisualで更新する。
+
 ## 6. 定期検証（`validate_rooms_system`）
 
 2 秒ごとに既存の `Room` エンティティを再評価します。
 
 - 現在の建物状態に対して `hw_world::room_detection::room_is_valid_against_input(&room.tiles, ...)` を実行
 - 不正な Room は despawn → dirty マーキング → 再検出へ戻す
-- 正常な Room の `RoomTileLookup` を再構築
+- 正常な Room の `RoomTileLookup` / `RoomBoundaryLookup` を再構築
 
 ## 7. 視覚境界線（`sync_room_overlay_tiles_system`）
 
@@ -123,7 +131,8 @@ Room 再検出は「dirty タイルが存在する」かつ「クールダウン
 
 ```
 GameSystemSet::Logic（Logic ループ内）
- └─ mark_room_dirty_from_building_changes_system
+ └─ DeconstructionFinalizerSet::Finalize（撤去footprintをdirty登録）
+     → mark_room_dirty_from_building_changes_system
      → validate_rooms_system
          → detect_rooms_system
 （Building / Door の Add / Remove は Observer が dirty 化）
@@ -135,10 +144,10 @@ GameSystemSet::Visual（Visual ループ内）
 
 ### world replacement
 
-`Room`、`RoomOverlayTile`、`RoomTileLookup`、検出・検証timerは保存しないruntime stateである。
+`Room`、`RoomOverlayTile`、`RoomTileLookup`、`RoomBoundaryLookup`、検出・検証timerは保存しないruntime stateである。
 normal load、rollback、recovery-only replaceはpersisted entityを書き換える前に同じ
 `hw_world::reset_for_world_replace` hookを実行し、Room rootと独立して残ったoverlayをどちらもdespawnして
-3 resourceをdefaultへ戻す。新worldのWall / Door / Floorを入力に、次のLogicでRoomとlookupを
+4 resourceをdefaultへ戻す。新worldのWall / Door / Floorを入力に、次のLogicでRoomとlookupを
 再検出する。旧worldのRoom Entity IDをload後へ持ち越さない。
 
 ## 9. 実装上の注意点

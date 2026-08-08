@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_energy::{
     ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerConsumer, PowerGenerator,
@@ -67,16 +68,21 @@ type PowerGridTopologyQuery<'w, 's> = Query<
     With<PowerGrid>,
 >;
 
+#[derive(SystemParam)]
+pub struct PowerGridTopologyQueries<'w, 's> {
+    q_yards: Query<'w, 's, (Entity, &'static Yard)>,
+    q_grids: PowerGridTopologyQuery<'w, 's>,
+    q_owner_markers_without_grid: Query<'w, 's, Entity, (With<YardPowerGrid>, Without<PowerGrid>)>,
+    q_consumers: ConsumerTopologyQuery<'w, 's>,
+    q_generators: GeneratorTopologyQuery<'w, 's>,
+}
+
 /// Yard/Grid の 1:1 対応と、空間上の generator/consumer 接続を一括修復する。
 ///
 /// load、Yard の編集、建物追加、重複・欠落した関係を同じ経路で正規化する。
 pub fn reconcile_power_grid_topology_system(
     mut commands: Commands,
-    q_yards: Query<(Entity, &Yard)>,
-    q_grids: PowerGridTopologyQuery,
-    q_owner_markers_without_grid: Query<Entity, (With<YardPowerGrid>, Without<PowerGrid>)>,
-    q_consumers: ConsumerTopologyQuery,
-    q_generators: GeneratorTopologyQuery,
+    queries: PowerGridTopologyQueries,
     mut dirty: ResMut<EnergyUpdateDirty>,
     #[cfg(feature = "profiling")] mut metrics: ResMut<super::grid_recalc::EnergyPerfMetrics>,
 ) {
@@ -84,7 +90,8 @@ pub fn reconcile_power_grid_topology_system(
     {
         metrics.topology_reconcile_runs = metrics.topology_reconcile_runs.saturating_add(1);
     }
-    let mut yards: Vec<(Entity, Yard)> = q_yards
+    let mut yards: Vec<(Entity, Yard)> = queries
+        .q_yards
         .iter()
         .map(|(entity, yard)| (entity, yard.clone()))
         .collect();
@@ -96,11 +103,11 @@ pub fn reconcile_power_grid_topology_system(
     let mut generator_memberships = HashSet::new();
     let mut consumer_memberships = HashSet::new();
     let mut changed = false;
-    for entity in &q_owner_markers_without_grid {
+    for entity in &queries.q_owner_markers_without_grid {
         changed = true;
         commands.entity(entity).despawn();
     }
-    for (entity, yard, generators, consumers) in &q_grids {
+    for (entity, yard, generators, consumers) in &queries.q_grids {
         let Some(yard) = yard else {
             changed = true;
             commands.entity(entity).despawn();
@@ -170,7 +177,7 @@ pub fn reconcile_power_grid_topology_system(
         })
     };
 
-    for (entity, transform, current) in &q_consumers {
+    for (entity, transform, current) in &queries.q_consumers {
         let desired = desired_grid_at(transform);
         let current_target = current.map(|relation| relation.0);
         let relation_is_consistent = match (current_target, desired) {
@@ -191,7 +198,7 @@ pub fn reconcile_power_grid_topology_system(
         }
     }
 
-    for (entity, transform, current) in &q_generators {
+    for (entity, transform, current) in &queries.q_generators {
         let desired = desired_grid_at(transform);
         let current_target = current.map(|relation| relation.0);
         let relation_is_consistent = match (current_target, desired) {

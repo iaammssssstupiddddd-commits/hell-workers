@@ -394,8 +394,9 @@ pub struct Designation {
     pub work_type: WorkType,
 }
 
-/// Positive provenance for player-created, producer-independent Chop/Mine
-/// designations. Absence is intentionally not treated as player ownership.
+/// Positive provenance for player-created designation roots, including manual
+/// Chop/Mine and dedicated DeconstructionOrder entities. Absence is
+/// intentionally not treated as player ownership.
 #[derive(Component, Debug, Clone, Copy, Reflect, Default)]
 #[reflect(Component, Default)]
 pub struct PlayerIssuedDesignation;

@@ -560,6 +560,8 @@ fn every_task_mode_owner_claims_escape_before_the_familiar_toggle() {
         TaskMode::DesignateChop(Some(Vec2::ZERO)),
         TaskMode::DesignateMine(None),
         TaskMode::DesignateHaul(None),
+        TaskMode::DesignateDeconstruct(None),
+        TaskMode::DesignateDeconstruct(Some(Vec2::ZERO)),
         TaskMode::CancelDesignation(None),
         TaskMode::SelectBuildTarget,
         TaskMode::AreaSelection(None),

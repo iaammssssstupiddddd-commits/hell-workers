@@ -2,9 +2,10 @@ use bevy::prelude::*;
 use hw_jobs::WorkType;
 use hw_jobs::{
     AssignedTask, BuildData, BuildPhase, BuildingType, CoatWallData, CoatWallPhase,
-    CollectBoneData, CollectBonePhase, FrameWallPhase, FrameWallTileData, GatherData, GatherPhase,
-    GeneratePowerData, GeneratePowerPhase, MovePlantData, MovePlantPhase, PourFloorPhase,
-    PourFloorTileData, RefineData, RefinePhase, ReinforceFloorPhase, ReinforceFloorTileData,
+    CollectBoneData, CollectBonePhase, DeconstructData, DeconstructPhase, FrameWallPhase,
+    FrameWallTileData, GatherData, GatherPhase, GeneratePowerData, GeneratePowerPhase,
+    MovePlantData, MovePlantPhase, PourFloorPhase, PourFloorTileData, RefineData, RefinePhase,
+    ReinforceFloorPhase, ReinforceFloorTileData,
 };
 
 use super::{
@@ -348,6 +349,33 @@ pub fn issue_generate_power(
         },
         assigned_task,
         &[ctx.task_entity],
+        already_commanded,
+    );
+}
+
+pub fn issue_deconstruct(
+    target: Entity,
+    task_pos: Vec2,
+    already_commanded: bool,
+    ctx: &AssignTaskContext<'_>,
+    queries: &mut FamiliarTaskAssignmentQueries,
+    shadow: &mut ReservationShadow,
+) {
+    let assigned_task = AssignedTask::Deconstruct(DeconstructData {
+        order: ctx.task_entity,
+        target,
+        phase: DeconstructPhase::GoingToTarget,
+    });
+    submit_assignment_with_reservation_ops(
+        ctx,
+        queries,
+        shadow,
+        TaskTarget {
+            work_type: WorkType::Deconstruct,
+            task_pos,
+        },
+        assigned_task,
+        Vec::new(),
         already_commanded,
     );
 }

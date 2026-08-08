@@ -22,6 +22,7 @@ pub enum PerfWorkload {
     UiGpu,
     TaskDashboard,
     IndoorLight,
+    Deconstruction,
 }
 
 impl PerfWorkload {
@@ -33,6 +34,7 @@ impl PerfWorkload {
             "ui-gpu" => Some(Self::UiGpu),
             "task-dashboard" => Some(Self::TaskDashboard),
             "indoor-light" => Some(Self::IndoorLight),
+            "deconstruction" => Some(Self::Deconstruction),
             _ => None,
         }
     }
@@ -45,6 +47,7 @@ impl PerfWorkload {
             Self::UiGpu => "ui-gpu",
             Self::TaskDashboard => "task-dashboard",
             Self::IndoorLight => "indoor-light",
+            Self::Deconstruction => "deconstruction",
         }
     }
 
@@ -351,7 +354,7 @@ impl PerfScenarioConfig {
         let workload = parse_value_or_default(
             value_from_args_or_env(&args, "--perf-workload", "HW_PERF_WORKLOAD")?,
             "--perf-workload",
-            "gather|path-door|construction|ui-gpu|task-dashboard|indoor-light",
+            "gather|path-door|construction|ui-gpu|task-dashboard|indoor-light|deconstruction",
             PerfWorkload::parse,
             PerfWorkload::Gather,
         )?;
@@ -495,6 +498,19 @@ impl PerfScenarioConfig {
             return Err(PerfScenarioConfigError(
                 "the indoor-light workload requires familiar policy baseline, operation dialog hidden, and dashboard hidden"
                 .to_string(),
+            ));
+        }
+        if workload == PerfWorkload::Deconstruction
+            && (size != PerfScenarioSize::Medium
+                || render_mode != PerfRenderMode::Cpu
+                || !matches!(clock_mode, PerfClockMode::Fixed)
+                || !matches!(familiar_policy_mode, PerfFamiliarPolicyMode::Baseline)
+                || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
+                || !matches!(dashboard_mode, PerfDashboardMode::Hidden))
+        {
+            return Err(PerfScenarioConfigError(
+                "the deconstruction workload requires medium/cpu/fixed, familiar policy baseline, operation dialog hidden, and dashboard hidden"
+                    .to_string(),
             ));
         }
         let master_seed = parse_u64_value_or_random(

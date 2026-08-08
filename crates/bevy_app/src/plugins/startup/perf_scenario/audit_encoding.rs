@@ -170,6 +170,21 @@ pub(super) fn write_assigned_task(
             })?;
             write_transform(record, tile, "generate-power tile transform")?;
         }
+        AssignedTask::Deconstruct(data) => {
+            record.push(4);
+            match data.phase {
+                hw_jobs::DeconstructPhase::GoingToTarget => record.push(0),
+                hw_jobs::DeconstructPhase::Dismantling { progress } => {
+                    record.push(1);
+                    write_f32(record, progress, "deconstruction progress")?;
+                }
+                hw_jobs::DeconstructPhase::AwaitingCommit => record.push(2),
+            }
+            let target = target_transforms.get(data.target).map_err(|_| {
+                "deconstruction task references a target without a transform".to_string()
+            })?;
+            write_transform(record, target, "deconstruction target transform")?;
+        }
         _ => {
             return Err(
                 "determinism audit encountered an unsupported AssignedTask variant".to_string(),
@@ -246,6 +261,7 @@ pub(super) fn write_work_type(record: &mut Vec<u8>, work_type: WorkType) {
         WorkType::FrameWallTile => 13,
         WorkType::CoatWall => 14,
         WorkType::GeneratePower => 15,
+        WorkType::Deconstruct => 16,
     });
 }
 
@@ -310,7 +326,7 @@ mod tests {
     use super::*;
     use bevy::ecs::system::SystemState;
     use hw_core::familiar::{FamiliarWorkPriority, FamiliarWorkRule, FamiliarWorkRuleOverride};
-    use hw_jobs::{GeneratePowerData, HaulData};
+    use hw_jobs::{DeconstructData, GeneratePowerData, HaulData};
 
     fn encoded(policy: &FamiliarPolicy) -> Vec<u8> {
         let mut record = Vec::new();
@@ -420,5 +436,64 @@ mod tests {
         assert_eq!(encodings[0][0..2], [3, 0]);
         assert_eq!(encodings[1][0..2], [3, 1]);
         assert_ne!(encodings[0], encodings[1]);
+    }
+
+    #[test]
+    fn deconstruction_audit_encodes_phase_progress_and_target_without_entity_ids() {
+        let mut world = World::new();
+        let target = world.spawn(Transform::from_xyz(12.0, 13.0, 14.0)).id();
+        let order = world.spawn_empty().id();
+        let mut query_state = SystemState::<Query<&Transform>>::new(&mut world);
+        let query = query_state.get(&world).expect("transform query validates");
+
+        let mut encodings = Vec::new();
+        for phase in [
+            hw_jobs::DeconstructPhase::GoingToTarget,
+            hw_jobs::DeconstructPhase::Dismantling { progress: 0.5 },
+            hw_jobs::DeconstructPhase::AwaitingCommit,
+        ] {
+            let mut record = Vec::new();
+            write_assigned_task(
+                &mut record,
+                &AssignedTask::Deconstruct(DeconstructData {
+                    order,
+                    target,
+                    phase,
+                }),
+                &query,
+            )
+            .unwrap();
+            encodings.push(record);
+        }
+
+        assert_eq!(encodings[0][0..2], [4, 0]);
+        assert_eq!(encodings[1][0..2], [4, 1]);
+        assert_eq!(encodings[2][0..2], [4, 2]);
+        assert_ne!(encodings[0], encodings[1]);
+        assert_ne!(encodings[1], encodings[2]);
+
+        let mut reordered_world = World::new();
+        reordered_world.spawn_empty();
+        let reordered_target = reordered_world
+            .spawn(Transform::from_xyz(12.0, 13.0, 14.0))
+            .id();
+        let reordered_order = reordered_world.spawn_empty().id();
+        let mut reordered_query_state = SystemState::<Query<&Transform>>::new(&mut reordered_world);
+        let reordered_query = reordered_query_state
+            .get(&reordered_world)
+            .expect("transform query validates");
+        let mut reordered_record = Vec::new();
+        write_assigned_task(
+            &mut reordered_record,
+            &AssignedTask::Deconstruct(DeconstructData {
+                order: reordered_order,
+                target: reordered_target,
+                phase: hw_jobs::DeconstructPhase::AwaitingCommit,
+            }),
+            &reordered_query,
+        )
+        .unwrap();
+
+        assert_eq!(encodings[2], reordered_record);
     }
 }

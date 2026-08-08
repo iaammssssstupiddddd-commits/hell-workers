@@ -350,6 +350,9 @@ pub(crate) fn drive_perf_capture_system(
                 write_indoor_light_fixture_sidecars(&params.config, &params.indoor_light_fixture)
             });
             let result = result.and_then(|()| {
+                write_deconstruction_fixture_sidecar(&params.config, &params.deconstruction_fixture)
+            });
+            let result = result.and_then(|()| {
                 let inventory = capture.initial_render_inventory.as_ref().ok_or_else(|| {
                     std::io::Error::other(
                         "capture reached Flush without the initial render inventory",

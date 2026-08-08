@@ -122,7 +122,9 @@ pub fn collect_active_reservation_ops(
         AssignedTask::CollectBone(data) => {
             if matches!(
                 data.phase,
-                CollectBonePhase::GoingToBone | CollectBonePhase::Collecting { .. }
+                CollectBonePhase::GoingToBone
+                    | CollectBonePhase::Collecting { .. }
+                    | CollectBonePhase::Done
             ) {
                 ops.push(ResourceReservationOp::ReserveSource {
                     source: data.target,
@@ -223,6 +225,7 @@ pub fn collect_active_reservation_ops(
                 amount: 1,
             });
         }
+        AssignedTask::Deconstruct(_) => {}
         AssignedTask::BucketTransport(_) | AssignedTask::None => {}
     }
 

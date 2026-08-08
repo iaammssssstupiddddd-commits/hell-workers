@@ -8,11 +8,11 @@ use bevy::prelude::*;
 use hw_core::familiar::Familiar;
 use hw_core::relationships::CommandedBy;
 use hw_core::soul::{DamnedSoul, IdleState};
-use hw_jobs::ConstructionSiteAccess;
-use hw_jobs::TaskDiagnosticInputRevisions;
+use hw_jobs::{AssignedTask, ConstructionSiteAccess, TaskDiagnosticInputRevisions};
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use hw_world::{WalkabilityConnectivityCache, WorldMapRead};
+use std::collections::HashSet;
 #[cfg(feature = "profiling")]
 use std::time::Instant;
 
@@ -74,6 +74,19 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
     } = params;
 
     let allow_task_delegation = delegation_timer.advance(time.delta());
+    let active_move_targets = if allow_task_delegation {
+        let mut assignments = q_souls.transmute_lens_filtered::<&AssignedTask, Without<Familiar>>();
+        assignments
+            .query()
+            .iter()
+            .filter_map(|task| match task {
+                AssignedTask::MovePlant(data) => Some(data.building),
+                _ => None,
+            })
+            .collect::<HashSet<_>>()
+    } else {
+        HashSet::new()
+    };
     let mut diagnostic_cycle = allow_task_delegation.then(|| {
         FamiliarTaskDiagnosticCycle::new(published_diagnostics.next_cycle(), &diagnostic_revisions)
     });
@@ -154,6 +167,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             fam_path: &mut fam_path,
             task_area_opt,
             squad_entities: &squad_entities,
+            active_move_targets: &active_move_targets,
             q_souls: &mut q_souls,
             task_queries: &mut task_queries,
             construction_sites: &construction_sites,

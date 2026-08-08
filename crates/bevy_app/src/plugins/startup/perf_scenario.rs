@@ -95,6 +95,7 @@ mod behavior_driver;
 mod capture_driver;
 mod config;
 #[cfg(feature = "profiling")]
+mod deconstruction_fixture;
 #[cfg(feature = "profiling")]
 mod fixture;
 #[cfg(feature = "profiling")]
@@ -123,6 +124,10 @@ pub use config::{
 pub(crate) use config::{
     is_fixed_step_behavior, is_fixed_step_scenario, is_not_fixed_step_audit,
     is_not_fixed_step_behavior, is_not_renderdoc_capture,
+};
+#[cfg(feature = "profiling")]
+pub(crate) use deconstruction_fixture::{
+    DeconstructionPerfFixtureState, drive_deconstruction_perf_workload_system,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use fixture::{PerfScenarioApplied, PerfScenarioDriverState, PerfScenarioSet};
@@ -162,9 +167,9 @@ use config::{
 use fixture::{PerfFixtureKind, PerfFixtureMarker};
 #[cfg(feature = "profiling")]
 use output::{
-    PerfCaptureWriteInput, fnv1a, fnv1a_bytes, write_determinism_audit,
-    write_indoor_light_fixture_sidecars, write_perf_capture, write_render_inventory,
-    write_window_observation,
+    PerfCaptureWriteInput, fnv1a, fnv1a_bytes, write_deconstruction_fixture_sidecar,
+    write_determinism_audit, write_indoor_light_fixture_sidecars, write_perf_capture,
+    write_render_inventory, write_window_observation,
 };
 
 #[cfg(feature = "profiling")]
@@ -556,6 +561,7 @@ pub(crate) struct PerfCaptureStartParams<'w, 's> {
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct PerfCaptureParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
+    deconstruction_fixture: Res<'w, DeconstructionPerfFixtureState>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
     time: ResMut<'w, Time<Virtual>>,
     fixed_time: Res<'w, Time<Fixed>>,

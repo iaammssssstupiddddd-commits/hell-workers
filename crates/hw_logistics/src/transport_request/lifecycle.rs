@@ -72,22 +72,41 @@ fn close_transport_request(
     workers: Option<&TaskWorkers>,
     resource_item: Option<&ResourceItem>,
 ) {
-    if let Some(workers) = workers {
-        for &soul_entity in workers.iter() {
-            commands.write_message(SoulTaskUnassignRequest {
-                soul_entity,
-                emit_abandoned: true,
-            });
-        }
+    let worker_entities = workers
+        .into_iter()
+        .flat_map(TaskWorkers::iter)
+        .copied()
+        .collect::<Vec<_>>();
+    close_transport_request_snapshot(
+        commands,
+        request_entity,
+        fixed_source.map(|source| source.0),
+        &worker_entities,
+        resource_item.is_some(),
+    );
+}
+
+fn close_transport_request_snapshot(
+    commands: &mut Commands,
+    request_entity: Entity,
+    fixed_source: Option<Entity>,
+    workers: &[Entity],
+    is_resource_item: bool,
+) {
+    for &soul_entity in workers {
+        commands.write_message(SoulTaskUnassignRequest {
+            soul_entity,
+            emit_abandoned: true,
+        });
     }
 
     if let Some(source) = fixed_source {
         commands
-            .entity(source.0)
+            .entity(source)
             .try_remove::<ManualHaulPinnedSource>();
     }
 
-    if resource_item.is_some() {
+    if is_resource_item {
         commands.entity(request_entity).try_remove::<(
             TransportRequest,
             Designation,
@@ -105,6 +124,110 @@ fn close_transport_request(
     } else {
         commands.entity(request_entity).try_despawn();
     }
+}
+
+/// Result of closing transport requests whose owner is removed by a root
+/// transaction after all of their workers were synchronously terminalized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnerTransportCleanupResult {
+    Applied,
+    StaleSnapshot,
+    ActiveWorkers,
+    SelfReference,
+}
+
+/// Returns transport request entities containing any edge to `owner`.
+pub fn transport_requests_referencing_owner(world: &mut World, owner: Entity) -> Vec<Entity> {
+    transport_requests_referencing_removed_owners(world, &[owner])
+}
+
+/// Returns the stable union of requests containing an edge to any removed
+/// owner. A request referencing two owners is returned exactly once.
+pub fn transport_requests_referencing_removed_owners(
+    world: &mut World,
+    owners: &[Entity],
+) -> Vec<Entity> {
+    let mut query = world.query::<(
+        Entity,
+        &TransportRequest,
+        Option<&TransportRequestFixedSource>,
+    )>();
+    let mut requests = query
+        .iter(world)
+        .filter_map(|(entity, request, fixed_source)| {
+            (owners.contains(&request.anchor)
+                || owners.contains(&request.issued_by)
+                || request
+                    .stockpile_group
+                    .iter()
+                    .any(|owner| owners.contains(owner))
+                || fixed_source.is_some_and(|source| owners.contains(&source.0)))
+            .then_some(entity)
+        })
+        .collect::<Vec<_>>();
+    requests.sort_unstable_by_key(|entity| entity.to_bits());
+    requests
+}
+
+/// Closes an exact, prevalidated request snapshot for a disappearing owner.
+///
+/// The caller must first terminalize every worker referencing these requests.
+/// A changed snapshot or remaining worker fails closed without mutation.
+pub fn close_transport_requests_for_removed_owner(
+    world: &mut World,
+    owner: Entity,
+    expected_requests: &[Entity],
+) -> OwnerTransportCleanupResult {
+    close_transport_requests_for_removed_owners(world, &[owner], expected_requests)
+}
+
+/// Closes the exact stable union for an owner graph removed by one root
+/// transaction.
+pub fn close_transport_requests_for_removed_owners(
+    world: &mut World,
+    owners: &[Entity],
+    expected_requests: &[Entity],
+) -> OwnerTransportCleanupResult {
+    let current = transport_requests_referencing_removed_owners(world, owners);
+    if current != expected_requests {
+        return OwnerTransportCleanupResult::StaleSnapshot;
+    }
+    if current.iter().any(|request| owners.contains(request)) {
+        return OwnerTransportCleanupResult::SelfReference;
+    }
+
+    let mut snapshots = Vec::with_capacity(current.len());
+    for request in current {
+        if world
+            .get::<TaskWorkers>(request)
+            .is_some_and(|workers| !workers.is_empty())
+        {
+            return OwnerTransportCleanupResult::ActiveWorkers;
+        }
+        snapshots.push((
+            request,
+            world
+                .get::<TransportRequestFixedSource>(request)
+                .map(|source| source.0),
+            world.get::<ResourceItem>(request).is_some(),
+        ));
+    }
+
+    let mut queue = bevy::ecs::world::CommandQueue::default();
+    {
+        let mut commands = Commands::new(&mut queue, world);
+        for (request, fixed_source, is_resource_item) in snapshots {
+            close_transport_request_snapshot(
+                &mut commands,
+                request,
+                fixed_source,
+                &[],
+                is_resource_item,
+            );
+        }
+    }
+    queue.apply(world);
+    OwnerTransportCleanupResult::Applied
 }
 
 type AnchorCleanupRequestQuery<'w, 's> = Query<

@@ -317,6 +317,9 @@ coverage_table! {
         "ui-intent::task-mode-designate-haul" => tuple(SelectTaskMode(TaskMode::DesignateHaul(_))) => {
             published("orders-designation")
         },
+        "ui-intent::task-mode-designate-deconstruct" => tuple(SelectTaskMode(
+            TaskMode::DesignateDeconstruct(_)
+        )) => published("building-deconstruction"),
         "ui-intent::task-mode-cancel-designation" => tuple(SelectTaskMode(
             TaskMode::CancelDesignation(_)
         )) => published("orders-designation"),
@@ -391,6 +394,9 @@ coverage_table! {
             published("zones-workflow")
         },
         "ui-intent::soul-spa-active-slots" => record(SetSoulSpaActiveSlots { .. }) => {
+            published("soul-energy-recovery")
+        },
+        "ui-intent::soul-spa-construction-cancel" => record(CancelSoulSpaConstruction { .. }) => {
             published("soul-energy-recovery")
         },
         "ui-intent::power-consumer-priority" => record(SetPowerConsumerPriority { .. }) => {
@@ -637,7 +643,8 @@ coverage_table! {
             published("task-dashboard-focus")
         },
         "work-type::coat-wall" => unit(CoatWall) => published("task-dashboard-focus"),
-        "work-type::generate-power" => unit(GeneratePower) => published("task-dashboard-focus")
+        "work-type::generate-power" => unit(GeneratePower) => published("task-dashboard-focus"),
+        "work-type::deconstruct" => unit(Deconstruct) => published("building-deconstruction")
     }
 }
 
@@ -650,6 +657,9 @@ coverage_table! {
         "task-mode::designate-chop" => tuple(DesignateChop(_)) => published("orders-designation"),
         "task-mode::designate-mine" => tuple(DesignateMine(_)) => published("orders-designation"),
         "task-mode::designate-haul" => tuple(DesignateHaul(_)) => published("orders-designation"),
+        "task-mode::designate-deconstruct" => tuple(DesignateDeconstruct(_)) => {
+            published("building-deconstruction")
+        },
         "task-mode::cancel-designation" => tuple(CancelDesignation(_)) => {
             published("orders-designation")
         },
@@ -1141,6 +1151,23 @@ mod tests {
                     owner: HelpOwnerId::FamiliarManagement,
                 },
             }
+        );
+    }
+
+    #[test]
+    fn deconstruction_player_surfaces_publish_the_completed_workflow() {
+        let expected = published("building-deconstruction");
+
+        assert_eq!(
+            task_mode_coverage(TaskMode::DesignateDeconstruct(None)),
+            expected
+        );
+        assert_eq!(work_type_coverage(WorkType::Deconstruct), expected);
+        assert_eq!(
+            ui_intent_coverage(&UiIntent::SelectTaskMode(TaskMode::DesignateDeconstruct(
+                None
+            ))),
+            expected
         );
     }
 

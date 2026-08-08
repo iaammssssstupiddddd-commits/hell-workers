@@ -130,6 +130,9 @@ pub(super) fn handle_pressed_action(
                 active_slots,
             });
         }
+        MenuAction::CancelSoulSpaConstruction { target } => {
+            ui_intents.write(UiIntent::CancelSoulSpaConstruction { target });
+        }
         MenuAction::SetPowerConsumerPriority { target, priority } => {
             ui_intents.write(UiIntent::SetPowerConsumerPriority { target, priority });
         }

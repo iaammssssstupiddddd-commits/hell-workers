@@ -69,6 +69,9 @@ pub fn assign_by_work_type(
         WorkType::GeneratePower => {
             basic::assign_generate_power(task_pos, already_commanded, ctx, queries, shadow)
         }
+        WorkType::Deconstruct => {
+            basic::assign_deconstruct(task_pos, already_commanded, ctx, queries, shadow)
+        }
     }
 }
 

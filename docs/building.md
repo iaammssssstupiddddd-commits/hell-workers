@@ -100,6 +100,85 @@ owner lifecycle に委譲する。cleanup は次を一つの終端として扱�
 cancel marker の処理と `ApplyDeferred` は Familiar / Soul / TransportRequest の Perceive より前に完了するため、
 同じ Logic frame でキャンセル済み owner を読んだ request の再生成・再割り当てを防ぐ。
 
+### 完成建築物の解体domain契約（Track C1 M1〜M4）
+
+解体指定は完成した通常`Building`、または`Building { kind: SoulSpa } + SoulSpaSite { phase: Operational }`の
+canonical rootだけを対象にする。Blueprint、floor/wall construction、仮設Building、Constructing Soul Spaは
+既存または専用のconstruction cancel境界へ残し、一般解体へ混在させない。Soul Spaは4枚のどの
+`SoulSpaTile`をhitしてもdurableな`parent_site`から同じrootへ解決する。
+
+completed building rootには既存の生産`Designation`があり得るため、解体指定の正本は別entityの
+`DeconstructionOrder`と`TargetDeconstructionRoot` Relationshipである。targetごとにorderは最大1件で、
+`MovePlanned`、active Move task/assignment、pending move applyのいずれかがある場合は割り当てとcommitを拒否する。
+M4では全12種の`BuildingType`とOperational Soul Spaをowner-safe cleanup対象とする。Familiar割り当て、
+Soul作業、root finalizer、WorldMap owner解除、2D child / 3D proxy、関連request/reservationのcleanup、
+固定回収item生成を同じcommitへまとめる。Doorはbuilding ownerとdoor cache/state、Bridgeはbuilding ownerと
+bridge cache、Floorはstackable floor layerだけをexact owner一致で解除する。Wall / Doorの撤去は
+`WallConnectionDirty`へfootprintを渡し、残った隣接壁のspriteをVisualで再接続する。全structure footprintは
+`RoomDetectionState`へdirty登録し、別ownerへ置換済みのslotや生のobstacle bitを誤って消さない。
+
+Bridgeは撤去後に川へ戻るfootprintを含めてsalvageの安全なdrop位置を事前計画し、候補が無ければ
+`NoSafeRecovery`としてtarget/mapを変更しない。Operational Soul Spaは4 tile、GeneratePower worker、
+`DeliverToSoulSpa` request、generator relationship、2D/3D visualをsite単位で閉じる。Outdoor LampとSoul Spaは
+commit後にenergy full rebuildを要求し、同じUpdateのtopology → output → allocation → Visualで残存consumerの
+grid summary、`PowerSupplyState`、`Unpowered`、sprite色まで一致させる。
+
+Soulは`GoingToTarget → Dismantling → AwaitingCommit`を進め、完了時にtargetを直接despawnせず、
+world epoch・worker・exact task identity・order・targetを持つcommit requestを1件だけ発行する。
+root exclusive finalizerはcancelを先に処理してcommitをtarget単位に安定順で直列化し、同期claim取得前に
+worker、関連TransportRequest、WorldMap owner、安全なsalvage drop先を全て事前検証する。worker終端は
+assignment payload、`ActiveTaskIdentity`、`WorkingOn`のいずれのedgeでも関連ownerを発見し、batch全件を
+all-or-noneで解除する。winnerだけが`OnTaskCompleted`を発行し、target/orderをworkerより先に消さない。
+
+commit失敗は一致するclaimとworker relationshipを解放し、durable orderへ理由とtask / topology / availabilityの
+依存domainを持つruntime blockerを置く。blockerはexact worker cleanupが次回発生させるtask revision 1回分を
+baselineへ先取りして即時armし、選択domainの追加revisionが変わるまで再割り当てを止める。これによりfailureから
+最初のrevision syncまでに起きたowner修復、Move解除、回収先availability変化を取りこぼさない。
+retarget前のstale requestは現在のorderをblockせず旧workerだけを終端し、relationship欠落等でorder自体が
+orphanになった場合はworkerを終端できたときだけinvalid orderとstale pendingを閉じる。別orderを指すpendingは、
+同じtargetへのvalid durable orderだけを維持する。exact Deconstruct shellは`DamnedSoul` / `WorkingOn`欠損でも解放し、
+Transform欠損時はdrop位置を生成せずassignment/path/identity/relationshipだけを閉じる。
+同じtargetへのmarker + root edgeを持つ兄弟orderはowned siblingとしてcanonical transactionに含める。
+markerまたはroot edgeを欠くunowned/malformed siblingがある場合はcanonicalを破棄せず`StaleTarget`でfail-closeする。
+兄弟orderのmarker追加・削除は`Designation`欠損時もcanonicalのtask revisionへ伝播し、補修でblockerを解除する。
+また空の`Inventory`はimmutableに確認し、実在itemがある場合だけmutable borrowしてavailability revisionを進める。
+
+Ordersの`Deconstruct`は単一建物を1回のpress/releaseで指定し、completed rootへ解決して専用orderを1件だけ作る。
+指定後は同じmodeの待機状態へ戻り、Escapeまたは右クリックでmodeを終了する。Modal / Pause / UI capture中の
+releaseはgestureだけをrollbackし、orderやworld clickを確定しない。hoverはcanonical targetとtyped reject reasonを
+latest-only resourceで表示し、指定・cancel・commitの終端結果は通知へ変換する。
+
+FamiliarのOperation policyは`Deconstruct`の許可と優先度を通常の`WorkType`と同じように保持する。
+Task Dashboardは`Deconstruct <building>`、priority、assigned count、typed blockerを表示し、cancel時は
+componentを直接剥がさず`DeconstructionCancelRequest`をowner finalizerへ渡す。claim取得後または対象状態が
+変わったcancelはworldを変更せずcanonical outcomeを通知する。
+
+facility cleanupはstorage / tool / occupant / taskを`FacilityRecoveryPlan`へsnapshotし、ground itemとcarrierの
+安全な最終座標だけを`RecoveryPlacementPlan`でapply前に確定する。TankはWaterとbucket、RestAreaはoccupantと予約、
+Parkingはwheelbarrowをowner lifecycleで解放し、parking解体でもvalidな`LoadedIn` cargoは積載状態を維持する。
+MudMixerはsandを別のoperational Mixerへnumeric移送し、既存StasisMud entityの`StoredByMixer`を付け替え、
+rockだけをground item化する。Mixer mirror不一致、安全なdrop cell不足、またはvolatile資源の全量受入先不足では
+`InconsistentMixerInventory` / `NoSafeRecovery`で非変更rejectする。
+
+回収量は建設費や搬入履歴から逆算せず、`hw_jobs::deconstruction_salvage`を唯一の正本とする。
+
+| BuildingType | 固定回収 |
+|:---|:---|
+| Wall / Door | Wood × 1 |
+| Floor | Bone × 1 |
+| Tank | Wood × 1 |
+| MudMixer / RestArea | Wood × 2 |
+| Bridge | Rock × 3 |
+| SandPile | なし |
+| BonePile | Bone × 5 |
+| WheelbarrowParking | Wood × 1 |
+| SoulSpa | Bone × 6 |
+| OutdoorLamp | Bone × 1 |
+
+`WorldMap::snapshot_owner`はbuilding / floor / door / bridge / stockpile layerをcurrent ownerのexact matchで逆引きし、
+Y→Xの安定順で返す。raw obstacleはowner identityを持たない派生bitmapなのでsnapshotへ含めない。
+cleanup側はこのsnapshot取得後にもcurrent ownerを照合し、別ownerへ置換済みのslotを解除してはならない。
+
 ## 4. 仮設建築 (Provisional Building)
 
 一部の建物（例: `Wall`）は、必要最低限の資材があれば「仮設状態」として建設を完了できます。
@@ -455,6 +534,7 @@ Wall の `Framing → Coating` も同じindex/counter契約を使い、`spawned_
   5. 養生中は Site 中央に進捗バーを表示し、残り時間を可視化
   6. 完成床生成時にバウンスアニメーションを再生
   7. 建築中タイルを完成床へ置換（床として通行可能）
+     - 建築中の`WorldMap.buildings` ownerを解除し、完成Floor entityをstackableな`WorldMap.floors` ownerとして同frameに登録する。床上の設備配置を妨げず、将来のowner-safe解体対象を維持する
   8. FloorTileBlueprint エンティティを despawn
   9. FloorConstructionSite エンティティを despawn
 
@@ -515,6 +595,18 @@ SoulSpaSite (root)
 5. `bones_delivered >= bones_required`（= 12）に達すると `SoulSpaPhase::Operational` へ遷移
 6. `soul_spa_tile_activate_system` が `Changed<SoulSpaSite>` をトリガーにして各タイルへ `Designation(GeneratePower)` + `TaskSlots{max:1}` + `TaskWorkers` を挿入
 
+#### 建設キャンセル
+
+Constructing中は情報パネルの`Cancel Construction`、またはTask Dashboardの
+`Haul Bone to Soul Spa`行から確認付きcancelを実行できる。どちらも`SoulSpaConstructionCancelRequest`へ合流し、
+UIがsite/tile/requestを直接変更しない。owner consumerはexactな2×2 `WorldMap` owner、4 tileの
+`parent_site`、Constructing phase、関連worker / TransportRequest、power relationship shapeを全て事前検証する。
+検証成功時だけworkerをexact terminal化し、request/reservation、tile、site、2D/3D visual、map ownerを一括除去して、
+`bones_delivered`の実数だけBone itemとして100%返す。未搬入分や固定salvage量から返却数を推測しない。
+
+Virtual Timeのpause中に情報パネルから操作した場合はLogicへrequestを残さず`Paused` outcomeを即時に返し、
+resume後へ遅延適用しない。Operationalへ遷移済み、stale target、owner/task不整合は非変更のtyped outcomeとなる。
+
 ### 10.4 稼働フェーズ（Operational）
 
 - 魂が `GeneratePower` タスクを取得 → タイルへ移動（`GoingToTile`）→ 発電中（`Generating`）
@@ -548,6 +640,7 @@ SoulSpaSite (root)
 | システム | フェーズ | 役割 |
 |:---|:---|:---|
 | `soul_spa_auto_haul_system` | Update / Logic（energy chain先頭） | `DeliverToSoulSpa` TransportRequest を upsert |
+| `soul_spa_construction_cancellation_system` | Update / Logic（owner cancel set、Familiar/Soul/Transport Perceive前） | Constructing siteのexact cleanupと実搬入Bone返却 |
 | `soul_spa_delivery_sync_system` | Update / Logic（`auto_haul`の後） | 周辺骨を消費・`bones_delivered` 更新・Operational 遷移 |
 | `soul_spa_tile_activate_system` | Update / Logic（`delivery_sync` の後） | Operational 遷移時にタイルへ Designation 付与 |
 | `soul_spa_power_output_system` | Update / Logic（dirty時） | 稼働タイル数から `current_output` 更新 |
@@ -562,7 +655,7 @@ Soul Spa を選択すると以下が表示される（`append_soul_spa_model` �
 
 | フェーズ | 表示 |
 |:---|:---|
-| Constructing | `Status: Constructing (bones_delivered/bones_required)` |
+| Constructing | `Status: Constructing (bones_delivered/bones_required)` + `Cancel Construction` |
 | Operational | `Status: Operational` → `Active: N/M souls`（超過中はDraining）→ `Output: X.XW` → Grid generation / served / demand / mode |
 
 ---

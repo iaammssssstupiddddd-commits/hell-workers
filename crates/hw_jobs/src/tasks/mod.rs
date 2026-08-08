@@ -3,6 +3,7 @@
 pub mod bucket;
 pub mod build;
 pub mod collect;
+pub mod deconstruct;
 pub mod gather;
 pub mod generate_power;
 pub mod haul;
@@ -18,10 +19,11 @@ pub use build::{
     PourFloorPhase, PourFloorTileData, ReinforceFloorPhase, ReinforceFloorTileData,
 };
 pub use collect::{CollectBoneData, CollectBonePhase};
+pub use deconstruct::{DeconstructData, DeconstructPhase};
 pub use gather::{GatherData, GatherPhase};
 pub use generate_power::{GeneratePowerData, GeneratePowerPhase};
 pub use haul::{HaulData, HaulPhase, HaulToBlueprintData, HaulToBpPhase};
-pub use move_plant::{MovePlantData, MovePlantPhase, MovePlantTask};
+pub use move_plant::{MovePlantData, MovePlantPhase, MovePlantTask, PendingBuildingMove};
 pub use refine::{HaulToMixerData, HaulToMixerPhase, RefineData, RefinePhase};
 pub use wheelbarrow::{HaulWithWheelbarrowData, HaulWithWheelbarrowPhase};
 
@@ -84,6 +86,14 @@ impl ActiveTaskIdentity {
             TaskIdentityBinding::Detached => working_on.is_none(),
         }
     }
+
+    /// Stable discriminator used only to total-order owner transaction input.
+    pub const fn binding_stable_index(&self) -> u8 {
+        match self.binding {
+            TaskIdentityBinding::Attached => 0,
+            TaskIdentityBinding::Detached => 1,
+        }
+    }
 }
 
 #[derive(Component, Reflect, Clone, Debug, Default)]
@@ -106,6 +116,7 @@ pub enum AssignedTask {
     FrameWallTile(FrameWallTileData),
     CoatWall(CoatWallData),
     GeneratePower(GeneratePowerData),
+    Deconstruct(DeconstructData),
 }
 
 impl AssignedTask {
@@ -136,6 +147,7 @@ impl AssignedTask {
             AssignedTask::FrameWallTile(_) => Some(WorkType::FrameWallTile),
             AssignedTask::CoatWall(_) => Some(WorkType::CoatWall),
             AssignedTask::GeneratePower(_) => Some(WorkType::GeneratePower),
+            AssignedTask::Deconstruct(_) => Some(WorkType::Deconstruct),
             AssignedTask::None => None,
         }
     }
@@ -157,7 +169,61 @@ impl AssignedTask {
             AssignedTask::FrameWallTile(data) => Some(data.tile),
             AssignedTask::CoatWall(data) => Some(data.tile),
             AssignedTask::GeneratePower(data) => Some(data.tile),
+            AssignedTask::Deconstruct(data) => Some(data.target),
             AssignedTask::None => None,
+        }
+    }
+
+    /// Returns whether any payload edge in this active task references `entity`.
+    ///
+    /// Owner finalizers use this before removing a building so in-flight work
+    /// is terminalized through the normal Soul cleanup path instead of being
+    /// left to a stale-target guard on the following frame.
+    pub fn references_entity(&self, entity: Entity) -> bool {
+        match self {
+            AssignedTask::Gather(data) => data.target == entity,
+            AssignedTask::Haul(data) => data.item == entity || data.stockpile == entity,
+            AssignedTask::HaulToBlueprint(data) => data.item == entity || data.blueprint == entity,
+            AssignedTask::Build(data) => data.blueprint == entity,
+            AssignedTask::MovePlant(data) => data.task_entity == entity || data.building == entity,
+            AssignedTask::BucketTransport(data) => {
+                data.bucket == entity
+                    || match data.source {
+                        BucketTransportSource::River => false,
+                        BucketTransportSource::Tank { tank, .. } => tank == entity,
+                    }
+                    || match data.destination {
+                        BucketTransportDestination::Tank(tank) => tank == entity,
+                        BucketTransportDestination::Mixer(mixer) => mixer == entity,
+                    }
+            }
+            AssignedTask::CollectBone(data) => data.target == entity,
+            AssignedTask::Refine(data) => data.mixer == entity,
+            AssignedTask::HaulToMixer(data) => data.item == entity || data.mixer == entity,
+            AssignedTask::HaulWithWheelbarrow(data) => {
+                data.wheelbarrow == entity
+                    || data.collect_source == Some(entity)
+                    || data.items.contains(&entity)
+                    || match data.destination {
+                        hw_core::logistics::WheelbarrowDestination::Stockpile(target)
+                        | hw_core::logistics::WheelbarrowDestination::Blueprint(target) => {
+                            target == entity
+                        }
+                        hw_core::logistics::WheelbarrowDestination::Mixer {
+                            entity: target,
+                            ..
+                        } => target == entity,
+                    }
+            }
+            AssignedTask::ReinforceFloorTile(data) => data.tile == entity || data.site == entity,
+            AssignedTask::PourFloorTile(data) => data.tile == entity || data.site == entity,
+            AssignedTask::FrameWallTile(data) => data.tile == entity || data.site == entity,
+            AssignedTask::CoatWall(data) => {
+                data.tile == entity || data.site == entity || data.wall == entity
+            }
+            AssignedTask::GeneratePower(data) => data.tile == entity,
+            AssignedTask::Deconstruct(data) => data.order == entity || data.target == entity,
+            AssignedTask::None => false,
         }
     }
 

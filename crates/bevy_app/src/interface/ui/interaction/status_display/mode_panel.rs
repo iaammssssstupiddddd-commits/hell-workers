@@ -15,7 +15,9 @@ use crate::systems::command::{
     overlap_summary_from_areas,
 };
 use crate::systems::jobs::Designation;
+use crate::systems::jobs::deconstruction::{DeconstructionHoverPreview, DeconstructionHoverStatus};
 use hw_core::relationships::ManagedBy;
+use hw_jobs::{BuildingType, DeconstructionSalvage, deconstruction_salvage};
 use hw_ui::components::UiNodeRegistry;
 
 #[derive(SystemParam)]
@@ -184,6 +186,7 @@ pub struct AreaEditContext<'w> {
     selected_entity: Res<'w, SelectedEntity>,
     area_edit_session: Res<'w, AreaEditSession>,
     area_edit_clipboard: Res<'w, AreaEditClipboard>,
+    deconstruction_preview: Option<Res<'w, DeconstructionHoverPreview>>,
 }
 
 #[derive(SystemParam)]
@@ -205,6 +208,7 @@ pub fn update_area_edit_preview_ui_system(
         selected_entity,
         area_edit_session,
         area_edit_clipboard,
+        deconstruction_preview,
     } = edit_context;
     let AreaEditQueries {
         q_task_areas,
@@ -217,6 +221,26 @@ pub fn update_area_edit_preview_ui_system(
         left: 0.0,
         top: 0.0,
     });
+
+    if matches!(task_context.0, TaskMode::DesignateDeconstruct(_)) {
+        payload = Some(
+            deconstruction_preview
+                .as_ref()
+                .and_then(|preview| {
+                    deconstruction_preview_payload(&task_context, preview, &q_window)
+                })
+                .unwrap_or(hw_ui::interaction::status_display::AreaEditPreviewPayload {
+                    display: false,
+                    text: String::new(),
+                    left: 0.0,
+                    top: 0.0,
+                }),
+        );
+        hw_ui::interaction::status_display::update_area_edit_preview_ui_system(
+            payload, ui_nodes, q_node, q_text,
+        );
+        return;
+    }
 
     if !matches!(task_context.0, TaskMode::AreaSelection(_)) {
         hw_ui::interaction::status_display::update_area_edit_preview_ui_system(
@@ -314,4 +338,96 @@ pub fn update_area_edit_preview_ui_system(
     hw_ui::interaction::status_display::update_area_edit_preview_ui_system(
         payload, ui_nodes, q_node, q_text,
     );
+}
+
+fn deconstruction_preview_payload(
+    task_context: &TaskContext,
+    preview: &DeconstructionHoverPreview,
+    q_window: &Query<&Window, With<PrimaryWindow>>,
+) -> Option<hw_ui::interaction::status_display::AreaEditPreviewPayload> {
+    let cursor = preview.cursor?;
+    let status = preview.status?;
+    let Ok(window) = q_window.single() else {
+        return None;
+    };
+    let action = if matches!(task_context.0, TaskMode::DesignateDeconstruct(Some(_))) {
+        "Release to designate"
+    } else {
+        "Click to designate"
+    };
+    let text = match status {
+        DeconstructionHoverStatus::Available { kind, .. } => {
+            format!(
+                "Deconstruct {kind:?} | Ready | {} | {action}",
+                deconstruction_salvage_label(kind)
+            )
+        }
+        DeconstructionHoverStatus::Rejected { kind, reason, .. } => {
+            let target = kind.map_or_else(|| "Target".to_string(), |kind| format!("{kind:?}"));
+            format!(
+                "Deconstruct {target} | Unavailable: {}",
+                deconstruction_reject_label(reason)
+            )
+        }
+    };
+
+    Some(hw_ui::interaction::status_display::AreaEditPreviewPayload {
+        display: true,
+        text,
+        left: (cursor.x + 14.0).min(window.width() - 420.0).max(4.0),
+        top: (cursor.y + 18.0).min(window.height() - 34.0).max(4.0),
+    })
+}
+
+fn deconstruction_salvage_label(kind: BuildingType) -> String {
+    match deconstruction_salvage(kind) {
+        DeconstructionSalvage::None => "Salvage: None".to_owned(),
+        DeconstructionSalvage::Material {
+            resource_type,
+            amount,
+        } => format!("Salvage: {resource_type:?} x{amount}"),
+    }
+}
+
+const fn deconstruction_reject_label(
+    reason: hw_jobs::DeconstructionDesignationRejectReason,
+) -> &'static str {
+    match reason {
+        hw_jobs::DeconstructionDesignationRejectReason::StaleWorld => "world changed; click again",
+        hw_jobs::DeconstructionDesignationRejectReason::NoTarget => "no completed building",
+        hw_jobs::DeconstructionDesignationRejectReason::CleanupUnavailable => {
+            "safe cleanup is not available"
+        }
+        hw_jobs::DeconstructionDesignationRejectReason::Target(reason) => match reason {
+            hw_jobs::DeconstructionRejectReason::StaleTarget => "target no longer exists",
+            hw_jobs::DeconstructionRejectReason::UnsupportedTarget => "unsupported target",
+            hw_jobs::DeconstructionRejectReason::ConstructionInProgress => {
+                "construction is still in progress"
+            }
+            hw_jobs::DeconstructionRejectReason::Moving => "building is moving",
+            hw_jobs::DeconstructionRejectReason::AlreadyDesignated => "already designated",
+            hw_jobs::DeconstructionRejectReason::OwnerMismatch => "invalid owner state",
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deconstruction_hover_uses_the_domain_salvage_table() {
+        assert_eq!(
+            deconstruction_salvage_label(BuildingType::Bridge),
+            "Salvage: Rock x3"
+        );
+        assert_eq!(
+            deconstruction_salvage_label(BuildingType::SoulSpa),
+            "Salvage: Bone x6"
+        );
+        assert_eq!(
+            deconstruction_salvage_label(BuildingType::SandPile),
+            "Salvage: None"
+        );
+    }
 }

@@ -1,13 +1,16 @@
 //! Task dashboard snapshot adapter.
 
-use super::actions::{TaskCapabilityRefs, resolve_task_action_capabilities};
+use super::actions::{
+    DeconstructionOrderActionQuery, DeconstructionTargetActionQuery, TaskCapabilityRefs,
+    deconstruction_order_is_actionable, resolve_task_action_capabilities,
+};
 use super::dirty::TaskListDirty;
 use super::presenter;
 use crate::systems::jobs::floor_construction::FloorTileBlueprint;
 use crate::systems::jobs::wall_construction::WallTileBlueprint;
 use crate::systems::jobs::{
-    Blueprint, BonePile, Designation, PlayerIssuedDesignation, Priority, Rock, SandPile, Tree,
-    WorkType,
+    Blueprint, BonePile, Building, Designation, PlayerIssuedDesignation, Priority, Rock, SandPile,
+    Tree, WorkType,
 };
 use crate::systems::logistics::ResourceItem;
 use crate::systems::logistics::transport_request::{
@@ -18,12 +21,14 @@ use bevy::prelude::*;
 use hw_core::relationships::{ManagedBy, TaskWorkers};
 use hw_familiar_ai::{AutoGatherDesignation, FamiliarTaskCandidateDiagnostics};
 use hw_jobs::{
-    TaskDiagnosticClass, TaskDiagnosticCounters, TaskDiagnosticCycleHeader,
-    TaskDiagnosticInputRevisions, TaskDiagnosticProducer, TaskDiagnosticProducerMask,
-    TaskDiagnosticRecord,
+    DeconstructionBlockReason, DeconstructionBlocker, TargetSoulSpaSite, TaskDiagnosticClass,
+    TaskDiagnosticCounters, TaskDiagnosticCycleHeader, TaskDiagnosticInputRevisions,
+    TaskDiagnosticProducer, TaskDiagnosticProducerMask, TaskDiagnosticRecord,
 };
 use hw_soul_ai::BlueprintAutoBuildDiagnostics;
-use hw_ui::panels::task_list::{TaskBlockerReason, TaskPriorityTier, TaskStatusSummary};
+use hw_ui::panels::task_list::{
+    TaskBlockerReason, TaskDashboardActionState, TaskPriorityTier, TaskStatusSummary,
+};
 
 pub use hw_ui::panels::task_list::TaskEntry;
 
@@ -68,6 +73,7 @@ struct TaskStatusEvidence<'a> {
     familiar_record: Option<&'a TaskDiagnosticRecord>,
     auto_build_header: Option<&'a TaskDiagnosticCycleHeader>,
     auto_build_record: Option<&'a TaskDiagnosticRecord>,
+    deconstruction_blocker: Option<&'a DeconstructionBlocker>,
     revisions: &'a TaskDiagnosticInputRevisions,
 }
 
@@ -94,6 +100,7 @@ type DesignationQuery<'w, 's> = Query<
         Option<&'static Rock>,
         Option<&'static SandPile>,
         Option<&'static BonePile>,
+        Option<&'static DeconstructionBlocker>,
     ),
 >;
 
@@ -113,6 +120,7 @@ type TaskCapabilityQuery<'w, 's> = Query<
         Option<&'static FloorTileBlueprint>,
         Option<&'static WallTileBlueprint>,
         Option<&'static TransportRequest>,
+        Option<&'static TargetSoulSpaSite>,
     ),
 >;
 
@@ -123,17 +131,33 @@ pub struct TaskListStateUpdateContext<'w> {
     revisions: Res<'w, TaskDiagnosticInputRevisions>,
     dirty: ResMut<'w, TaskListDirty>,
     state: ResMut<'w, TaskListState>,
+    action_state: Option<ResMut<'w, TaskDashboardActionState>>,
     #[cfg(feature = "profiling")]
     perf_metrics: Option<ResMut<'w, TaskDashboardPerfMetrics>>,
 }
 
-pub fn build_task_list_snapshot(
-    designations: &DesignationQuery,
-    capabilities: &TaskCapabilityQuery,
-    familiar_diagnostics: &FamiliarTaskCandidateDiagnostics,
-    auto_build_diagnostics: &BlueprintAutoBuildDiagnostics,
-    revisions: &TaskDiagnosticInputRevisions,
-) -> Vec<TaskEntry> {
+pub struct TaskListSnapshotInputs<'a, 'w, 's> {
+    pub designations: &'a DesignationQuery<'w, 's>,
+    pub capabilities: &'a TaskCapabilityQuery<'w, 's>,
+    pub deconstruction_orders: &'a DeconstructionOrderActionQuery<'w, 's>,
+    pub deconstruction_targets: &'a DeconstructionTargetActionQuery<'w, 's>,
+    pub deconstruction_target_buildings: &'a Query<'w, 's, &'static Building>,
+    pub familiar_diagnostics: &'a FamiliarTaskCandidateDiagnostics,
+    pub auto_build_diagnostics: &'a BlueprintAutoBuildDiagnostics,
+    pub revisions: &'a TaskDiagnosticInputRevisions,
+}
+
+pub fn build_task_list_snapshot(inputs: TaskListSnapshotInputs<'_, '_, '_>) -> Vec<TaskEntry> {
+    let TaskListSnapshotInputs {
+        designations,
+        capabilities,
+        deconstruction_orders,
+        deconstruction_targets,
+        deconstruction_target_buildings,
+        familiar_diagnostics,
+        auto_build_diagnostics,
+        revisions,
+    } = inputs;
     let mut entries = Vec::new();
 
     for (
@@ -150,6 +174,7 @@ pub fn build_task_list_snapshot(
         rock,
         sand_pile,
         bone_pile,
+        deconstruction_blocker,
     ) in designations.iter()
     {
         let work_type = designation.work_type;
@@ -165,6 +190,10 @@ pub fn build_task_list_snapshot(
                 rock,
                 _sand_pile: sand_pile,
                 bone_pile,
+                deconstruction_target: deconstruction_orders
+                    .get(entity)
+                    .ok()
+                    .and_then(|(_, target)| deconstruction_target_buildings.get(target.0).ok()),
             },
         );
         let status = derive_task_status(
@@ -177,6 +206,7 @@ pub fn build_task_list_snapshot(
                 familiar_record: familiar_diagnostics.record(entity),
                 auto_build_header: auto_build_diagnostics.header(),
                 auto_build_record: auto_build_diagnostics.record(entity),
+                deconstruction_blocker,
                 revisions,
             },
         );
@@ -203,6 +233,7 @@ pub fn build_task_list_snapshot(
                     floor_tile,
                     wall_tile,
                     transport_request,
+                    soul_spa_target,
                 )| {
                     resolve_task_action_capabilities(TaskCapabilityRefs {
                         designation,
@@ -217,6 +248,12 @@ pub fn build_task_list_snapshot(
                         floor_tile,
                         wall_tile,
                         transport_request,
+                        soul_spa_target,
+                        deconstruction_order_actionable: deconstruction_order_is_actionable(
+                            entity,
+                            deconstruction_orders,
+                            deconstruction_targets,
+                        ),
                     })
                 },
             ),
@@ -241,6 +278,13 @@ fn derive_task_status(
 ) -> TaskStatusSummary {
     if worker_count > 0 {
         return TaskStatusSummary::Working;
+    }
+    if work_type == WorkType::Deconstruct
+        && let Some(blocker) = evidence
+            .deconstruction_blocker
+            .filter(|blocker| blocker.active)
+    {
+        return TaskStatusSummary::Blocked(map_deconstruction_blocker_reason(blocker.reason));
     }
 
     let producers = TaskDiagnosticProducerMask::for_task(work_type, auto_build_applicable);
@@ -343,6 +387,23 @@ fn map_blocker_reason(class: TaskDiagnosticClass) -> TaskBlockerReason {
     }
 }
 
+const fn map_deconstruction_blocker_reason(reason: DeconstructionBlockReason) -> TaskBlockerReason {
+    match reason {
+        DeconstructionBlockReason::StaleTarget => TaskBlockerReason::DeconstructionStaleTarget,
+        DeconstructionBlockReason::OwnerMismatch => TaskBlockerReason::DeconstructionOwnerMismatch,
+        DeconstructionBlockReason::NoSafeRecovery => {
+            TaskBlockerReason::DeconstructionNoSafeRecovery
+        }
+        DeconstructionBlockReason::InconsistentMixerInventory => {
+            TaskBlockerReason::DeconstructionInconsistentInventory
+        }
+        DeconstructionBlockReason::Moving => TaskBlockerReason::DeconstructionMoving,
+        DeconstructionBlockReason::UnsupportedTarget => {
+            TaskBlockerReason::DeconstructionUnsupportedTarget
+        }
+    }
+}
+
 pub fn build_task_summary(designations: &DesignationQuery) -> (usize, usize) {
     let mut total = 0usize;
     let mut high = 0usize;
@@ -363,21 +424,40 @@ pub fn build_task_summary(designations: &DesignationQuery) -> (usize, usize) {
 pub fn update_task_list_state_system(
     designations: DesignationQuery,
     capabilities: TaskCapabilityQuery,
+    deconstruction_orders: DeconstructionOrderActionQuery,
+    deconstruction_targets: DeconstructionTargetActionQuery,
+    deconstruction_target_buildings: Query<'_, '_, &'static Building>,
     mut context: TaskListStateUpdateContext,
 ) {
     if context.state.initialized && !context.dirty.state_dirty() {
         return;
     }
 
-    let snapshot = build_task_list_snapshot(
-        &designations,
-        &capabilities,
-        &context.familiar_diagnostics,
-        &context.auto_build_diagnostics,
-        &context.revisions,
-    );
+    let snapshot = build_task_list_snapshot(TaskListSnapshotInputs {
+        designations: &designations,
+        capabilities: &capabilities,
+        deconstruction_orders: &deconstruction_orders,
+        deconstruction_targets: &deconstruction_targets,
+        deconstruction_target_buildings: &deconstruction_target_buildings,
+        familiar_diagnostics: &context.familiar_diagnostics,
+        auto_build_diagnostics: &context.auto_build_diagnostics,
+        revisions: &context.revisions,
+    });
     let (summary_total, summary_high) = build_task_summary(&designations);
     let list_changed = !context.state.initialized || snapshot != context.state.snapshot;
+    let mut confirmation_cleared = false;
+    if let Some(action_state) = context.action_state.as_deref_mut()
+        && action_state.confirmation.is_some_and(|pending| {
+            !snapshot.iter().any(|entry| {
+                entry.entity == pending.target
+                    && entry.work_type == pending.expected_work_type
+                    && entry.actions.cancel == Some(pending.kind)
+            })
+        })
+    {
+        action_state.confirmation = None;
+        confirmation_cleared = true;
+    }
     let summary_changed = !context.state.initialized
         || summary_total != context.state.summary_total
         || summary_high != context.state.summary_high;
@@ -406,7 +486,7 @@ pub fn update_task_list_state_system(
     context.state.initialized = true;
     context.dirty.clear_state();
 
-    if !was_initialized || list_changed {
+    if !was_initialized || list_changed || confirmation_cleared {
         context.dirty.mark_list();
     } else {
         context.dirty.clear_list();
@@ -496,6 +576,7 @@ mod tests {
             familiar_record: record,
             auto_build_header: None,
             auto_build_record: None,
+            deconstruction_blocker: None,
             revisions,
         }
     }
@@ -591,6 +672,111 @@ mod tests {
         assert_eq!(
             state.snapshot[0].status,
             TaskStatusSummary::Blocked(TaskBlockerReason::NoEligibleFamiliar)
+        );
+    }
+
+    #[test]
+    fn deconstruction_order_exposes_live_actions_description_and_typed_blocker() {
+        use hw_jobs::{
+            BuildingType, DeconstructionBlockReason, DeconstructionCommitClaim,
+            DeconstructionOrder, DeconstructionPending, PlayerIssuedDesignation,
+            TargetDeconstructionRoot, TaskDiagnosticDomainMask, TaskSlots,
+        };
+        use hw_logistics::zone::Stockpile;
+        use hw_ui::panels::task_list::{
+            PendingTaskCancellation, TaskCancelKind, TaskDashboardActionState,
+        };
+
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<FamiliarTaskCandidateDiagnostics>()
+            .init_resource::<BlueprintAutoBuildDiagnostics>()
+            .init_resource::<TaskDiagnosticInputRevisions>()
+            .init_resource::<TaskListDirty>()
+            .init_resource::<TaskListState>()
+            .init_resource::<TaskDashboardActionState>()
+            .add_systems(Update, update_task_list_state_system);
+        let target = app
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Tank,
+                    is_provisional: false,
+                },
+                Stockpile {
+                    capacity: 10,
+                    resource_type: Some(hw_logistics::ResourceType::Water),
+                },
+            ))
+            .id();
+        let order = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                DeconstructionOrder,
+                Designation {
+                    work_type: WorkType::Deconstruct,
+                },
+                PlayerIssuedDesignation,
+                Priority(5),
+                TaskSlots::new(1),
+                TargetDeconstructionRoot(target),
+            ))
+            .id();
+        app.world_mut().flush();
+        app.world_mut()
+            .entity_mut(target)
+            .insert(DeconstructionPending { order });
+
+        app.update();
+
+        let entry = &app.world().resource::<TaskListState>().snapshot[0];
+        assert_eq!(entry.description, "Deconstruct Tank");
+        assert!(entry.actions.priority);
+        assert_eq!(
+            entry.actions.cancel,
+            Some(TaskCancelKind::DeconstructionOrder)
+        );
+
+        app.world_mut()
+            .entity_mut(order)
+            .insert(DeconstructionBlocker::pending(
+                DeconstructionBlockReason::NoSafeRecovery,
+                TaskDiagnosticDomainMask::AVAILABILITY,
+            ));
+        app.world_mut().resource_mut::<TaskListDirty>().mark_all();
+        app.update();
+        assert_eq!(
+            app.world().resource::<TaskListState>().snapshot[0].status,
+            TaskStatusSummary::Blocked(TaskBlockerReason::DeconstructionNoSafeRecovery)
+        );
+
+        app.world_mut()
+            .resource_mut::<TaskDashboardActionState>()
+            .confirmation = Some(PendingTaskCancellation {
+            target: order,
+            expected_work_type: WorkType::Deconstruct,
+            kind: TaskCancelKind::DeconstructionOrder,
+        });
+        app.world_mut()
+            .entity_mut(target)
+            .insert(DeconstructionCommitClaim {
+                world_epoch: 0,
+                order,
+            });
+        app.world_mut().resource_mut::<TaskListDirty>().mark_all();
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<TaskListState>().snapshot[0].actions,
+            hw_ui::panels::task_list::TaskActionCapabilities::READ_ONLY
+        );
+        assert!(
+            app.world()
+                .resource::<TaskDashboardActionState>()
+                .confirmation
+                .is_none(),
+            "a disappeared cancel capability must invalidate its two-click confirmation",
         );
     }
 
@@ -789,6 +975,7 @@ mod tests {
                     familiar_record: Some(&familiar_record),
                     auto_build_header: Some(&zero_auto),
                     auto_build_record: None,
+                    deconstruction_blocker: None,
                     revisions: &revisions,
                 },
             ),
@@ -813,6 +1000,7 @@ mod tests {
                     familiar_record: Some(&familiar_record),
                     auto_build_header: Some(&auto_header),
                     auto_build_record: Some(&auto_record),
+                    deconstruction_blocker: None,
                     revisions: &revisions,
                 },
             ),
@@ -861,6 +1049,7 @@ mod tests {
                     familiar_record: Some(&policy),
                     auto_build_header: None,
                     auto_build_record: None,
+                    deconstruction_blocker: None,
                     revisions: &revisions,
                 },
             ),

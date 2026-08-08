@@ -3,6 +3,15 @@ from __future__ import annotations
 from .model import *
 from .rtt_light_contract import *
 
+
+# A CPU-only headless audit deliberately has no hardware renderer. Bevy emits
+# this warning before the deterministic fixture begins; it is expected only
+# for the fixed deconstruction workload and must not hide other log failures.
+DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING = (
+    r"selected adapter is using a driver that only supports software rendering"
+)
+
+
 def add_run_arguments(
     parser: argparse.ArgumentParser,
     *,
@@ -21,6 +30,7 @@ def add_run_arguments(
             "ui-gpu",
             "task-dashboard",
             "indoor-light",
+            "deconstruction",
         ],
     )
     parser.add_argument("--contract", choices=sorted(CONTRACT_FILES))
@@ -357,6 +367,35 @@ def validate_arguments(args: argparse.Namespace) -> None:
             "task-dashboard requires familiar policy baseline and operation dialog hidden"
         )
     selected_rtt_light = args.contract is not None or args.stage is not None or args.lane is not None
+    if args.workload == "deconstruction":
+        if args.command != "audit":
+            raise ValueError("deconstruction is only available through the fixed-step audit")
+        if selected_rtt_light:
+            raise ValueError("deconstruction does not accept an RtT-light contract selection")
+        if sizes != ["medium"] or renders != ["cpu"]:
+            raise ValueError("deconstruction requires --sizes medium --renders cpu")
+        if args.window_backend != "headless":
+            raise ValueError("deconstruction requires --window-backend headless")
+        if (
+            familiar_policies != ["baseline"]
+            or operation_dialog_modes != ["hidden"]
+            or dashboard_modes != ["hidden"]
+        ):
+            raise ValueError(
+                "deconstruction requires familiar policy baseline, operation dialog hidden, and dashboard hidden"
+            )
+        if args.souls is not None or args.familiars is not None:
+            raise ValueError("deconstruction uses the fixed medium population; overrides are forbidden")
+        if args.allow_log_pattern not in (
+            [],
+            [DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING],
+        ):
+            raise ValueError(
+                "deconstruction uses its fixed headless software-renderer allowance; "
+                "custom --allow-log-pattern is forbidden"
+            )
+        args.allow_log_pattern = [DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING]
+        return
     if args.workload != "indoor-light":
         if selected_rtt_light:
             raise ValueError(

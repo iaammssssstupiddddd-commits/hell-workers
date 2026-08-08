@@ -368,7 +368,9 @@ pub(crate) fn floor_construction_completion_system(
             tile_count += 1;
         }
 
-        // Curing is complete: the completed floor becomes durable map state.
+        // Curing is complete: tile becomes walkable and the completed floor
+        // becomes the durable logical owner used by save validation and
+        // deconstruction cleanup.
         register_completed_floors(&mut world_map, &completed_buildings);
 
         // Despawn site

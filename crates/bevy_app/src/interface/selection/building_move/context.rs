@@ -45,7 +45,12 @@ pub struct BuildMoveState<'w> {
 
 #[derive(SystemParam)]
 pub struct BuildMoveQueries<'w, 's> {
-    pub q_buildings: Query<'w, 's, (Entity, &'static Building, &'static Transform)>,
+    pub q_buildings: Query<
+        'w,
+        's,
+        (Entity, &'static Building, &'static Transform),
+        Without<hw_jobs::DeconstructionPending>,
+    >,
     pub q_bucket_storages: Query<
         'w,
         's,

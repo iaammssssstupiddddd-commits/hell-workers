@@ -20,6 +20,17 @@ impl WorldMap {
         self.buildings.remove(&grid)
     }
 
+    /// Clears only the owner-bearing building layer when it still belongs to
+    /// `entity`. Passable facilities such as Soul Spa and Outdoor Lamp use
+    /// this path so their removal never erases an unrelated raw obstacle bit.
+    pub fn clear_building_if_owned(&mut self, grid: (i32, i32), entity: Entity) -> bool {
+        if self.building_entity(grid) != Some(entity) {
+            return false;
+        }
+        self.clear_building(grid);
+        true
+    }
+
     pub fn set_building_occupancy(&mut self, grid: (i32, i32), entity: Entity) {
         self.set_building(grid, entity);
         self.add_obstacle(grid.0, grid.1);
@@ -51,10 +62,10 @@ impl WorldMap {
     }
 
     pub fn clear_building_occupancy_if_owned(&mut self, grid: (i32, i32), entity: Entity) -> bool {
-        if self.building_entity(grid) != Some(entity) {
+        if !self.clear_building_if_owned(grid, entity) {
             return false;
         }
-        self.clear_building_occupancy(grid);
+        self.remove_obstacle(grid.0, grid.1);
         true
     }
 
@@ -182,5 +193,28 @@ mod tests {
         assert_eq!(map.building_entity(grid), Some(building));
         assert!(!map.has_raw_obstacle(grid.0, grid.1));
         assert!(map.is_walkable(grid.0, grid.1));
+    }
+
+    #[test]
+    fn owner_safe_passable_clear_preserves_an_unrelated_raw_obstacle() {
+        let mut map = WorldMap::default();
+        let grid = (14, 15);
+        let owner = Entity::from_bits(3);
+        let replacement = Entity::from_bits(4);
+        map.set_building(grid, replacement);
+        map.add_grid_obstacle(grid);
+        let version = map.obstacle_version;
+
+        assert!(!map.clear_building_if_owned(grid, owner));
+        assert_eq!(map.building_entity(grid), Some(replacement));
+        assert!(map.has_raw_obstacle(grid.0, grid.1));
+        assert_eq!(map.obstacle_version, version);
+
+        map.set_building(grid, owner);
+        assert!(map.clear_building_if_owned(grid, owner));
+        assert_eq!(map.building_entity(grid), None);
+        assert!(map.has_raw_obstacle(grid.0, grid.1));
+        assert!(!map.is_walkable(grid.0, grid.1));
+        assert_eq!(map.obstacle_version, version);
     }
 }

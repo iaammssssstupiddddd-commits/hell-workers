@@ -25,6 +25,31 @@ impl WorldMap {
         }
     }
 
+    /// Removes a completed door from every WorldMap layer only when all
+    /// owner-bearing entries still belong to `entity`.
+    ///
+    /// Deconstruction uses this instead of composing `remove_door` with a
+    /// separate building clear: a partially replaced door must remain wholly
+    /// untouched rather than clearing another owner's occupancy.
+    pub fn clear_door_if_owned(&mut self, grid: (i32, i32), entity: Entity) -> bool {
+        if self.doors.get(&grid) != Some(&entity)
+            || self.buildings.get(&grid) != Some(&entity)
+            || !self.door_states.contains_key(&grid)
+        {
+            return false;
+        }
+
+        let was_walkable = self.is_walkable(grid.0, grid.1);
+        self.doors.remove(&grid);
+        self.door_states.remove(&grid);
+        self.buildings.remove(&grid);
+        self.set_obstacle_at(grid.0, grid.1, false);
+        if was_walkable != self.is_walkable(grid.0, grid.1) {
+            self.bump_obstacle_version();
+        }
+        true
+    }
+
     pub fn set_door_state(&mut self, x: i32, y: i32, state: DoorState) {
         if self.doors.contains_key(&(x, y)) {
             self.sync_door_passability((x, y), state);
@@ -116,5 +141,65 @@ mod tests {
         map.sync_door_passability(grid, DoorState::Closed);
         assert_eq!(map.obstacle_version, version + 2);
         assert!(map.is_walkable(grid.0, grid.1));
+    }
+
+    #[test]
+    fn owner_safe_clear_is_all_or_none_across_door_layers() {
+        let mut map = WorldMap::default();
+        let grid = (6, 7);
+        let owner = Entity::from_bits(1);
+        let replacement = Entity::from_bits(2);
+        map.register_door(grid, owner, DoorState::Locked);
+        map.set_building(grid, replacement);
+        let mismatch_version = map.obstacle_version;
+
+        assert!(!map.clear_door_if_owned(grid, owner));
+        assert_eq!(map.door_entity(grid.0, grid.1), Some(owner));
+        assert_eq!(map.building_entity(grid), Some(replacement));
+        assert_eq!(map.door_state(grid.0, grid.1), Some(DoorState::Locked));
+        assert!(map.has_raw_obstacle(grid.0, grid.1));
+        assert!(!map.is_walkable(grid.0, grid.1));
+        assert_eq!(map.obstacle_version, mismatch_version);
+
+        map.set_building(grid, owner);
+        let version = map.obstacle_version;
+        assert!(map.clear_door_if_owned(grid, owner));
+        assert_eq!(map.door_entity(grid.0, grid.1), None);
+        assert_eq!(map.building_entity(grid), None);
+        assert_eq!(map.door_state(grid.0, grid.1), None);
+        assert_eq!(map.obstacle_version, version + 1);
+        assert!(map.is_walkable(grid.0, grid.1));
+    }
+
+    #[test]
+    fn clearing_a_closed_door_over_river_restores_blocked_terrain() {
+        let mut map = WorldMap::default();
+        let grid = (7, 8);
+        let index = map.pos_to_idx(grid.0, grid.1).unwrap();
+        map.tiles[index] = crate::TerrainType::River;
+        let owner = Entity::from_bits(3);
+        map.register_door(grid, owner, DoorState::Closed);
+        assert!(map.is_walkable(grid.0, grid.1));
+
+        let version = map.obstacle_version;
+        assert!(map.clear_door_if_owned(grid, owner));
+
+        assert!(!map.is_walkable(grid.0, grid.1));
+        assert!(!map.has_raw_obstacle(grid.0, grid.1));
+        assert_eq!(map.obstacle_version, version + 1);
+    }
+
+    #[test]
+    fn clearing_a_closed_door_on_grass_keeps_topology_generation() {
+        let mut map = WorldMap::default();
+        let grid = (8, 9);
+        let owner = Entity::from_bits(4);
+        map.register_door(grid, owner, DoorState::Closed);
+        let version = map.obstacle_version;
+
+        assert!(map.clear_door_if_owned(grid, owner));
+
+        assert!(map.is_walkable(grid.0, grid.1));
+        assert_eq!(map.obstacle_version, version);
     }
 }

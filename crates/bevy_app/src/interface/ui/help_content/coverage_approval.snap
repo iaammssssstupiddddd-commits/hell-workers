@@ -30,22 +30,23 @@ entry|topic="familiar-commands"|id="familiar-designations"|title="作業指定"|
 entry|topic="familiar-commands"|id="familiar-idle-patrol"|title="Idle / Patrol"|paragraphs=["通常状態の Familiar を選択中に、Idle と Patrol を切り替えられます。"]|shortcut=Some("Esc")
 topic|feature="soul-energy"|owner="soul-energy"|section="familiars-workers"|id="soul-energy"|title="Soul Energy"
 entry|topic="soul-energy"|id="soul-energy-status"|title="Yard の電力網を確認する"|paragraphs=["電力は Yard ごとのリアルタイムな発電量と需要で決まり、蓄電はしません。", "Outdoor Lamp を選ぶと、接続、発電・供給済み需要・予備力または不足量、設備件数、供給状態と遮断順を確認できます。供給不足時は High、Normal、Low の順で給電し、同じ優先度では位置順に遮断します。", "情報パネルの Priority ボタンで設備の優先度を変更できます。Settings の Power priority allocation を無効にすると、需要超過時は接続中の全設備が停止する従来方式へ戻ります。"]|shortcut=None
-entry|topic="soul-energy"|id="soul-energy-recovery"|title="Soul Spa で発電する"|paragraphs=["Yard 内に Soul Spa を建てて選択すると Bone の搬入進捗を確認できます。Operational になると出力と電力網が表示され、発電枠へ Soul が入れます。", "情報パネルの Active slots は 0〜4 で変更できます。稼働数より小さくしても作業中の Soul は追い出さず、終了後の新規割り当てだけを設定枠まで止めます。", "発電中の Soul は Dream を消費します。Lamp を増やしたら、発電量、Soul の Dream、Yard への接続を一緒に確認してください。"]|shortcut=None
+entry|topic="soul-energy"|id="soul-energy-recovery"|title="Soul Spa で発電する"|paragraphs=["Yard 内に Soul Spa を建てて選択すると Bone の搬入進捗を確認できます。建設中は情報パネルまたは搬入タスクからキャンセルでき、実際に搬入済みの Bone だけをすべて返します。一時停止中は再開してからキャンセルしてください。Operational になると出力と電力網が表示され、発電枠へ Soul が入れます。", "情報パネルの Active slots は 0〜4 で変更できます。稼働数より小さくしても作業中の Soul は追い出さず、終了後の新規割り当てだけを設定枠まで止めます。", "発電中の Soul は Dream を消費します。Lamp を増やしたら、発電量、Soul の Dream、Yard への接続を一緒に確認してください。"]|shortcut=None
 topic|feature="info-panel"|owner="familiar-management"|section="familiars-workers"|id="info-panel"|title="情報パネル"
 entry|topic="info-panel"|id="info-panel-pin"|title="表示を固定する"|paragraphs=["情報パネルを pin すると、ポインターを別の対象へ動かしても表示対象を維持します。", "unpin すると現在の hover / selection に追従します。"]|shortcut=None
 entry|topic="info-panel"|id="soul-rename"|title="Soul の名前変更"|paragraphs=["Soul の情報パネルから名前を編集できます。Enter で確定、Esc でキャンセルします。"]|shortcut=Some("Enter / Esc")
 section|id="orders-building-zones"|title="タスク・建築・ゾーン・Dream"
 topic|feature="orders-areas"|owner="orders-building"|section="orders-building-zones"|id="orders-areas"|title="Orders と範囲編集"
 entry|topic="orders-areas"|id="orders-designation"|title="タスクを指定する"|paragraphs=["下部の Orders から作業を選び、対象をクリックまたは範囲ドラッグします。", "未確定の操作または開いているメニューは、その時点の入力文脈に応じて解除できます。"]|shortcut=Some("Esc")
+entry|topic="orders-areas"|id="building-deconstruction"|title="完成した建物を解体する"|paragraphs=["Orders の Deconstruct を選び、完成した建物をクリックします。カーソル表示で対象にできるかと、指定できない理由を確認できます。", "指示は専用タスクとして Tasks に追加されます。優先度の変更と確認付きキャンセルができ、解体を許可した Familiar が担当します。", "カーソルには固定回収量も表示されます。Wall・Door・Tank・WheelbarrowParking は Wood×1、MudMixer・RestArea は Wood×2、Floor・OutdoorLamp は Bone×1、BonePile は Bone×5、SoulSpa は Bone×6、Bridge は Rock×3、SandPile は回収なしです。", "設備内の資材や利用中の対象を安全に退避できない間は、建物を残したまま理由付きで待機します。Wall、Door、Floor、Bridge、Operational Soul Spa、Outdoor Lamp も対象になり、通路・部屋・電力網は撤去後に再計算されます。指定結果と解体結果は通知にも表示されます。"]|shortcut=Some("Esc")
 entry|topic="orders-areas"|id="area-edit"|title="Task Area を編集する"|paragraphs=["範囲編集では copy / paste、undo / redo、3つの preset 保存・読込を利用できます。", "3つの preset は保存用と読込用のショートカットから使い分けます。"]|shortcut=Some("Ctrl+C / Ctrl+V / Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z / Ctrl+1 / Ctrl+2 / Ctrl+3 / Alt+1 / Alt+2 / Alt+3")
 topic|feature="building-zones-dream"|owner="orders-building"|section="orders-building-zones"|id="building-zones-dream"|title="建築・ゾーン・Dream"
-entry|topic="building-zones-dream"|id="architect-building"|title="Architect で建築"|paragraphs=["建物を選び、world 上で配置します。Floor と Wall は範囲を指定して施工予定を作ります。", "必要資源が届くと、担当可能な Soul が工程を進めます。", "Outdoor Lamp は通行できますが建物としてタイルを占有するため、同じ場所へ別の建物を重ねて配置できません。"]|shortcut=Some("B")
+entry|topic="building-zones-dream"|id="architect-building"|title="Architect で建築"|paragraphs=["建物を選び、world 上で配置します。Floor と Wall は範囲を指定して施工予定を作ります。", "必要資源が届くと、担当可能な Soul が工程を進めます。", "Floor を Wall と Door で囲むと Room の境界が表示されます。完成した設備を床上に置いても Room は維持されます。", "Outdoor Lamp は通行できますが建物としてタイルを占有するため、同じ場所へ別の建物を重ねて配置できません。"]|shortcut=Some("B")
 entry|topic="building-zones-dream"|id="zones-workflow"|title="Zones で保管範囲を作る"|paragraphs=["Stockpile は新しい保管範囲を作成でき、Yard は既存範囲を拡張できます。Remove は Stockpile の削除に使います。", "Stockpile の対象資源、目標量、優先度、持出可否は情報パネルから変更できます。"]|shortcut=Some("Z")
 entry|topic="building-zones-dream"|id="dream-planting"|title="Dream で植樹"|paragraphs=["Dream の Plant Trees を選び、植える範囲を指定します。必要な Dream と成立条件を確認してください。"]|shortcut=None
 topic|feature="task-dashboard"|owner="orders-building"|section="orders-building-zones"|id="task-dashboard"|title="タスク一覧"
 entry|topic="task-dashboard"|id="task-dashboard-focus"|title="仕事の場所を確認する"|paragraphs=["左パネルを Tasks に切り替え、行を選ぶと該当する仕事へフォーカスできます。"]|shortcut=None
 entry|topic="task-dashboard"|id="task-dashboard-filter-sort"|title="絞り込みと並べ替え"|paragraphs=["Type / State / Priority / Workers の条件を順に切り替えて、表示する仕事を絞り込めます。", "Sort と Order では、仕事種別・状態・優先度・担当数の並び順と昇順／降順を変更できます。"]|shortcut=None
-entry|topic="task-dashboard"|id="task-dashboard-actions"|title="優先度変更とキャンセル"|paragraphs=["変更可能なタスクだけ優先度を調整できます。キャンセルは確認を経て実行されます。"]|shortcut=None
+entry|topic="task-dashboard"|id="task-dashboard-actions"|title="優先度変更とキャンセル"|paragraphs=["変更可能なタスクだけ優先度を調整できます。Deconstruct を含むキャンセルは確認を経て実行され、状態が変わって受理できない場合は理由が通知されます。"]|shortcut=None
 section|id="save-settings-notifications"|title="保存・設定・通知"
 topic|feature="save-settings-notifications"|owner="persistence-settings"|section="save-settings-notifications"|id="save-settings-notifications"|title="保存・設定・通知"
 entry|topic="save-settings-notifications"|id="save-load"|title="保存と読込"|paragraphs=["現在の単一セーブへ保存するか、読込確認を開きます。", "読込は現在の world を置き換えるため、確認ダイアログを経て実行されます。", "読込後は建築進捗と Familiar 設定を復元し、進行中の担当・運搬を安全な待機状態へ戻して再割り当てします。猫車の積載資材は車両付近へ荷下ろしされます。", "不正なセーブ内容は現在の world を置き換える前に拒否します。適用途中で失敗した場合は、直前の world の復旧を試みます。"]|shortcut=Some("F5 / F9")
@@ -186,6 +187,7 @@ coverage|task-mode::area-selection|player|published:entry:area-edit
 coverage|task-mode::assign-task|player|published:entry:orders-designation
 coverage|task-mode::cancel-designation|player|published:entry:orders-designation
 coverage|task-mode::designate-chop|player|published:entry:orders-designation
+coverage|task-mode::designate-deconstruct|player|published:entry:building-deconstruction
 coverage|task-mode::designate-haul|player|published:entry:orders-designation
 coverage|task-mode::designate-mine|player|published:entry:orders-designation
 coverage|task-mode::dream-planting|player|published:entry:dream-planting
@@ -277,6 +279,7 @@ coverage|ui-intent::settings-power-priority|player|published:entry:settings
 coverage|ui-intent::settings-toggle|player|published:entry:settings
 coverage|ui-intent::settings-ui-scale|player|published:entry:settings
 coverage|ui-intent::soul-spa-active-slots|player|published:entry:soul-energy-recovery
+coverage|ui-intent::soul-spa-construction-cancel|player|published:entry:soul-energy-recovery
 coverage|ui-intent::stockpile-policy-range|player|published:entry:zones-workflow
 coverage|ui-intent::stockpile-policy|player|published:entry:zones-workflow
 coverage|ui-intent::task-cancel|player|published:entry:task-dashboard-actions
@@ -284,6 +287,7 @@ coverage|ui-intent::task-mode-area-selection|player|published:entry:area-edit
 coverage|ui-intent::task-mode-assign-task|player|published:entry:orders-designation
 coverage|ui-intent::task-mode-cancel-designation|player|published:entry:orders-designation
 coverage|ui-intent::task-mode-designate-chop|player|published:entry:orders-designation
+coverage|ui-intent::task-mode-designate-deconstruct|player|published:entry:building-deconstruction
 coverage|ui-intent::task-mode-designate-haul|player|published:entry:orders-designation
 coverage|ui-intent::task-mode-designate-mine|player|published:entry:orders-designation
 coverage|ui-intent::task-mode-dream-planting|player|published:entry:dream-planting
@@ -304,6 +308,7 @@ coverage|work-type::build|player|published:entry:task-dashboard-focus
 coverage|work-type::chop|player|published:entry:task-dashboard-focus
 coverage|work-type::coat-wall|player|published:entry:task-dashboard-focus
 coverage|work-type::collect-bone|player|published:entry:task-dashboard-focus
+coverage|work-type::deconstruct|player|published:entry:building-deconstruction
 coverage|work-type::frame-wall-tile|player|published:entry:task-dashboard-focus
 coverage|work-type::gather-water|player|published:entry:task-dashboard-focus
 coverage|work-type::generate-power|player|published:entry:task-dashboard-focus

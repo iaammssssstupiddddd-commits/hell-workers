@@ -29,6 +29,7 @@ pub enum TaskMode {
     DesignateChop(Option<Vec2>),
     DesignateMine(Option<Vec2>),
     DesignateHaul(Option<Vec2>),
+    DesignateDeconstruct(Option<Vec2>),
     CancelDesignation(Option<Vec2>),
     SelectBuildTarget,
     AreaSelection(Option<Vec2>),

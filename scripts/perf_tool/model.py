@@ -40,6 +40,22 @@ RENDER_INVENTORY_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_FIXTURE_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_LAYOUT_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_PRESENTATION_SCHEMA_VERSION = "1"
+DECONSTRUCTION_FIXTURE_SCHEMA_VERSION = "2"
+DECONSTRUCTION_FIXTURE_COLUMNS = (
+    "schema_version",
+    "initial_completed_buildings",
+    "final_completed_buildings",
+    "building_type_count",
+    "commit_requests",
+    "committed",
+    "recovery_items",
+    "commit_validation_passes",
+    "successful_cleanup_transactions",
+    "recovery_items_spawned",
+    "post_commit_updates",
+    "steady_state_validation_delta",
+    "successful_transaction_elapsed_ns",
+)
 BEHAVIOR_TIMELINE_SCHEMA_VERSION = 1
 DEFAULT_SEED = 20_260_712
 SCENE_ROOT_COLUMNS = (
@@ -441,6 +457,7 @@ class Validation:
     indoor_light_fixture: dict[str, str] | None = None
     indoor_light_layout: list[dict[str, str]] | None = None
     indoor_light_presentation: list[dict[str, str]] | None = None
+    deconstruction_fixture: dict[str, str] | None = None
     timeline: list[dict[str, Any]] | None = None
     behavior_save_artifact: dict[str, Any] | None = None
     profile_artifact: dict[str, Any] | None = None
@@ -461,6 +478,7 @@ class Validation:
             "indoor_light_fixture": self.indoor_light_fixture,
             "indoor_light_layout": self.indoor_light_layout,
             "indoor_light_presentation": self.indoor_light_presentation,
+            "deconstruction_fixture": self.deconstruction_fixture,
             "timeline": self.timeline,
             "behavior_save_artifact": self.behavior_save_artifact,
             "profile_artifact": self.profile_artifact,

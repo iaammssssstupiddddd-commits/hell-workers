@@ -35,4 +35,5 @@ pub enum SoulTaskPhaseVisual {
     HaulToMixer,
     HaulWithWheelbarrow,
     GeneratePower,
+    Deconstruct,
 }

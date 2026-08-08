@@ -4,7 +4,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use hw_core::relationships::{IncomingDeliveries, ManagedBy, StoredItems, TaskWorkers};
-use hw_jobs::{Designation, MovePlanned, Priority, TaskSlots, WorkType};
+use hw_jobs::{DeconstructionPending, Designation, MovePlanned, Priority, TaskSlots, WorkType};
 
 use crate::resource_cache::SharedResourceCache;
 use crate::transport_request::producer::active_unit_cache::{
@@ -93,6 +93,7 @@ pub struct BucketAutoHaulParams<'w, 's> {
         ),
     >,
     pub q_move_planned: Query<'w, 's, (), With<MovePlanned>>,
+    pub q_deconstruction_pending: Query<'w, 's, (), With<DeconstructionPending>>,
 }
 
 pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) {
@@ -143,7 +144,9 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
 
     let mut desired_requests = std::collections::HashMap::<Entity, DesiredBucketReturn>::new();
     for (tank_entity, demand) in tank_demands.iter() {
-        if p.q_move_planned.get(*tank_entity).is_ok() {
+        if p.q_move_planned.get(*tank_entity).is_ok()
+            || p.q_deconstruction_pending.get(*tank_entity).is_ok()
+        {
             continue;
         }
         let Ok((tank_transform, tank_stockpile)) = p.q_tanks.get(*tank_entity) else {
@@ -287,5 +290,76 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
             TransportRequestState::Pending,
             TransportPolicy::default(),
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_world::Yard;
+
+    fn spawn_tank_with_dropped_bucket(app: &mut App, x: f32) -> Entity {
+        let tank = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(x, 0.0, 0.0),
+                Stockpile {
+                    capacity: 12,
+                    resource_type: Some(ResourceType::Water),
+                },
+            ))
+            .id();
+        app.world_mut().spawn((
+            BucketStorage,
+            BelongsTo(tank),
+            Stockpile {
+                capacity: 1,
+                resource_type: None,
+            },
+        ));
+        app.world_mut().spawn((
+            Visibility::Visible,
+            ResourceItem(ResourceType::BucketEmpty),
+            BelongsTo(tank),
+        ));
+        tank
+    }
+
+    #[test]
+    fn pending_tank_produces_no_bucket_return_request_while_live_tank_does() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<SharedResourceCache>()
+            .init_resource::<CachedActiveFamiliars>()
+            .init_resource::<CachedActiveYards>()
+            .add_systems(Update, bucket_auto_haul_system);
+        let yard_entity = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .resource_mut::<CachedActiveYards>()
+            .data
+            .push((
+                yard_entity,
+                Yard {
+                    min: Vec2::splat(-100.0),
+                    max: Vec2::splat(100.0),
+                },
+            ));
+        let pending = spawn_tank_with_dropped_bucket(&mut app, 0.0);
+        let live = spawn_tank_with_dropped_bucket(&mut app, 20.0);
+        let order = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .entity_mut(pending)
+            .insert(DeconstructionPending { order });
+        app.world_mut().flush();
+
+        app.update();
+
+        let mut requests = app.world_mut().query::<&TransportRequest>();
+        let anchors = requests
+            .iter(app.world())
+            .filter(|request| request.kind == TransportRequestKind::ReturnBucket)
+            .map(|request| request.anchor)
+            .collect::<Vec<_>>();
+        assert_eq!(anchors, vec![live]);
     }
 }

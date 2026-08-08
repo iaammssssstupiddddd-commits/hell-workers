@@ -182,6 +182,7 @@ fn task_mode_has_in_progress_gesture(task_mode: TaskMode) -> bool {
         TaskMode::DesignateChop(Some(_))
             | TaskMode::DesignateMine(Some(_))
             | TaskMode::DesignateHaul(Some(_))
+            | TaskMode::DesignateDeconstruct(Some(_))
             | TaskMode::CancelDesignation(Some(_))
             | TaskMode::AreaSelection(Some(_))
             | TaskMode::AssignTask(Some(_))

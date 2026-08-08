@@ -122,6 +122,11 @@ HELL_WORKERS_SAVE
 - Soul Spa `active_slots` と `PowerConsumerPolicy` も同じv1 additive migrationである。旧consumerの欠落policyは
   `Normal`、Soul Spaの範囲外slotは0〜4へ正規化する。`PowerSupplyState`、`Unpowered`、grid allocation summaryは
   正本ではないため保存せず、load/rollback後のenergy transactionで再構築する。
+- `DeconstructionOrder`とそのRelationshipもv1 bodyへのadditive component追加である。新しい実行ファイルは
+  これらを持たない既存v0/v1を読み続ける。orderを含む新v1を旧実行ファイルが読むforward compatibilityは保証しない。
+- `WorldMap.floors`も`#[serde(default)]`付きのv1 additive fieldである。旧v0/v1 bodyでfieldが欠落する場合、
+  completed Floorのcanonical Transformと旧`WorldMap.buildings` ownerをcandidateで照合し、
+  `DurableNormalize`で旧building entryをowner-safeに解除してstackableなfloor lookupを再構築する。
 - 書き込みは同一ディレクトリの `create_new` で確保した一意 temp file を `sync_all` した後に rename する。固定 `.tmp` 名を共有しないため、並列 test や別プロセスと temp file 名が衝突しない。保存先そのものの複数プロセス排他はこの機構の対象外である。
 
 ## 保存対象
@@ -139,14 +144,15 @@ HELL_WORKERS_SAVE
 - Soul / Familiar（`DamnedSoul`, `SoulIdentity`, `Familiar`）。Familiar ごとの
   `FamiliarOperation` と `FamiliarPolicy` は durable simulation state として保存する
 - タスク・建築（`Designation`, `Priority`, 手動 Chop / Mine の positive provenance
-  `PlayerIssuedDesignation`, `Blueprint`, `Building`, construction site 等）
+  `PlayerIssuedDesignation`, `DeconstructionOrder`, `TargetDeconstructionRoot` / `DeconstructionOrders`,
+  `Blueprint`, `Building`, construction site 等）
 - 物流（`ResourceItem`, `Stockpile`, `StockpilePolicy`, `TransportRequest`, `Wheelbarrow` 等）
 - エネルギー（`PowerGrid`, `SoulSpaSite.active_slots`, `PowerConsumerPolicy` 等）
 - ワールド採取対象・ゾーン（`Tree`, `Rock`, `Tile`, `Site`, `Yard`, `PairedSite`/`PairedYard`）
 
 各 Entity に付く **永続 simulation state の Relationship Source / Target**（runtime-derived obstacle marker / mirror と transient gathering relationship を除く）、および `Transform` 等の allow-list コンポーネントも保存する。
 
-`WorldMap` は Resource として保存し、内部の Entity 参照（`buildings`, `doors`, `stockpiles`, `tile_entities`）は `map_world_map_entities` で remap する。
+`WorldMap` は Resource として保存し、内部の Entity 参照（`buildings`, `floors`, `doors`, `stockpiles`, `tile_entities`）は `map_world_map_entities` で remap する。
 
 ### 保存しないもの
 
@@ -154,6 +160,7 @@ HELL_WORKERS_SAVE
 | --- | --- | --- |
 | 実行中タスク状態 | `AssignedTask`, `Path`, `Destination`, `FamiliarAiState`, `ActiveCommand` | Soul へ `AssignedTask::None` を付与し、shell 側で runtime state を再挿入する。Familiar は durable な `TaskArea` があれば `Patrol`、なければ `Idle` として再開し、Designation から再割当する |
 | タスク／物流の実行edge | `WorkingOn` / `TaskWorkers`、`DeliveringTo` / `IncomingDeliveries`、`PushedBy` / `PushingWheelbarrow`、`TransportRequestState`、`WheelbarrowLease`、`WheelbarrowPendingSince` | legacy bodyではschema検証前に除去する。全requestを`Pending`、`TransportDemand.inflight = 0`へ戻し、Soul inventoryとwheelbarrowをowner契約に沿って解放して通常の割当・仲裁へ戻す |
+| 解体runtime gate | `DeconstructionPending`, `DeconstructionCommitClaim` | 旧値を除去し、validated `DeconstructionOrder` Relationshipからpendingだけを再構築する。commit claimは再利用しない |
 | 期限付きitem runtime | `ItemDespawnTimer` | 保存せず、全Sand/StasisMudへload時にfresh 5秒timerを1つ付与する。通常runtimeでは`LoadedIn` / `StoredIn` / `DeliveringTo` / `StoredByMixer`中に既存lifetime systemが停止するが、load境界の積載物は安全に荷下ろしされるためtimerが地面で開始する |
 | 派生キャッシュ | 空間グリッド、`SharedResourceCache`、`ReservationSignatureCache`、transport producer cache、`CachedStockpileGroups`、`ObstaclePositionIndex`、task input revisions、Familiar/Blueprint/wheelbarrow diagnostics | root reset hookでdefault化する。予約同期 timerもresetし、次のPerceiveが初回同期として完全snapshot/診断cycleを再構築 |
 | runtime obstacle provenance / navigation cache | `ObstacleSourceKind`、`BuildingFootprint`、`ObstaclePositionIndex`、raw `WorldMap.obstacles` / `doors` / `bridged_tiles` | `rehydrate_obstacle_runtime` が durable semantic source から marker / cache を再構築。保存済み Door state は最終 override として使う |
@@ -187,6 +194,10 @@ Reflect 登録、`DynamicWorldBuilder` の allow-list、root entity の収集を
 legacy bodyのdeserializeのため維持するが、新規saveのallow-listには含めない。deserialize後かつschema
 検証前にこれらを除去するため、旧bodyが持つ消滅済みEntity参照、stale claim、stale供給結果をlive worldへ渡さない。
 `ManagedBy` / `ManagedTasks`、`ParkedAt` / `ParkedWheelbarrows`はload後も残すdurableなowner関係として保存する。
+`TargetDeconstructionRoot` / `DeconstructionOrders`も同じdurable relationshipで、`DeconstructionOrder`はroot markerである。
+一方`DeconstructionPending` / `DeconstructionCommitClaim`はReflect/schema inventory自体へ登録しないruntime-only型で、
+新規saveへ含めず、save bodyに現れた場合はdeserializeを受理しない。rehydrateはlive runtime値をclearしてから、
+validated orderだけを入力にpendingを再構築する。
 `LoadedIn` / `LoadedItems`もcarrierのremap済み位置をRuntimeNormalizeへ渡すstaging handoffとして保存し、
 candidate validatorがsource/target対称性、carrier種別、容量を検証する。ただし実行中の搬送先とclaimは保存しないため、
 live worldでは全積載物をcarrier（運搬中ならcarrying Soul）の最寄りwalkable cellへ荷下ろしして両Relationshipを除去する。
@@ -203,7 +214,7 @@ schema validation で reject する。この区別により、旧ファイルは
 3. runtime shell、cache、visual/UI hierarchy、obstacle provenance は schema に入れず、rehydrate または cache rebuild の契約へ追加する。
 
 schema の回帰テストは空の `AppTypeRegistry` で schema-owned type の `ReflectComponent` /
-`ReflectResource` data を検査する。production `App` では external component を検査し、27種類の
+`ReflectResource` data を検査する。production `App` では external component を検査し、28種類の
 root marker matrix は collect、extract、RON serialize/deserialize、Relationship の Entity remap まで確認する。
 
 ロード時も同じschemaを検証する。bodyに含まれるresourceとcomponentはallow-list由来の型だけを
@@ -313,6 +324,7 @@ runnerだけが所有する。
 | runtime energy | Yard/Grid一対一、generator/consumer relationship、個別供給stateとsummary | reset時に`EnergyUpdateDirty::request_full_rebuild()`。最初のLogicでduplicate/orphan cleanupとrewireを行い、output/allocationをeffect前に再構築する |
 | 旧形式の通常 Stockpile セル | 欠落した `StockpilePolicy` の互換既定値 | `BelongsTo(owner)` の owner が durable な `Yard` のセルだけへ `Any` / `Normal` / `target_amount = capacity` / export許可を挿入。既存の `Any` / `Only(ResourceType)` は意味を維持し、`Selected(StockpileResourceSet)` を含むpolicyはacceptance集合とtargetを正規化する。Tank / Mixer root、marker が保存されない Tank companion、owner 不明の storage へは推測で付与しない |
 | task / logistics runtime | assignment、delivery claim、tool use、request claim/lease、inflight、inventory、積載handoff、volatile item timer | runtime relationshipを除去し全Soulをunassignedへ戻す。requestは`Pending`、`inflight = 0`、lease/pending timerなし。inventory itemは近傍walkable cellへdropし、保存済み積載物もremap済みcarrier位置へ荷下ろしする。wheelbarrowはdurable `BelongsTo`のparkingへ戻し、Sand/StasisMudへfresh timerを付与 |
+| deconstruction order / completed Floor lookup | durable orderとtarget Relationship、completed Floor entity | candidateでshape、completed canonical target、WorldMap owner、自己参照・直接Designation・dual-roleを含むrole分離、対称性、targetあたり最大1件を検証。旧`WorldMap.buildings`のFloor ownerを`floors`へ正規化し、runtime pending/claimを除去してorderからpendingだけ再構築 |
 | 障害物 provenance / pathfinding cache | source-aware marker、Building footprint mirror、`ObstaclePositionIndex`、raw obstacle / Door / Bridge cache | `rehydrate_obstacle_runtime` が Tree/Rock、construction、Building/Blueprint/site の semantic source matrix から再構築 |
 
 ### Domain ledger
@@ -325,6 +337,7 @@ runnerだけが所有する。
 | Soul Energy | site/policy/durable relationship | grid/allocation runtime | slot clamp、欠落policy補完 | grid topology、供給state、summary | building shell/inspection入力 | 次Logicのfull rebuild |
 | Room | Wall/Door/Floor/`WorldMap` | Room root、overlay、lookup、detection state | なし | room/lookup | boundary/overlay | 次Logicのroom detection |
 | Task/Logistics | Designation/Request、`ManagedBy`、`ParkedAt`、`BelongsTo`、staging handoffの`LoadedIn` | cache/diagnostic/runtime claim | legacy runtime edge strip、積載物をcarrier近傍へ荷下ろし | request Pending、parking、item lifetime | item/tool shell | runner内〜次Perceive |
+| Deconstruction | `DeconstructionOrder`、target Relationship | pending / commit claim | canonical completed target、WorldMap owner、一意・対称relationshipを検証 | orderから`DeconstructionPending`を再構築 | M1ではなし | runner内 |
 
 shell 欠落の判定は「shell が必ず挿入するコンポーネントの不在」
 （Soul/Familiar は `Without<Destination>`、Building は `Without<BuildingBounceEffect>`、Blueprint は mirror / Sprite /
@@ -420,13 +433,13 @@ RON bodyを `systems::save::schema` testでdeserializeして型pathとvariant表
 ## 検証
 
 ```bash
-cargo check
-cargo clippy --workspace -- -D warnings
-cargo test -p bevy_app@0.1.0 --lib systems::save::schema
-cargo test -p bevy_app@0.1.0 --lib systems::save
-cargo test -p hw_world --lib world_replace
-cargo test -p hw_core --lib world_epoch
-cargo test -p hw_ui --lib world_replace_reset
+python3 scripts/dev.py check
+python3 scripts/dev.py cargo -- clippy --workspace -- -D warnings
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib systems::save::schema
+python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib systems::save
+python3 scripts/dev.py cargo -- test -p hw_world --lib world_replace
+python3 scripts/dev.py cargo -- test -p hw_core --lib world_epoch
+python3 scripts/dev.py cargo -- test -p hw_ui --lib world_replace_reset
 ```
 
 手動: プレイ → Familiar の fatigue threshold / max / 複数 WorkType の許可・priorityを変更 → F5で成功通知

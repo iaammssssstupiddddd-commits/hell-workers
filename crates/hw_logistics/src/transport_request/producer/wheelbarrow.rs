@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 
 use hw_core::relationships::{ManagedBy, ParkedAt, PushedBy, TaskWorkers};
-use hw_jobs::{Designation, Priority, TaskSlots, WorkType};
+use hw_jobs::{DeconstructionPending, Designation, Priority, TaskSlots, WorkType};
 
 use crate::transport_request::producer::active_unit_cache::CachedActiveFamiliars;
 use crate::transport_request::{
@@ -39,6 +39,7 @@ pub fn wheelbarrow_auto_haul_system(
     q_wheelbarrows: WheelbarrowParkedQuery,
     q_transforms: Query<&Transform>,
     q_wb_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
+    q_deconstruction_pending: Query<(), With<DeconstructionPending>>,
 ) {
     let active_familiars = &familiars_cache.data;
 
@@ -46,6 +47,9 @@ pub fn wheelbarrow_auto_haul_system(
         std::collections::HashMap::<Entity, DesiredWheelbarrowRequest>::new();
 
     for (wb_entity, wb_transform, parked_at) in q_wheelbarrows.iter() {
+        if q_deconstruction_pending.get(parked_at.0).is_ok() {
+            continue;
+        }
         let wb_pos = wb_transform.translation.truncate();
         let Some((fam_entity, _)) = super::find_owner(wb_pos, active_familiars) else {
             continue;
@@ -165,5 +169,67 @@ pub fn wheelbarrow_auto_haul_system(
             TransportRequestState::Pending,
             TransportPolicy::default(),
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_world::zones::AreaBounds;
+
+    #[test]
+    fn pending_parking_produces_no_return_request_for_its_wheelbarrow() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<CachedActiveFamiliars>()
+            .add_systems(Update, wheelbarrow_auto_haul_system);
+        let familiar = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .resource_mut::<CachedActiveFamiliars>()
+            .data
+            .push((
+                familiar,
+                AreaBounds::new(Vec2::splat(-100.0), Vec2::splat(200.0)),
+            ));
+        let pending_parking = app
+            .world_mut()
+            .spawn(Transform::from_xyz(0.0, 0.0, 0.0))
+            .id();
+        let live_parking = app
+            .world_mut()
+            .spawn(Transform::from_xyz(40.0, 0.0, 0.0))
+            .id();
+        let pending_wheelbarrow = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(80.0, 0.0, 0.0),
+                Wheelbarrow { capacity: 8 },
+                ParkedAt(pending_parking),
+            ))
+            .id();
+        let live_wheelbarrow = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(120.0, 0.0, 0.0),
+                Wheelbarrow { capacity: 8 },
+                ParkedAt(live_parking),
+            ))
+            .id();
+        let order = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .entity_mut(pending_parking)
+            .insert(DeconstructionPending { order });
+        app.world_mut().flush();
+
+        app.update();
+
+        let mut requests = app.world_mut().query::<&TransportRequest>();
+        let anchors = requests
+            .iter(app.world())
+            .filter(|request| request.kind == TransportRequestKind::ReturnWheelbarrow)
+            .map(|request| request.anchor)
+            .collect::<Vec<_>>();
+        assert!(!anchors.contains(&pending_wheelbarrow));
+        assert_eq!(anchors, vec![live_wheelbarrow]);
     }
 }

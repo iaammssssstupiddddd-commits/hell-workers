@@ -23,6 +23,7 @@ type MixerQuery<'w, 's> = Query<
         &'static MudMixerStorage,
         Option<&'static TaskWorkers>,
         Option<&'static hw_jobs::MovePlanned>,
+        Option<&'static hw_jobs::DeconstructionPending>,
     ),
 >;
 
@@ -78,4 +79,64 @@ pub fn mud_mixer_auto_haul_system(
         &desired_requests,
         &active_mixers,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transport_request::producer::active_unit_cache::{
+        CachedActiveFamiliars, CachedActiveYards,
+    };
+    use crate::zone::Stockpile;
+    use hw_jobs::DeconstructionPending;
+    use hw_world::Yard;
+
+    #[test]
+    fn pending_mixer_produces_no_delivery_requests_while_live_mixer_does() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<SharedResourceCache>()
+            .init_resource::<CachedActiveFamiliars>()
+            .init_resource::<CachedActiveYards>()
+            .add_systems(Update, mud_mixer_auto_haul_system);
+        let yard_entity = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .resource_mut::<CachedActiveYards>()
+            .data
+            .push((
+                yard_entity,
+                Yard {
+                    min: Vec2::splat(-100.0),
+                    max: Vec2::splat(100.0),
+                },
+            ));
+        let spawn_mixer = |app: &mut App, x: f32| {
+            app.world_mut()
+                .spawn((
+                    Transform::from_xyz(x, 0.0, 0.0),
+                    MudMixerStorage::default(),
+                    Stockpile {
+                        capacity: 8,
+                        resource_type: Some(ResourceType::Water),
+                    },
+                ))
+                .id()
+        };
+        let pending = spawn_mixer(&mut app, 0.0);
+        let live = spawn_mixer(&mut app, 20.0);
+        let order = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .entity_mut(pending)
+            .insert(DeconstructionPending { order });
+
+        app.update();
+
+        let mut requests = app.world_mut().query::<&TransportRequest>();
+        let anchors = requests
+            .iter(app.world())
+            .map(|request| request.anchor)
+            .collect::<Vec<_>>();
+        assert!(!anchors.contains(&pending));
+        assert!(anchors.contains(&live));
+    }
 }

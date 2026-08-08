@@ -1,4 +1,4 @@
-use bevy::app::ScheduleRunnerPlugin;
+use bevy::app::{AppExit, ScheduleRunnerPlugin};
 use bevy::gilrs::GilrsPlugin;
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
@@ -13,7 +13,7 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::time::Duration;
 
-fn main() {
+fn main() -> AppExit {
     let perf_config = PerfScenarioConfig::try_from_process().unwrap_or_else(|error| {
         eprintln!("Invalid performance scenario configuration: {error}");
         std::process::exit(2);
@@ -25,8 +25,20 @@ fn main() {
                 std::process::exit(2);
             },
         );
-    if native_acceptance_plugin.is_some() && perf_config.enabled() {
-        eprintln!("Native save/load acceptance cannot be combined with a performance scenario.");
+    let native_deconstruction_plugin =
+        bevy_app::systems::jobs::NativeDeconstructionAcceptancePlugin::try_from_process()
+            .unwrap_or_else(|error| {
+                eprintln!("Invalid native deconstruction acceptance configuration: {error}");
+                std::process::exit(2);
+            });
+    if (native_acceptance_plugin.is_some() || native_deconstruction_plugin.is_some())
+        && perf_config.enabled()
+    {
+        eprintln!("Native acceptance cannot be combined with a performance scenario.");
+        std::process::exit(2);
+    }
+    if native_acceptance_plugin.is_some() && native_deconstruction_plugin.is_some() {
+        eprintln!("Native save/load and deconstruction acceptance cannot run together.");
         std::process::exit(2);
     }
     let use_headless_runner = headless_runner_requested(&perf_config);
@@ -80,8 +92,11 @@ fn main() {
     if let Some(plugin) = native_acceptance_plugin {
         app.add_plugins(plugin);
     }
+    if let Some(plugin) = native_deconstruction_plugin {
+        app.add_plugins(plugin);
+    }
 
-    app.run();
+    app.run()
 }
 
 fn perf_window_resolution(perf_config: &PerfScenarioConfig) -> WindowResolution {

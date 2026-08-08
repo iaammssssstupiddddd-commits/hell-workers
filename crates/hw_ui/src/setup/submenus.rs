@@ -432,6 +432,11 @@ fn orders_menu_specs(theme: &UiTheme) -> Vec<MenuEntrySpec<'static>> {
             theme.colors.button_default,
         ),
         MenuEntrySpec::new(
+            "Deconstruct",
+            MenuAction::SelectTaskMode(TaskMode::DesignateDeconstruct(None)),
+            theme.colors.status_danger,
+        ),
+        MenuEntrySpec::new(
             "Cancel",
             MenuAction::SelectTaskMode(TaskMode::CancelDesignation(None)),
             theme.colors.button_default,

@@ -131,9 +131,68 @@ AutoGather では `ApplyDeferred` 後の同じ Decide tick に `Chop` / `Mine` �
 ### I-T8: task action capability は positive allow-list と live 再検証を通す
 
 保存済み `PlayerIssuedDesignation` 付きかつ `AutoGatherDesignation` のない Chop / Mine、well-formed
-`ManualTransportRequest`、Blueprint、Floor / Wall の
+`ManualTransportRequest`、Blueprint、Floor / Wall、canonical pendingと未取得claimを持つplayer-issued
+`DeconstructionOrder`の
 明示 owner kind だけを操作可能にする。marker 不在、legacy/unknown、Move、自動 producer task は read-only。
 表示時 capability を権限として使わず、apply 時に Entity generation、`WorkType`、owner component を再確認する。
+
+### I-T9: 解体指定は専用durable orderからcanonical targetを一意に所有する
+
+completed building rootへ`Designation::Deconstruct`を直付けしない。`DeconstructionOrder` entityが
+`TargetDeconstructionRoot` sourceを持ち、target側`DeconstructionOrders`はBevy Relationship hookだけが更新する。
+targetあたりorderは最大1件で、save candidateはcanonical completed target、1 slot、player provenance、priority、
+Transform、WorldMap exact ownership、Relationship対称性をlive置換前に検証する。
+order自身または別の`DeconstructionOrder` roleをtargetにする保存graphは、Relationship hookがskipされるload境界でも拒否する。
+`Designation::Deconstruct`だけをcompleted targetへ直付けする形と、order自身がBuilding/Soul Spa/construction target roleを
+兼ねるdual-role形も拒否し、専用save rootとtarget roleを分離する。
+`DeconstructionPending`と`DeconstructionCommitClaim`はruntime-onlyである。M4では全12種の
+`BuildingType`とOperational Soul Spaを実行可能にし、kindごとのexact owner shapeとcleanup planが
+成立しないtargetだけを`DependencyWaiting`またはtyped blockerへ閉じる。
+候補時とassignment apply時の両方でpending/claim/blocker、marker、provisional state、durable/assigned Moveを再検証する。
+
+Soul executorはtargetを直接despawnせず、`AwaitingCommit`へ遷移してworld epochとexact task identity付きrequestを
+1回だけ発行する。root finalizerはcancelを先に処理し、target単位の同期claimを取得してから、関連worker全件を
+all-or-noneのexact terminal adapterで終端する。winnerだけが`OnTaskCompleted`を発行し、loser/cancel/staleでは
+完了通知を出さない。worker、order、target、関連TransportRequest、WorldMap owner、安全なsalvage先のいずれかが
+事前検証に失敗した場合はtargetを変更せず、一致claimとworker relationshipを解放する。
+
+exact task/identityが残るDeconstruct worker shellは、`DamnedSoul` / `WorkingOn`欠損でもslotを解放する。
+Transformも欠損している場合はDeconstructが資源・予約を所有しない契約に限定してassignment/path/identity/
+relationshipだけを閉じ、drop座標やTransformを生成しない。order root、marker、Relationship、pendingの不整合は
+live repairを待つblockerにせずorphan orderを閉じる。pendingが別orderを指す場合は、そのorderが同じtargetへの
+valid durable orderなら維持し、invalidな参照だけを除去する。
+同じtargetへの`DeconstructionOrder` marker + `TargetDeconstructionRoot`を持つ兄弟orderはowned siblingとして
+canonical commitと同じcleanupに含め、`Designation`欠損だけで取り残さない。一方、markerまたはroot edgeを欠く
+unowned/malformed siblingはcanonical orderを破棄せず`StaleTarget`としてfail-closeする。
+兄弟orderの`DeconstructionOrder` marker追加・削除は`Designation`の有無に依存せずcanonical orderのtask revisionへ
+伝播し、marker補修後も`StaleTarget` blockerが眠り続ける状態を作らない。
+
+持続failureはorderへ選択domain付きblockerを置き、task / topology / availabilityの該当revisionが変わるまで
+再割り当てしない。finalizerは既知の`WorkingOn`削除による次回task revision 1回分をstampへ先取りして即時armし、
+その後最初のrevision syncまでに起きた実際のtask / topology / availability回復をbaselineへ吸収してはならない。
+stale retarget requestを現在のorderのblockerへ変換してはならず、invalidなorphan orderは関連workerを安全に
+終端できた場合だけ閉じる。order/targetを先にdespawnしてSoulのguard cleanupへ委ねてはならない。
+空の`Inventory`を`None`へ再代入してavailability revisionを進めてはならない。実在itemをdropする場合だけ
+mutable borrowし、`NoSafeRecovery` blockerがroot自身のcleanupで自己wakeしないこと。
+
+Tank / Mixer / RestArea / Parkingのcommitは、stored item、tool、occupant、carrier、関連task、receiver容量を
+`FacilityRecoveryPlan`へsnapshotし、ground item / carrierの安全座標を`RecoveryPlacementPlan`へ確定してからapplyする。
+volatileなSand/StasisMudをgroundまたは通常Stockpileへ
+逃がさず、別のoperational Mixerへ全量収容できなければ非変更rejectする。Mixerのnumeric mudと
+`StoredByMixer` entity数が一致しない場合も補完spawnせず`InconsistentMixerInventory`で止める。
+Parkingからwheelbarrowを外してもvalidな`LoadedIn` cargoは維持する。pending facilityへ新しいproducer/assignmentを
+追加してはならず、dashboard cancelはowner requestだけを発行してfinalizerのclaim/canonical target判定を迂回しない。
+
+Wall / Door / Floor / BridgeはWorldMapのbuilding / door / floor / bridge layerをkindごとのexact owner一致でだけ
+解除する。Door cache/state、Bridge walkability、stackable Floor上の別building owner、生のobstacle provenanceを
+混同しない。Wall / Door撤去は`WallConnectionDirty`、全structure footprintは`RoomDetectionState`へ伝播し、
+別ownerのslotを消さず残存壁spriteとRoomを再評価する。Bridge salvageの安全なpost-teardown cellが無ければ
+map、target、salvageを変更せず`NoSafeRecovery`とする。
+
+Operational Soul Spaは4 tile、GeneratePower worker、`DeliverToSoulSpa` request、generator relationship、visualを
+site transactionへ含める。Outdoor LampとSoul Spaのcommitはenergy full rebuildを要求し、同じUpdateで
+topology/output/allocationを終えてからVisualを実行する。targetだけを先にdespawnしてreverse relationship、
+stale grid summary、古い`Unpowered` / sprite色を1 frame残してはならない。
 
 ---
 
@@ -276,6 +335,17 @@ runtime state欠落とpolicy removalはallocation dirtyを起こす。Soul Spa�
 Soul state-sanity Commandsを名前付き境界でflushした後にenergy transactionを開始し、個別stateと
 `Unpowered`のCommandsを`ApplyDeferred`してからlamp等のeffectを実行する。接続外・不正需要を
 1 frameでも給電中として扱わない。
+
+### I-E5: Soul Spa construction cancelはexact owner transactionであり、pauseを跨がない
+
+Constructing Soul Spaの情報パネルとwell-formedな`DeliverToSoulSpa + TargetSoulSpaSite` task cancelは、
+`SoulSpaConstructionCancelRequest`を唯一のmutation境界とする。consumerはexact 2×2 WorldMap owner、4 tile、
+Constructing phase、関連worker/request、power relationship shapeを全て事前検証し、成功時だけ一括cleanupする。
+返却量は`bones_delivered`の実値だけで、未搬入分やOperational salvage tableから推測しない。
+
+Virtual Timeがpause中の情報パネル操作は停止中のLogicへrequestを残さず、root adapterが`Paused` outcomeへ
+即時終端する。resume後の遅延適用、UIからのsite/tile/request直接変更、中間`TaskActionOutcome`とowner outcomeの
+二重toastを禁止する。owner/task不整合ではsiteと資材を変更しない。
 
 ## 5. UI / Visual の不変条件
 
@@ -479,6 +549,14 @@ coordinator-owned `SaveRecoveryMode`は`Healthy`と`RecoveryFailed`だけを持�
 paused fail-closedを維持し、成功時だけ`Healthy`へ戻す。ただし成功は自動unpauseの権限を持たない。
 通常F9/`LoadRequested`をrecovery-onlyへ暗黙昇格せず、専用ownerだけが`RecoveryLoadRequested`を発行する。
 Track C3時点のproductionにはproducerを置かず、Track C2が専用UI/input gateと同時に接続する。
+
+### I-P11: 解体orderだけを保存し、pendingとcommit claimは再利用しない
+
+`DeconstructionOrder`、`Designation::Deconstruct`、`TargetDeconstructionRoot` / `DeconstructionOrders`は
+durable graphとして保存する。incoming/rollback candidateはtargetの完成状態、canonical root、WorldMap owner、
+relationship対称性と一意性をimmutable validatorで確認する。`DeconstructionPending`と
+`DeconstructionCommitClaim`は保存せず、RuntimeNormalizeで旧live値を全除去して、validated orderからpendingだけを
+idempotentに再構築する。load前のclaimやworld epochを新worldのcommit権限として扱ってはならない。
 
 ---
 

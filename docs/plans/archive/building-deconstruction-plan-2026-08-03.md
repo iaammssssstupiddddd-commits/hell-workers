@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `building-deconstruction-plan-2026-08-03` |
-| ステータス | `Draft` |
+| ステータス | `Archived` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-04` |
+| 最終更新日 | `2026-08-08` |
 | 作成者 | `Codex` |
 | 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track C1） |
 | 前提計画 | `docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`（C3完了済み） |
@@ -27,7 +27,7 @@
   - 解体指定はpriority、Familiar policy、A3 dashboard、save/load、A2通知の既存境界へ統合する。
 - 成功指標:
   - 全既存 `BuildingType` とOperational Soul Spaについて、解体後の孤立task/request/reservation/relationship/entityが0件。
-  - WorldMap building/door/bridge/stockpile、obstacle、Room、Powerがowner消失後の正規状態へ収束する。
+  - WorldMap building/floor/door/bridge/stockpile、obstacle、Room、Powerがowner消失後の正規状態へ収束する。
   - 保存中の`DeconstructionOrder`はload後に再割当され、実行中runtime taskやcommit要求は保存されない。
   - 資材、storage内容、付属toolの消失・二重生成が0件。
 
@@ -148,7 +148,7 @@ GoingToTarget
   - order / claim / canonical root / kind / anchor / owned grid集合
   - child、companion、independent visual proxy、owned item/tool
   - target/owned entityをpayload、anchor、issued_by、relationshipで参照するtask/request
-  - WorldMap building/door/bridge/stockpileのowner一致箇所
+  - WorldMap building/floor/door/bridge/stockpileのowner一致箇所
   - 回収yield、storage内容、各資源の確定回収先
 - applyは次の順序をroot-owned named setで行う。
 
@@ -265,6 +265,7 @@ Bridgeの実投入mixを逆算しない。
 | C1-D19 | blockerは既存`TaskDiagnosticInputStamp` + domain maskでinvalidateし、架空の単一global revisionを作らない |
 | C1-D20 | SandPile salvageは0。MixerのSandはnumeric transfer、StasisMudは既存entity transfer、wheelbarrow積載物は積載維持 |
 | C1-D21 | C1の積載維持はlive解体境界だけに適用し、C3 load後は積載handoffが安全に荷下ろしされるため`LoadedIn`存続を前提にしない |
+| C1-D22 | completed Floorは設備とstackできる`WorldMap.floors`層で所有する。旧v0/v1の`buildings` ownerはcanonical entity検証後にDurableNormalizeで移送する |
 
 - Bevy 0.19 APIでの注意点:
   - Entity despawn時の`ChildOf`伝播、Relationship hook、`RemovedComponents`可視化はBevy 0.19一次情報と回帰で確認する。
@@ -272,7 +273,7 @@ Bridgeの実投入mixを逆算しない。
 
 ## 5. マイルストーン
 
-## M1: Domain model、durable order、target resolver、回収table
+## M1: Domain model、durable order、target resolver、回収table（完了: 2026-08-04）
 
 - 着手条件: Track C3が完了し、production `RehydrateRegistry` / schema coverage / runtime task edge契約が利用可能である。
 - 変更内容:
@@ -288,19 +289,28 @@ Bridgeの実投入mixを逆算しない。
   - `crates/bevy_app/src/systems/save/{schema.rs,rehydrate/}`
   - `crates/bevy_app/src/plugins/startup/perf_scenario/audit_encoding.rs`
 - 完了条件:
-  - [ ] 既存WorkType index 0〜15が不変でDeconstructだけ末尾になる。
-  - [ ] building rootの既存Designationを変更せず、targetごとにorder rootが最大1件だけ存在する。
-  - [ ] 全既存BuildingTypeのeligibilityとyieldにexhaustive testがある。
-  - [ ] SandPileは明示0、BridgeはRock×3で、preview/Helpとpure recovery tableが一致する。
-  - [ ] multi-tile/SoulSpa tileの任意hitが同じrootを返す。
-  - [ ] owner逆引きが別ownerのWorldMap entryを含めない。
-  - [ ] new executableが旧v0/v1を読み、Deconstruct orderを含むnew v1はold executableへのforward compatibilityを保証しない契約がfixture/docsに固定される。
+  - [x] 既存WorkType index 0〜15が不変でDeconstructだけ末尾になる。
+  - [x] building rootの既存Designationを変更せず、targetごとにorder rootが最大1件だけ存在する。
+  - [x] 全既存BuildingTypeのeligibilityとyieldにexhaustive testがある。
+  - [x] SandPileは明示0、BridgeはRock×3としてpure recovery tableに固定する。M3のpreview/Helpはこのtableを読むまでBlockedを維持する。
+  - [x] multi-tile/SoulSpa tileの任意hitが同じrootを返す。
+  - [x] owner逆引きが別ownerのWorldMap entryを含めず、completed Floorは設備と独立したstackable layerに残る。
+  - [x] new executableが旧v0/v1を読み、Deconstruct orderを含むnew v1はold executableへのforward compatibilityを保証しない契約がfixture/docsに固定される。
 - 検証:
-  - `cargo test -p hw_core work_type`
-  - `cargo test -p hw_jobs deconstruct`
-  - `cargo test -p hw_world building`
+  - `python3 scripts/dev.py cargo -- test -p hw_core work_type`
+  - `python3 scripts/dev.py cargo -- test -p hw_jobs deconstruct`
+  - `python3 scripts/dev.py cargo -- test -p hw_world building`
 
-## M2: Headless task vertical slice、commit claim、ordinary cleanup
+実績（2026-08-04）:
+
+- 上記3コマンド、`python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 deconstruction`、schema/registry exact snapshot、
+  完成Floorのstackable `WorldMap.floors` owner、旧v1 field欠落migration、強制Entity remap回帰が成功。
+- Familiar filter / assignment policyはM2 consumerが揃うまで`DependencyWaiting`でfail-closed。
+  crafted/restored assignmentはSoul dispatchでretryable abortし、assignment/worker relationshipを解放する。
+- Helpは`WorkType` / `TaskMode` / `UiIntent`をcompletion consumer不足としてBlockedにし、Operation policy行、
+  task dashboard filter、Orders入力、解体Help entryの全てをM1では非公開にする。
+
+## M2: Headless task vertical slice、commit claim、ordinary cleanup（完了: 2026-08-04）
 
 - 変更内容:
   - order entityのDesignationをFamiliar filter/policy/validator/builderとSoul dispatcher/executorへ接続する。
@@ -319,27 +329,52 @@ Bridgeの実投入mixを逆算しない。
   - `crates/bevy_app/src/plugins/logic.rs`
   - `crates/hw_world/src/map/`
 - 完了条件:
-  - [ ] order→assign→execute→claim→ordinary cleanupのheadless固定tick vertical sliceが成立する。
-  - [ ] Familiar policyの禁止/priorityが候補評価へ一致する。
-  - [ ] path到達不能は追加A*なしで既存diagnosticへ集約される。
-  - [ ] executorはtargetを直接despawnせずworld-epoch付きcommit requestを発行する。
-  - [ ] `AwaitingCommit`中は同identityのrequestを再発行せず、全terminal pathでworkerがexactly once終端する。
-  - [ ] 同batch重複、2 order競合、cancel競合、stale replayでcleanup/salvage/success outcomeが各target1回だけになる。
-  - [ ] stale/owner mismatch/Move競合ではtarget/orderを破壊せずtyped failureになる。
-  - [ ] winnerだけが`OnTaskCompleted`を1回発行し、loser/cancel/staleでは発行せずassignment/identityが残らない。
-  - [ ] commit failureでSoul/TaskWorkers/claimが解放され、blocker domain stampがcurrentな間は再assign/requestされない。
-  - [ ] 関係するavailability/topology/task-local producerのrevision変化だけでblockerが再評価され、無関係domainでは起床しない。
+  - [x] order→assign→execute→claim→ordinary cleanupのheadless固定tick vertical sliceが成立する。
+  - [x] Familiar policyの禁止/priorityが候補評価へ一致する。
+  - [x] path到達不能は追加A*なしで既存diagnosticへ集約される。
+  - [x] executorはtargetを直接despawnせずworld-epoch付きcommit requestを発行する。
+  - [x] `AwaitingCommit`中は同identityのrequestを再発行せず、全terminal pathでworkerがexactly once終端する。
+  - [x] 同batch重複、2 order競合、cancel競合、stale replayでcleanup/salvage/success outcomeが各target1回だけになる。
+  - [x] stale/owner mismatch/Move競合ではtarget/orderを破壊せずtyped failureになる。
+  - [x] winnerだけが`OnTaskCompleted`を1回発行し、loser/cancel/staleでは発行せずassignment/identityが残らない。
+  - [x] commit failureでSoul/TaskWorkers/claimが解放され、blocker domain stampがcurrentな間は再assign/requestされない。
+  - [x] 関係するavailability/topology/task-local producerのrevision変化だけでblockerが再評価され、無関係domainでは起床しない。
 - 検証:
-  - `cargo test -p hw_familiar_ai deconstruct`
-  - `cargo test -p hw_soul_ai deconstruct`
-  - `cargo test -p bevy_app@0.1.0 deconstruct`
+  - `python3 scripts/dev.py cargo -- test -p hw_familiar_ai deconstruct`
+  - `python3 scripts/dev.py cargo -- test -p hw_soul_ai deconstruct`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 deconstruct`
 
-## M3: Orders UI、dashboard、特殊storage保全
+実績（2026-08-04）:
+
+- M2のordinary cleanup対象を`SandPile` / `BonePile`に限定し、orderからFamiliar候補評価、apply-time再検証、
+  Soulの3 phase実行、world-epoch付きcommit、root exclusive finalizer、WorldMap owner解除、固定salvage生成までを
+  固定tickで接続した。その他のBuildingTypeはM3/M4のcleanup matrixが揃うまで`DependencyWaiting`を維持する。
+- exact task terminal adapterはbatch全件を事前検証してall-or-noneで適用し、task payloadだけでなく
+  `ActiveTaskIdentity` / `WorkingOn`もcleanup edgeとして扱う。runtime `Path`欠落はdefault shellを補って終端し、
+  winnerだけが完了通知を発行する。
+- target単位claim、同batch重複、2 order、cancel、stale world/identity/retarget、orphan order、owner不一致、
+  active Move、TransportRequest workerを回帰で固定した。失敗時は一致claimとworker/relationshipを解放し、
+  task / topology / availabilityの選択domainが変化するまでblockerをcurrentに保つ。
+- 完了前の再監査で、workerの`DamnedSoul` / Transform / `WorkingOn`欠損、order entity消失、missing/foreign pending、
+  failure直後から最初のrevision syncまでの回復変更を追加固定した。exact Deconstruct shellはtargetを変更せず
+  slotを解放し、orphan orderはvalid foreign pendingだけを維持して閉じる。blockerは既知の`TaskWorkers` cleanup
+  1 revisionを先取りしてarmするため、owner修復と回収先availability変化を最初のsyncで検出する。
+- owned siblingは`Designation`欠損でもcanonical transactionへ含め、unowned/malformed siblingではcanonicalを
+  維持してfail-closeする。空Inventoryは実在itemがある場合だけmutable borrowし、`NoSafeRecovery` blockerが
+  root自身のavailability change tickで自己再試行しないようにした。
+- missing-Designationな兄弟orderでも`DeconstructionOrder` marker追加・削除をcanonicalのtask revisionへ伝播し、
+  malformed sibling補修後に`StaleTarget` blockerが解除される回帰を固定した。
+- `python3 scripts/dev.py cargo -- fmt --all -- --check`、workspace check / Clippy / test、`scripts/dev.py check` / `verify`が全て成功した。
+  `bevy_app`は446 passed / 1 ignored、deconstruction focusedは44 passed。実機ウィンドウを必要としない
+  headless milestoneのためnative acceptanceはM5へ残す。
+
+## M3: Orders UI、dashboard、特殊storage保全（完了: 2026-08-05）
 
 - 変更内容:
   - Orders button、TaskMode、hover preview、single-click intent/outcome、capture/cleanupを実装する。
   - A3 dashboardとFamiliar Operation policyへDeconstructを追加する。
-  - Tank/Mixer/Rest/Parkingのstored content、tool、occupant lifecycle helperと`RecoveryPlacementPlan`を追加する。
+  - Tank/Mixer/Rest/Parkingのstored content、tool、occupant lifecycle helper、`FacilityRecoveryPlan`と
+    ground/carrier配置用`RecoveryPlacementPlan`を追加する。
 - 主な変更ファイル:
   - `crates/bevy_app/src/systems/jobs/deconstruction/`
   - `crates/hw_ui/src/{intents.rs,setup/submenus.rs,panels/task_list/}`
@@ -347,24 +382,40 @@ Bridgeの実投入mixを逆算しない。
   - `crates/hw_logistics/src/`
   - `crates/bevy_app/src/interface/ui/panels/task_list/`
 - 完了条件:
-  - [ ] click1回でcanonical targetへorder entityを1件だけ作り、building rootの既存Designationを維持する。
-  - [ ] overlay/pause中にworld clickやcameraへ入力が漏れない。
-  - [ ] Familiar policy、dashboard reason、priority/cancel capabilityがlive評価と一致する。
-  - [ ] plant/temporary建物の全cleanup matrixが固定tick testで合格する。
-  - [ ] storage内容、bucket、wheelbarrowが消失せず事前確定した安全な回収先へ戻る。
-  - [ ] Sand/StasisMudは通常Stockpileへ入らず、別Mixerへ全量予約・移送され、ground lifetime対象にならない。
-  - [ ] Mixer sandはnumeric→numeric、mudは既存entity relationship+numeric mirrorで移り、rockだけがground item化する。
-  - [ ] safe cellへunparkしたwheelbarrowの`LoadedIn`内容はSand/StasisMudを含め維持される。
-  - [ ] F5/F9を跨いだ場合は積載item数をload直後に失わずcarrier近傍へground化し、C1が古い`LoadedIn`を要求せず再割当できる。
-  - [ ] Mixer mud countとStoredByMixer entityが不一致なら非変更rejectし、二重spawnしない。
-  - [ ] Bridge/river上を含め安全な回収先が無い場合はtargetを残してtyped failureになる。
-  - [ ] recovery itemは成功commitで1回だけ生成される。
-  - [ ] stale/owner mismatchではworldを変更せずfailure outcomeを返す。
+  - [x] click1回でcanonical targetへorder entityを1件だけ作り、building rootの既存Designationを維持する。
+  - [x] overlay/pause中にworld clickやcameraへ入力が漏れない。
+  - [x] Familiar policy、dashboard reason、priority/cancel capabilityがlive評価と一致する。
+  - [x] Tank/Mixer/Rest/Parkingのcleanup matrixが固定tick testで合格する。
+  - [x] storage内容、bucket、wheelbarrowが消失せず事前確定した安全な回収先へ戻る。
+  - [x] Sand/StasisMudは通常Stockpileへ入らず、別Mixerへ全量予約・移送され、ground lifetime対象にならない。
+  - [x] Mixer sandはnumeric→numeric、mudは既存entity relationship+numeric mirrorで移り、rockだけがground item化する。
+  - [x] safe cellへunparkしたwheelbarrowの`LoadedIn`内容はSand/StasisMudを含め維持される。
+  - [x] Mixer mud countとStoredByMixer entityが不一致なら非変更rejectし、二重spawnしない。
+  - [x] river等で安全なground/carrier配置cellが足りない場合はtargetを残してtyped failureになる。
+  - [x] recovery itemは成功commitで1回だけ生成される。
+  - [x] stale/owner mismatchではworldを変更せずfailure outcomeを返す。
 - 検証:
-  - `cargo test -p bevy_app@0.1.0 deconstruction`
-  - `cargo test -p hw_logistics deconstruction`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 deconstruction`
+  - `python3 scripts/dev.py cargo -- test -p hw_logistics deconstruction`
 
-## M4: Structure、Soul Spa、Room/Power統合
+実績（2026-08-05）:
+
+- OrdersのDeconstruct buttonからFamiliar選択を強制せず単体pointer ownerへ入り、building/floor hitをcanonical rootへ
+  解決する。1 gestureはtyped designation requestを1件だけ作り、UI/capture中のreleaseはorderを作らずrollback、
+  右click/Escapeはmodeを終了する。latest-only hoverは追加steady-state全件走査を持たない。
+- Tank / MudMixer / RestArea / WheelbarrowParkingのstorage、tool、occupant、carrier、関連taskを
+  `FacilityRecoveryPlan`で事前検証し、ground item / carrier座標だけを`RecoveryPlacementPlan`で確定する。
+  Mixerのsand/mud移送、rock item化、wheelbarrow積載維持、Tank water/bucket、RestArea lifecycleをatomic commitへ接続した。
+- facility pending中はMixer/Tank/bucket/wheelbarrow producerとassignmentを停止する。別Mixer容量不足、safe cell不足、
+  mud mirror不一致ではtargetを変更せずtyped blockerを残し、availability/topology変更まで再割当しない。
+- Task Dashboardはbuilding名、priority、assigned count、deconstruction固有blockerを表示する。確認付きcancelは
+  componentを剥がさずowner requestを発行し、claim取得後の古いcapability/確認を破棄する。Operation policy、
+  notification、HelpのPublished coverageとexact snapshotも同じ公開境界で更新した。
+- focused検証はbevy_app deconstruction 66件、task dashboard 9件、notifications 16件、hw_ui task list 14件、
+  hw_logistics deconstruction 2件、bevy_app Help 25件（更新専用1件ignored）、hw_ui Help 8件が全て成功した。
+  actual-window受入と全BuildingType横断性能監査はM4後のM5へ残す。
+
+## M4: Structure、Soul Spa、Room/Power統合（完了: 2026-08-05）
 
 - 変更内容:
   - Wall/Door/Floor/Bridgeのmap/cache/neighbor/Room dirtyを接続する。
@@ -378,35 +429,74 @@ Bridgeの実投入mixを逆算しない。
   - `crates/hw_world/src/{map/,room_systems.rs}`
   - `crates/hw_visual/src/{wall_connection.rs,power.rs}`
 - 完了条件:
-  - [ ] Door/Bridge/Floor/Wall解体後にwalkabilityとRoomが正しく再計算される。
-  - [ ] Soul Spa 4tile、worker、request、generator/grid relationが残らない。
-  - [ ] Lamp/Soul Spa removal後のgrid summaryとvisualが最初の有効frameで一致する。
-  - [ ] Constructing Soul Spaは実搬入Boneだけを100%返す。
+  - [x] Door/Bridge/Floor/Wall解体後にwalkabilityとRoomが正しく再計算される。
+  - [x] Bridge解体でpost-teardownの安全な回収先が無い場合はtargetを残してtyped failureになる。
+  - [x] Soul Spa 4tile、worker、request、generator/grid relationが残らない。
+  - [x] Lamp/Soul Spa removal後のgrid summaryとvisualが最初の有効frameで一致する。
+  - [x] Constructing Soul Spaは実搬入Boneだけを100%返す。
 - 検証:
-  - `cargo test -p bevy_app@0.1.0 deconstruction`
-  - `cargo test -p bevy_app@0.1.0 energy`
-  - `cargo test -p hw_world room`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 deconstruction`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 energy`
+  - `python3 scripts/dev.py cargo -- test -p hw_world room`
 
-## M5: Save/Load、Help、実機受入、archive
+### M4完了結果（2026-08-05）
+
+- Wall / Door / Floor / Bridgeをkind別のexact owner transactionへ接続した。Door cache/state、Bridge cacheと
+  post-teardown walkability、stackable Floor layer、passable building ownerを分離し、別ownerと生のobstacleを
+  保護する。Wall / Door撤去は`WallConnectionDirty`、全structure footprintはRoom dirtyへ伝播する。
+- Operational Soul Spaは4 tile、GeneratePower worker、`DeliverToSoulSpa` request、generator relationship、
+  2D/3D visualをsite単位で閉じる。Soul Spa / Outdoor Lamp撤去後はproduction energy transactionを同じUpdateで
+  完走し、grid summary、個別供給state、`Unpowered`、残存Lamp sprite色を最初の有効frameで一致させた。
+- Constructing Soul Spaは情報パネルとwell-formedな搬入タスクの両方から同じowner cancelへ接続した。
+  exact 2×2 owner / tile / task / request / power shapeを事前検証し、実搬入Boneだけを100%返す。pause中の
+  情報パネル操作はrequestをbufferせず`Paused` outcomeへ即時終端する。
+- diagnosticsはDoor / Bridge / Soul Spa tileとfacility root markerの変更・削除を対応revisionへ接続し、
+  blockerがowner修復を取りこぼさない。Task Dashboard、Info Panel、通知、Help coverageとexact snapshotも同期した。
+- focused検証はbevy_app deconstruction 74件、energy 16件、Soul Spa 28件、task dashboard 10件、
+  notifications 18件、diagnostics 14件、hw_ui 67件、hw_world Room 14件、owner-safe/cache 7件、
+  hw_visual wall connection 1件、bevy_app Help 12件（更新専用1件ignored）、hw_ui Help 8件が成功した。
+  `python3 scripts/dev.py cargo -- check -p bevy_app@0.1.0`も成功し、残るwarningは別作業中のperf scenario 1件だけである。
+  full workspace gate、save/load横断、性能fixture、actual-window受入は計画どおりM5へ残す。
+
+## M5: Save/Load、Help、実機受入、archive（完了: 2026-08-08）
 
 - 変更内容:
   - mid-order/mid-task save、load再割当、cancel/priority/dashboard、world replacement resetを横断確認する。
-  - Help impact reviewと恒久docsを更新する。
+  - M4対象を含むHelp impact最終レビューと恒久docsの最終同期を行う。
+  - 全BuildingTypeが揃った`deconstruction` perf fixtureとmedium 100棟契約を追加する。
   - no-prompt native acceptanceで操作、描画、cleanupを確認し、計画をarchiveする。
 - 主な変更ファイル:
   - `crates/bevy_app/src/systems/save/{schema.rs,rehydrate/,load.rs}`（必要な登録/回帰のみ）
   - `crates/bevy_app/src/interface/ui/help_content/`
-  - `docs/{building.md,tasks.md,state.md,logistics.md,room_detection.md,soul_energy.md,save_load.md,events.md,invariants.md,architecture.md,help-screen.md}`
+  - `docs/{building.md,tasks.md,state.md,logistics.md,room_detection.md,soul_energy.md,save_load.md,events.md,invariants.md,architecture.md,help-screen.md,performance-profiling.md,soul_ai.md,familiar_ai.md}`
 - 完了条件:
-  - [ ] load後にorder/target Relationshipは残り、runtime task/commit request/claim/UI targetは残らず再割当される。
-  - [ ] F9とrollback後に旧WorldEpochのrequestを再生しても新worldを変更しない。
-  - [ ] UI/Help/notification/dashboardとdomain結果が一致する。
-  - [ ] native V1〜V5が合格する。
-  - [ ] full workspace gateが成功し計画をarchiveする。
+  - [x] load後にorder/target Relationshipは残り、runtime task/commit request/claim/UI targetは残らず再割当される。
+  - [x] F5/F9を跨いだ積載itemはload直後に失われずcarrier近傍へground化し、C1は古い`LoadedIn`を要求せず再割当できる。
+  - [x] F9とrollback後に旧WorldEpochのrequestを再生しても新worldを変更しない。
+  - [x] UI/Help/notification/dashboardとdomain結果が一致する。
+  - [x] native V1〜V5が合格する。
+  - [x] full workspace gateが成功し計画をarchiveする。
 - 検証:
   - `python3 scripts/dev.py verify`
   - `python3 scripts/check_help_impact.py`
   - `git diff --check`
+
+### M5完了結果（2026-08-08）
+
+- save/load横断ではdurable `DeconstructionOrder` とtarget Relationshipを保持し、runtime task / claim /
+  UI参照をresetして再割当できること、旧WorldEpoch requestのreplayが新worldを変更しないことを固定した。
+  F5/F9後も積載itemをC1の正本にせず、C3のcargo normalizer後のground itemから再仲裁する。
+- `hell-workers-review-help-impact` は Update required と判定し、解体・Soul Spa回収のHelp provider / manifest /
+  exhaustive coverage / approval snapshotと恒久docsを同期した。
+- no-prompt native acceptanceは
+  `target/native-acceptance/building-deconstruction-20260807T203553Z-56413aa7/job.json` でvalidとなり、
+  Intel Arc / Vulkan / Xlib実window上のV1〜V5を全て合格した。V5はsave/load後のdurable order・target、
+  runtime参照reset、stale replay非変更、dashboard priority / reassign / cancelまでを確認した。
+- fixed-step性能監査は
+  `target/perf-runs/hw-c1-deconstruction-perf-20260808-r8/report.md` で20/20 valid、signature
+  `e2aa04b465ffc1ab`を記録した。各runはmedium 100→99建物、全12種、commit / cleanup validation各1回、
+  recovery item 5件、steady-state validation delta 0のfixture契約を満たす。
+- `python3 scripts/dev.py verify` が全quality gateを通過し、docs indexと最終`git diff --check`も成功した。
 
 ## 6. リスクと対策
 
@@ -426,7 +516,7 @@ Bridgeの実投入mixを逆算しない。
 | Move中のtargetをcleanup | 移動先予約/anchorが孤立 | 指定/commitでMove状態をrejectしpending後の新規Moveをgate |
 | 持続blocker後に即再割当 | 解体progress/requestが無限loop | failureで完全unassignし既存diagnostic domain stampがstaleになるまで候補外にする |
 | order/targetをworkerより先にdespawn | `AssignedTask::Deconstruct`がguard abortまで残る | exact identity付きowner adapterで全workerをterminal化してからorder/targetを消す |
-| WorkType追加の追従漏れ | policy/UI/save/perfでpanic/非表示 | ALL/index/exhaustive Help/encoding coverageをM1で更新 |
+| WorkType追加の追従漏れ | policy/UI/save/perfでpanic/誤公開 | ALL/index/exhaustive Help/encoding coverageをM1で更新し、consumer完成まではplayer control列挙から除外 |
 | deconstruct指定後もproducerが動く | cleanup直前に新request | pending targetを全facility producerの共通gateにする |
 | Room/PowerをC1内で直接再計算 | 正本が分岐 | owner dirty/reconcilerだけをwakeし既存pipelineを再利用 |
 
@@ -440,24 +530,29 @@ Bridgeの実投入mixを逆算しない。
   - Room/path/Powerのsame-cycleまたは明示next-cycle収束。
   - mid-order/mid-task save/load、world-epoch stale replay、rollback。
 - native acceptance（実装時は `hell-workers-run-native-acceptance` のno-prompt launcherを使用）:
-  - V1: Orders→Deconstruct、hover理由、click指定、progress、回収表示。
-  - V2: Wall/Door/Floor/Bridgeを撤去し、通行性、壁接続、Room再検出を確認。
+  - V1はOrders→Deconstruct、hover理由、click指定、実際のFamiliar/Soul assignment・progress、回収表示までを
+    production経路で確認する。
+  - V2〜V4はactual window内でproduction finalizer / Room / Power pipelineを実行する決定的な
+    `AwaitingCommit` cleanup matrixである。各分類のUI designationやassignment/executorを再主張せず、
+    V1のproduction経路と組み合わせてcleanup境界を確認する。
+  - V2: Wall/Door/Floor/Bridgeを撤去し、通行性、壁接続、Room再検出とBridgeの安全drop先不足rejectを確認。
   - V3: Tank/Mixer/Rest/Parkingを内容ありで撤去し、資源/tool/occupantが失われないこと、
-    Sand/StasisMudが別Mixerへ移りwheelbarrow積載が維持されること、別Mixer容量不足とBridgeの安全drop先不足では
+    Sand/StasisMudが別Mixerへ移りwheelbarrow積載が維持されること、別Mixer容量不足とfacilityの安全drop先不足では
     非変更拒否になることを確認。
   - V4: Operational/Constructing Soul SpaとLampを撤去し、worker/request/発電/給電表示を確認。
   - V5: 指定後F5/F9、overlay capture、load後再割当、dashboard cancel/priorityを確認。
 - パフォーマンス:
   - Deconstruct未使用steady stateで追加全Entity走査0。
-  - cleanup scanは操作時だけ。M3で`deconstruction` fixtureをperf runnerへ追加し、`medium = 100 completed buildings`
-    を固定fixture契約として、
-    `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit --workload deconstruction --sizes medium --repeat 20 --output /tmp/hw-c1-deconstruction-perf-20260803`
-    により1 commit CPU時間、scan/spawn数、steady-state 0 scanを記録する。
+  - cleanup scanは操作時だけ。全target cleanupが揃うM5で`deconstruction` fixtureをperf runnerへ追加し、
+    `medium = 100 completed buildings`を固定fixture契約として、
+    `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit --workload deconstruction --sizes medium --repeat 20 --output target/perf-runs/hw-c1-deconstruction-perf-20260803`
+    により1 commitのfinalizer transaction経過時間、実validation/apply/spawn数、
+    steady-stateで追加validationが0件であることを記録する。
 - 完了時:
-  - `cargo fmt --all -- --check`
-  - `cargo check --workspace`
-  - `cargo clippy --workspace --all-targets -- -D warnings`
-  - `cargo test --workspace`
+  - `python3 scripts/dev.py cargo -- fmt --all -- --check`
+  - `python3 scripts/dev.py check`
+  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+  - `python3 scripts/dev.py cargo -- test --workspace`
   - `python3 scripts/dev.py verify`
 
 ## 8. ロールバック方針
@@ -472,16 +567,21 @@ Bridgeの実投入mixを逆算しない。
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1〜M5
-- 前提状態: Track C3完了・archive済み。C1 M1を開始可能。
+- 進捗: `100%`（M1〜M5 / 5 milestones）
+- 完了済みマイルストーン: M1、M2、M3、M4、M5
+- 未着手/進行中: なし（archive済み）
+- 完了状態: Track C3を前提に、全BuildingType / Soul Spa cleanup、save/load再構築、Help、native V1〜V5、
+  fixed-step性能監査、full workspace gateを完了した。
+
+M5の性能証跡は`target/perf-runs/hw-c1-deconstruction-perf-20260808-r8/report.md`、
+native証跡は`target/native-acceptance/building-deconstruction-20260807T203553Z-56413aa7/job.json`を正本とする。
+この計画に残作業はない。
 
 ### 次のAIが最初にやること
 
-1. current worktreeを確認し、C3の完成したregistry/schema coverageを前提にM1を開始する。
-2. 専用order root/Relationship、WorkType末尾append、全BuildingType recovery table、WorldMap owner逆引きtestを先に固定する。
-3. UI前にtask assign→commit→ordinary building cleanupのheadless vertical sliceを成立させる。
+1. C1の実装・検証記録はこのarchiveを参照し、再実装や未完了扱いに戻さない。
+2. 次のTrack C作業は`docs/plans/save-catalog-autosave-plan-2026-08-03.md`のC2 M1から開始する。
+3. C2でsave/load境界を拡張する際は、C1のdurable orderとruntime cleanupの既存契約を回帰対象として維持する。
 
 ### ブロッカー/注意点
 
@@ -514,21 +614,26 @@ Bridgeの実投入mixを逆算しない。
 
 ### 最終確認ログ
 
-- 最終 `cargo check --workspace`: `未実施（計画作成のみ）`
-- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `未実施（計画作成のみ）`
-- 最終 `cargo test --workspace`: `未実施（計画作成のみ）`
-- 未解決エラー: `N/A`
+- 最終 focused check: `python3 scripts/dev.py cargo -- check -p bevy_app@0.1.0`成功（2026-08-05）。M4 focused testは上記実績の全件成功。
+- 最終 performance gate: `target/perf-runs/hw-c1-deconstruction-perf-20260808-r8/report.md`で20/20 valid、
+  signature `e2aa04b465ffc1ab`（2026-08-08）。
+- 最終 native acceptance: `target/native-acceptance/building-deconstruction-20260807T203553Z-56413aa7/job.json`がvalid、
+  V1〜V5全件PASS（Intel Arc / Vulkan / Xlib）。
+- 最終 full workspace gate: `python3 scripts/dev.py verify`成功（2026-08-08、All quality gates passed）。
+- Help impact判断: Update required。全BuildingType / Soul Spa cleanup、construction cancel、Room / Power再計算を
+  `building-deconstruction` / `soul-energy-recovery` entryへ反映し、exact approval snapshotとimpact gateを再検証した。
+- 未解決エラー: `なし`
 
 ### Definition of Done
 
-- [ ] M1〜M5が完了
-- [ ] 全既存BuildingTypeとSoul Spaのcleanup matrixが合格
-- [ ] 専用order、target単位commit claim、world-epoch resetが重複/cancel/load競合を排他する
-- [ ] winner/loser/cancel/staleの全経路でexact identity付きworker terminalがexactly once成立する
-- [ ] storage内容/tool/資源が消失・二重生成しない
-- [ ] save/load、dashboard、policy、Helpが同期
-- [ ] native V1〜V5が合格
-- [ ] `python3 scripts/dev.py verify`が成功
+- [x] M1〜M5が完了
+- [x] 全既存BuildingTypeとSoul Spaのcleanup matrixが合格
+- [x] 専用order、target単位commit claim、world-epoch resetが重複/cancel/load競合を排他する
+- [x] winner/loser/cancel/staleの全経路でexact identity付きworker terminalがexactly once成立する
+- [x] storage内容/tool/資源が消失・二重生成しない
+- [x] save/load、dashboard、policy、Helpが同期
+- [x] native V1〜V5が合格
+- [x] `python3 scripts/dev.py verify`が成功
 
 ## 10. 更新履歴
 
@@ -537,3 +642,10 @@ Bridgeの実投入mixを逆算しない。
 | `2026-08-03` | `Codex` | 専用order root、target単位commit claim、revision-gated failure復帰、owner-safe cleanup、揮発資材の事前storage確保、Mixer実体整合、Move競合、固定salvageをC1実装契約として確定 |
 | `2026-08-03` | `Codex` | 自己レビューでC3を必須前提化し、exact worker identity終端、既存diagnostic stamp、別Mixerへのvolatile移送、wheelbarrow積載維持、SandPile回収0へ修正 |
 | `2026-08-04` | `Codex` | 前提Track C3の実装・実機受入・archive完了を反映。C1はDraft/0%を維持し、次の着手点をM1へ更新 |
+| `2026-08-04` | `Codex` | M1を完了。WorkType/task型、durable order Relationship、target resolver、固定salvage、stackable Floor ownerと旧save移送、save validator/runtime rebuild、全player control非公開のHelp fail-closed境界を実装し、次をM2 headless vertical sliceへ更新 |
+| `2026-08-04` | `Codex` | 最終レビューでrelationship hook skip時のself/role重複、直接Designation、dual-roleをfail-closed化し、non-identity Entity remapと旧Floor owner migrationの回帰を追加 |
+| `2026-08-04` | `Codex` | M2を完了。Familiar/Soul vertical slice、exact worker terminal、target単位claim、owner-safe pile cleanup、固定salvage、TransportRequest/cache cleanup、revision-gated blockerと競合/stale回帰を実装し、次をM3 UI/storageへ更新 |
+| `2026-08-05` | `Codex` | M3を完了。Orders single-click/hover/capture、Operation policy、Task Dashboard owner cancel、typed通知/Help、Tank/Mixer/Rest/Parkingのatomic recoveryとpending producer gateを実装。全target性能fixtureはM4完了後のM5へ移し、次をstructure/Soul Spa統合へ更新 |
+| `2026-08-05` | `Codex` | M4を完了。Wall/Door/Floor/Bridgeのowner-safe map/cache/Room/wall visual cleanup、Operational/Constructing Soul Spaのsite lifecycle、Soul Spa/Lamp撤去後のsame-update Power/visual整合、Help/恒久docsを実装し、次をM5 save/load・性能・no-prompt実機受入へ更新 |
+| `2026-08-05` | `Codex` | M5のdeconstruction fixed-step性能fixtureとsidecar validatorを実装。medium 100棟/全12種類/1 commit/回収Bone 5/steady-state scan 0を契約化し、実行はホストmemory不足で保留。native V1〜V5とfull gateは未完了 |
+| `2026-08-08` | `Codex` | M5を完了。save/load runtime reset・stale epoch回帰、Help/恒久docs、Intel Arc/Vulkan/Xlib native V1〜V5、fixed-step r8性能監査20/20、full workspace verifyを完了し、C1をarchive |

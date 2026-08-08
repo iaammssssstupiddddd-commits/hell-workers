@@ -69,6 +69,11 @@ PowerGrid エンティティは Yard と厳密に 1 対 1 で存在する。Obse
 4. `bones_delivered >= bones_required` (12) で `soul_spa_tile_activate_system` が Operational に遷移
 5. 各タイルに `Designation(GeneratePower)` + `TaskSlots{max:1}` を付与
 
+Constructing中は情報パネル、またはTask Dashboardのwell-formedな`DeliverToSoulSpa`行からsite単位でcancelできる。
+owner consumerは2×2 footprint、4 tile、関連worker/request、power shapeを事前検証し、成功時だけ全owner状態を
+一括除去して`bones_delivered`の実数をBoneとして100%返す。pause中の情報パネル操作は停止中のLogicへrequestを
+残さず`Paused` outcomeへ即時終端し、resume後に遅延適用しない。
+
 ### 4.3 発電出力の計算
 
 `soul_spa_power_output_system`（Update, GameSystemSet::Logic）:
@@ -99,6 +104,17 @@ Familiar AI の `assign_generate_power` は、既存 `TaskWorkers` と同じ割�
 二重submitでsite枠だけを消費して別の空きtileを取り逃すことも、複数Familiarが枠上限を超えることも防ぐ。
 デフォルトは4。稼働中数より小さく変更しても既存worker・task・relationshipは解除しない（no-kick）。
 表示は `Draining (N active / M configured)` となり、既存作業の終了後から新規割当だけをM体まで止める。
+
+### 4.6 解体時のowner lifecycle
+
+Operational Soul Spaの一般解体はsite rootを正本に、4 tileの`GeneratePower` task/worker、
+`DeliverToSoulSpa` request、`GeneratesFor` / `GridGenerators`、2D child / 3D proxy、WorldMapの2×2 ownerを
+同じexclusive commitで閉じる。Outdoor Lampは`ConsumesFrom` / `GridConsumers`とpassable building ownerを閉じる。
+どちらもowner/reverse relationship shapeが一致しなければ非変更でfail-closeし、targetだけを先にdespawnしない。
+
+commitは`EnergyUpdateDirty::request_full_rebuild()`を発行し、production energy transactionが同じUpdateで
+topology、Soul Spa output、allocation、`Unpowered`を再計算する。続くVisualで`PoweredVisualState`とsprite色まで
+同期するため、Soul Spa撤去後の負荷遮断とLamp撤去後の残存consumer復旧は最初の有効frameで完結する。
 
 ## 5. 消費: Outdoor Lamp
 
@@ -139,7 +155,8 @@ Yard 外または有効なGridがないconsumerは `PowerSupplyState::Disconnect
 energy pipelineはSoul AI state-sanityの名前付きflush後に、次の順で1 transactionとして実行する。
 
 ```text
-SoulSpa construction → ApplyDeferred
+Deconstruction finalizer / construction owner cancel
+→ SoulSpa construction → ApplyDeferred
 → SettingsからPowerAllocationMode同期（実値変更時だけdirty）
 → dirty検出
 → topology reconciliation → ApplyDeferred
@@ -155,6 +172,7 @@ output/allocationはsteady-stateでは実行せず、次の変更でdirtyにな�
 - `PowerConsumerPolicy`、`GeneratesFor` / `ConsumesFrom` とtarget relationshipの変更
 - `PowerSupplyState` / `PowerGridAllocationSummary` の欠落（runtime stateのfail-closed再構築）
 - Yard境界、consumer/generator位置、load/rollback後の最初の完全再構築
+- Operational Soul Spa / Outdoor Lampのowner-safe解体、Constructing Soul Spaのcancel
 
 Soul Spa出力の`current_output`は同じtransaction内でallocation dirtyへ明示伝播し、そのderived writeだけ
 change detectionを抑制する。したがって翌frameの自己再起動は起こさない。一方、外部からの`PowerGenerator`
@@ -202,6 +220,8 @@ change detectionを抑制する。したがって翌frameの自己再起動は�
 - `Changed<PoweredVisualState>` を検知
 - `is_powered=true` → `Color::WHITE`、`false` → `Color::srgba(0.4, 0.4, 0.4, 1.0)`
 - エンティティ自身 + 子 Sprite のカラーを更新
+- Deconstruction finalizerはLogic中にenergy dirtyを立て、energy transactionとVisualが後続するため、撤去による
+  残存consumerの色変更も同じ`Update`で反映する
 
 ### 7.3 Power Status UI
 
@@ -216,7 +236,8 @@ Soul Spa / PowerConsumer の共通 Power Grid section は次を表示する。
 
 表示は`PowerGrid.powered`や`Unpowered`だけから推測せず、typed `PowerInspectionFields`へ写した
 runtime summary/stateを正本にする。Generator / Consumerのroleを分けるため、正常なSoul Spaを
-`Generator / rebuilding`と誤表示しない。Constructing中は骨材進捗だけを表示し、output・grid・枠操作は隠す。
+`Generator / rebuilding`と誤表示しない。Constructing中は骨材進捗と`Cancel Construction`だけを表示し、
+output・grid・枠操作は隠す。Operationalではconstruction cancelを隠す。
 stale/unsupported/missing policyやslot clamp/phase failureは専用outcomeから
 同じUpdateのtoastへ変換する。
 
@@ -229,6 +250,7 @@ stale/unsupported/missing policyやslot clamp/phase failureは専用outcomeか�
 | 稼働枠を下げてもSoulがすぐ退出しない | `Draining` | no-kick仕様。現在作業は完了まで継続し、新規割当だけを止める |
 | 発電量が需要と一致してもShedが復旧しない | `RestoreMargin` | 既知Shedの復旧だけ余裕を要求する。発電量をmargin以上へ増やす |
 | ランプ追加/出力変更後に通電状態が古い | energy pipeline の順序が崩れている | topology/output/allocationのdeferred境界とeffect前flushを保つ |
+| pause中のSoul Spa cancelがresume後に突然適用される | 停止中のLogicへrequestを残している | root adapterで`Paused` outcomeへ即時終端し、requestを発行しない |
 
 ## 9. 定数一覧
 

@@ -7,10 +7,10 @@
 | 計画ID | `save-catalog-autosave-plan-2026-08-03` |
 | ステータス | `Draft` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-04` |
+| 最終更新日 | `2026-08-08` |
 | 作成者 | `Codex` |
 | 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track C2） |
-| 前提計画 | `docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`（C3完了済み）、`docs/plans/building-deconstruction-plan-2026-08-03.md`（C1完了待ち） |
+| 前提計画 | `docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`（C3完了済み）、`docs/plans/archive/building-deconstruction-plan-2026-08-03.md`（C1完了済み） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的
@@ -501,13 +501,13 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 - 進捗: `0%`
 - 完了済みマイルストーン: なし
 - 未着手/進行中: M1〜M5
-- 前提状態: Track C3は完了。Track C1が未完了のためC2は引き続き待機。
+- 前提状態: Track C3とC1は完了・archive済み。C2はM1から開始可能。
 
 ### 次のAIが最初にやること
 
-1. C1完了とcurrent save/load diffを確認する。C1未完了ならC2を開始しない。
-2. M1でtyped slot/path mappingとbounded catalog fixtureだけを実装し、UIへ進む前にstatus分類を固定する。
-3. M2でrequestへslotとAbsent/Exact revisionを埋め込み、単一`SavePath`差替え方式を残さない。
+1. M1でtyped slot/path mappingとbounded catalog fixtureだけを実装し、UIへ進む前にstatus分類を固定する。
+2. M2でrequestへslotとAbsent/Exact revisionを埋め込み、単一`SavePath`差替え方式を残さない。
+3. C1のdurable `DeconstructionOrder`、runtime task cleanup、C3のrehydrate契約をsave/load回帰対象として維持する。
 
 ### ブロッカー/注意点
 
@@ -562,3 +562,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 | `2026-08-03` | `Codex` | role/health/capability分離、revision-bound no-clobber save、失敗種別別UI終端、共通SaveEligibility、active-time autosave、再現可能な性能gate、v1 additive方針をC2実装契約として確定 |
 | `2026-08-03` | `Codex` | 自己レビューでorigin別eligibility、autosave Absent/Exact、file+directory sync、streaming memory境界、mtime fallback、全failure backoff、RecoveryFailed再ロード経路へ修正 |
 | `2026-08-04` | `Codex` | 前提Track C3の実装・archive完了を反映。C2はDraft/0%とC1完了待ちを維持 |
+| `2026-08-08` | `Codex` | 前提Track C1のM1〜M5完了・archiveを反映。C2はDraft/0%のままM1から開始可能へ更新 |

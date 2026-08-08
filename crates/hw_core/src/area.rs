@@ -121,6 +121,7 @@ pub fn get_drag_start(mode: TaskMode) -> Option<Vec2> {
         TaskMode::DesignateChop(s) => s,
         TaskMode::DesignateMine(s) => s,
         TaskMode::DesignateHaul(s) => s,
+        TaskMode::DesignateDeconstruct(s) => s,
         TaskMode::CancelDesignation(s) => s,
         TaskMode::ZonePlacement(_, s) => s,
         TaskMode::ZoneRemoval(_, s) => s,

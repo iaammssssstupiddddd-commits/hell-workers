@@ -4,10 +4,12 @@ mod buildings;
 mod doors;
 mod floors;
 mod obstacles;
+mod ownership;
 mod stockpiles;
 mod tiles;
 
 pub use access::{WorldMapRead, WorldMapWrite};
+pub use ownership::WorldMapOwnerSnapshot;
 
 use crate::TerrainType;
 use crate::pathfinding::PathWorld;
@@ -41,6 +43,7 @@ pub struct WorldMap {
     pub tiles: Vec<TerrainType>,
     pub tile_entities: Vec<Option<Entity>>,
     pub buildings: HashMap<(i32, i32), Entity>,
+    /// Completed Floor ownership is stackable beneath `buildings` occupancy.
     /// Completed Floor occupancy, kept separate from ordinary building cells.
     #[serde(default)]
     pub floors: HashMap<(i32, i32), Entity>,

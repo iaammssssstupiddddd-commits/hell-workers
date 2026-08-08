@@ -181,6 +181,13 @@ pub(crate) fn handle_ui_intent(
                     .set_soul_spa_active_slots(target, active_slots);
                 false
             }
+            UiIntent::CancelSoulSpaConstruction { target } => {
+                let paused = action_contexts.p0().time.is_paused();
+                action_contexts
+                    .p1()
+                    .cancel_soul_spa_construction(target, paused);
+                false
+            }
             UiIntent::SetPowerConsumerPriority { target, priority } => {
                 action_contexts
                     .p1()
@@ -228,6 +235,8 @@ mod tests {
     #[test]
     fn handler_system_params_are_conflict_free() {
         let mut app = minimal_app();
+        app.add_message::<hw_energy::SoulSpaConstructionCancelRequest>();
+        app.add_message::<hw_energy::SoulSpaConstructionCancelOutcome>();
         let mut system = IntoSystem::into_system(handle_ui_intent);
 
         system.initialize(app.world_mut());
@@ -241,6 +250,8 @@ mod tests {
             .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
             .add_message::<hw_logistics::StockpilePolicyChangeRequest>()
             .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
+            .add_message::<hw_energy::SoulSpaConstructionCancelRequest>()
+            .add_message::<hw_energy::SoulSpaConstructionCancelOutcome>()
             .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
             .init_state::<PlayMode>()
             .init_resource::<BuildContext>()
@@ -339,6 +350,21 @@ mod tests {
         mut receipts: ResMut<SoulSpaSlotReceipts>,
     ) {
         receipts.0.extend(outcomes.read().copied());
+    }
+
+    #[derive(Resource, Default)]
+    struct SoulSpaCancelReceipts {
+        requests: Vec<hw_energy::SoulSpaConstructionCancelRequest>,
+        outcomes: Vec<hw_energy::SoulSpaConstructionCancelOutcome>,
+    }
+
+    fn collect_soul_spa_cancel_receipts(
+        mut requests: MessageReader<hw_energy::SoulSpaConstructionCancelRequest>,
+        mut outcomes: MessageReader<hw_energy::SoulSpaConstructionCancelOutcome>,
+        mut receipts: ResMut<SoulSpaCancelReceipts>,
+    ) {
+        receipts.requests.extend(requests.read().copied());
+        receipts.outcomes.extend(outcomes.read().copied());
     }
 
     #[derive(Resource, Default)]
@@ -472,6 +498,58 @@ mod tests {
                     status: SoulSpaSlotsChangeStatus::StaleTarget,
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn soul_spa_construction_cancel_intent_routes_to_the_domain_owner() {
+        let mut app = domain_action_app();
+        app.init_resource::<SoulSpaCancelReceipts>().add_systems(
+            Update,
+            collect_soul_spa_cancel_receipts.after(handle_ui_intent),
+        );
+        let target = app.world_mut().spawn_empty().id();
+
+        write_intent(&mut app, UiIntent::CancelSoulSpaConstruction { target });
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<SoulSpaCancelReceipts>().requests,
+            vec![hw_energy::SoulSpaConstructionCancelRequest { target }]
+        );
+        assert!(
+            app.world()
+                .resource::<SoulSpaCancelReceipts>()
+                .outcomes
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn paused_soul_spa_cancel_is_rejected_once_without_buffering_a_request() {
+        let mut app = domain_action_app();
+        app.init_resource::<SoulSpaCancelReceipts>().add_systems(
+            Update,
+            collect_soul_spa_cancel_receipts.after(handle_ui_intent),
+        );
+        let target = app.world_mut().spawn_empty().id();
+        app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        write_intent(&mut app, UiIntent::CancelSoulSpaConstruction { target });
+
+        for _ in 0..3 {
+            app.update();
+        }
+        app.world_mut().resource_mut::<Time<Virtual>>().unpause();
+        app.update();
+
+        let receipts = app.world().resource::<SoulSpaCancelReceipts>();
+        assert!(receipts.requests.is_empty());
+        assert_eq!(
+            receipts.outcomes,
+            vec![hw_energy::SoulSpaConstructionCancelOutcome {
+                target,
+                result: hw_energy::SoulSpaConstructionCancelResult::Paused,
+            }]
         );
     }
 
@@ -847,6 +925,28 @@ mod tests {
     }
 
     #[test]
+    fn deconstruction_task_mode_intent_enters_task_designation() {
+        let mut app = domain_action_app();
+
+        write_intent(
+            &mut app,
+            UiIntent::SelectTaskMode(TaskMode::DesignateDeconstruct(None)),
+        );
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<TaskContext>().0,
+            TaskMode::DesignateDeconstruct(None)
+        );
+        assert!(matches!(
+            *app.world().resource::<NextState<PlayMode>>(),
+            NextState::Pending(PlayMode::TaskDesignation)
+                | NextState::PendingIfNeq(PlayMode::TaskDesignation)
+        ));
+        assert_eq!(*app.world().resource::<MenuState>(), MenuState::Hidden);
+    }
+
+    #[test]
     fn move_plant_intent_rejects_despawned_or_non_plant_target() {
         let mut app = domain_action_app();
         let wall = spawn_building(&mut app, BuildingType::Wall);
@@ -859,6 +959,17 @@ mod tests {
         let stale = spawn_building(&mut app, BuildingType::Tank);
         assert!(app.world_mut().despawn(stale));
         write_intent(&mut app, UiIntent::MovePlantBuilding(stale));
+        app.update();
+
+        assert!(app.world().resource::<SelectedEntity>().0.is_none());
+        assert!(app.world().resource::<MoveContext>().0.is_none());
+
+        let pending = spawn_building(&mut app, BuildingType::Tank);
+        let order = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .entity_mut(pending)
+            .insert(hw_jobs::DeconstructionPending { order });
+        write_intent(&mut app, UiIntent::MovePlantBuilding(pending));
         app.update();
 
         assert!(app.world().resource::<SelectedEntity>().0.is_none());

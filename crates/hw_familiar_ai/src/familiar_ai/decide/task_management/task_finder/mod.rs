@@ -57,6 +57,7 @@ pub struct FamiliarCandidateSources<'a> {
     pub transport_request_grid: &'a TransportRequestSpatialGrid,
     pub managed_tasks: &'a ManagedTasks,
     pub world_map: &'a WorldMap,
+    pub active_move_targets: &'a HashSet<Entity>,
 }
 
 fn include_in_global_designation_scan(work_type: WorkType, is_managed_by_yard: bool) -> bool {
@@ -152,8 +153,7 @@ fn collect_scored_candidates_internal(
             entity,
             ctx.task_area_opt,
             &all_yards,
-            sources.managed_tasks,
-            sources.world_map,
+            &sources,
             queries,
         ) {
             Ok(snapshot) => snapshot,
@@ -232,7 +232,11 @@ mod tests {
     use hw_core::familiar::Familiar;
     use hw_core::relationships::ManagedBy;
     use hw_jobs::events::TaskAssignmentRequest;
-    use hw_jobs::{Blueprint, BuildingType, Designation, Priority, Rock, TaskSlots, Tree};
+    use hw_jobs::mud_mixer::MudMixerStorage;
+    use hw_jobs::{
+        Blueprint, Building, BuildingType, DeconstructionOrder, DeconstructionPending, Designation,
+        PendingBuildingMove, Priority, Rock, SandPile, TargetDeconstructionRoot, TaskSlots, Tree,
+    };
     use hw_logistics::SharedResourceCache;
 
     #[derive(Resource, Default)]
@@ -284,6 +288,7 @@ mod tests {
                 transport_request_grid: &transport_request_grid,
                 managed_tasks,
                 world_map: queries.read.world_map.as_ref(),
+                active_move_targets: &HashSet::new(),
             },
             &q_target_blueprints,
         )
@@ -318,6 +323,7 @@ mod tests {
                     transport_request_grid: &transport_request_grid,
                     managed_tasks,
                     world_map: queries.read.world_map.as_ref(),
+                    active_move_targets: &HashSet::new(),
                 },
                 &q_target_blueprints,
                 &mut diagnostics,
@@ -372,6 +378,7 @@ mod tests {
                 transport_request_grid: &transport_request_grid,
                 managed_tasks,
                 world_map: queries.read.world_map.as_ref(),
+                active_move_targets: &HashSet::new(),
             },
             &q_target_blueprints,
         )
@@ -390,6 +397,172 @@ mod tests {
     #[test]
     fn build_designations_keep_global_scan_fallback() {
         assert!(include_in_global_designation_scan(WorkType::Build, false));
+    }
+
+    #[test]
+    fn deconstruction_policy_controls_candidate_membership_and_priority() {
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<SharedResourceCache>()
+            .init_resource::<hw_logistics::transport_request::WheelbarrowArbitrationDiagnostics>()
+            .init_resource::<DesignationSpatialGrid>()
+            .init_resource::<TransportRequestSpatialGrid>()
+            .init_resource::<ContributionProbe>()
+            .add_message::<ResourceReservationRequest>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_systems(Update, capture_policy_contributions);
+
+        let mut policy = FamiliarPolicy::default();
+        policy.set_rule(
+            WorkType::Deconstruct,
+            hw_core::familiar::FamiliarWorkRule {
+                allowed: true,
+                priority: hw_core::familiar::FamiliarWorkPriority::High,
+            },
+        );
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                policy,
+                Transform::default(),
+                ManagedTasks::default(),
+            ))
+            .id();
+        let position = Vec2::splat(32.0);
+        let target = app
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::SandPile,
+                    is_provisional: false,
+                },
+                SandPile,
+                Transform::from_translation(position.extend(0.0)),
+            ))
+            .id();
+        let order = app
+            .world_mut()
+            .spawn((
+                DeconstructionOrder,
+                Designation {
+                    work_type: WorkType::Deconstruct,
+                },
+                ManagedBy(familiar),
+                TaskSlots::new(1),
+                Priority::default(),
+                TargetDeconstructionRoot(target),
+                Transform::from_translation(position.extend(0.0)),
+            ))
+            .id();
+        app.world_mut().flush();
+        app.world_mut()
+            .entity_mut(target)
+            .insert(DeconstructionPending { order });
+        app.world_mut()
+            .resource_mut::<WorldMap>()
+            .set_building_occupancy(WorldMap::world_to_grid(position), target);
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<ContributionProbe>().0.get(&order),
+            Some(&super::PolicyScoreContributions::new(0, 5))
+        );
+
+        app.world_mut()
+            .entity_mut(target)
+            .insert(PendingBuildingMove {
+                old_occupied: vec![(2, 2)],
+                new_occupied: vec![(3, 3)],
+                companion_anchor: None,
+            });
+        app.update();
+        assert!(
+            !app.world()
+                .resource::<ContributionProbe>()
+                .0
+                .contains_key(&order),
+            "pending move apply evidence must suppress the candidate"
+        );
+        app.world_mut()
+            .entity_mut(target)
+            .remove::<PendingBuildingMove>();
+        app.update();
+        assert_eq!(
+            app.world().resource::<ContributionProbe>().0.get(&order),
+            Some(&super::PolicyScoreContributions::new(0, 5))
+        );
+
+        {
+            let mut disabled = app
+                .world_mut()
+                .get_mut::<FamiliarPolicy>(familiar)
+                .expect("fixture familiar keeps its policy");
+            disabled.set_rule(
+                WorkType::Deconstruct,
+                hw_core::familiar::FamiliarWorkRule {
+                    allowed: false,
+                    priority: hw_core::familiar::FamiliarWorkPriority::High,
+                },
+            );
+        }
+        app.update();
+
+        assert!(
+            !app.world()
+                .resource::<ContributionProbe>()
+                .0
+                .contains_key(&order)
+        );
+    }
+
+    #[test]
+    fn pending_mixer_suppresses_an_existing_refine_candidate() {
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<SharedResourceCache>()
+            .init_resource::<hw_logistics::transport_request::WheelbarrowArbitrationDiagnostics>()
+            .init_resource::<DesignationSpatialGrid>()
+            .init_resource::<TransportRequestSpatialGrid>()
+            .init_resource::<CandidateProbe>()
+            .add_message::<ResourceReservationRequest>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_systems(Update, capture_candidates);
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                FamiliarPolicy::default(),
+                Transform::default(),
+                ManagedTasks::default(),
+            ))
+            .id();
+        let mixer = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(32.0, 32.0, 0.0),
+                MudMixerStorage::default(),
+                Designation {
+                    work_type: WorkType::Refine,
+                },
+                ManagedBy(familiar),
+                TaskSlots::new(1),
+                Priority::default(),
+            ))
+            .id();
+        app.world_mut().flush();
+
+        app.update();
+        assert!(app.world().resource::<CandidateProbe>().0.contains(&mixer));
+
+        let order = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .entity_mut(mixer)
+            .insert(DeconstructionPending { order });
+        app.update();
+
+        assert!(!app.world().resource::<CandidateProbe>().0.contains(&mixer));
     }
 
     #[test]

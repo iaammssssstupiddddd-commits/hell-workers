@@ -26,7 +26,11 @@ impl Plugin for UiNotificationsPlugin {
                 crate::interface::ui::notifications::adapt_stockpile_policy_change_outcomes,
                 crate::interface::ui::notifications::adapt_familiar_settings_change_outcomes,
                 crate::interface::ui::notifications::adapt_soul_spa_slots_change_outcomes,
+                crate::interface::ui::notifications::adapt_soul_spa_construction_cancel_outcomes,
                 crate::interface::ui::notifications::adapt_power_consumer_policy_change_outcomes,
+                crate::interface::ui::notifications::adapt_deconstruction_designation_outcomes,
+                crate::interface::ui::notifications::adapt_deconstruction_cancel_outcomes,
+                crate::interface::ui::notifications::adapt_deconstruction_commit_outcomes,
                 crate::interface::ui::panels::task_list::adapt_task_action_outcomes,
             )
                 .in_set(NotificationSystemSet::Adapt),
@@ -81,8 +85,7 @@ mod tests {
         trace.0.push(center.history_count());
     }
 
-    #[test]
-    fn adapt_reduce_and_present_run_in_the_same_update_in_order() {
+    fn notification_test_app() -> App {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
             .add_message::<SaveLoadOutcome>()
@@ -90,10 +93,20 @@ mod tests {
             .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
             .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
             .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
+            .add_message::<hw_energy::SoulSpaConstructionCancelOutcome>()
             .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
+            .add_message::<hw_jobs::DeconstructionDesignationOutcome>()
+            .add_message::<hw_jobs::DeconstructionCancelOutcome>()
+            .add_message::<hw_jobs::DeconstructionCommitOutcome>()
             .init_resource::<UiTheme>()
-            .init_resource::<UiInputState>()
-            .init_resource::<PresentTrace>()
+            .init_resource::<UiInputState>();
+        app
+    }
+
+    #[test]
+    fn adapt_reduce_and_present_run_in_the_same_update_in_order() {
+        let mut app = notification_test_app();
+        app.init_resource::<PresentTrace>()
             .add_systems(Update, adapt.in_set(NotificationSystemSet::Adapt))
             .add_systems(Update, trace_present.in_set(NotificationSystemSet::Present));
 
@@ -104,16 +117,7 @@ mod tests {
 
     #[test]
     fn identical_save_load_outcomes_coalesce_through_the_real_adapter() {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
-            .add_message::<SaveLoadOutcome>()
-            .add_message::<TaskActionOutcome>()
-            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
-            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
-            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
-            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
-            .init_resource::<UiTheme>()
-            .init_resource::<UiInputState>();
+        let mut app = notification_test_app();
         let outcome = SaveLoadOutcome {
             operation: SaveLoadOperation::Load,
             target: "world.scn.ron".to_owned(),
@@ -131,16 +135,7 @@ mod tests {
 
     #[test]
     fn task_action_outcome_becomes_one_toast_without_history() {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
-            .add_message::<SaveLoadOutcome>()
-            .add_message::<TaskActionOutcome>()
-            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
-            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
-            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
-            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
-            .init_resource::<UiTheme>()
-            .init_resource::<UiInputState>();
+        let mut app = notification_test_app();
         let entity = app.world_mut().spawn_empty().id();
         app.world_mut().write_message(TaskActionOutcome {
             entity,
@@ -162,17 +157,59 @@ mod tests {
     }
 
     #[test]
+    fn deconstruction_cancel_waits_for_one_canonical_owner_outcome_toast() {
+        let mut app = notification_test_app();
+        let order = app.world_mut().spawn_empty().id();
+        let target = app.world_mut().spawn_empty().id();
+        app.world_mut().write_message(TaskActionOutcome {
+            entity: order,
+            action: TaskActionKind::Cancel,
+            result: TaskActionResult::AwaitingOwnerOutcome,
+        });
+        app.world_mut()
+            .write_message(hw_jobs::DeconstructionCancelOutcome {
+                order,
+                target: Some(target),
+                result: hw_jobs::DeconstructionCancelResult::Canceled,
+            });
+
+        app.update();
+
+        let center = app.world().resource::<NotificationCenter>();
+        assert_eq!(center.toast_count(), 1);
+        let toast = center.toast_entries().next().unwrap();
+        assert_eq!(toast.severity, NotificationSeverity::Success);
+        assert!(toast.body.contains("cleaned up safely"));
+    }
+
+    #[test]
+    fn soul_spa_cancel_waits_for_one_canonical_owner_outcome_toast() {
+        let mut app = notification_test_app();
+        let request = app.world_mut().spawn_empty().id();
+        let site = app.world_mut().spawn_empty().id();
+        app.world_mut().write_message(TaskActionOutcome {
+            entity: request,
+            action: TaskActionKind::Cancel,
+            result: TaskActionResult::AwaitingOwnerOutcome,
+        });
+        app.world_mut()
+            .write_message(hw_energy::SoulSpaConstructionCancelOutcome {
+                target: site,
+                result: hw_energy::SoulSpaConstructionCancelResult::Canceled { refunded_bones: 7 },
+            });
+
+        app.update();
+
+        let center = app.world().resource::<NotificationCenter>();
+        assert_eq!(center.toast_count(), 1);
+        let toast = center.toast_entries().next().unwrap();
+        assert_eq!(toast.severity, NotificationSeverity::Success);
+        assert!(toast.body.contains('7'));
+    }
+
+    #[test]
     fn stockpile_policy_outcome_becomes_a_warning_toast_in_the_same_update() {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
-            .add_message::<SaveLoadOutcome>()
-            .add_message::<TaskActionOutcome>()
-            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
-            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
-            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
-            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
-            .init_resource::<UiTheme>()
-            .init_resource::<UiInputState>();
+        let mut app = notification_test_app();
         app.world_mut()
             .write_message(hw_logistics::StockpilePolicyChangeOutcome {
                 requested: 2,
@@ -195,16 +232,7 @@ mod tests {
 
     #[test]
     fn familiar_all_disabled_outcome_becomes_one_warning_in_the_same_update() {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
-            .add_message::<SaveLoadOutcome>()
-            .add_message::<TaskActionOutcome>()
-            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
-            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
-            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
-            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
-            .init_resource::<UiTheme>()
-            .init_resource::<UiInputState>();
+        let mut app = notification_test_app();
         app.world_mut()
             .write_message(hw_familiar_ai::FamiliarSettingsChangeOutcome {
                 target: Entity::PLACEHOLDER,
@@ -226,16 +254,7 @@ mod tests {
 
     #[test]
     fn soul_spa_clamped_outcome_becomes_one_warning_in_the_same_update() {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
-            .add_message::<SaveLoadOutcome>()
-            .add_message::<TaskActionOutcome>()
-            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
-            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
-            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
-            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
-            .init_resource::<UiTheme>()
-            .init_resource::<UiInputState>();
+        let mut app = notification_test_app();
         app.world_mut()
             .write_message(hw_energy::SoulSpaSlotsChangeOutcome {
                 target: Entity::PLACEHOLDER,
@@ -257,16 +276,7 @@ mod tests {
 
     #[test]
     fn soul_spa_exact_outcome_becomes_one_success_toast_in_the_same_update() {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
-            .add_message::<SaveLoadOutcome>()
-            .add_message::<TaskActionOutcome>()
-            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
-            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
-            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
-            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
-            .init_resource::<UiTheme>()
-            .init_resource::<UiInputState>();
+        let mut app = notification_test_app();
         app.world_mut()
             .write_message(hw_energy::SoulSpaSlotsChangeOutcome {
                 target: Entity::PLACEHOLDER,
@@ -289,16 +299,7 @@ mod tests {
 
     #[test]
     fn missing_power_policy_becomes_one_error_in_the_same_update() {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, HwUiPlugin, UiNotificationsPlugin))
-            .add_message::<SaveLoadOutcome>()
-            .add_message::<TaskActionOutcome>()
-            .add_message::<hw_logistics::StockpilePolicyChangeOutcome>()
-            .add_message::<hw_familiar_ai::FamiliarSettingsChangeOutcome>()
-            .add_message::<hw_energy::SoulSpaSlotsChangeOutcome>()
-            .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
-            .init_resource::<UiTheme>()
-            .init_resource::<UiInputState>();
+        let mut app = notification_test_app();
         app.world_mut()
             .write_message(hw_energy::PowerConsumerPolicyChangeOutcome {
                 target: Entity::PLACEHOLDER,

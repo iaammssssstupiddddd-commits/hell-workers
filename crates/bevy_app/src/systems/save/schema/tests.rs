@@ -226,6 +226,7 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
             world.spawn(Tree).id(),
             world.spawn(Rock).id(),
             world.spawn(Tile).id(),
+            world.spawn(DeconstructionOrder).id(),
             world
                 .spawn(hw_world::zones::Site {
                     min: Vec2::ZERO,
@@ -367,6 +368,141 @@ fn root_marker_matrix_collects_extracts_and_round_trips_durable_entities() {
         destination
             .get::<PlayerIssuedDesignation>(mapped_designation)
             .is_some()
+    );
+}
+
+#[test]
+fn deconstruction_order_relationship_round_trips_and_runtime_gates_do_not_persist() {
+    use hw_jobs::{
+        DeconstructionCommitClaim, DeconstructionOrder, DeconstructionOrders,
+        DeconstructionPending, TargetDeconstructionRoot,
+    };
+
+    let mut app = App::new();
+    register_save_types(&mut app);
+    let target = app
+        .world_mut()
+        .spawn((
+            Building {
+                kind: BuildingType::Wall,
+                is_provisional: false,
+            },
+            Transform::default(),
+        ))
+        .id();
+    let order = app
+        .world_mut()
+        .spawn((
+            DeconstructionOrder,
+            Designation {
+                work_type: WorkType::Deconstruct,
+            },
+            PlayerIssuedDesignation,
+            Priority(4),
+            TaskSlots::new(1),
+            TargetDeconstructionRoot(target),
+            Transform::default(),
+        ))
+        .id();
+    app.world_mut().flush();
+    app.world_mut().entity_mut(target).insert((
+        DeconstructionPending { order },
+        DeconstructionCommitClaim {
+            world_epoch: 9,
+            order,
+        },
+    ));
+
+    let roots = collect_persisted_entities(app.world_mut());
+    assert!(roots.contains(&target));
+    assert!(roots.contains(&order));
+
+    let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+    let registry = type_registry.read();
+    let dynamic_world = build_persisted_world(app.world(), &registry, roots.into_iter());
+    let dynamic_has_component = |entity: Entity, type_id: TypeId| {
+        dynamic_world
+            .entities
+            .iter()
+            .find(|dynamic_entity| dynamic_entity.entity == entity)
+            .is_some_and(|dynamic_entity| {
+                dynamic_entity.components.iter().any(|component| {
+                    component
+                        .get_represented_type_info()
+                        .is_some_and(|info| info.type_id() == type_id)
+                })
+            })
+    };
+    assert!(dynamic_has_component(
+        order,
+        TypeId::of::<DeconstructionOrder>()
+    ));
+    assert!(dynamic_has_component(
+        order,
+        TypeId::of::<TargetDeconstructionRoot>()
+    ));
+    assert!(dynamic_has_component(
+        target,
+        TypeId::of::<DeconstructionOrders>()
+    ));
+    assert!(!dynamic_has_component(
+        target,
+        TypeId::of::<DeconstructionPending>()
+    ));
+    assert!(!dynamic_has_component(
+        target,
+        TypeId::of::<DeconstructionCommitClaim>()
+    ));
+
+    let body = dynamic_world.serialize(&registry).unwrap();
+    let mut ron_deserializer = ron::de::Deserializer::from_str(&body).unwrap();
+    let round_tripped = WorldDeserializer {
+        type_registry: &registry,
+        load_from_path: &mut NoAssetLoad,
+    }
+    .deserialize(&mut ron_deserializer)
+    .unwrap();
+    drop(registry);
+
+    let mut destination = World::new();
+    for _ in 0..32 {
+        destination.spawn_empty();
+    }
+    let mut entity_map = EntityHashMap::default();
+    let registry = type_registry.read();
+    round_tripped
+        .write_to_world_with(&mut destination, &mut entity_map, &registry)
+        .unwrap();
+
+    let mapped_target = entity_map[&target];
+    let mapped_order = entity_map[&order];
+    assert_ne!(mapped_target, target);
+    assert_ne!(mapped_order, order);
+    assert_eq!(
+        destination
+            .get::<TargetDeconstructionRoot>(mapped_order)
+            .unwrap()
+            .0,
+        mapped_target
+    );
+    assert_eq!(
+        destination
+            .get::<DeconstructionOrders>(mapped_target)
+            .unwrap()
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![mapped_order]
+    );
+    assert!(
+        destination
+            .get::<DeconstructionPending>(mapped_target)
+            .is_none()
+    );
+    assert!(
+        destination
+            .get::<DeconstructionCommitClaim>(mapped_target)
+            .is_none()
     );
 }
 

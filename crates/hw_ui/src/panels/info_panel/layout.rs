@@ -158,6 +158,42 @@ fn spawn_soul_spa_slot_button(
         .id()
 }
 
+fn spawn_soul_spa_cancel_button(
+    parent: &mut ChildSpawnerCommands,
+    game_assets: &dyn UiAssets,
+    theme: &UiTheme,
+) -> Entity {
+    parent
+        .spawn((
+            Button,
+            Node {
+                display: Display::None,
+                width: Val::Percent(100.0),
+                min_height: Val::Px(30.0),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            BackgroundColor(theme.colors.button_default),
+            MenuButton(MenuAction::CancelSoulSpaConstruction {
+                target: Entity::PLACEHOLDER,
+            }),
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new("Cancel Soul Spa Construction"),
+                TextFont {
+                    font: game_assets.font_ui().clone().into(),
+                    font_size: crate::theme::font_size_rem(theme.typography.font_size_small),
+                    weight: FontWeight::SEMIBOLD,
+                    ..default()
+                },
+                TextColor(theme.colors.text_primary_semantic),
+            ));
+        })
+        .id()
+}
+
 fn spawn_power_priority_button(
     parent: &mut ChildSpawnerCommands,
     game_assets: &dyn UiAssets,
@@ -850,6 +886,8 @@ pub fn spawn_info_panel_ui(
                         })
                         .id(),
                 );
+                info_panel_nodes.soul_spa_cancel_button =
+                    Some(spawn_soul_spa_cancel_button(column, game_assets, theme));
             })
             .id();
         info_panel_nodes.soul_spa_group = Some(soul_spa_group);
@@ -1148,13 +1186,14 @@ mod tests {
 
         app.update();
 
-        let (status, decrease, increase, controls) = {
+        let (status, decrease, increase, controls, cancel) = {
             let nodes = app.world().resource::<InfoPanelNodes>();
             (
                 nodes.soul_spa_status.unwrap(),
                 nodes.soul_spa_slots_decrease_button.unwrap(),
                 nodes.soul_spa_slots_increase_button.unwrap(),
                 nodes.soul_spa_controls.unwrap(),
+                nodes.soul_spa_cancel_button.unwrap(),
             )
         };
         assert_eq!(
@@ -1164,6 +1203,10 @@ mod tests {
         assert_eq!(
             app.world().get::<Node>(controls).unwrap().display,
             Display::Flex
+        );
+        assert_eq!(
+            app.world().get::<Node>(cancel).unwrap().display,
+            Display::None
         );
 
         assert!(matches!(
@@ -1211,6 +1254,14 @@ mod tests {
             app.world().get::<Node>(controls).unwrap().display,
             Display::None
         );
+        assert_eq!(
+            app.world().get::<Node>(cancel).unwrap().display,
+            Display::Flex
+        );
+        assert!(matches!(
+            app.world().get::<MenuButton>(cancel).unwrap().0,
+            MenuAction::CancelSoulSpaConstruction { target } if target == soul_spa
+        ));
     }
 
     #[test]
