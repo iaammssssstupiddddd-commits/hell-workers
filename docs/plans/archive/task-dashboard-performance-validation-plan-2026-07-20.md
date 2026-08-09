@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-20` |
 | 最終更新日 | `2026-08-02` |
 | 作成者 | `Codex` |
-| 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track A3 性能フォローアップ） |
+| 関連提案 | `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`（Track A3 性能フォローアップ） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的

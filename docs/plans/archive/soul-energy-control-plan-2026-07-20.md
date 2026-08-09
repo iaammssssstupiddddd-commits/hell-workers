@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-20` |
 | 最終更新日 | `2026-08-03` |
 | 作成者 | `Codex` |
-| 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track B3） |
+| 関連提案 | `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`（Track B3） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的
@@ -493,7 +493,7 @@ Soul Update / state-sanity cleanup
 
 ### 参照必須ファイル
 
-- `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+- `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`
 - `docs/soul_energy.md`
 - `docs/info_panel_ui.md`
 - `docs/save_load.md`

@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-20` |
 | 最終更新日 | `2026-07-22` |
 | 作成者 | `Codex` |
-| 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track B1） |
+| 関連提案 | `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`（Track B1） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的
@@ -429,7 +429,7 @@ pub struct StockpilePolicy {
 
 ### 参照必須ファイル
 
-- `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+- `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`
 - `docs/logistics.md`
 - `docs/save_load.md`
 - `docs/invariants.md`

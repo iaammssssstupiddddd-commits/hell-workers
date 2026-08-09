@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-26` |
 | 最終更新日 | `2026-08-02` |
 | 作成者 | `Codex` |
-| 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track B2） |
+| 関連提案 | `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`（Track B2） |
 | 実装完了記録 | `docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md` |
 | 関連計画 | `docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md` |
 | 関連Issue/PR | `N/A` |

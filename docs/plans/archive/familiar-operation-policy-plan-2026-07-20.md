@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-20` |
 | 最終更新日 | `2026-07-26` |
 | 作成者 | `Codex` |
-| 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track B2） |
+| 関連提案 | `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`（Track B2） |
 | 前提 | Track B1 Stockpile policy と shared policy score composition は実装済み |
 | 関連Issue/PR | `N/A` |
 
@@ -838,7 +838,7 @@ visible dialog のまま強制 world replacement する reset ケースは自動
 
 ### 参照必須ファイル
 
-- `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+- `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`
 - `docs/invariants.md`
 - `docs/familiar_ai.md`
 - `docs/tasks.md`

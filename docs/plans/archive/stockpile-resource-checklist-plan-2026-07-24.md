@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-24` |
 | 最終更新日 | `2026-07-25` |
 | 作成者 | `Codex` |
-| 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md` |
+| 関連提案 | `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md` |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的

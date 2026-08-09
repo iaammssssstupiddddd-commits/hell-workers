@@ -17,8 +17,8 @@
 
 | Document | Status | Notes |
 | --- | --- | --- |
-| [gameplay-management-improvements-proposal-2026-07-17.md](gameplay-management-improvements-proposal-2026-07-17.md) | Draft | 操作・フィードバックを基盤に、運営ポリシー、復旧・永続化、進行要素を段階導入する総合提案 |
 | [hvac-plumbing-proposal.md](hvac-plumbing-proposal.md) | Accepted / Promoted | 空調・衛生の建築設備導入と世界観への落とし込み提案 |
+| [progression-and-choice-proposal-2026-08-09.md](progression-and-choice-proposal-2026-08-09.md) | Draft | Dream Edict、Contract、Familiar昇格を独立評価するTrack D提案 |
 | [soul-outline-mask-ring-proposal-2026-04-16.md](soul-outline-mask-ring-proposal-2026-04-16.md) | Accepted / Not Implemented | 既存 soul mask RtT を使い、composite 側で画面空間の外周 ring を生成する提案 |
 | [soul_spawn_despawn_optimization.md](soul_spawn_despawn_optimization.md) | Draft / Active | Soul Spawn/Despawn 最適化提案 |
 
@@ -37,5 +37,6 @@
 | [3d-rtt/archived/spatial-grid-architecture-plan-2026-03-12.md](3d-rtt/archived/spatial-grid-architecture-plan-2026-03-12.md) | Archived | **の計画。 |
 | [3d-rtt/archived/wfc-terrain-generation-plan-2026-03-12.md](3d-rtt/archived/wfc-terrain-generation-plan-2026-03-12.md) | Archived | **の計画。 |
 | [archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md](archive/familiar-task-management-hw-ai-extraction-proposal-2026-03-11.md) | Archived | `src/systems/familiar_ai/decide/task_management/` には、候補収集、優先度評価、搬送元選定、予約影反映、`AssignedTask` 構築など、使い魔 AI の中核ロジックがまとまっていたの提案。 |
+| [archive/gameplay-management-improvements-proposal-2026-07-17.md](archive/gameplay-management-improvements-proposal-2026-07-17.md) | Archived | Track A〜Cのロードマップと完了履歴。Track Dは独立提案へ移管 |
 | [archived/08_visual_update_prompts.md](archived/08_visual_update_prompts.md) | Archived | ビジュアルアップデート用アセット生成プロンプト案 |
 | [archived/speech_optimization.md](archived/speech_optimization.md) | Archived | スピーチシステムの最適化提案 (Scale: Soul 300, Familiar 30) |

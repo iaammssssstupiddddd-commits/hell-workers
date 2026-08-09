@@ -9,7 +9,7 @@
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-09` |
 | 作成者 | `Codex` |
-| 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track C2） |
+| 関連提案 | `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`（Track C2） |
 | 前提計画 | `docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`（C3完了済み）、`docs/plans/archive/building-deconstruction-plan-2026-08-03.md`（C1完了済み） |
 | 関連Issue/PR | `N/A` |
 

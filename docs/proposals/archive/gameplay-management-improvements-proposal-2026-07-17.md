@@ -5,12 +5,17 @@
 | 項目 | 値 |
 | --- | --- |
 | ドキュメントID | `gameplay-management-improvements-proposal-2026-07-17` |
-| ステータス | `Draft` |
+| ステータス | `Archived` |
 | 作成日 | `2026-07-17` |
 | 最終更新日 | `2026-08-09` |
 | 作成者 | `Codex` |
 | 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能検証完了）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`（B2実装・自動検証完了）、`docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`（B2実機・性能検証完了）、`docs/plans/archive/soul-energy-control-plan-2026-07-20.md`（B3実装・実機受入完了）、`docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`（C3完了）、`docs/plans/archive/building-deconstruction-plan-2026-08-03.md`（C1完了）、`docs/plans/archive/save-catalog-autosave-plan-2026-08-03.md`（C2完了） |
+| 後続提案 | `docs/proposals/progression-and-choice-proposal-2026-08-09.md`（旧Track Dの現行正本） |
 | 関連Issue/PR | `N/A` |
+
+> **Archived (2026-08-09):** 本書はTrack A〜Cのロードマップと完了履歴を保存する。未採否だったTrack Dは
+> `docs/proposals/progression-and-choice-proposal-2026-08-09.md`へ移管した。A2の重点実機受入は
+> `docs/plans/player-facing-result-notifications-plan-2026-07-18.md`が引き続き所有し、本書を再開しない。
 
 ## 1. 背景と問題
 
@@ -31,8 +36,7 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 - 初期状態ではStockpileの受入方針とFamiliarの運用設定が永続化されていなかった。
   Track B1/B2で現在内容と方針を分離し、Familiar operation / WorkType policyもsave/loadへ接続した。
 - Soul Energy、解体、セーブスロットなど、運営ゲームとして必要な管理操作が部分的である。
-- Dream は資源として存在する一方、継続的な判断や目標へ結び付く用途が少ない。
-  Familiar の階級設定も、現状は世界観上の記述が中心である。
+- Dream Edict、Contract、Familiar昇格の問題設定は、独立したTrack D提案へ移管した。
 
 これらを別々の UI 追加として実装すると、入力競合、診断ロジックの重複、
 セーブ形式の場当たり的な拡張を招く。本提案では、まず信頼できる操作・フィードバック基盤を整え、
@@ -44,7 +48,6 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 - 配置、セーブ/ロード、タスク停滞など、プレイヤーが次の行動を選ぶために必要な理由を可視化する。
 - Stockpile、Familiar、Soul Energy を、個別指示ではなく持続的な運営方針で制御できるようにする。
 - 建築物の解体と資源回収、複数セーブスロットを、安全なライフサイクルとして提供する。
-- Dream Edict、Contract、Familiar 昇格により、短期作業と中長期目標を接続する。
 - 既存のマクロ指揮中心のゲーム性と、タスク状態・物流・セーブの不変条件を維持する。
 - 各改善を独立した計画と小さなリリースへ分割できる、依存関係付きの優先順位を示す。
 
@@ -61,16 +64,15 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 
 一言要約: **操作の信頼性を先に直し、説明可能な運営ポリシーと進行システムを段階導入する。**
 
-提案を次の 4 トラックに分ける。
+本書で完了履歴を保持する対象を次の3トラックに分ける。旧Track Dは独立提案へ移管した。
 
 | 優先度 | トラック | 内容 | 主な成果 |
 | --- | --- | --- | --- |
 | P0 | A. 操作とフィードバック | 入力解決、通知、タスク診断 | 誤操作と「何が起きたか分からない」を減らす |
 | P1 | B. 運営ポリシー | Stockpile、Familiar、Soul Energy | 繰り返し操作を方針設定へ置き換える |
 | P1 | C. 復旧と永続化 | 解体、セーブカタログ、再構築基盤 | 長期プレイと試行錯誤を安全にする |
-| P2 | D. 進行と選択 | Dream Edict、Contract、Familiar 昇格 | Dream と運営判断へ中長期の意味を与える |
 
-原則として P0 を先行し、P1/P2 は個別計画へ分割する。P1 内でも、永続化する方針データは
+原則として P0 を先行し、P1は個別計画へ分割する。P1 内でも、永続化する方針データは
 セーブ移行方針を決めてから導入する。
 
 ## 5. 詳細設計
@@ -330,63 +332,30 @@ runtime task/cargo正常化、construction/WorldMap/Soul Spa再構築、Help・�
 - 通常ロードとrollbackが同じimmutable planのmutation step列をexactly once通り、stale runtime entity/Relationshipが残らない。
 - `RecoveryFailed`では別slot成功時だけ通常操作へ復帰し、再失敗時はload/quit以外をfail-closedに保つ。
 
-#### Track D: 進行と選択（P2）
+#### Track D: 進行と選択（P2、独立提案へ移管）
 
-##### D1. Dream Edict
-
-- Dream を消費して、期間限定または範囲限定の運営方針を発令する。
-- 初期候補は、効果と代償が明確な少数に限定する。
-  - `Overtime`: 一時的に作業効率を上げるが、疲労増加を強める。
-  - `Mandatory Repose`: 休息を優先し、短期生産を下げて疲労を回復する。
-- 発令時に影響範囲と対象集合を固定または明示的に再評価し、別 World/別対象への漏れを防ぐ。
-- 実行中タスクを強制破棄せず、既存のタスク終了規約に従って効果を適用する。
-- active Edict は種別、期限または残り時間、効果範囲を永続化する。範囲は transient な派生 Entity ID
-  ではなく durable な所有者または footprint で表し、ロード時に再検証する。
-  セーブ/ロードで効果時間や代償をリセットできないようにする。
-
-##### D2. Contract とマイルストーン
-
-- GameTime、イベント、人口/物流統計から評価可能な期限付きまたは継続目標を導入する。
-- 失敗をゲームオーバーにせず、報酬減少、次候補の変化、演出で扱う。
-- 報酬は Dream、称号/印章、建築・Edict・Familiar 昇格の解禁を中心とする。
-- 初期チュートリアルを Contract の特殊系列として表現できるようにする。
-
-##### D3. Familiar 昇格
-
-- 世界観上の `Imp`、`Servitor`、`Greater`、`Overseer` を段階的な Familiar rank として定義する。
-- 昇格条件は Contract、管理実績、Dream/印章など、観測可能な進行値に結び付ける。
-- 効果は管理 Soul 上限、活動範囲、作業専門化など、既存のマクロ指揮を強化する方向に限定する。
-- ランクと選択した特性は永続化し、B2 の方針データと責務を分ける。
-
-受入条件:
-
-- Dream 支出が、短期的利益と明示的な代償を持つ。
-- Contract の進捗が同じイベントを二重計上せず、セーブ/ロード後も保持される。
-- Familiar rank は管理能力を拡張するが、Soul の直接操作を必須にしない。
+Dream Edict、Contract、Familiar昇格の仕様、依存関係、未解決事項、検証計画は
+`docs/proposals/progression-and-choice-proposal-2026-08-09.md`へ移管した。Track Dの採否や実装計画は
+移管先だけで更新し、本書を現行正本として再利用しない。
 
 #### トラック間の必須依存
 
 ```text
 C3 ───── C1 ───── C2
- ├────── D1 / D2 / D3 の world schema 追加
  └────── HVAC M3 の保存・再構築変更
-
-D2 Contract ─────────── D3 Familiar 昇格
-                         （Contract を昇格条件に使う場合）
 
 B3 Soul Energy 制御 + HVAC 消費設備 ─── Battery
 ```
 
-A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立して導入できる。
+A1、A2、A3は相互の技術的前提ではない。Track Dの依存関係は移管先提案を正本とする。
 
 #### 推奨実装順
 
 1. A1 で既知の入力競合を除去する。
 2. A2 の共通結果通知を作り、A3 の診断 UI へ展開する。
-3. A2/A3 を再利用して B1/B2、C1/C2、D1 の操作結果と停止理由を表示する。
+3. A2/A3 を再利用して B1/B2、C1/C2の操作結果と停止理由を表示する。
 4. 新しいworld永続データへ進む前にv1 additive/v2 migration境界をC0判断として確定し、C3を先に導入する。
 5. B3 と HVAC 消費設備の運用を確認した後に Battery を設計する。
-6. D2 の Contract を昇格条件として採用した場合は、D3 を後続させる。
 
 実装順は必須依存を満たす範囲で変更できる。ただし、競合入力を増やす変更では A1 を、
 永続データを増やす変更ではセーブ移行方針を、それぞれ先送りしない。
@@ -414,8 +383,8 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - 恒久ドキュメント: `docs/settings.md`、`docs/state.md`、`docs/tasks.md`、
   `docs/task_list_ui.md`、`docs/info_panel_ui.md`、`docs/logistics.md`、
   `docs/familiar_ai.md`、`docs/soul_energy.md`、`docs/building.md`、
-  `docs/room_detection.md`、`docs/save_load.md`、`docs/dream.md`、
-  `docs/world_lore.md`、`docs/events.md`、`docs/invariants.md`、`docs/architecture.md`
+  `docs/room_detection.md`、`docs/save_load.md`、`docs/events.md`、
+  `docs/invariants.md`、`docs/architecture.md`
 
 ### 5.3 データ/コンポーネント/API 変更
 
@@ -431,13 +400,12 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - 消費設備優先度、Power inspection 用導出状態
 - `AssignedTask::Deconstruct(DeconstructData)`、専用order root、worker identity付きcommit request、target単位commit claim、解体回収テーブル
 - `SaveSlotId`, `SaveSlotMetadata`, `SaveCatalog`, `SaveRecoveryMode`
-- `DreamEdict`, `Contract`, `ContractProgress`, `FamiliarRank`
 
 変更候補:
 
 - `TaskEntry` に状態要約と操作対象 ID を追加する。
 - 配置結果を `bool` 表示だけでなく `PlacementRejectReason` まで UI へ渡す。
-- `FamiliarOperation` と新しい方針/進行値をセーブ境界へ含める。
+- `FamiliarOperation` と新しい方針値をセーブ境界へ含める。
 - Power grid の一律給電判定を優先度付き割当へ段階的に変更する。
 
 削除候補:
@@ -451,7 +419,6 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | 案 | 採否 | 理由 |
 | --- | --- | --- |
 | 各機能を独立に追加する | 不採用 | 入力、通知、永続化、診断が重複し、機能間で挙動がずれる |
-| 先に Contract/昇格だけを追加する | 不採用 | 目標は増えるが、失敗理由と運営手段が不足したままになる |
 | すべての入力/UI を単一巨大フレームワークへ移行する | 不採用 | 変更範囲と回帰リスクが大きく、既存 `UiIntent` の価値も失う |
 | P0 基盤後にトラック別導入する | 採用 | 早期に誤操作を減らし、各 P1/P2 機能を独立して検証できる |
 | 診断のため毎回候補評価/A*を再実行する | 不採用 | UI 開閉がシミュレーション負荷と結果へ影響する |
@@ -459,11 +426,11 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ## 7. 影響範囲
 
-- ゲーム挙動: 入力の優先順位、物流/AI 方針、給電、解体、進行目標が変わる。
+- ゲーム挙動: 入力の優先順位、物流/AI方針、給電、解体が変わる。
 - パフォーマンス: UI 用再探索を禁止する一方、診断要約と通知の保持コストが増える。
   変更検知、イベント駆動、有界履歴を基本とする。
-- UI/UX: 通知、タスクダッシュボード、ポリシー編集、セーブ選択、進行画面が増える。
-- セーブ互換: B2、C2、D1、D2、D3 は形式または永続 schema の変更を伴う。
+- UI/UX: 通知、タスクダッシュボード、ポリシー編集、セーブ選択が増える。
+- セーブ互換: B2、C2は形式または永続schemaの変更を伴う。
   形式バージョンと旧データの既定値補完が必要。
 - AI/物流: 方針フィルタが候補集合を狭めるため、候補なし理由と fallback を明示する必要がある。
 - 既存ドキュメント更新: 各トラック完了時に 5.2 の恒久ドキュメントと
@@ -479,8 +446,6 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | 永続化項目の追加が旧セーブを壊す | 長期データ喪失 | 形式バージョン、既定値移行、非破壊ロード失敗、fixture テストを先行する |
 | 解体 cleanup の漏れ | 到達不能・残存要求・描画不整合 | 建築種別ごとの cleanup matrix と固定 tick シナリオテストを作る |
 | Power 優先度が毎 tick 全走査になる | 規模拡大時の低速化 | grid dirty 時だけ再配分し、inspection は導出結果を読む |
-| Contract が単純なチェックリストになる | 世界観と運営判断が弱い | 期限、代償、複数解法、失敗後の変化を持つ少数の手作り Contract から始める |
-| P2 が P0/P1 を待ち続ける | 進行要素が届かない | トラックごとに採否し、A1/A2 以外の不要な依存を作らない |
 
 ## 9. 検証計画
 
@@ -503,14 +468,13 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 6. Power: 発電不足時に優先度順で遮断し、grid dirty でない tick に再配分しない。
 7. 解体: 各建築カテゴリを解体し、Entity、要求、予約、WorldMap、Room/Power、描画の残存を確認する。
 8. セーブ: 旧形式、新形式、破損、存在しないスロット、上書き、オートセーブ世代を確認する。
-9. 進行: Contract/Edict の境界時刻、重複イベント、失敗、保存/読込、昇格を確認する。
 
 成功指標:
 
 - 既知の入力二重発火が 0 件。
 - 配置不能と保存/読込結果の 100% が、ログを開かず識別可能。
 - タスクダッシュボード表示による候補評価・経路探索回数の増加が 0。
-- 方針、active Edict、Contract、rank のセーブ往復で値の欠落が 0。
+- 方針のセーブ往復で値の欠落が0。
 - 解体シナリオ後の孤立要求、予約、障害物、子 Entity が 0。
 
 ## 10. ロールアウト/ロールバック
@@ -520,14 +484,13 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 1. Track A を `A1`、`A2`、`A3` の別計画・別変更として実装する。
 2. セーブ形式バージョンと rehydrate 分割を設計し、永続化変更の共通前提を作る。
 3. Track B/C を機能単位で実装し、各段階で恒久ドキュメントと fixture を更新する。
-4. Track D は少数の Edict/Contract/rank で vertical slice を作り、遊びの判断密度を評価する。
-5. 各トラックの計測とプレイ確認後に、次の段階を有効化する。
+4. 各トラックの計測とプレイ確認後に、次の段階を有効化する。
 
 段階導入:
 
 - 新 UI は既存挙動を読み取る read-only 段階から始め、操作は後続変更で有効化できる。
-- 新しい方針/進行データは旧セーブに既定値を補う。
-- Power 優先度、オートセーブ、Contract は機能フラグまたは設定で個別に無効化できる境界を保つ。
+- 新しい方針データは旧セーブに既定値を補う。
+- Power優先度とオートセーブは、設定で個別に無効化できる境界を保つ。
 
 ロールバック:
 
@@ -558,14 +521,13 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
   durable state の削除・変換が必要になった時点で world schema version を別計画にする。
 - [x] Track Cも同じC0方針を継承する。C1の`DeconstructionOrder`/Relationship/`WorkType`はv1 additive、
   C2のslot/catalog/settingsはworld body外とし、rename/field shape変換が必要になるまでcontainer v2へ進めない。
-- [ ] Dream Edict の効果対象を World 全体、Room、Familiar 管轄のどれから始めるか決める。
-- [ ] Contract を手書きデータ、RON asset、コード定義のどれで管理するか決める。
+- [x] Track Dの未解決事項を`docs/proposals/progression-and-choice-proposal-2026-08-09.md`へ移管した。
 
 ## 12. AI引継ぎメモ（最重要）
 
 ### 現在地
 
-- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（機能・性能完了、archive済み）/ B1 100%（完了・archive済み）/ B2 100%（実装・実機・性能完了、archive済み）/ B3 100%（実装・自動検証・実機受入完了、archive済み）/ C3 100%（実装・実機完了、archive済み）/ C1 100%（完了・archive済み）/ C2 100%（実装・実機・性能完了、archive済み）/ D 未採否`
+- 進捗: `Archived / Track A〜Cのロードマップ履歴を固定 / Track Dは独立提案へ移管`
 - 直近で完了したこと: A3 の latest-only task diagnostics、filter/sort dashboard、安全な priority/cancel、
   owner cancellation、save/reset回帰、恒久ドキュメント同期。Track B はコード・save・UI の現状を再監査し、
   B1 Stockpile の M1〜M5（永続 policy、移行、tier 別需要、manual / wheelbarrow 判定、共有 score offset、
@@ -588,9 +550,9 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 次のAIが最初にやること
 
-1. C2は完了・archive済みである。slot拡張、background I/O、container v2を始める場合はC2を再開せず別計画を作る。
-2. A2の重点実機受入は独立残件として維持する。
-3. C1 archiveのdurable order / runtime cleanupとC3 rehydrate契約を、以後のsave/load変更でも回帰対象として維持する。
+1. Track Dは`docs/proposals/progression-and-choice-proposal-2026-08-09.md`だけで継続し、本書を再開しない。
+2. A2の重点実機受入は`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`で継続する。
+3. C2以後のslot拡張、background I/O、container v2はarchive済み計画を再開せず別計画を作る。
 
 ### ブロッカー/注意点
 
@@ -620,6 +582,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - `docs/dream.md`
 - `docs/world_lore.md`
 - `docs/proposals/hvac-plumbing-proposal.md`
+- `docs/proposals/progression-and-choice-proposal-2026-08-09.md`
 - `docs/plans/archive/stockpile-policy-plan-2026-07-20.md`
 - `docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`
 - `docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`
@@ -641,7 +604,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 - [x] 提案内容がレビュー可能な粒度で記述されている
 - [x] リスク・影響範囲・検証計画が埋まっている
-- [ ] Track D の採否と初回スコープが決定されている
+- [x] Track Dの目的、設計候補、未解決事項を独立提案へ移管している
 - [x] Track B1〜B3 の初回スコープ、正本、移行、実装順、受入条件が別計画に固定されている
 - [x] Track C1〜C3 の初回スコープ、正本、実装順、受入条件が別計画に固定されている
 - [x] 実装へ進むサブトラックの `docs/plans/...` が作成されている
@@ -684,3 +647,4 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | `2026-08-08` | `Codex` | Track C1 M1〜M5を完了。全BuildingType / Soul Spa cleanup、save/load runtime reset、Help、native V1〜V5、fixed-step性能監査20/20、full workspace verifyを完了してarchiveし、次をC2 M1へ更新 |
 | `2026-08-09` | `Codex` | C2実装前レビューを反映。archive済みC1のcurrent v1をC2互換性baselineとして明記し、過去のC1待機表現を解消 |
 | `2026-08-09` | `Codex` | Track C2 M1〜M5を完了。typed slot/catalog/manual transaction/autosave、RecoveryFailed fail-closed、Help/恒久docs、Capture/Memory artifact、Intel Vulkan/Xlib native V1〜V5、full workspace gateを通過してarchive |
+| `2026-08-09` | `Codex` | Track Dを独立した進行・選択提案へ移管。A〜Cのロードマップ履歴として本提案をArchived化し、A2残件とTrack Dの現行ownerを分離 |

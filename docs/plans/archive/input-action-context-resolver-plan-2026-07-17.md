@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-17` |
 | 最終更新日 | `2026-07-18` |
 | 作成者 | `Codex` |
-| 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track A1） |
+| 関連提案 | `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`（Track A1） |
 | 関連Issue/PR | `N/A` |
 
 > **計画境界**: 本計画は関連提案の **A1「コンテキスト付き入力アクション」だけ**を扱う。
@@ -457,7 +457,7 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   - `docs/architecture.md`
   - `docs/save_load.md`
   - `docs/debug-features.md`
-  - `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+  - `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`
 - 完了条件:
   - [x] F5 で Save だけが要求され、Soul mask は変わらない
   - [x] save file がある F9 で load confirm だけが開き、確認前に `LoadRequested` にならない
@@ -647,7 +647,7 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
   - `crates/bevy_app/src/interface/ui/README.md`
   - `crates/bevy_app/src/systems/command/README.md`
   - `crates/hw_ui/src/setup/bottom_bar.rs`
-  - `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+  - `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`
 - 完了条件:
   - [x] 恒久 docs と default binding table が一致する
   - [x] `python3 scripts/dev.py docs --check` が成功する
@@ -870,7 +870,7 @@ ActiveMode と menu が異常に同時 active の場合は、mode owner cleanup 
 
 ### 参照必須ファイル
 
-- `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+- `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`
 - `docs/architecture.md`
 - `docs/state.md`
 - `docs/tasks.md`

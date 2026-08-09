@@ -9,7 +9,7 @@
 | 作成日 | `2026-07-19` |
 | 最終更新日 | `2026-07-20` |
 | 作成者 | `Codex` |
-| 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track A3） |
+| 関連提案 | `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`（Track A3） |
 | 関連Issue/PR | `N/A` |
 
 ### クローズ判断
@@ -917,7 +917,7 @@ load 後は task list が `PendingEvaluation` から開始し、Spatial / Logic 
   - `crates/hw_spatial/README.md`
   - `crates/hw_ui/README.md`
   - `crates/bevy_app/src/interface/README.md`
-  - `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+  - `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`
   - `docs/plans/README.md`
 - 完了条件:
   - [x] owner、reason、coverage、revision、action capability、reset、system order が code / docs で一致する。
@@ -1149,7 +1149,7 @@ fixed / Capture / Memory harnessと実測受入まで完了した。
 
 ### 参照必須ファイル
 
-- `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+- `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`
 - `docs/task_list_ui.md`
 - `docs/tasks.md`
 - `docs/familiar_ai.md`
