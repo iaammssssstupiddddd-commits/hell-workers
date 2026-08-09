@@ -95,6 +95,7 @@ Create an implementation plan in `docs/plans/` when:
 
 #### Plan File Management
 - **Location**: `docs/plans/` (current plans are tracked; only archive/rejected areas are ignored by policy)
+- **Primary worktree only**: Create and update plans and other authoritative documentation in the primary repository's `docs/`. Never place authoritative documents under `target/**/docs/`, including a nested worktree checkout. If the current repository root is below another repository's `target/`, switch to the outer primary repository before editing documentation.
 - **Naming**: Copy `docs/plans/plan-template.md` to a descriptive `<topic>-plan-YYYY-MM-DD.md` name.
 - **Format**: Fill in metadata, purpose, milestones, verification, and AI handoff sections from the template.
 
@@ -108,6 +109,7 @@ Create an implementation plan in `docs/plans/` when:
 
 #### Index Maintenance
 - After adding, moving, or deleting a plan/proposal, run `python3 scripts/dev.py docs --write` and review both generated indexes.
+- `docs --write` fails closed in a worktree nested below another repository's `target/`; do not bypass this guard.
 - CI verifies index freshness with `python3 scripts/dev.py docs --check`.
 
 ### Bevy バージョンの厳守とドキュメント確認

@@ -5,11 +5,55 @@ import unittest
 from contextlib import redirect_stderr
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts import update_docs_index
 
 
 class IndexRenderingTests(unittest.TestCase):
+    def test_docs_write_location_accepts_primary_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo_root = Path(directory) / "hell-workers"
+            repo_root.mkdir()
+            update_docs_index.assert_safe_docs_write_location(repo_root)
+
+    def test_docs_write_location_accepts_standalone_checkout_named_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo_root = Path(directory) / "target" / "hell-workers"
+            repo_root.mkdir(parents=True)
+            update_docs_index.assert_safe_docs_write_location(repo_root)
+
+    def test_docs_write_location_rejects_worktree_below_repository_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            primary = Path(directory) / "hell-workers"
+            nested = primary / "target" / "p01-single-scene"
+            (primary / ".git").mkdir(parents=True)
+            (primary / "Cargo.toml").touch()
+            (primary / "docs").mkdir()
+            nested.mkdir(parents=True)
+
+            with self.assertRaisesRegex(
+                RuntimeError, "target-contained worktree"
+            ) as raised:
+                update_docs_index.assert_safe_docs_write_location(nested)
+
+            self.assertIn(str(primary), str(raised.exception))
+
+    def test_write_mode_fails_before_rendering_in_unsafe_worktree(self) -> None:
+        error = RuntimeError("target-contained worktree")
+        with (
+            patch.object(
+                update_docs_index,
+                "assert_safe_docs_write_location",
+                side_effect=error,
+            ),
+            redirect_stderr(StringIO()) as stderr,
+        ):
+            result = update_docs_index.main(["--write"])
+
+        self.assertEqual(result, 2)
+        self.assertIn("target-contained worktree", stderr.getvalue())
+
     def test_current_plans_render_is_idempotent(self) -> None:
         readme = update_docs_index.PLANS_DIR / "README.md"
         content = readme.read_text(encoding="utf-8")

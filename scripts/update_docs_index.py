@@ -33,6 +33,43 @@ ARCHIVE_DIR_NAMES = {"archive", "archived"}
 
 
 # ---------------------------------------------------------------------------
+# ドキュメント書き込み先の保護
+# ---------------------------------------------------------------------------
+
+def find_enclosing_repository_target(repo_root: Path) -> Path | None:
+    """Return an outer repository when repo_root is nested below its target/.
+
+    A checkout may legitimately live in a directory named ``target``.  Treat it
+    as an unsafe nested worktree only when that directory belongs to another
+    hell-workers-style repository.
+    """
+    resolved_root = repo_root.resolve()
+    for parent in resolved_root.parents:
+        if parent.name != "target":
+            continue
+        outer_repo = parent.parent
+        if (
+            (outer_repo / ".git").exists()
+            and (outer_repo / "Cargo.toml").is_file()
+            and (outer_repo / "docs").is_dir()
+        ):
+            return outer_repo
+    return None
+
+
+def assert_safe_docs_write_location(repo_root: Path = REPO_ROOT) -> None:
+    """Reject index writes from worktrees nested in another repo's target/."""
+    outer_repo = find_enclosing_repository_target(repo_root)
+    if outer_repo is None:
+        return
+    raise RuntimeError(
+        "refusing to write documentation indexes from a target-contained "
+        f"worktree: {repo_root.resolve()}\n"
+        f"Run the documentation workflow from the primary repository: {outer_repo}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # ファイル内容からの説明抽出
 # ---------------------------------------------------------------------------
 
@@ -431,6 +468,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.write:
+        try:
+            assert_safe_docs_write_location()
+        except RuntimeError as error:
+            print(f"ERROR: {error}", file=sys.stderr)
+            return 2
+
     plans_path = PLANS_DIR / "README.md"
     proposals_path = PROPOSALS_DIR / "README.md"
 
