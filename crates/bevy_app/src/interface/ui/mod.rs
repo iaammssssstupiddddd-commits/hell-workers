@@ -7,7 +7,7 @@ pub(crate) mod help_content;
 pub(crate) mod help_controller;
 pub mod interaction;
 pub mod list;
-pub(crate) mod notifications;
+pub mod notifications;
 pub mod panels;
 pub mod plugins;
 pub mod presentation;

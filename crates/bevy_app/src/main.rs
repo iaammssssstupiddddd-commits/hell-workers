@@ -31,14 +31,30 @@ fn main() -> AppExit {
                 eprintln!("Invalid native deconstruction acceptance configuration: {error}");
                 std::process::exit(2);
             });
-    if (native_acceptance_plugin.is_some() || native_deconstruction_plugin.is_some())
+    let native_notification_plugin =
+        bevy_app::interface::ui::notifications::NativeNotificationAcceptancePlugin::try_from_process()
+            .unwrap_or_else(|error| {
+                eprintln!("Invalid native notification acceptance configuration: {error}");
+                std::process::exit(2);
+            });
+    if (native_acceptance_plugin.is_some()
+        || native_deconstruction_plugin.is_some()
+        || native_notification_plugin.is_some())
         && perf_config.enabled()
     {
         eprintln!("Native acceptance cannot be combined with a performance scenario.");
         std::process::exit(2);
     }
-    if native_acceptance_plugin.is_some() && native_deconstruction_plugin.is_some() {
-        eprintln!("Native save/load and deconstruction acceptance cannot run together.");
+    let native_acceptance_count = [
+        native_acceptance_plugin.is_some(),
+        native_deconstruction_plugin.is_some(),
+        native_notification_plugin.is_some(),
+    ]
+    .into_iter()
+    .filter(|enabled| *enabled)
+    .count();
+    if native_acceptance_count > 1 {
+        eprintln!("Native acceptance profiles cannot run together.");
         std::process::exit(2);
     }
     let use_headless_runner = headless_runner_requested(&perf_config);
@@ -93,6 +109,9 @@ fn main() -> AppExit {
         app.add_plugins(plugin);
     }
     if let Some(plugin) = native_deconstruction_plugin {
+        app.add_plugins(plugin);
+    }
+    if let Some(plugin) = native_notification_plugin {
         app.add_plugins(plugin);
     }
 

@@ -43,7 +43,6 @@
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
-| [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できないの計画。 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 
@@ -90,6 +89,7 @@
 | [archive/implementation-spec-alignment-plan-2026-07-20.md](archive/implementation-spec-alignment-plan-2026-07-20.md) | Archived | - 現行実装と仕様文書の比較で、実装バグ、意図的な実装変更に追従していない文書、未登録の重複system、の計画。 |
 | [archive/input-action-context-resolver-plan-2026-07-17.md](archive/input-action-context-resolver-plan-2026-07-17.md) | Archived | Track A1: 離散キーボード競合解決と Modal/Pause の背景入力遮断計画 |
 | [archive/large-source-file-split-plan-2026-07-17.md](archive/large-source-file-split-plan-2026-07-17.md) | Archived | 500行以上の実装ファイル分割計画 |
+| [archive/player-facing-result-notifications-plan-2026-07-18.md](archive/player-facing-result-notifications-plan-2026-07-18.md) | Archived | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できないの計画。 |
 | [archive/runtime-correctness-contracts-plan-2026-07-12.md](archive/runtime-correctness-contracts-plan-2026-07-12.md) | Archived | 実行時正しさ契約リファクタリング計画 |
 | [archive/save-catalog-autosave-plan-2026-08-03.md](archive/save-catalog-autosave-plan-2026-08-03.md) | Archived | 単一save fileしか扱えず、退避・比較・世代付き自動復旧を安全に行えないの計画。 |
 | [archive/save-load-hardening-plan-2026-07-12.md](archive/save-load-hardening-plan-2026-07-12.md) | Archived | Save/Load境界強化・互換性リファクタリング計画 |

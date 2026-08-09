@@ -82,6 +82,37 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   --adapter Intel --backend vulkan --window-backend x11 --min-runs 3
 ```
 
+## Run the player-facing notifications recipe
+
+Use the dedicated Track A2 profile for typed placement rejection presentation,
+save/load outcome notifications, bounded dedupe, pause-independent toast expiry,
+toast pick-through, and blocking notification history.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+  plan-notifications --repo "$PWD" --seed 20260802 --adapter Intel \
+  --backend vulkan --window-backend x11 --present-mode novsync
+```
+
+Run only the returned direct `kitty` command and poll its `status_command`.
+The profile uses the regular game window and production placement tooltip plus
+notification adapter/reducer/presenter. It isolates save and settings roots
+under the job runtime, pauses `Time<Virtual>` while waiting for real-time toast
+expiry, and saves an in-game screenshot containing the final tooltip, toast,
+history panel, and PASS banner.
+
+Revalidate a completed job with the exact values recorded in `job.json`:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+  verify-notifications --repo "$PWD" --artifact <job-root>/artifact \
+  --runtime-root <job-root>/runtime --run-id <run-id> \
+  --harness-fingerprint <harness-sha256> --adapter Intel \
+  --backend vulkan --window-backend x11
+```
+
 ## Run the Save Catalog recipe
 
 Use the dedicated C2 profile for manual-slot, recovery, autosave transaction, and

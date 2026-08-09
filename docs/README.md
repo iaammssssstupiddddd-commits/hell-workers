@@ -62,7 +62,7 @@
 - [plans/archive/save-catalog-autosave-plan-2026-08-03.md](plans/archive/save-catalog-autosave-plan-2026-08-03.md): Track C2 の手動セーブスロット、catalog、世代オートセーブ計画（archive）。
 - [plans/archive/implementation-spec-alignment-plan-2026-07-20.md](plans/archive/implementation-spec-alignment-plan-2026-07-20.md): Dream質量、Familiar疲労閾値、production経路、文書台帳の実装・仕様整合性回復計画。
 - [plans/archive/soul-energy-control-plan-2026-07-20.md](plans/archive/soul-energy-control-plan-2026-07-20.md): Track B3のSoul Spa稼働枠、優先配電、保存互換、実機受入の完了記録。
-- [plans/player-facing-result-notifications-plan-2026-07-18.md](plans/player-facing-result-notifications-plan-2026-07-18.md): Track A2 の有界な通知センター、配置不能理由、セーブ/ロード終端結果を導入する実装計画。
+- [plans/archive/player-facing-result-notifications-plan-2026-07-18.md](plans/archive/player-facing-result-notifications-plan-2026-07-18.md): Track A2 の有界な通知センター、配置不能理由、セーブ/ロード終端結果、actual-window受入の完了記録。
 - [plans/hvac-plumbing-plan-2026-07-13.md](plans/hvac-plumbing-plan-2026-07-13.md): 換気・導水・Room 認可を M0〜M4 で導入する実装計画。
 - [plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md): Scene RtT 1枚、TopDown表示、Wall / Door遮光の放射状Indoor Light Fieldへ移行する9分割計画の親ロードマップ。
 - [proposals/README.md](proposals/README.md): 提案書一覧とテンプレート。

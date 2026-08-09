@@ -184,6 +184,28 @@ fresh artifact、source fingerprint、bounded monitor契約から起動する。
 検査対象と結果schemaの正本は`crates/bevy_app/src/systems/save/native_acceptance.rs`、
 一般のsave/load契約は[save_load.md](save_load.md)を参照する。
 
+## Track A2 通知 actual-window受入ドライバ
+
+`NativeNotificationAcceptancePlugin`は配置不能理由と通知UIをactual windowで検査する開発専用の
+opt-in driverである。`HW_NATIVE_NOTIFICATION_ACCEPTANCE_ARTIFACT`が未設定の通常起動ではpluginを
+追加しない。起動は`hell-workers-run-native-acceptance` Skillの`plan-notifications`だけを入口にする。
+
+- artifact、artifact外のfresh runtime root、run IDをそれぞれ
+  `HW_NATIVE_NOTIFICATION_ACCEPTANCE_ARTIFACT`、`HW_NATIVE_NOTIFICATION_ACCEPTANCE_RUNTIME_ROOT`、
+  `HW_NATIVE_NOTIFICATION_ACCEPTANCE_RUN_ID`へ束縛する。
+- runtimeの`saves/`と`settings/`をStartup前に注入し、実ユーザーの永続データを読書きしない。
+- productionの配置tooltipと`SaveLoadOutcome → UserFacingNotification → reducer → presenter`を通し、
+  typed rejection、target/result表示、同一失敗のrepeat集約、toast 3/history 64の有界契約を検査する。
+- `Time<Virtual>`をpauseしたまま`Time<Real>`でtoastがexpireすること、toast surfaceが入力透過で、
+  再表示したhistory panelが`UiInputBlocker` / `FocusPolicy::Block`を持つことを検査する。
+- 最終tooltip、toast、history panel、PASS bannerをprimary windowのBevy screenshotとして保存し、
+  PNG構造、640×360以上、16 MiB以下、renderer adapter/backend/display handle、exact artifact setを
+  driverと外側verifierが独立に検証する。headless、performance scenario、他native profileとの併用は拒否する。
+
+検査対象とresult schemaの正本は
+`crates/bevy_app/src/interface/ui/notifications/native_acceptance.rs`である。失敗jobは上書き・自動削除せず、
+fresh jobだけを再実行する。
+
 ---
 
 ## 関連ファイル
@@ -197,3 +219,4 @@ fresh artifact、source fingerprint、bounded monitor契約から起動する。
 - `crates/bevy_app/src/plugins/interface.rs` — Interface セット登録
 - `crates/bevy_app/src/plugins/logic.rs` — Logic セット登録
 - `crates/bevy_app/src/systems/save/native_acceptance.rs` — opt-in actual-window save/load受入driver
+- `crates/bevy_app/src/interface/ui/notifications/native_acceptance.rs` — opt-in Track A2 placement/notification受入driver

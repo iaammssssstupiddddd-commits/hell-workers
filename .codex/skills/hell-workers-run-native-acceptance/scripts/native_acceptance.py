@@ -77,6 +77,7 @@ NATIVE_HARNESS_FILES = (
     "scripts/cargo_runtime.py",
 )
 DECONSTRUCTION_CHECKS = {"V1", "V2", "V3", "V4", "V5"}
+NOTIFICATION_CHECKS = {"A1", "A2", "A3", "A4", "A5"}
 SAVE_CATALOG_SCREENSHOT = "paused-after-acceptance.png"
 SAVE_CATALOG_CHECKS = {"V1", "V2", "V3", "V4", "V5"}
 SAVE_CATALOG_FINAL_RECOVERY_FILE = "manual-2.scn.ron"
@@ -1383,6 +1384,81 @@ def plan_deconstruction(args: argparse.Namespace) -> int:
             "renderer_evidence_required": True,
             "in_game_screenshot_required": True,
             "synthetic_desktop_input": False,
+            "automatic_cleanup": False,
+        },
+    }
+    print_json(payload)
+    return 0 if status == "ready" else 1
+
+
+def plan_notifications(args: argparse.Namespace) -> int:
+    repo = validate_repo(args.repo)
+    resources = resource_snapshot(repo, require_launcher=True)
+    job_root = (
+        Path(args.job_root).resolve()
+        if args.job_root
+        else unique_job_root(repo, "player-facing-result-notifications")
+    )
+    if job_root.exists():
+        raise AcceptanceError(f"job root already exists: {job_root}")
+    failures = list(resources["failures"])
+    storage_error = persistent_storage_error(
+        job_root,
+        label="native acceptance job root",
+    )
+    if storage_error:
+        failures.append(storage_error)
+    status = "ready" if not failures else "blocked"
+    command = [
+        "kitty",
+        "--directory",
+        str(repo),
+        "--detach",
+        "env",
+        "HW_NATIVE_ACCEPTANCE_LAUNCHED=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "python3",
+        str(Path(__file__).resolve()),
+        "run-notifications",
+        "--repo",
+        str(repo),
+        "--job-root",
+        str(job_root),
+        "--seed",
+        str(args.seed),
+        "--adapter",
+        args.adapter,
+        "--backend",
+        args.backend,
+        "--window-backend",
+        args.window_backend,
+        "--present-mode",
+        args.present_mode,
+    ]
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "status": status,
+        "profile": "player-facing-result-notifications",
+        "measurement_kind": "native-functional-acceptance",
+        "job_root": str(job_root),
+        "resources": {**resources, "status": status, "failures": failures},
+        "launcher_command": command,
+        "status_command": [
+            "python3",
+            str(Path(__file__).resolve()),
+            "status",
+            "--job-root",
+            str(job_root),
+        ],
+        "execution_contract": {
+            "game_processes": 1,
+            "parallel_game_processes": 1,
+            "actual_feature_builds": 1,
+            "actual_window_required": True,
+            "renderer_evidence_required": True,
+            "in_game_screenshot_required": True,
+            "synthetic_desktop_input": False,
+            "isolated_save_and_settings_roots": True,
             "automatic_cleanup": False,
         },
     }
@@ -3149,6 +3225,149 @@ def run_deconstruction(args: argparse.Namespace) -> int:
             return 1
 
 
+@activity_locked
+def run_notifications(args: argparse.Namespace) -> int:
+    if os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") != "1":
+        raise AcceptanceError(
+            "run-notifications must be launched by the planned direct kitty command"
+        )
+    repo = validate_repo(args.repo)
+    job_root = Path(args.job_root).resolve()
+    require_persistent_storage(job_root, label="native acceptance job root")
+    if job_root.exists():
+        raise AcceptanceError(f"job root already exists: {job_root}")
+    job_root.mkdir(parents=True)
+    artifact = job_root / "artifact"
+    artifact.mkdir()
+    runtime_root = job_root / "runtime"
+    (runtime_root / "saves").mkdir(parents=True)
+    (runtime_root / "settings").mkdir(parents=True)
+    job_file = job_root / "job.json"
+    log_path = job_root / "orchestrator.log"
+    resources = resource_snapshot(repo, require_launcher=False)
+    source = source_fingerprint(repo)
+    harness = native_harness_fingerprint(repo)
+    run_id = f"a2-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{secrets.token_hex(4)}"
+    state: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "profile": "player-facing-result-notifications",
+        "status": "running",
+        "started_at": utc_now(),
+        "heartbeat_at": utc_now(),
+        "pid": os.getpid(),
+        "repo": str(repo),
+        "job_root": str(job_root),
+        "run_id": run_id,
+        "source_fingerprint": source,
+        "harness_fingerprint": harness,
+        "resources": resources,
+        "completed_stages": [],
+        "paths": {
+            "artifact": str(artifact),
+            "runtime": str(runtime_root),
+            "driver_result": str(artifact / "driver-result.json"),
+            "screenshot": str(artifact / "a2-notifications.png"),
+            "log": str(log_path),
+        },
+        "parameters": {
+            "seed": args.seed,
+            "adapter": args.adapter,
+            "backend": args.backend,
+            "window_backend": args.window_backend,
+            "present_mode": args.present_mode,
+        },
+    }
+    atomic_write_json(job_file, state)
+    if resources["status"] != "ready":
+        update_state(
+            job_file,
+            state,
+            status="invalid",
+            current_stage=None,
+            error="; ".join(resources["failures"]),
+            finished_at=utc_now(),
+        )
+        return 1
+
+    env = cargo_environment(repo)
+    for key in list(env):
+        if key.startswith("HW_PERF_") or key.startswith("HW_NATIVE_"):
+            env.pop(key, None)
+    env = cargo_environment(repo, env)
+    env.update(
+        {
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "CARGO_BUILD_JOBS": str(resources["cargo_jobs"]),
+            "CARGO_INCREMENTAL": "0",
+            "HELL_WORKERS_WORLDGEN_SEED": str(args.seed),
+            "HW_WINDOW_BACKEND": args.window_backend,
+            "WGPU_BACKEND": args.backend,
+            "HW_PRESENT_MODE": args.present_mode,
+            "HW_NATIVE_NOTIFICATION_ACCEPTANCE_ARTIFACT": str(artifact),
+            "HW_NATIVE_NOTIFICATION_ACCEPTANCE_RUNTIME_ROOT": str(runtime_root),
+            "HW_NATIVE_NOTIFICATION_ACCEPTANCE_RUN_ID": run_id,
+        }
+    )
+    command = ["cargo", "run", "--locked", "-p", "bevy_app@0.1.0"]
+    LOCK_PATH.touch(exist_ok=True)
+    with LOCK_PATH.open("r+", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            update_state(
+                job_file,
+                state,
+                status="invalid",
+                current_stage=None,
+                error=f"another native acceptance job holds {LOCK_PATH}",
+                finished_at=utc_now(),
+            )
+            return 1
+        try:
+            run_command(
+                "native-notifications",
+                command,
+                repo=repo,
+                env=env,
+                log_path=log_path,
+                job_file=job_file,
+                state=state,
+                timeout_seconds=360,
+            )
+            assert_source_unchanged(repo, source)
+            require(
+                native_harness_fingerprint(repo) == harness,
+                "native acceptance harness changed during the A2 run",
+            )
+            verification = verify_notifications_artifact(
+                artifact,
+                runtime_root=runtime_root,
+                run_id=run_id,
+                adapter=args.adapter,
+                backend=args.backend,
+                window_backend=args.window_backend,
+            )
+            update_state(
+                job_file,
+                state,
+                status="valid",
+                current_stage=None,
+                child_pid=None,
+                verification=verification,
+                finished_at=utc_now(),
+            )
+            return 0
+        except Exception as error:
+            update_state(
+                job_file,
+                state,
+                status="invalid",
+                current_stage=None,
+                child_pid=None,
+                error=str(error),
+                finished_at=utc_now(),
+            )
+            return 1
 def run_save_catalog(args: argparse.Namespace) -> int:
     if os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") != "1":
         raise AcceptanceError(
@@ -3622,6 +3841,127 @@ def verify_deconstruction_artifact(
             "width": width,
             "height": height,
             "bytes": len(png),
+            "sha256": sha256(screenshot_path),
+        },
+        "renderer": {
+            "adapter_name": adapter_name,
+            "backend": actual_backend,
+            "display_handle": display_handle,
+        },
+    }
+
+
+def verify_notifications_artifact(
+    artifact: Path,
+    *,
+    runtime_root: Path,
+    run_id: str,
+    adapter: str,
+    backend: str,
+    window_backend: str,
+) -> dict[str, Any]:
+    artifact = artifact.resolve()
+    runtime_root = runtime_root.resolve()
+    result_path = artifact / "driver-result.json"
+    screenshot_path = artifact / "a2-notifications.png"
+    require(artifact.is_dir(), f"A2 artifact directory is missing: {artifact}")
+    artifact_entries = {entry.name for entry in artifact.iterdir()}
+    require(
+        artifact_entries == {"driver-result.json", "a2-notifications.png"},
+        f"A2 artifact set is not exact: {sorted(artifact_entries)}",
+    )
+    require(
+        all(entry.is_file() and not entry.is_symlink() for entry in artifact.iterdir()),
+        "A2 artifact contains a non-regular file or symlink",
+    )
+    result = read_json(result_path)
+    require(result.get("status") == "PASS", f"A2 driver did not pass: {result_path}")
+    require(
+        result.get("profile") == "player-facing-result-notifications",
+        f"wrong A2 native profile in {result_path}",
+    )
+    actual_run_id = result.get("run_id")
+    require(isinstance(actual_run_id, str) and actual_run_id, "A2 driver run_id is missing")
+    require(run_id and actual_run_id == run_id, "A2 driver run_id does not match the job")
+    checks = result.get("checks")
+    require(isinstance(checks, dict), "A2 driver checks are missing")
+    require(set(checks) == NOTIFICATION_CHECKS, "A2 driver check set is incomplete")
+    require(
+        all(checks.get(check) == "PASS" for check in NOTIFICATION_CHECKS),
+        "one or more A2 driver checks did not pass",
+    )
+
+    runtime = result.get("runtime")
+    require(isinstance(runtime, dict), "A2 runtime evidence is missing")
+    require(
+        Path(str(runtime.get("save_root"))).resolve() == runtime_root / "saves",
+        "A2 save root escaped the isolated runtime",
+    )
+    require(
+        Path(str(runtime.get("settings_root"))).resolve() == runtime_root / "settings",
+        "A2 settings root escaped the isolated runtime",
+    )
+
+    screenshot = result.get("screenshot")
+    require(isinstance(screenshot, dict), "A2 screenshot evidence is missing")
+    require(screenshot_path.is_file(), f"A2 screenshot is missing: {screenshot_path}")
+    require(
+        Path(str(screenshot.get("path"))).resolve() == screenshot_path,
+        "A2 driver screenshot path does not match the artifact contract",
+    )
+    screenshot_bytes = screenshot_path.stat().st_size
+    require(
+        0 < screenshot_bytes <= MAX_NATIVE_SCREENSHOT_BYTES,
+        "A2 screenshot size is outside the fail-closed limit",
+    )
+    png = screenshot_path.read_bytes()
+    width, height = validate_png_structure(png)
+    require(width >= 640 and height >= 360, f"A2 screenshot is too small: {width}x{height}")
+    require(screenshot.get("width") == width, "A2 driver screenshot width is stale")
+    require(screenshot.get("height") == height, "A2 driver screenshot height is stale")
+    require(screenshot.get("bytes") == screenshot_bytes, "A2 screenshot byte count is stale")
+
+    renderer = result.get("renderer")
+    require(isinstance(renderer, dict), "A2 renderer evidence is missing")
+    adapter_name = str(renderer.get("adapter_name", ""))
+    actual_backend = str(renderer.get("backend", ""))
+    display_handle = str(renderer.get("display_handle", ""))
+    require(adapter_name, "A2 renderer adapter name is empty")
+    if adapter:
+        require(
+            adapter.lower() in adapter_name.lower(),
+            f"actual A2 adapter does not contain {adapter!r}: {adapter_name}",
+        )
+    require(
+        actual_backend.lower() == backend.lower(),
+        f"actual A2 renderer backend is {actual_backend!r}, expected {backend!r}",
+    )
+    display_lower = display_handle.lower()
+    if window_backend == "x11":
+        require(
+            "xlib" in display_lower or "xcb" in display_lower,
+            f"actual A2 display handle is not X11: {display_handle}",
+        )
+    else:
+        require(
+            "wayland" in display_lower,
+            f"actual A2 display handle is not Wayland: {display_handle}",
+        )
+
+    return {
+        "status": "pass",
+        "profile": "player-facing-result-notifications",
+        "run_id": actual_run_id,
+        "checks": checks,
+        "runtime": {
+            "save_root": str(runtime_root / "saves"),
+            "settings_root": str(runtime_root / "settings"),
+        },
+        "screenshot": {
+            "path": str(screenshot_path),
+            "width": width,
+            "height": height,
+            "bytes": screenshot_bytes,
             "sha256": sha256(screenshot_path),
         },
         "renderer": {
@@ -4892,6 +5232,24 @@ def verify_deconstruction_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def verify_notifications_command(args: argparse.Namespace) -> int:
+    repo = validate_repo(args.repo)
+    require(
+        native_harness_fingerprint(repo) == args.harness_fingerprint,
+        "native acceptance harness fingerprint differs from the A2 verification",
+    )
+    result = verify_notifications_artifact(
+        Path(args.artifact).resolve(),
+        runtime_root=Path(args.runtime_root).resolve(),
+        run_id=args.run_id,
+        adapter=args.adapter,
+        backend=args.backend,
+        window_backend=args.window_backend,
+    )
+    print_json(result)
+    return 0
+
+
 def verify_save_catalog_command(args: argparse.Namespace) -> int:
     repo = validate_repo(args.repo)
     require(
@@ -4980,6 +5338,27 @@ def status_command(args: argparse.Namespace) -> int:
         except (AcceptanceError, KeyError, TypeError, ValueError) as error:
             summary["status"] = "invalid"
             summary["error"] = f"artifact revalidation failed: {error}"
+            print_json(summary)
+            return 1
+    if status == "valid" and state.get("profile") == "player-facing-result-notifications":
+        parameters = state.get("parameters", {})
+        try:
+            expected_harness = str(state["harness_fingerprint"])
+            require(
+                native_harness_fingerprint(Path(state["repo"])) == expected_harness,
+                "native acceptance harness differs from the completed A2 job",
+            )
+            summary["verification"] = verify_notifications_artifact(
+                Path(state["paths"]["artifact"]),
+                runtime_root=Path(state["paths"]["runtime"]),
+                run_id=str(state["run_id"]),
+                adapter=str(parameters.get("adapter", "Intel")),
+                backend=str(parameters.get("backend", "vulkan")),
+                window_backend=str(parameters.get("window_backend", "x11")),
+            )
+        except (AcceptanceError, KeyError, TypeError, ValueError) as error:
+            summary["status"] = "invalid"
+            summary["error"] = f"A2 artifact revalidation failed: {error}"
             print_json(summary)
             return 1
     if status == "valid" and state.get("profile") == "save-catalog":
@@ -5884,6 +6263,63 @@ def self_test() -> int:
         else:
             raise AcceptanceError("truncated native PNG fixture unexpectedly passed")
 
+        notifications_job = root / "notifications-job"
+        notifications_artifact = notifications_job / "artifact"
+        notifications_runtime = notifications_job / "runtime"
+        notifications_artifact.mkdir(parents=True)
+        (notifications_runtime / "saves").mkdir(parents=True)
+        (notifications_runtime / "settings").mkdir(parents=True)
+        notifications_screenshot = notifications_artifact / "a2-notifications.png"
+        notifications_screenshot.write_bytes(structural_png(1280, 720))
+        atomic_write_json(
+            notifications_artifact / "driver-result.json",
+            {
+                "status": "PASS",
+                "profile": "player-facing-result-notifications",
+                "run_id": "self-test-a2",
+                "checks": {check: "PASS" for check in NOTIFICATION_CHECKS},
+                "runtime": {
+                    "save_root": str(notifications_runtime / "saves"),
+                    "settings_root": str(notifications_runtime / "settings"),
+                },
+                "screenshot": {
+                    "path": str(notifications_screenshot),
+                    "width": 1280,
+                    "height": 720,
+                    "bytes": notifications_screenshot.stat().st_size,
+                },
+                "renderer": {
+                    "adapter_name": "Intel(R) Arc Graphics",
+                    "backend": "Vulkan",
+                    "display_handle": "Xlib(XlibDisplayHandle)",
+                },
+            },
+        )
+        notifications_result = verify_notifications_artifact(
+            notifications_artifact,
+            runtime_root=notifications_runtime,
+            run_id="self-test-a2",
+            adapter="Intel",
+            backend="vulkan",
+            window_backend="x11",
+        )
+        require(notifications_result["status"] == "pass", "valid A2 fixture did not pass")
+        (notifications_artifact / "unexpected.txt").write_text("leak\n", encoding="utf-8")
+        try:
+            verify_notifications_artifact(
+                notifications_artifact,
+                runtime_root=notifications_runtime,
+                run_id="self-test-a2",
+                adapter="Intel",
+                backend="vulkan",
+                window_backend="x11",
+            )
+        except AcceptanceError:
+            pass
+        else:
+            raise AcceptanceError("A2 fixture with an extra artifact unexpectedly passed")
+        (notifications_artifact / "unexpected.txt").unlink()
+
         save_catalog_job = root / "save-catalog-job"
         save_catalog_artifact = save_catalog_job / "artifact"
         save_catalog_runtime = save_catalog_job / "runtime"
@@ -6410,6 +6846,14 @@ def parser() -> argparse.ArgumentParser:
         "run-deconstruction", help="run V1-V5 inside the planned actual window"
     )
     add_deconstruction_arguments(deconstruction_run, require_job_root=True)
+    notifications_plan = commands.add_parser(
+        "plan-notifications", help="emit the no-prompt Track A2 launcher plan"
+    )
+    add_deconstruction_arguments(notifications_plan, require_job_root=False)
+    notifications_run = commands.add_parser(
+        "run-notifications", help="run Track A2 inside the planned actual window"
+    )
+    add_deconstruction_arguments(notifications_run, require_job_root=True)
     save_catalog_plan = commands.add_parser(
         "plan-save-catalog", help="emit the no-prompt save-catalog launcher plan"
     )
@@ -6446,6 +6890,19 @@ def parser() -> argparse.ArgumentParser:
     verify_deconstruction.add_argument("--adapter", default="Intel")
     verify_deconstruction.add_argument("--backend", default="vulkan")
     verify_deconstruction.add_argument(
+        "--window-backend", default="x11", choices=["x11", "wayland"]
+    )
+    verify_notifications = commands.add_parser(
+        "verify-notifications", help="fail-closed validation of one Track A2 artifact"
+    )
+    verify_notifications.add_argument("--repo", required=True)
+    verify_notifications.add_argument("--artifact", required=True)
+    verify_notifications.add_argument("--runtime-root", required=True)
+    verify_notifications.add_argument("--run-id", required=True)
+    verify_notifications.add_argument("--harness-fingerprint", required=True)
+    verify_notifications.add_argument("--adapter", default="Intel")
+    verify_notifications.add_argument("--backend", default="vulkan")
+    verify_notifications.add_argument(
         "--window-backend", default="x11", choices=["x11", "wayland"]
     )
     verify_save_catalog = commands.add_parser(
@@ -6492,6 +6949,10 @@ def validate_args(args: argparse.Namespace) -> None:
             raise AcceptanceError("save-catalog harness fingerprint is invalid")
         if args.seed < 0:
             raise AcceptanceError("save-catalog seed cannot be negative")
+    if args.command == "verify-notifications" and re.fullmatch(
+        r"[0-9a-f]{64}", args.harness_fingerprint
+    ) is None:
+        raise AcceptanceError("A2 harness fingerprint is invalid")
     if args.command == "run-save-catalog" and re.fullmatch(
         r"[0-9a-f]{64}", args.harness_fingerprint
     ) is None:
@@ -6538,6 +6999,10 @@ def main() -> int:
         return plan_deconstruction(args)
     if args.command == "run-deconstruction":
         return run_deconstruction(args)
+    if args.command == "plan-notifications":
+        return plan_notifications(args)
+    if args.command == "run-notifications":
+        return run_notifications(args)
     if args.command == "plan-save-catalog":
         return plan_save_catalog(args)
     if args.command == "run-save-catalog":
@@ -6552,6 +7017,8 @@ def main() -> int:
         return verify_artifacts_command(args)
     if args.command == "verify-deconstruction":
         return verify_deconstruction_command(args)
+    if args.command == "verify-notifications":
+        return verify_notifications_command(args)
     if args.command == "verify-save-catalog":
         return verify_save_catalog_command(args)
     if args.command == "verify-rtt-light":

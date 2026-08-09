@@ -143,6 +143,19 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
 
 helperはUUID付きの一意なartifact rootとatomicな`job.json`を使い、fixed audit、実window Capture、native Memoryをrepository-wide lockの内側で逐次実行する。各sessionは`perf.py`自身に対応featureのbuildを行わせ、`--skip-build`と任意`--binary`を使わない。これにより、`target/profiling/bevy_app`が直前のMemory flavorであるのにCaptureとして記録する取り違えを防ぐ。CaptureとMemoryの間ではbinary hashが変わり、fixed auditとCaptureでは一致することをfail-closedで検証する。
 
+配置不能理由、save/load結果通知、dedupe、Pause中expiry、toast/history入力境界のTrack A2受入は、
+性能recipeへ混ぜず専用actual-window profileを使う。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+  plan-notifications --repo "$PWD" --adapter Intel \
+  --backend vulkan --window-backend x11 --present-mode novsync
+```
+
+このprofileも返されたdirect `kitty` launcherと`status_command`だけを使い、save/settingsをjob固有runtimeへ
+隔離する。結果は`verify-notifications`で再検証し、headless結果をUI/renderer証跡へ代用しない。
+
 resource preflightはnative recipe開始時に`MemAvailable` 10 GiBと実際のCargo target filesystem空き15 GiBを要求する。16 GiB以上ではCargo 2 job、未満では1 jobとし、`CARGO_INCREMENTAL=0`を固定する。swapの使用量はmanifestへ診断情報として記録するが、RAMの下限を満たす場合の開始・実行条件にはしない。Linuxで`MemAvailable`を読めない場合は開始を拒否する。開始後もhelperは1秒ごとに`MemAvailable` 8 GiBを監視し、下回った場合はそのstageのprocess group全体を停止してartifactへ理由を残す。helperは親環境の`CARGO_TARGET_DIR`を無視してworkspace `target/`へ、`TMPDIR` / `TMP` / `TEMP`を`target/.native-acceptance-tmp`へ固定し、`CARGO_HOME` / `RUSTUP_HOME`は安全な永続overrideだけを保持してtmpfs指定をaccount既定cacheへ戻す。job rootも`target/native-acceptance/`へ生成する。formal RenderDocのraw capture / replay workも`target/.renderdoc-tmp`へ置く。`/tmp`またはmemory-backed filesystemのjob / artifactを、default path・明示pathともに解決済みsymlink/mountまで検査して拒否し、残存`/tmp/hell-workers-*-target`はサイズを出して停止するが自動削除しない。`scripts/perf.py`と`scripts/dev.py`も同じくworkspace target・disk temporary・toolchain cache・最大2 Cargo jobsへ正規化し、Cargo compilationは`MemAvailable` 8 GiB未満では開始しない。Tracy capture / csvexportとRenderDocの子processもこのtemporary環境を継承する。通常のMemory受入はnative allocator + GNU timeを使い、Cargo/game/Capture/Memoryは並列化しない。artifactやCargo cacheの自動削除、別target directory、routineな`cargo clean`、`nice` / `ionice` / CPU affinityは行わない。
 
 既承認launcherが利用可能な間は、displayやGUIの追加許可をユーザーへ求めない。helperが返す`status_command`だけを15〜30秒間隔でpollし、通常は大きなbuild/game logを会話へ読み込まない。headlessはfixed correctnessまたはCPU-only route smokeに限定し、実renderer / adapter / presentの証拠にはしない。

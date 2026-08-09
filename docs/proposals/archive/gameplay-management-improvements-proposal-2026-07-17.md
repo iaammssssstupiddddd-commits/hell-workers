@@ -9,13 +9,13 @@
 | 作成日 | `2026-07-17` |
 | 最終更新日 | `2026-08-09` |
 | 作成者 | `Codex` |
-| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能検証完了）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`（B2実装・自動検証完了）、`docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`（B2実機・性能検証完了）、`docs/plans/archive/soul-energy-control-plan-2026-07-20.md`（B3実装・実機受入完了）、`docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`（C3完了）、`docs/plans/archive/building-deconstruction-plan-2026-08-03.md`（C1完了）、`docs/plans/archive/save-catalog-autosave-plan-2026-08-03.md`（C2完了） |
+| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/archive/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・実機受入完了）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能検証完了）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`（B2実装・自動検証完了）、`docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`（B2実機・性能検証完了）、`docs/plans/archive/soul-energy-control-plan-2026-07-20.md`（B3実装・実機受入完了）、`docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`（C3完了）、`docs/plans/archive/building-deconstruction-plan-2026-08-03.md`（C1完了）、`docs/plans/archive/save-catalog-autosave-plan-2026-08-03.md`（C2完了） |
 | 後続提案 | `docs/proposals/progression-and-choice-proposal-2026-08-09.md`（旧Track Dの現行正本） |
 | 関連Issue/PR | `N/A` |
 
 > **Archived (2026-08-09):** 本書はTrack A〜Cのロードマップと完了履歴を保存する。未採否だったTrack Dは
-> `docs/proposals/progression-and-choice-proposal-2026-08-09.md`へ移管した。A2の重点実機受入は
-> `docs/plans/player-facing-result-notifications-plan-2026-07-18.md`が引き続き所有し、本書を再開しない。
+> `docs/proposals/progression-and-choice-proposal-2026-08-09.md`へ移管した。A2もactual-window受入を完了し、
+> `docs/plans/archive/player-facing-result-notifications-plan-2026-07-18.md`へ完了記録を固定した。
 
 ## 1. 背景と問題
 
@@ -105,7 +105,7 @@ hell-workers は、建築、Soul の労働、Familiar の指揮、物流、Soul 
 実装状態: `2026-07-18` にM1〜M4のコード、回帰テスト、恒久ドキュメント同期を完了。
 有界通知センター、全配置経路のtyped live feedback、save/load terminal outcomeとreset後の発行順を実装した。
 重点実機受入と計画archiveを残す。詳細な責務境界、world replacement順序、有界性、検証項目は
-`docs/plans/player-facing-result-notifications-plan-2026-07-18.md` を参照する。
+`docs/plans/archive/player-facing-result-notifications-plan-2026-07-18.md` を参照する。
 
 - 既存のプレゼンテーション用 Message 経路を利用し、短命のトーストと履歴型の重要通知を分ける。
 - 配置ゴーストは `PlacementRejectReason` を保持し、カーソル付近または情報領域に
@@ -551,7 +551,7 @@ A1、A2、A3は相互の技術的前提ではない。Track Dの依存関係は�
 ### 次のAIが最初にやること
 
 1. Track Dは`docs/proposals/progression-and-choice-proposal-2026-08-09.md`だけで継続し、本書を再開しない。
-2. A2の重点実機受入は`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`で継続する。
+2. A2の完了記録は`docs/plans/archive/player-facing-result-notifications-plan-2026-07-18.md`を参照する。
 3. C2以後のslot拡張、background I/O、container v2はarchive済み計画を再開せず別計画を作る。
 
 ### ブロッカー/注意点
@@ -648,3 +648,4 @@ A1、A2、A3は相互の技術的前提ではない。Track Dの依存関係は�
 | `2026-08-09` | `Codex` | C2実装前レビューを反映。archive済みC1のcurrent v1をC2互換性baselineとして明記し、過去のC1待機表現を解消 |
 | `2026-08-09` | `Codex` | Track C2 M1〜M5を完了。typed slot/catalog/manual transaction/autosave、RecoveryFailed fail-closed、Help/恒久docs、Capture/Memory artifact、Intel Vulkan/Xlib native V1〜V5、full workspace gateを通過してarchive |
 | `2026-08-09` | `Codex` | Track Dを独立した進行・選択提案へ移管。A〜Cのロードマップ履歴として本提案をArchived化し、A2残件とTrack Dの現行ownerを分離 |
+| `2026-08-09` | `Codex` | A2のtyped配置tooltip、save/load結果通知、dedupe、Pause中expiry、toast/history入力境界をIntel Arc/Vulkan/Xlib actual-windowで受入完了。A2計画をarchiveし、Track A〜Cの全サブトラック完了を固定 |

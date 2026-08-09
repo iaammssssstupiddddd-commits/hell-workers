@@ -5,11 +5,11 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `player-facing-result-notifications-plan-2026-07-18` |
-| ステータス | `In Progress` |
+| ステータス | `Archived` |
 | 作成日 | `2026-07-18` |
-| 最終更新日 | `2026-07-20` |
+| 最終更新日 | `2026-08-09` |
 | 作成者 | `Codex` |
-| 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track A2） |
+| 関連提案 | `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`（Track A2） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的
@@ -430,12 +430,12 @@ rollback 経路では reset が複数回走っても、最後の reset 後に発
   - `docs/invariants.md`
   - `crates/bevy_app/src/interface/README.md`
   - `crates/bevy_app/src/interface/ui/README.md`
-  - `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+  - `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`
   - `docs/plans/README.md`
 - 完了条件:
   - [x] A2 の公開契約、owner、reset、上限、順序が code と docs で一致する。
   - [x] 提案の 3 受入条件を自動テストと手動確認へ対応付けられる。
-  - [ ] docs index が最新で、完了計画が archive されている。
+  - [x] docs index が最新で、完了計画が archive されている。
   - [x] full quality gate が成功する。
 - 検証:
   - `python3 scripts/dev.py docs --write`
@@ -544,21 +544,20 @@ rollback 経路では reset が複数回走っても、最後の reset 後に発
 
 ### 現在地
 
-- 進捗: `95%`（M1〜M3、M4の実装・自動検証・恒久docs同期完了。重点実機受入とarchive待ち）
-- 完了済みマイルストーン: `M1`、`M2`、`M3`
-- 進行中: `M4`（重点実機受入）
+- 進捗: `100%`（M1〜M4、重点実機受入、恒久docs、archive完了）
+- 完了済みマイルストーン: `M1`、`M2`、`M3`、`M4`
+- 進行中: なし
 - 未着手: なし
 
 ### 次のAIが最初にやること
 
-1. §7.3の重点実機項目を確認する。特に全配置経路のpreview理由、BuildingPlace成功後のsame-anchor blocker、
-   Floor / Wall部分採用、F5/F9通知、load後の履歴resetを優先する。
-2. 問題がなければ本計画を`docs/plans/archive/`へ移し、`python3 scripts/dev.py docs --write`と`verify`を再実行する。
-3. 問題があれば該当milestoneのcode / test / durable docsを同じ変更で直す。
+1. A2の完了記録は本archiveを参照し、追加要件は新しい計画で扱う。
+2. 通知・配置・save/load契約を変更した場合は、既存のunit/integration回帰と
+   `hell-workers-run-native-acceptance` Skillの`plan-notifications`を再実行する。
 
 ### ブロッカー/注意点
 
-- 実装ブロッカーは現在なし。自動検証ではUIの実見た目とpointer操作感を代替できないため、archive前に重点実機受入を残す。
+- 未解決ブロッカーはない。A2実機受入はno-prompt actual-window driverで自動化されている。
 - 配置対象は BuildingPlace、BucketStorage companion、BuildingMove（Tank companion を含む）、SoulSpa、
   Floor、Wall の全経路である。
 - `PlacementRejectReason` は 14 variant。数を推測せず enum と test を同時に更新する。
@@ -572,7 +571,7 @@ rollback 経路では reset が複数回走っても、最後の reset 後に発
 
 ### 参照必須ファイル
 
-- `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`
+- `docs/proposals/archive/gameplay-management-improvements-proposal-2026-07-17.md`
 - `docs/building.md`
 - `docs/save_load.md`
 - `docs/events.md`
@@ -593,23 +592,27 @@ rollback 経路では reset が複数回走っても、最後の reset 後に発
 
 ### 最終確認ログ
 
-- 最終 `cargo check --workspace`: `2026-07-18` / pass（`python3 scripts/dev.py verify` 内）
-- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `2026-07-18` / pass（同上）
-- 最終 `cargo test --workspace`: `2026-07-18` / pass（同上）
-- 最終 `python3 scripts/dev.py verify`: `2026-07-18` / pass
+- A2 actual-window: `2026-08-09` / pass（run `a2-20260809T074058Z-988cfc8d`、A1〜A5）
+- Renderer: `Intel(R) Arc(tm) Graphics (MTL)` / `vulkan` / `Xlib`
+- Screenshot: `target/native-acceptance/player-facing-result-notifications-20260809T074051Z-0d9ce9b6/artifact/a2-notifications.png`（2560×1440、SHA-256 `eb7c2cf805d11146558f39577d72af1cb440f7764f5cd1c9fef33fca778579c6`）
+- 実save/load補助証跡: C2 `target/native-acceptance/save-catalog-20260809T053650Z-845407ac`（production F5/F9 catalog/modal/dispatcher V1〜V5）
+- 最終 `cargo check --workspace`: `2026-08-09` / pass（最終verify内）
+- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `2026-08-09` / pass（同上）
+- 最終 `cargo test --workspace`: `2026-08-09` / pass（同上）
+- 最終 `python3 scripts/dev.py verify`: `2026-08-09` / pass
 - 未解決エラー: なし
 
 ### Definition of Done
 
-- [ ] M1〜M4 がすべて完了
-- [ ] 提案 A2 の 3 受入条件を自動テストと手動確認で満たす
+- [x] M1〜M4 がすべて完了
+- [x] 提案 A2 の 3 受入条件を自動テストとactual-window確認で満たす
 - [x] 影響ドキュメントが更新済み
 - [x] `python3 scripts/dev.py docs --check` が成功
 - [x] `cargo check --workspace` が成功
 - [x] `cargo clippy --workspace --all-targets -- -D warnings` が成功
 - [x] `cargo test --workspace` が成功
 - [x] `python3 scripts/dev.py verify` が成功
-- [ ] 完了した本計画が archive され、索引が最新
+- [x] 完了した本計画が archive され、索引が最新
 
 ## 10. 受入条件トレーサビリティ
 
@@ -640,3 +643,4 @@ rollback 経路では reset が複数回走っても、最後の reset 後に発
 | `2026-07-18` | `Codex` | 初版作成 |
 | `2026-07-18` | `Codex` | 自己レビューを実施。missing-load の owner 経路、adapter/reducer 順序、dynamic UI row reset、Modal/Pause capture、配置経路、失敗注入 seam、milestone ごとの文書同期、索引用要約を明確化 |
 | `2026-07-18` | `Codex` | M1〜M3実装、M4の恒久docs同期とfull quality gateを完了。実rollback成功／失敗、outcome dedupe、全配置typed validationを回帰化。重点実機受入とarchiveを残す |
+| `2026-08-09` | `Codex` | A2専用no-prompt actual-window受入を追加。typed配置tooltip、save/load通知、同一失敗repeat集約、Pause中expiry、toast透過、history blockをIntel Arc/Vulkan/XlibでA1〜A5 PASS。C2実F5/F9証跡と自動回帰を対応付け、M4/DoDを完了してarchive |

@@ -20,6 +20,10 @@ use hw_jobs::{
 };
 use hw_logistics::StockpilePolicyChangeOutcome;
 
+mod native_acceptance;
+
+pub use native_acceptance::NativeNotificationAcceptancePlugin;
+
 pub(crate) fn adapt_save_load_outcomes(
     mut outcomes: MessageReader<SaveLoadOutcome>,
     mut notifications: MessageWriter<UserFacingNotification>,
