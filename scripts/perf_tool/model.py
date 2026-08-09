@@ -21,7 +21,6 @@ import shutil
 import statistics
 import subprocess
 import sys
-import tempfile
 import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -458,6 +457,7 @@ class Validation:
     indoor_light_layout: list[dict[str, str]] | None = None
     indoor_light_presentation: list[dict[str, str]] | None = None
     deconstruction_fixture: dict[str, str] | None = None
+    save_transaction: dict[str, str] | None = None
     timeline: list[dict[str, Any]] | None = None
     behavior_save_artifact: dict[str, Any] | None = None
     profile_artifact: dict[str, Any] | None = None
@@ -479,6 +479,7 @@ class Validation:
             "indoor_light_layout": self.indoor_light_layout,
             "indoor_light_presentation": self.indoor_light_presentation,
             "deconstruction_fixture": self.deconstruction_fixture,
+            "save_transaction": self.save_transaction,
             "timeline": self.timeline,
             "behavior_save_artifact": self.behavior_save_artifact,
             "profile_artifact": self.profile_artifact,

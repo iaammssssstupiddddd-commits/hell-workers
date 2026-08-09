@@ -71,7 +71,21 @@ pub(crate) fn handle_time(
     intent: UiIntent,
     time: &mut Time<Virtual>,
     input_focus: &mut InputFocus,
+    recovery_failed: bool,
 ) {
+    if recovery_failed {
+        match intent {
+            UiIntent::SetTimeSpeed(TimeSpeed::Paused) | UiIntent::TogglePause
+                if !time.is_paused() =>
+            {
+                begin_overlay_open(input_focus);
+                time.pause();
+            }
+            _ => {}
+        }
+        return;
+    }
+
     match intent {
         UiIntent::TogglePause => {
             if time.is_paused() {
@@ -232,12 +246,12 @@ mod tests {
         let mut time = Time::<Virtual>::default();
         let mut focus = InputFocus::from_entity(Entity::PLACEHOLDER);
 
-        handle_time(UiIntent::TogglePause, &mut time, &mut focus);
+        handle_time(UiIntent::TogglePause, &mut time, &mut focus, false);
         assert!(time.is_paused());
         assert!(focus.get().is_none());
 
         focus = InputFocus::from_entity(Entity::PLACEHOLDER);
-        handle_time(UiIntent::TogglePause, &mut time, &mut focus);
+        handle_time(UiIntent::TogglePause, &mut time, &mut focus, false);
         assert!(!time.is_paused());
         assert_eq!(focus.get(), Some(Entity::PLACEHOLDER));
     }

@@ -23,6 +23,7 @@ pub enum PerfWorkload {
     TaskDashboard,
     IndoorLight,
     Deconstruction,
+    SaveTransaction,
 }
 
 impl PerfWorkload {
@@ -35,6 +36,7 @@ impl PerfWorkload {
             "task-dashboard" => Some(Self::TaskDashboard),
             "indoor-light" => Some(Self::IndoorLight),
             "deconstruction" => Some(Self::Deconstruction),
+            "save-transaction" => Some(Self::SaveTransaction),
             _ => None,
         }
     }
@@ -48,6 +50,7 @@ impl PerfWorkload {
             Self::TaskDashboard => "task-dashboard",
             Self::IndoorLight => "indoor-light",
             Self::Deconstruction => "deconstruction",
+            Self::SaveTransaction => "save-transaction",
         }
     }
 
@@ -354,7 +357,7 @@ impl PerfScenarioConfig {
         let workload = parse_value_or_default(
             value_from_args_or_env(&args, "--perf-workload", "HW_PERF_WORKLOAD")?,
             "--perf-workload",
-            "gather|path-door|construction|ui-gpu|task-dashboard|indoor-light|deconstruction",
+            "gather|path-door|construction|ui-gpu|task-dashboard|indoor-light|deconstruction|save-transaction",
             PerfWorkload::parse,
             PerfWorkload::Gather,
         )?;
@@ -512,6 +515,30 @@ impl PerfScenarioConfig {
                 "the deconstruction workload requires medium/cpu/fixed, familiar policy baseline, operation dialog hidden, and dashboard hidden"
                     .to_string(),
             ));
+        }
+        if workload == PerfWorkload::SaveTransaction
+            && (!matches!(familiar_policy_mode, PerfFamiliarPolicyMode::Baseline)
+                || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
+                || !matches!(dashboard_mode, PerfDashboardMode::Hidden)
+                || matches!(
+                    clock_mode,
+                    PerfClockMode::Fixed | PerfClockMode::FixedBehavior
+                ))
+        {
+            return Err(PerfScenarioConfigError(
+                "the save-transaction workload requires familiar policy baseline, operation dialog hidden, dashboard hidden, and realtime clock"
+                    .to_string(),
+            ));
+        }
+        if workload == PerfWorkload::SaveTransaction {
+            let runtime_root = env::var_os("HW_PERF_SAVE_RUNTIME_ROOT")
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute() && !path.as_os_str().is_empty());
+            if runtime_root.is_none() {
+                return Err(PerfScenarioConfigError(
+                    "save-transaction requires an absolute HW_PERF_SAVE_RUNTIME_ROOT".to_string(),
+                ));
+            }
         }
         let master_seed = parse_u64_value_or_random(
             value_from_args_or_env(&args, "--perf-seed", "HW_PERF_SEED")?

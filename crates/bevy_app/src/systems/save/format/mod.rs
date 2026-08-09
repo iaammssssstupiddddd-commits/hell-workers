@@ -1,8 +1,16 @@
 //! DynamicWorld body の外側に置く、registry 非依存のセーブ形式ヘッダー。
 
+mod inspect;
+
 use std::fmt;
+use std::io::{self, Write};
 
 use serde::{Deserialize, Serialize};
+
+pub use inspect::{
+    SAVE_HEADER_INSPECT_LIMIT_BYTES, SaveHeaderStatus, inspect_save_prefix,
+    save_header_status_allows_load, save_header_status_label,
+};
 
 pub const SAVE_MAGIC: &str = "HELL_WORKERS_SAVE";
 pub const CURRENT_SAVE_FORMAT_VERSION: u32 = 1;
@@ -61,12 +69,38 @@ impl fmt::Display for SaveFormatError {
 
 impl std::error::Error for SaveFormatError {}
 
-/// Encodes a v1 file without involving the DynamicWorld type registry.
-pub fn encode_save_file(header: SaveHeader, body: &str) -> String {
+/// Encodes a v1 header line without involving the DynamicWorld type registry.
+pub fn encode_save_header_text(header: SaveHeader) -> String {
     format!(
-        "{SAVE_MAGIC}\n(format_version: {}, worldgen_seed: {})\n---\n{body}",
+        "{SAVE_MAGIC}\n(format_version: {}, worldgen_seed: {})\n---\n",
         header.format_version, header.worldgen_seed
     )
+}
+
+/// Streams header then body into `writer` without allocating a second full-size
+/// container buffer. Callers supply an already-serialized body `String`.
+pub fn write_container(header: SaveHeader, body: &str, writer: &mut impl Write) -> io::Result<()> {
+    writer.write_all(encode_save_header_text(header).as_bytes())?;
+    write_body_chunks(body, writer)
+}
+
+fn write_body_chunks(body: &str, writer: &mut impl Write) -> io::Result<()> {
+    const CHUNK: usize = 64 * 1024;
+    let bytes = body.as_bytes();
+    let mut offset = 0;
+    while offset < bytes.len() {
+        let end = (offset + CHUNK).min(bytes.len());
+        writer.write_all(&bytes[offset..end])?;
+        offset = end;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+pub fn encode_save_file(header: SaveHeader, body: &str) -> String {
+    let mut encoded = Vec::new();
+    write_container(header, body, &mut encoded).expect("in-memory container write");
+    String::from_utf8(encoded).expect("save container is UTF-8")
 }
 
 /// Classifies a save before its DynamicWorld body is deserialized.
@@ -156,5 +190,15 @@ mod tests {
             decode_save_file(&contents),
             Err(SaveFormatError::InvalidHeader(_))
         ));
+    }
+
+    #[test]
+    fn write_container_streams_header_then_body_without_second_full_buffer() {
+        let body = "x".repeat(70_000);
+        let mut out = Vec::new();
+        write_container(SaveHeader::current(3), &body, &mut out).unwrap();
+        let as_string = String::from_utf8(out).unwrap();
+        assert_eq!(as_string, encode_save_file(SaveHeader::current(3), &body));
+        assert!(as_string.len() > 64 * 1024);
     }
 }

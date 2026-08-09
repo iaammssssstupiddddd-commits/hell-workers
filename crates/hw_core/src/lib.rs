@@ -11,6 +11,7 @@ pub mod logistics;
 pub mod population;
 pub mod quality;
 pub mod relationships;
+pub mod save;
 pub mod selection;
 pub mod settings;
 #[cfg(any(feature = "profiling", test))]
@@ -24,7 +25,8 @@ pub mod visual_mirror;
 pub mod world;
 pub mod world_epoch;
 
-pub use settings::GameSettings;
+pub use save::{SaveSlotId, SaveSlotRole};
+pub use settings::{AUTOSAVE_INTERVAL_MINUTES, GameSettings};
 pub use time::GameTime;
 pub use world::GridPos;
 pub use world_epoch::{EpochLocal, WorldEpoch};

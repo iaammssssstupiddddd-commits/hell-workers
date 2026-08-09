@@ -10,6 +10,7 @@ use super::intent_context::{
 };
 use crate::input_actions::PendingWorldInputCapture;
 use crate::interface::ui::help_controller::{HelpPauseGuard, HelpScrollAreas, handle_help_intent};
+use crate::systems::save::SaveRecoveryMode;
 
 #[derive(SystemParam)]
 pub(crate) struct IntentHelpCtx<'w, 's> {
@@ -33,6 +34,26 @@ pub(crate) struct IntentAuxCtx<'w, 's> {
     help: IntentHelpCtx<'w, 's>,
 }
 
+/// RecoveryFailed is a fail-closed UI boundary. Keyboard routing is only one
+/// ingress; pointer buttons and tests can write `UiIntent` directly, so the
+/// root consumer must reject every world-mutating intent here as well.
+fn recovery_allows_ui_intent(intent: &UiIntent) -> bool {
+    matches!(
+        intent,
+        UiIntent::RequestLoadGame
+            | UiIntent::SelectLoadCatalogSlot { .. }
+            | UiIntent::ConfirmLoadCatalogSlot { .. }
+            | UiIntent::CancelLoadConfirm
+            | UiIntent::CancelSaveCatalogConfirm
+            | UiIntent::CloseSaveCatalog
+            // These only dismiss an already-open foreground surface. They do
+            // not create a new interaction path or mutate the simulation.
+            | UiIntent::CloseHelp
+            | UiIntent::CloseSettings
+            | UiIntent::CloseDialog
+    )
+}
+
 pub(crate) fn handle_ui_intent(
     mut ui_intents: MessageReader<UiIntent>,
     mut action_contexts: ParamSet<(IntentModeCtx, IntentDomainActionCtx)>,
@@ -43,6 +64,11 @@ pub(crate) fn handle_ui_intent(
     mut aux_ctx: IntentAuxCtx,
 ) {
     for intent in ui_intents.read().cloned() {
+        if *ui_queries.save_recovery == SaveRecoveryMode::RecoveryFailed
+            && !recovery_allows_ui_intent(&intent)
+        {
+            continue;
+        }
         let should_save_settings = match intent {
             UiIntent::OpenHelp { .. } | UiIntent::CloseHelp => {
                 let mut mode_ctx = action_contexts.p0();
@@ -108,18 +134,25 @@ pub(crate) fn handle_ui_intent(
                 false
             }
             UiIntent::TogglePause | UiIntent::SetTimeSpeed(_) => {
+                let recovery_failed = *ui_queries.save_recovery == SaveRecoveryMode::RecoveryFailed;
                 handlers::handle_time(
                     intent,
                     &mut action_contexts.p0().time,
                     &mut ui_queries.input_focus,
+                    recovery_failed,
                 );
                 false
             }
             UiIntent::SaveGame
             | UiIntent::RequestLoadGame
-            | UiIntent::ConfirmLoadGame
-            | UiIntent::CancelLoadConfirm => {
-                handlers::handle_save_game(intent, &mut ui_queries);
+            | UiIntent::CancelLoadConfirm
+            | UiIntent::SelectSaveCatalogSlot { .. }
+            | UiIntent::ConfirmSaveCatalogSlot { .. }
+            | UiIntent::SelectLoadCatalogSlot { .. }
+            | UiIntent::ConfirmLoadCatalogSlot { .. }
+            | UiIntent::CancelSaveCatalogConfirm
+            | UiIntent::CloseSaveCatalog => {
+                handlers::handle_save_game(intent, &mut ui_queries, &aux_ctx.settings.settings);
                 false
             }
             UiIntent::ToggleSettings
@@ -130,7 +163,10 @@ pub(crate) fn handle_ui_intent(
             | UiIntent::SetDefaultTimeSpeed(_)
             | UiIntent::SetDebugGizmosEnabled(_)
             | UiIntent::SetFpsDisplayEnabled(_)
-            | UiIntent::SetPowerPriorityEnabled(_) => {
+            | UiIntent::SetPowerPriorityEnabled(_)
+            | UiIntent::SetAutosaveEnabled(_)
+            | UiIntent::SetAutosaveIntervalMinutes(_)
+            | UiIntent::SetAutosaveGenerations(_) => {
                 let mut mode_ctx = action_contexts.p0();
                 handlers::handle_settings(
                     intent,
@@ -197,7 +233,11 @@ pub(crate) fn handle_ui_intent(
             UiIntent::AdjustTaskPriority { .. } | UiIntent::CancelTask { .. } => false,
         };
 
-        handlers::save_if_requested(should_save_settings, &aux_ctx.settings.settings);
+        handlers::save_if_requested(
+            should_save_settings,
+            &ui_queries.settings_storage_root,
+            &aux_ctx.settings.settings,
+        );
     }
 }
 
@@ -216,7 +256,11 @@ mod tests {
     use crate::interface::selection::SelectedEntity;
     use crate::interface::ui::{EntityListNodeIndex, InfoPanelPinState};
     use crate::systems::command::{StockpilePolicyRangeEditState, ZoneRemovalPreviewState};
-    use crate::systems::save::{SaveLoadState, SavePath};
+    use crate::systems::save::{
+        SaveCatalog, SaveCatalogUi, SaveDialogSession, SaveLoadState, SavePath, SaveRecoveryMode,
+        SaveStorageRoot,
+    };
+    use crate::systems::settings::SettingsStorageRoot;
     use crate::test_support::minimal_app;
     use bevy::ecs::system::{IntoSystem, System};
     use bevy::input_focus::InputFocus;
@@ -273,6 +317,12 @@ mod tests {
             .init_resource::<InputFocus>()
             .init_resource::<SaveLoadState>()
             .init_resource::<SavePath>()
+            .init_resource::<SaveStorageRoot>()
+            .init_resource::<SettingsStorageRoot>()
+            .init_resource::<SaveCatalog>()
+            .init_resource::<SaveCatalogUi>()
+            .init_resource::<SaveDialogSession>()
+            .init_resource::<SaveRecoveryMode>()
             .init_resource::<hw_core::GameSettings>()
             .init_resource::<crate::DebugVisible>()
             .init_resource::<GizmoConfigStore>()
@@ -1084,6 +1134,44 @@ mod tests {
             app.world().resource::<ArchitectCategoryState>().0,
             Some(BuildingCategory::Plant)
         );
+    }
+
+    #[test]
+    fn recovery_failed_rejects_raw_world_mutating_ui_intents_at_root_ingress() {
+        let mut app = domain_action_app();
+        let grid = (6, 6);
+        let world = WorldMap::grid_to_world(grid.0, grid.1);
+        let door = app
+            .world_mut()
+            .spawn((
+                Door::default(),
+                Transform::from_translation(world.extend(0.0)),
+                Sprite::default(),
+            ))
+            .id();
+        app.world_mut().resource_mut::<WorldMap>().register_door(
+            grid,
+            door,
+            hw_core::world::DoorState::Closed,
+        );
+        *app.world_mut().resource_mut::<SaveRecoveryMode>() = SaveRecoveryMode::RecoveryFailed;
+
+        write_intent(&mut app, UiIntent::ToggleDoorLock(door));
+        write_intent(
+            &mut app,
+            UiIntent::SelectArchitectCategory(Some(BuildingCategory::Plant)),
+        );
+        write_intent(&mut app, UiIntent::ToggleSettings);
+        app.update();
+
+        assert_eq!(
+            app.world().get::<Door>(door).unwrap().state,
+            hw_core::world::DoorState::Closed
+        );
+        assert_eq!(app.world().resource::<ArchitectCategoryState>().0, None);
+        assert_eq!(*app.world().resource::<MenuState>(), MenuState::Hidden);
+        assert!(recovery_allows_ui_intent(&UiIntent::RequestLoadGame));
+        assert!(!recovery_allows_ui_intent(&UiIntent::SaveGame));
     }
 
     #[test]

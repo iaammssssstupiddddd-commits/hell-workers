@@ -1,5 +1,7 @@
 //! Production App のゲーム固有構成を集約するプラグイン。
 
+#[cfg(feature = "profiling")]
+use crate::systems::{save::SaveStorageRoot, settings::SettingsStorageRoot};
 use bevy::prelude::*;
 #[cfg(feature = "profiling")]
 use bevy::{
@@ -8,7 +10,11 @@ use bevy::{
 };
 #[cfg(feature = "profiling")]
 use hw_core::simulation_rng::FixedAuditSeed;
+#[cfg(feature = "profiling")]
+use std::path::PathBuf;
 
+#[cfg(feature = "profiling")]
+use crate::plugins::startup::PerfWorkload;
 use crate::{
     DamnedSoulPlugin, DebugInstantBuild, DebugVisible,
     plugins::{
@@ -20,7 +26,11 @@ use crate::{
         startup::{PerfScenarioConfig, StartupPlugin},
         visual::VisualPlugin,
     },
-    systems::{GameSystemSet, save::SavePlugin, settings::SettingsPlugin},
+    systems::{
+        GameSystemSet,
+        save::{SavePlugin, register_save_catalog_runtime_systems},
+        settings::SettingsPlugin,
+    },
 };
 use hw_core::game_state::PlayMode;
 
@@ -58,6 +68,19 @@ impl Plugin for HellWorkersGamePlugin {
         report_perf_scenario(&self.perf_config);
 
         let (render3d_visible, render_perf_toggles) = self.perf_config.initial_render_resources();
+        #[cfg(feature = "profiling")]
+        if self.perf_config.enabled() && self.perf_config.workload == PerfWorkload::SaveTransaction
+        {
+            let runtime_root = std::env::var_os("HW_PERF_SAVE_RUNTIME_ROOT")
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute() && !path.as_os_str().is_empty())
+                .expect("save-transaction config validates HW_PERF_SAVE_RUNTIME_ROOT");
+            // These are inserted before any nested plugin registers its Startup
+            // systems, so both save and settings persistence are isolated from
+            // the player's working-directory data.
+            app.insert_resource(SaveStorageRoot::new(runtime_root.join("saves")))
+                .insert_resource(SettingsStorageRoot::new(runtime_root.join("settings")));
+        }
         if let Some(rtt) = self.perf_config.requested_rtt_quality() {
             app.insert_resource(hw_core::quality::QualitySettings { rtt });
         }
@@ -99,6 +122,7 @@ impl Plugin for HellWorkersGamePlugin {
             .add_plugins(InterfacePlugin)
             .add_plugins(SettingsPlugin)
             .add_plugins(SavePlugin);
+        register_save_catalog_runtime_systems(app);
 
         #[cfg(feature = "profiling")]
         if !fixed_step_audit {
@@ -260,6 +284,14 @@ mod tests {
         assert_eq!(app.get_added_plugins::<InterfacePlugin>().len(), 1);
         assert_eq!(app.get_added_plugins::<SettingsPlugin>().len(), 1);
         assert_eq!(app.get_added_plugins::<SavePlugin>().len(), 1);
+        assert!(
+            app.world()
+                .contains_resource::<crate::systems::save::SaveCatalogUi>()
+        );
+        assert!(
+            app.world()
+                .contains_resource::<crate::systems::save::SaveRecoveryMode>()
+        );
 
         // Freeze the graph built by the actual production plugin composition.
         // This catches a missing LogicPlugin/VisualPlugin adapter even when a

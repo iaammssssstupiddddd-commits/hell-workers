@@ -49,8 +49,8 @@ entry|topic="task-dashboard"|id="task-dashboard-filter-sort"|title="絞り込み
 entry|topic="task-dashboard"|id="task-dashboard-actions"|title="優先度変更とキャンセル"|paragraphs=["変更可能なタスクだけ優先度を調整できます。Deconstruct を含むキャンセルは確認を経て実行され、状態が変わって受理できない場合は理由が通知されます。"]|shortcut=None
 section|id="save-settings-notifications"|title="保存・設定・通知"
 topic|feature="save-settings-notifications"|owner="persistence-settings"|section="save-settings-notifications"|id="save-settings-notifications"|title="保存・設定・通知"
-entry|topic="save-settings-notifications"|id="save-load"|title="保存と読込"|paragraphs=["現在の単一セーブへ保存するか、読込確認を開きます。", "読込は現在の world を置き換えるため、確認ダイアログを経て実行されます。", "読込後は建築進捗と Familiar 設定を復元し、進行中の担当・運搬を安全な待機状態へ戻して再割り当てします。猫車の積載資材は車両付近へ荷下ろしされます。", "不正なセーブ内容は現在の world を置き換える前に拒否します。適用途中で失敗した場合は、直前の world の復旧を試みます。"]|shortcut=Some("F5 / F9")
-entry|topic="save-settings-notifications"|id="settings"|title="Settings"|paragraphs=["UI scale、カメラ速度、マウス移動、既定時間速度、電力の優先配電、デバッグ表示を変更できます。", "設定は変更時に保存され、次回起動でも利用されます。"]|shortcut=None
+entry|topic="save-settings-notifications"|id="save-load"|title="保存と読込"|paragraphs=["F5 と Pause の Save Game はセーブカタログを開き、手動スロット 1〜3 から保存先を選びます。", "F9 と Pause の Load Game はロードカタログを開き、手動スロット・オートセーブ世代・既存の legacy default を一覧します。", "空の手動スロットは確認なしで保存し、既存スロットは上書き確認後にだけ置換します。読込は確認後に現在の world を置き換えます。", "読込後は建築進捗と Familiar 設定を復元し、進行中の担当・運搬を安全な待機状態へ戻して再割り当てします。猫車の積載資材は車両付近へ荷下ろしされます。", "破損・非対応形式・別 seed の候補はロードできません。適用途中で失敗した場合は直前の world の復旧を試み、復旧不能時は専用の再ロードだけが許可されます。"]|shortcut=Some("F5 / F9")
+entry|topic="save-settings-notifications"|id="settings"|title="Settings"|paragraphs=["UI scale、カメラ速度、マウス移動、既定時間速度、電力の優先配電、オートセーブ（有効・間隔・世代数）、デバッグ表示を変更できます。", "オートセーブは初期状態ではオフです。有効化すると操作中の実時間間隔（5/10/20/30 分）と世代数（1〜5）で自動保存します。", "設定画面を閉じると保存され、次回起動でも利用されます。"]|shortcut=None
 entry|topic="save-settings-notifications"|id="notifications"|title="通知"|paragraphs=["短い結果は toast で表示されます。重要な履歴は通知一覧から後で確認できます。", "同じ失敗が続く場合は、対象・資源・経路・担当範囲を順に確認してください。"]|shortcut=None
 coverage|building-category::architecture|player|published:entry:architect-building
 coverage|building-category::plant|player|published:entry:architect-building
@@ -252,7 +252,8 @@ coverage|ui-intent::help-topic-select|internal|excluded:internal-mechanism
 coverage|ui-intent::help-topic-step|internal|excluded:internal-mechanism
 coverage|ui-intent::inspect-entity|player|published:entry:info-panel-pin
 coverage|ui-intent::load-cancel|player|published:entry:save-load
-coverage|ui-intent::load-confirm|player|published:entry:save-load
+coverage|ui-intent::load-catalog-confirm|player|published:entry:save-load
+coverage|ui-intent::load-catalog-select|player|published:entry:save-load
 coverage|ui-intent::load-request|player|published:entry:save-load
 coverage|ui-intent::move-plant-building|player|published:entry:architect-building
 coverage|ui-intent::operation-close|player|published:entry:familiar-operation-policy
@@ -263,12 +264,19 @@ coverage|ui-intent::orders-toggle|player|published:entry:orders-designation
 coverage|ui-intent::power-consumer-priority|player|published:entry:soul-energy-status
 coverage|ui-intent::remove-stockpile-zone|player|published:entry:zones-workflow
 coverage|ui-intent::remove-yard-zone|player|excluded:unreachable-player-flow
+coverage|ui-intent::save-catalog-close|player|published:entry:save-load
+coverage|ui-intent::save-catalog-confirm-cancel|player|published:entry:save-load
+coverage|ui-intent::save-catalog-confirm|player|published:entry:save-load
+coverage|ui-intent::save-catalog-select|player|published:entry:save-load
 coverage|ui-intent::save|player|published:entry:save-load
 coverage|ui-intent::select-area-task|player|published:entry:orders-designation
 coverage|ui-intent::select-build|player|published:entry:architect-building
 coverage|ui-intent::select-dream-planting|player|published:entry:dream-planting
 coverage|ui-intent::select-floor-place|player|published:entry:architect-building
 coverage|ui-intent::select-zone|player|published:entry:zones-workflow
+coverage|ui-intent::settings-autosave-enabled|player|published:entry:settings
+coverage|ui-intent::settings-autosave-generations|player|published:entry:settings
+coverage|ui-intent::settings-autosave-interval|player|published:entry:settings
 coverage|ui-intent::settings-camera-mouse-pan|player|published:entry:settings
 coverage|ui-intent::settings-camera-pan-speed|player|published:entry:settings
 coverage|ui-intent::settings-close|player|published:entry:settings

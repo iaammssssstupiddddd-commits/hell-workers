@@ -57,8 +57,10 @@ mod tests {
     use crate::interface::ui::panels::task_list::{
         TaskActionKind, TaskActionOutcome, TaskActionResult,
     };
+    use crate::systems::save::LoadRequestOrigin;
     use crate::systems::save::{
-        SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadResult,
+        SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadOutcomeSource,
+        SaveLoadResult,
     };
     use hw_ui::HwUiPlugin;
     use hw_ui::components::UiInputState;
@@ -122,6 +124,9 @@ mod tests {
             operation: SaveLoadOperation::Load,
             target: "world.scn.ron".to_owned(),
             result: SaveLoadResult::Failed(SaveLoadFailureKind::LoadNotFound),
+            source: SaveLoadOutcomeSource::Load(LoadRequestOrigin::NormalCatalog {
+                dialog_session: 1,
+            }),
         };
         app.world_mut().write_message(outcome.clone());
         app.world_mut().write_message(outcome);

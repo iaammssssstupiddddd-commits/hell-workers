@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import fcntl
 from functools import wraps
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
@@ -39,10 +41,15 @@ MIN_RUNTIME_MEMORY_GIB = 8
 TWO_JOB_MEMORY_GIB = 16
 MIN_WORKSPACE_FREE_GIB = 15
 RESOURCE_POLL_SECONDS = 1.0
+CAPTURE_TOOL_TIMEOUT_SECONDS = 5.0
 PROCESS_GROUP_POLL_SECONDS = 0.1
 PROCESS_GROUP_TERM_GRACE_SECONDS = 10.0
 PROCESS_GROUP_KILL_GRACE_SECONDS = 10.0
 MAX_NATIVE_SCREENSHOT_BYTES = 16 * 1024 * 1024
+MAX_NATIVE_SCREENSHOT_DECODED_BYTES = 64 * 1024 * 1024
+MAX_SAVE_TRANSACTION_ARTIFACT_FILE_BYTES = 16 * 1024 * 1024
+SAVE_CATALOG_MARKER_RGB = (255, 0, 255)
+SAVE_CATALOG_MARKER_MIN_PIXELS = 1_024
 DEFAULT_SEED = 20260802
 LOCK_PATH = Path("/tmp/hell-workers-native-acceptance.lock")
 MEMORY_FILESYSTEM_TYPES = frozenset({"tmpfs", "ramfs", "devtmpfs"})
@@ -64,7 +71,67 @@ SOURCE_PREFIXES = (
     "scripts/perf_tool/",
 )
 ASSET_PREFIX = "assets/"
+NATIVE_HARNESS_FILES = (
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
+    "scripts/build_coordination.py",
+    "scripts/cargo_runtime.py",
+)
 DECONSTRUCTION_CHECKS = {"V1", "V2", "V3", "V4", "V5"}
+SAVE_CATALOG_SCREENSHOT = "paused-after-acceptance.png"
+SAVE_CATALOG_CHECKS = {"V1", "V2", "V3", "V4", "V5"}
+SAVE_CATALOG_FINAL_RECOVERY_FILE = "manual-2.scn.ron"
+SAVE_CATALOG_CAPTURE_SCOPE = "x11-client-window"
+SAVE_TRANSACTION_LEGS = ("capture", "memory")
+SAVE_TRANSACTION_SIZES = ("small", "medium", "large")
+SAVE_TRANSACTION_POPULATIONS = {
+    "small": (50, 4),
+    "medium": (200, 12),
+    "large": (500, 30),
+}
+SAVE_TRANSACTION_REPEAT = 20
+SAVE_TRANSACTION_PREFLIGHT_RUNS = 3
+SAVE_TRANSACTION_WARMUP_SECS = 1
+SAVE_TRANSACTION_MEASURE_SECS = 2
+SAVE_TRANSACTION_LARGE_TOTAL_P95_LIMIT_NS = 100_000_000
+SAVE_TRANSACTION_LARGE_TOTAL_MAX_LIMIT_NS = 250_000_000
+SAVE_TRANSACTION_SCHEMA_VERSION = "4"
+SAVE_TRANSACTION_MEASURE_NS = 2_000_000_000
+SAVE_TRANSACTION_COLUMNS = (
+    "schema_version",
+    "workload",
+    "size",
+    "render",
+    "seed",
+    "soul_count",
+    "familiar_count",
+    "fixture_checksum",
+    "sample_kind",
+    "measure_virtual_ns",
+    "measure_real_ns",
+    "body_bytes",
+    "serialize_ns",
+    "write_file_sync_ns",
+    "commit_directory_sync_ns",
+    "total_ns",
+    "peak_live_growth_bytes",
+)
+SAVE_TRANSACTION_AGGREGATE_COLUMNS = (
+    "case_id",
+    "valid_runs",
+    "fixture_checksums",
+    "serialize_p95_ns",
+    "serialize_max_ns",
+    "write_file_sync_p95_ns",
+    "write_file_sync_max_ns",
+    "commit_directory_sync_p95_ns",
+    "commit_directory_sync_max_ns",
+    "total_p95_ns",
+    "total_max_ns",
+    "peak_live_growth_p95_bytes",
+    "peak_live_growth_max_bytes",
+    "max_rss_kib_max",
+    "adapter",
+)
 RTT_LIGHT_CONTRACT_ID = "rtt-light-v1"
 RTT_LIGHT_STAGE = "current"
 RTT_LIGHT_LEGS = ("audit", "behavior", "capture", "renderdoc", "memory")
@@ -120,6 +187,37 @@ def atomic_write_json(path: Path, value: dict[str, Any]) -> None:
         encoding="utf-8",
     )
     os.replace(temporary, path)
+
+
+def write_new_atomic_text(path: Path, body: str) -> None:
+    """Publish a new text artifact atomically without overwriting an ACK.
+
+    The native driver polls acknowledgement files every frame, so a direct
+    write would expose an empty or partial contract.  Linking a fully-synced
+    temporary file gives create-only publication: an existing acknowledgement
+    remains authoritative even if a second publisher races us.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=path.parent,
+        text=True,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(body)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, path)
+        except FileExistsError as error:
+            raise AcceptanceError(
+                f"capture acknowledgement already exists: {path}"
+            ) from error
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def print_json(value: dict[str, Any]) -> None:
@@ -586,6 +684,24 @@ def source_fingerprint(repo: Path) -> str:
             digest.update(b"asset-stat\0")
             digest.update(relative.encode())
             digest.update(f"\0{stats.st_size}\0{stats.st_mtime_ns}\0".encode())
+    return digest.hexdigest()
+
+
+def native_harness_fingerprint(repo: Path) -> str:
+    """Hash C2 orchestration separately from the product build boundary."""
+    digest = hashlib.sha256()
+    for relative in NATIVE_HARNESS_FILES:
+        source = repo / relative
+        require(
+            source.is_file() and not source.is_symlink(),
+            f"native acceptance harness file is unavailable: {relative}",
+        )
+        digest.update(b"content\0")
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        with source.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
     return digest.hexdigest()
 
 
@@ -1274,6 +1390,100 @@ def plan_deconstruction(args: argparse.Namespace) -> int:
     return 0 if status == "ready" else 1
 
 
+def plan_save_catalog(args: argparse.Namespace) -> int:
+    require_save_catalog_x11_window_capture(args.window_backend)
+    repo = validate_repo(args.repo)
+    resources = resource_snapshot(repo, require_launcher=True)
+    harness = native_harness_fingerprint(repo)
+    job_root = (
+        Path(args.job_root).resolve()
+        if args.job_root
+        else unique_job_root(repo, "save-catalog")
+    )
+    if job_root.exists():
+        raise AcceptanceError(f"job root already exists: {job_root}")
+    failures = list(resources["failures"])
+    storage_error = persistent_storage_error(
+        job_root,
+        label="native acceptance job root",
+    )
+    if storage_error:
+        failures.append(storage_error)
+    capture_error = save_catalog_window_capture_tool_error()
+    if capture_error:
+        failures.append(capture_error)
+    status = "ready" if not failures else "blocked"
+    command = [
+        "kitty",
+        "--directory",
+        str(repo),
+        "--detach",
+        "env",
+        "HW_NATIVE_ACCEPTANCE_LAUNCHED=1",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "python3",
+        str(Path(__file__).resolve()),
+        "run-save-catalog",
+        "--repo",
+        str(repo),
+        "--job-root",
+        str(job_root),
+        "--seed",
+        str(args.seed),
+        "--adapter",
+        args.adapter,
+        "--backend",
+        args.backend,
+        "--window-backend",
+        args.window_backend,
+        "--present-mode",
+        args.present_mode,
+        "--harness-fingerprint",
+        harness,
+    ]
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "status": status,
+        "profile": "save-catalog",
+        "measurement_kind": "native-functional-acceptance",
+        "harness_fingerprint": harness,
+        "job_root": str(job_root),
+        "resources": {**resources, "status": status, "failures": failures},
+        "launcher_command": command,
+        "status_command": [
+            "python3",
+            str(Path(__file__).resolve()),
+            "status",
+            "--job-root",
+            str(job_root),
+        ],
+        "execution_contract": {
+            "game_processes": 1
+            + len(SAVE_TRANSACTION_LEGS)
+            * len(SAVE_TRANSACTION_SIZES)
+            * (SAVE_TRANSACTION_PREFLIGHT_RUNS + SAVE_TRANSACTION_REPEAT),
+            "parallel_game_processes": 1,
+            "actual_feature_builds": 3,
+            "actual_window_required": True,
+            "renderer_evidence_required": True,
+            "in_game_screenshot_required": True,
+            "screenshot_capture_scope": SAVE_CATALOG_CAPTURE_SCOPE,
+            "save_timing_capture_memory_matrix": {
+                "instrumentations": list(SAVE_TRANSACTION_LEGS),
+                "sizes": list(SAVE_TRANSACTION_SIZES),
+                "preflight_runs_per_case": SAVE_TRANSACTION_PREFLIGHT_RUNS,
+                "measured_runs_per_case": SAVE_TRANSACTION_REPEAT,
+                "runtime_root": "target/.save-transaction-runtime/<run-id>/",
+                "artifact_root": "target/perf-runs/save-transaction-<run-id>/",
+            },
+            "synthetic_desktop_input": False,
+            "automatic_cleanup": False,
+        },
+    }
+    print_json(payload)
+    return 0 if status == "ready" else 1
+
+
 def plan_rtt_light(args: argparse.Namespace) -> int:
     repo = validate_repo(args.repo)
     resources = resource_snapshot(repo, require_launcher=True)
@@ -1593,6 +1803,362 @@ def run_command(
                 update_state(job_file, state, child_pid=None)
 
 
+def finalize_native_screenshot(destination: Path) -> dict[str, int]:
+    png = destination.read_bytes()
+    width, height = validate_png_structure(png)
+    marker_pixels = count_save_catalog_marker_pixels(png)
+    require(
+        marker_pixels >= SAVE_CATALOG_MARKER_MIN_PIXELS,
+        "native screenshot does not contain the final Save catalog marker",
+    )
+    return {"width": width, "height": height, "marker_pixels": marker_pixels}
+
+
+def require_save_catalog_x11_window_capture(window_backend: str) -> None:
+    require(
+        window_backend == "x11",
+        "save-catalog in-game screenshot evidence requires --window-backend x11",
+    )
+
+
+def save_catalog_window_capture_tool_error() -> str | None:
+    missing = [
+        command
+        for command in ("xprop", "import")
+        if shutil.which(command) is None
+    ]
+    if missing:
+        return (
+            "save-catalog in-game screenshot capture requires "
+            f"{', '.join(missing)}"
+        )
+    return None
+
+
+def run_bounded_capture_tool(
+    command: list[str], *, label: str, timeout_seconds: float = CAPTURE_TOOL_TIMEOUT_SECONDS
+) -> subprocess.CompletedProcess[str]:
+    """Run one X11 capture helper within the native-stage deadline budget."""
+    try:
+        return subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise AcceptanceError(
+            f"{label} timed out after {timeout_seconds:g}s"
+        ) from error
+
+
+def parse_linux_proc_stat_ppid(body: str) -> int | None:
+    """Read field four from a Linux `/proc/<pid>/stat` record safely."""
+    closing = body.rfind(")")
+    if closing < 0:
+        return None
+    fields = body[closing + 1 :].split()
+    if len(fields) < 2 or not fields[1].isdigit():
+        return None
+    parent = int(fields[1])
+    return parent if parent > 0 else None
+
+
+def descendant_process_ids(root_pid: int, *, proc_root: Path = Path("/proc")) -> set[int]:
+    """Return the live process subtree rooted at a launched Cargo process."""
+    parents: dict[int, list[int]] = {}
+    try:
+        entries = list(proc_root.iterdir())
+    except OSError as error:
+        raise AcceptanceError(f"cannot enumerate {proc_root} for X11 window ownership: {error}") from error
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        try:
+            parent = parse_linux_proc_stat_ppid((entry / "stat").read_text(encoding="utf-8"))
+        except (OSError, UnicodeError):
+            continue
+        if parent is not None:
+            parents.setdefault(parent, []).append(pid)
+    descendants = {root_pid}
+    pending = [root_pid]
+    while pending:
+        parent = pending.pop()
+        for child in parents.get(parent, []):
+            if child not in descendants:
+                descendants.add(child)
+                pending.append(child)
+    return descendants
+
+
+def parse_x11_client_window_ids(output: str) -> list[str]:
+    """Extract canonical X11 client window IDs from `_NET_CLIENT_LIST`."""
+    windows: list[str] = []
+    for raw_window in re.findall(r"(?<![0-9A-Za-z_])0x[0-9A-Fa-f]+", output):
+        window = raw_window.lower()
+        if window not in windows:
+            windows.append(window)
+    return windows
+
+
+def parse_x11_window_pid(output: str) -> int | None:
+    match = re.search(r"=\s*([1-9][0-9]*)\s*$", output.strip())
+    return int(match.group(1)) if match is not None else None
+
+
+def x11_client_windows_for_process_tree(root_pid: int) -> list[tuple[str, int]]:
+    tool_error = save_catalog_window_capture_tool_error()
+    if tool_error:
+        raise AcceptanceError(tool_error)
+    xprop = shutil.which("xprop")
+    require(xprop is not None, "xprop was unavailable after the capture tool check")
+    window_ids: list[str] = []
+    failures: list[str] = []
+    for property_name in ("_NET_CLIENT_LIST", "_NET_CLIENT_LIST_STACKING"):
+        listed = run_bounded_capture_tool(
+            [xprop, "-root", property_name],
+            label=f"X11 root property {property_name}",
+        )
+        if listed.returncode != 0:
+            detail = (listed.stderr or listed.stdout).strip()
+            failures.append(f"{property_name}: {detail or listed.returncode}")
+            continue
+        for window_id in parse_x11_client_window_ids(listed.stdout):
+            if window_id not in window_ids:
+                window_ids.append(window_id)
+    if not window_ids and failures:
+        raise AcceptanceError(
+            "could not enumerate X11 client windows: " + "; ".join(failures)
+        )
+    owner_pids = descendant_process_ids(root_pid)
+    owned: list[tuple[str, int]] = []
+    for window_id in window_ids:
+        owner = run_bounded_capture_tool(
+            [xprop, "-id", window_id, "_NET_WM_PID"],
+            label=f"X11 window owner lookup for {window_id}",
+        )
+        if owner.returncode != 0:
+            continue
+        pid = parse_x11_window_pid(owner.stdout)
+        if pid is not None and pid in owner_pids:
+            owned.append((window_id, pid))
+    return owned
+
+
+def take_native_screenshot(destination: Path, *, root_pid: int) -> dict[str, int | str] | None:
+    """Capture exactly one X11 client window owned by the launched game tree.
+
+    Root-display capture is deliberately forbidden here: a desktop overlay can
+    otherwise satisfy the magenta marker check without showing the game UI.
+    Returning ``None`` allows the bounded capture handshake to retry while
+    Winit/XWayland publishes the actual client window.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    import_cmd = shutil.which("import")
+    if import_cmd is None:
+        raise AcceptanceError("save-catalog in-game screenshot capture requires import")
+    candidates: list[tuple[str, int, dict[str, int], Path]] = []
+    for window_id, window_pid in x11_client_windows_for_process_tree(root_pid):
+        candidate = destination.with_name(
+            f".{destination.name}.{window_id.removeprefix('0x')}.candidate.png"
+        )
+        try:
+            candidate.unlink(missing_ok=True)
+            completed = run_bounded_capture_tool(
+                [
+                    import_cmd,
+                    "-window",
+                    window_id,
+                    "-depth",
+                    "8",
+                    "-type",
+                    "TrueColor",
+                    str(candidate),
+                ],
+                label=f"X11 client screenshot capture for {window_id}",
+            )
+            if completed.returncode != 0 or not candidate.is_file():
+                candidate.unlink(missing_ok=True)
+                continue
+            try:
+                screenshot = finalize_native_screenshot(candidate)
+            except AcceptanceError:
+                candidate.unlink(missing_ok=True)
+                continue
+            candidates.append((window_id, window_pid, screenshot, candidate))
+        except OSError as error:
+            raise AcceptanceError(
+                f"could not capture X11 client window {window_id}: {error}"
+            ) from error
+    if not candidates:
+        return None
+    try:
+        require(
+            len(candidates) == 1,
+            "multiple launched-game X11 windows contained the save-catalog marker",
+        )
+        window_id, window_pid, screenshot, selected = candidates[0]
+        os.replace(selected, destination)
+        return {
+            **screenshot,
+            "capture_scope": SAVE_CATALOG_CAPTURE_SCOPE,
+            "window_id": window_id,
+            "window_pid": window_pid,
+        }
+    finally:
+        for _, _, _, candidate in candidates:
+            candidate.unlink(missing_ok=True)
+
+
+def write_save_catalog_capture_ack(
+    artifact: Path,
+    run_id: str,
+    screenshot_path: Path,
+    screenshot: dict[str, int | str],
+) -> None:
+    png = screenshot_path.read_bytes()
+    byte_count = len(png)
+    digest = hashlib.sha256(png).hexdigest()
+    body = (
+        f"run_id={run_id}\n"
+        f"screenshot={SAVE_CATALOG_SCREENSHOT}\n"
+        f"bytes={byte_count}\n"
+        f"width={screenshot['width']}\n"
+        f"height={screenshot['height']}\n"
+        f"sha256={digest}\n"
+        f"marker_pixels={screenshot['marker_pixels']}\n"
+        f"capture_scope={screenshot['capture_scope']}\n"
+        f"capture_window_id={screenshot['window_id']}\n"
+        f"capture_window_pid={screenshot['window_pid']}\n"
+    )
+    write_new_atomic_text(artifact / "capture.done.txt", body)
+
+
+def maybe_complete_save_catalog_capture(
+    artifact: Path, run_id: str, screenshot_path: Path, *, root_pid: int
+) -> bool:
+    ready_path = artifact / "capture-ready.txt"
+    ack_path = artifact / "capture.done.txt"
+    if ack_path.is_file():
+        return True
+    if not ready_path.is_file():
+        return False
+    body = ready_path.read_text(encoding="utf-8").strip()
+    expected_ready = (
+        f"run_id={run_id}\n"
+        "marker_rgb=255,0,255\n"
+        f"marker_min_pixels={SAVE_CATALOG_MARKER_MIN_PIXELS}"
+    )
+    require(body == expected_ready, "save-catalog capture-ready marker has an unexpected contract")
+    screenshot = take_native_screenshot(screenshot_path, root_pid=root_pid)
+    if screenshot is None:
+        return False
+    write_save_catalog_capture_ack(artifact, run_id, screenshot_path, screenshot)
+    return True
+
+
+def run_command_with_save_capture(
+    stage: str,
+    command: list[str],
+    *,
+    repo: Path,
+    env: dict[str, str],
+    log_path: Path,
+    job_file: Path,
+    state: dict[str, Any],
+    artifact: Path,
+    run_id: str,
+    screenshot_path: Path,
+    timeout_seconds: float | None = None,
+) -> None:
+    state.setdefault("commands", []).append({"stage": stage, "argv": command})
+    update_state(job_file, state, current_stage=stage)
+    with log_path.open("a", encoding="utf-8") as log:
+        log.write(f"\n[{utc_now()}] stage={stage}\n")
+        log.write(json.dumps(command) + "\n")
+        log.flush()
+        process = subprocess.Popen(
+            command,
+            cwd=repo,
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            text=True,
+            start_new_session=True,
+        )
+        try:
+            update_state(job_file, state, child_pid=process.pid)
+            deadline = (
+                time.monotonic() + timeout_seconds
+                if timeout_seconds is not None
+                else None
+            )
+            while process.poll() is None:
+                runtime_failure = runtime_resource_failure()
+                if runtime_failure is not None:
+                    reason, evidence = runtime_failure
+                    event = {
+                        "at": utc_now(),
+                        "stage": stage,
+                        "child_pid": process.pid,
+                        "reason": reason,
+                        **evidence,
+                    }
+                    state.setdefault("resource_guard_events", []).append(event)
+                    update_state(job_file, state, child_pid=process.pid)
+                    log.write(
+                        f"[{event['at']}] resource guard stopped stage={stage}: {reason}\n"
+                    )
+                    log.flush()
+                    stop_command_process(process)
+                    update_state(job_file, state, child_pid=None)
+                    raise AcceptanceError(
+                        f"stage {stage} stopped to preserve host resources: {reason}"
+                    )
+                try:
+                    maybe_complete_save_catalog_capture(
+                        artifact, run_id, screenshot_path, root_pid=process.pid
+                    )
+                except AcceptanceError as error:
+                    stop_command_process(process)
+                    update_state(job_file, state, child_pid=None)
+                    raise error
+                if deadline is not None and time.monotonic() >= deadline:
+                    stop_command_process(process)
+                    update_state(job_file, state, child_pid=None)
+                    raise AcceptanceError(
+                        f"stage {stage} exceeded its {timeout_seconds:g}s timeout"
+                    )
+                update_state(job_file, state, child_pid=process.pid)
+                time.sleep(RESOURCE_POLL_SECONDS)
+            if process.returncode != 0:
+                raise AcceptanceError(
+                    f"stage {stage} failed with exit code {process.returncode}"
+                )
+            completed = state.setdefault("completed_stages", [])
+            completed.append(stage)
+            update_state(job_file, state, child_pid=None)
+        finally:
+            if process.poll() is None:
+                cleanup_event = {
+                    "at": utc_now(),
+                    "stage": stage,
+                    "child_pid": process.pid,
+                    "reason": "stage interrupted before normal completion",
+                }
+                state.setdefault("cleanup_events", []).append(cleanup_event)
+                log.write(
+                    f"[{cleanup_event['at']}] stopping interrupted stage={stage} "
+                    f"process_group={process.pid}\n"
+                )
+                log.flush()
+                stop_command_process(process)
+            if state.get("child_pid") == process.pid:
+                update_state(job_file, state, child_pid=None)
+
+
 def settle(
     seconds: float, *, job_file: Path, state: dict[str, Any], after_stage: str
 ) -> None:
@@ -1610,6 +2176,15 @@ def assert_source_unchanged(repo: Path, expected: str) -> None:
     if actual != expected:
         raise AcceptanceError(
             f"relevant source changed during acceptance: expected {expected}, got {actual}"
+        )
+
+
+def assert_native_harness_unchanged(repo: Path, expected: str) -> None:
+    actual = native_harness_fingerprint(repo)
+    if actual != expected:
+        raise AcceptanceError(
+            "native acceptance harness changed during acceptance: "
+            f"expected {expected}, got {actual}"
         )
 
 
@@ -2448,6 +3023,9 @@ def run_deconstruction(args: argparse.Namespace) -> int:
     job_root.mkdir(parents=True)
     artifact = job_root / "artifact"
     artifact.mkdir()
+    runtime_root = job_root / "runtime"
+    (runtime_root / "saves").mkdir(parents=True)
+    (runtime_root / "settings").mkdir(parents=True)
     job_file = job_root / "job.json"
     log_path = job_root / "orchestrator.log"
     resources = resource_snapshot(repo, require_launcher=False)
@@ -2566,6 +3144,258 @@ def run_deconstruction(args: argparse.Namespace) -> int:
                 current_stage=None,
                 child_pid=None,
                 error=str(error),
+                finished_at=utc_now(),
+            )
+            return 1
+
+
+def run_save_catalog(args: argparse.Namespace) -> int:
+    if os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") != "1":
+        raise AcceptanceError(
+            "run-save-catalog must be launched by the planned direct kitty command"
+        )
+    require_save_catalog_x11_window_capture(args.window_backend)
+    capture_error = save_catalog_window_capture_tool_error()
+    if capture_error:
+        raise AcceptanceError(capture_error)
+    repo = validate_repo(args.repo)
+    job_root = Path(args.job_root).resolve()
+    require_persistent_storage(job_root, label="native acceptance job root")
+    if job_root.exists():
+        raise AcceptanceError(f"job root already exists: {job_root}")
+    job_root.mkdir(parents=True)
+    artifact = job_root / "artifact"
+    artifact.mkdir()
+    # Keep all save and settings I/O outside the immutable evidence directory.
+    # The native driver rejects an artifact-contained runtime root, and the
+    # explicit children make the freshness/ownership boundary auditable.
+    runtime_root = job_root / "runtime"
+    (runtime_root / "saves").mkdir(parents=True)
+    (runtime_root / "settings").mkdir(parents=True)
+    job_file = job_root / "job.json"
+    log_path = job_root / "orchestrator.log"
+    resources = resource_snapshot(repo, require_launcher=False)
+    source = source_fingerprint(repo)
+    harness = native_harness_fingerprint(repo)
+    require(
+        harness == args.harness_fingerprint,
+        "planned native acceptance harness changed before launch",
+    )
+    run_id = f"c2-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-{secrets.token_hex(4)}"
+    performance_root = repo / "target" / "perf-runs" / f"save-transaction-{run_id}"
+    save_transaction_runtime_root = (
+        repo / "target" / ".save-transaction-runtime" / run_id
+    )
+    for path, label in (
+        (performance_root, "save-transaction performance root"),
+        (save_transaction_runtime_root, "save-transaction runtime root"),
+    ):
+        require_persistent_storage(path, label=label)
+        if path.exists():
+            raise AcceptanceError(f"{label} already exists: {path}")
+    screenshot_path = artifact / SAVE_CATALOG_SCREENSHOT
+    # V5 deliberately corrupts Manual 1 to prove recovery remains fail-closed.
+    # The terminal durable target is the separately saved Manual 2 recovery slot.
+    save_path = runtime_root / "saves" / SAVE_CATALOG_FINAL_RECOVERY_FILE
+    state: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "profile": "save-catalog",
+        "status": "running",
+        "started_at": utc_now(),
+        "heartbeat_at": utc_now(),
+        "pid": os.getpid(),
+        "repo": str(repo),
+        "job_root": str(job_root),
+        "run_id": run_id,
+        "source_fingerprint": source,
+        "harness_fingerprint": harness,
+        "resources": resources,
+        "completed_stages": [],
+        "paths": {
+            "artifact": str(artifact),
+            "driver_result": str(artifact / "driver-result.json"),
+            "screenshot": str(screenshot_path),
+            "save": str(save_path),
+            "runtime": str(runtime_root),
+            "performance": {
+                "capture": str(performance_root / "capture"),
+                "memory": str(performance_root / "memory"),
+            },
+            "log": str(log_path),
+        },
+        "parameters": {
+            "seed": args.seed,
+            "adapter": args.adapter,
+            "backend": args.backend,
+            "window_backend": args.window_backend,
+            "present_mode": args.present_mode,
+        },
+    }
+    atomic_write_json(job_file, state)
+    if resources["status"] != "ready":
+        update_state(
+            job_file,
+            state,
+            status="invalid",
+            current_stage=None,
+            error="; ".join(resources["failures"]),
+            finished_at=utc_now(),
+        )
+        return 1
+
+    native_env = cargo_environment(repo)
+    for key in list(native_env):
+        if key.startswith("HW_PERF_") or key in {
+            "HW_NATIVE_DECONSTRUCTION_ACCEPTANCE_ARTIFACT",
+            "HW_NATIVE_DECONSTRUCTION_ACCEPTANCE_RUN_ID",
+            "HW_NATIVE_SAVE_LOAD_ACCEPTANCE_ARTIFACT",
+            "HW_NATIVE_SAVE_LOAD_ACCEPTANCE_RUN_ID",
+            "HW_NATIVE_SAVE_LOAD_ACCEPTANCE_RUNTIME_ROOT",
+        }:
+            native_env.pop(key, None)
+    native_env = cargo_environment(repo, native_env)
+    native_env.update(
+        {
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "CARGO_BUILD_JOBS": str(resources["cargo_jobs"]),
+            "CARGO_INCREMENTAL": "0",
+            "HELL_WORKERS_WORLDGEN_SEED": str(args.seed),
+            "HW_WINDOW_BACKEND": args.window_backend,
+            "WGPU_BACKEND": args.backend,
+            "HW_PRESENT_MODE": args.present_mode,
+            "HW_NATIVE_SAVE_LOAD_ACCEPTANCE_ARTIFACT": str(artifact),
+            "HW_NATIVE_SAVE_LOAD_ACCEPTANCE_RUNTIME_ROOT": str(runtime_root),
+            "HW_NATIVE_SAVE_LOAD_ACCEPTANCE_RUN_ID": run_id,
+        }
+    )
+    native_command = ["cargo", "run", "--locked", "-p", "bevy_app@0.1.0"]
+    perf_env = cargo_environment(repo)
+    for key in list(perf_env):
+        if key.startswith("HW_PERF_") or key.startswith("HW_NATIVE_"):
+            perf_env.pop(key, None)
+    perf_env["PYTHONDONTWRITEBYTECODE"] = "1"
+    performance_root_relative = Path("target") / "perf-runs" / performance_root.name
+    runtime_root_relative = Path("target") / ".save-transaction-runtime" / run_id
+    LOCK_PATH.touch(exist_ok=True)
+    with LOCK_PATH.open("r+", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            update_state(
+                job_file,
+                state,
+                status="invalid",
+                current_stage=None,
+                error=f"another native acceptance job holds {LOCK_PATH}",
+                finished_at=utc_now(),
+            )
+            return 1
+        try:
+            # `perf.py` owns its own non-blocking exclusive Cargo lease. Hold
+            # that lease only for the raw actual-window stage, while this tiny
+            # native lock continues to serialize the complete recipe.
+            with acquire_activity(repo, "exclusive"):
+                run_command_with_save_capture(
+                    "native-save-catalog",
+                    native_command,
+                    repo=repo,
+                    env=native_env,
+                    log_path=log_path,
+                    job_file=job_file,
+                    state=state,
+                    artifact=artifact,
+                    run_id=run_id,
+                    screenshot_path=screenshot_path,
+                    timeout_seconds=240,
+                )
+            assert_source_unchanged(repo, source)
+            assert_native_harness_unchanged(repo, harness)
+            native_verification = verify_save_catalog_artifact(
+                artifact,
+                run_id=run_id,
+                adapter=args.adapter,
+                backend=args.backend,
+                window_backend=args.window_backend,
+                runtime_root=runtime_root,
+            )
+            leg_binary_hashes: dict[str, str] = {}
+            for instrumentation in SAVE_TRANSACTION_LEGS:
+                run_command(
+                    f"save-transaction-{instrumentation}",
+                    save_transaction_perf_command(
+                        run_id=run_id,
+                        seed=args.seed,
+                        backend=args.backend,
+                        instrumentation=instrumentation,
+                        output=performance_root_relative / instrumentation,
+                        runtime_root=runtime_root_relative / instrumentation,
+                    ),
+                    repo=repo,
+                    env=perf_env,
+                    log_path=log_path,
+                    job_file=job_file,
+                    state=state,
+                    timeout_seconds=3600,
+                )
+                leg_binary_hashes[instrumentation] = manifest_binary_hash(
+                    performance_root / instrumentation,
+                    repo,
+                )
+                if instrumentation == "memory":
+                    require(
+                        leg_binary_hashes["capture"] != leg_binary_hashes["memory"],
+                        "Capture and Memory used the same profiling binary",
+                    )
+                assert_source_unchanged(repo, source)
+                assert_native_harness_unchanged(repo, harness)
+            performance_verification = verify_save_transaction_bundle(
+                repo=repo,
+                performance_root=performance_root,
+                expected_source=source,
+                expected_seed=args.seed,
+                expected_backend=args.backend,
+            )
+            remove_empty_save_transaction_runtime_root(repo, run_id)
+            require_save_transaction_runtime_absent(repo, run_id)
+            assert_native_harness_unchanged(repo, harness)
+            verification = {
+                "status": "pass",
+                "native": native_verification,
+                "save_transaction": performance_verification,
+                "runtime_cleanup": "verified-absent",
+                "harness": {
+                    "fingerprint_start": harness,
+                    "fingerprint_end": native_harness_fingerprint(repo),
+                    "unchanged": True,
+                },
+            }
+            update_state(
+                job_file,
+                state,
+                status="valid",
+                current_stage=None,
+                child_pid=None,
+                verification=verification,
+                finished_at=utc_now(),
+            )
+            return 0
+        except Exception as error:
+            cleanup_error = None
+            try:
+                cleanup_save_transaction_runtime_root(repo, run_id)
+            except Exception as cleanup_failure:
+                cleanup_error = str(cleanup_failure)
+            update_state(
+                job_file,
+                state,
+                status="invalid",
+                current_stage=None,
+                child_pid=None,
+                error=(
+                    str(error)
+                    if cleanup_error is None
+                    else f"{error}; save-transaction runtime cleanup failed: {cleanup_error}"
+                ),
                 finished_at=utc_now(),
             )
             return 1
@@ -2802,6 +3632,1040 @@ def verify_deconstruction_artifact(
     }
 
 
+def verify_save_catalog_artifact(
+    artifact: Path,
+    *,
+    run_id: str,
+    adapter: str,
+    backend: str,
+    window_backend: str,
+    runtime_root: Path | None = None,
+) -> dict[str, Any]:
+    require_save_catalog_x11_window_capture(window_backend)
+    artifact = artifact.resolve()
+    require_exact_artifact_entries(
+        artifact,
+        directories=set(),
+        files={
+            "driver-result.json",
+            "capture-ready.txt",
+            "capture.done.txt",
+            SAVE_CATALOG_SCREENSHOT,
+        },
+        label="save-catalog native artifact",
+    )
+    runtime_root = (
+        runtime_root.resolve()
+        if runtime_root is not None
+        else (artifact.parent / "runtime").resolve()
+    )
+    require(runtime_root.is_dir(), f"native runtime root is missing: {runtime_root}")
+    require(
+        not runtime_root.is_relative_to(artifact),
+        "native runtime root must be outside the screenshot artifact",
+    )
+    result_path = artifact / "driver-result.json"
+    ready_path = artifact / "capture-ready.txt"
+    acknowledgement_path = artifact / "capture.done.txt"
+    screenshot_path = artifact / SAVE_CATALOG_SCREENSHOT
+    save_path = runtime_root / "saves" / SAVE_CATALOG_FINAL_RECOVERY_FILE
+    settings_path = runtime_root / "settings/settings.ron"
+    result = read_json(result_path)
+    require(result.get("status") == "PASS", f"driver did not pass: {result_path}")
+    require(
+        result.get("profile") == "save-catalog",
+        f"wrong native profile in {result_path}",
+    )
+    actual_run_id = result.get("run_id")
+    require(isinstance(actual_run_id, str) and actual_run_id, "driver run_id is missing")
+    require(run_id, "verification requires the launched run_id")
+    require(actual_run_id == run_id, "driver run_id does not match the launched job")
+    checks = result.get("checks")
+    require(isinstance(checks, dict), "driver checks are missing")
+    require(
+        set(checks) == SAVE_CATALOG_CHECKS,
+        "driver save-catalog V1-V5 check set is incomplete",
+    )
+    require(
+        all(checks.get(check) == "PASS" for check in SAVE_CATALOG_CHECKS),
+        "one or more driver save-catalog V1-V5 checks did not pass",
+    )
+    before_epoch = result.get("world_epoch_before_valid_load")
+    after_epoch = result.get("world_epoch_after_valid_load")
+    require(
+        isinstance(before_epoch, int)
+        and isinstance(after_epoch, int)
+        and after_epoch == before_epoch + 1,
+        "WorldEpoch did not advance exactly once",
+    )
+    require(save_path.is_file(), f"native save artifact is missing: {save_path}")
+    save_bytes = save_path.stat().st_size
+    require(save_bytes > 0, "native save artifact is empty")
+    driver_save_bytes = result.get("save_bytes")
+    require(
+        isinstance(driver_save_bytes, int) and driver_save_bytes == save_bytes,
+        "driver save byte count is stale",
+    )
+    runtime = result.get("runtime")
+    require(isinstance(runtime, dict), "driver runtime isolation evidence is missing")
+    require(
+        Path(str(runtime.get("save_root"))).resolve() == runtime_root / "saves",
+        "driver save root does not match the isolated runtime contract",
+    )
+    require(
+        Path(str(runtime.get("settings_root"))).resolve() == runtime_root / "settings",
+        "driver settings root does not match the isolated runtime contract",
+    )
+    require(
+        not settings_path.is_relative_to(artifact),
+        "settings persistence path leaked into the artifact",
+    )
+    require(screenshot_path.is_file(), f"native screenshot is missing: {screenshot_path}")
+    screenshot_bytes = screenshot_path.stat().st_size
+    require(
+        0 < screenshot_bytes <= MAX_NATIVE_SCREENSHOT_BYTES,
+        "native screenshot size is outside the fail-closed limit",
+    )
+    png = screenshot_path.read_bytes()
+    width, height = validate_png_structure(png)
+    require(width >= 640 and height >= 360, f"screenshot is too small: {width}x{height}")
+    require(result.get("screenshot") == SAVE_CATALOG_SCREENSHOT, "driver screenshot name mismatch")
+    require(
+        result.get("screenshot_bytes") == screenshot_bytes,
+        "driver screenshot byte count is stale",
+    )
+    require(result.get("screenshot_width") == width, "driver screenshot width is stale")
+    require(result.get("screenshot_height") == height, "driver screenshot height is stale")
+    screenshot_sha = result.get("screenshot_sha256")
+    require(
+        isinstance(screenshot_sha, str)
+        and len(screenshot_sha) == 64
+        and screenshot_sha == sha256(screenshot_path),
+        "driver screenshot hash is stale",
+    )
+    marker_pixels = result.get("screenshot_marker_pixels")
+    require(
+        isinstance(marker_pixels, int)
+        and marker_pixels >= SAVE_CATALOG_MARKER_MIN_PIXELS
+        and marker_pixels == count_save_catalog_marker_pixels(png),
+        "driver screenshot does not retain the final Save catalog marker evidence",
+    )
+    screenshot_capture = result.get("screenshot_capture")
+    require(
+        isinstance(screenshot_capture, dict),
+        "driver screenshot capture ownership evidence is missing",
+    )
+    capture_scope = screenshot_capture.get("scope")
+    capture_window_id = screenshot_capture.get("window_id")
+    capture_window_pid = screenshot_capture.get("window_pid")
+    require(
+        capture_scope == SAVE_CATALOG_CAPTURE_SCOPE,
+        "driver screenshot was not captured from an X11 client window",
+    )
+    require(
+        isinstance(capture_window_id, str)
+        and re.fullmatch(r"0x[0-9a-f]+", capture_window_id) is not None,
+        "driver screenshot X11 window ID is invalid",
+    )
+    require(
+        isinstance(capture_window_pid, int) and capture_window_pid > 0,
+        "driver screenshot X11 window PID is invalid",
+    )
+    expected_ready = (
+        f"run_id={run_id}\n"
+        "marker_rgb=255,0,255\n"
+        f"marker_min_pixels={SAVE_CATALOG_MARKER_MIN_PIXELS}\n"
+    )
+    require(
+        ready_path.read_text(encoding="utf-8") == expected_ready,
+        "native capture-ready marker has an unexpected contract",
+    )
+    expected_acknowledgement = (
+        f"run_id={run_id}\n"
+        f"screenshot={SAVE_CATALOG_SCREENSHOT}\n"
+        f"bytes={screenshot_bytes}\n"
+        f"width={width}\n"
+        f"height={height}\n"
+        f"sha256={screenshot_sha}\n"
+        f"marker_pixels={marker_pixels}\n"
+        f"capture_scope={capture_scope}\n"
+        f"capture_window_id={capture_window_id}\n"
+        f"capture_window_pid={capture_window_pid}\n"
+    )
+    require(
+        acknowledgement_path.read_text(encoding="utf-8") == expected_acknowledgement,
+        "native capture acknowledgement has an unexpected contract",
+    )
+    renderer = result.get("renderer")
+    require(isinstance(renderer, dict), "renderer evidence is missing")
+    adapter_name = str(renderer.get("adapter_name", ""))
+    actual_backend = str(renderer.get("backend", ""))
+    display_handle = str(renderer.get("display_handle", ""))
+    require(adapter_name, "renderer adapter name is empty")
+    if adapter:
+        require(
+            adapter.lower() in adapter_name.lower(),
+            f"actual adapter does not contain {adapter!r}: {adapter_name}",
+        )
+    require(
+        actual_backend.lower() == backend.lower(),
+        f"actual renderer backend is {actual_backend!r}, expected {backend!r}",
+    )
+    display_lower = display_handle.lower()
+    if window_backend == "x11":
+        require(
+            "xlib" in display_lower or "xcb" in display_lower,
+            f"actual display handle is not X11: {display_handle}",
+        )
+    else:
+        require("wayland" in display_lower, f"actual display handle is not Wayland: {display_handle}")
+    return {
+        "status": "pass",
+        "profile": "save-catalog",
+        "run_id": actual_run_id,
+        "checks": checks,
+        "world_epoch_before_valid_load": before_epoch,
+        "world_epoch_after_valid_load": after_epoch,
+        "save": {
+            "path": str(save_path),
+            "bytes": save_bytes,
+            "sha256": sha256(save_path),
+        },
+        "screenshot": {
+            "path": str(screenshot_path),
+            "width": width,
+            "height": height,
+            "bytes": len(png),
+            "sha256": sha256(screenshot_path),
+            "marker_pixels": marker_pixels,
+            "capture_scope": capture_scope,
+            "window_id": capture_window_id,
+            "window_pid": capture_window_pid,
+        },
+        "requested_adapter": adapter,
+        "requested_backend": backend,
+        "requested_window_backend": window_backend,
+        "runtime": {
+            "root": str(runtime_root),
+            "save_root": str(save_path.parent),
+            "settings_root": str(settings_path.parent),
+        },
+        "renderer": {
+            "adapter_name": adapter_name,
+            "backend": actual_backend,
+            "display_handle": display_handle,
+        },
+    }
+
+
+def read_exact_csv(path: Path, columns: tuple[str, ...], label: str) -> list[dict[str, str]]:
+    try:
+        with path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            rows = list(reader)
+    except (OSError, UnicodeError, csv.Error) as error:
+        raise AcceptanceError(f"cannot parse {label}: {error}") from error
+    require(reader.fieldnames == list(columns), f"{label} has an unexpected schema")
+    require(
+        all(None not in row for row in rows),
+        f"{label} has a row with more values than its schema",
+    )
+    return rows
+
+
+def canonical_nonnegative(row: dict[str, str], column: str, label: str) -> int:
+    value = row.get(column)
+    require(
+        isinstance(value, str) and re.fullmatch(r"0|[1-9][0-9]*", value) is not None,
+        f"{label} {column} is not a canonical nonnegative integer",
+    )
+    return int(value)
+
+
+def save_transaction_labels() -> tuple[tuple[str, bool], ...]:
+    return (
+        *(
+            (f"preflight-{index:03d}", True)
+            for index in range(1, SAVE_TRANSACTION_PREFLIGHT_RUNS + 1)
+        ),
+        *(
+            (f"run-{index:03d}", False)
+            for index in range(1, SAVE_TRANSACTION_REPEAT + 1)
+        ),
+    )
+
+
+def nearest_rank_p95(values: list[int]) -> int:
+    require(values, "p95 requires a nonempty sample set")
+    ordered = sorted(values)
+    return ordered[(len(ordered) * 95 + 99) // 100 - 1]
+
+
+def validate_save_transaction_memory_sidecars(
+    run_dir: Path, row: dict[str, str]
+) -> tuple[int, int]:
+    memory_columns = (
+        "schema_version",
+        "baseline_live_bytes",
+        "peak_live_bytes",
+        "final_live_bytes",
+        "allocated_bytes",
+        "deallocated_bytes",
+        "allocation_calls",
+        "deallocation_calls",
+        "reallocation_calls",
+        "accounting_errors",
+    )
+    memory_rows = read_exact_csv(run_dir / "data" / "memory.csv", memory_columns, "memory.csv")
+    require(len(memory_rows) == 1, "memory.csv must contain exactly one row")
+    memory = memory_rows[0]
+    require(memory.get("schema_version") == "1", "memory.csv schema version is unsupported")
+    values = {
+        column: canonical_nonnegative(memory, column, "memory.csv")
+        for column in memory_columns[1:]
+    }
+    baseline = values["baseline_live_bytes"]
+    peak = values["peak_live_bytes"]
+    require(values["accounting_errors"] == 0, "memory.csv allocator accounting reported errors")
+    require(
+        peak >= max(baseline, values["final_live_bytes"]),
+        "memory.csv peak live bytes is below baseline or final live bytes",
+    )
+    require(
+        baseline + values["allocated_bytes"]
+        == values["final_live_bytes"] + values["deallocated_bytes"],
+        "memory.csv allocator byte accounting is unbalanced",
+    )
+    require(
+        (values["allocation_calls"] == 0) == (values["allocated_bytes"] == 0),
+        "memory.csv allocation calls and bytes disagree",
+    )
+    require(
+        (values["deallocation_calls"] == 0) == (values["deallocated_bytes"] == 0),
+        "memory.csv deallocation calls and bytes disagree",
+    )
+    require(
+        values["reallocation_calls"]
+        <= min(values["allocation_calls"], values["deallocation_calls"]),
+        "memory.csv reallocation calls exceed allocation/deallocation calls",
+    )
+    growth = canonical_nonnegative(row, "peak_live_growth_bytes", "save_transaction.csv")
+    require(peak >= baseline and peak - baseline == growth, "allocator growth disagrees with save_transaction.csv")
+
+    usage: dict[str, str] = {}
+    try:
+        usage_lines = (run_dir / "resource-usage.txt").read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise AcceptanceError(f"missing GNU time resource usage: {error}") from error
+    for line in usage_lines:
+        key, separator, value = line.partition("=")
+        require(separator == "=" and key and key not in usage, "resource-usage.txt has an invalid row")
+        usage[key] = value
+    require(
+        set(usage) == {"max_rss_kib", "user_cpu_secs", "system_cpu_secs", "exit_status"},
+        "resource-usage.txt has an unexpected schema",
+    )
+    rss = canonical_nonnegative(usage, "max_rss_kib", "resource-usage.txt")
+    require(rss > 0, "GNU time max RSS must be positive")
+    for column in ("user_cpu_secs", "system_cpu_secs"):
+        try:
+            value = float(usage[column])
+        except (KeyError, TypeError, ValueError) as error:
+            raise AcceptanceError(f"resource-usage.txt {column} is invalid") from error
+        require(
+            math.isfinite(value) and value >= 0.0,
+            f"resource-usage.txt {column} is not a finite nonnegative number",
+        )
+    require(usage.get("exit_status") == "0", "GNU time reports a nonzero exit status")
+    expected_profile = {
+        "instrumentation": "memory",
+        "allocation_memory": {
+            "source": "profiling-memory global allocator counters",
+            **values,
+            "peak_growth_bytes": peak - baseline,
+            "net_live_growth_bytes": values["final_live_bytes"] - baseline,
+            "allocated_bytes_per_frame": float(values["allocated_bytes"]),
+            "deallocated_bytes_per_frame": float(values["deallocated_bytes"]),
+            "allocation_calls_per_frame": float(values["allocation_calls"]),
+            "deallocation_calls_per_frame": float(values["deallocation_calls"]),
+        },
+        "process_memory": {
+            "max_rss_kib": rss,
+            "user_cpu_secs": float(usage["user_cpu_secs"]),
+            "system_cpu_secs": float(usage["system_cpu_secs"]),
+            "exit_status": 0,
+        },
+    }
+    require(
+        read_json(run_dir / "profile-artifact.json") == expected_profile,
+        "profile-artifact.json differs from raw memory/RSS sidecars",
+    )
+    return growth, rss
+
+
+def require_exact_artifact_entries(
+    directory: Path,
+    *,
+    directories: set[str],
+    files: set[str],
+    label: str,
+) -> None:
+    """Require a closed, regular artifact directory without hidden payloads."""
+    require(directory.is_dir() and not directory.is_symlink(), f"{label} is not a real directory")
+    expected = directories | files
+    actual = {path.name for path in directory.iterdir()}
+    require(
+        actual == expected,
+        f"{label} artifact set differs: {sorted(actual ^ expected)}",
+    )
+    for name in directories:
+        path = directory / name
+        require(path.is_dir() and not path.is_symlink(), f"{label}/{name} is not a real directory")
+    for name in files:
+        path = directory / name
+        require(path.is_file() and not path.is_symlink(), f"{label}/{name} is not a regular file")
+
+
+def require_no_save_body_in_save_transaction_artifacts(session: Path) -> None:
+    """Reject retained save payloads even when disguised under an allowed name."""
+    forbidden_markers = (
+        b"HELL_WORKERS_SAVE",
+        b"HW_PERF_SAVE_RUNTIME_ROOT=",
+        b".save-transaction-runtime/",
+    )
+    for path in sorted(session.rglob("*")):
+        require(not path.is_symlink(), f"save-transaction artifact contains a symlink: {path}")
+        if path.is_dir():
+            continue
+        require(path.is_file(), f"save-transaction artifact has a non-regular path: {path}")
+        size = path.stat().st_size
+        require(
+            size <= MAX_SAVE_TRANSACTION_ARTIFACT_FILE_BYTES,
+            f"save-transaction artifact file exceeds the bounded limit: {path.name}",
+        )
+        contents = path.read_bytes()
+        require(
+            not any(marker in contents for marker in forbidden_markers),
+            f"save-transaction artifact retains a serialized body or runtime path: {path}",
+        )
+
+
+def validate_save_transaction_session_file_set(
+    session: Path,
+    *,
+    instrumentation: str,
+    case_ids: set[str],
+) -> None:
+    require(instrumentation in SAVE_TRANSACTION_LEGS, "invalid save-transaction instrumentation")
+    require_exact_artifact_entries(
+        session,
+        directories={"cases"},
+        files={"manifest.json", "matrix.json", "aggregate.csv", "report.md"},
+        label="save-transaction session",
+    )
+    cases_dir = session / "cases"
+    require_exact_artifact_entries(
+        cases_dir,
+        directories=case_ids,
+        files=set(),
+        label="save-transaction cases",
+    )
+    labels = {label for label, _ in save_transaction_labels()}
+    run_files = {
+        "command.txt",
+        "requested-environment.json",
+        "run.log",
+        "validation.json",
+        "run-metadata.json",
+    }
+    if instrumentation == "memory":
+        run_files |= {"resource-usage.txt", "profile-artifact.json"}
+    data_files = {"window.csv", "save_transaction.csv"}
+    if instrumentation == "memory":
+        data_files.add("memory.csv")
+    for case_id in sorted(case_ids):
+        case_dir = cases_dir / case_id
+        require_exact_artifact_entries(
+            case_dir,
+            directories=labels,
+            files=set(),
+            label=f"save-transaction case {case_id}",
+        )
+        for label in sorted(labels):
+            run_dir = case_dir / label
+            require_exact_artifact_entries(
+                run_dir,
+                directories={"data"},
+                files=run_files,
+                label=f"save-transaction run {case_id}/{label}",
+            )
+            require_exact_artifact_entries(
+                run_dir / "data",
+                directories=set(),
+                files=data_files,
+                label=f"save-transaction data {case_id}/{label}",
+            )
+    require_no_save_body_in_save_transaction_artifacts(session)
+
+
+def revalidate_save_transaction_raw_run(
+    *,
+    repo: Path,
+    run_dir: Path,
+    case: dict[str, Any],
+    expected_backend: str,
+) -> None:
+    """Use the raw perf parser instead of trusting a stored validation result."""
+    scripts_directory = str((repo / "scripts").resolve())
+    if scripts_directory not in sys.path:
+        sys.path.insert(0, scripts_directory)
+    from perf_tool.artifacts import validate_run
+    from perf_tool.model import Case
+
+    expected_case = Case(**{key: value for key, value in case.items() if key != "id"})
+    validation = validate_run(
+        run_dir,
+        returncode=0,
+        expected_case=expected_case,
+        expected_adapter=None,
+        expected_backend=expected_backend,
+        allow_log_patterns=[],
+        capture_kind="frame-time",
+        expected_warmup_secs=SAVE_TRANSACTION_WARMUP_SECS,
+        expected_measure_secs=SAVE_TRANSACTION_MEASURE_SECS,
+        expected_fixed_hz=None,
+        expected_warmup_ticks=None,
+        expected_audit_ticks=None,
+        expected_window_backend="headless",
+        expected_present_mode="novsync",
+        expected_window_width=None,
+        expected_window_height=None,
+        expected_window_scale_factor=None,
+        expected_rtt_quality=None,
+        expected_contract=None,
+        expected_stage=None,
+        expected_lane=None,
+    )
+    require(
+        validation.valid,
+        "raw save-transaction validation failed: " + "; ".join(validation.reasons),
+    )
+
+
+def save_transaction_matrix(seed: int) -> dict[str, Any]:
+    """The complete formal C2 matrix retained by `scripts/perf.py`."""
+    return {
+        "workload": "save-transaction",
+        "sizes": list(SAVE_TRANSACTION_SIZES),
+        "renders": ["cpu"],
+        "seed": seed,
+        "repeat": SAVE_TRANSACTION_REPEAT,
+        "warmup_secs": SAVE_TRANSACTION_WARMUP_SECS,
+        "measure_secs": SAVE_TRANSACTION_MEASURE_SECS,
+        "fixed_hz": None,
+        "warmup_ticks": None,
+        "audit_ticks": None,
+        "preflight_runs": SAVE_TRANSACTION_PREFLIGHT_RUNS,
+        "souls": None,
+        "familiars": None,
+        "familiar_policies": ["baseline"],
+        "operation_dialog_modes": ["hidden"],
+        "dashboard_modes": ["hidden"],
+        "behavior_cases": [],
+        "capture_kind": "frame-time",
+        "clock_mode": "realtime",
+        "warmup_checksum_policy": "record",
+        "measure_end_checksum_policy": "record",
+        "allow_log_patterns": [],
+        "tracy_capture_secs": None,
+        "window_width": None,
+        "window_height": None,
+        "window_scale_factor": None,
+        "rtt_quality": None,
+        "environment_lock": None,
+        "rtt_light_contract": None,
+        "save_transaction_runtime": {"isolated": True, "cleanup": "per-run"},
+    }
+
+
+def save_transaction_requested_environment(repo: Path, backend: str) -> dict[str, str]:
+    require(backend in {"vulkan", "gl"}, "save-transaction backend is unsupported")
+    return {
+        "BEVY_ASSET_ROOT": str(repo.resolve()),
+        "HW_PRESENT_MODE": "novsync",
+        "HW_WINDOW_BACKEND": "headless",
+        "WGPU_BACKEND": backend,
+    }
+
+
+def verify_save_transaction_session(
+    session: Path,
+    *,
+    repo: Path,
+    instrumentation: str,
+    expected_source: str,
+    expected_seed: int,
+    expected_backend: str,
+) -> dict[str, Any]:
+    """Re-read a save timing leg without trusting its prior validation JSON.
+
+    The retained session has scalar metrics only. Each operation has already
+    removed its own isolated body-containing runtime before its artifact is
+    finalized, so this verifier proves the per-run cleanup contract rather
+    than retaining a serialized save as evidence.
+    """
+    session = session.resolve()
+    manifest = read_json(session / "manifest.json")
+    require(manifest.get("status") == "valid", f"save-transaction session is not valid: {session}")
+    binary = manifest.get("binary")
+    require(isinstance(binary, dict), "save-transaction binary metadata is missing")
+    binary_hash = binary.get("sha256")
+    require(
+        isinstance(binary_hash, str) and re.fullmatch(r"[0-9a-f]{64}", binary_hash) is not None,
+        "save-transaction binary fingerprint is invalid",
+    )
+    require(binary.get("instrumentation") == instrumentation, "save-transaction instrumentation mismatch")
+    source = manifest.get("source")
+    require(isinstance(source, dict), "save-transaction source provenance is missing")
+    require(
+        source.get("fingerprint_start") == expected_source
+        and source.get("fingerprint_end") == expected_source
+        and source.get("unchanged") is True,
+        "save-transaction source fingerprint differs from the native job",
+    )
+    matrix = manifest.get("matrix")
+    require(isinstance(matrix, dict), "save-transaction matrix is missing")
+    require(
+        matrix == save_transaction_matrix(expected_seed),
+        "save-transaction matrix differs from the fixed C2 contract",
+    )
+    require(
+        read_json(session / "matrix.json") == matrix,
+        "save-transaction matrix.json differs from its manifest",
+    )
+    requested = manifest.get("requested_environment")
+    require(
+        requested == save_transaction_requested_environment(repo, expected_backend),
+        "save-transaction requested environment differs from the fixed C2 contract",
+    )
+
+    cases = manifest.get("cases")
+    require(isinstance(cases, list) and len(cases) == len(SAVE_TRANSACTION_SIZES), "save-transaction cases are incomplete")
+    case_by_id = {
+        case.get("id"): case
+        for case in cases
+        if isinstance(case, dict) and isinstance(case.get("id"), str)
+    }
+    require(len(case_by_id) == len(SAVE_TRANSACTION_SIZES), "save-transaction case IDs are invalid")
+    require(
+        {case.get("size") for case in case_by_id.values()} == set(SAVE_TRANSACTION_SIZES)
+        and all(case.get("render") == "cpu" for case in case_by_id.values()),
+        "save-transaction cases must be one CPU case per canonical size",
+    )
+    for case_id, case in case_by_id.items():
+        size = case.get("size")
+        expected_case_id = f"save-transaction-{size}-cpu-seed-{expected_seed}"
+        require(
+            case
+            == {
+                "id": expected_case_id,
+                "workload": "save-transaction",
+                "size": size,
+                "render": "cpu",
+                "seed": expected_seed,
+                "souls": None,
+                "familiars": None,
+                "familiar_policy": "baseline",
+                "operation_dialog": "hidden",
+                "dashboard_mode": "hidden",
+                "behavior_case": None,
+            },
+            "save-transaction case does not match its fixed fixture",
+        )
+    validate_save_transaction_session_file_set(
+        session,
+        instrumentation=instrumentation,
+        case_ids=set(case_by_id),
+    )
+    cases_dir = session / "cases"
+
+    per_case: dict[str, dict[str, Any]] = {}
+    fixture_checksums: dict[str, str] = {}
+    for case_id, case in sorted(case_by_id.items()):
+        case_dir = cases_dir / case_id
+        expected_labels = {label for label, _ in save_transaction_labels()}
+        require(
+            {path.name for path in case_dir.iterdir() if path.is_dir()} == expected_labels,
+            f"{case_id} does not have the exact preflight/measured run set",
+        )
+        measured_values = {
+            "serialize_ns": [],
+            "write_file_sync_ns": [],
+            "commit_directory_sync_ns": [],
+            "total_ns": [],
+        }
+        growth_values: list[int] = []
+        rss_values: list[int] = []
+        observed_checksums: set[str] = set()
+        observed_populations: set[tuple[int, int]] = set()
+        expected_population = SAVE_TRANSACTION_POPULATIONS.get(case.get("size"))
+        require(
+            expected_population is not None,
+            f"{case_id} uses an unknown save-transaction fixture size",
+        )
+        for label, preflight in save_transaction_labels():
+            run_dir = case_dir / label
+            validation = read_json(run_dir / "validation.json")
+            require(
+                validation.get("valid") is True and validation.get("reasons") == [],
+                f"{case_id}/{label} stored validation is not valid",
+            )
+            metadata = read_json(run_dir / "run-metadata.json")
+            require(metadata.get("preflight") is preflight, f"{case_id}/{label} preflight flag is stale")
+            require(metadata.get("returncode") == 0, f"{case_id}/{label} did not exit successfully")
+            require(
+                metadata.get("case")
+                == {key: value for key, value in case.items() if key != "id"},
+                f"{case_id}/{label} run metadata case differs from its manifest",
+            )
+            require(
+                metadata.get("runtime_data_cleanup") == "per-run"
+                and metadata.get("runtime_data_cleaned") is True,
+                f"{case_id}/{label} runtime cleanup contract is not satisfied",
+            )
+            require(
+                read_json(run_dir / "requested-environment.json") == requested,
+                f"{case_id}/{label} requested environment differs from its manifest",
+            )
+            revalidate_save_transaction_raw_run(
+                repo=repo,
+                run_dir=run_dir,
+                case=case,
+                expected_backend=expected_backend,
+            )
+            command = (run_dir / "command.txt").read_text(encoding="utf-8")
+            require("HW_PERF_SAVE_RUNTIME_ROOT" not in command, f"{case_id}/{label} leaked runtime environment")
+            require("<absolute-path>" in command, f"{case_id}/{label} command record was not path-redacted")
+            rows = read_exact_csv(
+                run_dir / "data" / "save_transaction.csv",
+                SAVE_TRANSACTION_COLUMNS,
+                "save_transaction.csv",
+            )
+            require(len(rows) == 1, f"{case_id}/{label} must have one save-transaction row")
+            row = rows[0]
+            require(row.get("schema_version") == SAVE_TRANSACTION_SCHEMA_VERSION, "save-transaction schema mismatch")
+            require(
+                {
+                    "workload": row.get("workload"),
+                    "size": row.get("size"),
+                    "render": row.get("render"),
+                    "seed": row.get("seed"),
+                    "sample_kind": row.get("sample_kind"),
+                }
+                == {
+                    "workload": "save-transaction",
+                    "size": case.get("size"),
+                    "render": "cpu",
+                    "seed": str(expected_seed),
+                    "sample_kind": "preflight" if preflight else "measured",
+                },
+                f"{case_id}/{label} sidecar does not match its fixture metadata",
+            )
+            checksum = row.get("fixture_checksum")
+            require(
+                isinstance(checksum, str) and re.fullmatch(r"[0-9a-f]{16}", checksum) is not None,
+                f"{case_id}/{label} fixture checksum is invalid",
+            )
+            observed_checksums.add(checksum)
+            for column in (
+                "measure_virtual_ns",
+                "measure_real_ns",
+                "body_bytes",
+                "soul_count",
+                "familiar_count",
+                "serialize_ns",
+                "write_file_sync_ns",
+                "commit_directory_sync_ns",
+                "total_ns",
+            ):
+                canonical_nonnegative(row, column, "save_transaction.csv")
+            serialize_ns = canonical_nonnegative(row, "serialize_ns", "save_transaction.csv")
+            write_file_sync_ns = canonical_nonnegative(
+                row, "write_file_sync_ns", "save_transaction.csv"
+            )
+            commit_directory_sync_ns = canonical_nonnegative(
+                row, "commit_directory_sync_ns", "save_transaction.csv"
+            )
+            total_ns = canonical_nonnegative(row, "total_ns", "save_transaction.csv")
+            require(
+                total_ns >= serialize_ns + write_file_sync_ns + commit_directory_sync_ns,
+                f"{case_id}/{label} total duration is shorter than its measured phases",
+            )
+            completion_marker = (
+                "PERF_CAPTURE: wrote save-transaction sample "
+                f"(total_ns={total_ns})"
+            )
+            require(
+                completion_marker in (run_dir / "run.log").read_text(encoding="utf-8"),
+                f"{case_id}/{label} completion log does not match the transaction total",
+            )
+            population = (
+                canonical_nonnegative(row, "soul_count", "save_transaction.csv"),
+                canonical_nonnegative(row, "familiar_count", "save_transaction.csv"),
+            )
+            require(
+                population == expected_population,
+                f"{case_id}/{label} population differs from its canonical fixture",
+            )
+            observed_populations.add(population)
+            require(canonical_nonnegative(row, "body_bytes", "save_transaction.csv") > 0, "save body must be nonempty")
+            require(
+                canonical_nonnegative(row, "measure_virtual_ns", "save_transaction.csv")
+                >= SAVE_TRANSACTION_MEASURE_NS
+                and canonical_nonnegative(row, "measure_real_ns", "save_transaction.csv")
+                >= SAVE_TRANSACTION_MEASURE_NS,
+                f"{case_id}/{label} did not complete the fixed two-second measurement window",
+            )
+            if instrumentation == "capture":
+                require(row.get("peak_live_growth_bytes") == "", "Capture sidecar must not report allocator growth")
+                require(not (run_dir / "data" / "memory.csv").exists(), "Capture must not retain memory.csv")
+            else:
+                growth, rss = validate_save_transaction_memory_sidecars(run_dir, row)
+            if not preflight:
+                if instrumentation == "memory":
+                    growth_values.append(growth)
+                    rss_values.append(rss)
+                for column in measured_values:
+                    measured_values[column].append(canonical_nonnegative(row, column, "save_transaction.csv"))
+        require(len(observed_checksums) == 1, f"{case_id} fixture checksum drifted across samples")
+        require(len(observed_populations) == 1, f"{case_id} fixture population drifted across samples")
+        fixture_checksums[case_id] = next(iter(observed_checksums))
+        per_case[case_id] = {
+            "metrics": measured_values,
+            "growth": growth_values,
+            "rss": rss_values,
+            "population": next(iter(observed_populations)),
+        }
+
+    aggregate_rows = read_exact_csv(
+        session / "aggregate.csv", SAVE_TRANSACTION_AGGREGATE_COLUMNS, "aggregate.csv"
+    )
+    aggregate_ids = [row.get("case_id") for row in aggregate_rows]
+    require(
+        len(aggregate_rows) == len(case_by_id),
+        "save-transaction aggregate row count differs from the fixed case matrix",
+    )
+    require(
+        all(isinstance(case_id, str) and case_id for case_id in aggregate_ids),
+        "save-transaction aggregate has an empty case ID",
+    )
+    require(
+        len(set(aggregate_ids)) == len(aggregate_ids),
+        "save-transaction aggregate contains duplicate case IDs",
+    )
+    aggregate_by_id = {row["case_id"]: row for row in aggregate_rows}
+    require(set(aggregate_by_id) == set(case_by_id), "save-transaction aggregate case set is incomplete")
+    for case_id, case_data in per_case.items():
+        row = aggregate_by_id[case_id]
+        require(row.get("valid_runs") == str(SAVE_TRANSACTION_REPEAT), f"{case_id} aggregate valid run count is stale")
+        require(row.get("fixture_checksums") == fixture_checksums[case_id], f"{case_id} aggregate fixture checksum is stale")
+        for source, prefix in (
+            ("serialize_ns", "serialize"),
+            ("write_file_sync_ns", "write_file_sync"),
+            ("commit_directory_sync_ns", "commit_directory_sync"),
+            ("total_ns", "total"),
+        ):
+            values = case_data["metrics"][source]
+            require(len(values) == SAVE_TRANSACTION_REPEAT, f"{case_id} has incomplete measured values")
+            require(row.get(f"{prefix}_p95_ns") == str(nearest_rank_p95(values)), f"{case_id} {prefix} p95 is stale")
+            require(row.get(f"{prefix}_max_ns") == str(max(values)), f"{case_id} {prefix} max is stale")
+        if instrumentation == "capture":
+            require(
+                row.get("peak_live_growth_p95_bytes") == ""
+                and row.get("peak_live_growth_max_bytes") == ""
+                and row.get("max_rss_kib_max") == "",
+                "Capture aggregate must not contain Memory/RSS metrics",
+            )
+            if case_by_id[case_id].get("size") == "large":
+                require(
+                    int(row["total_p95_ns"]) <= SAVE_TRANSACTION_LARGE_TOTAL_P95_LIMIT_NS,
+                    "large Capture total p95 exceeds the C2 100ms limit",
+                )
+                require(
+                    int(row["total_max_ns"]) <= SAVE_TRANSACTION_LARGE_TOTAL_MAX_LIMIT_NS,
+                    "large Capture total max exceeds the C2 250ms limit",
+                )
+        else:
+            growth_values = case_data["growth"]
+            rss_values = case_data["rss"]
+            require(len(growth_values) == SAVE_TRANSACTION_REPEAT, f"{case_id} Memory growth set is incomplete")
+            require(len(rss_values) == SAVE_TRANSACTION_REPEAT, f"{case_id} Memory RSS set is incomplete")
+            require(
+                row.get("peak_live_growth_p95_bytes") == str(nearest_rank_p95(growth_values))
+                and row.get("peak_live_growth_max_bytes") == str(max(growth_values))
+                and row.get("max_rss_kib_max") == str(max(rss_values)),
+                f"{case_id} Memory aggregate is stale",
+            )
+    return {
+        "status": "pass",
+        "instrumentation": instrumentation,
+        "binary_sha256": binary_hash,
+        "fixture_checksums": fixture_checksums,
+        "populations": {case_id: data["population"] for case_id, data in per_case.items()},
+        "runtime_cleanup": "per-run",
+    }
+
+
+def verify_save_transaction_bundle(
+    *,
+    repo: Path,
+    performance_root: Path,
+    expected_source: str,
+    expected_seed: int,
+    expected_backend: str,
+) -> dict[str, Any]:
+    performance_root = performance_root.resolve()
+    require_exact_artifact_entries(
+        performance_root,
+        directories=set(SAVE_TRANSACTION_LEGS),
+        files=set(),
+        label="save-transaction performance root",
+    )
+    capture = verify_save_transaction_session(
+        performance_root / "capture",
+        repo=repo,
+        instrumentation="capture",
+        expected_source=expected_source,
+        expected_seed=expected_seed,
+        expected_backend=expected_backend,
+    )
+    memory = verify_save_transaction_session(
+        performance_root / "memory",
+        repo=repo,
+        instrumentation="memory",
+        expected_source=expected_source,
+        expected_seed=expected_seed,
+        expected_backend=expected_backend,
+    )
+    require(
+        capture["binary_sha256"] != memory["binary_sha256"],
+        "Capture and Memory must use distinct instrumentation binaries",
+    )
+    require(
+        capture["fixture_checksums"] == memory["fixture_checksums"],
+        "Capture and Memory fixture checksums differ",
+    )
+    require(
+        capture["populations"] == memory["populations"],
+        "Capture and Memory fixture populations differ",
+    )
+    return {
+        "status": "pass",
+        "capture": capture,
+        "memory": memory,
+        "runtime_cleanup": "per-run",
+    }
+
+
+def save_transaction_runtime_root(repo: Path, run_id: str) -> Path:
+    require(
+        re.fullmatch(r"c2-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}", run_id) is not None,
+        "save-transaction runtime cleanup run ID is invalid",
+    )
+    allowed_root = (repo.resolve() / "target" / ".save-transaction-runtime").resolve()
+    root = (allowed_root / run_id).resolve()
+    require(root.parent == allowed_root, "save-transaction cleanup escaped its exact runtime root")
+    return root
+
+
+def cleanup_save_transaction_runtime_root(repo: Path, run_id: str) -> bool:
+    root = save_transaction_runtime_root(repo, run_id)
+    if not root.exists():
+        return False
+    require(root.is_dir() and not root.is_symlink(), "save-transaction runtime cleanup target is unsafe")
+    shutil.rmtree(root)
+    return True
+
+
+def remove_empty_save_transaction_runtime_root(repo: Path, run_id: str) -> bool:
+    """Remove only the native recipe's empty run-ID directory.
+
+    Individual perf operations own and remove their body-containing roots.
+    The outer recipe may then remove the fresh run-ID parent only if it is
+    already empty; a nonempty directory is evidence of a cleanup failure and
+    must remain visible to the caller rather than being recursively erased.
+    """
+    root = save_transaction_runtime_root(repo, run_id)
+    if not root.exists():
+        return False
+    require(root.is_dir() and not root.is_symlink(), "save-transaction runtime parent is unsafe")
+    try:
+        root.rmdir()
+    except OSError as error:
+        raise AcceptanceError(
+            "save-transaction runtime parent is not empty after per-run cleanup"
+        ) from error
+    return True
+
+
+def require_save_transaction_runtime_absent(repo: Path, run_id: str) -> None:
+    root = save_transaction_runtime_root(repo, run_id)
+    require(
+        not root.exists(),
+        "save-transaction runtime data remains after per-run/helper cleanup",
+    )
+
+
+def save_transaction_perf_command(
+    *,
+    run_id: str,
+    seed: int,
+    backend: str,
+    instrumentation: str,
+    output: Path,
+    runtime_root: Path,
+) -> list[str]:
+    require(instrumentation in SAVE_TRANSACTION_LEGS, "invalid save-transaction instrumentation")
+    # Keep argv retained by the native orchestrator relative. The perf runner
+    # resolves it against the repository, while artifacts never learn the
+    # body-containing runtime path.
+    return [
+        "python3",
+        "scripts/perf.py",
+        "run",
+        "--workload",
+        "save-transaction",
+        "--sizes",
+        ",".join(SAVE_TRANSACTION_SIZES),
+        "--renders",
+        "cpu",
+        "--seed",
+        str(seed),
+        "--backend",
+        backend,
+        "--window-backend",
+        "headless",
+        "--present-mode",
+        "novsync",
+        "--instrumentation",
+        instrumentation,
+        "--repeat",
+        str(SAVE_TRANSACTION_REPEAT),
+        "--preflight-runs",
+        str(SAVE_TRANSACTION_PREFLIGHT_RUNS),
+        "--warmup-secs",
+        str(SAVE_TRANSACTION_WARMUP_SECS),
+        "--measure-secs",
+        str(SAVE_TRANSACTION_MEASURE_SECS),
+        "--timeout-secs",
+        "120",
+        "--output",
+        str(output),
+        "--save-runtime-root",
+        str(runtime_root),
+    ]
+
+
 def validate_png_structure(png: bytes) -> tuple[int, int]:
     signature = b"\x89PNG\r\n\x1a\n"
     require(
@@ -2848,6 +4712,95 @@ def validate_png_structure(png: bytes) -> tuple[int, int]:
     raise AcceptanceError("PNG is missing terminal IEND")
 
 
+def count_save_catalog_marker_pixels(png: bytes) -> int:
+    """Decode the bounded screenshot and require the native-only UI marker.
+
+    Native capture tools emit non-interlaced 8-bit RGB/RGBA PNGs. Rejecting
+    other representations is intentional: the capture command can normalize
+    ImageMagick output, and a verifier must not guess at an unproven image.
+    """
+    width, height = validate_png_structure(png)
+    offset = 8
+    bit_depth: int | None = None
+    color_type: int | None = None
+    compressed = bytearray()
+    while offset < len(png):
+        data_len = int.from_bytes(png[offset : offset + 4], "big")
+        chunk_type = png[offset + 4 : offset + 8]
+        data_start = offset + 8
+        data_end = data_start + data_len
+        if chunk_type == b"IHDR":
+            bit_depth = png[data_start + 8]
+            color_type = png[data_start + 9]
+            require(
+                png[data_start + 10 : data_start + 13] == b"\x00\x00\x00",
+                "native screenshot uses an unsupported PNG compression/filter/interlace mode",
+            )
+        elif chunk_type == b"IDAT":
+            compressed.extend(png[data_start:data_end])
+        elif chunk_type == b"IEND":
+            break
+        offset = data_end + 4
+    require(bit_depth == 8 and color_type in {2, 6}, "native screenshot must be 8-bit RGB/RGBA PNG")
+    channels = 3 if color_type == 2 else 4
+    stride = width * channels
+    expected_length = height * (stride + 1)
+    require(
+        expected_length <= MAX_NATIVE_SCREENSHOT_DECODED_BYTES,
+        "native screenshot decoded pixel buffer exceeds the fail-closed limit",
+    )
+    try:
+        decoder = zlib.decompressobj()
+        raw = decoder.decompress(bytes(compressed), expected_length + 1)
+        require(not decoder.unconsumed_tail, "native screenshot decompressed beyond its declared dimensions")
+        raw += decoder.flush()
+    except zlib.error as error:
+        raise AcceptanceError(f"native screenshot PNG data cannot be decompressed: {error}") from error
+    require(len(raw) == expected_length, "native screenshot decoded length is invalid")
+
+    previous = bytearray(stride)
+    marker_pixels = 0
+    cursor = 0
+    for _ in range(height):
+        filter_type = raw[cursor]
+        cursor += 1
+        encoded = raw[cursor : cursor + stride]
+        cursor += stride
+        scanline = bytearray(stride)
+        for index, value in enumerate(encoded):
+            left = scanline[index - channels] if index >= channels else 0
+            up = previous[index]
+            upper_left = previous[index - channels] if index >= channels else 0
+            if filter_type == 0:
+                reconstructed = value
+            elif filter_type == 1:
+                reconstructed = (value + left) & 0xFF
+            elif filter_type == 2:
+                reconstructed = (value + up) & 0xFF
+            elif filter_type == 3:
+                reconstructed = (value + ((left + up) // 2)) & 0xFF
+            elif filter_type == 4:
+                predictor = left + up - upper_left
+                distance_left = abs(predictor - left)
+                distance_up = abs(predictor - up)
+                distance_upper_left = abs(predictor - upper_left)
+                nearest = (
+                    left
+                    if distance_left <= distance_up and distance_left <= distance_upper_left
+                    else up if distance_up <= distance_upper_left else upper_left
+                )
+                reconstructed = (value + nearest) & 0xFF
+            else:
+                raise AcceptanceError("native screenshot uses an unknown PNG scanline filter")
+            scanline[index] = reconstructed
+        for index in range(0, stride, channels):
+            red, green, blue = scanline[index : index + 3]
+            if red >= 250 and green <= 5 and blue >= 250:
+                marker_pixels += 1
+        previous = scanline
+    return marker_pixels
+
+
 def png_chunk(chunk_type: bytes, data: bytes) -> bytes:
     require(len(chunk_type) == 4, "PNG chunk type must have four bytes")
     payload = chunk_type + data
@@ -2868,6 +4821,29 @@ def structural_png(width: int, height: int) -> bytes:
         b"\x89PNG\r\n\x1a\n"
         + png_chunk(b"IHDR", ihdr)
         + png_chunk(b"IDAT", b"\x78\x9c\x03\x00\x00\x00\x00\x01")
+        + png_chunk(b"IEND", b"")
+    )
+
+
+def save_catalog_marker_png(
+    width: int, height: int, *, include_marker: bool = True
+) -> bytes:
+    require(width >= 48 and height >= 48, "marker PNG dimensions are too small")
+    row = bytearray(width * 3)
+    raw = bytearray()
+    for y in range(height):
+        raw.append(0)
+        pixels = bytearray(row)
+        if include_marker and 12 <= y < 60:
+            for x in range(12, 60):
+                offset = x * 3
+                pixels[offset : offset + 3] = bytes(SAVE_CATALOG_MARKER_RGB)
+        raw.extend(pixels)
+    ihdr = width.to_bytes(4, "big") + height.to_bytes(4, "big") + bytes((8, 2, 0, 0, 0))
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + png_chunk(b"IHDR", ihdr)
+        + png_chunk(b"IDAT", zlib.compress(bytes(raw)))
         + png_chunk(b"IEND", b"")
     )
 
@@ -2913,6 +4889,39 @@ def verify_deconstruction_command(args: argparse.Namespace) -> int:
         window_backend=args.window_backend,
     )
     print_json(result)
+    return 0
+
+
+def verify_save_catalog_command(args: argparse.Namespace) -> int:
+    repo = validate_repo(args.repo)
+    require(
+        native_harness_fingerprint(repo) == args.harness_fingerprint,
+        "native acceptance harness fingerprint differs from the requested verification",
+    )
+    native = verify_save_catalog_artifact(
+        Path(args.artifact).resolve(),
+        run_id=args.run_id,
+        adapter=args.adapter,
+        backend=args.backend,
+        window_backend=args.window_backend,
+        runtime_root=Path(args.runtime_root).resolve(),
+    )
+    save_transaction = verify_save_transaction_bundle(
+        repo=repo,
+        performance_root=Path(args.performance_root).resolve(),
+        expected_source=args.source_fingerprint,
+        expected_seed=args.seed,
+        expected_backend=args.backend,
+    )
+    require_save_transaction_runtime_absent(repo, args.run_id)
+    print_json(
+        {
+            "status": "pass",
+            "native": native,
+            "save_transaction": save_transaction,
+            "runtime_cleanup": "verified-absent",
+        }
+    )
     return 0
 
 
@@ -2968,6 +4977,62 @@ def status_command(args: argparse.Namespace) -> int:
                 backend=str(parameters.get("backend", "vulkan")),
                 window_backend=str(parameters.get("window_backend", "x11")),
             )
+        except (AcceptanceError, KeyError, TypeError, ValueError) as error:
+            summary["status"] = "invalid"
+            summary["error"] = f"artifact revalidation failed: {error}"
+            print_json(summary)
+            return 1
+    if status == "valid" and state.get("profile") == "save-catalog":
+        parameters = state.get("parameters", {})
+        try:
+            native = verify_save_catalog_artifact(
+                Path(state["paths"]["artifact"]),
+                run_id=str(state["run_id"]),
+                adapter=str(parameters.get("adapter", "Intel")),
+                backend=str(parameters.get("backend", "vulkan")),
+                window_backend=str(parameters.get("window_backend", "x11")),
+                runtime_root=Path(state["paths"]["runtime"]),
+            )
+            performance = state["paths"]["performance"]
+            stored_verification = state.get("verification")
+            expected_harness = state.get("harness_fingerprint")
+            require(
+                isinstance(stored_verification, dict)
+                and stored_verification.get("runtime_cleanup") == "verified-absent",
+                "save-transaction runtime cleanup was not recorded",
+            )
+            require(
+                isinstance(expected_harness, str)
+                and re.fullmatch(r"[0-9a-f]{64}", expected_harness) is not None
+                and native_harness_fingerprint(Path(state["repo"])) == expected_harness,
+                "native acceptance harness fingerprint differs from the completed job",
+            )
+            harness_record = stored_verification.get("harness")
+            require(
+                harness_record
+                == {
+                    "fingerprint_start": expected_harness,
+                    "fingerprint_end": expected_harness,
+                    "unchanged": True,
+                },
+                "native acceptance harness provenance is incomplete",
+            )
+            save_transaction = verify_save_transaction_bundle(
+                repo=Path(state["repo"]),
+                performance_root=Path(performance["capture"]).parent,
+                expected_source=str(state["source_fingerprint"]),
+                expected_seed=int(parameters["seed"]),
+                expected_backend=str(parameters["backend"]),
+            )
+            require_save_transaction_runtime_absent(
+                Path(state["repo"]), str(state["run_id"])
+            )
+            summary["verification"] = {
+                "status": "pass",
+                "native": native,
+                "save_transaction": save_transaction,
+                "runtime_cleanup": "verified-absent",
+            }
         except (AcceptanceError, KeyError, TypeError, ValueError) as error:
             summary["status"] = "invalid"
             summary["error"] = f"artifact revalidation failed: {error}"
@@ -3048,11 +5113,267 @@ def write_fake_rtt_light_smoke(
     )
 
 
+def write_fake_save_transaction_session(
+    path: Path,
+    *,
+    repo: Path,
+    instrumentation: str,
+    binary_hash: str,
+    source_fingerprint_value: str,
+    seed: int,
+) -> None:
+    """Build a compact but exact C2 perf leg fixture for helper self-tests."""
+    from perf_tool.model import WINDOW_COLUMNS
+
+    path.mkdir(parents=True)
+    cases: list[dict[str, Any]] = []
+    aggregate_rows: list[dict[str, str]] = []
+    for size_index, size in enumerate(SAVE_TRANSACTION_SIZES, start=1):
+        case_id = f"save-transaction-{size}-cpu-seed-{seed}"
+        case = {
+            "id": case_id,
+            "workload": "save-transaction",
+            "size": size,
+            "render": "cpu",
+            "seed": seed,
+            "souls": None,
+            "familiars": None,
+            "familiar_policy": "baseline",
+            "operation_dialog": "hidden",
+            "dashboard_mode": "hidden",
+            "behavior_case": None,
+        }
+        cases.append(case)
+        checksum = f"{size_index:016x}"
+        souls, familiars = SAVE_TRANSACTION_POPULATIONS[size]
+        measured: dict[str, list[int]] = {
+            "serialize_ns": [],
+            "write_file_sync_ns": [],
+            "commit_directory_sync_ns": [],
+            "total_ns": [],
+        }
+        growth: list[int] = []
+        rss: list[int] = []
+        for run_index, (label, preflight) in enumerate(save_transaction_labels(), start=1):
+            run_dir = path / "cases" / case_id / label
+            data = run_dir / "data"
+            data.mkdir(parents=True)
+            total = 10_000 + size_index * 100 + run_index
+            row = {
+                "schema_version": SAVE_TRANSACTION_SCHEMA_VERSION,
+                "workload": "save-transaction",
+                "size": size,
+                "render": "cpu",
+                "seed": str(seed),
+                "soul_count": str(souls),
+                "familiar_count": str(familiars),
+                "fixture_checksum": checksum,
+                "sample_kind": "preflight" if preflight else "measured",
+                "measure_virtual_ns": str(SAVE_TRANSACTION_MEASURE_NS),
+                "measure_real_ns": str(SAVE_TRANSACTION_MEASURE_NS),
+                "body_bytes": str(1024 * size_index),
+                "serialize_ns": str(100 + run_index),
+                "write_file_sync_ns": str(200 + run_index),
+                "commit_directory_sync_ns": str(300 + run_index),
+                "total_ns": str(total),
+                "peak_live_growth_bytes": "" if instrumentation == "capture" else str(50 + run_index),
+            }
+            with (data / "save_transaction.csv").open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=SAVE_TRANSACTION_COLUMNS)
+                writer.writeheader()
+                writer.writerow(row)
+            window = {
+                "schema_version": "2",
+                "window_present": "false",
+                "logical_width": "",
+                "logical_height": "",
+                "physical_width": "",
+                "physical_height": "",
+                "scale_factor": "",
+                "rtt_quality": "high",
+                "scene_target_width": "1280",
+                "scene_target_height": "720",
+                "mask_target_width": "1280",
+                "mask_target_height": "720",
+                "target_scale_factor": "1.000000",
+                "resolved_window_backend": "",
+                "adapter_name": "",
+                "adapter_backend": "",
+                "requested_present_mode": "",
+                "effective_present_mode": "",
+                "end_window_present": "false",
+                "end_logical_width": "",
+                "end_logical_height": "",
+                "end_physical_width": "",
+                "end_physical_height": "",
+                "end_scale_factor": "",
+                "end_rtt_quality": "high",
+                "end_scene_target_width": "1280",
+                "end_scene_target_height": "720",
+                "end_mask_target_width": "1280",
+                "end_mask_target_height": "720",
+                "end_target_scale_factor": "1.000000",
+                "end_resolved_window_backend": "",
+                "end_adapter_name": "",
+                "end_adapter_backend": "",
+                "end_requested_present_mode": "",
+                "end_effective_present_mode": "",
+            }
+            with (data / "window.csv").open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=WINDOW_COLUMNS)
+                writer.writeheader()
+                writer.writerow(window)
+            (run_dir / "command.txt").write_text(
+                "<absolute-path> --perf-output <absolute-path>\n", encoding="utf-8"
+            )
+            atomic_write_json(
+                run_dir / "requested-environment.json",
+                save_transaction_requested_environment(repo, "vulkan"),
+            )
+            (run_dir / "run.log").write_text(
+                (
+                    f"PERF_SCENARIO: seed={seed} workload=save-transaction size={size} "
+                    f"souls={souls} familiars={familiars} render=cpu "
+                    "clock=realtime behavior_case=none familiar_policy=baseline "
+                    "operation_dialog=hidden dashboard_mode=hidden warmup=1s measure=2s\n"
+                    "AdapterInfo { name: \"Test GPU\", driver: \"test\", "
+                    "driver_info: \"test\", backend: Vulkan }\n"
+                    f"PERF_CAPTURE: wrote save-transaction sample (total_ns={total})\n"
+                ),
+                encoding="utf-8",
+            )
+            atomic_write_json(run_dir / "validation.json", {"valid": True, "reasons": []})
+            atomic_write_json(
+                run_dir / "run-metadata.json",
+                {
+                    "case": {key: value for key, value in case.items() if key != "id"},
+                    "preflight": preflight,
+                    "returncode": 0,
+                    "runtime_data_cleanup": "per-run",
+                    "runtime_data_cleaned": True,
+                },
+            )
+            if instrumentation == "memory":
+                value = 50 + run_index
+                (data / "memory.csv").write_text(
+                    "schema_version,baseline_live_bytes,peak_live_bytes,final_live_bytes,"
+                    "allocated_bytes,deallocated_bytes,allocation_calls,deallocation_calls,"
+                    "reallocation_calls,accounting_errors\n"
+                    f"1,100,{100 + value},100,1000,1000,10,9,0,0\n",
+                    encoding="utf-8",
+                )
+                (run_dir / "resource-usage.txt").write_text(
+                    "max_rss_kib=2048\nuser_cpu_secs=0.1\nsystem_cpu_secs=0.1\nexit_status=0\n",
+                    encoding="utf-8",
+                )
+                atomic_write_json(
+                    run_dir / "profile-artifact.json",
+                    {
+                        "instrumentation": "memory",
+                        "allocation_memory": {
+                            "source": "profiling-memory global allocator counters",
+                            "baseline_live_bytes": 100,
+                            "peak_live_bytes": 100 + value,
+                            "final_live_bytes": 100,
+                            "allocated_bytes": 1000,
+                            "deallocated_bytes": 1000,
+                            "allocation_calls": 10,
+                            "deallocation_calls": 9,
+                            "reallocation_calls": 0,
+                            "accounting_errors": 0,
+                            "peak_growth_bytes": value,
+                            "net_live_growth_bytes": 0,
+                            "allocated_bytes_per_frame": 1000.0,
+                            "deallocated_bytes_per_frame": 1000.0,
+                            "allocation_calls_per_frame": 10.0,
+                            "deallocation_calls_per_frame": 9.0,
+                        },
+                        "process_memory": {
+                            "max_rss_kib": 2048,
+                            "user_cpu_secs": 0.1,
+                            "system_cpu_secs": 0.1,
+                            "exit_status": 0,
+                        },
+                    },
+                )
+                growth.append(value)
+                rss.append(2048)
+            if not preflight:
+                for column in measured:
+                    measured[column].append(int(row[column]))
+        aggregate = {
+            "case_id": case_id,
+            "valid_runs": str(SAVE_TRANSACTION_REPEAT),
+            "fixture_checksums": checksum,
+            "peak_live_growth_p95_bytes": "",
+            "peak_live_growth_max_bytes": "",
+            "max_rss_kib_max": "",
+            "adapter": "null",
+        }
+        for source, prefix in (
+            ("serialize_ns", "serialize"),
+            ("write_file_sync_ns", "write_file_sync"),
+            ("commit_directory_sync_ns", "commit_directory_sync"),
+            ("total_ns", "total"),
+        ):
+            aggregate[f"{prefix}_p95_ns"] = str(nearest_rank_p95(measured[source]))
+            aggregate[f"{prefix}_max_ns"] = str(max(measured[source]))
+        if instrumentation == "memory":
+            aggregate["peak_live_growth_p95_bytes"] = str(nearest_rank_p95(growth))
+            aggregate["peak_live_growth_max_bytes"] = str(max(growth))
+            aggregate["max_rss_kib_max"] = str(max(rss))
+        aggregate_rows.append(aggregate)
+    (path / "cases").mkdir(exist_ok=True)
+    with (path / "aggregate.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=SAVE_TRANSACTION_AGGREGATE_COLUMNS)
+        writer.writeheader()
+        writer.writerows(aggregate_rows)
+    (path / "report.md").write_text("# valid save transaction fixture\n", encoding="utf-8")
+    atomic_write_json(path / "matrix.json", save_transaction_matrix(seed))
+    atomic_write_json(
+        path / "manifest.json",
+        {
+            "status": "valid",
+            "binary": {"instrumentation": instrumentation, "sha256": binary_hash},
+            "source": {
+                "fingerprint_start": source_fingerprint_value,
+                "fingerprint_end": source_fingerprint_value,
+                "unchanged": True,
+            },
+            "requested_environment": save_transaction_requested_environment(repo, "vulkan"),
+            "matrix": save_transaction_matrix(seed),
+            "cases": cases,
+        },
+    )
+
+
 def self_test() -> int:
     repo = Path(__file__).resolve().parents[4]
     sys.path.insert(0, str(repo / "scripts"))
     from perf_tool import execution as perf_execution
 
+    require(
+        parse_linux_proc_stat_ppid("42 (game worker) S 7 1 1 0") == 7,
+        "Linux process parent parser did not read field four",
+    )
+    require(
+        parse_linux_proc_stat_ppid("malformed") is None,
+        "malformed Linux process stat unexpectedly parsed",
+    )
+    require(
+        parse_x11_client_window_ids(
+            "_NET_CLIENT_LIST(WINDOW): window id # 0x00Aa, 0x4, 0x00Aa"
+        ) == ["0x00aa", "0x4"],
+        "X11 client window list parser did not retain canonical unique IDs",
+    )
+    require(
+        parse_x11_window_pid("_NET_WM_PID(CARDINAL) = 1234") == 1234,
+        "X11 window PID parser did not read a valid owner",
+    )
+    require(
+        parse_x11_window_pid("_NET_WM_PID: not found") is None,
+        "missing X11 window PID unexpectedly parsed",
+    )
     require(
         SOURCE_FILES == perf_execution.SOURCE_FINGERPRINT_FILES
         and SOURCE_PREFIXES == perf_execution.SOURCE_FINGERPRINT_PREFIXES
@@ -3074,6 +5395,72 @@ def self_test() -> int:
         tmp_root = root / "tmp"
         workspace.mkdir()
         tmp_root.mkdir()
+        capture_ack_artifact = root / "capture-ack-artifact"
+        capture_ack_artifact.mkdir()
+        capture_ack_screenshot = capture_ack_artifact / SAVE_CATALOG_SCREENSHOT
+        capture_ack_screenshot.write_bytes(save_catalog_marker_png(1280, 720))
+        capture_ack = {
+            **finalize_native_screenshot(capture_ack_screenshot),
+            "capture_scope": SAVE_CATALOG_CAPTURE_SCOPE,
+            "window_id": "0x1234",
+            "window_pid": 1234,
+        }
+        write_save_catalog_capture_ack(
+            capture_ack_artifact,
+            "self-test",
+            capture_ack_screenshot,
+            capture_ack,
+        )
+        capture_ack_path = capture_ack_artifact / "capture.done.txt"
+        published_ack = capture_ack_path.read_text(encoding="utf-8")
+        require(
+            len(published_ack.splitlines()) == 10
+            and published_ack.endswith("capture_window_pid=1234\n"),
+            "capture acknowledgement was not atomically published as one complete contract",
+        )
+        require(
+            not list(capture_ack_artifact.glob(".capture.done.txt.*.tmp")),
+            "atomic capture acknowledgement left a temporary file behind",
+        )
+        try:
+            write_save_catalog_capture_ack(
+                capture_ack_artifact,
+                "self-test",
+                capture_ack_screenshot,
+                capture_ack,
+            )
+        except AcceptanceError:
+            pass
+        else:
+            raise AcceptanceError("existing capture acknowledgement was overwritten")
+        require(
+            capture_ack_path.read_text(encoding="utf-8") == published_ack,
+            "existing capture acknowledgement changed after a rejected second publish",
+        )
+        try:
+            run_bounded_capture_tool(
+                [sys.executable, "-c", "import time; time.sleep(60)"],
+                label="capture timeout self-test",
+                timeout_seconds=0.05,
+            )
+        except AcceptanceError as error:
+            require(
+                "timed out" in str(error),
+                "bounded capture tool reported the wrong timeout failure",
+            )
+        else:
+            raise AcceptanceError("bounded capture tool did not time out")
+        proc = root / "proc"
+        for pid, parent in ((100, 1), (101, 100), (102, 101), (200, 1)):
+            process = proc / str(pid)
+            process.mkdir(parents=True)
+            (process / "stat").write_text(
+                f"{pid} (test worker) S {parent} 0 0 0\n", encoding="utf-8"
+            )
+        require(
+            descendant_process_ids(100, proc_root=proc) == {100, 101, 102},
+            "X11 window ownership process subtree was not bounded to Cargo descendants",
+        )
         mountinfo = root / "mountinfo"
         mountinfo.write_text(
             f"36 25 0:32 / {workspace} rw - ext4 /dev/fake rw\n"
@@ -3496,6 +5883,466 @@ def self_test() -> int:
             pass
         else:
             raise AcceptanceError("truncated native PNG fixture unexpectedly passed")
+
+        save_catalog_job = root / "save-catalog-job"
+        save_catalog_artifact = save_catalog_job / "artifact"
+        save_catalog_runtime = save_catalog_job / "runtime"
+        (save_catalog_runtime / "saves").mkdir(parents=True)
+        (save_catalog_runtime / "settings").mkdir(parents=True)
+        save_catalog_artifact.mkdir()
+        save_catalog_save = (
+            save_catalog_runtime / "saves" / SAVE_CATALOG_FINAL_RECOVERY_FILE
+        )
+        save_catalog_screenshot = save_catalog_artifact / SAVE_CATALOG_SCREENSHOT
+        save_catalog_save.write_text("native-save\n", encoding="utf-8")
+        (save_catalog_runtime / "settings/settings.ron").write_text("()\n", encoding="utf-8")
+        save_catalog_screenshot.write_bytes(save_catalog_marker_png(1280, 720))
+        save_catalog_marker_pixels = count_save_catalog_marker_pixels(
+            save_catalog_screenshot.read_bytes()
+        )
+        (save_catalog_artifact / "capture-ready.txt").write_text(
+            "run_id=self-test\nmarker_rgb=255,0,255\n"
+            f"marker_min_pixels={SAVE_CATALOG_MARKER_MIN_PIXELS}\n",
+            encoding="utf-8",
+        )
+        (save_catalog_artifact / "capture.done.txt").write_text(
+            f"run_id=self-test\n"
+            f"screenshot={SAVE_CATALOG_SCREENSHOT}\n"
+            f"bytes={save_catalog_screenshot.stat().st_size}\n"
+            "width=1280\nheight=720\n"
+            f"sha256={sha256(save_catalog_screenshot)}\n"
+            f"marker_pixels={save_catalog_marker_pixels}\n"
+            f"capture_scope={SAVE_CATALOG_CAPTURE_SCOPE}\n"
+            "capture_window_id=0x1234\n"
+            "capture_window_pid=1234\n",
+            encoding="utf-8",
+        )
+        atomic_write_json(
+            save_catalog_artifact / "driver-result.json",
+            {
+                "status": "PASS",
+                "profile": "save-catalog",
+                "run_id": "self-test",
+                "checks": {check: "PASS" for check in SAVE_CATALOG_CHECKS},
+                "world_epoch_before_valid_load": 7,
+                "world_epoch_after_valid_load": 8,
+                "save_bytes": save_catalog_save.stat().st_size,
+                "runtime": {
+                    "save_root": str(save_catalog_runtime / "saves"),
+                    "settings_root": str(save_catalog_runtime / "settings"),
+                },
+                "screenshot": SAVE_CATALOG_SCREENSHOT,
+                "screenshot_bytes": save_catalog_screenshot.stat().st_size,
+                "screenshot_width": 1280,
+                "screenshot_height": 720,
+                "screenshot_sha256": sha256(save_catalog_screenshot),
+                "screenshot_marker_pixels": save_catalog_marker_pixels,
+                "screenshot_capture": {
+                    "scope": SAVE_CATALOG_CAPTURE_SCOPE,
+                    "window_id": "0x1234",
+                    "window_pid": 1234,
+                },
+                "renderer": {
+                    "adapter_name": "Intel(R) Arc Graphics",
+                    "backend": "Vulkan",
+                    "display_handle": "Xlib(XlibDisplayHandle)",
+                },
+            },
+        )
+        save_catalog_result = verify_save_catalog_artifact(
+            save_catalog_artifact,
+            runtime_root=save_catalog_runtime,
+            run_id="self-test",
+            adapter="Intel",
+            backend="vulkan",
+            window_backend="x11",
+        )
+        require(
+            save_catalog_result["status"] == "pass",
+            "valid save-catalog fixture did not pass",
+        )
+        wrong_scope_catalog = read_json(save_catalog_artifact / "driver-result.json")
+        wrong_scope_catalog["screenshot_capture"]["scope"] = "root-display"
+        atomic_write_json(save_catalog_artifact / "driver-result.json", wrong_scope_catalog)
+        (save_catalog_artifact / "capture.done.txt").write_text(
+            f"run_id=self-test\n"
+            f"screenshot={SAVE_CATALOG_SCREENSHOT}\n"
+            f"bytes={save_catalog_screenshot.stat().st_size}\n"
+            "width=1280\nheight=720\n"
+            f"sha256={sha256(save_catalog_screenshot)}\n"
+            f"marker_pixels={save_catalog_marker_pixels}\n"
+            "capture_scope=root-display\n"
+            "capture_window_id=0x1234\n"
+            "capture_window_pid=1234\n",
+            encoding="utf-8",
+        )
+        try:
+            verify_save_catalog_artifact(
+                save_catalog_artifact,
+                runtime_root=save_catalog_runtime,
+                run_id="self-test",
+                adapter="Intel",
+                backend="vulkan",
+                window_backend="x11",
+            )
+        except AcceptanceError:
+            pass
+        else:
+            raise AcceptanceError("root-display save-catalog screenshot unexpectedly passed")
+        wrong_scope_catalog["screenshot_capture"]["scope"] = SAVE_CATALOG_CAPTURE_SCOPE
+        atomic_write_json(save_catalog_artifact / "driver-result.json", wrong_scope_catalog)
+        (save_catalog_artifact / "capture.done.txt").write_text(
+            f"run_id=self-test\n"
+            f"screenshot={SAVE_CATALOG_SCREENSHOT}\n"
+            f"bytes={save_catalog_screenshot.stat().st_size}\n"
+            "width=1280\nheight=720\n"
+            f"sha256={sha256(save_catalog_screenshot)}\n"
+            f"marker_pixels={save_catalog_marker_pixels}\n"
+            f"capture_scope={SAVE_CATALOG_CAPTURE_SCOPE}\n"
+            "capture_window_id=0x1234\n"
+            "capture_window_pid=1234\n",
+            encoding="utf-8",
+        )
+        save_catalog_screenshot.write_bytes(
+            save_catalog_marker_png(1280, 720, include_marker=False)
+        )
+        blank_catalog = read_json(save_catalog_artifact / "driver-result.json")
+        blank_catalog["screenshot_bytes"] = save_catalog_screenshot.stat().st_size
+        blank_catalog["screenshot_sha256"] = sha256(save_catalog_screenshot)
+        blank_catalog["screenshot_marker_pixels"] = 0
+        atomic_write_json(save_catalog_artifact / "driver-result.json", blank_catalog)
+        (save_catalog_artifact / "capture.done.txt").write_text(
+            f"run_id=self-test\n"
+            f"screenshot={SAVE_CATALOG_SCREENSHOT}\n"
+            f"bytes={save_catalog_screenshot.stat().st_size}\n"
+            "width=1280\nheight=720\n"
+            f"sha256={sha256(save_catalog_screenshot)}\n"
+            "marker_pixels=0\n"
+            f"capture_scope={SAVE_CATALOG_CAPTURE_SCOPE}\n"
+            "capture_window_id=0x1234\n"
+            "capture_window_pid=1234\n",
+            encoding="utf-8",
+        )
+        try:
+            verify_save_catalog_artifact(
+                save_catalog_artifact,
+                runtime_root=save_catalog_runtime,
+                run_id="self-test",
+                adapter="Intel",
+                backend="vulkan",
+                window_backend="x11",
+            )
+        except AcceptanceError:
+            pass
+        else:
+            raise AcceptanceError("blank native save-catalog screenshot unexpectedly passed")
+        save_catalog_screenshot.write_bytes(save_catalog_marker_png(1280, 720))
+        restored_catalog = read_json(save_catalog_artifact / "driver-result.json")
+        restored_catalog["screenshot_bytes"] = save_catalog_screenshot.stat().st_size
+        restored_catalog["screenshot_sha256"] = sha256(save_catalog_screenshot)
+        restored_catalog["screenshot_marker_pixels"] = count_save_catalog_marker_pixels(
+            save_catalog_screenshot.read_bytes()
+        )
+        atomic_write_json(save_catalog_artifact / "driver-result.json", restored_catalog)
+        (save_catalog_artifact / "capture.done.txt").write_text(
+            f"run_id=self-test\n"
+            f"screenshot={SAVE_CATALOG_SCREENSHOT}\n"
+            f"bytes={save_catalog_screenshot.stat().st_size}\n"
+            "width=1280\nheight=720\n"
+            f"sha256={sha256(save_catalog_screenshot)}\n"
+            f"marker_pixels={restored_catalog['screenshot_marker_pixels']}\n"
+            f"capture_scope={SAVE_CATALOG_CAPTURE_SCOPE}\n"
+            "capture_window_id=0x1234\n"
+            "capture_window_pid=1234\n",
+            encoding="utf-8",
+        )
+        broken_catalog = read_json(save_catalog_artifact / "driver-result.json")
+        broken_catalog["checks"]["V5"] = "FAIL"
+        atomic_write_json(save_catalog_artifact / "driver-result.json", broken_catalog)
+        try:
+            verify_save_catalog_artifact(
+                save_catalog_artifact,
+                runtime_root=save_catalog_runtime,
+                run_id="self-test",
+                adapter="Intel",
+                backend="vulkan",
+                window_backend="x11",
+            )
+        except AcceptanceError:
+            pass
+        else:
+            raise AcceptanceError("invalid save-catalog V5 fixture unexpectedly passed")
+
+        save_transaction_run_id = (
+            f"c2-20260809T000000Z-{secrets.token_hex(4)}"
+        )
+        save_transaction_runtime = (
+            repo / "target" / ".save-transaction-runtime" / save_transaction_run_id
+        )
+        save_transaction_perf = root / "save-transaction-perf"
+        require(
+            not save_transaction_runtime.exists(),
+            "self-test save-transaction runtime root unexpectedly already exists",
+        )
+        save_transaction_runtime.mkdir(parents=True)
+        require(
+            remove_empty_save_transaction_runtime_root(repo, save_transaction_run_id)
+            and not save_transaction_runtime.exists(),
+            "empty native save-transaction runtime parent was not removed",
+        )
+        save_transaction_runtime.mkdir(parents=True)
+        (save_transaction_runtime / "unexpected").mkdir()
+        try:
+            remove_empty_save_transaction_runtime_root(repo, save_transaction_run_id)
+        except AcceptanceError:
+            pass
+        else:
+            raise AcceptanceError("nonempty native runtime parent unexpectedly passed cleanup")
+        cleanup_save_transaction_runtime_root(repo, save_transaction_run_id)
+        try:
+            fake_source = source_fingerprint(repo)
+            write_fake_save_transaction_session(
+                save_transaction_perf / "capture",
+                repo=repo,
+                instrumentation="capture",
+                binary_hash="a" * 64,
+                source_fingerprint_value=fake_source,
+                seed=DEFAULT_SEED,
+            )
+            write_fake_save_transaction_session(
+                save_transaction_perf / "memory",
+                repo=repo,
+                instrumentation="memory",
+                binary_hash="b" * 64,
+                source_fingerprint_value=fake_source,
+                seed=DEFAULT_SEED,
+            )
+            save_transaction_result = verify_save_transaction_bundle(
+                repo=repo,
+                performance_root=save_transaction_perf,
+                expected_source=fake_source,
+                expected_seed=DEFAULT_SEED,
+                expected_backend="vulkan",
+            )
+            require(
+                save_transaction_result["status"] == "pass",
+                "valid save-transaction bundle did not pass",
+            )
+            duplicate_aggregate_perf = root / "save-transaction-duplicate-aggregate"
+            shutil.copytree(save_transaction_perf, duplicate_aggregate_perf)
+            duplicate_aggregate = duplicate_aggregate_perf / "capture" / "aggregate.csv"
+            aggregate_lines = duplicate_aggregate.read_text(encoding="utf-8").splitlines()
+            duplicate_aggregate.write_text(
+                "\n".join([*aggregate_lines, aggregate_lines[1]]) + "\n",
+                encoding="utf-8",
+            )
+            try:
+                verify_save_transaction_bundle(
+                    repo=repo,
+                    performance_root=duplicate_aggregate_perf,
+                    expected_source=fake_source,
+                    expected_seed=DEFAULT_SEED,
+                    expected_backend="vulkan",
+                )
+            except AcceptanceError:
+                pass
+            else:
+                raise AcceptanceError("duplicate save-transaction aggregate unexpectedly passed")
+            stale_total_perf = root / "save-transaction-stale-total"
+            shutil.copytree(save_transaction_perf, stale_total_perf)
+            stale_total_case = (
+                stale_total_perf
+                / "capture"
+                / "cases"
+                / f"save-transaction-small-cpu-seed-{DEFAULT_SEED}"
+            )
+            for label, _ in save_transaction_labels():
+                stale_total_csv = stale_total_case / label / "data" / "save_transaction.csv"
+                with stale_total_csv.open(newline="", encoding="utf-8") as handle:
+                    stale_total_rows = list(csv.DictReader(handle))
+                stale_total_rows[0]["total_ns"] = "1"
+                with stale_total_csv.open("w", newline="", encoding="utf-8") as handle:
+                    writer = csv.DictWriter(handle, fieldnames=SAVE_TRANSACTION_COLUMNS)
+                    writer.writeheader()
+                    writer.writerows(stale_total_rows)
+                stale_total_log = stale_total_case / label / "run.log"
+                stale_total_log.write_text(
+                    re.sub(r"total_ns=\\d+", "total_ns=1", stale_total_log.read_text(encoding="utf-8")),
+                    encoding="utf-8",
+                )
+            stale_total_aggregate = stale_total_perf / "capture" / "aggregate.csv"
+            with stale_total_aggregate.open(newline="", encoding="utf-8") as handle:
+                stale_total_rows = list(csv.DictReader(handle))
+            for row in stale_total_rows:
+                if row["case_id"] == f"save-transaction-small-cpu-seed-{DEFAULT_SEED}":
+                    row["total_p95_ns"] = "1"
+                    row["total_max_ns"] = "1"
+            with stale_total_aggregate.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=SAVE_TRANSACTION_AGGREGATE_COLUMNS)
+                writer.writeheader()
+                writer.writerows(stale_total_rows)
+            try:
+                verify_save_transaction_bundle(
+                    repo=repo,
+                    performance_root=stale_total_perf,
+                    expected_source=fake_source,
+                    expected_seed=DEFAULT_SEED,
+                    expected_backend="vulkan",
+                )
+            except AcceptanceError:
+                pass
+            else:
+                raise AcceptanceError("save-transaction phase-inconsistent total unexpectedly passed")
+            leaked_csv_perf = root / "save-transaction-csv-leak"
+            shutil.copytree(save_transaction_perf, leaked_csv_perf)
+            leaked_csv = (
+                leaked_csv_perf
+                / "capture"
+                / "cases"
+                / f"save-transaction-small-cpu-seed-{DEFAULT_SEED}"
+                / "run-001"
+                / "data"
+                / "save_transaction.csv"
+            )
+            leaked_csv.write_text(
+                leaked_csv.read_text(encoding="utf-8").rstrip("\n")
+                + ",HELL_WORKERS_SAVE\n(format_version: 1)\n",
+                encoding="utf-8",
+            )
+            try:
+                verify_save_transaction_bundle(
+                    repo=repo,
+                    performance_root=leaked_csv_perf,
+                    expected_source=fake_source,
+                    expected_seed=DEFAULT_SEED,
+                    expected_backend="vulkan",
+                )
+            except AcceptanceError:
+                pass
+            else:
+                raise AcceptanceError("save-transaction CSV body leak unexpectedly passed")
+            crlf_body_log_perf = root / "save-transaction-crlf-body-log"
+            shutil.copytree(save_transaction_perf, crlf_body_log_perf)
+            crlf_body_log = (
+                crlf_body_log_perf
+                / "capture"
+                / "cases"
+                / f"save-transaction-small-cpu-seed-{DEFAULT_SEED}"
+                / "run-001"
+                / "run.log"
+            )
+            crlf_body_log.write_bytes(
+                crlf_body_log.read_bytes()
+                + b"HELL_WORKERS_SAVE\r\n(format_version: 1, worldgen_seed: 1)\r\n---\r\n"
+            )
+            try:
+                verify_save_transaction_bundle(
+                    repo=repo,
+                    performance_root=crlf_body_log_perf,
+                    expected_source=fake_source,
+                    expected_seed=DEFAULT_SEED,
+                    expected_backend="vulkan",
+                )
+            except AcceptanceError:
+                pass
+            else:
+                raise AcceptanceError("CRLF save body retained in a log unexpectedly passed")
+            unknown_file_perf = root / "save-transaction-unknown-file"
+            shutil.copytree(save_transaction_perf, unknown_file_perf)
+            (
+                unknown_file_perf
+                / "memory"
+                / "cases"
+                / f"save-transaction-small-cpu-seed-{DEFAULT_SEED}"
+                / "run-001"
+                / "leaked.scn.ron"
+            ).write_text("HELL_WORKERS_SAVE\n(format_version: 1)\n", encoding="utf-8")
+            try:
+                verify_save_transaction_bundle(
+                    repo=repo,
+                    performance_root=unknown_file_perf,
+                    expected_source=fake_source,
+                    expected_seed=DEFAULT_SEED,
+                    expected_backend="vulkan",
+                )
+            except AcceptanceError:
+                pass
+            else:
+                raise AcceptanceError("unknown save-transaction artifact unexpectedly passed")
+            unbalanced_memory_perf = root / "save-transaction-unbalanced-memory"
+            shutil.copytree(save_transaction_perf, unbalanced_memory_perf)
+            unbalanced_memory = (
+                unbalanced_memory_perf
+                / "memory"
+                / "cases"
+                / f"save-transaction-small-cpu-seed-{DEFAULT_SEED}"
+                / "run-001"
+                / "data"
+                / "memory.csv"
+            )
+            unbalanced_memory.write_text(
+                unbalanced_memory.read_text(encoding="utf-8").replace(
+                    ",100,1000,1000,10,9,0,0\n",
+                    ",101,1000,1000,10,9,0,0\n",
+                ),
+                encoding="utf-8",
+            )
+            try:
+                verify_save_transaction_bundle(
+                    repo=repo,
+                    performance_root=unbalanced_memory_perf,
+                    expected_source=fake_source,
+                    expected_seed=DEFAULT_SEED,
+                    expected_backend="vulkan",
+                )
+            except AcceptanceError:
+                pass
+            else:
+                raise AcceptanceError("unbalanced save-transaction memory unexpectedly passed")
+            same_binary = read_json(save_transaction_perf / "memory" / "manifest.json")
+            same_binary["binary"]["sha256"] = "a" * 64
+            atomic_write_json(save_transaction_perf / "memory" / "manifest.json", same_binary)
+            try:
+                verify_save_transaction_bundle(
+                    repo=repo,
+                    performance_root=save_transaction_perf,
+                    expected_source=fake_source,
+                    expected_seed=DEFAULT_SEED,
+                    expected_backend="vulkan",
+                )
+            except AcceptanceError:
+                pass
+            else:
+                raise AcceptanceError("same-binary save-transaction fixture unexpectedly passed")
+            same_binary["binary"]["sha256"] = "b" * 64
+            atomic_write_json(save_transaction_perf / "memory" / "manifest.json", same_binary)
+            aggregate_path = save_transaction_perf / "capture" / "aggregate.csv"
+            aggregate_rows = read_exact_csv(
+                aggregate_path,
+                SAVE_TRANSACTION_AGGREGATE_COLUMNS,
+                "aggregate.csv",
+            )
+            next(
+                row for row in aggregate_rows if row["case_id"].split("-")[2] == "large"
+            )["total_p95_ns"] = str(SAVE_TRANSACTION_LARGE_TOTAL_P95_LIMIT_NS + 1)
+            with aggregate_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=SAVE_TRANSACTION_AGGREGATE_COLUMNS)
+                writer.writeheader()
+                writer.writerows(aggregate_rows)
+            try:
+                verify_save_transaction_bundle(
+                    repo=repo,
+                    performance_root=save_transaction_perf,
+                    expected_source=fake_source,
+                    expected_seed=DEFAULT_SEED,
+                    expected_backend="vulkan",
+                )
+            except AcceptanceError:
+                pass
+            else:
+                raise AcceptanceError("over-budget save-transaction fixture unexpectedly passed")
+        finally:
+            cleanup_save_transaction_runtime_root(repo, save_transaction_run_id)
     print("native_acceptance self-test: PASS")
     return 0
 
@@ -3563,6 +6410,15 @@ def parser() -> argparse.ArgumentParser:
         "run-deconstruction", help="run V1-V5 inside the planned actual window"
     )
     add_deconstruction_arguments(deconstruction_run, require_job_root=True)
+    save_catalog_plan = commands.add_parser(
+        "plan-save-catalog", help="emit the no-prompt save-catalog launcher plan"
+    )
+    add_deconstruction_arguments(save_catalog_plan, require_job_root=False)
+    save_catalog_run = commands.add_parser(
+        "run-save-catalog", help="run save-catalog acceptance inside the actual window"
+    )
+    add_deconstruction_arguments(save_catalog_run, require_job_root=True)
+    save_catalog_run.add_argument("--harness-fingerprint", required=True)
     rtt_plan = commands.add_parser(
         "plan-rtt-light", help="emit the S1 or formal RtT-light no-prompt launcher plan"
     )
@@ -3592,6 +6448,22 @@ def parser() -> argparse.ArgumentParser:
     verify_deconstruction.add_argument(
         "--window-backend", default="x11", choices=["x11", "wayland"]
     )
+    verify_save_catalog = commands.add_parser(
+        "verify-save-catalog", help="fail-closed validation of one save-catalog V1-V5 artifact"
+    )
+    verify_save_catalog.add_argument("--artifact", required=True)
+    verify_save_catalog.add_argument("--runtime-root", required=True)
+    verify_save_catalog.add_argument("--repo", required=True)
+    verify_save_catalog.add_argument("--performance-root", required=True)
+    verify_save_catalog.add_argument("--source-fingerprint", required=True)
+    verify_save_catalog.add_argument("--harness-fingerprint", required=True)
+    verify_save_catalog.add_argument("--seed", type=int, required=True)
+    verify_save_catalog.add_argument("--run-id", required=True)
+    verify_save_catalog.add_argument("--adapter", default="Intel")
+    verify_save_catalog.add_argument("--backend", default="vulkan")
+    verify_save_catalog.add_argument(
+        "--window-backend", default="x11", choices=["x11", "wayland"]
+    )
     verify_rtt = commands.add_parser(
         "verify-rtt-light", help="revalidate a registered formal RtT-light attempt"
     )
@@ -3613,6 +6485,23 @@ def validate_args(args: argparse.Namespace) -> None:
         raise AcceptanceError("artifact verification requires at least 3 runs")
     if args.command == "status" and args.stale_after_secs < 15:
         raise AcceptanceError("stale threshold must be at least 15 seconds")
+    if args.command == "verify-save-catalog":
+        if re.fullmatch(r"[0-9a-f]{64}", args.source_fingerprint) is None:
+            raise AcceptanceError("save-catalog source fingerprint is invalid")
+        if re.fullmatch(r"[0-9a-f]{64}", args.harness_fingerprint) is None:
+            raise AcceptanceError("save-catalog harness fingerprint is invalid")
+        if args.seed < 0:
+            raise AcceptanceError("save-catalog seed cannot be negative")
+    if args.command == "run-save-catalog" and re.fullmatch(
+        r"[0-9a-f]{64}", args.harness_fingerprint
+    ) is None:
+        raise AcceptanceError("planned save-catalog harness fingerprint is invalid")
+    if args.command in {
+        "plan-save-catalog",
+        "run-save-catalog",
+        "verify-save-catalog",
+    }:
+        require_save_catalog_x11_window_capture(args.window_backend)
     if args.command in {"plan-rtt-light", "run-rtt-light"}:
         if not args.adapter:
             raise AcceptanceError("RtT-light adapter filter must be nonempty")
@@ -3649,6 +6538,10 @@ def main() -> int:
         return plan_deconstruction(args)
     if args.command == "run-deconstruction":
         return run_deconstruction(args)
+    if args.command == "plan-save-catalog":
+        return plan_save_catalog(args)
+    if args.command == "run-save-catalog":
+        return run_save_catalog(args)
     if args.command == "plan-rtt-light":
         return plan_rtt_light(args)
     if args.command == "run-rtt-light":
@@ -3659,6 +6552,8 @@ def main() -> int:
         return verify_artifacts_command(args)
     if args.command == "verify-deconstruction":
         return verify_deconstruction_command(args)
+    if args.command == "verify-save-catalog":
+        return verify_save_catalog_command(args)
     if args.command == "verify-rtt-light":
         return verify_rtt_light_command(args)
     if args.command == "self-test":

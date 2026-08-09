@@ -1,220 +1,112 @@
 use bevy::prelude::*;
+use hw_core::GameSettings;
 use hw_ui::UiIntent;
-use hw_ui::interaction::dialog::{close_load_confirm_dialog, open_load_confirm_dialog};
 
 use super::super::intent_context::IntentUiQueries;
 use super::begin_overlay_open;
-use crate::systems::save::SaveLoadState;
+use crate::systems::save::SaveRecoveryMode;
+use crate::systems::save::catalog::AutosaveGenerationLimit;
+use crate::systems::save::catalog_ui::{
+    begin_load_confirm, begin_overwrite_confirm, cancel_confirm, close_catalog, open_load_catalog,
+    open_save_catalog, request_catalog_load, request_manual_save_for_slot, request_overwrite_save,
+};
 
-pub(crate) fn handle(intent: UiIntent, ui: &mut IntentUiQueries) {
+pub(crate) fn handle(intent: UiIntent, ui: &mut IntentUiQueries, settings: &GameSettings) {
+    let recovery = *ui.save_recovery;
+    let generations = AutosaveGenerationLimit(settings.normalized_autosave_generations());
+    let seed = ui.worldgen_seed();
+
     match intent {
         UiIntent::SaveGame => {
-            if *ui.save_load_state == SaveLoadState::Idle {
-                *ui.save_load_state = SaveLoadState::SaveRequested;
-                info!("Save requested");
-            }
-        }
-        UiIntent::RequestLoadGame => {
-            if !ui.save_path.as_path().exists() {
-                // Let the save owner perform the authoritative read and emit
-                // LoadNotFound. This also covers a file disappearing after
-                // the UI's existence check.
-                if *ui.save_load_state == SaveLoadState::Idle {
-                    *ui.save_load_state = SaveLoadState::LoadRequested;
-                    info!("Load requested without confirmation for a missing target");
-                }
+            if recovery == SaveRecoveryMode::RecoveryFailed {
                 return;
             }
             begin_overlay_open(&mut ui.input_focus);
-            open_load_confirm_dialog(&mut ui.q_load_confirm);
+            open_save_catalog(
+                &mut ui.save_catalog_ui,
+                &mut ui.save_dialog_session,
+                &mut ui.save_catalog,
+                &ui.save_storage_root,
+                generations,
+                seed,
+            );
+            info!("Save catalog opened");
         }
-        UiIntent::ConfirmLoadGame => {
-            close_load_confirm_dialog(&mut ui.q_load_confirm);
-            if *ui.save_load_state == SaveLoadState::Idle {
-                *ui.save_load_state = SaveLoadState::LoadRequested;
-                info!("Load requested from confirmation dialog");
+        UiIntent::RequestLoadGame => {
+            begin_overlay_open(&mut ui.input_focus);
+            open_load_catalog(
+                &mut ui.save_catalog_ui,
+                &mut ui.save_dialog_session,
+                &mut ui.save_catalog,
+                &ui.save_storage_root,
+                generations,
+                seed,
+                recovery,
+            );
+            info!("Load catalog opened");
+        }
+        UiIntent::SelectSaveCatalogSlot { slot, session } => {
+            let Some(entry) = ui.save_catalog.entry(slot) else {
+                return;
+            };
+            if !entry.capabilities.can_manual_save {
+                return;
+            }
+            if entry.revision.exists {
+                let _ = begin_overwrite_confirm(&mut ui.save_catalog_ui, slot, session);
+            } else {
+                let _ = request_manual_save_for_slot(
+                    &mut ui.save_load_state,
+                    &ui.save_catalog,
+                    &ui.save_catalog_ui,
+                    slot,
+                    session,
+                );
             }
         }
+        UiIntent::ConfirmSaveCatalogSlot { slot, session } => {
+            let _ = request_overwrite_save(
+                &mut ui.save_load_state,
+                &ui.save_catalog,
+                &ui.save_catalog_ui,
+                slot,
+                session,
+            );
+        }
+        UiIntent::SelectLoadCatalogSlot { slot, session } => {
+            let Some(entry) = ui.save_catalog.entry(slot) else {
+                return;
+            };
+            if !entry.capabilities.can_load {
+                return;
+            }
+            let _ = begin_load_confirm(&mut ui.save_catalog_ui, slot, session);
+        }
+        UiIntent::ConfirmLoadCatalogSlot { slot, session } => {
+            let _ = request_catalog_load(
+                &mut ui.save_load_state,
+                &ui.save_catalog,
+                &ui.save_catalog_ui,
+                recovery,
+                slot,
+                session,
+            );
+        }
+        UiIntent::CancelSaveCatalogConfirm => {
+            let session = ui.save_catalog_ui.session;
+            let _ = cancel_confirm(&mut ui.save_catalog_ui, session);
+        }
         UiIntent::CancelLoadConfirm => {
-            close_load_confirm_dialog(&mut ui.q_load_confirm);
+            let session = ui.save_catalog_ui.session;
+            if !cancel_confirm(&mut ui.save_catalog_ui, session)
+                && recovery != SaveRecoveryMode::RecoveryFailed
+            {
+                close_catalog(&mut ui.save_catalog_ui);
+            }
+        }
+        UiIntent::CloseSaveCatalog if recovery != SaveRecoveryMode::RecoveryFailed => {
+            close_catalog(&mut ui.save_catalog_ui);
         }
         _ => {}
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    use super::*;
-    use crate::input_actions::{
-        InputAction, InputModifiers, InputResolutionSet, ResolvedInputFrame,
-        configure_input_resolution_sets, input_action_to_ui_intent_system,
-    };
-    use crate::systems::GameSystemSet;
-    use crate::systems::save::SavePath;
-    use crate::test_support::minimal_app;
-    use bevy::input_focus::InputFocus;
-    use hw_ui::components::LoadConfirmDialog;
-
-    fn request_save(mut ui: IntentUiQueries) {
-        handle(UiIntent::SaveGame, &mut ui);
-    }
-
-    fn request_load(mut ui: IntentUiQueries) {
-        handle(UiIntent::RequestLoadGame, &mut ui);
-    }
-
-    fn confirm_load(mut ui: IntentUiQueries) {
-        handle(UiIntent::ConfirmLoadGame, &mut ui);
-    }
-
-    fn handle_save_intents(mut intents: MessageReader<UiIntent>, mut ui: IntentUiQueries) {
-        for intent in intents.read().copied() {
-            handle(intent, &mut ui);
-        }
-    }
-
-    fn unique_save_path(label: &str) -> PathBuf {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system clock must be after Unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!(
-            "hell-workers-{label}-{}-{nonce}.ron",
-            std::process::id()
-        ))
-    }
-
-    fn app_with_load_dialog(path: PathBuf, display: Display) -> (App, Entity) {
-        let mut app = minimal_app();
-        app.init_resource::<SaveLoadState>();
-        app.insert_resource(InputFocus::from_entity(Entity::PLACEHOLDER));
-        app.insert_resource(SavePath::new(path));
-        let dialog = app
-            .world_mut()
-            .spawn((
-                Node {
-                    display,
-                    ..default()
-                },
-                LoadConfirmDialog,
-            ))
-            .id();
-        (app, dialog)
-    }
-
-    #[test]
-    fn save_intent_requests_save_when_idle() {
-        let (mut app, _) = app_with_load_dialog(unique_save_path("save-request"), Display::None);
-        app.add_systems(Update, request_save);
-
-        app.update();
-
-        assert_eq!(
-            *app.world().resource::<SaveLoadState>(),
-            SaveLoadState::SaveRequested
-        );
-    }
-
-    #[test]
-    fn load_request_without_save_reaches_the_load_owner_without_a_dialog() {
-        let (mut app, dialog) =
-            app_with_load_dialog(unique_save_path("missing-load"), Display::None);
-        app.add_systems(Update, request_load);
-
-        app.update();
-
-        assert_eq!(
-            *app.world().resource::<SaveLoadState>(),
-            SaveLoadState::LoadRequested
-        );
-        assert_eq!(
-            app.world().entity(dialog).get::<Node>().unwrap().display,
-            Display::None
-        );
-        assert_eq!(
-            app.world().resource::<InputFocus>().get(),
-            Some(Entity::PLACEHOLDER)
-        );
-    }
-
-    #[test]
-    fn existing_save_opens_confirmation_before_requesting_load() {
-        let path = unique_save_path("confirm-load");
-        std::fs::write(&path, b"test save placeholder").unwrap();
-        let (mut app, dialog) = app_with_load_dialog(path.clone(), Display::None);
-        app.add_systems(Update, request_load);
-
-        app.update();
-
-        assert_eq!(
-            *app.world().resource::<SaveLoadState>(),
-            SaveLoadState::Idle
-        );
-        assert_eq!(
-            app.world().entity(dialog).get::<Node>().unwrap().display,
-            Display::Flex
-        );
-        assert!(app.world().resource::<InputFocus>().get().is_none());
-        std::fs::remove_file(path).unwrap();
-    }
-
-    #[test]
-    fn confirm_requests_loading_for_an_existing_save() {
-        let (mut app, dialog) =
-            app_with_load_dialog(unique_save_path("confirmed-load"), Display::Flex);
-        app.add_systems(Update, confirm_load);
-
-        app.update();
-
-        assert_eq!(
-            *app.world().resource::<SaveLoadState>(),
-            SaveLoadState::LoadRequested
-        );
-        assert_eq!(
-            app.world().entity(dialog).get::<Node>().unwrap().display,
-            Display::None
-        );
-    }
-
-    #[test]
-    fn resolver_bridge_reaches_save_handler_in_the_same_update() {
-        let path = unique_save_path("same-frame-load-intent");
-        std::fs::write(&path, b"test save placeholder").unwrap();
-        let (mut app, dialog) = app_with_load_dialog(path.clone(), Display::None);
-        app.add_message::<UiIntent>();
-        app.init_resource::<ResolvedInputFrame>();
-        app.world_mut()
-            .resource_mut::<ResolvedInputFrame>()
-            .replace(
-                InputModifiers::default(),
-                vec![InputAction::RequestLoadGame],
-                None,
-                true,
-            );
-        app.configure_sets(
-            Update,
-            (GameSystemSet::Input, GameSystemSet::Interface).chain(),
-        );
-        configure_input_resolution_sets(&mut app);
-        app.add_systems(
-            Update,
-            input_action_to_ui_intent_system.in_set(InputResolutionSet::Consume),
-        );
-        app.add_systems(Update, handle_save_intents.in_set(GameSystemSet::Interface));
-
-        app.update();
-
-        assert_eq!(
-            *app.world().resource::<SaveLoadState>(),
-            SaveLoadState::Idle
-        );
-        assert_eq!(
-            app.world().entity(dialog).get::<Node>().unwrap().display,
-            Display::Flex
-        );
-        std::fs::remove_file(path).unwrap();
     }
 }

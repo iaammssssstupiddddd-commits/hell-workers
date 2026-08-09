@@ -247,6 +247,8 @@ mod tests {
             .init_resource::<crate::DebugVisible>()
             .init_resource::<Time<Virtual>>()
             .init_resource::<UiTheme>()
+            .init_resource::<crate::systems::save::SaveCatalogUi>()
+            .init_resource::<crate::systems::save::SaveRecoveryMode>()
             .insert_resource(State::new(hw_core::game_state::PlayMode::Normal))
             .init_resource::<NextState<hw_core::game_state::PlayMode>>();
         configure_input_resolution_sets(&mut app);

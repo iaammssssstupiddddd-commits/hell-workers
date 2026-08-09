@@ -94,7 +94,8 @@ def summarize_behavior_session(
     manifest: dict[str, Any],
     runs: list[tuple[Path, Validation]],
 ) -> bool:
-    groups: dict[str, list[Validation]] = {}
+    groups: dict[str, list[tuple[Path, Validation]]] = {}
+    preflight_groups: dict[str, list[tuple[Path, Validation]]] = {}
     invalid_runs: list[tuple[Path, Validation]] = []
     adapters: list[dict[str, str]] = []
     for run_dir, validation in runs:
@@ -311,6 +312,345 @@ def summarize_determinism_session(
     return not invalid_runs
 
 
+def _nearest_rank_p95(values: list[int]) -> int:
+    if not values:
+        raise ValueError("p95 requires at least one value")
+    ordered = sorted(values)
+    return ordered[max(0, math.ceil(len(ordered) * 0.95) - 1)]
+
+
+SAVE_TRANSACTION_SIZES = ("small", "medium", "large")
+SAVE_TRANSACTION_MEASURE_NS = 2_000_000_000
+SAVE_TRANSACTION_LARGE_TOTAL_P95_LIMIT_NS = 100_000_000
+SAVE_TRANSACTION_LARGE_TOTAL_MAX_LIMIT_NS = 250_000_000
+
+
+def summarize_save_transaction_session(
+    session_dir: Path,
+    manifest: dict[str, Any],
+    runs: list[tuple[Path, Validation]],
+) -> bool:
+    """Aggregate the save-only sidecar without inventing frame samples.
+
+    A save transaction has one operation per process rather than a frame-time
+    distribution. Capture reports its phase p95/max over the 20 measured
+    process samples; Memory additionally reports allocator peak-live growth and
+    GNU-time process maximum RSS as distinct values.
+    """
+    matrix = manifest["matrix"]
+    invalid_runs: dict[Path, Validation] = {}
+    groups: dict[str, list[tuple[Path, Validation]]] = {}
+    preflight_groups: dict[str, list[tuple[Path, Validation]]] = {}
+    contract_errors: list[str] = []
+    adapters: list[dict[str, str]] = []
+    instrumentation = manifest.get("binary", {}).get("instrumentation", "capture")
+
+    def invalidate(run_dir: Path, validation: Validation, reason: str | None = None) -> None:
+        """Persist an aggregation failure on the owning run exactly once."""
+        if reason is not None and reason not in validation.reasons:
+            validation.reasons.append(reason)
+            validation.valid = False
+            write_json(run_dir / "validation.json", validation.to_json())
+        invalid_runs[run_dir] = validation
+
+    def validate_memory_contract(
+        run_dir: Path, validation: Validation, row: dict[str, str]
+    ) -> bool:
+        if instrumentation == "memory":
+            profile = validation.profile_artifact
+            allocation = profile.get("allocation_memory") if isinstance(profile, dict) else None
+            process = profile.get("process_memory") if isinstance(profile, dict) else None
+            try:
+                expected_growth = int(row["peak_live_growth_bytes"])
+                if (
+                    not isinstance(allocation, dict)
+                    or not isinstance(process, dict)
+                    or int(allocation["peak_growth_bytes"]) != expected_growth
+                    or int(process["max_rss_kib"]) <= 0
+                ):
+                    raise ValueError
+            except (KeyError, TypeError, ValueError):
+                invalidate(
+                    run_dir,
+                    validation,
+                    "save-transaction memory artifact disagrees with its allocator/RSS sidecars",
+                )
+                return False
+            return True
+        if row.get("peak_live_growth_bytes") not in {"", None}:
+            invalidate(
+                run_dir,
+                validation,
+                "capture save-transaction artifact must not claim allocator growth",
+            )
+            return False
+        return True
+
+    def validate_measure_window(
+        run_dir: Path, validation: Validation, row: dict[str, str]
+    ) -> bool:
+        try:
+            virtual_ns = int(row["measure_virtual_ns"])
+            real_ns = int(row["measure_real_ns"])
+            if (
+                virtual_ns < SAVE_TRANSACTION_MEASURE_NS
+                or real_ns < SAVE_TRANSACTION_MEASURE_NS
+            ):
+                raise ValueError
+        except (KeyError, TypeError, ValueError):
+            invalidate(
+                run_dir,
+                validation,
+                "save-transaction did not complete the fixed two-second measurement window",
+            )
+            return False
+        return True
+
+    matrix_errors = []
+    if matrix.get("repeat") != 20 or matrix.get("preflight_runs") != 3:
+        matrix_errors.append(
+            "save-transaction requires exactly 20 measured runs and 3 preflight runs"
+        )
+    if matrix.get("sizes") != list(SAVE_TRANSACTION_SIZES) or matrix.get("renders") != ["cpu"]:
+        matrix_errors.append(
+            "save-transaction requires the canonical small/medium/large CPU matrix"
+        )
+    if matrix.get("warmup_secs") != 1.0 or matrix.get("measure_secs") != 2.0:
+        matrix_errors.append("save-transaction requires a 1s warmup and 2s measure contract")
+    if instrumentation not in {"capture", "memory"}:
+        matrix_errors.append("save-transaction requires capture or memory instrumentation")
+    if matrix_errors:
+        manifest["status"] = "invalid"
+        manifest["artifact_set_errors"] = matrix_errors
+        write_json(session_dir / "manifest.json", manifest)
+        (session_dir / "report.md").write_text(
+            "# Save transaction report\n\n- Status: `INVALID`\n- Invalid matrix contract.\n",
+            encoding="utf-8",
+        )
+        return False
+
+    for run_dir, validation in runs:
+        if validation.adapter and validation.adapter not in adapters:
+            adapters.append(validation.adapter)
+        row = validation.save_transaction
+        if not validation.valid or row is None or row.get("sample_kind") != "measured":
+            invalidate(
+                run_dir,
+                validation,
+                "save-transaction measured run has no measured transaction sidecar"
+                if validation.valid
+                else None,
+            )
+            continue
+        if not validate_memory_contract(run_dir, validation, row):
+            continue
+        if not validate_measure_window(run_dir, validation, row):
+            continue
+        groups.setdefault(run_dir.parent.name, []).append((run_dir, validation))
+
+    for run_dir, validation in load_preflight_runs(session_dir):
+        row = validation.save_transaction
+        if (
+            not validation.valid
+            or row is None
+            or row.get("sample_kind") != "preflight"
+        ):
+            invalidate(
+                run_dir,
+                validation,
+                "save-transaction preflight has no preflight transaction sidecar"
+                if validation.valid
+                else None,
+            )
+            continue
+        if not validate_memory_contract(run_dir, validation, row):
+            continue
+        if not validate_measure_window(run_dir, validation, row):
+            continue
+        preflight_groups.setdefault(run_dir.parent.name, []).append((run_dir, validation))
+
+    case_records = {
+        case["id"]: case
+        for case in manifest.get("cases", [])
+        if isinstance(case, dict) and isinstance(case.get("id"), str)
+    }
+    expected_cases = set(case_records)
+    if (
+        len(case_records) != len(SAVE_TRANSACTION_SIZES)
+        or {record.get("size") for record in case_records.values()} != set(SAVE_TRANSACTION_SIZES)
+        or any(record.get("render") != "cpu" for record in case_records.values())
+    ):
+        contract_errors.append(
+            "save-transaction manifest cases must contain one CPU case for each canonical size"
+        )
+    for case_id in sorted(expected_cases):
+        case_preflights = preflight_groups.get(case_id, [])
+        if len(case_preflights) != 3:
+            reason = "save-transaction requires exactly 3 valid preflight samples per case"
+            contract_errors.append(f"{case_id}: {reason}")
+            for run_dir, validation in case_preflights:
+                invalidate(run_dir, validation, reason)
+
+        case_runs = groups.get(case_id, [])
+        if len(case_runs) != 20:
+            reason = "save-transaction requires exactly 20 valid measured samples per case"
+            contract_errors.append(f"{case_id}: {reason}")
+            for run_dir, validation in case_runs:
+                invalidate(run_dir, validation, reason)
+
+    columns = [
+        "case_id",
+        "valid_runs",
+        "fixture_checksums",
+        "serialize_p95_ns",
+        "serialize_max_ns",
+        "write_file_sync_p95_ns",
+        "write_file_sync_max_ns",
+        "commit_directory_sync_p95_ns",
+        "commit_directory_sync_max_ns",
+        "total_p95_ns",
+        "total_max_ns",
+        "peak_live_growth_p95_bytes",
+        "peak_live_growth_max_bytes",
+        "max_rss_kib_max",
+        "adapter",
+    ]
+    aggregate_rows: list[dict[str, str]] = []
+    for case_id in sorted(expected_cases):
+        case_runs = groups.get(case_id, [])
+        if any(run_dir in invalid_runs for run_dir, _ in case_runs):
+            continue
+        validations = [validation for _, validation in case_runs]
+        if len(validations) != 20:
+            continue
+        rows = [validation.save_transaction for validation in validations]
+        assert all(row is not None for row in rows)
+        typed_rows = [row for row in rows if row is not None]
+        fixture_checksums = {row["fixture_checksum"] for row in typed_rows}
+        if len(fixture_checksums) != 1:
+            for run_dir, validation in case_runs:
+                invalidate(
+                    run_dir,
+                    validation,
+                    "save-transaction fixture checksum differs across measured runs",
+                )
+            continue
+        preflight_checksums = {
+            validation.save_transaction["fixture_checksum"]
+            for _, validation in preflight_groups.get(case_id, [])
+            if validation.save_transaction is not None
+        }
+        if preflight_checksums != fixture_checksums:
+            for run_dir, validation in case_runs:
+                invalidate(
+                    run_dir,
+                    validation,
+                    "save-transaction preflight fixture checksum differs from measured samples",
+                )
+            continue
+        metric_values = {
+            column: [int(row[column]) for row in typed_rows]
+            for column in (
+                "serialize_ns",
+                "write_file_sync_ns",
+                "commit_directory_sync_ns",
+                "total_ns",
+            )
+        }
+        row = {
+            "case_id": case_id,
+            "valid_runs": str(len(validations)),
+            "fixture_checksums": ";".join(sorted(fixture_checksums)),
+            "adapter": json.dumps(validations[0].adapter, sort_keys=True),
+            "peak_live_growth_p95_bytes": "",
+            "peak_live_growth_max_bytes": "",
+            "max_rss_kib_max": "",
+        }
+        for source, prefix in (
+            ("serialize_ns", "serialize"),
+            ("write_file_sync_ns", "write_file_sync"),
+            ("commit_directory_sync_ns", "commit_directory_sync"),
+            ("total_ns", "total"),
+        ):
+            row[f"{prefix}_p95_ns"] = str(_nearest_rank_p95(metric_values[source]))
+            row[f"{prefix}_max_ns"] = str(max(metric_values[source]))
+        if instrumentation == "capture" and case_records[case_id].get("size") == "large":
+            total_p95 = int(row["total_p95_ns"])
+            total_max = int(row["total_max_ns"])
+            if total_p95 > SAVE_TRANSACTION_LARGE_TOTAL_P95_LIMIT_NS:
+                contract_errors.append(
+                    "large Capture total p95 exceeds "
+                    f"{SAVE_TRANSACTION_LARGE_TOTAL_P95_LIMIT_NS}ns: {total_p95}ns"
+                )
+            if total_max > SAVE_TRANSACTION_LARGE_TOTAL_MAX_LIMIT_NS:
+                contract_errors.append(
+                    "large Capture total max exceeds "
+                    f"{SAVE_TRANSACTION_LARGE_TOTAL_MAX_LIMIT_NS}ns: {total_max}ns"
+                )
+        if instrumentation == "memory":
+            growth = [int(item["peak_live_growth_bytes"]) for item in typed_rows]
+            rss = [
+                int(validation.profile_artifact["process_memory"]["max_rss_kib"])
+                for validation in validations
+                if isinstance(validation.profile_artifact, dict)
+            ]
+            if len(rss) != len(validations):
+                for run_dir, validation in case_runs:
+                    invalidate(
+                        run_dir,
+                        validation,
+                        "save-transaction memory aggregate is missing a process RSS sample",
+                    )
+                continue
+            row["peak_live_growth_p95_bytes"] = str(_nearest_rank_p95(growth))
+            row["peak_live_growth_max_bytes"] = str(max(growth))
+            row["max_rss_kib_max"] = str(max(rss))
+        aggregate_rows.append(row)
+
+    with (session_dir / "aggregate.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns)
+        writer.writeheader()
+        writer.writerows(aggregate_rows)
+
+    report_lines = [
+        "# Save transaction report",
+        "",
+        f"- Instrumentation: `{instrumentation}`",
+        f"- Valid measured runs: {sum(1 for rows in groups.values() for run_dir, _ in rows if run_dir not in invalid_runs)}",
+        f"- Invalid measured runs: {len(invalid_runs)}",
+        "- Preflight runs: 3 per case (validated but excluded from aggregate).",
+        "- p95 uses nearest-rank over the 20 measured transactions.",
+        "",
+    ]
+    if aggregate_rows:
+        report_lines.extend(
+            [
+                "| Case | Valid runs | Total p95 ns | Total max ns |",
+                "| --- | ---: | ---: | ---: |",
+                *(
+                    f"| {row['case_id']} | {row['valid_runs']} | {row['total_p95_ns']} | {row['total_max_ns']} |"
+                    for row in aggregate_rows
+                ),
+                "",
+            ]
+        )
+    if invalid_runs:
+        report_lines.extend(["## Invalid runs", ""])
+        for run_dir, validation in sorted(invalid_runs.items(), key=lambda item: str(item[0])):
+            report_lines.append(
+                f"- `{run_dir.relative_to(session_dir) if run_dir.is_relative_to(session_dir) else run_dir}`: "
+                + "; ".join(validation.reasons)
+            )
+    if contract_errors:
+        report_lines.extend(["## Session contract errors", ""])
+        report_lines.extend(f"- {reason}" for reason in sorted(set(contract_errors)))
+    (session_dir / "report.md").write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+    manifest["actual_adapters"] = adapters
+    manifest["status"] = "valid" if not invalid_runs and not contract_errors else "invalid"
+    write_json(session_dir / "manifest.json", manifest)
+    return not invalid_runs and not contract_errors
+
+
 def summarize_session(
     session_dir: Path,
     warmup_policy: str | None = None,
@@ -343,6 +683,10 @@ def summarize_session(
         )
         return False
     matrix = manifest["matrix"]
+    if matrix.get("workload") == "save-transaction":
+        return summarize_save_transaction_session(
+            session_dir, manifest, load_valid_runs(session_dir)
+        )
     if matrix.get("capture_kind") == "fixed-step-determinism":
         runs = load_valid_runs(session_dir)
         reset_checksum_policy(runs)

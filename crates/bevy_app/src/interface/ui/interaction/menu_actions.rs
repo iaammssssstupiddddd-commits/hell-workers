@@ -100,11 +100,26 @@ pub(super) fn handle_pressed_action(
         MenuAction::RequestLoadGame => {
             ui_intents.write(UiIntent::RequestLoadGame);
         }
-        MenuAction::ConfirmLoadGame => {
-            ui_intents.write(UiIntent::ConfirmLoadGame);
-        }
         MenuAction::CancelLoadConfirm => {
             ui_intents.write(UiIntent::CancelLoadConfirm);
+        }
+        MenuAction::SelectSaveCatalogSlot { slot, session } => {
+            ui_intents.write(UiIntent::SelectSaveCatalogSlot { slot, session });
+        }
+        MenuAction::ConfirmSaveCatalogSlot { slot, session } => {
+            ui_intents.write(UiIntent::ConfirmSaveCatalogSlot { slot, session });
+        }
+        MenuAction::SelectLoadCatalogSlot { slot, session } => {
+            ui_intents.write(UiIntent::SelectLoadCatalogSlot { slot, session });
+        }
+        MenuAction::ConfirmLoadCatalogSlot { slot, session } => {
+            ui_intents.write(UiIntent::ConfirmLoadCatalogSlot { slot, session });
+        }
+        MenuAction::CancelSaveCatalogConfirm => {
+            ui_intents.write(UiIntent::CancelSaveCatalogConfirm);
+        }
+        MenuAction::CloseSaveCatalog => {
+            ui_intents.write(UiIntent::CloseSaveCatalog);
         }
         MenuAction::ToggleDoorLock(entity) => {
             ui_intents.write(UiIntent::ToggleDoorLock(entity));
@@ -163,7 +178,10 @@ pub(super) fn handle_pressed_action(
         | MenuAction::SetCameraMousePanEnabled(_)
         | MenuAction::SetDebugGizmosEnabled(_)
         | MenuAction::SetFpsDisplayEnabled(_)
-        | MenuAction::SetPowerPriorityEnabled(_) => {
+        | MenuAction::SetPowerPriorityEnabled(_)
+        | MenuAction::SetAutosaveEnabled(_)
+        | MenuAction::SetAutosaveIntervalMinutes(_)
+        | MenuAction::SetAutosaveGenerations(_) => {
             // Slider/Checkbox observer 経由で発行される
         }
     }

@@ -178,9 +178,13 @@ def validate_session_artifact_set(
 
     return errors
 
-def load_valid_runs(session_dir: Path) -> list[tuple[Path, Validation]]:
+def _load_runs(
+    session_dir: Path, label_glob: str
+) -> list[tuple[Path, Validation]]:
     runs: list[tuple[Path, Validation]] = []
-    for validation_path in sorted((session_dir / "cases").glob("*/run-*/validation.json")):
+    for validation_path in sorted(
+        (session_dir / "cases").glob(f"*/{label_glob}/validation.json")
+    ):
         payload = json.loads(validation_path.read_text(encoding="utf-8"))
         validation = Validation(
             valid=bool(payload["valid"]),
@@ -198,12 +202,21 @@ def load_valid_runs(session_dir: Path) -> list[tuple[Path, Validation]]:
             indoor_light_layout=payload.get("indoor_light_layout"),
             indoor_light_presentation=payload.get("indoor_light_presentation"),
             deconstruction_fixture=payload.get("deconstruction_fixture"),
+            save_transaction=payload.get("save_transaction"),
             timeline=payload.get("timeline"),
             behavior_save_artifact=payload.get("behavior_save_artifact"),
             profile_artifact=payload.get("profile_artifact"),
         )
         runs.append((validation_path.parent, validation))
     return runs
+
+
+def load_valid_runs(session_dir: Path) -> list[tuple[Path, Validation]]:
+    return _load_runs(session_dir, "run-*")
+
+
+def load_preflight_runs(session_dir: Path) -> list[tuple[Path, Validation]]:
+    return _load_runs(session_dir, "preflight-*")
 
 
 def median_and_mad(values: list[float]) -> tuple[float, float]:

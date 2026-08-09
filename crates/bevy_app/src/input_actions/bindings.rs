@@ -599,15 +599,24 @@ pub(crate) fn binding_matches_context(
     binding: &InputBinding,
     context: &InputContextSnapshot,
 ) -> bool {
+    if context.recovery_failed && binding.action == InputAction::SaveGame {
+        return false;
+    }
+
     if let Some(overlay) = context.top_overlay {
         return match overlay {
-            InputOverlay::LoadConfirm => binding.context == InputBindingContext::LoadConfirm,
+            InputOverlay::LoadConfirm
+            | InputOverlay::SaveCatalog
+            | InputOverlay::LoadCatalog
+            | InputOverlay::RecoveryLoadCatalog => {
+                binding.context == InputBindingContext::LoadConfirm
+            }
             InputOverlay::Help => binding.context == InputBindingContext::Help,
             InputOverlay::Settings => binding.context == InputBindingContext::Settings,
             InputOverlay::Pause => {
                 binding.context == InputBindingContext::Pause
                     || (binding.context == InputBindingContext::Global
-                        && action_allowed_while_paused(binding.action))
+                        && action_allowed_while_paused(binding.action, context.recovery_failed))
             }
             InputOverlay::OperationDialog => {
                 binding.context == InputBindingContext::OperationDialog
@@ -641,7 +650,10 @@ pub(crate) fn binding_matches_context(
     }
 }
 
-fn action_allowed_while_paused(action: InputAction) -> bool {
+fn action_allowed_while_paused(action: InputAction, recovery_failed: bool) -> bool {
+    if recovery_failed {
+        return matches!(action, InputAction::RequestLoadGame);
+    }
     matches!(
         action,
         InputAction::SaveGame

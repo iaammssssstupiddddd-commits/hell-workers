@@ -1,9 +1,10 @@
+use crate::systems::save::SaveCatalogUi;
 use bevy::ecs::system::SystemParam;
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use hw_core::game_state::TimeSpeed;
 use hw_ui::components::{
-    LoadConfirmDialog, MenuAction, MenuButton, MenuState, OperationDialog, PauseMenu,
+    MenuAction, MenuButton, MenuState, OperationDialog, PauseMenu, SaveCatalogDialog,
     SettingsPanel, UiInputCapture, UiInputState,
 };
 use hw_ui::help::{HelpPanel, HelpPanelState};
@@ -11,7 +12,7 @@ use hw_ui::help::{HelpPanel, HelpPanelState};
 use super::{InputAction, InputOverlay, ResolvedInputFrame};
 use crate::entities::familiar::Familiar;
 use crate::interface::ui::list::reset_entity_list_drag_state;
-use crate::systems::save::SavePath;
+use crate::systems::save::SaveRecoveryMode;
 
 use super::ActiveModeCleanupParams;
 
@@ -75,7 +76,7 @@ type CaptureRootQuery<'w, 's> = Query<
     (
         Entity,
         &'static Node,
-        Has<LoadConfirmDialog>,
+        Has<SaveCatalogDialog>,
         Has<HelpPanel>,
         Has<SettingsPanel>,
         Has<PauseMenu>,
@@ -92,14 +93,14 @@ type CaptureOpeningButtonQuery<'w, 's> = Query<
 >;
 
 fn capture_root_overlay(
-    is_load: bool,
+    is_save_catalog: bool,
     is_help: bool,
     is_settings: bool,
     is_pause: bool,
     is_operation: bool,
 ) -> Option<InputOverlay> {
-    if is_load {
-        Some(InputOverlay::LoadConfirm)
+    if is_save_catalog {
+        Some(InputOverlay::SaveCatalog)
     } else if is_help {
         Some(InputOverlay::Help)
     } else if is_settings {
@@ -113,26 +114,49 @@ fn capture_root_overlay(
     }
 }
 
-fn root_for_overlay(roots: &CaptureRootQuery<'_, '_>, overlay: InputOverlay) -> Option<Entity> {
+fn root_for_overlay(
+    roots: &CaptureRootQuery<'_, '_>,
+    overlay: InputOverlay,
+    save_catalog_ui: &SaveCatalogUi,
+) -> Option<Entity> {
     roots.iter().find_map(
-        |(entity, _, is_load, is_help, is_settings, is_pause, is_operation)| {
-            (capture_root_overlay(is_load, is_help, is_settings, is_pause, is_operation)
-                == Some(overlay))
-            .then_some(entity)
+        |(entity, _, is_save_catalog, is_help, is_settings, is_pause, is_operation)| {
+            let mapped = if is_save_catalog {
+                // F5/F9 and catalog menu buttons request capture before their
+                // UiIntent changes the catalog mode. The dialog root already
+                // exists, so use it for that pending transition instead of
+                // requiring the next frame's visible mode.
+                super::context::catalog_overlay(save_catalog_ui.mode).or_else(|| {
+                    matches!(
+                        overlay,
+                        InputOverlay::SaveCatalog
+                            | InputOverlay::LoadCatalog
+                            | InputOverlay::RecoveryLoadCatalog
+                    )
+                    .then_some(overlay)
+                })?
+            } else {
+                capture_root_overlay(false, is_help, is_settings, is_pause, is_operation)?
+            };
+            (mapped == overlay).then_some(entity)
         },
     )
 }
 
 fn visible_capture(
     roots: &CaptureRootQuery<'_, '_>,
+    save_catalog_ui: &SaveCatalogUi,
     simulation_paused: bool,
 ) -> Option<(InputOverlay, Entity)> {
     roots
         .iter()
         .filter_map(
-            |(entity, node, is_load, is_help, is_settings, is_pause, is_operation)| {
-                let overlay =
-                    capture_root_overlay(is_load, is_help, is_settings, is_pause, is_operation)?;
+            |(entity, node, is_save_catalog, is_help, is_settings, is_pause, is_operation)| {
+                let overlay = if is_save_catalog {
+                    super::context::catalog_overlay(save_catalog_ui.mode)?
+                } else {
+                    capture_root_overlay(false, is_help, is_settings, is_pause, is_operation)?
+                };
                 let visible = node.display != Display::None
                     || (overlay == InputOverlay::Pause && simulation_paused);
                 visible.then_some((overlay, entity))
@@ -144,12 +168,13 @@ fn visible_capture(
 fn effective_capture(
     pending: &PendingWorldInputCapture,
     roots: &CaptureRootQuery<'_, '_>,
+    save_catalog_ui: &SaveCatalogUi,
     simulation_paused: bool,
 ) -> Option<(InputOverlay, Entity)> {
     let pending_capture = pending
         .request
         .map(|request| (request.overlay, request.root));
-    let visible_capture = visible_capture(roots, simulation_paused);
+    let visible_capture = visible_capture(roots, save_catalog_ui, simulation_paused);
 
     match (pending_capture, visible_capture) {
         (Some(pending), Some(visible)) if pending.0.priority() >= visible.0.priority() => {
@@ -167,10 +192,11 @@ fn begin_world_input_capture(
     opener: Option<Entity>,
     target: Option<Entity>,
     roots: &CaptureRootQuery<'_, '_>,
+    save_catalog_ui: &SaveCatalogUi,
     pending: &mut PendingWorldInputCapture,
     input_focus: &mut InputFocus,
 ) -> bool {
-    let Some(root) = root_for_overlay(roots, overlay) else {
+    let Some(root) = root_for_overlay(roots, overlay, save_catalog_ui) else {
         return false;
     };
     let accepted = pending.request(WorldInputCaptureRequest {
@@ -198,7 +224,8 @@ pub(crate) struct CaptureRequestParams<'w, 's> {
     time: Res<'w, Time<Virtual>>,
     menu_state: Res<'w, MenuState>,
     help_state: Res<'w, HelpPanelState>,
-    save_path: Res<'w, SavePath>,
+    save_recovery: Res<'w, SaveRecoveryMode>,
+    save_catalog_ui: Res<'w, SaveCatalogUi>,
     familiars: Query<'w, 's, (), With<Familiar>>,
     roots: CaptureRootQuery<'w, 's>,
     parents: Query<'w, 's, &'static ChildOf>,
@@ -209,18 +236,45 @@ fn capture_request_for_menu_action(
     params: &CaptureRequestParams<'_, '_>,
 ) -> Option<(InputOverlay, Option<Entity>)> {
     match action {
-        MenuAction::OpenHelp { .. } if !params.help_state.open => Some((InputOverlay::Help, None)),
-        MenuAction::RequestLoadGame if params.save_path.as_path().exists() => {
-            Some((InputOverlay::LoadConfirm, None))
+        MenuAction::OpenHelp { .. }
+            if *params.save_recovery != SaveRecoveryMode::RecoveryFailed
+                && !params.help_state.open =>
+        {
+            Some((InputOverlay::Help, None))
         }
-        MenuAction::ToggleSettings if *params.menu_state != MenuState::Settings => {
+        MenuAction::SaveGame if *params.save_recovery != SaveRecoveryMode::RecoveryFailed => {
+            Some((InputOverlay::SaveCatalog, None))
+        }
+        MenuAction::RequestLoadGame => {
+            let overlay = if *params.save_recovery == SaveRecoveryMode::RecoveryFailed {
+                InputOverlay::RecoveryLoadCatalog
+            } else {
+                InputOverlay::LoadCatalog
+            };
+            Some((overlay, None))
+        }
+        MenuAction::ToggleSettings
+            if *params.save_recovery != SaveRecoveryMode::RecoveryFailed
+                && *params.menu_state != MenuState::Settings =>
+        {
             Some((InputOverlay::Settings, None))
         }
-        MenuAction::TogglePause if !params.time.is_paused() => Some((InputOverlay::Pause, None)),
-        MenuAction::SetTimeSpeed(TimeSpeed::Paused) if !params.time.is_paused() => {
+        MenuAction::TogglePause
+            if *params.save_recovery != SaveRecoveryMode::RecoveryFailed
+                && !params.time.is_paused() =>
+        {
             Some((InputOverlay::Pause, None))
         }
-        MenuAction::OpenOperationDialog { target, .. } if params.familiars.get(target).is_ok() => {
+        MenuAction::SetTimeSpeed(TimeSpeed::Paused)
+            if *params.save_recovery != SaveRecoveryMode::RecoveryFailed
+                && !params.time.is_paused() =>
+        {
+            Some((InputOverlay::Pause, None))
+        }
+        MenuAction::OpenOperationDialog { target, .. }
+            if *params.save_recovery != SaveRecoveryMode::RecoveryFailed
+                && params.familiars.get(target).is_ok() =>
+        {
             Some((InputOverlay::OperationDialog, Some(target)))
         }
         _ => None,
@@ -236,9 +290,13 @@ pub(crate) fn request_capture_from_menu_buttons_system(
         if *interaction != Interaction::Pressed {
             continue;
         }
-        let foreground_root =
-            effective_capture(&params.pending, &params.roots, params.time.is_paused())
-                .map(|(_, root)| root);
+        let foreground_root = effective_capture(
+            &params.pending,
+            &params.roots,
+            &params.save_catalog_ui,
+            params.time.is_paused(),
+        )
+        .map(|(_, root)| root);
         if !foreground_ui_action_allowed_for_root(
             entity,
             foreground_root,
@@ -256,6 +314,7 @@ pub(crate) fn request_capture_from_menu_buttons_system(
             Some(entity),
             target,
             &params.roots,
+            &params.save_catalog_ui,
             &mut params.pending,
             &mut params.input_focus,
         );
@@ -267,14 +326,27 @@ pub(crate) fn request_capture_from_resolved_actions_system(
     mut resolved_frame: ResMut<ResolvedInputFrame>,
     mut params: CaptureRequestParams,
 ) {
-    let overlay = if resolved_frame.contains(InputAction::RequestLoadGame)
-        && params.save_path.as_path().exists()
+    let recovery_failed = *params.save_recovery == SaveRecoveryMode::RecoveryFailed;
+    let overlay = if resolved_frame.contains(InputAction::SaveGame)
+        && *params.save_recovery != SaveRecoveryMode::RecoveryFailed
     {
-        Some(InputOverlay::LoadConfirm)
-    } else if resolved_frame.contains(InputAction::OpenHelp) && !params.help_state.open {
+        Some(InputOverlay::SaveCatalog)
+    } else if resolved_frame.contains(InputAction::RequestLoadGame) {
+        Some(
+            if *params.save_recovery == SaveRecoveryMode::RecoveryFailed {
+                InputOverlay::RecoveryLoadCatalog
+            } else {
+                InputOverlay::LoadCatalog
+            },
+        )
+    } else if resolved_frame.contains(InputAction::OpenHelp)
+        && !recovery_failed
+        && !params.help_state.open
+    {
         Some(InputOverlay::Help)
     } else if (resolved_frame.contains(InputAction::TogglePause)
         || resolved_frame.contains(InputAction::TimePaused))
+        && !recovery_failed
         && !params.time.is_paused()
     {
         Some(InputOverlay::Pause)
@@ -288,6 +360,7 @@ pub(crate) fn request_capture_from_resolved_actions_system(
             None,
             None,
             &params.roots,
+            &params.save_catalog_ui,
             &mut params.pending,
             &mut params.input_focus,
         )
@@ -300,11 +373,12 @@ pub(crate) fn request_capture_from_resolved_actions_system(
 pub(crate) fn sync_world_input_capture_system(
     pending: Res<PendingWorldInputCapture>,
     roots: CaptureRootQuery<'_, '_>,
+    save_catalog_ui: Res<SaveCatalogUi>,
     time: Res<Time<Virtual>>,
     mut ui_input_state: ResMut<UiInputState>,
     mut resolved_frame: ResMut<ResolvedInputFrame>,
 ) {
-    let foreground = effective_capture(&pending, &roots, time.is_paused());
+    let foreground = effective_capture(&pending, &roots, &save_catalog_ui, time.is_paused());
 
     let was_captured = ui_input_state.world_input_captured;
     ui_input_state.world_input_captured = foreground.is_some();
@@ -396,9 +470,9 @@ impl ForegroundUiGate<'_, '_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::systems::save::{SaveCatalogMode, SaveCatalogUi, SavePath, SaveRecoveryMode};
     use crate::test_support::minimal_app;
     use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn capture_test_app() -> App {
         let mut app = minimal_app();
@@ -408,6 +482,8 @@ mod tests {
             .init_resource::<Time<Virtual>>()
             .init_resource::<MenuState>()
             .init_resource::<HelpPanelState>()
+            .init_resource::<SaveRecoveryMode>()
+            .init_resource::<SaveCatalogUi>()
             .insert_resource(SavePath::new(PathBuf::from(
                 "/definitely/missing/hell-workers-test-save.ron",
             )))
@@ -564,24 +640,12 @@ mod tests {
             InputOverlay::OperationDialog,
         );
 
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let save_file = std::env::temp_dir().join(format!(
-            "hell-workers-capture-{}-{unique}.ron",
-            std::process::id()
-        ));
-        std::fs::write(&save_file, b"capture test").unwrap();
-        let mut load = capture_test_app();
-        load.insert_resource(SavePath::new(save_file.clone()));
         assert_accepted_button_capture(
-            load,
-            LoadConfirmDialog,
+            capture_test_app(),
+            SaveCatalogDialog,
             MenuAction::RequestLoadGame,
-            InputOverlay::LoadConfirm,
+            InputOverlay::LoadCatalog,
         );
-        std::fs::remove_file(save_file).unwrap();
     }
 
     #[test]
@@ -590,7 +654,7 @@ mod tests {
         let load_root = Entity::from_bits(1 << 32 | 1);
         let help_root = Entity::from_bits(2 << 32 | 1);
         assert!(pending.request(WorldInputCaptureRequest {
-            overlay: InputOverlay::LoadConfirm,
+            overlay: InputOverlay::LoadCatalog,
             root: load_root,
             opener: None,
             target: None,
@@ -601,7 +665,7 @@ mod tests {
             opener: None,
             target: None,
         }));
-        assert!(pending.accepts(InputOverlay::LoadConfirm, None));
+        assert!(pending.accepts(InputOverlay::LoadCatalog, None));
         assert!(!pending.accepts_overlay(InputOverlay::Help));
     }
 
@@ -771,7 +835,7 @@ mod tests {
     #[test]
     fn rejected_load_operation_and_resume_requests_preserve_focus() {
         let mut app = capture_test_app();
-        spawn_capture_root(&mut app, LoadConfirmDialog, Display::None);
+        spawn_capture_root(&mut app, SaveCatalogDialog, Display::None);
         spawn_capture_root(&mut app, OperationDialog, Display::None);
         spawn_capture_root(&mut app, PauseMenu, Display::Flex);
         app.world_mut().resource_mut::<Time<Virtual>>().pause();
@@ -838,6 +902,62 @@ mod tests {
                 .resource::<ResolvedInputFrame>()
                 .pointer_selection_suppressed()
         );
+    }
+
+    #[test]
+    fn initial_save_and_load_keyboard_capture_the_closed_catalog_root() {
+        for (action, expected_overlay, recovery) in [
+            (InputAction::SaveGame, InputOverlay::SaveCatalog, false),
+            (
+                InputAction::RequestLoadGame,
+                InputOverlay::LoadCatalog,
+                false,
+            ),
+            (
+                InputAction::RequestLoadGame,
+                InputOverlay::RecoveryLoadCatalog,
+                true,
+            ),
+        ] {
+            let mut app = capture_test_app();
+            let root = spawn_capture_root(&mut app, SaveCatalogDialog, Display::None);
+            if recovery {
+                *app.world_mut().resource_mut::<SaveRecoveryMode>() =
+                    SaveRecoveryMode::RecoveryFailed;
+            }
+            app.world_mut()
+                .resource_mut::<ResolvedInputFrame>()
+                .replace(
+                    super::super::InputModifiers::default(),
+                    vec![action],
+                    None,
+                    false,
+                );
+            app.add_systems(
+                Update,
+                (
+                    request_capture_from_resolved_actions_system,
+                    sync_world_input_capture_system,
+                )
+                    .chain(),
+            );
+
+            app.update();
+
+            let request = app
+                .world()
+                .resource::<PendingWorldInputCapture>()
+                .request
+                .expect("closed catalog root must accept its opening capture");
+            assert_eq!(request.overlay, expected_overlay);
+            assert_eq!(request.root, root);
+            assert!(app.world().resource::<UiInputState>().world_input_captured);
+            assert!(
+                app.world()
+                    .resource::<ResolvedInputFrame>()
+                    .pointer_selection_suppressed()
+            );
+        }
     }
 
     #[test]
@@ -930,7 +1050,7 @@ mod tests {
         let mut app = capture_test_app();
         let operation = spawn_capture_root(&mut app, OperationDialog, Display::Flex);
         let settings = spawn_capture_root(&mut app, SettingsPanel, Display::None);
-        let load = spawn_capture_root(&mut app, LoadConfirmDialog, Display::None);
+        let load = spawn_capture_root(&mut app, SaveCatalogDialog, Display::None);
         app.add_systems(Update, sync_world_input_capture_system);
         app.world_mut()
             .resource_mut::<PendingWorldInputCapture>()
@@ -954,6 +1074,7 @@ mod tests {
             .get_mut::<Node>()
             .unwrap()
             .display = Display::Flex;
+        app.world_mut().resource_mut::<SaveCatalogUi>().mode = SaveCatalogMode::LoadCatalog;
         app.update();
         assert_eq!(
             app.world()

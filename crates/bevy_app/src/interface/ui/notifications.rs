@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use hw_ui::notifications::{NotificationRetention, NotificationSeverity, UserFacingNotification};
 
 use crate::systems::save::{
-    SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadResult,
+    SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadOutcomeSource, SaveLoadResult,
 };
 use hw_energy::{
     PowerConsumerPolicyChangeOutcome, PowerConsumerPolicyChangeStatus,
@@ -641,20 +641,59 @@ fn notification_from_outcome(outcome: &SaveLoadOutcome) -> UserFacingNotificatio
             "Load recovery failed",
             format!("Could not load {target}, and the previous world could not be restored."),
         ),
+        SaveLoadResult::Failed(SaveLoadFailureKind::OverwriteConfirmationRequired) => (
+            NotificationSeverity::Warning,
+            "Save confirmation required",
+            format!("{target} changed before saving. Confirm overwrite again."),
+        ),
+        SaveLoadResult::Failed(SaveLoadFailureKind::CommittedDurabilityUncertain) => (
+            NotificationSeverity::Warning,
+            "Save durability uncertain",
+            format!("{target} was written, but durability could not be confirmed."),
+        ),
+        SaveLoadResult::Failed(SaveLoadFailureKind::RequestRejected) => (
+            NotificationSeverity::Warning,
+            "Save request rejected",
+            format!("Could not accept a save/load request for {target}."),
+        ),
     };
 
     UserFacingNotification::new(
-        format!(
+        notification_id(outcome),
+        severity,
+        title,
+        body,
+        retention_for_outcome(outcome),
+    )
+}
+
+fn notification_id(outcome: &SaveLoadOutcome) -> String {
+    let target = safe_target(&outcome.target);
+    match outcome.source {
+        SaveLoadOutcomeSource::Autosave if matches!(outcome.result, SaveLoadResult::Succeeded) => {
+            format!(
+                "save_load:autosave:{}:{}",
+                target,
+                outcome.result.key_part()
+            )
+        }
+        _ => format!(
             "save_load:{}:{}:{}",
             outcome.operation.key_part(),
             target,
             outcome.result.key_part()
         ),
-        severity,
-        title,
-        body,
-        NotificationRetention::Important,
-    )
+    }
+}
+
+fn retention_for_outcome(outcome: &SaveLoadOutcome) -> NotificationRetention {
+    match outcome.source {
+        SaveLoadOutcomeSource::Autosave => match outcome.result {
+            SaveLoadResult::Succeeded => NotificationRetention::ToastOnly,
+            SaveLoadResult::Failed(_) => NotificationRetention::Important,
+        },
+        _ => NotificationRetention::Important,
+    }
 }
 
 fn safe_target(target: &str) -> &str {
@@ -673,7 +712,7 @@ fn safe_target(target: &str) -> &str {
 mod tests {
     use super::*;
 
-    const FAILURES: [SaveLoadFailureKind; 10] = [
+    const FAILURES: [SaveLoadFailureKind; 13] = [
         SaveLoadFailureKind::SaveSerialize,
         SaveLoadFailureKind::SaveWrite,
         SaveLoadFailureKind::LoadNotFound,
@@ -684,7 +723,27 @@ mod tests {
         SaveLoadFailureKind::MissingPrerequisite,
         SaveLoadFailureKind::ApplyRecovered,
         SaveLoadFailureKind::RecoveryFailed,
+        SaveLoadFailureKind::OverwriteConfirmationRequired,
+        SaveLoadFailureKind::CommittedDurabilityUncertain,
+        SaveLoadFailureKind::RequestRejected,
     ];
+
+    use crate::systems::save::{LoadRequestOrigin, SaveRequestOrigin};
+
+    fn manual_outcome(
+        operation: SaveLoadOperation,
+        target: &str,
+        result: SaveLoadResult,
+    ) -> SaveLoadOutcome {
+        SaveLoadOutcome {
+            operation,
+            target: target.to_owned(),
+            result,
+            source: SaveLoadOutcomeSource::Manual(SaveRequestOrigin::ManualCatalog {
+                dialog_session: 1,
+            }),
+        }
+    }
 
     #[test]
     fn every_terminal_result_maps_to_important_safe_ui_text() {
@@ -695,6 +754,9 @@ mod tests {
                 operation: SaveLoadOperation::Load,
                 target: "/private/user/secret.ron\nraw error".to_owned(),
                 result,
+                source: SaveLoadOutcomeSource::Load(LoadRequestOrigin::NormalCatalog {
+                    dialog_session: 1,
+                }),
             });
 
             assert_eq!(notification.retention, NotificationRetention::Important);
@@ -706,20 +768,26 @@ mod tests {
 
     #[test]
     fn severity_and_dedupe_key_keep_distinct_terminal_meanings() {
-        let success = notification_from_outcome(&SaveLoadOutcome {
-            operation: SaveLoadOperation::Save,
-            target: "world.scn.ron".to_owned(),
-            result: SaveLoadResult::Succeeded,
-        });
+        let success = notification_from_outcome(&manual_outcome(
+            SaveLoadOperation::Save,
+            "world.scn.ron",
+            SaveLoadResult::Succeeded,
+        ));
         let missing = notification_from_outcome(&SaveLoadOutcome {
             operation: SaveLoadOperation::Load,
             target: "world.scn.ron".to_owned(),
             result: SaveLoadResult::Failed(SaveLoadFailureKind::LoadNotFound),
+            source: SaveLoadOutcomeSource::Load(LoadRequestOrigin::NormalCatalog {
+                dialog_session: 1,
+            }),
         });
         let recovered = notification_from_outcome(&SaveLoadOutcome {
             operation: SaveLoadOperation::Load,
             target: "world.scn.ron".to_owned(),
             result: SaveLoadResult::Failed(SaveLoadFailureKind::ApplyRecovered),
+            source: SaveLoadOutcomeSource::Load(LoadRequestOrigin::NormalCatalog {
+                dialog_session: 1,
+            }),
         });
 
         assert_eq!(success.severity, NotificationSeverity::Success);
@@ -727,6 +795,32 @@ mod tests {
         assert_eq!(recovered.severity, NotificationSeverity::Warning);
         assert_ne!(success.key, missing.key);
         assert_ne!(missing.key, recovered.key);
+    }
+
+    #[test]
+    fn autosave_success_is_toast_only_with_slot_dedupe_key() {
+        let notification = notification_from_outcome(&SaveLoadOutcome {
+            operation: SaveLoadOperation::Save,
+            target: "Autosave 2".to_owned(),
+            result: SaveLoadResult::Succeeded,
+            source: SaveLoadOutcomeSource::Autosave,
+        });
+        assert_eq!(notification.retention, NotificationRetention::ToastOnly);
+        assert_eq!(
+            notification.key,
+            "save_load:autosave:Autosave 2:succeeded".into()
+        );
+    }
+
+    #[test]
+    fn autosave_failure_stays_important() {
+        let notification = notification_from_outcome(&SaveLoadOutcome {
+            operation: SaveLoadOperation::Save,
+            target: "Autosave 1".to_owned(),
+            result: SaveLoadResult::Failed(SaveLoadFailureKind::SaveWrite),
+            source: SaveLoadOutcomeSource::Autosave,
+        });
+        assert_eq!(notification.retention, NotificationRetention::Important);
     }
 
     #[test]

@@ -7,7 +7,7 @@ use hw_ui::components::MenuState;
 use super::begin_overlay_open;
 use crate::DebugVisible;
 use crate::systems::settings::apply::sync_debug_gizmos;
-use crate::systems::settings::persistence::save_settings_to_disk;
+use crate::systems::settings::persistence::{SettingsStorageRoot, save_settings_to_disk};
 
 pub fn handle(
     intent: UiIntent,
@@ -61,16 +61,32 @@ pub fn handle(
             settings.power_priority_enabled = enabled;
             false
         }
+        UiIntent::SetAutosaveEnabled(enabled) => {
+            settings.autosave_enabled = enabled;
+            false
+        }
+        UiIntent::SetAutosaveIntervalMinutes(minutes) => {
+            settings.autosave_interval_minutes = minutes;
+            false
+        }
+        UiIntent::SetAutosaveGenerations(generations) => {
+            settings.autosave_generations = generations.clamp(1, 5);
+            false
+        }
         _ => false,
     }
 }
 
-pub fn save_if_requested(should_save: bool, settings: &GameSettings) {
+pub fn save_if_requested(
+    should_save: bool,
+    settings_root: &SettingsStorageRoot,
+    settings: &GameSettings,
+) {
     if !should_save {
         return;
     }
 
-    if let Err(err) = save_settings_to_disk(settings) {
+    if let Err(err) = save_settings_to_disk(settings_root, settings) {
         warn!("Failed to save settings: {err}");
     }
 }

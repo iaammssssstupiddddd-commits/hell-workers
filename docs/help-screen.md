@@ -14,7 +14,7 @@
 | `Home` / `End` | 本文の先頭 / 末尾へ移動する |
 | mouse wheel / scrollbar | navigation または本文をスクロールする |
 
-Settings、Operation dialog、Load confirmation が前景の場合は Help を開きません。通常時に Help を開くと
+Save/Load catalog、Settings、Operation dialog、Load confirmation が前景の場合は Help を開きません。通常時に Help を開くと
 `Time<Virtual>` を一時停止し、閉じたときだけ直前の相対速度で再開します。すでに Pause 中だった場合は
 Help を閉じても Pause を維持します。Help の開閉は `MenuState`、`PlayMode`、`TaskMode`のvariant、
 Architect categoryを維持します。ただし受理frameに未確定のpointer dragがある場合は、その開始位置だけを
@@ -41,7 +41,7 @@ Help は widget schema とゲーム固有 catalog を分離します。
 Help は `MenuState` ではなく独立した full-viewport capture overlay です。入力と描画は同じ順序を使います。
 
 ```text
-LoadConfirm > Help > Settings > Pause > OperationDialog
+LoadConfirm > Save/Load catalog > Help > Settings > Pause > OperationDialog
 ```
 
 各capture rootは`GlobalZIndex(20_050 .. 20_010)`を使います。Help button/F1は

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use hw_core::game_state::{PlayMode, TaskMode, TaskModeZoneType, TimeSpeed};
 use hw_ui::components::{
-    LoadConfirmDialog, MenuState, OperationDialog, SettingsPanel, UiInputState,
+    MenuState, OperationDialog, SaveCatalogDialog, SettingsPanel, UiInputState,
 };
 
 use super::bindings::{DEFAULT_BINDINGS, InputBinding};
@@ -11,6 +11,7 @@ use super::*;
 use crate::app_contexts::TaskContext;
 use crate::entities::familiar::Familiar;
 use crate::interface::selection::SelectedEntity;
+use crate::systems::save::{SaveCatalogMode, SaveCatalogUi, SaveRecoveryMode};
 use crate::test_support::minimal_app;
 
 fn plain(key: KeyCode) -> InputChord {
@@ -886,6 +887,11 @@ fn resolver_app() -> App {
         .init_resource::<MenuState>()
         .init_resource::<SelectedEntity>()
         .init_resource::<crate::DebugVisible>()
+        // The production input resolver always has the catalog/recovery root
+        // resources. Keep this minimal resolver fixture on that same contract
+        // so ordinary shortcut assertions do not exercise an invalid app.
+        .init_resource::<SaveCatalogUi>()
+        .init_resource::<SaveRecoveryMode>()
         .init_resource::<Time<Virtual>>()
         .insert_resource(State::new(PlayMode::Normal))
         .init_resource::<NextState<PlayMode>>();
@@ -1028,6 +1034,12 @@ fn resolve_escape_with_overlays(
     operation: Display,
 ) -> Vec<InputAction> {
     let mut app = resolver_app();
+    if load_confirm != Display::None {
+        app.world_mut().resource_mut::<SaveCatalogUi>().mode = SaveCatalogMode::LoadConfirm {
+            slot: hw_core::SaveSlotId::Manual1,
+            recovery: false,
+        };
+    }
     app.world_mut().spawn((
         Node {
             display: operation,
@@ -1047,7 +1059,7 @@ fn resolve_escape_with_overlays(
             display: load_confirm,
             ..default()
         },
-        LoadConfirmDialog,
+        SaveCatalogDialog,
     ));
     if paused {
         app.world_mut().resource_mut::<Time<Virtual>>().pause();

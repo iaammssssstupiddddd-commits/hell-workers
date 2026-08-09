@@ -38,6 +38,9 @@ pub enum UiIntent {
     SetDebugGizmosEnabled(bool),
     SetFpsDisplayEnabled(bool),
     SetPowerPriorityEnabled(bool),
+    SetAutosaveEnabled(bool),
+    SetAutosaveIntervalMinutes(u32),
+    SetAutosaveGenerations(u8),
     InspectEntity(Entity),
     ClearInspectPin,
     SelectBuild(BuildingType),
@@ -64,8 +67,25 @@ pub enum UiIntent {
     TogglePause,
     SaveGame,
     RequestLoadGame,
-    ConfirmLoadGame,
     CancelLoadConfirm,
+    SelectSaveCatalogSlot {
+        slot: hw_core::SaveSlotId,
+        session: u64,
+    },
+    ConfirmSaveCatalogSlot {
+        slot: hw_core::SaveSlotId,
+        session: u64,
+    },
+    SelectLoadCatalogSlot {
+        slot: hw_core::SaveSlotId,
+        session: u64,
+    },
+    ConfirmLoadCatalogSlot {
+        slot: hw_core::SaveSlotId,
+        session: u64,
+    },
+    CancelSaveCatalogConfirm,
+    CloseSaveCatalog,
     SelectArchitectCategory(Option<BuildingCategory>),
     MovePlantBuilding(Entity),
     ApplyStockpilePolicy {

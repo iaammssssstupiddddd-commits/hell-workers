@@ -294,6 +294,15 @@ coverage_table! {
         "ui-intent::settings-power-priority" => tuple(SetPowerPriorityEnabled(_)) => {
             published("settings")
         },
+        "ui-intent::settings-autosave-enabled" => tuple(SetAutosaveEnabled(_)) => {
+            published("settings")
+        },
+        "ui-intent::settings-autosave-interval" => tuple(SetAutosaveIntervalMinutes(_)) => {
+            published("settings")
+        },
+        "ui-intent::settings-autosave-generations" => tuple(SetAutosaveGenerations(_)) => {
+            published("settings")
+        },
         "ui-intent::inspect-entity" => tuple(InspectEntity(_)) => published("info-panel-pin"),
         "ui-intent::clear-inspect-pin" => unit(ClearInspectPin) => published("info-panel-pin"),
         "ui-intent::select-build" => tuple(SelectBuild(_)) => published("architect-building"),
@@ -379,8 +388,23 @@ coverage_table! {
         "ui-intent::time-pause-toggle" => unit(TogglePause) => published("time-controls"),
         "ui-intent::save" => unit(SaveGame) => published("save-load"),
         "ui-intent::load-request" => unit(RequestLoadGame) => published("save-load"),
-        "ui-intent::load-confirm" => unit(ConfirmLoadGame) => published("save-load"),
         "ui-intent::load-cancel" => unit(CancelLoadConfirm) => published("save-load"),
+        "ui-intent::save-catalog-select" => record(SelectSaveCatalogSlot { .. }) => {
+            published("save-load")
+        },
+        "ui-intent::save-catalog-confirm" => record(ConfirmSaveCatalogSlot { .. }) => {
+            published("save-load")
+        },
+        "ui-intent::load-catalog-select" => record(SelectLoadCatalogSlot { .. }) => {
+            published("save-load")
+        },
+        "ui-intent::load-catalog-confirm" => record(ConfirmLoadCatalogSlot { .. }) => {
+            published("save-load")
+        },
+        "ui-intent::save-catalog-confirm-cancel" => unit(CancelSaveCatalogConfirm) => {
+            published("save-load")
+        },
+        "ui-intent::save-catalog-close" => unit(CloseSaveCatalog) => published("save-load"),
         "ui-intent::architect-category" => tuple(SelectArchitectCategory(_)) => {
             published("architect-building")
         },

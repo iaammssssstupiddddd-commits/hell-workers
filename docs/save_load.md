@@ -6,55 +6,56 @@ Hell Workers のシミュレーション状態を RON ファイルへ保存し�
 
 | 入力 | 動作 |
 | --- | --- |
-| **F5** / Pause メニュー「Save Game」 | 現在のワールドを `saves/world.scn.ron` へ保存 |
-| **F9** / Pause メニュー「Load Game」 | 確認ダイアログ後、`saves/world.scn.ron` からロード |
+| **F5** / Pause メニュー「Save Game」 | Save catalog を開き、手動スロット 1〜3 へ保存 |
+| **F9** / Pause メニュー「Load Game」 | Load catalog を開き、手動 / autosave / legacy default から読込 |
 | **Space** / 時間パネル `||` | 一時停止 → Pause メニュー表示 |
-| **Esc**（ロード確認中） | ロード確認ダイアログを閉じる |
+| **Esc**（catalog / 確認中） | 確認 → catalog の順に閉じる |
 
 保存先は実行ディレクトリ直下の `saves/`（`assets/` 外。AssetServer 非経由）。
-F9 は save file が存在する場合だけ確認ダイアログを開く。存在しない場合はダイアログを省略して
-load ownerへ要求を渡し、authoritative readの `LoadNotFound` を画面通知する。
-AreaEdit の active drag と `TaskMode::*Some` の in-progress gesture 中は未確定の persisted state を
-保存しないため、keyboard F5 actionを生成しない。
+F5/F9 は filesystem を事前参照せず、まず catalog の pending capture を立てる。catalog owner が
+bounded header scan で候補状態を更新する。AreaEdit の active drag と `TaskMode::*Some` の
+in-progress gesture 中は未確定の persisted state を保存しないため、keyboard F5 actionを生成しない。
 Pause 中は Escape/Space、Digit1-4、F5/F9 だけを入力 resolver が許可し、Familiar や背景 mode の
-shortcut は発火しない。ロード確認は overlay priority の最上位で Escape を所有する。
-keyboard/UI から確認ダイアログを実際に開く場合は `InputFocus` を同期的に解除する。save file がなく
-open request を受理しない F9 は focus を変更しない。
-受理された open request は確認ダイアログの `Node.display` 更新を待たず pending world-input capture を立てる。
+shortcut は発火しない。catalog / 確認は overlay priority の最上位で Escape を所有する。
+受理された open request は panel の `Node.display` 更新を待たず pending world-input capture を立てる。
 表示後は full-viewport `UiInputCapture` root へ引き継ぎ、panel 外の world pointer/camera と背景 UI を遮断する。
 
 ## アーキテクチャ
 
 ```text
 [PreUpdate::InputPreUpdateSet::CaptureRequest]
-  UI の Load Game press → save path確認 → pending capture + InputFocus clear
+  F5/F9 / Pause の Save Game・Load Game → catalog root を解決
+  → filesystem を読む前に pending capture + InputFocus clear
 
 [PreUpdate::InputPreUpdateSet::Resolve]
   F5/F9 exact chord → frame-local ResolvedInputFrame
 
 [PreUpdate::CaptureTransition → Rollback → CameraGuard]
-  accepted F9 → pending capture + InputFocus clear
+  accepted catalog open → pending capture + InputFocus clear
   → selection/gesture ingress抑止 → PanCamera停止 → Picking hover
 
 [Update::InputResolutionSet::Consume]
-  SaveGame / RequestLoadGame → UiIntent
+  F5/F9 / Pause button → SaveGame / RequestLoadGame `UiIntent`
 
 [Update::Interface]
-  SaveGame → SaveLoadState::SaveRequested
-  RequestLoadGame → save path確認
-    → 存在する: load confirmを開く（stateはIdleのまま）
-    → 存在しない: SaveLoadState::LoadRequested（confirmを省略）
-  ConfirmLoadGame → SaveLoadState::LoadRequested
+  SaveGame / RequestLoadGame → sessionを単調増加 → Save/Load catalogを開く
+    → bounded header scan（body deserializeなし）→ slot status/capabilityを表示
+  Save slot選択 → EmptyならSave request、occupied ManualならOverwrite confirm
+  Load slot選択 → loadable entryだけLoad confirm
+  confirm → operation・slot・revision・dialog sessionを束縛したone-shot request
+  cancel / Esc → confirmの親catalogへ戻る。通常catalogだけ次のEscで閉じる
 
 [Last::SaveLoadApplySet] exclusive dispatcher
-  → requestをSaveLoadState::Idleへ戻す
+  → `SaveLoadState::Pending(request)`を取り出してIdleへ戻す
+  → originと`SaveRecoveryMode`を照合（Healthyのnormal load / RecoveryFailedのrecovery loadだけ）
   [セーブ]
     → DynamicWorldBuilder (deny-all + allow-list)
     → extract_entities(collect_persisted_entities)
-    → DynamicWorld RON body を serialize → v1 external header → atomic rename
+    → DynamicWorld RON body をserialize → v1 external headerをstream write
+    → file sync → atomic commit → parent directory sync
 
   [ロード]
-    → SavePath から read
+    → request slotをroot ownerだけがpathへ解決してread
     → external header を decode（v1 の version / worldgen seed を body deserialize 前に照合）
     → RON body deserialize (WorldDeserializer) → legacy v0 だけ body 内 seed を照合
     → PreparedLoad normalization（legacy/runtime-derived stateをstrip）→ schema検証
@@ -68,9 +69,10 @@ open request を受理しない F9 は focus を変更しない。
     → ResolvedRehydratePlan（normalize → shell → derived rebuild → wake）を1回実行
     → live apply失敗時: partial entityを掃除 → resetを再実行 → snapshot復元 → 同じplanを1回実行
     → rollback失敗時: RecoveryFailedへ遷移してTime<Virtual>をpause
-    → RecoveryFailed専用ownerがRecoveryLoadRequestedを発行した場合だけ、incomingをfull preflightし、
-      rollback snapshotなしのrecovery-only replace（通常F9は拒否。専用UI producerはTrack C2）
+    → RecoveryFailed中はrecovery catalog由来だけをfull preflightし、rollback snapshotなしの
+      recovery-only replace。通常load / save / autosave / world mutationは拒否する
   → 全処理とresetの完了後、terminal SaveLoadOutcomeを1件発行
+  → catalogをdirty化し、次のcatalog owner refreshでmetadataを更新
 
 [次のUpdate::NotificationSystemSet]
   SaveLoadOutcome → Adapt（安全な表示文言）→ Reduce（履歴へ格納）→ Present
@@ -79,26 +81,25 @@ open request を受理しない F9 は focus を変更しない。
 実装: `crates/bevy_app/src/systems/save/`（`SavePlugin`）。
 
 `ResolvedInputFrame` は入力resolverの当該frame snapshotであり、save schema、Reflect、永続queueへ入れない。
-UI buttonもkeyboardも同じ `UiIntent` handlerを通る。既存fileはconfirm後だけ`LoadRequested`になり、
-missing fileだけはownerで結果を確定するため確認なしで`LoadRequested`になる。
+UI buttonもkeyboardも同じ `UiIntent` handlerを通る。`SaveCatalogUi`とdialog sessionはruntime-onlyで、
+古いbutton/confirm payloadは現行sessionを所有しないためrequestを発行できない。
 
 ## 終端結果とプレイヤー通知
 
-`SaveLoadState` は `Idle / SaveRequested / LoadRequested / RecoveryLoadRequested` の一回限りのtriggerであり、
-成功・失敗を保持しない。`RecoveryLoadRequested`はrollback失敗後のforeground recovery owner専用で、通常の
-F9/UI load経路からは発行しない。Track C3時点のproductionにはこの専用triggerのproducerはなく、Track C2が
-専用画面と入力gateと合わせて接続する。
-dispatcherは要求を実行する前に`Idle`へ戻し、save / loadの返り値から
-`SaveLoadOutcome { operation, target, result }`を要求ごとに1件だけ書く。
+`SaveLoadState` は `Idle / Pending(SaveLoadRequest)` の一回限りのtriggerであり、成功・失敗を保持しない。
+requestはsaveならorigin・slot・期待revision、loadならnormal/recovery catalog origin・slotを不可分に持つ。
+`RecoveryCatalog` originはforeground recovery catalog ownerだけが作り、通常F9やraw `UiIntent` payloadから
+構築できない。dispatcherは要求を実行する前に`Idle`へ戻し、save / loadの返り値から
+`SaveLoadOutcome { operation, target, result, source }`を要求ごとに1件だけ書く。
 
-`SaveLoadFailureKind`は`SaveSerialize`、`SaveWrite`、`LoadNotFound`、`LoadRead`、
-`UnsupportedFormat`、`InvalidData`、`SeedMismatch`、`MissingPrerequisite`、
-`ApplyRecovered`、`RecoveryFailed`の10分類である。raw OS error、RON error、絶対pathは既存ログだけに残す。
-outcomeの`target`は`SavePath.file_name()`から作る安全なラベルで、取得できなければ`Current save`となる。
+`SaveLoadFailureKind`はserialize/write/read/format/schema/seed/rollbackに加え、overwrite confirmation、
+commit durability uncertainty、request rejectionを分類する。raw OS error、RON error、絶対pathは既存ログだけに残す。
+outcomeの`target`はrequest slotのplayer-safe labelであり、絶対pathをUIへ渡さない。
 
-root UI adapterはoutcomeを`Important`な`UserFacingNotification`へ変換する。成功は`Success`、
-`LoadNotFound`と`ApplyRecovered`は`Warning`、その他は`Error`である。dedupe keyはoperation、target、
-result kindを含む。通知センターの上限、重複集約、表示仕様は[notifications.md](notifications.md)を参照。
+root UI adapterはmanual/load outcomeを`Important`な`UserFacingNotification`へ変換する。autosave成功だけは
+slot単位でdedupeする`ToastOnly`、autosave失敗は`Important`である。`ApplyRecovered`と
+`CommittedDurabilityUncertain`は`Warning`、その他の失敗は`Error`である。通知センターの上限、
+重複集約、表示仕様は[notifications.md](notifications.md)を参照。
 
 ## ファイル形式と互換性
 
@@ -111,7 +112,35 @@ HELL_WORKERS_SAVE
 <DynamicWorld RON body>
 ```
 
-- `SavePath` Resource の既定値は `saves/world.scn.ron`。UI のロード確認、save、load は同じ Resource を参照するため、テストまたは将来の slot 選択でパスを差し替えても判定経路が分岐しない。
+### Container / world schema（Track C0 / C2）
+
+- `format_version` は magic / header / body separator など **container を decode する規則**の version である。
+- Track C2 初版は既存 container v1 を維持する。slot ID、mtime、catalog status、autosave 設定は
+  DynamicWorld header/body へ追加しない。
+- archive 済み C1 の `DeconstructionOrder` / target Relationship / `WorkType::Deconstruct` を含む
+  current v1 が C2 の互換性 baseline である。新しい実行ファイルは旧 v0/v1 を補完して読む一方、
+  旧実行ファイルによる新 v1 の forward load は保証しない。
+- additive durable component は現行どおり、旧 v0/v1 の missing 値を明示 default 補完する。
+- durable type の削除、rename、field shape 変換など body migration が必要になった時点で、
+  次の専用計画により container v2 へ `world_schema_version` を追加する。v2 loader は v1 を
+  明示 migration input として扱い、unknown version を推測で deserialize しない。
+- Catalog は current / legacy candidate / unsupported を分類するだけで、unknown body を書き換えない。
+  magic 無し file は catalog 上 `LegacyV0Candidate` とだけ表示し、valid v0 と断定しない。
+
+### Slot storage（Track C2）
+
+- 中立な `SaveSlotId`（`hw_core`）だけを UI / intent へ渡す。filesystem path を持つ
+  `SaveStorageRoot`、revision、atomic adapter、request dispatcher は `bevy_app` の root save owner が所有する。
+- 既定 storage root は `saves/`。canonical filename は次に固定する。
+  - `manual-1.scn.ron`〜`manual-3.scn.ron`
+  - `autosave-1.scn.ron`〜`autosave-5.scn.ron`
+  - `world.scn.ron`（既存 default。load-only legacy path。欠落時は catalog に Empty を水増ししない）
+- runtime `SaveCatalog` は world save に含めない。scan は先頭 16 KiB までの bounded header のみを読み、
+  DynamicWorld body を deserialize / cache しない。
+
+### 既存規則
+
+- `SavePath` Resource は過渡互換として残るが、slot 解決の正本は `SaveStorageRoot + SaveSlotId` である。
 - magic を持つファイルは current format version と完全一致しなければ、DynamicWorld body を deserialize せず reject する。future version と旧 version の migration を header 形式で推測しない。
 - v1 の `worldgen_seed` は header が正本であり、body に `SavedWorldgenSeed` を含めない。seed mismatch は DynamicWorld の型 registry や entity を触る前に中止する。
 - magic 無しの既存ファイルだけを legacy v0 として読む。v0 は body の `SavedWorldgenSeed` を後方互換の seed guard として使用し、存在しない場合は警告して継続する。
@@ -127,7 +156,8 @@ HELL_WORKERS_SAVE
 - `WorldMap.floors`も`#[serde(default)]`付きのv1 additive fieldである。旧v0/v1 bodyでfieldが欠落する場合、
   completed Floorのcanonical Transformと旧`WorldMap.buildings` ownerをcandidateで照合し、
   `DurableNormalize`で旧building entryをowner-safeに解除してstackableなfloor lookupを再構築する。
-- 書き込みは同一ディレクトリの `create_new` で確保した一意 temp file を `sync_all` した後に rename する。固定 `.tmp` 名を共有しないため、並列 test や別プロセスと temp file 名が衝突しない。保存先そのものの複数プロセス排他はこの機構の対象外である。
+- 書き込みは同一ディレクトリの `create_new` で確保した一意 temp file へ header/body を順次 stream し、
+  `sync_all` 後に commit する。container 全体をもう一つの `String` へ連結しない。固定 `.tmp` 名を共有しないため、並列 test や別プロセスと temp file 名が衝突しない。保存先そのものの複数プロセス排他はこの機構の対象外である。
 
 ## 保存対象
 
@@ -245,11 +275,11 @@ inventoryのdrop、task/logistics claim除去、obstacle cache再構築、presen
 意図的に正規化される。reflect applyのpanicはtransactionの回復対象ではない。
 
 rollback自体に失敗した場合だけcoordinator-owned `SaveRecoveryMode`を`RecoveryFailed`へ遷移し、
-`Time<Virtual>`を即時pauseする。この状態ではsaveと通常transactionを拒否し、通常F9もrecovery-onlyへ
-暗黙昇格しない。専用ownerが`RecoveryLoadRequested`を発行した場合だけincomingのfull preflight、
-idempotent reset、同じrehydrate planを通す。成功時だけ`Healthy`へ戻すが自動unpauseはしない。
-Track C3はこの低位境界とfail-closed回帰だけを提供し、production producer、専用画面、別slot選択、
-world input全体のallow-listはTrack C2の責務である。
+`Time<Virtual>`を即時pauseする。この状態ではsave、autosave、通常transaction、world-mutating UI ingressを
+拒否し、通常F9もrecovery-onlyへ暗黙昇格しない。foreground recovery catalog が現行dialog sessionを所有して
+発行した`RecoveryCatalog` originだけが、incomingのfull preflight、idempotent reset、同じrehydrate planを
+通すrecovery-only replaceへ進める。pointer直送のUI intentや古いbutton/confirm payloadはこのoriginを作れない。
+成功時だけ`Healthy`へ戻すが自動unpauseはしない。
 
 ## フレーム境界と reset ownership
 
@@ -442,22 +472,40 @@ python3 scripts/dev.py cargo -- test -p hw_core --lib world_epoch
 python3 scripts/dev.py cargo -- test -p hw_ui --lib world_replace_reset
 ```
 
-手動: プレイ → Familiar の fatigue threshold / max / 複数 WorkType の許可・priorityを変更 → F5で成功通知
-→ 値を変える → F9 → 確認ダイアログで Confirm。確認前にはロードされず、Confirm後にFamiliar設定、Soul 数、
-Stockpile 内容、建築進捗、`GameTime` が復元され、旧通知履歴が消えてload成功が新しい先頭になること。
-save fileを退避した状態のF9ではダイアログを開かず`Save not found`が通知されることも確認する。
+手動: プレイ → Familiar の fatigue threshold / max / 複数 WorkType の許可・priorityを変更 → F5 →
+Manual slotを選択（既存slotなら上書きをConfirm）→ 値を変える → F9 → catalogで同slotを選択してConfirm。
+確認前にはロードされず、Confirm後にFamiliar設定、Soul 数、Stockpile 内容、建築進捗、`GameTime` が復元され、
+旧通知履歴が消えてload成功が新しい先頭になること。Empty、破損、非対応、seed不一致、読込不能のslotは一覧に
+理由付きで残り、load操作だけが無効であることも確認する。
 load直前にSoulが運搬中でも、load後はstale worker/delivery/tool claimが残らず、requestが再度割り当てられること、
 猫車の積載数を失わずremap済みcarrier/Soul近傍へ荷下ろしされることを確認する。積載されていたSand/StasisMudは
 load後にfresh 5秒timerがgroundで進行し、storage/mixer等の保護relationshipが残るitemだけ停止することも確認する。
 
 実window、production dispatcher、renderer screenshotを含む自動受入は
 [debug-features.md のセーブ／ロード actual-window受入ドライバ](debug-features.md#セーブロード-actual-window受入ドライバ)
-を使う。通常起動では無効で、no-prompt launcherとartifact監視は`hell-workers-run-native-acceptance` Skillを正本とする。
+を使う。Save catalog profileのrenderer screenshotはX11のゲームclient windowへPIDで束縛し、root desktop撮影を
+受入証跡に使わない。通常起動では無効で、no-prompt launcherとartifact監視は`hell-workers-run-native-acceptance`
+Skillを正本とする。
+
+## 同期セーブ性能計測（`save-transaction`）
+
+- 手動／オートセーブの同期 I/O は `SaveTransactionMetrics` に serialize・temp write + file sync・atomic commit + directory sync・total を記録する。
+- 性能ゲートは `perf.py run --workload save-transaction` の Capture / Memory を**別 session**で実行する（fixed-step audit は timing/RSS 証拠に使わない）。
+- 各sizeは3本のpreflightと20本のmeasured runを持つ。各runはwarmup後に **1 回だけ** Manual slot 1への
+  save transactionを行い、`save_transaction.csv`へfixture checksum、sample kind、serialize、temp file sync、
+  commit + directory sync、total、body bytesを出力する。Capture のallocator列は空、Memory は同一fixtureを
+  別binaryで計測し、allocator peak-live growthとprocess max RSSを別の値として記録する。
+- large fixtureのCapture measured 20本からnearest-rank p95とmaxを再計算し、それぞれ100 ms / 250 ms以下を
+  要求する。Memory timingはこの閾値へ混ぜない。
+- 実行時のsaveとsettings rootはartifact外の`HW_PERF_SAVE_RUNTIME_ROOT`
+  （runnerが`target/.save-transaction-runtime/<run-id>/`へ注入）に隔離する。各raw runはそのrun専用のrootを
+  終了前に削除し、helperは派生rootが不存在であることを再検証する。helperは過去の`validation.json`だけを
+  信用せず、window/log/environment/matrix/CSVとMemory収支を再読する。session内のファイル集合とCSV列は
+  allow-listで完全一致を要求し、serialized save bodyや未知ファイルが残れば不合格とする。実ユーザーの
+  `saves/` / `settings/`を読書きしない。
 
 ## 未実装
 
-- 複数スロット・オートセーブ・バージョンマイグレーション
-- `RecoveryFailed`専用画面、別slot再試行、resume/world inputのfail-closed allow-list（Track C2）
 - 設定画面からのセーブ/ロード（settings-screen-plan 側）
 
 ## 既知の制限
@@ -471,9 +519,8 @@ load後にfresh 5秒timerがgroundで進行し、storage/mixer等の保護relati
 ## UI 構成
 
 - **Pause メニュー**（`hw_ui/src/setup/pause_menu.rs`）: `Time<Virtual>` 一時停止中に full-viewport capture root + 中央 panel を表示。Resume / Save / Load / Settings の `MenuButton` を持つ
-- **ロード確認ダイアログ**（`hw_ui/src/setup/dialogs.rs`）: full-viewport capture root 上で、単一スロットの上書き不可を前提に「現在の進行を破棄」警告。`ConfirmLoadGame` / `CancelLoadConfirm`
-- **Intent 処理**（`bevy_app/.../handlers/save_game.rs`）: `SaveLoadState` へ橋渡し
-- **結果通知**（`hw_ui::notifications` + root adapter）: F5/F9のterminal outcomeをトーストと有界な重要履歴へ表示
+- **Save / Load catalog**（`hw_ui/src/setup/dialogs.rs`）: F5/F9 用の foreground modal。スロット一覧、上書き／読込確認、状態表示。
+- **Intent 処理**（`bevy_app/.../handlers/save_game.rs`）: catalog `UiIntent` → `SaveLoadState`
+- **結果通知**（`bevy_app/.../notifications.rs`）: manual/load は Important、autosave 成功は ToastOnly（slot 単位 dedupe）、autosave 失敗は Important
 
-Pause / LoadConfirm の子ツリーは **`MenuButton` + `UiIntent` パターン**で imperative に構築する。
-`bsn!` は Settings の marker root に限定し、`FontSource` / `MenuButton` を持つ子は同じ imperative 方針を使う。
+Pause / catalog の子ツリーは **`MenuButton` + `UiIntent` パターン**で imperative に構築する。

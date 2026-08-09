@@ -31,6 +31,7 @@ def add_run_arguments(
             "task-dashboard",
             "indoor-light",
             "deconstruction",
+            "save-transaction",
         ],
     )
     parser.add_argument("--contract", choices=sorted(CONTRACT_FILES))
@@ -93,6 +94,14 @@ def add_run_arguments(
     )
     parser.add_argument("--binary", help="prebuilt profiling binary path")
     parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument(
+        "--save-runtime-root",
+        help=(
+            "fresh disk-backed parent for save-transaction runtime data; "
+            "each operation removes its exact body-containing child before its "
+            "scalar evidence is retained"
+        ),
+    )
     parser.add_argument("--timeout-secs", type=float, default=600.0)
     if fixed_step_audit or fixed_step_behavior:
         parser.add_argument("--fixed-hz", type=int, default=64)
@@ -367,6 +376,47 @@ def validate_arguments(args: argparse.Namespace) -> None:
             "task-dashboard requires familiar policy baseline and operation dialog hidden"
         )
     selected_rtt_light = args.contract is not None or args.stage is not None or args.lane is not None
+    if args.workload == "save-transaction":
+        if args.command != "run":
+            raise ValueError("save-transaction is only available through perf.py run")
+        if selected_rtt_light:
+            raise ValueError("save-transaction does not accept an RtT-light contract selection")
+        if args.window_backend != "headless":
+            raise ValueError("save-transaction requires --window-backend headless")
+        if args.instrumentation not in {"capture", "memory"}:
+            raise ValueError("save-transaction requires --instrumentation capture or memory")
+        if sizes != ["small", "medium", "large"] or renders != ["cpu"]:
+            raise ValueError(
+                "save-transaction requires --sizes small,medium,large --renders cpu"
+            )
+        if (
+            familiar_policies != ["baseline"]
+            or operation_dialog_modes != ["hidden"]
+            or dashboard_modes != ["hidden"]
+        ):
+            raise ValueError(
+                "save-transaction requires familiar policy baseline, operation dialog hidden, and dashboard hidden"
+            )
+        if args.souls is not None or args.familiars is not None:
+            raise ValueError(
+                "save-transaction uses the gather population for the selected size; overrides are forbidden"
+            )
+        if args.repeat != 20 or args.preflight_runs != 3:
+            raise ValueError(
+                "save-transaction requires exactly --repeat 20 and --preflight-runs 3"
+            )
+        if args.warmup_secs != 1.0 or args.measure_secs != 2.0:
+            raise ValueError(
+                "save-transaction requires --warmup-secs 1 --measure-secs 2"
+            )
+        if args.binary is not None or args.skip_build:
+            raise ValueError(
+                "save-transaction must build and run its canonical profiling binary; "
+                "--binary and --skip-build are forbidden"
+            )
+        return
+    if args.save_runtime_root is not None:
+        raise ValueError("--save-runtime-root is only valid for save-transaction")
     if args.workload == "deconstruction":
         if args.command != "audit":
             raise ValueError("deconstruction is only available through the fixed-step audit")

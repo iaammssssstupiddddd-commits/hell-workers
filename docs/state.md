@@ -144,18 +144,21 @@ close後もPauseを維持する。Help open/closeは`PlayMode`、`TaskMode`、`M
 | `Healthy` | 通常のsave/load transactionを許可する |
 | `RecoveryFailed` | live apply後のrollback自体が失敗し、worldを信頼できない。virtual timeをpauseし、saveと通常loadを拒否する |
 
-`RecoveryFailed`中も通常のF9/`LoadRequested`は拒否する。専用foreground ownerが
-`RecoveryLoadRequested`を発行した場合だけ、incomingをfull preflightしてrollback snapshotなしで置換する
-recovery-only経路へ送る。再失敗時はpaused fail-closedを維持し、成功時だけ`Healthy`へ戻すが自動unpauseしない。
-Track C3時点のproductionにはこのtriggerのproducerを置かず、専用画面、別slot選択、resume/world inputの
-allow-listと同時にTrack C2で接続する。
+`RecoveryFailed`中も通常のF9/normal catalog loadは拒否する。foreground recovery catalog が現在の
+dialog sessionを所有する`RecoveryCatalog` originを作った場合だけ、incomingをfull preflightしてrollback
+snapshotなしで置換するrecovery-only経路へ送る。通常F9やraw UI payloadからこのoriginを作れない。
+この間はsave、autosave、通常loadとworld-mutating UI intentを拒否し、既に開いているforeground surfaceを
+閉じる安全なintentとrecovery catalog操作だけを通す。再失敗時はpaused fail-closedを維持し、成功時だけ
+`Healthy`へ戻すが自動unpauseしない。
 
 ## 共通仕様
 
 ### Escキーによるキャンセル
 
-- 最前面 overlay がある場合は `LoadConfirm → Help → Settings → Pause → OperationDialog` の優先順で、その
-  overlay だけを閉じる。HelpのEscapeはHelpが所有したpauseだけを解除し、PauseのEscapeはresumeだけを行う。
+- 最前面 overlay がある場合は `Save / Load / Recovery catalog（確認を含む） → Help → Settings → Pause → OperationDialog`
+  の優先順で、その overlay だけを閉じる。catalog確認のEscapeは親catalogへ戻り、通常catalogの次のEscapeだけが
+  catalogを閉じる。Recovery catalogはRecoveryFailed中に閉じて通常world操作へ戻る経路を作らない。HelpのEscapeは
+  Helpが所有したpauseだけを解除し、PauseのEscapeはresumeだけを行う。
   いずれも背景mode stateは変更しない。
 - overlay がない active owner（non-Normal `PlayMode`、non-`None` `TaskMode`、pending non-Normal 遷移）では
   共通 `ActiveModeCleanupParams` を通り、`Normal` を予約すると同時に

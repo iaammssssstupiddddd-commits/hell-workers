@@ -1,19 +1,22 @@
 //! セーブ/ロードのトリガー状態管理
 //!
-//! `SaveLoadState` は入力アクションまたは UI intent handler から
-//! `SaveRequested` / `LoadRequested` にセットされ、`Last`のexclusive apply
-//! dispatcherが処理前に`Idle`へ戻す。F9 は対象が存在する場合は確認後、
-//! 存在しない場合はowner側のread結果を得るため確認なしで`LoadRequested`になる。
-//! `RecoveryLoadRequested` は rollback 失敗後の foreground recovery ownerだけが
-//! 発行できる専用triggerで、通常のF9経路からは使用しない。
+//! Input / UI は operation・slot・revision・dialog session を束ねた
+//! [`SaveLoadRequest`] を one-shot pending として書き込む。`Last` の exclusive
+//! apply dispatcher が処理前に `Idle` へ戻す。
+//! `RecoveryCatalog` origin は rollback 失敗後の foreground recovery owner だけが
+//! 発行でき、通常の F9 / raw UiIntent からは構築できない。
 
-use bevy::prelude::*;
 use std::path::{Path, PathBuf};
 
-/// セーブファイルの保存先（ワークスペースルートからの相対パス）
+use bevy::prelude::*;
+use hw_core::SaveSlotId;
+
+use super::catalog::SaveExpectedTarget;
+
+/// 互換用の旧単一セーブパス定数。legacy default slot の canonical 名と一致する。
 pub const SAVE_FILE_PATH: &str = "saves/world.scn.ron";
 
-/// セーブ先。通常は既定パスを使うが、テストと将来の slot 選択では差し替えられる。
+/// 過渡互換の単一 path。正本は `SaveStorageRoot + SaveSlotId`。
 #[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct SavePath(pub PathBuf);
 
@@ -41,13 +44,121 @@ impl Default for SavePath {
 #[reflect(Resource)]
 pub struct SavedWorldgenSeed(pub u64);
 
-#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+/// Monotonic dialog session owned by the catalog modal.
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SaveDialogSession(pub u64);
+
+impl SaveDialogSession {
+    pub fn bump(&mut self) -> u64 {
+        self.0 = self.0.saturating_add(1);
+        self.0
+    }
+
+    pub fn current(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SaveRequestOrigin {
+    ManualCatalog { dialog_session: u64 },
+    Autosave,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LoadRequestOrigin {
+    NormalCatalog {
+        dialog_session: u64,
+    },
+    /// Capability-only origin. Must not be constructible from raw UiIntent payloads.
+    RecoveryCatalog {
+        dialog_session: u64,
+    },
+}
+
+impl LoadRequestOrigin {
+    pub const fn is_recovery(self) -> bool {
+        matches!(self, Self::RecoveryCatalog { .. })
+    }
+
+    pub const fn dialog_session(self) -> u64 {
+        match self {
+            Self::NormalCatalog { dialog_session } | Self::RecoveryCatalog { dialog_session } => {
+                dialog_session
+            }
+        }
+    }
+}
+
+impl SaveRequestOrigin {
+    pub const fn dialog_session(self) -> Option<u64> {
+        match self {
+            Self::ManualCatalog { dialog_session } => Some(dialog_session),
+            Self::Autosave => None,
+        }
+    }
+}
+
+/// Immutable one-shot request consumed by `Last::SaveLoadApplySet`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SaveLoadRequest {
+    Save {
+        origin: SaveRequestOrigin,
+        slot: SaveSlotId,
+        expected_target: SaveExpectedTarget,
+    },
+    Load {
+        origin: LoadRequestOrigin,
+        slot: SaveSlotId,
+    },
+}
+
+impl SaveLoadRequest {
+    pub const fn operation(&self) -> SaveLoadOperation {
+        match self {
+            Self::Save { .. } => SaveLoadOperation::Save,
+            Self::Load { .. } => SaveLoadOperation::Load,
+        }
+    }
+
+    pub const fn slot(&self) -> SaveSlotId {
+        match self {
+            Self::Save { slot, .. } | Self::Load { slot, .. } => *slot,
+        }
+    }
+
+    pub fn target_label(&self) -> String {
+        self.slot().player_label().to_owned()
+    }
+}
+
+#[derive(Resource, Default, Debug, Clone, PartialEq, Eq)]
 pub enum SaveLoadState {
     #[default]
     Idle,
-    SaveRequested,
-    LoadRequested,
-    RecoveryLoadRequested,
+    Pending(SaveLoadRequest),
+}
+
+impl SaveLoadState {
+    pub fn take_request(&mut self) -> Option<SaveLoadRequest> {
+        match std::mem::take(self) {
+            Self::Pending(request) => Some(request),
+            Self::Idle => None,
+        }
+    }
+
+    pub fn is_idle(&self) -> bool {
+        matches!(self, Self::Idle)
+    }
+
+    /// Accepts a request only when idle. Returns false without overwriting.
+    pub fn try_set(&mut self, request: SaveLoadRequest) -> bool {
+        if !self.is_idle() {
+            return false;
+        }
+        *self = Self::Pending(request);
+        true
+    }
 }
 
 /// Coordinator-owned trust state for the live simulation world.
@@ -59,6 +170,65 @@ pub enum SaveRecoveryMode {
     #[default]
     Healthy,
     RecoveryFailed,
+}
+
+/// Opt-in fault arm used exclusively by the bounded native save-catalog
+/// acceptance driver. It is never initialized by the production plugin,
+/// never reflected, and never included in a world snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum NativeLoadFault {
+    #[default]
+    None,
+    /// Fail after a normal live write so the rollback snapshot succeeds.
+    ApplyRecovered,
+    /// Fail after a normal live write, then fail rollback finalization.
+    RecoveryFailedNormalApply,
+    /// Internal second phase of `RecoveryFailedNormalApply`.
+    RecoveryFailedRollbackFinalize,
+    /// Fail an already-recovery-only replacement after it has written live entities.
+    RecoveryOnlyApply,
+}
+
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct NativeLoadFaultInjection(pub NativeLoadFault);
+
+impl NativeLoadFaultInjection {
+    pub(crate) fn arm(&mut self, fault: NativeLoadFault) {
+        debug_assert!(matches!(self.0, NativeLoadFault::None));
+        self.0 = fault;
+    }
+
+    pub(crate) fn fail_normal_post_write(&mut self) -> Option<&'static str> {
+        match self.0 {
+            NativeLoadFault::ApplyRecovered => {
+                self.0 = NativeLoadFault::None;
+                Some("native acceptance injected normal apply failure")
+            }
+            NativeLoadFault::RecoveryFailedNormalApply => {
+                self.0 = NativeLoadFault::RecoveryFailedRollbackFinalize;
+                Some("native acceptance injected normal apply failure before rollback")
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn fail_rollback_finalize(&mut self) -> Option<&'static str> {
+        if self.0 == NativeLoadFault::RecoveryFailedRollbackFinalize {
+            self.0 = NativeLoadFault::None;
+            Some("native acceptance injected rollback finalization failure")
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn fail_recovery_only_post_write(&mut self) -> Option<&'static str> {
+        if self.0 == NativeLoadFault::RecoveryOnlyApply {
+            self.0 = NativeLoadFault::None;
+            Some("native acceptance injected recovery-only apply failure")
+        } else {
+            None
+        }
+    }
 }
 
 /// A terminal save/load operation. This remains separate from
@@ -92,6 +262,9 @@ pub enum SaveLoadFailureKind {
     MissingPrerequisite,
     ApplyRecovered,
     RecoveryFailed,
+    OverwriteConfirmationRequired,
+    CommittedDurabilityUncertain,
+    RequestRejected,
 }
 
 impl SaveLoadFailureKind {
@@ -107,6 +280,9 @@ impl SaveLoadFailureKind {
             Self::MissingPrerequisite => "missing_prerequisite",
             Self::ApplyRecovered => "apply_recovered",
             Self::RecoveryFailed => "recovery_failed",
+            Self::OverwriteConfirmationRequired => "overwrite_confirmation_required",
+            Self::CommittedDurabilityUncertain => "committed_durability_uncertain",
+            Self::RequestRejected => "request_rejected",
         }
     }
 }
@@ -126,6 +302,26 @@ impl SaveLoadResult {
     }
 }
 
+/// Who produced the terminal save/load request behind this outcome.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SaveLoadOutcomeSource {
+    Manual(SaveRequestOrigin),
+    Autosave,
+    Load(LoadRequestOrigin),
+}
+
+impl SaveLoadOutcomeSource {
+    pub fn from_request(request: &SaveLoadRequest) -> Self {
+        match request {
+            SaveLoadRequest::Save { origin, .. } => match origin {
+                SaveRequestOrigin::Autosave => Self::Autosave,
+                SaveRequestOrigin::ManualCatalog { .. } => Self::Manual(*origin),
+            },
+            SaveLoadRequest::Load { origin, .. } => Self::Load(*origin),
+        }
+    }
+}
+
 /// The one terminal result emitted for each consumed save/load request.
 /// `target` is a display-safe label, never an absolute path.
 #[derive(Message, Debug, Clone, PartialEq, Eq)]
@@ -133,30 +329,41 @@ pub struct SaveLoadOutcome {
     pub operation: SaveLoadOperation,
     pub target: String,
     pub result: SaveLoadResult,
+    pub source: SaveLoadOutcomeSource,
 }
 
-pub(super) fn save_target_label(path: &Path) -> String {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty() && !name.chars().any(char::is_control))
-        .unwrap_or("Current save")
-        .to_owned()
+impl SaveLoadOutcome {
+    pub fn from_request(request: &SaveLoadRequest, result: SaveLoadResult) -> Self {
+        Self {
+            operation: request.operation(),
+            target: request.target_label().to_owned(),
+            result,
+            source: SaveLoadOutcomeSource::from_request(request),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::systems::save::catalog::SaveFileRevision;
 
     #[test]
-    fn target_label_exposes_only_a_safe_file_name() {
-        assert_eq!(
-            save_target_label(Path::new("/private/session/world.scn.ron")),
-            "world.scn.ron"
-        );
-        assert_eq!(save_target_label(Path::new("/")), "Current save");
-        assert_eq!(
-            save_target_label(Path::new("saves/unsafe\nname.ron")),
-            "Current save"
-        );
+    fn pending_request_keeps_slot_and_revision_immutable() {
+        let request = SaveLoadRequest::Save {
+            origin: SaveRequestOrigin::ManualCatalog { dialog_session: 3 },
+            slot: SaveSlotId::Manual2,
+            expected_target: SaveExpectedTarget::Exact(SaveFileRevision::absent()),
+        };
+        let mut state = SaveLoadState::Idle;
+        assert!(state.try_set(request.clone()));
+        assert!(!state.try_set(SaveLoadRequest::Load {
+            origin: LoadRequestOrigin::NormalCatalog { dialog_session: 4 },
+            slot: SaveSlotId::Manual1,
+        }));
+        let taken = state.take_request().unwrap();
+        assert_eq!(taken.slot(), SaveSlotId::Manual2);
+        assert_eq!(taken.target_label(), "Manual slot 2");
+        assert!(state.is_idle());
     }
 }

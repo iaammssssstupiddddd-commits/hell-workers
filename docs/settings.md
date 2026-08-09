@@ -1,12 +1,14 @@
 # ゲーム設定（GameSettings）
 
-`GameSettings` Resource と `settings/settings.ron` による永続化で、UI スケール・カメラ・デフォルト速度・電力配電・デバッグ表示を管理する。
+`GameSettings` Resource と `settings/settings.ron` による永続化で、UI スケール・カメラ・デフォルト速度・電力配電・オートセーブ・デバッグ表示を管理する。
 
 ## 保存先
 
 - パス: 実行ディレクトリ直下 `settings/settings.ron`
 - 書込: 設定モーダルを Close した時、`AppExit` 検知時
 - 読込: 起動時 `Startup`（`SettingsPlugin`）
+- native acceptance / performance はStartup前に独立した`SettingsStorageRoot`を注入する。通常の
+  `settings/settings.ron`と同じAPIを使うが、ユーザー設定を読書きしない。
 
 ## 設定項目
 
@@ -19,22 +21,29 @@
 | `debug_gizmos_enabled` | Debug Gizmos | `DebugVisible` + `GizmoConfigStore`（F12 と同期） |
 | `fps_display_enabled` | Show FPS | DevPanel 内 `UiSlot::FpsText` の `Visibility` |
 | `power_priority_enabled` | Power priority allocation | `true`: priority strict prefix / `false`: Legacy all-or-none |
+| `autosave_enabled` | Autosave | 初期値 `false`（性能 gate とは独立した product 判断） |
+| `autosave_interval_minutes` | Autosave interval | `5` / `10` / `20` / `30`（active play の実時間） |
+| `autosave_generations` | Autosave generations | `1..=5`（縮小しても既存 file は削除せず load-only 保持） |
 
 ## 重要な制約
 
 - **`apply_settings_system` は `Time<Virtual>` を触らない**（D9）。`default_time_speed` は Startup の `load_settings_system` で一度だけ適用する。設定 UI の Default Speed ボタンは次回起動用の値のみ更新し、現在の pause/速度は変えない。
 - **`PanCamera.enabled`** は通常 UI hover、Modal/Pause capture、text input focus、task area の左ドラッグ中に使う一時 guard 専用。area gesture は押下から release frame まで claim を維持し、残る capture / text focus / pointer claim がなくなった次 frame に既存設定どおり復帰する。永続化するのは `mouse_pan_settings.enabled` と `pan_speed` のみ。
 - **crate 境界**: `GameSettings` 型は `hw_core`。ロード/保存/intent 処理は `bevy_app`。UI spawn は `hw_ui`（`SettingsPanelInitial` DTO 経由）。
-- **旧settings互換**: `GameSettingsFile.power_priority_enabled`だけにfield-level `serde` default=trueを置く。旧RONのUI scale、camera、debug等の値を保持したまま新fieldだけを補完し、file全体をdefaultへ戻すmigrationにはしない。
+- **旧settings互換**: `power_priority_enabled` / `autosave_*` に field-level `serde` default を置く。旧RONのUI scale、camera、debug等の値を保持したまま新fieldだけを補完し、file全体をdefaultへ戻すmigrationにはしない。
 - **電力wake-up**: `sync_power_allocation_mode_from_settings_system`はresourceの実値が変わった時だけenergy allocationをdirtyにする。UI scale等の無関係な設定変更では配電を再実行しない。
 - **widget の見た目同期**: headless widget のため見た目は自前。スライダー thumb は `sync_settings_slider_thumbs_system`、チェックマークは `sync_settings_checkmarks_system`（`Checked` の有無 → `Display`、いずれも `hw_ui/src/interaction/settings.rs`）が毎フレーム同期する。F12 は `debug_toggle_system` が `GameSettings` に加えて Debug Gizmos チェックボックスの `Checked` も直接更新する。
 - **`settings/` は gitignore 済み**（ユーザーローカルファイル。`saves/` と同扱い）。
+- **計測隔離**: save-transactionのruntime rootはsave rootとsettings rootをまとめて隔離する。artifactや
+  実ユーザーの`settings/`を計測fixtureの保存先として再利用しない。
 
 ## 設定画面の開き方
 
 - ボトムバー **Settings** ボタン
 - ポーズメニュー（Save/Load 下）の **Settings** 行
-- Esc: 最前面 overlay を `LoadConfirm → Settings → Pause → OperationDialog` の優先順で 1 つだけ閉じる。Settings close 自体は背景 active mode を cancel しない
+- Esc: 最前面 overlay を `LoadConfirm → Save/Load catalog → Settings → Pause → OperationDialog` の優先順で
+  1つだけ閉じる。Load confirmのEscは親catalogへ戻る。Recovery Load catalogは`RecoveryFailed`中に閉じず、
+  Settings close自体は背景 active modeをcancelしない。
 
 ## UI スケール
 

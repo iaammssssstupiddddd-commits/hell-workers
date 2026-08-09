@@ -25,6 +25,9 @@ pub struct SettingsPanelInitial {
     pub debug_gizmos_enabled: bool,
     pub fps_display_enabled: bool,
     pub power_priority_enabled: bool,
+    pub autosave_enabled: bool,
+    pub autosave_interval_slider: f32,
+    pub autosave_generations_slider: f32,
 }
 
 struct SliderRowSpec<'a> {
@@ -171,6 +174,41 @@ pub fn spawn_settings_panel(
             "Power priority allocation",
             SettingsField::PowerPriority,
             initial.power_priority_enabled,
+        );
+
+        spawn_checkbox_row(
+            parent,
+            game_assets,
+            theme,
+            "Autosave",
+            SettingsField::AutosaveEnabled,
+            initial.autosave_enabled,
+        );
+        spawn_slider_row(
+            parent,
+            game_assets,
+            theme,
+            SliderRowSpec {
+                label: "Autosave interval (minutes)",
+                field: SettingsField::AutosaveInterval,
+                value: initial.autosave_interval_slider,
+                min: 0.0,
+                max: 3.0,
+                step: 1.0,
+            },
+        );
+        spawn_slider_row(
+            parent,
+            game_assets,
+            theme,
+            SliderRowSpec {
+                label: "Autosave generations",
+                field: SettingsField::AutosaveGenerations,
+                value: initial.autosave_generations_slider,
+                min: 1.0,
+                max: 5.0,
+                step: 1.0,
+            },
         );
 
         parent

@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `save-catalog-autosave-plan-2026-08-03` |
-| ステータス | `Draft` |
+| ステータス | `Archived` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-08` |
+| 最終更新日 | `2026-08-09` |
 | 作成者 | `Codex` |
 | 関連提案 | `docs/proposals/gameplay-management-improvements-proposal-2026-07-17.md`（Track C2） |
 | 前提計画 | `docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`（C3完了済み）、`docs/plans/archive/building-deconstruction-plan-2026-08-03.md`（C1完了済み） |
@@ -28,7 +28,7 @@
   - `RecoveryFailed`では通常transactionから切り離したC3のrecovery-only replaceを使い、別slotの再ロードまたは終了だけで
     fail-closed状態から復旧できる。
 - 成功指標:
-  - manual save/load/overwrite/missing/corrupt/unsupported/seed mismatchの全終端がslot label付きで識別できる。
+  - manual save/load/overwrite/missing/legacy/unreadable/corrupt/unsupported/seed mismatchの全終端がslot label付きで識別できる。
   - pre-transaction failureと`ApplyRecovered`では現在worldが維持/復旧され、`RecoveryFailed`はpaused fail-closedになる。
     いずれの失敗でも別slotや旧default fileを上書きしない。
   - autosave generationが設定上限を超えず、manual requestと同frameに二重saveしない。
@@ -79,18 +79,27 @@
 
 ```rust
 pub enum SaveSlotId {
-    Manual(u8),   // 1..=3
-    Autosave(u8), // 1..=5
+    Manual1,
+    Manual2,
+    Manual3,
+    Autosave1,
+    Autosave2,
+    Autosave3,
+    Autosave4,
+    Autosave5,
     LegacyDefault,
 }
 ```
 
-- constructorで範囲を検証し、任意文字列やpathを受け取らない。
+- `SaveSlotId`は閉じたenumと固定のiteration配列だけを公開する。raw `u8` variantや文字列/path constructorを
+  公開せず、範囲外IDを構築可能な状態にしない。
 - default storage rootは `saves/`、filenameは次に固定する。
   - `manual-1.scn.ron`〜`manual-3.scn.ron`
   - `autosave-1.scn.ron`〜`autosave-5.scn.ron`
   - `world.scn.ron`（既存file。load-only）
-- path解決はroot ownerだけが `SaveStorageRoot + SaveSlotId` から行う。UI/ViewModel/notificationへ絶対pathを渡さない。
+- `SaveSlotId`だけを`hw_core`からUIへ渡す。filesystem pathを持つ`SaveStorageRoot`、revision、atomic adapter、
+  request dispatcherは`bevy_app`のroot save ownerに置き、path解決はownerだけが`SaveStorageRoot + SaveSlotId`から行う。
+  UI/ViewModel/notificationへ絶対pathを渡さない。
 - testsは必ず一意temp directoryの `SaveStorageRoot` を注入し、実 `saves/` を読み書きしない。
 
 ### 4.2 Runtime catalog
@@ -128,6 +137,9 @@ pub enum SaveSlotId {
 - 既存内容のあるManual slotはcontent statusにかかわらず、明示overwrite confirmation後なら置換できる。
   ただしexisting targetのstable `SaveFileRevision`を取得できない場合はfail-closedで上書き不可とする。
   LegacyDefaultとAutosaveをmanual UIから上書きしない。
+- load actionだけは`Empty` / `CorruptHeader` / `UnsupportedVersion` / `SeedMismatch` / `Unreadable`でdisableする。
+  `LegacyV0Candidate`はfull preflight付きで選択可能、`BodyInvalid`は再試行可能とする。これらのload可否は
+  existing Manual entryのoverwrite可否を変更しない。
 
 - modified timeはoptional domain値として保持し、初版UIは追加calendar crateを必須にせずboundedな相対表記
   （just now / Xm / Xh / Xd）を使う。表示中はcached timestampと現在時刻からlabelだけを更新し、directoryを再scanしない。
@@ -144,10 +156,19 @@ Save {
   slot,
   expected_target: Absent | Exact(SaveFileRevision),
 }
-Load { slot, dialog_session }
+Load {
+  origin: NormalCatalog { dialog_session } | RecoveryCatalog { dialog_session },
+  slot,
+}
 ```
 
 - UIが選択中slotを後から変えても、受理済みrequestのtargetは変わらない。
+- `RecoveryCatalog` originはsave owner内部だけが発行できるcapabilityとし、raw `UiIntent`、通常F9、
+  任意のdialog payloadから指定できない。dispatcherはoriginからnormal / recovery-only executorを選び、
+  `NormalCatalog`を`Healthy`時だけ、`RecoveryCatalog`を`RecoveryFailed`時だけ受理する。`SavePath`やUIの
+  現在選択をdispatcherで読み直してmode/targetを決めない。
+- request、revision、dialog session、storage root、catalogはすべてruntime-onlyである。DynamicWorld schema、
+  rollback snapshot、Reflect persistenceへ含めない。
 - `SaveFileRevision`はexists、file identity（取得可能なplatform）、length、mtime、bounded prefix fingerprintを値として保持する。
   optional metadataは欠落もrevisionの一部とし、existingなのに再検査可能なrevisionを作れないtargetへ`Absent`を代用しない。
 - manual save:
@@ -176,8 +197,10 @@ Load { slot, dialog_session }
     catalogから別slotのload再試行だけを許可する。
 - C3 transaction coordinatorが所有する`SaveRecoveryMode::Healthy | RecoveryFailed`をUI/input gateの正本として再利用する。
   `RecoveryFailed`中は
-  save/autosave/resume/world input/domain commitを全てgateし、foreground Load catalogとquitだけを許可する。
-  別slotのrequestはfull read/decode/schema/staging/domain validationを通した後、C3のrecovery-only replace modeを使う。
+  save/autosave/resume/world input/domain commitを全てgateし、foreground Recovery Load catalogとOS/window closeだけを許可する。
+  これは個々のworld systemへ散らさず、input resolver、UI intent ingress、placement/domain commitのroot gateで
+  buffered messageもdiscard/denyする。別slotの`RecoveryCatalog` requestはfull read/decode/schema/staging/domain
+  validationを通した後、C3のrecovery-only replace modeを使う。
   success時だけ`Healthy`へ戻して明示resume操作を再許可するが自動unpauseはしない。preflight/applyの再失敗では
   paused fail-closedとcatalogを維持する。
 - outcomeはraw pathでなくslot ID/labelを持ち、A2 notificationのdedupe keyにもslotを含める。
@@ -185,14 +208,24 @@ Load { slot, dialog_session }
 
 ### 4.4 Modalと入力所有権
 
-- F5 / Pause `Save Game` はSave catalog、F9 / Pause `Load Game` はLoad catalogを開く。
+- `Healthy`時のF5 / Pause `Save Game`はSave catalog、F9 / Pause `Load Game`はLoad catalogを開く。
+  `RecoveryFailed`時はF9/Pause LoadだけがRecovery Load catalogを開け、Save導線はroot gateでrejectする。
+  F9/Pause input自体はrecovery capabilityを運ばず、catalog ownerがcurrent recovery modeとdialog sessionを検証した後にだけ
+  `RecoveryCatalog` requestを発行する。
 - AreaEdit active drag等、現行resolverがF5を禁止する境界は維持する。raw keyboard readerを追加しない。
-- modal stateは少なくとも `Closed / SaveCatalog / OverwriteConfirm(slot) / LoadCatalog / LoadConfirm(slot)` を区別する。
+- input resolverはF5/F9でfilesystemを事前参照せず、必ず`InputOverlay::SaveCatalog` / `LoadCatalog`
+  （recovery時は`RecoveryLoadCatalog`）のpending captureを先に立てる。現行`SavePath.exists()`によるF9 confirm分岐を
+  撤去し、catalog ownerがcapture後にscanする。
+- modal stateは少なくとも `Closed / SaveCatalog / OverwriteConfirm(slot) / LoadCatalog / RecoveryLoadCatalog /
+  LoadConfirm(slot)` を区別する。
 - open request受理frameからpending captureを立て、表示後はfull-viewport `UiInputCapture`へ引き継ぐ。
   background world pointer/camera/UIを遮断し、Escは最前面confirm→catalogの順に閉じる。
 - manual requestはmodalを閉じてから発行しない。`dialog_session`とslotをrequestへ束縛し、terminal outcomeまで
   同じSave/Load catalogまたは対応confirmがforeground captureを保持する。これによりmanual applyだけは
   「自分が所有するmodal/capture」を許可し、別modalやstale sessionを許可しない。
+- catalog ownerは単調増加`dialog_session`を持つ。capture state、button/confirm payload、root-owned one-shot requestに
+  同じsessionを束縛し、最前面overlayとcurrent sessionが一致しないstale intentはrequestを発行できない。`Last`は
+  requestを一度だけtakeする。
 - world replacementでselection、scroll、pending slot、confirm stateをresetする。catalog自体はEntityを持たないが、
   load terminal後にauthoritative refreshする。
 - save可否は一つのboolへ潰さず、共通baseとorigin別contextに分ける。
@@ -201,13 +234,13 @@ Load { slot, dialog_session }
   - `ManualCatalog`: common baseに加え、requestと一致するforeground Save catalog/confirm captureを要求する。
     Pause menu由来を含むpaused状態は許可し、modal保持自体を不適格理由にしない。
   - `Autosave`: common baseに加え、`Healthy`、unpaused active play、foreground modal/captureなしを要求する。
-  - loadも同じsession ownershipとreplace/apply/domain commit gateを持ち、`RecoveryFailed`だけは専用Load catalogから
-    recovery-only replaceを許可する。
+  - normal loadも同じsession ownershipとreplace/apply/domain commit gateを持つ。`RecoveryFailed`だけは
+    `RecoveryCatalog` capabilityを持つ専用Load catalogからrecovery-only replaceを許可する。
 
 ### 4.5 Container format / world schema方針
 
-- この方針はTrack C全体のC0判断として計画時点で先に確定済みであり、C2 M1実装までC1を待たせない。
-  C1の`DeconstructionOrder` / target Relationship / `WorkType::Deconstruct`はv1 bodyへのadditive type/variant追加として扱い、
+- この方針はTrack C全体のC0判断としてC1着手前に確定済みであり、archive済みC1の
+  `DeconstructionOrder` / target Relationship / `WorkType::Deconstruct`を含むcurrent v1がC2の互換性baselineである。
   new executableはold v0/v1を補完して読む一方、old executableによるnew v1のforward loadは保証しない。
 - C2初版は既存container v1を維持する。slot ID、mtime、catalog status、autosave設定をDynamicWorld header/bodyへ追加しない。
 - `format_version`はmagic/header/body separator等、containerをdecodeする規則のversionである。
@@ -257,21 +290,28 @@ Load { slot, dialog_session }
 ### 4.7 同期save性能・メモリgate
 
 - current exclusive pathを維持し、snapshot/serialize、temp write+file sync+commit+directory sync、totalを固定長metricsへ記録する。
-- representative small/medium/large fixtureを各3回warmup後、20回測定する。p95はnearest-rank
-  `sorted[ceil(0.95 * n) - 1]`で算出する。
-- M4でsave workloadを追加し、reference machine上で次を実行する。
-
-```bash
-PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
-  --workload save --sizes small,medium,large --repeat 20 --preflight-runs 3 \
-  --output /tmp/hw-c2-save-perf-20260803
-```
-
-- artifactにはcommit、OS/filesystem、CPU、fixture entity数/body bytes、process peak RSS delta、各phase sample、percentile算法だけを残し、
-  save bodyや絶対save pathを残さない。
-- memoryの構造gateとして、serialized body以外のfull-size container `String`/`Vec<u8>`を作らず、header/bodyをtempへ
-  sequential writeし、I/O bufferを64 KiB以下に固定する。body bytesとpeak RSSは回帰artifactへ残すが、OS依存RSSだけで
-  pass/failを決めない。
+- fixed-step `perf.py audit`はdeterminism専用でframe/transaction timingを出さずMemory instrumentationも使えないため、
+  C2のp95/RSS gateには使用しない。M4で新設する`save-transaction` workloadだけを`perf.py run`で実行する。
+- `save-transaction` contractはsmall/medium/largeそれぞれについて、同一fixture checksumと初期populationから
+  Capture timing legとMemory/RSS legを**別session・別instrumentation binary**で逐次実行する。各runはcontract固定の
+  warmup後に1回だけsave transactionを行う。3本のpreflight runはaggregate外、20本のvalid measured runだけから
+  nearest-rank p95（`sorted[ceil(0.95 * n) - 1]`）とmaxを算出する。欠損/未知run、invalid preflight、fixture/契約/
+  binary fingerprint不一致、sample不足はsession全体をinvalidにする。
+- `save_transaction.csv`（または同等のexact schema）はschema version、fixture checksum/population、sample種別、
+  body bytes、serialize / temp-write+file-sync / commit+directory-sync / totalのphase値だけを持つ。Capture legだけを
+  timing thresholdの正本とし、Memory legの時間値は比較に使わない。Memory legはallocatorの
+  `peak_live_growth_bytes`、GNU time由来の`process_max_rss_kib`を別指標として記録する。GNU timeが提供しない
+  「process peak RSS delta」を要求値にしない。
+- 正式artifactはM5の`plan-save-catalog`が返すno-prompt launcherだけで作る。helperは`perf.py run --workload
+  save-transaction`のCapture / Memory matrixを順次起動し、fresh UTC run ID付き
+  `target/perf-runs/save-transaction-<run-id>/`へ出力する。既存`audit`、固定名output、`--skip-build`、手作業で
+  組み合わせたsessionをformal evidenceへ昇格させない。
+- 各legの実runtimeはuniqueな`target/.save-transaction-runtime/<run-id>/`に置き、memory-backed filesystem、
+  実ユーザーの`saves/`/`settings/`、既存artifact rootをfail-closedで拒否する。保存bodyとabsolute pathはartifact、
+  summary、logに残さず、verifier完了後にhelperがそのexact runtime rootだけをbounded cleanupする。
+- memoryの構造gateは`serialize -> body String`と`write_container(header, &body, impl Write)`を別API境界に固定し、
+  container全体を返す/保持するAPIを作らないことで証明する。64 KiB以下のI/O chunk testは補助証拠に留める。body bytes、
+  allocator peak-live growth、process max RSSは回帰artifactへ残すが、OS依存RSSだけでpass/failを決めない。
 - C2 autosaveの完了条件は、reference machineのlarge fixtureで`total p95 <= 100ms`かつ`max <= 250ms`とする。
   超える場合はdefault offのまま「合格」とせず、immutable snapshot境界のfollow-up計画を作成してautosave milestoneを
   blockedにする。閾値を満たしてもdefaultを自動でonにせず、初期値offは独立したproduct判断として維持する。
@@ -292,13 +332,16 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 | C2-D09 | autosave初期値offはproduct判断。性能gateは機能完了条件でありdefault on/offとは分離する |
 | C2-D10 | background化より先にimmutable snapshot境界を設計する |
 | C2-D11 | manual/autosaveは同じauthoritative baseを二段階確認し、origin所有modalだけをmanualで許可する |
-| C2-D12 | v1 additive/forward-incompatible方針はTrack C0で確定済みとし、C1をC2 M1まで待たせない |
+| C2-D12 | v1 additive/forward-incompatible方針はTrack C0で確定済みとし、archive済みC1のcurrent v1をC2互換性baselineとする |
 | C2-D13 | autosave成功はToastOnly、失敗はImportant。manual save成功時もautosave timerをresetする |
 | C2-D14 | confirmed overwriteの非協調external-writer CASは初版対象外。AbsentだけはOS no-replaceでfail-closedに保証する |
 | C2-D15 | `RecoveryFailed`は明示root stateとし、C3 recovery-only replaceの成功時だけ解除する |
 | C2-D16 | save fileはheader/bodyを順次writeしfile+directory syncする。2本目のfull container bufferを作らない |
 | C2-D17 | manual intent producerをautosave schedulerより先に固定し、pending requestを後発producerが上書きしない |
 | C2-D18 | accepted autosaveの全terminal failureはfull interval backoff、eligibility延期だけdue保持とする |
+| C2-D19 | load originはNormalCatalog / RecoveryCatalog capabilityで固定し、RecoveryFailed時だけrecovery-only executorを選べる |
+| C2-D20 | save性能はCapture timingとMemory/RSSを別sessionで採り、fixed-step auditをp95/RSS evidenceに使わない |
+| C2-D21 | native/perfのsave・settings rootはartifactとは別のdisk-backed per-run runtimeへ隔離し、user dataを読書きしない |
 
 - Bevy 0.19 APIでの注意点:
   - `Time<Real>`と`Time<Virtual>`のpause/speed意味はBevy 0.19一次情報で確認し、timer ruleをunit testする。
@@ -310,123 +353,169 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 
 - 着手条件: Track C3とC1が完了し、C1のadditive orderを含むcurrent v1 round-trip fixtureがgreenである。
 - 変更内容:
-  - typed slot ID、canonical filename、storage root、role/health/capability/revisionを分けたcatalog entry、bounded header inspectorを実装する。
-  - current/v0 candidate/corrupt/unsupported/seed mismatch/missing fixtureを追加する。
+  - closed typed slot ID、canonical filename、storage root、role/health/capability/revisionを分けたcatalog entry、bounded header inspectorを実装する。
+  - current/v0 candidate/unreadable/corrupt/unsupported/seed mismatch/missing fixtureを追加する。
+  - `SaveSlotId`だけを`hw_core`境界に置き、path/revision/catalog scanner/dispatcherは`bevy_app` root ownerに閉じ込める。
   - v1 container維持とv2導入条件を`save_load.md`へ固定する。
 - 主な変更ファイル:
   - `crates/hw_core/src/save.rs`
   - `crates/bevy_app/src/systems/save/{catalog.rs,format.rs,state.rs,mod.rs}`
   - `docs/save_load.md`
 - 完了条件:
-  - [ ] 任意path/stringからslotを作れず、範囲外IDをrejectする。
-  - [ ] scan entry数とheader read bytesが上限内に収まる。
-  - [ ] bodyをdeserializeせず全header statusを分類し、magicless fileをvalid v0と断定しない。
-  - [ ] `can_manual_save/can_scheduler_save/can_load`とcontent statusが直交し、legacy v0 candidateのseedを誤分類しない。
-  - [ ] relative mtime label更新でfilesystem scanせず、metadata/read failureにplayer-safe fallbackが出る。
-  - [ ] legacy default fileが存在する時だけentryを追加し、変更せずload候補に表示する。
+  - [x] 任意path/string/raw numericからslotを作れず、存在しないmanual/autosave IDを構築できない。
+  - [x] scan entry数とheader read bytesが上限内に収まる。
+  - [x] bodyをdeserializeせず`Unreadable`を含む全header statusを分類し、magicless fileをvalid v0と断定しない。
+  - [x] `can_manual_save/can_scheduler_save/can_load`とcontent statusが直交し、legacy v0 candidateのseedを誤分類しない。
+  - [x] relative mtime label更新でfilesystem scanせず、metadata/read failureにplayer-safe fallbackが出る。
+  - [x] legacy default fileが存在する時だけentryを追加し、変更せずload候補に表示する。
 - 検証:
-  - `cargo test -p hw_core save_slot`
-  - `cargo test -p bevy_app@0.1.0 --lib systems::save::catalog`
-  - `cargo test -p bevy_app@0.1.0 --lib systems::save::format`
+  - `python3 scripts/dev.py cargo -- test -p hw_core save_slot`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib systems::save::catalog`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib systems::save::format`
 
 ## M2: Manual slot transactionとcatalog modal
 
 - 変更内容:
-  - origin/dialog session/slot/revisionを束縛したone-shot requestをsave/load dispatcherへ接続する。
+  - origin/dialog session/slot/revisionを束縛したroot-owned one-shot requestをsave/load dispatcherへ接続する。
+    Normal / RecoveryCatalog capabilityからexecutorを選び、`SavePath`やUI選択の再読でtarget/modeを決めない。
   - revision-bound overwrite recheck、atomic no-replace/replace、file+directory sync、streaming header/body、
     slot label outcome、catalog dirty/refreshを追加する。
-  - Save/Load catalog、selection、confirm、Esc/capture、Pause/F5/F9導線を実装する。
-  - missing/corrupt/unsupported/seed mismatchを操作前にdisableし、load試行時のbody invalidをterminal notificationへ流す。
-  - C3の`SaveRecoveryMode`/recovery-only replaceをcatalogへ接続し、RecoveryFailed中の入力allow-listと再ロードを実装する。
+  - Save/Load/Recovery Load catalog、selection、confirm、Esc/capture、Pause/F5/F9導線を実装する。F5/F9は
+    `SavePath.exists()`を参照せずcatalog captureを先に開き、catalog ownerがscanする。
+  - load actionだけをEmpty/Unreadable/corrupt/unsupported/seed mismatchでdisableし、`LegacyV0Candidate`は
+    full preflight付きで選択可能にする。existing Manual entryのoverwriteはcontent statusにかかわらずconfirm付きで残し、
+    LegacyDefault/Autosaveをmanual UIから上書きしない。body invalidはterminal notificationへ流す。
+  - monotonic dialog sessionをcapture/button/confirm/requestへ束縛し、stale session/別overlay intentをrejectする。
+  - C3の`SaveRecoveryMode`/recovery-only replaceをcatalogへ接続し、RecoveryFailed中のroot input/intent/domain gate、
+    `RecoveryCatalog`だけからの再ロード、OS/window closeを実装する。
 - 主な変更ファイル:
   - `crates/bevy_app/src/systems/save/{state.rs,saving.rs,load.rs,format.rs,catalog.rs,atomic_file.rs,mod.rs}`
   - `crates/hw_ui/src/{intents.rs,setup/pause_menu.rs,setup/dialogs.rs,interaction/}`
   - `crates/bevy_app/src/interface/ui/interaction/handlers/save_game.rs`
   - `crates/bevy_app/src/interface/ui/notifications.rs`
-  - `crates/bevy_app/src/input_actions/`
+  - `crates/bevy_app/src/input_actions/`（`capture.rs`を含む）
 - 完了条件:
-  - [ ] Empty save、confirmed overwrite、loadが選択slotだけを操作する。
-  - [ ] paused状態のowning Save catalog/confirmからmanual saveでき、別modal/stale dialog sessionからはrejectされる。
-  - [ ] UI表示後からcommit直前までにfileが出現してもAbsent saveはno-replace失敗し、未確認overwriteしない。
-  - [ ] confirmation後にrevisionが変わったExact saveは再確認を要求する。
-  - [ ] existing targetのstable revision取得不能時は`Absent`へ降格せず、manual/autosaveとも非変更failureになる。
-  - [ ] temp fileはfile sync後だけcommitされ、対応platformではdirectory syncされ、catalogはcrash tempを列挙しない。
-  - [ ] directory syncだけのpost-commit failureは`CommittedDurabilityUncertain`となり、未保存と誤表示しない。
-  - [ ] pre-transaction failureではcurrent world不変、ApplyRecoveredではrollback復旧、RecoveryFailedではpaused fail-closedになる。
-  - [ ] RecoveryFailed中はsave/autosave/resume/world commit不可で、別slot load/quitだけが可能。valid recovery-only load成功時だけ解除され、resumeは再許可されるが自動実行されない。
-  - [ ] recovery-only loadのpreflight/apply再失敗ではfail-closedを維持し、さらに別slotを試せる。
-  - [ ] 全load failureでtargetを含む全slot fileは不変である。
-  - [ ] modal open request frameからworld pointer/camera/background UIがcaptureされる。
-  - [ ] terminal outcomeとnotificationがslot label/operation/resultを正しく示す。
+  - [x] Empty save、confirmed overwrite、loadが選択slotだけを操作する。
+  - [x] `NormalCatalog` loadはHealthy時だけ、`RecoveryCatalog` loadはRecoveryFailed時だけdispatcherに受理され、
+    raw intent/F9/stale payloadからrecovery-only executorを選べない。
+  - [x] paused状態のowning Save catalog/confirmからmanual saveでき、別modal/stale dialog sessionからはrejectされる。
+  - [x] F5/F9はfilesystem事前判定なしにcatalog captureを開始し、current session以外のbutton/confirm payloadはrequestを発行しない。
+  - [x] UI表示後からcommit直前までにfileが出現してもAbsent saveはno-replace失敗し、未確認overwriteしない。
+  - [x] confirmation後にrevisionが変わったExact saveは再確認を要求する。
+  - [x] existing targetのstable revision取得不能時は`Absent`へ降格せず、manual/autosaveとも非変更failureになる。
+  - [x] temp fileはfile sync後だけcommitされ、対応platformではdirectory syncされ、catalogはcrash tempを列挙しない。
+  - [x] directory syncだけのpost-commit failureは`CommittedDurabilityUncertain`となり、未保存と誤表示しない。
+  - [x] pre-transaction failureではcurrent world不変、ApplyRecoveredではrollback復旧、RecoveryFailedではpaused fail-closedになる。
+  - [x] RecoveryFailed中はsave/autosave/resume/world commit不可で、Recovery Load catalogとOS/window closeだけが可能。
+    valid recovery-only load成功時だけ解除され、resumeは再許可されるが自動実行されない。
+  - [x] recovery-only loadのpreflight/apply再失敗ではfail-closedを維持し、さらに別slotを試せる。
+  - [x] 全load failureでtargetを含む全slot fileは不変である。
+  - [x] modal open request frameからworld pointer/camera/background UIがcaptureされる。
+  - [x] terminal outcomeとnotificationがslot label/operation/resultを正しく示す。
 - 検証:
-  - `cargo test -p bevy_app@0.1.0 --lib systems::save`
-  - `cargo test -p hw_ui save_catalog`
-  - `cargo test -p bevy_app@0.1.0 save_catalog`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --lib systems::save`
+  - `python3 scripts/dev.py cargo -- test -p hw_ui save_catalog`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 save_catalog`
 
 ## M3: Autosave settings、scheduler、generation rotation
 
 - 変更内容:
-  - user-local settingsと互換default、UI controls、active-play timerを追加する。
+  - user-local settingsと旧DTOへの互換default補完、UI controls、active-play timerを追加する。
   - context-aware eligibility、Interface後のmanual優先arbiter、single pending、mtime/round-robin rotation、
     全terminal failureのbackoff、load後resetを実装する。
   - clockを注入可能なpure schedulerへ分離し、長時間sleepなしでrotationをtestする。
 - 主な変更ファイル:
+  - `crates/hw_core/src/settings.rs`
   - `crates/bevy_app/src/systems/settings/`
+  - `crates/bevy_app/src/systems/settings/persistence.rs`
   - `crates/bevy_app/src/systems/save/{autosave.rs,catalog.rs,state.rs,mod.rs}`
-  - `crates/hw_ui/src/setup/settings_panel.rs`
+  - `crates/hw_ui/src/{components.rs,setup/settings_panel.rs}`
   - `crates/bevy_app/src/interface/ui/interaction/handlers/settings.rs`
   - `docs/settings.md`
 - 完了条件:
-  - [ ] default off、10分、3世代が旧settings.ronへ補完される。
-  - [ ] paused/modal/manual pending/AreaEdit/drag/world replacement中はrequestを発行しない。
-  - [ ] owning Save catalog中のmanual saveは許可される一方、同じframeのautosaveはmanual requestを上書きしない。
-  - [ ] 満了中のineligible期間が長くてもdueは1件だけで、eligible復帰後に1回だけ発行する。
-  - [ ] 5→10→20→30分と1〜5世代の全境界が正規化される。
-  - [ ] generation上限を超えず、全mtime可ならoldest+ID、mtime欠落ならcommit成功時advanceのround-robinでstable rotationになる。
-  - [ ] generation縮小で既存fileを削除せずinactive load-onlyとして保持する。
-  - [ ] revision/serialize/write/sync/commitのどのaccepted failureでも毎frame retryせず、eligibility延期だけdueを保持する。
-  - [ ] autosave成功/試行失敗/manual成功/committed-uncertain/load成功のtimer消費と通知retentionが契約どおりである。
+  - [x] default off、10分、3世代が旧settings.ronへ補完される。
+  - [x] paused/modal/manual pending/AreaEdit/drag/world replacement中はrequestを発行しない。
+  - [x] owning Save catalog中のmanual saveは許可される一方、同じframeのautosaveはmanual requestを上書きしない。
+  - [x] 満了中のineligible期間が長くてもdueは1件だけで、eligible復帰後に1回だけ発行する。
+  - [x] 5→10→20→30分と1〜5世代の全境界が正規化される。
+  - [x] generation上限を超えず、全mtime可ならoldest+ID、mtime欠落ならcommit成功時advanceのround-robinでstable rotationになる。
+  - [x] generation縮小で既存fileを削除せずinactive load-onlyとして保持する。
+  - [x] revision/serialize/write/sync/commitのどのaccepted failureでも毎frame retryせず、eligibility延期だけdueを保持する。
+  - [x] autosave成功/試行失敗/manual成功/committed-uncertain/load成功のtimer消費と通知retentionが契約どおりである。
 - 検証:
-  - `cargo test -p bevy_app@0.1.0 autosave`
-  - `cargo test -p bevy_app@0.1.0 settings`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 autosave`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 settings`
 
 ## M4: 性能gate、互換fixture、Help、恒久docs
 
 - 変更内容:
-  - save phase timing、body bytes、peak RSS deltaをbounded metricsへ追加し、small/medium/largeを測定する。
-  - manual/autosave/legacy v0/v1、B1〜B3 durable values、C1 DeconstructionOrder、corrupt/future/seed mismatch、
+  - `perf.py run`へ`save-transaction` contractを追加し、Capture timingとMemory/RSSを別sessionで測定・検証する。
+    exact sidecar、fixture checksum、3 preflight + 20 measured runのaggregate、fresh persistent artifact/runtime rootを実装する。
+  - save phase timing、body bytes、allocator peak-live growth、process max RSSをbounded metricsへ追加し、small/medium/largeを測定する。
+  - manual/autosave/legacy v0/v1/unreadable、B1〜B3 durable values、C1 durable order/target Relationship対称性、
+    persistしてはならない`DeconstructionPending` / `CommitClaim` / `AssignedTask`、rehydrate後のpending再生成、
+    `LoadedIn` cargo handoff→ground再仲裁、stale `WorldEpoch` replay非変更、corrupt/future/seed mismatch、
     rollback/recovery-onlyを横断確認する。
-  - Help impact reviewと恒久docsを同期する。
+  - Help impact reviewの実判断、provider/manifest/coverage/exact snapshot、恒久docsを同期する。
 - 主な変更ファイル:
   - `crates/bevy_app/src/systems/save/{saving.rs,metrics.rs}`
-  - `scripts/perf.py`（既存runnerへ最小のsave workloadを追加する場合のみ）
+  - `crates/bevy_app/src/plugins/startup/perf_scenario{.rs,/config.rs,/fixture.rs,/output.rs}`
+  - `scripts/perf.py`、`scripts/perf_tool/{arguments.py,execution.py,artifacts.py,summary.py,fixtures.py,model.py}`
   - `crates/bevy_app/src/interface/ui/help_content/`
   - `docs/{save_load.md,settings.md,state.md,notifications.md,help-screen.md,architecture.md,events.md,invariants.md}`
 - 完了条件:
-  - [ ] timing artifactがbody/pathを保持せず、serialize/file sync/commit+directory sync/totalとbody bytes/RSSを比較できる。
-  - [ ] serialized body以外のfull-size container bufferがなく、I/O bufferが64 KiB以下であることをstructural testで固定する。
-  - [ ] 3 warmup + 20 sampleとnearest-rank p95が固定コマンドで再現できる。
-  - [ ] largeでp95 100ms/max 250msを満たす。超過時はC2を完了扱いにせずsnapshot follow-upを作りautosaveをblockedにする。
-  - [ ] threshold結果にかかわらず初期値offを維持し、default変更を性能測定へ暗黙連動させない。
-  - [ ] legacy/current/invalid fixtureのplayer-visible statusとterminal resultが一致する。
-  - [ ] Help provider/manifest/coverage/exact snapshotが新workflowを説明する。
+  - [x] exact timing artifactがbody/pathを保持せず、fixture checksum、serialize/file sync/commit+directory sync/total、
+    body bytes、allocator peak-live growth、process max RSSを区別して比較できる。
+  - [x] `serialize -> body`と`write_container(header, &body, Write)`のAPI境界によりserialized body以外のfull-size
+    container bufferを作れず、64 KiB以下I/O chunk testを補助証拠として固定する。
+  - [x] 3 independent preflight + 20 valid measured sampleとnearest-rank p95が、Capture / Memory別sessionの
+    exact fixture/binary/artifact validationで再現できる。Memory timingはthresholdへ混ぜない。
+  - [x] largeでp95 100ms/max 250msを満たす。超過時はC2を完了扱いにせずsnapshot follow-upを作りautosaveをblockedにする。
+  - [x] threshold結果にかかわらず初期値offを維持し、default変更を性能測定へ暗黙連動させない。
+  - [x] legacy/current/unreadable/invalid fixtureのplayer-visible statusとterminal resultが一致する。
+  - [x] Help reviewがUpdate required / No impactの実判断を持ち、必要なprovider/manifest/coverage/exact snapshotが新workflowを説明する。
 - 検証:
-  - 上記§4.7のsave performance workload
+  - `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test`
+  - M5 helperが起動する§4.7の`save-transaction` Capture / Memory matrix
   - `python3 scripts/check_help_impact.py`
 
 ## M5: Native acceptance、full gate、archive
 
 - 変更内容:
-  - no-prompt native acceptanceでmodal表示/capture/manual workflow/catalog statusを確認する。
+  - `hell-workers-run-native-acceptance`へ`plan-save-catalog` / `run-save-catalog` /
+    `verify-save-catalog`のno-prompt profileを追加する。direct `kitty` launcher、exclusive lock、resource preflight、
+    fresh run ID/job.json/source fingerprint、actual adapter/backend/display、screenshot handshake、fail-closed verifierを
+    C1 profileと同水準で持たせる。screenshotはX11の起動process tree所有client windowだけを直接撮影し、root desktop
+    fallbackを禁止する。scope/window ID/PIDをack/resultへ束縛して別windowのpixelを証跡に混入させない。
+    ready/ackはcreate-new atomic publish、X11照会/captureはbounded callとし、ack受理までSave catalogの唯一の
+    foreground capture所有を維持できなければfail-closedとする。
+  - `NativeSaveLoadAcceptancePlugin`を旧`SavePath` / `SaveLoadState`直書きdriverからslot-bound request、production
+    `UiIntent`、modal/capture観測へ移植する。native jobはsave rootとsettings persistence rootの両方をartifact外の
+    fresh disk-backed runtimeへ注入し、実ユーザーの`saves/`/`settings/`を読書きしたらinvalidにする。
+  - no-prompt native acceptanceでmodal表示/capture/manual workflow/catalog statusを確認する。physical desktop inputを
+    注入しないため、actual windowではproduction UiIntentとmodal/capture stateを証明し、F5/F9/Esc resolver mappingは
+    unit/integrationを正本とする。
+  - V5の`ApplyRecovered` / `RecoveryFailed`はnative-driver-only opt-in fault injectionで確実に通す。通常起動経路へ
+    injectionを残さず、alternate slot recovery、再失敗fail-closed、明示resumeまでexact artifactへ記録する。
   - autosave rotationはclock-injected integration testを正本とし、実機で10分待つ受入は行わない。
-  - full workspace gate、docs index、計画archive、親提案進捗を同期する。
+  - helper self-test、skill/doc同期、full workspace gate、docs index、計画archive、親提案進捗を同期する。
+- 主な変更ファイル:
+  - `.codex/skills/hell-workers-run-native-acceptance/{SKILL.md,scripts/native_acceptance.py}`
+  - `crates/bevy_app/src/systems/save/native_acceptance.rs`
+  - `crates/bevy_app/src/main.rs`
+  - `docs/debug-features.md`
 - 完了条件:
-  - [ ] native V1〜V5が合格する。
-  - [ ] full workspace gateが成功する。
-  - [ ] C2計画をarchiveし、Track C親提案を更新する。
+  - [x] native artifactが`profile: save-catalog`、exact V1〜V5 check set、fresh run/source fingerprint、actual renderer
+    evidence、screenshotを持ち、欠落/stale/renderer不一致をfail-closedにする。
+  - [x] native V1〜V5が合格する。
+  - [x] full workspace gateが成功する。
+  - [x] C2計画をarchiveし、Track C親提案を更新する。
 - 検証:
+  - save-catalog native helper self-test、`plan-save-catalog`が返したlauncher、`verify-save-catalog`
   - `python3 scripts/dev.py verify`
   - `python3 scripts/check_help_impact.py`
+  - `python3 scripts/check_agent_rules.py`
+  - `python3 scripts/dev.py docs --check`
   - `git diff --check`
 
 ## 6. リスクと対策
@@ -438,8 +527,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 | no-replace非対応で通常renameへfallback | empty slotへ現れたfileを上書き | safe I/O failureとし置換renameを禁止 |
 | catalogがbodyを読む | modal openが重い/メモリ増 | bounded header prefixだけを読むcounter test |
 | raw path/nameをUIへ渡す | path traversal/情報漏洩 | typed ID→root canonical filename、player-safe label |
+| public raw slot numberを許す | 範囲外slot/pathがrequestへ入る | closed `SaveSlotId`とfixed iterationだけを公開 |
 | autosaveとmanualが競合 | 二重snapshot/通知 | manual優先、pending最大1、queueなし |
 | foreground modalを一律ineligibleにする | Save catalogからmanual saveが永久に実行不能 | 共通base+origin contextに分けowning dialog sessionだけ許可 |
+| F5/F9前にSavePathを参照する | missing slotでcaptureされず背景操作が漏れる | filesystem判定より先にcatalog pending captureを立て、scanはownerへ後送 |
 | autosave成功をImportantへ記録 | 定期toast/history spam | successはslot dedupe付きToastOnly、failureだけImportant |
 | pause中もtimer進行 | 操作中に意図しないsave | active real timeだけ加算しmodal/pauseでgate |
 | 未確定gesture中のautosave | area selectionの途中状態を意図せずsnapshot | manualと共通のbase eligibilityをrequest/applyの両方で再検査 |
@@ -449,111 +540,108 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 | serialize失敗だけtimerを消費しない | autosaveが毎frame再試行する | accepted autosaveの全terminal failureをfull-interval backoffへ統一 |
 | mtime欠落時に常に最小IDを選ぶ | autosave-1だけが上書きされる | 全mtime信頼時だけoldest、それ以外はruntime round-robin |
 | rename後のdirectory sync失敗を通常failure表示 | 実際はfile更新済みなのに未保存と誤認 | committed-but-uncertain outcomeとauthoritative catalog refresh |
-| RecoveryFailedで通常rollback候補を要求 | 壊れたlive worldからsnapshotできず再ロード不能 | C3の専用recovery-only modeをLoad catalogからだけ使用 |
+| RecoveryFailedで通常rollback候補を要求 | 壊れたlive worldからsnapshotできず再ロード不能 | `RecoveryCatalog` capabilityだけでC3の専用recovery-only modeを選ぶ |
 | metadataのためv1 headerを場当たり拡張 | format責務が曖昧 | 初版はfs metadata、v2条件を先に文書化 |
 | corrupt slotを一覧から消す | 復旧判断不能 | error entryを保持しload不可/再試行状態を明示 |
+| fixed-step auditを性能値に使う | p95/RSSが未測定のまま合格扱いになる | Capture timing / Memory-RSS別sessionのsave-transaction contractを必須化 |
+| native driverが実user dataを触る / stale artifactを読む | 保存破壊または誤った受入 | fresh disk-backed runtime、source fingerprint、exact verifier、user root拒否 |
 
 ## 7. 検証計画
 
 - unit/integration:
-  - typed ID/path mapping、bounded scan、optional legacy、mtime/round-robin ordering、all status classification。
+  - closed typed ID/path mapping、bounded scan、optional legacy、Unreadableを含むall status classification、mtime/round-robin ordering。
   - request target race、revision recheck、atomic no-replace/replace、file/directory sync、crash temp ignore、
-    missing/read/format/schema/rollback/recovery-only failure。
-  - dialog session ownership、paused manual save、capture/Escape/world replacement/recovery mode reset。
+    missing/read/format/schema/rollback/recovery-only failure、Normal / RecoveryCatalog executor選択。
+  - dialog session ownership、stale intent reject、paused manual save、F5/F9 filesystem-before-capture禁止、
+    capture/Escape/world replacement/recovery mode root-gate reset。
   - autosave clock、manual precedence、rotation、generation変更、全failureのtimer consumption、notification retention、failure retry。
-  - v0/v1、B1〜B3 durable value、C1 mid-order round-trip。
+  - v0/v1、B1〜B3 durable value、C1 mid-orderのorder/target対称性、runtime task/claim非永続、pending再生成、
+    cargo handoff再仲裁、stale WorldEpoch replay非変更。
 - native acceptance（実装時は `hell-workers-run-native-acceptance` のno-prompt launcherを使用）:
-  - V1: F5/Pause Save catalog、empty slot、save、occupied slot overwrite confirm。
-  - V2: F9/Pause Load catalog、slot選択、load confirm、異なるmanual slotのround-trip。
-  - V3: legacy/corrupt/unsupported/seed mismatchのlabel、disabled状態、通知。
-  - V4: modal open request frameから背景pointer/camera/UIが動かず、Escがconfirm→catalogを順に閉じる。
-  - V5: pre-transaction failureではcurrent world/selection/historyを維持し、ApplyRecoveredではentity-bound UIをreset、
-    RecoveryFailedではsave/resume/world操作不能かつLoad catalog/quitだけになり、別slot成功後に明示resume可能、再失敗で
-    fail-closedを維持することを確認する。
+  - artifactはactual-window renderer screenshot、production UiIntent/modal capture観測、exact V1〜V5 check set、
+    source fingerprintを必須にする。screenshotはX11のprocess-owned client windowから採り、scope/window ID/PIDを
+    driver resultとackで一致させる。F5/F9/Esc key resolver自体はsynthetic desktop inputを使わないunit/integrationで証明する。
+  - V1: production Save intent/Pause導線でcatalog capture、empty Manual save、occupied Manual overwrite confirm。
+  - V2: production Load intent/Pause導線でslot選択、load confirm、異なるmanual slotのround-trip。
+  - V3: legacy v0 candidate（selectable preflight）、Unreadable/corrupt/unsupported/seed mismatch（load disabled）、
+    壊れたManual slotのoverwrite confirm、terminal notification。
+  - V4: modal open request frameから背景pointer/camera/UIが動かず、Escがconfirm→catalogを順に閉じ、stale sessionが
+    requestを発行できない。
+  - V5: native-driver-only fault injectionでpre-transaction failureのworld/selection/history維持、ApplyRecoveredの
+    entity-bound UI reset、RecoveryFailedのsave/resume/world操作拒否、Recovery catalogからの別slot成功後の明示resume、
+    再失敗時fail-closed維持を確認する。
+  - save rootとsettings rootはartifact外のfresh disk-backed runtimeを使い、実user rootのread/writeをfail-closedで拒否する。
 - autosave:
   - generation rotationはfake clock/temp directoryで自動確認し、実時間待機を受入項目にしない。
   - actual windowではSettings表示と変更反映、1回の明示triggerによるstatus更新だけを確認する。
 - 性能:
   - catalog scan bytes/count。
-  - serialize / file sync / commit+directory sync / total、body bytes、peak RSS deltaのsmall/medium/large測定。
-  - full-size container bufferがserialized bodyの1本だけで、I/O bufferが64 KiB以下であるstructural check。
+  - `save-transaction` Capture / Memory別sessionで、fixture checksum、3 preflight + 20 measured run、
+    serialize / file sync / commit+directory sync / total、body bytes、allocator peak-live growth、process max RSSを確認する。
+  - `serialize -> body` / streaming writer API境界でfull-size container bufferがserialized bodyの1本だけであることを固定し、
+    I/O buffer 64 KiB以下は補助structural checkとする。
   - steady stateでdirectory scan/save timing処理0。
 - 完了時:
-  - `cargo fmt --all -- --check`
-  - `cargo check --workspace`
-  - `cargo clippy --workspace --all-targets -- -D warnings`
-  - `cargo test --workspace`
+  - `python3 scripts/dev.py cargo -- fmt --all -- --check`
+  - `python3 scripts/dev.py check`
+  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+  - `python3 scripts/dev.py cargo -- test --workspace`
   - `python3 scripts/dev.py verify`
 
 ## 8. ロールバック方針
 
 - M1 catalog model、M2 manual UI/transaction、M3 autosave、M4 metrics/docsを独立commitにする。
 - manual slot filesは全て現行v1 bodyのため、C2 UIを戻してもdata自体は専用pathに残る。
-  旧単一実装で読む場合はfileを自動移動せず、明示import手順を用意する。
+  旧単一実装へ戻す時もfileを自動移動しない。in-app importはC2の対象外とし、必要時だけ別途文書化した
+  offline recovery手順で明示的に扱う。
 - legacy `world.scn.ron` はC2から上書き/削除しないため、roll backしても既存saveを維持する。
 - autosaveに問題があればsetting default/featureをoffへ戻し、manual catalogを維持できる。
 - v2 migrationはC2初版で開始しないため、format rollbackを伴わない。
 
-## 9. AI引継ぎメモ（最重要）
+## 9. 完了記録
 
-### 現在地
+### 完了状態
 
-- 進捗: `0%`
-- 完了済みマイルストーン: なし
-- 未着手/進行中: M1〜M5
-- 前提状態: Track C3とC1は完了・archive済み。C2はM1から開始可能。
+- M1〜M5を完了し、typed slot/catalog、manual transaction、autosave、互換fixture、Help/恒久docs、native acceptanceを
+  archiveした。C2の残作業はない。将来のslot拡張、background I/O、container v2は新しい計画で扱う。
+- Help impactの実判断は **Update required**。Save/Load catalog、Autosave settings、通知のprovider、manifest、coverage、
+  exact approval snapshotを更新済みである。
 
-### 次のAIが最初にやること
+### 最終実機・性能証跡
 
-1. M1でtyped slot/path mappingとbounded catalog fixtureだけを実装し、UIへ進む前にstatus分類を固定する。
-2. M2でrequestへslotとAbsent/Exact revisionを埋め込み、単一`SavePath`差替え方式を残さない。
-3. C1のdurable `DeconstructionOrder`、runtime task cleanup、C3のrehydrate契約をsave/load回帰対象として維持する。
-
-### ブロッカー/注意点
-
-- UI選択ResourceとSavePathを別々に読んでrequest targetを決めない。
-- Absent saveを通常renameでcommitしない。no-replace非対応時はfail-closedにする。
-- confirmed overwriteはconfirmation時revisionをrequestへ束縛する。
-- manual saveをforeground modal一律禁止にしない。owning dialog sessionだけをeligibility例外として許可する。
-- catalog scanでDynamicWorld bodyをdeserializeしない。
-- absolute path/raw OS errorをnotificationへ出さない。
-- legacy default fileを自動移動・上書き・削除しない。
-- autosaveをbackground化する前にimmutable snapshot境界を設計する。
-- autosave成功をImportant historyへ蓄積しない。
-- `RecoveryFailed`から通常transactionを再利用せず、C3 recovery-only mode以外でlive resetしない。
-- headerとbodyを結合した2本目のfull-size Stringを作らない。
-- production変更後は必ず `hell-workers-review-help-impact` Skillの判断を完了する。
-
-### 参照必須ファイル
-
-- `docs/save_load.md`
-- `docs/settings.md`
-- `docs/notifications.md`
-- `docs/plans/archive/save-load-hardening-plan-2026-07-12.md`
-- `docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`
-- `crates/bevy_app/src/systems/save/`
-- `crates/bevy_app/src/interface/ui/interaction/handlers/save_game.rs`
-- `crates/hw_ui/src/{intents.rs,setup/pause_menu.rs,setup/dialogs.rs}`
+- no-prompt native job: `target/native-acceptance/save-catalog-20260809T053650Z-845407ac`
+  （run ID `c2-20260809T053658Z-6efa1919`）。Intel Arc / Vulkan / Xlib actual windowでV1〜V5がすべてPASSした。
+- screenshotは唯一のprocess-owned X11 client window（`0x1800004`、PID `3996666`）から取得し、
+  `x11-client-window` scope、2560×1440、marker 9,216 pxをack/resultで照合した。save/settings rootはartifact外の
+  fresh runtimeだけを使用した。
+- `save-transaction`はsmall/medium/large各ケースで3 preflight + 20 measured runをCapture / Memory別sessionで完走した。
+  large Captureはtotal p95 `63,205,577 ns`、max `63,939,900 ns`で、100 ms / 250 ms gateを満たす。large Memoryは
+  total p95 `64,777,152 ns`、max `71,232,362 ns`、peak-live growth p95 `6,041,988 bytes`、max RSS
+  `1,403,484 KiB`だった。
+- `verify-save-catalog`がraw CSV、fixture/binary/source/harness fingerprint、X11 screenshot、exact artifact set、
+  runtime cleanupを再読しPASSした。serialized save bodyはevidence sessionに残さず、runtime cleanupは
+  `verified-absent`である。
 
 ### 最終確認ログ
 
-- 最終 `cargo check --workspace`: `未実施（計画作成のみ）`
-- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `未実施（計画作成のみ）`
-- 最終 `cargo test --workspace`: `未実施（計画作成のみ）`
+- `python3 scripts/dev.py verify`: PASS（Python tooling、repository contracts、fmt、check、Clippy `-D warnings`、
+  workspace test、docs、diff hygiene）
+- `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py self-test`: PASS
+- `python3 scripts/check_help_impact.py`: PASS（Update requiredの実判断済み）
 - 未解決エラー: `N/A`
 
 ### Definition of Done
 
-- [ ] M1〜M5が完了
-- [ ] manual/legacy/autosave slotの全statusとterminal resultが自動確認済み
-- [ ] Absent no-clobberとExact revision再確認が競合fixtureで保証される
-- [ ] pre-transaction/ApplyRecovered/RecoveryFailedのworld・UI終端が区別される
-- [ ] RecoveryFailedから別slotの成功でのみ復帰し、再失敗中はsave/resume/world操作がfail-closedである
-- [ ] autosave generationとmanual precedenceが固定される
-- [ ] accepted autosave全failureのbackoffとmtime欠落時round-robinが固定される
-- [ ] save性能・メモリgateを満たし、default offを独立判断として維持する
-- [ ] Help/docs/native V1〜V5が完了
-- [ ] `python3 scripts/dev.py verify`が成功
+- [x] M1〜M5が完了
+- [x] manual/legacy/autosave slotの全statusとterminal resultが自動確認済み
+- [x] Absent no-clobberとExact revision再確認が競合fixtureで保証される
+- [x] pre-transaction/ApplyRecovered/RecoveryFailedのworld・UI終端が区別される
+- [x] RecoveryFailedから別slotの成功でのみ復帰し、再失敗中はsave/resume/world操作がfail-closedである
+- [x] autosave generationとmanual precedenceが固定される
+- [x] accepted autosave全failureのbackoffとmtime欠落時round-robinが固定される
+- [x] Capture timing / Memory-RSS別artifactが3 preflight + 20 measured contractを満たし、save性能・メモリgateとdefault offの独立判断が固定される
+- [x] Help/docs/native V1〜V5が完了
+- [x] `python3 scripts/dev.py verify`が成功
 
 ## 10. 更新履歴
 
@@ -563,3 +651,5 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 | `2026-08-03` | `Codex` | 自己レビューでorigin別eligibility、autosave Absent/Exact、file+directory sync、streaming memory境界、mtime fallback、全failure backoff、RecoveryFailed再ロード経路へ修正 |
 | `2026-08-04` | `Codex` | 前提Track C3の実装・archive完了を反映。C2はDraft/0%とC1完了待ちを維持 |
 | `2026-08-08` | `Codex` | 前提Track C1のM1〜M5完了・archiveを反映。C2はDraft/0%のままM1から開始可能へ更新 |
+| `2026-08-09` | `Codex` | 実装前レビューでclosed slot ID、Normal/RecoveryCatalog request capability、F5/F9 capture先行、Unreadable/legacy操作境界、C1 v1 compatibility baseline、Capture/Memory分離性能契約、isolated native save-catalog artifactを明文化 |
+| `2026-08-09` | `Codex` | C2 M1〜M5を完了。manual slot/catalog/autosave、RecoveryFailed root gate、Help/恒久docs、exact Capture/Memory artifact、Intel Vulkan/Xlib actual-window V1〜V5を検証し、full workspace gate通過後にarchiveを閉鎖 |

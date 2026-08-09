@@ -124,6 +124,8 @@ pub(crate) fn start_perf_capture_system(
     } else {
         capture.phase = PerfCapturePhase::Warmup;
         capture.elapsed_secs = 0.0;
+        capture.save_transaction_kind =
+            save_transaction::save_transaction_sample_kind_from_env().to_string();
         eprintln!(
             "PERF_CAPTURE: phase=warmup virtual_speed=1.0 target_secs={}",
             params.config.warmup_secs
@@ -219,6 +221,29 @@ pub(crate) fn drive_perf_capture_system(
             }
         }
         PerfCapturePhase::Measure => {
+            if params.config.workload == PerfWorkload::SaveTransaction {
+                // This workload has exactly one timed transaction, but it still
+                // owns the declared realtime measurement window. Keep the
+                // process alive through that window so the scalar transaction
+                // sample is not mislabeled as a completed two-second capture.
+                capture.elapsed_secs += params.time.delta_secs();
+                capture.measure_virtual_secs += params.time.delta_secs_f64();
+                capture.measure_real_secs += params.real_time.delta_secs_f64();
+                if capture.measure_virtual_secs < f64::from(params.config.measure_secs) {
+                    return;
+                }
+                if !capture.has_save_transaction_sample() {
+                    error!(
+                        "PERF_CAPTURE: save-transaction did not complete within the measurement window"
+                    );
+                    capture.phase = PerfCapturePhase::Finished;
+                    exit.write(AppExit::error());
+                    return;
+                }
+                params.dashboard_timing_metrics.active = false;
+                capture.phase = PerfCapturePhase::Flush;
+                return;
+            }
             if params.config.uses_fixed_timesteps() {
                 if let Err(error) = advance_fixed_audit_measure(
                     &params.config,
@@ -298,6 +323,27 @@ pub(crate) fn drive_perf_capture_system(
                     &capture.determinism_checkpoints,
                     &capture.determinism_actor_records,
                 )
+            } else if params.config.workload == PerfWorkload::SaveTransaction {
+                match (
+                    capture.initial_checksum,
+                    capture.take_save_transaction_sample(),
+                ) {
+                    (Some(initial), Some(sample)) => super::output::write_save_transaction_csv(
+                        &params.config,
+                        initial.value,
+                        sample,
+                        capture.save_transaction_kind(),
+                        capture.measure_virtual_secs,
+                        capture.measure_real_secs,
+                        #[cfg(feature = "profiling-memory")]
+                        Some(capture.memory_measurement.peak_live_growth_bytes()),
+                        #[cfg(not(feature = "profiling-memory"))]
+                        None,
+                    ),
+                    _ => Err(std::io::Error::other(
+                        "save-transaction capture reached Flush without fixture checksum or sample",
+                    )),
+                }
             } else {
                 match (
                     capture.initial_checksum,
@@ -339,6 +385,13 @@ pub(crate) fn drive_perf_capture_system(
                 }
             };
             let result = capture_result.and_then(|()| {
+                #[cfg(feature = "profiling-memory")]
+                if params.config.workload == PerfWorkload::SaveTransaction {
+                    super::output::write_save_transaction_memory_csv(
+                        &params.config,
+                        &capture.memory_measurement,
+                    )?;
+                }
                 let initial_window = capture.initial_window.as_ref().ok_or_else(|| {
                     std::io::Error::other(
                         "capture reached Flush without the initial window observation",
@@ -353,6 +406,9 @@ pub(crate) fn drive_perf_capture_system(
                 write_deconstruction_fixture_sidecar(&params.config, &params.deconstruction_fixture)
             });
             let result = result.and_then(|()| {
+                if params.config.workload == PerfWorkload::SaveTransaction {
+                    return Ok(());
+                }
                 let inventory = capture.initial_render_inventory.as_ref().ok_or_else(|| {
                     std::io::Error::other(
                         "capture reached Flush without the initial render inventory",

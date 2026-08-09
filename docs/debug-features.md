@@ -159,12 +159,27 @@ MS-WFC-4 以降、`Startup` の `setup()` が `prepare_generated_world_layout_re
 fresh artifact、source fingerprint、bounded monitor契約から起動する。
 
 - `HW_NATIVE_SAVE_LOAD_ACCEPTANCE_ARTIFACT`: 既存の空ディレクトリを絶対pathで指定する。
+- `HW_NATIVE_SAVE_LOAD_ACCEPTANCE_RUNTIME_ROOT`: artifact外のfresh disk-backed runtime rootを絶対pathで指定する。
 - `HW_NATIVE_SAVE_LOAD_ACCEPTANCE_RUN_ID`: path separatorや改行を含まないfresh run IDを指定する。
-- `HW_WINDOW_BACKEND=headless`およびperformance scenarioとの併用は拒否する。
-- `driver-result.json`、capture marker、screenshot、隔離saveが既に存在するartifactはstaleとして起動前に拒否する。
-- driverは実windowと永続worldの成立後にvirtual timeをpauseし、productionの`Last` dispatcherからsave/loadを実行する。正常loadによる`WorldEpoch`のexactly-once更新、pause維持、収束後の連続saveの意味的一致、破損saveの事前拒否とepoch不変、拒否後worldの意味的不変を検査する。
-- 外側monitorはrun ID付き`capture-ready.txt`を受け、実renderer screenshotを採取してsize・dimensions・SHA-256値付き`capture.done.txt`を返す。driverはrun IDとfilename、PNG header、640×360以上、16 MiB以下、size・dimensionsのack一致、SHA-256値の形式を検証してから、その値をcreate-newの`driver-result.json`へ記録してPASSを確定する。
-- driver全体は180秒でfail-closedに終了する。失敗artifactは上書き・自動削除せず診断用に保持する。
+- save-catalog profileは`HW_WINDOW_BACKEND=x11`を必須にする。headless / Waylandは、ゲーム自身の
+  client windowへ画像を束縛できないため受入対象にしない。performance scenarioとの併用も拒否する。
+- `driver-result.json`、capture marker、screenshot、runtimeのmanual save/settingsが既に存在するjobはstaleとして起動前に拒否する。
+- driverはruntime rootの`saves/`と`settings/`をStartup前に注入し、実ユーザーの同名directoryを読書きしない。
+  実windowと永続worldの成立後にvirtual timeをpauseし、productionの`UiIntent → catalog/modal → input capture → Last dispatcher`
+  を通す。V1〜V5は、initial/manual slot save-load、occupied slot overwrite、status表示とinvalid-body recovery、
+  confirm/escape ownership、rollback/recovery-only fail-closedと明示resumeをそれぞれ検査する。
+- 外側monitorはrun ID付き`capture-ready.txt`を受け、起動したCargo process treeのPIDを`_NET_WM_PID`で
+  照合した**唯一の X11 client window**だけを`import -window <id>`で撮影する。root desktop / 全画面撮影へは
+  fallbackしないため、別windowやoverlayのmarkerをゲームUI証跡として受理しない。size・dimensions・SHA-256値に加え、
+  fixed `capture_scope=x11-client-window`、window ID、window PIDを`capture.done.txt`へ記録する。driverはrun IDと
+  filename、PNG header、640×360以上、16 MiB以下、ack一致、marker、scope/window ID/PIDを検証してから、その値を
+  create-newの`driver-result.json`へ記録してPASSを確定する。`capture-ready.txt`とackはいずれもcreate-newの
+  atomic publishであり、monitorの`xprop`/`import`呼出は5秒でfail-closedに終了する。ackを受理する直前まで
+  Save catalog自身が唯一のforeground capture rootであることをdriverが再確認するため、markerだけが残った画面を
+  UI証跡としてPASSにできない。
+- driver全体は180秒でfail-closedに終了する。physical F5/F9/Escのdesktop入力注入は行わず、resolver mappingは
+  unit/integration、actual windowではproduction intent/capture/modal stateを証明する。失敗artifactは上書き・
+  自動削除せず診断用に保持する。
 
 検査対象と結果schemaの正本は`crates/bevy_app/src/systems/save/native_acceptance.rs`、
 一般のsave/load契約は[save_load.md](save_load.md)を参照する。

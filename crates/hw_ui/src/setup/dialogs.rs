@@ -2,10 +2,11 @@
 
 use super::UiAssets;
 use crate::components::{
-    LoadConfirmDialog, MenuAction, MenuButton, OperationDialog, OperationDialogScroll,
+    MenuAction, MenuButton, OperationDialog, OperationDialogScroll,
     OperationPolicyAllDisabledWarning, OperationPolicyAllowedButton, OperationPolicyAllowedText,
-    OperationPolicyPriorityButton, OperationPolicyPriorityText, OperationPolicyRow, UiInputBlocker,
-    UiInputCapture, UiNodeRegistry, UiSlot,
+    OperationPolicyPriorityButton, OperationPolicyPriorityText, OperationPolicyRow,
+    SaveCatalogDialog, SaveCatalogSlotList, SaveCatalogTitle, UiInputBlocker, UiInputCapture,
+    UiNodeRegistry, UiSlot,
 };
 use crate::overlay::{LOAD_CONFIRM_LAYER, OPERATION_DIALOG_LAYER};
 use crate::panels::task_list::player_reachable_work_types;
@@ -26,7 +27,7 @@ pub fn spawn_dialogs(
     ui_nodes: &mut UiNodeRegistry,
 ) {
     spawn_operation_dialog(commands, game_assets, theme, parent_entity, ui_nodes);
-    spawn_load_confirm_dialog(commands, game_assets, theme, parent_entity);
+    spawn_save_catalog_dialog(commands, game_assets, theme, parent_entity);
 }
 
 fn spawn_operation_dialog(
@@ -581,7 +582,7 @@ fn spawn_operation_button(
         });
 }
 
-fn spawn_load_confirm_dialog(
+fn spawn_save_catalog_dialog(
     commands: &mut Commands,
     game_assets: &dyn UiAssets,
     theme: &UiTheme,
@@ -596,14 +597,16 @@ fn spawn_load_confirm_dialog(
                 position_type: PositionType::Absolute,
                 left: Val::Px(0.0),
                 top: Val::Px(0.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
                 ..default()
             },
             FocusPolicy::Block,
             Pickable::default(),
             UiInputCapture,
-            LoadConfirmDialog,
+            SaveCatalogDialog,
             LOAD_CONFIRM_LAYER,
-            Name::new("Load Confirm Capture"),
+            Name::new("Save Catalog Capture"),
         ))
         .id();
     commands.entity(parent_entity).add_child(dialog_root);
@@ -611,16 +614,14 @@ fn spawn_load_confirm_dialog(
     let dialog_panel = commands
         .spawn((
             Node {
-                width: Val::Px(360.0),
+                width: Val::Px(420.0),
                 height: Val::Auto,
-                position_type: PositionType::Absolute,
-                left: Val::Percent(50.0),
-                top: Val::Percent(40.0),
-                margin: UiRect::left(Val::Px(-180.0)),
+                max_height: Val::Px(520.0),
                 flex_direction: FlexDirection::Column,
                 padding: UiRect::all(Val::Px(16.0)),
                 border: UiRect::all(Val::Px(2.0)),
                 border_radius: BorderRadius::all(Val::Px(6.0)),
+                row_gap: Val::Px(8.0),
                 ..default()
             },
             BackgroundColor(theme.colors.dialog_bg),
@@ -628,96 +629,56 @@ fn spawn_load_confirm_dialog(
             Interaction::default(),
             RelativeCursorPosition::default(),
             UiInputBlocker,
-            Name::new("Load Confirm Panel"),
+            Name::new("Save Catalog Panel"),
         ))
         .id();
     commands.entity(dialog_root).add_child(dialog_panel);
 
     commands.entity(dialog_panel).with_children(|parent| {
         parent.spawn((
-            Text::new("Load saved game?"),
+            Text::new("Save / Load"),
             TextFont {
                 font: game_assets.font_ui().clone().into(),
                 font_size: FontSize::Px(theme.typography.font_size_xl),
                 ..default()
             },
             TextColor(theme.colors.text_accent),
-            Node {
-                margin: UiRect::bottom(Val::Px(8.0)),
-                ..default()
-            },
+            SaveCatalogTitle,
         ));
-
         parent.spawn((
-            Text::new("Current progress will be lost. This cannot be undone."),
-            TextFont {
-                font: game_assets.font_ui().clone().into(),
-                font_size: FontSize::Px(theme.typography.font_size_dialog_small),
-                ..default()
-            },
-            TextColor(theme.colors.text_secondary),
             Node {
-                margin: UiRect::bottom(Val::Px(16.0)),
+                width: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(6.0),
                 ..default()
             },
+            SaveCatalogSlotList,
+            Name::new("Save Catalog Slot List"),
         ));
-
         parent
-            .spawn(Node {
-                width: Val::Percent(100.0),
-                flex_direction: FlexDirection::Row,
-                justify_content: JustifyContent::FlexEnd,
-                column_gap: Val::Px(8.0),
-                ..default()
-            })
-            .with_children(|row| {
-                row.spawn((
-                    Button,
-                    Node {
-                        width: Val::Px(90.0),
-                        height: Val::Px(32.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
+            .spawn((
+                Button,
+                Node {
+                    width: Val::Px(100.0),
+                    height: Val::Px(32.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    align_self: AlignSelf::FlexEnd,
+                    ..default()
+                },
+                BackgroundColor(theme.colors.button_default),
+                MenuButton(MenuAction::CloseSaveCatalog),
+            ))
+            .with_children(|btn| {
+                btn.spawn((
+                    Text::new("Close"),
+                    TextFont {
+                        font: game_assets.font_ui().clone().into(),
+                        font_size: FontSize::Px(theme.typography.font_size_dialog_small),
                         ..default()
                     },
-                    BackgroundColor(theme.colors.button_default),
-                    MenuButton(MenuAction::CancelLoadConfirm),
-                ))
-                .with_children(|btn| {
-                    btn.spawn((
-                        Text::new("Cancel"),
-                        TextFont {
-                            font: game_assets.font_ui().clone().into(),
-                            font_size: FontSize::Px(theme.typography.font_size_dialog_small),
-                            ..default()
-                        },
-                        TextColor(Color::WHITE),
-                    ));
-                });
-
-                row.spawn((
-                    Button,
-                    Node {
-                        width: Val::Px(90.0),
-                        height: Val::Px(32.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        ..default()
-                    },
-                    BackgroundColor(theme.colors.button_default),
-                    MenuButton(MenuAction::ConfirmLoadGame),
-                ))
-                .with_children(|btn| {
-                    btn.spawn((
-                        Text::new("Load"),
-                        TextFont {
-                            font: game_assets.font_ui().clone().into(),
-                            font_size: FontSize::Px(theme.typography.font_size_dialog_small),
-                            ..default()
-                        },
-                        TextColor(Color::WHITE),
-                    ));
-                });
+                    TextColor(Color::WHITE),
+                ));
             });
     });
 }

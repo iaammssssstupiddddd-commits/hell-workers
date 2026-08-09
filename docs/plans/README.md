@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-08-08）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-08-09）。
 
 ## 新規計画書の作り方
 
@@ -44,7 +44,6 @@
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |
 | [native-acceptance-resource-safety-plan-2026-08-05.md](native-acceptance-resource-safety-plan-2026-08-05.md) | Complete | tmpfs上のCargo出力を永続storageへ固定し、実機検証のRAM圧迫を防ぐ計画。 |
 | [player-facing-result-notifications-plan-2026-07-18.md](player-facing-result-notifications-plan-2026-07-18.md) | In Progress | 配置不能理由とセーブ/ロードの終端結果をゲーム画面から確実に確認できないの計画。 |
-| [save-catalog-autosave-plan-2026-08-03.md](save-catalog-autosave-plan-2026-08-03.md) | Draft | 手動slot、bounded catalog、世代autosaveを段階導入するTrack C2計画。 |
 
 ## アーカイブ計画書一覧 (`archive/` / `**/archived/`)
 
@@ -92,6 +91,7 @@
 | [archive/input-action-context-resolver-plan-2026-07-17.md](archive/input-action-context-resolver-plan-2026-07-17.md) | Archived | Track A1: 離散キーボード競合解決と Modal/Pause の背景入力遮断計画 |
 | [archive/large-source-file-split-plan-2026-07-17.md](archive/large-source-file-split-plan-2026-07-17.md) | Archived | 500行以上の実装ファイル分割計画 |
 | [archive/runtime-correctness-contracts-plan-2026-07-12.md](archive/runtime-correctness-contracts-plan-2026-07-12.md) | Archived | 実行時正しさ契約リファクタリング計画 |
+| [archive/save-catalog-autosave-plan-2026-08-03.md](archive/save-catalog-autosave-plan-2026-08-03.md) | Archived | 単一save fileしか扱えず、退避・比較・世代付き自動復旧を安全に行えないの計画。 |
 | [archive/save-load-hardening-plan-2026-07-12.md](archive/save-load-hardening-plan-2026-07-12.md) | Archived | Save/Load境界強化・互換性リファクタリング計画 |
 | [archive/save-rehydration-registry-plan-2026-08-03.md](archive/save-rehydration-registry-plan-2026-08-03.md) | Archived | ロード後再構築の暗黙順序と通常ロード／rollbackの追従漏れを機械的に防げないの計画。 |
 | [archive/soul-energy-control-plan-2026-07-20.md](archive/soul-energy-control-plan-2026-07-20.md) | Archived | Soul Spa の稼働枠を操作できず、供給不足時の grid が全設備を一律停止するの計画。 |

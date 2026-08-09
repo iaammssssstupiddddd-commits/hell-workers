@@ -119,8 +119,11 @@ def _run_suite(args: argparse.Namespace) -> int:
 
     validate_requested_output(args)
     require_cargo_memory()
+    source_before_build = source_fingerprint()
     binary = build_binary(args)
-    session_dir = prepare_session(args, binary, cases)
+    if source_fingerprint() != source_before_build:
+        raise RuntimeError("source fingerprint changed during profiling build")
+    session_dir = prepare_session(args, binary, cases, source_before_build)
     print(f"Artifacts: {session_dir}", flush=True)
     for case in cases:
         for index in range(1, args.preflight_runs + 1):

@@ -326,6 +326,10 @@ fn configure_perf_workload(
             config.size,
             deconstruction_fixture,
         ),
+        PerfWorkload::SaveTransaction => {
+            configure_gather_baseline(config, commands, q_familiars, q_souls, q_trees, q_rocks);
+            true
+        }
     }
 }
 

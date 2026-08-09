@@ -14,7 +14,7 @@ use bevy_world_serialization::DynamicWorld;
 use super::rehydrate::{ResolvedRehydratePlan, clear_rehydrate_presentation};
 use super::reset::{advance_world_epoch, discard_old_removed_components, run_load_resets};
 use super::schema::{build_persisted_world, collect_persisted_entities, validate_persisted_world};
-use super::state::SaveRecoveryMode;
+use super::state::{NativeLoadFaultInjection, SaveRecoveryMode};
 
 #[derive(Debug)]
 pub(super) struct PreflightError(String);
@@ -98,8 +98,9 @@ pub(super) fn replace_persisted_world(
         incoming,
         type_registry,
         plan,
-        |_| Ok(()),
+        native_normal_post_write_fault,
         |world| {
+            native_rollback_finalize_fault(world)?;
             plan.run(world);
             Ok(())
         },
@@ -186,7 +187,8 @@ fn replace_recovery_only_world_with_post_write(
     let apply_result = incoming
         .write_to_world_with(world, &mut entity_map, type_registry)
         .map_err(|error| error.to_string())
-        .and_then(|()| post_write(world));
+        .and_then(|()| post_write(world))
+        .and_then(|()| native_recovery_only_post_write_fault(world));
     if let Err(error) = apply_result {
         despawn_mapped_entities(world, entity_map.values().copied());
         enter_recovery_failed(world);
@@ -200,6 +202,33 @@ fn replace_recovery_only_world_with_post_write(
     world.flush();
     set_recovery_mode(world, SaveRecoveryMode::Healthy);
     Ok(())
+}
+
+fn native_normal_post_write_fault(world: &mut World) -> Result<(), String> {
+    let Some(mut faults) = world.get_resource_mut::<NativeLoadFaultInjection>() else {
+        return Ok(());
+    };
+    faults
+        .fail_normal_post_write()
+        .map_or(Ok(()), |reason| Err(reason.to_owned()))
+}
+
+fn native_rollback_finalize_fault(world: &mut World) -> Result<(), String> {
+    let Some(mut faults) = world.get_resource_mut::<NativeLoadFaultInjection>() else {
+        return Ok(());
+    };
+    faults
+        .fail_rollback_finalize()
+        .map_or(Ok(()), |reason| Err(reason.to_owned()))
+}
+
+fn native_recovery_only_post_write_fault(world: &mut World) -> Result<(), String> {
+    let Some(mut faults) = world.get_resource_mut::<NativeLoadFaultInjection>() else {
+        return Ok(());
+    };
+    faults
+        .fail_recovery_only_post_write()
+        .map_or(Ok(()), |reason| Err(reason.to_owned()))
 }
 
 fn validate_dynamic_candidate(
@@ -1186,9 +1215,11 @@ mod tests {
     #[test]
     fn recovered_and_failed_recovery_outcomes_survive_both_transaction_resets() {
         use crate::systems::save::{
-            SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadResult, SaveLoadState,
-            SavePath,
+            LoadRequestOrigin, SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome,
+            SaveLoadOutcomeSource, SaveLoadResult, SaveLoadState, SavePath, SaveRequestOrigin,
+            SaveStorageRoot, normal_load_request,
         };
+        use hw_core::SaveSlotId;
 
         let cases = [
             (false, SaveLoadFailureKind::ApplyRecovered),
@@ -1200,7 +1231,15 @@ mod tests {
             insert_persisted_resources(live.world_mut(), 1.0);
             live.world_mut().spawn(DamnedSoul::default());
             live.add_message::<SaveLoadOutcome>();
-            live.insert_resource(SaveLoadState::LoadRequested);
+            live.init_resource::<SaveLoadState>();
+            live.init_resource::<SaveStorageRoot>();
+            live.init_resource::<crate::systems::save::SaveCatalog>();
+            live.init_resource::<crate::systems::save::DispatchedSaveLoadRequest>();
+            assert!(
+                live.world_mut()
+                    .resource_mut::<SaveLoadState>()
+                    .try_set(normal_load_request(SaveSlotId::Manual1, 1))
+            );
             live.insert_resource(SavePath::new("slot-a.ron"));
             live.insert_resource(SaveRecoveryMode::Healthy);
             live.insert_resource(Time::<Virtual>::default());
@@ -1215,6 +1254,9 @@ mod tests {
                 operation: SaveLoadOperation::Save,
                 target: "old.ron".to_owned(),
                 result: SaveLoadResult::Succeeded,
+                source: SaveLoadOutcomeSource::Manual(SaveRequestOrigin::ManualCatalog {
+                    dialog_session: 1,
+                }),
             });
 
             let mut incoming_source = app_with_save_schema();
@@ -1276,8 +1318,11 @@ mod tests {
                     .collect::<Vec<_>>(),
                 vec![SaveLoadOutcome {
                     operation: SaveLoadOperation::Load,
-                    target: "slot-a.ron".to_owned(),
+                    target: "Manual slot 1".to_owned(),
                     result: SaveLoadResult::Failed(expected_failure),
+                    source: SaveLoadOutcomeSource::Load(LoadRequestOrigin::NormalCatalog {
+                        dialog_session: 1,
+                    }),
                 }]
             );
         }

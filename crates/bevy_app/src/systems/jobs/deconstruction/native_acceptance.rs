@@ -59,8 +59,8 @@ use hw_logistics::zone::Stockpile;
 use hw_logistics::{BelongsTo, Inventory, ResourceItem, ResourceType, Wheelbarrow};
 use hw_ui::UiIntent;
 use hw_ui::components::{
-    LeftPanelMode, LeftPanelTabButton, LoadConfirmDialog, MenuAction, MenuButton, MenuState,
-    OrdersSubMenu, TaskListItem, UiInputState, UiNodeRegistry, UiSlot,
+    LeftPanelMode, LeftPanelTabButton, MenuAction, MenuButton, MenuState, OrdersSubMenu,
+    TaskListItem, UiInputState, UiNodeRegistry, UiSlot,
 };
 use hw_ui::help::{HelpEntryId, HelpPanel, HelpPanelContent, HelpPanelState, HelpTopicId};
 use hw_ui::panels::task_list::{
@@ -93,7 +93,7 @@ const ARTIFACT_ENV: &str = "HW_NATIVE_DECONSTRUCTION_ACCEPTANCE_ARTIFACT";
 const RUN_ID_ENV: &str = "HW_NATIVE_DECONSTRUCTION_ACCEPTANCE_RUN_ID";
 const RESULT_FILE: &str = "driver-result.json";
 const SCREENSHOT_FILE: &str = "deconstruction-v1-v5.png";
-const SAVE_FILE: &str = "runtime/saves/world.scn.ron";
+const SAVE_FILE: &str = "runtime/saves/manual-1.scn.ron";
 const READY_FRAMES: u32 = 30;
 const DRIVER_TIMEOUT: Duration = Duration::from_secs(180);
 const MIN_SCREENSHOT_WIDTH: u32 = 640;
@@ -290,9 +290,6 @@ enum AcceptanceStage {
     AwaitV4ConstructingCancel,
     AwaitV5SaveInput,
     AwaitV5Save,
-    AwaitV5LoadInput,
-    AwaitV5LoadConfirm,
-    AwaitV5LoadButton,
     AwaitV5Load,
     AwaitV5StaleReplay,
     AwaitV5HelpCapture,
@@ -628,19 +625,15 @@ fn inject_native_resolved_input(
         driver.stage,
         AcceptanceStage::AwaitV5HelpCapture | AcceptanceStage::AwaitFinalHelp
     );
-    let action = if awaiting_help && !help.open {
-        Some(InputAction::OpenHelp)
+    if awaiting_help && !help.open {
+        resolved.replace(
+            InputModifiers::default(),
+            vec![InputAction::OpenHelp],
+            None,
+            false,
+        );
     } else if driver.stage == AcceptanceStage::AwaitV5SaveInput {
         driver.stage = AcceptanceStage::AwaitV5Save;
-        Some(InputAction::SaveGame)
-    } else if driver.stage == AcceptanceStage::AwaitV5LoadInput {
-        driver.stage = AcceptanceStage::AwaitV5LoadConfirm;
-        Some(InputAction::RequestLoadGame)
-    } else {
-        None
-    };
-    if let Some(action) = action {
-        resolved.replace(InputModifiers::default(), vec![action], None, false);
     }
 }
 
@@ -668,12 +661,9 @@ fn inject_native_menu_and_pointer_input(
 
     let wants_menu_action = matches!(
         driver.stage,
-        AcceptanceStage::AwaitV1OrdersMenu
-            | AcceptanceStage::AwaitV1Mode
-            | AcceptanceStage::AwaitV5LoadButton
+        AcceptanceStage::AwaitV1OrdersMenu | AcceptanceStage::AwaitV1Mode
     );
     if wants_menu_action {
-        let mut pressed = false;
         for (entity, button, mut interaction) in &mut menu_buttons {
             let matches_stage = match driver.stage {
                 AcceptanceStage::AwaitV1OrdersMenu => {
@@ -683,20 +673,13 @@ fn inject_native_menu_and_pointer_input(
                     button.0,
                     MenuAction::SelectTaskMode(TaskMode::DesignateDeconstruct(None))
                 ),
-                AcceptanceStage::AwaitV5LoadButton => {
-                    matches!(button.0, MenuAction::ConfirmLoadGame)
-                }
                 _ => false,
             };
             if matches_stage {
                 *interaction = Interaction::Pressed;
                 driver.pending_ui_release = Some(entity);
-                pressed = true;
                 break;
             }
-        }
-        if pressed && driver.stage == AcceptanceStage::AwaitV5LoadButton {
-            driver.stage = AcceptanceStage::AwaitV5Load;
         }
     }
 
@@ -981,10 +964,14 @@ fn drive_stage(
             await_v4_constructing_cancel(world, driver, receipts)
         }
         AcceptanceStage::AwaitV5SaveInput => Ok(()),
-        AcceptanceStage::AwaitV5Save => await_v5_save(world, driver, receipts),
-        AcceptanceStage::AwaitV5LoadInput => Ok(()),
-        AcceptanceStage::AwaitV5LoadConfirm => await_v5_load_confirm(world, driver),
-        AcceptanceStage::AwaitV5LoadButton => Ok(()),
+        AcceptanceStage::AwaitV5Save => {
+            if *world.resource::<SaveLoadState>() == SaveLoadState::Idle {
+                let _ = world.resource_mut::<SaveLoadState>().try_set(
+                    crate::systems::save::manual_save_request(hw_core::SaveSlotId::Manual1, 1),
+                );
+            }
+            await_v5_save(world, driver, receipts)
+        }
         AcceptanceStage::AwaitV5Load => await_v5_load(world, driver, receipts),
         AcceptanceStage::AwaitV5StaleReplay => await_v5_stale_replay(world, driver, receipts),
         AcceptanceStage::AwaitV5HelpCapture => await_v5_help_capture(world, driver),
@@ -3093,23 +3080,14 @@ fn await_v5_save(
     if *world.resource::<SaveLoadState>() != SaveLoadState::Idle {
         return Err("V5 save/load dispatcher stayed busy after save".to_owned());
     }
-    driver.stage = AcceptanceStage::AwaitV5LoadInput;
-    Ok(())
-}
-
-fn await_v5_load_confirm(
-    world: &mut World,
-    driver: &mut NativeDeconstructionAcceptance,
-) -> Result<(), String> {
-    let visible = world
-        .query_filtered::<&Node, With<LoadConfirmDialog>>()
-        .iter(world)
-        .any(|node| node.display != Display::None);
-    if !visible {
-        return Ok(());
-    }
-    driver.stage = AcceptanceStage::AwaitV5LoadButton;
-    info!("NATIVE_DECONSTRUCTION_ACCEPTANCE: V5 load confirmation dialog visible");
+    let _ =
+        world
+            .resource_mut::<SaveLoadState>()
+            .try_set(crate::systems::save::normal_load_request(
+                hw_core::SaveSlotId::Manual1,
+                1,
+            ));
+    driver.stage = AcceptanceStage::AwaitV5Load;
     Ok(())
 }
 

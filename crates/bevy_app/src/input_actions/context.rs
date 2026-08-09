@@ -1,14 +1,13 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::game_state::{PlayMode, TaskMode};
-use hw_ui::components::{
-    LoadConfirmDialog, MenuState, OperationDialog, SettingsPanel, UiInputState,
-};
+use hw_ui::components::{MenuState, OperationDialog, SettingsPanel, UiInputState};
 use hw_ui::help::HelpPanel;
 
 use crate::app_contexts::TaskContext;
 use crate::entities::familiar::Familiar;
 use crate::interface::selection::SelectedEntity;
+use crate::systems::save::{SaveCatalogMode, SaveCatalogUi, SaveRecoveryMode};
 
 use super::capture::PendingWorldInputCapture;
 
@@ -16,6 +15,9 @@ use super::capture::PendingWorldInputCapture;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputOverlay {
     LoadConfirm,
+    SaveCatalog,
+    LoadCatalog,
+    RecoveryLoadCatalog,
     Help,
     Settings,
     Pause,
@@ -36,6 +38,7 @@ pub struct InputContextSnapshot {
     pub has_selected_familiar: bool,
     pub pending_play_mode: Option<PlayMode>,
     pub debug_visible: bool,
+    pub recovery_failed: bool,
 }
 
 impl Default for InputContextSnapshot {
@@ -52,6 +55,7 @@ impl Default for InputContextSnapshot {
             has_selected_familiar: false,
             pending_play_mode: None,
             debug_visible: false,
+            recovery_failed: false,
         }
     }
 }
@@ -75,7 +79,8 @@ impl InputContextSnapshot {
     }
 
     pub(crate) fn open_menu(&self) -> bool {
-        self.play_mode == PlayMode::Normal
+        !self.recovery_failed
+            && self.play_mode == PlayMode::Normal
             && self.pending_play_mode.is_none()
             && !matches!(self.menu_state, MenuState::Hidden | MenuState::Settings)
     }
@@ -104,8 +109,9 @@ pub(crate) struct InputContextParams<'w, 's> {
     selected: Res<'w, SelectedEntity>,
     debug_visible: Res<'w, crate::DebugVisible>,
     pending_capture: Option<Res<'w, PendingWorldInputCapture>>,
+    save_catalog_ui: Res<'w, SaveCatalogUi>,
+    save_recovery: Res<'w, SaveRecoveryMode>,
     q_familiars: Query<'w, 's, (), With<Familiar>>,
-    q_load_confirm: Query<'w, 's, &'static Node, With<LoadConfirmDialog>>,
     q_help: Query<'w, 's, &'static Node, With<HelpPanel>>,
     q_settings: Query<'w, 's, &'static Node, With<SettingsPanel>>,
     q_operation_dialog: Query<'w, 's, &'static Node, With<OperationDialog>>,
@@ -127,11 +133,13 @@ impl InputContextParams<'_, '_> {
             .selected
             .0
             .filter(|entity| self.q_familiars.get(*entity).is_ok());
+        let recovery_failed = *self.save_recovery == SaveRecoveryMode::RecoveryFailed;
         let simulation_paused = self.time.is_paused();
+        let logic_shortcuts_enabled = !simulation_paused && !recovery_failed;
         let has_in_progress_gesture =
             has_active_area_edit_drag || task_mode_has_in_progress_gesture(self.task_context.0);
-        let visible_overlay = if query_is_visible(&self.q_load_confirm) {
-            Some(InputOverlay::LoadConfirm)
+        let visible_overlay = if let Some(overlay) = catalog_overlay(self.save_catalog_ui.mode) {
+            Some(overlay)
         } else if query_is_visible(&self.q_help) {
             Some(InputOverlay::Help)
         } else if query_is_visible(&self.q_settings) {
@@ -163,13 +171,14 @@ impl InputContextParams<'_, '_> {
                 has_in_progress_gesture,
                 top_overlay,
                 simulation_paused,
-                logic_shortcuts_enabled: !simulation_paused,
+                logic_shortcuts_enabled,
                 play_mode,
                 task_mode: self.task_context.0,
                 menu_state: *self.menu_state,
                 has_selected_familiar: selected_familiar.is_some(),
                 pending_play_mode,
                 debug_visible: self.debug_visible.0,
+                recovery_failed,
             },
             selected_familiar,
         )
@@ -200,4 +209,21 @@ fn query_is_visible<T: Component>(query: &Query<&Node, With<T>>) -> bool {
     query
         .single()
         .is_ok_and(|node| node.display != Display::None)
+}
+
+pub(crate) fn catalog_overlay(mode: SaveCatalogMode) -> Option<InputOverlay> {
+    match mode {
+        SaveCatalogMode::Closed => None,
+        SaveCatalogMode::SaveCatalog | SaveCatalogMode::OverwriteConfirm { .. } => {
+            Some(InputOverlay::SaveCatalog)
+        }
+        SaveCatalogMode::LoadCatalog
+        | SaveCatalogMode::LoadConfirm {
+            recovery: false, ..
+        } => Some(InputOverlay::LoadCatalog),
+        SaveCatalogMode::RecoveryLoadCatalog
+        | SaveCatalogMode::LoadConfirm { recovery: true, .. } => {
+            Some(InputOverlay::RecoveryLoadCatalog)
+        }
+    }
 }

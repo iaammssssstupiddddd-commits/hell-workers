@@ -30,6 +30,7 @@ SOURCE_FINGERPRINT_FILES = {
 }
 SOURCE_FINGERPRINT_PREFIXES = ("crates/", "scripts/perf_tool/")
 SOURCE_FINGERPRINT_ASSET_PREFIX = "assets/"
+SAVE_TRANSACTION_RUNTIME_ROOT = (REPO_ROOT / "target" / ".save-transaction-runtime").resolve()
 
 def command_output(command: list[str], *, cwd: Path = REPO_ROOT) -> str:
     completed = subprocess.run(
@@ -266,6 +267,10 @@ def cargo_features(instrumentation: str) -> str:
 
 
 def build_binary(args: argparse.Namespace) -> Path:
+    if args.workload == "save-transaction" and (args.binary or args.skip_build):
+        raise RuntimeError(
+            "save-transaction must build and run its canonical profiling binary"
+        )
     binary = (
         Path(args.binary).resolve()
         if args.binary
@@ -363,7 +368,57 @@ def validate_requested_output(args: argparse.Namespace) -> None:
     )
 
 
-def prepare_session(args: argparse.Namespace, binary: Path, cases: list[Case]) -> Path:
+def prepare_save_transaction_runtime_parent(
+    args: argparse.Namespace, session_dir: Path
+) -> Path | None:
+    """Reserve an artifact-external, disk-backed root for save transaction data.
+
+    Every invocation uses the same per-operation cleanup contract, including
+    the formal native recipe. Serialized save bodies must never survive below
+    the evidence session, the controlled runtime tree, or user data roots.
+    """
+    if args.workload != "save-transaction":
+        return None
+    configured = getattr(args, "save_runtime_root", None)
+    parent = (
+        Path(configured)
+        if configured is not None
+        else SAVE_TRANSACTION_RUNTIME_ROOT / session_dir.name
+    )
+    if not parent.is_absolute():
+        parent = REPO_ROOT / parent
+    parent = parent.resolve()
+    if not parent.is_relative_to(SAVE_TRANSACTION_RUNTIME_ROOT):
+        raise RuntimeError(
+            "save-transaction runtime root must be below target/.save-transaction-runtime"
+        )
+    if parent == SAVE_TRANSACTION_RUNTIME_ROOT:
+        raise RuntimeError("save-transaction runtime root must name one fresh run parent")
+    if parent.is_relative_to(session_dir) or session_dir.is_relative_to(parent):
+        raise RuntimeError("save-transaction runtime root must stay outside the artifact session")
+    storage_error = persistent_storage_error(
+        parent, label="save-transaction runtime root"
+    )
+    if storage_error:
+        raise RuntimeError(storage_error)
+    if parent.exists():
+        raise RuntimeError(f"save-transaction runtime root already exists: {parent}")
+    return parent
+
+
+def prepare_session(
+    args: argparse.Namespace,
+    binary: Path,
+    cases: list[Case],
+    source_start: str,
+) -> Path:
+    if re.fullmatch(r"[0-9a-f]{64}", source_start) is None:
+        raise RuntimeError("profiling source fingerprint before build is invalid")
+    binary_hash = sha256(binary)
+    # Keep a process-local pin for every child launch. The manifest is not a
+    # substitute for this check: another build can replace the shared profiling
+    # path while a multi-run session is still collecting samples.
+    args._profiling_binary_sha256 = binary_hash
     session_dir = explicit_session_dir(args)
     if session_dir is None:
         timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -373,6 +428,11 @@ def prepare_session(args: argparse.Namespace, binary: Path, cases: list[Case]) -
     require_persistent_output(session_dir)
     if session_dir.exists():
         raise RuntimeError(f"output directory already exists: {session_dir}")
+    save_runtime_parent = prepare_save_transaction_runtime_parent(args, session_dir)
+    # This is process-local orchestration state, intentionally never persisted
+    # into a session artifact: it points at a directory that can contain a
+    # serialized save body.
+    args._save_transaction_runtime_parent = save_runtime_parent
     session_dir.mkdir(parents=True)
     (session_dir / "cases").mkdir()
 
@@ -436,9 +496,16 @@ def prepare_session(args: argparse.Namespace, binary: Path, cases: list[Case]) -
             else None
         ),
         "rtt_light_contract": rtt_light_contract,
+        "save_transaction_runtime": (
+            {
+                "isolated": True,
+                "cleanup": "per-run",
+            }
+            if save_runtime_parent is not None
+            else None
+        ),
     }
     write_json(session_dir / "matrix.json", matrix)
-    source_start = source_fingerprint()
     manifest = {
         "schema_version": SESSION_MANIFEST_SCHEMA_VERSION,
         "created_at": datetime.now(UTC).isoformat(),
@@ -455,7 +522,7 @@ def prepare_session(args: argparse.Namespace, binary: Path, cases: list[Case]) -
         "host": host_metadata(),
         "binary": {
             "path": str(binary),
-            "sha256": sha256(binary),
+            "sha256": binary_hash,
             "instrumentation": args.instrumentation,
         },
         "profiling_tools": profiling_tool_metadata(args),
@@ -710,8 +777,9 @@ def collect_profile_artifact(
         write_json(run_dir / "profile-artifact.json", artifact)
         return artifact, errors
     if args.instrumentation == "memory":
+        memory_frame_samples = 1 if case.workload == "save-transaction" else frame_samples
         memory_summary, memory_errors = read_native_memory(
-            run_dir / "data" / "memory.csv", frame_samples=frame_samples
+            run_dir / "data" / "memory.csv", frame_samples=memory_frame_samples
         )
         resource_usage, resource_errors = read_resource_usage(
             run_dir / "resource-usage.txt"
@@ -772,6 +840,13 @@ def run_one(
     preflight: bool,
 ) -> Validation:
     require_persistent_output(session_dir)
+    expected_binary_hash = getattr(args, "_profiling_binary_sha256", None)
+    if not isinstance(expected_binary_hash, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", expected_binary_hash
+    ):
+        raise RuntimeError("profiling session binary fingerprint was not prepared")
+    if sha256(binary) != expected_binary_hash:
+        raise RuntimeError("profiling binary changed before starting a run")
     case_dir = session_dir / "cases" / case.identifier
     case_dir.mkdir(exist_ok=True)
     label = ("preflight-" if preflight else "run-") + f"{run_number:03d}"
@@ -854,6 +929,21 @@ def run_one(
         command.extend(["--perf-rtt-quality", args.rtt_quality])
     env = performance_environment()
     env.update(fixed_environment(args))
+    runtime_root: Path | None = None
+    runtime_cleanup_error: str | None = None
+    if case.workload == "save-transaction":
+        # This fixture owns its canonical size population. Do not let an
+        # interactive shell's optional spawn overrides alter the sampled
+        # world when the command deliberately relies on size defaults.
+        env.pop("HW_SPAWN_SOULS", None)
+        env.pop("HW_SPAWN_FAMILIARS", None)
+        env["HW_PERF_SAVE_SAMPLE_KIND"] = "preflight" if preflight else "measured"
+        runtime_parent = getattr(args, "_save_transaction_runtime_parent", None)
+        if not isinstance(runtime_parent, Path):
+            raise RuntimeError("save-transaction runtime parent was not prepared")
+        runtime_root = runtime_parent / case.identifier / label
+        runtime_root.mkdir(parents=True, exist_ok=False)
+        env["HW_PERF_SAVE_RUNTIME_ROOT"] = str(runtime_root)
     launch_command = command
     if args.instrumentation == "memory":
         timer = executable_path(shutil.which("time"), "GNU time binary")
@@ -865,8 +955,15 @@ def run_one(
             str(temporary_dir / "resource-usage.txt"),
             *command,
         ]
+    command_for_artifact = launch_command
+    if case.workload == "save-transaction":
+        # Runtime/body paths are deliberately absent from retained evidence.
+        command_for_artifact = [
+            "<absolute-path>" if Path(argument).is_absolute() else argument
+            for argument in launch_command
+        ]
     (temporary_dir / "command.txt").write_text(
-        " ".join(launch_command) + "\n", encoding="utf-8"
+        " ".join(command_for_artifact) + "\n", encoding="utf-8"
     )
     write_json(
         temporary_dir / "requested-environment.json",
@@ -976,6 +1073,37 @@ def run_one(
                 trace_returncode = 124
             if trace_log_handle is not None:
                 trace_log_handle.close()
+        if runtime_root is not None:
+            try:
+                # The root was created above for this one process and is never
+                # an artifact. Remove only that exact fresh path so serialized
+                # bodies/settings cannot accumulate inside the session.
+                if not runtime_root.is_dir() or runtime_root.is_symlink():
+                    raise OSError("isolated save runtime root is not a real directory")
+                shutil.rmtree(runtime_root)
+                runtime_parent = getattr(args, "_save_transaction_runtime_parent", None)
+                if not isinstance(runtime_parent, Path):
+                    raise OSError("save-transaction runtime parent was not prepared")
+                empty_parent = runtime_root.parent
+                while empty_parent.is_relative_to(runtime_parent):
+                    try:
+                        empty_parent.rmdir()
+                    except OSError:
+                        break
+                    if empty_parent == runtime_parent:
+                        break
+                    empty_parent = empty_parent.parent
+            except OSError as error:
+                runtime_cleanup_error = (
+                    f"failed to remove isolated save runtime root: {error}"
+                )
+
+    binary_provenance_error: str | None = None
+    try:
+        if sha256(binary) != expected_binary_hash:
+            binary_provenance_error = "profiling binary changed while a run was executing"
+    except OSError as error:
+        binary_provenance_error = f"profiling binary could not be rehashed after a run: {error}"
 
     validation = validate_run(
         temporary_dir,
@@ -1016,6 +1144,10 @@ def run_one(
     )
     validation.profile_artifact = profile_artifact
     validation.reasons.extend(profile_errors)
+    if runtime_cleanup_error is not None:
+        validation.reasons.append(runtime_cleanup_error)
+    if binary_provenance_error is not None:
+        validation.reasons.append(binary_provenance_error)
     validation.valid = not validation.reasons
     validation.reasons.extend(
         enforce_environment_lock(
@@ -1050,6 +1182,9 @@ def run_one(
             "actual_adapter": validation.adapter,
             "actual_window": validation.window,
             "actual_render_inventory": validation.render_inventory,
+            "runtime_data_cleaned": runtime_root is None
+            or runtime_cleanup_error is None,
+            "runtime_data_cleanup": "per-run",
         },
     )
     temporary_dir.replace(final_dir)

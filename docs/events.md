@@ -43,7 +43,7 @@ dual 通知の Producer は `publish_*` helper を使う。
 
 | Message | 定義 / 登録owner | Producer | Consumer / Timing | 契約 |
 |:---|:---|:---|:---|:---|
-| `SaveLoadOutcome` | `bevy_app::systems::save` / `SavePlugin` | `Last::SaveLoadApplySet` dispatcher | root通知adapter（次の`Update::NotificationSystemSet::Adapt`） | requestごとにterminal resultを1件。world replacementの全reset後に発行し、targetは安全なファイル名label、failureはraw textを持たない10分類 |
+| `SaveLoadOutcome` | `bevy_app::systems::save` / `SavePlugin` | `Last::SaveLoadApplySet` dispatcher | root通知adapter（次の`Update::NotificationSystemSet::Adapt`） | requestごとにterminal resultを1件。world replacementの全reset後に発行し、typed slotのplayer-safe labelとManual / Autosave / Load sourceを保持する。failureはraw textを持たない13分類 |
 | `TaskActionOutcome` | `bevy_app::interface::ui::panels::task_list::actions` / `MessagesPlugin` | `apply_task_action_intents_system` | task action通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | priority/cancel intentごとに1件。成功、stale、unsupported、pause、captureをtyped resultで表し、Entity/action/resultをdedupe keyへ含める |
 | `StockpilePolicyChangeOutcome` | `hw_logistics::stockpile_policy_change` / `MessagesPlugin` | `apply_stockpile_policy_change_requests_system` | Stockpile policy通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | policy change requestごとに1件。変更、同値、stale、特殊設備、capacity clamp、重複を件数だけで表し、player-safeなToastOnly通知へ変換する |
 | `FamiliarSettingsChangeOutcome` | `hw_familiar_ai::familiar_ai::settings` / root `MessagesPlugin` | UI adapter の pause/modal rejection、または `apply_familiar_settings_change_requests_system` | Familiar settings通知adapter（同じ`Update::NotificationSystemSet::Adapt`） | target batchごとに1件。通常Applied/Unchangedは通知しない。全作業禁止はWarning、roster解放はInfo、stale/missing/pause-modal rejectionはtyped Warning/Errorへ変換する |

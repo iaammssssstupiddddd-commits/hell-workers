@@ -189,10 +189,10 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 `crates/bevy_app/src/systems/save/` — `SavePlugin`（`HellWorkersGamePlugin` が登録する root 専用 plugin: 全クレートの型に届く必要があるため leaf へ移動不可）。
 
 - セーブ/ロードとも exclusive system（`&mut World`）で 1 フレーム内に完結する
-- F5/F9 は `PreUpdate` の input resolver から `UiIntent::SaveGame` / `RequestLoadGame` へ bridge し、Interface handler が `SaveLoadState` を更新する。F9 は save file が存在すれば確認後、存在しなければdialogを省略してload ownerへ要求する。exclusive applyは`Last::SaveLoadApplySet`へ固定する。dispatcherは要求を先に`Idle`へ戻し、全処理とworld replacement resetの後でterminal `SaveLoadOutcome`を1件だけ発行する。`SettingsPersistenceSet`の後に順序付けられたproject-owned最終phaseであり、他のproject `Last` systemを追加する場合は前後関係を明示する
+- F5/F9 は `PreUpdate` の input resolver から `UiIntent::SaveGame` / `RequestLoadGame` へ bridge する。filesystem を事前参照せず、同じ frame に catalog root の pending capture を確立してから、Interface handler が単調な dialog session 付きの Save / Load catalog を開く。Empty の手動slotは保存、既存 Manual slotは上書き確認、loadable entry は読込確認へ進む。disabled entry は理由を表示したまま読み込みだけを無効にする。exclusive applyは`Last::SaveLoadApplySet`へ固定する。dispatcherは要求を先に`Idle`へ戻し、全処理とworld replacement resetの後でterminal `SaveLoadOutcome`を1件だけ発行する。`SettingsPersistenceSet`の後に順序付けられたproject-owned最終phaseであり、他のproject `Last` systemを追加する場合は前後関係を明示する
 - 保存対象は`schema.rs`のdeny-all + allow-list方式。runtime task execution edge、request claim/lease、`ItemDespawnTimer`はwriterから除外し、legacy bodyでもschema検証前にstripする。`ManagedBy`と`ParkedAt`等のdurable owner Relationship、およびcarrier位置をremapするstaging handoffの`LoadedIn`はcandidate上で対称性と容量を検証する。積載handoffはRuntimeNormalizeでcarrier近傍へ荷下ろししてlive graphから除去する
 - rehydrate domain adapterはphase/dependency付き`RehydrateRegistry`へ登録する。全plugin build後の`SavePlugin::finish`がgraphを検証してimmutable `ResolvedRehydratePlan`へfreezeし、通常loadとrollbackは同じplanをexactly once実行する。phaseはdurable/runtime normalize、shell、derived rebuild、wakeに分かれ、shell→derivedのflush barrierはroot runnerだけが所有する
-- incomingとrollback snapshotはlive reset前に同じstaging/domain validatorを通す。rollback失敗時だけ`SaveRecoveryMode::RecoveryFailed`へ遷移してvirtual timeをpauseし、専用ownerの`RecoveryLoadRequested`だけがfull-preflight済みincomingをrollback snapshotなしで適用できる。通常F9はrecovery-onlyへ昇格せず、Track C3時点ではproduction producerを置かない。専用UI/input gateはTrack C2が所有する
+- incomingとrollback snapshotはlive reset前に同じstaging/domain validatorを通す。rollback失敗時だけ`SaveRecoveryMode::RecoveryFailed`へ遷移してvirtual timeをpauseする。この間はsave、autosave、通常load、world mutationを拒否し、foreground recovery catalog が現行dialog sessionへ束縛した`RecoveryCatalog` origin のloadだけが、full preflight済みincomingをrollback snapshotなしで適用できる。通常F9やraw UI payloadをrecovery-onlyへ昇格しない。成功時だけ`Healthy`へ戻すが自動unpauseしない
 - `LoadResetRegistry`はroot所有。leafは`reset_for_world_replace(&mut World)`だけを公開し、root facadeがcallbackを登録する。old simulation Entityを保持するResource/message/UI/visual cacheはreplace前にclearし、runtime-only `GatheringSpot`とlinked visualも同時にdespawnする。notification historyと旧outcomeもclearし、reset後に書かれたload結果を新world最初の重要通知とする。system-localは`hw_core::WorldEpoch`不一致でlazy clearする。old `RemovedComponents`はwrite前に二重bufferを破棄し、new `Added`/`Changed`は次frameへ保持する
 - **spawn 時コンポーネントを追加したら allow-list、shell、または source-aware rehydrate helper に必ず登録する**（I-P1）。タプルキーのコレクションは保存型に持ち込まない（I-P2）
 - 仕様: [docs/save_load.md](save_load.md) / 不変条件: [docs/invariants.md §7](invariants.md)
@@ -461,10 +461,10 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 - `UiInputState.pointer_over_ui` は通常 UI hover、`world_input_captured` は Modal/Pause の全域 ownership を表す。
   world 側 consumer は両者を合成する `world_input_blocked()` を使い、UI 自身は capture 中だけ前景 ancestry gate に従う。
-- `UiInputCapture` を持つ LoadConfirm / Help / Settings / Pause / OperationDialog の root は viewport 全体を
+- `UiInputCapture` を持つ Save / Load / Recovery catalog とその確認、Help / Settings / Pause / OperationDialog の root は viewport 全体を
   `FocusPolicy::Block + Pickable::default()` で覆う。構造用 `UiRoot` / `UiMountSlot` は
   `FocusPolicy::Pass + Pickable::IGNORE` とし、通常時の world picking を遮らない。
-- capture rootは`LoadConfirm > Help > Settings > Pause > OperationDialog`と入力priorityが一致する
+- capture rootは`Save / Load / Recovery catalog（確認を含む） > Help > Settings > Pause > OperationDialog`と入力priorityが一致する
   `GlobalZIndex`を共通定数から使用する。Helpは独立した`HelpPanelState`を持ち、背景`MenuState`とactive modeを
   保持する。通常時だけ`HelpPauseGuard`がpauseを所有し、close/world replacement時に所有したpauseだけを解除する。
 - capture 開始時は未確定 Area/Zone/Dream gesture と Entity List drag/resize を rollback/reset する。
@@ -540,7 +540,7 @@ roster relationshipを直接変更しない。
 既存 domain consumerへ渡す。新しい shortcut は binding table、context/compatibility、owner classification
 test を同時に更新し、consumer に raw keyboard path を追加しない。
 
-overlay は `LoadConfirm > Help > Settings > Pause > OperationDialog` の順で最前面だけが Escape を claim する。
+overlay は `Save / Load / Recovery catalog（確認を含む） > Help > Settings > Pause > OperationDialog` の順で最前面だけが Escape を claim する。
 Pause は Escape/Space、Digit1-4、F1、F5/F9 だけを許可し、その他の project action を抑止する。Helpは
 F1/Escape、ArrowUp/Down、PageUp/Down、Home/Endだけを許可する。overlay がない
 text input focus/latch 中は action を生成しない。accepted overlay open は同時に `InputFocus` を clear する。
@@ -556,8 +556,8 @@ text input focus/latch 中は action を生成しない。accepted overlay open 
 | `3` | 高速 (x2) / Familiar Haul | 同上 |
 | `4` | 超高速 (x4) / Familiar Build | 同上 |
 | `Escape` | overlay close / resume / active owner cancel / menu close / Familiar Idle・Patrol | 左から context priority 順。Idle・Patrol は `TaskMode::None` の Normal 時だけ |
-| `F5` | Save | text input中とin-progress gesture中は生成しない。Soul mask aliasは廃止 |
-| `F9` | Load確認を要求 | save file存在時は確認dialog、不在時はowner readへ進み`Save not found`を通知。追加light aliasは廃止 |
+| `F5` | Save catalogを開く | text input中とin-progress gesture中は生成しない。filesystemの事前参照なしにpending captureを取得し、Empty手動slotは保存、既存Manual slotは確認へ進む。Soul mask aliasは廃止 |
+| `F9` | Load catalogを開く | filesystemの事前参照なしにpending captureを取得する。Empty / 破損 / 非対応 / seed不一致 / 読込不能は理由を表示し、読込操作だけを無効にする。追加light aliasは廃止 |
 | `V` | 矢視切替 | exact unmodified chordのみ |
 | `F12` | デバッグ表示トグル + Gizmo 切替 | `plugins/input.rs`。`GizmoConfigStore` の enabled も同期 |
 | `F3` | 3D 表示トグル | `plugins/input.rs`。`Render3dVisible` を反転し、Camera3dRtt と RttCompositeSprite を制御（**Dev 専用**） |

@@ -105,6 +105,8 @@ mod output;
 #[cfg(feature = "profiling")]
 mod renderdoc_capture;
 #[cfg(feature = "profiling")]
+mod save_transaction;
+#[cfg(feature = "profiling")]
 mod workload_driver;
 
 #[cfg(feature = "profiling")]
@@ -147,6 +149,10 @@ pub(crate) use indoor_light_fixture::{
 pub(crate) use renderdoc_capture::{
     arm_renderdoc_checkpoint_system, install as install_renderdoc_capture,
     poll_renderdoc_capture_system,
+};
+#[cfg(feature = "profiling")]
+pub(crate) use save_transaction::{
+    SaveTransactionCaptureState, drive_save_transaction_capture_system,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use workload_driver::drive_perf_workload_system;
@@ -194,11 +200,13 @@ pub(crate) struct PerfCapture {
     determinism_actor_records: Vec<PerfDeterminismActorRecord>,
     #[cfg(feature = "profiling-memory")]
     memory_measurement: crate::profiling_allocator::MemoryMeasurement,
+    save_transaction_sample: Option<crate::systems::save::SaveTransactionSample>,
+    save_transaction_kind: String,
 }
 
 #[cfg(feature = "profiling")]
-#[derive(Default)]
-enum PerfCapturePhase {
+#[derive(Clone, Copy, Default)]
+pub(super) enum PerfCapturePhase {
     #[default]
     WaitingForScenario,
     ArmFixedAudit,
@@ -206,6 +214,47 @@ enum PerfCapturePhase {
     Measure,
     Flush,
     Finished,
+}
+
+#[cfg(feature = "profiling")]
+impl PerfCapture {
+    pub(super) const fn phase(&self) -> PerfCapturePhase {
+        self.phase
+    }
+
+    #[cfg(feature = "profiling-memory")]
+    pub(super) fn finish_memory_measurement(&mut self) {
+        self.memory_measurement = crate::profiling_allocator::end_measurement();
+    }
+
+    pub(super) fn store_save_transaction_sample(
+        &mut self,
+        sample: crate::systems::save::SaveTransactionSample,
+    ) {
+        self.save_transaction_sample = Some(sample);
+    }
+
+    pub(super) const fn has_save_transaction_sample(&self) -> bool {
+        self.save_transaction_sample.is_some()
+    }
+
+    pub(super) fn fail_capture(&mut self) {
+        self.phase = PerfCapturePhase::Finished;
+    }
+
+    pub(super) fn save_transaction_kind(&self) -> &str {
+        if self.save_transaction_kind.is_empty() {
+            "measured"
+        } else {
+            self.save_transaction_kind.as_str()
+        }
+    }
+
+    pub(super) fn take_save_transaction_sample(
+        &mut self,
+    ) -> Option<crate::systems::save::SaveTransactionSample> {
+        self.save_transaction_sample.take()
+    }
 }
 
 #[cfg(feature = "profiling")]

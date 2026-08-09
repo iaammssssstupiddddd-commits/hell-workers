@@ -7,7 +7,11 @@ use crate::input_actions::ActiveModeCleanupParams;
 use crate::interface::selection::SelectedEntity;
 use crate::interface::ui::InfoPanelPinState;
 use crate::systems::command::TaskArea;
-use crate::systems::save::{SaveLoadState, SavePath};
+use crate::systems::save::{
+    SaveCatalog, SaveCatalogUi, SaveDialogSession, SaveLoadState, SaveRecoveryMode, SaveStorageRoot,
+};
+use crate::systems::settings::SettingsStorageRoot;
+use crate::world::map::GeneratedWorldLayoutResource;
 use hw_core::game_state::PlayMode;
 use hw_core::world::DoorState;
 use hw_energy::{
@@ -19,7 +23,7 @@ use hw_energy::{
 use hw_jobs::{Building, BuildingCategory, DeconstructionPending, Door};
 use hw_logistics::{StockpilePolicyChangeRequest, StockpilePolicyPatch};
 use hw_spatial::StockpileSpatialGrid;
-use hw_ui::components::{ArchitectCategoryState, LoadConfirmDialog, OperationDialog};
+use hw_ui::components::{ArchitectCategoryState, OperationDialog};
 use hw_ui::intents::StockpilePolicyEditTarget;
 use hw_ui::power::PowerPriorityValue;
 use hw_world::{DoorVisualHandles, WorldMap, WorldMapWrite, apply_door_state};
@@ -207,15 +211,26 @@ pub(crate) struct IntentFamiliarQueries<'w, 's> {
 pub(crate) struct IntentUiQueries<'w, 's> {
     // ダイアログはそれぞれ独立したエンティティだが、&mut Node の 2 クエリは
     // Without で disjoint を明示しないと B0001（クエリ競合 panic）になる。
-    pub(crate) q_dialog:
-        Query<'w, 's, &'static mut Node, (With<OperationDialog>, Without<LoadConfirmDialog>)>,
-    pub(crate) q_load_confirm:
-        Query<'w, 's, &'static mut Node, (With<LoadConfirmDialog>, Without<OperationDialog>)>,
+    pub(crate) q_dialog: Query<'w, 's, &'static mut Node, With<OperationDialog>>,
     pub(crate) q_operation_scroll:
         Query<'w, 's, &'static mut ScrollPosition, With<hw_ui::components::OperationDialogScroll>>,
     pub(crate) input_focus: ResMut<'w, InputFocus>,
     pub(crate) save_load_state: ResMut<'w, SaveLoadState>,
-    pub(crate) save_path: Res<'w, SavePath>,
+    pub(crate) save_storage_root: Res<'w, SaveStorageRoot>,
+    pub(crate) settings_storage_root: Res<'w, SettingsStorageRoot>,
+    pub(crate) save_catalog: ResMut<'w, SaveCatalog>,
+    pub(crate) save_catalog_ui: ResMut<'w, SaveCatalogUi>,
+    pub(crate) save_dialog_session: ResMut<'w, SaveDialogSession>,
+    pub(crate) save_recovery: Res<'w, SaveRecoveryMode>,
+    pub(crate) worldgen_layout: Option<Res<'w, GeneratedWorldLayoutResource>>,
+}
+
+impl IntentUiQueries<'_, '_> {
+    pub(crate) fn worldgen_seed(&self) -> Option<u64> {
+        self.worldgen_layout
+            .as_ref()
+            .map(|layout| layout.master_seed)
+    }
 }
 
 pub(crate) fn ensure_familiar_selected(

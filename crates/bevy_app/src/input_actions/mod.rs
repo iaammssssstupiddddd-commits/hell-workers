@@ -73,7 +73,10 @@ pub(crate) fn configure_input_resolution_sets(app: &mut App) {
 impl InputOverlay {
     pub(crate) const fn priority(self) -> u8 {
         match self {
-            Self::LoadConfirm => 5,
+            Self::LoadConfirm
+            | Self::SaveCatalog
+            | Self::LoadCatalog
+            | Self::RecoveryLoadCatalog => 5,
             Self::Help => 4,
             Self::Settings => 3,
             Self::Pause => 2,

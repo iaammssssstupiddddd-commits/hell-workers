@@ -203,6 +203,7 @@ impl Plugin for StartupPlugin {
                     setup_perf_ui_mode_if_enabled.in_set(PerfScenarioSet::UiSetup),
                 )
                 .init_resource::<perf_scenario::PerfCapture>()
+                .init_resource::<perf_scenario::SaveTransactionCaptureState>()
                 .configure_sets(
                     Update,
                     PerfScenarioSet::Capture.after(GameSystemSet::Interface),
@@ -235,7 +236,10 @@ impl Plugin for StartupPlugin {
                 )
                 .add_systems(
                     Update,
-                    perf_scenario::drive_perf_capture_system
+                    (
+                        perf_scenario::drive_perf_capture_system,
+                        perf_scenario::drive_save_transaction_capture_system,
+                    )
                         .in_set(PerfScenarioSet::Capture)
                         .run_if(perf_scenario::is_not_fixed_step_behavior)
                         .run_if(perf_scenario::is_not_renderdoc_capture),

@@ -396,7 +396,7 @@ table、context/compatibility、owner classification test を同時に更新す�
 Help openはpending captureで`InputOverlay::Help`が実際のpriority勝者になった場合だけ受理する。
 通常時のopenは`Input` phaseでsimulationより先にpauseし、`HelpPauseGuard`が所有したpauseだけをclose/resetで解除する。
 Pauseからのhandoffではpause ownershipとcapture-start latchを取り直さず、背景`MenuState`/mode ownerを変更しない。
-capture rootの`GlobalZIndex`は`LoadConfirm > Help > Settings > Pause > OperationDialog`のinput priorityと一致させる。
+capture rootの`GlobalZIndex`は`Save / Load / Recovery catalog（確認を含む） > Help > Settings > Pause > OperationDialog`のinput priorityと一致させる。
 
 ### I-U5: 配置previewとcommitは同じ型付き判定を使う
 
@@ -547,8 +547,10 @@ coordinator-owned `SaveRecoveryMode`は`Healthy`と`RecoveryFailed`だけを持�
 `Time<Virtual>`をpauseし、saveと通常transactionを拒否する。recovery-only replaceは`RecoveryFailed`からだけ
 呼べ、incoming full preflight、idempotent reset、同じrehydrate planを必須とする。再失敗時はpartial entityを掃除して
 paused fail-closedを維持し、成功時だけ`Healthy`へ戻す。ただし成功は自動unpauseの権限を持たない。
-通常F9/`LoadRequested`をrecovery-onlyへ暗黙昇格せず、専用ownerだけが`RecoveryLoadRequested`を発行する。
-Track C3時点のproductionにはproducerを置かず、Track C2が専用UI/input gateと同時に接続する。
+通常F9/normal catalog loadをrecovery-onlyへ暗黙昇格せず、foreground recovery catalogだけが現行dialog
+sessionに束縛された`RecoveryCatalog` originを発行する。`RecoveryFailed`中はこのcatalog操作と既存foreground
+surfaceを閉じる安全なintent以外のUI ingressをrootでdiscardし、pointer直送やbuffer済みmessageからworld mutationを
+再開させない。
 
 ### I-P11: 解体orderだけを保存し、pendingとcommit claimは再利用しない
 

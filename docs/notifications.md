@@ -66,12 +66,11 @@ validator の結果と赤い ghost は変更しない。別の grid へ移動す
 
 ## セーブ／ロード結果
 
-`SavePlugin` は `SaveLoadState` を要求用の4状態（`Idle` / `SaveRequested` / `LoadRequested` /
-`RecoveryLoadRequested`）に限定し、各要求に対して
-`SaveLoadOutcome { operation, target, result }` を1件だけ発行する。`target` は `SavePath` の
-安全なファイル名だけを使い、取得できなければ `Current save` とする。
-`RecoveryLoadRequested`はrollback失敗後の専用recovery ownerだけが使う。通常のF9/UI loadからは発行せず、
-Track C3時点ではproduction producerを持たない。
+`SavePlugin` は `SaveLoadState::Pending(SaveLoadRequest)`だけを要求用のone-shot stateとして使い、
+各要求に対して`SaveLoadOutcome { operation, target, result, source }`を1件だけ発行する。`target` は
+typed slotから得るplayer-safe labelであり、pathやraw errorを表示へ渡さない。load requestはnormal catalogか
+recovery catalogのoriginを持つ。recovery originはrollback失敗後のforeground catalog ownerだけが発行でき、
+通常のF9/UI payloadからは作れない。
 
 | `SaveLoadFailureKind` | 意味 | UI severity |
 | --- | --- | --- |
@@ -85,10 +84,14 @@ Track C3時点ではproduction producerを持たない。
 | `MissingPrerequisite` | registry、asset、rehydrate前提が不足 | Error |
 | `ApplyRecovered` | live apply失敗後、旧worldのrollbackに成功 | Warning |
 | `RecoveryFailed` | live applyとrollbackの両方に失敗 | Error |
+| `OverwriteConfirmationRequired` | 保存先が確認後に変化した | Warning |
+| `CommittedDurabilityUncertain` | 書込は成功したがdirectory durabilityを確認できない | Warning |
+| `RequestRejected` | 現在のcatalog/recovery stateでは要求を受理できない | Warning |
 
-成功は `Success`、全terminal outcomeは `Important` として履歴へ残す。詳細なOS／RON／transaction errorは
-ログにだけ残し、root adapter は分類の exhaustive match から固定文言を作る。dedupe key は
-operation、対象、result kindを含むため、SaveとLoad、成功と失敗を誤って集約しない。
+manual save/loadの成功を含むterminal outcomeは`Important`として履歴へ残す。autosave成功だけは
+`ToastOnly`、autosave失敗は`Important`である。詳細なOS／RON／transaction errorはログにだけ残し、
+root adapter は分類のexhaustive matchから固定文言を作る。dedupe key はoperation、slot label、result kindを
+含むため、SaveとLoad、成功と失敗、autosave generationを誤って集約しない。
 
 dispatcherは要求を処理する直前に `SaveLoadState::Idle` へ戻す。load成功またはrollbackでは
 world replacementのresetが通知Messageと旧履歴を消し、その全処理が終わった後にdispatcherがoutcomeを発行する。

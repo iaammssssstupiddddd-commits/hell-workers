@@ -1,13 +1,16 @@
 //! セーブ/ロード機能のプラグイン。
 //!
-//! F5 でセーブ、F9 でロードをトリガーする（`docs/save_load.md` 参照）。
-//! セーブ/ロードは同期的な exclusive system として実装されており、
-//! despawn → deserialize → write → キャッシュ再構築を 1 フレーム内で完結させる
-//! （plan が想定していた複数フレームにまたがる `Time<Virtual>` 一時停止パイプラインは
-//! 採用していない。1フレーム内で完結させることで実装・検証を単純化した）。
+//! F5 / F9 は catalog modal を開き、operation と slot を束ねた one-shot request を
+//! `Last::SaveLoadApplySet` で適用する（`docs/save_load.md` 参照）。
 
+mod atomic_file;
+pub(crate) mod autosave;
+pub(crate) mod catalog;
+mod catalog_present;
+pub(crate) mod catalog_ui;
 mod format;
 mod load;
+mod metrics;
 mod native_acceptance;
 mod rehydrate;
 mod reset;
@@ -17,13 +20,25 @@ mod state;
 mod transaction;
 
 use bevy::prelude::*;
+use hw_core::SaveSlotId;
 
 use crate::systems::settings::SettingsPersistenceSet;
 
+pub use autosave::AutosaveScheduler;
+pub use catalog::{
+    AutosaveGenerationLimit, DEFAULT_SAVE_STORAGE_ROOT, SaveCatalog, SaveCatalogEntry,
+    SaveContentStatus, SaveExpectedTarget, SaveFileRevision, SaveSlotCapabilities, SaveStorageRoot,
+    format_relative_modified, read_save_file_revision, refresh_save_catalog,
+    relative_modified_label, scan_save_catalog, slot_capabilities,
+};
+pub use catalog_ui::{SaveCatalogMode, SaveCatalogUi};
+pub use metrics::{SaveTransactionMetrics, SaveTransactionSample};
 pub use native_acceptance::NativeSaveLoadAcceptancePlugin;
+pub use saving::expected_target_from_revision;
 pub use state::{
-    SAVE_FILE_PATH, SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome, SaveLoadResult,
-    SaveLoadState, SavePath, SaveRecoveryMode,
+    LoadRequestOrigin, SAVE_FILE_PATH, SaveDialogSession, SaveLoadFailureKind, SaveLoadOperation,
+    SaveLoadOutcome, SaveLoadOutcomeSource, SaveLoadRequest, SaveLoadResult, SaveLoadState,
+    SavePath, SaveRecoveryMode, SaveRequestOrigin,
 };
 
 use load::{load_world_system, recover_world_system};
@@ -41,6 +56,10 @@ use schema::register_save_types;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct SaveLoadApplySet;
 
+/// Request currently being executed by the Last apply dispatcher.
+#[derive(Resource, Debug, Clone, Default)]
+pub(crate) struct DispatchedSaveLoadRequest(pub Option<SaveLoadRequest>);
+
 pub struct SavePlugin;
 
 impl Plugin for SavePlugin {
@@ -49,14 +68,23 @@ impl Plugin for SavePlugin {
         app.init_resource::<SaveLoadState>();
         app.init_resource::<SaveRecoveryMode>();
         app.init_resource::<SavePath>();
+        app.init_resource::<SaveStorageRoot>();
+        app.init_resource::<SaveCatalog>();
+        app.init_resource::<SaveDialogSession>();
+        app.init_resource::<SaveCatalogUi>();
+        app.init_resource::<AutosaveScheduler>();
+        app.init_resource::<SaveTransactionMetrics>();
+        app.init_resource::<DispatchedSaveLoadRequest>();
         app.init_resource::<hw_core::WorldEpoch>();
         app.add_message::<SaveLoadOutcome>();
 
-        // These root-owned hooks are registered here because they have no leaf
-        // owner. Leaf facades register their own hooks when their plugins are
-        // constructed, without depending on this module.
         register_load_reset_hook(app, "root-interaction", reset_root_interaction_state);
         register_load_reset_hook(app, "root-runtime-caches", reset_runtime_caches);
+        register_load_reset_hook(
+            app,
+            "save-catalog-interaction",
+            reset_save_catalog_interaction,
+        );
         register_load_reset_hook(app, "save-load-outcomes", clear_save_load_outcomes);
 
         app.configure_sets(Last, SaveLoadApplySet.after(SettingsPersistenceSet));
@@ -68,7 +96,36 @@ impl Plugin for SavePlugin {
     }
 }
 
-fn save_load_apply_system(world: &mut World) {
+/// Runtime systems that depend on settings/UI assets. Registered by the app shell.
+pub fn register_save_catalog_runtime_systems(app: &mut App) {
+    use crate::interface::ui::interaction::handle_ui_intent;
+    use crate::systems::GameSystemSet;
+
+    app.add_systems(
+        Update,
+        (
+            catalog_ui::settle_catalog_after_outcomes_system,
+            catalog::refresh_dirty_save_catalog_system,
+            catalog_present::sync_save_catalog_dialog_system,
+            autosave::tick_autosave_timer_system,
+        )
+            .chain()
+            .in_set(GameSystemSet::Interface)
+            .before(handle_ui_intent),
+    );
+    app.add_systems(
+        Update,
+        (
+            autosave::consume_autosave_timer_on_outcomes,
+            autosave::autosave_scheduler_system,
+        )
+            .chain()
+            .after(handle_ui_intent)
+            .in_set(GameSystemSet::Interface),
+    );
+}
+
+pub(crate) fn save_load_apply_system(world: &mut World) {
     save_load_apply_with(
         world,
         save_world_system,
@@ -83,45 +140,100 @@ fn save_load_apply_with(
     mut load: impl FnMut(&mut World) -> SaveLoadResult,
     mut recover: impl FnMut(&mut World) -> SaveLoadResult,
 ) {
-    let request = *world.resource::<SaveLoadState>();
-    let operation = match request {
-        SaveLoadState::Idle => return,
-        SaveLoadState::SaveRequested => SaveLoadOperation::Save,
-        SaveLoadState::LoadRequested | SaveLoadState::RecoveryLoadRequested => {
-            SaveLoadOperation::Load
-        }
+    let Some(request) = world.resource_mut::<SaveLoadState>().take_request() else {
+        return;
     };
+    let resolved = world.resource::<SaveStorageRoot>().resolve(request.slot());
+    *world.resource_mut::<SavePath>() = SavePath::new(resolved);
+    world.resource_mut::<DispatchedSaveLoadRequest>().0 = Some(request.clone());
 
-    // Clear the trigger before entering fallible work so failures cannot block
-    // later requests. The terminal outcome is emitted only after all load
-    // resets and rollback work have completed.
-    *world.resource_mut::<SaveLoadState>() = SaveLoadState::Idle;
-    let target = state::save_target_label(world.resource::<SavePath>().as_path());
     let recovery_required = world
         .get_resource::<SaveRecoveryMode>()
         .is_some_and(|mode| *mode == SaveRecoveryMode::RecoveryFailed);
-    let result = match request {
-        SaveLoadState::SaveRequested | SaveLoadState::LoadRequested if recovery_required => {
+    let result = match &request {
+        SaveLoadRequest::Save { .. } if recovery_required => {
             SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed)
         }
-        SaveLoadState::RecoveryLoadRequested if !recovery_required => {
-            SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed)
-        }
-        SaveLoadState::SaveRequested => save(world),
-        SaveLoadState::LoadRequested => load(world),
-        SaveLoadState::RecoveryLoadRequested => recover(world),
-        SaveLoadState::Idle => unreachable!("Idle requests return before dispatch"),
+        SaveLoadRequest::Load {
+            origin: LoadRequestOrigin::NormalCatalog { .. },
+            ..
+        } if recovery_required => SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed),
+        SaveLoadRequest::Load {
+            origin: LoadRequestOrigin::RecoveryCatalog { .. },
+            ..
+        } if !recovery_required => SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed),
+        SaveLoadRequest::Save { .. } => save(world),
+        SaveLoadRequest::Load {
+            origin: LoadRequestOrigin::NormalCatalog { .. },
+            ..
+        } => load(world),
+        SaveLoadRequest::Load {
+            origin: LoadRequestOrigin::RecoveryCatalog { .. },
+            ..
+        } => recover(world),
     };
-    world.write_message(SaveLoadOutcome {
-        operation,
-        target,
-        result,
-    });
+    world.resource_mut::<DispatchedSaveLoadRequest>().0 = None;
+    if let Some(mut catalog) = world.get_resource_mut::<SaveCatalog>() {
+        match (&request, result) {
+            (
+                SaveLoadRequest::Load { slot, .. },
+                SaveLoadResult::Failed(SaveLoadFailureKind::InvalidData),
+            ) => catalog.mark_body_invalid(*slot),
+            (
+                SaveLoadRequest::Save { slot, .. },
+                SaveLoadResult::Succeeded
+                | SaveLoadResult::Failed(SaveLoadFailureKind::CommittedDurabilityUncertain),
+            ) => {
+                catalog.clear_body_invalid(*slot);
+                catalog.mark_dirty();
+            }
+            _ => catalog.mark_dirty(),
+        }
+    }
+    world.write_message(SaveLoadOutcome::from_request(&request, result));
 }
 
 fn clear_save_load_outcomes(world: &mut World) {
     if let Some(mut outcomes) = world.get_resource_mut::<Messages<SaveLoadOutcome>>() {
         outcomes.clear();
+    }
+}
+
+/// A world replacement invalidates the modal's selection/confirmation state,
+/// but not the monotonically increasing session counter. Keeping the counter
+/// prevents a stale button payload from becoming valid after a reload.
+fn reset_save_catalog_interaction(world: &mut World) {
+    if let Some(mut catalog_ui) = world.get_resource_mut::<SaveCatalogUi>() {
+        catalog_ui.mode = SaveCatalogMode::Closed;
+        catalog_ui.selected = None;
+    }
+    if let Some(mut catalog) = world.get_resource_mut::<SaveCatalog>() {
+        catalog.mark_dirty();
+    }
+}
+
+/// Test / driver helper: manual save against an absent target.
+pub fn manual_save_request(slot: SaveSlotId, dialog_session: u64) -> SaveLoadRequest {
+    SaveLoadRequest::Save {
+        origin: SaveRequestOrigin::ManualCatalog { dialog_session },
+        slot,
+        expected_target: SaveExpectedTarget::Absent,
+    }
+}
+
+/// Test / driver helper: normal catalog load.
+pub fn normal_load_request(slot: SaveSlotId, dialog_session: u64) -> SaveLoadRequest {
+    SaveLoadRequest::Load {
+        origin: LoadRequestOrigin::NormalCatalog { dialog_session },
+        slot,
+    }
+}
+
+/// Recovery-only load. Production UI must obtain this through the catalog owner.
+pub fn recovery_load_request(slot: SaveSlotId, dialog_session: u64) -> SaveLoadRequest {
+    SaveLoadRequest::Load {
+        origin: LoadRequestOrigin::RecoveryCatalog { dialog_session },
+        slot,
     }
 }
 
@@ -137,8 +249,45 @@ mod tests {
     use std::cell::Cell;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    fn test_outcome(
+        operation: SaveLoadOperation,
+        target: &str,
+        result: SaveLoadResult,
+        source: SaveLoadOutcomeSource,
+    ) -> SaveLoadOutcome {
+        SaveLoadOutcome {
+            operation,
+            target: target.to_owned(),
+            result,
+            source,
+        }
+    }
+
+    fn manual_source() -> SaveLoadOutcomeSource {
+        SaveLoadOutcomeSource::Manual(SaveRequestOrigin::ManualCatalog { dialog_session: 1 })
+    }
+
+    fn normal_load_source() -> SaveLoadOutcomeSource {
+        SaveLoadOutcomeSource::Load(LoadRequestOrigin::NormalCatalog { dialog_session: 1 })
+    }
+
+    fn recovery_load_source() -> SaveLoadOutcomeSource {
+        SaveLoadOutcomeSource::Load(LoadRequestOrigin::RecoveryCatalog { dialog_session: 1 })
+    }
+
     fn request_load(mut state: ResMut<SaveLoadState>) {
-        *state = SaveLoadState::LoadRequested;
+        let _ = state.try_set(normal_load_request(SaveSlotId::Manual1, 1));
+    }
+
+    fn dispatch_world() -> World {
+        let mut world = World::new();
+        world.init_resource::<SaveLoadState>();
+        world.init_resource::<SavePath>();
+        world.init_resource::<SaveStorageRoot>();
+        world.init_resource::<SaveCatalog>();
+        world.init_resource::<DispatchedSaveLoadRequest>();
+        world.init_resource::<Messages<SaveLoadOutcome>>();
+        world
     }
 
     #[test]
@@ -149,11 +298,12 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock must be after Unix epoch")
             .as_nanos();
-        let file_name = format!(
-            "hell-workers-missing-load-test-{}-{nonce}.ron",
+        let root = std::env::temp_dir().join(format!(
+            "hell-workers-missing-load-{}-{nonce}",
             std::process::id()
-        );
-        app.insert_resource(SavePath::new(std::env::temp_dir().join(&file_name)));
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        app.insert_resource(SaveStorageRoot::new(root.clone()));
         app.add_systems(Update, request_load);
 
         app.update();
@@ -167,20 +317,24 @@ mod tests {
                 .resource_mut::<Messages<SaveLoadOutcome>>()
                 .drain()
                 .collect::<Vec<_>>(),
-            vec![SaveLoadOutcome {
-                operation: SaveLoadOperation::Load,
-                target: file_name,
-                result: SaveLoadResult::Failed(SaveLoadFailureKind::LoadNotFound),
-            }]
+            vec![test_outcome(
+                SaveLoadOperation::Load,
+                "Manual slot 1",
+                SaveLoadResult::Failed(SaveLoadFailureKind::LoadNotFound),
+                normal_load_source(),
+            )]
         );
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
     fn dispatcher_clears_request_before_work_and_emits_exactly_one_outcome() {
-        let mut world = World::new();
-        world.insert_resource(SaveLoadState::SaveRequested);
-        world.insert_resource(SavePath::new("private/slot-a.ron"));
-        world.init_resource::<Messages<SaveLoadOutcome>>();
+        let mut world = dispatch_world();
+        assert!(
+            world
+                .resource_mut::<SaveLoadState>()
+                .try_set(manual_save_request(SaveSlotId::Manual1, 1))
+        );
         let calls = Cell::new(0);
 
         save_load_apply_with(
@@ -200,11 +354,12 @@ mod tests {
                 .resource_mut::<Messages<SaveLoadOutcome>>()
                 .drain()
                 .collect::<Vec<_>>(),
-            vec![SaveLoadOutcome {
-                operation: SaveLoadOperation::Save,
-                target: "slot-a.ron".to_owned(),
-                result: SaveLoadResult::Failed(SaveLoadFailureKind::SaveWrite),
-            }]
+            vec![test_outcome(
+                SaveLoadOperation::Save,
+                "Manual slot 1",
+                SaveLoadResult::Failed(SaveLoadFailureKind::SaveWrite),
+                manual_source(),
+            )]
         );
     }
 
@@ -217,10 +372,12 @@ mod tests {
         ];
 
         for result in results {
-            let mut world = World::new();
-            world.insert_resource(SaveLoadState::SaveRequested);
-            world.insert_resource(SavePath::new("slot-a.ron"));
-            world.init_resource::<Messages<SaveLoadOutcome>>();
+            let mut world = dispatch_world();
+            assert!(
+                world
+                    .resource_mut::<SaveLoadState>()
+                    .try_set(manual_save_request(SaveSlotId::Manual1, 1))
+            );
 
             save_load_apply_with(
                 &mut world,
@@ -234,22 +391,25 @@ mod tests {
                     .resource_mut::<Messages<SaveLoadOutcome>>()
                     .drain()
                     .collect::<Vec<_>>(),
-                vec![SaveLoadOutcome {
-                    operation: SaveLoadOperation::Save,
-                    target: "slot-a.ron".to_owned(),
+                vec![test_outcome(
+                    SaveLoadOperation::Save,
+                    "Manual slot 1",
                     result,
-                }]
+                    manual_source(),
+                )]
             );
         }
     }
 
     #[test]
     fn dispatcher_rejects_save_while_recovery_is_required() {
-        let mut world = World::new();
-        world.insert_resource(SaveLoadState::SaveRequested);
+        let mut world = dispatch_world();
         world.insert_resource(SaveRecoveryMode::RecoveryFailed);
-        world.insert_resource(SavePath::new("slot-a.ron"));
-        world.init_resource::<Messages<SaveLoadOutcome>>();
+        assert!(
+            world
+                .resource_mut::<SaveLoadState>()
+                .try_set(manual_save_request(SaveSlotId::Manual1, 1))
+        );
 
         save_load_apply_with(
             &mut world,
@@ -263,21 +423,24 @@ mod tests {
                 .resource_mut::<Messages<SaveLoadOutcome>>()
                 .drain()
                 .collect::<Vec<_>>(),
-            vec![SaveLoadOutcome {
-                operation: SaveLoadOperation::Save,
-                target: "slot-a.ron".to_owned(),
-                result: SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed),
-            }]
+            vec![test_outcome(
+                SaveLoadOperation::Save,
+                "Manual slot 1",
+                SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed),
+                manual_source(),
+            )]
         );
     }
 
     #[test]
     fn dispatcher_rejects_normal_load_while_recovery_is_required() {
-        let mut world = World::new();
-        world.insert_resource(SaveLoadState::LoadRequested);
+        let mut world = dispatch_world();
         world.insert_resource(SaveRecoveryMode::RecoveryFailed);
-        world.insert_resource(SavePath::new("slot-a.ron"));
-        world.init_resource::<Messages<SaveLoadOutcome>>();
+        assert!(
+            world
+                .resource_mut::<SaveLoadState>()
+                .try_set(normal_load_request(SaveSlotId::Manual1, 1))
+        );
 
         save_load_apply_with(
             &mut world,
@@ -292,11 +455,12 @@ mod tests {
                 .resource_mut::<Messages<SaveLoadOutcome>>()
                 .drain()
                 .collect::<Vec<_>>(),
-            vec![SaveLoadOutcome {
-                operation: SaveLoadOperation::Load,
-                target: "slot-a.ron".to_owned(),
-                result: SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed),
-            }]
+            vec![test_outcome(
+                SaveLoadOperation::Load,
+                "Manual slot 1",
+                SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed),
+                normal_load_source(),
+            )]
         );
     }
 
@@ -306,11 +470,13 @@ mod tests {
             (SaveRecoveryMode::Healthy, false),
             (SaveRecoveryMode::RecoveryFailed, true),
         ] {
-            let mut world = World::new();
-            world.insert_resource(SaveLoadState::RecoveryLoadRequested);
+            let mut world = dispatch_world();
             world.insert_resource(mode);
-            world.insert_resource(SavePath::new("slot-a.ron"));
-            world.init_resource::<Messages<SaveLoadOutcome>>();
+            assert!(
+                world
+                    .resource_mut::<SaveLoadState>()
+                    .try_set(recovery_load_request(SaveSlotId::Manual1, 1))
+            );
             let recover_calls = Cell::new(0);
 
             save_load_apply_with(
@@ -335,26 +501,30 @@ mod tests {
                     .resource_mut::<Messages<SaveLoadOutcome>>()
                     .drain()
                     .collect::<Vec<_>>(),
-                vec![SaveLoadOutcome {
-                    operation: SaveLoadOperation::Load,
-                    target: "slot-a.ron".to_owned(),
-                    result: expected_result,
-                }]
+                vec![test_outcome(
+                    SaveLoadOperation::Load,
+                    "Manual slot 1",
+                    expected_result,
+                    recovery_load_source(),
+                )]
             );
         }
     }
 
     #[test]
     fn load_outcome_is_written_after_executor_resets_messages() {
-        let mut world = World::new();
-        world.insert_resource(SaveLoadState::LoadRequested);
-        world.insert_resource(SavePath::new("slot-a.ron"));
-        world.init_resource::<Messages<SaveLoadOutcome>>();
-        world.write_message(SaveLoadOutcome {
-            operation: SaveLoadOperation::Save,
-            target: "old.ron".to_owned(),
-            result: SaveLoadResult::Succeeded,
-        });
+        let mut world = dispatch_world();
+        assert!(
+            world
+                .resource_mut::<SaveLoadState>()
+                .try_set(normal_load_request(SaveSlotId::Manual1, 1))
+        );
+        world.write_message(test_outcome(
+            SaveLoadOperation::Save,
+            "old",
+            SaveLoadResult::Succeeded,
+            manual_source(),
+        ));
 
         save_load_apply_with(
             &mut world,
@@ -371,11 +541,12 @@ mod tests {
                 .resource_mut::<Messages<SaveLoadOutcome>>()
                 .drain()
                 .collect::<Vec<_>>(),
-            vec![SaveLoadOutcome {
-                operation: SaveLoadOperation::Load,
-                target: "slot-a.ron".to_owned(),
-                result: SaveLoadResult::Failed(SaveLoadFailureKind::ApplyRecovered),
-            }]
+            vec![test_outcome(
+                SaveLoadOperation::Load,
+                "Manual slot 1",
+                SaveLoadResult::Failed(SaveLoadFailureKind::ApplyRecovered),
+                normal_load_source(),
+            )]
         );
     }
 
@@ -397,8 +568,11 @@ mod tests {
             let mut app = minimal_app();
             app.add_plugins(HwUiPlugin)
                 .add_message::<SaveLoadOutcome>()
-                .insert_resource(SaveLoadState::LoadRequested)
-                .insert_resource(SavePath::new("slot-a.ron"))
+                .init_resource::<SaveLoadState>()
+                .init_resource::<SavePath>()
+                .init_resource::<SaveStorageRoot>()
+                .init_resource::<SaveCatalog>()
+                .init_resource::<DispatchedSaveLoadRequest>()
                 .add_systems(
                     Update,
                     (
@@ -407,6 +581,11 @@ mod tests {
                     )
                         .chain(),
                 );
+            assert!(
+                app.world_mut()
+                    .resource_mut::<SaveLoadState>()
+                    .try_set(normal_load_request(SaveSlotId::Manual1, 1))
+            );
             app.world_mut().resource_mut::<NotificationCenter>().push(
                 UserFacingNotification::new(
                     "old-world",

@@ -82,6 +82,48 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   --adapter Intel --backend vulkan --window-backend x11 --min-runs 3
 ```
 
+## Run the Save Catalog recipe
+
+Use the dedicated C2 profile for manual-slot, recovery, autosave transaction, and
+actual-window Save Catalog acceptance. Do not substitute a generic `perf.py`
+run or a root-desktop screenshot.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+  plan-save-catalog --repo "$PWD" --seed 20260802 --adapter Intel --backend vulkan \
+  --window-backend x11 --present-mode novsync
+```
+
+Run only the returned direct `kitty` command, then poll its `status_command`
+every 15–30 seconds. The recipe first drives V1–V5 through the production
+`UiIntent → catalog/modal → capture → Last dispatcher` route, then runs the
+sequential Capture and Memory save-transaction matrix (small/medium/large,
+3 preflight + 20 measured operations each).
+
+Save Catalog screenshot evidence is deliberately **X11-only** until a
+comparable per-window Wayland capture contract exists. The monitor finds the
+launched Cargo process subtree, matches its X11 client window through
+`_NET_WM_PID`, and captures that one client window with `import -window`. It
+does not fall back to the root desktop, so a separate window or overlay cannot
+satisfy the catalog marker check. The acknowledgement and final result retain
+the fixed capture scope, X11 window ID, and owner PID. `xprop` and ImageMagick
+`import` are required preflight tools for this profile.
+
+To revalidate a completed C2 job without launching the game, use the exact
+fingerprints and paths recorded by its `job.json`:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+  verify-save-catalog --repo "$PWD" \
+  --artifact <job-root>/artifact --runtime-root <job-root>/runtime \
+  --performance-root target/perf-runs/save-transaction-<run-id> \
+  --source-fingerprint <source-sha256> --harness-fingerprint <harness-sha256> \
+  --seed 20260802 --run-id <run-id> --adapter Intel --backend vulkan \
+  --window-backend x11
+```
+
 ## Run the RtT-light migration recipe
 
 Use this path for the frozen `rtt-light-v1` baseline. Do not substitute a

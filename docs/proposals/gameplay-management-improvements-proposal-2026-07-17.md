@@ -7,9 +7,9 @@
 | ドキュメントID | `gameplay-management-improvements-proposal-2026-07-17` |
 | ステータス | `Draft` |
 | 作成日 | `2026-07-17` |
-| 最終更新日 | `2026-08-08` |
+| 最終更新日 | `2026-08-09` |
 | 作成者 | `Codex` |
-| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能検証完了）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`（B2実装・自動検証完了）、`docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`（B2実機・性能検証完了）、`docs/plans/archive/soul-energy-control-plan-2026-07-20.md`（B3実装・実機受入完了）、`docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`（C3完了）、`docs/plans/archive/building-deconstruction-plan-2026-08-03.md`（C1完了）、`docs/plans/save-catalog-autosave-plan-2026-08-03.md`（C2計画） |
+| 関連計画 | `docs/plans/archive/input-action-context-resolver-plan-2026-07-17.md`（A1完了）、`docs/plans/player-facing-result-notifications-plan-2026-07-18.md`（A2実装・自動検証完了、手動受入待ち）、`docs/plans/archive/actionable-task-dashboard-plan-2026-07-19.md`（A3完了）、`docs/plans/archive/task-dashboard-performance-validation-plan-2026-07-20.md`（A3性能検証完了）、`docs/plans/archive/stockpile-policy-plan-2026-07-20.md`（B1実装完了）、`docs/plans/archive/stockpile-resource-checklist-plan-2026-07-24.md`（B1チェックリスト実装完了）、`docs/plans/archive/stockpile-policy-manual-acceptance-plan-2026-07-23.md`（B1実機受入完了）、`docs/plans/archive/familiar-operation-policy-plan-2026-07-20.md`（B2実装・自動検証完了）、`docs/plans/archive/familiar-operation-policy-validation-plan-2026-07-26.md`（B2実機・性能検証完了）、`docs/plans/archive/soul-energy-control-plan-2026-07-20.md`（B3実装・実機受入完了）、`docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`（C3完了）、`docs/plans/archive/building-deconstruction-plan-2026-08-03.md`（C1完了）、`docs/plans/archive/save-catalog-autosave-plan-2026-08-03.md`（C2完了） |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 背景と問題
@@ -296,8 +296,13 @@ fixed-step性能監査20/20、full workspace gateまで完了した。詳細な�
   fail-closed中はsave/resume/world操作を止め、C3専用recovery-only replaceによる別slot loadまたは終了だけを許可する。
 - 現行 v1 `SaveHeader.format_version` と schema allow-list を前提に、container format と
   world schema evolution の責務境界、および v1 から次形式への移行方針を、
-  Track CのC0判断として新しい永続コンポーネント導入前に確定する。C1のadditive order/variantはこの判断に従うため、
-  C2 M1実装までは待たせない。
+  Track CのC0判断として新しい永続コンポーネント導入前に確定した。archive済みC1のadditive order/variantを含む
+  current v1は、C2の互換性baselineとして扱う。
+
+実装状態: `2026-08-09` にC2 M1〜M5を完了し、closed typed slot/catalog、manual transaction、autosave、
+RecoveryFailed recovery-only gate、Help/恒久docs、exact Capture/Memory artifactを実装した。Intel Vulkan/Xlib actual-window
+V1〜V5とfull workspace gateを通過し、
+`docs/plans/archive/save-catalog-autosave-plan-2026-08-03.md`へ完了記録をarchiveした。
 
 ##### C3. 再構築レジストリの分割
 
@@ -560,7 +565,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 現在地
 
-- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（機能・性能完了、archive済み）/ B1 100%（完了・archive済み）/ B2 100%（実装・実機・性能完了、archive済み）/ B3 100%（実装・自動検証・実機受入完了、archive済み）/ C3 100%（実装・実機完了、archive済み）/ C1 100%（完了・archive済み）/ C2 計画100%・実装0% / D 未採否`
+- 進捗: `提案初版 100% / A1 実装 100% / A2 コード・自動検証・docs 100%（実機受入待ち）/ A3 100%（機能・性能完了、archive済み）/ B1 100%（完了・archive済み）/ B2 100%（実装・実機・性能完了、archive済み）/ B3 100%（実装・自動検証・実機受入完了、archive済み）/ C3 100%（実装・実機完了、archive済み）/ C1 100%（完了・archive済み）/ C2 100%（実装・実機・性能完了、archive済み）/ D 未採否`
 - 直近で完了したこと: A3 の latest-only task diagnostics、filter/sort dashboard、安全な priority/cancel、
   owner cancellation、save/reset回帰、恒久ドキュメント同期。Track B はコード・save・UI の現状を再監査し、
   B1 Stockpile の M1〜M5（永続 policy、移行、tier 別需要、manual / wheelbarrow 判定、共有 score offset、
@@ -573,7 +578,8 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
   runtime task/cargo正常化、construction/WorldMap/Soul Spa再構築を実装した。Help・恒久docs・workspace全ゲートと、
   実X11/Vulkanでの正常load、paused維持、破損load事前拒否、world意味不変を確認してarchive済みである。
   C1は全BuildingType / Soul Spaのowner-safe cleanup、durable order/save再構築、native V1〜V5、
-  fixed-step性能監査、full gateを完了してarchiveした。C2のtyped slot/catalog/autosaveは独立計画のまま未着手である。
+  fixed-step性能監査、full gateを完了してarchiveした。C2はtyped slot/catalog/autosave、RecoveryFailed fail-closed、
+  Help/恒久docs、Capture/Memory性能、Intel Vulkan/Xlib native V1〜V5、full gateを完了してarchiveした。
   B1の実機確認ではpolicy round-trip、range/capture、Toast、Draining、in-flight、特殊設備除外を確認した。
   F9直後の旧情報パネル残留はInfoPanel rootの同期非表示と実Node回帰を追加して修正し、実機再受入も完了した。
   受入資材UIは全9資材の静的チェックリストと
@@ -582,9 +588,9 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 
 ### 次のAIが最初にやること
 
-1. `docs/plans/save-catalog-autosave-plan-2026-08-03.md` のC2 M1から着手する。
-2. typed slot/path mappingとbounded catalog fixtureを先に固定し、UIへ進む前にstatus分類を確認する。
-3. C1 archiveのdurable order / runtime cleanup契約をsave/load回帰に含め、manual catalogを先に完成させてからautosaveへ進む。A2の重点実機受入は独立残件として維持する。
+1. C2は完了・archive済みである。slot拡張、background I/O、container v2を始める場合はC2を再開せず別計画を作る。
+2. A2の重点実機受入は独立残件として維持する。
+3. C1 archiveのdurable order / runtime cleanupとC3 rehydrate契約を、以後のsave/load変更でも回帰対象として維持する。
 
 ### ブロッカー/注意点
 
@@ -623,7 +629,7 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 - `docs/plans/archive/soul-energy-control-plan-2026-07-20.md`
 - `docs/plans/archive/save-rehydration-registry-plan-2026-08-03.md`
 - `docs/plans/archive/building-deconstruction-plan-2026-08-03.md`
-- `docs/plans/save-catalog-autosave-plan-2026-08-03.md`
+- `docs/plans/archive/save-catalog-autosave-plan-2026-08-03.md`
 - `crates/bevy_app/src/plugins/input.rs`
 - `crates/hw_ui/src/selection/placement.rs`
 - `crates/hw_ui/src/panels/task_list/types.rs`
@@ -676,3 +682,5 @@ A1、A2、A3 は相互の技術的前提ではなく、D1 も D2 から独立し
 | `2026-08-04` | `Codex` | Track C3のcandidate/live validation、phase-aware registry、normal/rollback/recovery-only共通runner、task/cargo・construction・WorldMap/Soul Spa正常化を実装。Help・恒久docs・workspace gate・実X11/Vulkan受入を完了してarchiveし、次をC1へ更新 |
 | `2026-08-05` | `Codex` | Track C1 M1〜M3を完了。durable order/save、exact task/finalizer、Orders/Operation/Task Dashboard/通知/Help、Tank/Mixer/Rest/Parking recoveryを接続し、次をM4 structure/Soul Spa統合へ更新 |
 | `2026-08-08` | `Codex` | Track C1 M1〜M5を完了。全BuildingType / Soul Spa cleanup、save/load runtime reset、Help、native V1〜V5、fixed-step性能監査20/20、full workspace verifyを完了してarchiveし、次をC2 M1へ更新 |
+| `2026-08-09` | `Codex` | C2実装前レビューを反映。archive済みC1のcurrent v1をC2互換性baselineとして明記し、過去のC1待機表現を解消 |
+| `2026-08-09` | `Codex` | Track C2 M1〜M5を完了。typed slot/catalog/manual transaction/autosave、RecoveryFailed fail-closed、Help/恒久docs、Capture/Memory artifact、Intel Vulkan/Xlib native V1〜V5、full workspace gateを通過してarchive |

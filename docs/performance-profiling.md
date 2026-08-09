@@ -221,6 +221,7 @@ CPU条件では`data/scene_roots.csv`のSoul main/mask/shadowとFamiliar rootが
 | `ui-gpu` | Blueprint（Small/Medium/Large = 64/160/320） | UI/visual の描画条件 |
 | `task-dashboard` | 同一task / Soul / Familiar集合とdashboard 3 mode | AI work、dashboard producer / render、Task Dashboard CPU / memory |
 | `deconstruction` | Medium固定の完成済み建築100棟（`BuildingType::ALL`の12種類を安定順で反復）からBonePileを1件だけcommit | deconstruction commit elapsed、target/order cleanup、回収Bone、steady-state scan |
+| `save-transaction` | small / medium / large各fixtureでManual slot 1へ1回だけ同期save | serialize、temp file sync、commit + directory sync、total、body bytes、allocator peak-live growth、process max RSS |
 
 `construction` は Curing footprint の安全監査を含む。完成済みの別 workload の数値を construction の比較値として流用しない。
 
@@ -278,6 +279,28 @@ phaseとitem / stockpileのTransformをEntity ID非依存で符号化する。
 `determinism.csv`にはpolicyを除外した`structural_checksum`、policyを含む`state_checksum`と、
 delegation / candidate policy gate / snapshot / score / worker score / source selector / connectivity counterを
 checkpointごとの累積値として記録する。schema v4ではTop-K、wheelbarrow arbitration、caller別runtime A*、dashboard producer / render counterも同じcheckpointへ含める。Rust writerとPython runnerはどちらもdeterminism schema v4を要求するため、旧determinism schema v1〜v3 artifactは現行runnerではinvalidになる。これは後述の`summary.csv` schema v11とは独立したversionである。
+
+`save-transaction`はfixed-step auditに載せない。Capture timingとMemory/RSSを別session・別binaryで、
+small / medium / largeそれぞれ3 preflight + 20 measured runの固定matrixとして逐次実行する。各runは
+warmup 1秒、measurement 2秒の中で決定的fixtureからManual slot 1へ一度だけ保存する。preflightは
+artifactに残すがaggregateには含めない。Capture largeのmeasured 20本だけからnearest-rank p95とmaxを
+再計算し、totalが100 ms / 250 ms以下であることを要求する。Memory legはallocator peak-live growthと
+GNU timeのprocess max RSSを記録するが、timing閾値には混ぜない。
+
+正式実行は`hell-workers-run-native-acceptance` Skillの`plan-save-catalog`が返すno-prompt launcherだけを
+使う。helperがactual-window save catalog V1〜V5の後にCapture、Memoryを順番に起動し、raw CSV、fixture、
+source / harness / binary fingerprint、runtime cleanupを再検証する。`save_transaction.csv`はbody/pathを含めず、
+`target/.save-transaction-runtime/<run-id>/`以下のsave/settings rootはartifact外に置く。raw processはrunごとの
+exact rootを終了前に削除し、helperは最終bundle検証でも全派生rootの不存在を要求する。helperは保存済みの
+`validation.json`だけを通行証にせず、window/log/environment/matrix、CSV schema、Memory収支、artifact集合を
+再読し、unknown file・symlink・serialized save bodyをfail-closedで拒否する。`perf.py audit --workload save`や
+generic fixed auditはこのworkloadのtiming/RSS証拠として使わない。
+
+actual-window V1〜V5のscreenshotはX11限定である。monitorはroot desktopを撮らず、起動Cargo process treeと
+`_NET_WM_PID`が一致する唯一のclient windowを直接撮影し、`x11-client-window` scope、window ID、PIDを
+driver resultとackで照合する。ready/ackはatomicにpublishし、X11照会とcaptureは各5秒のbounded callとする。
+driverはack受理時点でもSave catalogのforeground captureが継続していることを要求する。これにより別windowや
+desktop overlay、またはcatalogを閉じた後に残るmarkerの画像をSave catalog UI証跡へ混入させない。
 
 Familiar policyのcontrolled auditは`gather`固定step専用で、次のexact matrixを使う。
 

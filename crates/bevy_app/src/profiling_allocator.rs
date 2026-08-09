@@ -72,6 +72,13 @@ pub(crate) struct MemoryMeasurement {
     pub(crate) accounting_errors: u64,
 }
 
+impl MemoryMeasurement {
+    pub(crate) const fn peak_live_growth_bytes(self) -> u64 {
+        self.peak_live_bytes
+            .saturating_sub(self.baseline_live_bytes)
+    }
+}
+
 pub(crate) fn begin_measurement() {
     lock_telemetry();
     ACTIVE.store(false, Ordering::Relaxed);

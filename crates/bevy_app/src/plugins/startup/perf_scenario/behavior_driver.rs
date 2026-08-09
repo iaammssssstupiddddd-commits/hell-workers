@@ -12,7 +12,8 @@ use hw_ui::UiIntent;
 use hw_world::{Room, Yard};
 
 use crate::systems::save::{
-    SaveLoadOperation, SaveLoadOutcome, SaveLoadResult, SaveLoadState, SavePath,
+    SaveLoadOperation, SaveLoadOutcome, SaveLoadResult, SaveLoadState, SavePath, SaveStorageRoot,
+    manual_save_request, normal_load_request,
 };
 
 use super::indoor_light_fixture::IndoorLightFixturePhase;
@@ -118,6 +119,7 @@ pub(crate) struct BehaviorDriveParams<'w, 's> {
     world_epoch: Res<'w, WorldEpoch>,
     world_map: Res<'w, WorldMap>,
     save_path: ResMut<'w, SavePath>,
+    save_root: ResMut<'w, SaveStorageRoot>,
     save_state: ResMut<'w, SaveLoadState>,
     ui_intents: MessageWriter<'w, UiIntent>,
     souls: Query<
@@ -191,16 +193,26 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
             &params.quality,
             None,
         ));
-        let private_save = perf_output_directory(&params.config).join("behavior-save.scn.ron");
-        if private_save.exists() {
+        let private_root = perf_output_directory(&params.config).join("behavior-saves");
+        if private_root.exists() {
             fail_behavior(
                 &mut params.capture,
-                "job-owned behavior save path already exists",
+                "job-owned behavior save root already exists",
                 &mut params.exit,
             );
             return;
         }
-        *params.save_path = SavePath::new(private_save);
+        if let Err(error) = std::fs::create_dir_all(&private_root) {
+            fail_behavior(
+                &mut params.capture,
+                &format!("failed to create behavior save root: {error}"),
+                &mut params.exit,
+            );
+            return;
+        }
+        *params.save_root = SaveStorageRoot::new(private_root.clone());
+        *params.save_path =
+            SavePath::new(private_root.join(hw_core::SaveSlotId::Manual1.canonical_file_name()));
         params.capture.phase = match params.config.behavior_case() {
             Some(PerfBehaviorCase::DoorStateV1) => BehaviorPhase::DoorStep(0),
             Some(PerfBehaviorCase::LoadNormalV1) => BehaviorPhase::LoadStep(0),
@@ -288,7 +300,7 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
             match step {
                 0 | 2 | 4 | 5 => {}
                 1 => {
-                    if *params.save_state != SaveLoadState::Idle {
+                    if !params.save_state.is_idle() {
                         fail_behavior(
                             &mut params.capture,
                             "save/load dispatcher was busy before behavior save",
@@ -296,10 +308,12 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
                         );
                         return;
                     }
-                    *params.save_state = SaveLoadState::SaveRequested;
+                    let _ = params
+                        .save_state
+                        .try_set(manual_save_request(hw_core::SaveSlotId::Manual1, 1));
                 }
                 3 => {
-                    if *params.save_state != SaveLoadState::Idle {
+                    if !params.save_state.is_idle() {
                         fail_behavior(
                             &mut params.capture,
                             "save/load dispatcher was busy before behavior load",
@@ -307,7 +321,9 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
                         );
                         return;
                     }
-                    *params.save_state = SaveLoadState::LoadRequested;
+                    let _ = params
+                        .save_state
+                        .try_set(normal_load_request(hw_core::SaveSlotId::Manual1, 1));
                 }
                 _ => {
                     fail_behavior(

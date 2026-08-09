@@ -141,7 +141,7 @@ mod tests {
         request_capture_from_resolved_actions_system, reset_pending_world_input_capture_system,
     };
     use crate::interface::selection::SelectedEntity;
-    use crate::systems::save::SavePath;
+    use crate::systems::save::{SaveCatalogUi, SavePath, SaveRecoveryMode};
     use crate::test_support::minimal_app;
 
     fn content() -> HelpPanelContent {
@@ -232,6 +232,8 @@ mod tests {
             .init_resource::<HelpPanelState>()
             .init_resource::<HelpPauseGuard>()
             .init_resource::<SelectedEntity>()
+            .init_resource::<SaveCatalogUi>()
+            .init_resource::<SaveRecoveryMode>()
             .init_resource::<Time<Virtual>>()
             .insert_resource(content())
             .insert_resource(SavePath::new(
@@ -368,6 +370,8 @@ mod tests {
             .init_resource::<MenuState>()
             .init_resource::<HelpPanelState>()
             .init_resource::<HelpPauseGuard>()
+            .init_resource::<SaveCatalogUi>()
+            .init_resource::<SaveRecoveryMode>()
             .init_resource::<Time<Virtual>>()
             .init_resource::<LogicCommitObservedUnpaused>()
             .insert_resource(content())

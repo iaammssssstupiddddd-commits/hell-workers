@@ -507,6 +507,120 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
 }
 
 #[cfg(feature = "profiling")]
+pub(super) fn write_save_transaction_csv(
+    config: &PerfScenarioConfig,
+    fixture_checksum: u64,
+    sample: crate::systems::save::SaveTransactionSample,
+    sample_kind: &str,
+    measure_virtual_secs: f64,
+    measure_real_secs: f64,
+    peak_live_growth_bytes: Option<u64>,
+) -> std::io::Result<()> {
+    write_save_transaction_csv_inner(
+        config,
+        fixture_checksum,
+        sample,
+        sample_kind,
+        measure_virtual_secs,
+        measure_real_secs,
+        peak_live_growth_bytes,
+    )
+}
+
+#[cfg(feature = "profiling")]
+fn write_save_transaction_csv_inner(
+    config: &PerfScenarioConfig,
+    fixture_checksum: u64,
+    sample: crate::systems::save::SaveTransactionSample,
+    sample_kind: &str,
+    measure_virtual_secs: f64,
+    measure_real_secs: f64,
+    peak_live_growth_bytes: Option<u64>,
+) -> std::io::Result<()> {
+    const SCHEMA_VERSION: u32 = 4;
+    let directory = perf_output_directory(config);
+    std::fs::create_dir_all(&directory)?;
+    let path = directory.join("save_transaction.csv");
+    if path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "save-transaction artifact already exists",
+        ));
+    }
+    let header = concat!(
+        "schema_version,workload,size,render,seed,soul_count,familiar_count,",
+        "fixture_checksum,sample_kind,measure_virtual_ns,measure_real_ns,body_bytes,serialize_ns,write_file_sync_ns,",
+        "commit_directory_sync_ns,total_ns,",
+        "peak_live_growth_bytes"
+    );
+    let fields = vec![
+        SCHEMA_VERSION.to_string(),
+        config.workload.as_str().to_string(),
+        config.size.as_str().to_string(),
+        config.render_mode.as_str().to_string(),
+        config.master_seed.to_string(),
+        config.soul_count.to_string(),
+        config.familiar_count.to_string(),
+        format!("{fixture_checksum:016x}"),
+        sample_kind.to_string(),
+        seconds_to_nanos(measure_virtual_secs).to_string(),
+        seconds_to_nanos(measure_real_secs).to_string(),
+        sample.body_bytes.to_string(),
+        sample.serialize_ns.to_string(),
+        sample.write_file_sync_ns.to_string(),
+        sample.commit_directory_sync_ns.to_string(),
+        sample.total_ns.to_string(),
+        peak_live_growth_bytes.map_or_else(String::new, |growth| growth.to_string()),
+    ];
+    let row = format!("{header}\n{}\n", fields.join(","));
+    std::fs::write(&path, row)?;
+    eprintln!(
+        "PERF_CAPTURE: wrote save-transaction sample (total_ns={})",
+        sample.total_ns,
+    );
+    Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn seconds_to_nanos(seconds: f64) -> u64 {
+    debug_assert!(seconds.is_finite() && seconds >= 0.0);
+    (seconds.max(0.0) * 1_000_000_000.0).round() as u64
+}
+
+#[cfg(all(feature = "profiling", feature = "profiling-memory"))]
+pub(super) fn write_save_transaction_memory_csv(
+    config: &PerfScenarioConfig,
+    measurement: &crate::profiling_allocator::MemoryMeasurement,
+) -> std::io::Result<()> {
+    let directory = perf_output_directory(config);
+    let path = directory.join("memory.csv");
+    if path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "native memory artifact already exists",
+        ));
+    }
+    let csv = format!(
+        concat!(
+            "schema_version,baseline_live_bytes,peak_live_bytes,final_live_bytes,",
+            "allocated_bytes,deallocated_bytes,allocation_calls,deallocation_calls,",
+            "reallocation_calls,accounting_errors\n",
+            "1,{},{},{},{},{},{},{},{},{}\n"
+        ),
+        measurement.baseline_live_bytes,
+        measurement.peak_live_bytes,
+        measurement.final_live_bytes,
+        measurement.allocated_bytes,
+        measurement.deallocated_bytes,
+        measurement.allocation_calls,
+        measurement.deallocation_calls,
+        measurement.reallocation_calls,
+        measurement.accounting_errors,
+    );
+    std::fs::write(path, csv)
+}
+
+#[cfg(feature = "profiling")]
 pub(super) fn perf_output_directory(config: &PerfScenarioConfig) -> PathBuf {
     config.output_dir.clone().unwrap_or_else(|| {
         PathBuf::from(format!(

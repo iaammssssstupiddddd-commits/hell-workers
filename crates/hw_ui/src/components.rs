@@ -312,6 +312,9 @@ pub enum SettingsField {
     DebugGizmos,
     FpsDisplay,
     PowerPriority,
+    AutosaveEnabled,
+    AutosaveInterval,
+    AutosaveGenerations,
 }
 
 #[derive(Component, Clone, Copy)]
@@ -331,6 +334,15 @@ pub struct SettingsDefaultSpeedButton(pub TimeSpeed);
 
 #[derive(Component)]
 pub struct LoadConfirmDialog;
+
+#[derive(Component)]
+pub struct SaveCatalogDialog;
+
+#[derive(Component)]
+pub struct SaveCatalogSlotList;
+
+#[derive(Component)]
+pub struct SaveCatalogTitle;
 
 // ============================================================
 // エンティティリスト UI コンポーネント
