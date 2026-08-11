@@ -2482,9 +2482,12 @@ def verify_rtt_light_smoke(
             matrix.get("workload") == "indoor-light",
             f"{name} smoke session has the wrong workload",
         )
+        rtt_light_contract = matrix.get("rtt_light_contract")
         require(
-            matrix.get("rtt_light_contract")
-            == {"contract_id": RTT_LIGHT_CONTRACT_ID, "stage_id": stage, "lane": "static"},
+            isinstance(rtt_light_contract, dict)
+            and rtt_light_contract.get("contract_id") == RTT_LIGHT_CONTRACT_ID
+            and rtt_light_contract.get("stage_id") == stage
+            and rtt_light_contract.get("lane") == "static",
             f"{name} smoke session has the wrong RtT-light stage",
         )
         require(matrix.get("repeat") == 3, f"{name} smoke session has wrong repeat")
@@ -5789,6 +5792,13 @@ def write_fake_rtt_light_smoke(
             "contract_id": RTT_LIGHT_CONTRACT_ID,
             "stage_id": stage,
             "lane": "static",
+            "measurement_contract_sha256": "a" * 64,
+            "fixture_contract_sha256": "b" * 64,
+            "lifecycle": {
+                "status": "frozen",
+                "formal_registration_allowed": True,
+                "freeze_blockers": [],
+            },
         },
         "sizes": ["small"] if fixed else ["small", "medium", "large"],
         "renders": ["cpu"] if fixed else ["cpu", "gpu"],
