@@ -613,6 +613,15 @@ def _runtime_checkpoint(
     return value
 
 
+def _manifest_stage_id(*, requested_stage: str, runtime: dict[str, Any]) -> str:
+    runtime_stage = runtime.get("stage_id")
+    if runtime_stage != requested_stage:
+        raise CaptureError(
+            "RenderDoc manifest stage differs from the validated runtime checkpoint"
+        )
+    return requested_stage
+
+
 def _locator(path: Path, *, root: Path) -> dict[str, Any]:
     return {
         "path": path.relative_to(root).as_posix(),
@@ -1253,7 +1262,9 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                 "schema_version": SCHEMA_VERSION,
                 "status": "valid",
                 "contract_id": contract["contract_id"],
-                "stage_id": "current",
+                "stage_id": _manifest_stage_id(
+                    requested_stage=args.stage, runtime=runtime
+                ),
                 "case_id": "renderdoc-medium-gpu",
                 "size": "medium",
                 "render": "gpu",
@@ -1473,6 +1484,19 @@ def self_test() -> int:
         _runtime_checkpoint(
             p01_runtime_path, contract=contract, stage="p01", capture_path=capture
         )
+        if (
+            _manifest_stage_id(requested_stage="current", runtime=runtime_checkpoint)
+            != "current"
+            or _manifest_stage_id(requested_stage="p01", runtime=p01_checkpoint)
+            != "p01"
+        ):
+            raise CaptureError("RenderDoc manifest stage identity was not preserved")
+        try:
+            _manifest_stage_id(requested_stage="current", runtime=p01_checkpoint)
+        except CaptureError:
+            pass
+        else:
+            raise CaptureError("RenderDoc manifest accepted a mismatched runtime stage")
         relative_runtime_checkpoint = {
             **runtime_checkpoint,
             "capture_path": "raw/indoor-light_capture.rdc",
