@@ -134,7 +134,8 @@ impl Plugin for DamnedSoulPlugin {
             spawn::soul_spawning_system
                 .in_set(GameSystemSet::Logic)
                 .in_set(DamnedSoulSystemSet::SpawnEvents)
-                .run_if(crate::plugins::startup::is_not_fixed_step_audit),
+                .run_if(crate::plugins::startup::is_not_fixed_step_audit)
+                .run_if(crate::plugins::startup::does_not_require_precheckpoint_fixture_spawn),
         );
 
         #[cfg(not(feature = "profiling"))]

@@ -198,11 +198,30 @@ contract, a clean committed subject, same-source S0/S1 evidence, resource
 preflight, and usable RenderDoc tools. Run only the returned `launcher_command`
 directly; poll its `status_command` every 15–30 seconds.
 
-The formal job is 64 sequential game processes under the repository lock:
-audit, behavior, Capture, one fixed RenderDoc replay capture, and Memory. It
-settles after behavior and RenderDoc, retains every artifact, and registers an
-attempt only after the offline bundle validation passes. Revalidate a registered
-attempt without launching the game with:
+The formal job is 65 sequential game processes under the repository lock. It
+seals the `profiling-renderdoc` binary, runs one actual-game RD0 capture from the
+same-source S1 environment before the long matrix, then runs audit, behavior,
+Capture, one fixed formal RenderDoc capture, and Memory. It keeps the binary in a read-only
+capsule and requires RD0/formal capsule identity plus normalized double-replay
+topology equality. It settles after behavior and formal RenderDoc, retains every
+artifact, and registers an attempt only after the offline bundle validation
+passes.
+The RenderDoc capsule must use both the `profiling-renderdoc` Cargo feature and
+the `profiling-renderdoc` Cargo profile. The profile inherits the profiling
+optimization level, enables debug assertions because wgpu-hal otherwise disables
+its RenderDoc bridge, and disables LTO with 16 codegen units to bound build RAM.
+Do not substitute the ordinary
+`target/profiling/bevy_app` output.
+
+Reuse the same clean validation worktree and its workspace `target/` for retries.
+With an unchanged profile/features, Cargo's freshness check must reuse the existing
+artifacts; Python harness or documentation changes do not justify a new Cargo target
+or a full Rust rebuild. The common subject fingerprint hashes source and asset content
+plus logical locators, not worktree paths or asset mtimes, so an identical detached
+checkout remains the same subject. A profile/feature/toolchain change is the explicit
+exception that requires rebuilding and resealing the affected capsule.
+
+Revalidate a registered attempt without launching the game with:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 \
@@ -236,9 +255,12 @@ baseline.
   the whole recipe.
 - Use two Cargo jobs only when `MemAvailable` is at least 16 GiB and one job
   below that. Refuse a native recipe start below 10 GiB available RAM or 15 GiB
-  free on the actual Cargo target filesystem; do not use `/tmp` capacity as a
-  build budget. While a stage is running, sample `MemAvailable` every second
-  and terminate that stage's isolated process group if RAM falls below 8 GiB.
+  free on the actual Cargo target filesystem. Immediately before each build,
+  game, capture, or replay stage, require 8 GiB `MemAvailable` and record the
+  admission snapshot. The 8 GiB threshold is a stage-start gate: once admitted,
+  do not terminate that stage solely because `MemAvailable` later dips below
+  8 GiB. Do not use `/tmp` capacity as a
+  build budget. Continue to enforce stage deadlines and owned-process-group cleanup.
   SwapTotal/SwapFree are recorded as diagnostic telemetry only: a low or
   unavailable swap balance does not block a run while the RAM floor is met.
   On Linux, unavailable `MemAvailable` is a failure, not an exemption.

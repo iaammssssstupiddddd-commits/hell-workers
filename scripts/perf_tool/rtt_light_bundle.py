@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
 import os
@@ -17,12 +18,20 @@ from typing import Any
 
 from .artifacts import sha256, validate_run
 from .execution import (
+    MEASUREMENT_HARNESS_FILES,
     read_native_memory,
     read_resource_usage,
     require_persistent_output,
 )
 from .model import Case, REPO_ROOT, SESSION_MANIFEST_SCHEMA_VERSION, Validation
 from .policy import determinism_signature, validate_session_artifact_set
+from .renderdoc_foundation import (
+    assert_publish_allowed,
+    accepts_renderdoc_api_version,
+    classify_renderdoc_log_lines,
+    transition_foundation_state,
+    validate_runtime_checkpoint_v3,
+)
 from .rtt_light_contract import (
     GATE_UNIT_TYPES,
     build_fixture_layout,
@@ -40,12 +49,8 @@ from .summary import behavior_timeline_signature
 ATTEMPT_SCHEMA_VERSION = 1
 BASELINE_INDEX_SCHEMA_VERSION = 1
 RENDERDOC_MANIFEST_SCHEMA_VERSION = 1
-RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION = 2
+RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION = 3
 RENDERDOC_EXTRACTION_SCHEMA_VERSION = 2
-RENDERDOC_LOG_PROBLEM_RE = re.compile(
-    r"\b(?:WARN(?:ING)?|ERROR|FATAL|CRITICAL|panicked)\b|bevy_ecs::error::handler",
-    re.IGNORECASE,
-)
 
 EXPECTED_RENDER_RESOURCES = {
     "scene_target_label": "hell-workers-rtt-scene",
@@ -80,6 +85,8 @@ EXPECTED_RENDER_RESOURCES = {
 }
 SOURCE_CHECKPOINTS_CURRENT = (
     "start",
+    "after-renderdoc-build",
+    "after-rd0",
     "after-audit",
     "after-behavior",
     "after-capture",
@@ -87,6 +94,36 @@ SOURCE_CHECKPOINTS_CURRENT = (
     "after-memory",
     "before-registration",
 )
+
+
+def measurement_harness_dirty_paths_only(entries: Any) -> bool:
+    """Accept only porcelain entries owned by the active measurement harness."""
+    if not isinstance(entries, list) or any(
+        not isinstance(entry, str) for entry in entries
+    ):
+        return False
+    status_characters = frozenset("MADRCU?!T")
+    for entry in entries:
+        if " -> " in entry:
+            return False
+        matched = False
+        for relative in MEASUREMENT_HARNESS_FILES:
+            if not entry.endswith(relative):
+                continue
+            prefix = entry[: -len(relative)]
+            code = prefix.strip()
+            if (
+                prefix.endswith(" ")
+                and 1 <= len(code) <= 2
+                and all(character in status_characters for character in code)
+            ):
+                matched = True
+                break
+        if not matched:
+            return False
+    return True
+
+
 SESSION_LEGS = frozenset({"audit", "behavior", "capture", "memory", "field-core", "consumer-core"})
 WINDOW_LOCK_FIELDS = (
     "logical_width",
@@ -348,7 +385,11 @@ def _validate_job(
     for check in checks:
         if set(check) != {"checkpoint", "commit", "clean", "fingerprint"}:
             raise RuntimeError("job source check keys differ from schema v1")
-        if check["commit"] != commit or check["clean"] is not True or not _is_sha256(check["fingerprint"]):
+        if (
+            check["commit"] != commit
+            or check["clean"] is not True
+            or not _is_sha256(check["fingerprint"])
+        ):
             raise RuntimeError("job source check is dirty, changed, or malformed")
         fingerprints.add(check["fingerprint"])
     if len(fingerprints) != 1:
@@ -465,6 +506,7 @@ def _expected_matrix(
             else contract["allow_log_patterns"]["windowed"]
         ),
         "tracy_capture_secs": None,
+        "save_transaction_runtime": None,
         "window_width": formal["window"]["physical_width"] if windowed else None,
         "window_height": formal["window"]["physical_height"] if windowed else None,
         "window_scale_factor": formal["window"]["scale_factor"] if windowed else None,
@@ -499,23 +541,45 @@ def _validate_environment_lock(
     contract: dict[str, Any],
     job: dict[str, Any],
 ) -> None:
-    expected_keys = {
-        "schema_version",
-        "contract_id",
-        "stage_id",
-        "subject_commit",
-        "source_fingerprint",
-        "host",
-        "adapter",
-        "resolved_window_backend",
-        "adapter_backend",
-        "requested_present_mode",
-        "effective_present_mode",
-        "window",
-        "capture_binary_sha256",
-    }
-    if set(lock) != expected_keys or lock["schema_version"] != 1:
-        raise RuntimeError("environment-lock.json differs from schema v1")
+    version = lock.get("schema_version")
+    if version == 1:
+        expected_keys = {
+            "schema_version",
+            "contract_id",
+            "stage_id",
+            "subject_commit",
+            "source_fingerprint",
+            "host",
+            "adapter",
+            "resolved_window_backend",
+            "adapter_backend",
+            "requested_present_mode",
+            "effective_present_mode",
+            "window",
+            "capture_binary_sha256",
+        }
+    elif version == 2:
+        expected_keys = {
+            "schema_version",
+            "contract_id",
+            "stage_id",
+            "subject_commit",
+            "source_fingerprint",
+            "host",
+            "adapter",
+            "resolved_window_backend",
+            "adapter_backend",
+            "requested_present_mode",
+            "effective_present_mode",
+            "window",
+            "capture_binary_sha256",
+            "renderdoc_binary_sha256",
+            "memory_binary_sha256",
+        }
+    else:
+        raise RuntimeError("environment-lock.json differs from schema v1/v2")
+    if set(lock) != expected_keys:
+        raise RuntimeError("environment-lock.json differs from schema v1/v2")
     source_fingerprint = job["source_checks"][0]["fingerprint"]
     if (
         lock["contract_id"] != contract["contract_id"]
@@ -529,6 +593,19 @@ def _validate_environment_lock(
         or not _is_sha256(lock["capture_binary_sha256"])
     ):
         raise RuntimeError("environment-lock.json identity or render environment differs")
+    if version == 2 and (
+        not _is_sha256(lock["renderdoc_binary_sha256"])
+        or not _is_sha256(lock["memory_binary_sha256"])
+        or len(
+            {
+                lock["capture_binary_sha256"],
+                lock["renderdoc_binary_sha256"],
+                lock["memory_binary_sha256"],
+            }
+        )
+        != 3
+    ):
+        raise RuntimeError("environment-lock.json binary capsule hashes are invalid")
     host = lock["host"]
     if (
         not isinstance(host, dict)
@@ -789,7 +866,7 @@ def _load_session_evidence(
         or not isinstance(git["short_commit"], str)
         or not 7 <= len(git["short_commit"]) <= 40
         or not job["subject_commit"].startswith(git["short_commit"])
-        or git["dirty_paths"] != []
+        or not measurement_harness_dirty_paths_only(git["dirty_paths"])
     ):
         raise RuntimeError(f"{leg_id} session was not captured from the clean subject commit")
     source = manifest.get("source")
@@ -1080,6 +1157,7 @@ def _load_renderdoc_evidence(
         "render",
         "source",
         "binary",
+        "capsule",
         "tool",
         "replay_tool",
         "library",
@@ -1091,8 +1169,11 @@ def _load_renderdoc_evidence(
         "extraction",
         "runtime_checkpoint",
         "log",
+        "process_status",
+        "disk_status",
         "fixture",
         "unexpected_log_lines",
+        "replay_digest",
     }
     if set(manifest) != expected_keys or manifest["schema_version"] != RENDERDOC_MANIFEST_SCHEMA_VERSION:
         raise RuntimeError("RenderDoc manifest differs from schema v1")
@@ -1104,6 +1185,7 @@ def _load_renderdoc_evidence(
         or manifest["size"] != "medium"
         or manifest["render"] != "gpu"
         or manifest["unexpected_log_lines"] != 0
+        or not _is_sha256(manifest["replay_digest"])
     ):
         raise RuntimeError("RenderDoc manifest identity or status differs")
     source = manifest["source"]
@@ -1119,6 +1201,49 @@ def _load_renderdoc_evidence(
         raise RuntimeError("RenderDoc binary provenance is invalid")
     if not isinstance(binary["path"], str) or not binary["path"]:
         raise RuntimeError("RenderDoc binary path is invalid")
+    capsule = manifest["capsule"]
+    if not isinstance(capsule, dict) or set(capsule) != {
+        "capsule_id",
+        "logical_locator",
+        "manifest_sha256",
+        "build_fingerprint",
+        "profile",
+        "features",
+        "manifest",
+    }:
+        raise RuntimeError("RenderDoc capsule provenance is invalid")
+    capsule_locator = capsule["manifest"]
+    if (
+        capsule["profile"] != "profiling-renderdoc"
+        or capsule["features"] != "profiling-renderdoc"
+        or not _is_sha256(capsule["capsule_id"])
+        or not _is_sha256(capsule["manifest_sha256"])
+        or not _is_sha256(capsule["build_fingerprint"])
+        or not isinstance(capsule["logical_locator"], str)
+        or not capsule["logical_locator"].startswith("capsule/renderdoc/")
+        or not isinstance(capsule_locator, dict)
+        or set(capsule_locator) != {"path", "bytes", "sha256"}
+    ):
+        raise RuntimeError("RenderDoc capsule identity differs from the formal recipe")
+    capsule_path = _relative_file(capsule_locator["path"], root=directory)
+    if (
+        not capsule_path.is_file()
+        or capsule_locator["bytes"] != capsule_path.stat().st_size
+        or capsule_locator["sha256"] != sha256(capsule_path)
+        or capsule["manifest_sha256"] != capsule_locator["sha256"]
+    ):
+        raise RuntimeError("RenderDoc sealed capsule manifest is missing or changed")
+    capsule_payload = read_json_object(capsule_path)
+    if (
+        capsule_payload.get("capsule_id") != capsule["capsule_id"]
+        or capsule_payload.get("logical_locator") != capsule["logical_locator"]
+        or capsule_payload.get("build_fingerprint") != capsule["build_fingerprint"]
+        or capsule_payload.get("profile") != capsule["profile"]
+        or capsule_payload.get("features") != capsule["features"]
+        or capsule_payload.get("binary_sha256") != binary["sha256"]
+        or capsule_payload.get("leg") != "renderdoc"
+    ):
+        raise RuntimeError("RenderDoc capsule manifest differs from captured binary identity")
     tool = manifest["tool"]
     if not isinstance(tool, dict) or set(tool) != {"path", "version", "sha256"}:
         raise RuntimeError("RenderDoc tool provenance is invalid")
@@ -1179,40 +1304,23 @@ def _load_renderdoc_evidence(
     }
     if manifest["environment"] != expected_environment:
         raise RuntimeError("RenderDoc environment differs from environment-lock.json")
-    renderdoc_contract = contract["formal_matrix"]["renderdoc"]
     checkpoint = manifest["checkpoint"]
-    if not isinstance(checkpoint, dict) or set(checkpoint) != {
-        "name",
-        "simulation_tick",
-        "settle_frames",
-        "capture_frame",
-        "render_frame_index",
-        "validated_frames",
-    }:
-        raise RuntimeError("RenderDoc checkpoint differs from schema v1")
-    if (
-        checkpoint["name"] != "indoor-light-fixture-ready-v1"
-        or checkpoint["settle_frames"] != renderdoc_contract["settle_frames"]
-        or checkpoint["capture_frame"] != renderdoc_contract["capture_frame"]
-        or checkpoint["validated_frames"] != 1
-        or not isinstance(checkpoint["simulation_tick"], int)
-        or isinstance(checkpoint["simulation_tick"], bool)
-        or checkpoint["simulation_tick"] < 0
-        or not isinstance(checkpoint["render_frame_index"], int)
-        or isinstance(checkpoint["render_frame_index"], bool)
-        or checkpoint["render_frame_index"] < renderdoc_contract["capture_frame"]
-    ):
-        raise RuntimeError("RenderDoc fixed checkpoint differs from the contract")
+    if not isinstance(checkpoint, dict):
+        raise RuntimeError("RenderDoc checkpoint is not an object")
     capture = manifest["capture"]
     extraction = manifest["extraction"]
     runtime_checkpoint = manifest["runtime_checkpoint"]
     capture_log = manifest["log"]
+    process_status = manifest["process_status"]
+    disk_status = manifest["disk_status"]
     artifact_paths: dict[str, Path] = {}
     for label, value, expected_suffix in (
         ("capture", capture, ".rdc"),
         ("extraction", extraction, ".json"),
         ("runtime_checkpoint", runtime_checkpoint, ".json"),
         ("log", capture_log, ".log"),
+        ("process_status", process_status, ".json"),
+        ("disk_status", disk_status, ".json"),
     ):
         if not isinstance(value, dict) or set(value) != {"path", "bytes", "sha256"}:
             raise RuntimeError(f"RenderDoc {label} locator differs from schema v1")
@@ -1226,50 +1334,126 @@ def _load_renderdoc_evidence(
     if len(raw_files) != 1 or raw_files[0].resolve() != _relative_file(capture["path"], root=directory):
         raise RuntimeError("RenderDoc leg must contain exactly one raw .rdc")
     extracted_path = artifact_paths["extraction"]
+    def normalized_topology(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: normalized_topology(child)
+                for key, child in value.items()
+                if key
+                not in {
+                    "capture_sha256",
+                    "resource_id",
+                    "binding_id",
+                    "attachment_id",
+                }
+            }
+        if isinstance(value, list):
+            return [normalized_topology(child) for child in value]
+        return value
+
+    normalized_extraction = hashlib.sha256(
+        json.dumps(
+            normalized_topology(read_json_object(extracted_path)),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    if manifest["replay_digest"] != normalized_extraction:
+        raise RuntimeError("RenderDoc replay digest differs from sealed extraction")
     expected_inventory = {
         "manifest.json",
+        capsule_locator["path"],
         capture["path"],
         extraction["path"],
         runtime_checkpoint["path"],
         capture_log["path"],
+        process_status["path"],
+        disk_status["path"],
     }
     actual_inventory = {
         row["path"] for row in directory_inventory(directory, relative_to=directory)
     }
     if actual_inventory != expected_inventory:
         raise RuntimeError("RenderDoc artifact set differs from schema v1")
-    runtime = read_json_object(artifact_paths["runtime_checkpoint"])
-    if set(runtime) != {
-        "schema_version",
-        "status",
-        "checkpoint",
-        "render_inventory",
-        "render_resources",
-        "fixture",
-        "capture_path",
-        "renderdoc_api_version",
-    } or runtime["schema_version"] != RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION or runtime["status"] != "valid":
-        raise RuntimeError("RenderDoc runtime checkpoint differs from schema v2")
+    process_evidence = read_json_object(artifact_paths["process_status"])
+    processes = process_evidence.get("processes")
     if (
-        runtime["checkpoint"] != checkpoint
-        or runtime["fixture"] != manifest["fixture"]
-        or runtime["renderdoc_api_version"]
-        != job["tooling"]["renderdoc_api_version"]
-        or not isinstance(runtime["capture_path"], str)
-        or Path(runtime["capture_path"]).name != artifact_paths["capture"].name
+        set(process_evidence) != {"schema_version", "processes"}
+        or process_evidence["schema_version"] != 1
+        or not isinstance(processes, list)
+        or [row.get("stage") for row in processes]
+        != ["capture", "replay-1", "replay-2"]
+        or any(
+            not isinstance(row, dict)
+            or set(row)
+            != {
+                "stage",
+                "pid",
+                "pgid",
+                "returncode",
+                "signal",
+                "deadline_reason",
+                "orphan_probe_count",
+            }
+            or row["returncode"] != 0
+            or row["signal"] is not None
+            or row["deadline_reason"] is not None
+            or row["orphan_probe_count"] != 0
+            or not isinstance(row["pid"], int)
+            or not isinstance(row["pgid"], int)
+            for row in processes
+        )
     ):
+        raise RuntimeError("RenderDoc process-group evidence is invalid")
+    disk_evidence = read_json_object(artifact_paths["disk_status"])
+    disk_checks = disk_evidence.get("checks")
+    if (
+        set(disk_evidence) != {"schema_version", "checks"}
+        or disk_evidence["schema_version"] != 1
+        or not isinstance(disk_checks, list)
+        or [row.get("stage") for row in disk_checks]
+        != ["before-capture", "before-staging-copy"]
+        or any(
+            not isinstance(row, dict)
+            or set(row)
+            != {"stage", "filesystem", "required_bytes", "free_bytes"}
+            or not isinstance(row["filesystem"], str)
+            or not isinstance(row["required_bytes"], int)
+            or not isinstance(row["free_bytes"], int)
+            or row["free_bytes"] < row["required_bytes"]
+            for row in disk_checks
+        )
+    ):
+        raise RuntimeError("RenderDoc disk-reservation evidence is invalid")
+    runtime = read_json_object(artifact_paths["runtime_checkpoint"])
+    if runtime.get("schema_version") != RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION:
+        raise RuntimeError("RenderDoc runtime checkpoint differs from schema v3")
+    try:
+        validate_runtime_checkpoint_v3(
+            runtime,
+            contract=contract,
+            stage_id=stage,
+            capture_path=None,
+            rdc_sha256=capture["sha256"],
+            rdc_bytes=capture["bytes"],
+        )
+    except ValueError as error:
+        raise RuntimeError(f"RenderDoc runtime checkpoint failed validation: {error}") from error
+    runtime_checkpoint = runtime["checkpoint"]
+    if checkpoint != runtime_checkpoint:
         raise RuntimeError("RenderDoc runtime checkpoint differs from manifest evidence")
+    if runtime["fixture"] != manifest["fixture"]:
+        raise RuntimeError("RenderDoc runtime fixture differs from manifest evidence")
+    if not accepts_renderdoc_api_version(
+        str(runtime["returned_renderdoc_api_version"]),
+        requested=str(runtime["requested_renderdoc_api_version"]),
+    ):
+        raise RuntimeError("RenderDoc runtime API version is incompatible")
     render_resources = _validate_render_resources(runtime["render_resources"])
     log_text = artifact_paths["log"].read_text(encoding="utf-8")
-    allowed_log_patterns = [
-        re.compile(pattern) for pattern in contract["allow_log_patterns"]["windowed"]
-    ]
-    unexpected = [
-        line
-        for line in log_text.splitlines()
-        if RENDERDOC_LOG_PROBLEM_RE.search(line)
-        and not any(pattern.search(line) for pattern in allowed_log_patterns)
-    ]
+    _, unexpected = classify_renderdoc_log_lines(
+        log_text, contract["allow_log_patterns"]["windowed"]
+    )
     if unexpected or manifest["unexpected_log_lines"] != len(unexpected):
         raise RuntimeError("RenderDoc log contains an unexpected warning or error")
 
@@ -1550,16 +1734,23 @@ def collect_attempt_evidence(
     if list(cases) != expected_ids:
         raise RuntimeError("attempt case set or order differs from the formal matrix")
     capture_sha = manifests["capture"]["binary"]["sha256"]
+    renderdoc_sha = manifests["renderdoc"]["binary"]["sha256"]
     for leg_id in ("audit", "behavior"):
         if manifests[leg_id]["binary"]["sha256"] != capture_sha:
             raise RuntimeError(f"{leg_id} did not use the Capture binary")
-    if manifests["renderdoc"]["binary"]["sha256"] != capture_sha:
-        raise RuntimeError("RenderDoc did not use the Capture binary")
+    if renderdoc_sha == capture_sha:
+        raise RuntimeError("RenderDoc must use a distinct profiling-renderdoc binary")
     memory_sha = manifests["memory"]["binary"]["sha256"]
-    if memory_sha == capture_sha:
+    if memory_sha == capture_sha or memory_sha == renderdoc_sha:
         raise RuntimeError("Memory must use a distinct profiling-memory binary")
     if environment_lock["capture_binary_sha256"] != capture_sha:
         raise RuntimeError("Capture binary differs from environment-lock.json")
+    if environment_lock.get("schema_version") != 2:
+        raise RuntimeError("new three-capsule formal attempts require environment-lock schema v2")
+    if environment_lock.get("renderdoc_binary_sha256") != renderdoc_sha:
+        raise RuntimeError("RenderDoc binary differs from environment-lock.json")
+    if environment_lock.get("memory_binary_sha256") != memory_sha:
+        raise RuntimeError("Memory binary differs from environment-lock.json")
     return (
         contract,
         job,
@@ -2097,6 +2288,10 @@ def finalize_attempt(attempt: Path) -> dict[str, Any]:
     _validate_attempt_file_set(attempt, leg_order=job["leg_order"], finalized=False)
     projection_rows = build_projection_rows(contract, job["stage_id"], cases)
     gate_rows = build_gate_result_rows(contract, job["stage_id"], cases)
+    foundation_state = "replay_valid"
+    transition_foundation_state(foundation_state, "render_gate_valid")
+    foundation_state = "render_gate_valid"
+    assert_publish_allowed(foundation_state)
     raw_inventory = _raw_attempt_inventory(attempt, finalized=False)
 
     data_dir = attempt / "data"

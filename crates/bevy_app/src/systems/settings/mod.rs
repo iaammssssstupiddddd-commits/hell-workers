@@ -60,10 +60,10 @@ fn load_settings_system(
     if let Some(config) = perf_config.filter(|config| config.enabled()) {
         // 計測はローカルの settings.ron にある一時停止・倍速設定の影響を受けない。
         time.set_relative_speed(1.0);
-        if config.uses_fixed_timesteps() {
-            // fixed-step audit は fixture checkpoint が採れた後に capture system が
-            // 明示的に unpause する。Startup から最初の Update までのゲーム更新を
-            // 混入させないための gate である。
+        if config.freezes_fixture_setup() {
+            // fixed-step audit と初期 checksum を横断比較する fixture は、
+            // fixture checkpoint が採れた後に capture system が明示的に unpause する。
+            // Startup から最初の Update までのゲーム更新を混入させないための gate。
             time.pause();
         } else {
             time.unpause();

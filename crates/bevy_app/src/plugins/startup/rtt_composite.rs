@@ -21,15 +21,15 @@ use hw_core::constants::{
 /// The formal RenderDoc evidence records this tuple to prove that one
 /// composite draw samples both current RtT targets.  Keep it in sync with
 /// `assets/shaders/rtt_composite_material.wgsl`.
-#[cfg(feature = "profiling")]
+#[cfg(feature = "profiling-renderdoc")]
 pub(crate) const RTT_COMPOSITE_BIND_SET_OR_SPACE: u32 = 2;
-#[cfg(feature = "profiling")]
+#[cfg(feature = "profiling-renderdoc")]
 pub(crate) const RTT_COMPOSITE_SCENE_TEXTURE_BINDING: u32 = 1;
-#[cfg(feature = "profiling")]
+#[cfg(feature = "profiling-renderdoc")]
 pub(crate) const RTT_COMPOSITE_SCENE_SAMPLER_BINDING: u32 = 2;
-#[cfg(feature = "profiling")]
+#[cfg(feature = "profiling-renderdoc")]
 pub(crate) const RTT_COMPOSITE_MASK_TEXTURE_BINDING: u32 = 3;
-#[cfg(feature = "profiling")]
+#[cfg(feature = "profiling-renderdoc")]
 pub(crate) const RTT_COMPOSITE_MASK_SAMPLER_BINDING: u32 = 4;
 
 /// RtT composite entity のマーカー。3D表示切り替えで可視性を制御する。

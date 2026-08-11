@@ -1,6 +1,8 @@
 //! One-shot save timing capture for the `save-transaction` perf workload.
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use std::env;
 
 use crate::systems::save::{
     SaveLoadOperation, SaveLoadOutcome, SaveLoadOutcomeSource, SaveLoadResult, SaveLoadState,
@@ -31,34 +33,39 @@ fn is_issued_manual_save_outcome(outcome: &SaveLoadOutcome) -> bool {
         )
 }
 
-pub(crate) fn drive_save_transaction_capture_system(
-    config: Res<PerfScenarioConfig>,
-    applied: Res<PerfScenarioApplied>,
-    mut capture: ResMut<PerfCapture>,
-    mut save_state: ResMut<SaveLoadState>,
-    metrics: Res<SaveTransactionMetrics>,
-    mut local: ResMut<SaveTransactionCaptureState>,
-    mut outcomes: MessageReader<SaveLoadOutcome>,
-    mut exit: MessageWriter<AppExit>,
-) {
-    if !config.enabled() || config.workload != PerfWorkload::SaveTransaction || !applied.complete()
+#[derive(SystemParam)]
+pub(crate) struct SaveTransactionCaptureParams<'w, 's> {
+    config: Res<'w, PerfScenarioConfig>,
+    applied: Res<'w, PerfScenarioApplied>,
+    capture: ResMut<'w, PerfCapture>,
+    save_state: ResMut<'w, SaveLoadState>,
+    metrics: Res<'w, SaveTransactionMetrics>,
+    local: ResMut<'w, SaveTransactionCaptureState>,
+    outcomes: MessageReader<'w, 's, SaveLoadOutcome>,
+    exit: MessageWriter<'w, AppExit>,
+}
+
+pub(crate) fn drive_save_transaction_capture_system(mut params: SaveTransactionCaptureParams) {
+    if !params.config.enabled()
+        || params.config.workload != PerfWorkload::SaveTransaction
+        || !params.applied.complete()
     {
         return;
     }
 
-    match capture.phase() {
-        PerfCapturePhase::Measure if !local.completed => {
-            if !local.issued {
-                if save_state.is_idle() {
-                    let _ = save_state.try_set(manual_save_request(
+    match params.capture.phase() {
+        PerfCapturePhase::Measure if !params.local.completed => {
+            if !params.local.issued {
+                if params.save_state.is_idle() {
+                    let _ = params.save_state.try_set(manual_save_request(
                         SaveSlotId::Manual1,
                         SAVE_TRANSACTION_DIALOG_SESSION,
                     ));
-                    local.issued = true;
+                    params.local.issued = true;
                 }
                 return;
             }
-            for outcome in outcomes.read() {
+            for outcome in params.outcomes.read() {
                 if !is_issued_manual_save_outcome(outcome) {
                     continue;
                 }
@@ -67,24 +74,32 @@ pub(crate) fn drive_save_transaction_capture_system(
                         "PERF_CAPTURE: issued save-transaction request did not succeed: {:?}",
                         outcome.result
                     );
-                    capture.fail_capture();
-                    exit.write(AppExit::error());
+                    params.capture.fail_capture();
+                    params.exit.write(AppExit::error());
                     return;
                 }
-                let Some(sample) = metrics.last else {
+                let Some(sample) = params.metrics.last else {
                     error!("PERF_CAPTURE: save-transaction finished without phase metrics");
-                    capture.fail_capture();
-                    exit.write(AppExit::error());
+                    params.capture.fail_capture();
+                    params.exit.write(AppExit::error());
                     return;
                 };
-                capture.store_save_transaction_sample(sample);
+                params.capture.store_save_transaction_sample(sample);
                 #[cfg(feature = "profiling-memory")]
-                capture.finish_memory_measurement();
-                local.completed = true;
+                params.capture.finish_memory_measurement();
+                params.local.completed = true;
                 return;
             }
         }
         _ => {}
+    }
+}
+
+pub(crate) fn save_transaction_sample_kind_from_env() -> &'static str {
+    match env::var("HW_PERF_SAVE_SAMPLE_KIND").as_deref() {
+        Ok("preflight") => "preflight",
+        Ok("measured") => "measured",
+        _ => "measured",
     }
 }
 
@@ -137,12 +152,3 @@ mod tests {
         )));
     }
 }
-
-pub(crate) fn save_transaction_sample_kind_from_env() -> &'static str {
-    match env::var("HW_PERF_SAVE_SAMPLE_KIND").as_deref() {
-        Ok("preflight") => "preflight",
-        Ok("measured") => "measured",
-        _ => "measured",
-    }
-}
-use std::env;

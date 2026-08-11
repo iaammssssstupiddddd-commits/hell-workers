@@ -4,6 +4,15 @@ use super::{
 };
 
 #[test]
+fn renderdoc_capture_requires_its_dedicated_feature() {
+    assert!(!super::resolve_renderdoc_capture(false).unwrap());
+    #[cfg(feature = "profiling-renderdoc")]
+    assert!(super::resolve_renderdoc_capture(true).unwrap());
+    #[cfg(not(feature = "profiling-renderdoc"))]
+    assert!(super::resolve_renderdoc_capture(true).is_err());
+}
+
+#[test]
 fn random_streams_are_stable_and_independent() {
     let config = PerfScenarioConfig {
         enabled: true,
@@ -19,7 +28,7 @@ fn random_streams_are_stable_and_independent() {
         warmup_secs: 30.0,
         measure_secs: 60.0,
         output_dir: None,
-        #[cfg(feature = "profiling")]
+        #[cfg(feature = "profiling-renderdoc")]
         renderdoc_capture: false,
         rtt_light: None,
         behavior_case: None,
@@ -128,6 +137,32 @@ fn fixed_clock_mode_is_explicit() {
     assert_eq!(PerfClockMode::parse("auto"), None);
     assert_eq!(PerfClockMode::Fixed.as_str(), "fixed");
     assert_eq!(PerfClockMode::FixedBehavior.as_str(), "fixed-behavior");
+}
+
+#[test]
+fn fixture_setup_freezes_for_fixed_step_and_checksum_compared_realtime_workloads() {
+    let mut config = PerfScenarioConfig {
+        enabled: true,
+        ..PerfScenarioConfig::default()
+    };
+    assert!(!config.freezes_fixture_setup());
+
+    config.workload = super::PerfWorkload::IndoorLight;
+    assert!(config.freezes_fixture_setup());
+    assert!(config.keeps_virtual_time_paused_during_capture());
+
+    config.workload = super::PerfWorkload::TaskDashboard;
+    assert!(config.freezes_fixture_setup());
+    assert!(!config.keeps_virtual_time_paused_during_capture());
+
+    config.workload = super::PerfWorkload::Gather;
+    config.clock_mode = PerfClockMode::Fixed;
+    assert!(config.freezes_fixture_setup());
+    assert!(!config.keeps_virtual_time_paused_during_capture());
+
+    config.enabled = false;
+    assert!(!config.freezes_fixture_setup());
+    assert!(!config.keeps_virtual_time_paused_during_capture());
 }
 
 #[test]

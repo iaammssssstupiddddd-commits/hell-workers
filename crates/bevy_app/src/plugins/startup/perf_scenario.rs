@@ -102,7 +102,7 @@ mod fixture;
 mod indoor_light_fixture;
 #[cfg(feature = "profiling")]
 mod output;
-#[cfg(feature = "profiling")]
+#[cfg(feature = "profiling-renderdoc")]
 mod renderdoc_capture;
 #[cfg(feature = "profiling")]
 mod save_transaction;
@@ -124,8 +124,8 @@ pub use config::{
 };
 #[cfg(feature = "profiling")]
 pub(crate) use config::{
-    is_fixed_step_behavior, is_fixed_step_scenario, is_not_fixed_step_audit,
-    is_not_fixed_step_behavior, is_not_renderdoc_capture,
+    does_not_require_precheckpoint_fixture_spawn, is_fixed_step_behavior, is_not_fixed_step_audit,
+    is_not_fixed_step_behavior, is_not_renderdoc_capture, requires_precheckpoint_fixture_spawn,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use deconstruction_fixture::{
@@ -145,7 +145,7 @@ pub(crate) use indoor_light_fixture::{
     should_settle_indoor_light_fixture, stabilize_indoor_light_actors_system,
     validate_indoor_light_fixture_system,
 };
-#[cfg(feature = "profiling")]
+#[cfg(feature = "profiling-renderdoc")]
 pub(crate) use renderdoc_capture::{
     arm_renderdoc_checkpoint_system, install as install_renderdoc_capture,
     poll_renderdoc_capture_system,
@@ -225,6 +225,11 @@ impl PerfCapture {
     #[cfg(feature = "profiling-memory")]
     pub(super) fn finish_memory_measurement(&mut self) {
         self.memory_measurement = crate::profiling_allocator::end_measurement();
+    }
+
+    #[cfg(feature = "profiling-renderdoc")]
+    pub(super) const fn fixed_update_tick(&self) -> u64 {
+        self.fixed_update_tick
     }
 
     pub(super) fn store_save_transaction_sample(

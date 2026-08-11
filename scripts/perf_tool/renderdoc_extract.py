@@ -17,10 +17,11 @@ from typing import Any
 
 
 SCHEMA_VERSION = 2
-RUNTIME_CHECKPOINT_SCHEMA_VERSION = 2
+RUNTIME_CHECKPOINT_SCHEMA_VERSION = 3
 CAPTURE_ENV = "HW_RENDERDOC_CAPTURE"
 OUTPUT_ENV = "HW_RENDERDOC_EXTRACTION"
 CHECKPOINT_ENV = "HW_RENDERDOC_RUNTIME_CHECKPOINT"
+FAILURE_ENV = "HW_RENDERDOC_EXTRACTION_FAILURE"
 
 EXPECTED_RENDER_RESOURCES = {
     "scene_target_label": "hell-workers-rtt-scene",
@@ -73,26 +74,66 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _read_checkpoint(path: Path) -> dict[str, Any]:
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise RuntimeError(f"cannot read runtime checkpoint: {error}") from error
+def _validate_checkpoint(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != {
         "schema_version",
         "status",
+        "contract_id",
+        "stage_id",
+        "generation",
         "checkpoint",
         "render_inventory",
         "render_resources",
         "fixture",
         "capture_path",
-        "renderdoc_api_version",
-    } or value.get("schema_version") != RUNTIME_CHECKPOINT_SCHEMA_VERSION or value.get("status") != "valid":
-        raise RuntimeError("runtime checkpoint is not a valid schema v2 JSON object")
+        "requested_renderdoc_api_version",
+        "returned_renderdoc_api_version",
+        "selector",
+        "gpu_ready",
+        "capture_artifact",
+    }:
+        raise RuntimeError("runtime checkpoint keys differ from schema v3")
+    if (
+        value.get("schema_version") != RUNTIME_CHECKPOINT_SCHEMA_VERSION
+        or value.get("status") != "valid"
+        or value.get("contract_id") != "rtt-light-v1"
+        or value.get("stage_id") != "current"
+        or not isinstance(value.get("generation"), int)
+        or isinstance(value.get("generation"), bool)
+        or value["generation"] < 1
+        or value.get("requested_renderdoc_api_version") != "1.6.0"
+        or not isinstance(value.get("returned_renderdoc_api_version"), str)
+    ):
+        raise RuntimeError("runtime checkpoint identity differs from schema v3")
     inventory = value.get("render_inventory")
     if not isinstance(inventory, dict) or not inventory:
         raise RuntimeError("runtime checkpoint has no render inventory")
+    if not isinstance(value.get("checkpoint"), dict):
+        raise RuntimeError("runtime checkpoint has no frame checkpoint")
+    if not isinstance(value.get("selector"), dict):
+        raise RuntimeError("runtime checkpoint has no selector evidence")
+    if not isinstance(value.get("gpu_ready"), dict):
+        raise RuntimeError("runtime checkpoint has no GPU-ready evidence")
+    artifact = value.get("capture_artifact")
+    if (
+        not isinstance(artifact, dict)
+        or set(artifact) != {"sha256", "bytes"}
+        or not isinstance(artifact.get("sha256"), str)
+        or len(artifact["sha256"]) != 64
+        or not isinstance(artifact.get("bytes"), int)
+        or isinstance(artifact.get("bytes"), bool)
+        or artifact["bytes"] <= 0
+    ):
+        raise RuntimeError("runtime checkpoint has no capture artifact evidence")
     return value
+
+
+def _read_checkpoint(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"cannot read runtime checkpoint: {error}") from error
+    return _validate_checkpoint(value)
 
 
 def _flatten(actions: Any) -> list[Any]:
@@ -185,8 +226,11 @@ def _draw_passes(rd: Any, roots: Any) -> tuple[list[tuple[Any, list[Any]]], list
     active: tuple[Any, list[Any]] | None = None
     for action in flattened:
         flags = action.flags
-        begins = bool(flags & rd.ActionFlags.BeginPass)
-        ends = bool(flags & rd.ActionFlags.EndPass)
+        is_command_buffer_boundary = bool(
+            flags & rd.ActionFlags.CommandBufferBoundary
+        )
+        begins = bool(flags & rd.ActionFlags.BeginPass) and not is_command_buffer_boundary
+        ends = bool(flags & rd.ActionFlags.EndPass) and not is_command_buffer_boundary
         # RenderDoc represents Vulkan vkCmdNextSubpass as one action carrying
         # both flags.  Close the old subpass before opening the next one.
         if ends:
@@ -220,7 +264,7 @@ def _render_resources(checkpoint: dict[str, Any]) -> dict[str, Any]:
         "composite_texture_bindings",
         "composite_sampler_bindings",
     }:
-        raise RuntimeError("runtime checkpoint render resources differ from schema v2")
+        raise RuntimeError("runtime checkpoint render resources differ from schema v3")
     for label in (expected["scene_target_label"], expected["mask_target_label"]):
         if not isinstance(label, str) or not label:
             raise RuntimeError("runtime checkpoint render resource label is invalid")
@@ -248,7 +292,7 @@ def _render_resources(checkpoint: dict[str, Any]) -> dict[str, Any]:
             or len(rows) != expected_count
             or any(not isinstance(row, dict) or set(row) != expected_keys for row in rows)
         ):
-            raise RuntimeError(f"runtime checkpoint {key} differs from schema v2")
+            raise RuntimeError(f"runtime checkpoint {key} differs from schema v3")
         for row in rows:
             if (
                 not isinstance(row["stage"], str)
@@ -625,6 +669,34 @@ def self_test() -> int:
     from enum import IntFlag
     from types import SimpleNamespace
 
+    checkpoint = {
+        "schema_version": 3,
+        "status": "valid",
+        "contract_id": "rtt-light-v1",
+        "stage_id": "current",
+        "generation": 1,
+        "checkpoint": {"ready_frame_ordinal": 4},
+        "render_inventory": {"scene_target_count": 1},
+        "render_resources": EXPECTED_RENDER_RESOURCES,
+        "fixture": {"rooms": 4},
+        "capture_path": "/diagnostic/capture.rdc",
+        "requested_renderdoc_api_version": "1.6.0",
+        "returned_renderdoc_api_version": "1.7.0",
+        "selector": {"strategy": "wgpu_device_null_window"},
+        "gpu_ready": {"pre_capture": {}, "post_capture": {}},
+        "capture_artifact": {"sha256": "a" * 64, "bytes": 1},
+    }
+    _require(
+        _validate_checkpoint(checkpoint) is checkpoint,
+        "runtime checkpoint schema v3 validation regressed",
+    )
+    try:
+        _validate_checkpoint({**checkpoint, "schema_version": 2})
+    except RuntimeError:
+        pass
+    else:
+        raise RuntimeError("runtime checkpoint schema v2 must be rejected")
+
     class ResourceId:
         def __init__(self, value: int):
             self.value = value
@@ -643,6 +715,7 @@ def self_test() -> int:
         BeginPass = 1
         EndPass = 2
         Drawcall = 4
+        CommandBufferBoundary = 8
 
     rd = SimpleNamespace(ResourceId=ResourceId, ActionFlags=ActionFlags)
 
@@ -654,6 +727,7 @@ def self_test() -> int:
         )
 
     roots = [
+        action(0, ActionFlags.BeginPass | ActionFlags.CommandBufferBoundary),
         action(1, ActionFlags.BeginPass, [action(2, ActionFlags.Drawcall)]),
         action(
             3,
@@ -661,10 +735,11 @@ def self_test() -> int:
             [action(4, ActionFlags.Drawcall)],
         ),
         action(5, ActionFlags.EndPass),
+        action(6, ActionFlags.EndPass | ActionFlags.CommandBufferBoundary),
     ]
     passes, flattened = _draw_passes(rd, roots)
     _require(
-        len(passes) == 2 and len(flattened) == 5,
+        len(passes) == 2 and len(flattened) == 7,
         "subpass-boundary grouping regressed",
     )
 
@@ -845,5 +920,18 @@ if __name__ == "__main__":
             raise SystemExit(self_test())
         raise SystemExit(main())
     except Exception as error:
-        print(f"renderdoc extraction failed: {error}", file=sys.stderr)
+        message = f"renderdoc extraction failed: {error}"
+        print(message, file=sys.stderr)
+        failure_value = os.environ.get(FAILURE_ENV)
+        if failure_value:
+            try:
+                _write_json_exclusive(
+                    Path(failure_value).resolve(),
+                    {"schema_version": 1, "error": message},
+                )
+            except Exception as failure_error:
+                print(
+                    f"renderdoc extraction failure evidence failed: {failure_error}",
+                    file=sys.stderr,
+                )
         raise SystemExit(1) from error

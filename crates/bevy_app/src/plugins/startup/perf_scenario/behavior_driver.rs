@@ -7,6 +7,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::WorldEpoch;
+use hw_energy::SoulSpaTile;
 use hw_jobs::{Building, BuildingType};
 use hw_ui::UiIntent;
 use hw_world::{Room, Yard};
@@ -193,7 +194,16 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
             &params.quality,
             None,
         ));
-        let private_root = perf_output_directory(&params.config).join("behavior-saves");
+        let output_directory = perf_output_directory(&params.config);
+        let Some(run_directory) = output_directory.parent() else {
+            fail_behavior(
+                &mut params.capture,
+                "behavior output directory has no run-owned parent",
+                &mut params.exit,
+            );
+            return;
+        };
+        let private_root = run_directory.join("behavior-runtime");
         if private_root.exists() {
             fail_behavior(
                 &mut params.capture,
@@ -371,11 +381,14 @@ pub(crate) struct BehaviorObserveParams<'w, 's> {
     building_3d_visuals: Query<'w, 's, &'static Building3dVisual>,
     door_handles: Res<'w, DoorVisualHandles>,
     buildings: Query<'w, 's, (Entity, &'static Building, &'static Transform)>,
+    soul_spa_tiles: Query<'w, 's, &'static SoulSpaTile>,
     souls: Query<'w, 's, (), With<DamnedSoul>>,
     familiars: Query<'w, 's, (), With<Familiar>>,
     yards: Query<'w, 's, &'static Yard>,
     rooms: Query<'w, 's, (), With<Room>>,
     world_map: Res<'w, WorldMap>,
+    save_path: Res<'w, SavePath>,
+    save_root: Res<'w, SaveStorageRoot>,
     primary_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     rtt_runtime: Res<'w, RttRuntime>,
     quality: Res<'w, QualitySettings>,
@@ -559,6 +572,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                 5 => {
                     match validate_loaded_small_fixture(
                         &params.buildings,
+                        &params.soul_spa_tiles,
                         &params.souls,
                         &params.familiars,
                         &params.yards,
@@ -668,18 +682,24 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
         &params.quality,
         None,
     );
-    let result = write_behavior_timeline(&params.config, &params.capture.rows)
-        .and_then(|()| {
-            let initial = params.capture.initial_window.as_ref().ok_or_else(|| {
-                std::io::Error::other("behavior flush has no initial window observation")
-            })?;
-            write_window_observation(&params.config, initial, &final_window)
-        })
-        .and_then(|()| write_indoor_light_fixture_sidecars(&params.config, &params.fixture));
+    let result = finalize_behavior_runtime(
+        &params.config,
+        params.config.behavior_case(),
+        params.save_path.as_path(),
+        params.save_root.as_path(),
+    )
+    .and_then(|()| write_behavior_timeline(&params.config, &params.capture.rows))
+    .and_then(|()| {
+        let initial = params.capture.initial_window.as_ref().ok_or_else(|| {
+            std::io::Error::other("behavior flush has no initial window observation")
+        })?;
+        write_window_observation(&params.config, initial, &final_window)
+    })
+    .and_then(|()| write_indoor_light_fixture_sidecars(&params.config, &params.fixture));
     params.capture.phase = BehaviorPhase::Finished;
     match result {
         Ok(()) => {
-            info!(
+            eprintln!(
                 "PERF_BEHAVIOR: wrote {} timeline rows",
                 params.capture.rows.len()
             );
@@ -690,6 +710,27 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             params.exit.write(AppExit::error());
         }
     }
+}
+
+fn finalize_behavior_runtime(
+    config: &PerfScenarioConfig,
+    behavior_case: Option<PerfBehaviorCase>,
+    save_path: &std::path::Path,
+    save_root: &std::path::Path,
+) -> std::io::Result<()> {
+    if behavior_case == Some(PerfBehaviorCase::LoadNormalV1) {
+        let output_directory = perf_output_directory(config);
+        std::fs::create_dir_all(&output_directory)?;
+        let artifact_path = output_directory.join("behavior-save.scn.ron");
+        if artifact_path.exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::AlreadyExists,
+                "behavior-save.scn.ron already exists",
+            ));
+        }
+        std::fs::copy(save_path, artifact_path)?;
+    }
+    std::fs::remove_dir_all(save_root)
 }
 
 fn append_row(capture: &mut PerfBehaviorCapture, row: TimelineRow) {
@@ -721,19 +762,27 @@ fn write_behavior_timeline(
 
 fn validate_loaded_small_fixture(
     buildings: &Query<'_, '_, (Entity, &Building, &Transform)>,
+    soul_spa_tiles: &Query<'_, '_, &SoulSpaTile>,
     souls: &Query<'_, '_, (), With<DamnedSoul>>,
     familiars: &Query<'_, '_, (), With<Familiar>>,
     yards: &Query<'_, '_, &Yard>,
     rooms: &Query<'_, '_, (), With<Room>>,
     world_map: &WorldMap,
 ) -> Result<(), String> {
-    if (
+    let counts = (
         souls.iter().count(),
         familiars.iter().count(),
         yards.iter().count(),
-    ) != (50, 4, 2)
-    {
-        return Err("Soul/Familiar/Yard counts have not converged".to_string());
+    );
+    // The fixed small fixture adds two contract-owned Yards while preserving
+    // the seed-owned world-generation Yard after proving that it does not
+    // overlap the fixture. A normal load must restore the complete durable
+    // world, not only the two fixture-owned Yards.
+    if counts != (50, 4, 3) {
+        return Err(format!(
+            "Soul/Familiar/Yard counts are {}/{}/{}, expected 50/4/3",
+            counts.0, counts.1, counts.2
+        ));
     }
     if rooms.iter().count() != 1 {
         return Err("Room count has not converged".to_string());
@@ -742,7 +791,7 @@ fn validate_loaded_small_fixture(
     let mut walls = BTreeSet::new();
     let mut doors = Vec::new();
     let mut lamps = BTreeSet::new();
-    let mut spas = BTreeSet::new();
+    let mut spa_sites = Vec::new();
     for (entity, building, transform) in buildings.iter() {
         let grid = WorldMap::world_to_grid(transform.translation.truncate());
         match building.kind {
@@ -757,7 +806,7 @@ fn validate_loaded_small_fixture(
                 lamps.insert(grid);
             }
             BuildingType::SoulSpa => {
-                spas.insert(grid);
+                spa_sites.push(entity);
             }
             _ => {}
         }
@@ -782,8 +831,32 @@ fn validate_loaded_small_fixture(
     {
         return Err("Door WorldMap owner/state relation differs after load".to_string());
     }
-    if lamps != BTreeSet::from([(17, 21), (80, 80)]) || spas != BTreeSet::from([(21, 26)]) {
-        return Err("Lamp or SoulSpa semantic grids differ after load".to_string());
+    if lamps != BTreeSet::from([(17, 21), (80, 80)]) {
+        return Err("Lamp semantic grids differ after load".to_string());
+    }
+    // SoulSpa is a 2x2 building whose site Transform is the footprint center,
+    // not its placement anchor. Converting that center back to one grid loses
+    // the anchor semantics. Validate the durable site-to-tile relationship and
+    // exact footprint instead; this is also what WorldMap rehydration owns.
+    if spa_sites.len() != 1 {
+        return Err(format!(
+            "SoulSpa site count is {}, expected 1",
+            spa_sites.len()
+        ));
+    }
+    let spa_site = spa_sites[0];
+    let spa_grids = soul_spa_tiles
+        .iter()
+        .filter(|tile| tile.parent_site == spa_site)
+        .map(|tile| tile.grid_pos)
+        .collect::<BTreeSet<_>>();
+    let expected_spa_grids = BTreeSet::from([(21, 25), (22, 25), (21, 26), (22, 26)]);
+    if spa_grids != expected_spa_grids
+        || expected_spa_grids
+            .iter()
+            .any(|grid| world_map.building_entity(*grid) != Some(spa_site))
+    {
+        return Err("SoulSpa semantic footprint differs after load".to_string());
     }
     Ok(())
 }

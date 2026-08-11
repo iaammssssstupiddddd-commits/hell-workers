@@ -73,7 +73,7 @@ def add_run_arguments(
         help="requested primary-window scale-factor override",
     )
     parser.add_argument("--rtt-quality", choices=["high", "medium", "low"])
-    parser.add_argument("--instrumentation", default="capture", choices=["capture", "tracy", "memory"])
+    parser.add_argument("--instrumentation", default="capture", choices=["capture", "tracy", "memory", "renderdoc"])
     parser.add_argument(
         "--tracy-capture-binary",
         default=os.environ.get("TRACY_CAPTURE_BINARY"),

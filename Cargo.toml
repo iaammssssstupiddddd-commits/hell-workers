@@ -24,6 +24,7 @@ bevy_world_serialization = "0.19"
 wfc = "0.10"        # gridbugs/wfc — MIT, seed + ForbidPattern hard constraint
 direction = "0.18"  # gridbugs/direction — CardinalDirectionTable (wfc の推移依存だが明示追加)
 wgpu = { version = "29.0.4", default-features = false }
+wgpu-core = { version = "29.0.4", default-features = false }
 libloading = "0.8.9"
 renderdoc-sys = "1.1.0"
 
@@ -36,6 +37,15 @@ codegen-units = 1
 inherits = "release"
 debug = "line-tables-only"
 lto = "thin"
+
+# wgpu-hal deliberately disables its RenderDoc bridge when debug assertions are
+# off. Keep the normal profiling binaries release-like and enable the assertion
+# contract only for the dedicated RenderDoc capsule.
+[profile.profiling-renderdoc]
+inherits = "profiling"
+debug-assertions = true
+lto = false
+codegen-units = 16
 
 [profile.dev]
 opt-level = 0

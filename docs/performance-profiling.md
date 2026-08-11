@@ -117,18 +117,40 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 ```
 
 ローカルVulkan loader由来の追加ERRORを診断用regexで許可したrunはformal evidenceに昇格させない。
-formal artifactはまだ未採取である。登録にはclean subject commit、ancestor correctness commit、同一sourceの
-S0 / S1、actual-window Capture / Memory、medium/gpuのRenderDoc replay、offline bundle validationが必要である。
-`plan-rtt-light`が`blocked`を返した場合は実行へ進めない。登録済みattemptはnative helperの
+P00 currentのcanonical formal baselineは2026-08-11に登録済みである。subject commitは
+`10763a4da6bfbe0b480971fb85c474e6ff7a5f86`、attempt IDは
+`9e813f24-0f7b-47f5-8a8d-e3ff34775370`、source fingerprintは
+`db34c8fc901a4c3ecdd80158f391bf986842323641c6a593daef67a6d89d7bce`である。audit / behavior /
+Capture / RenderDoc / Memoryの5 leg、18 case、各realtime / fixed-step case 3反復、RenderDoc 1 frameを登録し、
+raw artifact 884件のdirectory SHA256は
+`a9f4927186fe7c8c5f009583fd645cd7963b6ad36398e9d614fbcbbff1f8a6aa`である。登録済みattemptはnative helperの
 `verify-rtt-light --repo … --attempt …`、baseline rootは`python3 scripts/perf.py
-verify-rtt-light-baseline --baseline …`で再検証する。
+verify-rtt-light-baseline --baseline …`で再検証する。canonical registryの`baseline-index.json`と
+`SHA256SUMS`を正本とし、個別artifactの絶対pathはhost内の診断locatorとして扱う。
 
-RenderDoc runtime checkpoint / replay extractionはschema v2である。checkpointはScene / Soul mask targetの
-labelに加え、compositeのVulkan descriptor contract（fragment set 2: Scene texture / sampler = binding 1 / 2、
-mask texture / sampler = binding 3 / 4）を固定する。extractorは`vkCmdNextSubpass`の
-`EndPass | BeginPass`を旧subpassのclose後に次subpassへ開き、globalなsampler件数ではなく、同一draw上の
-2 texture + 2 samplerがこのexact `(set, binding)`を満たすことを要求する。別drawで同じsamplerを繰り返しても
-合格しない。schema v1のcheckpoint / extractionはformal baselineへ登録できない。
+2026-08-11 の diagnostic RD0 では Intel Arc / Vulkan / X11 の実ゲームから 699,959,528 byte の RDC
+（SHA256 `aaf0f73c02baebf018ad69f0c229ee0570b52c26bb9bc7df5c183c00a71243b8`）を採取し、
+requested App API 1.6.0 に対して returned 1.7.0、schema v3 checkpoint、orphan 0 を確認した。同一RDCの
+local replay 2回は normalized topology digest
+`554785d1b484efac994568d2311945e7c5ab8affdb2998eec5e18796673862cf` で一致した。これはactual-window
+経路の成立証拠だが、`target/native-acceptance/renderdoc-foundation/` のdiagnostic artifactであり、formal registryへ
+移動・昇格しない。
+
+同日のstage-start gate修正後のformal RD0では、開始時`MemAvailable` 13.10 GiBで8 GiB gateを通過し、実行中に
+約7.1 GiBまで低下してもcapture / 二重replayを継続した。700,992,434 byteのRDCと2つの抽出JSONを生成したため、
+8 GiBを開始後のkill条件にしない経路は実機で成立している。日本語text処理時の完全一致診断
+`ICU4X data error: No segmentation model for language: ja`は、近似regexではなく既知の非致命行として共通log分類器で
+数える。qrenderdocのGTK theme診断も完全一致shapeだけを許可し、近似行やその他のERRORは引き続きformalを失格にする。
+
+formal再試行ではgeneration-scoped environment lockを再利用する。Capture preflightは自分が所有しない既封印の
+RenderDoc / Memory capsule hashを消去せず、各leg ownerだけが該当hashを確定する。RD0とformalは同じRenderDoc binary /
+sealed capsuleを要求するが、別々のRDCに含まれるvolatile event IDやresource IDのためreplay digestの一致は要求しない。
+各RDC自身の二重replay integrityとnormalized topology gateを独立に検証する。offline registrationではcanonicalな
+RDC relative locator、SHA256、byte sizeを正本とし、capture時scratchのabsolute pathは絶対pathであったことだけを確認する。
+capture-time validatorは実際のscratch pathとのexact一致を維持する。
+
+RenderDoc は `profiling-renderdoc` 専用 Cargo feature と専用 Cargo profile の binary capsule を使う。`wgpu-hal 29.0.4` は `debug_assertions=false` の build で RenderDoc bridge を無効化するため、専用 profile は `profiling` を継承しつつ debug assertions を有効にする。また、build peakを抑えて後続stageの8 GiB開始ゲートへ到達しやすくするためLTOを無効化し、codegen unitを16に固定して、mutable outputを`target/profiling-renderdoc/bevy_app`へ分離する。Capture (`profiling`) / Memory (`profiling-memory`) と SHA を共有せず、environment-lock schema v2 が leg ごとの hash を保持する。mutable output は build 直後に read-only capsule へ封印し、RD0 と formal は `profile=profiling-renderdoc`、同一 capsule ID / SHA / build fingerprint だけを受理する。runtime checkpoint は schema v3 で、実測 fixed simulation tick、連続4 GPU-ready frame（`ready_frame_ordinal == capture_frame == 4`）、pre/post GPU-ready signature、requested / returned App API（major 1 かつ 1.6 以上）、wgpu の device-selected / null-window capture strategy、raw `.rdc` の SHA256 / byte size を artifact だけから再検証する。composite の Vulkan descriptor contract（fragment set 2: Scene texture / sampler = binding 1 / 2、mask texture / sampler = binding 3 / 4）は従来どおり固定する。formal 前の actual-game RD0 は同一 RDC を2回 local replayし、volatile resource IDを除いた normalized topology digest が一致した場合だけ formal を許可する。RD0 と failure diagnostic は `target/native-acceptance/renderdoc-foundation/<uuid>/` に置き、canonical registry へ昇格しない。schema v1/v2 checkpoint は登録できない。
+static preflight の `qrenderdoc --version` / `--help` は Qt の display 自動接続を行わない `QT_QPA_PLATFORM=offscreen` で実行する。これは tool metadata probe だけの契約であり、actual-window RD0 / formal capture と local replay の実行環境を offscreen へ置き換えない。
 
 ### 許可ダイアログなし実機受入
 
@@ -156,7 +178,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
 このprofileも返されたdirect `kitty` launcherと`status_command`だけを使い、save/settingsをjob固有runtimeへ
 隔離する。結果は`verify-notifications`で再検証し、headless結果をUI/renderer証跡へ代用しない。
 
-resource preflightはnative recipe開始時に`MemAvailable` 10 GiBと実際のCargo target filesystem空き15 GiBを要求する。16 GiB以上ではCargo 2 job、未満では1 jobとし、`CARGO_INCREMENTAL=0`を固定する。swapの使用量はmanifestへ診断情報として記録するが、RAMの下限を満たす場合の開始・実行条件にはしない。Linuxで`MemAvailable`を読めない場合は開始を拒否する。開始後もhelperは1秒ごとに`MemAvailable` 8 GiBを監視し、下回った場合はそのstageのprocess group全体を停止してartifactへ理由を残す。helperは親環境の`CARGO_TARGET_DIR`を無視してworkspace `target/`へ、`TMPDIR` / `TMP` / `TEMP`を`target/.native-acceptance-tmp`へ固定し、`CARGO_HOME` / `RUSTUP_HOME`は安全な永続overrideだけを保持してtmpfs指定をaccount既定cacheへ戻す。job rootも`target/native-acceptance/`へ生成する。formal RenderDocのraw capture / replay workも`target/.renderdoc-tmp`へ置く。`/tmp`またはmemory-backed filesystemのjob / artifactを、default path・明示pathともに解決済みsymlink/mountまで検査して拒否し、残存`/tmp/hell-workers-*-target`はサイズを出して停止するが自動削除しない。`scripts/perf.py`と`scripts/dev.py`も同じくworkspace target・disk temporary・toolchain cache・最大2 Cargo jobsへ正規化し、Cargo compilationは`MemAvailable` 8 GiB未満では開始しない。Tracy capture / csvexportとRenderDocの子processもこのtemporary環境を継承する。通常のMemory受入はnative allocator + GNU timeを使い、Cargo/game/Capture/Memoryは並列化しない。artifactやCargo cacheの自動削除、別target directory、routineな`cargo clean`、`nice` / `ionice` / CPU affinityは行わない。
+resource preflightはnative recipe開始時に`MemAvailable` 10 GiBと実際のCargo target filesystem空き15 GiBを要求する。16 GiB以上ではCargo 2 job、未満では1 jobとし、`CARGO_INCREMENTAL=0`を固定する。各build / game / capture / replay stageの開始直前には`MemAvailable` 8 GiBを要求し、admission snapshotをartifactへ記録する。この8 GiBはstage開始ゲートであり、開始後に`MemAvailable`が一時的に8 GiBを下回ったことだけを理由に実行中processを停止しない。swapの使用量はmanifestへ診断情報として記録するが、RAMの下限を満たす場合の開始条件にはしない。Linuxで`MemAvailable`を読めない場合はstage開始を拒否する。helperは親環境の`CARGO_TARGET_DIR`を無視してworkspace `target/`へ、`TMPDIR` / `TMP` / `TEMP`を`target/.native-acceptance-tmp`へ固定し、`CARGO_HOME` / `RUSTUP_HOME`は安全な永続overrideだけを保持してtmpfs指定をaccount既定cacheへ戻す。job rootも`target/native-acceptance/`へ生成する。formal RenderDocのraw capture / replay workは`target/native-acceptance/renderdoc-foundation/<uuid>/`に置き、成功時だけscratchを削除する。失敗時はpartial raw、log、checkpoint、failure reasonを同じUUIDに保持する。capture/replay childは各600秒、RD0 outerは1,920秒、formal RenderDoc outerは1,320秒を上限とし、owned process groupをTERM→KILL→reapしてorphanを拒否する。capture前とRDC copy前には`max(15 GiB, 2 × RDC bytes + 1 GiB)`の同一filesystem空きを要求する。`/tmp`またはmemory-backed filesystemのjob / artifactを、default path・明示pathともに解決済みsymlink/mountまで検査して拒否し、残存`/tmp/hell-workers-*-target`はサイズを出して停止するが自動削除しない。`scripts/perf.py`と`scripts/dev.py`も同じくworkspace target・disk temporary・toolchain cache・最大2 Cargo jobsへ正規化し、Cargo compilationは`MemAvailable` 8 GiB未満では開始しない。Tracy capture / csvexportとRenderDocの子processもこのtemporary環境を継承する。通常のMemory受入はnative allocator + GNU timeを使い、Cargo/game/Capture/Memoryは並列化しない。artifactやCargo cacheの自動削除、別target directory、routineな`cargo clean`、`nice` / `ionice` / CPU affinityは行わない。
+
+native formalのproduction subject fingerprintと起動・監視harness fingerprintは別に封印する。Python native helper、build coordination、Cargo runtime guardだけを変更した場合、同じclean validation worktreeとworkspace `target/`を再利用し、既存Rust binaryやvalid S0/S1を不要にfull rebuildしない。asset fingerprintはmtimeではなく内容をhashする。Cargo profile、feature、toolchain、Rust/Cargo source、または測定結果validatorの変更は証拠の意味を変えるため、該当capsuleを再build / 再検証する。
 
 既承認launcherが利用可能な間は、displayやGUIの追加許可をユーザーへ求めない。helperが返す`status_command`だけを15〜30秒間隔でpollし、通常は大きなbuild/game logを会話へ読み込まない。headlessはfixed correctnessまたはCPU-only route smokeに限定し、実renderer / adapter / presentの証拠にはしない。
 
@@ -351,7 +375,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
 
 返されたdirect `kitty` launcherを実行する。個別の`--skip-build` / `--binary` / `/tmp` outputを組み合わせてmatrixを手作業で組まない。helperが安全なworkspace target、disk temporary、逐次build、job root、Capture/Memoryのbinary hash契約をまとめて所有する。
 
-Capture / Tracy / Memoryは標準baselineとして混ぜない。各sessionの直前に対応する`profiling` / `profiling-tracy` / `profiling-memory` featureでbuildし、manifestのbinary hashを証跡にする。
+Capture / Tracy / Memory / RenderDoc は標準 baseline として混ぜない。各 session の直前に対応する `profiling` / `profiling-tracy` / `profiling-memory` / `profiling-renderdoc` feature で build し、manifest の binary hash を証跡にする。
 
 ```bash
 python3 scripts/perf.py run --instrumentation tracy --sizes medium --renders cpu \

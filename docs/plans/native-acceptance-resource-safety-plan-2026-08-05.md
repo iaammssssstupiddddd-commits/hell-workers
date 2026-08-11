@@ -40,7 +40,7 @@
 
 ## 4. 実装方針（高レベル）
 
-- shared runtime helper、native helper、performance runnerは`CARGO_TARGET_DIR`をworkspace `target/`へ、`TMPDIR` / `TMP` / `TEMP`をworkspace target配下へ、unsafeな`CARGO_HOME` / `RUSTUP_HOME`をaccount既定の永続cacheへ正規化する。performance/native buildはincrementalを無効にし、全入口は最大2 Cargo jobsに制限する。Cargo compilationは`MemAvailable` 8 GiB未満では開始しない。swap使用量は診断情報として記録し、native recipeは開始時に10 GiB、実行中に8 GiBのRAM下限を守る。実行中の下限割れや監視不能ではstageのprocess group全体を停止する。
+- shared runtime helper、native helper、performance runnerは`CARGO_TARGET_DIR`をworkspace `target/`へ、`TMPDIR` / `TMP` / `TEMP`をworkspace target配下へ、unsafeな`CARGO_HOME` / `RUSTUP_HOME`をaccount既定の永続cacheへ正規化する。performance/native buildはincrementalを無効にし、全入口は最大2 Cargo jobsに制限する。swap使用量は診断情報として記録し、native recipeは開始時に10 GiB、各build / game / capture / replay stageは開始直前に8 GiBのRAM下限を確認する。8 GiBはstage開始ゲートであり、開始後の一時的な下限割れだけを理由にprocess groupを停止しない。
 - workspace target、process temporary、toolchain cache、job root、performance artifact root、RenderDoc stagingのfilesystemがtmpfs/ramfsまたは`/tmp`なら、resolved symlink/mountを含め開始を拒否する。Tracy / csvexport / RenderDocのchild processもcontrolled temporary環境を継承する。
 - Hell Workers 名のtmp targetはroot metadataまたはdebug/profiling/release lockで識別し、サイズを記録して非破壊で停止する。削除は別途明示依頼がある場合だけ行う。
 - Skill本文、agent rules、性能/開発ドキュメント、plan/proposal templateは、`/tmp`に許すのは小さいlockだけであることと、Cargoを`python3 scripts/dev.py cargo -- <subcommand> ...`経由で実行することを明記する。
@@ -87,7 +87,7 @@
 
 ## M3: Native recipeのlive resource guard
 
-- 変更内容: native recipe開始はRAM 10 GiB、実行中はRAM 8 GiBを維持する。swap使用量は証跡へ記録するがRAMの余裕がある場合は開始条件にしない。下限割れではstageの専用process groupをTERM/KILLして、他の作業を巻き込まずにartifactへ理由を残す。
+- 変更内容: native recipe開始はRAM 10 GiB、各stage開始直前はRAM 8 GiBを要求する。swap使用量は証跡へ記録するがRAMの余裕がある場合は開始条件にしない。8 GiB未満ならchildをspawnせずartifactへ理由を残し、開始後はmemory値だけでTERM/KILLしない。timeout・interrupt・明示失敗時の専用process group cleanupは維持する。
 - 変更ファイル:
   - `.codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py`
   - `scripts/cargo_runtime.py`

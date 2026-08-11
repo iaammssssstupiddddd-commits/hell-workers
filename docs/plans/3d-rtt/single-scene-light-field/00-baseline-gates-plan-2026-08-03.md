@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-00-baseline-gates-plan-2026-08-03` |
-| ステータス | `In Progress` |
+| ステータス | `Completed` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-05` |
+| 最終更新日 | `2026-08-11` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | C00-Aはなし。C00-B以降はHVAC計画M0または同等の単一owner correctness commit |
@@ -151,7 +151,9 @@ trackedなcanonical contract `scripts/perf_tool/contracts/rtt_light_migration_v1
 - 安定projection schema、quantile定義、gate式、stageごとのrequired / not-applicable field。
 - allowlist warning regex。未登録warning / errorはfailする。
 
-runnerには`--contract rtt-light-v1`、`--stage current|p01|p02|p03|p04|p05|p06|p07|p08`、`--lane static|behavior|field-core|consumer-core`を追加する。`indoor-light`のS1 / formalではcontract / stage / lane省略、未知version、組合せ不一致、resolved hash不一致をすべて拒否し、workload名から暗黙に最新版を選ばない。`field-core`はP03以降、`consumer-core`はP07以降だけrequiredとし、それ以前のstageで実行または数値出力された場合もfailする。
+contractとoffline validatorは`current|p01|p02|p03|p04|p05|p06|p07|p08`および`static|behavior|field-core|consumer-core`の全語彙をモデル化する。ただしP00時点の実行可能なRust binary / native recipeは**`rtt-light-v1/current/static|behavior`だけ**である。`p01`以降のselector、field-core、consumer-coreを実行可能にするownerはP01以降であり、runtime / replay expectationと同じwork packageで追加する。P00のS1 / formalでは`current`以外を受理せず、contract / stage / lane省略、未知version、組合せ不一致、resolved hash不一致をすべて拒否する。workload名から暗黙に最新版を選ばない。
+
+`field-core`はP03以降、`consumer-core`はP07以降だけrequiredとし、それ以前のstageで実行または数値出力された場合もfailする。これはfuture stageのcontract規則であり、P00 current executorが未実装fieldを捏造してよいという意味ではない。
 
 formalの`--allow-log-pattern`はcontract内のexact集合をCLIへ反映するだけとし、追加・省略・別regexを拒否する。candidateごとにwarningを隠す自由入力にはしない。
 
@@ -269,7 +271,9 @@ primary performance matrixのwindowed legはFHD logical 1920×1080、scale facto
 
 lighting固有allocation `0`はglobal allocatorの推測差分では判定しない。collect / rebuild / upload ownerへprofiling-only scoped allocation counterを追加し、scope内allocation event / bytesをmigration projectionへ出す。scope外process allocationとRSSはMemory artifactのcompatible-reference比較へ分離する。
 
-RenderDoc checkpointはfixture / asset ready後にVirtual timeを固定し、同一stateを4 render frame settleさせた4枚目とする。`checkpoint name / simulation tick / render frame index / RenderDoc version / tool hash / adapter / backend`をmanifestへ記録する。raw `.rdc`、event / pass / attachment / binding抽出JSON、SHA256が1つでも欠ければfailする。RenderDocを利用できない場合はP00をblockedとし、auditで代用しない。
+RenderDoc checkpointはfixture / asset ready後にVirtual timeを固定し、同一GPU-ready signatureを**連続4 pre-render frame**観測した4枚目だけをcaptureする。runtime checkpoint schema v3では、CPU checkpoint generation、実測fixed simulation tickとそのsource、最初から最後までのstable-frame ordinal、capture begin / end frame、pre / post GPU-ready signature（window / camera / target ID・size・pipeline count）、requested API versionと実際に返ったAPI versionを記録する。offline validatorは`ready_frame_ordinal == capture_frame == 4`、signature不変、capture数1をexact検証し、global `FrameCount >= 4`だけでは合格させない。raw `.rdc`、event / pass / attachment / binding抽出JSON、SHA256が1つでも欠ければfailする。RenderDocを利用できない場合はP00をblockedとし、auditで代用しない。
+
+RenderDoc App APIは1.6.0 tableを要求し、そのprefixだけを利用する。`GetAPIVersion()`が返す値は`1.6.0`と完全一致ではなく、`major == 1 && (minor, patch) >= (6, 0)`を受理してprovenanceへ保存する。major不一致、1.6未満、必須function pointer欠落は拒否する。formal captureではselectorとcaptured pairの一意性を、(A) Bevy 0.19 / wgpu 29でdocumentedなnon-null selector、または(B) `NULL, NULL`を使うならexactly one matching API device/window pairであることとRD0でcaptured pairが宣言window / adapterに対応すること、のいずれかで証明する。opaque native pointerを推測・再構成しない。複数candidateまたは対応付け不能ならcapture前にfailする。
 
 runtime checkpoint / replay extraction schema v2は、Scene / Soul mask target labelだけでなく、compositeのfragment
 descriptor `(set, binding)`をScene texture / sampler=`(2,1) / (2,2)`、mask texture / sampler=`(2,3) / (2,4)`として
@@ -278,7 +282,7 @@ descriptor `(set, binding)`をScene texture / sampler=`(2,1) / (2,2)`、mask tex
 
 ### 4.5 artifact layoutとprovenance
 
-smokeはUUID付き`/tmp`へ置く。formalは次の構造で`target/perf-runs/`へ保存し、P08完了まで自動削除しない。
+smokeはUUID付き`target/native-acceptance/`へ、formalは次の構造で`target/perf-runs/`へ保存し、P08完了まで自動削除しない。`/tmp`は小さなlock file以外に使わない。
 
 ```text
 target/perf-runs/rtt-light/rtt-light-v1/
@@ -295,11 +299,12 @@ target/perf-runs/rtt-light/rtt-light-v1/
         capture/
         memory/
         renderdoc/
+        renderdoc-failed/  # failure時のみ。baseline-indexへ未登録
         field-core/
         consumer-core/
 ```
 
-失敗と再実行は必ず新しいattempt UUIDへ分離し、valid attemptだけを`baseline-index.json`へ登録する。固定`audit/`等へ再実行して既存artifactを上書きしない。`baseline-index.json`はP00 currentの5 leg、P03以降のfield-core、P07以降のconsumer-coreについてpath、case ID、status、size、SHA256、subject commit、contract / fixture hash、binary hash、schema version、gate generationを列挙する。正式manifestには少なくとも次を保存する。
+失敗と再実行は必ず新しいattempt UUIDへ分離し、valid attemptだけを`baseline-index.json`へ登録する。固定`audit/`等へ再実行して既存artifactを上書きしない。RD0はbaseline legではないため、別のUUID付き`target/native-acceptance/rtt-light-rd0-*/` job rootへ保持し、formal launcherはそのrootを明示引数として検証する。RD0 raw / extractionはbaseline indexへ登録しないが、root欠落・改変・provenance不一致ならformalを停止する。`baseline-index.json`はP00 currentの5 leg、P03以降のfield-core、P07以降のconsumer-coreについてpath、case ID、status、size、SHA256、subject commit、contract / fixture hash、binary hash、schema version、gate generationを列挙する。正式manifestには少なくとも次を保存する。
 
 - clean commit、subject source hash、measurement / fixture contract hash。
 - 実際に解決したfixture asset hash、Capture / Memory / RenderDoc binary hash。
@@ -309,11 +314,13 @@ target/perf-runs/rtt-light/rtt-light-v1/
 - seed、leg別のexact duration / tick、preflight、repeat。Capture / Memoryは30.0 / 60.0、preflight 1、repeat 3とし、31 / 61等を同じformal generationへ混ぜない。
 - prerequisite correctness commit列と、valid preflightから生成した`environment-lock.json`のSHA256。
 
-native acceptance helperにはgenericまたは`rtt-light`専用recipe / cross-session validatorを追加する。現行`task-dashboard`専用recipeをそのまま流用したことにしない。audit → behavior → stage-required field-core / consumer-core → Capture build / run → RenderDoc → Memory build / runをrepository lock下で逐次実行し、Capture / audit / behavior / core laneのbinary SHA一致、Memory別binary、全legのsource不変を検証する。
+RenderDocのraw captureとreplayは、各childをhelper所有のprocess groupで起動する。app capture / replayは各600秒、formal RenderDoc stageは1,320秒、RD0 toolchain preflightは1,920秒を上限とし、timeout・例外・interrupt時はTERM→KILL→reapまで完了させる。partial evidenceはattempt内の`renderdoc-failed/`へboundedなlog、checkpoint、終了理由、PGID、raw sizeだけを保存し、`renderdoc/`をvalid artifactとしてpublishしない。RD0のraw `.rdc` sizeから`2 × rdc_bytes + 1 GiB`をcopy reserveとし、formal開始前とcopy前に実target filesystemでこのreserveを確保したうえで15 GiBを残す。容量不足はcleanup / relocationではなくfail-closedにする。
 
-新recipeも既存Skillの安全契約を継承する。8 GiB available RAM、15 GiB workspace、1 GiB `/tmp`を開始下限とし、available RAMが12 GiB以上ならCargo job 2、それ未満なら1、`CARGO_INCREMENTAL=0`、一意job root、repository-wide lock、全process逐次を必須とする。recipe内では`--skip-build` / 任意`--binary`、自動cleanup、routine `cargo clean`を禁止する。
+native acceptance helperにはgenericまたは`rtt-light`専用recipe / cross-session validatorを追加する。現行`task-dashboard`専用recipeをそのまま流用したことにしない。audit → behavior → stage-required field-core / consumer-core → Capture build / run → RenderDoc → Memory build / runをrepository lock下で逐次実行し、Capture / audit / behavior / core laneのbinary SHA一致、Memory別binary、全legのsource不変を検証する。RD0とformal RenderDocは同じimmutable Capture binary SHA256、Cargo profile / feature集合 / build environment fingerprintを使い、RD0後の再buildまたはhash不一致を拒否する。このbinaryはRD0 launcherがrepository lock下で通常のCargo buildから生成したmanifest-bound capsuleだけであり、formalは検証済み`--rd0-job-root`経由でのみ解決する。外部path、任意`--binary`、利用者指定の`--skip-build`は引き続き受理しない。
 
-P08までに`cargo clean`が必要になった場合は、immutable payloadをrepository内のgitignored `.artifacts/perf-runs/rtt-light/`へ退避する。元`baseline-index.json`を変更せず、sorted relative path + byte size + file SHA256からcanonical directory digestを再計算する。移動先には旧 / 新path、旧 / 新digest、実行時刻を持つ`relocation.json`と新しい`SHA256SUMS`を生成し、両方のdigest一致後にだけP08の参照ledgerへ移動先を追記する。invalid / interrupted sessionは別UUIDのまま残し、comparatorのreferenceへ登録しない。
+新recipeも既存Skillの安全契約を継承する。recipe開始時は`MemAvailable >= 10 GiB`、各build / game / capture / replay stage開始直前は`8 GiB`を下限とし、実際のCargo targetに15 GiBを開始下限とする。8 GiBはstage開始ゲートであり、開始後の一時的な低下だけでprocess groupを停止しない。Cargo jobは`MemAvailable >= 16 GiB`でのみ2、それ未満は1、`CARGO_INCREMENTAL=0`、一意job root、repository-wide lock、全process逐次を必須とする。Cargo target、compiler temporary directory、Cargo/rustup cache、job root、trace / screenshot / RenderDoc成果物はすべて永続storageへ固定し、`/tmp`を容量予算に使わない。recipe内では`--skip-build` / 任意`--binary`、自動cleanup、routine `cargo clean`を禁止する。
+
+P08までに容量不足で`cargo clean`が必要になった場合、P00は停止する。registered payloadを`target/perf-runs/rtt-light-relocated/`や他の非canonical pathへ移しても、現行validatorのcanonical root / locator / digest契約では再検証できず、`target/`配下なので`cargo clean`からも保護されない。容量、対象path、必要byte数を記録し、cleanupは別の明示判断とする。relocationを実現するなら、canonical locator / index schema / two-location verifier / atomic migrationを先に実装し、別work packageで受入してから新しいbaseline generationにだけ適用する。invalid / interrupted sessionは別UUIDのまま残し、comparatorのreferenceへ登録しない。
 
 ### 4.6 hard gate
 
@@ -466,7 +473,7 @@ P06の増分costはP02完了時のcompatible referenceとも比較し、P01 / P0
 3. native acceptance helperへ`rtt-light` recipe、source / helper / contract fingerprint、cross-leg validatorを追加する。
 4. fixed simulation checkpointのRenderDoc captureと抽出manifest / offline validatorを追加する。
 5. S0 task-dashboard recipeを再実行して、generic化が既存recipeを壊していないことを確認する。
-6. `.artifacts/perf-runs/`をgitignoreし、artifact relocation digest / ledger validatorを追加する。
+6. canonical `target/perf-runs/`だけをformal artifact rootとして受理し、artifact locator / ledger validatorで非canonical pathをfail-closedにする。`target/`は既にgitignore済みなので、`.artifacts/`用の例外は追加しない。
 
 #### 主な変更ファイル
 
@@ -475,7 +482,6 @@ P06の増分costはP02完了時のcompatible referenceとも比較し、P01 / P0
 - quality初期化ownerと必要なfocused test
 - `.codex/skills/hell-workers-run-native-acceptance/{SKILL.md,scripts/native_acceptance.py}`
 - `scripts/perf_tool/`のmanifest / RenderDoc helper / validator
-- `.gitignore`
 - `docs/performance-profiling.md`
 
 #### 完了条件
@@ -484,8 +490,8 @@ P06の増分costはP02完了時のcompatible referenceとも比較し、P01 / P0
 - [x] exact adapter / seed / duration / present / host mismatchがfailする
 - [x] audit → behavior → stage-required field-core / consumer-core → Capture → RenderDoc → Memoryが同一job / lockで逐次実行される
 - [x] raw `.rdc`または抽出manifest欠落時に成功扱いしない
-- [x] resource下限、bounded Cargo jobs、`CARGO_INCREMENTAL=0`、repository lock、build順、自動cleanup禁止が既存Skill contractと一致する
-- [ ] 実機S0と同一sourceのS1がvalidになり、formal launcherがその証跡なしには開始しない
+- [x] resource下限（recipe開始10 GiB / 各stage開始8 GiB / 2 jobは16 GiB以上）、bounded Cargo jobs、`CARGO_INCREMENTAL=0`、repository lock、build順、自動cleanup禁止が既存Skill contractと一致する
+- [x] 実機S0と同一sourceのS1がvalidになり、formal launcherがその証跡なしには開始しない
 
 #### 2026-08-05 実装済みslice
 
@@ -493,28 +499,66 @@ P06の増分costはP02完了時のcompatible referenceとも比較し、P01 / P0
   `static`と`behavior`をformal legとして受理する。`field-core` / `consumer-core`は成立前stageで拒否する。
 - `window.csv`はresolved window backend、actual adapter/backend、requested / effective present modeを開始・終了で
   exact検証する。formalのenvironment lockはCapture binary hashまで束縛する。
-- native helperはS1（51 process）とformal（64 process）を別recipeとして持つ。formalはclean subject、ancestor
+- native helperはS1（51 process）とformal（RD0を含む65 process）を別recipeとして持つ。formalはclean subject、ancestor
   correctness commit、同一sourceのS0 / S1、frozen contract、RenderDoc tool probeをfail-closedで要求し、behavior /
   RenderDoc後に8秒settleする。
-- RenderDocはVulkan、GPU readyの連続4 frame、simulation tick 0、label付きScene / Soul mask targetを固定し、raw
-  `.rdc`、runtime checkpoint、qrenderdoc replay抽出、pass boundary、attachment、reflection binding、label解決した
-  target topologyをoffline validatorまで結ぶ。schema v2ではVulkan `(set, binding)`も記録し、subpass transitionを
-  close→openで扱い、同じ1 composite drawにScene / mask texture各1とsampler各1が存在することをexact検証する。
+- RenderDocのbase実装はVulkan、GPU-readyの連続4 frame、label付きScene / Soul mask target、raw `.rdc`、runtime
+  checkpoint、qrenderdoc replay抽出、pass boundary、attachment、reflection binding、label解決したtarget topologyを
+  offline validatorまで結ぶ。schema v2ではVulkan `(set, binding)`も記録し、subpass transitionをclose→openで扱い、
+  同じ1 composite drawにScene / mask texture各1とsampler各1が存在することをexact検証する。fixed tickの実測値、4番目の
+  frameのartifact証明、API上位互換、selector、timeout / orphanはこのsliceでは未完了で、C00-C2のschema v3で閉じる。
 - formal registrationはattempt manifest / SHA256SUMS / baseline-index locatorのledgerで行い、未登録・改変・
   到達不能なartifactをreferenceにしない。
+
+### M3.5 / C00-C2: RenderDoc実ツール互換性・checkpoint証拠・停止保証を閉じる
+
+#### 変更内容
+
+1. RenderDoc 1.6.0 API tableのprefixだけを使い、`GetAPIVersion()`が返す`major == 1 && (minor, patch) >= (6, 0)`の互換上位versionを記録・受理する。major不一致、1.6未満または1.6 prefixの必須function pointer欠落は拒否する。mockは1.6 exactと上位互換の返却値の両方を通し、major不一致 / 下位 / malformed versionを拒否する。
+2. runtime checkpoint / extractionをschema v3へ上げ、CPU generation、実測fixed tick、4 frameのordinal、capture begin / end frame、pre / post GPU-ready signature、requested / returned API versionをexact検証する。P00 formal artifactはまだ未登録なので、measurement contractのgate意味を変えずにtool schemaだけを更新できる。v1 formal baseline登録後に同種の変更が必要になれば`rtt-light-v2`へ分離する。
+3. formal captureのselector / captured pairを一意にする。(A) Bevy 0.19 / wgpu 29のdocumented pathによるnon-null device / window selector、または(B) `NULL, NULL`を使う場合はexactly one matching API device/window pairであることをpreflightで証明し、RD0でcaptured pairを宣言window / adapterに対応付ける、のいずれかを実装する。opaque native pointerを推測・再構成しない。複数candidateまたは対応付け不能はcapture前に失格にする。
+4. `renderdoc_capture.py`のapp captureと`qrenderdoc --python` replayをそれぞれowned process groupで実行し、600秒deadline、TERM / KILL / reap、orphan process `0`、partial failure evidenceの保持を実装する。native helperもformal RenderDoc stage 1,320秒、RD0 1,920秒のouter deadlineを持ち、helperが終了しただけでchild groupを取り逃がさない。
+5. S1後・formal前にRD0を追加する。RD0はbaseline legではなくUUID付き`target/native-acceptance/rtt-light-rd0-*/` job rootに保存し、formal launcherは`--rd0-job-root`を必須にする。RD0 launcherはrepository lock下の通常Cargo buildからformal RenderDoc用の**同一immutable Capture binary capsule**（SHA256、Cargo profile / feature集合 / build environment fingerprintを記録）を生成する。formalはこの検証済みroot以外のbinary pathを受理しない。RD0はそのbinaryと同一clean subject / source fingerprint / adapter / backend / window backendでactual-windowの1 captureを採り、同じ`.rdc`をqrenderdocで2回独立replayして正規化したextraction topology digestが一致することを検証する。resolved `renderdoccmd` / `qrenderdoc` / `librenderdoc` path・hash・tool version・requested / returned App API version・selector・raw sizeを記録する。formal launcherはRenderDoc前に`capture_binary_sha256 == rd0.capture_binary_sha256`とbuild fingerprintをexact検証し、RD0後のrebuildを拒否する。RD0はformalの64 game process数にも含めないが、formal launcherはvalid RD0 job rootなしに`ready`を返してはならない。
+6. RD0 raw sizeから`2 × rdc_bytes + 1 GiB`をformal RenderDoc copy reserveとして計算し、actual Cargo target filesystemで既存15 GiB下限に加えて確保する。capture中とpublish前に残容量を監視し、下限割れ時はpartial failure evidenceだけを残して停止する。
+
+#### 主な変更ファイル
+
+- `crates/bevy_app/src/plugins/startup/perf_scenario/renderdoc_capture.rs` とfocused Rust tests
+- `scripts/perf_tool/{renderdoc_capture.py,renderdoc_extract.py,rtt_light_bundle.py,rtt_light_contract.py}` とself-test / negative fixture
+- `.codex/skills/hell-workers-run-native-acceptance/{SKILL.md,scripts/native_acceptance.py}`
+- `docs/performance-profiling.md`
+
+#### 完了条件
+
+- [x] RenderDoc 1.6 tableへの要求とactual互換API versionの記録・上位互換受理をRust mockで確認する
+- [x] checkpoint schema v3が4番目の連続GPU-ready frame、実測tick、capture前後signatureをartifactだけからexact再検証できる
+- [x] documented non-null selector、または`NULL, NULL`使用時のexactly-one pair証明とRD0対応付けにより、selector / captured pairが一意でないnegative fixtureを拒否する
+- [x] timeout / exception / SIGTERMを模したnested childで、owned process groupのorphan `0`、valid `renderdoc/`未publish、bounded failure evidenceを確認する
+- [x] RD0がformalと同一Capture binaryでactual captureと同一`.rdc`の2 replayを成功させ、formal launcherが同一source / tool hash / environment / binary fingerprintのRD0なしには開始しない
+- [x] RD0 copy reserve・stage中disk監視が容量不足をcleanupなしでfail-closedにする
+
+#### 検証
+
+- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf_tool/renderdoc_capture.py self-test`
+- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf_tool/renderdoc_extract.py --self-test`
+- `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py self-test`
+- clean subject上のRD0 actual-window capture / double replayと、そのartifactのoffline revalidation
 
 ### M4 / C00-D: formal current baselineを採取する
 
 #### 実行順
 
 1. prerequisite correctness commit列とP00 toolingを含むclean commit、contract hashをfreezeする。
-2. formal auditを全size / cpu / headlessで実行する。
-3. formal behaviorのcurrent-required `door-state-v1` / `load-normal-v1`をsmall / cpu / headlessで各3反復する。
-4. formal Captureを全size × cpu/gpuで実行する。
-5. Capture binaryのmedium/gpu固定checkpointをRenderDoc captureする。
-6. formal Memoryを別buildで全size × cpu/gpu実行する。
-7. cross-leg validator、`SHA256SUMS`、`baseline-index.json`を生成する。
-8. behavior timelineでauto / manual / pause / loadのcurrent観測をtarget expectationと並記する。field-coreはP03以降のstage artifactとして追加する。
+2. S0、S1を同一source fingerprintで順にvalid化する。
+3. RD0 launcherがrepository lock下でformal Capture binary capsuleを一度だけbuildしてSHA256、Cargo profile / feature集合 / build environment fingerprintをfreezeする。以降のformal Capture、formal RenderDocは検証済みRD0 rootからこのbinaryを再buildせずに使い、任意path / `--skip-build`入力は使わない。
+4. RD0を同一source fingerprintとfrozen Capture binaryでvalid化する。RD0 failureはtoolchain / loader / selector / replay / disk / binary fingerprintのC00-C2 blockerであり、formalへ進まない。
+5. formal auditを全size / cpu / headlessで実行する。
+6. formal behaviorのcurrent-required `door-state-v1` / `load-normal-v1`をsmall / cpu / headlessで各3反復する。
+7. formal Captureを全size × cpu/gpuで実行する。
+8. frozen Capture binaryのmedium/gpu固定checkpointをRenderDoc captureする。
+9. formal Memoryを別buildで全size × cpu/gpu実行する。
+10. cross-leg validator、`SHA256SUMS`、`baseline-index.json`を生成する。
+11. behavior timelineでauto / manual / pause / loadのcurrent観測をtarget expectationと並記する。field-coreはP03以降のstage artifactとして追加する。
 
 #### formal audit command shape
 
@@ -546,10 +590,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 
 #### 完了条件
 
-- [ ] audit / behavior / Capture / Memory / RenderDocの5 formal legが§4.6のvalidity gateを満たす
-- [ ] source inventoryとRenderDocのpass / attachment / bindingが一致する
-- [ ] current known defectがtimelineへ記録され、target expectationと混ざっていない
-- [ ] baseline indexから全command、manifest、raw artifactを再検証できる
+- [x] audit / behavior / Capture / Memory / RenderDocの5 formal legが§4.6のvalidity gateを満たす
+- [x] source inventoryとRenderDocのpass / attachment / bindingが一致する
+- [x] current known defectがtimelineへ記録され、target expectationと混ざっていない
+- [x] baseline indexから全command、manifest、raw artifactを再検証できる
 
 ### M5 / C00-E: gate ledgerとhandoffを確定する
 
@@ -563,10 +607,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 
 #### 完了条件
 
-- [ ] hard targetに`TBD`がない
-- [ ] 全current値がartifact path / hashへ追跡できる
-- [ ] stageごとのreference lineageとrequired fieldが一意である
-- [ ] P01以降の着手者が追加の製品判断を必要としない
+- [x] hard targetに`TBD`がない
+- [x] 全current値がartifact path / hashへ追跡できる
+- [x] stageごとのreference lineageとrequired fieldが一意である
+- [x] P01以降の着手者が追加の製品判断を必要としない
 
 ## 6. commit / stop-go規則
 
@@ -575,6 +619,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 | C00-A contract / inventory | docs整合、owner決定 | Room / section / mount等の製品境界が未決定 |
 | C00-B fixture / projection | focused tests、self-test、workspace check | `fixture.rs` owner競合、production helperを使えない |
 | C00-C runner / native | S0 / S1、fail-closed validator | actual matrixを強制できない、RenderDoc unavailable |
+| C00-C2 RenderDoc stability | API / selector / checkpoint / timeout self-test、formal binaryでのactual RD0 double replay | RD0未登録、binary fingerprint不一致、orphan process、schema v3再検証不能、disk reserve不足 |
 | C00-D artifact | clean commit、全formal leg valid | source変化、adapter / host不一致、invalid run |
 | C00-E ledger | hard target確定、downstream参照同期 | `TBD`、hash不明、互換性のないsession混在 |
 
@@ -594,6 +639,12 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 | source hashを前後一致させる | candidate実装を比較できない | sourceはsession provenance、contract / fixture / environmentを互換条件にする |
 | Memory frame値を性能値へ使う | instrumentation擾乱を改善と誤認 | frameはCapture、allocation / RSSはMemoryへ限定 |
 | RenderDoc 1 frameをGPU percentile扱い | 統計的根拠がない | pass構造だけに使い、GPU percentileは別instrumentation扱い |
+| App APIの上位互換versionを不一致として拒否する | 現行RenderDocでformalを開始できない | 1.6 table prefixだけを使い、returned API `major == 1 && (minor, patch) >= (6, 0)`をprovenance化して受理する |
+| pair cardinalityの証明なしに`NULL, NULL` wildcard、または4 frameの自己申告だけを信頼する | 別device/windowまたは後続frameをbaselineとして登録する | documented non-null selector、またはexactly-one pair証明 + RD0対応付け、schema v3のordinal / signatureで一意性を閉じる |
+| timeout時にRenderDoc / game childが残る | 次の測定、GPU、diskを汚染する | owned process group、outer deadline、TERM / KILL / reap、orphan `0` fixtureを必須にする |
+| raw `.rdc` copyがtarget空きを使い切る | capture途中またはpublish中にartifactを壊す | RD0 sizeから2 copy reserveを算出し、15 GiB下限とstage中監視を併用する |
+| RD0とformalが別Capture binaryを使う | preflight済みでもinjection / linker / feature差分でformalが失敗する | immutable binary SHA256とCargo profile / feature / build fingerprintをRD0とformal RenderDocでexact一致させる |
+| noncanonical relocationを保全と誤認する | `cargo clean`でreferenceを失うか、validatorで再検証不能になる | P00では移動しない。relocation-aware schema / verifierを別work packageで先に受入する |
 | mask削減がfield costを隠す | P06増分を評価できない | P02 compatible referenceとP00 currentの二重比較 |
 | current bugを仕様へ固定 | Door / radius / stackの不具合が残る | current observation、target、ownerを別列で保持 |
 
@@ -611,18 +662,20 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 - focused Rust config / fixture / checksum / output tests
 - Python contract / artifact / invalid fixture / compare / native helper tests
 - `python3 scripts/perf.py self-test`
-- `cargo test -p bevy_app@0.1.0 --no-default-features --features profiling perf_scenario`
+- `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --no-default-features --features profiling perf_scenario`
 - `python3 scripts/dev.py check`
-- `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test --workspace`
+- `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+- `python3 scripts/dev.py cargo -- test --workspace`
 - Help impact review。profiling-only変更でも実際のplayer-visible pathから`No impact` / `Update required`を判断する
 - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py self-test`
+- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf_tool/renderdoc_capture.py self-test`
+- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf_tool/renderdoc_extract.py --self-test`
 - `python3 scripts/check_agent_rules.py`
 - `python3 /home/satotakumi/.codex/skills/.system/skill-creator/scripts/quick_validate.py .codex/skills/hell-workers-run-native-acceptance`
 
 ### C00-D / C00-E native and final
 
-- `hell-workers-run-native-acceptance` SkillによるS0、S1、Formalの逐次実行
+- `hell-workers-run-native-acceptance` SkillによるS0、S1、RD0、Formalの逐次実行
 - audit / behavior / Capture / Memory / RenderDocのoffline artifact verification
 - p95 / p99比較を別々に実行し、両方の合格を要求
 - `python3 scripts/dev.py verify`
@@ -640,80 +693,68 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py audit \
 
 ### 現在地
 
-- 進捗: `75%`（C00-A / C00-B完了、C00-C実装完了。C00-Dのformal環境待ち）
-- 完了済み: Room interior role / `RoomBoundaryLookup` correctness、current RtT startup inventory test、frozen
-  `rtt-light-v1` contract、3規模fixture、Door / load behavior、stable projection / gate expected row、manifest / raw
-  artifact / ledger validator、window / adapter / present evidence、S1 / formal native recipe、RenderDoc capture /
-  replay extractor、Runtime target label / topology verification、Skill手順、self-test群。
-- 未完了: actual S0、同一sourceのS1、clean subjectでのformal audit / behavior / Capture / RenderDoc / Memory、
-  registered `baseline-index.json`、current測定値を持つC00-E gate ledger。P01〜P08は未着手。
+- 進捗: `100%`。C00-A〜C00-EとC00-C2を完了した。
+- canonical subject: `10763a4da6bfbe0b480971fb85c474e6ff7a5f86`。correctness ancestorは
+  `39113e445023efd8eaf6b7fb3c81ea661d2bed80`、source fingerprintは
+  `db34c8fc901a4c3ecdd80158f391bf986842323641c6a593daef67a6d89d7bce`。
+- canonical attempt: `9e813f24-0f7b-47f5-8a8d-e3ff34775370`。audit / behavior / Capture / RenderDoc /
+  Memoryの5 leg、18 case、raw artifact 884件がvalid。directory SHA256は
+  `a9f4927186fe7c8c5f009583fd645cd7963b6ad36398e9d614fbcbbff1f8a6aa`。
+- registry: `baseline-index.json`と`SHA256SUMS`を生成し、native attempt verifierとbaseline registry verifierの
+  両方で再検証済み。P01以降はこの登録済みcurrent referenceを使う。
 
 ### 次のAIが最初にやること
 
-1. formal対象のclean commitを作り、Room / HVAC M0相当のcorrectness ancestor commitを一つ以上指定する。
-2. 8 GiB以上のavailable memoryとRenderDoc一式を用意して、同一commit / source fingerprintでS0、S1を順に採取する。
-3. `plan-rtt-light --level formal`が`ready`になることを確認して返却された`kitty` launcherのみを実行し、5 legと
-   registered baselineをoffline revalidateする。
+1. P01のblocked表示を解除し、登録済みcurrent referenceをhistorical readerで再検証する。
+2. P01 M1〜M3のatomic Scene-only removal seriesを実装し、`stage=p01`のproducer / validatorを同時に成立させる。
+3. P01 M4で同じadapter matrixを採取し、`RLV1-P01-RTT`と`RLV1-P01-PERF`をcurrent referenceに対して評価する。
 
 ### ブロッカー/注意点
 
-- formalはclean commit必須であり、現在のdirty worktreeをそのままbaselineにしない。最低一つのancestor
-  correctness commitと同一sourceのS0 / S1も必要である。
-- 2026-08-05のformal planは`MemAvailable 7.0 GiB < 8 GiB`、dirty worktree、`renderdoccmd`不在でblockedだった。
-  S0 / S1 job rootもまだない。これらはheadless smokeで代用しない。
 - contract v1はfrozenである。変更が必要ならv2を追加してreference / candidateを同条件で再採取する。
-- RenderDoc実装はraw `.rdc`とreplay topologyをfail-closedで検証するが、実toolによるcapture未採取のため
-  actual GPU pass値はまだ存在しない。
+- RD0とformalは同じRenderDoc capsuleを使うが、別RDCのvolatile event / resource IDまで同じとは限らない。
+  cross-captureではbinary / sealを比較し、replay integrityとtopologyは各RDC内で検証する。
+- generation-scoped environment lockの再試行時は既封印の他leg hashを保持する。各legが所有しないhashを`None`で
+  上書きしない。
+- offline registrationはcanonical relative locatorとRDC hash / bytesを正本とする。scratch absolute pathのexact比較は
+  capture-timeだけで行う。
 - Room interior correctnessと3規模production spawn / energy settleは実装済み。今後もsynthetic Buildingや
   直接`PowerSupplyState::Supplied` insertへ戻さない。
-- 現在のhostでloader / ICDのunexpected logが出る場合はformal contractへ追加せず、発生源を是正する。
+- 既知のICU4X / qrenderdoc GTK診断は完全一致分類だけを許可する。近似行や未知ERRORをallowlistへ広げない。
 
 ### 最終確認ログ
 
-- quality gates: `2026-08-04` / `python3 scripts/dev.py verify` pass（Python 47、perf self-test、
-  workspace test、profiling check、Clippy 0 warning、Help、docs、diff hygieneを含む）
-- focused Rust: `2026-08-04` / `cargo test -p bevy_app@0.1.0 --features profiling indoor_light_fixture --lib`
-  3件pass（small / medium / large layoutとRust sidecar shape）
-- diagnostic smoke: `2026-08-04` / headless frame-time Low 640×360、fixed audit 129 + 16 ticksが各1 run valid。actual-window evidenceには不使用
-- indoor-light smoke: `2026-08-04` / `current / static / small / cpu`、129 + 16 ticks、1 run、
-  3 sidecar（1 / 187 / 5行）と952 audit recordを検証してmanifest valid。local loader診断allowlist使用のためformal evidenceには不使用
-- indoor-light medium smoke: `2026-08-04` / `current / static / medium / cpu`、129 + 16 ticks、
-  sidecar（1 / 722 / 12行）と7 checkpointのsemantic auditを検証してmanifest valid。local software
-  adapter警告の診断allowlist使用のためformal evidenceには不使用
-- indoor-light large smoke: `2026-08-04` / `current / static / large / cpu`、129 + 16 ticks、
-  sidecar（1 / 2306 / 12行）と7 checkpointのsemantic auditを検証してmanifest valid。local software
-  adapter警告の診断allowlist使用のためformal evidenceには不使用
-- indoor-light realtime smoke: `2026-08-04` / `current / static / medium / cpu`、warmup / measure各0.1秒、
-  warmup終端 / measure終端のsemantic再検証とsidecar出力を通してmanifest valid。software adapter警告と
-  既知のRoomBorderLine B0004を診断用にallowしたため性能値・formal evidenceには不使用
-- native acceptance: `2026-08-04` / actual S0 / S1は未実行（当時のheadless smokeのみ。2026-08-05時点では
-  `rtt-light` recipe / RenderDoc実装済み）
-- docs gate: `2026-08-04` / `scripts/dev.py docs --check` pass
-- tooling self-test: `2026-08-05` / `python3 scripts/perf.py self-test`、native helper self-test、RenderDoc
-  capture / extractor self-test、AI rule contract、docs index pass。RenderDoc schema v2はsubpass close→open、
-  Vulkan `(set, binding)`、同一drawの2 texture / 2 samplerをsynthetic fixtureでもfail-closed確認する
-- profiling compile: `2026-08-05` / P00実装後の再実行は既存の
-  `interface/ui/panels/task_list/actions.rs`における`commands`未束縛2件で停止。P00 RenderDoc moduleの新規diagnosticは
-  出ていないため、この並行production変更の解消後に再実行する
-- Help impact: `2026-08-05` / P00 scopeはprofiling-only capture metadata、offline validator、開発docsだけであり、
-  通常の入力 / UI label / workflow / gameplayは不変としてNo impact。worktree全体には並行するHelp catalog更新が含まれるため、
-  その更新の承認をP00判断で代用しない
-- formal plan: `2026-08-05` / blocked（7.0 GiB < 8 GiB、dirty tree、`renderdoccmd`不在、S0 / S1未採取）
+- native prerequisites: clean subject `10763a4d`のS0
+  `task-dashboard-20260810T221113Z-cf3c40c0`、S1 `rtt-light-s1-20260810T221438Z-641ad6da`がvalid。
+- formal: attempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`、5 leg完了、全gate row pass、unexpected log 0。
+- RenderDoc: Intel Arc / Vulkan / X11、18 pass、212 draw、516 attachment、1,996 binding、composite draw 1。
+  RDC 697,940,813 bytes、SHA256 `5b33c53d0f81da746f92136edc1f1fe2143a97db89369a2ad70ba20654823f42`。
+- registry: artifact 884件、directory SHA256
+  `a9f4927186fe7c8c5f009583fd645cd7963b6ad36398e9d614fbcbbff1f8a6aa`。baseline `SHA256SUMS` SHA256は
+  `a478942cc3026b1d739b099876637ab956a0c7538866a24079cd4498760b5424`。
+- verification: native `verify-rtt-light`と`python3 scripts/perf.py verify-rtt-light-baseline`がともにpass。
+- quality: `python3 scripts/dev.py check`、Clippy 0 warning、focused RenderDoc / native self-test、
+  `python3 scripts/dev.py verify`、docs / agent-rule / diff hygieneが2026-08-11にpass。
+- Help impact: No impact。profiling専用の測定経路、内部の決定的tie-break、Room visibility metadataだけが変わり、
+  player-facing input / label / workflow / eligibility / result contractは不変。
 
 ### Definition of Done
 
-- [ ] M1〜M5が完了
-- [ ] contract v1、fixture、stable projection、native validatorがgreen
-- [ ] 5 formal legとbaseline indexがfail-closed検証済み
-- [ ] hard targetに`TBD`がなく、downstreamが同じgate IDを参照
-- [ ] current known defectsとtarget expectationが分離されている
-- [ ] Help impact review、workspace、native、docs gateが完了
-- [ ] 影響docsが更新済み
+- [x] M1〜M5とC00-C2が完了
+- [x] contract v1、fixture、stable projection、native validatorがgreen
+- [x] API互換、selector一意性、schema v3、timeout / orphan、disk reserve、RD0がactual toolでfail-closed検証済み
+- [x] 5 formal legとbaseline indexがfail-closed検証済み
+- [x] hard targetに`TBD`がなく、downstreamが同じgate IDを参照
+- [x] current known defectsとtarget expectationが分離されている
+- [x] Help impact review、workspace、native、docs gateが完了
+- [x] 影響docsが更新済み
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-11` | `Codex` | clean subject `10763a4d`の5 formal legをattempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`として登録。RenderDoc continuity、再試行environment lock、offline RDC locatorを安定化し、native / registry verifierでcurrent baselineを再検証してP00を完了。 |
+| `2026-08-09` | `Codex` | RenderDoc安定化レビュー。現行resource閾値 / canonical artifact pathへ同期し、非実装relocationを停止条件へ変更。C00-C2としてAPI上位互換、selector一意性、checkpoint schema v3、timeout / orphan cleanup、disk reserve、RD0 double replayをformal前提に追加し、古い検証ログを履歴へ降格。 |
 | `2026-08-05` | `Codex` | RenderDoc runtime / extraction schema v2へ更新し、Vulkan subpass境界、`(set, binding)`、同一composite drawのScene / mask texture・samplerをfail-closedに固定。formal環境再評価のblock条件も記録 |
 | `2026-08-05` | `Codex` | contract freeze、behavior / projection / gate row、window environment、S1 / formal native recipe、RenderDoc replay validatorを反映。formal baselineは環境条件未達のため未採取として明記 |
 | `2026-08-04` | `Codex` | medium/large production runtime、Door静的state同期、全Building component audit、Tankの論理1配置/ECS 2 storage、realtime終端再検証を反映 |

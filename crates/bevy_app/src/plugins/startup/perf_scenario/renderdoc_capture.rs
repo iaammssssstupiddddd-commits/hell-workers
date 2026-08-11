@@ -13,7 +13,7 @@ use bevy::render::camera::ExtractedCamera;
 use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 use bevy::render::render_asset::RenderAssets;
 use bevy::render::render_resource::{CachedPipelineState, PipelineCache};
-use bevy::render::renderer::RenderAdapterInfo;
+use bevy::render::renderer::{RenderAdapterInfo, RenderDevice};
 use bevy::render::texture::GpuImage;
 use bevy::render::view::window::ExtractedWindows;
 use bevy::render::{Render, RenderApp, RenderSystems};
@@ -27,8 +27,10 @@ use std::sync::{Arc, Mutex};
 
 const RENDERDOC_SETTLE_FRAMES: u32 = 4;
 const RENDERDOC_CHECKPOINT_NAME: &str = "indoor-light-fixture-ready-v1";
-const RENDERDOC_API_VERSION: &str = "1.6.0";
-const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 2;
+const RENDERDOC_REQUESTED_API_VERSION: &str = "1.6.0";
+const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 3;
+const RENDERDOC_SELECTOR_STRATEGY: &str = "wgpu_device_null_window";
+const SIMULATION_TICK_SOURCE: &str = "perf_capture.fixed_update_tick";
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
 const RTT_MASK_LABEL: &str = "hell-workers-rtt-soul-mask";
 
@@ -79,6 +81,13 @@ pub(crate) struct RenderDocCheckpointMailbox(Option<StableRenderDocCheckpoint>);
 struct RenderDocCaptureResult {
     checkpoint: StableRenderDocCheckpoint,
     render_frame_index: u64,
+    capture_begin_frame: u64,
+    capture_end_frame: u64,
+    frame_count_before_capture: u64,
+    ready_frame_ordinal: u32,
+    pre_capture_signature: GpuReadySignature,
+    post_capture_signature: GpuReadySignature,
+    returned_api_version: String,
     capture_path: PathBuf,
 }
 
@@ -86,7 +95,7 @@ struct RenderDocCaptureResult {
 enum RenderDocBridgeState {
     Waiting,
     Capturing,
-    Captured(RenderDocCaptureResult),
+    Captured(Box<RenderDocCaptureResult>),
     Failed(String),
     Finished,
 }
@@ -117,7 +126,7 @@ pub(crate) struct RenderDocMainState {
     next_generation: u64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 struct GpuReadySignature {
     pipeline_count: usize,
     primary_window: Entity,
@@ -131,7 +140,7 @@ struct RenderDocRenderState {
     generation: Option<u64>,
     ready_signature: Option<GpuReadySignature>,
     ready_frames: u32,
-    active: Option<(StableRenderDocCheckpoint, GpuReadySignature, u64)>,
+    active: Option<(StableRenderDocCheckpoint, GpuReadySignature, u64, u64)>,
 }
 
 type GetApiFn =
@@ -140,24 +149,13 @@ type GetApiFn =
 struct RequiredRenderDocFns {
     get_num_captures: unsafe extern "C" fn() -> u32,
     get_capture: unsafe extern "C" fn(u32, *mut std::os::raw::c_char, *mut u32, *mut u64) -> u32,
-    start_frame_capture: unsafe extern "C" fn(
-        renderdoc_sys::RENDERDOC_DevicePointer,
-        renderdoc_sys::RENDERDOC_WindowHandle,
-    ),
     is_frame_capturing: unsafe extern "C" fn() -> u32,
-    end_frame_capture: unsafe extern "C" fn(
-        renderdoc_sys::RENDERDOC_DevicePointer,
-        renderdoc_sys::RENDERDOC_WindowHandle,
-    ) -> u32,
-    discard_frame_capture: unsafe extern "C" fn(
-        renderdoc_sys::RENDERDOC_DevicePointer,
-        renderdoc_sys::RENDERDOC_WindowHandle,
-    ) -> u32,
 }
 
 struct LoadedRenderDoc {
     _library: Library,
     functions: RequiredRenderDocFns,
+    returned_api_version: String,
 }
 
 // RenderDoc exposes a process-global, thread-safe function table. The library
@@ -176,6 +174,7 @@ struct RenderDocApi {
 pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
     applied: Res<'w, PerfScenarioApplied>,
+    capture: Res<'w, PerfCapture>,
     checksum_queries: PerfChecksumQueries<'w, 's>,
     virtual_time: Res<'w, Time<Virtual>>,
     rtt_runtime: Res<'w, RttRuntime>,
@@ -193,6 +192,7 @@ struct RenderDocRenderParams<'w, 's> {
     images: Res<'w, RenderAssets<GpuImage>>,
     windows: Res<'w, ExtractedWindows>,
     adapter: Res<'w, RenderAdapterInfo>,
+    device: Res<'w, RenderDevice>,
     cameras: Query<'w, 's, &'static ExtractedCamera>,
     pipelines: Res<'w, PipelineCache>,
     frame_count: Res<'w, FrameCount>,
@@ -334,7 +334,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
     state.next_generation = state.next_generation.saturating_add(1);
     mailbox.0 = Some(StableRenderDocCheckpoint {
         generation: state.next_generation,
-        simulation_tick: 0,
+        simulation_tick: params.capture.fixed_update_tick(),
         scene_target: signature.scene_target,
         mask_target: signature.mask_target,
         render_inventory,
@@ -360,7 +360,19 @@ pub(crate) fn poll_renderdoc_capture_system(
                 exit.write(AppExit::error());
                 return;
             };
-            if let Err(error) = write_runtime_checkpoint(output_dir, &result) {
+            let Some(selection) = config.rtt_light_selection() else {
+                bridge.replace(RenderDocBridgeState::Failed(
+                    "RenderDoc capture requires an RtT-light selection".to_string(),
+                ));
+                exit.write(AppExit::error());
+                return;
+            };
+            if let Err(error) = write_runtime_checkpoint(
+                output_dir,
+                &result,
+                selection.contract_id(),
+                selection.stage_id(),
+            ) {
                 error!("PERF_RENDERDOC: failed to write checkpoint: {error}");
                 bridge.replace(RenderDocBridgeState::Failed(error.to_string()));
                 exit.write(AppExit::error());
@@ -424,22 +436,22 @@ fn begin_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Render
             return;
         }
     };
-    if let Err(reason) = api.start_capture() {
+    if let Err(reason) = api.start_capture(&params.device) {
         params.bridge.replace(RenderDocBridgeState::Failed(reason));
         return;
     }
     params.bridge.replace(RenderDocBridgeState::Capturing);
-    state.active = Some((
-        checkpoint.clone(),
-        signature,
-        u64::from(params.frame_count.0),
-    ));
+    let begin_frame = u64::from(params.frame_count.0);
+    state.active = Some((checkpoint.clone(), signature, begin_frame, begin_frame));
 }
 
 fn finish_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<RenderDocRenderState>) {
-    let Some((checkpoint, expected_signature, render_frame_index)) = state.active.take() else {
+    let Some((checkpoint, expected_signature, capture_begin_frame, frame_count_before)) =
+        state.active.take()
+    else {
         return;
     };
+    let capture_end_frame = u64::from(params.frame_count.0);
     let api = match &params.api.loaded {
         Ok(value) => value,
         Err(reason) => {
@@ -451,21 +463,52 @@ fn finish_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Rende
     };
     let current_signature = gpu_signature(&params, &checkpoint, false);
     if current_signature != Ok(Some(expected_signature)) {
-        let _ = api.discard_capture();
+        let _ = api.stop_without_publish(&params.device);
         params.bridge.replace(RenderDocBridgeState::Failed(
             "GPU capture gate changed during the captured render frame".to_string(),
         ));
         return;
     }
-    match api.end_capture() {
+    match api.end_capture(&params.device) {
         Ok(capture_path) => {
+            let returned_api_version = match &params.api.loaded {
+                Ok(loaded) => loaded.returned_api_version.clone(),
+                Err(reason) => {
+                    params
+                        .bridge
+                        .replace(RenderDocBridgeState::Failed(reason.clone()));
+                    return;
+                }
+            };
+            let post_signature = match gpu_signature(&params, &checkpoint, false) {
+                Ok(Some(value)) => value,
+                Ok(None) => {
+                    params.bridge.replace(RenderDocBridgeState::Failed(
+                        "GPU capture gate was unavailable after the captured frame".to_string(),
+                    ));
+                    return;
+                }
+                Err(reason) => {
+                    params.bridge.replace(RenderDocBridgeState::Failed(reason));
+                    return;
+                }
+            };
             params
                 .bridge
-                .replace(RenderDocBridgeState::Captured(RenderDocCaptureResult {
-                    checkpoint,
-                    render_frame_index,
-                    capture_path,
-                }))
+                .replace(RenderDocBridgeState::Captured(Box::new(
+                    RenderDocCaptureResult {
+                        checkpoint,
+                        render_frame_index: capture_end_frame,
+                        capture_begin_frame,
+                        capture_end_frame,
+                        frame_count_before_capture: frame_count_before,
+                        ready_frame_ordinal: RENDERDOC_SETTLE_FRAMES,
+                        pre_capture_signature: expected_signature,
+                        post_capture_signature: post_signature,
+                        returned_api_version,
+                        capture_path,
+                    },
+                )))
         }
         Err(reason) => params.bridge.replace(RenderDocBridgeState::Failed(reason)),
     }
@@ -592,10 +635,11 @@ fn validate_current_medium_inventory(inventory: PerfRenderInventory) -> Result<(
 }
 
 impl LoadedRenderDoc {
-    fn start_capture(&self) -> Result<(), String> {
+    fn start_capture(&self, device: &RenderDevice) -> Result<(), String> {
         let functions = &self.functions;
-        // SAFETY: All function pointers were negotiated from the retained 1.6
-        // API table, and null device/window mean the single active window.
+        // SAFETY: wgpu documents this method as RenderDoc
+        // StartFrameCapture(device, NULL). The render-device selector removes
+        // the undefined multi-device wildcard used by a NULL/NULL call.
         unsafe {
             if (functions.get_num_captures)() != 0 {
                 return Err("RenderDoc capture count was nonzero before arming".to_string());
@@ -603,7 +647,7 @@ impl LoadedRenderDoc {
             if (functions.is_frame_capturing)() != 0 {
                 return Err("RenderDoc was already capturing before arming".to_string());
             }
-            (functions.start_frame_capture)(ptr::null_mut(), ptr::null_mut());
+            device.wgpu_device().start_graphics_debugger_capture();
             if (functions.is_frame_capturing)() != 1 {
                 return Err("RenderDoc StartFrameCapture did not become active".to_string());
             }
@@ -611,26 +655,25 @@ impl LoadedRenderDoc {
         Ok(())
     }
 
-    fn discard_capture(&self) -> Result<(), String> {
-        // SAFETY: The function pointer belongs to the retained API table and
-        // null handles select the only active captured window.
-        let result =
-            unsafe { (self.functions.discard_frame_capture)(ptr::null_mut(), ptr::null_mut()) };
-        if result == 1 {
+    fn stop_without_publish(&self, device: &RenderDevice) -> Result<(), String> {
+        // SAFETY: This matches the preceding device-selected start. The
+        // surrounding helper treats the resulting temporary capture as failed
+        // diagnostic evidence and never publishes it.
+        unsafe { device.wgpu_device().stop_graphics_debugger_capture() };
+        // SAFETY: Function pointer was negotiated from the retained table.
+        if unsafe { (self.functions.is_frame_capturing)() } == 0 {
             Ok(())
         } else {
-            Err("RenderDoc DiscardFrameCapture failed".to_string())
+            Err("RenderDoc capture remained active after abort".to_string())
         }
     }
 
-    fn end_capture(&self) -> Result<PathBuf, String> {
+    fn end_capture(&self, device: &RenderDevice) -> Result<PathBuf, String> {
         let functions = &self.functions;
-        // SAFETY: The function pointers belong to the retained API table and
-        // null handles select the only active captured window.
+        // SAFETY: This matches the preceding device-selected wgpu start.
         unsafe {
-            if (functions.end_frame_capture)(ptr::null_mut(), ptr::null_mut()) != 1
-                || (functions.is_frame_capturing)() != 0
-            {
+            device.wgpu_device().stop_graphics_debugger_capture();
+            if (functions.is_frame_capturing)() != 0 {
                 return Err("RenderDoc EndFrameCapture failed".to_string());
             }
             if (functions.get_num_captures)() != 1 {
@@ -691,11 +734,12 @@ fn load_renderdoc(capture_template: &Path) -> Result<LoadedRenderDoc, String> {
     let mut patch = 0;
     // SAFETY: Function pointer was checked for null and arguments are valid.
     unsafe { get_api_version(&mut major, &mut minor, &mut patch) };
-    if (major, minor, patch) != (1, 6, 0) {
+    if !is_compatible_renderdoc_api_version(major, minor, patch) {
         return Err(format!(
-            "unexpected RenderDoc App API {major}.{minor}.{patch}"
+            "incompatible RenderDoc App API {major}.{minor}.{patch}"
         ));
     }
+    let returned_api_version = format!("{major}.{minor}.{patch}");
     // SAFETY: These union fields are aliases retained for API compatibility;
     // the negotiated 1.6 table initializes the capture-path variants.
     let set_capture_path = unsafe { api.__bindgen_anon_2.SetCaptureFilePathTemplate }
@@ -720,17 +764,17 @@ fn load_renderdoc(capture_template: &Path) -> Result<LoadedRenderDoc, String> {
     let functions = RequiredRenderDocFns {
         get_num_captures: api.GetNumCaptures.ok_or("GetNumCaptures is null")?,
         get_capture: api.GetCapture.ok_or("GetCapture is null")?,
-        start_frame_capture: api.StartFrameCapture.ok_or("StartFrameCapture is null")?,
         is_frame_capturing: api.IsFrameCapturing.ok_or("IsFrameCapturing is null")?,
-        end_frame_capture: api.EndFrameCapture.ok_or("EndFrameCapture is null")?,
-        discard_frame_capture: api
-            .DiscardFrameCapture
-            .ok_or("DiscardFrameCapture is null")?,
     };
     Ok(LoadedRenderDoc {
         _library: library,
         functions,
+        returned_api_version,
     })
+}
+
+const fn is_compatible_renderdoc_api_version(major: i32, minor: i32, patch: i32) -> bool {
+    major == 1 && (minor > 6 || (minor == 6 && patch >= 0))
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -742,22 +786,62 @@ fn load_renderdoc(_capture_template: &Path) -> Result<LoadedRenderDoc, String> {
 struct RuntimeCheckpointFile<'a> {
     schema_version: u32,
     status: &'static str,
+    contract_id: String,
+    stage_id: String,
+    generation: u64,
     checkpoint: RuntimeCheckpoint,
     render_inventory: RuntimeRenderInventory,
     render_resources: RuntimeRenderResources,
     fixture: RuntimeFixtureEvidence,
     capture_path: &'a Path,
-    renderdoc_api_version: &'static str,
+    requested_renderdoc_api_version: &'static str,
+    returned_renderdoc_api_version: String,
+    selector: RuntimeSelectorEvidence,
+    gpu_ready: RuntimeGpuReadyEvidence,
+    capture_artifact: RuntimeCaptureArtifact,
+}
+
+#[derive(Serialize)]
+struct RuntimeSelectorEvidence {
+    strategy: &'static str,
+    device_selector: &'static str,
+    window_selector: &'static str,
+    window_count: usize,
+    primary_window: u64,
+}
+
+#[derive(Serialize)]
+struct RuntimeGpuReadyEvidence {
+    pre_capture: RuntimeGpuReadySignature,
+    post_capture: RuntimeGpuReadySignature,
+}
+
+#[derive(Serialize)]
+struct RuntimeGpuReadySignature {
+    pipeline_count: usize,
+    scene_camera_count: usize,
+    mask_camera_count: usize,
+    window_camera_count: usize,
+}
+
+#[derive(Serialize)]
+struct RuntimeCaptureArtifact {
+    sha256: String,
+    bytes: u64,
 }
 
 #[derive(Serialize)]
 struct RuntimeCheckpoint {
     name: &'static str,
     simulation_tick: u64,
+    simulation_tick_source: &'static str,
     settle_frames: u32,
+    ready_frame_ordinal: u32,
     capture_frame: u32,
+    capture_begin_frame: u64,
+    capture_end_frame: u64,
     render_frame_index: u64,
-    validated_frames: u32,
+    frame_count_before_capture: u64,
 }
 
 #[derive(Serialize)]
@@ -847,9 +931,38 @@ fn current_composite_render_resources() -> RuntimeRenderResources {
     }
 }
 
+fn sha256_file(path: &Path) -> Result<String, std::io::Error> {
+    subprocess_sha256(path)
+}
+
+#[cfg(target_os = "linux")]
+fn subprocess_sha256(path: &Path) -> Result<String, std::io::Error> {
+    use std::process::Command;
+    let output = Command::new("sha256sum").arg(path).output()?;
+    if !output.status.success() {
+        return Err(std::io::Error::other("sha256sum failed"));
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let digest = text.split_whitespace().next().unwrap_or_default();
+    if digest.len() != 64 {
+        return Err(std::io::Error::other("sha256sum returned invalid digest"));
+    }
+    Ok(digest.to_string())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn subprocess_sha256(path: &Path) -> Result<String, std::io::Error> {
+    let _ = path;
+    Err(std::io::Error::other(
+        "sha256 capture digest requires Linux sha256sum",
+    ))
+}
+
 fn write_runtime_checkpoint(
     output_dir: &Path,
     result: &RenderDocCaptureResult,
+    contract_id: &str,
+    stage_id: &str,
 ) -> std::io::Result<()> {
     let metadata = std::fs::metadata(&result.capture_path)?;
     if !metadata.is_file() || metadata.len() == 0 {
@@ -857,25 +970,56 @@ fn write_runtime_checkpoint(
             "RenderDoc reported an empty or missing capture",
         ));
     }
+    let capture_bytes = metadata.len();
+    let capture_sha256 = sha256_file(&result.capture_path)?;
     std::fs::create_dir_all(output_dir)?;
     let destination = output_dir.join("renderdoc-checkpoint.json");
     let temporary = output_dir.join(format!(".renderdoc-checkpoint.{}.tmp", std::process::id()));
+    let signature = |value: GpuReadySignature| RuntimeGpuReadySignature {
+        pipeline_count: value.pipeline_count,
+        scene_camera_count: value.scene_camera_count,
+        mask_camera_count: value.mask_camera_count,
+        window_camera_count: value.window_camera_count,
+    };
     let file = RuntimeCheckpointFile {
         schema_version: RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION,
         status: "valid",
+        contract_id: contract_id.to_string(),
+        stage_id: stage_id.to_string(),
+        generation: result.checkpoint.generation,
         checkpoint: RuntimeCheckpoint {
             name: RENDERDOC_CHECKPOINT_NAME,
             simulation_tick: result.checkpoint.simulation_tick,
+            simulation_tick_source: SIMULATION_TICK_SOURCE,
             settle_frames: RENDERDOC_SETTLE_FRAMES,
+            ready_frame_ordinal: result.ready_frame_ordinal,
             capture_frame: RENDERDOC_SETTLE_FRAMES,
+            capture_begin_frame: result.capture_begin_frame,
+            capture_end_frame: result.capture_end_frame,
             render_frame_index: result.render_frame_index,
-            validated_frames: 1,
+            frame_count_before_capture: result.frame_count_before_capture,
         },
         render_inventory: result.checkpoint.render_inventory.into(),
         render_resources: current_composite_render_resources(),
         fixture: result.checkpoint.fixture.clone(),
         capture_path: &result.capture_path,
-        renderdoc_api_version: RENDERDOC_API_VERSION,
+        requested_renderdoc_api_version: RENDERDOC_REQUESTED_API_VERSION,
+        returned_renderdoc_api_version: result.returned_api_version.clone(),
+        selector: RuntimeSelectorEvidence {
+            strategy: RENDERDOC_SELECTOR_STRATEGY,
+            device_selector: "wgpu::Device::start_graphics_debugger_capture",
+            window_selector: "null",
+            window_count: 1,
+            primary_window: result.pre_capture_signature.primary_window.to_bits(),
+        },
+        gpu_ready: RuntimeGpuReadyEvidence {
+            pre_capture: signature(result.pre_capture_signature),
+            post_capture: signature(result.post_capture_signature),
+        },
+        capture_artifact: RuntimeCaptureArtifact {
+            sha256: capture_sha256,
+            bytes: capture_bytes,
+        },
     };
     let mut bytes = serde_json::to_vec_pretty(&file).map_err(std::io::Error::other)?;
     bytes.push(b'\n');
@@ -886,6 +1030,14 @@ fn write_runtime_checkpoint(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn renderdoc_api_requires_compatible_major_one_prefix() {
+        assert!(is_compatible_renderdoc_api_version(1, 6, 0));
+        assert!(is_compatible_renderdoc_api_version(1, 7, 2));
+        assert!(!is_compatible_renderdoc_api_version(1, 5, 9));
+        assert!(!is_compatible_renderdoc_api_version(2, 0, 0));
+    }
 
     #[test]
     fn current_medium_inventory_is_exact() {

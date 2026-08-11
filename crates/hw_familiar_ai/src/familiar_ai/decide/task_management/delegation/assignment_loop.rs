@@ -85,12 +85,13 @@ const fn connectivity_rejection(reachable: bool) -> Option<CandidateRejectReason
     }
 }
 
-/// 同点の候補をEntity IDで一意に順序付ける。
+/// 同点の候補をタスクの意味上の位置と種類で一意に順序付ける。
 ///
 /// task finderの候補集合は複数のspatial gridとHashSetを経由するため、入力順を
 /// assignmentの意味にしてはいけない。scoreだけの比較では同点候補の優先順位が
-/// HashSetのhash seedに依存し、fixed-step auditで異なるSoulへ同じtaskが割り当て
-/// られる。通常実行でも同じtie-breakを使い、比較の全順序を保つ。
+/// HashSetのhash seedに依存する。Entity IDもworld生成中の並列command適用順で同じ
+/// タイル群の対応が入れ替わるため、意味上の順序には使わない。位置と作業種別が
+/// どちらも同じタスクに限りEntity IDを最終tie-breakとし、比較の全順序を保つ。
 fn compare_ranked_candidates(
     left: &(DelegationCandidate, f32),
     right: &(DelegationCandidate, f32),
@@ -98,6 +99,14 @@ fn compare_ranked_candidates(
     right
         .1
         .total_cmp(&left.1)
+        .then_with(|| left.0.target_grid.1.cmp(&right.0.target_grid.1))
+        .then_with(|| left.0.target_grid.0.cmp(&right.0.target_grid.0))
+        .then_with(|| {
+            left.0
+                .work_type
+                .stable_index()
+                .cmp(&right.0.work_type.stable_index())
+        })
         .then_with(|| compare_entity_keys(left.0.entity, right.0.entity))
 }
 
@@ -616,7 +625,44 @@ mod tests {
     }
 
     #[test]
-    fn equal_score_candidates_use_entity_id_as_a_total_order() {
+    fn equal_score_candidates_use_semantic_task_order_before_entity_id() {
+        let mut candidates = [
+            (
+                DelegationCandidate {
+                    target_grid: (4, 2),
+                    ..candidate(2)
+                },
+                0.5,
+            ),
+            (
+                DelegationCandidate {
+                    target_grid: (8, 1),
+                    ..candidate(9)
+                },
+                0.5,
+            ),
+            (
+                DelegationCandidate {
+                    target_grid: (3, 2),
+                    ..candidate(5)
+                },
+                0.5,
+            ),
+        ];
+
+        candidates.sort_unstable_by(compare_ranked_candidates);
+
+        assert_eq!(
+            candidates
+                .iter()
+                .map(|(candidate, _)| candidate.entity)
+                .collect::<Vec<_>>(),
+            vec![entity(9), entity(5), entity(2)]
+        );
+    }
+
+    #[test]
+    fn semantically_identical_candidates_use_entity_id_as_a_total_order() {
         let mut candidates = [
             (candidate(9), 0.5),
             (candidate(2), 0.5),

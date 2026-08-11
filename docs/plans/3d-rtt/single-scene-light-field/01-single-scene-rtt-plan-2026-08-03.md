@@ -5,20 +5,22 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-01-single-scene-rtt-plan-2026-08-03` |
-| ステータス | `Draft` |
+| ステータス | `Ready — P00 current formal baseline registered` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-04` |
+| 最終更新日 | `2026-08-11` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
-| 直接依存 | [P00](00-baseline-gates-plan-2026-08-03.md) |
+| 直接依存 | [P00](00-baseline-gates-plan-2026-08-03.md) C00-D / C00-E（clean `current` formal 5 leg と登録済み `baseline-index.json`） |
 | 後続 | [P02](02-topdown-presentation-plan-2026-08-03.md)、[P06](06-indoor-light-rendering-plan-2026-08-03.md)、[P08](08-legacy-cleanup-release-plan-2026-08-03.md) |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的
 
 - 解決したい課題: Sceneと同解像度のSoul mask target、専用Camera3d、mask proxy、composite拡張、運用toggleが常時costと保守経路を増やしている。
-- 到達したい状態: `RttRuntime`はScene handleだけを持ち、overlay compositeはSceneを通常1回sampleする。
-- 成功指標: P00 captureに存在したmask pass / attachment / proxyがproduction、test、metricの全経路から消える。
+- 到達したい状態: `RttRuntime`はviewport / scale設定と**1つだけのworld color Scene handle**を所有し、overlay compositeはSceneを通常1回sampleする。
+- 成功指標: Soul mask RtTのproduction symbol / entity / asset / passは0である。一方、P00の安定projectionとstage gateは、削除されたmask target / camera / proxyを明示的な`0`として記録し、P01自身の不在を証明できる。
+
+ここで撤去する`Soul mask RtT`は、Soul輪郭用の`SoulMask*` / `soul_mask_*` active routeだけを指す。P03以降の室内照明用`indoor_mask_cells`やLight Field alphaを削除・改名する作業ではない。
 
 ## 2. スコープ
 
@@ -27,57 +29,90 @@
 - `RttRuntime.soul_mask`とmask target lifecycleの削除。
 - `Camera3dSoulMaskRtt`とmask RenderLayerの削除。
 - `SoulMaskProxy3d`、`SoulMaskMaterial`、GLB ready / sync / cache / rehydrateの削除。
-- composite material / WGSLのScene-only化。
-- DevPanel / env toggle / perf scenario / visual_testのmask契約削除。
-- resize、DPI、quality変更時のScene target再生成維持。
+- composite material / WGSLのScene-only化。Scene texture / samplerのVulkan descriptorは現行どおりfragment set 2のbinding `1 / 2`を維持し、maskの`3 / 4`を撤去する。
+- DevPanel / env toggle / perf scenario / visual_testのSoul mask active route削除。
+- resize、DPI、quality変更時のScene target再生成とcamera / material rebind維持。
+- P01を実行できるstage-aware profiling、RenderDoc、native acceptance launcher、raw artifact reader / writer、gate extractorの整備。
+- `rtt_light_migration` projection v1に、P01でのmask target / proxy等の意味上の`0`を明示記録する互換adapter。
 
 ### 非対象（Out of Scope）
 
 - visible Soul GLBからbillboardへの変更（P02）。
 - `SoulShadowProxy3d`の動作停止（P02）とprojector uniform / shaderの物理削除（P08）。
 - Camera2d二重passの整理（P02）。
-- Light Field texture（P06）。
+- Light Field texture、室内照明用alpha、Wall / Door遮光（P03〜P06）。
+- frozen `rtt-light-v1` JSON、projection v1、current formal artifactの書換え。契約変更が必要ならP00の手順どおり別generationを作り、referenceとcandidateを再採取する。
 
 ## 3. 現状とギャップ
 
-| 経路 | 現行symbol | 終了状態 |
+| 経路 | 現行 | P01終了状態 |
 | --- | --- | --- |
-| runtime | `RttRuntime { scene, soul_mask, ... }` | Scene handle 1つ |
-| camera | `Camera3dSoulMaskRtt` order -2 | entity / query 0 |
-| proxy | `SoulMaskProxy3d` + owner cache | type / spawn / cleanup 0 |
+| runtime | `RttRuntime { scene, soul_mask, ... }` | Scene color handle 1つ（viewport / scale設定は維持） |
+| camera | `Camera3dSoulMaskRtt` order -2 | entity / query / sync 0 |
+| proxy | `SoulMaskProxy3d` + owner cache | type / spawn / cleanup / rehydrate 0 |
 | material | `SoulMaskMaterial` | plugin / asset / shader 0 |
-| composite | mask texture + sampler + radius | Scene texture / samplerのみ |
-| toggle | `RenderPerfToggles.soul_mask_enabled` / `HW_DISABLE_SOUL_MASK` | field / env / button 0 |
-| metrics | `soul_mask_proxy_3d` | schemaから削除しmigration noteを残す |
+| composite | Scene + mask texture / sampler、mask loop | Scene texture / sampler 1組、通常sample 1回 |
+| toggle | `RenderPerfToggles.soul_mask_enabled` / `HW_DISABLE_SOUL_MASK` | field / env / button / label 0 |
+| generic profiling output | mask proxyのcomponent queryとraw count | active component query 0。P00互換の意味上のmask countはstage=`p01`で明示`0` |
+| window evidence | mask targetがSceneと同じ物理解像度 | `mask_target_present=false`。存在しないtargetの寸法をScene値で偽装しない |
+| RenderDoc | schema v2が2 target・2 texture・2 sampler・mask camera 1を固定 | stage-aware schema v3でScene 1、mask target / camera / pass / binding / sample / proxy 0 |
+| native formal launcher | `current`を固定 | `--stage p01`で5 formal leg、stage gate、artifact generationを選べる |
+| `visual_test` | 独自Soul mask RtT / material / proxy / resize契約 | Scene-only target / camera / compositeに一致 |
+
+### 3.1 着手判定（stop / go）
+
+P01のproduction変更は、次の全条件を満たすまで開始しない。
+
+1. P00 C00-D / C00-Eのclean `current` formal attemptが、audit / behavior / Capture / RenderDoc / Memoryの5 legすべてでvalidとなり、`baseline-index.json`から再検証できる。`RLV1-P01-PERF`はこのcurrent referenceなしには判定不能である。
+2. `rtt-light-v1`のcontract / fixture hashとprojection v1をfreeze済みとして扱う。P01はstage-aware producer / readerを追加しても同JSONやcanonical SHAを書き換えない。
+3. P00 current raw artifactはhistorical readerで再検証できることを先にtestし、P01 subjectにcurrent-only schemaを混ぜる経路をfail-closedにする。
+4. save / rehydrateとnative acceptance launcherには並行変更があり得る。各ownerとworktreeを確認し、同一ファイルを上書きする前に変更順を合意する。
+
+P00 formal baselineは2026-08-11にattempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`として登録され、native attempt verifierとbaseline registry verifierの両方でvalidである。P01のproduction変更・candidate採取を開始できる。
 
 ## 4. 実装方針
 
-### 4.1 atomic migration order
+### 4.1 atomic migration / merge境界
 
-1. Scene-only `RttRuntime` APIとcomposite assetを先に用意する。
-2. startup / resize / camera syncのmask consumerを切り替える。
-3. Soul spawn / observer / cache / rehydrateからmask proxyを削除する。
-4. plugin / material / layer / toggleを削除する。
-5. visual_testとperf schemaを同じcommit列で追従させる。
-6. symbol inventory 0とnative captureを確認する。
+1. P00 current readerとP01 topology fixtureを先に用意し、stage / schema mismatchをfail-closedにする。
+2. Scene-only `RttRuntime`、camera、composite、RenderDoc runtime expectationを同じwork packageで切り替える。
+3. Soul spawn / observer / cache / rehydrate、layer、material、toggleを削除する。
+4. visual_test、perf output、RenderDoc replay / bundle、native launcherを同じsource treeでP01 topologyへ切り替える。
+5. P01 gate row生成・current reference比較・native evidenceを閉じる。
 
-中間commitでも存在しないhandleをmaterialへbindしない。dummy mask textureによる互換期間は設けない。
+M1〜M3は、公開`SoulMask*`型を削除した時点でvisual_test / perf / rehydrateが同時に追従しなければcompile不能になる。したがってこれらは**1つのcompile可能なP01 removal seriesとして連続commitする**。M2だけを先にmergeしたり、dummy mask texture / 一時toggleを残したりしない。
 
 ### 4.2 Scene target contract
 
-- `RttRuntime`はScene `Handle<Image>`、physical size、target scale factorだけを所有する。
-- resize / quality変更はScene imageを一度だけrecreateし、Camera3d targetとcomposite materialを同じsystemでrebindする。
-- overlay Camera2dとScene composite spriteは維持する。
-- Scene image format、sampler、clear colorはP00 current contractを変えない。
+- `RttRuntime`はScene `Handle<Image>`、physical viewport、target scale factorを所有する。`Handle<Image>`が1つであることと、Resource全体がhandleだけであることを混同しない。
+- resize / quality変更はScene imageを一度だけrecreateし、残る`Camera3dRtt` targetとcomposite materialを同じrebind systemで更新する。
+- retired Scene handleはcamera / materialから到達不能であることをfocused testで確認する。
+- overlay Camera2dとScene composite spriteは維持する。`Camera3dRtt`はorder `-1`、`LAYER_3D`、transparent clear、Scene handle一致を維持し、mask cameraは0にする。
+- `LAYER_3D_SHADOW_RECEIVER`、Wall / TerrainのScene RtT参加、`RttDirectionalLight`、receiver-side projector契約はP01で変えない。Wall遮光を使う室内Light Fieldの土台を削らない。
 
 ### 4.3 composite contract
 
-- material bindingはScene texture + samplerだけにする。
-- fragmentは座標補正後にSceneを通常1回sampleし、色を返す。
-- mask blur、center mask、12方向sample、ring色、mask radius uniformを削除する。
-- P02のbillboard soft effectを先取りしてcompositeへ新しいactor loopを追加しない。
-- `sync_rtt_composite_perf_params_system`と`composite_shadow_offset_uv`はmask / projector専用consumerが0なら一緒に削除する。
-- `RttRuntime::pixel_size()`等のmask / offset専用APIもconsumer 0を確認して削除する。
+- `RttCompositeMaterial`のmask texture / sampler、mask radius / feather、mask blur / center mask / 12方向sample / ring色を削除する。
+- uniform `0`を維持する限り、Scene texture / samplerはfragment set 2のbinding `1 / 2`を維持する。mask binding `3 / 4`は存在しない。`AsBindGroup`、WGSL、RenderDoc stage table、reflection testを同じ番号へ固定する。
+- fragmentは座標補正後に`scene_texture`を通常1回だけsampleして色を返す。focused static testは`textureSample(scene_texture, ...)`が1か所、mask identifier / sampleが0であることを確認する。RenderDocは同一composite drawのScene texture 1、sampler 1を確認する。
+- P02のbillboard / shadowの効果を先取りしない。`SoulShadowProxy3d`がactiveな間はshadow関連uniform / offsetをP01で物理削除せず、P02 / P08のowner境界を守る。
+
+### 4.4 evidence / schema compatibility contract
+
+P00のprojection v1はP01以降もmaskの**不在を測るため**にfield名を維持する。productionの型・query・asset名と、migration artifactのhistorical field名を混同しない。
+
+| artifact | P00 current reference | P01 subject | 互換規則 |
+| --- | --- | --- | --- |
+| `summary.csv` | v11 | v11のまま | Soul mask専用ではないため不要なbumpをしない |
+| `scene_roots.csv` | 現行header | legacy `soul_mask_proxy_3d`を明示`0` | headerを黙って変えない。component queryではなくstage topologyからzero evidenceを出す |
+| `render_inventory.csv` | schema v1 | schema v1、mask target / proxyは`0` | target / camera / actor数はCSVとprojectionで一致させる |
+| `window.csv` | current schema v2 historical reader | p01 schema v3、`mask_target_present=false`とnullable / 空のmask寸法 | Scene寸法をmask寸法として書かない。current v2はreferenceとしてのみ受理 |
+| RenderDoc checkpoint / extraction | current schema v2、2 resource shape | p01 schema v3、Scene 1 resource / texture / sampler、mask resource absent | current v2をhistorical readerで再検証し、p01にv2、currentにp01-only v3 shapeを混ぜれば失格 |
+| `rtt_light_migration.csv` | schema v1 | schema v1のまま | `mask_target_count` / `soul_mask_proxy_3d`等をP01では意味上の`0`として出し、contract SHAを変えない |
+
+RenderDoc schema v3は`stage_id`を持ち、P01ではmask target labelをnullable、composite binding collectionを可変長の1要素とする。code-side stage tableはP01 medium / gpuのexact inventory `1 / 0 / 1 / 3 / 2 / 200 / 0 / 200 / 12`（Scene target、mask target、3D RtT camera、2D camera、`LAYER_2D` pass、Soul、mask Soul、shadow Soul、Familiar）を唯一の正本にする。frozen `rtt_light_migration_v1.json`へresource shapeを追記しない。
+
+native helper、extractor、bundle validatorのhashはP00 current referenceとP01 subjectで異なり得る。その差はprovenanceとして記録するが、cross-stage比較の等値条件にはしない。candidate側の新readerがP00 current raw attemptをlegacy modeで再検証し、同一contract / fixture / matrix / host / window / adapter条件を比較する。
 
 ## 5. マイルストーン
 
@@ -86,153 +121,172 @@
 ### 変更内容
 
 1. `RttRuntime`から`soul_mask`、`soul_mask_render_target()`、同時recreateを削除する。
-2. `RttCompositeMaterial`からmask binding / radiusを削除する。
+2. `RttCompositeMaterial`からmask binding / radius / featherとmask shader branchを削除し、Scene binding `1 / 2`を維持する。
 3. resize / DPI / quality rebind queryをScene Camera 1台へ縮小する。
 4. shaderをScene 1-sampleへ変更する。
+5. startup inventory testで残るScene cameraのorder / layer / clear / target、mask camera 0、cameraとmaterialのrebind一致を固定する。
 
 ### 主な変更ファイル
 
-- `crates/bevy_app/src/plugins/startup/{rtt_setup.rs,rtt_composite.rs,startup_systems.rs}`
+- `crates/bevy_app/src/plugins/startup/{mod.rs,rtt_setup.rs,rtt_composite.rs,startup_systems.rs}`
+- `crates/bevy_app/src/systems/visual/{camera_sync.rs,terrain_lod.rs}`
 - `assets/shaders/rtt_composite_material.wgsl`
 
 ### 完了条件
 
-- [ ] `RttRuntime`のcolor handleが1つ
-- [ ] resize時にScene Cameraとcompositeが同じ新handleを参照する
-- [ ] shaderにmask binding / loopがない
+- [ ] active world color handleはScene 1つだけ
+- [ ] resize / DPI / quality変更後、Scene Cameraとcompositeが同じ新handleを参照し、旧handleを参照しない
+- [ ] shaderにmask binding / identifier / loopがなく、Scene sampleは1回
+- [ ] Wall / Terrain receiverとdirectional Scene routeがP01前と同じ
 
-### focused test
-
-- Scene target recreateがsize / scaleを保持するtest
-- resize rebind後のhandle一致test
-- composite material reflection / binding test
-
-## M2: mask camera / proxy / materialを撤去する
+## M2: mask camera / proxy / materialとvisual_testを同時に撤去する
 
 ### 変更内容
 
-1. `Camera3dSoulMaskRtt`のspawn、query exclusion、sync、visibility toggleを削除する。
+1. `Camera3dSoulMaskRtt`のspawn、export、query arm、sync、visibility toggleを削除する。
 2. Soul spawnからmask SceneRootを削除する。
-3. mask GLB ready observer、sync、owner cache register / cleanupを削除する。
-4. save presentation cleanup / rehydrateからmask shellを削除する。
-5. `SoulMaskMaterial`のMaterialPlugin、handle、Rust module、WGSLを削除する。
-6. `LAYER_3D_SOUL_MASK`を削除する。
-7. terrain LODのmask-camera exclusion、`SceneObjectQuery`、`apply_render3d_visibility_system`のmask perf branch、`hw_visual::reset_for_world_replace`のmask cacheを削除する。
+3. mask GLB ready observer、sync、owner cache register / cleanup、save presentation clear / rehydrateからmask shellを削除する。
+4. `SoulMaskMaterial`のMaterialPlugin、handle、Rust module、WGSLを削除する。
+5. `LAYER_3D_SOUL_MASK`を削除する。
+6. `terrain_lod`のmask-camera exclusionだけを除去する。`SceneObjectQuery`と`apply_render3d_visibility_system`自体はBuilding / visible Soul / shadow / Familiar / main RtT / compositeを維持するため削除せず、`With<SoulMaskProxy3d>` armとmask camera loopだけを除く。
+7. `visual_test`をScene-only化する。独自`VisualTestRttRuntime.soul_mask`、`Camera3dSoulMaskTest`、local composite binding `3 / 4`、`SoulMaskConfig` / material / ready / sync、resize assertionを同じcommitで除去し、Scene targetだけのresize / rebind assertionを追加する。
+8. visible Soul GLBとSoul shadow pathはP01前と同じ各1系統を維持する。mask proxyだけを0にする。
 
 ### 主な変更ファイル
 
 - `crates/bevy_app/src/entities/damned_soul/spawn.rs`
-- `crates/bevy_app/src/systems/visual/character_proxy_3d/{cache.rs,gltf_ready.rs,sync.rs,tests/}`
-- `crates/bevy_app/src/systems/save/rehydrate/{presentation.rs,tests/presentation.rs}`および現行registry adapter
-- `crates/bevy_app/src/plugins/{visual.rs,startup/visual_handles.rs,startup/startup_systems.rs}`
-- `crates/hw_visual/src/{lib.rs,visual3d.rs,material/mod.rs,material/soul_mask_material.rs}`
+- `crates/bevy_app/src/systems/visual/{character_proxy_3d.rs,character_proxy_3d/{cache.rs,gltf_ready.rs,sync.rs},camera_sync.rs,terrain_lod.rs}`
+- `crates/bevy_app/src/systems/save/{rehydrate.rs,rehydrate/{presentation.rs,tests/presentation.rs}}`
+- `crates/bevy_app/src/plugins/{visual.rs,startup/{mod.rs,visual_handles.rs,startup_systems.rs}}`
+- `crates/hw_visual/src/{lib.rs,visual3d.rs,material/{mod.rs,soul_mask_material.rs}}`
 - `crates/hw_core/src/constants/render.rs`
+- `crates/visual_test/src/{main.rs,input.rs,soul.rs,systems.rs,setup/scene.rs,types/render.rs}`
 - `assets/shaders/soul_mask_material.wgsl`
 
 ### 完了条件
 
-- [ ] `rg -n "SoulMask|soul_mask|LAYER_3D_SOUL_MASK" crates assets`のproduction参照が0
+- [ ] production / runtime inventoryの`SoulMask`、`soul_mask`、`LAYER_3D_SOUL_MASK`参照は0
+- [ ] P00 contract、projection、historical reader、fixture / negative testに限定したlegacy metric名は許可され、P01値はすべて0
 - [ ] Soul spawn / load / despawnでmask entityを生成しない
-- [ ] visible Soul GLBとSoul shadow pathはP01前と同じ
+- [ ] visual_testがScene-onlyで起動し、resize後もtarget / material relationが正しい
+- [ ] visible Soul GLB / shadow各1、mask proxy 0、Wall receiver route維持
 
-## M3: toggle / test / metric契約を整理する
+## M3: P01 stage tooling / metric / native contractを閉じる
 
 ### 変更内容
 
-1. `RenderPerfToggles.soul_mask_enabled`、`HW_DISABLE_SOUL_MASK`、test presetを削除する。
-2. DevPanelのMask button、label、action、presentationを削除する。
-3. visual_testのmask camera / material / proxy / resize pathを削除する。
-4. `PerfSceneRootCounts` / `PerfChecksumQueries` / Rust outputとPython `SCENE_ROOT_COLUMNS` / reader / expected countsから`soul_mask_proxy_3d`を削除する。
-5. artifact schemaを明示的にbumpし、旧schema（現行v11等）はhistoricalとして受理または明示rejectする。列を無言で読み替えない。
-6. P00 artifactとのcolumn差を`docs/performance-profiling.md`またはP00 logへ記録する。
+1. `RenderPerfToggles.soul_mask_enabled`、`HW_DISABLE_SOUL_MASK`、DevPanelのMask button / label / action、test presetを削除する。
+2. `PerfChecksumQueries`からdeleted component queryを外す。ただし`PerfSceneRootCounts`、`render_inventory.csv`、P00 projectionにはcontract-backed zero evidenceを残し、P01のmask proxy値を黙って欠落 / 読み替えにしない。
+3. `PerfRttLightSelection` / config、`policy.py`、`fixtures.py`、`artifacts.py`のstage allowlist、behavior timeline validatorを`p01`対応にする。current reader / fixtureはcurrent referenceとして維持し、stage + schema許可表にない組合せを拒否する。
+4. RenderDoc runtime capture、`renderdoc_extract.py`、`rtt_light_bundle.py`をstage-awareにする。GPU-ready条件、checkpoint、replay resource topology、pass / attachment / binding / sample抽出をP01の1 Scene targetへ切り替え、current v2とP01 v3のpositive / negative fixtureを両方self-testする。
+5. bundleのP01 gate extractorを実装する。`RLV1-P01-RTT`のtarget / camera / pass / binding / sample / proxy / explicit color bytesと、`RLV1-P01-PERF`のcurrent referenceに対するp95 / p99 / RSS / large peak-live deltaをgate CSVへ出力し、unknown metric・reference locator不在・schema混在を失格にする。
+6. native acceptanceの`native_acceptance.py`を`--stage p01`化する。formal leg、output generation、gate selection、current reference読み込みをstageから選び、currentとの後方互換とself-testを追加する。正本Skillとadapter mirrorの`rtt-light`手順もP01を選択できるよう同期する。
+7. `window.csv`はmask target absentを明示し、P01 raw recordでScene targetの寸法をcopyしない。summary schema v11は変更しない。
+8. `docs/world_layout.md`、`docs/performance-profiling.md`、`docs/rendering-performance.md`、`docs/visual_test.md`を実装後のScene-only contractへ更新する。historical proposalは削除対象にせず、現行仕様との混同だけを防ぐ。
 
 ### 主な変更ファイル
 
-- `crates/bevy_app/src/lib.rs`
-- `crates/bevy_app/src/interface/ui/dev_panel/`
-- `crates/bevy_app/src/plugins/{interface.rs,startup/perf_scenario.rs,startup/perf_scenario/}`
-- `crates/visual_test/src/`
-- `scripts/perf_tool/{model.py,artifacts.py,fixtures.py}`
-- `docs/{architecture.md,debug-features.md,visual_test.md,performance-profiling.md,rendering-performance.md}`
+- `crates/bevy_app/src/{lib.rs,interface/ui/dev_panel/,plugins/interface.rs}`
+- `crates/bevy_app/src/plugins/startup/perf_scenario/{config.rs,output.rs,audit_checksum.rs,renderdoc_capture.rs}`
+- `crates/bevy_app/src/plugins/startup/perf_scenario.rs`
+- `scripts/perf_tool/{model.py,artifacts.py,fixtures.py,policy.py,rtt_light_bundle.py,renderdoc_extract.py}`と各self-test / negative fixture
+- `.codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py`
+- `.cursor/skills/hell-workers-run-native-acceptance/SKILL.md`、各adapter mirror
+- `docs/{world_layout.md,performance-profiling.md,rendering-performance.md,visual_test.md}`
 
 ### 完了条件
 
 - [ ] env / UI / testから存在しないmask機能を選べない
-- [ ] perf artifact validatorが新schemaを受理し、旧baselineとの差を明示する
-- [ ] visual_testがScene-onlyで起動する
+- [ ] current raw evidenceはhistorical readerで再検証でき、P01 subjectはP01 schemaだけを受理する
+- [ ] `rtt_light_migration.csv` v1とfrozen contract SHAは不変で、P01のmask-related migration fieldsは明示`0`
+- [ ] P01 RenderDocはScene label / texture / sampler各1、mask target / camera / pass / binding / sample / proxy各0をfail-closedに検証する
+- [ ] native launcherが`--stage p01`のformal 5 legを組み立て、P01 gate CSVとcurrent reference比較を生成する
 
-## M4: native / performance受入を閉じる
+## M4: formal / native受入を閉じる
 
 ### 変更内容
 
-1. P00 `stage=p01`のaudit / behavior / Capture / Memoryを各required case 3反復し、RenderDocを固定1 frame採取する。
-2. DPI / quality / resize / pan / zoomで座標とalphaを確認する。
-3. captureでmask pass / attachment消滅とScene sample数を確認する。
-4. P00の`RLV1-P01-RTT` / `RLV1-P01-PERF`と`RLV1-BUNDLE-VALID`を比較する。
+1. native acceptance Skillのstage-aware `rtt-light` recipeから、P00と同じcontract / fixture / host / window / adapter matrixで`stage=p01`を採取する。
+2. auditはsmall / medium / large × cpu、behaviorはsmall / cpuの`door-state-v1` / `load-normal-v1`、CaptureとMemoryは全size × cpu / gpuを各3反復する。RenderDocはmedium / gpuの固定1 frameを採取する。`field-core` / `consumer-core`はP01では実行・出力ともに拒否する。
+3. `RLV1-BUNDLE-VALID`、`RLV1-P01-RTT`、`RLV1-P01-PERF`の全expected rowをcurrent referenceに対して検証する。
+4. High / Medium / Low、DPI 1.0 / 1.5 / 2.0、pan / zoom / resizeで、透明clear上のblack frameなし、Scene Camera / composite handle一致、visible Soul GLB + shadow各1、mask 0を確認する。
+5. Help impact reviewを実際のDevPanel / player-visible経路から実施し、必要なHelp更新または理由付きNo impact判断を同じ変更batchで閉じる。
 
 ### 完了条件
 
 - [ ] Scene以外の画面解像度依存world color targetがない
-- [ ] `RLV1-P01-RTT` / `RLV1-P01-PERF`と`RLV1-BUNDLE-VALID`を満たす
-- [ ] black frame、stale handle、resizeずれがない
+- [ ] `RLV1-BUNDLE-VALID`、`RLV1-P01-RTT`、`RLV1-P01-PERF`が合格
+- [ ] RenderDocでScene texture / sampler 1、mask pass / attachment / binding / sample 0
+- [ ] black frame、stale handle、resizeずれ、Wall / Terrain receiver脱落がない
+- [ ] formal artifactとcurrent referenceがbaseline index / hashから再検証できる
 
 ## 6. リスクと対策
 
 | リスク | 対策 |
 | --- | --- |
-| proxy typeだけ削除してrehydrateがstale entityを残す | spawn / clear / rehydrate / owner cacheを一つのinventoryで削除する |
-| resize後にcompositeが旧handleを読む | Camera targetとmaterial rebindを同じsystem / testで固定する |
-| perf schema削除でP00比較不能 | column migration noteと互換性reject理由を残す |
-| mask削除とvisible Soul変更が混ざる | P01ではvisible GLBとSoul shadowを維持し、P02で同時に切り替える |
+| P00 formal currentがないままP01を始める | P00 C00-D / C00-Eと登録済みbaseline indexをhard entry gateにする |
+| type参照を消してP01 gateの証拠まで消す | active symbolとprojection legacy fieldを分離し、stage=`p01`では明示0を必須にする |
+| frozen contractをP01 resource shapeで上書きする | RenderDoc schema / code-side stage tableをversion化し、`rtt-light-v1` JSON / SHA / projection v1は変更しない |
+| P01 candidateがcurrent-only raw artifactを読み替える | stage + schema許可表、historical current reader、cross-stage mismatchのnegative testを持つ |
+| RenderDocが2 target前提のまま | runtime / replay / extractor / bundleを1 Scene target stage tableへ同時更新する |
+| `SceneObjectQuery`等をまとめて削除してmain routeを壊す | mask arm / mask camera loopだけを外し、remaining consumerのinventory testを保つ |
+| visual_testを後回しにして型削除でcompile不能 | M2と同じatomic removal seriesでScene-only化する |
+| Scene targetが消えたmask寸法を偽装する | `window.csv`にtarget present stateとnullable / empty mask dimensionsを明示する |
+| P01 tooling変更でP00 referenceが読めない | 新readerでP00 current v2を再検証し、tool hash差はprovenanceに留める |
+| Soul maskと室内Light Fieldのmaskを混同する | `SoulMask*`だけを対象にし、P03 / P06の`indoor_mask*`契約を検索除外・docsで区別する |
 
 ## 7. 検証計画
 
-- focused RtT runtime / rebind tests
-- character proxy lifecycle / rehydrate tests
-- `python3 scripts/perf.py self-test`
-- `cargo check --workspace`
-- `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test --workspace`
-- native audit / behavior / Capture / Memory / RenderDoc acceptance
-- `git diff --check`
+- RtT runtime / rebind / camera inventory / WGSL single-sample focused tests。
+- character proxy lifecycle / rehydrate / cache cleanup / visual_test resize tests。
+- stage-aware perf selector、raw schema reader、behavior timeline、window absent-target、RenderDoc runtime / replay / bundle / gate extractionのpositive / negative self-test。
+- `cargo check --workspace`、default testに加えprofiling / profiling-memory feature構成のcheck / focused test。
+- `cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`python3 scripts/perf.py self-test`、`python3 scripts/dev.py verify`。
+- native audit / behavior / Capture / Memory / RenderDoc acceptance（`hell-workers-run-native-acceptance` Skill必須）。
+- `git diff --check`、Help impact review、影響docs再読。
 
 ## 8. ロールバック方針
 
-- M1〜M3を同じP01 commit列としてrevertし、dummy maskや半端なtoggleを残さない。
+- P01 removal seriesを同じcommit列でrevertし、dummy mask、half-enabled toggle、current / p01 schemaの曖昧なreaderを残さない。
 - P01後のSoul輪郭品質が不足してもmask RtTを即時復活させず、P02 billboardのalpha silhouetteで評価する。
-- performance未達時はattachment、composite、proxyのどの削除が原因かP00 capture単位で切り分ける。
+- formal性能未達時はattachment、composite、proxyのどの差分かをP00 current / P01 RenderDoc topologyとgate row単位で切り分ける。gate、fixture、contract v1を結果に合わせて緩めない。
 
 ## 9. AI引継ぎメモ
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済み: 計画作成
-- 未着手: M1〜M4
+- 進捗: `0%`（review済み、P00 formal baseline登録により着手可能）
+- 完了済み: P00のfrozen `rtt-light-v1` contract / fixture / stage gate設計
+- 未着手: M1〜M4。blocked条件は解消済み
 
 ### 次のAIが最初にやること
 
-1. P00の`RLV1-P01-RTT` / `RLV1-P01-PERF`、`RLV1-BUNDLE-VALID`、artifact pathを確認する。
-2. `rg`でmask inventoryを更新し、本計画の変更ファイルとの差を確認する。
-3. M1のruntime / composite focused testから着手する。
+1. P00 `baseline-index.json`にcurrent formal 5 legが登録され、new readerで再検証できることを確認する。
+2. `rtt-light-v1` hashを確認し、P01を実行するsource treeに並行save / launcher変更がないか確認する。
+3. registered current artifactのhistorical reader再検証とP01 v3 artifact fixture / exact topology testから着手し、その後にM1〜M3のatomic removal seriesを進める。
 
 ### ブロッカー/注意点
 
-- save / rehydrateには並行変更があり得る。現行registry / shell ownershipを読んでからM2を編集する。
-- `Camera3dSoulMaskRtt`はcamera sync / terrain LOD query exclusionにも現れる。
-- visual_testとperf toolingをproduction削除より後回しにしない。
+- P00 formalの正本はattempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`である。diagnostic RD0、失敗attempt、dirty treeやheadless smokeをreferenceに昇格させない。
+- `Camera3dSoulMaskRtt`はcamera sync / terrain LOD queryに現れるが、main Scene query / system全体を削除してはならない。
+- visual_test、raw perf output、RenderDoc capture / extractor、native launcherはpublic mask typeを削除する同一seriesで追従させる。
+- P02までvisible Soul GLB / shadowは保持する。P03以降の室内Light Field maskとは別物である。
 
 ### 最終確認ログ
 
-- Rust gates: `2026-08-04` / `not run (plan-only update)`
-- native acceptance: `2026-08-04` / `not run (plan-only update)`
-- docs gate: `2026-08-04` / `pass (docs --write / --check, check_docs, diff --check)`
+- plan review: `2026-08-05` / P00 contract、source inventory、formal tooling、visual_test、native launcherとの整合を再確認
+- Rust gates: `2026-08-05` / `not run (plan-only update)`
+- P00 prerequisite: `2026-08-11` / current formal attempt登録、native / registry verifier pass
+- native acceptance: P01は未実行。P00 prerequisite待ちは解消済み
+- docs gate: `2026-08-11` / `pass (docs --write / --check, check_docs, diff --check)`
 
 ### Definition of Done
 
+- [x] P00 current formal baselineが登録済み
 - [ ] M1〜M4が完了
-- [ ] mask inventoryが0
-- [ ] `RLV1-P01-RTT` / `RLV1-P01-PERF`と`RLV1-BUNDLE-VALID`が合格
+- [ ] active mask inventoryが0、migration zero evidenceがP01 stageで存在
+- [ ] `RLV1-BUNDLE-VALID` / `RLV1-P01-RTT` / `RLV1-P01-PERF`が合格
+- [ ] current / P01 schema readersとgate extractionのself-testが合格
 - [ ] Help impact review完了
 - [ ] 影響docs更新済み
 
@@ -240,5 +294,7 @@
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-11` | `Codex` | P00 current canonical attemptの登録・再検証完了を受けてblockedを解除し、P01を着手可能へ更新 |
+| `2026-08-05` | `Codex` | P00 formal baseline未登録をentry blocker化し、frozen projectionのzero evidence、stage-aware RenderDoc / artifact / native launcher、visual_testのatomic移行、P01 gate extractionを具体化 |
 | `2026-08-04` | `Codex` | P00のstable RtT / performance gateと共通validity bundle参照へ同期 |
 | `2026-08-03` | `Codex` | 統合計画M1をruntime / proxy / tooling / native gateへ具体化 |

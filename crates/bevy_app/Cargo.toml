@@ -21,6 +21,7 @@ hw_soul_ai       = { path = "../hw_soul_ai" }
 hw_spatial = { path = "../hw_spatial" }
 hw_visual = { path = "../hw_visual" }
 wgpu = { workspace = true, optional = true }
+wgpu-core = { workspace = true, optional = true }
 libloading = { workspace = true, optional = true }
 renderdoc-sys = { workspace = true, optional = true }
 
@@ -30,8 +31,6 @@ default = ["dynamic_linking"]
 dynamic_linking = ["bevy/dynamic_linking"]
 profiling = [
     "dep:wgpu",
-    "dep:libloading",
-    "dep:renderdoc-sys",
     "dep:serde_json",
     "hw_core/profiling",
     "hw_energy/profiling",
@@ -43,6 +42,13 @@ profiling = [
     "hw_soul_ai/profiling",
     "hw_familiar_ai/profiling",
     "hw_visual/profiling",
+]
+profiling-renderdoc = [
+    "profiling",
+    "dep:libloading",
+    "dep:renderdoc-sys",
+    "dep:wgpu-core",
+    "wgpu-core/renderdoc",
 ]
 profiling-tracy = ["profiling", "bevy/trace_tracy"]
 profiling-memory = ["profiling"]

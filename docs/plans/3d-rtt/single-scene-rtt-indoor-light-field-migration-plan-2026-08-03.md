@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `Draft` |
+| ステータス | `In Progress — P00 completed / P01 ready` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-04` |
+| 最終更新日 | `2026-08-11` |
 | 作成者 | `Codex` |
 | 採用判断 | TopDown 2.5D、Scene RtT 1枚、map-space radial Light Field |
 | 関連提案 | `N/A` |
@@ -119,8 +119,8 @@ P00 baseline / contract
 | batch | work package | merge可能条件 |
 | --- | --- | --- |
 | B00 | P00契約・fixture・4 evidence family / 5 current leg・stable gate ID・数値gate | Room interior-role owner確定後、clean commitのformal baselineが揃う |
-| B01 | P01 M1 Scene-only runtime / composite | P00完了 |
-| B02 | P01 M2〜M4 mask camera / proxy / tooling / schema撤去 | B01 green |
+| B01 | P01 M1〜M3 Scene-only runtime / mask camera・proxy・visual_test撤去 / stage-aware tooling | P00 C00-D / C00-Eのcurrent formal baselineが登録済み。public `SoulMask*`削除と全consumer追従を同一compile可能seriesで完了 |
+| B02 | P01 M4 formal / native acceptance / P01 gate ledger | B01 green、current referenceをhistorical readerで再検証済み |
 | B03 | P02 M1 production Door経路修復 | P01完了。照明とは独立したcorrectness commit |
 | B04 | P02 M2 Camera2d一本化・V / Help削除 | B03 green |
 | B05 | P02 M3 Building全分類・Bridge・移動 / 状態同期 | B04 green |
@@ -233,18 +233,18 @@ Interface:
 
 ### 現在地
 
-- 進捗: `10%`（P00の実装はC00-D formal baseline採取待ち、P01〜P08は未着手）
+- 進捗: `11%`（P00完了、P01着手可能、P01〜P08のproduction変更は未着手）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator
-- 未完了: same-source S0 / S1、clean commit上のformal 5 leg、registered baseline index / current gate ledger、P01〜P08
+- P00 formal: subject `10763a4d`、attempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`。5 leg、18 case、baseline index / current gate ledgerを登録・再検証済み
+- 未完了: P01〜P08
 
 ### 次のAIが最初にやること
 
-1. `git status --short`を確認し、直近commit後のfixture / save ownerとP00未コミット差分を分離する。
-2. P00 formal要件を満たすclean commitとancestor correctness commitを用意し、S0 / S1を同一source fingerprintで採取する。
-3. `plan-rtt-light --level formal`がreadyになった後だけ、native acceptance Skillに従ってcurrent baselineを採取する。
-4. P00完了後にのみP01またはP03へ進む。
+1. 登録済みP00 current attemptをP01 historical readerで再検証する。
+2. P01 M1〜M3のatomic removal seriesをstage-aware toolingと同時に実装する。
+3. P01 M4をnative acceptance Skillで採取し、current referenceとのexact topology / performance gateを閉じる。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
@@ -258,11 +258,11 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 ### 最終確認ログ
 
-- 最終 `cargo check --workspace`: `2026-08-04` / `pass`
-- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `2026-08-04` / `pass (0 warning)`
-- 最終 `cargo test --workspace`: `2026-08-04` / `pass`
-- 最終 `python3 scripts/dev.py verify`: `2026-08-04` / `pass`
-- 最終 docs gate: `2026-08-04` / `pass (docs --write / --check, check_docs, diff --check)`
+- 最終 `cargo check --workspace`: `2026-08-11` / `pass`
+- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `2026-08-11` / `pass (0 warning)`
+- 最終 `cargo test --workspace`: `2026-08-11` / `pass`
+- 最終 `python3 scripts/dev.py verify`: `2026-08-11` / `pass`
+- 最終 docs gate: `2026-08-11` / `pass (docs --write / --check, check_docs, diff --check)`
 
 ### Definition of Done
 
@@ -276,6 +276,8 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-11` | `Codex` | P00 canonical current baseline（attempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`）の登録・再検証完了を反映し、P01を着手可能へ更新 |
+| `2026-08-05` | `Codex` | P01 reviewにより、P00 formal baseline登録を着手条件化し、public mask型を削除するM1〜M3をvisual_test / formal toolingと同じcompile可能seriesへ統合 |
 | `2026-08-05` | `Codex` | P00 contract / behavior / projection / native / RenderDoc実装完了と、formal baseline未採取の環境条件を現在地へ同期 |
 | `2026-08-04` | `Codex` | P00の3規模static production fixture、全Building runtime audit、Door初期状態、Tank companion、realtime終端再検証を現在地へ反映 |
 | `2026-08-04` | `Codex` | P00 medium/large全Building showcaseのexact contract、size別artifact validator、Bridge completion-only境界を現在地へ反映 |

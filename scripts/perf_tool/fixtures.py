@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import re
 import tempfile
 
 from .compare import *
 from .arguments import DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING
 from .rtt_light_contract import (
+    contract_fingerprints,
     expected_formal_cases,
     expected_gate_result_rows,
     projection_field_applicability,
@@ -426,6 +428,21 @@ def self_test() -> int:
     with tempfile.TemporaryDirectory(dir=temporary_root) as temporary:
         root = Path(temporary)
         rtt_contract = load_rtt_light_contract("rtt-light-v1")
+        rtt_fingerprints = contract_fingerprints(rtt_contract)
+        rust_fixture_source = (
+            REPO_ROOT
+            / "crates/bevy_app/src/plugins/startup/perf_scenario/indoor_light_fixture.rs"
+        ).read_text(encoding="utf-8")
+        for rust_constant, fingerprint_key in (
+            ("CONTRACT_SHA256", "measurement_contract_sha256"),
+            ("FIXTURE_SHA256", "fixture_contract_sha256"),
+        ):
+            match = re.search(
+                rf'pub\(super\) const {rust_constant}: &str =\s*"([0-9a-f]{{64}})";',
+                rust_fixture_source,
+            )
+            assert match is not None
+            assert match.group(1) == rtt_fingerprints[fingerprint_key]
         rtt_layouts = {
             size: build_fixture_layout(rtt_contract, size)
             for size in ("small", "medium", "large")
@@ -1464,6 +1481,71 @@ def self_test() -> int:
         )
         assert not wrong_duration.valid
         assert any("below requested" in reason for reason in wrong_duration.reasons)
+        indoor_duration_root = root / "indoor-duration"
+        write_fixture_run(
+            indoor_duration_root,
+            workload="indoor-light",
+            summary_overrides={
+                "warmup_virtual_secs": "0.0",
+                "measure_virtual_secs": "0.0",
+                "warmup_real_secs": "3.0",
+                "measure_real_secs": "5.0",
+            },
+        )
+        indoor_case = Case(
+            "indoor-light", "small", "cpu", DEFAULT_SEED, None, None
+        )
+        write_indoor_light_sidecars(indoor_duration_root, indoor_case)
+        write_render_inventory_fixture(indoor_duration_root)
+        indoor_log_path = indoor_duration_root / "run.log"
+        indoor_log_path.write_text(
+            indoor_log_path.read_text(encoding="utf-8")
+            + "PERF_SCENARIO: warmup=3s measure=5s\n",
+            encoding="utf-8",
+        )
+        indoor_duration = validate_run(
+            indoor_duration_root,
+            returncode=0,
+            expected_case=indoor_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+            expected_warmup_secs=3.0,
+            expected_measure_secs=5.0,
+            expected_contract="rtt-light-v1",
+            expected_stage="current",
+            expected_lane="static",
+        )
+        assert indoor_duration.valid, indoor_duration.reasons
+        summary_path = indoor_duration_root / "data" / "summary.csv"
+        with summary_path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            summary_fields = reader.fieldnames
+            summary_rows = list(reader)
+        assert summary_fields is not None and len(summary_rows) == 1
+        summary_rows[0]["measure_virtual_secs"] = "1.0"
+        with summary_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=summary_fields)
+            writer.writeheader()
+            writer.writerows(summary_rows)
+        moving_indoor_duration = validate_run(
+            indoor_duration_root,
+            returncode=0,
+            expected_case=indoor_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+            expected_warmup_secs=3.0,
+            expected_measure_secs=5.0,
+            expected_contract="rtt-light-v1",
+            expected_stage="current",
+            expected_lane="static",
+        )
+        assert not moving_indoor_duration.valid
+        assert any(
+            "expected 0 while indoor-light simulation is paused" in reason
+            for reason in moving_indoor_duration.reasons
+        )
         frames_path = root / "data" / "frames.csv"
         frames_path.write_text(
             "frame_index,frame_time_ms\n1,nan\n", encoding="utf-8"
@@ -2513,5 +2595,9 @@ def self_test() -> int:
         shutil.rmtree(exact_case_dir / "run-002")
         exact_errors = validate_session_artifact_set(exact_session, exact_manifest)
         assert any("missing runs: run-002" in error for error in exact_errors)
+
+        from .renderdoc_foundation import run_self_test as renderdoc_foundation_self_test
+
+        renderdoc_foundation_self_test()
     print("perf.py self-test: pass")
     return 0

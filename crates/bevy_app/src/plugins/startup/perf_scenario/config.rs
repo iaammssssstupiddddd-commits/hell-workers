@@ -312,7 +312,7 @@ pub struct PerfScenarioConfig {
     pub warmup_secs: f32,
     pub measure_secs: f32,
     pub output_dir: Option<PathBuf>,
-    #[cfg(feature = "profiling")]
+    #[cfg(feature = "profiling-renderdoc")]
     renderdoc_capture: bool,
     rtt_light: Option<PerfRttLightSelection>,
     behavior_case: Option<PerfBehaviorCase>,
@@ -560,8 +560,12 @@ impl PerfScenarioConfig {
         let output_dir = value_from_args_or_env(&args, "--perf-output-dir", "HW_PERF_OUTPUT_DIR")?
             .map(PathBuf::from)
             .filter(|path| !path.as_os_str().is_empty());
-        let renderdoc_capture = has_flag(&args, "--perf-renderdoc-capture")
+        let renderdoc_requested = has_flag(&args, "--perf-renderdoc-capture")
             || env::var("HW_PERF_RENDERDOC_CAPTURE").is_ok_and(|value| value == "1");
+        #[cfg(feature = "profiling-renderdoc")]
+        let renderdoc_capture = resolve_renderdoc_capture(renderdoc_requested)?;
+        #[cfg(not(feature = "profiling-renderdoc"))]
+        resolve_renderdoc_capture(renderdoc_requested)?;
         let rtt_light = parse_rtt_light_selection(&args, workload)?;
         let behavior_case_value =
             value_from_args_or_env(&args, "--perf-behavior-case", "HW_PERF_BEHAVIOR_CASE")?;
@@ -588,6 +592,7 @@ impl PerfScenarioConfig {
                     "the rtt-light behavior lane requires small/cpu/fixed-behavior".to_string(),
                 ));
             }
+            Some("behavior") => {}
             Some(_) if behavior_case.is_some() => {
                 return Err(PerfScenarioConfigError(
                     "--perf-behavior-case is only valid for --perf-lane behavior".to_string(),
@@ -649,6 +654,7 @@ impl PerfScenarioConfig {
                 }),
                 None => None,
             };
+        #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
             && (workload != PerfWorkload::IndoorLight
                 || rtt_light != Some(PerfRttLightSelection::CURRENT_STATIC_V1)
@@ -681,7 +687,7 @@ impl PerfScenarioConfig {
             warmup_secs,
             measure_secs,
             output_dir,
-            #[cfg(feature = "profiling")]
+            #[cfg(feature = "profiling-renderdoc")]
             renderdoc_capture,
             rtt_light,
             behavior_case,
@@ -714,7 +720,7 @@ impl PerfScenarioConfig {
         self.rtt_light
     }
 
-    #[cfg(feature = "profiling")]
+    #[cfg(feature = "profiling-renderdoc")]
     pub(crate) const fn renderdoc_capture_enabled(&self) -> bool {
         self.enabled && self.renderdoc_capture
     }
@@ -748,6 +754,26 @@ impl PerfScenarioConfig {
             self.clock_mode,
             PerfClockMode::Fixed | PerfClockMode::FixedBehavior
         )
+    }
+
+    pub const fn freezes_fixture_setup(&self) -> bool {
+        self.enabled
+            && (self.uses_fixed_timesteps()
+                || matches!(
+                    self.workload,
+                    PerfWorkload::IndoorLight | PerfWorkload::TaskDashboard
+                ))
+    }
+
+    /// 静的 light fixture の描画計測中はゲーム simulation を進めない。
+    ///
+    /// 計測窓そのものは `Time<Real>` で進める。これにより Soul/Familiar AI が
+    /// showcase building の bucket 等を運ぶことなく、同一 scene topology を
+    /// Capture / Memory / RenderDoc で共有できる。
+    pub const fn keeps_virtual_time_paused_during_capture(&self) -> bool {
+        self.enabled
+            && !self.uses_fixed_timesteps()
+            && matches!(self.workload, PerfWorkload::IndoorLight)
     }
 
     /// 自動 perf の CPU 条件では、計測対象外の 3D scene root を生成しない。
@@ -795,6 +821,23 @@ impl PerfScenarioConfig {
     }
 }
 
+#[cfg(feature = "profiling-renderdoc")]
+fn resolve_renderdoc_capture(requested: bool) -> Result<bool, PerfScenarioConfigError> {
+    Ok(requested)
+}
+
+#[cfg(not(feature = "profiling-renderdoc"))]
+fn resolve_renderdoc_capture(requested: bool) -> Result<bool, PerfScenarioConfigError> {
+    if requested {
+        Err(PerfScenarioConfigError(
+            "--perf-renderdoc-capture requires the profiling-renderdoc feature; rebuild with --features profiling-renderdoc"
+                .to_string(),
+        ))
+    } else {
+        Ok(false)
+    }
+}
+
 /// 固定 step 監査では、初期 fixture を通常の Logic ゲートより先に適用する。
 ///
 /// 監査開始時は `Time<Virtual>` を停止したままにするため、通常の `Logic`
@@ -824,13 +867,27 @@ pub(crate) fn is_not_fixed_step_behavior(config: Option<Res<PerfScenarioConfig>>
 }
 
 #[cfg(feature = "profiling")]
-pub(crate) fn is_fixed_step_scenario(config: Option<Res<PerfScenarioConfig>>) -> bool {
-    config.is_some_and(|config| config.enabled() && config.uses_fixed_timesteps())
+pub(crate) fn requires_precheckpoint_fixture_spawn(
+    config: Option<Res<PerfScenarioConfig>>,
+) -> bool {
+    config.is_some_and(|config| config.freezes_fixture_setup())
 }
 
 #[cfg(feature = "profiling")]
+pub(crate) fn does_not_require_precheckpoint_fixture_spawn(
+    config: Option<Res<PerfScenarioConfig>>,
+) -> bool {
+    !requires_precheckpoint_fixture_spawn(config)
+}
+
+#[cfg(feature = "profiling-renderdoc")]
 pub(crate) fn is_not_renderdoc_capture(config: Option<Res<PerfScenarioConfig>>) -> bool {
     !config.is_some_and(|config| config.renderdoc_capture_enabled())
+}
+
+#[cfg(all(feature = "profiling", not(feature = "profiling-renderdoc")))]
+pub(crate) fn is_not_renderdoc_capture(_config: Option<Res<PerfScenarioConfig>>) -> bool {
+    true
 }
 
 fn parse_rtt_light_selection(
@@ -887,7 +944,7 @@ impl Default for PerfScenarioConfig {
             warmup_secs: DEFAULT_WARMUP_SECS,
             measure_secs: DEFAULT_MEASURE_SECS,
             output_dir: None,
-            #[cfg(feature = "profiling")]
+            #[cfg(feature = "profiling-renderdoc")]
             renderdoc_capture: false,
             rtt_light: None,
             behavior_case: None,

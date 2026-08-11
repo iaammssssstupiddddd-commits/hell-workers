@@ -5,14 +5,17 @@
 | 項目 | 値 |
 | --- | --- |
 | ドキュメントID | `soul-outline-mask-ring-vs-inverted-hull-proposal-2026-04-16` |
-| ステータス | `Accepted / Not Implemented` |
+| ステータス | `Superseded` |
 | 作成日 | `2026-04-16` |
-| 最終更新日 | `2026-07-13` |
+| 最終更新日 | `2026-08-03` |
 | 作成者 | `Codex (GPT-5)` |
 | 関連計画 | `docs/plans/3d-rtt/milestone-roadmap.md` MS-3-10 |
 | 関連Issue/PR | `N/A` |
 | 置換元 | `docs/proposals/3d-rtt/archived/outline-rendering-proposal-2026-03-16.md` |
 | 実装済み前提 | `docs/proposals/3d-rtt/archived/character-3d-rendering-proposal-2026-03-16.md` |
+| 置換先 | [`../plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../plans/3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
+
+> **Superseded (2026-08-03):** 常設Soul mask RtTを廃止する方針が採用されたため、mask ringとinverted hullのどちらも本編実装へ進めない。Soul輪郭は置換先計画の共有unlit billboard / alpha silhouetteで再評価する。本書は比較履歴として保持する。
 
 ## 1. 背景と問題
 
@@ -263,9 +266,9 @@ Soul GLB本体
 
 ### 次のAIが最初にやること
 
-1. `assets/shaders/rtt_composite_material.wgsl` の `rounded_mask` / `center_mask` を用いた outline band 式を PoC 実装する。
-2. `visual_test` に outline 幅・強度調整 UI を追加する。
-3. 近接 Soul 2〜6 体で halo 連結が許容範囲か確認する。
+1. 本提案からmask ring / inverted hullを実装しない。
+2. 置換先のP00〜P02を読み、Soul billboardのalpha silhouette受入へ外周要件を引き継ぐ。
+3. 過去の比較が必要な場合だけ本書を履歴資料として参照する。
 
 ### ブロッカー/注意点
 
@@ -291,3 +294,4 @@ Soul GLB本体
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
 | `2026-04-16` | `Codex (GPT-5)` | 初版作成 |
+| `2026-08-03` | `Codex` | Soul mask RtT廃止とbillboard移行方針によりSuperseded化 |

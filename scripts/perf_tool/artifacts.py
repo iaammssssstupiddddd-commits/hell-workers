@@ -1634,9 +1634,12 @@ def validate_run(
                         f"summary {field} is {declared:.6f}, but frames.csv computes "
                         f"{computed:.6f}"
                     )
+        duration_clock = (
+            "real" if expected_case.workload == "indoor-light" else "virtual"
+        )
         for field, expected in (
-            ("warmup_virtual_secs", expected_warmup_secs),
-            ("measure_virtual_secs", expected_measure_secs),
+            (f"warmup_{duration_clock}_secs", expected_warmup_secs),
+            (f"measure_{duration_clock}_secs", expected_measure_secs),
         ):
             if expected is None:
                 continue
@@ -1648,6 +1651,16 @@ def validate_run(
                 reasons.append(
                     f"summary {field} is {observed:.6f}, below requested {expected:.6f}"
                 )
+        if expected_case.workload == "indoor-light":
+            for field in ("warmup_virtual_secs", "measure_virtual_secs"):
+                try:
+                    observed = float(summary[field])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not math.isclose(observed, 0.0, rel_tol=0.0, abs_tol=1e-6):
+                    reasons.append(
+                        f"summary {field} is {observed:.6f}, expected 0 while indoor-light simulation is paused"
+                    )
 
     if summary is not None and scene_roots is not None:
         try:

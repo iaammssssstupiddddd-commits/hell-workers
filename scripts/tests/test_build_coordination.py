@@ -58,6 +58,38 @@ class BuildCoordinationTests(unittest.TestCase):
         with build_coordination.acquire_activity(dev.REPO_ROOT, "shared"):
             pass
 
+    def test_exclusive_lease_can_be_borrowed_only_through_its_exact_fd(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=Path(__file__).resolve().parents[2] / "target"
+        ) as directory:
+            repo = Path(directory)
+            with build_coordination.acquire_activity(repo, "exclusive") as owner:
+                inherited = build_coordination.activity_lease_environment(owner)
+                self.assertEqual(
+                    build_coordination.activity_pass_fds(inherited), (owner.fd,)
+                )
+                with patch.dict("os.environ", inherited, clear=True):
+                    with build_coordination.acquire_activity(repo, "exclusive") as borrowed:
+                        self.assertTrue(borrowed.borrowed)
+                        self.assertEqual(borrowed.fd, owner.fd)
+                with self.assertRaises(build_coordination.ActivityBusyError):
+                    build_coordination.acquire_activity(repo, "shared")
+
+    def test_inherited_lease_rejects_a_different_lock_fd(self) -> None:
+        with tempfile.TemporaryDirectory(
+            dir=Path(__file__).resolve().parents[2] / "target"
+        ) as first_directory, tempfile.TemporaryDirectory(
+            dir=Path(__file__).resolve().parents[2] / "target"
+        ) as second_directory:
+            first_repo = Path(first_directory)
+            second_repo = Path(second_directory)
+            with build_coordination.acquire_activity(first_repo, "exclusive") as owner:
+                inherited = build_coordination.activity_lease_environment(owner)
+                build_coordination.activity_lock_path(second_repo).touch()
+                with patch.dict("os.environ", inherited, clear=True):
+                    with self.assertRaisesRegex(RuntimeError, "different lock"):
+                        build_coordination.acquire_activity(second_repo, "exclusive")
+
     def test_performance_recipe_uses_exclusive_lease_but_dry_run_does_not(self) -> None:
         lease = MagicMock()
         with patch.object(perf_cli, "acquire_activity", return_value=lease) as acquire:

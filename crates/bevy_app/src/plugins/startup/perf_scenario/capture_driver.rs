@@ -7,7 +7,7 @@ use super::*;
 /// deferred command を適用した直後にこの checkpoint を置く。
 #[cfg(feature = "profiling")]
 pub(crate) fn start_perf_capture_system(
-    params: PerfCaptureStartParams,
+    mut params: PerfCaptureStartParams,
     mut capture: ResMut<PerfCapture>,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -122,6 +122,9 @@ pub(crate) fn start_perf_capture_system(
             params.config.fixed_audit_ticks(),
         );
     } else {
+        if !params.config.keeps_virtual_time_paused_during_capture() {
+            params.virtual_time.unpause();
+        }
         capture.phase = PerfCapturePhase::Warmup;
         capture.elapsed_secs = 0.0;
         capture.save_transaction_kind =
@@ -178,13 +181,14 @@ pub(crate) fn drive_perf_capture_system(
                     exit.write(AppExit::error());
                 }
             } else {
-                capture.elapsed_secs += params.time.delta_secs();
+                capture.elapsed_secs += realtime_capture_delta_secs(&params);
                 capture.warmup_virtual_secs += params.time.delta_secs_f64();
                 capture.warmup_real_secs += params.real_time.delta_secs_f64();
                 if capture.elapsed_secs >= params.config.warmup_secs {
                     if let Err(error) = validate_realtime_indoor_light_checkpoint(
                         &params.config,
                         &params.checksum_queries,
+                        &params.time,
                         "warmup-end",
                     ) {
                         error!("PERF_CAPTURE: invalid indoor-light checkpoint: {error}");
@@ -264,7 +268,7 @@ pub(crate) fn drive_perf_capture_system(
                     exit.write(AppExit::error());
                 }
             } else {
-                capture.elapsed_secs += params.time.delta_secs();
+                capture.elapsed_secs += realtime_capture_delta_secs(&params);
                 capture.measure_virtual_secs += params.time.delta_secs_f64();
                 capture.measure_real_secs += params.real_time.delta_secs_f64();
                 if let Some(frame_time_ms) =
@@ -280,6 +284,7 @@ pub(crate) fn drive_perf_capture_system(
                     if let Err(error) = validate_realtime_indoor_light_checkpoint(
                         &params.config,
                         &params.checksum_queries,
+                        &params.time,
                         "measure-end",
                     ) {
                         error!("PERF_CAPTURE: invalid indoor-light checkpoint: {error}");
@@ -433,14 +438,29 @@ pub(crate) fn drive_perf_capture_system(
 fn validate_realtime_indoor_light_checkpoint(
     config: &PerfScenarioConfig,
     checksum_queries: &PerfChecksumQueries<'_, '_>,
+    virtual_time: &Time<Virtual>,
     checkpoint: &str,
 ) -> Result<(), String> {
     if config.workload != PerfWorkload::IndoorLight {
         return Ok(());
     }
+    if !virtual_time.is_paused() {
+        return Err(format!(
+            "{checkpoint}: indoor-light virtual time must remain paused"
+        ));
+    }
     indoor_light_fixture::collect_indoor_light_audit_records(&checksum_queries.indoor_light)
         .map(|_| ())
         .map_err(|reason| format!("{checkpoint}: {reason}"))
+}
+
+#[cfg(feature = "profiling")]
+fn realtime_capture_delta_secs(params: &PerfCaptureParams<'_, '_>) -> f32 {
+    if params.config.keeps_virtual_time_paused_during_capture() {
+        params.real_time.delta_secs()
+    } else {
+        params.time.delta_secs()
+    }
 }
 
 #[cfg(feature = "profiling")]

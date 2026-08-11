@@ -22,10 +22,20 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from cargo_runtime import persistent_storage_error
+from perf_tool.renderdoc_foundation import (
+    CAPTURE_CHILD_DEADLINE_SECONDS,
+    classify_renderdoc_log_lines,
+    assert_disk_headroom,
+    disk_reservation_bytes,
+    run_with_deadline,
+    validate_runtime_checkpoint_v3,
+    verify_capsule_hash,
+    DIAGNOSTIC_NAMESPACE,
+)
 
 
 SCHEMA_VERSION = 1
-RUNTIME_CHECKPOINT_SCHEMA_VERSION = 2
+RUNTIME_CHECKPOINT_SCHEMA_VERSION = 3
 EXTRACTION_SCHEMA_VERSION = 2
 CONTRACT_FILE = "scripts/perf_tool/contracts/rtt_light_migration_v1.json"
 SOURCE_FILES = {
@@ -38,12 +48,16 @@ SOURCE_FILES = {
 }
 SOURCE_PREFIXES = ("crates/", "scripts/perf_tool/")
 ASSET_PREFIX = "assets/"
-RENDERDOC_API_VERSION = "1.6.0"
-RENDERDOC_TEMP_DIRECTORY = ".renderdoc-tmp"
-LOG_PROBLEM_RE = re.compile(
-    r"\b(?:WARN(?:ING)?|ERROR|FATAL|CRITICAL|panicked)\b|bevy_ecs::error::handler",
-    re.IGNORECASE,
+MEASUREMENT_HARNESS_FILES = (
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
+    "scripts/build_coordination.py",
+    "scripts/cargo_runtime.py",
+    "scripts/perf_tool/execution.py",
+    "scripts/perf_tool/renderdoc_capture.py",
+    "scripts/perf_tool/renderdoc_foundation.py",
+    "scripts/perf_tool/rtt_light_bundle.py",
 )
+RENDERDOC_API_VERSION = "1.6.0"
 
 EXPECTED_RENDER_RESOURCES = {
     "scene_target_label": "hell-workers-rtt-scene",
@@ -83,7 +97,35 @@ class CaptureError(RuntimeError):
 
 
 def workspace_temp_dir(repo: Path) -> Path:
-    return (repo / "target" / RENDERDOC_TEMP_DIRECTORY).resolve()
+    return (repo / DIAGNOSTIC_NAMESPACE).resolve()
+
+
+class RetainedFailureDirectory(tempfile.TemporaryDirectory):
+    """Delete successful scratch space, but retain partial failure evidence."""
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> bool | None:
+        if exc_type is None:
+            return super().__exit__(exc_type, exc, traceback)
+        self._finalizer.detach()
+        failure = Path(self.name) / "failure.json"
+        try:
+            failure.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "status": "diagnostic_only",
+                        "reason": str(exc),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+        print(f"RenderDoc failure evidence retained at {self.name}", file=sys.stderr)
+        return False
 
 
 def require_within(path: Path, root: Path, *, label: str) -> None:
@@ -129,6 +171,32 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def normalized_json_digest(path: Path) -> str:
+    payload = read_json(path)
+
+    def normalize(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: normalize(child)
+                for key, child in value.items()
+                if key
+                not in {
+                    "capture_sha256",
+                    "resource_id",
+                    "binding_id",
+                    "attachment_id",
+                }
+            }
+        if isinstance(value, list):
+            return [normalize(child) for child in value]
+        return value
+
+    encoded = json.dumps(
+        normalize(payload), sort_keys=True, separators=(",", ":")
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _regular_file(value: str, label: str, *, executable: bool = False) -> Path:
     path = Path(value).resolve()
     if not path.is_file():
@@ -155,9 +223,19 @@ def _command_output(command: list[str], *, cwd: Path | None = None) -> str:
     return completed.stdout.strip()
 
 
-def _tool_version(path: Path) -> str:
+def _probe_environment(*, headless_qt: bool) -> dict[str, str]:
+    environment = os.environ.copy()
+    if headless_qt:
+        environment["QT_QPA_PLATFORM"] = "offscreen"
+    return environment
+
+
+def _tool_version(path: Path, *, headless_qt: bool = False) -> str:
     failures: list[str] = []
-    for arguments in (("version",), ("--version",)):
+    argument_options = (
+        (("--version",),) if headless_qt else (("version",), ("--version",))
+    )
+    for arguments in argument_options:
         try:
             completed = subprocess.run(
                 [str(path), *arguments],
@@ -165,6 +243,7 @@ def _tool_version(path: Path) -> str:
                 capture_output=True,
                 text=True,
                 timeout=30,
+                env=_probe_environment(headless_qt=headless_qt),
             )
         except subprocess.SubprocessError as error:
             failures.append(f"{' '.join(arguments)}: {error}")
@@ -183,13 +262,16 @@ def _version_tuple(value: str) -> tuple[int, int]:
     return int(match.group(1)), int(match.group(2))
 
 
-def _help_text(path: Path, arguments: tuple[str, ...]) -> str:
+def _help_text(
+    path: Path, arguments: tuple[str, ...], *, headless_qt: bool = False
+) -> str:
     completed = subprocess.run(
         [str(path), *arguments],
         check=False,
         capture_output=True,
         text=True,
         timeout=30,
+        env=_probe_environment(headless_qt=headless_qt),
     )
     output = "\n".join(filter(None, (completed.stdout, completed.stderr)))
     if completed.returncode != 0 or not output:
@@ -208,7 +290,7 @@ def inspect_tools(
     if library.stat().st_size <= 0 or library.read_bytes()[:4] != b"\x7fELF":
         raise CaptureError(f"librenderdoc is not a nonempty ELF file: {library}")
     renderdoc_version = _tool_version(renderdoccmd)
-    qrenderdoc_version = _tool_version(qrenderdoc)
+    qrenderdoc_version = _tool_version(qrenderdoc, headless_qt=True)
     if _version_tuple(renderdoc_version) != _version_tuple(qrenderdoc_version):
         raise CaptureError(
             "renderdoccmd and qrenderdoc major/minor versions differ: "
@@ -218,7 +300,7 @@ def inspect_tools(
     for option in ("--capture-file", "--wait-for-exit", "--working-dir"):
         if option not in capture_help:
             raise CaptureError(f"renderdoccmd capture does not advertise {option}")
-    if "--python" not in _help_text(qrenderdoc, ("--help",)):
+    if "--python" not in _help_text(qrenderdoc, ("--help",), headless_qt=True):
         raise CaptureError("qrenderdoc does not advertise --python")
     extractor = Path(__file__).resolve().with_name("renderdoc_extract.py")
     if not extractor.is_file():
@@ -247,18 +329,34 @@ def source_fingerprint(repo: Path) -> str:
         source = repo / relative
         if not source.is_file():
             continue
+        subject_bytes: bytes | None = None
+        if relative in MEASUREMENT_HARNESS_FILES:
+            completed = subprocess.run(
+                ["git", "show", f"HEAD:{relative}"],
+                cwd=repo,
+                check=False,
+                capture_output=True,
+            )
+            if completed.returncode != 0:
+                continue
+            subject_bytes = completed.stdout
         if relative in SOURCE_FILES or relative.startswith(SOURCE_PREFIXES):
+            digest.update(b"content\0")
+            digest.update(relative.encode())
+            digest.update(b"\0")
+            if subject_bytes is not None:
+                digest.update(subject_bytes)
+            else:
+                with source.open("rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        digest.update(chunk)
+        elif relative.startswith(ASSET_PREFIX):
             digest.update(b"content\0")
             digest.update(relative.encode())
             digest.update(b"\0")
             with source.open("rb") as handle:
                 for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                     digest.update(chunk)
-        elif relative.startswith(ASSET_PREFIX):
-            stats = source.stat()
-            digest.update(b"asset-stat\0")
-            digest.update(relative.encode())
-            digest.update(f"\0{stats.st_size}\0{stats.st_mtime_ns}\0".encode())
     return digest.hexdigest()
 
 
@@ -270,8 +368,16 @@ def _assert_clean_source(repo: Path, commit: str, fingerprint: str) -> None:
     status = _command_output(
         ["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=repo
     )
-    if status:
-        raise CaptureError("formal RenderDoc subject is dirty: " + status.splitlines()[0])
+    dirty: list[str] = []
+    for entry in status.splitlines() if status else []:
+        fields = entry.split(maxsplit=1)
+        path = fields[1] if len(fields) == 2 else entry
+        paths = path.split(" -> ", 1) if " -> " in path else [path]
+        if paths and all(candidate in MEASUREMENT_HARNESS_FILES for candidate in paths):
+            continue
+        dirty.append(entry)
+    if dirty:
+        raise CaptureError("formal RenderDoc subject is dirty: " + dirty[0])
     actual = source_fingerprint(repo)
     if actual != fingerprint:
         raise CaptureError(
@@ -325,9 +431,11 @@ def _validate_environment_lock(
         "effective_present_mode",
         "window",
         "capture_binary_sha256",
+        "renderdoc_binary_sha256",
+        "memory_binary_sha256",
     }
-    if set(lock) != expected_keys or lock.get("schema_version") != 1:
-        raise CaptureError("environment-lock.json differs from schema v1")
+    if set(lock) != expected_keys or lock.get("schema_version") != 2:
+        raise CaptureError("environment-lock.json differs from schema v2")
     matrix = contract["formal_matrix"]
     if (
         lock["contract_id"] != contract["contract_id"]
@@ -338,7 +446,11 @@ def _validate_environment_lock(
         or lock["adapter_backend"] != matrix["backend"]
         or lock["requested_present_mode"] != "auto_no_vsync"
         or lock["effective_present_mode"] not in {"immediate", "mailbox", "fifo"}
-        or lock["capture_binary_sha256"] != binary_sha256
+        or lock["renderdoc_binary_sha256"] != binary_sha256
+        or not isinstance(lock["capture_binary_sha256"], str)
+        or re.fullmatch(r"[0-9a-f]{64}", lock["capture_binary_sha256"]) is None
+        or lock["capture_binary_sha256"] == binary_sha256
+        or lock["memory_binary_sha256"] is not None
     ):
         raise CaptureError("environment lock identity or renderer tuple differs")
     adapter = lock["adapter"]
@@ -385,13 +497,7 @@ def _validate_capture_session(
 
 
 def unexpected_log_lines(text: str, allow_patterns: Iterable[str]) -> list[str]:
-    compiled = [re.compile(pattern) for pattern in allow_patterns]
-    return [
-        line
-        for line in text.splitlines()
-        if LOG_PROBLEM_RE.search(line)
-        and not any(pattern.search(line) for pattern in compiled)
-    ]
+    return classify_renderdoc_log_lines(text, allow_patterns)[1]
 
 
 def _validate_render_resources(value: Any) -> dict[str, Any]:
@@ -454,49 +560,17 @@ def _runtime_checkpoint(
     path: Path, *, contract: dict[str, Any], capture_path: Path
 ) -> dict[str, Any]:
     value = read_json(path)
-    if set(value) != {
-        "schema_version",
-        "status",
-        "checkpoint",
-        "render_inventory",
-        "render_resources",
-        "fixture",
-        "capture_path",
-        "renderdoc_api_version",
-    } or value.get("schema_version") != RUNTIME_CHECKPOINT_SCHEMA_VERSION or value.get("status") != "valid":
-        raise CaptureError("runtime RenderDoc checkpoint differs from schema v2")
-    checkpoint = value["checkpoint"]
-    renderdoc = contract["formal_matrix"]["renderdoc"]
-    if (
-        not isinstance(checkpoint, dict)
-        or set(checkpoint)
-        != {
-            "name",
-            "simulation_tick",
-            "settle_frames",
-            "capture_frame",
-            "render_frame_index",
-            "validated_frames",
-        }
-        or checkpoint["name"] != "indoor-light-fixture-ready-v1"
-        or checkpoint["settle_frames"] != renderdoc["settle_frames"]
-        or checkpoint["capture_frame"] != renderdoc["capture_frame"]
-        or checkpoint["validated_frames"] != 1
-        or not isinstance(checkpoint["simulation_tick"], int)
-        or isinstance(checkpoint["simulation_tick"], bool)
-        or checkpoint["simulation_tick"] < 0
-        or not isinstance(checkpoint["render_frame_index"], int)
-        or isinstance(checkpoint["render_frame_index"], bool)
-        or checkpoint["render_frame_index"] < renderdoc["capture_frame"]
-        or value["renderdoc_api_version"] != RENDERDOC_API_VERSION
-    ):
-        raise CaptureError("runtime RenderDoc fixed checkpoint differs from the contract")
     try:
-        observed_capture = Path(value["capture_path"]).resolve()
-    except TypeError as error:
-        raise CaptureError("runtime checkpoint capture path is invalid") from error
-    if observed_capture != capture_path.resolve():
-        raise CaptureError("runtime checkpoint points at a different .rdc capture")
+        validate_runtime_checkpoint_v3(
+            value,
+            contract=contract,
+            stage_id="current",
+            capture_path=capture_path,
+            rdc_sha256=sha256(capture_path),
+            rdc_bytes=capture_path.stat().st_size,
+        )
+    except (OSError, ValueError) as error:
+        raise CaptureError(f"runtime RenderDoc checkpoint differs from schema v3: {error}") from error
     for label in ("render_inventory", "render_resources", "fixture"):
         if not isinstance(value[label], dict) or not value[label]:
             raise CaptureError(f"runtime checkpoint {label} evidence is empty")
@@ -532,6 +606,35 @@ def _copy_regular(source: Path, destination: Path) -> None:
         shutil.copyfileobj(reader, writer, length=1024 * 1024)
         writer.flush()
         os.fsync(writer.fileno())
+
+
+def _record_process_status(path: Path, *, stage: str, status: Any) -> None:
+    payload = read_json(path) if path.exists() else {"schema_version": 1, "processes": []}
+    payload["processes"].append(
+        {
+            "stage": stage,
+            "pid": status.pid,
+            "pgid": status.pgid,
+            "returncode": status.returncode,
+            "signal": status.signal,
+            "deadline_reason": status.deadline_reason,
+            "orphan_probe_count": status.orphan_probe_count,
+        }
+    )
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _record_disk_status(path: Path, *, stage: str, filesystem: Path, required: int) -> None:
+    payload = read_json(path) if path.exists() else {"schema_version": 1, "checks": []}
+    payload["checks"].append(
+        {
+            "stage": stage,
+            "filesystem": str(filesystem.resolve()),
+            "required_bytes": required,
+            "free_bytes": shutil.disk_usage(filesystem).free,
+        }
+    )
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _validate_composite_topology(
@@ -839,16 +942,35 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
     repo = Path(args.repo).resolve()
     if not (repo / "Cargo.toml").is_file():
         raise CaptureError(f"not a repository root: {repo}")
-    binary = _regular_file(args.binary, "Capture profiling binary", executable=True)
-    require_within(binary, repo / "target", label="Capture profiling binary")
-    require_persistent_storage(binary, label="Capture profiling binary")
+    binary = _regular_file(args.binary, "RenderDoc profiling binary", executable=True)
+    require_within(binary, repo / "target", label="RenderDoc profiling binary")
+    require_persistent_storage(binary, label="RenderDoc profiling binary")
+    capsule_manifest_path = Path(args.capsule_manifest).resolve()
+    if capsule_manifest_path != binary.parent / "capsule-manifest.json":
+        raise CaptureError("RenderDoc binary and capsule manifest are not co-located")
+    try:
+        capsule = verify_capsule_hash(binary.parent)
+    except (OSError, RuntimeError, ValueError, KeyError) as error:
+        raise CaptureError(f"RenderDoc binary capsule is invalid: {error}") from error
+    if (
+        capsule.leg != "renderdoc"
+        or capsule.profile != "profiling-renderdoc"
+        or capsule.features != "profiling-renderdoc"
+        or capsule.binary_sha256 != sha256(binary)
+    ):
+        raise CaptureError("RenderDoc binary capsule identity differs from the formal recipe")
     output = Path(args.output).resolve()
-    require_within(output, repo / "target" / "perf-runs", label="RenderDoc output")
+    output_root = (
+        repo / "target" / "perf-runs"
+        if args.mode == "formal"
+        else repo / "target" / "native-acceptance" / "renderdoc-foundation"
+    )
+    require_within(output, output_root, label=f"RenderDoc {args.mode} output")
     require_persistent_storage(output, label="RenderDoc output")
     if output.exists() or output.name != "renderdoc" or not output.parent.is_dir():
         raise CaptureError(f"RenderDoc output must be a new attempt/renderdoc path: {output}")
     environment_lock_path = Path(args.environment_lock).resolve()
-    if environment_lock_path.parent != output.parent.parent.parent:
+    if args.mode == "formal" and environment_lock_path.parent != output.parent.parent.parent:
         raise CaptureError("environment lock is outside the RenderDoc attempt generation")
     contract = _load_contract(repo, args.contract, args.stage)
     _assert_clean_source(repo, args.subject_commit, args.source_fingerprint)
@@ -869,22 +991,37 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
         window_backend=args.window_backend,
         binary_sha256=binary_hash,
     )
-    capture_session = output.parent / "capture" / "manifest.json"
+    capture_session = (
+        Path(args.capture_session).resolve()
+        if args.capture_session
+        else output.parent / "capture" / "manifest.json"
+    )
+    require_within(capture_session, repo / "target", label="Capture session manifest")
     _validate_capture_session(
         read_json(capture_session),
         commit=args.subject_commit,
         fingerprint=args.source_fingerprint,
-        binary_hash=binary_hash,
+        binary_hash=environment_lock["capture_binary_sha256"],
     )
 
     temporary_root = workspace_temp_dir(repo)
     require_persistent_storage(temporary_root, label="RenderDoc temporary directory")
     temporary_root.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(
-        prefix="hell-workers-renderdoc-",
+    with RetainedFailureDirectory(
+        prefix=f"{uuid.uuid4()}-",
         dir=temporary_root,
     ) as temporary_name:
         work = Path(temporary_name)
+        process_status_path = work / "process-status.json"
+        disk_status_path = work / "disk-status.json"
+        initial_reservation = disk_reservation_bytes(max_rdc_bytes=0, rd0_rdc_bytes=0)
+        _record_disk_status(
+            disk_status_path,
+            stage="before-capture",
+            filesystem=temporary_root,
+            required=initial_reservation,
+        )
+        assert_disk_headroom(temporary_root, required_bytes=initial_reservation)
         raw_dir = work / "raw"
         runtime_dir = work / "runtime"
         raw_dir.mkdir()
@@ -916,14 +1053,21 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
             contract=contract,
         )
         with combined_log.open("xb") as log_handle:
-            completed = subprocess.run(
+            completed = run_with_deadline(
                 command,
                 cwd=repo,
                 env=environment,
-                check=False,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
-                timeout=600,
+                deadline_seconds=CAPTURE_CHILD_DEADLINE_SECONDS,
+                deadline_reason="renderdoc_capture_deadline",
+            )
+        _record_process_status(
+            process_status_path, stage="capture", status=completed
+        )
+        if completed.deadline_reason is not None or completed.orphan_probe_count != 0:
+            raise CaptureError(
+                "renderdoccmd capture exceeded its deadline or left a process group"
             )
         if completed.returncode != 0:
             raise CaptureError(f"renderdoccmd capture failed with {completed.returncode}")
@@ -940,16 +1084,18 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
             checkpoint_path, contract=contract, capture_path=capture
         )
         extraction_path = work / "extraction.json"
+        extraction_failure_path = work / "extraction-failure.json"
         replay_environment = environment.copy()
         replay_environment.update(
             {
                 "HW_RENDERDOC_CAPTURE": str(capture),
                 "HW_RENDERDOC_EXTRACTION": str(extraction_path),
+                "HW_RENDERDOC_EXTRACTION_FAILURE": str(extraction_failure_path),
                 "HW_RENDERDOC_RUNTIME_CHECKPOINT": str(checkpoint_path),
             }
         )
         with combined_log.open("ab") as log_handle:
-            replay = subprocess.run(
+            replay = run_with_deadline(
                 [
                     str(tools["qrenderdoc"]),
                     "--python",
@@ -958,19 +1104,68 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                 ],
                 cwd=repo,
                 env=replay_environment,
-                check=False,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
-                timeout=600,
+                deadline_seconds=CAPTURE_CHILD_DEADLINE_SECONDS,
+                deadline_reason="renderdoc_replay_deadline",
+            )
+        _record_process_status(process_status_path, stage="replay-1", status=replay)
+        if replay.deadline_reason is not None or replay.orphan_probe_count != 0:
+            raise CaptureError(
+                "qrenderdoc replay exceeded its deadline or left a process group"
             )
         if replay.returncode != 0 or not extraction_path.is_file():
+            failure_detail = ""
+            if extraction_failure_path.is_file():
+                failure = read_json(extraction_failure_path)
+                if isinstance(failure.get("error"), str):
+                    failure_detail = f": {failure['error']}"
             raise CaptureError(
-                f"qrenderdoc extraction failed with {replay.returncode}"
+                "qrenderdoc extraction did not produce JSON "
+                f"(process exit {replay.returncode}){failure_detail}"
             )
         capture_hash = sha256(capture)
         _validate_extraction(
             extraction_path, capture_hash=capture_hash, runtime=runtime
         )
+        replay_check_path = work / "extraction-replay.json"
+        replay_check_failure_path = work / "extraction-replay-failure.json"
+        replay_check_environment = replay_environment.copy()
+        replay_check_environment["HW_RENDERDOC_EXTRACTION"] = str(replay_check_path)
+        replay_check_environment["HW_RENDERDOC_EXTRACTION_FAILURE"] = str(
+            replay_check_failure_path
+        )
+        with combined_log.open("ab") as log_handle:
+            replay_check = run_with_deadline(
+                [
+                    str(tools["qrenderdoc"]),
+                    "--python",
+                    str(tools["extractor"]),
+                    str(capture),
+                ],
+                cwd=repo,
+                env=replay_check_environment,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                deadline_seconds=CAPTURE_CHILD_DEADLINE_SECONDS,
+                deadline_reason="renderdoc_second_replay_deadline",
+            )
+        _record_process_status(
+            process_status_path, stage="replay-2", status=replay_check
+        )
+        if (
+            replay_check.deadline_reason is not None
+            or replay_check.orphan_probe_count != 0
+            or replay_check.returncode != 0
+            or not replay_check_path.is_file()
+        ):
+            raise CaptureError("second qrenderdoc replay failed or left a process group")
+        _validate_extraction(
+            replay_check_path, capture_hash=capture_hash, runtime=runtime
+        )
+        replay_digest = normalized_json_digest(extraction_path)
+        if normalized_json_digest(replay_check_path) != replay_digest:
+            raise CaptureError("two local replays produced different normalized evidence")
         _assert_clean_source(repo, args.subject_commit, args.source_fingerprint)
         log_text = combined_log.read_text(encoding="utf-8", errors="replace")
         problems = unexpected_log_lines(
@@ -980,6 +1175,17 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
             raise CaptureError("unexpected RenderDoc log line: " + problems[0])
 
         staging = output.parent / f".renderdoc-{uuid.uuid4()}.tmp"
+        copy_reservation = disk_reservation_bytes(
+            max_rdc_bytes=capture.stat().st_size,
+            rd0_rdc_bytes=capture.stat().st_size if args.mode == "rd0" else 0,
+        )
+        _record_disk_status(
+            disk_status_path,
+            stage="before-staging-copy",
+            filesystem=output.parent,
+            required=copy_reservation,
+        )
+        assert_disk_headroom(output.parent, required_bytes=copy_reservation)
         if staging.exists():
             raise CaptureError(f"RenderDoc staging path already exists: {staging}")
         staging.mkdir(mode=0o755)
@@ -989,10 +1195,16 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
             final_extraction = staging / "extraction.json"
             final_checkpoint = staging / "runtime-checkpoint.json"
             final_log = staging / "capture.log"
+            final_capsule_manifest = staging / "capsule-manifest.json"
+            final_process_status = staging / "process-status.json"
+            final_disk_status = staging / "disk-status.json"
             _copy_regular(capture, final_capture)
             _copy_regular(extraction_path, final_extraction)
             _copy_regular(checkpoint_path, final_checkpoint)
             _copy_regular(combined_log, final_log)
+            _copy_regular(capsule_manifest_path, final_capsule_manifest)
+            _copy_regular(process_status_path, final_process_status)
+            _copy_regular(disk_status_path, final_disk_status)
             manifest = {
                 "schema_version": SCHEMA_VERSION,
                 "status": "valid",
@@ -1007,6 +1219,15 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                     "fingerprint": args.source_fingerprint,
                 },
                 "binary": {"path": str(binary), "sha256": binary_hash},
+                "capsule": {
+                    "capsule_id": capsule.capsule_id,
+                    "logical_locator": capsule.logical_locator,
+                    "manifest_sha256": sha256(capsule_manifest_path),
+                    "build_fingerprint": capsule.build_fingerprint,
+                    "profile": capsule.profile,
+                    "features": capsule.features,
+                    "manifest": _locator(final_capsule_manifest, root=staging),
+                },
                 "tool": {
                     "path": str(tools["renderdoccmd"]),
                     "version": tools["renderdoc_version"],
@@ -1050,8 +1271,11 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                 "extraction": _locator(final_extraction, root=staging),
                 "runtime_checkpoint": _locator(final_checkpoint, root=staging),
                 "log": _locator(final_log, root=staging),
+                "process_status": _locator(final_process_status, root=staging),
+                "disk_status": _locator(final_disk_status, root=staging),
                 "fixture": runtime["fixture"],
                 "unexpected_log_lines": 0,
+                "replay_digest": replay_digest,
             }
             _write_json_exclusive(staging / "manifest.json", manifest)
             os.replace(staging, output)
@@ -1112,6 +1336,7 @@ def self_test() -> int:
         )
         qrenderdoc.write_text(
             "#!/bin/sh\n"
+            "if [ \"$QT_QPA_PLATFORM\" != offscreen ]; then exit 9; fi\n"
             "if [ \"$1\" = --version ]; then echo 'QRenderDoc v1.99'; exit 0; fi\n"
             "if [ \"$1\" = --help ]; then echo '--python'; exit 0; fi\n"
             "exit 1\n",
@@ -1129,6 +1354,81 @@ def self_test() -> int:
         capture = root / "capture.rdc"
         capture.write_bytes(b"RenderDoc self-test capture")
         capture_hash = sha256(capture)
+        contract = _load_contract(repo, "rtt-light-v1", "current")
+        gpu_signature = {
+            "pipeline_count": 8,
+            "scene_camera_count": 1,
+            "mask_camera_count": 1,
+            "window_camera_count": 1,
+        }
+        runtime_checkpoint = {
+            "schema_version": RUNTIME_CHECKPOINT_SCHEMA_VERSION,
+            "status": "valid",
+            "contract_id": "rtt-light-v1",
+            "stage_id": "current",
+            "generation": 1,
+            "checkpoint": {
+                "name": "indoor-light-fixture-ready-v1",
+                "simulation_tick": 4,
+                "simulation_tick_source": "perf_capture.fixed_update_tick",
+                "settle_frames": 4,
+                "ready_frame_ordinal": 4,
+                "capture_frame": 4,
+                "capture_begin_frame": 12,
+                "capture_end_frame": 12,
+                "render_frame_index": 12,
+                "frame_count_before_capture": 12,
+            },
+            "render_inventory": {"scene_target_count": 1},
+            "render_resources": EXPECTED_RENDER_RESOURCES,
+            "fixture": {"fixture_checksum": "self-test"},
+            "capture_path": str(capture),
+            "requested_renderdoc_api_version": RENDERDOC_API_VERSION,
+            "returned_renderdoc_api_version": "1.7.2",
+            "selector": {
+                "strategy": "wgpu_device_null_window",
+                "device_selector": "wgpu::Device::start_graphics_debugger_capture",
+                "window_selector": "null",
+                "window_count": 1,
+                "primary_window": 1,
+            },
+            "gpu_ready": {
+                "pre_capture": gpu_signature,
+                "post_capture": gpu_signature,
+            },
+            "capture_artifact": {
+                "sha256": capture_hash,
+                "bytes": capture.stat().st_size,
+            },
+        }
+        runtime_path = root / "runtime-checkpoint.json"
+        runtime_path.write_text(json.dumps(runtime_checkpoint), encoding="utf-8")
+        _runtime_checkpoint(runtime_path, contract=contract, capture_path=capture)
+        validate_runtime_checkpoint_v3(
+            runtime_checkpoint,
+            contract=contract,
+            stage_id="current",
+            capture_path=None,
+            rdc_sha256=capture_hash,
+            rdc_bytes=capture.stat().st_size,
+        )
+        relative_runtime_checkpoint = {
+            **runtime_checkpoint,
+            "capture_path": "raw/indoor-light_capture.rdc",
+        }
+        try:
+            validate_runtime_checkpoint_v3(
+                relative_runtime_checkpoint,
+                contract=contract,
+                stage_id="current",
+                capture_path=None,
+                rdc_sha256=capture_hash,
+                rdc_bytes=capture.stat().st_size,
+            )
+        except ValueError:
+            pass
+        else:
+            raise CaptureError("relative runtime capture path was accepted")
         bindings = [
             {
                 "binding_id": "binding-0000001",
@@ -1299,6 +1599,14 @@ def self_test() -> int:
         raise CaptureError("RenderDoc log classifier did not fail closed")
     if unexpected_log_lines("WARNING allowed\n", [r"allowed$"]):
         raise CaptureError("RenderDoc log allowlist did not match exactly")
+    if unexpected_log_lines(
+        "ICU4X data error: No segmentation model for language: ja\n", []
+    ):
+        raise CaptureError("known ICU4X Japanese fallback was not classified")
+    if unexpected_log_lines(
+        "ICU4X data error: No segmentation model for language: ja extra\n", []
+    ) != ["ICU4X data error: No segmentation model for language: ja extra"]:
+        raise CaptureError("near-match ICU4X diagnostic was accepted")
     print("renderdoc_capture self-test: PASS")
     return 0
 
@@ -1314,6 +1622,9 @@ def build_parser() -> argparse.ArgumentParser:
     capture = subparsers.add_parser("capture")
     capture.add_argument("--repo", required=True)
     capture.add_argument("--binary", required=True)
+    capture.add_argument("--capsule-manifest", required=True)
+    capture.add_argument("--mode", choices=("formal", "rd0"), default="formal")
+    capture.add_argument("--capture-session")
     capture.add_argument("--output", required=True)
     capture.add_argument("--environment-lock", required=True)
     capture.add_argument("--contract", required=True)

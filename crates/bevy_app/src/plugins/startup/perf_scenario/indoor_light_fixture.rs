@@ -52,7 +52,7 @@ pub(super) const FIXTURE_ID: &str = "indoor-light-grid-v1";
 pub(super) const CONTRACT_SHA256: &str =
     "121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11";
 pub(super) const FIXTURE_SHA256: &str =
-    "a82e4d8b0a9d3962877f8b43f047ed424189ae257a21428ebb50cac851a9b1df";
+    "a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed";
 pub(super) const SMALL_LAYOUT_SHA256: &str =
     "e87a3b1aeb7ee1fbe334d311ad731bef24ce90ec80066af1e35c006ef4273af2";
 pub(super) const MEDIUM_LAYOUT_SHA256: &str =

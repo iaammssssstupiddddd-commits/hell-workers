@@ -18,7 +18,9 @@ pub use perf_scenario::{
     PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
 };
 #[cfg(feature = "profiling")]
-pub(crate) use perf_scenario::{is_fixed_step_behavior, is_not_fixed_step_audit};
+pub(crate) use perf_scenario::{
+    does_not_require_precheckpoint_fixture_spawn, is_fixed_step_behavior, is_not_fixed_step_audit,
+};
 pub use rtt_composite::RttCompositeSprite;
 pub(crate) use rtt_composite::composite_logical_size;
 pub use rtt_setup::{
@@ -122,6 +124,7 @@ impl Plugin for StartupPlugin {
         #[cfg(feature = "profiling")]
         {
             perf_render_environment::install(app);
+            #[cfg(feature = "profiling-renderdoc")]
             perf_scenario::install_renderdoc_capture(app);
             app.init_resource::<PerfScenarioApplied>()
                 .init_resource::<perf_scenario::PerfScenarioDriverState>()
@@ -157,7 +160,7 @@ impl Plugin for StartupPlugin {
                         crate::entities::familiar::familiar_spawning_system,
                     )
                         .in_set(PerfScenarioSet::FixtureSpawn)
-                        .run_if(perf_scenario::is_fixed_step_scenario),
+                        .run_if(perf_scenario::requires_precheckpoint_fixture_spawn),
                 )
                 .add_systems(
                     Update,
@@ -214,52 +217,52 @@ impl Plugin for StartupPlugin {
                         .in_set(PerfScenarioSet::InitialCheckpoint)
                         .run_if(perf_scenario::is_not_fixed_step_behavior)
                         .run_if(perf_scenario::is_not_renderdoc_capture),
-                )
-                .add_systems(
-                    Update,
-                    perf_scenario::arm_renderdoc_checkpoint_system
-                        .in_set(PerfScenarioSet::InitialCheckpoint),
-                )
-                .add_systems(
-                    Update,
-                    (
-                        perf_scenario::drive_perf_workload_system,
-                        perf_scenario::drive_deconstruction_perf_workload_system,
-                    )
-                        .in_set(PerfScenarioSet::Driver),
-                )
-                .add_systems(
-                    Update,
-                    perf_scenario::drive_perf_behavior_system
-                        .in_set(PerfScenarioSet::Driver)
-                        .run_if(is_fixed_step_behavior),
-                )
-                .add_systems(
-                    Update,
-                    (
-                        perf_scenario::drive_perf_capture_system,
-                        perf_scenario::drive_save_transaction_capture_system,
-                    )
-                        .in_set(PerfScenarioSet::Capture)
-                        .run_if(perf_scenario::is_not_fixed_step_behavior)
-                        .run_if(perf_scenario::is_not_renderdoc_capture),
-                )
-                .add_systems(
-                    Update,
-                    perf_scenario::poll_renderdoc_capture_system
-                        .in_set(PerfScenarioSet::Capture),
-                )
-                .add_systems(
-                    Update,
-                    perf_scenario::observe_perf_behavior_system
-                        .in_set(PerfScenarioSet::Capture)
-                        .run_if(is_fixed_step_behavior),
-                )
-                .add_systems(
-                    FixedUpdate,
-                    perf_scenario::count_perf_behavior_fixed_tick_system
-                        .run_if(is_fixed_step_behavior),
                 );
+            #[cfg(feature = "profiling-renderdoc")]
+            app.add_systems(
+                Update,
+                perf_scenario::arm_renderdoc_checkpoint_system
+                    .in_set(PerfScenarioSet::InitialCheckpoint),
+            );
+            app.add_systems(
+                Update,
+                (
+                    perf_scenario::drive_perf_workload_system,
+                    perf_scenario::drive_deconstruction_perf_workload_system,
+                )
+                    .in_set(PerfScenarioSet::Driver),
+            )
+            .add_systems(
+                Update,
+                perf_scenario::drive_perf_behavior_system
+                    .in_set(PerfScenarioSet::Driver)
+                    .run_if(is_fixed_step_behavior),
+            )
+            .add_systems(
+                Update,
+                (
+                    perf_scenario::drive_perf_capture_system,
+                    perf_scenario::drive_save_transaction_capture_system,
+                )
+                    .in_set(PerfScenarioSet::Capture)
+                    .run_if(perf_scenario::is_not_fixed_step_behavior)
+                    .run_if(perf_scenario::is_not_renderdoc_capture),
+            );
+            #[cfg(feature = "profiling-renderdoc")]
+            app.add_systems(
+                Update,
+                perf_scenario::poll_renderdoc_capture_system.in_set(PerfScenarioSet::Capture),
+            );
+            app.add_systems(
+                Update,
+                perf_scenario::observe_perf_behavior_system
+                    .in_set(PerfScenarioSet::Capture)
+                    .run_if(is_fixed_step_behavior),
+            )
+            .add_systems(
+                FixedUpdate,
+                perf_scenario::count_perf_behavior_fixed_tick_system.run_if(is_fixed_step_behavior),
+            );
         }
     }
 }

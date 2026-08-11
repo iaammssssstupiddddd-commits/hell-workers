@@ -21,6 +21,8 @@ except ModuleNotFoundError:
 
 ActivityMode = Literal["shared", "exclusive"]
 ACTIVITY_LOCK_NAME = ".cargo-activity.lock"
+ACTIVITY_LOCK_FD_ENV = "HELL_WORKERS_ACTIVITY_LOCK_FD"
+ACTIVITY_LOCK_MODE_ENV = "HELL_WORKERS_ACTIVITY_LOCK_MODE"
 
 
 class ActivityBusyError(RuntimeError):
@@ -52,9 +54,13 @@ class ActivityLease:
     mode: ActivityMode
     fd: int
     lock_path: Path
+    borrowed: bool = False
 
     def close(self) -> None:
         if self.fd < 0:
+            return
+        if self.borrowed:
+            self.fd = -1
             return
         try:
             if fcntl is not None:
@@ -76,6 +82,46 @@ def acquire_activity(repo: Path, mode: ActivityMode) -> ActivityLease:
     if mode not in {"shared", "exclusive"}:
         raise ValueError(f"invalid Cargo activity mode: {mode!r}")
     lock_path = activity_lock_path(repo)
+    inherited_fd_value = os.environ.get(ACTIVITY_LOCK_FD_ENV)
+    inherited_mode = os.environ.get(ACTIVITY_LOCK_MODE_ENV)
+    if inherited_fd_value is not None or inherited_mode is not None:
+        if inherited_mode != "exclusive" or inherited_fd_value is None:
+            raise RuntimeError("inherited Cargo activity lease metadata is invalid")
+        try:
+            inherited_fd = int(inherited_fd_value)
+            inherited_stats = os.fstat(inherited_fd)
+            lock_stats = lock_path.stat()
+        except (OSError, ValueError) as error:
+            raise RuntimeError("inherited Cargo activity lease fd is invalid") from error
+        if (
+            inherited_stats.st_dev != lock_stats.st_dev
+            or inherited_stats.st_ino != lock_stats.st_ino
+        ):
+            raise RuntimeError(
+                "inherited Cargo activity lease fd refers to a different lock"
+            )
+        probe_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            assert fcntl is not None
+            try:
+                fcntl.flock(probe_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as error:
+                if not (
+                    isinstance(error, BlockingIOError)
+                    or error.errno in {errno.EACCES, errno.EAGAIN}
+                ):
+                    raise
+            else:
+                fcntl.flock(probe_fd, fcntl.LOCK_UN)
+                raise RuntimeError("inherited Cargo activity lease is not locked")
+        finally:
+            os.close(probe_fd)
+        return ActivityLease(
+            mode="exclusive",
+            fd=inherited_fd,
+            lock_path=lock_path,
+            borrowed=True,
+        )
     fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     flags = fcntl.LOCK_SH if mode == "shared" else fcntl.LOCK_EX
     try:
@@ -92,3 +138,31 @@ def acquire_activity(repo: Path, mode: ActivityMode) -> ActivityLease:
             ) from error
         raise
     return ActivityLease(mode, fd, lock_path)
+
+
+def activity_lease_environment(
+    lease: ActivityLease, environment: dict[str, str] | None = None
+) -> dict[str, str]:
+    """Return an environment that can borrow an owned exclusive lease."""
+    if lease.fd < 0 or lease.mode != "exclusive":
+        raise RuntimeError("only an active exclusive Cargo lease can be inherited")
+    inherited = dict(os.environ if environment is None else environment)
+    inherited[ACTIVITY_LOCK_FD_ENV] = str(lease.fd)
+    inherited[ACTIVITY_LOCK_MODE_ENV] = lease.mode
+    return inherited
+
+
+def activity_pass_fds(environment: dict[str, str]) -> tuple[int, ...]:
+    """Resolve the exact lock descriptor a child process is allowed to inherit."""
+    value = environment.get(ACTIVITY_LOCK_FD_ENV)
+    mode = environment.get(ACTIVITY_LOCK_MODE_ENV)
+    if value is None and mode is None:
+        return ()
+    if value is None or mode != "exclusive":
+        raise RuntimeError("Cargo activity lease subprocess metadata is invalid")
+    try:
+        fd = int(value)
+        os.fstat(fd)
+    except (OSError, ValueError) as error:
+        raise RuntimeError("Cargo activity lease subprocess fd is invalid") from error
+    return (fd,)

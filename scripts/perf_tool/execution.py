@@ -30,6 +30,15 @@ SOURCE_FINGERPRINT_FILES = {
 }
 SOURCE_FINGERPRINT_PREFIXES = ("crates/", "scripts/perf_tool/")
 SOURCE_FINGERPRINT_ASSET_PREFIX = "assets/"
+MEASUREMENT_HARNESS_FILES = (
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
+    "scripts/build_coordination.py",
+    "scripts/cargo_runtime.py",
+    "scripts/perf_tool/execution.py",
+    "scripts/perf_tool/renderdoc_capture.py",
+    "scripts/perf_tool/renderdoc_foundation.py",
+    "scripts/perf_tool/rtt_light_bundle.py",
+)
 SAVE_TRANSACTION_RUNTIME_ROOT = (REPO_ROOT / "target" / ".save-transaction-runtime").resolve()
 
 def command_output(command: list[str], *, cwd: Path = REPO_ROOT) -> str:
@@ -58,17 +67,34 @@ def tracked_source_paths() -> list[str]:
     return sorted(filter(None, completed.stdout.splitlines()))
 
 
+def subject_file_bytes(relative: str) -> bytes | None:
+    """Read the committed subject copy for a mutable measurement harness file."""
+    completed = subprocess.run(
+        ["git", "show", f"HEAD:{relative}"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+    )
+    return completed.stdout if completed.returncode == 0 else None
+
+
 def source_fingerprint() -> str:
     """Match the native acceptance source boundary exactly.
 
-    Rust/Python sources and build configuration are content-hashed. Assets use
-    size and mtime so large trees remain cheap to sample at every session
-    boundary while still detecting in-session mutation.
+    Hash source and asset contents so an identical detached worktree has the
+    same identity regardless of checkout path or filesystem timestamps.
     """
     digest = hashlib.sha256()
     for relative in tracked_source_paths():
         source = REPO_ROOT / relative
         if not source.is_file():
+            continue
+        subject_bytes = (
+            subject_file_bytes(relative)
+            if relative in MEASUREMENT_HARNESS_FILES
+            else None
+        )
+        if relative in MEASUREMENT_HARNESS_FILES and subject_bytes is None:
             continue
         if relative in SOURCE_FINGERPRINT_FILES or relative.startswith(
             SOURCE_FINGERPRINT_PREFIXES
@@ -76,14 +102,19 @@ def source_fingerprint() -> str:
             digest.update(b"content\0")
             digest.update(relative.encode())
             digest.update(b"\0")
+            if subject_bytes is not None:
+                digest.update(subject_bytes)
+            else:
+                with source.open("rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        digest.update(chunk)
+        elif relative.startswith(SOURCE_FINGERPRINT_ASSET_PREFIX):
+            digest.update(b"content\0")
+            digest.update(relative.encode())
+            digest.update(b"\0")
             with source.open("rb") as handle:
                 for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                     digest.update(chunk)
-        elif relative.startswith(SOURCE_FINGERPRINT_ASSET_PREFIX):
-            stats = source.stat()
-            digest.update(b"asset-stat\0")
-            digest.update(relative.encode())
-            digest.update(f"\0{stats.st_size}\0{stats.st_mtime_ns}\0".encode())
     return digest.hexdigest()
 
 
@@ -134,7 +165,7 @@ def environment_lock_payload(
         raise RuntimeError("environment lock requires validated window and adapter evidence")
     window = validation.window
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "contract_id": contract_id,
         "stage_id": stage_id,
         "subject_commit": manifest["git"]["commit"],
@@ -147,6 +178,8 @@ def environment_lock_payload(
         "effective_present_mode": window["effective_present_mode"],
         "window": {field: window[field] for field in ENVIRONMENT_LOCK_WINDOW_FIELDS},
         "capture_binary_sha256": manifest["binary"]["sha256"],
+        "renderdoc_binary_sha256": None,
+        "memory_binary_sha256": None,
     }
 
 
@@ -199,12 +232,55 @@ def enforce_environment_lock(
         expected = json.loads(lock_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         return [f"cannot read environment lock: {error}"]
-    comparable = dict(observed)
-    if args.instrumentation == "memory":
-        comparable["capture_binary_sha256"] = expected.get("capture_binary_sha256")
+    try:
+        comparable = comparable_environment_lock_payload(
+            observed=observed,
+            expected=expected,
+            instrumentation=args.instrumentation,
+        )
+    except RuntimeError as error:
+        return [str(error)]
     if expected != comparable:
         return ["run environment differs from the generation environment lock"]
     return []
+
+
+def comparable_environment_lock_payload(
+    *,
+    observed: dict[str, Any],
+    expected: dict[str, Any],
+    instrumentation: str,
+) -> dict[str, Any]:
+    """Keep hashes sealed by other legs out of a perf-run environment diff.
+
+    The generation lock survives failed formal attempts.  Capture runs do not
+    produce RenderDoc or Memory hashes, and Memory runs do not produce the
+    Capture hash.  Preserve those already-sealed values while continuing to
+    compare every environment field and the binary owned by the active leg.
+    """
+
+    def sealed_hash(field: str) -> str | None:
+        value = expected.get(field)
+        if value is None:
+            return None
+        if (
+            not isinstance(value, str)
+            or len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+        ):
+            raise RuntimeError(f"generation environment lock has invalid {field}")
+        return value
+
+    comparable = dict(observed)
+    comparable["renderdoc_binary_sha256"] = sealed_hash(
+        "renderdoc_binary_sha256"
+    )
+    comparable["memory_binary_sha256"] = sealed_hash("memory_binary_sha256")
+    if instrumentation == "memory":
+        comparable["capture_binary_sha256"] = sealed_hash(
+            "capture_binary_sha256"
+        )
+    return comparable
 
 
 def git_metadata() -> dict[str, Any]:
@@ -263,6 +339,7 @@ def cargo_features(instrumentation: str) -> str:
         "capture": "profiling",
         "tracy": "profiling-tracy",
         "memory": "profiling-memory",
+        "renderdoc": "profiling-renderdoc",
     }[instrumentation]
 
 

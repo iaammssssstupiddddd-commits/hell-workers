@@ -26,18 +26,30 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from scripts.build_coordination import acquire_activity
+    from scripts.build_coordination import (
+        ACTIVITY_LOCK_FD_ENV,
+        ACTIVITY_LOCK_MODE_ENV,
+        acquire_activity,
+        activity_lease_environment,
+        activity_pass_fds,
+    )
 except ModuleNotFoundError:
     repository_root = Path(__file__).resolve().parents[4]
     sys.path.insert(0, str(repository_root))
-    from scripts.build_coordination import acquire_activity
+    from scripts.build_coordination import (
+        ACTIVITY_LOCK_FD_ENV,
+        ACTIVITY_LOCK_MODE_ENV,
+        acquire_activity,
+        activity_lease_environment,
+        activity_pass_fds,
+    )
 
 
 GIB = 1024**3
 SCHEMA_VERSION = 1
 RUNNING_EXIT_CODE = 2
 MIN_START_MEMORY_GIB = 10
-MIN_RUNTIME_MEMORY_GIB = 8
+MIN_STAGE_START_MEMORY_GIB = 8
 TWO_JOB_MEMORY_GIB = 16
 MIN_WORKSPACE_FREE_GIB = 15
 RESOURCE_POLL_SECONDS = 1.0
@@ -75,6 +87,10 @@ NATIVE_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
     "scripts/build_coordination.py",
     "scripts/cargo_runtime.py",
+    "scripts/perf_tool/execution.py",
+    "scripts/perf_tool/renderdoc_capture.py",
+    "scripts/perf_tool/renderdoc_foundation.py",
+    "scripts/perf_tool/rtt_light_bundle.py",
 )
 DECONSTRUCTION_CHECKS = {"V1", "V2", "V3", "V4", "V5"}
 NOTIFICATION_CHECKS = {"A1", "A2", "A3", "A4", "A5"}
@@ -138,6 +154,8 @@ RTT_LIGHT_STAGE = "current"
 RTT_LIGHT_LEGS = ("audit", "behavior", "capture", "renderdoc", "memory")
 RTT_LIGHT_SOURCE_CHECKPOINTS = (
     "start",
+    "after-renderdoc-build",
+    "after-rd0",
     "after-audit",
     "after-behavior",
     "after-capture",
@@ -158,8 +176,23 @@ def activity_locked(function):
     @wraps(function)
     def wrapped(args: argparse.Namespace) -> int:
         repo = Path(args.repo).resolve()
-        with acquire_activity(repo, "exclusive"):
-            return function(args)
+        with acquire_activity(repo, "exclusive") as lease:
+            inherited = activity_lease_environment(lease)
+            previous_fd = os.environ.get(ACTIVITY_LOCK_FD_ENV)
+            previous_mode = os.environ.get(ACTIVITY_LOCK_MODE_ENV)
+            os.environ[ACTIVITY_LOCK_FD_ENV] = inherited[ACTIVITY_LOCK_FD_ENV]
+            os.environ[ACTIVITY_LOCK_MODE_ENV] = inherited[ACTIVITY_LOCK_MODE_ENV]
+            try:
+                return function(args)
+            finally:
+                for name, previous in (
+                    (ACTIVITY_LOCK_FD_ENV, previous_fd),
+                    (ACTIVITY_LOCK_MODE_ENV, previous_mode),
+                ):
+                    if previous is None:
+                        os.environ.pop(name, None)
+                    else:
+                        os.environ[name] = previous
 
     return wrapped
 
@@ -307,27 +340,54 @@ def memory_safety_failures(
     return failures
 
 
-def runtime_resource_failure() -> tuple[str, dict[str, float | None]] | None:
-    """Return live evidence when a launched native stage must stop safely."""
+def stage_start_resource_gate(stage: str) -> dict[str, Any]:
+    """Return structured admission evidence before a stage launches."""
     try:
         snapshot = memory_snapshot()
     except AcceptanceError as error:
-        return f"native runtime resource monitoring failed: {error}", {}
+        raise AcceptanceError(
+            f"stage {stage} start resource probe failed: {error}"
+        ) from error
     failures = memory_safety_failures(
         snapshot,
-        minimum_memory_gib=MIN_RUNTIME_MEMORY_GIB,
-        phase="runtime",
+        minimum_memory_gib=MIN_STAGE_START_MEMORY_GIB,
+        phase="stage start",
     )
-    if not failures:
-        return None
-    return (
-        "; ".join(failures),
-        {
-            "mem_available_gib": optional_gib(snapshot["mem_available_bytes"]),
-            "swap_total_gib": optional_gib(snapshot["swap_total_bytes"]),
-            "swap_free_gib": optional_gib(snapshot["swap_free_bytes"]),
-        },
-    )
+    evidence = {
+        "at": utc_now(),
+        "stage": stage,
+        "status": "ready" if not failures else "blocked",
+        "mem_available_gib": optional_gib(snapshot["mem_available_bytes"]),
+        "swap_total_gib": optional_gib(snapshot["swap_total_bytes"]),
+        "swap_free_gib": optional_gib(snapshot["swap_free_bytes"]),
+        "minimum_mem_available_gib": MIN_STAGE_START_MEMORY_GIB,
+        "failures": failures,
+    }
+    return evidence
+
+
+def admit_stage_start(
+    stage: str,
+    *,
+    state: dict[str, Any],
+    job_file: Path,
+) -> None:
+    """Persist the stage-start snapshot and fail before spawning when blocked."""
+    try:
+        evidence = stage_start_resource_gate(stage)
+    except AcceptanceError as error:
+        evidence = {
+            "at": utc_now(),
+            "stage": stage,
+            "status": "blocked",
+            "reason": str(error),
+        }
+    state.setdefault("stage_start_resource_events", []).append(evidence)
+    update_state(job_file, state, child_pid=None)
+    if evidence["status"] != "ready":
+        failures = evidence.get("failures")
+        reason = "; ".join(failures) if isinstance(failures, list) else evidence["reason"]
+        raise AcceptanceError(f"stage {stage} not started: {reason}")
 
 
 def decode_mount_path(value: str) -> str:
@@ -503,7 +563,7 @@ def legacy_tmp_cargo_targets(tmp_root: Path = TMP_ROOT) -> list[dict[str, Any]]:
     for candidate in sorted(tmp_root.glob(TMP_CARGO_TARGET_GLOB)):
         if candidate.is_symlink() or not candidate.is_dir():
             continue
-        profiles = ("debug", "profiling", "release")
+        profiles = ("debug", "profiling", "profiling-renderdoc", "release")
         has_profile_lock = any(
             (candidate / profile / ".cargo-lock").is_file()
             for profile in profiles
@@ -640,7 +700,7 @@ def resource_snapshot(repo: Path, *, require_launcher: bool) -> dict[str, Any]:
         "launcher": launcher,
         "thresholds_gib": {
             "native_start_mem_available": MIN_START_MEMORY_GIB,
-            "native_runtime_mem_available": MIN_RUNTIME_MEMORY_GIB,
+            "native_stage_start_mem_available": MIN_STAGE_START_MEMORY_GIB,
             "cargo_target_free": MIN_WORKSPACE_FREE_GIB,
         },
     }
@@ -673,18 +733,34 @@ def source_fingerprint(repo: Path) -> str:
         source = repo / relative
         if not source.is_file():
             continue
+        subject_bytes: bytes | None = None
+        if relative in NATIVE_HARNESS_FILES:
+            completed = subprocess.run(
+                ["git", "show", f"HEAD:{relative}"],
+                cwd=repo,
+                check=False,
+                capture_output=True,
+            )
+            if completed.returncode != 0:
+                continue
+            subject_bytes = completed.stdout
         if relative in SOURCE_FILES or relative.startswith(SOURCE_PREFIXES):
+            digest.update(b"content\0")
+            digest.update(relative.encode())
+            digest.update(b"\0")
+            if subject_bytes is not None:
+                digest.update(subject_bytes)
+            else:
+                with source.open("rb") as handle:
+                    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                        digest.update(chunk)
+        elif relative.startswith(ASSET_PREFIX):
             digest.update(b"content\0")
             digest.update(relative.encode())
             digest.update(b"\0")
             with source.open("rb") as handle:
                 for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                     digest.update(chunk)
-        elif relative.startswith(ASSET_PREFIX):
-            stats = source.stat()
-            digest.update(b"asset-stat\0")
-            digest.update(relative.encode())
-            digest.update(f"\0{stats.st_size}\0{stats.st_mtime_ns}\0".encode())
     return digest.hexdigest()
 
 
@@ -692,7 +768,12 @@ def native_harness_fingerprint(repo: Path) -> str:
     """Hash C2 orchestration separately from the product build boundary."""
     digest = hashlib.sha256()
     for relative in NATIVE_HARNESS_FILES:
-        source = repo / relative
+        source = (
+            Path(__file__).resolve()
+            if relative
+            == ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py"
+            else repo / relative
+        )
         require(
             source.is_file() and not source.is_symlink(),
             f"native acceptance harness file is unavailable: {relative}",
@@ -729,11 +810,21 @@ def git_subject(repo: Path) -> str:
     return commit
 
 
-def git_dirty_paths(repo: Path) -> list[str]:
+def git_dirty_paths(
+    repo: Path, *, allowed_paths: tuple[str, ...] = ()
+) -> list[str]:
     output = command_output(
         ["git", "status", "--porcelain=v1", "--untracked-files=all"], repo=repo
     )
-    return output.splitlines() if output else []
+    dirty: list[str] = []
+    for entry in output.splitlines() if output else []:
+        fields = entry.split(maxsplit=1)
+        path = fields[1] if len(fields) == 2 else entry
+        paths = path.split(" -> ", 1) if " -> " in path else [path]
+        if paths and all(candidate in allowed_paths for candidate in paths):
+            continue
+        dirty.append(entry)
+    return dirty
 
 
 def assert_clean_subject(repo: Path, expected_commit: str) -> None:
@@ -742,7 +833,7 @@ def assert_clean_subject(repo: Path, expected_commit: str) -> None:
         raise AcceptanceError(
             f"subject commit changed: expected {expected_commit}, got {actual_commit}"
         )
-    dirty = git_dirty_paths(repo)
+    dirty = git_dirty_paths(repo, allowed_paths=NATIVE_HARNESS_FILES)
     if dirty:
         preview = ", ".join(dirty[:8])
         raise AcceptanceError(f"formal RtT-light subject is dirty: {preview}")
@@ -824,7 +915,12 @@ def rtt_light_attempt_path(
 
 
 def source_checkpoint(
-    repo: Path, *, checkpoint: str, subject_commit: str, fingerprint: str
+    repo: Path,
+    *,
+    checkpoint: str,
+    subject_commit: str,
+    fingerprint: str,
+    harness_fingerprint: str,
 ) -> dict[str, Any]:
     if checkpoint not in RTT_LIGHT_SOURCE_CHECKPOINTS:
         raise AcceptanceError(f"unknown RtT-light source checkpoint {checkpoint}")
@@ -834,6 +930,7 @@ def source_checkpoint(
         raise AcceptanceError(
             f"source fingerprint changed at {checkpoint}: expected {fingerprint}, got {actual}"
         )
+    assert_native_harness_unchanged(repo, harness_fingerprint)
     return {
         "checkpoint": checkpoint,
         "commit": subject_commit,
@@ -979,15 +1076,26 @@ def executable(value: str | None, label: str) -> Path:
     return path
 
 
-def renderdoc_version(path: Path) -> str:
+def renderdoc_probe_environment(*, headless_qt: bool) -> dict[str, str]:
+    environment = os.environ.copy()
+    if headless_qt:
+        environment["QT_QPA_PLATFORM"] = "offscreen"
+    return environment
+
+
+def renderdoc_version(path: Path, *, headless_qt: bool = False) -> str:
     failures: list[str] = []
-    for arguments in (("version",), ("--version",)):
+    argument_options = (
+        (("--version",),) if headless_qt else (("version",), ("--version",))
+    )
+    for arguments in argument_options:
         completed = subprocess.run(
             [str(path), *arguments],
             check=False,
             capture_output=True,
             text=True,
             timeout=30,
+            env=renderdoc_probe_environment(headless_qt=headless_qt),
         )
         output = (completed.stdout or completed.stderr).strip()
         if completed.returncode == 0 and output:
@@ -1027,7 +1135,7 @@ def inspect_renderdoc_tools(
             if not path.is_file():
                 raise AcceptanceError(f"{label} is missing: {path}")
         version = renderdoc_version(renderdoccmd)
-        qversion = renderdoc_version(qrenderdoc)
+        qversion = renderdoc_version(qrenderdoc, headless_qt=True)
         probe = subprocess.run(
             [
                 "python3",
@@ -1045,6 +1153,7 @@ def inspect_renderdoc_tools(
             capture_output=True,
             text=True,
             timeout=60,
+            env=renderdoc_probe_environment(headless_qt=True),
         )
         if probe.returncode != 0:
             raise AcceptanceError(
@@ -1231,6 +1340,17 @@ def rtt_light_session_commands(
     }
     if formal:
         commands["behavior"] = behavior
+        commands["build-renderdoc"] = [
+            "cargo",
+            "build",
+            "--profile",
+            "profiling-renderdoc",
+            "-p",
+            "bevy_app@0.1.0",
+            "--no-default-features",
+            "--features",
+            "profiling-renderdoc",
+        ]
     return commands
 
 
@@ -1566,6 +1686,7 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
     contract = rtt_light_contract(repo)
     subject_commit = git_subject(repo)
     fingerprint = source_fingerprint(repo)
+    harness_fingerprint = native_harness_fingerprint(repo)
     attempt_id = args.attempt_id or str(uuid.uuid4())
     state_root = (
         Path(args.job_root).resolve()
@@ -1645,6 +1766,8 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
         subject_commit,
         "--source-fingerprint",
         fingerprint,
+        "--harness-fingerprint",
+        harness_fingerprint,
         "--adapter",
         args.adapter,
         "--window-backend",
@@ -1681,6 +1804,7 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
         "level": args.level,
         "subject_commit": subject_commit,
         "source_fingerprint": fingerprint,
+        "harness_fingerprint": harness_fingerprint,
         "attempt_id": attempt_id,
         "output_root": str(output_root),
         "state_root": str(state_root),
@@ -1708,11 +1832,11 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
                 if args.level == "formal"
                 else ["audit", "capture", "memory"]
             ),
-            "game_processes": 64 if args.level == "formal" else 51,
+            "game_processes": 65 if args.level == "formal" else 51,
             "parallel_game_processes": 1,
-            "actual_feature_builds": 2,
+            "actual_feature_builds": 3 if args.level == "formal" else 2,
             "uses_skip_build": False,
-            "uses_binary_copy": False,
+            "uses_binary_copy": args.level == "formal",
             "automatic_cleanup": False,
             "repository_lock_covers_registration": args.level == "formal",
             "settle_secs": RTT_LIGHT_SETTLE_SECS,
@@ -1803,6 +1927,7 @@ def run_command(
 ) -> None:
     state.setdefault("commands", []).append({"stage": stage, "argv": command})
     update_state(job_file, state, current_stage=stage)
+    admit_stage_start(stage, state=state, job_file=job_file)
     with log_path.open("a", encoding="utf-8") as log:
         log.write(f"\n[{utc_now()}] stage={stage}\n")
         log.write(json.dumps(command) + "\n")
@@ -1815,6 +1940,7 @@ def run_command(
             stderr=subprocess.STDOUT,
             text=True,
             start_new_session=True,
+            pass_fds=activity_pass_fds(env),
         )
         try:
             update_state(job_file, state, child_pid=process.pid)
@@ -1824,27 +1950,6 @@ def run_command(
                 else None
             )
             while process.poll() is None:
-                runtime_failure = runtime_resource_failure()
-                if runtime_failure is not None:
-                    reason, evidence = runtime_failure
-                    event = {
-                        "at": utc_now(),
-                        "stage": stage,
-                        "child_pid": process.pid,
-                        "reason": reason,
-                        **evidence,
-                    }
-                    state.setdefault("resource_guard_events", []).append(event)
-                    update_state(job_file, state, child_pid=process.pid)
-                    log.write(
-                        f"[{event['at']}] resource guard stopped stage={stage}: {reason}\n"
-                    )
-                    log.flush()
-                    stop_command_process(process)
-                    update_state(job_file, state, child_pid=None)
-                    raise AcceptanceError(
-                        f"stage {stage} stopped to preserve host resources: {reason}"
-                    )
                 if deadline is not None and time.monotonic() >= deadline:
                     stop_command_process(process)
                     update_state(job_file, state, child_pid=None)
@@ -2151,6 +2256,7 @@ def run_command_with_save_capture(
 ) -> None:
     state.setdefault("commands", []).append({"stage": stage, "argv": command})
     update_state(job_file, state, current_stage=stage)
+    admit_stage_start(stage, state=state, job_file=job_file)
     with log_path.open("a", encoding="utf-8") as log:
         log.write(f"\n[{utc_now()}] stage={stage}\n")
         log.write(json.dumps(command) + "\n")
@@ -2163,6 +2269,7 @@ def run_command_with_save_capture(
             stderr=subprocess.STDOUT,
             text=True,
             start_new_session=True,
+            pass_fds=activity_pass_fds(env),
         )
         try:
             update_state(job_file, state, child_pid=process.pid)
@@ -2172,27 +2279,6 @@ def run_command_with_save_capture(
                 else None
             )
             while process.poll() is None:
-                runtime_failure = runtime_resource_failure()
-                if runtime_failure is not None:
-                    reason, evidence = runtime_failure
-                    event = {
-                        "at": utc_now(),
-                        "stage": stage,
-                        "child_pid": process.pid,
-                        "reason": reason,
-                        **evidence,
-                    }
-                    state.setdefault("resource_guard_events", []).append(event)
-                    update_state(job_file, state, child_pid=process.pid)
-                    log.write(
-                        f"[{event['at']}] resource guard stopped stage={stage}: {reason}\n"
-                    )
-                    log.flush()
-                    stop_command_process(process)
-                    update_state(job_file, state, child_pid=None)
-                    raise AcceptanceError(
-                        f"stage {stage} stopped to preserve host resources: {reason}"
-                    )
                 try:
                     maybe_complete_save_catalog_capture(
                         artifact, run_id, screenshot_path, root_pid=process.pid
@@ -2288,6 +2374,21 @@ def session_binary_hash(session: Path) -> str:
     return value
 
 
+def update_environment_lock_hashes(
+    path: Path, *, renderdoc_binary_sha256: str | None = None, memory_binary_sha256: str | None = None
+) -> None:
+    lock = read_json(path)
+    if lock.get("schema_version", 1) < 2:
+        lock["schema_version"] = 2
+        lock.setdefault("renderdoc_binary_sha256", None)
+        lock.setdefault("memory_binary_sha256", None)
+    if renderdoc_binary_sha256 is not None:
+        lock["renderdoc_binary_sha256"] = renderdoc_binary_sha256
+    if memory_binary_sha256 is not None:
+        lock["memory_binary_sha256"] = memory_binary_sha256
+    atomic_write_json(path, lock)
+
+
 def renderdoc_capture_command(
     *,
     repo: Path,
@@ -2298,19 +2399,26 @@ def renderdoc_capture_command(
     adapter: str,
     window_backend: str,
     tooling: dict[str, Any],
+    binary: Path,
+    capsule_manifest: Path,
+    output: Path | None = None,
+    mode: str = "formal",
+    capture_session: Path | None = None,
 ) -> list[str]:
     paths = tooling["paths"]
     job = tooling["job"]
-    return [
+    command = [
         "python3",
         paths["capture_helper"],
         "capture",
         "--repo",
         str(repo),
         "--binary",
-        str(repo / "target/profiling/bevy_app"),
+        str(binary),
+        "--capsule-manifest",
+        str(capsule_manifest),
         "--output",
-        str(attempt / "renderdoc"),
+        str(output or attempt / "renderdoc"),
         "--environment-lock",
         str(environment_lock),
         "--contract",
@@ -2335,7 +2443,12 @@ def renderdoc_capture_command(
         job["renderdoc_version"],
         "--qrenderdoc-version",
         job["qrenderdoc_version"],
+        "--mode",
+        mode,
     ]
+    if capture_session is not None:
+        command.extend(["--capture-session", str(capture_session)])
+    return command
 
 
 def verify_rtt_light_smoke(
@@ -2523,6 +2636,29 @@ def verify_rtt_light_prerequisites(
     }
 
 
+def verify_formal_renderdoc_continuity(
+    *,
+    rd0_manifest: dict[str, Any],
+    formal_manifest: dict[str, Any],
+    binary_sha256: str,
+) -> None:
+    """Verify the properties that must remain identical from RD0 to formal.
+
+    ``replay_digest`` proves that two replays of the *same* RDC produce the
+    same normalized evidence.  RenderDoc event numbering and descriptor
+    enumeration may legitimately differ between separately captured RDCs, so
+    their replay digests are not a cross-capture identity.  Both capture modes
+    independently validate the exact RtT topology; continuity between them is
+    therefore the sealed profiling binary capsule.
+    """
+    if formal_manifest.get("binary", {}).get("sha256") != binary_sha256:
+        raise AcceptanceError("RenderDoc did not use the profiling-renderdoc binary")
+    if not isinstance(formal_manifest.get("replay_digest"), str):
+        raise AcceptanceError("formal RenderDoc did not complete double replay")
+    if formal_manifest.get("capsule") != rd0_manifest.get("capsule"):
+        raise AcceptanceError("formal RenderDoc capsule differs from RD0")
+
+
 @activity_locked
 def run_rtt_light(args: argparse.Namespace) -> int:
     if os.environ.get("HW_NATIVE_ACCEPTANCE_LAUNCHED") != "1":
@@ -2537,6 +2673,9 @@ def run_rtt_light(args: argparse.Namespace) -> int:
     fingerprint = source_fingerprint(repo)
     if fingerprint != args.source_fingerprint:
         raise AcceptanceError("planned RtT-light source fingerprint changed before launch")
+    harness_fingerprint = native_harness_fingerprint(repo)
+    if harness_fingerprint != args.harness_fingerprint:
+        raise AcceptanceError("planned RtT-light harness fingerprint changed before launch")
     state_root = Path(args.state_root).resolve()
     require_persistent_storage(state_root, label="RtT-light state root")
     if state_root.exists():
@@ -2571,6 +2710,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
         "attempt_id": args.attempt_id,
         "subject_commit": subject_commit,
         "source_fingerprint": fingerprint,
+        "harness_fingerprint": harness_fingerprint,
         "completed_stages": [],
         "execution_contract": {
             "settle_secs": RTT_LIGHT_SETTLE_SECS,
@@ -2661,6 +2801,10 @@ def run_rtt_light(args: argparse.Namespace) -> int:
             attempt.mkdir(parents=True)
             log_path = attempt / "orchestrator.log"
             source_checks: list[dict[str, Any]] = []
+            capsule_root: Path | None = None
+            renderdoc_binary: Path | None = None
+            renderdoc_hash: str | None = None
+            rd0_manifest: dict[str, Any] | None = None
             if formal:
                 source_checks.append(
                     source_checkpoint(
@@ -2668,6 +2812,126 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                         checkpoint="start",
                         subject_commit=subject_commit,
                         fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
+                    )
+                )
+                if tooling is None:
+                    raise AcceptanceError("formal RenderDoc tooling disappeared")
+                run_command(
+                    "build-renderdoc",
+                    commands["build-renderdoc"],
+                    repo=repo,
+                    env=env,
+                    log_path=log_path,
+                    job_file=state_file,
+                    state=state,
+                )
+                sys.path.insert(0, str(repo / "scripts"))
+                from perf_tool.renderdoc_foundation import (
+                    FORMAL_RENDERDOC_OUTER_DEADLINE_SECONDS,
+                    RD0_OUTER_DEADLINE_SECONDS,
+                    copy_binary_capsule,
+                    foundation_diagnostic_root,
+                    verify_capsule_hash,
+                )
+
+                foundation_root = foundation_diagnostic_root(repo)
+                capsule_root = foundation_root / "capsule/renderdoc"
+                rustc = subprocess.run(
+                    ["rustc", "--version"],
+                    cwd=repo,
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                capsule = copy_binary_capsule(
+                    source_binary=repo / "target/profiling-renderdoc/bevy_app",
+                    capsule_root=capsule_root,
+                    leg="renderdoc",
+                    profile="profiling-renderdoc",
+                    features="profiling-renderdoc",
+                    cargo_lock_path=repo / "Cargo.lock",
+                    rustc_version=rustc,
+                    linker=env.get("RUSTFLAGS", "workspace-default"),
+                    env_allowlist={
+                        key: env[key]
+                        for key in ("CARGO_BUILD_JOBS", "CARGO_INCREMENTAL")
+                        if key in env
+                    },
+                )
+                sealed = verify_capsule_hash(capsule_root)
+                if sealed != capsule:
+                    raise AcceptanceError(
+                        "RenderDoc capsule changed immediately after sealing"
+                    )
+                renderdoc_binary = capsule_root / "bevy_app"
+                renderdoc_hash = capsule.binary_sha256
+                source_checks.append(
+                    source_checkpoint(
+                        repo,
+                        checkpoint="after-renderdoc-build",
+                        subject_commit=subject_commit,
+                        fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
+                    )
+                )
+                s1_state = read_json(Path(args.s1_job_root).resolve() / "job.json")
+                s1_paths = s1_state.get("paths", {})
+                s1_attempt = Path(s1_paths.get("attempt", "")).resolve()
+                s1_environment_lock = Path(
+                    s1_paths.get("environment_lock", "")
+                ).resolve()
+                rd0_root = foundation_root / "rd0"
+                rd0_environment_lock = rd0_root / "environment-lock.json"
+                atomic_write_json(
+                    rd0_environment_lock, read_json(s1_environment_lock)
+                )
+                update_environment_lock_hashes(
+                    rd0_environment_lock,
+                    renderdoc_binary_sha256=renderdoc_hash,
+                )
+                rd0_output = rd0_root / "renderdoc"
+                run_command(
+                    "renderdoc-rd0",
+                    renderdoc_capture_command(
+                        repo=repo,
+                        attempt=attempt,
+                        environment_lock=rd0_environment_lock,
+                        subject_commit=subject_commit,
+                        fingerprint=fingerprint,
+                        adapter=args.adapter,
+                        window_backend=args.window_backend,
+                        tooling=tooling,
+                        binary=renderdoc_binary,
+                        capsule_manifest=capsule_root / "capsule-manifest.json",
+                        output=rd0_output,
+                        mode="rd0",
+                        capture_session=s1_attempt / "capture/manifest.json",
+                    ),
+                    repo=repo,
+                    env=env,
+                    log_path=log_path,
+                    job_file=state_file,
+                    state=state,
+                    timeout_seconds=RD0_OUTER_DEADLINE_SECONDS,
+                )
+                rd0_manifest = read_json(rd0_output / "manifest.json")
+                if (
+                    rd0_manifest.get("binary", {}).get("sha256") != renderdoc_hash
+                    or not isinstance(rd0_manifest.get("replay_digest"), str)
+                ):
+                    raise AcceptanceError(
+                        "RD0 did not seal the RenderDoc capsule and double replay"
+                    )
+                verify_capsule_hash(capsule_root)
+                source_checks.append(
+                    source_checkpoint(
+                        repo,
+                        checkpoint="after-rd0",
+                        subject_commit=subject_commit,
+                        fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
                     )
                 )
 
@@ -2689,6 +2953,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                         checkpoint="after-audit",
                         subject_commit=subject_commit,
                         fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
                     )
                 )
                 run_command(
@@ -2708,6 +2973,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                         checkpoint="after-behavior",
                         subject_commit=subject_commit,
                         fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
                     )
                 )
                 settle(
@@ -2743,10 +3009,22 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                         checkpoint="after-capture",
                         subject_commit=subject_commit,
                         fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
                     )
                 )
-                if tooling is None:
-                    raise AcceptanceError("formal RenderDoc tooling disappeared")
+                if (
+                    tooling is None
+                    or capsule_root is None
+                    or renderdoc_binary is None
+                    or renderdoc_hash is None
+                    or rd0_manifest is None
+                ):
+                    raise AcceptanceError(
+                        "RenderDoc capsule and RD0 were not sealed before Capture"
+                    )
+                update_environment_lock_hashes(
+                    environment_lock, renderdoc_binary_sha256=renderdoc_hash
+                )
                 run_command(
                     "renderdoc",
                     renderdoc_capture_command(
@@ -2758,22 +3036,31 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                         adapter=args.adapter,
                         window_backend=args.window_backend,
                         tooling=tooling,
+                        binary=renderdoc_binary,
+                        capsule_manifest=capsule_root / "capsule-manifest.json",
+                        capture_session=attempt / "capture/manifest.json",
                     ),
                     repo=repo,
                     env=env,
                     log_path=log_path,
                     job_file=state_file,
                     state=state,
+                    timeout_seconds=FORMAL_RENDERDOC_OUTER_DEADLINE_SECONDS,
                 )
                 renderdoc_manifest = read_json(attempt / "renderdoc/manifest.json")
-                if renderdoc_manifest.get("binary", {}).get("sha256") != capture_hash:
-                    raise AcceptanceError("RenderDoc did not use the Capture binary")
+                verify_formal_renderdoc_continuity(
+                    rd0_manifest=rd0_manifest,
+                    formal_manifest=renderdoc_manifest,
+                    binary_sha256=renderdoc_hash,
+                )
+                verify_capsule_hash(capsule_root)
                 source_checks.append(
                     source_checkpoint(
                         repo,
                         checkpoint="after-renderdoc",
                         subject_commit=subject_commit,
                         fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
                     )
                 )
                 settle(
@@ -2802,6 +3089,10 @@ def run_rtt_light(args: argparse.Namespace) -> int:
             memory_hash = manifest_binary_hash(attempt / "memory", repo)
             if memory_hash == capture_hash:
                 raise AcceptanceError("Capture and Memory binary hashes match")
+            if formal:
+                update_environment_lock_hashes(
+                    environment_lock, memory_binary_sha256=memory_hash
+                )
             assert_source_unchanged(repo, fingerprint)
 
             if not formal:
@@ -2829,6 +3120,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                     checkpoint="after-memory",
                     subject_commit=subject_commit,
                     fingerprint=fingerprint,
+                    harness_fingerprint=harness_fingerprint,
                 )
             )
             source_checks.append(
@@ -2837,6 +3129,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                     checkpoint="before-registration",
                     subject_commit=subject_commit,
                     fingerprint=fingerprint,
+                    harness_fingerprint=harness_fingerprint,
                 )
             )
             refreshed_tooling, failures = inspect_renderdoc_tools(repo, args)
@@ -5730,6 +6023,7 @@ def self_test() -> int:
     repo = Path(__file__).resolve().parents[4]
     sys.path.insert(0, str(repo / "scripts"))
     from perf_tool import execution as perf_execution
+    from perf_tool import rtt_light_bundle as perf_bundle
 
     require(
         parse_linux_proc_stat_ppid("42 (game worker) S 7 1 1 0") == 7,
@@ -5760,9 +6054,142 @@ def self_test() -> int:
         "native and perf source fingerprint boundaries differ",
     )
     require(
+        NATIVE_HARNESS_FILES == perf_execution.MEASUREMENT_HARNESS_FILES,
+        "native and perf measurement harness boundaries differ",
+    )
+    require(
         source_fingerprint(repo) == perf_execution.source_fingerprint(),
         "native and perf source fingerprints differ",
     )
+    require(
+        perf_bundle.measurement_harness_dirty_paths_only(
+            [
+                "M .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
+                " M scripts/perf_tool/execution.py",
+                "?? scripts/perf_tool/renderdoc_foundation.py",
+            ]
+        ),
+        "formal bundle rejected exact measurement harness dirty paths",
+    )
+    for rejected_dirty_paths in (
+        [" M crates/bevy_app/src/main.rs"],
+        ["R  old.py -> scripts/perf_tool/execution.py"],
+        ["INVALID scripts/perf_tool/execution.py"],
+    ):
+        require(
+            not perf_bundle.measurement_harness_dirty_paths_only(
+                rejected_dirty_paths
+            ),
+            "formal bundle accepted a dirty path outside the harness boundary",
+        )
+    capture_hash = "1" * 64
+    renderdoc_hash = "2" * 64
+    memory_hash = "3" * 64
+    observed_lock = {
+        "schema_version": 2,
+        "capture_binary_sha256": capture_hash,
+        "renderdoc_binary_sha256": None,
+        "memory_binary_sha256": None,
+    }
+    sealed_lock = {
+        **observed_lock,
+        "renderdoc_binary_sha256": renderdoc_hash,
+        "memory_binary_sha256": memory_hash,
+    }
+    require(
+        perf_execution.comparable_environment_lock_payload(
+            observed=observed_lock,
+            expected=sealed_lock,
+            instrumentation="capture",
+        )
+        == sealed_lock,
+        "Capture retry did not preserve hashes sealed by later formal legs",
+    )
+    changed_capture = {
+        **observed_lock,
+        "capture_binary_sha256": "4" * 64,
+    }
+    require(
+        perf_execution.comparable_environment_lock_payload(
+            observed=changed_capture,
+            expected=sealed_lock,
+            instrumentation="capture",
+        )
+        != sealed_lock,
+        "Capture retry ignored a changed Capture binary",
+    )
+    memory_observation = {
+        **observed_lock,
+        "capture_binary_sha256": memory_hash,
+    }
+    require(
+        perf_execution.comparable_environment_lock_payload(
+            observed=memory_observation,
+            expected=sealed_lock,
+            instrumentation="memory",
+        )
+        == sealed_lock,
+        "Memory retry did not preserve generation binary ownership",
+    )
+    try:
+        perf_execution.comparable_environment_lock_payload(
+            observed=observed_lock,
+            expected={**sealed_lock, "renderdoc_binary_sha256": "invalid"},
+            instrumentation="capture",
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AcceptanceError("invalid sealed environment hash was accepted")
+    renderdoc_binary_hash = "a" * 64
+    renderdoc_capsule = {
+        "capsule_id": "b" * 64,
+        "manifest_sha256": "c" * 64,
+    }
+    rd0_manifest = {
+        "binary": {"sha256": renderdoc_binary_hash},
+        "capsule": renderdoc_capsule,
+        "replay_digest": "d" * 64,
+    }
+    formal_manifest = {
+        "binary": {"sha256": renderdoc_binary_hash},
+        "capsule": renderdoc_capsule.copy(),
+        "replay_digest": "e" * 64,
+    }
+    verify_formal_renderdoc_continuity(
+        rd0_manifest=rd0_manifest,
+        formal_manifest=formal_manifest,
+        binary_sha256=renderdoc_binary_hash,
+    )
+    for invalid_manifest, expected_error in (
+        (
+            {**formal_manifest, "capsule": {"capsule_id": "f" * 64}},
+            "formal RenderDoc capsule differs from RD0",
+        ),
+        (
+            {**formal_manifest, "replay_digest": None},
+            "formal RenderDoc did not complete double replay",
+        ),
+        (
+            {**formal_manifest, "binary": {"sha256": "0" * 64}},
+            "RenderDoc did not use the profiling-renderdoc binary",
+        ),
+    ):
+        try:
+            verify_formal_renderdoc_continuity(
+                rd0_manifest=rd0_manifest,
+                formal_manifest=invalid_manifest,
+                binary_sha256=renderdoc_binary_hash,
+            )
+        except AcceptanceError as error:
+            require(
+                str(error) == expected_error,
+                "formal RenderDoc continuity rejected with the wrong reason",
+            )
+        else:
+            raise AcceptanceError(
+                "formal RenderDoc continuity accepted invalid evidence"
+            )
     temporary_root = workspace_process_temp_dir(repo)
     temporary_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
@@ -5774,6 +6201,19 @@ def self_test() -> int:
         tmp_root = root / "tmp"
         workspace.mkdir()
         tmp_root.mkdir()
+        qrenderdoc_probe = root / "qrenderdoc-probe"
+        qrenderdoc_probe.write_text(
+            "#!/bin/sh\n"
+            "if [ \"$QT_QPA_PLATFORM\" != offscreen ]; then exit 9; fi\n"
+            "echo 'QRenderDoc v1.99'\n",
+            encoding="utf-8",
+        )
+        qrenderdoc_probe.chmod(0o755)
+        require(
+            renderdoc_version(qrenderdoc_probe, headless_qt=True)
+            == "QRenderDoc v1.99",
+            "static qrenderdoc probe did not force the offscreen Qt platform",
+        )
         capture_ack_artifact = root / "capture-ack-artifact"
         capture_ack_artifact.mkdir()
         capture_ack_screenshot = capture_ack_artifact / SAVE_CATALOG_SCREENSHOT
@@ -5938,8 +6378,8 @@ def self_test() -> int:
             ),
             "depleted swap blocked a native start despite healthy RAM",
         )
-        low_runtime_memory = {
-            "mem_available_bytes": (MIN_RUNTIME_MEMORY_GIB - 1) * GIB,
+        low_stage_start_memory = {
+            "mem_available_bytes": (MIN_STAGE_START_MEMORY_GIB - 1) * GIB,
             "swap_total_bytes": 0,
             "swap_free_bytes": 0,
         }
@@ -5947,12 +6387,12 @@ def self_test() -> int:
             any(
                 "MemAvailable" in failure
                 for failure in memory_safety_failures(
-                    low_runtime_memory,
-                    minimum_memory_gib=MIN_RUNTIME_MEMORY_GIB,
-                    phase="runtime",
+                    low_stage_start_memory,
+                    minimum_memory_gib=MIN_STAGE_START_MEMORY_GIB,
+                    phase="stage start",
                 )
             ),
-            "low runtime memory did not block a native stage",
+            "low memory did not block native stage admission",
         )
         unknown_swap = {
             "mem_available_bytes": 12 * GIB,
@@ -5970,56 +6410,59 @@ def self_test() -> int:
         original_meminfo_bytes = meminfo_bytes
         try:
             globals()["meminfo_bytes"] = lambda: {}
-            unavailable_monitor = runtime_resource_failure()
+            try:
+                stage_start_resource_gate("unavailable-probe-self-test")
+            except AcceptanceError as error:
+                unavailable_probe_error = str(error)
+            else:
+                raise AcceptanceError("unavailable stage-start probe did not fail closed")
         finally:
             globals()["meminfo_bytes"] = original_meminfo_bytes
         require(
-            unavailable_monitor is not None
-            and "resource monitoring failed" in unavailable_monitor[0],
-            "unavailable runtime resource monitor did not fail closed",
+            "start resource probe failed" in unavailable_probe_error,
+            "unavailable stage-start resource probe returned the wrong failure",
         )
 
-        resource_guard_job = root / "resource-guard-job.json"
-        resource_guard_log = root / "resource-guard.log"
-        resource_guard_state: dict[str, Any] = {
+        stage_gate_job = root / "stage-gate-job.json"
+        stage_gate_log = root / "stage-gate.log"
+        stage_gate_marker = root / "stage-gate-command-started"
+        stage_gate_state: dict[str, Any] = {
             "status": "running",
             "completed_stages": [],
         }
-        original_runtime_resource_failure = runtime_resource_failure
+        original_memory_snapshot = memory_snapshot
         try:
-            globals()["runtime_resource_failure"] = lambda: (
-                "forced resource guard failure",
-                {
-                    "mem_available_gib": 7.0,
-                    "swap_total_gib": 8.0,
-                    "swap_free_gib": 0.0,
-                },
-            )
+            globals()["memory_snapshot"] = lambda: low_stage_start_memory
             try:
                 run_command(
-                    "resource-guard-self-test",
-                    [sys.executable, "-c", "import time; time.sleep(60)"],
+                    "stage-start-gate-self-test",
+                    [
+                        sys.executable,
+                        "-c",
+                        f"from pathlib import Path; Path({str(stage_gate_marker)!r}).touch()",
+                    ],
                     repo=workspace,
                     env=guarded_env,
-                    log_path=resource_guard_log,
-                    job_file=resource_guard_job,
-                    state=resource_guard_state,
+                    log_path=stage_gate_log,
+                    job_file=stage_gate_job,
+                    state=stage_gate_state,
                 )
             except AcceptanceError as error:
                 require(
-                    "stopped to preserve host resources" in str(error),
-                    "resource guard returned the wrong failure",
+                    "not started" in str(error),
+                    "stage-start gate returned the wrong failure",
                 )
             else:
-                raise AcceptanceError("resource guard did not stop its stage")
+                raise AcceptanceError("stage-start gate launched a rejected stage")
         finally:
-            globals()["runtime_resource_failure"] = original_runtime_resource_failure
-        resource_guard_events = resource_guard_state.get("resource_guard_events", [])
+            globals()["memory_snapshot"] = original_memory_snapshot
+        stage_gate_events = stage_gate_state.get("stage_start_resource_events", [])
         require(
-            len(resource_guard_events) == 1
-            and resource_guard_state.get("child_pid") is None
-            and not process_group_exists(resource_guard_events[0]["child_pid"]),
-            "resource guard left a stage process behind",
+            len(stage_gate_events) == 1
+            and stage_gate_events[0]["status"] == "blocked"
+            and stage_gate_state.get("child_pid") is None
+            and not stage_gate_marker.exists(),
+            "stage-start gate launched a child or omitted blocked evidence",
         )
 
         ignore_term_child = (
@@ -6071,12 +6514,23 @@ def self_test() -> int:
             "completed_stages": [],
         }
 
-        def interrupting_monitor() -> tuple[str, dict[str, float | None]] | None:
-            raise KeyboardInterrupt
+        original_update_state = update_state
+        interrupt_raised = False
 
-        original_runtime_resource_failure = runtime_resource_failure
+        def interrupting_update_state(
+            job_file: Path,
+            state: dict[str, Any],
+            **updates: Any,
+        ) -> None:
+            nonlocal interrupt_raised
+            original_update_state(job_file, state, **updates)
+            child_pid = updates.get("child_pid")
+            if isinstance(child_pid, int) and not interrupt_raised:
+                interrupt_raised = True
+                raise KeyboardInterrupt
+
         try:
-            globals()["runtime_resource_failure"] = interrupting_monitor
+            globals()["update_state"] = interrupting_update_state
             try:
                 run_command(
                     "interrupted-command-self-test",
@@ -6092,7 +6546,7 @@ def self_test() -> int:
             else:
                 raise AcceptanceError("interrupted stage did not propagate the interrupt")
         finally:
-            globals()["runtime_resource_failure"] = original_runtime_resource_failure
+            globals()["update_state"] = original_update_state
         interrupted_events = interrupted_state.get("cleanup_events", [])
         require(
             len(interrupted_events) == 1
@@ -6827,6 +7281,7 @@ def add_rtt_light_arguments(
         parser.add_argument("--state-root", required=True)
         parser.add_argument("--subject-commit", required=True)
         parser.add_argument("--source-fingerprint", required=True)
+        parser.add_argument("--harness-fingerprint", required=True)
     else:
         parser.add_argument("--job-root")
 
@@ -6980,6 +7435,8 @@ def validate_args(args: argparse.Namespace) -> None:
                 raise AcceptanceError("planned subject commit is invalid")
             if re.fullmatch(r"[0-9a-f]{64}", args.source_fingerprint) is None:
                 raise AcceptanceError("planned source fingerprint is invalid")
+            if re.fullmatch(r"[0-9a-f]{64}", args.harness_fingerprint) is None:
+                raise AcceptanceError("planned harness fingerprint is invalid")
             if args.level == "formal" and (
                 args.s0_job_root is None or args.s1_job_root is None
             ):

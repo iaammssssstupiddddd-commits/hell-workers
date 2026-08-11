@@ -19,8 +19,7 @@
 single Scene RtT / indoor light migration前のcurrent構成は次である。`startup_systems`の
 `current_rtt_startup_inventory_is_explicit`が実際にstartup / composite spawn systemを実行し、カメラの
 order / active / RenderLayers、RtT image descriptor、DirectionalLight marker / 有効状態、compositeの
-2 texture参照、`LAYER_2D` 2 passを検証する。source-derived値はRenderDoc formal legで照合するまで
-GPU pass実測とは呼ばない。
+2 texture参照、`LAYER_2D` 2 passを検証する。下記inventoryはP00 canonical RenderDoc formal legと照合済みである。
 
 | 項目 | current |
 |---|---:|
@@ -35,14 +34,41 @@ P00のmeasurement contractはfrozenの`rtt-light-v1`である。canonical contra
 `121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`、fixture hashは
 `a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed`である。stage別projection義務と
 gate expected row、resolved window backend / effective present modeの開始・終了検証、formal attempt
-validatorは実装済みである。freeze後の変更は同じv1を編集せず新generationを追加する。formal artifact /
-RenderDoc値はまだ未採取であり、ここへ推定値をbaselineとして追記しない。
+validatorは実装済みである。freeze後の変更は同じv1を編集せず新generationを追加する。
 
-RenderDoc evidence schema v2はこのsource inventoryをGPU replayで厳密化する。composite drawはfragment
+P00 canonical current baselineはsubject `10763a4da6bfbe0b480971fb85c474e6ff7a5f86`、attempt
+`9e813f24-0f7b-47f5-8a8d-e3ff34775370`として登録済みである。Intel Arc / Vulkan / X11、1920×1080、DPI 1.0、
+High、immediate presentを記録し、audit / behavior / Capture / RenderDoc / Memoryの全legをoffline verifierと
+baseline registry verifierで再検証した。raw artifact 884件のdirectory SHA256は
+`a9f4927186fe7c8c5f009583fd645cd7963b6ad36398e9d614fbcbbff1f8a6aa`である。
+
+| case | frame p50 / p95 / p99 (ms) | max RSS (KiB) | allocator peak live (bytes) |
+|---|---:|---:|---:|
+| small / cpu | 14.701 / 21.441 / 24.271 | 1,338,744 | 669,949,156 |
+| small / gpu | 28.567 / 36.939 / 40.385 | 1,519,344 | 687,635,837 |
+| medium / cpu | 17.846 / 24.675 / 27.604 | 1,388,468 | 696,767,330 |
+| medium / gpu | 30.272 / 38.812 / 42.531 | 1,475,668 | 732,618,413 |
+| large / cpu | 23.772 / 30.750 / 34.008 | 1,425,912 | 739,108,778 |
+| large / gpu | 33.679 / 42.488 / 46.635 | 1,527,076 | 801,151,582 |
+
+frame値はCapture leg、RSS / allocator値はMemory legの正本であり、相互に代用しない。P01以降は同じcontract /
+fixture / adapter matrixとstable projectionで比較する。
+
+RenderDoc runtime checkpoint schema v3とextraction schema v2は、このsource inventoryをGPU replayで厳密化する。composite drawはfragment
 descriptor set 2のScene texture / sampler `(1, 2)`、Soul mask texture / sampler `(3, 4)`を同じ1 drawで
 使うことを要求する。抽出はVulkan subpass transitionを正しく分割し、全drawに散らばったsampler数では代用しない。
-この値は`rtt_composite_material.wgsl`とsource contractから得た期待値であり、formal captureを採取するまでは
-実測値ではない。
+canonical formal captureではVulkan 18 render pass、212 draw、516 attachment record、1,996 binding record、
+composite draw 1、Scene target attachment / binding各1、Soul mask target attachment / binding各1を実測した。
+compositeのScene texture / sampler `(1, 2)`、Soul mask texture / sampler `(3, 4)`も同一drawで一致する。raw RDCは
+697,940,813 byte、SHA256は`5b33c53d0f81da746f92136edc1f1fe2143a97db89369a2ad70ba20654823f42`である。
+RenderDoc binary SHA256は`5d0ac3accba20db0d9071ea036a770e1b236884335927121b64f4e873c9efb2f`、App APIは
+requested 1.6.0 / returned 1.7.0、capture / replay processはすべてexit 0かつorphan 0だった。
+
+RenderDoc leg は通常の `profiling` output を使わず、`profiling-renderdoc` feature と同名の専用 Cargo profile
+で build した capsule を使う。専用 profile は `profiling` を継承しつつ debug assertions を有効にし、native build の
+RAM peakを抑えるため LTO を無効化して codegen unit を 16 に固定する。これは `wgpu-hal 29.0.4` が debug assertions
+無効時に RenderDoc bridge を無効化するためであり、Capture / Memory
+の通常性能 profileへこの条件を波及させない。
 
 ---
 

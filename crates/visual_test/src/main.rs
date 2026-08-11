@@ -5,7 +5,7 @@
 //! [Y] で Soul shadow caster の通常配置と A/B 比較配置を切り替える。
 //!
 //! ```bash
-//! CARGO_HOME=/home/satotakumi/.cargo CARGO_TARGET_DIR=target cargo run -p visual_test
+//! python3 scripts/dev.py cargo -- run -p visual_test
 //! ```
 
 pub mod building;
