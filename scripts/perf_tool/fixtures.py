@@ -42,6 +42,8 @@ def write_fixture_run(
     workload: str = "gather",
     size: str = "small",
     seed: int = DEFAULT_SEED,
+    render: str = "cpu",
+    scene_roots: dict[str, str] | None = None,
 ) -> None:
     run_dir = root / "data"
     run_dir.mkdir(parents=True)
@@ -181,7 +183,7 @@ def write_fixture_run(
                 "seed": str(seed),
                 "workload": workload,
                 "size": size,
-                "render": "cpu",
+                "render": render,
                 "dashboard_mode": dashboard_mode,
                 "samples": "1",
                 "p50_ms": "1.0",
@@ -202,7 +204,12 @@ def write_fixture_run(
         with (run_dir / "scene_roots.csv").open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=SCENE_ROOT_COLUMNS)
             writer.writeheader()
-            writer.writerow({column: "0" for column in SCENE_ROOT_COLUMNS})
+            writer.writerow(
+                {
+                    column: (scene_roots or {}).get(column, "0")
+                    for column in SCENE_ROOT_COLUMNS
+                }
+            )
     extra = "2026 WARN unexpected warning\n" if warning else ""
     teardown_extra = "2026 WARN teardown warning\n" if teardown_warning else ""
     (root / "run.log").write_text(
@@ -214,7 +221,7 @@ def write_fixture_run(
             "fixed_warmup_ticks=1920 fixed_audit_ticks=128\n"
             if fixed_step_audit
             else f"PERF_SCENARIO: seed={seed} workload={workload} size={size} souls=50 familiars=4 "
-            "render=cpu clock=realtime behavior_case=none familiar_policy=baseline operation_dialog=hidden "
+            f"render={render} clock=realtime behavior_case=none familiar_policy=baseline operation_dialog=hidden "
             f"dashboard_mode={dashboard_mode}\n"
         )
         + "AdapterInfo { name: \"Test GPU\", driver: \"test\", driver_info: \"test\", backend: Vulkan }\n"
@@ -230,7 +237,7 @@ def write_fixture_run(
 
 
 def write_indoor_light_sidecars(
-    root: Path, case: Case, *, lane: str = "static"
+    root: Path, case: Case, *, lane: str = "static", stage_id: str = "current"
 ) -> None:
     data_dir = root / "data"
     contract = load_rtt_light_contract("rtt-light-v1")
@@ -238,7 +245,7 @@ def write_indoor_light_sidecars(
         contract,
         case,
         contract_id="rtt-light-v1",
-        stage_id="current",
+        stage_id=stage_id,
         lane=lane,
     )
     with (data_dir / "indoor_light_fixture.csv").open(
@@ -265,16 +272,17 @@ def write_render_inventory_fixture(
     root: Path,
     *,
     scene_roots: dict[str, str] | None = None,
+    stage_id: str = "current",
 ) -> None:
     values = {column: "0" for column in RENDER_INVENTORY_COLUMNS}
     values.update(
         {
             "schema_version": RENDER_INVENTORY_SCHEMA_VERSION,
             "scene_target_count": "1",
-            "mask_target_count": "1",
-            "camera_3d_rtt_count": "2",
-            "camera_2d_count": "3",
-            "layer_2d_pass_count": "2",
+            "mask_target_count": "0" if stage_id == "p01" else "1",
+            "camera_3d_rtt_count": "1" if stage_id == "p01" else "2",
+            "camera_2d_count": "1" if stage_id == "p01" else "3",
+            "layer_2d_pass_count": "1" if stage_id == "p01" else "2",
         }
     )
     for column in (
@@ -1372,6 +1380,59 @@ def self_test() -> int:
         assert any(
             "camera_3d_rtt_count differs" in reason
             for reason in invalid_inventory.reasons
+        )
+
+        p01_gpu_root = root / "indoor-realtime-p01-gpu"
+        p01_gpu_case = Case(
+            "indoor-light", "small", "gpu", 20_260_803, None, None
+        )
+        p01_scene_roots = {
+            "soul_proxy_3d": "50",
+            "soul_mask_proxy_3d": "0",
+            "soul_shadow_proxy_3d": "50",
+            "familiar_proxy_3d": "4",
+        }
+        write_fixture_run(
+            p01_gpu_root,
+            workload="indoor-light",
+            size="small",
+            seed=p01_gpu_case.seed,
+            render="gpu",
+            scene_roots=p01_scene_roots,
+            summary_overrides={
+                "initial_souls": "50",
+                "initial_familiars": "4",
+            },
+        )
+        write_indoor_light_sidecars(
+            p01_gpu_root, p01_gpu_case, stage_id="p01"
+        )
+        write_render_inventory_fixture(
+            p01_gpu_root,
+            scene_roots=p01_scene_roots,
+            stage_id="p01",
+        )
+
+        def validate_p01_gpu_fixture(stage_id: str) -> Validation:
+            return validate_run(
+                p01_gpu_root,
+                returncode=0,
+                expected_case=p01_gpu_case,
+                expected_adapter="Test",
+                expected_backend="vulkan",
+                allow_log_patterns=[],
+                expected_contract="rtt-light-v1",
+                expected_stage=stage_id,
+                expected_lane="static",
+            )
+
+        p01_gpu_validation = validate_p01_gpu_fixture("p01")
+        assert p01_gpu_validation.valid, p01_gpu_validation.reasons
+        current_gpu_validation = validate_p01_gpu_fixture("current")
+        assert not current_gpu_validation.valid
+        assert any(
+            "soul_mask_proxy_3d is '0', expected 50 for gpu" in reason
+            for reason in current_gpu_validation.reasons
         )
 
         for behavior_case, expected_rows, expects_save in (

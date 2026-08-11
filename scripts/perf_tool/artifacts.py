@@ -1692,7 +1692,11 @@ def validate_run(
         else:
             expected_counts = {
                 "soul_proxy_3d": 0 if expected_case.render == "cpu" else expected_souls,
-                "soul_mask_proxy_3d": 0 if expected_case.render == "cpu" else expected_souls,
+                "soul_mask_proxy_3d": (
+                    0
+                    if expected_case.render == "cpu" or expected_stage == "p01"
+                    else expected_souls
+                ),
                 "soul_shadow_proxy_3d": 0 if expected_case.render == "cpu" else expected_souls,
                 "familiar_proxy_3d": 0 if expected_case.render == "cpu" else expected_familiars,
             }
