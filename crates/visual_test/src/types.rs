@@ -7,8 +7,8 @@ use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{AlphaMode2d, Material2d};
 use hw_core::constants::{VIEW_HEIGHT, Z_OFFSET};
-use hw_visual::visual3d::{SoulMaskProxy3d, SoulShadowProxy3d};
-use hw_visual::{CharacterMaterial, SoulMaskMaterial, SoulShadowMaterial};
+use hw_visual::visual3d::SoulShadowProxy3d;
+use hw_visual::{CharacterMaterial, SoulShadowMaterial};
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
 
@@ -39,10 +39,10 @@ pub use domain::{
     AppMode, FaceExpression, MotionMode, SoulLayout, TestBuildingKind, TestElev, TestElevDir,
 };
 pub use render::{
-    AnimPlayerQuery, Cam2dQuery, Cam3dSyncQuery, Camera3dRtt, Camera3dSoulMaskTest,
-    LocalRttComposite, LocalRttCompositeMaterial, RttCompositeParams, SoulAnimHandle,
-    SoulBlobShadowProxy3d, SoulLayoutEntities, SoulMaskConfig, SoulShadowConfig, TestAssets,
-    TestMainCamera, TestSoulConfig, VisualTestRttRuntime, face_uv_offset, face_uv_scale,
+    AnimPlayerQuery, Cam2dQuery, Cam3dSyncQuery, Camera3dRtt, LocalRttComposite,
+    LocalRttCompositeMaterial, RttCompositeParams, SoulAnimHandle, SoulBlobShadowProxy3d,
+    SoulLayoutEntities, SoulShadowConfig, TestAssets, TestMainCamera, TestSoulConfig,
+    VisualTestRttRuntime, face_uv_offset, face_uv_scale,
 };
 pub use state::{FaceMode, TestState};
 pub use ui::{

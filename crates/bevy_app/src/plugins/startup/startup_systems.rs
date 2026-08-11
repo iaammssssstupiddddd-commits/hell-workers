@@ -1,7 +1,5 @@
 use super::asset_catalog::create_game_assets;
-use super::rtt_setup::{
-    self, Camera3dRtt, Camera3dSoulMaskRtt, RttDirectionalLight, RttExtraDirectionalLight,
-};
+use super::rtt_setup::{self, Camera3dRtt, RttDirectionalLight, RttExtraDirectionalLight};
 use crate::assets::GameAssets;
 use crate::entities::damned_soul::{DamnedSoulSpawnEvent, spawn_damned_souls};
 use crate::entities::familiar::FamiliarSpawnEvent;
@@ -21,8 +19,8 @@ use bevy::light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::{
-    LAYER_2D, LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_MASK, LAYER_3D_SOUL_SHADOW,
-    LAYER_OVERLAY, VIEW_HEIGHT, Z_OFFSET, topdown_sun_direction_world,
+    LAYER_2D, LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW, LAYER_OVERLAY, VIEW_HEIGHT,
+    Z_OFFSET, topdown_sun_direction_world,
 };
 use hw_core::quality::QualitySettings;
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
@@ -80,7 +78,6 @@ pub(super) fn setup(
     // --- RtT オフスクリーンテクスチャ生成 ---
     let runtime = rtt_setup::initialize_rtt_runtime(q_window.single().ok(), *quality, &mut images);
     let rtt_target = runtime.scene_render_target();
-    let soul_mask_target = runtime.soul_mask_render_target();
     commands.insert_resource(runtime);
 
     // --- Camera2d（既存: メイン描画・スクリーン出力） ---
@@ -193,29 +190,6 @@ pub(super) fn setup(
         RttExtraDirectionalLight,
     ));
 
-    commands.spawn((
-        Camera3d::default(),
-        Camera {
-            order: -2,
-            clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
-            is_active: perf_toggles.soul_mask_enabled,
-            ..default()
-        },
-        Projection::Orthographic(OrthographicProjection {
-            near: -2000.0,
-            far: 2000.0,
-            ..OrthographicProjection::default_3d()
-        }),
-        {
-            let mut transform = Transform::from_translation(Vec3::new(0.0, VIEW_HEIGHT, Z_OFFSET));
-            transform.rotation = ElevationDirection::TopDown.camera_rotation();
-            transform
-        },
-        soul_mask_target,
-        RenderLayers::layer(LAYER_3D_SOUL_MASK),
-        Camera3dSoulMaskRtt,
-    ));
-
     // --- asset catalog 生成 ---
     let game_assets = create_game_assets(&asset_server, &mut images);
     commands.insert_resource(game_assets);
@@ -288,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn current_rtt_startup_inventory_is_explicit() {
+    fn p01_scene_only_rtt_startup_inventory_is_explicit() {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, AssetPlugin::default()))
             .init_asset::<Image>()
@@ -335,10 +309,6 @@ mod tests {
             .query_filtered::<Entity, With<Camera3dRtt>>()
             .iter(world)
             .count();
-        let mask_rtt_count = world
-            .query_filtered::<Entity, With<Camera3dSoulMaskRtt>>()
-            .iter(world)
-            .count();
         let directional_count = world
             .query_filtered::<Entity, With<DirectionalLight>>()
             .iter(world)
@@ -349,11 +319,10 @@ mod tests {
             .count();
 
         assert_eq!(camera_2d_count, 3);
-        assert_eq!(camera_3d_count, 2);
+        assert_eq!(camera_3d_count, 1);
         assert_eq!(main_camera_count, 1);
         assert_eq!(foreground_camera_count, 1);
         assert_eq!(main_rtt_count, 1);
-        assert_eq!(mask_rtt_count, 1);
         assert_eq!(directional_count, 2);
         assert_eq!(composite_count, 1);
 
@@ -391,17 +360,12 @@ mod tests {
             .count();
         assert_eq!(layer_2d_pass_count, 2);
 
-        let (viewport, scene, soul_mask) = {
+        let (viewport, scene) = {
             let runtime = world.resource::<rtt_setup::RttRuntime>();
-            (
-                runtime.viewport,
-                runtime.scene.clone(),
-                runtime.soul_mask.clone(),
-            )
+            (runtime.viewport, runtime.scene.clone())
         };
         assert_eq!(viewport.width, 1920);
         assert_eq!(viewport.height, 1080);
-        assert_ne!(scene, soul_mask);
 
         let mut main_target_query =
             world.query_filtered::<(&Camera, &RenderLayers, &RenderTarget), With<Camera3dRtt>>();
@@ -414,18 +378,6 @@ mod tests {
         assert!(main_camera.is_active);
         assert_eq!(*main_layers, RenderLayers::layer(LAYER_3D));
         assert_eq!(main_target.handle, scene);
-
-        let mut mask_target_query = world
-            .query_filtered::<(&Camera, &RenderLayers, &RenderTarget), With<Camera3dSoulMaskRtt>>();
-        let (mask_camera, mask_layers, RenderTarget::Image(mask_target)) =
-            mask_target_query.single(world).unwrap()
-        else {
-            panic!("mask RtT camera must target an image");
-        };
-        assert_eq!(mask_camera.order, -2);
-        assert!(mask_camera.is_active);
-        assert_eq!(*mask_layers, RenderLayers::layer(LAYER_3D_SOUL_MASK));
-        assert_eq!(mask_target.handle, soul_mask);
 
         let expected_light_layers =
             RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]);
@@ -458,16 +410,13 @@ mod tests {
             .get(&material_handle)
             .unwrap();
         assert_eq!(material.scene_texture, scene);
-        assert_eq!(material.soul_mask_texture, soul_mask);
 
         let images = world.resource::<Assets<Image>>();
-        for handle in [&scene, &soul_mask] {
-            let image = images.get(handle).unwrap();
-            assert_eq!(image.texture_descriptor.size.width, 1920);
-            assert_eq!(image.texture_descriptor.size.height, 1080);
-            assert_eq!(image.texture_descriptor.size.depth_or_array_layers, 1);
-            assert_eq!(image.texture_descriptor.format, TextureFormat::Rgba8Unorm);
-            assert_eq!(image.data.as_ref().map(Vec::len), Some(8_294_400));
-        }
+        let image = images.get(&scene).unwrap();
+        assert_eq!(image.texture_descriptor.size.width, 1920);
+        assert_eq!(image.texture_descriptor.size.height, 1080);
+        assert_eq!(image.texture_descriptor.size.depth_or_array_layers, 1);
+        assert_eq!(image.texture_descriptor.format, TextureFormat::Rgba8Unorm);
+        assert_eq!(image.data.as_ref().map(Vec::len), Some(8_294_400));
     }
 }

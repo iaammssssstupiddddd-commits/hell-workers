@@ -23,7 +23,7 @@ python3 scripts/dev.py cargo -- run -p visual_test
 | ワールド上での建築物配置 | ゲーム本体と同一のゴーストプレビュー + クリック配置方式 |
 | 建築物 2D/3D 表示 | 2D スプライト + 3D メッシュの重ね描画を本番環境と同じ条件で確認 |
 | 影・ライト | DirectionalLight + CascadeShadowConfig による影をゲーム本体と同条件で検証 |
-| RtT パイプライン | scene Camera3d + Soul mask Camera3d → 2枚のオフスクリーンテクスチャ → composite sprite の描画経路 |
+| RtT パイプライン | scene Camera3d → 単一オフスクリーンテクスチャ → composite sprite の描画経路 |
 
 ## 操作
 
@@ -119,17 +119,16 @@ python3 scripts/dev.py cargo -- run -p visual_test
 | `hud.rs` | パネル表示制御・ボタン状態更新・動的テキスト更新 |
 | `input.rs` | キーボード入力ハンドラ（Soul モード / Build モード）|
 
-### カメラ 4 pass構造
+### カメラ 3 pass構造
 
 ```
 Camera3dRtt          (LAYER_3D,             order=-2) → scene RtT
-Camera3dSoulMaskTest (LAYER_3D_SOUL_MASK,   order=-1) → silhouette mask RtT
 TestMainCamera       (LAYER_2D,             order= 0) ← PanCamera（パン・ズーム）
 Overlay Camera2d     (LAYER_OVERLAY,        order= 1) ← composite sprite + UI
 ```
 
-`sync_test_camera3d` が毎フレーム TestMainCamera のTransform/scaleと矢視方向を2台のCamera3dへ反映する。
-2 枚の RtT は Window の物理解像度で生成し、各 `ImageRenderTarget.scale_factor` に Window の scale factor を設定する。これにより高 DPI 環境でも RtT Camera3d の論理 viewport と TestMainCamera が一致する。resize または DPI 変更時は scene / Soul mask texture と target、composite material を同時に再生成・再 bind する。`PanCamera` の Q/E 回転はゲーム本体と同様に無効で、表示方向は V の矢視プリセットだけが変更する。
+`sync_test_camera3d` が毎フレーム TestMainCamera のTransform/scaleと矢視方向を1台のCamera3dへ反映する。
+Scene RtT は Window の物理解像度で生成し、`ImageRenderTarget.scale_factor` に Window の scale factor を設定する。これにより高 DPI 環境でも RtT Camera3d の論理 viewport と TestMainCamera が一致する。resize または DPI 変更時はScene texture、camera target、composite materialを同時に再生成・再bindする。`PanCamera` の Q/E 回転はゲーム本体と同様に無効で、表示方向は V の矢視プリセットだけが変更する。
 
 ### ゴーストプレビュー（建築物配置）
 

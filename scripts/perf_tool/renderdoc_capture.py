@@ -59,7 +59,7 @@ MEASUREMENT_HARNESS_FILES = (
 )
 RENDERDOC_API_VERSION = "1.6.0"
 
-EXPECTED_RENDER_RESOURCES = {
+CURRENT_RENDER_RESOURCES = {
     "scene_target_label": "hell-workers-rtt-scene",
     "mask_target_label": "hell-workers-rtt-soul-mask",
     "composite_draw_count": 1,
@@ -89,6 +89,32 @@ EXPECTED_RENDER_RESOURCES = {
             "fixed_bind_number": 4,
         },
     ],
+}
+
+P01_RENDER_RESOURCES = {
+    "scene_target_label": "hell-workers-rtt-scene",
+    "mask_target_label": None,
+    "composite_draw_count": 1,
+    "composite_texture_bindings": [
+        {
+            "target": "scene_target",
+            "stage": "fragment",
+            "fixed_bind_set_or_space": 2,
+            "fixed_bind_number": 1,
+        },
+    ],
+    "composite_sampler_bindings": [
+        {
+            "stage": "fragment",
+            "fixed_bind_set_or_space": 2,
+            "fixed_bind_number": 2,
+        },
+    ],
+}
+
+EXPECTED_RENDER_RESOURCES_BY_STAGE = {
+    "current": CURRENT_RENDER_RESOURCES,
+    "p01": P01_RENDER_RESOURCES,
 }
 
 
@@ -387,8 +413,11 @@ def _assert_clean_source(repo: Path, commit: str, fingerprint: str) -> None:
 
 def _load_contract(repo: Path, contract_id: str, stage: str) -> dict[str, Any]:
     contract = read_json(repo / CONTRACT_FILE)
-    if contract.get("contract_id") != contract_id or stage != "current":
-        raise CaptureError("RenderDoc capture identity differs from rtt-light-v1/current")
+    if (
+        contract.get("contract_id") != contract_id
+        or stage not in EXPECTED_RENDER_RESOURCES_BY_STAGE
+    ):
+        raise CaptureError("RenderDoc capture identity differs from rtt-light-v1/current|p01")
     if contract.get("lifecycle") != {
         "status": "frozen",
         "formal_registration_allowed": True,
@@ -416,6 +445,7 @@ def _validate_environment_lock(
     adapter_filter: str,
     window_backend: str,
     binary_sha256: str,
+    stage: str,
 ) -> None:
     expected_keys = {
         "schema_version",
@@ -439,7 +469,7 @@ def _validate_environment_lock(
     matrix = contract["formal_matrix"]
     if (
         lock["contract_id"] != contract["contract_id"]
-        or lock["stage_id"] != "current"
+        or lock["stage_id"] != stage
         or lock["subject_commit"] != commit
         or lock["source_fingerprint"] != fingerprint
         or lock["resolved_window_backend"] != window_backend
@@ -472,8 +502,8 @@ def _validate_environment_lock(
         "rtt_quality": window["rtt_quality"],
         "scene_target_width": str(window["scene_target_width"]),
         "scene_target_height": str(window["scene_target_height"]),
-        "mask_target_width": str(window["scene_target_width"]),
-        "mask_target_height": str(window["scene_target_height"]),
+        "mask_target_width": str(window["scene_target_width"] if stage == "current" else 0),
+        "mask_target_height": str(window["scene_target_height"] if stage == "current" else 0),
         "target_scale_factor": f"{window['scale_factor']:.6f}",
     }
     if lock["window"] != expected_window:
@@ -500,7 +530,7 @@ def unexpected_log_lines(text: str, allow_patterns: Iterable[str]) -> list[str]:
     return classify_renderdoc_log_lines(text, allow_patterns)[1]
 
 
-def _validate_render_resources(value: Any) -> dict[str, Any]:
+def _validate_render_resources(value: Any, *, stage_id: str) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != {
         "scene_target_label",
         "mask_target_label",
@@ -509,7 +539,10 @@ def _validate_render_resources(value: Any) -> dict[str, Any]:
         "composite_sampler_bindings",
     }:
         raise CaptureError("runtime RenderDoc resources differ from schema v2")
-    for label in (value["scene_target_label"], value["mask_target_label"]):
+    for key in ("scene_target_label", "mask_target_label"):
+        label = value[key]
+        if key == "mask_target_label" and label is None:
+            continue
         if not isinstance(label, str) or not label:
             raise CaptureError("runtime RenderDoc target label is invalid")
     if (
@@ -531,7 +564,7 @@ def _validate_render_resources(value: Any) -> dict[str, Any]:
         rows = value[key]
         if (
             not isinstance(rows, list)
-            or len(rows) != 2
+            or not rows
             or any(not isinstance(row, dict) or set(row) != expected_keys for row in rows)
         ):
             raise CaptureError(f"runtime RenderDoc {key} differs from schema v2")
@@ -551,20 +584,22 @@ def _validate_render_resources(value: Any) -> dict[str, Any]:
                 not isinstance(row["target"], str) or not row["target"]
             ):
                 raise CaptureError("runtime RenderDoc texture target is invalid")
-    if value != EXPECTED_RENDER_RESOURCES:
-        raise CaptureError("runtime RenderDoc composite bindings differ from the current source")
+    if value != EXPECTED_RENDER_RESOURCES_BY_STAGE.get(stage_id):
+        raise CaptureError(
+            f"runtime RenderDoc composite bindings differ from the {stage_id} source contract"
+        )
     return value
 
 
 def _runtime_checkpoint(
-    path: Path, *, contract: dict[str, Any], capture_path: Path
+    path: Path, *, contract: dict[str, Any], stage: str, capture_path: Path
 ) -> dict[str, Any]:
     value = read_json(path)
     try:
         validate_runtime_checkpoint_v3(
             value,
             contract=contract,
-            stage_id="current",
+            stage_id=stage,
             capture_path=capture_path,
             rdc_sha256=sha256(capture_path),
             rdc_bytes=capture_path.stat().st_size,
@@ -574,7 +609,7 @@ def _runtime_checkpoint(
     for label in ("render_inventory", "render_resources", "fixture"):
         if not isinstance(value[label], dict) or not value[label]:
             raise CaptureError(f"runtime checkpoint {label} evidence is empty")
-    _validate_render_resources(value["render_resources"])
+    _validate_render_resources(value["render_resources"], stage_id=stage)
     return value
 
 
@@ -821,13 +856,16 @@ def _validate_extraction(path: Path, *, capture_hash: str, runtime: dict[str, An
         ):
             raise CaptureError("RenderDoc binding row is invalid")
     tracked = value["tracked_resources"]
-    if not isinstance(tracked, dict) or set(tracked) != {"scene_target", "mask_target"}:
-        raise CaptureError("RenderDoc extraction tracked resources are invalid")
-    render_resources = _validate_render_resources(runtime.get("render_resources"))
+    render_resources = _validate_render_resources(
+        runtime.get("render_resources"), stage_id=runtime.get("stage_id")
+    )
     expected_labels = {
-        "scene_target": render_resources["scene_target_label"],
-        "mask_target": render_resources["mask_target_label"],
+        key.removesuffix("_label"): label
+        for key, label in render_resources.items()
+        if key.endswith("_target_label") and label is not None
     }
+    if not isinstance(tracked, dict) or set(tracked) != set(expected_labels):
+        raise CaptureError("RenderDoc extraction tracked resources are invalid")
     for key, label in expected_labels.items():
         resource = tracked.get(key)
         if (
@@ -852,11 +890,12 @@ def _validate_extraction(path: Path, *, capture_hash: str, runtime: dict[str, An
         "composite_draw_count",
         "composite_texture_binding_count",
         "composite_sampler_binding_count",
-        "scene_target_attachment_count",
-        "scene_target_binding_count",
-        "mask_target_attachment_count",
-        "mask_target_binding_count",
     }
+    expected_structure_keys.update(
+        f"{key}_{kind}_count"
+        for key in expected_labels
+        for kind in ("attachment", "binding")
+    )
     if (
         not isinstance(structure, dict)
         or set(structure) != expected_structure_keys
@@ -869,16 +908,18 @@ def _validate_extraction(path: Path, *, capture_hash: str, runtime: dict[str, An
         or structure["binding_count"] != len(bindings)
         or structure["render_pass_count"] < 2
         or structure["composite_draw_count"] != 1
-        or structure["composite_texture_binding_count"] != 2
-        or structure["composite_sampler_binding_count"] != 2
+        or structure["composite_texture_binding_count"]
+        != len(render_resources["composite_texture_bindings"])
+        or structure["composite_sampler_binding_count"]
+        != len(render_resources["composite_sampler_bindings"])
         or any(
             structure[f"{key}_{kind}_count"] < 1
-            for key in ("scene_target", "mask_target")
+            for key in expected_labels
             for kind in ("attachment", "binding")
         )
         or composite_draw["event_id"] <= 0
     ):
-        raise CaptureError("RenderDoc replay structure does not prove current RtT topology")
+        raise CaptureError("RenderDoc replay structure does not prove stage RtT topology")
 
 
 def _capture_command(
@@ -889,6 +930,7 @@ def _capture_command(
     runtime_dir: Path,
     capture_template: Path,
     contract: dict[str, Any],
+    stage: str,
 ) -> list[str]:
     matrix = contract["formal_matrix"]
     window = matrix["window"]
@@ -923,7 +965,7 @@ def _capture_command(
         "--perf-contract",
         contract["contract_id"],
         "--perf-stage",
-        "current",
+        stage,
         "--perf-lane",
         "static",
         "--perf-window-width",
@@ -990,6 +1032,7 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
         adapter_filter=args.adapter,
         window_backend=args.window_backend,
         binary_sha256=binary_hash,
+        stage=args.stage,
     )
     capture_session = (
         Path(args.capture_session).resolve()
@@ -1051,6 +1094,7 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
             runtime_dir=runtime_dir,
             capture_template=capture_template,
             contract=contract,
+            stage=args.stage,
         )
         with combined_log.open("xb") as log_handle:
             completed = run_with_deadline(
@@ -1081,7 +1125,7 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
         capture = captures[0].resolve()
         checkpoint_path = runtime_dir / "renderdoc-checkpoint.json"
         runtime = _runtime_checkpoint(
-            checkpoint_path, contract=contract, capture_path=capture
+            checkpoint_path, contract=contract, stage=args.stage, capture_path=capture
         )
         extraction_path = work / "extraction.json"
         extraction_failure_path = work / "extraction-failure.json"
@@ -1380,7 +1424,7 @@ def self_test() -> int:
                 "frame_count_before_capture": 12,
             },
             "render_inventory": {"scene_target_count": 1},
-            "render_resources": EXPECTED_RENDER_RESOURCES,
+            "render_resources": CURRENT_RENDER_RESOURCES,
             "fixture": {"fixture_checksum": "self-test"},
             "capture_path": str(capture),
             "requested_renderdoc_api_version": RENDERDOC_API_VERSION,
@@ -1403,7 +1447,9 @@ def self_test() -> int:
         }
         runtime_path = root / "runtime-checkpoint.json"
         runtime_path.write_text(json.dumps(runtime_checkpoint), encoding="utf-8")
-        _runtime_checkpoint(runtime_path, contract=contract, capture_path=capture)
+        _runtime_checkpoint(
+            runtime_path, contract=contract, stage="current", capture_path=capture
+        )
         validate_runtime_checkpoint_v3(
             runtime_checkpoint,
             contract=contract,
@@ -1411,6 +1457,21 @@ def self_test() -> int:
             capture_path=None,
             rdc_sha256=capture_hash,
             rdc_bytes=capture.stat().st_size,
+        )
+        p01_signature = {**gpu_signature, "mask_camera_count": 0}
+        p01_checkpoint = {
+            **runtime_checkpoint,
+            "stage_id": "p01",
+            "render_resources": P01_RENDER_RESOURCES,
+            "gpu_ready": {
+                "pre_capture": p01_signature,
+                "post_capture": p01_signature,
+            },
+        }
+        p01_runtime_path = root / "p01-runtime-checkpoint.json"
+        p01_runtime_path.write_text(json.dumps(p01_checkpoint), encoding="utf-8")
+        _runtime_checkpoint(
+            p01_runtime_path, contract=contract, stage="p01", capture_path=capture
         )
         relative_runtime_checkpoint = {
             **runtime_checkpoint,
@@ -1577,7 +1638,7 @@ def self_test() -> int:
         _validate_extraction(
             extraction_path,
             capture_hash=capture_hash,
-            runtime={"render_resources": EXPECTED_RENDER_RESOURCES},
+            runtime={"stage_id": "current", "render_resources": CURRENT_RENDER_RESOURCES},
         )
         invalid_extraction = json.loads(json.dumps(extraction))
         invalid_extraction["composite_topology"]["draws"][0]["sampler_bindings"][1][
@@ -1589,7 +1650,7 @@ def self_test() -> int:
             _validate_extraction(
                 invalid_path,
                 capture_hash=capture_hash,
-                runtime={"render_resources": EXPECTED_RENDER_RESOURCES},
+                runtime={"stage_id": "current", "render_resources": CURRENT_RENDER_RESOURCES},
             )
         except CaptureError:
             pass

@@ -18,7 +18,7 @@
 //! `PanCamera` は `MainCamera` だけ更新するため、このカメラへ **毎フレーム `Transform` と
 //! `Camera::is_active` をコピー**しないと、木・資源・Familiar 等がパン・ズームと連動しない。
 
-use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt};
+use crate::plugins::startup::Camera3dRtt;
 use crate::systems::visual::elevation_view::{
     ELEVATION_DISTANCE, ElevationDirection, ElevationViewState,
 };
@@ -26,22 +26,10 @@ use bevy::prelude::*;
 use hw_core::constants::{VIEW_HEIGHT, Z_OFFSET};
 use hw_ui::camera::MainCamera;
 
-type MainCameraTransformQuery<'w, 's> = Query<
-    'w,
-    's,
-    &'static Transform,
-    (
-        With<MainCamera>,
-        Without<Camera3dRtt>,
-        Without<Camera3dSoulMaskRtt>,
-    ),
->;
-type SyncedCamera3dQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static mut Transform, &'static mut Projection),
-    Or<(With<Camera3dRtt>, With<Camera3dSoulMaskRtt>)>,
->;
+type MainCameraTransformQuery<'w, 's> =
+    Query<'w, 's, &'static Transform, (With<MainCamera>, Without<Camera3dRtt>)>;
+type SyncedCamera3dQuery<'w, 's> =
+    Query<'w, 's, (&'static mut Transform, &'static mut Projection), With<Camera3dRtt>>;
 
 /// RtT composite より後に `LAYER_2D` を描画する Camera2d（`startup_systems::setup` で spawn）。
 #[derive(Component)]

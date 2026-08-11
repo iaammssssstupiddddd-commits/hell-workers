@@ -454,14 +454,14 @@ def validate_arguments(args: argparse.Namespace) -> None:
         return
 
     expected_lane = "behavior" if args.command == "behavior" else "static"
-    if (args.contract, args.stage, args.lane) != (
-        "rtt-light-v1",
-        "current",
-        expected_lane,
+    if (
+        args.contract != "rtt-light-v1"
+        or args.stage not in {"current", "p01"}
+        or args.lane != expected_lane
     ):
         raise ValueError(
             "--workload indoor-light currently requires --contract rtt-light-v1 "
-            f"--stage current --lane {expected_lane}"
+            f"--stage current|p01 --lane {expected_lane}"
         )
     contract = load_rtt_light_contract(args.contract)
     validate_stage_lane(contract, args.stage, args.lane)
@@ -489,20 +489,20 @@ def validate_arguments(args: argparse.Namespace) -> None:
         expected_cases = contract["stages"][args.stage]["required_behavior_cases"]
         if behavior_cases != expected_cases:
             raise ValueError(
-                "current behavior requires the exact ordered cases: "
+                f"{args.stage} behavior requires the exact ordered cases: "
                 + ",".join(expected_cases)
             )
         if sizes != ["small"] or renders != ["cpu"]:
-            raise ValueError("current behavior requires --sizes small --renders cpu")
+            raise ValueError(f"{args.stage} behavior requires --sizes small --renders cpu")
         if args.window_backend != "headless":
-            raise ValueError("current behavior requires --window-backend headless")
+            raise ValueError(f"{args.stage} behavior requires --window-backend headless")
         if args.backend != contract["formal_matrix"]["backend"]:
             raise ValueError(
-                f"current behavior requires --backend {contract['formal_matrix']['backend']}"
+                f"{args.stage} behavior requires --backend {contract['formal_matrix']['backend']}"
             )
         if args.present_mode != contract["formal_matrix"]["present_mode"]:
             raise ValueError(
-                "current behavior requires --present-mode "
+                f"{args.stage} behavior requires --present-mode "
                 + contract["formal_matrix"]["present_mode"]
             )
         if (
@@ -510,8 +510,8 @@ def validate_arguments(args: argparse.Namespace) -> None:
             or args.preflight_runs
             != contract["formal_matrix"]["behavior"]["preflight_runs"]
         ):
-            raise ValueError("current behavior requires --repeat 3 --preflight-runs 0")
+            raise ValueError(f"{args.stage} behavior requires --repeat 3 --preflight-runs 0")
         if args.fixed_hz != contract["formal_matrix"]["fixed_hz"]:
             raise ValueError(
-                f"current behavior requires --fixed-hz {contract['formal_matrix']['fixed_hz']}"
+                f"{args.stage} behavior requires --fixed-hz {contract['formal_matrix']['fixed_hz']}"
             )

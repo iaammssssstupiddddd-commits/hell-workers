@@ -8,11 +8,11 @@ use bevy::pbr::{MeshMaterial3d, StandardMaterial};
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
 use hw_core::constants::{
-    LAYER_3D, LAYER_3D_SOUL_MASK, LAYER_3D_SOUL_SHADOW, SOUL_FACE_SCALE_MULTIPLIER, SOUL_GLB_SCALE,
+    LAYER_3D, LAYER_3D_SOUL_SHADOW, SOUL_FACE_SCALE_MULTIPLIER, SOUL_GLB_SCALE,
     SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES,
 };
-use hw_visual::visual3d::{SoulMaskProxy3d, SoulShadowProxy3d};
-use hw_visual::{CharacterMaterial, SoulMaskMaterial, SoulShadowMaterial};
+use hw_visual::visual3d::SoulShadowProxy3d;
+use hw_visual::{CharacterMaterial, SoulShadowMaterial};
 
 // ─── Soul 生成 ────────────────────────────────────────────────────────────────
 
@@ -32,7 +32,6 @@ pub struct SoulSpawnArgs<'a> {
     pub blob_shadow_mesh: &'a Handle<Mesh>,
     pub blob_shadow_material: &'a Handle<StandardMaterial>,
     pub soul_shadow_material: &'a Handle<SoulShadowMaterial>,
-    pub soul_mask_material: &'a Handle<SoulMaskMaterial>,
     pub shadow_caster: TestSoulShadowCaster,
     pub x: f32,
     pub z: f32,
@@ -122,16 +121,6 @@ pub fn spawn_test_soul(
             ));
         }
     }
-
-    commands.spawn((
-        WorldAssetRoot(args.soul_scene.clone()),
-        Transform::from_xyz(args.x, 0.0, args.z).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
-        RenderLayers::layer(LAYER_3D_SOUL_MASK),
-        SoulMaskProxy3d { owner: soul_entity },
-        SoulMaskConfig {
-            mask_mat: args.soul_mask_material.clone(),
-        },
-    ));
 }
 
 // ─── GLB マテリアル差し替え + アニメーション設定 ──────────────────────────────
@@ -219,7 +208,7 @@ pub fn on_soul_scene_ready(
     });
 }
 
-// ─── シャドウ・マスクプロキシ Observer ──────────────────────────────────────
+// ─── シャドウプロキシ Observer ──────────────────────────────────────────────
 
 pub fn on_shadow_scene_ready(
     scene_ready: On<WorldInstanceReady>,
@@ -243,44 +232,7 @@ pub fn on_shadow_scene_ready(
     }
 }
 
-// ─── マスクプロキシ Observer ─────────────────────────────────────────────────
-
-pub fn on_mask_scene_ready(
-    scene_ready: On<WorldInstanceReady>,
-    q_configs: Query<&SoulMaskConfig>,
-    q_children: Query<&Children>,
-    q_meshes: Query<(), With<Mesh3d>>,
-    mut commands: Commands,
-) {
-    let Ok(config) = q_configs.get(scene_ready.entity) else {
-        return;
-    };
-    let mask_mat = config.mask_mat.clone();
-    let render_layers = RenderLayers::layer(LAYER_3D_SOUL_MASK);
-    for child in q_children.iter_descendants(scene_ready.entity) {
-        let mut ec = commands.entity(child);
-        ec.insert(render_layers.clone());
-        if q_meshes.get(child).is_ok() {
-            ec.remove::<MeshMaterial3d<StandardMaterial>>()
-                .insert(MeshMaterial3d(mask_mat.clone()));
-        }
-    }
-}
-
 // ─── プロキシ同期 ─────────────────────────────────────────────────────────────
-
-pub fn sync_mask_proxies(
-    q_souls: Query<(Entity, &Transform), With<TestSoulConfig>>,
-    mut q_proxies: Query<(&SoulMaskProxy3d, &mut Transform), Without<TestSoulConfig>>,
-) {
-    for (proxy, mut proxy_tf) in q_proxies.iter_mut() {
-        if let Ok((_, soul_tf)) = q_souls.get(proxy.owner) {
-            proxy_tf.translation = soul_tf.translation;
-            proxy_tf.scale = soul_tf.scale;
-            proxy_tf.rotation = Quat::IDENTITY;
-        }
-    }
-}
 
 pub fn sync_shadow_proxies(
     q_souls: Query<(Entity, &Transform), With<TestSoulConfig>>,
@@ -315,7 +267,6 @@ pub struct SoulRebuildEntities {
     pub souls: Vec<Entity>,
     pub shadows: Vec<Entity>,
     pub blob_shadows: Vec<Entity>,
-    pub masks: Vec<Entity>,
 }
 
 pub fn rebuild_soul_test_layout(
@@ -333,9 +284,6 @@ pub fn rebuild_soul_test_layout(
         commands.entity(entity).despawn();
     }
     for entity in entities.blob_shadows {
-        commands.entity(entity).despawn();
-    }
-    for entity in entities.masks {
         commands.entity(entity).despawn();
     }
 
@@ -356,7 +304,6 @@ pub fn rebuild_soul_test_layout(
                         blob_shadow_mesh: &assets.blob_shadow_mesh,
                         blob_shadow_material: &assets.blob_shadow_material,
                         soul_shadow_material: &assets.soul_shadow_material,
-                        soul_mask_material: &assets.soul_mask_material,
                         shadow_caster: TestSoulShadowCaster::Glb,
                         x: (i as f32 - 1.0) * SOUL_SPACING,
                         z: 0.0,
@@ -390,7 +337,6 @@ pub fn rebuild_soul_test_layout(
                         blob_shadow_mesh: &assets.blob_shadow_mesh,
                         blob_shadow_material: &assets.blob_shadow_material,
                         soul_shadow_material: &assets.soul_shadow_material,
-                        soul_mask_material: &assets.soul_mask_material,
                         shadow_caster,
                         x,
                         z: 0.0,

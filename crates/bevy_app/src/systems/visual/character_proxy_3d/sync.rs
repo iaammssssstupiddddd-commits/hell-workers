@@ -7,12 +7,6 @@ type SoulProxy3dQuery<'w, 's> = Query<
     (&'static SoulProxy3d, &'static mut Transform),
     (Without<DamnedSoul>, Without<Camera3dRtt>),
 >;
-type SoulMaskProxy3dQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static SoulMaskProxy3d, &'static mut Transform),
-    (Without<DamnedSoul>, Without<Camera3dRtt>),
->;
 type SoulShadowProxy3dQuery<'w, 's> = Query<
     'w,
     's,
@@ -41,8 +35,6 @@ type FamiliarVisualOffsetQuery<'w, 's> = Query<
 >;
 type Camera3dTransformQuery<'w, 's> = Query<'w, 's, Ref<'static, Transform>, With<Camera3dRtt>>;
 type NewSoulProxyQuery<'w, 's> = Query<'w, 's, (Entity, &'static SoulProxy3d), Added<SoulProxy3d>>;
-type NewSoulMaskProxyQuery<'w, 's> =
-    Query<'w, 's, (Entity, &'static SoulMaskProxy3d), Added<SoulMaskProxy3d>>;
 type NewSoulShadowProxyQuery<'w, 's> =
     Query<'w, 's, (Entity, &'static SoulShadowProxy3d), Added<SoulShadowProxy3d>>;
 type NewFamiliarProxyQuery<'w, 's> =
@@ -148,43 +140,6 @@ pub fn sync_soul_proxy_3d_system(
             &mut proxy_transform,
             soul_proxy_transform(soul_transform),
             rotation,
-        );
-    }
-}
-
-/// SoulMaskProxy3d を対応する DamnedSoul の 2D Transform に同期する。
-pub fn sync_soul_mask_proxy_3d_system(
-    q_changed_souls: ChangedSoulTransformQuery,
-    q_souls: SoulTransformQuery,
-    q_new_proxies: NewSoulMaskProxyQuery,
-    cache: Res<SoulProxyOwnerCache>,
-    mut q_proxies: SoulMaskProxy3dQuery,
-) {
-    for (owner, soul_transform) in q_changed_souls.iter() {
-        let Some(&proxy_entity) = cache.soul_mask_proxy.get(&owner) else {
-            continue;
-        };
-        let Ok((_proxy, mut proxy_transform)) = q_proxies.get_mut(proxy_entity) else {
-            continue;
-        };
-        apply_proxy_transform(
-            &mut proxy_transform,
-            soul_proxy_transform(soul_transform),
-            Quat::IDENTITY,
-        );
-    }
-
-    for (proxy_entity, proxy) in q_new_proxies.iter() {
-        let Ok((_proxy, mut proxy_transform)) = q_proxies.get_mut(proxy_entity) else {
-            continue;
-        };
-        let Ok(soul_transform) = q_souls.get(proxy.owner) else {
-            continue;
-        };
-        apply_proxy_transform(
-            &mut proxy_transform,
-            soul_proxy_transform(soul_transform),
-            Quat::IDENTITY,
         );
     }
 }

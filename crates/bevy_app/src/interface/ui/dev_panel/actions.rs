@@ -76,18 +76,6 @@ pub fn toggle_instant_build_button_system(
     }
 }
 
-/// Soul mask ボタンのクリックを処理
-pub fn toggle_soul_mask_button_system(
-    q_button: Query<&Interaction, (Changed<Interaction>, With<ToggleSoulMaskButton>)>,
-    mut perf_toggles: ResMut<crate::RenderPerfToggles>,
-) {
-    for interaction in q_button.iter() {
-        if *interaction == Interaction::Pressed {
-            perf_toggles.soul_mask_enabled = !perf_toggles.soul_mask_enabled;
-        }
-    }
-}
-
 /// RtT light ボタンのクリックを処理
 pub fn toggle_rtt_light_button_system(
     q_button: Query<&Interaction, (Changed<Interaction>, With<ToggleRttLightButton>)>,

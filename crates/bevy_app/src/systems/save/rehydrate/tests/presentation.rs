@@ -31,11 +31,6 @@ fn presentation_cleanup_removes_only_rehydrate_owned_shells() {
             billboard: false,
         })
         .id();
-    let mask_proxy = world
-        .spawn(hw_visual::visual3d::SoulMaskProxy3d {
-            owner: Entity::PLACEHOLDER,
-        })
-        .id();
     let shadow_proxy = world
         .spawn(hw_visual::visual3d::SoulShadowProxy3d {
             owner: Entity::PLACEHOLDER,
@@ -67,7 +62,6 @@ fn presentation_cleanup_removes_only_rehydrate_owned_shells() {
 
     for entity in [
         soul_proxy,
-        mask_proxy,
         shadow_proxy,
         familiar_proxy,
         building_visual,
@@ -115,13 +109,6 @@ fn soul_shell_rehydrate_is_idempotent() {
     );
     assert_eq!(
         world
-            .query::<&hw_visual::visual3d::SoulMaskProxy3d>()
-            .iter(&world)
-            .count(),
-        1
-    );
-    assert_eq!(
-        world
             .query::<&hw_visual::visual3d::SoulShadowProxy3d>()
             .iter(&world)
             .count(),
@@ -133,13 +120,6 @@ fn soul_shell_rehydrate_is_idempotent() {
     assert_eq!(
         world
             .query::<&hw_visual::visual3d::SoulProxy3d>()
-            .iter(&world)
-            .count(),
-        1
-    );
-    assert_eq!(
-        world
-            .query::<&hw_visual::visual3d::SoulMaskProxy3d>()
             .iter(&world)
             .count(),
         1

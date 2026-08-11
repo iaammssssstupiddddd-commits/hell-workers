@@ -172,7 +172,6 @@ fn handle_soul_mode(
                 souls: soul.souls.iter().map(|(entity, _, _, _)| entity).collect(),
                 shadows: soul.layout_entities.shadow_proxies.iter().collect(),
                 blob_shadows: soul.layout_entities.blob_shadow_proxies.iter().collect(),
-                masks: soul.layout_entities.mask_proxies.iter().collect(),
             },
             layout,
         );
@@ -201,7 +200,6 @@ fn handle_soul_mode(
                 blob_shadow_mesh: &assets.blob_shadow_mesh,
                 blob_shadow_material: &assets.blob_shadow_material,
                 soul_shadow_material: &assets.soul_shadow_material,
-                soul_mask_material: &assets.soul_mask_material,
                 shadow_caster: TestSoulShadowCaster::Glb,
                 x: (state.soul_count as f32 - 1.0) * SOUL_SPACING * 0.5,
                 z: 0.0,
@@ -267,7 +265,6 @@ fn handle_soul_mode(
                     souls: soul.souls.iter().map(|(entity, _, _, _)| entity).collect(),
                     shadows: soul.layout_entities.shadow_proxies.iter().collect(),
                     blob_shadows: soul.layout_entities.blob_shadow_proxies.iter().collect(),
-                    masks: soul.layout_entities.mask_proxies.iter().collect(),
                 },
                 layout,
             );

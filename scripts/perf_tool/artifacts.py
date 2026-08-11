@@ -490,7 +490,13 @@ def read_window(
         return None, [f"cannot parse window.csv: {error}"]
 
     errors: list[str] = []
-    if fieldnames != list(WINDOW_COLUMNS):
+    schema_version = rows[0].get("schema_version") if len(rows) == 1 else None
+    expected_columns = (
+        WINDOW_COLUMNS_V2
+        if schema_version == WINDOW_HISTORICAL_SCHEMA_VERSION
+        else WINDOW_COLUMNS
+    )
+    if fieldnames != list(expected_columns):
         errors.append("window.csv columns differ from schema: " + ", ".join(fieldnames))
     if len(rows) != 1:
         errors.append(f"window.csv must contain exactly one data row; got {len(rows)}")
@@ -498,10 +504,10 @@ def read_window(
     row = rows[0]
     if None in row:
         errors.append("window.csv row has more values than columns")
-    if row.get("schema_version") != WINDOW_SCHEMA_VERSION:
+    if schema_version not in {WINDOW_HISTORICAL_SCHEMA_VERSION, WINDOW_SCHEMA_VERSION}:
         errors.append(
             f"window.csv schema_version is {row.get('schema_version')!r}, "
-            f"expected {WINDOW_SCHEMA_VERSION!r}"
+            f"expected {WINDOW_HISTORICAL_SCHEMA_VERSION!r} or {WINDOW_SCHEMA_VERSION!r}"
         )
 
     paired_fields = (
@@ -514,6 +520,10 @@ def read_window(
         ("rtt_quality", "end_rtt_quality"),
         ("scene_target_width", "end_scene_target_width"),
         ("scene_target_height", "end_scene_target_height"),
+    )
+    if schema_version == WINDOW_SCHEMA_VERSION:
+        paired_fields += (("mask_target_present", "end_mask_target_present"),)
+    paired_fields += (
         ("mask_target_width", "end_mask_target_width"),
         ("mask_target_height", "end_mask_target_height"),
         ("target_scale_factor", "end_target_scale_factor"),
@@ -634,13 +644,15 @@ def read_window(
             if row.get(field, "") != "":
                 errors.append(f"window.csv {field} must be empty without a primary window")
 
+    mask_present = schema_version == WINDOW_HISTORICAL_SCHEMA_VERSION
+    if schema_version == WINDOW_SCHEMA_VERSION:
+        mask_present_text = row.get("mask_target_present", "")
+        if mask_present_text not in {"true", "false"}:
+            errors.append("window.csv mask_target_present must be true or false")
+        mask_present = mask_present_text == "true"
+
     target_values: dict[str, float | int] = {}
-    for field in (
-        "scene_target_width",
-        "scene_target_height",
-        "mask_target_width",
-        "mask_target_height",
-    ):
+    for field in ("scene_target_width", "scene_target_height"):
         try:
             value = int(row[field])
             if value <= 0:
@@ -648,6 +660,15 @@ def read_window(
             target_values[field] = value
         except (KeyError, TypeError, ValueError):
             errors.append(f"window.csv {field} must be a positive integer")
+    for field in ("mask_target_width", "mask_target_height"):
+        try:
+            value = int(row[field])
+            if (mask_present and value <= 0) or (not mask_present and value != 0):
+                raise ValueError
+            target_values[field] = value
+        except (KeyError, TypeError, ValueError):
+            expectation = "positive" if mask_present else "zero"
+            errors.append(f"window.csv {field} must be {expectation}")
     try:
         target_factor = float(row["target_scale_factor"])
         if not math.isfinite(target_factor) or target_factor <= 0:
@@ -656,9 +677,9 @@ def read_window(
     except (KeyError, TypeError, ValueError):
         errors.append("window.csv target_scale_factor must be a finite positive number")
 
-    if target_values.get("scene_target_width") != target_values.get("mask_target_width"):
+    if mask_present and target_values.get("scene_target_width") != target_values.get("mask_target_width"):
         errors.append("window.csv scene and mask target widths differ")
-    if target_values.get("scene_target_height") != target_values.get("mask_target_height"):
+    if mask_present and target_values.get("scene_target_height") != target_values.get("mask_target_height"):
         errors.append("window.csv scene and mask target heights differ")
 
     if present:
@@ -1159,8 +1180,8 @@ def read_behavior_timeline(
     if behavior_case is None:
         return None, None, ["behavior validation requires a selected behavior case"]
     contract = load_rtt_light_contract(contract_id)
-    if stage_id != "current":
-        return None, None, ["behavior timeline validator currently requires stage current"]
+    if stage_id not in contract["stages"]:
+        return None, None, [f"behavior timeline validator does not know stage {stage_id}"]
     timeline_contract = contract["behavior_fixture"]["timeline"]
     path = data_dir / "timeline.json"
     def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

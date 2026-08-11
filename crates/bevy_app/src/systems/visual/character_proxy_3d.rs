@@ -13,16 +13,16 @@ use bevy::pbr::{MeshMaterial3d, StandardMaterial};
 use bevy::prelude::*;
 use bevy::world_serialization::WorldInstanceReady;
 use hw_core::constants::{
-    LAYER_3D, LAYER_3D_SOUL_MASK, LAYER_3D_SOUL_SHADOW, SOUL_FACE_SCALE_MULTIPLIER,
+    LAYER_3D, LAYER_3D_SOUL_SHADOW, SOUL_FACE_SCALE_MULTIPLIER,
     SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES,
 };
 use hw_core::familiar::Familiar;
 use hw_core::soul::DamnedSoul;
 use hw_visual::familiar::{FamiliarVisualOffset, FamiliarVisualOwner};
-use hw_visual::visual3d::{FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d, SoulShadowProxy3d};
+use hw_visual::visual3d::{FamiliarProxy3d, SoulProxy3d, SoulShadowProxy3d};
 use hw_visual::{
     CharacterMaterial, SoulAnimationPlayer3d, SoulBodyAnimState, SoulFaceMaterial3d,
-    SoulMaskMaterial, SoulProxyOwnerCache, SoulShadowMaterial,
+    SoulProxyOwnerCache, SoulShadowMaterial,
 };
 
 mod cache;
@@ -30,19 +30,16 @@ mod gltf_ready;
 mod sync;
 
 pub use cache::{
-    cleanup_familiar_proxy_3d_system, cleanup_soul_mask_proxy_3d_system,
-    cleanup_soul_proxy_3d_system, cleanup_soul_shadow_proxy_3d_system,
-    register_familiar_proxy_3d_system, register_soul_mask_proxy_3d_system,
+    cleanup_familiar_proxy_3d_system, cleanup_soul_proxy_3d_system,
+    cleanup_soul_shadow_proxy_3d_system, register_familiar_proxy_3d_system,
     register_soul_proxy_3d_system, register_soul_shadow_proxy_3d_system,
 };
 pub use gltf_ready::{
-    SoulGltfApplyParams, SoulMaskGltfApplyParams, SoulShadowGltfApplyParams,
-    apply_soul_gltf_render_layers_on_ready, apply_soul_mask_gltf_render_layers_on_ready,
+    SoulGltfApplyParams, SoulShadowGltfApplyParams, apply_soul_gltf_render_layers_on_ready,
     apply_soul_shadow_gltf_render_layers_on_ready,
 };
 pub use sync::{
-    sync_familiar_proxy_3d_system, sync_soul_mask_proxy_3d_system, sync_soul_proxy_3d_system,
-    sync_soul_shadow_proxy_3d_system,
+    sync_familiar_proxy_3d_system, sync_soul_proxy_3d_system, sync_soul_shadow_proxy_3d_system,
 };
 
 #[cfg(test)]

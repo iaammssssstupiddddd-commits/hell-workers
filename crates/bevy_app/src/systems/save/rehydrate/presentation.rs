@@ -6,7 +6,6 @@ pub(crate) fn clear_rehydrate_presentation(world: &mut World) {
     let presentation_entities: Vec<Entity> = {
         let mut query = world.query_filtered::<Entity, Or<(
             With<SoulProxy3d>,
-            With<SoulMaskProxy3d>,
             With<SoulShadowProxy3d>,
             With<FamiliarProxy3d>,
             With<Building3dVisual>,

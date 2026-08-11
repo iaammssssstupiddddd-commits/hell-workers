@@ -174,32 +174,6 @@ pub fn spawn_dev_panel_system(
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                BackgroundColor(Color::srgb(0.30, 0.24, 0.08)),
-                BorderColor::all(Color::srgb(0.55, 0.45, 0.18)),
-                ToggleSoulMaskButton,
-            ))
-            .with_children(|btn| {
-                btn.spawn((
-                    Text::new("Mask: ON"),
-                    TextFont {
-                        font_size: FontSize::Px(11.0),
-                        ..default()
-                    },
-                    TextColor(Color::WHITE),
-                ));
-            });
-
-        parent
-            .spawn((
-                Button,
-                Node {
-                    padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
-                    border: UiRect::all(Val::Px(1.0)),
-                    border_radius: BorderRadius::all(Val::Px(3.0)),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
                 BackgroundColor(Color::srgb(0.20, 0.22, 0.08)),
                 BorderColor::all(Color::srgb(0.42, 0.48, 0.18)),
                 ToggleRttLightButton,

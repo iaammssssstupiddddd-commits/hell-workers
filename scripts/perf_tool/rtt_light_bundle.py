@@ -52,7 +52,7 @@ RENDERDOC_MANIFEST_SCHEMA_VERSION = 1
 RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION = 3
 RENDERDOC_EXTRACTION_SCHEMA_VERSION = 2
 
-EXPECTED_RENDER_RESOURCES = {
+CURRENT_RENDER_RESOURCES = {
     "scene_target_label": "hell-workers-rtt-scene",
     "mask_target_label": "hell-workers-rtt-soul-mask",
     "composite_draw_count": 1,
@@ -83,7 +83,22 @@ EXPECTED_RENDER_RESOURCES = {
         },
     ],
 }
-SOURCE_CHECKPOINTS_CURRENT = (
+P01_RENDER_RESOURCES = {
+    "scene_target_label": "hell-workers-rtt-scene",
+    "mask_target_label": None,
+    "composite_draw_count": 1,
+    "composite_texture_bindings": [
+        {"target": "scene_target", "stage": "fragment", "fixed_bind_set_or_space": 2, "fixed_bind_number": 1},
+    ],
+    "composite_sampler_bindings": [
+        {"stage": "fragment", "fixed_bind_set_or_space": 2, "fixed_bind_number": 2},
+    ],
+}
+EXPECTED_RENDER_RESOURCES_BY_STAGE = {
+    "current": CURRENT_RENDER_RESOURCES,
+    "p01": P01_RENDER_RESOURCES,
+}
+SOURCE_CHECKPOINTS_RENDERDOC = (
     "start",
     "after-renderdoc-build",
     "after-rd0",
@@ -370,11 +385,7 @@ def _validate_job(
     ):
         raise RuntimeError("job tooling provenance is invalid")
     checks = job["source_checks"]
-    expected_checkpoints = (
-        SOURCE_CHECKPOINTS_CURRENT
-        if job["stage_id"] == "current"
-        else tuple(["start", *(f"after-{leg}" for leg in expected_order), "before-registration"])
-    )
+    expected_checkpoints = SOURCE_CHECKPOINTS_RENDERDOC
     if (
         not isinstance(checks, list)
         or any(not isinstance(check, dict) for check in checks)
@@ -633,8 +644,12 @@ def _validate_environment_lock(
         "rtt_quality": formal_window["rtt_quality"],
         "scene_target_width": str(formal_window["scene_target_width"]),
         "scene_target_height": str(formal_window["scene_target_height"]),
-        "mask_target_width": str(formal_window["scene_target_width"]),
-        "mask_target_height": str(formal_window["scene_target_height"]),
+        "mask_target_width": str(
+            formal_window["scene_target_width"] if job["stage_id"] == "current" else 0
+        ),
+        "mask_target_height": str(
+            formal_window["scene_target_height"] if job["stage_id"] == "current" else 0
+        ),
         "target_scale_factor": f"{formal_window['scale_factor']:.6f}",
     }
     if lock["window"] != expected_window:
@@ -975,7 +990,7 @@ def _validate_render_inventory_json(value: object) -> dict[str, str]:
     return result
 
 
-def _validate_render_resources(value: object) -> dict[str, Any]:
+def _validate_render_resources(value: object, *, stage: str) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != {
         "scene_target_label",
         "mask_target_label",
@@ -984,7 +999,10 @@ def _validate_render_resources(value: object) -> dict[str, Any]:
         "composite_sampler_bindings",
     }:
         raise RuntimeError("RenderDoc render_resources differs from schema v2")
-    for label in (value["scene_target_label"], value["mask_target_label"]):
+    for key in ("scene_target_label", "mask_target_label"):
+        label = value[key]
+        if key == "mask_target_label" and label is None:
+            continue
         if not isinstance(label, str) or not label:
             raise RuntimeError("RenderDoc resource target label is invalid")
     if (
@@ -1006,7 +1024,7 @@ def _validate_render_resources(value: object) -> dict[str, Any]:
         rows = value[key]
         if (
             not isinstance(rows, list)
-            or len(rows) != 2
+            or not rows
             or any(not isinstance(row, dict) or set(row) != expected_keys for row in rows)
         ):
             raise RuntimeError(f"RenderDoc {key} differs from schema v2")
@@ -1026,8 +1044,8 @@ def _validate_render_resources(value: object) -> dict[str, Any]:
                 not isinstance(row["target"], str) or not row["target"]
             ):
                 raise RuntimeError("RenderDoc composite texture target is invalid")
-    if value != EXPECTED_RENDER_RESOURCES:
-        raise RuntimeError("RenderDoc composite bindings differ from the current source")
+    if value != EXPECTED_RENDER_RESOURCES_BY_STAGE.get(stage):
+        raise RuntimeError(f"RenderDoc composite bindings differ from the {stage} source")
     return value
 
 
@@ -1449,7 +1467,7 @@ def _load_renderdoc_evidence(
         requested=str(runtime["requested_renderdoc_api_version"]),
     ):
         raise RuntimeError("RenderDoc runtime API version is incompatible")
-    render_resources = _validate_render_resources(runtime["render_resources"])
+    render_resources = _validate_render_resources(runtime["render_resources"], stage=stage)
     log_text = artifact_paths["log"].read_text(encoding="utf-8")
     _, unexpected = classify_renderdoc_log_lines(
         log_text, contract["allow_log_patterns"]["windowed"]
@@ -1576,15 +1594,13 @@ def _load_renderdoc_evidence(
     if extracted["event_count"] < extracted["draw_count"]:
         raise RuntimeError("RenderDoc event count is smaller than draw_count")
     tracked_resources = extracted["tracked_resources"]
-    if not isinstance(tracked_resources, dict) or set(tracked_resources) != {
-        "scene_target",
-        "mask_target",
-    }:
-        raise RuntimeError("RenderDoc tracked-resource schema differs from v1")
     expected_labels = {
-        "scene_target": render_resources["scene_target_label"],
-        "mask_target": render_resources["mask_target_label"],
+        key.removesuffix("_label"): label
+        for key, label in render_resources.items()
+        if key.endswith("_target_label") and label is not None
     }
+    if not isinstance(tracked_resources, dict) or set(tracked_resources) != set(expected_labels):
+        raise RuntimeError("RenderDoc tracked-resource schema differs from the stage contract")
     tracked_ids: dict[str, str] = {}
     for key, label in expected_labels.items():
         tracked = tracked_resources[key]
@@ -1611,11 +1627,12 @@ def _load_renderdoc_evidence(
         "composite_draw_count",
         "composite_texture_binding_count",
         "composite_sampler_binding_count",
-        "scene_target_attachment_count",
-        "scene_target_binding_count",
-        "mask_target_attachment_count",
-        "mask_target_binding_count",
     }
+    expected_structure_keys.update(
+        f"{key}_{kind}_count"
+        for key in expected_labels
+        for kind in ("attachment", "binding")
+    )
     if (
         not isinstance(replay_structure, dict)
         or set(replay_structure) != expected_structure_keys
@@ -1628,8 +1645,10 @@ def _load_renderdoc_evidence(
         or replay_structure["binding_count"] != len(bindings)
         or replay_structure["render_pass_count"] < 2
         or replay_structure["composite_draw_count"] != 1
-        or replay_structure["composite_texture_binding_count"] != 2
-        or replay_structure["composite_sampler_binding_count"] != 2
+        or replay_structure["composite_texture_binding_count"]
+        != len(render_resources["composite_texture_bindings"])
+        or replay_structure["composite_sampler_binding_count"]
+        != len(render_resources["composite_sampler_bindings"])
         or composite_draw["event_id"] <= 0
     ):
         raise RuntimeError("RenderDoc replay structure differs from extracted evidence")
@@ -1648,6 +1667,36 @@ def _load_renderdoc_evidence(
                 f"RenderDoc replay does not prove {key} attachment and binding topology"
             )
     render_inventory = _validate_render_inventory_json(runtime["render_inventory"])
+    mask_resource_id = tracked_ids.get("mask_target")
+    mask_pass_count = (
+        len(
+            {
+                row["pass_id"]
+                for row in attachments
+                if row["resource_id"] == mask_resource_id
+            }
+        )
+        if mask_resource_id is not None
+        else 0
+    )
+    mask_binding_count = (
+        sum(row["resource_id"] == mask_resource_id for row in bindings)
+        if mask_resource_id is not None
+        else 0
+    )
+    mask_sample_count = sum(
+        row["target"] == "mask_target"
+        for row in render_resources["composite_texture_bindings"]
+    )
+    window = environment_lock["window"]
+    try:
+        explicit_color_bytes = (
+            int(window["scene_target_width"])
+            * int(window["scene_target_height"])
+            * 4
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise RuntimeError("RenderDoc Scene target dimensions are invalid") from error
     fixture_layout = build_fixture_layout(contract, "medium")
     expected_fixture = {
         "fixture_checksum": fixture_layout["layout_checksum"],
@@ -1673,6 +1722,19 @@ def _load_renderdoc_evidence(
             "run_dirs": [],
             "fixture": manifest["fixture"],
             "render_inventory": render_inventory,
+            "gate_metrics": {
+                "scene_target_count": int(render_inventory["scene_target_count"]),
+                "mask_target_count": int(render_inventory["mask_target_count"]),
+                "camera_3d_rtt_count": int(render_inventory["camera_3d_rtt_count"]),
+                "mask_camera_count": int(
+                    runtime["gpu_ready"]["pre_capture"]["mask_camera_count"]
+                ),
+                "mask_pass_count": mask_pass_count,
+                "mask_binding_count": mask_binding_count,
+                "mask_sample_count": mask_sample_count,
+                "mask_proxy_count": int(render_inventory["soul_mask_proxy_3d"]),
+                "explicit_color_bytes": explicit_color_bytes,
+            },
             "validated_frames": 1,
             "unexpected_log_lines": 0,
             "environment_contract_match": True,
@@ -1700,8 +1762,6 @@ def collect_attempt_evidence(
         raise RuntimeError("job.json has no contract_id")
     contract = load_rtt_light_contract(contract_id)
     job, generation, baseline_root, environment_lock = _validate_job(attempt, contract)
-    if job["stage_id"] != "current":
-        raise RuntimeError("the implemented formal bundle assembler currently supports current")
     _validate_environment_lock(environment_lock, contract=contract, job=job)
     manifests: dict[str, dict[str, Any]] = {}
     cases: dict[str, dict[str, Any]] = {}
@@ -1765,6 +1825,12 @@ def collect_attempt_evidence(
 def _format_nonnegative_float(value: float) -> str:
     if not math.isfinite(value) or value < 0.0:
         raise RuntimeError("projection metric is not a finite nonnegative float")
+    return format(value, ".17g")
+
+
+def _format_finite_float(value: float) -> str:
+    if not math.isfinite(value):
+        raise RuntimeError("gate metric is not a finite float")
     return format(value, ".17g")
 
 
@@ -1958,9 +2024,45 @@ def _comparison_passes(
     raise RuntimeError(f"unsupported gate comparator {comparator}")
 
 
+def _projection_rows_by_case(
+    rows: list[dict[str, str]], *, stage: str
+) -> dict[str, dict[str, str]]:
+    result: dict[str, dict[str, str]] = {}
+    for row in rows:
+        case_id = row.get("case_id")
+        if row.get("stage_id") != stage or not isinstance(case_id, str) or not case_id:
+            raise RuntimeError(f"{stage} projection row identity is invalid")
+        if case_id in result:
+            raise RuntimeError(f"{stage} projection contains duplicate case {case_id}")
+        result[case_id] = row
+    return result
+
+
+def _load_registered_projection_rows(
+    contract: dict[str, Any], baseline_root: Path, stage: str
+) -> list[dict[str, str]]:
+    index_path = baseline_root / "baseline-index.json"
+    index = read_json_object(index_path)
+    stage_entry = index.get("stages", {}).get(stage)
+    if not isinstance(stage_entry, dict):
+        raise RuntimeError(f"reference stage {stage} is not registered")
+    locator = stage_entry.get("projection")
+    if not isinstance(locator, dict) or set(locator) != {"path", "sha256"}:
+        raise RuntimeError(f"reference stage {stage} projection locator is invalid")
+    projection_path = _relative_file(locator["path"], root=baseline_root)
+    if not projection_path.is_file() or sha256(projection_path) != locator["sha256"]:
+        raise RuntimeError(f"reference stage {stage} projection is missing or changed")
+    columns = [column["name"] for column in contract["projection"]["columns"]]
+    rows = read_exact_csv(projection_path, columns)
+    validate_projection_rows(contract, stage, rows)
+    return rows
+
+
 def _gate_observed(
     expected: dict[str, str],
     cases: dict[str, dict[str, Any]],
+    subject_projection: dict[str, dict[str, str]],
+    reference_projections: dict[str, dict[str, dict[str, str]]],
 ) -> str:
     case_id = expected["case_id"]
     metric_id = expected["metric_id"]
@@ -1993,6 +2095,57 @@ def _gate_observed(
         return "true" if evidence["environment_contract_match"] else "false"
     if metric_id == "required_sidecars_valid":
         return "true" if evidence["required_sidecars_valid"] else "false"
+    gate_metrics = evidence.get("gate_metrics")
+    if metric_id in {
+        "scene_target_count",
+        "mask_target_count",
+        "camera_3d_rtt_count",
+        "mask_camera_count",
+        "mask_pass_count",
+        "mask_binding_count",
+        "mask_sample_count",
+        "mask_proxy_count",
+        "explicit_color_bytes",
+    }:
+        if not isinstance(gate_metrics, dict):
+            raise RuntimeError(f"{case_id} has no RenderDoc gate metrics")
+        value = gate_metrics.get(metric_id)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise RuntimeError(f"{case_id} RenderDoc gate metric {metric_id} is invalid")
+        return str(value)
+    subject_row = subject_projection.get(case_id)
+    reference_stage = expected.get("reference_stage")
+    reference_row = (
+        reference_projections.get(reference_stage, {}).get(case_id)
+        if isinstance(reference_stage, str)
+        else None
+    )
+    relative_fields = {
+        "wall_frame_p95_relative_pct": "wall_frame_p95_ms",
+        "wall_frame_p99_relative_pct": "wall_frame_p99_ms",
+        "max_rss_relative_pct": "process_max_rss_kib",
+    }
+    if metric_id in relative_fields:
+        field = relative_fields[metric_id]
+        if subject_row is None or reference_row is None:
+            raise RuntimeError(f"{metric_id} has no subject or reference projection row")
+        try:
+            subject_value = float(subject_row[field])
+            reference_value = float(reference_row[field])
+        except (KeyError, TypeError, ValueError) as error:
+            raise RuntimeError(f"{metric_id} projection value is invalid") from error
+        if not math.isfinite(subject_value) or not math.isfinite(reference_value) or reference_value <= 0.0:
+            raise RuntimeError(f"{metric_id} reference must be finite and positive")
+        return _format_finite_float((subject_value / reference_value - 1.0) * 100.0)
+    if metric_id == "large_peak_live_delta_bytes":
+        if subject_row is None or reference_row is None:
+            raise RuntimeError(f"{metric_id} has no subject or reference projection row")
+        try:
+            subject_value = int(subject_row["allocation_peak_live_bytes"])
+            reference_value = int(reference_row["allocation_peak_live_bytes"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise RuntimeError(f"{metric_id} projection value is invalid") from error
+        return str(subject_value - reference_value)
     raise RuntimeError(f"stage {expected['stage_id']} gate metric is not implemented: {metric_id}")
 
 
@@ -2000,11 +2153,46 @@ def build_gate_result_rows(
     contract: dict[str, Any],
     stage: str,
     cases: dict[str, dict[str, Any]],
+    *,
+    subject_projection_rows: list[dict[str, str]] | None = None,
+    baseline_root: Path | None = None,
+    reference_projection_rows: dict[str, list[dict[str, str]]] | None = None,
 ) -> list[dict[str, str]]:
     columns = contract["gate_result"]["columns"]
+    subject_rows = (
+        build_projection_rows(contract, stage, cases)
+        if subject_projection_rows is None
+        else subject_projection_rows
+    )
+    validate_projection_rows(contract, stage, subject_rows)
+    subject_projection = _projection_rows_by_case(subject_rows, stage=stage)
+    expected_rows = expected_gate_result_rows(contract, stage)
+    reference_stages = {
+        row["reference_stage"]
+        for row in expected_rows
+        if isinstance(row.get("reference_stage"), str)
+    }
+    supplied_references = reference_projection_rows or {}
+    reference_projections: dict[str, dict[str, dict[str, str]]] = {}
+    for reference_stage in sorted(reference_stages):
+        rows = supplied_references.get(reference_stage)
+        if rows is None:
+            if baseline_root is None:
+                raise RuntimeError(
+                    f"stage {stage} gate requires registered {reference_stage} projection"
+                )
+            rows = _load_registered_projection_rows(
+                contract, baseline_root, reference_stage
+            )
+        validate_projection_rows(contract, reference_stage, rows)
+        reference_projections[reference_stage] = _projection_rows_by_case(
+            rows, stage=reference_stage
+        )
     rows: list[dict[str, str]] = []
-    for expected in expected_gate_result_rows(contract, stage):
-        observed = _gate_observed(expected, cases)
+    for expected in expected_rows:
+        observed = _gate_observed(
+            expected, cases, subject_projection, reference_projections
+        )
         passed = _comparison_passes(
             observed,
             expected["threshold"],
@@ -2287,7 +2475,13 @@ def finalize_attempt(attempt: Path) -> dict[str, Any]:
     attempt = attempt.resolve()
     _validate_attempt_file_set(attempt, leg_order=job["leg_order"], finalized=False)
     projection_rows = build_projection_rows(contract, job["stage_id"], cases)
-    gate_rows = build_gate_result_rows(contract, job["stage_id"], cases)
+    gate_rows = build_gate_result_rows(
+        contract,
+        job["stage_id"],
+        cases,
+        subject_projection_rows=projection_rows,
+        baseline_root=baseline_root,
+    )
     foundation_state = "replay_valid"
     transition_foundation_state(foundation_state, "render_gate_valid")
     foundation_state = "render_gate_valid"
@@ -2460,7 +2654,13 @@ def verify_attempt(attempt: Path) -> dict[str, Any]:
         raise RuntimeError("stored migration projection differs from raw evidence")
     gate_path = attempt / contract["gate_result"]["file"]
     observed_gates = read_exact_csv(gate_path, contract["gate_result"]["columns"])
-    expected_gates = build_gate_result_rows(contract, job["stage_id"], cases)
+    expected_gates = build_gate_result_rows(
+        contract,
+        job["stage_id"],
+        cases,
+        subject_projection_rows=expected_projection,
+        baseline_root=baseline_root,
+    )
     if observed_gates != expected_gates:
         raise RuntimeError("stored gate results differ from raw evidence")
     manifest = _verify_attempt_manifest(

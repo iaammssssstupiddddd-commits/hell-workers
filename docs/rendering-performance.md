@@ -14,12 +14,10 @@
 | **2D world** | 夢の泡パーティクル・前景スプライト | `Material2d` / `Sprite` を持つ 2D entity |
 | **UI** | DreamBubbleUiMaterial・UI ノード | UI パイプライン（`UiMaterial` 等） |
 
-### P00 current inventory（source/startup固定）
+### P00 current inventory（登録済みhistorical baseline）
 
-single Scene RtT / indoor light migration前のcurrent構成は次である。`startup_systems`の
-`current_rtt_startup_inventory_is_explicit`が実際にstartup / composite spawn systemを実行し、カメラの
-order / active / RenderLayers、RtT image descriptor、DirectionalLight marker / 有効状態、compositeの
-2 texture参照、`LAYER_2D` 2 passを検証する。下記inventoryはP00 canonical RenderDoc formal legと照合済みである。
+single Scene RtT / indoor light migration前のcurrent構成は次である。下記inventoryはP00 canonical
+RenderDoc formal legと照合済みであり、現sourceのstartup testではなく登録済みartifactが正本である。
 
 | 項目 | current |
 |---|---:|
@@ -29,6 +27,22 @@ order / active / RenderLayers、RtT image descriptor、DirectionalLight marker /
 | FHD High target | 各1920×1080、2 handleはdistinct |
 | DirectionalLight entity | 2（標準1 active、extra 1 default disabled） |
 | composite sampled texture | 2（Scene + Soul mask） |
+
+### P01 Scene-only runtime inventory
+
+現sourceはP01移行によりScene-onlyである。`RttRuntime`、Camera3d、world color target、composite sampled
+textureは各1となり、Soul mask camera / target / proxy / material / layer / toggleは存在しない。P00互換CSVの
+mask列は削除せず、P01 stageでは意味上の0を記録する。`p01_scene_only_rtt_startup_inventory_is_explicit`とvisual_testの
+resize testは、Scene targetの再生成後にCamera3dとcomposite materialが同じhandleへrebindされることを検証する。
+
+| 項目 | P01 source |
+|---|---:|
+| Camera3d RtT | 1（Scene） |
+| world color target | 1（Scene） |
+| Camera2d | 3（Main、Overlay、WorldForeground） |
+| DirectionalLight entity | 2（標準1 active、extra 1 default disabled） |
+| composite sampled texture / sampler | 各1（Scene、binding 1 / 2） |
+| Soul mask target / camera / proxy | 0 |
 
 P00のmeasurement contractはfrozenの`rtt-light-v1`である。canonical contract hashは
 `121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`、fixture hashは
@@ -54,7 +68,7 @@ baseline registry verifierで再検証した。raw artifact 884件のdirectory S
 frame値はCapture leg、RSS / allocator値はMemory legの正本であり、相互に代用しない。P01以降は同じcontract /
 fixture / adapter matrixとstable projectionで比較する。
 
-RenderDoc runtime checkpoint schema v3とextraction schema v2は、このsource inventoryをGPU replayで厳密化する。composite drawはfragment
+P00 RenderDoc runtime checkpoint schema v3とextraction schema v2は、historical current inventoryをGPU replayで厳密化する。composite drawはfragment
 descriptor set 2のScene texture / sampler `(1, 2)`、Soul mask texture / sampler `(3, 4)`を同じ1 drawで
 使うことを要求する。抽出はVulkan subpass transitionを正しく分割し、全drawに散らばったsampler数では代用しない。
 canonical formal captureではVulkan 18 render pass、212 draw、516 attachment record、1,996 binding record、
@@ -127,7 +141,6 @@ entity はこれを clone して参照するため、インスタンス数が増
 | body mesh | ≒1〜数 DC | `CharacterMaterial` 共有だが GLB 子孫に分散 |
 | face mesh | Soul 数 × DC | face は Soul ごとに material を複製（uv_offset のため） |
 | shadow proxy | 別 DC | `LAYER_3D_SOUL_SHADOW` |
-| mask proxy | 別 DC | `LAYER_3D_SOUL_MASK` |
 
 ---
 

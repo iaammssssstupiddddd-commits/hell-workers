@@ -59,16 +59,16 @@ pub(super) fn write_window_observation(
     let header = concat!(
         "schema_version,window_present,logical_width,logical_height,physical_width,",
         "physical_height,scale_factor,rtt_quality,scene_target_width,scene_target_height,",
-        "mask_target_width,mask_target_height,target_scale_factor,resolved_window_backend,",
+        "mask_target_present,mask_target_width,mask_target_height,target_scale_factor,resolved_window_backend,",
         "adapter_name,adapter_backend,requested_present_mode,effective_present_mode,",
         "end_window_present,end_logical_width,end_logical_height,end_physical_width,",
         "end_physical_height,end_scale_factor,end_rtt_quality,end_scene_target_width,",
-        "end_scene_target_height,end_mask_target_width,end_mask_target_height,",
+        "end_scene_target_height,end_mask_target_present,end_mask_target_width,end_mask_target_height,",
         "end_target_scale_factor,end_resolved_window_backend,end_adapter_name,",
         "end_adapter_backend,end_requested_present_mode,end_effective_present_mode"
     );
     let values = vec![
-        "2".to_string(),
+        "3".to_string(),
         initial.window_present.to_string(),
         optional_f32(initial.logical_width),
         optional_f32(initial.logical_height),
@@ -78,6 +78,7 @@ pub(super) fn write_window_observation(
         initial.rtt_quality.to_string(),
         initial.scene_target_width.to_string(),
         initial.scene_target_height.to_string(),
+        false.to_string(),
         initial.mask_target_width.to_string(),
         initial.mask_target_height.to_string(),
         format!("{:.6}", initial.target_scale_factor),
@@ -95,6 +96,7 @@ pub(super) fn write_window_observation(
         final_observation.rtt_quality.to_string(),
         final_observation.scene_target_width.to_string(),
         final_observation.scene_target_height.to_string(),
+        false.to_string(),
         final_observation.mask_target_width.to_string(),
         final_observation.mask_target_height.to_string(),
         format!("{:.6}", final_observation.target_scale_factor),

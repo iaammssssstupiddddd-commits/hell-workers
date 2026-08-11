@@ -40,7 +40,6 @@ pub struct Render3dVisible(pub bool);
 /// 3D RtT の固定費を切り分けるための個別トグル。
 #[derive(Resource)]
 pub struct RenderPerfToggles {
-    pub soul_mask_enabled: bool,
     pub directional_light_enabled: bool,
     pub extra_directional_light_enabled: bool,
     pub terrain_enabled: bool,
@@ -60,7 +59,6 @@ impl Default for Render3dVisible {
 impl Default for RenderPerfToggles {
     fn default() -> Self {
         Self {
-            soul_mask_enabled: !env_flag_is_true("HW_DISABLE_SOUL_MASK"),
             directional_light_enabled: !env_flag_is_true("HW_DISABLE_RTT_DIRECTIONAL_LIGHT"),
             extra_directional_light_enabled: env_flag_is_true(
                 "HW_ENABLE_RTT_EXTRA_DIRECTIONAL_LIGHT",
@@ -74,7 +72,6 @@ impl Default for RenderPerfToggles {
 impl RenderPerfToggles {
     pub const fn all_disabled() -> Self {
         Self {
-            soul_mask_enabled: false,
             directional_light_enabled: false,
             extra_directional_light_enabled: false,
             terrain_enabled: false,
@@ -84,7 +81,6 @@ impl RenderPerfToggles {
 
     pub const fn gpu_baseline() -> Self {
         Self {
-            soul_mask_enabled: true,
             directional_light_enabled: true,
             extra_directional_light_enabled: false,
             terrain_enabled: true,

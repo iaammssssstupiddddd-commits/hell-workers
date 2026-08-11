@@ -320,14 +320,6 @@ fn attach_soul_shell_with_scene_roots(
     commands.spawn((
         WorldAssetRoot(handles_3d.soul_scene.clone()),
         Transform::from_xyz(pos.x, 0.0, -pos.y).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
-        bevy::camera::visibility::RenderLayers::layer(LAYER_3D_SOUL_MASK),
-        hw_visual::visual3d::SoulMaskProxy3d { owner: soul_entity },
-        Name::new(format!("SoulMaskProxy3d: {}", soul_name)),
-    ));
-
-    commands.spawn((
-        WorldAssetRoot(handles_3d.soul_scene.clone()),
-        Transform::from_xyz(pos.x, 0.0, -pos.y).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
         bevy::camera::visibility::RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW]),
         hw_visual::visual3d::SoulShadowProxy3d { owner: soul_entity },
         Name::new(format!("SoulShadowProxy3d: {}", soul_name)),

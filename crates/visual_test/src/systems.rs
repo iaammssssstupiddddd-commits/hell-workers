@@ -19,7 +19,7 @@ use crate::soul::{
     spawn_test_soul,
 };
 use crate::types::*;
-use hw_visual::visual3d::{SoulMaskProxy3d, SoulShadowProxy3d};
+use hw_visual::visual3d::SoulShadowProxy3d;
 
 type BtnQuery<'w, 's> = Query<
     'w,
@@ -46,7 +46,6 @@ pub struct SoulInteractionContext<'w, 's> {
     souls: SoulInteractionQuery<'w, 's>,
     shadow_proxies: Query<'w, 's, Entity, With<SoulShadowProxy3d>>,
     blob_shadow_proxies: Query<'w, 's, Entity, With<SoulBlobShadowProxy3d>>,
-    mask_proxies: Query<'w, 's, Entity, With<SoulMaskProxy3d>>,
 }
 
 #[derive(SystemParam)]
@@ -102,7 +101,6 @@ pub fn handle_button_interactions(
                             souls: soul.souls.iter().map(|(entity, _, _, _)| entity).collect(),
                             shadows: soul.shadow_proxies.iter().collect(),
                             blob_shadows: soul.blob_shadow_proxies.iter().collect(),
-                            masks: soul.mask_proxies.iter().collect(),
                         },
                         layout,
                     );
@@ -156,7 +154,6 @@ pub fn handle_button_interactions(
                             blob_shadow_mesh: &assets.blob_shadow_mesh,
                             blob_shadow_material: &assets.blob_shadow_material,
                             soul_shadow_material: &assets.soul_shadow_material,
-                            soul_mask_material: &assets.soul_mask_material,
                             shadow_caster: TestSoulShadowCaster::Glb,
                             x: (state.soul_count as f32 - 1.0) * SOUL_SPACING * 0.5,
                             z: 0.0,
@@ -217,7 +214,6 @@ pub fn handle_button_interactions(
                             souls: soul.souls.iter().map(|(entity, _, _, _)| entity).collect(),
                             shadows: soul.shadow_proxies.iter().collect(),
                             blob_shadows: soul.blob_shadow_proxies.iter().collect(),
-                            masks: soul.mask_proxies.iter().collect(),
                         },
                         layout,
                     );
@@ -385,11 +381,7 @@ pub fn sync_test_rtt_to_window(
     q_window: Query<Ref<Window>, With<PrimaryWindow>>,
     mut runtime: ResMut<VisualTestRttRuntime>,
     mut images: ResMut<Assets<Image>>,
-    mut scene_target: Query<&mut RenderTarget, (With<Camera3dRtt>, Without<Camera3dSoulMaskTest>)>,
-    mut soul_mask_target: Query<
-        &mut RenderTarget,
-        (With<Camera3dSoulMaskTest>, Without<Camera3dRtt>),
-    >,
+    mut scene_target: Query<&mut RenderTarget, With<Camera3dRtt>>,
     q_composite: Query<&MeshMaterial2d<LocalRttCompositeMaterial>, With<LocalRttComposite>>,
     mut composite_materials: ResMut<Assets<LocalRttCompositeMaterial>>,
 ) {
@@ -413,19 +405,14 @@ pub fn sync_test_rtt_to_window(
     runtime.physical_size = physical_size;
     runtime.target_scale_factor = target_scale_factor;
     runtime.scene = create_test_rtt_texture(physical_size, &mut images);
-    runtime.soul_mask = create_test_rtt_texture(physical_size, &mut images);
 
     if let Ok(mut target) = scene_target.single_mut() {
         *target = runtime.scene_target();
-    }
-    if let Ok(mut target) = soul_mask_target.single_mut() {
-        *target = runtime.soul_mask_target();
     }
     if let Ok(material_handle) = q_composite.single()
         && let Some(mut material) = composite_materials.get_mut(&material_handle.0)
     {
         material.scene_texture = runtime.scene.clone();
-        material.soul_mask_texture = runtime.soul_mask.clone();
         material.params.pixel_size = runtime.pixel_size();
     }
 }
@@ -508,27 +495,19 @@ mod tests {
             .add_systems(Update, sync_test_rtt_to_window);
 
         let initial_size = UVec2::new(1280, 720);
-        let (scene, soul_mask) = {
+        let scene = {
             let mut images = app.world_mut().resource_mut::<Assets<Image>>();
-            (
-                create_test_rtt_texture(initial_size, &mut images),
-                create_test_rtt_texture(initial_size, &mut images),
-            )
+            create_test_rtt_texture(initial_size, &mut images)
         };
         let runtime = VisualTestRttRuntime {
             physical_size: initial_size,
             target_scale_factor: 1.0,
             scene,
-            soul_mask,
         };
         let initial_scene = runtime.scene.clone();
         let scene_camera = app
             .world_mut()
             .spawn((Camera3dRtt, runtime.scene_target()))
-            .id();
-        let soul_mask_camera = app
-            .world_mut()
-            .spawn((Camera3dSoulMaskTest, runtime.soul_mask_target()))
             .id();
         app.insert_resource(runtime);
         let window = app
@@ -555,15 +534,13 @@ mod tests {
         assert_eq!(runtime.target_scale_factor, 1.5);
         assert_ne!(runtime.scene, initial_scene);
 
-        for camera_entity in [scene_camera, soul_mask_camera] {
-            let RenderTarget::Image(target) = app
-                .world()
-                .get::<RenderTarget>(camera_entity)
-                .expect("test camera should keep an image render target")
-            else {
-                panic!("test camera should keep an image render target");
-            };
-            assert_eq!(target.scale_factor, 1.5);
-        }
+        let RenderTarget::Image(target) = app
+            .world()
+            .get::<RenderTarget>(scene_camera)
+            .expect("test camera should keep an image render target")
+        else {
+            panic!("test camera should keep an image render target");
+        };
+        assert_eq!(target.scale_factor, 1.5);
     }
 }

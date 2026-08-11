@@ -78,6 +78,16 @@ impl PerfRttLightSelection {
         stage_id: "current",
         lane: "behavior",
     };
+    const P01_STATIC_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p01",
+        lane: "static",
+    };
+    const P01_BEHAVIOR_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p01",
+        lane: "behavior",
+    };
 
     pub const fn contract_id(self) -> &'static str {
         self.contract_id
@@ -657,7 +667,13 @@ impl PerfScenarioConfig {
         #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
             && (workload != PerfWorkload::IndoorLight
-                || rtt_light != Some(PerfRttLightSelection::CURRENT_STATIC_V1)
+                || !matches!(
+                    rtt_light,
+                    Some(
+                        PerfRttLightSelection::CURRENT_STATIC_V1
+                            | PerfRttLightSelection::P01_STATIC_V1
+                    )
+                )
                 || size != PerfScenarioSize::Medium
                 || render_mode != PerfRenderMode::Gpu
                 || !matches!(clock_mode, PerfClockMode::Fixed)
@@ -668,7 +684,7 @@ impl PerfScenarioConfig {
                 || rtt_quality != Some(RttQualityPreset::High))
         {
             return Err(PerfScenarioConfigError(
-                "--perf-renderdoc-capture requires rtt-light-v1/current/static medium/gpu/fixed, an output directory, and the exact 1920x1080/scale-1/high window contract"
+                "--perf-renderdoc-capture requires rtt-light-v1/current|p01/static medium/gpu/fixed, an output directory, and the exact 1920x1080/scale-1/high window contract"
                     .to_string(),
             ));
         }
@@ -911,16 +927,18 @@ fn parse_rtt_light_selection(
 
     let (Some(contract), Some(stage), Some(lane)) = (contract, stage, lane) else {
         return Err(PerfScenarioConfigError(
-            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current --perf-lane static"
+            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01 --perf-lane static"
                 .to_string(),
         ));
     };
     let selection = match (contract.as_str(), stage.as_str(), lane.as_str()) {
         ("rtt-light-v1", "current", "static") => PerfRttLightSelection::CURRENT_STATIC_V1,
         ("rtt-light-v1", "current", "behavior") => PerfRttLightSelection::CURRENT_BEHAVIOR_V1,
+        ("rtt-light-v1", "p01", "static") => PerfRttLightSelection::P01_STATIC_V1,
+        ("rtt-light-v1", "p01", "behavior") => PerfRttLightSelection::P01_BEHAVIOR_V1,
         _ => {
             return Err(PerfScenarioConfigError(format!(
-                "this binary supports only rtt-light-v1/current/static|behavior; got {contract}/{stage}/{lane}"
+                "this binary supports only rtt-light-v1/current|p01/static|behavior; got {contract}/{stage}/{lane}"
             )));
         }
     };

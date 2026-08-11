@@ -1,8 +1,7 @@
 //! Deterministic RenderDoc capture for the frozen RtT-light profiling fixture.
 
 use super::super::rtt_composite::{
-    RTT_COMPOSITE_BIND_SET_OR_SPACE, RTT_COMPOSITE_MASK_SAMPLER_BINDING,
-    RTT_COMPOSITE_MASK_TEXTURE_BINDING, RTT_COMPOSITE_SCENE_SAMPLER_BINDING,
+    RTT_COMPOSITE_BIND_SET_OR_SPACE, RTT_COMPOSITE_SCENE_SAMPLER_BINDING,
     RTT_COMPOSITE_SCENE_TEXTURE_BINDING,
 };
 use super::*;
@@ -32,24 +31,15 @@ const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 3;
 const RENDERDOC_SELECTOR_STRATEGY: &str = "wgpu_device_null_window";
 const SIMULATION_TICK_SOURCE: &str = "perf_capture.fixed_update_tick";
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
-const RTT_MASK_LABEL: &str = "hell-workers-rtt-soul-mask";
 
-type SoulWorldInstancesQuery<'w, 's> = Query<
-    'w,
-    's,
-    &'static WorldInstance,
-    Or<(
-        With<SoulProxy3d>,
-        With<SoulMaskProxy3d>,
-        With<SoulShadowProxy3d>,
-    )>,
->;
+type SoulWorldInstancesQuery<'w, 's> =
+    Query<'w, 's, &'static WorldInstance, Or<(With<SoulProxy3d>, With<SoulShadowProxy3d>)>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct CpuCheckpointSignature {
     checksum: u64,
     scene_target: AssetId<Image>,
-    mask_target: AssetId<Image>,
+    mask_target: Option<AssetId<Image>>,
     render_inventory: PerfRenderInventory,
 }
 
@@ -58,7 +48,7 @@ struct StableRenderDocCheckpoint {
     generation: u64,
     simulation_tick: u64,
     scene_target: AssetId<Image>,
-    mask_target: AssetId<Image>,
+    mask_target: Option<AssetId<Image>>,
     render_inventory: PerfRenderInventory,
     fixture: RuntimeFixtureEvidence,
 }
@@ -282,7 +272,13 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         }
     }
 
-    let expected_instances = params.config.soul_count as usize * 3;
+    let Some(selection) = params.config.rtt_light_selection() else {
+        bridge.replace(RenderDocBridgeState::Failed(
+            "RenderDoc capture is missing the RtT-light selection".to_string(),
+        ));
+        return;
+    };
+    let expected_instances = params.config.soul_count as usize * 2;
     if params.soul_world_instances.iter().count() != expected_instances
         || !params
             .soul_world_instances
@@ -299,14 +295,14 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         return;
     }
     let render_inventory = calculate_render_inventory(&params.checksum_queries);
-    if let Err(reason) = validate_current_medium_inventory(render_inventory) {
+    if let Err(reason) = validate_medium_inventory(selection.stage_id(), render_inventory) {
         bridge.replace(RenderDocBridgeState::Failed(reason));
         return;
     }
     let signature = CpuCheckpointSignature {
         checksum: checksum.value,
         scene_target: params.rtt_runtime.scene.id(),
-        mask_target: params.rtt_runtime.soul_mask.id(),
+        mask_target: None,
         render_inventory,
     };
     if state.previous == Some(signature) {
@@ -556,13 +552,11 @@ fn gpu_signature(
     let Some(scene) = params.images.get(checkpoint.scene_target) else {
         return Ok(None);
     };
-    let Some(mask) = params.images.get(checkpoint.mask_target) else {
-        return Ok(None);
-    };
-    if scene.texture_descriptor.label != Some(RTT_SCENE_LABEL)
-        || mask.texture_descriptor.label != Some(RTT_MASK_LABEL)
-    {
+    if scene.texture_descriptor.label != Some(RTT_SCENE_LABEL) {
         return Err("RtT GPU texture labels differ from the RenderDoc contract".to_string());
+    }
+    if checkpoint.mask_target.is_some() {
+        return Err("P01 RenderDoc checkpoint unexpectedly retained a mask target".to_string());
     }
     if params.pipelines.waiting_pipelines().next().is_some() {
         return Ok(None);
@@ -593,7 +587,7 @@ fn gpu_signature(
                 scene_camera_count += 1;
             }
             Some(NormalizedRenderTarget::Image(target))
-                if target.handle.id() == checkpoint.mask_target =>
+                if Some(target.handle.id()) == checkpoint.mask_target =>
             {
                 mask_camera_count += 1;
             }
@@ -601,7 +595,7 @@ fn gpu_signature(
             _ => {}
         }
     }
-    if scene_camera_count != 1 || mask_camera_count != 1 || window_camera_count == 0 {
+    if scene_camera_count != 1 || mask_camera_count != 0 || window_camera_count == 0 {
         return Ok(None);
     }
     Ok(Some(GpuReadySignature {
@@ -613,15 +607,15 @@ fn gpu_signature(
     }))
 }
 
-fn validate_current_medium_inventory(inventory: PerfRenderInventory) -> Result<(), String> {
+fn validate_medium_inventory(stage_id: &str, inventory: PerfRenderInventory) -> Result<(), String> {
     let expected = PerfRenderInventory {
         scene_target_count: 1,
-        mask_target_count: 1,
-        camera_3d_rtt_count: 2,
+        mask_target_count: usize::from(stage_id == "current"),
+        camera_3d_rtt_count: if stage_id == "current" { 2 } else { 1 },
         camera_2d_count: 3,
         layer_2d_pass_count: 2,
         soul_proxy_3d: 200,
-        soul_mask_proxy_3d: 200,
+        soul_mask_proxy_3d: if stage_id == "current" { 200 } else { 0 },
         soul_shadow_proxy_3d: 200,
         familiar_proxy_3d: 12,
     };
@@ -629,7 +623,7 @@ fn validate_current_medium_inventory(inventory: PerfRenderInventory) -> Result<(
         Ok(())
     } else {
         Err(format!(
-            "current medium RenderDoc inventory differs: observed={inventory:?} expected={expected:?}"
+            "{stage_id} medium RenderDoc inventory differs: observed={inventory:?} expected={expected:?}"
         ))
     }
 }
@@ -875,10 +869,10 @@ struct RuntimeCompositeSamplerBinding {
 #[derive(Debug, PartialEq, Eq, Serialize)]
 struct RuntimeRenderResources {
     scene_target_label: &'static str,
-    mask_target_label: &'static str,
+    mask_target_label: Option<&'static str>,
     composite_draw_count: u32,
-    composite_texture_bindings: [RuntimeCompositeTextureBinding; 2],
-    composite_sampler_bindings: [RuntimeCompositeSamplerBinding; 2],
+    composite_texture_bindings: Vec<RuntimeCompositeTextureBinding>,
+    composite_sampler_bindings: Vec<RuntimeCompositeSamplerBinding>,
 }
 
 impl From<PerfRenderInventory> for RuntimeRenderInventory {
@@ -897,37 +891,22 @@ impl From<PerfRenderInventory> for RuntimeRenderInventory {
     }
 }
 
-fn current_composite_render_resources() -> RuntimeRenderResources {
+fn p01_composite_render_resources() -> RuntimeRenderResources {
     RuntimeRenderResources {
         scene_target_label: RTT_SCENE_LABEL,
-        mask_target_label: RTT_MASK_LABEL,
+        mask_target_label: None,
         composite_draw_count: 1,
-        composite_texture_bindings: [
-            RuntimeCompositeTextureBinding {
-                target: "scene_target",
-                stage: "fragment",
-                fixed_bind_set_or_space: RTT_COMPOSITE_BIND_SET_OR_SPACE,
-                fixed_bind_number: RTT_COMPOSITE_SCENE_TEXTURE_BINDING,
-            },
-            RuntimeCompositeTextureBinding {
-                target: "mask_target",
-                stage: "fragment",
-                fixed_bind_set_or_space: RTT_COMPOSITE_BIND_SET_OR_SPACE,
-                fixed_bind_number: RTT_COMPOSITE_MASK_TEXTURE_BINDING,
-            },
-        ],
-        composite_sampler_bindings: [
-            RuntimeCompositeSamplerBinding {
-                stage: "fragment",
-                fixed_bind_set_or_space: RTT_COMPOSITE_BIND_SET_OR_SPACE,
-                fixed_bind_number: RTT_COMPOSITE_SCENE_SAMPLER_BINDING,
-            },
-            RuntimeCompositeSamplerBinding {
-                stage: "fragment",
-                fixed_bind_set_or_space: RTT_COMPOSITE_BIND_SET_OR_SPACE,
-                fixed_bind_number: RTT_COMPOSITE_MASK_SAMPLER_BINDING,
-            },
-        ],
+        composite_texture_bindings: vec![RuntimeCompositeTextureBinding {
+            target: "scene_target",
+            stage: "fragment",
+            fixed_bind_set_or_space: RTT_COMPOSITE_BIND_SET_OR_SPACE,
+            fixed_bind_number: RTT_COMPOSITE_SCENE_TEXTURE_BINDING,
+        }],
+        composite_sampler_bindings: vec![RuntimeCompositeSamplerBinding {
+            stage: "fragment",
+            fixed_bind_set_or_space: RTT_COMPOSITE_BIND_SET_OR_SPACE,
+            fixed_bind_number: RTT_COMPOSITE_SCENE_SAMPLER_BINDING,
+        }],
     }
 }
 
@@ -1000,7 +979,7 @@ fn write_runtime_checkpoint(
             frame_count_before_capture: result.frame_count_before_capture,
         },
         render_inventory: result.checkpoint.render_inventory.into(),
-        render_resources: current_composite_render_resources(),
+        render_resources: p01_composite_render_resources(),
         fixture: result.checkpoint.fixture.clone(),
         capture_path: &result.capture_path,
         requested_renderdoc_api_version: RENDERDOC_REQUESTED_API_VERSION,
@@ -1052,44 +1031,46 @@ mod tests {
             soul_shadow_proxy_3d: 200,
             familiar_proxy_3d: 12,
         };
-        assert_eq!(validate_current_medium_inventory(inventory), Ok(()));
+        assert!(validate_medium_inventory("current", inventory).is_ok());
     }
 
     #[test]
-    fn current_composite_binding_contract_is_exact() {
-        let resources = current_composite_render_resources();
+    fn p01_medium_inventory_requires_scene_only_topology() {
+        let inventory = PerfRenderInventory {
+            scene_target_count: 1,
+            mask_target_count: 0,
+            camera_3d_rtt_count: 1,
+            camera_2d_count: 3,
+            layer_2d_pass_count: 2,
+            soul_proxy_3d: 200,
+            soul_mask_proxy_3d: 0,
+            soul_shadow_proxy_3d: 200,
+            familiar_proxy_3d: 12,
+        };
+        assert!(validate_medium_inventory("p01", inventory).is_ok());
+        assert!(validate_medium_inventory("current", inventory).is_err());
+    }
+
+    #[test]
+    fn p01_composite_binding_contract_is_exact() {
+        let resources = p01_composite_render_resources();
         assert_eq!(resources.composite_draw_count, 1);
         assert_eq!(
             resources.composite_texture_bindings,
-            [
-                RuntimeCompositeTextureBinding {
-                    target: "scene_target",
-                    stage: "fragment",
-                    fixed_bind_set_or_space: 2,
-                    fixed_bind_number: 1,
-                },
-                RuntimeCompositeTextureBinding {
-                    target: "mask_target",
-                    stage: "fragment",
-                    fixed_bind_set_or_space: 2,
-                    fixed_bind_number: 3,
-                },
-            ]
+            vec![RuntimeCompositeTextureBinding {
+                target: "scene_target",
+                stage: "fragment",
+                fixed_bind_set_or_space: 2,
+                fixed_bind_number: 1,
+            }]
         );
         assert_eq!(
             resources.composite_sampler_bindings,
-            [
-                RuntimeCompositeSamplerBinding {
-                    stage: "fragment",
-                    fixed_bind_set_or_space: 2,
-                    fixed_bind_number: 2,
-                },
-                RuntimeCompositeSamplerBinding {
-                    stage: "fragment",
-                    fixed_bind_set_or_space: 2,
-                    fixed_bind_number: 4,
-                },
-            ]
+            vec![RuntimeCompositeSamplerBinding {
+                stage: "fragment",
+                fixed_bind_set_or_space: 2,
+                fixed_bind_number: 2,
+            }]
         );
     }
 }

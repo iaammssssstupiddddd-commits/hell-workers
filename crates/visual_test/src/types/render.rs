@@ -31,8 +31,6 @@ pub fn face_uv_offset(col: f32, row: f32) -> Vec2 {
 #[derive(Clone, Copy, Debug, ShaderType)]
 pub struct RttCompositeParams {
     pub pixel_size: Vec2,
-    pub mask_radius_px: f32,
-    pub mask_feather: f32,
     pub shadow_offset_uv: Vec2,
     pub shadow_width_px: f32,
     pub shadow_strength: f32,
@@ -45,9 +43,6 @@ pub struct LocalRttCompositeMaterial {
     #[texture(1)]
     #[sampler(2)]
     pub scene_texture: Handle<Image>,
-    #[texture(3)]
-    #[sampler(4)]
-    pub soul_mask_texture: Handle<Image>,
 }
 
 impl Material2d for LocalRttCompositeMaterial {
@@ -64,8 +59,6 @@ impl Material2d for LocalRttCompositeMaterial {
 #[derive(Component)]
 pub struct LocalRttComposite;
 #[derive(Component)]
-pub struct Camera3dSoulMaskTest;
-#[derive(Component)]
 pub struct Camera3dRtt;
 #[derive(Component)]
 pub struct TestMainCamera;
@@ -75,16 +68,11 @@ pub struct VisualTestRttRuntime {
     pub physical_size: UVec2,
     pub target_scale_factor: f32,
     pub scene: Handle<Image>,
-    pub soul_mask: Handle<Image>,
 }
 
 impl VisualTestRttRuntime {
     pub fn scene_target(&self) -> RenderTarget {
         image_target(self.scene.clone(), self.target_scale_factor)
-    }
-
-    pub fn soul_mask_target(&self) -> RenderTarget {
-        image_target(self.soul_mask.clone(), self.target_scale_factor)
     }
 
     pub fn pixel_size(&self) -> Vec2 {
@@ -109,11 +97,6 @@ pub struct TestSoulConfig {
     pub face_mat: Handle<CharacterMaterial>,
     pub body_mat: Handle<CharacterMaterial>,
     pub index: usize,
-}
-
-#[derive(Component)]
-pub struct SoulMaskConfig {
-    pub mask_mat: Handle<SoulMaskMaterial>,
 }
 
 #[derive(Component)]
@@ -142,7 +125,6 @@ pub struct TestAssets {
     pub blob_shadow_mesh: Handle<Mesh>,
     pub blob_shadow_material: Handle<StandardMaterial>,
     pub soul_shadow_material: Handle<SoulShadowMaterial>,
-    pub soul_mask_material: Handle<SoulMaskMaterial>,
 }
 
 // ─── クエリ型エイリアス ───────────────────────────────────────────────────────
@@ -160,23 +142,10 @@ pub type AnimPlayerQuery<'w, 's> = Query<
 pub struct SoulLayoutEntities<'w, 's> {
     pub shadow_proxies: Query<'w, 's, Entity, With<SoulShadowProxy3d>>,
     pub blob_shadow_proxies: Query<'w, 's, Entity, With<SoulBlobShadowProxy3d>>,
-    pub mask_proxies: Query<'w, 's, Entity, With<SoulMaskProxy3d>>,
 }
 
-pub type Cam3dSyncQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static mut Transform, &'static mut Projection),
-    Or<(With<Camera3dRtt>, With<Camera3dSoulMaskTest>)>,
->;
+pub type Cam3dSyncQuery<'w, 's> =
+    Query<'w, 's, (&'static mut Transform, &'static mut Projection), With<Camera3dRtt>>;
 
-pub type Cam2dQuery<'w, 's> = Query<
-    'w,
-    's,
-    &'static Transform,
-    (
-        With<TestMainCamera>,
-        Without<Camera3dRtt>,
-        Without<Camera3dSoulMaskTest>,
-    ),
->;
+pub type Cam2dQuery<'w, 's> =
+    Query<'w, 's, &'static Transform, (With<TestMainCamera>, Without<Camera3dRtt>)>;

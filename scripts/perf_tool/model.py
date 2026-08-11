@@ -34,7 +34,8 @@ PERF_DESCRIPTION = __doc__
 SUMMARY_SCHEMA_VERSION = "11"
 DETERMINISM_SCHEMA_VERSION = "4"
 SESSION_MANIFEST_SCHEMA_VERSION = 2
-WINDOW_SCHEMA_VERSION = "2"
+WINDOW_SCHEMA_VERSION = "3"
+WINDOW_HISTORICAL_SCHEMA_VERSION = "2"
 RENDER_INVENTORY_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_FIXTURE_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_LAYOUT_SCHEMA_VERSION = "1"
@@ -76,7 +77,7 @@ RENDER_INVENTORY_COLUMNS = (
     "soul_shadow_proxy_3d",
     "familiar_proxy_3d",
 )
-WINDOW_COLUMNS = (
+WINDOW_COLUMNS_V2 = (
     "schema_version",
     "window_present",
     "logical_width",
@@ -112,6 +113,13 @@ WINDOW_COLUMNS = (
     "end_adapter_backend",
     "end_requested_present_mode",
     "end_effective_present_mode",
+)
+WINDOW_COLUMNS = (
+    *WINDOW_COLUMNS_V2[:10],
+    "mask_target_present",
+    *WINDOW_COLUMNS_V2[10:27],
+    "end_mask_target_present",
+    *WINDOW_COLUMNS_V2[27:],
 )
 INDOOR_LIGHT_FIXTURE_COLUMNS = (
     "schema_version",

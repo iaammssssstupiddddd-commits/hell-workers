@@ -150,7 +150,7 @@ SAVE_TRANSACTION_AGGREGATE_COLUMNS = (
     "adapter",
 )
 RTT_LIGHT_CONTRACT_ID = "rtt-light-v1"
-RTT_LIGHT_STAGE = "current"
+RTT_LIGHT_DEFAULT_STAGE = "current"
 RTT_LIGHT_LEGS = ("audit", "behavior", "capture", "renderdoc", "memory")
 RTT_LIGHT_SOURCE_CHECKPOINTS = (
     "start",
@@ -862,7 +862,7 @@ def assert_prerequisite_ancestors(
             )
 
 
-def rtt_light_contract(repo: Path) -> dict[str, Any]:
+def rtt_light_contract(repo: Path, stage: str) -> dict[str, Any]:
     scripts = str(repo / "scripts")
     if scripts not in sys.path:
         sys.path.insert(0, scripts)
@@ -872,14 +872,20 @@ def rtt_light_contract(repo: Path) -> dict[str, Any]:
         contract = load_rtt_light_contract(RTT_LIGHT_CONTRACT_ID)
     except (ImportError, OSError, ValueError, RuntimeError) as error:
         raise AcceptanceError(f"RtT-light contract validation failed: {error}") from error
+    if stage not in contract.get("stages", {}):
+        raise AcceptanceError(f"unknown RtT-light stage: {stage}")
+    stage_order = list(contract["stages"])
+    selected_index = stage_order.index(stage)
     legs = [
         leg.get("leg_id")
         for leg in contract.get("formal_legs", [])
-        if isinstance(leg, dict) and leg.get("first_required_stage") == "current"
+        if isinstance(leg, dict)
+        and leg.get("first_required_stage") in stage_order
+        and stage_order.index(leg["first_required_stage"]) <= selected_index
     ]
     if legs != list(RTT_LIGHT_LEGS):
         raise AcceptanceError(
-            f"RtT-light current leg order differs from the launcher: {legs}"
+            f"RtT-light {stage} leg order differs from the launcher: {legs}"
         )
     return contract
 
@@ -896,7 +902,7 @@ def formal_contract_ready(contract: dict[str, Any]) -> list[str]:
 
 
 def rtt_light_attempt_path(
-    repo: Path, *, subject_commit: str, attempt_id: str
+    repo: Path, *, stage: str, subject_commit: str, attempt_id: str
 ) -> Path:
     try:
         parsed = uuid.UUID(attempt_id)
@@ -908,7 +914,7 @@ def rtt_light_attempt_path(
         repo
         / "target/perf-runs/rtt-light"
         / RTT_LIGHT_CONTRACT_ID
-        / f"{RTT_LIGHT_STAGE}-{subject_commit[:16]}"
+        / f"{stage}-{subject_commit[:16]}"
         / "attempts"
         / attempt_id
     )
@@ -1203,6 +1209,7 @@ def rtt_light_session_commands(
     window_backend: str,
     contract: dict[str, Any],
     formal: bool,
+    stage: str,
 ) -> dict[str, list[str]]:
     perf = ["python3", str(repo / "scripts/perf.py")]
     matrix = contract["formal_matrix"]
@@ -1212,7 +1219,7 @@ def rtt_light_session_commands(
         "--contract",
         RTT_LIGHT_CONTRACT_ID,
         "--stage",
-        RTT_LIGHT_STAGE,
+        stage,
         "--seed",
         str(matrix["seed"]),
         "--backend",
@@ -1270,7 +1277,7 @@ def rtt_light_session_commands(
         "--renders",
         "cpu",
         "--behavior-cases",
-        ",".join(contract["stages"][RTT_LIGHT_STAGE]["required_behavior_cases"]),
+        ",".join(contract["stages"][stage]["required_behavior_cases"]),
         "--repeat",
         str(repeat),
         "--preflight-runs",
@@ -1683,7 +1690,7 @@ def plan_save_catalog(args: argparse.Namespace) -> int:
 def plan_rtt_light(args: argparse.Namespace) -> int:
     repo = validate_repo(args.repo)
     resources = resource_snapshot(repo, require_launcher=True)
-    contract = rtt_light_contract(repo)
+    contract = rtt_light_contract(repo, args.stage)
     subject_commit = git_subject(repo)
     fingerprint = source_fingerprint(repo)
     harness_fingerprint = native_harness_fingerprint(repo)
@@ -1720,9 +1727,10 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
                 fingerprint=fingerprint,
                 adapter=args.adapter,
                 window_backend=args.window_backend,
+                stage=args.stage,
             )
             attempt = rtt_light_attempt_path(
-                repo, subject_commit=subject_commit, attempt_id=attempt_id
+                repo, stage=args.stage, subject_commit=subject_commit, attempt_id=attempt_id
             )
             if attempt.exists():
                 failures.append(f"attempt path already exists: {attempt}")
@@ -1731,7 +1739,7 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
         tooling, tool_failures = inspect_renderdoc_tools(repo, args)
         failures.extend(tool_failures)
         output_root = rtt_light_attempt_path(
-            repo, subject_commit=subject_commit, attempt_id=attempt_id
+            repo, stage=args.stage, subject_commit=subject_commit, attempt_id=attempt_id
         )
     else:
         output_root = state_root / "artifacts"
@@ -1758,6 +1766,8 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
         str(repo),
         "--level",
         args.level,
+        "--stage",
+        args.stage,
         "--state-root",
         str(state_root),
         "--attempt-id",
@@ -1802,6 +1812,7 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
         "profile": "rtt-light",
         "measurement_kind": "formal" if args.level == "formal" else "s1-smoke",
         "level": args.level,
+        "stage_id": args.stage,
         "subject_commit": subject_commit,
         "source_fingerprint": fingerprint,
         "harness_fingerprint": harness_fingerprint,
@@ -2401,6 +2412,7 @@ def renderdoc_capture_command(
     tooling: dict[str, Any],
     binary: Path,
     capsule_manifest: Path,
+    stage: str,
     output: Path | None = None,
     mode: str = "formal",
     capture_session: Path | None = None,
@@ -2424,7 +2436,7 @@ def renderdoc_capture_command(
         "--contract",
         RTT_LIGHT_CONTRACT_ID,
         "--stage",
-        RTT_LIGHT_STAGE,
+        stage,
         "--adapter",
         adapter,
         "--window-backend",
@@ -2452,7 +2464,7 @@ def renderdoc_capture_command(
 
 
 def verify_rtt_light_smoke(
-    *, audit: Path, capture: Path, memory: Path, adapter: str, window_backend: str
+    *, audit: Path, capture: Path, memory: Path, adapter: str, window_backend: str, stage: str
 ) -> dict[str, Any]:
     manifests = {
         name: read_json(path / "manifest.json")
@@ -2469,6 +2481,11 @@ def verify_rtt_light_smoke(
         require(
             matrix.get("workload") == "indoor-light",
             f"{name} smoke session has the wrong workload",
+        )
+        require(
+            matrix.get("rtt_light_contract")
+            == {"contract_id": RTT_LIGHT_CONTRACT_ID, "stage_id": stage, "lane": "static"},
+            f"{name} smoke session has the wrong RtT-light stage",
         )
         require(matrix.get("repeat") == 3, f"{name} smoke session has wrong repeat")
         cases = manifest.get("cases")
@@ -2580,6 +2597,7 @@ def verify_rtt_light_prerequisites(
     fingerprint: str,
     adapter: str,
     window_backend: str,
+    stage: str,
 ) -> dict[str, Any]:
     for root, label in ((s0_job_root, "S0"), (s1_job_root, "S1")):
         if not root.is_dir() or root.is_symlink():
@@ -2626,6 +2644,7 @@ def verify_rtt_light_prerequisites(
         memory=s1_attempt / "memory",
         adapter=adapter,
         window_backend=window_backend,
+        stage=stage,
     )
     return {
         "status": "pass",
@@ -2666,7 +2685,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
             "run-rtt-light must be launched by the planned direct kitty command"
         )
     repo = validate_repo(args.repo)
-    contract = rtt_light_contract(repo)
+    contract = rtt_light_contract(repo, args.stage)
     subject_commit = args.subject_commit
     if git_subject(repo) != subject_commit:
         raise AcceptanceError("planned RtT-light subject commit changed before launch")
@@ -2686,7 +2705,10 @@ def run_rtt_light(args: argparse.Namespace) -> int:
     formal = args.level == "formal"
     attempt = (
         rtt_light_attempt_path(
-            repo, subject_commit=subject_commit, attempt_id=args.attempt_id
+            repo,
+            stage=args.stage,
+            subject_commit=subject_commit,
+            attempt_id=args.attempt_id,
         )
         if formal
         else state_root / "artifacts"
@@ -2751,6 +2773,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                 fingerprint=fingerprint,
                 adapter=args.adapter,
                 window_backend=args.window_backend,
+                stage=args.stage,
             )
             tooling, failures = inspect_renderdoc_tools(repo, args)
             if failures or tooling is None:
@@ -2781,6 +2804,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
         window_backend=args.window_backend,
         contract=contract,
         formal=formal,
+        stage=args.stage,
     )
     LOCK_PATH.touch(exist_ok=True)
     with LOCK_PATH.open("r+", encoding="utf-8") as lock:
@@ -2905,6 +2929,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                         tooling=tooling,
                         binary=renderdoc_binary,
                         capsule_manifest=capsule_root / "capsule-manifest.json",
+                        stage=args.stage,
                         output=rd0_output,
                         mode="rd0",
                         capture_session=s1_attempt / "capture/manifest.json",
@@ -3038,6 +3063,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                         tooling=tooling,
                         binary=renderdoc_binary,
                         capsule_manifest=capsule_root / "capsule-manifest.json",
+                        stage=args.stage,
                         capture_session=attempt / "capture/manifest.json",
                     ),
                     repo=repo,
@@ -3102,6 +3128,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                     memory=attempt / "memory",
                     adapter=args.adapter,
                     window_backend=args.window_backend,
+                    stage=args.stage,
                 )
                 update_state(
                     state_file,
@@ -3143,7 +3170,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                 "profile": "rtt-light",
                 "measurement_kind": "formal",
                 "contract_id": RTT_LIGHT_CONTRACT_ID,
-                "stage_id": RTT_LIGHT_STAGE,
+                "stage_id": args.stage,
                 "attempt_id": args.attempt_id,
                 "subject_commit": subject_commit,
                 "prerequisite_commits": args.prerequisite_commit,
@@ -5751,12 +5778,18 @@ def write_fake_rtt_light_smoke(
     leg: str,
     binary_hash: str,
     window_backend: str,
+    stage: str = "current",
 ) -> None:
     path.mkdir(parents=True)
     fixed = leg == "audit"
     case_count = 1 if fixed else 6
     matrix = {
         "workload": "indoor-light",
+        "rtt_light_contract": {
+            "contract_id": RTT_LIGHT_CONTRACT_ID,
+            "stage_id": stage,
+            "lane": "static",
+        },
         "sizes": ["small"] if fixed else ["small", "medium", "large"],
         "renders": ["cpu"] if fixed else ["cpu", "gpu"],
         "repeat": 3,
@@ -5855,7 +5888,7 @@ def write_fake_save_transaction_session(
                 writer.writeheader()
                 writer.writerow(row)
             window = {
-                "schema_version": "2",
+                "schema_version": "3",
                 "window_present": "false",
                 "logical_width": "",
                 "logical_height": "",
@@ -5865,8 +5898,9 @@ def write_fake_save_transaction_session(
                 "rtt_quality": "high",
                 "scene_target_width": "1280",
                 "scene_target_height": "720",
-                "mask_target_width": "1280",
-                "mask_target_height": "720",
+                "mask_target_present": "false",
+                "mask_target_width": "0",
+                "mask_target_height": "0",
                 "target_scale_factor": "1.000000",
                 "resolved_window_backend": "",
                 "adapter_name": "",
@@ -5882,8 +5916,9 @@ def write_fake_save_transaction_session(
                 "end_rtt_quality": "high",
                 "end_scene_target_width": "1280",
                 "end_scene_target_height": "720",
-                "end_mask_target_width": "1280",
-                "end_mask_target_height": "720",
+                "end_mask_target_present": "false",
+                "end_mask_target_width": "0",
+                "end_mask_target_height": "0",
                 "end_target_scale_factor": "1.000000",
                 "end_resolved_window_backend": "",
                 "end_adapter_name": "",
@@ -6631,6 +6666,7 @@ def self_test() -> int:
             memory=rtt_smoke / "memory",
             adapter="Intel",
             window_backend="x11",
+            stage="current",
         )
         require(rtt_result["status"] == "pass", "valid S1 fixture did not pass")
         broken_rtt = read_json(rtt_smoke / "capture" / "manifest.json")
@@ -6643,11 +6679,51 @@ def self_test() -> int:
                 memory=rtt_smoke / "memory",
                 adapter="Intel",
                 window_backend="x11",
+                stage="current",
             )
         except AcceptanceError:
             pass
         else:
             raise AcceptanceError("invalid S1 clock mode fixture unexpectedly passed")
+
+        rtt_p01 = root / "rtt-light-p01-smoke"
+        for leg, binary_hash, window_backend in (
+            ("audit", "e" * 64, "headless"),
+            ("capture", "e" * 64, "x11"),
+            ("memory", "f" * 64, "x11"),
+        ):
+            write_fake_rtt_light_smoke(
+                rtt_p01 / leg,
+                leg=leg,
+                binary_hash=binary_hash,
+                window_backend=window_backend,
+                stage="p01",
+            )
+        require(
+            verify_rtt_light_smoke(
+                audit=rtt_p01 / "audit",
+                capture=rtt_p01 / "capture",
+                memory=rtt_p01 / "memory",
+                adapter="Intel",
+                window_backend="x11",
+                stage="p01",
+            )["status"]
+            == "pass",
+            "valid P01 S1 fixture did not pass",
+        )
+        try:
+            verify_rtt_light_smoke(
+                audit=rtt_p01 / "audit",
+                capture=rtt_p01 / "capture",
+                memory=rtt_p01 / "memory",
+                adapter="Intel",
+                window_backend="x11",
+                stage="current",
+            )
+        except AcceptanceError:
+            pass
+        else:
+            raise AcceptanceError("P01 S1 fixture was accepted as current")
 
         native = root / "deconstruction"
         (native / "runtime/saves").mkdir(parents=True)
@@ -7268,6 +7344,7 @@ def add_rtt_light_arguments(
 ) -> None:
     parser.add_argument("--repo", required=True)
     parser.add_argument("--level", required=True, choices=["s1", "formal"])
+    parser.add_argument("--stage", default=RTT_LIGHT_DEFAULT_STAGE, choices=["current", "p01"])
     parser.add_argument("--attempt-id")
     parser.add_argument("--adapter", default="Intel")
     parser.add_argument("--window-backend", default="x11", choices=["x11", "wayland"])

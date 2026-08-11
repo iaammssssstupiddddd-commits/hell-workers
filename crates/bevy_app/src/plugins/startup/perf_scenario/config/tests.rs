@@ -230,8 +230,22 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
     );
     assert!(super::parse_rtt_light_selection(&exact, super::PerfWorkload::Gather).is_err());
 
+    let mut p01 = exact.clone();
+    p01[4] = "p01".to_string();
+    let p01_selection = super::parse_rtt_light_selection(&p01, super::PerfWorkload::IndoorLight)
+        .expect("p01/static v1 is implemented")
+        .expect("P01 requires an explicit selection");
+    assert_eq!(p01_selection.stage_id(), "p01");
+    let mut p01_behavior = p01;
+    p01_behavior[6] = "behavior".to_string();
+    let p01_behavior_selection =
+        super::parse_rtt_light_selection(&p01_behavior, super::PerfWorkload::IndoorLight)
+            .expect("p01/behavior v1 is implemented")
+            .expect("P01 behavior requires an explicit selection");
+    assert_eq!(p01_behavior_selection.lane(), "behavior");
+
     let mut wrong_stage = exact;
-    wrong_stage[4] = "p01".to_string();
+    wrong_stage[4] = "p02".to_string();
     assert!(
         super::parse_rtt_light_selection(&wrong_stage, super::PerfWorkload::IndoorLight).is_err()
     );

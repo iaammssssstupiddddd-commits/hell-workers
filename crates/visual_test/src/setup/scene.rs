@@ -9,7 +9,6 @@ pub struct SceneRenderAssets<'w> {
     character_materials: ResMut<'w, Assets<CharacterMaterial>>,
     standard_materials: ResMut<'w, Assets<StandardMaterial>>,
     soul_shadow_materials: ResMut<'w, Assets<SoulShadowMaterial>>,
-    soul_mask_materials: ResMut<'w, Assets<SoulMaskMaterial>>,
     composite_materials: ResMut<'w, Assets<LocalRttCompositeMaterial>>,
     meshes: ResMut<'w, Assets<Mesh>>,
 }
@@ -39,17 +38,10 @@ pub fn setup_scene(
         TextureFormat::Rgba8Unorm,
         Some(TextureFormat::Rgba8UnormSrgb),
     ));
-    let mask_handle = render_assets.images.add(Image::new_target_texture(
-        physical_size.x,
-        physical_size.y,
-        TextureFormat::Rgba8Unorm,
-        Some(TextureFormat::Rgba8UnormSrgb),
-    ));
     let runtime = VisualTestRttRuntime {
         physical_size,
         target_scale_factor,
         scene: rtt_handle,
-        soul_mask: mask_handle,
     };
 
     let cam3d_transform =
@@ -72,21 +64,6 @@ pub fn setup_scene(
         runtime.scene_target(),
         RenderLayers::layer(LAYER_3D),
         Camera3dRtt,
-    ));
-
-    // --- Camera3d (マスク RtT — シルエット) ---
-    commands.spawn((
-        Camera3d::default(),
-        Camera {
-            order: -1,
-            clear_color: ClearColorConfig::Custom(Color::srgba(0.0, 0.0, 0.0, 0.0)),
-            ..default()
-        },
-        Projection::Orthographic(OrthographicProjection::default_3d()),
-        cam3d_transform,
-        runtime.soul_mask_target(),
-        RenderLayers::layer(LAYER_3D_SOUL_MASK),
-        Camera3dSoulMaskTest,
     ));
 
     // --- Camera2d (メイン: パン + ズーム) ---
@@ -131,14 +108,11 @@ pub fn setup_scene(
         .add(LocalRttCompositeMaterial {
             params: RttCompositeParams {
                 pixel_size: runtime.pixel_size(),
-                mask_radius_px: 2.25,
-                mask_feather: 0.28,
                 shadow_offset_uv: Vec2::ZERO,
                 shadow_width_px: 0.0,
                 shadow_strength: 0.0,
             },
             scene_texture: runtime.scene.clone(),
-            soul_mask_texture: runtime.soul_mask.clone(),
         });
     commands.spawn((
         Mesh2d(mesh),
@@ -185,9 +159,6 @@ pub fn setup_scene(
     let soul_shadow_material = render_assets
         .soul_shadow_materials
         .add(SoulShadowMaterial::default());
-    let soul_mask_material = render_assets
-        .soul_mask_materials
-        .add(SoulMaskMaterial::solid_white());
 
     // --- 指向性ライト (本番相当) ---
     let sun_dir = topdown_sun_direction_world();
@@ -215,7 +186,6 @@ pub fn setup_scene(
         blob_shadow_mesh,
         blob_shadow_material,
         soul_shadow_material: soul_shadow_material.clone(),
-        soul_mask_material: soul_mask_material.clone(),
     };
     rebuild_soul_test_layout(
         &mut commands,

@@ -16,13 +16,9 @@ pub struct DevPanelMinimizeButtonLabel;
 #[derive(Component)]
 pub struct LodIndicatorText;
 
-/// RtT / Soul mask / Light 状態表示テキストのマーカー
+/// RtT / Light 状態表示テキストのマーカー
 #[derive(Component)]
 pub struct RenderPerfStatusText;
-
-/// Soul mask トグルボタンのマーカー
-#[derive(Component)]
-pub struct ToggleSoulMaskButton;
 
 /// RtT directional light トグルボタンのマーカー
 #[derive(Component)]

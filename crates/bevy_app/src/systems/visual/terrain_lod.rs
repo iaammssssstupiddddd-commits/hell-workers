@@ -10,9 +10,7 @@
 //! - `Lod0` は将来のリッチビジュアル実装用に予約し、現在の runtime では選択しない。
 
 use crate::plugins::startup::Terrain3dHandles;
-use crate::plugins::startup::{
-    Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime, composite_logical_size,
-};
+use crate::plugins::startup::{Camera3dRtt, RttRuntime, composite_logical_size};
 use crate::systems::visual::elevation_view::{ElevationDirection, ElevationViewState};
 use crate::world::map::TerrainChunk;
 use bevy::prelude::*;
@@ -24,12 +22,8 @@ use hw_visual::{
 
 // ── 型エイリアス ──────────────────────────────────────────────────────────────
 
-type Rtt3dCameraQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static Camera, &'static GlobalTransform),
-    (With<Camera3dRtt>, Without<Camera3dSoulMaskRtt>),
->;
+type Rtt3dCameraQuery<'w, 's> =
+    Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<Camera3dRtt>>;
 
 type ChunkLod1Query<'w, 's> = Query<
     'w,

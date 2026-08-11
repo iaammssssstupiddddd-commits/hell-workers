@@ -35,7 +35,7 @@ pub use handles::{
     PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
 };
 pub use material::{
-    CharacterMaterial, SectionCut, SectionMaterial, SoulMaskMaterial, SoulShadowMaterial,
+    CharacterMaterial, SectionCut, SectionMaterial, SoulShadowMaterial,
     TERRAIN_DIRT_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_DIRT_DOMAIN_WARP_STRENGTH,
     TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_GRASS_DOMAIN_WARP_STRENGTH,
     TERRAIN_GRASS_UV_DISTORT_STRENGTH, TERRAIN_KIND_DIRT, TERRAIN_KIND_GRASS, TERRAIN_KIND_RIVER,
@@ -52,8 +52,7 @@ pub use material::{
 pub use familiar::{FamiliarVisualOffset, FamiliarVisualOwner};
 pub use visual3d::{
     Building3dVisual, FamiliarProxy3d, SoulAnimVisualState, SoulAnimationPlayer3d,
-    SoulBodyAnimState, SoulFaceMaterial3d, SoulFaceState, SoulMaskProxy3d, SoulProxy3d,
-    SoulProxyOwnerCache,
+    SoulBodyAnimState, SoulFaceMaterial3d, SoulFaceState, SoulProxy3d, SoulProxyOwnerCache,
 };
 
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
@@ -86,7 +85,6 @@ impl Plugin for HwVisualPlugin {
             Material2dPlugin::<TaskAreaMaterial>::default(),
             MaterialPlugin::<material::CharacterMaterial>::default(),
             MaterialPlugin::<material::SectionMaterial>::default(),
-            MaterialPlugin::<material::SoulMaskMaterial>::default(),
             MaterialPlugin::<material::SoulShadowMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterialLod1Lite>::default(),
@@ -323,7 +321,6 @@ fn collect_transient_visual_entities(world: &mut World) -> HashSet<Entity> {
     let mut query = world.query_filtered::<Entity, Or<(
         With<visual3d::Building3dVisual>,
         With<visual3d::SoulProxy3d>,
-        With<visual3d::SoulMaskProxy3d>,
         With<visual3d::SoulShadowProxy3d>,
         With<visual3d::FamiliarProxy3d>,
         With<speech::components::SpeechBubble>,

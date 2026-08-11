@@ -65,11 +65,6 @@ pub fn update_render_perf_status_system(
         RttQualityPreset::Medium => "M",
         RttQualityPreset::Low => "L",
     };
-    let mask = if perf_toggles.soul_mask_enabled {
-        "ON"
-    } else {
-        "OFF"
-    };
     let light = if perf_toggles.directional_light_enabled {
         "ON"
     } else {
@@ -90,45 +85,11 @@ pub fn update_render_perf_status_system(
     } else {
         "OFF"
     };
-    let text = format!(
-        "RTT:{rtt} Mask:{mask} Light:{light} Light2:{light2} Terrain:{terrain} Objs:{scene_objects}"
-    );
+    let text =
+        format!("RTT:{rtt} Light:{light} Light2:{light2} Terrain:{terrain} Objs:{scene_objects}");
 
     for mut label in q_text.iter_mut() {
         label.0 = text.clone();
-    }
-}
-
-/// Soul mask ボタンのラベルと色を同期する。
-pub fn update_soul_mask_button_visual_system(
-    perf_toggles: Res<crate::RenderPerfToggles>,
-    mut q_button: Query<
-        (&Children, &mut BackgroundColor, &mut BorderColor),
-        With<ToggleSoulMaskButton>,
-    >,
-    mut q_text: Query<&mut Text>,
-) {
-    if !perf_toggles.is_changed() {
-        return;
-    }
-
-    for (children, mut bg, mut border) in q_button.iter_mut() {
-        if perf_toggles.soul_mask_enabled {
-            *bg = BackgroundColor(Color::srgb(0.30, 0.24, 0.08));
-            *border = BorderColor::all(Color::srgb(0.55, 0.45, 0.18));
-        } else {
-            *bg = BackgroundColor(Color::srgb(0.18, 0.12, 0.08));
-            *border = BorderColor::all(Color::srgb(0.40, 0.26, 0.18));
-        }
-        for child in children.iter() {
-            if let Ok(mut text) = q_text.get_mut(child) {
-                text.0 = if perf_toggles.soul_mask_enabled {
-                    "Mask: ON".to_string()
-                } else {
-                    "Mask: OFF".to_string()
-                };
-            }
-        }
     }
 }
 

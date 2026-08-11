@@ -67,9 +67,7 @@ use hw_soul_ai::soul_ai::update::slow_simulation::SlowSimulationPerfMetrics;
 #[cfg(feature = "profiling")]
 use hw_spatial::DoorPerfMetrics;
 #[cfg(feature = "profiling")]
-use hw_visual::visual3d::{
-    Building3dVisual, FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d, SoulShadowProxy3d,
-};
+use hw_visual::visual3d::{Building3dVisual, FamiliarProxy3d, SoulProxy3d, SoulShadowProxy3d};
 #[cfg(feature = "profiling")]
 use hw_world::{DoorVisualHandles, RuntimePathSearchBudget, RuntimePathSearchMetrics};
 use rand::SeedableRng;
@@ -83,7 +81,7 @@ use super::perf_render_environment::{
     PerfRenderEnvironment, PerfRenderEnvironmentEvidence, PerfRenderEnvironmentState,
 };
 #[cfg(feature = "profiling")]
-use super::rtt_setup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime};
+use super::rtt_setup::{Camera3dRtt, RttRuntime};
 
 #[cfg(feature = "profiling")]
 mod audit_checksum;
@@ -340,8 +338,8 @@ impl PerfWindowObservation {
             rtt_quality: quality.rtt.as_str(),
             scene_target_width: runtime.viewport.width,
             scene_target_height: runtime.viewport.height,
-            mask_target_width: runtime.viewport.width,
-            mask_target_height: runtime.viewport.height,
+            mask_target_width: 0,
+            mask_target_height: 0,
             target_scale_factor: runtime.target_scale_factor,
             resolved_window_backend: environment.map(|value| value.window_backend),
             adapter_name: environment.map(|value| value.adapter_name.clone()),
@@ -583,12 +581,10 @@ pub(crate) struct PerfChecksumQueries<'w, 's> {
     audit_fixtures: PerfAuditFixtureQuery<'w, 's>,
     target_transforms: Query<'w, 's, &'static Transform>,
     soul_proxy_3d: Query<'w, 's, (), With<SoulProxy3d>>,
-    soul_mask_proxy_3d: Query<'w, 's, (), With<SoulMaskProxy3d>>,
     soul_shadow_proxy_3d: Query<'w, 's, (), With<SoulShadowProxy3d>>,
     familiar_proxy_3d: Query<'w, 's, (), With<FamiliarProxy3d>>,
     building_3d_visual: Query<'w, 's, (), With<Building3dVisual>>,
     scene_rtt_cameras: Query<'w, 's, (), With<Camera3dRtt>>,
-    mask_rtt_cameras: Query<'w, 's, (), With<Camera3dSoulMaskRtt>>,
     cameras_2d: Query<'w, 's, (&'static Camera, Option<&'static RenderLayers>), With<Camera2d>>,
 }
 

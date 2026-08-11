@@ -1,7 +1,6 @@
 use super::*;
 
 type SoulProxyRootsQuery<'w, 's> = Query<'w, 's, &'static SoulProxy3d>;
-type SoulMaskProxyRootsQuery<'w, 's> = Query<'w, 's, &'static SoulMaskProxy3d>;
 type SoulShadowProxyRootsQuery<'w, 's> = Query<'w, 's, &'static SoulShadowProxy3d>;
 type ChildListQuery<'w, 's> = Query<'w, 's, &'static Children>;
 type TransformReadQuery<'w, 's> = Query<'w, 's, &'static Transform>;
@@ -18,13 +17,6 @@ pub struct SoulGltfApplyParams<'w, 's> {
     q_names: NameQuery<'w, 's>,
     q_meshes: MeshMarkerQuery<'w, 's>,
     q_animation_players: AnimationPlayerMarkerQuery<'w, 's>,
-}
-
-#[derive(SystemParam)]
-pub struct SoulMaskGltfApplyParams<'w, 's> {
-    q_soul_mask_roots: SoulMaskProxyRootsQuery<'w, 's>,
-    q_children: ChildListQuery<'w, 's>,
-    q_meshes: MeshMarkerQuery<'w, 's>,
 }
 
 #[derive(SystemParam)]
@@ -180,34 +172,5 @@ pub fn apply_soul_shadow_gltf_render_layers_on_ready(
                 ))
                 .insert(NotShadowCaster);
         }
-    }
-}
-
-/// Soul mask 用 SceneRoot 子孫へ RenderLayers と単色 mask material を付与する。
-pub fn apply_soul_mask_gltf_render_layers_on_ready(
-    scene_ready: On<WorldInstanceReady>,
-    mut commands: Commands,
-    character_handles: Res<CharacterHandles>,
-    params: SoulMaskGltfApplyParams,
-) {
-    let Ok(_proxy) = params.q_soul_mask_roots.get(scene_ready.entity) else {
-        return;
-    };
-
-    let render_layers = RenderLayers::layer(LAYER_3D_SOUL_MASK);
-    for child in params.q_children.iter_descendants(scene_ready.entity) {
-        let mut entity_commands = commands.entity(child);
-        entity_commands.insert(render_layers.clone());
-
-        if params.q_meshes.get(child).is_err() {
-            continue;
-        }
-
-        entity_commands
-            .remove::<MeshMaterial3d<StandardMaterial>>()
-            .remove::<MeshMaterial3d<CharacterMaterial>>()
-            .insert(MeshMaterial3d::<SoulMaskMaterial>(
-                character_handles.soul_mask_material.clone(),
-            ));
     }
 }

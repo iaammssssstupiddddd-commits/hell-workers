@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-01-single-scene-rtt-plan-2026-08-03` |
-| ステータス | `Ready — P00 current formal baseline registered` |
+| ステータス | `In Progress — M1〜M3 complete, M4 formal pending` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-11` |
 | 作成者 | `Codex` |
@@ -134,10 +134,10 @@ native helper、extractor、bundle validatorのhashはP00 current referenceとP0
 
 ### 完了条件
 
-- [ ] active world color handleはScene 1つだけ
-- [ ] resize / DPI / quality変更後、Scene Cameraとcompositeが同じ新handleを参照し、旧handleを参照しない
-- [ ] shaderにmask binding / identifier / loopがなく、Scene sampleは1回
-- [ ] Wall / Terrain receiverとdirectional Scene routeがP01前と同じ
+- [x] active world color handleはScene 1つだけ
+- [x] resize / DPI / quality変更後、Scene Cameraとcompositeが同じ新handleを参照し、旧handleを参照しない
+- [x] shaderにmask binding / identifier / loopがなく、Scene sampleは1回
+- [x] Wall / Terrain receiverとdirectional Scene routeがP01前と同じ
 
 ## M2: mask camera / proxy / materialとvisual_testを同時に撤去する
 
@@ -165,11 +165,11 @@ native helper、extractor、bundle validatorのhashはP00 current referenceとP0
 
 ### 完了条件
 
-- [ ] production / runtime inventoryの`SoulMask`、`soul_mask`、`LAYER_3D_SOUL_MASK`参照は0
-- [ ] P00 contract、projection、historical reader、fixture / negative testに限定したlegacy metric名は許可され、P01値はすべて0
-- [ ] Soul spawn / load / despawnでmask entityを生成しない
-- [ ] visual_testがScene-onlyで起動し、resize後もtarget / material relationが正しい
-- [ ] visible Soul GLB / shadow各1、mask proxy 0、Wall receiver route維持
+- [x] production / runtime inventoryの`SoulMask`、`soul_mask`、`LAYER_3D_SOUL_MASK`参照は0
+- [x] P00 contract、projection、historical reader、fixture / negative testに限定したlegacy metric名は許可され、P01値はすべて0
+- [x] Soul spawn / load / despawnでmask entityを生成しない
+- [x] visual_testがScene-onlyで起動し、resize後もtarget / material relationが正しい
+- [x] visible Soul GLB / shadow各1、mask proxy 0、Wall receiver route維持
 
 ## M3: P01 stage tooling / metric / native contractを閉じる
 
@@ -196,11 +196,11 @@ native helper、extractor、bundle validatorのhashはP00 current referenceとP0
 
 ### 完了条件
 
-- [ ] env / UI / testから存在しないmask機能を選べない
-- [ ] current raw evidenceはhistorical readerで再検証でき、P01 subjectはP01 schemaだけを受理する
-- [ ] `rtt_light_migration.csv` v1とfrozen contract SHAは不変で、P01のmask-related migration fieldsは明示`0`
-- [ ] P01 RenderDocはScene label / texture / sampler各1、mask target / camera / pass / binding / sample / proxy各0をfail-closedに検証する
-- [ ] native launcherが`--stage p01`のformal 5 legを組み立て、P01 gate CSVとcurrent reference比較を生成する
+- [x] env / UI / testから存在しないmask機能を選べない
+- [x] current raw evidenceはhistorical readerで再検証でき、P01 subjectはP01 schemaだけを受理する
+- [x] `rtt_light_migration.csv` v1とfrozen contract SHAは不変で、P01のmask-related migration fieldsは明示`0`
+- [x] P01 RenderDocはScene label / texture / sampler各1、mask target / camera / pass / binding / sample / proxy各0をfail-closedに検証する
+- [x] native launcherが`--stage p01`のformal 5 legを組み立て、P01 gate CSVとcurrent reference比較を生成する
 
 ## M4: formal / native受入を閉じる
 
@@ -255,21 +255,22 @@ native helper、extractor、bundle validatorのhashはP00 current referenceとP0
 
 ### 現在地
 
-- 進捗: `0%`（review済み、P00 formal baseline登録により着手可能）
-- 完了済み: P00のfrozen `rtt-light-v1` contract / fixture / stage gate設計
-- 未着手: M1〜M4。blocked条件は解消済み
+- 進捗: `75%`（M1〜M3 complete、M4 formal / native受入待ち）
+- 完了済み: Scene-only runtime / composite、mask camera / proxy / material / toggle削除、save / visual_test追従、window schema v3、current / P01 RenderDoc topology、P01 RTT / performance gate抽出、stage-aware native launcher、P00 canonical再検証
+- 進行中: M4 formal / native受入
+- 未着手: なし
 
 ### 次のAIが最初にやること
 
-1. P00 `baseline-index.json`にcurrent formal 5 legが登録され、new readerで再検証できることを確認する。
-2. `rtt-light-v1` hashを確認し、P01を実行するsource treeに並行save / launcher変更がないか確認する。
-3. registered current artifactのhistorical reader再検証とP01 v3 artifact fixture / exact topology testから着手し、その後にM1〜M3のatomic removal seriesを進める。
+1. clean P01 subject commitを作成し、同じsource fingerprintでS0 / S1を採取する。
+2. repository native acceptance Skillの`--stage p01`でformal 5 legを実行する。
+3. 登録済みP01 gate / projectionを再検証し、M4と親roadmapを完了状態へ更新する。
 
 ### ブロッカー/注意点
 
 - P00 formalの正本はattempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`である。diagnostic RD0、失敗attempt、dirty treeやheadless smokeをreferenceに昇格させない。
 - `Camera3dSoulMaskRtt`はcamera sync / terrain LOD queryに現れるが、main Scene query / system全体を削除してはならない。
-- visual_test、raw perf output、RenderDoc capture / extractor、native launcherはpublic mask typeを削除する同一seriesで追従させる。
+- raw perf output、RenderDoc capture / bundle、native launcherはP01 topologyへ追従済み。active Rust symbolは復活させない。
 - P02までvisible Soul GLB / shadowは保持する。P03以降の室内Light Field maskとは別物である。
 
 ### 最終確認ログ
@@ -277,6 +278,8 @@ native helper、extractor、bundle validatorのhashはP00 current referenceとP0
 - plan review: `2026-08-05` / P00 contract、source inventory、formal tooling、visual_test、native launcherとの整合を再確認
 - Rust gates: `2026-08-05` / `not run (plan-only update)`
 - P00 prerequisite: `2026-08-11` / current formal attempt登録、native / registry verifier pass
+- M1〜M3 gates: `2026-08-11` / workspace check、Clippy、focused Rust tests、perf / RenderDoc / native self-test pass。P00 canonical attemptをnew readerで再検証 pass
+- Help impact: `2026-08-11` / No impact（内部Soul mask RtTとdeveloper-only toggleの削除。player操作・Help workflow・成立条件・結果・labelは不変）
 - native acceptance: P01は未実行。P00 prerequisite待ちは解消済み
 - docs gate: `2026-08-11` / `pass (docs --write / --check, check_docs, diff --check)`
 

@@ -162,7 +162,8 @@ generic Task Dashboard run, a headless audit, or a RenderDoc screenshot for one
 of its required legs.
 
 Run the prerequisites in order on the same clean subject commit and source
-fingerprint:
+fingerprint. Set `<stage-id>` explicitly (`current` for the frozen reference,
+`p01` for the Scene-only P01 subject); do not rely on the compatibility default:
 
 1. Run the Task Dashboard S0 recipe and retain its valid job root.
 2. Generate an RtT S1 plan, execute its returned direct `kitty` command, and
@@ -171,7 +172,8 @@ fingerprint:
    ```bash
    PYTHONDONTWRITEBYTECODE=1 python3 \
      .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
-     plan-rtt-light --repo "$PWD" --level s1 --adapter Intel --window-backend x11
+     plan-rtt-light --repo "$PWD" --level s1 --stage <stage-id> \
+     --adapter Intel --window-backend x11
    ```
 
    S1 is a 51-process smoke: fixed audit, then Capture and Memory over the
@@ -185,7 +187,8 @@ fingerprint:
    ```bash
    PYTHONDONTWRITEBYTECODE=1 python3 \
      .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
-     plan-rtt-light --repo "$PWD" --level formal --adapter Intel --window-backend x11 \
+     plan-rtt-light --repo "$PWD" --level formal --stage <stage-id> \
+     --adapter Intel --window-backend x11 \
      --prerequisite-commit <full-correctness-sha> \
      --s0-job-root target/native-acceptance/<s0-job> \
      --s1-job-root target/native-acceptance/<s1-job> \

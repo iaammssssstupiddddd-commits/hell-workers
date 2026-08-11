@@ -1,6 +1,5 @@
 pub mod character_material;
 pub mod section_material;
-pub mod soul_mask_material;
 pub mod soul_shadow_material;
 pub mod terrain_surface_material;
 
@@ -14,7 +13,6 @@ pub use section_material::{
     TerrainMaterialMaps, make_section_material, make_section_material_textured,
     make_terrain_section_material, sync_section_cut_to_materials_system, with_alpha_mode,
 };
-pub use soul_mask_material::SoulMaskMaterial;
 pub use soul_shadow_material::SoulShadowMaterial;
 pub use terrain_surface_material::{
     TerrainFeatureLutUniformSyncState, TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial,

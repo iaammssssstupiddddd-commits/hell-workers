@@ -3,8 +3,7 @@
 use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
 use crate::input_actions::InputResolutionSet;
 use crate::plugins::startup::{
-    Camera3dRtt, Camera3dSoulMaskRtt, RttCompositeSprite, RttDirectionalLight,
-    RttExtraDirectionalLight,
+    Camera3dRtt, RttCompositeSprite, RttDirectionalLight, RttExtraDirectionalLight,
 };
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
@@ -21,13 +20,11 @@ use crate::systems::visual::camera_sync::{
     sync_camera3d_system, sync_world_foreground_2d_camera_system,
 };
 use crate::systems::visual::character_proxy_3d::{
-    apply_soul_gltf_render_layers_on_ready, apply_soul_mask_gltf_render_layers_on_ready,
-    apply_soul_shadow_gltf_render_layers_on_ready, cleanup_familiar_proxy_3d_system,
-    cleanup_soul_mask_proxy_3d_system, cleanup_soul_proxy_3d_system,
+    apply_soul_gltf_render_layers_on_ready, apply_soul_shadow_gltf_render_layers_on_ready,
+    cleanup_familiar_proxy_3d_system, cleanup_soul_proxy_3d_system,
     cleanup_soul_shadow_proxy_3d_system, register_familiar_proxy_3d_system,
-    register_soul_mask_proxy_3d_system, register_soul_proxy_3d_system,
-    register_soul_shadow_proxy_3d_system, sync_familiar_proxy_3d_system,
-    sync_soul_mask_proxy_3d_system, sync_soul_proxy_3d_system, sync_soul_shadow_proxy_3d_system,
+    register_soul_proxy_3d_system, register_soul_shadow_proxy_3d_system,
+    sync_familiar_proxy_3d_system, sync_soul_proxy_3d_system, sync_soul_shadow_proxy_3d_system,
 };
 use crate::systems::visual::elevation_view::{ElevationViewState, elevation_view_input_system};
 use crate::systems::visual::section_cut::sync_section_cut_normal_system;
@@ -50,16 +47,12 @@ use hw_visual::HwVisualPlugin;
 use hw_visual::SectionCut;
 use hw_visual::SoulProxyOwnerCache;
 use hw_visual::soul::task_link_system;
-use hw_visual::visual3d::{
-    Building3dVisual, FamiliarProxy3d, SoulMaskProxy3d, SoulProxy3d, SoulShadowProxy3d,
-};
+use hw_visual::visual3d::{Building3dVisual, FamiliarProxy3d, SoulProxy3d, SoulShadowProxy3d};
 use hw_world::{TerrainChangedEvent, sync_room_overlay_tiles_system};
 
 use bevy::prelude::*;
 
 type MainRttCameraQuery<'w, 's> = Query<'w, 's, &'static mut Camera, With<Camera3dRtt>>;
-type SoulMaskRttCameraQuery<'w, 's> =
-    Query<'w, 's, &'static mut Camera, (With<Camera3dSoulMaskRtt>, Without<Camera3dRtt>)>;
 type RttDirectionalLightQuery<'w, 's> =
     Query<'w, 's, &'static mut DirectionalLight, With<RttDirectionalLight>>;
 type RttExtraDirectionalLightQuery<'w, 's> =
@@ -217,7 +210,6 @@ impl Plugin for VisualPlugin {
             (
                 (
                     sync_soul_proxy_3d_system,
-                    sync_soul_mask_proxy_3d_system,
                     sync_soul_shadow_proxy_3d_system,
                     sync_familiar_proxy_3d_system.after(familiar_animation_system),
                 )
@@ -232,11 +224,9 @@ impl Plugin for VisualPlugin {
                 )
                     .chain(),
                 cleanup_soul_proxy_3d_system,
-                cleanup_soul_mask_proxy_3d_system,
                 cleanup_soul_shadow_proxy_3d_system,
                 cleanup_familiar_proxy_3d_system,
                 register_soul_proxy_3d_system,
-                register_soul_mask_proxy_3d_system,
                 register_soul_shadow_proxy_3d_system,
                 register_familiar_proxy_3d_system,
             )
@@ -267,7 +257,6 @@ impl Plugin for VisualPlugin {
             apply_rtt_scene_content_toggle_system.in_set(GameSystemSet::Visual),
         );
         app.add_observer(apply_soul_gltf_render_layers_on_ready);
-        app.add_observer(apply_soul_mask_gltf_render_layers_on_ready);
         app.add_observer(apply_soul_shadow_gltf_render_layers_on_ready);
     }
 }
@@ -300,20 +289,15 @@ fn render3d_sync_enabled(render3d: Res<crate::Render3dVisible>) -> bool {
 /// Render3dVisible の変更を Camera3dRtt と RttCompositeSprite の可視性に反映する
 fn apply_render3d_visibility_system(
     render3d: Res<crate::Render3dVisible>,
-    perf_toggles: Res<crate::RenderPerfToggles>,
     mut q_main_camera: MainRttCameraQuery,
-    mut q_soul_mask_camera: SoulMaskRttCameraQuery,
     mut q_sprite: Query<&mut Visibility, With<RttCompositeSprite>>,
 ) {
-    if !render3d.is_changed() && !perf_toggles.is_changed() {
+    if !render3d.is_changed() {
         return;
     }
 
     for mut camera in &mut q_main_camera {
         camera.is_active = render3d.0;
-    }
-    for mut camera in &mut q_soul_mask_camera {
-        camera.is_active = render3d.0 && perf_toggles.soul_mask_enabled;
     }
     if let Ok(mut visibility) = q_sprite.single_mut() {
         *visibility = if render3d.0 {
@@ -369,7 +353,6 @@ type SceneObjectQuery<'w, 's> = Query<
     Or<(
         With<Building3dVisual>,
         With<SoulProxy3d>,
-        With<SoulMaskProxy3d>,
         With<SoulShadowProxy3d>,
         With<FamiliarProxy3d>,
     )>,

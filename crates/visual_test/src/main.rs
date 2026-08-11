@@ -20,7 +20,7 @@ use bevy::camera_controller::pan_camera::PanCameraPlugin;
 use bevy::pbr::MaterialPlugin;
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
-use hw_visual::{CharacterMaterial, SoulMaskMaterial, SoulShadowMaterial};
+use hw_visual::{CharacterMaterial, SoulShadowMaterial};
 
 use types::{LocalRttCompositeMaterial, TestElev, TestState};
 
@@ -31,7 +31,6 @@ impl Plugin for VisualTestPlugin {
         app.add_plugins((
             PanCameraPlugin,
             MaterialPlugin::<SoulShadowMaterial>::default(),
-            MaterialPlugin::<SoulMaskMaterial>::default(),
             Material2dPlugin::<LocalRttCompositeMaterial>::default(),
         ))
         .init_resource::<TestState>()
@@ -46,7 +45,6 @@ impl Plugin for VisualTestPlugin {
         )
         .add_observer(soul::on_soul_scene_ready)
         .add_observer(soul::on_shadow_scene_ready)
-        .add_observer(soul::on_mask_scene_ready)
         .add_systems(
             PreUpdate,
             systems::handle_panel_scroll.after(bevy::input::InputSystems),
@@ -58,7 +56,6 @@ impl Plugin for VisualTestPlugin {
             ((
                 systems::sync_test_rtt_to_window,
                 systems::sync_test_camera3d,
-                soul::sync_mask_proxies,
                 soul::sync_shadow_proxies,
                 soul::sync_blob_shadow_proxies,
                 systems::apply_faces,

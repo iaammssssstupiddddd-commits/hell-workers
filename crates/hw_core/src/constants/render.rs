@@ -11,7 +11,6 @@ pub const LAYER_3D: usize = 1;
 /// RtT composite sprite 専用のオーバーレイレイヤー（矢視モード中も常時表示）
 pub const LAYER_OVERLAY: usize = 2;
 /// Soul シルエット mask 専用の RenderLayer インデックス
-pub const LAYER_3D_SOUL_MASK: usize = 3;
 /// Soul shadow caster proxy 専用の RenderLayer インデックス
 pub const LAYER_3D_SOUL_SHADOW: usize = 4;
 /// 3D 建築物など shadow receiver 専用の RenderLayer インデックス

@@ -50,7 +50,7 @@
 - `crates/hw_soul_ai/`: Soulのvitals、行動判断、task execution、移動
 - `crates/hw_ui/`: widget、theme、ViewModel表示、`UiIntent` producer
 - `crates/hw_visual/`: gameplay visual、speech、Dream presentation
-- `crates/visual_test/`: 独立した4-pass RtTビジュアル検証アプリ
+- `crates/visual_test/`: 独立したScene-only 3-pass RtTビジュアル検証アプリ
 - `docs/`: 技術仕様書、要件ドキュメント
 - `docs/proposals/`: 機能追加やリファクタリングの提案書
 - `assets/`: スプライト、フォントなどのリソース

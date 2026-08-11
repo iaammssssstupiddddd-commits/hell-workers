@@ -45,10 +45,10 @@ def write_fixture_run(
 ) -> None:
     run_dir = root / "data"
     run_dir.mkdir(parents=True)
-    window_row = {column: "" for column in WINDOW_COLUMNS}
+    window_row = {column: "" for column in WINDOW_COLUMNS_V2}
     window_row.update(
         {
-            "schema_version": WINDOW_SCHEMA_VERSION,
+            "schema_version": WINDOW_HISTORICAL_SCHEMA_VERSION,
             "window_present": "true",
             "logical_width": "1280.000000",
             "logical_height": "720.000000",
@@ -86,7 +86,7 @@ def write_fixture_run(
         }
     )
     with (run_dir / "window.csv").open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=WINDOW_COLUMNS)
+        writer = csv.DictWriter(handle, fieldnames=WINDOW_COLUMNS_V2)
         writer.writeheader()
         writer.writerow(window_row)
     if fixed_step_audit:
@@ -297,10 +297,10 @@ def write_behavior_fixture_run(root: Path, case: Case) -> None:
         raise ValueError("behavior fixture requires a behavior case")
     data_dir = root / "data"
     data_dir.mkdir(parents=True)
-    window_row = {column: "" for column in WINDOW_COLUMNS}
+    window_row = {column: "" for column in WINDOW_COLUMNS_V2}
     window_row.update(
         {
-            "schema_version": WINDOW_SCHEMA_VERSION,
+            "schema_version": WINDOW_HISTORICAL_SCHEMA_VERSION,
             "window_present": "false",
             "rtt_quality": "high",
             "scene_target_width": "1280",
@@ -320,7 +320,7 @@ def write_behavior_fixture_run(root: Path, case: Case) -> None:
     with (data_dir / "window.csv").open(
         "w", newline="", encoding="utf-8"
     ) as handle:
-        writer = csv.DictWriter(handle, fieldnames=WINDOW_COLUMNS)
+        writer = csv.DictWriter(handle, fieldnames=WINDOW_COLUMNS_V2)
         writer.writeheader()
         writer.writerow(window_row)
 
@@ -429,6 +429,70 @@ def self_test() -> int:
         root = Path(temporary)
         rtt_contract = load_rtt_light_contract("rtt-light-v1")
         rtt_fingerprints = contract_fingerprints(rtt_contract)
+        p01_window = root / "p01-window.csv"
+        p01_window_row = {column: "" for column in WINDOW_COLUMNS}
+        p01_window_row.update(
+            {
+                "schema_version": WINDOW_SCHEMA_VERSION,
+                "window_present": "true",
+                "logical_width": "1280.000000",
+                "logical_height": "720.000000",
+                "physical_width": "1280",
+                "physical_height": "720",
+                "scale_factor": "1.000000",
+                "rtt_quality": "high",
+                "scene_target_width": "1280",
+                "scene_target_height": "720",
+                "mask_target_present": "false",
+                "mask_target_width": "0",
+                "mask_target_height": "0",
+                "target_scale_factor": "1.000000",
+                "resolved_window_backend": "x11",
+                "adapter_name": "Test GPU",
+                "adapter_backend": "vulkan",
+                "requested_present_mode": "auto_no_vsync",
+                "effective_present_mode": "immediate",
+            }
+        )
+        for field, value in tuple(p01_window_row.items()):
+            if field.startswith("end_"):
+                source = field.removeprefix("end_")
+                p01_window_row[field] = p01_window_row[source]
+        with p01_window.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=WINDOW_COLUMNS)
+            writer.writeheader()
+            writer.writerow(p01_window_row)
+        _, p01_window_errors = read_window(
+            p01_window,
+            expect_headless=False,
+            expected_width=1280,
+            expected_height=720,
+            expected_scale_factor=1.0,
+            expected_rtt_quality="high",
+            expected_window_backend="x11",
+            expected_backend="vulkan",
+            expected_present_mode="novsync",
+        )
+        assert not p01_window_errors, p01_window_errors
+        invalid_p01_window = dict(p01_window_row)
+        invalid_p01_window["mask_target_width"] = "1"
+        invalid_p01_window["end_mask_target_width"] = "1"
+        with p01_window.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=WINDOW_COLUMNS)
+            writer.writeheader()
+            writer.writerow(invalid_p01_window)
+        _, invalid_p01_errors = read_window(
+            p01_window,
+            expect_headless=False,
+            expected_width=1280,
+            expected_height=720,
+            expected_scale_factor=1.0,
+            expected_rtt_quality="high",
+            expected_window_backend="x11",
+            expected_backend="vulkan",
+            expected_present_mode="novsync",
+        )
+        assert any("mask_target_width must be zero" in error for error in invalid_p01_errors)
         rust_fixture_source = (
             REPO_ROOT
             / "crates/bevy_app/src/plugins/startup/perf_scenario/indoor_light_fixture.rs"
@@ -984,6 +1048,73 @@ def self_test() -> int:
         assert generated_gates[0]["subject_artifact"] == (
             "rtt-light-v1/baseline-index.json#/stages/current/cases/attempt"
         )
+
+        p01_inventory = {
+            "schema_version": RENDER_INVENTORY_SCHEMA_VERSION,
+            "scene_target_count": "1",
+            "mask_target_count": "0",
+            "camera_3d_rtt_count": "1",
+            "camera_2d_count": "1",
+            "layer_2d_pass_count": "1",
+            "soul_proxy_3d": "1",
+            "soul_mask_proxy_3d": "0",
+            "soul_shadow_proxy_3d": "1",
+            "familiar_proxy_3d": "0",
+        }
+        p01_formal = {
+            formal_case["case_id"]: formal_case
+            for formal_case in expected_formal_cases(rtt_contract, "p01")
+        }
+        for case_id, evidence in bundle_cases.items():
+            evidence["formal"] = p01_formal[case_id]
+            if case_id == "renderdoc-medium-gpu":
+                evidence["render_inventory"] = {
+                    key: value
+                    for key, value in p01_inventory.items()
+                    if key != "schema_version"
+                }
+                evidence["gate_metrics"] = {
+                    "scene_target_count": 1,
+                    "mask_target_count": 0,
+                    "camera_3d_rtt_count": 1,
+                    "mask_camera_count": 0,
+                    "mask_pass_count": 0,
+                    "mask_binding_count": 0,
+                    "mask_sample_count": 0,
+                    "mask_proxy_count": 0,
+                    "explicit_color_bytes": 8_294_400,
+                }
+                continue
+            for validation in evidence["validations"]:
+                if validation.render_inventory is not None:
+                    validation.render_inventory = p01_inventory
+        p01_projection = build_rtt_light_projection_rows(
+            rtt_contract, "p01", bundle_cases
+        )
+        p01_gates = build_rtt_light_gate_result_rows(
+            rtt_contract,
+            "p01",
+            bundle_cases,
+            subject_projection_rows=p01_projection,
+            reference_projection_rows={"current": generated_projection},
+        )
+        assert len(p01_gates) == 123
+        assert all(row["status"] == "pass" for row in p01_gates)
+        renderdoc_evidence = bundle_cases["renderdoc-medium-gpu"]
+        renderdoc_evidence["gate_metrics"]["mask_binding_count"] = 1
+        try:
+            build_rtt_light_gate_result_rows(
+                rtt_contract,
+                "p01",
+                bundle_cases,
+                subject_projection_rows=p01_projection,
+                reference_projection_rows={"current": generated_projection},
+            )
+        except ValueError as error:
+            assert "does not pass" in str(error)
+        else:
+            raise AssertionError("P01 mask binding regression unexpectedly passed")
+        renderdoc_evidence["gate_metrics"]["mask_binding_count"] = 0
 
         ledger_root = root / "rtt-light-ledger"
         generation = ledger_root / f"current-{'0' * 40}"

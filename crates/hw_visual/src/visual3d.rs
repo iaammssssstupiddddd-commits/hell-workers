@@ -21,12 +21,6 @@ pub struct SoulProxy3d {
     pub billboard: bool,
 }
 
-/// DamnedSoul エンティティに対応する Soul 専用 mask プロキシのマーカー。
-#[derive(Component, Debug, Clone)]
-pub struct SoulMaskProxy3d {
-    pub owner: Entity,
-}
-
 /// DamnedSoul エンティティに対応する shadow caster 専用 proxy のマーカー。
 #[derive(Component, Debug, Clone)]
 pub struct SoulShadowProxy3d {
@@ -89,7 +83,6 @@ pub struct FamiliarProxy3d {
 #[derive(Resource, Default)]
 pub struct SoulProxyOwnerCache {
     pub soul_proxy: HashMap<Entity, Entity>,
-    pub soul_mask_proxy: HashMap<Entity, Entity>,
     pub soul_shadow_proxy: HashMap<Entity, Entity>,
     pub familiar_proxy: HashMap<Entity, Entity>,
 }

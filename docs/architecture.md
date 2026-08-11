@@ -260,17 +260,16 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 
 ### RtT テクスチャ管理
 
-`RttRuntime`（Resource、`crates/bevy_app/src/plugins/startup/rtt_setup.rs`）が viewport サイズ・scene テクスチャハンドル・soul mask テクスチャハンドルを 1 つの Resource として保持する。
+`RttRuntime`（Resource、`crates/bevy_app/src/plugins/startup/rtt_setup.rs`）が viewport サイズ・scale factor・単一のSceneテクスチャハンドルを保持する。
 
 ```
 RttRuntime
   .viewport: RttViewportSize   // 現在の RtT 実解像度
   .target_scale_factor: f32    // Window DPI × RtT quality
-  .scene: Handle<Image>        // 3D シーン描画先
-  .soul_mask: Handle<Image>    // Soul シルエット mask 描画先
+  .scene: Handle<Image>        // 唯一のworld color描画先
 ```
 
-テクスチャ生成は `create_rtt_texture(width, height, images)` 関数（`rtt_setup.rs`）に切り出されている。起動時は `initialize_rtt_runtime(window, quality, images)` helper が `PrimaryWindow` の物理解像度と `hw_core::quality::QualitySettings` の `rtt_scale()` を掛けたサイズで `RttRuntime` を構築し、`startup_systems::setup()` が Resource として挿入する。2 台の Camera3d の `ImageRenderTarget.scale_factor` は `Window scale factor × rtt_scale()` を明示し、整数 pixel の丸め誤差内で RtT の論理 viewport を Window の論理サイズへ揃える。`sync_rtt_texture_size_to_window_and_quality` は物理解像度・DPI・品質のいずれかが変わったフレームに `runtime.recreate()` を呼び、scene RtT / soul mask RtT を同時再生成する（`Rgba8Unorm` / `Rgba8UnormSrgb`）。DPI だけが変わって texture size が同じ場合も新しい image handle を発行し、Bevy 0.19 の camera target info / projection 更新を確実に発火させる。
+テクスチャ生成は `create_rtt_texture(width, height, images)` 関数（`rtt_setup.rs`）に切り出されている。起動時は `initialize_rtt_runtime(window, quality, images)` helper が `PrimaryWindow` の物理解像度と `hw_core::quality::QualitySettings` の `rtt_scale()` を掛けたサイズで `RttRuntime` を構築し、`startup_systems::setup()` が Resource として挿入する。1 台の Camera3d の `ImageRenderTarget.scale_factor` は `Window scale factor × rtt_scale()` を明示し、整数 pixel の丸め誤差内で RtT の論理 viewport を Window の論理サイズへ揃える。`sync_rtt_texture_size_to_window_and_quality` は物理解像度・DPI・品質のいずれかが変わったフレームに `runtime.recreate()` を呼び、Scene RtTだけを再生成する（`Rgba8Unorm` / `Rgba8UnormSrgb`）。DPI だけが変わって texture size が同じ場合も新しい image handle を発行し、Bevy 0.19 の camera target info / projection 更新を確実に発火させる。
 
 - `QualitySettings.rtt` は `High / Medium / Low` を持ち、係数は `1.0 / 0.75 / 0.5`。
 - `RttRuntime.pixel_size()` は shader 側へ渡す `1 / texture_size` を返し、logical な表示サイズではなく実際の RtT 解像度を基準にする。
@@ -342,13 +341,12 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - Camera2d の子エンティティではないため、MainCamera のパン・ズームの影響を受けない。
 - 3D コンテンツのパンは Camera3d の Transform、ズームは `OrthographicProjection.scale` を `sync_camera3d_system` が毎フレーム更新することで実現する。
 - `RttCompositeSprite` マーカーコンポーネントが付与されており、`apply_render3d_visibility_system` が `Visibility` を制御する。
-- `RttCompositeMaterial` は通常の 3D RtT (`RttRuntime.scene`) と Soul 専用 mask RtT (`RttRuntime.soul_mask`) を同時に受け取り、最終合成時に Soul の輪郭を画面上で少し丸める。
+- `RttCompositeMaterial` は `RttRuntime.scene` だけをfragment set 2のtexture / sampler binding `1 / 2`で受け取り、通常サンプル1回で合成する。
 - 建築物 3D ビジュアルは `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER])` を使い、RtT Camera3d には見せつつ、影確認用 `DirectionalLight` からも shadow receiver として扱えるようにしている。
-- 表示用 Soul GLB は `LAYER_3D`、`SoulMaskProxy3d` は `LAYER_3D_SOUL_MASK` に所属する。`Soul` の輪郭補正は `RttCompositeMaterial` が `soul_mask_texture` を参照して行い、影そのものはこの mask RtT からは作らない。
 - TopDown の主光源方向は `hw_core::constants::topdown_sun_direction_world()` を単一の真実とし、RtT の主 `DirectionalLight` と `CharacterMaterial` の body shader が同じ方向を使う。現在は画面手前側の壁面が完全な日陰にならないよう、真上寄りではなく前方寄りの斜光を採用している。
 - Bevy 0.19 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 light は `LAYER_3D` を含み、`Camera3dRtt` 視点で有効な light として GPU light 配列に入る。`Soul` projected shadow もこの view 内の shadow-enabled directional light だけを使う。
 
-`sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は合成メッシュのスケールをウィンドウリサイズに常時追従させ、`RttRuntime.is_changed()` のときのみカメラ `RenderTarget` と `RttCompositeMaterial` の参照テクスチャを更新する。target の再 bind では image handle と `target_scale_factor` を同時に反映する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttRuntime.viewport` の実サイズから再計算し、品質スケール時でも Soul silhouette 合成がずれないようにしている。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ・DPI・品質変更フレーム内で再生成後のテクスチャへ差し替わる。
+`sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は合成メッシュのスケールをウィンドウリサイズに常時追従させ、`RttRuntime.is_changed()` のときのみカメラ `RenderTarget` と `RttCompositeMaterial.scene_texture` を更新する。target の再 bind では image handle と `target_scale_factor` を同時に反映する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttRuntime.viewport` の実サイズから再計算する。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ・DPI・品質変更フレーム内で再生成後のSceneテクスチャへ差し替わる。
 
 ### キャラクター表示（Soul GLB + Familiar 2D 前面表示）
 
@@ -356,7 +354,6 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 - `GameAssets.soul_scene`（`Handle<WorldAsset>`）に `GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb")` を保持し、Soul spawn 時に `WorldAssetRoot` として 3D シーンへ追加する。
 - Soul 本体エンティティは 2D `Sprite` を持たず、通常表示は GLB 側へ一本化している。従来の `animation_system` / `idle_visual_system` は `Sprite` を optional にして、Soul の状態更新を維持したまま 3D 表示へ移行している。
-- Soul の通常描画ルートとは別に、`SoulMaskProxy3d` が同じ `soul.glb` を `LAYER_3D_SOUL_MASK` へ複製スポーンする。`sync_soul_mask_proxy_3d_system` が本体と同じ 2D 位置へ同期し、Soul 専用 mask RtT の入力に使う。
 - `SoulShadowProxy3d` は互換性のために残っているが、現在の runtime では `mesh_body` / `mesh_face` の両方に `NotShadowCaster` を付けており、実際の `Soul` 影には寄与しない。`Soul` の見た目変更は real shadow caster ではなく receiver 側で行う。
 - `systems/visual/soul_shadow_projector.rs` の `sync_soul_shadow_projectors_system` は、`Camera3dRtt` に近い `Soul` を最大 `MAX_SOUL_SHADOW_PROJECTORS` 個だけ選び、world-space projector 配列を `SectionMaterial` と terrain 系 material に流す。これにより床と壁が同じ projector 情報を共有し、影の接続を保ったまま stylize できる。
 - `assets/shaders/shadow_style.wgsl` の `apply_soul_projected_shadow` は、receiver 側で `Soul` ごとの radial / forward-falloff を評価し、最終色を直接暗い影色へブレンドする。既存の directional shadow blur/stylize と同じ shader 内で適用するが、`Soul` 影の濃さや外周フェードは shadow map caster の depth ではなく、この projector 評価で決まる。
@@ -365,8 +362,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - section clip は現在 `discard` ベースのため断面キャップを生成しない。壁 volume の途中で切ると切断面の蓋は作られず、内部を覗き込むような見え方になる。これは `section-material-proposal` の「方針 C: 何もしない」に相当し、断面キャップ方針は将来実装で確定する。
 - `hw_visual::CharacterMaterial` と `assets/shaders/character_material.wgsl` が Soul 用 custom material 経路を提供し、`AlphaMode::Blend` の透過付き描画を行う。現段階では section 連動や表情状態切り替えはまだ入れていない。
 - `apply_soul_gltf_render_layers_on_ready` が `WorldInstanceReady` を受けて Soul GLB の子孫へ `RenderLayers::layer(LAYER_3D)` を付与し、`mesh_body` / `mesh_face` の両方を `CharacterMaterial` へ差し替える。
-- `apply_soul_mask_gltf_render_layers_on_ready` が `SoulMaskProxy3d` の子孫へ `RenderLayers::layer(LAYER_3D_SOUL_MASK)` を付与し、すべてのメッシュを `SoulMaskMaterial` に差し替える。mask ルートは最終色を描かず、輪郭抽出専用の白単色 RtT だけを生成する。
-- `CharacterHandles` は Soul body/face 用の `Handle<CharacterMaterial>` と、Soul mask 用の `Handle<SoulMaskMaterial>` を保持する。`mesh_body` はリポジトリ内で生成する 1x1 白テクスチャを使い、shader 側で青白い base/shadow 色、簡易ポスタライズ、rim 強調で 2D の幽体感へ寄せる。body 自体は不透明描画にして、腕や胴体の重なりでポリゴン内部が透けないようにしている。
+- `CharacterHandles` は Soul body/face 用の `Handle<CharacterMaterial>` とshadow proxy用materialを保持する。`mesh_body` はリポジトリ内で生成する 1x1 白テクスチャを使い、shader 側で青白い base/shadow 色、簡易ポスタライズ、rim 強調で 2D の幽体感へ寄せる。body 自体は不透明描画にして、腕や胴体の重なりでポリゴン内部が透けないようにしている。
 - `mesh_face` は atlas の先頭セル（通常表情）から、Idle 表情の可視領域計測を元にした crop を `uv_scale` / `uv_offset` で切り出し、中心固定で 1.4 倍拡大している。
 - `prepare_soul_animation_library_system` は `GameAssets.soul_gltf` から `Gltf.named_animations` を読み、`Idle / Walk / Work / Carry / Fear / Exhausted / WalkLeft / WalkRight` の clip handle を名前解決して `SoulAnimationLibrary` に保持する。
 - `apply_soul_gltf_render_layers_on_ready` は `mesh_face` に共有 material を直接挿さず、Soul ごとに face material を複製して `SoulFaceMaterial3d` を付与する。これにより face atlas の `uv_offset` を Soul 単位で更新できる。
@@ -380,7 +376,6 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - `mesh_face` のローカル回転は GLB 側の初期姿勢をそのまま使い、PoC 段階では追加の billboard 回転を行わない。
 - `Camera3dRtt` には `AmbientLight` を付与し、GLB 付属の lit material が RtT 上で暗転しないようにする。
 - `startup_systems::setup` では RtT 用の主 `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 2048 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。追加の 2 本目 light は `RenderPerfToggles.extra_directional_light_enabled` で有効化するテスト用経路で、DevPanel `Light2` または `HW_ENABLE_RTT_EXTRA_DIRECTIONAL_LIGHT` から切り替える。receiver-side `Soul` projector はこの追加 light も含めて評価する。
-- `Camera3dSoulMaskRtt` は Soul mask 専用 Camera3d で、通常の `Camera3dRtt` と同じ Transform / Projection を共有する。最終合成では `RttCompositeMaterial` が `soul_mask_texture`（`RttRuntime.soul_mask` と同期）を近傍サンプリングし、Soul シルエットだけを画面上で少し膨らませて角を丸める。
 - Familiar は 2D `Sprite` の 4 フレーム差し替え・左右反転・hover/wobble を本表示として維持する。Command radius オーラ・hover/selection・吹き出しも同じ 2D world transform を参照する。
 - Familiar の論理 root は movement / spatial index 用座標を保持し、hover/wobble は `FamiliarVisualOwner` で owner を指す 2D child の `FamiliarVisualOffset` にだけ書く。移行期の `sync_familiar_proxy_3d_system` は owner→offset をフレーム内で一度索引化し、`familiar_animation_system` の後に同じ offset を proxy へ反映する。
 - Familiar は建築物 RtT 合成より手前に出す前提とし、Soul のような shadow proxy や shadow caster は持たない。
@@ -397,7 +392,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 | Dev ボタン | TopLeft パネルの「3D ON / 3D OFF」ボタン（`interface/ui/dev_panel.rs`）|
 
 `apply_render3d_visibility_system`（`plugins/visual.rs`、`GameSystemSet::Visual`）が `Render3dVisible` 変更を検知し、
-`Camera3dRtt.is_active`・`Camera3dSoulMaskRtt.is_active` と `RttCompositeSprite` の `Visibility` を同期する。
+`Camera3dRtt.is_active` と `RttCompositeSprite` の `Visibility` を同期する。
 両方を制御することで「カメラ無効化 → 前フレームのテクスチャが残る」問題を防ぐ。
 
 ## イベントシステム

@@ -10,7 +10,7 @@ use hw_core::visual::SoulTaskHandles;
 use hw_logistics::ResourceItemVisualHandles;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
-    PlantTreeHandles, SectionMaterial, SoulMaskMaterial, SoulShadowMaterial, SpeechHandles,
+    PlantTreeHandles, SectionMaterial, SoulShadowMaterial, SpeechHandles,
     TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial, TerrainSurfaceMaterialExt,
     TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,
     TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2, TerrainSurfaceUniform,
@@ -67,7 +67,6 @@ pub struct Terrain3dHandles {
 pub struct CharacterHandles {
     pub soul_body_material: Handle<CharacterMaterial>,
     pub soul_face_material: Handle<CharacterMaterial>,
-    pub soul_mask_material: Handle<SoulMaskMaterial>,
     pub soul_shadow_proxy_material: Handle<SoulShadowMaterial>,
 }
 
@@ -82,7 +81,6 @@ pub struct InitVisualHandlesParams<'w, 's> {
     terrain_surface_materials_lod1_lite: ResMut<'w, Assets<TerrainSurfaceMaterialLod1Lite>>,
     terrain_surface_materials_lod2: ResMut<'w, Assets<TerrainSurfaceMaterialLod2>>,
     character_materials: ResMut<'w, Assets<CharacterMaterial>>,
-    soul_mask_materials: ResMut<'w, Assets<SoulMaskMaterial>>,
     soul_shadow_materials: ResMut<'w, Assets<SoulShadowMaterial>>,
     terrain_feature_map: Res<'w, TerrainFeatureMap>,
     terrain_id_map: Res<'w, TerrainIdMap>,
@@ -95,7 +93,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     let materials = &mut params.materials;
     let section_materials = &mut params.section_materials;
     let character_materials = &mut params.character_materials;
-    let soul_mask_materials = &mut params.soul_mask_materials;
     let soul_shadow_materials = &mut params.soul_shadow_materials;
     let feature_map_handle = params.terrain_feature_map.image.clone();
     let terrain_id_map_handle = params.terrain_id_map.image.clone();
@@ -378,7 +375,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
             soul_face_uv_scale(),
             soul_face_uv_offset(0.0, 0.0),
         )),
-        soul_mask_material: soul_mask_materials.add(SoulMaskMaterial::solid_white()),
         soul_shadow_proxy_material: soul_shadow_materials.add(SoulShadowMaterial::default()),
     });
 }

@@ -23,7 +23,7 @@ OUTPUT_ENV = "HW_RENDERDOC_EXTRACTION"
 CHECKPOINT_ENV = "HW_RENDERDOC_RUNTIME_CHECKPOINT"
 FAILURE_ENV = "HW_RENDERDOC_EXTRACTION_FAILURE"
 
-EXPECTED_RENDER_RESOURCES = {
+CURRENT_RENDER_RESOURCES = {
     "scene_target_label": "hell-workers-rtt-scene",
     "mask_target_label": "hell-workers-rtt-soul-mask",
     "composite_draw_count": 1,
@@ -53,6 +53,32 @@ EXPECTED_RENDER_RESOURCES = {
             "fixed_bind_number": 4,
         },
     ],
+}
+
+P01_RENDER_RESOURCES = {
+    "scene_target_label": "hell-workers-rtt-scene",
+    "mask_target_label": None,
+    "composite_draw_count": 1,
+    "composite_texture_bindings": [
+        {
+            "target": "scene_target",
+            "stage": "fragment",
+            "fixed_bind_set_or_space": 2,
+            "fixed_bind_number": 1,
+        },
+    ],
+    "composite_sampler_bindings": [
+        {
+            "stage": "fragment",
+            "fixed_bind_set_or_space": 2,
+            "fixed_bind_number": 2,
+        },
+    ],
+}
+
+EXPECTED_RENDER_RESOURCES_BY_STAGE = {
+    "current": CURRENT_RENDER_RESOURCES,
+    "p01": P01_RENDER_RESOURCES,
 }
 
 
@@ -97,7 +123,7 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         value.get("schema_version") != RUNTIME_CHECKPOINT_SCHEMA_VERSION
         or value.get("status") != "valid"
         or value.get("contract_id") != "rtt-light-v1"
-        or value.get("stage_id") != "current"
+        or value.get("stage_id") not in EXPECTED_RENDER_RESOURCES_BY_STAGE
         or not isinstance(value.get("generation"), int)
         or isinstance(value.get("generation"), bool)
         or value["generation"] < 1
@@ -265,7 +291,10 @@ def _render_resources(checkpoint: dict[str, Any]) -> dict[str, Any]:
         "composite_sampler_bindings",
     }:
         raise RuntimeError("runtime checkpoint render resources differ from schema v3")
-    for label in (expected["scene_target_label"], expected["mask_target_label"]):
+    for key in ("scene_target_label", "mask_target_label"):
+        label = expected[key]
+        if key == "mask_target_label" and label is None:
+            continue
         if not isinstance(label, str) or not label:
             raise RuntimeError("runtime checkpoint render resource label is invalid")
     if (
@@ -274,22 +303,20 @@ def _render_resources(checkpoint: dict[str, Any]) -> dict[str, Any]:
         or expected["composite_draw_count"] != 1
     ):
         raise RuntimeError("runtime checkpoint composite draw count is invalid")
-    for key, expected_keys, expected_count in (
+    for key, expected_keys in (
         (
             "composite_texture_bindings",
             {"target", "stage", "fixed_bind_set_or_space", "fixed_bind_number"},
-            2,
         ),
         (
             "composite_sampler_bindings",
             {"stage", "fixed_bind_set_or_space", "fixed_bind_number"},
-            2,
         ),
     ):
         rows = expected[key]
         if (
             not isinstance(rows, list)
-            or len(rows) != expected_count
+            or not rows
             or any(not isinstance(row, dict) or set(row) != expected_keys for row in rows)
         ):
             raise RuntimeError(f"runtime checkpoint {key} differs from schema v3")
@@ -309,8 +336,11 @@ def _render_resources(checkpoint: dict[str, Any]) -> dict[str, Any]:
                 not isinstance(row["target"], str) or not row["target"]
             ):
                 raise RuntimeError("runtime checkpoint texture binding has an invalid target")
-    if expected != EXPECTED_RENDER_RESOURCES:
-        raise RuntimeError("runtime checkpoint composite bindings differ from the current source")
+    stage_id = checkpoint.get("stage_id")
+    if expected != EXPECTED_RENDER_RESOURCES_BY_STAGE.get(stage_id):
+        raise RuntimeError(
+            f"runtime checkpoint composite bindings differ from the {stage_id} source contract"
+        )
     return expected
 
 
@@ -318,8 +348,9 @@ def _tracked_resources(
     rd: Any, controller: Any, render_resources: dict[str, Any]
 ) -> dict[str, dict[str, str]]:
     labels = {
-        "scene_target": render_resources["scene_target_label"],
-        "mask_target": render_resources["mask_target_label"],
+        key.removesuffix("_label"): label
+        for key, label in render_resources.items()
+        if key.endswith("_target_label") and label is not None
     }
     matches: dict[str, list[str]] = {key: [] for key in labels}
     for resource in controller.GetResources():
@@ -352,7 +383,7 @@ def _composite_topology(
     bindings: list[dict[str, Any]],
     tracked_resources: dict[str, dict[str, str]],
 ) -> dict[str, Any]:
-    """Find the one source-defined draw that samples both RtT targets.
+    """Find the one source-defined draw that samples the stage's RtT targets.
 
     The match is per draw, not a global resource count.  In particular, two
     references to the same sampler across separate draws must not satisfy the
@@ -498,8 +529,10 @@ def _replay_structure(
     if (
         result["render_pass_count"] < 2
         or result["composite_draw_count"] != 1
-        or result["composite_texture_binding_count"] != 2
-        or result["composite_sampler_binding_count"] != 2
+        or result["composite_texture_binding_count"]
+        != len(composite_topology["draws"][0]["texture_bindings"])
+        or result["composite_sampler_binding_count"]
+        != len(composite_topology["draws"][0]["sampler_bindings"])
         or any(
             result[f"{key}_{kind}_count"] < 1
             for key in tracked_resources
@@ -507,7 +540,7 @@ def _replay_structure(
         )
     ):
         raise RuntimeError(
-            "RenderDoc replay does not prove scene/mask attachment and exact composite topology"
+            "RenderDoc replay does not prove the stage targets and exact composite topology"
         )
     return result
 
@@ -677,7 +710,7 @@ def self_test() -> int:
         "generation": 1,
         "checkpoint": {"ready_frame_ordinal": 4},
         "render_inventory": {"scene_target_count": 1},
-        "render_resources": EXPECTED_RENDER_RESOURCES,
+        "render_resources": CURRENT_RENDER_RESOURCES,
         "fixture": {"rooms": 4},
         "capture_path": "/diagnostic/capture.rdc",
         "requested_renderdoc_api_version": "1.6.0",
@@ -780,7 +813,7 @@ def self_test() -> int:
     ]
     controller = SimpleNamespace(GetResources=lambda: resources)
     render_resources = _render_resources(
-        {"render_resources": EXPECTED_RENDER_RESOURCES}
+        {"stage_id": "current", "render_resources": CURRENT_RENDER_RESOURCES}
     )
     tracked = _tracked_resources(
         rd,
@@ -878,6 +911,41 @@ def self_test() -> int:
         and structure["mask_target_binding_count"] == 1
         and structure["composite_sampler_binding_count"] == 2,
         "RtT replay topology accounting regressed",
+    )
+    p01_checkpoint = {
+        **checkpoint,
+        "stage_id": "p01",
+        "render_resources": P01_RENDER_RESOURCES,
+    }
+    _require(
+        _validate_checkpoint(p01_checkpoint) is p01_checkpoint,
+        "P01 runtime checkpoint validation regressed",
+    )
+    p01_resources = _render_resources(p01_checkpoint)
+    p01_tracked = _tracked_resources(
+        rd,
+        SimpleNamespace(GetResources=lambda: resources[:1]),
+        p01_resources,
+    )
+    p01_bindings = [bindings[0], bindings[2]]
+    p01_topology = _composite_topology(
+        render_resources=p01_resources,
+        bindings=p01_bindings,
+        tracked_resources=p01_tracked,
+    )
+    p01_structure = _replay_structure(
+        passes=[{"pass_id": "pass-0001"}, {"pass_id": "pass-0002"}],
+        attachments=[{"resource_id": "ResourceId::21"}],
+        bindings=p01_bindings,
+        tracked_resources=p01_tracked,
+        composite_topology=p01_topology,
+    )
+    _require(
+        set(p01_tracked) == {"scene_target"}
+        and p01_structure["scene_target_attachment_count"] == 1
+        and p01_structure["composite_texture_binding_count"] == 1
+        and p01_structure["composite_sampler_binding_count"] == 1,
+        "P01 Scene-only replay topology accounting regressed",
     )
     print("renderdoc_extract self-test: PASS")
     return 0

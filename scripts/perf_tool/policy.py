@@ -37,10 +37,15 @@ def validate_session_artifact_set(
     )
     if behavior_manifest:
         contract = load_rtt_light_contract("rtt-light-v1")
-        expected_behavior_cases = contract["stages"]["current"][
-            "required_behavior_cases"
-        ]
         rtt_selection = matrix.get("rtt_light_contract")
+        selected_stage = (
+            rtt_selection.get("stage_id") if isinstance(rtt_selection, dict) else None
+        )
+        expected_behavior_cases = (
+            contract["stages"][selected_stage]["required_behavior_cases"]
+            if selected_stage in contract["stages"]
+            else []
+        )
         exact_matrix = {
             "capture_kind": matrix.get("capture_kind"),
             "workload": matrix.get("workload"),
@@ -72,7 +77,10 @@ def validate_session_artifact_set(
             rtt_selection.get("contract_id"),
             rtt_selection.get("stage_id"),
             rtt_selection.get("lane"),
-        ) != ("rtt-light-v1", "current", "behavior"):
+        ) != ("rtt-light-v1", selected_stage, "behavior") or selected_stage not in {
+            "current",
+            "p01",
+        }:
             errors.append("behavior manifest has the wrong RtT-light selection")
         requested_environment = manifest.get("requested_environment")
         if not isinstance(requested_environment, dict) or {

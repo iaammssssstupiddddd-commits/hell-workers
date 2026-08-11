@@ -17,7 +17,6 @@ pub struct RttRuntime {
     /// Window logical size と一致する状態を維持する。
     pub target_scale_factor: f32,
     pub scene: Handle<Image>,
-    pub soul_mask: Handle<Image>,
 }
 
 impl RttRuntime {
@@ -32,13 +31,6 @@ impl RttRuntime {
                 viewport.height,
                 "hell-workers-rtt-scene",
                 "hell-workers-rtt-scene-view",
-                images,
-            ),
-            soul_mask: create_rtt_texture(
-                viewport.width,
-                viewport.height,
-                "hell-workers-rtt-soul-mask",
-                "hell-workers-rtt-soul-mask-view",
                 images,
             ),
             viewport,
@@ -61,21 +53,10 @@ impl RttRuntime {
             "hell-workers-rtt-scene-view",
             images,
         );
-        self.soul_mask = create_rtt_texture(
-            viewport.width,
-            viewport.height,
-            "hell-workers-rtt-soul-mask",
-            "hell-workers-rtt-soul-mask-view",
-            images,
-        );
     }
 
     pub fn scene_render_target(&self) -> RenderTarget {
         image_render_target(self.scene.clone(), self.target_scale_factor)
-    }
-
-    pub fn soul_mask_render_target(&self) -> RenderTarget {
-        image_render_target(self.soul_mask.clone(), self.target_scale_factor)
     }
 
     pub fn pixel_size(&self) -> Vec2 {
@@ -117,10 +98,6 @@ pub struct RttViewportSize {
 /// Camera3d（RtT オフスクリーン）のマーカーコンポーネント。M3 カメラ同期システムで使用。
 #[derive(Component)]
 pub struct Camera3dRtt;
-
-/// Soul mask RtT 用 Camera3d のマーカー。
-#[derive(Component)]
-pub struct Camera3dSoulMaskRtt;
 
 /// RtT 用 DirectionalLight のマーカー。
 #[derive(Component)]

@@ -2,9 +2,8 @@
 //!
 //! Camera3d がオフスクリーンテクスチャに描画した 3D コンテンツを、
 //! Overlay Camera 経由で全画面メッシュに貼り付ける。
-//! Soul 専用 mask も同時に受け取り、最終合成時にシルエットを少し丸める。
 
-use crate::plugins::startup::{Camera3dRtt, Camera3dSoulMaskRtt, RttRuntime};
+use crate::plugins::startup::{Camera3dRtt, RttRuntime};
 use bevy::camera::RenderTarget;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
@@ -19,7 +18,7 @@ use hw_core::constants::{
 /// Vulkan/WGSL descriptor location used by the RtT composite material.
 ///
 /// The formal RenderDoc evidence records this tuple to prove that one
-/// composite draw samples both current RtT targets.  Keep it in sync with
+/// composite draw samples the Scene RtT. Keep it in sync with
 /// `assets/shaders/rtt_composite_material.wgsl`.
 #[cfg(feature = "profiling-renderdoc")]
 pub(crate) const RTT_COMPOSITE_BIND_SET_OR_SPACE: u32 = 2;
@@ -27,10 +26,6 @@ pub(crate) const RTT_COMPOSITE_BIND_SET_OR_SPACE: u32 = 2;
 pub(crate) const RTT_COMPOSITE_SCENE_TEXTURE_BINDING: u32 = 1;
 #[cfg(feature = "profiling-renderdoc")]
 pub(crate) const RTT_COMPOSITE_SCENE_SAMPLER_BINDING: u32 = 2;
-#[cfg(feature = "profiling-renderdoc")]
-pub(crate) const RTT_COMPOSITE_MASK_TEXTURE_BINDING: u32 = 3;
-#[cfg(feature = "profiling-renderdoc")]
-pub(crate) const RTT_COMPOSITE_MASK_SAMPLER_BINDING: u32 = 4;
 
 /// RtT composite entity のマーカー。3D表示切り替えで可視性を制御する。
 #[derive(Component)]
@@ -39,8 +34,6 @@ pub struct RttCompositeSprite;
 #[derive(Clone, Copy, Debug, PartialEq, ShaderType)]
 pub struct RttCompositeParams {
     pub pixel_size: Vec2,
-    pub mask_radius_px: f32,
-    pub mask_feather: f32,
     pub shadow_offset_uv: Vec2,
     pub shadow_width_px: f32,
     pub shadow_strength: f32,
@@ -53,9 +46,6 @@ pub struct RttCompositeMaterial {
     #[texture(1)]
     #[sampler(2)]
     pub scene_texture: Handle<Image>,
-    #[texture(3)]
-    #[sampler(4)]
-    pub soul_mask_texture: Handle<Image>,
 }
 
 impl Material2d for RttCompositeMaterial {
@@ -72,7 +62,6 @@ impl Material2d for RttCompositeMaterial {
 pub fn spawn_rtt_composite_sprite(
     mut commands: Commands,
     runtime: Res<RttRuntime>,
-    perf_toggles: Res<crate::RenderPerfToggles>,
     q_window: Query<&Window, With<PrimaryWindow>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<RttCompositeMaterial>>,
@@ -83,18 +72,11 @@ pub fn spawn_rtt_composite_sprite(
     let material = materials.add(RttCompositeMaterial {
         params: RttCompositeParams {
             pixel_size: runtime.pixel_size(),
-            mask_radius_px: if perf_toggles.soul_mask_enabled {
-                2.25
-            } else {
-                0.0
-            },
-            mask_feather: 0.28,
             shadow_offset_uv: Vec2::new(0.018, -0.012),
             shadow_width_px: 22.0,
             shadow_strength: 0.0,
         },
         scene_texture: runtime.scene.clone(),
-        soul_mask_texture: runtime.soul_mask.clone(),
     });
 
     commands.spawn((
@@ -111,14 +93,7 @@ pub fn spawn_rtt_composite_sprite(
 pub fn sync_rtt_output_bindings(
     runtime: Res<RttRuntime>,
     q_window: Query<Ref<Window>, With<PrimaryWindow>>,
-    mut main_camera_targets: Query<
-        &mut RenderTarget,
-        (With<Camera3dRtt>, Without<Camera3dSoulMaskRtt>),
-    >,
-    mut soul_mask_targets: Query<
-        &mut RenderTarget,
-        (With<Camera3dSoulMaskRtt>, Without<Camera3dRtt>),
-    >,
+    mut main_camera_targets: Query<&mut RenderTarget, With<Camera3dRtt>>,
     mut quads: Query<
         (&MeshMaterial2d<RttCompositeMaterial>, &mut Transform),
         With<RttCompositeSprite>,
@@ -152,21 +127,16 @@ pub fn sync_rtt_output_bindings(
     if let Ok(mut target) = main_camera_targets.single_mut() {
         *target = runtime.scene_render_target();
     }
-    if let Ok(mut target) = soul_mask_targets.single_mut() {
-        *target = runtime.soul_mask_render_target();
-    }
     for (material_handle, _) in quads.iter() {
         if let Some(mut material) = materials.get_mut(&material_handle.0) {
             material.scene_texture = runtime.scene.clone();
-            material.soul_mask_texture = runtime.soul_mask.clone();
             material.params.pixel_size = runtime.pixel_size();
         }
     }
 }
 
-/// Soul mask の有効/無効に合わせて composite material のマスク半径を更新する。
+/// Camera projectionに合わせて、期限付きで残るshadow parameterを更新する。
 pub fn sync_rtt_composite_perf_params_system(
-    perf_toggles: Res<crate::RenderPerfToggles>,
     q_camera: Query<(Ref<Transform>, Ref<Projection>), With<Camera3dRtt>>,
     quads: Query<&MeshMaterial2d<RttCompositeMaterial>, With<RttCompositeSprite>>,
     mut materials: ResMut<Assets<RttCompositeMaterial>>,
@@ -175,23 +145,16 @@ pub fn sync_rtt_composite_perf_params_system(
         return;
     };
 
-    if !perf_toggles.is_changed() && !camera_transform.is_changed() && !projection.is_changed() {
+    if !camera_transform.is_changed() && !projection.is_changed() {
         return;
     }
 
     let shadow_offset_uv =
         composite_shadow_offset_uv(camera_transform.as_ref(), projection.as_ref());
 
-    let next_radius = if perf_toggles.soul_mask_enabled {
-        2.25
-    } else {
-        0.0
-    };
-
     for material_handle in quads.iter() {
         if let Some(mut material) = materials.get_mut(&material_handle.0) {
             let mut next_params = material.params;
-            next_params.mask_radius_px = next_radius;
             if let Some(offset_uv) = shadow_offset_uv {
                 next_params.shadow_offset_uv = offset_uv;
             }

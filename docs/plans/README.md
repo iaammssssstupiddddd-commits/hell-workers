@@ -30,7 +30,7 @@
 | [3d-rtt/lighting-visual-plan-2026-04-04.md](3d-rtt/lighting-visual-plan-2026-04-04.md) | Superseded | Outdoor Lamp のローカル照明で Soul / 建物に落ちる影を追加する計画 |
 | [3d-rtt/milestone-roadmap.md](3d-rtt/milestone-roadmap.md) | Superseded（完了済み実装の履歴。未完項目は凍結） | 3D-RtT 移行ロードマップ |
 | [3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md](3d-rtt/single-scene-light-field/00-baseline-gates-plan-2026-08-03.md) | Completed | Audit、Capture、Memory、RenderDocのbaselineと数値gateを実装前に固定するP00。 |
-| [3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md](3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md) | Ready — P00 current formal baseline registered | Soul mask target／camera／proxyを撤去し、Scene RtT 1枚へ移行するP01。 |
+| [3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md](3d-rtt/single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md) | In Progress — M1〜M3 complete, M4 formal pending | Soul mask target／camera／proxyを撤去し、Scene RtT 1枚へ移行するP01。 |
 | [3d-rtt/single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md](3d-rtt/single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md) | Draft | Door実経路、TopDown camera、Building分類、Soul billboard／Familiar前景を統合するP02。 |
 | [3d-rtt/single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md](3d-rtt/single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md) | Draft | 固定精度のradial field、遮光grid、supercover LOSを`hw_infra`へ実装するP03。 |
 | [3d-rtt/single-scene-light-field/04-indoor-light-runtime-integration-plan-2026-08-03.md](3d-rtt/single-scene-light-field/04-indoor-light-runtime-integration-plan-2026-08-03.md) | Draft | Wall／Door／給電／Roomのsnapshot、dirty管理、更新順を接続するP04。 |
