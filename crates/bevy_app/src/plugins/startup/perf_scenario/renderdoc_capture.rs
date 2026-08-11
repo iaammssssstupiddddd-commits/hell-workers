@@ -107,6 +107,18 @@ impl RenderDocBridge {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = state;
     }
+
+    fn try_begin_capture(&self) -> bool {
+        let mut state = self
+            .0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !matches!(*state, RenderDocBridgeState::Waiting) {
+            return false;
+        }
+        *state = RenderDocBridgeState::Capturing;
+        true
+    }
 }
 
 #[derive(Resource, Default)]
@@ -432,11 +444,13 @@ fn begin_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Render
             return;
         }
     };
+    if !params.bridge.try_begin_capture() {
+        return;
+    }
     if let Err(reason) = api.start_capture(&params.device) {
         params.bridge.replace(RenderDocBridgeState::Failed(reason));
         return;
     }
-    params.bridge.replace(RenderDocBridgeState::Capturing);
     let begin_frame = u64::from(params.frame_count.0);
     state.active = Some((checkpoint.clone(), signature, begin_frame, begin_frame));
 }
@@ -1072,5 +1086,17 @@ mod tests {
                 fixed_bind_number: 2,
             }]
         );
+    }
+
+    #[test]
+    fn renderdoc_bridge_claims_capture_once() {
+        let bridge = RenderDocBridge(Arc::new(Mutex::new(RenderDocBridgeState::Waiting)));
+
+        assert!(bridge.try_begin_capture());
+        assert!(matches!(bridge.snapshot(), RenderDocBridgeState::Capturing));
+        assert!(!bridge.try_begin_capture());
+
+        bridge.replace(RenderDocBridgeState::Failed("done".to_string()));
+        assert!(!bridge.try_begin_capture());
     }
 }
