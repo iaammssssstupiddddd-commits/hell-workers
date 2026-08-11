@@ -184,7 +184,7 @@ pub(crate) fn drive_perf_capture_system(
                 capture.elapsed_secs += realtime_capture_delta_secs(&params);
                 capture.warmup_virtual_secs += params.time.delta_secs_f64();
                 capture.warmup_real_secs += params.real_time.delta_secs_f64();
-                if capture.elapsed_secs >= params.config.warmup_secs {
+                if capture.elapsed_secs >= f64::from(params.config.warmup_secs) {
                     if let Err(error) = validate_realtime_indoor_light_checkpoint(
                         &params.config,
                         &params.checksum_queries,
@@ -230,7 +230,7 @@ pub(crate) fn drive_perf_capture_system(
                 // owns the declared realtime measurement window. Keep the
                 // process alive through that window so the scalar transaction
                 // sample is not mislabeled as a completed two-second capture.
-                capture.elapsed_secs += params.time.delta_secs();
+                capture.elapsed_secs += params.time.delta_secs_f64();
                 capture.measure_virtual_secs += params.time.delta_secs_f64();
                 capture.measure_real_secs += params.real_time.delta_secs_f64();
                 if capture.measure_virtual_secs < f64::from(params.config.measure_secs) {
@@ -276,7 +276,7 @@ pub(crate) fn drive_perf_capture_system(
                 {
                     capture.frame_times_ms.push(frame_time_ms);
                 }
-                if capture.elapsed_secs >= params.config.measure_secs {
+                if capture.elapsed_secs >= f64::from(params.config.measure_secs) {
                     #[cfg(feature = "profiling-memory")]
                     {
                         capture.memory_measurement = crate::profiling_allocator::end_measurement();
@@ -455,11 +455,11 @@ fn validate_realtime_indoor_light_checkpoint(
 }
 
 #[cfg(feature = "profiling")]
-fn realtime_capture_delta_secs(params: &PerfCaptureParams<'_, '_>) -> f32 {
+fn realtime_capture_delta_secs(params: &PerfCaptureParams<'_, '_>) -> f64 {
     if params.config.keeps_virtual_time_paused_during_capture() {
-        params.real_time.delta_secs()
+        params.real_time.delta_secs_f64()
     } else {
-        params.time.delta_secs()
+        params.time.delta_secs_f64()
     }
 }
 

@@ -401,7 +401,7 @@ Tracy runだけがTracy 0.13.1のcapture / csvexport executableを要求する�
 
 計測完了後のwarning/errorは有効性を失わせないが、`validation.json`の`teardown_warning_lines`、`aggregate.csv`の`post_capture_teardown_warning_counts`、`report.md`へ必ず記録される。現在確認されている`CommandQueue has un-applied commands`は、speech/conversationの`Commands::delayed()`が次の`PreUpdate`より前に`AppExit`で破棄されるteardown由来であり、強制flushして計測状態を変えてはならない。完了マーカー前の同種warningは従来どおり失格である。
 
-scenario driverは `Warmup → Measure → Flush → AppExit` を自動遷移する。各checkpointのinitial、warm-up終端、measure終端のentity数・Designation数・state checksum、実際のvirtual/real秒数、p50/p95/p99/maxは`summary.csv`に入る。`gather`、`path-door`、`construction`、`ui-gpu` はすべて専用 fixture を持つため、異なる workload の結果を相互の速度比較に使わない。
+scenario driverは `Warmup → Measure → Flush → AppExit` を自動遷移する。realtime phaseの終了判定と`summary.csv`へ記録する経過秒は同じf64 deltaを積算し、f32の先行丸めによって要求時間未満のrunを確定しない。各checkpointのinitial、warm-up終端、measure終端のentity数・Designation数・state checksum、実際のvirtual/real秒数、p50/p95/p99/maxは`summary.csv`に入る。`gather`、`path-door`、`construction`、`ui-gpu` はすべて専用 fixture を持つため、異なる workload の結果を相互の速度比較に使わない。
 
 ## Artifact形式と集約
 
