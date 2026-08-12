@@ -13,7 +13,6 @@ pub enum InputAction {
     HelpEnd,
     SaveGame,
     RequestLoadGame,
-    CycleElevation,
     ToggleRender3d,
     CycleRttQuality,
     ToggleRttDirectionalLight,

@@ -6,11 +6,9 @@
 use super::components::*;
 use crate::plugins::startup::Building3dHandles;
 use crate::systems::jobs::{Building, BuildingType, ProvisionalWall};
-use crate::systems::visual::wall_orientation_aid::attach_wall_orientation_aid;
 use crate::world::map::{WorldMap, WorldMapWrite};
 use bevy::prelude::*;
-use hw_core::constants::{TILE_SIZE, Z_MAP};
-use hw_visual::visual3d::Building3dVisual;
+use hw_core::constants::Z_MAP;
 type ChangedWallTileQuery<'w, 's> = Query<
     'w,
     's,
@@ -74,25 +72,13 @@ pub(crate) fn spawn_wall_shell(
             .insert(ProvisionalWall::default());
     }
 
-    let material = if is_provisional {
-        handles_3d.wall_provisional_material.clone()
-    } else {
-        handles_3d.wall_material.clone()
-    };
-    let visual_entity = commands
-        .spawn((
-            Mesh3d(handles_3d.wall_mesh.clone()),
-            MeshMaterial3d(material),
-            Transform::from_xyz(world_pos.x, TILE_SIZE / 2.0, -world_pos.y),
-            handles_3d.render_layers.clone(),
-            Building3dVisual { owner: wall_entity },
-            Name::new(if is_provisional {
-                "Building3dVisual (Wall, Provisional)"
-            } else {
-                "Building3dVisual (Wall)"
-            }),
-        ))
-        .id();
-    attach_wall_orientation_aid(commands, visual_entity, handles_3d);
+    crate::systems::jobs::building_completion::spawn_building_3d_visual(
+        commands,
+        wall_entity,
+        BuildingType::Wall,
+        world_pos,
+        is_provisional,
+        handles_3d,
+    );
     wall_entity
 }

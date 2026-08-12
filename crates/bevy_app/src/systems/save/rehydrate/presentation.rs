@@ -5,6 +5,7 @@ use super::*;
 pub(crate) fn clear_rehydrate_presentation(world: &mut World) {
     let presentation_entities: Vec<Entity> = {
         let mut query = world.query_filtered::<Entity, Or<(
+            With<ActorBillboard3d>,
             With<SoulProxy3d>,
             With<SoulShadowProxy3d>,
             With<FamiliarProxy3d>,

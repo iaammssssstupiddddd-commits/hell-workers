@@ -80,6 +80,7 @@ def validate_session_artifact_set(
         ) != ("rtt-light-v1", selected_stage, "behavior") or selected_stage not in {
             "current",
             "p01",
+            "p02",
         }:
             errors.append("behavior manifest has the wrong RtT-light selection")
         requested_environment = manifest.get("requested_environment")

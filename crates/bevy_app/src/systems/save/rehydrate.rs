@@ -59,7 +59,9 @@ use hw_logistics::{BelongsTo, BucketStorage, PendingBelongsToBlueprint, Resource
 use hw_ui::selection::building_size;
 use hw_visual::SoulProxyOwnerCache;
 use hw_visual::blueprint::{BlueprintVisual, BuildingBounceEffect};
-use hw_visual::visual3d::{Building3dVisual, FamiliarProxy3d, SoulProxy3d, SoulShadowProxy3d};
+use hw_visual::visual3d::{
+    ActorBillboard3d, Building3dVisual, FamiliarProxy3d, SoulProxy3d, SoulShadowProxy3d,
+};
 use hw_world::{Yard, seed_obstacle_position_index};
 use std::collections::{HashMap, HashSet};
 
@@ -595,7 +597,6 @@ fn rehydrate_shells(
             command_radius,
             translation.truncate(),
             game_assets,
-            handles_3d,
         );
         // ActiveCommand is intentionally runtime-only, while TaskArea is
         // durable. Reconstruct the operational command from that durable

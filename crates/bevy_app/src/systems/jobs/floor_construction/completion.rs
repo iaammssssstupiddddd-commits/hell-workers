@@ -14,7 +14,6 @@ use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{SpatialGrid, SpatialGridOps};
 use hw_visual::animations::{BounceAnimation, BounceAnimationConfig};
 use hw_visual::blueprint::{BOUNCE_DURATION, BuildingBounceEffect};
-use hw_visual::visual3d::Building3dVisual;
 use std::collections::HashSet;
 #[cfg(feature = "profiling")]
 use std::time::Instant;
@@ -121,16 +120,14 @@ pub(crate) fn spawn_completed_floor_tile(
         ))
         .id();
 
-    commands.spawn((
-        Mesh3d(handles_3d.floor_mesh.clone()),
-        MeshMaterial3d(handles_3d.floor_material.clone()),
-        Transform::from_xyz(world_pos.x, 0.0, -world_pos.y),
-        handles_3d.render_layers.clone(),
-        Building3dVisual {
-            owner: building_entity,
-        },
-        Name::new("Building3dVisual (Floor)"),
-    ));
+    crate::systems::jobs::building_completion::spawn_building_3d_visual(
+        commands,
+        building_entity,
+        BuildingType::Floor,
+        world_pos,
+        false,
+        handles_3d,
+    );
     building_entity
 }
 

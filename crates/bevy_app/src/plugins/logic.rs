@@ -1,6 +1,7 @@
 //! ゲームロジック関連のプラグイン
 
 use crate::entities::familiar::{familiar_movement, familiar_spawning_system};
+use crate::plugins::startup::PerfScenarioConfig;
 use crate::systems::GameSystemSet;
 use crate::systems::command::{
     AreaEditClipboard, AreaEditHistory, AreaEditPresets, AreaEditSession,
@@ -335,13 +336,19 @@ fn register_door_proximity_systems(app: &mut App) {
         Update,
         (
             door_auto_open_nearby_system
+                .run_if(door_automation_enabled)
                 .before(crate::entities::damned_soul::movement::soul_movement),
             familiar_movement,
             door_auto_close_nearby_system
+                .run_if(door_automation_enabled)
                 .after(crate::entities::damned_soul::movement::soul_movement),
         )
             .in_set(GameSystemSet::Actor),
     );
+}
+
+fn door_automation_enabled(config: Option<Res<PerfScenarioConfig>>) -> bool {
+    !config.is_some_and(|config| config.freezes_indoor_light_door_automation())
 }
 
 fn configure_task_owner_cancellation_schedule(app: &mut App) {

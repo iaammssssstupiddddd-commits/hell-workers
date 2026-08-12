@@ -94,6 +94,12 @@ Python self-testは3規模を生成・再読込し、Bridge footprint改変、si
 fail-closedに扱う。fixed auditは各checkpointでDoor state / child image / WorldMap、Room reverse lookup、
 電力網、SoulSpa worker、showcase componentを再検証する。realtime Capture / Memoryもwarmup終端とmeasure終端で
 同じsemantic validatorを通し、初期sidecarだけが正しいstale artifactを成功扱いしない。
+indoor-light static laneではseed済みDoor state自体がfixture topologyなので、fixed auditがsimulation tickを
+進めてもDoor auto-open / closeだけをprofiling run conditionで停止する。Doorのproduction automationは通常playと
+behavior laneで維持し、P02 behavior artifactがClosed→Open→Open→Locked→Lockedを別途検証する。fixture setupは
+Door domain stateのseed後にproduction presentation syncを1 frame待ってからchild image / 3D stateを検証する。
+またP02はlegacy Soul / mask / shadow / Familiar proxyを全render modeで0とし、置換後のSoul billboard / Familiar
+foregroundは`p02_presentation.csv`で個体数とexactly-one presentationを検証する。
 
 各規模は`indoor_light_fixture.csv` 1行と、small 187 / 5、medium 722 / 12、large 2306 / 12行の
 `indoor_light_layout.csv` / `indoor_light_presentation.csv`を必須出力する。indoor semantic actorはsmall 78、
@@ -136,6 +142,8 @@ gate ledgerは123 / 123 row pass、raw artifact 884件のdirectory SHA256は
 `68e470e51cf30f7659bb87eb1893235758d49f2c9d7a1e8f881f0e5f2a9f7502`である。`baseline-index.json`の
 `stages.p01`とattempt manifestを正本とし、`verify-rtt-light --attempt …`で再検証する。
 
+P02 TopDown presentation subjectは `--stage p02` を Rust / Python / native launcherの明示selectorで受理する。current / P01の既存schemaを変更せず、P02のCapture / Memoryは `p02_presentation.csv`、RenderDocはruntime checkpointの同名blockを必須にする。Door behavior validatorはP02だけ Closed→Open→Open→Locked→Lockedを要求し、current / P01のhistorical Closed-only timelineを維持する。bundleは `RLV1-P02-DOOR-DOMAIN`、`RLV1-P02-PRESENT`、`RLV1-P02-PERF` のexact rowを生成し、P02 frame p95/p99は登録済みP01 projectionをreferenceにする。
+
 2026-08-11 の diagnostic RD0 では Intel Arc / Vulkan / X11 の実ゲームから 699,959,528 byte の RDC
 （SHA256 `aaf0f73c02baebf018ad69f0c229ee0570b52c26bb9bc7df5c183c00a71243b8`）を採取し、
 requested App API 1.6.0 に対して returned 1.7.0、schema v3 checkpoint、orphan 0 を確認した。同一RDCの
@@ -157,7 +165,7 @@ sealed capsuleを要求するが、別々のRDCに含まれるvolatile event ID�
 RDC relative locator、SHA256、byte sizeを正本とし、capture時scratchのabsolute pathは絶対pathであったことだけを確認する。
 capture-time validatorは実際のscratch pathとのexact一致を維持する。
 
-RenderDoc は `profiling-renderdoc` 専用 Cargo feature と専用 Cargo profile の binary capsule を使う。`wgpu-hal 29.0.4` は `debug_assertions=false` の build で RenderDoc bridge を無効化するため、専用 profile は `profiling` を継承しつつ debug assertions を有効にする。また、build peakを抑えて後続stageの8 GiB開始ゲートへ到達しやすくするためLTOを無効化し、codegen unitを16に固定して、mutable outputを`target/profiling-renderdoc/bevy_app`へ分離する。Capture (`profiling`) / Memory (`profiling-memory`) と SHA を共有せず、environment-lock schema v2 が leg ごとの hash を保持する。mutable output は build 直後に read-only capsule へ封印し、RD0 と formal は `profile=profiling-renderdoc`、同一 capsule ID / SHA / build fingerprint だけを受理する。runtime checkpoint は schema v3 で、実測 fixed simulation tick、連続4 GPU-ready frame（`ready_frame_ordinal == capture_frame == 4`）、pre/post GPU-ready signature、requested / returned App API（major 1 かつ 1.6 以上）、wgpu の device-selected / null-window capture strategy、raw `.rdc` の SHA256 / byte size を artifact だけから再検証する。composite の Vulkan descriptor contract はstage-awareで、P00 currentはScene `(1, 2)` + mask `(3, 4)`、P01はScene texture / sampler `(1, 2)`だけを許可する。formal 前の actual-game RD0 は同一 RDC を2回 local replayし、volatile resource IDを除いた normalized topology digest が一致した場合だけ formal を許可する。RD0 と failure diagnostic は `target/native-acceptance/renderdoc-foundation/<uuid>/` に置き、canonical registry へ昇格しない。schema v1/v2 checkpoint は登録できない。
+RenderDoc は `profiling-renderdoc` 専用 Cargo feature と専用 Cargo profile の binary capsule を使う。`wgpu-hal 29.0.4` は `debug_assertions=false` の build で RenderDoc bridge を無効化するため、専用 profile は `profiling` を継承しつつ debug assertions を有効にする。また、build peakを抑えて後続stageの8 GiB開始ゲートへ到達しやすくするためLTOを無効化し、codegen unitを16に固定して、mutable outputを`target/profiling-renderdoc/bevy_app`へ分離する。Capture (`profiling`) / Memory (`profiling-memory`) と SHA を共有せず、environment-lock schema v2 が leg ごとの hash を保持する。mutable output は build 直後に read-only capsule へ封印し、RD0 と formal は `profile=profiling-renderdoc`、同一 capsule ID / SHA / build fingerprint だけを受理する。runtime checkpoint は schema v3 で、実測 fixed simulation tick、連続4 GPU-ready frame（`ready_frame_ordinal == capture_frame == 4`）、pre/post GPU-ready signature、requested / returned App API（major 1 かつ 1.6 以上）、wgpu の device-selected / null-window capture strategy、raw `.rdc` の SHA256 / byte size を artifact だけから再検証する。composite の Vulkan descriptor contract はstage-awareで、P00 currentはScene `(1, 2)` + mask `(3, 4)`、P01/P02はScene texture / sampler `(1, 2)`だけを許可する。P02は同じScene-only topologyでも独立stage entryとpresentation checkpointを必須にする。formal 前の actual-game RD0 は同一 RDC を2回 local replayし、volatile resource IDを除いた normalized topology digest が一致した場合だけ formal を許可する。RD0 と failure diagnostic は `target/native-acceptance/renderdoc-foundation/<uuid>/` に置き、canonical registry へ昇格しない。schema v1/v2 checkpoint は登録できない。
 static preflight の `qrenderdoc --version` / `--help` は Qt の display 自動接続を行わない `QT_QPA_PLATFORM=offscreen` で実行する。これは tool metadata probe だけの契約であり、actual-window RD0 / formal capture と local replay の実行環境を offscreen へ置き換えない。
 
 ### 許可ダイアログなし実機受入
@@ -252,7 +260,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py run --skip-build \
   --output target/perf-runs/m0-smoke
 ```
 
-CPU条件では`data/scene_roots.csv`のSoul main/mask/shadowとFamiliar rootがすべて0、GPU条件ではSoul数・Familiar数と一致しなければrunnerが失格にする。これはCPU-only条件へ対象外の3D sceneを混ぜないための契約である。
+legacy `data/scene_roots.csv` はP00 / P01 historyのGLB root契約を保持する。P02ではGPU条件でも旧Soul main / mask / shadowとFamiliar 3D rootは0で、Soulのactive scene参加は`p02_presentation.csv`の`soul_count / soul_billboard_count`で1:1を検証する。CPU条件ではbillboardを含む3D scene rootを生成しない。
 
 ## 標準 workload
 

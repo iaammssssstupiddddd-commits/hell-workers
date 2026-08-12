@@ -37,17 +37,24 @@ pub struct Building3dHandles {
     // --- 床 ---
     pub floor_mesh: Handle<Mesh>,
     pub floor_material: Handle<StandardMaterial>,
+    pub bridge_mesh: Handle<Mesh>,
+    pub bridge_material: Handle<StandardMaterial>,
     // --- ドア ---
     pub door_mesh: Handle<Mesh>,
-    pub door_material: Handle<StandardMaterial>,
+    pub door_closed_material: Handle<StandardMaterial>,
+    pub door_open_material: Handle<StandardMaterial>,
+    pub door_locked_material: Handle<StandardMaterial>,
     // --- 設備 (Tank / MudMixer / RestArea / WheelbarrowParking / SandPile / BonePile) ---
     pub equipment_1x1_mesh: Handle<Mesh>,
     pub equipment_2x2_mesh: Handle<Mesh>,
     pub equipment_material: Handle<StandardMaterial>,
+    pub tank_partial_material: Handle<StandardMaterial>,
+    pub tank_full_material: Handle<StandardMaterial>,
+    pub mixer_idle_material: Handle<StandardMaterial>,
+    pub mixer_active_material: Handle<StandardMaterial>,
     // --- キャラクター ---
     pub soul_scene: Handle<WorldAsset>,
-    pub familiar_mesh: Handle<Mesh>,
-    pub familiar_material: Handle<StandardMaterial>,
+    pub soul_billboards: SoulBillboardHandles,
     /// 全3Dエンティティに付与する RenderLayers
     pub render_layers: RenderLayers,
 }
@@ -70,6 +77,35 @@ pub struct CharacterHandles {
     pub soul_shadow_proxy_material: Handle<SoulShadowMaterial>,
 }
 
+/// Finite shared material pool for all production Soul billboards.
+#[derive(Resource, Clone)]
+pub struct SoulBillboardHandles {
+    pub mesh: Handle<Mesh>,
+    pub normal: Handle<StandardMaterial>,
+    pub exhausted: Handle<StandardMaterial>,
+    pub happy: Handle<StandardMaterial>,
+    pub sleep: Handle<StandardMaterial>,
+    pub wine: Handle<StandardMaterial>,
+    pub trump: Handle<StandardMaterial>,
+    pub stress: Handle<StandardMaterial>,
+    pub stress_breakdown: Handle<StandardMaterial>,
+}
+
+impl SoulBillboardHandles {
+    pub fn material(&self, frame: hw_visual::SoulBillboardFrame) -> Handle<StandardMaterial> {
+        match frame {
+            hw_visual::SoulBillboardFrame::Normal => self.normal.clone(),
+            hw_visual::SoulBillboardFrame::Exhausted => self.exhausted.clone(),
+            hw_visual::SoulBillboardFrame::Happy => self.happy.clone(),
+            hw_visual::SoulBillboardFrame::Sleep => self.sleep.clone(),
+            hw_visual::SoulBillboardFrame::Wine => self.wine.clone(),
+            hw_visual::SoulBillboardFrame::Trump => self.trump.clone(),
+            hw_visual::SoulBillboardFrame::Stress => self.stress.clone(),
+            hw_visual::SoulBillboardFrame::StressBreakdown => self.stress_breakdown.clone(),
+        }
+    }
+}
+
 #[derive(SystemParam)]
 pub struct InitVisualHandlesParams<'w, 's> {
     commands: Commands<'w, 's>,
@@ -81,7 +117,6 @@ pub struct InitVisualHandlesParams<'w, 's> {
     terrain_surface_materials_lod1_lite: ResMut<'w, Assets<TerrainSurfaceMaterialLod1Lite>>,
     terrain_surface_materials_lod2: ResMut<'w, Assets<TerrainSurfaceMaterialLod2>>,
     character_materials: ResMut<'w, Assets<CharacterMaterial>>,
-    soul_shadow_materials: ResMut<'w, Assets<SoulShadowMaterial>>,
     terrain_feature_map: Res<'w, TerrainFeatureMap>,
     terrain_id_map: Res<'w, TerrainIdMap>,
 }
@@ -93,7 +128,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     let materials = &mut params.materials;
     let section_materials = &mut params.section_materials;
     let character_materials = &mut params.character_materials;
-    let soul_shadow_materials = &mut params.soul_shadow_materials;
     let feature_map_handle = params.terrain_feature_map.image.clone();
     let terrain_id_map_handle = params.terrain_id_map.image.clone();
     commands.insert_resource(TerrainSurfaceLutImageHandle(
@@ -228,14 +262,25 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         TILE_SIZE * 0.96,
     ));
     let floor_mesh = meshes.add(Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE));
-    let door_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE * 0.5, TILE_SIZE));
+    let bridge_mesh = meshes.add(Cuboid::new(
+        TILE_SIZE * 2.0,
+        TILE_SIZE * 0.18,
+        TILE_SIZE * 5.0,
+    ));
+    // A narrow leaf keeps Open and Closed visibly distinct from the fixed
+    // TopDown view. The presentation consumer applies the hinge transform.
+    let door_mesh = meshes.add(Cuboid::new(
+        TILE_SIZE * 0.82,
+        TILE_SIZE * 0.5,
+        TILE_SIZE * 0.18,
+    ));
     let equipment_1x1_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE * 0.6, TILE_SIZE));
     let equipment_2x2_mesh = meshes.add(Cuboid::new(
         TILE_SIZE * 2.0,
         TILE_SIZE * 0.8,
         TILE_SIZE * 2.0,
     ));
-    let familiar_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.9, TILE_SIZE * 0.9));
+    let soul_billboard_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.9, TILE_SIZE * 1.1));
 
     let wall_material = section_materials.add(make_section_material(LinearRgba::new(
         0.56, 0.44, 0.30, 1.0,
@@ -256,8 +301,26 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         reflectance: 0.0,
         ..default()
     });
-    let door_material = materials.add(StandardMaterial {
+    let bridge_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.38, 0.24, 0.12),
+        perceptual_roughness: 1.0,
+        reflectance: 0.0,
+        ..default()
+    });
+    let door_closed_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.6, 0.45, 0.2),
+        perceptual_roughness: 1.0,
+        reflectance: 0.0,
+        ..default()
+    });
+    let door_open_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.32, 0.62, 0.28),
+        perceptual_roughness: 1.0,
+        reflectance: 0.0,
+        ..default()
+    });
+    let door_locked_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.68, 0.20, 0.16),
         perceptual_roughness: 1.0,
         reflectance: 0.0,
         ..default()
@@ -268,14 +331,43 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         reflectance: 0.0,
         ..default()
     });
-    let familiar_material = materials.add(StandardMaterial {
-        base_color: Color::WHITE,
-        unlit: true,
-        alpha_mode: AlphaMode::Blend,
-        base_color_texture: Some(game_assets.familiar.clone()),
-        cull_mode: None,
+    let tank_partial_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.24, 0.48, 0.72),
         ..default()
     });
+    let tank_full_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.16, 0.68, 0.88),
+        ..default()
+    });
+    let mixer_idle_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.42, 0.32, 0.24),
+        ..default()
+    });
+    let mixer_active_material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.75, 0.38, 0.12),
+        ..default()
+    });
+    let mut billboard_material = |image: Handle<Image>| {
+        materials.add(StandardMaterial {
+            base_color: Color::WHITE,
+            base_color_texture: Some(image),
+            unlit: true,
+            alpha_mode: AlphaMode::Mask(0.5),
+            cull_mode: None,
+            ..default()
+        })
+    };
+    let soul_billboards = SoulBillboardHandles {
+        mesh: soul_billboard_mesh,
+        normal: billboard_material(game_assets.soul.clone()),
+        exhausted: billboard_material(game_assets.soul_exhausted.clone()),
+        happy: billboard_material(game_assets.soul_lough.clone()),
+        sleep: billboard_material(game_assets.soul_sleep.clone()),
+        wine: billboard_material(game_assets.soul_wine.clone()),
+        trump: billboard_material(game_assets.soul_trump.clone()),
+        stress: billboard_material(game_assets.soul_stress.clone()),
+        stress_breakdown: billboard_material(game_assets.soul_stress_breakdown.clone()),
+    };
 
     commands.insert_resource(Building3dHandles {
         wall_mesh,
@@ -285,16 +377,24 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         wall_orientation_aid_material,
         floor_mesh,
         floor_material,
+        bridge_mesh,
+        bridge_material,
         door_mesh,
-        door_material,
+        door_closed_material,
+        door_open_material,
+        door_locked_material,
         equipment_1x1_mesh,
         equipment_2x2_mesh,
         equipment_material,
+        tank_partial_material,
+        tank_full_material,
+        mixer_idle_material,
+        mixer_active_material,
         soul_scene: game_assets.soul_scene.clone(),
-        familiar_mesh,
-        familiar_material,
+        soul_billboards: soul_billboards.clone(),
         render_layers: building_3d_render_layers(),
     });
+    commands.insert_resource(soul_billboards);
 
     // --- 地形 3D ハンドル ---
     let terrain_ext = TerrainSurfaceMaterialExt {
@@ -375,6 +475,8 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
             soul_face_uv_scale(),
             soul_face_uv_offset(0.0, 0.0),
         )),
-        soul_shadow_proxy_material: soul_shadow_materials.add(SoulShadowMaterial::default()),
+        // P02 stops the production shadow pipeline. Keep a default handle only
+        // so the P08 physical-deletion batch can remove legacy module types.
+        soul_shadow_proxy_material: Handle::default(),
     });
 }

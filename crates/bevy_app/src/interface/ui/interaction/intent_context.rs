@@ -26,7 +26,7 @@ use hw_spatial::StockpileSpatialGrid;
 use hw_ui::components::{ArchitectCategoryState, OperationDialog};
 use hw_ui::intents::StockpilePolicyEditTarget;
 use hw_ui::power::PowerPriorityValue;
-use hw_world::{DoorVisualHandles, WorldMap, WorldMapWrite, apply_door_state};
+use hw_world::{WorldMap, WorldMapWrite, apply_door_state};
 
 #[derive(SystemParam)]
 pub(crate) struct IntentModeCtx<'w, 's> {
@@ -45,16 +45,14 @@ impl IntentModeCtx<'_, '_> {
 
 /// Domain-side validation and mutation used by the generic UI intent handler.
 ///
-/// This is placed in a `ParamSet` with `IntentModeCtx`: both need WorldMap and
-/// mutable Sprite access, but individual intents borrow only one side at a
-/// time.
+/// This is placed in a `ParamSet` with `IntentModeCtx`: both need WorldMap,
+/// but individual intents borrow only one side at a time.
 #[derive(SystemParam)]
 pub(crate) struct IntentDomainActionCtx<'w, 's> {
     architect_category: ResMut<'w, ArchitectCategoryState>,
     q_buildings: Query<'w, 's, &'static Building, Without<DeconstructionPending>>,
-    q_doors: Query<'w, 's, (&'static Transform, &'static mut Door, &'static mut Sprite)>,
+    q_doors: Query<'w, 's, (&'static Transform, &'static mut Door)>,
     world_map: WorldMapWrite<'w>,
-    door_visual_handles: Res<'w, DoorVisualHandles>,
     stockpile_grid: Res<'w, StockpileSpatialGrid>,
     stockpile_policy_requests: MessageWriter<'w, StockpilePolicyChangeRequest>,
     soul_spa_slot_outcomes: MessageWriter<'w, SoulSpaSlotsChangeOutcome>,
@@ -82,7 +80,7 @@ impl IntentDomainActionCtx<'_, '_> {
     }
 
     pub(crate) fn toggle_door_lock(&mut self, entity: Entity) {
-        let Ok((transform, mut door, mut sprite)) = self.q_doors.get_mut(entity) else {
+        let Ok((transform, mut door)) = self.q_doors.get_mut(entity) else {
             return;
         };
         let door_grid = WorldMap::world_to_grid(transform.translation.truncate());
@@ -91,14 +89,7 @@ impl IntentDomainActionCtx<'_, '_> {
         } else {
             DoorState::Locked
         };
-        apply_door_state(
-            &mut door,
-            &mut sprite,
-            &mut self.world_map,
-            &self.door_visual_handles,
-            door_grid,
-            next_state,
-        );
+        apply_door_state(&mut door, &mut self.world_map, door_grid, next_state);
     }
 
     pub(crate) fn request_stockpile_policy_change(

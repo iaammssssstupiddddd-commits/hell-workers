@@ -105,7 +105,6 @@ fn every_action_has_exactly_one_consumer_owner() {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum ConsumerOwner {
         UiIntentBridge,
-        ElevationView,
         RenderDebugToggle,
         DebugSpawn,
         FamiliarCommand,
@@ -136,7 +135,6 @@ fn every_action_has_exactly_one_consumer_owner() {
             | InputAction::CancelLoadConfirm
             | InputAction::CloseSettings
             | InputAction::CloseOperationDialog => ConsumerOwner::UiIntentBridge,
-            InputAction::CycleElevation => ConsumerOwner::ElevationView,
             InputAction::ToggleRender3d
             | InputAction::CycleRttQuality
             | InputAction::ToggleRttDirectionalLight
@@ -180,7 +178,6 @@ fn every_action_has_exactly_one_consumer_owner() {
         InputAction::HelpEnd,
         InputAction::SaveGame,
         InputAction::RequestLoadGame,
-        InputAction::CycleElevation,
         InputAction::ToggleRender3d,
         InputAction::CycleRttQuality,
         InputAction::ToggleRttDirectionalLight,
@@ -228,7 +225,7 @@ fn every_action_has_exactly_one_consumer_owner() {
 fn exact_plain_chords_do_not_accept_modifiers() {
     assert_eq!(
         resolve_input_chords(&[plain(KeyCode::KeyV)], InputContextSnapshot::default()),
-        [InputAction::CycleElevation]
+        []
     );
     assert_eq!(
         resolve_input_chords(&[plain(KeyCode::KeyZ)], InputContextSnapshot::default()),
@@ -447,7 +444,7 @@ fn text_input_blocks_shortcuts_without_an_overlay() {
 }
 
 #[test]
-fn active_gesture_blocks_save_without_blocking_view_action() {
+fn active_gesture_blocks_save_without_reintroducing_plain_v() {
     let actions = resolve_input_chords(
         &[plain(KeyCode::F5), plain(KeyCode::KeyV)],
         InputContextSnapshot {
@@ -455,7 +452,7 @@ fn active_gesture_blocks_save_without_blocking_view_action() {
             ..default()
         },
     );
-    assert_eq!(actions, [InputAction::CycleElevation]);
+    assert!(actions.is_empty());
 }
 
 #[test]
@@ -738,7 +735,7 @@ fn compatibility_is_explicit_across_conflict_lanes() {
             &[plain(KeyCode::F5), plain(KeyCode::KeyV)],
             InputContextSnapshot::default(),
         ),
-        [InputAction::SaveGame, InputAction::CycleElevation]
+        [InputAction::SaveGame]
     );
     assert_eq!(
         resolve_input_chords(

@@ -150,10 +150,16 @@ fn fixture_setup_freezes_for_fixed_step_and_checksum_compared_realtime_workloads
     config.workload = super::PerfWorkload::IndoorLight;
     assert!(config.freezes_fixture_setup());
     assert!(config.keeps_virtual_time_paused_during_capture());
+    config.rtt_light = Some(super::PerfRttLightSelection::P02_STATIC_V1);
+    assert!(config.freezes_indoor_light_door_automation());
+    config.rtt_light = Some(super::PerfRttLightSelection::P02_BEHAVIOR_V1);
+    assert!(!config.freezes_indoor_light_door_automation());
+    config.rtt_light = None;
 
     config.workload = super::PerfWorkload::TaskDashboard;
     assert!(config.freezes_fixture_setup());
     assert!(!config.keeps_virtual_time_paused_during_capture());
+    assert!(!config.freezes_indoor_light_door_automation());
 
     config.workload = super::PerfWorkload::Gather;
     config.clock_mode = PerfClockMode::Fixed;
@@ -244,8 +250,16 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
             .expect("P01 behavior requires an explicit selection");
     assert_eq!(p01_behavior_selection.lane(), "behavior");
 
+    let mut p02 = p01_behavior;
+    p02[4] = "p02".to_string();
+    let p02_selection = super::parse_rtt_light_selection(&p02, super::PerfWorkload::IndoorLight)
+        .expect("p02/behavior v1 is implemented")
+        .expect("P02 requires an explicit selection");
+    assert_eq!(p02_selection.stage_id(), "p02");
+    assert_eq!(p02_selection.lane(), "behavior");
+
     let mut wrong_stage = exact;
-    wrong_stage[4] = "p02".to_string();
+    wrong_stage[4] = "p03".to_string();
     assert!(
         super::parse_rtt_light_selection(&wrong_stage, super::PerfWorkload::IndoorLight).is_err()
     );

@@ -5,12 +5,13 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-02-topdown-presentation-plan-2026-08-03` |
-| ステータス | `Draft` |
+| ステータス | `In Progress — M1〜M5 implemented, M6 native/formal pending` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-04` |
+| 最終更新日 | `2026-08-12` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | [P00](00-baseline-gates-plan-2026-08-03.md)、[P01](01-single-scene-rtt-plan-2026-08-03.md) |
+| 受入基盤 | [P02-A](02a-p02-acceptance-infrastructure-plan-2026-08-12.md) M1〜M4。P02 M6のformal / native開始条件。 |
 | 後続 | [P04](04-indoor-light-runtime-integration-plan-2026-08-03.md)、[P06](06-indoor-light-rendering-plan-2026-08-03.md)、[P08](08-legacy-cleanup-release-plan-2026-08-03.md) |
 | 関連Issue/PR | `N/A` |
 
@@ -33,6 +34,7 @@
 - Familiarの3D proxyを撤去し、Familiar / speech / selection / effectのforeground契約を固定する。
 - 3D Door visualを`DoorState`へ同期する。
 - `CycleElevation` / V binding / Help entryの削除とTopDown camera sync単純化。
+- P02 featureのsemantic sourceを、[P02-A](02a-p02-acceptance-infrastructure-plan-2026-08-12.md)がstage=`p02` artifact / native受入へ接続できる形で固定する。
 
 ### 非対象（Out of Scope）
 
@@ -41,6 +43,8 @@
 - Soul projector uniform / WGSL /型の物理削除（P08）。production動作はP02で止める。
 - Light Field material（P06）。
 - 新規GLB / sprite制作。
+- P00 frozen contract / projection v1とregistered current / P01 artifactの変更。P02-AはP02 evidenceを実装するが、これらを読み替えない。
+- P04 / P06以降のstage固有metric。P02-AはP02だけを所有し、後続stageは同じextension pointをそれぞれ所有する。
 
 ## 3. 現状とギャップ
 
@@ -73,12 +77,23 @@ root adapterに副作用のない`presentation_class(BuildingType)`を置き、�
 - `Structural3d`は3D proxyだけを描画する。
 - `Foreground2d`は2D visualだけを描画し、3D equipment cubeを生成しない。
 - BridgeはP02でmesh / material handle、spawn、rehydrate、cleanupを実装してから`Structural3d`へ切り替える。mappingだけ先に有効化しない。
-- all-building mappingは一般completionだけでなくSoulSpa placement、wall construction phase、floor completion、interface debug等の独自spawn経路も同じhelperへ通す。
-- `Building3dVisual { owner }`はAdded visual / `Changed<Transform>` ownerを読み、移動するTank / MudMixerを含めtransformへ追従する。
-- Tank / MudMixerのempty / partial / full / active状態は有限個の共有3D material handleへ移す。状態表現を落とす場合は暗黙縮退ではなくP00製品判断として親計画へ記録する。
+- all-building mappingは一般completionだけでなくSoulSpa placement、wall construction phase、floor completion、interface debug、初期`WheelbarrowParking`配置、rehydrate、P00 performance fixtureを同じhelper / route tableへ通す。deconstruction / world replacement後はownerを持つactive presentationが0になることも同じtableで検証する。
+- `Building3dVisual { owner }`はAdded visual / `Changed<Transform>` ownerを読むが、root transformをそのまま複製しない。2D XY→3D XZ、種別height、rotation、completion bounce scaleを分けたpresentation-transform resolverで、移動するTank / MudMixerを含め追従する。
+- Tank / MudMixerのempty / partial / full / active状態とcompletion bounceはP02がsemantic state / active presentation契約として所有する。P02で必要な有限shared handleは暫定bridgeに留め、durable `TopDownStructuralMaterial` / receiverへの移行はP06 M3が所有する。`state_and_bounce_probes_pass`はmaterial type名に依存させない。
 - P00契約どおりcompletion bounceをstage上のactive presentationへ移し、廃止または非描画2D childだけがbounceする状態を残さない。
 - Wall / Tank / MudMixer等の既存2D state syncが必要な間は`LegacyStructural2dMirror`相当を非描画で保持できるが、consumer名とP08削除条件をtestに記録する。単なる保険として残さない。
+- `WallOrientationAid`はP02で削除 / debug-only化 / `Structural3d`構成要素として維持のいずれかを選ぶ。維持する場合はscene inventoryとP06 receiver ownershipへ明示的に含め、無名の3D childとして残さない。
 - load rehydrateも通常spawnと同じmapping helperを使い、別matchを持たない。
+
+| presentation route | P02で固定する契約 | focused evidence |
+| --- | --- | --- |
+| generic completed blueprint | `BuildingType` mapping helperだけがactive presentationを作る | 全12 variantのnormal spawn |
+| wall phase / floor completion / SoulSpa placement | 独自spawnはhelperへ委譲し、route固有の2D / 3D bypassを持たない | completed stateとload後のexactly-one |
+| initial `WheelbarrowParking` | root Sprite直spawnをForeground2d helperへ正規化する | new gameとrehydrateの同一分類 |
+| interface debug | production mappingを迂回する場合はdebug-only markerを持ち、formal fixtureへ混入しない | debug-on / debug-off inventory |
+| rehydrate | normal spawnと同じclassification / transform resolver / cleanupを使う | load-normal fixture |
+| P00 performance fixture | stage-aware sidecarのpresentation expectationと同じroute tableを読む | medium / gpu checkpoint |
+| deconstruction / world replacement | owner消滅後のactive presentationは0、cache / observerを残さない | teardown / replace focused test |
 
 ### 4.2 camera composition
 
@@ -115,9 +130,9 @@ UI -> final
 
 - `hw_world::apply_door_state`をDoor rootとWorldMapだけのdomain mutationにし、Sprite componentを成立条件にしない。
 - auto proximity / manual intentの既存consumerをproduction root + child構造のintegration testで検証する。
-- generic `Building3dVisual`だけで識別せず`Door3dVisual { owner }`相当を付ける。
-- Closed / Lockedはclosed transform、Openは中心pivotで90度回転したopen transformを使う。
-- child Spriteと3D visualは`Changed<Door>`とAdded shellを読み、owner不在ならcleanupへ委ねる。
+- generic `Building3dVisual`だけで識別せず`Door3dVisual { owner }`相当を付ける。既存cleanupがこのmarkerを回収できないなら共通presentation tagへ統合する。
+- Closed / Lockedはclosed visual、Openは明示したyaw axis・pivot・orientationを持つopen visualを使う。正方形primitiveの中心90度回転だけで状態差を表さず、非対称leafまたはstate別mesh / materialでClosedとOpenを識別可能にする。orientationをwall topologyから得る場合は、topology不在時のdeterministic fallbackも定義する。
+- child Spriteと3D visualは`Changed<Door>`とAdded shellを読み、owner不在ならcleanupへ委ねる。Door mutation→`DoorPresentationSyncSet`相当のconsumer→behavior observationの順を固定し、snapshotをmutation直後のpre-visual状態から採らない。P04のmanual request化はこのconsumer / observation境界を変更しない。
 - Door visualはstateを書かず、`DoorState`の純粋consumerとする。
 - P04後はLight Fieldと同じDoorState revisionへ遷移する。
 
@@ -137,8 +152,9 @@ UI -> final
 
 1. Door state mutationをrootの`Door + WorldMap`だけへ分離する。
 2. auto open / closeとmanual lockのqueryから同一entity上の`Sprite`要件を除く。
-3. child Spriteをowner state consumerへ変更し、3D visualも同じownerを読む。
-4. `attach_building_shell` / completionから生成したDoorを使うintegration testを追加する。
+3. child Spriteと`Door3dVisual`をowner state consumerへ変更し、Closed / Open / Lockedを識別可能なvisual、orientation / pivot、owner-safe cleanupを実装する。
+4. Door mutation→`DoorPresentationSyncSet`相当のconsumer→behavior observationのorderを明示する。manual direct mutationがP04でrequestへ移る前後で、同じ観測境界を維持する。
+5. `attach_building_shell` / completionから生成したDoorを使うintegration test、despawn / world replacement test、P02-A M2のproduction-shell behavior sourceを追加する。
 
 ### 主な変更ファイル
 
@@ -148,14 +164,25 @@ UI -> final
 - `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs`
 - `crates/bevy_app/src/systems/visual/building3d_cleanup.rs`
 - `crates/bevy_app/src/plugins/logic.rs`
+- `crates/bevy_app/src/plugins/startup/perf_scenario/{workload_driver.rs,indoor_light_fixture.rs,behavior_driver.rs}`
+- P02-A M2のDoor evidence / focused test owner
 
 ### 完了条件
 
 - [ ] root Door / child Spriteでauto open / closeが成立する
 - [ ] manual mutationがSprite有無へ依存しない
 - [ ] synthetic `Door + Sprite`だけのtestで完了判定していない
-- [ ] child Spriteと3D visualが同じDoorStateを表示する
-- [ ] `RLV1-P02-DOOR-DOMAIN`を満たす
+- [ ] active child Spriteまたは3D visualが同じDoorStateを表示し、Open / Closedがactual-windowで識別できる
+- [ ] auto / manual / pausedのbehavior snapshotはDoor presentation consumer後に採られる
+- [ ] owner消滅後にDoor visual / cache / observerが残らない
+- [ ] P02-A M2が要求する`RLV1-P02-DOOR-DOMAIN`のsource-to-evidenceを満たす。P02全体未完了時のpartial artifactをformal合格と呼ばない
+
+### 検証
+
+- production root / child Doorのauto、manual、paused、despawn / world replacement focused tests
+- `python3 scripts/dev.py check`
+- `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+- `python3 scripts/dev.py cargo -- test --workspace`
 
 ## M2: camera passとTopDown-only契約を閉じる
 
@@ -167,6 +194,7 @@ UI -> final
 4. elevation input / state / branch / dynamic SectionCut producerを削除する。
 5. Terrain LODをTopDown resolverへ単純化する。
 6. Help manifest / provider / coverage / exact approvalからplain V elevationを削除し、Ctrl+Vを維持する。
+7. P02-A M2が同じmedium / gpu checkpointへ束縛するcamera / pass evidenceを提供する。
 
 ### 主な変更ファイル
 
@@ -176,7 +204,7 @@ UI -> final
 - `crates/bevy_app/src/plugins/visual.rs`
 - `crates/bevy_app/src/interface/ui/help_content/{providers/camera_selection.rs,coverage.rs,coverage_approval.snap}`
 - root Help manifest / approval gate
-- `docs/{help-screen.md,visual_test.md,rendering-performance.md}`
+- `docs/{help-screen.md,visual_test.md,rendering-performance.md,architecture.md,world_layout.md}`
 
 ### 完了条件
 
@@ -185,18 +213,27 @@ UI -> final
 - [ ] UI camera、pan / zoom / cursor conversionが回帰しない
 - [ ] plain V action / binding / Helpが0、Ctrl+Vは維持
 - [ ] `SectionCut`はdefault inactive以外のwriterを持たない
+- [ ] P02-A M2がcamera / pass evidenceをP02 presentation sidecarへ記録できる
+
+### 検証
+
+- camera order / clear / cursor conversion / Render3d hidden focused tests
+- Help manifest / provider / exhaustive coverage / exact approval snapshot test
+- `python3 scripts/dev.py check`
+- `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+- `python3 scripts/dev.py cargo -- test --workspace`
 
 ## M3: Building presentation mappingを導入する
 
 ### 変更内容
 
 1. class enumと全12 `BuildingType`のexhaustive mapping helperを追加する。
-2. completion、rehydrate、SoulSpa placement、wall phase、floor completion、debug spawnを同じhelperへ接続する。
+2. completion、rehydrate、SoulSpa placement、wall phase、floor completion、debug spawn、初期`WheelbarrowParking`配置、P00 performance fixtureを§4.1のroute tableに従って同じhelperへ接続する。
 3. Bridge用3D handles / spawn / rehydrate / cleanupを追加してからStructural3dへ切り替える。
 4. Structural3dの描画2D child、Foreground2dの3D proxyを生成しない。
-5. general 3D proxy transform syncを追加し、Tank / MudMixer moveとloadをtestする。
-6. Tank / MudMixer stateと必要なcompletion bounceを3D consumerへ移す。
-7. Wall connection / blueprint consumerを分離し、必要なlegacy mirrorだけmarker付きで期限設定する。
+5. XY→XZ、type height、rotation、bounce scaleを分離したgeneral 3D presentation-transform resolverを追加し、Tank / MudMixer moveとloadをtestする。
+6. Tank / MudMixer stateと必要なcompletion bounceをactive presentationへ移す。P06 M3へ渡すstate / bounce contractとtemporary material bridgeを明記する。
+7. Wall connection / blueprint consumerを分離し、`WallOrientationAid`の最終扱いと必要なlegacy mirrorだけをmarker付きで期限設定する。
 
 ### 主な変更ファイル
 
@@ -204,16 +241,27 @@ UI -> final
 - `crates/bevy_app/src/systems/save/rehydrate/`のpresentation shell adapter
 - `crates/bevy_app/src/systems/visual/building3d_cleanup.rs`
 - `crates/bevy_app/src/interface/selection/soul_spa_place/spawn.rs`
+- `crates/bevy_app/src/systems/logistics/initial_spawn/facilities.rs`
+- `crates/bevy_app/src/plugins/startup/perf_scenario/indoor_light_fixture.rs`
 - wall construction / floor completion / interface debugの独自spawn owner
 - `crates/hw_visual/src/{visual3d.rs,layer/,wall_connection.rs,tank.rs,mud_mixer.rs}`
 
 ### 完了条件
 
-- [ ] 全BuildingTypeの通常spawn / loadでexactly one presentation
+- [ ] §4.1の全routeで全BuildingTypeのactive presentationがexactly one、owner消滅後は0
 - [ ] Bridgeが不可視にならない
-- [ ] Tank / MudMixer move後に3D proxyが追従する
+- [ ] Tank / MudMixer move後に座標、height、rotation、bounce scaleを正しく保って3D proxyが追従する
 - [ ] Tank / MudMixerの状態表示が維持される
 - [ ] legacy mirrorがある場合、全consumerとP08削除gateが列挙されている
+- [ ] P00 fixture / P02-A sidecarの期待分類がproduction mappingと同じroute tableを使う
+
+### 検証
+
+- 全BuildingTypeのnormal spawn / load / initial spawn / teardown mapping tests
+- Bridge、moving Tank / MudMixer、state / bounce、WallOrientationAid focused tests
+- `python3 scripts/dev.py check`
+- `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+- `python3 scripts/dev.py cargo -- test --workspace`
 
 ## M4: Soul billboard・Familiar前景・Soul shadow停止を閉じる
 
@@ -226,7 +274,8 @@ UI -> final
 5. visible GLB ready observerとper-Soul face material cloneをproductionから外す。
 6. FamiliarProxy3dのspawn / sync / cache / rehydrate / reset / perf列を削除し、2D child 1つだけにする。
 7. SoulShadowProxy3dのspawn / observer / cache / rehydrateとprojector sync登録を停止する。
-8. alpha / depth / Wall前後 / selection / speech / effect / animationのnative fixtureを追加する。
+8. `SceneObjectQuery` / Render3d visibility pathをbillboardを含むP02 scene objectへ更新し、visible / hiddenで同じowner lifecycleを保つ。
+9. alpha / depth / Wall前後 / selection / speech / effect / animationのproduction actual-window fixtureをP02-A M3へ渡す。独立`visual_test`は補助検査に限定する。
 
 ### 主な変更ファイル
 
@@ -234,36 +283,87 @@ UI -> final
 - `crates/hw_visual/src/visual3d.rs`
 - `crates/bevy_app/src/entities/{damned_soul,familiar}/spawn.rs`
 - `crates/bevy_app/src/systems/visual/{character_proxy_3d,soul_animation.rs}`
+- `crates/bevy_app/src/plugins/visual.rs`
 - Soul movement / animation resolver owner
 - `crates/bevy_app/src/systems/save/rehydrate/`のactor shell
 - `crates/visual_test/src/{soul.rs,systems.rs,types/}`
 - `assets/shaders/actor_billboard_material.wgsl`
-- perf scene root Rust / Python schema
+- P02-A M2のpresentation sidecar / focused test owner
 
 ### 完了条件
 
 - [ ] Wall前 / Wall裏でSoul body depthが正しい
 - [ ] alpha edgeがWallを貫通せず、足元anchorが地面に合う
 - [ ] selection / speech / effectはforegroundで読める
-- [ ] per-actor material asset増加がない
+- [ ] pool cardinalityとspawn / load / despawn後のper-actor material asset増加なしをfocused production testで検証する
 - [ ] Soul billboard / Familiar Spriteがspawn / load / despawnで各1系統
 - [ ] Soul / Familiarの3D GLB proxyとSoul projector material writeがproductionで0
+- [ ] Soul shadow spawn / ready observer / cache / rehydrate / per-frame projector registrationがproductionで0
+- [ ] Render3d visible / hiddenでbillboardを含むscene objectが一貫してtoggleされ、foreground consumerは残る
 - [ ] animation / expressionが1つのresolverと明示schedule順を使う
 
-## M5: presentation native / performance受入を閉じる
+### 検証
+
+- billboard resolver / shared-pool / spawn / rehydrate / despawn / scene-toggle focused tests
+- P02-A M3 production actual-window scenarioのWall前後、alpha、foreground、animation observation
+- `python3 scripts/dev.py check`
+- `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+- `python3 scripts/dev.py cargo -- test --workspace`
+
+## M5: P02 evidence / stage toolingを接続する
 
 ### 変更内容
 
-1. all-building、Door、Soul、Familiar、camera compositionのvisual_testを固定する。
-2. High / Medium / Low、DPI 1.0 / 1.5 / 2.0、Render3d visible / hiddenをnative確認する。
-3. P00 `stage=p02`のaudit / behavior / Capture / Memoryを各required case 3反復し、RenderDoc固定1 frameでcamera、scene roots、material assets、frame / RSSを比較する。
+1. [P02-A](02a-p02-acceptance-infrastructure-plan-2026-08-12.md) M1〜M4を、P02 M1〜M4のproduction sourceと同じcommit seriesで完了する。
+2. `stage=p02` selector、historical current / P01 reader、Door / presentation sidecar、RenderDoc expectation、bundle gate extractor、native recipeを接続する。
+3. P00 frozen contract / projection v1を変更せず、P02 Door six metric、presentation seven metric、P01 compatible performance referenceへのsource-to-gate対応とnegative testを閉じる。
+4. all-building、Door、Soul、Familiar、camera compositionのproduction fixtureをP02-A actual-window scenarioへ渡す。`visual_test`は補助検査でありformal / nativeの代替にしない。
+
+### 主な変更ファイル
+
+- P02-Aで列挙する`perf_scenario` Rust / Python artifact、fixture、RenderDoc、bundle self-test
+- `.codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py`とSkill / adapter mirror
+- 実装後の`docs/{performance-profiling.md,rendering-performance.md,visual_test.md}`
 
 ### 完了条件
 
-- [ ] black frame / double draw / invisible Bridgeがない
-- [ ] camera inventoryとscene root countがtargetに一致する
+- [ ] P02-A M1〜M4が完了し、current / P01 historyを読み替えずP02 raw evidenceを生成できる
+- [ ] P02の各Door / presentation metricを壊すnegative fixtureが対応gateを落とす
+- [ ] P02 Scene-only checkpointがP01 RTT preservationとP02 presentation evidenceを同時に満たす
+- [ ] P02 full formalのcommand、input、artifact validator、failure triageが揃う。actual candidate採取はM6だけが行う
+
+### 検証
+
+- P02-A M1〜M4のselector / reader / fixture / behavior / RenderDoc / bundle / native self-test
+- `python3 scripts/dev.py check`
+- `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+- `python3 scripts/dev.py cargo -- test --workspace`
+- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test`
+
+## M6: presentation formal / native受入を閉じる
+
+### 変更内容
+
+1. P02-Aがreadyにしたno-prompt recipeで、P00 `stage=p02`のaudit / behavior / Capture / Memoryを各required case 3反復し、medium / gpu RenderDocを固定1 frame採取する。
+2. `RLV1-BUNDLE-VALID`、`RLV1-P01-RTT`、`RLV1-P02-DOOR-DOMAIN`、`RLV1-P02-PRESENT`、`RLV1-P02-PERF`だけをexact required gate集合として検証する。
+3. High / Medium / Low、DPI 1.0 / 1.5 / 2.0、Render3d visible / hiddenでP02-A actual-window scenarioを実行し、black frame、double draw、Door stateの非識別、Wall前後 / alpha、foreground、animation、invisible Bridgeを判定する。
+4. P02-PERFはP01 compatible referenceに対するp95 / p99をhard gateにする。RSSは診断値として記録し、P02の新規閾値にしない。閾値追加はv2 contractと双方rebaselineを別提案で行う。
+5. M2のHelp変更を含む実装batchに対し、`hell-workers-review-help-impact` Skillで実際のplayer-visible経路から`Update required`を完了する。
+
+### 完了条件
+
+- [ ] black frame / double draw / invisible Bridge / Door state非識別がない
+- [ ] camera inventory、scene root count、P02 presentation sidecarがtargetに一致する
 - [ ] `stage=p02`のexact gate ID集合を満たす
-- [ ] native artifactがfail-closed検証を通る
+- [ ] actual-window artifactとformal artifactがfail-closed検証を通る
+- [ ] Help impact review、影響docs、native evidence registryが同じ完了batchで閉じる
+
+### 検証
+
+- `hell-workers-run-native-acceptance` Skillの`rtt-light` formal recipe（P02 stage）
+- P02-A actual-window presentation scenario
+- `python3 scripts/dev.py verify`
+- `git diff --check`
 
 ## 6. リスクと対策
 
@@ -277,6 +377,11 @@ UI -> final
 | visible GLBとbillboardが同時spawnする | presentation shellを1 helper / 1 owner cacheへ統合する |
 | shadow cleanupをP08へ先送りしてcostが残る | spawn / per-frame updateはP02で停止し、dead layout削除だけP08へ残す |
 | V削除でCtrl+Vまで消す | chord単位testを維持し、plain Vだけを除去する |
+| Open Doorが正方形yawでClosedと見分けられない | leaf / state visual、orientation / pivot、actual-window observationを同じM1で固定する |
+| Door visualがwriter後に同期されずbehaviorがstale stateを読む | consumer→observation boundaryを明示し、P02-A behavior snapshotをその後だけに置く |
+| current / P01 artifactをP02 schemaで読み替える | P02-Aのstage×schema許可表とhistorical reader / cross-stage negativeでfail-closedにする |
+| initial spawn / fixtureがmapping helperを迂回する | §4.1 route tableの全pathをP02-A sidecarとfocused testへ束縛する |
+| P02 / P06でTank / MudMixer material ownerが重なる | P02はsemantic state / bounce、P06はdurable receiver materialを所有し、P02 gateはmaterial名へ依存させない |
 
 ## 7. 検証計画
 
@@ -288,11 +393,11 @@ UI -> final
 - Familiar exactly-one-presentation / Soul shadow runtime-zero tests
 - named billboard resolver / sync order tests
 - input binding / Help exact coverage tests
-- `cargo check --workspace`
-- `cargo clippy --workspace --all-targets -- -D warnings`
-- `cargo test --workspace`
-- native Wall前後 / alpha / selection / animation / Door acceptance
-- Help impact review
+- P02-A selector / schema reader / fixture / behavior / RenderDoc / bundle / native positive・negative self-test
+- production actual-window Wall前後 / alpha / selection / animation / Door acceptance
+- M1〜M5の各独立commitで`python3 scripts/dev.py check`、Rust変更時は`python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`と`python3 scripts/dev.py cargo -- test --workspace`
+- M2ではHelp manifest / provider / exhaustive coverage / exact approval snapshotを再生成し、M6の実装batchでHelp impact reviewを完了する
+- M6で`python3 scripts/dev.py verify`、`hell-workers-run-native-acceptance` SkillのP02 formal recipe、artifact fail-closed検証、`git diff --check`
 
 ## 8. ロールバック方針
 
@@ -306,31 +411,33 @@ UI -> final
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済み: 計画作成
-- 未着手: M1〜M5
+- 進捗: `85%`
+- 完了済み: M1 Door domain / presentation、M2 fixed TopDown camera / Help、M3 exhaustive Building presentation、M4 Soul billboard / Familiar foreground / shadow runtime停止、M5 `stage=p02` selector・sidecar・Door timeline・RenderDoc / bundle gate実装。headless behavior契約はDoor / load各3回（計6回）valid。S1で検出したstatic Door automation、fixed sidecar、Door presentation settle、P02 legacy proxy期待値の契約差を修正し、Intel Arc / Vulkan / X11でAudit 3/3、Capture 18/18、Memory 18/18 validを確認済み
+- 未完了: M6のclean committed subjectを使うformal / actual-window artifact採取・登録。P02-Aのactual-window matrixも同じM6 batchで閉じる。
 
 ### 次のAIが最初にやること
 
-1. P01完了とmask inventory 0を確認する。
-2. production Door root / child query mismatchが未修正であることを確認する。
-3. M1のcompletion helper由来Door integration testから着手する。
+1. 実装batchをreviewしてcommitし、clean subjectを確定する。
+2. P02-A actual-window matrixをno-prompt launcherで採取する。
+3. P02 formalをS0 / S1 prerequisiteと同じsubjectで採取し、exact gateを登録する。
 
 ### ブロッカー/注意点
 
 - save presentation shellは別作業のregistry変更と重なる可能性がある。
 - WallはP02時点でSectionMaterialを使い続ける。
 - P04がmanual requestのpause / frame契約を所有し、P02はdomain mutationの成立までを所有する。
+- P02 full formalはP02-A M1〜M4がreadyになるまで採取しない。P04のentryはP02 M1 Door correctnessのままとし、P02-A full formalを新規blockerにしない。
+- P00 frozen contract / projection v1とregistered current / P01 artifactをP02実装の都合で更新しない。
 
 ### 最終確認ログ
 
-- Rust gates: `2026-08-04` / `not run (plan-only update)`
-- native acceptance: `2026-08-04` / `not run (plan-only update)`
-- docs gate: `2026-08-04` / `pass (docs --write / --check, check_docs, diff --check)`
+- Rust gates: `2026-08-12` / `python3 scripts/dev.py verify pass（workspace test / check / profiling check / Clippy 0 warningsを含む）`
+- native acceptance: `2026-08-12` / `S1 valid: Intel Arc (MTL) / Vulkan / X11、Audit 3/3、Capture 18/18、Memory 18/18、source unchanged。formalはclean committed subjectが必要`
+- docs gate: `2026-08-12` / `docs --write / check pass`
 
 ### Definition of Done
 
-- [ ] M1〜M5が完了
+- [ ] M1〜M6とP02-A M1〜M4が完了
 - [ ] production Door silent pathが解消済み
 - [ ] 全Building / Soul / Familiarがexactly one presentation
 - [ ] Soul shadow spawn / per-frame projector更新が0
@@ -344,5 +451,11 @@ UI -> final
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-12` | `Codex` | 修正後S1をIntel Arc / Vulkan / X11で再実行し、Audit 3/3、Capture 18/18、Memory 18/18 valid・source unchangedを確認 |
+| `2026-08-12` | `Codex` | S1再試行のCaptureでmedium / large Open Doorのpresentation settle待ち不足とP02 GPU legacy proxy期待値の旧契約を検出。fixtureを1 frame待機、P02 legacy proxyを0へ修正 |
+| `2026-08-12` | `Codex` | S1初回auditでDoor 0のClosed→Openを検出。static laneだけDoor automationを停止し、fixed auditでP02 sidecarを出さないproducer/validator契約へ修正、focused audit 3/3 validを確認 |
+| `2026-08-12` | `Codex` | P02 Door / load behaviorを各3回validで確認し、旧2D mirrorをDoor / Tank / MudMixerだけへ限定するproduction/fixture契約を同期 |
+| `2026-08-12` | `Codex` | M1〜M5を実装し、M6のclean-subject native / formal採取だけを未完了として現在地へ反映 |
+| `2026-08-12` | `Codex` | P02-A受入基盤計画を分離し、Door visual / schedule / lifecycle、全presentation route、P02 stage tooling、actual-window formalをM1〜M6へ具体化 |
 | `2026-08-04` | `Codex` | P00のstable presentation / performance gateと共通validity bundle参照へ同期 |
 | `2026-08-03` | `Codex` | 統合計画M2をcamera、Building分類、billboard、TopDown-onlyへ具体化 |

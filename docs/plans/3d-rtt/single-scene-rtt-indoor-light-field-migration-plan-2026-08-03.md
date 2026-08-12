@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P00 / P01 completed, P02 ready` |
+| ステータス | `In Progress — P00 / P01 completed, P02 implementation complete pending native/formal` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-12` |
 | 作成者 | `Codex` |
@@ -15,7 +15,7 @@
 | 並行計画 | [`../hvac-plumbing-plan-2026-07-13.md`](../hvac-plumbing-plan-2026-07-13.md) / [`../archive/save-rehydration-registry-plan-2026-08-03.md`](../archive/save-rehydration-registry-plan-2026-08-03.md) |
 | 関連Issue/PR | `N/A` |
 
-本書は移行全体の製品契約、依存順、統合gateだけを所有する。実装手順、変更ファイル、focused test、rollbackは下記9計画を正本とし、本書へ重複させない。
+本書は移行全体の製品契約、依存順、統合gateだけを所有する。実装手順、変更ファイル、focused test、rollbackは下記の子計画を正本とし、本書へ重複させない。
 
 ## 1. 目的
 
@@ -85,7 +85,8 @@ local lightの合成はlinear空間で`directional_styled_rgb + base_color_rgb *
 
 ```text
 P00 baseline / contract
- ├─> P01 one Scene RtT ─> P02 TopDown presentation ────────────────┐
+ ├─> P01 one Scene RtT ─> P02 M1〜M4 feature ─> P02-A evidence ─> P02 M5〜M6 formal ─┐
+ │                              └── P02-A M1 selector / history ──────┘                 │
  └─> P03 Light Field core ─> P04 runtime integration ─> P05 save ─┼─> P06 GPU rendering ─┐
                                                     └──────────────┴─> P07 gameplay / Room ┤
  P01 + P02 + P03 + P04 + P05 + P06 + P07 ────────────────────────────────> P08 release
@@ -95,7 +96,8 @@ P00 baseline / contract
 | --- | --- | --- | --- |
 | P00 | [`00-baseline-gates-plan-2026-08-03.md`](single-scene-light-field/00-baseline-gates-plan-2026-08-03.md) | C00-Aはなし。C00-B以降はHVAC M0または同等correctness commit | current capture、安定比較schema、数値gate、表示分類、system-order contract |
 | P01 | [`01-single-scene-rtt-plan-2026-08-03.md`](single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md) | P00 | Soul mask target / camera / proxy / metricを除去したScene RtT 1枚 |
-| P02 | [`02-topdown-presentation-plan-2026-08-03.md`](single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md) | P00, P01 | Door実経路修復、world 2D pass 1回、表示分類、Soul billboard / Familiar前景、Soul shadow動作停止、V入力停止 |
+| P02-A | [`02a-p02-acceptance-infrastructure-plan-2026-08-12.md`](single-scene-light-field/02a-p02-acceptance-infrastructure-plan-2026-08-12.md) | P00, P01。M2〜M4はP02 M1〜M4のproduction sourceを入力にする | `stage=p02` selector / historical reader、P02 evidence sidecar、RenderDoc / bundle / native recipe、actual-window scenario |
+| P02 | [`02-topdown-presentation-plan-2026-08-03.md`](single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md) | P00, P01。M6はP02-A M1〜M4 | Door実経路修復、world 2D pass 1回、表示分類、Soul billboard / Familiar前景、Soul shadow動作停止、V入力停止、registered P02 formal artifact |
 | P03 | [`03-indoor-light-domain-core-plan-2026-08-03.md`](single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md) | P00 | `hw_infra`のdeterministicな論理fieldとpure LOS |
 | P04 | [`04-indoor-light-runtime-integration-plan-2026-08-03.md`](single-scene-light-field/04-indoor-light-runtime-integration-plan-2026-08-03.md) | P02 M1, P03、HVAC M0または同等correctness commit | topology / energy / Room / Doorを結ぶ更新transactionとsteady-state dirty管理 |
 | P05 | [`05-indoor-light-save-lifecycle-plan-2026-08-03.md`](single-scene-light-field/05-indoor-light-save-lifecycle-plan-2026-08-03.md) | P03, P04、save registry計画 | durable mount、named rehydrate step、load / rollback fail-dark |
@@ -108,6 +110,8 @@ P00 baseline / contract
 - P00完了前にP01以降のproduction変更へ着手しない。
 - P00 C00-BとP04は、室内設備が占有するfloor cellをRoom interiorとして維持するHVAC M0がmerge済み、または同じcorrectness変更を単一ownerで先行するまで開始しない。
 - P03とP01はP00後に並行可能だが、同じファイルを触る作業は同時に実行しない。
+- P02-A M1のselector / historical readerはP02 M1と並行できる。P02-A M2〜M4は対応するP02 production sourceが完成してから接続し、P02 M6 formalはP02-A M1〜M4のready stateを必須とする。
+- P04のentryはP02 M1 Door correctnessのままとし、P02-A full formalを新規blockerにしない。P04 / P06以降のstage固有metricは各planが所有する。
 - P04はsave / rehydrateを編集せずruntime transactionだけを所有する。
 - P05は`save-rehydration-registry-plan`の実装がmerge済み、またはその所有者と変更順が合意済みになるまで`save/rehydrate*`を編集しない。
 - P06とP07はP04 / P05のfield revision / epoch contractを変更せずconsumerとして実装する。
@@ -121,18 +125,20 @@ P00 baseline / contract
 | B00 | P00契約・fixture・4 evidence family / 5 current leg・stable gate ID・数値gate | Room interior-role owner確定後、clean commitのformal baselineが揃う |
 | B01 | P01 M1〜M3 Scene-only runtime / mask camera・proxy・visual_test撤去 / stage-aware tooling | P00 C00-D / C00-Eのcurrent formal baselineが登録済み。public `SoulMask*`削除と全consumer追従を同一compile可能seriesで完了 |
 | B02 | P01 M4 formal / native acceptance / P01 gate ledger | B01 green、current referenceをhistorical readerで再検証済み |
-| B03 | P02 M1 production Door経路修復 | P01完了。照明とは独立したcorrectness commit |
+| B03 | P02 M1 production Door経路修復 + P02-A M1 selector / historical reader | P01完了。P04はP02 M1のproduction Door focused testがgreenになれば開始でき、P02 full formalを待たない |
 | B04 | P02 M2 Camera2d一本化・V / Help削除 | B03 green |
 | B05 | P02 M3 Building全分類・Bridge・移動 / 状態同期 | B04 green |
-| B06 | P02 M4〜M5 Soul billboard・Familiar 3D撤去・Soul shadow動作停止 | B05 green |
-| B07 | P03 pure Light Field core | P00後にB01〜B06と並行可。共有Cargo ownerは調整 |
+| B06a | P02 M4 Soul billboard・Familiar 3D撤去・Soul shadow動作停止 | B05 green |
+| B06b | P02-A M2〜M4 P02 evidence / RenderDoc / native ready | B06a green。P02 M1〜M4のproduction sourceとcurrent / P01 historical readerが同一toolchainで再検証済み |
+| B06c | P02 M5〜M6 P02 evidence接続・formal / native受入 | B06b green。P02 exact gate artifactとactual-window scenarioを同じ完了batchで閉じる |
+| B07 | P03 pure Light Field core | P00後にB01〜B06cと並行可。共有Cargo ownerは調整 |
 | B08 | P04 runtime snapshot / Door request / schedule / dirty | B03とB07完了 |
 | B09 | P05 schema / registry / reset / epoch | B08完了かつsave registry owner条件成立 |
-| B10 | P06 Image bridge→Terrain→structural material→native | B02、B06、B08、B09完了 |
+| B10 | P06 Image bridge→Terrain→structural material→native | B02、B06c、B08、B09完了 |
 | B11 | P07 Soul effect→Room summary→soak | B08、B09完了。P06とはconsumer単位で並行可 |
 | B12 | P08 projector→section→mirror cleanup→final artifact | B10、B11完了 |
 
-各batchは少なくともfocused testと`cargo check --workspace`がgreenな独立commitにする。B04のHelp変更、B06 / B10 / B12のvisual変更は各batch内でHelp impact review / native acceptanceまで閉じる。
+各batchは少なくともfocused testと`python3 scripts/dev.py check`がgreenな独立commitにする。Rust変更を含むbatchは`python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`も通す。B04のHelp変更、B06a〜B06c / B10 / B12のvisual変更は各batch内でHelp impact review / native acceptanceまで閉じる。
 
 ## 4. 境界契約
 
@@ -233,20 +239,20 @@ Interface:
 
 ### 現在地
 
-- 進捗: `22%`（P00 / P01完了、P02着手可能、P02〜P08は未完了）
+- 進捗: `31%`（P00 / P01完了、P02 M1〜M5実装済み、P02 M6 native / formalとP03〜P08は未完了）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
-  P01 Scene-only runtime / compositeとSoul mask target / camera / proxy / material / toggle撤去
+  P01 Scene-only runtime / compositeとSoul mask target / camera / proxy / material / toggle撤去、P02-A受入基盤計画
 - P00 formal: subject `10763a4d`、attempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`。5 leg、18 case、baseline index / current gate ledgerを登録・再検証済み
 - P01 formal: subject `29a4a719`、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`。5 leg、18 case、123 / 123 gate row、Scene-only RenderDoc topologyを登録・再検証済み
-- 未完了: P02〜P08
+- 未完了: P02 M6のactual-window / formal登録、P03〜P08
 
 ### 次のAIが最初にやること
 
-1. [P02](single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md)のentry条件と現sourceを再確認する。
-2. P01 canonical attemptをreferenceに、P02 M1のDoor実経路修復から開始する。
-3. P02のpresentation変更でもScene-only topologyとP01 gateを回帰させない。
+1. [P02-A](single-scene-light-field/02a-p02-acceptance-infrastructure-plan-2026-08-12.md) M1のstage / schema compatibilityとcurrent / P01 historical readerを再確認する。
+2. P01 canonical attemptをreferenceに、P02 M1のDoor実経路修復とP02-A M1を並行可能な別file ownerで開始する。
+3. P02のpresentation変更でもScene-only topologyとP01 gateを回帰させず、P02-A M2〜M4のevidence sourceを同じcommit seriesへ接続する。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
@@ -257,19 +263,20 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - 現行manual Door lockはInterfaceで直接DoorStateを変更する。
 - 現行Lamp gameplay queryは任意の`PowerConsumer`を発光扱いし、半径`5.0`をworld unitとして比較している。
 - 現行Wallは`SectionMaterial`、Terrainは3種の`TerrainSurfaceMaterial`、他構造物は`StandardMaterial`である。
+- P02 formal / native candidateはP02-A M1〜M4のready state前に採取しない。frozen contract / projection / P00-P01 artifactをcandidate結果で変更しない。
 
 ### 最終確認ログ
 
-- 最終 `cargo check --workspace`: `2026-08-12` / `pass`
-- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `2026-08-12` / `pass (0 warning)`
-- 最終 `cargo test --workspace`: `2026-08-12` / `pass`
+- 最終 `python3 scripts/dev.py check`: `2026-08-12` / `pass`
+- 最終 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `2026-08-12` / `pass (0 warning)`
+- 最終 `python3 scripts/dev.py cargo -- test --workspace`: `2026-08-12` / `pass`
 - 最終 `python3 scripts/dev.py verify`: `2026-08-12` / `pass`
 - P01 native acceptance: `2026-08-12` / `pass`（Intel Arc / Vulkan / X11、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`、全5 leg valid、123 / 123 gate row pass）
 - 最終 docs gate: `2026-08-12` / `pass (docs --write / --check, check_docs, diff --check)`
 
 ### Definition of Done
 
-- [ ] P00〜P08が全て完了
+- [ ] P00〜P08とP02-Aが全て完了
 - [ ] 全子計画のDefinition of Doneが合格
 - [ ] 横断gateと性能gateが合格
 - [ ] Help impact reviewとnative acceptanceが完了
@@ -279,6 +286,8 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-12` | `Codex` | P02 M1〜M5の実装完了と、M6 native / formal未完了を親ロードマップへ反映 |
+| `2026-08-12` | `Codex` | P02-A受入基盤計画を追加し、P02 feature、evidence、formal / native受入の依存とmerge境界を明確化 |
 | `2026-08-12` | `Codex` | P01のScene-only RtT移行とcanonical formal attempt登録・再検証の完了を反映し、P02を着手可能へ更新 |
 | `2026-08-11` | `Codex` | P00 canonical current baseline（attempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`）の登録・再検証完了を反映し、P01を着手可能へ更新 |
 | `2026-08-05` | `Codex` | P01 reviewにより、P00 formal baseline登録を着手条件化し、public mask型を削除するM1〜M3をvisual_test / formal toolingと同じcompile可能seriesへ統合 |

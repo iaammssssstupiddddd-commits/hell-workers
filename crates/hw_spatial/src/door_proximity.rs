@@ -10,8 +10,7 @@ use hw_core::soul::{DamnedSoul, Path};
 use hw_core::world::DoorState;
 use hw_jobs::{Door, DoorCloseTimer};
 use hw_world::{
-    DoorVisualHandles, WorldMap, WorldMapWrite, apply_door_state, evaluate_door_auto_open,
-    soul_keeps_door_open,
+    WorldMap, WorldMapWrite, apply_door_state, evaluate_door_auto_open, soul_keeps_door_open,
 };
 
 use crate::{SpatialGrid, SpatialGridOps};
@@ -35,22 +34,12 @@ type DoorCloseQuery<'w, 's> = Query<
         Entity,
         &'static Transform,
         &'static mut Door,
-        &'static mut Sprite,
         Option<&'static mut DoorCloseTimer>,
     ),
 >;
 type DoorOpenSoulQuery<'w, 's> =
     Query<'w, 's, (&'static Transform, &'static Path), With<DamnedSoul>>;
-type DoorOpenQuery<'w, 's> = Query<
-    'w,
-    's,
-    (
-        Entity,
-        &'static Transform,
-        &'static mut Door,
-        &'static mut Sprite,
-    ),
->;
+type DoorOpenQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform, &'static mut Door)>;
 
 #[derive(SystemParam)]
 pub struct DoorAutoOpenParams<'w, 's> {
@@ -74,7 +63,6 @@ pub struct DoorAutoCloseParams<'w, 's> {
 /// is on the door tile or has the door in its remaining path.
 pub fn door_auto_open_nearby_system(
     mut commands: Commands,
-    handles: Res<DoorVisualHandles>,
     soul_grid: Res<SpatialGrid>,
     mut world_map: WorldMapWrite,
     params: DoorAutoOpenParams,
@@ -92,7 +80,7 @@ pub fn door_auto_open_nearby_system(
     #[cfg(feature = "profiling")]
     let mut waypoints_scanned = 0u32;
 
-    for (entity, transform, mut door, mut sprite) in q_doors.iter_mut() {
+    for (entity, transform, mut door) in q_doors.iter_mut() {
         if door.state != DoorState::Closed {
             continue;
         }
@@ -125,14 +113,7 @@ pub fn door_auto_open_nearby_system(
         });
 
         if should_open {
-            apply_door_state(
-                &mut door,
-                &mut sprite,
-                &mut world_map,
-                &handles,
-                door_grid,
-                DoorState::Open,
-            );
+            apply_door_state(&mut door, &mut world_map, door_grid, DoorState::Open);
             commands.entity(entity).remove::<DoorCloseTimer>();
         }
     }
@@ -151,7 +132,6 @@ pub fn door_auto_open_nearby_system(
 pub fn door_auto_close_nearby_system(
     mut commands: Commands,
     time: Res<Time>,
-    handles: Res<DoorVisualHandles>,
     soul_grid: Res<SpatialGrid>,
     mut world_map: WorldMapWrite,
     params: DoorAutoCloseParams,
@@ -167,7 +147,7 @@ pub fn door_auto_close_nearby_system(
     #[cfg(feature = "profiling")]
     let mut souls_scanned = 0u32;
 
-    for (entity, transform, mut door, mut sprite, timer_opt) in q_doors.iter_mut() {
+    for (entity, transform, mut door, timer_opt) in q_doors.iter_mut() {
         if door.state != DoorState::Open {
             continue;
         }
@@ -202,14 +182,7 @@ pub fn door_auto_close_nearby_system(
         if let Some(mut close_timer) = timer_opt {
             close_timer.timer.tick(time.delta());
             if close_timer.timer.just_finished() {
-                apply_door_state(
-                    &mut door,
-                    &mut sprite,
-                    &mut world_map,
-                    &handles,
-                    door_grid,
-                    DoorState::Closed,
-                );
+                apply_door_state(&mut door, &mut world_map, door_grid, DoorState::Closed);
                 commands.entity(entity).remove::<DoorCloseTimer>();
             }
         } else {
@@ -231,11 +204,7 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<SpatialGrid>()
             .init_resource::<WorldMap>()
-            .init_resource::<Time>()
-            .insert_resource(DoorVisualHandles {
-                door_open: Handle::default(),
-                door_closed: Handle::default(),
-            });
+            .init_resource::<Time>();
         #[cfg(feature = "profiling")]
         app.init_resource::<DoorPerfMetrics>();
         app
@@ -248,7 +217,6 @@ mod tests {
             .spawn((
                 Door { state },
                 Transform::from_translation(world.extend(0.0)),
-                Sprite::default(),
             ))
             .id();
         app.world_mut()

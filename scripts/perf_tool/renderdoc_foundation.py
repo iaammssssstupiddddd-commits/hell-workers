@@ -440,10 +440,43 @@ def validate_runtime_checkpoint_v3(
         "gpu_ready",
         "capture_artifact",
     }
+    if stage_id == "p02":
+        required_top.add("p02_presentation")
     if set(payload) != required_top:
         raise ValueError("runtime checkpoint v3 has unexpected keys")
     if payload["contract_id"] != contract["contract_id"] or payload["stage_id"] != stage_id:
         raise ValueError("runtime checkpoint contract/stage mismatch")
+    if stage_id == "p02":
+        presentation = payload["p02_presentation"]
+        expected_presentation_keys = {
+            "layer_2d_camera_count",
+            "layer_2d_pass_count",
+            "building_count",
+            "duplicate_presentation_count",
+            "building_exactly_one_presentation",
+            "soul_count",
+            "soul_billboard_count",
+            "familiar_3d_count",
+            "state_and_bounce_probes_pass",
+        }
+        if not isinstance(presentation, dict) or set(presentation) != expected_presentation_keys:
+            raise ValueError("runtime checkpoint P02 presentation schema is invalid")
+        for key in expected_presentation_keys - {
+            "building_exactly_one_presentation",
+            "state_and_bounce_probes_pass",
+        }:
+            if (
+                not isinstance(presentation[key], int)
+                or isinstance(presentation[key], bool)
+                or presentation[key] < 0
+            ):
+                raise ValueError(f"runtime checkpoint P02 presentation {key} is invalid")
+        for key in (
+            "building_exactly_one_presentation",
+            "state_and_bounce_probes_pass",
+        ):
+            if not isinstance(presentation[key], bool):
+                raise ValueError(f"runtime checkpoint P02 presentation {key} is invalid")
     generation = payload["generation"]
     if not isinstance(generation, int) or isinstance(generation, bool) or generation < 1:
         raise ValueError("runtime checkpoint generation is invalid")

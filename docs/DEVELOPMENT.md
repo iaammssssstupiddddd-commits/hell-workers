@@ -436,12 +436,12 @@ python3 scripts/dev.py docs --check
 - 新規ファイルはファイル内容から説明を自動抽出する。
 - 計画書・提案書を追加/移動/削除したらこのコマンドを実行する。
 
-### Visual Test Scene（Soul GLB・建築物 2D/3D 検証）
+### Visual Test Scene（legacy Soul GLB・建築物 2D/3D 検証）
 ```bash
 python3 scripts/dev.py cargo -- run -p visual_test
 ```
 
-ゲーム本体とは独立した `visual_test` クレート。Soul GLB レンダリングと建築物配置を本番同条件で検証する。詳細は `docs/visual_test.md` を参照。
+ゲーム本体とは独立した `visual_test` クレート。旧Soul GLBと建築物配置の比較用であり、P02 productionのbillboard / exactly-one presentation証拠には使わない。詳細は `docs/visual_test.md` を参照。
 
 | キー / 操作 | 内容 |
 |:---|:---|

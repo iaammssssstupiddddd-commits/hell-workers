@@ -5,7 +5,45 @@ use crate::systems::visual::wall_orientation_aid::attach_wall_orientation_aid;
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT};
 use hw_visual::layer::VisualLayerKind;
-use hw_visual::visual3d::Building3dVisual;
+use hw_visual::visual3d::{
+    Building3dVisual, Door3dVisual, DoorPresentationState, LegacyStructural2dMirror,
+    StructuralPresentationState,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RenderPresentationClass {
+    Structural3d,
+    Foreground2d,
+}
+
+pub(crate) const fn presentation_class(kind: BuildingType) -> RenderPresentationClass {
+    match kind {
+        BuildingType::Wall
+        | BuildingType::Door
+        | BuildingType::Floor
+        | BuildingType::Bridge
+        | BuildingType::Tank
+        | BuildingType::MudMixer
+        | BuildingType::RestArea
+        | BuildingType::SoulSpa => RenderPresentationClass::Structural3d,
+        BuildingType::SandPile
+        | BuildingType::BonePile
+        | BuildingType::WheelbarrowParking
+        | BuildingType::OutdoorLamp => RenderPresentationClass::Foreground2d,
+    }
+}
+
+/// Whether P02 still needs a hidden 2D state mirror for an active 3D building.
+///
+/// Door state synchronization and the legacy Tank / MudMixer state consumers
+/// still write Sprite handles. Other structural kinds have no such consumer,
+/// so retaining a Sprite for them would only preserve duplicate topology.
+pub(crate) const fn requires_legacy_structural_2d_mirror(kind: BuildingType) -> bool {
+    matches!(
+        kind,
+        BuildingType::Door | BuildingType::Tank | BuildingType::MudMixer
+    )
+}
 
 pub(super) fn spawn_completed_building(
     commands: &mut Commands,
@@ -80,8 +118,8 @@ pub(crate) fn attach_building_shell(
         _ => VisualLayerKind::Struct,
     };
 
-    // Phase 2: 全 BuildingType が 3D ビジュアルを使用する（Bridge は除外）
-    // 2D スプライト初期画像の選択（wall_connection システムが後から上書きする）
+    // Door/Tank/MudMixer keep a hidden legacy mirror for state consumers until
+    // P08; Foreground2d uses this Sprite as its one active presentation.
     let (sprite_image_2d, custom_size_2d) = match kind {
         BuildingType::Wall => (
             game_assets.mud_wall_isolated.clone(),
@@ -106,25 +144,29 @@ pub(crate) fn attach_building_shell(
         BuildingType::OutdoorLamp => (game_assets.bone_pile.clone(), Vec2::splat(TILE_SIZE)),
     };
 
-    commands
-        .entity(building_entity)
-        .insert((
-            Name::new(format!("Building ({:?})", kind)),
-            // VisualLayer 子が Visibility を持つため、親にも必要（Bevy B0004）
-            Visibility::Inherited,
-            hw_visual::blueprint::BuildingBounceEffect {
-                bounce_animation: hw_visual::animations::BounceAnimation {
-                    timer: 0.0,
-                    config: hw_visual::animations::BounceAnimationConfig {
-                        duration: hw_visual::blueprint::BOUNCE_DURATION,
-                        min_scale: 1.0,
-                        max_scale: 1.2,
-                    },
+    let class = presentation_class(kind);
+    let mut owner = commands.entity(building_entity);
+    owner.insert((
+        Name::new(format!("Building ({:?})", kind)),
+        // Presentation children carry Visibility, so the owner must participate
+        // in inherited visibility as well (Bevy B0004).
+        Visibility::Inherited,
+        hw_visual::blueprint::BuildingBounceEffect {
+            bounce_animation: hw_visual::animations::BounceAnimation {
+                timer: 0.0,
+                config: hw_visual::animations::BounceAnimationConfig {
+                    duration: hw_visual::blueprint::BOUNCE_DURATION,
+                    min_scale: 1.0,
+                    max_scale: 1.2,
                 },
             },
-        ))
-        .with_children(|parent| {
-            parent.spawn((
+        },
+    ));
+
+    if class == RenderPresentationClass::Foreground2d || requires_legacy_structural_2d_mirror(kind)
+    {
+        owner.with_children(|parent| {
+            let mut visual = parent.spawn((
                 layer_kind,
                 Sprite {
                     image: sprite_image_2d,
@@ -132,12 +174,21 @@ pub(crate) fn attach_building_shell(
                     ..default()
                 },
                 Transform::default(),
+                if class == RenderPresentationClass::Structural3d {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Inherited
+                },
                 Name::new(format!("VisualLayer ({:?})", layer_kind)),
             ));
+            if class == RenderPresentationClass::Structural3d {
+                visual.insert(LegacyStructural2dMirror);
+            }
         });
+    }
 
-    // 3D ビジュアルエンティティを独立して spawn（Building の Transform を変えない）
-    // Bridge は 2D のみ（spawn_building_3d_visual 側で early return）
+    // Structural3d visuals are independent entities so the logical Building
+    // transform stays in the 2D simulation coordinate system.
     spawn_building_3d_visual(
         commands,
         building_entity,
@@ -152,7 +203,7 @@ pub(crate) fn attach_building_shell(
 ///
 /// 2D 座標 (x, y) → 3D 座標 (x, height/2, -y) の変換を使用する。
 /// Camera3d は up=NEG_Z で XZ 平面を俯瞰するため、2D +y = 3D -z。
-fn spawn_building_3d_visual(
+pub(crate) fn spawn_building_3d_visual(
     commands: &mut Commands,
     owner: Entity,
     kind: BuildingType,
@@ -160,7 +211,7 @@ fn spawn_building_3d_visual(
     is_provisional: bool,
     handles_3d: &Building3dHandles,
 ) {
-    if matches!(kind, BuildingType::Bridge) {
+    if presentation_class(kind) == RenderPresentationClass::Foreground2d {
         return;
     }
 
@@ -188,10 +239,12 @@ fn spawn_building_3d_visual(
             let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.25, -pos2d.y);
             commands.spawn((
                 Mesh3d(handles_3d.door_mesh.clone()),
-                MeshMaterial3d(handles_3d.door_material.clone()),
+                MeshMaterial3d(handles_3d.door_closed_material.clone()),
                 transform_3d,
                 handles_3d.render_layers.clone(),
                 Building3dVisual { owner },
+                Door3dVisual { owner },
+                DoorPresentationState::Closed,
                 Name::new(format!("Building3dVisual ({:?})", kind)),
             ));
         }
@@ -200,20 +253,6 @@ fn spawn_building_3d_visual(
             commands.spawn((
                 Mesh3d(handles_3d.floor_mesh.clone()),
                 MeshMaterial3d(handles_3d.floor_material.clone()),
-                transform_3d,
-                handles_3d.render_layers.clone(),
-                Building3dVisual { owner },
-                Name::new(format!("Building3dVisual ({:?})", kind)),
-            ));
-        }
-        BuildingType::SandPile
-        | BuildingType::BonePile
-        | BuildingType::WheelbarrowParking
-        | BuildingType::OutdoorLamp => {
-            let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.3, -pos2d.y);
-            commands.spawn((
-                Mesh3d(handles_3d.equipment_1x1_mesh.clone()),
-                MeshMaterial3d(handles_3d.equipment_material.clone()),
                 transform_3d,
                 handles_3d.render_layers.clone(),
                 Building3dVisual { owner },
@@ -231,9 +270,61 @@ fn spawn_building_3d_visual(
                 transform_3d,
                 handles_3d.render_layers.clone(),
                 Building3dVisual { owner },
+                match kind {
+                    BuildingType::Tank => StructuralPresentationState::TankEmpty,
+                    BuildingType::MudMixer => StructuralPresentationState::MixerIdle,
+                    _ => StructuralPresentationState::Neutral,
+                },
                 Name::new(format!("Building3dVisual ({:?})", kind)),
             ));
         }
-        BuildingType::Bridge => unreachable!(),
+        BuildingType::Bridge => {
+            commands.spawn((
+                Mesh3d(handles_3d.bridge_mesh.clone()),
+                MeshMaterial3d(handles_3d.bridge_material.clone()),
+                Transform::from_xyz(pos2d.x, TILE_SIZE * 0.09, -pos2d.y),
+                handles_3d.render_layers.clone(),
+                Building3dVisual { owner },
+                Name::new("Building3dVisual (Bridge)"),
+            ));
+        }
+        BuildingType::SandPile
+        | BuildingType::BonePile
+        | BuildingType::WheelbarrowParking
+        | BuildingType::OutdoorLamp => unreachable!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_building_has_an_explicit_p02_presentation_class() {
+        let structural = BuildingType::ALL
+            .into_iter()
+            .filter(|kind| presentation_class(*kind) == RenderPresentationClass::Structural3d)
+            .count();
+        let foreground = BuildingType::ALL.len() - structural;
+
+        assert_eq!(structural, 8);
+        assert_eq!(foreground, 4);
+    }
+
+    #[test]
+    fn only_structural_state_consumers_keep_a_legacy_2d_mirror() {
+        let mirrored = BuildingType::ALL
+            .into_iter()
+            .filter(|kind| requires_legacy_structural_2d_mirror(*kind))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            mirrored,
+            [
+                BuildingType::Door,
+                BuildingType::Tank,
+                BuildingType::MudMixer,
+            ]
+        );
     }
 }

@@ -198,6 +198,6 @@
 - **M1/M2 LOD 観測基盤**: `bevy_app::systems::visual::terrain_lod::update_terrain_lod_metrics_system` が `Camera3dRtt` の `world_to_viewport` で得た論理 target px に `RttRuntime.target_scale_factor` を掛け、物理 RtT 上の 1 タイル見かけサイズ `tile_rtt_px` を算出する。さらに `composite_logical_size(window)` と `RttRuntime.viewport` から `tile_screen_px`（スクリーン表示上の補助値）を導出する。LOD 判定の正本は `TerrainLodMetrics.tile_rtt_px` であり、`tile_screen_px` はデバッグ表示専用。runtime の hysteresis は **`Lod1 → Lod1Lite` が 22px 未満、`Lod1Lite → Lod1` が 25px 超、`Lod1Lite → Lod2` が 14px 未満、`Lod2 → Lod1Lite` が 16px 超**で、`Lod0` は予約スロットのため遷移先に含めない。
 - **廃止**: `TerrainBorder` / `terrain_border.rs` / `hw_world::borders` は MS-3-4 で除去済み。`TerrainType::z_layer()` も同様に除去済み。per-tile の `Mesh3d` render entity は chunk renderer 導入時に廃止。`Terrain3dHandles.tile_mesh` フィールドも廃止済み。
 
-### 2D 前景カメラ（composite より手前の `LAYER_2D`）
+### 単一 2D 前景 pass（composite より手前の `LAYER_2D`）
 
-RtT composite が全画面を覆うため、`startup_systems::setup` で **`WorldForeground2dCamera`**（`Camera2d`、`order=2`、`LAYER_2D`、クリアなし）が同レイヤーを再描画する。`PanCamera` は `MainCamera` のみ更新するため、`sync_world_foreground_2d_camera_system`（`camera_sync.rs`）が **毎フレーム `MainCamera` と同一の `Transform` / `Camera::is_active`** を前景カメラへコピーし、パン・ズームと連動させる。TopDown 表示では Camera3d/RtT の姿勢を正本とし、2D カメラだけが回転して地形と前景がずれないよう `PanCamera` の既定 Q/E 回転入力は無効化する。表示方向の変更は `ElevationDirection` のプリセット切り替えだけが担い、側面表示中は 2D 前景を無効化する。
+P02では `MainCamera` 自身を `order=2` / `clear_color=None` とし、RtT composite（order 1）の後に `LAYER_2D` を1回だけ描く。旧 `WorldForeground2dCamera` と同期systemは削除した。Camera3dは固定TopDownで、MainCameraのパン・ズームを X/-Z と orthographic scaleへ同期する。productionにはQ/E回転・V elevation切替・側面表示がない。

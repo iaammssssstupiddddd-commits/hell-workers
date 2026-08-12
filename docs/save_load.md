@@ -343,9 +343,9 @@ runnerだけが所有する。
 
 | カテゴリ | shell の内容 | 実装 |
 | --- | --- | --- |
-| Soul | `Destination`/`Path`/`AnimationState`/UI リンク/speech 状態 + GLB 3D プロキシ×3 | `attach_soul_shell`（spawn と共用） |
-| Familiar | `FamiliarAiState`/`ActiveCommand`/Sprite + 3D プロキシ + 指揮範囲インジケーター×3 | `attach_familiar_shell`（同上）。durable operation / policy は挿入しない。runtime-only の `ActiveCommand` は保存済み `TaskArea` があれば `Patrol`、なければ `Idle` へ再構築する |
-| Building（SoulSpa 含む） | `Name`/バウンス演出 + VisualLayer 子 Sprite + 独立 3D ビジュアル | `attach_building_shell`（同上） |
+| Soul | `Destination`/`Path`/`AnimationState`/UI リンク/speech 状態 + shared-pool `ActorBillboard3d`×1 | `attach_soul_shell`（spawn と共用） |
+| Familiar | `FamiliarAiState`/`ActiveCommand`/foreground Sprite + 指揮範囲インジケーター×3 | `attach_familiar_shell`（同上）。3D proxyは生成しない。durable operation / policy は挿入せず、runtime-only の `ActiveCommand` は保存済み `TaskArea` があれば `Patrol`、なければ `Idle` へ再構築する |
+| Building（SoulSpa 含む） | `Name`/バウンス演出 + class別のactive Spriteまたは独立3D visual。旧state consumerが残るDoor / Tank / MudMixerだけStructural2d mirrorをhiddenで保持 | `attach_building_shell`（同上） |
 | Blueprint | `Name`、`Sprite`、`BlueprintVisualState`、`BlueprintVisual` | durable `Blueprint` から mirror と搬入履歴を完成形で生成してから付与。資材アイコン・進捗バーはこの mirror を入力に Visual phase で再生成し、保存済み搬入を新規演出として再生しない |
 | Floor / wall construction | site / tile の `Name`、site の visual state、tile の visual mirror と Sprite | durable な site / tile state から直接生成。Logic 停止中でも床・壁タイルと進捗表示を復元 |
 | Tree / Rock / ResourceItem / Stockpile | Sprite（spawn 箇所と同じ画像・サイズ） | rehydrate 内で直接挿入 |
@@ -361,7 +361,7 @@ runnerだけが所有する。
 
 | Domain | durable source | replace reset | compatibility normalization | runtime-derived rebuild | presentation | wake timing |
 | --- | --- | --- | --- | --- | --- | --- |
-| Familiar | `FamiliarOperation` / `FamiliarPolicy` / `TaskArea` / `Commanding` | AI・proxy・range shell | 欠落設定を補完しpolicyを正規化 | `FamiliarAiState` / `ActiveCommand` | sprite、proxy、range | runner内 |
+| Familiar | `FamiliarOperation` / `FamiliarPolicy` / `TaskArea` / `Commanding` | AI・range shell | 欠落設定を補完しpolicyを正規化 | `FamiliarAiState` / `ActiveCommand` | foreground sprite、range | runner内 |
 | Stockpile | `Stockpile` / `StockpilePolicy` / `BelongsTo(Yard)` | group / producer cache | 旧通常セルだけpolicy補完 | 次Perceiveでgroup/需要 | sprite | 次Perceive |
 | Construction | site/tile phase、Blueprint、Building | shell、index、obstacle cache | counter/phaseをdurable tileから正規化 | `TileSiteIndex` / `CuringFootprint` / obstacle | site/tile mirror、sprite | runner内 |
 | Soul Energy | site/policy/durable relationship | grid/allocation runtime | slot clamp、欠落policy補完 | grid topology、供給state、summary | building shell/inspection入力 | 次Logicのfull rebuild |
@@ -392,7 +392,7 @@ mirrorを作り、shell barrier後の`RebuildDerived`で`TileSiteIndex`とCuring
 
 rehydrateは先に前提Resourceを検証して`Result`を返す。前提不備ではinventoryやentityを変更しない。
 replace phaseではregistryが全pluginのtransient stateを先にclearし、さらにrehydrate所有の独立
-presentation entity（Soul/Familiar proxy、Building 3D visual、Familiar range indicator）と
+presentation entity（Soul billboard、旧Soul/Familiar proxy互換残骸、Building 3D visual、Familiar range indicator）と
 `SoulProxyOwnerCache`を狭く掃除する。rollback branchでも同じreset phaseを再実行するため、partial
 finalizerが残したowner shellはrollback snapshotのrehydrate前に残らない。
 

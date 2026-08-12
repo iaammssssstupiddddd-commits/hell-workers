@@ -12,6 +12,10 @@ pub use blueprint_cancellation::blueprint_cancellation_system;
 pub(crate) use building_completion::attach_building_shell;
 pub use building_completion::{BuildingCompletionSet, building_completion_system};
 #[cfg(feature = "profiling")]
+pub(crate) use building_completion::{
+    RenderPresentationClass, presentation_class, requires_legacy_structural_2d_mirror,
+};
+#[cfg(feature = "profiling")]
 pub(crate) use deconstruction::DeconstructionPerfMetrics;
 pub(crate) use deconstruction::deconstruction_hover_preview_system;
 pub use deconstruction::{

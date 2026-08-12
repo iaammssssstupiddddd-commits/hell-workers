@@ -91,6 +91,71 @@ pub(super) fn calculate_render_inventory(
 }
 
 #[cfg(feature = "profiling")]
+pub(super) fn calculate_p02_presentation(
+    checksum_queries: &PerfChecksumQueries<'_, '_>,
+) -> PerfP02Presentation {
+    let inventory = calculate_render_inventory(checksum_queries);
+    let mut duplicate_presentation_count = 0;
+    let mut building_exactly_one_presentation = true;
+    let mut state_and_bounce_probes_pass = true;
+
+    for (entity, building, owner_transform, children) in &checksum_queries.buildings {
+        let visuals = checksum_queries
+            .building_3d_visual
+            .iter()
+            .filter(|(visual, _, _, _)| visual.owner == entity)
+            .collect::<Vec<_>>();
+        let visible_2d = children
+            .into_iter()
+            .flat_map(|children| children.iter())
+            .filter_map(|child| checksum_queries.presentation_sprites.get(child).ok())
+            .filter(|(visibility, legacy)| legacy.is_none() && **visibility != Visibility::Hidden)
+            .count();
+        let active_3d = visuals.len();
+        let active_count = visible_2d + active_3d;
+        duplicate_presentation_count += usize::from(active_count > 1);
+        building_exactly_one_presentation &= active_count == 1;
+
+        match presentation_class(building.kind) {
+            RenderPresentationClass::Structural3d => {
+                state_and_bounce_probes_pass &= active_3d == 1 && visible_2d == 0;
+                if let Some((_, visual_transform, door_state, structural_state)) = visuals.first() {
+                    if building.kind == BuildingType::Door {
+                        state_and_bounce_probes_pass &= door_state.is_some();
+                    } else {
+                        state_and_bounce_probes_pass &= *visual_transform
+                            == &crate::systems::visual::building3d_cleanup::building_presentation_transform(
+                                building.kind,
+                                owner_transform,
+                            );
+                        if matches!(building.kind, BuildingType::Tank | BuildingType::MudMixer) {
+                            state_and_bounce_probes_pass &= structural_state.is_some_and(|state| {
+                                *state != StructuralPresentationState::Neutral
+                            });
+                        }
+                    }
+                }
+            }
+            RenderPresentationClass::Foreground2d => {
+                state_and_bounce_probes_pass &= active_3d == 0 && visible_2d == 1;
+            }
+        }
+    }
+
+    PerfP02Presentation {
+        layer_2d_camera_count: inventory.layer_2d_pass_count,
+        layer_2d_pass_count: inventory.layer_2d_pass_count,
+        building_count: checksum_queries.buildings.iter().count(),
+        duplicate_presentation_count,
+        building_exactly_one_presentation,
+        soul_count: checksum_queries.souls.iter().count(),
+        soul_billboard_count: checksum_queries.actor_billboard_3d.iter().count(),
+        familiar_3d_count: checksum_queries.familiar_proxy_3d.iter().count(),
+        state_and_bounce_probes_pass,
+    }
+}
+
+#[cfg(feature = "profiling")]
 pub(super) fn collect_audit_actor_records(
     checksum_queries: &PerfChecksumQueries<'_, '_>,
 ) -> Result<Vec<PerfAuditActorRecord>, String> {

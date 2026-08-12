@@ -265,7 +265,11 @@ def write_indoor_light_sidecars(
     ) as handle:
         writer = csv.DictWriter(handle, fieldnames=INDOOR_LIGHT_PRESENTATION_COLUMNS)
         writer.writeheader()
-        writer.writerows(build_fixture_presentation_rows(contract, case.size))
+        writer.writerows(
+            build_fixture_presentation_rows(
+                contract, case.size, stage_id=stage_id
+            )
+        )
 
 
 def write_render_inventory_fixture(
@@ -279,10 +283,10 @@ def write_render_inventory_fixture(
         {
             "schema_version": RENDER_INVENTORY_SCHEMA_VERSION,
             "scene_target_count": "1",
-            "mask_target_count": "0" if stage_id == "p01" else "1",
-            "camera_3d_rtt_count": "1" if stage_id == "p01" else "2",
-            "camera_2d_count": "1" if stage_id == "p01" else "3",
-            "layer_2d_pass_count": "1" if stage_id == "p01" else "2",
+            "mask_target_count": "0" if stage_id in {"p01", "p02"} else "1",
+            "camera_3d_rtt_count": "1" if stage_id in {"p01", "p02"} else "2",
+            "camera_2d_count": "2" if stage_id == "p02" else ("1" if stage_id == "p01" else "3"),
+            "layer_2d_pass_count": "1" if stage_id in {"p01", "p02"} else "2",
         }
     )
     for column in (
@@ -300,7 +304,30 @@ def write_render_inventory_fixture(
         writer.writerow(values)
 
 
-def write_behavior_fixture_run(root: Path, case: Case) -> None:
+def write_p02_presentation_fixture(root: Path, *, souls: int = 50) -> None:
+    values = {
+        "schema_version": "1",
+        "layer_2d_camera_count": "1",
+        "layer_2d_pass_count": "1",
+        "building_count": "187",
+        "duplicate_presentation_count": "0",
+        "building_exactly_one_presentation": "true",
+        "soul_count": str(souls),
+        "soul_billboard_count": str(souls),
+        "familiar_3d_count": "0",
+        "state_and_bounce_probes_pass": "true",
+    }
+    with (root / "data" / "p02_presentation.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(handle, fieldnames=P02_PRESENTATION_COLUMNS)
+        writer.writeheader()
+        writer.writerow(values)
+
+
+def write_behavior_fixture_run(
+    root: Path, case: Case, *, stage_id: str = "current"
+) -> None:
     if case.behavior_case is None:
         raise ValueError("behavior fixture requires a behavior case")
     data_dir = root / "data"
@@ -369,17 +396,27 @@ def write_behavior_fixture_run(root: Path, case: Case) -> None:
                     else load_attempted[index]
                 ),
                 "applied": (
-                    step["current_applied"]
+                    step[
+                        "p02_applied" if stage_id == "p02" else "current_applied"
+                    ]
                     if case.behavior_case == "door-state-v1"
                     else load_applied[index]
                 ),
                 "semantic_state": (
-                    step["current_semantic_state"]
+                    step[
+                        "p02_semantic_state"
+                        if stage_id == "p02"
+                        else "current_semantic_state"
+                    ]
                     if case.behavior_case == "door-state-v1"
                     else None
                 ),
                 "active_presentation_state": (
-                    step["current_active_presentation_state"]
+                    step[
+                        "p02_active_presentation_state"
+                        if stage_id == "p02"
+                        else "current_active_presentation_state"
+                    ]
                     if case.behavior_case == "door-state-v1"
                     else None
                 ),
@@ -573,6 +610,21 @@ def self_test() -> int:
             assert bridge["entity_count"] == "1"
             assert bridge["child_sprite_count"] == "1"
             assert bridge["owner_3d_count"] == "0"
+            p02_presentation = build_fixture_presentation_rows(
+                rtt_contract, size, stage_id="p02"
+            )
+            p02_bridge = next(
+                row for row in p02_presentation if row["building_kind"] == "Bridge"
+            )
+            p02_lamp = next(
+                row
+                for row in p02_presentation
+                if row["building_kind"] == "OutdoorLamp"
+            )
+            assert p02_bridge["child_sprite_count"] == "0"
+            assert p02_bridge["owner_3d_count"] == "1"
+            assert p02_lamp["child_sprite_count"] != "0"
+            assert p02_lamp["owner_3d_count"] == "0"
         validate_stage_lane(rtt_contract, "current", "static")
         try:
             validate_stage_lane(rtt_contract, "current", "field-core")
@@ -1124,6 +1176,67 @@ def self_test() -> int:
             raise AssertionError("P01 mask binding regression unexpectedly passed")
         renderdoc_evidence["gate_metrics"]["mask_binding_count"] = 0
 
+        p02_formal = {
+            formal_case["case_id"]: formal_case
+            for formal_case in expected_formal_cases(rtt_contract, "p02")
+        }
+        p02_door_steps = rtt_contract["behavior_fixture"]["door_state_v1"]["steps"]
+        for case_id, evidence in bundle_cases.items():
+            evidence["formal"] = p02_formal[case_id]
+            if case_id == "renderdoc-medium-gpu":
+                evidence["gate_metrics"].update(
+                    {
+                        "layer_2d_camera_count": 1,
+                        "layer_2d_pass_count": 1,
+                        "duplicate_presentation_count": 0,
+                        "building_exactly_one_presentation": True,
+                        "soul_billboard_per_soul": 1.0,
+                        "familiar_3d_count": 0,
+                        "state_and_bounce_probes_pass": True,
+                    }
+                )
+            if case_id == "behavior-door-state-v1":
+                timeline = []
+                for index, step in enumerate(p02_door_steps):
+                    timeline.append(
+                        {
+                            "intent": step["intent"],
+                            "attempted": step["attempted"],
+                            "applied": step["p02_applied"],
+                            "semantic_state": step["p02_semantic_state"],
+                            "active_presentation_state": step[
+                                "p02_active_presentation_state"
+                            ],
+                        }
+                    )
+                for validation in evidence["validations"]:
+                    validation.timeline = timeline
+        p02_projection = build_rtt_light_projection_rows(
+            rtt_contract, "p02", bundle_cases
+        )
+        p02_gates = build_rtt_light_gate_result_rows(
+            rtt_contract,
+            "p02",
+            bundle_cases,
+            subject_projection_rows=p02_projection,
+            reference_projection_rows={"p01": p01_projection},
+        )
+        assert all(row["status"] == "pass" for row in p02_gates)
+        renderdoc_evidence["gate_metrics"]["soul_billboard_per_soul"] = 0.5
+        try:
+            build_rtt_light_gate_result_rows(
+                rtt_contract,
+                "p02",
+                bundle_cases,
+                subject_projection_rows=p02_projection,
+                reference_projection_rows={"p01": p01_projection},
+            )
+        except ValueError as error:
+            assert "does not pass" in str(error)
+        else:
+            raise AssertionError("P02 missing billboard regression unexpectedly passed")
+        renderdoc_evidence["gate_metrics"]["soul_billboard_per_soul"] = 1.0
+
         ledger_root = root / "rtt-light-ledger"
         generation = ledger_root / f"current-{'0' * 40}"
         attempt = generation / "attempts" / "00000000-0000-4000-8000-000000000000"
@@ -1434,6 +1547,40 @@ def self_test() -> int:
             "soul_mask_proxy_3d is '0', expected 50 for gpu" in reason
             for reason in current_gpu_validation.reasons
         )
+
+        p02_root = root / "indoor-realtime-p02-gpu"
+        write_fixture_run(
+            p02_root,
+            workload="indoor-light",
+            size="small",
+            seed=p01_gpu_case.seed,
+            render="gpu",
+            summary_overrides={
+                "initial_souls": "50",
+                "initial_familiars": "4",
+            },
+            scene_roots={
+                "soul_proxy_3d": "0",
+                "soul_shadow_proxy_3d": "0",
+                "familiar_proxy_3d": "0",
+            },
+        )
+        write_indoor_light_sidecars(p02_root, p01_gpu_case, stage_id="p02")
+        write_render_inventory_fixture(p02_root, stage_id="p02")
+        write_p02_presentation_fixture(p02_root)
+        p02_validation = validate_run(
+            p02_root,
+            returncode=0,
+            expected_case=p01_gpu_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+            expected_contract="rtt-light-v1",
+            expected_stage="p02",
+            expected_lane="static",
+        )
+        assert p02_validation.valid, p02_validation.reasons
+        assert p02_validation.p02_presentation is not None
 
         for behavior_case, expected_rows, expects_save in (
             ("door-state-v1", 5, False),

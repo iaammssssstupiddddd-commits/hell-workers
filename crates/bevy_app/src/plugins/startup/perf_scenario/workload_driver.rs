@@ -9,9 +9,8 @@ pub(crate) fn drive_perf_workload_system(
     applied: Res<PerfScenarioApplied>,
     virtual_time: Res<Time<Virtual>>,
     mut state: ResMut<PerfScenarioDriverState>,
-    handles: Res<DoorVisualHandles>,
     mut world_map: WorldMapWrite,
-    mut q_doors: Query<(&PerfFixtureMarker, &Transform, &mut Door, &mut Sprite)>,
+    mut q_doors: Query<(&PerfFixtureMarker, &Transform, &mut Door)>,
 ) {
     if !applied.complete() || !config.enabled() || config.workload != PerfWorkload::PathDoor {
         return;
@@ -27,18 +26,11 @@ pub(crate) fn drive_perf_workload_system(
     } else {
         DoorState::Open
     };
-    for (marker, transform, mut door, mut sprite) in q_doors.iter_mut() {
+    for (marker, transform, mut door) in q_doors.iter_mut() {
         if marker.kind != PerfFixtureKind::Door || door.state == next_state {
             continue;
         }
         let grid = WorldMap::world_to_grid(transform.translation.truncate());
-        hw_world::apply_door_state(
-            &mut door,
-            &mut sprite,
-            &mut world_map,
-            &handles,
-            grid,
-            next_state,
-        );
+        hw_world::apply_door_state(&mut door, &mut world_map, grid, next_state);
     }
 }

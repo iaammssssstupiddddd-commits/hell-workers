@@ -4,6 +4,7 @@ mod report;
 mod terrain_resources;
 
 use crate::assets::GameAssets;
+use crate::plugins::startup::Building3dHandles;
 use crate::world::map::GeneratedWorldLayoutResource;
 use crate::world::map::WorldMapWrite;
 use bevy::prelude::*;
@@ -20,6 +21,7 @@ use terrain_resources::{spawn_initial_wood, spawn_rocks, spawn_trees};
 pub fn initial_resource_spawner(
     mut commands: Commands,
     game_assets: Res<GameAssets>,
+    handles_3d: Res<Building3dHandles>,
     mut world_map: WorldMapWrite,
     generated_layout: &GeneratedWorldLayoutResource,
 ) {
@@ -53,7 +55,13 @@ pub fn initial_resource_spawner(
     );
     let parking_spawned = match compute_parking_layout(parking_base, &world_map) {
         Some(layout) => {
-            spawn_wheelbarrow_parking(&mut commands, &game_assets, &mut world_map, &layout);
+            spawn_wheelbarrow_parking(
+                &mut commands,
+                &game_assets,
+                &handles_3d,
+                &mut world_map,
+                &layout,
+            );
             true
         }
         None => {

@@ -14,11 +14,62 @@ pub struct Building3dVisual {
     pub owner: Entity,
 }
 
+/// Hidden compatibility mirror retained only for state/connectivity consumers.
+/// It is never an active presentation and is scheduled for P08 removal.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct LegacyStructural2dMirror;
+
+/// Door-specific active 3D presentation. The root `Door` remains the only
+/// semantic writer; this component only identifies its visual consumer.
+#[derive(Component, Debug, Clone)]
+pub struct Door3dVisual {
+    pub owner: Entity,
+}
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DoorPresentationState {
+    #[default]
+    Closed,
+    Open,
+    Locked,
+}
+
+/// Stable finite semantic state consumed by structural 3D equipment visuals.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StructuralPresentationState {
+    #[default]
+    Neutral,
+    TankEmpty,
+    TankPartial,
+    TankFull,
+    MixerIdle,
+    MixerActive,
+}
+
 /// DamnedSoul エンティティに対応する3Dプロキシのマーカー。
 #[derive(Component, Debug, Clone)]
 pub struct SoulProxy3d {
     pub owner: Entity,
     pub billboard: bool,
+}
+
+/// Shared-pool alpha-masked Soul billboard participating in Scene depth.
+#[derive(Component, Debug, Clone)]
+pub struct ActorBillboard3d {
+    pub owner: Entity,
+}
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SoulBillboardFrame {
+    #[default]
+    Normal,
+    Exhausted,
+    Happy,
+    Sleep,
+    Wine,
+    Trump,
+    Stress,
+    StressBreakdown,
 }
 
 /// DamnedSoul エンティティに対応する shadow caster 専用 proxy のマーカー。
@@ -82,6 +133,7 @@ pub struct FamiliarProxy3d {
 /// 各プロキシのスポーン時（`Added<T>`）に登録し、owner 削除時の cleanup で使用する。
 #[derive(Resource, Default)]
 pub struct SoulProxyOwnerCache {
+    pub actor_billboard: HashMap<Entity, Entity>,
     pub soul_proxy: HashMap<Entity, Entity>,
     pub soul_shadow_proxy: HashMap<Entity, Entity>,
     pub familiar_proxy: HashMap<Entity, Entity>,

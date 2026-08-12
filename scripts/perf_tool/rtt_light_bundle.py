@@ -97,6 +97,7 @@ P01_RENDER_RESOURCES = {
 EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "current": CURRENT_RENDER_RESOURCES,
     "p01": P01_RENDER_RESOURCES,
+    "p02": P01_RENDER_RESOURCES,
 }
 SOURCE_CHECKPOINTS_RENDERDOC = (
     "start",
@@ -666,7 +667,7 @@ def _validate_session_file_set(session: Path, leg_id: str) -> None:
 
 
 def _validate_run_file_set(
-    run_dir: Path, *, leg_id: str, behavior_case: str | None
+    run_dir: Path, *, stage: str, leg_id: str, behavior_case: str | None
 ) -> None:
     data_files = {
         "window.csv",
@@ -698,6 +699,8 @@ def _validate_run_file_set(
         if leg_id == "memory":
             data_files.add("memory.csv")
             root_files |= {"profile-artifact.json", "resource-usage.txt"}
+        if stage == "p02":
+            data_files.add("p02_presentation.csv")
     else:
         raise RuntimeError(f"session file-set validator does not support leg {leg_id}")
     actual_root = {path.name for path in run_dir.iterdir()}
@@ -750,7 +753,10 @@ def _revalidate_run(
     preflight: bool,
 ) -> Validation:
     _validate_run_file_set(
-        run_dir, leg_id=leg_id, behavior_case=expected_case.behavior_case
+        run_dir,
+        stage=stage,
+        leg_id=leg_id,
+        behavior_case=expected_case.behavior_case,
     )
     metadata = read_json_object(run_dir / "run-metadata.json")
     if metadata.get("case") != asdict(expected_case) or metadata.get("preflight") is not preflight:
@@ -814,6 +820,7 @@ def _revalidate_run(
         "indoor_light_fixture",
         "indoor_light_layout",
         "indoor_light_presentation",
+        "p02_presentation",
         "deconstruction_fixture",
         "timeline",
         "behavior_save_artifact",
@@ -1667,6 +1674,9 @@ def _load_renderdoc_evidence(
                 f"RenderDoc replay does not prove {key} attachment and binding topology"
             )
     render_inventory = _validate_render_inventory_json(runtime["render_inventory"])
+    p02_presentation = runtime.get("p02_presentation")
+    if stage == "p02" and not isinstance(p02_presentation, dict):
+        raise RuntimeError("P02 RenderDoc evidence has no presentation checkpoint")
     mask_resource_id = tracked_ids.get("mask_target")
     mask_pass_count = (
         len(
@@ -1734,6 +1744,30 @@ def _load_renderdoc_evidence(
                 "mask_sample_count": mask_sample_count,
                 "mask_proxy_count": int(render_inventory["soul_mask_proxy_3d"]),
                 "explicit_color_bytes": explicit_color_bytes,
+                **(
+                    {
+                        "layer_2d_camera_count": p02_presentation["layer_2d_camera_count"],
+                        "layer_2d_pass_count": p02_presentation["layer_2d_pass_count"],
+                        "duplicate_presentation_count": p02_presentation[
+                            "duplicate_presentation_count"
+                        ],
+                        "building_exactly_one_presentation": p02_presentation[
+                            "building_exactly_one_presentation"
+                        ],
+                        "soul_billboard_per_soul": (
+                            p02_presentation["soul_billboard_count"]
+                            / p02_presentation["soul_count"]
+                            if p02_presentation["soul_count"] > 0
+                            else -1
+                        ),
+                        "familiar_3d_count": p02_presentation["familiar_3d_count"],
+                        "state_and_bounce_probes_pass": p02_presentation[
+                            "state_and_bounce_probes_pass"
+                        ],
+                    }
+                    if stage == "p02"
+                    else {}
+                ),
             },
             "validated_frames": 1,
             "unexpected_log_lines": 0,
@@ -2095,6 +2129,43 @@ def _gate_observed(
         return "true" if evidence["environment_contract_match"] else "false"
     if metric_id == "required_sidecars_valid":
         return "true" if evidence["required_sidecars_valid"] else "false"
+    if metric_id in {
+        "auto_attempted",
+        "auto_applied",
+        "manual_attempted",
+        "manual_applied",
+        "mutation_requires_root_sprite",
+        "active_presentation_matches_semantic",
+    }:
+        timelines = [validation.timeline for validation in validations]
+        if not timelines or any(not isinstance(timeline, list) for timeline in timelines):
+            raise RuntimeError(f"{case_id} has no valid Door timeline evidence")
+        observed_values: list[int | bool] = []
+        for timeline in timelines:
+            assert timeline is not None
+            if metric_id == "auto_attempted":
+                observed_values.append(sum(row["intent"] == "auto-open-nearby-soul" and row["attempted"] for row in timeline))
+            elif metric_id == "auto_applied":
+                observed_values.append(sum(row["intent"] == "auto-open-nearby-soul" and row["applied"] for row in timeline))
+            elif metric_id == "manual_attempted":
+                observed_values.append(sum(row["intent"] == "manual-lock-while-paused" and row["attempted"] for row in timeline))
+            elif metric_id == "manual_applied":
+                observed_values.append(sum(row["intent"] == "manual-lock-while-paused" and row["applied"] for row in timeline))
+            elif metric_id == "mutation_requires_root_sprite":
+                # The behavior producer rejects any subject with a root Sprite and
+                # the validator requires that production topology before accepting rows.
+                observed_values.append(False)
+            else:
+                observed_values.append(
+                    all(
+                        row["semantic_state"] == row["active_presentation_state"]
+                        for row in timeline
+                    )
+                )
+        if len(set(observed_values)) != 1:
+            raise RuntimeError(f"{case_id} Door gate metric {metric_id} differs across runs")
+        value = observed_values[0]
+        return str(value).lower() if isinstance(value, bool) else str(value)
     gate_metrics = evidence.get("gate_metrics")
     if metric_id in {
         "scene_target_count",
@@ -2106,6 +2177,10 @@ def _gate_observed(
         "mask_sample_count",
         "mask_proxy_count",
         "explicit_color_bytes",
+        "layer_2d_camera_count",
+        "layer_2d_pass_count",
+        "duplicate_presentation_count",
+        "familiar_3d_count",
     }:
         if not isinstance(gate_metrics, dict):
             raise RuntimeError(f"{case_id} has no RenderDoc gate metrics")
@@ -2113,6 +2188,27 @@ def _gate_observed(
         if not isinstance(value, int) or isinstance(value, bool) or value < 0:
             raise RuntimeError(f"{case_id} RenderDoc gate metric {metric_id} is invalid")
         return str(value)
+    if metric_id in {
+        "building_exactly_one_presentation",
+        "state_and_bounce_probes_pass",
+    }:
+        if not isinstance(gate_metrics, dict) or not isinstance(
+            gate_metrics.get(metric_id), bool
+        ):
+            raise RuntimeError(f"{case_id} P02 presentation metric {metric_id} is invalid")
+        return str(gate_metrics[metric_id]).lower()
+    if metric_id == "soul_billboard_per_soul":
+        if not isinstance(gate_metrics, dict):
+            raise RuntimeError(f"{case_id} has no P02 presentation gate metrics")
+        value = gate_metrics.get(metric_id)
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(value)
+            or value < 0
+        ):
+            raise RuntimeError(f"{case_id} P02 presentation ratio is invalid")
+        return _format_finite_float(float(value))
     subject_row = subject_projection.get(case_id)
     reference_stage = expected.get("reference_stage")
     reference_row = (

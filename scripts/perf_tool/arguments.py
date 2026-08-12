@@ -456,12 +456,12 @@ def validate_arguments(args: argparse.Namespace) -> None:
     expected_lane = "behavior" if args.command == "behavior" else "static"
     if (
         args.contract != "rtt-light-v1"
-        or args.stage not in {"current", "p01"}
+        or args.stage not in {"current", "p01", "p02"}
         or args.lane != expected_lane
     ):
         raise ValueError(
             "--workload indoor-light currently requires --contract rtt-light-v1 "
-            f"--stage current|p01 --lane {expected_lane}"
+            f"--stage current|p01|p02 --lane {expected_lane}"
         )
     contract = load_rtt_light_contract(args.contract)
     validate_stage_lane(contract, args.stage, args.lane)

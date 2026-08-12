@@ -378,7 +378,15 @@ pub(crate) struct BehaviorObserveParams<'w, 's> {
         ),
     >,
     sprites: Query<'w, 's, &'static Sprite>,
-    building_3d_visuals: Query<'w, 's, &'static Building3dVisual>,
+    building_3d_visuals: Query<
+        'w,
+        's,
+        (
+            &'static Building3dVisual,
+            Option<&'static DoorPresentationState>,
+        ),
+    >,
+    door_components: Query<'w, 's, &'static Door>,
     door_handles: Res<'w, DoorVisualHandles>,
     buildings: Query<'w, 's, (Entity, &'static Building, &'static Transform)>,
     soul_spa_tiles: Query<'w, 's, &'static SoulSpaTile>,
@@ -443,11 +451,11 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     &mut params.exit,
                 );
             }
-            let owner_3d_count = params
+            let owner_3d_visuals = params
                 .building_3d_visuals
                 .iter()
-                .filter(|visual| visual.owner == door_entity)
-                .count();
+                .filter(|(visual, _)| visual.owner == door_entity)
+                .collect::<Vec<_>>();
             if building.kind != BuildingType::Door
                 || WorldMap::world_to_grid(transform.translation.truncate()) != SMALL_DOOR_GRID
                 || params
@@ -458,7 +466,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     .world_map
                     .door_state(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1)
                     != Some(door.state)
-                || owner_3d_count != 1
+                || owner_3d_visuals.len() != 1
             {
                 return fail_behavior(
                     &mut params.capture,
@@ -467,22 +475,38 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                 );
             }
             let semantic_state = door_state_name(door.state);
-            let presentation_state = if child_sprites[0].image == params.door_handles.door_open {
-                "open"
-            } else if child_sprites[0].image == params.door_handles.door_closed {
-                "closed"
-            } else {
-                "unknown"
+            let presentation_state = match owner_3d_visuals[0].1 {
+                Some(DoorPresentationState::Closed) => "closed",
+                Some(DoorPresentationState::Open) => "open",
+                Some(DoorPresentationState::Locked) => "locked",
+                None => "unknown",
             };
+            let child_sprite_matches = child_sprites[0].image
+                == if door.state == DoorState::Open {
+                    params.door_handles.door_open.clone()
+                } else {
+                    params.door_handles.door_closed.clone()
+                };
+            let p02 = params
+                .config
+                .rtt_light_selection()
+                .is_some_and(|selection| selection.stage_id() == "p02");
+            let expected_semantic = if p02 {
+                ["closed", "open", "open", "locked", "locked"][step as usize]
+            } else {
+                "closed"
+            };
+            let expected_applied = p02 && matches!(step, 1 | 3);
             let expected_paused = matches!(step, 2 | 3);
-            if semantic_state != "closed"
-                || presentation_state != "closed"
+            if semantic_state != expected_semantic
+                || presentation_state != expected_semantic
+                || !child_sprite_matches
                 || params.virtual_time.is_paused() != expected_paused
             {
                 fail_behavior(
                     &mut params.capture,
                     &format!(
-                        "Door behavior step {step} observed semantic={semantic_state}, presentation={presentation_state}, paused={}; expected closed/closed/{expected_paused}",
+                        "Door behavior step {step} observed semantic={semantic_state}, presentation={presentation_state}, paused={}; expected {expected_semantic}/{expected_semantic}/{expected_paused}",
                         params.virtual_time.is_paused()
                     ),
                     &mut params.exit,
@@ -509,7 +533,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     world_epoch: params.world_epoch.get(),
                     intent: intents[step as usize],
                     attempted: matches!(step, 1 | 3),
-                    applied: false,
+                    applied: expected_applied,
                     semantic_state: Some(semantic_state),
                     active_presentation_state: Some(presentation_state),
                     fixture_checksum,
@@ -572,6 +596,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                 5 => {
                     match validate_loaded_small_fixture(
                         &params.buildings,
+                        &params.door_components,
                         &params.soul_spa_tiles,
                         &params.souls,
                         &params.familiars,
@@ -762,6 +787,7 @@ fn write_behavior_timeline(
 
 fn validate_loaded_small_fixture(
     buildings: &Query<'_, '_, (Entity, &Building, &Transform)>,
+    door_components: &Query<'_, '_, &Door>,
     soul_spa_tiles: &Query<'_, '_, &SoulSpaTile>,
     souls: &Query<'_, '_, (), With<DamnedSoul>>,
     familiars: &Query<'_, '_, (), With<Familiar>>,
@@ -825,11 +851,17 @@ fn validate_loaded_small_fixture(
     if doors.len() != 1 || doors[0].1 != SMALL_DOOR_GRID {
         return Err("Door semantic identity differs after load".to_string());
     }
-    if world_map.door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1) != Some(doors[0].0)
-        || world_map.door_state(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1)
-            != Some(hw_core::world::DoorState::Closed)
-    {
-        return Err("Door WorldMap owner/state relation differs after load".to_string());
+    let map_owner = world_map.door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1);
+    let map_state = world_map.door_state(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1);
+    let component_state = door_components
+        .get(doors[0].0)
+        .map(|door| door.state)
+        .map_err(|_| "loaded Door is missing its semantic Door component".to_string())?;
+    if map_owner != Some(doors[0].0) || map_state != Some(component_state) {
+        return Err(format!(
+            "Door WorldMap owner/state relation differs after load: entity={:?}, component_state={component_state:?}, map_owner={map_owner:?}, map_state={map_state:?}",
+            doors[0].0,
+        ));
     }
     if lamps != BTreeSet::from([(17, 21), (80, 80)]) {
         return Err("Lamp semantic grids differ after load".to_string());

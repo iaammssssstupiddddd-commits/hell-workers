@@ -5,12 +5,11 @@
 //! hw_visual クレートに移行済みのサブシステムは hw_visual::* を直接参照すること。
 //! root 残留ファイルは app_contexts / root 専有型への依存によるもの。
 
+pub mod actor_billboard;
 pub mod building3d_cleanup;
 pub mod camera_sync;
 pub mod character_proxy_3d;
-pub mod elevation_view;
 pub mod placement_ghost;
-pub mod section_cut;
 pub mod soul_animation;
 pub mod soul_shadow_projector;
 pub mod task_area_visual;

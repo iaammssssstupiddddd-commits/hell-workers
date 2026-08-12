@@ -28,7 +28,6 @@ pub struct FamiliarSpawnEvent {
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct FamiliarSpawnParams<'w> {
     game_assets: Res<'w, GameAssets>,
-    handles_3d: Res<'w, crate::plugins::startup::Building3dHandles>,
     world_map: WorldMapRead<'w>,
     color_allocator: ResMut<'w, FamiliarColorAllocator>,
     perf_config: Res<'w, PerfScenarioConfig>,
@@ -41,7 +40,6 @@ struct FamiliarSpawnInput {
     color_index: u32,
     voice: FamiliarVoice,
     simulation_random_key: Option<u64>,
-    spawn_3d_scene_root: bool,
 }
 
 struct FamiliarShellInput<'a> {
@@ -50,7 +48,6 @@ struct FamiliarShellInput<'a> {
     command_radius: f32,
     position: Vec2,
     voice: FamiliarVoice,
-    spawn_3d_scene_root: bool,
 }
 
 /// 使い魔をスポーンする
@@ -117,7 +114,6 @@ pub fn familiar_spawning_system(
         spawn_familiar_at(
             &mut commands,
             &params.game_assets,
-            &params.handles_3d,
             params.world_map.as_ref(),
             FamiliarSpawnInput {
                 position: event.position,
@@ -129,7 +125,6 @@ pub fn familiar_spawning_system(
                     .uses_fixed_timesteps()
                     .then_some(event.simulation_random_key)
                     .flatten(),
-                spawn_3d_scene_root: !params.perf_config.omits_3d_scene_roots(),
             },
         );
     }
@@ -139,7 +134,6 @@ pub fn familiar_spawning_system(
 fn spawn_familiar_at(
     commands: &mut Commands,
     game_assets: &GameAssets,
-    handles_3d: &crate::plugins::startup::Building3dHandles,
     world_map: &WorldMap,
     input: FamiliarSpawnInput,
 ) {
@@ -179,10 +173,8 @@ fn spawn_familiar_at(
             command_radius,
             position: actual_pos,
             voice: input.voice,
-            spawn_3d_scene_root: input.spawn_3d_scene_root,
         },
         game_assets,
-        handles_3d,
     );
 
     info!(
@@ -192,8 +184,8 @@ fn spawn_familiar_at(
 }
 
 /// 使い魔の「シェル」を付与する: セーブ対象外の実行時コンポーネント
-/// （AI 状態・アニメーション・移動・Sprite）と随伴エンティティ
-/// （3D プロキシ・指揮範囲インジケーター）。
+/// （AI 状態・アニメーション・移動・foreground Sprite）と随伴の
+/// 指揮範囲インジケーター。Familiarは3D scene rootを持たない。
 ///
 /// spawn 時とセーブデータのロード後（rehydrate）の両方から呼ばれる。
 /// 永続化される simulation 状態（`Familiar` / `FamiliarOperation` /
@@ -206,7 +198,6 @@ pub fn attach_familiar_shell(
     command_radius: f32,
     pos: Vec2,
     game_assets: &GameAssets,
-    handles_3d: &crate::plugins::startup::Building3dHandles,
 ) {
     attach_familiar_shell_with_voice(
         commands,
@@ -216,10 +207,8 @@ pub fn attach_familiar_shell(
             command_radius,
             position: pos,
             voice: FamiliarVoice::random(),
-            spawn_3d_scene_root: true,
         },
         game_assets,
-        handles_3d,
     );
 }
 
@@ -227,7 +216,6 @@ fn attach_familiar_shell_with_voice(
     commands: &mut Commands,
     input: FamiliarShellInput<'_>,
     game_assets: &GameAssets,
-    handles_3d: &crate::plugins::startup::Building3dHandles,
 ) {
     commands.entity(input.entity).insert((
         Name::new(input.name.to_string()),
@@ -260,20 +248,6 @@ fn attach_familiar_shell_with_voice(
         ))
         .id();
     commands.entity(input.entity).add_child(visual_child);
-
-    if input.spawn_3d_scene_root {
-        // 3D プロキシ（Phase 2 プレースホルダー）
-        commands.spawn((
-            Mesh3d(handles_3d.familiar_mesh.clone()),
-            MeshMaterial3d(handles_3d.familiar_material.clone()),
-            Transform::from_xyz(input.position.x, TILE_SIZE * 0.45, -input.position.y),
-            bevy::camera::visibility::RenderLayers::layer(LAYER_3D),
-            hw_visual::visual3d::FamiliarProxy3d {
-                owner: input.entity,
-            },
-            Name::new(format!("FamiliarProxy3d: {}", input.name)),
-        ));
-    }
 
     commands.spawn((
         FamiliarRangeIndicator(input.entity),
@@ -323,28 +297,7 @@ mod tests {
     use hw_core::relationships::{Commanding, ManagedTasks};
 
     use super::*;
-    use crate::plugins::startup::{Building3dHandles, create_game_assets};
-
-    fn empty_building_3d_handles() -> Building3dHandles {
-        Building3dHandles {
-            wall_mesh: Handle::default(),
-            wall_material: Handle::default(),
-            wall_provisional_material: Handle::default(),
-            wall_orientation_aid_mesh: Handle::default(),
-            wall_orientation_aid_material: Handle::default(),
-            floor_mesh: Handle::default(),
-            floor_material: Handle::default(),
-            door_mesh: Handle::default(),
-            door_material: Handle::default(),
-            equipment_1x1_mesh: Handle::default(),
-            equipment_2x2_mesh: Handle::default(),
-            equipment_material: Handle::default(),
-            soul_scene: Handle::default(),
-            familiar_mesh: Handle::default(),
-            familiar_material: Handle::default(),
-            render_layers: bevy::camera::visibility::RenderLayers::default(),
-        }
-    }
+    use crate::plugins::startup::create_game_assets;
 
     #[test]
     fn repeated_shell_attach_does_not_overwrite_durable_familiar_settings() {
@@ -360,8 +313,6 @@ mod tests {
             let mut images = app.world_mut().resource_mut::<Assets<Image>>();
             create_game_assets(&asset_server, &mut images)
         };
-        let handles_3d = empty_building_3d_handles();
-
         let expected_operation = FamiliarOperation {
             fatigue_threshold: 0.7,
             max_controlled_soul: 5,
@@ -398,10 +349,8 @@ mod tests {
                         command_radius: TILE_SIZE * 7.0,
                         position: Vec2::ZERO,
                         voice: FamiliarVoice::random(),
-                        spawn_3d_scene_root: false,
                     },
                     &game_assets,
-                    &handles_3d,
                 );
             }
         }

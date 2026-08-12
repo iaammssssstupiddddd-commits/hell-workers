@@ -22,9 +22,11 @@ use crate::systems::familiar_ai::FamiliarAiState;
 use crate::systems::familiar_ai::perceive::resource_sync::ReservationSyncPerfMetrics;
 #[cfg(feature = "profiling")]
 use crate::systems::jobs::{
-    Blueprint, BuildingType, ConstructionPerfMetrics, Designation, Door, DoorState, Priority, Rock,
-    TargetBlueprint, TaskSlots, Tree, WorkType,
+    Blueprint, Building, BuildingType, ConstructionPerfMetrics, Designation, Door, DoorState,
+    Priority, Rock, TargetBlueprint, TaskSlots, Tree, WorkType,
 };
+#[cfg(feature = "profiling")]
+use crate::systems::jobs::{RenderPresentationClass, presentation_class};
 #[cfg(feature = "profiling")]
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 #[cfg(feature = "profiling")]
@@ -67,7 +69,10 @@ use hw_soul_ai::soul_ai::update::slow_simulation::SlowSimulationPerfMetrics;
 #[cfg(feature = "profiling")]
 use hw_spatial::DoorPerfMetrics;
 #[cfg(feature = "profiling")]
-use hw_visual::visual3d::{Building3dVisual, FamiliarProxy3d, SoulProxy3d, SoulShadowProxy3d};
+use hw_visual::visual3d::{
+    ActorBillboard3d, Building3dVisual, DoorPresentationState, FamiliarProxy3d,
+    LegacyStructural2dMirror, SoulProxy3d, SoulShadowProxy3d, StructuralPresentationState,
+};
 #[cfg(feature = "profiling")]
 use hw_world::{DoorVisualHandles, RuntimePathSearchBudget, RuntimePathSearchMetrics};
 use rand::SeedableRng;
@@ -157,8 +162,9 @@ pub(crate) use workload_driver::drive_perf_workload_system;
 
 #[cfg(feature = "profiling")]
 use audit_checksum::{
-    calculate_checksum, calculate_render_inventory, calculate_scene_root_counts,
-    checksum_from_audit_records, collect_audit_actor_records, latest_frame_time_ms,
+    calculate_checksum, calculate_p02_presentation, calculate_render_inventory,
+    calculate_scene_root_counts, checksum_from_audit_records, collect_audit_actor_records,
+    latest_frame_time_ms,
 };
 #[cfg(feature = "profiling")]
 use audit_encoding::*;
@@ -172,8 +178,8 @@ use fixture::{PerfFixtureKind, PerfFixtureMarker};
 #[cfg(feature = "profiling")]
 use output::{
     PerfCaptureWriteInput, fnv1a, fnv1a_bytes, write_deconstruction_fixture_sidecar,
-    write_determinism_audit, write_indoor_light_fixture_sidecars, write_perf_capture,
-    write_render_inventory, write_window_observation,
+    write_determinism_audit, write_indoor_light_fixture_sidecars, write_p02_presentation_sidecar,
+    write_perf_capture, write_render_inventory, write_window_observation,
 };
 
 #[cfg(feature = "profiling")]
@@ -296,6 +302,21 @@ struct PerfRenderInventory {
     soul_mask_proxy_3d: usize,
     soul_shadow_proxy_3d: usize,
     familiar_proxy_3d: usize,
+}
+
+/// P02-only evidence kept separate from the frozen legacy render inventory.
+#[cfg(feature = "profiling")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PerfP02Presentation {
+    layer_2d_camera_count: usize,
+    layer_2d_pass_count: usize,
+    building_count: usize,
+    duplicate_presentation_count: usize,
+    building_exactly_one_presentation: bool,
+    soul_count: usize,
+    soul_billboard_count: usize,
+    familiar_3d_count: usize,
+    state_and_bounce_probes_pass: bool,
 }
 
 #[cfg(feature = "profiling")]
@@ -583,7 +604,36 @@ pub(crate) struct PerfChecksumQueries<'w, 's> {
     soul_proxy_3d: Query<'w, 's, (), With<SoulProxy3d>>,
     soul_shadow_proxy_3d: Query<'w, 's, (), With<SoulShadowProxy3d>>,
     familiar_proxy_3d: Query<'w, 's, (), With<FamiliarProxy3d>>,
-    building_3d_visual: Query<'w, 's, (), With<Building3dVisual>>,
+    actor_billboard_3d: Query<'w, 's, &'static ActorBillboard3d>,
+    buildings: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Building,
+            &'static Transform,
+            Option<&'static Children>,
+        ),
+    >,
+    building_3d_visual: Query<
+        'w,
+        's,
+        (
+            &'static Building3dVisual,
+            &'static Transform,
+            Option<&'static DoorPresentationState>,
+            Option<&'static StructuralPresentationState>,
+        ),
+    >,
+    presentation_sprites: Query<
+        'w,
+        's,
+        (
+            &'static Visibility,
+            Option<&'static LegacyStructural2dMirror>,
+        ),
+        With<Sprite>,
+    >,
     scene_rtt_cameras: Query<'w, 's, (), With<Camera3dRtt>>,
     cameras_2d: Query<'w, 's, (&'static Camera, Option<&'static RenderLayers>), With<Camera2d>>,
 }

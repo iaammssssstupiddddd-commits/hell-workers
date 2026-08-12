@@ -305,23 +305,18 @@ fn attach_soul_shell_with_scene_roots(
         return;
     }
 
-    // Soul の通常表示は GLB SceneRoot を RtT に流し、2D Sprite は持たない。
+    // Production Soul presentation is one shared-pool alpha-masked billboard.
+    // Its bottom anchor is placed on the ground and the visual sync system
+    // keeps it facing the fixed TopDown camera.
     commands.spawn((
-        WorldAssetRoot(handles_3d.soul_scene.clone()),
-        Transform::from_xyz(pos.x, 0.0, -pos.y).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
+        Mesh3d(handles_3d.soul_billboards.mesh.clone()),
+        MeshMaterial3d(handles_3d.soul_billboards.normal.clone()),
+        Transform::from_xyz(pos.x, TILE_SIZE * 0.55, -pos.y),
         bevy::camera::visibility::RenderLayers::layer(LAYER_3D),
-        hw_visual::visual3d::SoulProxy3d {
-            owner: soul_entity,
-            billboard: false,
-        },
-        Name::new(format!("SoulProxy3d: {}", soul_name)),
-    ));
-
-    commands.spawn((
-        WorldAssetRoot(handles_3d.soul_scene.clone()),
-        Transform::from_xyz(pos.x, 0.0, -pos.y).with_scale(Vec3::splat(SOUL_GLB_SCALE)),
-        bevy::camera::visibility::RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SOUL_SHADOW]),
-        hw_visual::visual3d::SoulShadowProxy3d { owner: soul_entity },
-        Name::new(format!("SoulShadowProxy3d: {}", soul_name)),
+        bevy::light::NotShadowCaster,
+        bevy::light::NotShadowReceiver,
+        hw_visual::visual3d::ActorBillboard3d { owner: soul_entity },
+        hw_visual::SoulBillboardFrame::Normal,
+        Name::new(format!("ActorBillboard3d: {}", soul_name)),
     ));
 }

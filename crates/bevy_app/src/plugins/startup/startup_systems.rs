@@ -6,8 +6,7 @@ use crate::entities::familiar::FamiliarSpawnEvent;
 use crate::plugins::startup::Terrain3dHandles;
 use crate::plugins::startup::{PerfScenarioConfig, PerfScenarioRandomStreams};
 use crate::systems::logistics::{ResourceItem, initial_resource_spawner};
-use crate::systems::visual::camera_sync::WorldForeground2dCamera;
-use crate::systems::visual::elevation_view::ElevationDirection;
+use crate::systems::visual::camera_sync::topdown_camera_rotation;
 use crate::world::map::{
     GeneratedWorldLayoutResource, WorldMapRead, WorldMapWrite,
     prepare_generated_world_layout_resource, spawn_map, spawn_terrain_chunks,
@@ -45,12 +44,19 @@ pub(super) fn spawn_terrain_chunks_timed(
 pub(super) fn initial_resource_spawner_timed(
     commands: Commands,
     game_assets: Res<GameAssets>,
+    handles_3d: Res<crate::plugins::startup::Building3dHandles>,
     world_map: WorldMapWrite,
     generated_layout: Res<GeneratedWorldLayoutResource>,
     mut regrowth: ResMut<RegrowthManager>,
 ) {
     configure_regrowth_from_generated_layout(&mut regrowth, &generated_layout.layout);
-    initial_resource_spawner(commands, game_assets, world_map, &generated_layout);
+    initial_resource_spawner(
+        commands,
+        game_assets,
+        handles_3d,
+        world_map,
+        &generated_layout,
+    );
 }
 
 /// Phase 5: camera/resources 初期化 + asset catalog 生成を呼び出す
@@ -84,6 +90,11 @@ pub(super) fn setup(
     commands.spawn((
         Camera2d,
         MainCamera,
+        Camera {
+            order: 2,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
         gameplay_pan_camera(),
         RenderLayers::layer(LAYER_2D),
     ));
@@ -98,21 +109,6 @@ pub(super) fn setup(
             ..default()
         },
         RenderLayers::layer(LAYER_OVERLAY),
-    ));
-
-    // --- World Foreground Camera（2D ワールドオブジェクト前面描画）---
-    // テレインが Camera3d → RtT に移行したことで composite sprite(order=1) が地面全体を覆う。
-    // 木・石・ファミリアなどの 2D Sprite が隠れないよう、composite の後(order=2)で
-    // LAYER_2D を再描画する。クリアなしで既存描画に上書きする。
-    commands.spawn((
-        Camera2d,
-        Camera {
-            order: 2,
-            clear_color: ClearColorConfig::None,
-            ..default()
-        },
-        RenderLayers::layer(LAYER_2D),
-        WorldForeground2dCamera,
     ));
 
     // --- Camera3d（RtT: オフスクリーン3D描画）---
@@ -136,7 +132,7 @@ pub(super) fn setup(
         }),
         {
             let mut transform = Transform::from_translation(Vec3::new(0.0, VIEW_HEIGHT, Z_OFFSET));
-            transform.rotation = ElevationDirection::TopDown.camera_rotation();
+            transform.rotation = topdown_camera_rotation();
             transform
         },
         rtt_target,
@@ -301,10 +297,6 @@ mod tests {
             .query_filtered::<Entity, With<MainCamera>>()
             .iter(world)
             .count();
-        let foreground_camera_count = world
-            .query_filtered::<Entity, With<WorldForeground2dCamera>>()
-            .iter(world)
-            .count();
         let main_rtt_count = world
             .query_filtered::<Entity, With<Camera3dRtt>>()
             .iter(world)
@@ -318,10 +310,9 @@ mod tests {
             .iter(world)
             .count();
 
-        assert_eq!(camera_2d_count, 3);
+        assert_eq!(camera_2d_count, 2);
         assert_eq!(camera_3d_count, 1);
         assert_eq!(main_camera_count, 1);
-        assert_eq!(foreground_camera_count, 1);
         assert_eq!(main_rtt_count, 1);
         assert_eq!(directional_count, 2);
         assert_eq!(composite_count, 1);
@@ -329,36 +320,24 @@ mod tests {
         let mut main_2d_query =
             world.query_filtered::<(&Camera, &RenderLayers), (With<Camera2d>, With<MainCamera>)>();
         let (main_2d, main_2d_layers) = main_2d_query.single(world).unwrap();
-        assert_eq!(main_2d.order, 0);
+        assert_eq!(main_2d.order, 2);
         assert!(main_2d.is_active);
+        assert!(matches!(main_2d.clear_color, ClearColorConfig::None));
         assert_eq!(*main_2d_layers, RenderLayers::layer(LAYER_2D));
 
-        let mut overlay_query = world.query_filtered::<(&Camera, &RenderLayers), (
-            With<Camera2d>,
-            Without<MainCamera>,
-            Without<WorldForeground2dCamera>,
-        )>();
+        let mut overlay_query = world
+            .query_filtered::<(&Camera, &RenderLayers), (With<Camera2d>, Without<MainCamera>)>();
         let (overlay, overlay_layers) = overlay_query.single(world).unwrap();
         assert_eq!(overlay.order, 1);
         assert!(overlay.is_active);
         assert_eq!(*overlay_layers, RenderLayers::layer(LAYER_OVERLAY));
-
-        let mut foreground_query = world.query_filtered::<
-            (&Camera, &RenderLayers),
-            (With<Camera2d>, With<WorldForeground2dCamera>),
-        >();
-        let (foreground, foreground_layers) = foreground_query.single(world).unwrap();
-        assert_eq!(foreground.order, 2);
-        assert!(foreground.is_active);
-        assert!(matches!(foreground.clear_color, ClearColorConfig::None));
-        assert_eq!(*foreground_layers, RenderLayers::layer(LAYER_2D));
 
         let layer_2d_pass_count = world
             .query_filtered::<&RenderLayers, With<Camera2d>>()
             .iter(world)
             .filter(|layers| **layers == RenderLayers::layer(LAYER_2D))
             .count();
-        assert_eq!(layer_2d_pass_count, 2);
+        assert_eq!(layer_2d_pass_count, 1);
 
         let (viewport, scene) = {
             let runtime = world.resource::<rtt_setup::RttRuntime>();

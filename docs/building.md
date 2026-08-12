@@ -352,7 +352,7 @@ Building3dVisual エンティティ（独立。Building の子ではない）
 └─ XZ 平面上にスポーン（3D メッシュ・マテリアル）
 ```
 
-> **注意**: Bridge 以外の建築物は `VisualLayerKind` 子エンティティ（2D スプライト）と `Building3dVisual`（3D プロキシ）の**両方**が常に存在する。`use_3d = !matches!(bp.kind, BuildingType::Bridge)` パスでも 2D スプライト子エンティティはスポーンされる（`Render3dVisible` OFF 時の 2D 表示維持のため）。
+> **P02 presentation契約**: `Wall / Door / Floor / Bridge / Tank / MudMixer / RestArea / SoulSpa` は `Structural3d` で、active presentation は `Building3dVisual` だけ。状態consumerとの互換用 `VisualLayerKind` Sprite は `LegacyStructural2dMirror` + `Visibility::Hidden` としてP08まで残す。`SandPile / BonePile / WheelbarrowParking / OutdoorLamp` は `Foreground2d` で、active presentation は子Spriteだけ、3D visualは生成しない。
 
 **BuildingType 別 Z 割り当て**:
 
@@ -365,7 +365,7 @@ Building3dVisual エンティティ（独立。Building の子ではない）
 
 ### Building3dVisual スポーン
 
-`Building3dVisual { owner: Entity }` は Building エンティティとは独立した3Dビジュアルプロキシで、XZ 平面上に独立スポーンする（Building の子エンティティではない）。
+`Building3dVisual { owner: Entity }` は `Structural3d` Buildingとは独立した3Dビジュアルで、XZ 平面上に独立スポーンする（Building の子エンティティではない）。ownerの移動・Z回転・完成bounce scaleは共通transform resolverで追従する。Doorは追加で`Door3dVisual`を持ち、Closed / Open / Lockedを状態別shared materialとhinge transformへ同期する。
 
 | スポーン箇所 | タイミング |
 |:---|:---|

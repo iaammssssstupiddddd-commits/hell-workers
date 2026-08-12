@@ -7354,7 +7354,9 @@ def add_rtt_light_arguments(
 ) -> None:
     parser.add_argument("--repo", required=True)
     parser.add_argument("--level", required=True, choices=["s1", "formal"])
-    parser.add_argument("--stage", default=RTT_LIGHT_DEFAULT_STAGE, choices=["current", "p01"])
+    parser.add_argument(
+        "--stage", default=RTT_LIGHT_DEFAULT_STAGE, choices=["current", "p01", "p02"]
+    )
     parser.add_argument("--attempt-id")
     parser.add_argument("--adapter", default="Intel")
     parser.add_argument("--window-backend", default="x11", choices=["x11", "wayland"])

@@ -17,11 +17,11 @@ python3 scripts/dev.py cargo -- run -p visual_test
 | GLB アニメーション再生 | soul.glb の 8 クリップを順番に切り替えて再生確認 |
 | シェーダーパラメータ調整 | 選択 Soul の ghost_alpha / rim_strength / posterize_steps をリアルタイム調整 |
 | カメラパン・ズーム | W/A/S/D パン・スクロールズーム（ゲーム本体と同じ PanCamera）|
-| 矢視（Elevation View）| V キーで TopDown/North/East/South/West を切替して GLB を全方向から確認 |
+| 矢視（legacy test only）| 独立クレート内では V キーで旧 GLB を確認できる。productionは固定TopDown |
 | 仰角調整 | VIEW_HEIGHT / Z_OFFSET をリアルタイムに変更して TopDown 俯角を確認 |
 | 複数 Soul 干渉 | Soul を最大 6 体まで追加し、Z-fight・マテリアル独立性を確認 |
 | ワールド上での建築物配置 | ゲーム本体と同一のゴーストプレビュー + クリック配置方式 |
-| 建築物 2D/3D 表示 | 2D スプライト + 3D メッシュの重ね描画を本番環境と同じ条件で確認 |
+| 建築物 2D/3D 表示 | legacy比較用。productionのexactly-one証拠には使用しない |
 | 影・ライト | DirectionalLight + CascadeShadowConfig による影をゲーム本体と同条件で検証 |
 | RtT パイプライン | scene Camera3d → 単一オフスクリーンテクスチャ → composite sprite の描画経路 |
 
@@ -35,7 +35,7 @@ python3 scripts/dev.py cargo -- run -p visual_test
 | `H` | メニューパネル表示/非表示 |
 | `W/A/S/D` | カメラパン |
 | スクロール | カメラズーム（メニュー上ではパネルスクロールに切り替わる）|
-| `V` | 矢視切替 (TopDown → North → East → South → West) |
+| `V` | 独立test内だけの旧GLB矢視切替。ゲーム本体では未割当 |
 | `J/K` | VIEW_HEIGHT ±10 |
 | `U/I` | Z_OFFSET ±10 |
 | `O` | VIEW_HEIGHT / Z_OFFSET をデフォルト値にリセット |

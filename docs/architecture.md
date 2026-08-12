@@ -134,7 +134,7 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 - 予約オペレーションは `build_source_reservation_ops` / `build_mixer_destination_reservation_ops` / `build_wheelbarrow_reservation_ops` の共通ヘルパーで構築し、割り当てビルダー間の重複を抑制する。
 - Familiar 側 Think フェーズでは `TileSiteIndex`（`Resource<HashMap<Entity, Vec<Entity>>`）を `Spatial` サブセットで更新し、建設サイトへの残需要計算時に floor/wall タイルを O(1) で照会できるようにする。
 - `IncomingDeliverySnapshot` は Think 開始時に1回構築し、`DemandReadContext` 経由で `policy::haul::*` の残需要計算に再利用する。`IncomingDeliveries` や `ResourceType` の都度ルックアップを集約し、同一フレーム内のCPU負荷を低減する。
-- `SoulProxyOwnerCache`（`hw_visual::visual3d`、`GameSystemSet::Visual`）は `owner → proxy entity` の O(1) HashMap ルックアップを提供する。`Added<SoulProxy3d>` 等の `register_*_system` × 4 でスポーン時に登録し、`DamnedSoul` / `Familiar` の削除時に `cleanup_*_system` が O(1) で対応 proxy を despawn する（旧: O(k×n) ネストループ × 4 関数）。
+- `SoulProxyOwnerCache`（`hw_visual::visual3d`、`GameSystemSet::Visual`）は `owner → presentation entity` の O(1) lookup を提供する。P02 production は `ActorBillboard3d` を登録し、Soul 削除時に対応 billboard を despawn する。旧 GLB / shadow / Familiar proxy 用 field は P08 の物理削除まで互換境界として残すが、production system は登録しない。
 - `TaskAssignmentQueries` は `ReservationAccess` / `DesignationAccess` / `StorageAccess` と `TaskAssignmentReadAccess` に分割し、読み取り系と更新系の境界を明確化する。
 - `apply_task_assignment_requests_system` は「ワーカー受理判定」「idle正規化」「予約適用」「DeliveringTo付与」「イベント発火」の責務に分けて拡張する。
 - `apply_task_assignment_requests_system` の登録責務は `hw_soul_ai::SoulAiCorePlugin` が持つ。`task_execution_system` / `apply_pending_building_move_system` / `idle_behavior_apply_system` / `escaping_apply_system` / `cleanup_commanded_souls_system` / `gathering_separation_system` / `escaping_decision_system` / `drifting_decision_system` / `gathering_mgmt_*` / `familiar_influence_unified_system` も `SoulAiCorePlugin` に一本化済み（2026-03-17）。root 側の `SoulAiPlugin` は `ApplyDeferred` フェーズ間同期マーカーと `gathering_spawn_system`（`GameAssets` 依存）のみを登録する。
@@ -245,18 +245,17 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 
 `docs/plans/3d-rtt/` で管理される段階的な 3D 化計画の Phase 1 として実装済み。地形タイルは **Camera3d → RtT** のみ（`world/map/spawn.rs`、`SectionMaterial`、`Terrain3dHandles`）。ゲーム内地形の 2D `Sprite` は使用しない。
 
-### カメラ構成（Main / Overlay / RtT / 2D 前景）
+### カメラ構成（Main / Overlay / RtT）
 
 | カメラ | マーカー | レイヤー | `order` | レンダー先 | 用途 |
 |:--|:--|:--|:--|:--|:--|
-| `Camera2d` | `MainCamera` | `LAYER_2D`(0) | 0 | スクリーン | `PanCamera` がパン・ズームを更新するメインビュー。既定 Q/E 回転は無効。矢視モード時は `is_active=false` |
+| `Camera2d` | `MainCamera` | `LAYER_2D`(0) | 2 | スクリーン | `PanCamera` がパン・ズームを更新し、Familiar・選択・吹き出し等の前景を composite 後に1回だけ描画。`clear_color: None` |
 | `Camera2d` | OverlayCamera（マーカーなし） | `LAYER_OVERLAY`(2) | 1 | スクリーン | RtT composite sprite 専用。常時アクティブ |
 | `Camera3d` | `Camera3dRtt` | `LAYER_3D`(1) | -1 | オフスクリーンテクスチャ (RtT) | 地形・建物・Soul 等の 3D オフスクリーン描画 |
-| `Camera2d` | `WorldForeground2dCamera` | `LAYER_2D`(0) | 2 | スクリーン | composite（order 1）**より後**に同じ `LAYER_2D` を再描画。木・資源・Familiar 等を RtT の上に載せる。`clear_color: None` |
 
 - Camera3d は `order: -1` で最初に描画され、結果をオフスクリーンテクスチャに書き込む。
-- OverlayCamera は MainCamera が無効化される矢視モード時も composite sprite を描画し続ける。
-- **World Foreground Camera** は `PanCamera` の対象外のため、`sync_world_foreground_2d_camera_system`（`systems/visual/camera_sync.rs`）が毎フレーム **`MainCamera` の `Transform` と `Camera::is_active` をコピー**する。`GameSystemSet::Visual` では `sync_camera3d_system` と **`.chain()`** で直列（Query は `Without<MainCamera>` / `Without<WorldForeground2dCamera>` で B0001 回避）。TopDown では RtT Camera3d の固定姿勢を正本とし、MainCamera だけが回転して前景と地形がずれないよう `PanCamera.key_rotate_ccw/cw` は `None` にする。表示方向は V の `ElevationDirection` プリセットだけが変更する。
+- MainCamera は Overlay より後にクリアなしで描画する。`LAYER_2D` を描く Camera はこの1台だけで、重複 pass を作らない。
+- Camera3d は固定 TopDown 姿勢を正本とし、MainCamera のパン・ズームだけを XZ / orthographic scale へ同期する。Q/E 回転と V の elevation 切替は production 入力から削除済み。
 
 ### RtT テクスチャ管理
 
@@ -276,7 +275,7 @@ RttRuntime
 
 `WgpuFeatures::CLIP_DISTANCES` は `main.rs` の `WgpuSettings` で有効化済み（MS-P3-Pre-A）。ただし現在の `SectionMaterial` 実装は runtime 実機検証の結果 `clip_distances` を使わず、fragment `discard` ベースの one-sided slab クリップを採用している。
 
-`hw_visual::SectionMaterial` / `SectionCut` は現在 `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` で実装している。lighting / shadow / prepass は `StandardMaterial` 側を維持し、section clip だけを extension shader と prepass shader で追加する構成である。`SectionCut.position` は `MainCamera` 中心のワールド位置、`SectionCut.normal` は矢視方向、`SectionCut.thickness` はその切断線から奥側へ残すスラブ幅として扱う。
+`hw_visual::SectionMaterial` / `SectionCut` は `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` の互換型として残る。P02 production は elevation / section-cut writer を登録せず、`SectionCut::default()` の非切断状態だけを material sync が読む。物理削除は P08 が所有する。
 
 地形は `hw_visual::TerrainSurfaceMaterial` / `TerrainSurfaceMaterialExt` を基本にしつつ、3 種の LOD variant を持つ。全 variant が `ExtendedMaterial<StandardMaterial, ...>` のまま section clip・lighting・prepass を維持する。
 
@@ -308,26 +307,13 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 ### Camera2d ↔ Camera3d 同期
 
-`sync_camera3d_system`（`systems/visual/camera_sync.rs`、`GameSystemSet::Visual` で毎フレーム実行。続けて **`.chain()`** で `sync_world_foreground_2d_camera_system` が実行される）：
+`sync_camera3d_system`（`systems/visual/camera_sync.rs`、`GameSystemSet::Visual`）は MainCamera の X/Y を Camera3d の X/-Z へ写し、Y 高度と回転を固定 TopDown 値に戻す。Camera2d の zoom は Camera3d の `OrthographicProjection.scale` へ同期する。elevation state、方向別 offset、前景カメラ同期は存在しない。
 
-全モードで `scale` と XZ を同期（パン・ズーム追従）。方向ごとに XZ オフセットを適用:
-
-| `ElevationDirection` | `cam3d.x` | `cam3d.z` | `cam3d.y` |
-|:--|:--|:--|:--|
-| `TopDown` | `cam2d.x` | `-cam2d.y + Z_OFFSET` | `VIEW_HEIGHT`（固定） |
-| `North` | `cam2d.x` | `-cam2d.y + ELEVATION_DISTANCE` | elevation_view が設定した値を維持 |
-| `South` | `cam2d.x` | `-cam2d.y - ELEVATION_DISTANCE` | 〃 |
-| `East` | `cam2d.x + ELEVATION_DISTANCE` | `-cam2d.y` | 〃 |
-| `West` | `cam2d.x - ELEVATION_DISTANCE` | `-cam2d.y` | 〃 |
-
-- `ELEVATION_DISTANCE = 800`（`pub const`、`elevation_view.rs` で定義）
-- TopDown の RtT は Camera3d の `OrthographicProjection.scale` を Camera2d 側のズーム量に同期する。
-- 矢視時の回転・Y 高度は `elevation_view_input_system`（resolver が生成した exact unmodified V の `CycleElevation` action）が設定し、`sync_camera3d_system` は上書きしない。Ctrl+V など修飾付き chord は矢視を変更しない。
 - `update_terrain_lod_metrics_system` は `sync_camera3d_system.after(...)` で登録され、更新済みの `Camera3dRtt` 投影から `tile_rtt_px` / `tile_screen_px` を観測する。現 runtime LOD は `Lod1 / Lod1Lite / Lod2` の 3 段を使い、`Lod0` は将来の高品質 variant 用に予約されている。
 
 ### Camera3d の向き
 
-`Transform::from_translation(Vec3::new(0.0, VIEW_HEIGHT, Z_OFFSET))` に `ElevationDirection::TopDown.camera_rotation()` を適用し、ズームは `OrthographicProjection.scale` で同期する
+`Transform::from_translation(Vec3::new(0.0, VIEW_HEIGHT, Z_OFFSET))` に `topdown_camera_rotation()` を適用し、ズームは `OrthographicProjection.scale` で同期する。
 
 - up=`NEG_Z`（= `Vec3::Z` では画面右が World -X に反転するため不可）
 - 画面右 = World +X、画面上 = World -Z
@@ -348,38 +334,15 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 
 `sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は合成メッシュのスケールをウィンドウリサイズに常時追従させ、`RttRuntime.is_changed()` のときのみカメラ `RenderTarget` と `RttCompositeMaterial.scene_texture` を更新する。target の再 bind では image handle と `target_scale_factor` を同時に反映する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttRuntime.viewport` の実サイズから再計算する。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ・DPI・品質変更フレーム内で再生成後のSceneテクスチャへ差し替わる。
 
-### キャラクター表示（Soul GLB + Familiar 2D 前面表示）
+### キャラクター表示（Soul billboard + Familiar 2D 前景）
 
-`SoulProxy3d` は `WorldAssetRoot` で `assets/models/characters/soul.glb#Scene0` を読み込む 3D ルートとして使う。Familiar は Phase 3 の表示方針として 2D 前面表示・影なしを採用し、建築物 RtT より手前の Camera2d レイヤーで扱う。
+P02 production は Soul を `ActorBillboard3d` 1 entity / owner で Scene RtT 内に描画し、Familiar は MainCamera の2D前景に残す。
 
-- `GameAssets.soul_scene`（`Handle<WorldAsset>`）に `GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb")` を保持し、Soul spawn 時に `WorldAssetRoot` として 3D シーンへ追加する。
-- Soul 本体エンティティは 2D `Sprite` を持たず、通常表示は GLB 側へ一本化している。従来の `animation_system` / `idle_visual_system` は `Sprite` を optional にして、Soul の状態更新を維持したまま 3D 表示へ移行している。
-- `SoulShadowProxy3d` は互換性のために残っているが、現在の runtime では `mesh_body` / `mesh_face` の両方に `NotShadowCaster` を付けており、実際の `Soul` 影には寄与しない。`Soul` の見た目変更は real shadow caster ではなく receiver 側で行う。
-- `systems/visual/soul_shadow_projector.rs` の `sync_soul_shadow_projectors_system` は、`Camera3dRtt` に近い `Soul` を最大 `MAX_SOUL_SHADOW_PROJECTORS` 個だけ選び、world-space projector 配列を `SectionMaterial` と terrain 系 material に流す。これにより床と壁が同じ projector 情報を共有し、影の接続を保ったまま stylize できる。
-- `assets/shaders/shadow_style.wgsl` の `apply_soul_projected_shadow` は、receiver 側で `Soul` ごとの radial / forward-falloff を評価し、最終色を直接暗い影色へブレンドする。既存の directional shadow blur/stylize と同じ shader 内で適用するが、`Soul` 影の濃さや外周フェードは shadow map caster の depth ではなく、この projector 評価で決まる。
-- projector の向きは固定 1 本ではなく、その view で有効な全 `DirectionalLight` を走査して合成する。したがって追加光源テスト時も「最後に選ばれた 1 本だけ」に切り替わらず、同じ `Soul` projector が各 light 方向に対して評価される。
-- 現在の placeholder consumer では `Wall` / `ProvisionalWall` のみ `SectionMaterial` を使い、`floor` / `door` / `equipment` は引き続き `StandardMaterial` を使う。full migration は後段の `MS-3-5` で行う。
-- section clip は現在 `discard` ベースのため断面キャップを生成しない。壁 volume の途中で切ると切断面の蓋は作られず、内部を覗き込むような見え方になる。これは `section-material-proposal` の「方針 C: 何もしない」に相当し、断面キャップ方針は将来実装で確定する。
-- `hw_visual::CharacterMaterial` と `assets/shaders/character_material.wgsl` が Soul 用 custom material 経路を提供し、`AlphaMode::Blend` の透過付き描画を行う。現段階では section 連動や表情状態切り替えはまだ入れていない。
-- `apply_soul_gltf_render_layers_on_ready` が `WorldInstanceReady` を受けて Soul GLB の子孫へ `RenderLayers::layer(LAYER_3D)` を付与し、`mesh_body` / `mesh_face` の両方を `CharacterMaterial` へ差し替える。
-- `CharacterHandles` は Soul body/face 用の `Handle<CharacterMaterial>` とshadow proxy用materialを保持する。`mesh_body` はリポジトリ内で生成する 1x1 白テクスチャを使い、shader 側で青白い base/shadow 色、簡易ポスタライズ、rim 強調で 2D の幽体感へ寄せる。body 自体は不透明描画にして、腕や胴体の重なりでポリゴン内部が透けないようにしている。
-- `mesh_face` は atlas の先頭セル（通常表情）から、Idle 表情の可視領域計測を元にした crop を `uv_scale` / `uv_offset` で切り出し、中心固定で 1.4 倍拡大している。
-- `prepare_soul_animation_library_system` は `GameAssets.soul_gltf` から `Gltf.named_animations` を読み、`Idle / Walk / Work / Carry / Fear / Exhausted / WalkLeft / WalkRight` の clip handle を名前解決して `SoulAnimationLibrary` に保持する。
-- `apply_soul_gltf_render_layers_on_ready` は `mesh_face` に共有 material を直接挿さず、Soul ごとに face material を複製して `SoulFaceMaterial3d` を付与する。これにより face atlas の `uv_offset` を Soul 単位で更新できる。
-- `sync_soul_anim_visual_state_system` が Soul 本体の `AssignedTask` ミラー、`AnimationState.is_moving`、`IdleState`、疲労、会話表情イベントから `SoulAnimVisualState { body, face }` を算出し、`sync_soul_body_animation_system` と `sync_soul_face_expression_system` がそれぞれ body clip と face atlas を更新する。
-- body / face の写像は同一ではない。body `Fear` は `StressBreakdown` にのみ結び付き、`is_frozen = true` の短時間は body を `Idle` のまま維持し、freeze 明けで `Fear` clip へ入る。negative 会話表情は face `Fear` のみを更新する。
-- body `Exhausted` は `IdleBehavior::ExhaustedGathering` にのみ結び付き、通常の fatigue 上昇や `ConversationExpressionKind::Exhausted` は face `Exhausted` 側だけで扱う。
-- `initialize_soul_animation_players_system` は GLB 内で自動生成された `AnimationPlayer` を `SoulAnimationPlayer3d` と関連付け、`AnimationGraphHandle` と `AnimationTransitions` を挿入して `Idle` から再生を開始する。
-- `sync_soul_body_animation_system` は Soul 本体のフレーム間移動量から実移動ベクトルを算出し、横成分比率が十分高いときだけ `WalkLeft / WalkRight` を使う。判定には enter / exit の 2 段階閾値を使って揺れを抑え、縦移動寄りでは `Walk` または `Carry` を維持する。現行 GLB に `CarryLeft / CarryRight` は無いため、運搬移動で横成分が強いときも `WalkLeft / WalkRight` を優先する。clip 向きは現行 Soul GLB に合わせて `+X => WalkLeft`、`-X => WalkRight` としている。
-- `sync_soul_body_animation_system` はさらに directional variant 更新に短い lock を持ち、微小な軌道ぶれで `Walk / Carry <-> WalkLeft/WalkRight` が毎フレーム往復しないようにしている。Idle / Work / Fear / Exhausted など別 body state への遷移は lock で止めない。
-- `mesh_face` には `SOUL_FACE_SCALE_MULTIPLIER` を掛け、PoC 目視で顔が読み取りづらい問題を asset 非破壊で補正する。
-- `mesh_face` のローカル回転は GLB 側の初期姿勢をそのまま使い、PoC 段階では追加の billboard 回転を行わない。
-- `Camera3dRtt` には `AmbientLight` を付与し、GLB 付属の lit material が RtT 上で暗転しないようにする。
-- `startup_systems::setup` では RtT 用の主 `DirectionalLight` を 1 本追加し、`DirectionalLightShadowMap { size: 2048 }` と `CascadeShadowConfigBuilder` で shadow map 範囲を明示している。追加の 2 本目 light は `RenderPerfToggles.extra_directional_light_enabled` で有効化するテスト用経路で、DevPanel `Light2` または `HW_ENABLE_RTT_EXTRA_DIRECTIONAL_LIGHT` から切り替える。receiver-side `Soul` projector はこの追加 light も含めて評価する。
-- Familiar は 2D `Sprite` の 4 フレーム差し替え・左右反転・hover/wobble を本表示として維持する。Command radius オーラ・hover/selection・吹き出しも同じ 2D world transform を参照する。
-- Familiar の論理 root は movement / spatial index 用座標を保持し、hover/wobble は `FamiliarVisualOwner` で owner を指す 2D child の `FamiliarVisualOffset` にだけ書く。移行期の `sync_familiar_proxy_3d_system` は owner→offset をフレーム内で一度索引化し、`familiar_animation_system` の後に同じ offset を proxy へ反映する。
-- Familiar は建築物 RtT 合成より手前に出す前提とし、Soul のような shadow proxy や shadow caster は持たない。
-- `FamiliarProxy3d` は移行期の検証用経路として残っているが、Phase 3 の恒久方針ではない。多層階導入時は `FloorLevel` 等の所属階 state を導入し、「現在表示中の階に属する Familiar だけを 2D 前面表示する」ルールを別マイルストーンで定義する。
+- Soul billboard は共有 Rectangle mesh と8個の `StandardMaterial`（alpha mask、unlit）だけを使う。`SoulBillboardFrame` は Normal / Exhausted / Happy / Sleep / Wine / Trump / Stress / StressBreakdown の有限集合で、既存の idle・task・movement・会話・stress state resolverを共有する。
+- `sync_actor_billboard_system` は owner XY を Scene X/-Z へ写し、固定 TopDown Camera3d の回転へ billboard を向け、左右向きは scale.x で表す。owner削除は `SoulProxyOwnerCache.actor_billboard` から O(1) で cleanupする。
+- Soul GLB、`SoulProxy3d`、`SoulShadowProxy3d`、shadow projector、`SoulShadowMaterial` plugin、GLB animation consumer は production pluginから停止した。型と旧 module は P08 の物理削除まで互換境界として残る。
+- Familiar は4フレームの child Sprite、左右反転、hover/wobble、selection、吹き出しを MainCamera の単一 `LAYER_2D` passで描く。production spawn は `FamiliarProxy3d` を生成しない。
+- `Render3dVisible` は Camera3d と composite を同時に隠すため、billboardを含む Scene 全体が前フレーム残像なしで切り替わる。
 
 ### 3D 表示トグル（開発機能）
 
@@ -531,7 +494,7 @@ roster relationshipを直接変更しない。
 ### Resolver 管理ショートカット
 
 次のキーは `crates/bevy_app/src/input_actions/` の binding table と resolver が raw keyboard edge の
-唯一の owner である。Save/Load・menu・時間 action は既存 `UiIntent` handler、elevation と Familiar は
+唯一の owner である。Save/Load・menu・時間 action は既存 `UiIntent` handler、Familiar action は
 既存 domain consumerへ渡す。新しい shortcut は binding table、context/compatibility、owner classification
 test を同時に更新し、consumer に raw keyboard path を追加しない。
 
@@ -553,7 +516,6 @@ text input focus/latch 中は action を生成しない。accepted overlay open 
 | `Escape` | overlay close / resume / active owner cancel / menu close / Familiar Idle・Patrol | 左から context priority 順。Idle・Patrol は `TaskMode::None` の Normal 時だけ |
 | `F5` | Save catalogを開く | text input中とin-progress gesture中は生成しない。filesystemの事前参照なしにpending captureを取得し、Empty手動slotは保存、既存Manual slotは確認へ進む。Soul mask aliasは廃止 |
 | `F9` | Load catalogを開く | filesystemの事前参照なしにpending captureを取得する。Empty / 破損 / 非対応 / seed不一致 / 読込不能は理由を表示し、読込操作だけを無効にする。追加light aliasは廃止 |
-| `V` | 矢視切替 | exact unmodified chordのみ |
 | `F12` | デバッグ表示トグル + Gizmo 切替 | `plugins/input.rs`。`GizmoConfigStore` の enabled も同期 |
 | `F3` | 3D 表示トグル | `plugins/input.rs`。`Render3dVisible` を反転し、Camera3dRtt と RttCompositeSprite を制御（**Dev 専用**） |
 | `F4/F6/F7/F8` | RtT quality / light / terrain / scene切替 | `plugins/input.rs`。詳細は `docs/debug-features.md` |

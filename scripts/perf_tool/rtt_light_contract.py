@@ -442,7 +442,7 @@ def build_fixture_ledger(contract: dict[str, Any], size: str) -> list[dict[str, 
 
 
 def build_fixture_presentation_rows(
-    contract: dict[str, Any], size: str
+    contract: dict[str, Any], size: str, *, stage_id: str = "current"
 ) -> list[dict[str, str]]:
     layout = build_fixture_layout(contract, size)
     counts = layout["counts"]
@@ -469,7 +469,33 @@ def build_fixture_presentation_rows(
         if building_kind not in entity_counts:
             continue
         entity_count = entity_counts[building_kind]
-        expectation = contract["fixture"]["current_presentation"][building_kind]
+        if stage_id == "p02":
+            structural_3d = building_kind in {
+                "Floor",
+                "Wall",
+                "Door",
+                "Tank",
+                "MudMixer",
+                "RestArea",
+                "Bridge",
+                "SoulSpa",
+            }
+            legacy_state_mirror = building_kind in {
+                "Door",
+                "Tank",
+                "MudMixer",
+            }
+            expectation = {
+                "root_sprite_per_entity": 0,
+                # Only legacy state consumers retain a hidden structural
+                # mirror; Foreground2d keeps its child as active presentation.
+                "child_sprite_per_entity": int(
+                    legacy_state_mirror or not structural_3d
+                ),
+                "owner_3d_per_entity": 1 if structural_3d else 0,
+            }
+        else:
+            expectation = contract["fixture"]["current_presentation"][building_kind]
         rows.append(
             {
                 "schema_version": "1",

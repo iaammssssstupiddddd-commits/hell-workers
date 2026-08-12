@@ -88,6 +88,16 @@ impl PerfRttLightSelection {
         stage_id: "p01",
         lane: "behavior",
     };
+    const P02_STATIC_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p02",
+        lane: "static",
+    };
+    const P02_BEHAVIOR_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p02",
+        lane: "behavior",
+    };
 
     pub const fn contract_id(self) -> &'static str {
         self.contract_id
@@ -672,6 +682,7 @@ impl PerfScenarioConfig {
                     Some(
                         PerfRttLightSelection::CURRENT_STATIC_V1
                             | PerfRttLightSelection::P01_STATIC_V1
+                            | PerfRttLightSelection::P02_STATIC_V1
                     )
                 )
                 || size != PerfScenarioSize::Medium
@@ -684,7 +695,7 @@ impl PerfScenarioConfig {
                 || rtt_quality != Some(RttQualityPreset::High))
         {
             return Err(PerfScenarioConfigError(
-                "--perf-renderdoc-capture requires rtt-light-v1/current|p01/static medium/gpu/fixed, an output directory, and the exact 1920x1080/scale-1/high window contract"
+                "--perf-renderdoc-capture requires rtt-light-v1/current|p01|p02/static medium/gpu/fixed, an output directory, and the exact 1920x1080/scale-1/high window contract"
                     .to_string(),
             ));
         }
@@ -779,6 +790,17 @@ impl PerfScenarioConfig {
                     self.workload,
                     PerfWorkload::IndoorLight | PerfWorkload::TaskDashboard
                 ))
+    }
+
+    /// The indoor-light static lane treats its seeded Door states as immutable
+    /// scene topology. Fixed audits still advance simulation time, so Door
+    /// automation must be excluded explicitly instead of relying on pause.
+    pub fn freezes_indoor_light_door_automation(&self) -> bool {
+        self.enabled
+            && self.workload == PerfWorkload::IndoorLight
+            && self
+                .rtt_light
+                .is_some_and(|selection| selection.lane() == "static")
     }
 
     /// 静的 light fixture の描画計測中はゲーム simulation を進めない。
@@ -927,7 +949,7 @@ fn parse_rtt_light_selection(
 
     let (Some(contract), Some(stage), Some(lane)) = (contract, stage, lane) else {
         return Err(PerfScenarioConfigError(
-            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01 --perf-lane static"
+            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01|p02 --perf-lane static"
                 .to_string(),
         ));
     };
@@ -936,9 +958,11 @@ fn parse_rtt_light_selection(
         ("rtt-light-v1", "current", "behavior") => PerfRttLightSelection::CURRENT_BEHAVIOR_V1,
         ("rtt-light-v1", "p01", "static") => PerfRttLightSelection::P01_STATIC_V1,
         ("rtt-light-v1", "p01", "behavior") => PerfRttLightSelection::P01_BEHAVIOR_V1,
+        ("rtt-light-v1", "p02", "static") => PerfRttLightSelection::P02_STATIC_V1,
+        ("rtt-light-v1", "p02", "behavior") => PerfRttLightSelection::P02_BEHAVIOR_V1,
         _ => {
             return Err(PerfScenarioConfigError(format!(
-                "this binary supports only rtt-light-v1/current|p01/static|behavior; got {contract}/{stage}/{lane}"
+                "this binary supports only rtt-light-v1/current|p01|p02/static|behavior; got {contract}/{stage}/{lane}"
             )));
         }
     };

@@ -163,7 +163,7 @@ of its required legs.
 
 Run the prerequisites in order on the same clean subject commit and source
 fingerprint. Set `<stage-id>` explicitly (`current` for the frozen reference,
-`p01` for the Scene-only P01 subject); do not rely on the compatibility default:
+`p01` for the Scene-only P01 subject, `p02` for the TopDown presentation subject); do not rely on the compatibility default:
 
 1. Run the Task Dashboard S0 recipe and retain its valid job root.
 2. Generate an RtT S1 plan, execute its returned direct `kitty` command, and

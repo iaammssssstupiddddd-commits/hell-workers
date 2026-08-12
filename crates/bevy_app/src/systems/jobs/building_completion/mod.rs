@@ -1,7 +1,11 @@
 mod post_process;
-mod spawn;
+pub(crate) mod spawn;
 
-pub(crate) use spawn::attach_building_shell;
+#[cfg(feature = "profiling")]
+pub(crate) use spawn::{
+    RenderPresentationClass, presentation_class, requires_legacy_structural_2d_mirror,
+};
+pub(crate) use spawn::{attach_building_shell, spawn_building_3d_visual};
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BuildingCompletionSet;

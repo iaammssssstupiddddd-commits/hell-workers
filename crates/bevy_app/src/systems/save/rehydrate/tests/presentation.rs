@@ -31,6 +31,11 @@ fn presentation_cleanup_removes_only_rehydrate_owned_shells() {
             billboard: false,
         })
         .id();
+    let actor_billboard = world
+        .spawn(hw_visual::visual3d::ActorBillboard3d {
+            owner: Entity::PLACEHOLDER,
+        })
+        .id();
     let shadow_proxy = world
         .spawn(hw_visual::visual3d::SoulShadowProxy3d {
             owner: Entity::PLACEHOLDER,
@@ -62,6 +67,7 @@ fn presentation_cleanup_removes_only_rehydrate_owned_shells() {
 
     for entity in [
         soul_proxy,
+        actor_billboard,
         shadow_proxy,
         familiar_proxy,
         building_visual,
@@ -102,7 +108,7 @@ fn soul_shell_rehydrate_is_idempotent() {
     );
     assert_eq!(
         world
-            .query::<&hw_visual::visual3d::SoulProxy3d>()
+            .query::<&hw_visual::visual3d::ActorBillboard3d>()
             .iter(&world)
             .count(),
         1
@@ -112,14 +118,14 @@ fn soul_shell_rehydrate_is_idempotent() {
             .query::<&hw_visual::visual3d::SoulShadowProxy3d>()
             .iter(&world)
             .count(),
-        1
+        0
     );
 
     assert_eq!(rehydrate_soul_shells(&mut world, &handles), 0);
     world.flush();
     assert_eq!(
         world
-            .query::<&hw_visual::visual3d::SoulProxy3d>()
+            .query::<&hw_visual::visual3d::ActorBillboard3d>()
             .iter(&world)
             .count(),
         1
@@ -129,7 +135,7 @@ fn soul_shell_rehydrate_is_idempotent() {
             .query::<&hw_visual::visual3d::SoulShadowProxy3d>()
             .iter(&world)
             .count(),
-        1
+        0
     );
 }
 

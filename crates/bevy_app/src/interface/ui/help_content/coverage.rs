@@ -203,7 +203,6 @@ coverage_table! {
         "input::help-end" => unit(HelpEnd) => chrome(HelpChromeSlot::DocumentEnd),
         "input::save" => unit(SaveGame) => published("save-load"),
         "input::load" => unit(RequestLoadGame) => published("save-load"),
-        "input::camera-elevation" => unit(CycleElevation) => published("camera-elevation"),
         "input::render-3d" => unit(ToggleRender3d) => debug_only(),
         "input::rtt-quality" => unit(CycleRttQuality) => debug_only(),
         "input::rtt-directional-light" => unit(ToggleRttDirectionalLight) => debug_only(),

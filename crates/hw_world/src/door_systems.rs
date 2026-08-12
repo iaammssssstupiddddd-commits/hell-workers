@@ -7,6 +7,9 @@ use hw_core::world::DoorState;
 use hw_jobs::Door;
 
 /// bevy_app から注入されるドア系ビジュアルアセットハンドル。
+///
+/// Door domain mutation intentionally does not depend on this resource. It is
+/// consumed by presentation systems after the root `Door` state has changed.
 #[derive(Resource)]
 pub struct DoorVisualHandles {
     pub door_open: Handle<Image>,
@@ -15,20 +18,33 @@ pub struct DoorVisualHandles {
 
 pub fn apply_door_state(
     door: &mut Door,
-    sprite: &mut Sprite,
     world_map: &mut WorldMap,
-    handles: &DoorVisualHandles,
     door_grid: (i32, i32),
     next_state: DoorState,
 ) {
     door.state = next_state;
-    sprite.image = if next_state == DoorState::Open {
-        handles.door_open.clone()
-    } else {
-        handles.door_closed.clone()
-    };
-
     world_map.sync_door_passability(door_grid, next_state);
+}
+
+#[cfg(test)]
+mod mutation_tests {
+    use super::*;
+
+    #[test]
+    fn mutation_requires_only_root_door_and_world_map() {
+        let mut world_map = WorldMap::default();
+        let entity = Entity::from_bits(1);
+        let grid = (4, 7);
+        let mut door = Door {
+            state: DoorState::Closed,
+        };
+        world_map.register_door(grid, entity, door.state);
+
+        apply_door_state(&mut door, &mut world_map, grid, DoorState::Open);
+
+        assert_eq!(door.state, DoorState::Open);
+        assert_eq!(world_map.door_state(grid.0, grid.1), Some(DoorState::Open));
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

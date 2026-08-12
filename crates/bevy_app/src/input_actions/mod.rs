@@ -132,8 +132,7 @@ fn ui_intent_for_action(action: InputAction) -> Option<UiIntent> {
         InputAction::CancelLoadConfirm => Some(UiIntent::CancelLoadConfirm),
         InputAction::CloseSettings => Some(UiIntent::CloseSettings),
         InputAction::CloseOperationDialog => Some(UiIntent::CloseDialog),
-        InputAction::CycleElevation
-        | InputAction::ToggleRender3d
+        InputAction::ToggleRender3d
         | InputAction::CycleRttQuality
         | InputAction::ToggleRttDirectionalLight
         | InputAction::ToggleRttTerrain

@@ -35,7 +35,8 @@ use crate::systems::jobs::floor_construction::{
 };
 use crate::systems::jobs::wall_construction::spawn_wall_shell;
 use crate::systems::jobs::{
-    Blueprint, Building, Designation, Door, MudMixerStorage, TaskSlots, WorkType,
+    Blueprint, Building, Designation, Door, MudMixerStorage, RenderPresentationClass, TaskSlots,
+    WorkType, presentation_class, requires_legacy_structural_2d_mirror,
 };
 use crate::systems::logistics::{
     BelongsTo, BucketStorage, PendingBelongsToBlueprint, ResourceItem, ResourceType, Stockpile,
@@ -118,6 +119,7 @@ pub(crate) struct IndoorLightFixtureState {
     pub(super) observation: Option<IndoorLightFixtureObservation>,
     pub(super) failure: Option<String>,
     door_states_seeded: bool,
+    door_presentations_settled: bool,
 }
 
 #[derive(Clone)]
@@ -1141,6 +1143,7 @@ pub(super) fn begin_indoor_light_fixture(
         bucket_storages,
     });
     state.door_states_seeded = false;
+    state.door_presentations_settled = false;
     state.phase = IndoorLightFixturePhase::Settling;
 }
 
@@ -1221,12 +1224,15 @@ pub(crate) fn stabilize_indoor_light_actors_system(
 pub(crate) fn seed_indoor_light_static_door_states_system(
     mut state: ResMut<IndoorLightFixtureState>,
     mut world_map: WorldMapWrite,
-    handles: Res<DoorVisualHandles>,
     mut q_doors: Query<(Entity, &Transform, &mut Door, &Children)>,
-    mut q_sprites: Query<&mut Sprite>,
+    q_sprites: Query<&Sprite>,
     mut exit: MessageWriter<AppExit>,
 ) {
     if state.door_states_seeded {
+        // Door domain state is seeded before the production presentation
+        // sync set runs. Reaching this branch on the next Update proves that
+        // the presentation system had one frame to mirror the new state.
+        state.door_presentations_settled = true;
         return;
     }
     let Some(layout) = state.fixture.as_ref().map(|fixture| fixture.layout.clone()) else {
@@ -1265,7 +1271,7 @@ pub(crate) fn seed_indoor_light_static_door_states_system(
             .iter()
             .filter(|child| q_sprites.contains(*child))
             .collect::<Vec<_>>();
-        let [sprite_entity] = sprite_children.as_slice() else {
+        let [_sprite_entity] = sprite_children.as_slice() else {
             fail_fixture(
                 &mut state,
                 &mut exit,
@@ -1276,22 +1282,7 @@ pub(crate) fn seed_indoor_light_static_door_states_system(
             );
             return;
         };
-        let Ok(mut sprite) = q_sprites.get_mut(*sprite_entity) else {
-            fail_fixture(
-                &mut state,
-                &mut exit,
-                format!("Door child Sprite at {:?} vanished", expected.grid),
-            );
-            return;
-        };
-        hw_world::apply_door_state(
-            &mut door,
-            &mut sprite,
-            &mut world_map,
-            &handles,
-            expected.grid,
-            expected.state,
-        );
+        hw_world::apply_door_state(&mut door, &mut world_map, expected.grid, expected.state);
     }
     state.door_states_seeded = true;
 }
@@ -1530,6 +1521,9 @@ struct ObservedBuilding {
 }
 
 pub(crate) fn validate_indoor_light_fixture_system(mut p: IndoorLightValidationParams) {
+    if !p.state.door_presentations_settled {
+        return;
+    }
     let Some(fixture) = p.state.fixture.clone() else {
         return;
     };
@@ -2125,10 +2119,14 @@ fn validate_observed_fixture(
 }
 
 fn expected_presentation(kind: BuildingType) -> (usize, usize) {
-    match kind {
-        BuildingType::Floor | BuildingType::Wall => (0, 1),
-        BuildingType::Bridge => (1, 0),
-        _ => (1, 1),
+    match presentation_class(kind) {
+        // Only state consumers that still require Sprite handles retain a
+        // hidden, explicitly-marked mirror until P08. It is not active
+        // presentation, but the fixture inventories its topology.
+        RenderPresentationClass::Structural3d => {
+            (usize::from(requires_legacy_structural_2d_mirror(kind)), 1)
+        }
+        RenderPresentationClass::Foreground2d => (1, 0),
     }
 }
 

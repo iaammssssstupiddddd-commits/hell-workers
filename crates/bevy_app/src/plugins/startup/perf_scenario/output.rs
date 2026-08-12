@@ -204,6 +204,50 @@ pub(super) fn write_render_inventory(
 }
 
 #[cfg(feature = "profiling")]
+pub(super) fn write_p02_presentation_sidecar(
+    config: &PerfScenarioConfig,
+    presentation: PerfP02Presentation,
+) -> std::io::Result<()> {
+    if config.uses_fixed_timesteps()
+        || config
+            .rtt_light_selection()
+            .is_none_or(|selection| selection.stage_id() != "p02" || selection.lane() != "static")
+    {
+        return Ok(());
+    }
+    let directory = perf_output_directory(config);
+    std::fs::create_dir_all(&directory)?;
+    let path = directory.join("p02_presentation.csv");
+    if path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!(
+                "P02 presentation sidecar already exists at {}",
+                path.display()
+            ),
+        ));
+    }
+    let csv = format!(
+        concat!(
+            "schema_version,layer_2d_camera_count,layer_2d_pass_count,building_count,",
+            "duplicate_presentation_count,building_exactly_one_presentation,soul_count,",
+            "soul_billboard_count,familiar_3d_count,state_and_bounce_probes_pass\n",
+            "1,{},{},{},{},{},{},{},{},{}\n"
+        ),
+        presentation.layer_2d_camera_count,
+        presentation.layer_2d_pass_count,
+        presentation.building_count,
+        presentation.duplicate_presentation_count,
+        presentation.building_exactly_one_presentation,
+        presentation.soul_count,
+        presentation.soul_billboard_count,
+        presentation.familiar_3d_count,
+        presentation.state_and_bounce_probes_pass,
+    );
+    std::fs::write(path, csv)
+}
+
+#[cfg(feature = "profiling")]
 pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::Result<()> {
     let PerfCaptureWriteInput {
         config,

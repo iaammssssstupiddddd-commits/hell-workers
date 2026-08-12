@@ -115,6 +115,7 @@ P01_RENDER_RESOURCES = {
 EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "current": CURRENT_RENDER_RESOURCES,
     "p01": P01_RENDER_RESOURCES,
+    "p02": P01_RENDER_RESOURCES,
 }
 
 
@@ -417,7 +418,7 @@ def _load_contract(repo: Path, contract_id: str, stage: str) -> dict[str, Any]:
         contract.get("contract_id") != contract_id
         or stage not in EXPECTED_RENDER_RESOURCES_BY_STAGE
     ):
-        raise CaptureError("RenderDoc capture identity differs from rtt-light-v1/current|p01")
+        raise CaptureError("RenderDoc capture identity differs from rtt-light-v1/current|p01|p02")
     if contract.get("lifecycle") != {
         "status": "frozen",
         "formal_registration_allowed": True,
@@ -606,7 +607,10 @@ def _runtime_checkpoint(
         )
     except (OSError, ValueError) as error:
         raise CaptureError(f"runtime RenderDoc checkpoint differs from schema v3: {error}") from error
-    for label in ("render_inventory", "render_resources", "fixture"):
+    labels = ["render_inventory", "render_resources", "fixture"]
+    if stage == "p02":
+        labels.append("p02_presentation")
+    for label in labels:
         if not isinstance(value[label], dict) or not value[label]:
             raise CaptureError(f"runtime checkpoint {label} evidence is empty")
     _validate_render_resources(value["render_resources"], stage_id=stage)

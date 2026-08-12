@@ -51,8 +51,10 @@ pub use material::{
 
 pub use familiar::{FamiliarVisualOffset, FamiliarVisualOwner};
 pub use visual3d::{
-    Building3dVisual, FamiliarProxy3d, SoulAnimVisualState, SoulAnimationPlayer3d,
+    ActorBillboard3d, Building3dVisual, Door3dVisual, DoorPresentationState, FamiliarProxy3d,
+    LegacyStructural2dMirror, SoulAnimVisualState, SoulAnimationPlayer3d, SoulBillboardFrame,
     SoulBodyAnimState, SoulFaceMaterial3d, SoulFaceState, SoulProxy3d, SoulProxyOwnerCache,
+    StructuralPresentationState,
 };
 
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
@@ -85,7 +87,6 @@ impl Plugin for HwVisualPlugin {
             Material2dPlugin::<TaskAreaMaterial>::default(),
             MaterialPlugin::<material::CharacterMaterial>::default(),
             MaterialPlugin::<material::SectionMaterial>::default(),
-            MaterialPlugin::<material::SoulShadowMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterialLod1Lite>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterialLod2>::default(),
@@ -320,6 +321,7 @@ pub fn reset_for_world_replace(world: &mut World) {
 fn collect_transient_visual_entities(world: &mut World) -> HashSet<Entity> {
     let mut query = world.query_filtered::<Entity, Or<(
         With<visual3d::Building3dVisual>,
+        With<visual3d::ActorBillboard3d>,
         With<visual3d::SoulProxy3d>,
         With<visual3d::SoulShadowProxy3d>,
         With<visual3d::FamiliarProxy3d>,

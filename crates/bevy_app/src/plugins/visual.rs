@@ -1,7 +1,6 @@
 //! ビジュアル関連のプラグイン
 
 use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
-use crate::input_actions::InputResolutionSet;
 use crate::plugins::startup::{
     Camera3dRtt, RttCompositeSprite, RttDirectionalLight, RttExtraDirectionalLight,
 };
@@ -13,28 +12,16 @@ use crate::systems::command::{
     update_designation_indicator_system,
 };
 use crate::systems::logistics::resource_count_display_system;
+use crate::systems::visual::actor_billboard::{
+    cleanup_actor_billboard_system, register_actor_billboard_system, sync_actor_billboard_system,
+};
 use crate::systems::visual::building3d_cleanup::{
-    cleanup_building_3d_visuals_system, sync_provisional_wall_material_system,
+    DoorPresentationSyncSet, cleanup_building_3d_visuals_system, sync_building_3d_transform_system,
+    sync_door_presentation_system, sync_provisional_wall_material_system,
+    sync_structural_presentation_state_system,
 };
-use crate::systems::visual::camera_sync::{
-    sync_camera3d_system, sync_world_foreground_2d_camera_system,
-};
-use crate::systems::visual::character_proxy_3d::{
-    apply_soul_gltf_render_layers_on_ready, apply_soul_shadow_gltf_render_layers_on_ready,
-    cleanup_familiar_proxy_3d_system, cleanup_soul_proxy_3d_system,
-    cleanup_soul_shadow_proxy_3d_system, register_familiar_proxy_3d_system,
-    register_soul_proxy_3d_system, register_soul_shadow_proxy_3d_system,
-    sync_familiar_proxy_3d_system, sync_soul_proxy_3d_system, sync_soul_shadow_proxy_3d_system,
-};
-use crate::systems::visual::elevation_view::{ElevationViewState, elevation_view_input_system};
-use crate::systems::visual::section_cut::sync_section_cut_normal_system;
-use crate::systems::visual::soul_animation::{
-    SoulAnimationLibrary, init_soul_face_expression_system,
-    initialize_soul_animation_players_system, prepare_soul_animation_library_system,
-    sync_soul_anim_visual_state_system, sync_soul_body_animation_system,
-    sync_soul_face_expression_system,
-};
-use crate::systems::visual::soul_shadow_projector::sync_soul_shadow_projectors_system;
+use crate::systems::visual::camera_sync::sync_camera3d_system;
+use crate::systems::visual::soul_animation::sync_soul_anim_visual_state_system;
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
 use crate::systems::visual::terrain_lod::{
     TerrainLodMetrics, TerrainLodState, terrain_lod_switch_system,
@@ -47,7 +34,7 @@ use hw_visual::HwVisualPlugin;
 use hw_visual::SectionCut;
 use hw_visual::SoulProxyOwnerCache;
 use hw_visual::soul::task_link_system;
-use hw_visual::visual3d::{Building3dVisual, FamiliarProxy3d, SoulProxy3d, SoulShadowProxy3d};
+use hw_visual::visual3d::{ActorBillboard3d, Building3dVisual};
 use hw_world::{TerrainChangedEvent, sync_room_overlay_tiles_system};
 
 use bevy::prelude::*;
@@ -75,21 +62,23 @@ impl Plugin for VisualPlugin {
             reset_root_command_visuals,
         );
 
-        app.init_resource::<ElevationViewState>();
         app.init_resource::<SectionCut>();
-        app.init_resource::<SoulAnimationLibrary>();
         app.init_resource::<SoulProxyOwnerCache>();
         app.init_resource::<TerrainLodMetrics>();
         app.init_resource::<TerrainLodState>();
 
         app.add_message::<TerrainChangedEvent>();
 
-        app.add_systems(
+        // Door mutations can originate from Actor automation or the Interface
+        // intent handler. Run the presentation consumer after both domains so
+        // render extraction and behavior observers see the same semantic
+        // revision in the current Update.
+        app.configure_sets(
             Update,
-            (sync_camera3d_system, sync_world_foreground_2d_camera_system)
-                .chain()
-                .in_set(GameSystemSet::Visual),
+            DoorPresentationSyncSet.after(GameSystemSet::Interface),
         );
+
+        app.add_systems(Update, sync_camera3d_system.in_set(GameSystemSet::Visual));
         app.add_systems(
             Update,
             update_terrain_lod_metrics_system
@@ -101,10 +90,6 @@ impl Plugin for VisualPlugin {
             terrain_lod_switch_system
                 .after(update_terrain_lod_metrics_system)
                 .in_set(GameSystemSet::Visual),
-        );
-        app.add_systems(
-            Update,
-            sync_section_cut_normal_system.in_set(GameSystemSet::Visual),
         );
 
         app.add_systems(
@@ -181,12 +166,6 @@ impl Plugin for VisualPlugin {
             Update,
             update_task_area_material_system.in_set(GameSystemSet::Visual),
         );
-        app.add_systems(
-            Update,
-            sync_soul_shadow_projectors_system
-                .after(sync_camera3d_system)
-                .in_set(GameSystemSet::Visual),
-        );
 
         // Building3dVisual クリーンアップ・マテリアル遷移
         app.add_systems(
@@ -194,8 +173,14 @@ impl Plugin for VisualPlugin {
             (
                 cleanup_building_3d_visuals_system,
                 sync_provisional_wall_material_system,
+                sync_building_3d_transform_system,
+                sync_structural_presentation_state_system,
             )
                 .in_set(GameSystemSet::Visual),
+        );
+        app.add_systems(
+            Update,
+            sync_door_presentation_system.in_set(DoorPresentationSyncSet),
         );
 
         // terrain id map 更新（障害物除去後）
@@ -204,39 +189,18 @@ impl Plugin for VisualPlugin {
             terrain_id_map_sync_system.in_set(GameSystemSet::Visual),
         );
 
-        // キャラクター3Dプロキシ同期・クリーンアップ
+        // Shared-pool Soul billboard resolver/sync/lifecycle.
         app.add_systems(
             Update,
             (
-                (
-                    sync_soul_proxy_3d_system,
-                    sync_soul_shadow_proxy_3d_system,
-                    sync_familiar_proxy_3d_system.after(familiar_animation_system),
-                )
+                sync_soul_anim_visual_state_system,
+                sync_actor_billboard_system
+                    .after(sync_soul_anim_visual_state_system)
                     .run_if(render3d_sync_enabled),
-                prepare_soul_animation_library_system,
-                (
-                    sync_soul_anim_visual_state_system,
-                    initialize_soul_animation_players_system,
-                    sync_soul_body_animation_system,
-                    init_soul_face_expression_system,
-                    sync_soul_face_expression_system,
-                )
-                    .chain(),
-                cleanup_soul_proxy_3d_system,
-                cleanup_soul_shadow_proxy_3d_system,
-                cleanup_familiar_proxy_3d_system,
-                register_soul_proxy_3d_system,
-                register_soul_shadow_proxy_3d_system,
-                register_familiar_proxy_3d_system,
+                cleanup_actor_billboard_system,
+                register_actor_billboard_system,
             )
                 .in_set(GameSystemSet::Visual),
-        );
-
-        // 矢視モード入力
-        app.add_systems(
-            Update,
-            elevation_view_input_system.in_set(InputResolutionSet::Consume),
         );
 
         // Render3dVisible の変更を Camera3dRtt と RttCompositeSprite に反映
@@ -256,8 +220,6 @@ impl Plugin for VisualPlugin {
             Update,
             apply_rtt_scene_content_toggle_system.in_set(GameSystemSet::Visual),
         );
-        app.add_observer(apply_soul_gltf_render_layers_on_ready);
-        app.add_observer(apply_soul_shadow_gltf_render_layers_on_ready);
     }
 }
 
@@ -346,17 +308,8 @@ fn apply_rtt_extra_directional_light_toggle_system(
     }
 }
 
-type SceneObjectQuery<'w, 's> = Query<
-    'w,
-    's,
-    Entity,
-    Or<(
-        With<Building3dVisual>,
-        With<SoulProxy3d>,
-        With<SoulShadowProxy3d>,
-        With<FamiliarProxy3d>,
-    )>,
->;
+type SceneObjectQuery<'w, 's> =
+    Query<'w, 's, Entity, Or<(With<Building3dVisual>, With<ActorBillboard3d>)>>;
 
 /// 地形と main scene object を個別に隠して、RtT 固定費の内訳を切り分ける。
 fn apply_rtt_scene_content_toggle_system(

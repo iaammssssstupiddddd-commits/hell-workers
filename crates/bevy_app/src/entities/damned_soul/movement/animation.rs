@@ -8,27 +8,32 @@ use crate::entities::damned_soul::{
 use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::prelude::*;
 
-fn select_soul_image<'a>(
-    game_assets: &'a GameAssets,
+pub(crate) fn resolve_soul_billboard_frame(
     idle: &IdleState,
     breakdown_opt: Option<&StressBreakdown>,
     expression_opt: Option<&ConversationExpression>,
     is_working_or_moving: bool,
-) -> &'a Handle<Image> {
+) -> hw_visual::SoulBillboardFrame {
     if let Some(breakdown) = breakdown_opt {
         if breakdown.is_frozen {
-            return &game_assets.soul_stress_breakdown;
+            return hw_visual::SoulBillboardFrame::StressBreakdown;
         }
-        return &game_assets.soul_stress;
+        return hw_visual::SoulBillboardFrame::Stress;
     }
 
     if let Some(expression) = expression_opt {
         match expression.kind {
-            ConversationExpressionKind::Positive => return &game_assets.soul_lough,
-            ConversationExpressionKind::Negative => return &game_assets.soul_stress,
-            ConversationExpressionKind::Exhausted => return &game_assets.soul_exhausted,
-            ConversationExpressionKind::GatheringWine => return &game_assets.soul_wine,
-            ConversationExpressionKind::GatheringTrump => return &game_assets.soul_trump,
+            ConversationExpressionKind::Positive => return hw_visual::SoulBillboardFrame::Happy,
+            ConversationExpressionKind::Negative => return hw_visual::SoulBillboardFrame::Stress,
+            ConversationExpressionKind::Exhausted => {
+                return hw_visual::SoulBillboardFrame::Exhausted;
+            }
+            ConversationExpressionKind::GatheringWine => {
+                return hw_visual::SoulBillboardFrame::Wine;
+            }
+            ConversationExpressionKind::GatheringTrump => {
+                return hw_visual::SoulBillboardFrame::Trump;
+            }
         }
     }
 
@@ -36,21 +41,39 @@ fn select_soul_image<'a>(
 
     match idle.behavior {
         IdleBehavior::Sleeping | IdleBehavior::Resting if allow_sleep_visual => {
-            &game_assets.soul_sleep
+            hw_visual::SoulBillboardFrame::Sleep
         }
-        IdleBehavior::Sleeping | IdleBehavior::Resting => &game_assets.soul,
-        IdleBehavior::GoingToRest => &game_assets.soul,
-        IdleBehavior::ExhaustedGathering => &game_assets.soul_exhausted,
-        IdleBehavior::Escaping => &game_assets.soul,
-        IdleBehavior::Drifting => &game_assets.soul,
+        IdleBehavior::Sleeping | IdleBehavior::Resting => hw_visual::SoulBillboardFrame::Normal,
+        IdleBehavior::GoingToRest => hw_visual::SoulBillboardFrame::Normal,
+        IdleBehavior::ExhaustedGathering => hw_visual::SoulBillboardFrame::Exhausted,
+        IdleBehavior::Escaping => hw_visual::SoulBillboardFrame::Normal,
+        IdleBehavior::Drifting => hw_visual::SoulBillboardFrame::Normal,
         IdleBehavior::Gathering => match idle.gathering_behavior {
-            GatheringBehavior::Sleeping if allow_sleep_visual => &game_assets.soul_sleep,
+            GatheringBehavior::Sleeping if allow_sleep_visual => {
+                hw_visual::SoulBillboardFrame::Sleep
+            }
             GatheringBehavior::Sleeping
             | GatheringBehavior::Wandering
             | GatheringBehavior::Standing
-            | GatheringBehavior::Dancing => &game_assets.soul,
+            | GatheringBehavior::Dancing => hw_visual::SoulBillboardFrame::Normal,
         },
-        IdleBehavior::Wandering | IdleBehavior::Sitting => &game_assets.soul,
+        IdleBehavior::Wandering | IdleBehavior::Sitting => hw_visual::SoulBillboardFrame::Normal,
+    }
+}
+
+fn image_for_frame(
+    game_assets: &GameAssets,
+    frame: hw_visual::SoulBillboardFrame,
+) -> &Handle<Image> {
+    match frame {
+        hw_visual::SoulBillboardFrame::Normal => &game_assets.soul,
+        hw_visual::SoulBillboardFrame::Exhausted => &game_assets.soul_exhausted,
+        hw_visual::SoulBillboardFrame::Happy => &game_assets.soul_lough,
+        hw_visual::SoulBillboardFrame::Sleep => &game_assets.soul_sleep,
+        hw_visual::SoulBillboardFrame::Wine => &game_assets.soul_wine,
+        hw_visual::SoulBillboardFrame::Trump => &game_assets.soul_trump,
+        hw_visual::SoulBillboardFrame::Stress => &game_assets.soul_stress,
+        hw_visual::SoulBillboardFrame::StressBreakdown => &game_assets.soul_stress_breakdown,
     }
 }
 
@@ -74,13 +97,13 @@ pub fn animation_system(time: Res<Time>, game_assets: Res<GameAssets>, mut query
             // 進行方向に応じて左右反転（facing_right は movement 側で更新）
             sprite.flip_x = anim.facing_right;
             let is_working_or_moving = !matches!(*task, AssignedTask::None) || anim.is_moving;
-            let desired_image = select_soul_image(
-                &game_assets,
+            let desired_frame = resolve_soul_billboard_frame(
                 idle,
                 breakdown_opt,
                 expression_opt,
                 is_working_or_moving,
             );
+            let desired_image = image_for_frame(&game_assets, desired_frame);
             if sprite.image != *desired_image {
                 sprite.image = desired_image.clone();
             }

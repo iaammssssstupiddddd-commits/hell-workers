@@ -229,14 +229,6 @@ pub(crate) const DEFAULT_BINDINGS: &[InputBinding] = &[
         InputConflictLane::ViewDebug,
         false,
     ),
-    binding(
-        KeyCode::KeyV,
-        InputAction::CycleElevation,
-        InputBindingContext::WorldNormal,
-        resolution(40, None, 0, 20),
-        InputConflictLane::ViewDebug,
-        false,
-    ),
     modified_binding(
         KeyCode::KeyC,
         CTRL,
@@ -704,8 +696,7 @@ fn is_independent_view_debug_pair(left: InputAction, right: InputAction) -> bool
     let is_current_view_debug_action = |action| {
         matches!(
             action,
-            InputAction::CycleElevation
-                | InputAction::ToggleRender3d
+            InputAction::ToggleRender3d
                 | InputAction::CycleRttQuality
                 | InputAction::ToggleRttDirectionalLight
                 | InputAction::ToggleRttTerrain

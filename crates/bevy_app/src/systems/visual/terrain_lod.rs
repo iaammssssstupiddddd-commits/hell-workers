@@ -11,7 +11,6 @@
 
 use crate::plugins::startup::Terrain3dHandles;
 use crate::plugins::startup::{Camera3dRtt, RttRuntime, composite_logical_size};
-use crate::systems::visual::elevation_view::{ElevationDirection, ElevationViewState};
 use crate::world::map::TerrainChunk;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -120,7 +119,6 @@ pub fn update_terrain_lod_metrics_system(
     q_window: Query<&Window, With<PrimaryWindow>>,
     mut metrics: ResMut<TerrainLodMetrics>,
     mut state: ResMut<TerrainLodState>,
-    elevation: Res<ElevationViewState>,
 ) {
     let Ok((cam, gtf)) = q_cam3d.single() else {
         return;
@@ -149,7 +147,7 @@ pub fn update_terrain_lod_metrics_system(
     }
 
     // LOD 状態遷移（hysteresis）
-    let new_level = resolve_lod_level(state.level, metrics.tile_rtt_px, elevation.direction);
+    let new_level = resolve_lod_level(state.level, metrics.tile_rtt_px);
     if new_level != state.level {
         state.level = new_level;
     }
@@ -162,11 +160,7 @@ fn logical_target_px_to_rtt_px(logical_px: f32, target_scale_factor: f32) -> f32
 /// hysteresis 付き LOD 遷移ロジック。
 ///
 /// `Lod0` は将来用の予約スロットのため、現在の runtime では `Lod1` に寄せる。
-pub fn resolve_lod_level(
-    current: LodLevel,
-    tile_rtt_px: f32,
-    _direction: ElevationDirection,
-) -> LodLevel {
+pub fn resolve_lod_level(current: LodLevel, tile_rtt_px: f32) -> LodLevel {
     match current {
         LodLevel::Lod0 => LodLevel::Lod1,
         LodLevel::Lod1 => {
@@ -266,79 +260,61 @@ mod tests {
 
     #[test]
     fn lod0_falls_back_to_lod1_while_reserved() {
-        let result = resolve_lod_level(LodLevel::Lod0, 20.0, ElevationDirection::TopDown);
+        let result = resolve_lod_level(LodLevel::Lod0, 20.0);
         assert_eq!(result, LodLevel::Lod1);
     }
 
     #[test]
     fn lod1_enters_lod2_when_small() {
-        let result = resolve_lod_level(LodLevel::Lod1, 13.0, ElevationDirection::TopDown);
+        let result = resolve_lod_level(LodLevel::Lod1, 13.0);
         assert_eq!(result, LodLevel::Lod1Lite);
     }
 
     #[test]
     fn lod1_stays_when_large() {
-        let result = resolve_lod_level(LodLevel::Lod1, 26.0, ElevationDirection::TopDown);
+        let result = resolve_lod_level(LodLevel::Lod1, 26.0);
         assert_eq!(result, LodLevel::Lod1);
     }
 
     #[test]
     fn lod1lite_enters_lod2_when_small() {
-        let result = resolve_lod_level(LodLevel::Lod1Lite, 13.0, ElevationDirection::TopDown);
+        let result = resolve_lod_level(LodLevel::Lod1Lite, 13.0);
         assert_eq!(result, LodLevel::Lod2);
     }
 
     #[test]
     fn lod1lite_returns_to_lod1_when_large() {
-        let result = resolve_lod_level(LodLevel::Lod1Lite, 26.0, ElevationDirection::TopDown);
+        let result = resolve_lod_level(LodLevel::Lod1Lite, 26.0);
         assert_eq!(result, LodLevel::Lod1);
     }
 
     #[test]
     fn lod1lite_stays_within_band() {
-        let result = resolve_lod_level(LodLevel::Lod1Lite, 20.0, ElevationDirection::TopDown);
+        let result = resolve_lod_level(LodLevel::Lod1Lite, 20.0);
         assert_eq!(result, LodLevel::Lod1Lite);
     }
 
     #[test]
     fn lod2_exits_to_lod1lite_when_large() {
-        let result = resolve_lod_level(LodLevel::Lod2, 17.0, ElevationDirection::TopDown);
+        let result = resolve_lod_level(LodLevel::Lod2, 17.0);
         assert_eq!(result, LodLevel::Lod1Lite);
     }
 
     #[test]
     fn lod2_stays_when_within_hysteresis_band() {
-        let result = resolve_lod_level(LodLevel::Lod2, 15.0, ElevationDirection::TopDown);
+        let result = resolve_lod_level(LodLevel::Lod2, 15.0);
         assert_eq!(result, LodLevel::Lod2);
     }
 
     #[test]
-    fn lod2_is_allowed_in_elevation_views() {
-        for dir in [
-            ElevationDirection::North,
-            ElevationDirection::East,
-            ElevationDirection::South,
-            ElevationDirection::West,
-        ] {
-            let result = resolve_lod_level(LodLevel::Lod1, 13.0, dir);
-            assert_eq!(
-                result,
-                LodLevel::Lod1Lite,
-                "LOD1Lite should remain available in {:?}",
-                dir
-            );
-        }
-    }
-
-    #[test]
     fn hysteresis_lod2_does_not_exit_at_enter_threshold() {
-        let result = resolve_lod_level(LodLevel::Lod2, 15.0, ElevationDirection::TopDown);
+        let result = resolve_lod_level(LodLevel::Lod2, 15.0);
         assert_eq!(result, LodLevel::Lod2);
     }
 
     #[test]
     fn hysteresis_lod1lite_does_not_exit_to_lod1_below_exit_threshold() {
-        let result = resolve_lod_level(LodLevel::Lod1Lite, 24.0, ElevationDirection::TopDown);
+        let result = resolve_lod_level(LodLevel::Lod1Lite, 24.0);
         assert_eq!(result, LodLevel::Lod1Lite);
     }
 

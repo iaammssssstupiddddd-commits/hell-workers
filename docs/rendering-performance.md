@@ -44,6 +44,20 @@ resize testは、Scene targetの再生成後にCamera3dとcomposite materialが�
 | composite sampled texture / sampler | 各1（Scene、binding 1 / 2） |
 | Soul mask target / camera / proxy | 0 |
 
+### P02 TopDown presentation runtime inventory
+
+P02 は Scene-only RtT を維持したまま、MainCamera を composite 後の唯一の `LAYER_2D` camera にする。structural Building は3D、foreground Buildingは2Dのどちらか一方だけが active presentationとなる。Soulは共有pool billboard 1 / owner、Familiarは2D前景のみである。
+
+| 項目 | P02 source |
+|---|---:|
+| Camera3d RtT / Scene target | 1 / 1 |
+| Camera2d | 2（Overlay、Main） |
+| active `LAYER_2D` pass | 1 |
+| Soul billboard / Soul | 1 |
+| Soul GLB / shadow proxy / Familiar 3D proxy | 0 / 0 / 0 |
+
+P02 固有値は legacy `render_inventory.csv` を読み替えず `p02_presentation.csv` と RenderDoc checkpoint の `p02_presentation` blockへ出す。formal gateは duplicate=0、全Building exactly-one、billboard ratio=1、Familiar3D=0、state/bounce probe=trueを同一 medium/GPU checkpointで評価する。
+
 P00のmeasurement contractはfrozenの`rtt-light-v1`である。canonical contract hashは
 `121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`、fixture hashは
 `a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed`である。stage別projection義務と
@@ -150,9 +164,9 @@ entity はこれを clone して参照するため、インスタンス数が増
 
 | 要素 | DC 数 | 備考 |
 |---|---|---|
-| body mesh | ≒1〜数 DC | `CharacterMaterial` 共有だが GLB 子孫に分散 |
-| face mesh | Soul 数 × DC | face は Soul ごとに material を複製（uv_offset のため） |
-| shadow proxy | 別 DC | `LAYER_3D_SOUL_SHADOW` |
+| billboard mesh | frame variantごとに最大1 DC | 全Soulが同一 Rectangle meshを共有 |
+| billboard material | 最大8 variant | frame切替は共有handle差替えで、entityごとのmaterial生成なし |
+| GLB / shadow proxy | 0 | production spawnとsystem登録を停止 |
 
 ---
 

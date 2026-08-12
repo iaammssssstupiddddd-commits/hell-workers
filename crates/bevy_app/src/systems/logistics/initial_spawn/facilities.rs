@@ -1,4 +1,5 @@
 use crate::assets::GameAssets;
+use crate::plugins::startup::Building3dHandles;
 use crate::systems::jobs::{
     Building, BuildingType, ObstaclePosition, ObstacleSourceKind, TaskSlots,
 };
@@ -57,6 +58,7 @@ pub fn spawn_site_and_yard(commands: &mut Commands, layout: &SiteYardLayout) {
 pub fn spawn_wheelbarrow_parking(
     commands: &mut Commands,
     game_assets: &GameAssets,
+    handles_3d: &Building3dHandles,
     world_map: &mut WorldMap,
     layout: &ParkingLayout,
 ) {
@@ -73,15 +75,20 @@ pub fn spawn_wheelbarrow_parking(
             WheelbarrowParking {
                 capacity: INITIAL_WHEELBARROW_PARKING_CAPACITY,
             },
-            Sprite {
-                image: game_assets.wheelbarrow_parking.clone(),
-                custom_size: Some(Vec2::splat(TILE_SIZE * 2.0)),
-                ..default()
-            },
             Transform::from_xyz(building_pos.x, building_pos.y, Z_ITEM_OBSTACLE),
             Name::new("Initial Wheelbarrow Parking"),
         ))
         .id();
+
+    crate::systems::jobs::attach_building_shell(
+        commands,
+        building_entity,
+        BuildingType::WheelbarrowParking,
+        false,
+        building_pos,
+        game_assets,
+        handles_3d,
+    );
 
     commands.entity(building_entity).with_children(|parent| {
         for (gx, gy) in occupied {

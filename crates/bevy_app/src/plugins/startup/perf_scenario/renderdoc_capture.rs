@@ -41,6 +41,7 @@ struct CpuCheckpointSignature {
     scene_target: AssetId<Image>,
     mask_target: Option<AssetId<Image>>,
     render_inventory: PerfRenderInventory,
+    p02_presentation: Option<PerfP02Presentation>,
 }
 
 #[derive(Clone, Debug)]
@@ -50,6 +51,7 @@ struct StableRenderDocCheckpoint {
     scene_target: AssetId<Image>,
     mask_target: Option<AssetId<Image>>,
     render_inventory: PerfRenderInventory,
+    p02_presentation: Option<PerfP02Presentation>,
     fixture: RuntimeFixtureEvidence,
 }
 
@@ -290,7 +292,11 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         ));
         return;
     };
-    let expected_instances = params.config.soul_count as usize * 2;
+    let expected_instances = if selection.stage_id() == "p02" {
+        0
+    } else {
+        params.config.soul_count as usize * 2
+    };
     if params.soul_world_instances.iter().count() != expected_instances
         || !params
             .soul_world_instances
@@ -311,11 +317,14 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         bridge.replace(RenderDocBridgeState::Failed(reason));
         return;
     }
+    let p02_presentation = (selection.stage_id() == "p02")
+        .then(|| calculate_p02_presentation(&params.checksum_queries));
     let signature = CpuCheckpointSignature {
         checksum: checksum.value,
         scene_target: params.rtt_runtime.scene.id(),
         mask_target: None,
         render_inventory,
+        p02_presentation,
     };
     if state.previous == Some(signature) {
         state.stable_updates = state.stable_updates.saturating_add(1);
@@ -346,6 +355,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         scene_target: signature.scene_target,
         mask_target: signature.mask_target,
         render_inventory,
+        p02_presentation,
         fixture,
     });
     eprintln!("PERF_RENDERDOC: CPU checkpoint ready; waiting for GPU settle");
@@ -626,12 +636,12 @@ fn validate_medium_inventory(stage_id: &str, inventory: PerfRenderInventory) -> 
         scene_target_count: 1,
         mask_target_count: usize::from(stage_id == "current"),
         camera_3d_rtt_count: if stage_id == "current" { 2 } else { 1 },
-        camera_2d_count: 3,
-        layer_2d_pass_count: 2,
-        soul_proxy_3d: 200,
+        camera_2d_count: if stage_id == "p02" { 2 } else { 3 },
+        layer_2d_pass_count: if stage_id == "p02" { 1 } else { 2 },
+        soul_proxy_3d: if stage_id == "p02" { 0 } else { 200 },
         soul_mask_proxy_3d: if stage_id == "current" { 200 } else { 0 },
-        soul_shadow_proxy_3d: 200,
-        familiar_proxy_3d: 12,
+        soul_shadow_proxy_3d: if stage_id == "p02" { 0 } else { 200 },
+        familiar_proxy_3d: if stage_id == "p02" { 0 } else { 12 },
     };
     if inventory == expected {
         Ok(())
@@ -799,6 +809,8 @@ struct RuntimeCheckpointFile<'a> {
     generation: u64,
     checkpoint: RuntimeCheckpoint,
     render_inventory: RuntimeRenderInventory,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    p02_presentation: Option<RuntimeP02Presentation>,
     render_resources: RuntimeRenderResources,
     fixture: RuntimeFixtureEvidence,
     capture_path: &'a Path,
@@ -865,6 +877,19 @@ struct RuntimeRenderInventory {
     familiar_proxy_3d: usize,
 }
 
+#[derive(Serialize)]
+struct RuntimeP02Presentation {
+    layer_2d_camera_count: usize,
+    layer_2d_pass_count: usize,
+    building_count: usize,
+    duplicate_presentation_count: usize,
+    building_exactly_one_presentation: bool,
+    soul_count: usize,
+    soul_billboard_count: usize,
+    familiar_3d_count: usize,
+    state_and_bounce_probes_pass: bool,
+}
+
 #[derive(Debug, PartialEq, Eq, Serialize)]
 struct RuntimeCompositeTextureBinding {
     target: &'static str,
@@ -901,6 +926,22 @@ impl From<PerfRenderInventory> for RuntimeRenderInventory {
             soul_mask_proxy_3d: value.soul_mask_proxy_3d,
             soul_shadow_proxy_3d: value.soul_shadow_proxy_3d,
             familiar_proxy_3d: value.familiar_proxy_3d,
+        }
+    }
+}
+
+impl From<PerfP02Presentation> for RuntimeP02Presentation {
+    fn from(value: PerfP02Presentation) -> Self {
+        Self {
+            layer_2d_camera_count: value.layer_2d_camera_count,
+            layer_2d_pass_count: value.layer_2d_pass_count,
+            building_count: value.building_count,
+            duplicate_presentation_count: value.duplicate_presentation_count,
+            building_exactly_one_presentation: value.building_exactly_one_presentation,
+            soul_count: value.soul_count,
+            soul_billboard_count: value.soul_billboard_count,
+            familiar_3d_count: value.familiar_3d_count,
+            state_and_bounce_probes_pass: value.state_and_bounce_probes_pass,
         }
     }
 }
@@ -993,6 +1034,7 @@ fn write_runtime_checkpoint(
             frame_count_before_capture: result.frame_count_before_capture,
         },
         render_inventory: result.checkpoint.render_inventory.into(),
+        p02_presentation: result.checkpoint.p02_presentation.map(Into::into),
         render_resources: p01_composite_render_resources(),
         fixture: result.checkpoint.fixture.clone(),
         capture_path: &result.capture_path,

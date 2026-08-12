@@ -2,6 +2,19 @@ from __future__ import annotations
 
 from .arguments import *
 
+P02_PRESENTATION_COLUMNS = (
+    "schema_version",
+    "layer_2d_camera_count",
+    "layer_2d_pass_count",
+    "building_count",
+    "duplicate_presentation_count",
+    "building_exactly_one_presentation",
+    "soul_count",
+    "soul_billboard_count",
+    "familiar_3d_count",
+    "state_and_bounce_probes_pass",
+)
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -311,7 +324,9 @@ def read_indoor_light_sidecars(
         compare_exact_rows(
             "indoor_light_presentation.csv",
             presentation_rows,
-            build_fixture_presentation_rows(contract, expected_case.size),
+            build_fixture_presentation_rows(
+                contract, expected_case.size, stage_id=stage_id
+            ),
         )
     )
     fixture = fixture_rows[0] if fixture_rows is not None and len(fixture_rows) == 1 else None
@@ -1280,6 +1295,7 @@ def read_behavior_timeline(
 
     comparable_rows = rows[: len(expected_steps)]
     if behavior_case == "door-state-v1":
+        stage_prefix = "p02" if stage_id == "p02" else "current"
         for index, (row, expected) in enumerate(zip(comparable_rows, expected_steps)):
             exact = {
                 "step_index": expected["step_index"],
@@ -1287,10 +1303,10 @@ def read_behavior_timeline(
                 "intent": expected["intent"],
                 "pause_state": expected["pause_state"],
                 "attempted": expected["attempted"],
-                "applied": expected["current_applied"],
-                "semantic_state": expected["current_semantic_state"],
+                "applied": expected[f"{stage_prefix}_applied"],
+                "semantic_state": expected[f"{stage_prefix}_semantic_state"],
                 "active_presentation_state": expected[
-                    "current_active_presentation_state"
+                    f"{stage_prefix}_active_presentation_state"
                 ],
                 "terminal_outcome": (
                     "succeeded" if index == len(expected_steps) - 1 else "in_progress"
@@ -1432,6 +1448,7 @@ def validate_run(
     indoor_light_fixture = None
     indoor_light_layout = None
     indoor_light_presentation = None
+    p02_presentation = None
     deconstruction_fixture = None
     save_transaction = None
     timeline = None
@@ -1493,6 +1510,43 @@ def validate_run(
                 "non-indoor workload must not write indoor-light sidecars: "
                 + ", ".join(unexpected_sidecars)
             )
+
+    p02_sidecar = data_dir / "p02_presentation.csv"
+    expects_p02_sidecar = (
+        expected_case.workload == "indoor-light"
+        and expected_stage == "p02"
+        and expected_lane == "static"
+        and capture_kind == "frame-time"
+    )
+    if expects_p02_sidecar:
+        rows, parse_errors = read_exact_csv_rows(
+            p02_sidecar,
+            columns=P02_PRESENTATION_COLUMNS,
+            artifact_name="p02_presentation.csv",
+        )
+        reasons.extend(parse_errors)
+        if rows is not None and len(rows) == 1:
+            p02_presentation = rows[0]
+            if p02_presentation["schema_version"] != "1":
+                reasons.append("p02_presentation.csv schema_version differs")
+            for column in P02_PRESENTATION_COLUMNS[1:5] + P02_PRESENTATION_COLUMNS[6:9]:
+                try:
+                    if int(p02_presentation[column]) < 0:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    reasons.append(f"p02_presentation.csv {column} is invalid")
+            for column in (
+                "building_exactly_one_presentation",
+                "state_and_bounce_probes_pass",
+            ):
+                if p02_presentation[column] not in {"true", "false"}:
+                    reasons.append(f"p02_presentation.csv {column} is invalid")
+        elif rows is not None:
+            reasons.append(
+                f"p02_presentation.csv must contain exactly one data row; got {len(rows)}"
+            )
+    elif p02_sidecar.exists():
+        reasons.append("p02_presentation.csv is not allowed for this stage/lane/capture kind")
     if expected_case.workload != "deconstruction" and (
         data_dir / "deconstruction_fixture.csv"
     ).exists():
@@ -1690,16 +1744,28 @@ def validate_run(
         except (KeyError, ValueError):
             reasons.append("summary initial population is invalid for scene root validation")
         else:
-            expected_counts = {
-                "soul_proxy_3d": 0 if expected_case.render == "cpu" else expected_souls,
-                "soul_mask_proxy_3d": (
-                    0
-                    if expected_case.render == "cpu" or expected_stage == "p01"
-                    else expected_souls
-                ),
-                "soul_shadow_proxy_3d": 0 if expected_case.render == "cpu" else expected_souls,
-                "familiar_proxy_3d": 0 if expected_case.render == "cpu" else expected_familiars,
-            }
+            if expected_stage == "p02":
+                # P02 replaces the legacy Soul proxy family with
+                # ActorBillboard3d and keeps Familiar presentation in the 2D
+                # foreground pass. Their counts are validated by the P02
+                # presentation sidecar, so every legacy proxy count is zero.
+                expected_counts = {
+                    "soul_proxy_3d": 0,
+                    "soul_mask_proxy_3d": 0,
+                    "soul_shadow_proxy_3d": 0,
+                    "familiar_proxy_3d": 0,
+                }
+            else:
+                expected_counts = {
+                    "soul_proxy_3d": 0 if expected_case.render == "cpu" else expected_souls,
+                    "soul_mask_proxy_3d": (
+                        0
+                        if expected_case.render == "cpu" or expected_stage == "p01"
+                        else expected_souls
+                    ),
+                    "soul_shadow_proxy_3d": 0 if expected_case.render == "cpu" else expected_souls,
+                    "familiar_proxy_3d": 0 if expected_case.render == "cpu" else expected_familiars,
+                }
             for column, expected in expected_counts.items():
                 if scene_roots.get(column) != str(expected):
                     reasons.append(
@@ -1828,6 +1894,7 @@ def validate_run(
         indoor_light_fixture=indoor_light_fixture,
         indoor_light_layout=indoor_light_layout,
         indoor_light_presentation=indoor_light_presentation,
+        p02_presentation=p02_presentation,
         deconstruction_fixture=deconstruction_fixture,
         save_transaction=save_transaction,
         timeline=timeline,
