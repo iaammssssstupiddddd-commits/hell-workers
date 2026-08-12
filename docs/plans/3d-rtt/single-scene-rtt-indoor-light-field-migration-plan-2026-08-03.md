@@ -260,10 +260,10 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 ### 最終確認ログ
 
-- 最終 `cargo check --workspace`: `2026-08-11` / `pass`
-- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `2026-08-11` / `pass (0 warning)`
-- 最終 `cargo test --workspace`: `2026-08-11` / `pass`
-- 最終 `python3 scripts/dev.py verify`: `2026-08-11` / `pass`
+- 最終 `cargo check --workspace`: `2026-08-12` / `pass`
+- 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `2026-08-12` / `pass (0 warning)`
+- 最終 `cargo test --workspace`: `2026-08-12` / `pass`
+- 最終 `python3 scripts/dev.py verify`: `2026-08-12` / `pass`
 - P01 native acceptance: `2026-08-12` / `pass`（Intel Arc / Vulkan / X11、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`、全5 leg valid、123 / 123 gate row pass）
 - 最終 docs gate: `2026-08-12` / `pass (docs --write / --check, check_docs, diff --check)`
 

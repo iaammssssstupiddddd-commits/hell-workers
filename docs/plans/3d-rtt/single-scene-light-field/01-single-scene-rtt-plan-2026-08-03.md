@@ -281,6 +281,7 @@ native helper、extractor、bundle validatorのhashはP00 current referenceとP0
 - Help impact: `2026-08-11` / No impact（内部Soul mask RtTとdeveloper-only toggleの削除。player操作・Help workflow・成立条件・結果・labelは不変）
 - native acceptance: `2026-08-12` / Intel Arc・Vulkan・X11。S0 / S1 pass、formal 5 leg・18 case valid。attempt `8bc82f04-10ac-4903-89b6-89011dacdada`を登録し、`verify-rtt-light` pass
 - P01 gates: `2026-08-12` / 123 / 123 row pass（うち`RLV1-P01-RTT` 9 row、`RLV1-P01-PERF` 20 row）。RenderDocは14 pass、163 draw、Scene binding `(1, 2)`各1、mask topology 0
+- final workspace verify: `2026-08-12` / `pass`（Python tooling、docs / Help、fmt、workspace check / Clippy / test、diff hygiene）
 - docs gate: `2026-08-12` / `pass (docs --write / --check, check_docs, diff --check)`
 
 ### Definition of Done
