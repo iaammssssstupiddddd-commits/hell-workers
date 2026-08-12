@@ -224,9 +224,11 @@ def run_case(
     ]
     artifact.mkdir(parents=True, exist_ok=False)
     log_path = artifact / "run.log"
+    case_environment = os.environ.copy()
+    case_environment["HW_P02_PRESENTATION_ACTUAL_WINDOW"] = "1"
     with log_path.open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
-            command, cwd=repo, env=os.environ.copy(), stdout=log,
+            command, cwd=repo, env=case_environment, stdout=log,
             stderr=subprocess.STDOUT, text=True, start_new_session=True,
             pass_fds=native.activity_pass_fds(os.environ),
         )

@@ -132,6 +132,7 @@ impl Plugin for StartupPlugin {
                 .init_resource::<perf_scenario::DeconstructionPerfFixtureState>()
                 .init_resource::<perf_scenario::IndoorLightFixtureState>()
                 .init_resource::<perf_scenario::PerfBehaviorCapture>()
+                .init_resource::<perf_scenario::P02ActualWindowAcceptance>()
                 .add_systems(
                     PostStartup,
                     setup_perf_scenario_if_enabled
@@ -238,6 +239,12 @@ impl Plugin for StartupPlugin {
                 perf_scenario::drive_perf_behavior_system
                     .in_set(PerfScenarioSet::Driver)
                     .run_if(is_fixed_step_behavior),
+            )
+            .add_systems(
+                Update,
+                perf_scenario::animate_p02_actual_window_bridge_system
+                    .in_set(PerfScenarioSet::Capture)
+                    .before(perf_scenario::drive_perf_capture_system),
             )
             .add_systems(
                 Update,

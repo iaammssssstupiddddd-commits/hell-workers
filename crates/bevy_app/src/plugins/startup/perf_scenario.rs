@@ -105,6 +105,8 @@ mod fixture;
 mod indoor_light_fixture;
 #[cfg(feature = "profiling")]
 mod output;
+#[cfg(feature = "profiling")]
+mod p02_actual_window;
 #[cfg(feature = "profiling-renderdoc")]
 mod renderdoc_capture;
 #[cfg(feature = "profiling")]
@@ -147,6 +149,10 @@ pub(crate) use indoor_light_fixture::{
     prepare_indoor_light_soul_spa_system, seed_indoor_light_static_door_states_system,
     should_settle_indoor_light_fixture, stabilize_indoor_light_actors_system,
     validate_indoor_light_fixture_system,
+};
+#[cfg(feature = "profiling")]
+pub(crate) use p02_actual_window::{
+    P02ActualWindowAcceptance, animate_p02_actual_window_bridge_system,
 };
 #[cfg(feature = "profiling-renderdoc")]
 pub(crate) use renderdoc_capture::{
