@@ -102,7 +102,9 @@ def _sha256(path: Path) -> str:
 
 
 def _validate_checkpoint(value: Any) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != {
+    if not isinstance(value, dict):
+        raise RuntimeError("runtime checkpoint keys differ from schema v3")
+    required_keys = {
         "schema_version",
         "status",
         "contract_id",
@@ -118,13 +120,17 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         "selector",
         "gpu_ready",
         "capture_artifact",
-    }:
+    }
+    stage_id = value.get("stage_id")
+    if stage_id == "p02":
+        required_keys.add("p02_presentation")
+    if set(value) != required_keys:
         raise RuntimeError("runtime checkpoint keys differ from schema v3")
     if (
         value.get("schema_version") != RUNTIME_CHECKPOINT_SCHEMA_VERSION
         or value.get("status") != "valid"
         or value.get("contract_id") != "rtt-light-v1"
-        or value.get("stage_id") not in EXPECTED_RENDER_RESOURCES_BY_STAGE
+        or stage_id not in EXPECTED_RENDER_RESOURCES_BY_STAGE
         or not isinstance(value.get("generation"), int)
         or isinstance(value.get("generation"), bool)
         or value["generation"] < 1
@@ -141,6 +147,11 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         raise RuntimeError("runtime checkpoint has no selector evidence")
     if not isinstance(value.get("gpu_ready"), dict):
         raise RuntimeError("runtime checkpoint has no GPU-ready evidence")
+    if stage_id == "p02" and (
+        not isinstance(value.get("p02_presentation"), dict)
+        or not value["p02_presentation"]
+    ):
+        raise RuntimeError("runtime checkpoint has no P02 presentation evidence")
     artifact = value.get("capture_artifact")
     if (
         not isinstance(artifact, dict)
@@ -724,6 +735,21 @@ def self_test() -> int:
         _validate_checkpoint(checkpoint) is checkpoint,
         "runtime checkpoint schema v3 validation regressed",
     )
+    p02_checkpoint = {
+        **checkpoint,
+        "stage_id": "p02",
+        "p02_presentation": {"building_exactly_one_presentation": True},
+    }
+    _require(
+        _validate_checkpoint(p02_checkpoint) is p02_checkpoint,
+        "P02 runtime checkpoint schema v3 validation regressed",
+    )
+    try:
+        _validate_checkpoint({**checkpoint, "stage_id": "p02"})
+    except RuntimeError:
+        pass
+    else:
+        raise RuntimeError("P02 checkpoint without presentation evidence must be rejected")
     try:
         _validate_checkpoint({**checkpoint, "schema_version": 2})
     except RuntimeError:
