@@ -101,9 +101,13 @@ def changed_pixels(first: Path, second: Path) -> int:
         label="P02 animation frame comparison",
     )
     output = (completed.stderr or completed.stdout).strip()
-    match = re.search(r"[0-9]+", output)
+    return parse_changed_pixels(output)
+
+
+def parse_changed_pixels(output: str) -> int:
+    match = re.search(r"[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?", output)
     native.require(match is not None, "compare did not return an absolute pixel difference")
-    return int(match.group(0))
+    return round(float(match.group(0)))
 
 
 def capture_client_window(destination: Path, *, root_pid: int) -> dict[str, Any] | None:
@@ -407,6 +411,7 @@ def self_test() -> int:
     native.require(len({case_id(q, s, v) for q, s, v, _ in EXPECTED_CASES}) == 18, "P02 case IDs must be unique")
     native.require({render for _, _, visibility, render in EXPECTED_CASES if visibility == "visible"} == {"gpu"}, "visible P02 cases must use GPU")
     native.require({render for _, _, visibility, render in EXPECTED_CASES if visibility == "hidden"} == {"cpu"}, "hidden P02 cases must omit Render3d")
+    native.require(parse_changed_pixels("2.85638e+06 (2.85638e+06)") == 2_856_380, "P02 compare parser lost scientific notation")
     valid = {
         "production_subject": "bevy_app:indoor-light/rtt-light-v1/p02/static",
         "capture_scope": native.SAVE_CATALOG_CAPTURE_SCOPE,
