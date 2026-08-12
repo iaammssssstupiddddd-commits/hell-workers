@@ -153,6 +153,7 @@ pub(crate) use indoor_light_fixture::{
 #[cfg(feature = "profiling")]
 pub(crate) use p02_actual_window::{
     P02ActualWindowAcceptance, animate_p02_actual_window_bridge_system,
+    prepare_p02_actual_window_view_system,
 };
 #[cfg(feature = "profiling-renderdoc")]
 pub(crate) use renderdoc_capture::{

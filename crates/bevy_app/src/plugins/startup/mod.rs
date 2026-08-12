@@ -242,7 +242,11 @@ impl Plugin for StartupPlugin {
             )
             .add_systems(
                 Update,
-                perf_scenario::animate_p02_actual_window_bridge_system
+                (
+                    perf_scenario::prepare_p02_actual_window_view_system,
+                    perf_scenario::animate_p02_actual_window_bridge_system,
+                )
+                    .chain()
                     .in_set(PerfScenarioSet::Capture)
                     .before(perf_scenario::drive_perf_capture_system),
             )

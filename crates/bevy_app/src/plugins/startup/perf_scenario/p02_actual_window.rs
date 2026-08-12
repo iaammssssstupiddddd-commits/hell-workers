@@ -1,13 +1,17 @@
 use super::config::PerfScenarioConfig;
 use super::indoor_light_fixture::{IndoorLightFixturePhase, IndoorLightFixtureState};
 use crate::systems::visual::building3d_cleanup::building_presentation_transform;
+use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::prelude::*;
+use hw_core::camera::MainCamera;
 use hw_jobs::{Building, BuildingType};
 use hw_visual::visual3d::Building3dVisual;
+use hw_world::WorldMap;
 use std::time::Duration;
 
 const ACCEPTANCE_ENV: &str = "HW_P02_PRESENTATION_ACTUAL_WINDOW";
 const PULSE_DURATION: Duration = Duration::from_secs(7);
+const FIXTURE_CENTER: (i32, i32) = (23, 27);
 
 #[derive(Resource, Debug)]
 pub(crate) struct P02ActualWindowAcceptance {
@@ -52,10 +56,41 @@ pub(crate) fn animate_p02_actual_window_bridge_system(
             continue;
         }
         let mut expected = building_presentation_transform(building.kind, owner);
+        let fixture_center = WorldMap::grid_to_world(FIXTURE_CENTER.0, FIXTURE_CENTER.1);
+        expected.translation.x = fixture_center.x;
+        expected.translation.z = -fixture_center.y;
         expected.scale *= scale_multiplier;
         if *transform != expected {
             *transform = expected;
         }
+    }
+}
+
+pub(crate) fn prepare_p02_actual_window_view_system(
+    config: Res<PerfScenarioConfig>,
+    acceptance: Res<P02ActualWindowAcceptance>,
+    mut camera: Query<(&mut Transform, &mut Projection, &mut PanCamera), With<MainCamera>>,
+    mut ui_roots: Query<&mut Node, Without<ChildOf>>,
+) {
+    if !acceptance.requested
+        || config
+            .rtt_light_selection()
+            .is_none_or(|selection| selection.stage_id() != "p02" || selection.lane() != "static")
+    {
+        return;
+    }
+
+    if let Ok((mut transform, mut projection, mut pan)) = camera.single_mut() {
+        let center = WorldMap::grid_to_world(FIXTURE_CENTER.0, FIXTURE_CENTER.1);
+        transform.translation.x = center.x;
+        transform.translation.y = center.y;
+        pan.enabled = false;
+        if let Projection::Orthographic(orthographic) = projection.as_mut() {
+            orthographic.scale = 0.75;
+        }
+    }
+    for mut node in &mut ui_roots {
+        node.display = Display::None;
     }
 }
 

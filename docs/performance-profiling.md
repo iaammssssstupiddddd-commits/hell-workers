@@ -152,8 +152,9 @@ High / Medium / Low × DPI 1.0 / 1.5 / 2.0 × Render3d visible / hiddenの18 cas
 foreground、Render3d toggleを合わせて検証する。headless、`visual_test`、root desktop screenshot、case欠落は
 代替証拠として受理しない。launcherはprofiling buildだけで解釈する
 `HW_P02_PRESENTATION_ACTUAL_WINDOW=1`をcase processへ注入し、Ready後7秒だけproduction Bridge presentationへ
-`Time<Real>`由来のscale pulseを適用する。pulseはcapture後にproduction transformへ復元されるため、最終sidecarは
-通常のexact transformを検証しつつ、2 frame差分は実際のRtT animation経路を検出できる。
+`Time<Real>`由来のscale pulseを適用する。同じ条件でMainCameraをfixture中心へ固定してroot UIを非表示にし、
+Bridge presentationだけをcapture中のfixture中心へ移す。pulseはcapture後にproduction transformへ復元されるため、
+最終sidecarは通常のexact transformを検証しつつ、2 frame差分は実際のRtT animation経路を検出できる。
 
 2026-08-11 の diagnostic RD0 では Intel Arc / Vulkan / X11 の実ゲームから 699,959,528 byte の RDC
 （SHA256 `aaf0f73c02baebf018ad69f0c229ee0570b52c26bb9bc7df5c183c00a71243b8`）を採取し、
