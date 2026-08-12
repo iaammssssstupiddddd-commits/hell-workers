@@ -32,6 +32,7 @@ SOURCE_FINGERPRINT_PREFIXES = ("crates/", "scripts/perf_tool/")
 SOURCE_FINGERPRINT_ASSET_PREFIX = "assets/"
 MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",
     "scripts/build_coordination.py",
     "scripts/cargo_runtime.py",
     "scripts/perf_tool/execution.py",

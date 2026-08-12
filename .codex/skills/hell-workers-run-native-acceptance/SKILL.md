@@ -155,6 +155,27 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   --window-backend x11
 ```
 
+## Run the P02 actual-window presentation matrix
+
+For the P02 TopDown subject, run the dedicated production-fixture matrix in
+addition to S0/S1/formal. It launches the game-owned `indoor-light/p02/static`
+fixture for High/Medium/Low × DPI 1.0/1.5/2.0 × Render3d visible/hidden and
+captures only the X11 client owned by the launched process tree:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py \
+  plan --repo "$PWD" --adapter Intel
+```
+
+Run only the returned direct `kitty` command. The validator requires all 18
+cases, two bounded client-window PNGs per case, non-black scene detail, visible
+animation evidence, Vulkan/X11 renderer evidence, and the production P02
+exactly-one, Door-state, structural-state/bounce, billboard, foreground, and
+Render3d-toggle sidecars. A headless run, `visual_test`, root-display capture,
+or incomplete matrix cannot satisfy this profile. Revalidate with `verify
+--job-root <job-root>`.
+
 ## Run the RtT-light migration recipe
 
 Use this path for the frozen `rtt-light-v1` baseline. Do not substitute a

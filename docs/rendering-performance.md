@@ -58,6 +58,11 @@ P02 は Scene-only RtT を維持したまま、MainCamera を composite 後の�
 
 P02 固有値は legacy `render_inventory.csv` を読み替えず `p02_presentation.csv` と RenderDoc checkpoint の `p02_presentation` blockへ出す。formal gateは duplicate=0、全Building exactly-one、billboard ratio=1、Familiar3D=0、state/bounce probe=trueを同一 medium/GPU checkpointで評価する。
 
+画像側の補完はproduction indoor-light fixtureの専用actual-window matrixが所有する。18 caseすべてでgame process所有の
+X11 clientを2 frame採取し、black frame / scene detail / animationをpixel判定する。semantic sidecarのDoor 3状態、
+structural state / bounce、foreground分類、visible時のSoul billboard 1:1とhidden時のbillboard 0を同じcaseへ束縛するため、
+desktop全体や独立`visual_test`の画像だけではP02受入にならない。
+
 P00のmeasurement contractはfrozenの`rtt-light-v1`である。canonical contract hashは
 `121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`、fixture hashは
 `a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed`である。stage別projection義務と

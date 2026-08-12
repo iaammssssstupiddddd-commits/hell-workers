@@ -144,6 +144,14 @@ gate ledgerは123 / 123 row pass、raw artifact 884件のdirectory SHA256は
 
 P02 TopDown presentation subjectは `--stage p02` を Rust / Python / native launcherの明示selectorで受理する。current / P01の既存schemaを変更せず、P02のCapture / Memoryは `p02_presentation.csv`、RenderDocはruntime checkpointの同名blockを必須にする。Door behavior validatorはP02だけ Closed→Open→Open→Locked→Lockedを要求し、current / P01のhistorical Closed-only timelineを維持する。bundleは `RLV1-P02-DOOR-DOMAIN`、`RLV1-P02-PRESENT`、`RLV1-P02-PERF` のexact rowを生成し、P02 frame p95/p99は登録済みP01 projectionをreferenceにする。
 
+P02のpixel / animation補完は専用`p02-presentation-actual-window-v1` profileで行う。入口は
+`.codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py plan`であり、
+High / Medium / Low × DPI 1.0 / 1.5 / 2.0 × Render3d visible / hiddenの18 caseをproduction
+`indoor-light/p02/static` fixtureから逐次採取する。各caseは起動process tree所有のX11 clientだけを2 frame採取し、
+非黒・scene detail・visible animation、Vulkan/X11、exactly-one、Door / state / bounce、Soul billboard、Familiar
+foreground、Render3d toggleを合わせて検証する。headless、`visual_test`、root desktop screenshot、case欠落は
+代替証拠として受理しない。
+
 2026-08-11 の diagnostic RD0 では Intel Arc / Vulkan / X11 の実ゲームから 699,959,528 byte の RDC
 （SHA256 `aaf0f73c02baebf018ad69f0c229ee0570b52c26bb9bc7df5c183c00a71243b8`）を採取し、
 requested App API 1.6.0 に対して returned 1.7.0、schema v3 checkpoint、orphan 0 を確認した。同一RDCの
