@@ -1,11 +1,10 @@
 use super::config::PerfScenarioConfig;
 use super::indoor_light_fixture::{IndoorLightFixturePhase, IndoorLightFixtureState};
-use crate::systems::visual::building3d_cleanup::building_presentation_transform;
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::prelude::*;
 use hw_core::camera::MainCamera;
-use hw_jobs::{Building, BuildingType};
-use hw_visual::visual3d::Building3dVisual;
+use hw_jobs::Building;
+use hw_visual::visual3d::LegacyStructural2dMirror;
 use hw_world::WorldMap;
 use std::time::Duration;
 
@@ -28,13 +27,16 @@ impl Default for P02ActualWindowAcceptance {
     }
 }
 
-pub(crate) fn animate_p02_actual_window_bridge_system(
+pub(crate) fn animate_p02_actual_window_foreground_system(
     config: Res<PerfScenarioConfig>,
     fixture: Res<IndoorLightFixtureState>,
     time: Res<Time<Real>>,
     mut acceptance: ResMut<P02ActualWindowAcceptance>,
-    owners: Query<(&Building, &Transform), Without<Building3dVisual>>,
-    mut visuals: Query<(&Building3dVisual, &mut Transform), Without<Building>>,
+    owners: Query<&Building>,
+    mut visuals: Query<
+        (&ChildOf, &mut Transform),
+        (With<Sprite>, Without<LegacyStructural2dMirror>),
+    >,
 ) {
     if !acceptance.requested
         || config
@@ -47,21 +49,19 @@ pub(crate) fn animate_p02_actual_window_bridge_system(
 
     let started_at = *acceptance.started_at.get_or_insert(time.elapsed());
     let elapsed = time.elapsed().saturating_sub(started_at);
-    let scale_multiplier = bridge_pulse_scale(elapsed);
-    for (visual, mut transform) in &mut visuals {
-        let Ok((building, owner)) = owners.get(visual.owner) else {
+    let scale_multiplier = foreground_pulse_scale(elapsed);
+    for (parent, mut transform) in &mut visuals {
+        let Ok(building) = owners.get(parent.parent()) else {
             continue;
         };
-        if building.kind != BuildingType::Bridge {
+        if crate::systems::jobs::presentation_class(building.kind)
+            != crate::systems::jobs::RenderPresentationClass::Foreground2d
+        {
             continue;
         }
-        let mut expected = building_presentation_transform(building.kind, owner);
-        let fixture_center = WorldMap::grid_to_world(FIXTURE_CENTER.0, FIXTURE_CENTER.1);
-        expected.translation.x = fixture_center.x;
-        expected.translation.z = -fixture_center.y;
-        expected.scale *= scale_multiplier;
-        if *transform != expected {
-            *transform = expected;
+        let expected = Vec3::splat(scale_multiplier);
+        if transform.scale != expected {
+            transform.scale = expected;
         }
     }
 }
@@ -94,7 +94,7 @@ pub(crate) fn prepare_p02_actual_window_view_system(
     }
 }
 
-fn bridge_pulse_scale(elapsed: Duration) -> f32 {
+fn foreground_pulse_scale(elapsed: Duration) -> f32 {
     if elapsed >= PULSE_DURATION {
         return 1.0;
     }
@@ -107,8 +107,8 @@ mod tests {
 
     #[test]
     fn acceptance_pulse_is_visible_then_restores_the_production_transform() {
-        assert_ne!(bridge_pulse_scale(Duration::from_secs_f32(0.75)), 1.0);
-        assert_eq!(bridge_pulse_scale(PULSE_DURATION), 1.0);
-        assert_eq!(bridge_pulse_scale(Duration::from_secs(20)), 1.0);
+        assert_ne!(foreground_pulse_scale(Duration::from_secs_f32(0.75)), 1.0);
+        assert_eq!(foreground_pulse_scale(PULSE_DURATION), 1.0);
+        assert_eq!(foreground_pulse_scale(Duration::from_secs(20)), 1.0);
     }
 }
