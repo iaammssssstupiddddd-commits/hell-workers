@@ -4,6 +4,7 @@
 //! - Building が仮設→本設に遷移した時、Building3dVisual のマテリアルを通常色に差し替える。
 
 use crate::plugins::startup::Building3dHandles;
+use bevy::ecs::entity::EntityHashMap;
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::relationships::StoredItems;
@@ -95,15 +96,60 @@ type BuildingVisualTransformQuery<'w, 's> = Query<
     (Without<Door3dVisual>, Without<Building>),
 >;
 
+type ChangedBuildingTransformQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Building, &'static Transform),
+    (Without<Building3dVisual>, Changed<Transform>),
+>;
+
+type AddedBuildingVisualQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Building3dVisual),
+    (
+        Added<Building3dVisual>,
+        Without<Door3dVisual>,
+        Without<Building>,
+    ),
+>;
+
 pub fn sync_building_3d_transform_system(
     owners: Query<(&Building, &Transform), Without<Building3dVisual>>,
-    mut visuals: BuildingVisualTransformQuery,
+    changed_owners: ChangedBuildingTransformQuery,
+    mut visuals: ParamSet<(AddedBuildingVisualQuery, BuildingVisualTransformQuery)>,
 ) {
-    for (visual, mut transform) in &mut visuals {
-        let Ok((building, owner)) = owners.get(visual.owner) else {
+    let added_visuals: Vec<_> = visuals
+        .p0()
+        .iter()
+        .map(|(entity, visual)| (entity, visual.owner))
+        .collect();
+    for (entity, owner_entity) in added_visuals {
+        let Ok((building, owner)) = owners.get(owner_entity) else {
+            continue;
+        };
+        let mut transform_query = visuals.p1();
+        let Ok((_, mut transform)) = transform_query.get_mut(entity) else {
             continue;
         };
         let next = building_presentation_transform(building.kind, owner);
+        if *transform != next {
+            *transform = next;
+        }
+    }
+
+    let changed: EntityHashMap<_> = changed_owners
+        .iter()
+        .map(|(entity, building, transform)| (entity, (building.kind, *transform)))
+        .collect();
+    if changed.is_empty() {
+        return;
+    }
+    for (visual, mut transform) in &mut visuals.p1() {
+        let Some((kind, owner)) = changed.get(&visual.owner) else {
+            continue;
+        };
+        let next = building_presentation_transform(*kind, owner);
         if *transform != next {
             *transform = next;
         }
@@ -173,7 +219,9 @@ pub fn sync_structural_presentation_state_system(
                 &handles.equipment_material
             }
         };
-        *state = next;
+        if *state != next {
+            *state = next;
+        }
         if material.0 != *next_material {
             material.0 = next_material.clone();
         }
