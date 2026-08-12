@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-02-topdown-presentation-plan-2026-08-03` |
-| ステータス | `In Progress — M1〜M5 implemented, M6 native/formal pending` |
+| ステータス | `Completed` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-12` |
+| 最終更新日 | `2026-08-13` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | [P00](00-baseline-gates-plan-2026-08-03.md)、[P01](01-single-scene-rtt-plan-2026-08-03.md) |
@@ -169,13 +169,13 @@ UI -> final
 
 ### 完了条件
 
-- [ ] root Door / child Spriteでauto open / closeが成立する
-- [ ] manual mutationがSprite有無へ依存しない
-- [ ] synthetic `Door + Sprite`だけのtestで完了判定していない
-- [ ] active child Spriteまたは3D visualが同じDoorStateを表示し、Open / Closedがactual-windowで識別できる
-- [ ] auto / manual / pausedのbehavior snapshotはDoor presentation consumer後に採られる
-- [ ] owner消滅後にDoor visual / cache / observerが残らない
-- [ ] P02-A M2が要求する`RLV1-P02-DOOR-DOMAIN`のsource-to-evidenceを満たす。P02全体未完了時のpartial artifactをformal合格と呼ばない
+- [x] root Door / child Spriteでauto open / closeが成立する
+- [x] manual mutationがSprite有無へ依存しない
+- [x] synthetic `Door + Sprite`だけのtestで完了判定していない
+- [x] active child Spriteまたは3D visualが同じDoorStateを表示し、Open / Closedがactual-windowで識別できる
+- [x] auto / manual / pausedのbehavior snapshotはDoor presentation consumer後に採られる
+- [x] owner消滅後にDoor visual / cache / observerが残らない
+- [x] P02-A M2が要求する`RLV1-P02-DOOR-DOMAIN`のsource-to-evidenceを満たす。P02全体未完了時のpartial artifactをformal合格と呼ばない
 
 ### 検証
 
@@ -208,12 +208,12 @@ UI -> final
 
 ### 完了条件
 
-- [ ] world `LAYER_2D` cameraがMainCamera 1台だけ
-- [ ] Render3d非表示でもoverlay clear + foregroundが正常
-- [ ] UI camera、pan / zoom / cursor conversionが回帰しない
-- [ ] plain V action / binding / Helpが0、Ctrl+Vは維持
-- [ ] `SectionCut`はdefault inactive以外のwriterを持たない
-- [ ] P02-A M2がcamera / pass evidenceをP02 presentation sidecarへ記録できる
+- [x] world `LAYER_2D` cameraがMainCamera 1台だけ
+- [x] Render3d非表示でもoverlay clear + foregroundが正常
+- [x] UI camera、pan / zoom / cursor conversionが回帰しない
+- [x] plain V action / binding / Helpが0、Ctrl+Vは維持
+- [x] `SectionCut`はdefault inactive以外のwriterを持たない
+- [x] P02-A M2がcamera / pass evidenceをP02 presentation sidecarへ記録できる
 
 ### 検証
 
@@ -248,12 +248,12 @@ UI -> final
 
 ### 完了条件
 
-- [ ] §4.1の全routeで全BuildingTypeのactive presentationがexactly one、owner消滅後は0
-- [ ] Bridgeが不可視にならない
-- [ ] Tank / MudMixer move後に座標、height、rotation、bounce scaleを正しく保って3D proxyが追従する
-- [ ] Tank / MudMixerの状態表示が維持される
-- [ ] legacy mirrorがある場合、全consumerとP08削除gateが列挙されている
-- [ ] P00 fixture / P02-A sidecarの期待分類がproduction mappingと同じroute tableを使う
+- [x] §4.1の全routeで全BuildingTypeのactive presentationがexactly one、owner消滅後は0
+- [x] Bridgeが不可視にならない
+- [x] Tank / MudMixer move後に座標、height、rotation、bounce scaleを正しく保って3D proxyが追従する
+- [x] Tank / MudMixerの状態表示が維持される
+- [x] legacy mirrorがある場合、全consumerとP08削除gateが列挙されている
+- [x] P00 fixture / P02-A sidecarの期待分類がproduction mappingと同じroute tableを使う
 
 ### 検証
 
@@ -292,15 +292,15 @@ UI -> final
 
 ### 完了条件
 
-- [ ] Wall前 / Wall裏でSoul body depthが正しい
-- [ ] alpha edgeがWallを貫通せず、足元anchorが地面に合う
-- [ ] selection / speech / effectはforegroundで読める
-- [ ] pool cardinalityとspawn / load / despawn後のper-actor material asset増加なしをfocused production testで検証する
-- [ ] Soul billboard / Familiar Spriteがspawn / load / despawnで各1系統
-- [ ] Soul / Familiarの3D GLB proxyとSoul projector material writeがproductionで0
-- [ ] Soul shadow spawn / ready observer / cache / rehydrate / per-frame projector registrationがproductionで0
-- [ ] Render3d visible / hiddenでbillboardを含むscene objectが一貫してtoggleされ、foreground consumerは残る
-- [ ] animation / expressionが1つのresolverと明示schedule順を使う
+- [x] Wall前 / Wall裏でSoul body depthが正しい
+- [x] alpha edgeがWallを貫通せず、足元anchorが地面に合う
+- [x] selection / speech / effectはforegroundで読める
+- [x] pool cardinalityとspawn / load / despawn後のper-actor material asset増加なしをfocused production testで検証する
+- [x] Soul billboard / Familiar Spriteがspawn / load / despawnで各1系統
+- [x] Soul / Familiarの3D GLB proxyとSoul projector material writeがproductionで0
+- [x] Soul shadow spawn / ready observer / cache / rehydrate / per-frame projector registrationがproductionで0
+- [x] Render3d visible / hiddenでbillboardを含むscene objectが一貫してtoggleされ、foreground consumerは残る
+- [x] animation / expressionが1つのresolverと明示schedule順を使う
 
 ### 検証
 
@@ -327,10 +327,10 @@ UI -> final
 
 ### 完了条件
 
-- [ ] P02-A M1〜M4が完了し、current / P01 historyを読み替えずP02 raw evidenceを生成できる
-- [ ] P02の各Door / presentation metricを壊すnegative fixtureが対応gateを落とす
-- [ ] P02 Scene-only checkpointがP01 RTT preservationとP02 presentation evidenceを同時に満たす
-- [ ] P02 full formalのcommand、input、artifact validator、failure triageが揃う。actual candidate採取はM6だけが行う
+- [x] P02-A M1〜M4が完了し、current / P01 historyを読み替えずP02 raw evidenceを生成できる
+- [x] P02の各Door / presentation metricを壊すnegative fixtureが対応gateを落とす
+- [x] P02 Scene-only checkpointがP01 RTT preservationとP02 presentation evidenceを同時に満たす
+- [x] P02 full formalのcommand、input、artifact validator、failure triageが揃う。actual candidate採取はM6だけが行う
 
 ### 検証
 
@@ -352,11 +352,11 @@ UI -> final
 
 ### 完了条件
 
-- [ ] black frame / double draw / invisible Bridge / Door state非識別がない
-- [ ] camera inventory、scene root count、P02 presentation sidecarがtargetに一致する
-- [ ] `stage=p02`のexact gate ID集合を満たす
-- [ ] actual-window artifactとformal artifactがfail-closed検証を通る
-- [ ] Help impact review、影響docs、native evidence registryが同じ完了batchで閉じる
+- [x] black frame / double draw / invisible Bridge / Door state非識別がない
+- [x] camera inventory、scene root count、P02 presentation sidecarがtargetに一致する
+- [x] `stage=p02`のexact gate ID集合を満たす
+- [x] actual-window artifactとformal artifactがfail-closed検証を通る
+- [x] Help impact review、影響docs、native evidence registryが同じ完了batchで閉じる
 
 ### 検証
 
@@ -411,15 +411,15 @@ UI -> final
 
 ### 現在地
 
-- 進捗: `85%`
-- 完了済み: M1 Door domain / presentation、M2 fixed TopDown camera / Help、M3 exhaustive Building presentation、M4 Soul billboard / Familiar foreground / shadow runtime停止、M5 `stage=p02` selector・sidecar・Door timeline・RenderDoc / bundle gate実装。headless behavior契約はDoor / load各3回（計6回）valid。S1で検出したstatic Door automation、fixed sidecar、Door presentation settle、P02 legacy proxy期待値の契約差を修正し、Intel Arc / Vulkan / X11でAudit 3/3、Capture 18/18、Memory 18/18 validを確認済み
-- 未完了: M6のclean committed subjectを使うformal / actual-window artifact採取・登録。P02-Aのactual-window matrixも同じM6 batchで閉じる。
+- 進捗: `100%`
+- 完了済み: M1〜M6とP02-A M1〜M4。subject `6ea0bf99391b1660607537304a3764f380a10eac`でproduction actual-window 18 / 18、S0 / S1、formal Audit / Behavior / Capture / RenderDoc / MemoryをIntel Arc (MTL) / Mesa 26.1.5 / Vulkan / X11上でvalid確認した。formal attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`は128 / 128 gate row passで登録し、独立verifierもpassした
+- 未完了: なし。後続P04 / P06は本計画のpresentation契約と登録済みP02 stageを入力にする。
 
 ### 次のAIが最初にやること
 
-1. 実装batchをreviewしてcommitし、clean subjectを確定する。
-2. P02-A actual-window matrixをno-prompt launcherで採取する。
-3. P02 formalをS0 / S1 prerequisiteと同じsubjectで採取し、exact gateを登録する。
+1. P04ではP02 M1のDoor domain / presentation consumer境界を維持したままmanual request化とLight Field transactionを実装する。
+2. P06では登録済みP02 stageを性能referenceとしてstructural receiverを導入する。
+3. P08で期限付きlegacy mirrorと到達不能section / projector型を撤去する。
 
 ### ブロッカー/注意点
 
@@ -431,26 +431,27 @@ UI -> final
 
 ### 最終確認ログ
 
-- Rust gates: `2026-08-12` / `python3 scripts/dev.py verify pass（workspace test / check / profiling check / Clippy 0 warningsを含む）`
-- native acceptance: `2026-08-12` / `S1 valid: Intel Arc (MTL) / Vulkan / X11、Audit 3/3、Capture 18/18、Memory 18/18、source unchanged。formalはclean committed subjectが必要`
-- docs gate: `2026-08-12` / `docs --write / check pass`
+- Rust gates: `2026-08-13` / `python3 scripts/dev.py check pass、Clippy 0 warnings。完了docs反映後にverifyを再実行`
+- native acceptance: `2026-08-13` / `subject 6ea0bf99、source fingerprint 0f43c3cf…、actual-window 18/18 valid、S0 / S1 valid、formal attempt 54d85a63-e237-4501-a0d0-33c1d0a29f3b valid、128/128 gate row pass、独立verify pass`
+- docs gate: `2026-08-13` / `完了docs反映後にdocs --write / checkを再実行`
 
 ### Definition of Done
 
-- [ ] M1〜M6とP02-A M1〜M4が完了
-- [ ] production Door silent pathが解消済み
-- [ ] 全Building / Soul / Familiarがexactly one presentation
-- [ ] Soul shadow spawn / per-frame projector更新が0
-- [ ] `stage=p02`のexact gate ID集合が合格
-- [ ] presentation / camera / billboard native gate合格
-- [ ] V elevation Help削除済み
-- [ ] Help impact review完了
-- [ ] 影響docs更新済み
+- [x] M1〜M6とP02-A M1〜M4が完了
+- [x] production Door silent pathが解消済み
+- [x] 全Building / Soul / Familiarがexactly one presentation
+- [x] Soul shadow spawn / per-frame projector更新が0
+- [x] `stage=p02`のexact gate ID集合が合格
+- [x] presentation / camera / billboard native gate合格
+- [x] V elevation Help削除済み
+- [x] Help impact review完了
+- [x] 影響docs更新済み
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-13` | `Codex` | subject `6ea0bf99`のactual-window 18 / 18、S0 / S1、formal 5 leg・128 / 128 gate rowと独立verifierをvalid確認し、M1〜M6を完了 |
 | `2026-08-12` | `Codex` | 修正後S1をIntel Arc / Vulkan / X11で再実行し、Audit 3/3、Capture 18/18、Memory 18/18 valid・source unchangedを確認 |
 | `2026-08-12` | `Codex` | S1再試行のCaptureでmedium / large Open Doorのpresentation settle待ち不足とP02 GPU legacy proxy期待値の旧契約を検出。fixtureを1 frame待機、P02 legacy proxyを0へ修正 |
 | `2026-08-12` | `Codex` | S1初回auditでDoor 0のClosed→Openを検出。static laneだけDoor automationを停止し、fixed auditでP02 sidecarを出さないproducer/validator契約へ修正、focused audit 3/3 validを確認 |

@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-02a-p02-acceptance-infrastructure-plan-2026-08-12` |
-| ステータス | `In Progress — automated evidence ready, actual-window scenario pending` |
+| ステータス | `Completed` |
 | 作成日 | `2026-08-12` |
-| 最終更新日 | `2026-08-12` |
+| 最終更新日 | `2026-08-13` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 関連計画 | [P00](00-baseline-gates-plan-2026-08-03.md)、[P01](01-single-scene-rtt-plan-2026-08-03.md)、[P02](02-topdown-presentation-plan-2026-08-03.md) |
@@ -103,10 +103,10 @@
 
 ### 完了条件
 
-- [ ] `current`、`p01`、`p02`だけがstage selectorで受理される
-- [ ] current / P01のregistered artifactをnew readerで再検証できる
-- [ ] cross-stage、schema混在、missing reference、unknown lane / stageの各negative testがfail-closedになる
-- [ ] native S1 recipeとformal recipeが`--stage p02`を構成できるが、P02 formal合格を偽装しない
+- [x] `current`、`p01`、`p02`だけがstage selectorで受理される
+- [x] current / P01のregistered artifactをnew readerで再検証できる
+- [x] cross-stage、schema混在、missing reference、unknown lane / stageの各negative testがfail-closedになる
+- [x] native S1 recipeとformal recipeが`--stage p02`を構成できるが、P02 formal合格を偽装しない
 
 ### 検証
 
@@ -133,11 +133,11 @@
 
 ### 完了条件
 
-- [ ] §4.2の全P02 metricにsource、raw field、checkpoint locator、positive / negative testがある
-- [ ] Door gateはroot Door・root Spriteなし・active presentation consumerありのproduction topologyで採る
-- [ ] all-building fixtureはP02 mapping / presentation routeと一致し、new gameとloadで別の期待形を持たない
-- [ ] P02 metricのunknown / duplicated / missing evidenceがbundle validationで失格になる
-- [ ] pool / shadow / Render3d toggleのfocused production testsがP02 feature不成立を検出する
+- [x] §4.2の全P02 metricにsource、raw field、checkpoint locator、positive / negative testがある
+- [x] Door gateはroot Door・root Spriteなし・active presentation consumerありのproduction topologyで採る
+- [x] all-building fixtureはP02 mapping / presentation routeと一致し、new gameとloadで別の期待形を持たない
+- [x] P02 metricのunknown / duplicated / missing evidenceがbundle validationで失格になる
+- [x] pool / shadow / Render3d toggleのfocused production testsがP02 feature不成立を検出する
 
 ### 検証
 
@@ -167,11 +167,11 @@
 
 ### 完了条件
 
-- [ ] P02 checkpointはP01 RTT preservationとP02 presentation evidenceをともに抽出する
-- [ ] P02 gate CSVはrequired row過不足、unknown metric、reference mismatch、schema混在をfail-closedにする
-- [ ] native helper self-testはP02 S1 / formal command、exact gate set、current / P01 / P02 cross-read negativeを検証する
-- [ ] actual-window scenarioはproduction fixtureのexpected observationをartifactで再検証できる
-- [ ] actual-window scenarioをheadless / visual_test / root desktopへ置換すると不合格になる
+- [x] P02 checkpointはP01 RTT preservationとP02 presentation evidenceをともに抽出する
+- [x] P02 gate CSVはrequired row過不足、unknown metric、reference mismatch、schema混在をfail-closedにする
+- [x] native helper self-testはP02 S1 / formal command、exact gate set、current / P01 / P02 cross-read negativeを検証する
+- [x] actual-window scenarioはproduction fixtureのexpected observationをartifactで再検証できる
+- [x] actual-window scenarioをheadless / visual_test / root desktopへ置換すると不合格になる
 
 ### 検証
 
@@ -191,11 +191,11 @@
 
 ### 完了条件
 
-- [ ] P00 contract JSON / SHAとprojection v1が不変である
-- [ ] registered current / P01 artifactがnew toolchainで再検証できる
-- [ ] P02の各metricを壊すnegative fixtureが対応gateを必ず落とす
-- [ ] P02 full formalを実行するための入力、command、artifact validator、failure判定が揃う
-- [ ] P02 M6はこの計画のready stateを前提にのみformal / native candidateを採取する
+- [x] P00 contract JSON / SHAとprojection v1が不変である
+- [x] registered current / P01 artifactがnew toolchainで再検証できる
+- [x] P02の各metricを壊すnegative fixtureが対応gateを必ず落とす
+- [x] P02 full formalを実行するための入力、command、artifact validator、failure判定が揃う
+- [x] P02 M6はこの計画のready stateを前提にのみformal / native candidateを採取する
 
 ### 検証
 
@@ -234,15 +234,15 @@
 
 ### 現在地
 
-- 進捗: `80%`
-- 完了済み: M1 selector / historical reader、M2 P02 sidecar / Door timeline、M3 RenderDoc checkpoint / exact bundle gate、native `p02` S1 / formal command生成とnegative self-test。
-- 未完了: production fixtureを使う専用actual-window matrixと、そのartifact validator。これを閉じるまでM3 / M4およびP02 M6を完了扱いにしない。
+- 進捗: `100%`
+- 完了済み: M1〜M4。production fixture actual-window 18 / 18をsubject `6ea0bf99391b1660607537304a3764f380a10eac`で採取・再検証し、同subjectのS0 / S1とformal 5 legをvalid確認した。attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`は128 / 128 gate row passで登録済み
+- 未完了: なし。P02 M6へのhandoffとformal登録まで完了した。
 
 ### 次のAIが最初にやること
 
-1. clean committed P02 subjectを確定する。
-2. production indoor-light fixtureのHigh / Medium / Low × DPI 1.0 / 1.5 / 2.0 × Render3d visible / hidden actual-window artifactを採取・検証する。
-3. S0 / S1 prerequisite後にP02 formalを採取し、P02 M6へhandoffする。
+1. P03 / P04のstage固有evidenceは既存extension pointへ追加し、P02 schemaを読み替えない。
+2. P06のentryでは登録済みP02 stageをhistorical referenceとして再検証する。
+3. native harness変更時はproduction fingerprintとharness fingerprintを分離して扱う。
 
 ### ブロッカー / 注意点
 
@@ -252,22 +252,23 @@
 
 ### 最終確認ログ
 
-- 最終 docs gate: `2026-08-12` / `docs --write / check pass`
-- 最終 Rust / native gate: `2026-08-12` / `verify pass。S1 valid: Intel Arc (MTL) / Vulkan / X11、Audit 3/3、Capture 18/18、Memory 18/18、source unchanged。formalはclean committed subject待ち`
+- 最終 docs gate: `2026-08-13` / `完了docs反映後にdocs --write / checkを再実行`
+- 最終 Rust / native gate: `2026-08-13` / `subject 6ea0bf99、actual-window 18/18、S0 / S1、formal 5 leg valid。attempt 54d85a63-e237-4501-a0d0-33c1d0a29f3b、128/128 gate row、独立verify pass`
 
 ### Definition of Done
 
-- [ ] M1〜M4の受入基盤が完了
-- [ ] current / P01 historyを再検証し、P02 selector / schema mismatchをfail-closedにする
-- [ ] P02 Door / presentation / perf metricのsource-to-gate対応とnegative testsが揃う
-- [ ] P02 actual-window scenarioがproduction fixtureで再検証できる
-- [ ] P02 M6がformal/native candidateを採取できるready stateへhandoff済み
-- [ ] 実装に追従する性能・描画・Skill docsが更新済み
+- [x] M1〜M4の受入基盤が完了
+- [x] current / P01 historyを再検証し、P02 selector / schema mismatchをfail-closedにする
+- [x] P02 Door / presentation / perf metricのsource-to-gate対応とnegative testsが揃う
+- [x] P02 actual-window scenarioがproduction fixtureで再検証できる
+- [x] P02 M6がformal/native candidateを採取できるready stateへhandoff済み
+- [x] 実装に追従する性能・描画・Skill docsが更新済み
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-13` | `Codex` | subject `6ea0bf99`のproduction actual-window 18 / 18、S0 / S1、formal 5 leg・128 / 128 gate rowをvalid確認し、M1〜M4を完了 |
 | `2026-08-12` | `Codex` | 修正後S1を再実行し、Audit / actual-window Capture / native Memoryの全legをvalid確認 |
 | `2026-08-12` | `Codex` | S1 CaptureでOpen Door presentationの同frame検証とP02 GPU legacy proxyの旧期待値を検出。fixture settle境界とstage-aware validatorを修正 |
 | `2026-08-12` | `Codex` | S1初回auditでstatic Door mutationとfixed-step P02 sidecar不許可を検出。producer/schedule境界を修正してfocused audit 3/3 validを確認 |

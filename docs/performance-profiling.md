@@ -144,6 +144,19 @@ gate ledgerは123 / 123 row pass、raw artifact 884件のdirectory SHA256は
 
 P02 TopDown presentation subjectは `--stage p02` を Rust / Python / native launcherの明示selectorで受理する。current / P01の既存schemaを変更せず、P02のCapture / Memoryは `p02_presentation.csv`、RenderDocはruntime checkpointの同名blockを必須にする。Door behavior validatorはP02だけ Closed→Open→Open→Locked→Lockedを要求し、current / P01のhistorical Closed-only timelineを維持する。bundleは `RLV1-P02-DOOR-DOMAIN`、`RLV1-P02-PRESENT`、`RLV1-P02-PERF` のexact rowを生成し、P02 frame p95/p99は登録済みP01 projectionをreferenceにする。
 
+P02 TopDown presentationのcanonical formal candidateは2026-08-13に登録済みである。subject commitは
+`6ea0bf99391b1660607537304a3764f380a10eac`、attempt IDは
+`54d85a63-e237-4501-a0d0-33c1d0a29f3b`、source fingerprintは
+`0f43c3cfccbd7aabaec7e3b9ed203adae0ee198facc98617834441c7c5d4a2f0`である。Intel Arc (MTL) / Mesa 26.1.5 /
+Vulkan / X11でP00 / P01と同じ5 legを登録し、gate ledgerは128 / 128 row pass、raw artifact 932件のdirectory
+SHA256は`dcb207eed7ad12435131bd92d1cb090efb3906bc87e0fb4d091067b269ccb98d`である。P01比のframe hard gateは
+p95 / p99とも全6 caseで5%以下となり、最大はlarge / cpuのp95 +4.54%、p99 +3.42%だった。
+`baseline-index.json`の`stages.p02`とattempt manifestを正本とし、`verify-rtt-light --attempt …`で再検証する。
+
+最初のformal candidateはP02 presentation syncが静止中も全Building / Soulを走査していたためframe gateを満たさず、
+登録しなかった。owner transform・presentation state・actor visual stateの変更時だけ同期する経路へ修正してから、同じ
+frozen contractとP01 referenceでcanonical candidateを採り直した。candidate結果を理由に閾値は変更していない。
+
 P02のpixel / animation補完は専用`p02-presentation-actual-window-v1` profileで行う。入口は
 `.codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py plan`であり、
 High / Medium / Low × DPI 1.0 / 1.5 / 2.0 × Render3d visible / hiddenの18 caseをproduction
@@ -155,6 +168,11 @@ foreground、Render3d toggleを合わせて検証する。headless、`visual_tes
 `Time<Real>`由来のscale pulseを適用する。同じ条件でMainCameraをfixture中心へ固定してroot UIを非表示にし、
 Bridge presentationだけをcapture中のfixture中心へ移す。pulseはcapture後にproduction transformへ復元されるため、
 最終sidecarは通常のexact transformを検証しつつ、2 frame差分は実際のRtT animation経路を検出できる。
+
+canonical P02 subjectのactual-window artifactは
+`target/native-acceptance/p02-presentation-20260812T203700Z-17c5324a`である。High / Medium / Low ×
+DPI 1.0 / 1.5 / 2.0 × Render3d visible / hiddenの18 / 18 caseがvalidで、subject commitとsource fingerprintは
+formal candidateに一致する。このpathはhost内locatorであり、合否の正本はjob / manifestのsealed metadataと各case artifactである。
 
 2026-08-11 の diagnostic RD0 では Intel Arc / Vulkan / X11 の実ゲームから 699,959,528 byte の RDC
 （SHA256 `aaf0f73c02baebf018ad69f0c229ee0570b52c26bb9bc7df5c183c00a71243b8`）を採取し、

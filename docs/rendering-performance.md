@@ -90,6 +90,21 @@ audit / behavior / Capture / RenderDoc / Memoryの全5 leg・18 caseを再検証
 | large / cpu | 23.772 / 30.750 / 34.008 | 1,425,912 | 739,108,778 |
 | large / gpu | 33.679 / 42.488 / 46.635 | 1,527,076 | 801,151,582 |
 
+P02 canonical TopDown presentation candidateはsubject `6ea0bf99391b1660607537304a3764f380a10eac`、attempt
+`54d85a63-e237-4501-a0d0-33c1d0a29f3b`として登録済みである。Intel Arc (MTL) / Mesa 26.1.5 / Vulkan / X11で
+actual-window 18 / 18とAudit / Behavior / Capture / RenderDoc / Memoryの全5 legを再検証し、gate ledgerは
+128 / 128 row passだった。raw artifact 932件のdirectory SHA256は
+`dcb207eed7ad12435131bd92d1cb090efb3906bc87e0fb4d091067b269ccb98d`である。
+
+| case | P02 frame p50 / p95 / p99 (ms) | P01比 p95 / p99 |
+|---|---:|---:|
+| small / cpu | 14.218 / 20.828 / 23.624 | -1.97% / -0.39% |
+| small / gpu | 21.427 / 30.843 / 35.826 | -10.24% / -8.60% |
+| medium / cpu | 17.582 / 24.267 / 27.221 | +3.36% / +3.11% |
+| medium / gpu | 22.427 / 29.765 / 32.775 | -6.81% / -5.93% |
+| large / cpu | 23.292 / 30.665 / 33.831 | +4.54% / +3.42% |
+| large / gpu | 26.025 / 34.236 / 37.935 | -15.87% / -14.99% |
+
 frame値はCapture leg、RSS / allocator値はMemory legの正本であり、相互に代用しない。P01以降は同じcontract /
 fixture / adapter matrixとstable projectionで比較する。
 
@@ -108,6 +123,13 @@ composite draw 1を実測した。tracked world color resourceはScene targetだ
 Scene texture / sampler `(1, 2)`を各1回使用し、Soul mask target / attachment / binding / sampleは0である。
 raw RDCは695,577,267 byte、SHA256は
 `de501ede816213662e86eca2c63983667a0b87dd7ad5700e3e86b80b5337cfbf`である。
+
+P02 canonical RenderDoc captureは11 render pass、88 draw、147 attachment record、1,217 binding record、
+composite draw 1を実測した。tracked world color resourceはScene targetだけで、compositeのfragment set 2は
+Scene texture / sampler `(1, 2)`を各1回使用する。同じcheckpointでworld `LAYER_2D` pass 1、duplicate
+presentation 0、全Building exactly-one、Soul billboard ratio 1、Familiar 3D 0、state / bounce probe trueを検証した。
+raw RDCは705,337,616 byte、SHA256は
+`38561b2ad8a9146aef6b80c269295b9d6cc49c5478dc807a316856d393f03120`である。
 
 RenderDoc leg は通常の `profiling` output を使わず、`profiling-renderdoc` feature と同名の専用 Cargo profile
 で build した capsule を使う。専用 profile は `profiling` を継承しつつ debug assertions を有効にし、native build の
