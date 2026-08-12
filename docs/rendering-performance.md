@@ -56,6 +56,12 @@ High、immediate presentを記録し、audit / behavior / Capture / RenderDoc / 
 baseline registry verifierで再検証した。raw artifact 884件のdirectory SHA256は
 `a9f4927186fe7c8c5f009583fd645cd7963b6ad36398e9d614fbcbbff1f8a6aa`である。
 
+P01 canonical Scene-only candidateはsubject `29a4a719e9fe92b10618f36ce548c4bb5a4c7e80`、attempt
+`8bc82f04-10ac-4903-89b6-89011dacdada`として登録済みである。同じcontract / fixtureとIntel Arc / Vulkan / X11環境で、
+audit / behavior / Capture / RenderDoc / Memoryの全5 leg・18 caseを再検証した。gate ledgerは123 / 123 row pass
+（`RLV1-P01-RTT` 9 row、`RLV1-P01-PERF` 20 row）で、raw artifact 884件のdirectory SHA256は
+`68e470e51cf30f7659bb87eb1893235758d49f2c9d7a1e8f881f0e5f2a9f7502`である。
+
 | case | frame p50 / p95 / p99 (ms) | max RSS (KiB) | allocator peak live (bytes) |
 |---|---:|---:|---:|
 | small / cpu | 14.701 / 21.441 / 24.271 | 1,338,744 | 669,949,156 |
@@ -77,6 +83,12 @@ compositeのScene texture / sampler `(1, 2)`、Soul mask texture / sampler `(3, 
 697,940,813 byte、SHA256は`5b33c53d0f81da746f92136edc1f1fe2143a97db89369a2ad70ba20654823f42`である。
 RenderDoc binary SHA256は`5d0ac3accba20db0d9071ea036a770e1b236884335927121b64f4e873c9efb2f`、App APIは
 requested 1.6.0 / returned 1.7.0、capture / replay processはすべてexit 0かつorphan 0だった。
+
+P01 canonical RenderDoc captureは14 render pass、163 draw、369 attachment record、1,780 binding record、
+composite draw 1を実測した。tracked world color resourceはScene targetだけで、compositeのfragment set 2は
+Scene texture / sampler `(1, 2)`を各1回使用し、Soul mask target / attachment / binding / sampleは0である。
+raw RDCは695,577,267 byte、SHA256は
+`de501ede816213662e86eca2c63983667a0b87dd7ad5700e3e86b80b5337cfbf`である。
 
 RenderDoc leg は通常の `profiling` output を使わず、`profiling-renderdoc` feature と同名の専用 Cargo profile
 で build した capsule を使う。専用 profile は `profiling` を継承しつつ debug assertions を有効にし、native build の

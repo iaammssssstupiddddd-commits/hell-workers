@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-01-single-scene-rtt-plan-2026-08-03` |
-| ステータス | `In Progress — M1〜M3 complete, M4 formal pending` |
+| ステータス | `Completed` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-11` |
+| 最終更新日 | `2026-08-12` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | [P00](00-baseline-gates-plan-2026-08-03.md) C00-D / C00-E（clean `current` formal 5 leg と登録済み `baseline-index.json`） |
@@ -214,11 +214,11 @@ native helper、extractor、bundle validatorのhashはP00 current referenceとP0
 
 ### 完了条件
 
-- [ ] Scene以外の画面解像度依存world color targetがない
-- [ ] `RLV1-BUNDLE-VALID`、`RLV1-P01-RTT`、`RLV1-P01-PERF`が合格
-- [ ] RenderDocでScene texture / sampler 1、mask pass / attachment / binding / sample 0
-- [ ] black frame、stale handle、resizeずれ、Wall / Terrain receiver脱落がない
-- [ ] formal artifactとcurrent referenceがbaseline index / hashから再検証できる
+- [x] Scene以外の画面解像度依存world color targetがない
+- [x] `RLV1-BUNDLE-VALID`、`RLV1-P01-RTT`、`RLV1-P01-PERF`が合格
+- [x] RenderDocでScene texture / sampler 1、mask pass / attachment / binding / sample 0
+- [x] black frame、stale handle、resizeずれ、Wall / Terrain receiver脱落がない
+- [x] formal artifactとcurrent referenceがbaseline index / hashから再検証できる
 
 ## 6. リスクと対策
 
@@ -255,22 +255,21 @@ native helper、extractor、bundle validatorのhashはP00 current referenceとP0
 
 ### 現在地
 
-- 進捗: `75%`（M1〜M3 complete、M4 formal / native受入待ち）
-- 完了済み: Scene-only runtime / composite、mask camera / proxy / material / toggle削除、save / visual_test追従、window schema v3、current / P01 RenderDoc topology、P01 RTT / performance gate抽出、stage-aware native launcher、P00 canonical再検証
-- 進行中: M4 formal / native受入
+- 進捗: `100%`（M1〜M4 complete）
+- 完了済み: Scene-only runtime / composite、mask camera / proxy / material / toggle削除、save / visual_test追従、window schema v3、current / P01 RenderDoc topology、P01 RTT / performance gate抽出、stage-aware native launcher、P00 canonical再検証、P01 formal / native受入とbaseline登録
+- 進行中: なし
 - 未着手: なし
 
 ### 次のAIが最初にやること
 
-1. clean P01 subject commitを作成し、同じsource fingerprintでS0 / S1を採取する。
-2. repository native acceptance Skillの`--stage p01`でformal 5 legを実行する。
-3. 登録済みP01 gate / projectionを再検証し、M4と親roadmapを完了状態へ更新する。
+1. 後続の[P02](02-topdown-presentation-plan-2026-08-03.md)を、登録済みP01 attemptをentry evidenceとして開始する。
+2. P02ではP01のScene-only topologyとfrozen `rtt-light-v1` contractを変更せず、Door実経路とTopDown presentationを実装する。
 
 ### ブロッカー/注意点
 
 - P00 formalの正本はattempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`である。diagnostic RD0、失敗attempt、dirty treeやheadless smokeをreferenceに昇格させない。
-- `Camera3dSoulMaskRtt`はcamera sync / terrain LOD queryに現れるが、main Scene query / system全体を削除してはならない。
-- raw perf output、RenderDoc capture / bundle、native launcherはP01 topologyへ追従済み。active Rust symbolは復活させない。
+- P01 formalの正本はsubject `29a4a719e9fe92b10618f36ce548c4bb5a4c7e80`、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`である。source fingerprintは`27d3d59b39a83be5d61df09c3f07c70e26cab2f16bbfb1136acca8d7412c5fbc`である。
+- raw perf output、RenderDoc capture / bundle、native launcherはP01 topologyへ追従済み。削除済みのactive mask symbolを復活させない。
 - P02までvisible Soul GLB / shadowは保持する。P03以降の室内Light Field maskとは別物である。
 
 ### 最終確認ログ
@@ -280,23 +279,25 @@ native helper、extractor、bundle validatorのhashはP00 current referenceとP0
 - P00 prerequisite: `2026-08-11` / current formal attempt登録、native / registry verifier pass
 - M1〜M3 gates: `2026-08-11` / workspace check、Clippy、focused Rust tests、perf / RenderDoc / native self-test pass。P00 canonical attemptをnew readerで再検証 pass
 - Help impact: `2026-08-11` / No impact（内部Soul mask RtTとdeveloper-only toggleの削除。player操作・Help workflow・成立条件・結果・labelは不変）
-- native acceptance: P01は未実行。P00 prerequisite待ちは解消済み
-- docs gate: `2026-08-11` / `pass (docs --write / --check, check_docs, diff --check)`
+- native acceptance: `2026-08-12` / Intel Arc・Vulkan・X11。S0 / S1 pass、formal 5 leg・18 case valid。attempt `8bc82f04-10ac-4903-89b6-89011dacdada`を登録し、`verify-rtt-light` pass
+- P01 gates: `2026-08-12` / 123 / 123 row pass（うち`RLV1-P01-RTT` 9 row、`RLV1-P01-PERF` 20 row）。RenderDocは14 pass、163 draw、Scene binding `(1, 2)`各1、mask topology 0
+- docs gate: `2026-08-12` / `pass (docs --write / --check, check_docs, diff --check)`
 
 ### Definition of Done
 
 - [x] P00 current formal baselineが登録済み
-- [ ] M1〜M4が完了
-- [ ] active mask inventoryが0、migration zero evidenceがP01 stageで存在
-- [ ] `RLV1-BUNDLE-VALID` / `RLV1-P01-RTT` / `RLV1-P01-PERF`が合格
-- [ ] current / P01 schema readersとgate extractionのself-testが合格
-- [ ] Help impact review完了
-- [ ] 影響docs更新済み
+- [x] M1〜M4が完了
+- [x] active mask inventoryが0、migration zero evidenceがP01 stageで存在
+- [x] `RLV1-BUNDLE-VALID` / `RLV1-P01-RTT` / `RLV1-P01-PERF`が合格
+- [x] current / P01 schema readersとgate extractionのself-testが合格
+- [x] Help impact review完了
+- [x] 影響docs更新済み
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-12` | `Codex` | P01 formal attemptを登録・再検証し、Scene-only topology、性能gate、Help impact、native acceptanceを閉じてM1〜M4を完了 |
 | `2026-08-11` | `Codex` | P00 current canonical attemptの登録・再検証完了を受けてblockedを解除し、P01を着手可能へ更新 |
 | `2026-08-05` | `Codex` | P00 formal baseline未登録をentry blocker化し、frozen projectionのzero evidence、stage-aware RenderDoc / artifact / native launcher、visual_testのatomic移行、P01 gate extractionを具体化 |
 | `2026-08-04` | `Codex` | P00のstable RtT / performance gateと共通validity bundle参照へ同期 |

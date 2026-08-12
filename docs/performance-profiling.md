@@ -128,6 +128,14 @@ raw artifact 884件のdirectory SHA256は
 verify-rtt-light-baseline --baseline …`で再検証する。canonical registryの`baseline-index.json`と
 `SHA256SUMS`を正本とし、個別artifactの絶対pathはhost内の診断locatorとして扱う。
 
+P01 Scene-onlyのcanonical formal candidateは2026-08-12に登録済みである。subject commitは
+`29a4a719e9fe92b10618f36ce548c4bb5a4c7e80`、attempt IDは
+`8bc82f04-10ac-4903-89b6-89011dacdada`、source fingerprintは
+`27d3d59b39a83be5d61df09c3f07c70e26cab2f16bbfb1136acca8d7412c5fbc`である。P00と同じ5 leg・18 caseを登録し、
+gate ledgerは123 / 123 row pass、raw artifact 884件のdirectory SHA256は
+`68e470e51cf30f7659bb87eb1893235758d49f2c9d7a1e8f881f0e5f2a9f7502`である。`baseline-index.json`の
+`stages.p01`とattempt manifestを正本とし、`verify-rtt-light --attempt …`で再検証する。
+
 2026-08-11 の diagnostic RD0 では Intel Arc / Vulkan / X11 の実ゲームから 699,959,528 byte の RDC
 （SHA256 `aaf0f73c02baebf018ad69f0c229ee0570b52c26bb9bc7df5c183c00a71243b8`）を採取し、
 requested App API 1.6.0 に対して returned 1.7.0、schema v3 checkpoint、orphan 0 を確認した。同一RDCの

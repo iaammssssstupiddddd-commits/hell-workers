@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P00 completed / P01 ready` |
+| ステータス | `In Progress — P00 / P01 completed, P02 ready` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-11` |
+| 最終更新日 | `2026-08-12` |
 | 作成者 | `Codex` |
 | 採用判断 | TopDown 2.5D、Scene RtT 1枚、map-space radial Light Field |
 | 関連提案 | `N/A` |
@@ -233,18 +233,20 @@ Interface:
 
 ### 現在地
 
-- 進捗: `11%`（P00完了、P01着手可能、P01〜P08のproduction変更は未着手）
+- 進捗: `22%`（P00 / P01完了、P02着手可能、P02〜P08は未完了）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
-  environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator
+  environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
+  P01 Scene-only runtime / compositeとSoul mask target / camera / proxy / material / toggle撤去
 - P00 formal: subject `10763a4d`、attempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`。5 leg、18 case、baseline index / current gate ledgerを登録・再検証済み
-- 未完了: P01〜P08
+- P01 formal: subject `29a4a719`、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`。5 leg、18 case、123 / 123 gate row、Scene-only RenderDoc topologyを登録・再検証済み
+- 未完了: P02〜P08
 
 ### 次のAIが最初にやること
 
-1. 登録済みP00 current attemptをP01 historical readerで再検証する。
-2. P01 M1〜M3のatomic removal seriesをstage-aware toolingと同時に実装する。
-3. P01 M4をnative acceptance Skillで採取し、current referenceとのexact topology / performance gateを閉じる。
+1. [P02](single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md)のentry条件と現sourceを再確認する。
+2. P01 canonical attemptをreferenceに、P02 M1のDoor実経路修復から開始する。
+3. P02のpresentation変更でもScene-only topologyとP01 gateを回帰させない。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
@@ -262,7 +264,8 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - 最終 `cargo clippy --workspace --all-targets -- -D warnings`: `2026-08-11` / `pass (0 warning)`
 - 最終 `cargo test --workspace`: `2026-08-11` / `pass`
 - 最終 `python3 scripts/dev.py verify`: `2026-08-11` / `pass`
-- 最終 docs gate: `2026-08-11` / `pass (docs --write / --check, check_docs, diff --check)`
+- P01 native acceptance: `2026-08-12` / `pass`（Intel Arc / Vulkan / X11、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`、全5 leg valid、123 / 123 gate row pass）
+- 最終 docs gate: `2026-08-12` / `pass (docs --write / --check, check_docs, diff --check)`
 
 ### Definition of Done
 
@@ -276,6 +279,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-12` | `Codex` | P01のScene-only RtT移行とcanonical formal attempt登録・再検証の完了を反映し、P02を着手可能へ更新 |
 | `2026-08-11` | `Codex` | P00 canonical current baseline（attempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`）の登録・再検証完了を反映し、P01を着手可能へ更新 |
 | `2026-08-05` | `Codex` | P01 reviewにより、P00 formal baseline登録を着手条件化し、public mask型を削除するM1〜M3をvisual_test / formal toolingと同じcompile可能seriesへ統合 |
 | `2026-08-05` | `Codex` | P00 contract / behavior / projection / native / RenderDoc実装完了と、formal baseline未採取の環境条件を現在地へ同期 |
