@@ -431,9 +431,9 @@ UI -> final
 
 ### 最終確認ログ
 
-- Rust gates: `2026-08-13` / `python3 scripts/dev.py check pass、Clippy 0 warnings。完了docs反映後にverifyを再実行`
+- Rust gates: `2026-08-13` / `python3 scripts/dev.py verify pass（workspace test / check / profiling self-test / Clippy 0 warningsを含む）`
 - native acceptance: `2026-08-13` / `subject 6ea0bf99、source fingerprint 0f43c3cf…、actual-window 18/18 valid、S0 / S1 valid、formal attempt 54d85a63-e237-4501-a0d0-33c1d0a29f3b valid、128/128 gate row pass、独立verify pass`
-- docs gate: `2026-08-13` / `完了docs反映後にdocs --write / checkを再実行`
+- docs gate: `2026-08-13` / `docs --write / check pass`
 
 ### Definition of Done
 

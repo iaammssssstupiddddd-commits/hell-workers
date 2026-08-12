@@ -252,8 +252,8 @@
 
 ### 最終確認ログ
 
-- 最終 docs gate: `2026-08-13` / `完了docs反映後にdocs --write / checkを再実行`
-- 最終 Rust / native gate: `2026-08-13` / `subject 6ea0bf99、actual-window 18/18、S0 / S1、formal 5 leg valid。attempt 54d85a63-e237-4501-a0d0-33c1d0a29f3b、128/128 gate row、独立verify pass`
+- 最終 docs gate: `2026-08-13` / `docs --write / check pass`
+- 最終 Rust / native gate: `2026-08-13` / `repository verify pass。subject 6ea0bf99、actual-window 18/18、S0 / S1、formal 5 leg valid。attempt 54d85a63-e237-4501-a0d0-33c1d0a29f3b、128/128 gate row、独立artifact verify pass`
 
 ### Definition of Done
 

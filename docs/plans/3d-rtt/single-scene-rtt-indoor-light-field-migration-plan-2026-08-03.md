@@ -271,10 +271,10 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - 最終 `python3 scripts/dev.py check`: `2026-08-12` / `pass`
 - 最終 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `2026-08-12` / `pass (0 warning)`
 - 最終 `python3 scripts/dev.py cargo -- test --workspace`: `2026-08-12` / `pass`
-- 最終 `python3 scripts/dev.py verify`: `2026-08-12` / `pass`
+- 最終 `python3 scripts/dev.py verify`: `2026-08-13` / `pass`
 - P01 native acceptance: `2026-08-12` / `pass`（Intel Arc / Vulkan / X11、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`、全5 leg valid、123 / 123 gate row pass）
 - P02 native acceptance: `2026-08-13` / `pass`（Intel Arc (MTL) / Mesa 26.1.5 / Vulkan / X11、actual-window 18 / 18、attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`、全5 leg valid、128 / 128 gate row pass、独立verify pass）
-- 最終 docs gate: `2026-08-12` / `pass (docs --write / --check, check_docs, diff --check)`
+- 最終 docs gate: `2026-08-13` / `pass (docs --write / --check, check_docs, diff --check)`
 
 ### Definition of Done
 
