@@ -31,8 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import native_acceptance as native  # noqa: E402
 
 
-SCHEMA_VERSION = 5
-PROFILE = "p02-presentation-actual-window-v5"
+SCHEMA_VERSION = 6
+PROFILE = "p02-presentation-actual-window-v6"
 QUALITIES = ("high", "medium", "low")
 SCALE_FACTORS = (1.0, 1.5, 2.0)
 VISIBILITY = (("visible", "gpu"), ("hidden", "cpu"))
@@ -155,8 +155,9 @@ def probe_failure_message(value: Any, *, session_nonce: str) -> str | None:
     native.require(status["schema_version"] == SCHEMA_VERSION, "P02 failed probe schema differs")
     native.require(status["session_nonce"] == session_nonce, "P02 failed probe session nonce differs")
     native.require(status["phase"] in PHASES, "P02 failed probe phase is invalid")
+    generation = require_int(status["generation"], "P02 failed probe generation", minimum=1)
     native.require(
-        status["generation"] == phase_generation(status["phase"]),
+        generation == phase_generation(status["phase"]),
         "P02 failed probe generation differs from the storyboard",
     )
     native.require(
@@ -301,8 +302,9 @@ def validate_probe_status(value: Any, *, phase: str, visibility: str) -> dict[st
         "P02 probe session nonce is invalid",
     )
     native.require(status["phase"] == phase, f"P02 probe phase is not {phase}")
+    generation = require_int(status["generation"], "P02 probe generation", minimum=1)
     native.require(
-        status["generation"] == phase_generation(phase),
+        generation == phase_generation(phase),
         "P02 probe generation differs from the storyboard",
     )
     native.require(
@@ -1217,8 +1219,8 @@ def verify_root(
         },
     )
     native.require(manifest["schema_version"] == SCHEMA_VERSION, "P02 manifest schema differs")
-    native.require(manifest["status"] == "pass" and manifest["profile"] == PROFILE, "P02 manifest is not the v5 pass profile")
-    native.require(job["schema_version"] == SCHEMA_VERSION and job["status"] == "valid" and job["profile"] == PROFILE, "P02 job is not valid v5 evidence")
+    native.require(manifest["status"] == "pass" and manifest["profile"] == PROFILE, "P02 manifest is not the v6 pass profile")
+    native.require(job["schema_version"] == SCHEMA_VERSION and job["status"] == "valid" and job["profile"] == PROFILE, "P02 job is not valid v6 evidence")
     for field in (
         "repo",
         "adapter",
@@ -1575,6 +1577,13 @@ def self_test() -> int:
             lambda: probe_failure_message(failed_probe, session_nonce="d" * 32),
             "failed probe nonce mismatch",
         )
+        for invalid_generation in (True, 6.0):
+            expect_failure(
+                lambda invalid_generation=invalid_generation: probe_failure_message(
+                    {**failed_probe, "generation": invalid_generation}, session_nonce="c" * 32
+                ),
+                f"failed probe non-integer generation {invalid_generation!r}",
+            )
         width, height = 640, 360
         pixels = bytes([48, 96, 64] * width * height)
         path = root / "door-open.png"
@@ -1652,6 +1661,15 @@ def self_test() -> int:
             ),
             "storyboard generation mismatch",
         )
+        for invalid_generation in (True, 1.0):
+            expect_failure(
+                lambda invalid_generation=invalid_generation: validate_probe_status(
+                    {**status, "generation": invalid_generation},
+                    phase="door-open",
+                    visibility="visible",
+                ),
+                f"ready probe non-integer generation {invalid_generation!r}",
+            )
         expect_failure(
             lambda: validate_probe_status(
                 {**status, "probe": {**status["probe"], "roi": {"x": 636, "y": 356, "width": 8, "height": 8}}},
