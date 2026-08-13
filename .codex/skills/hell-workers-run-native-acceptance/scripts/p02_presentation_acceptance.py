@@ -31,8 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import native_acceptance as native  # noqa: E402
 
 
-SCHEMA_VERSION = 4
-PROFILE = "p02-presentation-actual-window-v4"
+SCHEMA_VERSION = 5
+PROFILE = "p02-presentation-actual-window-v5"
 QUALITIES = ("high", "medium", "low")
 SCALE_FACTORS = (1.0, 1.5, 2.0)
 VISIBILITY = (("visible", "gpu"), ("hidden", "cpu"))
@@ -156,8 +156,8 @@ def probe_failure_message(value: Any, *, session_nonce: str) -> str | None:
     native.require(status["session_nonce"] == session_nonce, "P02 failed probe session nonce differs")
     native.require(status["phase"] in PHASES, "P02 failed probe phase is invalid")
     native.require(
-        isinstance(status["generation"], int) and status["generation"] > 0,
-        "P02 failed probe generation is invalid",
+        status["generation"] == phase_generation(status["phase"]),
+        "P02 failed probe generation differs from the storyboard",
     )
     native.require(
         isinstance(status["reason"], str) and status["reason"],
@@ -270,6 +270,12 @@ def expected_phase_probe_fields(phase: str, visibility: str) -> set[str]:
     raise native.AcceptanceError(f"unknown P02 phase {phase}")
 
 
+def phase_generation(phase: str) -> int:
+    """Return the immutable generation assigned to one storyboard phase."""
+    native.require(phase in PHASES, f"unknown P02 storyboard phase {phase}")
+    return PHASES.index(phase) + 1
+
+
 def validate_probe_status(value: Any, *, phase: str, visibility: str) -> dict[str, Any]:
     status = require_object(
         value,
@@ -295,7 +301,10 @@ def validate_probe_status(value: Any, *, phase: str, visibility: str) -> dict[st
         "P02 probe session nonce is invalid",
     )
     native.require(status["phase"] == phase, f"P02 probe phase is not {phase}")
-    require_int(status["generation"], "P02 probe generation", minimum=1)
+    native.require(
+        status["generation"] == phase_generation(phase),
+        "P02 probe generation differs from the storyboard",
+    )
     native.require(
         isinstance(status["fixture_layout_checksum"], str)
         and re.fullmatch(r"[0-9a-f]{64}", status["fixture_layout_checksum"]) is not None,
@@ -766,6 +775,7 @@ def revalidate_performance(
         presentation is not None and window is not None and fixture is not None,
         "P02 raw performance evidence lacks presentation/window/fixture sidecars",
     )
+    require_p02_presentation_semantics(presentation, render=render)
     semantic = {
         "presentation": presentation,
         "window": window,
@@ -779,6 +789,42 @@ def revalidate_performance(
         "performance_source_unchanged": source["unchanged"],
     }
     return semantic, calculated, provenance
+
+
+def require_p02_presentation_semantics(presentation: dict[str, Any], *, render: str) -> None:
+    """Require the P02 presentation values that define the actual-window subject.
+
+    The generic performance validator intentionally accepts both boolean values so
+    the formal bundle can report a failing candidate. This actual-window recipe is
+    an acceptance verifier, so it must reject a measured run that recorded a
+    failed P02 presentation invariant rather than merely preserving its shape.
+    """
+    native.require(render in {"gpu", "cpu"}, "P02 raw presentation Render3d mode is invalid")
+    for field, expected in (
+        ("layer_2d_camera_count", "1"),
+        ("layer_2d_pass_count", "1"),
+        ("duplicate_presentation_count", "0"),
+        ("building_exactly_one_presentation", "true"),
+        ("familiar_3d_count", "0"),
+        ("state_and_bounce_probes_pass", "true"),
+    ):
+        native.require(
+            presentation.get(field) == expected,
+            f"P02 raw presentation {field} is not {expected}",
+        )
+    try:
+        building_count = int(presentation["building_count"])
+        soul_count = int(presentation["soul_count"])
+        soul_billboard_count = int(presentation["soul_billboard_count"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise native.AcceptanceError("P02 raw presentation counts are invalid") from error
+    native.require(building_count > 0, "P02 raw presentation has no production Buildings")
+    native.require(soul_count > 0, "P02 raw presentation has no production Souls")
+    expected_billboards = soul_count if render == "gpu" else 0
+    native.require(
+        soul_billboard_count == expected_billboards,
+        "P02 raw presentation Soul billboard count differs from Render3d mode",
+    )
 
 
 def case_provenance_is_valid(observation: dict[str, Any]) -> bool:
@@ -1171,8 +1217,8 @@ def verify_root(
         },
     )
     native.require(manifest["schema_version"] == SCHEMA_VERSION, "P02 manifest schema differs")
-    native.require(manifest["status"] == "pass" and manifest["profile"] == PROFILE, "P02 manifest is not the v4 pass profile")
-    native.require(job["schema_version"] == SCHEMA_VERSION and job["status"] == "valid" and job["profile"] == PROFILE, "P02 job is not valid v4 evidence")
+    native.require(manifest["status"] == "pass" and manifest["profile"] == PROFILE, "P02 manifest is not the v5 pass profile")
+    native.require(job["schema_version"] == SCHEMA_VERSION and job["status"] == "valid" and job["profile"] == PROFILE, "P02 job is not valid v5 evidence")
     for field in (
         "repo",
         "adapter",
@@ -1602,6 +1648,12 @@ def self_test() -> int:
         )
         expect_failure(
             lambda: validate_probe_status(
+                {**status, "generation": 2}, phase="door-open", visibility="visible"
+            ),
+            "storyboard generation mismatch",
+        )
+        expect_failure(
+            lambda: validate_probe_status(
                 {**status, "probe": {**status["probe"], "roi": {"x": 636, "y": 356, "width": 8, "height": 8}}},
                 phase="door-open",
                 visibility="visible",
@@ -1684,6 +1736,38 @@ def self_test() -> int:
                 hidden_checks, {"fixture": {"layout_checksum": "1" * 64}}
             ),
             "fixture checksum linkage mismatch",
+        )
+        presentation = {
+            "layer_2d_camera_count": "1",
+            "layer_2d_pass_count": "1",
+            "duplicate_presentation_count": "0",
+            "building_exactly_one_presentation": "true",
+            "familiar_3d_count": "0",
+            "state_and_bounce_probes_pass": "true",
+            "building_count": "1",
+            "soul_count": "1",
+            "soul_billboard_count": "1",
+        }
+        require_p02_presentation_semantics(presentation, render="gpu")
+        for field, value in (
+            ("duplicate_presentation_count", "1"),
+            ("building_exactly_one_presentation", "false"),
+            ("state_and_bounce_probes_pass", "false"),
+        ):
+            expect_failure(
+                lambda field=field, value=value: require_p02_presentation_semantics(
+                    {**presentation, field: value}, render="gpu"
+                ),
+                f"P02 raw presentation {field} semantic failure",
+            )
+        expect_failure(
+            lambda: require_p02_presentation_semantics(
+                {**presentation, "soul_billboard_count": "0"}, render="gpu"
+            ),
+            "P02 GPU Soul billboard semantic failure",
+        )
+        require_p02_presentation_semantics(
+            {**presentation, "soul_billboard_count": "0"}, render="cpu"
         )
     native.print_json({"status": "pass", "schema_version": SCHEMA_VERSION, "cases": len(EXPECTED_CASES)})
     return 0

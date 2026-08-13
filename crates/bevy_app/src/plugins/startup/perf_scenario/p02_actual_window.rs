@@ -31,7 +31,7 @@ const ACCEPTANCE_ENV: &str = "HW_P02_PRESENTATION_ACTUAL_WINDOW";
 const STATUS_PATH_ENV: &str = "HW_P02_PRESENTATION_STATUS_PATH";
 const ACK_PATH_ENV: &str = "HW_P02_PRESENTATION_ACK_PATH";
 const SESSION_NONCE_ENV: &str = "HW_P02_PRESENTATION_SESSION_NONCE";
-const STATUS_SCHEMA_VERSION: u32 = 4;
+const STATUS_SCHEMA_VERSION: u32 = 5;
 const PHASE_SETTLE: Duration = Duration::from_millis(1_600);
 const ACK_TIMEOUT: Duration = Duration::from_secs(15);
 const SETTLE_FRAMES: u32 = 3;
@@ -515,9 +515,20 @@ pub(crate) fn publish_p02_actual_window_probe_status_system(
     camera_3d: Query<(&Camera, &GlobalTransform), With<Camera3dRtt>>,
     main_camera: Query<(&Camera, &GlobalTransform), (With<MainCamera>, Without<Camera3dRtt>)>,
     doors: Query<(Entity, &Door, &Transform)>,
-    door_visuals: Query<(&Door3dVisual, &DoorPresentationState, &Transform)>,
+    door_visuals: Query<(
+        &Door3dVisual,
+        &DoorPresentationState,
+        &Transform,
+        &Visibility,
+        &InheritedVisibility,
+    )>,
     owners: Query<(Entity, &Building, &Transform)>,
-    building_visuals: Query<(&Building3dVisual, &Transform)>,
+    building_visuals: Query<(
+        &Building3dVisual,
+        &Transform,
+        &Visibility,
+        &InheritedVisibility,
+    )>,
     billboards: Query<(&ActorBillboard3d, &Transform, &Visibility)>,
     bounces: Query<&BuildingBounceEffect>,
     foreground: Query<
@@ -601,9 +612,20 @@ fn build_probe_status(
     camera_3d: &Query<(&Camera, &GlobalTransform), With<Camera3dRtt>>,
     main_camera: &Query<(&Camera, &GlobalTransform), (With<MainCamera>, Without<Camera3dRtt>)>,
     doors: &Query<(Entity, &Door, &Transform)>,
-    door_visuals: &Query<(&Door3dVisual, &DoorPresentationState, &Transform)>,
+    door_visuals: &Query<(
+        &Door3dVisual,
+        &DoorPresentationState,
+        &Transform,
+        &Visibility,
+        &InheritedVisibility,
+    )>,
     owners: &Query<(Entity, &Building, &Transform)>,
-    building_visuals: &Query<(&Building3dVisual, &Transform)>,
+    building_visuals: &Query<(
+        &Building3dVisual,
+        &Transform,
+        &Visibility,
+        &InheritedVisibility,
+    )>,
     billboards: &Query<(&ActorBillboard3d, &Transform, &Visibility)>,
     bounces: &Query<&BuildingBounceEffect>,
     foreground: &Query<
@@ -634,11 +656,16 @@ fn build_probe_status(
                 )
             })
             .ok_or_else(|| format!("missing {expected_state:?} Door root"))?;
-        let (visual, presentation, transform) = door_visuals
+        let (visual, presentation, transform, visibility, inherited_visibility) = door_visuals
             .iter()
-            .find(|(visual, _, _)| visual.owner == door_entity)
+            .find(|(visual, _, _, _, _)| visual.owner == door_entity)
             .ok_or_else(|| format!("missing {expected_state:?} Door3dVisual"))?;
         let _ = visual;
+        require_visible_probe_visual(
+            visibility,
+            inherited_visibility,
+            &format!("{expected_state:?} Door3dVisual"),
+        )?;
         let expected_presentation = door_presentation_state(expected_state);
         if *presentation != expected_presentation {
             return Err(format!(
@@ -669,10 +696,15 @@ fn build_probe_status(
                         == WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1)
             })
             .ok_or_else(|| "missing production Wall depth probe".to_string())?;
-        let (_, wall_transform) = building_visuals
+        let (_, wall_transform, visibility, inherited_visibility) = building_visuals
             .iter()
-            .find(|(visual, _)| visual.owner == wall_entity)
+            .find(|(visual, _, _, _)| visual.owner == wall_entity)
             .ok_or_else(|| "missing production Wall3dVisual depth probe".to_string())?;
+        require_visible_probe_visual(
+            visibility,
+            inherited_visibility,
+            "production Wall3dVisual depth probe",
+        )?;
         let (camera, global) = camera_3d.single().map_err(|_| "missing RtT camera")?;
         let wall_view = camera
             .world_to_viewport_with_depth(global, wall_transform.translation)
@@ -775,10 +807,15 @@ fn build_probe_status(
                     && transform.translation.truncate() == bridge_position
             })
             .ok_or_else(|| "missing production Bridge root".to_string())?;
-        let (_, transform) = building_visuals
+        let (_, transform, visibility, inherited_visibility) = building_visuals
             .iter()
-            .find(|(visual, _)| visual.owner == bridge_entity)
+            .find(|(visual, _, _, _)| visual.owner == bridge_entity)
             .ok_or_else(|| "missing production Bridge3dVisual".to_string())?;
+        require_visible_probe_visual(
+            visibility,
+            inherited_visibility,
+            "production Bridge3dVisual",
+        )?;
         let (camera, global) = camera_3d.single().map_err(|_| "missing RtT camera")?;
         let roi = project_rtt_roi(
             camera,
@@ -803,10 +840,15 @@ fn build_probe_status(
                         == WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1)
             })
             .ok_or_else(|| "missing production Wall bounce root".to_string())?;
-        let (_, visual_transform) = building_visuals
+        let (_, visual_transform, visibility, inherited_visibility) = building_visuals
             .iter()
-            .find(|(visual, _)| visual.owner == wall_entity)
+            .find(|(visual, _, _, _)| visual.owner == wall_entity)
             .ok_or_else(|| "missing production Wall3dVisual bounce probe".to_string())?;
+        require_visible_probe_visual(
+            visibility,
+            inherited_visibility,
+            "production Wall3dVisual bounce probe",
+        )?;
         let bounce_active = bounces.get(wall_entity).is_ok();
         let owner_scale = owner_transform.scale.x;
         let visual_scale = visual_transform.scale.x;
@@ -1024,6 +1066,20 @@ fn point_as_json(point: Vec2) -> Value {
     json!({"x": point.x, "y": point.y})
 }
 
+fn require_visible_probe_visual(
+    visibility: &Visibility,
+    inherited_visibility: &InheritedVisibility,
+    label: &str,
+) -> Result<(), String> {
+    if *visibility == Visibility::Hidden {
+        Err(format!("{label} is hidden"))
+    } else if !inherited_visibility.get() {
+        Err(format!("{label} is hidden by its hierarchy"))
+    } else {
+        Ok(())
+    }
+}
+
 fn door_presentation_state(state: DoorState) -> DoorPresentationState {
     match state {
         DoorState::Closed => DoorPresentationState::Closed,
@@ -1152,5 +1208,41 @@ mod tests {
         let near_top = ((0.2 - 0.5) * topdown_rtt_vertical_compensation() + 0.5) * 720.0;
         assert_eq!(centered, 360.0);
         assert!(near_top < 144.0);
+    }
+
+    #[test]
+    fn actual_window_probe_rejects_hidden_required_visuals() {
+        assert!(
+            require_visible_probe_visual(
+                &Visibility::Visible,
+                &InheritedVisibility::VISIBLE,
+                "Door3dVisual"
+            )
+            .is_ok()
+        );
+        assert!(
+            require_visible_probe_visual(
+                &Visibility::Inherited,
+                &InheritedVisibility::VISIBLE,
+                "Bridge3dVisual"
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            require_visible_probe_visual(
+                &Visibility::Hidden,
+                &InheritedVisibility::VISIBLE,
+                "Wall3dVisual"
+            ),
+            Err("Wall3dVisual is hidden".to_string())
+        );
+        assert_eq!(
+            require_visible_probe_visual(
+                &Visibility::Inherited,
+                &InheritedVisibility::HIDDEN,
+                "Wall3dVisual"
+            ),
+            Err("Wall3dVisual is hidden by its hierarchy".to_string())
+        );
     }
 }
