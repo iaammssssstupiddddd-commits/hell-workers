@@ -244,7 +244,8 @@ impl Plugin for StartupPlugin {
                 Update,
                 (
                     perf_scenario::prepare_p02_actual_window_view_system,
-                    perf_scenario::animate_p02_actual_window_foreground_system,
+                    perf_scenario::apply_p02_actual_window_actor_probe_system,
+                    perf_scenario::publish_p02_actual_window_probe_status_system,
                 )
                     .chain()
                     .in_set(PerfScenarioSet::Capture)

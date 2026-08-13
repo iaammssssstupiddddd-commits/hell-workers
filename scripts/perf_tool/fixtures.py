@@ -15,6 +15,9 @@ from .rtt_light_contract import (
 )
 from .rtt_light_bundle import (
     _checksum_text as rtt_light_checksum_text,
+    _expected_requested_environment as expected_rtt_light_requested_environment,
+    _recorded_repo_root as recorded_rtt_light_repo_root,
+    _validate_session_matrix as validate_rtt_light_session_matrix,
     _verify_case_entry as verify_rtt_light_case_entry,
     build_gate_result_rows as build_rtt_light_gate_result_rows,
     build_projection_rows as build_rtt_light_projection_rows,
@@ -474,6 +477,65 @@ def self_test() -> int:
         root = Path(temporary)
         rtt_contract = load_rtt_light_contract("rtt-light-v1")
         rtt_fingerprints = contract_fingerprints(rtt_contract)
+        historical_root = "/historical/clean-subject"
+        historical_manifest = {"repo_root": historical_root}
+        assert recorded_rtt_light_repo_root(historical_manifest) == historical_root
+        for invalid_root in (None, "", "relative/subject"):
+            try:
+                recorded_rtt_light_repo_root({"repo_root": invalid_root})
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("invalid historical repo root was accepted")
+        historical_environment = expected_rtt_light_requested_environment(
+            contract=rtt_contract,
+            leg_id="capture",
+            job={"window_backend": "x11", "adapter_filter": "Test"},
+            recorded_repo_root=historical_root,
+        )
+        assert historical_environment["BEVY_ASSET_ROOT"] == historical_root
+        assert historical_environment["WGPU_BACKEND"] == "vulkan"
+        assert historical_environment["WGPU_ADAPTER_NAME"] == "Test"
+        expected_matrix = {
+            "workload": "indoor-light",
+            "environment_lock": "/current/attempt/environment-lock.json",
+        }
+        historical_matrix = {
+            **expected_matrix,
+            "environment_lock": "/historical/attempt/environment-lock.json",
+        }
+        validate_rtt_light_session_matrix(
+            manifest_matrix=historical_matrix,
+            matrix_file=historical_matrix,
+            expected=expected_matrix,
+            windowed=True,
+            leg_id="capture",
+        )
+        for invalid_locator in (None, "", 1):
+            try:
+                validate_rtt_light_session_matrix(
+                    manifest_matrix={**historical_matrix, "environment_lock": invalid_locator},
+                    matrix_file={**historical_matrix, "environment_lock": invalid_locator},
+                    expected=expected_matrix,
+                    windowed=True,
+                    leg_id="capture",
+                )
+            except RuntimeError:
+                pass
+            else:
+                raise AssertionError("invalid historical environment lock was accepted")
+        try:
+            validate_rtt_light_session_matrix(
+                manifest_matrix=historical_matrix,
+                matrix_file={**historical_matrix, "workload": "different"},
+                expected=expected_matrix,
+                windowed=True,
+                leg_id="capture",
+            )
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("matrix/manifest mismatch was accepted")
         p01_window = root / "p01-window.csv"
         p01_window_row = {column: "" for column in WINDOW_COLUMNS}
         p01_window_row.update(

@@ -1,7 +1,6 @@
 use super::super::{Blueprint, Building, BuildingType, Door, DoorState, ProvisionalWall};
 use crate::assets::GameAssets;
 use crate::plugins::startup::Building3dHandles;
-use crate::systems::visual::wall_orientation_aid::attach_wall_orientation_aid;
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT};
 use hw_visual::layer::VisualLayerKind;
@@ -151,16 +150,7 @@ pub(crate) fn attach_building_shell(
         // Presentation children carry Visibility, so the owner must participate
         // in inherited visibility as well (Bevy B0004).
         Visibility::Inherited,
-        hw_visual::blueprint::BuildingBounceEffect {
-            bounce_animation: hw_visual::animations::BounceAnimation {
-                timer: 0.0,
-                config: hw_visual::animations::BounceAnimationConfig {
-                    duration: hw_visual::blueprint::BOUNCE_DURATION,
-                    min_scale: 1.0,
-                    max_scale: 1.2,
-                },
-            },
-        },
+        hw_visual::blueprint::BuildingBounceEffect::completion(),
     ));
 
     if class == RenderPresentationClass::Foreground2d || requires_legacy_structural_2d_mirror(kind)
@@ -223,17 +213,14 @@ pub(crate) fn spawn_building_3d_visual(
                 handles_3d.wall_material.clone()
             };
             let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.5, -pos2d.y);
-            let entity = commands
-                .spawn((
-                    Mesh3d(handles_3d.wall_mesh.clone()),
-                    MeshMaterial3d(material),
-                    transform_3d,
-                    handles_3d.render_layers.clone(),
-                    Building3dVisual { owner },
-                    Name::new(format!("Building3dVisual ({:?})", kind)),
-                ))
-                .id();
-            attach_wall_orientation_aid(commands, entity, handles_3d);
+            commands.spawn((
+                Mesh3d(handles_3d.wall_mesh.clone()),
+                MeshMaterial3d(material),
+                transform_3d,
+                handles_3d.render_layers.clone(),
+                Building3dVisual { owner },
+                Name::new(format!("Building3dVisual ({:?})", kind)),
+            ));
         }
         BuildingType::Door => {
             let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.25, -pos2d.y);

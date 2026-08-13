@@ -32,8 +32,6 @@ pub struct Building3dHandles {
     pub wall_mesh: Handle<Mesh>,
     pub wall_material: Handle<SectionMaterial>,
     pub wall_provisional_material: Handle<SectionMaterial>,
-    pub wall_orientation_aid_mesh: Handle<Mesh>,
-    pub wall_orientation_aid_material: Handle<StandardMaterial>,
     // --- 床 ---
     pub floor_mesh: Handle<Mesh>,
     pub floor_material: Handle<StandardMaterial>,
@@ -256,11 +254,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
 
     // --- 3D レンダリング用ハンドル（Phase 2 プレースホルダー）---
     let wall_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE, TILE_SIZE));
-    let wall_orientation_aid_mesh = meshes.add(Cuboid::new(
-        TILE_SIZE * 0.96,
-        TILE_SIZE * 0.12,
-        TILE_SIZE * 0.96,
-    ));
     let floor_mesh = meshes.add(Plane3d::default().mesh().size(TILE_SIZE, TILE_SIZE));
     let bridge_mesh = meshes.add(Cuboid::new(
         TILE_SIZE * 2.0,
@@ -289,12 +282,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         make_section_material(LinearRgba::new(0.95, 0.72, 0.45, 0.9)),
         AlphaMode::Blend,
     ));
-    let wall_orientation_aid_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(1.0, 0.95, 0.2),
-        unlit: true,
-        alpha_mode: AlphaMode::Blend,
-        ..default()
-    });
     let floor_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.4, 0.3, 0.2),
         perceptual_roughness: 1.0,
@@ -373,8 +360,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         wall_mesh,
         wall_material,
         wall_provisional_material,
-        wall_orientation_aid_mesh,
-        wall_orientation_aid_material,
         floor_mesh,
         floor_material,
         bridge_mesh,

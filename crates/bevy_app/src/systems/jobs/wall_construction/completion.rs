@@ -8,6 +8,7 @@ use crate::world::map::WorldMapWrite;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_logistics::tile_index::TileSiteIndex;
+use hw_visual::blueprint::BuildingBounceEffect;
 #[cfg(feature = "profiling")]
 use std::time::Instant;
 
@@ -101,6 +102,11 @@ pub fn wall_construction_completion_system(
                     && building.kind == BuildingType::Wall
                 {
                     building.is_provisional = false;
+                    // A wall is only visually completed at Coating. The
+                    // provisional Framing shell deliberately has no bounce.
+                    commands
+                        .entity(wall_entity)
+                        .insert(BuildingBounceEffect::completion());
                 }
                 commands.entity(wall_entity).remove::<ProvisionalWall>();
             } else {
@@ -123,5 +129,75 @@ pub fn wall_construction_completion_system(
         metrics.wall_completion_elapsed_micros = metrics
             .wall_completion_elapsed_micros
             .saturating_add(started_at.elapsed().as_micros() as u64);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::world::map::WorldMap;
+    use hw_core::area::TaskArea;
+
+    #[test]
+    fn coating_completion_promotes_provisional_wall_and_starts_a_fresh_bounce() {
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<TileSiteIndex>()
+            .add_systems(Update, wall_construction_completion_system);
+        #[cfg(feature = "profiling")]
+        app.init_resource::<ConstructionPerfMetrics>();
+
+        let site = app
+            .world_mut()
+            .spawn(WallConstructionSite {
+                phase: WallConstructionPhase::Coating,
+                area_bounds: TaskArea::from_points(Vec2::ZERO, Vec2::ONE),
+                material_center: Vec2::ZERO,
+                tiles_total: 1,
+                tiles_framed: 1,
+                tiles_coated: 1,
+            })
+            .id();
+        let wall = app
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: true,
+                },
+                ProvisionalWall::default(),
+            ))
+            .id();
+        let tile = app
+            .world_mut()
+            .spawn(WallTileBlueprint {
+                parent_site: site,
+                grid_pos: (12, 13),
+                state: WallTileState::Complete,
+                wood_delivered: 1,
+                mud_delivered: 1,
+                spawned_wall: Some(wall),
+            })
+            .id();
+        app.world_mut()
+            .resource_mut::<TileSiteIndex>()
+            .wall_tiles_by_site
+            .insert(site, vec![tile]);
+
+        app.update();
+
+        let building = app
+            .world()
+            .get::<Building>(wall)
+            .expect("completed Wall must remain");
+        assert!(!building.is_provisional);
+        assert!(app.world().get::<ProvisionalWall>(wall).is_none());
+        let bounce = app
+            .world()
+            .get::<BuildingBounceEffect>(wall)
+            .expect("completed Wall must begin its completion bounce");
+        assert_eq!(bounce.bounce_animation.timer, 0.0);
+        assert!(app.world().get_entity(site).is_err());
+        assert!(app.world().get_entity(tile).is_err());
     }
 }

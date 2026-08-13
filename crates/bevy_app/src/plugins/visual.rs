@@ -173,7 +173,8 @@ impl Plugin for VisualPlugin {
             (
                 cleanup_building_3d_visuals_system,
                 sync_provisional_wall_material_system,
-                sync_building_3d_transform_system,
+                sync_building_3d_transform_system
+                    .after(hw_visual::blueprint::building_bounce_animation_system),
                 sync_structural_presentation_state_system,
             )
                 .in_set(GameSystemSet::Visual),

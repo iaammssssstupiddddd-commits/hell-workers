@@ -16,7 +16,6 @@
 | `camera_sync.rs` | カメラ同期 |
 | `character_proxy_3d.rs` | キャラクター 3D プロキシ |
 | `elevation_view.rs` | 高度ビュー |
-| `wall_orientation_aid.rs` | 壁向き補助 |
 
 ## TaskAreaMaterial
 

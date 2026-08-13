@@ -52,8 +52,6 @@ fn empty_building_3d_handles() -> Building3dHandles {
         wall_mesh: Handle::default(),
         wall_material: Handle::default(),
         wall_provisional_material: Handle::default(),
-        wall_orientation_aid_mesh: Handle::default(),
-        wall_orientation_aid_material: Handle::default(),
         floor_mesh: Handle::default(),
         floor_material: Handle::default(),
         bridge_mesh: Handle::default(),

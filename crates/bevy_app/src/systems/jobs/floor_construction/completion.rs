@@ -12,8 +12,7 @@ use bevy::prelude::*;
 use hw_core::constants::{FLOOR_CURING_DURATION_SECS, TILE_SIZE, Z_MAP};
 use hw_logistics::tile_index::TileSiteIndex;
 use hw_spatial::{SpatialGrid, SpatialGridOps};
-use hw_visual::animations::{BounceAnimation, BounceAnimationConfig};
-use hw_visual::blueprint::{BOUNCE_DURATION, BuildingBounceEffect};
+use hw_visual::blueprint::BuildingBounceEffect;
 use std::collections::HashSet;
 #[cfg(feature = "profiling")]
 use std::time::Instant;
@@ -104,16 +103,7 @@ pub(crate) fn spawn_completed_floor_tile(
                 kind: BuildingType::Floor,
                 is_provisional: false,
             },
-            BuildingBounceEffect {
-                bounce_animation: BounceAnimation {
-                    timer: 0.0,
-                    config: BounceAnimationConfig {
-                        duration: BOUNCE_DURATION,
-                        min_scale: 1.0,
-                        max_scale: 1.2,
-                    },
-                },
-            },
+            BuildingBounceEffect::completion(),
             Transform::from_translation(world_pos.extend(Z_MAP + 0.01)),
             Visibility::default(),
             Name::new("Building (Floor)"),

@@ -15,7 +15,6 @@ pub mod soul_shadow_projector;
 pub mod task_area_visual;
 pub mod terrain_lod;
 pub mod terrain_material;
-pub mod wall_orientation_aid;
 pub mod floor_construction {
     pub use hw_visual::floor_construction::{
         FloorCuringProgressBar, FloorTileBoneVisual, manage_floor_curing_progress_bars_system,

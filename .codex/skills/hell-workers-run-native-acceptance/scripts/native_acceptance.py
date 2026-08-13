@@ -5376,12 +5376,12 @@ def validate_png_structure(png: bytes) -> tuple[int, int]:
     raise AcceptanceError("PNG is missing terminal IEND")
 
 
-def count_save_catalog_marker_pixels(png: bytes) -> int:
-    """Decode the bounded screenshot and require the native-only UI marker.
+def decode_png_rgb(png: bytes) -> tuple[int, int, bytes]:
+    """Return a bounded native screenshot as an unfiltered RGB byte buffer.
 
     Native capture tools emit non-interlaced 8-bit RGB/RGBA PNGs. Rejecting
-    other representations is intentional: the capture command can normalize
-    ImageMagick output, and a verifier must not guess at an unproven image.
+    other representations is intentional: acceptance predicates must not
+    guess at an image representation that their capture command did not prove.
     """
     width, height = validate_png_structure(png)
     offset = 8
@@ -5423,7 +5423,8 @@ def count_save_catalog_marker_pixels(png: bytes) -> int:
     require(len(raw) == expected_length, "native screenshot decoded length is invalid")
 
     previous = bytearray(stride)
-    marker_pixels = 0
+    pixels = bytearray(width * height * 3)
+    pixel_cursor = 0
     cursor = 0
     for _ in range(height):
         filter_type = raw[cursor]
@@ -5458,11 +5459,19 @@ def count_save_catalog_marker_pixels(png: bytes) -> int:
                 raise AcceptanceError("native screenshot uses an unknown PNG scanline filter")
             scanline[index] = reconstructed
         for index in range(0, stride, channels):
-            red, green, blue = scanline[index : index + 3]
-            if red >= 250 and green <= 5 and blue >= 250:
-                marker_pixels += 1
+            pixels[pixel_cursor : pixel_cursor + 3] = scanline[index : index + 3]
+            pixel_cursor += 3
         previous = scanline
-    return marker_pixels
+    return width, height, bytes(pixels)
+
+
+def count_save_catalog_marker_pixels(png: bytes) -> int:
+    """Count the native-only UI marker in a fail-closed decoded screenshot."""
+    _, _, pixels = decode_png_rgb(png)
+    return sum(
+        red >= 250 and green <= 5 and blue >= 250
+        for red, green, blue in zip(pixels[::3], pixels[1::3], pixels[2::3])
+    )
 
 
 def png_chunk(chunk_type: bytes, data: bytes) -> bytes:

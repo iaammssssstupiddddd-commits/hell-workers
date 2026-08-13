@@ -154,6 +154,23 @@ struct IndoorLightAuditEntities {
 }
 
 impl IndoorLightFixtureState {
+    /// Returns the first Soul created by the production indoor-light fixture.
+    ///
+    /// This is deliberately only exposed to the P02 native presentation
+    /// storyboard. It keeps that evidence path tied to the same fixture that
+    /// produces the formal performance artifact instead of introducing a
+    /// synthetic visual-test actor.
+    pub(super) fn actual_window_subject_soul(&self) -> Option<Entity> {
+        self.fixture.as_ref()?.soul_entities.first().copied()
+    }
+
+    /// Stable fixture identity written into the P02 actual-window sidecar.
+    pub(super) fn actual_window_layout_checksum(&self) -> Option<&'static str> {
+        self.fixture
+            .as_ref()
+            .map(|fixture| fixture.layout.layout_checksum)
+    }
+
     pub(super) fn behavior_subjects(&self) -> Option<(Entity, Entity, Grid)> {
         let fixture = self.fixture.as_ref()?;
         let audit = self.audit_entities.as_ref()?;

@@ -533,9 +533,14 @@ def _expected_requested_environment(
     contract: dict[str, Any],
     leg_id: str,
     job: dict[str, Any],
+    recorded_repo_root: str,
 ) -> dict[str, str]:
     values = {
-        "BEVY_ASSET_ROOT": str(REPO_ROOT),
+        # A registered artifact can have been captured from a now-removed
+        # clean worktree. Its asset root is provenance, not a requirement to
+        # equal the reader's checkout. The caller validates that this exact
+        # value is also the session's recorded repository root.
+        "BEVY_ASSET_ROOT": recorded_repo_root,
         "HW_PRESENT_MODE": contract["formal_matrix"]["present_mode"],
         "HW_WINDOW_BACKEND": (
             "headless" if leg_id in {"audit", "behavior", "field-core", "consumer-core"} else job["window_backend"]
@@ -545,6 +550,46 @@ def _expected_requested_environment(
     if leg_id in {"capture", "memory"}:
         values["WGPU_ADAPTER_NAME"] = job["adapter_filter"]
     return values
+
+
+def _recorded_repo_root(manifest: dict[str, Any]) -> str:
+    """Return the capture checkout recorded by a session manifest.
+
+    Absolute paths in registered artifacts are host-local diagnostic
+    locators. They must still be internally consistent, but a historical
+    reader must not rewrite them to its own checkout path.
+    """
+    value = manifest.get("repo_root")
+    if not isinstance(value, str) or not value or not Path(value).is_absolute():
+        raise RuntimeError("session repo_root is not a nonempty absolute path")
+    return value
+
+
+def _validate_session_matrix(
+    *,
+    manifest_matrix: Any,
+    matrix_file: Any,
+    expected: dict[str, Any],
+    windowed: bool,
+    leg_id: str,
+) -> None:
+    """Validate formal session parameters without making host locators semantic.
+
+    `environment_lock` is written as an absolute capture-worktree locator.
+    The actual lock payload is independently verified from the canonical
+    attempt directory, so preserve the artifact value while requiring both
+    session copies to agree and remain nonempty.
+    """
+    if not isinstance(manifest_matrix, dict) or manifest_matrix != matrix_file:
+        raise RuntimeError(f"{leg_id} matrix.json differs from its manifest")
+    normalized_expected = dict(expected)
+    if windowed:
+        locator = manifest_matrix.get("environment_lock")
+        if not isinstance(locator, str) or not locator:
+            raise RuntimeError(f"{leg_id} environment_lock is not a nonempty locator")
+        normalized_expected["environment_lock"] = locator
+    if manifest_matrix != normalized_expected:
+        raise RuntimeError(f"{leg_id} matrix differs from the formal contract")
 
 
 def _validate_environment_lock(
@@ -871,13 +916,21 @@ def _load_session_evidence(
     matrix = _expected_matrix(
         contract, stage, leg_id, attempt.parent.parent / "environment-lock.json"
     )
-    if manifest.get("matrix") != matrix or read_json_object(session / "matrix.json") != matrix:
-        raise RuntimeError(f"{leg_id} matrix differs from the formal contract")
+    _validate_session_matrix(
+        manifest_matrix=manifest.get("matrix"),
+        matrix_file=read_json_object(session / "matrix.json"),
+        expected=matrix,
+        windowed=leg_id in {"capture", "memory"},
+        leg_id=leg_id,
+    )
     expected_cases = _expected_session_cases(contract, stage, leg_id)
     if manifest.get("cases") != expected_cases:
         raise RuntimeError(f"{leg_id} manifest cases differ from the formal matrix")
     if manifest.get("requested_environment") != _expected_requested_environment(
-        contract=contract, leg_id=leg_id, job=job
+        contract=contract,
+        leg_id=leg_id,
+        job=job,
+        recorded_repo_root=_recorded_repo_root(manifest),
     ):
         raise RuntimeError(f"{leg_id} requested environment differs from the formal contract")
     git = manifest.get("git")

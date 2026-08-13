@@ -66,6 +66,25 @@ pub struct BuildingBounceEffect {
     pub bounce_animation: BounceAnimation,
 }
 
+impl BuildingBounceEffect {
+    /// Creates the one-shot completion animation shared by every production
+    /// construction route. Keeping the values here prevents an individual
+    /// route from silently drifting away from the active-presentation
+    /// contract.
+    pub fn completion() -> Self {
+        Self {
+            bounce_animation: BounceAnimation {
+                timer: 0.0,
+                config: crate::animations::BounceAnimationConfig {
+                    duration: crate::blueprint::BOUNCE_DURATION,
+                    min_scale: 1.0,
+                    max_scale: 1.2,
+                },
+            },
+        }
+    }
+}
+
 #[derive(Component)]
 pub struct WorkerHammerIcon;
 
