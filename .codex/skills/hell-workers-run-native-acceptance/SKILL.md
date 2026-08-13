@@ -168,13 +168,16 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   plan --repo "$PWD" --adapter Intel
 ```
 
-Run only the returned direct `kitty` command. The validator requires all 18
-cases, two bounded client-window PNGs per case, non-black scene detail, visible
-animation evidence, Vulkan/X11 renderer evidence, and the production P02
-exactly-one, Door-state, structural-state/bounce, billboard, foreground, and
-Render3d-toggle sidecars. A headless run, `visual_test`, root-display capture,
-or incomplete matrix cannot satisfy this profile. Revalidate with `verify
---job-root <job-root>`.
+Run only the returned direct `kitty` command. The v3 validator requires all 18
+cases and ten phase-tagged bounded client-window PNGs per case. Rust holds each
+generation until the launcher writes a matching nonce/generation ACK after the
+PNG is captured, so a screenshot cannot be attributed to a stale phase. The
+validator recomputes ROI pixel predicates for Door state, Wall/Soul depth and
+alpha, Bridge visibility, Wall completion bounce, and Foreground animation;
+then cross-checks Vulkan/X11 evidence, raw performance validation, PNG hashes,
+and the production P02 exactly-one / state sidecars. A headless run,
+`visual_test`, root-display capture, or incomplete matrix cannot satisfy this
+profile. Revalidate with `verify --job-root <job-root>`.
 
 ## Run the RtT-light migration recipe
 

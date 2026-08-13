@@ -296,14 +296,13 @@ pub(crate) fn prepare_p02_actual_window_view_system(
     fixture: Res<IndoorLightFixtureState>,
     time: Res<Time<Real>>,
     mut acceptance: ResMut<P02ActualWindowAcceptance>,
-    mut camera: Query<(&mut Transform, &mut Projection, &mut PanCamera), With<MainCamera>>,
-    doors: Query<(Entity, &Door, &Transform)>,
-    owners: Query<(Entity, &Building, &Transform)>,
+    mut transforms: ParamSet<(
+        Query<(&mut Transform, &mut Projection, &mut PanCamera), With<MainCamera>>,
+        Query<(Entity, &Door, &Transform)>,
+        Query<(Entity, &Building, &Transform)>,
+        Query<(&ChildOf, &mut Transform), (With<Sprite>, Without<LegacyStructural2dMirror>)>,
+    )>,
     mut bounces: Query<&mut BuildingBounceEffect>,
-    mut foreground: Query<
-        (&ChildOf, &mut Transform),
-        (With<Sprite>, Without<LegacyStructural2dMirror>),
-    >,
     mut ui_roots: Query<&mut Node, Without<ChildOf>>,
     mut transient_text: Query<&mut Visibility, Or<(With<CompletionText>, With<DeliveryPopup>)>>,
 ) {
@@ -314,7 +313,8 @@ pub(crate) fn prepare_p02_actual_window_view_system(
     let phase = acceptance.phase;
 
     let center = if let Some(expected_state) = phase.expected_door_state() {
-        doors
+        transforms
+            .p1()
             .iter()
             .filter(|(_, door, _)| door.state == expected_state)
             .min_by_key(|(entity, _, transform)| {
@@ -338,7 +338,7 @@ pub(crate) fn prepare_p02_actual_window_view_system(
         };
         WorldMap::grid_to_world(grid.0, grid.1)
     };
-    if let Ok((mut transform, mut projection, mut pan)) = camera.single_mut() {
+    if let Ok((mut transform, mut projection, mut pan)) = transforms.p0().single_mut() {
         transform.translation.x = center.x;
         transform.translation.y = center.y;
         pan.enabled = false;
@@ -355,7 +355,8 @@ pub(crate) fn prepare_p02_actual_window_view_system(
         *visibility = Visibility::Hidden;
     }
     if phase.is_active_wall_bounce() {
-        let wall = owners
+        let wall = transforms
+            .p2()
             .iter()
             .find(|(_, building, transform)| {
                 building.kind == BuildingType::Wall
@@ -379,14 +380,18 @@ pub(crate) fn prepare_p02_actual_window_view_system(
             bounce.bounce_animation.timer = 0.0;
         }
     }
-    for (parent, mut transform) in &mut foreground {
-        let Ok((_, building, _)) = owners.get(parent.parent()) else {
-            continue;
-        };
-        if building.kind != BuildingType::SandPile
-            || crate::systems::jobs::presentation_class(building.kind)
-                != RenderPresentationClass::Foreground2d
-        {
+    let foreground_owners = transforms
+        .p2()
+        .iter()
+        .filter_map(|(entity, building, _)| {
+            (building.kind == BuildingType::SandPile
+                && crate::systems::jobs::presentation_class(building.kind)
+                    == RenderPresentationClass::Foreground2d)
+                .then_some(entity)
+        })
+        .collect::<Vec<_>>();
+    for (parent, mut transform) in &mut transforms.p3() {
+        if !foreground_owners.contains(&parent.parent()) {
             continue;
         }
         let scale = match phase {
@@ -407,9 +412,11 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
     fixture: Res<IndoorLightFixtureState>,
     acceptance: Res<P02ActualWindowAcceptance>,
     camera: Query<(&Camera, &GlobalTransform), With<Camera3dRtt>>,
-    owners: Query<(Entity, &Building, &Transform)>,
-    visuals: Query<(&Building3dVisual, &Transform)>,
-    mut billboards: Query<(&ActorBillboard3d, &mut Transform, &mut Visibility)>,
+    mut transforms: ParamSet<(
+        Query<(Entity, &Building, &Transform)>,
+        Query<(&Building3dVisual, &Transform)>,
+        Query<(&ActorBillboard3d, &mut Transform, &mut Visibility)>,
+    )>,
 ) {
     if !acceptance.enabled(&config, &fixture) {
         return;
@@ -419,7 +426,7 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
     };
     let is_gpu = matches!(config.render_mode, PerfRenderMode::Gpu);
     let phase = acceptance.phase;
-    for (billboard, _, mut visibility) in &mut billboards {
+    for (billboard, _, mut visibility) in &mut transforms.p2() {
         *visibility = if is_gpu && phase.is_soul_depth() && billboard.owner == subject {
             Visibility::Visible
         } else {
@@ -432,19 +439,22 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
     let Ok((camera, camera_transform)) = camera.single() else {
         return;
     };
-    let wall_position = owners
+    let wall = transforms
+        .p0()
         .iter()
         .find(|(_, building, transform)| {
             building.kind == BuildingType::Wall
                 && transform.translation.truncate()
                     == WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1)
         })
-        .and_then(|(wall, _, _)| {
-            visuals
-                .iter()
-                .find(|(visual, _)| visual.owner == wall)
-                .map(|(_, transform)| transform.translation)
-        });
+        .map(|(wall, _, _)| wall);
+    let wall_position = wall.and_then(|wall| {
+        transforms
+            .p1()
+            .iter()
+            .find(|(visual, _)| visual.owner == wall)
+            .map(|(_, transform)| transform.translation)
+    });
     let Some(wall_position) = wall_position else {
         return;
     };
@@ -486,7 +496,7 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
     let Some((_, _, position)) = selected else {
         return;
     };
-    for (billboard, mut transform, _) in &mut billboards {
+    for (billboard, mut transform, _) in &mut transforms.p2() {
         if billboard.owner == subject {
             transform.translation = position;
         }
@@ -1053,6 +1063,16 @@ fn write_status(path: &Path, value: &Value) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::ecs::system::{IntoSystem, System};
+
+    #[test]
+    fn actual_window_mutable_transform_queries_are_parameter_set_isolated() {
+        let mut world = World::new();
+        let mut prepare = IntoSystem::into_system(prepare_p02_actual_window_view_system);
+        prepare.initialize(&mut world);
+        let mut actor = IntoSystem::into_system(apply_p02_actual_window_actor_probe_system);
+        actor.initialize(&mut world);
+    }
 
     #[test]
     fn actual_window_storyboard_is_complete_and_unique() {

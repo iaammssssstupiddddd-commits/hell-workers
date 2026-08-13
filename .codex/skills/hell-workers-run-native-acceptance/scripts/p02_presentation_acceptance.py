@@ -62,6 +62,12 @@ MEASURE_SECONDS = 10.0
 RUN_TIMEOUT_SECONDS = 150.0
 POLL_INTERVAL_SECONDS = 0.10
 MAX_OCCLUSION_CENTER_DISTANCE = 2.0
+REQUIRED_RUNTIME_ASSETS = (
+    "assets/fonts/SourceSerif4-VF.ttf",
+    "assets/models/characters/soul.glb",
+    "assets/textures/terrain/mud_floor.png",
+    "assets/textures/character/soul_lough.png",
+)
 
 
 Image = tuple[int, int, bytes]
@@ -77,6 +83,21 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def missing_runtime_assets(repo: Path) -> list[str]:
+    """Return fixture assets that must exist before a native case can start.
+
+    Runtime art is deliberately ignored by Git, so a detached clean worktree
+    needs its local asset mirror provisioned before the formal plan is made.
+    Keeping this check in the plan phase prevents an otherwise ambiguous
+    Bevy asset-server failure after the expensive profiling build.
+    """
+    return [
+        relative
+        for relative in REQUIRED_RUNTIME_ASSETS
+        if not (repo / relative).is_file()
+    ]
 
 
 def require_object(value: Any, label: str, fields: set[str]) -> dict[str, Any]:
@@ -1114,6 +1135,11 @@ def plan(args: argparse.Namespace) -> int:
     for command in ("xprop", "import"):
         if native.shutil.which(command) is None:
             failures.append(f"P02 actual-window acceptance requires {command}")
+    for relative in missing_runtime_assets(repo):
+        failures.append(
+            "P02 actual-window subject is missing runtime asset "
+            f"{relative}; provision the ignored local asset mirror before planning"
+        )
     subject = native.git_subject(repo)
     fingerprint = native.source_fingerprint(repo)
     harness = native.native_harness_fingerprint(repo)
@@ -1192,6 +1218,33 @@ def run(args: argparse.Namespace) -> int:
         "completed_at": None,
     }
     native.atomic_write_json(root / "job.json", state)
+
+    try:
+        return _run_p02_job(args=args, repo=repo, root=root, state=state)
+    except Exception as error:
+        # The detached terminal must leave an explicit terminal state even
+        # when a game panic or validator error aborts a case.  Otherwise a
+        # stale `running` job could be mistaken for a launcher still in
+        # progress and hide the failure evidence from the caller.
+        state.update(
+            {
+                "status": "invalid",
+                "failure": f"{type(error).__name__}: {error}",
+                "heartbeat_at": native.utc_now(),
+                "completed_at": native.utc_now(),
+            }
+        )
+        native.atomic_write_json(root / "job.json", state)
+        raise
+
+
+def _run_p02_job(
+    *,
+    args: argparse.Namespace,
+    repo: Path,
+    root: Path,
+    state: dict[str, Any],
+) -> int:
     build = [
         "python3", "scripts/dev.py", "cargo", "--", "build", "--profile", "profiling",
         "--no-default-features", "--features", "profiling",
@@ -1304,6 +1357,18 @@ def self_test() -> int:
         native.require(not case_provenance_is_valid(replacement), "P02 negative provenance unexpectedly passed")
     with tempfile.TemporaryDirectory(prefix="p02-presentation-self-test-") as temporary:
         root = Path(temporary)
+        native.require(
+            set(missing_runtime_assets(root)) == set(REQUIRED_RUNTIME_ASSETS),
+            "P02 missing-runtime-assets self-test did not fail closed",
+        )
+        for relative in REQUIRED_RUNTIME_ASSETS:
+            asset = root / relative
+            asset.parent.mkdir(parents=True, exist_ok=True)
+            asset.write_bytes(b"fixture-asset")
+        native.require(
+            not missing_runtime_assets(root),
+            "P02 missing-runtime-assets self-test rejected a complete mirror",
+        )
         width, height = 640, 360
         pixels = bytes([48, 96, 64] * width * height)
         path = root / "door-open.png"
