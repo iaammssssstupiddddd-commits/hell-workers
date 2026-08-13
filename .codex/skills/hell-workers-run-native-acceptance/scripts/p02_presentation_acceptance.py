@@ -18,6 +18,7 @@ import json
 import math
 import os
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -30,8 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import native_acceptance as native  # noqa: E402
 
 
-SCHEMA_VERSION = 2
-PROFILE = "p02-presentation-actual-window-v2"
+SCHEMA_VERSION = 3
+PROFILE = "p02-presentation-actual-window-v3"
 QUALITIES = ("high", "medium", "low")
 SCALE_FACTORS = (1.0, 1.5, 2.0)
 VISIBILITY = (("visible", "gpu"), ("hidden", "cpu"))
@@ -48,6 +49,8 @@ PHASES = (
     "soul-front",
     "soul-behind",
     "bridge",
+    "wall-bounce-active",
+    "wall-bounce-rest",
     "foreground-a",
     "foreground-b",
 )
@@ -58,6 +61,7 @@ WARMUP_SECONDS = 10.0
 MEASURE_SECONDS = 10.0
 RUN_TIMEOUT_SECONDS = 150.0
 POLL_INTERVAL_SECONDS = 0.10
+MAX_OCCLUSION_CENTER_DISTANCE = 2.0
 
 
 Image = tuple[int, int, bytes]
@@ -165,12 +169,25 @@ def expected_phase_probe_fields(phase: str, visibility: str) -> set[str]:
         return {"kind", "expected_state", "presentation_state", "roi"}
     if phase.startswith("soul-"):
         return (
-            {"kind", "render3d", "roi", "relation", "wall_depth", "soul_depth"}
+            {
+                "kind",
+                "render3d",
+                "roi",
+                "relation",
+                "wall_depth",
+                "soul_depth",
+                "occlusion_roi",
+                "wall_center",
+                "soul_center",
+                "center_distance",
+            }
             if visibility == "visible"
             else {"kind", "render3d", "roi"}
         )
     if phase == "bridge":
         return {"kind", "owner_3d_visual", "render3d", "roi"}
+    if phase.startswith("wall-bounce-"):
+        return {"kind", "bounce_active", "owner_scale", "visual_scale", "roi"}
     if phase.startswith("foreground-"):
         return {"kind", "phase_scale", "roi"}
     raise native.AcceptanceError(f"unknown P02 phase {phase}")
@@ -183,6 +200,7 @@ def validate_probe_status(value: Any, *, phase: str, visibility: str) -> dict[st
         {
             "schema_version",
             "status",
+            "session_nonce",
             "phase",
             "generation",
             "fixture_layout_checksum",
@@ -194,6 +212,11 @@ def validate_probe_status(value: Any, *, phase: str, visibility: str) -> dict[st
     )
     native.require(status["schema_version"] == SCHEMA_VERSION, "P02 probe schema differs")
     native.require(status["status"] == "ready", f"P02 {phase} probe was not ready")
+    native.require(
+        isinstance(status["session_nonce"], str)
+        and re.fullmatch(r"[0-9a-f]{32}", status["session_nonce"]) is not None,
+        "P02 probe session nonce is invalid",
+    )
     native.require(status["phase"] == phase, f"P02 probe phase is not {phase}")
     require_int(status["generation"], "P02 probe generation", minimum=1)
     native.require(
@@ -233,10 +256,48 @@ def validate_probe_status(value: Any, *, phase: str, visibility: str) -> dict[st
                 soul_depth < wall_depth if relation == "front" else soul_depth > wall_depth,
                 "P02 Soul depth values do not prove the requested ordering",
             )
+            occlusion_roi = require_roi(
+                probe["occlusion_roi"],
+                width=window_width,
+                height=window_height,
+                label=f"P02 {phase} occlusion ROI",
+            )
+            native.require(
+                occlusion_roi["width"] > 0 and occlusion_roi["height"] > 0,
+                "P02 Soul occlusion ROI has no area",
+            )
+            centers = []
+            for label in ("wall_center", "soul_center"):
+                center = require_object(probe[label], f"P02 {phase} {label}", {"x", "y"})
+                centers.append(
+                    (require_number(center["x"], f"P02 {phase} {label}.x"),
+                     require_number(center["y"], f"P02 {phase} {label}.y"))
+                )
+            calculated_distance = math.dist(*centers)
+            reported_distance = require_number(probe["center_distance"], "P02 Soul center distance")
+            native.require(
+                abs(calculated_distance - reported_distance) <= 0.01
+                and reported_distance <= MAX_OCCLUSION_CENTER_DISTANCE,
+                "P02 Soul probe centers do not prove Wall overlap",
+            )
     elif phase == "bridge":
         native.require(probe["kind"] == "bridge", "P02 Bridge probe kind differs")
         native.require(probe["owner_3d_visual"] is True, "P02 Bridge lacks its production 3D owner")
         native.require(probe["render3d"] == visibility, "P02 Bridge visibility differs")
+    elif phase.startswith("wall-bounce-"):
+        native.require(probe["kind"] == "wall-bounce", "P02 Wall bounce probe kind differs")
+        expected_active = phase == "wall-bounce-active"
+        native.require(probe["bounce_active"] is expected_active, "P02 Wall bounce activity differs")
+        owner_scale = require_number(probe["owner_scale"], "P02 Wall bounce owner scale")
+        visual_scale = require_number(probe["visual_scale"], "P02 Wall bounce visual scale")
+        native.require(
+            abs(owner_scale - visual_scale) <= 0.001,
+            "P02 Wall bounce owner/3D presentation scale differs",
+        )
+        if expected_active:
+            native.require(owner_scale > 1.001, "P02 active Wall bounce has unit scale")
+        else:
+            native.require(abs(owner_scale - 1.0) <= 0.001, "P02 resting Wall bounce has non-unit scale")
     else:
         native.require(probe["kind"] == "foreground", "P02 Foreground probe kind differs")
         expected_scale = 1.0 if phase == "foreground-a" else 1.18
@@ -296,6 +357,18 @@ def capture_client_window(
         },
         image,
     )
+
+
+def capture_acknowledgement(status: dict[str, Any], *, phase: str) -> dict[str, Any]:
+    """Build the only acknowledgement Rust accepts for a held probe phase."""
+    native.require(status["phase"] == phase, "P02 acknowledgement phase differs from probe")
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": "captured",
+        "session_nonce": status["session_nonce"],
+        "phase": phase,
+        "generation": status["generation"],
+    }
 
 
 def roi_colour_metrics(image: Image, roi: dict[str, int]) -> dict[str, float | int]:
@@ -394,16 +467,13 @@ def evaluate_case_images(
     native.require(set(phases) == set(PHASES), "P02 sidecar phase set differs")
     checksums = {phases[phase]["probe_status"]["fixture_layout_checksum"] for phase in PHASES}
     native.require(len(checksums) == 1, "P02 phases used different production fixture layouts")
+    nonces = {phases[phase]["probe_status"]["session_nonce"] for phase in PHASES}
+    native.require(len(nonces) == 1, "P02 phases used different capture sessions")
 
     door = {
         phase: roi_colour_metrics(images[phase], phase_roi(phases, phase))
         for phase in ("door-open", "door-closed", "door-locked")
     }
-    for phase, metrics in door.items():
-        native.require(metrics["detail_pixels"] >= 64, f"P02 {phase} Door ROI lacks scene detail")
-    native.require(door["door-open"]["green_pixels"] >= 16, "P02 Open Door has no green material evidence")
-    native.require(door["door-closed"]["brown_pixels"] >= 16, "P02 Closed Door has no brown material evidence")
-    native.require(door["door-locked"]["red_pixels"] >= 16, "P02 Locked Door has no red material evidence")
     door_differences = {
         "open_closed": roi_difference(
             images["door-open"], images["door-closed"], phase_roi(phases, "door-open")
@@ -415,8 +485,20 @@ def evaluate_case_images(
             images["door-closed"], images["door-locked"], phase_roi(phases, "door-closed")
         ),
     }
-    for label, metrics in door_differences.items():
-        require_changed(metrics, f"P02 Door {label}", minimum=32, maximum_ratio=0.95)
+    # Door3d is intentionally absent from the composited RtT image when the
+    # Render3d toggle is hidden.  The CPU half still keeps its semantic
+    # sidecar checks above, while the GPU half is the only image route that
+    # can prove the three material/presentation states.  Applying RGB
+    # signatures to the hidden half would make the matrix reject a correct
+    # Render3d-off frame.
+    if visibility == "visible":
+        for phase, metrics in door.items():
+            native.require(metrics["detail_pixels"] >= 64, f"P02 {phase} Door ROI lacks scene detail")
+        native.require(door["door-open"]["green_pixels"] >= 16, "P02 Open Door has no green material evidence")
+        native.require(door["door-closed"]["brown_pixels"] >= 16, "P02 Closed Door has no brown material evidence")
+        native.require(door["door-locked"]["red_pixels"] >= 16, "P02 Locked Door has no red material evidence")
+        for label, metrics in door_differences.items():
+            require_changed(metrics, f"P02 Door {label}", minimum=32, maximum_ratio=0.95)
 
     front_roi = phase_roi(phases, "soul-front")
     behind_roi = phase_roi(phases, "soul-behind")
@@ -435,10 +517,40 @@ def evaluate_case_images(
             "P02 hidden Render3d Soul depth frames changed despite having no billboard",
         )
 
+    if visibility == "visible":
+        front_occlusion_roi = phases["soul-front"]["probe_status"]["probe"]["occlusion_roi"]
+        behind_occlusion_roi = phases["soul-behind"]["probe_status"]["probe"]["occlusion_roi"]
+        native.require(
+            front_occlusion_roi == behind_occlusion_roi,
+            "P02 Soul depth phases do not share one Wall-overlap ROI",
+        )
+        occlusion_difference = roi_difference(
+            images["soul-front"], images["soul-behind"], front_occlusion_roi
+        )
+        require_changed(occlusion_difference, "P02 Soul Wall-overlap probe", minimum=32, maximum_ratio=0.80)
+    else:
+        occlusion_difference = soul_difference
+
     bridge = roi_colour_metrics(images["bridge"], phase_roi(phases, "bridge"))
     if visibility == "visible":
         native.require(bridge["detail_pixels"] >= 64, "P02 visible Bridge ROI lacks structure")
         native.require(bridge["warm_pixels"] >= 12, "P02 visible Bridge ROI lacks its material")
+
+    wall_bounce_roi = phase_roi(phases, "wall-bounce-active")
+    native.require(
+        wall_bounce_roi == phase_roi(phases, "wall-bounce-rest"),
+        "P02 Wall bounce phases do not share one ROI",
+    )
+    wall_bounce_difference = roi_difference(
+        images["wall-bounce-active"], images["wall-bounce-rest"], wall_bounce_roi
+    )
+    if visibility == "visible":
+        require_changed(wall_bounce_difference, "P02 Wall completion bounce", minimum=32, maximum_ratio=0.85)
+    else:
+        native.require(
+            wall_bounce_difference["changed_ratio"] <= 0.005,
+            "P02 hidden Render3d Wall bounce frame changed despite no composite",
+        )
 
     foreground_roi = phase_roi(phases, "foreground-a")
     native.require(
@@ -452,10 +564,13 @@ def evaluate_case_images(
 
     return {
         "fixture_layout_checksum": checksums.pop(),
+        "session_nonce": nonces.pop(),
         "doors": door,
         "door_differences": door_differences,
         "soul_depth_difference": soul_difference,
+        "soul_occlusion_difference": occlusion_difference,
         "bridge": bridge,
+        "wall_bounce_difference": wall_bounce_difference,
         "foreground_difference": foreground_difference,
     }
 
@@ -612,6 +727,8 @@ def run_case(
 ) -> dict[str, Any]:
     output = artifact / "performance"
     status_path = artifact / "probe-status.json"
+    ack_path = artifact / "probe-ack.json"
+    session_nonce = secrets.token_hex(16)
     command = [
         "python3", "scripts/perf.py", "run",
         "--workload", "indoor-light", "--contract", "rtt-light-v1",
@@ -630,6 +747,8 @@ def run_case(
     environment = os.environ.copy()
     environment["HW_P02_PRESENTATION_ACTUAL_WINDOW"] = "1"
     environment["HW_P02_PRESENTATION_STATUS_PATH"] = str(status_path)
+    environment["HW_P02_PRESENTATION_ACK_PATH"] = str(ack_path)
+    environment["HW_P02_PRESENTATION_SESSION_NONCE"] = session_nonce
     captures: dict[str, dict[str, Any]] = {}
     images: dict[str, Image] = {}
     deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
@@ -655,6 +774,10 @@ def run_case(
                         phase = status_value.get("phase") if isinstance(status_value, dict) else None
                         if isinstance(phase, str) and phase in PHASES and phase not in captures:
                             status = validate_probe_status(status_value, phase=phase, visibility=visibility)
+                            native.require(
+                                status["session_nonce"] == session_nonce,
+                                "P02 probe session nonce differs from its launched case",
+                            )
                             captured = capture_client_window(
                                 artifact / SCREENSHOT_NAMES[phase],
                                 root_pid=process.pid,
@@ -662,6 +785,10 @@ def run_case(
                             )
                             if captured is not None:
                                 evidence, image = captured
+                                native.atomic_write_json(
+                                    ack_path,
+                                    capture_acknowledgement(status, phase=phase),
+                                )
                                 captures[phase] = {"probe_status": status, "screenshot": evidence}
                                 images[phase] = image
                 if time.monotonic() >= deadline:
@@ -673,6 +800,7 @@ def run_case(
             if process.poll() is None:
                 native.stop_command_process(process)
             status_path.unlink(missing_ok=True)
+            ack_path.unlink(missing_ok=True)
     native.require(returncode == 0, f"P02 case {artifact.name} exited with {returncode}")
     native.require(tuple(captures) == PHASES, f"P02 case {artifact.name} did not capture every storyboard phase")
     semantic, performance_validation, performance_provenance = revalidate_performance(
@@ -744,6 +872,15 @@ def verify_screenshot_evidence(
     for field, value in statistics.items():
         native.require(evidence.get(field) == value, f"P02 {phase} screenshot {field} differs")
     return image
+
+
+def require_fixture_checksum_link(image_checks: dict[str, Any], semantic: dict[str, Any]) -> None:
+    fixture = semantic.get("fixture")
+    native.require(isinstance(fixture, dict), "P02 raw fixture evidence is invalid")
+    native.require(
+        image_checks.get("fixture_layout_checksum") == fixture.get("layout_checksum"),
+        "P02 actual-window fixture checksum does not match raw performance fixture",
+    )
 
 
 def expected_case_tuple(identifier: str) -> tuple[str, float, str, str]:
@@ -828,6 +965,7 @@ def verify_case(
         binary_sha256=binary_sha256,
     )
     native.require(semantic == observation["semantic"], f"P02 {identifier} semantic evidence differs from raw run")
+    require_fixture_checksum_link(calculated_checks, semantic)
     native.require(validation == observation["performance_validation"], f"P02 {identifier} raw validation differs")
     native.require(provenance == observation["performance_provenance"], f"P02 {identifier} performance provenance differs")
     return observation, images
@@ -877,6 +1015,7 @@ def verify_root(
             "status",
             "profile",
             "repo",
+            "adapter",
             "subject_commit",
             "source_fingerprint",
             "harness_fingerprint",
@@ -895,6 +1034,7 @@ def verify_root(
             "status",
             "profile",
             "repo",
+            "adapter",
             "subject_commit",
             "source_fingerprint",
             "harness_fingerprint",
@@ -907,10 +1047,18 @@ def verify_root(
         },
     )
     native.require(manifest["schema_version"] == SCHEMA_VERSION, "P02 manifest schema differs")
-    native.require(manifest["status"] == "pass" and manifest["profile"] == PROFILE, "P02 manifest is not the v2 pass profile")
-    native.require(job["schema_version"] == SCHEMA_VERSION and job["status"] == "valid" and job["profile"] == PROFILE, "P02 job is not valid v2 evidence")
-    for field in ("repo", "subject_commit", "source_fingerprint", "harness_fingerprint", "profiling_binary_sha256"):
+    native.require(manifest["status"] == "pass" and manifest["profile"] == PROFILE, "P02 manifest is not the v3 pass profile")
+    native.require(job["schema_version"] == SCHEMA_VERSION and job["status"] == "valid" and job["profile"] == PROFILE, "P02 job is not valid v3 evidence")
+    for field in (
+        "repo",
+        "adapter",
+        "subject_commit",
+        "source_fingerprint",
+        "harness_fingerprint",
+        "profiling_binary_sha256",
+    ):
         native.require(job[field] == manifest[field], f"P02 job/manifest {field} differs")
+    native.require(isinstance(manifest["adapter"], str) and manifest["adapter"], "P02 adapter is invalid")
     native.require(job["cases_completed"] == len(EXPECTED_CASES) and job["current_case"] is None, "P02 job case completion differs")
     if subject_commit is not None:
         native.require(manifest["subject_commit"] == subject_commit, "P02 matrix subject differs")
@@ -943,7 +1091,7 @@ def verify_root(
             subject_commit=manifest["subject_commit"],
             source_fingerprint=manifest["source_fingerprint"],
             binary_sha256=manifest["profiling_binary_sha256"],
-            adapter="Intel",
+            adapter=manifest["adapter"],
         )
         observations[identifier] = checked
         images[identifier] = checked_images
@@ -990,6 +1138,7 @@ def plan(args: argparse.Namespace) -> int:
             "status": "ready" if not failures else "blocked",
             "profile": PROFILE,
             "job_root": str(root),
+            "adapter": args.adapter,
             "subject_commit": subject,
             "source_fingerprint": fingerprint,
             "harness_fingerprint": harness,
@@ -1031,6 +1180,7 @@ def run(args: argparse.Namespace) -> int:
         "status": "running",
         "profile": PROFILE,
         "repo": str(repo),
+        "adapter": args.adapter,
         "subject_commit": args.subject_commit,
         "source_fingerprint": args.source_fingerprint,
         "harness_fingerprint": args.harness_fingerprint,
@@ -1085,6 +1235,7 @@ def run(args: argparse.Namespace) -> int:
         "status": "pass",
         "profile": PROFILE,
         "repo": str(repo),
+        "adapter": args.adapter,
         "subject_commit": args.subject_commit,
         "source_fingerprint": args.source_fingerprint,
         "harness_fingerprint": args.harness_fingerprint,
@@ -1177,6 +1328,7 @@ def self_test() -> int:
         status = {
             "schema_version": SCHEMA_VERSION,
             "status": "ready",
+            "session_nonce": "a" * 32,
             "phase": "door-open",
             "generation": 1,
             "fixture_layout_checksum": "0" * 64,
@@ -1191,6 +1343,18 @@ def self_test() -> int:
             },
         }
         validated = validate_probe_status(status, phase="door-open", visibility="visible")
+        acknowledgement = capture_acknowledgement(validated, phase="door-open")
+        native.require(
+            acknowledgement
+            == {
+                "schema_version": SCHEMA_VERSION,
+                "status": "captured",
+                "session_nonce": "a" * 32,
+                "phase": "door-open",
+                "generation": 1,
+            },
+            "P02 capture acknowledgement differs",
+        )
         verify_screenshot_evidence(path=path, evidence=evidence, status=validated, phase="door-open")
         expect_failure(
             lambda: verify_screenshot_evidence(
@@ -1200,6 +1364,10 @@ def self_test() -> int:
                 phase="door-open",
             ),
             "screenshot hash mutation",
+        )
+        expect_failure(
+            lambda: capture_acknowledgement(validated, phase="door-closed"),
+            "capture acknowledgement generation/phase mismatch",
         )
         expect_failure(
             lambda: validate_probe_status(
@@ -1214,6 +1382,83 @@ def self_test() -> int:
                 visibility="visible",
             ),
             "out of bounds ROI",
+        )
+        hidden_roi = {"x": 40, "y": 40, "width": 16, "height": 16}
+
+        def hidden_status(phase: str) -> dict[str, Any]:
+            if phase.startswith("door-"):
+                probe: dict[str, Any] = {
+                    "kind": "door",
+                    "expected_state": phase.removeprefix("door-"),
+                    "presentation_state": phase.removeprefix("door-"),
+                    "roi": hidden_roi,
+                }
+            elif phase.startswith("soul-"):
+                probe = {"kind": "soul-depth", "render3d": "hidden", "roi": hidden_roi}
+            elif phase == "bridge":
+                probe = {
+                    "kind": "bridge",
+                    "owner_3d_visual": True,
+                    "render3d": "hidden",
+                    "roi": hidden_roi,
+                }
+            elif phase.startswith("wall-bounce-"):
+                active = phase == "wall-bounce-active"
+                probe = {
+                    "kind": "wall-bounce",
+                    "bounce_active": active,
+                    "owner_scale": 1.08 if active else 1.0,
+                    "visual_scale": 1.08 if active else 1.0,
+                    "roi": hidden_roi,
+                }
+            else:
+                probe = {
+                    "kind": "foreground",
+                    "phase_scale": 1.0 if phase == "foreground-a" else 1.18,
+                    "roi": hidden_roi,
+                }
+            return {
+                "schema_version": SCHEMA_VERSION,
+                "status": "ready",
+                "session_nonce": "b" * 32,
+                "phase": phase,
+                "generation": PHASES.index(phase) + 1,
+                "fixture_layout_checksum": "0" * 64,
+                "render3d": "hidden",
+                "camera_target": {"x": 0.0, "y": 0.0},
+                "window": {"physical_width": width, "physical_height": height},
+                "probe": probe,
+            }
+
+        hidden_images = {phase: image for phase in PHASES}
+        foreground_b = bytearray(pixels)
+        for y in range(hidden_roi["y"], hidden_roi["y"] + 8):
+            for x in range(hidden_roi["x"], hidden_roi["x"] + 8):
+                start = (y * width + x) * 3
+                foreground_b[start : start + 3] = b"\xff\x00\x00"
+        hidden_images["foreground-b"] = (width, height, bytes(foreground_b))
+        hidden_phases = {
+            phase: {
+                "probe_status": validate_probe_status(
+                    hidden_status(phase), phase=phase, visibility="hidden"
+                ),
+                "screenshot": {},
+            }
+            for phase in PHASES
+        }
+        hidden_checks = evaluate_case_images(hidden_images, hidden_phases, visibility="hidden")
+        native.require(
+            hidden_checks["doors"]["door-open"]["green_pixels"] > 0,
+            "P02 hidden-case self-test did not retain a non-3D Door color distractor",
+        )
+        require_fixture_checksum_link(
+            hidden_checks, {"fixture": {"layout_checksum": "0" * 64}}
+        )
+        expect_failure(
+            lambda: require_fixture_checksum_link(
+                hidden_checks, {"fixture": {"layout_checksum": "1" * 64}}
+            ),
+            "fixture checksum linkage mismatch",
         )
     native.print_json({"status": "pass", "schema_version": SCHEMA_VERSION, "cases": len(EXPECTED_CASES)})
     return 0

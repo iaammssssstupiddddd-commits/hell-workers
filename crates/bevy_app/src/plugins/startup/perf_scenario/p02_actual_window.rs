@@ -1,7 +1,8 @@
 //! Production-only visual probe storyboard for the P02 actual-window recipe.
 //!
 //! This module never participates in an ordinary game or formal perf run. The
-//! native acceptance launcher opts in with two environment variables, then
+//! native acceptance launcher opts in with its status/acknowledgement
+//! environment contract, then
 //! captures phase-tagged client-window frames from the normal indoor-light
 //! fixture. Every probe uses an entity that the production fixture already
 //! spawned; no `visual_test` or synthetic presentation path is accepted.
@@ -12,8 +13,8 @@ use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::camera::MainCamera;
-use hw_core::constants::TILE_SIZE;
-use hw_visual::blueprint::{CompletionText, DeliveryPopup};
+use hw_core::constants::{TILE_SIZE, topdown_rtt_vertical_compensation};
+use hw_visual::blueprint::{BuildingBounceEffect, CompletionText, DeliveryPopup};
 use hw_visual::visual3d::{
     ActorBillboard3d, Building3dVisual, Door3dVisual, DoorPresentationState,
     LegacyStructural2dMirror,
@@ -28,14 +29,19 @@ use crate::systems::jobs::{Building, BuildingType, Door, DoorState, RenderPresen
 
 const ACCEPTANCE_ENV: &str = "HW_P02_PRESENTATION_ACTUAL_WINDOW";
 const STATUS_PATH_ENV: &str = "HW_P02_PRESENTATION_STATUS_PATH";
-const STATUS_SCHEMA_VERSION: u32 = 2;
-const PHASE_HOLD: Duration = Duration::from_millis(1_600);
+const ACK_PATH_ENV: &str = "HW_P02_PRESENTATION_ACK_PATH";
+const SESSION_NONCE_ENV: &str = "HW_P02_PRESENTATION_SESSION_NONCE";
+const STATUS_SCHEMA_VERSION: u32 = 3;
+const PHASE_SETTLE: Duration = Duration::from_millis(1_600);
+const ACK_TIMEOUT: Duration = Duration::from_secs(15);
 const SETTLE_FRAMES: u32 = 3;
 const CAMERA_SCALE: f32 = 0.75;
 const WALL_PROBE_GRID: (i32, i32) = (16, 20);
 const BRIDGE_PROBE_GRID: (i32, i32) = (90, 65);
 const FOREGROUND_PROBE_GRID: (i32, i32) = (27, 28);
 const ROI_HALF_SIZE: u32 = 112;
+const OCCLUSION_ROI_HALF_SIZE: u32 = 48;
+const MAX_OCCLUSION_CENTER_DISTANCE: f32 = 2.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ProbePhase {
@@ -45,19 +51,23 @@ enum ProbePhase {
     SoulFront,
     SoulBehind,
     Bridge,
+    WallBounceActive,
+    WallBounceRest,
     ForegroundA,
     ForegroundB,
 }
 
 impl ProbePhase {
     #[cfg(test)]
-    const ALL: [Self; 8] = [
+    const ALL: [Self; 10] = [
         Self::DoorOpen,
         Self::DoorClosed,
         Self::DoorLocked,
         Self::SoulFront,
         Self::SoulBehind,
         Self::Bridge,
+        Self::WallBounceActive,
+        Self::WallBounceRest,
         Self::ForegroundA,
         Self::ForegroundB,
     ];
@@ -70,6 +80,8 @@ impl ProbePhase {
             Self::SoulFront => "soul-front",
             Self::SoulBehind => "soul-behind",
             Self::Bridge => "bridge",
+            Self::WallBounceActive => "wall-bounce-active",
+            Self::WallBounceRest => "wall-bounce-rest",
             Self::ForegroundA => "foreground-a",
             Self::ForegroundB => "foreground-b",
         }
@@ -91,7 +103,9 @@ impl ProbePhase {
             Self::DoorLocked => Some(Self::SoulFront),
             Self::SoulFront => Some(Self::SoulBehind),
             Self::SoulBehind => Some(Self::Bridge),
-            Self::Bridge => Some(Self::ForegroundA),
+            Self::Bridge => Some(Self::WallBounceActive),
+            Self::WallBounceActive => Some(Self::WallBounceRest),
+            Self::WallBounceRest => Some(Self::ForegroundA),
             Self::ForegroundA => Some(Self::ForegroundB),
             Self::ForegroundB => None,
         }
@@ -103,6 +117,22 @@ impl ProbePhase {
 
     const fn is_foreground(self) -> bool {
         matches!(self, Self::ForegroundA | Self::ForegroundB)
+    }
+
+    const fn is_wall_bounce(self) -> bool {
+        matches!(self, Self::WallBounceActive | Self::WallBounceRest)
+    }
+
+    const fn is_active_wall_bounce(self) -> bool {
+        matches!(self, Self::WallBounceActive)
+    }
+
+    const fn settle_duration(self) -> Duration {
+        if self.is_active_wall_bounce() {
+            Duration::ZERO
+        } else {
+            PHASE_SETTLE
+        }
     }
 }
 
@@ -130,11 +160,16 @@ impl ProbeRoi {
 pub(crate) struct P02ActualWindowAcceptance {
     requested: bool,
     status_path: Option<PathBuf>,
+    ack_path: Option<PathBuf>,
+    session_nonce: Option<String>,
     phase: ProbePhase,
     phase_started_at: Option<Duration>,
     phase_frames: u32,
     generation: u32,
     published_generation: Option<u32>,
+    wall_bounce_seeded_generation: Option<u32>,
+    completed: bool,
+    failure_reason: Option<String>,
 }
 
 impl Default for P02ActualWindowAcceptance {
@@ -144,11 +179,20 @@ impl Default for P02ActualWindowAcceptance {
             status_path: std::env::var_os(STATUS_PATH_ENV)
                 .map(PathBuf::from)
                 .filter(|path| path.is_absolute() && !path.as_os_str().is_empty()),
+            ack_path: std::env::var_os(ACK_PATH_ENV)
+                .map(PathBuf::from)
+                .filter(|path| path.is_absolute() && !path.as_os_str().is_empty()),
+            session_nonce: std::env::var(SESSION_NONCE_ENV)
+                .ok()
+                .filter(|value| is_session_nonce(value)),
             phase: ProbePhase::DoorOpen,
             phase_started_at: None,
             phase_frames: 0,
             generation: 1,
             published_generation: None,
+            wall_bounce_seeded_generation: None,
+            completed: false,
+            failure_reason: None,
         }
     }
 }
@@ -157,27 +201,74 @@ impl P02ActualWindowAcceptance {
     fn enabled(&self, config: &PerfScenarioConfig, fixture: &IndoorLightFixtureState) -> bool {
         self.requested
             && self.status_path.is_some()
+            && self.ack_path.is_some()
+            && self.session_nonce.is_some()
             && fixture.phase == IndoorLightFixturePhase::Ready
             && config.rtt_light_selection().is_some_and(|selection| {
                 selection.stage_id() == "p02" && selection.lane() == "static"
             })
     }
 
-    fn advance_if_due(&mut self, now: Duration) {
+    fn update_phase(&mut self, now: Duration) {
         let started_at = *self.phase_started_at.get_or_insert(now);
-        if now.saturating_sub(started_at) < PHASE_HOLD {
-            self.phase_frames = self.phase_frames.saturating_add(1);
+        self.phase_frames = self.phase_frames.saturating_add(1);
+        if self.completed || self.failure_reason.is_some() {
             return;
         }
-        let Some(next) = self.phase.next() else {
-            self.phase_frames = self.phase_frames.saturating_add(1);
+        if self.published_generation != Some(self.generation) {
             return;
+        }
+        if self.acknowledges_current_generation() {
+            if let Some(next) = self.phase.next() {
+                self.phase = next;
+                self.phase_started_at = Some(now);
+                self.phase_frames = 0;
+                self.generation = self.generation.saturating_add(1);
+                self.published_generation = None;
+                self.wall_bounce_seeded_generation = None;
+            } else {
+                self.completed = true;
+            }
+            return;
+        }
+        if now.saturating_sub(started_at) >= ACK_TIMEOUT {
+            self.failure_reason = Some(format!(
+                "timed out waiting for capture acknowledgement for {} generation {}",
+                self.phase.id(),
+                self.generation
+            ));
+        }
+    }
+
+    fn ready_to_publish(&self, now: Duration) -> bool {
+        let started_at = self.phase_started_at.unwrap_or(now);
+        !self.completed
+            && self.failure_reason.is_none()
+            && self.published_generation != Some(self.generation)
+            && self.phase_frames >= SETTLE_FRAMES
+            && now.saturating_sub(started_at) >= self.phase.settle_duration()
+    }
+
+    fn acknowledges_current_generation(&self) -> bool {
+        let (Some(path), Some(nonce)) = (&self.ack_path, &self.session_nonce) else {
+            return false;
         };
-        self.phase = next;
-        self.phase_started_at = Some(now);
-        self.phase_frames = 1;
-        self.generation = self.generation.saturating_add(1);
-        self.published_generation = None;
+        let Ok(bytes) = std::fs::read(path) else {
+            return false;
+        };
+        let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+            return false;
+        };
+        acknowledgement_matches(&value, nonce, self.phase, self.generation)
+    }
+
+    fn should_seed_wall_bounce(&self) -> bool {
+        self.phase.is_active_wall_bounce()
+            && self.wall_bounce_seeded_generation != Some(self.generation)
+    }
+
+    fn mark_wall_bounce_seeded(&mut self) {
+        self.wall_bounce_seeded_generation = Some(self.generation);
     }
 
     fn mark_published(&mut self) {
@@ -185,16 +276,30 @@ impl P02ActualWindowAcceptance {
     }
 }
 
+fn is_session_nonce(value: &str) -> bool {
+    value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn acknowledgement_matches(value: &Value, nonce: &str, phase: ProbePhase, generation: u32) -> bool {
+    value.get("schema_version").and_then(Value::as_u64) == Some(STATUS_SCHEMA_VERSION.into())
+        && value.get("status").and_then(Value::as_str) == Some("captured")
+        && value.get("session_nonce").and_then(Value::as_str) == Some(nonce)
+        && value.get("phase").and_then(Value::as_str) == Some(phase.id())
+        && value.get("generation").and_then(Value::as_u64) == Some(generation.into())
+}
+
 /// Applies the next deterministic camera and foreground state before the
 /// normal Visual schedule synchronizes the RtT camera and active visuals.
 pub(crate) fn prepare_p02_actual_window_view_system(
+    mut commands: Commands,
     config: Res<PerfScenarioConfig>,
     fixture: Res<IndoorLightFixtureState>,
     time: Res<Time<Real>>,
     mut acceptance: ResMut<P02ActualWindowAcceptance>,
     mut camera: Query<(&mut Transform, &mut Projection, &mut PanCamera), With<MainCamera>>,
     doors: Query<(Entity, &Door, &Transform)>,
-    owners: Query<&Building>,
+    owners: Query<(Entity, &Building, &Transform)>,
+    mut bounces: Query<&mut BuildingBounceEffect>,
     mut foreground: Query<
         (&ChildOf, &mut Transform),
         (With<Sprite>, Without<LegacyStructural2dMirror>),
@@ -205,7 +310,7 @@ pub(crate) fn prepare_p02_actual_window_view_system(
     if !acceptance.enabled(&config, &fixture) {
         return;
     }
-    acceptance.advance_if_due(time.elapsed());
+    acceptance.update_phase(time.elapsed());
     let phase = acceptance.phase;
 
     let center = if let Some(expected_state) = phase.expected_door_state() {
@@ -225,6 +330,7 @@ pub(crate) fn prepare_p02_actual_window_view_system(
         let grid = match phase {
             ProbePhase::SoulFront | ProbePhase::SoulBehind => WALL_PROBE_GRID,
             ProbePhase::Bridge => BRIDGE_PROBE_GRID,
+            ProbePhase::WallBounceActive | ProbePhase::WallBounceRest => WALL_PROBE_GRID,
             ProbePhase::ForegroundA | ProbePhase::ForegroundB => FOREGROUND_PROBE_GRID,
             ProbePhase::DoorOpen | ProbePhase::DoorClosed | ProbePhase::DoorLocked => {
                 unreachable!("door phase has an expected state")
@@ -248,8 +354,33 @@ pub(crate) fn prepare_p02_actual_window_view_system(
     for mut visibility in &mut transient_text {
         *visibility = Visibility::Hidden;
     }
+    if phase.is_active_wall_bounce() {
+        let wall = owners
+            .iter()
+            .find(|(_, building, transform)| {
+                building.kind == BuildingType::Wall
+                    && transform.translation.truncate()
+                        == WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1)
+            })
+            .map(|(entity, _, _)| entity);
+        if acceptance.should_seed_wall_bounce() {
+            if let Some(wall) = wall {
+                commands
+                    .entity(wall)
+                    .insert(BuildingBounceEffect::completion());
+                acceptance.mark_wall_bounce_seeded();
+            }
+        } else if let Some(wall) = wall
+            && let Ok(mut bounce) = bounces.get_mut(wall)
+        {
+            // Keep the production completion effect active until the native
+            // screenshot ACK arrives; the following rest phase then proves
+            // that the ordinary Visual schedule clears it again.
+            bounce.bounce_animation.timer = 0.0;
+        }
+    }
     for (parent, mut transform) in &mut foreground {
-        let Ok(building) = owners.get(parent.parent()) else {
+        let Ok((_, building, _)) = owners.get(parent.parent()) else {
             continue;
         };
         if building.kind != BuildingType::SandPile
@@ -320,37 +451,36 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
     let Ok(wall_view) = camera.world_to_viewport_with_depth(camera_transform, wall_position) else {
         return;
     };
-    let mut candidates = Vec::new();
-    for offset_y in -3..=3 {
-        for offset_x in -3..=3 {
-            if offset_x == 0 && offset_y == 0 {
-                continue;
-            }
-            let position = Vec3::new(
-                wall_position.x + offset_x as f32 * TILE_SIZE,
-                TILE_SIZE * 0.55,
-                wall_position.z - offset_y as f32 * TILE_SIZE,
-            );
-            let Ok(view) = camera.world_to_viewport_with_depth(camera_transform, position) else {
-                continue;
-            };
+    // Move along the actual camera ray rather than across the map. This
+    // keeps the billboard center on the Wall center in screen space while
+    // choosing strict front/behind depths, so the subsequent PNG predicate
+    // measures depth-tested occlusion rather than merely two nearby sprites.
+    let ray_offset = camera_transform.forward().as_vec3() * (TILE_SIZE * 1.5);
+    let candidates = [wall_position - ray_offset, wall_position + ray_offset]
+        .into_iter()
+        .filter_map(|position| {
+            let view = camera
+                .world_to_viewport_with_depth(camera_transform, position)
+                .ok()?;
             let screen_distance = view.truncate().distance(wall_view.truncate());
-            if screen_distance <= ROI_HALF_SIZE as f32 * 0.65 {
-                candidates.push((screen_distance, view.z, position));
-            }
-        }
-    }
+            (screen_distance <= MAX_OCCLUSION_CENTER_DISTANCE).then_some((
+                screen_distance,
+                view.z,
+                position,
+            ))
+        })
+        .collect::<Vec<_>>();
     let selected = match phase {
-        ProbePhase::SoulFront => candidates.into_iter().min_by(|left, right| {
-            left.1
-                .total_cmp(&right.1)
-                .then_with(|| left.0.total_cmp(&right.0))
-        }),
-        ProbePhase::SoulBehind => candidates.into_iter().max_by(|left, right| {
-            left.1
-                .total_cmp(&right.1)
-                .then_with(|| right.0.total_cmp(&left.0))
-        }),
+        ProbePhase::SoulFront => candidates
+            .iter()
+            .filter(|(_, depth, _)| *depth < wall_view.z)
+            .min_by(|left, right| left.0.total_cmp(&right.0))
+            .copied(),
+        ProbePhase::SoulBehind => candidates
+            .iter()
+            .filter(|(_, depth, _)| *depth > wall_view.z)
+            .min_by(|left, right| left.0.total_cmp(&right.0))
+            .copied(),
         _ => None,
     };
     let Some((_, _, position)) = selected else {
@@ -369,6 +499,7 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
 pub(crate) fn publish_p02_actual_window_probe_status_system(
     config: Res<PerfScenarioConfig>,
     fixture: Res<IndoorLightFixtureState>,
+    time: Res<Time<Real>>,
     mut acceptance: ResMut<P02ActualWindowAcceptance>,
     window: Query<&Window, With<PrimaryWindow>>,
     camera_3d: Query<(&Camera, &GlobalTransform), With<Camera3dRtt>>,
@@ -378,25 +509,49 @@ pub(crate) fn publish_p02_actual_window_probe_status_system(
     owners: Query<(Entity, &Building, &Transform)>,
     building_visuals: Query<(&Building3dVisual, &Transform)>,
     billboards: Query<(&ActorBillboard3d, &Transform, &Visibility)>,
+    bounces: Query<&BuildingBounceEffect>,
     foreground: Query<
         (&ChildOf, &GlobalTransform),
         (With<Sprite>, Without<LegacyStructural2dMirror>),
     >,
 ) {
-    if !acceptance.enabled(&config, &fixture)
-        || acceptance.phase_frames < SETTLE_FRAMES
-        || acceptance.published_generation == Some(acceptance.generation)
-    {
+    if !acceptance.enabled(&config, &fixture) {
         return;
     }
     let Some(path) = acceptance.status_path.clone() else {
         return;
     };
+    let Some(nonce) = acceptance.session_nonce.clone() else {
+        return;
+    };
+    if let Some(reason) = &acceptance.failure_reason {
+        if acceptance.published_generation == Some(acceptance.generation) {
+            return;
+        }
+        let status = json!({
+            "schema_version": STATUS_SCHEMA_VERSION,
+            "status": "failed",
+            "session_nonce": nonce,
+            "phase": acceptance.phase.id(),
+            "generation": acceptance.generation,
+            "reason": reason,
+        });
+        if let Err(error) = write_status(&path, &status) {
+            eprintln!("PERF_P02_PRESENTATION: cannot write probe status: {error}");
+            return;
+        }
+        acceptance.mark_published();
+        return;
+    }
+    if !acceptance.ready_to_publish(time.elapsed()) {
+        return;
+    }
     let status = match build_probe_status(
         &config,
         &fixture,
         acceptance.phase,
         acceptance.generation,
+        &nonce,
         &window,
         &camera_3d,
         &main_camera,
@@ -405,12 +560,14 @@ pub(crate) fn publish_p02_actual_window_probe_status_system(
         &owners,
         &building_visuals,
         &billboards,
+        &bounces,
         &foreground,
     ) {
         Ok(value) => value,
         Err(reason) => json!({
             "schema_version": STATUS_SCHEMA_VERSION,
             "status": "failed",
+            "session_nonce": nonce,
             "phase": acceptance.phase.id(),
             "generation": acceptance.generation,
             "reason": reason,
@@ -429,6 +586,7 @@ fn build_probe_status(
     fixture: &IndoorLightFixtureState,
     phase: ProbePhase,
     generation: u32,
+    session_nonce: &str,
     window: &Query<&Window, With<PrimaryWindow>>,
     camera_3d: &Query<(&Camera, &GlobalTransform), With<Camera3dRtt>>,
     main_camera: &Query<(&Camera, &GlobalTransform), (With<MainCamera>, Without<Camera3dRtt>)>,
@@ -437,6 +595,7 @@ fn build_probe_status(
     owners: &Query<(Entity, &Building, &Transform)>,
     building_visuals: &Query<(&Building3dVisual, &Transform)>,
     billboards: &Query<(&ActorBillboard3d, &Transform, &Visibility)>,
+    bounces: &Query<&BuildingBounceEffect>,
     foreground: &Query<
         (&ChildOf, &GlobalTransform),
         (With<Sprite>, Without<LegacyStructural2dMirror>),
@@ -477,7 +636,7 @@ fn build_probe_status(
             ));
         }
         let (camera, global) = camera_3d.single().map_err(|_| "missing RtT camera")?;
-        let roi = project_roi(
+        let roi = project_rtt_roi(
             camera,
             global,
             transform.translation,
@@ -508,7 +667,7 @@ fn build_probe_status(
         let wall_view = camera
             .world_to_viewport_with_depth(global, wall_transform.translation)
             .map_err(|error| format!("cannot project Wall depth probe: {error}"))?;
-        let roi = project_roi(
+        let roi = project_rtt_roi(
             camera,
             global,
             wall_transform.translation,
@@ -540,6 +699,35 @@ fn build_probe_status(
             let actor_view = camera
                 .world_to_viewport_with_depth(global, actor_transform.translation)
                 .map_err(|error| format!("cannot project Soul depth probe: {error}"))?;
+            let wall_center = project_rtt_point(
+                camera,
+                global,
+                wall_transform.translation,
+                physical_width,
+                physical_height,
+            )
+            .ok_or_else(|| "Wall depth center is outside the client window".to_string())?;
+            let soul_center = project_rtt_point(
+                camera,
+                global,
+                actor_transform.translation,
+                physical_width,
+                physical_height,
+            )
+            .ok_or_else(|| "Soul depth center is outside the client window".to_string())?;
+            let center_distance = wall_center.distance(soul_center);
+            if center_distance > MAX_OCCLUSION_CENTER_DISTANCE {
+                return Err(format!(
+                    "Soul depth center is {center_distance:.3}px from the Wall, above the overlap limit"
+                ));
+            }
+            let occlusion_roi = roi_around_point(
+                wall_center,
+                OCCLUSION_ROI_HALF_SIZE,
+                physical_width,
+                physical_height,
+            )
+            .ok_or_else(|| "Soul occlusion ROI is outside the client window".to_string())?;
             let relation = if actor_view.z < wall_view.z {
                 "front"
             } else {
@@ -562,6 +750,10 @@ fn build_probe_status(
                 "wall_depth": wall_view.z,
                 "soul_depth": actor_view.z,
                 "roi": roi.as_json(),
+                "occlusion_roi": occlusion_roi.as_json(),
+                "wall_center": point_as_json(wall_center),
+                "soul_center": point_as_json(soul_center),
+                "center_distance": center_distance,
             })
         }
     } else if phase == ProbePhase::Bridge {
@@ -578,7 +770,7 @@ fn build_probe_status(
             .find(|(visual, _)| visual.owner == bridge_entity)
             .ok_or_else(|| "missing production Bridge3dVisual".to_string())?;
         let (camera, global) = camera_3d.single().map_err(|_| "missing RtT camera")?;
-        let roi = project_roi(
+        let roi = project_rtt_roi(
             camera,
             global,
             transform.translation,
@@ -590,6 +782,55 @@ fn build_probe_status(
             "kind": "bridge",
             "owner_3d_visual": true,
             "render3d": if is_gpu { "visible" } else { "hidden" },
+            "roi": roi.as_json(),
+        })
+    } else if phase.is_wall_bounce() {
+        let (wall_entity, _, owner_transform) = owners
+            .iter()
+            .find(|(_, building, transform)| {
+                building.kind == BuildingType::Wall
+                    && transform.translation.truncate()
+                        == WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1)
+            })
+            .ok_or_else(|| "missing production Wall bounce root".to_string())?;
+        let (_, visual_transform) = building_visuals
+            .iter()
+            .find(|(visual, _)| visual.owner == wall_entity)
+            .ok_or_else(|| "missing production Wall3dVisual bounce probe".to_string())?;
+        let bounce_active = bounces.get(wall_entity).is_ok();
+        let owner_scale = owner_transform.scale.x;
+        let visual_scale = visual_transform.scale.x;
+        if phase.is_active_wall_bounce() {
+            if !bounce_active || owner_scale <= 1.001 || (owner_scale - visual_scale).abs() > 0.001
+            {
+                return Err(
+                    "active Wall bounce did not reach its matching 3D presentation transform"
+                        .to_string(),
+                );
+            }
+        } else if bounce_active
+            || (owner_scale - 1.0).abs() > 0.001
+            || (visual_scale - 1.0).abs() > 0.001
+        {
+            return Err(
+                "resting Wall bounce probe retained an effect or non-unit presentation scale"
+                    .to_string(),
+            );
+        }
+        let (camera, global) = camera_3d.single().map_err(|_| "missing RtT camera")?;
+        let roi = project_rtt_roi(
+            camera,
+            global,
+            visual_transform.translation,
+            physical_width,
+            physical_height,
+        )
+        .ok_or_else(|| "Wall bounce projection is outside the client window".to_string())?;
+        json!({
+            "kind": "wall-bounce",
+            "bounce_active": bounce_active,
+            "owner_scale": owner_scale,
+            "visual_scale": visual_scale,
             "roi": roi.as_json(),
         })
     } else if phase.is_foreground() {
@@ -610,7 +851,7 @@ fn build_probe_status(
             })
             .ok_or_else(|| "missing production Foreground2d Sprite".to_string())?;
         let _ = child;
-        let roi = project_roi(
+        let roi = project_main_roi(
             camera,
             global,
             transform.translation(),
@@ -629,6 +870,7 @@ fn build_probe_status(
     Ok(json!({
         "schema_version": STATUS_SCHEMA_VERSION,
         "status": "ready",
+        "session_nonce": session_nonce,
         "phase": phase.id(),
         "generation": generation,
         "fixture_layout_checksum": fixture_checksum,
@@ -658,7 +900,10 @@ fn phase_camera_target(
             .ok_or_else(|| format!("missing {expected_state:?} Door camera target"));
     }
     let grid = match phase {
-        ProbePhase::SoulFront | ProbePhase::SoulBehind => WALL_PROBE_GRID,
+        ProbePhase::SoulFront
+        | ProbePhase::SoulBehind
+        | ProbePhase::WallBounceActive
+        | ProbePhase::WallBounceRest => WALL_PROBE_GRID,
         ProbePhase::Bridge => BRIDGE_PROBE_GRID,
         ProbePhase::ForegroundA | ProbePhase::ForegroundB => FOREGROUND_PROBE_GRID,
         ProbePhase::DoorOpen | ProbePhase::DoorClosed | ProbePhase::DoorLocked => {
@@ -668,13 +913,66 @@ fn phase_camera_target(
     Ok(WorldMap::grid_to_world(grid.0, grid.1))
 }
 
-fn project_roi(
+fn project_rtt_roi(
     camera: &Camera,
     camera_transform: &GlobalTransform,
     world_position: Vec3,
     physical_width: u32,
     physical_height: u32,
 ) -> Option<ProbeRoi> {
+    let center = project_rtt_point(
+        camera,
+        camera_transform,
+        world_position,
+        physical_width,
+        physical_height,
+    )?;
+    roi_around_point(center, ROI_HALF_SIZE, physical_width, physical_height)
+}
+
+fn project_main_roi(
+    camera: &Camera,
+    camera_transform: &GlobalTransform,
+    world_position: Vec3,
+    physical_width: u32,
+    physical_height: u32,
+) -> Option<ProbeRoi> {
+    let center = project_client_point(
+        camera,
+        camera_transform,
+        world_position,
+        physical_width,
+        physical_height,
+        1.0,
+    )?;
+    roi_around_point(center, ROI_HALF_SIZE, physical_width, physical_height)
+}
+
+fn project_rtt_point(
+    camera: &Camera,
+    camera_transform: &GlobalTransform,
+    world_position: Vec3,
+    physical_width: u32,
+    physical_height: u32,
+) -> Option<Vec2> {
+    project_client_point(
+        camera,
+        camera_transform,
+        world_position,
+        physical_width,
+        physical_height,
+        topdown_rtt_vertical_compensation(),
+    )
+}
+
+fn project_client_point(
+    camera: &Camera,
+    camera_transform: &GlobalTransform,
+    world_position: Vec3,
+    physical_width: u32,
+    physical_height: u32,
+    vertical_compensation: f32,
+) -> Option<Vec2> {
     let viewport = camera.logical_viewport_size()?;
     if viewport.x <= 0.0 || viewport.y <= 0.0 {
         return None;
@@ -683,8 +981,20 @@ fn project_roi(
         .world_to_viewport(camera_transform, world_position)
         .ok()?;
     let center_x = point.x / viewport.x * physical_width as f32;
-    let center_y = point.y / viewport.y * physical_height as f32;
-    let half = ROI_HALF_SIZE as f32;
+    let normalized_y = point.y / viewport.y;
+    let center_y = ((normalized_y - 0.5) * vertical_compensation + 0.5) * physical_height as f32;
+    (center_x.is_finite() && center_y.is_finite()).then_some(Vec2::new(center_x, center_y))
+}
+
+fn roi_around_point(
+    center: Vec2,
+    half_size: u32,
+    physical_width: u32,
+    physical_height: u32,
+) -> Option<ProbeRoi> {
+    let half = half_size as f32;
+    let center_x = center.x;
+    let center_y = center.y;
     if center_x < half
         || center_y < half
         || center_x + half > physical_width as f32
@@ -695,9 +1005,13 @@ fn project_roi(
     Some(ProbeRoi {
         x: (center_x - half).round() as u32,
         y: (center_y - half).round() as u32,
-        width: ROI_HALF_SIZE * 2,
-        height: ROI_HALF_SIZE * 2,
+        width: half_size * 2,
+        height: half_size * 2,
     })
+}
+
+fn point_as_json(point: Vec2) -> Value {
+    json!({"x": point.x, "y": point.y})
 }
 
 fn door_presentation_state(state: DoorState) -> DoorPresentationState {
@@ -742,12 +1056,20 @@ mod tests {
 
     #[test]
     fn actual_window_storyboard_is_complete_and_unique() {
-        assert_eq!(ProbePhase::ALL.len(), 8);
+        assert_eq!(ProbePhase::ALL.len(), 10);
         let mut ids = ProbePhase::ALL.map(ProbePhase::id).to_vec();
         ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), ProbePhase::ALL.len());
         assert_eq!(ProbePhase::DoorOpen.next(), Some(ProbePhase::DoorClosed));
+        assert_eq!(
+            ProbePhase::Bridge.next(),
+            Some(ProbePhase::WallBounceActive)
+        );
+        assert_eq!(
+            ProbePhase::WallBounceRest.next(),
+            Some(ProbePhase::ForegroundA)
+        );
         assert_eq!(ProbePhase::ForegroundB.next(), None);
     }
 
@@ -761,5 +1083,54 @@ mod tests {
         };
         assert!(roi.x + roi.width <= 1280);
         assert!(roi.y + roi.height <= 720);
+    }
+
+    #[test]
+    fn acknowledgement_is_bound_to_the_current_nonce_phase_and_generation() {
+        let valid = json!({
+            "schema_version": STATUS_SCHEMA_VERSION,
+            "status": "captured",
+            "session_nonce": "a".repeat(32),
+            "phase": "door-open",
+            "generation": 1,
+        });
+        assert!(acknowledgement_matches(
+            &valid,
+            &"a".repeat(32),
+            ProbePhase::DoorOpen,
+            1
+        ));
+        assert!(!acknowledgement_matches(
+            &json!({
+                "schema_version": STATUS_SCHEMA_VERSION,
+                "status": "captured",
+                "session_nonce": "a".repeat(32),
+                "phase": "door-open",
+                "generation": 2,
+            }),
+            &"a".repeat(32),
+            ProbePhase::DoorOpen,
+            1
+        ));
+        assert!(!acknowledgement_matches(
+            &json!({
+                "schema_version": STATUS_SCHEMA_VERSION,
+                "status": "captured",
+                "session_nonce": "b".repeat(32),
+                "phase": "door-open",
+                "generation": 1,
+            }),
+            &"a".repeat(32),
+            ProbePhase::DoorOpen,
+            1
+        ));
+    }
+
+    #[test]
+    fn rtt_roi_mapping_applies_centered_vertical_compensation() {
+        let centered = ((0.5 - 0.5) * topdown_rtt_vertical_compensation() + 0.5) * 720.0;
+        let near_top = ((0.2 - 0.5) * topdown_rtt_vertical_compensation() + 0.5) * 720.0;
+        assert_eq!(centered, 360.0);
+        assert!(near_top < 144.0);
     }
 }
