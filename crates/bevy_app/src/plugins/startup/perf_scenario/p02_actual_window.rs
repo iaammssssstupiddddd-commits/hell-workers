@@ -26,6 +26,7 @@ use std::time::Duration;
 
 use crate::plugins::startup::Camera3dRtt;
 use crate::systems::jobs::{Building, BuildingType, Door, DoorState, RenderPresentationClass};
+use crate::world::map::RIVER_Y_MIN;
 
 const ACCEPTANCE_ENV: &str = "HW_P02_PRESENTATION_ACTUAL_WINDOW";
 const STATUS_PATH_ENV: &str = "HW_P02_PRESENTATION_STATUS_PATH";
@@ -327,16 +328,7 @@ pub(crate) fn prepare_p02_actual_window_view_system(
             .map(|(_, _, transform)| transform.translation.truncate())
             .unwrap_or_else(|| WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1))
     } else {
-        let grid = match phase {
-            ProbePhase::SoulFront | ProbePhase::SoulBehind => WALL_PROBE_GRID,
-            ProbePhase::Bridge => BRIDGE_PROBE_GRID,
-            ProbePhase::WallBounceActive | ProbePhase::WallBounceRest => WALL_PROBE_GRID,
-            ProbePhase::ForegroundA | ProbePhase::ForegroundB => FOREGROUND_PROBE_GRID,
-            ProbePhase::DoorOpen | ProbePhase::DoorClosed | ProbePhase::DoorLocked => {
-                unreachable!("door phase has an expected state")
-            }
-        };
-        WorldMap::grid_to_world(grid.0, grid.1)
+        static_phase_camera_target(phase)
     };
     if let Ok((mut transform, mut projection, mut pan)) = transforms.p0().single_mut() {
         transform.translation.x = center.x;
@@ -799,12 +791,15 @@ fn build_probe_status(
             })
         }
     } else if phase == ProbePhase::Bridge {
-        let bridge_position = WorldMap::grid_to_world(BRIDGE_PROBE_GRID.0, BRIDGE_PROBE_GRID.1);
         let (bridge_entity, _, _) = owners
             .iter()
             .find(|(_, building, transform)| {
-                building.kind == BuildingType::Bridge
-                    && transform.translation.truncate() == bridge_position
+                is_fixture_building_root(
+                    building,
+                    transform,
+                    BuildingType::Bridge,
+                    BRIDGE_PROBE_GRID,
+                )
             })
             .ok_or_else(|| "missing production Bridge root".to_string())?;
         let (_, transform, visibility, inherited_visibility) = building_visuals
@@ -951,18 +946,49 @@ fn phase_camera_target(
             .map(|(_, _, transform)| transform.translation.truncate())
             .ok_or_else(|| format!("missing {expected_state:?} Door camera target"));
     }
-    let grid = match phase {
+    Ok(static_phase_camera_target(phase))
+}
+
+fn static_phase_camera_target(phase: ProbePhase) -> Vec2 {
+    match phase {
         ProbePhase::SoulFront
         | ProbePhase::SoulBehind
         | ProbePhase::WallBounceActive
-        | ProbePhase::WallBounceRest => WALL_PROBE_GRID,
-        ProbePhase::Bridge => BRIDGE_PROBE_GRID,
-        ProbePhase::ForegroundA | ProbePhase::ForegroundB => FOREGROUND_PROBE_GRID,
+        | ProbePhase::WallBounceRest => {
+            WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1)
+        }
+        // A Bridge anchor is not its draw position: the production placement
+        // geometry centers it over the river. Every storyboard camera route
+        // must follow the same fixture geometry.
+        ProbePhase::Bridge => {
+            fixture_building_draw_position(BuildingType::Bridge, BRIDGE_PROBE_GRID)
+        }
+        ProbePhase::ForegroundA | ProbePhase::ForegroundB => {
+            WorldMap::grid_to_world(FOREGROUND_PROBE_GRID.0, FOREGROUND_PROBE_GRID.1)
+        }
         ProbePhase::DoorOpen | ProbePhase::DoorClosed | ProbePhase::DoorLocked => {
             unreachable!("door phase has an expected state")
         }
-    };
-    Ok(WorldMap::grid_to_world(grid.0, grid.1))
+    }
+}
+
+/// Returns the fixture's production draw position for an anchor.
+///
+/// The indoor-light fixture spawns completed blueprints through this exact
+/// placement geometry. In particular, a Bridge's logical anchor controls its
+/// river footprint while its root and 3D visual are centered over that span.
+fn fixture_building_draw_position(kind: BuildingType, anchor: (i32, i32)) -> Vec2 {
+    hw_ui::selection::building_geometry(kind, anchor, RIVER_Y_MIN).draw_pos
+}
+
+fn is_fixture_building_root(
+    building: &Building,
+    transform: &Transform,
+    kind: BuildingType,
+    anchor: (i32, i32),
+) -> bool {
+    building.kind == kind
+        && transform.translation.truncate() == fixture_building_draw_position(kind, anchor)
 }
 
 fn project_rtt_roi(
@@ -1147,6 +1173,46 @@ mod tests {
             Some(ProbePhase::ForegroundA)
         );
         assert_eq!(ProbePhase::ForegroundB.next(), None);
+    }
+
+    #[test]
+    fn bridge_probe_uses_the_fixture_draw_position_not_its_anchor_center() {
+        let draw_position = fixture_building_draw_position(BuildingType::Bridge, BRIDGE_PROBE_GRID);
+        assert_eq!(
+            draw_position,
+            hw_ui::selection::building_geometry(
+                BuildingType::Bridge,
+                BRIDGE_PROBE_GRID,
+                RIVER_Y_MIN,
+            )
+            .draw_pos
+        );
+        assert_ne!(
+            draw_position,
+            WorldMap::grid_to_world(BRIDGE_PROBE_GRID.0, BRIDGE_PROBE_GRID.1),
+        );
+        assert_eq!(
+            static_phase_camera_target(ProbePhase::Bridge),
+            draw_position
+        );
+        let bridge = Building {
+            kind: BuildingType::Bridge,
+            is_provisional: false,
+        };
+        assert!(is_fixture_building_root(
+            &bridge,
+            &Transform::from_translation(draw_position.extend(0.0)),
+            BuildingType::Bridge,
+            BRIDGE_PROBE_GRID,
+        ));
+        assert!(!is_fixture_building_root(
+            &bridge,
+            &Transform::from_translation(
+                WorldMap::grid_to_world(BRIDGE_PROBE_GRID.0, BRIDGE_PROBE_GRID.1).extend(0.0),
+            ),
+            BuildingType::Bridge,
+            BRIDGE_PROBE_GRID,
+        ));
     }
 
     #[test]
