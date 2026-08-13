@@ -31,8 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import native_acceptance as native  # noqa: E402
 
 
-SCHEMA_VERSION = 3
-PROFILE = "p02-presentation-actual-window-v3"
+SCHEMA_VERSION = 4
+PROFILE = "p02-presentation-actual-window-v4"
 QUALITIES = ("high", "medium", "low")
 SCALE_FACTORS = (1.0, 1.5, 2.0)
 VISIBILITY = (("visible", "gpu"), ("hidden", "cpu"))
@@ -100,6 +100,39 @@ def missing_runtime_assets(repo: Path) -> list[str]:
     ]
 
 
+def runtime_asset_fingerprint(repo: Path) -> str:
+    """Hash the complete local asset view used by the native fixture.
+
+    The project deliberately keeps production art out of Git.  A detached
+    validation worktree may therefore expose it through a read-only local
+    directory symlink.  The lexical asset paths and bytes, rather than the
+    host-specific symlink target, are the evidence input; a changed image or
+    missing asset invalidates the planned matrix and later revalidation.
+    """
+    root = repo / "assets"
+    digest = hashlib.sha256()
+    visited_directories: set[str] = set()
+    for current, directories, files in os.walk(root, followlinks=True):
+        resolved = str(Path(current).resolve())
+        if resolved in visited_directories:
+            directories[:] = []
+            continue
+        visited_directories.add(resolved)
+        directories.sort()
+        for name in sorted(files):
+            asset = Path(current) / name
+            if not asset.is_file():
+                continue
+            relative = asset.relative_to(repo).as_posix()
+            digest.update(b"asset\\0")
+            digest.update(relative.encode("utf-8"))
+            digest.update(b"\\0")
+            with asset.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+    return digest.hexdigest()
+
+
 def require_object(value: Any, label: str, fields: set[str]) -> dict[str, Any]:
     native.require(isinstance(value, dict), f"{label} must be an object")
     actual = set(value)
@@ -108,6 +141,29 @@ def require_object(value: Any, label: str, fields: set[str]) -> dict[str, Any]:
         f"{label} fields differ: expected {sorted(fields)}, got {sorted(actual)}",
     )
     return value
+
+
+def probe_failure_message(value: Any, *, session_nonce: str) -> str | None:
+    """Validate and preserve a game-owned terminal probe failure."""
+    if not isinstance(value, dict) or value.get("status") != "failed":
+        return None
+    status = require_object(
+        value,
+        "P02 failed probe status",
+        {"schema_version", "status", "session_nonce", "phase", "generation", "reason"},
+    )
+    native.require(status["schema_version"] == SCHEMA_VERSION, "P02 failed probe schema differs")
+    native.require(status["session_nonce"] == session_nonce, "P02 failed probe session nonce differs")
+    native.require(status["phase"] in PHASES, "P02 failed probe phase is invalid")
+    native.require(
+        isinstance(status["generation"], int) and status["generation"] > 0,
+        "P02 failed probe generation is invalid",
+    )
+    native.require(
+        isinstance(status["reason"], str) and status["reason"],
+        "P02 failed probe reason is invalid",
+    )
+    return status["reason"]
 
 
 def require_int(value: Any, label: str, *, minimum: int | None = None) -> int:
@@ -772,6 +828,7 @@ def run_case(
     environment["HW_P02_PRESENTATION_SESSION_NONCE"] = session_nonce
     captures: dict[str, dict[str, Any]] = {}
     images: dict[str, Image] = {}
+    retain_probe_status = False
     deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
     with log_path.open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
@@ -792,6 +849,15 @@ def run_case(
                     except Exception:
                         status_value = None
                     if status_value is not None:
+                        retain_probe_status = (
+                            isinstance(status_value, dict)
+                            and status_value.get("status") == "failed"
+                        )
+                        failure = probe_failure_message(status_value, session_nonce=session_nonce)
+                        if failure is not None:
+                            raise native.AcceptanceError(
+                                f"P02 case {artifact.name} production probe failed: {failure}"
+                            )
                         phase = status_value.get("phase") if isinstance(status_value, dict) else None
                         if isinstance(phase, str) and phase in PHASES and phase not in captures:
                             status = validate_probe_status(status_value, phase=phase, visibility=visibility)
@@ -820,7 +886,8 @@ def run_case(
         finally:
             if process.poll() is None:
                 native.stop_command_process(process)
-            status_path.unlink(missing_ok=True)
+            if not retain_probe_status:
+                status_path.unlink(missing_ok=True)
             ack_path.unlink(missing_ok=True)
     native.require(returncode == 0, f"P02 case {artifact.name} exited with {returncode}")
     native.require(tuple(captures) == PHASES, f"P02 case {artifact.name} did not capture every storyboard phase")
@@ -1017,6 +1084,35 @@ def evaluate_cross_case_bridge(
     return checks
 
 
+def p02_build_command() -> list[str]:
+    return [
+        "python3", "scripts/dev.py", "cargo", "--", "build", "--profile", "profiling",
+        "--no-default-features", "--features", "profiling",
+    ]
+
+
+def validate_terminal_job_metadata(job: dict[str, Any]) -> None:
+    native.require(
+        job["commands"] == [{"stage": "build", "argv": p02_build_command()}],
+        "P02 job command ledger differs",
+    )
+    native.require(job["current_stage"] == "build", "P02 job current stage differs")
+    native.require(job["child_pid"] is None, "P02 job retained a child PID")
+    native.require(job["completed_stages"] == ["build"], "P02 job completed-stage ledger differs")
+    resource_events = job["stage_start_resource_events"]
+    native.require(
+        isinstance(resource_events, list) and len(resource_events) == 1,
+        "P02 job stage-start resource evidence differs",
+    )
+    resource_event = resource_events[0]
+    native.require(
+        isinstance(resource_event, dict)
+        and resource_event.get("stage") == "build"
+        and resource_event.get("status") == "ready",
+        "P02 job build resource gate was not ready",
+    )
+
+
 def verify_root(
     root: Path,
     *,
@@ -1040,6 +1136,7 @@ def verify_root(
             "subject_commit",
             "source_fingerprint",
             "harness_fingerprint",
+            "runtime_assets_fingerprint",
             "profiling_binary_sha256",
             "capture_scope",
             "cases",
@@ -1059,28 +1156,36 @@ def verify_root(
             "subject_commit",
             "source_fingerprint",
             "harness_fingerprint",
+            "runtime_assets_fingerprint",
             "profiling_binary_sha256",
             "started_at",
             "heartbeat_at",
             "cases_completed",
             "current_case",
             "completed_at",
+            "commands",
+            "current_stage",
+            "child_pid",
+            "completed_stages",
+            "stage_start_resource_events",
         },
     )
     native.require(manifest["schema_version"] == SCHEMA_VERSION, "P02 manifest schema differs")
-    native.require(manifest["status"] == "pass" and manifest["profile"] == PROFILE, "P02 manifest is not the v3 pass profile")
-    native.require(job["schema_version"] == SCHEMA_VERSION and job["status"] == "valid" and job["profile"] == PROFILE, "P02 job is not valid v3 evidence")
+    native.require(manifest["status"] == "pass" and manifest["profile"] == PROFILE, "P02 manifest is not the v4 pass profile")
+    native.require(job["schema_version"] == SCHEMA_VERSION and job["status"] == "valid" and job["profile"] == PROFILE, "P02 job is not valid v4 evidence")
     for field in (
         "repo",
         "adapter",
         "subject_commit",
         "source_fingerprint",
         "harness_fingerprint",
+        "runtime_assets_fingerprint",
         "profiling_binary_sha256",
     ):
         native.require(job[field] == manifest[field], f"P02 job/manifest {field} differs")
     native.require(isinstance(manifest["adapter"], str) and manifest["adapter"], "P02 adapter is invalid")
     native.require(job["cases_completed"] == len(EXPECTED_CASES) and job["current_case"] is None, "P02 job case completion differs")
+    validate_terminal_job_metadata(job)
     if subject_commit is not None:
         native.require(manifest["subject_commit"] == subject_commit, "P02 matrix subject differs")
     if source_fingerprint is not None:
@@ -1091,6 +1196,10 @@ def verify_root(
     native.require(native.git_subject(repo) == manifest["subject_commit"], "P02 current subject differs from artifact")
     native.require(native.source_fingerprint(repo) == manifest["source_fingerprint"], "P02 current source differs from artifact")
     native.require(native.native_harness_fingerprint(repo) == manifest["harness_fingerprint"], "P02 current harness differs from artifact")
+    native.require(
+        runtime_asset_fingerprint(repo) == manifest["runtime_assets_fingerprint"],
+        "P02 current runtime assets differ from artifact",
+    )
     binary = repo / "target/profiling/bevy_app"
     native.require(binary.is_file() and not binary.is_symlink(), "P02 profiling binary is missing for revalidation")
     native.require(sha256(binary) == manifest["profiling_binary_sha256"], "P02 profiling binary hash differs")
@@ -1140,6 +1249,7 @@ def plan(args: argparse.Namespace) -> int:
             "P02 actual-window subject is missing runtime asset "
             f"{relative}; provision the ignored local asset mirror before planning"
         )
+    assets_fingerprint = runtime_asset_fingerprint(repo)
     subject = native.git_subject(repo)
     fingerprint = native.source_fingerprint(repo)
     harness = native.native_harness_fingerprint(repo)
@@ -1156,6 +1266,7 @@ def plan(args: argparse.Namespace) -> int:
         "python3", str(Path(__file__).resolve()), "run", "--repo", str(repo),
         "--job-root", str(root), "--subject-commit", subject,
         "--source-fingerprint", fingerprint, "--harness-fingerprint", harness,
+        "--runtime-assets-fingerprint", assets_fingerprint,
         "--adapter", args.adapter,
     ]
     native.print_json(
@@ -1168,6 +1279,7 @@ def plan(args: argparse.Namespace) -> int:
             "subject_commit": subject,
             "source_fingerprint": fingerprint,
             "harness_fingerprint": harness,
+            "runtime_assets_fingerprint": assets_fingerprint,
             "failures": failures,
             "resources": resources,
             "launcher_command": command,
@@ -1198,6 +1310,16 @@ def run(args: argparse.Namespace) -> int:
     native.require(native.source_fingerprint(repo) == args.source_fingerprint, "P02 source changed before launch")
     native.require(native.native_harness_fingerprint(repo) == args.harness_fingerprint, "P02 harness changed before launch")
     native.assert_clean_subject(repo, args.subject_commit)
+    missing_assets = missing_runtime_assets(repo)
+    native.require(
+        not missing_assets,
+        "P02 actual-window subject is missing runtime assets before launch: "
+        + ", ".join(missing_assets),
+    )
+    native.require(
+        runtime_asset_fingerprint(repo) == args.runtime_assets_fingerprint,
+        "P02 runtime asset fingerprint changed after planning",
+    )
     root = Path(args.job_root).resolve()
     native.require(not root.exists(), f"job root already exists: {root}")
     root.mkdir(parents=True)
@@ -1210,6 +1332,7 @@ def run(args: argparse.Namespace) -> int:
         "subject_commit": args.subject_commit,
         "source_fingerprint": args.source_fingerprint,
         "harness_fingerprint": args.harness_fingerprint,
+        "runtime_assets_fingerprint": args.runtime_assets_fingerprint,
         "profiling_binary_sha256": None,
         "started_at": native.utc_now(),
         "heartbeat_at": None,
@@ -1245,10 +1368,7 @@ def _run_p02_job(
     root: Path,
     state: dict[str, Any],
 ) -> int:
-    build = [
-        "python3", "scripts/dev.py", "cargo", "--", "build", "--profile", "profiling",
-        "--no-default-features", "--features", "profiling",
-    ]
+    build = p02_build_command()
     native.run_command(
         "build", build, repo=repo, env=os.environ.copy(), log_path=root / "build.log", job_file=root / "job.json", state=state
     )
@@ -1258,6 +1378,10 @@ def _run_p02_job(
     state["profiling_binary_sha256"] = binary_hash
     results = []
     for quality, scale, visibility, render in EXPECTED_CASES:
+        native.require(
+            runtime_asset_fingerprint(repo) == args.runtime_assets_fingerprint,
+            "P02 runtime assets changed before the next case",
+        )
         identifier = case_id(quality, scale, visibility)
         state["current_case"] = identifier
         native.atomic_write_json(root / "job.json", {**state, "heartbeat_at": native.utc_now()})
@@ -1292,6 +1416,7 @@ def _run_p02_job(
         "subject_commit": args.subject_commit,
         "source_fingerprint": args.source_fingerprint,
         "harness_fingerprint": args.harness_fingerprint,
+        "runtime_assets_fingerprint": args.runtime_assets_fingerprint,
         "profiling_binary_sha256": binary_hash,
         "capture_scope": native.SAVE_CATALOG_CAPTURE_SCOPE,
         "cases": results,
@@ -1368,6 +1493,41 @@ def self_test() -> int:
         native.require(
             not missing_runtime_assets(root),
             "P02 missing-runtime-assets self-test rejected a complete mirror",
+        )
+        asset_fingerprint = runtime_asset_fingerprint(root)
+        (root / REQUIRED_RUNTIME_ASSETS[-1]).write_bytes(b"changed-fixture-asset")
+        native.require(
+            runtime_asset_fingerprint(root) != asset_fingerprint,
+            "P02 runtime asset fingerprint did not detect content mutation",
+        )
+        terminal_job = {
+            "commands": [{"stage": "build", "argv": p02_build_command()}],
+            "current_stage": "build",
+            "child_pid": None,
+            "completed_stages": ["build"],
+            "stage_start_resource_events": [{"stage": "build", "status": "ready"}],
+        }
+        validate_terminal_job_metadata(terminal_job)
+        expect_failure(
+            lambda: validate_terminal_job_metadata({**terminal_job, "child_pid": 123}),
+            "terminal job retained child pid",
+        )
+        failed_probe = {
+            "schema_version": SCHEMA_VERSION,
+            "status": "failed",
+            "session_nonce": "c" * 32,
+            "phase": "bridge",
+            "generation": 6,
+            "reason": "missing production Bridge3dVisual",
+        }
+        native.require(
+            probe_failure_message(failed_probe, session_nonce="c" * 32)
+            == "missing production Bridge3dVisual",
+            "P02 failed probe reason was not preserved",
+        )
+        expect_failure(
+            lambda: probe_failure_message(failed_probe, session_nonce="d" * 32),
+            "failed probe nonce mismatch",
         )
         width, height = 640, 360
         pixels = bytes([48, 96, 64] * width * height)
@@ -1542,6 +1702,7 @@ def parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--subject-commit", required=True)
     run_parser.add_argument("--source-fingerprint", required=True)
     run_parser.add_argument("--harness-fingerprint", required=True)
+    run_parser.add_argument("--runtime-assets-fingerprint", required=True)
     run_parser.add_argument("--adapter", default="Intel")
     verify_parser = commands.add_parser("verify")
     verify_parser.add_argument("--job-root", required=True)
@@ -1558,6 +1719,7 @@ def main() -> int:
             (args.subject_commit, "subject", 40),
             (args.source_fingerprint, "source fingerprint", 64),
             (args.harness_fingerprint, "harness fingerprint", 64),
+            (args.runtime_assets_fingerprint, "runtime asset fingerprint", 64),
         ):
             native.require(re.fullmatch(f"[0-9a-f]{{{length}}}", value) is not None, f"invalid P02 {label}")
         return run(args)
