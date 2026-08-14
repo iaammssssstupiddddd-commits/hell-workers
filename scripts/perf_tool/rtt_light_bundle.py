@@ -98,6 +98,7 @@ EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "current": CURRENT_RENDER_RESOURCES,
     "p01": P01_RENDER_RESOURCES,
     "p02": P01_RENDER_RESOURCES,
+    "p03": P01_RENDER_RESOURCES,
 }
 SOURCE_CHECKPOINTS_RENDERDOC = (
     "start",
@@ -110,6 +111,12 @@ SOURCE_CHECKPOINTS_RENDERDOC = (
     "after-memory",
     "before-registration",
 )
+
+
+def _expected_source_checkpoints(stage: str) -> tuple[str, ...]:
+    if stage != "p03":
+        return SOURCE_CHECKPOINTS_RENDERDOC
+    return (*SOURCE_CHECKPOINTS_RENDERDOC[:-1], "after-field-core", "before-registration")
 
 
 def measurement_harness_dirty_paths_only(entries: Any) -> bool:
@@ -386,7 +393,7 @@ def _validate_job(
     ):
         raise RuntimeError("job tooling provenance is invalid")
     checks = job["source_checks"]
-    expected_checkpoints = SOURCE_CHECKPOINTS_RENDERDOC
+    expected_checkpoints = _expected_source_checkpoints(job["stage_id"])
     if (
         not isinstance(checks, list)
         or any(not isinstance(check, dict) for check in checks)
@@ -505,6 +512,8 @@ def _expected_matrix(
         "capture_kind": (
             "fixed-step-behavior"
             if behavior
+            else "field-core"
+            if leg_id == "field-core"
             else "fixed-step-determinism"
             if fixed
             else "frame-time"
@@ -744,8 +753,10 @@ def _validate_run_file_set(
         if leg_id == "memory":
             data_files.add("memory.csv")
             root_files |= {"profile-artifact.json", "resource-usage.txt"}
-        if stage == "p02":
+        if stage in {"p02", "p03"}:
             data_files.add("p02_presentation.csv")
+    elif leg_id == "field-core":
+        data_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
     else:
         raise RuntimeError(f"session file-set validator does not support leg {leg_id}")
     actual_root = {path.name for path in run_dir.iterdir()}
@@ -810,7 +821,7 @@ def _revalidate_run(
     if not isinstance(returncode, int):
         raise RuntimeError(f"{run_dir} run metadata returncode is invalid")
     formal = contract["formal_matrix"]
-    fixed = leg_id in {"audit", "behavior"}
+    fixed = leg_id in {"audit", "behavior", "field-core"}
     windowed = leg_id in {"capture", "memory"}
     validation = validate_run(
         run_dir,
@@ -826,6 +837,8 @@ def _revalidate_run(
         capture_kind=(
             "fixed-step-behavior"
             if leg_id == "behavior"
+            else "field-core"
+            if leg_id == "field-core"
             else "fixed-step-determinism"
             if leg_id == "audit"
             else "frame-time"
@@ -843,7 +856,13 @@ def _revalidate_run(
         expected_rtt_quality=formal["window"]["rtt_quality"],
         expected_contract=contract["contract_id"],
         expected_stage=stage,
-        expected_lane="behavior" if leg_id == "behavior" else "static",
+        expected_lane=(
+            "behavior"
+            if leg_id == "behavior"
+            else "field-core"
+            if leg_id == "field-core"
+            else "static"
+        ),
     )
     if leg_id == "memory":
         validation.profile_artifact = _load_memory_profile(run_dir, validation)
@@ -865,6 +884,7 @@ def _revalidate_run(
         "indoor_light_fixture",
         "indoor_light_layout",
         "indoor_light_presentation",
+        "indoor_light_field",
         "p02_presentation",
         "deconstruction_fixture",
         "timeline",
@@ -1018,6 +1038,12 @@ def _load_session_evidence(
             "environment_contract_match": True,
             "required_sidecars_valid": True,
         }
+        if leg_id == "field-core":
+            layout = build_fixture_layout(contract, formal["size"])
+            evidence[formal["case_id"]]["fixture"] = {
+                "fixture_checksum": layout["layout_checksum"],
+                **layout["counts"],
+            }
     return manifest, evidence
 
 
@@ -1728,7 +1754,7 @@ def _load_renderdoc_evidence(
             )
     render_inventory = _validate_render_inventory_json(runtime["render_inventory"])
     p02_presentation = runtime.get("p02_presentation")
-    if stage == "p02" and not isinstance(p02_presentation, dict):
+    if stage in {"p02", "p03"} and not isinstance(p02_presentation, dict):
         raise RuntimeError("P02 RenderDoc evidence has no presentation checkpoint")
     mask_resource_id = tracked_ids.get("mask_target")
     mask_pass_count = (
@@ -1818,7 +1844,7 @@ def _load_renderdoc_evidence(
                             "state_and_bounce_probes_pass"
                         ],
                     }
-                    if stage == "p02"
+                    if stage in {"p02", "p03"}
                     else {}
                 ),
             },
@@ -1882,7 +1908,9 @@ def collect_attempt_evidence(
         raise RuntimeError("attempt case set or order differs from the formal matrix")
     capture_sha = manifests["capture"]["binary"]["sha256"]
     renderdoc_sha = manifests["renderdoc"]["binary"]["sha256"]
-    for leg_id in ("audit", "behavior"):
+    for leg_id in ("audit", "behavior", "field-core"):
+        if leg_id not in manifests:
+            continue
         if manifests[leg_id]["binary"]["sha256"] != capture_sha:
             raise RuntimeError(f"{leg_id} did not use the Capture binary")
     if renderdoc_sha == capture_sha:
@@ -1932,7 +1960,20 @@ def _only_equal(values: list[Any], *, label: str) -> Any:
 
 def _fixture_projection(evidence: dict[str, Any]) -> dict[str, str]:
     validations: list[Validation] = evidence["validations"]
-    if validations:
+    if evidence["formal"]["leg_id"] == "field-core":
+        fixture = evidence.get("fixture")
+        if not isinstance(fixture, dict):
+            raise RuntimeError("field-core evidence has no canonical fixture identity")
+        result = {
+            "fixture_checksum": str(fixture["fixture_checksum"]),
+            "rooms": str(fixture["rooms"]),
+            "completed_floors": str(fixture["completed_floors"]),
+            "completed_walls": str(fixture["completed_walls"]),
+            "doors": str(fixture["doors"]),
+            "supplied_lamp_candidates": str(fixture["supplied_lamp_candidates"]),
+            "unsupplied_lamp_candidates": str(fixture["unsupplied_lamp_candidates"]),
+        }
+    elif validations:
         fixture = _only_equal(
             [validation.indoor_light_fixture for validation in validations],
             label=f"{evidence['formal']['case_id']} fixture sidecar",
@@ -2073,6 +2114,29 @@ def build_projection_rows(
                 raise RuntimeError("three-run memory median is not an integer")
             row["process_max_rss_kib"] = str(rss_median)
             row["allocation_peak_live_bytes"] = str(live_median)
+        if applicability["field_core"] == "available":
+            field_rows = [
+                validation.indoor_light_field for validation in evidence["validations"]
+            ]
+            if any(not isinstance(field, dict) for field in field_rows):
+                raise RuntimeError(f"{formal['case_id']} has no field-core evidence")
+            row["field_rebuild_p95_ms"] = _format_nonnegative_float(
+                statistics.median(field["field_rebuild_p95_ms"] for field in field_rows)
+            )
+            row["field_rebuild_p99_ms"] = _format_nonnegative_float(
+                statistics.median(field["field_rebuild_p99_ms"] for field in field_rows)
+            )
+        if applicability["field_rebuild_allocation"] == "available":
+            allocations = [
+                validation.indoor_light_field["field_rebuild_allocation"]
+                for validation in evidence["validations"]
+                if validation.indoor_light_field is not None
+            ]
+            allocation = _only_equal(
+                allocations, label=f"{formal['case_id']} field rebuild allocation"
+            )
+            row["field_rebuild_allocation_events"] = str(allocation["events"])
+            row["field_rebuild_allocation_bytes"] = str(allocation["bytes"])
         rows.append(row)
     validate_projection_rows(contract, stage, rows)
     return rows
@@ -2182,6 +2246,22 @@ def _gate_observed(
         return "true" if evidence["environment_contract_match"] else "false"
     if metric_id == "required_sidecars_valid":
         return "true" if evidence["required_sidecars_valid"] else "false"
+    if metric_id in {
+        "grid_cells",
+        "logical_payload_bytes",
+        "supplied_emitters",
+        "radius_tiles",
+    }:
+        fields = [validation.indoor_light_field for validation in validations]
+        if not fields or any(not isinstance(field, dict) for field in fields):
+            raise RuntimeError(f"{case_id} has no field-core shape evidence")
+        value = _only_equal([field[metric_id] for field in fields], label=metric_id)
+        return str(value)
+    if metric_id in {"field_rebuild_p95_ms", "field_rebuild_p99_ms"}:
+        row = subject_projection.get(case_id)
+        if row is None or not row.get(metric_id):
+            raise RuntimeError(f"{case_id} has no projected {metric_id}")
+        return row[metric_id]
     if metric_id in {
         "auto_attempted",
         "auto_applied",

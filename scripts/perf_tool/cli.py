@@ -150,7 +150,7 @@ def main() -> int:
     args = build_parser().parse_args()
     try:
         validate_arguments(args)
-        if args.command in {"run", "audit", "behavior"}:
+        if args.command in {"run", "audit", "behavior", "field-core"}:
             return run_suite(args)
         if args.command == "summarize":
             return 0 if summarize_session(

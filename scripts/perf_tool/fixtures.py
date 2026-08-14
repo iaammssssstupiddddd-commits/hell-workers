@@ -2708,6 +2708,81 @@ def self_test() -> int:
         assert audit_args.audit_ticks == 128
         assert audit_args.familiar_policies == "baseline"
         assert audit_args.operation_dialog_modes == "hidden"
+        field_core_args = build_parser().parse_args(["field-core", "--dry-run"])
+        validate_arguments(field_core_args)
+        assert field_core_args.capture_kind == "field-core"
+        assert field_core_args.stage == "p03"
+        assert field_core_args.lane == "field-core"
+        assert field_core_args.sizes == "large"
+        rejected_pre_p03_field = build_parser().parse_args(
+            ["field-core", "--dry-run", "--stage", "p02"]
+        )
+        try:
+            validate_arguments(rejected_pre_p03_field)
+        except ValueError as error:
+            assert "--stage p03" in str(error)
+        else:
+            raise AssertionError("pre-P03 field-core unexpectedly passed")
+
+        field_data = root / "field-core-data"
+        field_data.mkdir()
+        input_checksum = "1" * 64
+        output_checksum = "2" * 64
+        (field_data / "indoor_light_cpu.csv").write_text(
+            ",".join(INDOOR_LIGHT_CPU_COLUMNS)
+            + "\n"
+            + "".join(
+                f"{index},10000,50,5,{input_checksum},{output_checksum},{index + 1}\n"
+                for index in range(256)
+            ),
+            encoding="utf-8",
+        )
+        write_json(
+            field_data / "indoor_light_field.json",
+            {
+                "schema_version": 1,
+                "grid_cells": 10_000,
+                "logical_payload_bytes": 80_000,
+                "packed_payload_bytes": 40_000,
+                "supplied_emitters": 50,
+                "radius_tiles": 5,
+                "warmup_calls": 32,
+                "measure_calls": 256,
+                "steady_updates": 600,
+                "steady_full_scans": 0,
+                "steady_field_rebuilds": 0,
+                "steady_revision_increments": 0,
+                "max_rebuilds_per_update": 0,
+                "input_checksum": input_checksum,
+                "radiance_checksum": "3" * 64,
+                "mask_checksum": "4" * 64,
+                "field_checksum": output_checksum,
+                "field_rebuild_allocation": {
+                    "scope": "hw_infra::lighting::rebuild_field explicit owned buffers",
+                    "events": 6,
+                    "bytes": 210_400,
+                },
+            },
+        )
+        parsed_field, field_errors = read_indoor_light_field(field_data)
+        assert not field_errors
+        assert parsed_field is not None
+        assert parsed_field["field_rebuild_p95_ms"] == 0.000243
+        malformed_cpu = field_data / "indoor_light_cpu.csv"
+        original_cpu = malformed_cpu.read_text(encoding="utf-8")
+        malformed_cpu.write_text("\n".join(original_cpu.splitlines()[:-1]) + "\n", encoding="utf-8")
+        assert read_indoor_light_field(field_data)[0] is None
+        malformed_cpu.write_text(original_cpu, encoding="utf-8")
+        metadata_path = field_data / "indoor_light_field.json"
+        original_metadata = metadata_path.read_text(encoding="utf-8")
+        metadata_path.write_text(
+            original_metadata.replace("{\n", "{\n  \"schema_version\": 1,\n", 1),
+            encoding="utf-8",
+        )
+        duplicate_field, duplicate_errors = read_indoor_light_field(field_data)
+        assert duplicate_field is None
+        assert any("duplicate JSON key: schema_version" in error for error in duplicate_errors)
+        metadata_path.write_text(original_metadata, encoding="utf-8")
         indoor_args = build_parser().parse_args(
             [
                 "audit",

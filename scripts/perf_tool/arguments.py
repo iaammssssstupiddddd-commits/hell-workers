@@ -191,6 +191,29 @@ def build_parser() -> argparse.ArgumentParser:
         preflight_runs=0,
         instrumentation="capture",
     )
+    field_core_parser = subparsers.add_parser(
+        "field-core",
+        help="run the exact P03 pure indoor-light field rebuild contract",
+    )
+    add_run_arguments(field_core_parser, fixed_step_audit=True)
+    field_core_parser.set_defaults(
+        workload="indoor-light",
+        contract="rtt-light-v1",
+        stage="p03",
+        lane="field-core",
+        sizes="large",
+        renders="cpu",
+        backend="vulkan",
+        window_backend="headless",
+        present_mode="novsync",
+        seed=20_260_803,
+        repeat=3,
+        preflight_runs=0,
+        instrumentation="capture",
+        capture_kind="field-core",
+        clock_mode="fixed",
+        allow_log_pattern=[DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING],
+    )
     summarize_parser = subparsers.add_parser("summarize", help="rebuild aggregate.csv and report.md")
     summarize_parser.add_argument("session")
     summarize_parser.add_argument("--warmup-checksum-policy", choices=["require", "record"])
@@ -259,7 +282,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
         if args.min_runs < 1:
             raise ValueError("--min-runs must be at least 1")
         return
-    if args.command not in {"run", "audit", "behavior"}:
+    if args.command not in {"run", "audit", "behavior", "field-core"}:
         return
     if args.repeat < 1:
         raise ValueError("--repeat must be at least 1")
@@ -299,7 +322,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
             "validated Tracy runs must omit --tracy-capture-secs so the runner can "
             "disconnect Tracy at the measure-artifact boundary"
         )
-    if args.command in {"audit", "behavior"} and args.instrumentation != "capture":
+    if args.command in {"audit", "behavior", "field-core"} and args.instrumentation != "capture":
         raise ValueError("fixed-step audit and behavior only support --instrumentation capture")
     if args.environment_lock is not None and not (
         args.command == "run"
@@ -324,7 +347,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError(
                 f"--instrumentation {args.instrumentation} requires " + ", ".join(missing_tools)
             )
-    if args.command in {"audit", "behavior"}:
+    if args.command in {"audit", "behavior", "field-core"}:
         if args.fixed_hz <= 0:
             raise ValueError("--fixed-hz must be positive")
         if args.warmup_ticks <= DETERMINISM_EARLY_CHECKPOINTS[-1][1]:
@@ -453,15 +476,22 @@ def validate_arguments(args: argparse.Namespace) -> None:
             )
         return
 
-    expected_lane = "behavior" if args.command == "behavior" else "static"
+    expected_lane = (
+        "behavior"
+        if args.command == "behavior"
+        else "field-core"
+        if args.command == "field-core"
+        else "static"
+    )
+    expected_stages = {"p03"} if args.command == "field-core" else {"current", "p01", "p02", "p03"}
     if (
         args.contract != "rtt-light-v1"
-        or args.stage not in {"current", "p01", "p02"}
+        or args.stage not in expected_stages
         or args.lane != expected_lane
     ):
         raise ValueError(
             "--workload indoor-light currently requires --contract rtt-light-v1 "
-            f"--stage current|p01|p02 --lane {expected_lane}"
+            f"--stage {'p03' if args.command == 'field-core' else 'current|p01|p02|p03'} --lane {expected_lane}"
         )
     contract = load_rtt_light_contract(args.contract)
     validate_stage_lane(contract, args.stage, args.lane)
@@ -480,6 +510,27 @@ def validate_arguments(args: argparse.Namespace) -> None:
         raise ValueError(
             f"indoor-light rtt-light-v1 requires --seed {contract['formal_matrix']['seed']}"
         )
+    if args.command == "field-core":
+        if sizes != ["large"] or renders != ["cpu"]:
+            raise ValueError("p03 field-core requires --sizes large --renders cpu")
+        if args.window_backend != "headless":
+            raise ValueError("p03 field-core requires --window-backend headless")
+        if args.backend != contract["formal_matrix"]["backend"]:
+            raise ValueError(
+                f"p03 field-core requires --backend {contract['formal_matrix']['backend']}"
+            )
+        if args.present_mode != contract["formal_matrix"]["present_mode"]:
+            raise ValueError(
+                "p03 field-core requires --present-mode "
+                + contract["formal_matrix"]["present_mode"]
+            )
+        if args.repeat != 3 or args.preflight_runs != 0:
+            raise ValueError("p03 field-core requires --repeat 3 --preflight-runs 0")
+        if args.fixed_hz != contract["formal_matrix"]["fixed_hz"]:
+            raise ValueError(
+                f"p03 field-core requires --fixed-hz {contract['formal_matrix']['fixed_hz']}"
+            )
+        return
     if args.command == "behavior":
         behavior_cases = parse_csv_list(
             args.behavior_cases,

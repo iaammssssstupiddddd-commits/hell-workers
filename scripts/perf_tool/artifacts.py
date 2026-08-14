@@ -1169,6 +1169,7 @@ def classify_log_warnings(log_text: str, allow_patterns: Iterable[str]) -> tuple
             "PERF_CAPTURE: wrote" in line
             or "PERF_DETERMINISM_AUDIT: wrote" in line
             or "PERF_BEHAVIOR: wrote" in line
+            or "PERF_FIELD_CORE: wrote" in line
         ):
             capture_completed = True
             continue
@@ -1295,7 +1296,7 @@ def read_behavior_timeline(
 
     comparable_rows = rows[: len(expected_steps)]
     if behavior_case == "door-state-v1":
-        stage_prefix = "p02" if stage_id == "p02" else "current"
+        stage_prefix = "p02" if stage_id in {"p02", "p03"} else "current"
         for index, (row, expected) in enumerate(zip(comparable_rows, expected_steps)):
             exact = {
                 "step_index": expected["step_index"],
@@ -1414,6 +1415,134 @@ def read_behavior_timeline(
     return rows, save_artifact, []
 
 
+def read_indoor_light_field(
+    data_dir: Path,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in payload:
+                raise ValueError(f"duplicate JSON key: {key}")
+            payload[key] = value
+        return payload
+
+    errors: list[str] = []
+    rows, csv_errors = read_exact_csv_rows(
+        data_dir / "indoor_light_cpu.csv",
+        columns=INDOOR_LIGHT_CPU_COLUMNS,
+        artifact_name="indoor_light_cpu.csv",
+    )
+    errors.extend(csv_errors)
+    metadata_path = data_dir / "indoor_light_field.json"
+    try:
+        metadata = json.loads(
+            metadata_path.read_text(encoding="utf-8"),
+            object_pairs_hook=reject_duplicate_keys,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+        return None, [*errors, f"cannot parse indoor_light_field.json: {error}"]
+    metadata_keys = {
+        "schema_version",
+        "grid_cells",
+        "logical_payload_bytes",
+        "packed_payload_bytes",
+        "supplied_emitters",
+        "radius_tiles",
+        "warmup_calls",
+        "measure_calls",
+        "steady_updates",
+        "steady_full_scans",
+        "steady_field_rebuilds",
+        "steady_revision_increments",
+        "max_rebuilds_per_update",
+        "input_checksum",
+        "radiance_checksum",
+        "mask_checksum",
+        "field_checksum",
+        "field_rebuild_allocation",
+    }
+    if not isinstance(metadata, dict) or set(metadata) != metadata_keys:
+        return None, [*errors, "indoor_light_field.json keys differ from schema v1"]
+    expected_scalars = {
+        "schema_version": INDOOR_LIGHT_FIELD_SCHEMA_VERSION,
+        "grid_cells": 10_000,
+        "logical_payload_bytes": 80_000,
+        "packed_payload_bytes": 40_000,
+        "supplied_emitters": 50,
+        "radius_tiles": 5,
+        "warmup_calls": 32,
+        "measure_calls": 256,
+        "steady_updates": 600,
+        "steady_full_scans": 0,
+        "steady_field_rebuilds": 0,
+        "steady_revision_increments": 0,
+        "max_rebuilds_per_update": 0,
+    }
+    for field, expected in expected_scalars.items():
+        if metadata.get(field) != expected:
+            errors.append(f"indoor_light_field.json {field} differs from rtt-light-v1")
+    for field in ("input_checksum", "radiance_checksum", "mask_checksum", "field_checksum"):
+        if not isinstance(metadata.get(field), str) or re.fullmatch(
+            r"[0-9a-f]{64}", metadata[field]
+        ) is None:
+            errors.append(f"indoor_light_field.json {field} is not lowercase SHA-256")
+    allocation = metadata.get("field_rebuild_allocation")
+    if not isinstance(allocation, dict) or set(allocation) != {"scope", "events", "bytes"}:
+        errors.append("field_rebuild_allocation differs from schema v1")
+    else:
+        if allocation.get("scope") != "hw_infra::lighting::rebuild_field explicit owned buffers":
+            errors.append("field_rebuild_allocation has the wrong scope")
+        events = allocation.get("events")
+        allocated_bytes = allocation.get("bytes")
+        if not isinstance(events, int) or isinstance(events, bool) or not 1 <= events <= 64:
+            errors.append("field_rebuild_allocation events are out of range")
+        if (
+            not isinstance(allocated_bytes, int)
+            or isinstance(allocated_bytes, bool)
+            or not 80_000 <= allocated_bytes <= 1_000_000
+        ):
+            errors.append("field_rebuild_allocation bytes are out of range")
+
+    elapsed: list[int] = []
+    if rows is not None:
+        if len(rows) != 256:
+            errors.append(f"indoor_light_cpu.csv must contain exactly 256 rows; got {len(rows)}")
+        for index, row in enumerate(rows):
+            exact = {
+                "sample_index": str(index),
+                "grid_cells": "10000",
+                "supplied_emitters": "50",
+                "radius_tiles": "5",
+                "input_checksum": metadata.get("input_checksum"),
+                "output_checksum": metadata.get("field_checksum"),
+            }
+            for field, expected in exact.items():
+                if row.get(field) != expected:
+                    errors.append(f"indoor_light_cpu.csv row {index} {field} differs")
+            try:
+                duration = int(row["elapsed_ns"])
+                if duration <= 0 or duration > (1 << 64) - 1:
+                    raise ValueError
+            except (KeyError, TypeError, ValueError):
+                errors.append(f"indoor_light_cpu.csv row {index} elapsed_ns is invalid")
+            else:
+                elapsed.append(duration)
+    if errors or len(elapsed) != 256:
+        return None, errors
+    ordered = sorted(elapsed)
+    quantile = lambda ratio: ordered[math.floor((len(ordered) - 1) * ratio + 0.5)] / 1_000_000
+    return {
+        **expected_scalars,
+        "input_checksum": metadata["input_checksum"],
+        "radiance_checksum": metadata["radiance_checksum"],
+        "mask_checksum": metadata["mask_checksum"],
+        "field_checksum": metadata["field_checksum"],
+        "field_rebuild_p95_ms": quantile(0.95),
+        "field_rebuild_p99_ms": quantile(0.99),
+        "field_rebuild_allocation": allocation,
+    }, []
+
+
 def validate_run(
     run_dir: Path,
     *,
@@ -1448,29 +1577,47 @@ def validate_run(
     indoor_light_fixture = None
     indoor_light_layout = None
     indoor_light_presentation = None
+    indoor_light_field = None
     p02_presentation = None
     deconstruction_fixture = None
     save_transaction = None
     timeline = None
     behavior_save_artifact = None
-    window, window_errors = read_window(
-        data_dir / "window.csv",
-        expect_headless=expected_window_backend == "headless",
-        expected_width=expected_window_width,
-        expected_height=expected_window_height,
-        expected_scale_factor=expected_window_scale_factor,
-        expected_rtt_quality=expected_rtt_quality,
-        expected_window_backend=expected_window_backend,
-        expected_backend=expected_backend,
-        expected_present_mode=expected_present_mode,
-    )
-    reasons.extend(window_errors)
+    if capture_kind == "field-core":
+        window = None
+        if (data_dir / "window.csv").exists():
+            reasons.append("field-core must not write window.csv")
+    else:
+        window, window_errors = read_window(
+            data_dir / "window.csv",
+            expect_headless=expected_window_backend == "headless",
+            expected_width=expected_window_width,
+            expected_height=expected_window_height,
+            expected_scale_factor=expected_window_scale_factor,
+            expected_rtt_quality=expected_rtt_quality,
+            expected_window_backend=expected_window_backend,
+            expected_backend=expected_backend,
+            expected_present_mode=expected_present_mode,
+        )
+        reasons.extend(window_errors)
     indoor_sidecar_paths = (
         data_dir / "indoor_light_fixture.csv",
         data_dir / "indoor_light_layout.csv",
         data_dir / "indoor_light_presentation.csv",
     )
-    if expected_case.workload == "indoor-light":
+    if expected_case.workload == "indoor-light" and capture_kind == "field-core":
+        if (expected_contract, expected_stage, expected_lane) != (
+            "rtt-light-v1",
+            "p03",
+            "field-core",
+        ):
+            reasons.append("field-core requires the exact rtt-light-v1/p03/field-core selection")
+        indoor_light_field, field_errors = read_indoor_light_field(data_dir)
+        reasons.extend(field_errors)
+        unexpected_sidecars = [path.name for path in indoor_sidecar_paths if path.exists()]
+        if unexpected_sidecars:
+            reasons.append("field-core must not write ECS fixture sidecars")
+    elif expected_case.workload == "indoor-light":
         if expected_contract is None or expected_stage is None or expected_lane is None:
             reasons.append(
                 "indoor-light validation requires expected contract, stage, and lane"
@@ -1514,7 +1661,7 @@ def validate_run(
     p02_sidecar = data_dir / "p02_presentation.csv"
     expects_p02_sidecar = (
         expected_case.workload == "indoor-light"
-        and expected_stage == "p02"
+        and expected_stage in {"p02", "p03"}
         and expected_lane == "static"
         and capture_kind == "frame-time"
     )
@@ -1610,6 +1757,9 @@ def validate_run(
                 stage_id=expected_stage,
             )
             reasons.extend(timeline_errors)
+    elif capture_kind == "field-core":
+        if expected_fixed_hz is None:
+            reasons.append("field-core validation is missing fixed_hz")
     else:
         reasons.append(f"unsupported capture kind {capture_kind!r}")
     if capture_kind != "frame-time" and (data_dir / "render_inventory.csv").exists():
@@ -1665,6 +1815,16 @@ def validate_run(
             reasons.append(
                 "behavior capture is missing data artifacts: "
                 + ", ".join(missing_behavior_files)
+            )
+    elif capture_kind == "field-core":
+        expected_field_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
+        actual_field_files = (
+            {path.name for path in data_dir.iterdir()} if data_dir.is_dir() else set()
+        )
+        if actual_field_files != expected_field_files:
+            reasons.append(
+                "field-core data artifact set differs: "
+                + ", ".join(sorted(actual_field_files ^ expected_field_files))
             )
     elif (data_dir / "timeline.json").exists() or (
         data_dir / "behavior-save.scn.ron"
@@ -1744,7 +1904,7 @@ def validate_run(
         except (KeyError, ValueError):
             reasons.append("summary initial population is invalid for scene root validation")
         else:
-            if expected_stage == "p02":
+            if expected_stage in {"p02", "p03"}:
                 # P02 replaces the legacy Soul proxy family with
                 # ActorBillboard3d and keeps Familiar presentation in the 2D
                 # foreground pass. Their counts are validated by the P02
@@ -1815,6 +1975,8 @@ def validate_run(
             else "PERF_DETERMINISM_AUDIT: wrote"
             if capture_kind == "fixed-step-determinism"
             else "PERF_BEHAVIOR: wrote"
+            if capture_kind == "fixed-step-behavior"
+            else "PERF_FIELD_CORE: wrote"
         )
         if completion_marker not in log_text:
             reasons.append(f"{completion_marker} completion marker is absent")
@@ -1822,6 +1984,7 @@ def validate_run(
             "frame-time": "realtime",
             "fixed-step-determinism": "fixed",
             "fixed-step-behavior": "fixed-behavior",
+            "field-core": "fixed",
         }.get(capture_kind)
         if f"clock={expected_clock_mode}" not in log_text:
             reasons.append(
@@ -1841,7 +2004,7 @@ def validate_run(
         behavior_marker = f"behavior_case={expected_case.behavior_case or 'none'}"
         if behavior_marker not in log_text:
             reasons.append(f"PERF_SCENARIO marker is absent: {behavior_marker}")
-        if capture_kind in {"fixed-step-determinism", "fixed-step-behavior"} and expected_fixed_hz is not None:
+        if capture_kind in {"fixed-step-determinism", "fixed-step-behavior", "field-core"} and expected_fixed_hz is not None:
             marker = f"fixed_hz={expected_fixed_hz}"
             if marker not in log_text:
                 reasons.append(f"PERF_SCENARIO marker is absent: {marker}")
@@ -1894,6 +2057,7 @@ def validate_run(
         indoor_light_fixture=indoor_light_fixture,
         indoor_light_layout=indoor_light_layout,
         indoor_light_presentation=indoor_light_presentation,
+        indoor_light_field=indoor_light_field,
         p02_presentation=p02_presentation,
         deconstruction_fixture=deconstruction_fixture,
         save_transaction=save_transaction,

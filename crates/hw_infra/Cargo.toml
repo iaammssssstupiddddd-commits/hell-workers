@@ -1,0 +1,13 @@
+[package]
+name = "hw_infra"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+profiling = []
+
+[dependencies]
+hw_core = { path = "../hw_core" }
+serde = { workspace = true }
+sha2 = { workspace = true }

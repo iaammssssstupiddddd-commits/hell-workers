@@ -40,6 +40,7 @@ RENDER_INVENTORY_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_FIXTURE_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_LAYOUT_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_PRESENTATION_SCHEMA_VERSION = "1"
+INDOOR_LIGHT_FIELD_SCHEMA_VERSION = 1
 DECONSTRUCTION_FIXTURE_SCHEMA_VERSION = "2"
 DECONSTRUCTION_FIXTURE_COLUMNS = (
     "schema_version",
@@ -174,6 +175,15 @@ INDOOR_LIGHT_PRESENTATION_COLUMNS = (
     "root_sprite_count",
     "child_sprite_count",
     "owner_3d_count",
+)
+INDOOR_LIGHT_CPU_COLUMNS = (
+    "sample_index",
+    "grid_cells",
+    "supplied_emitters",
+    "radius_tiles",
+    "input_checksum",
+    "output_checksum",
+    "elapsed_ns",
 )
 EXPECTED_SUMMARY_COLUMNS = {
     "schema_version",
@@ -464,6 +474,7 @@ class Validation:
     indoor_light_fixture: dict[str, str] | None = None
     indoor_light_layout: list[dict[str, str]] | None = None
     indoor_light_presentation: list[dict[str, str]] | None = None
+    indoor_light_field: dict[str, Any] | None = None
     p02_presentation: dict[str, str] | None = None
     deconstruction_fixture: dict[str, str] | None = None
     save_transaction: dict[str, str] | None = None
@@ -487,6 +498,7 @@ class Validation:
             "indoor_light_fixture": self.indoor_light_fixture,
             "indoor_light_layout": self.indoor_light_layout,
             "indoor_light_presentation": self.indoor_light_presentation,
+            "indoor_light_field": self.indoor_light_field,
             "p02_presentation": self.p02_presentation,
             "deconstruction_fixture": self.deconstruction_fixture,
             "save_transaction": self.save_transaction,

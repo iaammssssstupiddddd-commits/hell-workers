@@ -7,11 +7,11 @@
 | 計画ID | `hvac-plumbing-plan-2026-07-13` |
 | ステータス | `Draft` |
 | 作成日 | `2026-07-13` |
-| 最終更新日 | `2026-08-04` |
+| 最終更新日 | `2026-08-13` |
 | 作成者 | `Codex` |
 | 関連提案 | [hvac-plumbing-proposal.md](../proposals/hvac-plumbing-proposal.md)（採用済み。世界観・採否理由の正本） |
 | 関連Issue/PR | `N/A` |
-| 前提ドキュメント | [room_detection.md](../room_detection.md) / [soul_energy.md](../soul_energy.md) / [building.md](../building.md) / [save_load.md](../save_load.md) / [crate-boundaries.md](../crate-boundaries.md) / [Track C3 ロード後再構築レジストリ計画](archive/save-rehydration-registry-plan-2026-08-03.md)（完了済み） |
+| 前提ドキュメント | [room_detection.md](../room_detection.md) / [soul_energy.md](../soul_energy.md) / [building.md](../building.md) / [save_load.md](../save_load.md) / [crate-boundaries.md](../crate-boundaries.md) / [Track C3 ロード後再構築レジストリ計画](archive/save-rehydration-registry-plan-2026-08-03.md)（完了済み） / [P03 Indoor Light Domain Core](3d-rtt/single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md)（`hw_infra` bootstrap owner） |
 
 > 本計画を実装契約の正本とする。関連提案と矛盾する場合は、2026-08-03 時点の現行コード、B3電力契約、
 > Track C3再構築契約へ再照合した本計画を優先する。
@@ -46,7 +46,7 @@
 
 ### 対象（In Scope）
 
-- `crates/hw_infra` の新設と、換気・流体・認可状態のデータモデルおよび純粋計算。
+- P03が新設する`crates/hw_infra`を拡張し、換気・流体・認可状態のデータモデルおよび純粋計算を追加する。
 - Room 検出入力の「床を無効化する上物」分類と、壁境界から Room を逆引きする lookup。
 - `ScreamingVent`、`SighChimney`、`ScourgeFan`、`LetheIntakeGate`、`OssuaryConduit`、`SludgePurifier`。
 - `BuildingCategory::Permanent` と本設設備のインフラ停止契約。
@@ -65,6 +65,8 @@
 - 侵食猶予タイマー、配管容量、複数系統の優先度制御。
 - Soul Energy の将来構想である Room 単位 PowerGrid への変更。
 - 完成設備の一般 demolition タスク。導水管はインフラ編集モードの erase 操作で撤去する。
+
+> crate coordination: P03 M1が`hw_infra`をbootstrapするまでは、HVACはcrate / `Cargo.toml` / root pluginを作成しない。HVAC M0は独立して進められる。HVAC M1以降は既存crateへ換気・流体・認可用のdependencyとmoduleを追加できるが、P03の`lighting` pure coreへECS/GPU依存を持ち込まない。
 
 ## 3. 現状とギャップ
 
@@ -130,7 +132,7 @@ provided = Room に属する稼働中 VentilationSource の capacity 合計
 
 ### 4.2 データ所有と依存方向
 
-`hw_infra` の依存方向は次に固定する。
+P03 bootstrap時の`lighting` pure coreは`hw_core` / `serde` / `sha2`だけに直接依存する。HVAC M1以降が換気・流体・認可のためにcrateへ追加する依存方向は次に固定する。これらの拡張はP03 coreのpure境界を変えない。
 
 ```text
 bevy_app (scheduling / assets / game-aware UI adapter)
@@ -275,9 +277,11 @@ Room overlay geometry sync
 
 ## M1: 基本換気 vertical slice
 
+> 着手条件: P03 M1による`hw_infra` bootstrapがmerge済みであること。M0はこの条件を待たずに完了できる。
+
 ### 変更内容
 
-1. `crates/hw_infra` を新設し、M1 で使用する `RoomVentilationState`、換気 pure calculation、dirty 条件、plugin / system registration 境界を実装する。
+1. P03が新設した`crates/hw_infra`を拡張し、M1で使用する`RoomVentilationState`、換気pure calculation、dirty条件、plugin / system registration境界を実装する。
 2. `BuildingType::ScreamingVent` を追加し、壁置換、資材配送、建設完了、Room 境界維持を接続する。
 3. 共有壁では capacity を隣接 Room 数で均等分割する。
 4. Room 境界線を換気状態別に色分けし、Room info panel に required / provided / state を表示する。
@@ -545,6 +549,7 @@ pure test では少なくとも次を固定する。
 - 完了済みマイルストーン: なし
 - 未着手: M0〜M4
 - 前提状態: Track C3は完了・archive済み。M3のregistry着手条件は満たしたが、M0〜M2を含む本計画は未着手。
+- crate前提: P03 M1が`hw_infra`をbootstrapする。HVAC M0は独立して着手可能だが、M1以降はP03 M1 merge後に既存crateを拡張する。
 - 採用済み提案を現行コードへ照合し、実装不能だった Room 床占有、壁 lookup、Conduit 重層、状態モデルを本計画で修正済み。
 
 ### 次のAIが最初にやること
@@ -556,6 +561,7 @@ pure test では少なくとも次を固定する。
 ### ブロッカー/注意点
 
 - Room entity は永続 ID ではない。Room ID を save、Relationship target、長寿命 timer key に使わない。
+- HVAC M1で`hw_infra`を新設しない。P03のpure `lighting` coreへHVACのECS / GPU依存を追加しない。
 - `RoomTileLookup` は床専用であり、壁設備には `RoomBoundaryLookup` を使う。
 - Conduit 完成時に `Building` を付けたり `WorldMap.add_building` を呼んだりしない。
 - PowerConsumer lifecycle は root adapter にあり、`hw_energy` 内だけを見て実装しない。
@@ -607,6 +613,7 @@ pure test では少なくとも次を固定する。
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-13` | `Codex` | `hw_infra`の初期bootstrap ownerをP03へ同期。HVAC M0の独立性を維持しつつ、M1以降を既存crate拡張へ変更 |
 | `2026-08-04` | `Codex` | Track C3の実装・実機受入・archive完了を反映。M3 prerequisiteを充足済みに更新し、完成registryを迂回する手書き再構築を禁止 |
 | `2026-08-03` | `Codex` | Track C3 採用に合わせ、M0〜M2 は独立、M3 は C3 完了後という依存を固定。Conduit root marker、hw_infra reset、phase別exactly-once rebuild、normal/rollback/paused回帰へ更新 |
 | `2026-08-03` | `Codex` | C3自己レビューへ同期し、infra stepの`SavePlugin::finish` freeze coverageとRecoveryFailed専用replace回帰をM3へ追加 |

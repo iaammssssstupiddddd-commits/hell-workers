@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P00 / P01 / P02 / P02-A completed; P03〜P08 pending` |
+| ステータス | `In Progress — P00 / P01 / P02 / P02-A completed; P03 implementation complete / formal evidence pending` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-14` |
 | 作成者 | `Codex` |
@@ -88,6 +88,7 @@ P00 baseline / contract
  ├─> P01 one Scene RtT ─> P02 M1〜M4 feature ─> P02-A evidence ─> P02 M5〜M6 formal ─┐
  │                              └── P02-A M1 selector / history ──────┘                 │
  └─> P03 Light Field core ─> P04 runtime integration ─> P05 save ─┼─> P06 GPU rendering ─┐
+ P02-A M1〜M4 ready extension point ──────────────────────> P03 M4 evidence                │
                                                     └──────────────┴─> P07 gameplay / Room ┤
  P01 + P02 + P03 + P04 + P05 + P06 + P07 ────────────────────────────────> P08 release
 ```
@@ -98,7 +99,7 @@ P00 baseline / contract
 | P01 | [`01-single-scene-rtt-plan-2026-08-03.md`](single-scene-light-field/01-single-scene-rtt-plan-2026-08-03.md) | P00 | Soul mask target / camera / proxy / metricを除去したScene RtT 1枚 |
 | P02-A | [`02a-p02-acceptance-infrastructure-plan-2026-08-12.md`](single-scene-light-field/02a-p02-acceptance-infrastructure-plan-2026-08-12.md) | P00, P01。M2〜M4はP02 M1〜M4のproduction sourceを入力にする | `stage=p02` selector / historical reader、P02 evidence sidecar、RenderDoc / bundle / native recipe、actual-window scenario |
 | P02 | [`02-topdown-presentation-plan-2026-08-03.md`](single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md) | P00, P01。M6はP02-A M1〜M4 | Door実経路修復、world 2D pass 1回、表示分類、Soul billboard / Familiar前景、Soul shadow動作停止、V入力停止、registered P02 formal artifact |
-| P03 | [`03-indoor-light-domain-core-plan-2026-08-03.md`](single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md) | P00 | `hw_infra`のdeterministicな論理fieldとpure LOS |
+| P03 | [`03-indoor-light-domain-core-plan-2026-08-03.md`](single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md) | P00。P03 stage有効化はP02-A M1〜M4 ready extension pointを利用 | `hw_infra`のdeterministicな論理field / pure LOSと`p03 / field-core`正式evidence |
 | P04 | [`04-indoor-light-runtime-integration-plan-2026-08-03.md`](single-scene-light-field/04-indoor-light-runtime-integration-plan-2026-08-03.md) | P02 M1, P03、HVAC M0または同等correctness commit | topology / energy / Room / Doorを結ぶ更新transactionとsteady-state dirty管理 |
 | P05 | [`05-indoor-light-save-lifecycle-plan-2026-08-03.md`](single-scene-light-field/05-indoor-light-save-lifecycle-plan-2026-08-03.md) | P03, P04、save registry計画 | durable mount、named rehydrate step、load / rollback fail-dark |
 | P06 | [`06-indoor-light-rendering-plan-2026-08-03.md`](single-scene-light-field/06-indoor-light-rendering-plan-2026-08-03.md) | P01, P02, P04, P05 | 100×100 Light Field textureと全`Structural3d` receiver |
@@ -109,7 +110,7 @@ P00 baseline / contract
 
 - P00完了前にP01以降のproduction変更へ着手しない。
 - P00 C00-BとP04は、室内設備が占有するfloor cellをRoom interiorとして維持するHVAC M0がmerge済み、または同じcorrectness変更を単一ownerで先行するまで開始しない。
-- P03とP01はP00後に並行可能だが、同じファイルを触る作業は同時に実行しない。
+- P03 M1〜M3とP01はP00後に並行可能だが、同じファイルを触る作業は同時に実行しない。P03 M4はP02-A M1〜M4 ready extension pointを拡張し、既存stageのschema / historical readerを再定義しない。
 - P02-A M1のselector / historical readerはP02 M1と並行できる。P02-A M2〜M4は対応するP02 production sourceが完成してから接続し、P02 M6 formalはP02-A M1〜M4のready stateを必須とする。
 - P04のentryはP02 M1 Door correctnessのままとし、P02-A full formalを新規blockerにしない。P04 / P06以降のstage固有metricは各planが所有する。
 - P04はsave / rehydrateを編集せずruntime transactionだけを所有する。
@@ -131,7 +132,7 @@ P00 baseline / contract
 | B06a | P02 M4 Soul billboard・Familiar 3D撤去・Soul shadow動作停止 | B05 green |
 | B06b | P02-A M2〜M4 P02 evidence / RenderDoc / native ready | B06a green。P02 M1〜M4のproduction sourceとcurrent / P01 historical readerが同一toolchainで再検証済み |
 | B06c | P02 M5〜M6 P02 evidence接続・formal / native受入 | B06b green。P02 exact gate artifactとactual-window scenarioを同じ完了batchで閉じる |
-| B07 | P03 pure Light Field core | P00後にB01〜B06cと並行可。共有Cargo ownerは調整 |
+| B07 | P03 pure Light Field core + P03 field-core evidence | P00後にB01〜B06cと並行可。P03が`hw_infra`をbootstrapし、P03 M4はP02-A M1〜M4 ready extension pointを拡張する。root Plugin / ECS runtimeは追加しない |
 | B08 | P04 runtime snapshot / Door request / schedule / dirty | B03とB07完了 |
 | B09 | P05 schema / registry / reset / epoch | B08完了かつsave registry owner条件成立 |
 | B10 | P06 Image bridge→Terrain→structural material→native | B02、B06c、B08、B09完了 |
@@ -148,11 +149,11 @@ P00 baseline / contract
 | --- | --- | --- |
 | `hw_world` | world/grid変換、Wall / Door / Room topology、DoorState rule | 照度、GPU Image、Lamp効果 |
 | `hw_energy` | demand、allocation、`PowerSupplyState` | 発光半径、色、LOS |
-| `hw_infra` | emitter / mount、occlusion snapshot、CPU field、dirty / revision、Room summary | Bevy render asset、UI、camera |
+| `hw_infra` | emitter / mount、occlusion snapshot、CPU field、field revision（dirty schedulingを除く）、Room summary | Bevy render asset、UI、camera、root schedule |
 | `hw_visual` | billboard / structural material、shader binding contract | gameplay照度、Door rule |
 | `bevy_app` | cross-domain ordering、save adapter、`Assets<Image>` bridge、presentation mapping | pure LOS / accumulation |
 
-`hw_infra` bootstrapはHVAC計画と共有する。先着計画だけがcrate / Pluginを作り、後着計画は既存crateへmoduleを追加する。
+P03が`hw_infra`を最初にbootstrapする。P03が作る`lighting` pure coreはroot Plugin / ECS runtimeを作らない。P04/P05は同じnamespaceへadapterを追加できるが、core APIへBevy/world依存を逆流させない。HVACはP03後に既存crateを拡張できる。
 
 ### 4.2 update transaction
 
@@ -218,7 +219,7 @@ Interface:
 | リスク | 対策 |
 | --- | --- |
 | 並行中のsave registry実装を上書きする | P05着手時にworktreeとownerを確認し、既存registryへnamed stepを追加する |
-| `hw_infra`をHVACと二重作成する | P00でbootstrap ownerを記録し、Cargo / Plugin登録元を1つにする |
+| `hw_infra`をHVACと二重作成する | P03をbootstrap ownerとし、HVACは既存crateを拡張する。P03はroot Pluginを登録しない |
 | material移行前に`SectionMaterial`を削除する | P06でTopDown material parityとconsumer移行、P08で参照0確認後に削除する |
 | UI Doorとauto Doorが別revisionになる | UIはrequest化し、Actorの単一writer経路へ集約する |
 | load中に旧GPU bytesが見える | load resetでblack handle / epoch invalidationを同期適用する |
@@ -239,20 +240,21 @@ Interface:
 
 ### 現在地
 
-- 進捗: `33%`（P00 / P01 / P02 / P02-A完了。P03〜P08は未完了）
+- 進捗: `43%`（P00 / P01 / P02 / P02-A完了。P03は実装完了・formal evidence待ち。P04〜P08は未着手）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
-  P01 Scene-only runtime / compositeとSoul mask target / camera / proxy / material / toggle撤去、P02-A受入基盤計画
+  P01 Scene-only runtime / compositeとSoul mask target / camera / proxy / material / toggle撤去、P02-A受入基盤計画、
+  P03 `hw_infra::lighting` pure coreとfield-core計測/artifact/bundle/native extension
 - P00 formal: subject `10763a4d`、attempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`。5 leg、18 case、baseline index / current gate ledgerを登録・再検証済み
 - P01 formal: subject `29a4a719`、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`。5 leg、18 case、123 / 123 gate row、Scene-only RenderDoc topologyを登録・再検証済み
 - P02 formal履歴: subject `6ea0bf99`、attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`はfrozen v1の履歴として保持する。actual-window v1は改竄再検証不足のためreview remediation後のP02完了証跡には使わない。
 - P02 current evidence: subject `c3515a40`、profile v9 / schema 7、actual-window 18 / 18、fresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`。job / manifest / formal / baseline historyの独立verifierがvalid、formal 5 legと128 / 128 gate rowがpassした。
-- 未完了: P03〜P08
+- 未完了: P03 formal native bundle、P04〜P08
 
 ### 次のAIが最初にやること
 
-1. P03のdeterministic radial Light Field coreとpure LOSを`hw_infra`へ実装する。
+1. cleanかつcommit済みのP03 subjectでformal native bundleを採取し、`RLV1-P03-FIELD`と`RLV1-BUNDLE-VALID`を再検証する。
 2. P04ではP02のDoor correctness境界とP03 fieldをruntime transactionへ接続する。
 3. P06着手時にP02 canonical attemptをhistorical referenceとして再検証し、presentation分類を維持する。
 
@@ -261,7 +263,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 ### ブロッカー/注意点
 
 - save / rehydrate registryは別commitとして進行している。履歴と現worktreeを再確認し、P00から破棄・上書きしない。
-- `hw_infra`はまだ存在しない可能性がある。着手時のCargoを正本とする。
+- `hw_infra`はP03がbootstrap済みである。HVAC M1は既存crateを拡張するが、`lighting` pure coreへECS/GPU依存を逆流させない。
 - 現行manual Door lockはInterfaceで直接DoorStateを変更する。
 - 現行Lamp gameplay queryは任意の`PowerConsumer`を発光扱いし、半径`5.0`をworld unitとして比較している。
 - 現行Wallは`SectionMaterial`、Terrainは3種の`TerrainSurfaceMaterial`、他構造物は`StandardMaterial`である。
@@ -269,9 +271,9 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 ### 最終確認ログ
 
-- 最終 `python3 scripts/dev.py check`: `2026-08-12` / `pass`
-- 最終 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `2026-08-12` / `pass (0 warning)`
-- 最終 `python3 scripts/dev.py cargo -- test --workspace`: `2026-08-12` / `pass`
+- 最終 `python3 scripts/dev.py check`: `2026-08-14` / `pass`
+- 最終 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `2026-08-14` / `pass (0 warning)`
+- 最終 `python3 scripts/dev.py verify`: `2026-08-14` / `pass`
 - 最終 `python3 scripts/dev.py verify`: `2026-08-13` / `pass`
 - P01 native acceptance: `2026-08-12` / `pass`（Intel Arc / Vulkan / X11、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`、全5 leg valid、123 / 123 gate row pass）
 - P02 native acceptance: `2026-08-14` / v9 actual-window 18 / 18、fresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`、5 leg valid、128 / 128 gate row pass、formal / baseline historyの独立verify pass。v1 actual-windowとattempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`は履歴として保持する。
@@ -289,6 +291,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-14` | `Codex` | P03 pure coreとfield-core evidence extensionの実装、unit/tool/full verification、Help No impact reviewを反映。formal native bundleだけをclean subject待ちとして残した。 |
 | `2026-08-14` | `Codex` | P02 actual-window v9（subject `c3515a40`、18 / 18）とfresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`（5 leg、128 / 128 gate row、独立verify）を反映。P02 / P02-Aを完了に更新した。 |
 | `2026-08-13` | `Codex` | P02 review remediationにより、旧actual-window v1証跡を完了判定から外した。P02 / P02-A v2 phase/ROI artifactとfresh S0 / S1 / formalを再採取するまで親ロードマップも再オープン。 |
 | `2026-08-13` | `Codex` | P02 / P02-Aのactual-window、S0 / S1、formal 5 leg・128 / 128 gate row登録と独立再検証を完了し、次対象をP03へ更新 |

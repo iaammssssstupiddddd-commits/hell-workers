@@ -101,6 +101,15 @@ Door domain stateのseed後にproduction presentation syncを1 frame待ってか
 またP02はlegacy Soul / mask / shadow / Familiar proxyを全render modeで0とし、置換後のSoul billboard / Familiar
 foregroundは`p02_presentation.csv`で個体数とexactly-one presentationを検証する。
 
+P03はP02のstatic / behavior / Capture / Memory / RenderDoc evidenceを維持したまま、`field-core` laneを1 case追加する。専用runnerは`p03 / large / cpu / seed 20260803 / headless / Vulkan`を固定し、3 runを実行する。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py field-core \
+  --output target/perf-runs/<fresh-session-name>
+```
+
+各runはcanonical pure fixtureをtimer外で構築し、32 warmup後の`hw_infra::lighting::rebuild_field`だけを256回測る。`data/indoor_light_cpu.csv`はexact 256 row、`data/indoor_light_field.json`は100×100、50 emitter、radius 5、4 checksum、600 steady updateのno-op count、明示的なowned bufferの論理allocation scopeを持つ。field-core runのdata file setはこの2件だけで、window/ECS fixture/GPU field artifactを混ぜない。P03 gateは3反復のp95 median 2 ms以下、p99 median 4 ms以下、repeat間allocation一致を要求する。正式bundleは既存18 caseとfield-core 1 caseの合計19 caseであり、256×3 measurement rowをcase数として数えない。
+
 各規模は`indoor_light_fixture.csv` 1行と、small 187 / 5、medium 722 / 12、large 2306 / 12行の
 `indoor_light_layout.csv` / `indoor_light_presentation.csv`を必須出力する。indoor semantic actorはsmall 78、
 medium 258、large 936件を全checkpointでexact検証する。generic actorはSoul / Familiar / Designationを

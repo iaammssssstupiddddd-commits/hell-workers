@@ -12,6 +12,7 @@ serde_json = { workspace = true, optional = true }
 bevy_world_serialization = { workspace = true }
 hw_core = { path = "../hw_core" }
 hw_energy = { path = "../hw_energy" }
+hw_infra = { path = "../hw_infra" }
 hw_jobs = { path = "../hw_jobs" }
 hw_logistics = { path = "../hw_logistics" }
 hw_ui = { path = "../hw_ui" }
@@ -34,6 +35,7 @@ profiling = [
     "dep:serde_json",
     "hw_core/profiling",
     "hw_energy/profiling",
+    "hw_infra/profiling",
     "hw_jobs/profiling",
     "hw_logistics/profiling",
     "hw_spatial/profiling",

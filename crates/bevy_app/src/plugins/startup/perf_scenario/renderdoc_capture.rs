@@ -292,7 +292,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         ));
         return;
     };
-    let expected_instances = if selection.stage_id() == "p02" {
+    let expected_instances = if selection.uses_p02_presentation() {
         0
     } else {
         params.config.soul_count as usize * 2
@@ -317,7 +317,8 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         bridge.replace(RenderDocBridgeState::Failed(reason));
         return;
     }
-    let p02_presentation = (selection.stage_id() == "p02")
+    let p02_presentation = selection
+        .uses_p02_presentation()
         .then(|| calculate_p02_presentation(&params.checksum_queries));
     let signature = CpuCheckpointSignature {
         checksum: checksum.value,
@@ -636,12 +637,32 @@ fn validate_medium_inventory(stage_id: &str, inventory: PerfRenderInventory) -> 
         scene_target_count: 1,
         mask_target_count: usize::from(stage_id == "current"),
         camera_3d_rtt_count: if stage_id == "current" { 2 } else { 1 },
-        camera_2d_count: if stage_id == "p02" { 2 } else { 3 },
-        layer_2d_pass_count: if stage_id == "p02" { 1 } else { 2 },
-        soul_proxy_3d: if stage_id == "p02" { 0 } else { 200 },
+        camera_2d_count: if matches!(stage_id, "p02" | "p03") {
+            2
+        } else {
+            3
+        },
+        layer_2d_pass_count: if matches!(stage_id, "p02" | "p03") {
+            1
+        } else {
+            2
+        },
+        soul_proxy_3d: if matches!(stage_id, "p02" | "p03") {
+            0
+        } else {
+            200
+        },
         soul_mask_proxy_3d: if stage_id == "current" { 200 } else { 0 },
-        soul_shadow_proxy_3d: if stage_id == "p02" { 0 } else { 200 },
-        familiar_proxy_3d: if stage_id == "p02" { 0 } else { 12 },
+        soul_shadow_proxy_3d: if matches!(stage_id, "p02" | "p03") {
+            0
+        } else {
+            200
+        },
+        familiar_proxy_3d: if matches!(stage_id, "p02" | "p03") {
+            0
+        } else {
+            12
+        },
     };
     if inventory == expected {
         Ok(())

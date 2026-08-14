@@ -100,6 +100,8 @@ mod config;
 #[cfg(feature = "profiling")]
 mod deconstruction_fixture;
 #[cfg(feature = "profiling")]
+mod field_core_driver;
+#[cfg(feature = "profiling")]
 mod fixture;
 #[cfg(feature = "profiling")]
 mod indoor_light_fixture;
@@ -129,13 +131,16 @@ pub use config::{
 };
 #[cfg(feature = "profiling")]
 pub(crate) use config::{
-    does_not_require_precheckpoint_fixture_spawn, is_fixed_step_behavior, is_not_fixed_step_audit,
-    is_not_fixed_step_behavior, is_not_renderdoc_capture, requires_precheckpoint_fixture_spawn,
+    does_not_require_precheckpoint_fixture_spawn, is_field_core, is_fixed_step_behavior,
+    is_not_field_core, is_not_fixed_step_audit, is_not_fixed_step_behavior,
+    is_not_renderdoc_capture, requires_precheckpoint_fixture_spawn,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use deconstruction_fixture::{
     DeconstructionPerfFixtureState, drive_deconstruction_perf_workload_system,
 };
+#[cfg(feature = "profiling")]
+pub(crate) use field_core_driver::{FieldCoreDriverState, run_field_core_driver_system};
 #[cfg(feature = "profiling")]
 pub(crate) use fixture::{PerfScenarioApplied, PerfScenarioDriverState, PerfScenarioSet};
 #[cfg(feature = "profiling")]

@@ -27,6 +27,7 @@ crates/hw_soul_ai
 crates/hw_spatial
 crates/hw_ui
 crates/hw_visual
+crates/hw_infra
 ```
 
 root `Cargo.toml`は`members = ["crates/*"]`、`default-members = ["crates/bevy_app"]`を使います。
@@ -44,6 +45,7 @@ root `Cargo.toml`は`members = ["crates/*"]`、`default-members = ["crates/bevy_
 | `hw_soul_ai` | `hw_core`, `hw_energy`, `hw_jobs`, `hw_logistics`, `hw_world`, `hw_spatial` |
 | `hw_ui` | `hw_core`, `hw_jobs`, `hw_logistics` |
 | `hw_visual` | `hw_core`, `hw_spatial`, `hw_world` |
+| `hw_infra` | `hw_core`（P03 lighting pure core。加えて外部crate `serde`, `sha2`） |
 | `visual_test` | `hw_core`, `hw_visual`, `hw_world` |
 | `bevy_app` | 全`hw_*` crate |
 
@@ -359,6 +361,16 @@ pub fn init_visual_handles(mut commands: Commands, game_assets: Res<GameAssets>)
 - `GameTime`（`hw_core::time`）— ゲーム内時間 Resource。`game_time_system` は `ClockText` 依存のため bevy_app に残留するが、型自体は `hw_core::GameTime` を直接使う。1 段だけの pass-through re-export は置かない
 - `GameSettings`（`hw_core::settings`）— 永続化対象のゲーム設定 Resource（型定義のみ）。RON ロード/保存・反映・intent 処理は `bevy_app/systems/settings/`、設定画面 UI は `hw_ui`。write は bevy_app のみ（詳細: [docs/settings.md](settings.md)）
 
+### `hw_infra`
+
+役割:
+
+- 建物インフラに属するドメインロジックのowner
+- P03時点では`lighting` pure coreだけを公開し、grid/mask/semantic occlusion/emitter snapshotから決定的な室内Light Fieldを構築
+- integer LOS、fixed-point falloff、revision/diff、canonical SHA-256、pure RGBA8 pack、canonical性能fixtureを所有
+
+P03の`lighting` sourceはBevy ECS、`hw_world`、`hw_jobs`、`hw_energy`、render/GPU APIに依存させない。P04以降のadapterはpure APIを一方向に利用し、P06の`Image`・material・shaderをcoreへ逆流させない。詳細は[`indoor_lighting.md`](indoor_lighting.md)を参照する。
+
 ### `hw_energy`
 
 役割:
@@ -673,6 +685,7 @@ python3 scripts/dev.py cargo -- check -p hw_jobs
 python3 scripts/dev.py cargo -- check -p hw_familiar_ai
 python3 scripts/dev.py cargo -- check -p hw_soul_ai
 python3 scripts/dev.py cargo -- check -p hw_visual
+python3 scripts/dev.py cargo -- check -p hw_infra
 ```
 
 ## 9. やらないこと

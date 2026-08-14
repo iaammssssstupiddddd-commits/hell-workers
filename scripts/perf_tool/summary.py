@@ -687,6 +687,68 @@ def summarize_session(
         return summarize_save_transaction_session(
             session_dir, manifest, load_valid_runs(session_dir)
         )
+    if matrix.get("capture_kind") == "field-core":
+        runs = load_valid_runs(session_dir)
+        invalid = [
+            (run_dir, validation)
+            for run_dir, validation in runs
+            if not validation.valid or validation.indoor_light_field is None
+        ]
+        fields = [
+            validation.indoor_light_field
+            for _, validation in runs
+            if validation.valid and validation.indoor_light_field is not None
+        ]
+        aggregate_columns = [
+            "case_id",
+            "valid_runs",
+            "field_rebuild_p95_median_ms",
+            "field_rebuild_p99_median_ms",
+            "field_rebuild_allocation_events",
+            "field_rebuild_allocation_bytes",
+        ]
+        aggregate_rows: list[dict[str, str]] = []
+        if fields and not invalid:
+            allocations = [field["field_rebuild_allocation"] for field in fields]
+            if len({(row["events"], row["bytes"], row["scope"]) for row in allocations}) != 1:
+                invalid.append((session_dir, Validation(False, ["field allocation evidence differs across runs"], None, None, [], [])))
+            else:
+                aggregate_rows.append(
+                    {
+                        "case_id": manifest["cases"][0]["id"],
+                        "valid_runs": str(len(fields)),
+                        "field_rebuild_p95_median_ms": f"{statistics.median(field['field_rebuild_p95_ms'] for field in fields):.6f}",
+                        "field_rebuild_p99_median_ms": f"{statistics.median(field['field_rebuild_p99_ms'] for field in fields):.6f}",
+                        "field_rebuild_allocation_events": str(allocations[0]["events"]),
+                        "field_rebuild_allocation_bytes": str(allocations[0]["bytes"]),
+                    }
+                )
+        with (session_dir / "aggregate.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=aggregate_columns)
+            writer.writeheader()
+            writer.writerows(aggregate_rows)
+        report = [
+            "# Field-core performance report",
+            "",
+            f"- Valid runs: {len(fields) if not invalid else 0}",
+            f"- Invalid runs: {len(invalid)}",
+            "- Capture kind: `field-core`",
+            "",
+        ]
+        if aggregate_rows:
+            row = aggregate_rows[0]
+            report.extend(
+                [
+                    f"- Rebuild p95 median: {row['field_rebuild_p95_median_ms']} ms",
+                    f"- Rebuild p99 median: {row['field_rebuild_p99_median_ms']} ms",
+                    "",
+                ]
+            )
+        (session_dir / "report.md").write_text("\n".join(report), encoding="utf-8")
+        manifest["actual_adapters"] = []
+        manifest["status"] = "invalid" if invalid else "valid"
+        write_json(session_dir / "manifest.json", manifest)
+        return not invalid
     if matrix.get("capture_kind") == "fixed-step-determinism":
         runs = load_valid_runs(session_dir)
         reset_checksum_policy(runs)

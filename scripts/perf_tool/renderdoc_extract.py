@@ -80,6 +80,7 @@ EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "current": CURRENT_RENDER_RESOURCES,
     "p01": P01_RENDER_RESOURCES,
     "p02": P01_RENDER_RESOURCES,
+    "p03": P01_RENDER_RESOURCES,
 }
 
 
@@ -122,7 +123,7 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         "capture_artifact",
     }
     stage_id = value.get("stage_id")
-    if stage_id == "p02":
+    if stage_id in {"p02", "p03"}:
         required_keys.add("p02_presentation")
     if set(value) != required_keys:
         raise RuntimeError("runtime checkpoint keys differ from schema v3")
@@ -147,7 +148,7 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         raise RuntimeError("runtime checkpoint has no selector evidence")
     if not isinstance(value.get("gpu_ready"), dict):
         raise RuntimeError("runtime checkpoint has no GPU-ready evidence")
-    if stage_id == "p02" and (
+    if stage_id in {"p02", "p03"} and (
         not isinstance(value.get("p02_presentation"), dict)
         or not value["p02_presentation"]
     ):

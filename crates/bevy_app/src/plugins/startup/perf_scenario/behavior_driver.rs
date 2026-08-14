@@ -490,7 +490,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             let p02 = params
                 .config
                 .rtt_light_selection()
-                .is_some_and(|selection| selection.stage_id() == "p02");
+                .is_some_and(|selection| selection.uses_p02_presentation());
             let expected_semantic = if p02 {
                 ["closed", "open", "open", "locked", "locked"][step as usize]
             } else {

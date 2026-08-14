@@ -258,8 +258,17 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
     assert_eq!(p02_selection.stage_id(), "p02");
     assert_eq!(p02_selection.lane(), "behavior");
 
+    let mut p03 = exact.clone();
+    p03[4] = "p03".to_string();
+    p03[6] = "field-core".to_string();
+    let p03_selection = super::parse_rtt_light_selection(&p03, super::PerfWorkload::IndoorLight)
+        .expect("p03/field-core v1 is implemented")
+        .expect("P03 field-core requires an explicit selection");
+    assert_eq!(p03_selection.stage_id(), "p03");
+    assert_eq!(p03_selection.lane(), "field-core");
+
     let mut wrong_stage = exact;
-    wrong_stage[4] = "p03".to_string();
+    wrong_stage[4] = "p09".to_string();
     assert!(
         super::parse_rtt_light_selection(&wrong_stage, super::PerfWorkload::IndoorLight).is_err()
     );

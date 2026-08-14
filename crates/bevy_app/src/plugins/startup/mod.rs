@@ -137,11 +137,13 @@ impl Plugin for StartupPlugin {
                 .init_resource::<perf_scenario::DeconstructionPerfFixtureState>()
                 .init_resource::<perf_scenario::IndoorLightFixtureState>()
                 .init_resource::<perf_scenario::PerfBehaviorCapture>()
+                .init_resource::<perf_scenario::FieldCoreDriverState>()
                 .add_systems(
                     PostStartup,
                     setup_perf_scenario_if_enabled
                         .after(spawn_familiar_wrapper)
-                        .before(setup_ui),
+                        .before(setup_ui)
+                        .run_if(perf_scenario::is_not_field_core),
                 )
                 .configure_sets(
                     Update,
@@ -174,7 +176,9 @@ impl Plugin for StartupPlugin {
                 )
                 .add_systems(
                     Update,
-                    setup_perf_scenario_runtime_if_enabled.in_set(PerfScenarioSet::Setup),
+                    setup_perf_scenario_runtime_if_enabled
+                        .in_set(PerfScenarioSet::Setup)
+                        .run_if(perf_scenario::is_not_field_core),
                 )
                 .add_systems(
                     Update,
@@ -222,8 +226,15 @@ impl Plugin for StartupPlugin {
                     perf_scenario::start_perf_capture_system
                         .in_set(PerfScenarioSet::InitialCheckpoint)
                         .run_if(perf_scenario::is_not_fixed_step_behavior)
+                        .run_if(perf_scenario::is_not_field_core)
                         .run_if(perf_scenario::is_not_renderdoc_capture),
                 );
+            app.add_systems(
+                Update,
+                perf_scenario::run_field_core_driver_system
+                    .in_set(PerfScenarioSet::InitialCheckpoint)
+                    .run_if(perf_scenario::is_field_core),
+            );
             #[cfg(feature = "profiling-renderdoc")]
             app.add_systems(
                 Update,
@@ -236,7 +247,8 @@ impl Plugin for StartupPlugin {
                     perf_scenario::drive_perf_workload_system,
                     perf_scenario::drive_deconstruction_perf_workload_system,
                 )
-                    .in_set(PerfScenarioSet::Driver),
+                    .in_set(PerfScenarioSet::Driver)
+                    .run_if(perf_scenario::is_not_field_core),
             )
             .add_systems(
                 Update,
@@ -265,6 +277,7 @@ impl Plugin for StartupPlugin {
                 )
                     .in_set(PerfScenarioSet::Capture)
                     .run_if(perf_scenario::is_not_fixed_step_behavior)
+                    .run_if(perf_scenario::is_not_field_core)
                     .run_if(perf_scenario::is_not_renderdoc_capture),
             );
             #[cfg(feature = "profiling-renderdoc")]

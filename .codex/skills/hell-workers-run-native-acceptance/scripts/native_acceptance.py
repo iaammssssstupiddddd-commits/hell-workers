@@ -152,7 +152,7 @@ SAVE_TRANSACTION_AGGREGATE_COLUMNS = (
 )
 RTT_LIGHT_CONTRACT_ID = "rtt-light-v1"
 RTT_LIGHT_DEFAULT_STAGE = "current"
-RTT_LIGHT_LEGS = ("audit", "behavior", "capture", "renderdoc", "memory")
+RTT_LIGHT_BASE_LEGS = ("audit", "behavior", "capture", "renderdoc", "memory")
 RTT_LIGHT_SOURCE_CHECKPOINTS = (
     "start",
     "after-renderdoc-build",
@@ -162,6 +162,7 @@ RTT_LIGHT_SOURCE_CHECKPOINTS = (
     "after-capture",
     "after-renderdoc",
     "after-memory",
+    "after-field-core",
     "before-registration",
 )
 RTT_LIGHT_RENDERDOC_API_VERSION = "1.6.0"
@@ -884,11 +885,24 @@ def rtt_light_contract(repo: Path, stage: str) -> dict[str, Any]:
         and leg.get("first_required_stage") in stage_order
         and stage_order.index(leg["first_required_stage"]) <= selected_index
     ]
-    if legs != list(RTT_LIGHT_LEGS):
+    expected_legs = list(RTT_LIGHT_BASE_LEGS)
+    if stage == "p03":
+        expected_legs.append("field-core")
+    if legs != expected_legs:
         raise AcceptanceError(
             f"RtT-light {stage} leg order differs from the launcher: {legs}"
         )
     return contract
+
+
+def rtt_light_legs(contract: dict[str, Any], stage: str) -> list[str]:
+    stage_order = list(contract["stages"])
+    selected_index = stage_order.index(stage)
+    return [
+        leg["leg_id"]
+        for leg in contract["formal_legs"]
+        if stage_order.index(leg["first_required_stage"]) <= selected_index
+    ]
 
 
 def formal_contract_ready(contract: dict[str, Any]) -> list[str]:
@@ -1346,6 +1360,29 @@ def rtt_light_session_commands(
         "capture": windowed("capture"),
         "memory": windowed("memory"),
     }
+    if "field-core" in rtt_light_legs(contract, stage):
+        field_core = perf + [
+            "field-core",
+            *selector,
+            "--lane",
+            "field-core",
+            "--sizes",
+            "large",
+            "--renders",
+            "cpu",
+            "--repeat",
+            str(repeat),
+            "--preflight-runs",
+            "0",
+            "--window-backend",
+            "headless",
+            "--fixed-hz",
+            str(matrix["fixed_hz"]),
+            "--output",
+            str(output_root / "field-core"),
+        ]
+        append_allow_patterns(field_core, contract["allow_log_patterns"]["headless_audit"])
+        commands["field-core"] = field_core
     if formal:
         commands["behavior"] = behavior
         commands["build-renderdoc"] = [
@@ -1840,11 +1877,15 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
         ],
         "execution_contract": {
             "leg_order": (
-                list(RTT_LIGHT_LEGS)
+                rtt_light_legs(contract, args.stage)
                 if args.level == "formal"
                 else ["audit", "capture", "memory"]
             ),
-            "game_processes": 65 if args.level == "formal" else 51,
+            "game_processes": (
+                (68 if args.stage == "p03" else 65)
+                if args.level == "formal"
+                else (54 if args.stage == "p03" else 51)
+            ),
             "parallel_game_processes": 1,
             "actual_feature_builds": 3 if args.level == "formal" else 2,
             "uses_skip_build": False,
@@ -3124,8 +3165,49 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                     environment_lock, memory_binary_sha256=memory_hash
                 )
             assert_source_unchanged(repo, fingerprint)
+            if formal:
+                source_checks.append(
+                    source_checkpoint(
+                        repo,
+                        checkpoint="after-memory",
+                        subject_commit=subject_commit,
+                        fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
+                    )
+                )
+
+            if "field-core" in commands:
+                run_command(
+                    "field-core",
+                    commands["field-core"],
+                    repo=repo,
+                    env=env,
+                    log_path=log_path,
+                    job_file=state_file,
+                    state=state,
+                )
+                if manifest_binary_hash(attempt / "field-core", repo) != capture_hash:
+                    raise AcceptanceError("field-core and Capture binary hashes differ")
+                assert_source_unchanged(repo, fingerprint)
+                if formal:
+                    source_checks.append(
+                        source_checkpoint(
+                            repo,
+                            checkpoint="after-field-core",
+                            subject_commit=subject_commit,
+                            fingerprint=fingerprint,
+                            harness_fingerprint=harness_fingerprint,
+                        )
+                    )
 
             if not formal:
+                if "field-core" in commands:
+                    field_manifest = read_json(attempt / "field-core/manifest.json")
+                    if (
+                        field_manifest.get("status") != "valid"
+                        or field_manifest.get("matrix", {}).get("capture_kind") != "field-core"
+                    ):
+                        raise AcceptanceError("P03 S1 field-core session is not valid")
                 verification = verify_rtt_light_smoke(
                     audit=attempt / "audit",
                     capture=attempt / "capture",
@@ -3145,15 +3227,6 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                 )
                 return 0
 
-            source_checks.append(
-                source_checkpoint(
-                    repo,
-                    checkpoint="after-memory",
-                    subject_commit=subject_commit,
-                    fingerprint=fingerprint,
-                    harness_fingerprint=harness_fingerprint,
-                )
-            )
             source_checks.append(
                 source_checkpoint(
                     repo,
@@ -3180,8 +3253,8 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                 "prerequisite_commits": args.prerequisite_commit,
                 "adapter_filter": args.adapter,
                 "window_backend": args.window_backend,
-                "leg_order": list(RTT_LIGHT_LEGS),
-                "completed_legs": list(RTT_LIGHT_LEGS),
+                "leg_order": rtt_light_legs(contract, args.stage),
+                "completed_legs": rtt_light_legs(contract, args.stage),
                 "source_checks": source_checks,
                 "tooling": tooling["job"],
                 "status": "completed",
@@ -7365,7 +7438,7 @@ def add_rtt_light_arguments(
     parser.add_argument("--repo", required=True)
     parser.add_argument("--level", required=True, choices=["s1", "formal"])
     parser.add_argument(
-        "--stage", default=RTT_LIGHT_DEFAULT_STAGE, choices=["current", "p01", "p02"]
+        "--stage", default=RTT_LIGHT_DEFAULT_STAGE, choices=["current", "p01", "p02", "p03"]
     )
     parser.add_argument("--attempt-id")
     parser.add_argument("--adapter", default="Intel")

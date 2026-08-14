@@ -209,9 +209,9 @@ pub(super) fn write_p02_presentation_sidecar(
     presentation: PerfP02Presentation,
 ) -> std::io::Result<()> {
     if config.uses_fixed_timesteps()
-        || config
-            .rtt_light_selection()
-            .is_none_or(|selection| selection.stage_id() != "p02" || selection.lane() != "static")
+        || config.rtt_light_selection().is_none_or(|selection| {
+            !selection.uses_p02_presentation() || selection.lane() != "static"
+        })
     {
         return Ok(());
     }
