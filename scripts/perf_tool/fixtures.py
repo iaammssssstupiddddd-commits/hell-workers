@@ -675,6 +675,10 @@ def self_test() -> int:
             p02_presentation = build_fixture_presentation_rows(
                 rtt_contract, size, stage_id="p02"
             )
+            p03_presentation = build_fixture_presentation_rows(
+                rtt_contract, size, stage_id="p03"
+            )
+            assert p03_presentation == p02_presentation
             p02_bridge = next(
                 row for row in p02_presentation if row["building_kind"] == "Bridge"
             )
