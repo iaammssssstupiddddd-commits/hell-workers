@@ -1490,6 +1490,29 @@ def self_test() -> int:
         _runtime_checkpoint(
             p01_runtime_path, contract=contract, stage="p01", capture_path=capture
         )
+        p03_checkpoint = {
+            **p01_checkpoint,
+            "stage_id": "p03",
+            "p02_presentation": {
+                "layer_2d_camera_count": 1,
+                "layer_2d_pass_count": 1,
+                "building_count": 245,
+                "duplicate_presentation_count": 0,
+                "building_exactly_one_presentation": True,
+                "soul_count": 200,
+                "soul_billboard_count": 200,
+                "familiar_3d_count": 0,
+                "state_and_bounce_probes_pass": True,
+            },
+        }
+        validate_runtime_checkpoint_v3(
+            p03_checkpoint,
+            contract=contract,
+            stage_id="p03",
+            capture_path=None,
+            rdc_sha256=capture_hash,
+            rdc_bytes=capture.stat().st_size,
+        )
         if (
             _manifest_stage_id(requested_stage="current", runtime=runtime_checkpoint)
             != "current"
