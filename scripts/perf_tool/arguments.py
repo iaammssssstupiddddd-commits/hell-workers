@@ -212,7 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
         instrumentation="capture",
         capture_kind="field-core",
         clock_mode="fixed",
-        allow_log_pattern=[DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING],
+        allow_log_pattern=[],
     )
     summarize_parser = subparsers.add_parser("summarize", help="rebuild aggregate.csv and report.md")
     summarize_parser.add_argument("session")
@@ -530,6 +530,13 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError(
                 f"p03 field-core requires --fixed-hz {contract['formal_matrix']['fixed_hz']}"
             )
+        expected_allow_patterns = contract["allow_log_patterns"]["headless_audit"]
+        if args.allow_log_pattern not in ([], expected_allow_patterns):
+            raise ValueError(
+                "p03 field-core uses the exact contract headless log allowances; "
+                "custom --allow-log-pattern is forbidden"
+            )
+        args.allow_log_pattern = list(expected_allow_patterns)
         return
     if args.command == "behavior":
         behavior_cases = parse_csv_list(

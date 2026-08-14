@@ -2718,6 +2718,18 @@ def self_test() -> int:
         assert field_core_args.stage == "p03"
         assert field_core_args.lane == "field-core"
         assert field_core_args.sizes == "large"
+        assert field_core_args.allow_log_pattern == rtt_contract["allow_log_patterns"][
+            "headless_audit"
+        ]
+        rejected_field_allowance = build_parser().parse_args(
+            ["field-core", "--dry-run", "--allow-log-pattern", "unexpected warning"]
+        )
+        try:
+            validate_arguments(rejected_field_allowance)
+        except ValueError as error:
+            assert "exact contract headless log allowances" in str(error)
+        else:
+            raise AssertionError("custom P03 field-core log allowance unexpectedly passed")
         rejected_pre_p03_field = build_parser().parse_args(
             ["field-core", "--dry-run", "--stage", "p02"]
         )
