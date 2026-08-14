@@ -168,8 +168,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   plan --repo "$PWD" --adapter Intel
 ```
 
-Run only the returned direct `kitty` command. The v6 validator requires all 18
-cases and ten phase-tagged bounded client-window PNGs per case. Rust holds each
+Run only the returned direct `kitty` command. The v7 validator requires all 18
+cases and ten phase-tagged bounded client-window PNGs per case. Its 30-second
+measurement window leaves time for every ACK-held storyboard phase after the
+normal warm-up. Rust holds each
 generation until the launcher writes a matching nonce/generation ACK after the
 PNG is captured, so a screenshot cannot be attributed to a stale phase. The
 validator recomputes ROI pixel predicates for Door state, Wall/Soul depth and
@@ -180,7 +182,7 @@ hidden required Door, Bridge, or Wall visual is rejected by the Rust sidecar;
 a headless run,
 `visual_test`, root-display capture, or incomplete matrix cannot satisfy this
 profile. Before planning, provision the ignored runtime asset mirror into the
-clean worktree; v6 hashes that full local asset view at plan, rechecks it before
+clean worktree; v7 hashes that full local asset view at plan, rechecks it before
 every case, and binds it to the manifest/revalidation. Revalidate with `verify
 --job-root <job-root>`.
 

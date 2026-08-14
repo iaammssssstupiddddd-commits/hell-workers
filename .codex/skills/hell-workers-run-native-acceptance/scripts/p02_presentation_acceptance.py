@@ -32,7 +32,7 @@ import native_acceptance as native  # noqa: E402
 
 
 SCHEMA_VERSION = 6
-PROFILE = "p02-presentation-actual-window-v6"
+PROFILE = "p02-presentation-actual-window-v7"
 QUALITIES = ("high", "medium", "low")
 SCALE_FACTORS = (1.0, 1.5, 2.0)
 VISIBILITY = (("visible", "gpu"), ("hidden", "cpu"))
@@ -58,7 +58,12 @@ SCREENSHOT_NAMES = {phase: f"{phase}.png" for phase in PHASES}
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
 WARMUP_SECONDS = 10.0
-MEASURE_SECONDS = 10.0
+# The Rust storyboard starts after the normal warm-up and holds nine of its
+# ten phases for 1.6 seconds before the launcher can capture and acknowledge
+# them.  A ten-second measurement ends after the seventh capture on the native
+# fixture, so keep a deliberate margin for all ten client-window artifacts.
+MIN_STORYBOARD_MEASURE_SECONDS = 30.0
+MEASURE_SECONDS = MIN_STORYBOARD_MEASURE_SECONDS
 RUN_TIMEOUT_SECONDS = 150.0
 POLL_INTERVAL_SECONDS = 0.10
 MAX_OCCLUSION_CENTER_DISTANCE = 2.0
@@ -1219,8 +1224,16 @@ def verify_root(
         },
     )
     native.require(manifest["schema_version"] == SCHEMA_VERSION, "P02 manifest schema differs")
-    native.require(manifest["status"] == "pass" and manifest["profile"] == PROFILE, "P02 manifest is not the v6 pass profile")
-    native.require(job["schema_version"] == SCHEMA_VERSION and job["status"] == "valid" and job["profile"] == PROFILE, "P02 job is not valid v6 evidence")
+    native.require(
+        manifest["status"] == "pass" and manifest["profile"] == PROFILE,
+        f"P02 manifest is not the {PROFILE} pass profile",
+    )
+    native.require(
+        job["schema_version"] == SCHEMA_VERSION
+        and job["status"] == "valid"
+        and job["profile"] == PROFILE,
+        f"P02 job is not valid {PROFILE} evidence",
+    )
     for field in (
         "repo",
         "adapter",
@@ -1514,6 +1527,10 @@ def expect_failure(action: Any, label: str) -> None:
 
 def self_test() -> int:
     native.require(len(EXPECTED_CASES) == 18, "P02 matrix must contain exactly 18 cases")
+    native.require(
+        MEASURE_SECONDS >= MIN_STORYBOARD_MEASURE_SECONDS,
+        "P02 storyboard measurement window is too short",
+    )
     native.require(len({case_id(q, s, v) for q, s, v, _ in EXPECTED_CASES}) == 18, "P02 case IDs must be unique")
     native.require({render for _, _, visibility, render in EXPECTED_CASES if visibility == "visible"} == {"gpu"}, "visible P02 cases must use GPU")
     native.require({render for _, _, visibility, render in EXPECTED_CASES if visibility == "hidden"} == {"cpu"}, "hidden P02 cases must omit Render3d")
