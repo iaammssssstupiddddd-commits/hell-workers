@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-03-indoor-light-domain-core-plan-2026-08-03` |
-| ステータス | `Implementation complete / formal evidence pending` |
+| ステータス | `Completed` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-14` |
+| 最終更新日 | `2026-08-15` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | [P00](00-baseline-gates-plan-2026-08-03.md)。P03 stage の evidence 有効化は完了済みの [P02-A](02a-p02-acceptance-infrastructure-plan-2026-08-12.md) extension point を利用する |
@@ -219,11 +219,11 @@ Soul / Familiar / 家具は`Clear`へ投影する。map外はLOS上のblocker扱
 
 ### 完了条件
 
-- [ ] `p03 / field-core` formal bundleが`RLV1-P03-FIELD`と`RLV1-BUNDLE-VALID`を通る
+- [x] `p03 / field-core` formal bundleが`RLV1-P03-FIELD`と`RLV1-BUNDLE-VALID`を通る
 - [x] 19 formal caseは既存18 caseと新規field-core 1 caseであり、256×3 raw measurement rowと取り違えない
 - [x] `field_rebuild_allocation`がfield-core artifactに存在し、範囲・scopeがvalidatorで検証される
 - [x] `p03`が許可されてもP06のGPU evidence要件は導入されない
-- [ ] actual native runはrepositoryの`hell-workers-run-native-acceptance` skillのno-prompt launcherを使い、artifact存在とbundle validationをfail-closedで確認する
+- [x] actual native runはrepositoryの`hell-workers-run-native-acceptance` skillのno-prompt launcherを使い、artifact存在とbundle validationをfail-closedで確認する
 
 ## 6. 検証計画
 
@@ -273,15 +273,15 @@ P03実装後、player-visibleなHelp導線・操作・設定・通知・runtime 
 
 ### 現在地
 
-- 進捗: `90%`
-- 完了済み: M1〜M3、M4のselector/driver/artifact/bundle/native helper実装、unit/tool/full verification、Help no-impact review
-- 残作業: cleanかつcommit済みsubjectに対するP03 formal native bundleの採取・登録
+- 進捗: `100%`
+- 完了済み: M1〜M4、unit/tool/full verification、Help no-impact review、clean subjectに対するP03 formal native bundleの採取・登録・独立再検証
+- 残作業: なし。後続はP04 runtime integration
 
 ### 次のAIが最初にやること
 
-1. 実装差分をreviewし、commitする場合はHelp no-impact trailerを付けてcleanなsubjectを作る。
-2. repositoryのnative acceptance skillで`p03` formal jobを実行する。
-3. `RLV1-P03-FIELD`と`RLV1-BUNDLE-VALID`、19 case、binary/source checkpointをartifactから再検証する。
+1. P04計画の着手条件と並行作業差分を再確認する。
+2. P02のDoor correctness境界とP03のpure fieldを、P04のruntime transactionへ接続する。
+3. P03 subject `834c744034d9ca4b96e74ad40d37d0066aa7f831` とregistered formal attemptをhistorical referenceとして維持する。
 
 ### ブロッカー/注意点
 
@@ -295,14 +295,17 @@ P03実装後、player-visibleなHelp導線・操作・設定・通知・runtime 
 
 - Rust gates: `2026-08-14` / `pass (hw_infra unit 16、workspace check、all-target Clippy -D warnings、verify)`
 - tooling gates: `2026-08-14` / `pass (perf self-test、P03 contract validator、native helper self-test、profiling/renderdoc compile)`
-- docs/Help gates: `2026-08-14` / `pass (docs --write/check、Help No impact、verify、diff --check)`
-- formal native: `2026-08-14` / `pending (clean committed subject required; current implementation worktree is intentionally uncommitted)`
+- docs/Help gates: `2026-08-15` / `pass (docs --write/check、Help No impact、verify、diff --check)`
+- formal native: `2026-08-15` / `pass`（subject `834c744034d9ca4b96e74ad40d37d0066aa7f831`、attempt `cd700aed-68bb-4fcd-92b5-2f4a4effa1bc`、19 / 19 case valid、`RLV1-P03-FIELD` / `RLV1-BUNDLE-VALID` pass、独立`verify-rtt-light` pass）
+- field-core: p95 median `0.347376 ms`、p99 median `0.373993 ms`、allocation `6 events / 210400 bytes`（100×100、50 emitters、radius 5、3 / 3 valid）
+- native environment: Intel(R) Arc(tm) Graphics (MTL)、Vulkan、X11、Intel Mesa `26.1.5`。formal job rootは`target/native-acceptance/rtt-light-formal-20260814T204944Z-3e69e622`
+- prerequisite evidence: S0 `target/native-acceptance/task-dashboard-20260814T203808Z-74786e50`、S1 `target/native-acceptance/rtt-light-s1-20260814T204031Z-64e7ac5a`
 
 ### Definition of Done
 
-- [ ] M1〜M4が完了
+- [x] M1〜M4が完了
 - [x] pure LOS / field testが全境界条件を覆う
-- [ ] `RLV1-P03-FIELD`と`RLV1-BUNDLE-VALID`を満たす
+- [x] `RLV1-P03-FIELD`と`RLV1-BUNDLE-VALID`を満たす
 - [x] API / unit / revision contractが恒久docsへ反映済み
 - [x] Help impact reviewが完了
 
@@ -310,6 +313,7 @@ P03実装後、player-visibleなHelp導線・操作・設定・通知・runtime 
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-15` | `Codex` | subject `834c7440` のformal native bundleを採取・登録し、19 / 19 case、field-core性能・allocation、RenderDoc、baseline indexを独立再検証してP03を完了 |
 | `2026-08-14` | `Codex` | pure lighting core、canonical fixture、P03 field-core計測/artifact/bundle/native extension、恒久docsを実装。全quality gateとHelp No impact reviewを完了し、formal native evidenceだけをclean subject待ちとして残した |
 | `2026-08-13` | `Codex` | `hw_infra` bootstrapのP03所有、semantic occlusion / exact LOS / payload-revision契約、P03 formal evidenceの実装境界を具体化。HVAC・親計画との責務競合を解消 |
 | `2026-08-04` | `Codex` | 固定精度・falloff・CPU payloadをP00へ統一し、field-core artifactと`RLV1-P03-FIELD` ownerを確定 |

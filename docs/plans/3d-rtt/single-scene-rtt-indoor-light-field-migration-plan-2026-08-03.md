@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P00 / P01 / P02 / P02-A completed; P03 implementation complete / formal evidence pending` |
+| ステータス | `In Progress — P00 / P01 / P02 / P02-A / P03 completed; P04 next` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-14` |
+| 最終更新日 | `2026-08-15` |
 | 作成者 | `Codex` |
 | 採用判断 | TopDown 2.5D、Scene RtT 1枚、map-space radial Light Field |
 | 関連提案 | `N/A` |
@@ -240,7 +240,7 @@ Interface:
 
 ### 現在地
 
-- 進捗: `43%`（P00 / P01 / P02 / P02-A完了。P03は実装完了・formal evidence待ち。P04〜P08は未着手）
+- 進捗: `P03完了`（P00 / P01 / P02 / P02-A / P03完了。P04〜P08は未着手）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
@@ -250,12 +250,13 @@ Interface:
 - P01 formal: subject `29a4a719`、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`。5 leg、18 case、123 / 123 gate row、Scene-only RenderDoc topologyを登録・再検証済み
 - P02 formal履歴: subject `6ea0bf99`、attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`はfrozen v1の履歴として保持する。actual-window v1は改竄再検証不足のためreview remediation後のP02完了証跡には使わない。
 - P02 current evidence: subject `c3515a40`、profile v9 / schema 7、actual-window 18 / 18、fresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`。job / manifest / formal / baseline historyの独立verifierがvalid、formal 5 legと128 / 128 gate rowがpassした。
-- 未完了: P03 formal native bundle、P04〜P08
+- P03 formal: subject `834c7440`、attempt `cd700aed-68bb-4fcd-92b5-2f4a4effa1bc`。19 / 19 case、`RLV1-P03-FIELD` / `RLV1-BUNDLE-VALID`、baseline index登録、独立verifierがpassした。field-coreはp95 `0.347376 ms`、p99 `0.373993 ms`、allocation `6 events / 210400 bytes`
+- 未完了: P04〜P08
 
 ### 次のAIが最初にやること
 
-1. cleanかつcommit済みのP03 subjectでformal native bundleを採取し、`RLV1-P03-FIELD`と`RLV1-BUNDLE-VALID`を再検証する。
-2. P04ではP02のDoor correctness境界とP03 fieldをruntime transactionへ接続する。
+1. P04ではP02のDoor correctness境界とP03 fieldをruntime transactionへ接続する。
+2. P04のnative evidenceではP03 registered attemptをhistorical referenceとして再検証する。
 3. P06着手時にP02 canonical attemptをhistorical referenceとして再検証し、presentation分類を維持する。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
@@ -273,11 +274,12 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 - 最終 `python3 scripts/dev.py check`: `2026-08-14` / `pass`
 - 最終 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `2026-08-14` / `pass (0 warning)`
-- 最終 `python3 scripts/dev.py verify`: `2026-08-14` / `pass`
+- 最終 `python3 scripts/dev.py verify`: `2026-08-15` / `pass`
 - 最終 `python3 scripts/dev.py verify`: `2026-08-13` / `pass`
 - P01 native acceptance: `2026-08-12` / `pass`（Intel Arc / Vulkan / X11、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`、全5 leg valid、123 / 123 gate row pass）
 - P02 native acceptance: `2026-08-14` / v9 actual-window 18 / 18、fresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`、5 leg valid、128 / 128 gate row pass、formal / baseline historyの独立verify pass。v1 actual-windowとattempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`は履歴として保持する。
-- 最終 docs gate: `2026-08-13` / `pass (docs --write / --check, check_docs, diff --check)`
+- P03 native acceptance: `2026-08-15` / subject `834c7440`、formal attempt `cd700aed-68bb-4fcd-92b5-2f4a4effa1bc`、19 / 19 case valid、field-core p95 `0.347376 ms` / p99 `0.373993 ms`、allocation `6 events / 210400 bytes`、Intel Arc / Vulkan / X11、独立verify pass。
+- 最終 docs gate: `2026-08-15` / `pass (docs --write / --check, check_docs, diff --check)`
 
 ### Definition of Done
 
@@ -291,6 +293,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-15` | `Codex` | P03 subject `834c7440` のformal native attempt `cd700aed-68bb-4fcd-92b5-2f4a4effa1bc`を登録・独立再検証し、P03を完了、次対象をP04へ更新 |
 | `2026-08-14` | `Codex` | P03 pure coreとfield-core evidence extensionの実装、unit/tool/full verification、Help No impact reviewを反映。formal native bundleだけをclean subject待ちとして残した。 |
 | `2026-08-14` | `Codex` | P02 actual-window v9（subject `c3515a40`、18 / 18）とfresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`（5 leg、128 / 128 gate row、独立verify）を反映。P02 / P02-Aを完了に更新した。 |
 | `2026-08-13` | `Codex` | P02 review remediationにより、旧actual-window v1証跡を完了判定から外した。P02 / P02-A v2 phase/ROI artifactとfresh S0 / S1 / formalを再採取するまで親ロードマップも再オープン。 |
