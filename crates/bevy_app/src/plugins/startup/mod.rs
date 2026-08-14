@@ -127,12 +127,16 @@ impl Plugin for StartupPlugin {
             perf_render_environment::install(app);
             #[cfg(feature = "profiling-renderdoc")]
             perf_scenario::install_renderdoc_capture(app);
+            let p02_actual_window_requested =
+                perf_scenario::P02ActualWindowAcceptance::requested_from_environment();
+            if p02_actual_window_requested {
+                app.init_resource::<perf_scenario::P02ActualWindowAcceptance>();
+            }
             app.init_resource::<PerfScenarioApplied>()
                 .init_resource::<perf_scenario::PerfScenarioDriverState>()
                 .init_resource::<perf_scenario::DeconstructionPerfFixtureState>()
                 .init_resource::<perf_scenario::IndoorLightFixtureState>()
                 .init_resource::<perf_scenario::PerfBehaviorCapture>()
-                .init_resource::<perf_scenario::P02ActualWindowAcceptance>()
                 .add_systems(
                     PostStartup,
                     setup_perf_scenario_if_enabled
@@ -239,19 +243,21 @@ impl Plugin for StartupPlugin {
                 perf_scenario::drive_perf_behavior_system
                     .in_set(PerfScenarioSet::Driver)
                     .run_if(is_fixed_step_behavior),
-            )
-            .add_systems(
-                Update,
-                (
-                    perf_scenario::prepare_p02_actual_window_view_system,
-                    perf_scenario::apply_p02_actual_window_actor_probe_system,
-                    perf_scenario::publish_p02_actual_window_probe_status_system,
-                )
-                    .chain()
-                    .in_set(PerfScenarioSet::Capture)
-                    .before(perf_scenario::drive_perf_capture_system),
-            )
-            .add_systems(
+            );
+            if p02_actual_window_requested {
+                app.add_systems(
+                    Update,
+                    (
+                        perf_scenario::prepare_p02_actual_window_view_system,
+                        perf_scenario::apply_p02_actual_window_actor_probe_system,
+                        perf_scenario::publish_p02_actual_window_probe_status_system,
+                    )
+                        .chain()
+                        .in_set(PerfScenarioSet::Capture)
+                        .before(perf_scenario::drive_perf_capture_system),
+                );
+            }
+            app.add_systems(
                 Update,
                 (
                     perf_scenario::drive_perf_capture_system,

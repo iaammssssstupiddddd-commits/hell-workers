@@ -261,7 +261,7 @@ pub(crate) struct P02ActualWindowAcceptance {
 impl Default for P02ActualWindowAcceptance {
     fn default() -> Self {
         Self {
-            requested: std::env::var(ACCEPTANCE_ENV).is_ok_and(|value| value == "1"),
+            requested: Self::requested_from_environment(),
             status_path: std::env::var_os(STATUS_PATH_ENV)
                 .map(PathBuf::from)
                 .filter(|path| path.is_absolute() && !path.as_os_str().is_empty()),
@@ -284,6 +284,13 @@ impl Default for P02ActualWindowAcceptance {
 }
 
 impl P02ActualWindowAcceptance {
+    /// The storyboard is an opt-in native-acceptance path. Keep its broad
+    /// mutable-world systems out of ordinary profiling runs so evidence
+    /// instrumentation cannot perturb the P02 performance contract.
+    pub(crate) fn requested_from_environment() -> bool {
+        std::env::var(ACCEPTANCE_ENV).is_ok_and(|value| value == "1")
+    }
+
     fn enabled(&self, config: &PerfScenarioConfig, fixture: &IndoorLightFixtureState) -> bool {
         self.requested
             && self.status_path.is_some()
