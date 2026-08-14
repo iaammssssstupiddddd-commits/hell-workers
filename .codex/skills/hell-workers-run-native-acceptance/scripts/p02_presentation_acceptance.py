@@ -32,7 +32,7 @@ import native_acceptance as native  # noqa: E402
 
 
 SCHEMA_VERSION = 6
-PROFILE = "p02-presentation-actual-window-v7"
+PROFILE = "p02-presentation-actual-window-v8"
 QUALITIES = ("high", "medium", "low")
 SCALE_FACTORS = (1.0, 1.5, 2.0)
 VISIBILITY = (("visible", "gpu"), ("hidden", "cpu"))
@@ -551,6 +551,11 @@ def phase_roi(phases: dict[str, dict[str, Any]], phase: str) -> dict[str, int]:
 def require_changed(metrics: dict[str, float | int], label: str, *, minimum: int, maximum_ratio: float) -> None:
     native.require(metrics["changed_pixels"] >= minimum, f"{label} has insufficient changed pixels")
     native.require(metrics["changed_ratio"] <= maximum_ratio, f"{label} changed an implausibly broad ROI")
+
+
+def require_minimum_changed(metrics: dict[str, float | int], label: str, *, minimum: int) -> None:
+    """Require a real image delta without treating an opaque RtT toggle as suspicious."""
+    native.require(metrics["changed_pixels"] >= minimum, f"{label} has insufficient changed pixels")
 
 
 def evaluate_case_images(
@@ -1126,7 +1131,12 @@ def evaluate_cross_case_bridge(
             hidden_roi = phase_roi(observations[hidden]["phases"], "bridge")
             native.require(visible_roi == hidden_roi, f"P02 Bridge ROI differs across {quality}/{scale}")
             difference = roi_difference(images[visible]["bridge"], images[hidden]["bridge"], visible_roi)
-            require_changed(difference, f"P02 Bridge Render3d {quality}/{scale}", minimum=48, maximum_ratio=0.80)
+            # Switching Render3d hides the whole RtT composite. Unlike an
+            # in-composite Door/Soul/Wall animation, an opaque production
+            # Bridge ROI can therefore change in every pixel; its source-side
+            # owner/visibility proof and the visible-only material/detail
+            # checks above establish locality instead.
+            require_minimum_changed(difference, f"P02 Bridge Render3d {quality}/{scale}", minimum=48)
             visible_detail = observations[visible]["image_checks"]["bridge"]["detail_pixels"]
             hidden_detail = observations[hidden]["image_checks"]["bridge"]["detail_pixels"]
             native.require(
@@ -1530,6 +1540,19 @@ def self_test() -> int:
     native.require(
         MEASURE_SECONDS >= MIN_STORYBOARD_MEASURE_SECONDS,
         "P02 storyboard measurement window is too short",
+    )
+    require_minimum_changed(
+        {"changed_pixels": 64, "changed_ratio": 1.0},
+        "P02 full opaque Bridge toggle",
+        minimum=48,
+    )
+    expect_failure(
+        lambda: require_minimum_changed(
+            {"changed_pixels": 0, "changed_ratio": 0.0},
+            "P02 missing Bridge toggle",
+            minimum=48,
+        ),
+        "Bridge Render3d toggle with no image delta",
     )
     native.require(len({case_id(q, s, v) for q, s, v, _ in EXPECTED_CASES}) == 18, "P02 case IDs must be unique")
     native.require({render for _, _, visibility, render in EXPECTED_CASES if visibility == "visible"} == {"gpu"}, "visible P02 cases must use GPU")

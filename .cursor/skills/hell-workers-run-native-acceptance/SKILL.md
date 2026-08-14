@@ -168,7 +168,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   plan --repo "$PWD" --adapter Intel
 ```
 
-Run only the returned direct `kitty` command. The v7 validator requires all 18
+Run only the returned direct `kitty` command. The v8 validator requires all 18
 cases and ten phase-tagged bounded client-window PNGs per case. Its 30-second
 measurement window leaves time for every ACK-held storyboard phase after the
 normal warm-up. Rust holds each
@@ -182,7 +182,7 @@ Rust sidecar requires Door, Bridge, and Wall visuals to be visible in GPU
 cases and hidden in CPU cases; a headless run,
 `visual_test`, root-display capture, or incomplete matrix cannot satisfy this
 profile. Before planning, provision the ignored runtime asset mirror into the
-clean worktree; v7 hashes that full local asset view at plan, rechecks it before
+clean worktree; v8 hashes that full local asset view at plan, rechecks it before
 every case, and binds it to the manifest/revalidation. Revalidate with `verify
 --job-root <job-root>`.
 
