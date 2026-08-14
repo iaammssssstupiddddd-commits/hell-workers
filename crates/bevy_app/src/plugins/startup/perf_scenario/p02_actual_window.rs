@@ -346,7 +346,7 @@ pub(crate) fn prepare_p02_actual_window_view_system(
     for mut visibility in &mut transient_text {
         *visibility = Visibility::Hidden;
     }
-    if phase.is_active_wall_bounce() {
+    if phase.is_wall_bounce() {
         let wall = transforms
             .p2()
             .iter()
@@ -356,20 +356,30 @@ pub(crate) fn prepare_p02_actual_window_view_system(
                         == WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1)
             })
             .map(|(entity, _, _)| entity);
-        if acceptance.should_seed_wall_bounce() {
-            if let Some(wall) = wall {
-                commands
-                    .entity(wall)
-                    .insert(BuildingBounceEffect::completion());
-                acceptance.mark_wall_bounce_seeded();
+        if phase.is_active_wall_bounce() {
+            if acceptance.should_seed_wall_bounce() {
+                if let Some(wall) = wall {
+                    commands.entity(wall).insert(active_wall_bounce_probe());
+                    acceptance.mark_wall_bounce_seeded();
+                }
+            } else if let Some(wall) = wall
+                && let Ok(mut bounce) = bounces.get_mut(wall)
+            {
+                // Indoor-light static capture deliberately pauses virtual
+                // time. Pin the ordinary production completion effect at its
+                // in-progress midpoint, so the normal Visual schedule still
+                // writes a non-unit owner scale and synchronizes the matching
+                // 3D presentation transform before the screenshot ACK.
+                pin_active_wall_bounce(&mut bounce);
             }
         } else if let Some(wall) = wall
             && let Ok(mut bounce) = bounces.get_mut(wall)
         {
-            // Keep the production completion effect active until the native
-            // screenshot ACK arrives; the following rest phase then proves
-            // that the ordinary Visual schedule clears it again.
-            bounce.bounce_animation.timer = 0.0;
+            // On the next normal Visual pass the production animation system
+            // resets the owner scale and removes this completed effect. This
+            // provides the resting-frame proof without unpausing the static
+            // performance fixture.
+            finish_wall_bounce(&mut bounce);
         }
     }
     let foreground_owners = transforms
@@ -393,6 +403,27 @@ pub(crate) fn prepare_p02_actual_window_view_system(
         };
         transform.scale = Vec3::splat(scale);
     }
+}
+
+/// Creates the ordinary production completion effect at its visible midpoint.
+///
+/// The actual-window fixture freezes `Time<Virtual>` by contract, so starting
+/// it at zero would correctly remain at scale 1.0 forever. The storyboard
+/// therefore pins the same one-shot effect at a deterministic in-progress
+/// state; `building_bounce_animation_system` remains the sole writer of the
+/// owner transform and the following Visual pass synchronizes its 3D child.
+fn active_wall_bounce_probe() -> BuildingBounceEffect {
+    let mut bounce = BuildingBounceEffect::completion();
+    pin_active_wall_bounce(&mut bounce);
+    bounce
+}
+
+fn pin_active_wall_bounce(bounce: &mut BuildingBounceEffect) {
+    bounce.bounce_animation.timer = bounce.bounce_animation.config.duration * 0.5;
+}
+
+fn finish_wall_bounce(bounce: &mut BuildingBounceEffect) {
+    bounce.bounce_animation.timer = bounce.bounce_animation.config.duration;
 }
 
 /// Keeps only the selected production billboard visible during the two depth
@@ -1173,6 +1204,81 @@ mod tests {
             Some(ProbePhase::ForegroundA)
         );
         assert_eq!(ProbePhase::ForegroundB.next(), None);
+    }
+
+    #[test]
+    fn wall_bounce_probe_pins_the_production_effect_while_virtual_time_is_paused() {
+        let mut bounce = active_wall_bounce_probe();
+        let duration = bounce.bounce_animation.config.duration;
+        assert!(bounce.bounce_animation.timer > 0.0);
+        assert!(bounce.bounce_animation.timer < duration);
+
+        // A paused `Time<Virtual>` has a zero delta. The production animation
+        // still resolves the pinned midpoint to a non-unit owner scale, which
+        // the normal Visual system then mirrors to `Building3dVisual`.
+        let scale = hw_visual::animations::update_bounce_animation(
+            &Time::default(),
+            &mut bounce.bounce_animation,
+        )
+        .expect("midpoint completion bounce must still be active");
+        assert!(scale > 1.001);
+
+        finish_wall_bounce(&mut bounce);
+        assert_eq!(bounce.bounce_animation.timer, duration);
+    }
+
+    #[test]
+    fn pinned_wall_bounce_reaches_and_then_clears_its_3d_presentation_while_paused() {
+        let mut app = App::new();
+        app.init_resource::<Time>()
+            .init_resource::<Time<Virtual>>()
+            .add_systems(
+                Update,
+                (
+                    hw_visual::blueprint::building_bounce_animation_system,
+                    crate::systems::visual::building3d_cleanup::sync_building_3d_transform_system,
+                )
+                    .chain(),
+            );
+        app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        let paused_time = app.world().resource::<Time<Virtual>>().as_generic();
+        app.world_mut().insert_resource(paused_time);
+
+        let wall = app
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: false,
+                },
+                Transform::default(),
+                active_wall_bounce_probe(),
+            ))
+            .id();
+        let visual = app
+            .world_mut()
+            .spawn((Building3dVisual { owner: wall }, Transform::default()))
+            .id();
+
+        app.update();
+        let owner_scale = app.world().get::<Transform>(wall).unwrap().scale.x;
+        let visual_scale = app.world().get::<Transform>(visual).unwrap().scale.x;
+        assert!(owner_scale > 1.001);
+        assert!((owner_scale - visual_scale).abs() <= 0.001);
+
+        {
+            let mut bounce = app
+                .world_mut()
+                .get_mut::<BuildingBounceEffect>(wall)
+                .unwrap();
+            finish_wall_bounce(&mut bounce);
+        }
+        app.update();
+        assert!(app.world().get::<BuildingBounceEffect>(wall).is_none());
+        let owner_scale = app.world().get::<Transform>(wall).unwrap().scale.x;
+        let visual_scale = app.world().get::<Transform>(visual).unwrap().scale.x;
+        assert!((owner_scale - 1.0).abs() <= 0.001);
+        assert!((visual_scale - 1.0).abs() <= 0.001);
     }
 
     #[test]
