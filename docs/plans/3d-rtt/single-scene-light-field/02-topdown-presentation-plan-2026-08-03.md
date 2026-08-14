@@ -7,7 +7,7 @@
 | 計画ID | `single-scene-light-field-02-topdown-presentation-plan-2026-08-03` |
 | ステータス | `Completed` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-13` |
+| 最終更新日 | `2026-08-14` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | [P00](00-baseline-gates-plan-2026-08-03.md)、[P01](01-single-scene-rtt-plan-2026-08-03.md) |
@@ -82,7 +82,7 @@ root adapterに副作用のない`presentation_class(BuildingType)`を置き、�
 - Tank / MudMixerのempty / partial / full / active状態とcompletion bounceはP02がsemantic state / active presentation契約として所有する。P02で必要な有限shared handleは暫定bridgeに留め、durable `TopDownStructuralMaterial` / receiverへの移行はP06 M3が所有する。`state_and_bounce_probes_pass`はmaterial type名に依存させない。
 - P00契約どおりcompletion bounceをstage上のactive presentationへ移し、廃止または非描画2D childだけがbounceする状態を残さない。
 - Wall / Tank / MudMixer等の既存2D state syncが必要な間は`LegacyStructural2dMirror`相当を非描画で保持できるが、consumer名とP08削除条件をtestに記録する。単なる保険として残さない。
-- `WallOrientationAid`はP02で削除 / debug-only化 / `Structural3d`構成要素として維持のいずれかを選ぶ。維持する場合はscene inventoryとP06 receiver ownershipへ明示的に含め、無名の3D childとして残さない。
+- `WallOrientationAid`はP02で削除する。active presentation / scene inventory / P06 receiverへ無名の3D childを残さない。
 - load rehydrateも通常spawnと同じmapping helperを使い、別matchを持たない。
 
 | presentation route | P02で固定する契約 | focused evidence |
@@ -352,10 +352,10 @@ UI -> final
 
 ### 完了条件
 
-- [x] black frame / double draw / invisible Bridge / Door state非識別がない
+- [x] black frame / double draw / invisible Bridge / Door state非識別がない（v9 actual-window artifactをfresh subjectで採取・独立再検証した）
 - [x] camera inventory、scene root count、P02 presentation sidecarがtargetに一致する
-- [x] `stage=p02`のexact gate ID集合を満たす
-- [x] actual-window artifactとformal artifactがfail-closed検証を通る
+- [x] `stage=p02`のexact gate ID集合を現subjectで満たす（attempt `9ff336ef-1312-4248-b0bf-bb454111decc`、128 / 128 row pass）
+- [x] actual-window artifactとformal artifactがfail-closed検証を通る（v9 actual-windowとfresh formalを独立verify）
 - [x] Help impact review、影響docs、native evidence registryが同じ完了batchで閉じる
 
 ### 検証
@@ -412,8 +412,8 @@ UI -> final
 ### 現在地
 
 - 進捗: `100%`
-- 完了済み: M1〜M6とP02-A M1〜M4。subject `6ea0bf99391b1660607537304a3764f380a10eac`でproduction actual-window 18 / 18、S0 / S1、formal Audit / Behavior / Capture / RenderDoc / MemoryをIntel Arc (MTL) / Mesa 26.1.5 / Vulkan / X11上でvalid確認した。formal attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`は128 / 128 gate row passで登録し、独立verifierもpassした
-- 未完了: なし。後続P04 / P06は本計画のpresentation契約と登録済みP02 stageを入力にする。
+- 完了済み: M1〜M6。subject `c3515a40`のv9 actual-window 18 / 18（Door / Soul depth / Bridge / Wall bounce / foregroundの10 phase）と、同一sourceのS0および同一subjectのS1 / formalを独立verifierで再計算済み。
+- formal: attempt `9ff336ef-1312-4248-b0bf-bb454111decc`はAudit / Behavior / Capture / RenderDoc / Memoryをvalidにし、128 / 128 gate rowがpassした。P00 current / P01 / P02のbaseline history readerも同じrootでvalidである。
 
 ### 次のAIが最初にやること
 
@@ -431,9 +431,9 @@ UI -> final
 
 ### 最終確認ログ
 
-- Rust gates: `2026-08-13` / `python3 scripts/dev.py verify pass（workspace test / check / profiling self-test / Clippy 0 warningsを含む）`
-- native acceptance: `2026-08-13` / `subject 6ea0bf99、source fingerprint 0f43c3cf…、actual-window 18/18 valid、S0 / S1 valid、formal attempt 54d85a63-e237-4501-a0d0-33c1d0a29f3b valid、128/128 gate row pass、独立verify pass`
-- docs gate: `2026-08-13` / `docs --write / check pass`
+- 旧証跡: `2026-08-13` / subject `6ea0bf99`のformal attemptとv1 actual-window matrixは履歴として保持するが、v9 actual-window verifierの完了証跡にはしない。
+- v9 actual-window: `2026-08-14` / subject `c3515a40`、profile `p02-presentation-actual-window-v9`、schema 7、18 / 18、job valid、manifest pass、独立verify pass。source / harness / runtime asset / profiling binary fingerprintをsealed manifestで照合した。
+- fresh formal: `2026-08-14` / attempt `9ff336ef-1312-4248-b0bf-bb454111decc`、Intel Arc (MTL) / Mesa 26.1.5 / Vulkan / X11、Audit / Behavior / Capture / RenderDoc / Memory valid、128 / 128 gate row pass、raw artifact 932件。`verify-rtt-light`とbaseline history readerを独立実行してpassした。
 
 ### Definition of Done
 
@@ -441,8 +441,8 @@ UI -> final
 - [x] production Door silent pathが解消済み
 - [x] 全Building / Soul / Familiarがexactly one presentation
 - [x] Soul shadow spawn / per-frame projector更新が0
-- [x] `stage=p02`のexact gate ID集合が合格
-- [x] presentation / camera / billboard native gate合格
+- [x] `stage=p02`のexact gate ID集合が現subjectで合格
+- [x] presentation / camera / billboard native gateがv9 actual-window artifactで合格
 - [x] V elevation Help削除済み
 - [x] Help impact review完了
 - [x] 影響docs更新済み
@@ -451,6 +451,8 @@ UI -> final
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-14` | `Codex` | subject `c3515a40`でactual-window v9（schema 7）を18 / 18採取し、同一sourceのS0および同一subjectのS1 / fresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`を登録した。5 legと128 / 128 gate row、actual-window / formal / baseline historyの独立verifyをpassした。 |
+| `2026-08-13` | `Codex` | review remediationとしてWall Coating bounce / transform ordering、WallOrientationAid撤去、historical readerとactual-window v2 fail-closed storyboardを実装。旧v1 evidenceをM6完了判定から外しfresh native再採取へ戻した。 |
 | `2026-08-13` | `Codex` | subject `6ea0bf99`のactual-window 18 / 18、S0 / S1、formal 5 leg・128 / 128 gate rowと独立verifierをvalid確認し、M1〜M6を完了 |
 | `2026-08-12` | `Codex` | 修正後S1をIntel Arc / Vulkan / X11で再実行し、Audit 3/3、Capture 18/18、Memory 18/18 valid・source unchangedを確認 |
 | `2026-08-12` | `Codex` | S1再試行のCaptureでmedium / large Open Doorのpresentation settle待ち不足とP02 GPU legacy proxy期待値の旧契約を検出。fixtureを1 frame待機、P02 legacy proxyを0へ修正 |

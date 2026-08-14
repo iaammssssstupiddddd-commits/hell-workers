@@ -161,7 +161,7 @@ Scene RtT は Window の物理解像度で生成し、`ImageRenderTarget.scale_f
 |:---|:---|
 | `TestMainCamera` + `PanCamera` | `hw_ui::camera::MainCamera` + `PanCamera` |
 | `sync_test_camera3d` | `systems::visual::camera_sync::sync_camera3d_system` |
-| `TestElevDir` / `TestElev` | `ElevationDirection` / `ElevationViewState` |
+| `TestElevDir` / `TestElev` | legacy visual-test-only state。productionには対応するElevation stateはなく、P02では固定TopDown cameraを使用する。 |
 | `update_building_cursor` ゴースト | `systems::visual::placement_ghost::placement_ghost_system` |
 | `SoulAnimHandle` | `SoulAnimationPlayer3d` + `SoulAnimationLibrary` |
 | `on_soul_scene_ready` | `apply_soul_gltf_render_layers_on_ready` |

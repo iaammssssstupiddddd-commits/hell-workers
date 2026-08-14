@@ -59,9 +59,11 @@ P02 は Scene-only RtT を維持したまま、MainCamera を composite 後の�
 P02 固有値は legacy `render_inventory.csv` を読み替えず `p02_presentation.csv` と RenderDoc checkpoint の `p02_presentation` blockへ出す。formal gateは duplicate=0、全Building exactly-one、billboard ratio=1、Familiar3D=0、state/bounce probe=trueを同一 medium/GPU checkpointで評価する。
 
 画像側の補完はproduction indoor-light fixtureの専用actual-window matrixが所有する。18 caseすべてでgame process所有の
-X11 clientを2 frame採取し、black frame / scene detail / animationをpixel判定する。semantic sidecarのDoor 3状態、
-structural state / bounce、foreground分類、visible時のSoul billboard 1:1とhidden時のbillboard 0を同じcaseへ束縛するため、
-desktop全体や独立`visual_test`の画像だけではP02受入にならない。
+X11 clientから、Door Open / Closed / Locked、Soul前 / 後、Bridge、Wall bounce active / rest、Foreground animation A / Bの
+10 ready phaseを採取する。nonce / generation ACK付きsemantic sidecarは対象owner・ROI・render modeを束縛し、PNGはDoorの
+状態差、Soul alpha/depth、Bridge visible / hidden、bounce、foreground差分を再計算する。BridgeはさらにRtT cameraとの
+`RenderLayers`交差、期待mesh / material handle、asset registry在籍をsource側でfail-closedに確認する。desktop全体や独立
+`visual_test`の画像だけではP02受入にならない。
 
 P00のmeasurement contractはfrozenの`rtt-light-v1`である。canonical contract hashは
 `121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`、fixture hashは
@@ -90,11 +92,10 @@ audit / behavior / Capture / RenderDoc / Memoryの全5 leg・18 caseを再検証
 | large / cpu | 23.772 / 30.750 / 34.008 | 1,425,912 | 739,108,778 |
 | large / gpu | 33.679 / 42.488 / 46.635 | 1,527,076 | 801,151,582 |
 
-P02 canonical TopDown presentation candidateはsubject `6ea0bf99391b1660607537304a3764f380a10eac`、attempt
-`54d85a63-e237-4501-a0d0-33c1d0a29f3b`として登録済みである。Intel Arc (MTL) / Mesa 26.1.5 / Vulkan / X11で
-actual-window 18 / 18とAudit / Behavior / Capture / RenderDoc / Memoryの全5 legを再検証し、gate ledgerは
-128 / 128 row passだった。raw artifact 932件のdirectory SHA256は
-`dcb207eed7ad12435131bd92d1cb090efb3906bc87e0fb4d091067b269ccb98d`である。
+P02 subject `6ea0bf99391b1660607537304a3764f380a10eac` / attempt
+`54d85a63-e237-4501-a0d0-33c1d0a29f3b`はfrozen v1 formalの履歴として保持する。actual-window profile v1は
+画像predicateとraw artifactの改竄再検証が不足するため、review remediation後のP02完了証跡には使わない。直後の表は
+この履歴測定値であり、現subjectのperformance結論ではない。
 
 | case | P02 frame p50 / p95 / p99 (ms) | P01比 p95 / p99 |
 |---|---:|---:|
@@ -104,6 +105,23 @@ actual-window 18 / 18とAudit / Behavior / Capture / RenderDoc / Memoryの全5 l
 | medium / gpu | 22.427 / 29.765 / 32.775 | -6.81% / -5.93% |
 | large / cpu | 23.292 / 30.665 / 33.831 | +4.54% / +3.42% |
 | large / gpu | 26.025 / 34.236 / 37.935 | -15.87% / -14.99% |
+
+review remediation後のcanonical P02 candidateはsubject
+`c3515a40543026a588592682889a08d67cbaeff9`、attempt
+`9ff336ef-1312-4248-b0bf-bb454111decc`である。Intel Arc (MTL) / Mesa 26.1.5 / Vulkan / X11で、actual-window
+v9（schema 7）18 / 18とAudit / Behavior / Capture / RenderDoc / Memoryを再検証した。formal gate ledgerは128 / 128 row
+pass、raw artifact 932件のdirectory SHA256は
+`a6b76b64ca8df601d051abeb15589ffd464fd1bd41dfe61c9f25fa734f6a0e72`である。P01比のframe hard gateは全12 rowがpassし、
+positive maximumはmedium / cpuのp95 +2.52%、p99 +1.96%である。
+
+| case | P02 frame p50 / p95 / p99 (ms) | P01比 p95 / p99 |
+|---|---:|---:|
+| small / cpu | 14.411 / 20.727 / 23.212 | -2.44% / -2.13% |
+| small / gpu | 21.891 / 30.907 / 35.829 | -10.05% / -8.60% |
+| medium / cpu | 17.653 / 24.071 / 26.917 | +2.52% / +1.96% |
+| medium / gpu | 22.350 / 29.823 / 32.759 | -6.63% / -5.98% |
+| large / cpu | 23.487 / 29.990 / 33.258 | +2.24% / +1.67% |
+| large / gpu | 26.245 / 34.124 / 37.606 | -16.15% / -15.73% |
 
 frame値はCapture leg、RSS / allocator値はMemory legの正本であり、相互に代用しない。P01以降は同じcontract /
 fixture / adapter matrixとstable projectionで比較する。

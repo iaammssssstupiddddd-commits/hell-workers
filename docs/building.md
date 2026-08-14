@@ -12,7 +12,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 |:---|:---|
 | `Blueprint` | 建設中の建物。`kind`, `progress`, `required_materials`, `delivered_materials` フィールドを持つ |
 | `Building` | 完成した建物。`is_provisional` (仮設) フラグを持つ。`Sprite` は直接持たず、子エンティティ（`VisualLayerKind`）が保持する |
-| `VisualLayerKind` | `Building` エンティティの子として生成されるビジュアルレイヤー種別（`hw_visual::layer`）。`Floor / Struct / Deco / Light` のいずれかを持ち、`Sprite` と共にスポーンされる。3D 表示は別途 `Building3dVisual` プロキシが担い、2D スプライト子エンティティは常に存在する（3D 表示 OFF 時や 2D レイヤー参照のため） |
+| `VisualLayerKind` | 必要な `Building` だけが持つ子ビジュアルレイヤー種別（`hw_visual::layer`）。`Foreground2d` は可視 `Sprite` 子を持つ。`Structural3d` は独立した `Building3dVisual` をactive presentationとし、Door / Tank / MudMixerだけが状態consumer互換の非表示 `LegacyStructural2dMirror` Sprite子を残す。Wall / Floor / Bridge / RestArea / SoulSpaは2D子を生成しない。 |
 | `ProvisionalWall` | 仮設壁のアップグレード状態（`mud_delivered`）を保持 |
 | `WallConstructionSite` | 壁の建設サイト（`Framing -> Coating` フェーズ、`material_center`、進捗カウンタを保持） |
 | `WallTileBlueprint` | 壁1タイルの建設状態（`wood_delivered` / `mud_delivered` / `spawned_wall`）を保持 |
@@ -335,33 +335,35 @@ cleanup側はこのsnapshot取得後にもcurrent ownerを照合し、別owner�
 
 ### 完成建築物のエンティティ構造
 
-`spawn_completed_building`（`building_completion/spawn.rs`）が生成するエンティティ階層:
+`spawn_completed_building`（`building_completion/spawn.rs`）が生成する共通rootと、presentation classごとのleaf:
 
 ```
 Building エンティティ（親）
 ├─ Building { kind, is_provisional }
 ├─ Transform（Z座標は BuildingType 別に Z_BUILDING_* 定数で決定）
 ├─ BuildingBounceEffect（完成時バウンスアニメーション）
-└─ VisualLayerKind エンティティ（子）
-   ├─ VisualLayerKind::Floor または ::Struct
-   ├─ Sprite（画像・サイズ）
-   └─ Transform::default()（ローカル Z=0、グローバル Z は親から継承）
+├─ Foreground2d のときだけ VisualLayerKind + 可視 Sprite エンティティ（子）
+│  └─ Transform::default()（ローカル Z=0、グローバル Z は親から継承）
+└─ Structural3d の Door / Tank / MudMixer のときだけ
+   LegacyStructural2dMirror + 非表示 Sprite エンティティ（子）
 
-Building3dVisual エンティティ（独立。Building の子ではない）
+Structural3d のときだけ Building3dVisual エンティティ（独立。Building の子ではない）
 ├─ Building3dVisual { owner: Entity }
 └─ XZ 平面上にスポーン（3D メッシュ・マテリアル）
 ```
 
-> **P02 presentation契約**: `Wall / Door / Floor / Bridge / Tank / MudMixer / RestArea / SoulSpa` は `Structural3d` で、active presentation は `Building3dVisual` だけ。状態consumerとの互換用 `VisualLayerKind` Sprite は `LegacyStructural2dMirror` + `Visibility::Hidden` としてP08まで残す。`SandPile / BonePile / WheelbarrowParking / OutdoorLamp` は `Foreground2d` で、active presentation は子Spriteだけ、3D visualは生成しない。
+> **P02 presentation契約**: `Wall / Door / Floor / Bridge / Tank / MudMixer / RestArea / SoulSpa` は `Structural3d` で、active presentation は `Building3dVisual` だけ。状態consumerとの互換用 `LegacyStructural2dMirror` + `Visibility::Hidden` SpriteはDoor / Tank / MudMixerだけがP08まで残す。`Wall / Floor / Bridge / RestArea / SoulSpa`は2D子を持たない。`SandPile / BonePile / WheelbarrowParking / OutdoorLamp` は `Foreground2d` で、active presentation は子Spriteだけ、3D visualは生成しない。
 
 **BuildingType 別 Z 割り当て**:
 
-| BuildingType | VisualLayerKind | Z定数 |
+| BuildingType | 2D child（存在する場合） | Z定数 |
 |:---|:---|:---|
-| `Floor`, `SandPile`, `BonePile` | `Floor` | `Z_BUILDING_FLOOR` (0.05) |
-| その他すべて | `Struct` | `Z_BUILDING_STRUCT` (0.12) |
+| `SandPile`, `BonePile` | 可視 `Floor` | `Z_BUILDING_FLOOR` (0.05) |
+| `WheelbarrowParking`, `OutdoorLamp` | 可視 `Struct` | `Z_BUILDING_STRUCT` (0.12) |
+| `Door`, `Tank`, `MudMixer` | 非表示 `Struct` + `LegacyStructural2dMirror` | `Z_BUILDING_STRUCT` (0.12) |
+| `Wall`, `Floor`, `Bridge`, `RestArea`, `SoulSpa` | なし | — |
 
-**visual system から Sprite を参照する方法**: `wall_connection`, `tank`, `mud_mixer` などは `Children` + `VisualLayerKind::Struct` の組み合わせで子エンティティから `Sprite` を取得する。親の `Building` エンティティが `Sprite` を直接持つと仮定しないこと。
+**visual system から Sprite を参照する方法**: 2D childを持つrouteだけが `Children` + `VisualLayerKind` で子の `Sprite` を取得する。Structural3dのactive presentationは常に独立 `Building3dVisual` を読む。親の `Building` エンティティが `Sprite` を直接持つ、または全Buildingに2D childがあると仮定しないこと。
 
 ### Building3dVisual スポーン
 
@@ -369,7 +371,7 @@ Building3dVisual エンティティ（独立。Building の子ではない）
 
 | スポーン箇所 | タイミング |
 |:---|:---|
-| `wall_framed_tile_spawn_system`（`wall_construction/phase_transition.rs`） | Framing 完了時に仮設壁 `Building` 生成と同時にスポーン（`wall_provisional_material`）|
+| `wall_framed_tile_spawn_system`（`wall_construction/phase_transition.rs`） | Framing 完了時に仮設Wall shellを生成（`wall_provisional_material`）。Coating完了時に同じownerを恒久materialへpromoteし、その時点でfresh `BuildingBounceEffect` を開始する。 |
 | `floor_construction_completion_system`（`floor_construction/completion.rs`） | 養生完了後の Floor Building 生成と同時にスポーン（`floor_mesh`/`floor_material`）|
 | `spawn_completed_building`（`building_completion/spawn.rs`） | Blueprint 完成時の Building 生成と同時にスポーン |
 

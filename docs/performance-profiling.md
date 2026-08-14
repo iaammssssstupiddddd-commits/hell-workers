@@ -133,6 +133,9 @@ raw artifact 884件のdirectory SHA256は
 `verify-rtt-light --repo … --attempt …`、baseline rootは`python3 scripts/perf.py
 verify-rtt-light-baseline --baseline …`で再検証する。canonical registryの`baseline-index.json`と
 `SHA256SUMS`を正本とし、個別artifactの絶対pathはhost内の診断locatorとして扱う。
+履歴readerは`BEVY_ASSET_ROOT`を現在のcheckoutではなく記録済みmanifestの`repo_root`と照合する。windowed matrixの
+`environment_lock`絶対pathも非意味論的なhost locatorとして、非空文字列とmanifest / matrix.json間の一致だけを確認し、
+lock payloadと各raw runは別途再検証する。
 
 P01 Scene-onlyのcanonical formal candidateは2026-08-12に登録済みである。subject commitは
 `29a4a719e9fe92b10618f36ce548c4bb5a4c7e80`、attempt IDは
@@ -144,35 +147,44 @@ gate ledgerは123 / 123 row pass、raw artifact 884件のdirectory SHA256は
 
 P02 TopDown presentation subjectは `--stage p02` を Rust / Python / native launcherの明示selectorで受理する。current / P01の既存schemaを変更せず、P02のCapture / Memoryは `p02_presentation.csv`、RenderDocはruntime checkpointの同名blockを必須にする。Door behavior validatorはP02だけ Closed→Open→Open→Locked→Lockedを要求し、current / P01のhistorical Closed-only timelineを維持する。bundleは `RLV1-P02-DOOR-DOMAIN`、`RLV1-P02-PRESENT`、`RLV1-P02-PERF` のexact rowを生成し、P02 frame p95/p99は登録済みP01 projectionをreferenceにする。
 
-P02 TopDown presentationのcanonical formal candidateは2026-08-13に登録済みである。subject commitは
-`6ea0bf99391b1660607537304a3764f380a10eac`、attempt IDは
-`54d85a63-e237-4501-a0d0-33c1d0a29f3b`、source fingerprintは
-`0f43c3cfccbd7aabaec7e3b9ed203adae0ee198facc98617834441c7c5d4a2f0`である。Intel Arc (MTL) / Mesa 26.1.5 /
-Vulkan / X11でP00 / P01と同じ5 legを登録し、gate ledgerは128 / 128 row pass、raw artifact 932件のdirectory
-SHA256は`dcb207eed7ad12435131bd92d1cb090efb3906bc87e0fb4d091067b269ccb98d`である。P01比のframe hard gateは
-p95 / p99とも全6 caseで5%以下となり、最大はlarge / cpuのp95 +4.54%、p99 +3.42%だった。
-`baseline-index.json`の`stages.p02`とattempt manifestを正本とし、`verify-rtt-light --attempt …`で再検証する。
+P02 TopDown presentationのcanonical formal candidateは2026-08-14に登録済みである。subject commitは
+`c3515a40543026a588592682889a08d67cbaeff9`、attempt IDは
+`9ff336ef-1312-4248-b0bf-bb454111decc`、source fingerprintは
+`6e6e37c5cbc898b6f39bf85b2362e854f3ad10bbe176c1e41abe4fd007cd5f02`である。Intel Arc (MTL) / Mesa 26.1.5 /
+Vulkan / X11でAudit / Behavior / Capture / RenderDoc / Memoryの5 legを登録し、gate ledgerは128 / 128 row pass、raw artifact
+932件のdirectory SHA256は`a6b76b64ca8df601d051abeb15589ffd464fd1bd41dfe61c9f25fa734f6a0e72`である。P01比のframe hard gateは
+p95 / p99とも全6 caseで5%以下となり、正の最大値はmedium / cpuのp95 +2.52%、p99 +1.96%だった。
+`baseline-index.json`の`stages.p02`とattempt manifestを正本とし、`verify-rtt-light --attempt …`とbaseline history readerで再検証する。
+subject `6ea0bf99` / attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`はfrozen v1 formalの履歴として保持する。
 
 最初のformal candidateはP02 presentation syncが静止中も全Building / Soulを走査していたためframe gateを満たさず、
 登録しなかった。owner transform・presentation state・actor visual stateの変更時だけ同期する経路へ修正してから、同じ
 frozen contractとP01 referenceでcanonical candidateを採り直した。candidate結果を理由に閾値は変更していない。
 
-P02のpixel / animation補完は専用`p02-presentation-actual-window-v1` profileで行う。入口は
+P02のpixel / animation補完は専用`p02-presentation-actual-window-v9`（schema 7）profileで行う。入口は
 `.codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py plan`であり、
 High / Medium / Low × DPI 1.0 / 1.5 / 2.0 × Render3d visible / hiddenの18 caseをproduction
-`indoor-light/p02/static` fixtureから逐次採取する。各caseは起動process tree所有のX11 clientだけを2 frame採取し、
-非黒・scene detail・visible animation、Vulkan/X11、exactly-one、Door / state / bounce、Soul billboard、Familiar
-foreground、Render3d toggleを合わせて検証する。headless、`visual_test`、root desktop screenshot、case欠落は
-代替証拠として受理しない。launcherはprofiling buildだけで解釈する
-`HW_P02_PRESENTATION_ACTUAL_WINDOW=1`をcase processへ注入し、Ready後7秒だけproduction Bridge presentationへ
-`Time<Real>`由来のscale pulseを適用する。同じ条件でMainCameraをfixture中心へ固定してroot UIを非表示にし、
-Bridge presentationだけをcapture中のfixture中心へ移す。pulseはcapture後にproduction transformへ復元されるため、
-最終sidecarは通常のexact transformを検証しつつ、2 frame差分は実際のRtT animation経路を検出できる。
+`indoor-light/p02/static` fixtureから逐次採取する。各caseはDoor Open / Closed / Locked、Soul前 / 後、Bridge、
+Wall bounce active / rest、Foreground animation A / Bの10 ready phaseを持つ。Rust側はproduction ownerとphase nonce /
+generation / ROIをsidecarへ出し、Python側はReadyなgenerationをACKしてからprocess tree所有のX11 clientだけを採取する。
+Doorの3状態、SoulのWall前後とalpha-masked差分、Bridgeのvisible / hidden差分、Wall bounce、Foregroundの局所animationを
+PNG pixelsから再計算する。Bridge phaseは画像差分だけに依存せず、RtT cameraとの`RenderLayers`交差、期待するBridge
+mesh / material handle、両assetのregistry在籍もsource側でfail-closedに確認する。
 
-canonical P02 subjectのactual-window artifactは
-`target/native-acceptance/p02-presentation-20260812T203700Z-17c5324a`である。High / Medium / Low ×
-DPI 1.0 / 1.5 / 2.0 × Render3d visible / hiddenの18 / 18 caseがvalidで、subject commitとsource fingerprintは
-formal candidateに一致する。このpathはhost内locatorであり、合否の正本はjob / manifestのsealed metadataと各case artifactである。
+manifest・observation・raw performance validation・binary / source / harness / runtime asset provenance・PNG hash / ROIを
+相互照合し、unknown file、symlink、phase欠落、sidecar / PNG / CSVの改竄をfail-closedで拒否する。headless、`visual_test`、
+root desktop screenshot、case欠落は代替証拠として受理しない。旧v1〜v8 profileのartifactはschema / profile mismatchであり、
+v9のP02完了証跡としては受理しない。
+
+v9 actual-window artifactはsubject
+`c3515a40543026a588592682889a08d67cbaeff9`、source fingerprint
+`6e6e37c5cbc898b6f39bf85b2362e854f3ad10bbe176c1e41abe4fd007cd5f02`、harness fingerprint
+`cd4fc4a06669a82884ebced366941e556d746824247f1a91e2725beccb15cb5e`、runtime asset fingerprint
+`97c17421b1438331f7a9cb59ab66cd703aa7da10fef99f567a54d16310c49a83`、profiling binary SHA256
+`55496636014ca5e98eea93ce5eb80d8ab9f25dc72fa2d7c6e1822a6433c61b8f`で封印する。Intel Arc (MTL) /
+Mesa 26.1.5 / Vulkan / X11、1280×720 client windowで18 / 18 caseが完了し、`job.json=status: valid`、
+`manifest.json=status: pass`、独立`verify`がpassしたことを記録する。絶対pathではなく、これらsealed metadataと
+各case artifactを正本とする。
 
 2026-08-11 の diagnostic RD0 では Intel Arc / Vulkan / X11 の実ゲームから 699,959,528 byte の RDC
 （SHA256 `aaf0f73c02baebf018ad69f0c229ee0570b52c26bb9bc7df5c183c00a71243b8`）を採取し、

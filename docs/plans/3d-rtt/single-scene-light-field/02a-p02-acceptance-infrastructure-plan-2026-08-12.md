@@ -7,7 +7,7 @@
 | 計画ID | `single-scene-light-field-02a-p02-acceptance-infrastructure-plan-2026-08-12` |
 | ステータス | `Completed` |
 | 作成日 | `2026-08-12` |
-| 最終更新日 | `2026-08-13` |
+| 最終更新日 | `2026-08-14` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 関連計画 | [P00](00-baseline-gates-plan-2026-08-03.md)、[P01](01-single-scene-rtt-plan-2026-08-03.md)、[P02](02-topdown-presentation-plan-2026-08-03.md) |
@@ -154,7 +154,7 @@
 1. P02 RenderDoc resource / checkpoint expectationをP01と別stage entryとして定義する。Scene-only topologyはP01 RTT gateを継続して検証する。
 2. extractor / bundleに`RLV1-P02-DOOR-DOMAIN`、`RLV1-P02-PRESENT`、`RLV1-P02-PERF`のexact rowを実装する。P02ではfield-core / consumer-coreを実行・出力ともに拒否する。
 3. `plan-rtt-light`、artifact validator、native S1 / formal dry-run self-testをP02に対応させ、source / binary / adapter / environment / referenceをfail-closedで照合する。
-4. production fixtureを使う`p02-presentation-actual-window-v1`相当のscenarioを追加し、§4.3の固定状態、window/client ownership、screenshot / observation artifact、否定条件を定義する。
+4. production fixtureを使う`p02-presentation-actual-window-v9`（schema 7）のscenarioを追加し、§4.3の固定状態、window/client ownership、screenshot / observation artifact、否定条件を定義する。
 5. P02 actual-window scenarioはgeneric `visual_test`、headless run、root desktop screenshotを代替証拠にしない。
 
 ### 主な変更ファイル
@@ -235,8 +235,8 @@
 ### 現在地
 
 - 進捗: `100%`
-- 完了済み: M1〜M4。production fixture actual-window 18 / 18をsubject `6ea0bf99391b1660607537304a3764f380a10eac`で採取・再検証し、同subjectのS0 / S1とformal 5 legをvalid確認した。attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`は128 / 128 gate row passで登録済み
-- 未完了: なし。P02 M6へのhandoffとformal登録まで完了した。
+- 完了済み: M1〜M4。selector・sidecar・RenderDoc/bundle・historical reader、v9 actual-window integrity evidence、P02 M6へのfresh formal handoff / 登録を閉じた。readerはrecorded repo rootとopaque host locatorを扱いつつraw payloadを再検証する。
+- 旧v1〜v8 artifactはPNG / observation / raw sidecarを再計算する現行profileの完了証跡ではない。
 
 ### 次のAIが最初にやること
 
@@ -252,22 +252,25 @@
 
 ### 最終確認ログ
 
-- 最終 docs gate: `2026-08-13` / `docs --write / check pass`
-- 最終 Rust / native gate: `2026-08-13` / `repository verify pass。subject 6ea0bf99、actual-window 18/18、S0 / S1、formal 5 leg valid。attempt 54d85a63-e237-4501-a0d0-33c1d0a29f3b、128/128 gate row、独立artifact verify pass`
+- 旧v1〜v8証跡は履歴として保持するが、v9 profile / schema mismatchのためnative completion evidenceではない。
+- v9 actual-window: subject `c3515a40`、schema 7、18 / 18、production phase sidecar、ROI pixel predicates、PNG / observation / raw-performance / provenanceの独立revalidationがpassした。
+- fresh formal handoff: subject `c3515a40`、attempt `9ff336ef-1312-4248-b0bf-bb454111decc`、5 leg valid、128 / 128 gate row pass。`verify-rtt-light`とcurrent / P01 / P02 baseline history readerを独立実行してpassした。
 
 ### Definition of Done
 
 - [x] M1〜M4の受入基盤が完了
 - [x] current / P01 historyを再検証し、P02 selector / schema mismatchをfail-closedにする
 - [x] P02 Door / presentation / perf metricのsource-to-gate対応とnegative testsが揃う
-- [x] P02 actual-window scenarioがproduction fixtureで再検証できる
-- [x] P02 M6がformal/native candidateを採取できるready stateへhandoff済み
+- [x] P02 actual-window scenarioがproduction fixtureで画像/semantic/provenanceを再計算して再検証できる
+- [x] P02 M6がfresh formal/native candidateを採取・登録してhand-offを完了する
 - [x] 実装に追従する性能・描画・Skill docsが更新済み
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-14` | `Codex` | subject `c3515a40`のactual-window v9（schema 7）を18 / 18採取し、phase / ROI / PNG / raw-performance / provenanceを独立再検証した。fresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`を登録し、5 leg・128 / 128 gate row・history readerを独立verifyした。 |
+| `2026-08-13` | `Codex` | actual-window v1 verifierがobservationとPNGを信頼していたreview所見を反映。v2 phase/ROI/raw-artifact revalidationへ移行し、fresh native handoffを再オープンした。 |
 | `2026-08-13` | `Codex` | subject `6ea0bf99`のproduction actual-window 18 / 18、S0 / S1、formal 5 leg・128 / 128 gate rowをvalid確認し、M1〜M4を完了 |
 | `2026-08-12` | `Codex` | 修正後S1を再実行し、Audit / actual-window Capture / native Memoryの全legをvalid確認 |
 | `2026-08-12` | `Codex` | S1 CaptureでOpen Door presentationの同frame検証とP02 GPU legacy proxyの旧期待値を検出。fixture settle境界とstage-aware validatorを修正 |
