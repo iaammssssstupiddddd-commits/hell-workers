@@ -9,7 +9,11 @@
 
 use super::config::{PerfRenderMode, PerfScenarioConfig};
 use super::indoor_light_fixture::{IndoorLightFixturePhase, IndoorLightFixtureState};
+use bevy::camera::visibility::RenderLayers;
 use bevy::camera_controller::pan_camera::PanCamera;
+use bevy::ecs::system::SystemParam;
+use bevy::mesh::{Mesh, Mesh3d};
+use bevy::pbr::{MeshMaterial3d, StandardMaterial};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::camera::MainCamera;
@@ -24,7 +28,7 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::plugins::startup::Camera3dRtt;
+use crate::plugins::startup::{Building3dHandles, Camera3dRtt};
 use crate::systems::jobs::{Building, BuildingType, Door, DoorState, RenderPresentationClass};
 use crate::world::map::RIVER_Y_MIN;
 
@@ -32,7 +36,7 @@ const ACCEPTANCE_ENV: &str = "HW_P02_PRESENTATION_ACTUAL_WINDOW";
 const STATUS_PATH_ENV: &str = "HW_P02_PRESENTATION_STATUS_PATH";
 const ACK_PATH_ENV: &str = "HW_P02_PRESENTATION_ACK_PATH";
 const SESSION_NONCE_ENV: &str = "HW_P02_PRESENTATION_SESSION_NONCE";
-const STATUS_SCHEMA_VERSION: u32 = 6;
+const STATUS_SCHEMA_VERSION: u32 = 7;
 const PHASE_SETTLE: Duration = Duration::from_millis(1_600);
 const ACK_TIMEOUT: Duration = Duration::from_secs(15);
 const SETTLE_FRAMES: u32 = 3;
@@ -43,6 +47,87 @@ const FOREGROUND_PROBE_GRID: (i32, i32) = (27, 28);
 const ROI_HALF_SIZE: u32 = 112;
 const OCCLUSION_ROI_HALF_SIZE: u32 = 48;
 const MAX_OCCLUSION_CENTER_DISTANCE: f32 = 2.0;
+
+type BridgeVisualQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Building3dVisual,
+        &'static Transform,
+        &'static Visibility,
+        &'static InheritedVisibility,
+        &'static RenderLayers,
+        &'static Mesh3d,
+        &'static MeshMaterial3d<StandardMaterial>,
+    ),
+>;
+
+/// Groups all read-only storyboard evidence inputs so the production schedule
+/// stays within Bevy's system arity and the verifier receives one coherent
+/// production-world view.
+#[derive(SystemParam)]
+pub(crate) struct P02ActualWindowStatusParams<'w, 's> {
+    handles_3d: Res<'w, Building3dHandles>,
+    meshes: Res<'w, Assets<Mesh>>,
+    standard_materials: Res<'w, Assets<StandardMaterial>>,
+    window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    camera_3d: Query<
+        'w,
+        's,
+        (
+            &'static Camera,
+            &'static GlobalTransform,
+            &'static RenderLayers,
+        ),
+        With<Camera3dRtt>,
+    >,
+    main_camera: Query<
+        'w,
+        's,
+        (&'static Camera, &'static GlobalTransform),
+        (With<MainCamera>, Without<Camera3dRtt>),
+    >,
+    doors: Query<'w, 's, (Entity, &'static Door, &'static Transform)>,
+    door_visuals: Query<
+        'w,
+        's,
+        (
+            &'static Door3dVisual,
+            &'static DoorPresentationState,
+            &'static Transform,
+            &'static Visibility,
+            &'static InheritedVisibility,
+        ),
+    >,
+    owners: Query<'w, 's, (Entity, &'static Building, &'static Transform)>,
+    building_visuals: Query<
+        'w,
+        's,
+        (
+            &'static Building3dVisual,
+            &'static Transform,
+            &'static Visibility,
+            &'static InheritedVisibility,
+        ),
+    >,
+    bridge_visuals: BridgeVisualQuery<'w, 's>,
+    billboards: Query<
+        'w,
+        's,
+        (
+            &'static ActorBillboard3d,
+            &'static Transform,
+            &'static Visibility,
+        ),
+    >,
+    bounces: Query<'w, 's, &'static BuildingBounceEffect>,
+    foreground: Query<
+        'w,
+        's,
+        (&'static ChildOf, &'static GlobalTransform),
+        (With<Sprite>, Without<LegacyStructural2dMirror>),
+    >,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ProbePhase {
@@ -532,32 +617,9 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
 pub(crate) fn publish_p02_actual_window_probe_status_system(
     config: Res<PerfScenarioConfig>,
     fixture: Res<IndoorLightFixtureState>,
+    status_params: P02ActualWindowStatusParams,
     time: Res<Time<Real>>,
     mut acceptance: ResMut<P02ActualWindowAcceptance>,
-    window: Query<&Window, With<PrimaryWindow>>,
-    camera_3d: Query<(&Camera, &GlobalTransform), With<Camera3dRtt>>,
-    main_camera: Query<(&Camera, &GlobalTransform), (With<MainCamera>, Without<Camera3dRtt>)>,
-    doors: Query<(Entity, &Door, &Transform)>,
-    door_visuals: Query<(
-        &Door3dVisual,
-        &DoorPresentationState,
-        &Transform,
-        &Visibility,
-        &InheritedVisibility,
-    )>,
-    owners: Query<(Entity, &Building, &Transform)>,
-    building_visuals: Query<(
-        &Building3dVisual,
-        &Transform,
-        &Visibility,
-        &InheritedVisibility,
-    )>,
-    billboards: Query<(&ActorBillboard3d, &Transform, &Visibility)>,
-    bounces: Query<&BuildingBounceEffect>,
-    foreground: Query<
-        (&ChildOf, &GlobalTransform),
-        (With<Sprite>, Without<LegacyStructural2dMirror>),
-    >,
 ) {
     if !acceptance.enabled(&config, &fixture) {
         return;
@@ -590,22 +652,12 @@ pub(crate) fn publish_p02_actual_window_probe_status_system(
     if !acceptance.ready_to_publish(time.elapsed()) {
         return;
     }
-    let status = match build_probe_status(
+    let status = match status_params.build_probe_status(
         &config,
         &fixture,
         acceptance.phase,
         acceptance.generation,
         &nonce,
-        &window,
-        &camera_3d,
-        &main_camera,
-        &doors,
-        &door_visuals,
-        &owners,
-        &building_visuals,
-        &billboards,
-        &bounces,
-        &foreground,
     ) {
         Ok(value) => value,
         Err(reason) => json!({
@@ -624,343 +676,388 @@ pub(crate) fn publish_p02_actual_window_probe_status_system(
     acceptance.mark_published();
 }
 
-#[allow(clippy::too_many_arguments)]
-fn build_probe_status(
-    config: &PerfScenarioConfig,
-    fixture: &IndoorLightFixtureState,
-    phase: ProbePhase,
-    generation: u32,
-    session_nonce: &str,
-    window: &Query<&Window, With<PrimaryWindow>>,
-    camera_3d: &Query<(&Camera, &GlobalTransform), With<Camera3dRtt>>,
-    main_camera: &Query<(&Camera, &GlobalTransform), (With<MainCamera>, Without<Camera3dRtt>)>,
-    doors: &Query<(Entity, &Door, &Transform)>,
-    door_visuals: &Query<(
-        &Door3dVisual,
-        &DoorPresentationState,
-        &Transform,
-        &Visibility,
-        &InheritedVisibility,
-    )>,
-    owners: &Query<(Entity, &Building, &Transform)>,
-    building_visuals: &Query<(
-        &Building3dVisual,
-        &Transform,
-        &Visibility,
-        &InheritedVisibility,
-    )>,
-    billboards: &Query<(&ActorBillboard3d, &Transform, &Visibility)>,
-    bounces: &Query<&BuildingBounceEffect>,
-    foreground: &Query<
-        (&ChildOf, &GlobalTransform),
-        (With<Sprite>, Without<LegacyStructural2dMirror>),
-    >,
-) -> Result<Value, String> {
-    let window = window.single().map_err(|_| "missing primary window")?;
-    let physical_width = window.physical_width();
-    let physical_height = window.physical_height();
-    if physical_width == 0 || physical_height == 0 {
-        return Err("primary window has no physical extent".to_string());
-    }
-    let is_gpu = matches!(config.render_mode, PerfRenderMode::Gpu);
-    let fixture_checksum = fixture
-        .actual_window_layout_checksum()
-        .ok_or_else(|| "ready fixture has no layout checksum".to_string())?;
-    let camera_target = phase_camera_target(phase, doors)?;
-    let probe = if let Some(expected_state) = phase.expected_door_state() {
-        let (door_entity, _, _) = doors
-            .iter()
-            .filter(|(_, door, _)| door.state == expected_state)
-            .min_by_key(|(entity, _, transform)| {
-                (
-                    transform.translation.y.to_bits(),
-                    transform.translation.x.to_bits(),
-                    entity.to_bits(),
-                )
-            })
-            .ok_or_else(|| format!("missing {expected_state:?} Door root"))?;
-        let (visual, presentation, transform, visibility, inherited_visibility) = door_visuals
-            .iter()
-            .find(|(visual, _, _, _, _)| visual.owner == door_entity)
-            .ok_or_else(|| format!("missing {expected_state:?} Door3dVisual"))?;
-        let _ = visual;
-        require_probe_visual_for_render_mode(
-            visibility,
-            inherited_visibility,
-            is_gpu,
-            &format!("{expected_state:?} Door3dVisual"),
-        )?;
-        let expected_presentation = door_presentation_state(expected_state);
-        if *presentation != expected_presentation {
-            return Err(format!(
-                "Door semantic/presentation mismatch: expected {expected_presentation:?}, got {presentation:?}"
-            ));
+impl<'w, 's> P02ActualWindowStatusParams<'w, 's> {
+    fn build_probe_status(
+        &self,
+        config: &PerfScenarioConfig,
+        fixture: &IndoorLightFixtureState,
+        phase: ProbePhase,
+        generation: u32,
+        session_nonce: &str,
+    ) -> Result<Value, String> {
+        let handles_3d = &self.handles_3d;
+        let meshes = &self.meshes;
+        let standard_materials = &self.standard_materials;
+        let window = &self.window;
+        let camera_3d = &self.camera_3d;
+        let main_camera = &self.main_camera;
+        let doors = &self.doors;
+        let door_visuals = &self.door_visuals;
+        let owners = &self.owners;
+        let building_visuals = &self.building_visuals;
+        let bridge_visuals = &self.bridge_visuals;
+        let billboards = &self.billboards;
+        let bounces = &self.bounces;
+        let foreground = &self.foreground;
+        let window = window.single().map_err(|_| "missing primary window")?;
+        let physical_width = window.physical_width();
+        let physical_height = window.physical_height();
+        if physical_width == 0 || physical_height == 0 {
+            return Err("primary window has no physical extent".to_string());
         }
-        let (camera, global) = camera_3d.single().map_err(|_| "missing RtT camera")?;
-        let roi = project_rtt_roi(
-            camera,
-            global,
-            transform.translation,
-            physical_width,
-            physical_height,
-        )
-        .ok_or_else(|| "Door probe projection is outside the client window".to_string())?;
-        json!({
-            "kind": "door",
-            "expected_state": door_state_name(expected_state),
-            "presentation_state": door_presentation_name(*presentation),
-            "roi": roi.as_json(),
-        })
-    } else if phase.is_soul_depth() {
-        let (wall_entity, _, _) = owners
-            .iter()
-            .find(|(_, building, transform)| {
-                building.kind == BuildingType::Wall
-                    && transform.translation.truncate()
-                        == WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1)
-            })
-            .ok_or_else(|| "missing production Wall depth probe".to_string())?;
-        let (_, wall_transform, visibility, inherited_visibility) = building_visuals
-            .iter()
-            .find(|(visual, _, _, _)| visual.owner == wall_entity)
-            .ok_or_else(|| "missing production Wall3dVisual depth probe".to_string())?;
-        require_probe_visual_for_render_mode(
-            visibility,
-            inherited_visibility,
-            is_gpu,
-            "production Wall3dVisual depth probe",
-        )?;
-        let (camera, global) = camera_3d.single().map_err(|_| "missing RtT camera")?;
-        let wall_view = camera
-            .world_to_viewport_with_depth(global, wall_transform.translation)
-            .map_err(|error| format!("cannot project Wall depth probe: {error}"))?;
-        let roi = project_rtt_roi(
-            camera,
-            global,
-            wall_transform.translation,
-            physical_width,
-            physical_height,
-        )
-        .ok_or_else(|| "Wall depth probe projection is outside the client window".to_string())?;
-        let subject = fixture
-            .actual_window_subject_soul()
-            .ok_or_else(|| "ready fixture has no Soul depth subject".to_string())?;
-        let actor = billboards
-            .iter()
-            .find(|(billboard, _, _)| billboard.owner == subject);
-        if !is_gpu {
-            if actor.is_some() {
-                return Err("CPU actual-window case retained a Soul billboard".to_string());
+        let is_gpu = matches!(config.render_mode, PerfRenderMode::Gpu);
+        let fixture_checksum = fixture
+            .actual_window_layout_checksum()
+            .ok_or_else(|| "ready fixture has no layout checksum".to_string())?;
+        let camera_target = phase_camera_target(phase, doors)?;
+        let probe = if let Some(expected_state) = phase.expected_door_state() {
+            let (door_entity, _, _) = doors
+                .iter()
+                .filter(|(_, door, _)| door.state == expected_state)
+                .min_by_key(|(entity, _, transform)| {
+                    (
+                        transform.translation.y.to_bits(),
+                        transform.translation.x.to_bits(),
+                        entity.to_bits(),
+                    )
+                })
+                .ok_or_else(|| format!("missing {expected_state:?} Door root"))?;
+            let (visual, presentation, transform, visibility, inherited_visibility) = door_visuals
+                .iter()
+                .find(|(visual, _, _, _, _)| visual.owner == door_entity)
+                .ok_or_else(|| format!("missing {expected_state:?} Door3dVisual"))?;
+            let _ = visual;
+            require_probe_visual_for_render_mode(
+                visibility,
+                inherited_visibility,
+                is_gpu,
+                &format!("{expected_state:?} Door3dVisual"),
+            )?;
+            let expected_presentation = door_presentation_state(expected_state);
+            if *presentation != expected_presentation {
+                return Err(format!(
+                    "Door semantic/presentation mismatch: expected {expected_presentation:?}, got {presentation:?}"
+                ));
             }
+            let (camera, global, _) = camera_3d.single().map_err(|_| "missing RtT camera")?;
+            let roi = project_rtt_roi(
+                camera,
+                global,
+                transform.translation,
+                physical_width,
+                physical_height,
+            )
+            .ok_or_else(|| "Door probe projection is outside the client window".to_string())?;
             json!({
-                "kind": "soul-depth",
-                "render3d": "hidden",
+                "kind": "door",
+                "expected_state": door_state_name(expected_state),
+                "presentation_state": door_presentation_name(*presentation),
                 "roi": roi.as_json(),
             })
-        } else {
-            let (_, actor_transform, visibility) =
-                actor.ok_or_else(|| "GPU actual-window case has no Soul billboard".to_string())?;
-            if *visibility == Visibility::Hidden {
-                return Err("GPU Soul depth subject is hidden".to_string());
-            }
-            let actor_view = camera
-                .world_to_viewport_with_depth(global, actor_transform.translation)
-                .map_err(|error| format!("cannot project Soul depth probe: {error}"))?;
-            let wall_center = project_rtt_point(
+        } else if phase.is_soul_depth() {
+            let (wall_entity, _, _) = owners
+                .iter()
+                .find(|(_, building, transform)| {
+                    building.kind == BuildingType::Wall
+                        && transform.translation.truncate()
+                            == WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1)
+                })
+                .ok_or_else(|| "missing production Wall depth probe".to_string())?;
+            let (_, wall_transform, visibility, inherited_visibility) = building_visuals
+                .iter()
+                .find(|(visual, _, _, _)| visual.owner == wall_entity)
+                .ok_or_else(|| "missing production Wall3dVisual depth probe".to_string())?;
+            require_probe_visual_for_render_mode(
+                visibility,
+                inherited_visibility,
+                is_gpu,
+                "production Wall3dVisual depth probe",
+            )?;
+            let (camera, global, _) = camera_3d.single().map_err(|_| "missing RtT camera")?;
+            let wall_view = camera
+                .world_to_viewport_with_depth(global, wall_transform.translation)
+                .map_err(|error| format!("cannot project Wall depth probe: {error}"))?;
+            let roi = project_rtt_roi(
                 camera,
                 global,
                 wall_transform.translation,
                 physical_width,
                 physical_height,
             )
-            .ok_or_else(|| "Wall depth center is outside the client window".to_string())?;
-            let soul_center = project_rtt_point(
+            .ok_or_else(|| {
+                "Wall depth probe projection is outside the client window".to_string()
+            })?;
+            let subject = fixture
+                .actual_window_subject_soul()
+                .ok_or_else(|| "ready fixture has no Soul depth subject".to_string())?;
+            let actor = billboards
+                .iter()
+                .find(|(billboard, _, _)| billboard.owner == subject);
+            if !is_gpu {
+                if actor.is_some() {
+                    return Err("CPU actual-window case retained a Soul billboard".to_string());
+                }
+                json!({
+                    "kind": "soul-depth",
+                    "render3d": "hidden",
+                    "roi": roi.as_json(),
+                })
+            } else {
+                let (_, actor_transform, visibility) = actor
+                    .ok_or_else(|| "GPU actual-window case has no Soul billboard".to_string())?;
+                if *visibility == Visibility::Hidden {
+                    return Err("GPU Soul depth subject is hidden".to_string());
+                }
+                let actor_view = camera
+                    .world_to_viewport_with_depth(global, actor_transform.translation)
+                    .map_err(|error| format!("cannot project Soul depth probe: {error}"))?;
+                let wall_center = project_rtt_point(
+                    camera,
+                    global,
+                    wall_transform.translation,
+                    physical_width,
+                    physical_height,
+                )
+                .ok_or_else(|| "Wall depth center is outside the client window".to_string())?;
+                let soul_center = project_rtt_point(
+                    camera,
+                    global,
+                    actor_transform.translation,
+                    physical_width,
+                    physical_height,
+                )
+                .ok_or_else(|| "Soul depth center is outside the client window".to_string())?;
+                let center_distance = wall_center.distance(soul_center);
+                if center_distance > MAX_OCCLUSION_CENTER_DISTANCE {
+                    return Err(format!(
+                        "Soul depth center is {center_distance:.3}px from the Wall, above the overlap limit"
+                    ));
+                }
+                let occlusion_roi = roi_around_point(
+                    wall_center,
+                    OCCLUSION_ROI_HALF_SIZE,
+                    physical_width,
+                    physical_height,
+                )
+                .ok_or_else(|| "Soul occlusion ROI is outside the client window".to_string())?;
+                let relation = if actor_view.z < wall_view.z {
+                    "front"
+                } else {
+                    "behind"
+                };
+                let expected_relation = if phase == ProbePhase::SoulFront {
+                    "front"
+                } else {
+                    "behind"
+                };
+                if relation != expected_relation {
+                    return Err(format!(
+                        "Soul depth probe is {relation}, expected {expected_relation}"
+                    ));
+                }
+                json!({
+                    "kind": "soul-depth",
+                    "render3d": "visible",
+                    "relation": relation,
+                    "wall_depth": wall_view.z,
+                    "soul_depth": actor_view.z,
+                    "roi": roi.as_json(),
+                    "occlusion_roi": occlusion_roi.as_json(),
+                    "wall_center": point_as_json(wall_center),
+                    "soul_center": point_as_json(soul_center),
+                    "center_distance": center_distance,
+                })
+            }
+        } else if phase == ProbePhase::Bridge {
+            let (bridge_entity, _, _) = owners
+                .iter()
+                .find(|(_, building, transform)| {
+                    is_fixture_building_root(
+                        building,
+                        transform,
+                        BuildingType::Bridge,
+                        BRIDGE_PROBE_GRID,
+                    )
+                })
+                .ok_or_else(|| "missing production Bridge root".to_string())?;
+            let (_, transform, visibility, inherited_visibility, bridge_layers, mesh, material) =
+                bridge_visuals
+                    .iter()
+                    .find(|(visual, _, _, _, _, _, _)| visual.owner == bridge_entity)
+                    .ok_or_else(|| "missing production Bridge3dVisual".to_string())?;
+            require_probe_visual_for_render_mode(
+                visibility,
+                inherited_visibility,
+                is_gpu,
+                "production Bridge3dVisual",
+            )?;
+            let (camera, global, camera_layers) =
+                camera_3d.single().map_err(|_| "missing RtT camera")?;
+            require_bridge_rtt_drawable(
+                bridge_layers,
+                camera_layers,
+                mesh,
+                material,
+                &handles_3d.bridge_mesh,
+                &handles_3d.bridge_material,
+                meshes,
+                standard_materials,
+            )?;
+            let roi = project_rtt_roi(
                 camera,
                 global,
-                actor_transform.translation,
+                transform.translation,
                 physical_width,
                 physical_height,
             )
-            .ok_or_else(|| "Soul depth center is outside the client window".to_string())?;
-            let center_distance = wall_center.distance(soul_center);
-            if center_distance > MAX_OCCLUSION_CENTER_DISTANCE {
-                return Err(format!(
-                    "Soul depth center is {center_distance:.3}px from the Wall, above the overlap limit"
-                ));
-            }
-            let occlusion_roi = roi_around_point(
-                wall_center,
-                OCCLUSION_ROI_HALF_SIZE,
-                physical_width,
-                physical_height,
-            )
-            .ok_or_else(|| "Soul occlusion ROI is outside the client window".to_string())?;
-            let relation = if actor_view.z < wall_view.z {
-                "front"
-            } else {
-                "behind"
-            };
-            let expected_relation = if phase == ProbePhase::SoulFront {
-                "front"
-            } else {
-                "behind"
-            };
-            if relation != expected_relation {
-                return Err(format!(
-                    "Soul depth probe is {relation}, expected {expected_relation}"
-                ));
-            }
+            .ok_or_else(|| "Bridge probe projection is outside the client window".to_string())?;
             json!({
-                "kind": "soul-depth",
-                "render3d": "visible",
-                "relation": relation,
-                "wall_depth": wall_view.z,
-                "soul_depth": actor_view.z,
+                "kind": "bridge",
+                "owner_3d_visual": true,
+                "rtt_drawable": true,
+                "render3d": if is_gpu { "visible" } else { "hidden" },
                 "roi": roi.as_json(),
-                "occlusion_roi": occlusion_roi.as_json(),
-                "wall_center": point_as_json(wall_center),
-                "soul_center": point_as_json(soul_center),
-                "center_distance": center_distance,
             })
-        }
-    } else if phase == ProbePhase::Bridge {
-        let (bridge_entity, _, _) = owners
-            .iter()
-            .find(|(_, building, transform)| {
-                is_fixture_building_root(
-                    building,
-                    transform,
-                    BuildingType::Bridge,
-                    BRIDGE_PROBE_GRID,
-                )
-            })
-            .ok_or_else(|| "missing production Bridge root".to_string())?;
-        let (_, transform, visibility, inherited_visibility) = building_visuals
-            .iter()
-            .find(|(visual, _, _, _)| visual.owner == bridge_entity)
-            .ok_or_else(|| "missing production Bridge3dVisual".to_string())?;
-        require_probe_visual_for_render_mode(
-            visibility,
-            inherited_visibility,
-            is_gpu,
-            "production Bridge3dVisual",
-        )?;
-        let (camera, global) = camera_3d.single().map_err(|_| "missing RtT camera")?;
-        let roi = project_rtt_roi(
-            camera,
-            global,
-            transform.translation,
-            physical_width,
-            physical_height,
-        )
-        .ok_or_else(|| "Bridge probe projection is outside the client window".to_string())?;
-        json!({
-            "kind": "bridge",
-            "owner_3d_visual": true,
-            "render3d": if is_gpu { "visible" } else { "hidden" },
-            "roi": roi.as_json(),
-        })
-    } else if phase.is_wall_bounce() {
-        let (wall_entity, _, owner_transform) = owners
-            .iter()
-            .find(|(_, building, transform)| {
-                building.kind == BuildingType::Wall
-                    && transform.translation.truncate()
-                        == WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1)
-            })
-            .ok_or_else(|| "missing production Wall bounce root".to_string())?;
-        let (_, visual_transform, visibility, inherited_visibility) = building_visuals
-            .iter()
-            .find(|(visual, _, _, _)| visual.owner == wall_entity)
-            .ok_or_else(|| "missing production Wall3dVisual bounce probe".to_string())?;
-        require_probe_visual_for_render_mode(
-            visibility,
-            inherited_visibility,
-            is_gpu,
-            "production Wall3dVisual bounce probe",
-        )?;
-        let bounce_active = bounces.get(wall_entity).is_ok();
-        let owner_scale = owner_transform.scale.x;
-        let visual_scale = visual_transform.scale.x;
-        if phase.is_active_wall_bounce() {
-            if !bounce_active || owner_scale <= 1.001 || (owner_scale - visual_scale).abs() > 0.001
+        } else if phase.is_wall_bounce() {
+            let (wall_entity, _, owner_transform) = owners
+                .iter()
+                .find(|(_, building, transform)| {
+                    building.kind == BuildingType::Wall
+                        && transform.translation.truncate()
+                            == WorldMap::grid_to_world(WALL_PROBE_GRID.0, WALL_PROBE_GRID.1)
+                })
+                .ok_or_else(|| "missing production Wall bounce root".to_string())?;
+            let (_, visual_transform, visibility, inherited_visibility) = building_visuals
+                .iter()
+                .find(|(visual, _, _, _)| visual.owner == wall_entity)
+                .ok_or_else(|| "missing production Wall3dVisual bounce probe".to_string())?;
+            require_probe_visual_for_render_mode(
+                visibility,
+                inherited_visibility,
+                is_gpu,
+                "production Wall3dVisual bounce probe",
+            )?;
+            let bounce_active = bounces.get(wall_entity).is_ok();
+            let owner_scale = owner_transform.scale.x;
+            let visual_scale = visual_transform.scale.x;
+            if phase.is_active_wall_bounce() {
+                if !bounce_active
+                    || owner_scale <= 1.001
+                    || (owner_scale - visual_scale).abs() > 0.001
+                {
+                    return Err(
+                        "active Wall bounce did not reach its matching 3D presentation transform"
+                            .to_string(),
+                    );
+                }
+            } else if bounce_active
+                || (owner_scale - 1.0).abs() > 0.001
+                || (visual_scale - 1.0).abs() > 0.001
             {
                 return Err(
-                    "active Wall bounce did not reach its matching 3D presentation transform"
+                    "resting Wall bounce probe retained an effect or non-unit presentation scale"
                         .to_string(),
                 );
             }
-        } else if bounce_active
-            || (owner_scale - 1.0).abs() > 0.001
-            || (visual_scale - 1.0).abs() > 0.001
-        {
-            return Err(
-                "resting Wall bounce probe retained an effect or non-unit presentation scale"
-                    .to_string(),
-            );
-        }
-        let (camera, global) = camera_3d.single().map_err(|_| "missing RtT camera")?;
-        let roi = project_rtt_roi(
-            camera,
-            global,
-            visual_transform.translation,
-            physical_width,
-            physical_height,
-        )
-        .ok_or_else(|| "Wall bounce projection is outside the client window".to_string())?;
-        json!({
-            "kind": "wall-bounce",
-            "bounce_active": bounce_active,
-            "owner_scale": owner_scale,
-            "visual_scale": visual_scale,
-            "roi": roi.as_json(),
-        })
-    } else if phase.is_foreground() {
-        let (camera, global) = main_camera.single().map_err(|_| "missing MainCamera")?;
-        let (child, transform) = foreground
-            .iter()
-            .find(|(child, _)| {
-                owners
-                    .get(child.parent())
-                    .is_ok_and(|(_, building, owner_transform)| {
-                        building.kind == BuildingType::SandPile
-                            && owner_transform.translation.truncate()
-                                == WorldMap::grid_to_world(
-                                    FOREGROUND_PROBE_GRID.0,
-                                    FOREGROUND_PROBE_GRID.1,
-                                )
-                    })
+            let (camera, global, _) = camera_3d.single().map_err(|_| "missing RtT camera")?;
+            let roi = project_rtt_roi(
+                camera,
+                global,
+                visual_transform.translation,
+                physical_width,
+                physical_height,
+            )
+            .ok_or_else(|| "Wall bounce projection is outside the client window".to_string())?;
+            json!({
+                "kind": "wall-bounce",
+                "bounce_active": bounce_active,
+                "owner_scale": owner_scale,
+                "visual_scale": visual_scale,
+                "roi": roi.as_json(),
             })
-            .ok_or_else(|| "missing production Foreground2d Sprite".to_string())?;
-        let _ = child;
-        let roi = project_main_roi(
-            camera,
-            global,
-            transform.translation(),
-            physical_width,
-            physical_height,
-        )
-        .ok_or_else(|| "Foreground probe projection is outside the client window".to_string())?;
-        json!({
-            "kind": "foreground",
-            "phase_scale": if phase == ProbePhase::ForegroundA { 1.0 } else { 1.18 },
-            "roi": roi.as_json(),
-        })
-    } else {
-        return Err("unknown P02 actual-window phase".to_string());
-    };
-    Ok(json!({
-        "schema_version": STATUS_SCHEMA_VERSION,
-        "status": "ready",
-        "session_nonce": session_nonce,
-        "phase": phase.id(),
-        "generation": generation,
-        "fixture_layout_checksum": fixture_checksum,
-        "render3d": if is_gpu { "visible" } else { "hidden" },
-        "camera_target": {"x": camera_target.x, "y": camera_target.y},
-        "window": {"physical_width": physical_width, "physical_height": physical_height},
-        "probe": probe,
-    }))
+        } else if phase.is_foreground() {
+            let (camera, global) = main_camera.single().map_err(|_| "missing MainCamera")?;
+            let (child, transform) = foreground
+                .iter()
+                .find(|(child, _)| {
+                    owners
+                        .get(child.parent())
+                        .is_ok_and(|(_, building, owner_transform)| {
+                            building.kind == BuildingType::SandPile
+                                && owner_transform.translation.truncate()
+                                    == WorldMap::grid_to_world(
+                                        FOREGROUND_PROBE_GRID.0,
+                                        FOREGROUND_PROBE_GRID.1,
+                                    )
+                        })
+                })
+                .ok_or_else(|| "missing production Foreground2d Sprite".to_string())?;
+            let _ = child;
+            let roi = project_main_roi(
+                camera,
+                global,
+                transform.translation(),
+                physical_width,
+                physical_height,
+            )
+            .ok_or_else(|| {
+                "Foreground probe projection is outside the client window".to_string()
+            })?;
+            json!({
+                "kind": "foreground",
+                "phase_scale": if phase == ProbePhase::ForegroundA { 1.0 } else { 1.18 },
+                "roi": roi.as_json(),
+            })
+        } else {
+            return Err("unknown P02 actual-window phase".to_string());
+        };
+        Ok(json!({
+            "schema_version": STATUS_SCHEMA_VERSION,
+            "status": "ready",
+            "session_nonce": session_nonce,
+            "phase": phase.id(),
+            "generation": generation,
+            "fixture_layout_checksum": fixture_checksum,
+            "render3d": if is_gpu { "visible" } else { "hidden" },
+            "camera_target": {"x": camera_target.x, "y": camera_target.y},
+            "window": {"physical_width": physical_width, "physical_height": physical_height},
+            "probe": probe,
+        }))
+    }
+}
+
+/// Proves that the production Bridge visual can be drawn by the RtT camera,
+/// rather than merely existing as a correctly-owned entity.  The actual-window
+/// image predicate intentionally permits a fully opaque composite toggle, so
+/// this source-side check closes the RenderLayer/mesh/material bypass route.
+fn require_bridge_rtt_drawable(
+    bridge_layers: &RenderLayers,
+    camera_layers: &RenderLayers,
+    mesh: &Mesh3d,
+    material: &MeshMaterial3d<StandardMaterial>,
+    expected_mesh: &Handle<Mesh>,
+    expected_material: &Handle<StandardMaterial>,
+    meshes: &Assets<Mesh>,
+    standard_materials: &Assets<StandardMaterial>,
+) -> Result<(), String> {
+    if !bridge_layers.intersects(camera_layers) {
+        return Err("production Bridge3dVisual shares no RenderLayer with Camera3dRtt".to_string());
+    }
+    if mesh.0.id() != expected_mesh.id() {
+        return Err("production Bridge3dVisual mesh differs from the Bridge handle".to_string());
+    }
+    if material.0.id() != expected_material.id() {
+        return Err(
+            "production Bridge3dVisual material differs from the Bridge handle".to_string(),
+        );
+    }
+    if !meshes.contains(expected_mesh.id()) {
+        return Err("production Bridge mesh asset is unavailable".to_string());
+    }
+    if !standard_materials.contains(expected_material.id()) {
+        return Err("production Bridge material asset is unavailable".to_string());
+    }
+    Ok(())
 }
 
 fn phase_camera_target(
@@ -1345,6 +1442,116 @@ mod tests {
             BuildingType::Bridge,
             BRIDGE_PROBE_GRID,
         ));
+    }
+
+    #[test]
+    fn bridge_probe_requires_the_production_rtt_layer_mesh_and_material() {
+        let mut meshes = Assets::<Mesh>::default();
+        let mut materials = Assets::<StandardMaterial>::default();
+        let expected_mesh = meshes.add(Mesh::from(Cuboid::new(1.0, 1.0, 1.0)));
+        let expected_material = materials.add(StandardMaterial::default());
+        let bridge_layers = RenderLayers::layer(3);
+        let camera_layers = RenderLayers::layer(3);
+        let bridge_mesh = Mesh3d(expected_mesh.clone());
+        let bridge_material = MeshMaterial3d(expected_material.clone());
+
+        assert!(
+            require_bridge_rtt_drawable(
+                &bridge_layers,
+                &camera_layers,
+                &bridge_mesh,
+                &bridge_material,
+                &expected_mesh,
+                &expected_material,
+                &meshes,
+                &materials,
+            )
+            .is_ok()
+        );
+
+        assert!(
+            require_bridge_rtt_drawable(
+                &RenderLayers::layer(2),
+                &camera_layers,
+                &bridge_mesh,
+                &bridge_material,
+                &expected_mesh,
+                &expected_material,
+                &meshes,
+                &materials,
+            )
+            .is_err()
+        );
+
+        let other_mesh = meshes.add(Mesh::from(Cuboid::new(2.0, 2.0, 2.0)));
+        assert!(
+            require_bridge_rtt_drawable(
+                &bridge_layers,
+                &camera_layers,
+                &Mesh3d(other_mesh),
+                &bridge_material,
+                &expected_mesh,
+                &expected_material,
+                &meshes,
+                &materials,
+            )
+            .is_err()
+        );
+
+        let other_material = materials.add(StandardMaterial::default());
+        assert!(
+            require_bridge_rtt_drawable(
+                &bridge_layers,
+                &camera_layers,
+                &bridge_mesh,
+                &MeshMaterial3d(other_material),
+                &expected_mesh,
+                &expected_material,
+                &meshes,
+                &materials,
+            )
+            .is_err()
+        );
+
+        let removed_mesh = meshes
+            .remove(expected_mesh.id())
+            .expect("expected Bridge mesh must be registered");
+        assert!(
+            require_bridge_rtt_drawable(
+                &bridge_layers,
+                &camera_layers,
+                &bridge_mesh,
+                &bridge_material,
+                &expected_mesh,
+                &expected_material,
+                &meshes,
+                &materials,
+            )
+            .is_err()
+        );
+        meshes
+            .insert(expected_mesh.id(), removed_mesh)
+            .expect("restoring registered Bridge mesh must succeed");
+
+        let removed_material = materials
+            .remove(expected_material.id())
+            .expect("expected Bridge material must be registered");
+        assert!(
+            require_bridge_rtt_drawable(
+                &bridge_layers,
+                &camera_layers,
+                &bridge_mesh,
+                &bridge_material,
+                &expected_mesh,
+                &expected_material,
+                &meshes,
+                &materials,
+            )
+            .is_err()
+        );
+        materials
+            .insert(expected_material.id(), removed_material)
+            .expect("restoring registered Bridge material must succeed");
     }
 
     #[test]

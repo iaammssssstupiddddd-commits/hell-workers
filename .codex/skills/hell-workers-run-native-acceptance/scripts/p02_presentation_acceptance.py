@@ -31,8 +31,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import native_acceptance as native  # noqa: E402
 
 
-SCHEMA_VERSION = 6
-PROFILE = "p02-presentation-actual-window-v8"
+SCHEMA_VERSION = 7
+PROFILE = "p02-presentation-actual-window-v9"
 QUALITIES = ("high", "medium", "low")
 SCALE_FACTORS = (1.0, 1.5, 2.0)
 VISIBILITY = (("visible", "gpu"), ("hidden", "cpu"))
@@ -268,7 +268,7 @@ def expected_phase_probe_fields(phase: str, visibility: str) -> set[str]:
             else {"kind", "render3d", "roi"}
         )
     if phase == "bridge":
-        return {"kind", "owner_3d_visual", "render3d", "roi"}
+        return {"kind", "owner_3d_visual", "rtt_drawable", "render3d", "roi"}
     if phase.startswith("wall-bounce-"):
         return {"kind", "bounce_active", "owner_scale", "visual_scale", "roi"}
     if phase.startswith("foreground-"):
@@ -376,6 +376,7 @@ def validate_probe_status(value: Any, *, phase: str, visibility: str) -> dict[st
     elif phase == "bridge":
         native.require(probe["kind"] == "bridge", "P02 Bridge probe kind differs")
         native.require(probe["owner_3d_visual"] is True, "P02 Bridge lacks its production 3D owner")
+        native.require(probe["rtt_drawable"] is True, "P02 Bridge is not drawable by Camera3dRtt")
         native.require(probe["render3d"] == visibility, "P02 Bridge visibility differs")
     elif phase.startswith("wall-bounce-"):
         native.require(probe["kind"] == "wall-bounce", "P02 Wall bounce probe kind differs")
@@ -556,6 +557,21 @@ def require_changed(metrics: dict[str, float | int], label: str, *, minimum: int
 def require_minimum_changed(metrics: dict[str, float | int], label: str, *, minimum: int) -> None:
     """Require a real image delta without treating an opaque RtT toggle as suspicious."""
     native.require(metrics["changed_pixels"] >= minimum, f"{label} has insufficient changed pixels")
+
+
+def require_bridge_render3d_evidence(
+    metrics: dict[str, float | int],
+    *,
+    visible_detail: int,
+    hidden_detail: int,
+    label: str,
+) -> None:
+    """Require the opaque RtT toggle and a visible-only local Bridge signal."""
+    require_minimum_changed(metrics, label, minimum=48)
+    native.require(
+        visible_detail > hidden_detail,
+        f"{label} has no extra local structure in the visible RtT frame",
+    )
 
 
 def evaluate_case_images(
@@ -1136,12 +1152,14 @@ def evaluate_cross_case_bridge(
             # Bridge ROI can therefore change in every pixel; its source-side
             # owner/visibility proof and the visible-only material/detail
             # checks above establish locality instead.
-            require_minimum_changed(difference, f"P02 Bridge Render3d {quality}/{scale}", minimum=48)
+            label = f"P02 Bridge Render3d {quality}/{scale}"
             visible_detail = observations[visible]["image_checks"]["bridge"]["detail_pixels"]
             hidden_detail = observations[hidden]["image_checks"]["bridge"]["detail_pixels"]
-            native.require(
-                visible_detail > hidden_detail,
-                f"P02 visible Bridge has no extra local structure at {quality}/{scale}",
+            require_bridge_render3d_evidence(
+                difference,
+                visible_detail=visible_detail,
+                hidden_detail=hidden_detail,
+                label=label,
             )
             checks[f"quality-{quality}-dpi-{str(scale).replace('.', 'p')}"] = difference
     return checks
@@ -1541,18 +1559,29 @@ def self_test() -> int:
         MEASURE_SECONDS >= MIN_STORYBOARD_MEASURE_SECONDS,
         "P02 storyboard measurement window is too short",
     )
-    require_minimum_changed(
+    require_bridge_render3d_evidence(
         {"changed_pixels": 64, "changed_ratio": 1.0},
-        "P02 full opaque Bridge toggle",
-        minimum=48,
+        visible_detail=64,
+        hidden_detail=0,
+        label="P02 full opaque Bridge toggle",
     )
     expect_failure(
-        lambda: require_minimum_changed(
+        lambda: require_bridge_render3d_evidence(
             {"changed_pixels": 0, "changed_ratio": 0.0},
-            "P02 missing Bridge toggle",
-            minimum=48,
+            visible_detail=64,
+            hidden_detail=0,
+            label="P02 missing Bridge toggle",
         ),
         "Bridge Render3d toggle with no image delta",
+    )
+    expect_failure(
+        lambda: require_bridge_render3d_evidence(
+            {"changed_pixels": 64, "changed_ratio": 1.0},
+            visible_detail=32,
+            hidden_detail=32,
+            label="P02 Bridge with no visible-only detail",
+        ),
+        "Bridge visible detail did not exceed hidden detail",
     )
     native.require(len({case_id(q, s, v) for q, s, v, _ in EXPECTED_CASES}) == 18, "P02 case IDs must be unique")
     native.require({render for _, _, visibility, render in EXPECTED_CASES if visibility == "visible"} == {"gpu"}, "visible P02 cases must use GPU")
@@ -1734,6 +1763,7 @@ def self_test() -> int:
                 probe = {
                     "kind": "bridge",
                     "owner_3d_visual": True,
+                    "rtt_drawable": True,
                     "render3d": "hidden",
                     "roi": hidden_roi,
                 }
@@ -1781,6 +1811,17 @@ def self_test() -> int:
             }
             for phase in PHASES
         }
+        expect_failure(
+            lambda: validate_probe_status(
+                {
+                    **hidden_status("bridge"),
+                    "probe": {**hidden_status("bridge")["probe"], "rtt_drawable": False},
+                },
+                phase="bridge",
+                visibility="hidden",
+            ),
+            "Bridge sidecar did not prove Camera3dRtt drawability",
+        )
         hidden_checks = evaluate_case_images(hidden_images, hidden_phases, visibility="hidden")
         native.require(
             hidden_checks["doors"]["door-open"]["green_pixels"] > 0,
