@@ -177,9 +177,9 @@ PNG is captured, so a screenshot cannot be attributed to a stale phase. The
 validator recomputes ROI pixel predicates for Door state, Wall/Soul depth and
 alpha, Bridge visibility, Wall completion bounce, and Foreground animation;
 then cross-checks Vulkan/X11 evidence, raw performance validation, PNG hashes,
-and the production P02 exactly-one / state sidecars as true invariants. A
-hidden required Door, Bridge, or Wall visual is rejected by the Rust sidecar;
-a headless run,
+and the production P02 exactly-one / state sidecars as true invariants. The
+Rust sidecar requires Door, Bridge, and Wall visuals to be visible in GPU
+cases and hidden in CPU cases; a headless run,
 `visual_test`, root-display capture, or incomplete matrix cannot satisfy this
 profile. Before planning, provision the ignored runtime asset mirror into the
 clean worktree; v7 hashes that full local asset view at plan, rechecks it before

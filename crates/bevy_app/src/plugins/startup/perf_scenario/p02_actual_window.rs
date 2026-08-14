@@ -684,9 +684,10 @@ fn build_probe_status(
             .find(|(visual, _, _, _, _)| visual.owner == door_entity)
             .ok_or_else(|| format!("missing {expected_state:?} Door3dVisual"))?;
         let _ = visual;
-        require_visible_probe_visual(
+        require_probe_visual_for_render_mode(
             visibility,
             inherited_visibility,
+            is_gpu,
             &format!("{expected_state:?} Door3dVisual"),
         )?;
         let expected_presentation = door_presentation_state(expected_state);
@@ -723,9 +724,10 @@ fn build_probe_status(
             .iter()
             .find(|(visual, _, _, _)| visual.owner == wall_entity)
             .ok_or_else(|| "missing production Wall3dVisual depth probe".to_string())?;
-        require_visible_probe_visual(
+        require_probe_visual_for_render_mode(
             visibility,
             inherited_visibility,
+            is_gpu,
             "production Wall3dVisual depth probe",
         )?;
         let (camera, global) = camera_3d.single().map_err(|_| "missing RtT camera")?;
@@ -837,9 +839,10 @@ fn build_probe_status(
             .iter()
             .find(|(visual, _, _, _)| visual.owner == bridge_entity)
             .ok_or_else(|| "missing production Bridge3dVisual".to_string())?;
-        require_visible_probe_visual(
+        require_probe_visual_for_render_mode(
             visibility,
             inherited_visibility,
+            is_gpu,
             "production Bridge3dVisual",
         )?;
         let (camera, global) = camera_3d.single().map_err(|_| "missing RtT camera")?;
@@ -870,9 +873,10 @@ fn build_probe_status(
             .iter()
             .find(|(visual, _, _, _)| visual.owner == wall_entity)
             .ok_or_else(|| "missing production Wall3dVisual bounce probe".to_string())?;
-        require_visible_probe_visual(
+        require_probe_visual_for_render_mode(
             visibility,
             inherited_visibility,
+            is_gpu,
             "production Wall3dVisual bounce probe",
         )?;
         let bounce_active = bounces.get(wall_entity).is_ok();
@@ -1137,6 +1141,28 @@ fn require_visible_probe_visual(
     }
 }
 
+/// Require the object-side visibility that matches the production Render3d
+/// mode. GPU screenshots must contain the concrete visual, whereas CPU
+/// screenshots deliberately hide it and prove that state through an unchanged
+/// composite plus this source-side assertion.
+fn require_probe_visual_for_render_mode(
+    visibility: &Visibility,
+    inherited_visibility: &InheritedVisibility,
+    is_gpu: bool,
+    label: &str,
+) -> Result<(), String> {
+    if is_gpu {
+        return require_visible_probe_visual(visibility, inherited_visibility, label);
+    }
+    if *visibility == Visibility::Hidden || !inherited_visibility.get() {
+        Ok(())
+    } else {
+        Err(format!(
+            "{label} remains visible in CPU Render3d-hidden mode"
+        ))
+    }
+}
+
 fn door_presentation_state(state: DoorState) -> DoorPresentationState {
     match state {
         DoorState::Closed => DoorPresentationState::Closed,
@@ -1383,38 +1409,69 @@ mod tests {
     }
 
     #[test]
-    fn actual_window_probe_rejects_hidden_required_visuals() {
+    fn actual_window_probe_visibility_matches_render_mode() {
         assert!(
-            require_visible_probe_visual(
+            require_probe_visual_for_render_mode(
                 &Visibility::Visible,
                 &InheritedVisibility::VISIBLE,
+                true,
                 "Door3dVisual"
             )
             .is_ok()
         );
         assert!(
-            require_visible_probe_visual(
+            require_probe_visual_for_render_mode(
                 &Visibility::Inherited,
                 &InheritedVisibility::VISIBLE,
+                true,
                 "Bridge3dVisual"
             )
             .is_ok()
         );
         assert_eq!(
-            require_visible_probe_visual(
+            require_probe_visual_for_render_mode(
                 &Visibility::Hidden,
                 &InheritedVisibility::VISIBLE,
+                true,
                 "Wall3dVisual"
             ),
             Err("Wall3dVisual is hidden".to_string())
         );
         assert_eq!(
-            require_visible_probe_visual(
+            require_probe_visual_for_render_mode(
                 &Visibility::Inherited,
                 &InheritedVisibility::HIDDEN,
+                true,
                 "Wall3dVisual"
             ),
             Err("Wall3dVisual is hidden by its hierarchy".to_string())
+        );
+        assert!(
+            require_probe_visual_for_render_mode(
+                &Visibility::Hidden,
+                &InheritedVisibility::VISIBLE,
+                false,
+                "Door3dVisual"
+            )
+            .is_ok()
+        );
+        assert!(
+            require_probe_visual_for_render_mode(
+                &Visibility::Inherited,
+                &InheritedVisibility::HIDDEN,
+                false,
+                "Bridge3dVisual"
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            require_probe_visual_for_render_mode(
+                &Visibility::Visible,
+                &InheritedVisibility::VISIBLE,
+                false,
+                "Wall3dVisual"
+            ),
+            Err("Wall3dVisual remains visible in CPU Render3d-hidden mode".to_string())
         );
     }
 }
