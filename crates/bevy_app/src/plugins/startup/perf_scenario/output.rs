@@ -159,8 +159,6 @@ fn write_indoor_light_runtime_sidecar(
     runtime: &crate::systems::lighting::IndoorLightRuntime,
     room_lookup: &hw_world::RoomTileLookup,
 ) -> std::io::Result<()> {
-    use sha2::{Digest, Sha256};
-
     if runtime.availability() != crate::systems::lighting::IndoorLightAvailability::Available {
         return Err(std::io::Error::other(format!(
             "indoor Light Field is not available: {}",
@@ -173,12 +171,7 @@ fn write_indoor_light_runtime_sidecar(
             "runtime field mask differs from canonical Room membership",
         ));
     }
-    let cells = tiles
-        .iter()
-        .map(|(x, y)| format!("[{x},{y}]"))
-        .collect::<Vec<_>>()
-        .join(",");
-    let indoor_mask_checksum = format!("{:x}", Sha256::digest(format!("{{\"cells\":[{cells}]}}")));
+    let indoor_mask_checksum = canonical_room_mask_checksum(tiles);
     let metadata = serde_json::json!({
         "schema_version": 1,
         "availability": "available",
@@ -201,6 +194,74 @@ fn write_indoor_light_runtime_sidecar(
     });
     let bytes = serde_json::to_vec_pretty(&metadata).map_err(std::io::Error::other)?;
     std::fs::write(path, bytes)
+}
+
+/// Hashes live Room membership in the frozen fixture's semantic order:
+/// connected interiors by row-major anchor, then row-major cells within each
+/// interior. This remains independent of recreated Room entity IDs while
+/// matching the P00 contract for multi-room fixtures.
+#[cfg(feature = "profiling")]
+pub(super) fn canonical_room_mask_checksum(tiles: &[(i32, i32)]) -> String {
+    use sha2::{Digest, Sha256};
+    use std::collections::{BTreeSet, VecDeque};
+
+    let mut remaining = tiles.iter().map(|&(x, y)| (y, x)).collect::<BTreeSet<_>>();
+    let mut ordered_cells = Vec::with_capacity(remaining.len());
+    while let Some(&(start_y, start_x)) = remaining.first() {
+        remaining.remove(&(start_y, start_x));
+        let mut pending = VecDeque::from([(start_y, start_x)]);
+        let mut component = Vec::new();
+        while let Some((y, x)) = pending.pop_front() {
+            component.push((x, y));
+            for neighbor in [
+                (y.saturating_sub(1), x),
+                (y, x.saturating_sub(1)),
+                (y, x.saturating_add(1)),
+                (y.saturating_add(1), x),
+            ] {
+                if remaining.remove(&neighbor) {
+                    pending.push_back(neighbor);
+                }
+            }
+        }
+        component.sort_unstable_by_key(|&(x, y)| (y, x));
+        ordered_cells.extend(component);
+    }
+    let canonical = serde_json::json!({"cells": ordered_cells});
+    let bytes = serde_json::to_vec(&canonical).expect("Room mask JSON is serializable");
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+#[cfg(all(test, feature = "profiling"))]
+mod p04_room_mask_checksum_tests {
+    use super::canonical_room_mask_checksum;
+
+    fn fixture_cells(module_count: i32) -> Vec<(i32, i32)> {
+        let mut cells = Vec::new();
+        for room_y in 0..module_count {
+            for room_x in 0..module_count {
+                for local_y in 1..=6 {
+                    for local_x in 1..=6 {
+                        cells.push((16 + room_x * 7 + local_x, 20 + room_y * 7 + local_y));
+                    }
+                }
+            }
+        }
+        cells.reverse();
+        cells
+    }
+
+    #[test]
+    fn multi_room_membership_matches_frozen_contract_independent_of_query_order() {
+        assert_eq!(
+            canonical_room_mask_checksum(&fixture_cells(2)),
+            "574f63940b48f33ec4f0179041a72649b235608983a64c6242dcf5664d589a16"
+        );
+        assert_eq!(
+            canonical_room_mask_checksum(&fixture_cells(4)),
+            "11008aa69297a381263083d0dfe2c444e3076a3eb9b73a06d2185a317f4759d0"
+        );
+    }
 }
 
 #[cfg(feature = "profiling")]

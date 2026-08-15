@@ -58,6 +58,6 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py field-core \
 
 ## P04 runtime evidence
 
-`--stage p04`はstatic / behavior / field-coreを受理する。staticとbehaviorは`indoor_light_runtime.json`へtyped / eligible emitter数、unsupplied adoption 0、canonical Room mask、input/output revision、availability、field checksumを出す。behavior timelineもplaceholderではなく同じlive field値を記録する。
+`--stage p04`はstatic / behavior / field-coreを受理する。staticとbehaviorは`indoor_light_runtime.json`へtyped / eligible emitter数、unsupplied adoption 0、canonical Room mask、input/output revision、availability、field checksumを出す。Room mask checksumはEntity IDを使わず、4近傍で連結した室内をanchorのrow-major順、各室内cellをrow-major順に直列化するため、P00の複数Room fixture契約と一致しつつRoom再生成に依存しない。behavior timelineもplaceholderではなく同じlive field値を記録する。
 
-P04 field-coreはP03の`indoor_light_cpu.csv`と`indoor_light_field.json`をそのまま継承し、別の`indoor_light_runtime.json`でproduction ECS fixtureを実走した600 Updateを証明する。large fixtureはtyped 51 / eligible 50 / mask 900であり、steady windowのfull scan、rebuild、revision increment、scoped allocation event/byteは0、1 Updateあたりのrebuildは最大1である。emitter collect allocationはadapterが明示的に所有するbufferの論理scopeとして別記録する。
+P04 field-coreはP03の`indoor_light_cpu.csv`と`indoor_light_field.json`をそのまま継承し、別の`indoor_light_runtime.json`でproduction ECS fixtureを実走した600 Updateを証明する。large fixtureはtyped 51 / eligible 50 / mask 576（16室×36 cell）であり、steady windowのfull scan、rebuild、revision increment、scoped allocation event/byteは0、1 Updateあたりのrebuildは最大1である。emitter collect allocationはadapterが明示的に所有するbufferの論理scopeとして別記録する。

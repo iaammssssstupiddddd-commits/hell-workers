@@ -75,10 +75,10 @@ pub(crate) fn run_field_core_driver_system(
                 ))
             } else if runtime.typed_emitter_components() != 51
                 || runtime.eligible_supplied_emitters() != 50
-                || runtime.indoor_mask_cells() != Some(900)
+                || runtime.indoor_mask_cells() != Some(576)
             {
                 Err(format!(
-                    "P04 large runtime shape is typed={}/eligible={}/mask={:?}; expected 51/50/900",
+                    "P04 large runtime shape is typed={}/eligible={}/mask={:?}; expected 51/50/576",
                     runtime.typed_emitter_components(),
                     runtime.eligible_supplied_emitters(),
                     runtime.indoor_mask_cells()

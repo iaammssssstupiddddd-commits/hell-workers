@@ -332,7 +332,6 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         .uses_p02_presentation()
         .then(|| calculate_p02_presentation(&params.checksum_queries));
     let runtime_field = if selection.uses_runtime_field() {
-        use sha2::{Digest, Sha256};
         if params.indoor_light_runtime.availability()
             != crate::systems::lighting::IndoorLightAvailability::Available
         {
@@ -351,19 +350,11 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
             ));
             return;
         }
-        let cells = tiles
-            .iter()
-            .map(|(x, y)| format!("[{x},{y}]"))
-            .collect::<Vec<_>>()
-            .join(",");
         Some(RuntimeFieldEvidence {
             typed_emitter_components: params.indoor_light_runtime.typed_emitter_components(),
             eligible_supplied_emitters: params.indoor_light_runtime.eligible_supplied_emitters(),
             indoor_mask_cells,
-            indoor_mask_checksum: format!(
-                "{:x}",
-                Sha256::digest(format!("{{\"cells\":[{cells}]}}"))
-            ),
+            indoor_mask_checksum: super::output::canonical_room_mask_checksum(tiles),
         })
     } else {
         None
