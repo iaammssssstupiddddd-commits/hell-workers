@@ -472,8 +472,11 @@ def write_behavior_fixture_run(
                 "schema_version": 1,
                 "availability": "available",
                 "typed_emitter_components": 2,
-                "eligible_supplied_emitters": (
-                    0 if case.behavior_case == "load-normal-v1" else 1
+                "eligible_supplied_emitters": expected_eligible_supplied_emitters(
+                    contract,
+                    stage_id,
+                    case.size,
+                    behavior_case=case.behavior_case,
                 ),
                 "unsupplied_snapshot_adoptions": 0,
                 "indoor_mask_cells": 36,
@@ -860,14 +863,43 @@ def self_test() -> int:
                         + layout["counts"]["unsupplied_lamp_candidates"]
                     )
                 if applicability["eligible_emitter"] == "available":
+                    behavior_case = (
+                        case["case_id"].removeprefix("behavior-")
+                        if case["leg_id"] == "behavior"
+                        else None
+                    )
                     row["eligible_supplied_emitters"] = str(
-                        layout["counts"]["supplied_lamp_candidates"]
+                        expected_eligible_supplied_emitters(
+                            rtt_contract,
+                            stage,
+                            case["size"],
+                            behavior_case=behavior_case,
+                        )
                     )
                 rows.append(row)
             return rows
 
         current_projection_rows = build_projection_rows("current")
         validate_projection_rows(rtt_contract, "current", current_projection_rows)
+        p04_projection_rows = build_projection_rows("p04")
+        validate_projection_rows(rtt_contract, "p04", p04_projection_rows)
+        invalid_load_projection = [dict(row) for row in p04_projection_rows]
+        load_row = next(
+            row
+            for row in invalid_load_projection
+            if row["case_id"] == "behavior-load-normal-v1"
+        )
+        load_row["eligible_supplied_emitters"] = "1"
+        try:
+            validate_projection_rows(
+                rtt_contract, "p04", invalid_load_projection
+            )
+        except ValueError as error:
+            assert "eligible_supplied_emitters" in str(error)
+        else:
+            raise AssertionError(
+                "pre-P05 load projection with a supplied emitter unexpectedly passed"
+            )
         missing_projection_row = current_projection_rows[:-1]
         try:
             validate_projection_rows(rtt_contract, "current", missing_projection_row)

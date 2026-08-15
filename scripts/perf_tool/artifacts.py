@@ -1567,6 +1567,7 @@ def read_indoor_light_runtime(
     *,
     expected_case: Case,
     contract_id: str,
+    stage_id: str,
     field_core: bool,
 ) -> tuple[dict[str, Any] | None, list[str]]:
     path = data_dir / "indoor_light_runtime.json"
@@ -1605,13 +1606,11 @@ def read_indoor_light_runtime(
     size_contract = contract["fixture"]["sizes"][expected_case.size]
     if payload.get("typed_emitter_components") != layout["counts"]["supplied_lamp_candidates"] + 1:
         errors.append("indoor_light_runtime.json typed emitter count differs from fixture")
-    # P05 owns save/load rehydration of the indoor-light lifecycle. At P04 the
-    # loaded semantic fixture is live but its runtime-only generator worker is
-    # intentionally discarded, so the rebuilt field must fail dark.
-    expected_eligible_emitters = (
-        0
-        if expected_case.behavior_case == "load-normal-v1"
-        else layout["counts"]["supplied_lamp_candidates"]
+    expected_eligible_emitters = expected_eligible_supplied_emitters(
+        contract,
+        stage_id,
+        expected_case.size,
+        behavior_case=expected_case.behavior_case,
     )
     if payload.get("eligible_supplied_emitters") != expected_eligible_emitters:
         errors.append("indoor_light_runtime.json eligible emitter count differs from fixture")
@@ -1733,6 +1732,7 @@ def validate_run(
                 data_dir,
                 expected_case=expected_case,
                 contract_id=expected_contract,
+                stage_id=expected_stage,
                 field_core=True,
             )
             reasons.extend(runtime_errors)
@@ -1763,6 +1763,7 @@ def validate_run(
                     data_dir,
                     expected_case=expected_case,
                     contract_id=expected_contract,
+                    stage_id=expected_stage,
                     field_core=False,
                 )
                 reasons.extend(runtime_errors)

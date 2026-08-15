@@ -875,6 +875,30 @@ def _validate_projection_value(column: dict[str, Any], value: str) -> bool:
     return False
 
 
+def expected_eligible_supplied_emitters(
+    contract: dict[str, Any],
+    stage: str,
+    size: str,
+    *,
+    behavior_case: str | None = None,
+) -> int:
+    """Return the stage-aware eligible-emitter fixture expectation.
+
+    P05 owns save/load rehydration of the indoor-light lifecycle. Before P05,
+    load-normal restores the durable fixture but intentionally cannot restore
+    its runtime-only generator worker, so P04 must publish an available,
+    fail-dark field with no eligible supplied emitters.
+    """
+    if (
+        behavior_case == "load-normal-v1"
+        and _stage_index(stage) < _stage_index("p05")
+    ):
+        return 0
+    return build_fixture_layout(contract, size)["counts"][
+        "supplied_lamp_candidates"
+    ]
+
+
 def validate_projection_rows(
     contract: dict[str, Any], stage: str, rows: list[dict[str, str]]
 ) -> None:
@@ -975,9 +999,20 @@ def validate_projection_rows(
                     f"projection row {index} typed_emitter_components differs from its "
                     "fixture contract"
                 )
+        behavior_case = (
+            formal_case["case_id"].removeprefix("behavior-")
+            if formal_case["leg_id"] == "behavior"
+            else None
+        )
+        expected_eligible_emitters = expected_eligible_supplied_emitters(
+            contract,
+            stage,
+            formal_case["size"],
+            behavior_case=behavior_case,
+        )
         if expected_availability["eligible_emitter"] == "available" and row[
             "eligible_supplied_emitters"
-        ] != str(layout["counts"]["supplied_lamp_candidates"]):
+        ] != str(expected_eligible_emitters):
             raise ValueError(
                 f"projection row {index} eligible_supplied_emitters differs from its "
                 "fixture contract"
