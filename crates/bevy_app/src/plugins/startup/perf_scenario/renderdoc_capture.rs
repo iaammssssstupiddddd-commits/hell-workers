@@ -677,28 +677,28 @@ fn validate_medium_inventory(stage_id: &str, inventory: PerfRenderInventory) -> 
         scene_target_count: 1,
         mask_target_count: usize::from(stage_id == "current"),
         camera_3d_rtt_count: if stage_id == "current" { 2 } else { 1 },
-        camera_2d_count: if matches!(stage_id, "p02" | "p03") {
+        camera_2d_count: if matches!(stage_id, "p02" | "p03" | "p04") {
             2
         } else {
             3
         },
-        layer_2d_pass_count: if matches!(stage_id, "p02" | "p03") {
+        layer_2d_pass_count: if matches!(stage_id, "p02" | "p03" | "p04") {
             1
         } else {
             2
         },
-        soul_proxy_3d: if matches!(stage_id, "p02" | "p03") {
+        soul_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04") {
             0
         } else {
             200
         },
         soul_mask_proxy_3d: if stage_id == "current" { 200 } else { 0 },
-        soul_shadow_proxy_3d: if matches!(stage_id, "p02" | "p03") {
+        soul_shadow_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04") {
             0
         } else {
             200
         },
-        familiar_proxy_3d: if matches!(stage_id, "p02" | "p03") {
+        familiar_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04") {
             0
         } else {
             12
@@ -1169,6 +1169,23 @@ mod tests {
         };
         assert!(validate_medium_inventory("p01", inventory).is_ok());
         assert!(validate_medium_inventory("current", inventory).is_err());
+    }
+
+    #[test]
+    fn p04_medium_inventory_preserves_p02_presentation_topology() {
+        let inventory = PerfRenderInventory {
+            scene_target_count: 1,
+            mask_target_count: 0,
+            camera_3d_rtt_count: 1,
+            camera_2d_count: 2,
+            layer_2d_pass_count: 1,
+            soul_proxy_3d: 0,
+            soul_mask_proxy_3d: 0,
+            soul_shadow_proxy_3d: 0,
+            familiar_proxy_3d: 0,
+        };
+        assert!(validate_medium_inventory("p04", inventory).is_ok());
+        assert!(validate_medium_inventory("p01", inventory).is_err());
     }
 
     #[test]
