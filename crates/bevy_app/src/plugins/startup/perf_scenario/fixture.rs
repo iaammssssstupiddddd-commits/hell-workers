@@ -127,6 +127,7 @@ pub struct PerfWorkloadSetupParams<'w, 's> {
     game_assets: Res<'w, crate::assets::GameAssets>,
     handles_3d: Res<'w, crate::plugins::startup::Building3dHandles>,
     settings: ResMut<'w, hw_core::GameSettings>,
+    virtual_time: ResMut<'w, Time<Virtual>>,
     deconstruction_fixture:
         ResMut<'w, super::deconstruction_fixture::DeconstructionPerfFixtureState>,
     indoor_light: ResMut<'w, super::indoor_light_fixture::IndoorLightFixtureState>,
@@ -181,10 +182,18 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
         game_assets,
         handles_3d,
         mut settings,
+        mut virtual_time,
         mut deconstruction_fixture,
         mut indoor_light,
         mut exit,
     } = params;
+
+    if config.pauses_virtual_time_for_field_core() {
+        // PostStartup precedes the first Update, so the schedule-level Logic /
+        // Actor run conditions observe the paused state before fixture
+        // completion can publish Door obstacle markers.
+        virtual_time.pause();
+    }
 
     if applied.workload || !config.enabled() || q_familiars.is_empty() {
         return;

@@ -1682,9 +1682,16 @@ fn validate_observed_fixture(
                 || p.world_map.is_walkable(spec.grid.0, spec.grid.1)
                     != (spec.state != hw_core::world::DoorState::Locked)
             {
+                let image_matches = building.child_images == [expected_image.clone()];
                 return Err(format!(
-                    "Door at {:?} differs from static {:?} state/image/WorldMap contract",
-                    spec.grid, spec.state
+                    "Door at {:?} differs from static {:?} contract: state={:?}, image_matches={}, owner={:?}, map_state={:?}, walkable={}",
+                    spec.grid,
+                    spec.state,
+                    building.door_state,
+                    image_matches,
+                    p.world_map.door_entity(spec.grid.0, spec.grid.1),
+                    p.world_map.door_state(spec.grid.0, spec.grid.1),
+                    p.world_map.is_walkable(spec.grid.0, spec.grid.1),
                 ));
             }
             Ok(building)
