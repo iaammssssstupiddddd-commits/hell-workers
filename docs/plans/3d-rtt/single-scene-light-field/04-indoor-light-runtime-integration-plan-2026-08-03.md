@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-04-indoor-light-runtime-integration-plan-2026-08-03` |
-| ステータス | `In Progress — implementation complete; P04 formal native evidence pending` |
+| ステータス | `Completed — production, tooling, formal native evidence verified` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-15` |
+| 最終更新日 | `2026-08-16` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | [P02](02-topdown-presentation-plan-2026-08-03.md) M1 Door domain mutation（完了）、[P03](03-indoor-light-domain-core-plan-2026-08-03.md) API実装およびformal evidence（B07）、HVAC M0相当のRoom interior correctness |
@@ -236,7 +236,7 @@ Update N+1 Visual: Door presentation consumer、その後behavior observer
 - [x] behavior timelineがliveなavailability、input revision、output revision、checksumを出し、`stage_before_field_owner`を残さない
 - [x] production adapterのunchanged 600 Updateでfull scan / rebuild / output revision increment / scoped allocation event / byteが全て0である
 - [x] 同一Updateの複数dirtyは最大1 rebuildへcoalesceされる
-- [ ] `RLV1-BUNDLE-VALID`、`RLV1-P01-RTT`、`RLV1-P02-DOOR-DOMAIN`、`RLV1-P03-FIELD`、`RLV1-P04-EMITTER`、`RLV1-P04-STEADY`を満たす
+- [x] `RLV1-BUNDLE-VALID`、`RLV1-P01-RTT`、`RLV1-P02-DOOR-DOMAIN`、`RLV1-P03-FIELD`、`RLV1-P04-EMITTER`、`RLV1-P04-STEADY`を満たす
 
 ## 6. 検証計画
 
@@ -278,16 +278,21 @@ Update N+1 Visual: Door presentation consumer、その後behavior observer
 
 ### 現在地
 
-- 進捗: `M1〜M3およびM4 instrumentation実装完了。formal native evidenceのみ未完了`
-- 完了済み: P03 formal entry、Door request / pause境界、runtime snapshot / dirty / schedule、P04 selector / sidecar / validators、production ECS adapterの600-Update steady test
-- 未完了: clean committed subjectを対象とするP04 formal actual-window acceptanceとregistered bundle verification
-- ブロック: formal launcherはclean committed subjectを必須とする。未commitの実装を正式証跡として登録しない
+- 進捗: `M1〜M4完了。P04 formal native evidenceと独立verificationがvalid`
+- 完了済み: P03 formal entry、Door request / pause境界、runtime snapshot / dirty / schedule、P04 selector / sidecar / validators、production ECS adapterの600-Update steady test、actual-window / RenderDoc / Memory / field-core formal matrix
+- formal subject: `44d22adcf1238de46ba8385615ae653f242c4aa0`
+- S0 / S1: `target/native-acceptance/task-dashboard-20260815T174144Z-a3a9eca7`、`target/native-acceptance/rtt-light-s1-20260815T174443Z-7f4b40f4`（ともに`valid`）
+- formal job / attempt: `target/native-acceptance/rtt-light-formal-20260815T175436Z-7320b1b6` / `target/perf-runs/rtt-light/rtt-light-v1/p04-44d22adcf1238de4/attempts/51d2b81d-ee8d-4242-a502-3f957c302903`
+- formal result: 19 / 19 case valid、142 / 142 gate row pass、1,023 raw artifactをmanifestで封印し、独立`verify-rtt-light`もpass
+- P04固有結果: typed emitter `2 / 11 / 51`、eligible supplied `1 / 10 / 50`、unsupplied adoption 0、600 unchanged Updateでfull scan / rebuild / revision increment / scoped allocationが全て0、field rebuild p95 `0.296658 ms` / p99 `0.335148 ms`
+- 実機環境: Intel Arc Graphics (MTL)、Vulkan、Mesa `26.1.5`、X11、1920×1080、`auto_no_vsync`（effective `immediate`）
+- 未完了: P04内になし。次の依存計画はP05
 
 ### 次のAIが最初にやること
 
-1. P04実装を独立commitにした後、`hell-workers-run-native-acceptance` Skillで`stage=p04` formal matrixを実行する。
-2. generated attemptを独立verifyし、exact gate ID集合とbaseline indexを登録する。
-3. formal evidenceがvalidになった時点で本計画をCompletedへ更新し、P05へhandoffする。
+1. P05のsave registry ownerと現worktreeを確認し、P04のruntime-only境界を変更せずP05計画をレビューする。
+2. P05ではP03所有の`FixtureMount`を再定義せず、Reflect / 保存登録・migrationだけを追加する。
+3. P04のformal attemptをP05のhistorical referenceとして独立再検証する。
 
 ### ブロッカー/注意点
 
@@ -309,22 +314,24 @@ Update N+1 Visual: Door presentation consumer、その後behavior observer
 ### 最終確認ログ
 
 - Rust gates: `2026-08-15` / focused tests、profiling feature checks、`python3 scripts/dev.py check`、workspace Clippy、`python3 scripts/dev.py verify` pass
-- native acceptance: `2026-08-15` / not run（formal helperのclean committed subject前提を満たさないため。実装commit後に必須）
-- docs / Help gate: `2026-08-15` / docs write/check、diff check pass。Help impactはNo impact（操作・文言・結果は不変、fieldは未表示・gameplay未使用）
+- native acceptance: `2026-08-16` / S0、S1、formal 19 / 19 case・142 / 142 gate row、独立`verify-rtt-light` pass（subject `44d22adc`、Intel Arc / Vulkan / X11）
+- docs / Help gate: `2026-08-16` / Help impactはNo impact。P04は既存のpre-P05 fail-dark lifecycle契約を一貫適用し、player controls、labels、workflows、Door / indoor-light semanticsを変更しない
 
 ### Definition of Done
 
 - [x] P03 formal evidence blockが解除されている
-- [ ] M1〜M4が完了（production / tooling実装済み。M4 formal証跡待ち）
+- [x] M1〜M4が完了
 - [x] production Door direct-mutation pathが解消されている
 - [x] Wall / Door / power / Room maskの更新順、errorのfail-dark、steady-stateがtestで固定されている
-- [ ] `stage=p04`のexact gate ID集合を満たす
-- [ ] Help impactの実際の判定、必要なnative acceptance、影響ドキュメント更新が完了している
+- [x] `stage=p04`のexact gate ID集合を満たす
+- [x] Help impactの実際の判定、必要なnative acceptance、影響ドキュメント更新が完了している
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-16` | `Codex` | subject `44d22adc`のS0 / S1 / formalを実行し、19 / 19 case、142 / 142 gate row、独立verificationをvalidとして登録。M1〜M4とP04を完了し、P05へhandoff |
+| `2026-08-16` | `Codex` | subject `8b155963`の初回formalはload-normal projection rowのfixture contract不一致をfail-closedでinvalidとし、契約の単一helper化後に新subjectで全証跡を再採取 |
 | `2026-08-15` | `Codex` | P03 formal block解除後にM1〜M3とM4 toolingを実装。root-owned ECS adapter、Door request、Room mask revision、fail-dark、600-Update steady検証、P04 selector / sidecar / validatorを追加し、formal native evidenceだけをclean subject後へ残した |
 | `2026-08-15` | `Codex` | P02 / P03の実状態、root ECS境界、Door / presentation順、Room revision、P04 evidence / steady-state契約を監査結果に合わせて改定 |
 | `2026-08-04` | `Codex` | Room interior依存、stage別Door consumer、typed / eligible emitter exact gateをP00へ同期 |

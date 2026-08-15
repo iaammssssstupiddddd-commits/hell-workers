@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P04 implementation complete; formal evidence pending` |
+| ステータス | `In Progress — P04 complete; P05 next` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-15` |
+| 最終更新日 | `2026-08-16` |
 | 作成者 | `Codex` |
 | 採用判断 | TopDown 2.5D、Scene RtT 1枚、map-space radial Light Field |
 | 関連提案 | `N/A` |
@@ -133,7 +133,7 @@ P00 baseline / contract
 | B06b | P02-A M2〜M4 P02 evidence / RenderDoc / native ready | B06a green。P02 M1〜M4のproduction sourceとcurrent / P01 historical readerが同一toolchainで再検証済み |
 | B06c | P02 M5〜M6 P02 evidence接続・formal / native受入 | B06b green。P02 exact gate artifactとactual-window scenarioを同じ完了batchで閉じる |
 | B07 | P03 pure Light Field core + P03 field-core evidence | P00後にB01〜B06cと並行可。P03が`hw_infra`をbootstrapし、P03 M4はP02-A M1〜M4 ready extension pointを拡張する。root Plugin / ECS runtimeは追加しない |
-| B08 | P04 runtime snapshot / Door request / schedule / dirty | B03とB07完了 |
+| B08 | P04 runtime snapshot / Door request / schedule / dirty（完了） | B03とB07完了 |
 | B09 | P05 schema / registry / reset / epoch | B08完了かつsave registry owner条件成立 |
 | B10 | P06 Image bridge→Terrain→structural material→native | B02、B06c、B08、B09完了 |
 | B11 | P07 Soul effect→Room summary→soak | B08、B09完了。P06とはconsumer単位で並行可 |
@@ -240,7 +240,7 @@ Interface:
 
 ### 現在地
 
-- 進捗: `P04 production / tooling実装完了、formal evidence待ち`（P00 / P01 / P02 / P02-A / P03完了。P04は正式実機証跡のみ未完了。P05〜P08は未着手）
+- 進捗: `P04完了、P05が次対象`（P00 / P01 / P02 / P02-A / P03 / P04完了。P05〜P08は未着手）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
@@ -251,14 +251,15 @@ Interface:
 - P02 formal履歴: subject `6ea0bf99`、attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`はfrozen v1の履歴として保持する。actual-window v1は改竄再検証不足のためreview remediation後のP02完了証跡には使わない。
 - P02 current evidence: subject `c3515a40`、profile v9 / schema 7、actual-window 18 / 18、fresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`。job / manifest / formal / baseline historyの独立verifierがvalid、formal 5 legと128 / 128 gate rowがpassした。
 - P03 formal: subject `834c7440`、attempt `cd700aed-68bb-4fcd-92b5-2f4a4effa1bc`。19 / 19 case、`RLV1-P03-FIELD` / `RLV1-BUNDLE-VALID`、baseline index登録、独立verifierがpassした。field-coreはp95 `0.347376 ms`、p99 `0.373993 ms`、allocation `6 events / 210400 bytes`
-- P04実装済み: Door request / pause契約、root ECS snapshot adapter、Room mask revision、fail-dark dirty / rebuild transaction、P04 static / behavior / field-core tooling
-- 未完了: P04 formal native evidence、P05〜P08
+- P04 formal: subject `44d22adc`、attempt `51d2b81d-ee8d-4242-a502-3f957c302903`。S0 / S1 / formalがvalid、19 / 19 case、142 / 142 gate row、1,023 artifact封印、独立verifierがpassした。production adapterの600 unchanged Updateはfull scan / rebuild / revision increment / scoped allocation 0、field-coreはp95 `0.296658 ms` / p99 `0.335148 ms`
+- P04完了: Door request / pause契約、root ECS snapshot adapter、Room mask revision、fail-dark dirty / rebuild transaction、P04 static / behavior / field-core toolingと正式実機証跡
+- 未完了: P05〜P08
 
 ### 次のAIが最初にやること
 
-1. P04をclean commitにした後、native acceptanceでP04 formal matrixを取得する。
-2. P04のnative evidenceではP03 registered attemptをhistorical referenceとして再検証し、valid後にP05へ進む。
-3. P06着手時にP02 canonical attemptをhistorical referenceとして再検証し、presentation分類を維持する。
+1. P05のsave registry owner、現worktree、既存rehydrate順を確認してP05計画をレビューする。
+2. P05ではP03所有の`FixtureMount`を再定義せず、Reflect / 保存登録・migrationだけを追加し、P04 runtime-only stateへepoch / reset契約を接続する。
+3. P04 formal attemptをhistorical referenceとして独立再検証し、P06着手時にはP02 canonical attemptも再検証してpresentation分類を維持する。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
@@ -266,7 +267,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 - save / rehydrate registryは別commitとして進行している。履歴と現worktreeを再確認し、P00から破棄・上書きしない。
 - `hw_infra`はP03がbootstrap済みである。HVAC M1は既存crateを拡張するが、`lighting` pure coreへECS/GPU依存を逆流させない。
-- 現行manual Door lockはInterfaceで直接DoorStateを変更する。
+- manual Door lockはP04でrequest化済みで、InterfaceはDoorState / WorldMapを直接変更しない。
 - 現行Lamp gameplay queryは任意の`PowerConsumer`を発光扱いし、半径`5.0`をworld unitとして比較している。
 - 現行Wallは`SectionMaterial`、Terrainは3種の`TerrainSurfaceMaterial`、他構造物は`StandardMaterial`である。
 - P02のreview remediation subjectはv9 actual-windowとfresh S0 / S1 / formalを登録・再検証済みである。P03以降もfrozen contract / projection / P00〜P02 artifactをcandidate結果で変更しない。
@@ -280,7 +281,8 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - P01 native acceptance: `2026-08-12` / `pass`（Intel Arc / Vulkan / X11、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`、全5 leg valid、123 / 123 gate row pass）
 - P02 native acceptance: `2026-08-14` / v9 actual-window 18 / 18、fresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`、5 leg valid、128 / 128 gate row pass、formal / baseline historyの独立verify pass。v1 actual-windowとattempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`は履歴として保持する。
 - P03 native acceptance: `2026-08-15` / subject `834c7440`、formal attempt `cd700aed-68bb-4fcd-92b5-2f4a4effa1bc`、19 / 19 case valid、field-core p95 `0.347376 ms` / p99 `0.373993 ms`、allocation `6 events / 210400 bytes`、Intel Arc / Vulkan / X11、独立verify pass。
-- 最終 docs gate: `2026-08-15` / `pass (docs --write / --check, check_docs, diff --check)`
+- P04 native acceptance: `2026-08-16` / subject `44d22adc`、S0 `task-dashboard-20260815T174144Z-a3a9eca7`、S1 `rtt-light-s1-20260815T174443Z-7f4b40f4`、formal attempt `51d2b81d-ee8d-4242-a502-3f957c302903`、19 / 19 case valid、142 / 142 gate row、Intel Arc / Vulkan / Mesa `26.1.5` / X11、独立verify pass。
+- 最終 docs / Help gate: `2026-08-16` / Help impact No impact。docs write/checkとdiff checkは完了commit前に再実行する
 
 ### Definition of Done
 
@@ -294,6 +296,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-16` | `Codex` | P04 subject `44d22adc`のS0 / S1 / formal（19 / 19 case、142 / 142 gate row）と独立verificationを完了し、B08 / P04を完了、次対象をP05へ更新 |
 | `2026-08-15` | `Codex` | P04 runtime / schedule / perf tooling実装を反映し、状態をformal native evidence待ちへ更新 |
 | `2026-08-15` | `Codex` | P03 subject `834c7440` のformal native attempt `cd700aed-68bb-4fcd-92b5-2f4a4effa1bc`を登録・独立再検証し、P03を完了、次対象をP04へ更新 |
 | `2026-08-14` | `Codex` | P03 pure coreとfield-core evidence extensionの実装、unit/tool/full verification、Help No impact reviewを反映。formal native bundleだけをclean subject待ちとして残した。 |
