@@ -148,6 +148,11 @@ impl PerfRttLightSelection {
     pub fn uses_runtime_field(self) -> bool {
         self.stage_id == "p04"
     }
+
+    #[cfg(any(feature = "profiling-renderdoc", test))]
+    fn supports_renderdoc_capture(self) -> bool {
+        self.lane == "static"
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -727,15 +732,7 @@ impl PerfScenarioConfig {
         #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
             && (workload != PerfWorkload::IndoorLight
-                || !matches!(
-                    rtt_light,
-                    Some(
-                        PerfRttLightSelection::CURRENT_STATIC_V1
-                            | PerfRttLightSelection::P01_STATIC_V1
-                            | PerfRttLightSelection::P02_STATIC_V1
-                            | PerfRttLightSelection::P03_STATIC_V1
-                    )
-                )
+                || !rtt_light.is_some_and(PerfRttLightSelection::supports_renderdoc_capture)
                 || size != PerfScenarioSize::Medium
                 || render_mode != PerfRenderMode::Gpu
                 || !matches!(clock_mode, PerfClockMode::Fixed)
@@ -746,7 +743,7 @@ impl PerfScenarioConfig {
                 || rtt_quality != Some(RttQualityPreset::High))
         {
             return Err(PerfScenarioConfigError(
-                "--perf-renderdoc-capture requires rtt-light-v1/current|p01|p02|p03/static medium/gpu/fixed, an output directory, and the exact 1920x1080/scale-1/high window contract"
+                "--perf-renderdoc-capture requires rtt-light-v1/current|p01|p02|p03|p04/static medium/gpu/fixed, an output directory, and the exact 1920x1080/scale-1/high window contract"
                     .to_string(),
             ));
         }

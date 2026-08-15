@@ -284,6 +284,14 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
     assert_eq!(p04_selection.lane(), "field-core");
     assert!(p04_selection.uses_p02_presentation());
     assert!(p04_selection.uses_runtime_field());
+    assert!(!p04_selection.supports_renderdoc_capture());
+
+    p04[6] = "static".to_string();
+    let p04_static_selection =
+        super::parse_rtt_light_selection(&p04, super::PerfWorkload::IndoorLight)
+            .expect("p04/static v1 is implemented")
+            .expect("P04 static requires an explicit selection");
+    assert!(p04_static_selection.supports_renderdoc_capture());
 
     let mut wrong_stage = exact;
     wrong_stage[4] = "p09".to_string();
