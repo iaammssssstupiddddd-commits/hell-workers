@@ -121,6 +121,7 @@ Update N+1 Visual: Door presentation consumer、その後behavior observer
 - owner不存在、construction中、wrong `WorldMap` owner、lock不可のrequestは一度だけ消費し、reason別telemetryを増やす。現行のsilent player pathを維持し、新規player notificationは導入しない。通知が必要になった場合は別UI / Help scopeとして扱う。
 - auto Doorとmanual requestが同じUpdateに競合した場合、manual lockをPreActorで先に適用し、Lockedをauto openが上書きしないことをtestする。
 - P04はgeneric message lifecycleとの接続点を持つが、save / world replacement時のrequest clear、dirty clear、epoch更新の実行ownerはP05である。P04でP05のregistryやreset producerを先取りしない。
+- `load-normal-v1`はP05より前のため、load後にruntime-only generator workerを復元しない。P04 artifactは新worldから再構築したavailableかつdarkなfield（small fixtureではtyped emitter 2、eligible supplied 0）を要求し、P05でnamed rehydrate後の再点灯へ契約を進める。
 
 ### 4.4 dirty、snapshot、rebuild
 

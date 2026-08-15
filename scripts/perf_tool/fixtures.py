@@ -472,7 +472,9 @@ def write_behavior_fixture_run(
                 "schema_version": 1,
                 "availability": "available",
                 "typed_emitter_components": 2,
-                "eligible_supplied_emitters": 1,
+                "eligible_supplied_emitters": (
+                    0 if case.behavior_case == "load-normal-v1" else 1
+                ),
                 "unsupplied_snapshot_adoptions": 0,
                 "indoor_mask_cells": 36,
                 "indoor_mask_checksum": contract["fixture"]["sizes"]["small"]["indoor_mask_checksum"],

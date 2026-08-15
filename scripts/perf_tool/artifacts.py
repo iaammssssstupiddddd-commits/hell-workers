@@ -1605,7 +1605,15 @@ def read_indoor_light_runtime(
     size_contract = contract["fixture"]["sizes"][expected_case.size]
     if payload.get("typed_emitter_components") != layout["counts"]["supplied_lamp_candidates"] + 1:
         errors.append("indoor_light_runtime.json typed emitter count differs from fixture")
-    if payload.get("eligible_supplied_emitters") != layout["counts"]["supplied_lamp_candidates"]:
+    # P05 owns save/load rehydration of the indoor-light lifecycle. At P04 the
+    # loaded semantic fixture is live but its runtime-only generator worker is
+    # intentionally discarded, so the rebuilt field must fail dark.
+    expected_eligible_emitters = (
+        0
+        if expected_case.behavior_case == "load-normal-v1"
+        else layout["counts"]["supplied_lamp_candidates"]
+    )
+    if payload.get("eligible_supplied_emitters") != expected_eligible_emitters:
         errors.append("indoor_light_runtime.json eligible emitter count differs from fixture")
     if payload.get("unsupplied_snapshot_adoptions") != 0:
         errors.append("indoor_light_runtime.json adopted the unsupplied control emitter")

@@ -295,6 +295,17 @@ impl Plugin for StartupPlugin {
             );
             app.add_systems(
                 Update,
+                // Re-run the production presentation consumer at the
+                // profiling observer boundary. This makes the behavior
+                // artifact independent of renderer visibility while keeping
+                // the observed state and mutation owner identical to runtime.
+                crate::systems::visual::building3d_cleanup::sync_door_presentation_system
+                    .in_set(PerfScenarioSet::Capture)
+                    .before(perf_scenario::observe_perf_behavior_system)
+                    .run_if(is_fixed_step_behavior),
+            )
+            .add_systems(
+                Update,
                 perf_scenario::observe_perf_behavior_system
                     .in_set(PerfScenarioSet::Capture)
                     .after(crate::systems::visual::building3d_cleanup::DoorPresentationSyncSet)

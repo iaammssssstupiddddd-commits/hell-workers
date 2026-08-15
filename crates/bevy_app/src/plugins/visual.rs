@@ -182,7 +182,11 @@ impl Plugin for VisualPlugin {
         );
         app.add_systems(
             Update,
-            sync_door_presentation_system.in_set(DoorPresentationSyncSet),
+            sync_door_presentation_system
+                .after(hw_spatial::door_auto_open_nearby_system)
+                .after(hw_spatial::door_auto_close_nearby_system)
+                .after(crate::systems::lighting::consume_door_lock_toggle_requests_system)
+                .in_set(DoorPresentationSyncSet),
         );
 
         // terrain id map 更新（障害物除去後）

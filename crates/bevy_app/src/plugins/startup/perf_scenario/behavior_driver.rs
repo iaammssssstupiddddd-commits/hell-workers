@@ -40,6 +40,8 @@ pub(crate) struct PerfBehaviorCapture {
     save_outcomes: u32,
     load_outcomes: u32,
     load_wait_updates: u32,
+    fixture_runtime_revisions: Option<(u64, u64)>,
+    fixture_runtime_steady_updates: u8,
     fixture_checksum: Option<&'static str>,
     initial_window: Option<PerfWindowObservation>,
 }
@@ -135,6 +137,7 @@ pub(crate) struct BehaviorDriveParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
     applied: Res<'w, PerfScenarioApplied>,
     fixture: Res<'w, IndoorLightFixtureState>,
+    indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
     capture: ResMut<'w, PerfBehaviorCapture>,
     virtual_time: ResMut<'w, Time<Virtual>>,
     world_epoch: Res<'w, WorldEpoch>,
@@ -215,6 +218,33 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
     if params.capture.phase == BehaviorPhase::WaitingForFixture {
         if !params.applied.complete() || params.fixture.phase != IndoorLightFixturePhase::Ready {
             return;
+        }
+        if params
+            .config
+            .rtt_light_selection()
+            .is_some_and(|selection| selection.uses_runtime_field())
+        {
+            if params.indoor_light_runtime.availability()
+                != crate::systems::lighting::IndoorLightAvailability::Available
+            {
+                return;
+            }
+            let revisions = (
+                params.indoor_light_runtime.input_revision(),
+                params.indoor_light_runtime.output_revision(),
+            );
+            if params.capture.fixture_runtime_revisions != Some(revisions) {
+                params.capture.fixture_runtime_revisions = Some(revisions);
+                params.capture.fixture_runtime_steady_updates = 0;
+                return;
+            }
+            params.capture.fixture_runtime_steady_updates = params
+                .capture
+                .fixture_runtime_steady_updates
+                .saturating_add(1);
+            if params.capture.fixture_runtime_steady_updates < 2 {
+                return;
+            }
         }
         let Some((subject_soul, subject_door, door_grid)) = params.fixture.behavior_subjects()
         else {

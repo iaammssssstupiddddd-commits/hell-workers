@@ -232,14 +232,14 @@ type DoorOwnerQuery<'w, 's> = Query<
     'w,
     's,
     (&'static Door, &'static Transform, Option<&'static Children>),
-    Without<Door3dVisual>,
+    Without<Building3dVisual>,
 >;
 
 type DoorVisualQuery<'w, 's> = Query<
     'w,
     's,
     (
-        &'static Door3dVisual,
+        &'static Building3dVisual,
         &'static mut DoorPresentationState,
         &'static mut Transform,
         &'static mut MeshMaterial3d<StandardMaterial>,

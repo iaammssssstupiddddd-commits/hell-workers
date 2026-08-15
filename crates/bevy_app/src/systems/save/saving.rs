@@ -138,7 +138,13 @@ pub(super) fn save_world_system(world: &mut World) -> SaveLoadResult {
     }
 
     let elapsed = started.elapsed();
-    if elapsed.as_millis() > 100 {
+    #[cfg(feature = "profiling")]
+    let fixed_behavior_capture = world
+        .get_resource::<crate::plugins::startup::PerfScenarioConfig>()
+        .is_some_and(|config| config.behavior_case_as_str().is_some());
+    #[cfg(not(feature = "profiling"))]
+    let fixed_behavior_capture = false;
+    if elapsed.as_millis() > 100 && !fixed_behavior_capture {
         warn!("Save of {} took {elapsed:?} (>100ms)", slot.player_label());
     } else {
         info!("World saved to {} in {elapsed:?}", slot.player_label());
