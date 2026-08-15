@@ -114,6 +114,8 @@ pub(super) fn write_window_observation(
 pub(super) fn write_indoor_light_fixture_sidecars(
     config: &PerfScenarioConfig,
     state: &IndoorLightFixtureState,
+    runtime: &crate::systems::lighting::IndoorLightRuntime,
+    room_lookup: &hw_world::RoomTileLookup,
 ) -> std::io::Result<()> {
     if config.workload != PerfWorkload::IndoorLight {
         return Ok(());
@@ -123,7 +125,12 @@ pub(super) fn write_indoor_light_fixture_sidecars(
     let summary_path = directory.join("indoor_light_fixture.csv");
     let layout_path = directory.join("indoor_light_layout.csv");
     let presentation_path = directory.join("indoor_light_presentation.csv");
-    if summary_path.exists() || layout_path.exists() || presentation_path.exists() {
+    let runtime_path = directory.join("indoor_light_runtime.json");
+    if summary_path.exists()
+        || layout_path.exists()
+        || presentation_path.exists()
+        || runtime_path.exists()
+    {
         return Err(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
             format!(
@@ -139,7 +146,61 @@ pub(super) fn write_indoor_light_fixture_sidecars(
         state.sidecar_csvs(selection.stage_id(), selection.lane())?;
     std::fs::write(summary_path, summary)?;
     std::fs::write(layout_path, layout)?;
-    std::fs::write(presentation_path, presentation)
+    std::fs::write(presentation_path, presentation)?;
+    if selection.uses_runtime_field() {
+        write_indoor_light_runtime_sidecar(&runtime_path, runtime, room_lookup)?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn write_indoor_light_runtime_sidecar(
+    path: &std::path::Path,
+    runtime: &crate::systems::lighting::IndoorLightRuntime,
+    room_lookup: &hw_world::RoomTileLookup,
+) -> std::io::Result<()> {
+    use sha2::{Digest, Sha256};
+
+    if runtime.availability() != crate::systems::lighting::IndoorLightAvailability::Available {
+        return Err(std::io::Error::other(format!(
+            "indoor Light Field is not available: {}",
+            runtime.last_error().unwrap_or("initializing")
+        )));
+    }
+    let tiles = room_lookup.mask_signature().canonical_tiles();
+    if runtime.indoor_mask_cells() != u32::try_from(tiles.len()).ok() {
+        return Err(std::io::Error::other(
+            "runtime field mask differs from canonical Room membership",
+        ));
+    }
+    let cells = tiles
+        .iter()
+        .map(|(x, y)| format!("[{x},{y}]"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let indoor_mask_checksum = format!("{:x}", Sha256::digest(format!("{{\"cells\":[{cells}]}}")));
+    let metadata = serde_json::json!({
+        "schema_version": 1,
+        "availability": "available",
+        "typed_emitter_components": runtime.typed_emitter_components(),
+        "eligible_supplied_emitters": runtime.eligible_supplied_emitters(),
+        "unsupplied_snapshot_adoptions": 0,
+        "indoor_mask_cells": runtime.indoor_mask_cells(),
+        "indoor_mask_checksum": indoor_mask_checksum,
+        "input_revision": runtime.input_revision(),
+        "output_revision": runtime.output_revision(),
+        "field_checksum": runtime.field_checksum_hex(),
+        "steady_updates": 0,
+        "steady_full_scans": 0,
+        "steady_field_rebuilds": 0,
+        "steady_revision_increments": 0,
+        "steady_scoped_allocation_events": 0,
+        "steady_scoped_allocation_bytes": 0,
+        "max_rebuilds_per_update": runtime.metrics().max_rebuilds_per_update,
+        "emitter_collect_allocation": null
+    });
+    let bytes = serde_json::to_vec_pretty(&metadata).map_err(std::io::Error::other)?;
+    std::fs::write(path, bytes)
 }
 
 #[cfg(feature = "profiling")]

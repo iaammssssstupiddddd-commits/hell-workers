@@ -64,7 +64,9 @@ auto-build を適用外にする。各 blocker record は代表理由が使っ�
 ## システムセットの実行順序
 `GameSystemSet` は `hw_core::system_sets` で定義され、production App では `crates/bevy_app/src/plugins/game.rs` の `HellWorkersGamePlugin` がチェーンする。binary `main.rs` は Window / Log / Render backend を設定してこの plugin を追加するだけに留める。
 `crates/bevy_app/src/lib.rs` は共有 Resource・公開 module・event re-exportと `HellWorkersGamePlugin` を提供し、focused unit testはここから対象systemだけを登録する：
-`Input` → `Spatial` → `Logic` → `Actor` → `Visual` → `Interface`
+`Input` → `Spatial` → `Logic` → `PreActor` → `Actor` → `PostActor` → `Visual` → `Interface`
+
+`PreActor` / `PostActor`はpause gate外のtransaction境界である。P04ではInterfaceがenqueueしたmanual Door requestを次Updateの`PreActor`で適用し、unpaused `Actor`のauto Door / movement確定後に`PostActor`で室内Light Fieldをcollect/rebuildする。VisualのDoor presentationは同じUpdateのCPU field rebuild後を観測する。
 
 keyboard action は `crates/bevy_app/src/input_actions/` で一元解決する。
 F5/F9/V、B/Z/Space/Digit1-4、Familiar command、context 別 Escape、AreaEdit、Tab、P/O、
@@ -277,11 +279,13 @@ RttRuntime
 
 `hw_visual::SectionMaterial` / `SectionCut` は `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` の互換型として残る。P02 production は elevation / section-cut writer を登録せず、`SectionCut::default()` の非切断状態だけを material sync が読む。物理削除は P08 が所有する。
 
-### 室内Light Fieldのドメイン境界（P03）
+### 室内Light Fieldのドメイン境界（P03 / P04）
 
 `hw_infra::lighting`は100×100までのgrid、indoor mask、Wall/Doorのsemantic occlusion、stable-key radial emitterをpure inputとして受け、integer supercover LOSとfixed-point合成からimmutableなUNORM16 field snapshotを返す。snapshotはradiance/luminance、mask、revision/diff count、canonical SHA-256を一体で保持し、P06向けのpure RGBA8 pack helperも同じcrateが所有する。
 
-P03では通常game scheduleへfieldを接続しない。P04がECS snapshotとdirty/rebuild lifecycle、P05がsave/world replacement、P06がGPU `Image`とshader、P07がgameplay/Room consumerを所有する。この依存方向によりrenderer・gameplay・Roomが別々の照度計算を持つことを防ぐ。計算とserializationの詳細は[`indoor_lighting.md`](indoor_lighting.md)を参照する。
+P04のroot adapterは`bevy_app::systems::lighting`にあり、completed Wall、Door、typed OutdoorLampの`PowerSupplyState::Supplied`、canonical Room maskをpure inputへ変換する。保存対象外の`RadialLightEmitter`がload後に欠けている場合は、completed OutdoorLamp rootからPostActorのdirty収集前に再構築する。`IndoorLightRuntime`はavailability、CPU snapshot、input/output revision、dirty/rebuild metricだけを保持し、Entity、save、GPU resourceを保持しない。入力不変時はfull scanもrebuildも行わず、invalid inputはstaleなlit fieldを公開せずunavailableへ落とす。
+
+P05がsave/world replacement、P06がGPU `Image`とshader、P07がgameplay/Room consumerを所有する。この依存方向によりrenderer・gameplay・Roomが別々の照度計算を持つことを防ぐ。計算、schedule、計測の詳細は[`indoor_lighting.md`](indoor_lighting.md)を参照する。
 
 地形は `hw_visual::TerrainSurfaceMaterial` / `TerrainSurfaceMaterialExt` を基本にしつつ、3 種の LOD variant を持つ。全 variant が `ExtendedMaterial<StandardMaterial, ...>` のまま section clip・lighting・prepass を維持する。
 

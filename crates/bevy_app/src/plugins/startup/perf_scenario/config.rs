@@ -113,6 +113,21 @@ impl PerfRttLightSelection {
         stage_id: "p03",
         lane: "field-core",
     };
+    const P04_STATIC_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p04",
+        lane: "static",
+    };
+    const P04_BEHAVIOR_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p04",
+        lane: "behavior",
+    };
+    const P04_FIELD_CORE_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p04",
+        lane: "field-core",
+    };
 
     pub const fn contract_id(self) -> &'static str {
         self.contract_id
@@ -127,7 +142,11 @@ impl PerfRttLightSelection {
     }
 
     pub fn uses_p02_presentation(self) -> bool {
-        matches!(self.stage_id, "p02" | "p03")
+        matches!(self.stage_id, "p02" | "p03" | "p04")
+    }
+
+    pub fn uses_runtime_field(self) -> bool {
+        self.stage_id == "p04"
     }
 }
 
@@ -824,15 +843,16 @@ impl PerfScenarioConfig {
                 ))
     }
 
-    /// The indoor-light static lane treats its seeded Door states as immutable
-    /// scene topology. Fixed audits still advance simulation time, so Door
-    /// automation must be excluded explicitly instead of relying on pause.
+    /// Indoor-light lanes other than behavior treat their seeded Door states as
+    /// immutable scene topology. Fixed audits still advance simulation time,
+    /// so Door automation must be excluded explicitly instead of relying on
+    /// pause.
     pub fn freezes_indoor_light_door_automation(&self) -> bool {
         self.enabled
             && self.workload == PerfWorkload::IndoorLight
             && self
                 .rtt_light
-                .is_some_and(|selection| selection.lane() == "static")
+                .is_some_and(|selection| selection.lane() != "behavior")
     }
 
     /// 静的 light fixture の描画計測中はゲーム simulation を進めない。
@@ -852,6 +872,13 @@ impl PerfScenarioConfig {
             && self
                 .rtt_light
                 .is_some_and(|selection| selection.lane() == "field-core")
+    }
+
+    pub fn is_pure_field_core(&self) -> bool {
+        self.is_field_core()
+            && self
+                .rtt_light
+                .is_some_and(|selection| selection.stage_id() == "p03")
     }
 
     /// 自動 perf の CPU 条件では、計測対象外の 3D scene root を生成しない。
@@ -955,10 +982,15 @@ pub(crate) fn is_not_field_core(config: Option<Res<PerfScenarioConfig>>) -> bool
 }
 
 #[cfg(feature = "profiling")]
+pub(crate) fn is_not_pure_field_core(config: Option<Res<PerfScenarioConfig>>) -> bool {
+    !config.is_some_and(|config| config.is_pure_field_core())
+}
+
+#[cfg(feature = "profiling")]
 pub(crate) fn requires_precheckpoint_fixture_spawn(
     config: Option<Res<PerfScenarioConfig>>,
 ) -> bool {
-    config.is_some_and(|config| config.freezes_fixture_setup() && !config.is_field_core())
+    config.is_some_and(|config| config.freezes_fixture_setup() && !config.is_pure_field_core())
 }
 
 #[cfg(feature = "profiling")]
@@ -999,7 +1031,7 @@ fn parse_rtt_light_selection(
 
     let (Some(contract), Some(stage), Some(lane)) = (contract, stage, lane) else {
         return Err(PerfScenarioConfigError(
-            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01|p02|p03 --perf-lane static|behavior|field-core"
+            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01|p02|p03|p04 --perf-lane static|behavior|field-core"
                 .to_string(),
         ));
     };
@@ -1013,9 +1045,12 @@ fn parse_rtt_light_selection(
         ("rtt-light-v1", "p03", "static") => PerfRttLightSelection::P03_STATIC_V1,
         ("rtt-light-v1", "p03", "behavior") => PerfRttLightSelection::P03_BEHAVIOR_V1,
         ("rtt-light-v1", "p03", "field-core") => PerfRttLightSelection::P03_FIELD_CORE_V1,
+        ("rtt-light-v1", "p04", "static") => PerfRttLightSelection::P04_STATIC_V1,
+        ("rtt-light-v1", "p04", "behavior") => PerfRttLightSelection::P04_BEHAVIOR_V1,
+        ("rtt-light-v1", "p04", "field-core") => PerfRttLightSelection::P04_FIELD_CORE_V1,
         _ => {
             return Err(PerfScenarioConfigError(format!(
-                "this binary supports only rtt-light-v1/current|p01|p02/static|behavior and p03/static|behavior|field-core; got {contract}/{stage}/{lane}"
+                "this binary supports rtt-light-v1 current through p04; field-core starts at p03; got {contract}/{stage}/{lane}"
             )));
         }
     };

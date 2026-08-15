@@ -154,6 +154,8 @@ fn fixture_setup_freezes_for_fixed_step_and_checksum_compared_realtime_workloads
     assert!(config.freezes_indoor_light_door_automation());
     config.rtt_light = Some(super::PerfRttLightSelection::P02_BEHAVIOR_V1);
     assert!(!config.freezes_indoor_light_door_automation());
+    config.rtt_light = Some(super::PerfRttLightSelection::P04_FIELD_CORE_V1);
+    assert!(config.freezes_indoor_light_door_automation());
     config.rtt_light = None;
 
     config.workload = super::PerfWorkload::TaskDashboard;
@@ -266,6 +268,18 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
         .expect("P03 field-core requires an explicit selection");
     assert_eq!(p03_selection.stage_id(), "p03");
     assert_eq!(p03_selection.lane(), "field-core");
+    assert!(p03_selection.uses_p02_presentation());
+    assert!(!p03_selection.uses_runtime_field());
+
+    let mut p04 = p03.clone();
+    p04[4] = "p04".to_string();
+    let p04_selection = super::parse_rtt_light_selection(&p04, super::PerfWorkload::IndoorLight)
+        .expect("p04/field-core v1 is implemented")
+        .expect("P04 field-core requires an explicit selection");
+    assert_eq!(p04_selection.stage_id(), "p04");
+    assert_eq!(p04_selection.lane(), "field-core");
+    assert!(p04_selection.uses_p02_presentation());
+    assert!(p04_selection.uses_runtime_field());
 
     let mut wrong_stage = exact;
     wrong_stage[4] = "p09".to_string();

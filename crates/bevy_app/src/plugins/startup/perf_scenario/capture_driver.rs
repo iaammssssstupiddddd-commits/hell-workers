@@ -405,7 +405,12 @@ pub(crate) fn drive_perf_capture_system(
                 write_window_observation(&params.config, initial_window, &final_window)
             });
             let result = result.and_then(|()| {
-                write_indoor_light_fixture_sidecars(&params.config, &params.indoor_light_fixture)
+                write_indoor_light_fixture_sidecars(
+                    &params.config,
+                    &params.indoor_light_fixture,
+                    &params.indoor_light_runtime,
+                    &params.room_lookup,
+                )
             });
             let result = result.and_then(|()| {
                 write_deconstruction_fixture_sidecar(&params.config, &params.deconstruction_fixture)

@@ -13,20 +13,19 @@ use crate::systems::save::{
 use crate::systems::settings::SettingsStorageRoot;
 use crate::world::map::GeneratedWorldLayoutResource;
 use hw_core::game_state::PlayMode;
-use hw_core::world::DoorState;
 use hw_energy::{
     PowerConsumer, PowerConsumerPolicy, PowerConsumerPolicyChangeOutcome,
     PowerConsumerPolicyChangeStatus, PowerPriority, SoulSpaConstructionCancelOutcome,
     SoulSpaConstructionCancelRequest, SoulSpaConstructionCancelResult, SoulSpaPhase, SoulSpaSite,
     SoulSpaSlotsChangeOutcome, SoulSpaSlotsChangeStatus,
 };
-use hw_jobs::{Building, BuildingCategory, DeconstructionPending, Door};
+use hw_jobs::{Building, BuildingCategory, DeconstructionPending};
 use hw_logistics::{StockpilePolicyChangeRequest, StockpilePolicyPatch};
 use hw_spatial::StockpileSpatialGrid;
 use hw_ui::components::{ArchitectCategoryState, OperationDialog};
 use hw_ui::intents::StockpilePolicyEditTarget;
 use hw_ui::power::PowerPriorityValue;
-use hw_world::{WorldMap, WorldMapWrite, apply_door_state};
+use hw_world::DoorLockToggleRequest;
 
 #[derive(SystemParam)]
 pub(crate) struct IntentModeCtx<'w, 's> {
@@ -45,14 +44,13 @@ impl IntentModeCtx<'_, '_> {
 
 /// Domain-side validation and mutation used by the generic UI intent handler.
 ///
-/// This is placed in a `ParamSet` with `IntentModeCtx`: both need WorldMap,
-/// but individual intents borrow only one side at a time.
+/// This is placed in a `ParamSet` with `IntentModeCtx` because the generic
+/// handler borrows only one action domain at a time.
 #[derive(SystemParam)]
 pub(crate) struct IntentDomainActionCtx<'w, 's> {
     architect_category: ResMut<'w, ArchitectCategoryState>,
     q_buildings: Query<'w, 's, &'static Building, Without<DeconstructionPending>>,
-    q_doors: Query<'w, 's, (&'static Transform, &'static mut Door)>,
-    world_map: WorldMapWrite<'w>,
+    door_lock_requests: MessageWriter<'w, DoorLockToggleRequest>,
     stockpile_grid: Res<'w, StockpileSpatialGrid>,
     stockpile_policy_requests: MessageWriter<'w, StockpilePolicyChangeRequest>,
     soul_spa_slot_outcomes: MessageWriter<'w, SoulSpaSlotsChangeOutcome>,
@@ -80,16 +78,8 @@ impl IntentDomainActionCtx<'_, '_> {
     }
 
     pub(crate) fn toggle_door_lock(&mut self, entity: Entity) {
-        let Ok((transform, mut door)) = self.q_doors.get_mut(entity) else {
-            return;
-        };
-        let door_grid = WorldMap::world_to_grid(transform.translation.truncate());
-        let next_state = if door.state == DoorState::Locked {
-            DoorState::Closed
-        } else {
-            DoorState::Locked
-        };
-        apply_door_state(&mut door, &mut self.world_map, door_grid, next_state);
+        self.door_lock_requests
+            .write(DoorLockToggleRequest { owner: entity });
     }
 
     pub(crate) fn request_stockpile_policy_change(

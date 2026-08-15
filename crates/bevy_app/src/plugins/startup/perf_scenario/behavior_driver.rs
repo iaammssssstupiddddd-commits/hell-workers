@@ -66,6 +66,11 @@ struct TimelineRow {
     applied: bool,
     semantic_state: Option<&'static str>,
     active_presentation_state: Option<&'static str>,
+    field_availability: &'static str,
+    field_input_revision: Option<u64>,
+    field_output_revision: Option<u64>,
+    field_is_dark: Option<bool>,
+    field_checksum: Option<String>,
     fixture_checksum: &'static str,
     terminal_outcome: &'static str,
 }
@@ -77,6 +82,16 @@ impl TimelineRow {
                 .map(|value| format!("\"{}\"", json_escape(value)))
                 .unwrap_or_else(|| "null".to_string())
         };
+        let optional_u64 = |value: Option<u64>| {
+            value
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "null".to_string())
+        };
+        let optional_bool = |value: Option<bool>| {
+            value
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "null".to_string())
+        };
         format!(
             concat!(
                 "{{\"case_id\":\"{}\",\"step_index\":{},\"script_update\":{},",
@@ -85,10 +100,10 @@ impl TimelineRow {
                 "\"semantic_state\":{},\"active_presentation_state\":{},",
                 "\"registry_phase\":\"stage_before_registry_owner\",",
                 "\"registry_step_id\":null,\"wake_count\":null,",
-                "\"field_availability\":\"stage_before_field_owner\",",
-                "\"field_input_revision\":null,\"field_output_revision\":null,",
+                "\"field_availability\":\"{}\",",
+                "\"field_input_revision\":{},\"field_output_revision\":{},",
                 "\"field_read_count\":null,\"old_epoch_field_read_count\":null,",
-                "\"field_is_dark\":null,\"field_checksum\":null,",
+                "\"field_is_dark\":{},\"field_checksum\":{},",
                 "\"gpu_availability\":\"stage_before_gpu_owner\",",
                 "\"gpu_upload_epoch\":null,\"gpu_checksum\":null,",
                 "\"fixture_checksum\":\"{}\",\"terminal_outcome\":\"{}\"}}"
@@ -104,6 +119,11 @@ impl TimelineRow {
             self.applied,
             optional(self.semantic_state),
             optional(self.active_presentation_state),
+            self.field_availability,
+            optional_u64(self.field_input_revision),
+            optional_u64(self.field_output_revision),
+            optional_bool(self.field_is_dark),
+            optional(self.field_checksum.as_deref()),
             self.fixture_checksum,
             self.terminal_outcome,
         )
@@ -137,6 +157,45 @@ pub(crate) struct BehaviorDriveParams<'w, 's> {
     rtt_runtime: Res<'w, RttRuntime>,
     quality: Res<'w, QualitySettings>,
     exit: MessageWriter<'w, AppExit>,
+}
+
+struct TimelineFieldObservation {
+    availability: &'static str,
+    input_revision: Option<u64>,
+    output_revision: Option<u64>,
+    is_dark: Option<bool>,
+    checksum: Option<String>,
+}
+
+fn timeline_field_observation(
+    config: &PerfScenarioConfig,
+    runtime: &crate::systems::lighting::IndoorLightRuntime,
+) -> Result<TimelineFieldObservation, String> {
+    let uses_runtime = config
+        .rtt_light_selection()
+        .is_some_and(|selection| selection.uses_runtime_field());
+    if !uses_runtime {
+        return Ok(TimelineFieldObservation {
+            availability: "stage_before_field_owner",
+            input_revision: None,
+            output_revision: None,
+            is_dark: None,
+            checksum: None,
+        });
+    }
+    if runtime.availability() != crate::systems::lighting::IndoorLightAvailability::Available {
+        return Err(format!(
+            "P04 behavior observed an unavailable Light Field: {}",
+            runtime.last_error().unwrap_or("initializing")
+        ));
+    }
+    Ok(TimelineFieldObservation {
+        availability: "available",
+        input_revision: Some(runtime.input_revision()),
+        output_revision: Some(runtime.output_revision()),
+        is_dark: runtime.is_dark(),
+        checksum: runtime.field_checksum_hex(),
+    })
 }
 
 pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
@@ -363,6 +422,8 @@ pub(crate) fn count_perf_behavior_fixed_tick_system(mut capture: ResMut<PerfBeha
 pub(crate) struct BehaviorObserveParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
     fixture: Res<'w, IndoorLightFixtureState>,
+    indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
+    room_lookup: Res<'w, hw_world::RoomTileLookup>,
     capture: ResMut<'w, PerfBehaviorCapture>,
     virtual_time: Res<'w, Time<Virtual>>,
     world_epoch: Res<'w, WorldEpoch>,
@@ -498,6 +559,15 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             };
             let expected_applied = p02 && matches!(step, 1 | 3);
             let expected_paused = matches!(step, 2 | 3);
+            let uses_runtime_field = params
+                .config
+                .rtt_light_selection()
+                .is_some_and(|selection| selection.uses_runtime_field());
+            if uses_runtime_field && step == 3 && semantic_state != "locked" {
+                // P04 owns the N -> N+1 Interface request handoff. Keep the
+                // script step pending until the next PreActor consumer pass.
+                return;
+            }
             if semantic_state != expected_semantic
                 || presentation_state != expected_semantic
                 || !child_sprite_matches
@@ -522,6 +592,16 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             ];
             let simulation_tick = params.capture.simulation_tick;
             let fixture_checksum = params.capture.fixture_checksum.unwrap_or("");
+            let Ok(field) =
+                timeline_field_observation(&params.config, &params.indoor_light_runtime)
+            else {
+                fail_behavior(
+                    &mut params.capture,
+                    "behavior timeline could not observe the P04 Light Field",
+                    &mut params.exit,
+                );
+                return;
+            };
             append_row(
                 &mut params.capture,
                 TimelineRow {
@@ -536,6 +616,11 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     applied: expected_applied,
                     semantic_state: Some(semantic_state),
                     active_presentation_state: Some(presentation_state),
+                    field_availability: field.availability,
+                    field_input_revision: field.input_revision,
+                    field_output_revision: field.output_revision,
+                    field_is_dark: field.is_dark,
+                    field_checksum: field.checksum,
                     fixture_checksum,
                     terminal_outcome: if step == 4 {
                         "succeeded"
@@ -651,6 +736,16 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             }
             let simulation_tick = params.capture.simulation_tick;
             let fixture_checksum = params.capture.fixture_checksum.unwrap_or("");
+            let Ok(field) =
+                timeline_field_observation(&params.config, &params.indoor_light_runtime)
+            else {
+                fail_behavior(
+                    &mut params.capture,
+                    "behavior timeline could not observe the P04 Light Field",
+                    &mut params.exit,
+                );
+                return;
+            };
             append_row(
                 &mut params.capture,
                 TimelineRow {
@@ -669,6 +764,11 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     applied,
                     semantic_state: None,
                     active_presentation_state: None,
+                    field_availability: field.availability,
+                    field_input_revision: field.input_revision,
+                    field_output_revision: field.output_revision,
+                    field_is_dark: field.is_dark,
+                    field_checksum: field.checksum,
                     fixture_checksum,
                     terminal_outcome: if step == 5 {
                         "succeeded"
@@ -720,7 +820,14 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
         })?;
         write_window_observation(&params.config, initial, &final_window)
     })
-    .and_then(|()| write_indoor_light_fixture_sidecars(&params.config, &params.fixture));
+    .and_then(|()| {
+        write_indoor_light_fixture_sidecars(
+            &params.config,
+            &params.fixture,
+            &params.indoor_light_runtime,
+            &params.room_lookup,
+        )
+    });
     params.capture.phase = BehaviorPhase::Finished;
     match result {
         Ok(()) => {

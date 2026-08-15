@@ -110,6 +110,10 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py field-core \
 
 各runはcanonical pure fixtureをtimer外で構築し、32 warmup後の`hw_infra::lighting::rebuild_field`だけを256回測る。`data/indoor_light_cpu.csv`はexact 256 row、`data/indoor_light_field.json`は100×100、50 emitter、radius 5、4 checksum、600 steady updateのno-op count、明示的なowned bufferの論理allocation scopeを持つ。field-core runのdata file setはこの2件だけで、window/ECS fixture/GPU field artifactを混ぜない。P03 gateは3反復のp95 median 2 ms以下、p99 median 4 ms以下、repeat間allocation一致を要求する。正式bundleは既存18 caseとfield-core 1 caseの合計19 caseであり、256×3 measurement rowをcase数として数えない。
 
+P04は同じ19 caseを`--stage p04`で実行し、P03 pure field artifactを変更せずruntime証跡を追加する。audit / behavior / Capture / Memoryは`indoor_light_runtime.json`を必須とし、typed emitter `2 / 11 / 51`、eligible supplied `1 / 10 / 50`、unsupplied adoption 0、Room mask cell `36 / 144 / 900`とcanonical checksumを検証する。RenderDocは同値をruntime checkpointの`runtime_field` blockへ記録する。behavior timelineは`field_availability=available`とlive input/output revision、dark state、field checksumを持つ。
+
+P04 field-coreはproduction large ECS fixtureを通常のcompletion / energy / Room / lighting scheduleで構築してから600 Updateを実走する。`indoor_light_cpu.csv` / `indoor_light_field.json`に加え`indoor_light_runtime.json`を出し、steady full scan / rebuild / revision increment / scoped allocation event・byteが0、最大rebuild/updateが1以下であることと、emitter collectが明示的に所有するbufferの論理allocationを別scopeで検証する。
+
 各規模は`indoor_light_fixture.csv` 1行と、small 187 / 5、medium 722 / 12、large 2306 / 12行の
 `indoor_light_layout.csv` / `indoor_light_presentation.csv`を必須出力する。indoor semantic actorはsmall 78、
 medium 258、large 936件を全checkpointでexact検証する。generic actorはSoul / Familiar / Designationを
@@ -154,7 +158,7 @@ gate ledgerは123 / 123 row pass、raw artifact 884件のdirectory SHA256は
 `68e470e51cf30f7659bb87eb1893235758d49f2c9d7a1e8f881f0e5f2a9f7502`である。`baseline-index.json`の
 `stages.p01`とattempt manifestを正本とし、`verify-rtt-light --attempt …`で再検証する。
 
-P02 TopDown presentation subjectは `--stage p02` を Rust / Python / native launcherの明示selectorで受理する。current / P01の既存schemaを変更せず、P02のCapture / Memoryは `p02_presentation.csv`、RenderDocはruntime checkpointの同名blockを必須にする。Door behavior validatorはP02だけ Closed→Open→Open→Locked→Lockedを要求し、current / P01のhistorical Closed-only timelineを維持する。bundleは `RLV1-P02-DOOR-DOMAIN`、`RLV1-P02-PRESENT`、`RLV1-P02-PERF` のexact rowを生成し、P02 frame p95/p99は登録済みP01 projectionをreferenceにする。
+P02 TopDown presentation subjectは `--stage p02` を Rust / Python / native launcherの明示selectorで受理する。current / P01の既存schemaを変更せず、P02以降のCapture / Memoryは `p02_presentation.csv`、RenderDocはruntime checkpointの同名blockを必須にする。Door behavior validatorはP02以降でClosed→Open→Open→Locked→Lockedを要求し、current / P01のhistorical Closed-only timelineを維持する。P04ではmanual lockだけInterface requestから次UpdateのPreActorへhandoffされるが、script rowは同じsemantic stepを記録する。bundleは `RLV1-P02-DOOR-DOMAIN`、`RLV1-P02-PRESENT`、`RLV1-P02-PERF` のexact rowを生成し、P02 frame p95/p99は登録済みP01 projectionをreferenceにする。
 
 P02 TopDown presentationのcanonical formal candidateは2026-08-14に登録済みである。subject commitは
 `c3515a40543026a588592682889a08d67cbaeff9`、attempt IDは

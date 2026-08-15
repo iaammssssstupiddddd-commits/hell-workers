@@ -28,8 +28,8 @@ pub use coords::{
     grid_to_world, idx_to_pos, snap_to_grid_center, snap_to_grid_edge, world_to_grid,
 };
 pub use door_systems::{
-    DoorOpenEvaluation, DoorVisualHandles, apply_door_state, evaluate_door_auto_open,
-    soul_keeps_door_open,
+    DoorLockToggleRequest, DoorOpenEvaluation, DoorVisualHandles, apply_door_state,
+    evaluate_door_auto_open, soul_keeps_door_open,
 };
 pub use layout::{RIVER_X_MAX, RIVER_X_MIN, RIVER_Y_MAX, RIVER_Y_MIN, SAND_WIDTH};
 pub use map::{WorldMap, WorldMapRead, WorldMapWrite};
@@ -49,8 +49,8 @@ pub use regrowth::{ForestZone, default_forest_zones, find_regrowth_position};
 pub use river::{generate_fixed_river_tiles, generate_sand_tiles};
 pub use room_detection::{
     DetectedRoom, Room, RoomBoundaryLookup, RoomBounds, RoomDetectionBuildingTile,
-    RoomDetectionInput, RoomDetectionState, RoomOverlayTile, RoomTileLookup, RoomValidationState,
-    build_detection_input, detect_rooms, room_is_valid_against_input,
+    RoomDetectionInput, RoomDetectionState, RoomMaskSignature, RoomOverlayTile, RoomTileLookup,
+    RoomValidationState, build_detection_input, detect_rooms, room_is_valid_against_input,
 };
 #[cfg(feature = "profiling")]
 pub use room_systems::detect_rooms_immediately_system;

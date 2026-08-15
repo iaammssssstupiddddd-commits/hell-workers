@@ -10,6 +10,12 @@ rootでbufferを所有する`Message`は`crates/bevy_app/src/plugins/messages.rs
 
 ---
 
+## 0. ドメイン要求
+
+| Message | 定義 / 登録owner | Producer | Consumer / Timing | 契約 |
+|:---|:---|:---|:---|:---|
+| `DoorLockToggleRequest` | `hw_world::door_systems` / root `MessagesPlugin` | `handle_ui_intent`が`UiIntent::ToggleDoorLock`を変換 | `DoorManualMutationSet`（次Updateのpause gate外`PreActor`） | Door root ownerだけを渡す。consumerがcompleted Door / `WorldMap` ownerを再検証し、FIFOで一度だけ`apply_door_state`へ適用する。stale / invalid / wrong ownerはreason別metricへ数え、player通知は増やさない。world replacement時clearはP05が所有する |
+
 ## 1. 通知イベント（EntityEvent Observer / MessageReader が受け取る）
 
 Soul・Familiar の状態変化を通知する。即時整合が必要な gameplay 副作用は

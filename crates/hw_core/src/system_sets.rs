@@ -11,8 +11,12 @@ pub enum GameSystemSet {
     Spatial,
     /// AI・タスク管理・リソース配分などのコアロジック
     Logic,
+    /// Pause中も処理するplayer requestのdomain mutation境界
+    PreActor,
     /// エンティティの移動・アニメーション (ロジックに基づく実際のアクション)
     Actor,
+    /// Actor確定後、Visualより前に処理するruntime snapshot境界
+    PostActor,
     /// 視覚的な同期処理 (移動完了後の描画追従)
     Visual,
 }

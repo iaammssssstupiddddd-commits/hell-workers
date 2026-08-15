@@ -483,7 +483,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
         if args.command == "field-core"
         else "static"
     )
-    expected_stages = {"p03"} if args.command == "field-core" else {"current", "p01", "p02", "p03"}
+    expected_stages = {"p03", "p04"} if args.command == "field-core" else {"current", "p01", "p02", "p03", "p04"}
     if (
         args.contract != "rtt-light-v1"
         or args.stage not in expected_stages
@@ -491,7 +491,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
     ):
         raise ValueError(
             "--workload indoor-light currently requires --contract rtt-light-v1 "
-            f"--stage {'p03' if args.command == 'field-core' else 'current|p01|p02|p03'} --lane {expected_lane}"
+            f"--stage {'p03|p04' if args.command == 'field-core' else 'current|p01|p02|p03|p04'} --lane {expected_lane}"
         )
     contract = load_rtt_light_contract(args.contract)
     validate_stage_lane(contract, args.stage, args.lane)
@@ -512,28 +512,28 @@ def validate_arguments(args: argparse.Namespace) -> None:
         )
     if args.command == "field-core":
         if sizes != ["large"] or renders != ["cpu"]:
-            raise ValueError("p03 field-core requires --sizes large --renders cpu")
+            raise ValueError("field-core requires --sizes large --renders cpu")
         if args.window_backend != "headless":
-            raise ValueError("p03 field-core requires --window-backend headless")
+            raise ValueError("field-core requires --window-backend headless")
         if args.backend != contract["formal_matrix"]["backend"]:
             raise ValueError(
-                f"p03 field-core requires --backend {contract['formal_matrix']['backend']}"
+                f"field-core requires --backend {contract['formal_matrix']['backend']}"
             )
         if args.present_mode != contract["formal_matrix"]["present_mode"]:
             raise ValueError(
-                "p03 field-core requires --present-mode "
+                "field-core requires --present-mode "
                 + contract["formal_matrix"]["present_mode"]
             )
         if args.repeat != 3 or args.preflight_runs != 0:
-            raise ValueError("p03 field-core requires --repeat 3 --preflight-runs 0")
+            raise ValueError("field-core requires --repeat 3 --preflight-runs 0")
         if args.fixed_hz != contract["formal_matrix"]["fixed_hz"]:
             raise ValueError(
-                f"p03 field-core requires --fixed-hz {contract['formal_matrix']['fixed_hz']}"
+                f"field-core requires --fixed-hz {contract['formal_matrix']['fixed_hz']}"
             )
         expected_allow_patterns = contract["allow_log_patterns"]["headless_audit"]
         if args.allow_log_pattern not in ([], expected_allow_patterns):
             raise ValueError(
-                "p03 field-core uses the exact contract headless log allowances; "
+                "field-core uses the exact contract headless log allowances; "
                 "custom --allow-log-pattern is forbidden"
             )
         args.allow_log_pattern = list(expected_allow_patterns)

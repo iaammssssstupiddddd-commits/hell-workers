@@ -4,6 +4,7 @@ pub mod game;
 pub mod input;
 pub mod interface;
 pub mod interface_debug;
+pub mod lighting;
 pub mod logic;
 pub mod messages;
 pub mod spatial;

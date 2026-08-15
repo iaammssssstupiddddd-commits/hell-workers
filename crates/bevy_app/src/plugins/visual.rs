@@ -11,6 +11,7 @@ use crate::systems::command::{
     dream_tree_planting_preview_system, sync_designation_indicator_system,
     update_designation_indicator_system,
 };
+use crate::systems::lighting::IndoorLightingRebuildSet;
 use crate::systems::logistics::resource_count_display_system;
 use crate::systems::visual::actor_billboard::{
     cleanup_actor_billboard_system, register_actor_billboard_system, sync_actor_billboard_system,
@@ -69,13 +70,13 @@ impl Plugin for VisualPlugin {
 
         app.add_message::<TerrainChangedEvent>();
 
-        // Door mutations can originate from Actor automation or the Interface
-        // intent handler. Run the presentation consumer after both domains so
-        // render extraction and behavior observers see the same semantic
-        // revision in the current Update.
+        // Door mutations and the CPU Light Field are final before presentation.
+        // Behavior observers remain after this stable consumer boundary.
         app.configure_sets(
             Update,
-            DoorPresentationSyncSet.after(GameSystemSet::Interface),
+            DoorPresentationSyncSet
+                .in_set(GameSystemSet::Visual)
+                .after(IndoorLightingRebuildSet),
         );
 
         app.add_systems(Update, sync_camera3d_system.in_set(GameSystemSet::Visual));

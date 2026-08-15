@@ -886,7 +886,7 @@ def rtt_light_contract(repo: Path, stage: str) -> dict[str, Any]:
         and stage_order.index(leg["first_required_stage"]) <= selected_index
     ]
     expected_legs = list(RTT_LIGHT_BASE_LEGS)
-    if stage == "p03":
+    if stage in {"p03", "p04"}:
         expected_legs.append("field-core")
     if legs != expected_legs:
         raise AcceptanceError(
@@ -1882,9 +1882,9 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
                 else ["audit", "capture", "memory"]
             ),
             "game_processes": (
-                (68 if args.stage == "p03" else 65)
+                (68 if args.stage in {"p03", "p04"} else 65)
                 if args.level == "formal"
-                else (54 if args.stage == "p03" else 51)
+                else (54 if args.stage in {"p03", "p04"} else 51)
             ),
             "parallel_game_processes": 1,
             "actual_feature_builds": 3 if args.level == "formal" else 2,
@@ -3207,7 +3207,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                         field_manifest.get("status") != "valid"
                         or field_manifest.get("matrix", {}).get("capture_kind") != "field-core"
                     ):
-                        raise AcceptanceError("P03 S1 field-core session is not valid")
+                        raise AcceptanceError("S1 field-core session is not valid")
                 verification = verify_rtt_light_smoke(
                     audit=attempt / "audit",
                     capture=attempt / "capture",
@@ -7438,7 +7438,7 @@ def add_rtt_light_arguments(
     parser.add_argument("--repo", required=True)
     parser.add_argument("--level", required=True, choices=["s1", "formal"])
     parser.add_argument(
-        "--stage", default=RTT_LIGHT_DEFAULT_STAGE, choices=["current", "p01", "p02", "p03"]
+        "--stage", default=RTT_LIGHT_DEFAULT_STAGE, choices=["current", "p01", "p02", "p03", "p04"]
     )
     parser.add_argument("--attempt-id")
     parser.add_argument("--adapter", default="Intel")

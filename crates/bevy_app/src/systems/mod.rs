@@ -3,6 +3,7 @@ pub mod dream_tree_planting;
 pub mod energy;
 pub mod familiar_ai;
 pub mod jobs;
+pub mod lighting;
 pub mod logistics;
 pub mod save;
 pub mod settings;

@@ -123,6 +123,12 @@ Architect メニューはカテゴリ列（左）と建物列（右）の横並�
 
 書き込み元: `UiIntent::SelectArchitectCategory`を単一consumer
 `handle_ui_intent`（`crates/bevy_app/src/interface/ui/interaction/intent_handler.rs`）が適用
+
+## IndoorLightRuntime（非永続）
+
+`IndoorLightRuntime`は`Initializing → Available | Unavailable`を持つroot-owned Resourceである。dirty inputが正常にcollect/rebuildされた場合だけ`Available`としてCPU snapshotを公開する。map外、重複occlusion、invalid emitter/mount、P03 diagnosticでは`Unavailable`となり、内部に前回snapshotが残っていてもreaderへ返さない。
+
+dirtyはtopology、typed emitter/power、Room maskの3系統をcoalesceする。`RoomMaskSignature`はtile membershipが変わった時だけrevisionを進める。入力checksumが変わった時だけinput revision、公開field bytesが変わった時だけoutput revisionが進み、入力不変Updateはcollect/rebuildしない。このResourceはsave/Reflect対象外であり、world replacement lifecycleはP05で追加する。
 リセット元: `menu_visibility_system`（Architect以外のMenuStateに遷移した時）
 
 ## HelpPanelState と HelpPauseGuard

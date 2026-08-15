@@ -65,7 +65,7 @@ pub(super) fn apply_building_specific_post_process(
     }
 
     if bp.kind == BuildingType::OutdoorLamp {
-        setup_outdoor_lamp(commands, building_entity);
+        setup_outdoor_lamp(commands, building_entity, transform);
     }
 
     spawn_completion_text(commands, transform, game_assets);
@@ -151,10 +151,14 @@ fn setup_bone_pile(commands: &mut Commands, building_entity: Entity) {
     commands.entity(building_entity).insert(BonePile);
 }
 
-fn setup_outdoor_lamp(commands: &mut Commands, building_entity: Entity) {
-    commands.entity(building_entity).insert(PowerConsumer {
-        demand: OUTDOOR_LAMP_DEMAND,
-    });
+fn setup_outdoor_lamp(commands: &mut Commands, building_entity: Entity, transform: &Transform) {
+    let grid = WorldMap::world_to_grid(transform.translation.truncate());
+    commands.entity(building_entity).insert((
+        PowerConsumer {
+            demand: OUTDOOR_LAMP_DEMAND,
+        },
+        crate::systems::lighting::RadialLightEmitter::outdoor_lamp(grid),
+    ));
     // ConsumesFrom は on_power_consumer_added Observer が付与する
 }
 

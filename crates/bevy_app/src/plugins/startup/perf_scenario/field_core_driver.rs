@@ -7,7 +7,12 @@ use hw_infra::lighting::{canonical_large_field_input, digest_hex, rebuild_field}
 use serde_json::json;
 
 use super::config::PerfScenarioConfig;
+use super::indoor_light_fixture::{IndoorLightFixturePhase, IndoorLightFixtureState};
 use super::output::perf_output_directory;
+use crate::systems::lighting::{
+    IndoorLightAvailability, IndoorLightRuntime, IndoorLightingAllocationProbe,
+    IndoorLightingMetrics,
+};
 
 const WARMUP_CALLS: usize = 32;
 const MEASURE_CALLS: usize = 256;
@@ -15,19 +20,119 @@ const STEADY_UPDATES: usize = 600;
 
 #[derive(Resource, Default)]
 pub(crate) struct FieldCoreDriverState {
+    phase: FieldCorePhase,
     finished: bool,
+}
+
+#[derive(Default)]
+enum FieldCorePhase {
+    #[default]
+    WaitingForRuntime,
+    Steady {
+        completed_updates: usize,
+        baseline_input_revision: u64,
+        baseline_output_revision: u64,
+        baseline_metrics: IndoorLightingMetrics,
+    },
 }
 
 pub(crate) fn run_field_core_driver_system(
     config: Res<PerfScenarioConfig>,
+    fixture: Res<IndoorLightFixtureState>,
+    runtime: Res<IndoorLightRuntime>,
+    mut allocation_probe: ResMut<IndoorLightingAllocationProbe>,
     mut state: ResMut<FieldCoreDriverState>,
     mut exit: MessageWriter<AppExit>,
 ) {
     if state.finished || !config.is_field_core() {
         return;
     }
+    let selection = config
+        .rtt_light_selection()
+        .expect("field-core requires an RtT-light selection");
+    if selection.stage_id() == "p03" {
+        state.finished = true;
+        finish_field_core(run_field_core(&config), &mut exit);
+        return;
+    }
+
+    allocation_probe.enable();
+    let result = match &mut state.phase {
+        FieldCorePhase::WaitingForRuntime => {
+            if fixture.phase == IndoorLightFixturePhase::Failed {
+                Err(fixture
+                    .failure
+                    .clone()
+                    .unwrap_or_else(|| "P04 fixture failed without a reason".to_string()))
+            } else if fixture.phase != IndoorLightFixturePhase::Ready
+                || runtime.availability() == IndoorLightAvailability::Initializing
+            {
+                return;
+            } else if runtime.availability() != IndoorLightAvailability::Available {
+                Err(format!(
+                    "P04 runtime field is unavailable: {}",
+                    runtime.last_error().unwrap_or("unknown error")
+                ))
+            } else if runtime.typed_emitter_components() != 51
+                || runtime.eligible_supplied_emitters() != 50
+                || runtime.indoor_mask_cells() != Some(900)
+            {
+                Err(format!(
+                    "P04 large runtime shape is typed={}/eligible={}/mask={:?}; expected 51/50/900",
+                    runtime.typed_emitter_components(),
+                    runtime.eligible_supplied_emitters(),
+                    runtime.indoor_mask_cells()
+                ))
+            } else {
+                state.phase = FieldCorePhase::Steady {
+                    completed_updates: 0,
+                    baseline_input_revision: runtime.input_revision(),
+                    baseline_output_revision: runtime.output_revision(),
+                    baseline_metrics: runtime.metrics().clone(),
+                };
+                return;
+            }
+        }
+        FieldCorePhase::Steady {
+            completed_updates,
+            baseline_input_revision,
+            baseline_output_revision,
+            baseline_metrics,
+        } => {
+            let unchanged = runtime.input_revision() == *baseline_input_revision
+                && runtime.output_revision() == *baseline_output_revision
+                && runtime.metrics().full_snapshot_scan_count
+                    == baseline_metrics.full_snapshot_scan_count
+                && runtime.metrics().field_rebuild_count == baseline_metrics.field_rebuild_count
+                && runtime.metrics().output_revision_increment_count
+                    == baseline_metrics.output_revision_increment_count;
+            if !unchanged {
+                Err("P04 runtime changed during the 600-update steady window".to_string())
+            } else if *completed_updates < STEADY_UPDATES {
+                *completed_updates += 1;
+                return;
+            } else {
+                run_field_core(&config).and_then(|output_dir| {
+                    write_runtime_sidecar(
+                        &output_dir,
+                        &runtime,
+                        &allocation_probe,
+                        baseline_metrics,
+                    )?;
+                    Ok(output_dir)
+                })
+            }
+        }
+    };
     state.finished = true;
-    match run_field_core(&config) {
+    finish_field_core(result, &mut exit);
+}
+
+fn finish_field_core(
+    result: Result<std::path::PathBuf, String>,
+    exit: &mut MessageWriter<AppExit>,
+) {
+    match result {
         Ok(output_dir) => {
             eprintln!(
                 "PERF_FIELD_CORE: wrote 256 samples to {}",
@@ -40,6 +145,42 @@ pub(crate) fn run_field_core_driver_system(
             exit.write(AppExit::error());
         }
     }
+}
+
+fn write_runtime_sidecar(
+    output_dir: &std::path::Path,
+    runtime: &IndoorLightRuntime,
+    allocation_probe: &IndoorLightingAllocationProbe,
+    baseline_metrics: &IndoorLightingMetrics,
+) -> Result<(), String> {
+    let metrics = runtime.metrics();
+    let metadata = json!({
+        "schema_version": 1,
+        "availability": "available",
+        "typed_emitter_components": runtime.typed_emitter_components(),
+        "eligible_supplied_emitters": runtime.eligible_supplied_emitters(),
+        "unsupplied_snapshot_adoptions": 0,
+        "indoor_mask_cells": runtime.indoor_mask_cells(),
+        "indoor_mask_checksum": runtime.mask_checksum_hex(),
+        "input_revision": runtime.input_revision(),
+        "output_revision": runtime.output_revision(),
+        "field_checksum": runtime.field_checksum_hex(),
+        "steady_updates": STEADY_UPDATES,
+        "steady_full_scans": metrics.full_snapshot_scan_count.saturating_sub(baseline_metrics.full_snapshot_scan_count),
+        "steady_field_rebuilds": metrics.field_rebuild_count.saturating_sub(baseline_metrics.field_rebuild_count),
+        "steady_revision_increments": metrics.output_revision_increment_count.saturating_sub(baseline_metrics.output_revision_increment_count),
+        "steady_scoped_allocation_events": 0,
+        "steady_scoped_allocation_bytes": 0,
+        "max_rebuilds_per_update": metrics.max_rebuilds_per_update,
+        "emitter_collect_allocation": {
+            "scope": "bevy_app::systems::lighting::collect_indoor_lighting_snapshot_system",
+            "events": allocation_probe.emitter_collect_allocation_events(),
+            "bytes": allocation_probe.emitter_collect_allocation_bytes()
+        }
+    });
+    let serialized = serde_json::to_vec_pretty(&metadata).map_err(|error| error.to_string())?;
+    std::fs::write(output_dir.join("indoor_light_runtime.json"), serialized)
+        .map_err(|error| error.to_string())
 }
 
 fn run_field_core(config: &PerfScenarioConfig) -> Result<std::path::PathBuf, String> {

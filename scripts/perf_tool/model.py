@@ -475,6 +475,7 @@ class Validation:
     indoor_light_layout: list[dict[str, str]] | None = None
     indoor_light_presentation: list[dict[str, str]] | None = None
     indoor_light_field: dict[str, Any] | None = None
+    indoor_light_runtime: dict[str, Any] | None = None
     p02_presentation: dict[str, str] | None = None
     deconstruction_fixture: dict[str, str] | None = None
     save_transaction: dict[str, str] | None = None
@@ -499,6 +500,7 @@ class Validation:
             "indoor_light_layout": self.indoor_light_layout,
             "indoor_light_presentation": self.indoor_light_presentation,
             "indoor_light_field": self.indoor_light_field,
+            "indoor_light_runtime": self.indoor_light_runtime,
             "p02_presentation": self.p02_presentation,
             "deconstruction_fixture": self.deconstruction_fixture,
             "save_transaction": self.save_transaction,

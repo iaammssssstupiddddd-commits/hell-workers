@@ -9,6 +9,7 @@ rand = { workspace = true }
 ron = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
+sha2 = { workspace = true }
 bevy_world_serialization = { workspace = true }
 hw_core = { path = "../hw_core" }
 hw_energy = { path = "../hw_energy" }

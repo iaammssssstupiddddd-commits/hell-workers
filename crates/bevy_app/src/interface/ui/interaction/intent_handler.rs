@@ -279,6 +279,7 @@ mod tests {
     #[test]
     fn handler_system_params_are_conflict_free() {
         let mut app = minimal_app();
+        app.add_message::<hw_world::DoorLockToggleRequest>();
         app.add_message::<hw_energy::SoulSpaConstructionCancelRequest>();
         app.add_message::<hw_energy::SoulSpaConstructionCancelOutcome>();
         let mut system = IntoSystem::into_system(handle_ui_intent);
@@ -297,6 +298,7 @@ mod tests {
             .add_message::<hw_energy::SoulSpaConstructionCancelRequest>()
             .add_message::<hw_energy::SoulSpaConstructionCancelOutcome>()
             .add_message::<hw_energy::PowerConsumerPolicyChangeOutcome>()
+            .add_message::<hw_world::DoorLockToggleRequest>()
             .init_state::<PlayMode>()
             .init_resource::<BuildContext>()
             .init_resource::<MoveContext>()
@@ -347,7 +349,14 @@ mod tests {
                 door_open: Handle::default(),
                 door_closed: Handle::default(),
             })
-            .add_systems(Update, handle_ui_intent);
+            .init_resource::<DoorLockRequestReceipts>()
+            .add_systems(
+                Update,
+                (
+                    handle_ui_intent,
+                    collect_door_lock_requests.after(handle_ui_intent),
+                ),
+            );
         app.update();
         app
     }
@@ -369,6 +378,16 @@ mod tests {
 
     #[derive(Resource, Default)]
     struct StockpilePolicyRequests(Vec<hw_logistics::StockpilePolicyChangeRequest>);
+
+    #[derive(Resource, Default)]
+    struct DoorLockRequestReceipts(Vec<hw_world::DoorLockToggleRequest>);
+
+    fn collect_door_lock_requests(
+        mut requests: MessageReader<hw_world::DoorLockToggleRequest>,
+        mut receipts: ResMut<DoorLockRequestReceipts>,
+    ) {
+        receipts.0.extend(requests.read().copied());
+    }
 
     fn collect_stockpile_policy_requests(
         mut requests: MessageReader<hw_logistics::StockpilePolicyChangeRequest>,
@@ -1101,7 +1120,7 @@ mod tests {
     }
 
     #[test]
-    fn door_and_architect_actions_have_single_intent_consumer() {
+    fn door_and_architect_actions_enqueue_one_domain_request() {
         let mut app = domain_action_app();
         let grid = (5, 5);
         let world = WorldMap::grid_to_world(grid.0, grid.1);
@@ -1128,7 +1147,11 @@ mod tests {
 
         assert_eq!(
             app.world().get::<Door>(door).unwrap().state,
-            hw_core::world::DoorState::Locked
+            hw_core::world::DoorState::Closed
+        );
+        assert_eq!(
+            app.world().resource::<DoorLockRequestReceipts>().0,
+            [hw_world::DoorLockToggleRequest { owner: door }]
         );
         assert_eq!(
             app.world().resource::<ArchitectCategoryState>().0,
@@ -1170,6 +1193,12 @@ mod tests {
         );
         assert_eq!(app.world().resource::<ArchitectCategoryState>().0, None);
         assert_eq!(*app.world().resource::<MenuState>(), MenuState::Hidden);
+        assert!(
+            app.world()
+                .resource::<DoorLockRequestReceipts>()
+                .0
+                .is_empty()
+        );
         assert!(recovery_allows_ui_intent(&UiIntent::RequestLoadGame));
         assert!(!recovery_allows_ui_intent(&UiIntent::SaveGame));
     }

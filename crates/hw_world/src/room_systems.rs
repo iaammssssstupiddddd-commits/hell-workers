@@ -157,7 +157,7 @@ fn rebuild_rooms(
         }
     }
 
-    room_tile_lookup.tile_to_room = tile_to_room;
+    room_tile_lookup.replace(tile_to_room);
     room_boundary_lookup.boundary_to_rooms = boundary_to_rooms;
     detection_state.dirty_tiles.clear();
 }
@@ -222,7 +222,7 @@ pub fn validate_rooms_system(mut p: ValidateRoomsParams) {
         p.commands.entity(room_entity).try_despawn();
     }
 
-    p.room_tile_lookup.tile_to_room = tile_to_room;
+    p.room_tile_lookup.replace(tile_to_room);
     p.room_boundary_lookup.boundary_to_rooms = boundary_to_rooms;
 }
 

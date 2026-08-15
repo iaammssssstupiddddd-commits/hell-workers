@@ -143,7 +143,7 @@ impl Plugin for StartupPlugin {
                     setup_perf_scenario_if_enabled
                         .after(spawn_familiar_wrapper)
                         .before(setup_ui)
-                        .run_if(perf_scenario::is_not_field_core),
+                        .run_if(perf_scenario::is_not_pure_field_core),
                 )
                 .configure_sets(
                     Update,
@@ -178,7 +178,7 @@ impl Plugin for StartupPlugin {
                     Update,
                     setup_perf_scenario_runtime_if_enabled
                         .in_set(PerfScenarioSet::Setup)
-                        .run_if(perf_scenario::is_not_field_core),
+                        .run_if(perf_scenario::is_not_pure_field_core),
                 )
                 .add_systems(
                     Update,

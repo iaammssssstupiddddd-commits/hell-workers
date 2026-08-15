@@ -20,6 +20,7 @@ use crate::{
     plugins::{
         input::InputPlugin,
         interface::InterfacePlugin,
+        lighting::IndoorLightingPlugin,
         logic::LogicPlugin,
         messages::MessagesPlugin,
         spatial::SpatialPlugin,
@@ -118,6 +119,7 @@ impl Plugin for HellWorkersGamePlugin {
             .add_plugins(InputPlugin)
             .add_plugins(SpatialPlugin)
             .add_plugins(LogicPlugin)
+            .add_plugins(IndoorLightingPlugin)
             .add_plugins(VisualPlugin)
             .add_plugins(InterfacePlugin)
             .add_plugins(SettingsPlugin)
@@ -166,7 +168,9 @@ fn configure_game_system_sets(app: &mut App) {
             GameSystemSet::Input,
             GameSystemSet::Spatial.run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
             GameSystemSet::Logic.run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
+            GameSystemSet::PreActor,
             GameSystemSet::Actor.run_if(|time: Res<Time<Virtual>>| !time.is_paused()),
+            GameSystemSet::PostActor,
             GameSystemSet::Visual,
             GameSystemSet::Interface,
         )
@@ -219,6 +223,14 @@ mod tests {
         order.0.push("actor");
     }
 
+    fn record_pre_actor(mut order: ResMut<SystemOrder>) {
+        order.0.push("pre_actor");
+    }
+
+    fn record_post_actor(mut order: ResMut<SystemOrder>) {
+        order.0.push("post_actor");
+    }
+
     fn record_visual(mut order: ResMut<SystemOrder>) {
         order.0.push("visual");
     }
@@ -239,7 +251,9 @@ mod tests {
                 record_input.in_set(GameSystemSet::Input),
                 record_spatial.in_set(GameSystemSet::Spatial),
                 record_logic.in_set(GameSystemSet::Logic),
+                record_pre_actor.in_set(GameSystemSet::PreActor),
                 record_actor.in_set(GameSystemSet::Actor),
+                record_post_actor.in_set(GameSystemSet::PostActor),
                 record_visual.in_set(GameSystemSet::Visual),
                 record_interface.in_set(GameSystemSet::Interface),
             ),
@@ -249,7 +263,16 @@ mod tests {
 
         assert_eq!(
             app.world().resource::<SystemOrder>().0,
-            ["input", "spatial", "logic", "actor", "visual", "interface"],
+            [
+                "input",
+                "spatial",
+                "logic",
+                "pre_actor",
+                "actor",
+                "post_actor",
+                "visual",
+                "interface"
+            ],
         );
     }
 

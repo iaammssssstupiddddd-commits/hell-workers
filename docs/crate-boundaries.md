@@ -54,7 +54,7 @@ UI は **Widget 層**（`hw_ui`）と **Adapter 層**（`bevy_app/src/interface/
 
 P03が追加した`hw_infra::lighting`は、leaf crate一般より狭いpure境界を恒久的に持つ。`lighting`の値型、occlusion、LOS、field、packing、fixture sourceにはBevy ECS型、render/GPU型、`hw_world`、`hw_jobs`、`hw_energy`を持ち込まない。
 
-P04以降のECS adapterはworld/queryから正規化snapshotを作りpure coreを呼ぶ。P05のworld replacement、P06のGPU resource/upload、P07のconsumerも同じsnapshot/revision契約を一方向に利用する。`Image`や`Entity`をcore APIへ追加する、Room membershipをLOSへ使う、`WorldMap.obstacle_version`を照明revisionとして再利用する実装は禁止する。詳細契約は[`indoor_lighting.md`](indoor_lighting.md)を正本とする。
+P04のECS adapterは`bevy_app::systems::lighting`に置き、world/queryから正規化snapshotを作ってpure coreを呼ぶ。`RadialLightEmitter`、`IndoorLightRuntime`、lighting system setはrootだけが所有し、`hw_infra`へBevy/world/energy依存を逆流させない。P05のworld replacement、P06のGPU resource/upload、P07のconsumerも同じsnapshot/revision契約を一方向に利用する。`Image`や`Entity`をcore APIへ追加する、Room membershipをLOSへ使う、`WorldMap.obstacle_version`を照明revisionとして再利用する実装は禁止する。詳細契約は[`indoor_lighting.md`](indoor_lighting.md)を正本とする。
 
 ## 2. 型定義と所有権（Ownership）のルール
 

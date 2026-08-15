@@ -469,7 +469,7 @@ def build_fixture_presentation_rows(
         if building_kind not in entity_counts:
             continue
         entity_count = entity_counts[building_kind]
-        if stage_id in {"p02", "p03"}:
+        if stage_id in {"p02", "p03", "p04"}:
             structural_3d = building_kind in {
                 "Floor",
                 "Wall",

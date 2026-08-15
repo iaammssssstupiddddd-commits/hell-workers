@@ -13,6 +13,6 @@ pub use self::core::{
     detect_rooms, room_is_valid_against_input,
 };
 pub use self::ecs::{
-    Room, RoomBoundaryLookup, RoomDetectionState, RoomOverlayTile, RoomTileLookup,
-    RoomValidationState,
+    Room, RoomBoundaryLookup, RoomDetectionState, RoomMaskSignature, RoomOverlayTile,
+    RoomTileLookup, RoomValidationState,
 };

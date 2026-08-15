@@ -6,6 +6,17 @@ use hw_core::soul::Path;
 use hw_core::world::DoorState;
 use hw_jobs::Door;
 
+/// Player-originated request to toggle one completed Door root between its
+/// locked and unlocked semantic states.
+///
+/// The UI owns only request production. Validation and mutation run from the
+/// root PreActor boundary so paused updates and Door automation share one
+/// domain writer.
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DoorLockToggleRequest {
+    pub owner: Entity,
+}
+
 /// bevy_app から注入されるドア系ビジュアルアセットハンドル。
 ///
 /// Door domain mutation intentionally does not depend on this resource. It is

@@ -132,7 +132,7 @@ pub use config::{
 #[cfg(feature = "profiling")]
 pub(crate) use config::{
     does_not_require_precheckpoint_fixture_spawn, is_field_core, is_fixed_step_behavior,
-    is_not_field_core, is_not_fixed_step_audit, is_not_fixed_step_behavior,
+    is_not_field_core, is_not_fixed_step_audit, is_not_fixed_step_behavior, is_not_pure_field_core,
     is_not_renderdoc_capture, requires_precheckpoint_fixture_spawn,
 };
 #[cfg(feature = "profiling")]
@@ -675,6 +675,8 @@ pub(crate) struct PerfCaptureParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
     deconstruction_fixture: Res<'w, DeconstructionPerfFixtureState>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
+    indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
+    room_lookup: Res<'w, hw_world::RoomTileLookup>,
     time: ResMut<'w, Time<Virtual>>,
     fixed_time: Res<'w, Time<Fixed>>,
     real_time: Res<'w, Time<Real>>,

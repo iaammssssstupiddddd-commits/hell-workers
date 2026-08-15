@@ -34,6 +34,52 @@ pub struct RoomOverlayTile {
 #[derive(Resource, Default, Debug)]
 pub struct RoomTileLookup {
     pub tile_to_room: HashMap<(i32, i32), Entity>,
+    mask_signature: RoomMaskSignature,
+}
+
+/// Entity-independent identity for the currently published indoor mask.
+///
+/// Room entities are recreated during detection, so only canonical tile
+/// membership may advance the lighting-facing revision.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct RoomMaskSignature {
+    revision: u64,
+    canonical_tiles: Vec<GridPos>,
+}
+
+impl RoomMaskSignature {
+    pub const fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    pub fn canonical_tiles(&self) -> &[GridPos] {
+        &self.canonical_tiles
+    }
+}
+
+impl RoomTileLookup {
+    pub const fn mask_signature(&self) -> &RoomMaskSignature {
+        &self.mask_signature
+    }
+
+    /// Publishes a new reverse lookup while advancing the semantic mask
+    /// revision only when canonical tile membership changes.
+    pub fn replace(&mut self, tile_to_room: HashMap<GridPos, Entity>) -> bool {
+        let mut canonical_tiles = tile_to_room.keys().copied().collect::<Vec<_>>();
+        canonical_tiles.sort_unstable_by_key(|&(x, y)| (y, x));
+        canonical_tiles.dedup();
+        let changed = canonical_tiles != self.mask_signature.canonical_tiles;
+        if changed {
+            self.mask_signature.revision = self
+                .mask_signature
+                .revision
+                .checked_add(1)
+                .expect("Room mask revision overflow");
+            self.mask_signature.canonical_tiles = canonical_tiles;
+        }
+        self.tile_to_room = tile_to_room;
+        changed
+    }
 }
 
 /// Reverse lookup from a wall or door grid position to every adjacent room.
@@ -101,5 +147,31 @@ impl Default for RoomValidationState {
         Self {
             timer: Timer::from_seconds(ROOM_VALIDATION_INTERVAL_SECS, TimerMode::Repeating),
         }
+    }
+}
+
+#[cfg(test)]
+mod mask_signature_tests {
+    use super::*;
+
+    #[test]
+    fn entity_replacement_does_not_advance_room_mask_revision() {
+        let mut lookup = RoomTileLookup::default();
+        let mut first = HashMap::new();
+        first.insert((4, 7), Entity::from_bits(1));
+        assert!(lookup.replace(first));
+        let revision = lookup.mask_signature().revision();
+
+        let mut recreated = HashMap::new();
+        recreated.insert((4, 7), Entity::from_bits(2));
+        assert!(!lookup.replace(recreated));
+        assert_eq!(lookup.mask_signature().revision(), revision);
+
+        let mut changed = HashMap::new();
+        changed.insert((4, 7), Entity::from_bits(3));
+        changed.insert((5, 7), Entity::from_bits(4));
+        assert!(lookup.replace(changed));
+        assert_eq!(lookup.mask_signature().revision(), revision + 1);
+        assert_eq!(lookup.mask_signature().canonical_tiles(), &[(4, 7), (5, 7)]);
     }
 }

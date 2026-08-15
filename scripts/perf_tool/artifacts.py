@@ -1282,13 +1282,32 @@ def read_behavior_timeline(
             errors.append(f"timeline.json row {index} has the wrong fixture_checksum")
         if row.get("registry_phase") != "stage_before_registry_owner":
             errors.append(f"timeline.json row {index} has the wrong registry availability")
-        if row.get("field_availability") != "stage_before_field_owner":
+        if stage_id == "p04":
+            if row.get("field_availability") != "available":
+                errors.append(f"timeline.json row {index} has the wrong field availability")
+            for field in ("field_input_revision", "field_output_revision"):
+                value = row.get(field)
+                if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                    errors.append(f"timeline.json row {index} {field} is not a published revision")
+            if not isinstance(row.get("field_is_dark"), bool):
+                errors.append(f"timeline.json row {index} field_is_dark is not boolean")
+            if not isinstance(row.get("field_checksum"), str) or re.fullmatch(
+                r"[0-9a-f]{64}", row["field_checksum"]
+            ) is None:
+                errors.append(f"timeline.json row {index} field_checksum is invalid")
+        elif row.get("field_availability") != "stage_before_field_owner":
             errors.append(f"timeline.json row {index} has the wrong field availability")
         if row.get("gpu_availability") != "stage_before_gpu_owner":
             errors.append(f"timeline.json row {index} has the wrong GPU availability")
-        for field in nullable_fields:
+        required_runtime_fields = {
+            "field_input_revision",
+            "field_output_revision",
+            "field_is_dark",
+            "field_checksum",
+        } if stage_id == "p04" else set()
+        for field in nullable_fields - required_runtime_fields:
             if row.get(field) is not None:
-                errors.append(f"timeline.json row {index} {field} must be null at current")
+                errors.append(f"timeline.json row {index} {field} must be null at this stage")
         if row.get("pause_state") not in {"running", "paused"}:
             errors.append(f"timeline.json row {index} has an invalid pause_state")
         if row.get("terminal_outcome") not in timeline_contract["terminal_outcomes"]:
@@ -1296,7 +1315,7 @@ def read_behavior_timeline(
 
     comparable_rows = rows[: len(expected_steps)]
     if behavior_case == "door-state-v1":
-        stage_prefix = "p02" if stage_id in {"p02", "p03"} else "current"
+        stage_prefix = "p02" if stage_id in {"p02", "p03", "p04"} else "current"
         for index, (row, expected) in enumerate(zip(comparable_rows, expected_steps)):
             exact = {
                 "step_index": expected["step_index"],
@@ -1543,6 +1562,92 @@ def read_indoor_light_field(
     }, []
 
 
+def read_indoor_light_runtime(
+    data_dir: Path,
+    *,
+    expected_case: Case,
+    contract_id: str,
+    field_core: bool,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    path = data_dir / "indoor_light_runtime.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        return None, [f"cannot parse indoor_light_runtime.json: {error}"]
+    keys = {
+        "schema_version", "availability", "typed_emitter_components",
+        "eligible_supplied_emitters", "unsupplied_snapshot_adoptions",
+        "indoor_mask_cells", "indoor_mask_checksum", "input_revision",
+        "output_revision", "field_checksum", "steady_updates",
+        "steady_full_scans", "steady_field_rebuilds", "steady_revision_increments",
+        "steady_scoped_allocation_events", "steady_scoped_allocation_bytes",
+        "max_rebuilds_per_update", "emitter_collect_allocation",
+    }
+    if not isinstance(payload, dict) or set(payload) != keys:
+        return None, ["indoor_light_runtime.json keys differ from schema v1"]
+    errors: list[str] = []
+    if payload.get("schema_version") != 1 or payload.get("availability") != "available":
+        errors.append("indoor_light_runtime.json is not an available schema-v1 snapshot")
+    integer_fields = keys - {
+        "schema_version", "availability", "indoor_mask_checksum", "field_checksum",
+        "emitter_collect_allocation",
+    }
+    for field in integer_fields:
+        value = payload.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            errors.append(f"indoor_light_runtime.json {field} is not a nonnegative integer")
+    for field in ("indoor_mask_checksum", "field_checksum"):
+        value = payload.get(field)
+        if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
+            errors.append(f"indoor_light_runtime.json {field} is not lowercase SHA-256")
+    contract = load_rtt_light_contract(contract_id)
+    layout = build_fixture_layout(contract, expected_case.size)
+    size_contract = contract["fixture"]["sizes"][expected_case.size]
+    if payload.get("typed_emitter_components") != layout["counts"]["supplied_lamp_candidates"] + 1:
+        errors.append("indoor_light_runtime.json typed emitter count differs from fixture")
+    if payload.get("eligible_supplied_emitters") != layout["counts"]["supplied_lamp_candidates"]:
+        errors.append("indoor_light_runtime.json eligible emitter count differs from fixture")
+    if payload.get("unsupplied_snapshot_adoptions") != 0:
+        errors.append("indoor_light_runtime.json adopted the unsupplied control emitter")
+    if payload.get("indoor_mask_cells") != layout["counts"]["completed_floors"]:
+        errors.append("indoor_light_runtime.json mask cell count differs from fixture")
+    if not field_core and payload.get("indoor_mask_checksum") != size_contract["indoor_mask_checksum"]:
+        errors.append("indoor_light_runtime.json mask checksum differs from fixture")
+    if payload.get("input_revision", 0) < 1 or payload.get("output_revision", 0) < 1:
+        errors.append("indoor_light_runtime.json revisions did not publish")
+    if payload.get("max_rebuilds_per_update", 2) > 1:
+        errors.append("indoor_light_runtime.json rebuilt more than once in an update")
+    if field_core:
+        for field, expected in {
+            "steady_updates": 600,
+            "steady_full_scans": 0,
+            "steady_field_rebuilds": 0,
+            "steady_revision_increments": 0,
+            "steady_scoped_allocation_events": 0,
+            "steady_scoped_allocation_bytes": 0,
+        }.items():
+            if payload.get(field) != expected:
+                errors.append(f"indoor_light_runtime.json {field} differs from P04 steady contract")
+        allocation = payload.get("emitter_collect_allocation")
+        if not isinstance(allocation, dict) or set(allocation) != {"scope", "events", "bytes"}:
+            errors.append("indoor_light_runtime.json emitter allocation scope is missing")
+        elif (
+            allocation.get("scope") != "bevy_app::systems::lighting::collect_indoor_lighting_snapshot_system"
+            or not isinstance(allocation.get("events"), int)
+            or isinstance(allocation.get("events"), bool)
+            or allocation["events"] < 1
+            or not isinstance(allocation.get("bytes"), int)
+            or isinstance(allocation.get("bytes"), bool)
+            or allocation["bytes"] < 1
+        ):
+            errors.append("indoor_light_runtime.json emitter allocation scope is invalid")
+    elif payload.get("emitter_collect_allocation") is not None:
+        errors.append("non-field-core runtime sidecar unexpectedly contains allocation evidence")
+    if errors:
+        return None, errors
+    return payload, []
+
+
 def validate_run(
     run_dir: Path,
     *,
@@ -1578,6 +1683,7 @@ def validate_run(
     indoor_light_layout = None
     indoor_light_presentation = None
     indoor_light_field = None
+    indoor_light_runtime = None
     p02_presentation = None
     deconstruction_fixture = None
     save_transaction = None
@@ -1606,14 +1712,22 @@ def validate_run(
         data_dir / "indoor_light_presentation.csv",
     )
     if expected_case.workload == "indoor-light" and capture_kind == "field-core":
-        if (expected_contract, expected_stage, expected_lane) != (
-            "rtt-light-v1",
-            "p03",
-            "field-core",
+        if (
+            expected_contract != "rtt-light-v1"
+            or expected_stage not in {"p03", "p04"}
+            or expected_lane != "field-core"
         ):
-            reasons.append("field-core requires the exact rtt-light-v1/p03/field-core selection")
+            reasons.append("field-core requires rtt-light-v1/p03|p04/field-core")
         indoor_light_field, field_errors = read_indoor_light_field(data_dir)
         reasons.extend(field_errors)
+        if expected_stage == "p04" and expected_contract is not None:
+            indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
+                data_dir,
+                expected_case=expected_case,
+                contract_id=expected_contract,
+                field_core=True,
+            )
+            reasons.extend(runtime_errors)
         unexpected_sidecars = [path.name for path in indoor_sidecar_paths if path.exists()]
         if unexpected_sidecars:
             reasons.append("field-core must not write ECS fixture sidecars")
@@ -1636,6 +1750,14 @@ def validate_run(
                 lane=expected_lane,
             )
             reasons.extend(indoor_errors)
+            if expected_stage == "p04":
+                indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
+                    data_dir,
+                    expected_case=expected_case,
+                    contract_id=expected_contract,
+                    field_core=False,
+                )
+                reasons.extend(runtime_errors)
     elif expected_case.workload == "deconstruction":
         if capture_kind != "fixed-step-determinism":
             reasons.append("deconstruction validation requires fixed-step determinism capture")
@@ -1661,7 +1783,7 @@ def validate_run(
     p02_sidecar = data_dir / "p02_presentation.csv"
     expects_p02_sidecar = (
         expected_case.workload == "indoor-light"
-        and expected_stage in {"p02", "p03"}
+        and expected_stage in {"p02", "p03", "p04"}
         and expected_lane == "static"
         and capture_kind == "frame-time"
     )
@@ -1799,6 +1921,8 @@ def validate_run(
             "indoor_light_presentation.csv",
             "timeline.json",
         }
+        if expected_stage == "p04":
+            expected_behavior_files.add("indoor_light_runtime.json")
         if expected_case.behavior_case == "load-normal-v1":
             expected_behavior_files.add("behavior-save.scn.ron")
         actual_behavior_files = {
@@ -1818,6 +1942,8 @@ def validate_run(
             )
     elif capture_kind == "field-core":
         expected_field_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
+        if expected_stage == "p04":
+            expected_field_files.add("indoor_light_runtime.json")
         actual_field_files = (
             {path.name for path in data_dir.iterdir()} if data_dir.is_dir() else set()
         )
@@ -1904,7 +2030,7 @@ def validate_run(
         except (KeyError, ValueError):
             reasons.append("summary initial population is invalid for scene root validation")
         else:
-            if expected_stage in {"p02", "p03"}:
+            if expected_stage in {"p02", "p03", "p04"}:
                 # P02 replaces the legacy Soul proxy family with
                 # ActorBillboard3d and keeps Familiar presentation in the 2D
                 # foreground pass. Their counts are validated by the P02
@@ -2058,6 +2184,7 @@ def validate_run(
         indoor_light_layout=indoor_light_layout,
         indoor_light_presentation=indoor_light_presentation,
         indoor_light_field=indoor_light_field,
+        indoor_light_runtime=indoor_light_runtime,
         p02_presentation=p02_presentation,
         deconstruction_fixture=deconstruction_fixture,
         save_transaction=save_transaction,

@@ -52,6 +52,7 @@ struct StableRenderDocCheckpoint {
     mask_target: Option<AssetId<Image>>,
     render_inventory: PerfRenderInventory,
     p02_presentation: Option<PerfP02Presentation>,
+    runtime_field: Option<RuntimeFieldEvidence>,
     fixture: RuntimeFixtureEvidence,
 }
 
@@ -64,6 +65,14 @@ struct RuntimeFixtureEvidence {
     doors: usize,
     supplied_lamp_candidates: usize,
     unsupplied_lamp_candidates: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct RuntimeFieldEvidence {
+    typed_emitter_components: u32,
+    eligible_supplied_emitters: u32,
+    indoor_mask_cells: u32,
+    indoor_mask_checksum: String,
 }
 
 #[derive(Resource, Clone, Default, ExtractResource)]
@@ -184,6 +193,8 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     rtt_runtime: Res<'w, RttRuntime>,
     render_environment: Res<'w, PerfRenderEnvironmentEvidence>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
+    indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
+    room_lookup: Res<'w, hw_world::RoomTileLookup>,
     world_instance_spawner: Res<'w, WorldInstanceSpawner>,
     soul_world_instances: SoulWorldInstancesQuery<'w, 's>,
 }
@@ -320,6 +331,43 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
     let p02_presentation = selection
         .uses_p02_presentation()
         .then(|| calculate_p02_presentation(&params.checksum_queries));
+    let runtime_field = if selection.uses_runtime_field() {
+        use sha2::{Digest, Sha256};
+        if params.indoor_light_runtime.availability()
+            != crate::systems::lighting::IndoorLightAvailability::Available
+        {
+            return;
+        }
+        let tiles = params.room_lookup.mask_signature().canonical_tiles();
+        let Some(indoor_mask_cells) = u32::try_from(tiles.len()).ok() else {
+            bridge.replace(RenderDocBridgeState::Failed(
+                "P04 Room mask cell count exceeds u32".to_string(),
+            ));
+            return;
+        };
+        if params.indoor_light_runtime.indoor_mask_cells() != Some(indoor_mask_cells) {
+            bridge.replace(RenderDocBridgeState::Failed(
+                "P04 runtime mask differs from canonical Room membership".to_string(),
+            ));
+            return;
+        }
+        let cells = tiles
+            .iter()
+            .map(|(x, y)| format!("[{x},{y}]"))
+            .collect::<Vec<_>>()
+            .join(",");
+        Some(RuntimeFieldEvidence {
+            typed_emitter_components: params.indoor_light_runtime.typed_emitter_components(),
+            eligible_supplied_emitters: params.indoor_light_runtime.eligible_supplied_emitters(),
+            indoor_mask_cells,
+            indoor_mask_checksum: format!(
+                "{:x}",
+                Sha256::digest(format!("{{\"cells\":[{cells}]}}"))
+            ),
+        })
+    } else {
+        None
+    };
     let signature = CpuCheckpointSignature {
         checksum: checksum.value,
         scene_target: params.rtt_runtime.scene.id(),
@@ -357,6 +405,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         mask_target: signature.mask_target,
         render_inventory,
         p02_presentation,
+        runtime_field,
         fixture,
     });
     eprintln!("PERF_RENDERDOC: CPU checkpoint ready; waiting for GPU settle");
@@ -832,6 +881,8 @@ struct RuntimeCheckpointFile<'a> {
     render_inventory: RuntimeRenderInventory,
     #[serde(skip_serializing_if = "Option::is_none")]
     p02_presentation: Option<RuntimeP02Presentation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    runtime_field: Option<RuntimeFieldEvidence>,
     render_resources: RuntimeRenderResources,
     fixture: RuntimeFixtureEvidence,
     capture_path: &'a Path,
@@ -1056,6 +1107,7 @@ fn write_runtime_checkpoint(
         },
         render_inventory: result.checkpoint.render_inventory.into(),
         p02_presentation: result.checkpoint.p02_presentation.map(Into::into),
+        runtime_field: result.checkpoint.runtime_field.clone(),
         render_resources: p01_composite_render_resources(),
         fixture: result.checkpoint.fixture.clone(),
         capture_path: &result.capture_path,

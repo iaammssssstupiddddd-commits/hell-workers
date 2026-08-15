@@ -29,6 +29,7 @@ use hw_logistics::{StockpilePolicyChangeOutcome, StockpilePolicyChangeRequest};
 use hw_visual::speech::conversation::events::{
     ConversationCompleted, ConversationToneTriggered, RequestConversation,
 };
+use hw_world::DoorLockToggleRequest;
 
 macro_rules! root_message_types {
     ($callback:ident, $argument:expr) => {
@@ -79,6 +80,7 @@ macro_rules! root_message_types {
             DeconstructionCancelOutcome,
             DeconstructionDesignationRequest,
             DeconstructionDesignationOutcome,
+            DoorLockToggleRequest,
         );
     };
 }

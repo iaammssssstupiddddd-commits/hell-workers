@@ -400,7 +400,7 @@ def write_behavior_fixture_run(
                 ),
                 "applied": (
                     step[
-                        "p02_applied" if stage_id == "p02" else "current_applied"
+                        "p02_applied" if stage_id in {"p02", "p03", "p04"} else "current_applied"
                     ]
                     if case.behavior_case == "door-state-v1"
                     else load_applied[index]
@@ -408,7 +408,7 @@ def write_behavior_fixture_run(
                 "semantic_state": (
                     step[
                         "p02_semantic_state"
-                        if stage_id == "p02"
+                        if stage_id in {"p02", "p03", "p04"}
                         else "current_semantic_state"
                     ]
                     if case.behavior_case == "door-state-v1"
@@ -417,7 +417,7 @@ def write_behavior_fixture_run(
                 "active_presentation_state": (
                     step[
                         "p02_active_presentation_state"
-                        if stage_id == "p02"
+                        if stage_id in {"p02", "p03", "p04"}
                         else "current_active_presentation_state"
                     ]
                     if case.behavior_case == "door-state-v1"
@@ -435,6 +435,16 @@ def write_behavior_fixture_run(
                 ),
             }
         )
+        if stage_id == "p04":
+            row.update(
+                {
+                    "field_availability": "available",
+                    "field_input_revision": index + 1,
+                    "field_output_revision": index + 1,
+                    "field_is_dark": False,
+                    "field_checksum": "4" * 64,
+                }
+            )
         rows.append(row)
     (data_dir / "timeline.json").write_text(
         json.dumps(
@@ -454,7 +464,31 @@ def write_behavior_fixture_run(
             ),
             encoding="utf-8",
         )
-    write_indoor_light_sidecars(root, case, lane="behavior")
+    write_indoor_light_sidecars(root, case, stage_id=stage_id, lane="behavior")
+    if stage_id == "p04":
+        write_json(
+            data_dir / "indoor_light_runtime.json",
+            {
+                "schema_version": 1,
+                "availability": "available",
+                "typed_emitter_components": 2,
+                "eligible_supplied_emitters": 1,
+                "unsupplied_snapshot_adoptions": 0,
+                "indoor_mask_cells": 36,
+                "indoor_mask_checksum": contract["fixture"]["sizes"]["small"]["indoor_mask_checksum"],
+                "input_revision": 5,
+                "output_revision": 5,
+                "field_checksum": "4" * 64,
+                "steady_updates": 0,
+                "steady_full_scans": 0,
+                "steady_field_rebuilds": 0,
+                "steady_revision_increments": 0,
+                "steady_scoped_allocation_events": 0,
+                "steady_scoped_allocation_bytes": 0,
+                "max_rebuilds_per_update": 1,
+                "emitter_collect_allocation": None,
+            },
+        )
     (root / "run.log").write_text(
         (
             f"PERF_SCENARIO: seed={case.seed} workload=indoor-light size=small "
@@ -1517,6 +1551,55 @@ def self_test() -> int:
         assert len(indoor_validation.indoor_light_layout or []) == 187
         assert len(indoor_validation.indoor_light_presentation or []) == 5
 
+        p04_root = root / "indoor-p04-sidecar"
+        write_fixture_run(
+            p04_root,
+            fixed_step_audit=True,
+            workload="indoor-light",
+            seed=indoor_case.seed,
+        )
+        write_indoor_light_sidecars(p04_root, indoor_case, stage_id="p04")
+        write_json(
+            p04_root / "data" / "indoor_light_runtime.json",
+            {
+                "schema_version": 1,
+                "availability": "available",
+                "typed_emitter_components": 2,
+                "eligible_supplied_emitters": 1,
+                "unsupplied_snapshot_adoptions": 0,
+                "indoor_mask_cells": 36,
+                "indoor_mask_checksum": rtt_contract["fixture"]["sizes"]["small"]["indoor_mask_checksum"],
+                "input_revision": 1,
+                "output_revision": 1,
+                "field_checksum": "3" * 64,
+                "steady_updates": 0,
+                "steady_full_scans": 0,
+                "steady_field_rebuilds": 0,
+                "steady_revision_increments": 0,
+                "steady_scoped_allocation_events": 0,
+                "steady_scoped_allocation_bytes": 0,
+                "max_rebuilds_per_update": 1,
+                "emitter_collect_allocation": None,
+            },
+        )
+        p04_validation = validate_run(
+            p04_root,
+            returncode=0,
+            expected_case=indoor_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+            capture_kind="fixed-step-determinism",
+            expected_fixed_hz=64,
+            expected_warmup_ticks=1920,
+            expected_audit_ticks=128,
+            expected_contract="rtt-light-v1",
+            expected_stage="p04",
+            expected_lane="static",
+        )
+        assert p04_validation.valid, p04_validation.reasons
+        assert p04_validation.indoor_light_runtime is not None
+
         indoor_realtime_root = root / "indoor-realtime-sidecar"
         write_fixture_run(
             indoor_realtime_root,
@@ -1710,6 +1793,43 @@ def self_test() -> int:
                 encoding="utf-8",
             )
             assert validate_behavior_fixture().valid
+
+        p04_behavior_root = root / "behavior-p04-door"
+        p04_behavior_case = Case(
+            "indoor-light",
+            "small",
+            "cpu",
+            20_260_803,
+            None,
+            None,
+            behavior_case="door-state-v1",
+        )
+        write_behavior_fixture_run(
+            p04_behavior_root,
+            p04_behavior_case,
+            stage_id="p04",
+        )
+        p04_behavior_validation = validate_run(
+            p04_behavior_root,
+            returncode=0,
+            expected_case=p04_behavior_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+            capture_kind="fixed-step-behavior",
+            expected_fixed_hz=64,
+            expected_warmup_ticks=1920,
+            expected_audit_ticks=128,
+            expected_window_backend="headless",
+            expected_contract="rtt-light-v1",
+            expected_stage="p04",
+            expected_lane="behavior",
+        )
+        assert p04_behavior_validation.valid, p04_behavior_validation.reasons
+        assert all(
+            row["field_availability"] == "available"
+            for row in p04_behavior_validation.timeline or []
+        )
 
         for size, ledger_rows, presentation_rows, building_records in (
             ("medium", 722, 12, 244),
@@ -2721,6 +2841,11 @@ def self_test() -> int:
         assert field_core_args.allow_log_pattern == rtt_contract["allow_log_patterns"][
             "headless_audit"
         ]
+        p04_field_core_args = build_parser().parse_args(
+            ["field-core", "--dry-run", "--stage", "p04"]
+        )
+        validate_arguments(p04_field_core_args)
+        assert p04_field_core_args.stage == "p04"
         rejected_field_allowance = build_parser().parse_args(
             ["field-core", "--dry-run", "--allow-log-pattern", "unexpected warning"]
         )

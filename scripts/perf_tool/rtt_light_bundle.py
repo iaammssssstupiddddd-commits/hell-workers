@@ -99,6 +99,7 @@ EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "p01": P01_RENDER_RESOURCES,
     "p02": P01_RENDER_RESOURCES,
     "p03": P01_RENDER_RESOURCES,
+    "p04": P01_RENDER_RESOURCES,
 }
 SOURCE_CHECKPOINTS_RENDERDOC = (
     "start",
@@ -114,7 +115,7 @@ SOURCE_CHECKPOINTS_RENDERDOC = (
 
 
 def _expected_source_checkpoints(stage: str) -> tuple[str, ...]:
-    if stage != "p03":
+    if stage not in {"p03", "p04"}:
         return SOURCE_CHECKPOINTS_RENDERDOC
     return (*SOURCE_CHECKPOINTS_RENDERDOC[:-1], "after-field-core", "before-registration")
 
@@ -729,6 +730,8 @@ def _validate_run_file_set(
         "indoor_light_layout.csv",
         "indoor_light_presentation.csv",
     }
+    if stage == "p04":
+        data_files.add("indoor_light_runtime.json")
     root_files = {
         "command.txt",
         "requested-environment.json",
@@ -753,10 +756,12 @@ def _validate_run_file_set(
         if leg_id == "memory":
             data_files.add("memory.csv")
             root_files |= {"profile-artifact.json", "resource-usage.txt"}
-        if stage in {"p02", "p03"}:
+        if stage in {"p02", "p03", "p04"}:
             data_files.add("p02_presentation.csv")
     elif leg_id == "field-core":
         data_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
+        if stage == "p04":
+            data_files.add("indoor_light_runtime.json")
     else:
         raise RuntimeError(f"session file-set validator does not support leg {leg_id}")
     actual_root = {path.name for path in run_dir.iterdir()}
@@ -1548,6 +1553,7 @@ def _load_renderdoc_evidence(
         raise RuntimeError("RenderDoc runtime checkpoint differs from manifest evidence")
     if runtime["fixture"] != manifest["fixture"]:
         raise RuntimeError("RenderDoc runtime fixture differs from manifest evidence")
+    runtime_field = runtime.get("runtime_field")
     if not accepts_renderdoc_api_version(
         str(runtime["returned_renderdoc_api_version"]),
         requested=str(runtime["requested_renderdoc_api_version"]),
@@ -1754,7 +1760,7 @@ def _load_renderdoc_evidence(
             )
     render_inventory = _validate_render_inventory_json(runtime["render_inventory"])
     p02_presentation = runtime.get("p02_presentation")
-    if stage in {"p02", "p03"} and not isinstance(p02_presentation, dict):
+    if stage in {"p02", "p03", "p04"} and not isinstance(p02_presentation, dict):
         raise RuntimeError("P02 RenderDoc evidence has no presentation checkpoint")
     mask_resource_id = tracked_ids.get("mask_target")
     mask_pass_count = (
@@ -1810,6 +1816,7 @@ def _load_renderdoc_evidence(
             "validations": [],
             "run_dirs": [],
             "fixture": manifest["fixture"],
+            "runtime_field": runtime_field,
             "render_inventory": render_inventory,
             "gate_metrics": {
                 "scene_target_count": int(render_inventory["scene_target_count"]),
@@ -1844,7 +1851,7 @@ def _load_renderdoc_evidence(
                             "state_and_bounce_probes_pass"
                         ],
                     }
-                    if stage in {"p02", "p03"}
+                    if stage in {"p02", "p03", "p04"}
                     else {}
                 ),
             },
@@ -2043,6 +2050,25 @@ def _render_inventory_projection(evidence: dict[str, Any]) -> dict[str, str]:
     return dict(inventory)
 
 
+def _runtime_field_projection(evidence: dict[str, Any]) -> dict[str, str]:
+    validations: list[Validation] = evidence["validations"]
+    if validations:
+        runtime = _only_equal(
+            [validation.indoor_light_runtime for validation in validations],
+            label=f"{evidence['formal']['case_id']} indoor Light Field runtime",
+        )
+    else:
+        runtime = evidence.get("runtime_field")
+    if not isinstance(runtime, dict):
+        raise RuntimeError("formal evidence has no indoor Light Field runtime sidecar")
+    return {
+        "typed_emitter_components": str(runtime["typed_emitter_components"]),
+        "eligible_supplied_emitters": str(runtime["eligible_supplied_emitters"]),
+        "indoor_mask_cells": str(runtime["indoor_mask_cells"]),
+        "indoor_mask_checksum": str(runtime["indoor_mask_checksum"]),
+    }
+
+
 def build_projection_rows(
     contract: dict[str, Any],
     stage: str,
@@ -2071,6 +2097,9 @@ def build_projection_rows(
         for group_name, group in contract["projection"]["field_groups"].items():
             row[group["availability_column"]] = applicability[group_name]
         row.update(_fixture_projection(evidence))
+
+        if applicability["emitter"] == "available":
+            row.update(_runtime_field_projection(evidence))
 
         if applicability["render_inventory"] == "available":
             row.update(_render_inventory_projection(evidence))
@@ -2137,6 +2166,18 @@ def build_projection_rows(
             )
             row["field_rebuild_allocation_events"] = str(allocation["events"])
             row["field_rebuild_allocation_bytes"] = str(allocation["bytes"])
+        if applicability["emitter_collect_allocation"] == "available":
+            runtime_rows = [
+                validation.indoor_light_runtime for validation in evidence["validations"]
+            ]
+            if any(not isinstance(runtime, dict) for runtime in runtime_rows):
+                raise RuntimeError(f"{formal['case_id']} has no runtime allocation evidence")
+            allocation = _only_equal(
+                [runtime["emitter_collect_allocation"] for runtime in runtime_rows],
+                label=f"{formal['case_id']} emitter collect allocation",
+            )
+            row["emitter_collect_allocation_events"] = str(allocation["events"])
+            row["emitter_collect_allocation_bytes"] = str(allocation["bytes"])
         rows.append(row)
     validate_projection_rows(contract, stage, rows)
     return rows
@@ -2262,6 +2303,28 @@ def _gate_observed(
         if row is None or not row.get(metric_id):
             raise RuntimeError(f"{case_id} has no projected {metric_id}")
         return row[metric_id]
+    if metric_id in {
+        "typed_emitter_components",
+        "eligible_supplied_emitters",
+        "indoor_mask_cells",
+        "indoor_mask_checksum",
+        "unsupplied_snapshot_adoptions",
+        "steady_updates",
+        "steady_full_scans",
+        "steady_field_rebuilds",
+        "steady_revision_increments",
+        "steady_scoped_allocation_events",
+        "steady_scoped_allocation_bytes",
+        "max_rebuilds_per_update",
+    }:
+        runtime_rows = [validation.indoor_light_runtime for validation in validations]
+        if not runtime_rows or any(not isinstance(runtime, dict) for runtime in runtime_rows):
+            raise RuntimeError(f"{case_id} has no P04 runtime evidence")
+        value = _only_equal(
+            [runtime[metric_id] for runtime in runtime_rows],
+            label=f"{case_id} {metric_id}",
+        )
+        return str(value)
     if metric_id in {
         "auto_attempted",
         "auto_applied",
