@@ -40,6 +40,7 @@ pub(crate) fn run_field_core_driver_system(
     config: Res<PerfScenarioConfig>,
     fixture: Res<IndoorLightFixtureState>,
     runtime: Res<IndoorLightRuntime>,
+    mut virtual_time: ResMut<Time<Virtual>>,
     mut allocation_probe: ResMut<IndoorLightingAllocationProbe>,
     mut state: ResMut<FieldCoreDriverState>,
     mut exit: MessageWriter<AppExit>,
@@ -54,6 +55,13 @@ pub(crate) fn run_field_core_driver_system(
         state.finished = true;
         finish_field_core(run_field_core(&config), &mut exit);
         return;
+    }
+
+    if config.pauses_virtual_time_for_field_core() {
+        // This runs in InitialCheckpoint before GameSystemSet::Input. Pausing
+        // here prevents normal Logic/Actor from re-registering freshly spawned
+        // Door obstacles after the fixture has seeded its canonical states.
+        virtual_time.pause();
     }
 
     allocation_probe.enable();

@@ -881,6 +881,17 @@ impl PerfScenarioConfig {
                 .is_some_and(|selection| selection.stage_id() == "p03")
     }
 
+    /// P04 field-core advances the light runtime through `Update`, but must not
+    /// advance normal simulation while its canonical fixture is settling.
+    /// `PreActor` and `PostActor` remain scheduled while virtual time is paused,
+    /// so manual mutations and the light snapshot/rebuild boundary still run.
+    pub fn pauses_virtual_time_for_field_core(&self) -> bool {
+        self.is_field_core()
+            && self
+                .rtt_light
+                .is_some_and(|selection| selection.uses_runtime_field())
+    }
+
     /// 自動 perf の CPU 条件では、計測対象外の 3D scene root を生成しない。
     ///
     /// これは起動時 fixture の生成だけに使う。通常プレイと、実行中の F8/F3

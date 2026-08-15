@@ -156,11 +156,15 @@ fn fixture_setup_freezes_for_fixed_step_and_checksum_compared_realtime_workloads
     assert!(!config.freezes_indoor_light_door_automation());
     config.rtt_light = Some(super::PerfRttLightSelection::P04_FIELD_CORE_V1);
     assert!(config.freezes_indoor_light_door_automation());
+    assert!(config.pauses_virtual_time_for_field_core());
+    config.rtt_light = Some(super::PerfRttLightSelection::P03_FIELD_CORE_V1);
+    assert!(!config.pauses_virtual_time_for_field_core());
     config.rtt_light = None;
 
     config.workload = super::PerfWorkload::TaskDashboard;
     assert!(config.freezes_fixture_setup());
     assert!(!config.keeps_virtual_time_paused_during_capture());
+    assert!(!config.pauses_virtual_time_for_field_core());
     assert!(!config.freezes_indoor_light_door_automation());
 
     config.workload = super::PerfWorkload::Gather;
