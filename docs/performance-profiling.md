@@ -97,7 +97,8 @@ fail-closedに扱う。fixed auditは各checkpointでDoor state / child image / 
 indoor-light static laneではseed済みDoor state自体がfixture topologyなので、fixed auditがsimulation tickを
 進めてもDoor auto-open / closeだけをprofiling run conditionで停止する。Doorのproduction automationは通常playと
 behavior laneで維持し、P02 behavior artifactがClosed→Open→Open→Locked→Lockedを別途検証する。fixture setupは
-Door domain stateのseed後にproduction presentation syncを1 frame待ってからchild image / 3D stateを検証する。
+Door domain stateのseed後、production presentation syncがchild Spriteへ期待画像handleを実際に反映したことを
+観測してからchild image / 3D stateを検証する。反映待ちは最大8 Updateで打ち切り、順序違反を明示的に失格にする。
 またP02はlegacy Soul / mask / shadow / Familiar proxyを全render modeで0とし、置換後のSoul billboard / Familiar
 foregroundは`p02_presentation.csv`で個体数とexactly-one presentationを検証する。
 
@@ -112,7 +113,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py field-core \
 
 P04は同じ19 caseを`--stage p04`で実行し、P03 pure field artifactを変更せずruntime証跡を追加する。audit / behavior / Capture / Memoryは`indoor_light_runtime.json`を必須とし、typed emitter `2 / 11 / 51`、eligible supplied `1 / 10 / 50`、unsupplied adoption 0、Room mask cell `36 / 144 / 576`とcanonical checksumを検証する。RenderDocは同値をruntime checkpointの`runtime_field` blockへ記録する。behavior timelineは`field_availability=available`とlive input/output revision、dark state、field checksumを持つ。
 
-P04 field-coreはproduction large ECS fixtureを通常のcompletion / energy / Room / lighting scheduleで構築してから600 Updateを実走する。fixture settle開始時に`Time<Virtual>`をpauseして通常のLogic / Actorによるworld mutationを止める一方、pause gate外のPreActor / PostActorは継続し、manual Door mutation境界とproduction lighting collect / rebuildを実測対象に保つ。fixture validationは`DoorPresentationSyncSet`後にdomain state、WorldMap、presentation topologyを照合してReadyを公開し、field-core driverは次Updateからsteady windowを開始する。headless field-coreはrenderer presentationを計測対象にしないためlegacy child Spriteの画像handle一致を要求せず、同じOpen / Closed / Locked画像契約はX11 static / behavior / RenderDoc各legで必須にする。`indoor_light_cpu.csv` / `indoor_light_field.json`に加え`indoor_light_runtime.json`を出し、steady full scan / rebuild / revision increment / scoped allocation event・byteが0、最大rebuild/updateが1以下であることと、emitter collectが明示的に所有するbufferの論理allocationを別scopeで検証する。
+P04 field-coreはproduction large ECS fixtureを通常のcompletion / energy / Room / lighting scheduleで構築してから600 Updateを実走する。fixture settle開始時に`Time<Virtual>`をpauseして通常のLogic / Actorによるworld mutationを止める一方、pause gate外のPreActor / PostActorは継続し、manual Door mutation境界とproduction lighting collect / rebuildを実測対象に保つ。fixture validationは`DoorPresentationSyncSet`後にdomain state、WorldMap、presentation topologyを照合してReadyを公開する。static / behavior / RenderDocではseed済みDoorのlegacy child Sprite画像handle一致を最大8 Updateまで実観測してからReadyとし、field-core driverは次Updateからsteady windowを開始する。headless field-coreはrenderer presentationを計測対象にしないためlegacy child Spriteの画像handle一致を要求せず、同じOpen / Closed / Locked画像契約はX11 static / behavior / RenderDoc各legで必須にする。`indoor_light_cpu.csv` / `indoor_light_field.json`に加え`indoor_light_runtime.json`を出し、steady full scan / rebuild / revision increment / scoped allocation event・byteが0、最大rebuild/updateが1以下であることと、emitter collectが明示的に所有するbufferの論理allocationを別scopeで検証する。
 
 各規模は`indoor_light_fixture.csv` 1行と、small 187 / 5、medium 722 / 12、large 2306 / 12行の
 `indoor_light_layout.csv` / `indoor_light_presentation.csv`を必須出力する。indoor semantic actorはsmall 78、
