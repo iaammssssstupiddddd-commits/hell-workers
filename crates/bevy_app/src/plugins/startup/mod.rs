@@ -205,7 +205,6 @@ impl Plugin for StartupPlugin {
                         bevy::ecs::schedule::ApplyDeferred,
                         hw_world::detect_rooms_immediately_system,
                         bevy::ecs::schedule::ApplyDeferred,
-                        perf_scenario::validate_indoor_light_fixture_system,
                     )
                         .chain()
                         .in_set(PerfScenarioSet::IndoorSettle)
@@ -220,6 +219,15 @@ impl Plugin for StartupPlugin {
                 .configure_sets(
                     Update,
                     PerfScenarioSet::Capture.after(GameSystemSet::Interface),
+                )
+                .add_systems(
+                    Update,
+                    perf_scenario::validate_indoor_light_fixture_system
+                        .in_set(PerfScenarioSet::Capture)
+                        .after(
+                            crate::systems::visual::building3d_cleanup::DoorPresentationSyncSet,
+                        )
+                        .run_if(perf_scenario::should_settle_indoor_light_fixture),
                 )
                 .add_systems(
                     Update,
