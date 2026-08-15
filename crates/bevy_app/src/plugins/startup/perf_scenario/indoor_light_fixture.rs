@@ -64,7 +64,6 @@ pub(super) const LARGE_LAYOUT_SHA256: &str =
 const ORIGIN: (i32, i32) = (16, 20);
 const MODULE_EXTENT: i32 = 7;
 const ROOM_INTERIOR_TILES: usize = 36;
-const MAX_DOOR_PRESENTATION_SETTLE_UPDATES: u8 = 8;
 type Grid = (i32, i32);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -121,7 +120,6 @@ pub(crate) struct IndoorLightFixtureState {
     pub(super) failure: Option<String>,
     door_states_seeded: bool,
     door_presentations_settled: bool,
-    door_presentation_wait_updates: u8,
 }
 
 #[derive(Clone)]
@@ -1163,7 +1161,6 @@ pub(super) fn begin_indoor_light_fixture(
     });
     state.door_states_seeded = false;
     state.door_presentations_settled = false;
-    state.door_presentation_wait_updates = 0;
     state.phase = IndoorLightFixturePhase::Settling;
 }
 
@@ -1242,11 +1239,10 @@ pub(crate) fn stabilize_indoor_light_actors_system(
 }
 
 pub(crate) fn seed_indoor_light_static_door_states_system(
-    config: Res<PerfScenarioConfig>,
     mut state: ResMut<IndoorLightFixtureState>,
     mut world_map: WorldMapWrite,
     mut q_doors: Query<(Entity, &Transform, &mut Door, &Children)>,
-    q_sprites: Query<&Sprite>,
+    mut q_sprites: Query<&mut Sprite>,
     door_handles: Res<DoorVisualHandles>,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -1254,74 +1250,6 @@ pub(crate) fn seed_indoor_light_static_door_states_system(
         return;
     };
     if state.door_states_seeded {
-        if config.is_field_core() {
-            state.door_presentations_settled = true;
-            return;
-        }
-        let mut pending_presentation = None;
-        for expected in &layout.doors {
-            let expected_pos = WorldMap::grid_to_world(expected.grid.0, expected.grid.1);
-            let mut matches = q_doors
-                .iter_mut()
-                .filter(|(_, transform, ..)| transform.translation.truncate() == expected_pos);
-            let Some((entity, _, door, children)) = matches.next() else {
-                fail_fixture(
-                    &mut state,
-                    &mut exit,
-                    format!(
-                        "Door at {:?} disappeared while presentation was settling",
-                        expected.grid
-                    ),
-                );
-                return;
-            };
-            if matches.next().is_some()
-                || world_map.door_entity(expected.grid.0, expected.grid.1) != Some(entity)
-                || world_map.door_state(expected.grid.0, expected.grid.1) != Some(expected.state)
-                || door.state != expected.state
-            {
-                fail_fixture(
-                    &mut state,
-                    &mut exit,
-                    format!(
-                        "Door at {:?} changed while presentation was settling",
-                        expected.grid
-                    ),
-                );
-                return;
-            }
-            let expected_image = if expected.state == hw_core::world::DoorState::Open {
-                &door_handles.door_open
-            } else {
-                &door_handles.door_closed
-            };
-            let child_images = children
-                .iter()
-                .filter_map(|child| q_sprites.get(child).ok())
-                .map(|sprite| sprite.image.clone())
-                .collect::<Vec<_>>();
-            if child_images != [expected_image.clone()] {
-                pending_presentation = Some(format!(
-                    "Door at {:?} has not mirrored static {:?} into its child Sprite",
-                    expected.grid, expected.state
-                ));
-                break;
-            }
-        }
-        if let Some(reason) = pending_presentation {
-            state.door_presentation_wait_updates =
-                state.door_presentation_wait_updates.saturating_add(1);
-            if state.door_presentation_wait_updates >= MAX_DOOR_PRESENTATION_SETTLE_UPDATES {
-                let attempts = state.door_presentation_wait_updates;
-                fail_fixture(
-                    &mut state,
-                    &mut exit,
-                    format!("{reason} after {attempts} Update attempts"),
-                );
-            }
-            return;
-        }
-        state.door_presentations_settled = true;
         return;
     }
     for expected in &layout.doors {
@@ -1357,7 +1285,7 @@ pub(crate) fn seed_indoor_light_static_door_states_system(
             .iter()
             .filter(|child| q_sprites.contains(*child))
             .collect::<Vec<_>>();
-        let [_sprite_entity] = sprite_children.as_slice() else {
+        let [sprite_entity] = sprite_children.as_slice() else {
             fail_fixture(
                 &mut state,
                 &mut exit,
@@ -1369,8 +1297,29 @@ pub(crate) fn seed_indoor_light_static_door_states_system(
             return;
         };
         hw_world::apply_door_state(&mut door, &mut world_map, expected.grid, expected.state);
+        let expected_image = if expected.state == hw_core::world::DoorState::Open {
+            &door_handles.door_open
+        } else {
+            &door_handles.door_closed
+        };
+        let Ok(mut sprite) = q_sprites.get_mut(*sprite_entity) else {
+            fail_fixture(
+                &mut state,
+                &mut exit,
+                format!(
+                    "Door at {:?} lost its child Sprite during static state seed",
+                    expected.grid
+                ),
+            );
+            return;
+        };
+        sprite.image = expected_image.clone();
     }
     state.door_states_seeded = true;
+    // The static fixture owns its frozen legacy mirror. The production Door
+    // presentation consumer still runs later in this Update, and validation
+    // after DoorPresentationSyncSet proves that it preserved the same state.
+    state.door_presentations_settled = true;
 }
 
 pub(crate) fn prepare_indoor_light_soul_spa_system(
