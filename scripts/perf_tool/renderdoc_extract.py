@@ -126,6 +126,8 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
     stage_id = value.get("stage_id")
     if stage_id in {"p02", "p03", "p04"}:
         required_keys.add("p02_presentation")
+    if stage_id == "p04":
+        required_keys.add("runtime_field")
     if set(value) != required_keys:
         raise RuntimeError("runtime checkpoint keys differ from schema v3")
     if (
@@ -154,6 +156,31 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         or not value["p02_presentation"]
     ):
         raise RuntimeError("runtime checkpoint has no P02 presentation evidence")
+    if stage_id == "p04":
+        runtime_field = value.get("runtime_field")
+        expected_runtime_keys = {
+            "typed_emitter_components",
+            "eligible_supplied_emitters",
+            "indoor_mask_cells",
+            "indoor_mask_checksum",
+        }
+        if not isinstance(runtime_field, dict) or set(runtime_field) != expected_runtime_keys:
+            raise RuntimeError("runtime checkpoint has no P04 field evidence")
+        for key in expected_runtime_keys - {"indoor_mask_checksum"}:
+            field_value = runtime_field[key]
+            if (
+                not isinstance(field_value, int)
+                or isinstance(field_value, bool)
+                or field_value < 0
+            ):
+                raise RuntimeError(f"runtime checkpoint P04 field {key} is invalid")
+        checksum = runtime_field["indoor_mask_checksum"]
+        if (
+            not isinstance(checksum, str)
+            or len(checksum) != 64
+            or any(character not in "0123456789abcdef" for character in checksum)
+        ):
+            raise RuntimeError("runtime checkpoint P04 mask checksum is invalid")
     artifact = value.get("capture_artifact")
     if (
         not isinstance(artifact, dict)
@@ -746,12 +773,32 @@ def self_test() -> int:
         _validate_checkpoint(p02_checkpoint) is p02_checkpoint,
         "P02 runtime checkpoint schema v3 validation regressed",
     )
+    p04_checkpoint = {
+        **p02_checkpoint,
+        "stage_id": "p04",
+        "runtime_field": {
+            "typed_emitter_components": 11,
+            "eligible_supplied_emitters": 10,
+            "indoor_mask_cells": 144,
+            "indoor_mask_checksum": "a" * 64,
+        },
+    }
+    _require(
+        _validate_checkpoint(p04_checkpoint) is p04_checkpoint,
+        "P04 runtime checkpoint schema v3 validation regressed",
+    )
     try:
         _validate_checkpoint({**checkpoint, "stage_id": "p02"})
     except RuntimeError:
         pass
     else:
         raise RuntimeError("P02 checkpoint without presentation evidence must be rejected")
+    try:
+        _validate_checkpoint({key: value for key, value in p04_checkpoint.items() if key != "runtime_field"})
+    except RuntimeError:
+        pass
+    else:
+        raise RuntimeError("P04 checkpoint without runtime field evidence must be rejected")
     try:
         _validate_checkpoint({**checkpoint, "schema_version": 2})
     except RuntimeError:
