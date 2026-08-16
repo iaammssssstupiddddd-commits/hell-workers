@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P05 implementation and native S1 complete; formal registration pending` |
+| ステータス | `In Progress — P05 complete; P06 ready` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-16` |
 | 作成者 | `Codex` |
@@ -240,7 +240,7 @@ Interface:
 
 ### 現在地
 
-- 進捗: `P05実装・native S1完了、formal registration待ち`（P00 / P01 / P02 / P02-A / P03 / P04完了。P05はclean subjectでのformal登録だけ未完了。P06〜P08は未着手）
+- 進捗: `P05完了、P06着手可能`（P00 / P01 / P02 / P02-A / P03 / P04 / P05完了。P06〜P08は未着手）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
@@ -254,13 +254,13 @@ Interface:
 - P04 formal: subject `44d22adc`、attempt `51d2b81d-ee8d-4242-a502-3f957c302903`。S0 / S1 / formalがvalid、19 / 19 case、142 / 142 gate row、1,023 artifact封印、独立verifierがpassした。production adapterの600 unchanged Updateはfull scan / rebuild / revision increment / scoped allocation 0、field-coreはp95 `0.296658 ms` / p99 `0.335148 ms`
 - P04完了: Door request / pause契約、root ECS snapshot adapter、Room mask revision、fail-dark dirty / rebuild transaction、P04 static / behavior / field-core toolingと正式実機証跡
 - P05 current evidence: behavior 21 / 21、headless field-core 3 / 3、native S1 job `p05-s1-20260816`はAudit 3 / 3、Capture 18 / 18、Memory 18 / 18、field-core 3 / 3がvalid
-- 未完了: P05 formal registration、P06〜P08
+- P05 formal: subject `56fa6bd3`、attempt `492ad69c-1275-48ea-90f2-ed1a8018b542`。24 / 24 case、190 / 190 gate row、RenderDoc replay、baseline index登録、独立attempt / 全baseline verifierがpassした。additive contract predecessorは旧stageの旧hashとSHA ledgerを保持し、P05以後には適用しない
+- 未完了: P06〜P08
 
 ### 次のAIが最初にやること
 
-1. publish時はP05をclean committed subjectへ固定し、S0 / S1 prerequisiteとformal 24 / 24 registrationを完了する。
-2. P05のmount / epoch契約を変更せず、P06のGPU upload / black clearへ進む。
-3. P06着手時にはP02 canonical attemptも再検証してpresentation分類を維持する。
+1. P05のmount / epoch契約を変更せず、P06のGPU upload / black clearへ進む。
+2. P06着手時にはP02 canonical attemptも再検証してpresentation分類を維持する。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
@@ -283,7 +283,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - P02 native acceptance: `2026-08-14` / v9 actual-window 18 / 18、fresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`、5 leg valid、128 / 128 gate row pass、formal / baseline historyの独立verify pass。v1 actual-windowとattempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`は履歴として保持する。
 - P03 native acceptance: `2026-08-15` / subject `834c7440`、formal attempt `cd700aed-68bb-4fcd-92b5-2f4a4effa1bc`、19 / 19 case valid、field-core p95 `0.347376 ms` / p99 `0.373993 ms`、allocation `6 events / 210400 bytes`、Intel Arc / Vulkan / X11、独立verify pass。
 - P04 native acceptance: `2026-08-16` / subject `44d22adc`、S0 `task-dashboard-20260815T174144Z-a3a9eca7`、S1 `rtt-light-s1-20260815T174443Z-7f4b40f4`、formal attempt `51d2b81d-ee8d-4242-a502-3f957c302903`、19 / 19 case valid、142 / 142 gate row、Intel Arc / Vulkan / Mesa `26.1.5` / X11、独立verify pass。
-- P05 native acceptance: `2026-08-16` / job `p05-s1-20260816`、Audit 3 / 3、actual-window Capture 18 / 18、Memory 18 / 18、field-core 3 / 3、Intel / Vulkan / X11、artifact verification pass。formal registrationはclean subject待ち。
+- P05 native acceptance: `2026-08-16` / subject `56fa6bd3`、attempt `492ad69c-1275-48ea-90f2-ed1a8018b542`、24 / 24 case、190 / 190 gate row、RenderDoc replay valid、Intel Arc / Vulkan / Mesa `26.1.6` / X11。attempt verifierとcurrent / P01 / P02 / P04 / P05 baseline全4,947 fileの独立verify pass。
 - 最終 `python3 scripts/dev.py check` / workspace Clippy / workspace test / `dev.py verify`: `2026-08-16` / `pass`
 - 最終 docs / Help gate: `2026-08-16` / Help impact No impact、docs write/checkとdiff check pass
 
@@ -299,6 +299,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-16` | `Codex` | P05 subject `56fa6bd3`のformal 24 / 24 case・190 / 190 gate rowを登録し、additive contract lineage、attempt、全baseline SHA ledgerを独立再検証。P05を完了して次対象をP06へ更新した。 |
 | `2026-08-16` | `Codex` | P05 production / evidence tooling、21 / 21 behavior、full quality gate、Help No impact、native S1全レッグvalidを反映。clean subjectでのformal 24 / 24 registrationだけを残した。 |
 | `2026-08-16` | `Codex` | C3完了を依存・着手条件へ反映し、P05をReadyへ更新。P05のdurable mount / registry edge / reset-epoch / evidence runnerのレビュー済み責務を親計画へ同期。 |
 | `2026-08-16` | `Codex` | P04 subject `44d22adc`のS0 / S1 / formal（19 / 19 case、142 / 142 gate row）と独立verificationを完了し、B08 / P04を完了、次対象をP05へ更新 |

@@ -66,10 +66,12 @@ X11 clientから、Door Open / Closed / Locked、Soul前 / 後、Bridge、Wall b
 `visual_test`の画像だけではP02受入にならない。
 
 P00のmeasurement contractはfrozenの`rtt-light-v1`である。canonical contract hashは
-`121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`、fixture hashは
+`ba5d6bf7320426b441465df8fae42d6ff80820748ce55e0edf0dbba409dc755a`、fixture hashは
 `a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed`である。stage別projection義務と
 gate expected row、resolved window backend / effective present modeの開始・終了検証、formal attempt
-validatorは実装済みである。freeze後の変更は同じv1を編集せず新generationを追加する。
+validatorは実装済みである。P05 evidence定義を補完したadditive改訂では、fixture / threshold不変を条件に旧hash
+`121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`をP04までの履歴entryだけにexact pinする。
+旧attemptのraw inventory、locator、SHA ledgerは保持し、P05以後へ旧hashを許可しない。以後の非additive変更は同じv1を編集せず新generationを追加する。
 
 P00 canonical current baselineはsubject `10763a4da6bfbe0b480971fb85c474e6ff7a5f86`、attempt
 `9e813f24-0f7b-47f5-8a8d-e3ff34775370`として登録済みである。Intel Arc / Vulkan / X11、1920×1080、DPI 1.0、

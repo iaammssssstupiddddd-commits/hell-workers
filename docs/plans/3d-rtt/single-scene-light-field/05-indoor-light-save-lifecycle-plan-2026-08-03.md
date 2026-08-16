@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-05-indoor-light-save-lifecycle-plan-2026-08-03` |
-| ステータス | `In Progress — implementation and native S1 complete; formal registration pending` |
+| ステータス | `Completed — production, tooling, formal native evidence verified` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-16` |
 | 作成者 | `Codex` |
@@ -197,7 +197,7 @@ P06は同じ`WorldEpoch`とepoch-aware field readを比較してGPU uploadをinv
 
 - [x] `python3 scripts/perf.py behavior --stage p05 --dry-run`と`field-core --stage p05 --dry-run`がP05 contractを検証して受理する
 - [x] 7 behavior case × 3 runとfield-core 3 runはvalid
-- [ ] clean commitに紐づくstatic / Capture / Memory / RenderDocを含むformal 24 / 24 registrationは未実施
+- [x] clean commit `56fa6bd3`に紐づくstatic / Capture / Memory / RenderDocを含むformal 24 / 24を登録・独立再検証済み
 - [x] `RLV1-P05-LIFECYCLE`がCPU fail-dark、epoch、read、wake、checksumを判定し、P06-only GPU metricは`not_applicable`である
 - [x] actual-window / RenderDoc / native launcherはP05をcontract-derivedなcase集合として扱い、P04固定のhardcodeを残さない
 
@@ -248,6 +248,7 @@ P06は同じ`WorldEpoch`とepoch-aware field readを比較してGPU uploadをinv
 | P06 / P07用の未使用messageをP05で作る | global `WorldEpoch`、epoch-aware read、LoadResetRegistry extension pointだけを公開する |
 | P05 contractだけが先行しrunnerがP04止まりのままになる | tooling / validator / native launcherをM4の必須実装成果にする |
 | frozen thresholdをP05の測定結果に合わせて緩める | schema / rebaseline変更はP00 ownerの明示判断へ戻し、同じgenerationでthresholdを変更しない |
+| P05追加で現行contract hashと履歴baseline hashが分岐する | fixture / threshold不変のadditive predecessorを旧hash・適用上限P04・現hashでexact pinし、旧stageはraw inventory / locator / SHA ledgerを保持したまま構造再検証する。P05以後へ旧hashを許可しない |
 
 ## 8. ロールバック方針
 
@@ -260,19 +261,19 @@ P06は同じ`WorldEpoch`とepoch-aware field readを比較してGPU uploadをinv
 
 ### 現在地
 
-- 進捗: `97%（M1〜M5実装、docs / local gates / headless evidence / native S1完了。formal registration待ち）`
-- 完了済み: durable mount adapter、candidate validator、named rehydrate/reset/epoch contract、P05 tooling、21/21 behavior、3/3 field-core、Help No impact、`dev.py verify`、native S1 42/42 actual-window/static run。
-- 残作業: clean committed subjectとS0/S1 prerequisiteを要するformal 24 / 24 registrationをpublish境界で実施する。
+- 進捗: `100%（M1〜M5、formal native registration、独立baseline再検証完了）`
+- 完了済み: durable mount adapter、candidate validator、named rehydrate/reset/epoch contract、P05 tooling、21/21 behavior、3/3 field-core、Help No impact、`dev.py verify`、native S0 / S1、formal 24/24、190/190 gate row、baseline登録・独立再検証。
+- 残作業: P05にはなし。後続はP05のmount / epoch契約を変更せずP06のGPU upload / black clearへ進む。
 
 ### 次のAIが最初にやること
 
-1. publish時はclean committed subjectでS0/S1 prerequisiteを揃え、formal 24 / 24を登録する。
-2. P05 production / contractを変更せずP06のGPU upload / black clearへ進む。
+1. P05 production / contractを変更せずP06のGPU upload / black clearへ進む。
+2. baseline verifier変更時は旧4 stageとP05を含む全4,947 registered fileのSHA ledgerを再検証する。
 
 ### ブロッカー/注意点
 
 - save registryはブロッカーではなく、P05 stepは既存phaseを変えずedge付きで追加済み。
-- formal registrationはclean committed subject、S0/S1 prerequisite、actual-window Capture / Memory / RenderDocを要求する。未コミットworktreeを証跡登録のためだけにcommitしない。
+- formal subjectは`56fa6bd3`、attemptは`492ad69c-1275-48ea-90f2-ed1a8018b542`として固定済み。P05 additive contract hash移行では旧stage entryの旧hashを保持し、P05以後にpredecessor hashを受理しない。
 - P05はplayer-facing wall fixture UIを追加していない。Help impactは既存save/load内部だけの変更としてNo impact確認済み。
 
 ### 最終確認ログ
@@ -281,13 +282,16 @@ P06は同じ`WorldEpoch`とepoch-aware field readを比較してGPU uploadをinv
 - headless evidence: `2026-08-16` / `pass`（behavior 21/21、field-core 3/3。p95 `0.625808 ms`、p99 `0.905667 ms`）
 - native acceptance: `2026-08-16` / `pass`（job `p05-s1-20260816`、Audit 3/3、Capture 18/18、Memory 18/18、field-core 3/3、Intel / Vulkan / X11、artifact verification pass）
 - native field-core: p95 `0.397500 ms`、p99 `0.436571 ms`
+- formal native: `2026-08-16` / subject `56fa6bd3`、attempt `492ad69c-1275-48ea-90f2-ed1a8018b542`、24 / 24 case、190 / 190 gate row、RenderDoc replay valid、Intel Arc / Vulkan / Mesa `26.1.6` / X11、独立attempt verifier pass
+- formal field-core: p95 `0.394178 ms`、p99 `0.409736 ms`、emitter collect `5 events / 38192 bytes`、field rebuild `6 events / 210400 bytes`
+- baseline registry: current / P01 / P02 / P04 / P05、4,947 file、`SHA256SUMS` digest `36750111018adfadeed203d8c526ae534bde1fb5ba309f07f5d4b42a1aab93aa`、全stage verifier valid
 - docs / Help gate: `2026-08-16` / Help impact `No impact`。`docs --write / --check`、`diff --check` pass
 
 ### Definition of Done
 
-- [ ] M1〜M5が完了し、durable / reconstructible / derived / render cacheの境界が実装と文書で一致する
+- [x] M1〜M5が完了し、durable / reconstructible / derived / render cacheの境界が実装と文書で一致する
 - [x] all successful lifecycle branchesが同じresolved traceを通り、preflight rejectはlive stateを変えない
-- [ ] `stage=p05`の全7 behavior case × 3 run、formal 24 / 24 case、exact gate ID集合を満たす
+- [x] `stage=p05`の全7 behavior case × 3 run、formal 24 / 24 case、exact gate ID集合を満たす
 - [x] CPU fail-dark、old epoch read 0、wake、terminal checksumのheadless証跡とP05 native S1が確認済み
 - [x] Help impact、恒久docs、docs index、full quality gateが完了している
 
@@ -295,6 +299,7 @@ P06は同じ`WorldEpoch`とepoch-aware field readを比較してGPU uploadをinv
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-16` | `Codex` | subject `56fa6bd3`のS0 / S1 / formal（24 / 24 case、190 / 190 gate row、RenderDoc replay valid）を登録し、additive contract predecessorをfail-closedで移行。P05 attemptとcurrent〜P05 baseline全4,947 fileを独立再検証してP05を完了した。 |
 | `2026-08-16` | `Codex` | P05実装、21/21 behavior、field-core、full quality gate、Help No impact、native S1（Audit / Capture / Memory / field-core全valid）を完了。clean subjectを要するformal 24 / 24 registrationだけをpublish境界へ残した。 |
 | `2026-08-16` | `Codex` | C3完了を反映してブロッカーを解除。pure mount / root persistence adapter、candidate reject、registry edge、reset / epoch、P05 evidence runner、P06との責務境界を実装可能な計画へ再構成。 |
 | `2026-08-04` | `Codex` | P00 behavior case / lifecycle gateへ同期し、Room summary reset登録をP07 ownerへ修正。 |

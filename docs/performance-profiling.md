@@ -48,12 +48,15 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py \
 `current`では`static`と`behavior`がrequiredであり、behavior caseは`door-state-v1`と
 `load-normal-v1`である。`field-core`はP03より前、`consumer-core`はP07より前では失格になる。validatorは
 canonical JSONをpinし、意図しない変更を検出する。canonical measurement contract hashは
-`121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`、fixture hashは
+`ba5d6bf7320426b441465df8fae42d6ff80820748ce55e0edf0dbba409dc755a`、fixture hashは
 `a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed`である。layout hashはsmall
 `e87a3b1aeb7ee1fbe334d311ad731bef24ce90ec80066af1e35c006ef4273af2`、medium
 `e18320b3bcf8089c1ea2743003eadd79a0c938caa44682ed414e9d9d54af8f2d`、large
 `3dec65d6c30ee9b88678af28a818a05fa70ededc66f20242ff78dcb6772c56fd`である。session manifestは
 選択したsizeごとのchecksum mapを持ち、run metadataは当該caseのchecksumを持つ。
+P05 evidence定義を補完したadditive改訂前のhash
+`121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11`は、fixture不変かつP04以前の登録済みstageに限って
+compatible predecessorとして保持する。baseline verifierは旧stageのraw inventory / locator / SHA ledgerを構造再検証し、P05以後には旧hashを受理しない。
 
 frame-time / fixed-stepの両runは`data/window.csv` schema v1を必須sidecarとして出力する。windowed runは
 開始・終了時のlogical / physical size、scale factor、RtT品質、Scene target寸法、legacy mask target寸法（P01以降は不在を示す0）、resolved window
