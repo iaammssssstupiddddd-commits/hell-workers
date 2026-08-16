@@ -353,7 +353,11 @@
     }
   ],
   "allow_log_patterns": {
-    "headless_audit": ["driver that only supports software rendering"],
+    "headless_audit": [
+      "driver that only supports software rendering",
+      "P05 behavior injected",
+      "incoming candidate was rejected before live replacement: candidate validator 'lighting\\.fixture':"
+    ],
     "windowed": []
   },
   "behavior_cases": [
@@ -385,7 +389,7 @@
         "gpu_upload_epoch", "gpu_checksum", "fixture_checksum", "terminal_outcome"
       ],
       "availability_values": [
-        "available", "stage_before_field_owner", "stage_before_registry_owner",
+        "available", "unavailable", "stage_before_field_owner", "stage_before_registry_owner",
         "stage_before_gpu_owner"
       ],
       "terminal_outcomes": ["in_progress", "succeeded", "rejected", "failed_dark"]
@@ -479,6 +483,56 @@
         {"step_index": 2, "intent": "observe-save-succeeded", "terminal_outcome": "in_progress"},
         {"step_index": 3, "intent": "request-load", "terminal_outcome": "in_progress"},
         {"step_index": 4, "intent": "observe-load-succeeded", "terminal_outcome": "in_progress"},
+        {"step_index": 5, "intent": "verify-semantic-rebind", "terminal_outcome": "succeeded"}
+      ]
+    },
+    "load_preflight_reject_v1": {
+      "steps": [
+        {"step_index": 0, "intent": "observe-initial", "terminal_outcome": "in_progress"},
+        {"step_index": 1, "intent": "request-save", "terminal_outcome": "in_progress"},
+        {"step_index": 2, "intent": "observe-save-succeeded", "terminal_outcome": "in_progress"},
+        {"step_index": 3, "intent": "request-load", "terminal_outcome": "in_progress"},
+        {"step_index": 4, "intent": "observe-load-terminal", "terminal_outcome": "in_progress"},
+        {"step_index": 5, "intent": "verify-semantic-rebind", "terminal_outcome": "rejected"}
+      ]
+    },
+    "load_rollback_v1": {
+      "steps": [
+        {"step_index": 0, "intent": "observe-initial", "terminal_outcome": "in_progress"},
+        {"step_index": 1, "intent": "request-save", "terminal_outcome": "in_progress"},
+        {"step_index": 2, "intent": "observe-save-succeeded", "terminal_outcome": "in_progress"},
+        {"step_index": 3, "intent": "request-load", "terminal_outcome": "in_progress"},
+        {"step_index": 4, "intent": "observe-load-terminal", "terminal_outcome": "in_progress"},
+        {"step_index": 5, "intent": "verify-semantic-rebind", "terminal_outcome": "succeeded"}
+      ]
+    },
+    "load_recovery_only_v1": {
+      "steps": [
+        {"step_index": 0, "intent": "observe-initial", "terminal_outcome": "in_progress"},
+        {"step_index": 1, "intent": "request-save", "terminal_outcome": "in_progress"},
+        {"step_index": 2, "intent": "observe-save-succeeded", "terminal_outcome": "in_progress"},
+        {"step_index": 3, "intent": "request-load", "terminal_outcome": "in_progress"},
+        {"step_index": 4, "intent": "observe-load-terminal", "terminal_outcome": "in_progress"},
+        {"step_index": 5, "intent": "verify-semantic-rebind", "terminal_outcome": "succeeded"}
+      ]
+    },
+    "load_recovery_failed_v1": {
+      "steps": [
+        {"step_index": 0, "intent": "observe-initial", "terminal_outcome": "in_progress"},
+        {"step_index": 1, "intent": "request-save", "terminal_outcome": "in_progress"},
+        {"step_index": 2, "intent": "observe-save-succeeded", "terminal_outcome": "in_progress"},
+        {"step_index": 3, "intent": "request-load", "terminal_outcome": "in_progress"},
+        {"step_index": 4, "intent": "observe-load-terminal", "terminal_outcome": "in_progress"},
+        {"step_index": 5, "intent": "verify-fail-dark", "terminal_outcome": "failed_dark"}
+      ]
+    },
+    "load_duplicate_reset_v1": {
+      "steps": [
+        {"step_index": 0, "intent": "observe-initial", "terminal_outcome": "in_progress"},
+        {"step_index": 1, "intent": "request-save", "terminal_outcome": "in_progress"},
+        {"step_index": 2, "intent": "observe-save-succeeded", "terminal_outcome": "in_progress"},
+        {"step_index": 3, "intent": "request-load", "terminal_outcome": "in_progress"},
+        {"step_index": 4, "intent": "observe-load-terminal", "terminal_outcome": "in_progress"},
         {"step_index": 5, "intent": "verify-semantic-rebind", "terminal_outcome": "succeeded"}
       ]
     }

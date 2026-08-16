@@ -102,8 +102,76 @@ fn schema_registers_owned_types_with_their_required_reflect_data() {
             .is_some()
     );
     assert!(
+        registration::<LightingFixtureMount>(&registry)
+            .data::<ReflectSerialize>()
+            .is_some()
+    );
+    assert!(
+        registration::<LightingFixtureMount>(&registry)
+            .data::<ReflectDeserialize>()
+            .is_some()
+    );
+    assert!(
         registry.get(TypeId::of::<Transform>()).is_none(),
         "Transform must remain an explicit external-registration dependency"
+    );
+}
+
+#[test]
+fn lighting_fixture_mount_round_trips_while_runtime_emitter_stays_out_of_schema() {
+    use hw_infra::lighting::{CardinalDirection, FixtureMount, LightGridPos};
+
+    let mut app = App::new();
+    register_save_types(&mut app);
+    let mount = LightingFixtureMount(FixtureMount::WallMounted {
+        anchor: LightGridPos::new(10, 10),
+        inward: CardinalDirection::East,
+    });
+    let lamp = app
+        .world_mut()
+        .spawn((
+            Building {
+                kind: BuildingType::OutdoorLamp,
+                is_provisional: false,
+            },
+            Transform::from_translation(WorldMap::grid_to_world(11, 10).extend(0.0)),
+            mount,
+            crate::systems::lighting::RadialLightEmitter::outdoor_lamp_at_mount(mount.mount()),
+        ))
+        .id();
+
+    let roots = collect_persisted_entities(app.world_mut());
+    let type_registry = app.world().resource::<AppTypeRegistry>().clone();
+    let registry = type_registry.read();
+    let dynamic_world = build_persisted_world(app.world(), &registry, roots.into_iter());
+    let serialized = dynamic_world.serialize(&registry).unwrap();
+    assert!(serialized.contains("LightingFixtureMount"));
+    assert!(!serialized.contains("RadialLightEmitter"));
+
+    let mut ron_deserializer = ron::de::Deserializer::from_str(&serialized).unwrap();
+    let round_tripped = WorldDeserializer {
+        type_registry: &registry,
+        load_from_path: &mut NoAssetLoad,
+    }
+    .deserialize(&mut ron_deserializer)
+    .unwrap();
+    drop(registry);
+
+    let mut destination = World::new();
+    let mut entity_map = EntityHashMap::default();
+    let registry = type_registry.read();
+    round_tripped
+        .write_to_world_with(&mut destination, &mut entity_map, &registry)
+        .unwrap();
+    let mapped_lamp = entity_map[&lamp];
+    assert_eq!(
+        destination.get::<LightingFixtureMount>(mapped_lamp),
+        Some(&mount)
+    );
+    assert!(
+        destination
+            .get::<crate::systems::lighting::RadialLightEmitter>(mapped_lamp)
+            .is_none()
     );
 }
 

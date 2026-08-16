@@ -12,9 +12,13 @@ use hw_jobs::{Building, BuildingType};
 use hw_ui::UiIntent;
 use hw_world::{Room, Yard};
 
+use crate::systems::lighting::{
+    IndoorLightingLifecycleProbe, LightingFixtureMount, read_indoor_light_snapshot,
+};
 use crate::systems::save::{
-    SaveLoadOperation, SaveLoadOutcome, SaveLoadResult, SaveLoadState, SavePath, SaveStorageRoot,
-    manual_save_request, normal_load_request,
+    PerfLoadFault, PerfLoadFaultInjection, SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome,
+    SaveLoadResult, SaveLoadState, SavePath, SaveRecoveryMode, SaveStorageRoot,
+    manual_save_request, normal_load_request, recovery_load_request,
 };
 
 use super::indoor_light_fixture::IndoorLightFixturePhase;
@@ -35,7 +39,7 @@ pub(crate) struct PerfBehaviorCapture {
     rows: Vec<TimelineRow>,
     subject_soul: Option<Entity>,
     subject_door: Option<Entity>,
-    initial_epoch: u64,
+    initial_epoch: WorldEpoch,
     initial_paused: bool,
     save_outcomes: u32,
     load_outcomes: u32,
@@ -44,6 +48,13 @@ pub(crate) struct PerfBehaviorCapture {
     fixture_runtime_steady_updates: u8,
     fixture_checksum: Option<&'static str>,
     initial_window: Option<PerfWindowObservation>,
+    initial_field_checksum: Option<String>,
+    initial_light_runtime: Option<crate::systems::lighting::IndoorLightRuntime>,
+    initial_room_tiles: Vec<(i32, i32)>,
+    invalid_mount_backup: Option<(Entity, LightingFixtureMount)>,
+    initial_reset_count: u64,
+    initial_wake_count: u64,
+    old_epoch_read_attempted: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -75,6 +86,11 @@ struct TimelineRow {
     field_checksum: Option<String>,
     fixture_checksum: &'static str,
     terminal_outcome: &'static str,
+    registry_phase: &'static str,
+    registry_step_id: Option<&'static str>,
+    wake_count: Option<u64>,
+    field_read_count: Option<u64>,
+    old_epoch_field_read_count: Option<u64>,
 }
 
 impl TimelineRow {
@@ -100,11 +116,11 @@ impl TimelineRow {
                 "\"simulation_tick\":{},\"pause_state\":\"{}\",\"world_epoch\":{},",
                 "\"intent\":\"{}\",\"attempted\":{},\"applied\":{},",
                 "\"semantic_state\":{},\"active_presentation_state\":{},",
-                "\"registry_phase\":\"stage_before_registry_owner\",",
-                "\"registry_step_id\":null,\"wake_count\":null,",
+                "\"registry_phase\":\"{}\",",
+                "\"registry_step_id\":{},\"wake_count\":{},",
                 "\"field_availability\":\"{}\",",
                 "\"field_input_revision\":{},\"field_output_revision\":{},",
-                "\"field_read_count\":null,\"old_epoch_field_read_count\":null,",
+                "\"field_read_count\":{},\"old_epoch_field_read_count\":{},",
                 "\"field_is_dark\":{},\"field_checksum\":{},",
                 "\"gpu_availability\":\"stage_before_gpu_owner\",",
                 "\"gpu_upload_epoch\":null,\"gpu_checksum\":null,",
@@ -121,9 +137,14 @@ impl TimelineRow {
             self.applied,
             optional(self.semantic_state),
             optional(self.active_presentation_state),
+            self.registry_phase,
+            optional(self.registry_step_id),
+            optional_u64(self.wake_count),
             self.field_availability,
             optional_u64(self.field_input_revision),
             optional_u64(self.field_output_revision),
+            optional_u64(self.field_read_count),
+            optional_u64(self.old_epoch_field_read_count),
             optional_bool(self.field_is_dark),
             optional(self.field_checksum.as_deref()),
             self.fixture_checksum,
@@ -138,6 +159,7 @@ pub(crate) struct BehaviorDriveParams<'w, 's> {
     applied: Res<'w, PerfScenarioApplied>,
     fixture: Res<'w, IndoorLightFixtureState>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
+    room_lookup: Res<'w, hw_world::RoomTileLookup>,
     capture: ResMut<'w, PerfBehaviorCapture>,
     virtual_time: ResMut<'w, Time<Virtual>>,
     world_epoch: Res<'w, WorldEpoch>,
@@ -145,6 +167,9 @@ pub(crate) struct BehaviorDriveParams<'w, 's> {
     save_path: ResMut<'w, SavePath>,
     save_root: ResMut<'w, SaveStorageRoot>,
     save_state: ResMut<'w, SaveLoadState>,
+    recovery_mode: ResMut<'w, SaveRecoveryMode>,
+    perf_load_fault: ResMut<'w, PerfLoadFaultInjection>,
+    lifecycle_probe: ResMut<'w, IndoorLightingLifecycleProbe>,
     ui_intents: MessageWriter<'w, UiIntent>,
     souls: Query<
         'w,
@@ -155,6 +180,17 @@ pub(crate) struct BehaviorDriveParams<'w, 's> {
             &'static mut Path,
         ),
         With<DamnedSoul>,
+    >,
+    lamp_mounts: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static Building,
+            &'static Transform,
+            &'static mut LightingFixtureMount,
+        ),
+        Without<DamnedSoul>,
     >,
     primary_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     rtt_runtime: Res<'w, RttRuntime>,
@@ -187,6 +223,18 @@ fn timeline_field_observation(
         });
     }
     if runtime.availability() != crate::systems::lighting::IndoorLightAvailability::Available {
+        if config
+            .rtt_light_selection()
+            .is_some_and(|selection| selection.stage_id() == "p05")
+        {
+            return Ok(TimelineFieldObservation {
+                availability: "unavailable",
+                input_revision: None,
+                output_revision: None,
+                is_dark: Some(runtime.is_fail_dark()),
+                checksum: None,
+            });
+        }
         return Err(format!(
             "P04 behavior observed an unavailable Light Field: {}",
             runtime.last_error().unwrap_or("initializing")
@@ -273,10 +321,20 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
         };
         params.virtual_time.unpause();
         params.capture.initial_paused = params.virtual_time.is_paused();
-        params.capture.initial_epoch = params.world_epoch.get();
+        params.capture.initial_epoch = *params.world_epoch;
         params.capture.subject_soul = Some(subject_soul);
         params.capture.subject_door = Some(subject_door);
         params.capture.fixture_checksum = Some(fixture_checksum);
+        params.capture.initial_field_checksum = params.indoor_light_runtime.field_checksum_hex();
+        params.capture.initial_light_runtime = Some(params.indoor_light_runtime.clone());
+        params.capture.initial_room_tiles = params
+            .room_lookup
+            .mask_signature()
+            .canonical_tiles()
+            .to_vec();
+        params.lifecycle_probe.enable();
+        params.capture.initial_reset_count = params.lifecycle_probe.reset_count();
+        params.capture.initial_wake_count = params.lifecycle_probe.wake_count();
         params.capture.initial_window = Some(PerfWindowObservation::capture(
             params.primary_window.single().ok(),
             &params.rtt_runtime,
@@ -314,7 +372,14 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
             SavePath::new(private_root.join(hw_core::SaveSlotId::Manual1.canonical_file_name()));
         params.capture.phase = match params.config.behavior_case() {
             Some(PerfBehaviorCase::DoorStateV1) => BehaviorPhase::DoorStep(0),
-            Some(PerfBehaviorCase::LoadNormalV1) => BehaviorPhase::LoadStep(0),
+            Some(
+                PerfBehaviorCase::LoadNormalV1
+                | PerfBehaviorCase::LoadPreflightRejectV1
+                | PerfBehaviorCase::LoadRollbackV1
+                | PerfBehaviorCase::LoadRecoveryOnlyV1
+                | PerfBehaviorCase::LoadRecoveryFailedV1
+                | PerfBehaviorCase::LoadDuplicateResetV1,
+            ) => BehaviorPhase::LoadStep(0),
             None => {
                 fail_behavior(
                     &mut params.capture,
@@ -396,6 +461,7 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
             params.capture.step_issued = true;
         }
         BehaviorPhase::LoadStep(step) => {
+            let behavior_case = params.config.behavior_case();
             match step {
                 0 | 2 | 4 | 5 => {}
                 1 => {
@@ -407,9 +473,41 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
                         );
                         return;
                     }
-                    let _ = params
+                    if behavior_case == Some(PerfBehaviorCase::LoadPreflightRejectV1) {
+                        let Some((entity, _, transform, mut mount)) = params
+                            .lamp_mounts
+                            .iter_mut()
+                            .find(|(_, building, _, _)| building.kind == BuildingType::OutdoorLamp)
+                        else {
+                            fail_behavior(
+                                &mut params.capture,
+                                "P05 preflight case has no persisted lamp mount",
+                                &mut params.exit,
+                            );
+                            return;
+                        };
+                        params.capture.invalid_mount_backup = Some((entity, *mount));
+                        let origin = WorldMap::world_to_grid(transform.translation.truncate());
+                        *mount =
+                            LightingFixtureMount(hw_infra::lighting::FixtureMount::WallMounted {
+                                anchor: hw_infra::lighting::LightGridPos::new(
+                                    origin.0 + 1,
+                                    origin.1,
+                                ),
+                                inward: hw_infra::lighting::CardinalDirection::West,
+                            });
+                    }
+                    if !params
                         .save_state
-                        .try_set(manual_save_request(hw_core::SaveSlotId::Manual1, 1));
+                        .try_set(manual_save_request(hw_core::SaveSlotId::Manual1, 1))
+                    {
+                        fail_behavior(
+                            &mut params.capture,
+                            "P05 behavior save request was rejected",
+                            &mut params.exit,
+                        );
+                        return;
+                    }
                 }
                 3 => {
                     if !params.save_state.is_idle() {
@@ -420,9 +518,35 @@ pub(crate) fn drive_perf_behavior_system(mut params: BehaviorDriveParams) {
                         );
                         return;
                     }
-                    let _ = params
-                        .save_state
-                        .try_set(normal_load_request(hw_core::SaveSlotId::Manual1, 1));
+                    let request = match behavior_case {
+                        Some(PerfBehaviorCase::LoadRollbackV1) => {
+                            params.perf_load_fault.arm(PerfLoadFault::ApplyRecovered);
+                            normal_load_request(hw_core::SaveSlotId::Manual1, 1)
+                        }
+                        Some(PerfBehaviorCase::LoadRecoveryOnlyV1) => {
+                            *params.recovery_mode = SaveRecoveryMode::RecoveryFailed;
+                            recovery_load_request(hw_core::SaveSlotId::Manual1, 1)
+                        }
+                        Some(PerfBehaviorCase::LoadRecoveryFailedV1) => {
+                            params
+                                .perf_load_fault
+                                .arm(PerfLoadFault::RecoveryFailedNormalApply);
+                            normal_load_request(hw_core::SaveSlotId::Manual1, 1)
+                        }
+                        Some(PerfBehaviorCase::LoadDuplicateResetV1) => {
+                            params.perf_load_fault.arm(PerfLoadFault::DuplicateReset);
+                            normal_load_request(hw_core::SaveSlotId::Manual1, 1)
+                        }
+                        _ => normal_load_request(hw_core::SaveSlotId::Manual1, 1),
+                    };
+                    if !params.save_state.try_set(request) {
+                        fail_behavior(
+                            &mut params.capture,
+                            "P05 behavior load request was rejected",
+                            &mut params.exit,
+                        );
+                        return;
+                    }
                 }
                 _ => {
                     fail_behavior(
@@ -453,6 +577,7 @@ pub(crate) struct BehaviorObserveParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
     fixture: Res<'w, IndoorLightFixtureState>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
+    lifecycle_probe: ResMut<'w, IndoorLightingLifecycleProbe>,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,
     capture: ResMut<'w, PerfBehaviorCapture>,
     virtual_time: Res<'w, Time<Virtual>>,
@@ -480,6 +605,7 @@ pub(crate) struct BehaviorObserveParams<'w, 's> {
     door_components: Query<'w, 's, &'static Door>,
     door_handles: Res<'w, DoorVisualHandles>,
     buildings: Query<'w, 's, (Entity, &'static Building, &'static Transform)>,
+    lamp_mounts: Query<'w, 's, &'static mut LightingFixtureMount>,
     soul_spa_tiles: Query<'w, 's, &'static SoulSpaTile>,
     souls: Query<'w, 's, (), With<DamnedSoul>>,
     familiars: Query<'w, 's, (), With<Familiar>>,
@@ -622,6 +748,10 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             ];
             let simulation_tick = params.capture.simulation_tick;
             let fixture_checksum = params.capture.fixture_checksum.unwrap_or("");
+            let p05 = params
+                .config
+                .rtt_light_selection()
+                .is_some_and(|selection| selection.stage_id() == "p05");
             let Ok(field) =
                 timeline_field_observation(&params.config, &params.indoor_light_runtime)
             else {
@@ -657,6 +787,16 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     } else {
                         "in_progress"
                     },
+                    registry_phase: if p05 {
+                        "candidate_preflight"
+                    } else {
+                        "stage_before_registry_owner"
+                    },
+                    registry_step_id: None,
+                    wake_count: p05.then_some(0),
+                    field_read_count: p05.then_some(params.lifecycle_probe.field_read_count()),
+                    old_epoch_field_read_count: p05
+                        .then_some(params.lifecycle_probe.old_epoch_field_reads()),
                 },
             );
             params.capture.step_issued = false;
@@ -667,6 +807,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             };
         }
         BehaviorPhase::LoadStep(step) => {
+            let behavior_case = params.config.behavior_case();
             let outcome = terminal_outcomes.first();
             let (intent, attempted, applied, ready) = match step {
                 0 => ("observe-initial", false, false, true),
@@ -677,6 +818,18 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                             && outcome.result == SaveLoadResult::Succeeded =>
                     {
                         params.capture.save_outcomes += 1;
+                        if let Some((entity, original)) = params.capture.invalid_mount_backup.take()
+                        {
+                            let Ok(mut mount) = params.lamp_mounts.get_mut(entity) else {
+                                fail_behavior(
+                                    &mut params.capture,
+                                    "P05 preflight case could not restore the live lamp mount",
+                                    &mut params.exit,
+                                );
+                                return;
+                            };
+                            *mount = original;
+                        }
                         ("observe-save-succeeded", false, true, true)
                     }
                     Some(_) => {
@@ -690,48 +843,82 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     None => ("observe-save-succeeded", false, false, false),
                 },
                 3 => ("request-load", true, false, outcome.is_none()),
-                4 => match outcome {
-                    Some(outcome)
-                        if outcome.operation == SaveLoadOperation::Load
-                            && outcome.result == SaveLoadResult::Succeeded =>
-                    {
-                        params.capture.load_outcomes += 1;
-                        ("observe-load-succeeded", false, true, true)
-                    }
-                    Some(_) => {
-                        fail_behavior(
-                            &mut params.capture,
-                            "normal-load behavior received a failed or wrong load outcome",
-                            &mut params.exit,
-                        );
-                        return;
-                    }
-                    None => ("observe-load-succeeded", false, false, false),
-                },
-                5 => {
-                    match validate_loaded_small_fixture(
-                        &params.buildings,
-                        &params.door_components,
-                        &params.soul_spa_tiles,
-                        &params.souls,
-                        &params.familiars,
-                        &params.yards,
-                        &params.rooms,
-                        &params.world_map,
-                    ) {
-                        Ok(()) => ("verify-semantic-rebind", false, true, true),
-                        Err(reason) if params.capture.load_wait_updates < 128 => {
-                            params.capture.load_wait_updates += 1;
-                            debug!("PERF_BEHAVIOR: waiting for load convergence: {reason}");
-                            ("verify-semantic-rebind", false, false, false)
+                4 => {
+                    let expected_result = match behavior_case {
+                        Some(PerfBehaviorCase::LoadPreflightRejectV1) => {
+                            SaveLoadResult::Failed(SaveLoadFailureKind::InvalidData)
                         }
-                        Err(reason) => {
+                        Some(PerfBehaviorCase::LoadRollbackV1) => {
+                            SaveLoadResult::Failed(SaveLoadFailureKind::ApplyRecovered)
+                        }
+                        Some(PerfBehaviorCase::LoadRecoveryFailedV1) => {
+                            SaveLoadResult::Failed(SaveLoadFailureKind::RecoveryFailed)
+                        }
+                        _ => SaveLoadResult::Succeeded,
+                    };
+                    match outcome {
+                        Some(outcome)
+                            if outcome.operation == SaveLoadOperation::Load
+                                && outcome.result == expected_result =>
+                        {
+                            params.capture.load_outcomes += 1;
+                            (
+                                if behavior_case == Some(PerfBehaviorCase::LoadNormalV1) {
+                                    "observe-load-succeeded"
+                                } else {
+                                    "observe-load-terminal"
+                                },
+                                false,
+                                true,
+                                true,
+                            )
+                        }
+                        Some(outcome) => {
                             fail_behavior(
                                 &mut params.capture,
-                                &format!("normal-load semantic rebind failed: {reason}"),
+                                &format!(
+                                    "P05 behavior received the wrong load outcome: got={:?}, expected={expected_result:?}",
+                                    outcome.result
+                                ),
                                 &mut params.exit,
                             );
                             return;
+                        }
+                        None => ("observe-load-terminal", false, false, false),
+                    }
+                }
+                5 => {
+                    if behavior_case == Some(PerfBehaviorCase::LoadRecoveryFailedV1) {
+                        if params.indoor_light_runtime.is_fail_dark() {
+                            ("verify-fail-dark", false, true, true)
+                        } else {
+                            ("verify-fail-dark", false, false, false)
+                        }
+                    } else {
+                        match validate_loaded_small_fixture(
+                            &params.buildings,
+                            &params.door_components,
+                            &params.soul_spa_tiles,
+                            &params.souls,
+                            &params.familiars,
+                            &params.yards,
+                            &params.rooms,
+                            &params.world_map,
+                        ) {
+                            Ok(()) => ("verify-semantic-rebind", false, true, true),
+                            Err(reason) if params.capture.load_wait_updates < 128 => {
+                                params.capture.load_wait_updates += 1;
+                                debug!("PERF_BEHAVIOR: waiting for load convergence: {reason}");
+                                ("verify-semantic-rebind", false, false, false)
+                            }
+                            Err(reason) => {
+                                fail_behavior(
+                                    &mut params.capture,
+                                    &format!("normal-load semantic rebind failed: {reason}"),
+                                    &mut params.exit,
+                                );
+                                return;
+                            }
                         }
                     }
                 }
@@ -747,16 +934,28 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             if !ready {
                 return;
             }
-            if step == 4 && params.world_epoch.get() != params.capture.initial_epoch.wrapping_add(1)
+            let expected_epoch_delta =
+                u64::from(behavior_case != Some(PerfBehaviorCase::LoadPreflightRejectV1));
+            if step == 4
+                && params.world_epoch.get()
+                    != params
+                        .capture
+                        .initial_epoch
+                        .get()
+                        .wrapping_add(expected_epoch_delta)
             {
                 fail_behavior(
                     &mut params.capture,
-                    "normal load did not advance WorldEpoch exactly once",
+                    "P05 load case observed the wrong WorldEpoch delta",
                     &mut params.exit,
                 );
                 return;
             }
-            if params.virtual_time.is_paused() != params.capture.initial_paused {
+            let recovery_failed = behavior_case == Some(PerfBehaviorCase::LoadRecoveryFailedV1);
+            if (!recovery_failed
+                && params.virtual_time.is_paused() != params.capture.initial_paused)
+                || (recovery_failed && step >= 4 && !params.virtual_time.is_paused())
+            {
                 fail_behavior(
                     &mut params.capture,
                     "normal load changed the pause state",
@@ -766,7 +965,18 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             }
             let simulation_tick = params.capture.simulation_tick;
             let fixture_checksum = params.capture.fixture_checksum.unwrap_or("");
-            let Ok(field) =
+            if step == 5 && expected_epoch_delta == 1 && !params.capture.old_epoch_read_attempted {
+                let requested = params.capture.initial_epoch;
+                let current = *params.world_epoch;
+                let _ = read_indoor_light_snapshot(
+                    &params.indoor_light_runtime,
+                    requested,
+                    current,
+                    &mut params.lifecycle_probe,
+                );
+                params.capture.old_epoch_read_attempted = true;
+            }
+            let Ok(mut field) =
                 timeline_field_observation(&params.config, &params.indoor_light_runtime)
             else {
                 fail_behavior(
@@ -776,10 +986,61 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                 );
                 return;
             };
+            let reset_count = params
+                .lifecycle_probe
+                .reset_count()
+                .saturating_sub(params.capture.initial_reset_count);
+            let wake_count = params
+                .lifecycle_probe
+                .wake_count()
+                .saturating_sub(params.capture.initial_wake_count);
+            if step == 4 && expected_epoch_delta == 1 {
+                field = TimelineFieldObservation {
+                    availability: "unavailable",
+                    input_revision: None,
+                    output_revision: None,
+                    is_dark: Some(params.lifecycle_probe.all_resets_fail_dark()),
+                    checksum: None,
+                };
+            }
+            if step == 5 {
+                let expected_counts = match behavior_case {
+                    Some(PerfBehaviorCase::LoadPreflightRejectV1) => (0, 0),
+                    Some(PerfBehaviorCase::LoadRollbackV1) => (2, 1),
+                    Some(PerfBehaviorCase::LoadRecoveryOnlyV1) => (1, 1),
+                    Some(PerfBehaviorCase::LoadRecoveryFailedV1) => (2, 0),
+                    Some(PerfBehaviorCase::LoadDuplicateResetV1) => (2, 1),
+                    _ => (1, 1),
+                };
+                let checksum_matches = behavior_case
+                    != Some(PerfBehaviorCase::LoadPreflightRejectV1)
+                    || field.checksum == params.capture.initial_field_checksum;
+                if !checksum_matches && params.capture.load_wait_updates < 128 {
+                    params.capture.load_wait_updates += 1;
+                    return;
+                }
+                if (reset_count, wake_count) != expected_counts
+                    || params.lifecycle_probe.old_epoch_field_reads() != 0
+                    || !params.lifecycle_probe.all_resets_fail_dark()
+                    || !checksum_matches
+                {
+                    let reason = format!(
+                        "P05 lifecycle proof failed: reset/wake={reset_count}/{wake_count}, expected={}/{}, old_epoch_reads={}, reset_dark={}, checksum_match={checksum_matches}, initial_checksum={:?}, terminal_checksum={:?}",
+                        expected_counts.0,
+                        expected_counts.1,
+                        params.lifecycle_probe.old_epoch_field_reads(),
+                        params.lifecycle_probe.all_resets_fail_dark(),
+                        params.capture.initial_field_checksum,
+                        field.checksum,
+                    );
+                    fail_behavior(&mut params.capture, &reason, &mut params.exit);
+                    return;
+                }
+            }
             append_row(
                 &mut params.capture,
                 TimelineRow {
-                    case_id: "load-normal-v1",
+                    case_id: behavior_case.map_or("load-normal-v1", PerfBehaviorCase::as_str),
                     step_index: step,
                     script_update: u64::from(step),
                     simulation_tick,
@@ -801,10 +1062,27 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     field_checksum: field.checksum,
                     fixture_checksum,
                     terminal_outcome: if step == 5 {
-                        "succeeded"
+                        match behavior_case {
+                            Some(PerfBehaviorCase::LoadPreflightRejectV1) => "rejected",
+                            Some(PerfBehaviorCase::LoadRecoveryFailedV1) => "failed_dark",
+                            _ => "succeeded",
+                        }
                     } else {
                         "in_progress"
                     },
+                    registry_phase: if step == 4 && expected_epoch_delta == 1 {
+                        "load_reset"
+                    } else if step >= 4 {
+                        "wake_domains"
+                    } else {
+                        "candidate_preflight"
+                    },
+                    registry_step_id: (step >= 4).then_some("lighting.wake"),
+                    wake_count: Some(wake_count),
+                    field_read_count: Some(params.lifecycle_probe.field_read_count()),
+                    old_epoch_field_read_count: Some(
+                        params.lifecycle_probe.old_epoch_field_reads(),
+                    ),
                 },
             );
             params.capture.step_issued = false;
@@ -851,11 +1129,25 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
         write_window_observation(&params.config, initial, &final_window)
     })
     .and_then(|()| {
+        let runtime =
+            if params.config.behavior_case() == Some(PerfBehaviorCase::LoadRecoveryFailedV1) {
+                params
+                    .capture
+                    .initial_light_runtime
+                    .as_ref()
+                    .ok_or_else(|| {
+                        std::io::Error::other("behavior flush has no trusted initial Light Field")
+                    })?
+            } else {
+                &params.indoor_light_runtime
+            };
         write_indoor_light_fixture_sidecars(
             &params.config,
             &params.fixture,
-            &params.indoor_light_runtime,
+            runtime,
             &params.room_lookup,
+            (params.config.behavior_case() == Some(PerfBehaviorCase::LoadRecoveryFailedV1))
+                .then_some(params.capture.initial_room_tiles.as_slice()),
         )
     });
     params.capture.phase = BehaviorPhase::Finished;
@@ -880,7 +1172,7 @@ fn finalize_behavior_runtime(
     save_path: &std::path::Path,
     save_root: &std::path::Path,
 ) -> std::io::Result<()> {
-    if behavior_case == Some(PerfBehaviorCase::LoadNormalV1) {
+    if behavior_case.is_some_and(|case| case.as_str().starts_with("load-")) {
         let output_directory = perf_output_directory(config);
         std::fs::create_dir_all(&output_directory)?;
         let artifact_path = output_directory.join("behavior-save.scn.ron");
@@ -1028,6 +1320,26 @@ fn validate_loaded_small_fixture(
         return Err("SoulSpa semantic footprint differs after load".to_string());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod system_param_tests {
+    use super::*;
+    use bevy::ecs::system::{IntoSystem, System};
+
+    #[test]
+    fn behavior_driver_queries_are_disjoint() {
+        let mut world = World::new();
+        let mut system = IntoSystem::into_system(drive_perf_behavior_system);
+        system.initialize(&mut world);
+    }
+
+    #[test]
+    fn behavior_observer_queries_are_disjoint() {
+        let mut world = World::new();
+        let mut system = IntoSystem::into_system(observe_perf_behavior_system);
+        system.initialize(&mut world);
+    }
 }
 
 const fn door_state_name(state: hw_core::world::DoorState) -> &'static str {

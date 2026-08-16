@@ -2,6 +2,7 @@ use std::fmt;
 
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use hw_core::WorldEpoch;
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use hw_core::world::DoorState;
 use hw_energy::PowerSupplyState;
@@ -13,7 +14,7 @@ use hw_infra::lighting::{
 use hw_jobs::{Building, BuildingType, Door, ProvisionalWall};
 use hw_world::{DoorLockToggleRequest, RoomTileLookup, WorldMap, apply_door_state};
 
-use super::RadialLightEmitter;
+use super::{LightingFixtureMount, RadialLightEmitter};
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DoorManualMutationSet;
@@ -73,13 +74,14 @@ impl IndoorLightingAllocationProbe {
     }
 }
 
-#[derive(Resource, Debug)]
+#[derive(Resource, Debug, Clone)]
 pub struct IndoorLightRuntime {
     availability: IndoorLightAvailability,
     snapshot: Option<FieldSnapshot>,
     pending_input: Option<LightFieldInput>,
     last_input_checksum: Option<Sha256Digest>,
     input_revision: u64,
+    published_epoch: Option<u64>,
     last_error: Option<String>,
     typed_emitter_components: u32,
     eligible_supplied_emitters: u32,
@@ -94,6 +96,7 @@ impl Default for IndoorLightRuntime {
             pending_input: None,
             last_input_checksum: None,
             input_revision: 0,
+            published_epoch: None,
             last_error: None,
             typed_emitter_components: 0,
             eligible_supplied_emitters: 0,
@@ -113,6 +116,16 @@ impl IndoorLightRuntime {
         } else {
             None
         }
+    }
+
+    pub fn snapshot_for_epoch(&self, world_epoch: WorldEpoch) -> Option<&FieldSnapshot> {
+        (self.published_epoch == Some(world_epoch.get()))
+            .then(|| self.snapshot())
+            .flatten()
+    }
+
+    pub const fn published_epoch(&self) -> Option<u64> {
+        self.published_epoch
     }
 
     pub const fn input_revision(&self) -> u64 {
@@ -153,6 +166,10 @@ impl IndoorLightRuntime {
             .map(|snapshot| snapshot.cells().iter().all(|cell| cell.luminance == 0))
     }
 
+    pub fn is_fail_dark(&self) -> bool {
+        self.availability == IndoorLightAvailability::Unavailable && self.snapshot.is_none()
+    }
+
     pub fn last_error(&self) -> Option<&str> {
         self.last_error.as_deref()
     }
@@ -169,9 +186,25 @@ impl IndoorLightRuntime {
         &self.metrics
     }
 
+    pub(crate) fn reset_for_world_replace(&mut self) {
+        self.availability = IndoorLightAvailability::Unavailable;
+        self.snapshot = None;
+        self.pending_input = None;
+        self.last_input_checksum = None;
+        self.input_revision = 0;
+        self.published_epoch = None;
+        self.last_error = Some("world replacement in progress".to_owned());
+        self.typed_emitter_components = 0;
+        self.eligible_supplied_emitters = 0;
+        self.metrics = IndoorLightingMetrics::default();
+    }
+
     fn publish_unavailable(&mut self, error: impl fmt::Display) {
         self.availability = IndoorLightAvailability::Unavailable;
+        self.snapshot = None;
         self.pending_input = None;
+        self.last_input_checksum = None;
+        self.published_epoch = None;
         self.last_error = Some(error.to_string());
         self.metrics.failed_update_count = self.metrics.failed_update_count.saturating_add(1);
     }
@@ -206,6 +239,112 @@ impl IndoorLightingDirty {
         self.emitters = false;
         self.room_mask = false;
     }
+
+    pub(crate) fn request_full_rebuild(&mut self) {
+        self.topology = true;
+        self.emitters = true;
+        self.room_mask = true;
+    }
+
+    pub(crate) fn reset_for_world_replace(&mut self) {
+        self.topology = false;
+        self.emitters = false;
+        self.room_mask = false;
+        self.last_room_mask_revision = 0;
+    }
+}
+
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
+pub struct IndoorLightingLifecycleProbe {
+    enabled: bool,
+    reset_count: u64,
+    wake_count: u64,
+    field_read_count: u64,
+    old_epoch_field_read_attempts: u64,
+    old_epoch_field_reads: u64,
+    all_resets_fail_dark: bool,
+}
+
+impl Default for IndoorLightingLifecycleProbe {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            reset_count: 0,
+            wake_count: 0,
+            field_read_count: 0,
+            old_epoch_field_read_attempts: 0,
+            old_epoch_field_reads: 0,
+            all_resets_fail_dark: true,
+        }
+    }
+}
+
+impl IndoorLightingLifecycleProbe {
+    pub fn enable(&mut self) {
+        self.enabled = true;
+    }
+
+    pub const fn reset_count(&self) -> u64 {
+        self.reset_count
+    }
+
+    pub const fn wake_count(&self) -> u64 {
+        self.wake_count
+    }
+
+    pub const fn field_read_count(&self) -> u64 {
+        self.field_read_count
+    }
+
+    pub const fn old_epoch_field_read_attempts(&self) -> u64 {
+        self.old_epoch_field_read_attempts
+    }
+
+    pub const fn old_epoch_field_reads(&self) -> u64 {
+        self.old_epoch_field_reads
+    }
+
+    pub const fn all_resets_fail_dark(&self) -> bool {
+        self.all_resets_fail_dark
+    }
+
+    pub(crate) fn record_reset(&mut self, fail_dark: bool) {
+        if self.enabled {
+            self.reset_count = self.reset_count.saturating_add(1);
+            self.all_resets_fail_dark &= fail_dark;
+        }
+    }
+
+    pub(crate) fn record_wake(&mut self) {
+        if self.enabled {
+            self.wake_count = self.wake_count.saturating_add(1);
+        }
+    }
+
+    fn record_read(&mut self, requested: WorldEpoch, current: WorldEpoch, returned: bool) {
+        if !self.enabled {
+            return;
+        }
+        self.field_read_count = self.field_read_count.saturating_add(1);
+        if requested != current {
+            self.old_epoch_field_read_attempts =
+                self.old_epoch_field_read_attempts.saturating_add(1);
+            if returned {
+                self.old_epoch_field_reads = self.old_epoch_field_reads.saturating_add(1);
+            }
+        }
+    }
+}
+
+pub fn read_indoor_light_snapshot<'a>(
+    runtime: &'a IndoorLightRuntime,
+    requested_epoch: WorldEpoch,
+    current_epoch: WorldEpoch,
+    probe: &mut IndoorLightingLifecycleProbe,
+) -> Option<&'a FieldSnapshot> {
+    let snapshot = runtime.snapshot_for_epoch(requested_epoch);
+    probe.record_read(requested_epoch, current_epoch, snapshot.is_some());
+    snapshot
 }
 
 #[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
@@ -350,18 +489,52 @@ pub fn mark_indoor_lighting_dirty_system(
 /// Reconstructs P04's runtime-only emitter component after loading a completed
 /// OutdoorLamp. P05 owns persisted mount registration; P04 derives the v1
 /// free-standing mount from the authoritative building root.
-pub fn sync_outdoor_lamp_emitters_system(
-    mut commands: Commands,
-    lamps: Query<(Entity, &Building, &Transform), Without<RadialLightEmitter>>,
-) {
-    for (entity, building, transform) in &lamps {
+type OutdoorLampSyncQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Building,
+        &'static Transform,
+        Option<&'static LightingFixtureMount>,
+        Option<&'static RadialLightEmitter>,
+    ),
+    Or<(
+        Added<Building>,
+        Changed<Building>,
+        Changed<Transform>,
+        Added<LightingFixtureMount>,
+        Changed<LightingFixtureMount>,
+        Without<LightingFixtureMount>,
+        Without<RadialLightEmitter>,
+    )>,
+>;
+
+pub fn sync_outdoor_lamp_emitters_system(mut commands: Commands, lamps: OutdoorLampSyncQuery) {
+    for (entity, building, transform, mount, emitter) in &lamps {
         if building.kind != BuildingType::OutdoorLamp || building.is_provisional {
             continue;
         }
         let grid = WorldMap::world_to_grid(transform.translation.truncate());
-        commands
-            .entity(entity)
-            .insert(RadialLightEmitter::outdoor_lamp(grid));
+        let free_standing = LightingFixtureMount::free_standing(grid);
+        let desired_mount = match mount.map(|mount| mount.mount()) {
+            Some(FixtureMount::WallMounted { anchor, inward }) => {
+                FixtureMount::WallMounted { anchor, inward }
+            }
+            Some(FixtureMount::FreeStanding { .. }) | None => free_standing.mount(),
+        };
+        let desired_adapter = LightingFixtureMount(desired_mount);
+        let desired_emitter = RadialLightEmitter::outdoor_lamp_at_mount(desired_mount);
+        let adapter_changed = mount.is_none_or(|mount| *mount != desired_adapter);
+        let emitter_changed = emitter.is_none_or(|emitter| *emitter != desired_emitter);
+        let mut entity_commands = commands.entity(entity);
+        if adapter_changed && emitter_changed {
+            entity_commands.insert((desired_adapter, desired_emitter));
+        } else if adapter_changed {
+            entity_commands.insert(desired_adapter);
+        } else if emitter_changed {
+            entity_commands.insert(desired_emitter);
+        }
     }
 }
 
@@ -428,7 +601,10 @@ pub fn collect_indoor_lighting_snapshot_system(
     dirty.clear();
 }
 
-pub fn rebuild_indoor_lighting_field_system(mut runtime: ResMut<IndoorLightRuntime>) {
+pub fn rebuild_indoor_lighting_field_system(
+    mut runtime: ResMut<IndoorLightRuntime>,
+    world_epoch: Res<WorldEpoch>,
+) {
     let Some(input) = runtime.pending_input.take() else {
         return;
     };
@@ -447,6 +623,7 @@ pub fn rebuild_indoor_lighting_field_system(mut runtime: ResMut<IndoorLightRunti
             }
             runtime.last_input_checksum = Some(outcome.input_checksum);
             runtime.snapshot = Some(outcome.snapshot);
+            runtime.published_epoch = Some(world_epoch.get());
             runtime.metrics.last_changed_cell_count = runtime
                 .snapshot
                 .as_ref()

@@ -42,6 +42,7 @@ pub use state::{
 };
 
 use load::{load_world_system, recover_world_system};
+pub(crate) use rehydrate::register_lighting_rehydrate_pipeline;
 #[cfg(test)]
 pub(crate) use rehydrate::resolved_rehydrate_plan_names;
 pub(crate) use rehydrate::{register_logic_rehydrate_pipeline, register_visual_rehydrate_pipeline};
@@ -50,6 +51,8 @@ pub(crate) use reset::{
 };
 use saving::save_world_system;
 use schema::register_save_types;
+#[cfg(feature = "profiling")]
+pub(crate) use state::{PerfLoadFault, PerfLoadFaultInjection};
 
 /// The sole project-owned final phase that may write or replace the persisted
 /// world. Input and UI systems only write `SaveLoadState` during `Update`.

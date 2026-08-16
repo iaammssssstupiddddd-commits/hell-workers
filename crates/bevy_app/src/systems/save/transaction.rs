@@ -14,6 +14,8 @@ use bevy_world_serialization::DynamicWorld;
 use super::rehydrate::{ResolvedRehydratePlan, clear_rehydrate_presentation};
 use super::reset::{advance_world_epoch, discard_old_removed_components, run_load_resets};
 use super::schema::{build_persisted_world, collect_persisted_entities, validate_persisted_world};
+#[cfg(feature = "profiling")]
+use super::state::PerfLoadFaultInjection;
 use super::state::{NativeLoadFaultInjection, SaveRecoveryMode};
 
 #[derive(Debug)]
@@ -123,6 +125,7 @@ fn replace_persisted_world_with_post_write(
     validate_dynamic_candidate(&rollback_snapshot, type_registry, plan, "rollback")?;
 
     run_load_resets(world);
+    profiling_duplicate_reset(world);
     clear_rehydrate_presentation(world);
     despawn_persisted_entities(world);
     advance_world_epoch(world);
@@ -205,22 +208,43 @@ fn replace_recovery_only_world_with_post_write(
 }
 
 fn native_normal_post_write_fault(world: &mut World) -> Result<(), String> {
-    let Some(mut faults) = world.get_resource_mut::<NativeLoadFaultInjection>() else {
-        return Ok(());
-    };
-    faults
-        .fail_normal_post_write()
-        .map_or(Ok(()), |reason| Err(reason.to_owned()))
+    let native = world
+        .get_resource_mut::<NativeLoadFaultInjection>()
+        .and_then(|mut faults| faults.fail_normal_post_write().map(str::to_owned));
+    #[cfg(feature = "profiling")]
+    let profiling = world
+        .get_resource_mut::<PerfLoadFaultInjection>()
+        .and_then(|mut faults| faults.fail_normal_post_write().map(str::to_owned));
+    #[cfg(not(feature = "profiling"))]
+    let profiling: Option<String> = None;
+    native.or(profiling).map_or(Ok(()), Err)
 }
 
 fn native_rollback_finalize_fault(world: &mut World) -> Result<(), String> {
-    let Some(mut faults) = world.get_resource_mut::<NativeLoadFaultInjection>() else {
-        return Ok(());
-    };
-    faults
-        .fail_rollback_finalize()
-        .map_or(Ok(()), |reason| Err(reason.to_owned()))
+    let native = world
+        .get_resource_mut::<NativeLoadFaultInjection>()
+        .and_then(|mut faults| faults.fail_rollback_finalize().map(str::to_owned));
+    #[cfg(feature = "profiling")]
+    let profiling = world
+        .get_resource_mut::<PerfLoadFaultInjection>()
+        .and_then(|mut faults| faults.fail_rollback_finalize().map(str::to_owned));
+    #[cfg(not(feature = "profiling"))]
+    let profiling: Option<String> = None;
+    native.or(profiling).map_or(Ok(()), Err)
 }
+
+#[cfg(feature = "profiling")]
+fn profiling_duplicate_reset(world: &mut World) {
+    let duplicate = world
+        .get_resource_mut::<PerfLoadFaultInjection>()
+        .is_some_and(|mut faults| faults.take_duplicate_reset());
+    if duplicate {
+        run_load_resets(world);
+    }
+}
+
+#[cfg(not(feature = "profiling"))]
+fn profiling_duplicate_reset(_world: &mut World) {}
 
 fn native_recovery_only_post_write_fault(world: &mut World) -> Result<(), String> {
     let Some(mut faults) = world.get_resource_mut::<NativeLoadFaultInjection>() else {
@@ -377,6 +401,11 @@ mod tests {
     use hw_world::{Room, RoomBounds, RoomOverlayTile, WorldMap};
 
     use super::*;
+    use crate::systems::lighting::{
+        IndoorLightRuntime, IndoorLightingAllocationProbe, IndoorLightingDirty,
+        IndoorLightingLifecycleProbe, LightingFixtureMount, RadialLightEmitter,
+        reset_indoor_lighting_for_world_replace,
+    };
     use crate::systems::save::rehydrate::{
         normalize_task_logistics_runtime_for_test, rebuild_deconstruction_runtime,
         validate_familiar_candidate,
@@ -740,6 +769,206 @@ mod tests {
         let type_registry = app.world().resource::<AppTypeRegistry>().clone();
         let registry = type_registry.read();
         build_persisted_world(app.world(), &registry, entities.into_iter())
+    }
+
+    fn configure_lighting_lifecycle(app: &mut App) {
+        app.init_resource::<IndoorLightRuntime>();
+        app.init_resource::<IndoorLightingDirty>();
+        app.init_resource::<IndoorLightingAllocationProbe>();
+        app.init_resource::<IndoorLightingLifecycleProbe>();
+        app.init_resource::<hw_core::WorldEpoch>();
+        app.world_mut()
+            .resource_mut::<IndoorLightingLifecycleProbe>()
+            .enable();
+        super::super::register_load_reset_hook(
+            app,
+            "lighting-runtime",
+            reset_indoor_lighting_for_world_replace,
+        );
+    }
+
+    fn spawn_persisted_lamp(world: &mut World, grid: (i32, i32)) -> Entity {
+        let mount = LightingFixtureMount::free_standing(grid);
+        let lamp = world
+            .spawn((
+                Building {
+                    kind: BuildingType::OutdoorLamp,
+                    is_provisional: false,
+                },
+                Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+                mount,
+            ))
+            .id();
+        world.resource_mut::<WorldMap>().set_building(grid, lamp);
+        lamp
+    }
+
+    fn assert_lighting_terminal_state(
+        world: &mut World,
+        grid: (i32, i32),
+        expected_resets: u64,
+        expected_wakes: u64,
+    ) {
+        let lamp = world
+            .resource::<WorldMap>()
+            .building_entity(grid)
+            .expect("loaded lamp owner");
+        assert_eq!(
+            world.get::<LightingFixtureMount>(lamp),
+            Some(&LightingFixtureMount::free_standing(grid))
+        );
+        assert!(world.get::<RadialLightEmitter>(lamp).is_some());
+        assert!(world.resource::<IndoorLightRuntime>().is_fail_dark());
+        let probe = world.resource::<IndoorLightingLifecycleProbe>();
+        assert_eq!(probe.reset_count(), expected_resets);
+        assert_eq!(probe.wake_count(), expected_wakes);
+    }
+
+    #[test]
+    fn lighting_normal_load_resets_dark_advances_epoch_and_wakes_once() {
+        let mut live = app_with_save_schema();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        spawn_persisted_lamp(live.world_mut(), (3, 4));
+        configure_lighting_lifecycle(&mut live);
+
+        let mut incoming_source = app_with_save_schema();
+        insert_persisted_resources(incoming_source.world_mut(), 2.0);
+        let incoming_grid = (8, 9);
+        spawn_persisted_lamp(incoming_source.world_mut(), incoming_grid);
+        let incoming = capture_from_app(&mut incoming_source);
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let plan = ResolvedRehydratePlan::with_lighting_for_test();
+
+        replace_persisted_world(live.world_mut(), &incoming, &registry, &plan).unwrap();
+
+        assert_eq!(live.world().resource::<hw_core::WorldEpoch>().get(), 1);
+        assert_lighting_terminal_state(live.world_mut(), incoming_grid, 1, 1);
+    }
+
+    #[test]
+    fn lighting_rollback_repeats_reset_without_repeating_epoch_or_wake() {
+        let mut live = app_with_save_schema();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        let rollback_grid = (3, 4);
+        spawn_persisted_lamp(live.world_mut(), rollback_grid);
+        configure_lighting_lifecycle(&mut live);
+
+        let mut incoming_source = app_with_save_schema();
+        insert_persisted_resources(incoming_source.world_mut(), 2.0);
+        spawn_persisted_lamp(incoming_source.world_mut(), (8, 9));
+        let incoming = capture_from_app(&mut incoming_source);
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let plan = ResolvedRehydratePlan::with_lighting_for_test();
+        let rollback_plan = plan.clone();
+
+        let result = replace_persisted_world_with_post_write(
+            live.world_mut(),
+            &incoming,
+            &registry,
+            &plan,
+            |_| Err("injected lighting apply failure".to_owned()),
+            move |world| {
+                rollback_plan.run(world);
+                Ok(())
+            },
+        );
+
+        assert!(matches!(result, Err(CommitError::Recovered { .. })));
+        assert_eq!(live.world().resource::<hw_core::WorldEpoch>().get(), 1);
+        assert_lighting_terminal_state(live.world_mut(), rollback_grid, 2, 1);
+    }
+
+    #[test]
+    fn lighting_recovery_only_wakes_once_and_failed_recovery_stays_dark() {
+        let incoming_grid = (8, 9);
+        let mut incoming_source = app_with_save_schema();
+        insert_persisted_resources(incoming_source.world_mut(), 2.0);
+        spawn_persisted_lamp(incoming_source.world_mut(), incoming_grid);
+        let incoming = capture_from_app(&mut incoming_source);
+
+        let mut recovered = app_with_save_schema();
+        insert_persisted_resources(recovered.world_mut(), 1.0);
+        spawn_persisted_lamp(recovered.world_mut(), (3, 4));
+        configure_lighting_lifecycle(&mut recovered);
+        recovered.insert_resource(SaveRecoveryMode::RecoveryFailed);
+        let type_registry = recovered.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let plan = ResolvedRehydratePlan::with_lighting_for_test();
+        replace_recovery_only_world(recovered.world_mut(), &incoming, &registry, &plan).unwrap();
+        assert_eq!(recovered.world().resource::<hw_core::WorldEpoch>().get(), 1);
+        assert_lighting_terminal_state(recovered.world_mut(), incoming_grid, 1, 1);
+
+        let mut failed = app_with_save_schema();
+        insert_persisted_resources(failed.world_mut(), 1.0);
+        spawn_persisted_lamp(failed.world_mut(), (3, 4));
+        configure_lighting_lifecycle(&mut failed);
+        failed.insert_resource(SaveRecoveryMode::RecoveryFailed);
+        failed.insert_resource(Time::<Virtual>::default());
+        let type_registry = failed.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let result = replace_recovery_only_world_with_post_write(
+            failed.world_mut(),
+            &incoming,
+            &registry,
+            &plan,
+            |_| Err("injected recovery-only failure".to_owned()),
+        );
+        assert!(matches!(result, Err(CommitError::RecoveryFailed { .. })));
+        assert_eq!(failed.world().resource::<hw_core::WorldEpoch>().get(), 1);
+        assert!(
+            failed
+                .world()
+                .resource::<IndoorLightRuntime>()
+                .is_fail_dark()
+        );
+        let probe = failed.world().resource::<IndoorLightingLifecycleProbe>();
+        assert_eq!(probe.reset_count(), 1);
+        assert_eq!(probe.wake_count(), 0);
+        assert!(failed.world().resource::<Time<Virtual>>().is_paused());
+    }
+
+    #[test]
+    fn invalid_lighting_candidate_leaves_live_world_epoch_and_reset_state_unchanged() {
+        let live_grid = (3, 4);
+        let mut live = app_with_save_schema();
+        insert_persisted_resources(live.world_mut(), 1.0);
+        let live_lamp = spawn_persisted_lamp(live.world_mut(), live_grid);
+        configure_lighting_lifecycle(&mut live);
+
+        let mut incoming_source = app_with_save_schema();
+        insert_persisted_resources(incoming_source.world_mut(), 2.0);
+        let invalid_grid = (8, 9);
+        let invalid_lamp = spawn_persisted_lamp(incoming_source.world_mut(), invalid_grid);
+        incoming_source
+            .world_mut()
+            .entity_mut(invalid_lamp)
+            .insert(LightingFixtureMount::free_standing((9, 9)));
+        let incoming = capture_from_app(&mut incoming_source);
+        let type_registry = live.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+        let plan = ResolvedRehydratePlan::with_lighting_for_test();
+
+        let result = replace_persisted_world(live.world_mut(), &incoming, &registry, &plan);
+
+        assert!(matches!(
+            result,
+            Err(CommitError::Rejected {
+                candidate: "incoming",
+                ..
+            })
+        ));
+        assert_eq!(live.world().resource::<hw_core::WorldEpoch>().get(), 0);
+        assert_eq!(
+            live.world()
+                .resource::<WorldMap>()
+                .building_entity(live_grid),
+            Some(live_lamp)
+        );
+        let probe = live.world().resource::<IndoorLightingLifecycleProbe>();
+        assert_eq!(probe.reset_count(), 0);
+        assert_eq!(probe.wake_count(), 0);
     }
 
     #[test]

@@ -440,15 +440,15 @@ def validate_runtime_checkpoint_v3(
         "gpu_ready",
         "capture_artifact",
     }
-    if stage_id in {"p02", "p03", "p04"}:
+    if stage_id in {"p02", "p03", "p04", "p05"}:
         required_top.add("p02_presentation")
-    if stage_id == "p04":
+    if stage_id in {"p04", "p05"}:
         required_top.add("runtime_field")
     if set(payload) != required_top:
         raise ValueError("runtime checkpoint v3 has unexpected keys")
     if payload["contract_id"] != contract["contract_id"] or payload["stage_id"] != stage_id:
         raise ValueError("runtime checkpoint contract/stage mismatch")
-    if stage_id in {"p02", "p03", "p04"}:
+    if stage_id in {"p02", "p03", "p04", "p05"}:
         presentation = payload["p02_presentation"]
         expected_presentation_keys = {
             "layer_2d_camera_count",
@@ -479,7 +479,7 @@ def validate_runtime_checkpoint_v3(
         ):
             if not isinstance(presentation[key], bool):
                 raise ValueError(f"runtime checkpoint P02 presentation {key} is invalid")
-    if stage_id == "p04":
+    if stage_id in {"p04", "p05"}:
         runtime_field = payload["runtime_field"]
         expected_runtime_keys = {
             "typed_emitter_components",

@@ -51,7 +51,7 @@ pub(super) const STAGE_ID: &str = "current";
 pub(super) const LANE: &str = "static";
 pub(super) const FIXTURE_ID: &str = "indoor-light-grid-v1";
 pub(super) const CONTRACT_SHA256: &str =
-    "121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11";
+    "ba5d6bf7320426b441465df8fae42d6ff80820748ce55e0edf0dbba409dc755a";
 pub(super) const FIXTURE_SHA256: &str =
     "a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed";
 pub(super) const SMALL_LAYOUT_SHA256: &str =

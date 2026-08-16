@@ -34,8 +34,21 @@ DASHBOARD_REALTIME_COUNTERS = (
 
 
 def behavior_timeline_signature(rows: list[dict[str, Any]]) -> str:
+    # Revisions are monotonic diagnostics, not semantic behavior identity.
+    # A dirty source can converge through one extra intermediate input while
+    # publishing the same checksummed field. Preserve the raw values in the
+    # artifact and validate them there, but keep repeat identity scoped to the
+    # observable lifecycle, counters, epochs, and checksums.
+    semantic_rows = [
+        {
+            key: value
+            for key, value in row.items()
+            if key not in {"field_input_revision", "field_output_revision"}
+        }
+        for row in rows
+    ]
     serialized = json.dumps(
-        rows,
+        semantic_rows,
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,

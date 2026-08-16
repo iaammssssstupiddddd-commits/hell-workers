@@ -1280,20 +1280,31 @@ def read_behavior_timeline(
             errors.append(f"timeline.json row {index} has the wrong step_index")
         if row.get("fixture_checksum") != fixture_checksum:
             errors.append(f"timeline.json row {index} has the wrong fixture_checksum")
-        if row.get("registry_phase") != "stage_before_registry_owner":
+        if stage_id == "p05":
+            if row.get("registry_phase") not in {
+                "candidate_preflight",
+                "load_reset",
+                "wake_domains",
+                "stage_before_registry_owner",
+            }:
+                errors.append(f"timeline.json row {index} has an invalid P05 registry phase")
+        elif row.get("registry_phase") != "stage_before_registry_owner":
             errors.append(f"timeline.json row {index} has the wrong registry availability")
-        if stage_id == "p04":
-            if row.get("field_availability") != "available":
+        if stage_id in {"p04", "p05"}:
+            if row.get("field_availability") not in {"available", "unavailable"}:
                 errors.append(f"timeline.json row {index} has the wrong field availability")
-            for field in ("field_input_revision", "field_output_revision"):
-                value = row.get(field)
-                if not isinstance(value, int) or isinstance(value, bool) or value < 1:
-                    errors.append(f"timeline.json row {index} {field} is not a published revision")
+            if row.get("field_availability") == "available":
+                for field in ("field_input_revision", "field_output_revision"):
+                    value = row.get(field)
+                    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                        errors.append(f"timeline.json row {index} {field} is not a published revision")
             if not isinstance(row.get("field_is_dark"), bool):
                 errors.append(f"timeline.json row {index} field_is_dark is not boolean")
-            if not isinstance(row.get("field_checksum"), str) or re.fullmatch(
-                r"[0-9a-f]{64}", row["field_checksum"]
-            ) is None:
+            if row.get("field_availability") == "available" and (
+                not isinstance(row.get("field_checksum"), str) or re.fullmatch(
+                    r"[0-9a-f]{64}", row["field_checksum"]
+                ) is None
+            ):
                 errors.append(f"timeline.json row {index} field_checksum is invalid")
         elif row.get("field_availability") != "stage_before_field_owner":
             errors.append(f"timeline.json row {index} has the wrong field availability")
@@ -1304,7 +1315,14 @@ def read_behavior_timeline(
             "field_output_revision",
             "field_is_dark",
             "field_checksum",
-        } if stage_id == "p04" else set()
+        } if stage_id in {"p04", "p05"} else set()
+        if stage_id == "p05":
+            required_runtime_fields |= {
+                "registry_step_id",
+                "wake_count",
+                "field_read_count",
+                "old_epoch_field_read_count",
+            }
         for field in nullable_fields - required_runtime_fields:
             if row.get(field) is not None:
                 errors.append(f"timeline.json row {index} {field} must be null at this stage")
@@ -1315,7 +1333,7 @@ def read_behavior_timeline(
 
     comparable_rows = rows[: len(expected_steps)]
     if behavior_case == "door-state-v1":
-        stage_prefix = "p02" if stage_id in {"p02", "p03", "p04"} else "current"
+        stage_prefix = "p02" if stage_id in {"p02", "p03", "p04", "p05"} else "current"
         for index, (row, expected) in enumerate(zip(comparable_rows, expected_steps)):
             exact = {
                 "step_index": expected["step_index"],
@@ -1382,9 +1400,19 @@ def read_behavior_timeline(
             ):
                 errors.append("timeline.json normal-load simulation ticks are not monotonic")
 
+    if behavior_case not in {"door-state-v1", "load-normal-v1"}:
+        for index, (row, expected) in enumerate(zip(comparable_rows, expected_steps)):
+            if (
+                row.get("intent") != expected["intent"]
+                or row.get("terminal_outcome") != expected["terminal_outcome"]
+            ):
+                errors.append(
+                    f"timeline.json P05 lifecycle row {index} differs from the contract"
+                )
+
     save_path = data_dir / "behavior-save.scn.ron"
     save_artifact: dict[str, Any] | None = None
-    if behavior_case == "load-normal-v1":
+    if behavior_case.startswith("load-"):
         if not save_path.is_file():
             errors.append("normal-load behavior is missing behavior-save.scn.ron")
         else:
@@ -1721,13 +1749,13 @@ def validate_run(
     if expected_case.workload == "indoor-light" and capture_kind == "field-core":
         if (
             expected_contract != "rtt-light-v1"
-            or expected_stage not in {"p03", "p04"}
+            or expected_stage not in {"p03", "p04", "p05"}
             or expected_lane != "field-core"
         ):
-            reasons.append("field-core requires rtt-light-v1/p03|p04/field-core")
+            reasons.append("field-core requires rtt-light-v1/p03|p04|p05/field-core")
         indoor_light_field, field_errors = read_indoor_light_field(data_dir)
         reasons.extend(field_errors)
-        if expected_stage == "p04" and expected_contract is not None:
+        if expected_stage in {"p04", "p05"} and expected_contract is not None:
             indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
                 data_dir,
                 expected_case=expected_case,
@@ -1758,7 +1786,7 @@ def validate_run(
                 lane=expected_lane,
             )
             reasons.extend(indoor_errors)
-            if expected_stage == "p04":
+            if expected_stage in {"p04", "p05"}:
                 indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
                     data_dir,
                     expected_case=expected_case,
@@ -1792,7 +1820,7 @@ def validate_run(
     p02_sidecar = data_dir / "p02_presentation.csv"
     expects_p02_sidecar = (
         expected_case.workload == "indoor-light"
-        and expected_stage in {"p02", "p03", "p04"}
+        and expected_stage in {"p02", "p03", "p04", "p05"}
         and expected_lane == "static"
         and capture_kind == "frame-time"
     )
@@ -1930,9 +1958,11 @@ def validate_run(
             "indoor_light_presentation.csv",
             "timeline.json",
         }
-        if expected_stage == "p04":
+        if expected_stage in {"p04", "p05"}:
             expected_behavior_files.add("indoor_light_runtime.json")
-        if expected_case.behavior_case == "load-normal-v1":
+        if expected_case.behavior_case is not None and expected_case.behavior_case.startswith(
+            "load-"
+        ):
             expected_behavior_files.add("behavior-save.scn.ron")
         actual_behavior_files = {
             path.name for path in data_dir.iterdir()
@@ -1951,7 +1981,7 @@ def validate_run(
             )
     elif capture_kind == "field-core":
         expected_field_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
-        if expected_stage == "p04":
+        if expected_stage in {"p04", "p05"}:
             expected_field_files.add("indoor_light_runtime.json")
         actual_field_files = (
             {path.name for path in data_dir.iterdir()} if data_dir.is_dir() else set()
@@ -2039,7 +2069,7 @@ def validate_run(
         except (KeyError, ValueError):
             reasons.append("summary initial population is invalid for scene root validation")
         else:
-            if expected_stage in {"p02", "p03", "p04"}:
+            if expected_stage in {"p02", "p03", "p04", "p05"}:
                 # P02 replaces the legacy Soul proxy family with
                 # ActorBillboard3d and keeps Familiar presentation in the 2D
                 # foreground pass. Their counts are validated by the P02

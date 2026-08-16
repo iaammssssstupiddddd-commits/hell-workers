@@ -11,6 +11,7 @@ use bevy_world_serialization::{DynamicWorld, DynamicWorldBuilder};
 use std::collections::HashSet;
 
 use crate::entities::damned_soul::{Gender, SoulIdentity};
+use crate::systems::lighting::LightingFixtureMount;
 use crate::world::map::Tile;
 
 use hw_core::GameTime;
@@ -110,6 +111,7 @@ macro_rules! for_each_persisted_component {
         $callback!(TaskSlots);
         $callback!(TaskArea);
         $callback!(Building);
+        $callback!(LightingFixtureMount);
         $callback!(hw_jobs::Door);
         $callback!(RestArea);
         $callback!(Blueprint);

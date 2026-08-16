@@ -328,6 +328,7 @@ mod tests {
                 "construction.normalize",
                 "deconstruction.floor-ownership",
                 "familiar.settings",
+                "lighting.mount.normalize",
                 "power-consumer.policy",
                 "soul-spa.normalize",
                 "stockpile.policy",
@@ -336,8 +337,10 @@ mod tests {
                 "deconstruction.runtime",
                 "presentation.shells",
                 "construction.runtime",
+                "lighting.emitters.rebuild",
                 "obstacle.runtime",
                 "domains.wake",
+                "lighting.wake",
             ]
         );
         assert_eq!(
@@ -346,6 +349,7 @@ mod tests {
                 "deconstruction.orders",
                 "durable.topology",
                 "familiar.roster",
+                "lighting.fixture",
                 "presentation.spatial-roots",
                 "task-logistics.owners",
             ]

@@ -153,11 +153,13 @@ fn setup_bone_pile(commands: &mut Commands, building_entity: Entity) {
 
 fn setup_outdoor_lamp(commands: &mut Commands, building_entity: Entity, transform: &Transform) {
     let grid = WorldMap::world_to_grid(transform.translation.truncate());
+    let mount = crate::systems::lighting::LightingFixtureMount::free_standing(grid);
     commands.entity(building_entity).insert((
         PowerConsumer {
             demand: OUTDOOR_LAMP_DEMAND,
         },
-        crate::systems::lighting::RadialLightEmitter::outdoor_lamp(grid),
+        mount,
+        crate::systems::lighting::RadialLightEmitter::outdoor_lamp_at_mount(mount.mount()),
     ));
     // ConsumesFrom は on_power_consumer_added Observer が付与する
 }

@@ -410,6 +410,7 @@ pub(crate) fn drive_perf_capture_system(
                     &params.indoor_light_fixture,
                     &params.indoor_light_runtime,
                     &params.room_lookup,
+                    None,
                 )
             });
             let result = result.and_then(|()| {

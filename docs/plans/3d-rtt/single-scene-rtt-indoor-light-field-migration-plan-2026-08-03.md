@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P04 complete; P05 next` |
+| ステータス | `In Progress — P05 implementation and native S1 complete; formal registration pending` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-16` |
 | 作成者 | `Codex` |
@@ -101,7 +101,7 @@ P00 baseline / contract
 | P02 | [`02-topdown-presentation-plan-2026-08-03.md`](single-scene-light-field/02-topdown-presentation-plan-2026-08-03.md) | P00, P01。M6はP02-A M1〜M4 | Door実経路修復、world 2D pass 1回、表示分類、Soul billboard / Familiar前景、Soul shadow動作停止、V入力停止、registered P02 formal artifact |
 | P03 | [`03-indoor-light-domain-core-plan-2026-08-03.md`](single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md) | P00。P03 stage有効化はP02-A M1〜M4 ready extension pointを利用 | `hw_infra`のdeterministicな論理field / pure LOSと`p03 / field-core`正式evidence |
 | P04 | [`04-indoor-light-runtime-integration-plan-2026-08-03.md`](single-scene-light-field/04-indoor-light-runtime-integration-plan-2026-08-03.md) | P02 M1, P03、HVAC M0または同等correctness commit | topology / energy / Room / Doorを結ぶ更新transactionとsteady-state dirty管理 |
-| P05 | [`05-indoor-light-save-lifecycle-plan-2026-08-03.md`](single-scene-light-field/05-indoor-light-save-lifecycle-plan-2026-08-03.md) | P03, P04、save registry計画 | durable mount、named rehydrate step、load / rollback fail-dark |
+| P05 | [`05-indoor-light-save-lifecycle-plan-2026-08-03.md`](single-scene-light-field/05-indoor-light-save-lifecycle-plan-2026-08-03.md) | P03, P04、完了済みC3 save registry（`1b84f316`） | durable mount、named rehydrate step、load / rollback fail-dark |
 | P06 | [`06-indoor-light-rendering-plan-2026-08-03.md`](single-scene-light-field/06-indoor-light-rendering-plan-2026-08-03.md) | P01, P02, P04, P05 | 100×100 Light Field textureと全`Structural3d` receiver |
 | P07 | [`07-indoor-light-gameplay-room-plan-2026-08-03.md`](single-scene-light-field/07-indoor-light-gameplay-room-plan-2026-08-03.md) | P03, P04, P05 | Soul / Roomが同じfield revisionを読むgameplay統合 |
 | P08 | [`08-legacy-cleanup-release-plan-2026-08-03.md`](single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | P01〜P07 | projector / section残骸撤去、性能比較、Help、最終gate |
@@ -114,7 +114,7 @@ P00 baseline / contract
 - P02-A M1のselector / historical readerはP02 M1と並行できる。P02-A M2〜M4は対応するP02 production sourceが完成してから接続し、P02 M6 formalはP02-A M1〜M4のready stateを必須とする。
 - P04のentryはP02 M1 Door correctnessのままとし、P02-A full formalを新規blockerにしない。P04 / P06以降のstage固有metricは各planが所有する。
 - P04はsave / rehydrateを編集せずruntime transactionだけを所有する。
-- P05は`save-rehydration-registry-plan`の実装がmerge済み、またはその所有者と変更順が合意済みになるまで`save/rehydrate*`を編集しない。
+- P05は完了済みC3 save registry（`1b84f316`）のfreeze済みproduction planを使用する。raw registryを迂回せず、既存step名・phaseを変えないedge付きnamed stepだけを追加する。
 - P06とP07はP04 / P05のfield revision / epoch contractを変更せずconsumerとして実装する。
 - 各子計画はfocused test、workspace check、Clippy、Help impact判断、必要なnative受入まで閉じてから次の依存計画を開始する。
 - 子計画の途中状態を長期間productionへ残さない。1計画内のwork packageは連続commitとする。
@@ -134,7 +134,7 @@ P00 baseline / contract
 | B06c | P02 M5〜M6 P02 evidence接続・formal / native受入 | B06b green。P02 exact gate artifactとactual-window scenarioを同じ完了batchで閉じる |
 | B07 | P03 pure Light Field core + P03 field-core evidence | P00後にB01〜B06cと並行可。P03が`hw_infra`をbootstrapし、P03 M4はP02-A M1〜M4 ready extension pointを拡張する。root Plugin / ECS runtimeは追加しない |
 | B08 | P04 runtime snapshot / Door request / schedule / dirty（完了） | B03とB07完了 |
-| B09 | P05 schema / registry / reset / epoch | B08完了かつsave registry owner条件成立 |
+| B09 | P05 schema / registry / reset / epoch | B08完了。C3 save registry（`1b84f316`）のfreeze済みproduction planを利用 |
 | B10 | P06 Image bridge→Terrain→structural material→native | B02、B06c、B08、B09完了 |
 | B11 | P07 Soul effect→Room summary→soak | B08、B09完了。P06とはconsumer単位で並行可 |
 | B12 | P08 projector→section→mirror cleanup→final artifact | B10、B11完了 |
@@ -190,10 +190,10 @@ Interface:
 
 ### 4.3 save / rollback
 
-- durable: Building、DoorState、Power policy、optional `FixtureMount`。
+- durable: Building、DoorState、Power policy、root-owned `LightingFixtureMount(FixtureMount)` adapter。
 - reconstructible: `RadialLightEmitter`、presentation shell。
 - derived: occlusion grid、field、Room summary、GPU Image、revision / upload cache。
-- 旧saveに`FixtureMount`がなければ`FreeStanding`へ移行する。wall mountはanchor Wallとcardinal interior normalを保存し、推測復元しない。
+- 旧saveに`LightingFixtureMount`がなければ`FreeStanding`へ移行する。pure `FixtureMount`のwall mountはanchor Wallとcardinal interior normalを保存し、推測復元しない。
 - world replacement開始時にderived stateをdark / emptyへresetし、既存`WorldEpoch`更新後も旧Imageを有効扱いしない。
 - paused load / failed rollbackでも旧worldのlight textureを次frameへ持ち越さない。
 
@@ -218,7 +218,7 @@ Interface:
 
 | リスク | 対策 |
 | --- | --- |
-| 並行中のsave registry実装を上書きする | P05着手時にworktreeとownerを確認し、既存registryへnamed stepを追加する |
+| freeze済みsave registryを迂回・上書きする | P05はC3のresolved production planへedge付きnamed stepを追加し、raw registry APIを公開しない |
 | `hw_infra`をHVACと二重作成する | P03をbootstrap ownerとし、HVACは既存crateを拡張する。P03はroot Pluginを登録しない |
 | material移行前に`SectionMaterial`を削除する | P06でTopDown material parityとconsumer移行、P08で参照0確認後に削除する |
 | UI Doorとauto Doorが別revisionになる | UIはrequest化し、Actorの単一writer経路へ集約する |
@@ -233,19 +233,19 @@ Interface:
 - P02 billboardが不合格なら開発中はvisible GLB 1系統へ戻せるが、mask RtTは戻さない。billboard成立までP08 releaseはblockedとする。
 - P06 visualが不合格でもP03 / P04 / P05 logical lifecycleは保持し、local visualだけをfeature-offできる境界を残す。
 - P07 gameplayが不合格なら旧Lamp effectを一時維持するが、全`PowerConsumer`をLamp扱いする誤りは別correctness fixとして残す。
-- `FixtureMount`はdurable schemaなので、P05以後を戻す場合も互換reader / writerまたはmigration shimを残す。
+- `LightingFixtureMount` adapterはdurable schemaなので、P05以後を戻す場合も互換reader / writerまたはmigration shimを残す。
 - section / Vを再導入する場合はrollbackではなく別proposalとnative acceptanceを必要とする。
 
 ## 8. AI引継ぎメモ
 
 ### 現在地
 
-- 進捗: `P04完了、P05が次対象`（P00 / P01 / P02 / P02-A / P03 / P04完了。P05〜P08は未着手）
+- 進捗: `P05実装・native S1完了、formal registration待ち`（P00 / P01 / P02 / P02-A / P03 / P04完了。P05はclean subjectでのformal登録だけ未完了。P06〜P08は未着手）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
   P01 Scene-only runtime / compositeとSoul mask target / camera / proxy / material / toggle撤去、P02-A受入基盤計画、
-  P03 `hw_infra::lighting` pure coreとfield-core計測/artifact/bundle/native extension
+  P03 `hw_infra::lighting` pure coreとfield-core計測/artifact/bundle/native extension、P05 durable mount / candidate validator / named rehydrate / reset-epoch lifecycleとP05 evidence tooling
 - P00 formal: subject `10763a4d`、attempt `9e813f24-0f7b-47f5-8a8d-e3ff34775370`。5 leg、18 case、baseline index / current gate ledgerを登録・再検証済み
 - P01 formal: subject `29a4a719`、attempt `8bc82f04-10ac-4903-89b6-89011dacdada`。5 leg、18 case、123 / 123 gate row、Scene-only RenderDoc topologyを登録・再検証済み
 - P02 formal履歴: subject `6ea0bf99`、attempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`はfrozen v1の履歴として保持する。actual-window v1は改竄再検証不足のためreview remediation後のP02完了証跡には使わない。
@@ -253,19 +253,20 @@ Interface:
 - P03 formal: subject `834c7440`、attempt `cd700aed-68bb-4fcd-92b5-2f4a4effa1bc`。19 / 19 case、`RLV1-P03-FIELD` / `RLV1-BUNDLE-VALID`、baseline index登録、独立verifierがpassした。field-coreはp95 `0.347376 ms`、p99 `0.373993 ms`、allocation `6 events / 210400 bytes`
 - P04 formal: subject `44d22adc`、attempt `51d2b81d-ee8d-4242-a502-3f957c302903`。S0 / S1 / formalがvalid、19 / 19 case、142 / 142 gate row、1,023 artifact封印、独立verifierがpassした。production adapterの600 unchanged Updateはfull scan / rebuild / revision increment / scoped allocation 0、field-coreはp95 `0.296658 ms` / p99 `0.335148 ms`
 - P04完了: Door request / pause契約、root ECS snapshot adapter、Room mask revision、fail-dark dirty / rebuild transaction、P04 static / behavior / field-core toolingと正式実機証跡
-- 未完了: P05〜P08
+- P05 current evidence: behavior 21 / 21、headless field-core 3 / 3、native S1 job `p05-s1-20260816`はAudit 3 / 3、Capture 18 / 18、Memory 18 / 18、field-core 3 / 3がvalid
+- 未完了: P05 formal registration、P06〜P08
 
 ### 次のAIが最初にやること
 
-1. P05のsave registry owner、現worktree、既存rehydrate順を確認してP05計画をレビューする。
-2. P05ではP03所有の`FixtureMount`を再定義せず、Reflect / 保存登録・migrationだけを追加し、P04 runtime-only stateへepoch / reset契約を接続する。
-3. P04 formal attemptをhistorical referenceとして独立再検証し、P06着手時にはP02 canonical attemptも再検証してpresentation分類を維持する。
+1. publish時はP05をclean committed subjectへ固定し、S0 / S1 prerequisiteとformal 24 / 24 registrationを完了する。
+2. P05のmount / epoch契約を変更せず、P06のGPU upload / black clearへ進む。
+3. P06着手時にはP02 canonical attemptも再検証してpresentation分類を維持する。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
 ### ブロッカー/注意点
 
-- save / rehydrate registryは別commitとして進行している。履歴と現worktreeを再確認し、P00から破棄・上書きしない。
+- C3 save / rehydrate registryは`1b84f316`で完了済みである。freeze済みgraphとresolved planを迂回・上書きせず、P05 compatibility stepを既存facadeから追加する。
 - `hw_infra`はP03がbootstrap済みである。HVAC M1は既存crateを拡張するが、`lighting` pure coreへECS/GPU依存を逆流させない。
 - manual Door lockはP04でrequest化済みで、InterfaceはDoorState / WorldMapを直接変更しない。
 - 現行Lamp gameplay queryは任意の`PowerConsumer`を発光扱いし、半径`5.0`をworld unitとして比較している。
@@ -282,7 +283,9 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - P02 native acceptance: `2026-08-14` / v9 actual-window 18 / 18、fresh formal attempt `9ff336ef-1312-4248-b0bf-bb454111decc`、5 leg valid、128 / 128 gate row pass、formal / baseline historyの独立verify pass。v1 actual-windowとattempt `54d85a63-e237-4501-a0d0-33c1d0a29f3b`は履歴として保持する。
 - P03 native acceptance: `2026-08-15` / subject `834c7440`、formal attempt `cd700aed-68bb-4fcd-92b5-2f4a4effa1bc`、19 / 19 case valid、field-core p95 `0.347376 ms` / p99 `0.373993 ms`、allocation `6 events / 210400 bytes`、Intel Arc / Vulkan / X11、独立verify pass。
 - P04 native acceptance: `2026-08-16` / subject `44d22adc`、S0 `task-dashboard-20260815T174144Z-a3a9eca7`、S1 `rtt-light-s1-20260815T174443Z-7f4b40f4`、formal attempt `51d2b81d-ee8d-4242-a502-3f957c302903`、19 / 19 case valid、142 / 142 gate row、Intel Arc / Vulkan / Mesa `26.1.5` / X11、独立verify pass。
-- 最終 docs / Help gate: `2026-08-16` / Help impact No impact。docs write/checkとdiff checkは完了commit前に再実行する
+- P05 native acceptance: `2026-08-16` / job `p05-s1-20260816`、Audit 3 / 3、actual-window Capture 18 / 18、Memory 18 / 18、field-core 3 / 3、Intel / Vulkan / X11、artifact verification pass。formal registrationはclean subject待ち。
+- 最終 `python3 scripts/dev.py check` / workspace Clippy / workspace test / `dev.py verify`: `2026-08-16` / `pass`
+- 最終 docs / Help gate: `2026-08-16` / Help impact No impact、docs write/checkとdiff check pass
 
 ### Definition of Done
 
@@ -296,6 +299,8 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-16` | `Codex` | P05 production / evidence tooling、21 / 21 behavior、full quality gate、Help No impact、native S1全レッグvalidを反映。clean subjectでのformal 24 / 24 registrationだけを残した。 |
+| `2026-08-16` | `Codex` | C3完了を依存・着手条件へ反映し、P05をReadyへ更新。P05のdurable mount / registry edge / reset-epoch / evidence runnerのレビュー済み責務を親計画へ同期。 |
 | `2026-08-16` | `Codex` | P04 subject `44d22adc`のS0 / S1 / formal（19 / 19 case、142 / 142 gate row）と独立verificationを完了し、B08 / P04を完了、次対象をP05へ更新 |
 | `2026-08-15` | `Codex` | P04 runtime / schedule / perf tooling実装を反映し、状態をformal native evidence待ちへ更新 |
 | `2026-08-15` | `Codex` | P03 subject `834c7440` のformal native attempt `cd700aed-68bb-4fcd-92b5-2f4a4effa1bc`を登録・独立再検証し、P03を完了、次対象をP04へ更新 |

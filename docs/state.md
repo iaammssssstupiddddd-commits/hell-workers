@@ -128,7 +128,9 @@ Architect メニューはカテゴリ列（左）と建物列（右）の横並�
 
 `IndoorLightRuntime`は`Initializing → Available | Unavailable`を持つroot-owned Resourceである。dirty inputが正常にcollect/rebuildされた場合だけ`Available`としてCPU snapshotを公開する。map外、重複occlusion、invalid emitter/mount、P03 diagnosticでは`Unavailable`となり、内部に前回snapshotが残っていてもreaderへ返さない。
 
-dirtyはtopology、typed emitter/power、Room maskの3系統をcoalesceする。`RoomMaskSignature`はtile membershipが変わった時だけrevisionを進める。入力checksumが変わった時だけinput revision、公開field bytesが変わった時だけoutput revisionが進み、入力不変Updateはcollect/rebuildしない。このResourceはsave/Reflect対象外であり、world replacement lifecycleはP05で追加する。
+dirtyはtopology、typed emitter/power、Room maskの3系統をcoalesceする。`RoomMaskSignature`はtile membershipが変わった時だけrevisionを進める。入力checksumが変わった時だけinput revision、公開field bytesが変わった時だけoutput revisionが進み、入力不変Updateはcollect/rebuildしない。このResourceはsave/Reflect対象外である。
+
+world replacementではrootの`lighting-runtime` reset hookがsnapshot、pending input、revision、published epochを消去して`Unavailable`へ遷移する。rehydrate後に公開するsnapshotは`WorldEpoch`でtagし、epoch-aware readは現在epochと一致する場合だけ返す。`RecoveryFailed`ではlighting transaction自体を停止し、successful normal / rollback / recovery-onlyの`lighting.wake`だけが次Updateの再構築をarmする。durableな正本はOutdoorLamp rootの`LightingFixtureMount`であり、このResourceやruntime-only `RadialLightEmitter`ではない。
 リセット元: `menu_visibility_system`（Architect以外のMenuStateに遷移した時）
 
 ## HelpPanelState と HelpPauseGuard

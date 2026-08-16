@@ -137,6 +137,7 @@ impl Plugin for StartupPlugin {
                 .init_resource::<perf_scenario::DeconstructionPerfFixtureState>()
                 .init_resource::<perf_scenario::IndoorLightFixtureState>()
                 .init_resource::<perf_scenario::PerfBehaviorCapture>()
+                .init_resource::<crate::systems::save::PerfLoadFaultInjection>()
                 .init_resource::<perf_scenario::FieldCoreDriverState>()
                 .add_systems(
                     PostStartup,

@@ -2,7 +2,7 @@
 
 ## 現在の実装範囲
 
-P03は`hw_infra::lighting`に、Bevy ECS・GPU・ゲームワールドqueryへ依存しない室内Light Fieldのpure coreを実装した。P04は`bevy_app::systems::lighting`から通常playへ接続し、completed Wall、Door、typed OutdoorLamp、給電状態、Room maskを同じCPU fieldへ正規化する。P05はsave/load lifecycle、P06はGPU uploadとshader、P07はgameplay・Room consumerを担当する。
+P03は`hw_infra::lighting`に、Bevy ECS・GPU・ゲームワールドqueryへ依存しない室内Light Fieldのpure coreを実装した。P04は`bevy_app::systems::lighting`から通常playへ接続し、completed Wall、Door、typed OutdoorLamp、給電状態、Room maskを同じCPU fieldへ正規化する。P05はdurable mountとsave/load lifecycleを実装した。P06はGPU uploadとshader、P07はgameplay・Room consumerを担当する。
 
 core入力は`GridDimensions`、row-majorの`IndoorMask`、semanticな`LightOcclusionGrid`、正規化済み`RadialLightEmitterSnapshot`である。最大gridはゲームworldと同じ100×100、canonical性能fixtureは50 emitter・radius 5 tileを使う。emitterはstable key順に処理し、duplicate keyは入力全体を拒否する。invalidな個別emitterはstable diagnosticを返してfail-darkにする。
 
@@ -41,7 +41,17 @@ coreはログや内部dirty stateを保持しない。P04 adapterがworld snapsh
 
 root scheduleは`Input → Spatial → Logic → PreActor → Actor → PostActor → Visual → Interface`である。Interfaceで生じた`DoorLockToggleRequest`は次Updateのpause gate外`PreActor`で一度だけ検証・適用され、Actorのauto Door/movement後、pause gate外`PostActor`でdirty収集・snapshot収集・最大1回のCPU rebuildを行う。`DoorPresentationSyncSet`はVisual内でrebuild後に走る。入力不変Updateではfull snapshot scan、rebuild、output revision増分を行わない。
 
-P04 runtimeはsave対象ではなくworld epochも所有しない。world replacement時のrequest/runtime clearと再構築順はP05、GPU textureとuploadはP06、照度gameplay readはP07の責務である。
+`RadialLightEmitter`とfield snapshotはsave対象ではない。P05以後は`LightingFixtureMount(FixtureMount)`だけをcompleted `OutdoorLamp` rootへ保存し、通常spawn / Transform同期 / rehydrateが同じmountを読む。legacy saveでwrapperが欠ける場合だけTransform gridから`FreeStanding`を補完する。wrapperのowner、origin、Transform、`WorldMap` ownership、wall anchorが不正なcandidateはlive reset前にrejectし、live fieldと`WorldEpoch`を変えない。
+
+## P05 save/load lifecycle
+
+`IndoorLightingPlugin`はfreeze前に`lighting.mount.normalize`、`lighting.emitters.rebuild`、`lighting.wake`をproduction rehydrate registryへ登録する。normal load、rollback、recovery-onlyはいずれも同じresolved planを通り、wakeはfull dirtyを一度だけarmする。field rebuild自体は次の通常UpdateにあるP04 transactionが所有する。
+
+world replacementの`lighting-runtime` reset hookはsnapshot、pending input、checksum、revision、published epoch、dirty/allocation stateを消去し、`IndoorLightAvailability::Unavailable`へfail-dark化する。公開snapshotは`WorldEpoch`でtagされ、epoch-aware readはtag不一致、reset中、unavailableで`None`を返す。rollbackはresetを2回通り得るがepoch advanceは1回、terminal wakeは1回である。`RecoveryFailed`中はemitter sync、dirty collect、snapshot collect、field rebuildを停止し、最後のlit fieldを再公開しない。
+
+energyの`TaskWorkers`と`PowerSupplyState`はruntime-derivedで保存しない。したがってload後のenergy full rebuildはworkerのないSoul Spa出力を0へ再計算し、durable fixtureとruntime emitterを復元してもeligible supplied emitterが0ならavailableなdark fieldを公開する。P05のterminal checksumはdurable fixtureのsemantic rebindを証明し、旧field bytesの一致を要求しない。
+
+GPU textureとuploadはP06、照度gameplay readはP07の責務である。
 
 ## P03 field-core evidence
 

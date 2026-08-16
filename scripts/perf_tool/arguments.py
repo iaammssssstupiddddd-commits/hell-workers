@@ -120,7 +120,7 @@ def add_run_arguments(
         if fixed_step_behavior:
             parser.add_argument(
                 "--behavior-cases",
-                default="door-state-v1,load-normal-v1",
+                default=None,
                 help="comma-separated contract behavior cases",
             )
             parser.set_defaults(
@@ -483,7 +483,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
         if args.command == "field-core"
         else "static"
     )
-    expected_stages = {"p03", "p04"} if args.command == "field-core" else {"current", "p01", "p02", "p03", "p04"}
+    expected_stages = {"p03", "p04", "p05"} if args.command == "field-core" else {"current", "p01", "p02", "p03", "p04", "p05"}
     if (
         args.contract != "rtt-light-v1"
         or args.stage not in expected_stages
@@ -491,7 +491,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
     ):
         raise ValueError(
             "--workload indoor-light currently requires --contract rtt-light-v1 "
-            f"--stage {'p03|p04' if args.command == 'field-core' else 'current|p01|p02|p03|p04'} --lane {expected_lane}"
+            f"--stage {'p03|p04|p05' if args.command == 'field-core' else 'current|p01|p02|p03|p04|p05'} --lane {expected_lane}"
         )
     contract = load_rtt_light_contract(args.contract)
     validate_stage_lane(contract, args.stage, args.lane)
@@ -539,12 +539,14 @@ def validate_arguments(args: argparse.Namespace) -> None:
         args.allow_log_pattern = list(expected_allow_patterns)
         return
     if args.command == "behavior":
+        expected_cases = contract["stages"][args.stage]["required_behavior_cases"]
+        if args.behavior_cases is None:
+            args.behavior_cases = ",".join(expected_cases)
         behavior_cases = parse_csv_list(
             args.behavior_cases,
             {case["case_id"] for case in contract["behavior_cases"]},
             "behavior cases",
         )
-        expected_cases = contract["stages"][args.stage]["required_behavior_cases"]
         if behavior_cases != expected_cases:
             raise ValueError(
                 f"{args.stage} behavior requires the exact ordered cases: "
@@ -563,6 +565,13 @@ def validate_arguments(args: argparse.Namespace) -> None:
                 f"{args.stage} behavior requires --present-mode "
                 + contract["formal_matrix"]["present_mode"]
             )
+        expected_allow_patterns = contract["allow_log_patterns"]["headless_audit"]
+        if args.allow_log_pattern not in ([], expected_allow_patterns):
+            raise ValueError(
+                "behavior uses the exact contract headless log allowances; "
+                "custom --allow-log-pattern is forbidden"
+            )
+        args.allow_log_pattern = list(expected_allow_patterns)
         if (
             args.repeat != contract["behavior_fixture"]["repeat"]
             or args.preflight_runs

@@ -293,6 +293,15 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
             .expect("P04 static requires an explicit selection");
     assert!(p04_static_selection.supports_renderdoc_capture());
 
+    let mut p05 = p04;
+    p05[4] = "p05".to_string();
+    let p05_selection = super::parse_rtt_light_selection(&p05, super::PerfWorkload::IndoorLight)
+        .expect("p05/static v1 is implemented")
+        .expect("P05 static requires an explicit selection");
+    assert_eq!(p05_selection.stage_id(), "p05");
+    assert!(p05_selection.uses_runtime_field());
+    assert!(p05_selection.uses_p02_presentation());
+
     let mut wrong_stage = exact;
     wrong_stage[4] = "p09".to_string();
     assert!(
@@ -314,6 +323,10 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
     assert_eq!(
         super::PerfBehaviorCase::parse("load-normal-v1"),
         Some(super::PerfBehaviorCase::LoadNormalV1)
+    );
+    assert_eq!(
+        super::PerfBehaviorCase::parse("load-recovery-failed-v1"),
+        Some(super::PerfBehaviorCase::LoadRecoveryFailedV1)
     );
     assert_eq!(super::PerfBehaviorCase::parse("unknown"), None);
 }

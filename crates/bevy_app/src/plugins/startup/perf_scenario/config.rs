@@ -128,6 +128,21 @@ impl PerfRttLightSelection {
         stage_id: "p04",
         lane: "field-core",
     };
+    const P05_STATIC_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p05",
+        lane: "static",
+    };
+    const P05_BEHAVIOR_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p05",
+        lane: "behavior",
+    };
+    const P05_FIELD_CORE_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p05",
+        lane: "field-core",
+    };
 
     pub const fn contract_id(self) -> &'static str {
         self.contract_id
@@ -142,11 +157,11 @@ impl PerfRttLightSelection {
     }
 
     pub fn uses_p02_presentation(self) -> bool {
-        matches!(self.stage_id, "p02" | "p03" | "p04")
+        matches!(self.stage_id, "p02" | "p03" | "p04" | "p05")
     }
 
     pub fn uses_runtime_field(self) -> bool {
-        self.stage_id == "p04"
+        matches!(self.stage_id, "p04" | "p05")
     }
 
     #[cfg(any(feature = "profiling-renderdoc", test))]
@@ -159,6 +174,11 @@ impl PerfRttLightSelection {
 pub(super) enum PerfBehaviorCase {
     DoorStateV1,
     LoadNormalV1,
+    LoadPreflightRejectV1,
+    LoadRollbackV1,
+    LoadRecoveryOnlyV1,
+    LoadRecoveryFailedV1,
+    LoadDuplicateResetV1,
 }
 
 impl PerfBehaviorCase {
@@ -166,6 +186,11 @@ impl PerfBehaviorCase {
         match value {
             "door-state-v1" => Some(Self::DoorStateV1),
             "load-normal-v1" => Some(Self::LoadNormalV1),
+            "load-preflight-reject-v1" => Some(Self::LoadPreflightRejectV1),
+            "load-rollback-v1" => Some(Self::LoadRollbackV1),
+            "load-recovery-only-v1" => Some(Self::LoadRecoveryOnlyV1),
+            "load-recovery-failed-v1" => Some(Self::LoadRecoveryFailedV1),
+            "load-duplicate-reset-v1" => Some(Self::LoadDuplicateResetV1),
             _ => None,
         }
     }
@@ -174,6 +199,11 @@ impl PerfBehaviorCase {
         match self {
             Self::DoorStateV1 => "door-state-v1",
             Self::LoadNormalV1 => "load-normal-v1",
+            Self::LoadPreflightRejectV1 => "load-preflight-reject-v1",
+            Self::LoadRollbackV1 => "load-rollback-v1",
+            Self::LoadRecoveryOnlyV1 => "load-recovery-only-v1",
+            Self::LoadRecoveryFailedV1 => "load-recovery-failed-v1",
+            Self::LoadDuplicateResetV1 => "load-duplicate-reset-v1",
         }
     }
 }
@@ -743,7 +773,7 @@ impl PerfScenarioConfig {
                 || rtt_quality != Some(RttQualityPreset::High))
         {
             return Err(PerfScenarioConfigError(
-                "--perf-renderdoc-capture requires rtt-light-v1/current|p01|p02|p03|p04/static medium/gpu/fixed, an output directory, and the exact 1920x1080/scale-1/high window contract"
+                "--perf-renderdoc-capture requires rtt-light-v1/current|p01|p02|p03|p04|p05/static medium/gpu/fixed, an output directory, and the exact 1920x1080/scale-1/high window contract"
                     .to_string(),
             ));
         }
@@ -1039,7 +1069,7 @@ fn parse_rtt_light_selection(
 
     let (Some(contract), Some(stage), Some(lane)) = (contract, stage, lane) else {
         return Err(PerfScenarioConfigError(
-            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01|p02|p03|p04 --perf-lane static|behavior|field-core"
+            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01|p02|p03|p04|p05 --perf-lane static|behavior|field-core"
                 .to_string(),
         ));
     };
@@ -1056,9 +1086,12 @@ fn parse_rtt_light_selection(
         ("rtt-light-v1", "p04", "static") => PerfRttLightSelection::P04_STATIC_V1,
         ("rtt-light-v1", "p04", "behavior") => PerfRttLightSelection::P04_BEHAVIOR_V1,
         ("rtt-light-v1", "p04", "field-core") => PerfRttLightSelection::P04_FIELD_CORE_V1,
+        ("rtt-light-v1", "p05", "static") => PerfRttLightSelection::P05_STATIC_V1,
+        ("rtt-light-v1", "p05", "behavior") => PerfRttLightSelection::P05_BEHAVIOR_V1,
+        ("rtt-light-v1", "p05", "field-core") => PerfRttLightSelection::P05_FIELD_CORE_V1,
         _ => {
             return Err(PerfScenarioConfigError(format!(
-                "this binary supports rtt-light-v1 current through p04; field-core starts at p03; got {contract}/{stage}/{lane}"
+                "this binary supports rtt-light-v1 current through p05; field-core starts at p03; got {contract}/{stage}/{lane}"
             )));
         }
     };

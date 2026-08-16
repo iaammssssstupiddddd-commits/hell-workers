@@ -231,6 +231,65 @@ impl NativeLoadFaultInjection {
     }
 }
 
+/// Job-private fault arm for the frozen RtT-light P05 behavior harness.
+///
+/// The resource exists only in profiling builds, is inserted only by the
+/// selected behavior case, and is neither reflected nor persisted.
+#[cfg(feature = "profiling")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum PerfLoadFault {
+    #[default]
+    None,
+    ApplyRecovered,
+    RecoveryFailedNormalApply,
+    RecoveryFailedRollbackFinalize,
+    DuplicateReset,
+}
+
+#[cfg(feature = "profiling")]
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct PerfLoadFaultInjection(pub PerfLoadFault);
+
+#[cfg(feature = "profiling")]
+impl PerfLoadFaultInjection {
+    pub(crate) fn arm(&mut self, fault: PerfLoadFault) {
+        debug_assert!(matches!(self.0, PerfLoadFault::None));
+        self.0 = fault;
+    }
+
+    pub(crate) fn fail_normal_post_write(&mut self) -> Option<&'static str> {
+        match self.0 {
+            PerfLoadFault::ApplyRecovered => {
+                self.0 = PerfLoadFault::None;
+                Some("P05 behavior injected normal apply failure")
+            }
+            PerfLoadFault::RecoveryFailedNormalApply => {
+                self.0 = PerfLoadFault::RecoveryFailedRollbackFinalize;
+                Some("P05 behavior injected normal apply failure before rollback")
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn fail_rollback_finalize(&mut self) -> Option<&'static str> {
+        if self.0 == PerfLoadFault::RecoveryFailedRollbackFinalize {
+            self.0 = PerfLoadFault::None;
+            Some("P05 behavior injected rollback finalization failure")
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn take_duplicate_reset(&mut self) -> bool {
+        if self.0 == PerfLoadFault::DuplicateReset {
+            self.0 = PerfLoadFault::None;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 /// A terminal save/load operation. This remains separate from
 /// [`SaveLoadState`], which is only a one-shot dispatcher trigger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -116,6 +116,7 @@ pub(super) fn write_indoor_light_fixture_sidecars(
     state: &IndoorLightFixtureState,
     runtime: &crate::systems::lighting::IndoorLightRuntime,
     room_lookup: &hw_world::RoomTileLookup,
+    canonical_room_tiles: Option<&[(i32, i32)]>,
 ) -> std::io::Result<()> {
     if config.workload != PerfWorkload::IndoorLight {
         return Ok(());
@@ -148,7 +149,11 @@ pub(super) fn write_indoor_light_fixture_sidecars(
     std::fs::write(layout_path, layout)?;
     std::fs::write(presentation_path, presentation)?;
     if selection.uses_runtime_field() {
-        write_indoor_light_runtime_sidecar(&runtime_path, runtime, room_lookup)?;
+        write_indoor_light_runtime_sidecar(
+            &runtime_path,
+            runtime,
+            canonical_room_tiles.unwrap_or_else(|| room_lookup.mask_signature().canonical_tiles()),
+        )?;
     }
     Ok(())
 }
@@ -157,7 +162,7 @@ pub(super) fn write_indoor_light_fixture_sidecars(
 fn write_indoor_light_runtime_sidecar(
     path: &std::path::Path,
     runtime: &crate::systems::lighting::IndoorLightRuntime,
-    room_lookup: &hw_world::RoomTileLookup,
+    tiles: &[(i32, i32)],
 ) -> std::io::Result<()> {
     if runtime.availability() != crate::systems::lighting::IndoorLightAvailability::Available {
         return Err(std::io::Error::other(format!(
@@ -165,7 +170,6 @@ fn write_indoor_light_runtime_sidecar(
             runtime.last_error().unwrap_or("initializing")
         )));
     }
-    let tiles = room_lookup.mask_signature().canonical_tiles();
     if runtime.indoor_mask_cells() != u32::try_from(tiles.len()).ok() {
         return Err(std::io::Error::other(
             "runtime field mask differs from canonical Room membership",

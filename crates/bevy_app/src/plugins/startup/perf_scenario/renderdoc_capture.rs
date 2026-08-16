@@ -677,28 +677,28 @@ fn validate_medium_inventory(stage_id: &str, inventory: PerfRenderInventory) -> 
         scene_target_count: 1,
         mask_target_count: usize::from(stage_id == "current"),
         camera_3d_rtt_count: if stage_id == "current" { 2 } else { 1 },
-        camera_2d_count: if matches!(stage_id, "p02" | "p03" | "p04") {
+        camera_2d_count: if matches!(stage_id, "p02" | "p03" | "p04" | "p05") {
             2
         } else {
             3
         },
-        layer_2d_pass_count: if matches!(stage_id, "p02" | "p03" | "p04") {
+        layer_2d_pass_count: if matches!(stage_id, "p02" | "p03" | "p04" | "p05") {
             1
         } else {
             2
         },
-        soul_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04") {
+        soul_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05") {
             0
         } else {
             200
         },
         soul_mask_proxy_3d: if stage_id == "current" { 200 } else { 0 },
-        soul_shadow_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04") {
+        soul_shadow_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05") {
             0
         } else {
             200
         },
-        familiar_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04") {
+        familiar_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05") {
             0
         } else {
             12

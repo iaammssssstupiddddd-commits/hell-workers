@@ -886,7 +886,7 @@ def rtt_light_contract(repo: Path, stage: str) -> dict[str, Any]:
         and stage_order.index(leg["first_required_stage"]) <= selected_index
     ]
     expected_legs = list(RTT_LIGHT_BASE_LEGS)
-    if stage in {"p03", "p04"}:
+    if stage in {"p03", "p04", "p05"}:
         expected_legs.append("field-core")
     if legs != expected_legs:
         raise AcceptanceError(
@@ -903,6 +903,23 @@ def rtt_light_legs(contract: dict[str, Any], stage: str) -> list[str]:
         for leg in contract["formal_legs"]
         if stage_order.index(leg["first_required_stage"]) <= selected_index
     ]
+
+
+def rtt_light_game_process_count(
+    contract: dict[str, Any], stage: str, *, formal: bool
+) -> int:
+    field_core_processes = 3 if "field-core" in rtt_light_legs(contract, stage) else 0
+    if not formal:
+        return 51 + field_core_processes
+    current_behavior_count = len(
+        contract["stages"]["current"]["required_behavior_cases"]
+    )
+    stage_behavior_count = len(contract["stages"][stage]["required_behavior_cases"])
+    return (
+        65
+        + field_core_processes
+        + (stage_behavior_count - current_behavior_count) * 3
+    )
 
 
 def formal_contract_ready(contract: dict[str, Any]) -> list[str]:
@@ -1881,10 +1898,8 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
                 if args.level == "formal"
                 else ["audit", "capture", "memory"]
             ),
-            "game_processes": (
-                (68 if args.stage in {"p03", "p04"} else 65)
-                if args.level == "formal"
-                else (54 if args.stage in {"p03", "p04"} else 51)
+            "game_processes": rtt_light_game_process_count(
+                contract, args.stage, formal=args.level == "formal"
             ),
             "parallel_game_processes": 1,
             "actual_feature_builds": 3 if args.level == "formal" else 2,
@@ -7438,7 +7453,9 @@ def add_rtt_light_arguments(
     parser.add_argument("--repo", required=True)
     parser.add_argument("--level", required=True, choices=["s1", "formal"])
     parser.add_argument(
-        "--stage", default=RTT_LIGHT_DEFAULT_STAGE, choices=["current", "p01", "p02", "p03", "p04"]
+        "--stage",
+        default=RTT_LIGHT_DEFAULT_STAGE,
+        choices=["current", "p01", "p02", "p03", "p04", "p05"],
     )
     parser.add_argument("--attempt-id")
     parser.add_argument("--adapter", default="Intel")

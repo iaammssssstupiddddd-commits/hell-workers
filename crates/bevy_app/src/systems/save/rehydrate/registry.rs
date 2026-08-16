@@ -140,6 +140,40 @@ impl ResolvedRehydratePlan {
             }],
         }
     }
+
+    #[cfg(test)]
+    pub(in crate::systems::save) fn with_lighting_for_test() -> Self {
+        Self {
+            validation_hooks: vec![ValidationHook {
+                name: "lighting.fixture",
+                validate: crate::systems::lighting::validate_fixture_mount_candidate,
+            }],
+            prerequisite_hooks: Vec::new(),
+            steps: vec![
+                RehydrateStep {
+                    name: "lighting.mount.normalize",
+                    phase: RehydratePhase::DurableNormalize,
+                    after: &[],
+                    requires: &[],
+                    run: crate::systems::lighting::normalize_lighting_mounts,
+                },
+                RehydrateStep {
+                    name: "lighting.emitters.rebuild",
+                    phase: RehydratePhase::RebuildDerived,
+                    after: &[],
+                    requires: &[],
+                    run: crate::systems::lighting::rebuild_lighting_emitters,
+                },
+                RehydrateStep {
+                    name: "lighting.wake",
+                    phase: RehydratePhase::WakeDomains,
+                    after: &[],
+                    requires: &[],
+                    run: crate::systems::lighting::wake_indoor_lighting,
+                },
+            ],
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -619,6 +653,7 @@ mod tests {
     impl Plugin for ProductionAdapterPlugin {
         fn build(&self, app: &mut App) {
             super::super::register_logic_rehydrate_pipeline(app);
+            super::super::register_lighting_rehydrate_pipeline(app);
             super::super::register_visual_rehydrate_pipeline(app);
         }
     }
@@ -653,6 +688,7 @@ mod tests {
                 "construction.normalize",
                 "deconstruction.floor-ownership",
                 "familiar.settings",
+                "lighting.mount.normalize",
                 "power-consumer.policy",
                 "soul-spa.normalize",
                 "stockpile.policy",
@@ -661,8 +697,10 @@ mod tests {
                 "deconstruction.runtime",
                 "presentation.shells",
                 "construction.runtime",
+                "lighting.emitters.rebuild",
                 "obstacle.runtime",
                 "domains.wake",
+                "lighting.wake",
                 "test.late-build",
             ]
         );
@@ -674,6 +712,7 @@ mod tests {
                 "deconstruction.orders",
                 "durable.topology",
                 "familiar.roster",
+                "lighting.fixture",
                 "presentation.spatial-roots",
                 "task-logistics.owners",
             ]

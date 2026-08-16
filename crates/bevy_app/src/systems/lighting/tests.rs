@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
+use hw_core::WorldEpoch;
 use hw_core::world::DoorState;
 use hw_energy::{PowerShedReason, PowerSupplyState};
+use hw_infra::lighting::{CardinalDirection, FixtureMount, LightGridPos};
 use hw_jobs::{Building, BuildingType, Door};
 use hw_world::{DoorLockToggleRequest, RoomTileLookup, WorldMap};
 
@@ -153,10 +155,186 @@ fn completed_loaded_outdoor_lamp_reconstructs_runtime_emitter() {
     app.update();
 
     assert!(app.world().entity(lamp).contains::<RadialLightEmitter>());
+    assert_eq!(
+        app.world().get::<LightingFixtureMount>(lamp),
+        Some(&LightingFixtureMount::free_standing(grid))
+    );
     let runtime = app.world().resource::<IndoorLightRuntime>();
     assert_eq!(runtime.availability(), IndoorLightAvailability::Available);
     assert_eq!(runtime.typed_emitter_components(), 1);
     assert_eq!(runtime.eligible_supplied_emitters(), 1);
+}
+
+#[test]
+fn moving_a_free_standing_lamp_updates_durable_mount_and_runtime_emitter() {
+    let mut app = lighting_app();
+    let original = (12, 14);
+    let moved = (16, 18);
+    let lamp = app
+        .world_mut()
+        .spawn((
+            Building {
+                kind: BuildingType::OutdoorLamp,
+                is_provisional: false,
+            },
+            Transform::from_translation(
+                WorldMap::grid_to_world(original.0, original.1).extend(0.0),
+            ),
+            LightingFixtureMount::free_standing(original),
+            RadialLightEmitter::outdoor_lamp(original),
+        ))
+        .id();
+    app.update();
+
+    app.world_mut()
+        .get_mut::<Transform>(lamp)
+        .unwrap()
+        .translation = WorldMap::grid_to_world(moved.0, moved.1).extend(0.0);
+    app.update();
+
+    let expected = LightingFixtureMount::free_standing(moved);
+    assert_eq!(
+        app.world().get::<LightingFixtureMount>(lamp),
+        Some(&expected)
+    );
+    assert_eq!(
+        app.world().get::<RadialLightEmitter>(lamp).unwrap().mount,
+        expected.mount()
+    );
+}
+
+#[test]
+fn fixture_candidate_accepts_valid_wall_mount_and_rejects_invalid_anchor() {
+    let mut candidate = World::new();
+    candidate.insert_resource(WorldMap::default());
+    let anchor_grid = (10, 10);
+    let origin_grid = (11, 10);
+    let anchor = candidate
+        .spawn((
+            Building {
+                kind: BuildingType::Wall,
+                is_provisional: false,
+            },
+            Transform::from_translation(
+                WorldMap::grid_to_world(anchor_grid.0, anchor_grid.1).extend(0.0),
+            ),
+        ))
+        .id();
+    let mount = LightingFixtureMount(FixtureMount::WallMounted {
+        anchor: LightGridPos::new(anchor_grid.0, anchor_grid.1),
+        inward: CardinalDirection::East,
+    });
+    let lamp = candidate
+        .spawn((
+            Building {
+                kind: BuildingType::OutdoorLamp,
+                is_provisional: false,
+            },
+            Transform::from_translation(
+                WorldMap::grid_to_world(origin_grid.0, origin_grid.1).extend(0.0),
+            ),
+            mount,
+        ))
+        .id();
+    candidate
+        .resource_mut::<WorldMap>()
+        .set_building(anchor_grid, anchor);
+    candidate
+        .resource_mut::<WorldMap>()
+        .set_building(origin_grid, lamp);
+
+    assert!(validate_fixture_mount_candidate(&candidate).is_ok());
+
+    candidate.entity_mut(anchor).insert(Building {
+        kind: BuildingType::Floor,
+        is_provisional: false,
+    });
+    assert!(
+        validate_fixture_mount_candidate(&candidate)
+            .unwrap_err()
+            .contains("not a completed Wall")
+    );
+}
+
+#[test]
+fn fixture_candidate_rejects_transform_mount_mismatch() {
+    let mut candidate = World::new();
+    candidate.insert_resource(WorldMap::default());
+    let transform_grid = (8, 8);
+    let lamp = candidate
+        .spawn((
+            Building {
+                kind: BuildingType::OutdoorLamp,
+                is_provisional: false,
+            },
+            Transform::from_translation(
+                WorldMap::grid_to_world(transform_grid.0, transform_grid.1).extend(0.0),
+            ),
+            LightingFixtureMount::free_standing((9, 8)),
+        ))
+        .id();
+    candidate
+        .resource_mut::<WorldMap>()
+        .set_building(transform_grid, lamp);
+
+    assert!(
+        validate_fixture_mount_candidate(&candidate)
+            .unwrap_err()
+            .contains("disagrees with mount origin")
+    );
+}
+
+#[test]
+fn reset_blocks_old_epoch_reads_until_one_successful_wake() {
+    let mut app = lighting_app();
+    app.world_mut()
+        .resource_mut::<IndoorLightingLifecycleProbe>()
+        .enable();
+    let grid = (20, 20);
+    publish_indoor_tile(&mut app, grid);
+    app.world_mut().spawn((
+        Building {
+            kind: BuildingType::OutdoorLamp,
+            is_provisional: false,
+        },
+        Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+        LightingFixtureMount::free_standing(grid),
+        RadialLightEmitter::outdoor_lamp(grid),
+        PowerSupplyState::Supplied,
+    ));
+    app.update();
+
+    let old_epoch = *app.world().resource::<WorldEpoch>();
+    assert!(
+        app.world()
+            .resource::<IndoorLightRuntime>()
+            .snapshot_for_epoch(old_epoch)
+            .is_some()
+    );
+
+    reset_indoor_lighting_for_world_replace(app.world_mut());
+    app.world_mut().resource_mut::<WorldEpoch>().advance();
+    let current_epoch = *app.world().resource::<WorldEpoch>();
+    app.world_mut()
+        .resource_scope(|world, mut probe: Mut<IndoorLightingLifecycleProbe>| {
+            let runtime = world.resource::<IndoorLightRuntime>();
+            assert!(
+                read_indoor_light_snapshot(runtime, old_epoch, current_epoch, &mut probe).is_none()
+            );
+            assert!(runtime.is_fail_dark());
+        });
+
+    wake_indoor_lighting(app.world_mut());
+    app.update();
+
+    let runtime = app.world().resource::<IndoorLightRuntime>();
+    assert!(runtime.snapshot_for_epoch(old_epoch).is_none());
+    assert!(runtime.snapshot_for_epoch(current_epoch).is_some());
+    let probe = app.world().resource::<IndoorLightingLifecycleProbe>();
+    assert_eq!(probe.reset_count(), 1);
+    assert_eq!(probe.wake_count(), 1);
+    assert_eq!(probe.old_epoch_field_read_attempts(), 1);
+    assert_eq!(probe.old_epoch_field_reads(), 0);
 }
 
 #[test]

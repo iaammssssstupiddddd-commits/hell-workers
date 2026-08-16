@@ -230,6 +230,44 @@ pub(crate) fn register_logic_rehydrate_pipeline(app: &mut App) {
     );
 }
 
+/// Indoor-lighting adapter registered by `IndoorLightingPlugin` before the
+/// save registry is frozen.
+pub(crate) fn register_lighting_rehydrate_pipeline(app: &mut App) {
+    register_candidate_validator(
+        app,
+        "lighting.fixture",
+        crate::systems::lighting::validate_fixture_mount_candidate,
+    );
+    register_rehydrate_step(
+        app,
+        "lighting.mount.normalize",
+        RehydratePhase::DurableNormalize,
+        &["construction.normalize"],
+        &[],
+        crate::systems::lighting::normalize_lighting_mounts,
+    );
+    register_rehydrate_step(
+        app,
+        "lighting.emitters.rebuild",
+        RehydratePhase::RebuildDerived,
+        &[
+            "lighting.mount.normalize",
+            "power-consumer.policy",
+            "presentation.shells",
+        ],
+        &[],
+        crate::systems::lighting::rebuild_lighting_emitters,
+    );
+    register_rehydrate_step(
+        app,
+        "lighting.wake",
+        RehydratePhase::WakeDomains,
+        &["lighting.emitters.rebuild", "domains.wake"],
+        &[],
+        crate::systems::lighting::wake_indoor_lighting,
+    );
+}
+
 /// Presentation-domain adapter registered by `VisualPlugin`.
 pub(crate) fn register_visual_rehydrate_pipeline(app: &mut App) {
     register_candidate_validator(

@@ -13,7 +13,7 @@ CONTRACT_FILES = {
     "rtt-light-v1": CONTRACT_DIRECTORY / "rtt_light_migration_v1.json",
 }
 EXPECTED_CONTRACT_SHA256 = {
-    "rtt-light-v1": "121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11",
+    "rtt-light-v1": "ba5d6bf7320426b441465df8fae42d6ff80820748ce55e0edf0dbba409dc755a",
 }
 RTT_LIGHT_STAGES = ("current", "p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08")
 RTT_LIGHT_LANES = ("static", "behavior", "field-core", "consumer-core")
@@ -469,7 +469,7 @@ def build_fixture_presentation_rows(
         if building_kind not in entity_counts:
             continue
         entity_count = entity_counts[building_kind]
-        if stage_id in {"p02", "p03", "p04"}:
+        if stage_id in {"p02", "p03", "p04", "p05"}:
             structural_3d = building_kind in {
                 "Floor",
                 "Wall",
@@ -884,14 +884,17 @@ def expected_eligible_supplied_emitters(
 ) -> int:
     """Return the stage-aware eligible-emitter fixture expectation.
 
-    P05 owns save/load rehydration of the indoor-light lifecycle. Before P05,
-    load-normal restores the durable fixture but intentionally cannot restore
-    its runtime-only generator worker, so P04 must publish an available,
-    fail-dark field with no eligible supplied emitters.
+    A committed replacement restores the durable fixture but intentionally
+    does not restore runtime-only generator workers. The energy transaction
+    therefore republishes a fail-dark field with no eligible supplied emitters.
+    Preflight rejection leaves the live world untouched; recovery-failed
+    evidence projects the last trusted field captured before replacement.
     """
     if (
-        behavior_case == "load-normal-v1"
-        and _stage_index(stage) < _stage_index("p05")
+        behavior_case is not None
+        and behavior_case.startswith("load-")
+        and behavior_case
+        not in {"load-preflight-reject-v1", "load-recovery-failed-v1"}
     ):
         return 0
     return build_fixture_layout(contract, size)["counts"][
@@ -1781,6 +1784,7 @@ def validate_rtt_light_contract(contract: dict[str, Any]) -> None:
         "columns": expected_timeline_columns,
         "availability_values": [
             "available",
+            "unavailable",
             "stage_before_field_owner",
             "stage_before_registry_owner",
             "stage_before_gpu_owner",

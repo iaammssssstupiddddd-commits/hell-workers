@@ -279,13 +279,15 @@ RttRuntime
 
 `hw_visual::SectionMaterial` / `SectionCut` は `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` の互換型として残る。P02 production は elevation / section-cut writer を登録せず、`SectionCut::default()` の非切断状態だけを material sync が読む。物理削除は P08 が所有する。
 
-### 室内Light Fieldのドメイン境界（P03 / P04）
+### 室内Light Fieldのドメイン境界（P03 / P04 / P05）
 
 `hw_infra::lighting`は100×100までのgrid、indoor mask、Wall/Doorのsemantic occlusion、stable-key radial emitterをpure inputとして受け、integer supercover LOSとfixed-point合成からimmutableなUNORM16 field snapshotを返す。snapshotはradiance/luminance、mask、revision/diff count、canonical SHA-256を一体で保持し、P06向けのpure RGBA8 pack helperも同じcrateが所有する。
 
-P04のroot adapterは`bevy_app::systems::lighting`にあり、completed Wall、Door、typed OutdoorLampの`PowerSupplyState::Supplied`、canonical Room maskをpure inputへ変換する。保存対象外の`RadialLightEmitter`がload後に欠けている場合は、completed OutdoorLamp rootからPostActorのdirty収集前に再構築する。`IndoorLightRuntime`はavailability、CPU snapshot、input/output revision、dirty/rebuild metricだけを保持し、Entity、save、GPU resourceを保持しない。入力不変時はfull scanもrebuildも行わず、invalid inputはstaleなlit fieldを公開せずunavailableへ落とす。
+P04のroot adapterは`bevy_app::systems::lighting`にあり、completed Wall、Door、typed OutdoorLampの`PowerSupplyState::Supplied`、canonical Room maskをpure inputへ変換する。`IndoorLightRuntime`はavailability、CPU snapshot、input/output revision、dirty/rebuild metricだけを保持し、Entity、save、GPU resourceを保持しない。入力不変時はfull scanもrebuildも行わず、invalid inputはstaleなlit fieldを公開せずunavailableへ落とす。
 
-P05がsave/world replacement、P06がGPU `Image`とshader、P07がgameplay/Room consumerを所有する。この依存方向によりrenderer・gameplay・Roomが別々の照度計算を持つことを防ぐ。計算、schedule、計測の詳細は[`indoor_lighting.md`](indoor_lighting.md)を参照する。
+P05はpure `FixtureMount`を内包するroot-owned `LightingFixtureMount`だけをdurable正本として保存し、runtime-only `RadialLightEmitter`とfieldをnamed rehydrate stepから再構築する。candidate validatorはowner/origin/wall anchorをlive reset前に検証する。world replacement hookはfieldをfail-darkへresetし、snapshotをglobal `WorldEpoch`でtagする。epoch-aware readerはold epochを返さず、`RecoveryFailed`中はlighting Update transactionを停止する。
+
+P06がGPU `Image`とshader、P07がgameplay/Room consumerを所有する。この依存方向によりrenderer・gameplay・Roomが別々の照度計算を持つことを防ぐ。計算、schedule、計測の詳細は[`indoor_lighting.md`](indoor_lighting.md)を参照する。
 
 地形は `hw_visual::TerrainSurfaceMaterial` / `TerrainSurfaceMaterialExt` を基本にしつつ、3 種の LOD variant を持つ。全 variant が `ExtendedMaterial<StandardMaterial, ...>` のまま section clip・lighting・prepass を維持する。
 

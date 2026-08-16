@@ -196,6 +196,7 @@ HELL_WORKERS_SAVE
 | runtime obstacle provenance / navigation cache | `ObstacleSourceKind`、`BuildingFootprint`、`ObstaclePositionIndex`、raw `WorldMap.obstacles` / `doors` / `bridged_tiles` | `rehydrate_obstacle_runtime` が durable semantic source から marker / cache を再構築。保存済み Door state は最終 override として使う |
 | transient gathering | `GatheringSpot`、`GatheringVisuals`、`ParticipatingIn`、`GatheringParticipants` | v1 saveから除外。旧bodyのrelationship componentはschema検証前に破棄し、replace hookはspotとlinked aura/objectをdespawn。Soulは非参加状態から通常AIへ戻る |
 | runtime energy state | `PowerSupplyState`、`Unpowered`、`PowerGridAllocationSummary`、`PowerAllocationMode` | 旧bodyのcomponentはschema検証前に除去。`PowerConsumer` requirementがload直後を`Unpowered`へfail-closed化し、runtime modeとfull energy rebuildがtopology・個別供給・summaryをeffect前に確定 |
+| runtime lighting state | `RadialLightEmitter`、CPU field snapshot、dirty/revision/read probe | durable `LightingFixtureMount`からemitterを再構築し、world replacement reset後のnamed wakeで新epoch fieldを再計算。旧fieldは返さない |
 | legacy task marker | `ReservedForTask` | header 無し v0 body の deserialize だけで受け付け、schema 検証前に除去する。v1 save / load には含めず、v1 body の混入は reject |
 | ビジュアル / UI | `hw_visual/*`, `hw_ui/*`, `SoulUiLinks`, Sprite / 3D プロキシ | **rehydrate**（下記）と observer / startup で再生成 |
 | 地形描画 | `TerrainChunk` | 起動時 seed から生成（v1 header の seed 照合で整合を保証） |
@@ -263,6 +264,8 @@ root marker matrix は collect、extract、RON serialize/deserialize、Relations
 3. incomingを空のstaging `World`へ1回だけ`write_to_world_with`し、registry、Reflect data、Entity remapを検証する。同じstagingをimmutableなdomain candidate validatorへ渡し、Familiar roster、task/logisticsのowner・容量・drop成立条件、自然障害物の`ObstaclePosition`を含む全durable topologyを検証する。`WorldMap.tile_entities`は全slotが一意な`Tile + Transform`を指すこと、`Blueprint.occupied_grids`、Wall tileの`spawned_wall.unwrap_or(parent_site)`、Soul Spa tileの`parent_site`が`WorldMap.buildings`と双方向に一致することもここで要求する。
 4. live worldからrollback snapshotを取得し、incomingと同じschema/staging/domain validatorを通す。どちらかが失敗した場合はreset、WorldEpoch、UI/visual、persisted worldを一切変更しない。`WorldMap`は各candidate自身のshapeと全Entity参照を検証し、旧live worldを新world再水和の前提にはしない。
 
+lighting candidate validatorは`LightingFixtureMount`のownerがcompleted `OutdoorLamp`であること、mount originとTransform grid、`WorldMap` ownerが一致すること、`WallMounted` anchorがcandidate内のcompleted Wallであることを同じpreflightで検証する。不正candidateは`InvalidData`で止まり、live Light Fieldとepochを変更しない。component欠落だけはlegacy互換としてreplace後の`lighting.mount.normalize`が`FreeStanding`を補完する。
+
 staging preflightの成功はtransaction成功を保証しない。live applyは別境界であり、write開始後に
 `Result`エラーが返った場合は、apply時の`EntityHashMap`に記録された全entityを直接despawnして
 partial entityを除去する。runnerが途中まで生成したrehydrate所有presentation shellもこの時点で
@@ -310,6 +313,7 @@ root message型は`MessagesPlugin`の単一typed macroから初期化と`Message
 | root command visual | designation / task-area indicator、area-edit handle、area / dream preview | root VisualPlugin hookでdespawn。`DesignationIndicator`は通常の`RemovedComponents<Designation>` cleanupを使えないためreplace前に明示破棄 |
 | simulation cache | spatial/resource/tile/room/reservation/stockpile group/obstacle index | root cache hookでdefault化し、既存systemまたはrehydrateで再構築 |
 | `hw_world` room owner | runtime `Room` root、`RoomOverlayTile`、`RoomTileLookup`、detection/validation state | leafのidempotent `reset_for_world_replace`がentityをdespawnしResourceをdefault化する。root `LogicPlugin`は`hw-world-rooms` hookを1回だけ登録 |
+| root lighting adapter | `IndoorLightRuntime`、dirty、allocation probe、old epoch snapshot | `lighting-runtime` hookがfail-darkへreset。`RecoveryFailed`ではUpdate transactionを停止し、successful rehydrateの`lighting.wake`だけが再構築をarm |
 | `Local<HashMap<Entity, _>>` | Soul移動のdoor wait、world tooltip runtime | `WorldEpoch`不一致を最初の利用前に検出してclear |
 | scratch `Local<Vec<Entity>>` / frame map | nearby検索buffer、idleのpending rest reservation | 使用前またはsystem先頭で必ずclearするためretain |
 
@@ -351,6 +355,7 @@ runnerだけが所有する。
 | Tree / Rock / ResourceItem / Stockpile | Sprite（spawn 箇所と同じ画像・サイズ） | rehydrate 内で直接挿入 |
 | 旧形式の Familiar 設定 | 欠落した `FamiliarOperation` / `FamiliarPolicy` | shell より前に `rehydrate_familiar_settings` を実行。operation 欠落時は default threshold と `max(default max, Commanding roster数)`、policy 欠落時は全許可 / Normal を補完する。保存済み operation は維持し、保存済み policy は effective semantics を変えず正規化する |
 | 旧形式のSoul Energy設定 | 範囲外`SoulSpaSite.active_slots`、欠落`PowerConsumerPolicy` | active slotsを0〜4へclampし、旧consumerだけNormal policyを補完する。保存済みLow/Normal/Highは維持する |
+| Indoor lighting | legacyで欠落した`LightingFixtureMount`、runtime-only emitter | completed OutdoorLampだけへTransform grid由来の`FreeStanding`を補完し、`lighting.emitters.rebuild`でmount-aware emitterを再付与する。`lighting.wake`はfield計算を行わずdirtyだけをarmする |
 | runtime energy | Yard/Grid一対一、generator/consumer relationship、個別供給stateとsummary | reset時に`EnergyUpdateDirty::request_full_rebuild()`。最初のLogicでduplicate/orphan cleanupとrewireを行い、output/allocationをeffect前に再構築する |
 | 旧形式の通常 Stockpile セル | 欠落した `StockpilePolicy` の互換既定値 | `BelongsTo(owner)` の owner が durable な `Yard` のセルだけへ `Any` / `Normal` / `target_amount = capacity` / export許可を挿入。既存の `Any` / `Only(ResourceType)` は意味を維持し、`Selected(StockpileResourceSet)` を含むpolicyはacceptance集合とtargetを正規化する。Tank / Mixer root、marker が保存されない Tank companion、owner 不明の storage へは推測で付与しない |
 | task / logistics runtime | assignment、delivery claim、tool use、request claim/lease、inflight、inventory、積載handoff、volatile item timer | runtime relationshipを除去し全Soulをunassignedへ戻す。requestは`Pending`、`inflight = 0`、lease/pending timerなし。inventory itemは近傍walkable cellへdropし、保存済み積載物もremap済みcarrier位置へ荷下ろしする。wheelbarrowはdurable `BelongsTo`のparkingへ戻し、Sand/StasisMudへfresh timerを付与 |
@@ -368,6 +373,7 @@ runnerだけが所有する。
 | Room | Wall/Door/Floor/`WorldMap` | Room root、overlay、lookup、detection state | なし | room/lookup | boundary/overlay | 次Logicのroom detection |
 | Task/Logistics | Designation/Request、`ManagedBy`、`ParkedAt`、`BelongsTo`、staging handoffの`LoadedIn` | cache/diagnostic/runtime claim | legacy runtime edge strip、積載物をcarrier近傍へ荷下ろし | request Pending、parking、item lifetime | item/tool shell | runner内〜次Perceive |
 | Deconstruction | `DeconstructionOrder`、target Relationship | pending / commit claim | canonical completed target、WorldMap owner、一意・対称relationshipを検証 | orderから`DeconstructionPending`を再構築 | M1ではなし | runner内 |
+| Indoor lighting | `LightingFixtureMount`、Building、Transform、WorldMap、energy policy | field/emitter/dirty/probe | wrapper欠落だけFreeStanding補完。不正owner/origin/wall anchorはpreflight reject | mount-aware `RadialLightEmitter`とepoch-tagged field | Lamp器具は既存building shell | `lighting.wake`後の次Update |
 
 shell 欠落の判定は「shell が必ず挿入するコンポーネントの不在」
 （Soul/Familiar は `Without<Destination>`、Building は `Without<BuildingBounceEffect>`、Blueprint は mirror / Sprite /

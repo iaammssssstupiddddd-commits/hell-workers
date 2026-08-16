@@ -100,6 +100,7 @@ EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "p02": P01_RENDER_RESOURCES,
     "p03": P01_RENDER_RESOURCES,
     "p04": P01_RENDER_RESOURCES,
+    "p05": P01_RENDER_RESOURCES,
 }
 SOURCE_CHECKPOINTS_RENDERDOC = (
     "start",
@@ -115,7 +116,7 @@ SOURCE_CHECKPOINTS_RENDERDOC = (
 
 
 def _expected_source_checkpoints(stage: str) -> tuple[str, ...]:
-    if stage not in {"p03", "p04"}:
+    if stage not in {"p03", "p04", "p05"}:
         return SOURCE_CHECKPOINTS_RENDERDOC
     return (*SOURCE_CHECKPOINTS_RENDERDOC[:-1], "after-field-core", "before-registration")
 
@@ -730,7 +731,7 @@ def _validate_run_file_set(
         "indoor_light_layout.csv",
         "indoor_light_presentation.csv",
     }
-    if stage == "p04":
+    if stage in {"p04", "p05"}:
         data_files.add("indoor_light_runtime.json")
     root_files = {
         "command.txt",
@@ -744,7 +745,7 @@ def _validate_run_file_set(
         data_files |= {"determinism.csv", "determinism_records.csv"}
     elif leg_id == "behavior":
         data_files.add("timeline.json")
-        if behavior_case == "load-normal-v1":
+        if behavior_case is not None and behavior_case.startswith("load-"):
             data_files.add("behavior-save.scn.ron")
     elif leg_id in {"capture", "memory"}:
         data_files |= {
@@ -756,11 +757,11 @@ def _validate_run_file_set(
         if leg_id == "memory":
             data_files.add("memory.csv")
             root_files |= {"profile-artifact.json", "resource-usage.txt"}
-        if stage in {"p02", "p03", "p04"}:
+        if stage in {"p02", "p03", "p04", "p05"}:
             data_files.add("p02_presentation.csv")
     elif leg_id == "field-core":
         data_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
-        if stage == "p04":
+        if stage in {"p04", "p05"}:
             data_files.add("indoor_light_runtime.json")
     else:
         raise RuntimeError(f"session file-set validator does not support leg {leg_id}")
@@ -1760,7 +1761,7 @@ def _load_renderdoc_evidence(
             )
     render_inventory = _validate_render_inventory_json(runtime["render_inventory"])
     p02_presentation = runtime.get("p02_presentation")
-    if stage in {"p02", "p03", "p04"} and not isinstance(p02_presentation, dict):
+    if stage in {"p02", "p03", "p04", "p05"} and not isinstance(p02_presentation, dict):
         raise RuntimeError("P02 RenderDoc evidence has no presentation checkpoint")
     mask_resource_id = tracked_ids.get("mask_target")
     mask_pass_count = (
@@ -1851,7 +1852,7 @@ def _load_renderdoc_evidence(
                             "state_and_bounce_probes_pass"
                         ],
                     }
-                    if stage in {"p02", "p03", "p04"}
+                    if stage in {"p02", "p03", "p04", "p05"}
                     else {}
                 ),
             },
@@ -2360,6 +2361,55 @@ def _gate_observed(
                 )
         if len(set(observed_values)) != 1:
             raise RuntimeError(f"{case_id} Door gate metric {metric_id} differs across runs")
+        value = observed_values[0]
+        return str(value).lower() if isinstance(value, bool) else str(value)
+    if metric_id in {
+        "live_field_unchanged",
+        "world_epoch_delta",
+        "wake_count",
+        "old_epoch_field_reads",
+        "reset_is_dark",
+        "terminal_checksum_match",
+    }:
+        timelines = [validation.timeline for validation in validations]
+        if not timelines or any(not isinstance(timeline, list) or not timeline for timeline in timelines):
+            raise RuntimeError(f"{case_id} has no valid P05 lifecycle timeline")
+        observed_values: list[int | bool] = []
+        for timeline in timelines:
+            assert timeline is not None
+            initial = timeline[0]
+            terminal = timeline[-1]
+            if metric_id == "live_field_unchanged":
+                observed_values.append(
+                    initial["field_checksum"] == terminal["field_checksum"]
+                )
+            elif metric_id == "world_epoch_delta":
+                observed_values.append(
+                    terminal["world_epoch"] - initial["world_epoch"]
+                )
+            elif metric_id == "wake_count":
+                observed_values.append(terminal["wake_count"])
+            elif metric_id == "old_epoch_field_reads":
+                observed_values.append(terminal["old_epoch_field_read_count"])
+            elif metric_id == "reset_is_dark":
+                reset_rows = [
+                    row for row in timeline if row["registry_phase"] == "load_reset"
+                ]
+                observed_values.append(
+                    bool(reset_rows)
+                    and all(
+                        row["field_availability"] == "unavailable"
+                        and row["field_is_dark"] is True
+                        and row["field_checksum"] is None
+                        for row in reset_rows
+                    )
+                )
+            else:
+                observed_values.append(
+                    initial["fixture_checksum"] == terminal["fixture_checksum"]
+                )
+        if len(set(observed_values)) != 1:
+            raise RuntimeError(f"{case_id} P05 lifecycle metric {metric_id} differs across runs")
         value = observed_values[0]
         return str(value).lower() if isinstance(value, bool) else str(value)
     gate_metrics = evidence.get("gate_metrics")
