@@ -122,7 +122,12 @@ pub(crate) fn start_perf_capture_system(
             params.config.fixed_audit_ticks(),
         );
     } else {
-        if !params.config.keeps_virtual_time_paused_during_capture() {
+        if params.config.keeps_virtual_time_paused_during_capture() {
+            // Freeze at the capture boundary itself instead of relying on the
+            // settings/fixture startup order. Every actual-window process must
+            // enter warm-up with the same immutable indoor-light topology.
+            params.virtual_time.pause();
+        } else {
             params.virtual_time.unpause();
         }
         capture.phase = PerfCapturePhase::Warmup;
