@@ -4,14 +4,16 @@
 //! - Building が仮設→本設に遷移した時、Building3dVisual のマテリアルを通常色に差し替える。
 
 use crate::plugins::startup::Building3dHandles;
+use crate::systems::jobs::structural_light_anchor_mesh_tag;
 use bevy::ecs::entity::EntityHashMap;
+use bevy::mesh::MeshTag;
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::relationships::StoredItems;
 use hw_core::visual_mirror::{MudMixerVisualState, StockpileVisualState};
 use hw_core::world::DoorState;
 use hw_jobs::{Building, BuildingType, Door};
-use hw_visual::SectionMaterial;
+use hw_visual::TopDownStructuralMaterial;
 use hw_visual::visual3d::{
     Building3dVisual, Door3dVisual, DoorPresentationState, StructuralPresentationState,
 };
@@ -42,7 +44,7 @@ pub fn sync_provisional_wall_material_system(
     handles_3d: Res<Building3dHandles>,
     q_buildings: Query<(Entity, &Building), Changed<Building>>,
     q_visuals: Query<(Entity, &Building3dVisual)>,
-    mut q_materials: Query<&mut MeshMaterial3d<SectionMaterial>>,
+    mut q_materials: Query<&mut MeshMaterial3d<TopDownStructuralMaterial>>,
 ) {
     for (building_entity, building) in q_buildings.iter() {
         // 仮設から本設への遷移のみ対象
@@ -92,7 +94,11 @@ pub fn building_presentation_transform(kind: BuildingType, owner: &Transform) ->
 type BuildingVisualTransformQuery<'w, 's> = Query<
     'w,
     's,
-    (&'static Building3dVisual, &'static mut Transform),
+    (
+        &'static Building3dVisual,
+        &'static mut Transform,
+        Option<&'static mut MeshTag>,
+    ),
     (Without<Door3dVisual>, Without<Building>),
 >;
 
@@ -129,12 +135,19 @@ pub fn sync_building_3d_transform_system(
             continue;
         };
         let mut transform_query = visuals.p1();
-        let Ok((_, mut transform)) = transform_query.get_mut(entity) else {
+        let Ok((_, mut transform, mesh_tag)) = transform_query.get_mut(entity) else {
             continue;
         };
         let next = building_presentation_transform(building.kind, owner);
         if *transform != next {
             *transform = next;
+        }
+        if let (Some(mut mesh_tag), Some(next_tag)) = (
+            mesh_tag,
+            structural_light_anchor_mesh_tag(building.kind, owner),
+        ) && *mesh_tag != next_tag
+        {
+            *mesh_tag = next_tag;
         }
     }
 
@@ -145,13 +158,19 @@ pub fn sync_building_3d_transform_system(
     if changed.is_empty() {
         return;
     }
-    for (visual, mut transform) in &mut visuals.p1() {
+    for (visual, mut transform, mesh_tag) in &mut visuals.p1() {
         let Some((kind, owner)) = changed.get(&visual.owner) else {
             continue;
         };
         let next = building_presentation_transform(*kind, owner);
         if *transform != next {
             *transform = next;
+        }
+        if let (Some(mut mesh_tag), Some(next_tag)) =
+            (mesh_tag, structural_light_anchor_mesh_tag(*kind, owner))
+            && *mesh_tag != next_tag
+        {
+            *mesh_tag = next_tag;
         }
     }
 }
@@ -201,7 +220,7 @@ pub fn sync_structural_presentation_state_system(
     mut visuals: Query<(
         &Building3dVisual,
         &mut StructuralPresentationState,
-        &mut MeshMaterial3d<StandardMaterial>,
+        &mut MeshMaterial3d<TopDownStructuralMaterial>,
     )>,
     handles: Res<Building3dHandles>,
 ) {
@@ -242,7 +261,8 @@ type DoorVisualQuery<'w, 's> = Query<
         &'static Building3dVisual,
         &'static mut DoorPresentationState,
         &'static mut Transform,
-        &'static mut MeshMaterial3d<StandardMaterial>,
+        &'static mut MeshMaterial3d<TopDownStructuralMaterial>,
+        &'static mut MeshTag,
     ),
     Without<Door>,
 >;
@@ -271,7 +291,7 @@ pub fn sync_door_presentation_system(
         }
     }
 
-    for (visual, mut observed_state, mut transform, mut material) in &mut visuals {
+    for (visual, mut observed_state, mut transform, mut material, mut mesh_tag) in &mut visuals {
         let Ok((door, owner_transform, _)) = owners.get(visual.owner) else {
             continue;
         };
@@ -290,6 +310,12 @@ pub fn sync_door_presentation_system(
         }
         if material.0 != *next_material {
             material.0 = next_material.clone();
+        }
+        if let Some(next_tag) =
+            structural_light_anchor_mesh_tag(BuildingType::Door, owner_transform)
+            && *mesh_tag != next_tag
+        {
+            *mesh_tag = next_tag;
         }
     }
 }

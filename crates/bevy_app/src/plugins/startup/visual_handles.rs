@@ -10,16 +10,17 @@ use hw_core::visual::SoulTaskHandles;
 use hw_logistics::ResourceItemVisualHandles;
 use hw_visual::{
     BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
-    PlantTreeHandles, SectionMaterial, SoulShadowMaterial, SpeechHandles,
-    TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial, TerrainSurfaceMaterialExt,
-    TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,
-    TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2, TerrainSurfaceUniform,
-    WallVisualHandles, WorkIconHandles, make_section_material, make_terrain_surface_material,
-    make_terrain_surface_material_lod1_lite, make_terrain_surface_material_lod2, with_alpha_mode,
+    PlantTreeHandles, SoulShadowMaterial, SpeechHandles, TerrainSurfaceLutImageHandle,
+    TerrainSurfaceMaterial, TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod1Lite,
+    TerrainSurfaceMaterialExtLod2, TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2,
+    TerrainSurfaceUniform, TopDownStructuralMaterial, WallVisualHandles, WorkIconHandles,
+    make_terrain_surface_material, make_terrain_surface_material_lod1_lite,
+    make_terrain_surface_material_lod2, make_topdown_structural_material, with_topdown_alpha_mode,
 };
 use hw_visual::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
 use hw_world::DoorVisualHandles;
 
+use crate::systems::visual::indoor_light_texture::IndoorLightTexture;
 use crate::world::map::{TerrainFeatureMap, TerrainIdMap};
 
 /// 3D レンダリング用メッシュ・マテリアルハンドルリソース
@@ -30,26 +31,26 @@ use crate::world::map::{TerrainFeatureMap, TerrainIdMap};
 pub struct Building3dHandles {
     // --- 壁 ---
     pub wall_mesh: Handle<Mesh>,
-    pub wall_material: Handle<SectionMaterial>,
-    pub wall_provisional_material: Handle<SectionMaterial>,
+    pub wall_material: Handle<TopDownStructuralMaterial>,
+    pub wall_provisional_material: Handle<TopDownStructuralMaterial>,
     // --- 床 ---
     pub floor_mesh: Handle<Mesh>,
-    pub floor_material: Handle<StandardMaterial>,
+    pub floor_material: Handle<TopDownStructuralMaterial>,
     pub bridge_mesh: Handle<Mesh>,
-    pub bridge_material: Handle<StandardMaterial>,
+    pub bridge_material: Handle<TopDownStructuralMaterial>,
     // --- ドア ---
     pub door_mesh: Handle<Mesh>,
-    pub door_closed_material: Handle<StandardMaterial>,
-    pub door_open_material: Handle<StandardMaterial>,
-    pub door_locked_material: Handle<StandardMaterial>,
+    pub door_closed_material: Handle<TopDownStructuralMaterial>,
+    pub door_open_material: Handle<TopDownStructuralMaterial>,
+    pub door_locked_material: Handle<TopDownStructuralMaterial>,
     // --- 設備 (Tank / MudMixer / RestArea / WheelbarrowParking / SandPile / BonePile) ---
     pub equipment_1x1_mesh: Handle<Mesh>,
     pub equipment_2x2_mesh: Handle<Mesh>,
-    pub equipment_material: Handle<StandardMaterial>,
-    pub tank_partial_material: Handle<StandardMaterial>,
-    pub tank_full_material: Handle<StandardMaterial>,
-    pub mixer_idle_material: Handle<StandardMaterial>,
-    pub mixer_active_material: Handle<StandardMaterial>,
+    pub equipment_material: Handle<TopDownStructuralMaterial>,
+    pub tank_partial_material: Handle<TopDownStructuralMaterial>,
+    pub tank_full_material: Handle<TopDownStructuralMaterial>,
+    pub mixer_idle_material: Handle<TopDownStructuralMaterial>,
+    pub mixer_active_material: Handle<TopDownStructuralMaterial>,
     // --- キャラクター ---
     pub soul_scene: Handle<WorldAsset>,
     pub soul_billboards: SoulBillboardHandles,
@@ -110,13 +111,14 @@ pub struct InitVisualHandlesParams<'w, 's> {
     game_assets: Res<'w, GameAssets>,
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
-    section_materials: ResMut<'w, Assets<SectionMaterial>>,
+    structural_materials: ResMut<'w, Assets<TopDownStructuralMaterial>>,
     terrain_surface_materials: ResMut<'w, Assets<TerrainSurfaceMaterial>>,
     terrain_surface_materials_lod1_lite: ResMut<'w, Assets<TerrainSurfaceMaterialLod1Lite>>,
     terrain_surface_materials_lod2: ResMut<'w, Assets<TerrainSurfaceMaterialLod2>>,
     character_materials: ResMut<'w, Assets<CharacterMaterial>>,
     terrain_feature_map: Res<'w, TerrainFeatureMap>,
     terrain_id_map: Res<'w, TerrainIdMap>,
+    indoor_light_texture: Res<'w, IndoorLightTexture>,
 }
 
 pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
@@ -124,7 +126,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     let commands = &mut params.commands;
     let meshes = &mut params.meshes;
     let materials = &mut params.materials;
-    let section_materials = &mut params.section_materials;
+    let structural_materials = &mut params.structural_materials;
     let character_materials = &mut params.character_materials;
     let feature_map_handle = params.terrain_feature_map.image.clone();
     let terrain_id_map_handle = params.terrain_id_map.image.clone();
@@ -275,65 +277,31 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     ));
     let soul_billboard_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.9, TILE_SIZE * 1.1));
 
-    let wall_material = section_materials.add(make_section_material(LinearRgba::new(
-        0.56, 0.44, 0.30, 1.0,
-    )));
-    let wall_provisional_material = section_materials.add(with_alpha_mode(
-        make_section_material(LinearRgba::new(0.95, 0.72, 0.45, 0.9)),
+    let indoor_light_field = params.indoor_light_texture.handle().clone();
+    let wall_provisional_material = structural_materials.add(with_topdown_alpha_mode(
+        make_topdown_structural_material(
+            LinearRgba::new(0.95, 0.72, 0.45, 0.9),
+            indoor_light_field.clone(),
+        ),
         AlphaMode::Blend,
     ));
-    let floor_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.4, 0.3, 0.2),
-        perceptual_roughness: 1.0,
-        reflectance: 0.0,
-        ..default()
-    });
-    let bridge_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.38, 0.24, 0.12),
-        perceptual_roughness: 1.0,
-        reflectance: 0.0,
-        ..default()
-    });
-    let door_closed_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.6, 0.45, 0.2),
-        perceptual_roughness: 1.0,
-        reflectance: 0.0,
-        ..default()
-    });
-    let door_open_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.32, 0.62, 0.28),
-        perceptual_roughness: 1.0,
-        reflectance: 0.0,
-        ..default()
-    });
-    let door_locked_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.68, 0.20, 0.16),
-        perceptual_roughness: 1.0,
-        reflectance: 0.0,
-        ..default()
-    });
-    let equipment_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.3, 0.5, 0.6),
-        perceptual_roughness: 1.0,
-        reflectance: 0.0,
-        ..default()
-    });
-    let tank_partial_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.24, 0.48, 0.72),
-        ..default()
-    });
-    let tank_full_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.16, 0.68, 0.88),
-        ..default()
-    });
-    let mixer_idle_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.42, 0.32, 0.24),
-        ..default()
-    });
-    let mixer_active_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.75, 0.38, 0.12),
-        ..default()
-    });
+    let mut structural_material = |color: LinearRgba| {
+        structural_materials.add(make_topdown_structural_material(
+            color,
+            indoor_light_field.clone(),
+        ))
+    };
+    let wall_material = structural_material(LinearRgba::new(0.56, 0.44, 0.30, 1.0));
+    let floor_material = structural_material(LinearRgba::new(0.4, 0.3, 0.2, 1.0));
+    let bridge_material = structural_material(LinearRgba::new(0.38, 0.24, 0.12, 1.0));
+    let door_closed_material = structural_material(LinearRgba::new(0.6, 0.45, 0.2, 1.0));
+    let door_open_material = structural_material(LinearRgba::new(0.32, 0.62, 0.28, 1.0));
+    let door_locked_material = structural_material(LinearRgba::new(0.68, 0.20, 0.16, 1.0));
+    let equipment_material = structural_material(LinearRgba::new(0.3, 0.5, 0.6, 1.0));
+    let tank_partial_material = structural_material(LinearRgba::new(0.24, 0.48, 0.72, 1.0));
+    let tank_full_material = structural_material(LinearRgba::new(0.16, 0.68, 0.88, 1.0));
+    let mixer_idle_material = structural_material(LinearRgba::new(0.42, 0.32, 0.24, 1.0));
+    let mixer_active_material = structural_material(LinearRgba::new(0.75, 0.38, 0.12, 1.0));
     let mut billboard_material = |image: Handle<Image>| {
         materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -401,6 +369,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         terrain_feature_lut: Some(game_assets.terrain_feature_lut.clone()),
         boundary_mask: None, // spawn_boundary_meshes (PostStartup) で後から設定される
         boundary_proximity_mask: None,
+        indoor_light_field: Some(indoor_light_field.clone()),
     };
     let terrain_surface = params
         .terrain_surface_materials
@@ -421,6 +390,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
                     terrain_feature_lut: Some(game_assets.terrain_feature_lut.clone()),
                     boundary_mask: None,
                     boundary_proximity_mask: None,
+                    indoor_light_field: Some(indoor_light_field.clone()),
                     ..Default::default()
                 },
             ));
@@ -441,6 +411,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
                     terrain_feature_lut: Some(game_assets.terrain_feature_lut.clone()),
                     boundary_mask: None, // spawn_boundary_meshes (PostStartup) で後から設定される
                     boundary_proximity_mask: None,
+                    indoor_light_field: Some(indoor_light_field),
                     ..Default::default()
                 },
             ));

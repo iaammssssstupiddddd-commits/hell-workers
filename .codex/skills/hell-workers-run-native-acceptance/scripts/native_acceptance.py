@@ -886,7 +886,7 @@ def rtt_light_contract(repo: Path, stage: str) -> dict[str, Any]:
         and stage_order.index(leg["first_required_stage"]) <= selected_index
     ]
     expected_legs = list(RTT_LIGHT_BASE_LEGS)
-    if stage in {"p03", "p04", "p05"}:
+    if stage in {"p03", "p04", "p05", "p06"}:
         expected_legs.append("field-core")
     if legs != expected_legs:
         raise AcceptanceError(
@@ -7455,7 +7455,7 @@ def add_rtt_light_arguments(
     parser.add_argument(
         "--stage",
         default=RTT_LIGHT_DEFAULT_STAGE,
-        choices=["current", "p01", "p02", "p03", "p04", "p05"],
+        choices=["current", "p01", "p02", "p03", "p04", "p05", "p06"],
     )
     parser.add_argument("--attempt-id")
     parser.add_argument("--adapter", default="Intel")

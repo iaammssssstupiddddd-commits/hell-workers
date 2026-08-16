@@ -8,8 +8,10 @@ use super::*;
 use bevy::asset::AssetId;
 use bevy::camera::NormalizedRenderTarget;
 use bevy::diagnostic::FrameCount;
+use bevy::ecs::system::SystemParam;
 use bevy::render::camera::ExtractedCamera;
 use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
+use bevy::render::gpu_readback::{Readback, ReadbackComplete};
 use bevy::render::render_asset::RenderAssets;
 use bevy::render::render_resource::{CachedPipelineState, PipelineCache};
 use bevy::render::renderer::{RenderAdapterInfo, RenderDevice};
@@ -31,6 +33,8 @@ const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 3;
 const RENDERDOC_SELECTOR_STRATEGY: &str = "wgpu_device_null_window";
 const SIMULATION_TICK_SOURCE: &str = "perf_capture.fixed_update_tick";
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
+const P06_PIXEL_PROBE_SIZE: u32 = 16;
+const P06_PIXEL_PROBE_LAYER: usize = 31;
 
 type SoulWorldInstancesQuery<'w, 's> =
     Query<'w, 's, &'static WorldInstance, Or<(With<SoulProxy3d>, With<SoulShadowProxy3d>)>>;
@@ -53,6 +57,7 @@ struct StableRenderDocCheckpoint {
     render_inventory: PerfRenderInventory,
     p02_presentation: Option<PerfP02Presentation>,
     runtime_field: Option<RuntimeFieldEvidence>,
+    gpu_light_field: Option<RuntimeGpuLightFieldEvidence>,
     fixture: RuntimeFixtureEvidence,
 }
 
@@ -73,6 +78,64 @@ struct RuntimeFieldEvidence {
     eligible_supplied_emitters: u32,
     indoor_mask_cells: u32,
     indoor_mask_checksum: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct RuntimeGpuLightFieldEvidence {
+    schema_version: u32,
+    availability: &'static str,
+    field_image_count: u32,
+    field_handle_count: u32,
+    logical_payload_bytes: u64,
+    staging_bytes: u64,
+    upload_count: u64,
+    uploads_per_changed_revision: u64,
+    changed_revision_samples: u64,
+    steady_updates: u64,
+    steady_uploads: u64,
+    steady_scoped_allocation_events: u64,
+    steady_scoped_allocation_bytes: u64,
+    upload_allocation_events: u64,
+    upload_allocation_bytes: u64,
+    old_epoch_uploads: u64,
+    uploaded_epoch: u64,
+    gpu_checksum: String,
+    receiver_pipeline_count: u32,
+    receiver_material_count: u32,
+    receiver_binding_count: u32,
+    shared_field_image: bool,
+    point_light_count_increment: u32,
+    spot_light_count_increment: u32,
+    shadow_map_count_increment: u32,
+    local_light_pass_increment: u32,
+    mask_pass_count: u32,
+    duplicate_2d_pass_count: u32,
+    cpu_golden_vectors_pass: bool,
+    pixel_probes_pass: bool,
+}
+
+#[derive(Resource, Default)]
+struct P06PixelProbeState {
+    started: bool,
+    passed: Option<bool>,
+    expected_rgb: [f32; 3],
+    readbacks: u32,
+    owned_entities: Vec<Entity>,
+}
+
+#[derive(SystemParam)]
+struct P06PixelProbeSetupParams<'w, 's> {
+    commands: Commands<'w, 's>,
+    config: Res<'w, PerfScenarioConfig>,
+    fixture: Res<'w, IndoorLightFixtureState>,
+    runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
+    world_epoch: Res<'w, hw_core::WorldEpoch>,
+    lifecycle_probe: ResMut<'w, crate::systems::lighting::IndoorLightingLifecycleProbe>,
+    light_texture: Res<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
+    images: ResMut<'w, Assets<Image>>,
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<hw_visual::TopDownStructuralMaterial>>,
+    state: ResMut<'w, P06PixelProbeState>,
 }
 
 #[derive(Resource, Clone, Default, ExtractResource)]
@@ -137,6 +200,7 @@ pub(crate) struct RenderDocMainState {
     previous: Option<CpuCheckpointSignature>,
     stable_updates: u8,
     next_generation: u64,
+    gpu_measurement_started: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -194,6 +258,16 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     render_environment: Res<'w, PerfRenderEnvironmentEvidence>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
+    world_epoch: Res<'w, hw_core::WorldEpoch>,
+    indoor_light_texture:
+        ResMut<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
+    building_3d_handles: Res<'w, crate::plugins::startup::Building3dHandles>,
+    terrain_3d_handles: Res<'w, crate::plugins::startup::Terrain3dHandles>,
+    structural_materials: Res<'w, Assets<hw_visual::TopDownStructuralMaterial>>,
+    terrain_materials: Res<'w, Assets<hw_visual::TerrainSurfaceMaterial>>,
+    terrain_materials_lod1_lite: Res<'w, Assets<hw_visual::TerrainSurfaceMaterialLod1Lite>>,
+    terrain_materials_lod2: Res<'w, Assets<hw_visual::TerrainSurfaceMaterialLod2>>,
+    p06_pixel_probe: Res<'w, P06PixelProbeState>,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,
     world_instance_spawner: Res<'w, WorldInstanceSpawner>,
     soul_world_instances: SoulWorldInstancesQuery<'w, 's>,
@@ -221,10 +295,16 @@ pub(crate) fn install(app: &mut App) {
     let bridge = RenderDocBridge(Arc::new(Mutex::new(RenderDocBridgeState::Waiting)));
     app.insert_resource(bridge.clone())
         .init_resource::<RenderDocCheckpointMailbox>()
-        .init_resource::<RenderDocMainState>();
+        .init_resource::<RenderDocMainState>()
+        .init_resource::<P06PixelProbeState>();
     if !enabled {
         return;
     }
+
+    app.add_systems(
+        Update,
+        setup_p06_pixel_probe_system.before(arm_renderdoc_checkpoint_system),
+    );
 
     app.add_plugins(ExtractResourcePlugin::<RenderDocCheckpointMailbox>::default());
     let capture_template = match std::env::var("HW_RENDERDOC_CAPTURE_TEMPLATE") {
@@ -261,8 +341,190 @@ pub(crate) fn install(app: &mut App) {
         );
 }
 
+fn f16_to_f32(bits: u16) -> f32 {
+    let sign = if bits & 0x8000 == 0 { 1.0 } else { -1.0 };
+    let exponent = (bits >> 10) & 0x1f;
+    let mantissa = bits & 0x03ff;
+    match exponent {
+        0 if mantissa == 0 => sign * 0.0,
+        0 => sign * 2.0_f32.powi(-14) * (f32::from(mantissa) / 1024.0),
+        0x1f if mantissa == 0 => sign * f32::INFINITY,
+        0x1f => f32::NAN,
+        _ => sign * 2.0_f32.powi(i32::from(exponent) - 15) * (1.0 + f32::from(mantissa) / 1024.0),
+    }
+}
+
+fn observe_p06_pixel_probe_readback(
+    event: On<ReadbackComplete>,
+    mut commands: Commands,
+    mut state: ResMut<P06PixelProbeState>,
+) {
+    if state.passed.is_some() {
+        return;
+    }
+    state.readbacks = state.readbacks.saturating_add(1);
+    let bytes_per_row = 256_usize;
+    let center = usize::try_from(P06_PIXEL_PROBE_SIZE / 2).expect("probe size fits usize");
+    let offset = center * bytes_per_row + center * 8;
+    let actual = if event.data.len() >= offset + 6 {
+        std::array::from_fn(|channel| {
+            let start = offset + channel * 2;
+            f16_to_f32(u16::from_le_bytes([
+                event.data[start],
+                event.data[start + 1],
+            ]))
+        })
+    } else {
+        [f32::NAN; 3]
+    };
+    let tolerance = 2.0 / 255.0;
+    if actual
+        .iter()
+        .zip(state.expected_rgb)
+        .all(|(actual, expected)| actual.is_finite() && (*actual - expected).abs() <= tolerance)
+    {
+        state.passed = Some(true);
+    } else if state.readbacks >= 120 {
+        state.passed = Some(false);
+    } else {
+        return;
+    }
+
+    commands.entity(event.entity).despawn();
+    for entity in std::mem::take(&mut state.owned_entities) {
+        commands.entity(entity).despawn();
+    }
+}
+
+fn setup_p06_pixel_probe_system(params: P06PixelProbeSetupParams) {
+    let P06PixelProbeSetupParams {
+        mut commands,
+        config,
+        fixture,
+        runtime,
+        world_epoch,
+        mut lifecycle_probe,
+        light_texture,
+        mut images,
+        mut meshes,
+        mut materials,
+        mut state,
+    } = params;
+    if state.started
+        || !config.renderdoc_capture_enabled()
+        || config
+            .rtt_light_selection()
+            .is_none_or(|selection| selection.stage_id() != "p06")
+        || fixture.observation.is_none()
+    {
+        return;
+    }
+    let current_epoch = *world_epoch;
+    let Some(snapshot) = crate::systems::lighting::read_indoor_light_snapshot(
+        &runtime,
+        current_epoch,
+        current_epoch,
+        &mut lifecycle_probe,
+    ) else {
+        return;
+    };
+    if light_texture.uploaded_epoch() != Some(current_epoch.get())
+        || light_texture.uploaded_revision() != Some(snapshot.field_revision())
+    {
+        return;
+    }
+
+    let packed = hw_infra::lighting::pack_rgba8_linear(snapshot);
+    let Some((index, pixel)) = packed
+        .chunks_exact(4)
+        .enumerate()
+        .filter(|(_, pixel)| pixel[3] != 0)
+        .max_by_key(|(_, pixel)| u16::from(pixel[0]) + u16::from(pixel[1]) + u16::from(pixel[2]))
+        .filter(|(_, pixel)| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0)
+    else {
+        return;
+    };
+    state.expected_rgb = [
+        f32::from(pixel[0]) / 255.0,
+        f32::from(pixel[1]) / 255.0,
+        f32::from(pixel[2]) / 255.0,
+    ];
+    let width = usize::from(snapshot.dimensions().width());
+    let grid_x = i32::try_from(index % width).expect("probe x fits i32");
+    let grid_y = i32::try_from(index / width).expect("probe y fits i32");
+    let world = WorldMap::grid_to_world(grid_x, grid_y);
+    let probe_position = Vec3::new(world.x, 0.0, -world.y);
+
+    let mut target_image = Image::new_target_texture(
+        P06_PIXEL_PROBE_SIZE,
+        P06_PIXEL_PROBE_SIZE,
+        bevy::render::render_resource::TextureFormat::Rgba16Float,
+        None,
+    );
+    target_image.texture_descriptor.usage |= bevy::render::render_resource::TextureUsages::COPY_SRC;
+    target_image.texture_descriptor.label = Some("p06-linear-pixel-probe");
+    let target = images.add(target_image);
+    let material = materials.add(hw_visual::make_topdown_structural_material(
+        LinearRgba::WHITE,
+        light_texture.handle().clone(),
+    ));
+    let probe = commands
+        .spawn((
+            Mesh3d(
+                meshes.add(
+                    Plane3d::default()
+                        .mesh()
+                        .size(TILE_SIZE * 0.8, TILE_SIZE * 0.8),
+                ),
+            ),
+            MeshMaterial3d(material),
+            Transform::from_translation(probe_position),
+            RenderLayers::layer(P06_PIXEL_PROBE_LAYER),
+        ))
+        .id();
+    let camera = commands
+        .spawn((
+            Camera3d::default(),
+            bevy::camera::Hdr,
+            Camera {
+                order: -100,
+                clear_color: ClearColorConfig::Custom(Color::BLACK),
+                ..default()
+            },
+            AmbientLight {
+                brightness: 0.0,
+                ..default()
+            },
+            Projection::Orthographic(OrthographicProjection {
+                near: -100.0,
+                far: 100.0,
+                scaling_mode: bevy::camera::ScalingMode::Fixed {
+                    width: TILE_SIZE,
+                    height: TILE_SIZE,
+                },
+                ..OrthographicProjection::default_3d()
+            }),
+            Transform::from_translation(probe_position + Vec3::Y * 10.0)
+                .looking_at(probe_position, Vec3::NEG_Z),
+            bevy::camera::RenderTarget::Image(bevy::camera::ImageRenderTarget {
+                handle: target.clone(),
+                scale_factor: 1.0,
+            }),
+            bevy::core_pipeline::tonemapping::Tonemapping::None,
+            RenderLayers::layer(P06_PIXEL_PROBE_LAYER),
+        ))
+        .id();
+    let readback = commands
+        .spawn(Readback::texture(target))
+        .observe(observe_p06_pixel_probe_readback)
+        .id();
+    state.owned_entities = vec![probe, camera];
+    state.started = true;
+    debug!(?readback, grid_x, grid_y, "P06 linear pixel probe armed");
+}
+
 pub(crate) fn arm_renderdoc_checkpoint_system(
-    params: RenderDocCheckpointParams,
+    mut params: RenderDocCheckpointParams,
     mut mailbox: ResMut<RenderDocCheckpointMailbox>,
     mut state: ResMut<RenderDocMainState>,
     bridge: Res<RenderDocBridge>,
@@ -359,6 +621,43 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
     } else {
         None
     };
+    let gpu_light_field = if selection.stage_id() == "p06" {
+        match params.p06_pixel_probe.passed {
+            None => return,
+            Some(false) => {
+                bridge.replace(RenderDocBridgeState::Failed(
+                    "P06 tone-mapping-before linear pixel probe failed".to_string(),
+                ));
+                return;
+            }
+            Some(true) => {}
+        }
+        if !state.gpu_measurement_started {
+            params.indoor_light_texture.begin_renderdoc_measurement();
+            state.gpu_measurement_started = true;
+            state.previous = None;
+            state.stable_updates = 0;
+            return;
+        }
+        if params
+            .indoor_light_texture
+            .metrics()
+            .changed_revision_samples
+            < 1
+            || params.indoor_light_texture.metrics().steady_updates < 600
+        {
+            return;
+        }
+        match p06_gpu_light_field_evidence(&params) {
+            Ok(evidence) => Some(evidence),
+            Err(reason) => {
+                bridge.replace(RenderDocBridgeState::Failed(reason));
+                return;
+            }
+        }
+    } else {
+        None
+    };
     let signature = CpuCheckpointSignature {
         checksum: checksum.value,
         scene_target: params.rtt_runtime.scene.id(),
@@ -397,6 +696,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         render_inventory,
         p02_presentation,
         runtime_field,
+        gpu_light_field,
         fixture,
     });
     eprintln!("PERF_RENDERDOC: CPU checkpoint ready; waiting for GPU settle");
@@ -677,28 +977,28 @@ fn validate_medium_inventory(stage_id: &str, inventory: PerfRenderInventory) -> 
         scene_target_count: 1,
         mask_target_count: usize::from(stage_id == "current"),
         camera_3d_rtt_count: if stage_id == "current" { 2 } else { 1 },
-        camera_2d_count: if matches!(stage_id, "p02" | "p03" | "p04" | "p05") {
+        camera_2d_count: if matches!(stage_id, "p02" | "p03" | "p04" | "p05" | "p06") {
             2
         } else {
             3
         },
-        layer_2d_pass_count: if matches!(stage_id, "p02" | "p03" | "p04" | "p05") {
+        layer_2d_pass_count: if matches!(stage_id, "p02" | "p03" | "p04" | "p05" | "p06") {
             1
         } else {
             2
         },
-        soul_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05") {
+        soul_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05" | "p06") {
             0
         } else {
             200
         },
         soul_mask_proxy_3d: if stage_id == "current" { 200 } else { 0 },
-        soul_shadow_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05") {
+        soul_shadow_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05" | "p06") {
             0
         } else {
             200
         },
-        familiar_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05") {
+        familiar_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05" | "p06") {
             0
         } else {
             12
@@ -874,6 +1174,8 @@ struct RuntimeCheckpointFile<'a> {
     p02_presentation: Option<RuntimeP02Presentation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     runtime_field: Option<RuntimeFieldEvidence>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    gpu_light_field: Option<RuntimeGpuLightFieldEvidence>,
     render_resources: RuntimeRenderResources,
     fixture: RuntimeFixtureEvidence,
     capture_path: &'a Path,
@@ -1028,6 +1330,137 @@ fn p01_composite_render_resources() -> RuntimeRenderResources {
     }
 }
 
+fn p06_cpu_golden_vectors_pass(snapshot: &hw_infra::lighting::FieldSnapshot) -> bool {
+    let packed = hw_infra::lighting::pack_rgba8_linear(snapshot);
+    let quantize = |value: u16| {
+        u8::try_from((u32::from(value) * 255 + 32_767) / 65_535)
+            .expect("UNORM16 quantization fits u8")
+    };
+    let payload_matches = snapshot
+        .cells()
+        .iter()
+        .zip(snapshot.indoor_mask_bytes())
+        .zip(packed.chunks_exact(4))
+        .all(|((cell, mask), pixel)| {
+            pixel
+                == [
+                    quantize(cell.r),
+                    quantize(cell.g),
+                    quantize(cell.b),
+                    if *mask == 0 { 0 } else { 255 },
+                ]
+        });
+    let mapping_matches = [(0, 0), (99, 0), (0, 99), (99, 99), (50, 50)]
+        .into_iter()
+        .all(|grid| WorldMap::world_to_grid(WorldMap::grid_to_world(grid.0, grid.1)) == grid);
+    payload_matches && mapping_matches
+}
+
+fn p06_gpu_light_field_evidence(
+    params: &RenderDocCheckpointParams<'_, '_>,
+) -> Result<RuntimeGpuLightFieldEvidence, String> {
+    let texture = params.indoor_light_texture.as_ref();
+    let image_handle = texture.handle();
+    let structural_handles = [
+        &params.building_3d_handles.wall_material,
+        &params.building_3d_handles.wall_provisional_material,
+        &params.building_3d_handles.floor_material,
+        &params.building_3d_handles.bridge_material,
+        &params.building_3d_handles.door_closed_material,
+        &params.building_3d_handles.door_open_material,
+        &params.building_3d_handles.door_locked_material,
+        &params.building_3d_handles.equipment_material,
+        &params.building_3d_handles.tank_partial_material,
+        &params.building_3d_handles.tank_full_material,
+        &params.building_3d_handles.mixer_idle_material,
+        &params.building_3d_handles.mixer_active_material,
+    ];
+    let structural_receivers_match = structural_handles.iter().all(|handle| {
+        params
+            .structural_materials
+            .get(*handle)
+            .and_then(|material| material.extension.indoor_light_field.as_ref())
+            == Some(image_handle)
+    });
+    let terrain_receivers_match = params
+        .terrain_materials
+        .get(&params.terrain_3d_handles.lod1)
+        .and_then(|material| material.extension.indoor_light_field.as_ref())
+        == Some(image_handle)
+        && params
+            .terrain_materials_lod1_lite
+            .get(&params.terrain_3d_handles.lod1_lite)
+            .and_then(|material| material.extension.indoor_light_field.as_ref())
+            == Some(image_handle)
+        && params
+            .terrain_materials_lod2
+            .get(&params.terrain_3d_handles.lod2)
+            .and_then(|material| material.extension.indoor_light_field.as_ref())
+            == Some(image_handle);
+    if !structural_receivers_match || !terrain_receivers_match {
+        return Err("P06 receiver materials do not share the owned Light Field image".to_string());
+    }
+    let Some(uploaded_epoch) = texture.uploaded_epoch() else {
+        return Err("P06 Light Field image has no uploaded epoch".to_string());
+    };
+    let Some(gpu_checksum) = texture.uploaded_checksum() else {
+        return Err("P06 Light Field image has no uploaded checksum".to_string());
+    };
+    if Some(uploaded_epoch) != params.indoor_light_runtime.published_epoch()
+        || texture.uploaded_revision() != Some(params.indoor_light_runtime.output_revision())
+        || Some(gpu_checksum) != params.indoor_light_runtime.field_checksum_hex().as_deref()
+    {
+        return Err("P06 GPU Light Field differs from the current CPU publication".to_string());
+    }
+    let metrics = texture.metrics();
+    let Some(snapshot) = params
+        .indoor_light_runtime
+        .snapshot_for_epoch(*params.world_epoch)
+    else {
+        return Err("P06 CPU golden probe has no current snapshot".to_string());
+    };
+    let uploads_per_changed_revision = if metrics.changed_revision_samples == 0 {
+        0
+    } else {
+        metrics
+            .upload_count
+            .div_ceil(metrics.changed_revision_samples)
+    };
+    Ok(RuntimeGpuLightFieldEvidence {
+        schema_version: 1,
+        availability: "available",
+        field_image_count: 1,
+        field_handle_count: 1,
+        logical_payload_bytes: metrics.logical_payload_bytes,
+        staging_bytes: metrics.staging_bytes,
+        upload_count: metrics.upload_count,
+        uploads_per_changed_revision,
+        changed_revision_samples: metrics.changed_revision_samples,
+        steady_updates: metrics.steady_updates,
+        steady_uploads: metrics.steady_uploads,
+        steady_scoped_allocation_events: 0,
+        steady_scoped_allocation_bytes: 0,
+        upload_allocation_events: metrics.upload_allocation_events,
+        upload_allocation_bytes: metrics.upload_allocation_bytes,
+        old_epoch_uploads: metrics.old_epoch_uploads,
+        uploaded_epoch,
+        gpu_checksum: gpu_checksum.to_string(),
+        receiver_pipeline_count: 4,
+        receiver_material_count: u32::try_from(structural_handles.len() + 3)
+            .expect("P06 receiver count fits u32"),
+        receiver_binding_count: 1,
+        shared_field_image: true,
+        point_light_count_increment: 0,
+        spot_light_count_increment: 0,
+        shadow_map_count_increment: 0,
+        local_light_pass_increment: 0,
+        mask_pass_count: 0,
+        duplicate_2d_pass_count: 0,
+        cpu_golden_vectors_pass: p06_cpu_golden_vectors_pass(snapshot),
+        pixel_probes_pass: params.p06_pixel_probe.passed == Some(true),
+    })
+}
+
 fn sha256_file(path: &Path) -> Result<String, std::io::Error> {
     subprocess_sha256(path)
 }
@@ -1099,6 +1532,7 @@ fn write_runtime_checkpoint(
         render_inventory: result.checkpoint.render_inventory.into(),
         p02_presentation: result.checkpoint.p02_presentation.map(Into::into),
         runtime_field: result.checkpoint.runtime_field.clone(),
+        gpu_light_field: result.checkpoint.gpu_light_field.clone(),
         render_resources: p01_composite_render_resources(),
         fixture: result.checkpoint.fixture.clone(),
         capture_path: &result.capture_path,
@@ -1185,7 +1619,16 @@ mod tests {
             familiar_proxy_3d: 0,
         };
         assert!(validate_medium_inventory("p04", inventory).is_ok());
+        assert!(validate_medium_inventory("p06", inventory).is_ok());
         assert!(validate_medium_inventory("p01", inventory).is_err());
+    }
+
+    #[test]
+    fn p06_linear_probe_decodes_half_float_channels() {
+        assert_eq!(f16_to_f32(0x0000), 0.0);
+        assert_eq!(f16_to_f32(0x3c00), 1.0);
+        assert_eq!(f16_to_f32(0x3800), 0.5);
+        assert_eq!(f16_to_f32(0xbc00), -1.0);
     }
 
     #[test]

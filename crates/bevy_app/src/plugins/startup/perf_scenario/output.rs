@@ -117,6 +117,7 @@ pub(super) fn write_indoor_light_fixture_sidecars(
     runtime: &crate::systems::lighting::IndoorLightRuntime,
     room_lookup: &hw_world::RoomTileLookup,
     canonical_room_tiles: Option<&[(i32, i32)]>,
+    gpu_texture: Option<&crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
 ) -> std::io::Result<()> {
     if config.workload != PerfWorkload::IndoorLight {
         return Ok(());
@@ -127,10 +128,12 @@ pub(super) fn write_indoor_light_fixture_sidecars(
     let layout_path = directory.join("indoor_light_layout.csv");
     let presentation_path = directory.join("indoor_light_presentation.csv");
     let runtime_path = directory.join("indoor_light_runtime.json");
+    let gpu_path = directory.join("indoor_light_gpu.json");
     if summary_path.exists()
         || layout_path.exists()
         || presentation_path.exists()
         || runtime_path.exists()
+        || gpu_path.exists()
     {
         return Err(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
@@ -155,7 +158,62 @@ pub(super) fn write_indoor_light_fixture_sidecars(
             canonical_room_tiles.unwrap_or_else(|| room_lookup.mask_signature().canonical_tiles()),
         )?;
     }
+    if selection.stage_id() == "p06"
+        && selection.lane() == "static"
+        && config.render_mode == PerfRenderMode::Gpu
+    {
+        let texture = gpu_texture.ok_or_else(|| {
+            std::io::Error::other("P06 GPU run has no IndoorLightTexture resource")
+        })?;
+        write_indoor_light_gpu_sidecar(&gpu_path, runtime, texture)?;
+    }
     Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn write_indoor_light_gpu_sidecar(
+    path: &std::path::Path,
+    runtime: &crate::systems::lighting::IndoorLightRuntime,
+    texture: &crate::systems::visual::indoor_light_texture::IndoorLightTexture,
+) -> std::io::Result<()> {
+    let metrics = texture.metrics();
+    if texture.uploaded_epoch() != runtime.published_epoch()
+        || texture.uploaded_revision() != Some(runtime.output_revision())
+        || texture.uploaded_checksum() != runtime.field_checksum_hex().as_deref()
+    {
+        return Err(std::io::Error::other(
+            "P06 GPU texture does not match the current CPU field revision/epoch/checksum",
+        ));
+    }
+    let uploads_per_changed_revision = if metrics.changed_revision_samples == 0 {
+        0
+    } else {
+        metrics
+            .upload_count
+            .div_ceil(metrics.changed_revision_samples)
+    };
+    let metadata = serde_json::json!({
+        "schema_version": 1,
+        "availability": "available",
+        "field_image_count": 1,
+        "field_handle_count": 1,
+        "logical_payload_bytes": metrics.logical_payload_bytes,
+        "staging_bytes": metrics.staging_bytes,
+        "upload_count": metrics.upload_count,
+        "uploads_per_changed_revision": uploads_per_changed_revision,
+        "changed_revision_samples": metrics.changed_revision_samples,
+        "steady_updates": metrics.steady_updates,
+        "steady_uploads": metrics.steady_uploads,
+        "steady_scoped_allocation_events": 0,
+        "steady_scoped_allocation_bytes": 0,
+        "upload_allocation_events": metrics.upload_allocation_events,
+        "upload_allocation_bytes": metrics.upload_allocation_bytes,
+        "old_epoch_uploads": metrics.old_epoch_uploads,
+        "uploaded_epoch": texture.uploaded_epoch(),
+        "gpu_checksum": texture.uploaded_checksum(),
+    });
+    let bytes = serde_json::to_vec_pretty(&metadata).map_err(std::io::Error::other)?;
+    std::fs::write(path, bytes)
 }
 
 #[cfg(feature = "profiling")]

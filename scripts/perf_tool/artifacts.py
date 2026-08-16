@@ -1280,7 +1280,7 @@ def read_behavior_timeline(
             errors.append(f"timeline.json row {index} has the wrong step_index")
         if row.get("fixture_checksum") != fixture_checksum:
             errors.append(f"timeline.json row {index} has the wrong fixture_checksum")
-        if stage_id == "p05":
+        if stage_id in {"p05", "p06"}:
             if row.get("registry_phase") not in {
                 "candidate_preflight",
                 "load_reset",
@@ -1290,7 +1290,7 @@ def read_behavior_timeline(
                 errors.append(f"timeline.json row {index} has an invalid P05 registry phase")
         elif row.get("registry_phase") != "stage_before_registry_owner":
             errors.append(f"timeline.json row {index} has the wrong registry availability")
-        if stage_id in {"p04", "p05"}:
+        if stage_id in {"p04", "p05", "p06"}:
             if row.get("field_availability") not in {"available", "unavailable"}:
                 errors.append(f"timeline.json row {index} has the wrong field availability")
             if row.get("field_availability") == "available":
@@ -1308,21 +1308,41 @@ def read_behavior_timeline(
                 errors.append(f"timeline.json row {index} field_checksum is invalid")
         elif row.get("field_availability") != "stage_before_field_owner":
             errors.append(f"timeline.json row {index} has the wrong field availability")
-        if row.get("gpu_availability") != "stage_before_gpu_owner":
+        if stage_id == "p06":
+            if row.get("gpu_availability") not in {"available", "unavailable"}:
+                errors.append(f"timeline.json row {index} has the wrong GPU availability")
+            if row.get("gpu_availability") == "available":
+                upload_epoch = row.get("gpu_upload_epoch")
+                checksum = row.get("gpu_checksum")
+                if (
+                    not isinstance(upload_epoch, int)
+                    or isinstance(upload_epoch, bool)
+                    or upload_epoch != row.get("world_epoch")
+                ):
+                    errors.append(f"timeline.json row {index} GPU epoch is stale")
+                if not isinstance(checksum, str) or re.fullmatch(
+                    r"[0-9a-f]{64}", checksum
+                ) is None:
+                    errors.append(f"timeline.json row {index} GPU checksum is invalid")
+            elif row.get("gpu_upload_epoch") is not None or row.get("gpu_checksum") is not None:
+                errors.append(f"timeline.json row {index} unavailable GPU fields must be null")
+        elif row.get("gpu_availability") != "stage_before_gpu_owner":
             errors.append(f"timeline.json row {index} has the wrong GPU availability")
         required_runtime_fields = {
             "field_input_revision",
             "field_output_revision",
             "field_is_dark",
             "field_checksum",
-        } if stage_id in {"p04", "p05"} else set()
-        if stage_id == "p05":
+        } if stage_id in {"p04", "p05", "p06"} else set()
+        if stage_id in {"p05", "p06"}:
             required_runtime_fields |= {
                 "registry_step_id",
                 "wake_count",
                 "field_read_count",
                 "old_epoch_field_read_count",
             }
+        if stage_id == "p06" and row.get("gpu_availability") == "available":
+            required_runtime_fields |= {"gpu_upload_epoch", "gpu_checksum"}
         for field in nullable_fields - required_runtime_fields:
             if row.get(field) is not None:
                 errors.append(f"timeline.json row {index} {field} must be null at this stage")
@@ -1683,6 +1703,49 @@ def read_indoor_light_runtime(
     return payload, []
 
 
+def read_indoor_light_gpu(
+    data_dir: Path,
+    *,
+    runtime: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    path = data_dir / "indoor_light_gpu.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        return None, [f"cannot parse indoor_light_gpu.json: {error}"]
+    keys = {
+        "schema_version", "availability", "field_image_count", "field_handle_count",
+        "logical_payload_bytes", "staging_bytes", "upload_count",
+        "uploads_per_changed_revision", "changed_revision_samples", "steady_updates",
+        "steady_uploads", "steady_scoped_allocation_events",
+        "steady_scoped_allocation_bytes", "upload_allocation_events",
+        "upload_allocation_bytes", "old_epoch_uploads", "uploaded_epoch", "gpu_checksum",
+    }
+    if not isinstance(payload, dict) or set(payload) != keys:
+        return None, ["indoor_light_gpu.json keys differ from schema v1"]
+    errors: list[str] = []
+    if payload.get("schema_version") != 1 or payload.get("availability") != "available":
+        errors.append("indoor_light_gpu.json is not an available schema-v1 snapshot")
+    for field in keys - {"schema_version", "availability", "gpu_checksum"}:
+        value = payload.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            errors.append(f"indoor_light_gpu.json {field} is not a nonnegative integer")
+    checksum = payload.get("gpu_checksum")
+    if not isinstance(checksum, str) or re.fullmatch(r"[0-9a-f]{64}", checksum) is None:
+        errors.append("indoor_light_gpu.json gpu_checksum is not lowercase SHA-256")
+    if payload.get("field_image_count") != 1 or payload.get("field_handle_count") != 1:
+        errors.append("indoor_light_gpu.json does not own exactly one shared image handle")
+    if runtime is None:
+        errors.append("indoor_light_gpu.json has no validated CPU runtime snapshot")
+    elif checksum != runtime.get("field_checksum"):
+        errors.append("indoor_light_gpu.json checksum differs from the CPU runtime")
+    if payload.get("upload_count", 0) < 1 or payload.get("changed_revision_samples", 0) < 1:
+        errors.append("indoor_light_gpu.json has no changed-revision upload")
+    if errors:
+        return None, errors
+    return payload, []
+
+
 def validate_run(
     run_dir: Path,
     *,
@@ -1719,6 +1782,7 @@ def validate_run(
     indoor_light_presentation = None
     indoor_light_field = None
     indoor_light_runtime = None
+    indoor_light_gpu = None
     p02_presentation = None
     deconstruction_fixture = None
     save_transaction = None
@@ -1749,13 +1813,13 @@ def validate_run(
     if expected_case.workload == "indoor-light" and capture_kind == "field-core":
         if (
             expected_contract != "rtt-light-v1"
-            or expected_stage not in {"p03", "p04", "p05"}
+            or expected_stage not in {"p03", "p04", "p05", "p06"}
             or expected_lane != "field-core"
         ):
-            reasons.append("field-core requires rtt-light-v1/p03|p04|p05/field-core")
+            reasons.append("field-core requires rtt-light-v1/p03|p04|p05|p06/field-core")
         indoor_light_field, field_errors = read_indoor_light_field(data_dir)
         reasons.extend(field_errors)
-        if expected_stage in {"p04", "p05"} and expected_contract is not None:
+        if expected_stage in {"p04", "p05", "p06"} and expected_contract is not None:
             indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
                 data_dir,
                 expected_case=expected_case,
@@ -1786,7 +1850,7 @@ def validate_run(
                 lane=expected_lane,
             )
             reasons.extend(indoor_errors)
-            if expected_stage in {"p04", "p05"}:
+            if expected_stage in {"p04", "p05", "p06"}:
                 indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
                     data_dir,
                     expected_case=expected_case,
@@ -1795,6 +1859,17 @@ def validate_run(
                     field_core=False,
                 )
                 reasons.extend(runtime_errors)
+                if (
+                    expected_stage == "p06"
+                    and expected_lane == "static"
+                    and expected_case.render == "gpu"
+                    and capture_kind == "frame-time"
+                ):
+                    indoor_light_gpu, gpu_errors = read_indoor_light_gpu(
+                        data_dir,
+                        runtime=indoor_light_runtime,
+                    )
+                    reasons.extend(gpu_errors)
     elif expected_case.workload == "deconstruction":
         if capture_kind != "fixed-step-determinism":
             reasons.append("deconstruction validation requires fixed-step determinism capture")
@@ -1820,7 +1895,7 @@ def validate_run(
     p02_sidecar = data_dir / "p02_presentation.csv"
     expects_p02_sidecar = (
         expected_case.workload == "indoor-light"
-        and expected_stage in {"p02", "p03", "p04", "p05"}
+        and expected_stage in {"p02", "p03", "p04", "p05", "p06"}
         and expected_lane == "static"
         and capture_kind == "frame-time"
     )
@@ -1958,7 +2033,7 @@ def validate_run(
             "indoor_light_presentation.csv",
             "timeline.json",
         }
-        if expected_stage in {"p04", "p05"}:
+        if expected_stage in {"p04", "p05", "p06"}:
             expected_behavior_files.add("indoor_light_runtime.json")
         if expected_case.behavior_case is not None and expected_case.behavior_case.startswith(
             "load-"
@@ -1981,7 +2056,7 @@ def validate_run(
             )
     elif capture_kind == "field-core":
         expected_field_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
-        if expected_stage in {"p04", "p05"}:
+        if expected_stage in {"p04", "p05", "p06"}:
             expected_field_files.add("indoor_light_runtime.json")
         actual_field_files = (
             {path.name for path in data_dir.iterdir()} if data_dir.is_dir() else set()
@@ -2069,7 +2144,7 @@ def validate_run(
         except (KeyError, ValueError):
             reasons.append("summary initial population is invalid for scene root validation")
         else:
-            if expected_stage in {"p02", "p03", "p04", "p05"}:
+            if expected_stage in {"p02", "p03", "p04", "p05", "p06"}:
                 # P02 replaces the legacy Soul proxy family with
                 # ActorBillboard3d and keeps Familiar presentation in the 2D
                 # foreground pass. Their counts are validated by the P02
@@ -2224,6 +2299,7 @@ def validate_run(
         indoor_light_presentation=indoor_light_presentation,
         indoor_light_field=indoor_light_field,
         indoor_light_runtime=indoor_light_runtime,
+        indoor_light_gpu=indoor_light_gpu,
         p02_presentation=p02_presentation,
         deconstruction_fixture=deconstruction_fixture,
         save_transaction=save_transaction,

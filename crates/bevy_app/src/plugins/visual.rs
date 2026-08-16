@@ -22,6 +22,10 @@ use crate::systems::visual::building3d_cleanup::{
     sync_structural_presentation_state_system,
 };
 use crate::systems::visual::camera_sync::sync_camera3d_system;
+use crate::systems::visual::indoor_light_texture::{
+    IndoorLightUploadSet, reset_indoor_light_texture_for_world_replace,
+    upload_indoor_light_texture_system,
+};
 use crate::systems::visual::soul_animation::sync_soul_anim_visual_state_system;
 use crate::systems::visual::task_area_visual::update_task_area_material_system;
 use crate::systems::visual::terrain_lod::{
@@ -62,6 +66,11 @@ impl Plugin for VisualPlugin {
             "root-command-visuals",
             reset_root_command_visuals,
         );
+        crate::systems::save::register_load_reset_hook(
+            app,
+            "indoor-light-texture",
+            reset_indoor_light_texture_for_world_replace,
+        );
 
         app.init_resource::<SectionCut>();
         app.init_resource::<SoulProxyOwnerCache>();
@@ -74,9 +83,19 @@ impl Plugin for VisualPlugin {
         // Behavior observers remain after this stable consumer boundary.
         app.configure_sets(
             Update,
-            DoorPresentationSyncSet
-                .in_set(GameSystemSet::Visual)
-                .after(IndoorLightingRebuildSet),
+            (
+                IndoorLightUploadSet
+                    .in_set(GameSystemSet::Visual)
+                    .after(IndoorLightingRebuildSet),
+                DoorPresentationSyncSet
+                    .in_set(GameSystemSet::Visual)
+                    .after(IndoorLightUploadSet),
+            )
+                .chain(),
+        );
+        app.add_systems(
+            Update,
+            upload_indoor_light_texture_system.in_set(IndoorLightUploadSet),
         );
 
         app.add_systems(Update, sync_camera3d_system.in_set(GameSystemSet::Visual));

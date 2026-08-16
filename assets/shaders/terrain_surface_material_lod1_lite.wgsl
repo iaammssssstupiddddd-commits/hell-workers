@@ -24,6 +24,7 @@
     forward_io::{VertexOutput, FragmentOutput},
 }
 #import "shaders/shadow_style.wgsl"::apply_directional_shadow_style
+#import "shaders/indoor_light_field.wgsl"::sample_indoor_light_field
 
 struct TerrainSurfaceUniforms {
     cut_position:               vec4<f32>,
@@ -43,6 +44,7 @@ struct TerrainSurfaceUniforms {
     shadow_style_params:        vec4<f32>,
     shadow_style_tint:          vec4<f32>,
     shadow_style_blur:          vec4<f32>,
+    indoor_light_params:        vec4<f32>,
     soul_shadow_projectors:     array<vec4<f32>, 12>,
     soul_shadow_projector_meta: vec4<f32>,
 }
@@ -81,6 +83,8 @@ struct TerrainSurfaceUniforms {
 @group(#{MATERIAL_BIND_GROUP}) @binding(130) var boundary_mask_sampler: sampler;
 @group(#{MATERIAL_BIND_GROUP}) @binding(131) var boundary_proximity_mask: texture_2d<f32>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(132) var boundary_proximity_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(133) var indoor_light_field: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(134) var indoor_light_sampler: sampler;
 
 fn section_discard(world_position: vec3<f32>) {
     if tsm.cut_active > 0.5 {
@@ -479,6 +483,20 @@ fn fragment(
             ),
             out.color.a,
         );
+        if tsm.indoor_light_params.z > 0.5 {
+            let local_light = sample_indoor_light_field(
+                indoor_light_field,
+                indoor_light_sampler,
+                in.world_position.xyz,
+                in.world_normal,
+                0u,
+                tsm.indoor_light_params.x,
+            ) * tsm.indoor_light_params.y;
+            out.color = vec4<f32>(
+                out.color.rgb + pbr_input.material.base_color.rgb * local_light,
+                out.color.a,
+            );
+        }
     } else {
         out.color = pbr_input.material.base_color;
     }

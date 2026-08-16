@@ -158,7 +158,9 @@ pub(crate) use indoor_light_fixture::{
 #[cfg(feature = "profiling")]
 pub(crate) use p02_actual_window::{
     P02ActualWindowAcceptance, apply_p02_actual_window_actor_probe_system,
+    apply_p02_actual_window_foreground_system, apply_p02_actual_window_wall_bounce_system,
     prepare_p02_actual_window_view_system, publish_p02_actual_window_probe_status_system,
+    suppress_p02_actual_window_ui_system,
 };
 #[cfg(feature = "profiling-renderdoc")]
 pub(crate) use renderdoc_capture::{
@@ -676,6 +678,7 @@ pub(crate) struct PerfCaptureParams<'w, 's> {
     deconstruction_fixture: Res<'w, DeconstructionPerfFixtureState>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
+    indoor_light_texture: Res<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,
     time: ResMut<'w, Time<Virtual>>,
     fixed_time: Res<'w, Time<Fixed>>,

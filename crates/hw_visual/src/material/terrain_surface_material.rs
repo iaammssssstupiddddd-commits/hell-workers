@@ -33,6 +33,8 @@ pub struct TerrainSurfaceUniform {
     pub shadow_style_tint: Vec4,
     /// `x`: blur radius in shadow texels, `yzw`: reserved
     pub shadow_style_blur: Vec4,
+    /// `x`: tile size, `y`: local-light gain, `z`: enabled, `w`: reserved.
+    pub indoor_light_params: Vec4,
     /// `xyz`: projector center in world space, `w`: radius
     pub soul_shadow_projectors: [Vec4; MAX_SOUL_SHADOW_PROJECTORS],
     /// `x`: projector count, `y`: feather, `z`: strength, `w`: reserved
@@ -60,6 +62,7 @@ impl Default for TerrainSurfaceUniform {
             shadow_style_params: topdown_shadow_style_params(),
             shadow_style_tint: topdown_shadow_style_tint(),
             shadow_style_blur: topdown_shadow_style_blur(),
+            indoor_light_params: Vec4::new(TILE_SIZE, 1.0, 1.0, 0.0),
             soul_shadow_projectors: [Vec4::ZERO; MAX_SOUL_SHADOW_PROJECTORS],
             soul_shadow_projector_meta: Vec4::new(
                 0.0,
@@ -124,6 +127,9 @@ pub struct TerrainSurfaceMaterialExt {
     #[texture(131)]
     #[sampler(132)]
     pub boundary_proximity_mask: Option<Handle<Image>>,
+    #[texture(133)]
+    #[sampler(134)]
+    pub indoor_light_field: Option<Handle<Image>>,
 }
 
 impl MaterialExtension for TerrainSurfaceMaterialExt {
@@ -211,6 +217,9 @@ pub struct TerrainSurfaceMaterialExtLod1Lite {
     #[texture(131)]
     #[sampler(132)]
     pub boundary_proximity_mask: Option<Handle<Image>>,
+    #[texture(133)]
+    #[sampler(134)]
+    pub indoor_light_field: Option<Handle<Image>>,
 }
 
 impl MaterialExtension for TerrainSurfaceMaterialExtLod1Lite {
@@ -298,6 +307,9 @@ pub struct TerrainSurfaceMaterialExtLod2 {
     #[texture(131)]
     #[sampler(132)]
     pub boundary_proximity_mask: Option<Handle<Image>>,
+    #[texture(133)]
+    #[sampler(134)]
+    pub indoor_light_field: Option<Handle<Image>>,
 }
 
 impl MaterialExtension for TerrainSurfaceMaterialExtLod2 {

@@ -44,9 +44,11 @@ pub use material::{
     TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial, TerrainSurfaceMaterialExt,
     TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,
     TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2, TerrainSurfaceUniform,
-    make_section_material, make_section_material_textured, make_terrain_section_material,
-    make_terrain_surface_material, make_terrain_surface_material_lod1_lite,
-    make_terrain_surface_material_lod2, soul_face_uv_offset, soul_face_uv_scale, with_alpha_mode,
+    TopDownStructuralMaterial, make_section_material, make_section_material_textured,
+    make_terrain_section_material, make_terrain_surface_material,
+    make_terrain_surface_material_lod1_lite, make_terrain_surface_material_lod2,
+    make_topdown_structural_material, soul_face_uv_offset, soul_face_uv_scale, with_alpha_mode,
+    with_topdown_alpha_mode,
 };
 
 pub use familiar::{FamiliarVisualOffset, FamiliarVisualOwner};
@@ -86,7 +88,7 @@ impl Plugin for HwVisualPlugin {
             UiMaterialPlugin::<dream::DreamBubbleUiMaterial>::default(),
             Material2dPlugin::<TaskAreaMaterial>::default(),
             MaterialPlugin::<material::CharacterMaterial>::default(),
-            MaterialPlugin::<material::SectionMaterial>::default(),
+            MaterialPlugin::<material::TopDownStructuralMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterialLod1Lite>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterialLod2>::default(),

@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P05 complete; P06 ready` |
+| ステータス | `In Progress — P06 implemented; native formal pending clean subject` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-16` |
+| 最終更新日 | `2026-08-17` |
 | 作成者 | `Codex` |
 | 採用判断 | TopDown 2.5D、Scene RtT 1枚、map-space radial Light Field |
 | 関連提案 | `N/A` |
@@ -240,7 +240,7 @@ Interface:
 
 ### 現在地
 
-- 進捗: `P05完了、P06着手可能`（P00 / P01 / P02 / P02-A / P03 / P04 / P05完了。P06〜P08は未着手）
+- 進捗: `P06 production/tooling実装完了、clean subjectでのnative formal待ち`（P00 / P01 / P02 / P02-A / P03 / P04 / P05完了。P06は実装済み・formal未完、P07〜P08未着手）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
@@ -255,12 +255,13 @@ Interface:
 - P04完了: Door request / pause契約、root ECS snapshot adapter、Room mask revision、fail-dark dirty / rebuild transaction、P04 static / behavior / field-core toolingと正式実機証跡
 - P05 current evidence: behavior 21 / 21、headless field-core 3 / 3、native S1 job `p05-s1-20260816`はAudit 3 / 3、Capture 18 / 18、Memory 18 / 18、field-core 3 / 3がvalid
 - P05 formal: subject `56fa6bd3`、attempt `492ad69c-1275-48ea-90f2-ed1a8018b542`。24 / 24 case、190 / 190 gate row、RenderDoc replay、baseline index登録、独立attempt / 全baseline verifierがpassした。additive contract predecessorは旧stageの旧hashとSHA ledgerを保持し、P05以後には適用しない
-- 未完了: P06〜P08
+- P06 current implementation: 単一RGBA8 Light Field image、epoch-aware upload／load black reset、Terrain 3 LOD／全Structural3d receiver、Door root `MeshTag` anchor、P06 sidecar／timeline／RenderDoc／bundle toolingを実装。2026-08-17 headless behavior 21 / 21 valid、local gates pass
+- 未完了: P06 native S0／S1／RD0／formalとpixel／performance evidence、P07〜P08
 
 ### 次のAIが最初にやること
 
-1. P05のmount / epoch契約を変更せず、P06のGPU upload / black clearへ進む。
-2. P06着手時にはP02 canonical attemptも再検証してpresentation分類を維持する。
+1. P06実装batchをcommitしたclean subjectでnative S0→S1→RD0→formalを実行し、P06 exact gate集合とpixel probeを登録・独立再検証する。
+2. formalが通るまでP07へ進まず、P05 mount／epochとP02 presentation分類を変更しない。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
@@ -270,7 +271,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - `hw_infra`はP03がbootstrap済みである。HVAC M1は既存crateを拡張するが、`lighting` pure coreへECS/GPU依存を逆流させない。
 - manual Door lockはP04でrequest化済みで、InterfaceはDoorState / WorldMapを直接変更しない。
 - 現行Lamp gameplay queryは任意の`PowerConsumer`を発光扱いし、半径`5.0`をworld unitとして比較している。
-- 現行Wallは`SectionMaterial`、Terrainは3種の`TerrainSurfaceMaterial`、他構造物は`StandardMaterial`である。
+- 現行Terrain 3 LODと全Structural3dは単一Light Field receiverである。`SectionMaterial`互換型／shader／projector fieldsの物理削除はP08が所有する。
 - P02のreview remediation subjectはv9 actual-windowとfresh S0 / S1 / formalを登録・再検証済みである。P03以降もfrozen contract / projection / P00〜P02 artifactをcandidate結果で変更しない。
 
 ### 最終確認ログ
@@ -286,6 +287,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - P05 native acceptance: `2026-08-16` / subject `56fa6bd3`、attempt `492ad69c-1275-48ea-90f2-ed1a8018b542`、24 / 24 case、190 / 190 gate row、RenderDoc replay valid、Intel Arc / Vulkan / Mesa `26.1.6` / X11。attempt verifierとcurrent / P01 / P02 / P04 / P05 baseline全4,947 fileの独立verify pass。
 - 最終 `python3 scripts/dev.py check` / workspace Clippy / workspace test / `dev.py verify`: `2026-08-16` / `pass`
 - 最終 docs / Help gate: `2026-08-16` / Help impact No impact、docs write/checkとdiff check pass
+- P06 implementation verification: `2026-08-17` / headless behavior 21 / 21、perf／RenderDoc／native helper self-test、`dev.py check` pass。actual-window／formalはnative Skillがdirty subjectをfail-closedで拒否したためclean commit待ち
 
 ### Definition of Done
 
@@ -299,6 +301,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-17` | `Codex` | P06 production／shader／evidence tooling実装、headless behavior 21 / 21とlocal gate passを反映。native actual-window／formalはclean committed subject待ちとしてP06を未完のまま維持。 |
 | `2026-08-16` | `Codex` | P05 subject `56fa6bd3`のformal 24 / 24 case・190 / 190 gate rowを登録し、additive contract lineage、attempt、全baseline SHA ledgerを独立再検証。P05を完了して次対象をP06へ更新した。 |
 | `2026-08-16` | `Codex` | P05 production / evidence tooling、21 / 21 behavior、full quality gate、Help No impact、native S1全レッグvalidを反映。clean subjectでのformal 24 / 24 registrationだけを残した。 |
 | `2026-08-16` | `Codex` | C3完了を依存・着手条件へ反映し、P05をReadyへ更新。P05のdurable mount / registry edge / reset-epoch / evidence runnerのレビュー済み責務を親計画へ同期。 |

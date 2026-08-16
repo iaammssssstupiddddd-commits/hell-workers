@@ -98,6 +98,7 @@ impl Plugin for StartupPlugin {
                 (
                     build_terrain_feature_map,
                     build_terrain_id_map,
+                    crate::systems::visual::indoor_light_texture::init_indoor_light_texture_system,
                     visual_handles::init_visual_handles,
                     spawn_map_timed,
                     spawn_terrain_chunks_timed,
@@ -270,6 +271,9 @@ impl Plugin for StartupPlugin {
                     Update,
                     (
                         perf_scenario::prepare_p02_actual_window_view_system,
+                        perf_scenario::apply_p02_actual_window_wall_bounce_system,
+                        perf_scenario::apply_p02_actual_window_foreground_system,
+                        perf_scenario::suppress_p02_actual_window_ui_system,
                         perf_scenario::apply_p02_actual_window_actor_probe_system,
                         perf_scenario::publish_p02_actual_window_probe_status_system,
                     )

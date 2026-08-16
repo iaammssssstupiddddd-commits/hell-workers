@@ -65,6 +65,20 @@ X11 clientから、Door Open / Closed / Locked、Soul前 / 後、Bridge、Wall b
 `RenderLayers`交差、期待mesh / material handle、asset registry在籍をsource側でfail-closedに確認する。desktop全体や独立
 `visual_test`の画像だけではP02受入にならない。
 
+### P06 shared Light Field runtime inventory
+
+P06はPoint／Spot Lightや追加shadow map／local-light passを生成せず、P01の単一Scene RtTとP02のTopDown presentationを維持する。CPU fieldは1つのlinear RGBA8 `Image`へrevision単位でuploadされ、Terrain 3 pipelineとstructural 1 pipelineはそれぞれtexture／samplerを1組だけbindする。Wall／Doorのper-instance sampling anchorは`MeshTag`にあり、material handle数はLamp数・Building数に比例しない。
+
+| 項目 | P06 source |
+|---|---:|
+| Light Field image / live handle | 1 / 1 |
+| canonical logical payload / padded staging | 40,000 / 51,200 bytes |
+| receiver material pipeline | Terrain LOD1、LOD1-lite、LOD2、TopDown structural |
+| receiver binding / pipeline | texture 1 + sampler 1 |
+| Point／Spot／shadow map／local pass増分 | 0 / 0 / 0 / 0 |
+
+`TopDownStructuralMaterial`は既存section discard、wall build progress、alpha／prepass、directional shadow stylingを保持した`ExtendedMaterial`である。productionのWall、Door、Floor、Bridge、Tank、MudMixer、RestArea、SoulSpaは有限共有handleへ移行済みで、Soul／Foreground2dはLight Fieldをbindしない。
+
 P00のmeasurement contractはfrozenの`rtt-light-v1`である。canonical contract hashは
 `ba5d6bf7320426b441465df8fae42d6ff80820748ce55e0edf0dbba409dc755a`、fixture hashは
 `a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed`である。stage別projection義務と

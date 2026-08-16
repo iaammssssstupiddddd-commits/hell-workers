@@ -13,12 +13,15 @@ use bevy::camera::visibility::RenderLayers;
 use bevy::camera_controller::pan_camera::PanCamera;
 use bevy::ecs::system::SystemParam;
 use bevy::mesh::{Mesh, Mesh3d};
-use bevy::pbr::{MeshMaterial3d, StandardMaterial};
+use bevy::pbr::MeshMaterial3d;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::camera::MainCamera;
 use hw_core::constants::{TILE_SIZE, topdown_rtt_vertical_compensation};
+use hw_visual::TopDownStructuralMaterial;
 use hw_visual::blueprint::{BuildingBounceEffect, CompletionText, DeliveryPopup};
+#[cfg(test)]
+use hw_visual::make_topdown_structural_material;
 use hw_visual::visual3d::{
     ActorBillboard3d, Building3dVisual, Door3dVisual, DoorPresentationState,
     LegacyStructural2dMirror,
@@ -58,9 +61,22 @@ type BridgeVisualQuery<'w, 's> = Query<
         &'static InheritedVisibility,
         &'static RenderLayers,
         &'static Mesh3d,
-        &'static MeshMaterial3d<StandardMaterial>,
+        &'static MeshMaterial3d<TopDownStructuralMaterial>,
     ),
 >;
+
+type BridgeAssets<'a> = (&'a Assets<Mesh>, &'a Assets<TopDownStructuralMaterial>);
+type MainCameraFilter = (With<MainCamera>, Without<Camera3dRtt>);
+type ForegroundFilter = (With<Sprite>, Without<LegacyStructural2dMirror>);
+type ProbeCameraFilter = (With<MainCamera>, Without<Door>);
+type TransientTextFilter = Or<(With<CompletionText>, With<DeliveryPopup>)>;
+type BuildingRootFilter = (With<Building>, Without<ActorBillboard3d>);
+type BuildingVisualFilter = (With<Building3dVisual>, Without<ActorBillboard3d>);
+type ActorBillboardFilter = (
+    With<ActorBillboard3d>,
+    Without<Building>,
+    Without<Building3dVisual>,
+);
 
 /// Groups all read-only storyboard evidence inputs so the production schedule
 /// stays within Bevy's system arity and the verifier receives one coherent
@@ -69,7 +85,7 @@ type BridgeVisualQuery<'w, 's> = Query<
 pub(crate) struct P02ActualWindowStatusParams<'w, 's> {
     handles_3d: Res<'w, Building3dHandles>,
     meshes: Res<'w, Assets<Mesh>>,
-    standard_materials: Res<'w, Assets<StandardMaterial>>,
+    structural_materials: Res<'w, Assets<TopDownStructuralMaterial>>,
     window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera_3d: Query<
         'w,
@@ -81,12 +97,7 @@ pub(crate) struct P02ActualWindowStatusParams<'w, 's> {
         ),
         With<Camera3dRtt>,
     >,
-    main_camera: Query<
-        'w,
-        's,
-        (&'static Camera, &'static GlobalTransform),
-        (With<MainCamera>, Without<Camera3dRtt>),
-    >,
+    main_camera: Query<'w, 's, (&'static Camera, &'static GlobalTransform), MainCameraFilter>,
     doors: Query<'w, 's, (Entity, &'static Door, &'static Transform)>,
     door_visuals: Query<
         'w,
@@ -121,12 +132,7 @@ pub(crate) struct P02ActualWindowStatusParams<'w, 's> {
         ),
     >,
     bounces: Query<'w, 's, &'static BuildingBounceEffect>,
-    foreground: Query<
-        'w,
-        's,
-        (&'static ChildOf, &'static GlobalTransform),
-        (With<Sprite>, Without<LegacyStructural2dMirror>),
-    >,
+    foreground: Query<'w, 's, (&'static ChildOf, &'static GlobalTransform), ForegroundFilter>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -381,23 +387,15 @@ fn acknowledgement_matches(value: &Value, nonce: &str, phase: ProbePhase, genera
         && value.get("generation").and_then(Value::as_u64) == Some(generation.into())
 }
 
-/// Applies the next deterministic camera and foreground state before the
-/// normal Visual schedule synchronizes the RtT camera and active visuals.
+/// Advances the deterministic phase and frames its subject before the normal
+/// Visual schedule synchronizes the RtT camera.
 pub(crate) fn prepare_p02_actual_window_view_system(
-    mut commands: Commands,
     config: Res<PerfScenarioConfig>,
     fixture: Res<IndoorLightFixtureState>,
     time: Res<Time<Real>>,
     mut acceptance: ResMut<P02ActualWindowAcceptance>,
-    mut transforms: ParamSet<(
-        Query<(&mut Transform, &mut Projection, &mut PanCamera), With<MainCamera>>,
-        Query<(Entity, &Door, &Transform)>,
-        Query<(Entity, &Building, &Transform)>,
-        Query<(&ChildOf, &mut Transform), (With<Sprite>, Without<LegacyStructural2dMirror>)>,
-    )>,
-    mut bounces: Query<&mut BuildingBounceEffect>,
-    mut ui_roots: Query<&mut Node, Without<ChildOf>>,
-    mut transient_text: Query<&mut Visibility, Or<(With<CompletionText>, With<DeliveryPopup>)>>,
+    mut camera: Query<(&mut Transform, &mut Projection, &mut PanCamera), ProbeCameraFilter>,
+    doors: Query<(Entity, &Door, &Transform), Without<MainCamera>>,
 ) {
     if !acceptance.enabled(&config, &fixture) {
         return;
@@ -406,8 +404,7 @@ pub(crate) fn prepare_p02_actual_window_view_system(
     let phase = acceptance.phase;
 
     let center = if let Some(expected_state) = phase.expected_door_state() {
-        transforms
-            .p1()
+        doors
             .iter()
             .filter(|(_, door, _)| door.state == expected_state)
             .min_by_key(|(entity, _, transform)| {
@@ -422,7 +419,7 @@ pub(crate) fn prepare_p02_actual_window_view_system(
     } else {
         static_phase_camera_target(phase)
     };
-    if let Ok((mut transform, mut projection, mut pan)) = transforms.p0().single_mut() {
+    if let Ok((mut transform, mut projection, mut pan)) = camera.single_mut() {
         transform.translation.x = center.x;
         transform.translation.y = center.y;
         pan.enabled = false;
@@ -430,17 +427,23 @@ pub(crate) fn prepare_p02_actual_window_view_system(
             orthographic.scale = CAMERA_SCALE;
         }
     }
-    for mut node in &mut ui_roots {
-        node.display = Display::None;
+}
+
+/// Pins the production completion effect for the two wall-bounce phases.
+pub(crate) fn apply_p02_actual_window_wall_bounce_system(
+    mut commands: Commands,
+    config: Res<PerfScenarioConfig>,
+    fixture: Res<IndoorLightFixtureState>,
+    mut acceptance: ResMut<P02ActualWindowAcceptance>,
+    buildings: Query<(Entity, &Building, &Transform)>,
+    mut bounces: Query<&mut BuildingBounceEffect>,
+) {
+    if !acceptance.enabled(&config, &fixture) {
+        return;
     }
-    // Completion text is real game feedback, but it is unrelated to a
-    // presentation probe and otherwise obscures every local ROI.
-    for mut visibility in &mut transient_text {
-        *visibility = Visibility::Hidden;
-    }
+    let phase = acceptance.phase;
     if phase.is_wall_bounce() {
-        let wall = transforms
-            .p2()
+        let wall = buildings
             .iter()
             .find(|(_, building, transform)| {
                 building.kind == BuildingType::Wall
@@ -474,17 +477,30 @@ pub(crate) fn prepare_p02_actual_window_view_system(
             finish_wall_bounce(&mut bounce);
         }
     }
-    let foreground_owners = transforms
-        .p2()
+}
+
+/// Applies the two foreground-scale phases to the existing production sprite.
+pub(crate) fn apply_p02_actual_window_foreground_system(
+    config: Res<PerfScenarioConfig>,
+    fixture: Res<IndoorLightFixtureState>,
+    acceptance: Res<P02ActualWindowAcceptance>,
+    buildings: Query<(Entity, &Building)>,
+    mut foreground: Query<(&ChildOf, &mut Transform), ForegroundFilter>,
+) {
+    if !acceptance.enabled(&config, &fixture) {
+        return;
+    }
+    let phase = acceptance.phase;
+    let foreground_owners = buildings
         .iter()
-        .filter_map(|(entity, building, _)| {
+        .filter_map(|(entity, building)| {
             (building.kind == BuildingType::SandPile
                 && crate::systems::jobs::presentation_class(building.kind)
                     == RenderPresentationClass::Foreground2d)
                 .then_some(entity)
         })
         .collect::<Vec<_>>();
-    for (parent, mut transform) in &mut transforms.p3() {
+    for (parent, mut transform) in &mut foreground {
         if !foreground_owners.contains(&parent.parent()) {
             continue;
         }
@@ -494,6 +510,25 @@ pub(crate) fn prepare_p02_actual_window_view_system(
             _ => 1.0,
         };
         transform.scale = Vec3::splat(scale);
+    }
+}
+
+/// Hides non-subject UI that would otherwise cover the local image probes.
+pub(crate) fn suppress_p02_actual_window_ui_system(
+    config: Res<PerfScenarioConfig>,
+    fixture: Res<IndoorLightFixtureState>,
+    acceptance: Res<P02ActualWindowAcceptance>,
+    mut ui_roots: Query<&mut Node, Without<ChildOf>>,
+    mut transient_text: Query<&mut Visibility, TransientTextFilter>,
+) {
+    if !acceptance.enabled(&config, &fixture) {
+        return;
+    }
+    for mut node in &mut ui_roots {
+        node.display = Display::None;
+    }
+    for mut visibility in &mut transient_text {
+        *visibility = Visibility::Hidden;
     }
 }
 
@@ -527,11 +562,12 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
     fixture: Res<IndoorLightFixtureState>,
     acceptance: Res<P02ActualWindowAcceptance>,
     camera: Query<(&Camera, &GlobalTransform), With<Camera3dRtt>>,
-    mut transforms: ParamSet<(
-        Query<(Entity, &Building, &Transform)>,
-        Query<(&Building3dVisual, &Transform)>,
-        Query<(&ActorBillboard3d, &mut Transform, &mut Visibility)>,
-    )>,
+    buildings: Query<(Entity, &Building, &Transform), BuildingRootFilter>,
+    building_visuals: Query<(&Building3dVisual, &Transform), BuildingVisualFilter>,
+    mut billboards: Query<
+        (&ActorBillboard3d, &mut Transform, &mut Visibility),
+        ActorBillboardFilter,
+    >,
 ) {
     if !acceptance.enabled(&config, &fixture) {
         return;
@@ -541,7 +577,7 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
     };
     let is_gpu = matches!(config.render_mode, PerfRenderMode::Gpu);
     let phase = acceptance.phase;
-    for (billboard, _, mut visibility) in &mut transforms.p2() {
+    for (billboard, _, mut visibility) in &mut billboards {
         *visibility = if is_gpu && phase.is_soul_depth() && billboard.owner == subject {
             Visibility::Visible
         } else {
@@ -554,8 +590,7 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
     let Ok((camera, camera_transform)) = camera.single() else {
         return;
     };
-    let wall = transforms
-        .p0()
+    let wall = buildings
         .iter()
         .find(|(_, building, transform)| {
             building.kind == BuildingType::Wall
@@ -564,8 +599,7 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
         })
         .map(|(wall, _, _)| wall);
     let wall_position = wall.and_then(|wall| {
-        transforms
-            .p1()
+        building_visuals
             .iter()
             .find(|(visual, _)| visual.owner == wall)
             .map(|(_, transform)| transform.translation)
@@ -611,7 +645,7 @@ pub(crate) fn apply_p02_actual_window_actor_probe_system(
     let Some((_, _, position)) = selected else {
         return;
     };
-    for (billboard, mut transform, _) in &mut transforms.p2() {
+    for (billboard, mut transform, _) in &mut billboards {
         if billboard.owner == subject {
             transform.translation = position;
         }
@@ -694,7 +728,7 @@ impl<'w, 's> P02ActualWindowStatusParams<'w, 's> {
     ) -> Result<Value, String> {
         let handles_3d = &self.handles_3d;
         let meshes = &self.meshes;
-        let standard_materials = &self.standard_materials;
+        let structural_materials = &self.structural_materials;
         let window = &self.window;
         let camera_3d = &self.camera_3d;
         let main_camera = &self.main_camera;
@@ -907,8 +941,7 @@ impl<'w, 's> P02ActualWindowStatusParams<'w, 's> {
                 material,
                 &handles_3d.bridge_mesh,
                 &handles_3d.bridge_material,
-                meshes,
-                standard_materials,
+                (meshes, structural_materials),
             )?;
             let roi = project_rtt_roi(
                 camera,
@@ -1041,12 +1074,12 @@ fn require_bridge_rtt_drawable(
     bridge_layers: &RenderLayers,
     camera_layers: &RenderLayers,
     mesh: &Mesh3d,
-    material: &MeshMaterial3d<StandardMaterial>,
+    material: &MeshMaterial3d<TopDownStructuralMaterial>,
     expected_mesh: &Handle<Mesh>,
-    expected_material: &Handle<StandardMaterial>,
-    meshes: &Assets<Mesh>,
-    standard_materials: &Assets<StandardMaterial>,
+    expected_material: &Handle<TopDownStructuralMaterial>,
+    assets: BridgeAssets<'_>,
 ) -> Result<(), String> {
+    let (meshes, structural_materials) = assets;
     if !bridge_layers.intersects(camera_layers) {
         return Err("production Bridge3dVisual shares no RenderLayer with Camera3dRtt".to_string());
     }
@@ -1061,7 +1094,7 @@ fn require_bridge_rtt_drawable(
     if !meshes.contains(expected_mesh.id()) {
         return Err("production Bridge mesh asset is unavailable".to_string());
     }
-    if !standard_materials.contains(expected_material.id()) {
+    if !structural_materials.contains(expected_material.id()) {
         return Err("production Bridge material asset is unavailable".to_string());
     }
     Ok(())
@@ -1454,9 +1487,12 @@ mod tests {
     #[test]
     fn bridge_probe_requires_the_production_rtt_layer_mesh_and_material() {
         let mut meshes = Assets::<Mesh>::default();
-        let mut materials = Assets::<StandardMaterial>::default();
+        let mut materials = Assets::<TopDownStructuralMaterial>::default();
         let expected_mesh = meshes.add(Mesh::from(Cuboid::new(1.0, 1.0, 1.0)));
-        let expected_material = materials.add(StandardMaterial::default());
+        let expected_material = materials.add(make_topdown_structural_material(
+            LinearRgba::WHITE,
+            Handle::default(),
+        ));
         let bridge_layers = RenderLayers::layer(3);
         let camera_layers = RenderLayers::layer(3);
         let bridge_mesh = Mesh3d(expected_mesh.clone());
@@ -1470,8 +1506,7 @@ mod tests {
                 &bridge_material,
                 &expected_mesh,
                 &expected_material,
-                &meshes,
-                &materials,
+                (&meshes, &materials),
             )
             .is_ok()
         );
@@ -1484,8 +1519,7 @@ mod tests {
                 &bridge_material,
                 &expected_mesh,
                 &expected_material,
-                &meshes,
-                &materials,
+                (&meshes, &materials),
             )
             .is_err()
         );
@@ -1499,13 +1533,15 @@ mod tests {
                 &bridge_material,
                 &expected_mesh,
                 &expected_material,
-                &meshes,
-                &materials,
+                (&meshes, &materials),
             )
             .is_err()
         );
 
-        let other_material = materials.add(StandardMaterial::default());
+        let other_material = materials.add(make_topdown_structural_material(
+            LinearRgba::BLACK,
+            Handle::default(),
+        ));
         assert!(
             require_bridge_rtt_drawable(
                 &bridge_layers,
@@ -1514,8 +1550,7 @@ mod tests {
                 &MeshMaterial3d(other_material),
                 &expected_mesh,
                 &expected_material,
-                &meshes,
-                &materials,
+                (&meshes, &materials),
             )
             .is_err()
         );
@@ -1531,8 +1566,7 @@ mod tests {
                 &bridge_material,
                 &expected_mesh,
                 &expected_material,
-                &meshes,
-                &materials,
+                (&meshes, &materials),
             )
             .is_err()
         );
@@ -1551,8 +1585,7 @@ mod tests {
                 &bridge_material,
                 &expected_mesh,
                 &expected_material,
-                &meshes,
-                &materials,
+                (&meshes, &materials),
             )
             .is_err()
         );

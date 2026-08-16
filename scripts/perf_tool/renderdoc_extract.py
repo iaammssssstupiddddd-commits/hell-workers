@@ -125,10 +125,12 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         "capture_artifact",
     }
     stage_id = value.get("stage_id")
-    if stage_id in {"p02", "p03", "p04", "p05"}:
+    if stage_id in {"p02", "p03", "p04", "p05", "p06"}:
         required_keys.add("p02_presentation")
-    if stage_id in {"p04", "p05"}:
+    if stage_id in {"p04", "p05", "p06"}:
         required_keys.add("runtime_field")
+    if stage_id == "p06":
+        required_keys.add("gpu_light_field")
     if set(value) != required_keys:
         raise RuntimeError("runtime checkpoint keys differ from schema v3")
     if (
@@ -152,12 +154,12 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         raise RuntimeError("runtime checkpoint has no selector evidence")
     if not isinstance(value.get("gpu_ready"), dict):
         raise RuntimeError("runtime checkpoint has no GPU-ready evidence")
-    if stage_id in {"p02", "p03", "p04", "p05"} and (
+    if stage_id in {"p02", "p03", "p04", "p05", "p06"} and (
         not isinstance(value.get("p02_presentation"), dict)
         or not value["p02_presentation"]
     ):
         raise RuntimeError("runtime checkpoint has no P02 presentation evidence")
-    if stage_id in {"p04", "p05"}:
+    if stage_id in {"p04", "p05", "p06"}:
         runtime_field = value.get("runtime_field")
         expected_runtime_keys = {
             "typed_emitter_components",
@@ -182,6 +184,11 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
             or any(character not in "0123456789abcdef" for character in checksum)
         ):
             raise RuntimeError("runtime checkpoint P04 mask checksum is invalid")
+    if stage_id == "p06" and (
+        not isinstance(value.get("gpu_light_field"), dict)
+        or not value["gpu_light_field"]
+    ):
+        raise RuntimeError("runtime checkpoint has no P06 GPU field evidence")
     artifact = value.get("capture_artifact")
     if (
         not isinstance(artifact, dict)

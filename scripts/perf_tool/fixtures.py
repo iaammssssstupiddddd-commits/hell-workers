@@ -5,6 +5,7 @@ import tempfile
 from types import SimpleNamespace
 
 from .compare import *
+from .artifacts import read_indoor_light_gpu
 from .arguments import DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING
 from .rtt_light_contract import (
     contract_fingerprints,
@@ -520,6 +521,44 @@ def self_test() -> int:
         root = Path(temporary)
         rtt_contract = load_rtt_light_contract("rtt-light-v1")
         rtt_fingerprints = contract_fingerprints(rtt_contract)
+        p06_gpu_dir = root / "p06-gpu-sidecar"
+        p06_gpu_dir.mkdir()
+        p06_runtime = {"field_checksum": "6" * 64}
+        p06_gpu_payload = {
+            "schema_version": 1,
+            "availability": "available",
+            "field_image_count": 1,
+            "field_handle_count": 1,
+            "logical_payload_bytes": 40_000,
+            "staging_bytes": 51_200,
+            "upload_count": 1,
+            "uploads_per_changed_revision": 1,
+            "changed_revision_samples": 1,
+            "steady_updates": 600,
+            "steady_uploads": 0,
+            "steady_scoped_allocation_events": 0,
+            "steady_scoped_allocation_bytes": 0,
+            "upload_allocation_events": 1,
+            "upload_allocation_bytes": 40_000,
+            "old_epoch_uploads": 0,
+            "uploaded_epoch": 1,
+            "gpu_checksum": "6" * 64,
+        }
+        write_json(p06_gpu_dir / "indoor_light_gpu.json", p06_gpu_payload)
+        parsed_gpu, gpu_errors = read_indoor_light_gpu(
+            p06_gpu_dir,
+            runtime=p06_runtime,
+        )
+        assert parsed_gpu == p06_gpu_payload and not gpu_errors
+        write_json(
+            p06_gpu_dir / "indoor_light_gpu.json",
+            {**p06_gpu_payload, "field_handle_count": 2},
+        )
+        parsed_gpu, gpu_errors = read_indoor_light_gpu(
+            p06_gpu_dir,
+            runtime=p06_runtime,
+        )
+        assert parsed_gpu is None and gpu_errors
         historical_root = "/historical/clean-subject"
         historical_manifest = {"repo_root": historical_root}
         assert recorded_rtt_light_repo_root(historical_manifest) == historical_root

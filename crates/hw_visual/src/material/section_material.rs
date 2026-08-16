@@ -41,6 +41,8 @@ pub struct SectionMaterialUniform {
     pub shadow_style_tint: Vec4,
     /// `x`: blur radius in shadow texels, `yzw`: reserved
     pub shadow_style_blur: Vec4,
+    /// `x`: tile size, `y`: local-light gain, `z`: enabled, `w`: reserved.
+    pub indoor_light_params: Vec4,
     /// `xyz`: projector center in world space, `w`: radius
     pub soul_shadow_projectors: [Vec4; MAX_SOUL_SHADOW_PROJECTORS],
     /// `x`: projector count, `y`: feather, `z`: strength, `w`: reserved
@@ -72,6 +74,11 @@ pub struct SectionMaterialExt {
     #[texture(109)]
     #[sampler(110)]
     pub terrain_feature_lut: Option<Handle<Image>>,
+    /// P06 shared linear RGBA8 Light Field. Every structural material handle
+    /// points at the same image owned by the root visual bridge.
+    #[texture(111)]
+    #[sampler(112)]
+    pub indoor_light_field: Option<Handle<Image>>,
 }
 
 impl Default for SectionMaterialExt {
@@ -96,6 +103,7 @@ impl Default for SectionMaterialExt {
                 shadow_style_params: topdown_shadow_style_params(),
                 shadow_style_tint: topdown_shadow_style_tint(),
                 shadow_style_blur: topdown_shadow_style_blur(),
+                indoor_light_params: Vec4::new(TILE_SIZE, 1.0, 1.0, 0.0),
                 soul_shadow_projectors: [Vec4::ZERO; MAX_SOUL_SHADOW_PROJECTORS],
                 soul_shadow_projector_meta: Vec4::new(
                     0.0,
@@ -109,6 +117,7 @@ impl Default for SectionMaterialExt {
             terrain_macro_overlay: None,
             river_flow_noise: None,
             terrain_feature_lut: None,
+            indoor_light_field: None,
         }
     }
 }
@@ -124,6 +133,10 @@ impl MaterialExtension for SectionMaterialExt {
 }
 
 pub type SectionMaterial = ExtendedMaterial<StandardMaterial, SectionMaterialExt>;
+
+/// Active P06 material name. `SectionMaterial` remains as the P08 cleanup
+/// alias, but production structural consumers use this name exclusively.
+pub type TopDownStructuralMaterial = ExtendedMaterial<StandardMaterial, SectionMaterialExt>;
 
 pub fn make_section_material(base_color: LinearRgba) -> SectionMaterial {
     SectionMaterial {
@@ -141,6 +154,15 @@ pub fn make_section_material(base_color: LinearRgba) -> SectionMaterial {
         },
         extension: SectionMaterialExt::default(),
     }
+}
+
+pub fn make_topdown_structural_material(
+    base_color: LinearRgba,
+    indoor_light_field: Handle<Image>,
+) -> TopDownStructuralMaterial {
+    let mut material = make_section_material(base_color);
+    material.extension.indoor_light_field = Some(indoor_light_field);
+    material
 }
 
 /// 草タイル用 A3（低周波 UV 歪み）の既定振幅（UV 空間）。土・砂・川は `0.0`。
@@ -228,6 +250,7 @@ pub fn make_terrain_section_material(
                 shadow_style_params: topdown_shadow_style_params(),
                 shadow_style_tint: topdown_shadow_style_tint(),
                 shadow_style_blur: topdown_shadow_style_blur(),
+                indoor_light_params: Vec4::new(TILE_SIZE, 1.0, 1.0, 0.0),
                 soul_shadow_projectors: [Vec4::ZERO; MAX_SOUL_SHADOW_PROJECTORS],
                 soul_shadow_projector_meta: Vec4::new(
                     0.0,
@@ -241,6 +264,7 @@ pub fn make_terrain_section_material(
             terrain_macro_overlay: maps.macro_overlay,
             river_flow_noise: maps.river_flow_noise,
             terrain_feature_lut: maps.feature_lut,
+            indoor_light_field: None,
         },
     }
 }
@@ -261,6 +285,14 @@ pub fn make_section_material_textured(texture: Handle<Image>) -> SectionMaterial
 }
 
 pub fn with_alpha_mode(mut material: SectionMaterial, alpha_mode: AlphaMode) -> SectionMaterial {
+    material.base.alpha_mode = alpha_mode;
+    material
+}
+
+pub fn with_topdown_alpha_mode(
+    mut material: TopDownStructuralMaterial,
+    alpha_mode: AlphaMode,
+) -> TopDownStructuralMaterial {
     material.base.alpha_mode = alpha_mode;
     material
 }

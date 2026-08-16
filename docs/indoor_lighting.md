@@ -2,7 +2,7 @@
 
 ## 現在の実装範囲
 
-P03は`hw_infra::lighting`に、Bevy ECS・GPU・ゲームワールドqueryへ依存しない室内Light Fieldのpure coreを実装した。P04は`bevy_app::systems::lighting`から通常playへ接続し、completed Wall、Door、typed OutdoorLamp、給電状態、Room maskを同じCPU fieldへ正規化する。P05はdurable mountとsave/load lifecycleを実装した。P06はGPU uploadとshader、P07はgameplay・Room consumerを担当する。
+P03は`hw_infra::lighting`に、Bevy ECS・GPU・ゲームワールドqueryへ依存しない室内Light Fieldのpure coreを実装した。P04は`bevy_app::systems::lighting`から通常playへ接続し、completed Wall、Door、typed OutdoorLamp、給電状態、Room maskを同じCPU fieldへ正規化する。P05はdurable mountとsave/load lifecycleを実装した。P06はGPU uploadとTerrain／Structural3d shaderを実装した。P07はgameplay・Room consumerを担当する。
 
 core入力は`GridDimensions`、row-majorの`IndoorMask`、semanticな`LightOcclusionGrid`、正規化済み`RadialLightEmitterSnapshot`である。最大gridはゲームworldと同じ100×100、canonical性能fixtureは50 emitter・radius 5 tileを使う。emitterはstable key順に処理し、duplicate keyは入力全体を拒否する。invalidな個別emitterはstable diagnosticを返してfail-darkにする。
 
@@ -51,7 +51,19 @@ world replacementの`lighting-runtime` reset hookはsnapshot、pending input、c
 
 energyの`TaskWorkers`と`PowerSupplyState`はruntime-derivedで保存しない。したがってload後のenergy full rebuildはworkerのないSoul Spa出力を0へ再計算し、durable fixtureとruntime emitterを復元してもeligible supplied emitterが0ならavailableなdark fieldを公開する。P05のterminal checksumはdurable fixtureのsemantic rebindを証明し、旧field bytesの一致を要求しない。
 
-GPU textureとuploadはP06、照度gameplay readはP07の責務である。
+## P06 GPU表示
+
+`bevy_app::systems::visual::IndoorLightTexture`がGPU側の唯一の`Image` handleを所有する。startupではproduction grid dimensionsのblack `Rgba8Unorm` imageをnearest／clamp sampler付きで生成し、`init_visual_handles`より前に公開する。uploadは`IndoorLightingRebuildSet → IndoorLightUploadSet → DoorPresentationSyncSet`の順で走り、P05のepoch-aware readerからcurrent `WorldEpoch`のsnapshotだけを受け取る。revisionとepochが不変ならpack／asset writeを行わず、dimension変更時も同じlive handleのimage descriptorとpayloadを置換する。
+
+`indoor-light-texture` load reset hookは同じhandleのbytesをblackへclearし、uploaded revision／epoch／checksumを無効化する。normal load、rollback、recovery-only、duplicate resetはこのhookを通り、current epoch fieldが再公開されるまでblackを維持する。candidate preflight rejectはworld replacement前に停止するためhookを通らず、live handle、bytes、checksumを変更しない。
+
+receiverはTerrainの`LOD1`／`LOD1-lite`／`LOD2`と、Wall、Door、Floor、Bridge、Tank、MudMixer、RestArea、SoulSpaの有限共有`TopDownStructuralMaterial` poolである。Soul billboard、Familiar、indicator、speech、selection、Foreground2d buildingとOutdoorLamp器具spriteはreceiverではない。全receiver materialは生成時から同じ`IndoorLightTexture` handleを持ち、per-building material cloneを作らない。
+
+共通WGSL helperはcentered mapのworld XZをrow-major gridへ変換し、bounds外をblackとしてnearest cellを読む。Terrain／Floor／Bridge／大型構造物はfragment cell、Wall側面はsurface normal側の隣接cell、Wall上面はNorth→East→South→Westのstable tie順で最大luminance近傍を使う。Wall／Doorは`MeshTag`へlogical root grid、resting cardinal、surface policyをpackする。Door leafがOpen表示でoffset／回転してもtagはdomain root `Transform`から同期されるため、Open／Closed／Lockedでsampling rootは変わらない。
+
+local lightはlinear空間で既存directional shadow stylingの後に`styled_rgb + base_color_rgb * local_light_rgb`として加算し、既存Scene tone mappingへ渡す。GPU payloadはpure coreの`pack_rgba8_linear`だけがUNORM16→RGBA8 round-half-upとindoor alpha maskを定義する。
+
+照度gameplay readはP07の責務である。
 
 ## P03 field-core evidence
 
@@ -71,3 +83,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py field-core \
 `--stage p04`はstatic / behavior / field-coreを受理する。staticとbehaviorは`indoor_light_runtime.json`へtyped / eligible emitter数、unsupplied adoption 0、canonical Room mask、input/output revision、availability、field checksumを出す。Room mask checksumはEntity IDを使わず、4近傍で連結した室内をanchorのrow-major順、各室内cellをrow-major順に直列化するため、P00の複数Room fixture契約と一致しつつRoom再生成に依存しない。behavior timelineもplaceholderではなく同じlive field値を記録する。
 
 P04 field-coreはP03の`indoor_light_cpu.csv`と`indoor_light_field.json`をそのまま継承し、別の`indoor_light_runtime.json`でproduction ECS fixtureを実走した600 Updateを証明する。large fixtureはtyped 51 / eligible 50 / mask 576（16室×36 cell）であり、steady windowのfull scan、rebuild、revision increment、scoped allocation event/byteは0、1 Updateあたりのrebuildは最大1である。emitter collect allocationはadapterが明示的に所有するbufferの論理scopeとして別記録する。
+
+## P06 GPU evidence
+
+`--stage p06`はstatic／behavior／field-coreを明示的に受理する。GPU static Capture／Memoryは`indoor_light_gpu.json`へimage／handle各1、logical／staging bytes、revision単位のupload、allocation、steady count、uploaded epoch／checksumを出し、CPU runtime checksumと一致しないartifactを拒否する。behavior timelineはGPU availability、upload epoch、checksumを持ち、replacement reset rowは`unavailable/null`、再公開後はrowの`world_epoch`と一致する`available`となる。RenderDoc runtime checkpointは別の`gpu_light_field` blockで同じupload証跡と全receiverのshared-image identity、追加light／shadow／passが0であることを保持する。P01 composite bindingからGPU Light Fieldを推測しない。

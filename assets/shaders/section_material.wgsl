@@ -5,8 +5,10 @@
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
     forward_io::{VertexOutput, FragmentOutput},
     mesh_view_bindings::globals,
+    mesh_functions,
 }
 #import "shaders/shadow_style.wgsl"::apply_directional_shadow_style
+#import "shaders/indoor_light_field.wgsl"::sample_indoor_light_field
 
 struct SectionMaterialUniforms {
     cut_position:    vec4<f32>,
@@ -27,6 +29,7 @@ struct SectionMaterialUniforms {
     shadow_style_params:           vec4<f32>,
     shadow_style_tint:             vec4<f32>,
     shadow_style_blur:             vec4<f32>,
+    indoor_light_params:           vec4<f32>,
     soul_shadow_projectors:        array<vec4<f32>, 12>,
     soul_shadow_projector_meta:    vec4<f32>,
 }
@@ -42,6 +45,8 @@ struct SectionMaterialUniforms {
 @group(#{MATERIAL_BIND_GROUP}) @binding(108) var river_flow_noise_sampler: sampler;
 @group(#{MATERIAL_BIND_GROUP}) @binding(109) var terrain_feature_lut: texture_2d<f32>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(110) var terrain_feature_lut_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(111) var indoor_light_field: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(112) var indoor_light_sampler: sampler;
 
 fn section_discard(world_position: vec3<f32>) {
     if section_material.cut_active > 0.5 {
@@ -362,6 +367,20 @@ fn fragment(
             ),
             out.color.a,
         );
+        if section_material.indoor_light_params.z > 0.5 {
+            let local_light = sample_indoor_light_field(
+                indoor_light_field,
+                indoor_light_sampler,
+                in.world_position.xyz,
+                in.world_normal,
+                mesh_functions::get_tag(in.instance_index),
+                section_material.indoor_light_params.x,
+            ) * section_material.indoor_light_params.y;
+            out.color = vec4<f32>(
+                out.color.rgb + pbr_input.material.base_color.rgb * local_light,
+                out.color.a,
+            );
+        }
     } else {
         out.color = pbr_input.material.base_color;
     }

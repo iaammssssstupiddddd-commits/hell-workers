@@ -5,7 +5,9 @@ pub(crate) mod spawn;
 pub(crate) use spawn::{
     RenderPresentationClass, presentation_class, requires_legacy_structural_2d_mirror,
 };
-pub(crate) use spawn::{attach_building_shell, spawn_building_3d_visual};
+pub(crate) use spawn::{
+    attach_building_shell, spawn_building_3d_visual, structural_light_anchor_mesh_tag,
+};
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BuildingCompletionSet;

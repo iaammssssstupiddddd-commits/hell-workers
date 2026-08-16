@@ -20,6 +20,7 @@ use crate::systems::save::{
     SaveLoadResult, SaveLoadState, SavePath, SaveRecoveryMode, SaveStorageRoot,
     manual_save_request, normal_load_request, recovery_load_request,
 };
+use crate::systems::visual::indoor_light_texture::IndoorLightTexture;
 
 use super::indoor_light_fixture::IndoorLightFixturePhase;
 use super::output::{
@@ -84,6 +85,9 @@ struct TimelineRow {
     field_output_revision: Option<u64>,
     field_is_dark: Option<bool>,
     field_checksum: Option<String>,
+    gpu_availability: &'static str,
+    gpu_upload_epoch: Option<u64>,
+    gpu_checksum: Option<String>,
     fixture_checksum: &'static str,
     terminal_outcome: &'static str,
     registry_phase: &'static str,
@@ -122,8 +126,8 @@ impl TimelineRow {
                 "\"field_input_revision\":{},\"field_output_revision\":{},",
                 "\"field_read_count\":{},\"old_epoch_field_read_count\":{},",
                 "\"field_is_dark\":{},\"field_checksum\":{},",
-                "\"gpu_availability\":\"stage_before_gpu_owner\",",
-                "\"gpu_upload_epoch\":null,\"gpu_checksum\":null,",
+                "\"gpu_availability\":\"{}\",",
+                "\"gpu_upload_epoch\":{},\"gpu_checksum\":{},",
                 "\"fixture_checksum\":\"{}\",\"terminal_outcome\":\"{}\"}}"
             ),
             json_escape(self.case_id),
@@ -147,9 +151,43 @@ impl TimelineRow {
             optional_u64(self.old_epoch_field_read_count),
             optional_bool(self.field_is_dark),
             optional(self.field_checksum.as_deref()),
+            self.gpu_availability,
+            optional_u64(self.gpu_upload_epoch),
+            optional(self.gpu_checksum.as_deref()),
             self.fixture_checksum,
             self.terminal_outcome,
         )
+    }
+}
+
+struct TimelineGpuObservation {
+    availability: &'static str,
+    upload_epoch: Option<u64>,
+    checksum: Option<String>,
+}
+
+fn timeline_gpu_observation(
+    config: &PerfScenarioConfig,
+    texture: &IndoorLightTexture,
+) -> TimelineGpuObservation {
+    let p06 = config
+        .rtt_light_selection()
+        .is_some_and(|selection| selection.stage_id() == "p06");
+    if !p06 {
+        return TimelineGpuObservation {
+            availability: "stage_before_gpu_owner",
+            upload_epoch: None,
+            checksum: None,
+        };
+    }
+    TimelineGpuObservation {
+        availability: if texture.uploaded_epoch().is_some() {
+            "available"
+        } else {
+            "unavailable"
+        },
+        upload_epoch: texture.uploaded_epoch(),
+        checksum: texture.uploaded_checksum().map(str::to_owned),
     }
 }
 
@@ -225,7 +263,7 @@ fn timeline_field_observation(
     if runtime.availability() != crate::systems::lighting::IndoorLightAvailability::Available {
         if config
             .rtt_light_selection()
-            .is_some_and(|selection| selection.stage_id() == "p05")
+            .is_some_and(|selection| matches!(selection.stage_id(), "p05" | "p06"))
         {
             return Ok(TimelineFieldObservation {
                 availability: "unavailable",
@@ -577,6 +615,7 @@ pub(crate) struct BehaviorObserveParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
     fixture: Res<'w, IndoorLightFixtureState>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
+    indoor_light_texture: Res<'w, IndoorLightTexture>,
     lifecycle_probe: ResMut<'w, IndoorLightingLifecycleProbe>,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,
     capture: ResMut<'w, PerfBehaviorCapture>,
@@ -748,10 +787,10 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             ];
             let simulation_tick = params.capture.simulation_tick;
             let fixture_checksum = params.capture.fixture_checksum.unwrap_or("");
-            let p05 = params
+            let owns_lifecycle = params
                 .config
                 .rtt_light_selection()
-                .is_some_and(|selection| selection.stage_id() == "p05");
+                .is_some_and(|selection| matches!(selection.stage_id(), "p05" | "p06"));
             let Ok(field) =
                 timeline_field_observation(&params.config, &params.indoor_light_runtime)
             else {
@@ -762,6 +801,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                 );
                 return;
             };
+            let gpu = timeline_gpu_observation(&params.config, &params.indoor_light_texture);
             append_row(
                 &mut params.capture,
                 TimelineRow {
@@ -781,21 +821,25 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     field_output_revision: field.output_revision,
                     field_is_dark: field.is_dark,
                     field_checksum: field.checksum,
+                    gpu_availability: gpu.availability,
+                    gpu_upload_epoch: gpu.upload_epoch,
+                    gpu_checksum: gpu.checksum,
                     fixture_checksum,
                     terminal_outcome: if step == 4 {
                         "succeeded"
                     } else {
                         "in_progress"
                     },
-                    registry_phase: if p05 {
+                    registry_phase: if owns_lifecycle {
                         "candidate_preflight"
                     } else {
                         "stage_before_registry_owner"
                     },
                     registry_step_id: None,
-                    wake_count: p05.then_some(0),
-                    field_read_count: p05.then_some(params.lifecycle_probe.field_read_count()),
-                    old_epoch_field_read_count: p05
+                    wake_count: owns_lifecycle.then_some(0),
+                    field_read_count: owns_lifecycle
+                        .then_some(params.lifecycle_probe.field_read_count()),
+                    old_epoch_field_read_count: owns_lifecycle
                         .then_some(params.lifecycle_probe.old_epoch_field_reads()),
                 },
             );
@@ -895,16 +939,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                             ("verify-fail-dark", false, false, false)
                         }
                     } else {
-                        match validate_loaded_small_fixture(
-                            &params.buildings,
-                            &params.door_components,
-                            &params.soul_spa_tiles,
-                            &params.souls,
-                            &params.familiars,
-                            &params.yards,
-                            &params.rooms,
-                            &params.world_map,
-                        ) {
+                        match params.validate_loaded_small_fixture() {
                             Ok(()) => ("verify-semantic-rebind", false, true, true),
                             Err(reason) if params.capture.load_wait_updates < 128 => {
                                 params.capture.load_wait_updates += 1;
@@ -986,6 +1021,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                 );
                 return;
             };
+            let mut gpu = timeline_gpu_observation(&params.config, &params.indoor_light_texture);
             let reset_count = params
                 .lifecycle_probe
                 .reset_count()
@@ -1000,6 +1036,11 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     input_revision: None,
                     output_revision: None,
                     is_dark: Some(params.lifecycle_probe.all_resets_fail_dark()),
+                    checksum: None,
+                };
+                gpu = TimelineGpuObservation {
+                    availability: "unavailable",
+                    upload_epoch: None,
                     checksum: None,
                 };
             }
@@ -1060,6 +1101,9 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     field_output_revision: field.output_revision,
                     field_is_dark: field.is_dark,
                     field_checksum: field.checksum,
+                    gpu_availability: gpu.availability,
+                    gpu_upload_epoch: gpu.upload_epoch,
+                    gpu_checksum: gpu.checksum,
                     fixture_checksum,
                     terminal_outcome: if step == 5 {
                         match behavior_case {
@@ -1148,6 +1192,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             &params.room_lookup,
             (params.config.behavior_case() == Some(PerfBehaviorCase::LoadRecoveryFailedV1))
                 .then_some(params.capture.initial_room_tiles.as_slice()),
+            None,
         )
     });
     params.capture.phase = BehaviorPhase::Finished;
@@ -1214,131 +1259,112 @@ fn write_behavior_timeline(
     file.sync_all()
 }
 
-fn validate_loaded_small_fixture(
-    buildings: &Query<'_, '_, (Entity, &Building, &Transform)>,
-    door_components: &Query<'_, '_, &Door>,
-    soul_spa_tiles: &Query<'_, '_, &SoulSpaTile>,
-    souls: &Query<'_, '_, (), With<DamnedSoul>>,
-    familiars: &Query<'_, '_, (), With<Familiar>>,
-    yards: &Query<'_, '_, &Yard>,
-    rooms: &Query<'_, '_, (), With<Room>>,
-    world_map: &WorldMap,
-) -> Result<(), String> {
-    let counts = (
-        souls.iter().count(),
-        familiars.iter().count(),
-        yards.iter().count(),
-    );
-    // The fixed small fixture adds two contract-owned Yards while preserving
-    // the seed-owned world-generation Yard after proving that it does not
-    // overlap the fixture. A normal load must restore the complete durable
-    // world, not only the two fixture-owned Yards.
-    if counts != (50, 4, 3) {
-        return Err(format!(
-            "Soul/Familiar/Yard counts are {}/{}/{}, expected 50/4/3",
-            counts.0, counts.1, counts.2
-        ));
-    }
-    if rooms.iter().count() != 1 {
-        return Err("Room count has not converged".to_string());
-    }
-    let mut floors = BTreeSet::new();
-    let mut walls = BTreeSet::new();
-    let mut doors = Vec::new();
-    let mut lamps = BTreeSet::new();
-    let mut spa_sites = Vec::new();
-    for (entity, building, transform) in buildings.iter() {
-        let grid = WorldMap::world_to_grid(transform.translation.truncate());
-        match building.kind {
-            BuildingType::Floor => {
-                floors.insert(grid);
-            }
-            BuildingType::Wall => {
-                walls.insert(grid);
-            }
-            BuildingType::Door => doors.push((entity, grid)),
-            BuildingType::OutdoorLamp => {
-                lamps.insert(grid);
-            }
-            BuildingType::SoulSpa => {
-                spa_sites.push(entity);
-            }
-            _ => {}
+impl BehaviorObserveParams<'_, '_> {
+    fn validate_loaded_small_fixture(&self) -> Result<(), String> {
+        let buildings = &self.buildings;
+        let door_components = &self.door_components;
+        let soul_spa_tiles = &self.soul_spa_tiles;
+        let souls = &self.souls;
+        let familiars = &self.familiars;
+        let yards = &self.yards;
+        let rooms = &self.rooms;
+        let world_map = &self.world_map;
+        let counts = (
+            souls.iter().count(),
+            familiars.iter().count(),
+            yards.iter().count(),
+        );
+        // The fixed small fixture adds two contract-owned Yards while preserving
+        // the seed-owned world-generation Yard after proving that it does not
+        // overlap the fixture. A normal load must restore the complete durable
+        // world, not only the two fixture-owned Yards.
+        if counts != (50, 4, 3) {
+            return Err(format!(
+                "Soul/Familiar/Yard counts are {}/{}/{}, expected 50/4/3",
+                counts.0, counts.1, counts.2
+            ));
         }
-    }
-    let expected_floors = (21..=26)
-        .flat_map(|y| (17..=22).map(move |x| (x, y)))
-        .collect::<BTreeSet<_>>();
-    let expected_walls = (20..=27)
-        .flat_map(|y| [(16, y), (23, y)])
-        .chain((17..=22).flat_map(|x| [(x, 20), (x, 27)]))
-        .filter(|grid| *grid != SMALL_DOOR_GRID)
-        .collect::<BTreeSet<_>>();
-    if floors != expected_floors || walls != expected_walls {
-        return Err("Floor or Wall semantic grid set differs after load".to_string());
-    }
-    if doors.len() != 1 || doors[0].1 != SMALL_DOOR_GRID {
-        return Err("Door semantic identity differs after load".to_string());
-    }
-    let map_owner = world_map.door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1);
-    let map_state = world_map.door_state(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1);
-    let component_state = door_components
-        .get(doors[0].0)
-        .map(|door| door.state)
-        .map_err(|_| "loaded Door is missing its semantic Door component".to_string())?;
-    if map_owner != Some(doors[0].0) || map_state != Some(component_state) {
-        return Err(format!(
-            "Door WorldMap owner/state relation differs after load: entity={:?}, component_state={component_state:?}, map_owner={map_owner:?}, map_state={map_state:?}",
-            doors[0].0,
-        ));
-    }
-    if lamps != BTreeSet::from([(17, 21), (80, 80)]) {
-        return Err("Lamp semantic grids differ after load".to_string());
-    }
-    // SoulSpa is a 2x2 building whose site Transform is the footprint center,
-    // not its placement anchor. Converting that center back to one grid loses
-    // the anchor semantics. Validate the durable site-to-tile relationship and
-    // exact footprint instead; this is also what WorldMap rehydration owns.
-    if spa_sites.len() != 1 {
-        return Err(format!(
-            "SoulSpa site count is {}, expected 1",
-            spa_sites.len()
-        ));
-    }
-    let spa_site = spa_sites[0];
-    let spa_grids = soul_spa_tiles
-        .iter()
-        .filter(|tile| tile.parent_site == spa_site)
-        .map(|tile| tile.grid_pos)
-        .collect::<BTreeSet<_>>();
-    let expected_spa_grids = BTreeSet::from([(21, 25), (22, 25), (21, 26), (22, 26)]);
-    if spa_grids != expected_spa_grids
-        || expected_spa_grids
+        if rooms.iter().count() != 1 {
+            return Err("Room count has not converged".to_string());
+        }
+        let mut floors = BTreeSet::new();
+        let mut walls = BTreeSet::new();
+        let mut doors = Vec::new();
+        let mut lamps = BTreeSet::new();
+        let mut spa_sites = Vec::new();
+        for (entity, building, transform) in buildings.iter() {
+            let grid = WorldMap::world_to_grid(transform.translation.truncate());
+            match building.kind {
+                BuildingType::Floor => {
+                    floors.insert(grid);
+                }
+                BuildingType::Wall => {
+                    walls.insert(grid);
+                }
+                BuildingType::Door => doors.push((entity, grid)),
+                BuildingType::OutdoorLamp => {
+                    lamps.insert(grid);
+                }
+                BuildingType::SoulSpa => {
+                    spa_sites.push(entity);
+                }
+                _ => {}
+            }
+        }
+        let expected_floors = (21..=26)
+            .flat_map(|y| (17..=22).map(move |x| (x, y)))
+            .collect::<BTreeSet<_>>();
+        let expected_walls = (20..=27)
+            .flat_map(|y| [(16, y), (23, y)])
+            .chain((17..=22).flat_map(|x| [(x, 20), (x, 27)]))
+            .filter(|grid| *grid != SMALL_DOOR_GRID)
+            .collect::<BTreeSet<_>>();
+        if floors != expected_floors || walls != expected_walls {
+            return Err("Floor or Wall semantic grid set differs after load".to_string());
+        }
+        if doors.len() != 1 || doors[0].1 != SMALL_DOOR_GRID {
+            return Err("Door semantic identity differs after load".to_string());
+        }
+        let map_owner = world_map.door_entity(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1);
+        let map_state = world_map.door_state(SMALL_DOOR_GRID.0, SMALL_DOOR_GRID.1);
+        let component_state = door_components
+            .get(doors[0].0)
+            .map(|door| door.state)
+            .map_err(|_| "loaded Door is missing its semantic Door component".to_string())?;
+        if map_owner != Some(doors[0].0) || map_state != Some(component_state) {
+            return Err(format!(
+                "Door WorldMap owner/state relation differs after load: entity={:?}, component_state={component_state:?}, map_owner={map_owner:?}, map_state={map_state:?}",
+                doors[0].0,
+            ));
+        }
+        if lamps != BTreeSet::from([(17, 21), (80, 80)]) {
+            return Err("Lamp semantic grids differ after load".to_string());
+        }
+        // SoulSpa is a 2x2 building whose site Transform is the footprint center,
+        // not its placement anchor. Converting that center back to one grid loses
+        // the anchor semantics. Validate the durable site-to-tile relationship and
+        // exact footprint instead; this is also what WorldMap rehydration owns.
+        if spa_sites.len() != 1 {
+            return Err(format!(
+                "SoulSpa site count is {}, expected 1",
+                spa_sites.len()
+            ));
+        }
+        let spa_site = spa_sites[0];
+        let spa_grids = soul_spa_tiles
             .iter()
-            .any(|grid| world_map.building_entity(*grid) != Some(spa_site))
-    {
-        return Err("SoulSpa semantic footprint differs after load".to_string());
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod system_param_tests {
-    use super::*;
-    use bevy::ecs::system::{IntoSystem, System};
-
-    #[test]
-    fn behavior_driver_queries_are_disjoint() {
-        let mut world = World::new();
-        let mut system = IntoSystem::into_system(drive_perf_behavior_system);
-        system.initialize(&mut world);
-    }
-
-    #[test]
-    fn behavior_observer_queries_are_disjoint() {
-        let mut world = World::new();
-        let mut system = IntoSystem::into_system(observe_perf_behavior_system);
-        system.initialize(&mut world);
+            .filter(|tile| tile.parent_site == spa_site)
+            .map(|tile| tile.grid_pos)
+            .collect::<BTreeSet<_>>();
+        let expected_spa_grids = BTreeSet::from([(21, 25), (22, 25), (21, 26), (22, 26)]);
+        if spa_grids != expected_spa_grids
+            || expected_spa_grids
+                .iter()
+                .any(|grid| world_map.building_entity(*grid) != Some(spa_site))
+        {
+            return Err("SoulSpa semantic footprint differs after load".to_string());
+        }
+        Ok(())
     }
 }
 
@@ -1370,4 +1396,24 @@ fn fail_behavior(
     capture.phase = BehaviorPhase::Finished;
     error!("PERF_BEHAVIOR: {reason}");
     exit.write(AppExit::error());
+}
+
+#[cfg(test)]
+mod system_param_tests {
+    use super::*;
+    use bevy::ecs::system::{IntoSystem, System};
+
+    #[test]
+    fn behavior_driver_queries_are_disjoint() {
+        let mut world = World::new();
+        let mut system = IntoSystem::into_system(drive_perf_behavior_system);
+        system.initialize(&mut world);
+    }
+
+    #[test]
+    fn behavior_observer_queries_are_disjoint() {
+        let mut world = World::new();
+        let mut system = IntoSystem::into_system(observe_perf_behavior_system);
+        system.initialize(&mut world);
+    }
 }

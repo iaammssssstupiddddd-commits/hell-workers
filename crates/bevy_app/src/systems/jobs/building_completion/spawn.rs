@@ -1,6 +1,7 @@
 use super::super::{Blueprint, Building, BuildingType, Door, DoorState, ProvisionalWall};
 use crate::assets::GameAssets;
 use crate::plugins::startup::Building3dHandles;
+use bevy::mesh::MeshTag;
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT};
 use hw_visual::layer::VisualLayerKind;
@@ -8,6 +9,46 @@ use hw_visual::visual3d::{
     Building3dVisual, Door3dVisual, DoorPresentationState, LegacyStructural2dMirror,
     StructuralPresentationState,
 };
+use hw_world::WorldMap;
+
+const LIGHT_ANCHOR_PRESENT: u32 = 1 << 31;
+const LIGHT_ANCHOR_POLICY_SHIFT: u32 = 18;
+const LIGHT_ANCHOR_POLICY_WALL: u32 = 1;
+const LIGHT_ANCHOR_POLICY_DOOR: u32 = 2;
+
+pub(crate) fn structural_light_anchor_mesh_tag(
+    kind: BuildingType,
+    owner: &Transform,
+) -> Option<MeshTag> {
+    let policy = match kind {
+        BuildingType::Wall => LIGHT_ANCHOR_POLICY_WALL,
+        BuildingType::Door => LIGHT_ANCHOR_POLICY_DOOR,
+        _ => return None,
+    };
+    let (grid_x, grid_y) = WorldMap::world_to_grid(owner.translation.truncate());
+    let (Ok(grid_x), Ok(grid_y)) = (u32::try_from(grid_x), u32::try_from(grid_y)) else {
+        return None;
+    };
+    if grid_x > u32::from(u8::MAX) || grid_y > u32::from(u8::MAX) {
+        return None;
+    }
+
+    let local_north = owner.rotation * Vec3::Y;
+    let direction = if local_north.x.abs() > local_north.y.abs() {
+        if local_north.x >= 0.0 { 1 } else { 3 }
+    } else if local_north.y >= 0.0 {
+        0
+    } else {
+        2
+    };
+    Some(MeshTag(
+        LIGHT_ANCHOR_PRESENT
+            | grid_x
+            | (grid_y << 8)
+            | (direction << 16)
+            | (policy << LIGHT_ANCHOR_POLICY_SHIFT),
+    ))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RenderPresentationClass {
@@ -213,17 +254,21 @@ pub(crate) fn spawn_building_3d_visual(
                 handles_3d.wall_material.clone()
             };
             let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.5, -pos2d.y);
+            let owner_transform = Transform::from_xyz(pos2d.x, pos2d.y, 0.0);
             commands.spawn((
                 Mesh3d(handles_3d.wall_mesh.clone()),
                 MeshMaterial3d(material),
                 transform_3d,
                 handles_3d.render_layers.clone(),
                 Building3dVisual { owner },
+                structural_light_anchor_mesh_tag(kind, &owner_transform)
+                    .expect("Wall grid anchor fits MeshTag"),
                 Name::new(format!("Building3dVisual ({:?})", kind)),
             ));
         }
         BuildingType::Door => {
             let transform_3d = Transform::from_xyz(pos2d.x, TILE_SIZE * 0.25, -pos2d.y);
+            let owner_transform = Transform::from_xyz(pos2d.x, pos2d.y, 0.0);
             commands.spawn((
                 Mesh3d(handles_3d.door_mesh.clone()),
                 MeshMaterial3d(handles_3d.door_closed_material.clone()),
@@ -232,6 +277,8 @@ pub(crate) fn spawn_building_3d_visual(
                 Building3dVisual { owner },
                 Door3dVisual { owner },
                 DoorPresentationState::Closed,
+                structural_light_anchor_mesh_tag(kind, &owner_transform)
+                    .expect("Door grid anchor fits MeshTag"),
                 Name::new(format!("Building3dVisual ({:?})", kind)),
             ));
         }
@@ -313,5 +360,38 @@ mod tests {
                 BuildingType::MudMixer,
             ]
         );
+    }
+
+    #[test]
+    fn door_light_anchor_stays_on_the_logical_root_at_edges_and_corners() {
+        for (grid, direction, rotation) in [
+            ((0, 0), 0, Quat::IDENTITY),
+            (
+                (99, 0),
+                1,
+                Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2),
+            ),
+            ((99, 99), 2, Quat::from_rotation_z(std::f32::consts::PI)),
+            (
+                (0, 99),
+                3,
+                Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+            ),
+        ] {
+            let world = WorldMap::grid_to_world(grid.0, grid.1);
+            let owner = Transform::from_translation(world.extend(0.0)).with_rotation(rotation);
+            let tag = structural_light_anchor_mesh_tag(BuildingType::Door, &owner)
+                .expect("canonical Door root fits MeshTag")
+                .0;
+
+            assert_ne!(tag & LIGHT_ANCHOR_PRESENT, 0);
+            assert_eq!(tag & 0xff, grid.0 as u32);
+            assert_eq!((tag >> 8) & 0xff, grid.1 as u32);
+            assert_eq!((tag >> 16) & 0x3, direction);
+            assert_eq!(
+                (tag >> LIGHT_ANCHOR_POLICY_SHIFT) & 0x3,
+                LIGHT_ANCHOR_POLICY_DOOR
+            );
+        }
     }
 }

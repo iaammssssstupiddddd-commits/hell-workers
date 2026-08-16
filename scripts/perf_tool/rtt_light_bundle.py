@@ -102,6 +102,7 @@ EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "p03": P01_RENDER_RESOURCES,
     "p04": P01_RENDER_RESOURCES,
     "p05": P01_RENDER_RESOURCES,
+    "p06": P01_RENDER_RESOURCES,
 }
 SOURCE_CHECKPOINTS_RENDERDOC = (
     "start",
@@ -117,7 +118,7 @@ SOURCE_CHECKPOINTS_RENDERDOC = (
 
 
 def _expected_source_checkpoints(stage: str) -> tuple[str, ...]:
-    if stage not in {"p03", "p04", "p05"}:
+    if stage not in {"p03", "p04", "p05", "p06"}:
         return SOURCE_CHECKPOINTS_RENDERDOC
     return (*SOURCE_CHECKPOINTS_RENDERDOC[:-1], "after-field-core", "before-registration")
 
@@ -732,7 +733,7 @@ def _validate_run_file_set(
         "indoor_light_layout.csv",
         "indoor_light_presentation.csv",
     }
-    if stage in {"p04", "p05"}:
+    if stage in {"p04", "p05", "p06"}:
         data_files.add("indoor_light_runtime.json")
     root_files = {
         "command.txt",
@@ -758,11 +759,13 @@ def _validate_run_file_set(
         if leg_id == "memory":
             data_files.add("memory.csv")
             root_files |= {"profile-artifact.json", "resource-usage.txt"}
-        if stage in {"p02", "p03", "p04", "p05"}:
+        if stage in {"p02", "p03", "p04", "p05", "p06"}:
             data_files.add("p02_presentation.csv")
+        if stage == "p06":
+            data_files.add("indoor_light_gpu.json")
     elif leg_id == "field-core":
         data_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
-        if stage in {"p04", "p05"}:
+        if stage in {"p04", "p05", "p06"}:
             data_files.add("indoor_light_runtime.json")
     else:
         raise RuntimeError(f"session file-set validator does not support leg {leg_id}")
@@ -1556,6 +1559,7 @@ def _load_renderdoc_evidence(
     if runtime["fixture"] != manifest["fixture"]:
         raise RuntimeError("RenderDoc runtime fixture differs from manifest evidence")
     runtime_field = runtime.get("runtime_field")
+    gpu_light_field = runtime.get("gpu_light_field")
     if not accepts_renderdoc_api_version(
         str(runtime["returned_renderdoc_api_version"]),
         requested=str(runtime["requested_renderdoc_api_version"]),
@@ -1762,7 +1766,7 @@ def _load_renderdoc_evidence(
             )
     render_inventory = _validate_render_inventory_json(runtime["render_inventory"])
     p02_presentation = runtime.get("p02_presentation")
-    if stage in {"p02", "p03", "p04", "p05"} and not isinstance(p02_presentation, dict):
+    if stage in {"p02", "p03", "p04", "p05", "p06"} and not isinstance(p02_presentation, dict):
         raise RuntimeError("P02 RenderDoc evidence has no presentation checkpoint")
     mask_resource_id = tracked_ids.get("mask_target")
     mask_pass_count = (
@@ -1819,6 +1823,7 @@ def _load_renderdoc_evidence(
             "run_dirs": [],
             "fixture": manifest["fixture"],
             "runtime_field": runtime_field,
+            "gpu_upload": gpu_light_field,
             "render_inventory": render_inventory,
             "gate_metrics": {
                 "scene_target_count": int(render_inventory["scene_target_count"]),
@@ -1832,6 +1837,35 @@ def _load_renderdoc_evidence(
                 "mask_sample_count": mask_sample_count,
                 "mask_proxy_count": int(render_inventory["soul_mask_proxy_3d"]),
                 "explicit_color_bytes": explicit_color_bytes,
+                **(
+                    {
+                        key: gpu_light_field[key]
+                        for key in (
+                            "field_image_count",
+                            "field_handle_count",
+                            "logical_payload_bytes",
+                            "staging_bytes",
+                            "uploads_per_changed_revision",
+                            "changed_revision_samples",
+                            "steady_updates",
+                            "steady_uploads",
+                            "steady_scoped_allocation_events",
+                            "steady_scoped_allocation_bytes",
+                            "point_light_count_increment",
+                            "spot_light_count_increment",
+                            "shadow_map_count_increment",
+                            "local_light_pass_increment",
+                            "receiver_binding_count",
+                            "shared_field_image",
+                            "mask_pass_count",
+                            "duplicate_2d_pass_count",
+                            "cpu_golden_vectors_pass",
+                            "pixel_probes_pass",
+                        )
+                    }
+                    if stage == "p06" and isinstance(gpu_light_field, dict)
+                    else {}
+                ),
                 **(
                     {
                         "layer_2d_camera_count": p02_presentation["layer_2d_camera_count"],
@@ -1853,7 +1887,7 @@ def _load_renderdoc_evidence(
                             "state_and_bounce_probes_pass"
                         ],
                     }
-                    if stage in {"p02", "p03", "p04", "p05"}
+                    if stage in {"p02", "p03", "p04", "p05", "p06"}
                     else {}
                 ),
             },
@@ -2083,6 +2117,25 @@ def _runtime_field_projection_payload(runtime: Any) -> dict[str, Any]:
     }
 
 
+def _gpu_upload_projection(evidence: dict[str, Any]) -> dict[str, str]:
+    validations: list[Validation] = evidence["validations"]
+    if validations:
+        gpu = _only_equal(
+            [validation.indoor_light_gpu for validation in validations],
+            label=f"{evidence['formal']['case_id']} indoor Light Field GPU upload",
+        )
+    else:
+        gpu = evidence.get("gpu_upload")
+    if not isinstance(gpu, dict):
+        raise RuntimeError("formal evidence has no indoor Light Field GPU upload")
+    return {
+        "gpu_upload_count": str(gpu["upload_count"]),
+        "gpu_upload_payload_bytes": str(gpu["logical_payload_bytes"]),
+        "gpu_upload_allocation_events": str(gpu["upload_allocation_events"]),
+        "gpu_upload_allocation_bytes": str(gpu["upload_allocation_bytes"]),
+    }
+
+
 def build_projection_rows(
     contract: dict[str, Any],
     stage: str,
@@ -2192,6 +2245,8 @@ def build_projection_rows(
             )
             row["emitter_collect_allocation_events"] = str(allocation["events"])
             row["emitter_collect_allocation_bytes"] = str(allocation["bytes"])
+        if applicability["gpu_upload"] == "available":
+            row.update(_gpu_upload_projection(evidence))
         rows.append(row)
     validate_projection_rows(contract, stage, rows)
     return rows
@@ -2381,6 +2436,7 @@ def _gate_observed(
         "world_epoch_delta",
         "wake_count",
         "old_epoch_field_reads",
+        "old_epoch_gpu_uploads",
         "reset_is_dark",
         "terminal_checksum_match",
     }:
@@ -2404,6 +2460,14 @@ def _gate_observed(
                 observed_values.append(terminal["wake_count"])
             elif metric_id == "old_epoch_field_reads":
                 observed_values.append(terminal["old_epoch_field_read_count"])
+            elif metric_id == "old_epoch_gpu_uploads":
+                observed_values.append(
+                    sum(
+                        row["gpu_upload_epoch"] is not None
+                        and row["gpu_upload_epoch"] != row["world_epoch"]
+                        for row in timeline
+                    )
+                )
             elif metric_id == "reset_is_dark":
                 reset_rows = [
                     row for row in timeline if row["registry_phase"] == "load_reset"
@@ -2426,6 +2490,37 @@ def _gate_observed(
         value = observed_values[0]
         return str(value).lower() if isinstance(value, bool) else str(value)
     gate_metrics = evidence.get("gate_metrics")
+    if metric_id in {
+        "field_image_count",
+        "field_handle_count",
+        "logical_payload_bytes",
+        "staging_bytes",
+        "uploads_per_changed_revision",
+        "changed_revision_samples",
+        "steady_updates",
+        "steady_uploads",
+        "steady_scoped_allocation_events",
+        "steady_scoped_allocation_bytes",
+        "point_light_count_increment",
+        "spot_light_count_increment",
+        "shadow_map_count_increment",
+        "local_light_pass_increment",
+        "receiver_binding_count",
+        "mask_pass_count",
+        "duplicate_2d_pass_count",
+    }:
+        if not isinstance(gate_metrics, dict):
+            raise RuntimeError(f"{case_id} has no P06 RenderDoc gate metrics")
+        value = gate_metrics.get(metric_id)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise RuntimeError(f"{case_id} P06 gate metric {metric_id} is invalid")
+        return str(value)
+    if metric_id in {"shared_field_image", "cpu_golden_vectors_pass", "pixel_probes_pass"}:
+        if not isinstance(gate_metrics, dict) or not isinstance(
+            gate_metrics.get(metric_id), bool
+        ):
+            raise RuntimeError(f"{case_id} P06 gate metric {metric_id} is invalid")
+        return str(gate_metrics[metric_id]).lower()
     if metric_id in {
         "scene_target_count",
         "mask_target_count",

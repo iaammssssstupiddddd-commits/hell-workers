@@ -483,7 +483,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
         if args.command == "field-core"
         else "static"
     )
-    expected_stages = {"p03", "p04", "p05"} if args.command == "field-core" else {"current", "p01", "p02", "p03", "p04", "p05"}
+    expected_stages = {"p03", "p04", "p05", "p06"} if args.command == "field-core" else {"current", "p01", "p02", "p03", "p04", "p05", "p06"}
     if (
         args.contract != "rtt-light-v1"
         or args.stage not in expected_stages
@@ -491,7 +491,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
     ):
         raise ValueError(
             "--workload indoor-light currently requires --contract rtt-light-v1 "
-            f"--stage {'p03|p04|p05' if args.command == 'field-core' else 'current|p01|p02|p03|p04|p05'} --lane {expected_lane}"
+            f"--stage {'p03|p04|p05|p06' if args.command == 'field-core' else 'current|p01|p02|p03|p04|p05|p06'} --lane {expected_lane}"
         )
     contract = load_rtt_light_contract(args.contract)
     validate_stage_lane(contract, args.stage, args.lane)

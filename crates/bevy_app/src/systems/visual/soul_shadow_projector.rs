@@ -1,4 +1,4 @@
-use crate::plugins::startup::{Building3dHandles, Camera3dRtt, Terrain3dHandles};
+use crate::plugins::startup::{Camera3dRtt, Terrain3dHandles};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::{
@@ -8,15 +8,14 @@ use hw_core::constants::{
 };
 use hw_core::soul::DamnedSoul;
 use hw_visual::{
-    SectionMaterial, TerrainSurfaceMaterial, TerrainSurfaceMaterialLod1Lite,
-    TerrainSurfaceMaterialLod2,
+    TerrainSurfaceMaterial, TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2,
+    TopDownStructuralMaterial,
 };
 
 #[derive(SystemParam)]
 pub struct SyncSoulShadowProjectorsParams<'w, 's> {
-    building_handles: Res<'w, Building3dHandles>,
     terrain_handles: Res<'w, Terrain3dHandles>,
-    section_materials: ResMut<'w, Assets<SectionMaterial>>,
+    structural_materials: ResMut<'w, Assets<TopDownStructuralMaterial>>,
     terrain_surface_materials: ResMut<'w, Assets<TerrainSurfaceMaterial>>,
     terrain_surface_materials_lod1_lite: ResMut<'w, Assets<TerrainSurfaceMaterialLod1Lite>>,
     terrain_surface_materials_lod2: ResMut<'w, Assets<TerrainSurfaceMaterialLod2>>,
@@ -64,18 +63,10 @@ pub fn sync_soul_shadow_projectors_system(
         SOUL_SHADOW_PROJECTOR_FORWARD_EXTENT,
     );
 
-    let building_handles = params.building_handles.as_ref();
     let terrain_handles = params.terrain_handles.as_ref();
 
-    sync_section_material_projectors(
-        &mut params.section_materials,
-        &building_handles.wall_material,
-        &projector_array,
-        projector_meta,
-    );
-    sync_section_material_projectors(
-        &mut params.section_materials,
-        &building_handles.wall_provisional_material,
+    sync_topdown_structural_projectors(
+        &mut params.structural_materials,
         &projector_array,
         projector_meta,
     );
@@ -99,23 +90,21 @@ pub fn sync_soul_shadow_projectors_system(
     );
 }
 
-fn sync_section_material_projectors(
-    materials: &mut Assets<SectionMaterial>,
-    handle: &Handle<SectionMaterial>,
+fn sync_topdown_structural_projectors(
+    materials: &mut Assets<TopDownStructuralMaterial>,
     projectors: &[Vec4; MAX_SOUL_SHADOW_PROJECTORS],
     projector_meta: Vec4,
 ) {
-    let Some(mut material) = materials.get_mut(handle) else {
-        return;
-    };
-    let uniforms = &mut material.extension.uniforms;
-    if uniforms.soul_shadow_projectors == *projectors
-        && uniforms.soul_shadow_projector_meta == projector_meta
-    {
-        return;
+    for (_, material) in materials.iter_mut() {
+        let uniforms = &mut material.extension.uniforms;
+        if uniforms.soul_shadow_projectors == *projectors
+            && uniforms.soul_shadow_projector_meta == projector_meta
+        {
+            continue;
+        }
+        uniforms.soul_shadow_projectors = *projectors;
+        uniforms.soul_shadow_projector_meta = projector_meta;
     }
-    uniforms.soul_shadow_projectors = *projectors;
-    uniforms.soul_shadow_projector_meta = projector_meta;
 }
 
 fn sync_terrain_surface_material_projectors(

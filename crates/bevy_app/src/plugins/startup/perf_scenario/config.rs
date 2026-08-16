@@ -143,6 +143,21 @@ impl PerfRttLightSelection {
         stage_id: "p05",
         lane: "field-core",
     };
+    const P06_STATIC_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p06",
+        lane: "static",
+    };
+    const P06_BEHAVIOR_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p06",
+        lane: "behavior",
+    };
+    const P06_FIELD_CORE_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p06",
+        lane: "field-core",
+    };
 
     pub const fn contract_id(self) -> &'static str {
         self.contract_id
@@ -157,11 +172,11 @@ impl PerfRttLightSelection {
     }
 
     pub fn uses_p02_presentation(self) -> bool {
-        matches!(self.stage_id, "p02" | "p03" | "p04" | "p05")
+        matches!(self.stage_id, "p02" | "p03" | "p04" | "p05" | "p06")
     }
 
     pub fn uses_runtime_field(self) -> bool {
-        matches!(self.stage_id, "p04" | "p05")
+        matches!(self.stage_id, "p04" | "p05" | "p06")
     }
 
     #[cfg(any(feature = "profiling-renderdoc", test))]
@@ -1069,7 +1084,7 @@ fn parse_rtt_light_selection(
 
     let (Some(contract), Some(stage), Some(lane)) = (contract, stage, lane) else {
         return Err(PerfScenarioConfigError(
-            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01|p02|p03|p04|p05 --perf-lane static|behavior|field-core"
+            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01|p02|p03|p04|p05|p06 --perf-lane static|behavior|field-core"
                 .to_string(),
         ));
     };
@@ -1089,9 +1104,12 @@ fn parse_rtt_light_selection(
         ("rtt-light-v1", "p05", "static") => PerfRttLightSelection::P05_STATIC_V1,
         ("rtt-light-v1", "p05", "behavior") => PerfRttLightSelection::P05_BEHAVIOR_V1,
         ("rtt-light-v1", "p05", "field-core") => PerfRttLightSelection::P05_FIELD_CORE_V1,
+        ("rtt-light-v1", "p06", "static") => PerfRttLightSelection::P06_STATIC_V1,
+        ("rtt-light-v1", "p06", "behavior") => PerfRttLightSelection::P06_BEHAVIOR_V1,
+        ("rtt-light-v1", "p06", "field-core") => PerfRttLightSelection::P06_FIELD_CORE_V1,
         _ => {
             return Err(PerfScenarioConfigError(format!(
-                "this binary supports rtt-light-v1 current through p05; field-core starts at p03; got {contract}/{stage}/{lane}"
+                "this binary supports rtt-light-v1 current through p06; field-core starts at p03; got {contract}/{stage}/{lane}"
             )));
         }
     };

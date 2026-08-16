@@ -84,6 +84,7 @@ def validate_session_artifact_set(
             "p03",
             "p04",
             "p05",
+            "p06",
         }:
             errors.append("behavior manifest has the wrong RtT-light selection")
         requested_environment = manifest.get("requested_environment")

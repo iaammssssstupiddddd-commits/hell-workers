@@ -440,15 +440,17 @@ def validate_runtime_checkpoint_v3(
         "gpu_ready",
         "capture_artifact",
     }
-    if stage_id in {"p02", "p03", "p04", "p05"}:
+    if stage_id in {"p02", "p03", "p04", "p05", "p06"}:
         required_top.add("p02_presentation")
-    if stage_id in {"p04", "p05"}:
+    if stage_id in {"p04", "p05", "p06"}:
         required_top.add("runtime_field")
+    if stage_id == "p06":
+        required_top.add("gpu_light_field")
     if set(payload) != required_top:
         raise ValueError("runtime checkpoint v3 has unexpected keys")
     if payload["contract_id"] != contract["contract_id"] or payload["stage_id"] != stage_id:
         raise ValueError("runtime checkpoint contract/stage mismatch")
-    if stage_id in {"p02", "p03", "p04", "p05"}:
+    if stage_id in {"p02", "p03", "p04", "p05", "p06"}:
         presentation = payload["p02_presentation"]
         expected_presentation_keys = {
             "layer_2d_camera_count",
@@ -479,7 +481,7 @@ def validate_runtime_checkpoint_v3(
         ):
             if not isinstance(presentation[key], bool):
                 raise ValueError(f"runtime checkpoint P02 presentation {key} is invalid")
-    if stage_id in {"p04", "p05"}:
+    if stage_id in {"p04", "p05", "p06"}:
         runtime_field = payload["runtime_field"]
         expected_runtime_keys = {
             "typed_emitter_components",
@@ -498,6 +500,42 @@ def validate_runtime_checkpoint_v3(
             character not in "0123456789abcdef" for character in checksum
         ):
             raise ValueError("runtime checkpoint P04 mask checksum is invalid")
+    if stage_id == "p06":
+        gpu_field = payload["gpu_light_field"]
+        expected_gpu_keys = {
+            "schema_version", "availability", "field_image_count", "field_handle_count",
+            "logical_payload_bytes", "staging_bytes", "upload_count",
+            "uploads_per_changed_revision", "changed_revision_samples", "steady_updates",
+            "steady_uploads", "steady_scoped_allocation_events",
+            "steady_scoped_allocation_bytes", "upload_allocation_events",
+            "upload_allocation_bytes", "old_epoch_uploads", "uploaded_epoch", "gpu_checksum",
+            "receiver_pipeline_count", "receiver_material_count", "receiver_binding_count",
+            "shared_field_image", "point_light_count_increment", "spot_light_count_increment",
+            "shadow_map_count_increment", "local_light_pass_increment", "mask_pass_count",
+            "duplicate_2d_pass_count", "cpu_golden_vectors_pass", "pixel_probes_pass",
+        }
+        if not isinstance(gpu_field, dict) or set(gpu_field) != expected_gpu_keys:
+            raise ValueError("runtime checkpoint P06 GPU field schema is invalid")
+        if gpu_field["schema_version"] != 1 or gpu_field["availability"] != "available":
+            raise ValueError("runtime checkpoint P06 GPU field is unavailable")
+        boolean_keys = {
+            "shared_field_image", "cpu_golden_vectors_pass", "pixel_probes_pass"
+        }
+        for key in boolean_keys:
+            if not isinstance(gpu_field[key], bool):
+                raise ValueError(f"runtime checkpoint P06 GPU field {key} is invalid")
+        integer_keys = expected_gpu_keys - {
+            "schema_version", "availability", "gpu_checksum", *boolean_keys
+        }
+        for key in integer_keys:
+            value = gpu_field[key]
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError(f"runtime checkpoint P06 GPU field {key} is invalid")
+        checksum = gpu_field["gpu_checksum"]
+        if not isinstance(checksum, str) or len(checksum) != 64 or any(
+            character not in "0123456789abcdef" for character in checksum
+        ):
+            raise ValueError("runtime checkpoint P06 GPU checksum is invalid")
     generation = payload["generation"]
     if not isinstance(generation, int) or isinstance(generation, bool) or generation < 1:
         raise ValueError("runtime checkpoint generation is invalid")
