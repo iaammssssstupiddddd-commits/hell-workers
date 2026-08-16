@@ -10,6 +10,7 @@ from .rtt_light_contract import (
     contract_fingerprints,
     expected_formal_cases,
     expected_gate_result_rows,
+    is_compatible_contract_predecessor,
     projection_field_applicability,
     validate_gate_result_rows,
     validate_projection_rows,
@@ -19,6 +20,7 @@ from .rtt_light_bundle import (
     _expected_requested_environment as expected_rtt_light_requested_environment,
     _recorded_repo_root as recorded_rtt_light_repo_root,
     _runtime_field_projection as project_rtt_light_runtime,
+    _upgrade_compatible_baseline_index as upgrade_rtt_light_baseline_index,
     _validate_session_matrix as validate_rtt_light_session_matrix,
     _verify_case_entry as verify_rtt_light_case_entry,
     build_gate_result_rows as build_rtt_light_gate_result_rows,
@@ -1454,6 +1456,56 @@ def self_test() -> int:
         assert rtt_light_checksum_text(ledger_root, index) == registered_checksum
         payload.write_text("tampered\n", encoding="utf-8")
         assert rtt_light_checksum_text(ledger_root, index) != registered_checksum
+
+        predecessor_sha256 = (
+            "121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11"
+        )
+        predecessor_fixture_sha256 = (
+            "a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed"
+        )
+        assert is_compatible_contract_predecessor(
+            rtt_contract,
+            stage_id="p04",
+            measurement_contract_sha256=predecessor_sha256,
+            fixture_contract_sha256=predecessor_fixture_sha256,
+        )
+        assert not is_compatible_contract_predecessor(
+            rtt_contract,
+            stage_id="p05",
+            measurement_contract_sha256=predecessor_sha256,
+            fixture_contract_sha256=predecessor_fixture_sha256,
+        )
+        predecessor_index = {
+            "schema_version": 1,
+            "contract_id": "rtt-light-v1",
+            "measurement_contract_sha256": predecessor_sha256,
+            "fixture_contract_sha256": predecessor_fixture_sha256,
+            "stages": {
+                "p04": {
+                    "measurement_contract_sha256": predecessor_sha256,
+                    "fixture_contract_sha256": predecessor_fixture_sha256,
+                }
+            },
+        }
+        upgraded_index = upgrade_rtt_light_baseline_index(
+            predecessor_index, rtt_contract
+        )
+        assert {
+            key: upgraded_index[key]
+            for key in ("measurement_contract_sha256", "fixture_contract_sha256")
+        } == contract_fingerprints(rtt_contract)
+        assert (
+            upgraded_index["stages"]["p04"]["measurement_contract_sha256"]
+            == predecessor_sha256
+        )
+        incompatible_index = json.loads(json.dumps(predecessor_index))
+        incompatible_index["stages"]["p05"] = incompatible_index["stages"].pop(
+            "p04"
+        )
+        assert (
+            upgrade_rtt_light_baseline_index(incompatible_index, rtt_contract)
+            == incompatible_index
+        )
 
         mutated_semantics = json.loads(json.dumps(rtt_contract))
         mutated_semantics["behavior_fixture"]["door_state_v1"]["steps"][1][

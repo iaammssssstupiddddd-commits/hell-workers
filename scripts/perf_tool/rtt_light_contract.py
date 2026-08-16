@@ -15,6 +15,15 @@ CONTRACT_FILES = {
 EXPECTED_CONTRACT_SHA256 = {
     "rtt-light-v1": "ba5d6bf7320426b441465df8fae42d6ff80820748ce55e0edf0dbba409dc755a",
 }
+COMPATIBLE_CONTRACT_PREDECESSORS = {
+    "rtt-light-v1": {
+        "121a365ac3349cd4fa7890ab3069f0392098ced17e0d47f920095a1490c2ba11": {
+            "successor_sha256": EXPECTED_CONTRACT_SHA256["rtt-light-v1"],
+            "fixture_sha256": "a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed",
+            "last_compatible_stage": "p04",
+        }
+    }
+}
 RTT_LIGHT_STAGES = ("current", "p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08")
 RTT_LIGHT_LANES = ("static", "behavior", "field-core", "consumer-core")
 FIELD_CORE_STAGES = frozenset({"p03", "p04", "p05", "p06", "p07", "p08"})
@@ -2540,3 +2549,32 @@ def contract_fingerprints(contract: dict[str, Any]) -> dict[str, str]:
         "measurement_contract_sha256": canonical_sha256(contract),
         "fixture_contract_sha256": canonical_sha256(contract["fixture"]),
     }
+
+
+def is_compatible_contract_predecessor(
+    contract: dict[str, Any],
+    *,
+    stage_id: str,
+    measurement_contract_sha256: str,
+    fixture_contract_sha256: str,
+) -> bool:
+    """Accept only the pinned additive predecessor for historical stage evidence."""
+    compatibility = COMPATIBLE_CONTRACT_PREDECESSORS.get(
+        contract.get("contract_id"), {}
+    ).get(measurement_contract_sha256)
+    if compatibility is None:
+        return False
+    current = contract_fingerprints(contract)
+    if (
+        compatibility["successor_sha256"]
+        != current["measurement_contract_sha256"]
+        or compatibility["fixture_sha256"] != fixture_contract_sha256
+        or current["fixture_contract_sha256"] != fixture_contract_sha256
+    ):
+        return False
+    try:
+        return RTT_LIGHT_STAGES.index(stage_id) <= RTT_LIGHT_STAGES.index(
+            compatibility["last_compatible_stage"]
+        )
+    except ValueError:
+        return False

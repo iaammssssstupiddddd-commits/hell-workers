@@ -38,6 +38,7 @@ from .rtt_light_contract import (
     contract_fingerprints,
     expected_formal_cases,
     expected_gate_result_rows,
+    is_compatible_contract_predecessor,
     load_rtt_light_contract,
     projection_field_applicability,
     validate_gate_result_rows,
@@ -2810,6 +2811,41 @@ def _checksum_text(
     return "\n".join(rows) + "\n"
 
 
+def _upgrade_compatible_baseline_index(
+    index: dict[str, Any], contract: dict[str, Any]
+) -> dict[str, Any]:
+    current = contract_fingerprints(contract)
+    observed = {
+        key: index.get(key)
+        for key in ("measurement_contract_sha256", "fixture_contract_sha256")
+    }
+    if observed == current:
+        return index
+    stages = index.get("stages")
+    if not isinstance(stages, dict) or not stages:
+        return index
+    predecessor_measurement = observed["measurement_contract_sha256"]
+    predecessor_fixture = observed["fixture_contract_sha256"]
+    if not isinstance(predecessor_measurement, str) or not isinstance(
+        predecessor_fixture, str
+    ):
+        return index
+    for stage_id, entry in stages.items():
+        if (
+            not isinstance(entry, dict)
+            or entry.get("measurement_contract_sha256") != predecessor_measurement
+            or entry.get("fixture_contract_sha256") != predecessor_fixture
+            or not is_compatible_contract_predecessor(
+                contract,
+                stage_id=stage_id,
+                measurement_contract_sha256=predecessor_measurement,
+                fixture_contract_sha256=predecessor_fixture,
+            )
+        ):
+            return index
+    return {**index, **current}
+
+
 def finalize_attempt(attempt: Path) -> dict[str, Any]:
     try:
         import fcntl
@@ -2827,7 +2863,6 @@ def finalize_attempt(attempt: Path) -> dict[str, Any]:
         cases,
     ) = collect_attempt_evidence(attempt)
     attempt = attempt.resolve()
-    _validate_attempt_file_set(attempt, leg_order=job["leg_order"], finalized=False)
     projection_rows = build_projection_rows(contract, job["stage_id"], cases)
     gate_rows = build_gate_result_rows(
         contract,
@@ -2840,39 +2875,64 @@ def finalize_attempt(attempt: Path) -> dict[str, Any]:
     transition_foundation_state(foundation_state, "render_gate_valid")
     foundation_state = "render_gate_valid"
     assert_publish_allowed(foundation_state)
-    raw_inventory = _raw_attempt_inventory(attempt, finalized=False)
-
     data_dir = attempt / "data"
-    if data_dir.exists() or (attempt / "attempt-manifest.json").exists():
-        raise RuntimeError("attempt already contains finalized ledger artifacts")
-    write_csv_exclusive(
-        data_dir / Path(contract["projection"]["file"]).name,
-        columns=[column["name"] for column in contract["projection"]["columns"]],
-        rows=projection_rows,
-    )
-    write_csv_exclusive(
-        data_dir / Path(contract["gate_result"]["file"]).name,
-        columns=contract["gate_result"]["columns"],
-        rows=gate_rows,
-    )
-    manifest = _attempt_manifest(
-        attempt=attempt,
-        contract=contract,
-        job=job,
-        generation=generation,
-        environment_lock=environment_lock,
-        manifests=manifests,
-        cases=cases,
-        raw_inventory=raw_inventory,
-    )
-    descriptor = os.open(
-        attempt / "attempt-manifest.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644
-    )
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        json.dump(manifest, handle, ensure_ascii=False, indent=2, sort_keys=True)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
+    manifest_path = attempt / "attempt-manifest.json"
+    if data_dir.exists() or manifest_path.exists():
+        if not data_dir.is_dir() or not manifest_path.is_file():
+            raise RuntimeError("attempt contains an incomplete finalized ledger")
+        _validate_attempt_file_set(attempt, leg_order=job["leg_order"], finalized=True)
+        projection_path = attempt / contract["projection"]["file"]
+        gate_path = attempt / contract["gate_result"]["file"]
+        if read_exact_csv(
+            projection_path,
+            [column["name"] for column in contract["projection"]["columns"]],
+        ) != projection_rows:
+            raise RuntimeError("stored migration projection differs from raw evidence")
+        if read_exact_csv(gate_path, contract["gate_result"]["columns"]) != gate_rows:
+            raise RuntimeError("stored gate results differ from raw evidence")
+        manifest = _verify_attempt_manifest(
+            attempt=attempt,
+            contract=contract,
+            job=job,
+            generation=generation,
+            baseline_root=baseline_root,
+            environment_lock=environment_lock,
+            manifests=manifests,
+            cases=cases,
+        )
+    else:
+        _validate_attempt_file_set(
+            attempt, leg_order=job["leg_order"], finalized=False
+        )
+        raw_inventory = _raw_attempt_inventory(attempt, finalized=False)
+        write_csv_exclusive(
+            data_dir / Path(contract["projection"]["file"]).name,
+            columns=[column["name"] for column in contract["projection"]["columns"]],
+            rows=projection_rows,
+        )
+        write_csv_exclusive(
+            data_dir / Path(contract["gate_result"]["file"]).name,
+            columns=contract["gate_result"]["columns"],
+            rows=gate_rows,
+        )
+        manifest = _attempt_manifest(
+            attempt=attempt,
+            contract=contract,
+            job=job,
+            generation=generation,
+            environment_lock=environment_lock,
+            manifests=manifests,
+            cases=cases,
+            raw_inventory=raw_inventory,
+        )
+        descriptor = os.open(
+            manifest_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(manifest, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
 
     lock_path = Path("/tmp") / f"hell-workers-{contract['contract_id']}-baseline.lock"
     lock_descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
@@ -2895,6 +2955,7 @@ def finalize_attempt(attempt: Path) -> dict[str, Any]:
         try:
             if index_path.exists():
                 index = read_json_object(index_path)
+                index = _upgrade_compatible_baseline_index(index, contract)
             else:
                 index = {
                     "schema_version": BASELINE_INDEX_SCHEMA_VERSION,
@@ -3154,6 +3215,107 @@ def _verify_stage_gate_locators(
             checked.add(locator)
 
 
+def _verify_compatible_historical_attempt(
+    *,
+    attempt: Path,
+    contract: dict[str, Any],
+    stage_entry: dict[str, Any],
+) -> dict[str, Any]:
+    manifest = read_json_object(attempt / "attempt-manifest.json")
+    required_manifest_keys = {
+        "schema_version",
+        "status",
+        "contract_id",
+        "stage_id",
+        "attempt_id",
+        "subject_commit",
+        "prerequisite_commits",
+        "source_fingerprint",
+        "measurement_contract_sha256",
+        "fixture_contract_sha256",
+        "environment_lock",
+        "job_sha256",
+        "tooling",
+        "binaries",
+        "projection",
+        "gate_results",
+        "cases",
+        "raw_artifacts",
+        "raw_directory_sha256",
+        "finalized_at",
+    }
+    if set(manifest) != required_manifest_keys or manifest.get("schema_version") != 1:
+        raise RuntimeError("historical attempt manifest differs from schema v1")
+    stage_id = manifest.get("stage_id")
+    if (
+        manifest.get("status") != "valid"
+        or manifest.get("contract_id") != contract["contract_id"]
+        or not isinstance(stage_id, str)
+        or not is_compatible_contract_predecessor(
+            contract,
+            stage_id=stage_id,
+            measurement_contract_sha256=manifest.get(
+                "measurement_contract_sha256", ""
+            ),
+            fixture_contract_sha256=manifest.get("fixture_contract_sha256", ""),
+        )
+    ):
+        raise RuntimeError("historical attempt contract lineage is not compatible")
+    job, generation, baseline_root, _ = _validate_job(attempt, contract)
+    if (
+        job["stage_id"] != stage_id
+        or manifest["attempt_id"] != job["attempt_id"]
+        or manifest["subject_commit"] != job["subject_commit"]
+        or manifest["prerequisite_commits"] != job["prerequisite_commits"]
+        or manifest["job_sha256"] != sha256(attempt / "job.json")
+        or manifest["source_fingerprint"]
+        != job["source_checks"][0]["fingerprint"]
+    ):
+        raise RuntimeError("historical attempt identity differs from job.json")
+    _validate_attempt_file_set(attempt, leg_order=job["leg_order"], finalized=True)
+    raw_inventory = _raw_attempt_inventory(attempt, finalized=True)
+    if (
+        manifest["raw_artifacts"] != raw_inventory
+        or manifest["raw_directory_sha256"] != directory_digest(raw_inventory)
+    ):
+        raise RuntimeError("historical attempt raw artifact ledger differs")
+    environment = manifest["environment_lock"]
+    if not isinstance(environment, dict) or set(environment) != {
+        "path",
+        "sha256",
+        "value",
+    }:
+        raise RuntimeError("historical attempt environment locator is invalid")
+    environment_path = (attempt / environment["path"]).resolve()
+    try:
+        environment_path.relative_to(baseline_root)
+    except ValueError as error:
+        raise RuntimeError("historical attempt environment locator escapes baseline") from error
+    if (
+        environment_path != generation / "environment-lock.json"
+        or not environment_path.is_file()
+        or sha256(environment_path) != environment["sha256"]
+        or read_json_object(environment_path) != environment["value"]
+    ):
+        raise RuntimeError("historical attempt environment lock differs")
+    if stage_entry != _baseline_stage_entry(attempt=attempt, manifest=manifest):
+        raise RuntimeError("historical baseline stage entry differs from its attempt")
+    for case_id, entry in stage_entry["cases"].items():
+        _verify_case_entry(
+            baseline_root=baseline_root,
+            attempt=attempt,
+            manifest=manifest,
+            case_id=case_id,
+            entry=entry,
+        )
+    for field in ("projection", "gate_results"):
+        locator = stage_entry[field]
+        artifact = _relative_file(locator["path"], root=baseline_root)
+        if not artifact.is_file() or sha256(artifact) != locator["sha256"]:
+            raise RuntimeError(f"historical attempt {field} locator differs")
+    return manifest
+
+
 def verify_baseline(baseline_root: Path) -> dict[str, Any]:
     baseline_root = baseline_root.resolve()
     require_persistent_output(baseline_root)
@@ -3185,7 +3347,29 @@ def verify_baseline(baseline_root: Path) -> dict[str, Any]:
         manifest_path = _relative_file(
             stage_entry["attempt_manifest"]["path"], root=baseline_root
         )
-        manifest = verify_attempt(manifest_path.parent)
+        stage_fingerprints = {
+            key: stage_entry.get(key)
+            for key in ("measurement_contract_sha256", "fixture_contract_sha256")
+        }
+        if stage_fingerprints == contract_fingerprints(contract):
+            manifest = verify_attempt(manifest_path.parent)
+        elif is_compatible_contract_predecessor(
+            contract,
+            stage_id=stage_id,
+            measurement_contract_sha256=stage_entry.get(
+                "measurement_contract_sha256", ""
+            ),
+            fixture_contract_sha256=stage_entry.get("fixture_contract_sha256", ""),
+        ):
+            manifest = _verify_compatible_historical_attempt(
+                attempt=manifest_path.parent,
+                contract=contract,
+                stage_entry=stage_entry,
+            )
+        else:
+            raise RuntimeError(
+                f"baseline stage {stage_id!r} has an incompatible contract fingerprint"
+            )
         if manifest["stage_id"] != stage_id:
             raise RuntimeError("baseline stage id differs from its attempt manifest")
         verified[stage_id] = manifest["attempt_id"]
