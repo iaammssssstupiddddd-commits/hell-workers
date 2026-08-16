@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import tempfile
+from types import SimpleNamespace
 
 from .compare import *
 from .arguments import DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING
@@ -17,6 +18,7 @@ from .rtt_light_bundle import (
     _checksum_text as rtt_light_checksum_text,
     _expected_requested_environment as expected_rtt_light_requested_environment,
     _recorded_repo_root as recorded_rtt_light_repo_root,
+    _runtime_field_projection as project_rtt_light_runtime,
     _validate_session_matrix as validate_rtt_light_session_matrix,
     _verify_case_entry as verify_rtt_light_case_entry,
     build_gate_result_rows as build_rtt_light_gate_result_rows,
@@ -3246,6 +3248,39 @@ def self_test() -> int:
         shutil.rmtree(exact_case_dir / "run-002")
         exact_errors = validate_session_artifact_set(exact_session, exact_manifest)
         assert any("missing runs: run-002" in error for error in exact_errors)
+
+        runtime_base = {
+            "typed_emitter_components": 2,
+            "eligible_supplied_emitters": 0,
+            "indoor_mask_cells": 36,
+            "indoor_mask_checksum": "mask-checksum",
+            "input_revision": 3,
+            "output_revision": 2,
+        }
+        runtime_evidence = {
+            "formal": {"case_id": "behavior-load-normal-v1"},
+            "validations": [
+                SimpleNamespace(indoor_light_runtime=runtime_base),
+                SimpleNamespace(
+                    indoor_light_runtime=runtime_base | {"input_revision": 2}
+                ),
+            ],
+        }
+        assert project_rtt_light_runtime(runtime_evidence) == {
+            "typed_emitter_components": "2",
+            "eligible_supplied_emitters": "0",
+            "indoor_mask_cells": "36",
+            "indoor_mask_checksum": "mask-checksum",
+        }
+        runtime_evidence["validations"][1].indoor_light_runtime = runtime_base | {
+            "typed_emitter_components": 1
+        }
+        try:
+            project_rtt_light_runtime(runtime_evidence)
+        except RuntimeError as error:
+            assert "differs across repeated runs" in str(error)
+        else:
+            raise AssertionError("semantic runtime drift unexpectedly projected")
 
         from .renderdoc_foundation import run_self_test as renderdoc_foundation_self_test
 

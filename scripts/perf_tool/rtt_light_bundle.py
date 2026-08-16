@@ -2055,18 +2055,30 @@ def _runtime_field_projection(evidence: dict[str, Any]) -> dict[str, str]:
     validations: list[Validation] = evidence["validations"]
     if validations:
         runtime = _only_equal(
-            [validation.indoor_light_runtime for validation in validations],
+            [
+                _runtime_field_projection_payload(validation.indoor_light_runtime)
+                for validation in validations
+            ],
             label=f"{evidence['formal']['case_id']} indoor Light Field runtime",
         )
     else:
-        runtime = evidence.get("runtime_field")
+        runtime = _runtime_field_projection_payload(evidence.get("runtime_field"))
+    if not isinstance(runtime, dict):
+        raise RuntimeError("formal evidence has no indoor Light Field runtime sidecar")
+    return {key: str(value) for key, value in runtime.items()}
+
+
+def _runtime_field_projection_payload(runtime: Any) -> dict[str, Any]:
     if not isinstance(runtime, dict):
         raise RuntimeError("formal evidence has no indoor Light Field runtime sidecar")
     return {
-        "typed_emitter_components": str(runtime["typed_emitter_components"]),
-        "eligible_supplied_emitters": str(runtime["eligible_supplied_emitters"]),
-        "indoor_mask_cells": str(runtime["indoor_mask_cells"]),
-        "indoor_mask_checksum": str(runtime["indoor_mask_checksum"]),
+        key: runtime[key]
+        for key in (
+            "typed_emitter_components",
+            "eligible_supplied_emitters",
+            "indoor_mask_cells",
+            "indoor_mask_checksum",
+        )
     }
 
 
