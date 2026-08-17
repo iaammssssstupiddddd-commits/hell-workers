@@ -83,6 +83,8 @@ EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "p03": P01_RENDER_RESOURCES,
     "p04": P01_RENDER_RESOURCES,
     "p05": P01_RENDER_RESOURCES,
+    "p06": P01_RENDER_RESOURCES,
+    "p07": P01_RENDER_RESOURCES,
 }
 
 
@@ -794,6 +796,11 @@ def self_test() -> int:
     _require(
         _validate_checkpoint(p04_checkpoint) is p04_checkpoint,
         "P04 runtime checkpoint schema v3 validation regressed",
+    )
+    p07_checkpoint = {**p04_checkpoint, "stage_id": "p07"}
+    _require(
+        _validate_checkpoint(p07_checkpoint) is p07_checkpoint,
+        "P07 runtime checkpoint schema v3 validation regressed",
     )
     try:
         _validate_checkpoint({**checkpoint, "stage_id": "p02"})
