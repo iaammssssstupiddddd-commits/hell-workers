@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-06-indoor-light-rendering-plan-2026-08-03` |
-| ステータス | `Implementation complete — native S0 / S1 / formal pending clean committed subject` |
+| ステータス | `Accepted — user-approved RenderDoc RD0 timeout exception; S0 / S1 valid, formal artifact remains unregistered` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-17` |
 | 作成者 | `Codex` |
@@ -28,7 +28,8 @@
 - Rust／Python／RenderDoc／bundle／native selectorを`stage=p06`へ拡張し、GPU sidecar、timeline GPU publication、RenderDoc `gpu_light_field` checkpointをfail-closed schemaへ接続した。
 - production headless behavior 7 case×3反復は21 / 21 valid。workspace test、`profiling-renderdoc` Clippy、perf / RenderDoc / native helper self-test、`dev.py verify`はpassした。
 - Help impactは`No impact`。既存Outdoor Lampの給電結果を描画へ接続するだけで、配置／給電／Door操作／save-load条件、UI文言、通知、設定、shortcutは不変である。
-- native acceptance Skillのactual-window planはdirty subjectを正しく拒否した。無断commitは行わないため、P06 S0／S1／RD0／formal、pixel probe、performance gate登録はclean committed subject取得後の未完了受入として残す。
+- commit `19ad5fec1e7c8bfa83ae971f047b174b1e48aa72`でclean subjectを作成後、P06 S0 / S1はvalidだった。formalはRD0の`renderdoccmd capture`がdeadline超過またはprocess groupを残して失敗し、valid formal artifact / baseline登録には至らなかった。
+- 2026-08-17にユーザーは上記RD0 failureを例外としてP06を受理した。この判断は無効artifactをpassへ書き換えるものではない。M4のunchecked formal項目と再現用記録は残し、P07 v1 formalへP06 GPU ownerを混入させない。
 
 ## 2. スコープ
 
@@ -307,29 +308,27 @@ P02の`Structural3d` mappingをP06で暗黙に再定義しない。receiver cove
 
 ### 現在地
 
-- 進捗: `実装完了。native S0 / S1 / RD0 / formalのみclean committed subject待ち`
-- 完了済み: M0〜M3、M5、production headless behavior 21 / 21、workspace test、full verify
-- 未完了: M4のP06 actual-window / RenderDoc / native performance artifact取得と独立再検証
+- 進捗: `ユーザー承認で受理。S0 / S1 valid、RD0 failureのためformal artifactは未登録`
+- 完了済み: M0〜M3、M5、production headless behavior 21 / 21、workspace test、full verify、clean subjectでのS0 / S1
+- 記録上の未完了: M4のvalid RenderDoc / formal artifactと独立再検証。これは受理判断を覆さず、後続の再現・調査用に残す。
 
 ### 次のAIが最初にやること
 
-1. この変更を意図したcommitへ固定した後、native acceptance SkillのP06 recipeでS0→S1→RD0→formalを順に実行する。
-2. P06 actual-windowのlinear pixel readback、shared receiver binding、600-frame steady uploadをartifactから独立再検証する。
-3. P02 canonical referenceとP05 baselineを同じreaderで再検証し、cross-stage fallbackがないことを確認する。
-4. 全P06 gateが合格した時点でM4 / DoDを閉じ、P08へhandoffする。
+1. RD0 timeoutを再調査する場合は、受理済みP06を再オープンせず、clean subjectとnative Skillのartifactを使う別の再現調査として扱う。
+2. P08ではP06のGPU receiverとP07 CPU consumerを統合し、cross-consumer evidenceを新規に採取する。P07 v1 formalへP06 GPU evidenceを流用しない。
 
 ### ブロッカー/注意点
 
 - `frames.csv`はGPU pass timeではない。wall-frame quantileはCapture、pass / binding構造はRenderDocというP00の区分を使う。
 - Soul billboardやforegroundへ照明textureをbindしない。
 - P05はP06専用messageを公開しない。epoch-aware readとP06 own reset hookを使い、raw snapshotをconsumerへ渡さない。
-- native launcherはdirty / uncommitted subjectを受理しない。現worktreeではplanがこの条件でfail closedしたため、無断commitせず受入を保留している。
+- native launcherはdirty / uncommitted subjectを受理しない。P06ではその後clean subjectを作成してS0 / S1を実行したが、RD0 failureはartifact validatorの正当なfailureとして保持する。
 - section fieldの削除はP08まで行わない。
 
 ### 最終確認ログ
 
 - Rust gates: `2026-08-17` / pass (`workspace test`, `profiling-renderdoc clippy -D warnings`, `dev.py verify`)
-- native acceptance: `2026-08-17` / blocked as designed (`dirty subject`; launcher未実行、artifact未取得)
+- native acceptance: `2026-08-17` / S0 / S1 valid。formal RD0は`renderdoccmd capture` deadline / process-group failureでinvalid。ユーザーが例外としてP06を受理
 - docs gate: `2026-08-17` / pass (`docs --write / --check`, `check_docs`, Help no-impact decision, `diff --check`)
 
 ### Definition of Done
@@ -344,7 +343,7 @@ P02の`Structural3d` mappingをP06で暗黙に再定義しない。receiver cove
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
-| `2026-08-17` | `Codex` | P06 GPU bridge / Terrain・Structural receiver / Door root anchor / reset lifecycle / selector・artifact・RenderDoc toolingを実装。headless 21 / 21とfull verifyはpass、native formalはclean committed subject待ち。 |
+| `2026-08-17` | `Codex` | commit `19ad5fec`でP06 GPU bridge / Terrain・Structural receiver / Door root anchor / reset lifecycle / selector・artifact・RenderDoc toolingを実装。headless 21 / 21とfull verify、S0 / S1はvalid。formal RD0は`renderdoccmd capture` deadline / process-group failureでinvalidだったが、ユーザーが例外としてP06を受理した。 |
 | `2026-08-16` | `Codex` | P05完了後のP06 review。P06 own reset hook / epoch-aware bridge、P06 selector・sidecar・RenderDoc・native evidence、Door root-anchor GPU transport、dynamic dimensions、P02 preservation、Help / docs lifecycleを実装前条件として明確化。 |
 | `2026-08-04` | `Codex` | P00のevidence区分へ同期し、Wall上面sampleのtie / OOB / RGB選択規則を確定 |
 | `2026-08-03` | `Codex` | CPU fieldからGPU texture / Terrain / structural receiverへの移行を独立計画化 |

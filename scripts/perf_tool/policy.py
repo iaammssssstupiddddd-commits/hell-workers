@@ -85,6 +85,7 @@ def validate_session_artifact_set(
             "p04",
             "p05",
             "p06",
+            "p07",
         }:
             errors.append("behavior manifest has the wrong RtT-light selection")
         requested_environment = manifest.get("requested_environment")
@@ -216,6 +217,13 @@ def _load_runs(
             indoor_light_layout=payload.get("indoor_light_layout"),
             indoor_light_presentation=payload.get("indoor_light_presentation"),
             indoor_light_field=payload.get("indoor_light_field"),
+            indoor_light_runtime=payload.get("indoor_light_runtime"),
+            indoor_light_gpu=payload.get("indoor_light_gpu"),
+            indoor_light_consumers=payload.get("indoor_light_consumers"),
+            indoor_light_consumer_lifecycle=payload.get(
+                "indoor_light_consumer_lifecycle"
+            ),
+            p02_presentation=payload.get("p02_presentation"),
             deconstruction_fixture=payload.get("deconstruction_fixture"),
             save_transaction=payload.get("save_transaction"),
             timeline=payload.get("timeline"),

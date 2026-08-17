@@ -405,7 +405,9 @@ def write_behavior_fixture_run(
                 ),
                 "applied": (
                     step[
-                        "p02_applied" if stage_id in {"p02", "p03", "p04"} else "current_applied"
+                        "p02_applied"
+                        if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"}
+                        else "current_applied"
                     ]
                     if case.behavior_case == "door-state-v1"
                     else load_applied[index]
@@ -413,7 +415,7 @@ def write_behavior_fixture_run(
                 "semantic_state": (
                     step[
                         "p02_semantic_state"
-                        if stage_id in {"p02", "p03", "p04"}
+                        if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"}
                         else "current_semantic_state"
                     ]
                     if case.behavior_case == "door-state-v1"
@@ -422,7 +424,7 @@ def write_behavior_fixture_run(
                 "active_presentation_state": (
                     step[
                         "p02_active_presentation_state"
-                        if stage_id in {"p02", "p03", "p04"}
+                        if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"}
                         else "current_active_presentation_state"
                     ]
                     if case.behavior_case == "door-state-v1"
@@ -3051,6 +3053,112 @@ def self_test() -> int:
         assert duplicate_field is None
         assert any("duplicate JSON key: schema_version" in error for error in duplicate_errors)
         metadata_path.write_text(original_metadata, encoding="utf-8")
+        consumer_args = build_parser().parse_args(["consumer-core", "--dry-run"])
+        validate_arguments(consumer_args)
+        assert consumer_args.capture_kind == "consumer-core"
+        assert consumer_args.stage == "p07"
+        assert consumer_args.lane == "consumer-core"
+
+        consumer_data = root / "consumer-core-data"
+        consumer_data.mkdir()
+        (consumer_data / "indoor_light_consumers.csv").write_text(
+            ",".join(INDOOR_LIGHT_CONSUMER_COLUMNS)
+            + "\n"
+            + "".join(
+                f"{index},500,16,576,0,1,1,1,true,0,{index + 1}\n"
+                for index in range(256)
+            ),
+            encoding="utf-8",
+        )
+        write_json(
+            consumer_data / "indoor_light_consumer_proof.json",
+            {
+                "schema": "consumer-proof-v1",
+                "schema_version": 1,
+                "warmup_calls": 32,
+                "measure_calls": 256,
+                "souls": 500,
+                "rooms": 16,
+                "room_cells": 576,
+                "max_samples_per_soul_slow_step": 1,
+                "max_effects_per_soul_slow_step": 1,
+                "revision_epoch_consistency": True,
+                "mask_or_stale_effects": 0,
+                "scoped_allocation_events": 0,
+                "scoped_allocation_bytes": 0,
+            },
+        )
+        parsed_consumers, consumer_errors = read_indoor_light_consumers(consumer_data)
+        assert not consumer_errors
+        assert parsed_consumers is not None
+        assert parsed_consumers["consumer_p95_ms"] == 0.000243
+        consumer_run = (
+            root
+            / "consumer-session"
+            / "cases"
+            / "indoor-light-large-cpu-seed-20260803"
+            / "run-001"
+        )
+        consumer_run.mkdir(parents=True)
+        write_json(
+            consumer_run / "validation.json",
+            Validation(
+                valid=True,
+                reasons=[],
+                summary=None,
+                adapter=None,
+                warning_lines=[],
+                teardown_warning_lines=[],
+                indoor_light_consumers=parsed_consumers,
+            ).to_json(),
+        )
+        loaded_consumers = load_valid_runs(root / "consumer-session")
+        assert loaded_consumers[0][1].indoor_light_consumers == parsed_consumers
+        lifecycle_data = root / "consumer-lifecycle-data"
+        lifecycle_data.mkdir()
+        lifecycle_case = Case(
+            "indoor-light",
+            "small",
+            "cpu",
+            DEFAULT_SEED,
+            None,
+            None,
+            behavior_case="door-state-v1",
+        )
+        lifecycle_payload = {
+            "schema": "consumer-lifecycle-v1",
+            "schema_version": 1,
+            "case_id": "door-state-v1",
+            "world_epoch": 0,
+            "field_revision": 1,
+            "old_epoch_recovery_effects": 0,
+            "old_epoch_room_summary_reads": 0,
+            "room_state_available": True,
+        }
+        write_json(
+            lifecycle_data / "indoor_light_consumer_lifecycle.json",
+            lifecycle_payload,
+        )
+        lifecycle, lifecycle_errors = read_indoor_light_consumer_lifecycle(
+            lifecycle_data, expected_case=lifecycle_case
+        )
+        assert lifecycle is not None and not lifecycle_errors
+        lifecycle_payload["room_state_available"] = False
+        write_json(
+            lifecycle_data / "indoor_light_consumer_lifecycle.json",
+            lifecycle_payload,
+        )
+        assert read_indoor_light_consumer_lifecycle(
+            lifecycle_data, expected_case=lifecycle_case
+        )[0] is None
+        original_consumers = (consumer_data / "indoor_light_consumers.csv").read_text(
+            encoding="utf-8"
+        )
+        (consumer_data / "indoor_light_consumers.csv").write_text(
+            original_consumers.replace(",true,0,1\n", ",false,0,1\n", 1),
+            encoding="utf-8",
+        )
+        assert read_indoor_light_consumers(consumer_data)[0] is None
         indoor_args = build_parser().parse_args(
             [
                 "audit",

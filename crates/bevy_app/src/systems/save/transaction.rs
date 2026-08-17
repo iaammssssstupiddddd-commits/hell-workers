@@ -722,6 +722,7 @@ mod tests {
         let room = world
             .spawn(Room {
                 tiles: vec![(1, 1)],
+                tile_signature: hw_world::RoomTileSignature::from_tiles(&[(1, 1)]),
                 wall_tiles: Vec::new(),
                 door_tiles: Vec::new(),
                 bounds: RoomBounds {

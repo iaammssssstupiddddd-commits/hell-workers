@@ -2,7 +2,7 @@
 
 ## 現在の実装範囲
 
-P03は`hw_infra::lighting`に、Bevy ECS・GPU・ゲームワールドqueryへ依存しない室内Light Fieldのpure coreを実装した。P04は`bevy_app::systems::lighting`から通常playへ接続し、completed Wall、Door、typed OutdoorLamp、給電状態、Room maskを同じCPU fieldへ正規化する。P05はdurable mountとsave/load lifecycleを実装した。P06はGPU uploadとTerrain／Structural3d shaderを実装した。P07はgameplay・Room consumerを担当する。
+P03は`hw_infra::lighting`に、Bevy ECS・GPU・ゲームワールドqueryへ依存しない室内Light Fieldのpure coreを実装した。P04は`bevy_app::systems::lighting`から通常playへ接続し、completed Wall、Door、typed OutdoorLamp、給電状態、Room maskを同じCPU fieldへ正規化する。P05はdurable mountとsave/load lifecycle、P06はGPU uploadとTerrain／Structural3d shader、P07はgameplay回復とRoom照度summaryを実装した。
 
 core入力は`GridDimensions`、row-majorの`IndoorMask`、semanticな`LightOcclusionGrid`、正規化済み`RadialLightEmitterSnapshot`である。最大gridはゲームworldと同じ100×100、canonical性能fixtureは50 emitter・radius 5 tileを使う。emitterはstable key順に処理し、duplicate keyは入力全体を拒否する。invalidな個別emitterはstable diagnosticを返してfail-darkにする。
 
@@ -63,7 +63,32 @@ receiverはTerrainの`LOD1`／`LOD1-lite`／`LOD2`と、Wall、Door、Floor、Br
 
 local lightはlinear空間で既存directional shadow stylingの後に`styled_rgb + base_color_rgb * local_light_rgb`として加算し、既存Scene tone mappingへ渡す。GPU payloadはpure coreの`pack_rgba8_linear`だけがUNORM16→RGBA8 round-half-upとindoor alpha maskを定義する。
 
-照度gameplay readはP07の責務である。
+## P07 gameplay / Room consumer
+
+gameplay consumerはraw snapshotを読まず、`read_indoor_light_snapshot`へcurrent `WorldEpoch`をrequested/currentの
+両方として渡す。Soul回復はActor後かつ`IndoorLightingRebuildSet`後のPostActorで、slow simulation stepごとに
+現在cellを最大1回sampleする。luminanceが0より大きい時だけ既存rateを1回適用し、複数emitterでもstackしない。
+step 0とpause中はsnapshot read自体を行わない。map外、mask外、unavailable、epoch不一致はdarkである。
+
+`RoomIlluminationState`はRoom entityへ付くruntime-only derived componentで、`world_epoch`、field revision、
+Room topology revision、Entity非依存tile signatureと、sample count／dark count／整数mean／min／Q16 dark ratioを持つ。
+pure aggregateはmask外・bounds外・empty Roomをfail-closedにする。cache keyはepoch／field／topology／tile signatureで、
+Room entity再生成時は再集計せず新entityへ再付与する。current identity以外は毎更新でpruneする。
+
+Room partitionは`RoomTileLookup`の`RoomTopologySignature`で追跡する。union maskの`RoomMaskSignature`とは別であり、
+Entity IDだけの置換では進まず、同じmaskを別Roomへ分割・結合した時に進む。P07のnamed load-reset hookはRoom summary、
+cache、consumer metricsをidempotentに消去し、current epoch fieldが再公開されるまで旧stateを返さない。
+
+P07専用headless計測は次を使う。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py consumer-core --stage p07 \
+  --output target/perf-runs/<fresh-session-name>
+```
+
+large fixture（500 Soul／16 Room／576 cells）を32回warmup後に256回測り、
+`indoor_light_consumers.csv`と`indoor_light_consumer_proof.json`を出力する。behavior laneは別の
+`indoor_light_consumer_lifecycle.json`でold-epoch recovery／Room readが0であることを固定する。
 
 ## P03 field-core evidence
 

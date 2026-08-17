@@ -29,7 +29,7 @@ pub fn reset_for_world_replace(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::RoomBounds;
+    use crate::{RoomBounds, RoomTileSignature};
 
     #[test]
     fn reset_removes_room_roots_overlays_and_entity_lookup_idempotently() {
@@ -37,6 +37,7 @@ mod tests {
         let room = world
             .spawn(Room {
                 tiles: vec![(1, 1)],
+                tile_signature: RoomTileSignature::from_tiles(&[(1, 1)]),
                 wall_tiles: Vec::new(),
                 door_tiles: Vec::new(),
                 bounds: RoomBounds {

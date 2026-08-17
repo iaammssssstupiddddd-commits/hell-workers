@@ -214,6 +214,29 @@ def build_parser() -> argparse.ArgumentParser:
         clock_mode="fixed",
         allow_log_pattern=[],
     )
+    consumer_core_parser = subparsers.add_parser(
+        "consumer-core",
+        help="run the exact P07 indoor-light gameplay and Room consumer contract",
+    )
+    add_run_arguments(consumer_core_parser, fixed_step_audit=True)
+    consumer_core_parser.set_defaults(
+        workload="indoor-light",
+        contract="rtt-light-v1",
+        stage="p07",
+        lane="consumer-core",
+        sizes="large",
+        renders="cpu",
+        backend="vulkan",
+        window_backend="headless",
+        present_mode="novsync",
+        seed=20_260_803,
+        repeat=3,
+        preflight_runs=0,
+        instrumentation="capture",
+        capture_kind="consumer-core",
+        clock_mode="fixed",
+        allow_log_pattern=[],
+    )
     summarize_parser = subparsers.add_parser("summarize", help="rebuild aggregate.csv and report.md")
     summarize_parser.add_argument("session")
     summarize_parser.add_argument("--warmup-checksum-policy", choices=["require", "record"])
@@ -282,7 +305,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
         if args.min_runs < 1:
             raise ValueError("--min-runs must be at least 1")
         return
-    if args.command not in {"run", "audit", "behavior", "field-core"}:
+    if args.command not in {"run", "audit", "behavior", "field-core", "consumer-core"}:
         return
     if args.repeat < 1:
         raise ValueError("--repeat must be at least 1")
@@ -322,7 +345,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
             "validated Tracy runs must omit --tracy-capture-secs so the runner can "
             "disconnect Tracy at the measure-artifact boundary"
         )
-    if args.command in {"audit", "behavior", "field-core"} and args.instrumentation != "capture":
+    if args.command in {"audit", "behavior", "field-core", "consumer-core"} and args.instrumentation != "capture":
         raise ValueError("fixed-step audit and behavior only support --instrumentation capture")
     if args.environment_lock is not None and not (
         args.command == "run"
@@ -347,7 +370,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError(
                 f"--instrumentation {args.instrumentation} requires " + ", ".join(missing_tools)
             )
-    if args.command in {"audit", "behavior", "field-core"}:
+    if args.command in {"audit", "behavior", "field-core", "consumer-core"}:
         if args.fixed_hz <= 0:
             raise ValueError("--fixed-hz must be positive")
         if args.warmup_ticks <= DETERMINISM_EARLY_CHECKPOINTS[-1][1]:
@@ -481,9 +504,17 @@ def validate_arguments(args: argparse.Namespace) -> None:
         if args.command == "behavior"
         else "field-core"
         if args.command == "field-core"
+        else "consumer-core"
+        if args.command == "consumer-core"
         else "static"
     )
-    expected_stages = {"p03", "p04", "p05", "p06"} if args.command == "field-core" else {"current", "p01", "p02", "p03", "p04", "p05", "p06"}
+    expected_stages = (
+        {"p03", "p04", "p05", "p06", "p07"}
+        if args.command == "field-core"
+        else {"p07"}
+        if args.command == "consumer-core"
+        else {"current", "p01", "p02", "p03", "p04", "p05", "p06", "p07"}
+    )
     if (
         args.contract != "rtt-light-v1"
         or args.stage not in expected_stages
@@ -491,7 +522,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
     ):
         raise ValueError(
             "--workload indoor-light currently requires --contract rtt-light-v1 "
-            f"--stage {'p03|p04|p05|p06' if args.command == 'field-core' else 'current|p01|p02|p03|p04|p05|p06'} --lane {expected_lane}"
+            f"--stage {'p03|p04|p05|p06|p07' if args.command == 'field-core' else 'p07' if args.command == 'consumer-core' else 'current|p01|p02|p03|p04|p05|p06|p07'} --lane {expected_lane}"
         )
     contract = load_rtt_light_contract(args.contract)
     validate_stage_lane(contract, args.stage, args.lane)
@@ -510,30 +541,31 @@ def validate_arguments(args: argparse.Namespace) -> None:
         raise ValueError(
             f"indoor-light rtt-light-v1 requires --seed {contract['formal_matrix']['seed']}"
         )
-    if args.command == "field-core":
+    if args.command in {"field-core", "consumer-core"}:
+        command_name = args.command
         if sizes != ["large"] or renders != ["cpu"]:
-            raise ValueError("field-core requires --sizes large --renders cpu")
+            raise ValueError(f"{command_name} requires --sizes large --renders cpu")
         if args.window_backend != "headless":
-            raise ValueError("field-core requires --window-backend headless")
+            raise ValueError(f"{command_name} requires --window-backend headless")
         if args.backend != contract["formal_matrix"]["backend"]:
             raise ValueError(
-                f"field-core requires --backend {contract['formal_matrix']['backend']}"
+                f"{command_name} requires --backend {contract['formal_matrix']['backend']}"
             )
         if args.present_mode != contract["formal_matrix"]["present_mode"]:
             raise ValueError(
-                "field-core requires --present-mode "
+                f"{command_name} requires --present-mode "
                 + contract["formal_matrix"]["present_mode"]
             )
         if args.repeat != 3 or args.preflight_runs != 0:
-            raise ValueError("field-core requires --repeat 3 --preflight-runs 0")
+            raise ValueError(f"{command_name} requires --repeat 3 --preflight-runs 0")
         if args.fixed_hz != contract["formal_matrix"]["fixed_hz"]:
             raise ValueError(
-                f"field-core requires --fixed-hz {contract['formal_matrix']['fixed_hz']}"
+                f"{command_name} requires --fixed-hz {contract['formal_matrix']['fixed_hz']}"
             )
         expected_allow_patterns = contract["allow_log_patterns"]["headless_audit"]
         if args.allow_log_pattern not in ([], expected_allow_patterns):
             raise ValueError(
-                "field-core uses the exact contract headless log allowances; "
+                f"{command_name} uses the exact contract headless log allowances; "
                 "custom --allow-log-pattern is forbidden"
             )
         args.allow_log_pattern = list(expected_allow_patterns)

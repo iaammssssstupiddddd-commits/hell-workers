@@ -980,7 +980,7 @@ def run_one(
                 str(args.measure_secs),
             ]
         )
-    elif args.capture_kind in {"fixed-step-determinism", "field-core"}:
+    elif args.capture_kind in {"fixed-step-determinism", "field-core", "consumer-core"}:
         command.extend(
             [
                 "--perf-fixed-hz",

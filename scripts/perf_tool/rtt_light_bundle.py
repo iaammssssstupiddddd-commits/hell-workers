@@ -103,6 +103,7 @@ EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "p04": P01_RENDER_RESOURCES,
     "p05": P01_RENDER_RESOURCES,
     "p06": P01_RENDER_RESOURCES,
+    "p07": P01_RENDER_RESOURCES,
 }
 SOURCE_CHECKPOINTS_RENDERDOC = (
     "start",
@@ -118,9 +119,12 @@ SOURCE_CHECKPOINTS_RENDERDOC = (
 
 
 def _expected_source_checkpoints(stage: str) -> tuple[str, ...]:
-    if stage not in {"p03", "p04", "p05", "p06"}:
+    if stage not in {"p03", "p04", "p05", "p06", "p07"}:
         return SOURCE_CHECKPOINTS_RENDERDOC
-    return (*SOURCE_CHECKPOINTS_RENDERDOC[:-1], "after-field-core", "before-registration")
+    checkpoints = (*SOURCE_CHECKPOINTS_RENDERDOC[:-1], "after-field-core")
+    if stage == "p07":
+        checkpoints = (*checkpoints, "after-consumer-core")
+    return (*checkpoints, "before-registration")
 
 
 def measurement_harness_dirty_paths_only(entries: Any) -> bool:
@@ -518,6 +522,8 @@ def _expected_matrix(
             if behavior
             else "field-core"
             if leg_id == "field-core"
+            else "consumer-core"
+            if leg_id == "consumer-core"
             else "fixed-step-determinism"
             if fixed
             else "frame-time"
@@ -733,7 +739,7 @@ def _validate_run_file_set(
         "indoor_light_layout.csv",
         "indoor_light_presentation.csv",
     }
-    if stage in {"p04", "p05", "p06"}:
+    if stage in {"p04", "p05", "p06", "p07"}:
         data_files.add("indoor_light_runtime.json")
     root_files = {
         "command.txt",
@@ -747,6 +753,8 @@ def _validate_run_file_set(
         data_files |= {"determinism.csv", "determinism_records.csv"}
     elif leg_id == "behavior":
         data_files.add("timeline.json")
+        if stage == "p07":
+            data_files.add("indoor_light_consumer_lifecycle.json")
         if behavior_case is not None and behavior_case.startswith("load-"):
             data_files.add("behavior-save.scn.ron")
     elif leg_id in {"capture", "memory"}:
@@ -759,14 +767,19 @@ def _validate_run_file_set(
         if leg_id == "memory":
             data_files.add("memory.csv")
             root_files |= {"profile-artifact.json", "resource-usage.txt"}
-        if stage in {"p02", "p03", "p04", "p05", "p06"}:
+        if stage in {"p02", "p03", "p04", "p05", "p06", "p07"}:
             data_files.add("p02_presentation.csv")
         if stage == "p06":
             data_files.add("indoor_light_gpu.json")
     elif leg_id == "field-core":
         data_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
-        if stage in {"p04", "p05", "p06"}:
+        if stage in {"p04", "p05", "p06", "p07"}:
             data_files.add("indoor_light_runtime.json")
+    elif leg_id == "consumer-core":
+        data_files = {
+            "indoor_light_consumers.csv",
+            "indoor_light_consumer_proof.json",
+        }
     else:
         raise RuntimeError(f"session file-set validator does not support leg {leg_id}")
     actual_root = {path.name for path in run_dir.iterdir()}
@@ -831,7 +844,7 @@ def _revalidate_run(
     if not isinstance(returncode, int):
         raise RuntimeError(f"{run_dir} run metadata returncode is invalid")
     formal = contract["formal_matrix"]
-    fixed = leg_id in {"audit", "behavior", "field-core"}
+    fixed = leg_id in {"audit", "behavior", "field-core", "consumer-core"}
     windowed = leg_id in {"capture", "memory"}
     validation = validate_run(
         run_dir,
@@ -849,6 +862,8 @@ def _revalidate_run(
             if leg_id == "behavior"
             else "field-core"
             if leg_id == "field-core"
+            else "consumer-core"
+            if leg_id == "consumer-core"
             else "fixed-step-determinism"
             if leg_id == "audit"
             else "frame-time"
@@ -871,6 +886,8 @@ def _revalidate_run(
             if leg_id == "behavior"
             else "field-core"
             if leg_id == "field-core"
+            else "consumer-core"
+            if leg_id == "consumer-core"
             else "static"
         ),
     )
@@ -895,6 +912,8 @@ def _revalidate_run(
         "indoor_light_layout",
         "indoor_light_presentation",
         "indoor_light_field",
+        "indoor_light_consumers",
+        "indoor_light_consumer_lifecycle",
         "p02_presentation",
         "deconstruction_fixture",
         "timeline",
@@ -1048,7 +1067,7 @@ def _load_session_evidence(
             "environment_contract_match": True,
             "required_sidecars_valid": True,
         }
-        if leg_id == "field-core":
+        if leg_id in {"field-core", "consumer-core"}:
             layout = build_fixture_layout(contract, formal["size"])
             evidence[formal["case_id"]]["fixture"] = {
                 "fixture_checksum": layout["layout_checksum"],
@@ -1766,7 +1785,7 @@ def _load_renderdoc_evidence(
             )
     render_inventory = _validate_render_inventory_json(runtime["render_inventory"])
     p02_presentation = runtime.get("p02_presentation")
-    if stage in {"p02", "p03", "p04", "p05", "p06"} and not isinstance(p02_presentation, dict):
+    if stage in {"p02", "p03", "p04", "p05", "p06", "p07"} and not isinstance(p02_presentation, dict):
         raise RuntimeError("P02 RenderDoc evidence has no presentation checkpoint")
     mask_resource_id = tracked_ids.get("mask_target")
     mask_pass_count = (
@@ -1887,7 +1906,7 @@ def _load_renderdoc_evidence(
                             "state_and_bounce_probes_pass"
                         ],
                     }
-                    if stage in {"p02", "p03", "p04", "p05", "p06"}
+                    if stage in {"p02", "p03", "p04", "p05", "p06", "p07"}
                     else {}
                 ),
             },
@@ -1951,7 +1970,7 @@ def collect_attempt_evidence(
         raise RuntimeError("attempt case set or order differs from the formal matrix")
     capture_sha = manifests["capture"]["binary"]["sha256"]
     renderdoc_sha = manifests["renderdoc"]["binary"]["sha256"]
-    for leg_id in ("audit", "behavior", "field-core"):
+    for leg_id in ("audit", "behavior", "field-core", "consumer-core"):
         if leg_id not in manifests:
             continue
         if manifests[leg_id]["binary"]["sha256"] != capture_sha:
@@ -2003,7 +2022,7 @@ def _only_equal(values: list[Any], *, label: str) -> Any:
 
 def _fixture_projection(evidence: dict[str, Any]) -> dict[str, str]:
     validations: list[Validation] = evidence["validations"]
-    if evidence["formal"]["leg_id"] == "field-core":
+    if evidence["formal"]["leg_id"] in {"field-core", "consumer-core"}:
         fixture = evidence.get("fixture")
         if not isinstance(fixture, dict):
             raise RuntimeError("field-core evidence has no canonical fixture identity")
@@ -2247,6 +2266,33 @@ def build_projection_rows(
             row["emitter_collect_allocation_bytes"] = str(allocation["bytes"])
         if applicability["gpu_upload"] == "available":
             row.update(_gpu_upload_projection(evidence))
+        if applicability["consumer_core"] == "available":
+            consumer_rows = [
+                validation.indoor_light_consumers
+                for validation in evidence["validations"]
+            ]
+            if any(not isinstance(consumer, dict) for consumer in consumer_rows):
+                raise RuntimeError(f"{formal['case_id']} has no consumer-core evidence")
+            row["consumer_p95_ms"] = _format_nonnegative_float(
+                statistics.median(
+                    consumer["consumer_p95_ms"] for consumer in consumer_rows
+                )
+            )
+            row["consumer_p99_ms"] = _format_nonnegative_float(
+                statistics.median(
+                    consumer["consumer_p99_ms"] for consumer in consumer_rows
+                )
+            )
+            allocation_events = _only_equal(
+                [consumer["scoped_allocation_events"] for consumer in consumer_rows],
+                label=f"{formal['case_id']} consumer allocation events",
+            )
+            allocation_bytes = _only_equal(
+                [consumer["scoped_allocation_bytes"] for consumer in consumer_rows],
+                label=f"{formal['case_id']} consumer allocation bytes",
+            )
+            row["consumer_scoped_allocation_events"] = str(allocation_events)
+            row["consumer_scoped_allocation_bytes"] = str(allocation_bytes)
         rows.append(row)
     validate_projection_rows(contract, stage, rows)
     return rows
@@ -2372,6 +2418,36 @@ def _gate_observed(
         if row is None or not row.get(metric_id):
             raise RuntimeError(f"{case_id} has no projected {metric_id}")
         return row[metric_id]
+    if metric_id in {
+        "samples_per_soul_slow_step",
+        "effects_per_soul_slow_step",
+        "revision_epoch_consistency",
+        "mask_or_stale_effects",
+    }:
+        consumers = [
+            validation.indoor_light_consumers for validation in validations
+        ]
+        if not consumers or any(not isinstance(consumer, dict) for consumer in consumers):
+            raise RuntimeError(f"{case_id} has no P07 consumer-core evidence")
+        values = [consumer[metric_id] for consumer in consumers]
+        if metric_id == "mask_or_stale_effects":
+            return str(sum(values))
+        value = max(values) if metric_id.endswith("per_soul_slow_step") else all(values)
+        return str(value).lower() if isinstance(value, bool) else str(value)
+    if metric_id in {
+        "consumer_p95_ms",
+        "consumer_p99_ms",
+        "scoped_allocation_events",
+        "scoped_allocation_bytes",
+    }:
+        projection_name = {
+            "scoped_allocation_events": "consumer_scoped_allocation_events",
+            "scoped_allocation_bytes": "consumer_scoped_allocation_bytes",
+        }.get(metric_id, metric_id)
+        row = subject_projection.get(case_id)
+        if row is None or not row.get(projection_name):
+            raise RuntimeError(f"{case_id} has no projected {projection_name}")
+        return row[projection_name]
     if metric_id in {
         "typed_emitter_components",
         "eligible_supplied_emitters",

@@ -14,5 +14,5 @@ pub use self::core::{
 };
 pub use self::ecs::{
     Room, RoomBoundaryLookup, RoomDetectionState, RoomMaskSignature, RoomOverlayTile,
-    RoomTileLookup, RoomValidationState,
+    RoomTileLookup, RoomTileSignature, RoomTopologySignature, RoomValidationState,
 };

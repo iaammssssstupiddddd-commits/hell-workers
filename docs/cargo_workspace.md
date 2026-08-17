@@ -380,7 +380,7 @@ P03の`lighting` sourceはBevy ECS、`hw_world`、`hw_jobs`、`hw_energy`、rend
 
 代表例:
 
-- `constants::{OUTPUT_PER_SOUL, DREAM_CONSUME_RATE_GENERATING, DREAM_GENERATE_FLOOR, OUTDOOR_LAMP_DEMAND, OUTDOOR_LAMP_EFFECT_RADIUS, SOUL_SPA_BONE_COST_PER_TILE, SOUL_SPA_MAX_ACTIVE_SLOTS, POWER_ALLOCATION_EPSILON, POWER_RESTORE_MARGIN, FATIGUE_RATE_GENERATING}`
+- `constants::{OUTPUT_PER_SOUL, DREAM_CONSUME_RATE_GENERATING, DREAM_GENERATE_FLOOR, OUTDOOR_LAMP_DEMAND, OUTDOOR_LAMP_RADIUS_TILES, SOUL_SPA_BONE_COST_PER_TILE, SOUL_SPA_MAX_ACTIVE_SLOTS, POWER_ALLOCATION_EPSILON, POWER_RESTORE_MARGIN, FATIGUE_RATE_GENERATING}`
 - `components::{PowerGrid, PowerGenerator, PowerConsumer, PowerConsumerPolicy, PowerSupplyState, PowerGridAllocationSummary, Unpowered, YardPowerGrid}`
   - `PowerGrid` — Yard に 1 対 1 で存在する電力網エンティティ（generation / consumption / powered を保持）
   - `PowerGenerator` — SoulSpaSite に付与するサイト単位の発電集計コンポーネント（Phase 1b で使用開始）

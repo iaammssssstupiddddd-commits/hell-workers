@@ -721,8 +721,10 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
         slow_simulation_metrics.state_sanity_audits.to_string(),
         energy_metrics.power_output_runs.to_string(),
         energy_metrics.grid_recalc_runs.to_string(),
-        energy_metrics.lamp_steps.to_string(),
-        energy_metrics.lamp_candidates_scanned.to_string(),
+        // Schema-v11 compatibility columns. P07 removed the Lamp-by-Soul
+        // energy scan; consumer work is evidenced by consumer-core instead.
+        "0".to_string(),
+        "0".to_string(),
     ];
     let summary = format!("{summary_header}{}\n", summary_fields.join(","));
     std::fs::write(&summary_path, summary)?;

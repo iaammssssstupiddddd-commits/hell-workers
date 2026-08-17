@@ -700,6 +700,77 @@ def summarize_session(
         return summarize_save_transaction_session(
             session_dir, manifest, load_valid_runs(session_dir)
         )
+    if matrix.get("capture_kind") == "consumer-core":
+        runs = load_valid_runs(session_dir)
+        invalid = [
+            (run_dir, validation)
+            for run_dir, validation in runs
+            if not validation.valid or validation.indoor_light_consumers is None
+        ]
+        consumers = [
+            validation.indoor_light_consumers
+            for _, validation in runs
+            if validation.valid and validation.indoor_light_consumers is not None
+        ]
+        aggregate_columns = [
+            "case_id",
+            "valid_runs",
+            "consumer_p95_median_ms",
+            "consumer_p99_median_ms",
+            "samples_per_soul_slow_step",
+            "effects_per_soul_slow_step",
+            "revision_epoch_consistency",
+            "mask_or_stale_effects",
+            "scoped_allocation_events",
+            "scoped_allocation_bytes",
+        ]
+        aggregate_rows: list[dict[str, str]] = []
+        if consumers and not invalid:
+            aggregate_rows.append(
+                {
+                    "case_id": manifest["cases"][0]["id"],
+                    "valid_runs": str(len(consumers)),
+                    "consumer_p95_median_ms": f"{statistics.median(row['consumer_p95_ms'] for row in consumers):.6f}",
+                    "consumer_p99_median_ms": f"{statistics.median(row['consumer_p99_ms'] for row in consumers):.6f}",
+                    "samples_per_soul_slow_step": str(
+                        max(row["samples_per_soul_slow_step"] for row in consumers)
+                    ),
+                    "effects_per_soul_slow_step": str(
+                        max(row["effects_per_soul_slow_step"] for row in consumers)
+                    ),
+                    "revision_epoch_consistency": str(
+                        all(row["revision_epoch_consistency"] for row in consumers)
+                    ).lower(),
+                    "mask_or_stale_effects": str(
+                        sum(row["mask_or_stale_effects"] for row in consumers)
+                    ),
+                    "scoped_allocation_events": str(
+                        sum(row["scoped_allocation_events"] for row in consumers)
+                    ),
+                    "scoped_allocation_bytes": str(
+                        sum(row["scoped_allocation_bytes"] for row in consumers)
+                    ),
+                }
+            )
+        with (session_dir / "aggregate.csv").open(
+            "w", newline="", encoding="utf-8"
+        ) as handle:
+            writer = csv.DictWriter(handle, fieldnames=aggregate_columns)
+            writer.writeheader()
+            writer.writerows(aggregate_rows)
+        report = [
+            "# Consumer-core performance report",
+            "",
+            f"- Valid runs: {len(consumers) if not invalid else 0}",
+            f"- Invalid runs: {len(invalid)}",
+            "- Capture kind: `consumer-core`",
+            "",
+        ]
+        (session_dir / "report.md").write_text("\n".join(report), encoding="utf-8")
+        manifest["actual_adapters"] = []
+        manifest["status"] = "invalid" if invalid else "valid"
+        write_json(session_dir / "manifest.json", manifest)
+        return not invalid
     if matrix.get("capture_kind") == "field-core":
         runs = load_valid_runs(session_dir)
         invalid = [

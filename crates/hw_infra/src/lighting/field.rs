@@ -14,6 +14,12 @@ pub struct LightCell {
     pub luminance: u16,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldSampleError {
+    OutOfBounds(LightGridPos),
+    OutsideIndoorMask(LightGridPos),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LightFieldInput {
     dimensions: GridDimensions,
@@ -93,6 +99,29 @@ impl FieldSnapshot {
 
     pub fn indoor_mask_bytes(&self) -> &[u8] {
         &self.indoor_mask
+    }
+
+    /// Samples gameplay luminance without clamping. Cells outside the indoor
+    /// mask are deliberately exposed as dark, while map OOB stays distinct.
+    pub fn sample_luminance(&self, pos: LightGridPos) -> Option<u16> {
+        let index = self.dimensions.index(pos)?;
+        if self.indoor_mask[index] == 0 {
+            return Some(0);
+        }
+        self.cells.get(index).map(|cell| cell.luminance)
+    }
+
+    /// Strict Room sampling keeps a malformed Room tile distinguishable from
+    /// a valid indoor tile whose luminance is zero.
+    pub fn sample_room_cell(&self, pos: LightGridPos) -> Result<LightCell, FieldSampleError> {
+        let index = self
+            .dimensions
+            .index(pos)
+            .ok_or(FieldSampleError::OutOfBounds(pos))?;
+        if self.indoor_mask[index] == 0 {
+            return Err(FieldSampleError::OutsideIndoorMask(pos));
+        }
+        Ok(self.cells[index])
     }
 
     pub fn radiance_payload_le(&self) -> Vec<u8> {
@@ -645,6 +674,22 @@ mod tests {
         .unwrap();
         assert_eq!(outcome.snapshot.cells()[0], LightCell::default());
         assert!(outcome.snapshot.cells()[2].r > 0);
+        assert_eq!(
+            outcome.snapshot.sample_luminance(LightGridPos::new(0, 0)),
+            Some(0)
+        );
+        assert_eq!(
+            outcome.snapshot.sample_room_cell(LightGridPos::new(0, 0)),
+            Err(FieldSampleError::OutsideIndoorMask(LightGridPos::new(0, 0)))
+        );
+        assert_eq!(
+            outcome.snapshot.sample_luminance(LightGridPos::new(-1, 0)),
+            None
+        );
+        assert_eq!(
+            outcome.snapshot.sample_room_cell(LightGridPos::new(-1, 0)),
+            Err(FieldSampleError::OutOfBounds(LightGridPos::new(-1, 0)))
+        );
     }
 
     #[test]

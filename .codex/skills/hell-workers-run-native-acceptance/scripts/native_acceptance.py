@@ -163,6 +163,7 @@ RTT_LIGHT_SOURCE_CHECKPOINTS = (
     "after-renderdoc",
     "after-memory",
     "after-field-core",
+    "after-consumer-core",
     "before-registration",
 )
 RTT_LIGHT_RENDERDOC_API_VERSION = "1.6.0"
@@ -886,8 +887,10 @@ def rtt_light_contract(repo: Path, stage: str) -> dict[str, Any]:
         and stage_order.index(leg["first_required_stage"]) <= selected_index
     ]
     expected_legs = list(RTT_LIGHT_BASE_LEGS)
-    if stage in {"p03", "p04", "p05", "p06"}:
+    if stage in {"p03", "p04", "p05", "p06", "p07"}:
         expected_legs.append("field-core")
+    if stage == "p07":
+        expected_legs.append("consumer-core")
     if legs != expected_legs:
         raise AcceptanceError(
             f"RtT-light {stage} leg order differs from the launcher: {legs}"
@@ -909,8 +912,9 @@ def rtt_light_game_process_count(
     contract: dict[str, Any], stage: str, *, formal: bool
 ) -> int:
     field_core_processes = 3 if "field-core" in rtt_light_legs(contract, stage) else 0
+    consumer_core_processes = 3 if "consumer-core" in rtt_light_legs(contract, stage) else 0
     if not formal:
-        return 51 + field_core_processes
+        return 51 + field_core_processes + consumer_core_processes
     current_behavior_count = len(
         contract["stages"]["current"]["required_behavior_cases"]
     )
@@ -918,6 +922,7 @@ def rtt_light_game_process_count(
     return (
         65
         + field_core_processes
+        + consumer_core_processes
         + (stage_behavior_count - current_behavior_count) * 3
     )
 
@@ -1400,6 +1405,31 @@ def rtt_light_session_commands(
         ]
         append_allow_patterns(field_core, contract["allow_log_patterns"]["headless_audit"])
         commands["field-core"] = field_core
+    if "consumer-core" in rtt_light_legs(contract, stage):
+        consumer_core = perf + [
+            "consumer-core",
+            *selector,
+            "--lane",
+            "consumer-core",
+            "--sizes",
+            "large",
+            "--renders",
+            "cpu",
+            "--repeat",
+            str(repeat),
+            "--preflight-runs",
+            "0",
+            "--window-backend",
+            "headless",
+            "--fixed-hz",
+            str(matrix["fixed_hz"]),
+            "--output",
+            str(output_root / "consumer-core"),
+        ]
+        append_allow_patterns(
+            consumer_core, contract["allow_log_patterns"]["headless_audit"]
+        )
+        commands["consumer-core"] = consumer_core
     if formal:
         commands["behavior"] = behavior
         commands["build-renderdoc"] = [
@@ -3215,6 +3245,30 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                         )
                     )
 
+            if "consumer-core" in commands:
+                run_command(
+                    "consumer-core",
+                    commands["consumer-core"],
+                    repo=repo,
+                    env=env,
+                    log_path=log_path,
+                    job_file=state_file,
+                    state=state,
+                )
+                if manifest_binary_hash(attempt / "consumer-core", repo) != capture_hash:
+                    raise AcceptanceError("consumer-core and Capture binary hashes differ")
+                assert_source_unchanged(repo, fingerprint)
+                if formal:
+                    source_checks.append(
+                        source_checkpoint(
+                            repo,
+                            checkpoint="after-consumer-core",
+                            subject_commit=subject_commit,
+                            fingerprint=fingerprint,
+                            harness_fingerprint=harness_fingerprint,
+                        )
+                    )
+
             if not formal:
                 if "field-core" in commands:
                     field_manifest = read_json(attempt / "field-core/manifest.json")
@@ -3223,6 +3277,16 @@ def run_rtt_light(args: argparse.Namespace) -> int:
                         or field_manifest.get("matrix", {}).get("capture_kind") != "field-core"
                     ):
                         raise AcceptanceError("S1 field-core session is not valid")
+                if "consumer-core" in commands:
+                    consumer_manifest = read_json(
+                        attempt / "consumer-core/manifest.json"
+                    )
+                    if (
+                        consumer_manifest.get("status") != "valid"
+                        or consumer_manifest.get("matrix", {}).get("capture_kind")
+                        != "consumer-core"
+                    ):
+                        raise AcceptanceError("S1 consumer-core session is not valid")
                 verification = verify_rtt_light_smoke(
                     audit=attempt / "audit",
                     capture=attempt / "capture",
@@ -7455,7 +7519,7 @@ def add_rtt_light_arguments(
     parser.add_argument(
         "--stage",
         default=RTT_LIGHT_DEFAULT_STAGE,
-        choices=["current", "p01", "p02", "p03", "p04", "p05", "p06"],
+        choices=["current", "p01", "p02", "p03", "p04", "p05", "p06", "p07"],
     )
     parser.add_argument("--attempt-id")
     parser.add_argument("--adapter", default="Intel")

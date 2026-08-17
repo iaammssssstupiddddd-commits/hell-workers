@@ -279,7 +279,7 @@ RttRuntime
 
 `hw_visual::SectionMaterial` / `SectionCut` は `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` の互換型として残る。P02 production は elevation / section-cut writer を登録せず、`SectionCut::default()` の非切断状態だけを material sync が読む。物理削除は P08 が所有する。
 
-### 室内Light Fieldのドメイン境界（P03 / P04 / P05 / P06）
+### 室内Light Fieldのドメイン境界（P03〜P07）
 
 `hw_infra::lighting`は100×100までのgrid、indoor mask、Wall/Doorのsemantic occlusion、stable-key radial emitterをpure inputとして受け、integer supercover LOSとfixed-point合成からimmutableなUNORM16 field snapshotを返す。snapshotはradiance/luminance、mask、revision/diff count、canonical SHA-256を一体で保持し、P06向けのpure RGBA8 pack helperも同じcrateが所有する。
 
@@ -289,7 +289,7 @@ P05はpure `FixtureMount`を内包するroot-owned `LightingFixtureMount`だけ�
 
 P06の`IndoorLightTexture`はcurrent epochのCPU snapshotをpure RGBA8 pack helperで単一のlinear `Image`へuploadする。load reset hookは同じhandleをblack化し、preflight rejectでは触らない。Visual順序はCPU rebuild、GPU upload、Door／structure presentationであり、Terrain 3 LODと有限共有`TopDownStructuralMaterial` poolだけが同じimageをsampleする。Doorのlogical root grid／resting cardinalは`MeshTag`でper-instanceに渡すため、opened leaf transformやmaterial cloneへ依存しない。
 
-P07がgameplay/Room consumerを所有する。この依存方向によりrenderer・gameplay・Roomが別々の照度計算を持つことを防ぐ。計算、schedule、計測の詳細は[`indoor_lighting.md`](indoor_lighting.md)を参照する。
+P07のroot adapterはPostActorでcurrent epoch snapshotを読み、各Soulをslow stepごとに1回sampleして既存回復rateをnon-stack適用する。`hw_infra`はpure Room aggregateだけ、`hw_world`はEntity非依存Room tile/topology signature、rootは`RoomIlluminationState`、bounded cache、load resetを所有する。この依存方向によりrenderer・gameplay・Roomが別々の照度計算を持つことを防ぐ。計算、schedule、計測の詳細は[`indoor_lighting.md`](indoor_lighting.md)を参照する。
 
 地形は `hw_visual::TerrainSurfaceMaterial` / `TerrainSurfaceMaterialExt` を基本にしつつ、3 種の LOD variant を持つ。全 variant が `ExtendedMaterial<StandardMaterial, ...>` のままsection clip・directional lighting・prepass・P06 Light Field bindingを維持する。
 

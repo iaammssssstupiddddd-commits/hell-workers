@@ -217,6 +217,7 @@ impl Plugin for StartupPlugin {
                     setup_perf_ui_mode_if_enabled.in_set(PerfScenarioSet::UiSetup),
                 )
                 .init_resource::<perf_scenario::PerfCapture>()
+                .init_resource::<perf_scenario::ConsumerCoreDriverState>()
                 .init_resource::<perf_scenario::SaveTransactionCaptureState>()
                 .configure_sets(
                     Update,
@@ -237,6 +238,7 @@ impl Plugin for StartupPlugin {
                         .in_set(PerfScenarioSet::InitialCheckpoint)
                         .run_if(perf_scenario::is_not_fixed_step_behavior)
                         .run_if(perf_scenario::is_not_field_core)
+                        .run_if(perf_scenario::is_not_consumer_core)
                         .run_if(perf_scenario::is_not_renderdoc_capture),
                 );
             app.add_systems(
@@ -244,6 +246,12 @@ impl Plugin for StartupPlugin {
                 perf_scenario::run_field_core_driver_system
                     .in_set(PerfScenarioSet::InitialCheckpoint)
                     .run_if(perf_scenario::is_field_core),
+            );
+            app.add_systems(
+                Update,
+                perf_scenario::run_consumer_core_driver_system
+                    .in_set(PerfScenarioSet::InitialCheckpoint)
+                    .run_if(perf_scenario::is_consumer_core),
             );
             #[cfg(feature = "profiling-renderdoc")]
             app.add_systems(
@@ -258,7 +266,8 @@ impl Plugin for StartupPlugin {
                     perf_scenario::drive_deconstruction_perf_workload_system,
                 )
                     .in_set(PerfScenarioSet::Driver)
-                    .run_if(perf_scenario::is_not_field_core),
+                    .run_if(perf_scenario::is_not_field_core)
+                    .run_if(perf_scenario::is_not_consumer_core),
             )
             .add_systems(
                 Update,
@@ -291,6 +300,7 @@ impl Plugin for StartupPlugin {
                     .in_set(PerfScenarioSet::Capture)
                     .run_if(perf_scenario::is_not_fixed_step_behavior)
                     .run_if(perf_scenario::is_not_field_core)
+                    .run_if(perf_scenario::is_not_consumer_core)
                     .run_if(perf_scenario::is_not_renderdoc_capture),
             );
             #[cfg(feature = "profiling-renderdoc")]

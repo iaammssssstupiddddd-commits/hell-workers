@@ -697,14 +697,18 @@ Legacy all-or-noneへ切り替わる。`PowerGrid.powered`は「全consumer供�
 `PowerConsumer`は`#[require(Unpowered, PowerConsumerPolicy)]`により未接続時をfail-closedにする。
 allocation transactionが`PowerSupplyState`と`Unpowered`を同時に同期し、`ApplyDeferred`後のeffectだけがこれを読む。
 
-### 11.4 バフシステム
+### 11.4 照明回復システム
 
-`lamp_buff_system`は`GameSystemSet::Logic`に登録されるが、効果を適用するのは
-`SlowSimulationClock.steps_this_frame() > 0`の100 ms stepだけである。render deltaを別に積算しない:
-- `With<PowerConsumer>, Without<Unpowered>` でフィルタリング（通電中のランプのみ）
-- 半径 `OUTDOOR_LAMP_EFFECT_RADIUS` 内のソウルに:
-  - `stress -= LAMP_STRESS_REDUCTION_RATE * dt`
-  - `fatigue -= LAMP_FATIGUE_RECOVERY_BONUS * dt`
+`apply_light_recovery_effect_system`は`PostActor`の室内Light Field再構築後に実行され、
+`SlowSimulationClock.steps_this_frame() > 0`の100 ms stepだけを処理する。各Soulはstepごとに
+current world epochのfield cellを1回だけsampleし、luminanceが0より大きい場合に次を1回適用する:
+
+- `stress -= LAMP_STRESS_REDUCTION_RATE * dt`
+- `fatigue -= LAMP_FATIGUE_RECOVERY_BONUS * dt`
+
+供給中Outdoor Lampの半径は`OUTDOOR_LAMP_RADIUS_TILES`を正本とし、Wall、Closed / Locked Door、
+電力供給状態はfield生成側で反映される。複数Lampが同じcellを照らしても効果はstackせず、
+field unavailable、epoch不一致、map外ではfail-darkとなる。
 
 ### 11.5 視覚フィードバック
 
@@ -729,5 +733,5 @@ Outdoor Lamp を選択すると以下が表示される（`append_power_consumer
 | `on_power_consumer_added` | Observer `On<Add, PowerConsumer>` | topology dirty通知 |
 | `reconcile_power_grid_topology_system` | Update / Logic（topology dirty時） | Yard/Grid一意化、orphan/duplicate整理、generator/consumer接続修復 |
 | `grid_recalc_system` | Update / Logic（dirty時、`soul_spa_power_output_system` の後） | generation/demand集計、個別配電、summaryとruntime state同期 |
-| `lamp_buff_system` | Update / Logic（gridの`Unpowered`反映後） | SlowSimulationClockのstepごとに通電ランプ半径内Soulへバフ適用 |
+| `apply_light_recovery_effect_system` | Update / PostActor（`IndoorLightingRebuildSet`後、unpaused） | SlowSimulationClockのstepごとに各Soulのcurrent field cellを1回sampleし、明るい場合だけ回復を適用 |
 | `sync_powered_visual_system` | `GameSystemSet::Visual` | `PoweredVisualState` → スプライト色同期 |

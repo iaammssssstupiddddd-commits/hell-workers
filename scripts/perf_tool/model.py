@@ -41,6 +41,7 @@ INDOOR_LIGHT_FIXTURE_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_LAYOUT_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_PRESENTATION_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_FIELD_SCHEMA_VERSION = 1
+INDOOR_LIGHT_CONSUMER_PROOF_SCHEMA_VERSION = 1
 DECONSTRUCTION_FIXTURE_SCHEMA_VERSION = "2"
 DECONSTRUCTION_FIXTURE_COLUMNS = (
     "schema_version",
@@ -183,6 +184,19 @@ INDOOR_LIGHT_CPU_COLUMNS = (
     "radius_tiles",
     "input_checksum",
     "output_checksum",
+    "elapsed_ns",
+)
+INDOOR_LIGHT_CONSUMER_COLUMNS = (
+    "sample_index",
+    "souls",
+    "rooms",
+    "room_cells",
+    "world_epoch",
+    "field_revision",
+    "samples_per_soul_slow_step",
+    "effects_per_soul_slow_step",
+    "revision_epoch_consistency",
+    "mask_or_stale_effects",
     "elapsed_ns",
 )
 EXPECTED_SUMMARY_COLUMNS = {
@@ -477,6 +491,8 @@ class Validation:
     indoor_light_field: dict[str, Any] | None = None
     indoor_light_runtime: dict[str, Any] | None = None
     indoor_light_gpu: dict[str, Any] | None = None
+    indoor_light_consumers: dict[str, Any] | None = None
+    indoor_light_consumer_lifecycle: dict[str, Any] | None = None
     p02_presentation: dict[str, str] | None = None
     deconstruction_fixture: dict[str, str] | None = None
     save_transaction: dict[str, str] | None = None
@@ -503,6 +519,8 @@ class Validation:
             "indoor_light_field": self.indoor_light_field,
             "indoor_light_runtime": self.indoor_light_runtime,
             "indoor_light_gpu": self.indoor_light_gpu,
+            "indoor_light_consumers": self.indoor_light_consumers,
+            "indoor_light_consumer_lifecycle": self.indoor_light_consumer_lifecycle,
             "p02_presentation": self.p02_presentation,
             "deconstruction_fixture": self.deconstruction_fixture,
             "save_transaction": self.save_transaction,

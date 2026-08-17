@@ -16,8 +16,8 @@ pub const DREAM_GENERATE_ASSIGN_THRESHOLD: f32 = 30.0;
 /// 屋外ランプ 1 基の電力需要。1 Soul = 5 基まで点灯
 pub const OUTDOOR_LAMP_DEMAND: f32 = OUTPUT_PER_SOUL * 0.2;
 
-/// 屋外ランプの照明効果半径（タイル単位）
-pub const OUTDOOR_LAMP_EFFECT_RADIUS: f32 = 5.0;
+/// 屋外ランプの照明効果半径（整数タイル単位）。
+pub const OUTDOOR_LAMP_RADIUS_TILES: u16 = 5;
 
 /// Soul Spa のタイル 1 枚あたり建設コスト（Bone）。2×2 = 合計 12
 pub const SOUL_SPA_BONE_COST_PER_TILE: u32 = 3;

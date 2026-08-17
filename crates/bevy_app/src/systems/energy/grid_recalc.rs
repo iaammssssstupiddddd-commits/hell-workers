@@ -44,8 +44,6 @@ pub struct EnergyPerfMetrics {
     pub topology_reconcile_runs: u64,
     pub power_output_runs: u64,
     pub grid_recalc_runs: u64,
-    pub lamp_steps: u64,
-    pub lamp_candidates_scanned: u64,
 }
 
 type EnergyOutputSiteDirtyQuery<'w, 's> =

@@ -342,7 +342,9 @@ pub fn read_indoor_light_snapshot<'a>(
     current_epoch: WorldEpoch,
     probe: &mut IndoorLightingLifecycleProbe,
 ) -> Option<&'a FieldSnapshot> {
-    let snapshot = runtime.snapshot_for_epoch(requested_epoch);
+    let snapshot = (requested_epoch == current_epoch)
+        .then(|| runtime.snapshot_for_epoch(requested_epoch))
+        .flatten();
     probe.record_read(requested_epoch, current_epoch, snapshot.is_some());
     snapshot
 }

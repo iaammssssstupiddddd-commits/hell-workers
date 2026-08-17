@@ -312,6 +312,18 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
     assert!(p06_selection.uses_p02_presentation());
     assert!(p06_selection.supports_renderdoc_capture());
 
+    let mut p07 = p06;
+    p07[4] = "p07".to_string();
+    p07[6] = "consumer-core".to_string();
+    let p07_selection = super::parse_rtt_light_selection(&p07, super::PerfWorkload::IndoorLight)
+        .expect("p07/consumer-core v1 is implemented")
+        .expect("P07 consumer-core requires an explicit selection");
+    assert_eq!(p07_selection.stage_id(), "p07");
+    assert_eq!(p07_selection.lane(), "consumer-core");
+    assert!(p07_selection.uses_runtime_field());
+    assert!(p07_selection.uses_p02_presentation());
+    assert!(!p07_selection.supports_renderdoc_capture());
+
     let mut wrong_stage = exact;
     wrong_stage[4] = "p09".to_string();
     assert!(

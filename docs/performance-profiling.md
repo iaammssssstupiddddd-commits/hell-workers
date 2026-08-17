@@ -114,6 +114,25 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py field-core \
 
 各runはcanonical pure fixtureをtimer外で構築し、32 warmup後の`hw_infra::lighting::rebuild_field`だけを256回測る。`data/indoor_light_cpu.csv`はexact 256 row、`data/indoor_light_field.json`は100×100、50 emitter、radius 5、4 checksum、600 steady updateのno-op count、明示的なowned bufferの論理allocation scopeを持つ。field-core runのdata file setはこの2件だけで、window/ECS fixture/GPU field artifactを混ぜない。P03 gateは3反復のp95 median 2 ms以下、p99 median 4 ms以下、repeat間allocation一致を要求する。正式bundleは既存18 caseとfield-core 1 caseの合計19 caseであり、256×3 measurement rowをcase数として数えない。
 
+P07は`consumer-core` laneを追加する。large production fixtureの500 Soul／16 Room／576 cellを使い、productionの
+epoch-aware field readerとRoom state readerを32 warmup + 256 measured call × 3 runで通す。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py consumer-core --stage p07 \
+  --output target/perf-runs/<fresh-session-name>
+```
+
+各runは`indoor_light_consumers.csv`（exact 256 rows）と`indoor_light_consumer_proof.json`
+（`consumer-proof-v1`）だけを持つ。validatorは各Soul/stepのsample=1、effect≤1、epoch/revision整合、
+mask/stale effect=0、p95/p99、scoped allocation=0をraw artifactから再計算する。P07 behavior 7 caseは
+`indoor_light_consumer_lifecycle.json`（`consumer-lifecycle-v1`）を追加し、old-epoch recovery effectと
+Room summary readが0であることをtimelineとは独立に検証する。P07 formalはP05 lineageのclean subjectで採取し、
+P06 GPU ownerとの統合証跡はP08で扱う。
+
+一般frame-time `summary.csv`のschema v11にある`energy_lamp_steps`と
+`energy_lamp_candidates_scanned`は履歴artifact比較専用の予約列で、P07以降は常に0である。
+runtimeの旧Lamp走査counterは削除済みで、consumer workの正本は上記consumer-core artifactとする。
+
 P04は同じ19 caseを`--stage p04`で実行し、P03 pure field artifactを変更せずruntime証跡を追加する。audit / Capture / Memoryとdoor behaviorは`indoor_light_runtime.json`を必須とし、typed emitter `2 / 11 / 51`、eligible supplied `1 / 10 / 50`、unsupplied adoption 0、Room mask cell `36 / 144 / 576`とcanonical checksumを検証する。`load-normal-v1`はP05のlight lifecycle ownerより前なので、world replacement後にruntime-only generator workerを復元せず、typed emitter 2、eligible supplied 0のliveなfail-dark fieldをP04の正規結果とする。RenderDocはP02/P03の置換後presentation inventory（2D camera 2、active 2D pass 1、legacy Soul/Familiar proxy 0）を維持し、同値をruntime checkpointの必須`runtime_field` blockへ記録する。qrenderdoc extractorとoffline bundle validatorは同じschema v3 key集合・値制約をfail-closedで検証する。behavior timelineは`field_availability=available`とlive input/output revision、dark state、field checksumを持つ。
 
 P04 field-coreはproduction large ECS fixtureを通常のcompletion / energy / Room / lighting scheduleで構築してから600 Updateを実走する。fixture settle開始時に`Time<Virtual>`をpauseして通常のLogic / Actorによるworld mutationを止める一方、pause gate外のPreActor / PostActorは継続し、manual Door mutation境界とproduction lighting collect / rebuildを実測対象に保つ。fixture validationは`DoorPresentationSyncSet`後にdomain state、WorldMap、presentation topologyを照合してReadyを公開する。static / RenderDocの固定fixtureはDoor stateとlegacy child Spriteをsetup transactionで同時にseedし、consumer後のvalidationで維持を検証する。behavior laneはheadlessのrenderer visibilityに依存しないようCapture observer境界で同じproduction Door consumerを再実行し、Open / Closed / Locked遷移を別artifactで検証する。P04 behaviorはfixture Readyだけで開始せず、runtimeのinput/output revisionが3回連続で不変になった点をstep 0にしてsave所要時間によるtimeline差を除く。save latencyはbehavior契約の計測対象外なので、このfixed behavior laneだけ通常の100 ms slow-save warningをinfoへ落とし、save artifactとtimelineのexact validationを成否に使う。field-core driverは次Updateからsteady windowを開始する。headless field-coreはrenderer presentationを計測対象にしないためlegacy child Spriteの画像handle一致を要求せず、同じOpen / Closed / Locked画像契約はX11 static / behavior / RenderDoc各legで必須にする。`indoor_light_cpu.csv` / `indoor_light_field.json`に加え`indoor_light_runtime.json`を出し、steady full scan / rebuild / revision increment / scoped allocation event・byteが0、最大rebuild/updateが1以下であることと、emitter collectが明示的に所有するbufferの論理allocationを別scopeで検証する。

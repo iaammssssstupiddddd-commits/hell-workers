@@ -1,62 +1,60 @@
-#[cfg(feature = "profiling")]
-use super::grid_recalc::EnergyPerfMetrics;
 use bevy::prelude::*;
-use hw_core::soul::DamnedSoul;
-use hw_energy::{
-    LAMP_FATIGUE_RECOVERY_BONUS, LAMP_STRESS_REDUCTION_RATE, OUTDOOR_LAMP_EFFECT_RADIUS,
-    PowerConsumer, Unpowered,
-};
+use hw_core::{WorldEpoch, soul::DamnedSoul};
+use hw_energy::{LAMP_FATIGUE_RECOVERY_BONUS, LAMP_STRESS_REDUCTION_RATE};
+use hw_infra::lighting::LightGridPos;
 use hw_soul_ai::soul_ai::update::slow_simulation::SlowSimulationClock;
-use hw_spatial::{SpatialGrid, SpatialGridOps};
+use hw_world::WorldMap;
 
-type PoweredLampQuery<'w, 's> =
-    Query<'w, 's, &'static Transform, (With<PowerConsumer>, Without<Unpowered>)>;
+use crate::systems::lighting::{
+    IndoorLightConsumerMetrics, IndoorLightRuntime, IndoorLightingLifecycleProbe,
+    read_indoor_light_snapshot,
+};
 
-/// 点灯中のランプ半径内にいる Soul の stress と fatigue を軽減する。
-/// Unpowered ランプはスキップされるため、停電時はバフが自動停止する。
-pub fn lamp_buff_system(
-    q_lamps: PoweredLampQuery,
-    soul_grid: Res<SpatialGrid>,
-    mut candidate_souls: Local<Vec<Entity>>,
-    mut q_souls: Query<(&Transform, &mut DamnedSoul)>,
+pub fn apply_light_recovery_effect_system(
     clock: Res<SlowSimulationClock>,
-    #[cfg(feature = "profiling")] mut metrics: ResMut<EnergyPerfMetrics>,
+    runtime: Res<IndoorLightRuntime>,
+    world_epoch: Res<WorldEpoch>,
+    mut lifecycle_probe: ResMut<IndoorLightingLifecycleProbe>,
+    mut metrics: ResMut<IndoorLightConsumerMetrics>,
+    mut souls: Query<(&Transform, &mut DamnedSoul)>,
 ) {
-    let r2 = OUTDOOR_LAMP_EFFECT_RADIUS * OUTDOOR_LAMP_EFFECT_RADIUS;
+    let steps = clock.steps_this_frame();
+    if steps == 0 {
+        return;
+    }
 
-    for _ in 0..clock.steps_this_frame() {
-        #[cfg(feature = "profiling")]
-        {
-            metrics.lamp_steps = metrics.lamp_steps.saturating_add(1);
-        }
-        let dt = clock.step_secs();
-        for lamp_tf in q_lamps.iter() {
-            let lamp_pos = lamp_tf.translation.truncate();
-            soul_grid.get_nearby_in_radius_into(
-                lamp_pos,
-                OUTDOOR_LAMP_EFFECT_RADIUS,
-                &mut candidate_souls,
-            );
-            // The index normally has one entry per Soul. Sorting and
-            // deduplicating keeps the effect deterministic even while an
-            // index implementation changes its cell boundary policy.
-            candidate_souls.sort_unstable_by_key(|entity| entity.to_bits());
-            candidate_souls.dedup();
-            #[cfg(feature = "profiling")]
-            {
-                metrics.lamp_candidates_scanned = metrics
-                    .lamp_candidates_scanned
-                    .saturating_add(candidate_souls.len() as u64);
+    metrics.recovery_updates = metrics.recovery_updates.saturating_add(1);
+    let Some(snapshot) =
+        read_indoor_light_snapshot(&runtime, *world_epoch, *world_epoch, &mut lifecycle_probe)
+    else {
+        metrics.unavailable_recovery_updates =
+            metrics.unavailable_recovery_updates.saturating_add(1);
+        return;
+    };
+    let snapshot_epoch_is_current = runtime.published_epoch() == Some(world_epoch.get());
+
+    let dt = clock.step_secs();
+    for _ in 0..steps {
+        metrics.recovery_steps = metrics.recovery_steps.saturating_add(1);
+        for (transform, mut soul) in &mut souls {
+            metrics.soul_samples = metrics.soul_samples.saturating_add(1);
+            let grid = WorldMap::world_to_grid(transform.translation.truncate());
+            let light_pos = LightGridPos::new(grid.0, grid.1);
+            let Some(luminance) = snapshot.sample_luminance(light_pos) else {
+                metrics.out_of_bounds_samples = metrics.out_of_bounds_samples.saturating_add(1);
+                continue;
+            };
+            if luminance == 0 {
+                metrics.dark_samples = metrics.dark_samples.saturating_add(1);
+                continue;
             }
 
-            for &soul_entity in candidate_souls.iter() {
-                let Ok((soul_tf, mut soul)) = q_souls.get_mut(soul_entity) else {
-                    continue;
-                };
-                if soul_tf.translation.truncate().distance_squared(lamp_pos) <= r2 {
-                    soul.stress = (soul.stress - LAMP_STRESS_REDUCTION_RATE * dt).max(0.0);
-                    soul.fatigue = (soul.fatigue - LAMP_FATIGUE_RECOVERY_BONUS * dt).max(0.0);
-                }
+            soul.stress = (soul.stress - LAMP_STRESS_REDUCTION_RATE * dt).max(0.0);
+            soul.fatigue = (soul.fatigue - LAMP_FATIGUE_RECOVERY_BONUS * dt).max(0.0);
+            metrics.recovery_effects = metrics.recovery_effects.saturating_add(1);
+            if !snapshot_epoch_is_current {
+                metrics.old_epoch_recovery_effects =
+                    metrics.old_epoch_recovery_effects.saturating_add(1);
             }
         }
     }

@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use hw_energy::OUTDOOR_LAMP_RADIUS_TILES;
 use hw_infra::lighting::{FixtureMount, LightGridPos, LightRadiusTiles, LightRgbLinear};
 use serde::{Deserialize, Serialize};
 
@@ -44,7 +45,7 @@ impl RadialLightEmitter {
     pub const fn outdoor_lamp_at_mount(mount: FixtureMount) -> Self {
         Self {
             mount,
-            radius_tiles: LightRadiusTiles::new(5),
+            radius_tiles: LightRadiusTiles::new(OUTDOOR_LAMP_RADIUS_TILES),
             color: LightRgbLinear {
                 r: u16::MAX,
                 g: 49_151,

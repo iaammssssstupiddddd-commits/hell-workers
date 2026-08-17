@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use hw_core::GridPos;
 use hw_core::constants::{ROOM_DETECTION_COOLDOWN_SECS, ROOM_VALIDATION_INTERVAL_SECS};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use super::core::RoomBounds;
 
@@ -18,6 +19,7 @@ use super::core::RoomBounds;
 #[derive(Component, Debug, Clone)]
 pub struct Room {
     pub tiles: Vec<(i32, i32)>,
+    pub tile_signature: RoomTileSignature,
     pub wall_tiles: Vec<(i32, i32)>,
     pub door_tiles: Vec<(i32, i32)>,
     pub bounds: RoomBounds,
@@ -35,6 +37,24 @@ pub struct RoomOverlayTile {
 pub struct RoomTileLookup {
     pub tile_to_room: HashMap<(i32, i32), Entity>,
     mask_signature: RoomMaskSignature,
+    topology_signature: RoomTopologySignature,
+}
+
+/// Exact, entity-independent identity for one Room's canonical floor tiles.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RoomTileSignature(Arc<[GridPos]>);
+
+impl RoomTileSignature {
+    pub fn from_tiles(tiles: &[GridPos]) -> Self {
+        let mut canonical_tiles = tiles.to_vec();
+        canonical_tiles.sort_unstable_by_key(|&(x, y)| (y, x));
+        canonical_tiles.dedup();
+        Self(canonical_tiles.into())
+    }
+
+    pub fn canonical_tiles(&self) -> &[GridPos] {
+        &self.0
+    }
 }
 
 /// Entity-independent identity for the currently published indoor mask.
@@ -57,9 +77,30 @@ impl RoomMaskSignature {
     }
 }
 
+/// Exact identity for the canonical partition of all current Room tiles.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct RoomTopologySignature {
+    revision: u64,
+    canonical_rooms: Vec<RoomTileSignature>,
+}
+
+impl RoomTopologySignature {
+    pub const fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    pub fn canonical_rooms(&self) -> &[RoomTileSignature] {
+        &self.canonical_rooms
+    }
+}
+
 impl RoomTileLookup {
     pub const fn mask_signature(&self) -> &RoomMaskSignature {
         &self.mask_signature
+    }
+
+    pub const fn topology_signature(&self) -> &RoomTopologySignature {
+        &self.topology_signature
     }
 
     /// Publishes a new reverse lookup while advancing the semantic mask
@@ -76,6 +117,24 @@ impl RoomTileLookup {
                 .checked_add(1)
                 .expect("Room mask revision overflow");
             self.mask_signature.canonical_tiles = canonical_tiles;
+        }
+
+        let mut room_tiles = HashMap::<Entity, Vec<GridPos>>::new();
+        for (&tile, &room_entity) in &tile_to_room {
+            room_tiles.entry(room_entity).or_default().push(tile);
+        }
+        let mut canonical_rooms = room_tiles
+            .into_values()
+            .map(|tiles| RoomTileSignature::from_tiles(&tiles))
+            .collect::<Vec<_>>();
+        canonical_rooms.sort_unstable();
+        if canonical_rooms != self.topology_signature.canonical_rooms {
+            self.topology_signature.revision = self
+                .topology_signature
+                .revision
+                .checked_add(1)
+                .expect("Room topology revision overflow");
+            self.topology_signature.canonical_rooms = canonical_rooms;
         }
         self.tile_to_room = tile_to_room;
         changed
@@ -161,11 +220,13 @@ mod mask_signature_tests {
         first.insert((4, 7), Entity::from_bits(1));
         assert!(lookup.replace(first));
         let revision = lookup.mask_signature().revision();
+        let topology_revision = lookup.topology_signature().revision();
 
         let mut recreated = HashMap::new();
         recreated.insert((4, 7), Entity::from_bits(2));
         assert!(!lookup.replace(recreated));
         assert_eq!(lookup.mask_signature().revision(), revision);
+        assert_eq!(lookup.topology_signature().revision(), topology_revision);
 
         let mut changed = HashMap::new();
         changed.insert((4, 7), Entity::from_bits(3));
@@ -173,5 +234,30 @@ mod mask_signature_tests {
         assert!(lookup.replace(changed));
         assert_eq!(lookup.mask_signature().revision(), revision + 1);
         assert_eq!(lookup.mask_signature().canonical_tiles(), &[(4, 7), (5, 7)]);
+    }
+
+    #[test]
+    fn partition_change_advances_topology_without_changing_mask() {
+        let mut lookup = RoomTileLookup::default();
+        let mut split = HashMap::new();
+        split.insert((1, 1), Entity::from_bits(1));
+        split.insert((2, 1), Entity::from_bits(2));
+        assert!(lookup.replace(split));
+        let mask_revision = lookup.mask_signature().revision();
+        let topology_revision = lookup.topology_signature().revision();
+
+        let mut joined = HashMap::new();
+        joined.insert((1, 1), Entity::from_bits(3));
+        joined.insert((2, 1), Entity::from_bits(3));
+        assert!(!lookup.replace(joined));
+        assert_eq!(lookup.mask_signature().revision(), mask_revision);
+        assert_eq!(
+            lookup.topology_signature().revision(),
+            topology_revision + 1
+        );
+        assert_eq!(
+            lookup.topology_signature().canonical_rooms()[0].canonical_tiles(),
+            &[(1, 1), (2, 1)]
+        );
     }
 }

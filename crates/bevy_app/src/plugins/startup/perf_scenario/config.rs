@@ -158,6 +158,26 @@ impl PerfRttLightSelection {
         stage_id: "p06",
         lane: "field-core",
     };
+    const P07_STATIC_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p07",
+        lane: "static",
+    };
+    const P07_BEHAVIOR_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p07",
+        lane: "behavior",
+    };
+    const P07_FIELD_CORE_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p07",
+        lane: "field-core",
+    };
+    const P07_CONSUMER_CORE_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p07",
+        lane: "consumer-core",
+    };
 
     pub const fn contract_id(self) -> &'static str {
         self.contract_id
@@ -172,11 +192,11 @@ impl PerfRttLightSelection {
     }
 
     pub fn uses_p02_presentation(self) -> bool {
-        matches!(self.stage_id, "p02" | "p03" | "p04" | "p05" | "p06")
+        matches!(self.stage_id, "p02" | "p03" | "p04" | "p05" | "p06" | "p07")
     }
 
     pub fn uses_runtime_field(self) -> bool {
-        matches!(self.stage_id, "p04" | "p05" | "p06")
+        matches!(self.stage_id, "p04" | "p05" | "p06" | "p07")
     }
 
     #[cfg(any(feature = "profiling-renderdoc", test))]
@@ -923,6 +943,14 @@ impl PerfScenarioConfig {
                 .is_some_and(|selection| selection.stage_id() == "p03")
     }
 
+    pub fn is_consumer_core(&self) -> bool {
+        self.enabled
+            && self.workload == PerfWorkload::IndoorLight
+            && self
+                .rtt_light
+                .is_some_and(|selection| selection.lane() == "consumer-core")
+    }
+
     /// P04 field-core advances the light runtime through `Update`, but must not
     /// advance normal simulation while its canonical fixture is settling.
     /// `PreActor` and `PostActor` remain scheduled while virtual time is paused,
@@ -1035,6 +1063,16 @@ pub(crate) fn is_not_field_core(config: Option<Res<PerfScenarioConfig>>) -> bool
 }
 
 #[cfg(feature = "profiling")]
+pub(crate) fn is_consumer_core(config: Option<Res<PerfScenarioConfig>>) -> bool {
+    config.is_some_and(|config| config.is_consumer_core())
+}
+
+#[cfg(feature = "profiling")]
+pub(crate) fn is_not_consumer_core(config: Option<Res<PerfScenarioConfig>>) -> bool {
+    !is_consumer_core(config)
+}
+
+#[cfg(feature = "profiling")]
 pub(crate) fn is_not_pure_field_core(config: Option<Res<PerfScenarioConfig>>) -> bool {
     !config.is_some_and(|config| config.is_pure_field_core())
 }
@@ -1084,7 +1122,7 @@ fn parse_rtt_light_selection(
 
     let (Some(contract), Some(stage), Some(lane)) = (contract, stage, lane) else {
         return Err(PerfScenarioConfigError(
-            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01|p02|p03|p04|p05|p06 --perf-lane static|behavior|field-core"
+            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01|p02|p03|p04|p05|p06|p07 --perf-lane static|behavior|field-core|consumer-core"
                 .to_string(),
         ));
     };
@@ -1107,9 +1145,13 @@ fn parse_rtt_light_selection(
         ("rtt-light-v1", "p06", "static") => PerfRttLightSelection::P06_STATIC_V1,
         ("rtt-light-v1", "p06", "behavior") => PerfRttLightSelection::P06_BEHAVIOR_V1,
         ("rtt-light-v1", "p06", "field-core") => PerfRttLightSelection::P06_FIELD_CORE_V1,
+        ("rtt-light-v1", "p07", "static") => PerfRttLightSelection::P07_STATIC_V1,
+        ("rtt-light-v1", "p07", "behavior") => PerfRttLightSelection::P07_BEHAVIOR_V1,
+        ("rtt-light-v1", "p07", "field-core") => PerfRttLightSelection::P07_FIELD_CORE_V1,
+        ("rtt-light-v1", "p07", "consumer-core") => PerfRttLightSelection::P07_CONSUMER_CORE_V1,
         _ => {
             return Err(PerfScenarioConfigError(format!(
-                "this binary supports rtt-light-v1 current through p06; field-core starts at p03; got {contract}/{stage}/{lane}"
+                "this binary supports rtt-light-v1 current through p07; field-core starts at p03 and consumer-core at p07; got {contract}/{stage}/{lane}"
             )));
         }
     };

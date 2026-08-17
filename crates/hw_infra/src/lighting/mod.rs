@@ -3,19 +3,21 @@ mod fixture;
 mod los;
 mod occlusion;
 mod packing;
+mod room_summary;
 
 use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
 pub use field::{
-    EmitterDiagnostic, EmitterDiagnosticReason, FieldSnapshot, LightCell, LightFieldInput,
-    RebuildOutcome, Sha256Digest, digest_hex, rebuild_field,
+    EmitterDiagnostic, EmitterDiagnosticReason, FieldSampleError, FieldSnapshot, LightCell,
+    LightFieldInput, RebuildOutcome, Sha256Digest, digest_hex, rebuild_field,
 };
 pub use fixture::canonical_large_field_input;
 pub use los::has_line_of_sight;
 pub use occlusion::{IndoorMask, LightOcclusionGrid, OcclusionCell};
 pub use packing::pack_rgba8_linear;
+pub use room_summary::{RoomIlluminationSummary, RoomSummaryError, summarize_room_illumination};
 
 pub const MAX_GRID_CELLS: usize = (MAP_WIDTH as usize) * (MAP_HEIGHT as usize);
 

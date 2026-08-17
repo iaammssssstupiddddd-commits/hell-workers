@@ -11,9 +11,11 @@ use hw_energy::SoulSpaTile;
 use hw_jobs::{Building, BuildingType};
 use hw_ui::UiIntent;
 use hw_world::{Room, Yard};
+use serde_json::json;
 
 use crate::systems::lighting::{
-    IndoorLightingLifecycleProbe, LightingFixtureMount, read_indoor_light_snapshot,
+    IndoorLightConsumerMetrics, IndoorLightingLifecycleProbe, LightingFixtureMount,
+    RoomIlluminationState, read_indoor_light_snapshot,
 };
 use crate::systems::save::{
     PerfLoadFault, PerfLoadFaultInjection, SaveLoadFailureKind, SaveLoadOperation, SaveLoadOutcome,
@@ -263,7 +265,7 @@ fn timeline_field_observation(
     if runtime.availability() != crate::systems::lighting::IndoorLightAvailability::Available {
         if config
             .rtt_light_selection()
-            .is_some_and(|selection| matches!(selection.stage_id(), "p05" | "p06"))
+            .is_some_and(|selection| matches!(selection.stage_id(), "p05" | "p06" | "p07"))
         {
             return Ok(TimelineFieldObservation {
                 availability: "unavailable",
@@ -617,6 +619,7 @@ pub(crate) struct BehaviorObserveParams<'w, 's> {
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
     indoor_light_texture: Res<'w, IndoorLightTexture>,
     lifecycle_probe: ResMut<'w, IndoorLightingLifecycleProbe>,
+    consumer_metrics: Res<'w, IndoorLightConsumerMetrics>,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,
     capture: ResMut<'w, PerfBehaviorCapture>,
     virtual_time: Res<'w, Time<Virtual>>,
@@ -649,7 +652,7 @@ pub(crate) struct BehaviorObserveParams<'w, 's> {
     souls: Query<'w, 's, (), With<DamnedSoul>>,
     familiars: Query<'w, 's, (), With<Familiar>>,
     yards: Query<'w, 's, &'static Yard>,
-    rooms: Query<'w, 's, (), With<Room>>,
+    rooms: Query<'w, 's, Option<&'static RoomIlluminationState>, With<Room>>,
     world_map: Res<'w, WorldMap>,
     save_path: Res<'w, SavePath>,
     save_root: Res<'w, SaveStorageRoot>,
@@ -790,7 +793,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             let owns_lifecycle = params
                 .config
                 .rtt_light_selection()
-                .is_some_and(|selection| matches!(selection.stage_id(), "p05" | "p06"));
+                .is_some_and(|selection| matches!(selection.stage_id(), "p05" | "p06" | "p07"));
             let Ok(field) =
                 timeline_field_observation(&params.config, &params.indoor_light_runtime)
             else {
@@ -1038,11 +1041,17 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                     is_dark: Some(params.lifecycle_probe.all_resets_fail_dark()),
                     checksum: None,
                 };
-                gpu = TimelineGpuObservation {
-                    availability: "unavailable",
-                    upload_epoch: None,
-                    checksum: None,
-                };
+                if params
+                    .config
+                    .rtt_light_selection()
+                    .is_some_and(|selection| selection.stage_id() == "p06")
+                {
+                    gpu = TimelineGpuObservation {
+                        availability: "unavailable",
+                        upload_epoch: None,
+                        checksum: None,
+                    };
+                }
             }
             if step == 5 {
                 let expected_counts = match behavior_case {
@@ -1159,6 +1168,9 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
         &params.quality,
         None,
     );
+    let mut room_states = params.rooms.iter();
+    let room_state_available =
+        room_states.next().is_some_and(|state| state.is_some()) && room_states.next().is_none();
     let result = finalize_behavior_runtime(
         &params.config,
         params.config.behavior_case(),
@@ -1166,6 +1178,15 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
         params.save_root.as_path(),
     )
     .and_then(|()| write_behavior_timeline(&params.config, &params.capture.rows))
+    .and_then(|()| {
+        write_consumer_lifecycle_sidecar(
+            &params.config,
+            &params.indoor_light_runtime,
+            *params.world_epoch,
+            &params.consumer_metrics,
+            room_state_available,
+        )
+    })
     .and_then(|()| {
         let initial = params.capture.initial_window.as_ref().ok_or_else(|| {
             std::io::Error::other("behavior flush has no initial window observation")
@@ -1256,6 +1277,43 @@ fn write_behavior_timeline(
         "{{\n  \"schema_version\": 1,\n  \"complete\": true,\n  \"rows\": [\n    {row_json}\n  ]\n}}\n"
     );
     file.write_all(body.as_bytes())?;
+    file.sync_all()
+}
+
+fn write_consumer_lifecycle_sidecar(
+    config: &PerfScenarioConfig,
+    runtime: &crate::systems::lighting::IndoorLightRuntime,
+    world_epoch: WorldEpoch,
+    metrics: &IndoorLightConsumerMetrics,
+    room_state_available: bool,
+) -> std::io::Result<()> {
+    if config
+        .rtt_light_selection()
+        .is_none_or(|selection| selection.stage_id() != "p07")
+    {
+        return Ok(());
+    }
+    let case_id = config.behavior_case_as_str().ok_or_else(|| {
+        std::io::Error::other("P07 consumer lifecycle sidecar has no behavior case")
+    })?;
+    let current_field_available = runtime.published_epoch() == Some(world_epoch.get())
+        && runtime.availability() == crate::systems::lighting::IndoorLightAvailability::Available;
+    let body = json!({
+        "schema": "consumer-lifecycle-v1",
+        "schema_version": 1,
+        "case_id": case_id,
+        "world_epoch": world_epoch.get(),
+        "field_revision": current_field_available.then(|| runtime.output_revision()),
+        "old_epoch_recovery_effects": metrics.old_epoch_recovery_effects,
+        "old_epoch_room_summary_reads": metrics.old_epoch_room_reads,
+        "room_state_available": room_state_available,
+    });
+    let directory = perf_output_directory(config);
+    std::fs::create_dir_all(&directory)?;
+    let path = directory.join("indoor_light_consumer_lifecycle.json");
+    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    serde_json::to_writer_pretty(&mut file, &body)?;
+    file.write_all(b"\n")?;
     file.sync_all()
 }
 

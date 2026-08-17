@@ -34,7 +34,7 @@ Roomデータは将来の温度・モラル・部屋品質バフ等の基盤に�
 
 | 型 | 定義クレート | 説明 |
 |:---|:---|:---|
-| `Room` | `hw_world` | 検出された Room エンティティ。`tiles`, `wall_tiles`, `door_tiles`, `bounds`, `tile_count` を保持 |
+| `Room` | `hw_world` | 検出された Room エンティティ。`tiles`, Entity非依存`tile_signature`, `wall_tiles`, `door_tiles`, `bounds`, `tile_count` を保持 |
 | `RoomBounds` | `hw_world` | Room の最小/最大グリッド座標（min_x, min_y, max_x, max_y） |
 | `RoomOverlayTile` | `hw_world` | 床と外周壁の境界に置く細いline spriteのmarker。`Room` エンティティの子として生成 |
 
@@ -43,7 +43,7 @@ Roomデータは将来の温度・モラル・部屋品質バフ等の基盤に�
 | 型 | 定義クレート | 説明 |
 |:---|:---|:---|
 | `RoomDetectionState` | `hw_world` | dirty タイルセットとクールダウンタイマー |
-| `RoomTileLookup` | `hw_world` | `(i32, i32)` グリッド座標 → `Entity`（Room エンティティ）の逆引きマップ |
+| `RoomTileLookup` | `hw_world` | grid→Room逆引きに加え、union mask revisionとcanonical Room partition revisionを保持 |
 | `RoomBoundaryLookup` | `hw_world` | 完成壁/扉グリッド → 隣接する全Roomの逆引き。共有壁では2 Roomを保持 |
 | `RoomValidationState` | `hw_world` | 定期検証タイマー |
 
@@ -116,6 +116,10 @@ Room 再検出は「dirty タイルが存在する」かつ「クールダウン
 - 現在の建物状態に対して `hw_world::room_detection::room_is_valid_against_input(&room.tiles, ...)` を実行
 - 不正な Room は despawn → dirty マーキング → 再検出へ戻す
 - 正常な Room の `RoomTileLookup` / `RoomBoundaryLookup` を再構築
+
+`RoomTileLookup::replace`は全Roomのsorted tile-group集合から`RoomTopologySignature`をpublishする。
+Room entityのdespawn/recreateだけではrevisionを進めず、同じunion maskでも分割・結合が変われば進める。
+P07の`RoomIlluminationState`はこのrevisionとper-Room tile signatureを使い、再生成entityへ安全にcacheを再付与する。
 
 ## 7. 視覚境界線（`sync_room_overlay_tiles_system`）
 

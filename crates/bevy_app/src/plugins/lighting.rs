@@ -3,14 +3,17 @@ use bevy::prelude::*;
 use hw_core::WorldEpoch;
 
 use crate::systems::GameSystemSet;
+use crate::systems::energy::lamp_buff::apply_light_recovery_effect_system;
 use crate::systems::lighting::{
-    DoorLockToggleMetrics, DoorManualMutationSet, IndoorLightRuntime,
+    DoorLockToggleMetrics, DoorManualMutationSet, IndoorLightConsumerMetrics, IndoorLightRuntime,
     IndoorLightingAllocationProbe, IndoorLightingCollectSet, IndoorLightingDirty,
     IndoorLightingDirtyCollectSet, IndoorLightingEmitterSyncSet, IndoorLightingLifecycleProbe,
-    IndoorLightingRebuildSet, collect_indoor_lighting_snapshot_system,
+    IndoorLightingRebuildSet, RoomIlluminationCache, RoomIlluminationSummarySet,
+    SoulLightRecoverySet, collect_indoor_lighting_snapshot_system,
     consume_door_lock_toggle_requests_system, mark_indoor_lighting_dirty_system,
-    rebuild_indoor_lighting_field_system, reset_indoor_lighting_for_world_replace,
-    sync_outdoor_lamp_emitters_system,
+    rebuild_indoor_lighting_field_system, reset_indoor_light_consumers_for_world_replace,
+    reset_indoor_lighting_for_world_replace, sync_outdoor_lamp_emitters_system,
+    update_room_illumination_summaries_system,
 };
 use crate::systems::save::SaveRecoveryMode;
 
@@ -32,11 +35,18 @@ impl Plugin for IndoorLightingPlugin {
             "lighting-runtime",
             reset_indoor_lighting_for_world_replace,
         );
+        crate::systems::save::register_load_reset_hook(
+            app,
+            "lighting-consumers",
+            reset_indoor_light_consumers_for_world_replace,
+        );
         app.init_resource::<DoorLockToggleMetrics>()
             .init_resource::<IndoorLightingDirty>()
             .init_resource::<IndoorLightRuntime>()
             .init_resource::<IndoorLightingAllocationProbe>()
             .init_resource::<IndoorLightingLifecycleProbe>()
+            .init_resource::<IndoorLightConsumerMetrics>()
+            .init_resource::<RoomIlluminationCache>()
             .init_resource::<WorldEpoch>()
             .configure_sets(
                 Update,
@@ -49,6 +59,18 @@ impl Plugin for IndoorLightingPlugin {
                     IndoorLightingDirtyCollectSet.in_set(GameSystemSet::PostActor),
                     IndoorLightingCollectSet.in_set(GameSystemSet::PostActor),
                     IndoorLightingRebuildSet.in_set(GameSystemSet::PostActor),
+                )
+                    .chain(),
+            )
+            .configure_sets(
+                Update,
+                (
+                    SoulLightRecoverySet
+                        .after(IndoorLightingRebuildSet)
+                        .in_set(GameSystemSet::PostActor),
+                    RoomIlluminationSummarySet
+                        .after(SoulLightRecoverySet)
+                        .in_set(GameSystemSet::PostActor),
                 )
                     .chain(),
             )
@@ -80,6 +102,20 @@ impl Plugin for IndoorLightingPlugin {
                 rebuild_indoor_lighting_field_system
                     .run_if(lighting_runtime_is_trusted)
                     .in_set(IndoorLightingRebuildSet),
+            )
+            .add_systems(
+                Update,
+                apply_light_recovery_effect_system
+                    .run_if(lighting_runtime_is_trusted)
+                    .run_if(|time: Res<Time<Virtual>>| !time.is_paused())
+                    .in_set(SoulLightRecoverySet),
+            )
+            .add_systems(
+                Update,
+                (update_room_illumination_summaries_system, ApplyDeferred)
+                    .chain()
+                    .run_if(lighting_runtime_is_trusted)
+                    .in_set(RoomIlluminationSummarySet),
             );
     }
 }

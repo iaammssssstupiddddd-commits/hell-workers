@@ -50,7 +50,8 @@ pub use river::{generate_fixed_river_tiles, generate_sand_tiles};
 pub use room_detection::{
     DetectedRoom, Room, RoomBoundaryLookup, RoomBounds, RoomDetectionBuildingTile,
     RoomDetectionInput, RoomDetectionState, RoomMaskSignature, RoomOverlayTile, RoomTileLookup,
-    RoomValidationState, build_detection_input, detect_rooms, room_is_valid_against_input,
+    RoomTileSignature, RoomTopologySignature, RoomValidationState, build_detection_input,
+    detect_rooms, room_is_valid_against_input,
 };
 #[cfg(feature = "profiling")]
 pub use room_systems::detect_rooms_immediately_system;

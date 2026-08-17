@@ -140,15 +140,17 @@ Yard 外または有効なGridがないconsumerは `PowerSupplyState::Disconnect
 
 ### 5.4 ランプバフ
 
-`lamp_buff_system`（Update, GameSystemSet::Logic）:
+`apply_light_recovery_effect_system`（Update, `GameSystemSet::PostActor`）は、P04のCPU
+`IndoorLightField`をgameplayの正本として読む。
 
-- 対象: `With<PowerConsumer>, Without<Unpowered>` のランプ（= 通電中のみ）
-- `SlowSimulationClock` の 100 ms step を共有し、render delta を別に積算しない
-- Soul 全件との直積は作らず、Soul 用 `SpatialGrid` から半径内候補だけを取得してから正確な距離を判定する
-- 半径 `OUTDOOR_LAMP_EFFECT_RADIUS` (5.0 タイル) 内の Soul に:
-  - stress を `LAMP_STRESS_REDUCTION_RATE` (0.004/s) で軽減
-  - fatigue を `LAMP_FATIGUE_RECOVERY_BONUS` (0.003/s) で軽減
-- 停電時は `Without<Unpowered>` フィルタでスキップ → バフ自動停止
+- `SlowSimulationClock` の100 ms stepごとに各Soulの現在位置を`WorldMap::world_to_grid`で1 cellへ変換し、
+  current `WorldEpoch`のsnapshotを最大1回sampleする。複数Lampが同じcellを照らしても効果はstackしない。
+- luminanceが0より大きいcellだけ、stressを`LAMP_STRESS_REDUCTION_RATE` (0.004/s)、fatigueを
+  `LAMP_FATIGUE_RECOVERY_BONUS` (0.003/s)で軽減する。mask外・map外・unavailable・old epochはdark扱い。
+- SuppliedのOutdoor Lampだけがfield emitterになる。完成Wall、Closed / Locked Doorは遮光し、Open Doorは通す。
+- `IndoorLightingRebuildSet`後に実行するため、同じUpdateのActor移動、Door、給電状態を読む。pause中は
+  PostActorのfield / Room summaryは更新するが、recovery system自身を停止する。
+- radiusの唯一のbalance正本は整数tileの`OUTDOOR_LAMP_RADIUS_TILES` (5)であり、world distance比較は行わない。
 
 ## 6. Grid 再計算
 
@@ -162,7 +164,9 @@ Deconstruction finalizer / construction owner cancel
 → topology reconciliation → ApplyDeferred
 → SoulSpa output
 → individual allocation / disconnected normalization → ApplyDeferred
-→ lamp effect
+→ Room detection / explicit deferred flush
+
+PostActor: indoor Light Field rebuild → Soul light recovery → Room illumination summary
 ```
 
 output/allocationはsteady-stateでは実行せず、次の変更でdirtyになる。
@@ -261,7 +265,7 @@ stale/unsupported/missing policyやslot clamp/phase failureは専用outcomeか�
 | `DREAM_GENERATE_FLOOR` | 10.0 | Dream がこの値を下回ったらタスク自動終了 |
 | `DREAM_GENERATE_ASSIGN_THRESHOLD` | 30.0 | この値以上でないとタスクをアサインしない |
 | `OUTDOOR_LAMP_DEMAND` | 0.2 | ランプ 1 基の電力需要（W） |
-| `OUTDOOR_LAMP_EFFECT_RADIUS` | 5.0 | ランプバフ半径（タイル） |
+| `OUTDOOR_LAMP_RADIUS_TILES` | 5 | Light Field emitter半径（整数タイル） |
 | `SOUL_SPA_MAX_ACTIVE_SLOTS` | 4 | Soul Spaで設定可能な最大稼働枠 |
 | `POWER_ALLOCATION_EPSILON` | 0.0001 | capacity比較の浮動小数点許容差 |
 | `POWER_RESTORE_MARGIN` | 0.05 | 既知Shedを復旧するための追加余裕 |

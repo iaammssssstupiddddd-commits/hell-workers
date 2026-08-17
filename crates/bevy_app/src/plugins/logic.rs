@@ -20,7 +20,6 @@ use crate::systems::energy::grid_recalc::{
     energy_power_output_should_run, energy_topology_should_run, grid_recalc_system,
     sync_power_allocation_mode_from_settings_system,
 };
-use crate::systems::energy::lamp_buff::lamp_buff_system;
 use crate::systems::energy::power_output::soul_spa_power_output_system;
 use crate::systems::familiar_ai::FamiliarAiPlugin;
 use crate::systems::jobs::floor_construction::{
@@ -226,6 +225,7 @@ impl Plugin for LogicPlugin {
                 mark_room_dirty_from_building_changes_system,
                 validate_rooms_system,
                 detect_rooms_system,
+                ApplyDeferred,
             )
                 .chain()
                 .after(dream_tree_planting_system)
@@ -322,7 +322,6 @@ pub(crate) fn register_soul_energy_pipeline(app: &mut App) {
             soul_spa_power_output_system.run_if(energy_power_output_should_run),
             grid_recalc_system.run_if(energy_grid_recalc_should_run),
             bevy::ecs::schedule::ApplyDeferred,
-            lamp_buff_system,
         )
             .chain()
             .after(StateSanityFlushSet)

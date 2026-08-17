@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P06 implemented; native formal pending clean subject` |
+| ステータス | `In Progress — P07 implemented locally; isolated P05-lineage formal pending` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-17` |
 | 作成者 | `Codex` |
@@ -102,8 +102,8 @@ P00 baseline / contract
 | P03 | [`03-indoor-light-domain-core-plan-2026-08-03.md`](single-scene-light-field/03-indoor-light-domain-core-plan-2026-08-03.md) | P00。P03 stage有効化はP02-A M1〜M4 ready extension pointを利用 | `hw_infra`のdeterministicな論理field / pure LOSと`p03 / field-core`正式evidence |
 | P04 | [`04-indoor-light-runtime-integration-plan-2026-08-03.md`](single-scene-light-field/04-indoor-light-runtime-integration-plan-2026-08-03.md) | P02 M1, P03、HVAC M0または同等correctness commit | topology / energy / Room / Doorを結ぶ更新transactionとsteady-state dirty管理 |
 | P05 | [`05-indoor-light-save-lifecycle-plan-2026-08-03.md`](single-scene-light-field/05-indoor-light-save-lifecycle-plan-2026-08-03.md) | P03, P04、完了済みC3 save registry（`1b84f316`） | durable mount、named rehydrate step、load / rollback fail-dark |
-| P06 | [`06-indoor-light-rendering-plan-2026-08-03.md`](single-scene-light-field/06-indoor-light-rendering-plan-2026-08-03.md) | P01, P02, P04, P05 | 100×100 Light Field textureと全`Structural3d` receiver |
-| P07 | [`07-indoor-light-gameplay-room-plan-2026-08-03.md`](single-scene-light-field/07-indoor-light-gameplay-room-plan-2026-08-03.md) | P03, P04, P05 | Soul / Roomが同じfield revisionを読むgameplay統合 |
+| P06 | [`06-indoor-light-rendering-plan-2026-08-03.md`](single-scene-light-field/06-indoor-light-rendering-plan-2026-08-03.md) | P01, P02, P04, P05 | user-approved RD0 timeout例外で受理した100×100 Light Field textureと全`Structural3d` receiver |
+| P07 | [`07-indoor-light-gameplay-room-plan-2026-08-03.md`](single-scene-light-field/07-indoor-light-gameplay-room-plan-2026-08-03.md) | P03, P04, P05 | P05-lineage evidenceでSoul / Roomが同じfield revisionを読むgameplay統合 |
 | P08 | [`08-legacy-cleanup-release-plan-2026-08-03.md`](single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | P01〜P07 | projector / section残骸撤去、性能比較、Help、最終gate |
 
 ### 3.1 着手とmergeの規則
@@ -115,7 +115,7 @@ P00 baseline / contract
 - P04のentryはP02 M1 Door correctnessのままとし、P02-A full formalを新規blockerにしない。P04 / P06以降のstage固有metricは各planが所有する。
 - P04はsave / rehydrateを編集せずruntime transactionだけを所有する。
 - P05は完了済みC3 save registry（`1b84f316`）のfreeze済みproduction planを使用する。raw registryを迂回せず、既存step名・phaseを変えないedge付きnamed stepだけを追加する。
-- P06とP07はP04 / P05のfield revision / epoch contractを変更せずconsumerとして実装する。
+- P06とP07はP04 / P05のfield revision / epoch contractを変更せずconsumerとして実装する。凍結v1のP07 formalは`stage_without_gpu_owner`であるため、P07 evidence subjectはP05から分岐しP06を含めない。P08がP06 / P07統合とcross-consumer evidenceを所有する。
 - 各子計画はfocused test、workspace check、Clippy、Help impact判断、必要なnative受入まで閉じてから次の依存計画を開始する。
 - 子計画の途中状態を長期間productionへ残さない。1計画内のwork packageは連続commitとする。
 
@@ -135,8 +135,8 @@ P00 baseline / contract
 | B07 | P03 pure Light Field core + P03 field-core evidence | P00後にB01〜B06cと並行可。P03が`hw_infra`をbootstrapし、P03 M4はP02-A M1〜M4 ready extension pointを拡張する。root Plugin / ECS runtimeは追加しない |
 | B08 | P04 runtime snapshot / Door request / schedule / dirty（完了） | B03とB07完了 |
 | B09 | P05 schema / registry / reset / epoch | B08完了。C3 save registry（`1b84f316`）のfreeze済みproduction planを利用 |
-| B10 | P06 Image bridge→Terrain→structural material→native | B02、B06c、B08、B09完了 |
-| B11 | P07 Soul effect→Room summary→soak | B08、B09完了。P06とはconsumer単位で並行可 |
+| B10 | P06 Image bridge→Terrain→structural material→native | B02、B06c、B08、B09完了。RD0 failureはartifact上invalidのまま、2026-08-17のユーザー判断で受理 |
+| B11 | P07 Soul effect→Room summary→soak | B08、B09完了。frozen v1 evidenceはP05-lineage clean subjectで採取し、P06 GPU ownerを含めない |
 | B12 | P08 projector→section→mirror cleanup→final artifact | B10、B11完了 |
 
 各batchは少なくともfocused testと`python3 scripts/dev.py check`がgreenな独立commitにする。Rust変更を含むbatchは`python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`も通す。B04のHelp変更、B06a〜B06c / B10 / B12のvisual変更は各batch内でHelp impact review / native acceptanceまで閉じる。
@@ -148,10 +148,10 @@ P00 baseline / contract
 | 所有先 | 所有するもの | 所有しないもの |
 | --- | --- | --- |
 | `hw_world` | world/grid変換、Wall / Door / Room topology、DoorState rule | 照度、GPU Image、Lamp効果 |
-| `hw_energy` | demand、allocation、`PowerSupplyState` | 発光半径、色、LOS |
-| `hw_infra` | emitter / mount、occlusion snapshot、CPU field、field revision（dirty schedulingを除く）、Room summary | Bevy render asset、UI、camera、root schedule |
+| `hw_energy` | demand、allocation、`PowerSupplyState`、OutdoorLampの整数tile radius default | visual `LightRadiusTiles`、色、LOS |
+| `hw_infra` | emitter / mount、occlusion snapshot、CPU field、field revision（dirty schedulingを除く）、Room summaryのpure value / aggregation | Bevy `Component` / cache、render asset、UI、camera、root schedule |
 | `hw_visual` | billboard / structural material、shader binding contract | gameplay照度、Door rule |
-| `bevy_app` | cross-domain ordering、save adapter、`Assets<Image>` bridge、presentation mapping | pure LOS / accumulation |
+| `bevy_app` | cross-domain ordering、save adapter、`Assets<Image>` bridge、presentation mapping、Room summary component / cache / reset adapter | pure LOS / accumulation |
 
 P03が`hw_infra`を最初にbootstrapする。P03が作る`lighting` pure coreはroot Plugin / ECS runtimeを作らない。P04/P05は同じnamespaceへadapterを追加できるが、core APIへBevy/world依存を逆流させない。HVACはP03後に既存crateを拡張できる。
 
@@ -172,8 +172,10 @@ Pause gate外 / pre-Visual:
 Actor（unpaused時）:
   auto-open -> movement -> auto-close
 
-Pause gate外 / Actor後:
-  IndoorLightingUpdateSet
+PostActor / pause-open:
+  IndoorLightingRebuildSet
+  -> SoulLightRecoverySet（P07独自unpaused gate）
+  -> RoomIlluminationSummarySet（P07、pause-open）
 
 Visual:
   IndoorLightUploadSet（revision / WorldEpoch変更時だけ）
@@ -240,7 +242,7 @@ Interface:
 
 ### 現在地
 
-- 進捗: `P06 production/tooling実装完了、clean subjectでのnative formal待ち`（P00 / P01 / P02 / P02-A / P03 / P04 / P05完了。P06は実装済み・formal未完、P07〜P08未着手）
+- 進捗: `P06はuser-approved RD0 timeout例外で受理、P07はlocal実装 / consumer-core完了・P05-lineage formal待ち`（P00 / P01 / P02 / P02-A / P03 / P04 / P05完了。P08未着手）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
@@ -255,13 +257,14 @@ Interface:
 - P04完了: Door request / pause契約、root ECS snapshot adapter、Room mask revision、fail-dark dirty / rebuild transaction、P04 static / behavior / field-core toolingと正式実機証跡
 - P05 current evidence: behavior 21 / 21、headless field-core 3 / 3、native S1 job `p05-s1-20260816`はAudit 3 / 3、Capture 18 / 18、Memory 18 / 18、field-core 3 / 3がvalid
 - P05 formal: subject `56fa6bd3`、attempt `492ad69c-1275-48ea-90f2-ed1a8018b542`。24 / 24 case、190 / 190 gate row、RenderDoc replay、baseline index登録、独立attempt / 全baseline verifierがpassした。additive contract predecessorは旧stageの旧hashとSHA ledgerを保持し、P05以後には適用しない
-- P06 current implementation: 単一RGBA8 Light Field image、epoch-aware upload／load black reset、Terrain 3 LOD／全Structural3d receiver、Door root `MeshTag` anchor、P06 sidecar／timeline／RenderDoc／bundle toolingを実装。2026-08-17 headless behavior 21 / 21 valid、local gates pass
-- 未完了: P06 native S0／S1／RD0／formalとpixel／performance evidence、P07〜P08
+- P06: commit `19ad5fec`で単一RGBA8 Light Field image、epoch-aware upload／load black reset、Terrain 3 LOD／全Structural3d receiver、Door root `MeshTag` anchor、P06 sidecar／timeline／RenderDoc／bundle toolingを実装。2026-08-17 headless behavior 21 / 21、local gates、clean-subject S0 / S1はvalid。formal RD0は`renderdoccmd capture` deadline / process-group failureでinvalidだったが、ユーザーが例外として受理した。
+- P07 local: binary non-stackのepoch-aware Soul recovery、Room topology / summary / cache / reset、P07 selector / consumer-core / lifecycle evidence / native tooling、Help / docsを実装。full verify pass、final source binary `0a04b05a…`でbehavior 21 / 21とconsumer-core 3 / 3がvalid（p95 median `0.022560 ms`、p99 median `0.025054 ms`、allocation / stale effect / old-epoch consumer 0）。
+- 未完了: P07 isolated formalとP08。P07 frozen v1 formalはP06入りsubjectで置換しない。
 
 ### 次のAIが最初にやること
 
-1. P06実装batchをcommitしたclean subjectでnative S0→S1→RD0→formalを実行し、P06 exact gate集合とpixel probeを登録・独立再検証する。
-2. formalが通るまでP07へ進まず、P05 mount／epochとP02 presentation分類を変更しない。
+1. 現P07差分をP05 formal subjectから分岐したclean evidence subjectへ移し、S0 / S1 / 全7 behavior / consumer-core / RenderDoc formalを採取する。
+2. P07 formalではP06 GPU ownerを含めず、P08で初めてP06 / P07統合とcross-consumer evidenceを扱う。P05 mount／epochとP02 presentation分類は変更しない。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
@@ -287,7 +290,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - P05 native acceptance: `2026-08-16` / subject `56fa6bd3`、attempt `492ad69c-1275-48ea-90f2-ed1a8018b542`、24 / 24 case、190 / 190 gate row、RenderDoc replay valid、Intel Arc / Vulkan / Mesa `26.1.6` / X11。attempt verifierとcurrent / P01 / P02 / P04 / P05 baseline全4,947 fileの独立verify pass。
 - 最終 `python3 scripts/dev.py check` / workspace Clippy / workspace test / `dev.py verify`: `2026-08-16` / `pass`
 - 最終 docs / Help gate: `2026-08-16` / Help impact No impact、docs write/checkとdiff check pass
-- P06 implementation verification: `2026-08-17` / headless behavior 21 / 21、perf／RenderDoc／native helper self-test、`dev.py check` pass。actual-window／formalはnative Skillがdirty subjectをfail-closedで拒否したためclean commit待ち
+- P06 acceptance: `2026-08-17` / commit `19ad5fec`、headless behavior 21 / 21、perf／RenderDoc／native helper self-test、`dev.py check`、clean-subject S0 / S1 valid。formal RD0は`renderdoccmd capture` deadline / process-group failureでinvalidだが、ユーザーが例外として受理
 
 ### Definition of Done
 
@@ -301,7 +304,8 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
-| `2026-08-17` | `Codex` | P06 production／shader／evidence tooling実装、headless behavior 21 / 21とlocal gate passを反映。native actual-window／formalはclean committed subject待ちとしてP06を未完のまま維持。 |
+| `2026-08-17` | `Codex` | P07 local implementation、full verify、consumer-core 3 / 3、Help / docs完了を反映。凍結v1のP05-lineage native formalだけを未完了として維持。 |
+| `2026-08-17` | `Codex` | P06 formal RD0の`renderdoccmd capture` deadline / process-group failureをinvalidのまま記録し、ユーザー承認の例外としてP06を受理。P07をP05-lineage frozen-v1 evidenceとP08統合へ分離する改訂を反映。 |
 | `2026-08-16` | `Codex` | P05 subject `56fa6bd3`のformal 24 / 24 case・190 / 190 gate rowを登録し、additive contract lineage、attempt、全baseline SHA ledgerを独立再検証。P05を完了して次対象をP06へ更新した。 |
 | `2026-08-16` | `Codex` | P05 production / evidence tooling、21 / 21 behavior、full quality gate、Help No impact、native S1全レッグvalidを反映。clean subjectでのformal 24 / 24 registrationだけを残した。 |
 | `2026-08-16` | `Codex` | C3完了を依存・着手条件へ反映し、P05をReadyへ更新。P05のdurable mount / registry edge / reset-epoch / evidence runnerのレビュー済み責務を親計画へ同期。 |

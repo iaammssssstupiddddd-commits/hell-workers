@@ -13,8 +13,8 @@ use hw_jobs::{Building, Door};
 use crate::map::WorldMap;
 use crate::room_detection::{
     DetectedRoom, Room, RoomBoundaryLookup, RoomDetectionBuildingTile, RoomDetectionState,
-    RoomOverlayTile, RoomTileLookup, RoomValidationState, build_detection_input, detect_rooms,
-    room_is_valid_against_input,
+    RoomOverlayTile, RoomTileLookup, RoomTileSignature, RoomValidationState, build_detection_input,
+    detect_rooms, room_is_valid_against_input,
 };
 
 type ChangedBuildingQuery<'w, 's> = Query<
@@ -128,6 +128,7 @@ fn rebuild_rooms(
             bounds,
         } = detected;
         let tile_count = tiles.len();
+        let tile_signature = RoomTileSignature::from_tiles(&tiles);
         let room_tiles_for_lookup = tiles.clone();
 
         let room_entity = commands.spawn_empty().id();
@@ -141,6 +142,7 @@ fn rebuild_rooms(
         commands.entity(room_entity).insert((
             Room {
                 tiles,
+                tile_signature,
                 wall_tiles,
                 door_tiles,
                 bounds,

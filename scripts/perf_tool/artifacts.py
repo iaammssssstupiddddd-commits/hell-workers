@@ -15,6 +15,15 @@ P02_PRESENTATION_COLUMNS = (
     "state_and_bounce_probes_pass",
 )
 
+
+def reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in payload:
+            raise ValueError(f"duplicate JSON key: {key}")
+        payload[key] = value
+    return payload
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -1170,6 +1179,7 @@ def classify_log_warnings(log_text: str, allow_patterns: Iterable[str]) -> tuple
             or "PERF_DETERMINISM_AUDIT: wrote" in line
             or "PERF_BEHAVIOR: wrote" in line
             or "PERF_FIELD_CORE: wrote" in line
+            or "PERF_CONSUMER_CORE: wrote" in line
         ):
             capture_completed = True
             continue
@@ -1280,7 +1290,7 @@ def read_behavior_timeline(
             errors.append(f"timeline.json row {index} has the wrong step_index")
         if row.get("fixture_checksum") != fixture_checksum:
             errors.append(f"timeline.json row {index} has the wrong fixture_checksum")
-        if stage_id in {"p05", "p06"}:
+        if stage_id in {"p05", "p06", "p07"}:
             if row.get("registry_phase") not in {
                 "candidate_preflight",
                 "load_reset",
@@ -1290,7 +1300,7 @@ def read_behavior_timeline(
                 errors.append(f"timeline.json row {index} has an invalid P05 registry phase")
         elif row.get("registry_phase") != "stage_before_registry_owner":
             errors.append(f"timeline.json row {index} has the wrong registry availability")
-        if stage_id in {"p04", "p05", "p06"}:
+        if stage_id in {"p04", "p05", "p06", "p07"}:
             if row.get("field_availability") not in {"available", "unavailable"}:
                 errors.append(f"timeline.json row {index} has the wrong field availability")
             if row.get("field_availability") == "available":
@@ -1333,8 +1343,8 @@ def read_behavior_timeline(
             "field_output_revision",
             "field_is_dark",
             "field_checksum",
-        } if stage_id in {"p04", "p05", "p06"} else set()
-        if stage_id in {"p05", "p06"}:
+        } if stage_id in {"p04", "p05", "p06", "p07"} else set()
+        if stage_id in {"p05", "p06", "p07"}:
             required_runtime_fields |= {
                 "registry_step_id",
                 "wake_count",
@@ -1353,7 +1363,9 @@ def read_behavior_timeline(
 
     comparable_rows = rows[: len(expected_steps)]
     if behavior_case == "door-state-v1":
-        stage_prefix = "p02" if stage_id in {"p02", "p03", "p04", "p05"} else "current"
+        stage_prefix = (
+            "p02" if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"} else "current"
+        )
         for index, (row, expected) in enumerate(zip(comparable_rows, expected_steps)):
             exact = {
                 "step_index": expected["step_index"],
@@ -1703,6 +1715,192 @@ def read_indoor_light_runtime(
     return payload, []
 
 
+def read_indoor_light_consumers(
+    data_dir: Path,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    errors: list[str] = []
+    rows, csv_errors = read_exact_csv_rows(
+        data_dir / "indoor_light_consumers.csv",
+        columns=INDOOR_LIGHT_CONSUMER_COLUMNS,
+        artifact_name="indoor_light_consumers.csv",
+    )
+    errors.extend(csv_errors)
+    proof_path = data_dir / "indoor_light_consumer_proof.json"
+    try:
+        proof = json.loads(
+            proof_path.read_text(encoding="utf-8"),
+            object_pairs_hook=reject_duplicate_json_keys,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+        return None, [*errors, f"cannot parse indoor_light_consumer_proof.json: {error}"]
+    proof_keys = {
+        "schema",
+        "schema_version",
+        "warmup_calls",
+        "measure_calls",
+        "souls",
+        "rooms",
+        "room_cells",
+        "max_samples_per_soul_slow_step",
+        "max_effects_per_soul_slow_step",
+        "revision_epoch_consistency",
+        "mask_or_stale_effects",
+        "scoped_allocation_events",
+        "scoped_allocation_bytes",
+    }
+    if not isinstance(proof, dict) or set(proof) != proof_keys:
+        return None, [*errors, "indoor_light_consumer_proof.json keys differ from schema v1"]
+    expected = {
+        "schema": "consumer-proof-v1",
+        "schema_version": INDOOR_LIGHT_CONSUMER_PROOF_SCHEMA_VERSION,
+        "warmup_calls": 32,
+        "measure_calls": 256,
+        "souls": 500,
+        "rooms": 16,
+        "room_cells": 576,
+        "max_samples_per_soul_slow_step": 1,
+        "revision_epoch_consistency": True,
+        "mask_or_stale_effects": 0,
+        "scoped_allocation_events": 0,
+        "scoped_allocation_bytes": 0,
+    }
+    for field, value in expected.items():
+        if proof.get(field) != value:
+            errors.append(f"indoor_light_consumer_proof.json {field} differs")
+    effects = proof.get("max_effects_per_soul_slow_step")
+    if not isinstance(effects, int) or isinstance(effects, bool) or not 0 <= effects <= 1:
+        errors.append("indoor_light_consumer_proof.json max effects is invalid")
+
+    elapsed: list[int] = []
+    if rows is not None:
+        if len(rows) != 256:
+            errors.append(
+                f"indoor_light_consumers.csv must contain exactly 256 rows; got {len(rows)}"
+            )
+        epoch_revision: tuple[str, str] | None = None
+        for index, row in enumerate(rows):
+            exact = {
+                "sample_index": str(index),
+                "souls": "500",
+                "rooms": "16",
+                "room_cells": "576",
+                "samples_per_soul_slow_step": "1",
+                "revision_epoch_consistency": "true",
+                "mask_or_stale_effects": "0",
+            }
+            for field, value in exact.items():
+                if row.get(field) != value:
+                    errors.append(
+                        f"indoor_light_consumers.csv row {index} {field} differs"
+                    )
+            if row.get("effects_per_soul_slow_step") not in {"0", "1"}:
+                errors.append(
+                    f"indoor_light_consumers.csv row {index} effects value is invalid"
+                )
+            identity = (row.get("world_epoch", ""), row.get("field_revision", ""))
+            epoch, revision = identity
+            if not (
+                epoch.isdigit()
+                and int(epoch) >= 0
+                and revision.isdigit()
+                and int(revision) > 0
+            ):
+                errors.append(
+                    f"indoor_light_consumers.csv row {index} epoch/revision is invalid"
+                )
+            elif epoch_revision is None:
+                epoch_revision = identity
+            elif identity != epoch_revision:
+                errors.append(
+                    f"indoor_light_consumers.csv row {index} epoch/revision changed"
+                )
+            try:
+                duration = int(row["elapsed_ns"])
+                if duration <= 0 or duration > (1 << 64) - 1:
+                    raise ValueError
+            except (KeyError, TypeError, ValueError):
+                errors.append(
+                    f"indoor_light_consumers.csv row {index} elapsed_ns is invalid"
+                )
+            else:
+                elapsed.append(duration)
+    if errors or len(elapsed) != 256:
+        return None, errors
+    ordered = sorted(elapsed)
+    quantile = lambda ratio: ordered[
+        math.floor((len(ordered) - 1) * ratio + 0.5)
+    ] / 1_000_000
+    return {
+        "samples_per_soul_slow_step": 1,
+        "effects_per_soul_slow_step": effects,
+        "revision_epoch_consistency": True,
+        "mask_or_stale_effects": 0,
+        "consumer_p95_ms": quantile(0.95),
+        "consumer_p99_ms": quantile(0.99),
+        "scoped_allocation_events": 0,
+        "scoped_allocation_bytes": 0,
+    }, []
+
+
+def read_indoor_light_consumer_lifecycle(
+    data_dir: Path, *, expected_case: Case
+) -> tuple[dict[str, Any] | None, list[str]]:
+    path = data_dir / "indoor_light_consumer_lifecycle.json"
+    try:
+        payload = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=reject_duplicate_json_keys,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+        return None, [f"cannot parse indoor_light_consumer_lifecycle.json: {error}"]
+    keys = {
+        "schema",
+        "schema_version",
+        "case_id",
+        "world_epoch",
+        "field_revision",
+        "old_epoch_recovery_effects",
+        "old_epoch_room_summary_reads",
+        "room_state_available",
+    }
+    errors: list[str] = []
+    if not isinstance(payload, dict) or set(payload) != keys:
+        return None, ["indoor_light_consumer_lifecycle.json keys differ from schema v1"]
+    if payload.get("schema") != "consumer-lifecycle-v1" or payload.get("schema_version") != 1:
+        errors.append("indoor_light_consumer_lifecycle.json schema differs")
+    if payload.get("case_id") != expected_case.behavior_case:
+        errors.append("indoor_light_consumer_lifecycle.json case_id differs")
+    if (
+        not isinstance(payload.get("world_epoch"), int)
+        or isinstance(payload["world_epoch"], bool)
+        or payload["world_epoch"] < 0
+    ):
+        errors.append("indoor_light_consumer_lifecycle.json world_epoch is invalid")
+    if payload.get("field_revision") is not None and (
+        not isinstance(payload["field_revision"], int)
+        or isinstance(payload["field_revision"], bool)
+        or payload["field_revision"] < 1
+    ):
+        errors.append("indoor_light_consumer_lifecycle.json field_revision is invalid")
+    for field in ("old_epoch_recovery_effects", "old_epoch_room_summary_reads"):
+        if payload.get(field) != 0:
+            errors.append(f"indoor_light_consumer_lifecycle.json {field} must be zero")
+    if not isinstance(payload.get("room_state_available"), bool):
+        errors.append("indoor_light_consumer_lifecycle.json availability is invalid")
+    else:
+        expected_available = expected_case.behavior_case != "load-recovery-failed-v1"
+        if payload["room_state_available"] != expected_available:
+            errors.append(
+                "indoor_light_consumer_lifecycle.json Room availability differs"
+            )
+    expected_field_revision = expected_case.behavior_case != "load-recovery-failed-v1"
+    if (payload.get("field_revision") is not None) != expected_field_revision:
+        errors.append(
+            "indoor_light_consumer_lifecycle.json field availability differs"
+        )
+    return (None, errors) if errors else (payload, [])
+
+
 def read_indoor_light_gpu(
     data_dir: Path,
     *,
@@ -1783,15 +1981,17 @@ def validate_run(
     indoor_light_field = None
     indoor_light_runtime = None
     indoor_light_gpu = None
+    indoor_light_consumers = None
+    indoor_light_consumer_lifecycle = None
     p02_presentation = None
     deconstruction_fixture = None
     save_transaction = None
     timeline = None
     behavior_save_artifact = None
-    if capture_kind == "field-core":
+    if capture_kind in {"field-core", "consumer-core"}:
         window = None
         if (data_dir / "window.csv").exists():
-            reasons.append("field-core must not write window.csv")
+            reasons.append(f"{capture_kind} must not write window.csv")
     else:
         window, window_errors = read_window(
             data_dir / "window.csv",
@@ -1810,16 +2010,25 @@ def validate_run(
         data_dir / "indoor_light_layout.csv",
         data_dir / "indoor_light_presentation.csv",
     )
-    if expected_case.workload == "indoor-light" and capture_kind == "field-core":
+    if expected_case.workload == "indoor-light" and capture_kind == "consumer-core":
         if (
             expected_contract != "rtt-light-v1"
-            or expected_stage not in {"p03", "p04", "p05", "p06"}
+            or expected_stage != "p07"
+            or expected_lane != "consumer-core"
+        ):
+            reasons.append("consumer-core requires rtt-light-v1/p07/consumer-core")
+        indoor_light_consumers, consumer_errors = read_indoor_light_consumers(data_dir)
+        reasons.extend(consumer_errors)
+    elif expected_case.workload == "indoor-light" and capture_kind == "field-core":
+        if (
+            expected_contract != "rtt-light-v1"
+            or expected_stage not in {"p03", "p04", "p05", "p06", "p07"}
             or expected_lane != "field-core"
         ):
-            reasons.append("field-core requires rtt-light-v1/p03|p04|p05|p06/field-core")
+            reasons.append("field-core requires rtt-light-v1/p03|p04|p05|p06|p07/field-core")
         indoor_light_field, field_errors = read_indoor_light_field(data_dir)
         reasons.extend(field_errors)
-        if expected_stage in {"p04", "p05", "p06"} and expected_contract is not None:
+        if expected_stage in {"p04", "p05", "p06", "p07"} and expected_contract is not None:
             indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
                 data_dir,
                 expected_case=expected_case,
@@ -1850,7 +2059,7 @@ def validate_run(
                 lane=expected_lane,
             )
             reasons.extend(indoor_errors)
-            if expected_stage in {"p04", "p05", "p06"}:
+            if expected_stage in {"p04", "p05", "p06", "p07"}:
                 indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
                     data_dir,
                     expected_case=expected_case,
@@ -1895,7 +2104,7 @@ def validate_run(
     p02_sidecar = data_dir / "p02_presentation.csv"
     expects_p02_sidecar = (
         expected_case.workload == "indoor-light"
-        and expected_stage in {"p02", "p03", "p04", "p05", "p06"}
+        and expected_stage in {"p02", "p03", "p04", "p05", "p06", "p07"}
         and expected_lane == "static"
         and capture_kind == "frame-time"
     )
@@ -1991,9 +2200,17 @@ def validate_run(
                 stage_id=expected_stage,
             )
             reasons.extend(timeline_errors)
-    elif capture_kind == "field-core":
+            if expected_stage == "p07":
+                (
+                    indoor_light_consumer_lifecycle,
+                    lifecycle_errors,
+                ) = read_indoor_light_consumer_lifecycle(
+                    data_dir, expected_case=expected_case
+                )
+                reasons.extend(lifecycle_errors)
+    elif capture_kind in {"field-core", "consumer-core"}:
         if expected_fixed_hz is None:
-            reasons.append("field-core validation is missing fixed_hz")
+            reasons.append(f"{capture_kind} validation is missing fixed_hz")
     else:
         reasons.append(f"unsupported capture kind {capture_kind!r}")
     if capture_kind != "frame-time" and (data_dir / "render_inventory.csv").exists():
@@ -2033,8 +2250,10 @@ def validate_run(
             "indoor_light_presentation.csv",
             "timeline.json",
         }
-        if expected_stage in {"p04", "p05", "p06"}:
+        if expected_stage in {"p04", "p05", "p06", "p07"}:
             expected_behavior_files.add("indoor_light_runtime.json")
+        if expected_stage == "p07":
+            expected_behavior_files.add("indoor_light_consumer_lifecycle.json")
         if expected_case.behavior_case is not None and expected_case.behavior_case.startswith(
             "load-"
         ):
@@ -2056,7 +2275,7 @@ def validate_run(
             )
     elif capture_kind == "field-core":
         expected_field_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
-        if expected_stage in {"p04", "p05", "p06"}:
+        if expected_stage in {"p04", "p05", "p06", "p07"}:
             expected_field_files.add("indoor_light_runtime.json")
         actual_field_files = (
             {path.name for path in data_dir.iterdir()} if data_dir.is_dir() else set()
@@ -2065,6 +2284,19 @@ def validate_run(
             reasons.append(
                 "field-core data artifact set differs: "
                 + ", ".join(sorted(actual_field_files ^ expected_field_files))
+            )
+    elif capture_kind == "consumer-core":
+        expected_consumer_files = {
+            "indoor_light_consumers.csv",
+            "indoor_light_consumer_proof.json",
+        }
+        actual_consumer_files = (
+            {path.name for path in data_dir.iterdir()} if data_dir.is_dir() else set()
+        )
+        if actual_consumer_files != expected_consumer_files:
+            reasons.append(
+                "consumer-core data artifact set differs: "
+                + ", ".join(sorted(actual_consumer_files ^ expected_consumer_files))
             )
     elif (data_dir / "timeline.json").exists() or (
         data_dir / "behavior-save.scn.ron"
@@ -2144,7 +2376,7 @@ def validate_run(
         except (KeyError, ValueError):
             reasons.append("summary initial population is invalid for scene root validation")
         else:
-            if expected_stage in {"p02", "p03", "p04", "p05", "p06"}:
+            if expected_stage in {"p02", "p03", "p04", "p05", "p06", "p07"}:
                 # P02 replaces the legacy Soul proxy family with
                 # ActorBillboard3d and keeps Familiar presentation in the 2D
                 # foreground pass. Their counts are validated by the P02
@@ -2217,6 +2449,8 @@ def validate_run(
             else "PERF_BEHAVIOR: wrote"
             if capture_kind == "fixed-step-behavior"
             else "PERF_FIELD_CORE: wrote"
+            if capture_kind == "field-core"
+            else "PERF_CONSUMER_CORE: wrote"
         )
         if completion_marker not in log_text:
             reasons.append(f"{completion_marker} completion marker is absent")
@@ -2225,6 +2459,7 @@ def validate_run(
             "fixed-step-determinism": "fixed",
             "fixed-step-behavior": "fixed-behavior",
             "field-core": "fixed",
+            "consumer-core": "fixed",
         }.get(capture_kind)
         if f"clock={expected_clock_mode}" not in log_text:
             reasons.append(
@@ -2244,7 +2479,12 @@ def validate_run(
         behavior_marker = f"behavior_case={expected_case.behavior_case or 'none'}"
         if behavior_marker not in log_text:
             reasons.append(f"PERF_SCENARIO marker is absent: {behavior_marker}")
-        if capture_kind in {"fixed-step-determinism", "fixed-step-behavior", "field-core"} and expected_fixed_hz is not None:
+        if capture_kind in {
+            "fixed-step-determinism",
+            "fixed-step-behavior",
+            "field-core",
+            "consumer-core",
+        } and expected_fixed_hz is not None:
             marker = f"fixed_hz={expected_fixed_hz}"
             if marker not in log_text:
                 reasons.append(f"PERF_SCENARIO marker is absent: {marker}")
@@ -2300,6 +2540,8 @@ def validate_run(
         indoor_light_field=indoor_light_field,
         indoor_light_runtime=indoor_light_runtime,
         indoor_light_gpu=indoor_light_gpu,
+        indoor_light_consumers=indoor_light_consumers,
+        indoor_light_consumer_lifecycle=indoor_light_consumer_lifecycle,
         p02_presentation=p02_presentation,
         deconstruction_fixture=deconstruction_fixture,
         save_transaction=save_transaction,
