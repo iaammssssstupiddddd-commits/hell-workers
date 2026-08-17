@@ -1,6 +1,6 @@
 # Plans Index
 
-`docs/plans` の文書ステータス一覧（更新日: 2026-08-17）。
+`docs/plans` の文書ステータス一覧（更新日: 2026-08-18）。
 
 ## 新規計画書の作り方
 
@@ -37,9 +37,9 @@
 | [3d-rtt/single-scene-light-field/04-indoor-light-runtime-integration-plan-2026-08-03.md](3d-rtt/single-scene-light-field/04-indoor-light-runtime-integration-plan-2026-08-03.md) | Completed — production, tooling, formal native evidence verified | Wall／Door／給電／Roomのsnapshot、dirty管理、更新順を接続するP04。 |
 | [3d-rtt/single-scene-light-field/05-indoor-light-save-lifecycle-plan-2026-08-03.md](3d-rtt/single-scene-light-field/05-indoor-light-save-lifecycle-plan-2026-08-03.md) | Completed — production, tooling, formal native evidence verified | FixtureMount保存、named rehydrate step、load／rollback fail-darkを導入するP05。 |
 | [3d-rtt/single-scene-light-field/06-indoor-light-rendering-plan-2026-08-03.md](3d-rtt/single-scene-light-field/06-indoor-light-rendering-plan-2026-08-03.md) | Accepted — user-approved RenderDoc RD0 timeout exception; S0 / S1 valid, formal artifact remains unregistered | 100×100共有textureとTerrain／構造物receiverへLight Fieldを表示するP06。 |
-| [3d-rtt/single-scene-light-field/07-indoor-light-gameplay-room-plan-2026-08-03.md](3d-rtt/single-scene-light-field/07-indoor-light-gameplay-room-plan-2026-08-03.md) | Implemented — local gates / consumer-core valid、P05-lineage native formal pending | Soul回復とRoom照度summaryを同じCPU field revisionへ統合するP07。 |
+| [3d-rtt/single-scene-light-field/07-indoor-light-gameplay-room-plan-2026-08-03.md](3d-rtt/single-scene-light-field/07-indoor-light-gameplay-room-plan-2026-08-03.md) | Complete — P05-lineage frozen v1 formal registered / offline verified | Soul回復とRoom照度summaryを同じCPU field revisionへ統合するP07。 |
 | [3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md](3d-rtt/single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | Draft | Soul projector／section／legacy mirrorを撤去し、最終性能・Help gateを閉じるP08。 |
-| [3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) | In Progress — P07 implemented locally; isolated P05-lineage formal pending | Scene RtT 1枚、TopDown表示、放射状Indoor Light Fieldへの9分割親ロードマップ。 |
+| [3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md](3d-rtt/single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) | In Progress — P07 complete; P08 ready | Scene RtT 1枚、TopDown表示、放射状Indoor Light Fieldへの9分割親ロードマップ。 |
 | [3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md](3d-rtt/terrain-lod-switch-flicker-plan-2026-04-17.md) | Draft | 地形 LOD の単発切替ポップを観測し、短い dither 遷移で抑える計画 |
 | [development-workstation-blender-migration-plan-2026-07-29.md](development-workstation-blender-migration-plan-2026-07-29.md) | In Progress | 新PCへの開発環境移行と、現PCでのBlender／asset新規構築計画。 |
 | [hvac-plumbing-plan-2026-07-13.md](hvac-plumbing-plan-2026-07-13.md) | Draft | 地獄のインフラ（換気・導水・部屋認可）実装計画 |

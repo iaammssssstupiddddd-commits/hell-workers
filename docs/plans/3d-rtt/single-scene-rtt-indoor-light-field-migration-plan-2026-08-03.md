@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P07 implemented locally; isolated P05-lineage formal pending` |
+| ステータス | `In Progress — P07 complete; P08 ready` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-17` |
+| 最終更新日 | `2026-08-18` |
 | 作成者 | `Codex` |
 | 採用判断 | TopDown 2.5D、Scene RtT 1枚、map-space radial Light Field |
 | 関連提案 | `N/A` |
@@ -136,7 +136,7 @@ P00 baseline / contract
 | B08 | P04 runtime snapshot / Door request / schedule / dirty（完了） | B03とB07完了 |
 | B09 | P05 schema / registry / reset / epoch | B08完了。C3 save registry（`1b84f316`）のfreeze済みproduction planを利用 |
 | B10 | P06 Image bridge→Terrain→structural material→native | B02、B06c、B08、B09完了。RD0 failureはartifact上invalidのまま、2026-08-17のユーザー判断で受理 |
-| B11 | P07 Soul effect→Room summary→soak | B08、B09完了。frozen v1 evidenceはP05-lineage clean subjectで採取し、P06 GPU ownerを含めない |
+| B11 | P07 Soul effect→Room summary→soak（完了） | B08、B09完了。P05-lineage subject `a749a580`のfrozen v1 formalを登録・offline再検証済み。P06 GPU ownerは含めない |
 | B12 | P08 projector→section→mirror cleanup→final artifact | B10、B11完了 |
 
 各batchは少なくともfocused testと`python3 scripts/dev.py check`がgreenな独立commitにする。Rust変更を含むbatchは`python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`も通す。B04のHelp変更、B06a〜B06c / B10 / B12のvisual変更は各batch内でHelp impact review / native acceptanceまで閉じる。
@@ -242,7 +242,7 @@ Interface:
 
 ### 現在地
 
-- 進捗: `P06はuser-approved RD0 timeout例外で受理、P07はlocal実装 / consumer-core完了・P05-lineage formal待ち`（P00 / P01 / P02 / P02-A / P03 / P04 / P05完了。P08未着手）
+- 進捗: `P06はuser-approved RD0 timeout例外で受理、P07はP05-lineage frozen v1 formalまで完了、P08 ready`（P00〜P07とP02-A完了。P08未着手）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
@@ -259,12 +259,13 @@ Interface:
 - P05 formal: subject `56fa6bd3`、attempt `492ad69c-1275-48ea-90f2-ed1a8018b542`。24 / 24 case、190 / 190 gate row、RenderDoc replay、baseline index登録、独立attempt / 全baseline verifierがpassした。additive contract predecessorは旧stageの旧hashとSHA ledgerを保持し、P05以後には適用しない
 - P06: commit `19ad5fec`で単一RGBA8 Light Field image、epoch-aware upload／load black reset、Terrain 3 LOD／全Structural3d receiver、Door root `MeshTag` anchor、P06 sidecar／timeline／RenderDoc／bundle toolingを実装。2026-08-17 headless behavior 21 / 21、local gates、clean-subject S0 / S1はvalid。formal RD0は`renderdoccmd capture` deadline / process-group failureでinvalidだったが、ユーザーが例外として受理した。
 - P07 local: binary non-stackのepoch-aware Soul recovery、Room topology / summary / cache / reset、P07 selector / consumer-core / lifecycle evidence / native tooling、Help / docsを実装。full verify pass、final source binary `0a04b05a…`でbehavior 21 / 21とconsumer-core 3 / 3がvalid（p95 median `0.022560 ms`、p99 median `0.025054 ms`、allocation / stale effect / old-epoch consumer 0）。
-- 未完了: P07 isolated formalとP08。P07 frozen v1 formalはP06入りsubjectで置換しない。
+- P07 formal: P05-lineage subject `a749a580370947f0f64c1685010e625a903324dd`、attempt `82bd460f-31c6-4fa0-8705-a4d702ff4c1f`。fresh S0 / S1、25 case、203 / 203 gate row、1,249 artifact、RenderDoc、consumer-coreを登録し、offline verifierがpassした。consumer-coreはp95 `0.023802 ms` / p99 `0.026977 ms`、allocation 0。
+- 未完了: P08のみ。P07 frozen v1 formalはP06入りsubjectで置換しない。
 
 ### 次のAIが最初にやること
 
-1. 現P07差分をP05 formal subjectから分岐したclean evidence subjectへ移し、S0 / S1 / 全7 behavior / consumer-core / RenderDoc formalを採取する。
-2. P07 formalではP06 GPU ownerを含めず、P08で初めてP06 / P07統合とcross-consumer evidenceを扱う。P05 mount／epochとP02 presentation分類は変更しない。
+1. P08計画を再レビューし、P06 GPU ownerとP07 CPU consumerをmainlineで統合するcross-consumer evidence、legacy cleanup、release gateを実装順へ落とす。
+2. P07 frozen v1 formal subject / attemptはimmutable evidenceとして保持し、P08のserial integration evidenceと分離する。P05 mount／epochとP02 presentation分類は変更しない。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
@@ -291,6 +292,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - 最終 `python3 scripts/dev.py check` / workspace Clippy / workspace test / `dev.py verify`: `2026-08-16` / `pass`
 - 最終 docs / Help gate: `2026-08-16` / Help impact No impact、docs write/checkとdiff check pass
 - P06 acceptance: `2026-08-17` / commit `19ad5fec`、headless behavior 21 / 21、perf／RenderDoc／native helper self-test、`dev.py check`、clean-subject S0 / S1 valid。formal RD0は`renderdoccmd capture` deadline / process-group failureでinvalidだが、ユーザーが例外として受理
+- P07 native acceptance: `2026-08-18` / P05-lineage subject `a749a580370947f0f64c1685010e625a903324dd`、S0 `task-dashboard-20260817T172253Z-32b4de03`、S1 `rtt-light-s1-20260817T172521Z-34c5062d`、formal attempt `82bd460f-31c6-4fa0-8705-a4d702ff4c1f`。25 case、203 / 203 gate row、1,249 artifact、全7 behavior / Capture / Memory / RenderDoc / field-core / consumer-core valid、Intel Arc / Vulkan / Mesa `26.1.6` / X11、registered attempt / offline verifier pass
 
 ### Definition of Done
 
@@ -304,6 +306,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-18` | `Codex` | P07 P05-lineage subject `a749a580`のfresh S0 / S1 / frozen v1 formalを登録・offline再検証。25 case・203 / 203 gate row・1,249 artifactをpassし、B11 / P07を完了、次対象をP08へ更新した。 |
 | `2026-08-17` | `Codex` | P07 local implementation、full verify、consumer-core 3 / 3、Help / docs完了を反映。凍結v1のP05-lineage native formalだけを未完了として維持。 |
 | `2026-08-17` | `Codex` | P06 formal RD0の`renderdoccmd capture` deadline / process-group failureをinvalidのまま記録し、ユーザー承認の例外としてP06を受理。P07をP05-lineage frozen-v1 evidenceとP08統合へ分離する改訂を反映。 |
 | `2026-08-16` | `Codex` | P05 subject `56fa6bd3`のformal 24 / 24 case・190 / 190 gate rowを登録し、additive contract lineage、attempt、全baseline SHA ledgerを独立再検証。P05を完了して次対象をP06へ更新した。 |

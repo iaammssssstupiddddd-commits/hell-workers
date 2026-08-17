@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-07-indoor-light-gameplay-room-plan-2026-08-03` |
-| ステータス | `Implemented — local gates / consumer-core valid、P05-lineage native formal pending` |
+| ステータス | `Complete — P05-lineage frozen v1 formal registered / offline verified` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-17` |
+| 最終更新日 | `2026-08-18` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | [P03](03-indoor-light-domain-core-plan-2026-08-03.md)、[P04](04-indoor-light-runtime-integration-plan-2026-08-03.md)、[P05](05-indoor-light-save-lifecycle-plan-2026-08-03.md) |
@@ -217,9 +217,9 @@ PostActor（pause-open）:
 
 ### 完了条件
 
-- [ ] `RLV1-BUNDLE-VALID`、`RLV1-P01-RTT`、`RLV1-P02-DOOR-DOMAIN`、`RLV1-P03-FIELD`、`RLV1-P04-EMITTER`、`RLV1-P04-STEADY`、`RLV1-P05-LIFECYCLE`、`RLV1-P07-CPU-CONSUMERS`、`RLV1-P07-CONSUMER-CPU`のexact集合を満たす（formal bundle待ち）
+- [x] `RLV1-BUNDLE-VALID`、`RLV1-P01-RTT`、`RLV1-P02-DOOR-DOMAIN`、`RLV1-P03-FIELD`、`RLV1-P04-EMITTER`、`RLV1-P04-STEADY`、`RLV1-P05-LIFECYCLE`、`RLV1-P07-CPU-CONSUMERS`、`RLV1-P07-CONSUMER-CPU`のexact集合を満たす
 - [x] local behavior / consumer-coreでeffect / summary / field revision / world epoch mismatch、masked / stale effect、old-epoch Room readが0
-- [ ] P07 native S0 / S1 / formal artifactがfail-closed validatorと独立attempt / baseline verifierを通る
+- [x] P07 native S0 / S1 / formal artifactがfail-closed validatorと独立attempt / baseline verifierを通る
 - [x] Help impactを`Update required`と確定し、Help provider / approval snapshot / docs indexを同期する
 
 ## 5. 検証計画
@@ -260,15 +260,14 @@ PostActor（pause-open）:
 
 ### 現在地
 
-- 進捗: `90%`（M0〜M3実装、M4 local behavior / consumer-core / quality / docs完了。P05-lineage native formal未完了）
-- 完了済み: P07 selector / consumer-core / artifact / native基盤、epoch-aware Soul recovery、Room summary / topology / reset、Help / docs、local behavior 21 / 21とconsumer-core 3 / 3
-- 未完了: P05-lineage clean subjectでの全7 behavior、S0 / S1 / RenderDoc / formal bundle登録
+- 進捗: `100%`（M0〜M4、P05-lineage S0 / S1 / frozen v1 formal登録、offline再検証まで完了）
+- 完了済み: P07 selector / consumer-core / artifact / native基盤、epoch-aware Soul recovery、Room summary / topology / reset、Help / docs、全7 behavior、S0 / S1、Capture / Memory / RenderDoc / field-core / consumer-core、formal bundle登録とoffline再検証
+- 未完了: なし。P06 / P07統合とcross-consumer evidenceは契約どおりP08が所有する
 
 ### 次のAIが最初にやること
 
-1. 現P07実装差分をfull P05 correctness SHAを祖先にしたclean P07 evidence subjectへ移し、同一source fingerprintを固定する。
-2. Skill launcherでS0 → S1 → 全7 behavior / field-core / consumer-core / RenderDocを含むformalを順に実行する。
-3. exact gate集合をoffline再検証してvalid attemptだけを登録し、P08統合へ引き渡す。
+1. P08計画を再レビューし、P06 GPU consumerとP07 CPU consumerをmainlineで統合するcross-consumer evidence境界を確認する。
+2. P07 frozen v1 evidence subject `a749a580370947f0f64c1685010e625a903324dd`とregistered attemptを変更せず保持し、P08のserial統合証跡と混同しない。
 
 ### ブロッカー/注意点
 
@@ -284,19 +283,24 @@ PostActor（pause-open）:
 - consumer-core: `2026-08-17` / 同一binary、valid 3/3、500 Soul / 16 Room / 576 cell、p95 median 0.022560 ms、p99 median 0.025054 ms、sample/effect max 1、stale/masked 0、allocation 0
 - tooling: `2026-08-17` / pass (`perf.py self-test`, native acceptance self-test、P07 S1 plan ready)
 - Help / docs: `2026-08-17` / `Update required`、provider / approval snapshot更新、`docs --write / --check`、link / plans index check、`diff --check` pass
+- native S0: `2026-08-18` / subject `a749a580370947f0f64c1685010e625a903324dd`、source fingerprint `844e0fc0ee13d7ae304e31fe7d551ddfce2ccce18d77d0e78fbe7df04f781970`、job `task-dashboard-20260817T172253Z-32b4de03`、Audit 1 / 1、Capture 3 / 3、Memory 3 / 3 valid
+- native S1: `2026-08-18` / job `rtt-light-s1-20260817T172521Z-34c5062d`、Audit / Capture / Memory / field-core / consumer-core valid、S0とCapture / Memory binary SHA一致
+- frozen v1 formal: `2026-08-18` / attempt `82bd460f-31c6-4fa0-8705-a4d702ff4c1f`、25 case、203 / 203 gate row、artifact 1,249件、全7 behavior各3反復、Capture / Memory各6 case × 3、RenderDoc 1 / 1、field-core / consumer-core各3 / 3 valid。Intel Arc / Vulkan / Mesa `26.1.6` / X11、registered attemptとoffline verifierがpass
+- formal consumer-core: `2026-08-18` / 500 Soul / 16 Room / 576 cell、p95 `0.023802 ms`、p99 `0.026977 ms`、sample / effect最大1、masked / stale effect 0、scoped allocation event / bytes 0
 
 ### Definition of Done
 
-- [ ] M0〜M4が完了（M0〜M3完了、M4 formal待ち）
+- [x] M0〜M4が完了
 - [x] Soul effectがbinary non-stackのepoch-aware field consumerになっている
 - [x] Room summaryがworld epoch / field revision / canonical topologyを追跡し、Entity再生成とloadでstale stateを残さない
-- [ ] P05-lineage `stage=p07`がexact gate ID集合、全7 behavior case、consumer-core / RenderDoc evidenceを満たす
+- [x] P05-lineage `stage=p07`がexact gate ID集合、全7 behavior case、consumer-core / RenderDoc evidenceを満たす
 - [x] Help impact reviewとgameplay / Room / architecture / performance docs更新が完了
 
 ## 9. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-18` | `Codex` | P05-lineage subject `a749a580`のfresh S0 / S1とfrozen v1 formal attempt `82bd460f-31c6-4fa0-8705-a4d702ff4c1f`を登録。25 case・203 / 203 gate row・1,249 artifactとoffline verifierをpassし、P07を完了した。 |
 | `2026-08-17` | `Codex` | M0〜M3とM4 local経路を実装。binary non-stack回復、epoch/topology-aware Room summary、P07 tooling / consumer-core、Help / docsを追加し、full verifyとlocal 3-runを通過。P05-lineage native formalは未完了として保持。 |
 | `2026-08-17` | `Codex` | P07を実装可能な計画へ改訂。P05-lineage formal、PostActor recovery / pause gate、epoch-aware Room cache / reset、canonical Room topology、P07 consumer-core / native / RenderDoc evidence、全7 behavior caseを固定した。 |
 | `2026-08-04` | `Codex` | P00の10 Hz / rate / threshold、consumer-core数値gate、P05 reset hook ownershipへ同期。 |
