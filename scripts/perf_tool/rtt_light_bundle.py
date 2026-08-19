@@ -52,6 +52,7 @@ BASELINE_INDEX_SCHEMA_VERSION = 1
 RENDERDOC_MANIFEST_SCHEMA_VERSION = 1
 RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION = 3
 RENDERDOC_EXTRACTION_SCHEMA_VERSION = 2
+P06_RENDERDOC_EXTRACTION_SCHEMA_VERSION = 3
 
 CURRENT_RENDER_RESOURCES = {
     "scene_target_label": "hell-workers-rtt-scene",
@@ -1574,7 +1575,7 @@ def _load_renderdoc_evidence(
         raise RuntimeError("RenderDoc log contains an unexpected warning or error")
 
     extracted = read_json_object(extracted_path)
-    if set(extracted) != {
+    expected_extraction_keys = {
         "schema_version",
         "api",
         "capture_sha256",
@@ -1587,7 +1588,15 @@ def _load_renderdoc_evidence(
         "tracked_resources",
         "composite_topology",
         "replay_structure",
-    } or extracted["schema_version"] != RENDERDOC_EXTRACTION_SCHEMA_VERSION:
+    }
+    expected_extraction_schema = RENDERDOC_EXTRACTION_SCHEMA_VERSION
+    if stage == "p06":
+        expected_extraction_keys.add("gpu_light_field_pixel_probe")
+        expected_extraction_schema = P06_RENDERDOC_EXTRACTION_SCHEMA_VERSION
+    if (
+        set(extracted) != expected_extraction_keys
+        or extracted["schema_version"] != expected_extraction_schema
+    ):
         raise RuntimeError("RenderDoc extraction differs from schema v1")
     if (
         extracted["api"] != "vulkan"
@@ -1604,6 +1613,40 @@ def _load_renderdoc_evidence(
     passes = extracted["passes"]
     attachments = extracted["attachments"]
     bindings = extracted["bindings"]
+    p06_pixel_probe = extracted.get("gpu_light_field_pixel_probe")
+    if stage == "p06":
+        expected_probe_keys = {
+            "label",
+            "resource_id",
+            "width",
+            "height",
+            "x",
+            "y",
+            "expected_rgba",
+            "actual_rgba",
+            "binding_count",
+            "passed",
+        }
+        if (
+            not isinstance(p06_pixel_probe, dict)
+            or set(p06_pixel_probe) != expected_probe_keys
+            or not isinstance(gpu_light_field, dict)
+            or p06_pixel_probe["label"] != gpu_light_field.get("field_texture_label")
+            or p06_pixel_probe["width"] != gpu_light_field.get("field_width")
+            or p06_pixel_probe["height"] != gpu_light_field.get("field_height")
+            or p06_pixel_probe["x"] != gpu_light_field.get("pixel_probe_x")
+            or p06_pixel_probe["y"] != gpu_light_field.get("pixel_probe_y")
+            or p06_pixel_probe["expected_rgba"]
+            != gpu_light_field.get("pixel_probe_expected_rgba")
+            or p06_pixel_probe["actual_rgba"] != p06_pixel_probe["expected_rgba"]
+            or p06_pixel_probe["passed"] is not True
+            or not isinstance(p06_pixel_probe["resource_id"], str)
+            or not p06_pixel_probe["resource_id"]
+            or not isinstance(p06_pixel_probe["binding_count"], int)
+            or isinstance(p06_pixel_probe["binding_count"], bool)
+            or p06_pixel_probe["binding_count"] < 1
+        ):
+            raise RuntimeError("RenderDoc P06 GPU Light Field pixel proof is invalid")
     schemas = {
         "passes": {"pass_id", "name", "first_event", "last_event", "draw_count"},
         "attachments": {
@@ -1810,6 +1853,12 @@ def _load_renderdoc_evidence(
     }
     if manifest["fixture"] != expected_fixture:
         raise RuntimeError("RenderDoc fixture evidence differs from the contract")
+    verified_gpu_light_field = gpu_light_field
+    if stage == "p06" and isinstance(gpu_light_field, dict):
+        verified_gpu_light_field = {
+            **gpu_light_field,
+            "pixel_probes_pass": p06_pixel_probe["passed"],
+        }
     evidence = {
         "renderdoc-medium-gpu": {
             "formal": next(
@@ -1823,7 +1872,7 @@ def _load_renderdoc_evidence(
             "run_dirs": [],
             "fixture": manifest["fixture"],
             "runtime_field": runtime_field,
-            "gpu_upload": gpu_light_field,
+            "gpu_upload": verified_gpu_light_field,
             "render_inventory": render_inventory,
             "gate_metrics": {
                 "scene_target_count": int(render_inventory["scene_target_count"]),
@@ -1839,7 +1888,7 @@ def _load_renderdoc_evidence(
                 "explicit_color_bytes": explicit_color_bytes,
                 **(
                     {
-                        key: gpu_light_field[key]
+                        key: verified_gpu_light_field[key]
                         for key in (
                             "field_image_count",
                             "field_handle_count",
@@ -1863,7 +1912,7 @@ def _load_renderdoc_evidence(
                             "pixel_probes_pass",
                         )
                     }
-                    if stage == "p06" and isinstance(gpu_light_field, dict)
+                    if stage == "p06" and isinstance(verified_gpu_light_field, dict)
                     else {}
                 ),
                 **(

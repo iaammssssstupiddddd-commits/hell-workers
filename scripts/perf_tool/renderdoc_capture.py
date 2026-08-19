@@ -38,6 +38,7 @@ from perf_tool.renderdoc_foundation import (
 SCHEMA_VERSION = 1
 RUNTIME_CHECKPOINT_SCHEMA_VERSION = 3
 EXTRACTION_SCHEMA_VERSION = 2
+P06_EXTRACTION_SCHEMA_VERSION = 3
 CONTRACT_FILE = "scripts/perf_tool/contracts/rtt_light_migration_v1.json"
 SOURCE_FILES = {
     ".cargo/config.toml",
@@ -802,6 +803,7 @@ def _validate_composite_topology(
 
 def _validate_extraction(path: Path, *, capture_hash: str, runtime: dict[str, Any]) -> None:
     value = read_json(path)
+    stage_id = runtime.get("stage_id")
     expected_keys = {
         "schema_version",
         "api",
@@ -816,14 +818,52 @@ def _validate_extraction(path: Path, *, capture_hash: str, runtime: dict[str, An
         "composite_topology",
         "replay_structure",
     }
+    expected_schema_version = EXTRACTION_SCHEMA_VERSION
+    if stage_id == "p06":
+        expected_keys.add("gpu_light_field_pixel_probe")
+        expected_schema_version = P06_EXTRACTION_SCHEMA_VERSION
     if (
         set(value) != expected_keys
-        or value.get("schema_version") != EXTRACTION_SCHEMA_VERSION
+        or value.get("schema_version") != expected_schema_version
         or value.get("api") != "vulkan"
         or value.get("capture_sha256") != capture_hash
         or value.get("validated_frames") != 1
     ):
         raise CaptureError("RenderDoc replay extraction identity differs")
+    if stage_id == "p06":
+        probe = value["gpu_light_field_pixel_probe"]
+        expected_probe_keys = {
+            "label",
+            "resource_id",
+            "width",
+            "height",
+            "x",
+            "y",
+            "expected_rgba",
+            "actual_rgba",
+            "binding_count",
+            "passed",
+        }
+        runtime_gpu = runtime.get("gpu_light_field")
+        if (
+            not isinstance(probe, dict)
+            or set(probe) != expected_probe_keys
+            or not isinstance(runtime_gpu, dict)
+            or probe["label"] != runtime_gpu.get("field_texture_label")
+            or probe["width"] != runtime_gpu.get("field_width")
+            or probe["height"] != runtime_gpu.get("field_height")
+            or probe["x"] != runtime_gpu.get("pixel_probe_x")
+            or probe["y"] != runtime_gpu.get("pixel_probe_y")
+            or probe["expected_rgba"] != runtime_gpu.get("pixel_probe_expected_rgba")
+            or probe["actual_rgba"] != probe["expected_rgba"]
+            or probe["passed"] is not True
+            or not isinstance(probe["resource_id"], str)
+            or not probe["resource_id"]
+            or not isinstance(probe["binding_count"], int)
+            or isinstance(probe["binding_count"], bool)
+            or probe["binding_count"] < 1
+        ):
+            raise CaptureError("RenderDoc P06 GPU Light Field pixel proof is invalid")
     for field in ("event_count", "draw_count"):
         observed = value.get(field)
         if not isinstance(observed, int) or isinstance(observed, bool) or observed <= 0:

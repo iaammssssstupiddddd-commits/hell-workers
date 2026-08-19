@@ -17,6 +17,7 @@ from typing import Any
 
 
 SCHEMA_VERSION = 2
+P06_SCHEMA_VERSION = 3
 RUNTIME_CHECKPOINT_SCHEMA_VERSION = 3
 CAPTURE_ENV = "HW_RENDERDOC_CAPTURE"
 OUTPUT_ENV = "HW_RENDERDOC_EXTRACTION"
@@ -83,6 +84,7 @@ EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "p03": P01_RENDER_RESOURCES,
     "p04": P01_RENDER_RESOURCES,
     "p05": P01_RENDER_RESOURCES,
+    "p06": P01_RENDER_RESOURCES,
 }
 
 
@@ -421,6 +423,104 @@ def _tracked_resources(
     return tracked
 
 
+def _rgba8_from_unorm(pixel: Any) -> list[int]:
+    values = [float(pixel.floatValue[index]) for index in range(4)]
+    return [max(0, min(255, round(value * 255.0))) for value in values]
+
+
+def _p06_gpu_light_field_pixel_probe(
+    rd: Any,
+    controller: Any,
+    checkpoint: dict[str, Any],
+    bindings: list[dict[str, Any]],
+    final_event: int,
+) -> dict[str, Any]:
+    gpu_field = checkpoint.get("gpu_light_field")
+    required = {
+        "field_texture_label",
+        "field_width",
+        "field_height",
+        "pixel_probe_x",
+        "pixel_probe_y",
+        "pixel_probe_expected_rgba",
+    }
+    if not isinstance(gpu_field, dict) or not required.issubset(gpu_field):
+        raise RuntimeError("P06 runtime checkpoint has no GPU pixel probe request")
+    label = gpu_field["field_texture_label"]
+    width = gpu_field["field_width"]
+    height = gpu_field["field_height"]
+    x = gpu_field["pixel_probe_x"]
+    y = gpu_field["pixel_probe_y"]
+    expected = gpu_field["pixel_probe_expected_rgba"]
+    if (
+        not isinstance(label, str)
+        or not label
+        or any(
+            not isinstance(value, int) or isinstance(value, bool) or value <= 0
+            for value in (width, height)
+        )
+        or any(
+            not isinstance(value, int) or isinstance(value, bool) or value < 0
+            for value in (x, y)
+        )
+        or x >= width
+        or y >= height
+        or not isinstance(expected, list)
+        or len(expected) != 4
+        or any(
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or not 0 <= value <= 255
+            for value in expected
+        )
+    ):
+        raise RuntimeError("P06 GPU pixel probe request is invalid")
+    matches = [
+        texture
+        for texture in controller.GetTextures()
+        if str(getattr(texture, "name", "")).strip() == label
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"P06 Light Field label {label!r} resolved to {len(matches)} textures"
+        )
+    texture = matches[0]
+    if int(texture.width) != width or int(texture.height) != height:
+        raise RuntimeError("P06 replay Light Field dimensions differ from the CPU publication")
+    resource_id = _resource_id(rd, texture.resourceId)
+    if resource_id is None:
+        raise RuntimeError("P06 replay Light Field has no resource id")
+    binding_count = sum(row["resource_id"] == resource_id for row in bindings)
+    if binding_count < 1:
+        raise RuntimeError("P06 replay Light Field is not bound by a captured receiver")
+    controller.SetFrameEvent(final_event, True)
+    actual = _rgba8_from_unorm(
+        controller.PickPixel(
+            texture.resourceId,
+            x,
+            y,
+            rd.Subresource(),
+            rd.CompType.UNorm,
+        )
+    )
+    if actual != expected:
+        raise RuntimeError(
+            f"P06 replay Light Field pixel differs: expected={expected} actual={actual}"
+        )
+    return {
+        "label": label,
+        "resource_id": resource_id,
+        "width": width,
+        "height": height,
+        "x": x,
+        "y": y,
+        "expected_rgba": expected,
+        "actual_rgba": actual,
+        "binding_count": binding_count,
+        "passed": True,
+    }
+
+
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise RuntimeError(message)
@@ -697,6 +797,18 @@ def _extract(rd: Any, controller: Any, checkpoint: dict[str, Any]) -> dict[str, 
         raise RuntimeError("capture contains no draw attachments")
     if not bindings:
         raise RuntimeError("capture contains no used draw bindings")
+    stage_id = checkpoint.get("stage_id")
+    p06_pixel_probe = (
+        _p06_gpu_light_field_pixel_probe(
+            rd,
+            controller,
+            checkpoint,
+            bindings,
+            max(event_ids),
+        )
+        if stage_id == "p06"
+        else None
+    )
     composite_topology = _composite_topology(
         render_resources=render_resources,
         bindings=bindings,
@@ -710,7 +822,7 @@ def _extract(rd: Any, controller: Any, checkpoint: dict[str, Any]) -> dict[str, 
         composite_topology=composite_topology,
     )
     return {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": P06_SCHEMA_VERSION if stage_id == "p06" else SCHEMA_VERSION,
         "api": "vulkan",
         "capture_sha256": _sha256(_required_path(CAPTURE_ENV, must_exist=True)),
         "validated_frames": 1,
@@ -722,6 +834,11 @@ def _extract(rd: Any, controller: Any, checkpoint: dict[str, Any]) -> dict[str, 
         "tracked_resources": tracked_resources,
         "composite_topology": composite_topology,
         "replay_structure": replay_structure,
+        **(
+            {"gpu_light_field_pixel_probe": p06_pixel_probe}
+            if p06_pixel_probe is not None
+            else {}
+        ),
     }
 
 
@@ -835,6 +952,75 @@ def self_test() -> int:
         CommandBufferBoundary = 8
 
     rd = SimpleNamespace(ResourceId=ResourceId, ActionFlags=ActionFlags)
+
+    light_texture = SimpleNamespace(
+        resourceId=ResourceId(31),
+        name="hell-workers-indoor-light-field",
+        width=100,
+        height=100,
+    )
+    expected_rgba = [17, 34, 51, 255]
+    picked_events: list[int] = []
+    probe_controller = SimpleNamespace(
+        GetTextures=lambda: [light_texture],
+        SetFrameEvent=lambda event_id, _force: picked_events.append(event_id),
+        PickPixel=lambda *_args: SimpleNamespace(
+            floatValue=[value / 255.0 for value in expected_rgba]
+        ),
+    )
+    probe = _p06_gpu_light_field_pixel_probe(
+        SimpleNamespace(ResourceId=ResourceId, Subresource=lambda: object(), CompType=SimpleNamespace(UNorm=1)),
+        probe_controller,
+        {
+            "gpu_light_field": {
+                "field_texture_label": "hell-workers-indoor-light-field",
+                "field_width": 100,
+                "field_height": 100,
+                "pixel_probe_x": 10,
+                "pixel_probe_y": 20,
+                "pixel_probe_expected_rgba": expected_rgba,
+            }
+        },
+        [{"resource_id": "ResourceId::31"}],
+        99,
+    )
+    _require(
+        probe["passed"] is True
+        and probe["actual_rgba"] == expected_rgba
+        and probe["binding_count"] == 1
+        and picked_events == [99],
+        "P06 replay pixel proof regressed",
+    )
+    mismatched_controller = SimpleNamespace(
+        GetTextures=lambda: [light_texture],
+        SetFrameEvent=lambda _event_id, _force: None,
+        PickPixel=lambda *_args: SimpleNamespace(floatValue=[0.0, 0.0, 0.0, 1.0]),
+    )
+    try:
+        _p06_gpu_light_field_pixel_probe(
+            SimpleNamespace(
+                ResourceId=ResourceId,
+                Subresource=lambda: object(),
+                CompType=SimpleNamespace(UNorm=1),
+            ),
+            mismatched_controller,
+            {
+                "gpu_light_field": {
+                    "field_texture_label": "hell-workers-indoor-light-field",
+                    "field_width": 100,
+                    "field_height": 100,
+                    "pixel_probe_x": 10,
+                    "pixel_probe_y": 20,
+                    "pixel_probe_expected_rgba": expected_rgba,
+                }
+            },
+            [{"resource_id": "ResourceId::31"}],
+            99,
+        )
+    except RuntimeError as error:
+        _require("pixel differs" in str(error), "P06 replay mismatch reason regressed")
+    else:
+        raise RuntimeError("P06 replay accepted a mismatched GPU Light Field pixel")
 
     def action(event_id: int, flags: ActionFlags, children: list[Any] | None = None) -> Any:
         return SimpleNamespace(

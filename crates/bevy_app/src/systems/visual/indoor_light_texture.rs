@@ -15,6 +15,7 @@ use crate::systems::lighting::{
 pub struct IndoorLightUploadSet;
 
 pub(crate) const STEADY_UPDATE_CALLS: u64 = 600;
+pub(crate) const LIGHT_FIELD_TEXTURE_LABEL: &str = "hell-workers-indoor-light-field";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IndoorLightTextureMetrics {
@@ -102,6 +103,7 @@ fn make_light_field_image(dimensions: GridDimensions, data: Vec<u8>) -> Image {
         TextureFormat::Rgba8Unorm,
         default(),
     );
+    image.texture_descriptor.label = Some(LIGHT_FIELD_TEXTURE_LABEL);
     #[cfg(feature = "profiling-renderdoc")]
     {
         image.texture_descriptor.usage |= bevy::render::render_resource::TextureUsages::COPY_SRC;
@@ -288,6 +290,10 @@ mod tests {
         assert_eq!(image.texture_descriptor.format, TextureFormat::Rgba8Unorm);
         assert_eq!(image.texture_descriptor.size.width, 100);
         assert_eq!(image.texture_descriptor.size.height, 100);
+        assert_eq!(
+            image.texture_descriptor.label,
+            Some(LIGHT_FIELD_TEXTURE_LABEL)
+        );
         assert_eq!(image.data.as_deref().map(<[u8]>::len), Some(40_000));
         assert_eq!(staging_bytes(dimensions), 51_200);
         #[cfg(feature = "profiling-renderdoc")]

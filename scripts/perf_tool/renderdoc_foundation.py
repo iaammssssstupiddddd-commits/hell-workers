@@ -516,6 +516,8 @@ def validate_runtime_checkpoint_v3(
             "shared_field_image", "point_light_count_increment", "spot_light_count_increment",
             "shadow_map_count_increment", "local_light_pass_increment", "mask_pass_count",
             "duplicate_2d_pass_count", "cpu_golden_vectors_pass", "pixel_probes_pass",
+            "field_texture_label", "field_width", "field_height", "pixel_probe_x",
+            "pixel_probe_y", "pixel_probe_expected_rgba",
         }
         if not isinstance(gpu_field, dict) or set(gpu_field) != expected_gpu_keys:
             raise ValueError("runtime checkpoint P06 GPU field schema is invalid")
@@ -528,7 +530,8 @@ def validate_runtime_checkpoint_v3(
             if not isinstance(gpu_field[key], bool):
                 raise ValueError(f"runtime checkpoint P06 GPU field {key} is invalid")
         integer_keys = expected_gpu_keys - {
-            "schema_version", "availability", "gpu_checksum", *boolean_keys
+            "schema_version", "availability", "gpu_checksum", "field_texture_label",
+            "pixel_probe_expected_rgba", *boolean_keys
         }
         for key in integer_keys:
             value = gpu_field[key]
@@ -539,6 +542,28 @@ def validate_runtime_checkpoint_v3(
             character not in "0123456789abcdef" for character in checksum
         ):
             raise ValueError("runtime checkpoint P06 GPU checksum is invalid")
+        label = gpu_field["field_texture_label"]
+        expected_rgba = gpu_field["pixel_probe_expected_rgba"]
+        if not isinstance(label, str) or not label:
+            raise ValueError("runtime checkpoint P06 texture label is invalid")
+        if (
+            not isinstance(expected_rgba, list)
+            or len(expected_rgba) != 4
+            or any(
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or not 0 <= value <= 255
+                for value in expected_rgba
+            )
+        ):
+            raise ValueError("runtime checkpoint P06 pixel probe is invalid")
+        if (
+            gpu_field["field_width"] <= 0
+            or gpu_field["field_height"] <= 0
+            or gpu_field["pixel_probe_x"] >= gpu_field["field_width"]
+            or gpu_field["pixel_probe_y"] >= gpu_field["field_height"]
+        ):
+            raise ValueError("runtime checkpoint P06 pixel probe bounds are invalid")
     generation = payload["generation"]
     if not isinstance(generation, int) or isinstance(generation, bool) or generation < 1:
         raise ValueError("runtime checkpoint generation is invalid")

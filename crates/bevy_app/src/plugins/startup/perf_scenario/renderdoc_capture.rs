@@ -11,7 +11,6 @@ use bevy::diagnostic::FrameCount;
 use bevy::ecs::system::SystemParam;
 use bevy::render::camera::ExtractedCamera;
 use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
-use bevy::render::gpu_readback::{Readback, ReadbackComplete};
 use bevy::render::render_asset::RenderAssets;
 use bevy::render::render_resource::{CachedPipelineState, PipelineCache};
 use bevy::render::renderer::{RenderAdapterInfo, RenderDevice};
@@ -33,7 +32,6 @@ const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 3;
 const RENDERDOC_SELECTOR_STRATEGY: &str = "wgpu_device_null_window";
 const SIMULATION_TICK_SOURCE: &str = "perf_capture.fixed_update_tick";
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
-const P06_PIXEL_PROBE_MAX_READBACKS: u32 = 8;
 const TOPDOWN_STRUCTURAL_SHADER: &str =
     include_str!("../../../../../../assets/shaders/section_material.wgsl");
 
@@ -113,27 +111,12 @@ struct RuntimeGpuLightFieldEvidence {
     duplicate_2d_pass_count: u32,
     cpu_golden_vectors_pass: bool,
     pixel_probes_pass: bool,
-}
-
-#[derive(Resource, Default)]
-struct P06PixelProbeState {
-    started: bool,
-    passed: Option<bool>,
-    expected_rgba: [u8; 4],
-    byte_offset: usize,
-    readbacks: u32,
-}
-
-#[derive(SystemParam)]
-struct P06PixelProbeSetupParams<'w, 's> {
-    commands: Commands<'w, 's>,
-    config: Res<'w, PerfScenarioConfig>,
-    fixture: Res<'w, IndoorLightFixtureState>,
-    runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
-    world_epoch: Res<'w, hw_core::WorldEpoch>,
-    lifecycle_probe: ResMut<'w, crate::systems::lighting::IndoorLightingLifecycleProbe>,
-    light_texture: Res<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
-    state: ResMut<'w, P06PixelProbeState>,
+    field_texture_label: &'static str,
+    field_width: u16,
+    field_height: u16,
+    pixel_probe_x: u16,
+    pixel_probe_y: u16,
+    pixel_probe_expected_rgba: [u8; 4],
 }
 
 #[derive(Resource, Clone, Default, ExtractResource)]
@@ -268,7 +251,6 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     terrain_materials: Res<'w, Assets<hw_visual::TerrainSurfaceMaterial>>,
     terrain_materials_lod1_lite: Res<'w, Assets<hw_visual::TerrainSurfaceMaterialLod1Lite>>,
     terrain_materials_lod2: Res<'w, Assets<hw_visual::TerrainSurfaceMaterialLod2>>,
-    p06_pixel_probe: Res<'w, P06PixelProbeState>,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,
     world_instance_spawner: Res<'w, WorldInstanceSpawner>,
     soul_world_instances: SoulWorldInstancesQuery<'w, 's>,
@@ -296,16 +278,10 @@ pub(crate) fn install(app: &mut App) {
     let bridge = RenderDocBridge(Arc::new(Mutex::new(RenderDocBridgeState::Waiting)));
     app.insert_resource(bridge.clone())
         .init_resource::<RenderDocCheckpointMailbox>()
-        .init_resource::<RenderDocMainState>()
-        .init_resource::<P06PixelProbeState>();
+        .init_resource::<RenderDocMainState>();
     if !enabled {
         return;
     }
-
-    app.add_systems(
-        Update,
-        setup_p06_pixel_probe_system.before(arm_renderdoc_checkpoint_system),
-    );
 
     app.add_plugins(ExtractResourcePlugin::<RenderDocCheckpointMailbox>::default());
     let capture_template = match std::env::var("HW_RENDERDOC_CAPTURE_TEMPLATE") {
@@ -349,99 +325,6 @@ fn topdown_structural_light_is_applied_before_post_processing() -> bool {
     let post = TOPDOWN_STRUCTURAL_SHADER
         .find("out.color = main_pass_post_lighting_processing(pbr_input, out.color);");
     matches!((sample, apply, post), (Some(sample), Some(apply), Some(post)) if sample < apply && apply < post)
-}
-
-fn observe_p06_pixel_probe_readback(
-    event: On<ReadbackComplete>,
-    mut commands: Commands,
-    mut state: ResMut<P06PixelProbeState>,
-) {
-    if state.passed.is_some() {
-        return;
-    }
-    state.readbacks = state.readbacks.saturating_add(1);
-    let actual = if event.data.len() >= state.byte_offset + 4 {
-        event.data[state.byte_offset..state.byte_offset + 4]
-            .try_into()
-            .expect("four-byte Light Field probe slice")
-    } else {
-        [0; 4]
-    };
-    if actual == state.expected_rgba {
-        state.passed = Some(topdown_structural_light_is_applied_before_post_processing());
-    } else if state.readbacks >= P06_PIXEL_PROBE_MAX_READBACKS {
-        eprintln!(
-            "PERF_RENDERDOC: GPU Light Field pixel probe mismatch; expected={:?} actual={actual:?} readbacks={}",
-            state.expected_rgba, state.readbacks
-        );
-        state.passed = Some(false);
-    } else {
-        return;
-    }
-
-    commands.entity(event.entity).despawn();
-}
-
-fn setup_p06_pixel_probe_system(params: P06PixelProbeSetupParams) {
-    let P06PixelProbeSetupParams {
-        mut commands,
-        config,
-        fixture,
-        runtime,
-        world_epoch,
-        mut lifecycle_probe,
-        light_texture,
-        mut state,
-    } = params;
-    if state.started
-        || !config.renderdoc_capture_enabled()
-        || config
-            .rtt_light_selection()
-            .is_none_or(|selection| selection.stage_id() != "p06")
-        || fixture.observation.is_none()
-    {
-        return;
-    }
-    let current_epoch = *world_epoch;
-    let Some(snapshot) = crate::systems::lighting::read_indoor_light_snapshot(
-        &runtime,
-        current_epoch,
-        current_epoch,
-        &mut lifecycle_probe,
-    ) else {
-        return;
-    };
-    if light_texture.uploaded_epoch() != Some(current_epoch.get())
-        || light_texture.uploaded_revision() != Some(snapshot.field_revision())
-    {
-        return;
-    }
-
-    let packed = hw_infra::lighting::pack_rgba8_linear(snapshot);
-    let Some((index, pixel)) = packed
-        .chunks_exact(4)
-        .enumerate()
-        .filter(|(_, pixel)| pixel[3] != 0)
-        .max_by_key(|(_, pixel)| u16::from(pixel[0]) + u16::from(pixel[1]) + u16::from(pixel[2]))
-        .filter(|(_, pixel)| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0)
-    else {
-        return;
-    };
-    let width = usize::from(snapshot.dimensions().width());
-    let bytes_per_row = (width * 4).div_ceil(256) * 256;
-    state.expected_rgba.copy_from_slice(pixel);
-    state.byte_offset = (index / width) * bytes_per_row + (index % width) * 4;
-    let readback = commands
-        .spawn(Readback::texture(light_texture.handle().clone()))
-        .observe(observe_p06_pixel_probe_readback)
-        .id();
-    state.started = true;
-    debug!(
-        ?readback,
-        index,
-        expected = ?state.expected_rgba,
-        "P06 GPU Light Field pixel probe armed"
-    );
 }
 
 pub(crate) fn arm_renderdoc_checkpoint_system(
@@ -543,16 +426,6 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         None
     };
     let gpu_light_field = if selection.stage_id() == "p06" {
-        match params.p06_pixel_probe.passed {
-            None => return,
-            Some(false) => {
-                bridge.replace(RenderDocBridgeState::Failed(
-                    "GPU Light Field pixel/read-order proof failed".to_string(),
-                ));
-                return;
-            }
-            Some(true) => {}
-        }
         if !state.gpu_measurement_started {
             state.gpu_measurement_started = true;
             state.previous = None;
@@ -1346,6 +1219,21 @@ fn p06_gpu_light_field_evidence(
     else {
         return Err("P06 CPU golden probe has no current snapshot".to_string());
     };
+    let packed = hw_infra::lighting::pack_rgba8_linear(snapshot);
+    let Some((probe_index, probe_pixel)) = packed
+        .chunks_exact(4)
+        .enumerate()
+        .filter(|(_, pixel)| pixel[3] != 0)
+        .max_by_key(|(_, pixel)| u16::from(pixel[0]) + u16::from(pixel[1]) + u16::from(pixel[2]))
+        .filter(|(_, pixel)| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0)
+    else {
+        return Err("P06 CPU golden probe has no illuminated pixel".to_string());
+    };
+    let dimensions = snapshot.dimensions();
+    let width = usize::from(dimensions.width());
+    let pixel_probe_expected_rgba = probe_pixel
+        .try_into()
+        .expect("Light Field probe pixel contains four bytes");
     let uploads_per_changed_revision = if metrics.changed_revision_samples == 0 {
         0
     } else {
@@ -1383,8 +1271,16 @@ fn p06_gpu_light_field_evidence(
         local_light_pass_increment: 0,
         mask_pass_count: 0,
         duplicate_2d_pass_count: 0,
-        cpu_golden_vectors_pass: p06_cpu_golden_vectors_pass(snapshot),
-        pixel_probes_pass: params.p06_pixel_probe.passed == Some(true),
+        cpu_golden_vectors_pass: p06_cpu_golden_vectors_pass(snapshot)
+            && topdown_structural_light_is_applied_before_post_processing(),
+        pixel_probes_pass: false,
+        field_texture_label:
+            crate::systems::visual::indoor_light_texture::LIGHT_FIELD_TEXTURE_LABEL,
+        field_width: dimensions.width(),
+        field_height: dimensions.height(),
+        pixel_probe_x: u16::try_from(probe_index % width).expect("probe x fits u16"),
+        pixel_probe_y: u16::try_from(probe_index / width).expect("probe y fits u16"),
+        pixel_probe_expected_rgba,
     })
 }
 
