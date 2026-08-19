@@ -1664,6 +1664,27 @@ mod tests {
     }
 
     #[test]
+    fn p06_receivers_import_the_named_light_field_module() {
+        let receiver_sources = [
+            TOPDOWN_STRUCTURAL_SHADER,
+            include_str!("../../../../../../assets/shaders/terrain_surface_material.wgsl"),
+            include_str!(
+                "../../../../../../assets/shaders/terrain_surface_material_lod1_lite.wgsl"
+            ),
+            include_str!("../../../../../../assets/shaders/terrain_surface_material_lod2.wgsl"),
+        ];
+
+        for source in receiver_sources {
+            assert!(
+                source.contains(
+                    "#import hell_workers::indoor_light_field::sample_indoor_light_field"
+                )
+            );
+            assert!(!source.contains("\"shaders/indoor_light_field.wgsl\""));
+        }
+    }
+
+    #[test]
     fn p01_composite_binding_contract_is_exact() {
         let resources = p01_composite_render_resources();
         assert_eq!(resources.composite_draw_count, 1);
