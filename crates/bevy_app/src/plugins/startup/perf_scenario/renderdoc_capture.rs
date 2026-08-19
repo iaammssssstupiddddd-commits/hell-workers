@@ -17,7 +17,7 @@ use bevy::render::renderer::{RenderAdapterInfo, RenderDevice};
 use bevy::render::texture::GpuImage;
 use bevy::render::view::window::ExtractedWindows;
 use bevy::render::{Render, RenderApp, RenderSystems};
-use bevy::shader::Shader;
+use bevy::shader::{Shader, ShaderCacheError};
 use bevy::world_serialization::{WorldInstance, WorldInstanceSpawner};
 use libloading::Library;
 use serde::Serialize;
@@ -827,12 +827,28 @@ fn gpu_signature(
     for pipeline in params.pipelines.pipelines() {
         match &pipeline.state {
             CachedPipelineState::Ok(_) => pipeline_count += 1,
-            // Unused material variants can remain queued indefinitely. The
-            // strong shader handles above remove the former ShaderNotLoaded
-            // ambiguity, so any completed compilation error is now actionable
-            // and must fail before capture instead of silently dropping a
-            // required receiver draw.
-            CachedPipelineState::Queued | CachedPipelineState::Creating(_) => {}
+            CachedPipelineState::Queued => {
+                return Ok(GpuCaptureGate::Waiting(
+                    "render pipeline compilation is queued",
+                ));
+            }
+            CachedPipelineState::Creating(_) => {
+                return Ok(GpuCaptureGate::Waiting(
+                    "render pipeline compilation is in progress",
+                ));
+            }
+            // PipelineCache::process_pipeline retries these two states on the
+            // next render pass. Capturing while they cycle would let the
+            // resident pipeline count appear stable even though a required
+            // material draw has not reached the GPU yet.
+            CachedPipelineState::Err(
+                ShaderCacheError::ShaderNotLoaded(_)
+                | ShaderCacheError::ShaderImportNotYetAvailable,
+            ) => {
+                return Ok(GpuCaptureGate::Waiting(
+                    "render pipeline is waiting for a shader dependency",
+                ));
+            }
             CachedPipelineState::Err(error) => {
                 return Err(format!("render pipeline compilation failed: {error:?}"));
             }
