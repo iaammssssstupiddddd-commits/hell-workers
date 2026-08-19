@@ -26,6 +26,7 @@ use std::ptr;
 use std::sync::{Arc, Mutex};
 
 const RENDERDOC_SETTLE_FRAMES: u32 = 4;
+const RENDERDOC_GATE_TIMEOUT_FRAMES: u32 = 600;
 const RENDERDOC_CHECKPOINT_NAME: &str = "indoor-light-fixture-ready-v1";
 const RENDERDOC_REQUESTED_API_VERSION: &str = "1.6.0";
 const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 3;
@@ -198,7 +199,14 @@ struct RenderDocRenderState {
     generation: Option<u64>,
     ready_signature: Option<GpuReadySignature>,
     ready_frames: u32,
+    waiting_reason: Option<&'static str>,
+    waiting_frames: u32,
     active: Option<(StableRenderDocCheckpoint, GpuReadySignature, u64, u64)>,
+}
+
+enum GpuCaptureGate {
+    Ready(GpuReadySignature),
+    Waiting(&'static str),
 }
 
 type GetApiFn =
@@ -563,10 +571,31 @@ fn begin_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Render
         state.generation = Some(checkpoint.generation);
         state.ready_signature = None;
         state.ready_frames = 0;
+        state.waiting_reason = None;
+        state.waiting_frames = 0;
     }
     let signature = match gpu_ready_signature(&params, checkpoint) {
-        Ok(Some(value)) => value,
-        Ok(None) => return,
+        Ok(GpuCaptureGate::Ready(value)) => {
+            state.waiting_reason = None;
+            state.waiting_frames = 0;
+            value
+        }
+        Ok(GpuCaptureGate::Waiting(reason)) => {
+            state.ready_signature = None;
+            state.ready_frames = 0;
+            if state.waiting_reason == Some(reason) {
+                state.waiting_frames = state.waiting_frames.saturating_add(1);
+            } else {
+                state.waiting_reason = Some(reason);
+                state.waiting_frames = 1;
+            }
+            if state.waiting_frames >= RENDERDOC_GATE_TIMEOUT_FRAMES {
+                params.bridge.replace(RenderDocBridgeState::Failed(format!(
+                    "GPU capture gate remained unavailable for {RENDERDOC_GATE_TIMEOUT_FRAMES} frames: {reason}"
+                )));
+            }
+            return;
+        }
         Err(reason) => {
             params.bridge.replace(RenderDocBridgeState::Failed(reason));
             return;
@@ -623,7 +652,10 @@ fn finish_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Rende
         }
     };
     let current_signature = gpu_signature(&params, &checkpoint, false);
-    if current_signature != Ok(Some(expected_signature)) {
+    if !matches!(
+        current_signature,
+        Ok(GpuCaptureGate::Ready(signature)) if signature == expected_signature
+    ) {
         let _ = api.stop_without_publish(&params.device);
         params.bridge.replace(RenderDocBridgeState::Failed(
             "GPU capture gate changed during the captured render frame".to_string(),
@@ -642,11 +674,11 @@ fn finish_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Rende
                 }
             };
             let post_signature = match gpu_signature(&params, &checkpoint, false) {
-                Ok(Some(value)) => value,
-                Ok(None) => {
-                    params.bridge.replace(RenderDocBridgeState::Failed(
-                        "GPU capture gate was unavailable after the captured frame".to_string(),
-                    ));
+                Ok(GpuCaptureGate::Ready(value)) => value,
+                Ok(GpuCaptureGate::Waiting(reason)) => {
+                    params.bridge.replace(RenderDocBridgeState::Failed(format!(
+                        "GPU capture gate was unavailable after the captured frame: {reason}"
+                    )));
                     return;
                 }
                 Err(reason) => {
@@ -678,7 +710,7 @@ fn finish_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Rende
 fn gpu_ready_signature(
     params: &RenderDocRenderParams,
     checkpoint: &StableRenderDocCheckpoint,
-) -> Result<Option<GpuReadySignature>, String> {
+) -> Result<GpuCaptureGate, String> {
     gpu_signature(params, checkpoint, true)
 }
 
@@ -686,7 +718,7 @@ fn gpu_signature(
     params: &RenderDocRenderParams,
     checkpoint: &StableRenderDocCheckpoint,
     before_render: bool,
-) -> Result<Option<GpuReadySignature>, String> {
+) -> Result<GpuCaptureGate, String> {
     if params.adapter.backend != wgpu::Backend::Vulkan {
         return Err(format!(
             "RenderDoc capture requires Vulkan; observed {:?}",
@@ -700,22 +732,30 @@ fn gpu_signature(
         ));
     }
     let Some(primary) = params.windows.primary else {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting("primary window is unavailable"));
     };
     let Some(window) = params.windows.windows.get(&primary) else {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "primary extracted window is unavailable",
+        ));
     };
     if window.swap_chain_texture_view.is_none() {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "primary swapchain texture view is unavailable",
+        ));
     }
     if before_render && window.swap_chain_texture.is_none() {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "primary swapchain texture is unavailable before render",
+        ));
     }
     if !before_render && window.swap_chain_texture.is_some() {
         return Err("primary swapchain image was not presented by the captured frame".to_string());
     }
     let Some(scene) = params.images.get(checkpoint.scene_target) else {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "RtT scene texture is unavailable on the GPU",
+        ));
     };
     if scene.texture_descriptor.label != Some(RTT_SCENE_LABEL) {
         return Err("RtT GPU texture labels differ from the RenderDoc contract".to_string());
@@ -723,22 +763,24 @@ fn gpu_signature(
     if checkpoint.mask_target.is_some() {
         return Err("P01 RenderDoc checkpoint unexpectedly retained a mask target".to_string());
     }
-    if params.pipelines.waiting_pipelines().next().is_some() {
-        return Ok(None);
-    }
     let mut pipeline_count = 0;
     for pipeline in params.pipelines.pipelines() {
-        pipeline_count += 1;
         match &pipeline.state {
-            CachedPipelineState::Ok(_) => {}
-            CachedPipelineState::Queued | CachedPipelineState::Creating(_) => return Ok(None),
+            CachedPipelineState::Ok(_) => pipeline_count += 1,
+            // Unused material variants can remain queued indefinitely. They do not
+            // block capture: the stable signature below includes only resident GPU
+            // pipelines, and any pipeline becoming ready during capture changes the
+            // signature and fails the frame closed.
+            CachedPipelineState::Queued | CachedPipelineState::Creating(_) => {}
             CachedPipelineState::Err(error) => {
                 return Err(format!("render pipeline compilation failed: {error:?}"));
             }
         }
     }
     if pipeline_count == 0 {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "no resident render pipeline is available",
+        ));
     }
 
     let mut scene_camera_count = 0;
@@ -761,9 +803,11 @@ fn gpu_signature(
         }
     }
     if scene_camera_count != 1 || mask_camera_count != 0 || window_camera_count == 0 {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "RenderDoc camera topology is not ready",
+        ));
     }
-    Ok(Some(GpuReadySignature {
+    Ok(GpuCaptureGate::Ready(GpuReadySignature {
         pipeline_count,
         primary_window: primary,
         scene_camera_count,
