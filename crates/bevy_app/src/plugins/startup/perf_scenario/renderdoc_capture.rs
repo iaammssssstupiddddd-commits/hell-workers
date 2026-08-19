@@ -601,18 +601,7 @@ fn begin_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Render
             return;
         }
     };
-    match state.ready_signature {
-        None => state.ready_signature = Some(signature),
-        Some(previous) if previous != signature => {
-            params.bridge.replace(RenderDocBridgeState::Failed(
-                "GPU capture gate changed after the settle window began".to_string(),
-            ));
-            return;
-        }
-        Some(_) => {}
-    }
-    state.ready_frames = state.ready_frames.saturating_add(1);
-    if state.ready_frames < RENDERDOC_SETTLE_FRAMES {
+    if !observe_gpu_ready_signature(&mut state, signature) {
         return;
     }
     let api = match &params.api.loaded {
@@ -633,6 +622,22 @@ fn begin_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Render
     }
     let begin_frame = u64::from(params.frame_count.0);
     state.active = Some((checkpoint.clone(), signature, begin_frame, begin_frame));
+}
+
+fn observe_gpu_ready_signature(
+    state: &mut RenderDocRenderState,
+    signature: GpuReadySignature,
+) -> bool {
+    match state.ready_signature {
+        None => state.ready_signature = Some(signature),
+        Some(previous) if previous != signature => {
+            state.ready_signature = Some(signature);
+            state.ready_frames = 0;
+        }
+        Some(_) => {}
+    }
+    state.ready_frames = state.ready_frames.saturating_add(1);
+    state.ready_frames >= RENDERDOC_SETTLE_FRAMES
 }
 
 fn finish_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<RenderDocRenderState>) {
@@ -1529,5 +1534,25 @@ mod tests {
 
         bridge.replace(RenderDocBridgeState::Failed("done".to_string()));
         assert!(!bridge.try_begin_capture());
+    }
+
+    #[test]
+    fn renderdoc_settle_restarts_when_resident_pipeline_set_changes() {
+        let signature = |pipeline_count| GpuReadySignature {
+            pipeline_count,
+            primary_window: Entity::from_bits(1),
+            scene_camera_count: 1,
+            mask_camera_count: 0,
+            window_camera_count: 1,
+        };
+        let mut state = RenderDocRenderState::default();
+
+        assert!(!observe_gpu_ready_signature(&mut state, signature(10)));
+        assert!(!observe_gpu_ready_signature(&mut state, signature(10)));
+        assert!(!observe_gpu_ready_signature(&mut state, signature(11)));
+        assert_eq!(state.ready_frames, 1);
+        assert!(!observe_gpu_ready_signature(&mut state, signature(11)));
+        assert!(!observe_gpu_ready_signature(&mut state, signature(11)));
+        assert!(observe_gpu_ready_signature(&mut state, signature(11)));
     }
 }
