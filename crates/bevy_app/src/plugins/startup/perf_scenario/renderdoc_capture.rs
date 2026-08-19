@@ -9,6 +9,7 @@ use bevy::asset::{AssetId, LoadState};
 use bevy::camera::NormalizedRenderTarget;
 use bevy::diagnostic::FrameCount;
 use bevy::ecs::system::SystemParam;
+use bevy::light::NotShadowCaster;
 use bevy::render::camera::ExtractedCamera;
 use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 use bevy::render::render_asset::RenderAssets;
@@ -202,6 +203,7 @@ pub(crate) struct RenderDocMainState {
     stable_updates: u8,
     next_generation: u64,
     gpu_measurement_started: bool,
+    receiver_probes_spawned: bool,
 }
 
 #[derive(Resource)]
@@ -311,6 +313,7 @@ struct RenderDocApi {
 
 #[derive(SystemParam)]
 pub(crate) struct RenderDocCheckpointParams<'w, 's> {
+    commands: Commands<'w, 's>,
     config: Res<'w, PerfScenarioConfig>,
     applied: Res<'w, PerfScenarioApplied>,
     capture: Res<'w, PerfCapture>,
@@ -335,6 +338,12 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     terrain_materials: Res<'w, Assets<hw_visual::TerrainSurfaceMaterial>>,
     terrain_materials_lod1_lite: Res<'w, Assets<hw_visual::TerrainSurfaceMaterialLod1Lite>>,
     terrain_materials_lod2: Res<'w, Assets<hw_visual::TerrainSurfaceMaterialLod2>>,
+    terrain_chunks: Query<
+        'w,
+        's,
+        (&'static Mesh3d, &'static Transform, &'static RenderLayers),
+        With<crate::world::map::TerrainChunk>,
+    >,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,
     world_instance_spawner: Res<'w, WorldInstanceSpawner>,
     soul_world_instances: SoulWorldInstancesQuery<'w, 's>,
@@ -460,6 +469,33 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         ));
         return;
     };
+    if selection.stage_id() == "p06" && !state.receiver_probes_spawned {
+        let Some((mesh, source_transform, render_layers)) = params.terrain_chunks.iter().next()
+        else {
+            return;
+        };
+        let mut probe_transform = *source_transform;
+        probe_transform.translation.y -= 0.25;
+        params.commands.spawn((
+            Name::new("PerfRenderDocTerrainLod1LiteReceiverProbe"),
+            Mesh3d(mesh.0.clone()),
+            MeshMaterial3d(params.terrain_3d_handles.lod1_lite.clone()),
+            probe_transform,
+            render_layers.clone(),
+            NotShadowCaster,
+        ));
+        probe_transform.translation.y -= 0.25;
+        params.commands.spawn((
+            Name::new("PerfRenderDocTerrainLod2ReceiverProbe"),
+            Mesh3d(mesh.0.clone()),
+            MeshMaterial3d(params.terrain_3d_handles.lod2.clone()),
+            probe_transform,
+            render_layers.clone(),
+            NotShadowCaster,
+        ));
+        state.receiver_probes_spawned = true;
+        return;
+    }
     let receiver_import_shaders = if selection.stage_id() == "p06" {
         match params.receiver_shaders.loaded(&params.asset_server) {
             Ok(true) => {}
