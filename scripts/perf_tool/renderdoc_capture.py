@@ -24,6 +24,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
 from cargo_runtime import persistent_storage_error
 from perf_tool.renderdoc_foundation import (
     CAPTURE_CHILD_DEADLINE_SECONDS,
+    REPLAY_CHILD_DEADLINE_SECONDS,
     classify_renderdoc_log_lines,
     assert_disk_headroom,
     disk_reservation_bytes,
@@ -1170,7 +1171,7 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                 env=replay_environment,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
-                deadline_seconds=CAPTURE_CHILD_DEADLINE_SECONDS,
+                deadline_seconds=REPLAY_CHILD_DEADLINE_SECONDS,
                 deadline_reason="renderdoc_replay_deadline",
             )
         _record_process_status(process_status_path, stage="replay-1", status=replay)
@@ -1211,7 +1212,7 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
                 env=replay_check_environment,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
-                deadline_seconds=CAPTURE_CHILD_DEADLINE_SECONDS,
+                deadline_seconds=REPLAY_CHILD_DEADLINE_SECONDS,
                 deadline_reason="renderdoc_second_replay_deadline",
             )
         _record_process_status(

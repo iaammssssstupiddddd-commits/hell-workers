@@ -152,9 +152,15 @@ FAILURE_POLICY: Final[dict[str, dict[str, Any]]] = {
     },
 }
 
-CAPTURE_CHILD_DEADLINE_SECONDS: Final = 600
-RD0_OUTER_DEADLINE_SECONDS: Final = 1920
-FORMAL_RENDERDOC_OUTER_DEADLINE_SECONDS: Final = 1320
+# RenderDoc injection reduces the P06/P08 high-quality 1920x1080 fixture to
+# roughly one visual update every two seconds on the canonical Intel adapter.
+# The frozen GPU gate deliberately requires 600 unchanged update calls, so the
+# capture child needs headroom beyond ten minutes. Replay does not advance that
+# runtime proof and retains its smaller independent deadline.
+CAPTURE_CHILD_DEADLINE_SECONDS: Final = 1800
+REPLAY_CHILD_DEADLINE_SECONDS: Final = 600
+RD0_OUTER_DEADLINE_SECONDS: Final = 3120
+FORMAL_RENDERDOC_OUTER_DEADLINE_SECONDS: Final = 3120
 PROCESS_TERM_GRACE_SECONDS: Final = 5
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
