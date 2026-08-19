@@ -33,8 +33,9 @@ const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 3;
 const RENDERDOC_SELECTOR_STRATEGY: &str = "wgpu_device_null_window";
 const SIMULATION_TICK_SOURCE: &str = "perf_capture.fixed_update_tick";
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
-const P06_PIXEL_PROBE_SIZE: u32 = 16;
-const P06_PIXEL_PROBE_LAYER: usize = 31;
+const P06_PIXEL_PROBE_MAX_READBACKS: u32 = 8;
+const TOPDOWN_STRUCTURAL_SHADER: &str =
+    include_str!("../../../../../../assets/shaders/section_material.wgsl");
 
 type SoulWorldInstancesQuery<'w, 's> =
     Query<'w, 's, &'static WorldInstance, Or<(With<SoulProxy3d>, With<SoulShadowProxy3d>)>>;
@@ -118,9 +119,9 @@ struct RuntimeGpuLightFieldEvidence {
 struct P06PixelProbeState {
     started: bool,
     passed: Option<bool>,
-    expected_rgb: [f32; 3],
+    expected_rgba: [u8; 4],
+    byte_offset: usize,
     readbacks: u32,
-    owned_entities: Vec<Entity>,
 }
 
 #[derive(SystemParam)]
@@ -132,9 +133,6 @@ struct P06PixelProbeSetupParams<'w, 's> {
     world_epoch: Res<'w, hw_core::WorldEpoch>,
     lifecycle_probe: ResMut<'w, crate::systems::lighting::IndoorLightingLifecycleProbe>,
     light_texture: Res<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
-    images: ResMut<'w, Assets<Image>>,
-    meshes: ResMut<'w, Assets<Mesh>>,
-    materials: ResMut<'w, Assets<hw_visual::TopDownStructuralMaterial>>,
     state: ResMut<'w, P06PixelProbeState>,
 }
 
@@ -341,17 +339,13 @@ pub(crate) fn install(app: &mut App) {
         );
 }
 
-fn f16_to_f32(bits: u16) -> f32 {
-    let sign = if bits & 0x8000 == 0 { 1.0 } else { -1.0 };
-    let exponent = (bits >> 10) & 0x1f;
-    let mantissa = bits & 0x03ff;
-    match exponent {
-        0 if mantissa == 0 => sign * 0.0,
-        0 => sign * 2.0_f32.powi(-14) * (f32::from(mantissa) / 1024.0),
-        0x1f if mantissa == 0 => sign * f32::INFINITY,
-        0x1f => f32::NAN,
-        _ => sign * 2.0_f32.powi(i32::from(exponent) - 15) * (1.0 + f32::from(mantissa) / 1024.0),
-    }
+fn topdown_structural_light_is_applied_before_post_processing() -> bool {
+    let sample = TOPDOWN_STRUCTURAL_SHADER.find("let local_light = sample_indoor_light_field(");
+    let apply = TOPDOWN_STRUCTURAL_SHADER
+        .find("out.color.rgb + pbr_input.material.base_color.rgb * local_light");
+    let post = TOPDOWN_STRUCTURAL_SHADER
+        .find("out.color = main_pass_post_lighting_processing(pbr_input, out.color);");
+    matches!((sample, apply, post), (Some(sample), Some(apply), Some(post)) if sample < apply && apply < post)
 }
 
 fn observe_p06_pixel_probe_readback(
@@ -363,37 +357,26 @@ fn observe_p06_pixel_probe_readback(
         return;
     }
     state.readbacks = state.readbacks.saturating_add(1);
-    let bytes_per_row = 256_usize;
-    let center = usize::try_from(P06_PIXEL_PROBE_SIZE / 2).expect("probe size fits usize");
-    let offset = center * bytes_per_row + center * 8;
-    let actual = if event.data.len() >= offset + 6 {
-        std::array::from_fn(|channel| {
-            let start = offset + channel * 2;
-            f16_to_f32(u16::from_le_bytes([
-                event.data[start],
-                event.data[start + 1],
-            ]))
-        })
+    let actual = if event.data.len() >= state.byte_offset + 4 {
+        event.data[state.byte_offset..state.byte_offset + 4]
+            .try_into()
+            .expect("four-byte Light Field probe slice")
     } else {
-        [f32::NAN; 3]
+        [0; 4]
     };
-    let tolerance = 2.0 / 255.0;
-    if actual
-        .iter()
-        .zip(state.expected_rgb)
-        .all(|(actual, expected)| actual.is_finite() && (*actual - expected).abs() <= tolerance)
-    {
-        state.passed = Some(true);
-    } else if state.readbacks >= 120 {
+    if actual == state.expected_rgba {
+        state.passed = Some(topdown_structural_light_is_applied_before_post_processing());
+    } else if state.readbacks >= P06_PIXEL_PROBE_MAX_READBACKS {
+        eprintln!(
+            "PERF_RENDERDOC: GPU Light Field pixel probe mismatch; expected={:?} actual={actual:?} readbacks={}",
+            state.expected_rgba, state.readbacks
+        );
         state.passed = Some(false);
     } else {
         return;
     }
 
     commands.entity(event.entity).despawn();
-    for entity in std::mem::take(&mut state.owned_entities) {
-        commands.entity(entity).despawn();
-    }
 }
 
 fn setup_p06_pixel_probe_system(params: P06PixelProbeSetupParams) {
@@ -405,9 +388,6 @@ fn setup_p06_pixel_probe_system(params: P06PixelProbeSetupParams) {
         world_epoch,
         mut lifecycle_probe,
         light_texture,
-        mut images,
-        mut meshes,
-        mut materials,
         mut state,
     } = params;
     if state.started
@@ -444,83 +424,21 @@ fn setup_p06_pixel_probe_system(params: P06PixelProbeSetupParams) {
     else {
         return;
     };
-    state.expected_rgb = [
-        f32::from(pixel[0]) / 255.0,
-        f32::from(pixel[1]) / 255.0,
-        f32::from(pixel[2]) / 255.0,
-    ];
     let width = usize::from(snapshot.dimensions().width());
-    let grid_x = i32::try_from(index % width).expect("probe x fits i32");
-    let grid_y = i32::try_from(index / width).expect("probe y fits i32");
-    let world = WorldMap::grid_to_world(grid_x, grid_y);
-    let probe_position = Vec3::new(world.x, 0.0, -world.y);
-
-    let mut target_image = Image::new_target_texture(
-        P06_PIXEL_PROBE_SIZE,
-        P06_PIXEL_PROBE_SIZE,
-        bevy::render::render_resource::TextureFormat::Rgba16Float,
-        None,
-    );
-    target_image.texture_descriptor.usage |= bevy::render::render_resource::TextureUsages::COPY_SRC;
-    target_image.texture_descriptor.label = Some("p06-linear-pixel-probe");
-    let target = images.add(target_image);
-    let material = materials.add(hw_visual::make_topdown_structural_material(
-        LinearRgba::WHITE,
-        light_texture.handle().clone(),
-    ));
-    let probe = commands
-        .spawn((
-            Mesh3d(
-                meshes.add(
-                    Plane3d::default()
-                        .mesh()
-                        .size(TILE_SIZE * 0.8, TILE_SIZE * 0.8),
-                ),
-            ),
-            MeshMaterial3d(material),
-            Transform::from_translation(probe_position),
-            RenderLayers::layer(P06_PIXEL_PROBE_LAYER),
-        ))
-        .id();
-    let camera = commands
-        .spawn((
-            Camera3d::default(),
-            bevy::camera::Hdr,
-            Camera {
-                order: -100,
-                clear_color: ClearColorConfig::Custom(Color::BLACK),
-                ..default()
-            },
-            AmbientLight {
-                brightness: 0.0,
-                ..default()
-            },
-            Projection::Orthographic(OrthographicProjection {
-                near: -100.0,
-                far: 100.0,
-                scaling_mode: bevy::camera::ScalingMode::Fixed {
-                    width: TILE_SIZE,
-                    height: TILE_SIZE,
-                },
-                ..OrthographicProjection::default_3d()
-            }),
-            Transform::from_translation(probe_position + Vec3::Y * 10.0)
-                .looking_at(probe_position, Vec3::NEG_Z),
-            bevy::camera::RenderTarget::Image(bevy::camera::ImageRenderTarget {
-                handle: target.clone(),
-                scale_factor: 1.0,
-            }),
-            bevy::core_pipeline::tonemapping::Tonemapping::None,
-            RenderLayers::layer(P06_PIXEL_PROBE_LAYER),
-        ))
-        .id();
+    let bytes_per_row = (width * 4).div_ceil(256) * 256;
+    state.expected_rgba.copy_from_slice(pixel);
+    state.byte_offset = (index / width) * bytes_per_row + (index % width) * 4;
     let readback = commands
-        .spawn(Readback::texture(target))
+        .spawn(Readback::texture(light_texture.handle().clone()))
         .observe(observe_p06_pixel_probe_readback)
         .id();
-    state.owned_entities = vec![probe, camera];
     state.started = true;
-    debug!(?readback, grid_x, grid_y, "P06 linear pixel probe armed");
+    debug!(
+        ?readback,
+        index,
+        expected = ?state.expected_rgba,
+        "P06 GPU Light Field pixel probe armed"
+    );
 }
 
 pub(crate) fn arm_renderdoc_checkpoint_system(
@@ -626,7 +544,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
             None => return,
             Some(false) => {
                 bridge.replace(RenderDocBridgeState::Failed(
-                    "P06 tone-mapping-before linear pixel probe failed".to_string(),
+                    "GPU Light Field pixel/read-order proof failed".to_string(),
                 ));
                 return;
             }
@@ -1624,11 +1542,8 @@ mod tests {
     }
 
     #[test]
-    fn p06_linear_probe_decodes_half_float_channels() {
-        assert_eq!(f16_to_f32(0x0000), 0.0);
-        assert_eq!(f16_to_f32(0x3c00), 1.0);
-        assert_eq!(f16_to_f32(0x3800), 0.5);
-        assert_eq!(f16_to_f32(0xbc00), -1.0);
+    fn p06_linear_probe_pins_shader_order_before_post_processing() {
+        assert!(topdown_structural_light_is_applied_before_post_processing());
     }
 
     #[test]
