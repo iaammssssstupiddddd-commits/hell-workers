@@ -12,7 +12,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::render::camera::ExtractedCamera;
 use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
 use bevy::render::render_asset::RenderAssets;
-use bevy::render::render_resource::{CachedPipelineState, PipelineCache};
+use bevy::render::render_resource::{CachedPipelineState, PipelineCache, PipelineDescriptor};
 use bevy::render::renderer::{RenderAdapterInfo, RenderDevice};
 use bevy::render::texture::GpuImage;
 use bevy::render::view::window::ExtractedWindows;
@@ -46,6 +46,12 @@ const RENDERDOC_RECEIVER_SHADER_PATHS: [&str; 8] = [
     "shaders/shadow_style.wgsl",
     "shaders/indoor_light_field.wgsl",
 ];
+const RENDERDOC_RECEIVER_FRAGMENT_SHADER_PATHS: [&str; 4] = [
+    RENDERDOC_RECEIVER_SHADER_PATHS[0],
+    RENDERDOC_RECEIVER_SHADER_PATHS[2],
+    RENDERDOC_RECEIVER_SHADER_PATHS[3],
+    RENDERDOC_RECEIVER_SHADER_PATHS[4],
+];
 
 type SoulWorldInstancesQuery<'w, 's> =
     Query<'w, 's, &'static WorldInstance, Or<(With<SoulProxy3d>, With<SoulShadowProxy3d>)>>;
@@ -69,6 +75,7 @@ struct StableRenderDocCheckpoint {
     p02_presentation: Option<PerfP02Presentation>,
     runtime_field: Option<RuntimeFieldEvidence>,
     gpu_light_field: Option<RuntimeGpuLightFieldEvidence>,
+    receiver_fragment_shaders: Option<[AssetId<Shader>; 4]>,
     fixture: RuntimeFixtureEvidence,
 }
 
@@ -219,6 +226,15 @@ impl RenderDocReceiverShaders {
         }
         Ok(true)
     }
+
+    fn fragment_shader_ids(&self) -> [AssetId<Shader>; 4] {
+        [
+            self.handles[0].id(),
+            self.handles[2].id(),
+            self.handles[3].id(),
+            self.handles[4].id(),
+        ]
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -235,14 +251,14 @@ struct RenderDocRenderState {
     generation: Option<u64>,
     ready_signature: Option<GpuReadySignature>,
     ready_frames: u32,
-    waiting_reason: Option<&'static str>,
+    waiting_reason: Option<String>,
     waiting_frames: u32,
     active: Option<(StableRenderDocCheckpoint, GpuReadySignature, u64, u64)>,
 }
 
 enum GpuCaptureGate {
     Ready(GpuReadySignature),
-    Waiting(&'static str),
+    Waiting(String),
 }
 
 type GetApiFn =
@@ -560,6 +576,8 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         p02_presentation,
         runtime_field,
         gpu_light_field,
+        receiver_fragment_shaders: (selection.stage_id() == "p06")
+            .then(|| params.receiver_shaders.fragment_shader_ids()),
         fixture,
     });
     eprintln!("PERF_RENDERDOC: CPU checkpoint ready; waiting for GPU settle");
@@ -636,15 +654,7 @@ fn begin_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Render
             value
         }
         Ok(GpuCaptureGate::Waiting(reason)) => {
-            state.ready_signature = None;
-            state.ready_frames = 0;
-            if state.waiting_reason == Some(reason) {
-                state.waiting_frames = state.waiting_frames.saturating_add(1);
-            } else {
-                state.waiting_reason = Some(reason);
-                state.waiting_frames = 1;
-            }
-            if state.waiting_frames >= RENDERDOC_GATE_TIMEOUT_FRAMES {
+            if observe_gpu_waiting(&mut state, reason.clone()) {
                 params.bridge.replace(RenderDocBridgeState::Failed(format!(
                     "GPU capture gate remained unavailable for {RENDERDOC_GATE_TIMEOUT_FRAMES} frames: {reason}"
                 )));
@@ -693,6 +703,14 @@ fn observe_gpu_ready_signature(
     }
     state.ready_frames = state.ready_frames.saturating_add(1);
     state.ready_frames >= RENDERDOC_SETTLE_FRAMES
+}
+
+fn observe_gpu_waiting(state: &mut RenderDocRenderState, reason: String) -> bool {
+    state.ready_signature = None;
+    state.ready_frames = 0;
+    state.waiting_reason = Some(reason);
+    state.waiting_frames = state.waiting_frames.saturating_add(1);
+    state.waiting_frames >= RENDERDOC_GATE_TIMEOUT_FRAMES
 }
 
 fn finish_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<RenderDocRenderState>) {
@@ -792,21 +810,23 @@ fn gpu_signature(
         ));
     }
     let Some(primary) = params.windows.primary else {
-        return Ok(GpuCaptureGate::Waiting("primary window is unavailable"));
+        return Ok(GpuCaptureGate::Waiting(
+            "primary window is unavailable".to_string(),
+        ));
     };
     let Some(window) = params.windows.windows.get(&primary) else {
         return Ok(GpuCaptureGate::Waiting(
-            "primary extracted window is unavailable",
+            "primary extracted window is unavailable".to_string(),
         ));
     };
     if window.swap_chain_texture_view.is_none() {
         return Ok(GpuCaptureGate::Waiting(
-            "primary swapchain texture view is unavailable",
+            "primary swapchain texture view is unavailable".to_string(),
         ));
     }
     if before_render && window.swap_chain_texture.is_none() {
         return Ok(GpuCaptureGate::Waiting(
-            "primary swapchain texture is unavailable before render",
+            "primary swapchain texture is unavailable before render".to_string(),
         ));
     }
     if !before_render && window.swap_chain_texture.is_some() {
@@ -814,7 +834,7 @@ fn gpu_signature(
     }
     let Some(scene) = params.images.get(checkpoint.scene_target) else {
         return Ok(GpuCaptureGate::Waiting(
-            "RtT scene texture is unavailable on the GPU",
+            "RtT scene texture is unavailable on the GPU".to_string(),
         ));
     };
     if scene.texture_descriptor.label != Some(RTT_SCENE_LABEL) {
@@ -825,39 +845,67 @@ fn gpu_signature(
     }
     let mut pipeline_count = 0;
     for pipeline in params.pipelines.pipelines() {
-        match &pipeline.state {
-            CachedPipelineState::Ok(_) => pipeline_count += 1,
-            CachedPipelineState::Queued => {
-                return Ok(GpuCaptureGate::Waiting(
-                    "render pipeline compilation is queued",
-                ));
-            }
-            CachedPipelineState::Creating(_) => {
-                return Ok(GpuCaptureGate::Waiting(
-                    "render pipeline compilation is in progress",
-                ));
-            }
-            // PipelineCache::process_pipeline retries these two states on the
-            // next render pass. Capturing while they cycle would let the
-            // resident pipeline count appear stable even though a required
-            // material draw has not reached the GPU yet.
-            CachedPipelineState::Err(
-                ShaderCacheError::ShaderNotLoaded(_)
-                | ShaderCacheError::ShaderImportNotYetAvailable,
-            ) => {
-                return Ok(GpuCaptureGate::Waiting(
-                    "render pipeline is waiting for a shader dependency",
-                ));
-            }
-            CachedPipelineState::Err(error) => {
-                return Err(format!("render pipeline compilation failed: {error:?}"));
-            }
-        }
+        pipeline_count += usize::from(matches!(&pipeline.state, CachedPipelineState::Ok(_)));
     }
     if pipeline_count == 0 {
         return Ok(GpuCaptureGate::Waiting(
-            "no resident render pipeline is available",
+            "no resident render pipeline is available".to_string(),
         ));
+    }
+    if checkpoint.gpu_light_field.is_some() {
+        let Some(receiver_fragment_shaders) = checkpoint.receiver_fragment_shaders else {
+            return Err("P06 GPU checkpoint is missing receiver fragment shader IDs".to_string());
+        };
+        for (path, shader_id) in RENDERDOC_RECEIVER_FRAGMENT_SHADER_PATHS
+            .iter()
+            .zip(receiver_fragment_shaders)
+        {
+            let mut matched_descriptor = false;
+            let mut resident = false;
+            let mut waiting_state = None;
+            let mut permanent_error = None;
+            for pipeline in params.pipelines.pipelines() {
+                let PipelineDescriptor::RenderPipelineDescriptor(descriptor) = &pipeline.descriptor
+                else {
+                    continue;
+                };
+                let Some(fragment) = descriptor.fragment.as_ref() else {
+                    continue;
+                };
+                if fragment.shader.id() != shader_id {
+                    continue;
+                }
+                matched_descriptor = true;
+                match &pipeline.state {
+                    CachedPipelineState::Ok(_) => resident = true,
+                    CachedPipelineState::Queued => waiting_state = Some("queued"),
+                    CachedPipelineState::Creating(_) => waiting_state = Some("creating"),
+                    CachedPipelineState::Err(
+                        ShaderCacheError::ShaderNotLoaded(_)
+                        | ShaderCacheError::ShaderImportNotYetAvailable,
+                    ) => waiting_state = Some("waiting for a shader dependency"),
+                    CachedPipelineState::Err(error) => {
+                        permanent_error = Some(format!("{error:?}"));
+                    }
+                }
+            }
+            if resident {
+                continue;
+            }
+            if let Some(error) = permanent_error {
+                return Err(format!(
+                    "RenderDoc receiver pipeline compilation failed for {path}: {error}"
+                ));
+            }
+            let state = if matched_descriptor {
+                waiting_state.unwrap_or("not resident")
+            } else {
+                "not queued"
+            };
+            return Ok(GpuCaptureGate::Waiting(format!(
+                "RenderDoc receiver pipeline for {path} is {state}"
+            )));
+        }
     }
 
     let mut scene_camera_count = 0;
@@ -881,7 +929,7 @@ fn gpu_signature(
     }
     if scene_camera_count != 1 || mask_camera_count != 0 || window_camera_count == 0 {
         return Ok(GpuCaptureGate::Waiting(
-            "RenderDoc camera topology is not ready",
+            "RenderDoc camera topology is not ready".to_string(),
         ));
     }
     Ok(GpuCaptureGate::Ready(GpuReadySignature {
@@ -1625,5 +1673,24 @@ mod tests {
         assert!(!observe_gpu_ready_signature(&mut state, signature(11)));
         assert!(!observe_gpu_ready_signature(&mut state, signature(11)));
         assert!(observe_gpu_ready_signature(&mut state, signature(11)));
+    }
+
+    #[test]
+    fn renderdoc_wait_watchdog_does_not_restart_when_reason_changes() {
+        let mut state = RenderDocRenderState::default();
+
+        for frame in 1..RENDERDOC_GATE_TIMEOUT_FRAMES {
+            let reason = if frame % 2 == 0 { "queued" } else { "creating" };
+            assert!(!observe_gpu_waiting(&mut state, reason.to_string()));
+        }
+        assert!(observe_gpu_waiting(
+            &mut state,
+            "waiting for a shader dependency".to_string()
+        ));
+        assert_eq!(state.waiting_frames, RENDERDOC_GATE_TIMEOUT_FRAMES);
+        assert_eq!(
+            state.waiting_reason.as_deref(),
+            Some("waiting for a shader dependency")
+        );
     }
 }
