@@ -50,7 +50,7 @@ from .summary import behavior_timeline_signature
 ATTEMPT_SCHEMA_VERSION = 1
 BASELINE_INDEX_SCHEMA_VERSION = 1
 RENDERDOC_MANIFEST_SCHEMA_VERSION = 1
-RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION = 3
+RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSIONS = frozenset({3, 4})
 RENDERDOC_EXTRACTION_SCHEMA_VERSION = 2
 
 CURRENT_RENDER_RESOURCES = {
@@ -104,6 +104,7 @@ EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "p05": P01_RENDER_RESOURCES,
     "p06": P01_RENDER_RESOURCES,
     "p07": P01_RENDER_RESOURCES,
+    "p08": P01_RENDER_RESOURCES,
 }
 SOURCE_CHECKPOINTS_RENDERDOC = (
     "start",
@@ -119,10 +120,10 @@ SOURCE_CHECKPOINTS_RENDERDOC = (
 
 
 def _expected_source_checkpoints(stage: str) -> tuple[str, ...]:
-    if stage not in {"p03", "p04", "p05", "p06", "p07"}:
+    if stage not in {"p03", "p04", "p05", "p06", "p07", "p08"}:
         return SOURCE_CHECKPOINTS_RENDERDOC
     checkpoints = (*SOURCE_CHECKPOINTS_RENDERDOC[:-1], "after-field-core")
-    if stage == "p07":
+    if stage in {"p07", "p08"}:
         checkpoints = (*checkpoints, "after-consumer-core")
     return (*checkpoints, "before-registration")
 
@@ -739,7 +740,7 @@ def _validate_run_file_set(
         "indoor_light_layout.csv",
         "indoor_light_presentation.csv",
     }
-    if stage in {"p04", "p05", "p06", "p07"}:
+    if stage in {"p04", "p05", "p06", "p07", "p08"}:
         data_files.add("indoor_light_runtime.json")
     root_files = {
         "command.txt",
@@ -753,7 +754,7 @@ def _validate_run_file_set(
         data_files |= {"determinism.csv", "determinism_records.csv"}
     elif leg_id == "behavior":
         data_files.add("timeline.json")
-        if stage == "p07":
+        if stage in {"p07", "p08"}:
             data_files.add("indoor_light_consumer_lifecycle.json")
         if behavior_case is not None and behavior_case.startswith("load-"):
             data_files.add("behavior-save.scn.ron")
@@ -767,13 +768,13 @@ def _validate_run_file_set(
         if leg_id == "memory":
             data_files.add("memory.csv")
             root_files |= {"profile-artifact.json", "resource-usage.txt"}
-        if stage in {"p02", "p03", "p04", "p05", "p06", "p07"}:
+        if stage in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}:
             data_files.add("p02_presentation.csv")
-        if stage == "p06":
+        if stage in {"p06", "p08"}:
             data_files.add("indoor_light_gpu.json")
     elif leg_id == "field-core":
         data_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
-        if stage in {"p04", "p05", "p06", "p07"}:
+        if stage in {"p04", "p05", "p06", "p07", "p08"}:
             data_files.add("indoor_light_runtime.json")
     elif leg_id == "consumer-core":
         data_files = {
@@ -1270,6 +1271,14 @@ def _validate_composite_topology(
     return draw
 
 
+def _validate_p08_cross_sidecar(directory: Path, runtime: dict[str, Any]) -> dict[str, Any]:
+    sidecar = read_json_object(directory / "indoor_light_cross_consumer.json")
+    cross_consumer = runtime.get("cross_consumer")
+    if sidecar != cross_consumer:
+        raise RuntimeError("P08 cross-consumer sidecar differs from runtime checkpoint")
+    return sidecar
+
+
 def _load_renderdoc_evidence(
     *,
     attempt: Path,
@@ -1503,6 +1512,8 @@ def _load_renderdoc_evidence(
         process_status["path"],
         disk_status["path"],
     }
+    if stage == "p08":
+        expected_inventory.add("indoor_light_cross_consumer.json")
     actual_inventory = {
         row["path"] for row in directory_inventory(directory, relative_to=directory)
     }
@@ -1559,8 +1570,8 @@ def _load_renderdoc_evidence(
     ):
         raise RuntimeError("RenderDoc disk-reservation evidence is invalid")
     runtime = read_json_object(artifact_paths["runtime_checkpoint"])
-    if runtime.get("schema_version") != RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION:
-        raise RuntimeError("RenderDoc runtime checkpoint differs from schema v3")
+    if runtime.get("schema_version") not in RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSIONS:
+        raise RuntimeError("RenderDoc runtime checkpoint differs from schema v3/v4")
     try:
         validate_runtime_checkpoint_v3(
             runtime,
@@ -1579,6 +1590,9 @@ def _load_renderdoc_evidence(
         raise RuntimeError("RenderDoc runtime fixture differs from manifest evidence")
     runtime_field = runtime.get("runtime_field")
     gpu_light_field = runtime.get("gpu_light_field")
+    cross_consumer = runtime.get("cross_consumer")
+    if stage == "p08":
+        _validate_p08_cross_sidecar(directory, runtime)
     if not accepts_renderdoc_api_version(
         str(runtime["returned_renderdoc_api_version"]),
         requested=str(runtime["requested_renderdoc_api_version"]),
@@ -1785,7 +1799,7 @@ def _load_renderdoc_evidence(
             )
     render_inventory = _validate_render_inventory_json(runtime["render_inventory"])
     p02_presentation = runtime.get("p02_presentation")
-    if stage in {"p02", "p03", "p04", "p05", "p06", "p07"} and not isinstance(p02_presentation, dict):
+    if stage in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"} and not isinstance(p02_presentation, dict):
         raise RuntimeError("P02 RenderDoc evidence has no presentation checkpoint")
     mask_resource_id = tracked_ids.get("mask_target")
     mask_pass_count = (
@@ -1843,6 +1857,7 @@ def _load_renderdoc_evidence(
             "fixture": manifest["fixture"],
             "runtime_field": runtime_field,
             "gpu_upload": gpu_light_field,
+            "cross_consumer": cross_consumer,
             "render_inventory": render_inventory,
             "gate_metrics": {
                 "scene_target_count": int(render_inventory["scene_target_count"]),
@@ -1882,7 +1897,16 @@ def _load_renderdoc_evidence(
                             "pixel_probes_pass",
                         )
                     }
-                    if stage == "p06" and isinstance(gpu_light_field, dict)
+                    if stage in {"p06", "p08"} and isinstance(gpu_light_field, dict)
+                    else {}
+                ),
+                **(
+                    {
+                        "revision_epoch_consistency": cross_consumer[
+                            "revision_epoch_consistency"
+                        ]
+                    }
+                    if stage == "p08" and isinstance(cross_consumer, dict)
                     else {}
                 ),
                 **(
@@ -1906,7 +1930,7 @@ def _load_renderdoc_evidence(
                             "state_and_bounce_probes_pass"
                         ],
                     }
-                    if stage in {"p02", "p03", "p04", "p05", "p06", "p07"}
+                    if stage in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}
                     else {}
                 ),
             },
@@ -2424,6 +2448,14 @@ def _gate_observed(
         "revision_epoch_consistency",
         "mask_or_stale_effects",
     }:
+        if metric_id == "revision_epoch_consistency" and isinstance(
+            evidence.get("gate_metrics"), dict
+        ) and isinstance(
+            evidence["gate_metrics"].get("revision_epoch_consistency"), bool
+        ):
+            return str(
+                evidence["gate_metrics"]["revision_epoch_consistency"]
+            ).lower()
         consumers = [
             validation.indoor_light_consumers for validation in validations
         ]

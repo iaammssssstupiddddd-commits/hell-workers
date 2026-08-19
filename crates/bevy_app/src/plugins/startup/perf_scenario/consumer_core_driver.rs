@@ -80,7 +80,7 @@ pub(crate) fn run_consumer_core_driver_system(mut params: ConsumerCoreDriverPara
                 .fixture
                 .failure
                 .clone()
-                .unwrap_or_else(|| "P07 fixture failed without a reason".to_string())),
+                .unwrap_or_else(|| "consumer fixture failed without a reason".to_string())),
             &mut params.state,
             &mut params.exit,
         );
@@ -185,7 +185,7 @@ fn measure_consumers(
     rooms: &ConsumerRoomQuery,
 ) -> Result<ConsumerObservation, String> {
     let snapshot = read_indoor_light_snapshot(runtime, world_epoch, world_epoch, lifecycle_probe)
-        .ok_or_else(|| "P07 consumer-core field is unavailable".to_string())?;
+        .ok_or_else(|| "consumer-core field is unavailable".to_string())?;
     let field_revision = snapshot.field_revision();
     let topology_revision = room_lookup.topology_signature().revision();
     let start = Instant::now();
@@ -231,7 +231,7 @@ fn measure_consumers(
     if (soul_count, room_count, room_cells) != (EXPECTED_SOULS, EXPECTED_ROOMS, EXPECTED_ROOM_CELLS)
     {
         return Err(format!(
-            "P07 consumer fixture shape is souls={soul_count}/rooms={room_count}/cells={room_cells}; expected {EXPECTED_SOULS}/{EXPECTED_ROOMS}/{EXPECTED_ROOM_CELLS}"
+            "consumer fixture shape is souls={soul_count}/rooms={room_count}/cells={room_cells}; expected {EXPECTED_SOULS}/{EXPECTED_ROOMS}/{EXPECTED_ROOM_CELLS}"
         ));
     }
     Ok(ConsumerObservation {

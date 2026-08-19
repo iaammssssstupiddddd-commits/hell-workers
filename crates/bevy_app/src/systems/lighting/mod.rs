@@ -8,6 +8,8 @@ pub(crate) use lifecycle::{
     normalize_lighting_mounts, rebuild_lighting_emitters, reset_indoor_lighting_for_world_replace,
     validate_fixture_mount_candidate, wake_indoor_lighting,
 };
+#[cfg(feature = "profiling")]
+pub use room_summary::IndoorLightCrossConsumerObservation;
 pub(crate) use room_summary::reset_indoor_light_consumers_for_world_replace;
 pub use room_summary::{
     IndoorLightConsumerMetrics, RoomIlluminationCache, RoomIlluminationState,

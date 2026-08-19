@@ -216,7 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     consumer_core_parser = subparsers.add_parser(
         "consumer-core",
-        help="run the exact P07 indoor-light gameplay and Room consumer contract",
+        help="run the exact P07/P08 indoor-light gameplay and Room consumer contract",
     )
     add_run_arguments(consumer_core_parser, fixed_step_audit=True)
     consumer_core_parser.set_defaults(
@@ -509,11 +509,11 @@ def validate_arguments(args: argparse.Namespace) -> None:
         else "static"
     )
     expected_stages = (
-        {"p03", "p04", "p05", "p06", "p07"}
+        {"p03", "p04", "p05", "p06", "p07", "p08"}
         if args.command == "field-core"
-        else {"p07"}
+        else {"p07", "p08"}
         if args.command == "consumer-core"
-        else {"current", "p01", "p02", "p03", "p04", "p05", "p06", "p07"}
+        else {"current", "p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08"}
     )
     if (
         args.contract != "rtt-light-v1"
@@ -522,7 +522,7 @@ def validate_arguments(args: argparse.Namespace) -> None:
     ):
         raise ValueError(
             "--workload indoor-light currently requires --contract rtt-light-v1 "
-            f"--stage {'p03|p04|p05|p06|p07' if args.command == 'field-core' else 'p07' if args.command == 'consumer-core' else 'current|p01|p02|p03|p04|p05|p06|p07'} --lane {expected_lane}"
+            f"--stage {'p03|p04|p05|p06|p07|p08' if args.command == 'field-core' else 'p07|p08' if args.command == 'consumer-core' else 'current|p01|p02|p03|p04|p05|p06|p07|p08'} --lane {expected_lane}"
         )
     contract = load_rtt_light_contract(args.contract)
     validate_stage_lane(contract, args.stage, args.lane)

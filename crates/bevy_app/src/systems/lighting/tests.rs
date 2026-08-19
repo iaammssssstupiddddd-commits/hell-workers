@@ -232,6 +232,26 @@ fn recovery_samples_the_rebuilt_field_in_the_same_update() {
     assert_eq!(metrics.recovery_steps, 1);
     assert_eq!(metrics.soul_samples, 1);
     assert_eq!(metrics.recovery_effects, 1);
+    #[cfg(feature = "profiling")]
+    {
+        let observation = *app
+            .world()
+            .resource::<IndoorLightCrossConsumerObservation>();
+        assert_eq!(observation.world_epoch(), Some(0));
+        assert_eq!(
+            observation.field_revision(),
+            Some(
+                app.world()
+                    .resource::<IndoorLightRuntime>()
+                    .output_revision()
+            )
+        );
+        assert_eq!(observation.recovery_steps(), 1);
+        assert_eq!(observation.soul_count(), 1);
+        assert_eq!(observation.sample_count(), 1);
+        assert_eq!(observation.effect_count(), 1);
+        assert_eq!(observation.mask_or_stale_effects(), 0);
+    }
 }
 
 #[test]
@@ -529,6 +549,11 @@ fn room_summary_reader_rejects_old_epoch_and_reset_is_idempotent() {
     assert_eq!(metrics.old_epoch_room_read_attempts, 1);
     assert_eq!(metrics.old_epoch_room_reads, 0);
 
+    #[cfg(feature = "profiling")]
+    app.world_mut()
+        .resource_mut::<IndoorLightCrossConsumerObservation>()
+        .record_recovery_step(current_epoch.get(), field_revision, 1, 1, 1, 0);
+
     reset_indoor_light_consumers_for_world_replace(app.world_mut());
     reset_indoor_light_consumers_for_world_replace(app.world_mut());
     assert!(app.world().get::<RoomIlluminationState>(room).is_none());
@@ -536,6 +561,12 @@ fn room_summary_reader_rejects_old_epoch_and_reset_is_idempotent() {
     assert_eq!(
         app.world().resource::<IndoorLightConsumerMetrics>(),
         &IndoorLightConsumerMetrics::default()
+    );
+    #[cfg(feature = "profiling")]
+    assert_eq!(
+        *app.world()
+            .resource::<IndoorLightCrossConsumerObservation>(),
+        IndoorLightCrossConsumerObservation::default()
     );
 }
 

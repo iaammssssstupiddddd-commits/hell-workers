@@ -158,12 +158,12 @@ pub(super) fn write_indoor_light_fixture_sidecars(
             canonical_room_tiles.unwrap_or_else(|| room_lookup.mask_signature().canonical_tiles()),
         )?;
     }
-    if selection.stage_id() == "p06"
+    if selection.uses_gpu_light_field()
         && selection.lane() == "static"
         && config.render_mode == PerfRenderMode::Gpu
     {
         let texture = gpu_texture.ok_or_else(|| {
-            std::io::Error::other("P06 GPU run has no IndoorLightTexture resource")
+            std::io::Error::other("GPU Light Field run has no IndoorLightTexture resource")
         })?;
         write_indoor_light_gpu_sidecar(&gpu_path, runtime, texture)?;
     }
@@ -182,7 +182,7 @@ fn write_indoor_light_gpu_sidecar(
         || texture.uploaded_checksum() != runtime.field_checksum_hex().as_deref()
     {
         return Err(std::io::Error::other(
-            "P06 GPU texture does not match the current CPU field revision/epoch/checksum",
+            "GPU Light Field texture does not match the current CPU field revision/epoch/checksum",
         ));
     }
     let uploads_per_changed_revision = if metrics.changed_revision_samples == 0 {

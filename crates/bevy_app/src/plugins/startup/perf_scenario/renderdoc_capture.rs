@@ -29,7 +29,7 @@ use std::sync::{Arc, Mutex};
 const RENDERDOC_SETTLE_FRAMES: u32 = 4;
 const RENDERDOC_CHECKPOINT_NAME: &str = "indoor-light-fixture-ready-v1";
 const RENDERDOC_REQUESTED_API_VERSION: &str = "1.6.0";
-const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 3;
+const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 4;
 const RENDERDOC_SELECTOR_STRATEGY: &str = "wgpu_device_null_window";
 const SIMULATION_TICK_SOURCE: &str = "perf_capture.fixed_update_tick";
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
@@ -58,6 +58,7 @@ struct StableRenderDocCheckpoint {
     p02_presentation: Option<PerfP02Presentation>,
     runtime_field: Option<RuntimeFieldEvidence>,
     gpu_light_field: Option<RuntimeGpuLightFieldEvidence>,
+    cross_consumer: Option<RuntimeCrossConsumerEvidence>,
     fixture: RuntimeFixtureEvidence,
 }
 
@@ -74,6 +75,9 @@ struct RuntimeFixtureEvidence {
 
 #[derive(Clone, Debug, Serialize)]
 struct RuntimeFieldEvidence {
+    world_epoch: u64,
+    field_revision: u64,
+    field_checksum: String,
     typed_emitter_components: u32,
     eligible_supplied_emitters: u32,
     indoor_mask_cells: u32,
@@ -99,6 +103,7 @@ struct RuntimeGpuLightFieldEvidence {
     upload_allocation_bytes: u64,
     old_epoch_uploads: u64,
     uploaded_epoch: u64,
+    uploaded_revision: u64,
     gpu_checksum: String,
     receiver_pipeline_count: u32,
     receiver_material_count: u32,
@@ -112,6 +117,29 @@ struct RuntimeGpuLightFieldEvidence {
     duplicate_2d_pass_count: u32,
     cpu_golden_vectors_pass: bool,
     pixel_probes_pass: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct RuntimeCrossConsumerEvidence {
+    schema_version: u32,
+    availability: &'static str,
+    world_epoch: u64,
+    field_revision: u64,
+    field_checksum: String,
+    gpu_uploaded_epoch: u64,
+    gpu_uploaded_revision: u64,
+    gpu_checksum: String,
+    soul_recovery_steps: u32,
+    soul_count: u32,
+    soul_sample_count: u64,
+    soul_effect_count: u64,
+    soul_mask_or_stale_effects: u64,
+    room_count: u32,
+    room_state_count: u32,
+    room_world_epoch_match_count: u32,
+    room_field_revision_match_count: u32,
+    room_topology_match_count: u32,
+    revision_epoch_consistency: bool,
 }
 
 #[derive(Resource, Default)]
@@ -269,6 +297,16 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     terrain_materials_lod2: Res<'w, Assets<hw_visual::TerrainSurfaceMaterialLod2>>,
     p06_pixel_probe: Res<'w, P06PixelProbeState>,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,
+    cross_consumer_observation:
+        Res<'w, crate::systems::lighting::IndoorLightCrossConsumerObservation>,
+    room_illumination_states: Query<
+        'w,
+        's,
+        (
+            &'static hw_world::Room,
+            &'static crate::systems::lighting::RoomIlluminationState,
+        ),
+    >,
     world_instance_spawner: Res<'w, WorldInstanceSpawner>,
     soul_world_instances: SoulWorldInstancesQuery<'w, 's>,
 }
@@ -414,7 +452,7 @@ fn setup_p06_pixel_probe_system(params: P06PixelProbeSetupParams) {
         || !config.renderdoc_capture_enabled()
         || config
             .rtt_light_selection()
-            .is_none_or(|selection| selection.stage_id() != "p06")
+            .is_none_or(|selection| !selection.uses_gpu_light_field())
         || fixture.observation.is_none()
     {
         return;
@@ -612,7 +650,16 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
             ));
             return;
         }
+        let Some(field_checksum) = params.indoor_light_runtime.field_checksum_hex() else {
+            bridge.replace(RenderDocBridgeState::Failed(
+                "P04 runtime field has no published checksum".to_string(),
+            ));
+            return;
+        };
         Some(RuntimeFieldEvidence {
+            world_epoch: params.world_epoch.get(),
+            field_revision: params.indoor_light_runtime.output_revision(),
+            field_checksum,
             typed_emitter_components: params.indoor_light_runtime.typed_emitter_components(),
             eligible_supplied_emitters: params.indoor_light_runtime.eligible_supplied_emitters(),
             indoor_mask_cells,
@@ -621,7 +668,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
     } else {
         None
     };
-    let gpu_light_field = if selection.stage_id() == "p06" {
+    let gpu_light_field = if selection.uses_gpu_light_field() {
         match params.p06_pixel_probe.passed {
             None => return,
             Some(false) => {
@@ -648,7 +695,30 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         {
             return;
         }
-        match p06_gpu_light_field_evidence(&params) {
+        match gpu_light_field_evidence(&params) {
+            Ok(evidence) => Some(evidence),
+            Err(reason) => {
+                bridge.replace(RenderDocBridgeState::Failed(reason));
+                return;
+            }
+        }
+    } else {
+        None
+    };
+    let cross_consumer = if selection.stage_id() == "p08" {
+        let Some(runtime_field) = runtime_field.as_ref() else {
+            bridge.replace(RenderDocBridgeState::Failed(
+                "P08 cross-consumer checkpoint has no runtime field".to_string(),
+            ));
+            return;
+        };
+        let Some(gpu_light_field) = gpu_light_field.as_ref() else {
+            bridge.replace(RenderDocBridgeState::Failed(
+                "P08 cross-consumer checkpoint has no GPU field".to_string(),
+            ));
+            return;
+        };
+        match cross_consumer_evidence(&params, runtime_field, gpu_light_field) {
             Ok(evidence) => Some(evidence),
             Err(reason) => {
                 bridge.replace(RenderDocBridgeState::Failed(reason));
@@ -697,6 +767,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         p02_presentation,
         runtime_field,
         gpu_light_field,
+        cross_consumer,
         fixture,
     });
     eprintln!("PERF_RENDERDOC: CPU checkpoint ready; waiting for GPU settle");
@@ -977,28 +1048,43 @@ fn validate_medium_inventory(stage_id: &str, inventory: PerfRenderInventory) -> 
         scene_target_count: 1,
         mask_target_count: usize::from(stage_id == "current"),
         camera_3d_rtt_count: if stage_id == "current" { 2 } else { 1 },
-        camera_2d_count: if matches!(stage_id, "p02" | "p03" | "p04" | "p05" | "p06" | "p07") {
+        camera_2d_count: if matches!(
+            stage_id,
+            "p02" | "p03" | "p04" | "p05" | "p06" | "p07" | "p08"
+        ) {
             2
         } else {
             3
         },
-        layer_2d_pass_count: if matches!(stage_id, "p02" | "p03" | "p04" | "p05" | "p06" | "p07") {
+        layer_2d_pass_count: if matches!(
+            stage_id,
+            "p02" | "p03" | "p04" | "p05" | "p06" | "p07" | "p08"
+        ) {
             1
         } else {
             2
         },
-        soul_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05" | "p06" | "p07") {
+        soul_proxy_3d: if matches!(
+            stage_id,
+            "p02" | "p03" | "p04" | "p05" | "p06" | "p07" | "p08"
+        ) {
             0
         } else {
             200
         },
         soul_mask_proxy_3d: if stage_id == "current" { 200 } else { 0 },
-        soul_shadow_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05" | "p06" | "p07") {
+        soul_shadow_proxy_3d: if matches!(
+            stage_id,
+            "p02" | "p03" | "p04" | "p05" | "p06" | "p07" | "p08"
+        ) {
             0
         } else {
             200
         },
-        familiar_proxy_3d: if matches!(stage_id, "p02" | "p03" | "p04" | "p05" | "p06" | "p07") {
+        familiar_proxy_3d: if matches!(
+            stage_id,
+            "p02" | "p03" | "p04" | "p05" | "p06" | "p07" | "p08"
+        ) {
             0
         } else {
             12
@@ -1176,6 +1262,8 @@ struct RuntimeCheckpointFile<'a> {
     runtime_field: Option<RuntimeFieldEvidence>,
     #[serde(skip_serializing_if = "Option::is_none")]
     gpu_light_field: Option<RuntimeGpuLightFieldEvidence>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cross_consumer: Option<RuntimeCrossConsumerEvidence>,
     render_resources: RuntimeRenderResources,
     fixture: RuntimeFixtureEvidence,
     capture_path: &'a Path,
@@ -1356,7 +1444,7 @@ fn p06_cpu_golden_vectors_pass(snapshot: &hw_infra::lighting::FieldSnapshot) -> 
     payload_matches && mapping_matches
 }
 
-fn p06_gpu_light_field_evidence(
+fn gpu_light_field_evidence(
     params: &RenderDocCheckpointParams<'_, '_>,
 ) -> Result<RuntimeGpuLightFieldEvidence, String> {
     let texture = params.indoor_light_texture.as_ref();
@@ -1403,6 +1491,9 @@ fn p06_gpu_light_field_evidence(
     let Some(uploaded_epoch) = texture.uploaded_epoch() else {
         return Err("P06 Light Field image has no uploaded epoch".to_string());
     };
+    let Some(uploaded_revision) = texture.uploaded_revision() else {
+        return Err("GPU Light Field image has no uploaded revision".to_string());
+    };
     let Some(gpu_checksum) = texture.uploaded_checksum() else {
         return Err("P06 Light Field image has no uploaded checksum".to_string());
     };
@@ -1444,6 +1535,7 @@ fn p06_gpu_light_field_evidence(
         upload_allocation_bytes: metrics.upload_allocation_bytes,
         old_epoch_uploads: metrics.old_epoch_uploads,
         uploaded_epoch,
+        uploaded_revision,
         gpu_checksum: gpu_checksum.to_string(),
         receiver_pipeline_count: 4,
         receiver_material_count: u32::try_from(structural_handles.len() + 3)
@@ -1458,6 +1550,91 @@ fn p06_gpu_light_field_evidence(
         duplicate_2d_pass_count: 0,
         cpu_golden_vectors_pass: p06_cpu_golden_vectors_pass(snapshot),
         pixel_probes_pass: params.p06_pixel_probe.passed == Some(true),
+    })
+}
+
+fn cross_consumer_evidence(
+    params: &RenderDocCheckpointParams<'_, '_>,
+    runtime_field: &RuntimeFieldEvidence,
+    gpu_light_field: &RuntimeGpuLightFieldEvidence,
+) -> Result<RuntimeCrossConsumerEvidence, String> {
+    let observation = *params.cross_consumer_observation;
+    let expected_epoch = params.world_epoch.get();
+    let expected_revision = params.indoor_light_runtime.output_revision();
+    let expected_souls = params.config.soul_count;
+    let expected_samples =
+        u64::from(expected_souls).saturating_mul(u64::from(observation.recovery_steps()));
+    let topology_revision = params.room_lookup.topology_signature().revision();
+    let expected_rooms = params
+        .indoor_light_fixture
+        .observation
+        .as_ref()
+        .map(|fixture| fixture.rooms)
+        .ok_or_else(|| "P08 cross-consumer checkpoint has no fixture observation".to_string())?;
+
+    let mut room_state_count = 0_u32;
+    let mut room_world_epoch_match_count = 0_u32;
+    let mut room_field_revision_match_count = 0_u32;
+    let mut room_topology_match_count = 0_u32;
+    for (room, state) in &params.room_illumination_states {
+        room_state_count = room_state_count.saturating_add(1);
+        if state.world_epoch() == expected_epoch {
+            room_world_epoch_match_count = room_world_epoch_match_count.saturating_add(1);
+        }
+        if state.field_revision() == expected_revision {
+            room_field_revision_match_count = room_field_revision_match_count.saturating_add(1);
+        }
+        if state.room_topology_revision() == topology_revision
+            && state.room_tile_signature() == &room.tile_signature
+        {
+            room_topology_match_count = room_topology_match_count.saturating_add(1);
+        }
+    }
+    let room_count = u32::try_from(expected_rooms)
+        .map_err(|_| "P08 fixture Room count exceeds u32".to_string())?;
+    let revision_epoch_consistency = runtime_field.world_epoch == expected_epoch
+        && runtime_field.field_revision == expected_revision
+        && runtime_field.field_checksum == gpu_light_field.gpu_checksum
+        && gpu_light_field.uploaded_epoch == expected_epoch
+        && gpu_light_field.uploaded_revision == expected_revision
+        && observation.world_epoch() == Some(expected_epoch)
+        && observation.field_revision() == Some(expected_revision)
+        && observation.recovery_steps() > 0
+        && observation.soul_count() == expected_souls
+        && observation.sample_count() == expected_samples
+        && observation.mask_or_stale_effects() == 0
+        && room_state_count == room_count
+        && room_world_epoch_match_count == room_count
+        && room_field_revision_match_count == room_count
+        && room_topology_match_count == room_count;
+    if !revision_epoch_consistency {
+        return Err(format!(
+            "P08 cross-consumer epoch/revision mismatch: epoch={expected_epoch} revision={expected_revision} souls={}/{expected_souls} samples={}/{expected_samples} rooms={room_state_count}/{room_count}",
+            observation.soul_count(),
+            observation.sample_count(),
+        ));
+    }
+
+    Ok(RuntimeCrossConsumerEvidence {
+        schema_version: 1,
+        availability: "available",
+        world_epoch: expected_epoch,
+        field_revision: expected_revision,
+        field_checksum: runtime_field.field_checksum.clone(),
+        gpu_uploaded_epoch: gpu_light_field.uploaded_epoch,
+        gpu_uploaded_revision: gpu_light_field.uploaded_revision,
+        gpu_checksum: gpu_light_field.gpu_checksum.clone(),
+        soul_recovery_steps: observation.recovery_steps(),
+        soul_count: observation.soul_count(),
+        soul_sample_count: observation.sample_count(),
+        soul_effect_count: observation.effect_count(),
+        soul_mask_or_stale_effects: observation.mask_or_stale_effects(),
+        room_count,
+        room_state_count,
+        room_world_epoch_match_count,
+        room_field_revision_match_count,
+        room_topology_match_count,
+        revision_epoch_consistency,
     })
 }
 
@@ -1533,6 +1710,7 @@ fn write_runtime_checkpoint(
         p02_presentation: result.checkpoint.p02_presentation.map(Into::into),
         runtime_field: result.checkpoint.runtime_field.clone(),
         gpu_light_field: result.checkpoint.gpu_light_field.clone(),
+        cross_consumer: result.checkpoint.cross_consumer.clone(),
         render_resources: p01_composite_render_resources(),
         fixture: result.checkpoint.fixture.clone(),
         capture_path: &result.capture_path,

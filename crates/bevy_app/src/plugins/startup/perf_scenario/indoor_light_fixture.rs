@@ -3,7 +3,10 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use bevy::app::AppExit;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use hw_core::relationships::{StoredIn, TaskWorkers, WorkingOn};
+use hw_core::{
+    WorldEpoch,
+    relationships::{StoredIn, TaskWorkers, WorkingOn},
+};
 use hw_energy::{
     ConsumesFrom, GeneratesFor, GridConsumers, GridGenerators, PowerAllocationMode, PowerConsumer,
     PowerGenerator, PowerGrid, PowerGridAllocationSummary, PowerShedReason, PowerSupplyState,
@@ -37,6 +40,10 @@ use crate::systems::jobs::wall_construction::spawn_wall_shell;
 use crate::systems::jobs::{
     Blueprint, Building, Designation, Door, MudMixerStorage, RenderPresentationClass, TaskSlots,
     WorkType, presentation_class, requires_legacy_structural_2d_mirror,
+};
+#[cfg(feature = "profiling")]
+use crate::systems::lighting::{
+    IndoorLightCrossConsumerObservation, IndoorLightRuntime, RoomIlluminationState,
 };
 use crate::systems::logistics::{
     BelongsTo, BucketStorage, PendingBelongsToBlueprint, ResourceItem, ResourceType, Stockpile,
@@ -967,6 +974,8 @@ pub(super) fn begin_indoor_light_fixture(
     if state.phase != IndoorLightFixturePhase::Inactive {
         return;
     }
+    #[cfg(feature = "profiling")]
+    commands.insert_resource(IndoorLightCrossConsumerObservation::default());
     let layout = IndoorLightLayout::build(config.size);
     for spa in &layout.spas {
         let geometry =
@@ -1524,7 +1533,11 @@ pub(crate) struct IndoorLightValidationParams<'w, 's> {
         PerfSetupFamiliarFilter,
     >,
     q_rooms: Query<'w, 's, (Entity, &'static Room)>,
+    q_room_states: Query<'w, 's, (&'static Room, &'static RoomIlluminationState)>,
     room_tiles: Res<'w, RoomTileLookup>,
+    indoor_light_runtime: Res<'w, IndoorLightRuntime>,
+    cross_consumer_observation: Res<'w, IndoorLightCrossConsumerObservation>,
+    world_epoch: Res<'w, WorldEpoch>,
     room_boundaries: Res<'w, RoomBoundaryLookup>,
     world_map: Res<'w, WorldMap>,
     q_stockpiles: Query<'w, 's, &'static Stockpile>,
@@ -1562,6 +1575,41 @@ pub(crate) fn validate_indoor_light_fixture_system(mut p: IndoorLightValidationP
     let Some(fixture) = p.state.fixture.clone() else {
         return;
     };
+    let p08_static = p
+        .config
+        .rtt_light_selection()
+        .is_some_and(|selection| selection.stage_id() == "p08" && selection.lane() == "static");
+    if p08_static {
+        let observation = *p.cross_consumer_observation;
+        let current_epoch = p.world_epoch.get();
+        let current_revision = p.indoor_light_runtime.output_revision();
+        let expected_souls = p.config.soul_count;
+        let expected_rooms = u32::try_from(
+            fixture
+                .layout
+                .module_count
+                .saturating_mul(fixture.layout.module_count),
+        )
+        .unwrap_or(u32::MAX);
+        let topology_revision = p.room_tiles.topology_signature().revision();
+        let room_states_are_current = p.q_room_states.iter().count() == expected_rooms as usize
+            && p.q_room_states.iter().all(|(room, state)| {
+                state.world_epoch() == current_epoch
+                    && state.field_revision() == current_revision
+                    && state.room_topology_revision() == topology_revision
+                    && state.room_tile_signature() == &room.tile_signature
+            });
+        if observation.world_epoch() != Some(current_epoch)
+            || observation.field_revision() != Some(current_revision)
+            || observation.recovery_steps() != 1
+            || observation.soul_count() != expected_souls
+            || observation.sample_count() != u64::from(expected_souls)
+            || observation.mask_or_stale_effects() != 0
+            || !room_states_are_current
+        {
+            return;
+        }
+    }
     let observed_buildings = p
         .q_buildings
         .iter()

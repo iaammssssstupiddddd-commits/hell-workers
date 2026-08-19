@@ -478,7 +478,7 @@ def build_fixture_presentation_rows(
         if building_kind not in entity_counts:
             continue
         entity_count = entity_counts[building_kind]
-        if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"}:
+        if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}:
             structural_3d = building_kind in {
                 "Floor",
                 "Wall",
@@ -2153,6 +2153,14 @@ def validate_rtt_light_contract(contract: dict[str, Any]) -> None:
         "consumer_core"
     ] != "leg_not_selected":
         raise ValueError("RtT-light P07 consumer projection must be leg-inapplicable")
+    if projection_field_applicability(contract, "p08", "renderdoc")[
+        "gpu_upload"
+    ] != "available":
+        raise ValueError("RtT-light P08 GPU projection must be available")
+    if projection_field_applicability(contract, "p08", "consumer-core")[
+        "consumer_core"
+    ] != "available":
+        raise ValueError("RtT-light P08 consumer projection must be available")
 
     gate_result = contract.get("gate_result")
     expected_gate_columns = [

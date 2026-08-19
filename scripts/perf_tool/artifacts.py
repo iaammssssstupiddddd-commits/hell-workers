@@ -1290,7 +1290,7 @@ def read_behavior_timeline(
             errors.append(f"timeline.json row {index} has the wrong step_index")
         if row.get("fixture_checksum") != fixture_checksum:
             errors.append(f"timeline.json row {index} has the wrong fixture_checksum")
-        if stage_id in {"p05", "p06", "p07"}:
+        if stage_id in {"p05", "p06", "p07", "p08"}:
             if row.get("registry_phase") not in {
                 "candidate_preflight",
                 "load_reset",
@@ -1300,7 +1300,7 @@ def read_behavior_timeline(
                 errors.append(f"timeline.json row {index} has an invalid P05 registry phase")
         elif row.get("registry_phase") != "stage_before_registry_owner":
             errors.append(f"timeline.json row {index} has the wrong registry availability")
-        if stage_id in {"p04", "p05", "p06", "p07"}:
+        if stage_id in {"p04", "p05", "p06", "p07", "p08"}:
             if row.get("field_availability") not in {"available", "unavailable"}:
                 errors.append(f"timeline.json row {index} has the wrong field availability")
             if row.get("field_availability") == "available":
@@ -1318,7 +1318,7 @@ def read_behavior_timeline(
                 errors.append(f"timeline.json row {index} field_checksum is invalid")
         elif row.get("field_availability") != "stage_before_field_owner":
             errors.append(f"timeline.json row {index} has the wrong field availability")
-        if stage_id == "p06":
+        if stage_id in {"p06", "p08"}:
             if row.get("gpu_availability") not in {"available", "unavailable"}:
                 errors.append(f"timeline.json row {index} has the wrong GPU availability")
             if row.get("gpu_availability") == "available":
@@ -1343,15 +1343,15 @@ def read_behavior_timeline(
             "field_output_revision",
             "field_is_dark",
             "field_checksum",
-        } if stage_id in {"p04", "p05", "p06", "p07"} else set()
-        if stage_id in {"p05", "p06", "p07"}:
+        } if stage_id in {"p04", "p05", "p06", "p07", "p08"} else set()
+        if stage_id in {"p05", "p06", "p07", "p08"}:
             required_runtime_fields |= {
                 "registry_step_id",
                 "wake_count",
                 "field_read_count",
                 "old_epoch_field_read_count",
             }
-        if stage_id == "p06" and row.get("gpu_availability") == "available":
+        if stage_id in {"p06", "p08"} and row.get("gpu_availability") == "available":
             required_runtime_fields |= {"gpu_upload_epoch", "gpu_checksum"}
         for field in nullable_fields - required_runtime_fields:
             if row.get(field) is not None:
@@ -1364,7 +1364,7 @@ def read_behavior_timeline(
     comparable_rows = rows[: len(expected_steps)]
     if behavior_case == "door-state-v1":
         stage_prefix = (
-            "p02" if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"} else "current"
+            "p02" if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"} else "current"
         )
         for index, (row, expected) in enumerate(zip(comparable_rows, expected_steps)):
             exact = {
@@ -2013,22 +2013,22 @@ def validate_run(
     if expected_case.workload == "indoor-light" and capture_kind == "consumer-core":
         if (
             expected_contract != "rtt-light-v1"
-            or expected_stage != "p07"
+            or expected_stage not in {"p07", "p08"}
             or expected_lane != "consumer-core"
         ):
-            reasons.append("consumer-core requires rtt-light-v1/p07/consumer-core")
+            reasons.append("consumer-core requires rtt-light-v1/p07|p08/consumer-core")
         indoor_light_consumers, consumer_errors = read_indoor_light_consumers(data_dir)
         reasons.extend(consumer_errors)
     elif expected_case.workload == "indoor-light" and capture_kind == "field-core":
         if (
             expected_contract != "rtt-light-v1"
-            or expected_stage not in {"p03", "p04", "p05", "p06", "p07"}
+            or expected_stage not in {"p03", "p04", "p05", "p06", "p07", "p08"}
             or expected_lane != "field-core"
         ):
-            reasons.append("field-core requires rtt-light-v1/p03|p04|p05|p06|p07/field-core")
+            reasons.append("field-core requires rtt-light-v1/p03|p04|p05|p06|p07|p08/field-core")
         indoor_light_field, field_errors = read_indoor_light_field(data_dir)
         reasons.extend(field_errors)
-        if expected_stage in {"p04", "p05", "p06", "p07"} and expected_contract is not None:
+        if expected_stage in {"p04", "p05", "p06", "p07", "p08"} and expected_contract is not None:
             indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
                 data_dir,
                 expected_case=expected_case,
@@ -2059,7 +2059,7 @@ def validate_run(
                 lane=expected_lane,
             )
             reasons.extend(indoor_errors)
-            if expected_stage in {"p04", "p05", "p06", "p07"}:
+            if expected_stage in {"p04", "p05", "p06", "p07", "p08"}:
                 indoor_light_runtime, runtime_errors = read_indoor_light_runtime(
                     data_dir,
                     expected_case=expected_case,
@@ -2069,7 +2069,7 @@ def validate_run(
                 )
                 reasons.extend(runtime_errors)
                 if (
-                    expected_stage == "p06"
+                    expected_stage in {"p06", "p08"}
                     and expected_lane == "static"
                     and expected_case.render == "gpu"
                     and capture_kind == "frame-time"
@@ -2104,7 +2104,7 @@ def validate_run(
     p02_sidecar = data_dir / "p02_presentation.csv"
     expects_p02_sidecar = (
         expected_case.workload == "indoor-light"
-        and expected_stage in {"p02", "p03", "p04", "p05", "p06", "p07"}
+        and expected_stage in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}
         and expected_lane == "static"
         and capture_kind == "frame-time"
     )
@@ -2200,7 +2200,7 @@ def validate_run(
                 stage_id=expected_stage,
             )
             reasons.extend(timeline_errors)
-            if expected_stage == "p07":
+            if expected_stage in {"p07", "p08"}:
                 (
                     indoor_light_consumer_lifecycle,
                     lifecycle_errors,
@@ -2250,9 +2250,9 @@ def validate_run(
             "indoor_light_presentation.csv",
             "timeline.json",
         }
-        if expected_stage in {"p04", "p05", "p06", "p07"}:
+        if expected_stage in {"p04", "p05", "p06", "p07", "p08"}:
             expected_behavior_files.add("indoor_light_runtime.json")
-        if expected_stage == "p07":
+        if expected_stage in {"p07", "p08"}:
             expected_behavior_files.add("indoor_light_consumer_lifecycle.json")
         if expected_case.behavior_case is not None and expected_case.behavior_case.startswith(
             "load-"
@@ -2275,7 +2275,7 @@ def validate_run(
             )
     elif capture_kind == "field-core":
         expected_field_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
-        if expected_stage in {"p04", "p05", "p06", "p07"}:
+        if expected_stage in {"p04", "p05", "p06", "p07", "p08"}:
             expected_field_files.add("indoor_light_runtime.json")
         actual_field_files = (
             {path.name for path in data_dir.iterdir()} if data_dir.is_dir() else set()
@@ -2376,7 +2376,7 @@ def validate_run(
         except (KeyError, ValueError):
             reasons.append("summary initial population is invalid for scene root validation")
         else:
-            if expected_stage in {"p02", "p03", "p04", "p05", "p06", "p07"}:
+            if expected_stage in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}:
                 # P02 replaces the legacy Soul proxy family with
                 # ActorBillboard3d and keeps Familiar presentation in the 2D
                 # foreground pass. Their counts are validated by the P02

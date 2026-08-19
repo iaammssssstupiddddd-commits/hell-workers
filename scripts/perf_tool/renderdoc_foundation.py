@@ -26,6 +26,7 @@ from .artifacts import sha256 as file_sha256
 
 RENDERDOC_REQUESTED_API_VERSION: Final = "1.6.0"
 RUNTIME_CHECKPOINT_SCHEMA_V3: Final = 3
+RUNTIME_CHECKPOINT_SCHEMA_V4: Final = 4
 ENVIRONMENT_LOCK_SCHEMA_V2: Final = 2
 CAPSULE_SCHEMA_VERSION: Final = 1
 
@@ -419,8 +420,11 @@ def validate_runtime_checkpoint_v3(
     rdc_sha256: str,
     rdc_bytes: int,
 ) -> None:
-    if payload.get("schema_version") != RUNTIME_CHECKPOINT_SCHEMA_V3:
-        raise ValueError("runtime checkpoint schema_version must be 3")
+    schema_version = payload.get("schema_version")
+    if schema_version not in {RUNTIME_CHECKPOINT_SCHEMA_V3, RUNTIME_CHECKPOINT_SCHEMA_V4}:
+        raise ValueError("runtime checkpoint schema_version must be 3 or 4")
+    if stage_id == "p08" and schema_version != RUNTIME_CHECKPOINT_SCHEMA_V4:
+        raise ValueError("P08 runtime checkpoint schema_version must be 4")
     if payload.get("status") != "valid":
         raise ValueError("runtime checkpoint status must be valid")
     required_top = {
@@ -440,17 +444,19 @@ def validate_runtime_checkpoint_v3(
         "gpu_ready",
         "capture_artifact",
     }
-    if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"}:
+    if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}:
         required_top.add("p02_presentation")
-    if stage_id in {"p04", "p05", "p06", "p07"}:
+    if stage_id in {"p04", "p05", "p06", "p07", "p08"}:
         required_top.add("runtime_field")
-    if stage_id == "p06":
+    if stage_id in {"p06", "p08"}:
         required_top.add("gpu_light_field")
+    if stage_id == "p08":
+        required_top.add("cross_consumer")
     if set(payload) != required_top:
         raise ValueError("runtime checkpoint v3 has unexpected keys")
     if payload["contract_id"] != contract["contract_id"] or payload["stage_id"] != stage_id:
         raise ValueError("runtime checkpoint contract/stage mismatch")
-    if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"}:
+    if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}:
         presentation = payload["p02_presentation"]
         expected_presentation_keys = {
             "layer_2d_camera_count",
@@ -481,7 +487,7 @@ def validate_runtime_checkpoint_v3(
         ):
             if not isinstance(presentation[key], bool):
                 raise ValueError(f"runtime checkpoint P02 presentation {key} is invalid")
-    if stage_id in {"p04", "p05", "p06", "p07"}:
+    if stage_id in {"p04", "p05", "p06", "p07", "p08"}:
         runtime_field = payload["runtime_field"]
         expected_runtime_keys = {
             "typed_emitter_components",
@@ -489,9 +495,11 @@ def validate_runtime_checkpoint_v3(
             "indoor_mask_cells",
             "indoor_mask_checksum",
         }
+        if schema_version == RUNTIME_CHECKPOINT_SCHEMA_V4:
+            expected_runtime_keys |= {"world_epoch", "field_revision", "field_checksum"}
         if not isinstance(runtime_field, dict) or set(runtime_field) != expected_runtime_keys:
             raise ValueError("runtime checkpoint P04 field schema is invalid")
-        for key in expected_runtime_keys - {"indoor_mask_checksum"}:
+        for key in expected_runtime_keys - {"indoor_mask_checksum", "field_checksum"}:
             value = runtime_field[key]
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError(f"runtime checkpoint P04 field {key} is invalid")
@@ -500,7 +508,13 @@ def validate_runtime_checkpoint_v3(
             character not in "0123456789abcdef" for character in checksum
         ):
             raise ValueError("runtime checkpoint P04 mask checksum is invalid")
-    if stage_id == "p06":
+        if schema_version == RUNTIME_CHECKPOINT_SCHEMA_V4:
+            field_checksum = runtime_field["field_checksum"]
+            if not isinstance(field_checksum, str) or len(field_checksum) != 64 or any(
+                character not in "0123456789abcdef" for character in field_checksum
+            ):
+                raise ValueError("runtime checkpoint field checksum is invalid")
+    if stage_id in {"p06", "p08"}:
         gpu_field = payload["gpu_light_field"]
         expected_gpu_keys = {
             "schema_version", "availability", "field_image_count", "field_handle_count",
@@ -514,6 +528,8 @@ def validate_runtime_checkpoint_v3(
             "shadow_map_count_increment", "local_light_pass_increment", "mask_pass_count",
             "duplicate_2d_pass_count", "cpu_golden_vectors_pass", "pixel_probes_pass",
         }
+        if schema_version == RUNTIME_CHECKPOINT_SCHEMA_V4:
+            expected_gpu_keys.add("uploaded_revision")
         if not isinstance(gpu_field, dict) or set(gpu_field) != expected_gpu_keys:
             raise ValueError("runtime checkpoint P06 GPU field schema is invalid")
         if gpu_field["schema_version"] != 1 or gpu_field["availability"] != "available":
@@ -536,6 +552,61 @@ def validate_runtime_checkpoint_v3(
             character not in "0123456789abcdef" for character in checksum
         ):
             raise ValueError("runtime checkpoint P06 GPU checksum is invalid")
+    if stage_id == "p08":
+        cross = payload["cross_consumer"]
+        expected_cross_keys = {
+            "schema_version", "availability", "world_epoch", "field_revision",
+            "field_checksum", "gpu_uploaded_epoch", "gpu_uploaded_revision",
+            "gpu_checksum", "soul_recovery_steps", "soul_count",
+            "soul_sample_count", "soul_effect_count", "soul_mask_or_stale_effects",
+            "room_count", "room_state_count", "room_world_epoch_match_count",
+            "room_field_revision_match_count", "room_topology_match_count",
+            "revision_epoch_consistency",
+        }
+        if not isinstance(cross, dict) or set(cross) != expected_cross_keys:
+            raise ValueError("runtime checkpoint P08 cross-consumer schema is invalid")
+        if cross["schema_version"] != 1 or cross["availability"] != "available":
+            raise ValueError("runtime checkpoint P08 cross-consumer evidence is unavailable")
+        integer_keys = expected_cross_keys - {
+            "schema_version", "availability", "field_checksum", "gpu_checksum",
+            "revision_epoch_consistency",
+        }
+        if any(
+            not isinstance(cross[key], int) or isinstance(cross[key], bool) or cross[key] < 0
+            for key in integer_keys
+        ):
+            raise ValueError("runtime checkpoint P08 cross-consumer integer is invalid")
+        if any(
+            not isinstance(cross[key], str)
+            or len(cross[key]) != 64
+            or any(character not in "0123456789abcdef" for character in cross[key])
+            for key in ("field_checksum", "gpu_checksum")
+        ):
+            raise ValueError("runtime checkpoint P08 cross-consumer checksum is invalid")
+        runtime_field = payload["runtime_field"]
+        gpu_field = payload["gpu_light_field"]
+        expected_counts = contract["fixture"]["sizes"]["medium"]["expected_counts"]
+        raw_consistent = (
+            cross["world_epoch"] == runtime_field["world_epoch"]
+            == cross["gpu_uploaded_epoch"] == gpu_field["uploaded_epoch"]
+            and cross["field_revision"] == runtime_field["field_revision"]
+            == cross["gpu_uploaded_revision"] == gpu_field["uploaded_revision"]
+            and cross["field_checksum"] == runtime_field["field_checksum"]
+            == cross["gpu_checksum"] == gpu_field["gpu_checksum"]
+            and cross["soul_recovery_steps"] > 0
+            and cross["soul_count"] == expected_counts["souls"]
+            and cross["soul_sample_count"]
+            == cross["soul_count"] * cross["soul_recovery_steps"]
+            and cross["soul_effect_count"] <= cross["soul_sample_count"]
+            and cross["soul_mask_or_stale_effects"] == 0
+            and cross["room_count"] == expected_counts["rooms"]
+            and cross["room_state_count"] == cross["room_count"]
+            and cross["room_world_epoch_match_count"] == cross["room_count"]
+            and cross["room_field_revision_match_count"] == cross["room_count"]
+            and cross["room_topology_match_count"] == cross["room_count"]
+        )
+        if cross["revision_epoch_consistency"] is not True or not raw_consistent:
+            raise ValueError("runtime checkpoint P08 cross-consumer facts are inconsistent")
     generation = payload["generation"]
     if not isinstance(generation, int) or isinstance(generation, bool) or generation < 1:
         raise ValueError("runtime checkpoint generation is invalid")

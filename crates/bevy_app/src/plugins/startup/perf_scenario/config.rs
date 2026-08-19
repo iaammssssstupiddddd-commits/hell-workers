@@ -178,6 +178,26 @@ impl PerfRttLightSelection {
         stage_id: "p07",
         lane: "consumer-core",
     };
+    const P08_STATIC_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p08",
+        lane: "static",
+    };
+    const P08_BEHAVIOR_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p08",
+        lane: "behavior",
+    };
+    const P08_FIELD_CORE_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p08",
+        lane: "field-core",
+    };
+    const P08_CONSUMER_CORE_V1: Self = Self {
+        contract_id: "rtt-light-v1",
+        stage_id: "p08",
+        lane: "consumer-core",
+    };
 
     pub const fn contract_id(self) -> &'static str {
         self.contract_id
@@ -192,11 +212,22 @@ impl PerfRttLightSelection {
     }
 
     pub fn uses_p02_presentation(self) -> bool {
-        matches!(self.stage_id, "p02" | "p03" | "p04" | "p05" | "p06" | "p07")
+        matches!(
+            self.stage_id,
+            "p02" | "p03" | "p04" | "p05" | "p06" | "p07" | "p08"
+        )
     }
 
     pub fn uses_runtime_field(self) -> bool {
-        matches!(self.stage_id, "p04" | "p05" | "p06" | "p07")
+        matches!(self.stage_id, "p04" | "p05" | "p06" | "p07" | "p08")
+    }
+
+    pub fn uses_gpu_light_field(self) -> bool {
+        matches!(self.stage_id, "p06" | "p08")
+    }
+
+    pub fn uses_cpu_consumers(self) -> bool {
+        matches!(self.stage_id, "p07" | "p08")
     }
 
     #[cfg(any(feature = "profiling-renderdoc", test))]
@@ -1122,7 +1153,7 @@ fn parse_rtt_light_selection(
 
     let (Some(contract), Some(stage), Some(lane)) = (contract, stage, lane) else {
         return Err(PerfScenarioConfigError(
-            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01|p02|p03|p04|p05|p06|p07 --perf-lane static|behavior|field-core|consumer-core"
+            "--perf-workload indoor-light requires --perf-contract rtt-light-v1 --perf-stage current|p01|p02|p03|p04|p05|p06|p07|p08 --perf-lane static|behavior|field-core|consumer-core"
                 .to_string(),
         ));
     };
@@ -1149,9 +1180,13 @@ fn parse_rtt_light_selection(
         ("rtt-light-v1", "p07", "behavior") => PerfRttLightSelection::P07_BEHAVIOR_V1,
         ("rtt-light-v1", "p07", "field-core") => PerfRttLightSelection::P07_FIELD_CORE_V1,
         ("rtt-light-v1", "p07", "consumer-core") => PerfRttLightSelection::P07_CONSUMER_CORE_V1,
+        ("rtt-light-v1", "p08", "static") => PerfRttLightSelection::P08_STATIC_V1,
+        ("rtt-light-v1", "p08", "behavior") => PerfRttLightSelection::P08_BEHAVIOR_V1,
+        ("rtt-light-v1", "p08", "field-core") => PerfRttLightSelection::P08_FIELD_CORE_V1,
+        ("rtt-light-v1", "p08", "consumer-core") => PerfRttLightSelection::P08_CONSUMER_CORE_V1,
         _ => {
             return Err(PerfScenarioConfigError(format!(
-                "this binary supports rtt-light-v1 current through p07; field-core starts at p03 and consumer-core at p07; got {contract}/{stage}/{lane}"
+                "this binary supports rtt-light-v1 current through p08; field-core starts at p03 and consumer-core at p07; got {contract}/{stage}/{lane}"
             )));
         }
     };

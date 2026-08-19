@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import tempfile
 from types import SimpleNamespace
@@ -23,6 +24,7 @@ from .rtt_light_bundle import (
     _runtime_field_projection as project_rtt_light_runtime,
     _upgrade_compatible_baseline_index as upgrade_rtt_light_baseline_index,
     _validate_session_matrix as validate_rtt_light_session_matrix,
+    _validate_p08_cross_sidecar as validate_p08_cross_sidecar,
     _verify_case_entry as verify_rtt_light_case_entry,
     build_gate_result_rows as build_rtt_light_gate_result_rows,
     build_projection_rows as build_rtt_light_projection_rows,
@@ -406,7 +408,7 @@ def write_behavior_fixture_run(
                 "applied": (
                     step[
                         "p02_applied"
-                        if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"}
+                        if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}
                         else "current_applied"
                     ]
                     if case.behavior_case == "door-state-v1"
@@ -415,7 +417,7 @@ def write_behavior_fixture_run(
                 "semantic_state": (
                     step[
                         "p02_semantic_state"
-                        if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"}
+                        if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}
                         else "current_semantic_state"
                     ]
                     if case.behavior_case == "door-state-v1"
@@ -424,7 +426,7 @@ def write_behavior_fixture_run(
                 "active_presentation_state": (
                     step[
                         "p02_active_presentation_state"
-                        if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"}
+                        if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}
                         else "current_active_presentation_state"
                     ]
                     if case.behavior_case == "door-state-v1"
@@ -835,6 +837,12 @@ def self_test() -> int:
         assert projection_field_applicability(
             rtt_contract, "p06", "field-core"
         )["consumer_core"] == "stage_before_consumer_owner"
+        assert projection_field_applicability(
+            rtt_contract, "p08", "renderdoc"
+        )["gpu_upload"] == "available"
+        assert projection_field_applicability(
+            rtt_contract, "p08", "consumer-core"
+        )["consumer_core"] == "available"
 
         projection_contract = rtt_contract["projection"]
         projection_columns = projection_contract["columns"]
@@ -3058,6 +3066,11 @@ def self_test() -> int:
         assert consumer_args.capture_kind == "consumer-core"
         assert consumer_args.stage == "p07"
         assert consumer_args.lane == "consumer-core"
+        consumer_p08_args = build_parser().parse_args(
+            ["consumer-core", "--stage", "p08", "--dry-run"]
+        )
+        validate_arguments(consumer_p08_args)
+        assert consumer_p08_args.stage == "p08"
 
         consumer_data = root / "consumer-core-data"
         consumer_data.mkdir()
@@ -3480,6 +3493,33 @@ def self_test() -> int:
             assert "differs across repeated runs" in str(error)
         else:
             raise AssertionError("semantic runtime drift unexpectedly projected")
+
+        cross_dir = root / "p08-cross-sidecar"
+        cross_dir.mkdir()
+        cross_payload = {
+            "schema_version": 1,
+            "revision_epoch_consistency": True,
+            "world_epoch": 7,
+        }
+        cross_runtime = {"cross_consumer": cross_payload}
+        try:
+            validate_p08_cross_sidecar(cross_dir, cross_runtime)
+        except (FileNotFoundError, RuntimeError):
+            pass
+        else:
+            raise AssertionError("missing P08 cross-consumer sidecar unexpectedly passed")
+        cross_path = cross_dir / "indoor_light_cross_consumer.json"
+        cross_path.write_text(json.dumps(cross_payload), encoding="utf-8")
+        assert validate_p08_cross_sidecar(cross_dir, cross_runtime) == cross_payload
+        cross_path.write_text(
+            json.dumps(cross_payload | {"world_epoch": 8}), encoding="utf-8"
+        )
+        try:
+            validate_p08_cross_sidecar(cross_dir, cross_runtime)
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("stale P08 cross-consumer sidecar unexpectedly passed")
 
         from .renderdoc_foundation import run_self_test as renderdoc_foundation_self_test
 

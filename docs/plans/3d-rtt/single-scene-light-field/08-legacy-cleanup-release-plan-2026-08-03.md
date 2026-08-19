@@ -5,143 +5,254 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-08-legacy-cleanup-release-plan-2026-08-03` |
-| ステータス | `Draft` |
+| ステータス | `Implementation in Progress — M0 tooling implemented / native reference bootstrap pending` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-04` |
+| 最終更新日 | `2026-08-18` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | P01〜[P07](07-indoor-light-gameplay-room-plan-2026-08-03.md)すべて |
+| 証跡系譜 | mainlineのP06 GPU owner + P07 CPU consumerを含むfresh P08 serial-integration subject。P07 P05-lineage formalはimmutable referenceでありP08 subjectではない |
 | 後続 | なし |
 | 関連Issue/PR | `N/A` |
 
 ## 1. 目的
 
-- 解決したい課題: production経路を停止しても、Soul projector、section uniform / shader、legacy 2D mirror、旧perf列やHelpが残れば保守対象とbinding costが継続する。
-- 到達したい状態: TopDown + Scene RtT 1枚 + Light Fieldだけをproduction契約とし、旧経路の型・system・asset・feature・docsを参照0確認後に削除する。
-- 成功指標: source / runtime inventoryにmask、Soul shadow、projector、elevation、section、legacy duplicateがなく、P00同一matrixの最終artifactが全gateを満たす。
+- 解決したい課題: production経路を停止しても、Soul GLB / shadow proxy、projector、section uniform / shader、hidden structural 2D mirrorが残れば保守対象とbinding / query costが継続する。また凍結contractだけがP08を知り、現行runner / artifact / native経路はP07で停止している。
+- 到達したい状態: TopDown + Scene RtT 1枚 + CPU Light Field + GPU Light Field 1枚をproduction契約とし、Soul / Room / GPUが同じcurrent world epoch / field revisionを読むことを同一P08 checkpointで証明してから、旧型・system・asset・featureを物理削除する。
+- 成功指標: production runtimeにmask RtT、Soul GLB / shadow、projector、section cut、hidden structural mirrorがなく、凍結`rtt-light-v1`のP08 4 lane / 25 case / exact 16 gateをfresh serial subjectで合格・登録・offline再検証する。
 
 ## 2. スコープ
 
 ### 対象（In Scope）
 
-- P02で停止済みのSoul shadow proxy / per-frame projector経路の物理削除。
-- `SectionCut` / `SectionMaterial` / Terrain section field / shader branch / prepass branchの削除。
-- `CLIP_DISTANCES`等の不要renderer feature、system registration、cache / rehydrate / perf列の削除。
-- `LegacyStructural2dMirror`が残った場合の全consumer移行とshell削除。
-- P00同一matrixのfinal audit / behavior / field-core / consumer-core / Capture / Memory / RenderDocと結果比較。
-- Help / architecture / rendering / crate / gameplay / save docsの最終同期。
+- P08 static / behavior / field-core / consumer-core selector、artifact / bundle、RenderDoc、native acceptanceの実行基盤。
+- P06 GPU uploadとP07 production CPU consumerを同じP08 runtime / RenderDoc checkpointで照合するcross-consumer evidence。
+- P02で停止済みのSoul / Familiar GLB proxy、Soul shadow proxy / material / layer、per-frame projector producerの物理削除。
+- 現役`TopDownStructuralMaterial`をsection ownerから独立させた後の`SectionCut` / `SectionMaterial` / Terrain section field / shader branch / prepass branch削除。
+- Door / Tank / MudMixerに限定された`LegacyStructural2dMirror`のhidden Sprite writeとshell削除。通常の2D foreground / blueprint / placement ghost Spriteは削除しない。
+- frozen projection v1を保持したまま、P08でobsolete runtime inventoryをliteral / derived `0`として出力・検証するstage mapping。
+- final native formal、Help impact判断、architecture / rendering / gameplay / save / visual-test docsの同期。
 
 ### 非対象（Out of Scope）
 
 - Direct-to-windowへの追加移行。
-- section、多層階、Soul shadowの再導入。
-- 新規照明gameplay、Room UI、hero light。
+- section、多層階、Soul shadow、GLB actor backendの再導入。
+- 新規照明gameplay、Room UI、hero light、brightness比例balance。
+- `scripts/perf_tool/contracts/rtt_light_migration_v1.json`のgate ID / threshold / formal matrix / hash変更、または結果を見たrebaseline。
+- P06のinvalid RD0をvalid referenceとして扱うこと、P07のP05-lineage formalをP08 serial proofとして読み替えること。
 
-## 3. 削除gate
+## 3. 固定契約と着手条件
 
-削除はファイル名単位ではなくconsumer countで進める。
+### 3.1 frozen v1を変更しない
+
+- measurement contract hashは`ba5d6bf7320426b441465df8fae42d6ff80820748ce55e0edf0dbba409dc755a`、fixture hashは`a688d564f8f50c2fdcdbe49dca7625b2cb05d01f8555378215fb8ba89b553eed`をexact pinする。
+- P08 required laneは`static` / `behavior` / `field-core` / `consumer-core`の4つ。behaviorは`door-state-v1`と6 load caseの計7 caseで、RenderDoc以外は各3 valid run、RenderDocはmedium / GPU 1 validated frameとする。
+- projection schema v1はP08まで列削除・意味変更禁止である。`soul_proxy_3d`、`soul_shadow_proxy_3d`、`familiar_proxy_3d`等はruntime型 / Queryを削除してもprojection列とhistorical readerを保持し、P08 producerはstage契約どおり`0`を出す。
+- frozen JSONはread-only source contractとし、M0はproducer / reader / validator / launcherをP08へ接続する。P08実装に合わせてcontract hashを更新しない。
+
+### 3.2 evidence lineageとcanonical reference
+
+- P08 implementation subjectはmainlineのP06実装`19ad5fec1e7c8bfa83ae971f047b174b1e48aa72`とP07実装`6711dd6350a0df7257827e989ee4f91e38c7edd5`を祖先に含むclean committed serial subjectとする。full P05 correctness `56fa6bd3ee2dc4de0e24c529066836048b2ee5bc`と合わせ、この3 SHAをすべて独立した`--prerequisite-commit`としてnative helperに渡しancestor確認する。
+- P07 formal subject`a749a580370947f0f64c1685010e625a903324dd` / attempt`82bd460f-31c6-4fa0-8705-a4d702ff4c1f`はP05-lineageのimmutable CPU referenceとして保持する。P08 mainlineへmergeしていないこと自体は問題ではなく、P08 source ancestryの代用にはしない。
+- P06の2026-08-17 user-approved RD0 timeout例外はP06 milestone受理であり、P08の`RLV1-P08-MEMORY`が要求するvalid registered P06 GPU referenceの免除ではない。invalid attemptを登録・改変しない。
+- P08 finalizeは同一canonical `baseline_root`に`current` / `p01` / `p02` / `p06` / `p07`のvalid registered projectionがある場合だけ許可する。P01 performanceはcurrent、P02 performanceはP01、P06 performanceはP02をreferenceにするため、P08が直接比較するcurrent / P06 / P07だけを先に置いてもP06 finalizeは成立しない。
+- canonical evidence checkoutは、既存P07 registered artifactを所有する`/home/satotakumi/projects/hell-workers-p07-v1-evidence`を使う。同checkoutでsourceを切り替え、`current` subject`10763a4da6bfbe0b480971fb85c474e6ff7a5f86` -> `p01` subject`29a4a719e9fe92b10618f36ce548c4bb5a4c7e80` -> accepted P02 remediation subject`c3515a40543026a588592682889a08d67cbaeff9` -> P06-lineage clean subject -> existing P07 projection -> P08 serial subjectの順に扱う。
+- current / P01 / P02 / P06の各新規採取は、そのstageのclean subjectでfresh S0 -> S1 -> RD0 -> formal -> finalize / register -> offline verifyを閉じてから次へ進む。P06 subjectは`19ad5fec1e7c8bfa83ae971f047b174b1e48aa72`を基点に必要最小のRenderDoc extractor / tooling correctionだけを含み、P07 gameplayを含めない。既存P07はartifactを変更せず同じrootからoffline再検証する。
+- bundleは実行中`REPO_ROOT/target/perf-runs/rtt-light/rtt-light-v1/`を物理canonical rootとする。全bootstrap、P08 formal、全offline verifierを必ず上記evidence checkout内から起動し、primary worktreeの`--baseline`等でsibling rootを指さない。artifact directoryをcopy / relocateせず、source checkoutを切り替えても同一physical `target`を保持する。
+- 全referenceとP08 subjectでactual adapter / backend / window / present mode / driver stable fieldsを照合し、不一致は比較せずfail-closedにする。各subjectのcleanliness / source fingerprint / binary SHA / adapter manifestもhelperで検証する。chainのいずれかをvalid登録できなければP08 formal開始を停止する。
+
+### 3.3 cross-consumer checkpoint
+
+`RLV1-P08-CROSS-CONSUMER`はP07 consumer-coreの別process結果を流用せず、P08 `renderdoc-medium-gpu`の同一runtime checkpointで次を照合する。
+
+| consumer | 必須のsource fact |
+| --- | --- |
+| CPU publication | current `WorldEpoch`、`FieldSnapshot.field_revision`、field checksum、availability |
+| GPU upload | `IndoorLightTexture.uploaded_epoch / uploaded_revision / uploaded_checksum`、同一shared Image / receiver binding |
+| Soul recovery | production `apply_light_recovery_effect_system`が実際に読んだepoch / revision、fixture Soul数、sample / effect / stale facts |
+| Room summary | 全current Roomの`RoomIlluminationState.world_epoch / field_revision`、topology validity、stale / missing count |
+
+- profiling時だけ使うboundedな`IndoorLightCrossConsumerObservation`（名称は実装時にこれへ固定）をproduction recovery system内で更新し、外部のpure sampler呼出しだけでSoul観測を偽装しない。
+- P08 static fixtureはfield / Roomがreadyになった後、capture freeze前のsetup phaseで実際のslow simulation stepを1回通し、fixture内全Soulのproduction observationを確定する。その後`Time<Virtual>`をpauseしてRenderDoc checkpointまでepoch / revision / checksum / topologyが不変であることを要求する。観測なし、複数revision混在、pause後のfield変更、Soul / Room件数不足はfail-closedにする。
+- observationはderived / nonserialized resourceとし、fixture開始とfield unavailable時にclearする。P08 ownerのidempotent load-reset hookでnormal / rollback / recovery-only / recovery-failed / duplicate reset時に即時clear / epoch-invalid化し、preflight rejectではlive observationを変更しない。reset後にproduction recoveryがcurrent fieldを読むまで旧observationを再公開しない。
+- additive schema version 1の`indoor_light_cross_consumer.json`をP08 RenderDoc legだけのrequired sidecarとする。その他stage / legでは禁止する。producerの`revision_epoch_consistency` booleanを信用せず、Python validatorが上表のraw factsから再計算する。
+- stale epoch / revision、GPU checksum差、Soul observation欠落、Room state欠落 / topology mismatch、sidecar missing / extra / malformedを個別negative testにする。
+
+### 3.4 削除gate
+
+削除はファイル名だけでなく、production consumer・test/tool consumer・frozen historyを分けて判定する。
 
 | legacy | P08着手条件 | 完了条件 |
 | --- | --- | --- |
-| Soul shadow runtime | P02でspawn / observer / sync / rehydrate / perf producer停止済み | type / cache / system / asset / metric列0 |
-| projector uniform / WGSL | P06のTopDown materialがbuild / directional shadow / light fieldを代替 | Rust field / shader loop / constants 0 |
-| SectionMaterial | P06で`MeshMaterial3d<SectionMaterial>` consumer 0 | type / plugin / sync / shader / prepass 0 |
-| Terrain section fields | TopDown-only、dynamic writer 0 | 3 LOD uniform / WGSL discard 0 |
-| elevation / SectionCut | P02でinput / producer / Help 0 | resource / state / system / test 0 |
-| structural 2D mirror | P02 / P06でstate consumerを3Dへ移行 | mirror entity / hidden sprite / sync 0 |
+| Soul / Familiar GLB proxy | P02 billboard / foreground pathがnativeで成立 | production / `visual_test`の型・spawn・observer・cache member・asset load 0。現役billboardは維持 |
+| Soul shadow runtime / layer | P02でspawn / sync停止済み | runtime entity / material / shader / render layer / light-layer membership 0、projection列はP08値0で維持 |
+| projector producer / uniform | P06 Light Field + directional shadowが代替 | producer / constants / uniform fields / WGSL loop 0。`shadow_style.wgsl`の現役directional helperは維持 |
+| SectionMaterial / SectionCut | active structural materialを独立ownerへ移行済み | alias / resource / sync / shader / prepass / clip feature 0 |
+| Terrain section fields | TopDown-only、dynamic writer 0 | LOD1 / LOD1-lite / LOD2 Rust uniformとWGSL discard 0 |
+| structural 2D mirror | Door / Tank / MudMixerの3D state consumerが既存 | marker / hidden child Sprite / old state writer 0、foreground Spriteは維持 |
 
-各削除commitの前後に`rg` inventoryを保存し、consumerが残る場合は削除せず所有計画へ戻す。
+各cleanup commit前後にscope付き`rg` inventoryを保存する。`docs/plans/archive`、凍結artifact、historical readerの文字列はruntime参照0判定に含めず、allowlist理由を記録する。
 
 ## 4. マイルストーン
 
-## M1: Soul shadow / projector残骸を削除する
+## M0: P08 serial integration / tooling / reference bootstrap
 
 ### 変更内容
 
-1. `SoulShadowProxy3d`、shadow GLB spawn / ready observer / owner cache / sync / cleanup / resetを削除する。
-2. `sync_soul_shadow_projectors_system`、nearby projector collection、material per-frame writesを削除する。
-3. Section / Terrain material uniformからprojector array / count / radius / opacityを削除する。
-4. `soul_shadow_*` WGSL helper / loop、constants、material plugin、assetsを削除する。
-5. perf scene root schemaのhistorical列扱いを閉じる。
+1. Rust `PerfRttLightSelection`へP08の4 laneを追加し、`stage=p08`がP02 presentation、P04 / P05 runtime field、P06 GPU owner、P07 CPU consumerを同時に有効化するnamed predicateを置く。stage stringの散在比較だけで合成しない。
+2. static output、behavior timeline / lifecycle sidecar、field-core、consumer-core、RenderDoc checkpointをP08へ配線する。`indoor_light_gpu.json`はGPU Capture / Memory caseだけで必須とし、CPU / audit / field-core / consumer-coreでは禁止する。behaviorはfield / GPU / consumer lifecycle、field-coreはruntime field、consumer-coreはP07 CSV / proofをexact file setとして要求し、cross JSONはRenderDoc legだけで許可する。
+3. `scripts/perf_tool`のCLI / artifact / projection / bundle / summary / fixture / RenderDoc mapをP08へ拡張する。missing / extra artifact、lane leak、stage leak、row count / order、schema / identity / checkpoint mismatchをfail-closedにする。
+4. P08 RenderDocへ`indoor_light_cross_consumer.json`と対応するRust checkpoint / Python extractor / validator / gate producerを追加する。P01 Scene topology、P02 actual presentation、P06 GPU image / pixel probe、P07 CPU consumer、P08 cross factsを同じvalidated frameへ結ぶ。
+5. native launcherへP08 plan / S0 / S1 / RD0 / formal / verifyを追加する。formal leg / behavior case / preflightからprocess countを導出し、P08 self-testで現在の期待値（25 unique case、contract由来の86 game process）を固定する。
+6. source checkpoint順を`... -> after-field-core -> after-consumer-core -> before-registration`とし、field-core / consumer-core binaryもCapture binary SHA一致対象にする。P08 cross sidecarとRenderDoc capture / replayのsource fingerprintを同一にする。
+7. §3.2のcanonical physical rootでcurrent -> P01 -> P02 -> valid P06 -> existing P07を順に登録・offline verifyする。reference bootstrapはcleanup commitとは分離し、凍結contractや既存P07 artifactを変更しない。
 
 ### 主な変更ファイル
 
-- `crates/bevy_app/src/entities/damned_soul/spawn.rs`
-- `crates/bevy_app/src/systems/visual/character_proxy_3d/`
-- `crates/bevy_app/src/plugins/visual.rs`
-- `crates/hw_visual/src/{visual3d.rs,material/}`
-- `assets/shaders/{section_material*.wgsl,terrain_surface_material*.wgsl}`
-- perf Rust / Python artifact schema
+- `crates/bevy_app/src/plugins/startup/perf_scenario/{config.rs,config/tests.rs,output.rs,behavior_driver.rs,renderdoc_capture.rs}`
+- `crates/bevy_app/src/plugins/startup/perf_scenario/{field_core_driver.rs,consumer_core_driver.rs,indoor_light_fixture.rs}`
+- `crates/bevy_app/src/plugins/startup/{perf_scenario.rs,mod.rs}`
+- `crates/bevy_app/src/systems/{energy/lamp_buff.rs,lighting/room_summary.rs,visual/indoor_light_texture.rs}`
+- `scripts/perf_tool/{arguments.py,cli.py,artifacts.py,model.py,summary.py,fixtures.py,policy.py}`
+- `scripts/perf_tool/{rtt_light_contract.py,rtt_light_bundle.py,renderdoc_capture.py,renderdoc_extract.py,renderdoc_foundation.py}`
+- `.codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py`
+- frozen `scripts/perf_tool/contracts/rtt_light_migration_v1.json`はread-only test oracle
 
 ### 完了条件
 
-- [ ] `rg "SoulShadow|soul_shadow|shadow_projector"`のproduction参照0
-- [ ] Soul数に比例するshadow GLB / material writeが0
-- [ ] historical perf artifactをsilent reinterpretしない
+- [x] Rust / Python / nativeのP08全4 lane selector positive testと、unknown lane / stage mismatch negative testが合格
+- [ ] P08はGPU sidecarとconsumer sidecarを同時に生成し、p06 / p07や他legへのcross sidecar leakが0
+- [ ] cross-consumer raw factsからvalidatorが一致を再計算し、stale / missing / malformed fixtureがすべてrejectされる
+- [ ] P08 RenderDoc checkpointがpausedで、production Soul observation / Room state / CPU field / GPU uploadの同epoch / revision / checksumを証明
+- [ ] cross observationはnonserializedで、fixture開始 / unavailable / replacement resetで消え、preflight rejectだけは不変。旧epoch observationをsidecarへ再利用できない
+- [ ] schedule assertionがPostActorの`IndoorLightingRebuildSet -> SoulLightRecoverySet -> RoomIlluminationSummarySet`と、後続Visualの`IndoorLightingRebuildSet -> IndoorLightUploadSet -> DoorPresentationSyncSet`を固定する
+- [ ] 同一physical canonical rootでcurrent / p01 / p02 / p06 / p07 referenceがvalid registeredかつoffline verifier合格。1つでも欠ければM4 formalへ進まない
+- [ ] `python3 scripts/perf.py ... --stage p08`とnative `plan-rtt-light --stage p08`が全required legを列挙する
 
-## M2: section / elevation material残骸を削除する
+## M1: legacy character / Soul shadow / projector producerを削除する
 
 ### 変更内容
 
-1. `SectionCut` resource / sync / plugin registration / testsを削除する。
-2. `SectionMaterial`型、plugin、factory、build-progress syncの旧ownerを削除する。
-3. Terrain 3 LOD uniform / Rust sync / WGSLからsection plane / direction / discardを削除する。
-4. fragment / prepass shaderとimportを削除する。
-5. `main.rs`の`WgpuFeatures::CLIP_DISTANCES`を参照0 / adapter互換確認後に削除する。
+1. `SoulProxy3d`、`SoulShadowProxy3d`、`FamiliarProxy3d`、`SoulAnimationPlayer3d`、`SoulFaceMaterial3d`とspawn / ready observer / sync / cleanup / rehydrateを削除する。P02の`ActorBillboard3d`とFamiliar foreground Spriteは維持する。
+2. `SoulProxyOwnerCache`全体を消さない。現役`actor_billboard` lookup / resetを`ActorBillboardOwnerCache`へrename / narrowし、legacy soul / shadow / familiar mapだけを削除する。
+3. `soul_animation.rs`を分割し、現役billboard用`SoulAnimVisualState` resolverは保持する。GLB `AnimationGraph` / player / face-material部分と`CharacterMaterial` plugin / shaderを、remaining reference 0確認後に削除する。
+4. `sync_soul_shadow_projectors_system`とprojector collection / per-frame material writeを削除する。shared uniform / WGSL fieldの物理削除はM2のmaterial re-home後に行う。
+5. `CharacterHandles`、`Building3dHandles.soul_scene`、`GameAssets.soul_gltf / soul_scene / soul_face_atlas`とproduction loadをremaining reference 0後に削除する。
+6. `LAYER_3D_SOUL_SHADOW`、shadow-only constants、GLB専用`SOUL_GLB_SCALE / SOUL_FACE_SCALE_MULTIPLIER`、camera / directional lightのlayer membership、`SoulShadowMaterial`と専用shader / prepassを削除する。
+7. `crates/visual_test`のlegacy Soul GLB / shadow mode、ResetElevation input、専用goldenを削除し、building / terrain material visual testだけを維持する。active actor billboard acceptanceはP02 actual-window / P08 native fixtureを正本とし、`docs/visual_test.md`を同期する。
+8. `assets/models/characters/soul.glb`、face atlas等はasset catalog / docs / testを含むremaining reference 0を確認してから削除する。共有・第三者asset provenanceがある場合は未使用扱いをdocsへ残して別commitで削除する。
 
 ### 主な変更ファイル
 
-- `crates/hw_visual/src/material/{section_material.rs,terrain_surface_material.rs,mod.rs}`
-- `crates/hw_visual/src/lib.rs`
-- `crates/bevy_app/src/systems/visual/{section_cut.rs,mod.rs}`
+- `crates/hw_visual/src/{visual3d.rs,lib.rs,material/mod.rs,material/character_material.rs,material/soul_shadow_material.rs}`
+- `crates/bevy_app/src/systems/visual/{character_proxy_3d.rs,character_proxy_3d/,soul_shadow_projector.rs,soul_animation.rs,actor_billboard.rs,mod.rs}`
+- `crates/bevy_app/src/plugins/{visual.rs,startup/asset_catalog.rs,startup/visual_handles.rs,startup/startup_systems.rs}`
+- `crates/bevy_app/src/{assets.rs,systems/save/rehydrate.rs,systems/save/rehydrate/presentation.rs}`とfocused save tests
+- `crates/hw_core/src/constants/render.rs`
+- `crates/visual_test/src/`、`docs/visual_test.md`
+- `assets/shaders/{character_material.wgsl,soul_shadow_material.wgsl,soul_shadow_prepass.wgsl}`とreference 0のcharacter assets
+- perf Rust inventory query / P08 literal-zero producer。projection v1 / historical readerは削除しない
+
+### 完了条件
+
+- [ ] production / workspace test codeのlegacy GLB / shadow type、spawn、observer、system、asset load、render layer、`SOUL_GLB_SCALE / SOUL_FACE_SCALE_MULTIPLIER`参照0
+- [ ] 1 Soulにつきactive billboard exactly 1、Familiar 3D proxy 0、shadow caster / shadow GLB 0
+- [ ] actor billboard owner cache / load cleanup / animation-state invalidationが維持される
+- [ ] `soul_shadow_proxy_3d`等のfrozen projection列は存在し、P08値0、過去stage readerは旧値を同じ意味で読める
+- [ ] visual_test building / terrain modesとP02 / P08 actual-window actor probesが合格
+
+## M2: active materialをre-homeしてsection / projector fieldを削除する
+
+### 変更内容
+
+1. 現状`TopDownStructuralMaterial`と`SectionMaterial`は同じ`ExtendedMaterial<StandardMaterial, SectionMaterialExt>` aliasである。先に`topdown_structural_material.rs`へ独立`TopDownStructuralMaterialExt` / uniform / factory / fragment / prepass shaderを作る。
+2. 独立materialはP06のbuild progress / wall height、provisional wall alpha / prepass、directional shadow style、Door root light anchor、shared Light Field bindingを保持する。`AsBindGroup` / WGSLの予約layoutはuniform `100`、Light Field texture / sampler `111 / 112`を維持し、cut / projector fieldは新uniformへ持ち込まない。
+3. `Building3dHandles`全handle、spawn、Door / Tank / Mixer material swap、wall completion、P02 actual-window exact-handle probe、save rehydrate fixtureを新しい独立型へ移し、material / Image handle identityを再検証する。
+4. structural consumer 0確認後に`SectionMaterial` alias / factory、`SectionCut` resource / sync / plugin registration / tests、`section_material*.wgsl`を削除する。存在しない`systems/visual/section_cut.rs`を新設しない。
+5. Terrain LOD1 / LOD1-lite / LOD2のRust uniformと全fragment / prepass WGSLからcut position / normal / thickness / active、projector arrays / metadata / discard / loopを削除する。Light Field、terrain blend、directional shadow、alpha / depth契約は維持する。
+6. `shadow_style.wgsl`は全削除せず、Soul projector helper / args / mixだけを除去し、現役directional shadow helperを保持する。
+7. `MAX_SOUL_SHADOW_PROJECTORS`、projector radius / feather / strength / forward extent等をreference 0後に削除する。`WgpuFeatures::CLIP_DISTANCES`は全shader / pipeline reference 0とnative adapter起動確認後にだけ削除する。
+
+### 主な変更ファイル
+
+- `crates/hw_visual/src/material/{section_material.rs,topdown_structural_material.rs,terrain_surface_material.rs,mod.rs}`
+- `crates/hw_visual/src/{lib.rs,visual3d.rs}`、`crates/hw_visual/README.md`
+- `crates/bevy_app/src/plugins/startup/{visual_handles.rs,startup_systems.rs}`
+- `crates/bevy_app/src/systems/{jobs/building_completion/spawn.rs,visual/building3d_cleanup.rs}`
+- `crates/bevy_app/src/plugins/startup/perf_scenario/p02_actual_window.rs`
+- `crates/bevy_app/src/systems/save/rehydrate/tests/`
 - `crates/bevy_app/src/{main.rs,plugins/visual.rs}`
-- `assets/shaders/section_material*.wgsl`
-- `assets/shaders/terrain_surface_material*.wgsl`
+- `assets/shaders/{section_material*.wgsl,topdown_structural_material*.wgsl,terrain_surface_material*.wgsl,shadow_style.wgsl}`
 
 ### 完了条件
 
-- [ ] `rg "SectionCut|SectionMaterial|section_cut|CLIP_DISTANCES"`のproduction参照0
-- [ ] provisional wall build progress / prepassがP06 materialで維持される
-- [ ] Terrain 3 LOD shader compileとnative captureが合格
+- [ ] `TopDownStructuralMaterial`はSection aliasでなく独立type / plugin / shaderで、全structural handle / queryが新型を使う
+- [ ] `rg "SectionCut|SectionMaterial|section_cut|MAX_SOUL_SHADOW_PROJECTORS|soul_shadow_projector"`のproduction Rust / active shader参照0
+- [ ] provisional wall build progress / alpha / prepass、Door Open / Closed / Locked root-cell light、Tank / Mixer state、directional shadowが維持される
+- [ ] Terrain LOD1 / LOD1-lite / LOD2 shader compile、shared Light Field binding、native pixel / RenderDoc probeが合格
+- [ ] structural Rust `AsBindGroup` / fragment / prepassのbindingは`100` / `111` / `112`で一致し、collision / layout drift testが合格
+- [ ] `CLIP_DISTANCES`削除後もVulkan adapter / actual windowが起動し、shader validation error 0
 
-## M3: legacy mirror / schema /設定を掃除する
+## M3: structural mirror / config / runtime inventoryを掃除する
 
 ### 変更内容
 
-1. P02で期限付き保持した`LegacyStructural2dMirror` consumerを3D stateへ移し、entity / syncを削除する。
-2. 旧mask / proxy / elevation / shadowのDevPanel、env var、visual_test flag、perf column、artifact validatorを最終inventoryする。
-3. root message / reset / cache inventoryからdead entryを削除する。
-4. `cargo machete`等のrepository既定手順がある場合だけ不要dependencyを確認する。
-5. P02のvisible GLB一時fallbackがactiveならreleaseを停止する。P08の完成形はbillboard 1系統であり、fallback GLBを第2の正式backendとして残さない。
+1. `LegacyStructural2dMirror`を付けるDoor / Tank / MudMixer hidden child Sprite spawnとmarkerを削除する。Wall / Floor等の別purpose Sprite、blueprint、placement ghost、foreground actorは対象外とする。
+2. Doorの`sync_door_presentation_system`からchild Sprite branchだけを外し、3D material / transform / `DoorPresentationState`更新を保持する。`IndoorLightUploadSet -> DoorPresentationSyncSet`のP07同frame edgeを維持する。
+3. `hw_visual::tank` / `mud_mixer`の旧Sprite state writerとplugin registrationを削除し、root `sync_structural_presentation_state_system`による3D stateを唯一のruntime consumerにする。
+4. P08 perf fixture / actual-window probeはDoor semantic rootをseedしてproduction 3D syncを待ち、structural child Sprite `0`を期待する。p02〜p07のhistorical artifact expectationは変更せず、P08 stage mappingだけを追加する。
+5. obsolete DevPanel / env / visual-test flag / message / reset entry / queryをinventoryし、runtime ownerがないものだけ削除する。active P05 light reset、P06 GPU reset、P07 Room cache resetは残す。
+6. frozen projection列 / contract / historical readerは保持する。runtime Queryを消した列はP08 producerでliteral / derived `0`とし、`artifacts.py` / `rtt_light_contract.py` / RenderDoc validatorがP08の0を要求する。
+7. save lifecycleはderived visual / Room state / cross observationをserializeしない。preflight rejectはlive state不変、normal / rollback / recovery-only / recovery-failed / duplicate resetはold epoch field / GPU / Soul / Room / cross observation read 0とdark-first / idempotenceを維持する。
+8. P07 Room cache key`(world_epoch, field_revision, topology_revision, room_tile_signature)`とbounded prune契約を回帰固定する。Room validationによるinvalid despawn、同tileのRoom entity再生成、topology revision / tile signature変更、field unavailableの各経路で旧component / cacheを残さずcurrent stateだけを再付与する。
+9. P07 CPU lifecycleのPostActor順`IndoorLightingRebuildSet -> SoulLightRecoverySet -> RoomIlluminationSummarySet`と、P06 / P07 visual順`IndoorLightingRebuildSet -> IndoorLightUploadSet -> DoorPresentationSyncSet`をnamed-set schedule testで固定する。cleanupでregistration / run condition / cross observation timingを変えない。
 
 ### 主な変更ファイル
 
-- `crates/bevy_app/src/systems/visual/`
-- `crates/hw_visual/src/`
-- `crates/bevy_app/src/interface/ui/dev_panel.rs`
-- `crates/bevy_app/src/interface/ui/dev_panel/`
-- `crates/visual_test/src/`
-- `scripts/perf_tool/`
-- workspace Cargo / plugin inventories
+- `crates/hw_visual/src/{visual3d.rs,tank.rs,mud_mixer.rs,lib.rs}`
+- `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs`
+- `crates/bevy_app/src/systems/visual/building3d_cleanup.rs`
+- `crates/bevy_app/src/plugins/{visual.rs,logic.rs}`
+- `crates/bevy_app/src/plugins/startup/perf_scenario/{indoor_light_fixture.rs,p02_actual_window.rs}`
+- `crates/bevy_app/src/plugins/startup/perf_scenario.rs`
+- `scripts/perf_tool/{artifacts.py,rtt_light_contract.py,rtt_light_bundle.py}`
+- save / reset / behavior focused tests、DevPanel / config inventoryでremaining ownerがある実ファイル
 
 ### 完了条件
 
-- [ ] 1 building / actorにつき親計画どおりexactly one presentation
-- [ ] hidden structural Sprite / Familiar 3D proxy / Soul GLB proxyが0
-- [ ] billboard fallback flag / branchが0で、alpha / depth acceptanceが合格
-- [ ] dead config / message / reset / perf columnが0
+- [ ] Door / Tank / MudMixer hidden Sprite / marker / old writer 0、各building rootにactive presentation exactly 1
+- [ ] Door semantic change -> field rebuild / upload -> 3D presentationの同visual-frame schedule testが合格
+- [ ] rebuild -> recovery -> Room summaryとrebuild -> upload -> Doorの4 ordering edgeがschedule assertionで合格
+- [ ] P08 actual-windowはstructural child Sprite 0、foreground child Sprite 1、owner-linked 3D exactly 1を証明
+- [ ] active load-reset hook、Room summary / cache fail-dark、GPU black resetを誤って削除していない
+- [ ] Room invalid despawn / same-tile entity recreation / topology change / field unavailableで旧state / cache 0、current keyだけが公開される
+- [ ] dead runtime config / message / cache member / query 0。frozen projection列とhistorical readerは維持
 
 ## M4: final性能・製品・docs gateを閉じる
 
-### 変更内容
+### formal entry condition
 
-1. P00と同じcommit cleanliness / adapter manifestでaudit、behavior、field-core、consumer-core、Capture、Memoryを各required case 3反復し、RenderDocは固定checkpointの1 frameを採取する。
-2. current / P01 / finalのDoor timeline、attachment、pass、scene roots、field rebuild / upload、frame p50 / p95 / p99、RSSを比較表にする。
-3. save / rollback、Door、Wall、billboard、Building全分類、quality / DPIのnative acceptanceを実行する。
-4. Help impact reviewを実行し、plain V削除、照明挙動、操作上必要な説明とexact approval snapshotを同期する。
-5. 恒久docsへ設計契約を移し、親 / 子計画を完了後にarchiveまたは削除する。
+- fresh clean committed P08 serial subjectである。
+- P05 `56fa6bd3ee2dc4de0e24c529066836048b2ee5bc`、P06 `19ad5fec1e7c8bfa83ae971f047b174b1e48aa72`、mainline P07 `6711dd6350a0df7257827e989ee4f91e38c7edd5`の3 SHAを`--prerequisite-commit`でancestor確認する。P07 evidence subject`a749a580...`はflagへ渡さない。
+- S0とS1が同一subject commit / source fingerprint / actual adapter / window backendを証明する。
+- usable `renderdoccmd` / `qrenderdoc` / `librenderdoc`があり、P08専用fresh RD0がvalidである。P06のinvalid RD0やP07の旧RD0は流用しない。
+- 同じphysical canonical baseline rootのcurrent / p01 / p02 / p06 / p07 registered referenceがoffline verify済みで、adapter / backend / window / present / driver stable fieldsが比較可能である。
 
-`stage=p08`でrequiredなgate IDは次のexact集合とする。
+### formal matrix
+
+| leg | case | repeat / 条件 |
+| --- | --- | --- |
+| audit | small / medium / large CPU | 各3 valid |
+| behavior | Door 1 + load 6 | 各3 valid、計7 case |
+| Capture | 3 size × CPU / GPU | 各3 valid |
+| RenderDoc | medium GPU | 1 validated frame |
+| Memory | 3 size × CPU / GPU | 各3 valid |
+| field-core | large CPU | 3 valid、32 warmup + 256 measure + 600 steady |
+| consumer-core | large CPU | 3 valid、32 warmup + 256 measure |
+
+unique formal case IDは25。native helperはpreflightを含むgame process数をcontractから導出し、現在のP08期待値86をself-testする。固定値を手書きしたlauncher分岐だけに依存しない。
+
+### required gates
 
 - validity: `RLV1-BUNDLE-VALID`
 - preservation: `RLV1-P01-RTT`、`RLV1-P02-DOOR-DOMAIN`、`RLV1-P02-PRESENT`
@@ -150,110 +261,155 @@
 - gameplay / integration: `RLV1-P07-CPU-CONSUMERS`、`RLV1-P07-CONSUMER-CPU`、`RLV1-P08-CROSS-CONSUMER`
 - final budget: `RLV1-P08-FRAME`、`RLV1-P08-MEMORY`
 
-P01 / P02 / P06の導入時performance gateは各owner stageで閉じ、finalでは`RLV1-P08-FRAME` / `RLV1-P08-MEMORY`へ置き換える。構造 / 表示のpreservation gateは置き換えない。
+### exact budget / reference
+
+- P03 field-core p95 `<= 2 ms`、p99 `<= 4 ms`。
+- P07 consumer-core p95 `<= 1 ms`、p99 `<= 2 ms`、1 Soul / slow step sample `= 1`、effect `<= 1`、masked / stale effect `= 0`、scoped allocation event / byte `= 0`。
+- P05 replacement load casesは`old_epoch_field_reads = 0`に加え、P08で`old_epoch_gpu_uploads = 0`。preflight rejectはlive field / epoch / consumer state不変。
+- P08 Capture p95 / p99は各caseのcurrent reference比`<= +5%`、large GPUはp95 `<= 16.667 ms`、p99 `<= 25 ms`。
+- P08 Memoryはallocator accounting error `= 0`、max RSSはcurrent比`<= +5%`、large peak-live deltaはCPUをp07、GPUをp06 referenceとして各`<= 4 MiB`。
+- candidate結果を見て閾値・reference・contract hashを緩和しない。変更が必要なら新baseline generation / proposalとしてP08を停止する。
+
+### 製品・docs・登録
+
+1. `hell-workers-run-native-acceptance` SkillでS0 -> S1 -> RD0 -> formal -> finalize / register -> attempt / full baseline offline verifyを順に実行する。valid registered attempt以外を完了根拠にしない。
+2. Door / Wall / Tank / Mixer / all `BuildingType`、Soul billboard / Familiar foreground、quality / DPI、save / rollbackをactual-windowでspot-checkし、renderer / validation error 0を確認する。
+3. `hell-workers-review-help-impact` Skillを実装後の実経路に対して実行し、`Update required`または`No impact`を根拠付きで確定する。P02で削除済みのplain V説明をP08で再度変更したと仮定しない。
+4. durable contractを恒久docsへ同期し、P00〜P08の歴史証跡を保持したままplan familyをarchive / deleteするか親計画の完了時に判断する。凍結artifactや完了計画を単なる`rg 0`のために改変しない。
 
 ### 更新対象docs
 
 - `docs/architecture.md`
+- `README.md`
+- `docs/README.md`
+- `docs/DEVELOPMENT.md`
+- `docs/cargo_workspace.md`
+- `docs/crate-boundaries.md`
+- `docs/building.md`
+- `docs/world_layout.md`
+- `docs/indoor_lighting.md`
+- `docs/soul_energy.md`
+- `docs/room_detection.md`
+- `docs/save_load.md`
 - `docs/rendering-performance.md`
 - `docs/performance-profiling.md`
-- `docs/crate-map.md`
-- `docs/buildings.md`
-- `docs/rooms.md`
-- `docs/soul-energy.md`
-- `docs/save-system.md`または現行save正本
-- `docs/help-screen.md`
-- `crates/hw_infra/README.md`
+- `docs/visual_test.md`
+- `docs/assets_workflow.md`（asset削除時）
+- `docs/map_generation.md`
+- `docs/blender-setup.md`（`soul.glb`削除時）
+- `docs/art-style-criteria.md`（現行契約なら更新、歴史的判断なら明示allowlist）
+- `docs/help-screen.md`（Help impactがUpdate requiredの場合）
 - `crates/hw_visual/README.md`
 
 ### 完了条件
 
-- [ ] 上記`stage=p08` exact gate ID集合がすべて合格
-- [ ] native artifact validatorがfail-closedで合格
-- [ ] Help manifest / provider / coverage / exact approvalが一致
-- [ ] current specsから旧full RtT / section / Soul shadow記述がない
+- [ ] exact 16 gateがすべてpassし、25 case / required repeats / RenderDoc 1 frameがvalid
+- [ ] P08 attemptがcanonical indexへ登録され、attempt verifierと全baseline verifierがpass
+- [ ] current -> p01 -> p02 -> p06 reference chainとp07 locator / SHA ledger / source lineageが同じcanonical rootで解決する
+- [ ] native actual-window / Vulkan / RenderDoc / allocator evidenceがfresh P08 subjectと一致
+- [ ] Help impact decision、durable docs、generated docs indexが一致
+- [ ] legacy runtime inventory 0とfrozen historical schema保持を同時に証明
 
 ## 5. 最終受入matrix
 
 | fixture | 必須観測 |
 | --- | --- |
-| 直線Wall + Door | Open通光、Closed / Locked遮光、visualと同frame |
-| L字corner | exact corner光漏れなし |
-| wall-mounted Lamp | inward側のみ発光、invalid mountはdark |
-| many Lamp | 50 emitterでもtexture / binding数一定、effect non-stack |
-| Soul / Familiar | SoulはWall depth、Familiarはforeground、shadow caster 0 |
+| 直線Wall + Door | Open通光、Closed / Locked遮光、field uploadと3D visualが同frame |
+| L字corner | exact corner光漏れなし、Door root anchor不変 |
+| wall-mounted Lamp | inward側のみ発光、invalid mount / unsuppliedはdark |
+| many Lamp | 50 emitterでもtexture / binding数一定、Soul effect non-stack |
+| Soul / Familiar | Soul billboard exactly 1、Familiar foreground、GLB / shadow caster 0 |
+| Room | current topologyの全Room stateがCPU fieldと同epoch / revision、stale / missing 0 |
 | all BuildingType | exhaustive class、duplicate / invisible 0、move / state表示維持 |
-| load / rollback failure | resetからdark、旧epoch再利用0 |
+| load 6 case | preflight不変、replacementはdark-first、old epoch field / GPU / Soul / Room read 0 |
 | quality / DPI | map-space light範囲不変、camera composition正常 |
+| P08 cross checkpoint | CPU / GPU / Soul / Roomのepoch / revision / checksum整合 |
 
 ## 6. 検証計画
 
-- 各削除対象のbefore / after `rg` inventory。
-- workspace format / check / clippy / test / docs / policy full gate。
-- P00 deterministic audit / behavior / field-core / consumer-core。
-- native Capture / Memory build、artifact validation。
-- RenderDoc pass / attachment / binding確認。
-- visual_test golden / pixel probe。
-- Help exhaustive coverage / exact approval。
-- `git diff --check`。
+- 各削除対象のbefore / after scope付き`rg` inventoryとallowlist review。
+- focused Rust unit / schedule / save / shader / material handle test。
+- P08 Rust / Python / native selector、artifact、bundle、RenderDoc positive / negative self-test。
+- `python3 scripts/dev.py check`
+- `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+- `python3 scripts/dev.py cargo -- test --workspace`
+- `python3 scripts/dev.py verify`
+- `python3 scripts/dev.py docs --write`後にgenerated `docs/README.md` / `docs/plans/README.md`をreview。
+- `python3 scripts/dev.py docs --check`
+- `python3 scripts/check_help_impact.py`
+- native acceptance SkillによるS0 / S1 / RD0 / formal / offline verification。
+- `git diff --check`と最終clean commit / source fingerprint確認。
 
 ## 7. リスクと対策
 
 | リスク | 対策 |
 | --- | --- |
-| SectionMaterialが隠れたbuild consumerを持つ | P06 consumer 0 gateとM2前の`rg`を必須にする |
-| perf schema削除で旧artifactを誤読する | schema version / historical readerを明示してsilent変更しない |
-| cleanupと機能修正が混ざる | M1〜M3をconsumer別commitにし、挙動変更は所有計画へ戻す |
-| final値を見てgateを緩める | P00の数値を固定し、変更には新baseline世代と根拠を要求する |
-| Helpだけ古い操作を残す | mandatory Help impact Skillでmanifestからsnapshotまで確認する |
+| contractだけP08対応でrunnerが証跡を作れない | cleanup前のM0で4 lane / artifact / native / RenderDocをpositive / negative testまで閉じる |
+| reference chain不在でP08 / P06 performance gateを計算できない | same canonical rootへvalid current -> P01 -> P02 -> P06 chainとP07を登録・offline verifyするまでformalを停止 |
+| `SectionMaterial`削除で現役TopDown receiverも消える | 独立Ext / uniform / shaderへ全consumerを先に移し、alias 0を確認してから削除 |
+| owner cache削除でbillboard cleanupが壊れる | actor billboard lookup / resetをrenameして保持し、legacy mapだけ削除 |
+| `shadow_style.wgsl`全削除でdirectional shadowが壊れる | projector helperだけを削除し、directional helper / goldenを固定 |
+| frozen perf列削除で旧artifactを誤読する | projection v1 / historical readerを保持し、P08 runtime値だけ0にする |
+| visual_testがlegacy GLB / shadow assetを保持する | Soul legacy modeを削除し、active actor acceptanceをP02 / P08 actual-windowへ一本化 |
+| cross proofを別processの値で合成する | same P08 RenderDoc checkpointのraw factsとproduction Soul observationだけを許可 |
+| cleanupでP05〜P07 reset / scheduleを消す | reset / schedule focused testsと全7 behavior caseをM3 / M4 gateにする |
+| final値を見てgateを緩める | frozen hash / thresholdをpinし、新世代承認なしの変更を禁止 |
 
 ## 8. ロールバック方針
 
-- cleanup commitはSoul projector、section、mirror、schema / docsの単位で分ける。
-- 削除前materialへ戻す必要が出た場合は該当consumerが残る最後のcommitだけを戻し、mask RtTやSoul shadow runtimeは再導入しない。
-- final性能不合格時はP06 visual consumerをambient-onlyへ切れる境界を使って原因を分離し、P00 gateを無断で変更しない。
-- section / V / Soul shadowの製品再導入はrollbackではなく新proposalとnative evidenceを要求する。
+- M0、legacy character、material re-home、section field deletion、mirror deletion、docs / evidenceを独立commit列にする。
+- cleanup後にconsumerが見つかった場合は、該当cleanup commitだけを戻してownerを特定する。mask RtT、Soul shadow runtime、GLB backendを完成形へ再導入しない。
+- material regression時は独立`TopDownStructuralMaterial`移行commitまで戻し、`SectionCut`を機能として復活させない。
+- P08 formal不合格時はCPU publication / GPU upload / Soul / Room / renderer / reference bootstrapをartifact境界で分離し、frozen gateを書き換えない。
+- section / V / Soul shadow / GLB actor backendの製品再導入はrollbackではなく新proposalとnative evidenceを要求する。
 
 ## 9. AI引継ぎメモ
 
 ### 現在地
 
-- 進捗: `0%`
-- 完了済み: 削除gate / final acceptance設計
-- 未着手: M1〜M4
+- 進捗: `M0 implementation in progress / cleanup M1〜M4 not started`
+- 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、Help no-impact review。
+- 未完了: clean commit上のnative P08 plan、actual RenderDoc cross checkpoint、canonical reference bootstrap、M1〜M4。
+- 現ブロッカー: canonical P08 baseline rootにvalid registered current -> P01 -> P02 -> P06 reference chainとexisting P07を揃える必要がある。P06 user-approved invalid RD0はP08 referenceに使えない。
 
 ### 次のAIが最初にやること
 
-1. P01〜P07のDefinition of Doneと未完compatibility markerを一覧化する。
-2. P00 baseline manifestと同一adapter / cleanlinessを確保する。
-3. M1のSoul shadow runtime / uniform参照inventoryから着手する。
+1. M0実装をclean commitにし、native helperのP08 planをdry-runして4 lane / 25 case / reference requirements / source checkpointをfail-closedで確認する。
+2. actual RenderDocでP08 cross checkpointを採取し、同frameのCPU / GPU / Soul / Room raw factsをoffline再検証する。
+3. canonical evidence checkoutをcleanにし、current -> P01 -> accepted P02 -> valid P06 -> existing P07の順でreferenceを登録・offline verifyする。
+4. reference bootstrapが閉じてからM1 legacy character inventoryへ進む。
 
 ### ブロッカー/注意点
 
-- P02でSoul shadow動作経路は停止済みであること。P08まで動かし続けない。
-- P06でSectionMaterial consumer 0になるまでM2へ進まない。
+- `TopDownStructuralMaterial`は現在`SectionMaterialExt`のaliasである。M2のre-homeより先に`section_material.rs`を削除しない。
+- `SoulProxyOwnerCache.actor_billboard`は現役である。resource全体を削除しない。
+- `shadow_style.wgsl`と2D Spriteには現役consumerがある。文字列一致だけでファイル全体を削除しない。
+- P08のobsolete perf列は値0であり、列0ではない。frozen projection / historical readerを維持する。
 - 実機検証には`hell-workers-run-native-acceptance` Skillを必ず使う。
-- 機能・runtime docs変更後は`hell-workers-review-help-impact` Skillを必ず実行する。
+- 機能・runtime data変更後、commit / completion前に`hell-workers-review-help-impact` Skillを必ず使う。
 
 ### 最終確認ログ
 
-- Rust gates: `2026-08-04` / `not run (plan-only update)`
-- native acceptance: `2026-08-04` / `not run (plan-only update)`
-- Help impact: `2026-08-04` / `not run (plan-only update)`
-- docs gate: `2026-08-04` / `pass (docs --write / --check, check_docs, diff --check)`
+- Rust gates: `2026-08-18` / `not run (plan-only review)`
+- native acceptance: `2026-08-18` / `not run (plan-only review)`
+- Help impact: `2026-08-18` / `not applicable (plan-only review; check_help_impact.py pass、implementation後にactual decision必須)`
+- docs gate: `2026-08-18` / `pass (docs --write / --check、check_docs、diff --check)`
 
 ### Definition of Done
 
-- [ ] M1〜M4が完了
-- [ ] 親計画の全横断gateが合格
-- [ ] 旧RtT / shadow / section / mirror参照0
-- [ ] audit / behavior / field-core / consumer-core / Capture / Memory / RenderDocのfinal artifactsが保存済み
+- [ ] M0〜M4が完了
+- [ ] valid current / P01 / P02 / P06 reference chain、existing P07、fresh P08 registered formalが同じcanonical rootにある
+- [ ] exact 16 gate / 25 formal case / required repeatsが合格
+- [ ] productionの旧mask / GLB proxy / shadow / projector / section / hidden mirror参照0
+- [ ] frozen projection v1 / historical readerが保持され、P08 obsolete inventory値0
 - [ ] Help / native / docs / workspace full gateが完了
-- [ ] 親と全子計画をarchiveまたは削除し、恒久docsへ移管済み
+- [ ] 親計画を完了し、durable docsへの移管とplan familyのarchive / delete判断が完了
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-18` | `Codex` | M0実装開始。Rust / Python / nativeへP08 4 laneを追加し、GPU + CPU consumer合成、RenderDoc checkpoint schema v4、production Soul observation、Room / CPU / GPU cross validator、P08 cross sidecar、25 case / 86 process self-testを実装。native reference bootstrapとactual RenderDocは未実施 |
+| `2026-08-18` | `Codex` | P08を現行mainline / frozen contract / evidence topologyへ再レビュー。M0 tooling・reference bootstrap、same-checkpoint cross-consumer proof、TopDown material re-home、frozen projection維持、legacy character / mirrorの実consumer、fresh 25-case formalを実装順へ固定 |
 | `2026-08-04` | `Codex` | P00の全formal legへ最終計測を同期し、統計3反復と固定frame RenderDoc captureを分離 |
 | `2026-08-03` | `Codex` | 旧runtime / shader削除とfinal acceptanceを独立計画化 |

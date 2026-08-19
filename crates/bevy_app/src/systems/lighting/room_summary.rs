@@ -36,6 +36,71 @@ pub struct IndoorLightConsumerMetrics {
     pub old_epoch_room_reads: u64,
 }
 
+#[cfg(feature = "profiling")]
+#[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct IndoorLightCrossConsumerObservation {
+    world_epoch: Option<u64>,
+    field_revision: Option<u64>,
+    recovery_steps: u32,
+    soul_count: u32,
+    sample_count: u64,
+    effect_count: u64,
+    mask_or_stale_effects: u64,
+}
+
+#[cfg(feature = "profiling")]
+impl IndoorLightCrossConsumerObservation {
+    pub const fn world_epoch(self) -> Option<u64> {
+        self.world_epoch
+    }
+
+    pub const fn field_revision(self) -> Option<u64> {
+        self.field_revision
+    }
+
+    pub const fn recovery_steps(self) -> u32 {
+        self.recovery_steps
+    }
+
+    pub const fn soul_count(self) -> u32 {
+        self.soul_count
+    }
+
+    pub const fn sample_count(self) -> u64 {
+        self.sample_count
+    }
+
+    pub const fn effect_count(self) -> u64 {
+        self.effect_count
+    }
+
+    pub const fn mask_or_stale_effects(self) -> u64 {
+        self.mask_or_stale_effects
+    }
+
+    pub(crate) fn record_recovery_step(
+        &mut self,
+        world_epoch: u64,
+        field_revision: u64,
+        recovery_steps: u32,
+        sample_count: u64,
+        effect_count: u64,
+        mask_or_stale_effects: u64,
+    ) {
+        let Some(soul_count) = sample_count.checked_div(u64::from(recovery_steps)) else {
+            *self = Self::default();
+            return;
+        };
+        self.world_epoch = Some(world_epoch);
+        self.field_revision = Some(field_revision);
+        self.recovery_steps = recovery_steps;
+        self.soul_count = u32::try_from(soul_count).unwrap_or(u32::MAX);
+        self.sample_count = sample_count;
+        self.effect_count = effect_count;
+        self.mask_or_stale_effects = mask_or_stale_effects;
+    }
+}
+
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct RoomIlluminationState {
     world_epoch: u64,
@@ -253,4 +318,6 @@ pub(crate) fn reset_indoor_light_consumers_for_world_replace(world: &mut World) 
     }
     world.insert_resource(RoomIlluminationCache::default());
     world.insert_resource(IndoorLightConsumerMetrics::default());
+    #[cfg(feature = "profiling")]
+    world.insert_resource(IndoorLightCrossConsumerObservation::default());
 }

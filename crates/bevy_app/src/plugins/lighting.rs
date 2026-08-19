@@ -117,6 +117,8 @@ impl Plugin for IndoorLightingPlugin {
                     .run_if(lighting_runtime_is_trusted)
                     .in_set(RoomIlluminationSummarySet),
             );
+        #[cfg(feature = "profiling")]
+        app.init_resource::<crate::systems::lighting::IndoorLightCrossConsumerObservation>();
     }
 }
 

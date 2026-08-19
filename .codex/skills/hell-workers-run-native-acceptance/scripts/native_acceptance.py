@@ -887,9 +887,9 @@ def rtt_light_contract(repo: Path, stage: str) -> dict[str, Any]:
         and stage_order.index(leg["first_required_stage"]) <= selected_index
     ]
     expected_legs = list(RTT_LIGHT_BASE_LEGS)
-    if stage in {"p03", "p04", "p05", "p06", "p07"}:
+    if stage in {"p03", "p04", "p05", "p06", "p07", "p08"}:
         expected_legs.append("field-core")
-    if stage == "p07":
+    if stage in {"p07", "p08"}:
         expected_legs.append("consumer-core")
     if legs != expected_legs:
         raise AcceptanceError(
@@ -6264,6 +6264,17 @@ def self_test() -> int:
         NATIVE_HARNESS_FILES == perf_execution.MEASUREMENT_HARNESS_FILES,
         "native and perf measurement harness boundaries differ",
     )
+    p08_contract = rtt_light_contract(repo, "p08")
+    require(
+        rtt_light_legs(p08_contract, "p08")
+        == ["audit", "behavior", "capture", "renderdoc", "memory", "field-core", "consumer-core"],
+        "P08 formal leg order differs from the frozen contract",
+    )
+    require(
+        len(perf_bundle.expected_formal_cases(p08_contract, "p08")) == 25
+        and rtt_light_game_process_count(p08_contract, "p08", formal=True) == 86,
+        "P08 formal matrix must contain 25 cases and 86 game processes",
+    )
     require(
         source_fingerprint(repo) == perf_execution.source_fingerprint(),
         "native and perf source fingerprints differ",
@@ -7519,7 +7530,7 @@ def add_rtt_light_arguments(
     parser.add_argument(
         "--stage",
         default=RTT_LIGHT_DEFAULT_STAGE,
-        choices=["current", "p01", "p02", "p03", "p04", "p05", "p06", "p07"],
+        choices=["current", "p01", "p02", "p03", "p04", "p05", "p06", "p07", "p08"],
     )
     parser.add_argument("--attempt-id")
     parser.add_argument("--adapter", default="Intel")

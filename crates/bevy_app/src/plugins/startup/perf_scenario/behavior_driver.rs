@@ -174,7 +174,7 @@ fn timeline_gpu_observation(
 ) -> TimelineGpuObservation {
     let p06 = config
         .rtt_light_selection()
-        .is_some_and(|selection| selection.stage_id() == "p06");
+        .is_some_and(|selection| selection.uses_gpu_light_field());
     if !p06 {
         return TimelineGpuObservation {
             availability: "stage_before_gpu_owner",
@@ -265,7 +265,7 @@ fn timeline_field_observation(
     if runtime.availability() != crate::systems::lighting::IndoorLightAvailability::Available {
         if config
             .rtt_light_selection()
-            .is_some_and(|selection| matches!(selection.stage_id(), "p05" | "p06" | "p07"))
+            .is_some_and(|selection| matches!(selection.stage_id(), "p05" | "p06" | "p07" | "p08"))
         {
             return Ok(TimelineFieldObservation {
                 availability: "unavailable",
@@ -793,7 +793,9 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
             let owns_lifecycle = params
                 .config
                 .rtt_light_selection()
-                .is_some_and(|selection| matches!(selection.stage_id(), "p05" | "p06" | "p07"));
+                .is_some_and(|selection| {
+                    matches!(selection.stage_id(), "p05" | "p06" | "p07" | "p08")
+                });
             let Ok(field) =
                 timeline_field_observation(&params.config, &params.indoor_light_runtime)
             else {
@@ -1044,7 +1046,7 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                 if params
                     .config
                     .rtt_light_selection()
-                    .is_some_and(|selection| selection.stage_id() == "p06")
+                    .is_some_and(|selection| selection.uses_gpu_light_field())
                 {
                     gpu = TimelineGpuObservation {
                         availability: "unavailable",
@@ -1289,13 +1291,13 @@ fn write_consumer_lifecycle_sidecar(
 ) -> std::io::Result<()> {
     if config
         .rtt_light_selection()
-        .is_none_or(|selection| selection.stage_id() != "p07")
+        .is_none_or(|selection| !selection.uses_cpu_consumers())
     {
         return Ok(());
     }
-    let case_id = config.behavior_case_as_str().ok_or_else(|| {
-        std::io::Error::other("P07 consumer lifecycle sidecar has no behavior case")
-    })?;
+    let case_id = config
+        .behavior_case_as_str()
+        .ok_or_else(|| std::io::Error::other("consumer lifecycle sidecar has no behavior case"))?;
     let current_field_available = runtime.published_epoch() == Some(world_epoch.get())
         && runtime.availability() == crate::systems::lighting::IndoorLightAvailability::Available;
     let body = json!({

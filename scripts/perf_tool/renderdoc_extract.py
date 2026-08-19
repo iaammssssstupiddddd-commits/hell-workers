@@ -17,7 +17,7 @@ from typing import Any
 
 
 SCHEMA_VERSION = 2
-RUNTIME_CHECKPOINT_SCHEMA_VERSION = 3
+RUNTIME_CHECKPOINT_SCHEMA_VERSIONS = {3, 4}
 CAPTURE_ENV = "HW_RENDERDOC_CAPTURE"
 OUTPUT_ENV = "HW_RENDERDOC_EXTRACTION"
 CHECKPOINT_ENV = "HW_RENDERDOC_RUNTIME_CHECKPOINT"
@@ -85,6 +85,7 @@ EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "p05": P01_RENDER_RESOURCES,
     "p06": P01_RENDER_RESOURCES,
     "p07": P01_RENDER_RESOURCES,
+    "p08": P01_RENDER_RESOURCES,
 }
 
 
@@ -127,16 +128,19 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         "capture_artifact",
     }
     stage_id = value.get("stage_id")
-    if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"}:
+    if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}:
         required_keys.add("p02_presentation")
-    if stage_id in {"p04", "p05", "p06", "p07"}:
+    if stage_id in {"p04", "p05", "p06", "p07", "p08"}:
         required_keys.add("runtime_field")
-    if stage_id == "p06":
+    if stage_id in {"p06", "p08"}:
         required_keys.add("gpu_light_field")
+    if stage_id == "p08":
+        required_keys.add("cross_consumer")
     if set(value) != required_keys:
         raise RuntimeError("runtime checkpoint keys differ from schema v3")
     if (
-        value.get("schema_version") != RUNTIME_CHECKPOINT_SCHEMA_VERSION
+        value.get("schema_version") not in RUNTIME_CHECKPOINT_SCHEMA_VERSIONS
+        or (stage_id == "p08" and value.get("schema_version") != 4)
         or value.get("status") != "valid"
         or value.get("contract_id") != "rtt-light-v1"
         or stage_id not in EXPECTED_RENDER_RESOURCES_BY_STAGE
@@ -156,12 +160,12 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
         raise RuntimeError("runtime checkpoint has no selector evidence")
     if not isinstance(value.get("gpu_ready"), dict):
         raise RuntimeError("runtime checkpoint has no GPU-ready evidence")
-    if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07"} and (
+    if stage_id in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"} and (
         not isinstance(value.get("p02_presentation"), dict)
         or not value["p02_presentation"]
     ):
         raise RuntimeError("runtime checkpoint has no P02 presentation evidence")
-    if stage_id in {"p04", "p05", "p06", "p07"}:
+    if stage_id in {"p04", "p05", "p06", "p07", "p08"}:
         runtime_field = value.get("runtime_field")
         expected_runtime_keys = {
             "typed_emitter_components",
@@ -169,9 +173,11 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
             "indoor_mask_cells",
             "indoor_mask_checksum",
         }
+        if value["schema_version"] == 4:
+            expected_runtime_keys |= {"world_epoch", "field_revision", "field_checksum"}
         if not isinstance(runtime_field, dict) or set(runtime_field) != expected_runtime_keys:
             raise RuntimeError("runtime checkpoint has no P04 field evidence")
-        for key in expected_runtime_keys - {"indoor_mask_checksum"}:
+        for key in expected_runtime_keys - {"indoor_mask_checksum", "field_checksum"}:
             field_value = runtime_field[key]
             if (
                 not isinstance(field_value, int)
@@ -186,11 +192,16 @@ def _validate_checkpoint(value: Any) -> dict[str, Any]:
             or any(character not in "0123456789abcdef" for character in checksum)
         ):
             raise RuntimeError("runtime checkpoint P04 mask checksum is invalid")
-    if stage_id == "p06" and (
+    if stage_id in {"p06", "p08"} and (
         not isinstance(value.get("gpu_light_field"), dict)
         or not value["gpu_light_field"]
     ):
         raise RuntimeError("runtime checkpoint has no P06 GPU field evidence")
+    if stage_id == "p08" and (
+        not isinstance(value.get("cross_consumer"), dict)
+        or value["cross_consumer"].get("revision_epoch_consistency") is not True
+    ):
+        raise RuntimeError("runtime checkpoint has no valid P08 cross-consumer evidence")
     artifact = value.get("capture_artifact")
     if (
         not isinstance(artifact, dict)
@@ -802,6 +813,31 @@ def self_test() -> int:
         _validate_checkpoint(p07_checkpoint) is p07_checkpoint,
         "P07 runtime checkpoint schema v3 validation regressed",
     )
+    p08_checkpoint = {
+        **p04_checkpoint,
+        "schema_version": 4,
+        "stage_id": "p08",
+        "runtime_field": {
+            **p04_checkpoint["runtime_field"],
+            "world_epoch": 7,
+            "field_revision": 11,
+            "field_checksum": "b" * 64,
+        },
+        "gpu_light_field": {"uploaded_revision": 11},
+        "cross_consumer": {"revision_epoch_consistency": True},
+    }
+    _require(
+        _validate_checkpoint(p08_checkpoint) is p08_checkpoint,
+        "P08 runtime checkpoint schema v4 validation regressed",
+    )
+    try:
+        _validate_checkpoint(
+            {key: value for key, value in p08_checkpoint.items() if key != "cross_consumer"}
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise RuntimeError("P08 checkpoint without cross-consumer evidence must be rejected")
     try:
         _validate_checkpoint({**checkpoint, "stage_id": "p02"})
     except RuntimeError:

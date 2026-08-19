@@ -310,6 +310,8 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
     assert_eq!(p06_selection.stage_id(), "p06");
     assert!(p06_selection.uses_runtime_field());
     assert!(p06_selection.uses_p02_presentation());
+    assert!(p06_selection.uses_gpu_light_field());
+    assert!(!p06_selection.uses_cpu_consumers());
     assert!(p06_selection.supports_renderdoc_capture());
 
     let mut p07 = p06;
@@ -322,7 +324,22 @@ fn indoor_light_selection_is_exact_and_not_implicit() {
     assert_eq!(p07_selection.lane(), "consumer-core");
     assert!(p07_selection.uses_runtime_field());
     assert!(p07_selection.uses_p02_presentation());
+    assert!(!p07_selection.uses_gpu_light_field());
+    assert!(p07_selection.uses_cpu_consumers());
     assert!(!p07_selection.supports_renderdoc_capture());
+
+    let mut p08 = p07;
+    p08[4] = "p08".to_string();
+    let p08_selection = super::parse_rtt_light_selection(&p08, super::PerfWorkload::IndoorLight)
+        .expect("p08/consumer-core v1 is implemented")
+        .expect("P08 consumer-core requires an explicit selection");
+    assert_eq!(p08_selection.stage_id(), "p08");
+    assert_eq!(p08_selection.lane(), "consumer-core");
+    assert!(p08_selection.uses_runtime_field());
+    assert!(p08_selection.uses_p02_presentation());
+    assert!(p08_selection.uses_gpu_light_field());
+    assert!(p08_selection.uses_cpu_consumers());
+    assert!(!p08_selection.supports_renderdoc_capture());
 
     let mut wrong_stage = exact;
     wrong_stage[4] = "p09".to_string();

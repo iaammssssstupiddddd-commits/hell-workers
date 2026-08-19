@@ -122,6 +122,7 @@ EXPECTED_RENDER_RESOURCES_BY_STAGE = {
     "p05": P01_RENDER_RESOURCES,
     "p06": P01_RENDER_RESOURCES,
     "p07": P01_RENDER_RESOURCES,
+    "p08": P01_RENDER_RESOURCES,
 }
 
 
@@ -424,7 +425,7 @@ def _load_contract(repo: Path, contract_id: str, stage: str) -> dict[str, Any]:
         contract.get("contract_id") != contract_id
         or stage not in EXPECTED_RENDER_RESOURCES_BY_STAGE
     ):
-        raise CaptureError("RenderDoc capture identity differs from rtt-light-v1/current through p07")
+        raise CaptureError("RenderDoc capture identity differs from rtt-light-v1/current through p08")
     if contract.get("lifecycle") != {
         "status": "frozen",
         "formal_registration_allowed": True,
@@ -614,10 +615,12 @@ def _runtime_checkpoint(
     except (OSError, ValueError) as error:
         raise CaptureError(f"runtime RenderDoc checkpoint differs from schema v3: {error}") from error
     labels = ["render_inventory", "render_resources", "fixture"]
-    if stage in {"p02", "p03", "p04", "p05", "p06", "p07"}:
+    if stage in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}:
         labels.append("p02_presentation")
-    if stage == "p06":
+    if stage in {"p06", "p08"}:
         labels.append("gpu_light_field")
+    if stage == "p08":
+        labels.append("cross_consumer")
     for label in labels:
         if not isinstance(value[label], dict) or not value[label]:
             raise CaptureError(f"runtime checkpoint {label} evidence is empty")
@@ -1270,6 +1273,11 @@ def run_capture(args: argparse.Namespace) -> dict[str, Any]:
             _copy_regular(capsule_manifest_path, final_capsule_manifest)
             _copy_regular(process_status_path, final_process_status)
             _copy_regular(disk_status_path, final_disk_status)
+            if args.stage == "p08":
+                _write_json_exclusive(
+                    staging / "indoor_light_cross_consumer.json",
+                    runtime["cross_consumer"],
+                )
             manifest = {
                 "schema_version": SCHEMA_VERSION,
                 "status": "valid",
@@ -1519,6 +1527,103 @@ def self_test() -> int:
             rdc_sha256=capture_hash,
             rdc_bytes=capture.stat().st_size,
         )
+        gpu_field = {
+            "schema_version": 1,
+            "availability": "available",
+            "field_image_count": 1,
+            "field_handle_count": 1,
+            "logical_payload_bytes": 40_000,
+            "staging_bytes": 40_000,
+            "upload_count": 1,
+            "uploads_per_changed_revision": 1,
+            "changed_revision_samples": 1,
+            "steady_updates": 600,
+            "steady_uploads": 0,
+            "steady_scoped_allocation_events": 0,
+            "steady_scoped_allocation_bytes": 0,
+            "upload_allocation_events": 0,
+            "upload_allocation_bytes": 0,
+            "old_epoch_uploads": 0,
+            "uploaded_epoch": 7,
+            "uploaded_revision": 11,
+            "gpu_checksum": "b" * 64,
+            "receiver_pipeline_count": 4,
+            "receiver_material_count": 15,
+            "receiver_binding_count": 1,
+            "shared_field_image": True,
+            "point_light_count_increment": 0,
+            "spot_light_count_increment": 0,
+            "shadow_map_count_increment": 0,
+            "local_light_pass_increment": 0,
+            "mask_pass_count": 0,
+            "duplicate_2d_pass_count": 0,
+            "cpu_golden_vectors_pass": True,
+            "pixel_probes_pass": True,
+        }
+        cross_consumer = {
+            "schema_version": 1,
+            "availability": "available",
+            "world_epoch": 7,
+            "field_revision": 11,
+            "field_checksum": "b" * 64,
+            "gpu_uploaded_epoch": 7,
+            "gpu_uploaded_revision": 11,
+            "gpu_checksum": "b" * 64,
+            "soul_recovery_steps": 1,
+            "soul_count": 200,
+            "soul_sample_count": 200,
+            "soul_effect_count": 100,
+            "soul_mask_or_stale_effects": 0,
+            "room_count": 4,
+            "room_state_count": 4,
+            "room_world_epoch_match_count": 4,
+            "room_field_revision_match_count": 4,
+            "room_topology_match_count": 4,
+            "revision_epoch_consistency": True,
+        }
+        p08_checkpoint = {
+            **p03_checkpoint,
+            "schema_version": 4,
+            "stage_id": "p08",
+            "runtime_field": {
+                "world_epoch": 7,
+                "field_revision": 11,
+                "field_checksum": "b" * 64,
+                "typed_emitter_components": 11,
+                "eligible_supplied_emitters": 10,
+                "indoor_mask_cells": 144,
+                "indoor_mask_checksum": "a" * 64,
+            },
+            "gpu_light_field": gpu_field,
+            "cross_consumer": cross_consumer,
+        }
+        validate_runtime_checkpoint_v3(
+            p08_checkpoint,
+            contract=contract,
+            stage_id="p08",
+            capture_path=None,
+            rdc_sha256=capture_hash,
+            rdc_bytes=capture.stat().st_size,
+        )
+        try:
+            validate_runtime_checkpoint_v3(
+                {
+                    **p08_checkpoint,
+                    "cross_consumer": {
+                        **cross_consumer,
+                        "gpu_checksum": "c" * 64,
+                    },
+                },
+                contract=contract,
+                stage_id="p08",
+                capture_path=None,
+                rdc_sha256=capture_hash,
+                rdc_bytes=capture.stat().st_size,
+            )
+        except ValueError:
+            pass
+        else:
+            raise CaptureError("P08 stale cross-consumer checksum was accepted")
         if (
             _manifest_stage_id(requested_stage="current", runtime=runtime_checkpoint)
             != "current"
