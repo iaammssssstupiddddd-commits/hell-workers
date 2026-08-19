@@ -7,6 +7,7 @@ use super::super::rtt_composite::{
 use super::*;
 use bevy::asset::{AssetId, LoadState};
 use bevy::camera::NormalizedRenderTarget;
+use bevy::camera::visibility::NoFrustumCulling;
 use bevy::diagnostic::FrameCount;
 use bevy::ecs::system::SystemParam;
 use bevy::light::NotShadowCaster;
@@ -341,7 +342,12 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     terrain_chunks: Query<
         'w,
         's,
-        (&'static Mesh3d, &'static Transform, &'static RenderLayers),
+        (
+            &'static Mesh3d,
+            &'static Transform,
+            &'static RenderLayers,
+            &'static ViewVisibility,
+        ),
         With<crate::world::map::TerrainChunk>,
     >,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,
@@ -470,7 +476,10 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         return;
     };
     if selection.stage_id() == "p06" && !state.receiver_probes_spawned {
-        let Some((mesh, source_transform, render_layers)) = params.terrain_chunks.iter().next()
+        let Some((mesh, source_transform, render_layers, _)) = params
+            .terrain_chunks
+            .iter()
+            .find(|(_, _, _, visibility)| visibility.get())
         else {
             return;
         };
@@ -482,6 +491,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
             MeshMaterial3d(params.terrain_3d_handles.lod1_lite.clone()),
             probe_transform,
             render_layers.clone(),
+            NoFrustumCulling,
             NotShadowCaster,
         ));
         probe_transform.translation.y -= 0.25;
@@ -491,6 +501,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
             MeshMaterial3d(params.terrain_3d_handles.lod2.clone()),
             probe_transform,
             render_layers.clone(),
+            NoFrustumCulling,
             NotShadowCaster,
         ));
         state.receiver_probes_spawned = true;
