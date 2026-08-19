@@ -14,6 +14,8 @@ use crate::systems::lighting::{
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IndoorLightUploadSet;
 
+pub(crate) const STEADY_UPDATE_CALLS: u64 = 600;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IndoorLightTextureMetrics {
     pub update_calls: u64,
@@ -147,17 +149,36 @@ pub fn upload_indoor_light_texture_system(
     mut texture: ResMut<IndoorLightTexture>,
     mut images: ResMut<Assets<Image>>,
 ) {
+    upload_indoor_light_texture_once(
+        &runtime,
+        *world_epoch,
+        &mut lifecycle_probe,
+        &mut texture,
+        &mut images,
+    );
+}
+
+fn upload_indoor_light_texture_once(
+    runtime: &IndoorLightRuntime,
+    current_epoch: WorldEpoch,
+    lifecycle_probe: &mut IndoorLightingLifecycleProbe,
+    texture: &mut IndoorLightTexture,
+    images: &mut Assets<Image>,
+) {
     texture.metrics.update_calls = texture.metrics.update_calls.saturating_add(1);
-    let current_epoch = *world_epoch;
     let Some(snapshot) =
-        read_indoor_light_snapshot(&runtime, current_epoch, current_epoch, &mut lifecycle_probe)
+        read_indoor_light_snapshot(runtime, current_epoch, current_epoch, lifecycle_probe)
     else {
         return;
     };
     if texture.uploaded_revision == Some(snapshot.field_revision())
         && texture.uploaded_epoch == Some(current_epoch.get())
     {
-        texture.metrics.steady_updates = texture.metrics.steady_updates.saturating_add(1).min(600);
+        texture.metrics.steady_updates = texture
+            .metrics
+            .steady_updates
+            .saturating_add(1)
+            .min(STEADY_UPDATE_CALLS);
         return;
     }
 
@@ -194,6 +215,20 @@ pub fn upload_indoor_light_texture_system(
     texture.metrics.staging_bytes = staging_bytes(dimensions);
 }
 
+#[cfg(feature = "profiling-renderdoc")]
+pub(crate) fn collect_renderdoc_steady_window(
+    runtime: &IndoorLightRuntime,
+    current_epoch: WorldEpoch,
+    lifecycle_probe: &mut IndoorLightingLifecycleProbe,
+    texture: &mut IndoorLightTexture,
+    images: &mut Assets<Image>,
+) {
+    texture.begin_renderdoc_measurement();
+    for _ in 0..=STEADY_UPDATE_CALLS {
+        upload_indoor_light_texture_once(runtime, current_epoch, lifecycle_probe, texture, images);
+    }
+}
+
 pub fn reset_indoor_light_texture_for_world_replace(world: &mut World) {
     let Some(texture) = world.get_resource::<IndoorLightTexture>() else {
         return;
@@ -227,6 +262,23 @@ pub fn reset_indoor_light_texture_for_world_replace(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "profiling-renderdoc")]
+    fn collect_renderdoc_steady_window_system(
+        runtime: Res<IndoorLightRuntime>,
+        world_epoch: Res<WorldEpoch>,
+        mut lifecycle_probe: ResMut<IndoorLightingLifecycleProbe>,
+        mut texture: ResMut<IndoorLightTexture>,
+        mut images: ResMut<Assets<Image>>,
+    ) {
+        collect_renderdoc_steady_window(
+            &runtime,
+            *world_epoch,
+            &mut lifecycle_probe,
+            &mut texture,
+            &mut images,
+        );
+    }
 
     #[test]
     fn canonical_image_is_linear_nearest_and_has_padded_staging_size() {
@@ -284,5 +336,70 @@ mod tests {
                 .iter()
                 .all(|byte| *byte == 0)
         );
+    }
+
+    #[cfg(feature = "profiling-renderdoc")]
+    #[test]
+    fn renderdoc_window_runs_the_production_upload_path_without_render_frames() {
+        use std::collections::HashMap;
+
+        use hw_energy::PowerSupplyState;
+        use hw_jobs::{Building, BuildingType};
+        use hw_world::{DoorLockToggleRequest, RoomTileLookup, WorldMap};
+
+        use crate::plugins::lighting::IndoorLightingPlugin;
+        use crate::systems::GameSystemSet;
+        use crate::systems::lighting::{IndoorLightingRebuildSet, RadialLightEmitter};
+
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_message::<DoorLockToggleRequest>()
+            .init_resource::<WorldMap>()
+            .init_resource::<RoomTileLookup>()
+            .init_resource::<Assets<Image>>()
+            .configure_sets(
+                Update,
+                (
+                    GameSystemSet::Input,
+                    GameSystemSet::Spatial,
+                    GameSystemSet::Logic,
+                    GameSystemSet::PreActor,
+                    GameSystemSet::Actor,
+                    GameSystemSet::PostActor,
+                    GameSystemSet::Visual,
+                    GameSystemSet::Interface,
+                )
+                    .chain(),
+            )
+            .add_plugins(IndoorLightingPlugin)
+            .add_systems(Startup, init_indoor_light_texture_system)
+            .add_systems(
+                Update,
+                collect_renderdoc_steady_window_system.after(IndoorLightingRebuildSet),
+            );
+
+        let grid = (10, 10);
+        app.world_mut()
+            .resource_mut::<RoomTileLookup>()
+            .replace(HashMap::from([(grid, Entity::PLACEHOLDER)]));
+        let world = WorldMap::grid_to_world(grid.0, grid.1);
+        app.world_mut().spawn((
+            Building {
+                kind: BuildingType::OutdoorLamp,
+                is_provisional: false,
+            },
+            Transform::from_translation(world.extend(0.0)),
+            RadialLightEmitter::outdoor_lamp(grid),
+            PowerSupplyState::Supplied,
+        ));
+
+        app.update();
+
+        let metrics = app.world().resource::<IndoorLightTexture>().metrics();
+        assert_eq!(metrics.update_calls, STEADY_UPDATE_CALLS + 1);
+        assert_eq!(metrics.upload_count, 1);
+        assert_eq!(metrics.changed_revision_samples, 1);
+        assert_eq!(metrics.steady_updates, STEADY_UPDATE_CALLS);
+        assert_eq!(metrics.steady_uploads, 0);
     }
 }

@@ -259,6 +259,9 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     world_epoch: Res<'w, hw_core::WorldEpoch>,
     indoor_light_texture:
         ResMut<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
+    indoor_light_lifecycle_probe:
+        ResMut<'w, crate::systems::lighting::IndoorLightingLifecycleProbe>,
+    images: ResMut<'w, Assets<Image>>,
     building_3d_handles: Res<'w, crate::plugins::startup::Building3dHandles>,
     terrain_3d_handles: Res<'w, crate::plugins::startup::Terrain3dHandles>,
     structural_materials: Res<'w, Assets<hw_visual::TopDownStructuralMaterial>>,
@@ -551,18 +554,24 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
             Some(true) => {}
         }
         if !state.gpu_measurement_started {
-            params.indoor_light_texture.begin_renderdoc_measurement();
             state.gpu_measurement_started = true;
             state.previous = None;
             state.stable_updates = 0;
-            return;
+            crate::systems::visual::indoor_light_texture::collect_renderdoc_steady_window(
+                &params.indoor_light_runtime,
+                *params.world_epoch,
+                &mut params.indoor_light_lifecycle_probe,
+                &mut params.indoor_light_texture,
+                &mut params.images,
+            );
         }
         if params
             .indoor_light_texture
             .metrics()
             .changed_revision_samples
             < 1
-            || params.indoor_light_texture.metrics().steady_updates < 600
+            || params.indoor_light_texture.metrics().steady_updates
+                < crate::systems::visual::indoor_light_texture::STEADY_UPDATE_CALLS
         {
             return;
         }
