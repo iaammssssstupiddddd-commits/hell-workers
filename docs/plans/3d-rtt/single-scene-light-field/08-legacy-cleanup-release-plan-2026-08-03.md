@@ -7,7 +7,7 @@
 | 計画ID | `single-scene-light-field-08-legacy-cleanup-release-plan-2026-08-03` |
 | ステータス | `Implementation in Progress — M0 tooling implemented / native reference bootstrap pending` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-18` |
+| 最終更新日 | `2026-08-19` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | P01〜[P07](07-indoor-light-gameplay-room-plan-2026-08-03.md)すべて |
@@ -103,6 +103,7 @@
 2. static output、behavior timeline / lifecycle sidecar、field-core、consumer-core、RenderDoc checkpointをP08へ配線する。`indoor_light_gpu.json`はGPU Capture / Memory caseだけで必須とし、CPU / audit / field-core / consumer-coreでは禁止する。behaviorはfield / GPU / consumer lifecycle、field-coreはruntime field、consumer-coreはP07 CSV / proofをexact file setとして要求し、cross JSONはRenderDoc legだけで許可する。
 3. `scripts/perf_tool`のCLI / artifact / projection / bundle / summary / fixture / RenderDoc mapをP08へ拡張する。missing / extra artifact、lane leak、stage leak、row count / order、schema / identity / checkpoint mismatchをfail-closedにする。
 4. P08 RenderDocへ`indoor_light_cross_consumer.json`と対応するRust checkpoint / Python extractor / validator / gate producerを追加する。P01 Scene topology、P02 actual presentation、P06 GPU image / pixel probe、P07 CPU consumer、P08 cross factsを同じvalidated frameへ結ぶ。
+   - GPU pixel proofはowned `Rgba8Unorm` Light Field imageのdirect readbackとCPU packed RGBA一致を動的に検証し、receiver WGSLのLight Field加算が`main_pass_post_lighting_processing`より前であることを埋め込みsource順序checkで固定する。probe専用PBR cameraの継続readbackは600 steady-updateを自己stallさせるため使用しない。
 5. native launcherへP08 plan / S0 / S1 / RD0 / formal / verifyを追加する。formal leg / behavior case / preflightからprocess countを導出し、P08 self-testで現在の期待値（25 unique case、contract由来の86 game process）を固定する。
 6. source checkpoint順を`... -> after-field-core -> after-consumer-core -> before-registration`とし、field-core / consumer-core binaryもCapture binary SHA一致対象にする。P08 cross sidecarとRenderDoc capture / replayのsource fingerprintを同一にする。
 7. §3.2のcanonical physical rootでcurrent -> P01 -> P02 -> valid P06 -> existing P07を順に登録・offline verifyする。reference bootstrapはcleanup commitとは分離し、凍結contractや既存P07 artifactを変更しない。
@@ -369,14 +370,14 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 - 進捗: `M0 implementation in progress / cleanup M1〜M4 not started`
 - 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、Help no-impact review。
-- 未完了: clean commit上のnative P08 plan、actual RenderDoc cross checkpoint、canonical reference bootstrap、M1〜M4。
-- 現ブロッカー: canonical P08 baseline rootにvalid registered current -> P01 -> P02 -> P06 reference chainとexisting P07を揃える必要がある。P06 user-approved invalid RD0はP08 referenceに使えない。
+- 未完了: direct GPU pixel probe修正の再検証、actual RenderDoc cross checkpoint、valid P06 reference、M1〜M4。
+- 現ブロッカー: primary canonical rootへのexisting P07 importと全baseline offline verifyは完了したが、P06 `19ad5fec`のfresh formal retry `3989b184-a946-43d3-9367-fdad29d5d075`はprobe専用PBR cameraの継続readback中に再度600秒deadlineへ達してinvalidになった。修正版をP06 evidence-only subjectへ移植してfresh S0 / S1 / RD0 / formalを再採取し、valid P06を登録する必要がある。
 
 ### 次のAIが最初にやること
 
-1. M0実装をclean commitにし、native helperのP08 planをdry-runして4 lane / 25 case / reference requirements / source checkpointをfail-closedで確認する。
-2. actual RenderDocでP08 cross checkpointを採取し、同frameのCPU / GPU / Soul / Room raw factsをoffline再検証する。
-3. canonical evidence checkoutをcleanにし、current -> P01 -> accepted P02 -> valid P06 -> existing P07の順でreferenceを登録・offline verifyする。
+1. direct GPU pixel readback + receiver WGSL order checkを検証・commitし、P06 evidence-only subjectへ同じ修正を移植する。
+2. P06 evidence-only subjectでfresh S0 -> S1 -> RD0 -> formalを採取し、primary canonical rootへP06を登録してbaseline全体をoffline verifyする。
+3. P08 cleanup実装後、actual RenderDocでcross checkpointを採取し、同frameのCPU / GPU / Soul / Room raw factsをoffline再検証する。
 4. reference bootstrapが閉じてからM1 legacy character inventoryへ進む。
 
 ### ブロッカー/注意点
@@ -409,6 +410,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-19` | `Codex` | M0を`6675f751`でcommit。existing P07 attemptをprimary canonical rootへ原子的登録し、current / p01 / p02 / p04 / p05 / p07の6 stage・6,200 fileをoffline verify。P06 fresh formal retryはRD0で同じ600秒deadlineを再現したため、probe専用PBR cameraを廃止し、owned Light Field direct GPU pixel readback + receiver WGSL pre-post-processing順序checkへ修正開始 |
 | `2026-08-18` | `Codex` | M0実装開始。Rust / Python / nativeへP08 4 laneを追加し、GPU + CPU consumer合成、RenderDoc checkpoint schema v4、production Soul observation、Room / CPU / GPU cross validator、P08 cross sidecar、25 case / 86 process self-testを実装。native reference bootstrapとactual RenderDocは未実施 |
 | `2026-08-18` | `Codex` | P08を現行mainline / frozen contract / evidence topologyへ再レビュー。M0 tooling・reference bootstrap、same-checkpoint cross-consumer proof、TopDown material re-home、frozen projection維持、legacy character / mirrorの実consumer、fresh 25-case formalを実装順へ固定 |
 | `2026-08-04` | `Codex` | P00の全formal legへ最終計測を同期し、統計3反復と固定frame RenderDoc captureを分離 |

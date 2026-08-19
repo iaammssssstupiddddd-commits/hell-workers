@@ -136,6 +136,10 @@ lifecycleと`indoor_light_consumer_lifecycle.json`、field-coreとconsumer-core�
 CPU publication、GPU uploaded epoch / revision / checksum、production Soul recovery observation、全Room summary stateを
 raw factsで照合する。Python validatorはproducerのbooleanを信用せず、Soul sample数、stale effect 0、Room state数と
 topology validityを再計算する。P08以外のstageとRenderDoc以外のlegにcross sidecarが存在した場合は失格にする。
+GPU owner stageの`pixel_probes_pass`は、owned `Rgba8Unorm` Light Field imageをGPUから直接readbackしてCPU packed
+RGBAと一致させる動的probeと、`section_material.wgsl`でLight Field加算が
+`main_pass_post_lighting_processing`より前にあることを埋め込みsourceから固定する順序checkの積である。probe専用PBR
+cameraを毎frame readbackしないため、probe自身がRenderDoc下の600 steady-update証跡を直列stallさせることはない。
 
 一般frame-time `summary.csv`のschema v11にある`energy_lamp_steps`と
 `energy_lamp_candidates_scanned`は履歴artifact比較専用の予約列で、P07以降は常に0である。

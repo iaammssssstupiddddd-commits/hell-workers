@@ -100,6 +100,10 @@ fn make_light_field_image(dimensions: GridDimensions, data: Vec<u8>) -> Image {
         TextureFormat::Rgba8Unorm,
         default(),
     );
+    #[cfg(feature = "profiling-renderdoc")]
+    {
+        image.texture_descriptor.usage |= bevy::render::render_resource::TextureUsages::COPY_SRC;
+    }
     image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
         address_mode_u: ImageAddressMode::ClampToEdge,
         address_mode_v: ImageAddressMode::ClampToEdge,
@@ -234,6 +238,13 @@ mod tests {
         assert_eq!(image.texture_descriptor.size.height, 100);
         assert_eq!(image.data.as_deref().map(<[u8]>::len), Some(40_000));
         assert_eq!(staging_bytes(dimensions), 51_200);
+        #[cfg(feature = "profiling-renderdoc")]
+        assert!(
+            image
+                .texture_descriptor
+                .usage
+                .contains(bevy::render::render_resource::TextureUsages::COPY_SRC)
+        );
     }
 
     #[test]
