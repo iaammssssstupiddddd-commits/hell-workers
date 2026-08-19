@@ -76,6 +76,7 @@ struct StableRenderDocCheckpoint {
     runtime_field: Option<RuntimeFieldEvidence>,
     gpu_light_field: Option<RuntimeGpuLightFieldEvidence>,
     receiver_fragment_shaders: Option<[AssetId<Shader>; 4]>,
+    receiver_import_shaders: Option<[(AssetId<Shader>, Shader); 2]>,
     fixture: RuntimeFixtureEvidence,
 }
 
@@ -235,6 +236,26 @@ impl RenderDocReceiverShaders {
             self.handles[4].id(),
         ]
     }
+
+    fn import_shader_snapshots(
+        &self,
+        shaders: &Assets<Shader>,
+    ) -> Result<[(AssetId<Shader>, Shader); 2], String> {
+        let snapshot = |index: usize| {
+            let handle = &self.handles[index];
+            shaders
+                .get(handle)
+                .cloned()
+                .map(|shader| (handle.id(), shader))
+                .ok_or_else(|| {
+                    format!(
+                        "RenderDoc receiver import shader asset is unavailable: {}",
+                        RENDERDOC_RECEIVER_SHADER_PATHS[index]
+                    )
+                })
+        };
+        Ok([snapshot(6)?, snapshot(7)?])
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -299,6 +320,7 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     render_environment: Res<'w, PerfRenderEnvironmentEvidence>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
     asset_server: Res<'w, AssetServer>,
+    shaders: Res<'w, Assets<Shader>>,
     receiver_shaders: Res<'w, RenderDocReceiverShaders>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
     world_epoch: Res<'w, hw_core::WorldEpoch>,
@@ -328,7 +350,7 @@ struct RenderDocRenderParams<'w, 's> {
     adapter: Res<'w, RenderAdapterInfo>,
     device: Res<'w, RenderDevice>,
     cameras: Query<'w, 's, &'static ExtractedCamera>,
-    pipelines: Res<'w, PipelineCache>,
+    pipelines: ResMut<'w, PipelineCache>,
     frame_count: Res<'w, FrameCount>,
 }
 
@@ -438,7 +460,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         ));
         return;
     };
-    if selection.stage_id() == "p06" {
+    let receiver_import_shaders = if selection.stage_id() == "p06" {
         match params.receiver_shaders.loaded(&params.asset_server) {
             Ok(true) => {}
             Ok(false) => return,
@@ -447,7 +469,19 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
                 return;
             }
         }
-    }
+        match params
+            .receiver_shaders
+            .import_shader_snapshots(&params.shaders)
+        {
+            Ok(shaders) => Some(shaders),
+            Err(reason) => {
+                bridge.replace(RenderDocBridgeState::Failed(reason));
+                return;
+            }
+        }
+    } else {
+        None
+    };
     let expected_instances = if selection.uses_p02_presentation() {
         0
     } else {
@@ -578,6 +612,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         gpu_light_field,
         receiver_fragment_shaders: (selection.stage_id() == "p06")
             .then(|| params.receiver_shaders.fragment_shader_ids()),
+        receiver_import_shaders,
         fixture,
     });
     eprintln!("PERF_RENDERDOC: CPU checkpoint ready; waiting for GPU settle");
@@ -633,7 +668,10 @@ pub(crate) fn poll_renderdoc_capture_system(
     }
 }
 
-fn begin_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<RenderDocRenderState>) {
+fn begin_renderdoc_frame(
+    mut params: RenderDocRenderParams,
+    mut state: ResMut<RenderDocRenderState>,
+) {
     if state.active.is_some() {
         return;
     }
@@ -641,6 +679,11 @@ fn begin_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Render
         return;
     };
     if state.generation != Some(checkpoint.generation) {
+        if let Some(imports) = checkpoint.receiver_import_shaders.as_ref() {
+            for (id, shader) in imports {
+                params.pipelines.set_shader(*id, shader.clone());
+            }
+        }
         state.generation = Some(checkpoint.generation);
         state.ready_signature = None;
         state.ready_frames = 0;
