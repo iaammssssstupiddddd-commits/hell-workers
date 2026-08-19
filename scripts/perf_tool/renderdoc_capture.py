@@ -834,6 +834,7 @@ def _validate_extraction(path: Path, *, capture_hash: str, runtime: dict[str, An
         probe = value["gpu_light_field_pixel_probe"]
         expected_probe_keys = {
             "label",
+            "captured_name",
             "resource_id",
             "width",
             "height",
@@ -857,6 +858,7 @@ def _validate_extraction(path: Path, *, capture_hash: str, runtime: dict[str, An
             or probe["expected_rgba"] != runtime_gpu.get("pixel_probe_expected_rgba")
             or probe["actual_rgba"] != probe["expected_rgba"]
             or probe["passed"] is not True
+            or not isinstance(probe["captured_name"], str)
             or not isinstance(probe["resource_id"], str)
             or not probe["resource_id"]
             or not isinstance(probe["binding_count"], int)

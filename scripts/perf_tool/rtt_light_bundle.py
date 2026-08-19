@@ -1617,6 +1617,7 @@ def _load_renderdoc_evidence(
     if stage == "p06":
         expected_probe_keys = {
             "label",
+            "captured_name",
             "resource_id",
             "width",
             "height",
@@ -1640,6 +1641,7 @@ def _load_renderdoc_evidence(
             != gpu_light_field.get("pixel_probe_expected_rgba")
             or p06_pixel_probe["actual_rgba"] != p06_pixel_probe["expected_rgba"]
             or p06_pixel_probe["passed"] is not True
+            or not isinstance(p06_pixel_probe["captured_name"], str)
             or not isinstance(p06_pixel_probe["resource_id"], str)
             or not p06_pixel_probe["resource_id"]
             or not isinstance(p06_pixel_probe["binding_count"], int)
