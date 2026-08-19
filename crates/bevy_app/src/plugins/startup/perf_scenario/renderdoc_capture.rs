@@ -827,15 +827,15 @@ fn gpu_signature(
     for pipeline in params.pipelines.pipelines() {
         match &pipeline.state {
             CachedPipelineState::Ok(_) => pipeline_count += 1,
-            // Unused material variants can remain queued or fail because their
-            // shader asset was never loaded. They do not block capture: the stable
-            // signature below includes only resident GPU pipelines, and any
-            // pipeline becoming ready during capture changes the signature and
-            // fails the frame closed. Replay validates every required receiver
-            // pipeline, binding, and pixel independently.
-            CachedPipelineState::Queued
-            | CachedPipelineState::Creating(_)
-            | CachedPipelineState::Err(_) => {}
+            // Unused material variants can remain queued indefinitely. The
+            // strong shader handles above remove the former ShaderNotLoaded
+            // ambiguity, so any completed compilation error is now actionable
+            // and must fail before capture instead of silently dropping a
+            // required receiver draw.
+            CachedPipelineState::Queued | CachedPipelineState::Creating(_) => {}
+            CachedPipelineState::Err(error) => {
+                return Err(format!("render pipeline compilation failed: {error:?}"));
+            }
         }
     }
     if pipeline_count == 0 {
