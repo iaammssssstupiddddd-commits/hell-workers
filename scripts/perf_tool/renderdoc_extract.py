@@ -475,40 +475,50 @@ def _p06_gpu_light_field_pixel_probe(
         )
     ):
         raise RuntimeError("P06 GPU pixel probe request is invalid")
-    matches = [
-        texture
-        for texture in controller.GetTextures()
-        if str(getattr(texture, "name", "")).strip() == label
-    ]
+    controller.SetFrameEvent(final_event, True)
+    bound_resource_ids = {
+        row["resource_id"]
+        for row in bindings
+        if row["category"].endswith(":read-only")
+    }
+    candidates: list[tuple[Any, str, list[int], int]] = []
+    dimension_matches: list[tuple[str | None, str, bool]] = []
+    for texture in controller.GetTextures():
+        if int(texture.width) != width or int(texture.height) != height:
+            continue
+        resource_id = _resource_id(rd, texture.resourceId)
+        dimension_matches.append(
+            (
+                resource_id,
+                str(getattr(texture, "name", "")).strip(),
+                resource_id in bound_resource_ids,
+            )
+        )
+        if resource_id is None or resource_id not in bound_resource_ids:
+            continue
+        actual = _rgba8_from_unorm(
+            controller.PickPixel(
+                texture.resourceId,
+                x,
+                y,
+                rd.Subresource(),
+                rd.CompType.UNorm,
+            )
+        )
+        binding_count = sum(row["resource_id"] == resource_id for row in bindings)
+        candidates.append((texture, resource_id, actual, binding_count))
+    matches = [candidate for candidate in candidates if candidate[2] == expected]
     if len(matches) != 1:
         raise RuntimeError(
-            f"P06 Light Field label {label!r} resolved to {len(matches)} textures"
+            "P06 replay did not resolve exactly one bound Light Field texture by "
+            f"dimensions and pixel: expected={expected} candidates="
+            f"{[(resource_id, actual) for _, resource_id, actual, _ in candidates]} "
+            f"dimension_matches={dimension_matches}"
         )
-    texture = matches[0]
-    if int(texture.width) != width or int(texture.height) != height:
-        raise RuntimeError("P06 replay Light Field dimensions differ from the CPU publication")
-    resource_id = _resource_id(rd, texture.resourceId)
-    if resource_id is None:
-        raise RuntimeError("P06 replay Light Field has no resource id")
-    binding_count = sum(row["resource_id"] == resource_id for row in bindings)
-    if binding_count < 1:
-        raise RuntimeError("P06 replay Light Field is not bound by a captured receiver")
-    controller.SetFrameEvent(final_event, True)
-    actual = _rgba8_from_unorm(
-        controller.PickPixel(
-            texture.resourceId,
-            x,
-            y,
-            rd.Subresource(),
-            rd.CompType.UNorm,
-        )
-    )
-    if actual != expected:
-        raise RuntimeError(
-            f"P06 replay Light Field pixel differs: expected={expected} actual={actual}"
-        )
+    texture, resource_id, actual, binding_count = matches[0]
     return {
         "label": label,
+        "captured_name": str(getattr(texture, "name", "")).strip(),
         "resource_id": resource_id,
         "width": width,
         "height": height,
@@ -862,7 +872,8 @@ def self_test() -> int:
     The formal capture must still replay through qrenderdoc.  This narrow test
     protects the API-shape assumptions that can otherwise regress before that
     environment is available: pass boundaries, reflection binding numbers,
-    sampler-resource resolution, label lookup, and topology accounting.
+    sampler-resource resolution, bound-texture pixel selection, and topology
+    accounting.
     """
 
     from enum import IntFlag
@@ -955,7 +966,7 @@ def self_test() -> int:
 
     light_texture = SimpleNamespace(
         resourceId=ResourceId(31),
-        name="hell-workers-indoor-light-field",
+        name="Texture2D 100x100",
         width=100,
         height=100,
     )
@@ -981,7 +992,7 @@ def self_test() -> int:
                 "pixel_probe_expected_rgba": expected_rgba,
             }
         },
-        [{"resource_id": "ResourceId::31"}],
+        [{"category": "fragment:read-only", "resource_id": "ResourceId::31"}],
         99,
     )
     _require(
@@ -1014,11 +1025,11 @@ def self_test() -> int:
                     "pixel_probe_expected_rgba": expected_rgba,
                 }
             },
-            [{"resource_id": "ResourceId::31"}],
+            [{"category": "fragment:read-only", "resource_id": "ResourceId::31"}],
             99,
         )
     except RuntimeError as error:
-        _require("pixel differs" in str(error), "P06 replay mismatch reason regressed")
+        _require("dimensions and pixel" in str(error), "P06 replay mismatch reason regressed")
     else:
         raise RuntimeError("P06 replay accepted a mismatched GPU Light Field pixel")
 

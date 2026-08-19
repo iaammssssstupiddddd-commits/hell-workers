@@ -5,7 +5,7 @@ use super::super::rtt_composite::{
     RTT_COMPOSITE_SCENE_TEXTURE_BINDING,
 };
 use super::*;
-use bevy::asset::AssetId;
+use bevy::asset::{AssetId, LoadState};
 use bevy::camera::NormalizedRenderTarget;
 use bevy::diagnostic::FrameCount;
 use bevy::ecs::system::SystemParam;
@@ -17,6 +17,7 @@ use bevy::render::renderer::{RenderAdapterInfo, RenderDevice};
 use bevy::render::texture::GpuImage;
 use bevy::render::view::window::ExtractedWindows;
 use bevy::render::{Render, RenderApp, RenderSystems};
+use bevy::shader::Shader;
 use bevy::world_serialization::{WorldInstance, WorldInstanceSpawner};
 use libloading::Library;
 use serde::Serialize;
@@ -35,6 +36,16 @@ const SIMULATION_TICK_SOURCE: &str = "perf_capture.fixed_update_tick";
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
 const TOPDOWN_STRUCTURAL_SHADER: &str =
     include_str!("../../../../../../assets/shaders/section_material.wgsl");
+const RENDERDOC_RECEIVER_SHADER_PATHS: [&str; 8] = [
+    "shaders/section_material.wgsl",
+    "shaders/section_material_prepass.wgsl",
+    "shaders/terrain_surface_material.wgsl",
+    "shaders/terrain_surface_material_lod1_lite.wgsl",
+    "shaders/terrain_surface_material_lod2.wgsl",
+    "shaders/terrain_surface_material_prepass.wgsl",
+    "shaders/shadow_style.wgsl",
+    "shaders/indoor_light_field.wgsl",
+];
 
 type SoulWorldInstancesQuery<'w, 's> =
     Query<'w, 's, &'static WorldInstance, Or<(With<SoulProxy3d>, With<SoulShadowProxy3d>)>>;
@@ -185,6 +196,31 @@ pub(crate) struct RenderDocMainState {
     gpu_measurement_started: bool,
 }
 
+#[derive(Resource)]
+struct RenderDocReceiverShaders {
+    handles: [Handle<Shader>; RENDERDOC_RECEIVER_SHADER_PATHS.len()],
+}
+
+impl RenderDocReceiverShaders {
+    fn loaded(&self, asset_server: &AssetServer) -> Result<bool, String> {
+        for (path, handle) in RENDERDOC_RECEIVER_SHADER_PATHS
+            .iter()
+            .zip(self.handles.iter())
+        {
+            match asset_server.get_load_state(handle.id()) {
+                Some(LoadState::Loaded) => {}
+                Some(LoadState::Failed(error)) => {
+                    return Err(format!(
+                        "RenderDoc receiver shader failed to load: {path}: {error}"
+                    ));
+                }
+                Some(LoadState::NotLoaded | LoadState::Loading) | None => return Ok(false),
+            }
+        }
+        Ok(true)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 struct GpuReadySignature {
     pipeline_count: usize,
@@ -246,6 +282,8 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     rtt_runtime: Res<'w, RttRuntime>,
     render_environment: Res<'w, PerfRenderEnvironmentEvidence>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
+    asset_server: Res<'w, AssetServer>,
+    receiver_shaders: Res<'w, RenderDocReceiverShaders>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
     world_epoch: Res<'w, hw_core::WorldEpoch>,
     indoor_light_texture:
@@ -287,6 +325,13 @@ pub(crate) fn install(app: &mut App) {
     app.insert_resource(bridge.clone())
         .init_resource::<RenderDocCheckpointMailbox>()
         .init_resource::<RenderDocMainState>();
+    let receiver_shader_handles = {
+        let asset_server = app.world().resource::<AssetServer>();
+        RENDERDOC_RECEIVER_SHADER_PATHS.map(|path| asset_server.load(path))
+    };
+    app.insert_resource(RenderDocReceiverShaders {
+        handles: receiver_shader_handles,
+    });
     if !enabled {
         return;
     }
@@ -377,6 +422,16 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         ));
         return;
     };
+    if selection.stage_id() == "p06" {
+        match params.receiver_shaders.loaded(&params.asset_server) {
+            Ok(true) => {}
+            Ok(false) => return,
+            Err(reason) => {
+                bridge.replace(RenderDocBridgeState::Failed(reason));
+                return;
+            }
+        }
+    }
     let expected_instances = if selection.uses_p02_presentation() {
         0
     } else {
