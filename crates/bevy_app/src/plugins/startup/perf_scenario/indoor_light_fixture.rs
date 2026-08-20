@@ -19,6 +19,9 @@ use hw_jobs::{
 use hw_visual::visual3d::Building3dVisual;
 use hw_world::{DoorVisualHandles, Room, RoomBoundaryLookup, RoomTileLookup, Yard};
 
+#[cfg(feature = "profiling")]
+use hw_soul_ai::soul_ai::update::slow_simulation::SLOW_SIMULATION_STEP;
+
 use super::fixture::{
     PerfSetupFamiliarFilter, PerfSetupFamiliarQuery, PerfSetupSoulFilter, PerfSetupSoulQuery,
 };
@@ -127,6 +130,8 @@ pub(crate) struct IndoorLightFixtureState {
     pub(super) failure: Option<String>,
     door_states_seeded: bool,
     door_presentations_settled: bool,
+    p08_cross_consumer_step_armed: bool,
+    p08_cross_consumer_step_complete: bool,
 }
 
 #[derive(Clone)]
@@ -944,6 +949,57 @@ pub(crate) fn should_settle_indoor_light_fixture(
         && state.phase == IndoorLightFixturePhase::Settling
 }
 
+/// Opens exactly one production slow-simulation step for the P08 static
+/// fixture after the CPU field and Room summaries have reached the current
+/// world. Startup keeps virtual time paused, so without this explicit boundary
+/// the cross-consumer readiness check and the capture checkpoint would wait on
+/// each other forever.
+pub(crate) fn arm_p08_cross_consumer_setup_step_system(
+    config: Res<PerfScenarioConfig>,
+    mut state: ResMut<IndoorLightFixtureState>,
+    runtime: Res<IndoorLightRuntime>,
+    world_epoch: Res<WorldEpoch>,
+    room_tiles: Res<RoomTileLookup>,
+    q_room_states: Query<(&Room, &RoomIlluminationState)>,
+    mut virtual_time: ResMut<Time<Virtual>>,
+) {
+    if !config.requires_p08_cross_consumer_setup_step()
+        || state.phase != IndoorLightFixturePhase::Settling
+        || !state.door_presentations_settled
+        || state.p08_cross_consumer_step_armed
+    {
+        return;
+    }
+    let Some(fixture) = state.fixture.as_ref() else {
+        return;
+    };
+    let current_epoch = world_epoch.get();
+    let current_revision = runtime.output_revision();
+    let expected_rooms = fixture
+        .layout
+        .module_count
+        .saturating_mul(fixture.layout.module_count);
+    let topology_revision = room_tiles.topology_signature().revision();
+    let rooms_are_current = q_room_states.iter().count() == expected_rooms
+        && q_room_states.iter().all(|(room, room_state)| {
+            room_state.world_epoch() == current_epoch
+                && room_state.field_revision() == current_revision
+                && room_state.room_topology_revision() == topology_revision
+                && room_state.room_tile_signature() == &room.tile_signature
+        });
+    if runtime.availability() != crate::systems::lighting::IndoorLightAvailability::Available
+        || runtime.published_epoch() != Some(current_epoch)
+        || current_revision == 0
+        || !rooms_are_current
+    {
+        return;
+    }
+
+    virtual_time.unpause();
+    virtual_time.advance_by(SLOW_SIMULATION_STEP);
+    state.p08_cross_consumer_step_armed = true;
+}
+
 pub(super) struct IndoorLightFixtureSetupContext<'a, 'w, 's> {
     pub(super) commands: &'a mut Commands<'w, 's>,
     pub(super) state: &'a mut IndoorLightFixtureState,
@@ -1538,6 +1594,7 @@ pub(crate) struct IndoorLightValidationParams<'w, 's> {
     indoor_light_runtime: Res<'w, IndoorLightRuntime>,
     cross_consumer_observation: Res<'w, IndoorLightCrossConsumerObservation>,
     world_epoch: Res<'w, WorldEpoch>,
+    virtual_time: ResMut<'w, Time<Virtual>>,
     room_boundaries: Res<'w, RoomBoundaryLookup>,
     world_map: Res<'w, WorldMap>,
     q_stockpiles: Query<'w, 's, &'static Stockpile>,
@@ -1580,6 +1637,14 @@ pub(crate) fn validate_indoor_light_fixture_system(mut p: IndoorLightValidationP
         .rtt_light_selection()
         .is_some_and(|selection| selection.stage_id() == "p08" && selection.lane() == "static");
     if p08_static {
+        if !p.state.p08_cross_consumer_step_armed {
+            return;
+        }
+        if !p.state.p08_cross_consumer_step_complete {
+            p.virtual_time.pause();
+            p.virtual_time.advance_by(std::time::Duration::ZERO);
+            p.state.p08_cross_consumer_step_complete = true;
+        }
         let observation = *p.cross_consumer_observation;
         let current_epoch = p.world_epoch.get();
         let current_revision = p.indoor_light_runtime.output_revision();
@@ -1607,6 +1672,21 @@ pub(crate) fn validate_indoor_light_fixture_system(mut p: IndoorLightValidationP
             || observation.mask_or_stale_effects() != 0
             || !room_states_are_current
         {
+            fail_fixture(
+                &mut p.state,
+                &mut p.exit,
+                format!(
+                    "P08 cross-consumer setup step did not publish one current observation: epoch={:?}/{current_epoch} revision={:?}/{current_revision} steps={} souls={}/{} samples={}/{} masked_or_stale={} rooms_current={room_states_are_current}",
+                    observation.world_epoch(),
+                    observation.field_revision(),
+                    observation.recovery_steps(),
+                    observation.soul_count(),
+                    expected_souls,
+                    observation.sample_count(),
+                    expected_souls,
+                    observation.mask_or_stale_effects(),
+                ),
+            );
             return;
         }
     }

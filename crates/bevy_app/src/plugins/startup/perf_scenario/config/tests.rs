@@ -159,6 +159,15 @@ fn fixture_setup_freezes_for_fixed_step_and_checksum_compared_realtime_workloads
     assert!(config.pauses_virtual_time_for_field_core());
     config.rtt_light = Some(super::PerfRttLightSelection::P03_FIELD_CORE_V1);
     assert!(!config.pauses_virtual_time_for_field_core());
+    config.rtt_light = Some(super::PerfRttLightSelection::P08_STATIC_V1);
+    assert!(config.requires_p08_cross_consumer_setup_step());
+    config.clock_mode = PerfClockMode::Fixed;
+    assert!(config.requires_p08_cross_consumer_setup_step());
+    config.rtt_light = Some(super::PerfRttLightSelection::P08_BEHAVIOR_V1);
+    assert!(!config.requires_p08_cross_consumer_setup_step());
+    config.rtt_light = Some(super::PerfRttLightSelection::P07_STATIC_V1);
+    assert!(!config.requires_p08_cross_consumer_setup_step());
+    config.clock_mode = PerfClockMode::Realtime;
     config.rtt_light = None;
 
     config.workload = super::PerfWorkload::TaskDashboard;
@@ -166,6 +175,7 @@ fn fixture_setup_freezes_for_fixed_step_and_checksum_compared_realtime_workloads
     assert!(!config.keeps_virtual_time_paused_during_capture());
     assert!(!config.pauses_virtual_time_for_field_core());
     assert!(!config.freezes_indoor_light_door_automation());
+    assert!(!config.requires_p08_cross_consumer_setup_step());
 
     config.workload = super::PerfWorkload::Gather;
     config.clock_mode = PerfClockMode::Fixed;

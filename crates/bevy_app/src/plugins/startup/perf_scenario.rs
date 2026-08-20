@@ -155,10 +155,10 @@ pub use fixture::{
 };
 #[cfg(feature = "profiling")]
 pub(crate) use indoor_light_fixture::{
-    IndoorLightFixtureState, assign_indoor_light_generator_system,
-    prepare_indoor_light_soul_spa_system, seed_indoor_light_static_door_states_system,
-    should_settle_indoor_light_fixture, stabilize_indoor_light_actors_system,
-    validate_indoor_light_fixture_system,
+    IndoorLightFixtureState, arm_p08_cross_consumer_setup_step_system,
+    assign_indoor_light_generator_system, prepare_indoor_light_soul_spa_system,
+    seed_indoor_light_static_door_states_system, should_settle_indoor_light_fixture,
+    stabilize_indoor_light_actors_system, validate_indoor_light_fixture_system,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use p02_actual_window::{

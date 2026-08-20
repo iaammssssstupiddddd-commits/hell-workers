@@ -982,6 +982,18 @@ impl PerfScenarioConfig {
                 .is_some_and(|selection| selection.lane() == "consumer-core")
     }
 
+    /// P08 static evidence needs one production slow-simulation step after the
+    /// CPU field and Room summaries are current, but before capture freezes the
+    /// fixture again. Other stages and lanes must retain their existing setup
+    /// timing.
+    pub fn requires_p08_cross_consumer_setup_step(&self) -> bool {
+        self.enabled
+            && self.workload == PerfWorkload::IndoorLight
+            && self.rtt_light.is_some_and(|selection| {
+                selection.stage_id() == "p08" && selection.lane() == "static"
+            })
+    }
+
     /// P04 field-core advances the light runtime through `Update`, but must not
     /// advance normal simulation while its canonical fixture is settling.
     /// `PreActor` and `PostActor` remain scheduled while virtual time is paused,

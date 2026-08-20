@@ -234,12 +234,16 @@ impl Plugin for StartupPlugin {
                 )
                 .add_systems(
                     Update,
-                    perf_scenario::start_perf_capture_system
-                        .in_set(PerfScenarioSet::InitialCheckpoint)
-                        .run_if(perf_scenario::is_not_fixed_step_behavior)
-                        .run_if(perf_scenario::is_not_field_core)
-                        .run_if(perf_scenario::is_not_consumer_core)
-                        .run_if(perf_scenario::is_not_renderdoc_capture),
+                    (
+                        perf_scenario::arm_p08_cross_consumer_setup_step_system,
+                        perf_scenario::start_perf_capture_system
+                            .run_if(perf_scenario::is_not_fixed_step_behavior)
+                            .run_if(perf_scenario::is_not_field_core)
+                            .run_if(perf_scenario::is_not_consumer_core)
+                            .run_if(perf_scenario::is_not_renderdoc_capture),
+                    )
+                        .chain()
+                        .in_set(PerfScenarioSet::InitialCheckpoint),
                 );
             app.add_systems(
                 Update,
