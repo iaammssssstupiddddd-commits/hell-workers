@@ -266,7 +266,7 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
   - `assets/` は177ファイル、130,691,241 bytes（約126 MiB）。
   - Git追跡はWGSL 15ファイルだけで、GLB、画像、フォント等162ファイルはignore対象である。
   - 監査時点では、コードから参照するruntime asset pathは現ローカル `assets/` に存在する。
-  - `assets/models/characters/soul.glb` はlegacy visual testの入力である。production gameはP08でGLB backendを削除し、shared-pool billboardへ一本化した。
+  - `assets/models/characters/soul.glb` はGit管理外のlocal comparison referenceである。production gameと`visual_test`はP08でGLB consumerを削除し、製品Soul表示をshared-pool billboardへ一本化した。
 - 外部アセット:
   - 文書上の正本は `~/Sync/hell-workers-assets/source/` と `exports/` だが、現在調査できたホストでは実データがほぼない。
   - 現行Syncthing設定はLinux上でWindows形式のfolder pathを参照しており、正規Linuxパスと分裂している。
@@ -726,9 +726,10 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
   - M0で固定したvalidatorによるstaging GLB検証
   - `python3 scripts/dev.py verify`
 - 必須の手動確認:
-  - `cargo run --locked -p visual_test`
-  - `cargo run --locked`
-  - visual testの8 clip、6表情、全Elevation View、影、mask、RtT。
+  - `python3 scripts/dev.py cargo -- run --locked -p visual_test`
+  - `python3 scripts/dev.py cargo -- run --locked -p bevy_app@0.1.0`
+  - visual testのbuilding / terrain、directional shadow、Scene RtT。
+  - production P02 / P08 actual-windowのSoul billboard、Familiar foreground、exactly-one presentation。
   - 日本語UI、Familiar font、Soul名、絵文字、主要terrain／building／icon。
   - 検証用saveコピーでF9 load、F5 save、settings再起動。
   - 新規canonical候補のcopy-open、missing file 0、staging export、asset反映、Bevy読込。

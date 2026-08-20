@@ -17,9 +17,7 @@
 | `progress_bar.rs` | 汎用プログレスバーコンポーネント |
 | `worker_icon.rs` | ワーカー頭上アイコン（ハンマー・斧・ツルハシ等）共通実装 |
 | `wall_connection.rs` | 壁接続状態の視覚同期 |
-| `visual3d.rs` | 3D レンダリング用プロキシコンポーネント（`Building3dVisual`, `FamiliarProxy3d`, `SoulProxy3d`） |
-| `mud_mixer.rs` | 泥ミキサービジュアル |
-| `tank.rs` | タンクビジュアル |
+| `visual3d.rs` | Scene RtT用presentationコンポーネント（`Building3dVisual`, `Door3dVisual`, `ActorBillboard3d`）とactor billboard owner cache |
 | `layer/` | ビジュアルレイヤー定数・管理 |
 | `soul/` | Soul の progress bar, status, task link, idle/gathering/vitals visual |
 | `speech/` | 吹き出しと observer ベースの発話演出（`conversation/` の `systems.rs` / `phase_handlers.rs` / `bubble_spawn_helpers.rs` を含む） |

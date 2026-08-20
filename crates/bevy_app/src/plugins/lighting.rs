@@ -27,6 +27,21 @@ fn recovery_mode_is_trusted(recovery_mode: Option<&SaveRecoveryMode>) -> bool {
     recovery_mode.is_none_or(|mode| *mode == SaveRecoveryMode::Healthy)
 }
 
+fn configure_indoor_light_consumer_schedule(app: &mut App) {
+    app.configure_sets(
+        Update,
+        (
+            SoulLightRecoverySet
+                .after(IndoorLightingRebuildSet)
+                .in_set(GameSystemSet::PostActor),
+            RoomIlluminationSummarySet
+                .after(SoulLightRecoverySet)
+                .in_set(GameSystemSet::PostActor),
+        )
+            .chain(),
+    );
+}
+
 impl Plugin for IndoorLightingPlugin {
     fn build(&self, app: &mut App) {
         crate::systems::save::register_lighting_rehydrate_pipeline(app);
@@ -59,18 +74,6 @@ impl Plugin for IndoorLightingPlugin {
                     IndoorLightingDirtyCollectSet.in_set(GameSystemSet::PostActor),
                     IndoorLightingCollectSet.in_set(GameSystemSet::PostActor),
                     IndoorLightingRebuildSet.in_set(GameSystemSet::PostActor),
-                )
-                    .chain(),
-            )
-            .configure_sets(
-                Update,
-                (
-                    SoulLightRecoverySet
-                        .after(IndoorLightingRebuildSet)
-                        .in_set(GameSystemSet::PostActor),
-                    RoomIlluminationSummarySet
-                        .after(SoulLightRecoverySet)
-                        .in_set(GameSystemSet::PostActor),
                 )
                     .chain(),
             )
@@ -117,6 +120,7 @@ impl Plugin for IndoorLightingPlugin {
                     .run_if(lighting_runtime_is_trusted)
                     .in_set(RoomIlluminationSummarySet),
             );
+        configure_indoor_light_consumer_schedule(app);
         #[cfg(feature = "profiling")]
         app.init_resource::<crate::systems::lighting::IndoorLightCrossConsumerObservation>();
     }
@@ -126,6 +130,21 @@ impl Plugin for IndoorLightingPlugin {
 mod tests {
     use super::*;
 
+    #[derive(Resource, Default)]
+    struct ScheduleTrace(Vec<&'static str>);
+
+    fn trace_rebuild(mut trace: ResMut<ScheduleTrace>) {
+        trace.0.push("rebuild");
+    }
+
+    fn trace_recovery(mut trace: ResMut<ScheduleTrace>) {
+        trace.0.push("recovery");
+    }
+
+    fn trace_room_summary(mut trace: ResMut<ScheduleTrace>) {
+        trace.0.push("room-summary");
+    }
+
     #[test]
     fn recovery_failed_disables_lighting_runtime_updates() {
         assert!(recovery_mode_is_trusted(None));
@@ -133,5 +152,26 @@ mod tests {
         assert!(!recovery_mode_is_trusted(Some(
             &SaveRecoveryMode::RecoveryFailed
         )));
+    }
+
+    #[test]
+    fn consumer_sets_follow_the_current_field_in_post_actor() {
+        let mut app = App::new();
+        app.init_resource::<ScheduleTrace>().add_systems(
+            Update,
+            (
+                trace_rebuild.in_set(IndoorLightingRebuildSet),
+                trace_recovery.in_set(SoulLightRecoverySet),
+                trace_room_summary.in_set(RoomIlluminationSummarySet),
+            ),
+        );
+        configure_indoor_light_consumer_schedule(&mut app);
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<ScheduleTrace>().0,
+            ["rebuild", "recovery", "room-summary"]
+        );
     }
 }

@@ -1,7 +1,4 @@
-//! 3D レンダリング用コンポーネント定義
-//!
-//! Phase 2 ハイブリッド RtT アーキテクチャで使用するプロキシコンポーネント群。
-//! Phase 3 で GLB モデルに置き換えるまでのプレースホルダー実装。
+//! Scene RtT内の建物presentationとshared-pool Soul billboard用コンポーネント。
 
 use bevy::prelude::*;
 use std::collections::HashMap;

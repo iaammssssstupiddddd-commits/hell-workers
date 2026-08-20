@@ -51,6 +51,21 @@ type RttExtraDirectionalLightQuery<'w, 's> =
 
 pub struct VisualPlugin;
 
+fn configure_indoor_light_visual_schedule(app: &mut App) {
+    app.configure_sets(
+        Update,
+        (
+            IndoorLightUploadSet
+                .in_set(GameSystemSet::Visual)
+                .after(IndoorLightingRebuildSet),
+            DoorPresentationSyncSet
+                .in_set(GameSystemSet::Visual)
+                .after(IndoorLightUploadSet),
+        )
+            .chain(),
+    );
+}
+
 impl Plugin for VisualPlugin {
     fn build(&self, app: &mut App) {
         crate::systems::save::register_visual_rehydrate_pipeline(app);
@@ -79,18 +94,7 @@ impl Plugin for VisualPlugin {
 
         // Door mutations and the CPU Light Field are final before presentation.
         // Behavior observers remain after this stable consumer boundary.
-        app.configure_sets(
-            Update,
-            (
-                IndoorLightUploadSet
-                    .in_set(GameSystemSet::Visual)
-                    .after(IndoorLightingRebuildSet),
-                DoorPresentationSyncSet
-                    .in_set(GameSystemSet::Visual)
-                    .after(IndoorLightUploadSet),
-            )
-                .chain(),
-        );
+        configure_indoor_light_visual_schedule(app);
         app.add_systems(
             Update,
             upload_indoor_light_texture_system.in_set(IndoorLightUploadSet),
@@ -369,6 +373,21 @@ mod tests {
     use super::*;
     use crate::systems::command::AreaEditHandleKind;
 
+    #[derive(Resource, Default)]
+    struct ScheduleTrace(Vec<&'static str>);
+
+    fn trace_rebuild(mut trace: ResMut<ScheduleTrace>) {
+        trace.0.push("rebuild");
+    }
+
+    fn trace_upload(mut trace: ResMut<ScheduleTrace>) {
+        trace.0.push("upload");
+    }
+
+    fn trace_door_presentation(mut trace: ResMut<ScheduleTrace>) {
+        trace.0.push("door-presentation");
+    }
+
     #[test]
     fn world_replace_reset_removes_root_command_visuals() {
         let mut world = World::new();
@@ -395,5 +414,26 @@ mod tests {
         ] {
             assert!(world.get_entity(entity).is_err());
         }
+    }
+
+    #[test]
+    fn visual_sets_upload_the_current_field_before_door_presentation() {
+        let mut app = App::new();
+        app.init_resource::<ScheduleTrace>().add_systems(
+            Update,
+            (
+                trace_rebuild.in_set(IndoorLightingRebuildSet),
+                trace_upload.in_set(IndoorLightUploadSet),
+                trace_door_presentation.in_set(DoorPresentationSyncSet),
+            ),
+        );
+        configure_indoor_light_visual_schedule(&mut app);
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<ScheduleTrace>().0,
+            ["rebuild", "upload", "door-presentation"]
+        );
     }
 }

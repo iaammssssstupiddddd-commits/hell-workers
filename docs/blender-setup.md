@@ -223,8 +223,10 @@ upstream tag を動かす場合は、既存patchを無条件で当てず、差�
   色再現性の受入は blocker です。
 - `Material.use_nodes` は Blender 5.1.1 では動作しますが、6.0向けdeprecation warningが
   出ます。Blender upgradeとは別作業で移行します。
-- 既存 `soul.glb` は Khronos validatorで既知errorがあるため、環境のgreen fixtureには
-  使いません。現PCで新規canonical `.blend`を作る場合も、既存GLBは構造・見た目の
-  comparison referenceに限定し、importしたcopyを正本化しません。
-- この構成は一般scene品質を検査します。Soul固有の8 animation clips、face atlas、
-  Bevy visual testは別のM4受入gateです。
+- 既存 `soul.glb` は Khronos validatorで既知errorがあり、P08でproduction / visual-test
+  consumerも削除済みです。環境のgreen fixtureには使わず、現PCで新規canonical
+  `.blend`を作る場合もローカルのcomparison referenceに限定します。importしたcopyを
+  正本化しません。
+- この構成は一般scene品質を検査します。Soulの製品表示はshared-pool billboardと
+  P02 / P08 actual-window evidenceを正本とし、GLB clip / face atlasはrelease gateでは
+  ありません。

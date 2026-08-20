@@ -146,7 +146,7 @@
 5. [完了 2026-08-20] `CharacterHandles`、`Building3dHandles.soul_scene`、`GameAssets.soul_gltf / soul_scene / soul_face_atlas`とproduction loadを削除した。
 6. [完了 2026-08-20] camera / directional lightからshadow-only layer membershipを削除し、`LAYER_3D_SOUL_SHADOW`、shadow-only constants、GLB専用scale、`SoulShadowMaterial`とshader / prepassを削除した。
 7. [完了 2026-08-20] `crates/visual_test`のlegacy Soul GLB / shadow mode、ResetElevation input、専用surfaceを削除し、building / terrain TopDown visual testだけを維持した。active actor billboard acceptanceはP02 actual-window / P08 native fixtureを正本とし、`docs/visual_test.md`を同期した。
-8. `assets/models/characters/soul.glb`、face atlas等はasset catalog / docs / testを含むremaining reference 0を確認してから削除する。共有・第三者asset provenanceがある場合は未使用扱いをdocsへ残して別commitで削除する。
+8. [方針確定 2026-08-20] `assets/models/characters/soul.glb`、face atlas等はGit管理外で、workstation / Blender移行計画がlocal comparison referenceとして所有するため削除しない。production asset catalog / code / `visual_test` loadは0とし、製品release gateへ含めない。将来の削除・canonical化はasset provenanceを扱う同計画で行う。
 
 ### 主な変更ファイル
 
@@ -161,11 +161,11 @@
 
 ### 完了条件
 
-- [ ] production / workspace test codeのlegacy GLB / shadow type、spawn、observer、system、asset load、render layer、`SOUL_GLB_SCALE / SOUL_FACE_SCALE_MULTIPLIER`参照0
-- [ ] 1 Soulにつきactive billboard exactly 1、Familiar 3D proxy 0、shadow caster / shadow GLB 0
-- [ ] actor billboard owner cache / load cleanup / animation-state invalidationが維持される
-- [ ] `soul_shadow_proxy_3d`等のfrozen projection列は存在し、P08値0、過去stage readerは旧値を同じ意味で読める
-- [ ] visual_test building / terrain modesとP02 / P08 actual-window actor probesが合格
+- [x] production / workspace test codeのlegacy GLB / shadow type、spawn、observer、system、asset load、render layer、`SOUL_GLB_SCALE / SOUL_FACE_SCALE_MULTIPLIER`参照0
+- [x] 1 Soulにつきactive billboard exactly 1、Familiar 3D proxy 0、shadow caster / shadow GLB 0
+- [x] actor billboard owner cache / load cleanup / animation-state invalidationが維持される
+- [x] `soul_shadow_proxy_3d`等のfrozen projection列は存在し、P08値0、過去stage readerは旧値を同じ意味で読める
+- [x] visual_test building / terrain modesとP02 / P08 actual-window actor probesが合格
 
 ## M2: active materialをre-homeしてsection / projector fieldを削除する
 
@@ -228,7 +228,7 @@
 
 - [ ] Door / Tank / MudMixer hidden Sprite / marker / old writer 0、各building rootにactive presentation exactly 1
 - [ ] Door semantic change -> field rebuild / upload -> 3D presentationの同visual-frame schedule testが合格
-- [ ] rebuild -> recovery -> Room summaryとrebuild -> upload -> Doorの4 ordering edgeがschedule assertionで合格
+- [x] rebuild -> recovery -> Room summaryとrebuild -> upload -> Doorの4 ordering edgeがschedule assertionで合格
 - [ ] P08 actual-windowはstructural child Sprite 0、foreground child Sprite 1、owner-linked 3D exactly 1を証明
 - [ ] active load-reset hook、Room summary / cache fail-dark、GPU black resetを誤って削除していない
 - [ ] Room invalid despawn / same-tile entity recreation / topology change / field unavailableで旧state / cache 0、current keyだけが公開される
@@ -375,14 +375,13 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 - 進捗: `M0 implementation in progress / M1・M2 code cleanup complete / M3 hidden mirror implemented / fresh P08 S0+S1 valid / RD0・reference bootstrap・formal pending`
 - 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、stopped projector producer / uniform / WGSL cleanup、P08 production slow-step fixture priming、fixed-audit capture-relative clock、post-Actor actor位置復元、同一commitのfresh S0 / S1、Door / Tank / MudMixer hidden structural mirrorと旧2D writer、productionとvisual_testのSoul GLB / character material / shadow proxy backend、Help no-impact review。
-- 未完了: untracked/local legacy character assetの処置判断、actual RenderDoc cross checkpoint、valid P06 reference、M2のRenderDoc pixel / visual semantics確認、M4 formal。
+- 未完了: actual RenderDoc cross checkpoint、valid P06 reference、M2のRenderDoc pixel / visual semantics確認、M4 formal。local legacy character assetはworkstation / Blender移行計画のcomparison referenceとして保持方針を確定済み。
 - 現ブロッカー: primary canonical rootへのexisting P07 importと全baseline offline verifyは完了したが、P06 `19ad5fec`のfresh formal retry `3989b184-a946-43d3-9367-fdad29d5d075`はprobe専用PBR cameraの継続readback中に再度600秒deadlineへ達してinvalidになった。修正版をP06 evidence-only subjectへ移植してfresh S0 / S1 / RD0 / formalを再採取し、valid P06を登録する必要がある。
 
 ### 次のAIが最初にやること
 
 1. direct GPU pixel readback + receiver WGSL order checkをP06 evidence-only subjectへ移植し、fresh S0 -> S1 -> RD0 -> formalを採取してvalid P06をcanonical rootへ登録する。
-2. 残るlocal/untracked character assetを削除対象へ含めるかprovenance保管するかを判定する。
-3. committed P08 subjectのfresh RD0でstructural / Terrain / cross-consumer pixel semanticsを閉じ、canonical referenceが揃った後だけM4 formalを採取する。
+2. committed P08 subjectのfresh RD0でstructural / Terrain / cross-consumer pixel semanticsを閉じ、canonical referenceが揃った後だけM4 formalを採取する。
 
 ### ブロッカー/注意点
 
@@ -415,6 +414,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-20` | `Codex` | production PostActorのfield rebuild -> Soul recovery -> Room summaryと、Visualのfield rebuild -> GPU upload -> Door presentationを実行順で検証するfocused schedule assertionを追加。Git管理外のlegacy character assetはworkstation / Blender移行計画のlocal comparison referenceとして保持し、production / visual-test consumer 0と分離 |
 | `2026-08-20` | `Codex` | cleanup committed subject `3735cab2`でfresh actual-window S0とP08 S1をvalid取得。Intel Arc / Vulkan / X11、同一source fingerprint / Capture・Memory binary SHAでaudit / Capture / Memory / field-core / consumer-coreの57 processを完走し、`CLIP_DISTANCES`削除後のpipeline起動を確認。これはRD0 / formal / registered evidenceではない |
 | `2026-08-20` | `Codex` | `visual_test`をbuilding / terrain TopDown試験へ限定し、Soul GLB / animation / face / shadow modeと旧矢視UIを削除。remaining consumerがなくなったshared CharacterMaterial / SoulShadowMaterial / shadow-only layer・constants・shaderを削除 |
 | `2026-08-20` | `Codex` | production Soul GLB asset catalog、CharacterHandles、proxy observer / sync、animation player / face materialを削除。owner cacheをActor billboard専用へnarrowし、obsolete perf inventoryをliteral 0へ移行。visual_testのlegacy GLB / shadow surfaceは次単位へ分離 |
