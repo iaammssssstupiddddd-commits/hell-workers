@@ -219,6 +219,8 @@ pub(crate) struct PerfCapture {
     measure_virtual_secs: f64,
     measure_real_secs: f64,
     fixed_update_tick: u64,
+    determinism_virtual_elapsed_origin_ns: u128,
+    determinism_fixed_elapsed_origin_ns: u128,
     determinism_checkpoints: Vec<PerfDeterminismCheckpoint>,
     determinism_actor_records: Vec<PerfDeterminismActorRecord>,
     #[cfg(feature = "profiling-memory")]

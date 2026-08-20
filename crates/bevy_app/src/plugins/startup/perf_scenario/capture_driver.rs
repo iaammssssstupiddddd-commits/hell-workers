@@ -91,6 +91,12 @@ pub(crate) fn start_perf_capture_system(
         render_environment.as_ref(),
     ));
     if params.config.uses_fixed_timesteps() {
+        // Fixture setup may intentionally run production simulation before the
+        // audit boundary (P08 primes one slow-light consumer step). Keep the
+        // determinism timeline relative to this boundary so every audit still
+        // starts at tick/time zero.
+        capture.determinism_virtual_elapsed_origin_ns = params.virtual_time.elapsed().as_nanos();
+        capture.determinism_fixed_elapsed_origin_ns = params.fixed_time.elapsed().as_nanos();
         if let Err(error) = record_determinism_checkpoint(
             &mut capture,
             PerfCheckpointRequest {
@@ -637,6 +643,18 @@ fn record_determinism_checkpoint(
     let structural_checksum = calculate_checksum(checksum_queries);
     let audit_records = collect_audit_actor_records(checksum_queries)?;
     let checksum = checksum_from_audit_records(&audit_records);
+    let virtual_elapsed_ns = elapsed_since_capture_origin(
+        virtual_time.elapsed().as_nanos(),
+        capture.determinism_virtual_elapsed_origin_ns,
+        checkpoint,
+        "virtual",
+    )?;
+    let fixed_elapsed_ns = elapsed_since_capture_origin(
+        fixed_time.elapsed().as_nanos(),
+        capture.determinism_fixed_elapsed_origin_ns,
+        checkpoint,
+        "fixed",
+    )?;
     capture
         .determinism_checkpoints
         .push(PerfDeterminismCheckpoint {
@@ -644,9 +662,9 @@ fn record_determinism_checkpoint(
             update_tick,
             fixed_timestep_ns: fixed_time.timestep().as_nanos(),
             virtual_delta_ns: virtual_time.delta().as_nanos(),
-            virtual_elapsed_ns: virtual_time.elapsed().as_nanos(),
+            virtual_elapsed_ns,
             fixed_delta_ns: fixed_time.delta().as_nanos(),
-            fixed_elapsed_ns: fixed_time.elapsed().as_nanos(),
+            fixed_elapsed_ns,
             fixed_overstep_ns: fixed_time.overstep().as_nanos(),
             virtual_paused: virtual_time.is_paused(),
             virtual_relative_speed_bits: virtual_time.relative_speed_f64().to_bits(),
@@ -671,6 +689,18 @@ fn record_determinism_checkpoint(
     Ok(())
 }
 
+#[cfg(feature = "profiling")]
+fn elapsed_since_capture_origin(
+    current_ns: u128,
+    origin_ns: u128,
+    checkpoint: &str,
+    clock: &str,
+) -> Result<u128, String> {
+    current_ns.checked_sub(origin_ns).ok_or_else(|| {
+        format!("{checkpoint}: {clock} elapsed time moved before the capture origin")
+    })
+}
+
 #[cfg(all(test, feature = "profiling"))]
 mod tests {
     use super::*;
@@ -686,5 +716,21 @@ mod tests {
         assert!(virtual_time.is_paused());
         assert_eq!(virtual_time.delta(), std::time::Duration::ZERO);
         assert_eq!(virtual_time.elapsed(), elapsed);
+    }
+
+    #[test]
+    fn determinism_elapsed_time_is_relative_to_the_capture_origin() {
+        assert_eq!(
+            elapsed_since_capture_origin(100_000_000, 100_000_000, "initial", "virtual"),
+            Ok(0)
+        );
+        assert_eq!(
+            elapsed_since_capture_origin(115_625_000, 100_000_000, "tick-1", "virtual"),
+            Ok(15_625_000)
+        );
+        assert_eq!(
+            elapsed_since_capture_origin(99, 100, "rewind", "fixed"),
+            Err("rewind: fixed elapsed time moved before the capture origin".to_string())
+        );
     }
 }

@@ -73,7 +73,7 @@
 | Room summary | 全current Roomの`RoomIlluminationState.world_epoch / field_revision`、topology validity、stale / missing count |
 
 - profiling時だけ使うboundedな`IndoorLightCrossConsumerObservation`（名称は実装時にこれへ固定）をproduction recovery system内で更新し、外部のpure sampler呼出しだけでSoul観測を偽装しない。
-- P08 static fixtureはfield / Roomがreadyになった後、capture freeze前のsetup phaseで実際のslow simulation stepを1回通し、fixture内全Soulのproduction observationを確定する。その後`Time<Virtual>`をpauseしてRenderDoc checkpointまでepoch / revision / checksum / topologyが不変であることを要求する。観測なし、複数revision混在、pause後のfield変更、Soul / Room件数不足はfail-closedにする。
+- P08 static fixtureはfield / Roomがreadyになった後、capture freeze前のsetup phaseで実際のslow simulation stepを1回通し、fixture内全Soulのproduction observationを確定する。その後`Time<Virtual>`をpauseしてRenderDoc checkpointまでepoch / revision / checksum / topologyが不変であることを要求する。fixed auditではこのsetup step後のcapture境界をvirtual / fixed elapsedの原点にしてCSVを相対時刻化し、fixture準備時間をaudit tickへ混入させない。観測なし、複数revision混在、pause後のfield変更、Soul / Room件数不足、capture原点より前への時刻逆行はfail-closedにする。
 - observationはderived / nonserialized resourceとし、fixture開始とfield unavailable時にclearする。P08 ownerのidempotent load-reset hookでnormal / rollback / recovery-only / recovery-failed / duplicate reset時に即時clear / epoch-invalid化し、preflight rejectではlive observationを変更しない。reset後にproduction recoveryがcurrent fieldを読むまで旧observationを再公開しない。
 - additive schema version 1の`indoor_light_cross_consumer.json`をP08 RenderDoc legだけのrequired sidecarとする。その他stage / legでは禁止する。producerの`revision_epoch_consistency` booleanを信用せず、Python validatorが上表のraw factsから再計算する。
 - stale epoch / revision、GPU checksum差、Soul observation欠落、Room state欠落 / topology mismatch、sidecar missing / extra / malformedを個別negative testにする。
@@ -104,6 +104,7 @@
 3. `scripts/perf_tool`のCLI / artifact / projection / bundle / summary / fixture / RenderDoc mapをP08へ拡張する。missing / extra artifact、lane leak、stage leak、row count / order、schema / identity / checkpoint mismatchをfail-closedにする。
 4. P08 RenderDocへ`indoor_light_cross_consumer.json`と対応するRust checkpoint / Python extractor / validator / gate producerを追加する。P01 Scene topology、P02 actual presentation、P06 GPU image / pixel probe、P07 CPU consumer、P08 cross factsを同じvalidated frameへ結ぶ。
    - GPU pixel proofはowned `Rgba8Unorm` Light Field imageのdirect readbackとCPU packed RGBA一致を動的に検証し、receiver WGSLのLight Field加算が`main_pass_post_lighting_processing`より前であることを埋め込みsource順序checkで固定する。probe専用PBR cameraの継続readbackは600 steady-updateを自己stallさせるため使用しない。
+   - P08 static fixtureはcapture開始前にproduction slow stepをexactly 1回だけ通す。fixed auditのdeterminism elapsedはcapture境界からの相対値とし、setup stepを実行してもcheckpoint 0=`0 ns`、tick 1=`fixed timestep`を維持する。
 5. native launcherへP08 plan / S0 / S1 / RD0 / formal / verifyを追加する。formal leg / behavior case / preflightからprocess countを導出し、P08 self-testで現在の期待値（25 unique case、contract由来の86 game process）を固定する。
 6. source checkpoint順を`... -> after-field-core -> after-consumer-core -> before-registration`とし、field-core / consumer-core binaryもCapture binary SHA一致対象にする。P08 cross sidecarとRenderDoc capture / replayのsource fingerprintを同一にする。
 7. §3.2のcanonical physical rootでcurrent -> P01 -> P02 -> valid P06 -> existing P07を順に登録・offline verifyする。reference bootstrapはcleanup commitとは分離し、凍結contractや既存P07 artifactを変更しない。
@@ -112,7 +113,7 @@
 
 - `crates/bevy_app/src/plugins/startup/perf_scenario/{config.rs,config/tests.rs,output.rs,behavior_driver.rs,renderdoc_capture.rs}`
 - `crates/bevy_app/src/plugins/startup/perf_scenario/{field_core_driver.rs,consumer_core_driver.rs,indoor_light_fixture.rs}`
-- `crates/bevy_app/src/plugins/startup/{perf_scenario.rs,mod.rs}`
+- `crates/bevy_app/src/plugins/startup/{perf_scenario.rs,perf_scenario/capture_driver.rs,mod.rs}`
 - `crates/bevy_app/src/systems/{energy/lamp_buff.rs,lighting/room_summary.rs,visual/indoor_light_texture.rs}`
 - `scripts/perf_tool/{arguments.py,cli.py,artifacts.py,model.py,summary.py,fixtures.py,policy.py}`
 - `scripts/perf_tool/{rtt_light_contract.py,rtt_light_bundle.py,renderdoc_capture.py,renderdoc_extract.py,renderdoc_foundation.py}`
@@ -122,6 +123,7 @@
 ### 完了条件
 
 - [x] Rust / Python / nativeのP08全4 lane selector positive testと、unknown lane / stage mismatch negative testが合格
+- [x] P08 fixed auditがproduction slow stepを1回通してfixture readyへ到達し、capture-relative virtual / fixed elapsedでdeterminism validatorに合格
 - [ ] P08はGPU sidecarとconsumer sidecarを同時に生成し、p06 / p07や他legへのcross sidecar leakが0
 - [ ] cross-consumer raw factsからvalidatorが一致を再計算し、stale / missing / malformed fixtureがすべてrejectされる
 - [ ] P08 RenderDoc checkpointがpausedで、production Soul observation / Room state / CPU field / GPU uploadの同epoch / revision / checksumを証明
@@ -368,17 +370,17 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 ### 現在地
 
-- 進捗: `M0 implementation in progress / cleanup M1〜M4 not started`
-- 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、Help no-impact review。
-- 未完了: direct GPU pixel probe修正の再検証、actual RenderDoc cross checkpoint、valid P06 reference、M1〜M4。
+- 進捗: `M0 implementation in progress / M1・M2 projector subset complete / remaining cleanup pending`
+- 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、stopped projector producer / uniform / WGSL cleanup、P08 production slow-step fixture priming、fixed-audit capture-relative clock、Help no-impact review。
+- 未完了: fresh committed subjectでのS0 / S1再採取、actual RenderDoc cross checkpoint、valid P06 reference、legacy character / material re-home / section / mirror cleanup、M4 formal。
 - 現ブロッカー: primary canonical rootへのexisting P07 importと全baseline offline verifyは完了したが、P06 `19ad5fec`のfresh formal retry `3989b184-a946-43d3-9367-fdad29d5d075`はprobe専用PBR cameraの継続readback中に再度600秒deadlineへ達してinvalidになった。修正版をP06 evidence-only subjectへ移植してfresh S0 / S1 / RD0 / formalを再採取し、valid P06を登録する必要がある。
 
 ### 次のAIが最初にやること
 
-1. direct GPU pixel readback + receiver WGSL order checkを検証・commitし、P06 evidence-only subjectへ同じ修正を移植する。
-2. P06 evidence-only subjectでfresh S0 -> S1 -> RD0 -> formalを採取し、primary canonical rootへP06を登録してbaseline全体をoffline verifyする。
+1. capture-relative clock修正を含むclean committed subjectでfresh P08 S0 -> S1を再採取する。
+2. direct GPU pixel readback + receiver WGSL order checkをP06 evidence-only subjectへ移植し、fresh S0 -> S1 -> RD0 -> formalを採取してvalid P06をcanonical rootへ登録する。
 3. P08 cleanup実装後、actual RenderDocでcross checkpointを採取し、同frameのCPU / GPU / Soul / Room raw factsをoffline再検証する。
-4. reference bootstrapが閉じてからM1 legacy character inventoryへ進む。
+4. reference bootstrapと並行しない独立commitとしてM1 legacy character inventoryへ進む。
 
 ### ブロッカー/注意点
 
@@ -391,10 +393,10 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 ### 最終確認ログ
 
-- Rust gates: `2026-08-18` / `not run (plan-only review)`
-- native acceptance: `2026-08-18` / `not run (plan-only review)`
-- Help impact: `2026-08-18` / `not applicable (plan-only review; check_help_impact.py pass、implementation後にactual decision必須)`
-- docs gate: `2026-08-18` / `pass (docs --write / --check、check_docs、diff --check)`
+- Rust gates: `2026-08-20` / `pass (focused profiling tests 2、python3 scripts/dev.py verify)`
+- native acceptance: `2026-08-20` / `partial (projector cleanup subjectのS0はvalid。clock修正後のheadless P08 fixed-audit smokeはValid 1 / Invalid 0。fresh committed subjectのS0 / S1は未採取)`
+- Help impact: `2026-08-20` / `No impact (profiling-only P08 fixture / audit clock origin。通常gameplayのinput / visual / lighting / save / label / workflowは不変)`
+- docs gate: `2026-08-20` / `pass (docs --write / --check、check_docs、diff --check)`
 
 ### Definition of Done
 
@@ -410,6 +412,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-20` | `Codex` | P08 static fixtureをproduction slow stepでprimeし、fixed auditのvirtual / fixed elapsedをcapture境界相対へ修正。headless P08 small / CPU 1-runで旧paused待ちを解消し、7 checkpointが`0 ns`起点でValid 1 / Invalid 0となることを確認。stopped Soul projector producer / uniform / WGSL cleanupも独立commitで完了 |
 | `2026-08-19` | `Codex` | M0を`6675f751`でcommit。existing P07 attemptをprimary canonical rootへ原子的登録し、current / p01 / p02 / p04 / p05 / p07の6 stage・6,200 fileをoffline verify。P06 fresh formal retryはRD0で同じ600秒deadlineを再現したため、probe専用PBR cameraを廃止し、owned Light Field direct GPU pixel readback + receiver WGSL pre-post-processing順序checkへ修正開始 |
 | `2026-08-18` | `Codex` | M0実装開始。Rust / Python / nativeへP08 4 laneを追加し、GPU + CPU consumer合成、RenderDoc checkpoint schema v4、production Soul observation、Room / CPU / GPU cross validator、P08 cross sidecar、25 case / 86 process self-testを実装。native reference bootstrapとactual RenderDocは未実施 |
 | `2026-08-18` | `Codex` | P08を現行mainline / frozen contract / evidence topologyへ再レビュー。M0 tooling・reference bootstrap、same-checkpoint cross-consumer proof、TopDown material re-home、frozen projection維持、legacy character / mirrorの実consumer、fresh 25-case formalを実装順へ固定 |
