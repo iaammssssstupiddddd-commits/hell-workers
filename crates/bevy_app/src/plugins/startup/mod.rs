@@ -234,6 +234,12 @@ impl Plugin for StartupPlugin {
                 )
                 .add_systems(
                     Update,
+                    perf_scenario::restore_p08_cross_consumer_actor_positions_system
+                        .in_set(GameSystemSet::PostActor)
+                        .before(crate::systems::lighting::IndoorLightingRebuildSet),
+                )
+                .add_systems(
+                    Update,
                     (
                         perf_scenario::arm_p08_cross_consumer_setup_step_system,
                         perf_scenario::start_perf_capture_system

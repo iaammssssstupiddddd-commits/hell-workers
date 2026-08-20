@@ -1000,6 +1000,46 @@ pub(crate) fn arm_p08_cross_consumer_setup_step_system(
     state.p08_cross_consumer_step_armed = true;
 }
 
+/// Restores canonical fixture cells after the one P08 setup step has run the
+/// Actor schedule and before production lighting consumers sample the current
+/// transforms in PostActor.
+pub(crate) fn restore_p08_cross_consumer_actor_positions_system(
+    config: Res<PerfScenarioConfig>,
+    state: Res<IndoorLightFixtureState>,
+    mut q_transforms: Query<&mut Transform>,
+) {
+    if !config.requires_p08_cross_consumer_setup_step()
+        || state.phase != IndoorLightFixturePhase::Settling
+        || !state.p08_cross_consumer_step_armed
+        || state.p08_cross_consumer_step_complete
+    {
+        return;
+    }
+    let Some(fixture) = state.fixture.as_ref() else {
+        return;
+    };
+    for (&entity, &grid) in fixture.soul_entities.iter().zip(&fixture.layout.soul_cells) {
+        if let Ok(mut transform) = q_transforms.get_mut(entity) {
+            restore_fixture_actor_position(&mut transform, grid);
+        }
+    }
+    for (&entity, &grid) in fixture
+        .familiar_entities
+        .iter()
+        .zip(&fixture.layout.familiar_cells)
+    {
+        if let Ok(mut transform) = q_transforms.get_mut(entity) {
+            restore_fixture_actor_position(&mut transform, grid);
+        }
+    }
+}
+
+fn restore_fixture_actor_position(transform: &mut Transform, grid: Grid) {
+    let position = WorldMap::grid_to_world(grid.0, grid.1);
+    transform.translation.x = position.x;
+    transform.translation.y = position.y;
+}
+
 pub(super) struct IndoorLightFixtureSetupContext<'a, 'w, 's> {
     pub(super) commands: &'a mut Commands<'w, 's>,
     pub(super) state: &'a mut IndoorLightFixtureState,
@@ -3336,6 +3376,18 @@ mod tests {
             observation: Some(observation),
             ..default()
         }
+    }
+
+    #[test]
+    fn p08_setup_step_restore_uses_canonical_cell_and_preserves_depth() {
+        let grid = (21, 25);
+        let mut transform = Transform::from_xyz(999.0, -999.0, 17.0);
+
+        restore_fixture_actor_position(&mut transform, grid);
+
+        let expected = WorldMap::grid_to_world(grid.0, grid.1);
+        assert_eq!(transform.translation.truncate(), expected);
+        assert_eq!(transform.translation.z, 17.0);
     }
 
     #[test]
