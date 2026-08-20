@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-08-legacy-cleanup-release-plan-2026-08-03` |
-| ステータス | `Implementation in Progress — M1/M2 code cleanup complete / native reference bootstrap pending` |
+| ステータス | `Implementation in Progress — M1/M2 code cleanup complete / fresh P08 S0+S1 valid / RD0・reference bootstrap pending` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-20` |
 | 作成者 | `Codex` |
@@ -173,11 +173,11 @@
 
 1. [完了 2026-08-20] `topdown_structural_material.rs`へ独立`TopDownStructuralMaterialExt` / uniform / factory / fragment / prepass shaderを作り、`SectionMaterialExt` aliasを解消した。
 2. [完了 2026-08-20] 独立materialはP06のbuild progress / wall height、provisional wall alpha / prepass、directional shadow style、Door root light anchor、shared Light Field bindingを保持する。`AsBindGroup` / WGSLの予約layoutはuniform `100`、Light Field texture / sampler `111 / 112`を維持し、cut / projector fieldは新uniformへ持ち込まない。
-3. [code完了 2026-08-20 / actual-window再確認待ち] `Building3dHandles`全handle、spawn、Door / Tank / Mixer material swap、wall completion、P02 actual-window exact-handle probe、save rehydrate fixtureを独立型へ移した。material / Image handle identityのRust契約は維持し、native確認をM4前に再実行する。
+3. [code完了 2026-08-20 / fresh P08 S0+S1 valid] `Building3dHandles`全handle、spawn、Door / Tank / Mixer material swap、wall completion、P02 actual-window exact-handle probe、save rehydrate fixtureを独立型へ移した。material / Image handle identityのRust契約を維持し、committed subject `3735cab2` のactual-window / Vulkan S0+S1でruntime pipeline成立を再確認した。visual semanticsの最終判定はfresh RD0 / formalで閉じる。
 4. [完了 2026-08-20] structural consumer 0確認後に`SectionMaterial` alias / factory、`SectionCut` resource / sync / plugin registration / tests、`section_material*.wgsl`を削除した。存在しない`systems/visual/section_cut.rs`は新設していない。
 5. [完了 2026-08-20] Terrain LOD1 / LOD1-lite / LOD2のRust uniformと全fragment / prepass WGSLからcut position / normal / thickness / active、projector arrays / metadata / discard / loopを削除した。Light Field、terrain blend、directional shadow、alpha / depth契約は維持した。
 6. [完了 2026-08-20] `shadow_style.wgsl`は全削除せず、Soul projector helper / args / mixだけを除去し、現役directional shadow helperを保持した。
-7. [code完了 2026-08-20 / native再確認待ち] `MAX_SOUL_SHADOW_PROJECTORS`、projector radius / feather / strength / forward extentをreference 0確認後に削除した。全active shader / pipelineでclip参照0を確認し、`WgpuFeatures::CLIP_DISTANCES`要求も削除した。native adapter起動はfresh committed subjectで再確認する。
+7. [完了 2026-08-20] `MAX_SOUL_SHADOW_PROJECTORS`、projector radius / feather / strength / forward extentをreference 0確認後に削除した。全active shader / pipelineでclip参照0を確認し、`WgpuFeatures::CLIP_DISTANCES`要求も削除した。committed subject `3735cab2` のfresh S0+S1はIntel Arc / Vulkan / X11でvalidation errorなくvalid完了した。
 
 ### 主な変更ファイル
 
@@ -197,7 +197,7 @@
 - [ ] provisional wall build progress / alpha / prepass、Door Open / Closed / Locked root-cell light、Tank / Mixer state、directional shadowが維持される
 - [ ] Terrain LOD1 / LOD1-lite / LOD2 shader compile、shared Light Field binding、native pixel / RenderDoc probeが合格
 - [x] structural Rust `AsBindGroup` / fragment / prepassのbindingは`100` / `111` / `112`で一致し、collision / layout drift testが合格
-- [ ] `CLIP_DISTANCES`削除後もVulkan adapter / actual windowが起動し、shader validation error 0
+- [x] `CLIP_DISTANCES`削除後もVulkan adapter / actual windowが起動し、shader validation error 0
 
 ## M3: structural mirror / config / runtime inventoryを掃除する
 
@@ -373,16 +373,16 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 ### 現在地
 
-- 進捗: `M0 implementation in progress / M1・M2 code cleanup complete / M3 hidden mirror implemented / native・formal pending`
+- 進捗: `M0 implementation in progress / M1・M2 code cleanup complete / M3 hidden mirror implemented / fresh P08 S0+S1 valid / RD0・reference bootstrap・formal pending`
 - 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、stopped projector producer / uniform / WGSL cleanup、P08 production slow-step fixture priming、fixed-audit capture-relative clock、post-Actor actor位置復元、同一commitのfresh S0 / S1、Door / Tank / MudMixer hidden structural mirrorと旧2D writer、productionとvisual_testのSoul GLB / character material / shadow proxy backend、Help no-impact review。
-- 未完了: cleanup後のactual-window再確認、untracked/local legacy character assetの処置判断、actual RenderDoc cross checkpoint、valid P06 reference、M2のnative shader / pixel確認、M4 formal。
+- 未完了: untracked/local legacy character assetの処置判断、actual RenderDoc cross checkpoint、valid P06 reference、M2のRenderDoc pixel / visual semantics確認、M4 formal。
 - 現ブロッカー: primary canonical rootへのexisting P07 importと全baseline offline verifyは完了したが、P06 `19ad5fec`のfresh formal retry `3989b184-a946-43d3-9367-fdad29d5d075`はprobe専用PBR cameraの継続readback中に再度600秒deadlineへ達してinvalidになった。修正版をP06 evidence-only subjectへ移植してfresh S0 / S1 / RD0 / formalを再採取し、valid P06を登録する必要がある。
 
 ### 次のAIが最初にやること
 
-1. fresh committed P08 subjectでactual-window / S0 / S1を再実行し、独立TopDown structural shader、Terrain 3 LOD、hidden mirror 0、billboard / foregroundを確認する。
-2. direct GPU pixel readback + receiver WGSL order checkをP06 evidence-only subjectへ移植し、fresh S0 -> S1 -> RD0 -> formalを採取してvalid P06をcanonical rootへ登録する。
-3. 残るlocal/untracked character assetを削除対象へ含めるかprovenance保管するかを判定し、P08 RenderDoc cross checkpointとM4 formalを採取する。
+1. direct GPU pixel readback + receiver WGSL order checkをP06 evidence-only subjectへ移植し、fresh S0 -> S1 -> RD0 -> formalを採取してvalid P06をcanonical rootへ登録する。
+2. 残るlocal/untracked character assetを削除対象へ含めるかprovenance保管するかを判定する。
+3. committed P08 subjectのfresh RD0でstructural / Terrain / cross-consumer pixel semanticsを閉じ、canonical referenceが揃った後だけM4 formalを採取する。
 
 ### ブロッカー/注意点
 
@@ -397,7 +397,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 - Rust gates: `2026-08-20` / `pass (M2 structural / terrain shader contract tests under profiling-renderdoc、Clippy workspace all-targets、python3 scripts/dev.py verify)`
 - headless P08 audit: `2026-08-20` / `pass (target/perf-runs/p08-production-glb-removal-smoke-4、small CPU、Valid 1 / Invalid 0、determinism signature 4ea0f6ef43859c30)`
-- native acceptance: `2026-08-20` / `partial (actor復元subject addc5724のfresh S0とP08 S1がvalid。S1はaudit / Capture / Memory / field-core / consumer-coreを完走。M3 mirror削除後のactual-window / S0 / S1 / RD0 / formalは未採取)`
+- native acceptance: `2026-08-20` / `partial (cleanup committed subject 3735cab2、source fingerprint 22bfca85...でfresh S0 / P08 S1がvalid。Intel Arc / Vulkan / X11でS1のaudit 3、Capture 18、Memory 18、field-core 3、consumer-core 3 runはinvalid 0。S0/S1のCapture SHA 3aa544f5...、Memory SHA eb09c1f9...は一致。S1 job rtt-light-s1-20260820T082815Z-20f021f6。RD0 / formalは未採取)`
 - Help impact: `2026-08-20` / `No impact (停止済みproduction GLB backend、非表示structural mirror、到達不能section-cutと未使用GPU feature要求の削除。可視billboard / 3D presentation、通常gameplayのinput / state semantics / save / label / workflowは不変)`
 - docs gate: `2026-08-20` / `pass (docs --write / --check、check_docs、diff --check)`
 
@@ -415,6 +415,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-20` | `Codex` | cleanup committed subject `3735cab2`でfresh actual-window S0とP08 S1をvalid取得。Intel Arc / Vulkan / X11、同一source fingerprint / Capture・Memory binary SHAでaudit / Capture / Memory / field-core / consumer-coreの57 processを完走し、`CLIP_DISTANCES`削除後のpipeline起動を確認。これはRD0 / formal / registered evidenceではない |
 | `2026-08-20` | `Codex` | `visual_test`をbuilding / terrain TopDown試験へ限定し、Soul GLB / animation / face / shadow modeと旧矢視UIを削除。remaining consumerがなくなったshared CharacterMaterial / SoulShadowMaterial / shadow-only layer・constants・shaderを削除 |
 | `2026-08-20` | `Codex` | production Soul GLB asset catalog、CharacterHandles、proxy observer / sync、animation player / face materialを削除。owner cacheをActor billboard専用へnarrowし、obsolete perf inventoryをliteral 0へ移行。visual_testのlegacy GLB / shadow surfaceは次単位へ分離 |
 | `2026-08-20` | `Codex` | actor復元subject `addc5724`でfresh S0 / P08 S1をvalid取得。続いてDoor / Tank / MudMixer hidden structural Sprite、marker、旧2D state writerを削除し、3D state consumerへ一本化。P08 fixtureだけchild Sprite 0へ更新し、p02〜p07 historical projectionを保持 |
