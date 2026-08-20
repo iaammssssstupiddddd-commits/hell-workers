@@ -5,19 +5,21 @@ use super::super::rtt_composite::{
     RTT_COMPOSITE_SCENE_TEXTURE_BINDING,
 };
 use super::*;
-use bevy::asset::AssetId;
+use bevy::asset::{AssetId, LoadState};
 use bevy::camera::NormalizedRenderTarget;
+use bevy::camera::visibility::NoFrustumCulling;
 use bevy::diagnostic::FrameCount;
 use bevy::ecs::system::SystemParam;
+use bevy::light::NotShadowCaster;
 use bevy::render::camera::ExtractedCamera;
 use bevy::render::extract_resource::{ExtractResource, ExtractResourcePlugin};
-use bevy::render::gpu_readback::{Readback, ReadbackComplete};
 use bevy::render::render_asset::RenderAssets;
-use bevy::render::render_resource::{CachedPipelineState, PipelineCache};
+use bevy::render::render_resource::{CachedPipelineState, PipelineCache, PipelineDescriptor};
 use bevy::render::renderer::{RenderAdapterInfo, RenderDevice};
 use bevy::render::texture::GpuImage;
 use bevy::render::view::window::ExtractedWindows;
 use bevy::render::{Render, RenderApp, RenderSystems};
+use bevy::shader::{Shader, ShaderCacheError};
 use bevy::world_serialization::{WorldInstance, WorldInstanceSpawner};
 use libloading::Library;
 use serde::Serialize;
@@ -27,15 +29,31 @@ use std::ptr;
 use std::sync::{Arc, Mutex};
 
 const RENDERDOC_SETTLE_FRAMES: u32 = 4;
+const RENDERDOC_GATE_TIMEOUT_FRAMES: u32 = 600;
 const RENDERDOC_CHECKPOINT_NAME: &str = "indoor-light-fixture-ready-v1";
 const RENDERDOC_REQUESTED_API_VERSION: &str = "1.6.0";
 const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 4;
 const RENDERDOC_SELECTOR_STRATEGY: &str = "wgpu_device_null_window";
 const SIMULATION_TICK_SOURCE: &str = "perf_capture.fixed_update_tick";
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
-const P06_PIXEL_PROBE_MAX_READBACKS: u32 = 8;
 const TOPDOWN_STRUCTURAL_SHADER: &str =
     include_str!("../../../../../../assets/shaders/section_material.wgsl");
+const RENDERDOC_RECEIVER_SHADER_PATHS: [&str; 8] = [
+    "shaders/section_material.wgsl",
+    "shaders/section_material_prepass.wgsl",
+    "shaders/terrain_surface_material.wgsl",
+    "shaders/terrain_surface_material_lod1_lite.wgsl",
+    "shaders/terrain_surface_material_lod2.wgsl",
+    "shaders/terrain_surface_material_prepass.wgsl",
+    "shaders/shadow_style.wgsl",
+    "shaders/indoor_light_field.wgsl",
+];
+const RENDERDOC_RECEIVER_FRAGMENT_SHADER_PATHS: [&str; 4] = [
+    RENDERDOC_RECEIVER_SHADER_PATHS[0],
+    RENDERDOC_RECEIVER_SHADER_PATHS[2],
+    RENDERDOC_RECEIVER_SHADER_PATHS[3],
+    RENDERDOC_RECEIVER_SHADER_PATHS[4],
+];
 
 type SoulWorldInstancesQuery<'w, 's> =
     Query<'w, 's, &'static WorldInstance, Or<(With<SoulProxy3d>, With<SoulShadowProxy3d>)>>;
@@ -60,6 +78,8 @@ struct StableRenderDocCheckpoint {
     runtime_field: Option<RuntimeFieldEvidence>,
     gpu_light_field: Option<RuntimeGpuLightFieldEvidence>,
     cross_consumer: Option<RuntimeCrossConsumerEvidence>,
+    receiver_fragment_shaders: Option<[AssetId<Shader>; 4]>,
+    receiver_import_shaders: Option<[(AssetId<Shader>, Shader); 2]>,
     fixture: RuntimeFixtureEvidence,
 }
 
@@ -118,6 +138,12 @@ struct RuntimeGpuLightFieldEvidence {
     duplicate_2d_pass_count: u32,
     cpu_golden_vectors_pass: bool,
     pixel_probes_pass: bool,
+    field_texture_label: &'static str,
+    field_width: u16,
+    field_height: u16,
+    pixel_probe_x: u16,
+    pixel_probe_y: u16,
+    pixel_probe_expected_rgba: [u8; 4],
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -141,27 +167,6 @@ struct RuntimeCrossConsumerEvidence {
     room_field_revision_match_count: u32,
     room_topology_match_count: u32,
     revision_epoch_consistency: bool,
-}
-
-#[derive(Resource, Default)]
-struct P06PixelProbeState {
-    started: bool,
-    passed: Option<bool>,
-    expected_rgba: [u8; 4],
-    byte_offset: usize,
-    readbacks: u32,
-}
-
-#[derive(SystemParam)]
-struct P06PixelProbeSetupParams<'w, 's> {
-    commands: Commands<'w, 's>,
-    config: Res<'w, PerfScenarioConfig>,
-    fixture: Res<'w, IndoorLightFixtureState>,
-    runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
-    world_epoch: Res<'w, hw_core::WorldEpoch>,
-    lifecycle_probe: ResMut<'w, crate::systems::lighting::IndoorLightingLifecycleProbe>,
-    light_texture: Res<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
-    state: ResMut<'w, P06PixelProbeState>,
 }
 
 #[derive(Resource, Clone, Default, ExtractResource)]
@@ -227,6 +232,61 @@ pub(crate) struct RenderDocMainState {
     stable_updates: u8,
     next_generation: u64,
     gpu_measurement_started: bool,
+    receiver_probes_spawned: bool,
+}
+
+#[derive(Resource)]
+struct RenderDocReceiverShaders {
+    handles: [Handle<Shader>; RENDERDOC_RECEIVER_SHADER_PATHS.len()],
+}
+
+impl RenderDocReceiverShaders {
+    fn loaded(&self, asset_server: &AssetServer) -> Result<bool, String> {
+        for (path, handle) in RENDERDOC_RECEIVER_SHADER_PATHS
+            .iter()
+            .zip(self.handles.iter())
+        {
+            match asset_server.get_load_state(handle.id()) {
+                Some(LoadState::Loaded) => {}
+                Some(LoadState::Failed(error)) => {
+                    return Err(format!(
+                        "RenderDoc receiver shader failed to load: {path}: {error}"
+                    ));
+                }
+                Some(LoadState::NotLoaded | LoadState::Loading) | None => return Ok(false),
+            }
+        }
+        Ok(true)
+    }
+
+    fn fragment_shader_ids(&self) -> [AssetId<Shader>; 4] {
+        [
+            self.handles[0].id(),
+            self.handles[2].id(),
+            self.handles[3].id(),
+            self.handles[4].id(),
+        ]
+    }
+
+    fn import_shader_snapshots(
+        &self,
+        shaders: &Assets<Shader>,
+    ) -> Result<[(AssetId<Shader>, Shader); 2], String> {
+        let snapshot = |index: usize| {
+            let handle = &self.handles[index];
+            shaders
+                .get(handle)
+                .cloned()
+                .map(|shader| (handle.id(), shader))
+                .ok_or_else(|| {
+                    format!(
+                        "RenderDoc receiver import shader asset is unavailable: {}",
+                        RENDERDOC_RECEIVER_SHADER_PATHS[index]
+                    )
+                })
+        };
+        Ok([snapshot(6)?, snapshot(7)?])
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -243,7 +303,14 @@ struct RenderDocRenderState {
     generation: Option<u64>,
     ready_signature: Option<GpuReadySignature>,
     ready_frames: u32,
+    waiting_reason: Option<String>,
+    waiting_frames: u32,
     active: Option<(StableRenderDocCheckpoint, GpuReadySignature, u64, u64)>,
+}
+
+enum GpuCaptureGate {
+    Ready(GpuReadySignature),
+    Waiting(String),
 }
 
 type GetApiFn =
@@ -275,6 +342,7 @@ struct RenderDocApi {
 
 #[derive(SystemParam)]
 pub(crate) struct RenderDocCheckpointParams<'w, 's> {
+    commands: Commands<'w, 's>,
     config: Res<'w, PerfScenarioConfig>,
     applied: Res<'w, PerfScenarioApplied>,
     capture: Res<'w, PerfCapture>,
@@ -283,17 +351,33 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     rtt_runtime: Res<'w, RttRuntime>,
     render_environment: Res<'w, PerfRenderEnvironmentEvidence>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
+    asset_server: Res<'w, AssetServer>,
+    shaders: Res<'w, Assets<Shader>>,
+    receiver_shaders: Res<'w, RenderDocReceiverShaders>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
     world_epoch: Res<'w, hw_core::WorldEpoch>,
     indoor_light_texture:
         ResMut<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
+    indoor_light_lifecycle_probe:
+        ResMut<'w, crate::systems::lighting::IndoorLightingLifecycleProbe>,
+    images: ResMut<'w, Assets<Image>>,
     building_3d_handles: Res<'w, crate::plugins::startup::Building3dHandles>,
     terrain_3d_handles: Res<'w, crate::plugins::startup::Terrain3dHandles>,
     structural_materials: Res<'w, Assets<hw_visual::TopDownStructuralMaterial>>,
     terrain_materials: Res<'w, Assets<hw_visual::TerrainSurfaceMaterial>>,
     terrain_materials_lod1_lite: Res<'w, Assets<hw_visual::TerrainSurfaceMaterialLod1Lite>>,
     terrain_materials_lod2: Res<'w, Assets<hw_visual::TerrainSurfaceMaterialLod2>>,
-    p06_pixel_probe: Res<'w, P06PixelProbeState>,
+    terrain_chunks: Query<
+        'w,
+        's,
+        (
+            &'static Mesh3d,
+            &'static Transform,
+            &'static RenderLayers,
+            &'static ViewVisibility,
+        ),
+        With<crate::world::map::TerrainChunk>,
+    >,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,
     cross_consumer_observation:
         Res<'w, crate::systems::lighting::IndoorLightCrossConsumerObservation>,
@@ -319,7 +403,7 @@ struct RenderDocRenderParams<'w, 's> {
     adapter: Res<'w, RenderAdapterInfo>,
     device: Res<'w, RenderDevice>,
     cameras: Query<'w, 's, &'static ExtractedCamera>,
-    pipelines: Res<'w, PipelineCache>,
+    pipelines: ResMut<'w, PipelineCache>,
     frame_count: Res<'w, FrameCount>,
 }
 
@@ -331,16 +415,17 @@ pub(crate) fn install(app: &mut App) {
     let bridge = RenderDocBridge(Arc::new(Mutex::new(RenderDocBridgeState::Waiting)));
     app.insert_resource(bridge.clone())
         .init_resource::<RenderDocCheckpointMailbox>()
-        .init_resource::<RenderDocMainState>()
-        .init_resource::<P06PixelProbeState>();
+        .init_resource::<RenderDocMainState>();
+    let receiver_shader_handles = {
+        let asset_server = app.world().resource::<AssetServer>();
+        RENDERDOC_RECEIVER_SHADER_PATHS.map(|path| asset_server.load(path))
+    };
+    app.insert_resource(RenderDocReceiverShaders {
+        handles: receiver_shader_handles,
+    });
     if !enabled {
         return;
     }
-
-    app.add_systems(
-        Update,
-        setup_p06_pixel_probe_system.before(arm_renderdoc_checkpoint_system),
-    );
 
     app.add_plugins(ExtractResourcePlugin::<RenderDocCheckpointMailbox>::default());
     let capture_template = match std::env::var("HW_RENDERDOC_CAPTURE_TEMPLATE") {
@@ -386,99 +471,6 @@ fn topdown_structural_light_is_applied_before_post_processing() -> bool {
     matches!((sample, apply, post), (Some(sample), Some(apply), Some(post)) if sample < apply && apply < post)
 }
 
-fn observe_p06_pixel_probe_readback(
-    event: On<ReadbackComplete>,
-    mut commands: Commands,
-    mut state: ResMut<P06PixelProbeState>,
-) {
-    if state.passed.is_some() {
-        return;
-    }
-    state.readbacks = state.readbacks.saturating_add(1);
-    let actual = if event.data.len() >= state.byte_offset + 4 {
-        event.data[state.byte_offset..state.byte_offset + 4]
-            .try_into()
-            .expect("four-byte Light Field probe slice")
-    } else {
-        [0; 4]
-    };
-    if actual == state.expected_rgba {
-        state.passed = Some(topdown_structural_light_is_applied_before_post_processing());
-    } else if state.readbacks >= P06_PIXEL_PROBE_MAX_READBACKS {
-        eprintln!(
-            "PERF_RENDERDOC: GPU Light Field pixel probe mismatch; expected={:?} actual={actual:?} readbacks={}",
-            state.expected_rgba, state.readbacks
-        );
-        state.passed = Some(false);
-    } else {
-        return;
-    }
-
-    commands.entity(event.entity).despawn();
-}
-
-fn setup_p06_pixel_probe_system(params: P06PixelProbeSetupParams) {
-    let P06PixelProbeSetupParams {
-        mut commands,
-        config,
-        fixture,
-        runtime,
-        world_epoch,
-        mut lifecycle_probe,
-        light_texture,
-        mut state,
-    } = params;
-    if state.started
-        || !config.renderdoc_capture_enabled()
-        || config
-            .rtt_light_selection()
-            .is_none_or(|selection| !selection.uses_gpu_light_field())
-        || fixture.observation.is_none()
-    {
-        return;
-    }
-    let current_epoch = *world_epoch;
-    let Some(snapshot) = crate::systems::lighting::read_indoor_light_snapshot(
-        &runtime,
-        current_epoch,
-        current_epoch,
-        &mut lifecycle_probe,
-    ) else {
-        return;
-    };
-    if light_texture.uploaded_epoch() != Some(current_epoch.get())
-        || light_texture.uploaded_revision() != Some(snapshot.field_revision())
-    {
-        return;
-    }
-
-    let packed = hw_infra::lighting::pack_rgba8_linear(snapshot);
-    let Some((index, pixel)) = packed
-        .chunks_exact(4)
-        .enumerate()
-        .filter(|(_, pixel)| pixel[3] != 0)
-        .max_by_key(|(_, pixel)| u16::from(pixel[0]) + u16::from(pixel[1]) + u16::from(pixel[2]))
-        .filter(|(_, pixel)| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0)
-    else {
-        return;
-    };
-    let width = usize::from(snapshot.dimensions().width());
-    let bytes_per_row = (width * 4).div_ceil(256) * 256;
-    state.expected_rgba.copy_from_slice(pixel);
-    state.byte_offset = (index / width) * bytes_per_row + (index % width) * 4;
-    let readback = commands
-        .spawn(Readback::texture(light_texture.handle().clone()))
-        .observe(observe_p06_pixel_probe_readback)
-        .id();
-    state.started = true;
-    debug!(
-        ?readback,
-        index,
-        expected = ?state.expected_rgba,
-        "P06 GPU Light Field pixel probe armed"
-    );
-}
-
 pub(crate) fn arm_renderdoc_checkpoint_system(
     mut params: RenderDocCheckpointParams,
     mut mailbox: ResMut<RenderDocCheckpointMailbox>,
@@ -520,6 +512,60 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
             "RenderDoc capture is missing the RtT-light selection".to_string(),
         ));
         return;
+    };
+    if selection.uses_gpu_light_field() && !state.receiver_probes_spawned {
+        let Some((mesh, source_transform, render_layers, _)) = params
+            .terrain_chunks
+            .iter()
+            .find(|(_, _, _, visibility)| visibility.get())
+        else {
+            return;
+        };
+        let mut probe_transform = *source_transform;
+        probe_transform.translation.y -= 0.25;
+        params.commands.spawn((
+            Name::new("PerfRenderDocTerrainLod1LiteReceiverProbe"),
+            Mesh3d(mesh.0.clone()),
+            MeshMaterial3d(params.terrain_3d_handles.lod1_lite.clone()),
+            probe_transform,
+            render_layers.clone(),
+            NoFrustumCulling,
+            NotShadowCaster,
+        ));
+        probe_transform.translation.y -= 0.25;
+        params.commands.spawn((
+            Name::new("PerfRenderDocTerrainLod2ReceiverProbe"),
+            Mesh3d(mesh.0.clone()),
+            MeshMaterial3d(params.terrain_3d_handles.lod2.clone()),
+            probe_transform,
+            render_layers.clone(),
+            NoFrustumCulling,
+            NotShadowCaster,
+        ));
+        state.receiver_probes_spawned = true;
+        return;
+    }
+    let receiver_import_shaders = if selection.uses_gpu_light_field() {
+        match params.receiver_shaders.loaded(&params.asset_server) {
+            Ok(true) => {}
+            Ok(false) => return,
+            Err(reason) => {
+                bridge.replace(RenderDocBridgeState::Failed(reason));
+                return;
+            }
+        }
+        match params
+            .receiver_shaders
+            .import_shader_snapshots(&params.shaders)
+        {
+            Ok(shaders) => Some(shaders),
+            Err(reason) => {
+                bridge.replace(RenderDocBridgeState::Failed(reason));
+                return;
+            }
+        }
+    } else {
+        None
     };
     let expected_instances = if selection.uses_p02_presentation() {
         0
@@ -587,29 +633,25 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         None
     };
     let gpu_light_field = if selection.uses_gpu_light_field() {
-        match params.p06_pixel_probe.passed {
-            None => return,
-            Some(false) => {
-                bridge.replace(RenderDocBridgeState::Failed(
-                    "GPU Light Field pixel/read-order proof failed".to_string(),
-                ));
-                return;
-            }
-            Some(true) => {}
-        }
         if !state.gpu_measurement_started {
-            params.indoor_light_texture.begin_renderdoc_measurement();
             state.gpu_measurement_started = true;
             state.previous = None;
             state.stable_updates = 0;
-            return;
+            crate::systems::visual::indoor_light_texture::collect_renderdoc_steady_window(
+                &params.indoor_light_runtime,
+                *params.world_epoch,
+                &mut params.indoor_light_lifecycle_probe,
+                &mut params.indoor_light_texture,
+                &mut params.images,
+            );
         }
         if params
             .indoor_light_texture
             .metrics()
             .changed_revision_samples
             < 1
-            || params.indoor_light_texture.metrics().steady_updates < 600
+            || params.indoor_light_texture.metrics().steady_updates
+                < crate::systems::visual::indoor_light_texture::STEADY_UPDATE_CALLS
         {
             return;
         }
@@ -686,6 +728,10 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         runtime_field,
         gpu_light_field,
         cross_consumer,
+        receiver_fragment_shaders: selection
+            .uses_gpu_light_field()
+            .then(|| params.receiver_shaders.fragment_shader_ids()),
+        receiver_import_shaders,
         fixture,
     });
     eprintln!("PERF_RENDERDOC: CPU checkpoint ready; waiting for GPU settle");
@@ -741,7 +787,10 @@ pub(crate) fn poll_renderdoc_capture_system(
     }
 }
 
-fn begin_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<RenderDocRenderState>) {
+fn begin_renderdoc_frame(
+    mut params: RenderDocRenderParams,
+    mut state: ResMut<RenderDocRenderState>,
+) {
     if state.active.is_some() {
         return;
     }
@@ -749,30 +798,37 @@ fn begin_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Render
         return;
     };
     if state.generation != Some(checkpoint.generation) {
+        if let Some(imports) = checkpoint.receiver_import_shaders.as_ref() {
+            for (id, shader) in imports {
+                params.pipelines.set_shader(*id, shader.clone());
+            }
+        }
         state.generation = Some(checkpoint.generation);
         state.ready_signature = None;
         state.ready_frames = 0;
+        state.waiting_reason = None;
+        state.waiting_frames = 0;
     }
     let signature = match gpu_ready_signature(&params, checkpoint) {
-        Ok(Some(value)) => value,
-        Ok(None) => return,
+        Ok(GpuCaptureGate::Ready(value)) => {
+            state.waiting_reason = None;
+            state.waiting_frames = 0;
+            value
+        }
+        Ok(GpuCaptureGate::Waiting(reason)) => {
+            if observe_gpu_waiting(&mut state, reason.clone()) {
+                params.bridge.replace(RenderDocBridgeState::Failed(format!(
+                    "GPU capture gate remained unavailable for {RENDERDOC_GATE_TIMEOUT_FRAMES} frames: {reason}"
+                )));
+            }
+            return;
+        }
         Err(reason) => {
             params.bridge.replace(RenderDocBridgeState::Failed(reason));
             return;
         }
     };
-    match state.ready_signature {
-        None => state.ready_signature = Some(signature),
-        Some(previous) if previous != signature => {
-            params.bridge.replace(RenderDocBridgeState::Failed(
-                "GPU capture gate changed after the settle window began".to_string(),
-            ));
-            return;
-        }
-        Some(_) => {}
-    }
-    state.ready_frames = state.ready_frames.saturating_add(1);
-    if state.ready_frames < RENDERDOC_SETTLE_FRAMES {
+    if !observe_gpu_ready_signature(&mut state, signature) {
         return;
     }
     let api = match &params.api.loaded {
@@ -795,6 +851,30 @@ fn begin_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Render
     state.active = Some((checkpoint.clone(), signature, begin_frame, begin_frame));
 }
 
+fn observe_gpu_ready_signature(
+    state: &mut RenderDocRenderState,
+    signature: GpuReadySignature,
+) -> bool {
+    match state.ready_signature {
+        None => state.ready_signature = Some(signature),
+        Some(previous) if previous != signature => {
+            state.ready_signature = Some(signature);
+            state.ready_frames = 0;
+        }
+        Some(_) => {}
+    }
+    state.ready_frames = state.ready_frames.saturating_add(1);
+    state.ready_frames >= RENDERDOC_SETTLE_FRAMES
+}
+
+fn observe_gpu_waiting(state: &mut RenderDocRenderState, reason: String) -> bool {
+    state.ready_signature = None;
+    state.ready_frames = 0;
+    state.waiting_reason = Some(reason);
+    state.waiting_frames = state.waiting_frames.saturating_add(1);
+    state.waiting_frames >= RENDERDOC_GATE_TIMEOUT_FRAMES
+}
+
 fn finish_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<RenderDocRenderState>) {
     let Some((checkpoint, expected_signature, capture_begin_frame, frame_count_before)) =
         state.active.take()
@@ -812,7 +892,10 @@ fn finish_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Rende
         }
     };
     let current_signature = gpu_signature(&params, &checkpoint, false);
-    if current_signature != Ok(Some(expected_signature)) {
+    if !matches!(
+        current_signature,
+        Ok(GpuCaptureGate::Ready(signature)) if signature == expected_signature
+    ) {
         let _ = api.stop_without_publish(&params.device);
         params.bridge.replace(RenderDocBridgeState::Failed(
             "GPU capture gate changed during the captured render frame".to_string(),
@@ -831,11 +914,11 @@ fn finish_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Rende
                 }
             };
             let post_signature = match gpu_signature(&params, &checkpoint, false) {
-                Ok(Some(value)) => value,
-                Ok(None) => {
-                    params.bridge.replace(RenderDocBridgeState::Failed(
-                        "GPU capture gate was unavailable after the captured frame".to_string(),
-                    ));
+                Ok(GpuCaptureGate::Ready(value)) => value,
+                Ok(GpuCaptureGate::Waiting(reason)) => {
+                    params.bridge.replace(RenderDocBridgeState::Failed(format!(
+                        "GPU capture gate was unavailable after the captured frame: {reason}"
+                    )));
                     return;
                 }
                 Err(reason) => {
@@ -867,7 +950,7 @@ fn finish_renderdoc_frame(params: RenderDocRenderParams, mut state: ResMut<Rende
 fn gpu_ready_signature(
     params: &RenderDocRenderParams,
     checkpoint: &StableRenderDocCheckpoint,
-) -> Result<Option<GpuReadySignature>, String> {
+) -> Result<GpuCaptureGate, String> {
     gpu_signature(params, checkpoint, true)
 }
 
@@ -875,7 +958,7 @@ fn gpu_signature(
     params: &RenderDocRenderParams,
     checkpoint: &StableRenderDocCheckpoint,
     before_render: bool,
-) -> Result<Option<GpuReadySignature>, String> {
+) -> Result<GpuCaptureGate, String> {
     if params.adapter.backend != wgpu::Backend::Vulkan {
         return Err(format!(
             "RenderDoc capture requires Vulkan; observed {:?}",
@@ -889,22 +972,32 @@ fn gpu_signature(
         ));
     }
     let Some(primary) = params.windows.primary else {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "primary window is unavailable".to_string(),
+        ));
     };
     let Some(window) = params.windows.windows.get(&primary) else {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "primary extracted window is unavailable".to_string(),
+        ));
     };
     if window.swap_chain_texture_view.is_none() {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "primary swapchain texture view is unavailable".to_string(),
+        ));
     }
     if before_render && window.swap_chain_texture.is_none() {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "primary swapchain texture is unavailable before render".to_string(),
+        ));
     }
     if !before_render && window.swap_chain_texture.is_some() {
         return Err("primary swapchain image was not presented by the captured frame".to_string());
     }
     let Some(scene) = params.images.get(checkpoint.scene_target) else {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "RtT scene texture is unavailable on the GPU".to_string(),
+        ));
     };
     if scene.texture_descriptor.label != Some(RTT_SCENE_LABEL) {
         return Err("RtT GPU texture labels differ from the RenderDoc contract".to_string());
@@ -912,22 +1005,69 @@ fn gpu_signature(
     if checkpoint.mask_target.is_some() {
         return Err("P01 RenderDoc checkpoint unexpectedly retained a mask target".to_string());
     }
-    if params.pipelines.waiting_pipelines().next().is_some() {
-        return Ok(None);
-    }
     let mut pipeline_count = 0;
     for pipeline in params.pipelines.pipelines() {
-        pipeline_count += 1;
-        match &pipeline.state {
-            CachedPipelineState::Ok(_) => {}
-            CachedPipelineState::Queued | CachedPipelineState::Creating(_) => return Ok(None),
-            CachedPipelineState::Err(error) => {
-                return Err(format!("render pipeline compilation failed: {error:?}"));
-            }
-        }
+        pipeline_count += usize::from(matches!(&pipeline.state, CachedPipelineState::Ok(_)));
     }
     if pipeline_count == 0 {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "no resident render pipeline is available".to_string(),
+        ));
+    }
+    if checkpoint.gpu_light_field.is_some() {
+        let Some(receiver_fragment_shaders) = checkpoint.receiver_fragment_shaders else {
+            return Err("P06 GPU checkpoint is missing receiver fragment shader IDs".to_string());
+        };
+        for (path, shader_id) in RENDERDOC_RECEIVER_FRAGMENT_SHADER_PATHS
+            .iter()
+            .zip(receiver_fragment_shaders)
+        {
+            let mut matched_descriptor = false;
+            let mut resident = false;
+            let mut waiting_state = None;
+            let mut permanent_error = None;
+            for pipeline in params.pipelines.pipelines() {
+                let PipelineDescriptor::RenderPipelineDescriptor(descriptor) = &pipeline.descriptor
+                else {
+                    continue;
+                };
+                let Some(fragment) = descriptor.fragment.as_ref() else {
+                    continue;
+                };
+                if fragment.shader.id() != shader_id {
+                    continue;
+                }
+                matched_descriptor = true;
+                match &pipeline.state {
+                    CachedPipelineState::Ok(_) => resident = true,
+                    CachedPipelineState::Queued => waiting_state = Some("queued"),
+                    CachedPipelineState::Creating(_) => waiting_state = Some("creating"),
+                    CachedPipelineState::Err(
+                        ShaderCacheError::ShaderNotLoaded(_)
+                        | ShaderCacheError::ShaderImportNotYetAvailable,
+                    ) => waiting_state = Some("waiting for a shader dependency"),
+                    CachedPipelineState::Err(error) => {
+                        permanent_error = Some(format!("{error:?}"));
+                    }
+                }
+            }
+            if resident {
+                continue;
+            }
+            if let Some(error) = permanent_error {
+                return Err(format!(
+                    "RenderDoc receiver pipeline compilation failed for {path}: {error}"
+                ));
+            }
+            let state = if matched_descriptor {
+                waiting_state.unwrap_or("not resident")
+            } else {
+                "not queued"
+            };
+            return Ok(GpuCaptureGate::Waiting(format!(
+                "RenderDoc receiver pipeline for {path} is {state}"
+            )));
+        }
     }
 
     let mut scene_camera_count = 0;
@@ -950,9 +1090,11 @@ fn gpu_signature(
         }
     }
     if scene_camera_count != 1 || mask_camera_count != 0 || window_camera_count == 0 {
-        return Ok(None);
+        return Ok(GpuCaptureGate::Waiting(
+            "RenderDoc camera topology is not ready".to_string(),
+        ));
     }
-    Ok(Some(GpuReadySignature {
+    Ok(GpuCaptureGate::Ready(GpuReadySignature {
         pipeline_count,
         primary_window: primary,
         scene_camera_count,
@@ -1428,6 +1570,21 @@ fn gpu_light_field_evidence(
     else {
         return Err("P06 CPU golden probe has no current snapshot".to_string());
     };
+    let packed = hw_infra::lighting::pack_rgba8_linear(snapshot);
+    let Some((probe_index, probe_pixel)) = packed
+        .chunks_exact(4)
+        .enumerate()
+        .filter(|(_, pixel)| pixel[3] != 0)
+        .max_by_key(|(_, pixel)| u16::from(pixel[0]) + u16::from(pixel[1]) + u16::from(pixel[2]))
+        .filter(|(_, pixel)| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0)
+    else {
+        return Err("P06 CPU golden probe has no illuminated pixel".to_string());
+    };
+    let dimensions = snapshot.dimensions();
+    let width = usize::from(dimensions.width());
+    let pixel_probe_expected_rgba = probe_pixel
+        .try_into()
+        .expect("Light Field probe pixel contains four bytes");
     let uploads_per_changed_revision = if metrics.changed_revision_samples == 0 {
         0
     } else {
@@ -1466,8 +1623,16 @@ fn gpu_light_field_evidence(
         local_light_pass_increment: 0,
         mask_pass_count: 0,
         duplicate_2d_pass_count: 0,
-        cpu_golden_vectors_pass: p06_cpu_golden_vectors_pass(snapshot),
-        pixel_probes_pass: params.p06_pixel_probe.passed == Some(true),
+        cpu_golden_vectors_pass: p06_cpu_golden_vectors_pass(snapshot)
+            && topdown_structural_light_is_applied_before_post_processing(),
+        pixel_probes_pass: false,
+        field_texture_label:
+            crate::systems::visual::indoor_light_texture::LIGHT_FIELD_TEXTURE_LABEL,
+        field_width: dimensions.width(),
+        field_height: dimensions.height(),
+        pixel_probe_x: u16::try_from(probe_index % width).expect("probe x fits u16"),
+        pixel_probe_y: u16::try_from(probe_index / width).expect("probe y fits u16"),
+        pixel_probe_expected_rgba,
     })
 }
 
@@ -1725,6 +1890,27 @@ mod tests {
     }
 
     #[test]
+    fn p06_receivers_import_the_named_light_field_module() {
+        let receiver_sources = [
+            TOPDOWN_STRUCTURAL_SHADER,
+            include_str!("../../../../../../assets/shaders/terrain_surface_material.wgsl"),
+            include_str!(
+                "../../../../../../assets/shaders/terrain_surface_material_lod1_lite.wgsl"
+            ),
+            include_str!("../../../../../../assets/shaders/terrain_surface_material_lod2.wgsl"),
+        ];
+
+        for source in receiver_sources {
+            assert!(
+                source.contains(
+                    "#import hell_workers::indoor_light_field::sample_indoor_light_field"
+                )
+            );
+            assert!(!source.contains("\"shaders/indoor_light_field.wgsl\""));
+        }
+    }
+
+    #[test]
     fn p01_composite_binding_contract_is_exact() {
         let resources = p01_composite_render_resources();
         assert_eq!(resources.composite_draw_count, 1);
@@ -1757,5 +1943,44 @@ mod tests {
 
         bridge.replace(RenderDocBridgeState::Failed("done".to_string()));
         assert!(!bridge.try_begin_capture());
+    }
+
+    #[test]
+    fn renderdoc_settle_restarts_when_resident_pipeline_set_changes() {
+        let signature = |pipeline_count| GpuReadySignature {
+            pipeline_count,
+            primary_window: Entity::from_bits(1),
+            scene_camera_count: 1,
+            mask_camera_count: 0,
+            window_camera_count: 1,
+        };
+        let mut state = RenderDocRenderState::default();
+
+        assert!(!observe_gpu_ready_signature(&mut state, signature(10)));
+        assert!(!observe_gpu_ready_signature(&mut state, signature(10)));
+        assert!(!observe_gpu_ready_signature(&mut state, signature(11)));
+        assert_eq!(state.ready_frames, 1);
+        assert!(!observe_gpu_ready_signature(&mut state, signature(11)));
+        assert!(!observe_gpu_ready_signature(&mut state, signature(11)));
+        assert!(observe_gpu_ready_signature(&mut state, signature(11)));
+    }
+
+    #[test]
+    fn renderdoc_wait_watchdog_does_not_restart_when_reason_changes() {
+        let mut state = RenderDocRenderState::default();
+
+        for frame in 1..RENDERDOC_GATE_TIMEOUT_FRAMES {
+            let reason = if frame % 2 == 0 { "queued" } else { "creating" };
+            assert!(!observe_gpu_waiting(&mut state, reason.to_string()));
+        }
+        assert!(observe_gpu_waiting(
+            &mut state,
+            "waiting for a shader dependency".to_string()
+        ));
+        assert_eq!(state.waiting_frames, RENDERDOC_GATE_TIMEOUT_FRAMES);
+        assert_eq!(
+            state.waiting_reason.as_deref(),
+            Some("waiting for a shader dependency")
+        );
     }
 }

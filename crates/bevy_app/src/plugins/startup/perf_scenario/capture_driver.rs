@@ -126,7 +126,7 @@ pub(crate) fn start_perf_capture_system(
             // Freeze at the capture boundary itself instead of relying on the
             // settings/fixture startup order. Every actual-window process must
             // enter warm-up with the same immutable indoor-light topology.
-            params.virtual_time.pause();
+            pause_virtual_time_at_capture_boundary(&mut params.virtual_time);
         } else {
             params.virtual_time.unpause();
         }
@@ -139,6 +139,17 @@ pub(crate) fn start_perf_capture_system(
             params.config.warmup_secs
         );
     }
+}
+
+#[cfg(feature = "profiling")]
+fn pause_virtual_time_at_capture_boundary(virtual_time: &mut Time<Virtual>) {
+    virtual_time.pause();
+    // `Time<Virtual>` was advanced before `Update`. Pausing it now affects the
+    // next frame, but does not clear the delta that was already published for
+    // this one. The capture driver runs later in the same schedule, so clear
+    // that pre-boundary delta explicitly instead of counting startup/render
+    // initialization time as simulated warm-up.
+    virtual_time.advance_by(std::time::Duration::ZERO);
 }
 
 /// perf scenarioのwarm-up/計測/CSV出力を自動化する。
@@ -658,4 +669,22 @@ fn record_determinism_checkpoint(
                 }),
         );
     Ok(())
+}
+
+#[cfg(all(test, feature = "profiling"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_boundary_pause_clears_the_already_published_virtual_delta() {
+        let mut virtual_time = Time::<Virtual>::default();
+        let elapsed = std::time::Duration::from_millis(195);
+        virtual_time.advance_by(elapsed);
+
+        pause_virtual_time_at_capture_boundary(&mut virtual_time);
+
+        assert!(virtual_time.is_paused());
+        assert_eq!(virtual_time.delta(), std::time::Duration::ZERO);
+        assert_eq!(virtual_time.elapsed(), elapsed);
+    }
 }

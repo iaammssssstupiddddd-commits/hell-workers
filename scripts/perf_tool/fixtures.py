@@ -20,9 +20,11 @@ from .rtt_light_contract import (
 from .rtt_light_bundle import (
     _checksum_text as rtt_light_checksum_text,
     _expected_requested_environment as expected_rtt_light_requested_environment,
+    _gate_observed as observe_rtt_light_gate,
     _recorded_repo_root as recorded_rtt_light_repo_root,
     _runtime_field_projection as project_rtt_light_runtime,
     _upgrade_compatible_baseline_index as upgrade_rtt_light_baseline_index,
+    _validate_run_file_set as validate_rtt_light_run_file_set,
     _validate_session_matrix as validate_rtt_light_session_matrix,
     _validate_p08_cross_sidecar as validate_p08_cross_sidecar,
     _verify_case_entry as verify_rtt_light_case_entry,
@@ -444,7 +446,7 @@ def write_behavior_fixture_run(
                 ),
             }
         )
-        if stage_id == "p04":
+        if stage_id in {"p04", "p05", "p06"}:
             row.update(
                 {
                     "field_availability": "available",
@@ -454,6 +456,17 @@ def write_behavior_fixture_run(
                     "field_checksum": "4" * 64,
                 }
             )
+        if stage_id in {"p05", "p06"}:
+            row.update(
+                {
+                    "registry_phase": "candidate_preflight",
+                    "wake_count": 0,
+                    "field_read_count": 0,
+                    "old_epoch_field_read_count": 0,
+                }
+            )
+        if stage_id == "p06":
+            row["gpu_availability"] = "unavailable"
         rows.append(row)
     (data_dir / "timeline.json").write_text(
         json.dumps(
@@ -474,7 +487,7 @@ def write_behavior_fixture_run(
             encoding="utf-8",
         )
     write_indoor_light_sidecars(root, case, stage_id=stage_id, lane="behavior")
-    if stage_id == "p04":
+    if stage_id in {"p04", "p05", "p06"}:
         write_json(
             data_dir / "indoor_light_runtime.json",
             {
@@ -563,6 +576,117 @@ def self_test() -> int:
             runtime=p06_runtime,
         )
         assert parsed_gpu is None and gpu_errors
+        duplicate_metric_cases = {
+            "field-core-large-cpu": {
+                "validations": [
+                    SimpleNamespace(
+                        indoor_light_field={"logical_payload_bytes": 80_000},
+                        indoor_light_runtime={"steady_updates": 600},
+                    )
+                ]
+            },
+            "renderdoc-medium-gpu": {
+                "validations": [],
+                "gate_metrics": {
+                    "logical_payload_bytes": 40_000,
+                    "steady_updates": 700,
+                },
+            },
+        }
+        assert observe_rtt_light_gate(
+            {
+                "gate_id": "RLV1-P03-FIELD",
+                "case_id": "field-core-large-cpu",
+                "metric_id": "logical_payload_bytes",
+            },
+            duplicate_metric_cases,
+            {},
+            {},
+        ) == "80000"
+        assert observe_rtt_light_gate(
+            {
+                "gate_id": "RLV1-P06-UPLOAD",
+                "case_id": "renderdoc-medium-gpu",
+                "metric_id": "logical_payload_bytes",
+            },
+            duplicate_metric_cases,
+            {},
+            {},
+        ) == "40000"
+        assert observe_rtt_light_gate(
+            {
+                "gate_id": "RLV1-P04-STEADY",
+                "case_id": "field-core-large-cpu",
+                "metric_id": "steady_updates",
+            },
+            duplicate_metric_cases,
+            {},
+            {},
+        ) == "600"
+        assert observe_rtt_light_gate(
+            {
+                "gate_id": "RLV1-P06-UPLOAD",
+                "case_id": "renderdoc-medium-gpu",
+                "metric_id": "steady_updates",
+            },
+            duplicate_metric_cases,
+            {},
+            {},
+        ) == "700"
+
+        capture_root_files = {
+            "command.txt",
+            "requested-environment.json",
+            "run.log",
+            "validation.json",
+            "run-metadata.json",
+        }
+        capture_data_files = {
+            "window.csv",
+            "indoor_light_fixture.csv",
+            "indoor_light_layout.csv",
+            "indoor_light_presentation.csv",
+            "indoor_light_runtime.json",
+            "summary.csv",
+            "frames.csv",
+            "scene_roots.csv",
+            "render_inventory.csv",
+            "p02_presentation.csv",
+        }
+        for render in ("cpu", "gpu"):
+            run_dir = root / f"p06-{render}-capture-file-set"
+            data_dir = run_dir / "data"
+            data_dir.mkdir(parents=True)
+            for name in capture_root_files:
+                (run_dir / name).touch()
+            for name in capture_data_files:
+                (data_dir / name).touch()
+            if render == "gpu":
+                (data_dir / "indoor_light_gpu.json").touch()
+            validate_rtt_light_run_file_set(
+                run_dir,
+                stage="p06",
+                leg_id="capture",
+                render=render,
+                behavior_case=None,
+            )
+            wrong_gpu_path = data_dir / "indoor_light_gpu.json"
+            if render == "cpu":
+                wrong_gpu_path.touch()
+            else:
+                wrong_gpu_path.unlink()
+            try:
+                validate_rtt_light_run_file_set(
+                    run_dir,
+                    stage="p06",
+                    leg_id="capture",
+                    render=render,
+                    behavior_case=None,
+                )
+            except RuntimeError as error:
+                assert "data artifact set differs" in str(error)
+            else:
+                raise AssertionError(f"P06 {render} GPU sidecar boundary was not enforced")
         historical_root = "/historical/clean-subject"
         historical_manifest = {"repo_root": historical_root}
         assert recorded_rtt_light_repo_root(historical_manifest) == historical_root
@@ -1967,6 +2091,33 @@ def self_test() -> int:
             row["field_availability"] == "available"
             for row in p04_behavior_validation.timeline or []
         )
+
+        p06_behavior_root = root / "behavior-p06-door"
+        write_behavior_fixture_run(
+            p06_behavior_root,
+            p04_behavior_case,
+            stage_id="p06",
+        )
+        p06_behavior_validation = validate_run(
+            p06_behavior_root,
+            returncode=0,
+            expected_case=p04_behavior_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+            capture_kind="fixed-step-behavior",
+            expected_fixed_hz=64,
+            expected_warmup_ticks=1920,
+            expected_audit_ticks=128,
+            expected_window_backend="headless",
+            expected_contract="rtt-light-v1",
+            expected_stage="p06",
+            expected_lane="behavior",
+        )
+        assert p06_behavior_validation.valid, p06_behavior_validation.reasons
+        assert [
+            row["semantic_state"] for row in p06_behavior_validation.timeline or []
+        ] == ["closed", "open", "open", "locked", "locked"]
 
         for size, ledger_rows, presentation_rows, building_records in (
             ("medium", 722, 12, 244),

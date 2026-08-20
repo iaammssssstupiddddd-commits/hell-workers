@@ -153,7 +153,10 @@ FAILURE_POLICY: Final[dict[str, dict[str, Any]]] = {
     },
 }
 
+# Runtime evidence is collected before arming the capture, so capture and
+# replay retain bounded independent deadlines.
 CAPTURE_CHILD_DEADLINE_SECONDS: Final = 600
+REPLAY_CHILD_DEADLINE_SECONDS: Final = 600
 RD0_OUTER_DEADLINE_SECONDS: Final = 1920
 FORMAL_RENDERDOC_OUTER_DEADLINE_SECONDS: Final = 1320
 PROCESS_TERM_GRACE_SECONDS: Final = 5
@@ -527,6 +530,8 @@ def validate_runtime_checkpoint_v3(
             "shared_field_image", "point_light_count_increment", "spot_light_count_increment",
             "shadow_map_count_increment", "local_light_pass_increment", "mask_pass_count",
             "duplicate_2d_pass_count", "cpu_golden_vectors_pass", "pixel_probes_pass",
+            "field_texture_label", "field_width", "field_height", "pixel_probe_x",
+            "pixel_probe_y", "pixel_probe_expected_rgba",
         }
         if schema_version == RUNTIME_CHECKPOINT_SCHEMA_V4:
             expected_gpu_keys.add("uploaded_revision")
@@ -541,7 +546,8 @@ def validate_runtime_checkpoint_v3(
             if not isinstance(gpu_field[key], bool):
                 raise ValueError(f"runtime checkpoint P06 GPU field {key} is invalid")
         integer_keys = expected_gpu_keys - {
-            "schema_version", "availability", "gpu_checksum", *boolean_keys
+            "schema_version", "availability", "gpu_checksum", "field_texture_label",
+            "pixel_probe_expected_rgba", *boolean_keys
         }
         for key in integer_keys:
             value = gpu_field[key]
@@ -552,6 +558,28 @@ def validate_runtime_checkpoint_v3(
             character not in "0123456789abcdef" for character in checksum
         ):
             raise ValueError("runtime checkpoint P06 GPU checksum is invalid")
+        label = gpu_field["field_texture_label"]
+        expected_rgba = gpu_field["pixel_probe_expected_rgba"]
+        if not isinstance(label, str) or not label:
+            raise ValueError("runtime checkpoint P06 texture label is invalid")
+        if (
+            not isinstance(expected_rgba, list)
+            or len(expected_rgba) != 4
+            or any(
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or not 0 <= value <= 255
+                for value in expected_rgba
+            )
+        ):
+            raise ValueError("runtime checkpoint P06 pixel probe is invalid")
+        if (
+            gpu_field["field_width"] <= 0
+            or gpu_field["field_height"] <= 0
+            or gpu_field["pixel_probe_x"] >= gpu_field["field_width"]
+            or gpu_field["pixel_probe_y"] >= gpu_field["field_height"]
+        ):
+            raise ValueError("runtime checkpoint P06 pixel probe bounds are invalid")
     if stage_id == "p08":
         cross = payload["cross_consumer"]
         expected_cross_keys = {

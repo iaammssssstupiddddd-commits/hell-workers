@@ -52,6 +52,7 @@ BASELINE_INDEX_SCHEMA_VERSION = 1
 RENDERDOC_MANIFEST_SCHEMA_VERSION = 1
 RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSIONS = frozenset({3, 4})
 RENDERDOC_EXTRACTION_SCHEMA_VERSION = 2
+P06_RENDERDOC_EXTRACTION_SCHEMA_VERSION = 3
 
 CURRENT_RENDER_RESOURCES = {
     "scene_target_label": "hell-workers-rtt-scene",
@@ -732,7 +733,12 @@ def _validate_session_file_set(session: Path, leg_id: str) -> None:
 
 
 def _validate_run_file_set(
-    run_dir: Path, *, stage: str, leg_id: str, behavior_case: str | None
+    run_dir: Path,
+    *,
+    stage: str,
+    leg_id: str,
+    render: str,
+    behavior_case: str | None,
 ) -> None:
     data_files = {
         "window.csv",
@@ -770,7 +776,7 @@ def _validate_run_file_set(
             root_files |= {"profile-artifact.json", "resource-usage.txt"}
         if stage in {"p02", "p03", "p04", "p05", "p06", "p07", "p08"}:
             data_files.add("p02_presentation.csv")
-        if stage in {"p06", "p08"}:
+        if stage in {"p06", "p08"} and render == "gpu":
             data_files.add("indoor_light_gpu.json")
     elif leg_id == "field-core":
         data_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
@@ -836,6 +842,7 @@ def _revalidate_run(
         run_dir,
         stage=stage,
         leg_id=leg_id,
+        render=expected_case.render,
         behavior_case=expected_case.behavior_case,
     )
     metadata = read_json_object(run_dir / "run-metadata.json")
@@ -1607,7 +1614,7 @@ def _load_renderdoc_evidence(
         raise RuntimeError("RenderDoc log contains an unexpected warning or error")
 
     extracted = read_json_object(extracted_path)
-    if set(extracted) != {
+    expected_extraction_keys = {
         "schema_version",
         "api",
         "capture_sha256",
@@ -1620,7 +1627,15 @@ def _load_renderdoc_evidence(
         "tracked_resources",
         "composite_topology",
         "replay_structure",
-    } or extracted["schema_version"] != RENDERDOC_EXTRACTION_SCHEMA_VERSION:
+    }
+    expected_extraction_schema = RENDERDOC_EXTRACTION_SCHEMA_VERSION
+    if stage in {"p06", "p08"}:
+        expected_extraction_keys.add("gpu_light_field_pixel_probe")
+        expected_extraction_schema = P06_RENDERDOC_EXTRACTION_SCHEMA_VERSION
+    if (
+        set(extracted) != expected_extraction_keys
+        or extracted["schema_version"] != expected_extraction_schema
+    ):
         raise RuntimeError("RenderDoc extraction differs from schema v1")
     if (
         extracted["api"] != "vulkan"
@@ -1637,6 +1652,42 @@ def _load_renderdoc_evidence(
     passes = extracted["passes"]
     attachments = extracted["attachments"]
     bindings = extracted["bindings"]
+    p06_pixel_probe = extracted.get("gpu_light_field_pixel_probe")
+    if stage in {"p06", "p08"}:
+        expected_probe_keys = {
+            "label",
+            "captured_name",
+            "resource_id",
+            "width",
+            "height",
+            "x",
+            "y",
+            "expected_rgba",
+            "actual_rgba",
+            "binding_count",
+            "passed",
+        }
+        if (
+            not isinstance(p06_pixel_probe, dict)
+            or set(p06_pixel_probe) != expected_probe_keys
+            or not isinstance(gpu_light_field, dict)
+            or p06_pixel_probe["label"] != gpu_light_field.get("field_texture_label")
+            or p06_pixel_probe["width"] != gpu_light_field.get("field_width")
+            or p06_pixel_probe["height"] != gpu_light_field.get("field_height")
+            or p06_pixel_probe["x"] != gpu_light_field.get("pixel_probe_x")
+            or p06_pixel_probe["y"] != gpu_light_field.get("pixel_probe_y")
+            or p06_pixel_probe["expected_rgba"]
+            != gpu_light_field.get("pixel_probe_expected_rgba")
+            or p06_pixel_probe["actual_rgba"] != p06_pixel_probe["expected_rgba"]
+            or p06_pixel_probe["passed"] is not True
+            or not isinstance(p06_pixel_probe["captured_name"], str)
+            or not isinstance(p06_pixel_probe["resource_id"], str)
+            or not p06_pixel_probe["resource_id"]
+            or not isinstance(p06_pixel_probe["binding_count"], int)
+            or isinstance(p06_pixel_probe["binding_count"], bool)
+            or p06_pixel_probe["binding_count"] < 1
+        ):
+            raise RuntimeError("RenderDoc P06 GPU Light Field pixel proof is invalid")
     schemas = {
         "passes": {"pass_id", "name", "first_event", "last_event", "draw_count"},
         "attachments": {
@@ -1843,6 +1894,12 @@ def _load_renderdoc_evidence(
     }
     if manifest["fixture"] != expected_fixture:
         raise RuntimeError("RenderDoc fixture evidence differs from the contract")
+    verified_gpu_light_field = gpu_light_field
+    if stage in {"p06", "p08"} and isinstance(gpu_light_field, dict):
+        verified_gpu_light_field = {
+            **gpu_light_field,
+            "pixel_probes_pass": p06_pixel_probe["passed"],
+        }
     evidence = {
         "renderdoc-medium-gpu": {
             "formal": next(
@@ -1856,7 +1913,7 @@ def _load_renderdoc_evidence(
             "run_dirs": [],
             "fixture": manifest["fixture"],
             "runtime_field": runtime_field,
-            "gpu_upload": gpu_light_field,
+            "gpu_upload": verified_gpu_light_field,
             "cross_consumer": cross_consumer,
             "render_inventory": render_inventory,
             "gate_metrics": {
@@ -1873,7 +1930,7 @@ def _load_renderdoc_evidence(
                 "explicit_color_bytes": explicit_color_bytes,
                 **(
                     {
-                        key: gpu_light_field[key]
+                        key: verified_gpu_light_field[key]
                         for key in (
                             "field_image_count",
                             "field_handle_count",
@@ -1897,7 +1954,8 @@ def _load_renderdoc_evidence(
                             "pixel_probes_pass",
                         )
                     }
-                    if stage in {"p06", "p08"} and isinstance(gpu_light_field, dict)
+                    if stage in {"p06", "p08"}
+                    and isinstance(verified_gpu_light_field, dict)
                     else {}
                 ),
                 **(
@@ -2426,7 +2484,7 @@ def _gate_observed(
         return "true" if evidence["environment_contract_match"] else "false"
     if metric_id == "required_sidecars_valid":
         return "true" if evidence["required_sidecars_valid"] else "false"
-    if metric_id in {
+    if expected["gate_id"] == "RLV1-P03-FIELD" and metric_id in {
         "grid_cells",
         "logical_payload_bytes",
         "supplied_emitters",
@@ -2480,7 +2538,7 @@ def _gate_observed(
         if row is None or not row.get(projection_name):
             raise RuntimeError(f"{case_id} has no projected {projection_name}")
         return row[projection_name]
-    if metric_id in {
+    if expected["gate_id"] in {"RLV1-P04-EMITTER", "RLV1-P04-STEADY"} and metric_id in {
         "typed_emitter_components",
         "eligible_supplied_emitters",
         "indoor_mask_cells",

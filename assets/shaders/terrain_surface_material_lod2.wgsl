@@ -20,7 +20,7 @@
     forward_io::{VertexOutput, FragmentOutput},
 }
 #import "shaders/shadow_style.wgsl"::apply_directional_shadow_style
-#import "shaders/indoor_light_field.wgsl"::sample_indoor_light_field
+#import hell_workers::indoor_light_field::sample_indoor_light_field
 
 struct TerrainSurfaceUniforms {
     cut_position:               vec4<f32>,
