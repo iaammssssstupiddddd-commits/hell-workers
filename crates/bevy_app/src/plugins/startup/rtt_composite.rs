@@ -7,13 +7,11 @@ use crate::plugins::startup::{Camera3dRtt, RttRuntime};
 use bevy::camera::RenderTarget;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
-use bevy::render::render_resource::{AsBindGroup, ShaderType};
+use bevy::render::render_resource::AsBindGroup;
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{AlphaMode2d, Material2d, MeshMaterial2d};
 use bevy::window::PrimaryWindow;
-use hw_core::constants::{
-    LAYER_OVERLAY, Z_RTT_COMPOSITE, topdown_rtt_vertical_compensation, topdown_sun_direction_world,
-};
+use hw_core::constants::{LAYER_OVERLAY, Z_RTT_COMPOSITE, topdown_rtt_vertical_compensation};
 
 /// Vulkan/WGSL descriptor location used by the RtT composite material.
 ///
@@ -31,18 +29,8 @@ pub(crate) const RTT_COMPOSITE_SCENE_SAMPLER_BINDING: u32 = 2;
 #[derive(Component)]
 pub struct RttCompositeSprite;
 
-#[derive(Clone, Copy, Debug, PartialEq, ShaderType)]
-pub struct RttCompositeParams {
-    pub pixel_size: Vec2,
-    pub shadow_offset_uv: Vec2,
-    pub shadow_width_px: f32,
-    pub shadow_strength: f32,
-}
-
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct RttCompositeMaterial {
-    #[uniform(0)]
-    pub params: RttCompositeParams,
     #[texture(1)]
     #[sampler(2)]
     pub scene_texture: Handle<Image>,
@@ -70,12 +58,6 @@ pub fn spawn_rtt_composite_sprite(
     let mesh = meshes.add(Rectangle::default().mesh());
     let size = custom_size.unwrap_or(Vec2::new(1280.0, 720.0));
     let material = materials.add(RttCompositeMaterial {
-        params: RttCompositeParams {
-            pixel_size: runtime.pixel_size(),
-            shadow_offset_uv: Vec2::new(0.018, -0.012),
-            shadow_width_px: 22.0,
-            shadow_strength: 0.0,
-        },
         scene_texture: runtime.scene.clone(),
     });
 
@@ -130,37 +112,6 @@ pub fn sync_rtt_output_bindings(
     for (material_handle, _) in quads.iter() {
         if let Some(mut material) = materials.get_mut(&material_handle.0) {
             material.scene_texture = runtime.scene.clone();
-            material.params.pixel_size = runtime.pixel_size();
-        }
-    }
-}
-
-/// Camera projectionに合わせて、期限付きで残るshadow parameterを更新する。
-pub fn sync_rtt_composite_perf_params_system(
-    q_camera: Query<(Ref<Transform>, Ref<Projection>), With<Camera3dRtt>>,
-    quads: Query<&MeshMaterial2d<RttCompositeMaterial>, With<RttCompositeSprite>>,
-    mut materials: ResMut<Assets<RttCompositeMaterial>>,
-) {
-    let Ok((camera_transform, projection)) = q_camera.single() else {
-        return;
-    };
-
-    if !camera_transform.is_changed() && !projection.is_changed() {
-        return;
-    }
-
-    let shadow_offset_uv =
-        composite_shadow_offset_uv(camera_transform.as_ref(), projection.as_ref());
-
-    for material_handle in quads.iter() {
-        if let Some(mut material) = materials.get_mut(&material_handle.0) {
-            let mut next_params = material.params;
-            if let Some(offset_uv) = shadow_offset_uv {
-                next_params.shadow_offset_uv = offset_uv;
-            }
-            if material.params != next_params {
-                material.params = next_params;
-            }
         }
     }
 }
@@ -169,27 +120,4 @@ pub fn sync_rtt_composite_perf_params_system(
 pub(crate) fn composite_logical_size(window: &Window) -> Vec2 {
     let size = window.size();
     Vec2::new(size.x, size.y * topdown_rtt_vertical_compensation())
-}
-
-fn composite_shadow_offset_uv(
-    camera_transform: &Transform,
-    projection: &Projection,
-) -> Option<Vec2> {
-    let Projection::Orthographic(ortho) = projection else {
-        return None;
-    };
-
-    let area_size = ortho.area.size();
-    if area_size.x.abs() <= f32::EPSILON || area_size.y.abs() <= f32::EPSILON {
-        return None;
-    }
-
-    let shadow_world = -topdown_sun_direction_world() * 34.0;
-    let right = *camera_transform.right();
-    let up = *camera_transform.up();
-
-    Some(Vec2::new(
-        shadow_world.dot(right) / area_size.x,
-        -shadow_world.dot(up) / area_size.y,
-    ))
 }

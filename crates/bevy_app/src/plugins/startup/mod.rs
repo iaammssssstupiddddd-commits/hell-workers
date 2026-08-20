@@ -116,7 +116,6 @@ impl Plugin for StartupPlugin {
                 (
                     rtt_setup::sync_rtt_texture_size_to_window_and_quality,
                     rtt_composite::sync_rtt_output_bindings,
-                    rtt_composite::sync_rtt_composite_perf_params_system,
                 )
                     .chain(),
             );
