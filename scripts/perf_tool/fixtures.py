@@ -19,6 +19,7 @@ from .rtt_light_contract import (
 from .rtt_light_bundle import (
     _checksum_text as rtt_light_checksum_text,
     _expected_requested_environment as expected_rtt_light_requested_environment,
+    _gate_observed as observe_rtt_light_gate,
     _recorded_repo_root as recorded_rtt_light_repo_root,
     _runtime_field_projection as project_rtt_light_runtime,
     _upgrade_compatible_baseline_index as upgrade_rtt_light_baseline_index,
@@ -573,6 +574,63 @@ def self_test() -> int:
             runtime=p06_runtime,
         )
         assert parsed_gpu is None and gpu_errors
+        duplicate_metric_cases = {
+            "field-core-large-cpu": {
+                "validations": [
+                    SimpleNamespace(
+                        indoor_light_field={"logical_payload_bytes": 80_000},
+                        indoor_light_runtime={"steady_updates": 600},
+                    )
+                ]
+            },
+            "renderdoc-medium-gpu": {
+                "validations": [],
+                "gate_metrics": {
+                    "logical_payload_bytes": 40_000,
+                    "steady_updates": 700,
+                },
+            },
+        }
+        assert observe_rtt_light_gate(
+            {
+                "gate_id": "RLV1-P03-FIELD",
+                "case_id": "field-core-large-cpu",
+                "metric_id": "logical_payload_bytes",
+            },
+            duplicate_metric_cases,
+            {},
+            {},
+        ) == "80000"
+        assert observe_rtt_light_gate(
+            {
+                "gate_id": "RLV1-P06-UPLOAD",
+                "case_id": "renderdoc-medium-gpu",
+                "metric_id": "logical_payload_bytes",
+            },
+            duplicate_metric_cases,
+            {},
+            {},
+        ) == "40000"
+        assert observe_rtt_light_gate(
+            {
+                "gate_id": "RLV1-P04-STEADY",
+                "case_id": "field-core-large-cpu",
+                "metric_id": "steady_updates",
+            },
+            duplicate_metric_cases,
+            {},
+            {},
+        ) == "600"
+        assert observe_rtt_light_gate(
+            {
+                "gate_id": "RLV1-P06-UPLOAD",
+                "case_id": "renderdoc-medium-gpu",
+                "metric_id": "steady_updates",
+            },
+            duplicate_metric_cases,
+            {},
+            {},
+        ) == "700"
 
         capture_root_files = {
             "command.txt",

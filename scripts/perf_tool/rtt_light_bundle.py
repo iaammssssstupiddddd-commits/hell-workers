@@ -2413,7 +2413,7 @@ def _gate_observed(
         return "true" if evidence["environment_contract_match"] else "false"
     if metric_id == "required_sidecars_valid":
         return "true" if evidence["required_sidecars_valid"] else "false"
-    if metric_id in {
+    if expected["gate_id"] == "RLV1-P03-FIELD" and metric_id in {
         "grid_cells",
         "logical_payload_bytes",
         "supplied_emitters",
@@ -2429,7 +2429,7 @@ def _gate_observed(
         if row is None or not row.get(metric_id):
             raise RuntimeError(f"{case_id} has no projected {metric_id}")
         return row[metric_id]
-    if metric_id in {
+    if expected["gate_id"] in {"RLV1-P04-EMITTER", "RLV1-P04-STEADY"} and metric_id in {
         "typed_emitter_components",
         "eligible_supplied_emitters",
         "indoor_mask_cells",
