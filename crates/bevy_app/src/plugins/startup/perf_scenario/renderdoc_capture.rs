@@ -1917,6 +1917,38 @@ mod tests {
     }
 
     #[test]
+    fn p08_receivers_remove_section_cut_but_keep_active_structural_contracts() {
+        let structural_prepass = include_str!(
+            "../../../../../../assets/shaders/topdown_structural_material_prepass.wgsl"
+        );
+        let receiver_sources = [
+            TOPDOWN_STRUCTURAL_SHADER,
+            structural_prepass,
+            include_str!("../../../../../../assets/shaders/terrain_surface_material.wgsl"),
+            include_str!(
+                "../../../../../../assets/shaders/terrain_surface_material_lod1_lite.wgsl"
+            ),
+            include_str!("../../../../../../assets/shaders/terrain_surface_material_lod2.wgsl"),
+            include_str!("../../../../../../assets/shaders/terrain_surface_material_prepass.wgsl"),
+        ];
+
+        for source in receiver_sources {
+            assert!(!source.contains("cut_position"));
+            assert!(!source.contains("cut_normal"));
+            assert!(!source.contains("cut_active"));
+            assert!(!source.contains("section_discard"));
+        }
+
+        for source in [TOPDOWN_STRUCTURAL_SHADER, structural_prepass] {
+            assert!(source.contains("build_progress"));
+            assert!(source.contains("wall_height"));
+        }
+        assert!(TOPDOWN_STRUCTURAL_SHADER.contains("apply_directional_shadow_style("));
+        assert!(TOPDOWN_STRUCTURAL_SHADER.contains("@binding(111) var indoor_light_field"));
+        assert!(TOPDOWN_STRUCTURAL_SHADER.contains("@binding(112) var indoor_light_sampler"));
+    }
+
+    #[test]
     fn p01_composite_binding_contract_is_exact() {
         let resources = p01_composite_render_resources();
         assert_eq!(resources.composite_draw_count, 1);

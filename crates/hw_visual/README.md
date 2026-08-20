@@ -33,8 +33,8 @@
 | `site_yard_visual.rs` | site / yard 境界表示 |
 | `wall_construction.rs` | 壁建設のタイル / progress bar visual |
 | `task_area_visual.rs` | `TaskAreaMaterial`, `TaskAreaVisual` 型定義 |
-| `material/section_material.rs` | `SectionMaterial`（建物用）、`SectionCut`。シェーダは `assets/shaders/section_material*.wgsl` |
-| `material/terrain_surface_material.rs` | `TerrainSurfaceMaterial`（地形専用共有 material）、`TerrainIdMap` 前提の section clip / prepass 対応、`sync_section_cut_to_terrain_surface_system`。シェーダは `assets/shaders/terrain_surface_material*.wgsl` |
+| `material/topdown_structural_material.rs` | 建物用 `TopDownStructuralMaterial`。建築進捗、directional shadow style、室内 Light Field を保持し、シェーダは `assets/shaders/topdown_structural_material*.wgsl` |
+| `material/terrain_surface_material.rs` | `TerrainSurfaceMaterial`（地形専用共有 material）、`TerrainIdMap` 前提の LOD / prepass / directional shadow style / 室内 Light Field 対応。シェーダは `assets/shaders/terrain_surface_material*.wgsl` |
 | `material/boundary_surface_material.rs` | `BoundarySurfaceMaterial`（境界リボン専用 material）。`BoundarySurfaceUniform`（left/right terrain ID・UV scale・blend softness）と地形 4 種アルベド・macro_noise・overlay・`terrain_feature_map`・`terrain_feature_lut`・`shoreline_detail` の全テクスチャバインディングを持つ。シェーダは `assets/shaders/boundary_surface_material.wgsl` |
 
 ## soul/ の責務

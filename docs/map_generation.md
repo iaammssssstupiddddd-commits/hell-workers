@@ -14,7 +14,7 @@
 
 この文書が主対象にしないもの:
 
-- 地形の視覚表現、`SectionMaterial`、RtT
+- 地形の視覚表現、`TerrainSurfaceMaterial`、RtT
 - `world_to_grid` / `grid_to_world` などの座標変換
 - `WorldMap` への最終反映後のゲームロジック
 

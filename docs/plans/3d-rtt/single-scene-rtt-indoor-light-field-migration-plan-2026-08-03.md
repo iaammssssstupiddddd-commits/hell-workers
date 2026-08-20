@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P07 complete; P08 reviewed / M0 ready` |
+| ステータス | `In Progress — P07 complete; P08 M1/M2 code cleanup complete` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-18` |
 | 作成者 | `Codex` |
@@ -242,7 +242,7 @@ Interface:
 
 ### 現在地
 
-- 進捗: `P06はuser-approved RD0 timeout例外で受理、P07はP05-lineage frozen v1 formalまで完了、P08 review完了 / M0 ready`（P00〜P07とP02-A完了。P08実装未着手）
+- 進捗: `P06はuser-approved RD0 timeout例外で受理、P07はP05-lineage frozen v1 formalまで完了、P08はM1/M2 code cleanupとM3 hidden mirrorまで実装済み / native reference bootstrap・formal未完`（P00〜P07とP02-A完了。P08実装進行中）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
@@ -276,7 +276,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 - `hw_infra`はP03がbootstrap済みである。HVAC M1は既存crateを拡張するが、`lighting` pure coreへECS/GPU依存を逆流させない。
 - manual Door lockはP04でrequest化済みで、InterfaceはDoorState / WorldMapを直接変更しない。
 - 現行Lamp gameplay queryは任意の`PowerConsumer`を発光扱いし、半径`5.0`をworld unitとして比較している。
-- 現行Terrain 3 LODと全Structural3dは単一Light Field receiverである。`SectionMaterial`互換型／shader／projector fieldsの物理削除はP08が所有する。
+- 現行Terrain 3 LODと全Structural3dは単一Light Field receiverである。P08で`TopDownStructuralMaterial`を独立ownerへ移し、`SectionMaterial`互換型／shader／projector fieldsは物理削除済み。native shader / pixel証跡はP08 final gateで取得する。
 - P02のreview remediation subjectはv9 actual-windowとfresh S0 / S1 / formalを登録・再検証済みである。P03以降もfrozen contract / projection / P00〜P02 artifactをcandidate結果で変更しない。
 
 ### 最終確認ログ

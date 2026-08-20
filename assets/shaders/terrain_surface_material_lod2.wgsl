@@ -8,7 +8,7 @@
 //   - sample_surface_color_lod2: macro-noise 明度変調・domain warp・UV distort・river scroll を除去。
 //   - さらに albedo UV を量子化し、低解像度テクスチャ相当の見た目に落とす。
 //   - grade_sand_lod2: shoreline_detail テクスチャサンプリングを除去。
-//   - section_discard / PBR ライティング経路は LOD1 と同一。
+//   - PBR ライティング経路は LOD1 と同一。
 //
 // バインドグループはバインディング番号 100〜130 が LOD1 と同一。
 // LOD2 シェーダーで未参照のスロット（111〜126）はバインドされるが GPU からアクセスされない。
@@ -23,10 +23,6 @@
 #import hell_workers::indoor_light_field::sample_indoor_light_field
 
 struct TerrainSurfaceUniforms {
-    cut_position:               vec4<f32>,
-    cut_normal:                 vec4<f32>,
-    thickness:                  f32,
-    cut_active:                 f32,
     map_world_width:            f32,
     map_world_height:           f32,
     uv_scale:                   f32,
@@ -66,15 +62,6 @@ struct TerrainSurfaceUniforms {
 @group(#{MATERIAL_BIND_GROUP}) @binding(134) var indoor_light_sampler: sampler;
 
 const LOD2_ALBEDO_WORLD_TEXEL: f32 = 8.0;
-
-fn section_discard(world_position: vec3<f32>) {
-    if tsm.cut_active > 0.5 {
-        let dist = dot(world_position - tsm.cut_position.xyz, tsm.cut_normal.xyz);
-        if dist < 0.0 || dist > tsm.thickness {
-            discard;
-        }
-    }
-}
 
 fn tile_size() -> f32 {
     return 1.0 / tsm.uv_scale;
@@ -344,8 +331,6 @@ fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
-    section_discard(in.world_position.xyz);
-
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     pbr_input.material.base_color =
         alpha_discard(pbr_input.material, pbr_input.material.base_color);

@@ -2,7 +2,7 @@ use bevy::app::{AppExit, ScheduleRunnerPlugin};
 use bevy::gilrs::GilrsPlugin;
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
-use bevy::render::settings::{Backends, RenderCreation, WgpuFeatures, WgpuSettings};
+use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
 use bevy::window::{ExitCondition, PresentMode, WindowResolution};
 use bevy::winit::WinitPlugin;
 use bevy_app::{HellWorkersGamePlugin, plugins::startup::PerfScenarioConfig};
@@ -88,7 +88,6 @@ fn main() -> AppExit {
         .set(RenderPlugin {
             render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
                 backends: Some(backends), // WSL は GL を優先
-                features: WgpuFeatures::CLIP_DISTANCES,
                 ..default()
             })),
             ..default()

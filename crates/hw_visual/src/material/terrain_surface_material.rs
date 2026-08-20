@@ -8,14 +8,8 @@ use hw_core::constants::{
     topdown_shadow_style_tint,
 };
 
-use super::section_material::SectionCut;
-
 #[derive(Clone, Copy, Debug, ShaderType, Reflect)]
 pub struct TerrainSurfaceUniform {
-    pub cut_position: Vec4,
-    pub cut_normal: Vec4,
-    pub thickness: f32,
-    pub cut_active: f32,
     pub map_world_width: f32,
     pub map_world_height: f32,
     pub uv_scale: f32,
@@ -39,10 +33,6 @@ pub struct TerrainSurfaceUniform {
 impl Default for TerrainSurfaceUniform {
     fn default() -> Self {
         Self {
-            cut_position: Vec4::ZERO,
-            cut_normal: Vec3::NEG_Z.extend(0.0),
-            thickness: TILE_SIZE * 5.0,
-            cut_active: 0.0,
             map_world_width: MAP_WIDTH as f32 * TILE_SIZE,
             map_world_height: MAP_HEIGHT as f32 * TILE_SIZE,
             uv_scale: 1.0 / TILE_SIZE,
@@ -334,52 +324,6 @@ pub struct TerrainSurfaceLutImageHandle(pub Handle<Image>);
 #[derive(Resource, Default)]
 pub struct TerrainFeatureLutUniformSyncState {
     pub done: bool,
-}
-
-fn apply_section_cut(uniforms: &mut TerrainSurfaceUniform, cut: &SectionCut) {
-    uniforms.cut_position = cut.position.extend(0.0);
-    uniforms.cut_normal = cut.normal.normalize_or_zero().extend(0.0);
-    uniforms.thickness = cut.thickness.max(0.0);
-    uniforms.cut_active = if cut.active { 1.0 } else { 0.0 };
-}
-
-pub fn sync_section_cut_to_terrain_surface_lod2_system(
-    cut: Res<SectionCut>,
-    mut materials: ResMut<Assets<TerrainSurfaceMaterialLod2>>,
-) {
-    if !cut.is_changed() {
-        return;
-    }
-
-    for (_, material) in materials.iter_mut() {
-        apply_section_cut(&mut material.extension.uniforms, &cut);
-    }
-}
-
-pub fn sync_section_cut_to_terrain_surface_lod1_lite_system(
-    cut: Res<SectionCut>,
-    mut materials: ResMut<Assets<TerrainSurfaceMaterialLod1Lite>>,
-) {
-    if !cut.is_changed() {
-        return;
-    }
-
-    for (_, material) in materials.iter_mut() {
-        apply_section_cut(&mut material.extension.uniforms, &cut);
-    }
-}
-
-pub fn sync_section_cut_to_terrain_surface_system(
-    cut: Res<SectionCut>,
-    mut materials: ResMut<Assets<TerrainSurfaceMaterial>>,
-) {
-    if !cut.is_changed() {
-        return;
-    }
-
-    for (_, material) in materials.iter_mut() {
-        apply_section_cut(&mut material.extension.uniforms, &cut);
-    }
 }
 
 fn decode_lut_pixel(pixel: &[u8]) -> Vec4 {

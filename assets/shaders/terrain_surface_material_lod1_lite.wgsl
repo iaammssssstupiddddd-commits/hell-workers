@@ -27,10 +27,6 @@
 #import hell_workers::indoor_light_field::sample_indoor_light_field
 
 struct TerrainSurfaceUniforms {
-    cut_position:               vec4<f32>,
-    cut_normal:                 vec4<f32>,
-    thickness:                  f32,
-    cut_active:                 f32,
     map_world_width:            f32,
     map_world_height:           f32,
     uv_scale:                   f32,
@@ -83,15 +79,6 @@ struct TerrainSurfaceUniforms {
 @group(#{MATERIAL_BIND_GROUP}) @binding(132) var boundary_proximity_sampler: sampler;
 @group(#{MATERIAL_BIND_GROUP}) @binding(133) var indoor_light_field: texture_2d<f32>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(134) var indoor_light_sampler: sampler;
-
-fn section_discard(world_position: vec3<f32>) {
-    if tsm.cut_active > 0.5 {
-        let dist = dot(world_position - tsm.cut_position.xyz, tsm.cut_normal.xyz);
-        if dist < 0.0 || dist > tsm.thickness {
-            discard;
-        }
-    }
-}
 
 fn tile_size() -> f32 {
     return 1.0 / tsm.uv_scale;
@@ -446,8 +433,6 @@ fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
-    section_discard(in.world_position.xyz);
-
     var pbr_input = pbr_input_from_standard_material(in, is_front);
     pbr_input.material.base_color =
         alpha_discard(pbr_input.material, pbr_input.material.base_color);

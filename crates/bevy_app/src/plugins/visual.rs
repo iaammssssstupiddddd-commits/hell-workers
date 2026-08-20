@@ -37,7 +37,6 @@ use crate::world::map::TerrainChunk;
 use hw_core::game_state::PlayMode;
 use hw_visual::ActorBillboardOwnerCache;
 use hw_visual::HwVisualPlugin;
-use hw_visual::SectionCut;
 use hw_visual::soul::task_link_system;
 use hw_visual::visual3d::{ActorBillboard3d, Building3dVisual};
 use hw_world::{TerrainChangedEvent, sync_room_overlay_tiles_system};
@@ -72,7 +71,6 @@ impl Plugin for VisualPlugin {
             reset_indoor_light_texture_for_world_replace,
         );
 
-        app.init_resource::<SectionCut>();
         app.init_resource::<ActorBillboardOwnerCache>();
         app.init_resource::<TerrainLodMetrics>();
         app.init_resource::<TerrainLodState>();

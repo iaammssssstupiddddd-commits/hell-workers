@@ -137,7 +137,7 @@ CPU publication、GPU uploaded epoch / revision / checksum、production Soul rec
 raw factsで照合する。Python validatorはproducerのbooleanを信用せず、Soul sample数、stale effect 0、Room state数と
 topology validityを再計算する。P08以外のstageとRenderDoc以外のlegにcross sidecarが存在した場合は失格にする。
 GPU owner stageの`pixel_probes_pass`は、owned `Rgba8Unorm` Light Field imageをGPUから直接readbackしてCPU packed
-RGBAと一致させる動的probeと、`section_material.wgsl`でLight Field加算が
+RGBAと一致させる動的probeと、`topdown_structural_material.wgsl`でLight Field加算が
 `main_pass_post_lighting_processing`より前にあることを埋め込みsourceから固定する順序checkの積である。probe専用PBR
 cameraを毎frame readbackしないため、probe自身がRenderDoc下の600 steady-update証跡を直列stallさせることはない。
 

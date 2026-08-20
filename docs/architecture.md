@@ -245,7 +245,7 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 
 ## RtT（Render-to-Texture）インフラ
 
-`docs/plans/3d-rtt/` で管理される段階的な 3D 化計画の Phase 1 として実装済み。地形タイルは **Camera3d → RtT** のみ（`world/map/spawn.rs`、`SectionMaterial`、`Terrain3dHandles`）。ゲーム内地形の 2D `Sprite` は使用しない。
+`docs/plans/3d-rtt/` で管理される段階的な 3D 化計画の Phase 1 として実装済み。地形タイルは **Camera3d → RtT** のみ（`world/map/spawn.rs`、`TerrainSurfaceMaterial`、`Terrain3dHandles`）。ゲーム内地形の 2D `Sprite` は使用しない。
 
 ### カメラ構成（Main / Overlay / RtT）
 
@@ -275,9 +275,7 @@ RttRuntime
 - `QualitySettings.rtt` は `High / Medium / Low` を持ち、係数は `1.0 / 0.75 / 0.5`。
 - `RttRuntime.pixel_size()` は shader 側へ渡す `1 / texture_size` を返し、logical な表示サイズではなく実際の RtT 解像度を基準にする。
 
-`WgpuFeatures::CLIP_DISTANCES` は `main.rs` の `WgpuSettings` で有効化済み（MS-P3-Pre-A）。ただし現在の `SectionMaterial` 実装は runtime 実機検証の結果 `clip_distances` を使わず、fragment `discard` ベースの one-sided slab クリップを採用している。
-
-`hw_visual::SectionMaterial` / `SectionCut` は `ExtendedMaterial<StandardMaterial, SectionMaterialExt>` の互換型として残る。P02 production は elevation / section-cut writer を登録せず、`SectionCut::default()` の非切断状態だけを material sync が読む。物理削除は P08 が所有する。
+section-cut pipelineと`WgpuFeatures::CLIP_DISTANCES`要求は存在しない。建物・壁は独立した`TopDownStructuralMaterial`で建築進捗、directional shadow style、室内Light Fieldを処理し、地形3 LODは`TerrainSurfaceMaterial`群で同じshadow styleとLight Fieldを処理する。
 
 ### 室内Light Fieldのドメイン境界（P03〜P07）
 
@@ -291,7 +289,7 @@ P06の`IndoorLightTexture`はcurrent epochのCPU snapshotをpure RGBA8 pack help
 
 P07のroot adapterはPostActorでcurrent epoch snapshotを読み、各Soulをslow stepごとに1回sampleして既存回復rateをnon-stack適用する。`hw_infra`はpure Room aggregateだけ、`hw_world`はEntity非依存Room tile/topology signature、rootは`RoomIlluminationState`、bounded cache、load resetを所有する。この依存方向によりrenderer・gameplay・Roomが別々の照度計算を持つことを防ぐ。計算、schedule、計測の詳細は[`indoor_lighting.md`](indoor_lighting.md)を参照する。
 
-地形は `hw_visual::TerrainSurfaceMaterial` / `TerrainSurfaceMaterialExt` を基本にしつつ、3 種の LOD variant を持つ。全 variant が `ExtendedMaterial<StandardMaterial, ...>` のままsection clip・directional lighting・prepass・P06 Light Field bindingを維持する。
+地形は `hw_visual::TerrainSurfaceMaterial` / `TerrainSurfaceMaterialExt` を基本にしつつ、3 種の LOD variant を持つ。全 variant が `ExtendedMaterial<StandardMaterial, ...>` のままdirectional lighting・prepass・P06 Light Field bindingを維持する。
 
 | 型名 | シェーダー | 用途 |
 |---|---|---|
