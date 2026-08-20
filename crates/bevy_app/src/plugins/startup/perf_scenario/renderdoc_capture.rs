@@ -36,10 +36,10 @@ const RENDERDOC_SELECTOR_STRATEGY: &str = "wgpu_device_null_window";
 const SIMULATION_TICK_SOURCE: &str = "perf_capture.fixed_update_tick";
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
 const TOPDOWN_STRUCTURAL_SHADER: &str =
-    include_str!("../../../../../../assets/shaders/section_material.wgsl");
+    include_str!("../../../../../../assets/shaders/topdown_structural_material.wgsl");
 const RENDERDOC_RECEIVER_SHADER_PATHS: [&str; 8] = [
-    "shaders/section_material.wgsl",
-    "shaders/section_material_prepass.wgsl",
+    "shaders/topdown_structural_material.wgsl",
+    "shaders/topdown_structural_material_prepass.wgsl",
     "shaders/terrain_surface_material.wgsl",
     "shaders/terrain_surface_material_lod1_lite.wgsl",
     "shaders/terrain_surface_material_lod2.wgsl",
@@ -1894,7 +1894,9 @@ mod tests {
     fn p08_receivers_remove_soul_projectors_but_keep_directional_shadow_style() {
         let receiver_sources = [
             TOPDOWN_STRUCTURAL_SHADER,
-            include_str!("../../../../../../assets/shaders/section_material_prepass.wgsl"),
+            include_str!(
+                "../../../../../../assets/shaders/topdown_structural_material_prepass.wgsl"
+            ),
             include_str!("../../../../../../assets/shaders/terrain_surface_material.wgsl"),
             include_str!(
                 "../../../../../../assets/shaders/terrain_surface_material_lod1_lite.wgsl"

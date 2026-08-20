@@ -122,10 +122,6 @@ impl MaterialExtension for SectionMaterialExt {
 
 pub type SectionMaterial = ExtendedMaterial<StandardMaterial, SectionMaterialExt>;
 
-/// Active P06 material name. `SectionMaterial` remains as the P08 cleanup
-/// alias, but production structural consumers use this name exclusively.
-pub type TopDownStructuralMaterial = ExtendedMaterial<StandardMaterial, SectionMaterialExt>;
-
 pub fn make_section_material(base_color: LinearRgba) -> SectionMaterial {
     SectionMaterial {
         base: StandardMaterial {
@@ -142,15 +138,6 @@ pub fn make_section_material(base_color: LinearRgba) -> SectionMaterial {
         },
         extension: SectionMaterialExt::default(),
     }
-}
-
-pub fn make_topdown_structural_material(
-    base_color: LinearRgba,
-    indoor_light_field: Handle<Image>,
-) -> TopDownStructuralMaterial {
-    let mut material = make_section_material(base_color);
-    material.extension.indoor_light_field = Some(indoor_light_field);
-    material
 }
 
 /// 草タイル用 A3（低周波 UV 歪み）の既定振幅（UV 空間）。土・砂・川は `0.0`。
@@ -266,14 +253,6 @@ pub fn make_section_material_textured(texture: Handle<Image>) -> SectionMaterial
 }
 
 pub fn with_alpha_mode(mut material: SectionMaterial, alpha_mode: AlphaMode) -> SectionMaterial {
-    material.base.alpha_mode = alpha_mode;
-    material
-}
-
-pub fn with_topdown_alpha_mode(
-    mut material: TopDownStructuralMaterial,
-    alpha_mode: AlphaMode,
-) -> TopDownStructuralMaterial {
     material.base.alpha_mode = alpha_mode;
     material
 }

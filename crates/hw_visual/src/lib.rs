@@ -41,8 +41,9 @@ pub use material::{
     TerrainFeatureLutUniformSyncState, TerrainMaterialMaps, TerrainSurfaceLutImageHandle,
     TerrainSurfaceMaterial, TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod1Lite,
     TerrainSurfaceMaterialExtLod2, TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2,
-    TerrainSurfaceUniform, TopDownStructuralMaterial, make_section_material,
-    make_section_material_textured, make_terrain_section_material, make_terrain_surface_material,
+    TerrainSurfaceUniform, TopDownStructuralMaterial, TopDownStructuralMaterialExt,
+    TopDownStructuralUniform, make_section_material, make_section_material_textured,
+    make_terrain_section_material, make_terrain_surface_material,
     make_terrain_surface_material_lod1_lite, make_terrain_surface_material_lod2,
     make_topdown_structural_material, with_alpha_mode, with_topdown_alpha_mode,
 };
