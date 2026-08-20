@@ -42,7 +42,7 @@ use crate::systems::jobs::floor_construction::{
 use crate::systems::jobs::wall_construction::spawn_wall_shell;
 use crate::systems::jobs::{
     Blueprint, Building, Designation, Door, MudMixerStorage, RenderPresentationClass, TaskSlots,
-    WorkType, presentation_class, requires_legacy_structural_2d_mirror,
+    WorkType, presentation_class,
 };
 #[cfg(feature = "profiling")]
 use crate::systems::lighting::{
@@ -2333,12 +2333,7 @@ fn validate_observed_fixture(
 
 fn expected_presentation(kind: BuildingType) -> (usize, usize) {
     match presentation_class(kind) {
-        // Only state consumers that still require Sprite handles retain a
-        // hidden, explicitly-marked mirror until P08. It is not active
-        // presentation, but the fixture inventories its topology.
-        RenderPresentationClass::Structural3d => {
-            (usize::from(requires_legacy_structural_2d_mirror(kind)), 1)
-        }
+        RenderPresentationClass::Structural3d => (0, 1),
         RenderPresentationClass::Foreground2d => (1, 0),
     }
 }

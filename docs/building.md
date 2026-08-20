@@ -12,7 +12,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 |:---|:---|
 | `Blueprint` | 建設中の建物。`kind`, `progress`, `required_materials`, `delivered_materials` フィールドを持つ |
 | `Building` | 完成した建物。`is_provisional` (仮設) フラグを持つ。`Sprite` は直接持たず、子エンティティ（`VisualLayerKind`）が保持する |
-| `VisualLayerKind` | 必要な `Building` だけが持つ子ビジュアルレイヤー種別（`hw_visual::layer`）。`Foreground2d` は可視 `Sprite` 子を持つ。`Structural3d` は独立した `Building3dVisual` をactive presentationとし、Door / Tank / MudMixerだけが状態consumer互換の非表示 `LegacyStructural2dMirror` Sprite子を残す。Wall / Floor / Bridge / RestArea / SoulSpaは2D子を生成しない。 |
+| `VisualLayerKind` | 必要な `Building` だけが持つ子ビジュアルレイヤー種別（`hw_visual::layer`）。`Foreground2d` は可視 `Sprite` 子を持つ。`Structural3d` は独立した `Building3dVisual` だけをactive presentationとし、2D子を生成しない。 |
 | `ProvisionalWall` | 仮設壁のアップグレード状態（`mud_delivered`）を保持 |
 | `WallConstructionSite` | 壁の建設サイト（`Framing -> Coating` フェーズ、`material_center`、進捗カウンタを保持） |
 | `WallTileBlueprint` | 壁1タイルの建設状態（`wood_delivered` / `mud_delivered` / `spawned_wall`）を保持 |
@@ -342,17 +342,15 @@ Building エンティティ（親）
 ├─ Building { kind, is_provisional }
 ├─ Transform（Z座標は BuildingType 別に Z_BUILDING_* 定数で決定）
 ├─ BuildingBounceEffect（完成時バウンスアニメーション）
-├─ Foreground2d のときだけ VisualLayerKind + 可視 Sprite エンティティ（子）
-│  └─ Transform::default()（ローカル Z=0、グローバル Z は親から継承）
-└─ Structural3d の Door / Tank / MudMixer のときだけ
-   LegacyStructural2dMirror + 非表示 Sprite エンティティ（子）
+└─ Foreground2d のときだけ VisualLayerKind + 可視 Sprite エンティティ（子）
+   └─ Transform::default()（ローカル Z=0、グローバル Z は親から継承）
 
 Structural3d のときだけ Building3dVisual エンティティ（独立。Building の子ではない）
 ├─ Building3dVisual { owner: Entity }
 └─ XZ 平面上にスポーン（3D メッシュ・マテリアル）
 ```
 
-> **P02 presentation契約**: `Wall / Door / Floor / Bridge / Tank / MudMixer / RestArea / SoulSpa` は `Structural3d` で、active presentation は `Building3dVisual` だけ。状態consumerとの互換用 `LegacyStructural2dMirror` + `Visibility::Hidden` SpriteはDoor / Tank / MudMixerだけがP08まで残す。`Wall / Floor / Bridge / RestArea / SoulSpa`は2D子を持たない。`SandPile / BonePile / WheelbarrowParking / OutdoorLamp` は `Foreground2d` で、active presentation は子Spriteだけ、3D visualは生成しない。
+> **P08 presentation契約**: `Wall / Door / Floor / Bridge / Tank / MudMixer / RestArea / SoulSpa` は `Structural3d` で、presentation はowner-linked `Building3dVisual` exactly 1、子Spriteは0。Door / Tank / MudMixerの状態は3D material / transform consumerが直接読む。`SandPile / BonePile / WheelbarrowParking / OutdoorLamp` は `Foreground2d` で、active presentation は子Spriteだけ、3D visualは生成しない。P02〜P07の凍結済みperformance artifactは当時のhidden mirror列を歴史値として保持する。
 
 **BuildingType 別 Z 割り当て**:
 
@@ -360,8 +358,7 @@ Structural3d のときだけ Building3dVisual エンティティ（独立。Buil
 |:---|:---|:---|
 | `SandPile`, `BonePile` | 可視 `Floor` | `Z_BUILDING_FLOOR` (0.05) |
 | `WheelbarrowParking`, `OutdoorLamp` | 可視 `Struct` | `Z_BUILDING_STRUCT` (0.12) |
-| `Door`, `Tank`, `MudMixer` | 非表示 `Struct` + `LegacyStructural2dMirror` | `Z_BUILDING_STRUCT` (0.12) |
-| `Wall`, `Floor`, `Bridge`, `RestArea`, `SoulSpa` | なし | — |
+| `Wall`, `Door`, `Floor`, `Bridge`, `Tank`, `MudMixer`, `RestArea`, `SoulSpa` | なし | — |
 
 **visual system から Sprite を参照する方法**: 2D childを持つrouteだけが `Children` + `VisualLayerKind` で子の `Sprite` を取得する。Structural3dのactive presentationは常に独立 `Building3dVisual` を読む。親の `Building` エンティティが `Sprite` を直接持つ、または全Buildingに2D childがあると仮定しないこと。
 

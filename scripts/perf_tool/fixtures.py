@@ -888,6 +888,9 @@ def self_test() -> int:
             p03_presentation = build_fixture_presentation_rows(
                 rtt_contract, size, stage_id="p03"
             )
+            p08_presentation = build_fixture_presentation_rows(
+                rtt_contract, size, stage_id="p08"
+            )
             assert p03_presentation == p02_presentation
             p02_bridge = next(
                 row for row in p02_presentation if row["building_kind"] == "Bridge"
@@ -901,6 +904,16 @@ def self_test() -> int:
             assert p02_bridge["owner_3d_count"] == "1"
             assert p02_lamp["child_sprite_count"] != "0"
             assert p02_lamp["owner_3d_count"] == "0"
+            for kind in ("Door", "Tank", "MudMixer"):
+                p02_row = next(
+                    row for row in p02_presentation if row["building_kind"] == kind
+                )
+                p08_row = next(
+                    row for row in p08_presentation if row["building_kind"] == kind
+                )
+                assert p02_row["child_sprite_count"] == p02_row["entity_count"]
+                assert p08_row["child_sprite_count"] == "0"
+                assert p08_row["owner_3d_count"] == p08_row["entity_count"]
         validate_stage_lane(rtt_contract, "current", "static")
         try:
             validate_stage_lane(rtt_contract, "current", "field-core")

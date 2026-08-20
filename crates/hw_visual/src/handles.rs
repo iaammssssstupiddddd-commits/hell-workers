@@ -44,19 +44,6 @@ pub struct WallVisualHandles {
     pub mud_floor: Handle<Image>,
 }
 
-/// ビルディングアニメーション（mud_mixer.rs, tank.rs）
-#[derive(Resource)]
-pub struct BuildingAnimHandles {
-    pub mud_mixer_idle: Handle<Image>,
-    pub mud_mixer_anim_1: Handle<Image>,
-    pub mud_mixer_anim_2: Handle<Image>,
-    pub mud_mixer_anim_3: Handle<Image>,
-    pub mud_mixer_anim_4: Handle<Image>,
-    pub tank_empty: Handle<Image>,
-    pub tank_partial: Handle<Image>,
-    pub tank_full: Handle<Image>,
-}
-
 /// 作業アイコン（gather/worker_indicator.rs, blueprint/worker_indicator.rs）
 #[derive(Resource)]
 pub struct WorkIconHandles {

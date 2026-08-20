@@ -11,9 +11,7 @@ use bevy::prelude::SystemSet;
 pub use blueprint_cancellation::blueprint_cancellation_system;
 pub use building_completion::{BuildingCompletionSet, building_completion_system};
 #[cfg(feature = "profiling")]
-pub(crate) use building_completion::{
-    RenderPresentationClass, presentation_class, requires_legacy_structural_2d_mirror,
-};
+pub(crate) use building_completion::{RenderPresentationClass, presentation_class};
 pub(crate) use building_completion::{attach_building_shell, structural_light_anchor_mesh_tag};
 #[cfg(feature = "profiling")]
 pub(crate) use deconstruction::DeconstructionPerfMetrics;

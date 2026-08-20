@@ -24,7 +24,6 @@ use hw_visual::blueprint::{BuildingBounceEffect, CompletionText, DeliveryPopup};
 use hw_visual::make_topdown_structural_material;
 use hw_visual::visual3d::{
     ActorBillboard3d, Building3dVisual, Door3dVisual, DoorPresentationState,
-    LegacyStructural2dMirror,
 };
 use hw_world::WorldMap;
 use serde_json::{Value, json};
@@ -67,7 +66,7 @@ type BridgeVisualQuery<'w, 's> = Query<
 
 type BridgeAssets<'a> = (&'a Assets<Mesh>, &'a Assets<TopDownStructuralMaterial>);
 type MainCameraFilter = (With<MainCamera>, Without<Camera3dRtt>);
-type ForegroundFilter = (With<Sprite>, Without<LegacyStructural2dMirror>);
+type ForegroundFilter = With<Sprite>;
 type ProbeCameraFilter = (With<MainCamera>, Without<Door>);
 type TransientTextFilter = Or<(With<CompletionText>, With<DeliveryPopup>)>;
 type BuildingRootFilter = (With<Building>, Without<ActorBillboard3d>);

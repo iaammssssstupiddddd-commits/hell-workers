@@ -203,10 +203,10 @@
 
 ### 変更内容
 
-1. `LegacyStructural2dMirror`を付けるDoor / Tank / MudMixer hidden child Sprite spawnとmarkerを削除する。Wall / Floor等の別purpose Sprite、blueprint、placement ghost、foreground actorは対象外とする。
-2. Doorの`sync_door_presentation_system`からchild Sprite branchだけを外し、3D material / transform / `DoorPresentationState`更新を保持する。`IndoorLightUploadSet -> DoorPresentationSyncSet`のP07同frame edgeを維持する。
-3. `hw_visual::tank` / `mud_mixer`の旧Sprite state writerとplugin registrationを削除し、root `sync_structural_presentation_state_system`による3D stateを唯一のruntime consumerにする。
-4. P08 perf fixture / actual-window probeはDoor semantic rootをseedしてproduction 3D syncを待ち、structural child Sprite `0`を期待する。p02〜p07のhistorical artifact expectationは変更せず、P08 stage mappingだけを追加する。
+1. [実装完了 2026-08-20 / native再確認待ち] `LegacyStructural2dMirror`を付けるDoor / Tank / MudMixer hidden child Sprite spawnとmarkerを削除した。Wall / Floor等の別purpose Sprite、blueprint、placement ghost、foreground actorは対象外とした。
+2. [実装完了 2026-08-20 / native再確認待ち] Doorの`sync_door_presentation_system`からchild Sprite branchだけを外し、3D material / transform / `DoorPresentationState`更新を保持した。`IndoorLightUploadSet -> DoorPresentationSyncSet`のP07同frame edgeは維持する。
+3. [実装完了 2026-08-20 / native再確認待ち] `hw_visual::tank` / `mud_mixer`の旧Sprite state writerとplugin registrationを削除し、root `sync_structural_presentation_state_system`による3D stateを唯一のruntime consumerにした。
+4. [実装完了 2026-08-20 / actual-window再確認待ち] P08 perf fixtureはstructural child Sprite `0`を期待し、p02〜p07のhistorical artifact expectationを変更せずP08 stage mappingだけを追加した。actual-window probeは既存のDoor semantic root / production 3D syncを継続利用する。
 5. obsolete DevPanel / env / visual-test flag / message / reset entry / queryをinventoryし、runtime ownerがないものだけ削除する。active P05 light reset、P06 GPU reset、P07 Room cache resetは残す。
 6. frozen projection列 / contract / historical readerは保持する。runtime Queryを消した列はP08 producerでliteral / derived `0`とし、`artifacts.py` / `rtt_light_contract.py` / RenderDoc validatorがP08の0を要求する。
 7. save lifecycleはderived visual / Room state / cross observationをserializeしない。preflight rejectはlive state不変、normal / rollback / recovery-only / recovery-failed / duplicate resetはold epoch field / GPU / Soul / Room / cross observation read 0とdark-first / idempotenceを維持する。
@@ -373,17 +373,16 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 ### 現在地
 
-- 進捗: `M0 implementation in progress / M1・M2 projector subset complete / remaining cleanup pending`
-- 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、stopped projector producer / uniform / WGSL cleanup、P08 production slow-step fixture priming、fixed-audit capture-relative clock、post-Actor actor位置復元、Help no-impact review。
-- 未完了: actor位置復元を含むfresh committed subjectでのS0 / S1再採取、actual RenderDoc cross checkpoint、valid P06 reference、legacy character / material re-home / section / mirror cleanup、M4 formal。
+- 進捗: `M0 implementation in progress / M1・M2 projector subset complete / M3 hidden structural mirror implementation complete / remaining cleanup pending`
+- 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、stopped projector producer / uniform / WGSL cleanup、P08 production slow-step fixture priming、fixed-audit capture-relative clock、post-Actor actor位置復元、同一commitのfresh S0 / S1、Door / Tank / MudMixer hidden structural mirrorと旧2D writerの物理削除、Help no-impact review。
+- 未完了: mirror削除後のactual-window再確認、actual RenderDoc cross checkpoint、valid P06 reference、legacy character / material re-home / section cleanup、M4 formal。
 - 現ブロッカー: primary canonical rootへのexisting P07 importと全baseline offline verifyは完了したが、P06 `19ad5fec`のfresh formal retry `3989b184-a946-43d3-9367-fdad29d5d075`はprobe専用PBR cameraの継続readback中に再度600秒deadlineへ達してinvalidになった。修正版をP06 evidence-only subjectへ移植してfresh S0 / S1 / RD0 / formalを再採取し、valid P06を登録する必要がある。
 
 ### 次のAIが最初にやること
 
-1. capture-relative clock修正を含むclean committed subjectでfresh P08 S0 -> S1を再採取する。
+1. M3 mirror削除をcommitし、M1 legacy character / visual_test置換を独立commitとして進める。
 2. direct GPU pixel readback + receiver WGSL order checkをP06 evidence-only subjectへ移植し、fresh S0 -> S1 -> RD0 -> formalを採取してvalid P06をcanonical rootへ登録する。
-3. P08 cleanup実装後、actual RenderDocでcross checkpointを採取し、同frameのCPU / GPU / Soul / Room raw factsをoffline再検証する。
-4. reference bootstrapと並行しない独立commitとしてM1 legacy character inventoryへ進む。
+3. P08 cleanup実装後、fresh actual-window / RenderDocでpresentationとcross checkpointを採取し、同frameのCPU / GPU / Soul / Room raw factsをoffline再検証する。
 
 ### ブロッカー/注意点
 
@@ -396,9 +395,9 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 ### 最終確認ログ
 
-- Rust gates: `2026-08-20` / `pass (focused profiling tests 2、python3 scripts/dev.py verify)`
-- native acceptance: `2026-08-20` / `partial (clock修正subject 40fb7d74のfresh S0はvalid。P08 S1はfixed audit合格後、medium / large Capture preflightのActor移動でinvalid。post-Actor復元後のheadless medium / large fixed auditはValid 2 / Invalid 0。次commitのfresh S0 / S1は未採取)`
-- Help impact: `2026-08-20` / `No impact (profiling-only P08 fixture timing / canonical actor positioning。通常gameplayのinput / visual / lighting / save / label / workflowは不変)`
+- Rust gates: `2026-08-20` / `pass (spawn / 3D presentation focused tests、perf.py self-test、python3 scripts/dev.py verify)`
+- native acceptance: `2026-08-20` / `partial (actor復元subject addc5724のfresh S0とP08 S1がvalid。S1はaudit / Capture / Memory / field-core / consumer-coreを完走。M3 mirror削除後のactual-window / S0 / S1 / RD0 / formalは未採取)`
+- Help impact: `2026-08-20` / `No impact (profiling-only fixture timing / canonical actor positioningと、非表示structural mirror / 旧2D writerの削除。可視3D presentation、通常gameplayのinput / state semantics / save / label / workflowは不変)`
 - docs gate: `2026-08-20` / `pass (docs --write / --check、check_docs、diff --check)`
 
 ### Definition of Done
@@ -415,6 +414,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-20` | `Codex` | actor復元subject `addc5724`でfresh S0 / P08 S1をvalid取得。続いてDoor / Tank / MudMixer hidden structural Sprite、marker、旧2D state writerを削除し、3D state consumerへ一本化。P08 fixtureだけchild Sprite 0へ更新し、p02〜p07 historical projectionを保持 |
 | `2026-08-20` | `Codex` | P08 static fixtureをproduction slow stepでprimeし、fixed auditのvirtual / fixed elapsedをcapture境界相対へ修正。headless small 1-runとfresh S0がvalidとなり、S1 fixed auditも旧paused待ちを解消。S1 Captureでmedium / large Soul移動を検出したため、PostActorかつlighting前にfixture actor位置だけをcanonical cellへ復元し、headless medium / largeをValid 2 / Invalid 0で再検証。stopped Soul projector producer / uniform / WGSL cleanupも独立commitで完了 |
 | `2026-08-19` | `Codex` | M0を`6675f751`でcommit。existing P07 attemptをprimary canonical rootへ原子的登録し、current / p01 / p02 / p04 / p05 / p07の6 stage・6,200 fileをoffline verify。P06 fresh formal retryはRD0で同じ600秒deadlineを再現したため、probe専用PBR cameraを廃止し、owned Light Field direct GPU pixel readback + receiver WGSL pre-post-processing順序checkへ修正開始 |
 | `2026-08-18` | `Codex` | M0実装開始。Rust / Python / nativeへP08 4 laneを追加し、GPU + CPU consumer合成、RenderDoc checkpoint schema v4、production Soul observation、Room / CPU / GPU cross validator、P08 cross sidecar、25 case / 86 process self-testを実装。native reference bootstrapとactual RenderDocは未実施 |

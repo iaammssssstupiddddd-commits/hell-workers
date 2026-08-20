@@ -14,11 +14,6 @@ pub struct Building3dVisual {
     pub owner: Entity,
 }
 
-/// Hidden compatibility mirror retained only for state/connectivity consumers.
-/// It is never an active presentation and is scheduled for P08 removal.
-#[derive(Component, Debug, Clone, Copy)]
-pub struct LegacyStructural2dMirror;
-
 /// Door-specific active 3D presentation. The root `Door` remains the only
 /// semantic writer; this component only identifies its visual consumer.
 #[derive(Component, Debug, Clone)]

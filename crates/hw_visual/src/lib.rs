@@ -10,7 +10,6 @@ pub mod handles;
 pub mod haul;
 pub mod layer;
 pub mod material;
-pub mod mud_mixer;
 pub mod plant_trees;
 pub mod power;
 pub mod progress_bar;
@@ -18,7 +17,6 @@ pub mod selection_indicator;
 pub mod site_yard_visual;
 pub mod soul;
 pub mod speech;
-pub mod tank;
 pub mod task_area_visual;
 pub mod visual3d;
 pub mod wall_connection;
@@ -31,8 +29,8 @@ pub use speech::max_soul_visual_system;
 pub use speech::squad_visual_system;
 
 pub use handles::{
-    BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
-    PlantTreeHandles, SpeechHandles, WallVisualHandles, WorkIconHandles,
+    GatheringVisualHandles, HaulItemHandles, MaterialIconHandles, PlantTreeHandles, SpeechHandles,
+    WallVisualHandles, WorkIconHandles,
 };
 pub use material::{
     CharacterMaterial, SectionCut, SectionMaterial, SoulShadowMaterial,
@@ -54,8 +52,8 @@ pub use material::{
 pub use familiar::{FamiliarVisualOffset, FamiliarVisualOwner};
 pub use visual3d::{
     ActorBillboard3d, Building3dVisual, Door3dVisual, DoorPresentationState, FamiliarProxy3d,
-    LegacyStructural2dMirror, SoulAnimVisualState, SoulAnimationPlayer3d, SoulBillboardFrame,
-    SoulBodyAnimState, SoulFaceMaterial3d, SoulFaceState, SoulProxy3d, SoulProxyOwnerCache,
+    SoulAnimVisualState, SoulAnimationPlayer3d, SoulBillboardFrame, SoulBodyAnimState,
+    SoulFaceMaterial3d, SoulFaceState, SoulProxy3d, SoulProxyOwnerCache,
     StructuralPresentationState,
 };
 
@@ -249,15 +247,9 @@ impl Plugin for HwVisualPlugin {
                 .in_set(GameSystemSet::Visual),
         );
 
-        // Building animation systems
         app.add_systems(
             Update,
-            (
-                tank::update_tank_visual_system,
-                mud_mixer::update_mud_mixer_visual_system,
-                power::sync_powered_visual_system,
-            )
-                .in_set(GameSystemSet::Visual),
+            power::sync_powered_visual_system.in_set(GameSystemSet::Visual),
         );
 
         // Floor / wall construction visual systems

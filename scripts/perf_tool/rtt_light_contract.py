@@ -489,7 +489,7 @@ def build_fixture_presentation_rows(
                 "Bridge",
                 "SoulSpa",
             }
-            legacy_state_mirror = building_kind in {
+            legacy_state_mirror = stage_id != "p08" and building_kind in {
                 "Door",
                 "Tank",
                 "MudMixer",

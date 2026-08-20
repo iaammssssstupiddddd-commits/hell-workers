@@ -8,16 +8,16 @@ use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, building_3d_render_layers};
 use hw_core::visual::SoulTaskHandles;
 use hw_logistics::ResourceItemVisualHandles;
-use hw_visual::{
-    BuildingAnimHandles, GatheringVisualHandles, HaulItemHandles, MaterialIconHandles,
-    PlantTreeHandles, SoulShadowMaterial, SpeechHandles, TerrainSurfaceLutImageHandle,
-    TerrainSurfaceMaterial, TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod1Lite,
-    TerrainSurfaceMaterialExtLod2, TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2,
-    TerrainSurfaceUniform, TopDownStructuralMaterial, WallVisualHandles, WorkIconHandles,
-    make_terrain_surface_material, make_terrain_surface_material_lod1_lite,
-    make_terrain_surface_material_lod2, make_topdown_structural_material, with_topdown_alpha_mode,
-};
 use hw_visual::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
+use hw_visual::{
+    GatheringVisualHandles, HaulItemHandles, MaterialIconHandles, PlantTreeHandles,
+    SoulShadowMaterial, SpeechHandles, TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial,
+    TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,
+    TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2, TerrainSurfaceUniform,
+    TopDownStructuralMaterial, WallVisualHandles, WorkIconHandles, make_terrain_surface_material,
+    make_terrain_surface_material_lod1_lite, make_terrain_surface_material_lod2,
+    make_topdown_structural_material, with_topdown_alpha_mode,
+};
 use hw_world::DoorVisualHandles;
 
 use crate::systems::visual::indoor_light_texture::IndoorLightTexture;
@@ -169,17 +169,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         mud_end_left: game_assets.mud_wall_end_left.clone(),
         mud_end_right: game_assets.mud_wall_end_right.clone(),
         mud_floor: game_assets.mud_floor.clone(),
-    });
-
-    commands.insert_resource(BuildingAnimHandles {
-        mud_mixer_idle: game_assets.mud_mixer.clone(),
-        mud_mixer_anim_1: game_assets.mud_mixer_anim_1.clone(),
-        mud_mixer_anim_2: game_assets.mud_mixer_anim_2.clone(),
-        mud_mixer_anim_3: game_assets.mud_mixer_anim_3.clone(),
-        mud_mixer_anim_4: game_assets.mud_mixer_anim_4.clone(),
-        tank_empty: game_assets.tank_empty.clone(),
-        tank_partial: game_assets.tank_partial.clone(),
-        tank_full: game_assets.tank_full.clone(),
     });
 
     commands.insert_resource(WorkIconHandles {

@@ -70,8 +70,8 @@ use hw_soul_ai::soul_ai::update::slow_simulation::SlowSimulationPerfMetrics;
 use hw_spatial::DoorPerfMetrics;
 #[cfg(feature = "profiling")]
 use hw_visual::visual3d::{
-    ActorBillboard3d, Building3dVisual, DoorPresentationState, FamiliarProxy3d,
-    LegacyStructural2dMirror, SoulProxy3d, SoulShadowProxy3d, StructuralPresentationState,
+    ActorBillboard3d, Building3dVisual, DoorPresentationState, FamiliarProxy3d, SoulProxy3d,
+    SoulShadowProxy3d, StructuralPresentationState,
 };
 #[cfg(feature = "profiling")]
 use hw_world::{DoorVisualHandles, RuntimePathSearchBudget, RuntimePathSearchMetrics};
@@ -647,15 +647,7 @@ pub(crate) struct PerfChecksumQueries<'w, 's> {
             Option<&'static StructuralPresentationState>,
         ),
     >,
-    presentation_sprites: Query<
-        'w,
-        's,
-        (
-            &'static Visibility,
-            Option<&'static LegacyStructural2dMirror>,
-        ),
-        With<Sprite>,
-    >,
+    presentation_sprites: Query<'w, 's, &'static Visibility, With<Sprite>>,
     scene_rtt_cameras: Query<'w, 's, (), With<Camera3dRtt>>,
     cameras_2d: Query<'w, 's, (&'static Camera, Option<&'static RenderLayers>), With<Camera2d>>,
 }

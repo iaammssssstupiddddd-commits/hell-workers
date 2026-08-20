@@ -6,8 +6,7 @@ use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT};
 use hw_visual::layer::VisualLayerKind;
 use hw_visual::visual3d::{
-    Building3dVisual, Door3dVisual, DoorPresentationState, LegacyStructural2dMirror,
-    StructuralPresentationState,
+    Building3dVisual, Door3dVisual, DoorPresentationState, StructuralPresentationState,
 };
 use hw_world::WorldMap;
 
@@ -71,18 +70,6 @@ pub(crate) const fn presentation_class(kind: BuildingType) -> RenderPresentation
         | BuildingType::WheelbarrowParking
         | BuildingType::OutdoorLamp => RenderPresentationClass::Foreground2d,
     }
-}
-
-/// Whether P02 still needs a hidden 2D state mirror for an active 3D building.
-///
-/// Door state synchronization and the legacy Tank / MudMixer state consumers
-/// still write Sprite handles. Other structural kinds have no such consumer,
-/// so retaining a Sprite for them would only preserve duplicate topology.
-pub(crate) const fn requires_legacy_structural_2d_mirror(kind: BuildingType) -> bool {
-    matches!(
-        kind,
-        BuildingType::Door | BuildingType::Tank | BuildingType::MudMixer
-    )
 }
 
 pub(super) fn spawn_completed_building(
@@ -158,8 +145,8 @@ pub(crate) fn attach_building_shell(
         _ => VisualLayerKind::Struct,
     };
 
-    // Door/Tank/MudMixer keep a hidden legacy mirror for state consumers until
-    // P08; Foreground2d uses this Sprite as its one active presentation.
+    // Foreground2d uses this Sprite as its one active presentation. Structural
+    // buildings are represented only by their owner-linked 3D visual.
     let (sprite_image_2d, custom_size_2d) = match kind {
         BuildingType::Wall => (
             game_assets.mud_wall_isolated.clone(),
@@ -194,10 +181,9 @@ pub(crate) fn attach_building_shell(
         hw_visual::blueprint::BuildingBounceEffect::completion(),
     ));
 
-    if class == RenderPresentationClass::Foreground2d || requires_legacy_structural_2d_mirror(kind)
-    {
+    if class == RenderPresentationClass::Foreground2d {
         owner.with_children(|parent| {
-            let mut visual = parent.spawn((
+            parent.spawn((
                 layer_kind,
                 Sprite {
                     image: sprite_image_2d,
@@ -205,16 +191,9 @@ pub(crate) fn attach_building_shell(
                     ..default()
                 },
                 Transform::default(),
-                if class == RenderPresentationClass::Structural3d {
-                    Visibility::Hidden
-                } else {
-                    Visibility::Inherited
-                },
+                Visibility::Inherited,
                 Name::new(format!("VisualLayer ({:?})", layer_kind)),
             ));
-            if class == RenderPresentationClass::Structural3d {
-                visual.insert(LegacyStructural2dMirror);
-            }
         });
     }
 
@@ -343,23 +322,6 @@ mod tests {
 
         assert_eq!(structural, 8);
         assert_eq!(foreground, 4);
-    }
-
-    #[test]
-    fn only_structural_state_consumers_keep_a_legacy_2d_mirror() {
-        let mirrored = BuildingType::ALL
-            .into_iter()
-            .filter(|kind| requires_legacy_structural_2d_mirror(*kind))
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            mirrored,
-            [
-                BuildingType::Door,
-                BuildingType::Tank,
-                BuildingType::MudMixer,
-            ]
-        );
     }
 
     #[test]

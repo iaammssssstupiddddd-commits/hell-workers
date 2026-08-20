@@ -81,7 +81,7 @@ root adapterに副作用のない`presentation_class(BuildingType)`を置き、�
 - `Building3dVisual { owner }`はAdded visual / `Changed<Transform>` ownerを読むが、root transformをそのまま複製しない。2D XY→3D XZ、種別height、rotation、completion bounce scaleを分けたpresentation-transform resolverで、移動するTank / MudMixerを含め追従する。
 - Tank / MudMixerのempty / partial / full / active状態とcompletion bounceはP02がsemantic state / active presentation契約として所有する。P02で必要な有限shared handleは暫定bridgeに留め、durable `TopDownStructuralMaterial` / receiverへの移行はP06 M3が所有する。`state_and_bounce_probes_pass`はmaterial type名に依存させない。
 - P00契約どおりcompletion bounceをstage上のactive presentationへ移し、廃止または非描画2D childだけがbounceする状態を残さない。
-- Wall / Tank / MudMixer等の既存2D state syncが必要な間は`LegacyStructural2dMirror`相当を非描画で保持できるが、consumer名とP08削除条件をtestに記録する。単なる保険として残さない。
+- Wall / Tank / MudMixer等の既存2D state syncが必要な間は`LegacyStructural2dMirror`相当を非描画で保持できるが、consumer名とP08削除条件をtestに記録する。単なる保険として残さない。P08でDoor / Tank / MudMixerの3D state consumerへ一本化し、hidden mirrorは物理削除した。
 - `WallOrientationAid`はP02で削除する。active presentation / scene inventory / P06 receiverへ無名の3D childを残さない。
 - load rehydrateも通常spawnと同じmapping helperを使い、別matchを持たない。
 

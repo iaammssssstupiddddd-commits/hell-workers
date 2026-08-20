@@ -109,7 +109,7 @@ pub(super) fn calculate_p02_presentation(
             .into_iter()
             .flat_map(|children| children.iter())
             .filter_map(|child| checksum_queries.presentation_sprites.get(child).ok())
-            .filter(|(visibility, legacy)| legacy.is_none() && **visibility != Visibility::Hidden)
+            .filter(|visibility| **visibility != Visibility::Hidden)
             .count();
         let active_3d = visuals.len();
         let active_count = visible_2d + active_3d;

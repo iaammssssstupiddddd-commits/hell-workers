@@ -17,8 +17,6 @@ use hw_visual::TopDownStructuralMaterial;
 use hw_visual::visual3d::{
     Building3dVisual, Door3dVisual, DoorPresentationState, StructuralPresentationState,
 };
-use hw_world::DoorVisualHandles;
-
 /// Stable boundary used by profiling and future Light Field consumers. Door
 /// domain writers run earlier; observers must run after this set.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -247,12 +245,8 @@ pub fn sync_structural_presentation_state_system(
     }
 }
 
-type DoorOwnerQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static Door, &'static Transform, Option<&'static Children>),
-    Without<Building3dVisual>,
->;
+type DoorOwnerQuery<'w, 's> =
+    Query<'w, 's, (&'static Door, &'static Transform), Without<Building3dVisual>>;
 
 type DoorVisualQuery<'w, 's> = Query<
     'w,
@@ -267,32 +261,15 @@ type DoorVisualQuery<'w, 's> = Query<
     Without<Door>,
 >;
 
-/// Synchronizes both the legacy child Sprite and active 3D leaf from the root
-/// `Door`. This system never writes semantic state or `WorldMap`.
+/// Synchronizes the active 3D leaf from the root `Door`. This system never
+/// writes semantic state or `WorldMap`.
 pub fn sync_door_presentation_system(
     owners: DoorOwnerQuery,
-    mut sprites: Query<&mut Sprite>,
     mut visuals: DoorVisualQuery,
-    sprite_handles: Res<DoorVisualHandles>,
     handles_3d: Res<Building3dHandles>,
 ) {
-    for (door, _, children) in &owners {
-        let desired_image = if door.state == DoorState::Open {
-            &sprite_handles.door_open
-        } else {
-            &sprite_handles.door_closed
-        };
-        for child in children.into_iter().flat_map(|children| children.iter()) {
-            if let Ok(mut sprite) = sprites.get_mut(child)
-                && sprite.image != *desired_image
-            {
-                sprite.image = desired_image.clone();
-            }
-        }
-    }
-
     for (visual, mut observed_state, mut transform, mut material, mut mesh_tag) in &mut visuals {
-        let Ok((door, owner_transform, _)) = owners.get(visual.owner) else {
+        let Ok((door, owner_transform)) = owners.get(visual.owner) else {
             continue;
         };
         let next_state = presentation_state(door.state);
