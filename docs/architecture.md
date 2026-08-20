@@ -344,7 +344,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - `RttCompositeMaterial` は `RttRuntime.scene` だけをfragment set 2のtexture / sampler binding `1 / 2`で受け取り、通常サンプル1回で合成する。
 - 建築物 3D ビジュアルは `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER])` を使い、RtT Camera3d には見せつつ、影確認用 `DirectionalLight` からも shadow receiver として扱えるようにしている。
 - TopDown の主光源方向は `hw_core::constants::topdown_sun_direction_world()` を単一の真実とし、RtT の主 `DirectionalLight` と `CharacterMaterial` の body shader が同じ方向を使う。現在は画面手前側の壁面が完全な日陰にならないよう、真上寄りではなく前方寄りの斜光を採用している。
-- Bevy 0.19 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 light は `LAYER_3D` を含み、`Camera3dRtt` 視点で有効な light として GPU light 配列に入る。`Soul` projected shadow もこの view 内の shadow-enabled directional light だけを使う。
+- Bevy 0.19 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 light は `LAYER_3D` を含み、`Camera3dRtt` 視点で有効な light として GPU light 配列に入る。
 
 `sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は合成メッシュのスケールをウィンドウリサイズに常時追従させ、`RttRuntime.is_changed()` のときのみカメラ `RenderTarget` と `RttCompositeMaterial.scene_texture` を更新する。target の再 bind では image handle と `target_scale_factor` を同時に反映する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttRuntime.viewport` の実サイズから再計算する。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ・DPI・品質変更フレーム内で再生成後のSceneテクスチャへ差し替わる。
 
@@ -354,7 +354,7 @@ P02 production は Soul を `ActorBillboard3d` 1 entity / owner で Scene RtT �
 
 - Soul billboard は共有 Rectangle mesh と8個の `StandardMaterial`（alpha mask、unlit）だけを使う。`SoulBillboardFrame` は Normal / Exhausted / Happy / Sleep / Wine / Trump / Stress / StressBreakdown の有限集合で、既存の idle・task・movement・会話・stress state resolverを共有する。
 - `sync_actor_billboard_system` は owner XY を Scene X/-Z へ写し、固定 TopDown Camera3d の回転へ billboard を向け、左右向きは scale.x で表す。owner削除は `SoulProxyOwnerCache.actor_billboard` から O(1) で cleanupする。
-- Soul GLB、`SoulProxy3d`、`SoulShadowProxy3d`、shadow projector、`SoulShadowMaterial` plugin、GLB animation consumer は production pluginから停止した。型と旧 module は P08 の物理削除まで互換境界として残る。
+- Soul GLB、`SoulProxy3d`、`SoulShadowProxy3d`、`SoulShadowMaterial` plugin、GLB animation consumer は production pluginから停止しており、P08で順次物理削除する。未登録だったshadow projector producerとreceiver uniform / WGSL loopは削除済みで、現役のdirectional shadow styleだけを保持する。
 - Familiar は4フレームの child Sprite、左右反転、hover/wobble、selection、吹き出しを MainCamera の単一 `LAYER_2D` passで描く。production spawn は `FamiliarProxy3d` を生成しない。
 - `Render3dVisible` は Camera3d と composite を同時に隠すため、billboardを含む Scene 全体が前フレーム残像なしで切り替わる。
 

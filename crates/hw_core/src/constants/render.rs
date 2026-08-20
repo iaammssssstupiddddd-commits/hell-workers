@@ -80,17 +80,6 @@ pub const SOUL_GLB_SCALE: f32 = TILE_SIZE * 0.8;
 pub const SOUL_FACE_SCALE_MULTIPLIER: f32 = 1.6;
 /// 表示用 Soul mesh の後傾を打ち消す shadow proxy 用の起こし角度（度）。
 pub const SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES: f32 = -40.0;
-/// receiver shader が扱う Soul radial shadow projector の最大数。
-pub const MAX_SOUL_SHADOW_PROJECTORS: usize = 12;
-/// Soul radial shadow projector のワールド半径。
-pub const SOUL_SHADOW_PROJECTOR_RADIUS: f32 = TILE_SIZE * 0.85;
-/// Soul radial shadow projector の外周フェザー幅。
-pub const SOUL_SHADOW_PROJECTOR_FEATHER: f32 = TILE_SIZE * 0.55;
-/// Soul radial shadow projector の影寄与の強さ。
-pub const SOUL_SHADOW_PROJECTOR_STRENGTH: f32 = 1.0;
-/// Soul projected shadow の前方到達距離。
-pub const SOUL_SHADOW_PROJECTOR_FORWARD_EXTENT: f32 = TILE_SIZE * 2.4;
-
 /// 影スタイルの共通パラメータ。
 ///
 /// `x`: effect mix, `y`: shadow amount threshold, `z`: threshold softness, `w`: full-shadow darken

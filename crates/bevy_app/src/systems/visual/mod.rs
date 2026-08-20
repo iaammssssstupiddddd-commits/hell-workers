@@ -11,7 +11,6 @@ pub mod camera_sync;
 pub mod character_proxy_3d;
 pub mod placement_ghost;
 pub mod soul_animation;
-pub mod soul_shadow_projector;
 pub mod task_area_visual;
 pub mod terrain_lod;
 pub mod terrain_material;

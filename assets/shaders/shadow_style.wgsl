@@ -148,113 +148,22 @@ fn directional_shadow_visibility(
     return visibility;
 }
 
-fn soul_projected_shadow_amount(
-    in: pbr_types::PbrInput,
-    soul_shadow_projectors: array<vec4<f32>, 12>,
-    soul_shadow_projector_meta: vec4<f32>,
-) -> f32 {
-    let projector_count = u32(clamp(soul_shadow_projector_meta.x, 0.0, 12.0));
-    if projector_count == 0u {
-        return 0.0;
-    }
-
-    let feather = max(soul_shadow_projector_meta.y, 0.001);
-    let strength = clamp(soul_shadow_projector_meta.z, 0.0, 1.0);
-    if strength <= 0.0 {
-        return 0.0;
-    }
-
-    let forward_extent = max(soul_shadow_projector_meta.w, 0.001);
-    let n_directional_lights = view_bindings::lights.n_directional_lights;
-    var found_shadow_light = false;
-    var projector_weight = 0.0;
-
-    for (var light_index: u32 = 0u; light_index < n_directional_lights; light_index = light_index + 1u) {
-        let light = &view_bindings::lights.directional_lights[light_index];
-        if ((*light).flags & mesh_view_types::DIRECTIONAL_LIGHT_FLAGS_SHADOWS_ENABLED_BIT) == 0u {
-            continue;
-        }
-
-        found_shadow_light = true;
-        let shadow_dir = -(*light).direction_to_light.xyz;
-        for (var projector_index: u32 = 0u; projector_index < projector_count; projector_index = projector_index + 1u) {
-            let projector = soul_shadow_projectors[projector_index];
-            let to_fragment = in.world_position.xyz - projector.xyz;
-            let along_shadow = dot(to_fragment, shadow_dir);
-            if along_shadow < -feather || along_shadow > forward_extent + feather * 3.0 {
-                continue;
-            }
-
-            let lateral = to_fragment - shadow_dir * along_shadow;
-            let radius = max(projector.w, 0.001);
-            let forward_t = clamp(along_shadow / forward_extent, 0.0, 1.0);
-            let lateral_radius = mix(radius * 0.62, radius * 1.18, forward_t);
-            let inner_radius = max(lateral_radius - feather, 0.0);
-            let radial_weight = 1.0 - smoothstep(inner_radius, lateral_radius, length(lateral));
-            let start_weight = smoothstep(-feather, feather * 1.5, along_shadow);
-            let end_weight =
-                1.0 - smoothstep(forward_extent - feather * 1.5, forward_extent + feather * 2.0, along_shadow);
-            projector_weight = max(projector_weight, radial_weight * start_weight * end_weight);
-        }
-    }
-
-    if !found_shadow_light {
-        return 0.0;
-    }
-
-    return projector_weight * strength;
-}
-
-fn apply_soul_projected_shadow(
-    in: pbr_types::PbrInput,
-    lit_rgb: vec3<f32>,
-    shadow_style_tint: vec4<f32>,
-    soul_shadow_projectors: array<vec4<f32>, 12>,
-    soul_shadow_projector_meta: vec4<f32>,
-) -> vec3<f32> {
-    let projected_shadow = soul_projected_shadow_amount(
-        in,
-        soul_shadow_projectors,
-        soul_shadow_projector_meta,
-    );
-    if projected_shadow <= 0.0 {
-        return lit_rgb;
-    }
-
-    let projector_opacity = smoothstep(0.02, 0.24, projected_shadow);
-    return mix(lit_rgb, vec3<f32>(0.0), projector_opacity * 0.96);
-}
-
 fn apply_directional_shadow_style(
     in: pbr_types::PbrInput,
     lit_rgb: vec3<f32>,
     shadow_style_params: vec4<f32>,
     shadow_style_tint: vec4<f32>,
     shadow_style_blur: vec4<f32>,
-    soul_shadow_projectors: array<vec4<f32>, 12>,
-    soul_shadow_projector_meta: vec4<f32>,
 ) -> vec3<f32> {
     let style_mix = clamp(shadow_style_params.x, 0.0, 1.0);
     if style_mix <= 0.0 {
-        return apply_soul_projected_shadow(
-            in,
-            lit_rgb,
-            shadow_style_tint,
-            soul_shadow_projectors,
-            soul_shadow_projector_meta,
-        );
+        return lit_rgb;
     }
 
     let blur_radius_texels = max(shadow_style_blur.x, 0.0);
     let outer_shadow_amount = 1.0 - directional_shadow_visibility(in, blur_radius_texels);
     if outer_shadow_amount <= 0.0 {
-        return apply_soul_projected_shadow(
-            in,
-            lit_rgb,
-            shadow_style_tint,
-            soul_shadow_projectors,
-            soul_shadow_projector_meta,
-        );
+        return lit_rgb;
     }
 
     let inner_blur_radius_texels = blur_radius_texels * 0.35;
@@ -270,13 +179,7 @@ fn apply_directional_shadow_style(
     );
 
     if shadow_mask <= 0.0 {
-        return apply_soul_projected_shadow(
-            in,
-            lit_rgb,
-            shadow_style_tint,
-            soul_shadow_projectors,
-            soul_shadow_projector_meta,
-        );
+        return lit_rgb;
     }
 
     let core_ratio = clamp(
@@ -292,11 +195,5 @@ fn apply_directional_shadow_style(
     let tint_target = shadow_style_luma(darkened) * tint_rgb;
     let tinted = mix(darkened, tint_target, tint_strength * shadow_opacity);
     let styled = mix(lit_rgb, tinted, style_mix * shadow_opacity);
-    return apply_soul_projected_shadow(
-        in,
-        styled,
-        shadow_style_tint,
-        soul_shadow_projectors,
-        soul_shadow_projector_meta,
-    );
+    return styled;
 }

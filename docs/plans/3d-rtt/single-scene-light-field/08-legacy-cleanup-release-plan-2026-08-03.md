@@ -7,7 +7,7 @@
 | 計画ID | `single-scene-light-field-08-legacy-cleanup-release-plan-2026-08-03` |
 | ステータス | `Implementation in Progress — M0 tooling implemented / native reference bootstrap pending` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-19` |
+| 最終更新日 | `2026-08-20` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | P01〜[P07](07-indoor-light-gameplay-room-plan-2026-08-03.md)すべて |
@@ -137,7 +137,7 @@
 1. `SoulProxy3d`、`SoulShadowProxy3d`、`FamiliarProxy3d`、`SoulAnimationPlayer3d`、`SoulFaceMaterial3d`とspawn / ready observer / sync / cleanup / rehydrateを削除する。P02の`ActorBillboard3d`とFamiliar foreground Spriteは維持する。
 2. `SoulProxyOwnerCache`全体を消さない。現役`actor_billboard` lookup / resetを`ActorBillboardOwnerCache`へrename / narrowし、legacy soul / shadow / familiar mapだけを削除する。
 3. `soul_animation.rs`を分割し、現役billboard用`SoulAnimVisualState` resolverは保持する。GLB `AnimationGraph` / player / face-material部分と`CharacterMaterial` plugin / shaderを、remaining reference 0確認後に削除する。
-4. `sync_soul_shadow_projectors_system`とprojector collection / per-frame material writeを削除する。shared uniform / WGSL fieldの物理削除はM2のmaterial re-home後に行う。
+4. [完了 2026-08-20] 未登録だった`sync_soul_shadow_projectors_system`とprojector collection / per-frame material writeを削除した。全shared materialのprojector countが常時0であることを確認できたため、uniform / WGSL fieldも描画結果を変えない独立cleanupとして同時に削除した。
 5. `CharacterHandles`、`Building3dHandles.soul_scene`、`GameAssets.soul_gltf / soul_scene / soul_face_atlas`とproduction loadをremaining reference 0後に削除する。
 6. `LAYER_3D_SOUL_SHADOW`、shadow-only constants、GLB専用`SOUL_GLB_SCALE / SOUL_FACE_SCALE_MULTIPLIER`、camera / directional lightのlayer membership、`SoulShadowMaterial`と専用shader / prepassを削除する。
 7. `crates/visual_test`のlegacy Soul GLB / shadow mode、ResetElevation input、専用goldenを削除し、building / terrain material visual testだけを維持する。active actor billboard acceptanceはP02 actual-window / P08 native fixtureを正本とし、`docs/visual_test.md`を同期する。
@@ -171,8 +171,8 @@
 3. `Building3dHandles`全handle、spawn、Door / Tank / Mixer material swap、wall completion、P02 actual-window exact-handle probe、save rehydrate fixtureを新しい独立型へ移し、material / Image handle identityを再検証する。
 4. structural consumer 0確認後に`SectionMaterial` alias / factory、`SectionCut` resource / sync / plugin registration / tests、`section_material*.wgsl`を削除する。存在しない`systems/visual/section_cut.rs`を新設しない。
 5. Terrain LOD1 / LOD1-lite / LOD2のRust uniformと全fragment / prepass WGSLからcut position / normal / thickness / active、projector arrays / metadata / discard / loopを削除する。Light Field、terrain blend、directional shadow、alpha / depth契約は維持する。
-6. `shadow_style.wgsl`は全削除せず、Soul projector helper / args / mixだけを除去し、現役directional shadow helperを保持する。
-7. `MAX_SOUL_SHADOW_PROJECTORS`、projector radius / feather / strength / forward extent等をreference 0後に削除する。`WgpuFeatures::CLIP_DISTANCES`は全shader / pipeline reference 0とnative adapter起動確認後にだけ削除する。
+6. [完了 2026-08-20] `shadow_style.wgsl`は全削除せず、Soul projector helper / args / mixだけを除去し、現役directional shadow helperを保持した。
+7. [projector完了 2026-08-20] `MAX_SOUL_SHADOW_PROJECTORS`、projector radius / feather / strength / forward extentをreference 0確認後に削除した。`WgpuFeatures::CLIP_DISTANCES`は全shader / pipeline reference 0とnative adapter起動確認後にだけ削除する。
 
 ### 主な変更ファイル
 

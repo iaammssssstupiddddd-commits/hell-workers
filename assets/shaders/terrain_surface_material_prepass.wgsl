@@ -23,8 +23,6 @@ struct TerrainSurfaceUniforms {
     shadow_style_tint:  vec4<f32>,
     shadow_style_blur:  vec4<f32>,
     indoor_light_params: vec4<f32>,
-    soul_shadow_projectors: array<vec4<f32>, 12>,
-    soul_shadow_projector_meta: vec4<f32>,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> terrain_surface: TerrainSurfaceUniforms;

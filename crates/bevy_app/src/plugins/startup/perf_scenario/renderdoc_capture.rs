@@ -1911,6 +1911,30 @@ mod tests {
     }
 
     #[test]
+    fn p08_receivers_remove_soul_projectors_but_keep_directional_shadow_style() {
+        let receiver_sources = [
+            TOPDOWN_STRUCTURAL_SHADER,
+            include_str!("../../../../../../assets/shaders/section_material_prepass.wgsl"),
+            include_str!("../../../../../../assets/shaders/terrain_surface_material.wgsl"),
+            include_str!(
+                "../../../../../../assets/shaders/terrain_surface_material_lod1_lite.wgsl"
+            ),
+            include_str!("../../../../../../assets/shaders/terrain_surface_material_lod2.wgsl"),
+            include_str!("../../../../../../assets/shaders/terrain_surface_material_prepass.wgsl"),
+            include_str!("../../../../../../assets/shaders/shadow_style.wgsl"),
+        ];
+
+        for source in receiver_sources {
+            assert!(!source.contains("soul_shadow_projector"));
+            assert!(!source.contains("soul_projected_shadow"));
+        }
+
+        let shadow_style = include_str!("../../../../../../assets/shaders/shadow_style.wgsl");
+        assert!(shadow_style.contains("fn directional_shadow_visibility("));
+        assert!(shadow_style.contains("fn apply_directional_shadow_style("));
+    }
+
+    #[test]
     fn p01_composite_binding_contract_is_exact() {
         let resources = p01_composite_render_resources();
         assert_eq!(resources.composite_draw_count, 1);

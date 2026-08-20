@@ -4,9 +4,8 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, ShaderType};
 use bevy::shader::ShaderRef;
 use hw_core::constants::{
-    MAP_HEIGHT, MAP_WIDTH, MAX_SOUL_SHADOW_PROJECTORS, SOUL_SHADOW_PROJECTOR_FEATHER,
-    SOUL_SHADOW_PROJECTOR_FORWARD_EXTENT, SOUL_SHADOW_PROJECTOR_STRENGTH, TILE_SIZE,
-    topdown_shadow_style_blur, topdown_shadow_style_params, topdown_shadow_style_tint,
+    MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, topdown_shadow_style_blur, topdown_shadow_style_params,
+    topdown_shadow_style_tint,
 };
 
 use super::section_material::SectionCut;
@@ -35,10 +34,6 @@ pub struct TerrainSurfaceUniform {
     pub shadow_style_blur: Vec4,
     /// `x`: tile size, `y`: local-light gain, `z`: enabled, `w`: reserved.
     pub indoor_light_params: Vec4,
-    /// `xyz`: projector center in world space, `w`: radius
-    pub soul_shadow_projectors: [Vec4; MAX_SOUL_SHADOW_PROJECTORS],
-    /// `x`: projector count, `y`: feather, `z`: strength, `w`: reserved
-    pub soul_shadow_projector_meta: Vec4,
 }
 
 impl Default for TerrainSurfaceUniform {
@@ -63,13 +58,6 @@ impl Default for TerrainSurfaceUniform {
             shadow_style_tint: topdown_shadow_style_tint(),
             shadow_style_blur: topdown_shadow_style_blur(),
             indoor_light_params: Vec4::new(TILE_SIZE, 1.0, 1.0, 0.0),
-            soul_shadow_projectors: [Vec4::ZERO; MAX_SOUL_SHADOW_PROJECTORS],
-            soul_shadow_projector_meta: Vec4::new(
-                0.0,
-                SOUL_SHADOW_PROJECTOR_FEATHER,
-                SOUL_SHADOW_PROJECTOR_STRENGTH,
-                SOUL_SHADOW_PROJECTOR_FORWARD_EXTENT,
-            ),
         }
     }
 }
