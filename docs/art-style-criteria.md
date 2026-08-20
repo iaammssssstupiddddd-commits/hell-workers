@@ -49,38 +49,33 @@ GLB モデルの参照画像・入力画像はこの角度（水平から59°）
 | **移動表現** | ふわふわ浮遊。物理的な歩行ではない |
 | **感情による色変化** | 通常: 白〜薄青 / やる気: 黄緑 / 疲労: グレー / ストレス: 赤 / 恐怖: 紫 |
 
-### 3.3 CharacterMaterial 仕様（確定済み）
+### 3.3 production billboard仕様（確定済み）
 
 ```
-Unlit（ライティングなし）
-+ アウトライン（後処理またはインセット法）
-+ ポスタライズ（色数を絞って塗り絵的に）
-+ ghost_alpha（半透明度、幽霊的外見）
-+ fear_factor / exhausted_factor（状態による色変化）
+shared Rectangle mesh
++ 既存Soul sprite 8枚の有限shared StandardMaterial pool
++ AlphaMode::Mask + unlit
++ SoulAnimVisualStateによるframe選択
++ 左右方向はinstance transformのscale.xで表現
 ```
 
-### 3.4 モデル構成（確定済み）
+### 3.4 表示構成（確定済み）
 
-| サブメッシュ | 内容 | 備考 |
+| 要素 | 内容 | 備考 |
 | --- | --- | --- |
-| `mesh_body` | 胴体・全体シルエット | CharacterMaterial 適用 |
-| `mesh_face` | 顔テクスチャ表示面 | face_atlas UV オフセットで表情切替 |
-| `mesh_curtain` | 裾・マント（将来） | Phase 3 中盤以降 |
+| `ActorBillboard3d` | Soul本体 | ownerあたりexactly one、Scene RtT内でdepth共有 |
+| `SoulBillboardFrame` | 表情・状態 | Normal / Exhausted / Happy / Sleep / Wine / Trump / Stress / StressBreakdown |
+| `ActorBillboardOwnerCache` | owner lookup | despawn/reset用。legacy proxy mapは持たない |
 
-### 3.5 LOD目安（確定済み）
+### 3.5 旧GLB仕様の扱い
 
-> **注**: ここの LOD0/LOD1 は GLB メッシュのポリゴン段階を指す。地形マテリアルの `LodLevel::Lod1`（フル品質）/ `LodLevel::Lod2`（遠景簡略）とは別軸の命名。
-
-| LOD | 三角形数 | 用途 |
-| --- | --- | --- |
-| LOD0 | 600〜1,200 | セクションビュー（高品質） |
-| LOD1 | 200〜400 | 通常プレイ（実装優先） |
+旧`CharacterMaterial`、face atlas、Soul GLB、shadow proxyはP08でruntimeと`visual_test`から削除した。過去の採用理由やPoC値はarchive plan/proposalだけに保持し、新規assetやruntime実装の前提にしない。
 
 ---
 
 ## 4. アウトライン基準（PoC待ち）
 
-> **判断タイミング**: MS-Asset-Char-GLB-A（Soul GLB PoC）の目視確認後に確定する。
+> **現状**: production billboardの輪郭は入力spriteのalpha境界を使う。新しい輪郭処理は別提案とnative比較を必要とする。
 
 | 項目 | 候補 | 現状 |
 | --- | --- | --- |
@@ -203,7 +198,7 @@ Unlit（ライティングなし）
 
 | 未確定項目 | 確定トリガー |
 | --- | --- |
-| アウトライン線幅・ゆらぎ・色 | MS-Asset-Char-GLB-A（Soul GLB PoC）目視後 |
-| ズームアウト無効化閾値 | MS-P3-Pre-D（Character GLB PoC）目視後 |
+| billboardアウトライン線幅・ゆらぎ・色 | 新しいbillboard outline提案とnative比較 |
+| ズームアウト時の表示調整 | production camera / DPI / qualityのnative比較 |
 | 壁ノーマルマップ あり/なし | MS-Asset-Build-A（壁 GLB PoC）目視後 |
 | キャラクター向き管理方式 | 同上（左右ミラーのみ vs フル8方向） |

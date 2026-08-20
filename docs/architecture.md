@@ -136,7 +136,7 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 - 予約オペレーションは `build_source_reservation_ops` / `build_mixer_destination_reservation_ops` / `build_wheelbarrow_reservation_ops` の共通ヘルパーで構築し、割り当てビルダー間の重複を抑制する。
 - Familiar 側 Think フェーズでは `TileSiteIndex`（`Resource<HashMap<Entity, Vec<Entity>>`）を `Spatial` サブセットで更新し、建設サイトへの残需要計算時に floor/wall タイルを O(1) で照会できるようにする。
 - `IncomingDeliverySnapshot` は Think 開始時に1回構築し、`DemandReadContext` 経由で `policy::haul::*` の残需要計算に再利用する。`IncomingDeliveries` や `ResourceType` の都度ルックアップを集約し、同一フレーム内のCPU負荷を低減する。
-- `ActorBillboardOwnerCache`（`hw_visual::visual3d`、`GameSystemSet::Visual`）は `owner → ActorBillboard3d` の O(1) lookupだけを提供し、Soul削除時に対応billboardをdespawnする。旧GLB / shadow / Familiar proxy用map、production asset load、observer / sync、animation playerはP08で削除済み。`visual_test`に残るlegacy GLB比較surfaceは別の置換単位として扱う。
+- `ActorBillboardOwnerCache`（`hw_visual::visual3d`、`GameSystemSet::Visual`）は `owner → ActorBillboard3d` の O(1) lookupだけを提供し、Soul削除時に対応billboardをdespawnする。旧GLB / shadow / Familiar proxy用map、asset load、observer / sync、animation playerはP08で削除済み。`visual_test`も建物・地形のTopDown試験へ限定し、legacy character surfaceを持たない。
 - `TaskAssignmentQueries` は `ReservationAccess` / `DesignationAccess` / `StorageAccess` と `TaskAssignmentReadAccess` に分割し、読み取り系と更新系の境界を明確化する。
 - `apply_task_assignment_requests_system` は「ワーカー受理判定」「idle正規化」「予約適用」「DeliveringTo付与」「イベント発火」の責務に分けて拡張する。
 - `apply_task_assignment_requests_system` の登録責務は `hw_soul_ai::SoulAiCorePlugin` が持つ。`task_execution_system` / `apply_pending_building_move_system` / `idle_behavior_apply_system` / `escaping_apply_system` / `cleanup_commanded_souls_system` / `gathering_separation_system` / `escaping_decision_system` / `drifting_decision_system` / `gathering_mgmt_*` / `familiar_influence_unified_system` も `SoulAiCorePlugin` に一本化済み（2026-03-17）。root 側の `SoulAiPlugin` は `ApplyDeferred` フェーズ間同期マーカーと `gathering_spawn_system`（`GameAssets` 依存）のみを登録する。
@@ -343,7 +343,7 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 - `RttCompositeSprite` マーカーコンポーネントが付与されており、`apply_render3d_visibility_system` が `Visibility` を制御する。
 - `RttCompositeMaterial` は `RttRuntime.scene` だけをfragment set 2のtexture / sampler binding `1 / 2`で受け取り、通常サンプル1回で合成する。
 - 建築物 3D ビジュアルは `RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER])` を使い、RtT Camera3d には見せつつ、影確認用 `DirectionalLight` からも shadow receiver として扱えるようにしている。
-- TopDown の主光源方向は `hw_core::constants::topdown_sun_direction_world()` を単一の真実とし、RtT の主 `DirectionalLight` と `CharacterMaterial` の body shader が同じ方向を使う。現在は画面手前側の壁面が完全な日陰にならないよう、真上寄りではなく前方寄りの斜光を採用している。
+- TopDown の主光源方向は `hw_core::constants::topdown_sun_direction_world()` を単一の真実とし、RtT の主 `DirectionalLight` とstructural / terrain materialのdirectional shadow styleが同じ方向を使う。現在は画面手前側の壁面が完全な日陰にならないよう、真上寄りではなく前方寄りの斜光を採用している。
 - Bevy 0.19 の directional light は `light.render_layers` と camera の view layers が交差しないと、その view では一切使われない。RtT 用 light は `LAYER_3D` を含み、`Camera3dRtt` 視点で有効な light として GPU light 配列に入る。
 
 `sync_rtt_output_bindings`（同ファイル、`Update` スケジュール）は合成メッシュのスケールをウィンドウリサイズに常時追従させ、`RttRuntime.is_changed()` のときのみカメラ `RenderTarget` と `RttCompositeMaterial.scene_texture` を更新する。target の再 bind では image handle と `target_scale_factor` を同時に反映する。RtT テクスチャ自体は物理解像度×品質係数で生成するが、合成メッシュのスケールは `PrimaryWindow` の logical size を基準にしつつ、斜め TopDown オーソ投影で圧縮される Y 方向を `topdown_rtt_vertical_compensation()` で補正する。`pixel_size` は常に `RttRuntime.viewport` の実サイズから再計算する。`sync_rtt_texture_size_to_window_and_quality` と `chain` で登録されているため、ウィンドウサイズ・DPI・品質変更フレーム内で再生成後のSceneテクスチャへ差し替わる。
@@ -354,7 +354,7 @@ P02 production は Soul を `ActorBillboard3d` 1 entity / owner で Scene RtT �
 
 - Soul billboard は共有 Rectangle mesh と8個の `StandardMaterial`（alpha mask、unlit）だけを使う。`SoulBillboardFrame` は Normal / Exhausted / Happy / Sleep / Wine / Trump / Stress / StressBreakdown の有限集合で、既存の idle・task・movement・会話・stress state resolverを共有する。
 - `sync_actor_billboard_system` は owner XY を Scene X/-Z へ写し、固定 TopDown Camera3d の回転へ billboard を向け、左右向きは scale.x で表す。owner削除は `ActorBillboardOwnerCache.actor_billboard` から O(1) でcleanupする。
-- Soul GLBのproduction asset load、`CharacterHandles`、proxy observer / sync、GLB animation consumerはP08で物理削除済み。`SoulAnimVisualState` resolverとshared-pool `ActorBillboard3d`だけがproductionのSoul presentationを担う。`visual_test`のlegacy GLB / `SoulShadowMaterial`比較surfaceはまだ置換待ち。未登録だったshadow projector producerとreceiver uniform / WGSL loopは削除済みで、現役のdirectional shadow styleだけを保持する。
+- Soul GLBのasset load、`CharacterHandles`、proxy observer / sync、GLB animation consumer、`CharacterMaterial`、`SoulShadowMaterial`とshadow-only layerはP08で物理削除済み。`SoulAnimVisualState` resolverとshared-pool `ActorBillboard3d`だけがproductionのSoul presentationを担う。`visual_test`も建物・地形のTopDown試験へ限定した。未登録だったshadow projector producerとreceiver uniform / WGSL loopは削除済みで、現役のdirectional shadow styleだけを保持する。
 - Familiar は4フレームの child Sprite、左右反転、hover/wobble、selection、吹き出しを MainCamera の単一 `LAYER_2D` passで描く。production spawn は `FamiliarProxy3d` を生成しない。
 - `Render3dVisible` は Camera3d と composite を同時に隠すため、billboardを含む Scene 全体が前フレーム残像なしで切り替わる。
 

@@ -1,9 +1,6 @@
-pub mod character_material;
 pub mod section_material;
-pub mod soul_shadow_material;
 pub mod terrain_surface_material;
 
-pub use character_material::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
 pub use section_material::{
     SectionCut, SectionMaterial, TERRAIN_DIRT_BRIGHTNESS_VARIATION_STRENGTH,
     TERRAIN_DIRT_DOMAIN_WARP_STRENGTH, TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH,
@@ -15,7 +12,6 @@ pub use section_material::{
     make_topdown_structural_material, sync_section_cut_to_materials_system, with_alpha_mode,
     with_topdown_alpha_mode,
 };
-pub use soul_shadow_material::SoulShadowMaterial;
 pub use terrain_surface_material::{
     TerrainFeatureLutUniformSyncState, TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial,
     TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,

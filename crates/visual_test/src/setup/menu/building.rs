@@ -1,13 +1,12 @@
 use super::*;
 
-/// Build モード用セクション（BuildSectionNode でモード切替時に show/hide）。
+/// Building and terrain presentation controls.
 pub(super) fn spawn_build_section(p: &mut ChildSpawnerCommands, font: &Handle<Font>) {
     p.spawn((
         Node {
             flex_direction: FlexDirection::Row,
             flex_wrap: FlexWrap::Wrap,
             width: Val::Percent(100.0),
-            display: Display::None, // デフォルトは Soul モード
             ..default()
         },
         BuildSectionNode,

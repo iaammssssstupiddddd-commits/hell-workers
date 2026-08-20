@@ -60,12 +60,6 @@ pub enum SoulBillboardFrame {
     StressBreakdown,
 }
 
-/// DamnedSoul エンティティに対応する shadow caster 専用 proxy のマーカー。
-#[derive(Component, Debug, Clone)]
-pub struct SoulShadowProxy3d {
-    pub owner: Entity,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SoulBodyAnimState {
     #[default]

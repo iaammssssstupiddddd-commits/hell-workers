@@ -33,20 +33,18 @@ pub use handles::{
     WallVisualHandles, WorkIconHandles,
 };
 pub use material::{
-    CharacterMaterial, SectionCut, SectionMaterial, SoulShadowMaterial,
-    TERRAIN_DIRT_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_DIRT_DOMAIN_WARP_STRENGTH,
-    TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_GRASS_DOMAIN_WARP_STRENGTH,
-    TERRAIN_GRASS_UV_DISTORT_STRENGTH, TERRAIN_KIND_DIRT, TERRAIN_KIND_GRASS, TERRAIN_KIND_RIVER,
-    TERRAIN_KIND_SAND, TERRAIN_SAND_BRIGHTNESS_VARIATION_STRENGTH,
-    TERRAIN_SAND_DOMAIN_WARP_STRENGTH, TerrainFeatureLutUniformSyncState, TerrainMaterialMaps,
-    TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial, TerrainSurfaceMaterialExt,
-    TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,
-    TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2, TerrainSurfaceUniform,
-    TopDownStructuralMaterial, make_section_material, make_section_material_textured,
-    make_terrain_section_material, make_terrain_surface_material,
+    SectionCut, SectionMaterial, TERRAIN_DIRT_BRIGHTNESS_VARIATION_STRENGTH,
+    TERRAIN_DIRT_DOMAIN_WARP_STRENGTH, TERRAIN_GRASS_BRIGHTNESS_VARIATION_STRENGTH,
+    TERRAIN_GRASS_DOMAIN_WARP_STRENGTH, TERRAIN_GRASS_UV_DISTORT_STRENGTH, TERRAIN_KIND_DIRT,
+    TERRAIN_KIND_GRASS, TERRAIN_KIND_RIVER, TERRAIN_KIND_SAND,
+    TERRAIN_SAND_BRIGHTNESS_VARIATION_STRENGTH, TERRAIN_SAND_DOMAIN_WARP_STRENGTH,
+    TerrainFeatureLutUniformSyncState, TerrainMaterialMaps, TerrainSurfaceLutImageHandle,
+    TerrainSurfaceMaterial, TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod1Lite,
+    TerrainSurfaceMaterialExtLod2, TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2,
+    TerrainSurfaceUniform, TopDownStructuralMaterial, make_section_material,
+    make_section_material_textured, make_terrain_section_material, make_terrain_surface_material,
     make_terrain_surface_material_lod1_lite, make_terrain_surface_material_lod2,
-    make_topdown_structural_material, soul_face_uv_offset, soul_face_uv_scale, with_alpha_mode,
-    with_topdown_alpha_mode,
+    make_topdown_structural_material, with_alpha_mode, with_topdown_alpha_mode,
 };
 
 pub use familiar::{FamiliarVisualOffset, FamiliarVisualOwner};

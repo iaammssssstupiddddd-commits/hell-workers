@@ -31,8 +31,7 @@ AI モデリングは次の二つを分離します。
 `2026-08-01`のユーザー判断により、旧 Blender 端末からasset、設定、addon、presetを
 引き継がず、この表を現端末の新規canonical authoring baselineとします。
 `source/`と`exports/`は空から開始し、stagingで新規制作・検証・目視承認した成果物だけを
-正本へ昇格します。既存 `assets/models/characters/soul.glb` はlegacy `visual_test`比較用referenceであり、production runtimeはP08以降shared-pool billboardを使います。
-Blenderへ逆変換して正本扱いしません。
+正本へ昇格します。production runtimeと`visual_test`はP08以降Soul GLBを読み込まず、shared-pool billboardを使います。ローカルに残る旧GLBをBlenderへ逆変換して正本扱いしません。
 
 ## 3. ディレクトリ
 

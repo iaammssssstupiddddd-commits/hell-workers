@@ -1,6 +1,5 @@
 //! Z軸レイヤー管理 (RenderLayers) および描画レイヤー定数
 
-use super::world::TILE_SIZE;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::{Color, Vec3, Vec4};
 
@@ -8,11 +7,8 @@ use bevy::prelude::{Color, Vec3, Vec4};
 pub const LAYER_2D: usize = 0;
 /// Camera3d（RtT オフスクリーン）が使用する RenderLayer インデックス
 pub const LAYER_3D: usize = 1;
-/// RtT composite sprite 専用のオーバーレイレイヤー（矢視モード中も常時表示）
+/// RtT composite sprite とUI専用のオーバーレイレイヤー。
 pub const LAYER_OVERLAY: usize = 2;
-/// Soul シルエット mask 専用の RenderLayer インデックス
-/// Soul shadow caster proxy 専用の RenderLayer インデックス
-pub const LAYER_3D_SOUL_SHADOW: usize = 4;
 /// 3D 建築物など shadow receiver 専用の RenderLayer インデックス
 pub const LAYER_3D_SHADOW_RECEIVER: usize = 5;
 
@@ -74,12 +70,6 @@ pub const Z_RTT_COMPOSITE: f32 = 20.0;
 pub const VIEW_HEIGHT: f32 = 150.0;
 /// Camera3d（TopDown）の Z オフセット
 pub const Z_OFFSET: f32 = 90.0;
-/// Soul GLB PoC の初期スケール（Blender 1.0 単位をタイル基準へ揃える）
-pub const SOUL_GLB_SCALE: f32 = TILE_SIZE * 0.8;
-/// Soul `mesh_face` の見やすさを補う一時スケール補正。
-pub const SOUL_FACE_SCALE_MULTIPLIER: f32 = 1.6;
-/// 表示用 Soul mesh の後傾を打ち消す shadow proxy 用の起こし角度（度）。
-pub const SOUL_SHADOW_PROXY_PITCH_CORRECTION_DEGREES: f32 = -40.0;
 /// 影スタイルの共通パラメータ。
 ///
 /// `x`: effect mix, `y`: shadow amount threshold, `z`: threshold softness, `w`: full-shadow darken

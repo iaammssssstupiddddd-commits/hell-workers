@@ -6,9 +6,6 @@ use super::*;
 pub struct SceneRenderAssets<'w> {
     asset_server: Res<'w, AssetServer>,
     images: ResMut<'w, Assets<Image>>,
-    character_materials: ResMut<'w, Assets<CharacterMaterial>>,
-    standard_materials: ResMut<'w, Assets<StandardMaterial>>,
-    soul_shadow_materials: ResMut<'w, Assets<SoulShadowMaterial>>,
     composite_materials: ResMut<'w, Assets<LocalRttCompositeMaterial>>,
     meshes: ResMut<'w, Assets<Mesh>>,
 }
@@ -17,7 +14,6 @@ pub fn setup_scene(
     mut commands: Commands,
     mut render_assets: SceneRenderAssets,
     q_window: Query<&Window, With<PrimaryWindow>>,
-    mut state: ResMut<TestState>,
 ) {
     commands.insert_resource(DirectionalLightShadowMap { size: 4096 });
 
@@ -47,7 +43,7 @@ pub fn setup_scene(
     let cam3d_transform =
         Transform::from_xyz(0.0, VIEW_HEIGHT, Z_OFFSET).looking_at(Vec3::ZERO, Vec3::NEG_Z);
 
-    // --- Camera3d (RtT — ソウル本体/顔) ---
+    // --- Camera3d (RtT — building/terrain presentation) ---
     commands.spawn((
         Camera3d::default(),
         Camera {
@@ -127,38 +123,7 @@ pub fn setup_scene(
     ));
     commands.insert_resource(runtime);
 
-    // --- アセット ---
-    let soul_scene = render_assets
-        .asset_server
-        .load(GltfAssetLabel::Scene(0).from_asset("models/characters/soul.glb"));
-    let gltf_handle = render_assets
-        .asset_server
-        .load("models/characters/soul.glb");
-    let face_atlas = render_assets
-        .asset_server
-        .load("textures/character/soul_face_atlas.png");
-    let white_pixel = render_assets.images.add(Image::new(
-        bevy::render::render_resource::Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        },
-        bevy::render::render_resource::TextureDimension::D2,
-        vec![255, 255, 255, 255],
-        TextureFormat::Rgba8UnormSrgb,
-        default(),
-    ));
     let font: Handle<Font> = render_assets.asset_server.load("fonts/NotoSansJP-VF.ttf");
-    let blob_shadow_mesh = render_assets.meshes.add(build_blob_shadow_mesh());
-    let blob_shadow_material = render_assets.standard_materials.add(StandardMaterial {
-        base_color: Color::BLACK,
-        unlit: true,
-        cull_mode: None,
-        ..default()
-    });
-    let soul_shadow_material = render_assets
-        .soul_shadow_materials
-        .add(SoulShadowMaterial::default());
 
     // --- 指向性ライト (本番相当) ---
     let sun_dir = topdown_sun_direction_world();
@@ -175,53 +140,8 @@ pub fn setup_scene(
             ..default()
         }
         .build(),
-        RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]),
+        RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER]),
     ));
 
-    let test_assets = TestAssets {
-        soul_scene: soul_scene.clone(),
-        face_atlas: face_atlas.clone(),
-        white_pixel: white_pixel.clone(),
-        gltf_handle,
-        blob_shadow_mesh,
-        blob_shadow_material,
-        soul_shadow_material: soul_shadow_material.clone(),
-    };
-    rebuild_soul_test_layout(
-        &mut commands,
-        &mut render_assets.character_materials,
-        &test_assets,
-        &mut state,
-        SoulRebuildEntities::default(),
-        SoulLayout::Default,
-    );
-    commands.insert_resource(test_assets);
-
     spawn_menu_ui(&mut commands, font);
-}
-
-fn build_blob_shadow_mesh() -> Mesh {
-    let outline = blob_shadow_outline();
-    let mut positions = Vec::with_capacity(outline.len() + 1);
-    positions.push([0.0, 0.0, 0.0]);
-    positions.extend(outline.iter().map(|p| [p.x, p.y, 0.0]));
-
-    let mut indices = Vec::with_capacity(outline.len() * 3);
-    for i in 0..outline.len() {
-        let current = (i + 1) as u32;
-        let next = if i + 1 == outline.len() {
-            1
-        } else {
-            (i + 2) as u32
-        };
-        indices.extend_from_slice(&[0, current, next]);
-    }
-
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_indices(Indices::U32(indices))
-    .with_computed_normals()
 }

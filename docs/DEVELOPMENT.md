@@ -436,20 +436,19 @@ python3 scripts/dev.py docs --check
 - 新規ファイルはファイル内容から説明を自動抽出する。
 - 計画書・提案書を追加/移動/削除したらこのコマンドを実行する。
 
-### Visual Test Scene（legacy Soul GLB・建築物 2D/3D 検証）
+### Visual Test Scene（TopDown建物・地形表示）
 ```bash
 python3 scripts/dev.py cargo -- run -p visual_test
 ```
 
-ゲーム本体とは独立した `visual_test` クレート。旧Soul GLBと建築物配置の比較用であり、P02 productionのbillboard / exactly-one presentation証拠には使わない。詳細は `docs/visual_test.md` を参照。
+ゲーム本体とは独立した `visual_test` クレート。建物・地形のTopDown表示とScene RtT合成を確認する。Soulのproduction billboard / exactly-one presentation証拠にはP02/P08 native fixtureを使う。詳細は `docs/visual_test.md` を参照。
 
 | キー / 操作 | 内容 |
 |:---|:---|
-| `Space` | Soul ⇔ Build モード切替 |
 | `H` | メニューパネル表示/非表示 |
 | `Esc` | 終了 |
-| マウス移動（Build モード）| ゴーストプレビュー追従（緑=配置可 / 赤=占有）|
-| 左クリック（Build モード）| 建築物配置 / 削除 |
+| マウス移動 | ゴーストプレビュー追従（緑=配置可 / 赤=占有）|
+| 左クリック | 建築物配置 / 削除 |
 
 ソース: `crates/visual_test/`
 

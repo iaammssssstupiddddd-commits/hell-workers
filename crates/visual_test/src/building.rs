@@ -293,8 +293,7 @@ pub struct BuildingCursorBuildings<'w, 's> {
     visuals_3d: Query<'w, 's, (Entity, &'static TestBuilding3dVisual)>,
 }
 
-/// Build モード時にマウス追従のゴーストプレビューを表示し、左クリックで配置・削除する。
-/// Soul モード時はカーソルを非表示にする。
+/// マウス追従のゴーストプレビューを表示し、左クリックで配置・削除する。
 pub fn update_building_cursor(
     mut state: ResMut<TestState>,
     pointer: BuildingCursorPointer,
@@ -305,12 +304,6 @@ pub fn update_building_cursor(
     let Ok((mut tf, mut sprite)) = q_cursor.single_mut() else {
         return;
     };
-
-    // Soul モード: ゴーストを画面外に退避
-    if state.mode != AppMode::Build {
-        tf.translation.z = -999.0;
-        return;
-    }
 
     // マウスがメニューパネル上にあるか判定
     let over_panel = state.menu_visible

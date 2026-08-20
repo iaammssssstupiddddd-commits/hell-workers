@@ -1,8 +1,6 @@
 use super::*;
 
 #[derive(Component)]
-pub struct SelectedSoul;
-#[derive(Component)]
 pub struct MenuPanel;
 #[derive(Component)]
 pub struct MenuHint;
@@ -11,56 +9,19 @@ pub struct WorldMapTile;
 
 // ─── パネルボタン ─────────────────────────────────────────────────────────────
 
-/// ソウルモード専用セクション。モード切替で Node::display を制御。
-#[derive(Component)]
-pub struct SoulSectionNode;
-
-/// ビルドモード専用セクション。モード切替で Node::display を制御。
+/// Building controls container.
 #[derive(Component)]
 pub struct BuildSectionNode;
 
 /// パネル内の動的テキスト。update_dynamic_texts で値を一括更新。
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DynamicTextKind {
-    ViewDir,
-    Height,
-    Offset,
-    ShadowLayout,
-    Ghost,
-    Rim,
-    Posterize,
     CursorPos,
 }
 
 /// パネルボタンアクション。Changed<Interaction> ハンドラで処理する。
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum VisualTestAction {
-    SetMode(AppMode),
-    // カメラ
-    NextView,
-    HeightDown,
-    HeightUp,
-    OffsetDown,
-    OffsetUp,
-    ResetElevation,
-    SetSoulLayout(SoulLayout),
-    // Soul
-    SetFace(FaceExpression),
-    SetFaceAll,
-    SetAnimation(usize),
-    SetMotion(MotionMode),
-    GhostDown,
-    GhostUp,
-    RimDown,
-    RimUp,
-    PosterizeDown,
-    PosterizeUp,
-    ResetShader,
-    AddSoul,
-    RemoveSoul,
-    SelectNextSoul,
-    ResetSoulPos,
-    // Build
     SetBuildingKind(TestBuildingKind),
     PlaceOrRemove,
     RemoveAllBuildings,

@@ -1,6 +1,7 @@
 # Visual Test Scene
 
-ゲーム本体とは独立して Soul GLB レンダリングと建築物配置を検証するための独立クレート。
+ゲーム本体とは独立して、TopDownの建物・地形表示とScene RtT合成を確認するための補助クレートです。
+Soulの製品表示は本体の`ActorBillboard3d`とP08 native acceptanceを正本とし、このクレートはGLB、表情atlas、shadow proxyを読み込みません。
 
 ## 起動
 
@@ -12,164 +13,51 @@ python3 scripts/dev.py cargo -- run -p visual_test
 
 | 項目 | 概要 |
 |:---|:---|
-| 表情アトラス UV 切り替え | 6 表情 (Normal/Fear/Exhausted/Concentration/Happy/Sleep) の個別・一括切り替え |
-| モーション | Idle / FloatingBob / Sleeping / Resting / Escaping / Dancing |
-| GLB アニメーション再生 | soul.glb の 8 クリップを順番に切り替えて再生確認 |
-| シェーダーパラメータ調整 | 選択 Soul の ghost_alpha / rim_strength / posterize_steps をリアルタイム調整 |
-| カメラパン・ズーム | W/A/S/D パン・スクロールズーム（ゲーム本体と同じ PanCamera）|
-| 矢視（legacy test only）| 独立クレート内では V キーで旧 GLB を確認できる。productionは固定TopDown |
-| 仰角調整 | VIEW_HEIGHT / Z_OFFSET をリアルタイムに変更して TopDown 俯角を確認 |
-| 複数 Soul 干渉 | Soul を最大 6 体まで追加し、Z-fight・マテリアル独立性を確認 |
-| ワールド上での建築物配置 | ゲーム本体と同一のゴーストプレビュー + クリック配置方式 |
-| 建築物 2D/3D 表示 | legacy比較用。productionのexactly-one証拠には使用しない |
-| 影・ライト | DirectionalLight + CascadeShadowConfig による影をゲーム本体と同条件で検証 |
-| RtT パイプライン | scene Camera3d → 単一オフスクリーンテクスチャ → composite sprite の描画経路 |
+| ワールド上での建築物配置 | マウス追従のゴーストとグリッド単位の配置・削除 |
+| 建築物2D/3D表示 | 同じgridへ置いた補助2D spriteとScene RtT内3D形状の位置関係 |
+| 地形表示 | deterministic terrain map上での配置とcamera pan/zoom |
+| 影・ライト | 建物receiver向けDirectionalLightとcascade shadow |
+| RtTパイプライン | Camera3d → 単一offscreen texture → composite sprite |
+| resize / DPI | Window物理解像度変更時のtexture再生成・camera target・material再bind |
 
 ## 操作
 
-### 共通
-
-| キー | 操作 |
+| キー / 操作 | 内容 |
 |:---|:---|
-| `Space` | モード切替 (Soul ⇔ Build) |
 | `H` | メニューパネル表示/非表示 |
 | `W/A/S/D` | カメラパン |
-| スクロール | カメラズーム（メニュー上ではパネルスクロールに切り替わる）|
-| `V` | 独立test内だけの旧GLB矢視切替。ゲーム本体では未割当 |
-| `J/K` | VIEW_HEIGHT ±10 |
-| `U/I` | Z_OFFSET ±10 |
-| `O` | VIEW_HEIGHT / Z_OFFSET をデフォルト値にリセット |
-| `Esc` | 終了 |
-
-### Soul モード
-
-| キー | 操作 |
-|:---|:---|
-| `1`–`6` | 表情切り替え |
-| `G` | 全表情モード（各 Soul に異なる表情を自動割当）|
-| `=` | Soul 追加 (最大 6) |
-| `-` | Soul 削除 |
-| `M` | モーション切り替え |
-| `Q` | アニメーションクリップ切り替え |
-| `Z/X` | 選択 Soul の `ghost_alpha` ±0.05 |
-| `C/F` | 選択 Soul の `rim_strength` ±0.05 |
-| `B/N` | 選択 Soul の `posterize_steps` ±1.0 |
-| `P` | シェーダーパラメータをデフォルトにリセット |
-| `R` | 全 Soul の位置・回転・スケールをリセット |
-| `←→↑↓` | 選択 Soul を移動 |
-| `Tab` | Soul 選択を順番に切り替え |
-
-### Build モード
-
-| 操作 | 内容 |
-|:---|:---|
-| **マウス移動** | ゴーストプレビューが追従（緑 = 配置可能、赤 = 占有済み）|
-| **左クリック** | 空きグリッドなら建築物を配置、占有済みなら削除 |
-| `[` / `]` | 建築種別を前/次に切り替え |
+| スクロール | カメラズーム。メニュー上ではパネルスクロール |
+| マウス移動 | ゴースト追従（緑=空き、赤=占有） |
+| 左クリック | 現在gridへ配置、または同位置の建物を削除 |
+| `[` / `]` | 建築種別を前/次へ切り替え |
 | `Enter` | 現在のゴースト位置で配置/削除 |
 | `Del` | 全建築物を削除 |
+| `Esc` | 終了 |
 
-## メニューパネル
-
-右サイドに常時表示されるデバッグパネル（`[H]` で折りたたみ）。ボタンで操作でき、現在値をリアルタイムで反映する。
-
-### パネル構成
-
-```
-━━ Visual Test ━━━━━━━━━━━━━━
- [H] メニューを閉じる
- [SOUL]  [BUILD]          ← モード切替
-
-─ カメラ ─────────────────────
- [TopDown]               [V]
- HEIGHT: [150-] [150+]
- OFFSET: [ 90-] [ 90+]
- [リセット]
-
-─ ソウルセクション（Soul モード時のみ表示）─
- 表情ボタン × 6 + 全表情
- アニメーションクリップボタン
- モーションボタン
- シェーダーパラメータ（ghost/rim/posterize）
- Soul 追加/削除/選択/リセット
-
-─ 建築セクション（Build モード時のみ表示）─
- 建築種別ボタン × 11
- 配置位置 (x, y)         ← マウス追従
- [配置/削除 [Enter]]
- [全削除 [Del]]
-```
-
-パネル上でスクロールするとパネルがスクロールされ、ワールドのズームは無効化される。
+右側のメニューでは建築種別、現在grid、配置/削除、全削除を操作できます。パネル上のスクロールはworld cameraへ伝播しません。
 
 ## アーキテクチャ
 
-独立した `visual_test` クレート (`crates/visual_test/`)。ゲーム本体の `GameAssets` / `StartupPlugin` には一切依存しない。
-
-### モジュール構成
+`crates/visual_test/`はゲーム本体の`GameAssets`や`StartupPlugin`に依存しない独立binaryです。
 
 | ファイル | 責務 |
 |:---|:---|
-| `main.rs` | App 構築・プラグイン登録・システム順序定義 |
-| `types.rs` + `types/` | 共有型のfacade。domain、render、state、UIの型を責務別に定義 |
-| `setup.rs` + `setup/` | 初期化facade。sceneとmenu（header、camera、soul、building、widgets）を構築 |
-| `building.rs` | 建築物のアセット定義・スポーン/デスポーン・ゴーストシステム・ワールドマップ生成 |
-| `soul.rs` | Soul GLB スポーン・WorldInstanceReady Observer |
-| `systems.rs` | ボタンインタラクション・カメラ同期・Soul 描画システム群 |
-| `hud.rs` | パネル表示制御・ボタン状態更新・動的テキスト更新 |
-| `input.rs` | キーボード入力ハンドラ（Soul モード / Build モード）|
+| `main.rs` | App、plugin、system順序 |
+| `types.rs` + `types/` | RtT、local fixture state、UI action |
+| `setup.rs` + `setup/` | camera、RtT、directional light、menu |
+| `building.rs` | terrain map、建物asset/shape、配置ghost |
+| `systems.rs` | menu action、camera同期、resize/DPI再bind、composite |
+| `hud.rs` | panel visibility、button state、grid text |
+| `input.rs` | keyboard input |
 
-### カメラ 3 pass構造
+### 3 pass構造
 
+```text
+Camera3dRtt      (LAYER_3D,      order=-2) → scene RtT
+TestMainCamera   (LAYER_2D,      order= 0) ← PanCamera
+Overlay Camera2d (LAYER_OVERLAY, order= 1) ← composite sprite + UI
 ```
-Camera3dRtt          (LAYER_3D,             order=-2) → scene RtT
-TestMainCamera       (LAYER_2D,             order= 0) ← PanCamera（パン・ズーム）
-Overlay Camera2d     (LAYER_OVERLAY,        order= 1) ← composite sprite + UI
-```
 
-`sync_test_camera3d` が毎フレーム TestMainCamera のTransform/scaleと矢視方向を1台のCamera3dへ反映する。
-Scene RtT は Window の物理解像度で生成し、`ImageRenderTarget.scale_factor` に Window の scale factor を設定する。これにより高 DPI 環境でも RtT Camera3d の論理 viewport と TestMainCamera が一致する。resize または DPI 変更時はScene texture、camera target、composite materialを同時に再生成・再bindする。`PanCamera` の Q/E 回転はゲーム本体と同様に無効で、表示方向は V の矢視プリセットだけが変更する。
+`sync_test_camera3d`は2D cameraのpan/scaleを固定TopDown Camera3dへ反映します。Scene RtTはWindowの物理解像度で生成し、`ImageRenderTarget.scale_factor`へWindow scale factorを設定します。resizeまたはDPI変更時はScene texture、camera target、composite materialを同時に再生成・再bindします。
 
-### ゴーストプレビュー（建築物配置）
-
-マウス座標 → `Camera::viewport_to_world_2d` → `world_to_grid` → グリッドスナップ の流れで毎フレーム更新。
-
-| 状態 | ゴースト色 |
-|:---|:---|
-| 空きグリッド | `Color::srgba(0.5, 1.0, 0.5, 0.5)` 緑・50% |
-| 占有済みグリッド | `Color::srgba(1.0, 0.2, 0.2, 0.5)` 赤・50% |
-
-ゴーストスプライトには実際の建築テクスチャが表示される。メニューパネル上ではマウス入力が無効化される。
-
-`update_building_cursor` システム（`building.rs`）が座標変換・占有チェック・左クリック配置を一括担当する。
-
-### UI パネルボタン
-
-`VisualTestAction` コンポーネントで各ボタンアクションを識別。`Changed<Interaction>` フィルタで `Interaction::Pressed` を検知し `TestState` を更新する。ボタン色は `update_button_states`（毎フレーム）が管理する。
-
-| 色 | 状態 |
-|:---|:---|
-| `BTN_DEF` (暗グレー) | 通常 |
-| `BTN_HOVER` (紫) | ホバー |
-| `BTN_PRESS` (オレンジ暗) | 押下中 |
-| `BTN_ACT` (オレンジ明) | 選択中 |
-| `BTN_ACT_H` (オレンジ明+ホバー) | 選択中かつホバー |
-
-### ゲーム本体との対応
-
-| visual_test 内 | ゲーム本体対応 |
-|:---|:---|
-| `TestMainCamera` + `PanCamera` | `hw_ui::camera::MainCamera` + `PanCamera` |
-| `sync_test_camera3d` | `systems::visual::camera_sync::sync_camera3d_system` |
-| `TestElevDir` / `TestElev` | legacy visual-test-only state。productionには対応するElevation stateはなく、P02では固定TopDown cameraを使用する。 |
-| `update_building_cursor` ゴースト | `systems::visual::placement_ghost::placement_ghost_system` |
-| `SoulAnimHandle` | `SoulAnimationPlayer3d` + `SoulAnimationLibrary` |
-| `on_soul_scene_ready` | `apply_soul_gltf_render_layers_on_ready` |
-
-## ファイルパス
-
-| ファイル | 内容 |
-|:---|:---|
-| `crates/visual_test/` | クレートルート |
-| `crates/visual_test/src/` | Rust ソース（上記モジュール）|
-| `crates/visual_test/Cargo.toml` | 依存クレート定義 |
+Soul billboard、Familiar foreground、load lifecycle、exactly-one presentationの受入は`visual_test`ではなく、production fixtureを通るP02/P08 actual-window・RenderDoc evidenceで行います。

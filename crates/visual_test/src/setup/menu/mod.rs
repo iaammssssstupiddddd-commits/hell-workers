@@ -1,19 +1,12 @@
 use super::*;
 
 mod building;
-mod camera;
 mod header;
-mod soul;
 mod widgets;
 
 use building::spawn_build_section;
-use camera::spawn_camera_section;
 use header::spawn_header;
-use soul::spawn_soul_section;
-use widgets::{
-    BTN_GAP, BTN_H, DIM_COL, PANEL_BG, SFONT, VAL_COL, param_row, sec_label, small_btn, spawn_btn,
-    val_text,
-};
+use widgets::{PANEL_BG, SFONT, VAL_COL, sec_label, spawn_btn};
 
 pub(super) fn spawn_menu_ui(commands: &mut Commands, font: Handle<Font>) {
     commands
@@ -35,8 +28,6 @@ pub(super) fn spawn_menu_ui(commands: &mut Commands, font: Handle<Font>) {
         ))
         .with_children(|p| {
             spawn_header(p, &font);
-            spawn_camera_section(p, &font);
-            spawn_soul_section(p, &font);
             spawn_build_section(p, &font);
         });
 
