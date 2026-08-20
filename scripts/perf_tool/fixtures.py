@@ -405,7 +405,9 @@ def write_behavior_fixture_run(
                 ),
                 "applied": (
                     step[
-                        "p02_applied" if stage_id in {"p02", "p03", "p04"} else "current_applied"
+                        "p02_applied"
+                        if stage_id in {"p02", "p03", "p04", "p05", "p06"}
+                        else "current_applied"
                     ]
                     if case.behavior_case == "door-state-v1"
                     else load_applied[index]
@@ -413,7 +415,7 @@ def write_behavior_fixture_run(
                 "semantic_state": (
                     step[
                         "p02_semantic_state"
-                        if stage_id in {"p02", "p03", "p04"}
+                        if stage_id in {"p02", "p03", "p04", "p05", "p06"}
                         else "current_semantic_state"
                     ]
                     if case.behavior_case == "door-state-v1"
@@ -422,7 +424,7 @@ def write_behavior_fixture_run(
                 "active_presentation_state": (
                     step[
                         "p02_active_presentation_state"
-                        if stage_id in {"p02", "p03", "p04"}
+                        if stage_id in {"p02", "p03", "p04", "p05", "p06"}
                         else "current_active_presentation_state"
                     ]
                     if case.behavior_case == "door-state-v1"
@@ -440,7 +442,7 @@ def write_behavior_fixture_run(
                 ),
             }
         )
-        if stage_id == "p04":
+        if stage_id in {"p04", "p05", "p06"}:
             row.update(
                 {
                     "field_availability": "available",
@@ -450,6 +452,17 @@ def write_behavior_fixture_run(
                     "field_checksum": "4" * 64,
                 }
             )
+        if stage_id in {"p05", "p06"}:
+            row.update(
+                {
+                    "registry_phase": "candidate_preflight",
+                    "wake_count": 0,
+                    "field_read_count": 0,
+                    "old_epoch_field_read_count": 0,
+                }
+            )
+        if stage_id == "p06":
+            row["gpu_availability"] = "unavailable"
         rows.append(row)
     (data_dir / "timeline.json").write_text(
         json.dumps(
@@ -470,7 +483,7 @@ def write_behavior_fixture_run(
             encoding="utf-8",
         )
     write_indoor_light_sidecars(root, case, stage_id=stage_id, lane="behavior")
-    if stage_id == "p04":
+    if stage_id in {"p04", "p05", "p06"}:
         write_json(
             data_dir / "indoor_light_runtime.json",
             {
@@ -1957,6 +1970,33 @@ def self_test() -> int:
             row["field_availability"] == "available"
             for row in p04_behavior_validation.timeline or []
         )
+
+        p06_behavior_root = root / "behavior-p06-door"
+        write_behavior_fixture_run(
+            p06_behavior_root,
+            p04_behavior_case,
+            stage_id="p06",
+        )
+        p06_behavior_validation = validate_run(
+            p06_behavior_root,
+            returncode=0,
+            expected_case=p04_behavior_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+            capture_kind="fixed-step-behavior",
+            expected_fixed_hz=64,
+            expected_warmup_ticks=1920,
+            expected_audit_ticks=128,
+            expected_window_backend="headless",
+            expected_contract="rtt-light-v1",
+            expected_stage="p06",
+            expected_lane="behavior",
+        )
+        assert p06_behavior_validation.valid, p06_behavior_validation.reasons
+        assert [
+            row["semantic_state"] for row in p06_behavior_validation.timeline or []
+        ] == ["closed", "open", "open", "locked", "locked"]
 
         for size, ledger_rows, presentation_rows, building_records in (
             ("medium", 722, 12, 244),

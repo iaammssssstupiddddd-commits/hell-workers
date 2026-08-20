@@ -1353,7 +1353,11 @@ def read_behavior_timeline(
 
     comparable_rows = rows[: len(expected_steps)]
     if behavior_case == "door-state-v1":
-        stage_prefix = "p02" if stage_id in {"p02", "p03", "p04", "p05"} else "current"
+        stage_prefix = (
+            "p02"
+            if stage_id in {"p02", "p03", "p04", "p05", "p06"}
+            else "current"
+        )
         for index, (row, expected) in enumerate(zip(comparable_rows, expected_steps)):
             exact = {
                 "step_index": expected["step_index"],
