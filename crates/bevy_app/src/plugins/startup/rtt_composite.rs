@@ -31,6 +31,11 @@ pub struct RttCompositeSprite;
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct RttCompositeMaterial {
+    /// Frozen v1 evidence records the Scene texture/sampler at bindings 1/2.
+    /// Keep binding 0 occupied without the retired per-frame shadow params so
+    /// RenderDoc reflection preserves those stable descriptor numbers.
+    #[uniform(0)]
+    pub descriptor_layout_anchor: Vec4,
     #[texture(1)]
     #[sampler(2)]
     pub scene_texture: Handle<Image>,
@@ -58,6 +63,7 @@ pub fn spawn_rtt_composite_sprite(
     let mesh = meshes.add(Rectangle::default().mesh());
     let size = custom_size.unwrap_or(Vec2::new(1280.0, 720.0));
     let material = materials.add(RttCompositeMaterial {
+        descriptor_layout_anchor: Vec4::ZERO,
         scene_texture: runtime.scene.clone(),
     });
 

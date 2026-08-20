@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-08-legacy-cleanup-release-plan-2026-08-03` |
-| ステータス | `Implementation in Progress — P01 remediation candidate focused pass / fresh P01 S0→formal and remaining reference bootstrap pending` |
+| ステータス | `Implementation in Progress — final-contract P01 formal fail-closed on 60 Hz pacing / comparable display environment and remaining reference bootstrap pending` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-21` |
 | 作成者 | `Codex` |
@@ -63,6 +63,9 @@
 - 2026-08-21時点で、current subject`0ffb8004d7d5d75cfc49d4808c1bdaa4adf64c92` / attempt`3af17e1b-0b93-4917-875f-2a9d6019b73b`はfresh formal、登録、offline verifyまで合格済みである。P01 historical subject`29a4a719e9fe92b10618f36ce548c4bb5a4c7e80`もfresh S0 / S1 / RD0と全formal legを完走したが、attempt`fa6b00a6-aaca-48ce-b467-55d814b3d12d`は`capture-medium-cpu`の`RLV1-P01-PERF`でcurrent比p95 `+10.071186004173182%`、p99 `+9.2527073866044205%`となり、各`<= 5.0%`を満たさず未登録である。同一subjectのfocused 3-run再測定でもp95 `14.833945 ms` / p99 `17.623100 ms`となり再現したため、単なる一時ノイズとして同じformalを繰り返さない。
 - P01の次のsubjectは、凍結contract / fixture /閾値を変更せずmedium CPUの実質的なremediationを含むclean descendantとする。fresh S0 -> S1 -> RD0 -> formal -> register -> offline verifyでP01を閉じるまでP02 / P06 / P08の採取を開始しない。Render3d非表示時のshadow projector、camera / LOD / section、全RtT update chain、GLTF animation chainの単純なstage gateはfocused actual-window診断で改善しなかったため、同じ仮説を反復しない。
 - P01 remediation subject`9de7834c52ddc506269f732d33d3bc0087522aa2`は、Scene-only WGSLが宣言も参照もしないlegacy composite uniformと、その値だけを更新する毎frame同期systemを削除した。Intel Arc / Vulkan / X11のfocused medium CPU 3-runはp95 `13.414166 ms` / p99 `15.359286 ms`（MAD `0.024155 / 0.116348 ms`）で、registered current `13.660129 / 15.432964 ms`比`-1.8006% / -0.4774%`となり凍結`<= +5%`を満たした。ただしこれはformal attemptではないため、fresh S0 / S1 / RD0 / formalで再現して登録するまでreferenceとは扱わない。mainlineにも同じ修正を`2dcc1341037fd5445cae0f1155afaf50e8e0c970`として取り込み済みである。
+- final frozen contractへ揃えたP01 evidence subject`9ba1d52d96d5a8815b82d63c18f151ec1062b50d`は、retired uniformの毎frame同期を復活させず、binding 0のzero-valued descriptor anchorだけを置いてScene texture / samplerの凍結binding `1 / 2`を維持する。fresh S0`task-dashboard-20260820T211411Z-6bc9c93b`、S1`rtt-light-s1-20260820T213654Z-f165ed5c`、RD0、audit / behavior / Capture / RenderDoc / Memoryはすべてvalidとなった。
+- 同subjectのformal attempt`5c64d56d-3795-4e77-807b-f11ae8432733`は、最終offline gateで`capture-small-cpu`のp95 `+142.8378075606974%` / p99 `+136.3594189218451%`、`capture-medium-cpu`のp95 `+5.7030134927715581%`が凍結`<= +5.0%`を超えたためfail-closed未登録である。123 gate row中の不合格はこの3行だけで、invalid artifactは保存し、threshold / current reference / contractを変更しない。
+- 同一subjectの診断S1`rtt-light-s1-20260820T232141Z-383d53ad`はaudit / Capture / Memoryをvalid完走したが、Captureのsmall / medium / large CPU p50が各`16.669 / 16.670 / 17.086 ms`となった。GNOME Mutter `GetCurrentState`が現在の唯一のactive displayを`2880x1800@60.001`として返し、small / mediumの全3反復が約16.67 msへ同期したため、一時的な単発ノイズ仮説を否定した。frozen environment lockのadapter / backend / window / present / driverは旧referenceと一致する一方、physical display refreshはschema v2のstable fieldに含まれない。比較可能なdisplay/presentation状態を復元・確認するまで同じformalを反復せず、P01登録とP02以降を停止する。
 
 ### 3.3 cross-consumer checkpoint
 
@@ -377,14 +380,14 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 ### 現在地
 
-- 進捗: `M0 implementation in progress / M1・M2 code cleanup complete / M3 hidden mirror implemented / fresh P08 S0+S1 valid / current reference registered / P01 remediation candidate focused pass / fresh P01 S0→formal・以降のreference bootstrap・P08 RD0/formal pending`
+- 進捗: `M0 implementation in progress / M1・M2 code cleanup complete / M3 hidden mirror implemented / fresh P08 S0+S1 valid / current reference registered / final-contract P01 S0・S1・RD0・formal legs valid but performance gate fail-closed / comparable display environment・以降のreference bootstrap・P08 formal pending`
 - 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、stopped projector producer / uniform / WGSL cleanup、P08 production slow-step fixture priming、fixed-audit capture-relative clock、post-Actor actor位置復元、同一commitのfresh S0 / S1、Door / Tank / MudMixer hidden structural mirrorと旧2D writer、productionとvisual_testのSoul GLB / character material / shadow proxy backend、Help no-impact review。
-- 未完了: fresh P01 performance remediation、P02 / P06 reference登録、actual P08 RenderDoc cross checkpoint、M2のRenderDoc pixel / visual semantics確認、M4 formal。local legacy character assetはworkstation / Blender移行計画のcomparison referenceとして保持方針を確定済み。
-- 現ブロッカー: P01 remediation subject`9de7834c`のfocused actual-window 3-runはmedium CPU gate相当を合格したが、fresh same-subject S0 / S1 / RD0 / formalは未採取である。formalで再現しP01を登録するまでP02以降へ進めない。
+- 未完了: comparable display環境でのfresh P01 performance再採取 / 登録、P02 / P06 reference登録、actual P08 RenderDoc cross checkpoint、M2のRenderDoc pixel / visual semantics確認、M4 formal。local legacy character assetはworkstation / Blender移行計画のcomparison referenceとして保持方針を確定済み。
+- 現ブロッカー: final-contract P01 subject`9ba1d52d`はRD0と全formal legをvalid完走したが、現在の60.001 Hz display状態ではsmall / medium CPUが約16.67 msへ同期し、凍結current比gateを超える。contractが固定するadapter / backend / window / present / driverだけではこの差を検出できないため、比較可能なphysical display / presentation状態の復元を確認するまでP01を再実行・登録せず、P02以降へ進めない。
 
 ### 次のAIが最初にやること
 
-1. P01 remediation subject`9de7834c52ddc506269f732d33d3bc0087522aa2`でfresh S0 -> S1 -> RD0 -> formalを採取し、focused 3-runの改善を`RLV1-P01-PERF`で再現して登録 / offline verifyする。不合格ならfocused値をformal合格へ読み替えず、artifact差分を切り分ける。
+1. physical display / compositor / presentation状態がregistered current採取時と比較可能であることをread-onlyで確認する。現在の60.001 Hzだけの状態では再実行しない。比較可能な状態を復元できた場合だけP01 subject`9ba1d52d96d5a8815b82d63c18f151ec1062b50d`でfresh S0 -> S1 -> RD0 -> formalを採取し、`RLV1-P01-PERF`を合格させて登録 / offline verifyする。
 2. P01登録後だけP02をfresh採取 / 登録し、P06の既存valid legまたは必要なfresh evidence-only subjectをP02 referenceでfinalize / registerする。existing P07を同じphysical rootからoffline再検証する。
 3. committed P08 subjectのfresh RD0でstructural / Terrain / cross-consumer pixel semanticsを閉じ、canonical referenceが揃った後だけM4 formalを採取する。
 
@@ -394,6 +397,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 - `ActorBillboardOwnerCache.actor_billboard`は現役である。resource全体を削除しない。
 - `shadow_style.wgsl`と2D Spriteには現役consumerがある。文字列一致だけでファイル全体を削除しない。
 - P08のobsolete perf列は値0であり、列0ではない。frozen projection / historical readerを維持する。
+- frozen environment lock schema v2はphysical display refreshをstable fieldとして記録しない。現在の60.001 Hz pacingと旧currentの高速pacingを、adapter / backend / window / present / driver一致だけで比較可能と判断しない。
 - 実機検証には`hell-workers-run-native-acceptance` Skillを必ず使う。
 - 機能・runtime data変更後、commit / completion前に`hell-workers-review-help-impact` Skillを必ず使う。
 
@@ -404,6 +408,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 - native acceptance: `2026-08-20` / `partial (cleanup committed subject 3735cab2、source fingerprint 22bfca85...でfresh S0 / P08 S1がvalid。Intel Arc / Vulkan / X11でS1のaudit 3、Capture 18、Memory 18、field-core 3、consumer-core 3 runはinvalid 0。S0/S1のCapture SHA 3aa544f5...、Memory SHA eb09c1f9...は一致。S1 job rtt-light-s1-20260820T082815Z-20f021f6。RD0 / formalは未採取)`
 - reference bootstrap: `2026-08-21` / `partial fail-closed (Intel Arc / Vulkan / X11、Mesa 26.1.6 / kernel 7.1.8。同一physical rootでcurrent 0ffb8004 / attempt 3af17e1bをfresh formal・登録・offline verify。P01 29a4a719 / attempt fa6b00a6はS0・S1・RD0・全formal leg validだが、medium CPU p95 15.035866 ms / p99 16.860931 ms、current 13.660129 / 15.432964比 +10.071% / +9.253%でRLV1-P01-PERF不合格。focused 3-runでも再現し、未finalize・未登録のままP02以降を停止)`
 - P01 remediation probe: `2026-08-21` / `pass as focused diagnostic only (subject 9de7834c、Intel Arc / Vulkan / X11、medium CPU 3/3 valid。p95 13.414166 ms / MAD 0.024155、p99 15.359286 ms / MAD 0.116348でregistered current比 -1.801% / -0.477%。Scene-only shaderで未使用だったcomposite uniform / sync system除去。fresh S0 / S1 / RD0 / formalは未採取)`
+- final-contract P01 evidence: `2026-08-21` / `partial fail-closed (subject 9ba1d52d、S0 task-dashboard-20260820T211411Z-6bc9c93b、S1 rtt-light-s1-20260820T213654Z-f165ed5c、RD0と全formal leg valid。attempt 5c64d56d-3795-4e77-807b-f11ae8432733は123 gate row中small CPU p95/p99とmedium CPU p95の3行だけ不合格で未登録。診断S1 rtt-light-s1-20260820T232141Z-383d53adもvalidだがsmall/medium CPU全反復が60.001 Hz相当の約16.67 msへ同期したため、同条件のformal反復を停止)`
 - Help impact: `2026-08-20` / `No impact (停止済みproduction GLB backend、非表示structural mirror、到達不能section-cutと未使用GPU feature要求の削除。可視billboard / 3D presentation、通常gameplayのinput / state semantics / save / label / workflowは不変)`
 - docs gate: `2026-08-20` / `pass (docs --write / --check、check_docs、diff --check)`
 
@@ -421,6 +426,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-21` | `Codex` | final frozen contractのP01 subject`9ba1d52d`でfresh S0 / S1 / RD0と全formal legをvalid完走。offline gateはsmall CPU p95 / p99とmedium CPU p95の3行だけ不合格となり未登録。追加S1でsmall / medium全反復の約16.67 ms pacingと現在の唯一のactive display `60.001 Hz`を確認し、単発ノイズ仮説を棄却。比較可能なdisplay状態を復元するまでformal反復とP02以降を停止 |
 | `2026-08-21` | `Codex` | P01のScene-only WGSLが参照しないlegacy composite uniformと同期systemをremediation subject`9de7834c`で削除し、mainlineへ`2dcc1341`として同一修正を取り込み。Intel Arc / Vulkan / X11のfocused medium CPU 3-runはp95 `13.414166 ms` / p99 `15.359286 ms`でregistered current以内へ改善。formal evidenceではないため、fresh same-subject S0 / S1 / RD0 / formalを次のhard gateとして維持 |
 | `2026-08-21` | `Codex` | canonical evidence rootでfresh current subject`0ffb8004` / attempt`3af17e1b`をformal登録・offline verify。P01 subject`29a4a719`はfresh S0 / S1 / RD0と全formal legを完走したが、attempt`fa6b00a6`がmedium CPUの凍結current比gateをp95 `+10.071%` / p99 `+9.253%`で不合格となりfail-closed未登録。focused actual-window 3-runで再現し、改善しなかった4系統の単純stage-gate仮説を打ち切ってP02以降を停止 |
 | `2026-08-20` | `Codex` | production PostActorのfield rebuild -> Soul recovery -> Room summaryと、Visualのfield rebuild -> GPU upload -> Door presentationを実行順で検証するfocused schedule assertionを追加。Git管理外のlegacy character assetはworkstation / Blender移行計画のlocal comparison referenceとして保持し、production / visual-test consumer 0と分離 |
