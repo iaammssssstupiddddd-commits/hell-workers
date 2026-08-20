@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-08-legacy-cleanup-release-plan-2026-08-03` |
-| ステータス | `Implementation in Progress — M1/M2 code cleanup complete / fresh P08 S0+S1 valid / RD0・reference bootstrap pending` |
+| ステータス | `Implementation in Progress — M1/M2 code cleanup complete / fresh P08 S0+S1 valid / reference bootstrap blocked by fresh P01 performance gate` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-20` |
+| 最終更新日 | `2026-08-21` |
 | 作成者 | `Codex` |
 | 親計画 | [`../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](../single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) |
 | 直接依存 | P01〜[P07](07-indoor-light-gameplay-room-plan-2026-08-03.md)すべて |
@@ -56,10 +56,12 @@
 - P07 formal subject`a749a580370947f0f64c1685010e625a903324dd` / attempt`82bd460f-31c6-4fa0-8705-a4d702ff4c1f`はP05-lineageのimmutable CPU referenceとして保持する。P08 mainlineへmergeしていないこと自体は問題ではなく、P08 source ancestryの代用にはしない。
 - P06の2026-08-17 user-approved RD0 timeout例外はP06 milestone受理であり、P08の`RLV1-P08-MEMORY`が要求するvalid registered P06 GPU referenceの免除ではない。invalid attemptを登録・改変しない。
 - P08 finalizeは同一canonical `baseline_root`に`current` / `p01` / `p02` / `p06` / `p07`のvalid registered projectionがある場合だけ許可する。P01 performanceはcurrent、P02 performanceはP01、P06 performanceはP02をreferenceにするため、P08が直接比較するcurrent / P06 / P07だけを先に置いてもP06 finalizeは成立しない。
-- canonical evidence checkoutは、既存P07 registered artifactを所有する`/home/satotakumi/projects/hell-workers-p07-v1-evidence`を使う。同checkoutでsourceを切り替え、`current` subject`10763a4da6bfbe0b480971fb85c474e6ff7a5f86` -> `p01` subject`29a4a719e9fe92b10618f36ce548c4bb5a4c7e80` -> accepted P02 remediation subject`c3515a40543026a588592682889a08d67cbaeff9` -> P06-lineage clean subject -> existing P07 projection -> P08 serial subjectの順に扱う。
+- canonical evidence checkoutは、既存P07 registered artifactを所有する`/home/satotakumi/projects/hell-workers-p07-v1-evidence`を使う。同checkoutでsourceを切り替え、`current` subject`0ffb8004d7d5d75cfc49d4808c1bdaa4adf64c92` -> P01 remediation subject -> accepted P02 remediation subject`c3515a40543026a588592682889a08d67cbaeff9` -> P06-lineage clean subject -> existing P07 projection -> P08 serial subjectの順に扱う。
 - current / P01 / P02 / P06の各新規採取は、そのstageのclean subjectでfresh S0 -> S1 -> RD0 -> formal -> finalize / register -> offline verifyを閉じてから次へ進む。P06 subjectは`19ad5fec1e7c8bfa83ae971f047b174b1e48aa72`を基点に必要最小のRenderDoc extractor / tooling correctionだけを含み、P07 gameplayを含めない。既存P07はartifactを変更せず同じrootからoffline再検証する。
 - bundleは実行中`REPO_ROOT/target/perf-runs/rtt-light/rtt-light-v1/`を物理canonical rootとする。全bootstrap、P08 formal、全offline verifierを必ず上記evidence checkout内から起動し、primary worktreeの`--baseline`等でsibling rootを指さない。artifact directoryをcopy / relocateせず、source checkoutを切り替えても同一physical `target`を保持する。
 - 全referenceとP08 subjectでactual adapter / backend / window / present mode / driver stable fieldsを照合し、不一致は比較せずfail-closedにする。各subjectのcleanliness / source fingerprint / binary SHA / adapter manifestもhelperで検証する。chainのいずれかをvalid登録できなければP08 formal開始を停止する。
+- 2026-08-21時点で、current subject`0ffb8004d7d5d75cfc49d4808c1bdaa4adf64c92` / attempt`3af17e1b-0b93-4917-875f-2a9d6019b73b`はfresh formal、登録、offline verifyまで合格済みである。P01 historical subject`29a4a719e9fe92b10618f36ce548c4bb5a4c7e80`もfresh S0 / S1 / RD0と全formal legを完走したが、attempt`fa6b00a6-aaca-48ce-b467-55d814b3d12d`は`capture-medium-cpu`の`RLV1-P01-PERF`でcurrent比p95 `+10.071186004173182%`、p99 `+9.2527073866044205%`となり、各`<= 5.0%`を満たさず未登録である。同一subjectのfocused 3-run再測定でもp95 `14.833945 ms` / p99 `17.623100 ms`となり再現したため、単なる一時ノイズとして同じformalを繰り返さない。
+- P01の次のsubjectは、凍結contract / fixture /閾値を変更せずmedium CPUの実質的なremediationを含むclean descendantとする。fresh S0 -> S1 -> RD0 -> formal -> register -> offline verifyでP01を閉じるまでP02 / P06 / P08の採取を開始しない。Render3d非表示時のshadow projector、camera / LOD / section、全RtT update chain、GLTF animation chainの単純なstage gateはfocused actual-window診断で改善しなかったため、同じ仮説を反復しない。
 
 ### 3.3 cross-consumer checkpoint
 
@@ -133,6 +135,7 @@
 - [ ] cross observationはnonserializedで、fixture開始 / unavailable / replacement resetで消え、preflight rejectだけは不変。旧epoch observationをsidecarへ再利用できない
 - [ ] schedule assertionがPostActorの`IndoorLightingRebuildSet -> SoulLightRecoverySet -> RoomIlluminationSummarySet`と、後続Visualの`IndoorLightingRebuildSet -> IndoorLightUploadSet -> DoorPresentationSyncSet`を固定する
 - [ ] 同一physical canonical rootでcurrent / p01 / p02 / p06 / p07 referenceがvalid registeredかつoffline verifier合格。1つでも欠ければM4 formalへ進まない
+- [ ] fresh P01の`RLV1-P01-PERF` medium CPU p95 / p99を凍結current比`<= 5.0%`で合格させて登録する。2026-08-21のhistorical P01 attemptはfail-closed未登録であり、referenceに使わない
 - [ ] `python3 scripts/perf.py ... --stage p08`とnative `plan-rtt-light --stage p08`が全required legを列挙する
 
 ## M1: legacy character / Soul shadow / projector producerを削除する
@@ -373,15 +376,16 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 ### 現在地
 
-- 進捗: `M0 implementation in progress / M1・M2 code cleanup complete / M3 hidden mirror implemented / fresh P08 S0+S1 valid / RD0・reference bootstrap・formal pending`
+- 進捗: `M0 implementation in progress / M1・M2 code cleanup complete / M3 hidden mirror implemented / fresh P08 S0+S1 valid / current reference registered / P01 performance remediation・以降のreference bootstrap・P08 RD0/formal pending`
 - 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、stopped projector producer / uniform / WGSL cleanup、P08 production slow-step fixture priming、fixed-audit capture-relative clock、post-Actor actor位置復元、同一commitのfresh S0 / S1、Door / Tank / MudMixer hidden structural mirrorと旧2D writer、productionとvisual_testのSoul GLB / character material / shadow proxy backend、Help no-impact review。
-- 未完了: actual RenderDoc cross checkpoint、valid P06 reference、M2のRenderDoc pixel / visual semantics確認、M4 formal。local legacy character assetはworkstation / Blender移行計画のcomparison referenceとして保持方針を確定済み。
-- 現ブロッカー: primary canonical rootへのexisting P07 importと全baseline offline verifyは完了したが、P06 `19ad5fec`のfresh formal retry `3989b184-a946-43d3-9367-fdad29d5d075`はprobe専用PBR cameraの継続readback中に再度600秒deadlineへ達してinvalidになった。修正版をP06 evidence-only subjectへ移植してfresh S0 / S1 / RD0 / formalを再採取し、valid P06を登録する必要がある。
+- 未完了: fresh P01 performance remediation、P02 / P06 reference登録、actual P08 RenderDoc cross checkpoint、M2のRenderDoc pixel / visual semantics確認、M4 formal。local legacy character assetはworkstation / Blender移行計画のcomparison referenceとして保持方針を確定済み。
+- 現ブロッカー: canonical evidence rootのfresh currentは登録 / offline verify済みだが、P01 subject`29a4a719`のfresh attempt`fa6b00a6-aaca-48ce-b467-55d814b3d12d`が`RLV1-P01-PERF`のmedium CPU p95 / p99でcurrent比`+10.071% / +9.253%`となり、凍結`<= 5%` gateを不合格になった。全formal legのartifact自体はvalidだがfinalizeせず未登録であり、P02以降へ進めない。
 
 ### 次のAIが最初にやること
 
-1. direct GPU pixel readback + receiver WGSL order checkをP06 evidence-only subjectへ移植し、fresh S0 -> S1 -> RD0 -> formalを採取してvalid P06をcanonical rootへ登録する。
-2. committed P08 subjectのfresh RD0でstructural / Terrain / cross-consumer pixel semanticsを閉じ、canonical referenceが揃った後だけM4 formalを採取する。
+1. P01 medium CPU差分の実質的な原因を切り分け、凍結contractを維持したclean remediation descendantをcommitする。既に否定した単純なshadow-projector、camera / LOD / section、全RtT chain、GLTF animationのstage gateを反復せず、fresh S0 -> S1 -> RD0 -> formalで`RLV1-P01-PERF`を合格 / 登録 / offline verifyする。
+2. P01登録後だけP02をfresh採取 / 登録し、P06の既存valid legまたは必要なfresh evidence-only subjectをP02 referenceでfinalize / registerする。existing P07を同じphysical rootからoffline再検証する。
+3. committed P08 subjectのfresh RD0でstructural / Terrain / cross-consumer pixel semanticsを閉じ、canonical referenceが揃った後だけM4 formalを採取する。
 
 ### ブロッカー/注意点
 
@@ -397,6 +401,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 - Rust gates: `2026-08-20` / `pass (M2 structural / terrain shader contract tests under profiling-renderdoc、Clippy workspace all-targets、python3 scripts/dev.py verify)`
 - headless P08 audit: `2026-08-20` / `pass (target/perf-runs/p08-production-glb-removal-smoke-4、small CPU、Valid 1 / Invalid 0、determinism signature 4ea0f6ef43859c30)`
 - native acceptance: `2026-08-20` / `partial (cleanup committed subject 3735cab2、source fingerprint 22bfca85...でfresh S0 / P08 S1がvalid。Intel Arc / Vulkan / X11でS1のaudit 3、Capture 18、Memory 18、field-core 3、consumer-core 3 runはinvalid 0。S0/S1のCapture SHA 3aa544f5...、Memory SHA eb09c1f9...は一致。S1 job rtt-light-s1-20260820T082815Z-20f021f6。RD0 / formalは未採取)`
+- reference bootstrap: `2026-08-21` / `partial fail-closed (Intel Arc / Vulkan / X11、Mesa 26.1.6 / kernel 7.1.8。同一physical rootでcurrent 0ffb8004 / attempt 3af17e1bをfresh formal・登録・offline verify。P01 29a4a719 / attempt fa6b00a6はS0・S1・RD0・全formal leg validだが、medium CPU p95 15.035866 ms / p99 16.860931 ms、current 13.660129 / 15.432964比 +10.071% / +9.253%でRLV1-P01-PERF不合格。focused 3-runでも再現し、未finalize・未登録のままP02以降を停止)`
 - Help impact: `2026-08-20` / `No impact (停止済みproduction GLB backend、非表示structural mirror、到達不能section-cutと未使用GPU feature要求の削除。可視billboard / 3D presentation、通常gameplayのinput / state semantics / save / label / workflowは不変)`
 - docs gate: `2026-08-20` / `pass (docs --write / --check、check_docs、diff --check)`
 
@@ -414,6 +419,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-21` | `Codex` | canonical evidence rootでfresh current subject`0ffb8004` / attempt`3af17e1b`をformal登録・offline verify。P01 subject`29a4a719`はfresh S0 / S1 / RD0と全formal legを完走したが、attempt`fa6b00a6`がmedium CPUの凍結current比gateをp95 `+10.071%` / p99 `+9.253%`で不合格となりfail-closed未登録。focused actual-window 3-runで再現し、改善しなかった4系統の単純stage-gate仮説を打ち切ってP02以降を停止 |
 | `2026-08-20` | `Codex` | production PostActorのfield rebuild -> Soul recovery -> Room summaryと、Visualのfield rebuild -> GPU upload -> Door presentationを実行順で検証するfocused schedule assertionを追加。Git管理外のlegacy character assetはworkstation / Blender移行計画のlocal comparison referenceとして保持し、production / visual-test consumer 0と分離 |
 | `2026-08-20` | `Codex` | cleanup committed subject `3735cab2`でfresh actual-window S0とP08 S1をvalid取得。Intel Arc / Vulkan / X11、同一source fingerprint / Capture・Memory binary SHAでaudit / Capture / Memory / field-core / consumer-coreの57 processを完走し、`CLIP_DISTANCES`削除後のpipeline起動を確認。これはRD0 / formal / registered evidenceではない |
 | `2026-08-20` | `Codex` | `visual_test`をbuilding / terrain TopDown試験へ限定し、Soul GLB / animation / face / shadow modeと旧矢視UIを削除。remaining consumerがなくなったshared CharacterMaterial / SoulShadowMaterial / shadow-only layer・constants・shaderを削除 |
