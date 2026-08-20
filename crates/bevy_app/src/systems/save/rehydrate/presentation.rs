@@ -6,9 +6,6 @@ pub(crate) fn clear_rehydrate_presentation(world: &mut World) {
     let presentation_entities: Vec<Entity> = {
         let mut query = world.query_filtered::<Entity, Or<(
             With<ActorBillboard3d>,
-            With<SoulProxy3d>,
-            With<SoulShadowProxy3d>,
-            With<FamiliarProxy3d>,
             With<Building3dVisual>,
             With<crate::entities::familiar::FamiliarRangeIndicator>,
         )>>();
@@ -17,7 +14,7 @@ pub(crate) fn clear_rehydrate_presentation(world: &mut World) {
     for entity in presentation_entities {
         world.despawn(entity);
     }
-    if world.contains_resource::<SoulProxyOwnerCache>() {
-        world.insert_resource(SoulProxyOwnerCache::default());
+    if world.contains_resource::<ActorBillboardOwnerCache>() {
+        world.insert_resource(ActorBillboardOwnerCache::default());
     }
 }

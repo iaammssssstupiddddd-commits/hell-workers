@@ -54,10 +54,10 @@ pub(super) fn calculate_scene_root_counts(
     checksum_queries: &PerfChecksumQueries<'_, '_>,
 ) -> PerfSceneRootCounts {
     PerfSceneRootCounts {
-        soul_proxy_3d: checksum_queries.soul_proxy_3d.iter().count(),
+        soul_proxy_3d: 0,
         soul_mask_proxy_3d: 0,
-        soul_shadow_proxy_3d: checksum_queries.soul_shadow_proxy_3d.iter().count(),
-        familiar_proxy_3d: checksum_queries.familiar_proxy_3d.iter().count(),
+        soul_shadow_proxy_3d: 0,
+        familiar_proxy_3d: 0,
         building_3d_visual: checksum_queries.building_3d_visual.iter().count(),
     }
 }
@@ -83,10 +83,10 @@ pub(super) fn calculate_render_inventory(
         camera_3d_rtt_count: scene_target_count + mask_target_count,
         camera_2d_count,
         layer_2d_pass_count,
-        soul_proxy_3d: checksum_queries.soul_proxy_3d.iter().count(),
+        soul_proxy_3d: 0,
         soul_mask_proxy_3d: 0,
-        soul_shadow_proxy_3d: checksum_queries.soul_shadow_proxy_3d.iter().count(),
-        familiar_proxy_3d: checksum_queries.familiar_proxy_3d.iter().count(),
+        soul_shadow_proxy_3d: 0,
+        familiar_proxy_3d: 0,
     }
 }
 
@@ -150,7 +150,7 @@ pub(super) fn calculate_p02_presentation(
         building_exactly_one_presentation,
         soul_count: checksum_queries.souls.iter().count(),
         soul_billboard_count: checksum_queries.actor_billboard_3d.iter().count(),
-        familiar_3d_count: checksum_queries.familiar_proxy_3d.iter().count(),
+        familiar_3d_count: 0,
         state_and_bounce_probes_pass,
     }
 }

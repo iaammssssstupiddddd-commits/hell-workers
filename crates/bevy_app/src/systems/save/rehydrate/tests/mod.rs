@@ -67,7 +67,6 @@ fn empty_building_3d_handles() -> Building3dHandles {
         tank_full_material: Handle::default(),
         mixer_idle_material: Handle::default(),
         mixer_active_material: Handle::default(),
-        soul_scene: Handle::default(),
         soul_billboards: crate::plugins::startup::SoulBillboardHandles {
             mesh: Handle::default(),
             normal: Handle::default(),

@@ -632,7 +632,7 @@ pub(crate) struct BehaviorObserveParams<'w, 's> {
             &'static Door,
             &'static Building,
             &'static Transform,
-            &'static Children,
+            Option<&'static Children>,
         ),
     >,
     sprites: Query<'w, 's, &'static Sprite>,
@@ -700,13 +700,20 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                 );
             };
             let child_sprites = children
-                .iter()
+                .into_iter()
+                .flat_map(|children| children.iter())
                 .filter_map(|child| params.sprites.get(child).ok())
                 .collect::<Vec<_>>();
-            if child_sprites.len() != 1 || params.sprites.contains(door_entity) {
+            let p08 = params
+                .config
+                .rtt_light_selection()
+                .is_some_and(|selection| selection.stage_id() == "p08");
+            let expected_child_sprites = usize::from(!p08);
+            if child_sprites.len() != expected_child_sprites || params.sprites.contains(door_entity)
+            {
                 return fail_behavior(
                     &mut params.capture,
-                    "Door behavior subject differs from root-Door/child-Sprite topology",
+                    "Door behavior subject differs from the stage presentation topology",
                     &mut params.exit,
                 );
             }
@@ -740,12 +747,15 @@ pub(crate) fn observe_perf_behavior_system(mut params: BehaviorObserveParams) {
                 Some(DoorPresentationState::Locked) => "locked",
                 None => "unknown",
             };
-            let child_sprite_matches = child_sprites[0].image
-                == if door.state == DoorState::Open {
-                    params.door_handles.door_open.clone()
-                } else {
-                    params.door_handles.door_closed.clone()
-                };
+            let child_sprite_matches = p08
+                || child_sprites.first().is_some_and(|sprite| {
+                    sprite.image
+                        == if door.state == DoorState::Open {
+                            params.door_handles.door_open.clone()
+                        } else {
+                            params.door_handles.door_closed.clone()
+                        }
+                });
             let p02 = params
                 .config
                 .rtt_light_selection()

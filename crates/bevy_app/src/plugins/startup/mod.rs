@@ -26,9 +26,7 @@ pub(crate) use rtt_composite::composite_logical_size;
 pub use rtt_setup::{
     Camera3dRtt, RttDirectionalLight, RttExtraDirectionalLight, RttRuntime, RttViewportSize,
 };
-pub use visual_handles::{
-    Building3dHandles, CharacterHandles, SoulBillboardHandles, Terrain3dHandles,
-};
+pub use visual_handles::{Building3dHandles, SoulBillboardHandles, Terrain3dHandles};
 
 use crate::world::map::{build_terrain_feature_map, build_terrain_id_map, spawn_boundary_meshes};
 #[cfg(feature = "profiling")]

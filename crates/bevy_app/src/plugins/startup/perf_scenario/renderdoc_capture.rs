@@ -20,7 +20,6 @@ use bevy::render::texture::GpuImage;
 use bevy::render::view::window::ExtractedWindows;
 use bevy::render::{Render, RenderApp, RenderSystems};
 use bevy::shader::{Shader, ShaderCacheError};
-use bevy::world_serialization::{WorldInstance, WorldInstanceSpawner};
 use libloading::Library;
 use serde::Serialize;
 use std::ffi::{CStr, CString, c_void};
@@ -54,9 +53,6 @@ const RENDERDOC_RECEIVER_FRAGMENT_SHADER_PATHS: [&str; 4] = [
     RENDERDOC_RECEIVER_SHADER_PATHS[3],
     RENDERDOC_RECEIVER_SHADER_PATHS[4],
 ];
-
-type SoulWorldInstancesQuery<'w, 's> =
-    Query<'w, 's, &'static WorldInstance, Or<(With<SoulProxy3d>, With<SoulShadowProxy3d>)>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct CpuCheckpointSignature {
@@ -389,8 +385,6 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
             &'static crate::systems::lighting::RoomIlluminationState,
         ),
     >,
-    world_instance_spawner: Res<'w, WorldInstanceSpawner>,
-    soul_world_instances: SoulWorldInstancesQuery<'w, 's>,
 }
 
 #[derive(SystemParam)]
@@ -567,20 +561,6 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
     } else {
         None
     };
-    let expected_instances = if selection.uses_p02_presentation() {
-        0
-    } else {
-        params.config.soul_count as usize * 2
-    };
-    if params.soul_world_instances.iter().count() != expected_instances
-        || !params
-            .soul_world_instances
-            .iter()
-            .all(|instance| params.world_instance_spawner.instance_is_ready(**instance))
-    {
-        return;
-    }
-
     let checksum = calculate_checksum(&params.checksum_queries);
     if checksum.souls != params.config.soul_count as usize
         || checksum.familiars != params.config.familiar_count as usize

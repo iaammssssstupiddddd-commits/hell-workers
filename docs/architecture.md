@@ -136,7 +136,7 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 - 予約オペレーションは `build_source_reservation_ops` / `build_mixer_destination_reservation_ops` / `build_wheelbarrow_reservation_ops` の共通ヘルパーで構築し、割り当てビルダー間の重複を抑制する。
 - Familiar 側 Think フェーズでは `TileSiteIndex`（`Resource<HashMap<Entity, Vec<Entity>>`）を `Spatial` サブセットで更新し、建設サイトへの残需要計算時に floor/wall タイルを O(1) で照会できるようにする。
 - `IncomingDeliverySnapshot` は Think 開始時に1回構築し、`DemandReadContext` 経由で `policy::haul::*` の残需要計算に再利用する。`IncomingDeliveries` や `ResourceType` の都度ルックアップを集約し、同一フレーム内のCPU負荷を低減する。
-- `SoulProxyOwnerCache`（`hw_visual::visual3d`、`GameSystemSet::Visual`）は `owner → presentation entity` の O(1) lookup を提供する。P02 production は `ActorBillboard3d` を登録し、Soul 削除時に対応 billboard を despawn する。旧 GLB / shadow / Familiar proxy 用 field は P08 の物理削除まで互換境界として残すが、production system は登録しない。
+- `ActorBillboardOwnerCache`（`hw_visual::visual3d`、`GameSystemSet::Visual`）は `owner → ActorBillboard3d` の O(1) lookupだけを提供し、Soul削除時に対応billboardをdespawnする。旧GLB / shadow / Familiar proxy用map、production asset load、observer / sync、animation playerはP08で削除済み。`visual_test`に残るlegacy GLB比較surfaceは別の置換単位として扱う。
 - `TaskAssignmentQueries` は `ReservationAccess` / `DesignationAccess` / `StorageAccess` と `TaskAssignmentReadAccess` に分割し、読み取り系と更新系の境界を明確化する。
 - `apply_task_assignment_requests_system` は「ワーカー受理判定」「idle正規化」「予約適用」「DeliveringTo付与」「イベント発火」の責務に分けて拡張する。
 - `apply_task_assignment_requests_system` の登録責務は `hw_soul_ai::SoulAiCorePlugin` が持つ。`task_execution_system` / `apply_pending_building_move_system` / `idle_behavior_apply_system` / `escaping_apply_system` / `cleanup_commanded_souls_system` / `gathering_separation_system` / `escaping_decision_system` / `drifting_decision_system` / `gathering_mgmt_*` / `familiar_influence_unified_system` も `SoulAiCorePlugin` に一本化済み（2026-03-17）。root 側の `SoulAiPlugin` は `ApplyDeferred` フェーズ間同期マーカーと `gathering_spawn_system`（`GameAssets` 依存）のみを登録する。
@@ -353,8 +353,8 @@ LOD1 shader は `terrain_id_map` を `textureLoad` で引いて center / cardina
 P02 production は Soul を `ActorBillboard3d` 1 entity / owner で Scene RtT 内に描画し、Familiar は MainCamera の2D前景に残す。
 
 - Soul billboard は共有 Rectangle mesh と8個の `StandardMaterial`（alpha mask、unlit）だけを使う。`SoulBillboardFrame` は Normal / Exhausted / Happy / Sleep / Wine / Trump / Stress / StressBreakdown の有限集合で、既存の idle・task・movement・会話・stress state resolverを共有する。
-- `sync_actor_billboard_system` は owner XY を Scene X/-Z へ写し、固定 TopDown Camera3d の回転へ billboard を向け、左右向きは scale.x で表す。owner削除は `SoulProxyOwnerCache.actor_billboard` から O(1) で cleanupする。
-- Soul GLB、`SoulProxy3d`、`SoulShadowProxy3d`、`SoulShadowMaterial` plugin、GLB animation consumer は production pluginから停止しており、P08で順次物理削除する。未登録だったshadow projector producerとreceiver uniform / WGSL loopは削除済みで、現役のdirectional shadow styleだけを保持する。
+- `sync_actor_billboard_system` は owner XY を Scene X/-Z へ写し、固定 TopDown Camera3d の回転へ billboard を向け、左右向きは scale.x で表す。owner削除は `ActorBillboardOwnerCache.actor_billboard` から O(1) でcleanupする。
+- Soul GLBのproduction asset load、`CharacterHandles`、proxy observer / sync、GLB animation consumerはP08で物理削除済み。`SoulAnimVisualState` resolverとshared-pool `ActorBillboard3d`だけがproductionのSoul presentationを担う。`visual_test`のlegacy GLB / `SoulShadowMaterial`比較surfaceはまだ置換待ち。未登録だったshadow projector producerとreceiver uniform / WGSL loopは削除済みで、現役のdirectional shadow styleだけを保持する。
 - Familiar は4フレームの child Sprite、左右反転、hover/wobble、selection、吹き出しを MainCamera の単一 `LAYER_2D` passで描く。production spawn は `FamiliarProxy3d` を生成しない。
 - `Render3dVisible` は Camera3d と composite を同時に隠すため、billboardを含む Scene 全体が前フレーム残像なしで切り替わる。
 

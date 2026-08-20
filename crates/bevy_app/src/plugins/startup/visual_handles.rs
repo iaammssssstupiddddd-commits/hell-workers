@@ -8,11 +8,10 @@ use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, building_3d_render_layers};
 use hw_core::visual::SoulTaskHandles;
 use hw_logistics::ResourceItemVisualHandles;
-use hw_visual::{CharacterMaterial, soul_face_uv_offset, soul_face_uv_scale};
 use hw_visual::{
-    GatheringVisualHandles, HaulItemHandles, MaterialIconHandles, PlantTreeHandles,
-    SoulShadowMaterial, SpeechHandles, TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial,
-    TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,
+    GatheringVisualHandles, HaulItemHandles, MaterialIconHandles, PlantTreeHandles, SpeechHandles,
+    TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial, TerrainSurfaceMaterialExt,
+    TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,
     TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2, TerrainSurfaceUniform,
     TopDownStructuralMaterial, WallVisualHandles, WorkIconHandles, make_terrain_surface_material,
     make_terrain_surface_material_lod1_lite, make_terrain_surface_material_lod2,
@@ -52,7 +51,6 @@ pub struct Building3dHandles {
     pub mixer_idle_material: Handle<TopDownStructuralMaterial>,
     pub mixer_active_material: Handle<TopDownStructuralMaterial>,
     // --- キャラクター ---
-    pub soul_scene: Handle<WorldAsset>,
     pub soul_billboards: SoulBillboardHandles,
     /// 全3Dエンティティに付与する RenderLayers
     pub render_layers: RenderLayers,
@@ -67,13 +65,6 @@ pub struct Terrain3dHandles {
     pub lod1: Handle<TerrainSurfaceMaterial>,
     pub lod1_lite: Handle<TerrainSurfaceMaterialLod1Lite>,
     pub lod2: Handle<TerrainSurfaceMaterialLod2>,
-}
-
-#[derive(Resource)]
-pub struct CharacterHandles {
-    pub soul_body_material: Handle<CharacterMaterial>,
-    pub soul_face_material: Handle<CharacterMaterial>,
-    pub soul_shadow_proxy_material: Handle<SoulShadowMaterial>,
 }
 
 /// Finite shared material pool for all production Soul billboards.
@@ -115,7 +106,6 @@ pub struct InitVisualHandlesParams<'w, 's> {
     terrain_surface_materials: ResMut<'w, Assets<TerrainSurfaceMaterial>>,
     terrain_surface_materials_lod1_lite: ResMut<'w, Assets<TerrainSurfaceMaterialLod1Lite>>,
     terrain_surface_materials_lod2: ResMut<'w, Assets<TerrainSurfaceMaterialLod2>>,
-    character_materials: ResMut<'w, Assets<CharacterMaterial>>,
     terrain_feature_map: Res<'w, TerrainFeatureMap>,
     terrain_id_map: Res<'w, TerrainIdMap>,
     indoor_light_texture: Res<'w, IndoorLightTexture>,
@@ -127,7 +117,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     let meshes = &mut params.meshes;
     let materials = &mut params.materials;
     let structural_materials = &mut params.structural_materials;
-    let character_materials = &mut params.character_materials;
     let feature_map_handle = params.terrain_feature_map.image.clone();
     let terrain_id_map_handle = params.terrain_id_map.image.clone();
     commands.insert_resource(TerrainSurfaceLutImageHandle(
@@ -332,7 +321,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         tank_full_material,
         mixer_idle_material,
         mixer_active_material,
-        soul_scene: game_assets.soul_scene.clone(),
         soul_billboards: soul_billboards.clone(),
         render_layers: building_3d_render_layers(),
     });
@@ -409,19 +397,5 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         lod1: terrain_surface,
         lod1_lite: terrain_surface_lod1_lite,
         lod2: terrain_surface_lod2,
-    });
-
-    commands.insert_resource(CharacterHandles {
-        soul_body_material: character_materials
-            .add(CharacterMaterial::body(game_assets.white_pixel.clone())),
-        soul_face_material: character_materials.add(CharacterMaterial::face(
-            game_assets.soul_face_atlas.clone(),
-            LinearRgba::WHITE,
-            soul_face_uv_scale(),
-            soul_face_uv_offset(0.0, 0.0),
-        )),
-        // P02 stops the production shadow pipeline. Keep a default handle only
-        // so the P08 physical-deletion batch can remove legacy module types.
-        soul_shadow_proxy_material: Handle::default(),
     });
 }

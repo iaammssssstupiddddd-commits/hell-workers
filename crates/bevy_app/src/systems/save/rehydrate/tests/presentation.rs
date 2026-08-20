@@ -23,26 +23,10 @@ fn prerequisites_are_reported_before_rehydrate_mutates_the_world() {
 #[test]
 fn presentation_cleanup_removes_only_rehydrate_owned_shells() {
     let mut world = World::new();
-    world.init_resource::<hw_visual::SoulProxyOwnerCache>();
+    world.init_resource::<hw_visual::ActorBillboardOwnerCache>();
 
-    let soul_proxy = world
-        .spawn(hw_visual::visual3d::SoulProxy3d {
-            owner: Entity::PLACEHOLDER,
-            billboard: false,
-        })
-        .id();
     let actor_billboard = world
         .spawn(hw_visual::visual3d::ActorBillboard3d {
-            owner: Entity::PLACEHOLDER,
-        })
-        .id();
-    let shadow_proxy = world
-        .spawn(hw_visual::visual3d::SoulShadowProxy3d {
-            owner: Entity::PLACEHOLDER,
-        })
-        .id();
-    let familiar_proxy = world
-        .spawn(hw_visual::visual3d::FamiliarProxy3d {
             owner: Entity::PLACEHOLDER,
         })
         .id();
@@ -59,27 +43,22 @@ fn presentation_cleanup_removes_only_rehydrate_owned_shells() {
     let durable_entity = world.spawn(Tree).id();
 
     {
-        let mut cache = world.resource_mut::<hw_visual::SoulProxyOwnerCache>();
-        cache.soul_proxy.insert(Entity::PLACEHOLDER, soul_proxy);
+        let mut cache = world.resource_mut::<hw_visual::ActorBillboardOwnerCache>();
+        cache
+            .actor_billboard
+            .insert(Entity::PLACEHOLDER, actor_billboard);
     }
 
     clear_rehydrate_presentation(&mut world);
 
-    for entity in [
-        soul_proxy,
-        actor_billboard,
-        shadow_proxy,
-        familiar_proxy,
-        building_visual,
-        range_indicator,
-    ] {
+    for entity in [actor_billboard, building_visual, range_indicator] {
         assert!(world.get_entity(entity).is_err());
     }
     assert!(world.get_entity(durable_entity).is_ok());
     assert!(
         world
-            .resource::<hw_visual::SoulProxyOwnerCache>()
-            .soul_proxy
+            .resource::<hw_visual::ActorBillboardOwnerCache>()
+            .actor_billboard
             .is_empty()
     );
 }
@@ -113,14 +92,6 @@ fn soul_shell_rehydrate_is_idempotent() {
             .count(),
         1
     );
-    assert_eq!(
-        world
-            .query::<&hw_visual::visual3d::SoulShadowProxy3d>()
-            .iter(&world)
-            .count(),
-        0
-    );
-
     assert_eq!(rehydrate_soul_shells(&mut world, &handles), 0);
     world.flush();
     assert_eq!(
@@ -129,13 +100,6 @@ fn soul_shell_rehydrate_is_idempotent() {
             .iter(&world)
             .count(),
         1
-    );
-    assert_eq!(
-        world
-            .query::<&hw_visual::visual3d::SoulShadowProxy3d>()
-            .iter(&world)
-            .count(),
-        0
     );
 }
 

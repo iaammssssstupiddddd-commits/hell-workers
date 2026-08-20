@@ -7,7 +7,9 @@ use crate::systems::soul_ai::execute::task_execution::AssignedTask;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
-use hw_visual::{ActorBillboard3d, SoulAnimVisualState, SoulBillboardFrame, SoulProxyOwnerCache};
+use hw_visual::{
+    ActorBillboard3d, ActorBillboardOwnerCache, SoulAnimVisualState, SoulBillboardFrame,
+};
 
 type BillboardOwnerQuery<'w, 's> = Query<
     'w,
@@ -67,7 +69,7 @@ pub struct ActorBillboardSyncContext<'w, 's> {
     changed_owners: ChangedBillboardOwnerQuery<'w, 's>,
     camera: Query<'w, 's, Ref<'static, Transform>, With<Camera3dRtt>>,
     handles: Res<'w, SoulBillboardHandles>,
-    cache: Res<'w, SoulProxyOwnerCache>,
+    cache: Res<'w, ActorBillboardOwnerCache>,
     added: Query<'w, 's, (Entity, &'static ActorBillboard3d), Added<ActorBillboard3d>>,
     removed_breakdowns: RemovedComponents<'w, 's, StressBreakdown>,
     removed_expressions: RemovedComponents<'w, 's, ConversationExpression>,
@@ -76,7 +78,7 @@ pub struct ActorBillboardSyncContext<'w, 's> {
 
 pub fn register_actor_billboard_system(
     added: Query<(Entity, &ActorBillboard3d), Added<ActorBillboard3d>>,
-    mut cache: ResMut<SoulProxyOwnerCache>,
+    mut cache: ResMut<ActorBillboardOwnerCache>,
 ) {
     for (entity, billboard) in &added {
         cache.actor_billboard.insert(billboard.owner, entity);
@@ -86,7 +88,7 @@ pub fn register_actor_billboard_system(
 pub fn cleanup_actor_billboard_system(
     mut commands: Commands,
     mut removed: RemovedComponents<DamnedSoul>,
-    mut cache: ResMut<SoulProxyOwnerCache>,
+    mut cache: ResMut<ActorBillboardOwnerCache>,
 ) {
     for owner in removed.read() {
         if let Some(entity) = cache.actor_billboard.remove(&owner) {
@@ -169,7 +171,7 @@ fn sync_billboard_for_owner(
     camera_rotation: Quat,
     owners: &BillboardOwnerQuery,
     handles: &SoulBillboardHandles,
-    cache: &SoulProxyOwnerCache,
+    cache: &ActorBillboardOwnerCache,
     billboards: &mut ActorBillboardQuery,
 ) {
     let Some(&entity) = cache.actor_billboard.get(&owner) else {

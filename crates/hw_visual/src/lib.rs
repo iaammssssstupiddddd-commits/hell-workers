@@ -51,10 +51,9 @@ pub use material::{
 
 pub use familiar::{FamiliarVisualOffset, FamiliarVisualOwner};
 pub use visual3d::{
-    ActorBillboard3d, Building3dVisual, Door3dVisual, DoorPresentationState, FamiliarProxy3d,
-    SoulAnimVisualState, SoulAnimationPlayer3d, SoulBillboardFrame, SoulBodyAnimState,
-    SoulFaceMaterial3d, SoulFaceState, SoulProxy3d, SoulProxyOwnerCache,
-    StructuralPresentationState,
+    ActorBillboard3d, ActorBillboardOwnerCache, Building3dVisual, Door3dVisual,
+    DoorPresentationState, SoulAnimVisualState, SoulBillboardFrame, SoulBodyAnimState,
+    SoulFaceState, StructuralPresentationState,
 };
 
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
@@ -85,7 +84,6 @@ impl Plugin for HwVisualPlugin {
             Material2dPlugin::<dream::DreamBubbleMaterial>::default(),
             UiMaterialPlugin::<dream::DreamBubbleUiMaterial>::default(),
             Material2dPlugin::<TaskAreaMaterial>::default(),
-            MaterialPlugin::<material::CharacterMaterial>::default(),
             MaterialPlugin::<material::TopDownStructuralMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterialLod1Lite>::default(),
@@ -304,8 +302,8 @@ pub fn reset_for_world_replace(world: &mut World) {
         }
     }
 
-    if world.contains_resource::<SoulProxyOwnerCache>() {
-        world.insert_resource(SoulProxyOwnerCache::default());
+    if world.contains_resource::<ActorBillboardOwnerCache>() {
+        world.insert_resource(ActorBillboardOwnerCache::default());
     }
     if world.contains_resource::<dream::DreamPresentationLedger>() {
         world.insert_resource(dream::DreamPresentationLedger::default());
@@ -316,9 +314,6 @@ fn collect_transient_visual_entities(world: &mut World) -> HashSet<Entity> {
     let mut query = world.query_filtered::<Entity, Or<(
         With<visual3d::Building3dVisual>,
         With<visual3d::ActorBillboard3d>,
-        With<visual3d::SoulProxy3d>,
-        With<visual3d::SoulShadowProxy3d>,
-        With<visual3d::FamiliarProxy3d>,
         With<speech::components::SpeechBubble>,
         With<dream::DreamParticle>,
         With<dream::DreamGainPopup>,

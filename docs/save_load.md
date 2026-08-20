@@ -399,7 +399,7 @@ mirrorを作り、shell barrier後の`RebuildDerived`で`TileSiteIndex`とCuring
 rehydrateは先に前提Resourceを検証して`Result`を返す。前提不備ではinventoryやentityを変更しない。
 replace phaseではregistryが全pluginのtransient stateを先にclearし、さらにrehydrate所有の独立
 presentation entity（Soul billboard、旧Soul/Familiar proxy互換残骸、Building 3D visual、Familiar range indicator）と
-`SoulProxyOwnerCache`を狭く掃除する。rollback branchでも同じreset phaseを再実行するため、partial
+`ActorBillboardOwnerCache`を狭く掃除する。rollback branchでも同じreset phaseを再実行するため、partial
 finalizerが残したowner shellはrollback snapshotのrehydrate前に残らない。
 
 付随処理:

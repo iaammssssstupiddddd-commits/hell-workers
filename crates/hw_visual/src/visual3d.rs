@@ -41,13 +41,6 @@ pub enum StructuralPresentationState {
     MixerActive,
 }
 
-/// DamnedSoul エンティティに対応する3Dプロキシのマーカー。
-#[derive(Component, Debug, Clone)]
-pub struct SoulProxy3d {
-    pub owner: Entity,
-    pub billboard: bool,
-}
-
 /// Shared-pool alpha-masked Soul billboard participating in Scene depth.
 #[derive(Component, Debug, Clone)]
 pub struct ActorBillboard3d {
@@ -71,22 +64,6 @@ pub enum SoulBillboardFrame {
 #[derive(Component, Debug, Clone)]
 pub struct SoulShadowProxy3d {
     pub owner: Entity,
-}
-
-#[derive(Component, Debug, Clone)]
-pub struct SoulAnimationPlayer3d {
-    pub owner: Entity,
-    pub current_body: SoulBodyAnimState,
-    pub walk_facing_right: Option<bool>,
-    pub last_owner_pos: Option<Vec2>,
-    pub directional_variant_lock_secs: f32,
-}
-
-#[derive(Component, Debug, Clone)]
-pub struct SoulFaceMaterial3d {
-    pub owner: Entity,
-    pub material: Handle<crate::CharacterMaterial>,
-    pub last_applied_face: Option<SoulFaceState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -117,19 +94,8 @@ pub struct SoulAnimVisualState {
     pub face: SoulFaceState,
 }
 
-/// Familiar エンティティに対応する3Dプロキシのマーカー。
-#[derive(Component, Debug, Clone)]
-pub struct FamiliarProxy3d {
-    pub owner: Entity,
-}
-
-/// owner → proxy エンティティの O(1) ルックアップキャッシュ。
-///
-/// 各プロキシのスポーン時（`Added<T>`）に登録し、owner 削除時の cleanup で使用する。
+/// owner → active billboard entity の O(1) lookup cache.
 #[derive(Resource, Default)]
-pub struct SoulProxyOwnerCache {
+pub struct ActorBillboardOwnerCache {
     pub actor_billboard: HashMap<Entity, Entity>,
-    pub soul_proxy: HashMap<Entity, Entity>,
-    pub soul_shadow_proxy: HashMap<Entity, Entity>,
-    pub familiar_proxy: HashMap<Entity, Entity>,
 }

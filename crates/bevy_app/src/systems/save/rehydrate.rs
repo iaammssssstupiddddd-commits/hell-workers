@@ -57,11 +57,9 @@ use hw_logistics::tile_index::TileSiteIndex;
 use hw_logistics::zone::{Stockpile, StockpilePolicy};
 use hw_logistics::{BelongsTo, BucketStorage, PendingBelongsToBlueprint, ResourceItem};
 use hw_ui::selection::building_size;
-use hw_visual::SoulProxyOwnerCache;
+use hw_visual::ActorBillboardOwnerCache;
 use hw_visual::blueprint::{BlueprintVisual, BuildingBounceEffect};
-use hw_visual::visual3d::{
-    ActorBillboard3d, Building3dVisual, FamiliarProxy3d, SoulProxy3d, SoulShadowProxy3d,
-};
+use hw_visual::visual3d::{ActorBillboard3d, Building3dVisual};
 use hw_world::{Yard, seed_obstacle_position_index};
 use std::collections::{HashMap, HashSet};
 

@@ -1346,9 +1346,7 @@ pub(crate) fn stabilize_indoor_light_actors_system(
 pub(crate) fn seed_indoor_light_static_door_states_system(
     mut state: ResMut<IndoorLightFixtureState>,
     mut world_map: WorldMapWrite,
-    mut q_doors: Query<(Entity, &Transform, &mut Door, &Children)>,
-    mut q_sprites: Query<&mut Sprite>,
-    door_handles: Res<DoorVisualHandles>,
+    mut q_doors: Query<(Entity, &Transform, &mut Door)>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let Some(layout) = state.fixture.as_ref().map(|fixture| fixture.layout.clone()) else {
@@ -1362,7 +1360,7 @@ pub(crate) fn seed_indoor_light_static_door_states_system(
         let mut matches = q_doors
             .iter_mut()
             .filter(|(_, transform, ..)| transform.translation.truncate() == expected_pos);
-        let Some((entity, _, mut door, children)) = matches.next() else {
+        let Some((entity, _, mut door)) = matches.next() else {
             fail_fixture(
                 &mut state,
                 &mut exit,
@@ -1386,44 +1384,11 @@ pub(crate) fn seed_indoor_light_static_door_states_system(
             );
             return;
         }
-        let sprite_children = children
-            .iter()
-            .filter(|child| q_sprites.contains(*child))
-            .collect::<Vec<_>>();
-        let [sprite_entity] = sprite_children.as_slice() else {
-            fail_fixture(
-                &mut state,
-                &mut exit,
-                format!(
-                    "Door at {:?} does not have exactly one child Sprite",
-                    expected.grid
-                ),
-            );
-            return;
-        };
         hw_world::apply_door_state(&mut door, &mut world_map, expected.grid, expected.state);
-        let expected_image = if expected.state == hw_core::world::DoorState::Open {
-            &door_handles.door_open
-        } else {
-            &door_handles.door_closed
-        };
-        let Ok(mut sprite) = q_sprites.get_mut(*sprite_entity) else {
-            fail_fixture(
-                &mut state,
-                &mut exit,
-                format!(
-                    "Door at {:?} lost its child Sprite during static state seed",
-                    expected.grid
-                ),
-            );
-            return;
-        };
-        sprite.image = expected_image.clone();
     }
     state.door_states_seeded = true;
-    // The static fixture owns its frozen legacy mirror. The production Door
-    // presentation consumer still runs later in this Update, and validation
-    // after DoorPresentationSyncSet proves that it preserved the same state.
+    // Production 3D presentation runs later in this Update. Validation after
+    // DoorPresentationSyncSet proves that it consumed the same semantic state.
     state.door_presentations_settled = true;
 }
 
@@ -1580,6 +1545,7 @@ type IndoorLightOwnedItemsQuery<'w, 's> = Query<
 
 #[derive(SystemParam)]
 pub(super) struct IndoorLightAuditQueries<'w, 's> {
+    config: Res<'w, PerfScenarioConfig>,
     state: Res<'w, IndoorLightFixtureState>,
     q_buildings: IndoorLightBuildingQuery<'w, 's>,
     q_sprites: Query<'w, 's, &'static Sprite>,
@@ -1861,7 +1827,11 @@ fn validate_observed_fixture(
             } else {
                 &p.door_handles.door_closed
             };
-            let image_contract_required = !p.config.is_field_core();
+            let image_contract_required = !p.config.is_field_core()
+                && !p
+                    .config
+                    .rtt_light_selection()
+                    .is_some_and(|selection| selection.stage_id() == "p08");
             if building.door_state != Some(spec.state)
                 || (image_contract_required
                     && building.child_images != [expected_image.clone()])
@@ -2698,8 +2668,12 @@ pub(super) fn collect_indoor_light_audit_records(
                         .map(|sprite| sprite.image.clone())
                         .collect::<Vec<_>>()
                 });
+                let image_contract_required = !q
+                    .config
+                    .rtt_light_selection()
+                    .is_some_and(|selection| selection.stage_id() == "p08");
                 if door.map(|door| door.state) != Some(state)
-                    || child_images != [expected_image.clone()]
+                    || (image_contract_required && child_images != [expected_image.clone()])
                     || q.world_map
                         .door_entity(expected.anchor.0, expected.anchor.1)
                         != Some(entity)

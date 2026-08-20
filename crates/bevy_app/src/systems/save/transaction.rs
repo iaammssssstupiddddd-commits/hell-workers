@@ -1091,9 +1091,8 @@ mod tests {
             &registry,
             &plan,
             |world| {
-                world.spawn(hw_visual::visual3d::SoulProxy3d {
+                world.spawn(hw_visual::visual3d::ActorBillboard3d {
                     owner: Entity::PLACEHOLDER,
-                    billboard: false,
                 });
                 Err("injected failure after DynamicWorld write".to_string())
             },
@@ -1159,7 +1158,7 @@ mod tests {
         assert_ne!(restored_floor, restored_building);
         assert_eq!(
             live.world_mut()
-                .query_filtered::<Entity, With<hw_visual::visual3d::SoulProxy3d>>()
+                .query_filtered::<Entity, With<hw_visual::visual3d::ActorBillboard3d>>()
                 .iter(live.world())
                 .count(),
             0

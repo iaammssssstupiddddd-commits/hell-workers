@@ -35,9 +35,9 @@ use crate::systems::visual::terrain_lod::{
 use crate::systems::visual::terrain_material::terrain_id_map_sync_system;
 use crate::world::map::TerrainChunk;
 use hw_core::game_state::PlayMode;
+use hw_visual::ActorBillboardOwnerCache;
 use hw_visual::HwVisualPlugin;
 use hw_visual::SectionCut;
-use hw_visual::SoulProxyOwnerCache;
 use hw_visual::soul::task_link_system;
 use hw_visual::visual3d::{ActorBillboard3d, Building3dVisual};
 use hw_world::{TerrainChangedEvent, sync_room_overlay_tiles_system};
@@ -73,7 +73,7 @@ impl Plugin for VisualPlugin {
         );
 
         app.init_resource::<SectionCut>();
-        app.init_resource::<SoulProxyOwnerCache>();
+        app.init_resource::<ActorBillboardOwnerCache>();
         app.init_resource::<TerrainLodMetrics>();
         app.init_resource::<TerrainLodState>();
 

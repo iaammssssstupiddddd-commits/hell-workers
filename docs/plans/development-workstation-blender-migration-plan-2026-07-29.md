@@ -266,7 +266,7 @@ AIが実行できるterminal commandをユーザーへ手作業として転嫁�
   - `assets/` は177ファイル、130,691,241 bytes（約126 MiB）。
   - Git追跡はWGSL 15ファイルだけで、GLB、画像、フォント等162ファイルはignore対象である。
   - 監査時点では、コードから参照するruntime asset pathは現ローカル `assets/` に存在する。
-  - `assets/models/characters/soul.glb` はゲームとvisual testの必須入力である。
+  - `assets/models/characters/soul.glb` はlegacy visual testの入力である。production gameはP08でGLB backendを削除し、shared-pool billboardへ一本化した。
 - 外部アセット:
   - 文書上の正本は `~/Sync/hell-workers-assets/source/` と `exports/` だが、現在調査できたホストでは実データがほぼない。
   - 現行Syncthing設定はLinux上でWindows形式のfolder pathを参照しており、正規Linuxパスと分裂している。

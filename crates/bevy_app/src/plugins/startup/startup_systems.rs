@@ -18,8 +18,8 @@ use bevy::light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::constants::{
-    LAYER_2D, LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW, LAYER_OVERLAY, VIEW_HEIGHT,
-    Z_OFFSET, topdown_sun_direction_world,
+    LAYER_2D, LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_OVERLAY, VIEW_HEIGHT, Z_OFFSET,
+    topdown_sun_direction_world,
 };
 use hw_core::quality::QualitySettings;
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
@@ -160,7 +160,7 @@ pub(super) fn setup(
             ..default()
         }
         .build(),
-        RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]),
+        RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER]),
         RttDirectionalLight,
     ));
 
@@ -182,7 +182,7 @@ pub(super) fn setup(
             ..default()
         }
         .build(),
-        RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]),
+        RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER]),
         RttExtraDirectionalLight,
     ));
 
@@ -359,7 +359,7 @@ mod tests {
         assert_eq!(main_target.handle, scene);
 
         let expected_light_layers =
-            RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER, LAYER_3D_SOUL_SHADOW]);
+            RenderLayers::from_layers(&[LAYER_3D, LAYER_3D_SHADOW_RECEIVER]);
         let mut primary_light_query =
             world.query_filtered::<(&DirectionalLight, &RenderLayers), With<RttDirectionalLight>>();
         let (primary_light, primary_light_layers) = primary_light_query.single(world).unwrap();

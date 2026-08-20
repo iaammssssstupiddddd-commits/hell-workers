@@ -139,12 +139,12 @@
 
 ### 変更内容
 
-1. `SoulProxy3d`、`SoulShadowProxy3d`、`FamiliarProxy3d`、`SoulAnimationPlayer3d`、`SoulFaceMaterial3d`とspawn / ready observer / sync / cleanup / rehydrateを削除する。P02の`ActorBillboard3d`とFamiliar foreground Spriteは維持する。
-2. `SoulProxyOwnerCache`全体を消さない。現役`actor_billboard` lookup / resetを`ActorBillboardOwnerCache`へrename / narrowし、legacy soul / shadow / familiar mapだけを削除する。
-3. `soul_animation.rs`を分割し、現役billboard用`SoulAnimVisualState` resolverは保持する。GLB `AnimationGraph` / player / face-material部分と`CharacterMaterial` plugin / shaderを、remaining reference 0確認後に削除する。
+1. [production backend完了 2026-08-20 / visual_test置換待ち] productionの`SoulProxy3d` / `FamiliarProxy3d` / animation player / face materialとspawn / ready observer / sync / cleanupを削除した。凍結inventoryはliteral 0へ移し、P02の`ActorBillboard3d`とFamiliar foreground Spriteを維持した。`visual_test`が使う`SoulShadowProxy3d`は次の置換単位まで残す。
+2. [完了 2026-08-20] `SoulProxyOwnerCache`を`ActorBillboardOwnerCache`へrename / narrowし、現役`actor_billboard` lookup / resetだけを残してlegacy soul / shadow / familiar mapを削除した。
+3. [production backend完了 2026-08-20 / visual_test置換待ち] `soul_animation.rs`をbillboard用`SoulAnimVisualState` resolverだけへ狭め、GLB `AnimationGraph` / player / face-material部分とproduction `CharacterMaterial` pluginを削除した。shared material / shaderは`visual_test`置換後に削除する。
 4. [完了 2026-08-20] 未登録だった`sync_soul_shadow_projectors_system`とprojector collection / per-frame material writeを削除した。全shared materialのprojector countが常時0であることを確認できたため、uniform / WGSL fieldも描画結果を変えない独立cleanupとして同時に削除した。
-5. `CharacterHandles`、`Building3dHandles.soul_scene`、`GameAssets.soul_gltf / soul_scene / soul_face_atlas`とproduction loadをremaining reference 0後に削除する。
-6. `LAYER_3D_SOUL_SHADOW`、shadow-only constants、GLB専用`SOUL_GLB_SCALE / SOUL_FACE_SCALE_MULTIPLIER`、camera / directional lightのlayer membership、`SoulShadowMaterial`と専用shader / prepassを削除する。
+5. [完了 2026-08-20] `CharacterHandles`、`Building3dHandles.soul_scene`、`GameAssets.soul_gltf / soul_scene / soul_face_atlas`とproduction loadを削除した。
+6. [production membership完了 2026-08-20 / visual_test置換待ち] camera / directional lightからshadow-only layer membershipを削除した。`LAYER_3D_SOUL_SHADOW`、shadow-only constants、GLB専用`SOUL_GLB_SCALE / SOUL_FACE_SCALE_MULTIPLIER`、`SoulShadowMaterial`とshader / prepassは`visual_test`置換後に削除する。
 7. `crates/visual_test`のlegacy Soul GLB / shadow mode、ResetElevation input、専用goldenを削除し、building / terrain material visual testだけを維持する。active actor billboard acceptanceはP02 actual-window / P08 native fixtureを正本とし、`docs/visual_test.md`を同期する。
 8. `assets/models/characters/soul.glb`、face atlas等はasset catalog / docs / testを含むremaining reference 0を確認してから削除する。共有・第三者asset provenanceがある場合は未使用扱いをdocsへ残して別commitで削除する。
 
@@ -373,21 +373,21 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 ### 現在地
 
-- 進捗: `M0 implementation in progress / M1・M2 projector subset complete / M3 hidden structural mirror implementation complete / remaining cleanup pending`
-- 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、stopped projector producer / uniform / WGSL cleanup、P08 production slow-step fixture priming、fixed-audit capture-relative clock、post-Actor actor位置復元、同一commitのfresh S0 / S1、Door / Tank / MudMixer hidden structural mirrorと旧2D writerの物理削除、Help no-impact review。
-- 未完了: mirror削除後のactual-window再確認、actual RenderDoc cross checkpoint、valid P06 reference、legacy character / material re-home / section cleanup、M4 formal。
+- 進捗: `M0 implementation in progress / M1 production GLB backend・M2 projector subset・M3 hidden mirror implemented / remaining cleanup pending`
+- 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、stopped projector producer / uniform / WGSL cleanup、P08 production slow-step fixture priming、fixed-audit capture-relative clock、post-Actor actor位置復元、同一commitのfresh S0 / S1、Door / Tank / MudMixer hidden structural mirrorと旧2D writer、production Soul GLB asset / proxy / animation backend、Help no-impact review。
+- 未完了: mirror / GLB backend削除後のactual-window再確認、visual_test legacy Soul置換、shared character / shadow type・shader・asset削除、actual RenderDoc cross checkpoint、valid P06 reference、material re-home / section cleanup、M4 formal。
 - 現ブロッカー: primary canonical rootへのexisting P07 importと全baseline offline verifyは完了したが、P06 `19ad5fec`のfresh formal retry `3989b184-a946-43d3-9367-fdad29d5d075`はprobe専用PBR cameraの継続readback中に再度600秒deadlineへ達してinvalidになった。修正版をP06 evidence-only subjectへ移植してfresh S0 / S1 / RD0 / formalを再採取し、valid P06を登録する必要がある。
 
 ### 次のAIが最初にやること
 
-1. M3 mirror削除をcommitし、M1 legacy character / visual_test置換を独立commitとして進める。
+1. M1 production GLB backend削除をcommitし、`visual_test` legacy Soul modeをbuilding / terrain material testへ置換してshared character / shadow型・shader・assetを削除する。
 2. direct GPU pixel readback + receiver WGSL order checkをP06 evidence-only subjectへ移植し、fresh S0 -> S1 -> RD0 -> formalを採取してvalid P06をcanonical rootへ登録する。
 3. P08 cleanup実装後、fresh actual-window / RenderDocでpresentationとcross checkpointを採取し、同frameのCPU / GPU / Soul / Room raw factsをoffline再検証する。
 
 ### ブロッカー/注意点
 
 - `TopDownStructuralMaterial`は現在`SectionMaterialExt`のaliasである。M2のre-homeより先に`section_material.rs`を削除しない。
-- `SoulProxyOwnerCache.actor_billboard`は現役である。resource全体を削除しない。
+- `ActorBillboardOwnerCache.actor_billboard`は現役である。resource全体を削除しない。
 - `shadow_style.wgsl`と2D Spriteには現役consumerがある。文字列一致だけでファイル全体を削除しない。
 - P08のobsolete perf列は値0であり、列0ではない。frozen projection / historical readerを維持する。
 - 実機検証には`hell-workers-run-native-acceptance` Skillを必ず使う。
@@ -395,9 +395,10 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 ### 最終確認ログ
 
-- Rust gates: `2026-08-20` / `pass (spawn / 3D presentation focused tests、perf.py self-test、python3 scripts/dev.py verify)`
+- Rust gates: `2026-08-20` / `pass (spawn / 3D presentation / save rehydrate / actor billboard focused tests、perf.py self-test、python3 scripts/dev.py verify)`
+- headless P08 audit: `2026-08-20` / `pass (target/perf-runs/p08-production-glb-removal-smoke-4、small CPU、Valid 1 / Invalid 0、determinism signature 4ea0f6ef43859c30)`
 - native acceptance: `2026-08-20` / `partial (actor復元subject addc5724のfresh S0とP08 S1がvalid。S1はaudit / Capture / Memory / field-core / consumer-coreを完走。M3 mirror削除後のactual-window / S0 / S1 / RD0 / formalは未採取)`
-- Help impact: `2026-08-20` / `No impact (profiling-only fixture timing / canonical actor positioningと、非表示structural mirror / 旧2D writerの削除。可視3D presentation、通常gameplayのinput / state semantics / save / label / workflowは不変)`
+- Help impact: `2026-08-20` / `No impact (停止済みproduction GLB backendと非表示structural mirror / 旧2D writerの削除。可視billboard / 3D presentation、通常gameplayのinput / state semantics / save / label / workflowは不変)`
 - docs gate: `2026-08-20` / `pass (docs --write / --check、check_docs、diff --check)`
 
 ### Definition of Done
@@ -414,6 +415,7 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-20` | `Codex` | production Soul GLB asset catalog、CharacterHandles、proxy observer / sync、animation player / face materialを削除。owner cacheをActor billboard専用へnarrowし、obsolete perf inventoryをliteral 0へ移行。visual_testのlegacy GLB / shadow surfaceは次単位へ分離 |
 | `2026-08-20` | `Codex` | actor復元subject `addc5724`でfresh S0 / P08 S1をvalid取得。続いてDoor / Tank / MudMixer hidden structural Sprite、marker、旧2D state writerを削除し、3D state consumerへ一本化。P08 fixtureだけchild Sprite 0へ更新し、p02〜p07 historical projectionを保持 |
 | `2026-08-20` | `Codex` | P08 static fixtureをproduction slow stepでprimeし、fixed auditのvirtual / fixed elapsedをcapture境界相対へ修正。headless small 1-runとfresh S0がvalidとなり、S1 fixed auditも旧paused待ちを解消。S1 Captureでmedium / large Soul移動を検出したため、PostActorかつlighting前にfixture actor位置だけをcanonical cellへ復元し、headless medium / largeをValid 2 / Invalid 0で再検証。stopped Soul projector producer / uniform / WGSL cleanupも独立commitで完了 |
 | `2026-08-19` | `Codex` | M0を`6675f751`でcommit。existing P07 attemptをprimary canonical rootへ原子的登録し、current / p01 / p02 / p04 / p05 / p07の6 stage・6,200 fileをoffline verify。P06 fresh formal retryはRD0で同じ600秒deadlineを再現したため、probe専用PBR cameraを廃止し、owned Light Field direct GPU pixel readback + receiver WGSL pre-post-processing順序checkへ修正開始 |
