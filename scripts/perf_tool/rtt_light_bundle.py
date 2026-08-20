@@ -726,7 +726,12 @@ def _validate_session_file_set(session: Path, leg_id: str) -> None:
 
 
 def _validate_run_file_set(
-    run_dir: Path, *, stage: str, leg_id: str, behavior_case: str | None
+    run_dir: Path,
+    *,
+    stage: str,
+    leg_id: str,
+    render: str,
+    behavior_case: str | None,
 ) -> None:
     data_files = {
         "window.csv",
@@ -762,7 +767,7 @@ def _validate_run_file_set(
             root_files |= {"profile-artifact.json", "resource-usage.txt"}
         if stage in {"p02", "p03", "p04", "p05", "p06"}:
             data_files.add("p02_presentation.csv")
-        if stage == "p06":
+        if stage == "p06" and render == "gpu":
             data_files.add("indoor_light_gpu.json")
     elif leg_id == "field-core":
         data_files = {"indoor_light_cpu.csv", "indoor_light_field.json"}
@@ -823,6 +828,7 @@ def _revalidate_run(
         run_dir,
         stage=stage,
         leg_id=leg_id,
+        render=expected_case.render,
         behavior_case=expected_case.behavior_case,
     )
     metadata = read_json_object(run_dir / "run-metadata.json")

@@ -22,6 +22,7 @@ from .rtt_light_bundle import (
     _recorded_repo_root as recorded_rtt_light_repo_root,
     _runtime_field_projection as project_rtt_light_runtime,
     _upgrade_compatible_baseline_index as upgrade_rtt_light_baseline_index,
+    _validate_run_file_set as validate_rtt_light_run_file_set,
     _validate_session_matrix as validate_rtt_light_session_matrix,
     _verify_case_entry as verify_rtt_light_case_entry,
     build_gate_result_rows as build_rtt_light_gate_result_rows,
@@ -572,6 +573,60 @@ def self_test() -> int:
             runtime=p06_runtime,
         )
         assert parsed_gpu is None and gpu_errors
+
+        capture_root_files = {
+            "command.txt",
+            "requested-environment.json",
+            "run.log",
+            "validation.json",
+            "run-metadata.json",
+        }
+        capture_data_files = {
+            "window.csv",
+            "indoor_light_fixture.csv",
+            "indoor_light_layout.csv",
+            "indoor_light_presentation.csv",
+            "indoor_light_runtime.json",
+            "summary.csv",
+            "frames.csv",
+            "scene_roots.csv",
+            "render_inventory.csv",
+            "p02_presentation.csv",
+        }
+        for render in ("cpu", "gpu"):
+            run_dir = root / f"p06-{render}-capture-file-set"
+            data_dir = run_dir / "data"
+            data_dir.mkdir(parents=True)
+            for name in capture_root_files:
+                (run_dir / name).touch()
+            for name in capture_data_files:
+                (data_dir / name).touch()
+            if render == "gpu":
+                (data_dir / "indoor_light_gpu.json").touch()
+            validate_rtt_light_run_file_set(
+                run_dir,
+                stage="p06",
+                leg_id="capture",
+                render=render,
+                behavior_case=None,
+            )
+            wrong_gpu_path = data_dir / "indoor_light_gpu.json"
+            if render == "cpu":
+                wrong_gpu_path.touch()
+            else:
+                wrong_gpu_path.unlink()
+            try:
+                validate_rtt_light_run_file_set(
+                    run_dir,
+                    stage="p06",
+                    leg_id="capture",
+                    render=render,
+                    behavior_case=None,
+                )
+            except RuntimeError as error:
+                assert "data artifact set differs" in str(error)
+            else:
+                raise AssertionError(f"P06 {render} GPU sidecar boundary was not enforced")
         historical_root = "/historical/clean-subject"
         historical_manifest = {"repo_root": historical_root}
         assert recorded_rtt_light_repo_root(historical_manifest) == historical_root
