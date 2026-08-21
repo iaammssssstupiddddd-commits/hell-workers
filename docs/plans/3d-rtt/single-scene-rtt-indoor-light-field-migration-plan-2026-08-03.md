@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P07 complete; P08 bounded release closure pending` |
+| ステータス | `Completed — P00〜P08 and P02-A complete; P08 bounded release closure valid` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-21` |
 | 作成者 | `Codex` |
@@ -242,7 +242,7 @@ Interface:
 
 ### 現在地
 
-- 進捗: `P06はuser-approved RD0 timeout例外で受理、P07はP05-lineage frozen v1 formalまで完了、P08はM1/M2 code cleanupとM3 hidden mirrorまで実装済み / 3-process bounded native closure未完`（P00〜P07とP02-A完了。P08実装進行中）
+- 進捗: `P00〜P08とP02-A完了。P08は3-process bounded native closure valid、historical performance bootstrapは承認済み資源判断によりDoD外`
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
@@ -260,13 +260,13 @@ Interface:
 - P06: commit `19ad5fec`で単一RGBA8 Light Field image、epoch-aware upload／load black reset、Terrain 3 LOD／全Structural3d receiver、Door root `MeshTag` anchor、P06 sidecar／timeline／RenderDoc／bundle toolingを実装。2026-08-17 headless behavior 21 / 21、local gates、clean-subject S0 / S1はvalid。formal RD0は`renderdoccmd capture` deadline / process-group failureでinvalidだったが、ユーザーが例外として受理した。
 - P07 local: binary non-stackのepoch-aware Soul recovery、Room topology / summary / cache / reset、P07 selector / consumer-core / lifecycle evidence / native tooling、Help / docsを実装。full verify pass、final source binary `0a04b05a…`でbehavior 21 / 21とconsumer-core 3 / 3がvalid（p95 median `0.022560 ms`、p99 median `0.025054 ms`、allocation / stale effect / old-epoch consumer 0）。
 - P07 formal: P05-lineage subject `a749a580370947f0f64c1685010e625a903324dd`、attempt `82bd460f-31c6-4fa0-8705-a4d702ff4c1f`。fresh S0 / S1、25 case、203 / 203 gate row、1,249 artifact、RenderDoc、consumer-coreを登録し、offline verifierがpassした。consumer-coreはp95 `0.023802 ms` / p99 `0.026977 ms`、allocation 0。
-- 未完了: P08のみ。P07 frozen v1 formalはP06入りsubjectで置換しない。
+- 未完了: runtime / release gateなし。P07 frozen v1 formalはP06入りsubjectで置換しない。
 
 ### 次のAIが最初にやること
 
-1. P08 bounded closure helper / Skill / docsをself-testし、workspace full gate済みのclean commitにする。
-2. `--level closure --stage p08`でmedium GPU Capture 2起動とRenderDoc 1起動だけを実行し、same-checkpoint cross-consumer proofを閉じる。
-3. historical reference bootstrapは32時間消費を受けたユーザー判断で停止済み。明示的な再承認なしにcurrent -> P01 -> P02 -> P06再測定へ戻らない。
+1. 次のproduct workへ進む。P08の再確認が必要なら3-process bounded closureを既定とする。
+2. historical reference bootstrapは32時間消費を受けたユーザー判断で停止済み。明示的な再承認なしにcurrent -> P01 -> P02 -> P06再測定へ戻らない。
+3. plan familyは履歴参照を維持するため現位置でCompleted表示を保持し、物理archive移動は独立docs maintenanceへ分離する。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
@@ -297,16 +297,17 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 ### Definition of Done
 
-- [ ] P00〜P08とP02-Aが全て完了
-- [ ] 全子計画のDefinition of Doneが合格
-- [ ] P08 bounded renderer / cross-consumer gateが合格し、historical性能合格を過大主張していない
-- [ ] Help impact reviewとnative acceptanceが完了
-- [ ] 恒久docsへ契約を移し、本計画と子計画をarchiveまたは削除
+- [x] P00〜P08とP02-Aが全て完了
+- [x] 全子計画のDefinition of Doneが合格
+- [x] P08 bounded renderer / cross-consumer gateが合格し、historical性能合格を過大主張していない
+- [x] Help impact reviewとnative acceptanceが完了
+- [x] 恒久docsへ契約を移し、plan familyは履歴参照のため現位置でCompleted表示を保持すると判断
 
 ## 9. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-21` | `Codex` | P08 committed subject`5b28b67e`のbounded closureを3 game processでvalid完了。Intel Arc / Vulkan / X11でCapture / RenderDoc / GPU pixel / CPU-GPU-Soul-Room cross proofがpassし、baseline未登録を明示してP00〜P08とP02-Aの移行プログラムを完了 |
 | `2026-08-21` | `Codex` | historical reference bootstrapの32時間消費を受け、P08 completionをfresh subjectの3-process / 2-build bounded closureへ変更。frozen formal契約とartifactは保持するが、current / P01 / P02 / P06再採取とbaseline登録を今回のDoDから除外 |
 | `2026-08-18` | `Codex` | P08を現行mainline / frozen v1 / evidence lineageへ再レビューし、M0 tooling・valid reference bootstrap、same-checkpoint cross-consumer proof、TopDown material re-home、stable projection維持を実装順へ固定。B12をM0着手可能へ更新した。 |
 | `2026-08-18` | `Codex` | P07 P05-lineage subject `a749a580`のfresh S0 / S1 / frozen v1 formalを登録・offline再検証。25 case・203 / 203 gate row・1,249 artifactをpassし、B11 / P07を完了、次対象をP08へ更新した。 |

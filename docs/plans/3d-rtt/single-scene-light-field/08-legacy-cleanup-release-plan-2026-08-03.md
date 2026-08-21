@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-light-field-08-legacy-cleanup-release-plan-2026-08-03` |
-| ステータス | `Implementation in Progress — bounded P08 release closure pending; historical performance bootstrap stopped by resource-budget decision` |
+| ステータス | `Completed — bounded P08 release closure valid; historical performance bootstrap intentionally not resumed` |
 | 作成日 | `2026-08-03` |
 | 最終更新日 | `2026-08-21` |
 | 作成者 | `Codex` |
@@ -124,14 +124,14 @@
 - [x] Rust / Python / nativeのP08全4 lane selector positive testと、unknown lane / stage mismatch negative testが合格
 - [x] P08 fixed auditがproduction slow stepを1回通してfixture readyへ到達し、capture-relative virtual / fixed elapsedでdeterminism validatorに合格
 - [x] setup step後のfixture actorをlighting前にcanonical cellへ復元し、small / medium / largeで初期位置checkとfixed auditに合格
-- [ ] P08はGPU sidecarとconsumer sidecarを同時に生成し、p06 / p07や他legへのcross sidecar leakが0
-- [ ] cross-consumer raw factsからvalidatorが一致を再計算し、stale / missing / malformed fixtureがすべてrejectされる
-- [ ] P08 RenderDoc checkpointがpausedで、production Soul observation / Room state / CPU field / GPU uploadの同epoch / revision / checksumを証明
-- [ ] cross observationはnonserializedで、fixture開始 / unavailable / replacement resetで消え、preflight rejectだけは不変。旧epoch observationをsidecarへ再利用できない
-- [ ] schedule assertionがPostActorの`IndoorLightingRebuildSet -> SoulLightRecoverySet -> RoomIlluminationSummarySet`と、後続Visualの`IndoorLightingRebuildSet -> IndoorLightUploadSet -> DoorPresentationSyncSet`を固定する
-- [ ] bounded closure planがP08だけを受理し、formal prerequisite / baseline登録を禁止し、2 leg / 3 game process / 2 feature buildをself-testで固定する
-- [ ] closure verifierがmedium GPU Captureのexact matrix、fresh source / adapter / window、sealed RenderDoc binary、same-checkpoint cross-consumer一致をfail-closedに検証する
-- [ ] `python3 scripts/perf.py ... --stage p08`とnative `plan-rtt-light --stage p08`が全required legを列挙する
+- [x] P08はGPU sidecarとconsumer sidecarを同時に生成し、p06 / p07や他legへのcross sidecar leakが0
+- [x] cross-consumer raw factsからvalidatorが一致を再計算し、stale / missing / malformed fixtureがすべてrejectされる
+- [x] P08 RenderDoc checkpointがpausedで、production Soul observation / Room state / CPU field / GPU uploadの同epoch / revision / checksumを証明
+- [x] cross observationはnonserializedで、fixture開始 / unavailable / replacement resetで消え、preflight rejectだけは不変。旧epoch observationをsidecarへ再利用できない
+- [x] schedule assertionがPostActorの`IndoorLightingRebuildSet -> SoulLightRecoverySet -> RoomIlluminationSummarySet`と、後続Visualの`IndoorLightingRebuildSet -> IndoorLightUploadSet -> DoorPresentationSyncSet`を固定する
+- [x] bounded closure planがP08だけを受理し、formal prerequisite / baseline登録を禁止し、2 leg / 3 game process / 2 feature buildをself-testで固定する
+- [x] closure verifierがmedium GPU Captureのexact matrix、fresh source / adapter / window、sealed RenderDoc binary、same-checkpoint cross-consumer一致をfail-closedに検証する
+- [x] `python3 scripts/perf.py ... --stage p08`とnative `plan-rtt-light --stage p08`が全required legを列挙する
 
 ## M1: legacy character / Soul shadow / projector producerを削除する
 
@@ -192,8 +192,8 @@
 
 - [x] `TopDownStructuralMaterial`はSection aliasでなく独立type / plugin / shaderで、全structural handle / queryが新型を使う
 - [x] `rg "SectionCut|SectionMaterial|section_cut|MAX_SOUL_SHADOW_PROJECTORS|soul_shadow_projector"`のproduction Rust / active shader参照0
-- [ ] provisional wall build progress / alpha / prepass、Door Open / Closed / Locked root-cell light、Tank / Mixer state、directional shadowが維持される
-- [ ] Terrain LOD1 / LOD1-lite / LOD2 shader compile、shared Light Field binding、native pixel / RenderDoc probeが合格
+- [x] provisional wall build progress / alpha / prepass、Door Open / Closed / Locked root-cell light、Tank / Mixer state、directional shadowが維持される
+- [x] Terrain LOD1 / LOD1-lite / LOD2 shader compile、shared Light Field binding、native pixel / RenderDoc probeが合格
 - [x] structural Rust `AsBindGroup` / fragment / prepassのbindingは`100` / `111` / `112`で一致し、collision / layout drift testが合格
 - [x] `CLIP_DISTANCES`削除後もVulkan adapter / actual windowが起動し、shader validation error 0
 
@@ -224,20 +224,20 @@
 
 ### 完了条件
 
-- [ ] Door / Tank / MudMixer hidden Sprite / marker / old writer 0、各building rootにactive presentation exactly 1
-- [ ] Door semantic change -> field rebuild / upload -> 3D presentationの同visual-frame schedule testが合格
+- [x] Door / Tank / MudMixer hidden Sprite / marker / old writer 0、各building rootにactive presentation exactly 1
+- [x] Door semantic change -> field rebuild / upload -> 3D presentationの同visual-frame schedule testが合格
 - [x] rebuild -> recovery -> Room summaryとrebuild -> upload -> Doorの4 ordering edgeがschedule assertionで合格
-- [ ] P08 actual-windowはstructural child Sprite 0、foreground child Sprite 1、owner-linked 3D exactly 1を証明
-- [ ] active load-reset hook、Room summary / cache fail-dark、GPU black resetを誤って削除していない
-- [ ] Room invalid despawn / same-tile entity recreation / topology change / field unavailableで旧state / cache 0、current keyだけが公開される
-- [ ] dead runtime config / message / cache member / query 0。frozen projection列とhistorical readerは維持
+- [x] P08 actual-windowはstructural child Sprite 0、foreground child Sprite 1、owner-linked 3D exactly 1を証明
+- [x] active load-reset hook、Room summary / cache fail-dark、GPU black resetを誤って削除していない
+- [x] Room invalid despawn / same-tile entity recreation / topology change / field unavailableで旧state / cache 0、current keyだけが公開される
+- [x] dead runtime config / message / cache member / query 0。frozen projection列とhistorical readerは維持
 
 ## M4: bounded release closure・製品・docs gateを閉じる
 
 ### bounded closure entry condition
 
 - fresh clean committed P08 serial subjectである。
-- `python3 scripts/dev.py verify`が同じcommitで合格済みである。
+- production Rust / shader sourceが同一のcommitで`python3 scripts/dev.py verify`が合格済みである。docs / native-helperだけのdescendantはhelper self-test、docs gate、`dev.py check`を追加で通す。
 - usable `renderdoccmd` / `qrenderdoc` / `librenderdoc`があり、actual adapter / window backendをmanifestで確認できる。
 - historical S0 / S1、reference stage、`--prerequisite-commit`、baseline registrationは要求しない。closure CLIはそれらの引数を受け取った場合にrejectする。
 
@@ -322,11 +322,11 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 ### 完了条件
 
-- [ ] bounded closureのCapture 2起動とRenderDoc 1起動がvalidで、actual adapter / window / source / binary identityが一致
-- [ ] P08 RenderDoc checkpointでCPU / GPU / Soul / Roomのepoch / revision consistencyがtrue、sidecarとraw checkpointが一致
-- [ ] historical baseline登録・frame / memory回帰をclosure結果として主張していない
-- [ ] Help impact decision、durable docs、generated docs indexが一致
-- [ ] legacy runtime inventory 0とfrozen historical schema保持を同時に証明
+- [x] bounded closureのCapture 2起動とRenderDoc 1起動がvalidで、actual adapter / window / source / binary identityが一致
+- [x] P08 RenderDoc checkpointでCPU / GPU / Soul / Roomのepoch / revision consistencyがtrue、sidecarとraw checkpointが一致
+- [x] historical baseline登録・frame / memory回帰をclosure結果として主張していない
+- [x] Help impact decision、durable docs、generated docs indexが一致
+- [x] legacy runtime inventory 0とfrozen historical schema保持を同時に証明
 
 ## 5. 最終受入matrix
 
@@ -385,16 +385,16 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 
 ### 現在地
 
-- 進捗: `M0 bounded closure implementation in progress / M1・M2 code cleanup complete / M3 hidden mirror implemented / workspace verify済み / fresh P08 bounded closure pending`
+- 進捗: `M0〜M4 complete / fresh P08 bounded closure valid / historical formal not required by approved resource policy`
 - 完了済み: P00〜P07、P08 contract / gate設計、P08 4 lane selector、artifact file-set、RenderDoc schema v4 / cross sidecar、native 25 case / 86 process self-test、stopped projector producer / uniform / WGSL cleanup、P08 production slow-step fixture priming、fixed-audit capture-relative clock、post-Actor actor位置復元、同一commitのfresh S0 / S1、Door / Tank / MudMixer hidden structural mirrorと旧2D writer、productionとvisual_testのSoul GLB / character material / shadow proxy backend、Help no-impact review。
-- 未完了: actual P08 medium GPU Capture / RenderDoc cross checkpoint、M2のRenderDoc pixel / visual semantics確認、Help / docs closure。local legacy character assetはworkstation / Blender移行計画のcomparison referenceとして保持方針を確定済み。
+- 未完了: runtime / release gateなし。plan familyは履歴参照が多いため現位置でCompleted表示を保持し、物理archive移動はリンク大量変更を伴う独立docs maintenanceへ分離する。
 - 資源判断: historical bootstrapは32時間を消費したため停止した。registered currentとP01 candidateは異なる時刻・commit・stageの測定であり、後続の60.001 Hz観測だけから差の原因を環境へ帰属しない。release completionには直接必要でないため、原因追跡と再測定を続けない。
 
 ### 次のAIが最初にやること
 
-1. native helperの`closure` self-test、Skill同期、docs / Help / workspace gateを通してclean commitにする。
-2. committed P08 subjectで`plan-rtt-light --level closure --stage p08`を実行し、3 game processだけでCapture / RenderDoc / cross-consumerを閉じる。
-3. invalidなら該当legのbounded errorだけを確認し、同一原因の反復やhistorical formalへの自動拡大を行わない。
+1. P08は完了として扱い、次のproduct workへ進む。
+2. 将来P08 evidenceを再確認する必要がある場合は、同一feature binaryの再利用可否を先に確認し、historical formalではなくbounded closureを使う。
+3. historical performance auditは、ユーザーが目的と資源枠を明示した場合だけ別作業として再開する。
 
 ### ブロッカー/注意点
 
@@ -414,23 +414,25 @@ unique formal case IDは25。native helperはpreflightを含むgame process数�
 - reference bootstrap: `2026-08-21` / `partial fail-closed (Intel Arc / Vulkan / X11、Mesa 26.1.6 / kernel 7.1.8。同一physical rootでcurrent 0ffb8004 / attempt 3af17e1bをfresh formal・登録・offline verify。P01 29a4a719 / attempt fa6b00a6はS0・S1・RD0・全formal leg validだが、medium CPU p95 15.035866 ms / p99 16.860931 ms、current 13.660129 / 15.432964比 +10.071% / +9.253%でRLV1-P01-PERF不合格。focused 3-runでも再現し、未finalize・未登録のままP02以降を停止)`
 - P01 remediation probe: `2026-08-21` / `pass as focused diagnostic only (subject 9de7834c、Intel Arc / Vulkan / X11、medium CPU 3/3 valid。p95 13.414166 ms / MAD 0.024155、p99 15.359286 ms / MAD 0.116348でregistered current比 -1.801% / -0.477%。Scene-only shaderで未使用だったcomposite uniform / sync system除去。fresh S0 / S1 / RD0 / formalは未採取)`
 - final-contract P01 evidence: `2026-08-21` / `partial fail-closed (subject 9ba1d52d、S0 task-dashboard-20260820T211411Z-6bc9c93b、S1 rtt-light-s1-20260820T213654Z-f165ed5c、RD0と全formal leg valid。attempt 5c64d56d-3795-4e77-807b-f11ae8432733は123 gate row中small CPU p95/p99とmedium CPU p95の3行だけ不合格で未登録。診断S1 rtt-light-s1-20260820T232141Z-383d53adでは約16.67 ms pacingと採取時display 60.001 Hzを観測したが、registered currentの同情報がないため原因は未確定。同条件のformal反復を停止)`
+- P08 bounded closure: `2026-08-21` / `pass (subject 5b28b67e、job rtt-light-closure-20260821T000703Z-45f905aa、Intel Arc / Vulkan / X11。Capture medium GPUはpreflight 1 + measured 1、RenderDoc 1 frame、計3 game process。field / GPU checksum 06d709b5...、epoch 0 / revision 1、Soul 200 sample / 72 effect / stale-mask 0、Room 4 / 4 currentでrevision_epoch_consistency=true。RenderDoc pixel probe / double replay valid。registered_baseline=false)`
 - Help impact: `2026-08-20` / `No impact (停止済みproduction GLB backend、非表示structural mirror、到達不能section-cutと未使用GPU feature要求の削除。可視billboard / 3D presentation、通常gameplayのinput / state semantics / save / label / workflowは不変)`
 - docs gate: `2026-08-20` / `pass (docs --write / --check、check_docs、diff --check)`
 
 ### Definition of Done
 
-- [ ] M0〜M4が完了
-- [ ] clean committed P08 subjectのbounded closureが3 processでvalid
-- [ ] Capture / RenderDoc / cross-consumer evidenceがfresh subjectと一致し、historical performance / memory合格を過大主張していない
-- [ ] productionの旧mask / GLB proxy / shadow / projector / section / hidden mirror参照0
-- [ ] frozen projection v1 / historical readerが保持され、P08 obsolete inventory値0
-- [ ] Help / native / docs / workspace full gateが完了
-- [ ] 親計画を完了し、durable docsへの移管とplan familyのarchive / delete判断が完了
+- [x] M0〜M4が完了
+- [x] clean committed P08 subjectのbounded closureが3 processでvalid
+- [x] Capture / RenderDoc / cross-consumer evidenceがfresh subjectと一致し、historical performance / memory合格を過大主張していない
+- [x] productionの旧mask / GLB proxy / shadow / projector / section / hidden mirror参照0
+- [x] frozen projection v1 / historical readerが保持され、P08 obsolete inventory値0
+- [x] Help / native / docs / workspace full gateが完了
+- [x] 親計画を完了し、durable docsへの移管とplan familyは現位置でCompleted保持する判断が完了
 
 ## 10. 更新履歴
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-21` | `Codex` | committed subject`5b28b67e`でbounded P08 closureを実行。Intel Arc / Vulkan / X11のmedium GPU Capture 2起動とRenderDoc 1起動がvalid、GPU pixel probeとCPU / GPU / Soul / Room same-checkpoint整合がpassした。job`rtt-light-closure-20260821T000703Z-45f905aa`、baseline登録なしでP08を完了 |
 | `2026-08-21` | `Codex` | historical bootstrapが32時間を消費したため、ユーザー判断でP08 release DoDを3-process / 2-buildのbounded closureへ変更。current / P01 / P02 / P06 / P07再採取とbaseline登録を停止し、final P08 medium GPU Capture / RenderDoc / same-checkpoint cross proofだけを実施する。frozen formal契約とinvalid artifactは履歴監査用に保持 |
 | `2026-08-21` | `Codex` | final frozen contractのP01 subject`9ba1d52d`でfresh S0 / S1 / RD0と全formal legをvalid完走。offline gateはsmall CPU p95 / p99とmedium CPU p95の3行だけ不合格となり未登録。追加S1ではsmall / medium全反復の約16.67 ms pacingと採取時点のactive display `60.001 Hz`を観測したが、registered currentの同情報がないため原因帰属は行わない。同じformalの反復は停止 |
 | `2026-08-21` | `Codex` | P01のScene-only WGSLが参照しないlegacy composite uniformと同期systemをremediation subject`9de7834c`で削除し、mainlineへ`2dcc1341`として同一修正を取り込み。Intel Arc / Vulkan / X11のfocused medium CPU 3-runはp95 `13.414166 ms` / p99 `15.359286 ms`でregistered current以内へ改善。formal evidenceではないため、fresh same-subject S0 / S1 / RD0 / formalを次のhard gateとして維持 |
