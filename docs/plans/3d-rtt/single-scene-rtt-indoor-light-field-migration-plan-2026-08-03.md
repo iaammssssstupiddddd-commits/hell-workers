@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `single-scene-rtt-indoor-light-field-migration-plan-2026-08-03` |
-| ステータス | `In Progress — P07 complete; P08 M1/M2 code cleanup complete` |
+| ステータス | `In Progress — P07 complete; P08 bounded release closure pending` |
 | 作成日 | `2026-08-03` |
-| 最終更新日 | `2026-08-18` |
+| 最終更新日 | `2026-08-21` |
 | 作成者 | `Codex` |
 | 採用判断 | TopDown 2.5D、Scene RtT 1枚、map-space radial Light Field |
 | 関連提案 | `N/A` |
@@ -104,7 +104,7 @@ P00 baseline / contract
 | P05 | [`05-indoor-light-save-lifecycle-plan-2026-08-03.md`](single-scene-light-field/05-indoor-light-save-lifecycle-plan-2026-08-03.md) | P03, P04、完了済みC3 save registry（`1b84f316`） | durable mount、named rehydrate step、load / rollback fail-dark |
 | P06 | [`06-indoor-light-rendering-plan-2026-08-03.md`](single-scene-light-field/06-indoor-light-rendering-plan-2026-08-03.md) | P01, P02, P04, P05 | user-approved RD0 timeout例外で受理した100×100 Light Field textureと全`Structural3d` receiver |
 | P07 | [`07-indoor-light-gameplay-room-plan-2026-08-03.md`](single-scene-light-field/07-indoor-light-gameplay-room-plan-2026-08-03.md) | P03, P04, P05 | P05-lineage evidenceでSoul / Roomが同じfield revisionを読むgameplay統合 |
-| P08 | [`08-legacy-cleanup-release-plan-2026-08-03.md`](single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | P01〜P07 | projector / section残骸撤去、性能比較、Help、最終gate |
+| P08 | [`08-legacy-cleanup-release-plan-2026-08-03.md`](single-scene-light-field/08-legacy-cleanup-release-plan-2026-08-03.md) | P01〜P07 | projector / section残骸撤去、bounded final-state renderer / cross proof、Help、最終gate |
 
 ### 3.1 着手とmergeの規則
 
@@ -137,7 +137,7 @@ P00 baseline / contract
 | B09 | P05 schema / registry / reset / epoch | B08完了。C3 save registry（`1b84f316`）のfreeze済みproduction planを利用 |
 | B10 | P06 Image bridge→Terrain→structural material→native | B02、B06c、B08、B09完了。RD0 failureはartifact上invalidのまま、2026-08-17のユーザー判断で受理 |
 | B11 | P07 Soul effect→Room summary→soak（完了） | B08、B09完了。P05-lineage subject `a749a580`のfrozen v1 formalを登録・offline再検証済み。P06 GPU ownerは含めない |
-| B12 | P08 tooling / reference bootstrap→cross-consumer proof→projector / section / mirror cleanup→final artifact | B10、B11完了。frozen v1のcurrent→P01→P02→P06 reference chainとP07を同じcanonical rootに揃えてからformalへ進む |
+| B12 | P08 tooling→cross-consumer proof→projector / section / mirror cleanup→bounded release closure | B10、B11完了。workspace full gate後、fresh P08 subjectを3-process Capture / RenderDoc closureで確認する。historical reference bootstrapは今回のDoD外 |
 
 各batchは少なくともfocused testと`python3 scripts/dev.py check`がgreenな独立commitにする。Rust変更を含むbatchは`python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`も通す。B04のHelp変更、B06a〜B06c / B10 / B12のvisual変更は各batch内でHelp impact review / native acceptanceまで閉じる。
 
@@ -242,7 +242,7 @@ Interface:
 
 ### 現在地
 
-- 進捗: `P06はuser-approved RD0 timeout例外で受理、P07はP05-lineage frozen v1 formalまで完了、P08はM1/M2 code cleanupとM3 hidden mirrorまで実装済み / native reference bootstrap・formal未完`（P00〜P07とP02-A完了。P08実装進行中）
+- 進捗: `P06はuser-approved RD0 timeout例外で受理、P07はP05-lineage frozen v1 formalまで完了、P08はM1/M2 code cleanupとM3 hidden mirrorまで実装済み / 3-process bounded native closure未完`（P00〜P07とP02-A完了。P08実装進行中）
 - 完了済み: 計画分割、設計契約、Room interior-role correctness、P00 current startup inventory、frozen
   `rtt-light-v1` contract、3規模static / behavior fixture、stable projection / gate row、window / RtT
   environment evidence、S1 / formal native recipe、RenderDoc capture / replay validator、runtime / offline ledger validator、
@@ -264,9 +264,9 @@ Interface:
 
 ### 次のAIが最初にやること
 
-1. P08 M0を実装し、P08の4 lane selector / artifact / RenderDoc cross-consumer sidecar / native launcherをfail-closedで接続する。
-2. 同じcanonical baseline rootへvalid current -> P01 -> P02 -> P06 reference chainを順に登録し、existing P07と合わせてoffline verifyする。P06のinvalid RD0を登録せず、P07 frozen v1 subject / attemptはimmutable evidenceとして保持する。
-3. reference bootstrap完了後にlegacy character、TopDown material re-home、section / mirror cleanupへ進む。P05 mount / epochとP02 presentation分類は変更しない。
+1. P08 bounded closure helper / Skill / docsをself-testし、workspace full gate済みのclean commitにする。
+2. `--level closure --stage p08`でmedium GPU Capture 2起動とRenderDoc 1起動だけを実行し、same-checkpoint cross-consumer proofを閉じる。
+3. historical reference bootstrapは32時間消費を受けたユーザー判断で停止済み。明示的な再承認なしにcurrent -> P01 -> P02 -> P06再測定へ戻らない。
 
 P00の数値gateは実装前契約として確定済みである。candidate結果を見て同じbaseline generationの閾値を緩和しない。
 
@@ -299,7 +299,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 - [ ] P00〜P08とP02-Aが全て完了
 - [ ] 全子計画のDefinition of Doneが合格
-- [ ] 横断gateと性能gateが合格
+- [ ] P08 bounded renderer / cross-consumer gateが合格し、historical性能合格を過大主張していない
 - [ ] Help impact reviewとnative acceptanceが完了
 - [ ] 恒久docsへ契約を移し、本計画と子計画をarchiveまたは削除
 
@@ -307,6 +307,7 @@ P00の数値gateは実装前契約として確定済みである。candidate結�
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-08-21` | `Codex` | historical reference bootstrapの32時間消費を受け、P08 completionをfresh subjectの3-process / 2-build bounded closureへ変更。frozen formal契約とartifactは保持するが、current / P01 / P02 / P06再採取とbaseline登録を今回のDoDから除外 |
 | `2026-08-18` | `Codex` | P08を現行mainline / frozen v1 / evidence lineageへ再レビューし、M0 tooling・valid reference bootstrap、same-checkpoint cross-consumer proof、TopDown material re-home、stable projection維持を実装順へ固定。B12をM0着手可能へ更新した。 |
 | `2026-08-18` | `Codex` | P07 P05-lineage subject `a749a580`のfresh S0 / S1 / frozen v1 formalを登録・offline再検証。25 case・203 / 203 gate row・1,249 artifactをpassし、B11 / P07を完了、次対象をP08へ更新した。 |
 | `2026-08-17` | `Codex` | P07 local implementation、full verify、consumer-core 3 / 3、Help / docs完了を反映。凍結v1のP05-lineage native formalだけを未完了として維持。 |

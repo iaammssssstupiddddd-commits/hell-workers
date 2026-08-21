@@ -194,6 +194,37 @@ Use this path for the frozen `rtt-light-v1` baseline. Do not substitute a
 generic Task Dashboard run, a headless audit, or a RenderDoc screenshot for one
 of its required legs.
 
+### Run the bounded P08 release closure
+
+Use `closure` as the default P08 completion path when the implementation and
+workspace gates already pass and a fresh final-state renderer check is needed.
+It intentionally does not rebuild the historical `current -> p01 -> p02 -> p06
+-> p07` performance baseline chain.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py \
+  plan-rtt-light --repo "$PWD" --level closure --stage p08 \
+  --adapter Intel --window-backend x11 \
+  --renderdoccmd /usr/bin/renderdoccmd --qrenderdoc /usr/bin/qrenderdoc \
+  --renderdoc-library /usr/lib64/renderdoc/librenderdoc.so
+```
+
+Run only the returned direct `kitty` command and poll its status. The bounded
+closure uses two feature builds and exactly three game starts: one preflight
+and one measured medium/GPU Capture run, followed by one sealed
+`profiling-renderdoc` capture. It requires the final P08 GPU pipeline and
+receiver bindings to validate, and requires CPU publication, GPU upload, Soul
+recovery, and Room summary to agree on the same epoch/revision checkpoint.
+
+Closure evidence is deliberately not registered as a frozen performance
+baseline. It does not claim historical frame-time or RSS comparability, and it
+does not satisfy the 25-case/86-process formal matrix. Use the formal path below
+only when the user explicitly requests a historical performance audit or a new
+registered baseline and accepts that resource budget.
+
+### Run the historical frozen formal matrix
+
 Run the prerequisites in order on the same clean subject commit and source
 fingerprint. Set `<stage-id>` explicitly (`current` for the frozen reference,
 `p01` for the Scene-only P01 subject, `p02` for the TopDown presentation subject); do not rely on the compatibility default:

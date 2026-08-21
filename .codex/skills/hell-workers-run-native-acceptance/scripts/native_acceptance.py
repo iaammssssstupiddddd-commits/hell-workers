@@ -168,6 +168,8 @@ RTT_LIGHT_SOURCE_CHECKPOINTS = (
 )
 RTT_LIGHT_RENDERDOC_API_VERSION = "1.6.0"
 RTT_LIGHT_SETTLE_SECS = 8.0
+RTT_LIGHT_CLOSURE_STAGE = "p08"
+RTT_LIGHT_CLOSURE_GAME_PROCESSES = 3
 
 
 class AcceptanceError(RuntimeError):
@@ -1446,6 +1448,88 @@ def rtt_light_session_commands(
     return commands
 
 
+def rtt_light_closure_commands(
+    *,
+    repo: Path,
+    output_root: Path,
+    environment_lock: Path,
+    adapter: str,
+    window_backend: str,
+    contract: dict[str, Any],
+) -> dict[str, list[str]]:
+    """Build the bounded P08 closure matrix without historical perf replay."""
+    matrix = contract["formal_matrix"]
+    window = matrix["window"]
+    capture = [
+        "python3",
+        str(repo / "scripts/perf.py"),
+        "run",
+        "--workload",
+        "indoor-light",
+        "--contract",
+        RTT_LIGHT_CONTRACT_ID,
+        "--stage",
+        RTT_LIGHT_CLOSURE_STAGE,
+        "--lane",
+        "static",
+        "--seed",
+        str(matrix["seed"]),
+        "--backend",
+        matrix["backend"],
+        "--present-mode",
+        matrix["present_mode"],
+        "--rtt-quality",
+        matrix["window"]["rtt_quality"],
+        "--sizes",
+        "medium",
+        "--renders",
+        "gpu",
+        "--instrumentation",
+        "capture",
+        "--repeat",
+        "1",
+        "--preflight-runs",
+        "1",
+        "--warmup-secs",
+        "3.0",
+        "--measure-secs",
+        "5.0",
+        "--warmup-checksum-policy",
+        "record",
+        "--measure-end-checksum-policy",
+        "record",
+        "--adapter",
+        adapter,
+        "--window-backend",
+        window_backend,
+        "--window-width",
+        str(window["physical_width"]),
+        "--window-height",
+        str(window["physical_height"]),
+        "--window-scale-factor",
+        str(window["scale_factor"]),
+        "--environment-lock",
+        str(environment_lock),
+        "--output",
+        str(output_root / "capture"),
+    ]
+    append_allow_patterns(capture, contract["allow_log_patterns"]["windowed"])
+    return {
+        "capture": capture,
+        "build-renderdoc": [
+            "cargo",
+            "build",
+            "--profile",
+            "profiling-renderdoc",
+            "-p",
+            "bevy_app@0.1.0",
+            "--no-default-features",
+            "--features",
+            "profiling-renderdoc",
+        ],
+    }
+
+
 def plan_task_dashboard(args: argparse.Namespace) -> int:
     repo = validate_repo(args.repo)
     resources = resource_snapshot(repo, require_launcher=True)
@@ -1793,40 +1877,57 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
     if state_root_error:
         failures.append(state_root_error)
     tooling: dict[str, Any] | None = None
-    if args.level == "formal":
-        failures.extend(formal_contract_ready(contract))
+    formal = args.level == "formal"
+    closure = args.level == "closure"
+    if formal or closure:
         try:
             assert_clean_subject(repo, subject_commit)
-            assert_prerequisite_ancestors(
-                repo, subject_commit, args.prerequisite_commit
-            )
-            if args.s0_job_root is None or args.s1_job_root is None:
-                raise AcceptanceError(
-                    "formal RtT-light planning requires --s0-job-root and --s1-job-root"
+            if closure:
+                if args.stage != RTT_LIGHT_CLOSURE_STAGE:
+                    raise AcceptanceError(
+                        "bounded RtT-light closure is available only for stage p08"
+                    )
+            else:
+                failures.extend(formal_contract_ready(contract))
+                assert_prerequisite_ancestors(
+                    repo, subject_commit, args.prerequisite_commit
                 )
-            verify_rtt_light_prerequisites(
-                repo=repo,
-                s0_job_root=Path(args.s0_job_root).resolve(),
-                s1_job_root=Path(args.s1_job_root).resolve(),
-                subject_commit=subject_commit,
-                fingerprint=fingerprint,
-                adapter=args.adapter,
-                window_backend=args.window_backend,
-                stage=args.stage,
-            )
-            attempt = rtt_light_attempt_path(
-                repo, stage=args.stage, subject_commit=subject_commit, attempt_id=attempt_id
-            )
-            if attempt.exists():
-                failures.append(f"attempt path already exists: {attempt}")
+                if args.s0_job_root is None or args.s1_job_root is None:
+                    raise AcceptanceError(
+                        "formal RtT-light planning requires --s0-job-root and --s1-job-root"
+                    )
+                verify_rtt_light_prerequisites(
+                    repo=repo,
+                    s0_job_root=Path(args.s0_job_root).resolve(),
+                    s1_job_root=Path(args.s1_job_root).resolve(),
+                    subject_commit=subject_commit,
+                    fingerprint=fingerprint,
+                    adapter=args.adapter,
+                    window_backend=args.window_backend,
+                    stage=args.stage,
+                )
+                attempt = rtt_light_attempt_path(
+                    repo,
+                    stage=args.stage,
+                    subject_commit=subject_commit,
+                    attempt_id=attempt_id,
+                )
+                if attempt.exists():
+                    failures.append(f"attempt path already exists: {attempt}")
         except AcceptanceError as error:
             failures.append(str(error))
         tooling, tool_failures = inspect_renderdoc_tools(repo, args)
         failures.extend(tool_failures)
-        output_root = rtt_light_attempt_path(
-            repo, stage=args.stage, subject_commit=subject_commit, attempt_id=attempt_id
-        )
+        if formal:
+            output_root = rtt_light_attempt_path(
+                repo,
+                stage=args.stage,
+                subject_commit=subject_commit,
+                attempt_id=attempt_id,
+            )
     else:
+        output_root = state_root / "artifacts"
+    if closure:
         output_root = state_root / "artifacts"
     output_root_error = persistent_storage_error(
         output_root,
@@ -1870,7 +1971,7 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
     ]
     for commit in args.prerequisite_commit:
         launcher_command.extend(["--prerequisite-commit", commit])
-    if args.level == "formal" and args.s0_job_root and args.s1_job_root:
+    if formal and args.s0_job_root and args.s1_job_root:
         launcher_command.extend(
             [
                 "--s0-job-root",
@@ -1879,7 +1980,7 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
                 str(Path(args.s1_job_root).resolve()),
             ]
         )
-    if args.level == "formal" and tooling is not None:
+    if (formal or closure) and tooling is not None:
         launcher_command.extend(
             [
                 "--renderdoccmd",
@@ -1895,7 +1996,9 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
         "schema_version": SCHEMA_VERSION,
         "status": status,
         "profile": "rtt-light",
-        "measurement_kind": "formal" if args.level == "formal" else "s1-smoke",
+        "measurement_kind": (
+            "formal" if formal else "p08-closure" if closure else "s1-smoke"
+        ),
         "level": args.level,
         "stage_id": args.stage,
         "subject_commit": subject_commit,
@@ -1925,22 +2028,30 @@ def plan_rtt_light(args: argparse.Namespace) -> int:
         "execution_contract": {
             "leg_order": (
                 rtt_light_legs(contract, args.stage)
-                if args.level == "formal"
+                if formal
+                else ["capture", "renderdoc"]
+                if closure
                 else ["audit", "capture", "memory"]
             ),
-            "game_processes": rtt_light_game_process_count(
-                contract, args.stage, formal=args.level == "formal"
+            "game_processes": (
+                RTT_LIGHT_CLOSURE_GAME_PROCESSES
+                if closure
+                else rtt_light_game_process_count(
+                    contract, args.stage, formal=formal
+                )
             ),
             "parallel_game_processes": 1,
-            "actual_feature_builds": 3 if args.level == "formal" else 2,
+            "actual_feature_builds": 3 if formal else 2,
             "uses_skip_build": False,
-            "uses_binary_copy": args.level == "formal",
+            "uses_binary_copy": formal or closure,
             "automatic_cleanup": False,
-            "repository_lock_covers_registration": args.level == "formal",
+            "repository_lock_covers_registration": formal,
             "settle_secs": RTT_LIGHT_SETTLE_SECS,
             "settle_after": (
                 ["behavior", "renderdoc"]
-                if args.level == "formal"
+                if formal
+                else ["capture"]
+                if closure
                 else ["audit", "capture"]
             ),
         },
@@ -2678,6 +2789,125 @@ def verify_rtt_light_smoke(
     }
 
 
+def verify_rtt_light_closure(
+    *,
+    capture: Path,
+    renderdoc: Path,
+    adapter: str,
+    window_backend: str,
+    subject_commit: str,
+    source_fingerprint_value: str,
+    renderdoc_binary_sha256: str,
+) -> dict[str, Any]:
+    """Validate the bounded final P08 renderer/cross-consumer proof."""
+    capture_manifest = read_json(capture / "manifest.json")
+    require(capture_manifest.get("status") == "valid", "closure Capture is invalid")
+    matrix = capture_manifest.get("matrix", {})
+    selector = matrix.get("rtt_light_contract")
+    require(
+        isinstance(selector, dict)
+        and selector.get("contract_id") == RTT_LIGHT_CONTRACT_ID
+        and selector.get("stage_id") == RTT_LIGHT_CLOSURE_STAGE
+        and selector.get("lane") == "static",
+        "closure Capture has the wrong RtT-light selector",
+    )
+    require(
+        {
+            key: matrix.get(key)
+            for key in (
+                "sizes",
+                "renders",
+                "repeat",
+                "preflight_runs",
+                "warmup_secs",
+                "measure_secs",
+                "capture_kind",
+                "clock_mode",
+            )
+        }
+        == {
+            "sizes": ["medium"],
+            "renders": ["gpu"],
+            "repeat": 1,
+            "preflight_runs": 1,
+            "warmup_secs": 3.0,
+            "measure_secs": 5.0,
+            "capture_kind": "frame-time",
+            "clock_mode": "realtime",
+        },
+        "closure Capture matrix differs from the bounded contract",
+    )
+    cases = capture_manifest.get("cases")
+    require(
+        isinstance(cases, list)
+        and len(cases) == 1
+        and cases[0].get("size") == "medium"
+        and cases[0].get("render") == "gpu",
+        "closure Capture must contain exactly the medium GPU case",
+    )
+    require(
+        capture_manifest.get("requested_environment", {}).get("HW_WINDOW_BACKEND")
+        == window_backend,
+        "closure Capture window backend differs",
+    )
+    require(
+        any(
+            adapter.casefold() in str(value.get("name", "")).casefold()
+            for value in capture_manifest.get("actual_adapters", [])
+        ),
+        "closure Capture adapter differs",
+    )
+
+    renderdoc_manifest = read_json(renderdoc / "manifest.json")
+    require(renderdoc_manifest.get("status") == "valid", "closure RenderDoc is invalid")
+    require(
+        renderdoc_manifest.get("contract_id") == RTT_LIGHT_CONTRACT_ID
+        and renderdoc_manifest.get("stage_id") == RTT_LIGHT_CLOSURE_STAGE
+        and renderdoc_manifest.get("case_id") == "renderdoc-medium-gpu"
+        and renderdoc_manifest.get("size") == "medium"
+        and renderdoc_manifest.get("render") == "gpu",
+        "closure RenderDoc has the wrong P08 case identity",
+    )
+    require(
+        renderdoc_manifest.get("binary", {}).get("sha256")
+        == renderdoc_binary_sha256,
+        "closure RenderDoc binary differs from the sealed capsule",
+    )
+    require(
+        renderdoc_manifest.get("source")
+        == {
+            "clean": True,
+            "commit": subject_commit,
+            "fingerprint": source_fingerprint_value,
+        },
+        "closure RenderDoc source identity differs",
+    )
+    require(
+        isinstance(renderdoc_manifest.get("replay_digest"), str),
+        "closure RenderDoc did not complete double replay",
+    )
+    runtime_checkpoint = read_json(renderdoc / "runtime-checkpoint.json")
+    cross_consumer = runtime_checkpoint.get("cross_consumer")
+    require(
+        isinstance(cross_consumer, dict)
+        and cross_consumer.get("revision_epoch_consistency") is True,
+        "closure RenderDoc lacks a consistent P08 cross-consumer checkpoint",
+    )
+    require(
+        read_json(renderdoc / "indoor_light_cross_consumer.json") == cross_consumer,
+        "closure cross-consumer sidecar differs from the runtime checkpoint",
+    )
+    return {
+        "status": "pass",
+        "capture": str(capture),
+        "renderdoc": str(renderdoc),
+        "capture_binary_sha256": session_binary_hash(capture),
+        "renderdoc_binary_sha256": renderdoc_binary_sha256,
+        "game_processes": RTT_LIGHT_CLOSURE_GAME_PROCESSES,
+        "registered_baseline": False,
+    }
+
+
 def verify_rtt_light_prerequisites(
     *,
     repo: Path,
@@ -2793,6 +3023,7 @@ def run_rtt_light(args: argparse.Namespace) -> int:
     state_file = state_root / "job.json"
     resources = resource_snapshot(repo, require_launcher=False)
     formal = args.level == "formal"
+    closure = args.level == "closure"
     attempt = (
         rtt_light_attempt_path(
             repo,
@@ -2812,7 +3043,9 @@ def run_rtt_light(args: argparse.Namespace) -> int:
     state: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "profile": "rtt-light",
-        "measurement_kind": "formal" if formal else "s1-smoke",
+        "measurement_kind": (
+            "formal" if formal else "p08-closure" if closure else "s1-smoke"
+        ),
         "status": "running",
         "started_at": utc_now(),
         "heartbeat_at": utc_now(),
@@ -2827,7 +3060,11 @@ def run_rtt_light(args: argparse.Namespace) -> int:
         "execution_contract": {
             "settle_secs": RTT_LIGHT_SETTLE_SECS,
             "settle_after": (
-                ["behavior", "renderdoc"] if formal else ["audit", "capture"]
+                ["behavior", "renderdoc"]
+                if formal
+                else ["capture"]
+                if closure
+                else ["audit", "capture"]
             ),
         },
         "paths": {
@@ -2846,25 +3083,31 @@ def run_rtt_light(args: argparse.Namespace) -> int:
         )
         return 1
     tooling: dict[str, Any] | None = None
-    if formal:
+    if formal or closure:
         try:
-            readiness = formal_contract_ready(contract)
-            if readiness:
-                raise AcceptanceError("; ".join(readiness))
             assert_clean_subject(repo, subject_commit)
-            assert_prerequisite_ancestors(
-                repo, subject_commit, args.prerequisite_commit
-            )
-            verify_rtt_light_prerequisites(
-                repo=repo,
-                s0_job_root=Path(args.s0_job_root).resolve(),
-                s1_job_root=Path(args.s1_job_root).resolve(),
-                subject_commit=subject_commit,
-                fingerprint=fingerprint,
-                adapter=args.adapter,
-                window_backend=args.window_backend,
-                stage=args.stage,
-            )
+            if closure:
+                if args.stage != RTT_LIGHT_CLOSURE_STAGE:
+                    raise AcceptanceError(
+                        "bounded RtT-light closure is available only for stage p08"
+                    )
+            else:
+                readiness = formal_contract_ready(contract)
+                if readiness:
+                    raise AcceptanceError("; ".join(readiness))
+                assert_prerequisite_ancestors(
+                    repo, subject_commit, args.prerequisite_commit
+                )
+                verify_rtt_light_prerequisites(
+                    repo=repo,
+                    s0_job_root=Path(args.s0_job_root).resolve(),
+                    s1_job_root=Path(args.s1_job_root).resolve(),
+                    subject_commit=subject_commit,
+                    fingerprint=fingerprint,
+                    adapter=args.adapter,
+                    window_backend=args.window_backend,
+                    stage=args.stage,
+                )
             tooling, failures = inspect_renderdoc_tools(repo, args)
             if failures or tooling is None:
                 raise AcceptanceError("; ".join(failures or ["RenderDoc tooling is unavailable"]))
@@ -2886,15 +3129,26 @@ def run_rtt_light(args: argparse.Namespace) -> int:
             "CARGO_INCREMENTAL": "0",
         }
     )
-    commands = rtt_light_session_commands(
-        repo=repo,
-        output_root=attempt,
-        environment_lock=environment_lock,
-        adapter=args.adapter,
-        window_backend=args.window_backend,
-        contract=contract,
-        formal=formal,
-        stage=args.stage,
+    commands = (
+        rtt_light_closure_commands(
+            repo=repo,
+            output_root=attempt,
+            environment_lock=environment_lock,
+            adapter=args.adapter,
+            window_backend=args.window_backend,
+            contract=contract,
+        )
+        if closure
+        else rtt_light_session_commands(
+            repo=repo,
+            output_root=attempt,
+            environment_lock=environment_lock,
+            adapter=args.adapter,
+            window_backend=args.window_backend,
+            contract=contract,
+            formal=formal,
+            stage=args.stage,
+        )
     )
     LOCK_PATH.touch(exist_ok=True)
     with LOCK_PATH.open("r+", encoding="utf-8") as lock:
@@ -2919,6 +3173,165 @@ def run_rtt_light(args: argparse.Namespace) -> int:
             renderdoc_binary: Path | None = None
             renderdoc_hash: str | None = None
             rd0_manifest: dict[str, Any] | None = None
+            if closure:
+                if tooling is None:
+                    raise AcceptanceError("closure RenderDoc tooling disappeared")
+                source_checks.append(
+                    source_checkpoint(
+                        repo,
+                        checkpoint="start",
+                        subject_commit=subject_commit,
+                        fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
+                    )
+                )
+                run_command(
+                    "capture",
+                    commands["capture"],
+                    repo=repo,
+                    env=env,
+                    log_path=log_path,
+                    job_file=state_file,
+                    state=state,
+                )
+                manifest_binary_hash(attempt / "capture", repo)
+                source_checks.append(
+                    source_checkpoint(
+                        repo,
+                        checkpoint="after-capture",
+                        subject_commit=subject_commit,
+                        fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
+                    )
+                )
+                settle(
+                    RTT_LIGHT_SETTLE_SECS,
+                    job_file=state_file,
+                    state=state,
+                    after_stage="capture",
+                )
+                run_command(
+                    "build-renderdoc",
+                    commands["build-renderdoc"],
+                    repo=repo,
+                    env=env,
+                    log_path=log_path,
+                    job_file=state_file,
+                    state=state,
+                )
+                sys.path.insert(0, str(repo / "scripts"))
+                from perf_tool.renderdoc_foundation import (
+                    RD0_OUTER_DEADLINE_SECONDS,
+                    copy_binary_capsule,
+                    foundation_diagnostic_root,
+                    verify_capsule_hash,
+                )
+
+                foundation_root = foundation_diagnostic_root(repo)
+                capsule_root = foundation_root / "capsule/renderdoc"
+                rustc = subprocess.run(
+                    ["rustc", "--version"],
+                    cwd=repo,
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                capsule = copy_binary_capsule(
+                    source_binary=repo / "target/profiling-renderdoc/bevy_app",
+                    capsule_root=capsule_root,
+                    leg="renderdoc",
+                    profile="profiling-renderdoc",
+                    features="profiling-renderdoc",
+                    cargo_lock_path=repo / "Cargo.lock",
+                    rustc_version=rustc,
+                    linker=env.get("RUSTFLAGS", "workspace-default"),
+                    env_allowlist={
+                        key: env[key]
+                        for key in ("CARGO_BUILD_JOBS", "CARGO_INCREMENTAL")
+                        if key in env
+                    },
+                )
+                if verify_capsule_hash(capsule_root) != capsule:
+                    raise AcceptanceError(
+                        "RenderDoc capsule changed immediately after sealing"
+                    )
+                renderdoc_binary = capsule_root / "bevy_app"
+                renderdoc_hash = capsule.binary_sha256
+                update_environment_lock_hashes(
+                    environment_lock,
+                    renderdoc_binary_sha256=renderdoc_hash,
+                )
+                renderdoc_output = foundation_root / "closure/renderdoc"
+                renderdoc_output.parent.mkdir(parents=True)
+                source_checks.append(
+                    source_checkpoint(
+                        repo,
+                        checkpoint="after-renderdoc-build",
+                        subject_commit=subject_commit,
+                        fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
+                    )
+                )
+                run_command(
+                    "renderdoc-closure",
+                    renderdoc_capture_command(
+                        repo=repo,
+                        attempt=attempt,
+                        environment_lock=environment_lock,
+                        subject_commit=subject_commit,
+                        fingerprint=fingerprint,
+                        adapter=args.adapter,
+                        window_backend=args.window_backend,
+                        tooling=tooling,
+                        binary=renderdoc_binary,
+                        capsule_manifest=capsule_root / "capsule-manifest.json",
+                        stage=RTT_LIGHT_CLOSURE_STAGE,
+                        output=renderdoc_output,
+                        mode="rd0",
+                        capture_session=attempt / "capture/manifest.json",
+                    ),
+                    repo=repo,
+                    env=env,
+                    log_path=log_path,
+                    job_file=state_file,
+                    state=state,
+                    timeout_seconds=RD0_OUTER_DEADLINE_SECONDS,
+                )
+                verification = verify_rtt_light_closure(
+                    capture=attempt / "capture",
+                    renderdoc=renderdoc_output,
+                    adapter=args.adapter,
+                    window_backend=args.window_backend,
+                    subject_commit=subject_commit,
+                    source_fingerprint_value=fingerprint,
+                    renderdoc_binary_sha256=renderdoc_hash,
+                )
+                verify_capsule_hash(capsule_root)
+                source_checks.append(
+                    source_checkpoint(
+                        repo,
+                        checkpoint="after-rd0",
+                        subject_commit=subject_commit,
+                        fingerprint=fingerprint,
+                        harness_fingerprint=harness_fingerprint,
+                    )
+                )
+                update_state(
+                    state_file,
+                    state,
+                    status="valid",
+                    current_stage=None,
+                    child_pid=None,
+                    paths={
+                        **state["paths"],
+                        "renderdoc": str(renderdoc_output),
+                    },
+                    source_checks=source_checks,
+                    verification=verification,
+                    finished_at=utc_now(),
+                )
+                return 0
             if formal:
                 source_checks.append(
                     source_checkpoint(
@@ -6275,6 +6688,26 @@ def self_test() -> int:
         and rtt_light_game_process_count(p08_contract, "p08", formal=True) == 86,
         "P08 formal matrix must contain 25 cases and 86 game processes",
     )
+    closure_commands = rtt_light_closure_commands(
+        repo=repo,
+        output_root=repo / "target/native-acceptance-self-test/closure",
+        environment_lock=repo
+        / "target/native-acceptance-self-test/closure/environment-lock.json",
+        adapter="Intel",
+        window_backend="x11",
+        contract=p08_contract,
+    )
+    closure_capture = closure_commands["capture"]
+    require(
+        set(closure_commands) == {"capture", "build-renderdoc"}
+        and closure_capture[closure_capture.index("--stage") + 1] == "p08"
+        and closure_capture[closure_capture.index("--sizes") + 1] == "medium"
+        and closure_capture[closure_capture.index("--renders") + 1] == "gpu"
+        and closure_capture[closure_capture.index("--repeat") + 1] == "1"
+        and closure_capture[closure_capture.index("--preflight-runs") + 1] == "1"
+        and RTT_LIGHT_CLOSURE_GAME_PROCESSES == 3,
+        "bounded P08 closure must use two legs and three game processes",
+    )
     require(
         source_fingerprint(repo) == perf_execution.source_fingerprint(),
         "native and perf source fingerprints differ",
@@ -6868,6 +7301,108 @@ def self_test() -> int:
             pass
         else:
             raise AcceptanceError("invalid S1 clock mode fixture unexpectedly passed")
+
+        closure_root = root / "rtt-light-p08-closure"
+        closure_capture = closure_root / "capture"
+        closure_renderdoc = closure_root / "renderdoc"
+        closure_capture.mkdir(parents=True)
+        closure_renderdoc.mkdir(parents=True)
+        closure_capture_hash = "7" * 64
+        closure_renderdoc_hash = "8" * 64
+        closure_subject = "9" * 40
+        closure_fingerprint = "a" * 64
+        atomic_write_json(
+            closure_capture / "manifest.json",
+            {
+                "status": "valid",
+                "binary": {"sha256": closure_capture_hash},
+                "matrix": {
+                    "workload": "indoor-light",
+                    "rtt_light_contract": {
+                        "contract_id": RTT_LIGHT_CONTRACT_ID,
+                        "stage_id": "p08",
+                        "lane": "static",
+                    },
+                    "sizes": ["medium"],
+                    "renders": ["gpu"],
+                    "repeat": 1,
+                    "preflight_runs": 1,
+                    "warmup_secs": 3.0,
+                    "measure_secs": 5.0,
+                    "capture_kind": "frame-time",
+                    "clock_mode": "realtime",
+                },
+                "requested_environment": {"HW_WINDOW_BACKEND": "x11"},
+                "actual_adapters": [{"name": "Intel(R) Arc Graphics"}],
+                "cases": [{"size": "medium", "render": "gpu"}],
+            },
+        )
+        cross_consumer = {
+            "revision_epoch_consistency": True,
+            "world_epoch": 3,
+            "field_revision": 5,
+        }
+        atomic_write_json(
+            closure_renderdoc / "manifest.json",
+            {
+                "status": "valid",
+                "contract_id": RTT_LIGHT_CONTRACT_ID,
+                "stage_id": "p08",
+                "case_id": "renderdoc-medium-gpu",
+                "size": "medium",
+                "render": "gpu",
+                "binary": {"sha256": closure_renderdoc_hash},
+                "source": {
+                    "clean": True,
+                    "commit": closure_subject,
+                    "fingerprint": closure_fingerprint,
+                },
+                "replay_digest": "b" * 64,
+            },
+        )
+        atomic_write_json(
+            closure_renderdoc / "runtime-checkpoint.json",
+            {"cross_consumer": cross_consumer},
+        )
+        atomic_write_json(
+            closure_renderdoc / "indoor_light_cross_consumer.json",
+            cross_consumer,
+        )
+        closure_result = verify_rtt_light_closure(
+            capture=closure_capture,
+            renderdoc=closure_renderdoc,
+            adapter="Intel",
+            window_backend="x11",
+            subject_commit=closure_subject,
+            source_fingerprint_value=closure_fingerprint,
+            renderdoc_binary_sha256=closure_renderdoc_hash,
+        )
+        require(
+            closure_result["status"] == "pass"
+            and closure_result["game_processes"] == 3
+            and closure_result["registered_baseline"] is False,
+            "valid bounded P08 closure fixture did not pass",
+        )
+        atomic_write_json(
+            closure_renderdoc / "indoor_light_cross_consumer.json",
+            {**cross_consumer, "field_revision": 6},
+        )
+        try:
+            verify_rtt_light_closure(
+                capture=closure_capture,
+                renderdoc=closure_renderdoc,
+                adapter="Intel",
+                window_backend="x11",
+                subject_commit=closure_subject,
+                source_fingerprint_value=closure_fingerprint,
+                renderdoc_binary_sha256=closure_renderdoc_hash,
+            )
+        except AcceptanceError:
+            pass
+        else:
+            raise AcceptanceError(
+                "mismatched P08 closure cross-consumer fixture unexpectedly passed"
+            )
 
         rtt_p01 = root / "rtt-light-p01-smoke"
         for leg, binary_hash, window_backend in (
@@ -7526,7 +8061,7 @@ def add_rtt_light_arguments(
     parser: argparse.ArgumentParser, *, planned_run: bool
 ) -> None:
     parser.add_argument("--repo", required=True)
-    parser.add_argument("--level", required=True, choices=["s1", "formal"])
+    parser.add_argument("--level", required=True, choices=["s1", "closure", "formal"])
     parser.add_argument(
         "--stage",
         default=RTT_LIGHT_DEFAULT_STAGE,
@@ -7583,7 +8118,8 @@ def parser() -> argparse.ArgumentParser:
     add_deconstruction_arguments(save_catalog_run, require_job_root=True)
     save_catalog_run.add_argument("--harness-fingerprint", required=True)
     rtt_plan = commands.add_parser(
-        "plan-rtt-light", help="emit the S1 or formal RtT-light no-prompt launcher plan"
+        "plan-rtt-light",
+        help="emit the S1, bounded P08 closure, or formal RtT-light launcher plan",
     )
     add_rtt_light_arguments(rtt_plan, planned_run=False)
     rtt_run = commands.add_parser(
@@ -7692,6 +8228,17 @@ def validate_args(args: argparse.Namespace) -> None:
                 raise AcceptanceError("RtT-light attempt id is not a UUID") from error
             if parsed.version != 4 or str(parsed) != args.attempt_id:
                 raise AcceptanceError("RtT-light attempt id must be a canonical UUIDv4")
+        if args.level == "closure":
+            if args.stage != RTT_LIGHT_CLOSURE_STAGE:
+                raise AcceptanceError("RtT-light closure requires --stage p08")
+            if (
+                args.prerequisite_commit
+                or args.s0_job_root is not None
+                or args.s1_job_root is not None
+            ):
+                raise AcceptanceError(
+                    "RtT-light closure does not accept formal prerequisites"
+                )
         if args.command == "run-rtt-light":
             if args.attempt_id is None:
                 raise AcceptanceError("planned RtT-light run requires --attempt-id")
