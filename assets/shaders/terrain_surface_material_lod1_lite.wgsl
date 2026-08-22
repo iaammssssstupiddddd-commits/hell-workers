@@ -464,20 +464,6 @@ fn fragment(
             ),
             out.color.a,
         );
-        if tsm.indoor_light_params.z > 0.5 {
-            let local_light = sample_indoor_light_field(
-                indoor_light_field,
-                indoor_light_sampler,
-                in.world_position.xyz,
-                in.world_normal,
-                0u,
-                tsm.indoor_light_params.x,
-            ) * tsm.indoor_light_params.y;
-            out.color = vec4<f32>(
-                out.color.rgb + pbr_input.material.base_color.rgb * local_light,
-                out.color.a,
-            );
-        }
     } else {
         out.color = pbr_input.material.base_color;
     }

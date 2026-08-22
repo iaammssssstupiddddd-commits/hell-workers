@@ -2,7 +2,7 @@
 
 ## 現在の実装範囲
 
-P03は`hw_infra::lighting`に、Bevy ECS・GPU・ゲームワールドqueryへ依存しない室内Light Fieldのpure coreを実装した。P04は`bevy_app::systems::lighting`から通常playへ接続し、completed Wall、Door、typed OutdoorLamp、給電状態、Room maskを同じCPU fieldへ正規化する。P05はdurable mountとsave/load lifecycle、P06はGPU uploadとTerrain／Structural3d shader、P07はgameplay回復とRoom照度summaryを実装した。
+P03は`hw_infra::lighting`に、Bevy ECS・GPU・ゲームワールドqueryへ依存しない室内Light Fieldのpure coreを実装した。P04は`bevy_app::systems::lighting`から通常playへ接続し、completed Wall、Door、typed OutdoorLamp、給電状態、Room maskを同じCPU fieldへ正規化する。P05はdurable mountとsave/load lifecycle、P06はGPU upload bridge、P07はgameplay回復とRoom照度summaryを実装した。Terrain／Structural3d materialは共有GPU resourceをbindするが、通常起動の描画互換性のためLight Fieldをsampleしない。
 
 core入力は`GridDimensions`、row-majorの`IndoorMask`、semanticな`LightOcclusionGrid`、正規化済み`RadialLightEmitterSnapshot`である。最大gridはゲームworldと同じ100×100、canonical性能fixtureは50 emitter・radius 5 tileを使う。emitterはstable key順に処理し、duplicate keyは入力全体を拒否する。invalidな個別emitterはstable diagnosticを返してfail-darkにする。
 
@@ -57,11 +57,13 @@ energyの`TaskWorkers`と`PowerSupplyState`はruntime-derivedで保存しない�
 
 `indoor-light-texture` load reset hookは同じhandleのbytesをblackへclearし、uploaded revision／epoch／checksumを無効化する。normal load、rollback、recovery-only、duplicate resetはこのhookを通り、current epoch fieldが再公開されるまでblackを維持する。candidate preflight rejectはworld replacement前に停止するためhookを通らず、live handle、bytes、checksumを変更しない。
 
-receiverはTerrainの`LOD1`／`LOD1-lite`／`LOD2`と、Wall、Door、Floor、Bridge、Tank、MudMixer、RestArea、SoulSpaの有限共有`TopDownStructuralMaterial` poolである。Soul billboard、Familiar、indicator、speech、selection、Foreground2d buildingとOutdoorLamp器具spriteはreceiverではない。全receiver materialは生成時から同じ`IndoorLightTexture` handleを持ち、per-building material cloneを作らない。
+Terrainの`LOD1`／`LOD1-lite`／`LOD2`と、Wall、Door、Floor、Bridge、Tank、MudMixer、RestArea、SoulSpaの有限共有`TopDownStructuralMaterial` poolは、生成時から同じ`IndoorLightTexture` handleをbindしてresource topologyを維持する。ただし現在のfragment shaderはLight Fieldをsampleしない。active sampleは通常起動時にterrainまたはbuilding scene pixelを失わせるため無効化している。全materialは有限共有handleを使い、per-building material cloneを作らない。Soul billboard、Familiar、indicator、speech、selection、Foreground2d buildingとOutdoorLamp器具spriteは元から対象外である。
 
-共通WGSL helperはcentered mapのworld XZをrow-major gridへ変換し、bounds外をblackとしてnearest cellを読む。Terrain／Floor／Bridge／大型構造物はfragment cell、Wall側面はsurface normal側の隣接cell、Wall上面はNorth→East→South→Westのstable tie順で最大luminance近傍を使う。Wall／Doorは`MeshTag`へlogical root grid、resting cardinal、surface policyをpackする。Door leafがOpen表示でoffset／回転してもtagはdomain root `Transform`から同期されるため、Open／Closed／Lockedでsampling rootは変わらない。
+共通WGSL helperは将来の互換実装用として、centered mapのworld XZをrow-major gridへ変換し、bounds外をblackとしてnearest cellを読む。Wall／Doorの`MeshTag`にもlogical root grid、resting cardinal、surface policyを同期するが、現在の通常描画ではこのhelperを呼ばない。
 
-local lightはlinear空間で既存directional shadow stylingの後に`styled_rgb + base_color_rgb * local_light_rgb`として加算し、既存Scene tone mappingへ渡す。GPU payloadはpure coreの`pack_rgba8_linear`だけがUNORM16→RGBA8 round-half-upとindoor alpha maskを定義する。
+GPU payloadはpure coreの`pack_rgba8_linear`だけがUNORM16→RGBA8 round-half-upとindoor alpha maskを定義する。visual shaderでのlocal-light加算は互換実装が成立するまで停止する。
+
+startup acceptanceではresource binding identityだけでなく、通常起動でterrainとbuildingのscene pixelが描画されることを要求する。CPU fieldを読むSoul回復とRoom照度summaryはvisual shaderの互換処置に影響されない。
 
 ## P07 gameplay / Room consumer
 

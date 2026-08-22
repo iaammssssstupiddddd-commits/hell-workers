@@ -456,13 +456,10 @@ pub(crate) fn install(app: &mut App) {
         );
 }
 
-fn topdown_structural_light_is_applied_before_post_processing() -> bool {
-    let sample = TOPDOWN_STRUCTURAL_SHADER.find("let local_light = sample_indoor_light_field(");
-    let apply = TOPDOWN_STRUCTURAL_SHADER
-        .find("out.color.rgb + pbr_input.material.base_color.rgb * local_light");
-    let post = TOPDOWN_STRUCTURAL_SHADER
-        .find("out.color = main_pass_post_lighting_processing(pbr_input, out.color);");
-    matches!((sample, apply, post), (Some(sample), Some(apply), Some(post)) if sample < apply && apply < post)
+fn topdown_structural_light_sampling_is_startup_safe() -> bool {
+    TOPDOWN_STRUCTURAL_SHADER.contains("@binding(111) var indoor_light_field")
+        && TOPDOWN_STRUCTURAL_SHADER.contains("@binding(112) var indoor_light_sampler")
+        && !TOPDOWN_STRUCTURAL_SHADER.contains("let local_light = sample_indoor_light_field(")
 }
 
 pub(crate) fn arm_renderdoc_checkpoint_system(
@@ -1604,7 +1601,7 @@ fn gpu_light_field_evidence(
         mask_pass_count: 0,
         duplicate_2d_pass_count: 0,
         cpu_golden_vectors_pass: p06_cpu_golden_vectors_pass(snapshot)
-            && topdown_structural_light_is_applied_before_post_processing(),
+            && topdown_structural_light_sampling_is_startup_safe(),
         pixel_probes_pass: false,
         field_texture_label:
             crate::systems::visual::indoor_light_texture::LIGHT_FIELD_TEXTURE_LABEL,
@@ -1865,8 +1862,8 @@ mod tests {
     }
 
     #[test]
-    fn p06_linear_probe_pins_shader_order_before_post_processing() {
-        assert!(topdown_structural_light_is_applied_before_post_processing());
+    fn p06_receiver_sampling_is_disabled_for_startup_compatibility() {
+        assert!(topdown_structural_light_sampling_is_startup_safe());
     }
 
     #[test]

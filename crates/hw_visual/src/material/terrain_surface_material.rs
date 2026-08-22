@@ -390,3 +390,29 @@ pub fn sync_terrain_feature_lut_uniforms_system(
 
     state.done = true;
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn visual_receivers_bind_but_do_not_sample_light_field_at_startup() {
+        let structural_source =
+            include_str!("../../../../assets/shaders/topdown_structural_material.wgsl");
+        assert!(structural_source.contains("@binding(111) var indoor_light_field"));
+        assert!(structural_source.contains("@binding(112) var indoor_light_sampler"));
+        assert!(!structural_source.contains("let local_light = sample_indoor_light_field("));
+
+        let terrain_sources = [
+            include_str!("../../../../assets/shaders/terrain_surface_material.wgsl"),
+            include_str!("../../../../assets/shaders/terrain_surface_material_lod1_lite.wgsl"),
+            include_str!("../../../../assets/shaders/terrain_surface_material_lod2.wgsl"),
+        ];
+
+        for source in terrain_sources {
+            // Keep the shared P06 resource topology, but do not reactivate the fragment
+            // reads: they make normal startup terrain or structures produce no scene pixels.
+            assert!(source.contains("@binding(133) var indoor_light_field"));
+            assert!(source.contains("@binding(134) var indoor_light_sampler"));
+            assert!(!source.contains("let local_light = sample_indoor_light_field("));
+        }
+    }
+}

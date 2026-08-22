@@ -4,7 +4,6 @@
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
     forward_io::{VertexOutput, FragmentOutput},
-    mesh_functions,
 }
 #import "shaders/shadow_style.wgsl"::apply_directional_shadow_style
 #import hell_workers::indoor_light_field::sample_indoor_light_field
@@ -57,20 +56,6 @@ fn fragment(
             ),
             out.color.a,
         );
-        if structural_material.indoor_light_params.z > 0.5 {
-            let local_light = sample_indoor_light_field(
-                indoor_light_field,
-                indoor_light_sampler,
-                in.world_position.xyz,
-                in.world_normal,
-                mesh_functions::get_tag(in.instance_index),
-                structural_material.indoor_light_params.x,
-            ) * structural_material.indoor_light_params.y;
-            out.color = vec4<f32>(
-                out.color.rgb + pbr_input.material.base_color.rgb * local_light,
-                out.color.a,
-            );
-        }
     } else {
         out.color = pbr_input.material.base_color;
     }
