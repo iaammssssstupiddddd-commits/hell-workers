@@ -48,18 +48,21 @@ pub fn animate_speech_bubbles(
             }
             AnimationPhase::Idle => {
                 transform.scale = Vec3::ONE;
+                transform.translation.x = bubble.offset.x;
+                transform.translation.y = bubble.offset.y;
 
-                // 感情別の待機アニメーション (微調整)
+                // 感情別の待機アニメーション。基準offsetから絶対量を適用し、
+                // frame deltaや前frameのTransformを振幅へ混ぜない。
                 match bubble.emotion {
                     BubbleEmotion::Exhausted => {
                         let offset =
                             (time.elapsed_secs() * BUBBLE_BOB_SPEED).sin() * BUBBLE_BOB_AMPLITUDE;
-                        transform.translation.y += offset * dt * 10.0; // 追従後に適用されるため累積させない工夫が必要だが、ここでは簡易的に
+                        transform.translation.y += offset;
                     }
                     BubbleEmotion::Stressed => {
                         let shake = (time.elapsed_secs() * BUBBLE_SHAKE_SPEED).sin()
                             * BUBBLE_SHAKE_INTENSITY;
-                        transform.translation.x += shake * dt * 10.0;
+                        transform.translation.x += shake;
                     }
                     _ => {}
                 }
@@ -91,6 +94,61 @@ pub fn animate_speech_bubbles(
                     }
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn idle_bubble_translation(emotion: BubbleEmotion, elapsed: f32, delta: f32) -> Vec3 {
+        let mut app = App::new();
+        app.insert_resource(Time::<()>::default())
+            .add_systems(Update, animate_speech_bubbles);
+        let base = Vec3::new(17.0, 23.0, 0.0);
+        let bubble = app
+            .world_mut()
+            .spawn((
+                SpeechBubble {
+                    elapsed: 0.0,
+                    duration: 10.0,
+                    speaker: Entity::PLACEHOLDER,
+                    offset: base.truncate(),
+                    emotion,
+                    background: None,
+                },
+                BubbleAnimation {
+                    phase: AnimationPhase::Idle,
+                    elapsed: 0.0,
+                },
+                Transform::from_translation(base),
+            ))
+            .id();
+        {
+            let mut time = app.world_mut().resource_mut::<Time<()>>();
+            time.advance_by(Duration::from_secs_f32(elapsed - delta));
+            time.advance_by(Duration::from_secs_f32(delta));
+        }
+
+        app.update();
+        app.world().get::<Transform>(bubble).unwrap().translation
+    }
+
+    #[test]
+    fn idle_emotion_offsets_do_not_depend_on_frame_delta() {
+        for (emotion, speed) in [
+            (BubbleEmotion::Exhausted, BUBBLE_BOB_SPEED),
+            (BubbleEmotion::Stressed, BUBBLE_SHAKE_SPEED),
+        ] {
+            let elapsed = std::f32::consts::FRAC_PI_2 / speed;
+            let slow_frame = idle_bubble_translation(emotion, elapsed, 1.0 / 30.0);
+            let fast_frame = idle_bubble_translation(emotion, elapsed, 1.0 / 120.0);
+            assert!(
+                slow_frame.abs_diff_eq(fast_frame, 0.0001),
+                "{emotion:?} offset changed with delta: {slow_frame:?} != {fast_frame:?}"
+            );
         }
     }
 }

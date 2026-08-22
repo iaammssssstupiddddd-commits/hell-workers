@@ -64,8 +64,8 @@ impl FamiliarStateDecisionResult {
         }
     }
 
-    /// Idle path: 分隊満員 → Idle 遷移の結果
-    pub fn from_idle_squad_full(transition_applied: bool) -> Self {
+    /// Idle path: 所属なし・招募無効 → Idle 遷移の結果
+    pub fn from_idle_without_squad(transition_applied: bool) -> Self {
         Self {
             squad_add: None,
             squad_release: Vec::new(),
@@ -74,8 +74,8 @@ impl FamiliarStateDecisionResult {
         }
     }
 
-    /// 非 Idle path の結果（squad 管理 + scouting / recruitment + finalize を集約）
-    pub fn from_non_idle(
+    /// 既存分隊 path の結果（squad 管理 + recruitment + finalize を集約）
+    pub fn from_squad_management(
         squad_release: Vec<Entity>,
         recruited: Option<Entity>,
         state_changed: bool,

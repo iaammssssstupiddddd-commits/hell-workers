@@ -146,6 +146,7 @@ type PathfindingChangedScan<'w, 's> = Query<
     's,
     (
         Entity,
+        &'static Transform,
         &'static Destination,
         &'static Path,
         &'static AssignedTask,
@@ -190,18 +191,36 @@ fn idle_behavior_can_move(
     }
 }
 
-fn request_class_if_needed(
-    task: &AssignedTask,
-    idle: &IdleState,
-    resting_in: Option<&hw_core::relationships::RestingIn>,
-    cooldown: Option<&PathCooldown>,
-    path: &Path,
+struct PathRequestInput<'a> {
+    task: &'a AssignedTask,
+    idle: &'a IdleState,
+    resting_in: Option<&'a hw_core::relationships::RestingIn>,
+    cooldown: Option<&'a PathCooldown>,
+    path: &'a Path,
+    current_pos: Vec2,
     destination: Vec2,
     obstacle_version: u64,
-) -> Option<PathRequestClass> {
+}
+
+fn request_class_if_needed(input: PathRequestInput<'_>) -> Option<PathRequestClass> {
+    let PathRequestInput {
+        task,
+        idle,
+        resting_in,
+        cooldown,
+        path,
+        current_pos,
+        destination,
+        obstacle_version,
+    } = input;
     // A cooldown is advanced only by the queue's dedicated timer lane. It is
     // never a runnable path request, even if another component changed.
     if cooldown.is_some() {
+        return None;
+    }
+
+    let path_finished = path.waypoints.is_empty() || path.current_index >= path.waypoints.len();
+    if path_finished && current_pos.distance_squared(destination) <= 1.0 {
         return None;
     }
 
@@ -237,22 +256,23 @@ fn collect_pathfinding_work(
     if topology_changed {
         // Topology change is the one deliberate all-Soul invalidation. Every
         // steady-state update uses the filtered changed query below.
-        for (entity, _, destination, path, task, idle, resting_in, _, cooldown, _) in
+        for (entity, transform, destination, path, task, idle, resting_in, _, cooldown, _) in
             query.p1().iter_mut()
         {
             if cooldown.is_some() {
                 cooling_entities.push(entity);
                 continue;
             }
-            if let Some(class) = request_class_if_needed(
-                &task,
-                &idle,
+            if let Some(class) = request_class_if_needed(PathRequestInput {
+                task: &task,
+                idle: &idle,
                 resting_in,
-                cooldown.as_deref(),
-                &path,
-                destination.0,
+                cooldown: cooldown.as_deref(),
+                path: &path,
+                current_pos: transform.translation.truncate(),
+                destination: destination.0,
                 obstacle_version,
-            ) {
+            }) {
                 requests.push((entity, class));
             }
         }
@@ -260,20 +280,23 @@ fn collect_pathfinding_work(
         return;
     }
 
-    for (entity, destination, path, task, idle, resting_in, cooldown) in query.p0().iter() {
+    for (entity, transform, destination, path, task, idle, resting_in, cooldown) in
+        query.p0().iter()
+    {
         if cooldown.is_some() {
             cooling_entities.push(entity);
             continue;
         }
-        if let Some(class) = request_class_if_needed(
+        if let Some(class) = request_class_if_needed(PathRequestInput {
             task,
             idle,
             resting_in,
             cooldown,
             path,
-            destination.0,
+            current_pos: transform.translation.truncate(),
+            destination: destination.0,
             obstacle_version,
-        ) {
+        }) {
             requests.push((entity, class));
         }
     }
@@ -291,7 +314,7 @@ fn tick_pathfinding_cooldowns(
         let Some(entity) = work_queue.pop_cooldown() else {
             break;
         };
-        let Ok((_, _, destination, path, task, idle, resting_in, _, cooldown_opt, _)) =
+        let Ok((_, transform, destination, path, task, idle, resting_in, _, cooldown_opt, _)) =
             query.get_mut(entity)
         else {
             work_queue.clear_entity(entity);
@@ -299,15 +322,16 @@ fn tick_pathfinding_cooldowns(
         };
 
         let Some(mut cooldown) = cooldown_opt else {
-            if let Some(class) = request_class_if_needed(
-                &task,
-                &idle,
+            if let Some(class) = request_class_if_needed(PathRequestInput {
+                task: &task,
+                idle: &idle,
                 resting_in,
-                None,
-                &path,
-                destination.0,
+                cooldown: None,
+                path: &path,
+                current_pos: transform.translation.truncate(),
+                destination: destination.0,
                 obstacle_version,
-            ) {
+            }) {
                 work_queue.enqueue(entity, class);
             }
             continue;
@@ -320,15 +344,16 @@ fn tick_pathfinding_cooldowns(
         }
 
         commands.entity(entity).remove::<PathCooldown>();
-        if let Some(class) = request_class_if_needed(
-            &task,
-            &idle,
+        if let Some(class) = request_class_if_needed(PathRequestInput {
+            task: &task,
+            idle: &idle,
             resting_in,
-            None,
-            &path,
-            destination.0,
+            cooldown: None,
+            path: &path,
+            current_pos: transform.translation.truncate(),
+            destination: destination.0,
             obstacle_version,
-        ) {
+        }) {
             work_queue.enqueue(entity, class);
         }
     }

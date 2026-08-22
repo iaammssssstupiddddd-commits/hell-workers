@@ -62,7 +62,6 @@ pub fn finalize_state_transitions(
     ai_state: &mut FamiliarAiState,
     squad_entities: &[Entity],
     fam_entity: Entity,
-    max_workers: usize,
 ) -> bool {
     let mut state_changed = false;
 
@@ -82,32 +81,95 @@ pub fn finalize_state_transitions(
                 fam_entity, prev_state
             );
         }
-    } else {
-        // メンバーがいる場合
-        let is_squad_full = squad_entities.len() >= max_workers;
-
-        if !matches!(*ai_state, FamiliarAiState::Scouting { .. }) {
-            // 枠に空きがあるなら、監視を中断して探索へ戻れるようにする
-            if !is_squad_full && matches!(*ai_state, FamiliarAiState::Supervising { .. }) {
-                *ai_state = FamiliarAiState::SearchingTask;
-                state_changed = true;
-                debug!(
-                    "FAM_AI: {:?} squad has open slots ({}/{}). Switching to SearchingTask",
-                    fam_entity,
-                    squad_entities.len(),
-                    max_workers
-                );
-            } else if is_squad_full && !matches!(*ai_state, FamiliarAiState::Supervising { .. }) {
-                // 枠がいっぱいで、かつ監視モード以外なら監視へ
-                *ai_state = FamiliarAiState::Supervising {
-                    target: None,
-                    timer: 0.0,
-                };
-                state_changed = true;
-                debug!("FAM_AI: {:?} squad full. -> Supervising", fam_entity);
-            }
-        }
+    } else if !matches!(
+        *ai_state,
+        FamiliarAiState::Scouting { .. } | FamiliarAiState::Supervising { .. }
+    ) {
+        // 既存分隊の判断経路では、この確定処理より先に追加募集を試している。
+        // 候補をScouting中でなければ、空き枠があっても既存メンバーを監視する。
+        *ai_state = FamiliarAiState::Supervising {
+            target: None,
+            timer: 0.0,
+        };
+        state_changed = true;
+        debug!(
+            "FAM_AI: {:?} has {} squad member(s). -> Supervising",
+            fam_entity,
+            squad_entities.len()
+        );
     }
 
     state_changed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn partial_squad_transitions_to_supervising() {
+        let familiar = Entity::from_bits(1);
+        let soul = Entity::from_bits(2);
+        let mut state = FamiliarAiState::SearchingTask;
+
+        let changed = finalize_state_transitions(&mut state, &[soul], familiar);
+
+        assert!(changed);
+        assert!(matches!(state, FamiliarAiState::Supervising { .. }));
+    }
+
+    #[test]
+    fn partial_squad_keeps_active_scouting() {
+        let familiar = Entity::from_bits(1);
+        let squad_soul = Entity::from_bits(2);
+        let recruit = Entity::from_bits(3);
+        let mut state = FamiliarAiState::Scouting {
+            target_soul: recruit,
+        };
+
+        let changed = finalize_state_transitions(&mut state, &[squad_soul], familiar);
+
+        assert!(!changed);
+        assert_eq!(
+            state,
+            FamiliarAiState::Scouting {
+                target_soul: recruit
+            }
+        );
+    }
+
+    #[test]
+    fn partial_squad_preserves_existing_supervision_target_and_timer() {
+        let familiar = Entity::from_bits(1);
+        let soul = Entity::from_bits(2);
+        let mut state = FamiliarAiState::Supervising {
+            target: Some(soul),
+            timer: 1.25,
+        };
+
+        let changed = finalize_state_transitions(&mut state, &[soul], familiar);
+
+        assert!(!changed);
+        assert_eq!(
+            state,
+            FamiliarAiState::Supervising {
+                target: Some(soul),
+                timer: 1.25
+            }
+        );
+    }
+
+    #[test]
+    fn empty_squad_leaves_supervising_for_searching() {
+        let familiar = Entity::from_bits(1);
+        let mut state = FamiliarAiState::Supervising {
+            target: None,
+            timer: 0.0,
+        };
+
+        let changed = finalize_state_transitions(&mut state, &[], familiar);
+
+        assert!(changed);
+        assert_eq!(state, FamiliarAiState::SearchingTask);
+    }
 }

@@ -46,6 +46,7 @@ pub(crate) fn entity_list_and_squads() -> Result<HelpContribution, HelpCatalogEr
                         "Familiar のコンテキストメニューから Open Operation を選ぶと、疲労閾値、最大使役 Soul 数、作業種別ごとの許可と Low / Normal / High の優先度を設定できます。",
                         "Disable all は新しい作業の割り当てだけを止めます。すでに実行中の作業と休息などの自己維持は継続します。",
                         "方針だけで新しい割り当てが止まった仕事は Tasks に Blocked: Disabled by familiar policy と表示されます。",
+                        "命令が Idle でも、1体以上所属していれば既存メンバーを監視しながら最大使役 Soul 数まで追加募集を続けます。",
                         "設定は Familiar ごとに保存されます。最大数を現在の使役数より下げると、超過した Soul は所属と作業から解放されます。",
                     ],
                 )

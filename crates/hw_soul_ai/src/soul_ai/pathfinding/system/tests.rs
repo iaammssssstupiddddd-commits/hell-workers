@@ -49,6 +49,39 @@ fn preupdate_reset_restores_the_actor_budget_each_frame() {
 }
 
 #[test]
+fn arrived_idle_soul_does_not_regenerate_a_completed_path() {
+    let mut app = App::new();
+    let position = WorldMap::grid_to_world(12, 12);
+    app.add_plugins(MinimalPlugins)
+        .insert_resource(WorldMap::default())
+        .insert_resource(RuntimePathSearchBudget::new(1))
+        .init_resource::<SharedResourceCache>()
+        .add_message::<ResourceReservationRequest>()
+        .add_message::<TaskAssignmentRequest>()
+        .add_systems(Update, pathfinding_system);
+    #[cfg(feature = "profiling")]
+    app.init_resource::<RuntimePathDeferMetrics>();
+
+    let soul = app
+        .world_mut()
+        .spawn((
+            Transform::from_translation(position.extend(0.0)),
+            DamnedSoul::default(),
+            Destination(position),
+            Path::default(),
+            AssignedTask::None,
+            IdleState::default(),
+        ))
+        .id();
+
+    app.update();
+
+    let path = app.world().get::<Path>(soul).unwrap();
+    assert!(path.waypoints.is_empty());
+    assert_eq!(path.current_index, 0);
+}
+
+#[test]
 fn actor_work_queue_keeps_fifo_and_drops_entity_state_on_world_epoch_change() {
     let first = Entity::from_bits(1);
     let second = Entity::from_bits(2);

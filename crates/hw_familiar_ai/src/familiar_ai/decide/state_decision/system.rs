@@ -214,8 +214,8 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                 }
             }
 
-            FamiliarDecisionPath::IdleSquadFull => {
-                // 分隊十分: Idle 停止ロジック
+            FamiliarDecisionPath::IdleWithoutSquad => {
+                // 所属なし・招募無効: Idle 停止ロジック
                 let transition = state_handlers::idle::handle_idle_state(
                     active_command,
                     &next_state,
@@ -224,7 +224,7 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                     &mut fam_path,
                 );
                 let applied = transition.apply_to(&mut next_state);
-                FamiliarStateDecisionResult::from_idle_squad_full(applied)
+                FamiliarStateDecisionResult::from_idle_without_squad(applied)
             }
 
             FamiliarDecisionPath::NonIdleScoutingContinue { target_soul } => {
@@ -263,20 +263,17 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                 };
                 let recruited = transition_result.recruited_entity;
                 let scout_changed = transition_result.transition.apply_to(&mut next_state);
-                let finalized = finalize_state_transitions(
-                    &mut next_state,
-                    &squad_entities,
-                    fam_entity,
-                    max_workers,
-                );
-                FamiliarStateDecisionResult::from_non_idle(
+                let finalized =
+                    finalize_state_transitions(&mut next_state, &squad_entities, fam_entity);
+                FamiliarStateDecisionResult::from_squad_management(
                     released_entities,
                     recruited,
                     scout_changed || finalized,
                 )
             }
 
-            FamiliarDecisionPath::NonIdleRecruitOrTransition => {
+            FamiliarDecisionPath::IdleSquadRecruitOrTransition
+            | FamiliarDecisionPath::NonIdleRecruitOrTransition => {
                 let SquadManagementOutcome {
                     mut squad_entities,
                     released_entities,
@@ -319,13 +316,9 @@ pub fn familiar_ai_state_system(params: FamiliarAiStateDecisionParams) {
                     RecruitmentOutcome::ScoutingStarted => (None, true),
                     RecruitmentOutcome::NoRecruit => (None, false),
                 };
-                let finalized = finalize_state_transitions(
-                    &mut next_state,
-                    &squad_entities,
-                    fam_entity,
-                    max_workers,
-                );
-                FamiliarStateDecisionResult::from_non_idle(
+                let finalized =
+                    finalize_state_transitions(&mut next_state, &squad_entities, fam_entity);
+                FamiliarStateDecisionResult::from_squad_management(
                     released_entities,
                     recruited,
                     recruit_changed || finalized,
@@ -365,4 +358,189 @@ fn run_squad_management<'w, 's>(
         q_souls: &q,
     };
     process_squad_management(&mut ctx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::events::{
+        EncouragementRequest, FamiliarAiStateChangedEvent, FamiliarIdleVisualRequest,
+        FamiliarStateRequest, SquadManagementRequest,
+    };
+    use hw_core::familiar::{
+        ActiveCommand, Familiar, FamiliarAiState, FamiliarCommand, FamiliarOperation,
+    };
+    use hw_core::relationships::CommandedBy;
+    use hw_core::soul::{DamnedSoul, Destination, IdleState, Path};
+
+    #[test]
+    fn non_idle_partial_squad_enters_supervising_through_state_system() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<FamiliarStateDecisionTimer>()
+            .init_resource::<SpatialGrid>()
+            .add_message::<FamiliarAiStateChangedEvent>()
+            .add_message::<FamiliarStateRequest>()
+            .add_message::<SquadManagementRequest>()
+            .add_message::<EncouragementRequest>()
+            .add_message::<FamiliarIdleVisualRequest>()
+            .add_systems(
+                Update,
+                (
+                    familiar_ai_state_system,
+                    crate::familiar_ai::execute::state_apply::familiar_state_apply_system,
+                )
+                    .chain(),
+            );
+
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                Familiar::default(),
+                FamiliarOperation::default(),
+                ActiveCommand {
+                    command: FamiliarCommand::GatherResources,
+                },
+                FamiliarAiState::SearchingTask,
+                Destination(Vec2::ZERO),
+                Path::default(),
+            ))
+            .id();
+        app.world_mut().spawn((
+            Transform::default(),
+            DamnedSoul::default(),
+            AssignedTask::None,
+            Destination(Vec2::ZERO),
+            Path::default(),
+            IdleState::default(),
+            CommandedBy(familiar),
+        ));
+        app.world_mut().flush();
+
+        app.update();
+
+        assert!(matches!(
+            app.world().get::<FamiliarAiState>(familiar),
+            Some(FamiliarAiState::Supervising { .. })
+        ));
+    }
+
+    #[test]
+    fn idle_familiar_enters_supervising_when_command_changes_to_patrol() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<FamiliarStateDecisionTimer>()
+            .init_resource::<SpatialGrid>()
+            .add_message::<FamiliarAiStateChangedEvent>()
+            .add_message::<FamiliarStateRequest>()
+            .add_message::<SquadManagementRequest>()
+            .add_message::<EncouragementRequest>()
+            .add_message::<FamiliarIdleVisualRequest>()
+            .add_systems(
+                Update,
+                (
+                    familiar_ai_state_system,
+                    crate::familiar_ai::execute::state_apply::familiar_state_apply_system,
+                )
+                    .chain(),
+            );
+
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                Familiar::default(),
+                FamiliarOperation::default(),
+                ActiveCommand::default(),
+                FamiliarAiState::Idle,
+                Destination(Vec2::ZERO),
+                Path::default(),
+            ))
+            .id();
+        app.world_mut().flush();
+
+        app.update();
+        assert_eq!(
+            app.world().get::<FamiliarAiState>(familiar),
+            Some(&FamiliarAiState::Idle)
+        );
+
+        app.world_mut().spawn((
+            Transform::default(),
+            DamnedSoul::default(),
+            AssignedTask::None,
+            Destination(Vec2::ZERO),
+            Path::default(),
+            IdleState::default(),
+            CommandedBy(familiar),
+        ));
+        app.world_mut()
+            .get_mut::<ActiveCommand>(familiar)
+            .expect("familiar must have ActiveCommand")
+            .command = FamiliarCommand::Patrol;
+        app.update();
+
+        assert!(matches!(
+            app.world().get::<FamiliarAiState>(familiar),
+            Some(FamiliarAiState::Supervising { .. })
+        ));
+    }
+
+    #[test]
+    fn idle_command_with_existing_squad_enters_supervising() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<FamiliarStateDecisionTimer>()
+            .init_resource::<SpatialGrid>()
+            .add_message::<FamiliarAiStateChangedEvent>()
+            .add_message::<FamiliarStateRequest>()
+            .add_message::<SquadManagementRequest>()
+            .add_message::<EncouragementRequest>()
+            .add_message::<FamiliarIdleVisualRequest>()
+            .add_systems(
+                Update,
+                (
+                    familiar_ai_state_system,
+                    crate::familiar_ai::execute::state_apply::familiar_state_apply_system,
+                )
+                    .chain(),
+            );
+
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                Familiar::default(),
+                FamiliarOperation::default(),
+                ActiveCommand::default(),
+                FamiliarAiState::Idle,
+                Destination(Vec2::ZERO),
+                Path::default(),
+            ))
+            .id();
+        app.world_mut().flush();
+
+        app.update();
+        assert_eq!(
+            app.world().get::<FamiliarAiState>(familiar),
+            Some(&FamiliarAiState::Idle)
+        );
+
+        app.world_mut().spawn((
+            Transform::default(),
+            DamnedSoul::default(),
+            AssignedTask::None,
+            Destination(Vec2::ZERO),
+            Path::default(),
+            IdleState::default(),
+            CommandedBy(familiar),
+        ));
+        app.update();
+
+        assert!(matches!(
+            app.world().get::<FamiliarAiState>(familiar),
+            Some(FamiliarAiState::Supervising { .. })
+        ));
+    }
 }

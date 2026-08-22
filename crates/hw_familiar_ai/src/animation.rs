@@ -11,5 +11,4 @@ pub struct FamiliarAnimation {
     pub is_moving: bool,
     pub facing_right: bool,
     pub hover_timer: f32,
-    pub hover_offset: f32,
 }

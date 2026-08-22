@@ -60,7 +60,6 @@ pub fn familiar_animation_system(
             FAMILIAR_HOVER_AMPLITUDE_IDLE
         };
         let hover_offset = anim.hover_timer.sin() * hover_amplitude;
-        anim.hover_offset = hover_offset;
 
         let dir_tilt = if anim.is_moving {
             if anim.facing_right { -0.04 } else { 0.04 }
@@ -79,5 +78,75 @@ pub fn familiar_animation_system(
         }
         offset.hover_offset = hover_offset;
         offset.tilt_radians = tilt_radians;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use bevy::asset::{AssetApp, AssetPlugin};
+    use bevy::prelude::*;
+    use bevy::time::TimeUpdateStrategy;
+    use hw_core::soul::Path;
+
+    use super::*;
+    use crate::plugins::startup::create_game_assets;
+
+    #[test]
+    fn visual_hover_does_not_move_the_familiar_logical_root() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        app.init_asset::<Image>()
+            .init_asset::<Font>()
+            .init_asset::<Gltf>()
+            .init_asset::<WorldAsset>();
+
+        let asset_server = app.world().resource::<AssetServer>().clone();
+        let game_assets = {
+            let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+            create_game_assets(&asset_server, &mut images)
+        };
+        app.insert_resource(game_assets)
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+                100,
+            )))
+            .add_systems(
+                Update,
+                (familiar_animation_system, hw_familiar_ai::familiar_movement).chain(),
+            );
+
+        let logical_position = Vec3::new(12.0, 34.0, 5.0);
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                Transform::from_translation(logical_position),
+                Path::default(),
+                super::super::components::FamiliarAnimation::default(),
+            ))
+            .id();
+        let visual = app
+            .world_mut()
+            .spawn((
+                hw_visual::FamiliarVisualOwner { owner: familiar },
+                hw_visual::FamiliarVisualOffset::default(),
+                Sprite::default(),
+                Transform::default(),
+            ))
+            .id();
+
+        // The first TimePlugin update establishes the initial timestamp.
+        app.update();
+        app.update();
+
+        assert_eq!(
+            app.world().get::<Transform>(familiar).unwrap().translation,
+            logical_position
+        );
+        assert_ne!(
+            app.world().get::<Transform>(visual).unwrap().translation.y,
+            0.0
+        );
     }
 }

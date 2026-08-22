@@ -11,11 +11,6 @@ pub fn familiar_movement(
     mut query: Query<(&mut Transform, &mut Path, &mut FamiliarAnimation), With<Familiar>>,
 ) {
     for (mut transform, mut path, mut anim) in query.iter_mut() {
-        if anim.hover_offset != 0.0 {
-            transform.translation.y -= anim.hover_offset;
-            anim.hover_offset = 0.0;
-        }
-
         if path.current_index < path.waypoints.len() {
             let target = path.waypoints[path.current_index];
             let current_pos = transform.translation.truncate();

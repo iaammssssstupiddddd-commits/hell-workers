@@ -15,8 +15,10 @@ pub enum FamiliarDecisionPath {
     IdleScoutingContinue { target_soul: Entity },
     /// Idle command + 招募必要 + 非 Scouting（即時リクルートまたはスカウト開始）
     IdleRecruitSearch,
-    /// Idle command + 分隊満員（招募不要）→ Idle 停止ロジックへ
-    IdleSquadFull,
+    /// Idle command + 所属なし + 招募無効 → Idle 停止ロジックへ
+    IdleWithoutSquad,
+    /// Idle command + 既存分隊あり（追加募集後、既存メンバーを監視）
+    IdleSquadRecruitOrTransition,
     /// 非 Idle command + 既に Scouting 中
     NonIdleScoutingContinue { target_soul: Entity },
     /// 非 Idle command + その他（SearchingTask / Supervising / etc.）
@@ -38,18 +40,57 @@ pub fn determine_decision_path(
 ) -> FamiliarDecisionPath {
     if matches!(command, FamiliarCommand::Idle) {
         let needs_recruitment = max_workers > 0 && current_squad_count < max_workers;
-        if needs_recruitment {
+        if current_squad_count > 0 {
+            if let FamiliarAiState::Scouting { target_soul } = *current_state {
+                FamiliarDecisionPath::IdleScoutingContinue { target_soul }
+            } else {
+                FamiliarDecisionPath::IdleSquadRecruitOrTransition
+            }
+        } else if needs_recruitment {
             if let FamiliarAiState::Scouting { target_soul } = *current_state {
                 FamiliarDecisionPath::IdleScoutingContinue { target_soul }
             } else {
                 FamiliarDecisionPath::IdleRecruitSearch
             }
         } else {
-            FamiliarDecisionPath::IdleSquadFull
+            FamiliarDecisionPath::IdleWithoutSquad
         }
     } else if let FamiliarAiState::Scouting { target_soul } = *current_state {
         FamiliarDecisionPath::NonIdleScoutingContinue { target_soul }
     } else {
         FamiliarDecisionPath::NonIdleRecruitOrTransition
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn partial_supervising_squad_still_uses_recruitment_path() {
+        let path = determine_decision_path(
+            &FamiliarCommand::GatherResources,
+            &FamiliarAiState::Supervising {
+                target: None,
+                timer: 0.0,
+            },
+            2,
+            1,
+        );
+
+        assert!(matches!(
+            path,
+            FamiliarDecisionPath::NonIdleRecruitOrTransition
+        ));
+    }
+
+    #[test]
+    fn idle_command_with_existing_squad_uses_recruitment_and_supervision_path() {
+        let path = determine_decision_path(&FamiliarCommand::Idle, &FamiliarAiState::Idle, 2, 1);
+
+        assert!(matches!(
+            path,
+            FamiliarDecisionPath::IdleSquadRecruitOrTransition
+        ));
     }
 }

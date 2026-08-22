@@ -207,3 +207,66 @@ pub fn move_to_center(
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::ecs::system::SystemState;
+    use hw_jobs::{GeneratePowerData, GeneratePowerPhase};
+
+    #[test]
+    fn supervising_prefers_a_working_soul_and_follows_when_it_is_far() {
+        let mut world = World::new();
+        let familiar = world.spawn_empty().id();
+        let task_target = world.spawn_empty().id();
+        let idle_soul = world
+            .spawn((
+                Transform::from_xyz(TILE_SIZE * 8.0, 0.0, 0.0),
+                AssignedTask::None,
+            ))
+            .id();
+        let working_position = Vec2::new(TILE_SIZE * 6.0, 0.0);
+        let working_soul = world
+            .spawn((
+                Transform::from_translation(working_position.extend(0.0)),
+                AssignedTask::GeneratePower(GeneratePowerData {
+                    tile: task_target,
+                    tile_pos: working_position,
+                    phase: GeneratePowerPhase::Generating,
+                }),
+            ))
+            .id();
+        let active_members = vec![idle_soul, working_soul];
+        let mut ai_state = FamiliarAiState::Supervising {
+            target: None,
+            timer: 0.0,
+        };
+        let mut destination = Destination(Vec2::ZERO);
+        let mut path = Path::default();
+        let mut query_state = SystemState::<SoulSupervisingQuery>::new(&mut world);
+        let souls = query_state.get(&world).unwrap();
+
+        supervising_logic(&mut FamiliarSupervisingContext {
+            fam_entity: familiar,
+            fam_pos: Vec2::ZERO,
+            active_members: &active_members,
+            task_area_opt: None,
+            delta_secs: 0.1,
+            ai_state: &mut ai_state,
+            fam_dest: &mut destination,
+            fam_path: &mut path,
+            q_souls: &souls,
+        });
+
+        assert!(matches!(
+            ai_state,
+            FamiliarAiState::Supervising {
+                target: Some(entity),
+                ..
+            } if entity == working_soul
+        ));
+        assert_eq!(destination.0, working_position);
+        assert_eq!(path.waypoints, vec![working_position]);
+        assert_eq!(path.current_index, 0);
+    }
+}

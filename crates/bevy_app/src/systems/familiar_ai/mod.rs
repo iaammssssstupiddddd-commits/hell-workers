@@ -87,17 +87,77 @@ impl Plugin for FamiliarAiPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entities::damned_soul::{DamnedSoul, Path};
+    use crate::entities::damned_soul::{DamnedSoul, Destination, IdleState, Path};
     use hw_core::events::{
         FamiliarRosterReleasedVisualMessage, ResourceReservationRequest, SoulTaskUnassignRequest,
     };
     use hw_core::familiar::{Familiar, FamiliarOperation, FamiliarPolicy, FamiliarSettingsPatch};
     use hw_core::relationships::{CommandedBy, Commanding, WorkingOn};
     use hw_core::system_sets::SoulAiSystemSet;
+    use hw_jobs::events::TaskAssignmentRequest;
     use hw_jobs::{ActiveTaskIdentity, GeneratePowerData, GeneratePowerPhase, WorkType};
     use hw_logistics::SharedResourceCache;
     use hw_soul_ai::soul_ai::execute::task_execution::AssignedTask;
-    use hw_world::WorldMap;
+    use hw_world::{RuntimePathSearchBudget, WorldMap};
+
+    #[test]
+    fn commanded_idle_soul_stays_stopped_after_actor_pathfinding() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(WorldMap::default())
+            .insert_resource(RuntimePathSearchBudget::new(1))
+            .init_resource::<SharedResourceCache>()
+            .add_message::<ResourceReservationRequest>()
+            .add_message::<TaskAssignmentRequest>()
+            .add_systems(
+                Update,
+                (
+                    hw_familiar_ai::familiar_ai::decide::following::following_familiar_system,
+                    hw_soul_ai::soul_ai::pathfinding::pathfinding_system,
+                )
+                    .chain(),
+            );
+        #[cfg(feature = "profiling")]
+        app.init_resource::<hw_soul_ai::soul_ai::pathfinding::RuntimePathDeferMetrics>();
+
+        let familiar_position = WorldMap::grid_to_world(10, 10);
+        let familiar = app
+            .world_mut()
+            .spawn((
+                Familiar::default(),
+                Transform::from_translation(familiar_position.extend(0.0)),
+            ))
+            .id();
+        let soul_position = WorldMap::grid_to_world(12, 10);
+        let soul = app
+            .world_mut()
+            .spawn((
+                DamnedSoul::default(),
+                Transform::from_translation(soul_position.extend(0.0)),
+                AssignedTask::None,
+                CommandedBy(familiar),
+                IdleState::default(),
+                Destination(familiar_position),
+                Path {
+                    waypoints: vec![familiar_position],
+                    current_index: 0,
+                    planned_destination: Some(familiar_position),
+                    validated_obstacle_version: 1,
+                },
+            ))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<Destination>(soul).unwrap().0,
+            soul_position
+        );
+        let path = app.world().get::<Path>(soul).unwrap();
+        assert!(path.waypoints.is_empty());
+        assert_eq!(path.current_index, 0);
+        assert_eq!(path.planned_destination, None);
+    }
 
     #[test]
     fn settings_release_cleans_relationship_and_task_in_the_same_update() {

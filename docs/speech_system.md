@@ -71,6 +71,7 @@ Familiar は命令や状態を「ラテン語」で表現します。表示は *
     - Bored: 薄い青系
     - Chatting: 会話用の明るい色系 [NEW]
     - Slacking: サボり用の特定色系 [NEW]
+- **感情別の待機モーション**: Exhausted は上下へ、Stressed は左右へ揺れます。毎frameの基準`SpeechBubble.offset`へ経過時刻から求めた絶対offsetを加えるため、揺れ幅はframe deltaへ依存せず累積もしません。
 
 ### Familiar 固有
 - **9-slice 吹き出し**: テキストの長さに応じて、吹き出し背景（`bubble_9slice.png`）が動的に伸縮します。
