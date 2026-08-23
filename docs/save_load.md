@@ -340,6 +340,13 @@ marker のない legacy / auto task を「auto marker が消えた manual task�
 `SavePlugin::finish`で検証・freezeする。transactionが読む正本はimmutableな`ResolvedRehydratePlan`であり、
 通常loadとrollbackは同じsnapshotをexactly once実行する。
 
+candidate preflightのroot adapterは`rehydrate/candidate.rs`に4つの薄いregistry-facing wrapperだけを置く。
+実装は同crate内のprivate moduleへ分け、durable topologyの7 domain pass順は`candidate/topology/mod.rs`、
+task/logisticsの15 validation traversalとshared index境界は`candidate/logistics/mod.rs`が所有する。
+Familiar rosterとpresentation prerequisiteはそれぞれ`candidate/familiar.rs`、`candidate/shell.rs`が所有する。
+これら4 callbackにdeconstructionとlightingの独立callbackを加えたproduction candidate planは6件であり、
+stable name順のexact snapshotを維持する。private module分割でregistry、schema、error policy、transaction順を変えない。
+
 stepは`DurableNormalize → RuntimeNormalize → AttachShells → RebuildDerived → WakeDomains`の5 phaseで
 固定する。重複名、未知依存、循環、後phaseへの逆依存はApp finish時にpanicしてload開始前に構成不正を止める。
 独立stepはphase・名前順で安定化し、`AttachShells`後から`RebuildDerived`へ移るbarrierと最終`flush()`は
