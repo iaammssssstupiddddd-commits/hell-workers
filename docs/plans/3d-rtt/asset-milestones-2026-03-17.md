@@ -58,7 +58,7 @@
 
 | ファイル | 状態 | 備考 |
 | --- | --- | --- |
-| `grass.png`・`sand.png`・`dirt.png`・`river.png` | ✅ 存在 | `SectionMaterial` ベースカラーとして転用可能 |
+| `grass.png`・`sand.png`・`dirt_seamless.png`・`river.png` | ✅ 存在 | `SectionMaterial` ベースカラーとして転用可能。Dirt は黒格子を含まない反復用素材を使用 |
 | `terrain/grass_edge.png` 等の境界オーバーレイ | ✅ 存在 | 2D境界線。MS-3-6（表面表現改善）で代替される |
 
 ### シェーダー

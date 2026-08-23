@@ -57,10 +57,6 @@ pub struct FloorTileBoneVisual {
 #[derive(Component)]
 pub struct FloorCuringProgressBar;
 
-fn progress_to_ratio(progress: u8) -> f32 {
-    (progress as f32 / 100.0).clamp(0.0, 1.0)
-}
-
 fn desired_bone_visual_count(mirror: &FloorTileVisualMirror) -> u8 {
     if matches!(mirror.state, FloorTileStateMirror::Complete) {
         return 0;
@@ -85,40 +81,6 @@ fn curing_progress_ratio(site: &FloorSiteVisualState) -> f32 {
         return 1.0;
     }
     (1.0 - site.curing_remaining_secs / FLOOR_CURING_DURATION_SECS).clamp(0.0, 1.0)
-}
-
-/// Update floor tile sprite color based on construction state.
-pub fn update_floor_tile_visuals_system(
-    mut q_tiles: Query<(&FloorTileVisualMirror, &mut Sprite), Changed<FloorTileVisualMirror>>,
-) {
-    for (mirror, mut sprite) in q_tiles.iter_mut() {
-        sprite.color = match mirror.state {
-            FloorTileStateMirror::WaitingBones => Color::srgba(0.50, 0.50, 0.80, 0.20),
-            FloorTileStateMirror::ReinforcingReady => Color::srgba(0.65, 0.65, 0.90, 0.35),
-            FloorTileStateMirror::Reinforcing { progress } => {
-                let t = progress_to_ratio(progress);
-                Color::srgba(
-                    0.60 + 0.18 * t,
-                    0.58 + 0.14 * t,
-                    0.52 + 0.10 * t,
-                    0.35 + 0.25 * t,
-                )
-            }
-            FloorTileStateMirror::ReinforcedComplete => Color::srgba(0.78, 0.72, 0.60, 0.60),
-            FloorTileStateMirror::WaitingMud => Color::srgba(0.55, 0.44, 0.34, 0.30),
-            FloorTileStateMirror::PouringReady => Color::srgba(0.60, 0.48, 0.36, 0.45),
-            FloorTileStateMirror::Pouring { progress } => {
-                let t = progress_to_ratio(progress);
-                Color::srgba(
-                    0.52 - 0.18 * t,
-                    0.44 - 0.14 * t,
-                    0.34 - 0.10 * t,
-                    0.50 + 0.40 * t,
-                )
-            }
-            FloorTileStateMirror::Complete => Color::srgba(0.33, 0.33, 0.35, 0.95),
-        };
-    }
 }
 
 /// Sync per-tile bone marker sprites from `bones_delivered`.

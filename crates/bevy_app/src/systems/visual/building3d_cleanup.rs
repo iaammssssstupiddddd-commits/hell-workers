@@ -8,7 +8,7 @@ use crate::systems::jobs::structural_light_anchor_mesh_tag;
 use bevy::ecs::entity::EntityHashMap;
 use bevy::mesh::MeshTag;
 use bevy::prelude::*;
-use hw_core::constants::TILE_SIZE;
+use hw_core::constants::{TILE_SIZE, Z_BUILDING_FLOOR};
 use hw_core::relationships::StoredItems;
 use hw_core::visual_mirror::{MudMixerVisualState, StockpileVisualState};
 use hw_core::world::DoorState;
@@ -69,7 +69,7 @@ pub fn sync_provisional_wall_material_system(
 /// bounce scale are intentionally resolved independently.
 pub fn building_presentation_transform(kind: BuildingType, owner: &Transform) -> Transform {
     let height = match kind {
-        BuildingType::Floor => 0.0,
+        BuildingType::Floor => Z_BUILDING_FLOOR,
         BuildingType::Bridge => TILE_SIZE * 0.09,
         BuildingType::Door => TILE_SIZE * 0.25,
         BuildingType::Wall => TILE_SIZE * 0.5,
@@ -349,6 +349,15 @@ mod door_tests {
         assert_eq!(visual.translation, Vec3::new(12.0, TILE_SIZE * 0.4, -34.0));
         assert_eq!(visual.scale, Vec3::splat(1.15));
         assert_ne!(visual.rotation, Quat::IDENTITY);
+    }
+
+    #[test]
+    fn floor_stays_above_the_coplanar_terrain_surface() {
+        let owner = Transform::from_xyz(12.0, 34.0, Z_BUILDING_FLOOR);
+        let visual = building_presentation_transform(BuildingType::Floor, &owner);
+
+        assert_eq!(visual.translation, Vec3::new(12.0, Z_BUILDING_FLOOR, -34.0));
+        assert!(visual.translation.y > 0.0);
     }
 
     #[test]

@@ -2,9 +2,7 @@
 
 use bevy::prelude::*;
 use hw_core::constants::{TILE_SIZE, Z_BAR_BG};
-use hw_core::visual_mirror::construction::{
-    WallSiteVisualState, WallTileStateMirror, WallTileVisualMirror,
-};
+use hw_core::visual_mirror::construction::WallSiteVisualState;
 use std::collections::HashSet;
 
 use crate::progress_bar::{
@@ -49,10 +47,6 @@ type WallConstructionFillQuery<'w, 's> = Query<
         Without<ProgressBarBackground>,
     ),
 >;
-fn progress_to_ratio(progress: u8) -> f32 {
-    (progress as f32 / 100.0).clamp(0.0, 1.0)
-}
-
 fn site_phase_progress(site: &WallSiteVisualState) -> f32 {
     if site.tiles_total == 0 {
         return 1.0;
@@ -82,40 +76,6 @@ fn should_show_site_progress(site: &WallSiteVisualState) -> bool {
         site.tiles_framed < site.tiles_total
     } else {
         site.tiles_coated < site.tiles_total
-    }
-}
-
-/// Update wall tile sprite color based on construction state.
-pub fn update_wall_tile_visuals_system(
-    mut q_tiles: Query<(&WallTileVisualMirror, &mut Sprite), Changed<WallTileVisualMirror>>,
-) {
-    for (mirror, mut sprite) in q_tiles.iter_mut() {
-        sprite.color = match mirror.state {
-            WallTileStateMirror::WaitingWood => Color::srgba(0.78, 0.56, 0.32, 0.25),
-            WallTileStateMirror::FramingReady => Color::srgba(0.90, 0.68, 0.36, 0.40),
-            WallTileStateMirror::Framing { progress } => {
-                let t = progress_to_ratio(progress);
-                Color::srgba(
-                    0.86 - 0.20 * t,
-                    0.66 - 0.20 * t,
-                    0.38 - 0.12 * t,
-                    0.40 + 0.35 * t,
-                )
-            }
-            WallTileStateMirror::FramedProvisional => Color::srgba(0.58, 0.42, 0.30, 0.70),
-            WallTileStateMirror::WaitingMud => Color::srgba(0.55, 0.44, 0.34, 0.30),
-            WallTileStateMirror::CoatingReady => Color::srgba(0.62, 0.50, 0.37, 0.45),
-            WallTileStateMirror::Coating { progress } => {
-                let t = progress_to_ratio(progress);
-                Color::srgba(
-                    0.56 - 0.22 * t,
-                    0.46 - 0.18 * t,
-                    0.35 - 0.11 * t,
-                    0.50 + 0.42 * t,
-                )
-            }
-            WallTileStateMirror::Complete => Color::srgba(0.35, 0.35, 0.38, 0.95),
-        };
     }
 }
 

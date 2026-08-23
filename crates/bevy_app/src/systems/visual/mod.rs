@@ -17,14 +17,13 @@ pub mod floor_construction {
     pub use hw_visual::floor_construction::{
         FloorCuringProgressBar, FloorTileBoneVisual, manage_floor_curing_progress_bars_system,
         sync_floor_tile_bone_visuals_system, update_floor_curing_progress_bars_system,
-        update_floor_tile_visuals_system,
     };
 }
 pub mod indoor_light_texture;
 pub mod wall_construction {
     pub use hw_visual::wall_construction::{
         WallConstructionProgressBar, manage_wall_progress_bars_system,
-        update_wall_progress_bars_system, update_wall_tile_visuals_system,
+        update_wall_progress_bars_system,
     };
 }
 

@@ -365,7 +365,7 @@ pub fn update_building_cursor(
 /// ワールドマップのタイルスプライトをスポーンする。
 pub fn setup_world_map(mut commands: Commands, asset_server: Res<AssetServer>) {
     let grass = asset_server.load("textures/grass.png");
-    let dirt = asset_server.load("textures/dirt.png");
+    let dirt = asset_server.load("textures/dirt_seamless.png");
     let river = asset_server.load("textures/river.png");
     let sand = asset_server.load("textures/sand_terrain.png");
 

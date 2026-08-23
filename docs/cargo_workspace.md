@@ -182,6 +182,7 @@ root 側の `bevy_app/src/interface/ui/` 残留（Adapter 層 — ViewModel / Pr
 - `fade::*`, `floating_text::*`, `animations::*`, `progress_bar::*`, `worker_icon::*` — 汎用ビジュアルユーティリティ
 - `floor_construction::*` — 床建設タイル進捗バー・資材 visual・骨 visual システム
 - `wall_construction::*` — 壁建設タイル progress / 資材 visual システム
+- `construction_mask3d::*` / `material::ConstructionMaskMaterial` — 床・壁タイルの状態色をScene RtT内のowner-linked Planeへ同期するshared mesh/material経路。per-instance stateは`MeshTag`で渡し、tileごとのmaterial assetを作らない
 - `task_area_visual::{TaskAreaMaterial, TaskAreaVisual}` — タスクエリアシェーダー型定義
 - `selection_indicator::update_selection_indicator` — 選択エンティティを追従する黄色スプライト indicator（`SelectionIndicator` コンポーネントは `hw_core::selection` が所有。実装は `hw_visual`、登録は同フレーム反映のため root `Interface` フェーズで行う）
 

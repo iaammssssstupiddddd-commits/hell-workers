@@ -53,7 +53,7 @@ pub fn create_game_assets(asset_server: &AssetServer, images: &mut Assets<Image>
         dirt: asset_server
             .load_builder()
             .with_settings(terrain_sampler)
-            .load("textures/dirt.png"),
+            .load("textures/dirt_seamless.png"),
         river: asset_server
             .load_builder()
             .with_settings(terrain_sampler)

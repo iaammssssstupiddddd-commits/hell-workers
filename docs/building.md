@@ -21,7 +21,7 @@ Hell-Workers における建築システムの基礎実装について説明し�
 ### ロード時の visual shell
 
 `BlueprintVisualState`、`BlueprintVisual`、通常 Blueprint の `Sprite` / `Name`、floor / wall construction の
-site/tile visual mirror、tile `Sprite` / `Name` は保存しない runtime state である。ロード時はそれぞれの
+site/tile visual mirror、tile `Name`、owner-linked `ConstructionMask3dVisual` は保存しない runtime state である。ロード時はそれぞれの
 durable construction component から完成形の mirror を再構築してから Visual phase に渡す。
 `BlueprintVisual.last_delivered` は mirror の保存済み搬入数から初期化し、ロード直後に既搬入資材を新規の
 `+1` 演出として再生しない。virtual time が pause 中でもロードできるため、default mirror を挿入して
@@ -366,6 +366,8 @@ Structural3d のときだけ Building3dVisual エンティティ（独立。Buil
 
 `Building3dVisual { owner: Entity }` は `Structural3d` Buildingとは独立した3Dビジュアルで、XZ 平面上に独立スポーンする（Building の子エンティティではない）。ownerの移動・Z回転・完成bounce scaleは共通transform resolverで追従する。Doorは追加で`Door3dVisual`を持ち、Closed / Open / Lockedを状態別shared materialとhinge transformへ同期する。
 
+Floorのactive presentationは1タイルの`Plane3d`で、既存の`textures/terrain/mud_floor.png`を共有マテリアルから参照する。3D側の高さにも`Z_BUILDING_FLOOR`（0.05）を使い、`y=0`の地形面との深度競合を避ける。spawn時とowner transform同期時は同じ高さresolverを通す。
+
 | スポーン箇所 | タイミング |
 |:---|:---|
 | `wall_framed_tile_spawn_system`（`wall_construction/phase_transition.rs`） | Framing 完了時に仮設Wall shellを生成（`wall_provisional_material`）。Coating完了時に同じownerを恒久materialへpromoteし、その時点でfresh `BuildingBounceEffect` を開始する。 |
@@ -469,6 +471,10 @@ FloorTileBlueprint (子エンティティ、タイルごと)
 
 `WaitingBones` → `ReinforcingReady` → `Reinforcing { progress }` → `ReinforcedComplete` → `WaitingMud` → `PouringReady` → `Pouring { progress }` → `Complete`
 
+床・壁のタイル状態色は2D `Sprite`ではなく、owner-linked `ConstructionMask3dVisual`としてScene RtT内の水平Planeへ描画する。論理tileの2D `Transform`はsimulation座標のまま保持し、proxyだけを`(x, Z_BUILDING_FLOOR * 0.5, -y)`へ変換する。maskは完成Floor (`Z_BUILDING_FLOOR`) より低く地形より高い位置にあり、Soulのalpha-mask billboardと同じ3D深度バッファで前後判定される。このためCamera2dの後段合成でSoulを覆わない。
+
+全tileは同じPlane meshと`ConstructionMaskMaterial` handleを共有する。state / progress / floor-wall種別は`MeshTag`へencodeし、shaderが従来の色・透明度gradientを復元するため、tileごとのmaterial assetは生成しない。進捗バー、骨marker、作業者iconなどの情報表示は従来どおり2D前景に残す。
+
 ### 9.5 資材配送システム
 
 **TransportRequest による自動配送**:
@@ -555,6 +561,7 @@ Wall の `Framing → Coating` も同じindex/counter契約を使い、`spawned_
 - `Framing` 完了タイルは即時に `Building { kind: Wall, is_provisional: true }` を生成し、通路分離・壁接続判定に参加する。
 - `Coating` 完了時に `Building.is_provisional = false` へ更新し、`ProvisionalWall` を除去する。
 - `Curing` 相当フェーズは持たず、全タイル `Complete` 到達で site / tile / request を即時 cleanup する。
+- `WallTileBlueprint`の状態色も床と同じ共有`ConstructionMask3dVisual`経路を使う。Framing完了後の仮設Wallは別の`Building3dVisual`として立ち上がり、水平maskはその下で状態遷移を示す。
 - キャンセルは tile または `DeliverToWallConstruction` request から parent site を解決し、site 単位で処理する。
   搬入済み `Wood` / `StasisMud` を返却し、関連 request / 作業割り当てを解除する。保存済み
   `TransportRequest.kind + anchor + TargetWallConstructionSite` の整合をcandidateで検証し、pre-C3 saveの欠落markerは

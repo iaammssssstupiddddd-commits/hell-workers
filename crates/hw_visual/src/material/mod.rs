@@ -1,6 +1,8 @@
+pub mod construction_mask_material;
 pub mod terrain_surface_material;
 pub mod topdown_structural_material;
 
+pub use construction_mask_material::ConstructionMaskMaterial;
 pub use terrain_surface_material::{
     TerrainFeatureLutUniformSyncState, TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial,
     TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,

@@ -263,6 +263,14 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         ),
         AlphaMode::Blend,
     ));
+    let floor_material = {
+        let mut material = make_topdown_structural_material(
+            LinearRgba::new(1.0, 1.0, 1.0, 1.0),
+            indoor_light_field.clone(),
+        );
+        material.base.base_color_texture = Some(game_assets.mud_floor.clone());
+        structural_materials.add(material)
+    };
     let mut structural_material = |color: LinearRgba| {
         structural_materials.add(make_topdown_structural_material(
             color,
@@ -270,7 +278,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         ))
     };
     let wall_material = structural_material(LinearRgba::new(0.56, 0.44, 0.30, 1.0));
-    let floor_material = structural_material(LinearRgba::new(0.4, 0.3, 0.2, 1.0));
     let bridge_material = structural_material(LinearRgba::new(0.38, 0.24, 0.12, 1.0));
     let door_closed_material = structural_material(LinearRgba::new(0.6, 0.45, 0.2, 1.0));
     let door_open_material = structural_material(LinearRgba::new(0.32, 0.62, 0.28, 1.0));

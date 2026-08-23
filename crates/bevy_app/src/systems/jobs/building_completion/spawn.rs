@@ -262,7 +262,7 @@ pub(crate) fn spawn_building_3d_visual(
             ));
         }
         BuildingType::Floor => {
-            let transform_3d = Transform::from_xyz(pos2d.x, 0.0, -pos2d.y);
+            let transform_3d = Transform::from_xyz(pos2d.x, Z_BUILDING_FLOOR, -pos2d.y);
             commands.spawn((
                 Mesh3d(handles_3d.floor_mesh.clone()),
                 MeshMaterial3d(handles_3d.floor_material.clone()),

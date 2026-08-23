@@ -1,5 +1,6 @@
 pub mod animations;
 pub mod blueprint;
+pub mod construction_mask3d;
 pub mod dream;
 pub mod fade;
 pub mod familiar;
@@ -33,12 +34,13 @@ pub use handles::{
     WallVisualHandles, WorkIconHandles,
 };
 pub use material::{
-    TerrainFeatureLutUniformSyncState, TerrainSurfaceLutImageHandle, TerrainSurfaceMaterial,
-    TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod1Lite, TerrainSurfaceMaterialExtLod2,
-    TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2, TerrainSurfaceUniform,
-    TopDownStructuralMaterial, TopDownStructuralMaterialExt, TopDownStructuralUniform,
-    make_terrain_surface_material, make_terrain_surface_material_lod1_lite,
-    make_terrain_surface_material_lod2, make_topdown_structural_material, with_topdown_alpha_mode,
+    ConstructionMaskMaterial, TerrainFeatureLutUniformSyncState, TerrainSurfaceLutImageHandle,
+    TerrainSurfaceMaterial, TerrainSurfaceMaterialExt, TerrainSurfaceMaterialExtLod1Lite,
+    TerrainSurfaceMaterialExtLod2, TerrainSurfaceMaterialLod1Lite, TerrainSurfaceMaterialLod2,
+    TerrainSurfaceUniform, TopDownStructuralMaterial, TopDownStructuralMaterialExt,
+    TopDownStructuralUniform, make_terrain_surface_material,
+    make_terrain_surface_material_lod1_lite, make_terrain_surface_material_lod2,
+    make_topdown_structural_material, with_topdown_alpha_mode,
 };
 
 pub use familiar::{FamiliarVisualOffset, FamiliarVisualOwner};
@@ -77,6 +79,7 @@ impl Plugin for HwVisualPlugin {
             UiMaterialPlugin::<dream::DreamBubbleUiMaterial>::default(),
             Material2dPlugin::<TaskAreaMaterial>::default(),
             MaterialPlugin::<material::TopDownStructuralMaterial>::default(),
+            MaterialPlugin::<material::ConstructionMaskMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterial>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterialLod1Lite>::default(),
             MaterialPlugin::<material::TerrainSurfaceMaterialLod2>::default(),
@@ -84,6 +87,7 @@ impl Plugin for HwVisualPlugin {
 
         app.add_plugins(speech::SpeechPlugin);
         app.init_resource::<TerrainFeatureLutUniformSyncState>();
+        app.init_resource::<construction_mask3d::ConstructionMask3dOwnerCache>();
         app.init_resource::<dream::DreamPresentationLedger>();
         app.init_resource::<wall_connection::WallConnectionDirty>();
 
@@ -99,6 +103,10 @@ impl Plugin for HwVisualPlugin {
         // Dream bubble shared handles (mesh + material pool)
         app.add_systems(Startup, dream::init_dream_bubble_handles);
         app.add_systems(Startup, dream::init_dream_bubble_ui_handles);
+        app.add_systems(
+            Startup,
+            construction_mask3d::init_construction_mask3d_handles,
+        );
 
         // Standalone systems
         app.add_systems(
@@ -244,11 +252,12 @@ impl Plugin for HwVisualPlugin {
             (
                 floor_construction::manage_floor_curing_progress_bars_system,
                 floor_construction::update_floor_curing_progress_bars_system,
-                floor_construction::update_floor_tile_visuals_system,
+                construction_mask3d::sync_floor_construction_masks_system,
                 floor_construction::sync_floor_tile_bone_visuals_system,
                 wall_construction::manage_wall_progress_bars_system,
                 wall_construction::update_wall_progress_bars_system,
-                wall_construction::update_wall_tile_visuals_system,
+                construction_mask3d::sync_wall_construction_masks_system,
+                construction_mask3d::cleanup_construction_mask3d_system,
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),
@@ -293,6 +302,9 @@ pub fn reset_for_world_replace(world: &mut World) {
     if world.contains_resource::<ActorBillboardOwnerCache>() {
         world.insert_resource(ActorBillboardOwnerCache::default());
     }
+    if world.contains_resource::<construction_mask3d::ConstructionMask3dOwnerCache>() {
+        world.insert_resource(construction_mask3d::ConstructionMask3dOwnerCache::default());
+    }
     if world.contains_resource::<dream::DreamPresentationLedger>() {
         world.insert_resource(dream::DreamPresentationLedger::default());
     }
@@ -302,6 +314,7 @@ fn collect_transient_visual_entities(world: &mut World) -> HashSet<Entity> {
     let mut query = world.query_filtered::<Entity, Or<(
         With<visual3d::Building3dVisual>,
         With<visual3d::ActorBillboard3d>,
+        With<construction_mask3d::ConstructionMask3dVisual>,
         With<speech::components::SpeechBubble>,
         With<dream::DreamParticle>,
         With<dream::DreamGainPopup>,
