@@ -118,7 +118,10 @@ pub fn debug_instant_complete_walls_system(
 mod tests {
     use super::*;
     use crate::input_actions::InputModifiers;
-    use crate::test_support::minimal_app;
+    use crate::systems::jobs::wall_construction::wall_construction_completion_system;
+    use crate::test_support::{empty_building_3d_handles, minimal_app};
+    use hw_core::area::TaskArea;
+    use hw_logistics::tile_index::{TileSiteIndex, sync_wall_tile_site_index_system};
 
     #[derive(Resource, Default)]
     struct SpawnCounts {
@@ -133,6 +136,62 @@ mod tests {
     ) {
         counts.souls += souls.read().count();
         counts.familiars += familiars.read().count();
+    }
+
+    #[test]
+    fn instant_build_completes_a_new_indexed_wall_site() {
+        let mut app = App::new();
+        app.init_resource::<crate::DebugInstantBuild>()
+            .init_resource::<crate::world::map::WorldMap>()
+            .init_resource::<TileSiteIndex>()
+            .insert_resource(empty_building_3d_handles())
+            .add_systems(
+                Update,
+                (
+                    sync_wall_tile_site_index_system,
+                    debug_instant_complete_walls_system,
+                    ApplyDeferred,
+                    wall_construction_completion_system,
+                    ApplyDeferred,
+                )
+                    .chain(),
+            );
+        app.world_mut().resource_mut::<crate::DebugInstantBuild>().0 = true;
+
+        let grid = (7, 8);
+        let world_pos = crate::world::map::WorldMap::grid_to_world(grid.0, grid.1);
+        let site = app
+            .world_mut()
+            .spawn(WallConstructionSite::new(
+                TaskArea::from_points(world_pos, world_pos),
+                world_pos,
+                1,
+            ))
+            .id();
+        let tile = app
+            .world_mut()
+            .spawn(WallTileBlueprint::new(site, grid))
+            .id();
+        app.world_mut()
+            .resource_mut::<crate::world::map::WorldMap>()
+            .set_building_occupancy(grid, site);
+
+        app.update();
+
+        assert!(app.world().get_entity(site).is_err());
+        assert!(app.world().get_entity(tile).is_err());
+        let wall = app
+            .world()
+            .resource::<crate::world::map::WorldMap>()
+            .building_entity(grid)
+            .expect("completed wall must own its map tile");
+        let building = app
+            .world()
+            .get::<Building>(wall)
+            .expect("instant build must leave a completed Wall root");
+        assert_eq!(building.kind, BuildingType::Wall);
+        assert!(!building.is_provisional);
+        assert!(app.world().get::<BuildingBounceEffect>(wall).is_some());
     }
 
     #[test]

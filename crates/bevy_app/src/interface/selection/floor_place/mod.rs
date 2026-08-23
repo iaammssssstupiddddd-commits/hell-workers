@@ -11,6 +11,7 @@ mod wall_apply;
 
 use crate::app_contexts::TaskContext;
 use crate::interface::ui::UiInputState;
+use crate::plugins::startup::Building3dHandles;
 use crate::systems::command::TaskMode;
 use crate::systems::jobs::Building;
 use crate::systems::jobs::floor_construction::FloorTileBlueprint;
@@ -49,6 +50,7 @@ pub struct FloorPlaceContext<'w, 's> {
     pub q_existing_floor_tiles: Query<'w, 's, &'static FloorTileBlueprint>,
     pub q_floor_buildings: Query<'w, 's, (&'static Building, &'static Transform)>,
     pub debug_instant_build: Res<'w, crate::DebugInstantBuild>,
+    pub building_3d_handles: Res<'w, Building3dHandles>,
 }
 
 pub fn floor_placement_system(
@@ -85,7 +87,7 @@ pub fn floor_placement_system(
         start_pos_opt,
         is_floor_mode,
         snapped_pos,
-        bypass_floor_check: context.debug_instant_build.0,
+        instant_build: context.debug_instant_build.0,
     };
     let fq = FloorQueryGroup {
         q_existing_floor_tiles: &context.q_existing_floor_tiles,
@@ -102,6 +104,7 @@ pub fn floor_placement_system(
         FloorReleaseState {
             placement_feedback: &mut context.placement_feedback,
             task_mode: &mut context.task_context.0,
+            building_3d_handles: &context.building_3d_handles,
             now,
         },
     ) {

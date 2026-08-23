@@ -1,3 +1,4 @@
+use crate::plugins::startup::Building3dHandles;
 use crate::systems::command::wall_line_area;
 use crate::systems::command::{TaskArea, TaskMode};
 use crate::systems::jobs::Building;
@@ -18,7 +19,7 @@ pub(super) struct FloorReleaseData {
     pub start_pos_opt: Option<Vec2>,
     pub is_floor_mode: bool,
     pub snapped_pos: Vec2,
-    pub bypass_floor_check: bool,
+    pub instant_build: bool,
 }
 
 pub(super) struct FloorQueryGroup<'a, 'w, 's> {
@@ -29,6 +30,7 @@ pub(super) struct FloorQueryGroup<'a, 'w, 's> {
 pub(super) struct FloorReleaseState<'a> {
     pub placement_feedback: &'a mut PlacementFeedbackState,
     pub task_mode: &'a mut TaskMode,
+    pub building_3d_handles: &'a Building3dHandles,
     pub now: std::time::Duration,
 }
 
@@ -97,7 +99,7 @@ pub(super) fn handle_release(
                 &area,
                 world_map,
                 &existing_floor_building_grids,
-                data.bypass_floor_check,
+                data.instant_build,
             );
             if plan.valid_tiles.is_empty() {
                 if let Some(feedback) = plan.feedback() {
@@ -108,7 +110,13 @@ pub(super) fn handle_release(
                 }
             } else {
                 state.placement_feedback.clear_recent_failure();
-                apply_wall_placement(commands, world_map, &area, &plan);
+                apply_wall_placement(
+                    commands,
+                    world_map,
+                    &area,
+                    &plan,
+                    data.instant_build.then_some(state.building_3d_handles),
+                );
             }
         }
 

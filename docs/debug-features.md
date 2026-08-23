@@ -68,7 +68,7 @@
 | 状態 | 色 | 説明 |
 |---|---|---|
 | OFF（デフォルト） | 暗グレー | 通常の建築フロー（ワーカーが作業） |
-| ON | 暗橙 | 壁を配置した次フレームに即時完成させる |
+| ON | 暗橙 | 壁の配置確定時に完成Wallを直接生成する |
 
 - Resource: `DebugInstantBuild(pub bool)`（定義: `crates/bevy_app/src/lib.rs`、production Appへの初期登録: `plugins/game.rs`）
 - マーカー: `InstantBuildButton`
@@ -80,18 +80,17 @@
 ### 概要
 
 `IBuild: ON` の状態で壁を配置すると、ワーカーによるフレーミング・コーティング工程を
-スキップして次フレームに完成済み壁が表示される。  
+スキップして配置transaction内で完成済み壁を生成する。仮想時間がpause中でも、配置入力が
+許可されている状態なら即時完成はvirtual-time Logic gateに依存しない。
 Camera3d 角度の目視確認など、壁の 3D ビジュアルをすぐに確認したいときに使用する。
 
 ### 動作
 
-- 配置直後に `WallTileBlueprint` を `WallTileState::Complete` に強制設定する
-- `WallConstructionSite.phase` を `Coating` に強制移行する
-- タイルに `spawned_wall` がない場合（フレーミング前）は完成済み `Building(Wall)` と
-  `Building3dVisual(wall_material)` を直接 spawn する
-- `spawned_wall` が既に存在する場合（仮設壁が立っている）は `ProvisionalWall` を除去して
-  `is_provisional = false` に昇格させる
-- `wall_construction_completion_system` が同フレーム内で site・tile の cleanup を行う
+- ONで新しく配置するWallは`WallConstructionSite` / `WallTileBlueprint`を作らず、productionの
+  `spawn_wall_shell`を通して完成済み`Building(Wall)`と`Building3dVisual`を直接spawnする
+- 同じ配置transactionで完成bounceを開始し、`WorldMap`の各タイルownerを完成Wallへ設定する
+- ONへ切り替える前から存在する建設siteは従来のfallbackを使う。タイルを`Complete`、siteを
+  `Coating`へ強制し、仮設Wallを昇格して通常completion systemでcleanupする
 
 ### 床なし配置バイパス
 
@@ -109,8 +108,8 @@ Camera3d 角度の目視確認など、壁の 3D ビジュアルをすぐに確�
 | `crates/bevy_app/src/plugins/interface_debug.rs` | `debug_instant_complete_walls_system` |
 | `crates/bevy_app/src/plugins/logic.rs` | wall construction グループ（Group D）の `wall_framed_tile_spawn_system` 直前に挿入 |
 | `crates/bevy_app/src/interface/selection/floor_place/validation.rs` | `validate_wall_tile_no_floor_check`（floor 制約バイパス用） |
-| `crates/bevy_app/src/interface/selection/floor_place/wall_apply.rs` | `bypass_floor_check` フラグで分岐 |
-| `crates/bevy_app/src/interface/selection/floor_place/input.rs` | `handle_release` にフラグを伝搬 |
+| `crates/bevy_app/src/interface/selection/floor_place/wall_apply.rs` | ON時にproduction Wall shellを直接commit、OFF時は通常site/tileを生成 |
+| `crates/bevy_app/src/interface/selection/floor_place/input.rs` | `handle_release` にIBuild状態と3D handleを伝搬 |
 | `crates/bevy_app/src/interface/selection/floor_place/mod.rs` | `floor_placement_system` で `DebugInstantBuild` を読み込み |
 
 ---
