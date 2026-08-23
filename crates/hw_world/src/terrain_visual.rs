@@ -8,8 +8,10 @@ use hw_jobs::construction::WallConstructionSite;
 use hw_jobs::{Blueprint, Building, BuildingType, ObstaclePosition, ObstacleSourceKind};
 use std::collections::{HashMap, HashSet};
 
-/// 障害物除去によってテレインが変化したことを通知するメッセージ。
-/// `bevy_app` 側の `terrain_material_sync_system` が受信してマテリアルを差し替える。
+/// 自然障害物の最後の除去によってテレイン表示を同期する必要があることを通知するメッセージ。
+///
+/// 岩場セルは最初から [`TerrainType::Dirt`] だが、描画用の rock field feature を
+/// 別途解除する必要があるため、論理 terrain type の値が変わらない場合も通知する。
 #[derive(Message, Clone)]
 pub struct TerrainChangedEvent {
     pub idx: usize,
@@ -284,10 +286,10 @@ pub fn obstacle_sync_system(params: ObstacleSyncParams) {
             continue;
         }
 
-        if let Some(idx) = world_map.pos_to_idx(grid.0, grid.1)
-            && world_map.terrain_at_idx(idx) != Some(TerrainType::Dirt)
-        {
-            world_map.set_terrain_at_idx(idx, TerrainType::Dirt);
+        if let Some(idx) = world_map.pos_to_idx(grid.0, grid.1) {
+            if world_map.terrain_at_idx(idx) != Some(TerrainType::Dirt) {
+                world_map.set_terrain_at_idx(idx, TerrainType::Dirt);
+            }
             ev_terrain_changed.write(TerrainChangedEvent { idx });
         }
     }

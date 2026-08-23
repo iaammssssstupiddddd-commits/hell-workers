@@ -773,7 +773,7 @@ fn item_sprite(
 ) -> Sprite {
     let (image, scale) = match resource_type {
         ResourceType::Wood => (soul_handles.wood.clone(), 0.5),
-        ResourceType::Rock => (soul_handles.rock.clone(), 0.5),
+        ResourceType::Rock => (soul_handles.icon_rock_small.clone(), 0.5),
         ResourceType::Bone => (soul_handles.icon_bone_small.clone(), 0.5),
         ResourceType::Sand => (soul_handles.icon_sand_small.clone(), 0.5),
         ResourceType::StasisMud => (soul_handles.icon_stasis_mud_small.clone(), 0.5),

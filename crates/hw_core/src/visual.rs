@@ -5,7 +5,7 @@ use bevy::prelude::*;
 pub struct SoulTaskHandles {
     pub wood: Handle<Image>,
     pub tree_animes: Vec<Handle<Image>>,
-    pub rock: Handle<Image>,
+    pub icon_rock_small: Handle<Image>,
     pub icon_bone_small: Handle<Image>,
     pub icon_sand_small: Handle<Image>,
     pub icon_stasis_mud_small: Handle<Image>,

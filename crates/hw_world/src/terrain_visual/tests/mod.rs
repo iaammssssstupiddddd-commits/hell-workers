@@ -65,6 +65,37 @@ fn natural_removal_clears_blocker_and_turns_terrain_to_dirt() {
 }
 
 #[test]
+fn natural_removal_notifies_when_terrain_is_already_dirt() {
+    let mut app = test_app();
+    let idx = app.world().resource::<WorldMap>().pos_to_idx(4, 5).unwrap();
+    app.world_mut()
+        .resource_mut::<WorldMap>()
+        .set_terrain_at_idx(idx, TerrainType::Dirt);
+    let marker = app
+        .world_mut()
+        .spawn((
+            ObstaclePosition(4, 5),
+            ObstacleSourceKind::NaturalTerrainClearing,
+        ))
+        .id();
+
+    app.update();
+    let mut cursor = app
+        .world()
+        .resource::<Messages<TerrainChangedEvent>>()
+        .get_cursor_current();
+
+    app.world_mut()
+        .entity_mut(marker)
+        .remove::<ObstaclePosition>();
+    app.update();
+
+    let messages = app.world().resource::<Messages<TerrainChangedEvent>>();
+    let changed: Vec<_> = cursor.read(messages).map(|event| event.idx).collect();
+    assert_eq!(changed, vec![idx]);
+}
+
+#[test]
 fn non_natural_removal_keeps_terrain_unchanged() {
     let mut app = test_app();
     let marker = app

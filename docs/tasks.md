@@ -266,6 +266,9 @@ Bevy 0.19 は削除イベントを持たないため、各システムが `Remov
 
 採集完了 (`GatherPhase::Done`) 直後、同フレーム内で `chain::find_haul_chain_after_gather` が起動し、採集地点から **4タイル以内の空きアイテム** と **pending な TransportRequest** を照合して同一 Soul が即座に運搬タスクへ移行する。
 
+採掘完了時に生成する `ResourceItem(Rock)` は、自然障害物の岩山画像ではなく `SoulTaskHandles.icon_rock_small` を使う。地面アイテムのロード復元も同じハンドルと `TILE_SIZE * 0.5` の表示サイズを使い、保存前後で見た目を一致させる。
+同一セルに複数ドロップした Rock は10個の論理 entity を維持し、地面資材数ラベルで総数を示しながら代表スプライト1件だけを描画する。
+
 **チェーン先の優先順位**:
 
 | 優先度 | TransportRequest kind | Soul に割り当てるタスク | 対象リソース |

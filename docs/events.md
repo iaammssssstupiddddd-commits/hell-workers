@@ -43,7 +43,7 @@ dual 通知の Producer は `publish_*` helper を使う。
 | `ConversationCompleted` | `Message`（`hw_visual::speech::conversation::events`、root inventory登録） | `process_conversation_logic` | `apply_conversation_rewards` / Soul表情event consumer | 参加者へstress reliefとmotivation penaltyを適用し、完了表情を通知 |
 | `DriftingEscapeStarted` | `Event` | `decide/drifting` | root adapter | `PopulationManager::start_escape_cooldown()` |
 | `SoulEscaped` | `Event` | `execute/drifting`（マップ端到達） | root adapter | `PopulationManager::total_escaped` インクリメント |
-| `TerrainChangedEvent` | `Message`（`hw_world::terrain_visual`） | `obstacle_sync_system`（`ObstacleSyncSet`、Actor phase） | `terrain_id_map_sync_system`（`MessageReader`、`GameSystemSet::Visual`） | 自然物由来 blocker の最後の削除で `WorldMap` 上の該当タイルが Dirt へ変わったとき `idx` を通知し、`TerrainIdMap` の対応ピクセルを書き換えて共有 `TerrainSurfaceMaterial` の見た目を更新する。**chunk entity（`TerrainChunk`）の再生成は不要**。shader が world-space で texture を参照するため、texture 1 ピクセル書き換えだけで全 chunk の見た目が更新される。登録は `VisualPlugin::add_message::<TerrainChangedEvent>()` |
+| `TerrainChangedEvent` | `Message`（`hw_world::terrain_visual`） | `obstacle_sync_system`（`ObstacleSyncSet`、Actor phase） | `terrain_metadata_sync_system`（`MessageReader`、`GameSystemSet::Visual`） | 自然物由来 blocker の最後の削除で `idx` を通知する。岩場セルは論理 terrain が初めから Dirt でも必ず通知し、consumer が `TerrainIdMap` の対応ピクセルと `TerrainFeatureMap` の rock field channel を同期して共有 `TerrainSurfaceMaterial` の見た目を更新する。**chunk entity（`TerrainChunk`）の再生成は不要**。shader が world-space で texture を参照するため、texture の局所更新だけで全 chunk の見た目が更新される。登録は `VisualPlugin::add_message::<TerrainChangedEvent>()` |
 
 ### プレイヤー向け結果通知
 

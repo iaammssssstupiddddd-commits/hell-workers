@@ -70,7 +70,7 @@ fn empty_soul_task_handles() -> SoulTaskHandles {
     SoulTaskHandles {
         wood: default(),
         tree_animes: Vec::new(),
-        rock: default(),
+        icon_rock_small: default(),
         icon_bone_small: default(),
         icon_sand_small: default(),
         icon_stasis_mud_small: default(),

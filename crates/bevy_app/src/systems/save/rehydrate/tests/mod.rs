@@ -1,8 +1,8 @@
 use super::{
-    BlueprintSpriteHandles, clear_rehydrate_presentation, normalize_construction_state,
-    rehydrate_construction_runtime, rehydrate_construction_shells, rehydrate_familiar_settings,
-    rehydrate_obstacle_runtime, rehydrate_power_consumer_policies, rehydrate_shells,
-    rehydrate_soul_shells, rehydrate_soul_spas, rehydrate_stockpile_policies,
+    BlueprintSpriteHandles, clear_rehydrate_presentation, item_sprite,
+    normalize_construction_state, rehydrate_construction_runtime, rehydrate_construction_shells,
+    rehydrate_familiar_settings, rehydrate_obstacle_runtime, rehydrate_power_consumer_policies,
+    rehydrate_shells, rehydrate_soul_shells, rehydrate_soul_spas, rehydrate_stockpile_policies,
     validate_rehydrate_prerequisites,
 };
 use crate::entities::damned_soul::{Gender, SoulIdentity};
@@ -98,7 +98,7 @@ fn empty_soul_task_handles() -> hw_core::visual::SoulTaskHandles {
     hw_core::visual::SoulTaskHandles {
         wood: Handle::default(),
         tree_animes: Vec::new(),
-        rock: Handle::default(),
+        icon_rock_small: Handle::default(),
         icon_bone_small: Handle::default(),
         icon_sand_small: Handle::default(),
         icon_stasis_mud_small: Handle::default(),

@@ -134,6 +134,32 @@ fn resting_soul_shell_remains_hidden_after_rehydrate() {
 }
 
 #[test]
+fn rehydrated_rock_item_uses_the_small_ground_item_image() {
+    use bevy::asset::{AssetApp, AssetPlugin};
+
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+    app.init_asset::<Image>()
+        .init_asset::<Font>()
+        .init_asset::<Gltf>()
+        .init_asset::<WorldAsset>();
+
+    let asset_server = app.world().resource::<AssetServer>().clone();
+    let game_assets = {
+        let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+        crate::plugins::startup::create_game_assets(&asset_server, &mut images)
+    };
+    let mut soul_handles = empty_soul_task_handles();
+    soul_handles.icon_rock_small = game_assets.icon_rock_small.clone();
+
+    let sprite = item_sprite(ResourceType::Rock, &game_assets, &soul_handles);
+
+    assert_eq!(sprite.image, game_assets.icon_rock_small);
+    assert_ne!(sprite.image, game_assets.rock);
+    assert_eq!(sprite.custom_size, Some(Vec2::splat(TILE_SIZE * 0.5)));
+}
+
+#[test]
 fn stored_water_shell_is_hidden_while_a_stored_bucket_remains_visible() {
     use bevy::asset::{AssetApp, AssetPlugin};
     use hw_core::relationships::StoredIn;

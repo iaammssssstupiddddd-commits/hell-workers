@@ -12,7 +12,7 @@ use crate::systems::command::{
     update_designation_indicator_system,
 };
 use crate::systems::lighting::IndoorLightingRebuildSet;
-use crate::systems::logistics::resource_count_display_system;
+use crate::systems::logistics::{resource_count_display_system, resource_stack_display_system};
 use crate::systems::visual::actor_billboard::{
     cleanup_actor_billboard_system, register_actor_billboard_system, sync_actor_billboard_system,
 };
@@ -32,7 +32,7 @@ use crate::systems::visual::terrain_lod::{
     TerrainLodMetrics, TerrainLodState, terrain_lod_switch_system,
     update_terrain_lod_metrics_system,
 };
-use crate::systems::visual::terrain_material::terrain_id_map_sync_system;
+use crate::systems::visual::terrain_material::terrain_metadata_sync_system;
 use crate::world::map::TerrainChunk;
 use hw_core::game_state::PlayMode;
 use hw_visual::ActorBillboardOwnerCache;
@@ -170,6 +170,7 @@ impl Plugin for VisualPlugin {
                 }),
                 update_designation_indicator_system,
                 sync_designation_indicator_system,
+                resource_stack_display_system,
                 resource_count_display_system,
             )
                 .chain()
@@ -210,10 +211,10 @@ impl Plugin for VisualPlugin {
                 .in_set(DoorPresentationSyncSet),
         );
 
-        // terrain id map 更新（障害物除去後）
+        // terrain metadata texture 更新（自然障害物除去後）
         app.add_systems(
             Update,
-            terrain_id_map_sync_system.in_set(GameSystemSet::Visual),
+            terrain_metadata_sync_system.in_set(GameSystemSet::Visual),
         );
 
         // Shared-pool Soul billboard resolver/sync/lifecycle.

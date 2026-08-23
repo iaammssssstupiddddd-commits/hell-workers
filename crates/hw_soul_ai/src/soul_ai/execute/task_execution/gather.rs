@@ -12,7 +12,7 @@ use crate::soul_ai::execute::task_execution::{
 use bevy::prelude::*;
 use hw_core::constants::*;
 use hw_core::relationships::WorkingOn;
-use hw_core::visual::FadeOut;
+use hw_core::visual::{FadeOut, SoulTaskHandles};
 use hw_jobs::{Designation, WorkType};
 use hw_logistics::{ResourceItem, ResourceType};
 
@@ -93,11 +93,7 @@ pub fn handle_gather_task(
                             let offset = Vec3::new((i as f32 - 2.0) * 6.0, 0.0, 0.0);
                             commands.spawn((
                                 ResourceItem(hw_logistics::ResourceType::Wood),
-                                Sprite {
-                                    image: ctx.env.soul_handles.wood.clone(),
-                                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                                    ..default()
-                                },
+                                gathered_resource_sprite(ResourceType::Wood, ctx.env.soul_handles),
                                 Transform::from_translation(pos + offset),
                             ));
                         }
@@ -139,11 +135,7 @@ pub fn handle_gather_task(
                             );
                             commands.spawn((
                                 ResourceItem(hw_logistics::ResourceType::Rock),
-                                Sprite {
-                                    image: ctx.env.soul_handles.rock.clone(),
-                                    custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
-                                    ..default()
-                                },
+                                gathered_resource_sprite(ResourceType::Rock, ctx.env.soul_handles),
                                 Transform::from_translation(pos + offset),
                             ));
                         }
@@ -251,4 +243,47 @@ pub fn handle_gather_task(
     }
 
     TaskHandlerControl::Continue
+}
+
+fn gathered_resource_sprite(resource_type: ResourceType, handles: &SoulTaskHandles) -> Sprite {
+    let image = match resource_type {
+        ResourceType::Wood => handles.wood.clone(),
+        ResourceType::Rock => handles.icon_rock_small.clone(),
+        _ => unreachable!("gather only produces wood or rock"),
+    };
+    Sprite {
+        image,
+        custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),
+        ..default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::asset::uuid_handle;
+
+    fn task_handles() -> SoulTaskHandles {
+        SoulTaskHandles {
+            wood: uuid_handle!("18dfef08-168c-4bd8-99d0-f1c8a4ee5a07"),
+            tree_animes: Vec::new(),
+            icon_rock_small: uuid_handle!("e279c724-0413-47cf-81a4-33547ff47895"),
+            icon_bone_small: default(),
+            icon_sand_small: default(),
+            icon_stasis_mud_small: default(),
+            bucket_water: default(),
+            bucket_empty: default(),
+        }
+    }
+
+    #[test]
+    fn mined_rock_uses_the_small_ground_item_image() {
+        let handles = task_handles();
+
+        let sprite = gathered_resource_sprite(ResourceType::Rock, &handles);
+
+        assert_eq!(sprite.image, handles.icon_rock_small);
+        assert_ne!(sprite.image, handles.wood);
+        assert_eq!(sprite.custom_size, Some(Vec2::splat(TILE_SIZE * 0.5)));
+    }
 }
