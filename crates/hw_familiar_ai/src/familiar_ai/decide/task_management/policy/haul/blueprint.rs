@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
 use hw_core::constants::WHEELBARROW_CAPACITY;
-use hw_core::logistics::ResourceType;
+use hw_core::logistics::{ResourceSourceKey, ResourceType};
 use hw_logistics::transport_request::can_complete_pick_drop_to_blueprint;
 
 use super::super::super::builders::{
@@ -189,7 +189,7 @@ type FindSourceFn = fn(
     Option<&TaskArea>,
     &crate::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries,
     &ReservationShadow,
-) -> Option<(Entity, Vec2)>;
+) -> Option<(ResourceSourceKey, Vec2)>;
 
 type IssueFnPtr = fn(
     WheelbarrowCollectSpec,
@@ -239,7 +239,7 @@ fn try_direct_collect_with_wheelbarrow_to_blueprint(
     (strategy.issue_fn)(
         WheelbarrowCollectSpec {
             wheelbarrow: wb_entity,
-            source_entity,
+            source: source_entity,
             source_pos,
             destination: params.blueprint,
             amount,

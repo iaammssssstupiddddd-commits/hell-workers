@@ -195,6 +195,233 @@ def read_exact_csv_rows(
     return (rows if not errors else None), errors
 
 
+def read_transport_request_changes(
+    path: Path,
+) -> tuple[list[dict[str, str]] | None, list[str]]:
+    rows, errors = read_exact_csv_rows(
+        path,
+        columns=TRANSPORT_REQUEST_CHANGE_COLUMNS,
+        artifact_name="transport_request_changes.csv",
+    )
+    if rows is None:
+        return None, errors
+    if len(rows) != len(TRANSPORT_REQUEST_KIND_NAMES):
+        errors.append(
+            "transport_request_changes.csv must contain exactly "
+            f"{len(TRANSPORT_REQUEST_KIND_NAMES)} data rows; got {len(rows)}"
+        )
+    observer_runs: int | None = None
+    for index, (row, expected_kind) in enumerate(
+        zip(rows, TRANSPORT_REQUEST_KIND_NAMES)
+    ):
+        if row.get("schema_version") != TRANSPORT_REQUEST_CHANGES_SCHEMA_VERSION:
+            errors.append(
+                "transport_request_changes.csv row "
+                f"{index} schema_version is {row.get('schema_version')!r}, "
+                f"expected {TRANSPORT_REQUEST_CHANGES_SCHEMA_VERSION!r}"
+            )
+        if row.get("request_kind") != expected_kind:
+            errors.append(
+                "transport_request_changes.csv row "
+                f"{index} request_kind is {row.get('request_kind')!r}, "
+                f"expected {expected_kind!r}"
+            )
+        parsed: dict[str, int] = {}
+        for column in TRANSPORT_REQUEST_CHANGE_COLUMNS[2:]:
+            value = row.get(column, "")
+            try:
+                parsed_value = int(value)
+                if parsed_value < 0 or str(parsed_value) != value:
+                    raise ValueError
+            except (TypeError, ValueError):
+                errors.append(
+                    f"transport_request_changes.csv row {index} {column} "
+                    "must be a canonical nonnegative integer"
+                )
+                continue
+            parsed[column] = parsed_value
+        current_runs = parsed.get("observer_runs")
+        if current_runs is not None:
+            if observer_runs is None:
+                observer_runs = current_runs
+            elif current_runs != observer_runs:
+                errors.append(
+                    "transport_request_changes.csv observer_runs differs between rows"
+                )
+        if all(
+            column in parsed
+            for column in (
+                "changed_components",
+                "added_components",
+                "changed_existing_components",
+            )
+        ) and parsed["changed_components"] != (
+            parsed["added_components"] + parsed["changed_existing_components"]
+        ):
+            errors.append(
+                "transport_request_changes.csv row "
+                f"{index} changed_components differs from added + changed-existing"
+            )
+        producer_parts = (
+            "producer_spawns",
+            "producer_missing_repairs",
+            "producer_semantic_updates",
+            "producer_disable_updates",
+            "producer_no_op_writes",
+            "producer_steady_observations",
+        )
+        if all(
+            column in parsed for column in ("producer_observations", *producer_parts)
+        ) and parsed["producer_observations"] != sum(
+            parsed[column] for column in producer_parts
+        ):
+            errors.append(
+                "transport_request_changes.csv row "
+                f"{index} producer_observations differs from producer outcome sum"
+            )
+    if observer_runs is not None and observer_runs == 0:
+        errors.append("transport_request_changes.csv observer_runs must be greater than zero")
+    return (rows if not errors else None), errors
+
+
+def read_spatial_query_metrics(
+    path: Path,
+    *,
+    workload: str,
+) -> tuple[list[dict[str, str]] | None, list[str]]:
+    rows, errors = read_exact_csv_rows(
+        path,
+        columns=SPATIAL_QUERY_METRICS_COLUMNS,
+        artifact_name="spatial_query_metrics.csv",
+    )
+    if rows is None:
+        return None, errors
+    expected_rows = SPATIAL_QUERY_METRICS_CONTRACTS.get(workload, ())
+    if len(rows) != len(expected_rows):
+        errors.append(
+            "spatial_query_metrics.csv must contain exactly "
+            f"{len(expected_rows)} rows for {workload}; got {len(rows)}"
+        )
+    integer_columns = SPATIAL_QUERY_METRICS_COLUMNS[4:]
+    for index, (row, expected) in enumerate(
+        zip(rows, expected_rows)
+    ):
+        expected_caller, expected_band, expected_radius = expected
+        if row.get("schema_version") != SPATIAL_QUERY_METRICS_SCHEMA_VERSION:
+            errors.append(f"spatial_query_metrics.csv row {index} schema_version differs")
+        if row.get("tag") != "soul":
+            errors.append(f"spatial_query_metrics.csv row {index} tag differs")
+        if row.get("caller") != expected_caller:
+            errors.append(f"spatial_query_metrics.csv row {index} caller differs")
+        if row.get("radius_band") != expected_band:
+            errors.append(f"spatial_query_metrics.csv row {index} radius_band differs")
+        parsed: dict[str, int] = {}
+        for column in integer_columns:
+            value = row.get(column, "")
+            try:
+                parsed_value = int(value)
+                if parsed_value < 0 or str(parsed_value) != value:
+                    raise ValueError
+            except (TypeError, ValueError):
+                errors.append(
+                    f"spatial_query_metrics.csv row {index} {column} "
+                    "must be a canonical nonnegative integer"
+                )
+                continue
+            parsed[column] = parsed_value
+        if row.get("radius_px") != expected_radius:
+            errors.append(f"spatial_query_metrics.csv row {index} radius_px differs")
+        if parsed.get("queries") == 0:
+            errors.append(f"spatial_query_metrics.csv row {index} queries must be positive")
+        if parsed.get("invalid_queries") != 0:
+            errors.append(f"spatial_query_metrics.csv row {index} has invalid queries")
+        if parsed.get("occupied_buckets", 0) > parsed.get("coordinate_probes", 0):
+            errors.append(
+                f"spatial_query_metrics.csv row {index} occupied buckets exceed probes"
+            )
+        if parsed.get("exact_hits", 0) > parsed.get("bucket_members_examined", 0):
+            errors.append(f"spatial_query_metrics.csv row {index} hits exceed members")
+        if parsed.get("position_fallbacks", 0) > parsed.get(
+            "bucket_members_examined", 0
+        ):
+            errors.append(
+                f"spatial_query_metrics.csv row {index} fallbacks exceed members"
+            )
+    return (rows if not errors else None), errors
+
+
+def read_dream_ui_metrics(
+    path: Path,
+) -> tuple[dict[str, str] | None, list[str]]:
+    rows, errors = read_exact_csv_rows(
+        path,
+        columns=DREAM_UI_METRICS_COLUMNS,
+        artifact_name="dream_ui_metrics.csv",
+    )
+    if rows is None:
+        return None, errors
+    if len(rows) != 1:
+        return None, [
+            *errors,
+            f"dream_ui_metrics.csv must contain exactly one data row; got {len(rows)}",
+        ]
+    row = rows[0]
+    if row.get("schema_version") != DREAM_UI_METRICS_SCHEMA_VERSION:
+        errors.append("dream_ui_metrics.csv schema_version differs")
+    if row.get("workload") != "dream-ui-burst":
+        errors.append("dream_ui_metrics.csv workload differs")
+    if row.get("scoped_allocator_available") not in {"true", "false"}:
+        errors.append("dream_ui_metrics.csv scoped_allocator_available must be boolean")
+    integer_columns = DREAM_UI_METRICS_COLUMNS[2:12] + DREAM_UI_METRICS_COLUMNS[13:18] + (
+        "maximum_active_particles",
+    )
+    parsed: dict[str, int] = {}
+    for column in integer_columns:
+        value = row.get(column, "")
+        try:
+            parsed_value = int(value)
+            if parsed_value < 0 or str(parsed_value) != value:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append(
+                f"dream_ui_metrics.csv {column} must be a canonical nonnegative integer"
+            )
+            continue
+        parsed[column] = parsed_value
+    for column in DREAM_UI_METRICS_COLUMNS[18:21]:
+        if not re.fullmatch(r"[0-9a-f]{16}", row.get(column, "")):
+            errors.append(
+                f"dream_ui_metrics.csv {column} must be a 16-digit lowercase hex checksum"
+            )
+    if parsed.get("target_active_particles") != 128:
+        errors.append("dream_ui_metrics.csv target_active_particles must be 128")
+    if parsed.get("maximum_active_particles") != 128:
+        errors.append("dream_ui_metrics.csv maximum_active_particles must be 128")
+    for column in (
+        "measured_frames",
+        "active_particle_updates",
+        "merge_pair_comparisons",
+        "dream_lane_elapsed_ns",
+        "dream_lane_p95_ns",
+    ):
+        if parsed.get(column, 0) <= 0:
+            errors.append(f"dream_ui_metrics.csv {column} must be positive")
+    if parsed.get("node_writes") != parsed.get("active_particle_updates"):
+        errors.append("dream_ui_metrics.csv node_writes must equal active_particle_updates")
+    if row.get("scoped_allocator_available") == "false" and (
+        parsed.get("scoped_alloc_calls") != 0 or parsed.get("scoped_alloc_bytes") != 0
+    ):
+        errors.append("dream_ui_metrics.csv unavailable scoped allocator counters must be zero")
+    if row.get("scoped_allocator_available") == "true" and (
+        parsed.get("scoped_alloc_calls", 0) <= 0
+        or parsed.get("scoped_alloc_bytes", 0) <= 0
+    ):
+        errors.append("dream_ui_metrics.csv available scoped allocator counters must be positive")
+    if parsed.get("dream_lane_sample_overflow") != 0:
+        errors.append("dream_ui_metrics.csv dream_lane_sample_overflow must be zero")
+    return (row if not errors else None), errors
+
+
 def compare_exact_rows(
     artifact_name: str,
     observed: list[dict[str, str]] | None,
@@ -1986,6 +2213,7 @@ def validate_run(
     p02_presentation = None
     deconstruction_fixture = None
     save_transaction = None
+    dream_ui_metrics = None
     timeline = None
     behavior_save_artifact = None
     if capture_kind in {"field-core", "consumer-core"}:
@@ -2145,6 +2373,45 @@ def validate_run(
         data_dir / "save_transaction.csv"
     ).exists():
         reasons.append("non-save-transaction workload must not write save_transaction.csv")
+    dream_ui_metrics_path = data_dir / "dream_ui_metrics.csv"
+    if expected_case.workload == "dream-ui-burst" and capture_kind in {
+        "frame-time",
+        "fixed-step-determinism",
+    }:
+        dream_ui_metrics, dream_ui_errors = read_dream_ui_metrics(dream_ui_metrics_path)
+        reasons.extend(dream_ui_errors)
+    elif dream_ui_metrics_path.exists():
+        reasons.append("dream_ui_metrics.csv is only allowed for dream-ui-burst captures")
+    transport_request_changes_path = data_dir / "transport_request_changes.csv"
+    expects_transport_request_changes = (
+        capture_kind == "frame-time"
+        and expected_case.workload in {"construction", "task-dashboard"}
+    )
+    if expects_transport_request_changes:
+        _, transport_change_errors = read_transport_request_changes(
+            transport_request_changes_path
+        )
+        reasons.extend(transport_change_errors)
+    elif transport_request_changes_path.exists():
+        reasons.append(
+            "transport_request_changes.csv is only allowed for frame-time "
+            "construction/task-dashboard workloads"
+        )
+    spatial_query_metrics_path = data_dir / "spatial_query_metrics.csv"
+    expects_spatial_query_metrics = (
+        capture_kind == "frame-time"
+        and expected_case.workload in SPATIAL_QUERY_METRICS_CONTRACTS
+    )
+    if expects_spatial_query_metrics:
+        _, spatial_query_errors = read_spatial_query_metrics(
+            spatial_query_metrics_path,
+            workload=expected_case.workload,
+        )
+        reasons.extend(spatial_query_errors)
+    elif spatial_query_metrics_path.exists():
+        reasons.append(
+            "spatial_query_metrics.csv is only allowed for frame-time path-door/gather workloads"
+        )
     if capture_kind == "frame-time":
         if expected_case.workload == "save-transaction":
             if (data_dir / "summary.csv").exists():
@@ -2545,6 +2812,7 @@ def validate_run(
         p02_presentation=p02_presentation,
         deconstruction_fixture=deconstruction_fixture,
         save_transaction=save_transaction,
+        dream_ui_metrics=dream_ui_metrics,
         timeline=timeline,
         behavior_save_artifact=behavior_save_artifact,
         profile_artifact=None,

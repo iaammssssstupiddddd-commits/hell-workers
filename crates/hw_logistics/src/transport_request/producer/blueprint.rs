@@ -24,21 +24,16 @@ pub fn blueprint_auto_haul_system(
     yards_cache: Res<CachedActiveYards>,
     q_paired_sites: Query<(&Site, &PairedYard)>,
     q_blueprints: Query<(Entity, &Transform, &Blueprint, Option<&TaskWorkers>)>,
-    q_bp_requests: Query<(
-        Entity,
-        &TargetBlueprint,
-        &TransportRequest,
-        Option<&TaskWorkers>,
-    )>,
+    q_bp_requests: super::ExistingConstructionRequestQuery<TargetBlueprint>,
 ) {
     let mut in_flight = std::collections::HashMap::<(Entity, ResourceType), usize>::new();
 
-    for (_, target_bp, req, workers_opt) in q_bp_requests.iter() {
+    for (_, _, req, workers_opt, _) in q_bp_requests.iter() {
         if matches!(req.kind, TransportRequestKind::DeliverToBlueprint) {
             let count = workers_opt.map(|w| w.len()).unwrap_or(0);
             if count > 0 {
                 *in_flight
-                    .entry((target_bp.0, req.resource_type))
+                    .entry((req.anchor, req.resource_type))
                     .or_insert(0) += count;
             }
         }
@@ -135,11 +130,11 @@ pub fn blueprint_auto_haul_system(
 
     let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
 
-    for (request_entity, target_bp, request, workers_opt) in q_bp_requests.iter() {
+    for (request_entity, target_bp, request, workers_opt, current) in q_bp_requests.iter() {
         if !matches!(request.kind, TransportRequestKind::DeliverToBlueprint) {
             continue;
         }
-        let key = (target_bp.0, request.resource_type);
+        let key = (request.anchor, request.resource_type);
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
 
         if !super::upsert::process_duplicate_key(
@@ -154,36 +149,34 @@ pub fn blueprint_auto_haul_system(
 
         if let Some((issued_by, slots, bp_pos)) = desired_requests.get(&key) {
             let inflight = super::to_u32_saturating(workers);
-            commands.entity(request_entity).try_insert((
-                Transform::from_xyz(bp_pos.x, bp_pos.y, 0.0),
-                Visibility::Hidden,
-                Designation {
-                    work_type: WorkType::Haul,
-                },
-                ManagedBy(*issued_by),
-                TaskSlots::new(*slots),
-                Priority(0),
-                TargetBlueprint(key.0),
-                TransportRequest {
-                    kind: TransportRequestKind::DeliverToBlueprint,
-                    anchor: key.0,
-                    resource_type: key.1,
+            if target_bp.is_none_or(|current| current.0 != key.0) {
+                commands
+                    .entity(request_entity)
+                    .try_insert(TargetBlueprint(key.0));
+            }
+            super::upsert::update_request_runtime_if_needed(
+                &mut commands,
+                request_entity,
+                request,
+                current,
+                super::upsert::SemanticRequestSpec {
+                    key,
+                    site_pos: *bp_pos,
                     issued_by: *issued_by,
-                    priority: TransportPriority::Normal,
-                    stockpile_group: vec![],
-                },
-                TransportDemand {
                     desired_slots: *slots,
                     inflight,
+                    priority: 0,
+                    transport_priority: TransportPriority::Normal,
+                    kind: TransportRequestKind::DeliverToBlueprint,
+                    work_type: WorkType::Haul,
+                    state: super::upsert::request_state_for_workers(workers),
                 },
-                super::upsert::request_state_for_workers(workers),
-                TransportPolicy::default(),
-            ));
+            );
             continue;
         }
 
         if workers == 0 {
-            super::upsert::disable_request(&mut commands, request_entity);
+            super::upsert::disable_request_if_needed(&mut commands, request_entity, current, None);
         }
     }
 
@@ -270,16 +263,55 @@ mod tests {
 
         app.update();
 
-        let world = app.world_mut();
-        let mut requests = world.query::<(&TransportRequest, &TargetBlueprint, &ManagedBy)>();
-        let matching: Vec<_> = requests
-            .iter(world)
-            .filter(|(request, target, _)| {
-                target.0 == blueprint_entity && request.resource_type == ResourceType::Wood
-            })
-            .collect();
-        assert_eq!(matching.len(), 1);
-        assert_eq!(matching[0].0.issued_by, yard);
-        assert_eq!(matching[0].2.0, yard);
+        let request_entity = {
+            let world = app.world_mut();
+            let mut requests =
+                world.query::<(Entity, &TransportRequest, &TargetBlueprint, &ManagedBy)>();
+            let matching: Vec<_> = requests
+                .iter(world)
+                .filter(|(_, request, target, _)| {
+                    target.0 == blueprint_entity && request.resource_type == ResourceType::Wood
+                })
+                .collect();
+            assert_eq!(matching.len(), 1);
+            assert_eq!(matching[0].1.issued_by, yard);
+            assert_eq!(matching[0].3.0, yard);
+            matching[0].0
+        };
+
+        app.world_mut()
+            .entity_mut(request_entity)
+            .insert(TargetBlueprint(yard))
+            .remove::<TransportPolicy>();
+        app.update();
+        assert_eq!(
+            app.world()
+                .get::<TargetBlueprint>(request_entity)
+                .map(|target| target.0),
+            Some(blueprint_entity)
+        );
+        assert!(
+            app.world()
+                .entity(request_entity)
+                .contains::<TransportPolicy>()
+        );
+
+        app.world_mut().clear_trackers();
+        app.update();
+
+        let request = app.world().entity(request_entity);
+        assert!(!request.get_ref::<Transform>().unwrap().is_changed());
+        assert!(!request.get_ref::<Designation>().unwrap().is_changed());
+        assert!(!request.get_ref::<ManagedBy>().unwrap().is_changed());
+        assert!(!request.get_ref::<TaskSlots>().unwrap().is_changed());
+        assert!(!request.get_ref::<TransportRequest>().unwrap().is_changed());
+        assert!(!request.get_ref::<TransportDemand>().unwrap().is_changed());
+        assert!(
+            !request
+                .get_ref::<TransportRequestState>()
+                .unwrap()
+                .is_changed()
+        );
+        assert!(!request.get_ref::<TransportPolicy>().unwrap().is_changed());
     }
 }

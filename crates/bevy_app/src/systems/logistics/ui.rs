@@ -25,6 +25,68 @@ impl Default for ResourceCountDisplayTimer {
 #[derive(Component)]
 pub struct ResourceCountLabel;
 
+type ResourceStackKey = ((i32, i32), ResourceType);
+
+/// Runtime-only membership index shared by stack alpha and count-label projection.
+#[derive(Resource, Default)]
+pub struct ResourceStackIndex {
+    entries: HashMap<Entity, Option<ResourceStackKey>>,
+    members: HashMap<ResourceStackKey, HashSet<Entity>>,
+    grid_counts: HashMap<(i32, i32), usize>,
+    dirty_keys: HashSet<ResourceStackKey>,
+    dirty_work: Vec<ResourceStackKey>,
+    reset_alpha: HashSet<Entity>,
+    initialized: bool,
+}
+
+impl ResourceStackIndex {
+    fn remove_cached(&mut self, entity: Entity) {
+        let Some(key) = self.entries.remove(&entity).flatten() else {
+            self.reset_alpha.insert(entity);
+            return;
+        };
+        self.dirty_keys.insert(key);
+        self.reset_alpha.insert(entity);
+        if let Some(members) = self.members.get_mut(&key) {
+            members.remove(&entity);
+            if members.is_empty() {
+                self.members.remove(&key);
+            }
+        }
+        if let Some(count) = self.grid_counts.get_mut(&key.0) {
+            *count = count.saturating_sub(1);
+            if *count == 0 {
+                self.grid_counts.remove(&key.0);
+            }
+        }
+    }
+
+    fn update_cached(
+        &mut self,
+        entity: Entity,
+        transform: &Transform,
+        visibility: &Visibility,
+        item: &ResourceItem,
+    ) {
+        let key = matches!(visibility, Visibility::Visible | Visibility::Inherited).then(|| {
+            (
+                WorldMap::world_to_grid(transform.translation.truncate()),
+                item.0,
+            )
+        });
+        if self.entries.get(&entity).copied() == Some(key) {
+            return;
+        }
+        self.remove_cached(entity);
+        self.entries.insert(entity, key);
+        if let Some(key) = key {
+            self.members.entry(key).or_default().insert(entity);
+            *self.grid_counts.entry(key.0).or_insert(0) += 1;
+            self.dirty_keys.insert(key);
+        }
+    }
+}
+
 type ResourceStackItemsQuery<'w, 's> = Query<
     'w,
     's,
@@ -35,66 +97,117 @@ type ResourceStackItemsQuery<'w, 's> = Query<
         &'static ResourceItem,
     ),
 >;
+type ChangedResourceStackItemsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static Visibility,
+        &'static ResourceItem,
+    ),
+    Or<(
+        Changed<Transform>,
+        Changed<Visibility>,
+        Changed<ResourceItem>,
+    )>,
+>;
+type AddedResourceSpriteQuery<'w, 's> = Query<'w, 's, Entity, (With<ResourceItem>, Added<Sprite>)>;
+type ResourceSpriteMutQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static mut Sprite), With<ResourceItem>>;
 
 pub fn resource_stack_display_system(
     q_items: ResourceStackItemsQuery,
-    mut q_item_sprites: Query<(Entity, &mut Sprite), With<ResourceItem>>,
+    q_changed_items: ChangedResourceStackItemsQuery,
+    mut removed_items: RemovedComponents<ResourceItem>,
+    mut removed_transforms: RemovedComponents<Transform>,
+    mut removed_visibility: RemovedComponents<Visibility>,
+    mut index: ResMut<ResourceStackIndex>,
+    mut sprite_queries: ParamSet<(AddedResourceSpriteQuery, ResourceSpriteMutQuery)>,
 ) {
-    let mut visible_items = HashSet::new();
-    let mut stack_representatives: HashMap<((i32, i32), ResourceType), Entity> = HashMap::new();
+    for entity in removed_items.read() {
+        index.remove_cached(entity);
+    }
+    for entity in removed_transforms.read() {
+        index.remove_cached(entity);
+    }
+    for entity in removed_visibility.read() {
+        index.remove_cached(entity);
+    }
 
-    for (entity, transform, visibility, item) in q_items.iter() {
-        if matches!(visibility, Visibility::Visible | Visibility::Inherited) {
-            let grid = WorldMap::world_to_grid(transform.translation.truncate());
-            visible_items.insert(entity);
-            stack_representatives
-                .entry((grid, item.0))
-                .and_modify(|representative| {
-                    if entity.to_bits() < representative.to_bits() {
-                        *representative = entity;
-                    }
-                })
-                .or_insert(entity);
+    if index.initialized {
+        for (entity, transform, visibility, item) in &q_changed_items {
+            index.update_cached(entity, transform, visibility, item);
+        }
+    } else {
+        index.initialized = true;
+        for (entity, transform, visibility, item) in &q_items {
+            index.update_cached(entity, transform, visibility, item);
         }
     }
 
-    let visible_representatives: HashSet<_> = stack_representatives.into_values().collect();
-    for (entity, mut sprite) in &mut q_item_sprites {
-        let target_alpha =
-            if visible_items.contains(&entity) && !visible_representatives.contains(&entity) {
-                0.0
-            } else {
-                1.0
-            };
-        if sprite.color.alpha() != target_alpha {
-            sprite.color.set_alpha(target_alpha);
+    {
+        let q_added_sprites = sprite_queries.p0();
+        for entity in &q_added_sprites {
+            index.reset_alpha.insert(entity);
+            if let Some(key) = index.entries.get(&entity).copied().flatten() {
+                index.dirty_keys.insert(key);
+            }
         }
     }
+
+    let mut q_item_sprites = sprite_queries.p1();
+    for entity in index.reset_alpha.drain() {
+        if let Ok((_, mut sprite)) = q_item_sprites.get_mut(entity)
+            && sprite.color.alpha() != 1.0
+        {
+            sprite.color.set_alpha(1.0);
+        }
+    }
+
+    let mut dirty_work = std::mem::take(&mut index.dirty_work);
+    dirty_work.clear();
+    dirty_work.extend(index.dirty_keys.drain());
+    for key in &dirty_work {
+        let Some(members) = index.members.get(key) else {
+            continue;
+        };
+        let representative = members
+            .iter()
+            .min_by_key(|entity| entity.to_bits())
+            .copied();
+        for entity in members {
+            if let Ok((_, mut sprite)) = q_item_sprites.get_mut(*entity) {
+                let target_alpha = if Some(*entity) == representative {
+                    1.0
+                } else {
+                    0.0
+                };
+                if sprite.color.alpha() != target_alpha {
+                    sprite.color.set_alpha(target_alpha);
+                }
+            }
+        }
+    }
+    index.dirty_work = dirty_work;
 }
 
 pub fn resource_count_display_system(
     mut commands: Commands,
     time: Res<Time>,
     mut refresh_timer: ResMut<ResourceCountDisplayTimer>,
-    q_items: Query<(&Transform, &Visibility), With<ResourceItem>>,
+    index: Res<ResourceStackIndex>,
     mut labels: ResMut<ResourceLabels>,
     mut q_text: Query<&mut Text2d, With<ResourceCountLabel>>,
     mut q_transform: Query<&mut Transform, (With<ResourceCountLabel>, Without<ResourceItem>)>,
 ) {
-    let mut grid_counts: HashMap<(i32, i32), usize> = HashMap::new();
-
     let timer_finished = refresh_timer.timer.tick(time.delta()).just_finished();
     if refresh_timer.first_run_done && !timer_finished {
         return;
     }
     refresh_timer.first_run_done = true;
 
-    for (transform, visibility) in q_items.iter() {
-        if matches!(visibility, Visibility::Visible | Visibility::Inherited) {
-            let grid = WorldMap::world_to_grid(transform.translation.truncate());
-            *grid_counts.entry(grid).or_insert(0) += 1;
-        }
-    }
+    let grid_counts = &index.grid_counts;
 
     // ラベルの更新または作成
     for (grid, count) in grid_counts.iter() {
@@ -110,9 +223,17 @@ pub fn resource_count_display_system(
         if let Some(&entity) = labels.0.get(grid) {
             if let Ok(mut transform) = q_transform.get_mut(entity) {
                 if let Ok(mut text) = q_text.get_mut(entity) {
-                    text.0 = count.to_string();
+                    let next = count.to_string();
+                    if text.0 != next {
+                        text.0 = next;
+                    }
                 }
-                *transform = target_transform;
+                if transform.translation != target_transform.translation
+                    || transform.rotation != target_transform.rotation
+                    || transform.scale != target_transform.scale
+                {
+                    *transform = target_transform;
+                }
             } else {
                 // エンティティが存在しないか、Transformを持っていない場合は再作成フラグ
                 labels.0.remove(grid);
@@ -139,18 +260,16 @@ pub fn resource_count_display_system(
     }
 
     // 不要なラベルの削除
-    let mut to_remove = Vec::new();
-    for (&grid, &entity) in labels.0.iter() {
-        if !grid_counts.contains_key(&grid) {
-            if let Ok(mut e) = commands.get_entity(entity) {
+    labels.0.retain(|grid, entity| {
+        if !grid_counts.contains_key(grid) {
+            if let Ok(mut e) = commands.get_entity(*entity) {
                 e.despawn();
             }
-            to_remove.push(grid);
+            false
+        } else {
+            true
         }
-    }
-    for grid in to_remove {
-        labels.0.remove(&grid);
-    }
+    });
 }
 
 #[cfg(test)]
@@ -162,6 +281,7 @@ mod tests {
     fn same_cell_resource_stack_draws_one_representative_without_hiding_items() {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
+            .init_resource::<ResourceStackIndex>()
             .add_systems(Update, resource_stack_display_system);
         let center = WorldMap::grid_to_world(3, 4);
         for offset_x in [-4.0, 0.0, 4.0] {
@@ -200,21 +320,73 @@ mod tests {
             .insert(Visibility::Hidden);
         app.update();
 
-        let visible_alphas = app
+        let updated_items = app
             .world_mut()
-            .query_filtered::<(&Sprite, &Visibility), With<ResourceItem>>()
+            .query_filtered::<(Entity, &Sprite, &Visibility), With<ResourceItem>>()
             .iter(app.world())
-            .filter_map(|(sprite, visibility)| {
-                (*visibility != Visibility::Hidden).then_some(sprite.color.alpha())
-            })
+            .map(|(entity, sprite, visibility)| (entity, sprite.color.alpha(), *visibility))
             .collect::<Vec<_>>();
         assert_eq!(
-            visible_alphas.iter().filter(|alpha| **alpha == 1.0).count(),
+            updated_items
+                .iter()
+                .filter(|(_, alpha, visibility)| {
+                    *visibility != Visibility::Hidden && *alpha == 1.0
+                })
+                .count(),
             1
         );
         assert_eq!(
-            visible_alphas.iter().filter(|alpha| **alpha == 0.0).count(),
+            updated_items
+                .iter()
+                .filter(|(_, alpha, visibility)| {
+                    *visibility != Visibility::Hidden && *alpha == 0.0
+                })
+                .count(),
             1
+        );
+        assert_eq!(
+            updated_items
+                .iter()
+                .find(|(entity, _, _)| *entity == items[0].0)
+                .map(|(_, alpha, _)| *alpha),
+            Some(1.0)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<ResourceStackIndex>()
+                .grid_counts
+                .get(&(3, 4)),
+            Some(&2)
+        );
+
+        let other_center = WorldMap::grid_to_world(8, 9);
+        app.world_mut()
+            .entity_mut(items[1].0)
+            .get_mut::<Transform>()
+            .unwrap()
+            .translation = other_center.extend(0.6);
+        app.update();
+
+        let index = app.world().resource::<ResourceStackIndex>();
+        assert_eq!(index.grid_counts.get(&(3, 4)), Some(&1));
+        assert_eq!(index.grid_counts.get(&(8, 9)), Some(&1));
+        assert_eq!(
+            app.world()
+                .entity(items[1].0)
+                .get::<Sprite>()
+                .unwrap()
+                .color
+                .alpha(),
+            1.0
+        );
+        assert_eq!(
+            app.world()
+                .entity(items[2].0)
+                .get::<Sprite>()
+                .unwrap()
+                .color
+                .alpha(),
+            1.0
         );
     }
 }

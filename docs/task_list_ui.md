@@ -1,6 +1,6 @@
 # タスクリストUI仕様
 
-最終更新: 2026-08-05
+最終更新: 2026-08-24
 
 ## 概要
 画面左側に表示される常駐パネルのモードの1つです（エンティティリストとタブ切替）。
@@ -112,6 +112,10 @@ exhaustive coverageされ、追加・変更時は`docs/help-screen.md`の更新�
   task list の dirty 検知は policy 本体を再評価せず、更新された diagnostics / revision を通常の dirty source として読みます。
 - 左パネルを `TaskList` に切り替えたフレームは `mark_all()` で `state_dirty` / `list_dirty` を両方立て、最新スナップショットで再描画します（タスクデータが変わっていない場合も含む）。
 - 画面上部の task summary は `TaskListState.summary_total` / `summary_high` を参照し、タスクリストと同じ dirty source を共有します。
+- `TaskListBody`は`clip_y`でスクロールしないため、ウィンドウ高の70%に相当する最大パネル高から
+  `ceil(max_panel_height / soul_item_height) + 2`行をresident上限として計算します。filter / sort後の件数と
+  group countは全snapshotを使いますが、上限より後ろの完全に不可視なrow Nodeは生成しません。ウィンドウ高から
+  求めた上限が変わった場合だけ`TaskListDirty::list_dirty`を立てて再構築します。
 
 ## 実装アーキテクチャ
 - `LeftPanelMode::TaskList` 時に表示
@@ -120,7 +124,7 @@ exhaustive coverageされ、追加・変更時は`docs/help-screen.md`の更新�
   - `presenter.rs` - WorkType → icon / label / description
   - `actions.rs` - capability の positive allow-list、live 再検証、owner 別 action adapter
   - `dirty.rs` - タスクリストと task summary の dirty source
-  - `update.rs` - dirty gate 付きオーケストレーション、必要時のみ再描画
+  - `update.rs` - dirty gate、最大viewport resident行数、必要時のみ再描画
 - `crates/bevy_app/src/interface/ui/plugins/info_panel.rs` が `PreUpdate` の dirty 検知と state 更新、`Update` の左パネル表示更新を束ねます。
 - `crates/bevy_app/src/interface/ui/interaction/status_display/mode_panel.rs` が cached summary を読み、task summary 表示だけを差分更新します。
 - `Designation` コンポーネントを持つエンティティをクエリし、関連コンポーネント（Blueprint, TransportRequest等）を参照して説明文を生成

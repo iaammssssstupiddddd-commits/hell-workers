@@ -202,7 +202,7 @@ fn try_direct_bone_collect_to_floor(
     issue_collect_bone_with_wheelbarrow_to_floor(
         WheelbarrowCollectSpec {
             wheelbarrow,
-            source_entity,
+            source: source_entity,
             source_pos,
             destination: params.site_entity,
             amount,

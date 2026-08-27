@@ -3,15 +3,15 @@
 use bevy::prelude::*;
 use hw_core::system_sets::{FamiliarAiSystemSet, GameSystemSet, SoulAiSystemSet};
 
-#[cfg(feature = "profiling")]
-use super::WheelbarrowArbitrationPerfMetrics;
 use super::arbitration::{WheelbarrowArbitrationDiagnostics, WheelbarrowArbitrationRuntime};
 use super::producer::{
+    ConstructionMaterialConsumptionShadow,
     active_unit_cache::{
         CachedActiveFamiliars, CachedActiveYards, CachedStockpileGroups,
         update_cached_active_familiars_system, update_cached_active_yards_system,
         update_cached_stockpile_groups_system,
     },
+    begin_construction_material_delivery_cycle_system,
     blueprint::blueprint_auto_haul_system,
     bucket::bucket_auto_haul_system,
     consolidation::stockpile_consolidation_producer_system,
@@ -40,8 +40,14 @@ use super::state_machine::{
     transport_request_state_sync_system, transport_request_task_workers_reconcile_system,
 };
 use super::{
-    TransportRequestMetrics, transport_request_anchor_cleanup_system,
-    transport_request_metrics_system, wheelbarrow_arbitration_system,
+    FloorMaterialSyncMetrics, TaskAreaMetrics, WallMaterialSyncMetrics,
+    WheelbarrowArbitrationMetrics, transport_request_anchor_cleanup_system,
+    wheelbarrow_arbitration_system,
+};
+#[cfg(feature = "profiling")]
+use super::{
+    TransportRequestChangePerfMetrics, WheelbarrowArbitrationPerfMetrics,
+    collect_transport_request_change_metrics_system,
 };
 
 /// TransportRequest サブシステムの実行フェーズ
@@ -61,13 +67,24 @@ pub enum TransportRequestSet {
     Maintain,
 }
 
+#[cfg(feature = "profiling")]
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+enum TransportRequestPerfSet {
+    CollectChanges,
+}
+
 pub struct TransportRequestPlugin;
 
 impl Plugin for TransportRequestPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<TransportRequestMetrics>();
+        app.init_resource::<WheelbarrowArbitrationMetrics>();
+        app.init_resource::<TaskAreaMetrics>();
+        app.init_resource::<FloorMaterialSyncMetrics>();
+        app.init_resource::<WallMaterialSyncMetrics>();
+        app.init_resource::<ConstructionMaterialConsumptionShadow>();
         #[cfg(feature = "profiling")]
-        app.init_resource::<WheelbarrowArbitrationPerfMetrics>();
+        app.init_resource::<WheelbarrowArbitrationPerfMetrics>()
+            .init_resource::<TransportRequestChangePerfMetrics>();
         app.init_resource::<WheelbarrowArbitrationRuntime>();
         app.init_resource::<WheelbarrowArbitrationDiagnostics>();
         app.init_resource::<FloorTileWaitingCache>();
@@ -101,11 +118,32 @@ impl Plugin for TransportRequestPlugin {
                 .in_set(GameSystemSet::Actor),
         );
 
+        #[cfg(not(feature = "profiling"))]
         app.add_systems(
             Update,
             ApplyDeferred
                 .after(TransportRequestSet::Execute)
                 .before(FamiliarAiSystemSet::Decide),
+        );
+        #[cfg(feature = "profiling")]
+        app.configure_sets(
+            Update,
+            TransportRequestPerfSet::CollectChanges
+                .after(TransportRequestSet::Execute)
+                .before(FamiliarAiSystemSet::Decide)
+                .in_set(GameSystemSet::Logic),
+        )
+        .add_systems(
+            Update,
+            ApplyDeferred
+                .after(TransportRequestSet::Execute)
+                .before(TransportRequestPerfSet::CollectChanges)
+                .before(FamiliarAiSystemSet::Decide),
+        )
+        .add_systems(
+            Update,
+            collect_transport_request_change_metrics_system
+                .in_set(TransportRequestPerfSet::CollectChanges),
         );
 
         // Actor systems can remove WorkingOn after Logic has completed. Removing that source can
@@ -122,8 +160,14 @@ impl Plugin for TransportRequestPlugin {
 
         app.add_systems(
             Update,
+            begin_construction_material_delivery_cycle_system
+                .before(floor_material_delivery_sync_system)
+                .in_set(TransportRequestSet::Decide),
+        );
+
+        app.add_systems(
+            Update,
             (
-                transport_request_metrics_system.in_set(TransportRequestSet::Perceive),
                 update_floor_tile_waiting_cache_system.in_set(TransportRequestSet::Perceive),
                 update_wall_tile_waiting_cache_system.in_set(TransportRequestSet::Perceive),
                 update_cached_active_familiars_system.in_set(TransportRequestSet::Perceive),
@@ -139,7 +183,8 @@ impl Plugin for TransportRequestPlugin {
                     floor_tile_designation_system.after(floor_material_delivery_sync_system),
                     provisional_wall_auto_haul_system,
                     provisional_wall_material_delivery_sync_system
-                        .after(provisional_wall_auto_haul_system),
+                        .after(provisional_wall_auto_haul_system)
+                        .after(wall_material_delivery_sync_system),
                     provisional_wall_designation_system
                         .after(provisional_wall_material_delivery_sync_system),
                     mud_mixer_auto_haul_system,
@@ -149,7 +194,9 @@ impl Plugin for TransportRequestPlugin {
                 (
                     task_area_auto_haul_system,
                     wall_construction_auto_haul_system,
-                    wall_material_delivery_sync_system.after(wall_construction_auto_haul_system),
+                    wall_material_delivery_sync_system
+                        .after(wall_construction_auto_haul_system)
+                        .after(floor_material_delivery_sync_system),
                     wall_tile_designation_system.after(wall_material_delivery_sync_system),
                     wheelbarrow_auto_haul_system,
                     stockpile_consolidation_producer_system.after(task_area_auto_haul_system),

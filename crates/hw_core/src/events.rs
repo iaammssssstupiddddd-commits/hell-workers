@@ -311,15 +311,15 @@ pub enum ResourceReservationOp {
         resource_type: ResourceType,
     },
     ReserveSource {
-        source: Entity,
+        source: crate::logistics::ResourceSourceKey,
         amount: usize,
     },
     ReleaseSource {
-        source: Entity,
+        source: crate::logistics::ResourceSourceKey,
         amount: usize,
     },
     RecordPickedSource {
-        source: Entity,
+        source: crate::logistics::ResourceSourceKey,
         amount: usize,
     },
 }

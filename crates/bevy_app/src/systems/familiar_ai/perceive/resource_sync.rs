@@ -12,6 +12,7 @@ use bevy::prelude::*;
 use hw_core::constants::RESERVATION_SYNC_INTERVAL;
 use hw_core::ecs::drain_removed;
 use hw_core::events::ResourceReservationOp;
+use hw_core::logistics::ResourceSourceKey;
 use hw_core::relationships::TaskWorkers;
 use hw_jobs::lifecycle::{self, ReservationSignature};
 use std::collections::HashMap;
@@ -270,7 +271,7 @@ fn update_active_reservation_signatures<'a>(
 
 fn apply_active_reservation_op(
     mixer_dest_res: &mut HashMap<(Entity, ResourceType), usize>,
-    source_res: &mut HashMap<Entity, usize>,
+    source_res: &mut HashMap<ResourceSourceKey, usize>,
     op: ResourceReservationOp,
 ) {
     match op {

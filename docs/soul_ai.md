@@ -64,7 +64,7 @@ active taskはMotivation低下だけでは中断せず、`OnTaskAbandoned`も発
 | **`Escaping`** | 使い魔接近 + ストレス > 0.3 | 使い魔から逃走し、安全な集会スポットを探す。 |
 | **`Drifting`** | 未管理状態が長時間継続し、脱走判定に成功 | うろつきつつマップ端へ漂流し、端到達でデスポーン。 |
 
-通常の idle decision は slow step と同じ最大10 Hzで評価する。`NeedsIdleDecision` は task/休憩 relationship の境界で付与され、次の Decide phase に `dt = 0` の再評価を要求する。timer書き込み自体は wake-up にせず、タスク有無は集会所・空間索引を調べる前に判定する。state sanity の全体監査は即時の構造変更時または virtual 1秒ごとの安全監査だけで実行する。
+通常の idle decision は slow step と同じ最大10 Hzで評価する。周期frameは全対象を周期`dt`で一度だけ処理し、非周期frameは`NeedsIdleDecision`を持つSoulだけを`dt = 0`で処理する排他的branchである。markerはtask/休憩 relationship の境界で付与され、timer書き込み自体はwake-upにしない。task有無は集会所・空間索引を調べる前に判定する。coherentなtask assignment追加はstate sanityの全体監査を起動せず、relationship削除・建物/休憩構造変更、またはvirtual 1秒ごとの安全監査だけがfull auditを起動する。
 
 ### 2.1 逃走システム (Escaping System)
 
@@ -193,7 +193,7 @@ Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し�
 - **無変更フレームのスキップ**: `Path` は計画時の目的地 `planned_destination` と検証済み世代 `validated_obstacle_version` を保持する。`can_skip_pathfinding_tick` が「有効パス追従中 かつ 目的地不変（`planned_destination == destination`）かつ `WorldMap.obstacle_version` 不変 かつ cooldown なし」を満たす Soul を per-tick でスキップし、`reuse.rs` も版一致時は経路上の全 waypoint 再検証（`is_walkable` 走査）を省略する。完了済みまたは空のPathで現在位置がDestinationから1 world unit以内なら、新しい探索要求自体を作らない。目的地変更・マップ変更（→ [I-PF1](invariants.md)）のいずれかで再検証・再探索が発火する。
 - **部分再利用**: 既存パスの後半だけが障害物で塞がれた場合、阻塞直前から目的地までの部分パスを再探索して前半を再利用します。
 
-`RuntimePathSearchBudget` は `PreUpdate` でresetされ、world replacement時にも初期化される。runtime の waypoint 生成はすべて budgeted facade を使い、raw A* は `hw_world` 内の mapgen/test 専用である。Actor は目的地・task・idle state の変更、cooldown 終了、topology 変更を class 別 FIFO へ入れ、topology 変更時以外は全 Soul の二重走査をしない。task handler とescape は core A* を claim した Entity の次から round-robin し、Actor FIFO、task/escape continuation は `WorldEpoch` 変更時に破棄する。
+`RuntimePathSearchBudget` は `PreUpdate` でresetされ、world replacement時にも初期化される。runtime の waypoint 生成はすべて budgeted facade を使い、raw A* は `hw_world` 内の mapgen/test 専用である。Actor は目的地・task・idle state の変更、cooldown 終了、topology 変更を class 別 FIFO へ入れ、topology 変更時以外は全 Soul の二重走査をしない。task executionのround-robin母集団も`ActiveTaskIdentity`保持者に限定し、`WorkingOn`だけが残るidentity欠落と`RemovedComponents<ActiveTaskIdentity>`をfail-closed edgeとして追加する。task handler とescape は core A* を claim した Entity の次から round-robin し、Actor FIFO、task/escape continuation は `WorldEpoch` 変更時に破棄する。
 
 ### 5.2. スライディング衝突解決 (Sliding Collision)
 - **仕様**: 移動システム（`soul_movement`）において、進行方向が通行不可（`WorldMap::is_walkable` が `false`）な場合、X軸またはY軸のみの移動を試みます。
@@ -201,7 +201,7 @@ Soul 本体画像は、Idle 状態だけでなくイベントでも一時差し�
 - **救済措置**: 万が一、全方位が塞がれて一歩も動けなくなった場合は、そのウェイポイントを到達済みとみなして次の経路へスキップします。
 
 ### 5.3. 障害物埋まりエスケープ (Stuck Escape)
-- **検出**: 毎フレーム、ソウルの現在位置が通行不可（`WorldMap::is_walkable_world` が `false`）かどうかを判定します。建築物の配置や障害物の追加で、ソウルが障害物と重なった場合に該当します。
+- **検出**: `WorldMap.obstacle_version`または`WorldEpoch`が変わったframeは全Soulを検査し、topology安定frameは`Changed<Transform>`のSoulだけを検査します。建築物・扉・障害物の変更と、外部teleport/移動の両方を即時対象にし、安定した静止Soulへのwalkability lookupは行いません。
 - **処理**: 埋まったソウルは、現在位置から周辺5マス以内の最も近い歩行可能タイルへ即座に移動（テレポート）されます。パスはクリアされ、次フレームで目的地へ向けた経路が再計算されます。
 - **実装**: `soul_stuck_escape_system` がパス検索の前に実行され、`WorldMap::get_nearest_walkable_grid` で脱出先を決定します。
 

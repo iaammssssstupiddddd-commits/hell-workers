@@ -48,7 +48,7 @@ pub fn collect_active_reservation_ops(
     if let Some(transport_data) = task.bucket_transport_data() {
         if transport_data.should_reserve_bucket_source() {
             ops.push(ResourceReservationOp::ReserveSource {
-                source: transport_data.bucket,
+                source: transport_data.bucket.into(),
                 amount: 1,
             });
         }
@@ -56,7 +56,10 @@ pub fn collect_active_reservation_ops(
         if transport_data.should_reserve_tank_source()
             && let Some(source) = transport_data.tank_source_entity()
         {
-            ops.push(ResourceReservationOp::ReserveSource { source, amount: 1 });
+            ops.push(ResourceReservationOp::ReserveSource {
+                source: source.into(),
+                amount: 1,
+            });
         }
 
         if transport_data.should_reserve_mixer_destination() {
@@ -71,7 +74,7 @@ pub fn collect_active_reservation_ops(
         AssignedTask::Haul(data) => {
             if matches!(data.phase, HaulPhase::GoingToItem) {
                 ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.item,
+                    source: data.item.into(),
                     amount: 1,
                 });
             }
@@ -83,7 +86,7 @@ pub fn collect_active_reservation_ops(
             });
             if matches!(data.phase, HaulToMixerPhase::GoingToItem) {
                 ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.item,
+                    source: data.item.into(),
                     amount: 1,
                 });
             }
@@ -91,7 +94,7 @@ pub fn collect_active_reservation_ops(
         AssignedTask::HaulToBlueprint(data) => {
             if matches!(data.phase, HaulToBpPhase::GoingToItem) {
                 ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.item,
+                    source: data.item.into(),
                     amount: 1,
                 });
             }
@@ -102,7 +105,7 @@ pub fn collect_active_reservation_ops(
                 BuildPhase::GoingToBlueprint | BuildPhase::Building { .. }
             ) {
                 ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.blueprint,
+                    source: data.blueprint.into(),
                     amount: 1,
                 });
             }
@@ -114,7 +117,7 @@ pub fn collect_active_reservation_ops(
                 GatherPhase::GoingToResource | GatherPhase::Collecting { .. }
             ) {
                 ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.target,
+                    source: data.target.into(),
                     amount: 1,
                 });
             }
@@ -127,7 +130,7 @@ pub fn collect_active_reservation_ops(
                     | CollectBonePhase::Done
             ) {
                 ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.target,
+                    source: data.target.into(),
                     amount: 1,
                 });
             }
@@ -138,14 +141,14 @@ pub fn collect_active_reservation_ops(
                 RefinePhase::GoingToMixer | RefinePhase::Refining { .. }
             ) {
                 ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.mixer,
+                    source: data.mixer.into(),
                     amount: 1,
                 });
             }
         }
         AssignedTask::HaulWithWheelbarrow(data) => {
             ops.push(ResourceReservationOp::ReserveSource {
-                source: data.wheelbarrow,
+                source: data.wheelbarrow.into(),
                 amount: 1,
             });
 
@@ -180,7 +183,7 @@ pub fn collect_active_reservation_ops(
                 } else {
                     for &item in &data.items {
                         ops.push(ResourceReservationOp::ReserveSource {
-                            source: item,
+                            source: item.into(),
                             amount: 1,
                         });
                     }
@@ -190,7 +193,7 @@ pub fn collect_active_reservation_ops(
         AssignedTask::ReinforceFloorTile(data) => {
             if !matches!(data.phase, ReinforceFloorPhase::Done) {
                 ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.tile,
+                    source: data.tile.into(),
                     amount: 1,
                 });
             }
@@ -198,7 +201,7 @@ pub fn collect_active_reservation_ops(
         AssignedTask::PourFloorTile(data) => {
             if !matches!(data.phase, PourFloorPhase::Done) {
                 ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.tile,
+                    source: data.tile.into(),
                     amount: 1,
                 });
             }
@@ -206,7 +209,7 @@ pub fn collect_active_reservation_ops(
         AssignedTask::FrameWallTile(data) => {
             if !matches!(data.phase, FrameWallPhase::Done) {
                 ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.tile,
+                    source: data.tile.into(),
                     amount: 1,
                 });
             }
@@ -214,14 +217,14 @@ pub fn collect_active_reservation_ops(
         AssignedTask::CoatWall(data) => {
             if !matches!(data.phase, CoatWallPhase::Done) {
                 ops.push(ResourceReservationOp::ReserveSource {
-                    source: data.tile,
+                    source: data.tile.into(),
                     amount: 1,
                 });
             }
         }
         AssignedTask::GeneratePower(data) => {
             ops.push(ResourceReservationOp::ReserveSource {
-                source: data.tile,
+                source: data.tile.into(),
                 amount: 1,
             });
         }

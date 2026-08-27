@@ -178,6 +178,7 @@ pub(crate) fn drive_perf_capture_system(
                 exit.write(AppExit::error());
                 return;
             }
+            reset_dream_ui_measurement(&mut params);
             params.time.unpause();
             capture.phase = PerfCapturePhase::Warmup;
             eprintln!("PERF_DETERMINISM_AUDIT: phase=warmup");
@@ -202,6 +203,9 @@ pub(crate) fn drive_perf_capture_system(
                     capture.phase = PerfCapturePhase::Finished;
                     exit.write(AppExit::error());
                 }
+                if matches!(capture.phase, PerfCapturePhase::Measure) {
+                    reset_dream_ui_measurement(&mut params);
+                }
             } else {
                 capture.elapsed_secs += realtime_capture_delta_secs(&params);
                 capture.warmup_virtual_secs += params.time.delta_secs_f64();
@@ -224,6 +228,7 @@ pub(crate) fn drive_perf_capture_system(
                     capture.frame_times_ms.clear();
                     *params.familiar_metrics = FamiliarDelegationPerfMetrics::default();
                     *params.arbitration_metrics = WheelbarrowArbitrationPerfMetrics::default();
+                    params.transport_request_change_metrics.clear();
                     *params.dashboard_metrics = TaskDashboardPerfMetrics::default();
                     *params.dashboard_timing_metrics = TaskDashboardTimingMetrics {
                         active: true,
@@ -232,11 +237,14 @@ pub(crate) fn drive_perf_capture_system(
                     *params.task_execution_metrics = TaskExecutionPerfMetrics::default();
                     *params.reservation_sync_metrics = ReservationSyncPerfMetrics::default();
                     *params.door_metrics = DoorPerfMetrics::default();
+                    *params.gathering_recruitment_metrics =
+                        GatheringRecruitmentPerfMetrics::default();
                     *params.construction_metrics = ConstructionPerfMetrics::default();
                     *params.slow_simulation_metrics = SlowSimulationPerfMetrics::default();
                     *params.energy_metrics = EnergyPerfMetrics::default();
                     params.runtime_path_budget.clear_metrics();
                     params.runtime_path_defer_metrics.clear();
+                    reset_dream_ui_measurement(&mut params);
                     eprintln!(
                         "PERF_CAPTURE: phase=measure target_secs={}",
                         params.config.measure_secs
@@ -392,6 +400,8 @@ pub(crate) fn drive_perf_capture_system(
                             measure_real_secs: capture.measure_real_secs,
                             familiar_metrics: &params.familiar_metrics,
                             arbitration_metrics: &params.arbitration_metrics,
+                            transport_request_change_metrics: &params
+                                .transport_request_change_metrics,
                             dashboard_metrics: &params.dashboard_metrics,
                             dashboard_timing_metrics: &params.dashboard_timing_metrics,
                             #[cfg(feature = "profiling-memory")]
@@ -399,6 +409,7 @@ pub(crate) fn drive_perf_capture_system(
                             task_execution_metrics: &params.task_execution_metrics,
                             reservation_sync_metrics: &params.reservation_sync_metrics,
                             door_metrics: &params.door_metrics,
+                            gathering_recruitment_metrics: &params.gathering_recruitment_metrics,
                             construction_metrics: &params.construction_metrics,
                             slow_simulation_metrics: &params.slow_simulation_metrics,
                             energy_metrics: &params.energy_metrics,
@@ -425,6 +436,9 @@ pub(crate) fn drive_perf_capture_system(
                     )
                 })?;
                 write_window_observation(&params.config, initial_window, &final_window)
+            });
+            let result = result.and_then(|()| {
+                write_dream_ui_metrics(&params.config, params.dream_ui_metrics.as_deref())
             });
             let result = result.and_then(|()| {
                 write_indoor_light_fixture_sidecars(
@@ -466,6 +480,16 @@ pub(crate) fn drive_perf_capture_system(
             }
         }
         PerfCapturePhase::Finished => {}
+    }
+}
+
+#[cfg(feature = "profiling")]
+fn reset_dream_ui_measurement(params: &mut PerfCaptureParams<'_, '_>) {
+    if let Some(control) = params.dream_ui_control.as_deref_mut() {
+        control.reset_measurement();
+    }
+    if let Some(metrics) = params.dream_ui_metrics.as_deref_mut() {
+        metrics.reset_measurement();
     }
 }
 

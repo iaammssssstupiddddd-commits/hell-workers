@@ -59,7 +59,11 @@ use hw_jobs::construction::{
 #[cfg(feature = "profiling")]
 use hw_jobs::{GatherPhase, GeneratePowerPhase, HaulPhase};
 #[cfg(feature = "profiling")]
-use hw_logistics::transport_request::WheelbarrowArbitrationPerfMetrics;
+use hw_logistics::transport_request::{
+    TransportRequestChangePerfMetrics, TransportRequestKind, WheelbarrowArbitrationPerfMetrics,
+};
+#[cfg(feature = "profiling")]
+use hw_soul_ai::soul_ai::decide::gathering_mgmt::GatheringRecruitmentPerfMetrics;
 #[cfg(feature = "profiling")]
 use hw_soul_ai::soul_ai::execute::task_execution::TaskExecutionPerfMetrics;
 #[cfg(feature = "profiling")]
@@ -197,8 +201,9 @@ use fixture::{PerfFixtureKind, PerfFixtureMarker};
 #[cfg(feature = "profiling")]
 use output::{
     PerfCaptureWriteInput, fnv1a, fnv1a_bytes, write_deconstruction_fixture_sidecar,
-    write_determinism_audit, write_indoor_light_fixture_sidecars, write_p02_presentation_sidecar,
-    write_perf_capture, write_render_inventory, write_window_observation,
+    write_determinism_audit, write_dream_ui_metrics, write_indoor_light_fixture_sidecars,
+    write_p02_presentation_sidecar, write_perf_capture, write_render_inventory,
+    write_window_observation,
 };
 
 #[cfg(feature = "profiling")]
@@ -683,16 +688,20 @@ pub(crate) struct PerfCaptureParams<'w, 's> {
     checksum_queries: PerfChecksumQueries<'w, 's>,
     familiar_metrics: ResMut<'w, FamiliarDelegationPerfMetrics>,
     arbitration_metrics: ResMut<'w, WheelbarrowArbitrationPerfMetrics>,
+    transport_request_change_metrics: ResMut<'w, TransportRequestChangePerfMetrics>,
     dashboard_metrics: ResMut<'w, TaskDashboardPerfMetrics>,
     dashboard_timing_metrics: ResMut<'w, TaskDashboardTimingMetrics>,
     task_execution_metrics: ResMut<'w, TaskExecutionPerfMetrics>,
     reservation_sync_metrics: ResMut<'w, ReservationSyncPerfMetrics>,
     door_metrics: ResMut<'w, DoorPerfMetrics>,
+    gathering_recruitment_metrics: ResMut<'w, GatheringRecruitmentPerfMetrics>,
     construction_metrics: ResMut<'w, ConstructionPerfMetrics>,
     slow_simulation_metrics: ResMut<'w, SlowSimulationPerfMetrics>,
     energy_metrics: ResMut<'w, EnergyPerfMetrics>,
     runtime_path_budget: ResMut<'w, RuntimePathSearchBudget>,
     runtime_path_defer_metrics: ResMut<'w, RuntimePathDeferMetrics>,
+    dream_ui_control: Option<ResMut<'w, hw_visual::dream::DreamUiPerfControl>>,
+    dream_ui_metrics: Option<ResMut<'w, hw_visual::dream::DreamUiPerfMetrics>>,
     primary_window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     rtt_runtime: Res<'w, RttRuntime>,
     quality: Res<'w, QualitySettings>,

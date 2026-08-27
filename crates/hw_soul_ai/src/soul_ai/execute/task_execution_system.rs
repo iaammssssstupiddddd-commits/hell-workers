@@ -42,18 +42,57 @@ pub struct TaskExecutionRoundRobin {
     entities: Vec<Entity>,
 }
 
-pub fn task_execution_system(
-    mut commands: Commands,
-    mut q_souls: TaskExecutionSoulQuery,
-    mut queries: TaskQueries,
-    mut res: TaskExecResources,
-    q_wheelbarrows: Query<
-        (&Transform, Option<&hw_core::relationships::ParkedAt>),
-        With<Wheelbarrow>,
-    >,
-    q_entities: Query<Entity>,
-    #[cfg(feature = "profiling")] mut perf_metrics: ResMut<TaskExecutionPerfMetrics>,
-) {
+type TaskWheelbarrowQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Transform,
+        Option<&'static hw_core::relationships::ParkedAt>,
+    ),
+    With<Wheelbarrow>,
+>;
+type ActiveTaskEntityQuery<'w, 's> =
+    Query<'w, 's, Entity, (With<hw_core::soul::DamnedSoul>, With<ActiveTaskIdentity>)>;
+type MissingTaskIdentityQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    (
+        With<hw_core::soul::DamnedSoul>,
+        With<WorkingOn>,
+        Without<ActiveTaskIdentity>,
+    ),
+>;
+
+#[derive(SystemParam)]
+pub struct TaskExecutionParams<'w, 's> {
+    commands: Commands<'w, 's>,
+    souls: TaskExecutionSoulQuery<'w, 's>,
+    queries: TaskQueries<'w, 's>,
+    resources: TaskExecResources<'w, 's>,
+    wheelbarrows: TaskWheelbarrowQuery<'w, 's>,
+    entities: Query<'w, 's, Entity>,
+    active_entities: ActiveTaskEntityQuery<'w, 's>,
+    missing_identity: MissingTaskIdentityQuery<'w, 's>,
+    removed_identities: RemovedComponents<'w, 's, ActiveTaskIdentity>,
+    #[cfg(feature = "profiling")]
+    perf_metrics: ResMut<'w, TaskExecutionPerfMetrics>,
+}
+
+pub fn task_execution_system(params: TaskExecutionParams) {
+    let TaskExecutionParams {
+        mut commands,
+        souls: mut q_souls,
+        mut queries,
+        resources: mut res,
+        wheelbarrows: q_wheelbarrows,
+        entities: q_entities,
+        active_entities: q_active_entities,
+        missing_identity: q_missing_identity,
+        mut removed_identities,
+        #[cfg(feature = "profiling")]
+        mut perf_metrics,
+    } = params;
     // Escape runs in Decide before task execution. Reserve two ActiveTask
     // slots for Actor-side replans later in the frame, plus the idle reserve.
     res.path_budget
@@ -64,9 +103,15 @@ pub fn task_execution_system(
     let path_search_progress = res.path_search_progress.get_mut(world_epoch);
     let task_round_robin = res.task_round_robin.get_mut(world_epoch);
     task_round_robin.entities.clear();
-    task_round_robin
-        .entities
-        .extend(q_souls.iter().map(|(entity, ..)| entity));
+    task_round_robin.entities.extend(q_active_entities.iter());
+    // Preserve fail-closed cleanup for the structural malformed edge without putting every idle
+    // Soul back into the per-frame candidate set.
+    task_round_robin.entities.extend(q_missing_identity.iter());
+    for entity in removed_identities.read() {
+        if !task_round_robin.entities.contains(&entity) {
+            task_round_robin.entities.push(entity);
+        }
+    }
     let task_count = task_round_robin.entities.len();
     let task_start = task_round_robin
         .last_core_search_claimant

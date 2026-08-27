@@ -836,8 +836,11 @@ def summarize_session(
     if matrix.get("capture_kind") == "fixed-step-determinism":
         runs = load_valid_runs(session_dir)
         reset_checksum_policy(runs)
+        reset_dream_ui_repeat_policy(runs)
         runs = load_valid_runs(session_dir)
         apply_determinism_policy(runs)
+        runs = load_valid_runs(session_dir)
+        apply_dream_ui_determinism_policy(runs)
         runs = load_valid_runs(session_dir)
         apply_familiar_policy_controlled_audit(session_dir, manifest, runs)
         runs = load_valid_runs(session_dir)

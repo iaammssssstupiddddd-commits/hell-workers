@@ -29,6 +29,7 @@ def add_run_arguments(
             "construction",
             "ui-gpu",
             "task-dashboard",
+            "dream-ui-burst",
             "indoor-light",
             "deconstruction",
             "save-transaction",
@@ -422,6 +423,30 @@ def validate_arguments(args: argparse.Namespace) -> None:
             "task-dashboard requires familiar policy baseline and operation dialog hidden"
         )
     selected_rtt_light = args.contract is not None or args.stage is not None or args.lane is not None
+    if args.workload == "dream-ui-burst":
+        if args.command not in {"run", "audit"}:
+            raise ValueError("dream-ui-burst is available through perf.py run or audit")
+        if selected_rtt_light:
+            raise ValueError("dream-ui-burst does not accept an RtT-light contract selection")
+        if sizes != ["small"] or renders != ["cpu"]:
+            raise ValueError("dream-ui-burst requires --sizes small --renders cpu")
+        if args.window_backend == "headless":
+            raise ValueError("dream-ui-burst requires an actual window backend")
+        if args.instrumentation not in {"capture", "memory"}:
+            raise ValueError("dream-ui-burst requires --instrumentation capture or memory")
+        if (
+            familiar_policies != ["baseline"]
+            or operation_dialog_modes != ["hidden"]
+            or dashboard_modes != ["hidden"]
+        ):
+            raise ValueError(
+                "dream-ui-burst requires familiar policy baseline, operation dialog hidden, and dashboard hidden"
+            )
+        if args.souls is not None or args.familiars is not None:
+            raise ValueError("dream-ui-burst uses the default small population; overrides are forbidden")
+        if args.save_runtime_root is not None:
+            raise ValueError("--save-runtime-root is only valid for save-transaction")
+        return
     if args.workload == "save-transaction":
         if args.command != "run":
             raise ValueError("save-transaction is only available through perf.py run")

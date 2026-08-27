@@ -47,7 +47,7 @@ use crate::interface::selection::{HoveredEntity, SelectedEntity};
 use crate::interface::ui::{MenuState, setup_ui};
 #[cfg(feature = "profiling")]
 use crate::systems::GameSystemSet;
-use crate::systems::logistics::{ResourceCountDisplayTimer, ResourceLabels};
+use crate::systems::logistics::{ResourceCountDisplayTimer, ResourceLabels, ResourceStackIndex};
 use crate::world::map::WorldMap;
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
@@ -78,6 +78,7 @@ impl Plugin for StartupPlugin {
             .init_resource::<CompanionPlacementState>()
             .init_resource::<ResourceLabels>()
             .init_resource::<ResourceCountDisplayTimer>()
+            .init_resource::<ResourceStackIndex>()
             .init_resource::<GameTime>()
             .init_resource::<TaskContext>()
             .init_resource::<SpatialGrid>()

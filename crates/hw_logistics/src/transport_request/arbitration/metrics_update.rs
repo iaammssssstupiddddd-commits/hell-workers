@@ -1,4 +1,4 @@
-use crate::transport_request::metrics::TransportRequestMetrics;
+use crate::transport_request::metrics::WheelbarrowArbitrationMetrics;
 
 pub(super) struct MetricsUpdateSpec {
     pub active_leases: u32,
@@ -13,7 +13,7 @@ pub(super) struct MetricsUpdateSpec {
     pub arbitration_started_at: std::time::Instant,
 }
 
-pub(super) fn update_metrics(metrics: &mut TransportRequestMetrics, spec: MetricsUpdateSpec) {
+pub(super) fn update_metrics(metrics: &mut WheelbarrowArbitrationMetrics, spec: MetricsUpdateSpec) {
     metrics.wheelbarrow_leases_active = spec.active_leases;
     metrics.wheelbarrow_leases_granted_this_frame = spec.leases_granted;
     metrics.wheelbarrow_arb_eligible_requests = spec.eligible_requests;

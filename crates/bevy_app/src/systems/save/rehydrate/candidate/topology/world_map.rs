@@ -41,6 +41,31 @@ pub(in super::super) fn validate_world_map_candidate(candidate: &World) -> Resul
             ));
         }
     }
+    let persisted_tiles: HashSet<_> = candidate
+        .iter_entities()
+        .filter(|entity| entity.contains::<Tile>())
+        .map(|entity| entity.id())
+        .collect();
+    match tile_entities.len() {
+        0 if persisted_tiles.is_empty() => {}
+        0 => {
+            return Err(format!(
+                "sparse WorldMap has {} orphan Tile entities",
+                persisted_tiles.len()
+            ));
+        }
+        count if count == expected_len && persisted_tiles == tile_entities => {}
+        count if count == expected_len => {
+            return Err(
+                "legacy WorldMap Tile entities do not exactly match tile_entities".to_owned(),
+            );
+        }
+        count => {
+            return Err(format!(
+                "WorldMap.tile_entities has mixed sparse/legacy shape ({count}/{expected_len} anchors)"
+            ));
+        }
+    }
 
     for (&grid, &owner) in &map.buildings {
         validate_world_map_grid("buildings", grid)?;
@@ -166,17 +191,6 @@ pub(in super::super) fn validate_world_map_candidate(candidate: &World) -> Resul
     Ok(())
 }
 
-pub(super) fn validate_world_map_tile_anchors(candidate: &World) -> Result<(), String> {
-    let map = candidate
-        .get_resource::<WorldMap>()
-        .ok_or_else(|| "persisted WorldMap is missing".to_owned())?;
-    if let Some(index) = map.tile_entities.iter().position(Option::is_none) {
-        return Err(format!(
-            "WorldMap.tile_entities[{index}] is missing its Tile anchor"
-        ));
-    }
-    Ok(())
-}
 pub(super) fn validate_natural_obstacle_positions(candidate: &World) -> Result<(), String> {
     for entity in candidate.iter_entities() {
         let role = if entity.contains::<Tree>() {

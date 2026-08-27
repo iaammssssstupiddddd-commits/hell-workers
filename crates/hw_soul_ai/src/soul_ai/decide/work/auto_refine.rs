@@ -3,6 +3,7 @@
 //! Automatically creates refine tasks when materials are ready in MudMixer.
 
 use bevy::prelude::*;
+use std::collections::HashSet;
 
 use hw_core::area::TaskArea;
 use hw_core::constants::MUD_MIXER_REFINE_PRIORITY;
@@ -11,7 +12,7 @@ use hw_core::familiar::{ActiveCommand, FamiliarCommand};
 use hw_core::logistics::ResourceType;
 use hw_core::relationships::{StoredItems, TaskWorkers};
 use hw_jobs::mud_mixer::MudMixerStorage;
-use hw_jobs::{AssignedTask, DeconstructionPending, Designation, MovePlanned};
+use hw_jobs::{AssignedTask, DeconstructionPending, Designation, MovePlanned, RefineActivityIndex};
 use hw_logistics::transport_request::producer::{collect_all_area_owners, find_owner_for_position};
 use hw_logistics::zone::Stockpile;
 use hw_world::Yard;
@@ -39,13 +40,19 @@ pub fn mud_mixer_auto_refine_system(
     q_yards: Query<(Entity, &Yard)>,
     q_mixers: MixersQuery,
     q_souls: Query<&AssignedTask>,
+    activity_index: Option<Res<RefineActivityIndex>>,
+    mut bootstrap_in_flight: Local<HashSet<Entity>>,
 ) {
-    // 1. 集計フェーズ: 現在実行中の精製タスクをカウント
-    let mut in_flight = std::collections::HashMap::<Entity, usize>::new();
-
-    for task in q_souls.iter() {
-        if let AssignedTask::Refine(data) = task {
-            *in_flight.entry(data.mixer).or_insert(0) += 1;
+    // The shared index is synchronized after Execute and is therefore the
+    // previous frame's settled snapshot here. Before its first sync (including
+    // isolated tests), retain the old full-scan behavior as a fail-closed boot lane.
+    let activity_index = activity_index.filter(|index| index.is_initialized());
+    bootstrap_in_flight.clear();
+    if activity_index.is_none() {
+        for task in &q_souls {
+            if let AssignedTask::Refine(data) = task {
+                bootstrap_in_flight.insert(data.mixer);
+            }
         }
     }
 
@@ -101,11 +108,14 @@ pub fn mud_mixer_auto_refine_system(
             if !storage.has_output_capacity_for_refining() {
                 continue;
             }
-            let inflight_count = *in_flight.get(&mixer_entity).unwrap_or(&0);
-            let current_workers = workers_opt.map(|w| w.len()).unwrap_or(0);
+            let has_assigned_refine = activity_index.as_ref().map_or_else(
+                || bootstrap_in_flight.contains(&mixer_entity),
+                |index| index.assigned_count(mixer_entity) > 0,
+            );
+            let has_workers = workers_opt.is_some_and(|workers| !workers.is_empty());
 
             // 作業員が1名未満（精製は1人で行う）かつ、予約中のタスクがない場合
-            if current_workers + inflight_count < 1 {
+            if !has_workers && !has_assigned_refine {
                 // Refine タスクを発行
                 designation_writer.write(DesignationRequest {
                     entity: mixer_entity,
@@ -120,7 +130,7 @@ pub fn mud_mixer_auto_refine_system(
                 });
 
                 // カウントアップして同一フレーム内での重複を防ぐ
-                in_flight.insert(mixer_entity, inflight_count + 1);
+                bootstrap_in_flight.insert(mixer_entity);
 
                 info!(
                     "AUTO_REFINE: Issued Refine task for MudMixer {:?}",
@@ -134,7 +144,8 @@ pub fn mud_mixer_auto_refine_system(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hw_core::relationships::StoredIn;
+    use hw_core::relationships::{StoredIn, WorkingOn};
+    use hw_jobs::{RefineData, RefinePhase, sync_refine_activity_index_system};
     use hw_logistics::{ResourceItem, Stockpile};
 
     fn spawn_ready_mixer(app: &mut App, x: f32) -> Entity {
@@ -185,5 +196,101 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].entity, live);
+    }
+
+    #[test]
+    fn shared_activity_index_suppresses_all_refine_phases() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_message::<DesignationRequest>()
+            .init_resource::<RefineActivityIndex>()
+            .add_systems(
+                Update,
+                (
+                    sync_refine_activity_index_system,
+                    mud_mixer_auto_refine_system,
+                )
+                    .chain(),
+            );
+        app.world_mut().spawn(Yard {
+            min: Vec2::splat(-100.0),
+            max: Vec2::splat(100.0),
+        });
+        let mixer = spawn_ready_mixer(&mut app, 0.0);
+        let soul = app
+            .world_mut()
+            .spawn(AssignedTask::Refine(RefineData {
+                mixer,
+                phase: RefinePhase::Done,
+            }))
+            .id();
+
+        app.update();
+        assert!(
+            app.world_mut()
+                .resource_mut::<Messages<DesignationRequest>>()
+                .drain()
+                .next()
+                .is_none()
+        );
+
+        *app.world_mut()
+            .entity_mut(soul)
+            .get_mut::<AssignedTask>()
+            .unwrap() = AssignedTask::None;
+        app.update();
+        let requests = app
+            .world_mut()
+            .resource_mut::<Messages<DesignationRequest>>()
+            .drain()
+            .collect::<Vec<_>>();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].entity, mixer);
+    }
+
+    #[test]
+    fn task_workers_remain_an_independent_refine_guard() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_message::<DesignationRequest>()
+            .init_resource::<RefineActivityIndex>()
+            .add_systems(
+                Update,
+                (
+                    sync_refine_activity_index_system,
+                    mud_mixer_auto_refine_system,
+                )
+                    .chain(),
+            );
+        app.world_mut().spawn(Yard {
+            min: Vec2::splat(-100.0),
+            max: Vec2::splat(100.0),
+        });
+        let mixer = spawn_ready_mixer(&mut app, 0.0);
+        let worker = app
+            .world_mut()
+            .spawn((AssignedTask::None, WorkingOn(mixer)))
+            .id();
+        app.world_mut().flush();
+
+        app.update();
+        assert!(
+            app.world_mut()
+                .resource_mut::<Messages<DesignationRequest>>()
+                .drain()
+                .next()
+                .is_none()
+        );
+
+        app.world_mut().entity_mut(worker).remove::<WorkingOn>();
+        app.world_mut().flush();
+        app.update();
+        let requests = app
+            .world_mut()
+            .resource_mut::<Messages<DesignationRequest>>()
+            .drain()
+            .collect::<Vec<_>>();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].entity, mixer);
     }
 }

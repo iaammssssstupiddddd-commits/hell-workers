@@ -138,7 +138,10 @@ pub fn build_source_reservation_ops(sources: &[Entity]) -> Vec<ResourceReservati
     sources
         .iter()
         .copied()
-        .map(|source| ResourceReservationOp::ReserveSource { source, amount: 1 })
+        .map(|source| ResourceReservationOp::ReserveSource {
+            source: source.into(),
+            amount: 1,
+        })
         .collect()
 }
 
@@ -162,12 +165,15 @@ pub fn build_wheelbarrow_reservation_ops(
     let mut reservation_ops =
         Vec::with_capacity(1 + reserved_sources.len() + destination_items.len());
     reservation_ops.push(ResourceReservationOp::ReserveSource {
-        source: wheelbarrow,
+        source: wheelbarrow.into(),
         amount: 1,
     });
 
     for &source in reserved_sources {
-        reservation_ops.push(ResourceReservationOp::ReserveSource { source, amount: 1 });
+        reservation_ops.push(ResourceReservationOp::ReserveSource {
+            source: source.into(),
+            amount: 1,
+        });
     }
 
     if let WheelbarrowDestination::Mixer {

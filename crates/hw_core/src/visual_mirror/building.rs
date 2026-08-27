@@ -31,7 +31,7 @@ pub struct BuildingVisualState {
 
 /// Mirror of MudMixer's active state for `hw_visual`.
 /// Inserted by `on_mud_mixer_storage_added` (Observer) and updated by
-/// `sync_mud_mixer_active_system` (every Logic frame) in `hw_jobs`.
+/// `sync_mud_mixer_active_system` from the shared refine activity index in `hw_jobs`.
 #[derive(Component, Default)]
 pub struct MudMixerVisualState {
     pub is_active: bool,

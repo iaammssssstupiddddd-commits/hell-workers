@@ -32,28 +32,12 @@ impl Default for StateSanityAudit {
     }
 }
 
-// Task progress updates `AssignedTask` frequently. Assignment
-// identity/relationship boundaries are the invariant-relevant events; treating
-// every progress write as a wake-up would put the full consistency sweep back
-// on the 60 Hz path.
-type TaskSanityDirtyQuery<'w, 's> = Query<
-    'w,
-    's,
-    (),
-    Or<(
-        Added<AssignedTask>,
-        Added<WorkingOn>,
-        Added<ActiveTaskIdentity>,
-    )>,
->;
-
 type BuildingSanityDirtyQuery<'w, 's> = Query<'w, 's, (), Or<(Added<Building>, Changed<Building>)>>;
 type RestSanityDirtyQuery<'w, 's> =
     Query<'w, 's, (), Or<(Added<RestingIn>, Added<RestAreaReservedFor>)>>;
 
 #[derive(SystemParam)]
 pub(crate) struct StateSanitySignals<'w, 's> {
-    q_task_dirty: TaskSanityDirtyQuery<'w, 's>,
     q_building_dirty: BuildingSanityDirtyQuery<'w, 's>,
     q_rest_dirty: RestSanityDirtyQuery<'w, 's>,
     removed_working: RemovedComponents<'w, 's, WorkingOn>,
@@ -74,10 +58,8 @@ pub(crate) fn update_state_sanity_trigger_system(
         || signals.removed_identity.read().count() != 0
         || signals.removed_resting.read().count() != 0
         || signals.removed_reserved.read().count() != 0;
-    audit.dirty |= !signals.q_task_dirty.is_empty()
-        || !signals.q_building_dirty.is_empty()
-        || !signals.q_rest_dirty.is_empty()
-        || removed_any;
+    audit.dirty |=
+        !signals.q_building_dirty.is_empty() || !signals.q_rest_dirty.is_empty() || removed_any;
 }
 
 pub fn state_sanity_should_run(audit: Res<StateSanityAudit>) -> bool {
@@ -179,5 +161,42 @@ pub fn reconcile_rest_state_system(
                 *visibility = Visibility::Visible;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::jobs::WorkType;
+
+    #[test]
+    fn coherent_task_assignment_additions_do_not_wake_the_full_sanity_audit() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<StateSanityAudit>()
+            .add_systems(Update, update_state_sanity_trigger_system);
+        app.update();
+        {
+            let mut audit = app.world_mut().resource_mut::<StateSanityAudit>();
+            audit.dirty = false;
+            audit.due = false;
+        }
+
+        let target = app.world_mut().spawn_empty().id();
+        let assignment = app.world_mut().spawn_empty().id();
+        app.world_mut().spawn((
+            AssignedTask::GeneratePower(hw_jobs::GeneratePowerData {
+                tile: target,
+                tile_pos: Vec2::ZERO,
+                phase: hw_jobs::GeneratePowerPhase::GoingToTile,
+            }),
+            WorkingOn(target),
+            ActiveTaskIdentity::new(assignment, target, WorkType::GeneratePower),
+        ));
+        app.update();
+
+        let audit = app.world().resource::<StateSanityAudit>();
+        assert!(!audit.dirty);
+        assert!(!audit.due);
     }
 }

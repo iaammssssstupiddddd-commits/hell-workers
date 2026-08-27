@@ -19,7 +19,6 @@ pub(super) fn validate(candidate: &World) -> Result<(), String> {
     zones_targets::validate_zone_links(candidate)?;
     zones_targets::validate_target_links(candidate)?;
     world_map::validate_natural_obstacle_positions(candidate)?;
-    world_map::validate_world_map_tile_anchors(candidate)?;
     Ok(())
 }
 

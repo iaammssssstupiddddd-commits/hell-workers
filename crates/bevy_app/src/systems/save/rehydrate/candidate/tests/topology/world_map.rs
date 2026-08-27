@@ -87,14 +87,10 @@ fn world_map_validation_rejects_wrong_completed_floor_lookup() {
 }
 
 #[test]
-fn durable_topology_validation_requires_every_tile_anchor() {
+fn durable_topology_validation_accepts_sparse_tile_anchors() {
     let world = candidate_world();
 
-    assert!(
-        validate_durable_topology_candidate(&world)
-            .unwrap_err()
-            .contains("is missing its Tile anchor")
-    );
+    validate_durable_topology_candidate(&world).unwrap();
 }
 
 #[test]
@@ -107,4 +103,56 @@ fn durable_topology_validation_accepts_complete_unique_tile_anchors() {
     world.resource_mut::<WorldMap>().tile_entities = anchors.into_iter().map(Some).collect();
 
     validate_durable_topology_candidate(&world).unwrap();
+}
+
+#[test]
+fn legacy_tile_anchors_normalize_to_sparse_shape() {
+    let mut world = candidate_world();
+    let tile_count = (MAP_WIDTH * MAP_HEIGHT) as usize;
+    let anchors: Vec<_> = (0..tile_count)
+        .map(|_| world.spawn((Tile, Transform::default())).id())
+        .collect();
+    world.resource_mut::<WorldMap>().tile_entities = anchors.into_iter().map(Some).collect();
+
+    crate::systems::save::rehydrate::normalize_legacy_tile_anchors(&mut world);
+
+    assert!(
+        world
+            .resource::<WorldMap>()
+            .tile_entities
+            .iter()
+            .all(Option::is_none)
+    );
+    assert_eq!(
+        world
+            .query_filtered::<Entity, With<Tile>>()
+            .iter(&world)
+            .count(),
+        0
+    );
+}
+
+#[test]
+fn durable_topology_validation_rejects_mixed_tile_anchor_shape() {
+    let mut world = candidate_world();
+    let anchor = world.spawn((Tile, Transform::default())).id();
+    world.resource_mut::<WorldMap>().tile_entities[0] = Some(anchor);
+
+    assert!(
+        validate_durable_topology_candidate(&world)
+            .unwrap_err()
+            .contains("mixed sparse/legacy shape")
+    );
+}
+
+#[test]
+fn durable_topology_validation_rejects_orphan_tile_entity() {
+    let mut world = candidate_world();
+    world.spawn((Tile, Transform::default()));
+
+    assert!(
+        validate_durable_topology_candidate(&world)
+            .unwrap_err()
+            .contains("orphan Tile entities")
+    );
 }

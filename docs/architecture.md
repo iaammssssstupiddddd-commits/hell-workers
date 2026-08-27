@@ -203,6 +203,7 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 
 `SpatialGridOps` trait契約の正本は`hw_world/src/spatial.rs`である。`crates/hw_spatial`はこれをre-exportし、`SpatialIndex<Tag>`に対する唯一のconcrete implと標準Transform updaterを持つ。9個の公開名はcrate所有ZST tagを使うtype aliasである（Soul用の型名は **`SpatialGrid`** — `SoulSpatialGrid`というRust型はない）。custom cell sizeまたは内部gridの検査・構成は`SpatialIndex::new(GridData)`、`data`、`data_mut`、`into_data`を通し、tuple fieldへ依存しない。`ResourceSpatialGrid`のVisibility policyと`GatheringSpotSpatialGrid`のcenter / Added-only policyは専用systemのまま保持する。`ResourceItem` / `Stockpile` / `TransportRequest`のcomponent特化wrapperは`hw_logistics`にあり、`plugins/spatial.rs`から登録される。`crates/bevy_app/src/systems/spatial/`は削除済みで、`crates/bevy_app/src/plugins/spatial.rs`が`hw_spatial` / `hw_logistics`から直接importする。
 標準 7 系統は `Added<Tracked>` / `Changed<Transform>` / `RemovedComponents<Tracked>` の Change Detection に基づく差分更新を使う。Resource と Gathering は上記の専用 policy を優先する。
+半径検索は中心cellから対称にbucketを展開せず、円のAABBから正確なmin/max cellを求める。640 px cell・半径48 pxなら通常1 cell、cell境界付近でも最大4 cellだけを候補にし、平方距離で円周を含めてexact判定する。負値・非finite半径や無効cell幅は空結果となる。Soul 128 px / wide hybrid候補は密集path-door実機でmember検査が減らずprobeだけ増えたため撤回し、全typed indexの640 px defaultを維持する。
 
 | グリッド | 用途 |
 |:--|:--|
@@ -297,7 +298,7 @@ P07のroot adapterはPostActorでcurrent epoch snapshotを読み、各Soulをslo
 | `TerrainSurfaceMaterialLod1Lite` / `TerrainSurfaceMaterialExtLod1Lite` | `terrain_surface_material_lod1_lite.wgsl` | LOD1-lite（中景・簡略化） |
 | `TerrainSurfaceMaterialLod2` / `TerrainSurfaceMaterialExtLod2` | `terrain_surface_material_lod2.wgsl` | LOD2（遠景・最低コスト） |
 
-startup は `TerrainIdMap`（`R8Unorm`、runtime 更新対象）と `TerrainFeatureMap`（`Rgba8Unorm`、worldgen snapshot）を生成し、`Terrain3dHandles { lod1, lod1_lite, lod2 }` として 3 種の共有 material handle を保持する。**地形描画は `TerrainChunk` entity（16×16 タイル/chunk、7×7=49 entity）で行い、per-tile の render entity は廃止**。chunk には LOD に応じて 3 種の material のいずれかが付く。`Tile` marker entity（10,000 個）は描画コンポーネントなしで `WorldMap.tile_entities` に登録され、Familiar AI の収集可否判定の論理 anchor としてのみ機能する。`Lod0` は将来のリッチビジュアル用に予約で未使用。
+startup は `TerrainIdMap`（`R8Unorm`、runtime 更新対象）と `TerrainFeatureMap`（`Rgba8Unorm`、worldgen snapshot）を生成し、`Terrain3dHandles { lod1, lod1_lite, lod2 }` として 3 種の共有 material handle を保持する。**地形描画は `TerrainChunk` entity（16×16 タイル/chunk、7×7=49 entity）で行い、per-tile の render entityも論理anchor entityも生成しない**。chunk には LOD に応じて 3 種の material のいずれかが付く。地形セルの正本は`WorldMap.tiles`、Sand/River直接収集のidentityは`ResourceSourceKey::Terrain`であり、`WorldMap.tile_entities`と`Tile`型は旧Dense v0/v1 saveのdecode後にcurrent空shapeへ正規化するためだけに残る。`Lod0` は将来のリッチビジュアル用に予約で未使用。
 
 **シェーダー機能比較**:
 

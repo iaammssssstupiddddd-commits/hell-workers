@@ -222,6 +222,134 @@ def write_fixture_run(
                     for column in SCENE_ROOT_COLUMNS
                 }
             )
+        if workload in {"construction", "task-dashboard"}:
+            with (run_dir / "transport_request_changes.csv").open(
+                "w", newline="", encoding="utf-8"
+            ) as handle:
+                writer = csv.DictWriter(
+                    handle, fieldnames=TRANSPORT_REQUEST_CHANGE_COLUMNS
+                )
+                writer.writeheader()
+                for request_kind in TRANSPORT_REQUEST_KIND_NAMES:
+                    added = int(
+                        workload == "construction"
+                        and request_kind == "deliver-to-floor-construction"
+                    )
+                    changed_existing = int(
+                        (
+                            workload == "construction"
+                            and request_kind == "deliver-to-floor-construction"
+                        )
+                        or (
+                            workload == "task-dashboard"
+                            and request_kind == "deposit-to-stockpile"
+                        )
+                    )
+                    producer_spawns = added
+                    producer_missing_repairs = int(
+                        workload == "construction"
+                        and request_kind == "deliver-to-floor-construction"
+                    )
+                    producer_semantic_updates = changed_existing
+                    producer_disable_updates = int(
+                        workload == "construction"
+                        and request_kind == "deliver-to-provisional-wall"
+                    )
+                    producer_no_op_writes = int(
+                        workload == "task-dashboard"
+                        and request_kind == "deposit-to-stockpile"
+                    )
+                    producer_steady_observations = int(
+                        request_kind == "return-bucket"
+                    )
+                    producer_observations = sum(
+                        (
+                            producer_spawns,
+                            producer_missing_repairs,
+                            producer_semantic_updates,
+                            producer_disable_updates,
+                            producer_no_op_writes,
+                            producer_steady_observations,
+                        )
+                    )
+                    writer.writerow(
+                        {
+                            "schema_version": TRANSPORT_REQUEST_CHANGES_SCHEMA_VERSION,
+                            "request_kind": request_kind,
+                            "observer_runs": "4",
+                            "changed_components": str(added + changed_existing),
+                            "added_components": str(added),
+                            "changed_existing_components": str(changed_existing),
+                            "producer_observations": str(producer_observations),
+                            "producer_spawns": str(producer_spawns),
+                            "producer_missing_repairs": str(producer_missing_repairs),
+                            "producer_semantic_updates": str(producer_semantic_updates),
+                            "producer_disable_updates": str(producer_disable_updates),
+                            "producer_no_op_writes": str(producer_no_op_writes),
+                            "producer_steady_observations": str(
+                                producer_steady_observations
+                            ),
+                        }
+                    )
+        if workload in SPATIAL_QUERY_METRICS_CONTRACTS:
+            with (run_dir / "spatial_query_metrics.csv").open(
+                "w", newline="", encoding="utf-8"
+            ) as handle:
+                writer = csv.DictWriter(
+                    handle, fieldnames=SPATIAL_QUERY_METRICS_COLUMNS
+                )
+                writer.writeheader()
+                for caller, radius_band, radius_px in SPATIAL_QUERY_METRICS_CONTRACTS[
+                    workload
+                ]:
+                    writer.writerow(
+                        {
+                            "schema_version": SPATIAL_QUERY_METRICS_SCHEMA_VERSION,
+                            "tag": "soul",
+                            "caller": caller,
+                            "radius_band": radius_band,
+                            "radius_px": radius_px,
+                            "queries": "1",
+                            "invalid_queries": "0",
+                            "coordinate_probes": "1",
+                            "occupied_buckets": "1",
+                            "bucket_members_examined": "1",
+                            "exact_hits": "1",
+                            "position_fallbacks": "0",
+                        }
+                    )
+    if workload == "dream-ui-burst":
+        with (run_dir / "dream_ui_metrics.csv").open(
+            "w", newline="", encoding="utf-8"
+        ) as handle:
+            writer = csv.DictWriter(handle, fieldnames=DREAM_UI_METRICS_COLUMNS)
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "schema_version": DREAM_UI_METRICS_SCHEMA_VERSION,
+                    "workload": "dream-ui-burst",
+                    "target_active_particles": "128",
+                    "measured_frames": "128",
+                    "active_particle_updates": "16384",
+                    "merge_pair_comparisons": "1040384",
+                    "node_writes": "16384",
+                    "ui_transform_writes": "0",
+                    "particle_spawns": "256",
+                    "particle_despawns": "128",
+                    "trail_spawns": "512",
+                    "trail_despawns": "384",
+                    "scoped_allocator_available": "false",
+                    "scoped_alloc_calls": "0",
+                    "scoped_alloc_bytes": "0",
+                    "dream_lane_elapsed_ns": "1000000",
+                    "dream_lane_p95_ns": "10000",
+                    "dream_lane_sample_overflow": "0",
+                    "rng_sequence_checksum": "1111111111111111",
+                    "trajectory_checksum": "2222222222222222",
+                    "lifetime_checksum": "3333333333333333",
+                    "maximum_active_particles": "128",
+                }
+            )
     extra = "2026 WARN unexpected warning\n" if warning else ""
     teardown_extra = "2026 WARN teardown warning\n" if teardown_warning else ""
     (root / "run.log").write_text(
@@ -2282,6 +2410,164 @@ def self_test() -> int:
             "fixture_contract_sha256" in reason
             for reason in tampered_contract.reasons
         )
+
+        transport_root = root / "transport-request-changes"
+        transport_case = Case(
+            "construction", "small", "cpu", DEFAULT_SEED, None, None
+        )
+        write_fixture_run(transport_root, workload="construction")
+        transport_validation = validate_run(
+            transport_root,
+            returncode=0,
+            expected_case=transport_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+        )
+        assert transport_validation.valid, transport_validation.reasons
+        transport_path = transport_root / "data" / "transport_request_changes.csv"
+        with transport_path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            transport_fields = reader.fieldnames
+            transport_rows = list(reader)
+        assert transport_fields is not None and len(transport_rows) == len(
+            TRANSPORT_REQUEST_KIND_NAMES
+        )
+        transport_rows[2]["changed_components"] = "0"
+        with transport_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=transport_fields)
+            writer.writeheader()
+            writer.writerows(transport_rows)
+        invalid_transport = validate_run(
+            transport_root,
+            returncode=0,
+            expected_case=transport_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+        )
+        assert not invalid_transport.valid
+        assert any(
+            "changed_components differs from added + changed-existing" in reason
+            for reason in invalid_transport.reasons
+        )
+
+        transport_rows[2]["changed_components"] = str(
+            int(transport_rows[2]["added_components"])
+            + int(transport_rows[2]["changed_existing_components"])
+        )
+        transport_rows[2]["producer_observations"] = "0"
+        with transport_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=transport_fields)
+            writer.writeheader()
+            writer.writerows(transport_rows)
+        invalid_producer_outcomes = validate_run(
+            transport_root,
+            returncode=0,
+            expected_case=transport_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+        )
+        assert not invalid_producer_outcomes.valid
+        assert any(
+            "producer_observations differs from producer outcome sum" in reason
+            for reason in invalid_producer_outcomes.reasons
+        )
+
+        spatial_root = root / "spatial-query-metrics"
+        spatial_case = Case("path-door", "small", "cpu", DEFAULT_SEED, None, None)
+        write_fixture_run(spatial_root, workload="path-door")
+        spatial_validation = validate_run(
+            spatial_root,
+            returncode=0,
+            expected_case=spatial_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+        )
+        assert spatial_validation.valid, spatial_validation.reasons
+        spatial_path = spatial_root / "data" / "spatial_query_metrics.csv"
+        with spatial_path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            spatial_fields = reader.fieldnames
+            spatial_rows = list(reader)
+        assert spatial_fields is not None and len(spatial_rows) == 2
+        spatial_rows[0]["exact_hits"] = "2"
+        with spatial_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=spatial_fields)
+            writer.writeheader()
+            writer.writerows(spatial_rows)
+        invalid_spatial = validate_run(
+            spatial_root,
+            returncode=0,
+            expected_case=spatial_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+        )
+        assert not invalid_spatial.valid
+        assert any("hits exceed members" in reason for reason in invalid_spatial.reasons)
+
+        dream_root = root / "dream-ui-metrics"
+        dream_case = Case(
+            "dream-ui-burst", "small", "cpu", DEFAULT_SEED, None, None
+        )
+        write_fixture_run(dream_root, workload="dream-ui-burst")
+        dream_validation = validate_run(
+            dream_root,
+            returncode=0,
+            expected_case=dream_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+        )
+        assert dream_validation.valid, dream_validation.reasons
+        assert dream_validation.dream_ui_metrics is not None
+        dream_path = dream_root / "data" / "dream_ui_metrics.csv"
+        with dream_path.open(newline="", encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            dream_fields = reader.fieldnames
+            dream_rows = list(reader)
+        assert dream_fields is not None and len(dream_rows) == 1
+        dream_rows[0]["maximum_active_particles"] = "127"
+        with dream_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=dream_fields)
+            writer.writeheader()
+            writer.writerows(dream_rows)
+        invalid_dream = validate_run(
+            dream_root,
+            returncode=0,
+            expected_case=dream_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+        )
+        assert not invalid_dream.valid
+        assert any(
+            "maximum_active_particles must be 128" in reason
+            for reason in invalid_dream.reasons
+        )
+
+        dream_audit_root = root / "dream-ui-fixed-audit"
+        write_fixture_run(
+            dream_audit_root,
+            workload="dream-ui-burst",
+            fixed_step_audit=True,
+        )
+        dream_audit_validation = validate_run(
+            dream_audit_root,
+            returncode=0,
+            expected_case=dream_case,
+            expected_adapter="Test",
+            expected_backend="vulkan",
+            allow_log_patterns=[],
+            capture_kind="fixed-step-determinism",
+            expected_fixed_hz=64,
+            expected_warmup_ticks=1920,
+            expected_audit_ticks=128,
+        )
+        assert dream_audit_validation.valid, dream_audit_validation.reasons
 
         write_fixture_run(root, teardown_warning=True)
         case = Case("gather", "small", "cpu", DEFAULT_SEED, None, None)

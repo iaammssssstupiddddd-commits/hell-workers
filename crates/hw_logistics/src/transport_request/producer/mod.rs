@@ -15,14 +15,28 @@ pub mod wall_construction;
 pub mod wheelbarrow;
 
 use bevy::math::Vec2;
-use bevy::prelude::{Commands, Entity, Query, Transform, Visibility};
+use bevy::prelude::{
+    Added, Commands, Entity, Or, Query, ResMut, Resource, Transform, Visibility, With,
+};
 use hw_world::zones::{AreaBounds, Yard};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::transport_request::producer::upsert::{SpawnRequestSpec, UpsertRequestSpec};
-use crate::transport_request::{TransportRequest, TransportRequestKind};
+use crate::transport_request::producer::upsert::{SemanticRequestSpec, SpawnRequestSpec};
+use crate::transport_request::{TransportPriority, TransportRequest, TransportRequestKind};
 use crate::types::{ResourceItem, ResourceType};
 use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
+
+/// Resources already consumed by construction delivery systems this Update.
+#[derive(Resource, Default)]
+pub struct ConstructionMaterialConsumptionShadow {
+    pub(super) consumed: HashSet<Entity>,
+}
+
+pub fn begin_construction_material_delivery_cycle_system(
+    mut shadow: ResMut<ConstructionMaterialConsumptionShadow>,
+) {
+    shadow.consumed.clear();
+}
 
 pub fn to_u32_saturating(value: usize) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
@@ -116,17 +130,20 @@ pub fn collect_nearby_resource_entities(
     )>,
     scratch: &mut Vec<Entity>,
     resources_scanned: &mut u32,
-) -> Vec<Entity> {
+    consumed_resources: &HashSet<Entity>,
+) {
     let pickup_radius_sq = spec.pickup_radius * spec.pickup_radius;
-    let mut nearby_resources = Vec::new();
     resource_grid.get_nearby_in_radius_into(spec.center, spec.pickup_radius, scratch);
-    for entity in scratch.iter().copied() {
-        let Ok((_, transform, visibility, resource_item, stored_in_opt)) = q_resources.get(entity)
-        else {
-            continue;
-        };
+    scratch.retain(|entity| {
         *resources_scanned = resources_scanned.saturating_add(1);
-        if *visibility != Visibility::Hidden
+        if consumed_resources.contains(entity) {
+            return false;
+        }
+        let Ok((_, transform, visibility, resource_item, stored_in_opt)) = q_resources.get(*entity)
+        else {
+            return false;
+        };
+        *visibility != Visibility::Hidden
             && stored_in_opt.is_none()
             && resource_item.0 == spec.target_resource
             && transform
@@ -134,33 +151,15 @@ pub fn collect_nearby_resource_entities(
                 .truncate()
                 .distance_squared(spec.center)
                 <= pickup_radius_sq
-        {
-            nearby_resources.push(entity);
-        }
-    }
-    nearby_resources
-}
-
-pub fn group_tiles_by_site<T: bevy::prelude::Component>(
-    q_tiles: &Query<(Entity, &T)>,
-    mut parent_site_of: impl FnMut(&T) -> Entity,
-    tiles_scanned: &mut u32,
-) -> HashMap<Entity, Vec<Entity>> {
-    let mut tiles_by_site = HashMap::<Entity, Vec<Entity>>::new();
-    for (tile_entity, tile) in q_tiles.iter() {
-        *tiles_scanned = tiles_scanned.saturating_add(1);
-        tiles_by_site
-            .entry(parent_site_of(tile))
-            .or_default()
-            .push(tile_entity);
-    }
-    tiles_by_site
+    });
 }
 
 /// `consume_waiting_tile_resources` の非ジェネリック引数をまとめた構造体。
 pub struct TileConsumeSpec<'a> {
     pub site_tiles: &'a [Entity],
     pub required_amount: u32,
+    pub consumed_resources: &'a mut HashSet<Entity>,
+    pub nearby_resources: &'a mut Vec<Entity>,
 }
 
 pub fn consume_waiting_tile_resources<
@@ -169,7 +168,6 @@ pub fn consume_waiting_tile_resources<
     commands: &mut Commands,
     spec: TileConsumeSpec<'_>,
     q_tiles: &mut Query<&mut T>,
-    nearby_resources: &mut Vec<Entity>,
     mut is_waiting: impl FnMut(&T) -> bool,
     mut delivered_mut: impl FnMut(&mut T) -> &mut u32,
     mut mark_ready: impl FnMut(&mut T),
@@ -186,9 +184,12 @@ pub fn consume_waiting_tile_resources<
         let reached_required = {
             let delivered = delivered_mut(&mut tile);
             while *delivered < spec.required_amount {
-                let Some(resource_entity) = nearby_resources.pop() else {
+                let Some(resource_entity) = spec.nearby_resources.pop() else {
                     break;
                 };
+                if !spec.consumed_resources.insert(resource_entity) {
+                    continue;
+                }
                 commands.entity(resource_entity).try_despawn();
                 *delivered += 1;
                 consumed += 1;
@@ -199,7 +200,7 @@ pub fn consume_waiting_tile_resources<
         if reached_required {
             mark_ready(&mut tile);
         }
-        if nearby_resources.is_empty() {
+        if spec.nearby_resources.is_empty() {
             break;
         }
     }
@@ -208,7 +209,6 @@ pub fn consume_waiting_tile_resources<
 
 /// `sync_construction_delivery` のサイト固有データ＋検索補助バッファをまとめた構造体。
 pub struct ConstructionDeliverySpec<'a> {
-    pub site_entity: Entity,
     pub site_pos: Vec2,
     pub target_resource: ResourceType,
     pub required_amount: u32,
@@ -216,7 +216,8 @@ pub struct ConstructionDeliverySpec<'a> {
     pub resource_grid: &'a ResourceSpatialGrid,
     pub scratch: &'a mut Vec<Entity>,
     pub resources_scanned: &'a mut u32,
-    pub tiles_by_site: &'a HashMap<Entity, Vec<Entity>>,
+    pub site_tiles: &'a [Entity],
+    pub consumed_resources: &'a mut HashSet<Entity>,
 }
 
 pub fn sync_construction_delivery<
@@ -236,7 +237,7 @@ pub fn sync_construction_delivery<
     delivered_mut: impl FnMut(&mut TTile) -> &mut u32,
     mark_ready: impl FnMut(&mut TTile),
 ) -> u32 {
-    let mut nearby_resources = collect_nearby_resource_entities(
+    collect_nearby_resource_entities(
         NearbyResourceSpec {
             center: spec.site_pos,
             pickup_radius: spec.pickup_radius,
@@ -246,24 +247,22 @@ pub fn sync_construction_delivery<
         q_resources,
         spec.scratch,
         spec.resources_scanned,
+        spec.consumed_resources,
     );
 
-    if nearby_resources.is_empty() {
+    if spec.scratch.is_empty() {
         return 0;
     }
-
-    let Some(site_tiles) = spec.tiles_by_site.get(&spec.site_entity) else {
-        return 0;
-    };
 
     consume_waiting_tile_resources(
         commands,
         TileConsumeSpec {
-            site_tiles,
+            site_tiles: spec.site_tiles,
             required_amount: spec.required_amount,
+            consumed_resources: spec.consumed_resources,
+            nearby_resources: spec.scratch,
         },
         q_tiles,
-        &mut nearby_resources,
         is_waiting,
         delivered_mut,
         mark_ready,
@@ -277,14 +276,22 @@ pub struct RequestSyncSpec {
     pub request_kind: TransportRequestKind,
 }
 
+pub type ExistingConstructionRequestQuery<'w, 's, TTarget> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        Option<&'static TTarget>,
+        &'static TransportRequest,
+        Option<&'static hw_core::relationships::TaskWorkers>,
+        upsert::ExistingRequestRuntime<'static>,
+    ),
+    Or<(With<TTarget>, Added<TransportRequest>)>,
+>;
+
 pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
     commands: &mut Commands,
-    q_requests: &Query<(
-        Entity,
-        &TTarget,
-        &TransportRequest,
-        Option<&hw_core::relationships::TaskWorkers>,
-    )>,
+    q_requests: &ExistingConstructionRequestQuery<TTarget>,
     desired_requests: &HashMap<(Entity, ResourceType), (Entity, u32, Vec2)>,
     spec: RequestSyncSpec,
     target_entity: impl Fn(&TTarget) -> Entity,
@@ -293,12 +300,12 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
 ) -> std::collections::HashSet<(Entity, ResourceType)> {
     let mut seen_existing_keys = std::collections::HashSet::<(Entity, ResourceType)>::new();
 
-    for (request_entity, target, request, workers_opt) in q_requests.iter() {
+    for (request_entity, target, request, workers_opt, current) in q_requests.iter() {
         if request.kind != spec.expected_kind {
             continue;
         }
 
-        let key = (target_entity(target), request.resource_type);
+        let key = (request.anchor, request.resource_type);
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
         if !upsert::process_duplicate_key(
             commands,
@@ -312,25 +319,33 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
 
         let inflight = to_u32_saturating(workers);
         if let Some((issued_by, slots, site_pos)) = desired_requests.get(&key) {
-            upsert::upsert_transport_request(
+            if target.is_none_or(|current| target_entity(current) != key.0) {
+                commands
+                    .entity(request_entity)
+                    .try_insert(build_target(key.0));
+            }
+            upsert::update_request_runtime_if_needed(
                 commands,
                 request_entity,
-                UpsertRequestSpec {
+                request,
+                current,
+                SemanticRequestSpec {
                     key,
                     site_pos: *site_pos,
                     issued_by: *issued_by,
                     desired_slots: *slots,
                     inflight,
                     priority: priority_for(key.1),
-                    target: build_target(key.0),
+                    transport_priority: TransportPriority::Normal,
                     kind: spec.request_kind,
                     work_type: hw_jobs::WorkType::Haul,
+                    state: upsert::request_state_for_workers(workers),
                 },
             );
             continue;
         }
 
-        upsert::disable_request_with_demand(commands, request_entity, inflight);
+        upsert::disable_request_if_needed(commands, request_entity, current, Some(inflight));
     }
 
     for (key, (issued_by, slots, site_pos)) in desired_requests.iter() {
@@ -360,6 +375,15 @@ pub fn sync_construction_requests<TTarget: bevy::prelude::Component>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tile_index::TileSiteIndex;
+    use crate::transport_request::{FloorMaterialSyncMetrics, WallMaterialSyncMetrics};
+    use bevy::prelude::{App, IntoScheduleConfigs, MinimalPlugins, Update};
+    use hw_core::area::TaskArea;
+    use hw_jobs::construction::{
+        FloorConstructionPhase, FloorConstructionSite, FloorTileBlueprint, FloorTileState,
+        WallConstructionPhase, WallConstructionSite, WallTileBlueprint, WallTileState,
+    };
+    use hw_jobs::{Building, BuildingType, ProvisionalWall};
 
     #[test]
     fn paired_site_is_owned_by_its_yard_for_construction() {
@@ -379,5 +403,96 @@ mod tests {
             find_owner(Vec2::new(5.0, 5.0), &owners).map(|(owner, _)| owner),
             Some(yard_entity)
         );
+    }
+
+    #[test]
+    fn one_resource_is_consumed_by_only_one_overlapping_construction_target() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<ResourceSpatialGrid>()
+            .init_resource::<TileSiteIndex>()
+            .init_resource::<FloorMaterialSyncMetrics>()
+            .init_resource::<WallMaterialSyncMetrics>()
+            .init_resource::<ConstructionMaterialConsumptionShadow>()
+            .add_systems(
+                Update,
+                (
+                    begin_construction_material_delivery_cycle_system,
+                    floor_construction::floor_material_delivery_sync_system,
+                    wall_construction::wall_material_delivery_sync_system,
+                    provisional_wall::provisional_wall_material_delivery_sync_system,
+                )
+                    .chain(),
+            );
+        let center = Vec2::new(64.0, 64.0);
+
+        let mut floor_site_data =
+            FloorConstructionSite::new(TaskArea::from_points(center, center), center, 1);
+        floor_site_data.phase = FloorConstructionPhase::Pouring;
+        let floor_site = app.world_mut().spawn(floor_site_data).id();
+        let mut floor_tile_data = FloorTileBlueprint::new(floor_site, (2, 2));
+        floor_tile_data.state = FloorTileState::WaitingMud;
+        let floor_tile = app.world_mut().spawn(floor_tile_data).id();
+
+        let mut wall_site_data =
+            WallConstructionSite::new(TaskArea::from_points(center, center), center, 1);
+        wall_site_data.phase = WallConstructionPhase::Coating;
+        let wall_site = app.world_mut().spawn(wall_site_data).id();
+        let mut wall_tile_data = WallTileBlueprint::new(wall_site, (2, 2));
+        wall_tile_data.state = WallTileState::WaitingMud;
+        let wall_tile = app.world_mut().spawn(wall_tile_data).id();
+
+        let provisional_wall = app
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: true,
+                },
+                ProvisionalWall::default(),
+                Transform::from_translation(center.extend(0.0)),
+            ))
+            .id();
+
+        app.world_mut()
+            .resource_mut::<TileSiteIndex>()
+            .rebuild_from_tiles([(floor_tile, floor_site)], [(wall_tile, wall_site)]);
+        let resource = app
+            .world_mut()
+            .spawn((
+                ResourceItem(ResourceType::StasisMud),
+                Transform::from_translation(center.extend(0.0)),
+                Visibility::Visible,
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<ResourceSpatialGrid>()
+            .insert(resource, center);
+
+        app.update();
+
+        let floor_tile_state = app
+            .world()
+            .entity(floor_tile)
+            .get::<FloorTileBlueprint>()
+            .unwrap();
+        assert_eq!(floor_tile_state.mud_delivered, 1);
+        assert_eq!(floor_tile_state.state, FloorTileState::PouringReady);
+        assert_eq!(
+            app.world()
+                .entity(wall_tile)
+                .get::<WallTileBlueprint>()
+                .unwrap()
+                .mud_delivered,
+            0
+        );
+        assert!(
+            !app.world()
+                .entity(provisional_wall)
+                .get::<ProvisionalWall>()
+                .unwrap()
+                .mud_delivered
+        );
+        assert!(app.world().get_entity(resource).is_err());
     }
 }

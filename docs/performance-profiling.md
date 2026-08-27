@@ -8,7 +8,7 @@ exclusive leaseを保持する。lease取得に失敗した場合はCargo/game/R
 
 ゲーム側の入口は `crates/bevy_app/src/plugins/startup/perf_scenario.rs` に維持し、設定、fixture、workload driver、capture driver、audit checksum/encoding、出力処理は同名ディレクトリの子モジュールが担当する。CLI option、summary schema、checkpoint順序はこの物理分割に依存しない。
 
-再現性は二段階に分ける。通常の実時間ベンチマークは、ゲーム更新前の**初期 fixture**を必ず一致させ、warm-up/計測終端の状態は実測値として記録する。`Time<Virtual>`は実フレームのdeltaで進み、warm-up境界を越える最終frameがrunごとに異なるためである。完全に同じsimulation時刻での状態一致は、`scripts/perf.py audit` による固定stepの決定性auditとしてframe-time計測と別に扱う。auditは性能値を出力せず、通常の`summary.csv` baselineとも比較しない。
+再現性は二段階に分ける。通常の実時間ベンチマークは、ゲーム更新前の**初期 fixture**を必ず一致させ、warm-up/計測終端の状態は実測値として記録する。profilingが有効なautomated fixtureは`Time<Virtual>`をpauseした状態で専用spawn / deferred apply / setup / initial checkpointを完了し、realtime captureはcheckpoint後に明示的にunpauseする。これにより通常の`Logic` / `Actor`が初期actorへ可変delta更新を1frameだけ先行させる経路を持たない。`Time<Virtual>`はwarm-up開始後に実フレームのdeltaで進み、warm-up境界を越える最終frameがrunごとに異なるため、warm-up/measure終端checksumは既定では記録だけを行う。完全に同じsimulation時刻での状態一致は、`scripts/perf.py audit` による固定stepの決定性auditとしてframe-time計測と別に扱う。auditは性能値を出力せず、通常の`summary.csv` baselineとも比較しない。
 
 ## 計測モード
 
@@ -367,10 +367,27 @@ legacy `data/scene_roots.csv` はP00 / P01 historyのGLB root契約を保持す�
 | `construction` | Curing 中の Floor site（Small/Medium/Large = 16/64/128 tile） | construction site/tile、evacuation候補 |
 | `ui-gpu` | Blueprint（Small/Medium/Large = 64/160/320） | UI/visual の描画条件 |
 | `task-dashboard` | 同一task / Soul / Familiar集合とdashboard 3 mode | AI work、dashboard producer / render、Task Dashboard CPU / memory |
+| `dream-ui-burst` | production Dream UI update / merge / trail経路で128 active particleを決定的に維持 | particle更新、merge比較、Node write、spawn/despawn、Dream lane CPU、RNG / trajectory / lifetime checksum |
 | `deconstruction` | Medium固定の完成済み建築100棟（`BuildingType::ALL`の12種類を安定順で反復）からBonePileを1件だけcommit | deconstruction commit elapsed、target/order cleanup、回収Bone、steady-state scan |
 | `save-transaction` | small / medium / large各fixtureでManual slot 1へ1回だけ同期save | serialize、temp file sync、commit + directory sync、total、body bytes、allocator peak-live growth、process max RSS |
 
 `construction` は Curing footprint の安全監査を含む。完成済みの別 workload の数値を construction の比較値として流用しない。
+
+`dream-ui-burst`はsmall / cpu / default population / hidden dashboard固定で、actual windowを必須とする。
+profiling限定のmaster-seed RNGをproductionのparticle update / noise / trail経路へ渡し、通常buildの
+`thread_rng()`経路は変更しない。fixed auditはmeasure境界でparticle / trail fixtureとRNGを再構築し、
+stable ordinal順でparticle更新とmerge候補を処理する。Capture / Memoryはこの監査専用sortを使わず、
+productionと同じquery反復経路を計測する。短縮経路smokeは次で実行できるが、1反復・1秒/2秒をformal baselineや
+production candidateの採否へ使ってはならない。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py run \
+  --workload dream-ui-burst --sizes small --renders cpu \
+  --repeat 1 --preflight-runs 0 --warmup-secs 1 --measure-secs 2 \
+  --adapter Intel --backend vulkan --window-backend x11 \
+  --present-mode novsync --instrumentation capture \
+  --output target/native-acceptance/dream-ui-burst-smoke
+```
 
 `deconstruction` は fixed-step audit 専用のCPU/headless workloadである。fixtureは100棟を生成し、
 全12種類が少なくとも1棟ずつ存在すること、実際の `DeconstructionCommitRequest` が1件だけ
@@ -448,6 +465,28 @@ actual-window V1〜V5のscreenshotはX11限定である。monitorはroot desktop
 driver resultとackで照合する。ready/ackはatomicにpublishし、X11照会とcaptureは各5秒のbounded callとする。
 driverはack受理時点でもSave catalogのforeground captureが継続していることを要求する。これにより別windowや
 desktop overlay、またはcatalogを閉じた後に残るmarkerの画像をSave catalog UI証跡へ混入させない。
+
+### Dense Tile anchor削減の検証結果（2026-08-27）
+
+Dense anchor削減は、同一seed/fixtureのprofiling限定A/B
+`target/perf-runs/tile-anchor-dense-{capture,memory}-20260826` と
+`target/perf-runs/tile-anchor-omitted-{capture,memory}-20260826`で削減上限を先に固定し、
+production実装後にSave Catalog recipe
+`target/native-acceptance/save-catalog-20260826T235536Z-372acde8`で実経路を閉じた。
+後者はIntel Arc / Vulkan / X11、V1〜V5、Capture/Memory各60 measured・invalid 0、各case 3 preflightでvalidである。
+
+| large指標 | Dense baseline | production sparse | 改善 |
+| --- | ---: | ---: | ---: |
+| save body | 4,058,025 bytes | 1,036,182 bytes | 74.47%減 |
+| Capture serialize p95 | 50,721,781 ns | 15,201,681 ns | 70.03%減 |
+| Capture total p95 | 73,332,099 ns | 35,711,658 ns | 51.30%減 |
+| Memory peak-live growth p95 | 5,998,168 bytes | 1,432,071 bytes | 76.12%減 |
+| Memory process max RSS | 1,374,840 KiB | 1,378,428 KiB | 0.26%増（非gate） |
+
+production closureはseed 20260827、Dense baselineはseed 20260826のため、両artifactを
+`perf.py compare`の同一fixture比較として扱わない。採否の同一seed A/Bは上記omitted artifactが担い、
+production closureは同じ3規模・population・runner schemaで削減量が再現し、実際のsave/load UIと
+current canonical `Tile` 0経路が成立することを確認する。RSSは従来どおり改善主張に使わない。
 
 Familiar policyのcontrolled auditは`gather`固定step専用で、次のexact matrixを使う。
 
@@ -532,6 +571,9 @@ target/perf-runs/<session>/
       data/summary.csv
       data/scene_roots.csv
       data/task_dashboard_cpu.csv # task-dashboard Capture / Tracy
+      data/transport_request_changes.csv # construction / task-dashboard frame-time
+      data/spatial_query_metrics.csv # path-door / gather frame-time
+      data/dream_ui_metrics.csv      # dream-ui-burst Capture / Memory / fixed audit
       data/memory.csv              # Memory build
       data/deconstruction_fixture.csv # deconstruction fixed-step owner-transaction contract
       profile-artifact.json
@@ -540,7 +582,30 @@ target/perf-runs/<session>/
 
 fixed-step auditでは`frames.csv`と`summary.csv`の代わりに、`data/determinism.csv`と`data/determinism_records.csv`を出力する。
 
-`summary.csv` schema v11には、frame-timeに加えcapture期間全体の task execution / reservation / delegation counter、candidate snapshot / score、Top-K、wheelbarrow arbitration、caller別 runtime A* と defer counter、dashboard producer / render、Door候補数、construction の site/tile/evacuation counterを入れる。さらにslow simulationのstep / 更新Soul / idle decision / sanity auditと、energyのoutput / grid / lamp候補counterを入れる。`aggregate.csv`には各counterの中央値/MADと、run内で割り算してから集約したidle skip比率・handler到達比率を併記する。これらはframeあたりの値ではないため、比較時は同じmeasure秒数でのみ用いる。別々のcounterを独立に中央値化した値どうしを引き算して比率を作ってはならない。
+`summary.csv` schema v11には、frame-timeに加えcapture期間全体の task execution / reservation / delegation counter、candidate snapshot / score、Top-K、wheelbarrow arbitration、caller別 runtime A* と defer counter、dashboard producer / render、Door候補数、construction の site/tile/evacuation counterを入れる。さらにslow simulationのstep / 更新Soul / idle decision / sanity auditと、energyのoutput / grid / lamp候補counterを入れる。task executionの`souls_queried`は全Soul数ではなく、active identityまたはfail-closed edgeから実際にrandom-access取得した数であり、`idle_skips`はstale identityを持つidle edgeだけを表す。`aggregate.csv`には各counterの中央値/MADと、run内で割り算してから集約したidle skip比率・handler到達比率を併記する。これらはframeあたりの値ではないため、比較時は同じmeasure秒数でのみ用いる。別々のcounterを独立に中央値化した値どうしを引き算して比率を作ってはならない。
+
+`transport_request_changes.csv` schema v2は`construction` / `task-dashboard`のframe-time runだけが出力する。13種の`TransportRequestKind`を固定順で1行ずつ持ち、measure区間の`observer_runs`、`changed_components`、`added_components`、`changed_existing_components`に加え、`producer_observations`と`producer_spawns / producer_missing_repairs / producer_semantic_updates / producer_disable_updates / producer_no_op_writes / producer_steady_observations`を記録する。logistics crate所有producerはTransportの`ApplyDeferred`後、root所有のSoul Spa producerは既存energy pipeline内の専用`ApplyDeferred`後に、それぞれkindを分担するcollectorで採取する。`observer_runs`は通常collectorの1回/frameを正本とし、producer systemへ共有`ResMut`競合やcross-set schedule edgeを追加しない。
+
+`spatial_query_metrics.csv` schema v1は`path-door` / `gather`のframe-time runだけが出力する。`path-door`はSoul indexの`door-open` / `door-close`を固定順で記録し、半径48 px（`small-le-64`）を計測する。`gather`は`gather-recruitment` 1行で半径240 px（`medium-le-320`）を記録する。各行はquery数、invalid query、coordinate probe、occupied bucket、bucket member検査、exact hit、position fallbackを分離する。query coreは`SpatialQueryStats`を値で返し、各systemがcaller専用resourceへ集約するため、Spatial indexにAtomicや共有`ResMut`を追加しない。offline validatorはworkload別exact header / 行順 / radius contract / canonical非負整数 / `occupied <= probes` / `hits, fallbacks <= members`をfail closedで検証する。これは収録済みcallerのruntime query mixを示すsidecarであり、今後の`spatial-core` CPU laneやResource / wide recruitmentの代理にはしない。
+
+`dream_ui_metrics.csv` schema v2は`dream-ui-burst`だけが出力する。target / maximum active particleは
+128、`node_writes == active_particle_updates`、sample overflow 0、checksum 3種のlowercase 16桁を
+fail closedで検証する。Dream lane p95はupdate / merge / trailのsystem-local elapsedを同じVisual frameへ
+合算した値であり、全frame timeのp95ではない。65,536 sample分のbufferはmeasure前に確保し、resetは
+capacityを維持するため、p95採取自身のmeasure区間allocationを発生させない。
+Capture / fixed auditでは`scoped_allocator_available=false`かつallocation値0、Memory buildでは
+thread-local system scopeのcalls / bytesを正数として要求し、`memory.csv` / process RSSで補完する。
+Captureのchecksumはrecord-only、fixed auditの同一seed反復だけが
+RNG sequence / trajectory / lifetimeのexact一致を要求する。
+Dream UIのalgorithm candidateを開始できるのは、128 particleの30秒warm-up / 60秒measure × 3 valid runで、
+CaptureのDream lane p95中央値が100,000 ns/frame以上、またはMemoryのscoped allocation中央値が
+32 KiB/frame以上の場合だけである。開始後もspatial hashは`merge_pair_comparisons / active_particle_updates >= 16`、
+`UiTransform`は`node_writes / active_particle_updates >= 0.9`、poolはspawn + despawnが8件/frame以上の
+該当候補だけを評価する。分母0は0とし、Memory legのframe timingをこの判定に使わない。
+
+ここで`changed_existing_components`はcomponentの意味差分ではなく、Bevy change tickとして観測された既存`TransportRequest`置換である。`producer_no_op_writes`はproducer-owned componentのいずれかにchange tickが立った一方、前frame snapshotと値が同じだった観測、`producer_steady_observations`は対象componentにchange tickがなくsnapshotも同一だった観測である。削除はsnapshotのcomponent存在差で検出する。manual requestは除外し、`TransportRequestState`やlease等のruntime owner fieldはproducer分類へ含めない。
+
+warm-up終端では累積counterだけをresetし、snapshot cacheは保持するためmeasure開始時の既存requestをspawnへ誤分類しない。同値再挿入を止めるM1 candidateは`producer_no_op_writes`と`changed_existing_components`を主指標にする一方、これらからgameplay変更回数を推定しない。全requestのsnapshot検査自体も`profiling` build限定で、通常buildへ観測負荷を持ち込まない。offline validatorはexact header / 13行順序 / canonical非負整数 / `changed = added + changed-existing` / `producer_observations = 6 outcomeの合計` / 全行共通かつ非0のobserver回数をfail closedで検証する。schema v1 artifactは現行validatorでは受理しない。fixed-step auditはこのsidecarを出力せず、determinism schema v4を維持する。
 
 `runtime_path_total_core_searches` は caller別 `*_core_searches` の和であり、capture中に budgeted facade がclaimした実core A*数である。`*_deferred` は枠不足で拒否されたcore A* request数であり、requestの待機frame数ではない。frameごとのhard limitは `RuntimePathSearchBudget` のclaim境界とunit testで保証し、capture合計だけから1フレームの上限を推定してはならない。
 
@@ -593,6 +658,8 @@ python3 scripts/perf.py compare \
 4. 最適化前後は同じseed、population、window/backend、adapter、present mode、runner versionを使い、`compare`でcaseごとに比較する。workloadの意味やfixtureが変わった場合は新しいbaselineとして扱う。
 
 marker前のwarning/errorは、allowlistへ追加して通すのではなく、発火したsystem・deferred command順・target/sourceの存続条件を特定してから修正する。特にBevy Relationship警告は「存在しないtargetへのinsert」を示すため、targetのdespawn処理だけでなく、同じmessage/deferred command batch内の後続insertも監査する。
+
+Resource visual cleanupは、LogicでResourceItemのdespawnが予約された同じframeにVisual queryが旧snapshotを読む場合がある。Sprite復元と`ResourceVisual`除去は存続Entityにだけ意味があるため、後者も`try_remove`でfail closedにし、deferred despawn後の通常`remove` warningを正式runへ持ち込まない。`chain_ignore_deferred`を使うfocused testがこのsame-frame順序を固定する。
 
 ## 起動経路のデバッグ
 

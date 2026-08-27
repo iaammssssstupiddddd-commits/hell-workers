@@ -2543,7 +2543,7 @@ fn successful_commit_aborts_an_existing_collect_source_and_releases_its_reservat
         .filter(|request| {
             request.op
                 == hw_core::events::ResourceReservationOp::ReleaseSource {
-                    source: fixture.target,
+                    source: fixture.target.into(),
                     amount: 1,
                 }
         })

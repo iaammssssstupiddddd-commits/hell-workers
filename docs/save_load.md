@@ -178,11 +178,11 @@ HELL_WORKERS_SAVE
   `Blueprint`, `Building`, construction site 等）
 - 物流（`ResourceItem`, `Stockpile`, `StockpilePolicy`, `TransportRequest`, `Wheelbarrow` 等）
 - エネルギー（`PowerGrid`, `SoulSpaSite.active_slots`, `PowerConsumerPolicy` 等）
-- ワールド採取対象・ゾーン（`Tree`, `Rock`, `Tile`, `Site`, `Yard`, `PairedSite`/`PairedYard`）
+- ワールド採取対象・ゾーン（`Tree`, `Rock`, `Site`, `Yard`, `PairedSite`/`PairedYard`）。`Tile`は旧Dense v0/v1 bodyのdecode/validation用root markerとしてschemaに残すが、current runtime/saveでは0件
 
 各 Entity に付く **永続 simulation state の Relationship Source / Target**（runtime-derived obstacle marker / mirror と transient gathering relationship を除く）、および `Transform` 等の allow-list コンポーネントも保存する。
 
-`WorldMap` は Resource として保存し、内部の Entity 参照（`buildings`, `floors`, `doors`, `stockpiles`, `tile_entities`）は `map_world_map_entities` で remap する。
+`WorldMap` は Resource として保存し、内部の Entity 参照（`buildings`, `floors`, `doors`, `stockpiles`, legacy `tile_entities`）は `map_world_map_entities` で remap する。current canonical shapeの`tile_entities`は固定長の全`None`であり、新規saveに`Tile` rootは含まれない。
 
 ### 保存しないもの
 
@@ -261,7 +261,7 @@ root marker matrix は collect、extract、RON serialize/deserialize、Relations
 
 1. header/seed、RON deserialize、legacy v0 shimとv0/v1 runtime-derived componentの除去、schema allow-listを検証する。このdecode境界で`GeneratedWorldLayoutResource`をseed照合に、`AssetServer`をreflect asset path解決に要求する。
 2. freeze済みplanのlive prerequisiteとして`GameAssets`、`Building3dHandles`、`SoulTaskHandles`、`Time<Virtual>`と、Tree再水和に必要な非空の`GameAssets.trees`を検証する。
-3. incomingを空のstaging `World`へ1回だけ`write_to_world_with`し、registry、Reflect data、Entity remapを検証する。同じstagingをimmutableなdomain candidate validatorへ渡し、Familiar roster、task/logisticsのowner・容量・drop成立条件、自然障害物の`ObstaclePosition`を含む全durable topologyを検証する。`WorldMap.tile_entities`は全slotが一意な`Tile + Transform`を指すこと、`Blueprint.occupied_grids`、Wall tileの`spawned_wall.unwrap_or(parent_site)`、Soul Spa tileの`parent_site`が`WorldMap.buildings`と双方向に一致することもここで要求する。
+3. incomingを空のstaging `World`へ1回だけ`write_to_world_with`し、registry、Reflect data、Entity remapを検証する。同じstagingをimmutableなdomain candidate validatorへ渡し、Familiar roster、task/logisticsのowner・容量・drop成立条件、自然障害物の`ObstaclePosition`を含む全durable topologyを検証する。`WorldMap.tile_entities`はcurrentの「全slot `None`かつ`Tile` root 0」またはlegacy Denseの「全slot `Some`、一意な`Tile + Transform`、余分な`Tile`なし」だけを受理し、混在shapeは拒否する。`Blueprint.occupied_grids`、Wall tileの`spawned_wall.unwrap_or(parent_site)`、Soul Spa tileの`parent_site`が`WorldMap.buildings`と双方向に一致することもここで要求する。
 4. live worldからrollback snapshotを取得し、incomingと同じschema/staging/domain validatorを通す。どちらかが失敗した場合はreset、WorldEpoch、UI/visual、persisted worldを一切変更しない。`WorldMap`は各candidate自身のshapeと全Entity参照を検証し、旧live worldを新world再水和の前提にはしない。
 
 lighting candidate validatorは`LightingFixtureMount`のownerがcompleted `OutdoorLamp`であること、mount originとTransform grid、`WorldMap` ownerが一致すること、`WallMounted` anchorがcandidate内のcompleted Wallであることを同じpreflightで検証する。不正candidateは`InvalidData`で止まり、live Light Fieldとepochを変更しない。component欠落だけはlegacy互換としてreplace後の`lighting.mount.normalize`が`FreeStanding`を補完する。
@@ -276,6 +276,10 @@ rollback成功時の保証は「persistent graphを復元し、非保存runtime 
 状態へ正規化する」ことである。raw Entity IDやRON byte列の一致は保証しない。`AssignedTask`、
 inventoryのdrop、task/logistics claim除去、obstacle cache再構築、presentation shellはrunnerで
 意図的に正規化される。reflect applyのpanicはtransactionの回復対象ではない。
+
+legacy Dense tile anchorはnormal/rollback共通のnamed `DurableNormalize` step
+`world-map.tile-anchors`で全`Tile`をdespawnし、`WorldMap.tile_entities.fill(None)`へ縮約する。
+したがって旧saveを一度loadして再保存したbodyもcurrent canonical shapeになり、Logicへ旧anchorを渡さない。
 
 rollback自体に失敗した場合だけcoordinator-owned `SaveRecoveryMode`を`RecoveryFailed`へ遷移し、
 `Time<Virtual>`を即時pauseする。この状態ではsave、autosave、通常transaction、world-mutating UI ingressを

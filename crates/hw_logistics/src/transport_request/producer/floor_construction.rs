@@ -2,6 +2,7 @@
 //!
 //! Creates transport requests for bones and mud delivery to floor construction sites
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::{
     FLOOR_BONES_PER_TILE, FLOOR_CONSTRUCTION_PRIORITY, FLOOR_MUD_PER_TILE, TILE_SIZE,
@@ -15,13 +16,15 @@ use hw_jobs::{FloorConstructionSite, FloorTileState};
 use hw_spatial::{FloorConstructionSpatialGrid, ResourceSpatialGrid};
 use std::time::Instant;
 
+use crate::tile_index::TileSiteIndex;
 use crate::transport_request::producer::active_unit_cache::CachedActiveFamiliars;
 use crate::transport_request::producer::tile_wait_cache::FloorTileWaitingCache;
-use crate::transport_request::producer::{ConstructionDeliverySpec, RequestSyncSpec};
-use crate::transport_request::{TransportRequest, TransportRequestKind, TransportRequestMetrics};
+use crate::transport_request::producer::{
+    ConstructionDeliverySpec, ConstructionMaterialConsumptionShadow, RequestSyncSpec,
+};
+use crate::transport_request::{FloorMaterialSyncMetrics, TransportRequestKind};
 use crate::types::{ResourceItem, ResourceType};
 
-type FloorTileImmutQuery<'w, 's> = Query<'w, 's, (Entity, &'static FloorTileBlueprint)>;
 type FloorTileMutQuery<'w, 's> = Query<'w, 's, &'static mut FloorTileBlueprint>;
 type FloorResourcesQuery<'w, 's> = Query<
     'w,
@@ -34,6 +37,18 @@ type FloorResourcesQuery<'w, 's> = Query<
         Option<&'static hw_core::relationships::StoredIn>,
     ),
 >;
+
+#[derive(SystemParam)]
+pub struct FloorMaterialDeliveryContext<'w, 's> {
+    q_sites: Query<'w, 's, (Entity, &'static FloorConstructionSite)>,
+    q_tiles: FloorTileMutQuery<'w, 's>,
+    q_resources: FloorResourcesQuery<'w, 's>,
+    resource_grid: Res<'w, ResourceSpatialGrid>,
+    tile_site_index: Res<'w, TileSiteIndex>,
+    consumption_shadow: ResMut<'w, ConstructionMaterialConsumptionShadow>,
+    metrics: ResMut<'w, FloorMaterialSyncMetrics>,
+    nearby_buf: Local<'s, Vec<Entity>>,
+}
 
 mod designation;
 pub use designation::floor_tile_designation_system;
@@ -49,12 +64,7 @@ pub fn floor_construction_auto_haul_system(
         &FloorConstructionSite,
         Option<&TaskWorkers>,
     )>,
-    q_floor_requests: Query<(
-        Entity,
-        &TargetFloorConstructionSite,
-        &TransportRequest,
-        Option<&TaskWorkers>,
-    )>,
+    q_floor_requests: super::ExistingConstructionRequestQuery<TargetFloorConstructionSite>,
     waiting_cache: Res<FloorTileWaitingCache>,
 ) {
     let active_familiars = &familiars_cache.data;
@@ -139,23 +149,23 @@ pub fn floor_construction_auto_haul_system(
 /// despawns consumed items so each resource is counted exactly once.
 pub fn floor_material_delivery_sync_system(
     mut commands: Commands,
-    q_sites: Query<(Entity, &FloorConstructionSite)>,
-    mut q_tiles: ParamSet<(FloorTileImmutQuery, FloorTileMutQuery)>,
-    q_resources: FloorResourcesQuery,
-    resource_grid: Res<ResourceSpatialGrid>,
-    mut nearby_buf: Local<Vec<Entity>>,
-    mut metrics: ResMut<TransportRequestMetrics>,
+    context: FloorMaterialDeliveryContext,
 ) {
+    let FloorMaterialDeliveryContext {
+        q_sites,
+        mut q_tiles,
+        q_resources,
+        resource_grid,
+        tile_site_index,
+        mut consumption_shadow,
+        mut metrics,
+        mut nearby_buf,
+    } = context;
     let started_at = Instant::now();
     let pickup_radius = TILE_SIZE * 2.0;
     let mut sites_processed = 0u32;
     let mut resources_scanned = 0u32;
     let mut tiles_scanned = 0u32;
-
-    let tiles_by_site = {
-        let q_tiles_read = q_tiles.p0();
-        super::group_tiles_by_site(&q_tiles_read, |tile| tile.parent_site, &mut tiles_scanned)
-    };
 
     for (site_entity, site) in q_sites.iter() {
         sites_processed += 1;
@@ -174,37 +184,38 @@ pub fn floor_material_delivery_sync_system(
             ),
             FloorConstructionPhase::Curing => continue,
         };
-
-        let consumed = {
-            let mut q_tiles_write = q_tiles.p1();
-            super::sync_construction_delivery(
-                &mut commands,
-                ConstructionDeliverySpec {
-                    site_entity,
-                    site_pos: site.material_center,
-                    target_resource,
-                    required_amount,
-                    pickup_radius,
-                    resource_grid: &resource_grid,
-                    scratch: &mut nearby_buf,
-                    resources_scanned: &mut resources_scanned,
-                    tiles_by_site: &tiles_by_site,
-                },
-                &q_resources,
-                &mut q_tiles_write,
-                |tile: &FloorTileBlueprint| tile.state == waiting_state,
-                |tile: &mut FloorTileBlueprint| match site.phase {
-                    FloorConstructionPhase::Reinforcing => &mut tile.bones_delivered,
-                    FloorConstructionPhase::Pouring => &mut tile.mud_delivered,
-                    FloorConstructionPhase::Curing => {
-                        unreachable!("curing phase should be skipped")
-                    }
-                },
-                |tile: &mut FloorTileBlueprint| {
-                    tile.state = ready_state;
-                },
-            )
+        let Some(site_tiles) = tile_site_index.floor_tiles_by_site.get(&site_entity) else {
+            continue;
         };
+        tiles_scanned = tiles_scanned.saturating_add(site_tiles.len() as u32);
+
+        let consumed = super::sync_construction_delivery(
+            &mut commands,
+            ConstructionDeliverySpec {
+                site_pos: site.material_center,
+                target_resource,
+                required_amount,
+                pickup_radius,
+                resource_grid: &resource_grid,
+                scratch: &mut nearby_buf,
+                resources_scanned: &mut resources_scanned,
+                site_tiles,
+                consumed_resources: &mut consumption_shadow.consumed,
+            },
+            &q_resources,
+            &mut q_tiles,
+            |tile: &FloorTileBlueprint| tile.state == waiting_state,
+            |tile: &mut FloorTileBlueprint| match site.phase {
+                FloorConstructionPhase::Reinforcing => &mut tile.bones_delivered,
+                FloorConstructionPhase::Pouring => &mut tile.mud_delivered,
+                FloorConstructionPhase::Curing => {
+                    unreachable!("curing phase should be skipped")
+                }
+            },
+            |tile: &mut FloorTileBlueprint| {
+                tile.state = ready_state;
+            },
+        );
 
         if consumed > 0 {
             debug!(
@@ -218,4 +229,81 @@ pub fn floor_material_delivery_sync_system(
     metrics.floor_material_sync_resources_scanned = resources_scanned;
     metrics.floor_material_sync_tiles_scanned = tiles_scanned;
     metrics.floor_material_sync_elapsed_ms = started_at.elapsed().as_secs_f32() * 1000.0;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hw_core::area::TaskArea;
+    use hw_spatial::SpatialGridOps;
+
+    #[test]
+    fn material_sync_reads_only_the_indexed_site_tiles() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<ResourceSpatialGrid>()
+            .init_resource::<TileSiteIndex>()
+            .init_resource::<FloorMaterialSyncMetrics>()
+            .init_resource::<ConstructionMaterialConsumptionShadow>()
+            .add_systems(Update, floor_material_delivery_sync_system);
+        let center = Vec2::new(64.0, 64.0);
+        let site = app
+            .world_mut()
+            .spawn(FloorConstructionSite::new(
+                TaskArea::from_points(center, center),
+                center,
+                1,
+            ))
+            .id();
+        let tile = app
+            .world_mut()
+            .spawn(FloorTileBlueprint::new(site, (2, 2)))
+            .id();
+        let unrelated_site = app.world_mut().spawn_empty().id();
+        let unrelated_tile = app
+            .world_mut()
+            .spawn(FloorTileBlueprint::new(unrelated_site, (20, 20)))
+            .id();
+        app.world_mut()
+            .resource_mut::<TileSiteIndex>()
+            .rebuild_from_tiles([(tile, site), (unrelated_tile, unrelated_site)], []);
+
+        let resource = app
+            .world_mut()
+            .spawn((
+                ResourceItem(ResourceType::Bone),
+                Transform::from_translation(center.extend(0.0)),
+                Visibility::Visible,
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<ResourceSpatialGrid>()
+            .insert(resource, center);
+
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .entity(tile)
+                .get::<FloorTileBlueprint>()
+                .unwrap()
+                .bones_delivered,
+            1
+        );
+        assert_eq!(
+            app.world()
+                .entity(unrelated_tile)
+                .get::<FloorTileBlueprint>()
+                .unwrap()
+                .bones_delivered,
+            0
+        );
+        assert_eq!(
+            app.world()
+                .resource::<FloorMaterialSyncMetrics>()
+                .floor_material_sync_tiles_scanned,
+            1
+        );
+        assert!(app.world().get_entity(resource).is_err());
+    }
 }

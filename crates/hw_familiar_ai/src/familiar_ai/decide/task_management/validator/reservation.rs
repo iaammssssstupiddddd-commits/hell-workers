@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use hw_core::logistics::ResourceSourceKey;
 
 use crate::familiar_ai::decide::task_management::{
     FamiliarTaskAssignmentQueries, ReservationShadow,
@@ -34,5 +35,18 @@ pub fn source_not_reserved(
         .resource_cache
         .get_source_reservation(task_entity)
         + shadow.source_reserved(task_entity)
+        == 0
+}
+
+pub fn source_key_not_reserved(
+    source: ResourceSourceKey,
+    queries: &FamiliarTaskAssignmentQueries,
+    shadow: &ReservationShadow,
+) -> bool {
+    queries
+        .reservation
+        .resource_cache
+        .get_source_reservation(source)
+        + shadow.source_reserved_key(source)
         == 0
 }

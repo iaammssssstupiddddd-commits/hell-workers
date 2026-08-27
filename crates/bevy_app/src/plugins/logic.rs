@@ -62,7 +62,12 @@ use hw_jobs::visual_sync::{
     sync_mud_mixer_active_system, sync_soul_task_visual_system, sync_wall_site_visual_system,
     sync_wall_tile_visual_system,
 };
-use hw_jobs::{GeneratePowerData, GeneratePowerPhase, TargetSoulSpaSite};
+use hw_jobs::{
+    GeneratePowerData, GeneratePowerPhase, RefineActivityIndex, TargetSoulSpaSite,
+    sync_refine_activity_index_system,
+};
+#[cfg(feature = "profiling")]
+use hw_logistics::transport_request::collect_soul_spa_transport_request_change_metrics_system;
 use hw_logistics::visual_sync::{
     on_stockpile_added_sync_visual, on_wheelbarrow_added, sync_inventory_item_visual_system,
     sync_stockpile_visual_system,
@@ -79,6 +84,9 @@ use hw_world::{
 };
 
 pub struct LogicPlugin;
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+struct SoulSpaTransportRequestFlushSet;
 
 impl Plugin for LogicPlugin {
     fn build(&self, app: &mut App) {
@@ -108,6 +116,7 @@ impl Plugin for LogicPlugin {
         app.init_resource::<RoomValidationState>();
         app.init_resource::<ObstaclePositionIndex>();
         app.init_resource::<EnergyUpdateDirty>();
+        app.init_resource::<RefineActivityIndex>();
         app.init_resource::<PowerAllocationMode>();
         app.init_resource::<crate::systems::jobs::deconstruction::DeconstructionHoverPreview>();
         #[cfg(feature = "profiling")]
@@ -188,6 +197,13 @@ impl Plugin for LogicPlugin {
         // グループB: maintenance / spawn 系（独立。Bevy scheduler が競合を自動調停）
         .add_systems(
             Update,
+            sync_refine_activity_index_system
+                .after(SoulAiSystemSet::Execute)
+                .before(sync_mud_mixer_active_system)
+                .in_set(GameSystemSet::Logic),
+        )
+        .add_systems(
+            Update,
             (
                 tree_regrowth_system,
                 blueprint_cancel_cleanup_system,
@@ -215,7 +231,7 @@ impl Plugin for LogicPlugin {
                 sync_wall_site_visual_system,
                 sync_building_visual_system,
                 sync_stockpile_visual_system,
-                sync_mud_mixer_active_system,
+                sync_mud_mixer_active_system.after(sync_refine_activity_index_system),
             )
                 .in_set(GameSystemSet::Logic),
         )
@@ -314,7 +330,7 @@ pub(crate) fn register_soul_energy_pipeline(app: &mut App) {
             soul_spa_auto_haul_system,
             soul_spa_delivery_sync_system,
             soul_spa_tile_activate_system,
-            bevy::ecs::schedule::ApplyDeferred,
+            bevy::ecs::schedule::ApplyDeferred.in_set(SoulSpaTransportRequestFlushSet),
             sync_power_allocation_mode_from_settings_system,
             detect_energy_update_dirty_system,
             reconcile_power_grid_topology_system.run_if(energy_topology_should_run),
@@ -326,6 +342,13 @@ pub(crate) fn register_soul_energy_pipeline(app: &mut App) {
             .chain()
             .after(StateSanityFlushSet)
             .after(DeconstructionFinalizerSet::Finalize)
+            .in_set(GameSystemSet::Logic),
+    );
+    #[cfg(feature = "profiling")]
+    app.add_systems(
+        Update,
+        collect_soul_spa_transport_request_change_metrics_system
+            .after(SoulSpaTransportRequestFlushSet)
             .in_set(GameSystemSet::Logic),
     );
 }

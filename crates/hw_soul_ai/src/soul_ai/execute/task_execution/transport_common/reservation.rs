@@ -4,6 +4,7 @@
 
 use crate::soul_ai::execute::task_execution::context::TaskExecutionContext;
 use bevy::prelude::*;
+use hw_core::logistics::ResourceSourceKey;
 use hw_logistics::ResourceType;
 
 /// ストックパイル/ブループリントの目的地予約を解放
@@ -13,8 +14,15 @@ pub fn release_destination(_ctx: &mut TaskExecutionContext, _target: Entity) {
 }
 
 /// ソース（アイテム）の予約を解放
-pub fn release_source(ctx: &mut TaskExecutionContext, source: Entity, amount: usize) {
-    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource { source, amount });
+pub fn release_source(
+    ctx: &mut TaskExecutionContext,
+    source: impl Into<ResourceSourceKey>,
+    amount: usize,
+) {
+    ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
+        source: source.into(),
+        amount,
+    });
 }
 
 /// ミキサー目的地の予約を解放
@@ -32,9 +40,13 @@ pub fn release_mixer_destination(
 }
 
 /// ソース取得を記録（Delta Update用）
-pub fn record_picked_source(ctx: &mut TaskExecutionContext, source: Entity, amount: usize) {
+pub fn record_picked_source(
+    ctx: &mut TaskExecutionContext,
+    source: impl Into<ResourceSourceKey>,
+    amount: usize,
+) {
     ctx.queue_reservation(hw_core::events::ResourceReservationOp::RecordPickedSource {
-        source,
+        source: source.into(),
         amount,
     });
 }

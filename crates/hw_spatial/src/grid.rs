@@ -47,24 +47,78 @@ impl GridData {
     }
 
     pub fn get_nearby_in_radius_into(&self, pos: Vec2, radius: f32, out: &mut Vec<Entity>) {
-        out.clear();
-        let cell_radius = (radius / self.cell_size).ceil() as i32;
-        let center_cell = self.pos_to_cell(pos);
+        self.get_nearby_in_radius_observed(pos, radius, out, &mut ());
+    }
 
-        for dy in -cell_radius..=cell_radius {
-            for dx in -cell_radius..=cell_radius {
-                let cell = (center_cell.0 + dx, center_cell.1 + dy);
+    /// Runs the radius query and returns exact work counters for profiling.
+    ///
+    /// Callers aggregate the returned value in their own `Local` state. The
+    /// grid intentionally does not own shared mutable metrics, so independent
+    /// spatial readers remain parallelizable.
+    pub fn get_nearby_in_radius_with_stats_into(
+        &self,
+        pos: Vec2,
+        radius: f32,
+        out: &mut Vec<Entity>,
+    ) -> SpatialQueryStats {
+        let mut stats = SpatialQueryStats::default();
+        self.get_nearby_in_radius_observed(pos, radius, out, &mut stats);
+        stats
+    }
+
+    #[inline]
+    fn get_nearby_in_radius_observed<Observer: RadiusQueryObserver>(
+        &self,
+        pos: Vec2,
+        radius: f32,
+        out: &mut Vec<Entity>,
+        observer: &mut Observer,
+    ) {
+        out.clear();
+        observer.query_started();
+        let Some((min_cell, max_cell)) = self.radius_cell_bounds(pos, radius) else {
+            observer.invalid_query();
+            return;
+        };
+        let radius_squared = radius * radius;
+
+        for y in min_cell.1..=max_cell.1 {
+            for x in min_cell.0..=max_cell.0 {
+                observer.coordinate_probed();
+                let cell = (x, y);
                 if let Some(entities) = self.grid.get(&cell) {
+                    observer.occupied_bucket();
                     for &entity in entities {
-                        if let Some(&entity_pos) = self.positions.get(&entity)
-                            && pos.distance(entity_pos) <= radius
-                        {
-                            out.push(entity);
+                        observer.bucket_member_examined();
+                        if let Some(&entity_pos) = self.positions.get(&entity) {
+                            if pos.distance_squared(entity_pos) <= radius_squared {
+                                observer.exact_hit();
+                                out.push(entity);
+                            }
+                        } else {
+                            observer.position_fallback();
                         }
                     }
                 }
             }
         }
+    }
+
+    fn radius_cell_bounds(&self, pos: Vec2, radius: f32) -> Option<((i32, i32), (i32, i32))> {
+        if !self.cell_size.is_finite()
+            || self.cell_size <= 0.0
+            || !pos.x.is_finite()
+            || !pos.y.is_finite()
+            || !radius.is_finite()
+            || radius < 0.0
+        {
+            return None;
+        }
+        let extent = Vec2::splat(radius);
+        Some((
+            self.pos_to_cell(pos - extent),
+            self.pos_to_cell(pos + extent),
+        ))
     }
 
     /// 矩形範囲内のエンティティを返す
@@ -140,6 +194,96 @@ impl GridData {
     }
 }
 
+/// Exact work performed by one or more spatial radius queries.
+///
+/// The counters distinguish empty coordinate probes from occupied buckets and
+/// exact hits. This is the evidence needed to compare cell layouts without
+/// treating the final result count as the amount of index work.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SpatialQueryStats {
+    pub queries: u64,
+    pub invalid_queries: u64,
+    pub coordinate_probes: u64,
+    pub occupied_buckets: u64,
+    pub bucket_members_examined: u64,
+    pub exact_hits: u64,
+    pub position_fallbacks: u64,
+}
+
+impl SpatialQueryStats {
+    pub fn merge(&mut self, other: Self) {
+        self.queries = self.queries.saturating_add(other.queries);
+        self.invalid_queries = self.invalid_queries.saturating_add(other.invalid_queries);
+        self.coordinate_probes = self
+            .coordinate_probes
+            .saturating_add(other.coordinate_probes);
+        self.occupied_buckets = self.occupied_buckets.saturating_add(other.occupied_buckets);
+        self.bucket_members_examined = self
+            .bucket_members_examined
+            .saturating_add(other.bucket_members_examined);
+        self.exact_hits = self.exact_hits.saturating_add(other.exact_hits);
+        self.position_fallbacks = self
+            .position_fallbacks
+            .saturating_add(other.position_fallbacks);
+    }
+}
+
+trait RadiusQueryObserver {
+    #[inline]
+    fn query_started(&mut self) {}
+    #[inline]
+    fn invalid_query(&mut self) {}
+    #[inline]
+    fn coordinate_probed(&mut self) {}
+    #[inline]
+    fn occupied_bucket(&mut self) {}
+    #[inline]
+    fn bucket_member_examined(&mut self) {}
+    #[inline]
+    fn exact_hit(&mut self) {}
+    #[inline]
+    fn position_fallback(&mut self) {}
+}
+
+impl RadiusQueryObserver for () {}
+
+impl RadiusQueryObserver for SpatialQueryStats {
+    #[inline]
+    fn query_started(&mut self) {
+        self.queries = self.queries.saturating_add(1);
+    }
+
+    #[inline]
+    fn invalid_query(&mut self) {
+        self.invalid_queries = self.invalid_queries.saturating_add(1);
+    }
+
+    #[inline]
+    fn coordinate_probed(&mut self) {
+        self.coordinate_probes = self.coordinate_probes.saturating_add(1);
+    }
+
+    #[inline]
+    fn occupied_bucket(&mut self) {
+        self.occupied_buckets = self.occupied_buckets.saturating_add(1);
+    }
+
+    #[inline]
+    fn bucket_member_examined(&mut self) {
+        self.bucket_members_examined = self.bucket_members_examined.saturating_add(1);
+    }
+
+    #[inline]
+    fn exact_hit(&mut self) {
+        self.exact_hits = self.exact_hits.saturating_add(1);
+    }
+
+    #[inline]
+    fn position_fallback(&mut self) {
+        self.position_fallbacks = self.position_fallbacks.saturating_add(1);
+    }
+}
+
 /// A type-separated spatial index backed by the common grid storage.
 ///
 /// Tags are owned by this crate rather than by the domain crates that own the
@@ -203,6 +347,21 @@ impl<Tag> SpatialIndex<Tag> {
     /// Returns the entities whose recorded positions are inside the rectangle.
     pub fn get_in_area(&self, min: Vec2, max: Vec2) -> Vec<Entity> {
         self.data.get_in_area(min, max)
+    }
+
+    /// Runs a radius query and returns exact grid work counters.
+    ///
+    /// This is an inherent profiling API rather than part of `SpatialGridOps`:
+    /// domain-independent consumers keep the minimal trait while concrete
+    /// runtime owners can opt into caller-local instrumentation.
+    pub fn get_nearby_in_radius_with_stats_into(
+        &self,
+        pos: Vec2,
+        radius: f32,
+        out: &mut Vec<Entity>,
+    ) -> SpatialQueryStats {
+        self.data
+            .get_nearby_in_radius_with_stats_into(pos, radius, out)
     }
 }
 
@@ -342,6 +501,138 @@ mod tests {
 
         index.data_mut().clear();
         assert_eq!(index.into_data().cell_size, 48.0);
+    }
+
+    #[test]
+    fn radius_bounds_visit_only_cells_intersecting_the_circle_aabb() {
+        let grid = GridData::new(640.0);
+
+        assert_eq!(
+            grid.radius_cell_bounds(Vec2::new(320.0, 320.0), 48.0),
+            Some(((0, 0), (0, 0)))
+        );
+        assert_eq!(
+            grid.radius_cell_bounds(Vec2::new(620.0, 620.0), 48.0),
+            Some(((0, 0), (1, 1)))
+        );
+        assert_eq!(
+            grid.radius_cell_bounds(Vec2::new(-320.0, -320.0), 48.0),
+            Some(((-1, -1), (-1, -1)))
+        );
+        assert_eq!(
+            grid.radius_cell_bounds(Vec2::new(-20.0, -20.0), 48.0),
+            Some(((-1, -1), (0, 0)))
+        );
+    }
+
+    #[test]
+    fn radius_query_includes_distance_boundary_and_rejects_invalid_shapes() {
+        let mut grid = GridData::new(640.0);
+        let boundary = Entity::from_bits(1);
+        let outside = Entity::from_bits(2);
+        grid.insert(boundary, Vec2::new(48.0, 0.0));
+        grid.insert(outside, Vec2::new(48.01, 0.0));
+
+        assert_eq!(grid.get_nearby_in_radius(Vec2::ZERO, 48.0), vec![boundary]);
+        assert!(grid.get_nearby_in_radius(Vec2::ZERO, -1.0).is_empty());
+        assert!(grid.get_nearby_in_radius(Vec2::ZERO, f32::NAN).is_empty());
+        assert!(
+            grid.get_nearby_in_radius(Vec2::ZERO, f32::INFINITY)
+                .is_empty()
+        );
+        assert!(
+            GridData::new(0.0)
+                .get_nearby_in_radius(Vec2::ZERO, 48.0)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn radius_query_stats_separate_probes_members_hits_and_missing_positions() {
+        let mut grid = GridData::new(64.0);
+        let hit = Entity::from_bits(1);
+        let miss = Entity::from_bits(2);
+        let outside = Entity::from_bits(3);
+        let missing_position = Entity::from_bits(4);
+        grid.insert(hit, Vec2::new(8.0, 8.0));
+        grid.insert(miss, Vec2::new(56.0, 56.0));
+        grid.insert(outside, Vec2::new(-24.0, -24.0));
+        grid.grid
+            .entry((0, 0))
+            .or_default()
+            .insert(missing_position);
+
+        let mut results = Vec::new();
+        let stats =
+            grid.get_nearby_in_radius_with_stats_into(Vec2::new(8.0, 8.0), 32.0, &mut results);
+
+        assert_eq!(results, vec![hit]);
+        assert_eq!(
+            stats,
+            SpatialQueryStats {
+                queries: 1,
+                invalid_queries: 0,
+                coordinate_probes: 4,
+                occupied_buckets: 2,
+                bucket_members_examined: 4,
+                exact_hits: 1,
+                position_fallbacks: 1,
+            }
+        );
+    }
+
+    #[test]
+    fn radius_query_stats_merge_and_count_invalid_queries() {
+        let grid = GridData::new(64.0);
+        let mut results = vec![Entity::from_bits(99)];
+        let invalid = grid.get_nearby_in_radius_with_stats_into(Vec2::ZERO, f32::NAN, &mut results);
+        let valid = grid.get_nearby_in_radius_with_stats_into(Vec2::ZERO, 0.0, &mut results);
+        let mut total = invalid;
+        total.merge(valid);
+
+        assert!(results.is_empty());
+        assert_eq!(total.queries, 2);
+        assert_eq!(total.invalid_queries, 1);
+        assert_eq!(total.coordinate_probes, 1);
+        assert_eq!(total.occupied_buckets, 0);
+    }
+
+    #[test]
+    fn cell_widths_and_hybrid_path_return_the_same_radius_membership() {
+        let fixtures = [
+            Vec2::new(-600.0, -40.0),
+            Vec2::new(-128.0, 0.0),
+            Vec2::new(-48.0, 0.0),
+            Vec2::ZERO,
+            Vec2::new(48.0, 0.0),
+            Vec2::new(127.0, 1.0),
+            Vec2::new(900.0, 900.0),
+        ];
+        let queries = [
+            (Vec2::ZERO, 48.0),
+            (Vec2::new(32.0, 16.0), 240.0),
+            (Vec2::ZERO, 5_120.0),
+        ];
+        let mut expected = None;
+
+        for cell_size in [64.0, 128.0, 256.0, 640.0] {
+            let mut grid = GridData::new(cell_size);
+            for (index, position) in fixtures.into_iter().enumerate() {
+                grid.insert(Entity::from_bits(index as u64 + 1), position);
+            }
+            let mut observed = Vec::new();
+            for (center, radius) in queries {
+                let mut entities = grid.get_nearby_in_radius(center, radius);
+                entities.sort_unstable_by_key(|entity| entity.to_bits());
+                observed.push(entities);
+            }
+
+            if let Some(expected) = &expected {
+                assert_eq!(&observed, expected, "cell_size={cell_size}");
+            } else {
+                expected = Some(observed);
+            }
+        }
     }
 
     #[test]

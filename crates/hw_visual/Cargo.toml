@@ -5,7 +5,8 @@ edition = "2024"
 
 [features]
 default = []
-profiling = []
+profiling = ["hw_core/profiling"]
+profiling-memory = ["profiling", "hw_core/profiling-memory"]
 
 [dependencies]
 bevy = { workspace = true }

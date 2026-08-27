@@ -14,6 +14,7 @@ Soul が実行するタスクの種類・進捗状態、および建物の建設
 | `construction.rs` | 床・壁の建設フェーズ状態機械、タイル Blueprint コンポーネント |
 | `model.rs` | `BuildingType`、`MovePlanned`、`Door` / `DoorCloseTimer`、`remove_tile_task_components` |
 | `mud_mixer.rs` | 泥ミキサーのワークフロー状態 |
+| `refine_activity.rs` | mixer別のassigned/refining countとvisual dirty edgeをChanged/Removed・WorldEpochから差分同期するruntime index |
 | `events.rs` | タスク完了イベント等 |
 | `diagnostics.rs` | producer共通の5分類、fixed-width coverage/counter、input stamp/revision契約（表示非依存・runtime only） |
 | `lifecycle.rs` | タスク予約ライフサイクル helper (`collect_active_reservation_ops`, `active_reservation_signature`, `collect_release_reservation_ops`) |
@@ -67,6 +68,7 @@ hw_jobs は**共有 model / state、pure transition rule、visual mirror同期�
 | `BuildingType` と `required_materials()` | 建物完成後処理・ワールドマップ更新 |
 | `Door`, `DoorCloseTimer` | ドアrule/state applyは`hw_world`、index adapterは`hw_spatial`、UI intent applyと登録はroot |
 | `MudMixerInputSlot` / `MudMixerOutputSlot` 型 | 泥ミキサーのフロー制御システム |
+| `RefineActivityIndex` と同期system | auto-refineでのDesignation発行、rootでのschedule登録 |
 | タスク予約ライフサイクル helper (`lifecycle.rs`) | 予約再構築を呼ぶゲーム側システム。`ReservationSignature` は active operation からのみ導出する |
 | `remove_tile_task_components` | `hw_logistics::construction_phase_transition`がtransition適用時に呼ぶ |
 | 建設状態コンポーネント（`FloorTileState`, `WallTileState` 等） | コンポーネントの Bevy 登録・Observer 配線 |

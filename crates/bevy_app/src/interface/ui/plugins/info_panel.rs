@@ -1,11 +1,12 @@
 use crate::interface::ui::panels::task_list::{
-    TaskListDirty, TaskListState, detect_task_list_changed_components,
-    detect_task_list_removed_components, update_task_list_state_system,
-};
-use crate::interface::ui::panels::task_list::{
-    left_panel_tab_system, left_panel_visibility_system, task_dashboard_action_state_sync_system,
+    TaskDashboardViewport, left_panel_tab_system, left_panel_visibility_system,
+    sync_task_dashboard_viewport_system, task_dashboard_action_state_sync_system,
     task_dashboard_control_system, task_list_click_system, task_list_update_system,
     task_list_visual_feedback_system,
+};
+use crate::interface::ui::panels::task_list::{
+    TaskListDirty, TaskListState, detect_task_list_changed_components,
+    detect_task_list_removed_components, update_task_list_state_system,
 };
 use crate::interface::ui::{
     InfoPanelNodes, InfoPanelPinState, InfoPanelState, info_panel_system,
@@ -81,6 +82,7 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
     app.init_resource::<InspectionRefreshCadence>();
     app.init_resource::<TaskListDirty>();
     app.init_resource::<TaskListState>();
+    app.init_resource::<TaskDashboardViewport>();
     #[cfg(feature = "profiling")]
     app.init_resource::<crate::interface::ui::panels::task_list::TaskDashboardPerfMetrics>()
         .init_resource::<crate::interface::ui::panels::task_list::TaskDashboardTimingMetrics>();
@@ -104,9 +106,11 @@ fn register_ui_info_panel_plugin_systems(app: &mut App) {
             left_panel_visibility_system.after(left_panel_tab_system),
             task_dashboard_action_state_sync_system.after(left_panel_tab_system),
             task_dashboard_control_system.after(task_dashboard_action_state_sync_system),
+            sync_task_dashboard_viewport_system.after(left_panel_visibility_system),
             task_list_update_system
                 .after(task_dashboard_action_state_sync_system)
-                .after(task_dashboard_control_system),
+                .after(task_dashboard_control_system)
+                .after(sync_task_dashboard_viewport_system),
             task_list_click_system,
             task_list_visual_feedback_system.after(task_list_click_system),
             soul_rename_button_system::<crate::assets::GameAssets>,
@@ -145,7 +149,8 @@ mod tests {
     };
     use hw_logistics::transport_request::producer::task_area::task_area_auto_haul_system;
     use hw_logistics::transport_request::{
-        TransportRequestMetrics, WheelbarrowArbitrationDiagnostics, wheelbarrow_arbitration_system,
+        TaskAreaMetrics, WheelbarrowArbitrationDiagnostics, WheelbarrowArbitrationMetrics,
+        wheelbarrow_arbitration_system,
     };
     use hw_logistics::{
         BelongsTo, ResourceItem, ResourceType, SharedResourceCache, Stockpile, StockpilePolicy,
@@ -212,20 +217,25 @@ mod tests {
     }
 
     impl SteadyStateTotals {
-        fn sample(&mut self, metrics: &TransportRequestMetrics) {
-            self.task_area_groups += u64::from(metrics.task_area_groups);
-            self.task_area_free_items_scanned += u64::from(metrics.task_area_free_items_scanned);
-            self.task_area_items_matched += u64::from(metrics.task_area_items_matched);
+        fn sample(
+            &mut self,
+            task_area: &TaskAreaMetrics,
+            arbitration: &WheelbarrowArbitrationMetrics,
+        ) {
+            self.task_area_groups += u64::from(task_area.task_area_groups);
+            self.task_area_free_items_scanned += u64::from(task_area.task_area_free_items_scanned);
+            self.task_area_items_matched += u64::from(task_area.task_area_items_matched);
             self.wheelbarrow_leases_granted +=
-                u64::from(metrics.wheelbarrow_leases_granted_this_frame);
+                u64::from(arbitration.wheelbarrow_leases_granted_this_frame);
             self.wheelbarrow_eligible_requests +=
-                u64::from(metrics.wheelbarrow_arb_eligible_requests);
-            self.wheelbarrow_bucket_items += u64::from(metrics.wheelbarrow_arb_bucket_items_total);
+                u64::from(arbitration.wheelbarrow_arb_eligible_requests);
+            self.wheelbarrow_bucket_items +=
+                u64::from(arbitration.wheelbarrow_arb_bucket_items_total);
             self.wheelbarrow_candidates_after_top_k +=
-                u64::from(metrics.wheelbarrow_arb_candidates_after_topk);
-            self.wheelbarrow_items_deduped += u64::from(metrics.wheelbarrow_arb_items_deduped);
+                u64::from(arbitration.wheelbarrow_arb_candidates_after_topk);
+            self.wheelbarrow_items_deduped += u64::from(arbitration.wheelbarrow_arb_items_deduped);
             self.wheelbarrow_candidates_dropped_by_dedup +=
-                u64::from(metrics.wheelbarrow_arb_candidates_dropped_by_dedup);
+                u64::from(arbitration.wheelbarrow_arb_candidates_dropped_by_dedup);
         }
     }
 
@@ -242,7 +252,8 @@ mod tests {
             .init_resource::<StockpileSpatialGrid>()
             .init_resource::<CachedActiveYards>()
             .init_resource::<CachedStockpileGroups>()
-            .init_resource::<TransportRequestMetrics>()
+            .init_resource::<TaskAreaMetrics>()
+            .init_resource::<WheelbarrowArbitrationMetrics>()
             .init_resource::<SharedResourceCache>()
             .init_resource::<WheelbarrowArbitrationRuntime>()
             .init_resource::<WheelbarrowArbitrationDiagnostics>()
@@ -364,7 +375,10 @@ mod tests {
                 );
             }
 
-            totals.sample(app.world().resource::<TransportRequestMetrics>());
+            totals.sample(
+                app.world().resource::<TaskAreaMetrics>(),
+                app.world().resource::<WheelbarrowArbitrationMetrics>(),
+            );
         }
 
         totals.group_rebuilds = app

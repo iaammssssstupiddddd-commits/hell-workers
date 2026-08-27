@@ -227,6 +227,7 @@ def _load_runs(
             p02_presentation=payload.get("p02_presentation"),
             deconstruction_fixture=payload.get("deconstruction_fixture"),
             save_transaction=payload.get("save_transaction"),
+            dream_ui_metrics=payload.get("dream_ui_metrics"),
             timeline=payload.get("timeline"),
             behavior_save_artifact=payload.get("behavior_save_artifact"),
             profile_artifact=payload.get("profile_artifact"),
@@ -347,6 +348,62 @@ def apply_determinism_policy(runs: list[tuple[Path, Validation]]) -> bool:
         reason = "determinism checkpoints differ across repeated runs: " + ", ".join(
             sorted(signatures)
         )
+        for run_dir, validation in case_runs:
+            if not validation.valid:
+                continue
+            validation.valid = False
+            validation.reasons.append(reason)
+            write_json(run_dir / "validation.json", validation.to_json())
+            changed = True
+    return changed
+
+
+DREAM_UI_REPEAT_REASON_PREFIX = "Dream UI deterministic checksums differ across repeated runs:"
+
+
+def reset_dream_ui_repeat_policy(runs: list[tuple[Path, Validation]]) -> bool:
+    changed = False
+    for run_dir, validation in runs:
+        reasons = [
+            reason
+            for reason in validation.reasons
+            if not reason.startswith(DREAM_UI_REPEAT_REASON_PREFIX)
+        ]
+        valid = not reasons
+        if reasons != validation.reasons or valid != validation.valid:
+            validation.reasons = reasons
+            validation.valid = valid
+            write_json(run_dir / "validation.json", validation.to_json())
+            changed = True
+    return changed
+
+
+def apply_dream_ui_determinism_policy(
+    runs: list[tuple[Path, Validation]],
+) -> bool:
+    by_case: dict[str, list[tuple[Path, Validation]]] = {}
+    for run_dir, validation in runs:
+        by_case.setdefault(run_dir.parent.name, []).append((run_dir, validation))
+    changed = False
+    checksum_fields = (
+        "rng_sequence_checksum",
+        "trajectory_checksum",
+        "lifetime_checksum",
+    )
+    for case_runs in by_case.values():
+        signatures = {
+            tuple(metrics[field] for field in checksum_fields)
+            for _, validation in case_runs
+            if validation.valid
+            and (metrics := validation.dream_ui_metrics) is not None
+        }
+        has_dream_metrics = any(
+            validation.dream_ui_metrics is not None for _, validation in case_runs
+        )
+        if not has_dream_metrics or len(signatures) <= 1:
+            continue
+        formatted = ["/".join(signature) for signature in sorted(signatures)]
+        reason = DREAM_UI_REPEAT_REASON_PREFIX + " " + ", ".join(formatted)
         for run_dir, validation in case_runs:
             if not validation.valid:
                 continue

@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 use hw_core::area::TaskArea;
-use hw_core::logistics::ResourceType;
+use hw_core::logistics::{ResourceSourceKey, ResourceType};
 use hw_core::relationships::{CommandedBy, ParticipatingIn};
 use hw_core::soul::{DamnedSoul, Destination, IdleState, Path};
 use hw_energy::constants::DREAM_GENERATE_ASSIGN_THRESHOLD;
@@ -56,7 +56,7 @@ pub struct ReservationShadow {
     mixer_destination: HashMap<(Entity, ResourceType), usize>,
     destination_total: HashMap<Entity, usize>,
     destination_by_resource: HashMap<(Entity, ResourceType), usize>,
-    source: HashMap<Entity, usize>,
+    source: HashMap<ResourceSourceKey, usize>,
     soul_spa_assignments: HashMap<Entity, u32>,
     pub(crate) source_selector_cache: Option<SourceSelectorFrameCache>,
 }
@@ -70,6 +70,10 @@ impl ReservationShadow {
     }
 
     pub fn source_reserved(&self, source: Entity) -> usize {
+        self.source_reserved_key(source.into())
+    }
+
+    pub fn source_reserved_key(&self, source: ResourceSourceKey) -> usize {
         self.source.get(&source).cloned().unwrap_or(0)
     }
 

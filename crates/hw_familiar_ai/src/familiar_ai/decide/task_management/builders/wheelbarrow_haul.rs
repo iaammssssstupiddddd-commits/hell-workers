@@ -1,7 +1,8 @@
 //! 一輪車運搬系 builder — `HaulWithWheelbarrow` タスクを生成するすべての関数。
 
 use bevy::prelude::*;
-use hw_core::logistics::{ResourceType, WheelbarrowDestination};
+use hw_core::events::ResourceReservationOp;
+use hw_core::logistics::{ResourceSourceKey, ResourceType, WheelbarrowDestination};
 use hw_jobs::WorkType;
 use hw_jobs::{AssignedTask, HaulWithWheelbarrowData, HaulWithWheelbarrowPhase};
 
@@ -31,7 +32,7 @@ pub struct ReturnWheelbarrowSpec {
 /// 一輪車での collect 系 builder の共通引数をまとめた構造体。
 pub struct WheelbarrowCollectSpec {
     pub wheelbarrow: Entity,
-    pub source_entity: Entity,
+    pub source: ResourceSourceKey,
     pub source_pos: Vec2,
     /// 各 builder が独自の `WheelbarrowDestination` に変換するデスティネーションエンティティ。
     pub destination: Entity,
@@ -128,7 +129,7 @@ pub fn issue_collect_sand_with_wheelbarrow_to_mixer(
         wheelbarrow: spec.wheelbarrow,
         source_pos: spec.source_pos,
         destination,
-        collect_source: Some(spec.source_entity),
+        collect_source: Some(spec.source),
         collect_amount: haul_amount,
         collect_resource_type: Some(ResourceType::Sand),
         items: Vec::new(),
@@ -136,13 +137,12 @@ pub fn issue_collect_sand_with_wheelbarrow_to_mixer(
     });
 
     // Reserve wheelbarrow + sand source, then mixer destination slots for the items we'll generate
-    let mut reservation_ops = build_wheelbarrow_reservation_ops(
-        queries,
-        spec.wheelbarrow,
-        &destination,
-        &[spec.source_entity],
-        &[],
-    );
+    let mut reservation_ops =
+        build_wheelbarrow_reservation_ops(queries, spec.wheelbarrow, &destination, &[], &[]);
+    reservation_ops.push(ResourceReservationOp::ReserveSource {
+        source: spec.source,
+        amount: 1,
+    });
     for _ in 0..haul_amount {
         reservation_ops.extend(build_mixer_destination_reservation_ops(
             spec.destination,
@@ -177,20 +177,19 @@ pub fn issue_collect_bone_with_wheelbarrow_to_blueprint(
         wheelbarrow: spec.wheelbarrow,
         source_pos: spec.source_pos,
         destination,
-        collect_source: Some(spec.source_entity),
+        collect_source: Some(spec.source),
         collect_amount: haul_amount,
         collect_resource_type: Some(ResourceType::Bone),
         items: Vec::new(),
         phase: HaulWithWheelbarrowPhase::GoingToParking,
     });
 
-    let reservation_ops = build_wheelbarrow_reservation_ops(
-        queries,
-        spec.wheelbarrow,
-        &destination,
-        &[spec.source_entity],
-        &[],
-    );
+    let mut reservation_ops =
+        build_wheelbarrow_reservation_ops(queries, spec.wheelbarrow, &destination, &[], &[]);
+    reservation_ops.push(ResourceReservationOp::ReserveSource {
+        source: spec.source,
+        amount: 1,
+    });
     submit_assignment_with_reservation_ops(
         ctx,
         queries,
@@ -219,20 +218,19 @@ pub fn issue_collect_bone_with_wheelbarrow_to_floor(
         wheelbarrow: spec.wheelbarrow,
         source_pos: spec.source_pos,
         destination,
-        collect_source: Some(spec.source_entity),
+        collect_source: Some(spec.source),
         collect_amount: haul_amount,
         collect_resource_type: Some(ResourceType::Bone),
         items: Vec::new(),
         phase: HaulWithWheelbarrowPhase::GoingToParking,
     });
 
-    let reservation_ops = build_wheelbarrow_reservation_ops(
-        queries,
-        spec.wheelbarrow,
-        &destination,
-        &[spec.source_entity],
-        &[],
-    );
+    let mut reservation_ops =
+        build_wheelbarrow_reservation_ops(queries, spec.wheelbarrow, &destination, &[], &[]);
+    reservation_ops.push(ResourceReservationOp::ReserveSource {
+        source: spec.source,
+        amount: 1,
+    });
     submit_assignment_with_reservation_ops(
         ctx,
         queries,
@@ -262,20 +260,19 @@ pub fn issue_collect_bone_with_wheelbarrow_to_soul_spa(
         wheelbarrow: spec.wheelbarrow,
         source_pos: spec.source_pos,
         destination,
-        collect_source: Some(spec.source_entity),
+        collect_source: Some(spec.source),
         collect_amount: haul_amount,
         collect_resource_type: Some(ResourceType::Bone),
         items: Vec::new(),
         phase: HaulWithWheelbarrowPhase::GoingToParking,
     });
 
-    let reservation_ops = build_wheelbarrow_reservation_ops(
-        queries,
-        spec.wheelbarrow,
-        &destination,
-        &[spec.source_entity],
-        &[],
-    );
+    let mut reservation_ops =
+        build_wheelbarrow_reservation_ops(queries, spec.wheelbarrow, &destination, &[], &[]);
+    reservation_ops.push(ResourceReservationOp::ReserveSource {
+        source: spec.source,
+        amount: 1,
+    });
     submit_assignment_with_reservation_ops(
         ctx,
         queries,

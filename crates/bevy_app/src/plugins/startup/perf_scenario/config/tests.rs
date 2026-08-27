@@ -140,12 +140,12 @@ fn fixed_clock_mode_is_explicit() {
 }
 
 #[test]
-fn fixture_setup_freezes_for_fixed_step_and_checksum_compared_realtime_workloads() {
+fn every_enabled_fixture_freezes_until_the_initial_checkpoint() {
     let mut config = PerfScenarioConfig {
         enabled: true,
         ..PerfScenarioConfig::default()
     };
-    assert!(!config.freezes_fixture_setup());
+    assert!(config.freezes_fixture_setup());
 
     config.workload = super::PerfWorkload::IndoorLight;
     assert!(config.freezes_fixture_setup());
@@ -178,6 +178,8 @@ fn fixture_setup_freezes_for_fixed_step_and_checksum_compared_realtime_workloads
     assert!(!config.requires_p08_cross_consumer_setup_step());
 
     config.workload = super::PerfWorkload::Gather;
+    config.clock_mode = PerfClockMode::Realtime;
+    assert!(config.freezes_fixture_setup());
     config.clock_mode = PerfClockMode::Fixed;
     assert!(config.freezes_fixture_setup());
     assert!(!config.keeps_virtual_time_paused_during_capture());

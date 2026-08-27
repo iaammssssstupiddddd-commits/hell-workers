@@ -333,6 +333,7 @@ mod tests {
                 "soul-spa.normalize",
                 "stockpile.policy",
                 "transport-request.targets",
+                "world-map.tile-anchors",
                 "task-logistics.runtime",
                 "deconstruction.runtime",
                 "presentation.shells",
@@ -355,5 +356,15 @@ mod tests {
             ]
         );
         assert_eq!(prerequisites, vec!["presentation.assets-time"]);
+
+        let mut update = app
+            .world_mut()
+            .resource_mut::<Schedules>()
+            .remove(Update)
+            .expect("Update schedule must exist");
+        update
+            .initialize(app.world_mut())
+            .expect("production Update schedule must be acyclic");
+        app.world_mut().resource_mut::<Schedules>().insert(update);
     }
 }

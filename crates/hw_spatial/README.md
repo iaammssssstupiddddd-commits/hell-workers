@@ -50,8 +50,23 @@ trait SpatialGridOps {
 `hw_spatial` が所有し、downstream domain component を tag にしない。
 custom cell size または内部 grid の検査・構成が必要な場合は、tuple field に依存せず
 `SpatialIndex::new(GridData)`、`data`、`data_mut`、`into_data` を使う。
+
+半径queryのcell layoutを比較する計測では
+`GridData::get_nearby_in_radius_with_stats_into`を使う。このAPIはqueryごとの
+`SpatialQueryStats`（coordinate probe、occupied bucket、member検査、exact hit、
+欠落position）を返し、共有metrics resourceは更新しない。caller側の`Local`または
+CPU-only fixtureで集約し、通常の`get_nearby_in_radius_into`は同じkernelを
+ゼロサイズobserverで実行する。
+profiling runtimeではDoor open / closeとGather recruitmentがそれぞれcaller所有metricsへ集約し、
+root perf runnerがworkload専用sidecarへ書く。index本体へmetrics resourceやAtomicを埋め込まない。
 `generation()` は membership または記録位置が実際に変化したときだけ進む semantic generation であり、
 task diagnostics の availability revision bridge が stale reason の失効に使う。読み取りや同値 update では進めない。
+
+半径検索は円のAABB (`pos - radius`〜`pos + radius`) から正確なmin/max cellを求め、交差しない周辺cellを
+走査しない。たとえば既定640 px cellの中央付近にある半径48 px検索は1 cell、境界付近でも最大4 cellを調べる。
+exact判定は平方距離を使い、円周上を含む。負半径、非finiteな中心・半径、非positiveまたは非finiteなcell幅は
+不正なquery shapeとして空結果を返す。既定cell幅640 pxは維持する。Soul 128 px候補は密集path-door実機で
+member検査が減らずprobeだけ増えたため不採用とした。
 
 ## 更新タイミング
 

@@ -1828,10 +1828,9 @@ fn validate_observed_fixture(
                 &p.door_handles.door_closed
             };
             let image_contract_required = !p.config.is_field_core()
-                && !p
-                    .config
+                && p.config
                     .rtt_light_selection()
-                    .is_some_and(|selection| selection.stage_id() == "p08");
+                    .is_none_or(|selection| selection.stage_id() != "p08");
             if building.door_state != Some(spec.state)
                 || (image_contract_required
                     && building.child_images != [expected_image.clone()])
@@ -2668,10 +2667,10 @@ pub(super) fn collect_indoor_light_audit_records(
                         .map(|sprite| sprite.image.clone())
                         .collect::<Vec<_>>()
                 });
-                let image_contract_required = !q
+                let image_contract_required = q
                     .config
                     .rtt_light_selection()
-                    .is_some_and(|selection| selection.stage_id() == "p08");
+                    .is_none_or(|selection| selection.stage_id() != "p08");
                 if door.map(|door| door.state) != Some(state)
                     || (image_contract_required && child_images != [expected_image.clone()])
                     || q.world_map

@@ -279,7 +279,10 @@ fn non_deconstruction_task_targets_pending_owner(
         AssignedTask::HaulToMixer(data) => pending(data.item) || pending(data.mixer),
         AssignedTask::HaulWithWheelbarrow(data) => {
             pending(data.wheelbarrow)
-                || data.collect_source.is_some_and(pending)
+                || data
+                    .collect_source
+                    .and_then(|source| source.entity_id())
+                    .is_some_and(pending)
                 || data.items.iter().copied().any(pending)
                 || match data.destination {
                     WheelbarrowDestination::Stockpile(target)
@@ -880,7 +883,10 @@ mod tests {
                 target: source,
                 phase: CollectBonePhase::GoingToBone,
             }),
-            reservation_ops: vec![ResourceReservationOp::ReserveSource { source, amount: 1 }],
+            reservation_ops: vec![ResourceReservationOp::ReserveSource {
+                source: source.into(),
+                amount: 1,
+            }],
             already_commanded: true,
         });
 
@@ -973,7 +979,7 @@ mod tests {
                 task_pos: Vec2::ZERO,
                 assigned_task,
                 reservation_ops: vec![ResourceReservationOp::ReserveSource {
-                    source: facility,
+                    source: facility.into(),
                     amount: 1,
                 }],
                 already_commanded: true,

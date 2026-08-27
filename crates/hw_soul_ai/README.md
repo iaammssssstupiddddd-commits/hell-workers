@@ -13,11 +13,12 @@ Perceive / Decide / Execute / Update の各フェーズでの行動選択・タ�
 | `soul_ai/` | Soul AI のトップレベル Plugin |
 | `soul_ai/perceive/` | 周囲のリソース・タスク・施設情報の収集 |
 | `soul_ai/decide/` | 行動選択（タスク割当・アイドル行動・脱走判定） |
+| `soul_ai/decide/gathering_mgmt.rs` | Gathering維持・統合・参加判断。profiling時は240 px recruitment queryの`SpatialQueryStats`をcaller専用resourceへ集約 |
 | `soul_ai/decide/work/auto_build_diagnostics.rs` | Blueprint auto-build producer のlatest-only coverage/reason snapshot |
-| `soul_ai/execute/` | タスクフェーズステートマシンの実行（`task_execution_system`） |
+| `soul_ai/execute/` | active identity＋structural/removed error edgeだけをround-robinするタスクフェーズステートマシン（`task_execution_system`） |
 | `soul_ai/execute/task_execution/` | 各タスク種別の具体的な実行ロジック |
 | `soul_ai/execute/task_execution/stockpile_policy.rs` | live搬入予約からcommitted / unreservedを区別し、通常・猫車搬送を共通Stockpile evaluatorへ接続するadapter |
-| `soul_ai/update/` | バイタル（疲労・ストレス・dream）の更新 |
+| `soul_ai/update/` | バイタル（疲労・ストレス・dream）の更新、slow cadenceと周期/dirty state sanity audit |
 | `soul_ai/helpers/work/` | `unassign_task` — タスク中断の最終防衛線 |
 
 ## plugin 登録

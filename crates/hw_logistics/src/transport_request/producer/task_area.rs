@@ -14,9 +14,9 @@ use crate::stockpile_policy::{
 };
 use crate::transport_request::producer::active_unit_cache::CachedStockpileGroups;
 use crate::transport_request::{
-    ManualHaulPinnedSource, ManualTransportRequest, ReceiverPolicyTier, TransportDemand,
-    TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
-    TransportRequestMetrics, TransportRequestState,
+    ManualHaulPinnedSource, ManualTransportRequest, ReceiverPolicyTier, TaskAreaMetrics,
+    TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
+    TransportRequestState,
 };
 use crate::types::{BelongsTo, ResourceItem, ResourceType};
 use crate::zone::{Stockpile, StockpilePolicy};
@@ -638,7 +638,7 @@ pub struct TaskAreaAutoHaulParams<'w, 's> {
         Without<ManualTransportRequest>,
     >,
     pub q_free_items: FreeItemsQuery<'w, 's>,
-    pub metrics: ResMut<'w, TransportRequestMetrics>,
+    pub metrics: ResMut<'w, TaskAreaMetrics>,
 }
 
 pub fn task_area_auto_haul_system(mut commands: Commands, mut p: TaskAreaAutoHaulParams) {
@@ -854,7 +854,7 @@ mod tests {
     fn overlapping_yard_groups_spawn_only_one_cells_worth_of_live_demand() {
         let mut app = App::new();
         app.init_resource::<CachedStockpileGroups>()
-            .init_resource::<TransportRequestMetrics>()
+            .init_resource::<TaskAreaMetrics>()
             .add_systems(Update, task_area_auto_haul_system);
 
         let yard_a_bounds = Yard {
@@ -926,7 +926,7 @@ mod tests {
         assert_eq!(requests[0].0.stockpile_group, vec![stockpile]);
         assert_eq!(requests[0].1.max, 1);
         assert_eq!(requests[0].2.desired_slots, 1);
-        let metrics = app.world().resource::<TransportRequestMetrics>();
+        let metrics = app.world().resource::<TaskAreaMetrics>();
         assert_eq!(metrics.task_area_groups, 2);
         assert_eq!(metrics.task_area_items_matched, 2);
     }
@@ -958,19 +958,22 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_once()));
         app.init_resource::<CachedStockpileGroups>()
-            .init_resource::<TransportRequestMetrics>()
+            .init_resource::<TaskAreaMetrics>()
             .init_resource::<SharedResourceCache>()
             .init_resource::<WheelbarrowArbitrationRuntime>()
-            .init_resource::<WheelbarrowArbitrationDiagnostics>()
-            .add_systems(
-                Update,
-                (
-                    task_area_auto_haul_system,
-                    ApplyDeferred,
-                    wheelbarrow_arbitration_system,
-                )
-                    .chain(),
-            );
+            .init_resource::<crate::transport_request::WheelbarrowArbitrationMetrics>()
+            .init_resource::<WheelbarrowArbitrationDiagnostics>();
+        #[cfg(feature = "profiling")]
+        app.init_resource::<crate::transport_request::WheelbarrowArbitrationPerfMetrics>();
+        app.add_systems(
+            Update,
+            (
+                task_area_auto_haul_system,
+                ApplyDeferred,
+                wheelbarrow_arbitration_system,
+            )
+                .chain(),
+        );
 
         let yard_bounds = Yard {
             min: Vec2::splat(-16.0),

@@ -34,11 +34,37 @@ fn phase_budget_limit(prioritize_tasks: bool) -> usize {
 
 /// 障害物に埋まったソウルを最寄りの歩行可能タイルへ逃がす。
 /// 建築物の配置や障害物の追加で現在位置が通行不可になった場合に実行される。
+#[derive(Default)]
+pub struct StuckEscapeState {
+    obstacle_version: Option<u64>,
+    entities: Vec<Entity>,
+}
+
+type ChangedStuckSoulQuery<'w, 's> = Query<'w, 's, Entity, (With<DamnedSoul>, Changed<Transform>)>;
+type StuckSoulMutQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static mut Transform, &'static mut Path), With<DamnedSoul>>;
+
 pub fn soul_stuck_escape_system(
     world_map: WorldMapRead,
-    mut query: Query<(&mut Transform, &mut Path), With<DamnedSoul>>,
+    world_epoch: Option<Res<WorldEpoch>>,
+    mut state: Local<EpochLocal<StuckEscapeState>>,
+    q_all_entities: Query<Entity, With<DamnedSoul>>,
+    mut queries: ParamSet<(ChangedStuckSoulQuery, StuckSoulMutQuery)>,
 ) {
-    for (mut transform, mut path) in query.iter_mut() {
+    let world_epoch = world_epoch.map_or_else(WorldEpoch::default, |epoch| *epoch);
+    let state = state.get_mut(world_epoch);
+    let topology_changed = state.obstacle_version != Some(world_map.obstacle_version);
+    state.obstacle_version = Some(world_map.obstacle_version);
+    state.entities.clear();
+    if topology_changed {
+        state.entities.extend(q_all_entities.iter());
+    } else {
+        state.entities.extend(queries.p0().iter());
+    }
+
+    let mut query = queries.p1();
+    let mut candidates = query.iter_many_mut(state.entities.iter());
+    while let Some((_, mut transform, mut path)) = candidates.fetch_next() {
         let current_pos = transform.translation.truncate();
         if world_map.is_walkable_world(current_pos) {
             continue;

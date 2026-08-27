@@ -201,7 +201,7 @@ pub fn handle_pour_floor_task(
             // For floor tiles, workers are assigned to a tile.
             // We should release the reservation here.
             ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                source: tile_entity,
+                source: tile_entity.into(),
                 amount: 1,
             });
             debug!(

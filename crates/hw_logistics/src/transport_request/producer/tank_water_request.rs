@@ -41,6 +41,7 @@ pub struct TankWaterRequestParams<'w, 's> {
             Entity,
             &'static TransportRequest,
             Option<&'static TaskWorkers>,
+            super::upsert::ExistingRequestRuntime<'static>,
         ),
     >,
     q_move_planned: Query<'w, 's, (), With<MovePlanned>>,
@@ -99,7 +100,7 @@ pub fn tank_water_request_system(params: TankWaterRequestParams) {
 
     let mut seen_existing = std::collections::HashSet::<Entity>::new();
 
-    for (request_entity, request, workers_opt) in q_tank_requests.iter() {
+    for (request_entity, request, workers_opt, current) in q_tank_requests.iter() {
         if request.kind != TransportRequestKind::GatherWaterToTank {
             continue;
         }
@@ -117,35 +118,29 @@ pub fn tank_water_request_system(params: TankWaterRequestParams) {
         }
 
         if let Some((issued_by, slots, tank_pos)) = desired_requests.get(&tank_entity) {
-            commands.entity(request_entity).try_insert((
-                Transform::from_xyz(tank_pos.x, tank_pos.y, 0.0),
-                Visibility::Hidden,
-                Designation {
-                    work_type: WorkType::GatherWater,
-                },
-                hw_core::relationships::ManagedBy(*issued_by),
-                TaskSlots::new(*slots),
-                Priority(3),
-                TransportRequest {
-                    kind: TransportRequestKind::GatherWaterToTank,
-                    anchor: tank_entity,
-                    resource_type: ResourceType::Water,
+            super::upsert::update_request_runtime_if_needed(
+                &mut commands,
+                request_entity,
+                request,
+                current,
+                super::upsert::SemanticRequestSpec {
+                    key: (tank_entity, ResourceType::Water),
+                    site_pos: *tank_pos,
                     issued_by: *issued_by,
-                    priority: TransportPriority::Normal,
-                    stockpile_group: vec![],
-                },
-                TransportDemand {
                     desired_slots: *slots,
-                    inflight: 0,
+                    inflight: super::to_u32_saturating(workers),
+                    priority: 3,
+                    transport_priority: TransportPriority::Normal,
+                    kind: TransportRequestKind::GatherWaterToTank,
+                    work_type: WorkType::GatherWater,
+                    state: super::upsert::request_state_for_workers(workers),
                 },
-                TransportRequestState::Pending,
-                TransportPolicy::default(),
-            ));
+            );
             continue;
         }
 
         if workers == 0 {
-            super::upsert::disable_request(&mut commands, request_entity);
+            super::upsert::disable_request_if_needed(&mut commands, request_entity, current, None);
         }
     }
 

@@ -156,7 +156,7 @@ pub fn handle_refine_task(
             commands.entity(mixer_entity).remove::<hw_jobs::TaskSlots>();
             commands.entity(mixer_entity).remove::<hw_jobs::IssuedBy>();
             ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                source: mixer_entity,
+                source: mixer_entity.into(),
                 amount: 1,
             });
             return ctx.complete_task(commands, "refine done");

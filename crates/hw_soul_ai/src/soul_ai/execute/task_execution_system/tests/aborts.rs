@@ -107,7 +107,7 @@ fn unreachable_blueprint_haul_source_retryably_releases_assignment_and_delivery(
     assert_eq!(
         receipts.reservation_ops,
         vec![ResourceReservationOp::ReleaseSource {
-            source: item,
+            source: item.into(),
             amount: 1,
         }]
     );
@@ -213,6 +213,42 @@ fn missing_identity_retryably_unassigns_without_completion_notification() {
 }
 
 #[test]
+fn removed_detached_identity_retryably_unassigns_on_the_exact_edge() {
+    let mut app = task_execution_test_app();
+    // Start the removed-component reader before producing the edge.
+    app.update();
+
+    let target = app.world_mut().spawn_empty().id();
+    let assignment = app.world_mut().spawn_empty().id();
+    let mut identity = ActiveTaskIdentity::new(assignment, target, WorkType::Build);
+    identity.detach_from_working_on();
+    let soul = spawn_task_execution_soul(
+        app.world_mut(),
+        AssignedTask::Build(BuildData {
+            blueprint: target,
+            phase: BuildPhase::Done,
+        }),
+    );
+    app.world_mut().entity_mut(soul).insert(identity);
+    app.world_mut().flush();
+    app.world_mut()
+        .entity_mut(soul)
+        .remove::<ActiveTaskIdentity>();
+
+    app.update();
+
+    assert!(matches!(
+        app.world().get::<AssignedTask>(soul),
+        Some(AssignedTask::None)
+    ));
+    assert!(app.world().get::<WorkingOn>(soul).is_none());
+    let receipts = app.world().resource::<TaskNotificationReceipts>();
+    assert!(receipts.completed_domain.is_empty());
+    assert!(receipts.completed_visual.is_empty());
+    assert!(receipts.abandoned.is_empty());
+}
+
+#[test]
 fn vanished_blueprint_done_phase_aborts_without_completion_notification() {
     let mut app = task_execution_test_app();
     let target = app.world_mut().spawn_empty().id();
@@ -278,11 +314,11 @@ fn bucket_abort_releases_active_reservations_without_terminal_notifications() {
         receipts.reservation_ops,
         vec![
             ResourceReservationOp::ReleaseSource {
-                source: bucket,
+                source: bucket.into(),
                 amount: 1,
             },
             ResourceReservationOp::ReleaseSource {
-                source: tank,
+                source: tank.into(),
                 amount: 1,
             },
             ResourceReservationOp::ReleaseMixerDestination {

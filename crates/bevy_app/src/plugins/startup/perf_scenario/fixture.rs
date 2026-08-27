@@ -51,6 +51,7 @@ pub(super) enum PerfFixtureKind {
     DashboardWheelbarrow,
     DashboardTransportRequest,
     DashboardDesignation,
+    DreamUiBurst,
 }
 
 #[cfg(feature = "profiling")]
@@ -66,6 +67,7 @@ impl PerfFixtureKind {
             Self::DashboardWheelbarrow => 6,
             Self::DashboardTransportRequest => 7,
             Self::DashboardDesignation => 8,
+            Self::DreamUiBurst => 9,
         }
     }
 }
@@ -323,6 +325,21 @@ fn configure_perf_workload(
         }
         PerfWorkload::TaskDashboard => {
             configure_task_dashboard_fixture(commands, q_familiars, config.size)
+        }
+        PerfWorkload::DreamUiBurst => {
+            commands.insert_resource(hw_visual::dream::DreamUiPerfControl::new(
+                config.master_seed,
+                config.uses_fixed_timesteps(),
+            ));
+            commands.insert_resource(hw_visual::dream::DreamUiPerfMetrics::default());
+            commands.spawn((
+                PerfFixtureMarker {
+                    kind: PerfFixtureKind::DreamUiBurst,
+                    ordinal: 0,
+                },
+                Transform::default(),
+            ));
+            true
         }
         PerfWorkload::IndoorLight => {
             unreachable!("indoor-light uses the production-topology settle pipeline")

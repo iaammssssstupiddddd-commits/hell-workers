@@ -54,4 +54,4 @@ profiling-renderdoc = [
     "wgpu-core/renderdoc",
 ]
 profiling-tracy = ["profiling", "bevy/trace_tracy"]
-profiling-memory = ["profiling"]
+profiling-memory = ["profiling", "hw_core/profiling-memory", "hw_visual/profiling-memory"]

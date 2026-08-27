@@ -39,7 +39,9 @@ pub fn soul_movement(
         if let Some(breakdown) = breakdown_opt
             && breakdown.is_frozen
         {
-            anim.is_moving = false;
+            if anim.is_moving {
+                anim.is_moving = false;
+            }
             continue;
         }
 
@@ -52,14 +54,18 @@ pub fn soul_movement(
                         path.waypoints.clear();
                         path.current_index = 0;
                         door_waits.remove(&entity);
-                        anim.is_moving = false;
+                        if anim.is_moving {
+                            anim.is_moving = false;
+                        }
                         continue;
                     }
                     DoorState::Closed => {
                         let remaining = door_waits.entry(entity).or_insert(DOOR_OPEN_DURATION_SECS);
                         if *remaining > 0.0 {
                             *remaining -= time.delta_secs();
-                            anim.is_moving = false;
+                            if anim.is_moving {
+                                anim.is_moving = false;
+                            }
                             continue;
                         }
                         door_waits.remove(&entity);
@@ -139,17 +145,62 @@ pub fn soul_movement(
                     }
                 }
 
-                anim.is_moving = moved;
+                if anim.is_moving != moved {
+                    anim.is_moving = moved;
+                }
                 if direction.x.abs() > 0.1 {
-                    anim.facing_right = direction.x > 0.0;
+                    let facing_right = direction.x > 0.0;
+                    if anim.facing_right != facing_right {
+                        anim.facing_right = facing_right;
+                    }
                 }
             } else {
                 path.current_index += 1;
-                anim.is_moving = false;
+                if anim.is_moving {
+                    anim.is_moving = false;
+                }
             }
         } else {
             door_waits.remove(&entity);
-            anim.is_moving = false;
+            if anim.is_moving {
+                anim.is_moving = false;
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stable_idle_soul_does_not_dirty_animation_state() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(WorldMap::default())
+            .init_resource::<WorldEpoch>()
+            .add_systems(Update, soul_movement);
+        let soul = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                Path::default(),
+                AnimationState::default(),
+                DamnedSoul::default(),
+                IdleState::default(),
+            ))
+            .id();
+
+        app.update();
+        app.world_mut().clear_trackers();
+        app.update();
+
+        assert!(
+            !app.world()
+                .entity(soul)
+                .get_ref::<AnimationState>()
+                .unwrap()
+                .is_changed()
+        );
     }
 }

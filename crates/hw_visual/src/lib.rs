@@ -216,11 +216,15 @@ impl Plugin for HwVisualPlugin {
                 dream::dream_particle_spawn_system,
                 dream::rest_area_dream_particle_spawn_system,
                 dream::dream_popup_spawn_system,
+                #[cfg(feature = "profiling")]
+                dream::maintain_dream_ui_perf_burst_system,
                 dream::dream_particle_update_system,
                 dream::dream_popup_update_system,
                 dream::ui_particle_update_system,
                 dream::ui_particle_merge_system,
                 dream::dream_trail_ghost_update_system,
+                #[cfg(feature = "profiling")]
+                dream::observe_dream_ui_perf_system,
                 dream::dream_icon_absorb_system,
                 floating_text::update_all_floating_texts_system,
             )
@@ -276,8 +280,11 @@ impl Plugin for HwVisualPlugin {
 }
 
 #[cfg(feature = "profiling")]
-fn visual_updates_enabled(audit_seed: Option<Res<FixedAuditSeed>>) -> bool {
-    audit_seed.is_none()
+fn visual_updates_enabled(
+    audit_seed: Option<Res<FixedAuditSeed>>,
+    dream_perf: Option<Res<dream::DreamUiPerfControl>>,
+) -> bool {
+    audit_seed.is_none() || dream_perf.is_some()
 }
 
 #[cfg(not(feature = "profiling"))]

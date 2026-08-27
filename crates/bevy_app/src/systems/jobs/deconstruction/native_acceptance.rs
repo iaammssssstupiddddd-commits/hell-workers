@@ -1067,7 +1067,7 @@ fn await_v1_mode(
 
 fn native_world_is_ready(world: &mut World) -> bool {
     let map_ready = world.get_resource::<WorldMap>().is_some_and(|map| {
-        !map.tile_entities.is_empty() && map.tile_entities.iter().all(Option::is_some)
+        !map.tile_entities.is_empty() && map.tile_entities.iter().all(Option::is_none)
     });
     let souls_ready = !world
         .query_filtered::<Entity, With<DamnedSoul>>()

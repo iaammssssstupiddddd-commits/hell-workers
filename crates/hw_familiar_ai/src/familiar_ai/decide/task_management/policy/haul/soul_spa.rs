@@ -75,7 +75,7 @@ pub fn assign_haul_to_soul_spa(
     issue_collect_bone_with_wheelbarrow_to_soul_spa(
         WheelbarrowCollectSpec {
             wheelbarrow: wb_entity,
-            source_entity,
+            source: source_entity,
             source_pos,
             destination: site_entity,
             amount,

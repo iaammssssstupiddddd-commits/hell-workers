@@ -21,6 +21,7 @@ pub enum PerfWorkload {
     Construction,
     UiGpu,
     TaskDashboard,
+    DreamUiBurst,
     IndoorLight,
     Deconstruction,
     SaveTransaction,
@@ -34,6 +35,7 @@ impl PerfWorkload {
             "construction" => Some(Self::Construction),
             "ui-gpu" => Some(Self::UiGpu),
             "task-dashboard" => Some(Self::TaskDashboard),
+            "dream-ui-burst" => Some(Self::DreamUiBurst),
             "indoor-light" => Some(Self::IndoorLight),
             "deconstruction" => Some(Self::Deconstruction),
             "save-transaction" => Some(Self::SaveTransaction),
@@ -48,6 +50,7 @@ impl PerfWorkload {
             Self::Construction => "construction",
             Self::UiGpu => "ui-gpu",
             Self::TaskDashboard => "task-dashboard",
+            Self::DreamUiBurst => "dream-ui-burst",
             Self::IndoorLight => "indoor-light",
             Self::Deconstruction => "deconstruction",
             Self::SaveTransaction => "save-transaction",
@@ -516,7 +519,7 @@ impl PerfScenarioConfig {
         let workload = parse_value_or_default(
             value_from_args_or_env(&args, "--perf-workload", "HW_PERF_WORKLOAD")?,
             "--perf-workload",
-            "gather|path-door|construction|ui-gpu|task-dashboard|indoor-light|deconstruction|save-transaction",
+            "gather|path-door|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|deconstruction|save-transaction",
             PerfWorkload::parse,
             PerfWorkload::Gather,
         )?;
@@ -649,6 +652,19 @@ impl PerfScenarioConfig {
         {
             return Err(PerfScenarioConfigError(
                 "the task-dashboard workload requires familiar policy baseline and operation dialog hidden"
+                    .to_string(),
+            ));
+        }
+        if workload == PerfWorkload::DreamUiBurst
+            && (size != PerfScenarioSize::Small
+                || render_mode != PerfRenderMode::Cpu
+                || (soul_count, familiar_count) != (default_souls, default_familiars)
+                || !matches!(familiar_policy_mode, PerfFamiliarPolicyMode::Baseline)
+                || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
+                || !matches!(dashboard_mode, PerfDashboardMode::Hidden))
+        {
+            return Err(PerfScenarioConfigError(
+                "the dream-ui-burst workload requires the default small/cpu population, familiar policy baseline, operation dialog hidden, and dashboard hidden"
                     .to_string(),
             ));
         }
@@ -928,12 +944,12 @@ impl PerfScenarioConfig {
     }
 
     pub const fn freezes_fixture_setup(&self) -> bool {
+        // Every automated profiling fixture must capture its initial checksum
+        // before production Logic / Actor systems can advance the spawned
+        // actors.  Otherwise a realtime workload records its "initial" state
+        // on the next frame after a variable-delta movement step, so repeated
+        // runs with the same seed fail the mandatory checksum contract.
         self.enabled
-            && (self.uses_fixed_timesteps()
-                || matches!(
-                    self.workload,
-                    PerfWorkload::IndoorLight | PerfWorkload::TaskDashboard
-                ))
     }
 
     /// Indoor-light lanes other than behavior treat their seeded Door states as

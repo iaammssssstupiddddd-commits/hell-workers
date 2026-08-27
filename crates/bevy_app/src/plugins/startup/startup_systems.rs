@@ -26,11 +26,10 @@ use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 use hw_ui::camera::MainCamera;
 
 pub(super) fn spawn_map_timed(
-    commands: Commands,
     world_map: WorldMapWrite,
     generated_layout: Res<GeneratedWorldLayoutResource>,
 ) {
-    spawn_map(commands, world_map, generated_layout);
+    spawn_map(world_map, generated_layout);
 }
 
 pub(super) fn spawn_terrain_chunks_timed(

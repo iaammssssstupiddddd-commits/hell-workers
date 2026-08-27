@@ -226,7 +226,7 @@ pub fn finalize_collect_task(
 ) -> TaskHandlerControl {
     cleanup_collect_target_components(target, commands, true);
     ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-        source: target,
+        source: target.into(),
         amount: 1,
     });
     ctx.complete_task(commands, "collect task done")

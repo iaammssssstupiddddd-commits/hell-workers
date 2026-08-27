@@ -32,7 +32,7 @@ pub use gathering::{GatheringSpotSpatialGrid, update_gathering_spot_spatial_grid
 pub use grid::{
     BlueprintIndexTag, DesignationIndexTag, FamiliarIndexTag, FloorConstructionIndexTag,
     GatheringSpotIndexTag, GridData, ResourceIndexTag, SoulIndexTag, SpatialGridOps, SpatialIndex,
-    StockpileIndexTag, TransformSpatialUpdateQuery, TransportRequestIndexTag,
+    SpatialQueryStats, StockpileIndexTag, TransformSpatialUpdateQuery, TransportRequestIndexTag,
     update_transform_spatial_index_system,
 };
 pub use resource::{ResourceSpatialGrid, update_resource_spatial_grid_system};

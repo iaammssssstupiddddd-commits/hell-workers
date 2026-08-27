@@ -12,7 +12,17 @@ use hw_jobs::AssignedTask;
 
 use crate::soul_ai::decide::SoulDecideOutput;
 use crate::soul_ai::helpers::gathering::*;
-use hw_spatial::{SpatialGrid, SpatialGridOps};
+use hw_spatial::SpatialGrid;
+#[cfg(not(feature = "profiling"))]
+use hw_spatial::SpatialGridOps;
+#[cfg(feature = "profiling")]
+use hw_spatial::SpatialQueryStats;
+
+#[cfg(feature = "profiling")]
+#[derive(Resource, Debug, Default)]
+pub struct GatheringRecruitmentPerfMetrics {
+    pub spatial_queries: SpatialQueryStats,
+}
 
 fn is_gathering_spot_safe_from_familiars(
     spot_pos: Vec2,
@@ -171,6 +181,8 @@ pub(crate) struct GatheringRecruitmentParams<'w, 's> {
     q_familiars: Query<'w, 's, (&'static Transform, &'static Familiar)>,
     update_timer: Res<'w, GatheringUpdateTimer>,
     decide_output: SoulDecideOutput<'w>,
+    #[cfg(feature = "profiling")]
+    perf_metrics: ResMut<'w, GatheringRecruitmentPerfMetrics>,
 }
 
 /// 条件を満たすSoulの集会参加を Recruit 要求に変換する
@@ -185,6 +197,8 @@ pub(crate) fn gathering_recruitment_decision(params: GatheringRecruitmentParams)
         q_familiars,
         update_timer,
         mut decide_output,
+        #[cfg(feature = "profiling")]
+        mut perf_metrics,
     } = params;
     if !update_timer.timer.just_finished() {
         return;
@@ -198,7 +212,16 @@ pub(crate) fn gathering_recruitment_decision(params: GatheringRecruitmentParams)
         let spot_is_safe_for_escape =
             is_gathering_spot_safe_from_familiars(spot.center, &q_familiars);
         let search_radius = GATHERING_DETECTION_RADIUS.max(ESCAPE_GATHERING_JOIN_RADIUS);
+        #[cfg(feature = "profiling")]
+        let spatial_query = soul_grid.get_nearby_in_radius_with_stats_into(
+            spot.center,
+            search_radius,
+            &mut nearby_buf,
+        );
+        #[cfg(not(feature = "profiling"))]
         soul_grid.get_nearby_in_radius_into(spot.center, search_radius, &mut nearby_buf);
+        #[cfg(feature = "profiling")]
+        perf_metrics.spatial_queries.merge(spatial_query);
         #[cfg(feature = "profiling")]
         if audit_seed.is_some() {
             nearby_buf.sort_unstable_by_key(|entity| entity.to_bits());

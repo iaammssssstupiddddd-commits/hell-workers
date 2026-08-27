@@ -2,14 +2,14 @@ use bevy::prelude::*;
 use hw_core::area::TaskArea;
 use hw_core::constants::FLOOR_CONSTRUCTION_PRIORITY;
 use hw_core::familiar::{ActiveCommand, FamiliarCommand};
-use hw_core::relationships::TaskWorkers;
 use hw_energy::{SoulSpaPhase, SoulSpaSite};
 use hw_jobs::TargetSoulSpaSite;
 use hw_logistics::ResourceType;
+use hw_logistics::transport_request::TransportRequestKind;
 use hw_logistics::transport_request::producer::{
-    RequestSyncSpec, collect_all_area_owners, find_owner, sync_construction_requests,
+    ExistingConstructionRequestQuery, RequestSyncSpec, collect_all_area_owners, find_owner,
+    sync_construction_requests,
 };
-use hw_logistics::transport_request::{TransportRequest, TransportRequestKind};
 use hw_world::zones::{AreaBounds, Yard};
 use std::collections::HashMap;
 
@@ -19,12 +19,7 @@ pub fn soul_spa_auto_haul_system(
     q_familiars: Query<(Entity, &ActiveCommand, &TaskArea)>,
     q_yards: Query<(Entity, &Yard)>,
     q_sites: Query<(Entity, &Transform, &SoulSpaSite)>,
-    q_existing: Query<(
-        Entity,
-        &TargetSoulSpaSite,
-        &TransportRequest,
-        Option<&TaskWorkers>,
-    )>,
+    q_existing: ExistingConstructionRequestQuery<TargetSoulSpaSite>,
 ) {
     let active_familiars: Vec<(Entity, AreaBounds)> = q_familiars
         .iter()
@@ -54,12 +49,12 @@ pub fn soul_spa_auto_haul_system(
         // Count in-flight deliveries for this site
         let in_flight: u32 = q_existing
             .iter()
-            .filter(|(_, target, req, workers)| {
-                target.0 == site_entity
+            .filter(|(_, _, req, workers, _)| {
+                req.anchor == site_entity
                     && req.kind == TransportRequestKind::DeliverToSoulSpa
                     && workers.map(|w| w.len()).unwrap_or(0) > 0
             })
-            .map(|(_, _, _, workers)| workers.map(|w| w.len() as u32).unwrap_or(0))
+            .map(|(_, _, _, workers, _)| workers.map(|w| w.len() as u32).unwrap_or(0))
             .sum();
 
         let remaining = site

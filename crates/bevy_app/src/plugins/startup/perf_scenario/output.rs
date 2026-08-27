@@ -14,6 +14,7 @@ pub(super) struct PerfCaptureWriteInput<'a> {
     pub(super) measure_real_secs: f64,
     pub(super) familiar_metrics: &'a FamiliarDelegationPerfMetrics,
     pub(super) arbitration_metrics: &'a WheelbarrowArbitrationPerfMetrics,
+    pub(super) transport_request_change_metrics: &'a TransportRequestChangePerfMetrics,
     pub(super) dashboard_metrics: &'a TaskDashboardPerfMetrics,
     pub(super) dashboard_timing_metrics: &'a TaskDashboardTimingMetrics,
     #[cfg(feature = "profiling-memory")]
@@ -21,6 +22,7 @@ pub(super) struct PerfCaptureWriteInput<'a> {
     pub(super) task_execution_metrics: &'a TaskExecutionPerfMetrics,
     pub(super) reservation_sync_metrics: &'a ReservationSyncPerfMetrics,
     pub(super) door_metrics: &'a DoorPerfMetrics,
+    pub(super) gathering_recruitment_metrics: &'a GatheringRecruitmentPerfMetrics,
     pub(super) construction_metrics: &'a ConstructionPerfMetrics,
     pub(super) slow_simulation_metrics: &'a SlowSimulationPerfMetrics,
     pub(super) energy_metrics: &'a EnergyPerfMetrics,
@@ -107,6 +109,85 @@ pub(super) fn write_window_observation(
         optional_text(final_observation.effective_present_mode),
     ];
     let csv = format!("{header}\n{}\n", values.join(","));
+    std::fs::write(path, csv)
+}
+
+#[cfg(feature = "profiling")]
+pub(super) fn write_dream_ui_metrics(
+    config: &PerfScenarioConfig,
+    metrics: Option<&hw_visual::dream::DreamUiPerfMetrics>,
+) -> std::io::Result<()> {
+    if config.workload != PerfWorkload::DreamUiBurst {
+        return Ok(());
+    }
+    let metrics = metrics.ok_or_else(|| {
+        std::io::Error::other("dream-ui-burst reached Flush without DreamUiPerfMetrics")
+    })?;
+    if metrics.measured_frames == 0
+        || metrics.maximum_active_particles
+            != hw_core::constants::DREAM_UI_PARTICLE_MAX_ACTIVE as u32
+        || metrics.active_particle_updates == 0
+        || metrics.node_writes != metrics.active_particle_updates
+        || metrics.merge_pair_comparisons == 0
+        || metrics.dream_lane_elapsed_ns == 0
+        || metrics.dream_lane_p95_ns() == 0
+        || metrics.dream_lane_sample_overflow != 0
+    {
+        return Err(std::io::Error::other(format!(
+            "invalid dream-ui-burst metrics: frames={} max_active={} updates={} node_writes={} comparisons={} elapsed_ns={} p95_ns={} sample_overflow={}",
+            metrics.measured_frames,
+            metrics.maximum_active_particles,
+            metrics.active_particle_updates,
+            metrics.node_writes,
+            metrics.merge_pair_comparisons,
+            metrics.dream_lane_elapsed_ns,
+            metrics.dream_lane_p95_ns(),
+            metrics.dream_lane_sample_overflow,
+        )));
+    }
+    let directory = perf_output_directory(config);
+    std::fs::create_dir_all(&directory)?;
+    let path = directory.join("dream_ui_metrics.csv");
+    if path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("Dream UI metrics already exist at {}", path.display()),
+        ));
+    }
+    let csv = format!(
+        concat!(
+            "schema_version,workload,target_active_particles,measured_frames,",
+            "active_particle_updates,merge_pair_comparisons,node_writes,ui_transform_writes,",
+            "particle_spawns,particle_despawns,trail_spawns,trail_despawns,",
+            "scoped_allocator_available,scoped_alloc_calls,scoped_alloc_bytes,",
+            "dream_lane_elapsed_ns,dream_lane_p95_ns,dream_lane_sample_overflow,",
+            "rng_sequence_checksum,trajectory_checksum,",
+            "lifetime_checksum,maximum_active_particles\n",
+            "{},dream-ui-burst,{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},",
+            "{:016x},{:016x},{:016x},{}\n"
+        ),
+        metrics.schema_version,
+        hw_core::constants::DREAM_UI_PARTICLE_MAX_ACTIVE,
+        metrics.measured_frames,
+        metrics.active_particle_updates,
+        metrics.merge_pair_comparisons,
+        metrics.node_writes,
+        metrics.ui_transform_writes,
+        metrics.particle_spawns,
+        metrics.particle_despawns,
+        metrics.trail_spawns,
+        metrics.trail_despawns,
+        metrics.scoped_allocator_available,
+        metrics.scoped_alloc_calls,
+        metrics.scoped_alloc_bytes,
+        metrics.dream_lane_elapsed_ns,
+        metrics.dream_lane_p95_ns(),
+        metrics.dream_lane_sample_overflow,
+        metrics.rng_sequence_checksum,
+        metrics.trajectory_checksum,
+        metrics.lifetime_checksum,
+        metrics.maximum_active_particles,
+    );
     std::fs::write(path, csv)
 }
 
@@ -446,6 +527,7 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
         measure_real_secs,
         familiar_metrics,
         arbitration_metrics,
+        transport_request_change_metrics,
         dashboard_metrics,
         dashboard_timing_metrics,
         #[cfg(feature = "profiling-memory")]
@@ -453,6 +535,7 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
         task_execution_metrics,
         reservation_sync_metrics,
         door_metrics,
+        gathering_recruitment_metrics,
         construction_metrics,
         slow_simulation_metrics,
         energy_metrics,
@@ -480,6 +563,8 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
     let summary_path = directory.join("summary.csv");
     let scene_roots_path = directory.join("scene_roots.csv");
     let dashboard_cpu_path = directory.join("task_dashboard_cpu.csv");
+    let transport_request_changes_path = directory.join("transport_request_changes.csv");
+    let spatial_query_metrics_path = directory.join("spatial_query_metrics.csv");
     #[cfg(feature = "profiling-memory")]
     let memory_path = directory.join("memory.csv");
     if frames_path.exists()
@@ -488,6 +573,14 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
         || directory.join("determinism.csv").exists()
         || directory.join("determinism_records.csv").exists()
         || (config.workload == PerfWorkload::TaskDashboard && dashboard_cpu_path.exists())
+        || (matches!(
+            config.workload,
+            PerfWorkload::Construction | PerfWorkload::TaskDashboard
+        ) && transport_request_changes_path.exists())
+        || (matches!(
+            config.workload,
+            PerfWorkload::PathDoor | PerfWorkload::Gather
+        ) && spatial_query_metrics_path.exists())
         || (cfg!(feature = "profiling-memory") && directory.join("memory.csv").exists())
     {
         return Err(std::io::Error::new(
@@ -521,6 +614,26 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
             dashboard_timing_metrics.system_invocations, dashboard_timing_metrics.total_elapsed_ns,
         );
         std::fs::write(&dashboard_cpu_path, dashboard_cpu_csv)?;
+    }
+
+    if matches!(
+        config.workload,
+        PerfWorkload::Construction | PerfWorkload::TaskDashboard
+    ) {
+        std::fs::write(
+            &transport_request_changes_path,
+            transport_request_changes_csv(transport_request_change_metrics),
+        )?;
+    }
+
+    if matches!(
+        config.workload,
+        PerfWorkload::PathDoor | PerfWorkload::Gather
+    ) {
+        std::fs::write(
+            &spatial_query_metrics_path,
+            spatial_query_metrics_csv(config.workload, door_metrics, gathering_recruitment_metrics),
+        )?;
     }
 
     #[cfg(feature = "profiling-memory")]
@@ -736,6 +849,170 @@ pub(super) fn write_perf_capture(input: PerfCaptureWriteInput<'_>) -> std::io::R
         warmup_checksum.value,
     );
     Ok(())
+}
+
+#[cfg(feature = "profiling")]
+fn transport_request_changes_csv(metrics: &TransportRequestChangePerfMetrics) -> String {
+    let mut csv = String::from(concat!(
+        "schema_version,request_kind,observer_runs,changed_components,added_components,",
+        "changed_existing_components,producer_observations,producer_spawns,",
+        "producer_missing_repairs,producer_semantic_updates,producer_disable_updates,",
+        "producer_no_op_writes,producer_steady_observations\n"
+    ));
+    for kind in TransportRequestKind::ALL {
+        let kind_metrics = metrics.for_kind(kind);
+        let producer_metrics = metrics.producer_for_kind(kind);
+        csv.push_str(&format!(
+            "2,{},{},{},{},{},{},{},{},{},{},{},{}\n",
+            kind.as_str(),
+            metrics.observer_runs,
+            kind_metrics.changed(),
+            kind_metrics.added,
+            kind_metrics.changed_existing,
+            producer_metrics.observations(),
+            producer_metrics.spawns,
+            producer_metrics.missing_repairs,
+            producer_metrics.semantic_updates,
+            producer_metrics.disable_updates,
+            producer_metrics.no_op_writes,
+            producer_metrics.steady_observations,
+        ));
+    }
+    csv
+}
+
+#[cfg(feature = "profiling")]
+fn spatial_query_metrics_csv(
+    workload: PerfWorkload,
+    door_metrics: &DoorPerfMetrics,
+    gathering_metrics: &GatheringRecruitmentPerfMetrics,
+) -> String {
+    let header = concat!(
+        "schema_version,tag,caller,radius_band,radius_px,queries,invalid_queries,",
+        "coordinate_probes,occupied_buckets,bucket_members_examined,exact_hits,",
+        "position_fallbacks\n"
+    );
+    let row =
+        |caller: &str, radius_band: &str, radius_px: u32, stats: &hw_spatial::SpatialQueryStats| {
+            format!(
+                "1,soul,{caller},{radius_band},{radius_px},{},{},{},{},{},{},{}\n",
+                stats.queries,
+                stats.invalid_queries,
+                stats.coordinate_probes,
+                stats.occupied_buckets,
+                stats.bucket_members_examined,
+                stats.exact_hits,
+                stats.position_fallbacks,
+            )
+        };
+    match workload {
+        PerfWorkload::PathDoor => format!(
+            "{header}{}{}",
+            row(
+                "door-open",
+                "small-le-64",
+                48,
+                &door_metrics.open_spatial_queries
+            ),
+            row(
+                "door-close",
+                "small-le-64",
+                48,
+                &door_metrics.close_spatial_queries
+            ),
+        ),
+        PerfWorkload::Gather => format!(
+            "{header}{}",
+            row(
+                "gather-recruitment",
+                "medium-le-320",
+                240,
+                &gathering_metrics.spatial_queries,
+            ),
+        ),
+        _ => header.to_string(),
+    }
+}
+
+#[cfg(all(test, feature = "profiling"))]
+mod transport_request_change_output_tests {
+    use super::*;
+
+    #[test]
+    fn transport_request_change_csv_has_exact_kind_order_and_zero_rows() {
+        let mut metrics = TransportRequestChangePerfMetrics::default();
+        metrics.observer_runs = 7;
+        let csv = transport_request_changes_csv(&metrics);
+        let lines = csv.lines().collect::<Vec<_>>();
+
+        assert_eq!(lines.len(), TransportRequestKind::ALL.len() + 1);
+        assert_eq!(
+            lines[0],
+            "schema_version,request_kind,observer_runs,changed_components,added_components,changed_existing_components,producer_observations,producer_spawns,producer_missing_repairs,producer_semantic_updates,producer_disable_updates,producer_no_op_writes,producer_steady_observations"
+        );
+        assert_eq!(lines[1], "2,deposit-to-stockpile,7,0,0,0,0,0,0,0,0,0,0");
+        assert_eq!(lines[13], "2,deliver-to-soul-spa,7,0,0,0,0,0,0,0,0,0,0");
+    }
+}
+
+#[cfg(all(test, feature = "profiling"))]
+mod spatial_query_output_tests {
+    use super::*;
+
+    #[test]
+    fn spatial_query_csv_has_exact_door_caller_order() {
+        let metrics = DoorPerfMetrics {
+            open_spatial_queries: hw_spatial::SpatialQueryStats {
+                queries: 2,
+                coordinate_probes: 3,
+                occupied_buckets: 2,
+                bucket_members_examined: 5,
+                exact_hits: 1,
+                ..default()
+            },
+            ..default()
+        };
+        let lines = spatial_query_metrics_csv(
+            PerfWorkload::PathDoor,
+            &metrics,
+            &GatheringRecruitmentPerfMetrics::default(),
+        )
+        .lines()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[1], "1,soul,door-open,small-le-64,48,2,0,3,2,5,1,0");
+        assert_eq!(lines[2], "1,soul,door-close,small-le-64,48,0,0,0,0,0,0,0");
+    }
+
+    #[test]
+    fn spatial_query_csv_labels_gather_recruitment_radius() {
+        let gathering = GatheringRecruitmentPerfMetrics {
+            spatial_queries: hw_spatial::SpatialQueryStats {
+                queries: 3,
+                coordinate_probes: 6,
+                occupied_buckets: 3,
+                bucket_members_examined: 24,
+                exact_hits: 8,
+                ..default()
+            },
+        };
+        let lines = spatial_query_metrics_csv(
+            PerfWorkload::Gather,
+            &DoorPerfMetrics::default(),
+            &gathering,
+        )
+        .lines()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+
+        assert_eq!(lines.len(), 2);
+        assert_eq!(
+            lines[1],
+            "1,soul,gather-recruitment,medium-le-320,240,3,0,6,3,24,8,0"
+        );
+    }
 }
 
 #[cfg(feature = "profiling")]

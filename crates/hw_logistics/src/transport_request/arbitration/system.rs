@@ -8,7 +8,7 @@ use hw_core::ecs::{drain_removed, drain_removed_where};
 use hw_core::relationships::{IncomingDeliveries, ParkedAt, PushedBy, StoredIn, StoredItems};
 use hw_jobs::Designation;
 
-use crate::transport_request::metrics::TransportRequestMetrics;
+use crate::transport_request::metrics::WheelbarrowArbitrationMetrics;
 #[cfg(feature = "profiling")]
 use crate::transport_request::metrics::WheelbarrowArbitrationPerfMetrics;
 use crate::transport_request::{
@@ -110,7 +110,7 @@ pub struct WheelbarrowArbitrationParams<'w, 's> {
 pub struct WheelbarrowArbitrationResources<'w> {
     time: Res<'w, Time>,
     runtime: ResMut<'w, WheelbarrowArbitrationRuntime>,
-    metrics: ResMut<'w, TransportRequestMetrics>,
+    metrics: ResMut<'w, WheelbarrowArbitrationMetrics>,
     #[cfg(feature = "profiling")]
     perf_metrics: ResMut<'w, WheelbarrowArbitrationPerfMetrics>,
     cache: Res<'w, crate::resource_cache::SharedResourceCache>,
@@ -358,10 +358,12 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_once()));
         app.init_resource::<SharedResourceCache>()
-            .init_resource::<TransportRequestMetrics>()
+            .init_resource::<WheelbarrowArbitrationMetrics>()
             .init_resource::<WheelbarrowArbitrationRuntime>()
-            .init_resource::<WheelbarrowArbitrationDiagnostics>()
-            .add_systems(Update, wheelbarrow_arbitration_system);
+            .init_resource::<WheelbarrowArbitrationDiagnostics>();
+        #[cfg(feature = "profiling")]
+        app.init_resource::<WheelbarrowArbitrationPerfMetrics>();
+        app.add_systems(Update, wheelbarrow_arbitration_system);
         app
     }
 

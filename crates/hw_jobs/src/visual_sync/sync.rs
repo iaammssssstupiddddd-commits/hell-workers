@@ -17,7 +17,7 @@ use crate::construction::{
 use crate::model::{Blueprint, Building, BuildingType};
 use crate::tasks::{
     AssignedTask, CoatWallPhase, DeconstructPhase, FrameWallPhase, GatherPhase, HaulPhase,
-    PourFloorPhase, RefinePhase, ReinforceFloorPhase,
+    PourFloorPhase, ReinforceFloorPhase,
 };
 
 use super::building_type_to_visual;
@@ -317,24 +317,29 @@ pub fn sync_building_visual_system(
     }
 }
 
-/// Scans all Soul `AssignedTask`s and updates each Mixer's `MudMixerVisualState`.
-/// Full scan is necessary because the active state depends on other entities' state.
-pub fn sync_mud_mixer_active_system(
-    q_tasks: Query<&AssignedTask>,
-    mut q_mixers: Query<(Entity, &mut MudMixerVisualState)>,
-) {
-    let refining_mixers: std::collections::HashSet<Entity> = q_tasks
-        .iter()
-        .filter_map(|task| match task {
-            AssignedTask::Refine(data) if matches!(data.phase, RefinePhase::Refining { .. }) => {
-                Some(data.mixer)
-            }
-            _ => None,
-        })
-        .collect();
+type AddedMudMixerVisualQuery<'w, 's> = Query<'w, 's, Entity, Added<MudMixerVisualState>>;
+type MudMixerVisualMutQuery<'w, 's> = Query<'w, 's, &'static mut MudMixerVisualState>;
 
-    for (entity, mut state) in q_mixers.iter_mut() {
-        let active = refining_mixers.contains(&entity);
+/// Projects the shared refine activity aggregate onto each mixer visual.
+pub fn sync_mud_mixer_active_system(
+    mut activity_index: ResMut<crate::RefineActivityIndex>,
+    mut mixer_queries: ParamSet<(AddedMudMixerVisualQuery, MudMixerVisualMutQuery)>,
+    mut dirty_mixers: Local<Vec<Entity>>,
+) {
+    {
+        let q_added_mixers = mixer_queries.p0();
+        for entity in &q_added_mixers {
+            activity_index.mark_visual_dirty(entity);
+        }
+    }
+    activity_index.drain_visual_dirty_into(&mut dirty_mixers);
+
+    let mut q_mixers = mixer_queries.p1();
+    for entity in dirty_mixers.iter().copied() {
+        let Ok(mut state) = q_mixers.get_mut(entity) else {
+            continue;
+        };
+        let active = activity_index.refining_count(entity) > 0;
         if state.is_active != active {
             state.is_active = active;
         }

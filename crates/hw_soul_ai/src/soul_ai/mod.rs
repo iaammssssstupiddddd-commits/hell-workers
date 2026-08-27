@@ -18,7 +18,8 @@ impl Plugin for SoulAiCorePlugin {
         #[cfg(feature = "profiling")]
         app.init_resource::<execute::task_execution::TaskExecutionPerfMetrics>()
             .init_resource::<pathfinding::RuntimePathDeferMetrics>()
-            .init_resource::<update::slow_simulation::SlowSimulationPerfMetrics>();
+            .init_resource::<update::slow_simulation::SlowSimulationPerfMetrics>()
+            .init_resource::<decide::gathering_mgmt::GatheringRecruitmentPerfMetrics>();
 
         app.init_resource::<helpers::gathering::GatheringUpdateTimer>()
             .init_resource::<perceive::escaping::EscapeDetectionTimer>()

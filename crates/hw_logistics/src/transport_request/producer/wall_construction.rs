@@ -2,6 +2,7 @@
 //!
 //! Creates transport requests for wood and mud delivery to wall construction sites.
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::{
     TILE_SIZE, WALL_COAT_PRIORITY, WALL_FRAME_PRIORITY, WALL_MUD_PER_TILE, WALL_WOOD_PER_TILE,
@@ -14,12 +15,15 @@ use hw_spatial::ResourceSpatialGrid;
 use hw_world::{PairedYard, Site};
 use std::time::Instant;
 
+use crate::tile_index::TileSiteIndex;
 use crate::transport_request::producer::active_unit_cache::{
     CachedActiveFamiliars, CachedActiveYards,
 };
 use crate::transport_request::producer::tile_wait_cache::WallTileWaitingCache;
-use crate::transport_request::producer::{ConstructionDeliverySpec, RequestSyncSpec};
-use crate::transport_request::{TransportRequest, TransportRequestKind, TransportRequestMetrics};
+use crate::transport_request::producer::{
+    ConstructionDeliverySpec, ConstructionMaterialConsumptionShadow, RequestSyncSpec,
+};
+use crate::transport_request::{TransportRequestKind, WallMaterialSyncMetrics};
 use crate::types::{ResourceItem, ResourceType};
 
 type WallTileDesignationQuery<'w, 's> = Query<
@@ -35,7 +39,6 @@ type WallTileDesignationQuery<'w, 's> = Query<
     ),
 >;
 
-type WallTileImmutQuery<'w, 's> = Query<'w, 's, (Entity, &'static WallTileBlueprint)>;
 type WallTileMutQuery<'w, 's> = Query<'w, 's, &'static mut WallTileBlueprint>;
 type WallResourcesQuery<'w, 's> = Query<
     'w,
@@ -48,6 +51,18 @@ type WallResourcesQuery<'w, 's> = Query<
         Option<&'static hw_core::relationships::StoredIn>,
     ),
 >;
+
+#[derive(SystemParam)]
+pub struct WallMaterialDeliveryContext<'w, 's> {
+    q_sites: Query<'w, 's, (Entity, &'static WallConstructionSite)>,
+    q_tiles: WallTileMutQuery<'w, 's>,
+    q_resources: WallResourcesQuery<'w, 's>,
+    resource_grid: Res<'w, ResourceSpatialGrid>,
+    tile_site_index: Res<'w, TileSiteIndex>,
+    consumption_shadow: ResMut<'w, ConstructionMaterialConsumptionShadow>,
+    metrics: ResMut<'w, WallMaterialSyncMetrics>,
+    nearby_buf: Local<'s, Vec<Entity>>,
+}
 
 fn request_priority(resource_type: ResourceType) -> u32 {
     match resource_type {
@@ -69,12 +84,7 @@ pub fn wall_construction_auto_haul_system(
         &WallConstructionSite,
         Option<&TaskWorkers>,
     )>,
-    q_wall_requests: Query<(
-        Entity,
-        &TargetWallConstructionSite,
-        &TransportRequest,
-        Option<&TaskWorkers>,
-    )>,
+    q_wall_requests: super::ExistingConstructionRequestQuery<TargetWallConstructionSite>,
     waiting_cache: Res<WallTileWaitingCache>,
 ) {
     let active_familiars = &familiars_cache.data;
@@ -145,23 +155,23 @@ pub fn wall_construction_auto_haul_system(
 /// Consumes delivered materials around each wall site and advances tiles to ready states.
 pub fn wall_material_delivery_sync_system(
     mut commands: Commands,
-    q_sites: Query<(Entity, &WallConstructionSite)>,
-    mut q_tiles: ParamSet<(WallTileImmutQuery, WallTileMutQuery)>,
-    q_resources: WallResourcesQuery,
-    resource_grid: Res<ResourceSpatialGrid>,
-    mut nearby_buf: Local<Vec<Entity>>,
-    mut metrics: ResMut<TransportRequestMetrics>,
+    context: WallMaterialDeliveryContext,
 ) {
+    let WallMaterialDeliveryContext {
+        q_sites,
+        mut q_tiles,
+        q_resources,
+        resource_grid,
+        tile_site_index,
+        mut consumption_shadow,
+        mut metrics,
+        mut nearby_buf,
+    } = context;
     let started_at = Instant::now();
     let pickup_radius = TILE_SIZE * 2.0;
     let mut sites_processed = 0u32;
     let mut resources_scanned = 0u32;
     let mut tiles_scanned = 0u32;
-
-    let tiles_by_site = {
-        let q_tiles_read = q_tiles.p0();
-        super::group_tiles_by_site(&q_tiles_read, |tile| tile.parent_site, &mut tiles_scanned)
-    };
 
     for (site_entity, site) in q_sites.iter() {
         sites_processed += 1;
@@ -179,34 +189,35 @@ pub fn wall_material_delivery_sync_system(
                 WallTileState::CoatingReady,
             ),
         };
-
-        let consumed = {
-            let mut q_tiles_write = q_tiles.p1();
-            super::sync_construction_delivery(
-                &mut commands,
-                ConstructionDeliverySpec {
-                    site_entity,
-                    site_pos: site.material_center,
-                    target_resource,
-                    required_amount,
-                    pickup_radius,
-                    resource_grid: &resource_grid,
-                    scratch: &mut nearby_buf,
-                    resources_scanned: &mut resources_scanned,
-                    tiles_by_site: &tiles_by_site,
-                },
-                &q_resources,
-                &mut q_tiles_write,
-                |tile: &WallTileBlueprint| tile.state == waiting_state,
-                |tile: &mut WallTileBlueprint| match site.phase {
-                    WallConstructionPhase::Framing => &mut tile.wood_delivered,
-                    WallConstructionPhase::Coating => &mut tile.mud_delivered,
-                },
-                |tile: &mut WallTileBlueprint| {
-                    tile.state = ready_state;
-                },
-            )
+        let Some(site_tiles) = tile_site_index.wall_tiles_by_site.get(&site_entity) else {
+            continue;
         };
+        tiles_scanned = tiles_scanned.saturating_add(site_tiles.len() as u32);
+
+        let consumed = super::sync_construction_delivery(
+            &mut commands,
+            ConstructionDeliverySpec {
+                site_pos: site.material_center,
+                target_resource,
+                required_amount,
+                pickup_radius,
+                resource_grid: &resource_grid,
+                scratch: &mut nearby_buf,
+                resources_scanned: &mut resources_scanned,
+                site_tiles,
+                consumed_resources: &mut consumption_shadow.consumed,
+            },
+            &q_resources,
+            &mut q_tiles,
+            |tile: &WallTileBlueprint| tile.state == waiting_state,
+            |tile: &mut WallTileBlueprint| match site.phase {
+                WallConstructionPhase::Framing => &mut tile.wood_delivered,
+                WallConstructionPhase::Coating => &mut tile.mud_delivered,
+            },
+            |tile: &mut WallTileBlueprint| {
+                tile.state = ready_state;
+            },
+        );
 
         if consumed > 0 {
             debug!(
@@ -270,5 +281,77 @@ pub fn wall_tile_designation_system(mut commands: Commands, mut q_tiles: WallTil
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod material_sync_tests {
+    use super::*;
+    use hw_core::area::TaskArea;
+    use hw_spatial::SpatialGridOps;
+
+    #[test]
+    fn material_sync_reads_only_the_indexed_site_tiles() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<ResourceSpatialGrid>()
+            .init_resource::<TileSiteIndex>()
+            .init_resource::<WallMaterialSyncMetrics>()
+            .init_resource::<ConstructionMaterialConsumptionShadow>()
+            .add_systems(Update, wall_material_delivery_sync_system);
+        let center = Vec2::new(64.0, 64.0);
+        let site = app
+            .world_mut()
+            .spawn(WallConstructionSite::new(
+                TaskArea::from_points(center, center),
+                center,
+                1,
+            ))
+            .id();
+        let tile = app
+            .world_mut()
+            .spawn(WallTileBlueprint::new(site, (2, 2)))
+            .id();
+        let unrelated_site = app.world_mut().spawn_empty().id();
+        let unrelated_tile = app
+            .world_mut()
+            .spawn(WallTileBlueprint::new(unrelated_site, (20, 20)))
+            .id();
+        app.world_mut()
+            .resource_mut::<TileSiteIndex>()
+            .rebuild_from_tiles([], [(tile, site), (unrelated_tile, unrelated_site)]);
+
+        let resource = app
+            .world_mut()
+            .spawn((
+                ResourceItem(ResourceType::Wood),
+                Transform::from_translation(center.extend(0.0)),
+                Visibility::Visible,
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<ResourceSpatialGrid>()
+            .insert(resource, center);
+
+        app.update();
+
+        let tile_state = app.world().entity(tile).get::<WallTileBlueprint>().unwrap();
+        assert_eq!(tile_state.wood_delivered, 1);
+        assert_eq!(tile_state.state, WallTileState::FramingReady);
+        assert_eq!(
+            app.world()
+                .entity(unrelated_tile)
+                .get::<WallTileBlueprint>()
+                .unwrap()
+                .wood_delivered,
+            0
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WallMaterialSyncMetrics>()
+                .wall_material_sync_tiles_scanned,
+            1
+        );
+        assert!(app.world().get_entity(resource).is_err());
     }
 }

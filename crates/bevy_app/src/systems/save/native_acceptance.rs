@@ -1879,7 +1879,7 @@ fn persistent_world_is_ready(
     primary_windows: &Query<'_, '_, (), With<PrimaryWindow>>,
 ) -> bool {
     world_map.is_some_and(|map| {
-        !map.tile_entities.is_empty() && map.tile_entities.iter().all(Option::is_some)
+        !map.tile_entities.is_empty() && map.tile_entities.iter().all(Option::is_none)
     }) && !souls.is_empty()
         && !familiars.is_empty()
         && primary_windows.iter().count() == 1

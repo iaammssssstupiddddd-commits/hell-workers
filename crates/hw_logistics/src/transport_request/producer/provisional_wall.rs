@@ -8,6 +8,7 @@ use hw_jobs::construction::WallTileBlueprint;
 use hw_jobs::{
     Building, BuildingType, Designation, Priority, ProvisionalWall, TaskSlots, WorkType,
 };
+use hw_spatial::{ResourceSpatialGrid, SpatialGridOps};
 
 use crate::transport_request::producer::active_unit_cache::{
     CachedActiveFamiliars, CachedActiveYards,
@@ -47,7 +48,12 @@ pub fn provisional_wall_auto_haul_system(
         &ProvisionalWall,
         Option<&TaskWorkers>,
     )>,
-    q_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
+    q_requests: Query<(
+        Entity,
+        &TransportRequest,
+        Option<&TaskWorkers>,
+        super::upsert::ExistingRequestRuntime<'static>,
+    )>,
     q_wall_tiles: Query<&WallTileBlueprint>,
 ) {
     let site_managed_walls: std::collections::HashSet<Entity> = q_wall_tiles
@@ -56,7 +62,7 @@ pub fn provisional_wall_auto_haul_system(
         .collect();
 
     let mut in_flight = std::collections::HashMap::<Entity, usize>::new();
-    for (_, req, workers_opt) in q_requests.iter() {
+    for (_, req, workers_opt, _) in q_requests.iter() {
         if req.kind != TransportRequestKind::DeliverToProvisionalWall {
             continue;
         }
@@ -100,7 +106,7 @@ pub fn provisional_wall_auto_haul_system(
     }
 
     let mut seen_existing = std::collections::HashSet::<Entity>::new();
-    for (request_entity, request, workers_opt) in q_requests.iter() {
+    for (request_entity, request, workers_opt, current) in q_requests.iter() {
         if request.kind != TransportRequestKind::DeliverToProvisionalWall {
             continue;
         }
@@ -119,38 +125,33 @@ pub fn provisional_wall_auto_haul_system(
 
         let inflight = to_u32_saturating(workers);
         if let Some((issued_by, wall_pos, slots)) = desired_requests.get(&key) {
-            commands.entity(request_entity).try_insert((
-                Transform::from_xyz(wall_pos.x, wall_pos.y, 0.0),
-                Visibility::Hidden,
-                Designation {
-                    work_type: WorkType::Haul,
-                },
-                hw_core::relationships::ManagedBy(*issued_by),
-                TaskSlots::new(*slots),
-                Priority(PROVISIONAL_WALL_PRIORITY),
-                TransportRequest {
-                    kind: TransportRequestKind::DeliverToProvisionalWall,
-                    anchor: key,
-                    resource_type: ResourceType::StasisMud,
+            super::upsert::update_request_runtime_if_needed(
+                &mut commands,
+                request_entity,
+                request,
+                current,
+                super::upsert::SemanticRequestSpec {
+                    key: (key, ResourceType::StasisMud),
+                    site_pos: *wall_pos,
                     issued_by: *issued_by,
-                    priority: TransportPriority::Low,
-                    stockpile_group: vec![],
-                },
-                TransportDemand {
                     desired_slots: *slots,
                     inflight,
+                    priority: PROVISIONAL_WALL_PRIORITY,
+                    transport_priority: TransportPriority::Low,
+                    kind: TransportRequestKind::DeliverToProvisionalWall,
+                    work_type: WorkType::Haul,
+                    state: super::upsert::request_state_for_workers(workers),
                 },
-                super::upsert::request_state_for_workers(workers),
-                TransportPolicy::default(),
-            ));
+            );
             continue;
         }
 
-        super::upsert::disable_request(&mut commands, request_entity);
-        commands.entity(request_entity).try_insert(TransportDemand {
-            desired_slots: 0,
-            inflight,
-        });
+        super::upsert::disable_request_if_needed(
+            &mut commands,
+            request_entity,
+            current,
+            Some(inflight),
+        );
     }
 
     for (wall_entity, (issued_by, wall_pos, slots)) in desired_requests {
@@ -197,6 +198,9 @@ pub fn provisional_wall_material_delivery_sync_system(
         Option<&hw_core::relationships::StoredIn>,
     )>,
     q_wall_tiles: Query<&WallTileBlueprint>,
+    resource_grid: Res<ResourceSpatialGrid>,
+    mut nearby_resources: Local<Vec<Entity>>,
+    mut consumption_shadow: ResMut<super::ConstructionMaterialConsumptionShadow>,
 ) {
     let site_managed_walls: std::collections::HashSet<Entity> = q_wall_tiles
         .iter()
@@ -217,25 +221,34 @@ pub fn provisional_wall_material_delivery_sync_system(
         }
 
         let wall_pos = wall_transform.translation.truncate();
-        let nearest_mud = q_resources
+        resource_grid.get_nearby_in_radius_into(wall_pos, TILE_SIZE * 1.5, &mut nearby_resources);
+        let nearest_mud = nearby_resources
             .iter()
-            .filter(|(_, transform, visibility, item, stored_in_opt)| {
-                *visibility != Visibility::Hidden
+            .copied()
+            .filter(|entity| !consumption_shadow.consumed.contains(entity))
+            .filter_map(|entity| {
+                let Ok((_, transform, visibility, item, stored_in_opt)) = q_resources.get(entity)
+                else {
+                    return None;
+                };
+                (*visibility != Visibility::Hidden
                     && stored_in_opt.is_none()
-                    && item.0 == ResourceType::StasisMud
-                    && transform.translation.truncate().distance_squared(wall_pos)
-                        <= pickup_radius_sq
+                    && item.0 == ResourceType::StasisMud)
+                    .then_some((
+                        entity,
+                        transform.translation.truncate().distance_squared(wall_pos),
+                    ))
             })
-            .min_by(|(_, t1, _, _, _), (_, t2, _, _, _)| {
-                t1.translation
-                    .truncate()
-                    .distance_squared(wall_pos)
-                    .partial_cmp(&t2.translation.truncate().distance_squared(wall_pos))
-                    .unwrap_or(std::cmp::Ordering::Equal)
+            .filter(|(_, distance_squared)| *distance_squared <= pickup_radius_sq)
+            .min_by(|(entity_a, distance_a), (entity_b, distance_b)| {
+                distance_a
+                    .total_cmp(distance_b)
+                    .then_with(|| entity_a.to_bits().cmp(&entity_b.to_bits()))
             })
-            .map(|(entity, _, _, _, _)| entity);
+            .map(|(entity, _)| entity);
 
         if let Some(mud_entity) = nearest_mud {
+            consumption_shadow.consumed.insert(mud_entity);
             commands.entity(mud_entity).try_despawn();
             provisional.mud_delivered = true;
             debug!(
@@ -290,5 +303,69 @@ pub fn provisional_wall_designation_system(
                 .remove::<TaskSlots>()
                 .remove::<Priority>();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn equal_distance_delivery_uses_entity_bits_tie_break() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<ResourceSpatialGrid>()
+            .init_resource::<super::super::ConstructionMaterialConsumptionShadow>()
+            .add_systems(Update, provisional_wall_material_delivery_sync_system);
+        let center = Vec2::new(64.0, 64.0);
+        let wall = app
+            .world_mut()
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: true,
+                },
+                ProvisionalWall::default(),
+                Transform::from_translation(center.extend(0.0)),
+            ))
+            .id();
+        let first = app
+            .world_mut()
+            .spawn((
+                ResourceItem(ResourceType::StasisMud),
+                Transform::from_translation((center + Vec2::X).extend(0.0)),
+                Visibility::Visible,
+            ))
+            .id();
+        let second = app
+            .world_mut()
+            .spawn((
+                ResourceItem(ResourceType::StasisMud),
+                Transform::from_translation((center - Vec2::X).extend(0.0)),
+                Visibility::Visible,
+            ))
+            .id();
+        {
+            let mut grid = app.world_mut().resource_mut::<ResourceSpatialGrid>();
+            grid.insert(first, center + Vec2::X);
+            grid.insert(second, center - Vec2::X);
+        }
+        let (expected, remaining) = if first.to_bits() < second.to_bits() {
+            (first, second)
+        } else {
+            (second, first)
+        };
+
+        app.update();
+
+        assert!(app.world().get_entity(expected).is_err());
+        assert!(app.world().get_entity(remaining).is_ok());
+        assert!(
+            app.world()
+                .entity(wall)
+                .get::<ProvisionalWall>()
+                .unwrap()
+                .mud_delivered
+        );
     }
 }

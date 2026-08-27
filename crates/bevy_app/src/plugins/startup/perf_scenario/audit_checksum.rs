@@ -293,7 +293,8 @@ pub(super) fn collect_audit_actor_records(
             | PerfFixtureKind::DashboardResource
             | PerfFixtureKind::DashboardWheelbarrow
             | PerfFixtureKind::DashboardTransportRequest
-            | PerfFixtureKind::DashboardDesignation => {}
+            | PerfFixtureKind::DashboardDesignation
+            | PerfFixtureKind::DreamUiBurst => {}
         }
         records.push(PerfAuditActorRecord {
             actor_kind: "fixture",

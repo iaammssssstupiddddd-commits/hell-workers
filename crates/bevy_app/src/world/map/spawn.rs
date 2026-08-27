@@ -8,7 +8,7 @@ use hw_core::constants::{MAP_HEIGHT, MAP_WIDTH, TILE_SIZE, building_3d_render_la
 use hw_visual::TerrainSurfaceMaterial;
 use hw_world::{GeneratedWorldLayout, generate_world_layout, grid_to_world};
 
-use super::{Tile, WorldMapWrite};
+use super::WorldMapWrite;
 
 const WORLDGEN_SEED_ENV: &str = "HELL_WORKERS_WORLDGEN_SEED";
 
@@ -62,16 +62,12 @@ pub fn prepare_generated_world_layout_resource(
     }
 }
 
-/// `WorldMap.tile_entities` に登録される論理 anchor entity を生成する。
+/// 生成済みレイアウトを `WorldMap` の dense terrain 配列へ反映する。
 ///
-/// 各 `Tile` entity は描画コンポーネント（`Mesh3d` / `MeshMaterial3d`）を持たない。
-/// 地形描画は `spawn_terrain_chunks` が担う `TerrainChunk` entity が行う。
-///
-/// `Tile` entity は Familiar AI（`direct_collect.rs`）が `Designation` / `TaskWorkers` を
-/// 参照する際の lookup anchor として存続する。`Transform` は `DesignationSpatialGrid` と
-/// UI/選択系 Query が依存するため必須。
+/// 地形 source は grid key で識別し、描画は `TerrainChunk` が担うため、タイルごとの
+/// ECS anchor は生成しない。`tile_entities` は旧 save 読み込み専用の互換フィールドで、
+/// 新規 world では全 slot を `None` のまま保つ。
 pub fn spawn_map(
-    mut commands: Commands,
     mut world_map: WorldMapWrite,
     generated_layout: Res<GeneratedWorldLayoutResource>,
 ) {
@@ -84,18 +80,11 @@ pub fn spawn_map(
                 .expect("x/y within MAP_WIDTH x MAP_HEIGHT");
             let terrain = terrain_tiles[idx];
             world_map.set_terrain_at_idx(idx, terrain);
-
-            let pos2d = grid_to_world(x, y);
-            let entity = commands
-                .spawn((Tile, Transform::from_xyz(pos2d.x, 0.0, -pos2d.y)))
-                .id();
-
-            world_map.set_tile_entity_at_idx(idx, entity);
         }
     }
 
     info!(
-        "BEVY_STARTUP: Map tile anchors spawned ({}x{} tiles, worldgen seed={}, attempt={}, fallback={})",
+        "BEVY_STARTUP: Map terrain initialized without tile anchors ({}x{} tiles, worldgen seed={}, attempt={}, fallback={})",
         MAP_WIDTH,
         MAP_HEIGHT,
         generated_layout.master_seed,
@@ -157,4 +146,34 @@ pub fn spawn_terrain_chunks(
         CHUNK_TILES,
         CHUNK_TILES
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::world::map::Tile;
+    use hw_world::WorldMap;
+
+    #[test]
+    fn spawn_map_initializes_terrain_without_tile_entities() {
+        let mut app = App::new();
+        app.insert_resource(WorldMap::default())
+            .insert_resource(GeneratedWorldLayoutResource {
+                master_seed: 123,
+                layout: generate_world_layout(123),
+            })
+            .add_systems(Update, spawn_map);
+
+        app.update();
+
+        assert!(
+            app.world()
+                .resource::<WorldMap>()
+                .tile_entities
+                .iter()
+                .all(Option::is_none)
+        );
+        let mut tiles = app.world_mut().query_filtered::<Entity, With<Tile>>();
+        assert_eq!(tiles.iter(app.world()).count(), 0);
+    }
 }

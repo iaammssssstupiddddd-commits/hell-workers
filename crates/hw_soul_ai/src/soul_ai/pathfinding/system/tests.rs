@@ -49,6 +49,82 @@ fn preupdate_reset_restores_the_actor_budget_each_frame() {
 }
 
 #[test]
+fn stuck_escape_rechecks_a_soul_moved_into_existing_blocked_topology() {
+    let mut map = WorldMap::default();
+    map.add_grid_obstacle((8, 8));
+    let safe_pos = WorldMap::grid_to_world(4, 4);
+    let blocked_pos = WorldMap::grid_to_world(8, 8);
+    let mut app = App::new();
+    app.insert_resource(map)
+        .add_systems(Update, soul_stuck_escape_system);
+    let soul = app
+        .world_mut()
+        .spawn((
+            Transform::from_translation(safe_pos.extend(0.0)),
+            DamnedSoul::default(),
+            Path::default(),
+        ))
+        .id();
+
+    // Initializes the local obstacle revision while the Soul is already safe.
+    app.update();
+    app.world_mut()
+        .get_mut::<Transform>(soul)
+        .unwrap()
+        .translation = blocked_pos.extend(0.0);
+    app.update();
+
+    let escaped_pos = app
+        .world()
+        .get::<Transform>(soul)
+        .unwrap()
+        .translation
+        .truncate();
+    assert_ne!(escaped_pos, blocked_pos);
+    assert!(
+        app.world()
+            .resource::<WorldMap>()
+            .is_walkable_world(escaped_pos)
+    );
+}
+
+#[test]
+fn stuck_escape_full_sweeps_when_topology_revision_changes() {
+    let soul_pos = WorldMap::grid_to_world(8, 8);
+    let mut app = App::new();
+    app.insert_resource(WorldMap::default())
+        .add_systems(Update, soul_stuck_escape_system);
+    let soul = app
+        .world_mut()
+        .spawn((
+            Transform::from_translation(soul_pos.extend(0.0)),
+            DamnedSoul::default(),
+            Path::default(),
+        ))
+        .id();
+    app.update();
+
+    app.world_mut()
+        .resource_mut::<WorldMap>()
+        .add_grid_obstacle((8, 8));
+    app.world_mut().clear_trackers();
+    app.update();
+
+    let escaped_pos = app
+        .world()
+        .get::<Transform>(soul)
+        .unwrap()
+        .translation
+        .truncate();
+    assert_ne!(escaped_pos, soul_pos);
+    assert!(
+        app.world()
+            .resource::<WorldMap>()
+            .is_walkable_world(escaped_pos)
+    );
+}
+
+#[test]
 fn arrived_idle_soul_does_not_regenerate_a_completed_path() {
     let mut app = App::new();
     let position = WorldMap::grid_to_world(12, 12);
@@ -209,7 +285,7 @@ fn unreachable_task_destination_unassigns_and_releases_its_reservation() {
     assert_eq!(
         app.world().resource::<ReservationReceipts>().0,
         vec![ResourceReservationOp::ReleaseSource {
-            source: target,
+            source: target.into(),
             amount: 1,
         }]
     );

@@ -210,7 +210,7 @@ pub fn handle_reinforce_floor_task(
         ReinforceFloorPhase::Done => {
             // Release task slot
             ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                source: tile_entity,
+                source: tile_entity.into(),
                 amount: 1,
             });
             debug!(

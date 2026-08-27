@@ -61,14 +61,14 @@ fn generate_power_reserves_its_tile_until_terminal_transition() {
         assert_eq!(
             collect_active_reservation_ops(&task, |_, fallback| fallback),
             vec![ResourceReservationOp::ReserveSource {
-                source: tile,
+                source: tile.into(),
                 amount: 1,
             }]
         );
         assert_eq!(
             collect_release_reservation_ops(&task, |_, fallback| fallback),
             vec![ResourceReservationOp::ReleaseSource {
-                source: tile,
+                source: tile.into(),
                 amount: 1,
             }]
         );
@@ -86,7 +86,7 @@ fn collect_bone_done_keeps_source_reservation_until_terminal_cleanup() {
     assert_eq!(
         collect_release_reservation_ops(&task, |_, fallback| fallback),
         vec![ResourceReservationOp::ReleaseSource {
-            source: target,
+            source: target.into(),
             amount: 1,
         }]
     );
@@ -122,7 +122,7 @@ fn wheelbarrow_item_source_reservations_end_after_loading() {
         collect_active_reservation_ops(&before_loading, |_, fallback| fallback),
         vec![
             ResourceReservationOp::ReserveSource {
-                source: wheelbarrow,
+                source: wheelbarrow.into(),
                 amount: 1,
             },
             ResourceReservationOp::ReserveMixerDestination {
@@ -134,11 +134,11 @@ fn wheelbarrow_item_source_reservations_end_after_loading() {
                 resource_type: ResourceType::Wood,
             },
             ResourceReservationOp::ReserveSource {
-                source: first_item,
+                source: first_item.into(),
                 amount: 1,
             },
             ResourceReservationOp::ReserveSource {
-                source: second_item,
+                source: second_item.into(),
                 amount: 1,
             },
         ]
@@ -147,7 +147,7 @@ fn wheelbarrow_item_source_reservations_end_after_loading() {
         collect_active_reservation_ops(&after_loading, |_, fallback| fallback),
         vec![
             ResourceReservationOp::ReserveSource {
-                source: wheelbarrow,
+                source: wheelbarrow.into(),
                 amount: 1,
             },
             ResourceReservationOp::ReserveMixerDestination {
@@ -185,7 +185,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 phase: HaulPhase::GoingToItem,
             }),
             vec![ResourceReservationOp::ReserveSource {
-                source: item,
+                source: item.into(),
                 amount: 1,
             }],
         ),
@@ -203,7 +203,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                     resource_type: ResourceType::Rock,
                 },
                 ResourceReservationOp::ReserveSource {
-                    source: item,
+                    source: item.into(),
                     amount: 1,
                 },
             ],
@@ -216,7 +216,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 phase: HaulToBpPhase::GoingToItem,
             }),
             vec![ResourceReservationOp::ReserveSource {
-                source: item,
+                source: item.into(),
                 amount: 1,
             }],
         ),
@@ -227,7 +227,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 phase: BuildPhase::GoingToBlueprint,
             }),
             vec![ResourceReservationOp::ReserveSource {
-                source: target,
+                source: target.into(),
                 amount: 1,
             }],
         ),
@@ -266,11 +266,11 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
             }),
             vec![
                 ResourceReservationOp::ReserveSource {
-                    source: bucket,
+                    source: bucket.into(),
                     amount: 1,
                 },
                 ResourceReservationOp::ReserveSource {
-                    source: tank,
+                    source: tank.into(),
                     amount: 1,
                 },
                 ResourceReservationOp::ReserveMixerDestination {
@@ -286,7 +286,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 phase: CollectBonePhase::GoingToBone,
             }),
             vec![ResourceReservationOp::ReserveSource {
-                source: target,
+                source: target.into(),
                 amount: 1,
             }],
         ),
@@ -298,7 +298,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 phase: GatherPhase::GoingToResource,
             }),
             vec![ResourceReservationOp::ReserveSource {
-                source: target,
+                source: target.into(),
                 amount: 1,
             }],
         ),
@@ -309,7 +309,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 phase: RefinePhase::GoingToMixer,
             }),
             vec![ResourceReservationOp::ReserveSource {
-                source: mixer,
+                source: mixer.into(),
                 amount: 1,
             }],
         ),
@@ -327,11 +327,11 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
             }),
             vec![
                 ResourceReservationOp::ReserveSource {
-                    source: wheelbarrow,
+                    source: wheelbarrow.into(),
                     amount: 1,
                 },
                 ResourceReservationOp::ReserveSource {
-                    source: item,
+                    source: item.into(),
                     amount: 1,
                 },
             ],
@@ -344,7 +344,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 phase: ReinforceFloorPhase::GoingToTile,
             }),
             vec![ResourceReservationOp::ReserveSource {
-                source: target,
+                source: target.into(),
                 amount: 1,
             }],
         ),
@@ -356,7 +356,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 phase: PourFloorPhase::GoingToTile,
             }),
             vec![ResourceReservationOp::ReserveSource {
-                source: target,
+                source: target.into(),
                 amount: 1,
             }],
         ),
@@ -368,7 +368,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 phase: FrameWallPhase::GoingToTile,
             }),
             vec![ResourceReservationOp::ReserveSource {
-                source: target,
+                source: target.into(),
                 amount: 1,
             }],
         ),
@@ -381,7 +381,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 phase: CoatWallPhase::GoingToTile,
             }),
             vec![ResourceReservationOp::ReserveSource {
-                source: target,
+                source: target.into(),
                 amount: 1,
             }],
         ),
@@ -393,7 +393,7 @@ fn every_assigned_task_variant_has_an_explicit_reservation_contract() {
                 phase: GeneratePowerPhase::GoingToTile,
             }),
             vec![ResourceReservationOp::ReserveSource {
-                source: target,
+                source: target.into(),
                 amount: 1,
             }],
         ),

@@ -4,6 +4,20 @@
 
 use bevy::prelude::*;
 
+use crate::blueprint::{CompletionText, DeliveryPopup};
+
+type StandaloneFloatingTextQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static mut FloatingText,
+        &'static mut Transform,
+        &'static mut TextColor,
+    ),
+    (Without<DeliveryPopup>, Without<CompletionText>),
+>;
+
 /// フローティングテキストの設定
 #[derive(Debug, Clone)]
 pub struct FloatingTextConfig {
@@ -101,7 +115,7 @@ pub fn update_floating_text(
 pub fn update_all_floating_texts_system(
     mut commands: Commands,
     time: Res<Time>,
-    mut q_texts: Query<(Entity, &mut FloatingText, &mut Transform, &mut TextColor)>,
+    mut q_texts: StandaloneFloatingTextQuery,
 ) {
     for (entity, mut text, mut transform, mut text_color) in q_texts.iter_mut() {
         let current_pos = transform.translation;
@@ -116,5 +130,52 @@ pub fn update_all_floating_texts_system(
         let mut color = text_color.0.to_srgba();
         color.alpha = alpha;
         text_color.0 = color.into();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::blueprint::update_delivery_popup_system;
+
+    #[test]
+    fn blueprint_popup_has_only_its_specialized_lifetime_owner() {
+        let mut app = App::new();
+        app.set_error_handler(bevy::ecs::error::panic);
+        app.init_resource::<Time>();
+        app.add_systems(
+            Update,
+            (
+                update_all_floating_texts_system,
+                update_delivery_popup_system,
+            )
+                .chain_ignore_deferred(),
+        );
+
+        let config = FloatingTextConfig {
+            lifetime: 0.0,
+            ..default()
+        };
+        let popup = app
+            .world_mut()
+            .spawn((
+                FloatingText {
+                    lifetime: 0.0,
+                    config: config.clone(),
+                },
+                DeliveryPopup {
+                    floating_text: FloatingText {
+                        lifetime: 0.0,
+                        config,
+                    },
+                },
+                Transform::default(),
+                TextColor::default(),
+            ))
+            .id();
+
+        app.update();
+
+        assert!(app.world().get_entity(popup).is_err());
     }
 }

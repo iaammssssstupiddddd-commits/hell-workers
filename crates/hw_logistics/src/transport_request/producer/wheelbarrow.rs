@@ -38,7 +38,12 @@ pub fn wheelbarrow_auto_haul_system(
     familiars_cache: Res<CachedActiveFamiliars>,
     q_wheelbarrows: WheelbarrowParkedQuery,
     q_transforms: Query<&Transform>,
-    q_wb_requests: Query<(Entity, &TransportRequest, Option<&TaskWorkers>)>,
+    q_wb_requests: Query<(
+        Entity,
+        &TransportRequest,
+        Option<&TaskWorkers>,
+        super::upsert::ExistingRequestRuntime<'static>,
+    )>,
     q_deconstruction_pending: Query<(), With<DeconstructionPending>>,
 ) {
     let active_familiars = &familiars_cache.data;
@@ -76,7 +81,7 @@ pub fn wheelbarrow_auto_haul_system(
     }
 
     let mut seen_return = std::collections::HashSet::new();
-    for (req_entity, req, workers_opt) in q_wb_requests.iter() {
+    for (req_entity, req, workers_opt, current) in q_wb_requests.iter() {
         let wb_entity = req.anchor;
         let workers = workers_opt.map(|w| w.len()).unwrap_or(0);
         let inflight = to_u32_saturating(workers);
@@ -101,38 +106,33 @@ pub fn wheelbarrow_auto_haul_system(
                 }
 
                 if let Some(desired) = desired_return_requests.get(&wb_entity) {
-                    commands.entity(req_entity).try_insert((
-                        Transform::from_xyz(desired.wb_pos.x, desired.wb_pos.y, 0.0),
-                        Visibility::Hidden,
-                        Designation {
-                            work_type: WorkType::WheelbarrowHaul,
-                        },
-                        ManagedBy(desired.issued_by),
-                        TaskSlots::new(1),
-                        Priority(RETURN_REQUEST_PRIORITY),
-                        TransportRequest {
-                            kind: TransportRequestKind::ReturnWheelbarrow,
-                            anchor: wb_entity,
-                            resource_type: ResourceType::Wheelbarrow,
+                    super::upsert::update_request_runtime_if_needed(
+                        &mut commands,
+                        req_entity,
+                        req,
+                        current,
+                        super::upsert::SemanticRequestSpec {
+                            key: (wb_entity, ResourceType::Wheelbarrow),
+                            site_pos: desired.wb_pos,
                             issued_by: desired.issued_by,
-                            priority: TransportPriority::Low,
-                            stockpile_group: vec![],
-                        },
-                        TransportDemand {
                             desired_slots: 1,
                             inflight,
+                            priority: RETURN_REQUEST_PRIORITY,
+                            transport_priority: TransportPriority::Low,
+                            kind: TransportRequestKind::ReturnWheelbarrow,
+                            work_type: WorkType::WheelbarrowHaul,
+                            state: super::upsert::request_state_for_workers(workers),
                         },
-                        TransportRequestState::Pending,
-                        TransportPolicy::default(),
-                    ));
+                    );
                 } else if workers == 0 {
                     commands.entity(req_entity).try_despawn();
                 } else {
-                    super::upsert::disable_request(&mut commands, req_entity);
-                    commands.entity(req_entity).try_insert(TransportDemand {
-                        desired_slots: 0,
-                        inflight,
-                    });
+                    super::upsert::disable_request_if_needed(
+                        &mut commands,
+                        req_entity,
+                        current,
+                        Some(inflight),
+                    );
                 }
             }
             _ => {}
@@ -223,13 +223,36 @@ mod tests {
 
         app.update();
 
-        let mut requests = app.world_mut().query::<&TransportRequest>();
-        let anchors = requests
+        let mut requests = app.world_mut().query::<(Entity, &TransportRequest)>();
+        let matching = requests
             .iter(app.world())
-            .filter(|request| request.kind == TransportRequestKind::ReturnWheelbarrow)
-            .map(|request| request.anchor)
+            .filter(|(_, request)| request.kind == TransportRequestKind::ReturnWheelbarrow)
+            .map(|(entity, request)| (entity, request.anchor))
+            .collect::<Vec<_>>();
+        let anchors = matching
+            .iter()
+            .map(|(_, anchor)| *anchor)
             .collect::<Vec<_>>();
         assert!(!anchors.contains(&pending_wheelbarrow));
         assert_eq!(anchors, vec![live_wheelbarrow]);
+
+        let request_entity = matching[0].0;
+        app.world_mut().clear_trackers();
+        app.update();
+
+        let request = app.world().entity(request_entity);
+        assert!(!request.get_ref::<Transform>().unwrap().is_changed());
+        assert!(!request.get_ref::<Designation>().unwrap().is_changed());
+        assert!(!request.get_ref::<ManagedBy>().unwrap().is_changed());
+        assert!(!request.get_ref::<TaskSlots>().unwrap().is_changed());
+        assert!(!request.get_ref::<TransportRequest>().unwrap().is_changed());
+        assert!(!request.get_ref::<TransportDemand>().unwrap().is_changed());
+        assert!(
+            !request
+                .get_ref::<TransportRequestState>()
+                .unwrap()
+                .is_changed()
+        );
+        assert!(!request.get_ref::<TransportPolicy>().unwrap().is_changed());
     }
 }

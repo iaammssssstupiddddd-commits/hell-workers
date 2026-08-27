@@ -79,7 +79,22 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   - `StoredByMixer(Entity)`: MudMixer に格納されている
 - これにより、運搬されずに放置された余剰な中間素材が自動的にクリーンアップされます。
 
-### 1.5 TransportRequest
+### 1.5 地面資材のスタック表示
+
+- 表示対象は `Visibility::Visible` または `Visibility::Inherited` の `ResourceItem` だけで、
+  同じ `(grid, ResourceType)` ごとに Entity bits が最小の1個を代表表示する。残りのSpriteは
+  alpha 0にするが、`Visibility`自体は変更しない。
+- `ResourceStackIndex` はEntityごとの直前membership、bucket member、grid内の全資材数をruntime-onlyで保持する。
+  Transform、Visibility、ResourceTypeの変更とcomponent removalから旧・新bucketだけをdirtyにし、代表alphaと
+  250 ms cadenceの個数ラベルが同じ集計値を読む。
+- Hidden化、membership離脱、Sprite追加時は対象自身のalphaを1へ戻す。代表の移動・非表示・削除時は、
+  残ったmemberから同じtie-breakで次の代表を選ぶ。
+- indexは保存しない。startupとworld replacementのreset inventoryで空にし、次のVisual passでlive entityから再構築する。
+- 現段階ではBevyの`Changed` filterによるmatching archetype検査は残る。従来の毎Visual frameの全Sprite走査と
+  一時HashSet / HashMap生成は除去済みだが、完全なaffected-entity駆動化は各resource writerからのsemantic dirty edgeを
+  導入する後続candidateとして扱う。
+
+### 1.6 TransportRequest
 - `TransportRequest { kind, anchor, resource_type, issued_by, priority, stockpile_group }`
 - `TransportDemand { desired_slots, inflight }`
 - `desired_slots` は request が同時に持てる worker の総 ceiling、`inflight` は既存 request に付いた
@@ -89,7 +104,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
   - `Pending` / `Claimed`
 - request エンティティには通常 `Designation`, `ManagedBy`, `TaskSlots`, `Priority` も付与されます。
 
-### 1.6 セーブ／ロード境界
+### 1.7 セーブ／ロード境界
 
 - durable: request本体、`Designation`、`ManagedBy` / `ManagedTasks`、`ParkedAt` /
   `ParkedWheelbarrows`、wheelbarrowの`BelongsTo`。`LoadedIn` / `LoadedItems`もremap済みcarrier位置を
@@ -119,7 +134,7 @@ Source 側のみ手動操作し、Target 側は Bevy が自動更新する（tas
    - `CachedStockpileGroups` は membership と位置だけを保持する。policy 値、stored、incoming は live demand の正本にせず、変更のない tick では generation を進めない
    - `CachedActiveFamiliars` / `CachedActiveYards` / `CachedStockpileGroups` は全 producer が共有参照し、producer ごとの Vec / group 再構築を排除する
    - ⚠️ `task_area_auto_haul_system` と `stockpile_consolidation_producer_system` は `Decide` で `CachedStockpileGroups` を **読むだけ**にする。両 system が個別に `build_stockpile_groups` を呼ぶと同一フレームで重複構築になるため、Perceive の cache を経由すること
-2. `Decide`（各 producer が request を upsert）
+2. `Decide`（logistics crate所有の各 producer が request を upsert。root所有の`SoulSpa` producerは既存energy chain内でupsertする）
 3. `Arbitrate`（手押し車仲裁 — 後述 §5.2）
 4. `Execute`（`Changed<TaskWorkers>` に応じた state 同期）— worker がいる request は `Claimed`、target が残ったまま空になった request は `Pending` に遷移
 5. `Reconcile`（Soul AI の `Execute` 後）— `WorkingOn` source の削除を適用してから、Relationship hook が内部 queue に積んだ空 `TaskWorkers` target の削除も適用する。`RemovedComponents<TaskWorkers>` を全件消費し、現存する worker なし request を同じ `Update` で `Pending` に戻す
@@ -285,6 +300,19 @@ assignment arbitrationが新しいrequest/workerを追加しない。既存in-fl
 - 割り当て時に、エリア内の有効タンクと利用可能バケツを遅延解決して搬送。
 - 実行フェーズは内部的に `BucketTransport` の共通表現へ収束し、Tank→Mixer / River→Tank の流れを共通ハンドラで解釈する。
 
+#### 自動精製のactivity集計
+
+- `RefineActivityIndex`はSoulごとの直前`AssignedTask::Refine`寄与を保持し、mixer別のassigned countと
+  `RefinePhase::Refining` countを差分同期する。progressだけの変更はcountを更新しない。
+- auto-refineは前frameのExecute後に確定したassigned countをDecideで読む。GoingToMixer / Refining / Doneの
+  いずれかが1件以上、または`TaskWorkers`がnon-emptyなら新しいDesignationを発行しない。index初期化前だけ
+  fail-closedに全AssignedTaskを1回集計する。
+- task execution後にindexを同期し、その後にvisual mirrorへ反映する。`MudMixerVisualState::is_active`は
+  refining countだけを読み、GoingToMixerやDoneでは点灯しない。visual更新はsemantic contributionが変わったmixerと
+  `MudMixerVisualState`追加entityだけを対象にし、全mixer走査は行わない。
+- indexはruntime-onlyで、WorldEpoch変更とload resetで全件再構築する。Soul despawn、AssignedTask removal、
+  mixer変更、複数workerはcountとして処理する。
+
 ### 4.5 バケツ返却 (`ReturnBucket`)
 - 返却対象は「地面上のバケツ（`BucketEmpty` / `BucketWater`、`StoredIn` なし）」のみ。
 - request は **タンクごとに最大1件**（`anchor = tank`）を維持する。
@@ -328,7 +356,8 @@ assignment arbitrationが新しいrequest/workerを追加しない。既存in-fl
 - `floor_construction_auto_haul_system` が site ごとに不足資材を算出し request を upsert。
 - Reinforcing フェーズでは `Bone`、Pouring フェーズでは `StasisMud` を要求。
 - 搬入先は常に `FloorConstructionSite.material_center`。
-- `floor_material_delivery_sync_system` が `material_center` 周辺の資材を消費し、各タイルの `bones_delivered` / `mud_delivered` を進める。
+- `floor_material_delivery_sync_system` が `material_center` 周辺の資材を消費し、`TileSiteIndex`の当該site memberだけを
+  読んで各タイルの `bones_delivered` / `mud_delivered` を進める。全Floor tileの再group化は行わない。
 - Familiar 割り当て時と wheelbarrow 荷下ろし時の両方で、待機中タイルの残数から `IncomingDeliveries` / 当フレーム予約分を差し引いた残需要を再確認する。
 - `Bone` は以下の優先順で解決される:
   1. 地面アイテムを通常 `Haul` で搬送
@@ -337,7 +366,8 @@ assignment arbitrationが新しいrequest/workerを追加しない。既存in-fl
 ### 4.9 仮設壁搬入 (`DeliverToProvisionalWall`)
 - `provisional_wall_auto_haul_system` が `BuildingType::Wall && is_provisional` の壁を走査し、`ProvisionalWall.mud_delivered == false` の壁に request を upsert。
 - request の anchor は壁エンティティで、割り当て時に `StasisMud` ソースを遅延解決する。
-- `provisional_wall_material_delivery_sync_system` が壁近傍へ落ちた `StasisMud` を消費して `mud_delivered = true` に更新する。
+- `provisional_wall_material_delivery_sync_system` が`ResourceSpatialGrid`から壁近傍へ落ちた `StasisMud` を選び、
+  `mud_delivered = true` に更新する。等距離ではEntity bits最小を選ぶ。
 - 割り当て時と荷下ろし時の両方で「まだ泥未搬入か」を確認し、充足済み壁への重複搬入を防ぐ。
 - `provisional_wall_designation_system` が準備完了した壁へ `WorkType::CoatWall` を付与し、塗布タスクへ遷移させる。
 - 互換レイヤーとして残存しており、`WallConstructionSite` 配下で管理される壁タイル実体（`spawned_wall`）は対象から除外される。
@@ -347,9 +377,15 @@ assignment arbitrationが新しいrequest/workerを追加しない。既存in-fl
 - `Framing` フェーズでは `Wood`、`Coating` フェーズでは `StasisMud` を要求。
 - `Site` 内の `WallConstructionSite` は `PairedYard` の Yard を construction owner 候補に含め、Familiar が Idle でも Wood request を維持する。
 - 搬入先は常に `WallConstructionSite.material_center`。
-- `wall_material_delivery_sync_system` が `material_center` 周辺の資材を消費し、各タイルの `wood_delivered` / `mud_delivered` を更新する。
+- `wall_material_delivery_sync_system` が `material_center` 周辺の資材を消費し、`TileSiteIndex`の当該site memberだけを
+  読んで各タイルの `wood_delivered` / `mud_delivered` を更新する。全Wall tileの再group化は行わない。
 - 割り当て時と wheelbarrow 荷下ろし時に、対象 phase の残需要を再確認して不要な資材を搬入先へ置かない。
 - `wall_tile_designation_system` が `FramingReady -> WorkType::FrameWallTile`、`CoatingReady -> WorkType::CoatWall` を付与する。
+
+床、壁、仮設壁のmaterial deliveryは同じUpdate内で共有する
+`ConstructionMaterialConsumptionShadow`を使い、床→壁→仮設壁の安定順で処理する。先行targetが消費予約した
+Resource Entityを後続targetは候補から外すため、Commandsのdeferred despawn前でも1個を二重計上しない。
+shadowは各delivery cycle開始時とworld replacement時にclearし、保存しない。
 
 ### 4.11 Soul Spa 建設搬入 (`DeliverToSoulSpa`)
 - `soul_spa_auto_haul_system` が `SoulSpaPhase::Constructing` のサイトを走査し、残 Bone 需要を算出して request を upsert。
@@ -469,7 +505,21 @@ WheelbarrowLease {
 
 #### 5.2.6 メトリクス
 
-`TransportRequestMetrics` に `wheelbarrow_leases_active`, `wb_arb_*`（eligible/topk/dedup/pending/duration/elapsed）, `task_area_*`（groups/scanned/matched/elapsed）を追加。5秒間隔のデバッグログに出力。
+最新frameの計測値は、writerごとに`WheelbarrowArbitrationMetrics`、`TaskAreaMetrics`、
+`FloorMaterialSyncMetrics`、`WallMaterialSyncMetrics`へ分離する。producer / arbitrationが単一`ResMut`を
+共有してscheduleを直列化しない。旧`TransportRequestMetrics`の全request件数・state集計はproduction consumerが
+存在しなかったため、毎frameの全request scanごと削除した。
+
+自動producerは既存requestのactual snapshotとproducer-owned projectionを比較し、Transform、Visibility、
+Designation、ManagedBy、TaskSlots、Priority、target marker、TransportRequest、TransportDemand、state、policyのうち
+欠落または意味が異なるcomponentだけをdeferred queueへ積む。disableも既にないactivation componentをremoveせず、
+同値Demandを再挿入しない。`WheelbarrowLease`、pending時刻、manual sourceなどのruntime-owned componentは共通helperの
+対象外である。target別queryは`With<TTarget> OR Added<TransportRequest>`へ絞り、通常frameで他kindを全走査せず、
+新規・rehydrate直後のtarget欠落だけを修復できる。
+
+`profiling` buildでは、logistics crate所有producerのdeferred command適用後に通常collectorを実行し、root所有の`SoulSpa`だけは既存energy pipeline内の専用`ApplyDeferred`後に専用collectorを実行する。両collectorはkindを分担するため二重計上せず、`observer_runs`は通常collectorの1回/frameを正本とする。producerを別setへ重複所属させたりcross-set edgeを追加したりしないため、production scheduleの既存chainを変えない。各collectorは`TransportRequest`のAdded / changed-existing change tickを種別ごとに累積し、前frameのproducer-owned component snapshotから`spawn`、欠落componentの修復、semantic update、disable update、同値write、change tickなしのsteady observationへ分類する。manual requestは自動producerの観測対象から除外する。component削除は現frameの`Ref<T>`だけでは検出できないため、snapshotからの存在差で判定する。
+
+collectorは通常producerのfield ownerではなく、component内容も変更しない。各producerへ共有`ResMut`を追加せず、`construction` / `task-dashboard`のframe-time artifactは`transport_request_changes.csv` schema v2へmeasure区間だけを出力する。warm-up終端のresetは累積counterだけを消し、比較元snapshotは保持するため、既存requestをmeasure開始時のspawnとして誤計上しない。通常buildにはcollector/resource/sidecarを登録せず、全件snapshot走査も行わない。
 
 #### 5.2.7 latest-only 診断
 
@@ -576,6 +626,8 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
 ### 8.3 予約の責務を統一
 - **搬入先予約**: タスク割り当て時に `DeliveringTo` が自動挿入される。手動で `ResourceReservationOp` を発行する必要はない。
 - **ソース予約**: 「割り当て時」に `ResourceReservationOp::ReserveSource` で付与し、成功・失敗・中断の全経路で解放する。
+- source identityは`ResourceSourceKey`へ統一する。item/pile/wheelbarrow/tank等のdurable ECS sourceは`Entity(Entity)`、Sand/River terrainは`Terrain { grid, resource_type }`を使い、予約・task payload・lifecycle再構築・解放で同じkeyを渡す。
+- terrain直接収集はpile候補を先に評価し、terrain fallbackでは`WorldMap.tiles`をrow-majorに走査する。TaskArea内→全体fallbackを維持し、Loading直前にgrid範囲とterrain/resource対応を再検証する。
 - pickup前の`Unreachable`やroster解除も同じ中断契約を通し、source予約と`DeliveringTo`の片方だけを残してはならない。
 - タスク実行でソース取得が成功したら `RecordPickedSource` を使う。
 - 共有ソース（例: tank 取水）は `ReserveSource` で排他を取る。

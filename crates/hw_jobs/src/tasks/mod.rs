@@ -202,7 +202,7 @@ impl AssignedTask {
             AssignedTask::HaulToMixer(data) => data.item == entity || data.mixer == entity,
             AssignedTask::HaulWithWheelbarrow(data) => {
                 data.wheelbarrow == entity
-                    || data.collect_source == Some(entity)
+                    || data.collect_source.and_then(|source| source.entity_id()) == Some(entity)
                     || data.items.contains(&entity)
                     || match data.destination {
                         hw_core::logistics::WheelbarrowDestination::Stockpile(target)

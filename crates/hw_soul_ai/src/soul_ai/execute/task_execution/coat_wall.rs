@@ -131,7 +131,7 @@ fn handle_legacy_coat_wall_task(
         }
         CoatWallPhase::Done => {
             ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                source: wall_entity,
+                source: wall_entity.into(),
                 amount: 1,
             });
             return ctx.complete_task(commands, "legacy coat wall done");
@@ -323,7 +323,7 @@ pub fn handle_coat_wall_task(
         }
         CoatWallPhase::Done => {
             ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                source: tile_entity,
+                source: tile_entity.into(),
                 amount: 1,
             });
             return ctx.complete_task(commands, "coat wall done");

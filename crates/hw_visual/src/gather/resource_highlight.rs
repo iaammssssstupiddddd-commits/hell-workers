@@ -105,6 +105,42 @@ pub fn cleanup_resource_visual_system(
             sprite_copy.color = original_color;
             commands.entity(entity).try_insert(sprite_copy);
         }
-        commands.entity(entity).remove::<ResourceVisual>();
+        commands.entity(entity).try_remove::<ResourceVisual>();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn queue_resource_despawn(mut commands: Commands, query: Query<Entity, With<ResourceVisual>>) {
+        for entity in query.iter() {
+            commands.entity(entity).try_despawn();
+        }
+    }
+
+    #[test]
+    fn cleanup_tolerates_a_resource_despawn_queued_in_the_same_frame() {
+        let mut app = App::new();
+        app.set_error_handler(bevy::ecs::error::panic);
+        app.add_systems(
+            Update,
+            (queue_resource_despawn, cleanup_resource_visual_system).chain_ignore_deferred(),
+        );
+        let resource = app
+            .world_mut()
+            .spawn((
+                ResourceVisual {
+                    state: ResourceHighlightState::Normal,
+                    pulse_animation: None,
+                    original_color: Some(Color::WHITE),
+                },
+                Sprite::default(),
+            ))
+            .id();
+
+        app.update();
+
+        assert!(app.world().get_entity(resource).is_err());
     }
 }

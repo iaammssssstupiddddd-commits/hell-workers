@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use hw_core::events::{ResourceReservationOp, ResourceReservationRequest};
-use hw_core::logistics::ResourceType;
+use hw_core::logistics::{ResourceSourceKey, ResourceType};
 use std::collections::HashMap;
 
 /// システム全体で共有されるリソース予約キャッシュ
@@ -15,7 +15,7 @@ pub struct SharedResourceCache {
 
     /// リソース/タンクからの取り出し予約数 (Source Reservation)
     /// Entity -> 取り出し予定数
-    source_reservations: HashMap<Entity, usize>,
+    source_reservations: HashMap<ResourceSourceKey, usize>,
 
     /// このフレームで格納された数（コンポーネント未反映分）
     /// Entity -> 格納数
@@ -23,7 +23,7 @@ pub struct SharedResourceCache {
 
     /// このフレームで取り出された数（コンポーネント未反映分）
     /// Entity -> 取り出し数
-    frame_picked_count: HashMap<Entity, usize>,
+    frame_picked_count: HashMap<ResourceSourceKey, usize>,
 
     /// Advances only when a reservation or logical availability changes.
     semantic_generation: u64,
@@ -46,7 +46,7 @@ impl SharedResourceCache {
     pub fn replace_reservation_snapshot(
         &mut self,
         mixer_dest_reservations: HashMap<(Entity, ResourceType), usize>,
-        source_reservations: HashMap<Entity, usize>,
+        source_reservations: HashMap<ResourceSourceKey, usize>,
     ) {
         let changed = self.mixer_dest_reservations != mixer_dest_reservations
             || self.source_reservations != source_reservations;
@@ -94,16 +94,18 @@ impl SharedResourceCache {
     }
 
     /// リソース取り出し予約を追加 (Source Reservation)
-    pub fn reserve_source(&mut self, source: Entity, amount: usize) {
+    pub fn reserve_source(&mut self, source: impl Into<ResourceSourceKey>, amount: usize) {
         if amount == 0 {
             return;
         }
+        let source = source.into();
         *self.source_reservations.entry(source).or_insert(0) += amount;
         self.bump_semantic_generation();
     }
 
     /// リソース取り出し予約を解除
-    pub fn release_source(&mut self, source: Entity, amount: usize) {
+    pub fn release_source(&mut self, source: impl Into<ResourceSourceKey>, amount: usize) {
+        let source = source.into();
         if let Some(count) = self.source_reservations.get_mut(&source) {
             let previous = *count;
             *count = count.saturating_sub(amount);
@@ -117,7 +119,8 @@ impl SharedResourceCache {
     }
 
     /// リソース取り出し予約数を取得（予約済み + このフレームで取得済み）
-    pub fn get_source_reservation(&self, source: Entity) -> usize {
+    pub fn get_source_reservation(&self, source: impl Into<ResourceSourceKey>) -> usize {
+        let source = source.into();
         let reserved = self.source_reservations.get(&source).cloned().unwrap_or(0);
         let picked = self.frame_picked_count.get(&source).cloned().unwrap_or(0);
         reserved + picked
@@ -128,8 +131,9 @@ impl SharedResourceCache {
     /// Root-owned world transactions use this after exact worker cleanup so a
     /// stale reservation cannot survive until the next perceive rebuild.
     pub fn clear_owner_reservations(&mut self, owner: Entity) -> bool {
-        let removed_source = self.source_reservations.remove(&owner).is_some();
-        let removed_picked = self.frame_picked_count.remove(&owner).is_some();
+        let owner_source = ResourceSourceKey::entity(owner);
+        let removed_source = self.source_reservations.remove(&owner_source).is_some();
+        let removed_picked = self.frame_picked_count.remove(&owner_source).is_some();
         let removed_stored = self.frame_stored_count.remove(&owner).is_some();
         let destinations_before = self.mixer_dest_reservations.len();
         self.mixer_dest_reservations
@@ -146,10 +150,11 @@ impl SharedResourceCache {
 
     /// 取得アクション成功を記録 (Delta Update)
     /// ソース予約を減らし、フレーム内取得数を増やす（論理在庫減少）
-    pub fn record_picked_source(&mut self, source: Entity, amount: usize) {
+    pub fn record_picked_source(&mut self, source: impl Into<ResourceSourceKey>, amount: usize) {
         if amount == 0 {
             return;
         }
+        let source = source.into();
         self.release_source(source, amount);
         *self.frame_picked_count.entry(source).or_insert(0) += amount;
         self.bump_semantic_generation();
@@ -217,9 +222,9 @@ mod tests {
         let source = Entity::PLACEHOLDER;
         let mut cache = SharedResourceCache::default();
 
-        cache.replace_reservation_snapshot(HashMap::new(), HashMap::from([(source, 3)]));
+        cache.replace_reservation_snapshot(HashMap::new(), HashMap::from([(source.into(), 3)]));
         cache.record_picked_source(source, 1);
-        cache.replace_reservation_snapshot(HashMap::new(), HashMap::from([(source, 5)]));
+        cache.replace_reservation_snapshot(HashMap::new(), HashMap::from([(source.into(), 5)]));
 
         assert_eq!(cache.get_source_reservation(source), 6);
     }
@@ -229,7 +234,7 @@ mod tests {
         let source = Entity::PLACEHOLDER;
         let mut cache = SharedResourceCache::default();
 
-        cache.replace_reservation_snapshot(HashMap::new(), HashMap::from([(source, 3)]));
+        cache.replace_reservation_snapshot(HashMap::new(), HashMap::from([(source.into(), 3)]));
         cache.record_picked_source(source, 1);
         cache.begin_frame();
 
@@ -244,6 +249,18 @@ mod tests {
         cache.begin_frame();
 
         assert_eq!(cache.semantic_generation(), before);
+    }
+
+    #[test]
+    fn terrain_source_reservations_are_keyed_by_grid_and_resource_type() {
+        let mut cache = SharedResourceCache::default();
+        let sand = ResourceSourceKey::terrain((3, 5), ResourceType::Sand);
+        let bone = ResourceSourceKey::terrain((3, 5), ResourceType::Bone);
+
+        cache.reserve_source(sand, 1);
+
+        assert_eq!(cache.get_source_reservation(sand), 1);
+        assert_eq!(cache.get_source_reservation(bone), 0);
     }
 
     #[test]

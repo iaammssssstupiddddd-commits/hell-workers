@@ -155,7 +155,7 @@ pub fn handle_gather_task(
                         .remove::<hw_core::relationships::WorkingOn>();
 
                     ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                        source: target,
+                        source: target.into(),
                         amount: 1,
                     });
 

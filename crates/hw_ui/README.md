@@ -136,6 +136,8 @@ launcher、header/footer、entry shortcut接頭辞のcopyとshortcutはrootが`H
 task dashboard は focus行とaction barをsiblingとして生成し、nested `Button` を作らない。filter/sortと
 inline confirmationはruntime stateで、capture開始・選択/タブ変更・world replacementでresetする。
 ゲームownerのcapability判定、live再検証、priority/cancel適用はroot adapterが所有する。
+`TaskListBody`は非scrollのclip表示なので、rootが最大パネル高からresident行上限を計算し、renderは
+filter/sort後の完全に不可視な末尾row Nodeを生成しない。全件数とgroup countは全snapshotを正本にする。
 
 Stockpile editorは`StockpileInspectionFields`から現在値を表示し、全選択・全解除・全資材の静的2列チェックリストを
 button操作として`UiIntent`へ発行するだけでdomain componentを直接変更しない。チェック行は毎frame生成せず、

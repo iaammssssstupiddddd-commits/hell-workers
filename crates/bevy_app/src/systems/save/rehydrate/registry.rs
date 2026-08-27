@@ -693,6 +693,7 @@ mod tests {
                 "soul-spa.normalize",
                 "stockpile.policy",
                 "transport-request.targets",
+                "world-map.tile-anchors",
                 "task-logistics.runtime",
                 "deconstruction.runtime",
                 "presentation.shells",

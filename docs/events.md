@@ -72,7 +72,7 @@ dual 通知の Producer は `publish_*` helper を使う。
 | イベント | 定義 | 主な送信元 | 受信・適用システム | 内容 |
 |:---|:---|:---|:---|:---|
 | `TaskAssignmentRequest` | `Message` | `familiar_task_delegation_system` | `apply_task_assignment_requests` (Execute) | Soul へのタスク割り当て。`WorkingOn`・`CommandedBy`・`DeliveringTo` を設定 |
-| `ResourceReservationRequest` | `Message` | `unassign_task` / task handler の `TaskExecutionContext::queue_reservation` | `hw_logistics::apply_reservation_requests_system`（Execute） | `ResourceReservationOp` の適用。予約解放と `RecordPickedSource` によるソース取得差分記録など |
+| `ResourceReservationRequest` | `Message` | `unassign_task` / task handler の `TaskExecutionContext::queue_reservation` | `hw_logistics::apply_reservation_requests_system`（Execute） | `ResourceReservationOp` の適用。sourceは`ResourceSourceKey`（durable ECS entityまたはterrain grid/resource）で識別し、予約解放と`RecordPickedSource`による取得差分を同じkeyで記録する |
 | `DesignationRequest` | `Message` | request producer / UI | `apply_designation_requests` (Execute) | `Designation` の発行 |
 | `SquadManagementRequest` | `Message` | Familiar AI decide 層 | Squad 管理システム | 分隊メンバーの追加・解放 |
 | `IdleBehaviorRequest` | `Message` | Soul AI decide 層 | アイドル行動システム | 集会参加・離脱・休憩所予約 等 |

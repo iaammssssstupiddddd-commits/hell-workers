@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 
 use hw_core::relationships::TaskWorkers;
+use hw_jobs::WorkType;
 use hw_jobs::mud_mixer::TargetMixer;
-use hw_jobs::{Designation, WorkType};
 
-use crate::transport_request::producer::upsert::{self, SpawnRequestSpec, UpsertRequestSpec};
-use crate::transport_request::{TransportRequest, TransportRequestKind};
+use crate::transport_request::producer::upsert::{self, SemanticRequestSpec, SpawnRequestSpec};
+use crate::transport_request::{TransportPriority, TransportRequest, TransportRequestKind};
 use crate::types::ResourceType;
 
 type MixerRequestsQuery<'w, 's> = Query<
@@ -13,11 +13,12 @@ type MixerRequestsQuery<'w, 's> = Query<
     's,
     (
         Entity,
-        &'static TargetMixer,
+        Option<&'static TargetMixer>,
         &'static TransportRequest,
-        Option<&'static Designation>,
         Option<&'static TaskWorkers>,
+        upsert::ExistingRequestRuntime<'static>,
     ),
+    Or<(With<TargetMixer>, Added<TransportRequest>)>,
 >;
 
 pub(crate) fn upsert_mixer_requests(
@@ -76,13 +77,11 @@ fn upsert_mixer_requests_by_kind(
     seen_existing_keys: &mut std::collections::HashSet<(Entity, ResourceType)>,
     expected_kind: TransportRequestKind,
 ) {
-    for (request_entity, target_mixer, request, _designation, workers_opt) in
-        q_mixer_requests.iter()
-    {
+    for (request_entity, target_mixer, request, workers_opt, current) in q_mixer_requests.iter() {
         if request.kind != expected_kind {
             continue;
         }
-        let key = (target_mixer.0, request.resource_type);
+        let key = (request.anchor, request.resource_type);
         if !mixer_request_resource_matches(key.1, expected_kind) {
             continue;
         }
@@ -100,29 +99,37 @@ fn upsert_mixer_requests_by_kind(
 
         if let Some((issued_by, slots, mixer_pos)) = desired_requests.get(&key) {
             let (work_type, kind, _) = mixer_request_profile(key.1);
-            upsert::upsert_transport_request(
+            if target_mixer.is_none_or(|current| current.0 != key.0) {
+                commands
+                    .entity(request_entity)
+                    .try_insert(TargetMixer(key.0));
+            }
+            upsert::update_request_runtime_if_needed(
                 commands,
                 request_entity,
-                UpsertRequestSpec {
+                request,
+                current,
+                SemanticRequestSpec {
                     key,
                     site_pos: *mixer_pos,
                     issued_by: *issued_by,
                     desired_slots: *slots,
-                    inflight: 0,
+                    inflight: super::super::to_u32_saturating(workers),
                     priority: 5,
-                    target: TargetMixer(key.0),
+                    transport_priority: TransportPriority::Normal,
                     kind,
                     work_type,
+                    state: upsert::request_state_for_workers(workers),
                 },
             );
             continue;
         }
 
         if workers == 0 {
-            if !active_mixers.contains(&target_mixer.0) {
+            if !active_mixers.contains(&request.anchor) {
                 commands.entity(request_entity).try_despawn();
             } else {
-                upsert::disable_request(commands, request_entity);
+                upsert::disable_request_if_needed(commands, request_entity, current, None);
             }
         }
     }

@@ -178,7 +178,7 @@ fn try_direct_collect_with_wheelbarrow_to_mixer(
     issue_collect_sand_with_wheelbarrow_to_mixer(
         WheelbarrowCollectSpec {
             wheelbarrow: wb_entity,
-            source_entity,
+            source: source_entity,
             source_pos,
             destination: mixer_entity,
             amount,

@@ -6,7 +6,8 @@ pub use hw_logistics::transport_request::components::{
 pub use hw_logistics::transport_request::kinds::TransportRequestKind;
 pub use hw_logistics::transport_request::lifecycle::transport_request_anchor_cleanup_system;
 pub use hw_logistics::transport_request::metrics::{
-    TransportRequestMetrics, transport_request_metrics_system,
+    FloorMaterialSyncMetrics, TaskAreaMetrics, WallMaterialSyncMetrics,
+    WheelbarrowArbitrationMetrics,
 };
 pub use hw_logistics::transport_request::plugin::{TransportRequestPlugin, TransportRequestSet};
 pub use hw_logistics::transport_request::state_machine::transport_request_state_sync_system;

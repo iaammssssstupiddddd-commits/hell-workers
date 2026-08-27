@@ -61,9 +61,9 @@ fn load_settings_system(
         // 計測はローカルの settings.ron にある一時停止・倍速設定の影響を受けない。
         time.set_relative_speed(1.0);
         if config.freezes_fixture_setup() {
-            // fixed-step audit と初期 checksum を横断比較する fixture は、
-            // fixture checkpoint が採れた後に capture system が明示的に unpause する。
-            // Startup から最初の Update までのゲーム更新を混入させないための gate。
+            // 全profiling fixtureは、初期checkpointが採れた後にcapture systemが
+            // 明示的にunpauseする。Startupから最初のUpdateまでの可変delta更新を
+            // initial checksumへ混入させないためのgate。
             time.pause();
         } else {
             time.unpause();

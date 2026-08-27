@@ -2,7 +2,6 @@ use bevy::prelude::*;
 use bevy::ui_render::prelude::MaterialNode;
 use hw_core::constants::*;
 use rand::Rng;
-use rand::rngs::ThreadRng;
 
 use super::super::super::components::DreamGainUiParticle;
 use super::super::super::dream_bubble_material::DreamBubbleUiMaterial;
@@ -35,9 +34,9 @@ pub(super) struct StandardInput {
     pub current_pos: Vec2,
 }
 
-pub(super) struct ParticleState<'a> {
+pub(super) struct ParticleState<'a, R: Rng + ?Sized> {
     pub particle: &'a mut DreamGainUiParticle,
-    pub rng: &'a mut ThreadRng,
+    pub rng: &'a mut R,
 }
 
 pub(super) struct NodeVisuals<'a> {
@@ -52,9 +51,9 @@ pub(super) struct TrailTimingCtx {
     pub ui_bubble_layer: Option<Entity>,
 }
 
-pub(super) fn update_standard_particle(
+pub(super) fn update_standard_particle<R: Rng + ?Sized>(
     input: StandardInput,
-    state: ParticleState<'_>,
+    state: ParticleState<'_, R>,
     visuals: NodeVisuals<'_>,
     handles: &DreamBubbleUiHandles,
     ui_bubble_layer: Option<Entity>,
@@ -115,7 +114,7 @@ fn compute_standard_particle_forces(
     viewport_size: Vec2,
     current_pos: Vec2,
     particle: &mut DreamGainUiParticle,
-    rng: &mut ThreadRng,
+    rng: &mut (impl Rng + ?Sized),
 ) -> StandardParticleForces {
     let buoyancy_ratio = (1.0 - (particle.time_alive / 1.5)).max(0.0);
     let buoyancy = Vec2::new(0.0, -DREAM_UI_BUOYANCY * buoyancy_ratio);

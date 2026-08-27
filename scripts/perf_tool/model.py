@@ -43,6 +43,84 @@ INDOOR_LIGHT_PRESENTATION_SCHEMA_VERSION = "1"
 INDOOR_LIGHT_FIELD_SCHEMA_VERSION = 1
 INDOOR_LIGHT_CONSUMER_PROOF_SCHEMA_VERSION = 1
 DECONSTRUCTION_FIXTURE_SCHEMA_VERSION = "2"
+TRANSPORT_REQUEST_CHANGES_SCHEMA_VERSION = "2"
+TRANSPORT_REQUEST_CHANGE_COLUMNS = (
+    "schema_version",
+    "request_kind",
+    "observer_runs",
+    "changed_components",
+    "added_components",
+    "changed_existing_components",
+    "producer_observations",
+    "producer_spawns",
+    "producer_missing_repairs",
+    "producer_semantic_updates",
+    "producer_disable_updates",
+    "producer_no_op_writes",
+    "producer_steady_observations",
+)
+TRANSPORT_REQUEST_KIND_NAMES = (
+    "deposit-to-stockpile",
+    "deliver-to-blueprint",
+    "deliver-to-floor-construction",
+    "deliver-to-wall-construction",
+    "deliver-to-provisional-wall",
+    "deliver-to-mixer-solid",
+    "deliver-water-to-mixer",
+    "gather-water-to-tank",
+    "return-bucket",
+    "return-wheelbarrow",
+    "batch-wheelbarrow",
+    "consolidate-stockpile",
+    "deliver-to-soul-spa",
+)
+SPATIAL_QUERY_METRICS_SCHEMA_VERSION = "1"
+SPATIAL_QUERY_METRICS_COLUMNS = (
+    "schema_version",
+    "tag",
+    "caller",
+    "radius_band",
+    "radius_px",
+    "queries",
+    "invalid_queries",
+    "coordinate_probes",
+    "occupied_buckets",
+    "bucket_members_examined",
+    "exact_hits",
+    "position_fallbacks",
+)
+SPATIAL_QUERY_METRICS_CONTRACTS = {
+    "path-door": (
+        ("door-open", "small-le-64", "48"),
+        ("door-close", "small-le-64", "48"),
+    ),
+    "gather": (("gather-recruitment", "medium-le-320", "240"),),
+}
+DREAM_UI_METRICS_SCHEMA_VERSION = "2"
+DREAM_UI_METRICS_COLUMNS = (
+    "schema_version",
+    "workload",
+    "target_active_particles",
+    "measured_frames",
+    "active_particle_updates",
+    "merge_pair_comparisons",
+    "node_writes",
+    "ui_transform_writes",
+    "particle_spawns",
+    "particle_despawns",
+    "trail_spawns",
+    "trail_despawns",
+    "scoped_allocator_available",
+    "scoped_alloc_calls",
+    "scoped_alloc_bytes",
+    "dream_lane_elapsed_ns",
+    "dream_lane_p95_ns",
+    "dream_lane_sample_overflow",
+    "rng_sequence_checksum",
+    "trajectory_checksum",
+    "lifetime_checksum",
+    "maximum_active_particles",
+)
 DECONSTRUCTION_FIXTURE_COLUMNS = (
     "schema_version",
     "initial_completed_buildings",
@@ -496,6 +574,7 @@ class Validation:
     p02_presentation: dict[str, str] | None = None
     deconstruction_fixture: dict[str, str] | None = None
     save_transaction: dict[str, str] | None = None
+    dream_ui_metrics: dict[str, str] | None = None
     timeline: list[dict[str, Any]] | None = None
     behavior_save_artifact: dict[str, Any] | None = None
     profile_artifact: dict[str, Any] | None = None
@@ -524,6 +603,7 @@ class Validation:
             "p02_presentation": self.p02_presentation,
             "deconstruction_fixture": self.deconstruction_fixture,
             "save_transaction": self.save_transaction,
+            "dream_ui_metrics": self.dream_ui_metrics,
             "timeline": self.timeline,
             "behavior_save_artifact": self.behavior_save_artifact,
             "profile_artifact": self.profile_artifact,

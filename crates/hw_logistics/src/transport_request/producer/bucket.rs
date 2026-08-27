@@ -90,6 +90,7 @@ pub struct BucketAutoHaulParams<'w, 's> {
             Entity,
             &'static TransportRequest,
             Option<&'static TaskWorkers>,
+            super::upsert::ExistingRequestRuntime<'static>,
         ),
     >,
     pub q_move_planned: Query<'w, 's, (), With<MovePlanned>>,
@@ -177,7 +178,7 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
     }
 
     let mut seen_existing = std::collections::HashSet::<Entity>::new();
-    for (request_entity, request, workers_opt) in p.q_bucket_requests.iter() {
+    for (request_entity, request, workers_opt, current) in p.q_bucket_requests.iter() {
         if request.kind != TransportRequestKind::ReturnBucket {
             continue;
         }
@@ -194,11 +195,12 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
             if workers == 0 {
                 commands.entity(request_entity).try_despawn();
             } else {
-                super::upsert::disable_request(&mut commands, request_entity);
-                commands.entity(request_entity).try_insert(TransportDemand {
-                    desired_slots: 0,
-                    inflight,
-                });
+                super::upsert::disable_request_if_needed(
+                    &mut commands,
+                    request_entity,
+                    current,
+                    Some(inflight),
+                );
             }
             continue;
         }
@@ -211,52 +213,42 @@ pub fn bucket_auto_haul_system(mut commands: Commands, p: BucketAutoHaulParams) 
             tank_entity,
         ) {
             if workers > 0 {
-                super::upsert::disable_request(&mut commands, request_entity);
-                commands.entity(request_entity).try_insert(TransportDemand {
-                    desired_slots: 0,
-                    inflight,
-                });
+                super::upsert::disable_request_if_needed(
+                    &mut commands,
+                    request_entity,
+                    current,
+                    Some(inflight),
+                );
             }
             continue;
         }
 
         if let Some(desired) = desired_requests.get(&tank_entity) {
-            commands.entity(request_entity).try_insert((
-                Transform::from_xyz(desired.tank_pos.x, desired.tank_pos.y, 0.0),
-                Visibility::Hidden,
-                Designation {
-                    work_type: WorkType::Haul,
-                },
-                ManagedBy(desired.issued_by),
-                TaskSlots::new(desired.desired_slots),
-                Priority(5),
-                TransportRequest {
-                    kind: TransportRequestKind::ReturnBucket,
-                    anchor: tank_entity,
-                    resource_type: ResourceType::BucketEmpty,
+            super::upsert::update_request_runtime_if_needed(
+                &mut commands,
+                request_entity,
+                request,
+                current,
+                super::upsert::SemanticRequestSpec {
+                    key: (tank_entity, ResourceType::BucketEmpty),
+                    site_pos: desired.tank_pos,
                     issued_by: desired.issued_by,
-                    priority: TransportPriority::Normal,
-                    stockpile_group: vec![],
-                },
-                TransportDemand {
                     desired_slots: desired.desired_slots,
                     inflight,
+                    priority: 5,
+                    transport_priority: TransportPriority::Normal,
+                    kind: TransportRequestKind::ReturnBucket,
+                    work_type: WorkType::Haul,
+                    state: super::upsert::request_state_for_workers(workers),
                 },
-                TransportRequestState::Pending,
-                TransportPolicy::default(),
-            ));
-        } else if workers == 0 {
-            super::upsert::disable_request(&mut commands, request_entity);
-            commands.entity(request_entity).try_insert(TransportDemand {
-                desired_slots: 0,
-                inflight: 0,
-            });
+            );
         } else {
-            super::upsert::disable_request(&mut commands, request_entity);
-            commands.entity(request_entity).try_insert(TransportDemand {
-                desired_slots: 0,
-                inflight,
-            });
+            super::upsert::disable_request_if_needed(
+                &mut commands,
+                request_entity,
+                current,
+                Some(inflight),
+            );
         }
     }
 

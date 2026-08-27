@@ -20,6 +20,14 @@ pub struct UiParticleReadParams<'w, 's> {
     ui_nodes: Res<'w, UiNodeRegistry>,
 }
 
+#[cfg(feature = "profiling")]
+#[derive(SystemParam)]
+pub struct UiParticlePerfParams<'w, 's> {
+    control: Option<ResMut<'w, super::super::perf::DreamUiPerfControl>>,
+    metrics: Option<ResMut<'w, super::super::perf::DreamUiPerfMetrics>>,
+    particles: Query<'w, 's, (Entity, &'static super::super::perf::DreamUiPerfParticle)>,
+}
+
 type ParticlesQuery<'w, 's> = Query<
     'w,
     's,
@@ -40,7 +48,20 @@ pub fn ui_particle_update_system(
     read: UiParticleReadParams,
     mut q_icon: Query<&mut DreamIconAbsorb>,
     mut q_particles: ParticlesQuery,
+    #[cfg(feature = "profiling")] perf: UiParticlePerfParams,
 ) {
+    #[cfg(feature = "profiling")]
+    let UiParticlePerfParams {
+        control: mut perf_control,
+        metrics: mut perf_metrics,
+        particles: perf_particles,
+    } = perf;
+    #[cfg(feature = "profiling-memory")]
+    if perf_metrics.is_some() {
+        hw_core::profiling_alloc_scope::begin();
+    }
+    #[cfg(feature = "profiling")]
+    let perf_started = perf_metrics.as_ref().map(|_| std::time::Instant::now());
     let dt = time.delta_secs();
     let ui_bubble_layer = read
         .q_ui_bubble_layer
@@ -63,61 +84,213 @@ pub fn ui_particle_update_system(
     let mut rng = rand::thread_rng();
 
     let icon_entity = read.ui_nodes.get_slot(UiSlot::DreamPoolIcon);
+    let update_context = ParticleUpdateContext {
+        dt,
+        viewport_size,
+        target_positions: &target_positions,
+        handles: &handles,
+        ui_bubble_layer,
+    };
 
-    for (entity, mut particle, mut node, mut mat_node, mut material_bucket, mut transform) in
-        q_particles.iter_mut()
-    {
-        particle.time_alive += dt;
-
-        let current_pos = ui_position_from_node(&node);
-
-        let should_despawn = if particle.merging_into.is_some() {
-            update_merging_particle(
-                MergeInput {
-                    dt,
-                    viewport_size,
-                    current_pos,
-                },
-                &target_positions,
-                &mut particle,
-                &mut node,
-                &mut mat_node,
-                &mut material_bucket,
-                &handles,
-            )
+    #[cfg(feature = "profiling")]
+    if let Some(control) = perf_control.as_deref_mut() {
+        if control.deterministic_order() {
+            let mut ordered_entities = perf_particles
+                .iter()
+                .map(|(entity, marker)| (marker.0, entity))
+                .collect::<Vec<_>>();
+            ordered_entities.sort_unstable_by_key(|(ordinal, _)| *ordinal);
+            let mut particles =
+                q_particles.iter_many_mut(ordered_entities.iter().map(|(_, entity)| *entity));
+            while let Some((
+                entity,
+                mut particle,
+                mut node,
+                mut mat_node,
+                mut material_bucket,
+                mut transform,
+            )) = particles.fetch_next()
+            {
+                let result = update_one_particle(
+                    &mut commands,
+                    &mut particle,
+                    update_standard::NodeVisuals {
+                        node: &mut node,
+                        mat_node: &mut mat_node,
+                        material_bucket: &mut material_bucket,
+                        transform: &mut transform,
+                    },
+                    control,
+                    &update_context,
+                );
+                apply_particle_update_result(
+                    result,
+                    entity,
+                    &mut commands,
+                    icon_entity,
+                    &mut q_icon,
+                );
+                record_particle_update(perf_metrics.as_deref_mut());
+            }
         } else {
-            let arrived = update_standard::update_standard_particle(
-                update_standard::StandardInput {
-                    dt,
-                    viewport_size,
-                    current_pos,
-                },
-                update_standard::ParticleState {
-                    particle: &mut particle,
-                    rng: &mut rng,
-                },
+            for (
+                entity,
+                mut particle,
+                mut node,
+                mut mat_node,
+                mut material_bucket,
+                mut transform,
+            ) in q_particles.iter_mut()
+            {
+                let result = update_one_particle(
+                    &mut commands,
+                    &mut particle,
+                    update_standard::NodeVisuals {
+                        node: &mut node,
+                        mat_node: &mut mat_node,
+                        material_bucket: &mut material_bucket,
+                        transform: &mut transform,
+                    },
+                    control,
+                    &update_context,
+                );
+                apply_particle_update_result(
+                    result,
+                    entity,
+                    &mut commands,
+                    icon_entity,
+                    &mut q_icon,
+                );
+                record_particle_update(perf_metrics.as_deref_mut());
+            }
+        }
+    } else {
+        for (entity, mut particle, mut node, mut mat_node, mut material_bucket, mut transform) in
+            q_particles.iter_mut()
+        {
+            let result = update_one_particle(
+                &mut commands,
+                &mut particle,
                 update_standard::NodeVisuals {
                     node: &mut node,
                     mat_node: &mut mat_node,
                     material_bucket: &mut material_bucket,
                     transform: &mut transform,
                 },
-                &handles,
-                ui_bubble_layer,
-                &mut commands,
+                &mut rng,
+                &update_context,
             );
-            if arrived
-                && let Some(icon_e) = icon_entity
-                && let Ok(mut absorb) = q_icon.get_mut(icon_e)
-            {
-                absorb.pulse_count = absorb.pulse_count.saturating_add(1);
-            }
-            arrived
-        };
-
-        if should_despawn {
-            commands.entity(entity).try_despawn();
+            apply_particle_update_result(result, entity, &mut commands, icon_entity, &mut q_icon);
+            record_particle_update(perf_metrics.as_deref_mut());
         }
+    }
+    #[cfg(not(feature = "profiling"))]
+    for (entity, mut particle, mut node, mut mat_node, mut material_bucket, mut transform) in
+        q_particles.iter_mut()
+    {
+        let result = update_one_particle(
+            &mut commands,
+            &mut particle,
+            update_standard::NodeVisuals {
+                node: &mut node,
+                mat_node: &mut mat_node,
+                material_bucket: &mut material_bucket,
+                transform: &mut transform,
+            },
+            &mut rng,
+            &update_context,
+        );
+        apply_particle_update_result(result, entity, &mut commands, icon_entity, &mut q_icon);
+    }
+    #[cfg(feature = "profiling")]
+    if let (Some(metrics), Some(started)) = (perf_metrics.as_deref_mut(), perf_started) {
+        metrics.record_elapsed(started);
+    }
+    #[cfg(feature = "profiling-memory")]
+    if let Some(metrics) = perf_metrics.as_deref_mut() {
+        metrics.record_scoped_allocations(hw_core::profiling_alloc_scope::end());
+    }
+}
+
+#[cfg(feature = "profiling")]
+fn record_particle_update(metrics: Option<&mut super::super::perf::DreamUiPerfMetrics>) {
+    if let Some(metrics) = metrics {
+        metrics.active_particle_updates = metrics.active_particle_updates.saturating_add(1);
+        metrics.node_writes = metrics.node_writes.saturating_add(1);
+    }
+}
+
+struct ParticleUpdateContext<'a> {
+    dt: f32,
+    viewport_size: Vec2,
+    target_positions: &'a [(Entity, Vec2)],
+    handles: &'a DreamBubbleUiHandles,
+    ui_bubble_layer: Option<Entity>,
+}
+
+struct ParticleUpdateResult {
+    arrived: bool,
+    should_despawn: bool,
+}
+
+fn update_one_particle(
+    commands: &mut Commands,
+    particle: &mut DreamGainUiParticle,
+    visuals: update_standard::NodeVisuals<'_>,
+    rng: &mut (impl Rng + ?Sized),
+    context: &ParticleUpdateContext<'_>,
+) -> ParticleUpdateResult {
+    particle.time_alive += context.dt;
+    let current_pos = ui_position_from_node(visuals.node);
+    let should_despawn = if particle.merging_into.is_some() {
+        update_merging_particle(
+            MergeInput {
+                dt: context.dt,
+                viewport_size: context.viewport_size,
+                current_pos,
+            },
+            context.target_positions,
+            particle,
+            visuals.node,
+            visuals.mat_node,
+            visuals.material_bucket,
+            context.handles,
+        )
+    } else {
+        update_standard::update_standard_particle(
+            update_standard::StandardInput {
+                dt: context.dt,
+                viewport_size: context.viewport_size,
+                current_pos,
+            },
+            update_standard::ParticleState { particle, rng },
+            visuals,
+            context.handles,
+            context.ui_bubble_layer,
+            commands,
+        )
+    };
+    ParticleUpdateResult {
+        arrived: should_despawn && particle.merging_into.is_none(),
+        should_despawn,
+    }
+}
+
+fn apply_particle_update_result(
+    result: ParticleUpdateResult,
+    entity: Entity,
+    commands: &mut Commands,
+    icon_entity: Option<Entity>,
+    q_icon: &mut Query<&mut DreamIconAbsorb>,
+) {
+    if result.arrived
+        && let Some(icon_entity) = icon_entity
+        && let Ok(mut absorb) = q_icon.get_mut(icon_entity)
+    {
+        absorb.pulse_count = absorb.pulse_count.saturating_add(1);
+    }
+    if result.should_despawn {
+        commands.entity(entity).try_despawn();
     }
 }
 
@@ -228,6 +401,20 @@ pub fn spawn_ui_particle(
 ) {
     let mut rng = rand::thread_rng();
 
+    let _ = spawn_ui_particle_with_rng(
+        commands, start_pos, target_pos, ui_root, handles, mass, &mut rng,
+    );
+}
+
+pub(crate) fn spawn_ui_particle_with_rng(
+    commands: &mut Commands,
+    start_pos: Vec2,
+    target_pos: Vec2,
+    ui_root: Entity,
+    handles: &DreamBubbleUiHandles,
+    mass: f32,
+    rng: &mut impl Rng,
+) -> Entity {
     let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
     let noise_dir = Vec2::new(angle.cos(), angle.sin());
 
@@ -272,4 +459,5 @@ pub fn spawn_ui_particle(
         .id();
 
     commands.entity(ui_root).add_child(particle);
+    particle
 }

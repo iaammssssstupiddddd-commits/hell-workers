@@ -42,6 +42,7 @@ const IDLE_SELECT_BEHAVIOR_STREAM: u64 = 0x6964_6c65_5f73_656c;
 pub(crate) struct IdleLocalState<'s> {
     pending_rest_reservations: Local<'s, HashMap<Entity, usize>>,
     nearby_buf: Local<'s, Vec<Entity>>,
+    decision_entities: Local<'s, Vec<Entity>>,
 }
 
 #[derive(SystemParam)]
@@ -68,6 +69,42 @@ pub(crate) struct IdleDecisionProfiling<'w, 's> {
     metrics: ResMut<'w, SlowSimulationPerfMetrics>,
 }
 
+type PeriodicIdleCandidateQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    (
+        With<hw_core::soul::DamnedSoul>,
+        Without<hw_core::relationships::WorkingOn>,
+        Without<hw_core::relationships::CommandedBy>,
+    ),
+>;
+type WokenIdleCandidateQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    (
+        With<hw_core::soul::DamnedSoul>,
+        With<crate::soul_ai::helpers::query_types::NeedsIdleDecision>,
+        Without<hw_core::relationships::WorkingOn>,
+        Without<hw_core::relationships::CommandedBy>,
+    ),
+>;
+
+#[derive(SystemParam)]
+pub(crate) struct IdleDecisionContext<'w, 's> {
+    clock: Res<'w, SlowSimulationClock>,
+    request_writer: MessageWriter<'w, IdleBehaviorRequest>,
+    world_map: Res<'w, WorldMap>,
+    local: IdleLocalState<'s>,
+    gathering: IdleGatheringQueries<'w, 's>,
+    souls: IdleDecisionSoulQuery<'w, 's>,
+    periodic_entities: PeriodicIdleCandidateQuery<'w, 's>,
+    woken_entities: WokenIdleCandidateQuery<'w, 's>,
+    #[cfg(feature = "profiling")]
+    profiling: IdleDecisionProfiling<'w, 's>,
+}
+
 /// アイドル行動の決定システム (Decide Phase)
 ///
 /// 怠惰行動のAIロジック。やる気が低い魂は怠惰な行動をする。
@@ -76,15 +113,19 @@ pub(crate) struct IdleDecisionProfiling<'w, 's> {
 /// このシステムはIdleState, Destination, Pathの更新と、
 /// IdleBehaviorRequestの発行を行う。実際のエンティティ操作は
 /// idle_behavior_apply_systemで行われる。
-pub(crate) fn idle_behavior_decision_system(
-    clock: Res<SlowSimulationClock>,
-    mut request_writer: MessageWriter<IdleBehaviorRequest>,
-    world_map: Res<WorldMap>,
-    mut local: IdleLocalState,
-    gq: IdleGatheringQueries,
-    mut query: IdleDecisionSoulQuery,
-    #[cfg(feature = "profiling")] profiling: IdleDecisionProfiling,
-) {
+pub(crate) fn idle_behavior_decision_system(context: IdleDecisionContext) {
+    let IdleDecisionContext {
+        clock,
+        mut request_writer,
+        world_map,
+        mut local,
+        gathering: gq,
+        souls: mut query,
+        periodic_entities: q_periodic_entities,
+        woken_entities: q_woken_entities,
+        #[cfg(feature = "profiling")]
+        profiling,
+    } = context;
     #[cfg(feature = "profiling")]
     let IdleDecisionProfiling {
         audit_seed,
@@ -96,8 +137,16 @@ pub(crate) fn idle_behavior_decision_system(
     let periodic_due = periodic_steps > 0;
     let dt = clock.step_secs() * f32::from(periodic_steps);
     local.pending_rest_reservations.clear();
+    local.decision_entities.clear();
+    if periodic_due {
+        local.decision_entities.extend(q_periodic_entities.iter());
+    } else {
+        local.decision_entities.extend(q_woken_entities.iter());
+    }
 
-    for (
+    let mut decision_iter = query.iter_many_mut(local.decision_entities.iter());
+
+    while let Some((
         entity,
         transform,
         mut idle,
@@ -110,11 +159,9 @@ pub(crate) fn idle_behavior_decision_system(
         rest_reserved_for,
         rest_cooldown,
         wake_up,
-    ) in query.iter_mut()
+    )) = decision_iter.fetch_next()
     {
-        if !periodic_due && wake_up.is_none() {
-            continue;
-        }
+        debug_assert!(periodic_due || wake_up.is_some());
         #[cfg(feature = "profiling")]
         let mut random_state = random_states.get_mut(entity).ok();
 

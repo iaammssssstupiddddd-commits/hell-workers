@@ -24,15 +24,33 @@ type TaskListRenderResult = TaskListRenderStats;
 #[cfg(not(feature = "profiling"))]
 type TaskListRenderResult = ();
 
+pub struct TaskListRenderInput<'a> {
+    pub snapshot: &'a [TaskEntry],
+    pub view_state: &'a TaskDashboardViewState,
+    pub pinned_entity: Option<Entity>,
+    pub action_state: &'a TaskDashboardActionState,
+    pub game_assets: &'a dyn UiAssets,
+    pub theme: &'a UiTheme,
+    pub resident_row_limit: usize,
+}
+
+fn resident_row_count(filtered_rows: usize, resident_row_limit: usize) -> usize {
+    filtered_rows.min(resident_row_limit.max(1))
+}
+
 pub fn rebuild_task_list_ui(
     parent: &mut ChildSpawnerCommands,
-    snapshot: &[TaskEntry],
-    view_state: &TaskDashboardViewState,
-    pinned_entity: Option<Entity>,
-    action_state: &TaskDashboardActionState,
-    game_assets: &dyn UiAssets,
-    theme: &UiTheme,
+    input: TaskListRenderInput<'_>,
 ) -> TaskListRenderResult {
+    let TaskListRenderInput {
+        snapshot,
+        view_state,
+        pinned_entity,
+        action_state,
+        game_assets,
+        theme,
+        resident_row_limit,
+    } = input;
     spawn_toolbar(parent, view_state, game_assets, theme);
 
     let visible = view_state.visible_entries(snapshot);
@@ -65,7 +83,8 @@ pub fn rebuild_task_list_ui(
 
     let grouped = view_state.sort_key == TaskSortKey::WorkType;
     let mut previous_work_type = None;
-    for entry in visible.iter().copied() {
+    let resident_rows = resident_row_count(visible.len(), resident_row_limit);
+    for entry in visible[..resident_rows].iter().copied() {
         if grouped && previous_work_type != Some(entry.work_type) {
             let count = visible
                 .iter()
@@ -524,5 +543,12 @@ mod tests {
         assert_ne!(working, blocked);
         assert_ne!(working, pending);
         assert_ne!(blocked, pending);
+    }
+
+    #[test]
+    fn clipped_tail_is_not_materialized_beyond_the_viewport_limit() {
+        assert_eq!(resident_row_count(661, 40), 40);
+        assert_eq!(resident_row_count(12, 40), 12);
+        assert_eq!(resident_row_count(12, 0), 1);
     }
 }

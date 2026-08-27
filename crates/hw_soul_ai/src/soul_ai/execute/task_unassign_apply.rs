@@ -225,7 +225,7 @@ mod tests {
                 .map(|request| request.op.clone())
                 .collect::<Vec<_>>(),
             vec![ResourceReservationOp::ReleaseSource {
-                source: item,
+                source: item.into(),
                 amount: 1,
             }]
         );

@@ -145,7 +145,7 @@ pub fn handle(
         }
 
         ctx.queue_reservation(hw_core::events::ResourceReservationOp::RecordPickedSource {
-            source: bucket_entity,
+            source: bucket_entity.into(),
             amount: 1,
         });
 

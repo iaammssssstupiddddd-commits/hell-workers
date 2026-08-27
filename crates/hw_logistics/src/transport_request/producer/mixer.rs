@@ -32,11 +32,12 @@ type MixerRequestQuery<'w, 's> = Query<
     's,
     (
         Entity,
-        &'static TargetMixer,
+        Option<&'static TargetMixer>,
         &'static TransportRequest,
-        Option<&'static hw_jobs::Designation>,
         Option<&'static TaskWorkers>,
+        super::upsert::ExistingRequestRuntime<'static>,
     ),
+    Or<(With<TargetMixer>, Added<TransportRequest>)>,
 >;
 
 pub fn mud_mixer_auto_haul_system(

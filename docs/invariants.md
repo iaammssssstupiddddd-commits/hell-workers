@@ -201,6 +201,7 @@ stale grid summary、古い`Unpowered` / sprite色を1 frame残してはなら�
 ### I-L1: SharedResourceCache 予約の解放責務
 `unassign_task` は `SharedResourceCache` の予約を解放する責務を持つ。
 タスクを中断・放棄する全経路で `unassign_task` を呼ぶこと。
+source予約は`ResourceSourceKey`を予約から解放まで同一値で保持する。ECS sourceは`Entity` variant、terrain sourceは`grid + ResourceType` variantを使い、terrainを一時Entityへ置換してはならない。
 直接 `AssignedTask` を `None` にリセットすると、`unassign_task` が行う `Release*` 要求の送信と task cleanup を飛ばす。signature 同期は次の Perceive/audit で snapshot を回復する安全網であり、中断経路の代替にしてはならない。
 受理済みHaulはpickup前からitemへ`DeliveringTo`を持つため、中断時は`Inventory`の有無に依存せず
 `AssignedTask` payloadが指すitemのrelationshipも除去しなければならない。source予約だけを解放して
@@ -462,7 +463,7 @@ loadは、header/seed/schema検証、staging `World`への適用、immutable dom
 **live persisted entityのdespawn前**に完了する。incomingだけでなく同一schemaから取得したrollback snapshotも
 同じcandidate pipelineへ通し、どちらかが不正ならWorldEpoch、Resource、UI/visualを変更しない。validatorは
 全persisted Entity link、Relationship対称性、owner/role/capacityに加え、candidate自身の`WorldMap` shapeと
-tile/building/door/stockpile参照を検証する。全tile anchorは一意な`Tile + Transform`を持ち、Blueprint、Wall tile、
+tile/building/door/stockpile参照を検証する。tile anchor shapeはcurrentの全`None`/`Tile` 0またはlegacy Denseの全`Some`/一意な`Tile + Transform`だけを許可し、legacy形はDurableNormalizeでcurrent形へ縮約する。Blueprint、Wall tile、
 Soul Spa tileのdurable footprintは`WorldMap.buildings`と双方向一致しなければならない。旧live `WorldMap`を
 新worldの前提として要求しない。validatorごとに
 Worldをcloneせず、1 candidateにつき1 stagingを共有し、staging EntityやQueryStateをlive runnerへ持ち出さない。

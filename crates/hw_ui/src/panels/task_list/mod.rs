@@ -9,7 +9,7 @@ pub use interaction::{
 };
 #[cfg(feature = "profiling")]
 pub use render::TaskListRenderStats;
-pub use render::rebuild_task_list_ui;
+pub use render::{TaskListRenderInput, rebuild_task_list_ui};
 pub use types::{
     PendingTaskCancellation, TaskActionButton, TaskActionButtonKind, TaskActionCapabilities,
     TaskBlockerReason, TaskCancelKind, TaskDashboardActionState, TaskDashboardControl,

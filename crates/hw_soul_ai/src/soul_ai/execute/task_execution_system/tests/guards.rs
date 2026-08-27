@@ -17,6 +17,22 @@ fn idle_guard_leaves_task_context_components_unchanged() {
     assert_component_unchanged::<Inventory>(&mut world, soul);
 }
 
+#[cfg(feature = "profiling")]
+#[test]
+fn task_execution_candidate_lane_does_not_query_idle_souls() {
+    let mut app = task_execution_test_app();
+    for _ in 0..128 {
+        spawn_task_execution_soul(app.world_mut(), AssignedTask::None);
+    }
+
+    app.update();
+
+    let metrics = app.world().resource::<TaskExecutionPerfMetrics>();
+    assert_eq!(metrics.souls_queried, 0);
+    assert_eq!(metrics.idle_skips, 0);
+    assert_eq!(metrics.handler_runs, 0);
+}
+
 #[test]
 fn active_task_without_working_on_remains_in_task_execution_query() {
     let mut world = World::new();

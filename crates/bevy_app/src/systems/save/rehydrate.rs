@@ -24,7 +24,7 @@ use crate::entities::familiar::attach_familiar_shell;
 use crate::plugins::startup::Building3dHandles;
 use crate::systems::jobs::attach_building_shell;
 use crate::systems::jobs::floor_construction::CuringFootprint;
-use crate::world::map::WorldMap;
+use crate::world::map::{Tile, WorldMap};
 
 use hw_core::area::TaskArea;
 use hw_core::constants::TILE_SIZE;
@@ -132,6 +132,14 @@ pub(crate) fn register_logic_rehydrate_pipeline(app: &mut App) {
     );
     register_rehydrate_step(
         app,
+        "world-map.tile-anchors",
+        RehydratePhase::DurableNormalize,
+        &[],
+        &[],
+        normalize_legacy_tile_anchors,
+    );
+    register_rehydrate_step(
+        app,
         "construction.normalize",
         RehydratePhase::DurableNormalize,
         &[],
@@ -226,6 +234,17 @@ pub(crate) fn register_logic_rehydrate_pipeline(app: &mut App) {
         &[],
         wake_domains_after_load,
     );
+}
+
+fn normalize_legacy_tile_anchors(world: &mut World) {
+    let tile_entities: Vec<_> = world
+        .query_filtered::<Entity, With<Tile>>()
+        .iter(world)
+        .collect();
+    for entity in tile_entities {
+        world.despawn(entity);
+    }
+    world.resource_mut::<WorldMap>().tile_entities.fill(None);
 }
 
 /// Indoor-lighting adapter registered by `IndoorLightingPlugin` before the

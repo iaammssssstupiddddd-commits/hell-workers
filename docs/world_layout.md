@@ -135,25 +135,27 @@
 
 ## 論理タイルデータの真実源（Truth Source）
 
-地形タイル情報は以下の配列データが唯一の真実源である。ECS entity は描画・ロジック anchor を担うに過ぎない。
+地形タイル情報は以下の配列データが唯一の真実源である。地形セルごとのECS entityは生成しない。
 
 | データ | 型 | 更新タイミング | 備考 |
 |:--|:--|:--|:--|
 | `WorldMap.tiles` | `Vec<TerrainType>` | startup + obstacle 除去時 | 論理地形の truth source |
-| `WorldMap.tile_entities` | `Vec<Option<Entity>>` | startup のみ | 論理 anchor の lookup 層。描画 entity ではない |
+| `WorldMap.tile_entities` | `Vec<Option<Entity>>` | 旧save load時のみ | v0/v1 Dense save互換用。current runtimeでは全slot `None` |
 | `GeneratedWorldLayout.terrain_tiles` | `&[TerrainType]` | startup のみ（snapshot） | worldgen 結果。`WorldMap.tiles` の初期値として使用 |
 
-**`WorldMap.tile_entities` / `tile_entity_at_idx()` について**:
-- `tile_entities` に登録される `Tile` entity は描画コンポーネント（`Mesh3d` / `MeshMaterial3d`）を持たない論理 anchor である。
-- ランタイムで `tile_entity_at_idx()` を呼ぶ箇所は `crates/hw_familiar_ai/.../haul/direct_collect.rs:147` の **1 箇所のみ**。用途は tile entity 上の `Designation` + `TaskWorkers` コンポーネントの Query（収集可否判定）。
-- 地形描画は chunk entity（`TerrainChunk`）が担う。`tile_entities` は将来の別フェーズで廃止検討。
+**`WorldMap.tile_entities` / terrain sourceについて**:
+- 新規worldは10,000個の`Tile + Transform` anchorを生成せず、`tile_entities`を全slot `None`に保つ。
+- Sand/Riverの直接収集は`ResourceSourceKey::Terrain { grid, resource_type }`でセルを識別する。同一セルの排他は`SharedResourceCache`とDecide-cycleの`ReservationShadow`が同じkeyで担う。
+- Loading直前にgrid範囲と`WorldMap.tiles`のterrain/resource対応を再検証し、不一致なら資材を生成しない。
+- `Tile`型と`tile_entities`フィールドは旧v0/v1 Dense saveのdecode専用に残る。完全Dense入力はpreflight後の`DurableNormalize`でTile 0・全slot `None`へ縮約される。
+- 地形描画は従来どおり49個のchunk entity（`TerrainChunk`）が担う。
 
 **将来の BiomeType 追加方針**:
 - biome タイプは `WorldMap.tiles` と並列に `Vec<BiomeType>` を `WorldMap` に追加する形で格納する。
 - 描画用には `TerrainFeatureMap` と同様の独立した `BiomeIdMap` texture（`R8Unorm`）を startup で生成し、`TerrainSurfaceMaterial` の uniform に追加するだけで chunk entity 自体の変更は不要。
 
 ## 関連ファイル
-- `crates/bevy_app/src/world/map/`: root 側の app shell。`spawn.rs` は `GeneratedWorldLayout` の `terrain_tiles` から地形論理タイル anchor をスポーンし、chunk render は `spawn_terrain_chunks` が担う（`prepare_generated_world_layout_resource` と同一 layout）
+- `crates/bevy_app/src/world/map/`: root 側の app shell。`spawn.rs` は `GeneratedWorldLayout` の `terrain_tiles` を`WorldMap.tiles`へ反映し、chunk renderは`spawn_terrain_chunks`が担う（`prepare_generated_world_layout_resource`と同一layout）
 - `crates/bevy_app/src/plugins/startup/visual_handles.rs`: `Terrain3dHandles` リソース（共有 `TerrainSurfaceMaterial` ハンドル）
 - `crates/bevy_app/src/systems/visual/terrain_material.rs`: 障害物除去後のテレインマテリアル差し替えシステム
 - [`../crates/hw_world/src/anchor.rs`](../crates/hw_world/src/anchor.rs): `Site/Yard` 固定アンカー定義
@@ -181,7 +183,7 @@
 - **Chunk 構成**: `CHUNK_TILES = 16`（16×16 タイル/chunk）。100×100 マップ → 7×7 = **49 chunk entity**。辺端は 4 tile 幅の端数 chunk が生じる。
 - **Chunk entity**: `TerrainChunk { cx, cy }` + `Mesh3d` + `Transform` + `building_3d_render_layers()` を持ち、地形 material は LOD に応じて `MeshMaterial3d<TerrainSurfaceMaterial>` / `MeshMaterial3d<TerrainSurfaceMaterialLod1Lite>` / `MeshMaterial3d<TerrainSurfaceMaterialLod2>` のいずれか一方が付く。chunk の中心ワールド座標に配置。
 - **Chunk mesh**: `Plane3d::default().mesh().size(w * TILE_SIZE, h * TILE_SIZE)`。フルチャンク（512×512wu）、端数チャンク（128×512wu 等）。
-- **Tile anchor entity**: 10,000 個の `Tile` entity（`Tile` component + `Transform`）は描画コンポーネントなしで存続。`WorldMap.tile_entities` に登録され、Familiar AI の収集可否判定（`direct_collect.rs`）から `Designation` / `TaskWorkers` を取得する論理 anchor として機能する。
+- **Tile anchor entity**: current runtimeでは0個。地形セルの論理状態は`WorldMap.tiles`、直接収集の排他はtyped terrain source keyで表現する。旧Dense save由来の`Tile`だけload時に一時的に存在し、Logic再開前に除去する。
 - **マテリアル**: `Terrain3dHandles` は `lod1: Handle<TerrainSurfaceMaterial>`、`lod1_lite: Handle<TerrainSurfaceMaterialLod1Lite>`、`lod2: Handle<TerrainSurfaceMaterialLod2>` を保持する。`terrain_lod_switch_system` が 49 chunk の `MeshMaterial3d` component を差し替え、現 runtime は `Lod1 / Lod1Lite / Lod2` を使う。`Lod0` は将来のリッチビジュアル用に予約で未使用。LOD1 shader は現行フル品質、LOD1-lite shader は **曲線境界と 4-corner bilinear を維持しつつ**、macro noise / domain warp / river scroll を落とした中景向け簡略版で、`boundary_proximity_mask` により境界外画素を early-out する。砂浜の shoreline tone は LOD1 と揃え、`shoreline_detail` は Sand 経路だけ保持する。LOD2 shader は **`boundary_mask` の nearest region を正本にして曲線境界を維持しつつ**、4-corner bilinear・domain warp・river scroll・shoreline detail を落とし、albedo UV を量子化して低解像度 texture 相当の見た目へ簡略化する。chunk 境界での継ぎ目は全 LOD とも world-space 参照のため発生しない。建物・壁は `TopDownStructuralMaterial`。
 - **terrain id map**: startup の `build_terrain_id_map` が `GeneratedWorldLayout.terrain_tiles` から `R8Unorm` の `TerrainIdMap` を生成する。0 / 85 / 170 / 255 を grass / dirt / sand / river として encode し、shader 側では `round(raw * 3.0)` で terrain id に戻す。`ClampToEdge + Nearest`。
 - **テクスチャサンプラ**: 地形 4 枚（`grass` / `dirt` / `sand_terrain` / `river`）は `asset_catalog.rs` で `AddressMode::Repeat` 付きロード。ワールド UV が 0〜1 を超える前提。

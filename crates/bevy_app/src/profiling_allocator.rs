@@ -118,6 +118,7 @@ pub(crate) fn end_measurement() -> MemoryMeasurement {
 }
 
 fn record_allocation(size: usize) {
+    hw_core::profiling_alloc_scope::record_allocation(size);
     let bytes = u64::try_from(size).unwrap_or(u64::MAX);
     lock_telemetry();
     let live_bytes = checked_add(&LIVE_BYTES, bytes);
@@ -141,6 +142,7 @@ fn record_deallocation(size: usize) {
 }
 
 fn record_reallocation(old_size: usize, new_size: usize) {
+    hw_core::profiling_alloc_scope::record_allocation(new_size);
     let old_bytes = u64::try_from(old_size).unwrap_or(u64::MAX);
     let new_bytes = u64::try_from(new_size).unwrap_or(u64::MAX);
     lock_telemetry();

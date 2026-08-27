@@ -94,7 +94,7 @@ pub fn handle_build_task(
                         ctx.soul_entity, blueprint_entity
                     );
                     ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                        source: blueprint_entity,
+                        source: blueprint_entity.into(),
                         amount: 1,
                     });
                     return ctx.complete_task(commands, "build done");
@@ -121,7 +121,7 @@ pub fn handle_build_task(
                 return ctx.abort_closed(commands, "build blueprint gone before completion");
             }
             ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                source: blueprint_entity,
+                source: blueprint_entity.into(),
                 amount: 1,
             });
             return ctx.complete_task(commands, "build done");

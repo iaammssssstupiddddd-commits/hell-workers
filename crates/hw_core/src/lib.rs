@@ -9,6 +9,8 @@ pub mod gathering;
 pub mod jobs;
 pub mod logistics;
 pub mod population;
+#[cfg(any(feature = "profiling-memory", test))]
+pub mod profiling_alloc_scope;
 pub mod quality;
 pub mod relationships;
 pub mod save;

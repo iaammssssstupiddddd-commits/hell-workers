@@ -67,8 +67,9 @@ mod tests {
     use super::*;
     use crate::transport_request::arbitration::WheelbarrowArbitrationRuntime;
     use crate::transport_request::{
-        TransportDemand, TransportPriority, TransportRequestKind, TransportRequestMetrics,
-        WheelbarrowArbitrationDiagnostics, WheelbarrowLease, wheelbarrow_arbitration_system,
+        TransportDemand, TransportPriority, TransportRequestKind,
+        WheelbarrowArbitrationDiagnostics, WheelbarrowArbitrationMetrics, WheelbarrowLease,
+        wheelbarrow_arbitration_system,
     };
     use crate::{ResourceItem, ResourceType, SharedResourceCache, Stockpile, Wheelbarrow};
     use hw_core::relationships::{ParkedAt, WorkingOn};
@@ -108,9 +109,11 @@ mod tests {
         app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_once()));
         app.init_resource::<WorkerToRelease>()
             .init_resource::<SharedResourceCache>()
-            .init_resource::<TransportRequestMetrics>()
+            .init_resource::<WheelbarrowArbitrationMetrics>()
             .init_resource::<WheelbarrowArbitrationRuntime>()
             .init_resource::<WheelbarrowArbitrationDiagnostics>();
+        #[cfg(feature = "profiling")]
+        app.init_resource::<crate::transport_request::WheelbarrowArbitrationPerfMetrics>();
         app.configure_sets(Update, (GameSystemSet::Logic, GameSystemSet::Actor).chain());
         app.configure_sets(Update, SoulAiSystemSet::Actor.in_set(GameSystemSet::Actor));
         app.configure_sets(Update, TestSet::Arbitrate.in_set(GameSystemSet::Logic));

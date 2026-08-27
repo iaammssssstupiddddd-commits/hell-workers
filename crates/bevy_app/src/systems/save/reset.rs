@@ -9,14 +9,19 @@ use bevy::prelude::*;
 use hw_core::WorldEpoch;
 use hw_core::game_state::PlayMode;
 use hw_core::selection::{HoveredEntity, SelectedEntity};
+use hw_jobs::RefineActivityIndex;
 use hw_logistics::resource_cache::SharedResourceCache;
 use hw_logistics::tile_index::TileSiteIndex;
-use hw_logistics::transport_request::TransportRequestMetrics;
+use hw_logistics::transport_request::producer::ConstructionMaterialConsumptionShadow;
 use hw_logistics::transport_request::producer::active_unit_cache::{
     CachedActiveFamiliars, CachedActiveYards, CachedStockpileGroups,
 };
 use hw_logistics::transport_request::producer::tile_wait_cache::{
     FloorTileWaitingCache, WallTileWaitingCache,
+};
+use hw_logistics::transport_request::{
+    FloorMaterialSyncMetrics, TaskAreaMetrics, WallMaterialSyncMetrics,
+    WheelbarrowArbitrationMetrics,
 };
 use hw_spatial::blueprint::BlueprintSpatialGrid;
 use hw_spatial::designation::DesignationSpatialGrid;
@@ -41,7 +46,9 @@ use crate::systems::energy::grid_recalc::EnergyUpdateDirty;
 use crate::systems::familiar_ai::perceive::resource_sync::{
     ReservationSignatureCache, ReservationSyncTimer,
 };
-use crate::systems::logistics::{ResourceCountDisplayTimer, ResourceCountLabel, ResourceLabels};
+use crate::systems::logistics::{
+    ResourceCountDisplayTimer, ResourceCountLabel, ResourceLabels, ResourceStackIndex,
+};
 use crate::world::map::GeneratedWorldLayoutResource;
 use crate::world::regrowth::{RegrowthManager, configure_regrowth_from_generated_layout};
 
@@ -129,7 +136,12 @@ pub(crate) fn reset_runtime_caches(world: &mut World) {
     world.insert_resource(ReservationSignatureCache::default());
     world.insert_resource(ReservationSyncTimer::default());
     world.insert_resource(TileSiteIndex::default());
-    world.insert_resource(TransportRequestMetrics::default());
+    world.insert_resource(WheelbarrowArbitrationMetrics::default());
+    world.insert_resource(TaskAreaMetrics::default());
+    world.insert_resource(FloorMaterialSyncMetrics::default());
+    world.insert_resource(WallMaterialSyncMetrics::default());
+    world.insert_resource(ConstructionMaterialConsumptionShadow::default());
+    world.insert_resource(RefineActivityIndex::default());
     world.insert_resource(
         hw_logistics::transport_request::WheelbarrowArbitrationDiagnostics::default(),
     );
@@ -214,6 +226,7 @@ fn clear_resource_count_labels(world: &mut World) {
     }
     reset_existing_resource::<ResourceLabels>(world);
     reset_existing_resource::<ResourceCountDisplayTimer>(world);
+    reset_existing_resource::<ResourceStackIndex>(world);
 }
 
 #[cfg(test)]

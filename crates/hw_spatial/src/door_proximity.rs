@@ -13,7 +13,11 @@ use hw_world::{
     WorldMap, WorldMapWrite, apply_door_state, evaluate_door_auto_open, soul_keeps_door_open,
 };
 
-use crate::{SpatialGrid, SpatialGridOps};
+use crate::SpatialGrid;
+#[cfg(any(not(feature = "profiling"), test))]
+use crate::SpatialGridOps;
+#[cfg(feature = "profiling")]
+use crate::SpatialQueryStats;
 
 /// Profiling counters for index candidate work performed by door automation.
 #[cfg(feature = "profiling")]
@@ -22,6 +26,8 @@ pub struct DoorPerfMetrics {
     pub open_souls_scanned: u32,
     pub open_waypoints_scanned: u32,
     pub close_souls_scanned: u32,
+    pub open_spatial_queries: SpatialQueryStats,
+    pub close_spatial_queries: SpatialQueryStats,
 }
 
 const DOOR_NEARBY_RADIUS: f32 = TILE_SIZE * 1.5;
@@ -86,11 +92,20 @@ pub fn door_auto_open_nearby_system(
         }
 
         let door_grid = WorldMap::world_to_grid(transform.translation.truncate());
+        #[cfg(feature = "profiling")]
+        let spatial_query = soul_grid.get_nearby_in_radius_with_stats_into(
+            transform.translation.truncate(),
+            DOOR_NEARBY_RADIUS,
+            &mut nearby_candidates,
+        );
+        #[cfg(not(feature = "profiling"))]
         soul_grid.get_nearby_in_radius_into(
             transform.translation.truncate(),
             DOOR_NEARBY_RADIUS,
             &mut nearby_candidates,
         );
+        #[cfg(feature = "profiling")]
+        metrics.open_spatial_queries.merge(spatial_query);
         let should_open = nearby_candidates.iter().copied().any(|soul_entity| {
             #[cfg(feature = "profiling")]
             {
@@ -153,11 +168,20 @@ pub fn door_auto_close_nearby_system(
         }
 
         let door_grid = WorldMap::world_to_grid(transform.translation.truncate());
+        #[cfg(feature = "profiling")]
+        let spatial_query = soul_grid.get_nearby_in_radius_with_stats_into(
+            transform.translation.truncate(),
+            DOOR_NEARBY_RADIUS,
+            &mut nearby_candidates,
+        );
+        #[cfg(not(feature = "profiling"))]
         soul_grid.get_nearby_in_radius_into(
             transform.translation.truncate(),
             DOOR_NEARBY_RADIUS,
             &mut nearby_candidates,
         );
+        #[cfg(feature = "profiling")]
+        metrics.close_spatial_queries.merge(spatial_query);
         let has_nearby_soul = nearby_candidates.iter().copied().any(|soul_entity| {
             #[cfg(feature = "profiling")]
             {
@@ -348,5 +372,11 @@ mod tests {
         let metrics = app.world().resource::<DoorPerfMetrics>();
         assert_eq!(metrics.open_souls_scanned, 1);
         assert_eq!(metrics.open_waypoints_scanned, 1);
+        assert_eq!(metrics.open_spatial_queries.queries, 1);
+        assert_eq!(metrics.open_spatial_queries.coordinate_probes, 1);
+        assert_eq!(metrics.open_spatial_queries.occupied_buckets, 1);
+        assert_eq!(metrics.open_spatial_queries.bucket_members_examined, 1);
+        assert_eq!(metrics.open_spatial_queries.exact_hits, 1);
+        assert_eq!(metrics.open_spatial_queries.position_fallbacks, 0);
     }
 }

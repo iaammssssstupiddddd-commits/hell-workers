@@ -37,7 +37,7 @@
 | `components.rs` | `TransportRequest`, `TransportDemand`, policy-driven request の runtime-only `ReceiverPolicyTier` コンポーネント |
 | `kinds.rs` | `TransportRequestKind` enum（輸送種別） |
 | `lifecycle.rs` | `transport_request_anchor_cleanup_system` と UI/anchor共用の `close_manual_transport_request` typed owner API |
-| `metrics.rs` | `TransportRequestMetrics`, 需要計算システム |
+| `metrics.rs` | producer / material sync / wheelbarrow arbitration別の独立metricsと、`profiling`限定semantic change collector |
 | `state_machine.rs` | `TransportRequestState` (Pending/Claimed) 遷移 |
 | `wheelbarrow_completion.rs` | 手押し車輸送完了判定ヘルパー |
 | `plugin.rs` | `TransportRequestPlugin`, `TransportRequestSet` |
@@ -62,20 +62,20 @@
 
 | ファイル | 内容 |
 |---|---|
-| `mod.rs` | 共通ヘルパー (`collect_all_area_owners`, `find_owner`, `sync_construction_requests` 等) |
+| `mod.rs` | 共通ヘルパー (`collect_all_area_owners`, `find_owner`, `sync_construction_requests`) と床→壁→仮設壁で共有するsame-cycle material consumption shadow |
 | `blueprint.rs` | `blueprint_auto_haul_system` |
 | `bucket.rs` | `bucket_auto_haul_system` |
 | `consolidation.rs` | `stockpile_consolidation_producer_system`。receiver=`NewInbound`、donor=`NewOutbound`、draining override、receiver tier、committed worker 保持を統合 |
 | `mixer.rs` | `mud_mixer_auto_haul_system` |
 | `mixer_helpers/` | mixer 用サブヘルパー群 (`collect`, `desired`, `issue`, `types`, `upsert`) |
-| `provisional_wall.rs` | `provisional_wall_auto_haul_system`, `provisional_wall_designation_system` |
-| `floor_construction.rs` | `floor_construction_auto_haul_system`, `floor_material_delivery_sync_system`, `floor_tile_designation_system` |
+| `provisional_wall.rs` | `provisional_wall_auto_haul_system`, ResourceSpatialGrid利用のmaterial delivery、`provisional_wall_designation_system` |
+| `floor_construction.rs` | `floor_construction_auto_haul_system`, TileSiteIndex利用のmaterial delivery、`floor_tile_designation_system` |
 | `stockpile_group.rs` | `StockpileGroup` — Yard 単位ストックパイルグルーピング |
 | `active_unit_cache.rs` | Familiar / Yard と、`With<StockpilePolicy>` membership だけを保持する構造 group cache。live policy / stored / incoming は保持しない |
 | `tank_water_request.rs` | `tank_water_request_system` |
 | `task_area.rs` | `task_area_auto_haul_system`。tier 別 request の決定的生成と semantic-diff upsert |
-| `upsert.rs` | request の upsert/cleanup 共通ヘルパー |
-| `wall_construction.rs` | `wall_construction_auto_haul_system`, `wall_material_delivery_sync_system`, `wall_tile_designation_system` |
+| `upsert.rs` | producer-owned componentをactual snapshotと比較するsemantic upsert/disable共通ヘルパー。安定frameでは同値commandを発行しない |
+| `wall_construction.rs` | `wall_construction_auto_haul_system`, TileSiteIndex利用のmaterial delivery、`wall_tile_designation_system` |
 | `wheelbarrow.rs` | `wheelbarrow_auto_haul_system` |
 
 `DeliverToSoulSpa`は有効な`TransportRequestKind`だが、producerだけはroot固有のSoul Spa建設siteと

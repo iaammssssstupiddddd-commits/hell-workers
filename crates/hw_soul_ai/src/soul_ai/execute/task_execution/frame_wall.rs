@@ -136,7 +136,7 @@ pub fn handle_frame_wall_task(
         }
         FrameWallPhase::Done => {
             ctx.queue_reservation(hw_core::events::ResourceReservationOp::ReleaseSource {
-                source: tile_entity,
+                source: tile_entity.into(),
                 amount: 1,
             });
             return ctx.complete_task(commands, "construction done");
