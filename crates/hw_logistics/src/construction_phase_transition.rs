@@ -54,14 +54,14 @@ pub fn floor_construction_phase_transition_system(
     mut q_sites: FloorTransitionSiteQuery,
     mut q_tiles: Query<&mut FloorTileBlueprint>,
     mut commands: Commands,
-    #[cfg(feature = "profiling")] mut metrics: ResMut<ConstructionPerfMetrics>,
+    #[cfg(feature = "profiling")] mut metrics: Option<ResMut<ConstructionPerfMetrics>>,
 ) {
     #[cfg(feature = "profiling")]
     let started_at = Instant::now();
 
     for (site_entity, mut site) in q_sites.iter_mut() {
         #[cfg(feature = "profiling")]
-        {
+        if let Some(metrics) = metrics.as_mut() {
             metrics.floor_sites_considered = metrics.floor_sites_considered.saturating_add(1);
         }
         if !site.can_transition_to_pouring() {
@@ -72,7 +72,7 @@ pub fn floor_construction_phase_transition_system(
             continue;
         };
         #[cfg(feature = "profiling")]
-        {
+        if let Some(metrics) = metrics.as_mut() {
             metrics.floor_tiles_inspected = metrics
                 .floor_tiles_inspected
                 .saturating_add(tile_entities.len() as u64);
@@ -107,7 +107,7 @@ pub fn floor_construction_phase_transition_system(
     }
 
     #[cfg(feature = "profiling")]
-    {
+    if let Some(metrics) = metrics.as_mut() {
         metrics.floor_phase_elapsed_micros = metrics
             .floor_phase_elapsed_micros
             .saturating_add(started_at.elapsed().as_micros() as u64);
@@ -125,14 +125,14 @@ pub fn wall_construction_phase_transition_system(
     mut q_sites: WallTransitionSiteQuery,
     mut q_tiles: Query<&mut WallTileBlueprint>,
     mut commands: Commands,
-    #[cfg(feature = "profiling")] mut metrics: ResMut<ConstructionPerfMetrics>,
+    #[cfg(feature = "profiling")] mut metrics: Option<ResMut<ConstructionPerfMetrics>>,
 ) {
     #[cfg(feature = "profiling")]
     let started_at = Instant::now();
 
     for (site_entity, mut site) in q_sites.iter_mut() {
         #[cfg(feature = "profiling")]
-        {
+        if let Some(metrics) = metrics.as_mut() {
             metrics.wall_sites_considered = metrics.wall_sites_considered.saturating_add(1);
         }
         if !site.can_transition_to_coating() {
@@ -143,7 +143,7 @@ pub fn wall_construction_phase_transition_system(
             continue;
         };
         #[cfg(feature = "profiling")]
-        {
+        if let Some(metrics) = metrics.as_mut() {
             metrics.wall_tiles_inspected = metrics
                 .wall_tiles_inspected
                 .saturating_add(tile_entities.len() as u64);
@@ -178,7 +178,7 @@ pub fn wall_construction_phase_transition_system(
     }
 
     #[cfg(feature = "profiling")]
-    {
+    if let Some(metrics) = metrics.as_mut() {
         metrics.wall_phase_elapsed_micros = metrics
             .wall_phase_elapsed_micros
             .saturating_add(started_at.elapsed().as_micros() as u64);

@@ -112,7 +112,7 @@ pub struct WheelbarrowArbitrationResources<'w> {
     runtime: ResMut<'w, WheelbarrowArbitrationRuntime>,
     metrics: ResMut<'w, WheelbarrowArbitrationMetrics>,
     #[cfg(feature = "profiling")]
-    perf_metrics: ResMut<'w, WheelbarrowArbitrationPerfMetrics>,
+    perf_metrics: Option<ResMut<'w, WheelbarrowArbitrationPerfMetrics>>,
     cache: Res<'w, crate::resource_cache::SharedResourceCache>,
     diagnostics: ResMut<'w, WheelbarrowArbitrationDiagnostics>,
 }
@@ -196,8 +196,8 @@ pub fn wheelbarrow_arbitration_system(
 
     if should_rebuild {
         #[cfg(feature = "profiling")]
-        {
-            resources.perf_metrics.rebuilds = resources.perf_metrics.rebuilds.saturating_add(1);
+        if let Some(perf_metrics) = resources.perf_metrics.as_mut() {
+            perf_metrics.rebuilds = perf_metrics.rebuilds.saturating_add(1);
         }
         resources.runtime.initialized = true;
         resources.runtime.last_full_eval_secs = now;
@@ -248,19 +248,15 @@ pub fn wheelbarrow_arbitration_system(
         candidates_after_top_k = after_top_k;
         pending_secs_total = pending_total;
         #[cfg(feature = "profiling")]
-        {
+        if let Some(perf_metrics) = resources.perf_metrics.as_mut() {
             if eligible_requests > 0 {
-                resources.perf_metrics.request_bucket_builds = resources
-                    .perf_metrics
-                    .request_bucket_builds
-                    .saturating_add(1);
+                perf_metrics.request_bucket_builds =
+                    perf_metrics.request_bucket_builds.saturating_add(1);
             }
-            resources.perf_metrics.bucket_items_scanned = resources
-                .perf_metrics
+            perf_metrics.bucket_items_scanned = perf_metrics
                 .bucket_items_scanned
                 .saturating_add(bucket_items_total);
-            resources.perf_metrics.candidates_after_top_k = resources
-                .perf_metrics
+            perf_metrics.candidates_after_top_k = perf_metrics
                 .candidates_after_top_k
                 .saturating_add(candidates_after_top_k);
         }

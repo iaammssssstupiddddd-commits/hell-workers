@@ -23,12 +23,13 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::game_state::{PlayMode, TaskMode};
 use hw_core::quality::QualitySettings;
+use hw_core::selection::{FamiliarMoveFeedback, WorldPointerTarget};
 use hw_spatial::{
     FamiliarSpatialGrid, ResourceSpatialGrid, SelectableObstacleSpatialGrid, SpatialGrid,
     StockpileSpatialGrid,
 };
 use hw_ui::camera::MainCamera;
-use hw_ui::selection::{FamiliarMoveFeedback, OpenWorldContextMenu, WorldPointerTarget};
+use hw_ui::selection::OpenWorldContextMenu;
 use hw_world::WorldMap;
 
 pub struct InputPlugin;

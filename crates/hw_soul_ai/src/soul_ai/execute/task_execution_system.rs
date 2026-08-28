@@ -76,7 +76,7 @@ pub struct TaskExecutionParams<'w, 's> {
     missing_identity: MissingTaskIdentityQuery<'w, 's>,
     removed_identities: RemovedComponents<'w, 's, ActiveTaskIdentity>,
     #[cfg(feature = "profiling")]
-    perf_metrics: ResMut<'w, TaskExecutionPerfMetrics>,
+    perf_metrics: Option<ResMut<'w, TaskExecutionPerfMetrics>>,
 }
 
 pub fn task_execution_system(params: TaskExecutionParams) {
@@ -91,7 +91,7 @@ pub fn task_execution_system(params: TaskExecutionParams) {
         missing_identity: q_missing_identity,
         mut removed_identities,
         #[cfg(feature = "profiling")]
-        mut perf_metrics,
+        perf_metrics,
     } = params;
     // Escape runs in Decide before task execution. Reserve two ActiveTask
     // slots for Actor-side replans later in the frame, plus the idle reserve.
@@ -285,7 +285,7 @@ pub fn task_execution_system(params: TaskExecutionParams) {
     }
 
     #[cfg(feature = "profiling")]
-    {
+    if let Some(mut perf_metrics) = perf_metrics {
         perf_metrics.souls_queried = perf_metrics.souls_queried.saturating_add(souls_queried);
         perf_metrics.idle_skips = perf_metrics.idle_skips.saturating_add(idle_skips);
         perf_metrics.handler_runs = perf_metrics.handler_runs.saturating_add(handler_runs);

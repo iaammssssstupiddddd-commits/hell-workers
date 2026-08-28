@@ -71,10 +71,26 @@ pub use hw_core::ui_nodes::{UiMountSlot, UiNodeRegistry, UiRoot, UiSlot};
 
 #[derive(Resource, Default)]
 pub struct InfoPanelNodes {
+    pub common: InfoPanelCommonNodes,
+    pub soul: InfoPanelSoulNodes,
+    pub stockpile: InfoPanelStockpileNodes,
+    pub soul_spa: InfoPanelSoulSpaNodes,
+    pub power: InfoPanelPowerNodes,
+}
+
+#[derive(Default)]
+pub struct InfoPanelCommonNodes {
     pub root: Option<Entity>,
     pub stats_group: Option<Entity>,
     pub unpin_button: Option<Entity>,
     pub header: Option<Entity>,
+    pub summary: Option<Entity>,
+    pub rename_button: Option<Entity>,
+    pub rename_field_container: Option<Entity>,
+}
+
+#[derive(Default)]
+pub struct InfoPanelSoulNodes {
     pub gender_icon: Option<Entity>,
     pub motivation: Option<Entity>,
     pub stress: Option<Entity>,
@@ -82,6 +98,10 @@ pub struct InfoPanelNodes {
     pub dream: Option<Entity>,
     pub task: Option<Entity>,
     pub inventory: Option<Entity>,
+}
+
+#[derive(Default)]
+pub struct InfoPanelStockpileNodes {
     pub stockpile_group: Option<Entity>,
     pub stockpile_state: Option<Entity>,
     pub stockpile_current: Option<Entity>,
@@ -97,6 +117,10 @@ pub struct InfoPanelNodes {
     pub stockpile_export_button: Option<Entity>,
     pub stockpile_export_text: Option<Entity>,
     pub stockpile_area_button: Option<Entity>,
+}
+
+#[derive(Default)]
+pub struct InfoPanelSoulSpaNodes {
     pub soul_spa_group: Option<Entity>,
     pub soul_spa_status: Option<Entity>,
     pub soul_spa_output: Option<Entity>,
@@ -105,15 +129,16 @@ pub struct InfoPanelNodes {
     pub soul_spa_slots_text: Option<Entity>,
     pub soul_spa_slots_increase_button: Option<Entity>,
     pub soul_spa_cancel_button: Option<Entity>,
+}
+
+#[derive(Default)]
+pub struct InfoPanelPowerNodes {
     pub power_group: Option<Entity>,
     pub power_connection: Option<Entity>,
     pub power_flow: Option<Entity>,
     pub power_state: Option<Entity>,
     pub power_priority_button: Option<Entity>,
     pub power_priority_text: Option<Entity>,
-    pub common: Option<Entity>,
-    pub rename_button: Option<Entity>,
-    pub rename_field_container: Option<Entity>,
 }
 
 #[derive(Clone, Copy)]

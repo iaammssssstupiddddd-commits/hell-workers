@@ -365,6 +365,7 @@ pub(super) fn try_assign_for_workers(
             world_map: env.world_map,
             active_move_targets: env.active_move_targets,
         },
+        env.candidate_snapshot,
         &queries.storage.target_blueprints,
         diagnostics.evaluator,
         diagnostics.revisions,

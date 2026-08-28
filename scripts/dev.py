@@ -192,12 +192,22 @@ def verify() -> None:
         "-p",
         "test_*.py",
     )
+    run_python_script(
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/blender_ai_workflow/tests",
+        "-p",
+        "test_*.py",
+    )
     run_python_script(str(SCRIPTS_DIR / "perf.py"), "self-test")
 
     print("==> Repository contracts", flush=True)
     run_python_script(str(SCRIPTS_DIR / "check_agent_rules.py"))
     run_python_script(str(SCRIPTS_DIR / "check_help_impact.py"))
     run_python_script(str(SCRIPTS_DIR / "check_repo_hygiene.py"))
+    run_python_script(str(SCRIPTS_DIR / "check_crate_dependencies.py"))
     run_docs(write=False)
 
     print("==> Rust quality gates", flush=True)
@@ -206,16 +216,33 @@ def verify() -> None:
     run_command(
         [
             "cargo",
-            "check",
-            "-p",
-            "bevy_app@0.1.0",
-            "--lib",
+            "test",
+            "--workspace",
             "--no-default-features",
             "--features",
             "profiling",
             "--locked",
         ]
     )
+    profiling_features = ["profiling-memory", "profiling-tracy"]
+    if platform.system() in {"Linux", "Windows"}:
+        profiling_features.append("profiling-renderdoc")
+    else:
+        print("profiling-renderdoc: skipped (supported on Linux/Windows)")
+    for feature in profiling_features:
+        run_command(
+            [
+                "cargo",
+                "check",
+                "-p",
+                "bevy_app@0.1.0",
+                "--lib",
+                "--no-default-features",
+                "--features",
+                feature,
+                "--locked",
+            ]
+        )
     run_command(
         [
             "cargo",

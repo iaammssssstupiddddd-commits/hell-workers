@@ -59,10 +59,11 @@ use hw_logistics::zone::Stockpile;
 use hw_logistics::{BelongsTo, Inventory, ResourceItem, ResourceType, Wheelbarrow};
 use hw_ui::UiIntent;
 use hw_ui::components::{
-    LeftPanelMode, LeftPanelTabButton, MenuAction, MenuButton, MenuState, OrdersSubMenu,
-    TaskListItem, UiInputState, UiNodeRegistry, UiSlot,
+    InfoPanel, InfoPanelNodes, LeftPanelMode, LeftPanelTabButton, MenuAction, MenuButton,
+    MenuState, OrdersSubMenu, TaskListItem, UiInputState, UiNodeRegistry, UiSlot,
 };
-use hw_ui::help::{HelpEntryId, HelpPanel, HelpPanelContent, HelpPanelState, HelpTopicId};
+use hw_ui::help::{HelpEntryId, HelpPanelContent, HelpPanelState, HelpTopicId};
+use hw_ui::panels::info_panel::InfoPanelPinState;
 use hw_ui::panels::task_list::{
     PendingTaskCancellation, TaskActionButton, TaskActionButtonKind, TaskCancelKind,
     TaskDashboardActionState, TaskPriorityAdjustment, TaskPriorityTier,
@@ -84,7 +85,7 @@ use crate::interface::ui::panels::task_list::{
 use crate::plugins::startup::Camera3dRtt;
 use crate::systems::command::TaskMode;
 use crate::systems::save::{
-    SaveLoadOperation, SaveLoadOutcome, SaveLoadResult, SaveLoadState, SavePath,
+    SaveLoadOperation, SaveLoadOutcome, SaveLoadResult, SaveLoadState, SavePath, SaveStorageRoot,
 };
 
 use super::{DeconstructionHoverPreview, DeconstructionHoverStatus};
@@ -93,7 +94,7 @@ const ARTIFACT_ENV: &str = "HW_NATIVE_DECONSTRUCTION_ACCEPTANCE_ARTIFACT";
 const RUN_ID_ENV: &str = "HW_NATIVE_DECONSTRUCTION_ACCEPTANCE_RUN_ID";
 const RESULT_FILE: &str = "driver-result.json";
 const SCREENSHOT_FILE: &str = "deconstruction-v1-v5.png";
-const SAVE_FILE: &str = "runtime/saves/manual-1.scn.ron";
+const SAVE_FILE: &str = "runtime/saves/world.scn.ron";
 const READY_FRAMES: u32 = 30;
 const DRIVER_TIMEOUT: Duration = Duration::from_secs(180);
 const MIN_SCREENSHOT_WIDTH: u32 = 640;
@@ -157,8 +158,10 @@ impl NativeDeconstructionAcceptancePlugin {
 
 impl Plugin for NativeDeconstructionAcceptancePlugin {
     fn build(&self, app: &mut App) {
+        let save_root = self.artifact_dir.join("runtime/saves");
         let save_path = self.artifact_dir.join(SAVE_FILE);
         let render_evidence = NativeRenderEvidence::pending();
+        app.insert_resource(SaveStorageRoot::new(save_root));
         app.insert_resource(SavePath::new(save_path.clone()));
         app.insert_resource(NativeDeconstructionAcceptance::new(
             self.artifact_dir.clone(),
@@ -304,7 +307,7 @@ enum AcceptanceStage {
     AwaitV5CancelFirstPress,
     AwaitV5CancelSecondPress,
     AwaitV5Cancel,
-    AwaitFinalHelp,
+    AwaitFinalInfoPanel,
     AwaitScreenshot,
     Finished,
 }
@@ -460,6 +463,7 @@ struct NativeDeconstructionAcceptance {
     ready_frames: u32,
     pending_ui_release: Option<Entity>,
     v4_constructing_cancel_press_attempts: u8,
+    v5_cancel_press_attempts: u8,
     native_relative_speed: Option<f32>,
     base_grid: Option<(i32, i32)>,
     room_target_grid: Option<(i32, i32)>,
@@ -475,6 +479,7 @@ struct NativeDeconstructionAcceptance {
     v4: Option<V4Fixture>,
     v5_grid: Option<(i32, i32)>,
     v5_old_request: Option<DeconstructionCommitRequest>,
+    v5_save_dispatched: bool,
     v5_loaded: Option<LoadedV5Fixture>,
     v5_stale_snapshot: Option<V5StaleSnapshot>,
     v5_cancel_action_seen: bool,
@@ -510,6 +515,7 @@ impl NativeDeconstructionAcceptance {
             ready_frames: 0,
             pending_ui_release: None,
             v4_constructing_cancel_press_attempts: 0,
+            v5_cancel_press_attempts: 0,
             native_relative_speed: None,
             base_grid: None,
             room_target_grid: None,
@@ -525,6 +531,7 @@ impl NativeDeconstructionAcceptance {
             v4: None,
             v5_grid: None,
             v5_old_request: None,
+            v5_save_dispatched: false,
             v5_loaded: None,
             v5_stale_snapshot: None,
             v5_cancel_action_seen: false,
@@ -621,10 +628,7 @@ fn inject_native_resolved_input(
     help: Res<HelpPanelState>,
     mut resolved: ResMut<ResolvedInputFrame>,
 ) {
-    let awaiting_help = matches!(
-        driver.stage,
-        AcceptanceStage::AwaitV5HelpCapture | AcceptanceStage::AwaitFinalHelp
-    );
+    let awaiting_help = matches!(driver.stage, AcceptanceStage::AwaitV5HelpCapture);
     if awaiting_help && !help.open {
         resolved.replace(
             InputModifiers::default(),
@@ -782,6 +786,23 @@ fn inject_native_menu_and_pointer_input(
                 if driver.v4_constructing_cancel_press_attempts < 3 {
                     driver.v4_constructing_cancel_press_attempts += 1;
                     driver.stage = AcceptanceStage::AwaitV4ConstructingCancelFirstPress;
+                }
+                return;
+            }
+        }
+        if driver.stage == AcceptanceStage::AwaitV5CancelSecondPress {
+            let pending = PendingTaskCancellation {
+                target: expected.target,
+                expected_work_type: expected.expected_work_type,
+                kind: match expected.kind {
+                    TaskActionButtonKind::Cancel(kind) => kind,
+                    TaskActionButtonKind::AdjustPriority(_) => return,
+                },
+            };
+            if action_state.confirmation != Some(pending) {
+                if driver.v5_cancel_press_attempts < 3 {
+                    driver.v5_cancel_press_attempts += 1;
+                    driver.stage = AcceptanceStage::AwaitV5CancelFirstPress;
                 }
                 return;
             }
@@ -965,9 +986,14 @@ fn drive_stage(
         }
         AcceptanceStage::AwaitV5SaveInput => Ok(()),
         AcceptanceStage::AwaitV5Save => {
-            if *world.resource::<SaveLoadState>() == SaveLoadState::Idle {
-                let _ = world.resource_mut::<SaveLoadState>().try_set(
-                    crate::systems::save::manual_save_request(hw_core::SaveSlotId::Manual1, 1),
+            if !driver.v5_save_dispatched
+                && *world.resource::<SaveLoadState>() == SaveLoadState::Idle
+            {
+                driver.v5_save_dispatched = world.resource_mut::<SaveLoadState>().try_set(
+                    crate::systems::save::manual_save_request(
+                        hw_core::SaveSlotId::LegacyDefault,
+                        1,
+                    ),
                 );
             }
             await_v5_save(world, driver, receipts)
@@ -990,7 +1016,7 @@ fn drive_stage(
             Ok(())
         }
         AcceptanceStage::AwaitV5Cancel => await_v5_cancel(world, driver, receipts),
-        AcceptanceStage::AwaitFinalHelp => await_final_help(world, driver),
+        AcceptanceStage::AwaitFinalInfoPanel => await_final_info_panel(world, driver),
         AcceptanceStage::AwaitScreenshot => await_screenshot(world, driver),
         AcceptanceStage::Finished => Ok(()),
     }
@@ -3084,7 +3110,7 @@ fn await_v5_save(
         world
             .resource_mut::<SaveLoadState>()
             .try_set(crate::systems::save::normal_load_request(
-                hw_core::SaveSlotId::Manual1,
+                hw_core::SaveSlotId::LegacyDefault,
                 1,
             ));
     driver.stage = AcceptanceStage::AwaitV5Load;
@@ -3368,6 +3394,9 @@ fn await_v5_help_capture(
     if !world.resource::<UiInputState>().world_input_captured {
         return Ok(());
     }
+    if !help_recovery_copy_is_complete(world) {
+        return Ok(());
+    }
     resume_native_simulation(world, driver);
     world.write_message(UiIntent::AdjustTaskPriority {
         entity: loaded.order,
@@ -3467,6 +3496,7 @@ fn await_v5_reassignment(
         }
         return Ok(());
     }
+    freeze_native_simulation(world, driver);
     driver.stage = AcceptanceStage::AwaitV5CancelFirstPress;
     info!("NATIVE_DECONSTRUCTION_ACCEPTANCE: V5 order reassigned");
     Ok(())
@@ -3478,11 +3508,17 @@ fn await_v5_cancel(
     receipts: &FrameReceipts,
 ) -> Result<(), String> {
     let loaded = required(driver.v5_loaded, "V5 loaded fixture")?;
-    driver.v5_cancel_action_seen |= receipts.task_actions.iter().any(|outcome| {
-        outcome.entity == loaded.order
-            && outcome.action == TaskActionKind::Cancel
-            && outcome.result == TaskActionResult::AwaitingOwnerOutcome
-    });
+    for outcome in receipts.task_actions.iter().filter(|outcome| {
+        outcome.entity == loaded.order && outcome.action == TaskActionKind::Cancel
+    }) {
+        if outcome.result != TaskActionResult::AwaitingOwnerOutcome {
+            return Err(format!(
+                "V5 dashboard cancel returned unexpected task action outcome {:?}",
+                outcome.result
+            ));
+        }
+        driver.v5_cancel_action_seen = true;
+    }
     let canceled = receipts.cancels.iter().any(|outcome| {
         outcome.order == loaded.order && outcome.result == DeconstructionCancelResult::Canceled
     });
@@ -3505,32 +3541,84 @@ fn await_v5_cancel(
         );
     }
     driver.checks[4] = true;
-    driver.stage = AcceptanceStage::AwaitFinalHelp;
+    world.resource_mut::<SelectedEntity>().0 = Some(loaded.target);
+    world.resource_mut::<InfoPanelPinState>().entity = Some(loaded.target);
+    driver.stage = AcceptanceStage::AwaitFinalInfoPanel;
     info!("NATIVE_DECONSTRUCTION_ACCEPTANCE: V5 PASS");
     Ok(())
 }
 
-fn await_final_help(
+fn await_final_info_panel(
     world: &mut World,
     driver: &mut NativeDeconstructionAcceptance,
 ) -> Result<(), String> {
-    let topic = HelpTopicId::new("orders-areas");
-    if !world.resource::<HelpPanelState>().open {
+    let target = required(driver.v5_loaded, "V5 loaded fixture")?.target;
+    if world.resource::<SelectedEntity>().0 != Some(target)
+        || world.resource::<InfoPanelPinState>().entity != Some(target)
+    {
+        return Err("final Info Panel lost its selected/pinned Wall target".to_owned());
+    }
+    if world.resource::<HelpPanelState>().open {
+        return Err("final Info Panel evidence is obscured by Help".to_owned());
+    }
+
+    let nodes = world.resource::<InfoPanelNodes>();
+    let root = nodes
+        .common
+        .root
+        .ok_or_else(|| "final Info Panel root handle is missing".to_owned())?;
+    let header = nodes
+        .common
+        .header
+        .ok_or_else(|| "final Info Panel header handle is missing".to_owned())?;
+    let summary = nodes
+        .common
+        .summary
+        .ok_or_else(|| "final Info Panel summary handle is missing".to_owned())?;
+    let stats_group = nodes
+        .common
+        .stats_group
+        .ok_or_else(|| "final Info Panel stats handle is missing".to_owned())?;
+    let stockpile_group = nodes
+        .stockpile
+        .stockpile_group
+        .ok_or_else(|| "final Info Panel stockpile handle is missing".to_owned())?;
+    let soul_spa_group = nodes
+        .soul_spa
+        .soul_spa_group
+        .ok_or_else(|| "final Info Panel Soul Spa handle is missing".to_owned())?;
+    let power_group = nodes
+        .power
+        .power_group
+        .ok_or_else(|| "final Info Panel power handle is missing".to_owned())?;
+
+    let root_visible = world
+        .get::<Node>(root)
+        .is_some_and(|node| node.display != Display::None);
+    let header_text = world.get::<Text>(header).map(|text| text.0.as_str());
+    let summary_text = world.get::<Text>(summary).map(|text| text.0.as_str());
+    let section_is_hidden = |entity| {
+        world
+            .get::<Node>(entity)
+            .is_some_and(|node| node.display == Display::None)
+    };
+    if !root_visible
+        || header_text != Some("Building: Wall")
+        || summary_text != Some("")
+        || !section_is_hidden(stats_group)
+        || !section_is_hidden(stockpile_group)
+        || !section_is_hidden(soul_spa_group)
+        || !section_is_hidden(power_group)
+    {
         return Ok(());
     }
-    if world.resource::<HelpPanelState>().active_topic != Some(topic) {
-        world.write_message(UiIntent::SelectHelpTopic(topic));
-        return Ok(());
-    }
-    let mut help_query = world.query_filtered::<&Node, With<HelpPanel>>();
-    let node = help_query
-        .single(world)
-        .map_err(|_| "final Help overlay root is missing or duplicated".to_owned())?;
-    if node.display == Display::None || !help_recovery_copy_is_complete(world) {
-        return Ok(());
+    let mut roots = world.query_filtered::<Entity, With<InfoPanel>>();
+    if roots.iter(world).collect::<Vec<_>>() != [root] {
+        return Err("final Info Panel root authority is missing or duplicated".to_owned());
     }
     if driver.banner.is_none() {
         driver.banner = Some(spawn_pass_banner(world));
+        info!("NATIVE_DECONSTRUCTION_ACCEPTANCE: Info Panel PASS");
         return Ok(());
     }
     if !driver.screenshot_requested {

@@ -1,4 +1,4 @@
-//! FamiliarDelegationContext と process_task_delegation_and_movement の定義。
+//! Familiar delegation と continuous movement の境界コンテキスト。
 //!
 //! WorldMap / WalkabilityConnectivityCache / ConstructionSiteAccess などは全て leaf crate 由来であり、
 //! hw_familiar_ai から直接参照できる。
@@ -21,6 +21,7 @@ use super::task_management::TaskManager;
 use super::task_management::delegation::{
     DelegationDiagnosticsCtx, DelegationEnvCtx, DelegationScratchCtx,
 };
+use super::task_management::task_finder::DelegationCandidateSnapshot;
 use super::task_management::{
     FamiliarEvaluatorDiagnostics, FamiliarTaskAssignmentQueries, IncomingDeliverySnapshot,
     ReservationShadow,
@@ -39,12 +40,10 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub fam_transform: &'a Transform,
     pub familiar_op: &'a FamiliarOperation,
     pub familiar_policy: &'a FamiliarPolicy,
-    pub ai_state: &'a mut FamiliarAiState,
-    pub fam_dest: &'a mut Destination,
-    pub fam_path: &'a mut Path,
     pub task_area_opt: Option<&'a hw_core::area::TaskArea>,
     pub squad_entities: &'a [Entity],
     pub active_move_targets: &'a HashSet<Entity>,
+    pub candidate_snapshot: &'a DelegationCandidateSnapshot,
     pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
     pub task_queries: &'a mut FamiliarTaskAssignmentQueries<'w, 's>,
     pub construction_sites: &'a ConstructionSiteAccess<'w, 's>,
@@ -54,9 +53,7 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub managed_tasks: &'a ManagedTasks,
     pub world_map: &'a WorldMap,
     pub connectivity_cache: &'a mut WalkabilityConnectivityCache,
-    pub delta_secs: f32,
     pub allow_task_delegation: bool,
-    pub state_changed: bool,
     pub reservation_shadow: &'a mut ReservationShadow,
     pub tile_site_index: &'a TileSiteIndex,
     pub incoming_snapshot: &'a IncomingDeliverySnapshot,
@@ -64,14 +61,13 @@ pub struct FamiliarDelegationContext<'a, 'w, 's> {
     pub diagnostic_revisions: &'a TaskDiagnosticInputRevisions,
 }
 
-/// タスク委譲と移動制御を実行
-pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<'_, '_, '_>) {
+/// One Familiar's task delegation work for an active delegation cycle.
+pub fn process_task_delegation(ctx: &mut FamiliarDelegationContext<'_, '_, '_>) {
     let fam_pos = ctx.fam_transform.translation.truncate();
     let fatigue_threshold = ctx.familiar_op.release_fatigue_threshold();
 
-    // タスク委譲
-    let has_available_task = if ctx.allow_task_delegation {
-        TaskManager::delegate_task(
+    if ctx.allow_task_delegation {
+        let _ = TaskManager::delegate_task(
             DelegationEnvCtx {
                 fam_entity: ctx.fam_entity,
                 fam_pos,
@@ -87,6 +83,7 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
                 tile_site_index: ctx.tile_site_index,
                 incoming_snapshot: ctx.incoming_snapshot,
                 active_move_targets: ctx.active_move_targets,
+                candidate_snapshot: ctx.candidate_snapshot,
             },
             ctx.task_queries,
             ctx.construction_sites,
@@ -99,11 +96,27 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
                 evaluator: ctx.diagnostics,
                 revisions: ctx.diagnostic_revisions,
             },
-        )
-        .is_some()
-    } else {
-        false
-    };
+        );
+    }
+}
+
+/// Data needed by the per-frame supervision/search movement path.
+pub struct FamiliarMovementContext<'a, 'w, 's> {
+    pub fam_entity: Entity,
+    pub fam_transform: &'a Transform,
+    pub ai_state: &'a mut FamiliarAiState,
+    pub fam_dest: &'a mut Destination,
+    pub fam_path: &'a mut Path,
+    pub task_area_opt: Option<&'a hw_core::area::TaskArea>,
+    pub squad_entities: &'a [Entity],
+    pub q_souls: &'a mut FamiliarSoulQuery<'w, 's>,
+    pub delta_secs: f32,
+    pub state_changed: bool,
+}
+
+/// Run only continuous movement; it never scans or assigns task candidates.
+pub fn process_supervision_movement(ctx: &mut FamiliarMovementContext<'_, '_, '_>) {
+    let fam_pos = ctx.fam_transform.translation.truncate();
 
     // state_changed があっても、Supervising/SearchingTask なら各ロジックを呼ぶ
     if !ctx.state_changed
@@ -128,9 +141,8 @@ pub fn process_task_delegation_and_movement(ctx: &mut FamiliarDelegationContext<
                     .collect();
 
                 debug!(
-                    "FAM_AI: Supervising movement - active_members: {}, has_available_task: {}, state_changed: {}",
+                    "FAM_AI: Supervising movement - active_members: {}, state_changed: {}",
                     active_members.len(),
-                    has_available_task,
                     ctx.state_changed
                 );
                 let mut q_supervising_lens = ctx.q_souls.transmute_lens_filtered::<

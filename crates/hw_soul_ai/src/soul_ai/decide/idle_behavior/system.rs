@@ -66,7 +66,7 @@ pub(crate) struct IdleGatheringQueries<'w, 's> {
 pub(crate) struct IdleDecisionProfiling<'w, 's> {
     audit_seed: Option<Res<'w, FixedAuditSeed>>,
     random_states: IdleDecisionRandomStateQuery<'w, 's>,
-    metrics: ResMut<'w, SlowSimulationPerfMetrics>,
+    metrics: Option<ResMut<'w, SlowSimulationPerfMetrics>>,
 }
 
 type PeriodicIdleCandidateQuery<'w, 's> = Query<
@@ -180,7 +180,7 @@ pub(crate) fn idle_behavior_decision_system(context: IdleDecisionContext) {
         }
 
         #[cfg(feature = "profiling")]
-        {
+        if let Some(metrics) = metrics.as_mut() {
             metrics.idle_decisions = metrics.idle_decisions.saturating_add(1);
             metrics.idle_spatial_target_lookups =
                 metrics.idle_spatial_target_lookups.saturating_add(1);

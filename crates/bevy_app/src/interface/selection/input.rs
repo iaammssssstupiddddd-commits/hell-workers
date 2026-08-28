@@ -8,11 +8,11 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::GameSettings;
 use hw_core::game_state::PlayMode;
-use hw_ui::camera::MainCamera;
-use hw_ui::selection::{
-    FamiliarMoveFeedback, OpenWorldContextMenu, SelectionCandidate, SelectionIntent,
-    SelectionTargetClass, WorldPointerTarget,
+use hw_core::selection::{
+    FamiliarMoveFeedback, SelectionCandidate, SelectionTargetClass, WorldPointerTarget,
 };
+use hw_ui::camera::MainCamera;
+use hw_ui::selection::{OpenWorldContextMenu, SelectionIntent};
 use std::time::{Duration, Instant};
 
 use super::hit_test::SelectionResolver;
@@ -362,7 +362,7 @@ pub(crate) fn update_hover_entity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hw_ui::selection::SelectionHitKind;
+    use hw_core::selection::SelectionHitKind;
 
     fn candidate(entity: Entity) -> SelectionCandidate {
         SelectionCandidate {

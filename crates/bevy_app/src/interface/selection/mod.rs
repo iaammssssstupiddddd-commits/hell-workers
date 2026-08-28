@@ -6,9 +6,8 @@ mod input;
 mod mode;
 pub(crate) mod soul_spa_place;
 mod state {
-    pub use hw_ui::selection::{
-        HoveredEntity, SelectedEntity, SelectionIndicator, cleanup_selection_references_system,
-    };
+    pub use hw_core::selection::{HoveredEntity, SelectedEntity, SelectionIndicator};
+    pub use hw_ui::selection::cleanup_selection_references_system;
     pub use hw_visual::update_familiar_destination_marker;
     pub use hw_visual::update_selection_indicator;
 }

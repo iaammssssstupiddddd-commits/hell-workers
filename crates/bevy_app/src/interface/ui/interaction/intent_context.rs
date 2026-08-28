@@ -13,19 +13,8 @@ use crate::systems::save::{
 use crate::systems::settings::SettingsStorageRoot;
 use crate::world::map::GeneratedWorldLayoutResource;
 use hw_core::game_state::PlayMode;
-use hw_energy::{
-    PowerConsumer, PowerConsumerPolicy, PowerConsumerPolicyChangeOutcome,
-    PowerConsumerPolicyChangeStatus, PowerPriority, SoulSpaConstructionCancelOutcome,
-    SoulSpaConstructionCancelRequest, SoulSpaConstructionCancelResult, SoulSpaPhase, SoulSpaSite,
-    SoulSpaSlotsChangeOutcome, SoulSpaSlotsChangeStatus,
-};
 use hw_jobs::{Building, BuildingCategory, DeconstructionPending};
-use hw_logistics::{StockpilePolicyChangeRequest, StockpilePolicyPatch};
-use hw_spatial::StockpileSpatialGrid;
 use hw_ui::components::{ArchitectCategoryState, OperationDialog};
-use hw_ui::intents::StockpilePolicyEditTarget;
-use hw_ui::power::PowerPriorityValue;
-use hw_world::DoorLockToggleRequest;
 
 #[derive(SystemParam)]
 pub(crate) struct IntentModeCtx<'w, 's> {
@@ -42,27 +31,14 @@ impl IntentModeCtx<'_, '_> {
     }
 }
 
-/// Domain-side validation and mutation used by the generic UI intent handler.
-///
-/// This is placed in a `ParamSet` with `IntentModeCtx` because the generic
-/// handler borrows only one action domain at a time.
+/// UI-owned mode and selection actions used by the generic intent handler.
 #[derive(SystemParam)]
-pub(crate) struct IntentDomainActionCtx<'w, 's> {
+pub(crate) struct IntentActionCtx<'w, 's> {
     architect_category: ResMut<'w, ArchitectCategoryState>,
     q_buildings: Query<'w, 's, &'static Building, Without<DeconstructionPending>>,
-    door_lock_requests: MessageWriter<'w, DoorLockToggleRequest>,
-    stockpile_grid: Res<'w, StockpileSpatialGrid>,
-    stockpile_policy_requests: MessageWriter<'w, StockpilePolicyChangeRequest>,
-    soul_spa_slot_outcomes: MessageWriter<'w, SoulSpaSlotsChangeOutcome>,
-    soul_spa_cancel_requests: MessageWriter<'w, SoulSpaConstructionCancelRequest>,
-    soul_spa_cancel_outcomes: MessageWriter<'w, SoulSpaConstructionCancelOutcome>,
-    power_consumer_policy_outcomes: MessageWriter<'w, PowerConsumerPolicyChangeOutcome>,
-    q_soul_spas: Query<'w, 's, &'static mut SoulSpaSite>,
-    q_power_consumers: Query<'w, 's, Option<&'static mut PowerConsumerPolicy>, With<PowerConsumer>>,
-    q_entities: Query<'w, 's, ()>,
 }
 
-impl IntentDomainActionCtx<'_, '_> {
+impl IntentActionCtx<'_, '_> {
     pub(crate) fn toggle_architect_category(&mut self, category: Option<BuildingCategory>) {
         self.architect_category.0 = if self.architect_category.0 == category {
             None
@@ -75,91 +51,6 @@ impl IntentDomainActionCtx<'_, '_> {
         self.q_buildings
             .get(entity)
             .is_ok_and(|building| building.kind.is_player_movable())
-    }
-
-    pub(crate) fn toggle_door_lock(&mut self, entity: Entity) {
-        self.door_lock_requests
-            .write(DoorLockToggleRequest { owner: entity });
-    }
-
-    pub(crate) fn request_stockpile_policy_change(
-        &mut self,
-        target: StockpilePolicyEditTarget,
-        patch: StockpilePolicyPatch,
-    ) {
-        let targets =
-            crate::systems::command::resolve_stockpile_policy_targets(target, &self.stockpile_grid);
-        self.stockpile_policy_requests
-            .write(StockpilePolicyChangeRequest { targets, patch });
-    }
-
-    pub(crate) fn set_soul_spa_active_slots(&mut self, target: Entity, requested: u32) {
-        let status = match self.q_soul_spas.get_mut(target) {
-            Ok(site) if site.phase != SoulSpaPhase::Operational => {
-                SoulSpaSlotsChangeStatus::PhaseUnavailable
-            }
-            Ok(mut site) => {
-                let applied = SoulSpaSite::clamped_active_slots(requested);
-                if site.active_slots != applied {
-                    site.set_active_slots(applied);
-                }
-                SoulSpaSlotsChangeStatus::Applied {
-                    requested,
-                    applied,
-                    clamped: requested != applied,
-                }
-            }
-            Err(_) if self.q_entities.get(target).is_ok() => {
-                SoulSpaSlotsChangeStatus::UnsupportedTarget
-            }
-            Err(_) => SoulSpaSlotsChangeStatus::StaleTarget,
-        };
-        self.soul_spa_slot_outcomes
-            .write(SoulSpaSlotsChangeOutcome { target, status });
-    }
-
-    pub(crate) fn cancel_soul_spa_construction(&mut self, target: Entity, paused: bool) {
-        if paused {
-            self.soul_spa_cancel_outcomes
-                .write(SoulSpaConstructionCancelOutcome {
-                    target,
-                    result: SoulSpaConstructionCancelResult::Paused,
-                });
-        } else {
-            self.soul_spa_cancel_requests
-                .write(SoulSpaConstructionCancelRequest { target });
-        }
-    }
-
-    pub(crate) fn set_power_consumer_priority(
-        &mut self,
-        target: Entity,
-        requested: PowerPriorityValue,
-    ) {
-        let requested = match requested {
-            PowerPriorityValue::Low => PowerPriority::Low,
-            PowerPriorityValue::Normal => PowerPriority::Normal,
-            PowerPriorityValue::High => PowerPriority::High,
-        };
-        let status = match self.q_power_consumers.get_mut(target) {
-            Ok(Some(mut policy)) => {
-                let previous = policy.priority;
-                if previous != requested {
-                    policy.priority = requested;
-                }
-                PowerConsumerPolicyChangeStatus::Applied {
-                    previous,
-                    applied: requested,
-                }
-            }
-            Ok(None) => PowerConsumerPolicyChangeStatus::MissingPolicy,
-            Err(_) if self.q_entities.get(target).is_ok() => {
-                PowerConsumerPolicyChangeStatus::UnsupportedTarget
-            }
-            Err(_) => PowerConsumerPolicyChangeStatus::StaleTarget,
-        };
-        self.power_consumer_policy_outcomes
-            .write(PowerConsumerPolicyChangeOutcome { target, status });
     }
 }
 

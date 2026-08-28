@@ -1,5 +1,6 @@
 mod blueprint_cancellation;
 mod building_completion;
+mod construction_cancellation;
 pub mod deconstruction;
 mod exact_task_cleanup;
 pub mod floor_construction;

@@ -191,7 +191,7 @@ pub(crate) struct SlowSimulationDriverParams<'w, 's> {
     dream_transfers: Local<'s, DreamTransferAccumulator>,
     q_transforms: Query<'w, 's, &'static Transform>,
     #[cfg(feature = "profiling")]
-    metrics: ResMut<'w, SlowSimulationPerfMetrics>,
+    metrics: Option<ResMut<'w, SlowSimulationPerfMetrics>>,
     queries: ParamSet<
         'w,
         's,
@@ -221,8 +221,8 @@ pub(crate) fn slow_simulation_driver_system(
     for _ in 0..clock.steps_this_frame() {
         let dt = clock.step_secs();
         #[cfg(feature = "profiling")]
-        {
-            params.metrics.steps = params.metrics.steps.saturating_add(1);
+        if let Some(metrics) = params.metrics.as_mut() {
+            metrics.steps = metrics.steps.saturating_add(1);
         }
         {
             let mut q_souls = params.queries.p0();
@@ -233,9 +233,8 @@ pub(crate) fn slow_simulation_driver_system(
                 &mut q_souls,
             );
             #[cfg(feature = "profiling")]
-            {
-                params.metrics.souls_updated =
-                    params.metrics.souls_updated.saturating_add(_souls_updated);
+            if let Some(metrics) = params.metrics.as_mut() {
+                metrics.souls_updated = metrics.souls_updated.saturating_add(_souls_updated);
             }
         }
         {

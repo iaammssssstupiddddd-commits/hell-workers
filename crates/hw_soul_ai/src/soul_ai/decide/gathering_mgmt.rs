@@ -182,7 +182,7 @@ pub(crate) struct GatheringRecruitmentParams<'w, 's> {
     update_timer: Res<'w, GatheringUpdateTimer>,
     decide_output: SoulDecideOutput<'w>,
     #[cfg(feature = "profiling")]
-    perf_metrics: ResMut<'w, GatheringRecruitmentPerfMetrics>,
+    perf_metrics: Option<ResMut<'w, GatheringRecruitmentPerfMetrics>>,
 }
 
 /// 条件を満たすSoulの集会参加を Recruit 要求に変換する
@@ -221,7 +221,9 @@ pub(crate) fn gathering_recruitment_decision(params: GatheringRecruitmentParams)
         #[cfg(not(feature = "profiling"))]
         soul_grid.get_nearby_in_radius_into(spot.center, search_radius, &mut nearby_buf);
         #[cfg(feature = "profiling")]
-        perf_metrics.spatial_queries.merge(spatial_query);
+        if let Some(perf_metrics) = perf_metrics.as_mut() {
+            perf_metrics.spatial_queries.merge(spatial_query);
+        }
         #[cfg(feature = "profiling")]
         if audit_seed.is_some() {
             nearby_buf.sort_unstable_by_key(|entity| entity.to_bits());

@@ -17,6 +17,7 @@ pub enum FamiliarTaskDecisionSet {
     AutoGatherFlush,
     TaskRevisionSync,
     Delegation,
+    SupervisionMovement,
     Encouragement,
 }
 
@@ -43,6 +44,7 @@ pub fn configure_familiar_task_decision_schedule(app: &mut App) {
             FamiliarTaskDecisionSet::AutoGatherFlush,
             FamiliarTaskDecisionSet::TaskRevisionSync,
             FamiliarTaskDecisionSet::Delegation,
+            FamiliarTaskDecisionSet::SupervisionMovement,
             FamiliarTaskDecisionSet::Encouragement,
         )
             .chain()
@@ -91,8 +93,13 @@ impl Plugin for FamiliarAiCorePlugin {
             )
             .add_systems(
                 Update,
-                decide::task_delegation::familiar_task_delegation_system
+                decide::task_delegation::familiar_task_delegation_cycle_system
                     .in_set(FamiliarTaskDecisionSet::Delegation),
+            )
+            .add_systems(
+                Update,
+                decide::task_delegation::familiar_supervision_movement_system
+                    .in_set(FamiliarTaskDecisionSet::SupervisionMovement),
             )
             .add_systems(
                 Update,

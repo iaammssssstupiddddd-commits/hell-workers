@@ -9,15 +9,15 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::constants::TILE_SIZE;
 use hw_core::relationships::{LoadedIn, StoredIn};
+use hw_core::selection::{
+    SelectionCandidate, SelectionHitKind, SelectionTargetClass, classify_selection_distance,
+    point_to_rect_distance, sort_selection_candidates,
+};
 use hw_spatial::{
     FamiliarSpatialGrid, ResourceSpatialGrid, SelectableObstacleSpatialGrid, SpatialGrid,
     SpatialGridOps, StockpileSpatialGrid,
 };
 use hw_ui::camera::MainCamera;
-use hw_ui::selection::{
-    SelectionCandidate, SelectionHitKind, SelectionTargetClass, classify_selection_distance,
-    point_to_rect_distance, sort_selection_candidates,
-};
 use hw_world::WorldMap;
 
 const TASK_AREA_BORDER_HIT_THICKNESS: f32 = 6.0;

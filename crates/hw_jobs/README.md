@@ -18,6 +18,7 @@ Soul が実行するタスクの種類・進捗状態、および建物の建設
 | `events.rs` | タスク完了イベント等 |
 | `diagnostics.rs` | producer共通の5分類、fixed-width coverage/counter、input stamp/revision契約（表示非依存・runtime only） |
 | `lifecycle.rs` | タスク予約ライフサイクル helper (`collect_active_reservation_ops`, `active_reservation_signature`, `collect_release_reservation_ops`) |
+| `deconstruction.rs` | durable order、target policy、candidate/applyが共有するquery非依存`DeconstructionAssignmentFacts` validator |
 | `visual_sync/` | `GatherHighlightMarker` / `RestAreaVisual` / `BuildingVisualState` / `MudMixerVisualState` などの visual mirror 同期関数群 |
 
 ## AssignedTask

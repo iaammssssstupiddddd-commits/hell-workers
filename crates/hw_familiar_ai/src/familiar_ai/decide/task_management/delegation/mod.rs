@@ -12,6 +12,7 @@ use hw_world::{WalkabilityConnectivityCache, WorldMap};
 use std::collections::HashSet;
 
 use crate::familiar_ai::decide::task_management::context::ConstructionSitePositions;
+use crate::familiar_ai::decide::task_management::task_finder::DelegationCandidateSnapshot;
 use crate::familiar_ai::decide::task_management::{
     FamiliarEvaluatorDiagnostics, FamiliarSoulQuery, FamiliarTaskAssignmentQueries,
     IncomingDeliverySnapshot, ReservationShadow,
@@ -37,6 +38,7 @@ pub struct DelegationEnvCtx<'a> {
     pub tile_site_index: &'a TileSiteIndex,
     pub incoming_snapshot: &'a IncomingDeliverySnapshot,
     pub active_move_targets: &'a HashSet<Entity>,
+    pub candidate_snapshot: &'a DelegationCandidateSnapshot,
 }
 
 /// 委譲ループ内で更新するキャッシュと仮予約を一つの実行コンテキストに束ねる。

@@ -1,18 +1,18 @@
 //! Floor construction cancellation system
 
 use super::components::FloorConstructionCancelRequested;
-use crate::entities::damned_soul::{DamnedSoul, Path};
-use crate::systems::jobs::{ResourceItemVisualHandles, spawn_refund_items};
-use crate::systems::logistics::{Inventory, ResourceType};
+use crate::systems::jobs::ResourceItemVisualHandles;
+use crate::systems::jobs::construction_cancellation::{
+    ConstructionCancellationPolicy, ConstructionCancellationSoulQuery, collect_site_requests,
+    release_matching_workers, spawn_construction_refunds,
+};
 use crate::systems::soul_ai::execute::task_execution::context::TaskQueries;
 use crate::systems::soul_ai::execute::task_execution::types::AssignedTask;
 use crate::world::map::WorldMapWrite;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use hw_core::relationships::WorkingOn;
 use hw_logistics::tile_index::TileSiteIndex;
-use hw_logistics::transport_request::{TransportRequest, TransportRequestKind};
-use hw_soul_ai::unassign_task;
+use hw_logistics::transport_request::TransportRequest;
 use std::collections::HashSet;
 
 #[derive(Clone, Copy)]
@@ -31,20 +31,6 @@ fn is_floor_task_for_site(task: &AssignedTask, site_entity: Entity) -> bool {
     }
 }
 
-type SoulCancellationQuery<'w, 's> = Query<
-    'w,
-    's,
-    (
-        Entity,
-        &'static Transform,
-        &'static mut AssignedTask,
-        &'static mut Path,
-        &'static mut Inventory,
-        Option<&'static WorkingOn>,
-    ),
-    With<DamnedSoul>,
->;
-
 #[derive(SystemParam)]
 pub struct FloorCancellationQueries<'w, 's> {
     q_sites: Query<'w, 's, Entity, With<FloorConstructionCancelRequested>>,
@@ -62,7 +48,7 @@ pub struct FloorCancellationQueries<'w, 's> {
 pub fn floor_construction_cancellation_system(
     mut commands: Commands,
     fl_queries: FloorCancellationQueries,
-    mut q_souls: SoulCancellationQuery,
+    mut q_souls: ConstructionCancellationSoulQuery,
     mut reservation_queries: TaskQueries,
     mut world_map: WorldMapWrite,
     resource_item_handles: Res<ResourceItemVisualHandles>,
@@ -108,15 +94,11 @@ pub fn floor_construction_cancellation_system(
             }
         }
 
-        let site_requests: Vec<Entity> = fl_queries
-            .q_floor_requests
-            .iter()
-            .filter(|(_, request)| {
-                request.kind == TransportRequestKind::DeliverToFloorConstruction
-                    && request.anchor == site_entity
-            })
-            .map(|(request_entity, _)| request_entity)
-            .collect();
+        let site_requests = collect_site_requests(
+            &fl_queries.q_floor_requests,
+            site_entity,
+            ConstructionCancellationPolicy::FLOOR,
+        );
 
         let mut related_targets: HashSet<Entity> =
             HashSet::with_capacity(site_tiles.len() + site_requests.len() + 1);
@@ -124,56 +106,28 @@ pub fn floor_construction_cancellation_system(
         related_targets.extend(site_requests.iter().copied());
         related_targets.insert(site_entity);
 
-        let mut released_workers = 0usize;
-        for (
-            soul_entity,
-            soul_transform,
-            mut assigned_task,
-            mut path,
-            mut inventory,
-            working_on_opt,
-        ) in q_souls.iter_mut()
-        {
-            let matches_site_task = is_floor_task_for_site(&assigned_task, site_entity);
-            let matches_working_on = working_on_opt
-                .map(|working_on| related_targets.contains(&working_on.0))
-                .unwrap_or(false);
-
-            if !(matches_site_task || matches_working_on) {
-                continue;
-            }
-
-            unassign_task(
-                &mut commands,
-                hw_soul_ai::SoulDropCtx {
-                    soul_entity,
-                    drop_pos: soul_transform.translation.truncate(),
-                    inventory: Some(&mut inventory),
-                    dropped_item_res: None,
-                },
-                &mut assigned_task,
-                &mut path,
-                &mut reservation_queries,
-                &world_map,
-                true,
-            );
-            released_workers += 1;
-        }
+        let released_workers = release_matching_workers(
+            &mut commands,
+            &mut q_souls,
+            &mut reservation_queries,
+            &world_map,
+            |assigned_task, working_on_opt| {
+                let matches_site_task = is_floor_task_for_site(assigned_task, site_entity);
+                let matches_working_on = working_on_opt
+                    .map(|working_on| related_targets.contains(&working_on.0))
+                    .unwrap_or(false);
+                matches_site_task || matches_working_on
+            },
+        );
 
         let refunded_bones: u32 = site_tiles.iter().map(|tile| tile.bones_delivered).sum();
         let refunded_mud: u32 = site_tiles.iter().map(|tile| tile.mud_delivered).sum();
-        spawn_refund_items(
+        spawn_construction_refunds(
             &mut commands,
             &resource_item_handles,
             site_material_center,
-            ResourceType::Bone,
+            ConstructionCancellationPolicy::FLOOR,
             refunded_bones,
-        );
-        spawn_refund_items(
-            &mut commands,
-            &resource_item_handles,
-            site_material_center,
-            ResourceType::StasisMud,
             refunded_mud,
         );
 
@@ -201,13 +155,18 @@ pub fn floor_construction_cancellation_system(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entities::damned_soul::{DamnedSoul, Path};
+    use crate::systems::logistics::{Inventory, ResourceType};
     use bevy::ecs::schedule::ApplyDeferred;
     use hw_core::area::TaskArea;
     use hw_core::events::{OnTaskAbandoned, ResourceReservationRequest};
+    use hw_core::relationships::WorkingOn;
     use hw_jobs::construction::{FloorConstructionSite, FloorTileBlueprint};
     use hw_jobs::{ReinforceFloorPhase, ReinforceFloorTileData};
     use hw_logistics::SharedResourceCache;
-    use hw_logistics::transport_request::{TransportPriority, TransportRequest};
+    use hw_logistics::transport_request::{
+        TransportPriority, TransportRequest, TransportRequestKind,
+    };
 
     fn empty_handles() -> ResourceItemVisualHandles {
         ResourceItemVisualHandles {

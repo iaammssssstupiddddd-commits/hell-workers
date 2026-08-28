@@ -8,8 +8,8 @@ use hw_core::relationships::ManagedBy;
 use hw_jobs::{Designation, Priority, TaskSlots, WorkType};
 
 use crate::transport_request::{
-    TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
-    TransportRequestState,
+    ReceiverPolicyTier, TransportDemand, TransportPolicy, TransportPriority, TransportRequest,
+    TransportRequestKind, TransportRequestState,
 };
 use crate::types::ResourceType;
 
@@ -180,6 +180,264 @@ pub fn disable_request_if_needed(
     }
 }
 
+/// Stockpile producers own one additional receiver-policy component and a non-empty source group.
+pub type ExistingStockpileRequestRuntime<'a> = (
+    Option<&'a Transform>,
+    Option<&'a Visibility>,
+    Option<&'a Designation>,
+    Option<&'a ManagedBy>,
+    Option<&'a TaskSlots>,
+    Option<&'a Priority>,
+    Option<&'a ReceiverPolicyTier>,
+    Option<&'a TransportDemand>,
+    Option<&'a TransportRequestState>,
+    Option<&'a TransportPolicy>,
+);
+
+/// Semantic state shared by deposit and consolidation stockpile requests.
+pub struct StockpileRequestSpec<'a> {
+    pub name: &'static str,
+    pub anchor: Entity,
+    pub resource_type: ResourceType,
+    pub site_pos: Vec2,
+    pub issued_by: Entity,
+    pub new_assignable: usize,
+    pub job_priority: u32,
+    pub transport_priority: TransportPriority,
+    pub stockpile_group: &'a [Entity],
+    pub receiver_policy_tier: TransportPriority,
+    pub kind: TransportRequestKind,
+    pub work_type: WorkType,
+}
+
+/// Prefer an in-flight request, then the stable lowest entity id.
+#[inline]
+pub fn prefer_canonical_request(
+    candidate: (Entity, usize),
+    current: (Entity, usize),
+) -> (Entity, usize) {
+    match (candidate.1 > 0, current.1 > 0) {
+        (true, false) => candidate,
+        (false, true) => current,
+        _ if entity_sort_key(candidate.0) < entity_sort_key(current.0) => candidate,
+        _ => current,
+    }
+}
+
+fn entity_sort_key(entity: Entity) -> (u32, u32) {
+    (entity.index_u32(), entity.generation().to_bits())
+}
+
+fn stockpile_request_matches(
+    current: &TransportRequest,
+    desired: &StockpileRequestSpec<'_>,
+) -> bool {
+    current.kind == desired.kind
+        && current.anchor == desired.anchor
+        && current.resource_type == desired.resource_type
+        && current.issued_by == desired.issued_by
+        && current.priority == desired.transport_priority
+        && current.stockpile_group == desired.stockpile_group
+}
+
+fn update_stockpile_request_if_needed(
+    commands: &mut Commands,
+    entity: Entity,
+    current_request: &TransportRequest,
+    current: ExistingStockpileRequestRuntime<'_>,
+    desired: &StockpileRequestSpec<'_>,
+    workers: usize,
+) {
+    let (
+        transform,
+        visibility,
+        designation,
+        managed_by,
+        slots,
+        priority,
+        receiver_tier,
+        demand,
+        state,
+        policy,
+    ) = current;
+    let desired_slots = super::to_u32_saturating(workers.saturating_add(desired.new_assignable));
+    let inflight = super::to_u32_saturating(workers);
+    let desired_transform = Transform::from_xyz(desired.site_pos.x, desired.site_pos.y, 0.0);
+    let desired_state = request_state_for_workers(workers);
+    let mut entity_commands = commands.entity(entity);
+
+    if transform.is_none_or(|current| {
+        current.translation != desired_transform.translation
+            || current.rotation != desired_transform.rotation
+            || current.scale != desired_transform.scale
+    }) {
+        entity_commands.try_insert(desired_transform);
+    }
+    if visibility.is_none_or(|current| *current != Visibility::Hidden) {
+        entity_commands.try_insert(Visibility::Hidden);
+    }
+    if designation.is_none_or(|current| current.work_type != desired.work_type) {
+        entity_commands.try_insert(Designation {
+            work_type: desired.work_type,
+        });
+    }
+    if managed_by.is_none_or(|current| current.0 != desired.issued_by) {
+        entity_commands.try_insert(ManagedBy(desired.issued_by));
+    }
+    if slots.is_none_or(|current| current.max != desired_slots) {
+        entity_commands.try_insert(TaskSlots::new(desired_slots));
+    }
+    if priority.is_none_or(|current| current.0 != desired.job_priority) {
+        entity_commands.try_insert(Priority(desired.job_priority));
+    }
+    if !stockpile_request_matches(current_request, desired) {
+        entity_commands.try_insert(TransportRequest {
+            kind: desired.kind,
+            anchor: desired.anchor,
+            resource_type: desired.resource_type,
+            issued_by: desired.issued_by,
+            priority: desired.transport_priority,
+            stockpile_group: desired.stockpile_group.to_vec(),
+        });
+    }
+    if receiver_tier.is_none_or(|current| current.0 != desired.receiver_policy_tier) {
+        entity_commands.try_insert(ReceiverPolicyTier(desired.receiver_policy_tier));
+    }
+    if demand.is_none_or(|current| {
+        current.desired_slots != desired_slots || current.inflight != inflight
+    }) {
+        entity_commands.try_insert(TransportDemand {
+            desired_slots,
+            inflight,
+        });
+    }
+    if state.is_none_or(|current| *current != desired_state) {
+        entity_commands.try_insert(desired_state);
+    }
+    if policy.is_none_or(|current| !policy_is_default(current)) {
+        entity_commands.try_insert(TransportPolicy::default());
+    }
+}
+
+fn cap_committed_stockpile_request_if_needed(
+    commands: &mut Commands,
+    entity: Entity,
+    workers: usize,
+    current: ExistingStockpileRequestRuntime<'_>,
+) {
+    let workers = super::to_u32_saturating(workers);
+    let (_, _, _, _, slots, _, _, demand, state, _) = current;
+    let mut entity_commands = commands.entity(entity);
+    if slots.is_none_or(|current| current.max != workers) {
+        entity_commands.try_insert(TaskSlots::new(workers));
+    }
+    if demand.is_none_or(|current| current.desired_slots != workers || current.inflight != workers)
+    {
+        entity_commands.try_insert(TransportDemand {
+            desired_slots: workers,
+            inflight: workers,
+        });
+    }
+    if state.is_none_or(|current| *current != TransportRequestState::Claimed) {
+        entity_commands.try_insert(TransportRequestState::Claimed);
+    }
+}
+
+fn disable_workerless_stockpile_request_if_needed(
+    commands: &mut Commands,
+    entity: Entity,
+    current: ExistingStockpileRequestRuntime<'_>,
+) {
+    let (_, _, designation, _, slots, priority, receiver_tier, demand, _, _) = current;
+    let mut entity_commands = commands.entity(entity);
+    if designation.is_some() {
+        entity_commands.try_remove::<Designation>();
+    }
+    if slots.is_some() {
+        entity_commands.try_remove::<TaskSlots>();
+    }
+    if priority.is_some() {
+        entity_commands.try_remove::<Priority>();
+    }
+    if receiver_tier.is_some() {
+        entity_commands.try_remove::<ReceiverPolicyTier>();
+    }
+    if demand.is_none_or(|current| current.desired_slots != 0 || current.inflight != 0) {
+        entity_commands.try_insert(TransportDemand {
+            desired_slots: 0,
+            inflight: 0,
+        });
+    }
+}
+
+/// Reconcile the shared stockpile-request lifecycle, including duplicate and committed handling.
+#[inline]
+pub fn reconcile_stockpile_request(
+    commands: &mut Commands,
+    entity: Entity,
+    current_request: &TransportRequest,
+    current: ExistingStockpileRequestRuntime<'_>,
+    workers: usize,
+    is_canonical: bool,
+    desired: Option<&StockpileRequestSpec<'_>>,
+) {
+    if !is_canonical {
+        if workers == 0 {
+            commands.entity(entity).try_despawn();
+        } else {
+            cap_committed_stockpile_request_if_needed(commands, entity, workers, current);
+        }
+        return;
+    }
+
+    if let Some(desired) = desired {
+        update_stockpile_request_if_needed(
+            commands,
+            entity,
+            current_request,
+            current,
+            desired,
+            workers,
+        );
+    } else if workers == 0 {
+        disable_workerless_stockpile_request_if_needed(commands, entity, current);
+    } else {
+        cap_committed_stockpile_request_if_needed(commands, entity, workers, current);
+    }
+}
+
+/// Spawn one request using the same semantic shape accepted by the reconciler.
+#[inline]
+pub fn spawn_stockpile_request(commands: &mut Commands, desired: StockpileRequestSpec<'_>) {
+    let desired_slots = super::to_u32_saturating(desired.new_assignable);
+    commands.spawn((
+        Name::new(desired.name),
+        Transform::from_xyz(desired.site_pos.x, desired.site_pos.y, 0.0),
+        Visibility::Hidden,
+        Designation {
+            work_type: desired.work_type,
+        },
+        ManagedBy(desired.issued_by),
+        TaskSlots::new(desired_slots),
+        Priority(desired.job_priority),
+        TransportRequest {
+            kind: desired.kind,
+            anchor: desired.anchor,
+            resource_type: desired.resource_type,
+            issued_by: desired.issued_by,
+            priority: desired.transport_priority,
+            stockpile_group: desired.stockpile_group.to_vec(),
+        },
+        ReceiverPolicyTier(desired.receiver_policy_tier),
+        TransportDemand {
+            desired_slots,
+            inflight: 0,
+        },
+        TransportRequestState::Pending,
+        TransportPolicy::default(),
+    ));
+}
+
 /// 新規 request entity を spawn するためのスペック。
 pub struct SpawnRequestSpec<TTarget> {
     pub name: &'static str,
@@ -236,6 +494,7 @@ mod tests {
         request: Entity,
         owner: Entity,
         anchor: Entity,
+        stockpile_group: Vec<Entity>,
     }
 
     fn reconcile_active_request(
@@ -271,6 +530,37 @@ mod tests {
     ) {
         let current = q_requests.get(fixture.request).unwrap();
         disable_request_if_needed(&mut commands, fixture.request, current, Some(0));
+    }
+
+    fn reconcile_active_stockpile_request(
+        mut commands: Commands,
+        fixture: Res<RequestFixture>,
+        q_requests: Query<(&TransportRequest, ExistingStockpileRequestRuntime<'static>)>,
+    ) {
+        let (request, current) = q_requests.get(fixture.request).unwrap();
+        let desired = StockpileRequestSpec {
+            name: "TransportRequest::DepositToStockpile",
+            anchor: fixture.anchor,
+            resource_type: ResourceType::Wood,
+            site_pos: Vec2::new(4.0, 8.0),
+            issued_by: fixture.owner,
+            new_assignable: 2,
+            job_priority: 0,
+            transport_priority: TransportPriority::High,
+            stockpile_group: &fixture.stockpile_group,
+            receiver_policy_tier: TransportPriority::High,
+            kind: TransportRequestKind::DepositToStockpile,
+            work_type: WorkType::Haul,
+        };
+        reconcile_stockpile_request(
+            &mut commands,
+            fixture.request,
+            request,
+            current,
+            0,
+            true,
+            Some(&desired),
+        );
     }
 
     fn active_bundle(anchor: Entity, owner: Entity) -> impl Bundle {
@@ -309,6 +599,48 @@ mod tests {
             request,
             owner,
             anchor,
+            stockpile_group: vec![anchor],
+        });
+        app
+    }
+
+    fn stockpile_fixture() -> App {
+        let mut app = App::new();
+        let owner = app.world_mut().spawn_empty().id();
+        let anchor = app.world_mut().spawn_empty().id();
+        let request = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(4.0, 8.0, 0.0),
+                Visibility::Hidden,
+                Designation {
+                    work_type: WorkType::Haul,
+                },
+                ManagedBy(owner),
+                TaskSlots::new(2),
+                Priority(0),
+                TransportRequest {
+                    kind: TransportRequestKind::DepositToStockpile,
+                    anchor,
+                    resource_type: ResourceType::Wood,
+                    issued_by: owner,
+                    priority: TransportPriority::High,
+                    stockpile_group: vec![anchor],
+                },
+                ReceiverPolicyTier(TransportPriority::High),
+                TransportDemand {
+                    desired_slots: 2,
+                    inflight: 0,
+                },
+                TransportRequestState::Pending,
+                TransportPolicy::default(),
+            ))
+            .id();
+        app.insert_resource(RequestFixture {
+            request,
+            owner,
+            anchor,
+            stockpile_group: vec![anchor],
         });
         app
     }
@@ -355,5 +687,37 @@ mod tests {
         let demand = request.get_ref::<TransportDemand>().unwrap();
         assert_eq!((demand.desired_slots, demand.inflight), (0, 0));
         assert!(!demand.is_changed());
+    }
+
+    #[test]
+    fn second_stockpile_reconciliation_does_not_dirty_owned_components() {
+        let mut app = stockpile_fixture();
+        app.add_systems(Update, reconcile_active_stockpile_request);
+        app.update();
+        app.world_mut().clear_trackers();
+        app.update();
+
+        let request_entity = app.world().resource::<RequestFixture>().request;
+        let request = app.world().entity(request_entity);
+        assert!(!request.get_ref::<Transform>().unwrap().is_changed());
+        assert!(!request.get_ref::<Designation>().unwrap().is_changed());
+        assert!(!request.get_ref::<ManagedBy>().unwrap().is_changed());
+        assert!(!request.get_ref::<TaskSlots>().unwrap().is_changed());
+        assert!(!request.get_ref::<Priority>().unwrap().is_changed());
+        assert!(!request.get_ref::<TransportRequest>().unwrap().is_changed());
+        assert!(
+            !request
+                .get_ref::<ReceiverPolicyTier>()
+                .unwrap()
+                .is_changed()
+        );
+        assert!(!request.get_ref::<TransportDemand>().unwrap().is_changed());
+        assert!(
+            !request
+                .get_ref::<TransportRequestState>()
+                .unwrap()
+                .is_changed()
+        );
+        assert!(!request.get_ref::<TransportPolicy>().unwrap().is_changed());
     }
 }

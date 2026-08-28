@@ -33,7 +33,6 @@
 hw_core      ✓  (visual_mirror::* を通じてドメイン状態を受け取る)
 hw_spatial   ✓
 hw_world     ✓
-hw_ui        ✓  (UI 型の参照)
 bevy         ✓
 rand         ✓
 
@@ -43,6 +42,7 @@ hw_logistics △  (tank.rs の Stockpile のみ)
 
 # 禁止
 bevy_app       ✗
+hw_ui          ✗  (共有selection契約はhw_core::selectionを参照する)
 hw_soul_ai     ✗  (AI ロジック型は hw_core events 経由で受け取る)
 hw_familiar_ai ✗
 ```

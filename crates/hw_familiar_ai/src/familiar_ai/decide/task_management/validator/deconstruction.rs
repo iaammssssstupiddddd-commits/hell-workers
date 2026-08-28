@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use hw_jobs::{
-    DeconstructionTargetMarkers, deconstruction_marker_matches, supports_deconstruction_cleanup,
+    DeconstructionAssignmentFacts, DeconstructionAssignmentRejection, DeconstructionTargetMarkers,
+    validate_deconstruction_assignment_facts,
 };
 use hw_logistics::ResourceType;
 use std::collections::HashSet;
@@ -26,36 +27,17 @@ pub fn resolve_assignable_deconstruction_target(
         .deconstruction_pending
         .get(target)
         .map_err(|_| CandidateRejectReason::StaleInput)?;
-    if pending.order != order {
-        return Err(CandidateRejectReason::MalformedTask);
-    }
-    if queries.deconstruction_claims.get(target).is_ok() {
-        return Err(CandidateRejectReason::TemporaryContention);
-    }
-    if queries.move_planned.get(target).is_ok()
+    let move_conflict = queries.move_planned.get(target).is_ok()
         || queries.pending_building_moves.get(target).is_ok()
         || queries
             .move_plant_tasks
             .iter()
             .any(|move_task| move_task.building == target)
-        || active_move_targets.contains(&target)
-        || queries
-            .deconstruction_blockers
-            .get(order)
-            .is_ok_and(|blocker| blocker.active)
-    {
-        return Err(CandidateRejectReason::DependencyWaiting);
-    }
+        || active_move_targets.contains(&target);
 
     let Ok((_, building, provisional_wall)) = queries.storage.buildings.get(target) else {
         return Err(CandidateRejectReason::StaleInput);
     };
-    if building.is_provisional || provisional_wall.is_some() {
-        return Err(CandidateRejectReason::DependencyWaiting);
-    }
-    if !supports_deconstruction_cleanup(building.kind) {
-        return Err(CandidateRejectReason::DependencyWaiting);
-    }
     let water_storage = queries
         .storage
         .stockpiles
@@ -77,9 +59,29 @@ pub fn resolve_assignable_deconstruction_target(
         power_consumer: queries.power_consumers.get(target).is_ok(),
         power_generator: queries.power_generators.get(target).is_ok(),
     };
-    if !deconstruction_marker_matches(building.kind, markers) {
-        return Err(CandidateRejectReason::MalformedTask);
-    }
+    validate_deconstruction_assignment_facts(DeconstructionAssignmentFacts {
+        pending_matches_order: pending.order == order,
+        claim_present: queries.deconstruction_claims.get(target).is_ok(),
+        move_conflict,
+        blocker_active: queries
+            .deconstruction_blockers
+            .get(order)
+            .is_ok_and(|blocker| blocker.active),
+        provisional: building.is_provisional || provisional_wall.is_some(),
+        kind: building.kind,
+        markers,
+    })
+    .map_err(|reason| match reason {
+        DeconstructionAssignmentRejection::Claimed => CandidateRejectReason::TemporaryContention,
+        DeconstructionAssignmentRejection::DependencyWaiting
+        | DeconstructionAssignmentRejection::UnsupportedTarget => {
+            CandidateRejectReason::DependencyWaiting
+        }
+        DeconstructionAssignmentRejection::MalformedOrder
+        | DeconstructionAssignmentRejection::MalformedTarget => {
+            CandidateRejectReason::MalformedTask
+        }
+    })?;
 
     Ok(target)
 }

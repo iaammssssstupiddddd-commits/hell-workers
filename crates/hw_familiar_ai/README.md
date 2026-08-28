@@ -13,9 +13,11 @@ Perceive / Decide / Execute の各フェーズでの状態遷移・タスク探�
 | `familiar_ai/` | Familiar AI のトップレベル Plugin |
 | `familiar_ai/perceive/` | 担当エリア内の Soul・タスク・リソース情報の収集 |
 | `familiar_ai/decide/` | 行動方針の決定（タスク探索・Soul リクルート・Squad 管理） |
+| `familiar_ai/decide/task_delegation.rs` | cycle単位のYard/Designation/incoming/Move snapshot、0.5秒task delegation、毎frame supervision movementの分離 |
 | `familiar_ai/decide/task_management/policy/` | タスク種別ごとのアサイン戦略（basic, haul, soul_spa 等） |
 | `familiar_ai/decide/task_management/policy_score.rs` | base worker score後にtransport / Familiarのscalar contributionを合成する共有no-clamp score helper |
 | `familiar_ai/decide/task_management/diagnostics.rs` | typed rejection、Familiar-local 1票reducer、latest-only `FamiliarTaskCandidateDiagnostics` |
+| `familiar_ai/decide/task_management/validator/deconstruction.rs` | live ECSから共有`DeconstructionAssignmentFacts`を組み立てるcandidate境界 |
 | `familiar_ai/settings.rs` | Familiar settings request / outcome、target単位FIFO replay、operation / policyのatomic commitとroster release |
 | `familiar_ai/execute/` | 決定結果の ECS への反映 |
 

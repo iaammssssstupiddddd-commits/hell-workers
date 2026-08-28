@@ -10,6 +10,7 @@
 
 ### MessageReader 登録方針
 - セリフ系の通知 consumer は `SpeechPlugin` の `MessageReader` system として一元登録し、`GameSystemSet::Visual` で実行します。
+  roster/idle/squad由来の3 consumerも`SpeechVisualIngressSet`に入り、Actor後のtransformを読み、fixed-step auditのVisual停止条件に従います。
 - gameplay の即時副作用は対応する domain `EntityEvent` Observer に残し、SpeechPlugin に visual-only Observer を追加しません。
 
 ### Soul (魂) のセリフ

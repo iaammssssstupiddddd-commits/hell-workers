@@ -84,10 +84,10 @@ pub fn reconcile_power_grid_topology_system(
     mut commands: Commands,
     queries: PowerGridTopologyQueries,
     mut dirty: ResMut<EnergyUpdateDirty>,
-    #[cfg(feature = "profiling")] mut metrics: ResMut<super::grid_recalc::EnergyPerfMetrics>,
+    #[cfg(feature = "profiling")] metrics: Option<ResMut<super::grid_recalc::EnergyPerfMetrics>>,
 ) {
     #[cfg(feature = "profiling")]
-    {
+    if let Some(mut metrics) = metrics {
         metrics.topology_reconcile_runs = metrics.topology_reconcile_runs.saturating_add(1);
     }
     let mut yards: Vec<(Entity, Yard)> = queries

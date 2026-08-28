@@ -13,10 +13,10 @@ pub fn soul_spa_power_output_system(
     mut q_sites: Query<(Entity, &SoulSpaSite, &mut PowerGenerator)>,
     q_tiles: Query<(&SoulSpaTile, Option<&TaskWorkers>)>,
     mut dirty: ResMut<EnergyUpdateDirty>,
-    #[cfg(feature = "profiling")] mut metrics: ResMut<EnergyPerfMetrics>,
+    #[cfg(feature = "profiling")] metrics: Option<ResMut<EnergyPerfMetrics>>,
 ) {
     #[cfg(feature = "profiling")]
-    {
+    if let Some(mut metrics) = metrics {
         metrics.power_output_runs = metrics.power_output_runs.saturating_add(1);
     }
     let occupied_by_site = q_tiles

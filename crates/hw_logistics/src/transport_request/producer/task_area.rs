@@ -5,8 +5,8 @@ use std::time::Instant;
 
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use hw_core::relationships::{IncomingDeliveries, ManagedBy, StoredItems, TaskWorkers};
-use hw_jobs::{Designation, Priority, TaskSlots, WorkType};
+use hw_core::relationships::{IncomingDeliveries, StoredItems, TaskWorkers};
+use hw_jobs::{Designation, WorkType};
 
 use crate::stockpile_policy::{
     StockpilePolicyInput, StockpileTransferPhase, evaluate_stockpile_policy,
@@ -14,9 +14,8 @@ use crate::stockpile_policy::{
 };
 use crate::transport_request::producer::active_unit_cache::CachedStockpileGroups;
 use crate::transport_request::{
-    ManualHaulPinnedSource, ManualTransportRequest, ReceiverPolicyTier, TaskAreaMetrics,
-    TransportDemand, TransportPolicy, TransportPriority, TransportRequest, TransportRequestKind,
-    TransportRequestState,
+    ManualHaulPinnedSource, ManualTransportRequest, TaskAreaMetrics, TransportPriority,
+    TransportRequest, TransportRequestKind,
 };
 use crate::types::{BelongsTo, ResourceItem, ResourceType};
 use crate::zone::{Stockpile, StockpilePolicy};
@@ -451,175 +450,6 @@ fn request_key(request: &TransportRequest) -> StockpileRequestKey {
     }
 }
 
-fn prefer_canonical(candidate: (Entity, usize), current: (Entity, usize)) -> (Entity, usize) {
-    match (candidate.1 > 0, current.1 > 0) {
-        (true, false) => candidate,
-        (false, true) => current,
-        _ if entity_sort_key(candidate.0) < entity_sort_key(current.0) => candidate,
-        _ => current,
-    }
-}
-
-type ExistingRequestRuntime<'a> = (
-    Option<&'a Transform>,
-    Option<&'a Visibility>,
-    Option<&'a Designation>,
-    Option<&'a ManagedBy>,
-    Option<&'a TaskSlots>,
-    Option<&'a Priority>,
-    Option<&'a ReceiverPolicyTier>,
-    Option<&'a TransportDemand>,
-    Option<&'a TransportRequestState>,
-    Option<&'a TransportPolicy>,
-);
-
-fn request_matches(current: &TransportRequest, desired: &TransportRequest) -> bool {
-    current.kind == desired.kind
-        && current.anchor == desired.anchor
-        && current.resource_type == desired.resource_type
-        && current.issued_by == desired.issued_by
-        && current.priority == desired.priority
-        && current.stockpile_group == desired.stockpile_group
-}
-
-fn transport_policy_is_default(policy: &TransportPolicy) -> bool {
-    let default = TransportPolicy::default();
-    policy.allow_cross_area_source == default.allow_cross_area_source
-        && policy.allow_cross_familiar_claim == default.allow_cross_familiar_claim
-        && policy.source_search_radius_tiles == default.source_search_radius_tiles
-}
-
-fn upsert_active_request(
-    commands: &mut Commands,
-    entity: Entity,
-    current_request: &TransportRequest,
-    current: ExistingRequestRuntime<'_>,
-    desired: &DesiredStockpileRequest,
-    workers: usize,
-) {
-    let (
-        transform,
-        visibility,
-        designation,
-        managed_by,
-        slots,
-        priority,
-        receiver_tier,
-        demand,
-        state,
-        policy,
-    ) = current;
-    let desired_slots = super::to_u32_saturating(workers.saturating_add(desired.new_assignable));
-    let inflight = super::to_u32_saturating(workers);
-    let desired_transform = Transform::from_xyz(desired.pos.x, desired.pos.y, 0.0);
-    let desired_request = TransportRequest {
-        kind: TransportRequestKind::DepositToStockpile,
-        anchor: desired.anchor,
-        resource_type: desired.key.resource_type,
-        issued_by: desired.issued_by,
-        priority: desired.key.priority,
-        stockpile_group: desired.group_cells.clone(),
-    };
-    let desired_state = super::upsert::request_state_for_workers(workers);
-    let mut entity_commands = commands.entity(entity);
-
-    if transform.is_none_or(|current| {
-        current.translation != desired_transform.translation
-            || current.rotation != desired_transform.rotation
-            || current.scale != desired_transform.scale
-    }) {
-        entity_commands.try_insert(desired_transform);
-    }
-    if visibility.is_none_or(|current| *current != Visibility::Hidden) {
-        entity_commands.try_insert(Visibility::Hidden);
-    }
-    if designation.is_none_or(|current| current.work_type != WorkType::Haul) {
-        entity_commands.try_insert(Designation {
-            work_type: WorkType::Haul,
-        });
-    }
-    if managed_by.is_none_or(|current| current.0 != desired.issued_by) {
-        entity_commands.try_insert(ManagedBy(desired.issued_by));
-    }
-    if slots.is_none_or(|current| current.max != desired_slots) {
-        entity_commands.try_insert(TaskSlots::new(desired_slots));
-    }
-    if priority.is_none_or(|current| current.0 != 0) {
-        entity_commands.try_insert(Priority(0));
-    }
-    if !request_matches(current_request, &desired_request) {
-        entity_commands.try_insert(desired_request);
-    }
-    if receiver_tier.is_none_or(|current| current.0 != desired.key.priority) {
-        entity_commands.try_insert(ReceiverPolicyTier(desired.key.priority));
-    }
-    if demand.is_none_or(|current| {
-        current.desired_slots != desired_slots || current.inflight != inflight
-    }) {
-        entity_commands.try_insert(TransportDemand {
-            desired_slots,
-            inflight,
-        });
-    }
-    if state.is_none_or(|current| *current != desired_state) {
-        entity_commands.try_insert(desired_state);
-    }
-    if policy.is_none_or(|current| !transport_policy_is_default(current)) {
-        entity_commands.try_insert(TransportPolicy::default());
-    }
-}
-
-fn cap_committed_request(
-    commands: &mut Commands,
-    entity: Entity,
-    workers: usize,
-    current: ExistingRequestRuntime<'_>,
-) {
-    let workers = super::to_u32_saturating(workers);
-    let (_, _, _, _, slots, _, _, demand, state, _) = current;
-    let mut entity_commands = commands.entity(entity);
-    if slots.is_none_or(|current| current.max != workers) {
-        entity_commands.try_insert(TaskSlots::new(workers));
-    }
-    if demand.is_none_or(|current| current.desired_slots != workers || current.inflight != workers)
-    {
-        entity_commands.try_insert(TransportDemand {
-            desired_slots: workers,
-            inflight: workers,
-        });
-    }
-    if state.is_none_or(|current| *current != TransportRequestState::Claimed) {
-        entity_commands.try_insert(TransportRequestState::Claimed);
-    }
-}
-
-fn disable_workerless_request(
-    commands: &mut Commands,
-    entity: Entity,
-    current: ExistingRequestRuntime<'_>,
-) {
-    let (_, _, designation, _, slots, priority, receiver_tier, demand, _, _) = current;
-    let mut entity_commands = commands.entity(entity);
-    if designation.is_some() {
-        entity_commands.try_remove::<Designation>();
-    }
-    if slots.is_some() {
-        entity_commands.try_remove::<TaskSlots>();
-    }
-    if priority.is_some() {
-        entity_commands.try_remove::<Priority>();
-    }
-    if receiver_tier.is_some() {
-        entity_commands.try_remove::<ReceiverPolicyTier>();
-    }
-    if demand.is_none_or(|current| current.desired_slots != 0 || current.inflight != 0) {
-        entity_commands.try_insert(TransportDemand {
-            desired_slots: 0,
-            inflight: 0,
-        });
-    }
-}
-
 /// `task_area_auto_haul_system` の ECS クエリ・リソースをまとめた SystemParam。
 #[derive(SystemParam)]
 pub struct TaskAreaAutoHaulParams<'w, 's> {
@@ -633,7 +463,7 @@ pub struct TaskAreaAutoHaulParams<'w, 's> {
             Entity,
             &'static TransportRequest,
             Option<&'static TaskWorkers>,
-            ExistingRequestRuntime<'static>,
+            super::upsert::ExistingStockpileRequestRuntime<'static>,
         ),
         Without<ManualTransportRequest>,
     >,
@@ -661,7 +491,9 @@ pub fn task_area_auto_haul_system(mut commands: Commands, mut p: TaskAreaAutoHau
         let workers = workers.map_or(0, TaskWorkers::len);
         canonical
             .entry(request_key(request))
-            .and_modify(|current| *current = prefer_canonical((entity, workers), *current))
+            .and_modify(|current| {
+                *current = super::upsert::prefer_canonical_request((entity, workers), *current)
+            })
             .or_insert((entity, workers));
     }
 
@@ -672,22 +504,32 @@ pub fn task_area_auto_haul_system(mut commands: Commands, mut p: TaskAreaAutoHau
         let key = request_key(request);
         let workers = workers.map_or(0, TaskWorkers::len);
         let is_canonical = canonical.get(&key).is_some_and(|(kept, _)| *kept == entity);
-        if !is_canonical {
-            if workers == 0 {
-                commands.entity(entity).try_despawn();
-            } else {
-                cap_committed_request(&mut commands, entity, workers, current);
-            }
-            continue;
-        }
-
-        if let Some(desired) = desired_requests.get(&key) {
-            upsert_active_request(&mut commands, entity, request, current, desired, workers);
-        } else if workers == 0 {
-            disable_workerless_request(&mut commands, entity, current);
-        } else {
-            cap_committed_request(&mut commands, entity, workers, current);
-        }
+        let desired =
+            desired_requests
+                .get(&key)
+                .map(|desired| super::upsert::StockpileRequestSpec {
+                    name: "TransportRequest::DepositToStockpile",
+                    anchor: desired.anchor,
+                    resource_type: desired.key.resource_type,
+                    site_pos: desired.pos,
+                    issued_by: desired.issued_by,
+                    new_assignable: desired.new_assignable,
+                    job_priority: 0,
+                    transport_priority: desired.key.priority,
+                    stockpile_group: &desired.group_cells,
+                    receiver_policy_tier: desired.key.priority,
+                    kind: TransportRequestKind::DepositToStockpile,
+                    work_type: WorkType::Haul,
+                });
+        super::upsert::reconcile_stockpile_request(
+            &mut commands,
+            entity,
+            request,
+            current,
+            workers,
+            is_canonical,
+            desired.as_ref(),
+        );
     }
 
     let mut missing_requests: Vec<_> = desired_requests
@@ -696,33 +538,23 @@ pub fn task_area_auto_haul_system(mut commands: Commands, mut p: TaskAreaAutoHau
         .collect();
     missing_requests.sort_unstable_by(|(left, _), (right, _)| compare_request_keys(*left, *right));
     for (key, desired) in missing_requests {
-        let desired_slots = super::to_u32_saturating(desired.new_assignable);
-        commands.spawn((
-            Name::new("TransportRequest::DepositToStockpile"),
-            Transform::from_xyz(desired.pos.x, desired.pos.y, 0.0),
-            Visibility::Hidden,
-            Designation {
-                work_type: WorkType::Haul,
-            },
-            hw_core::relationships::ManagedBy(desired.issued_by),
-            TaskSlots::new(desired_slots),
-            Priority(0),
-            TransportRequest {
-                kind: TransportRequestKind::DepositToStockpile,
+        super::upsert::spawn_stockpile_request(
+            &mut commands,
+            super::upsert::StockpileRequestSpec {
+                name: "TransportRequest::DepositToStockpile",
                 anchor: desired.anchor,
                 resource_type: key.resource_type,
+                site_pos: desired.pos,
                 issued_by: desired.issued_by,
-                priority: key.priority,
-                stockpile_group: desired.group_cells,
+                new_assignable: desired.new_assignable,
+                job_priority: 0,
+                transport_priority: key.priority,
+                stockpile_group: &desired.group_cells,
+                receiver_policy_tier: key.priority,
+                kind: TransportRequestKind::DepositToStockpile,
+                work_type: WorkType::Haul,
             },
-            ReceiverPolicyTier(key.priority),
-            TransportDemand {
-                desired_slots,
-                inflight: 0,
-            },
-            TransportRequestState::Pending,
-            TransportPolicy::default(),
-        ));
+        );
     }
 
     p.metrics.task_area_groups = groups.len() as u32;
@@ -737,10 +569,12 @@ mod tests {
     use crate::SharedResourceCache;
     use crate::transport_request::arbitration::WheelbarrowArbitrationRuntime;
     use crate::transport_request::{
-        WheelbarrowArbitrationDiagnostics, wheelbarrow_arbitration_system,
+        ReceiverPolicyTier, TransportDemand, WheelbarrowArbitrationDiagnostics,
+        wheelbarrow_arbitration_system,
     };
     use crate::zone::StockpileAcceptance;
     use bevy::app::ScheduleRunnerPlugin;
+    use hw_jobs::TaskSlots;
     use hw_world::Yard;
 
     fn entity(index: u32) -> Entity {
@@ -948,9 +782,18 @@ mod tests {
     fn committed_request_is_the_deterministic_canonical_entity() {
         let workerless = (entity(1), 0);
         let committed = (entity(9), 1);
-        assert_eq!(prefer_canonical(committed, workerless), committed);
-        assert_eq!(prefer_canonical(workerless, committed), committed);
-        assert_eq!(prefer_canonical((entity(2), 0), workerless), workerless);
+        assert_eq!(
+            super::super::upsert::prefer_canonical_request(committed, workerless),
+            committed
+        );
+        assert_eq!(
+            super::super::upsert::prefer_canonical_request(workerless, committed),
+            committed
+        );
+        assert_eq!(
+            super::super::upsert::prefer_canonical_request((entity(2), 0), workerless),
+            workerless
+        );
     }
 
     #[test]

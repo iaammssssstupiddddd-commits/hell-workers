@@ -22,6 +22,10 @@ pub use voice::FamiliarVoice;
 use bevy::prelude::*;
 use conversation::ConversationPlugin;
 
+/// Actor-complete ingress for state-driven speech presentation.
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SpeechVisualIngressSet;
+
 pub struct SpeechPlugin;
 
 impl Plugin for SpeechPlugin {
@@ -29,6 +33,19 @@ impl Plugin for SpeechPlugin {
         app.register_type::<cooldown::SpeechHistory>();
         app.init_resource::<periodic::PeriodicEmotionFrameCounter>();
         app.add_plugins(ConversationPlugin);
+        app.configure_sets(
+            Update,
+            SpeechVisualIngressSet.in_set(hw_core::system_sets::GameSystemSet::Visual),
+        );
+        app.add_systems(
+            Update,
+            (
+                max_soul_visual::max_soul_visual_system,
+                idle_visual::familiar_idle_visual_apply_system,
+                squad_visual::squad_visual_system,
+            )
+                .in_set(SpeechVisualIngressSet),
+        );
         app.add_systems(
             Update,
             (

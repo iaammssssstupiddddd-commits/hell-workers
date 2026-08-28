@@ -28,7 +28,7 @@ pub struct WallCompletionParams<'w, 's> {
     q_requests: WallCompletionRequestQuery<'w, 's>,
     q_buildings: WallCompletionBuildingQuery<'w, 's>,
     #[cfg(feature = "profiling")]
-    metrics: ResMut<'w, ConstructionPerfMetrics>,
+    metrics: Option<ResMut<'w, ConstructionPerfMetrics>>,
 }
 
 /// Handles wall construction completion (no curing phase)
@@ -51,7 +51,7 @@ pub fn wall_construction_completion_system(
     let started_at = Instant::now();
     for (site_entity, site) in q_sites.iter() {
         #[cfg(feature = "profiling")]
-        {
+        if let Some(metrics) = metrics.as_mut() {
             metrics.wall_sites_considered = metrics.wall_sites_considered.saturating_add(1);
         }
         if site.phase != WallConstructionPhase::Coating
@@ -75,7 +75,7 @@ pub fn wall_construction_completion_system(
             .collect();
 
         #[cfg(feature = "profiling")]
-        {
+        if let Some(metrics) = metrics.as_mut() {
             metrics.wall_tiles_inspected = metrics
                 .wall_tiles_inspected
                 .saturating_add(site_tiles.len() as u64);
@@ -125,7 +125,7 @@ pub fn wall_construction_completion_system(
         );
     }
     #[cfg(feature = "profiling")]
-    {
+    if let Some(metrics) = metrics.as_mut() {
         metrics.wall_completion_elapsed_micros = metrics
             .wall_completion_elapsed_micros
             .saturating_add(started_at.elapsed().as_micros() as u64);

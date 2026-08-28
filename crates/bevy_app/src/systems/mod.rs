@@ -9,6 +9,7 @@ pub mod save;
 pub mod settings;
 pub mod soul_ai;
 pub mod time;
+pub(crate) mod ui_domain_commit;
 pub mod visual;
 
 pub use hw_core::system_sets::GameSystemSet;

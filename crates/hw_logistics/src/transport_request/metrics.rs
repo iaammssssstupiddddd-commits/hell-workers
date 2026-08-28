@@ -391,9 +391,12 @@ fn record_producer_outcome(
 #[cfg(feature = "profiling")]
 pub fn collect_transport_request_change_metrics_system(
     q_requests: ProducerChangeQuery,
-    mut metrics: ResMut<TransportRequestChangePerfMetrics>,
+    metrics: Option<ResMut<TransportRequestChangePerfMetrics>>,
     mut observed_entities: Local<HashSet<Entity>>,
 ) {
+    let Some(mut metrics) = metrics else {
+        return;
+    };
     metrics.observer_runs = metrics.observer_runs.saturating_add(1);
     observed_entities.clear();
     for (entity, request, common, targets) in q_requests.iter() {
@@ -415,8 +418,11 @@ pub fn collect_transport_request_change_metrics_system(
 #[cfg(feature = "profiling")]
 pub fn collect_soul_spa_transport_request_change_metrics_system(
     q_requests: ProducerChangeQuery,
-    mut metrics: ResMut<TransportRequestChangePerfMetrics>,
+    metrics: Option<ResMut<TransportRequestChangePerfMetrics>>,
 ) {
+    let Some(mut metrics) = metrics else {
+        return;
+    };
     for (entity, request, common, targets) in q_requests.iter() {
         if request.kind != TransportRequestKind::DeliverToSoulSpa {
             continue;

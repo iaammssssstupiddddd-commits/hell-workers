@@ -93,7 +93,7 @@ fn pan_camera_drag_app() -> (App, Entity, Entity, Location) {
         .init_resource::<PendingTestDrag>()
         .init_resource::<WorldSelectionGesture>()
         .init_resource::<hw_core::GameSettings>()
-        .init_resource::<hw_ui::selection::FamiliarMoveFeedback>()
+        .init_resource::<hw_core::selection::FamiliarMoveFeedback>()
         .init_resource::<hw_world::WorldMap>()
         .init_resource::<hw_spatial::FamiliarSpatialGrid>()
         .init_resource::<hw_spatial::SpatialGrid>()

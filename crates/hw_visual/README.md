@@ -20,7 +20,7 @@
 | `visual3d.rs` | Scene RtT用presentationコンポーネント（`Building3dVisual`, `Door3dVisual`, `ActorBillboard3d`）とactor billboard owner cache |
 | `layer/` | ビジュアルレイヤー定数・管理 |
 | `soul/` | Soul の progress bar, status, task link, idle/gathering/vitals visual |
-| `speech/` | 吹き出しと observer ベースの発話演出（`conversation/` の `systems.rs` / `phase_handlers.rs` / `bubble_spawn_helpers.rs` を含む） |
+| `speech/` | 吹き出しと observer ベースの発話演出。state-driven consumerもVisual配下の`SpeechVisualIngressSet`で実行（`conversation/` の `systems.rs` / `phase_handlers.rs` / `bubble_spawn_helpers.rs` を含む） |
 | `blueprint/` | 設計図 visual, progress bar, delivery popup |
 | `gather/` | 採取インジケータ、resource highlight |
 | `haul/` | 運搬 visual、手押し車追従 |
@@ -58,7 +58,7 @@
 
 ## 依存クレート
 
-- `hw_core`, `hw_jobs`, `hw_logistics`, `hw_spatial`, `hw_world`, `hw_ui`, `bevy`
+- `hw_core`, `hw_spatial`, `hw_world`, `bevy`, `rand`
 
 ## src/ との境界
 

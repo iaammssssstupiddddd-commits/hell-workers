@@ -15,10 +15,10 @@ use hw_jobs::events::TaskAssignmentRequest;
 use hw_jobs::mud_mixer::MudMixerStorage;
 use hw_jobs::{
     ActiveTaskIdentity, AssignedTask, BonePile, BridgeMarker, Building, DeconstructPhase,
-    DeconstructionBlocker, DeconstructionCommitClaim, DeconstructionOrder, DeconstructionPending,
-    DeconstructionTargetMarkers, Designation, Door, IssuedBy, MovePlanned, MovePlantTask,
-    PendingBuildingMove, ProvisionalWall, RestArea, SandPile, TargetDeconstructionRoot, TaskSlots,
-    WorkType, deconstruction_marker_matches, supports_deconstruction_cleanup,
+    DeconstructionAssignmentFacts, DeconstructionBlocker, DeconstructionCommitClaim,
+    DeconstructionOrder, DeconstructionPending, DeconstructionTargetMarkers, Designation, Door,
+    IssuedBy, MovePlanned, MovePlantTask, PendingBuildingMove, ProvisionalWall, RestArea, SandPile,
+    TargetDeconstructionRoot, TaskSlots, WorkType, validate_deconstruction_assignment_facts,
 };
 use hw_logistics::types::WheelbarrowParking;
 use hw_logistics::zone::Stockpile;
@@ -322,10 +322,7 @@ fn assignment_is_still_valid(
             else {
                 return false;
             };
-            if order_target.0 != data.target
-                || designation.work_type != WorkType::Deconstruct
-                || blocker.is_some_and(|blocker| blocker.active)
-            {
+            if order_target.0 != data.target || designation.work_type != WorkType::Deconstruct {
                 return false;
             }
             let Ok((pending, building, provisional_wall, claim, moving, pending_move)) =
@@ -352,37 +349,37 @@ fn assignment_is_still_valid(
             else {
                 return false;
             };
-            pending.order == data.order
-                && claim.is_none()
-                && moving.is_none()
-                && pending_move.is_none()
-                && !building.is_provisional
-                && provisional_wall.is_none()
-                && supports_deconstruction_cleanup(building.kind)
-                && deconstruction_marker_matches(
-                    building.kind,
-                    DeconstructionTargetMarkers {
-                        water_storage: stockpile.is_some_and(|stockpile| {
-                            stockpile.resource_type == Some(ResourceType::Water)
-                        }),
-                        mud_mixer_storage: mixer_storage.is_some(),
-                        rest_area: rest_area.is_some(),
-                        wheelbarrow_parking: wheelbarrow_parking.is_some(),
-                        sand_pile: sand_pile.is_some(),
-                        bone_pile: bone_pile.is_some(),
-                        door: door.is_some(),
-                        bridge: bridge.is_some(),
-                        operational_soul_spa: soul_spa
-                            .is_some_and(|site| site.phase == SoulSpaPhase::Operational),
-                        power_consumer: power_consumer.is_some(),
-                        power_generator: power_generator.is_some(),
-                    },
-                )
-                && !deconstruction
-                    .move_plant_tasks
-                    .iter()
-                    .any(|move_task| move_task.building == data.target)
-                && !assigned_move_targets.contains(&data.target)
+            validate_deconstruction_assignment_facts(DeconstructionAssignmentFacts {
+                pending_matches_order: pending.order == data.order,
+                claim_present: claim.is_some(),
+                move_conflict: moving.is_some()
+                    || pending_move.is_some()
+                    || deconstruction
+                        .move_plant_tasks
+                        .iter()
+                        .any(|move_task| move_task.building == data.target)
+                    || assigned_move_targets.contains(&data.target),
+                blocker_active: blocker.is_some_and(|blocker| blocker.active),
+                provisional: building.is_provisional || provisional_wall.is_some(),
+                kind: building.kind,
+                markers: DeconstructionTargetMarkers {
+                    water_storage: stockpile.is_some_and(|stockpile| {
+                        stockpile.resource_type == Some(ResourceType::Water)
+                    }),
+                    mud_mixer_storage: mixer_storage.is_some(),
+                    rest_area: rest_area.is_some(),
+                    wheelbarrow_parking: wheelbarrow_parking.is_some(),
+                    sand_pile: sand_pile.is_some(),
+                    bone_pile: bone_pile.is_some(),
+                    door: door.is_some(),
+                    bridge: bridge.is_some(),
+                    operational_soul_spa: soul_spa
+                        .is_some_and(|site| site.phase == SoulSpaPhase::Operational),
+                    power_consumer: power_consumer.is_some(),
+                    power_generator: power_generator.is_some(),
+                },
+            })
+            .is_ok()
         }
         task => !non_deconstruction_task_targets_pending_owner(task, deconstruction),
     }

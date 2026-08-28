@@ -3,9 +3,7 @@ use super::model::{
     stockpile_acceptance_row_label, stockpile_acceptance_summary, to_view_model,
 };
 use super::state::{InfoPanelPinState, InfoPanelState};
-use crate::components::{
-    InfoPanelNodes, MenuAction, MenuButton, SoulRenameState, UiNodeRegistry, UiSlot,
-};
+use crate::components::{InfoPanelNodes, MenuAction, MenuButton, SoulRenameState, UiSlot};
 use crate::intents::StockpilePolicyEditTarget;
 use crate::models::inspection::{
     EntityInspectionViewModel, InspectionSoulGender, PowerInspectionFields,
@@ -23,7 +21,6 @@ use hw_logistics::{StockpileAcceptance, StockpilePolicyPatch, StockpilePolicySta
 pub struct InfoPanelRes<'w, A: UiAssets + Resource + 'static> {
     pub game_assets: Res<'w, A>,
     pub info_nodes: Res<'w, InfoPanelNodes>,
-    pub ui_nodes: Res<'w, UiNodeRegistry>,
     pub inspection_view_model: Res<'w, EntityInspectionViewModel>,
 }
 
@@ -35,27 +32,22 @@ pub struct InfoPanelNodeQueries<'w, 's> {
     pub q_menu_button: Query<'w, 's, &'static mut MenuButton>,
 }
 
-fn entity_for_slot(
-    info_nodes: &InfoPanelNodes,
-    ui_nodes: &UiNodeRegistry,
-    slot: UiSlot,
-) -> Option<Entity> {
-    let info_entity = match slot {
-        UiSlot::InfoPanelRoot => info_nodes.root,
-        UiSlot::InfoPanelStatsGroup => info_nodes.stats_group,
-        UiSlot::InfoPanelUnpinButton => info_nodes.unpin_button,
-        UiSlot::Header => info_nodes.header,
-        UiSlot::GenderIcon => info_nodes.gender_icon,
-        UiSlot::StatMotivation => info_nodes.motivation,
-        UiSlot::StatStress => info_nodes.stress,
-        UiSlot::StatFatigue => info_nodes.fatigue,
-        UiSlot::StatDream => info_nodes.dream,
-        UiSlot::TaskText => info_nodes.task,
-        UiSlot::InventoryText => info_nodes.inventory,
-        UiSlot::CommonText => info_nodes.common,
+fn entity_for_slot(info_nodes: &InfoPanelNodes, slot: UiSlot) -> Option<Entity> {
+    match slot {
+        UiSlot::InfoPanelRoot => info_nodes.common.root,
+        UiSlot::InfoPanelStatsGroup => info_nodes.common.stats_group,
+        UiSlot::InfoPanelUnpinButton => info_nodes.common.unpin_button,
+        UiSlot::Header => info_nodes.common.header,
+        UiSlot::GenderIcon => info_nodes.soul.gender_icon,
+        UiSlot::StatMotivation => info_nodes.soul.motivation,
+        UiSlot::StatStress => info_nodes.soul.stress,
+        UiSlot::StatFatigue => info_nodes.soul.fatigue,
+        UiSlot::StatDream => info_nodes.soul.dream,
+        UiSlot::TaskText => info_nodes.soul.task,
+        UiSlot::InventoryText => info_nodes.soul.inventory,
+        UiSlot::CommonText => info_nodes.common.summary,
         _ => None,
-    };
-    info_entity.or_else(|| ui_nodes.get_slot(slot))
+    }
 }
 
 fn set_node_display(entity: Option<Entity>, q_node: &mut Query<&mut Node>, display: Display) {
@@ -154,7 +146,7 @@ fn update_power_section(
     q_menu_button: &mut Query<&mut MenuButton>,
 ) {
     set_node_display(
-        nodes.power_group,
+        nodes.power.power_group,
         q_node,
         if fields.is_some() {
             Display::Flex
@@ -167,7 +159,7 @@ fn update_power_section(
     };
 
     set_text_entity(
-        nodes.power_connection,
+        nodes.power.power_connection,
         q_text,
         if fields.grid.is_some() {
             "Connection: Connected"
@@ -215,15 +207,15 @@ fn update_power_section(
         };
         flow.push_str(&format!("\nShed order: {shed_order}"));
     }
-    set_text_entity(nodes.power_flow, q_text, &flow);
+    set_text_entity(nodes.power.power_flow, q_text, &flow);
     let mut state = power_supply_label(fields).to_string();
     if let Some(demand) = fields.demand_watts {
         state.push_str(&format!(" / Demand: {demand:.1}W"));
     }
-    set_text_entity(nodes.power_state, q_text, &state);
+    set_text_entity(nodes.power.power_state, q_text, &state);
 
     set_node_display(
-        nodes.power_priority_button,
+        nodes.power.power_priority_button,
         q_node,
         if fields.priority.is_some() {
             Display::Flex
@@ -234,12 +226,12 @@ fn update_power_section(
     if let Some(priority) = fields.priority {
         let next = next_power_priority(priority);
         set_text_entity(
-            nodes.power_priority_text,
+            nodes.power.power_priority_text,
             q_text,
             &format!("Priority: {priority:?} → {next:?}"),
         );
         set_menu_action(
-            nodes.power_priority_button,
+            nodes.power.power_priority_button,
             q_menu_button,
             MenuAction::SetPowerConsumerPriority {
                 target,
@@ -251,12 +243,11 @@ fn update_power_section(
 
 fn set_text_slot(
     info_nodes: &InfoPanelNodes,
-    ui_nodes: &UiNodeRegistry,
     q_text: &mut Query<&mut Text>,
     slot: UiSlot,
     value: &str,
 ) {
-    let Some(entity) = entity_for_slot(info_nodes, ui_nodes, slot) else {
+    let Some(entity) = entity_for_slot(info_nodes, slot) else {
         return;
     };
     if let Ok(mut text) = q_text.get_mut(entity)
@@ -268,12 +259,11 @@ fn set_text_slot(
 
 fn set_display_slot(
     info_nodes: &InfoPanelNodes,
-    ui_nodes: &UiNodeRegistry,
     q_node: &mut Query<&mut Node>,
     slot: UiSlot,
     display: Display,
 ) {
-    let Some(entity) = entity_for_slot(info_nodes, ui_nodes, slot) else {
+    let Some(entity) = entity_for_slot(info_nodes, slot) else {
         return;
     };
     if let Ok(mut node) = q_node.get_mut(entity)
@@ -285,36 +275,23 @@ fn set_display_slot(
 
 fn update_gender_icon<A: UiAssets>(
     info_nodes: &InfoPanelNodes,
-    ui_nodes: &UiNodeRegistry,
     q_gender: &mut Query<&mut ImageNode>,
     q_node: &mut Query<&mut Node>,
     game_assets: &A,
     gender: Option<InspectionSoulGender>,
 ) {
-    let Some(entity) = entity_for_slot(info_nodes, ui_nodes, UiSlot::GenderIcon) else {
+    let Some(entity) = entity_for_slot(info_nodes, UiSlot::GenderIcon) else {
         return;
     };
     if let Ok(mut icon) = q_gender.get_mut(entity) {
         if let Some(gender) = gender {
-            set_display_slot(
-                info_nodes,
-                ui_nodes,
-                q_node,
-                UiSlot::GenderIcon,
-                Display::Flex,
-            );
+            set_display_slot(info_nodes, q_node, UiSlot::GenderIcon, Display::Flex);
             icon.image = match gender {
                 InspectionSoulGender::Male => game_assets.icon_male().clone(),
                 InspectionSoulGender::Female => game_assets.icon_female().clone(),
             };
         } else {
-            set_display_slot(
-                info_nodes,
-                ui_nodes,
-                q_node,
-                UiSlot::GenderIcon,
-                Display::None,
-            );
+            set_display_slot(info_nodes, q_node, UiSlot::GenderIcon, Display::None);
         }
     }
 }
@@ -350,7 +327,6 @@ pub fn info_panel_system<A: UiAssets + Resource>(
 
     set_display_slot(
         &res.info_nodes,
-        &res.ui_nodes,
         &mut queries.q_node,
         UiSlot::InfoPanelRoot,
         if next_model.is_some() {
@@ -361,7 +337,6 @@ pub fn info_panel_system<A: UiAssets + Resource>(
     );
     set_display_slot(
         &res.info_nodes,
-        &res.ui_nodes,
         &mut queries.q_node,
         UiSlot::InfoPanelUnpinButton,
         if pinned { Display::Flex } else { Display::None },
@@ -384,12 +359,12 @@ pub fn info_panel_system<A: UiAssets + Resource>(
     match &next_model {
         Some(InfoPanelViewModel::Soul(soul)) => {
             set_node_display(
-                res.info_nodes.stockpile_group,
+                res.info_nodes.stockpile.stockpile_group,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.soul_spa_group,
+                res.info_nodes.soul_spa.soul_spa_group,
                 &mut queries.q_node,
                 Display::None,
             );
@@ -397,12 +372,12 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 .active
                 .is_some_and(|active| active.target == soul.entity);
             set_node_display(
-                res.info_nodes.rename_button,
+                res.info_nodes.common.rename_button,
                 &mut queries.q_node,
                 Display::Flex,
             );
             set_node_display(
-                res.info_nodes.rename_field_container,
+                res.info_nodes.common.rename_field_container,
                 &mut queries.q_node,
                 if renaming {
                     Display::Flex
@@ -412,14 +387,12 @@ pub fn info_panel_system<A: UiAssets + Resource>(
             );
             set_display_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_node,
                 UiSlot::InfoPanelStatsGroup,
                 Display::Flex,
             );
             set_display_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_node,
                 UiSlot::Header,
                 if renaming {
@@ -430,63 +403,54 @@ pub fn info_panel_system<A: UiAssets + Resource>(
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::Header,
                 &soul.header,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::StatMotivation,
                 &soul.motivation,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::StatStress,
                 &soul.stress,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::StatFatigue,
                 &soul.fatigue,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::StatDream,
                 &soul.dream,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::TaskText,
                 &soul.task,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::InventoryText,
                 &soul.inventory,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::CommonText,
                 &soul.common,
             );
             update_gender_icon(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_gender,
                 &mut queries.q_node,
                 &*res.game_assets,
@@ -495,56 +459,51 @@ pub fn info_panel_system<A: UiAssets + Resource>(
         }
         Some(InfoPanelViewModel::Stockpile(stockpile)) => {
             set_node_display(
-                res.info_nodes.soul_spa_group,
+                res.info_nodes.soul_spa.soul_spa_group,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.rename_button,
+                res.info_nodes.common.rename_button,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.rename_field_container,
+                res.info_nodes.common.rename_field_container,
                 &mut queries.q_node,
                 Display::None,
             );
             set_display_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_node,
                 UiSlot::InfoPanelStatsGroup,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.stockpile_group,
+                res.info_nodes.stockpile.stockpile_group,
                 &mut queries.q_node,
                 Display::Flex,
             );
             set_display_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_node,
                 UiSlot::Header,
                 Display::Flex,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::Header,
                 &stockpile.header,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::CommonText,
                 &stockpile.common,
             );
             update_gender_icon(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_gender,
                 &mut queries.q_node,
                 &*res.game_assets,
@@ -562,12 +521,12 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 .map(|resource| resource.display_name().to_string())
                 .unwrap_or_else(|| "Empty".to_string());
             set_text_entity(
-                res.info_nodes.stockpile_state,
+                res.info_nodes.stockpile.stockpile_state,
                 &mut queries.q_text,
                 &format!("State: {state_label}"),
             );
             set_text_entity(
-                res.info_nodes.stockpile_current,
+                res.info_nodes.stockpile.stockpile_current,
                 &mut queries.q_text,
                 &format!(
                     "Stored: {}/{} ({resource_label}) | Incoming: {}",
@@ -575,17 +534,17 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 ),
             );
             set_text_entity(
-                res.info_nodes.stockpile_acceptance_summary,
+                res.info_nodes.stockpile.stockpile_acceptance_summary,
                 &mut queries.q_text,
                 &stockpile_acceptance_summary(stockpile.acceptance),
             );
             set_text_entity(
-                res.info_nodes.stockpile_target_text,
+                res.info_nodes.stockpile.stockpile_target_text,
                 &mut queries.q_text,
                 &format!("Target: {}/{}", stockpile.target_amount, stockpile.capacity),
             );
             set_text_entity(
-                res.info_nodes.stockpile_priority_text,
+                res.info_nodes.stockpile.stockpile_priority_text,
                 &mut queries.q_text,
                 &format!("Inbound Priority: {:?} (cycle)", stockpile.inbound_priority),
             );
@@ -598,14 +557,14 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                     "Export: Off"
                 };
             set_text_entity(
-                res.info_nodes.stockpile_export_text,
+                res.info_nodes.stockpile.stockpile_export_text,
                 &mut queries.q_text,
                 export_label,
             );
 
             let single = StockpilePolicyEditTarget::Single(stockpile.entity);
             set_menu_action(
-                res.info_nodes.stockpile_acceptance_all_button,
+                res.info_nodes.stockpile.stockpile_acceptance_all_button,
                 &mut queries.q_menu_button,
                 MenuAction::ApplyStockpilePolicy {
                     target: single,
@@ -616,7 +575,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 },
             );
             set_menu_action(
-                res.info_nodes.stockpile_acceptance_none_button,
+                res.info_nodes.stockpile.stockpile_acceptance_none_button,
                 &mut queries.q_menu_button,
                 MenuAction::ApplyStockpilePolicy {
                     target: single,
@@ -626,7 +585,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                     },
                 },
             );
-            for row in &res.info_nodes.stockpile_acceptance_rows {
+            for row in &res.info_nodes.stockpile.stockpile_acceptance_rows {
                 set_text_entity(
                     Some(row.text),
                     &mut queries.q_text,
@@ -648,7 +607,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 );
             }
             set_menu_action(
-                res.info_nodes.stockpile_target_decrease_button,
+                res.info_nodes.stockpile.stockpile_target_decrease_button,
                 &mut queries.q_menu_button,
                 MenuAction::ApplyStockpilePolicy {
                     target: single,
@@ -659,7 +618,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 },
             );
             set_menu_action(
-                res.info_nodes.stockpile_target_increase_button,
+                res.info_nodes.stockpile.stockpile_target_increase_button,
                 &mut queries.q_menu_button,
                 MenuAction::ApplyStockpilePolicy {
                     target: single,
@@ -675,7 +634,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 },
             );
             set_menu_action(
-                res.info_nodes.stockpile_priority_button,
+                res.info_nodes.stockpile.stockpile_priority_button,
                 &mut queries.q_menu_button,
                 MenuAction::ApplyStockpilePolicy {
                     target: single,
@@ -686,7 +645,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 },
             );
             set_menu_action(
-                res.info_nodes.stockpile_export_button,
+                res.info_nodes.stockpile.stockpile_export_button,
                 &mut queries.q_menu_button,
                 MenuAction::ApplyStockpilePolicy {
                     target: single,
@@ -697,7 +656,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 },
             );
             set_menu_action(
-                res.info_nodes.stockpile_area_button,
+                res.info_nodes.stockpile.stockpile_area_button,
                 &mut queries.q_menu_button,
                 MenuAction::BeginStockpilePolicyRangeEdit {
                     patch: StockpilePolicyPatch {
@@ -711,56 +670,51 @@ pub fn info_panel_system<A: UiAssets + Resource>(
         }
         Some(InfoPanelViewModel::SoulSpa(soul_spa)) => {
             set_node_display(
-                res.info_nodes.stockpile_group,
+                res.info_nodes.stockpile.stockpile_group,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.soul_spa_group,
+                res.info_nodes.soul_spa.soul_spa_group,
                 &mut queries.q_node,
                 Display::Flex,
             );
             set_node_display(
-                res.info_nodes.rename_button,
+                res.info_nodes.common.rename_button,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.rename_field_container,
+                res.info_nodes.common.rename_field_container,
                 &mut queries.q_node,
                 Display::None,
             );
             set_display_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_node,
                 UiSlot::InfoPanelStatsGroup,
                 Display::None,
             );
             set_display_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_node,
                 UiSlot::Header,
                 Display::Flex,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::Header,
                 &soul_spa.header,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::CommonText,
                 &soul_spa.common,
             );
             update_gender_icon(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_gender,
                 &mut queries.q_node,
                 &*res.game_assets,
@@ -768,9 +722,13 @@ pub fn info_panel_system<A: UiAssets + Resource>(
             );
 
             let status = soul_spa_status_label(soul_spa);
-            set_text_entity(res.info_nodes.soul_spa_status, &mut queries.q_text, &status);
+            set_text_entity(
+                res.info_nodes.soul_spa.soul_spa_status,
+                &mut queries.q_text,
+                &status,
+            );
             set_node_display(
-                res.info_nodes.soul_spa_output,
+                res.info_nodes.soul_spa.soul_spa_output,
                 &mut queries.q_node,
                 if soul_spa.operational {
                     Display::Flex
@@ -779,12 +737,12 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 },
             );
             set_text_entity(
-                res.info_nodes.soul_spa_output,
+                res.info_nodes.soul_spa.soul_spa_output,
                 &mut queries.q_text,
                 &format!("Output: {:.1}W", soul_spa.output_watts),
             );
             set_text_entity(
-                res.info_nodes.soul_spa_slots_text,
+                res.info_nodes.soul_spa.soul_spa_slots_text,
                 &mut queries.q_text,
                 &format!(
                     "Active slots: {}/{}",
@@ -792,7 +750,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 ),
             );
             set_node_display(
-                res.info_nodes.soul_spa_controls,
+                res.info_nodes.soul_spa.soul_spa_controls,
                 &mut queries.q_node,
                 if soul_spa.operational {
                     Display::Flex
@@ -801,7 +759,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 },
             );
             set_menu_action(
-                res.info_nodes.soul_spa_slots_decrease_button,
+                res.info_nodes.soul_spa.soul_spa_slots_decrease_button,
                 &mut queries.q_menu_button,
                 MenuAction::SetSoulSpaActiveSlots {
                     target: soul_spa.entity,
@@ -809,7 +767,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 },
             );
             set_menu_action(
-                res.info_nodes.soul_spa_slots_increase_button,
+                res.info_nodes.soul_spa.soul_spa_slots_increase_button,
                 &mut queries.q_menu_button,
                 MenuAction::SetSoulSpaActiveSlots {
                     target: soul_spa.entity,
@@ -820,7 +778,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 },
             );
             set_node_display(
-                res.info_nodes.soul_spa_cancel_button,
+                res.info_nodes.soul_spa.soul_spa_cancel_button,
                 &mut queries.q_node,
                 if soul_spa.operational {
                     Display::None
@@ -829,7 +787,7 @@ pub fn info_panel_system<A: UiAssets + Resource>(
                 },
             );
             set_menu_action(
-                res.info_nodes.soul_spa_cancel_button,
+                res.info_nodes.soul_spa.soul_spa_cancel_button,
                 &mut queries.q_menu_button,
                 MenuAction::CancelSoulSpaConstruction {
                     target: soul_spa.entity,
@@ -838,56 +796,51 @@ pub fn info_panel_system<A: UiAssets + Resource>(
         }
         Some(InfoPanelViewModel::Power(power)) => {
             set_node_display(
-                res.info_nodes.stockpile_group,
+                res.info_nodes.stockpile.stockpile_group,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.soul_spa_group,
+                res.info_nodes.soul_spa.soul_spa_group,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.rename_button,
+                res.info_nodes.common.rename_button,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.rename_field_container,
+                res.info_nodes.common.rename_field_container,
                 &mut queries.q_node,
                 Display::None,
             );
             set_display_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_node,
                 UiSlot::InfoPanelStatsGroup,
                 Display::None,
             );
             set_display_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_node,
                 UiSlot::Header,
                 Display::Flex,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::Header,
                 &power.header,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::CommonText,
                 &power.common,
             );
             update_gender_icon(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_gender,
                 &mut queries.q_node,
                 &*res.game_assets,
@@ -896,49 +849,45 @@ pub fn info_panel_system<A: UiAssets + Resource>(
         }
         Some(InfoPanelViewModel::Simple(simple)) => {
             set_node_display(
-                res.info_nodes.stockpile_group,
+                res.info_nodes.stockpile.stockpile_group,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.soul_spa_group,
+                res.info_nodes.soul_spa.soul_spa_group,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.rename_button,
+                res.info_nodes.common.rename_button,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.rename_field_container,
+                res.info_nodes.common.rename_field_container,
                 &mut queries.q_node,
                 Display::None,
             );
             set_display_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_node,
                 UiSlot::InfoPanelStatsGroup,
                 Display::None,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::Header,
                 &simple.header,
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::CommonText,
                 &simple.common,
             );
             update_gender_icon(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_gender,
                 &mut queries.q_node,
                 &*res.game_assets,
@@ -946,42 +895,21 @@ pub fn info_panel_system<A: UiAssets + Resource>(
             );
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::StatMotivation,
                 "",
             );
+            set_text_slot(&res.info_nodes, &mut queries.q_text, UiSlot::StatStress, "");
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
-                &mut queries.q_text,
-                UiSlot::StatStress,
-                "",
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::StatFatigue,
                 "",
             );
+            set_text_slot(&res.info_nodes, &mut queries.q_text, UiSlot::StatDream, "");
+            set_text_slot(&res.info_nodes, &mut queries.q_text, UiSlot::TaskText, "");
             set_text_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
-                &mut queries.q_text,
-                UiSlot::StatDream,
-                "",
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &res.ui_nodes,
-                &mut queries.q_text,
-                UiSlot::TaskText,
-                "",
-            );
-            set_text_slot(
-                &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_text,
                 UiSlot::InventoryText,
                 "",
@@ -989,35 +917,33 @@ pub fn info_panel_system<A: UiAssets + Resource>(
         }
         None => {
             set_node_display(
-                res.info_nodes.stockpile_group,
+                res.info_nodes.stockpile.stockpile_group,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.soul_spa_group,
+                res.info_nodes.soul_spa.soul_spa_group,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.rename_button,
+                res.info_nodes.common.rename_button,
                 &mut queries.q_node,
                 Display::None,
             );
             set_node_display(
-                res.info_nodes.rename_field_container,
+                res.info_nodes.common.rename_field_container,
                 &mut queries.q_node,
                 Display::None,
             );
             set_display_slot(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_node,
                 UiSlot::InfoPanelStatsGroup,
                 Display::None,
             );
             update_gender_icon(
                 &res.info_nodes,
-                &res.ui_nodes,
                 &mut queries.q_gender,
                 &mut queries.q_node,
                 &*res.game_assets,

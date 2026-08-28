@@ -29,7 +29,8 @@ Familiarの地面移動を受理すると、移動先へ短時間の緑色マー
 
 ## 実装境界
 
-- `hw_ui::selection::candidate`: candidate型、画面矩形距離、順位、表示用resource
+- `hw_core::selection`: candidate型、画面矩形距離、順位、表示用resource
+- `hw_ui::selection`: gesture intentとtyped placement validation／feedback
 - `hw_spatial::selectable_obstacle`: Tree／Rockの差分更新index
 - `bevy_app::interface::selection`: WorldMap／index／ECSのcandidate収集、gesture、intent適用
 - `hw_visual::selection_indicator`: Hover、footprint selection、Familiar destination marker

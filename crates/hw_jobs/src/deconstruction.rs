@@ -332,6 +332,49 @@ pub struct DeconstructionTargetMarkers {
     pub power_generator: bool,
 }
 
+/// Query-independent live facts shared by candidate and assignment-apply validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeconstructionAssignmentFacts {
+    pub pending_matches_order: bool,
+    pub claim_present: bool,
+    pub move_conflict: bool,
+    pub blocker_active: bool,
+    pub provisional: bool,
+    pub kind: BuildingType,
+    pub markers: DeconstructionTargetMarkers,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeconstructionAssignmentRejection {
+    MalformedOrder,
+    Claimed,
+    DependencyWaiting,
+    UnsupportedTarget,
+    MalformedTarget,
+}
+
+/// Validate facts captured from the live ECS at one boundary.
+pub const fn validate_deconstruction_assignment_facts(
+    facts: DeconstructionAssignmentFacts,
+) -> Result<(), DeconstructionAssignmentRejection> {
+    if !facts.pending_matches_order {
+        return Err(DeconstructionAssignmentRejection::MalformedOrder);
+    }
+    if facts.claim_present {
+        return Err(DeconstructionAssignmentRejection::Claimed);
+    }
+    if facts.move_conflict || facts.blocker_active || facts.provisional {
+        return Err(DeconstructionAssignmentRejection::DependencyWaiting);
+    }
+    if !supports_deconstruction_cleanup(facts.kind) {
+        return Err(DeconstructionAssignmentRejection::UnsupportedTarget);
+    }
+    if !deconstruction_marker_matches(facts.kind, facts.markers) {
+        return Err(DeconstructionAssignmentRejection::MalformedTarget);
+    }
+    Ok(())
+}
+
 pub const fn deconstruction_marker_matches(
     kind: BuildingType,
     markers: DeconstructionTargetMarkers,
@@ -790,5 +833,44 @@ mod tests {
                 Err(DeconstructionRejectReason::Moving)
             );
         }
+    }
+
+    #[test]
+    fn assignment_facts_apply_one_shared_fail_closed_precedence() {
+        let valid = DeconstructionAssignmentFacts {
+            pending_matches_order: true,
+            claim_present: false,
+            move_conflict: false,
+            blocker_active: false,
+            provisional: false,
+            kind: BuildingType::Wall,
+            markers: DeconstructionTargetMarkers::default(),
+        };
+        assert_eq!(validate_deconstruction_assignment_facts(valid), Ok(()));
+        assert_eq!(
+            validate_deconstruction_assignment_facts(DeconstructionAssignmentFacts {
+                claim_present: true,
+                move_conflict: true,
+                ..valid
+            }),
+            Err(DeconstructionAssignmentRejection::Claimed)
+        );
+        assert_eq!(
+            validate_deconstruction_assignment_facts(DeconstructionAssignmentFacts {
+                blocker_active: true,
+                ..valid
+            }),
+            Err(DeconstructionAssignmentRejection::DependencyWaiting)
+        );
+        assert_eq!(
+            validate_deconstruction_assignment_facts(DeconstructionAssignmentFacts {
+                markers: DeconstructionTargetMarkers {
+                    door: true,
+                    ..default()
+                },
+                ..valid
+            }),
+            Err(DeconstructionAssignmentRejection::MalformedTarget)
+        );
     }
 }

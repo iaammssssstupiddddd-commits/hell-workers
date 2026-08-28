@@ -68,12 +68,12 @@ pub fn state_sanity_should_run(audit: Res<StateSanityAudit>) -> bool {
 
 pub fn clear_state_sanity_trigger_system(
     mut audit: ResMut<StateSanityAudit>,
-    #[cfg(feature = "profiling")] mut metrics: ResMut<SlowSimulationPerfMetrics>,
+    #[cfg(feature = "profiling")] metrics: Option<ResMut<SlowSimulationPerfMetrics>>,
 ) {
     audit.dirty = false;
     audit.due = false;
     #[cfg(feature = "profiling")]
-    {
+    if let Some(mut metrics) = metrics {
         metrics.state_sanity_audits = metrics.state_sanity_audits.saturating_add(1);
     }
 }

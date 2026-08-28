@@ -198,7 +198,7 @@ pub struct PathfindingResources<'w, 's> {
     pf_context: Local<'s, PathfindingContext>,
     budget: ResMut<'w, RuntimePathSearchBudget>,
     #[cfg(feature = "profiling")]
-    defer_metrics: ResMut<'w, RuntimePathDeferMetrics>,
+    defer_metrics: Option<ResMut<'w, RuntimePathDeferMetrics>>,
     work_queue: Local<'s, EpochLocal<RuntimePathWorkQueue>>,
     rest_areas: Query<'w, 's, &'static Transform, With<hw_jobs::RestArea>>,
     assignment_queries:
@@ -405,7 +405,9 @@ pub fn pathfinding_system(
     let world_epoch = world_epoch.map_or_else(WorldEpoch::default, |epoch| *epoch);
     let work_queue = work_queue.get_mut(world_epoch);
     #[cfg(feature = "profiling")]
-    work_queue.begin_defer_metrics_frame(&defer_metrics);
+    if let Some(defer_metrics) = defer_metrics.as_deref() {
+        work_queue.begin_defer_metrics_frame(defer_metrics);
+    }
 
     collect_pathfinding_work(work_queue, obstacle_version, &mut query);
 
@@ -504,7 +506,9 @@ pub fn pathfinding_system(
                 WorkerPathfindingOutcome::CoolingDown => work_queue.begin_cooldown(entity),
                 WorkerPathfindingOutcome::Deferred => {
                     #[cfg(feature = "profiling")]
-                    work_queue.record_deferred(entity, class, &mut defer_metrics);
+                    if let Some(defer_metrics) = defer_metrics.as_deref_mut() {
+                        work_queue.record_deferred(entity, class, defer_metrics);
+                    }
                     work_queue.requeue_back(entity, class);
                     break;
                 }

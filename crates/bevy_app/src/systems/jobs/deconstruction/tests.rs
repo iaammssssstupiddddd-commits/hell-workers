@@ -690,7 +690,7 @@ fn order_to_familiar_assignment_to_finalizer_runs_in_fixed_headless_ticks() {
     use bevy::time::TimeUpdateStrategy;
     use hw_core::events::OnTaskAssigned;
     use hw_familiar_ai::familiar_ai::decide::resources::FamiliarTaskDelegationTimer;
-    use hw_familiar_ai::familiar_ai::decide::task_delegation::familiar_task_delegation_system;
+    use hw_familiar_ai::familiar_ai::decide::task_delegation::familiar_task_delegation_cycle_system;
     use hw_logistics::tile_index::TileSiteIndex;
     use hw_soul_ai::soul_ai::execute::task_assignment_apply::apply_task_assignment_requests_system;
 
@@ -712,7 +712,7 @@ fn order_to_familiar_assignment_to_finalizer_runs_in_fixed_headless_ticks() {
     .add_systems(
         Update,
         (
-            familiar_task_delegation_system,
+            familiar_task_delegation_cycle_system,
             apply_task_assignment_requests_system,
             ApplyDeferred,
             hw_soul_ai::soul_ai::execute::task_execution_system::task_execution_system,

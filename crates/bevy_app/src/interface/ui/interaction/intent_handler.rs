@@ -5,12 +5,13 @@ use hw_ui::UiIntent;
 use super::handlers;
 use super::handlers::familiar_settings::FamiliarSettingsIntentCtx;
 use super::intent_context::{
-    IntentDomainActionCtx, IntentFamiliarQueries, IntentModeCtx, IntentSelectionCtx,
-    IntentUiQueries,
+    IntentActionCtx, IntentFamiliarQueries, IntentModeCtx, IntentSelectionCtx, IntentUiQueries,
 };
 use crate::input_actions::PendingWorldInputCapture;
 use crate::interface::ui::help_controller::{HelpPauseGuard, HelpScrollAreas, handle_help_intent};
 use crate::systems::save::SaveRecoveryMode;
+#[cfg(test)]
+use crate::systems::ui_domain_commit::apply_ui_domain_intents_system;
 
 #[derive(SystemParam)]
 pub(crate) struct IntentHelpCtx<'w, 's> {
@@ -56,7 +57,7 @@ fn recovery_allows_ui_intent(intent: &UiIntent) -> bool {
 
 pub(crate) fn handle_ui_intent(
     mut ui_intents: MessageReader<UiIntent>,
-    mut action_contexts: ParamSet<(IntentModeCtx, IntentDomainActionCtx)>,
+    mut action_contexts: ParamSet<(IntentModeCtx, IntentActionCtx)>,
     mut selection_ctx: IntentSelectionCtx,
     familiar_queries: IntentFamiliarQueries,
     mut ui_queries: IntentUiQueries,
@@ -177,10 +178,7 @@ pub(crate) fn handle_ui_intent(
                     &mut ui_queries.input_focus,
                 )
             }
-            UiIntent::ToggleDoorLock(entity) => {
-                action_contexts.p1().toggle_door_lock(entity);
-                false
-            }
+            UiIntent::ToggleDoorLock(_) => false,
             UiIntent::SelectArchitectCategory(category) => {
                 action_contexts.p1().toggle_architect_category(category);
                 false
@@ -202,34 +200,10 @@ pub(crate) fn handle_ui_intent(
                 }
                 false
             }
-            UiIntent::ApplyStockpilePolicy { target, patch } => {
-                action_contexts
-                    .p1()
-                    .request_stockpile_policy_change(target, patch);
-                false
-            }
-            UiIntent::SetSoulSpaActiveSlots {
-                target,
-                active_slots,
-            } => {
-                action_contexts
-                    .p1()
-                    .set_soul_spa_active_slots(target, active_slots);
-                false
-            }
-            UiIntent::CancelSoulSpaConstruction { target } => {
-                let paused = action_contexts.p0().time.is_paused();
-                action_contexts
-                    .p1()
-                    .cancel_soul_spa_construction(target, paused);
-                false
-            }
-            UiIntent::SetPowerConsumerPriority { target, priority } => {
-                action_contexts
-                    .p1()
-                    .set_power_consumer_priority(target, priority);
-                false
-            }
+            UiIntent::ApplyStockpilePolicy { .. }
+            | UiIntent::SetSoulSpaActiveSlots { .. }
+            | UiIntent::CancelSoulSpaConstruction { .. }
+            | UiIntent::SetPowerConsumerPriority { .. } => false,
             UiIntent::AdjustTaskPriority { .. } | UiIntent::CancelTask { .. } => false,
         };
 
@@ -353,9 +327,11 @@ mod tests {
             .add_systems(
                 Update,
                 (
+                    apply_ui_domain_intents_system,
                     handle_ui_intent,
                     collect_door_lock_requests.after(handle_ui_intent),
-                ),
+                )
+                    .chain(),
             );
         app.update();
         app

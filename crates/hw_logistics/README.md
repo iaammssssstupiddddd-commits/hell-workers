@@ -74,7 +74,7 @@
 | `active_unit_cache.rs` | Familiar / Yard と、`With<StockpilePolicy>` membership だけを保持する構造 group cache。live policy / stored / incoming は保持しない |
 | `tank_water_request.rs` | `tank_water_request_system` |
 | `task_area.rs` | `task_area_auto_haul_system`。tier 別 request の決定的生成と semantic-diff upsert |
-| `upsert.rs` | producer-owned componentをactual snapshotと比較するsemantic upsert/disable共通ヘルパー。安定frameでは同値commandを発行しない |
+| `upsert.rs` | producer-owned componentをactual snapshotと比較するsemantic upsert/disable共通ヘルパー。Stockpile producerのcanonical/duplicate/committed/disable/spawn lifecycleも一元化し、安定frameでは同値commandを発行しない |
 | `wall_construction.rs` | `wall_construction_auto_haul_system`, TileSiteIndex利用のmaterial delivery、`wall_tile_designation_system` |
 | `wheelbarrow.rs` | `wheelbarrow_auto_haul_system` |
 

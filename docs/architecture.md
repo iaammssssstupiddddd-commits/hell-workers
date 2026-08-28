@@ -151,7 +151,7 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 - `pathfinding_system` / `soul_stuck_escape_system` は `hw_soul_ai::soul_ai::pathfinding` に移管済み（`GameSystemSet::Actor` で登録）。既存パス再利用・再探索・休憩所フォールバック・到達不能時クリーンアップの補助関数群で構成し、挙動差分を局所化する。`hw_world::pathfinding`（`world/mod.rs` の inline `pub mod pathfinding` として re-export）側は `find_path_with_policy` を探索共通核として、通常探索・隣接探索・境界探索の差分をポリシー化する。`find_path` は `PathGoalPolicy` でゴール歩行性契約を明示し、`find_path_to_adjacent` は `allow_goal_blocked`（開始点が非歩行のケースを含む）で逆探索の許容条件を制御する。
 - 建設完了後の WorldMap 更新・movement-blocking footprint marker spawn・Soul 押し出しは `BuildingCompletedEvent`（`hw_jobs::events`）の Pub/Sub パターンに移管済み。root の `building_completion_system` がイベントを `commands.trigger()` で発行し、`hw_soul_ai::soul_ai::building_completed::on_building_completed` Observer（`SoulAiCorePlugin` 登録）が受理・適用する。Outdoor Lamp等の通行可能建物でもBlueprint ownerを完成建物へ同frameで移譲し、placement予約のraw obstacleだけを解除する。
 - `transport_request::producer` の floor/wall 搬入同期は `producer/mod.rs` の共通ヘルパー（`sync_construction_requests`, `sync_construction_delivery`）を利用して重複実装を避ける。全プロデューサーのオーナー解決は `AreaBounds`（`zones.rs` の共通矩形型）に統一し、`collect_all_area_owners` / `find_owner_for_position` で Familiar TaskArea と Yard 境界を同列に処理する。
-- UI/Visual の更新責務は `status_display/*` と `hw_visual::dream::ui_particle/*` に分離し、表示更新と演出更新を独立に保守する。button interactionは`ui_interaction_system`が`UiIntent`へ変換し、rootの単一`handle_ui_intent`がゲーム操作をdispatchする。Stockpile方針操作はここで`StockpilePolicyChangeRequest`へ変換するだけで、domain componentの変更は後続の`hw_logistics::apply_stockpile_policy_change_requests_system`だけが行う。Move/door/Architect用の直接`Changed<Interaction>` consumerは持たない。
+- UI/Visual の更新責務は `status_display/*` と `hw_visual::dream::ui_particle/*` に分離し、表示更新と演出更新を独立に保守する。button interactionは`ui_interaction_system`が`UiIntent`へ変換し、simulation-facing intentは`systems/ui_domain_commit.rs`の`UiDomainCommitSet`がlive再検証・commitしてからgeneric `handle_ui_intent`がsave/menu等を処理する。Stockpile方針操作はここで`StockpilePolicyChangeRequest`へ変換するだけで、domain componentの変更は後続の`hw_logistics::apply_stockpile_policy_change_requests_system`だけが行う。Move/door/Architect用の直接`Changed<Interaction>` consumerは持たない。
 - task action は `hw_ui` の `UiIntent` と表示 capability から root `actions.rs` へ渡す。root は Entity generation、
   expected `WorkType`、positive provenance / owner component を live 再検証し、generic designation、manual transport、
   Blueprint、Floor / Wall site の各 owner API へ明示的に dispatch する。Pause / capture でも reader を drain し、
@@ -163,6 +163,9 @@ owner cancellationはAI phase外の`TaskOwnerCancellationSet::Cancel → Flush`�
 - site/tile単位のpure eligibility/transition methodは`hw_jobs::construction`が所有する。
 - `floor_construction_phase_transition_system` / `wall_construction_phase_transition_system`と`ConstructionPerfMetrics`は、`TileSiteIndex` ownerである`hw_logistics::construction_phase_transition`が所有する。rootは`plugins/logic.rs`から一度だけ登録する。
 - cancel/completionと`Building3dHandles`依存の`wall_framed_tile_spawn_system`は`bevy_app`に残す。
+- Floor/Wall cancelはroot `construction_cancellation`の共通worker release／request／refund primitiveを使い、
+  tile snapshotとWallのspawned-wall cleanup差だけを各ownerに残す。deconstruction finalizerはexclusive entryを維持し、
+  deterministic intakeとtyped outcome publicationをprivate `finalizer/{protocol,outcome}.rs`へ分離する。
 - `AssignedTask` 側の worker オペレーション型（`ReinforceFloorPhase`, `PourFloorPhase`, `FrameWallPhase`, `CoatWallPhase`）は、現時点では「実行者視点の進捗」を表す独立型として維持する。
 - `hw_jobs::construction` 側の tile state は「サイト/タイルごとの状態」を表現し、AssignedTask phase は「魂がそのタスク内でどの段階にいるか」を表現する。
 - 今回の抽出では型を統合せず、2 系統の enum は役割分離したまま保持し、境界を越えた参照だけを `pub use` レイヤーで標準化する。
@@ -491,7 +494,7 @@ roster relationshipを直接変更しない。
 | move geometry API | `hw_ui::selection::placement` | `move_anchor_grid`, `move_occupied_grids`, `move_spawn_pos`, `validate_moved_building_placement`, `validate_moved_bucket_storage_placement` |
 | floor / wall validation | `hw_ui::selection::placement` | `build_area_placement_plan`, `validate_area_size`, `validate_wall_area`, `validate_floor_tile`, `validate_wall_tile` |
 | selection intent | `hw_ui::selection::intent` | `SelectionIntent`, `OpenWorldContextMenu` |
-| pointer candidate | `hw_ui::selection::candidate` | screen-space distance、Direct/Snapped、stable ordering、`WorldPointerTarget` |
+| pointer candidate | `hw_core::selection` | screen-space distance、Direct/Snapped、stable ordering、`WorldPointerTarget` |
 | root adapter | `crates/bevy_app/src/interface/selection/*` | Query/Res から intent 生成、ECS 状態・WorldMap 変更の適用 |
 
 - `SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は cross-crate で共有される interaction state として `hw_core::selection` に置き、`hw_ui::selection` は cleanup と placement validation の公開面を担う。`Commands`/`WorldMapWrite`/`NextState<PlayMode>` は使わない。

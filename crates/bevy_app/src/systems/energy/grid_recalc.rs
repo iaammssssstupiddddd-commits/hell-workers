@@ -236,10 +236,10 @@ pub fn grid_recalc_system(
     mode: Res<PowerAllocationMode>,
     mut commands: Commands,
     mut dirty: ResMut<EnergyUpdateDirty>,
-    #[cfg(feature = "profiling")] mut metrics: ResMut<EnergyPerfMetrics>,
+    #[cfg(feature = "profiling")] metrics: Option<ResMut<EnergyPerfMetrics>>,
 ) {
     #[cfg(feature = "profiling")]
-    {
+    if let Some(mut metrics) = metrics {
         metrics.grid_recalc_runs = metrics.grid_recalc_runs.saturating_add(1);
     }
 

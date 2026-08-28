@@ -44,6 +44,11 @@ use super::recovery::{
 };
 use crate::systems::jobs::exact_task_cleanup::{CompletingExactTask, prepare_owner_task_terminals};
 
+mod outcome;
+mod protocol;
+
+use outcome::{commit_outcome_base, write_cancel_outcome, write_commit_outcome};
+
 #[derive(Debug)]
 struct PreparedCommit {
     kind: BuildingType,
@@ -143,27 +148,7 @@ impl CommitFailure {
 
 /// Serializes cancel and commit requests into one owner-safe world transaction.
 pub fn deconstruction_finalizer_system(world: &mut World) {
-    let mut cancels: Vec<_> = world
-        .resource_mut::<Messages<DeconstructionCancelRequest>>()
-        .drain()
-        .collect();
-    let mut commits: Vec<_> = world
-        .resource_mut::<Messages<DeconstructionCommitRequest>>()
-        .drain()
-        .collect();
-    cancels.sort_unstable_by_key(|request| (request.world_epoch, request.order.to_bits()));
-    commits.sort_unstable_by_key(|request| {
-        (
-            request.world_epoch,
-            request.target.to_bits(),
-            request.order.to_bits(),
-            request.worker.to_bits(),
-            request.identity.assignment_entity.to_bits(),
-            request.identity.current_target_entity.to_bits(),
-            request.identity.current_work_type.stable_index(),
-            request.identity.binding_stable_index(),
-        )
-    });
+    let (cancels, commits) = protocol::drain_sorted_requests(world);
 
     let current_epoch = world
         .get_resource::<WorldEpoch>()
@@ -1335,25 +1320,4 @@ fn move_task_references(world: &mut World, target: Entity) -> bool {
     query
         .iter(world)
         .any(|task| matches!(task, AssignedTask::MovePlant(data) if data.building == target))
-}
-
-const fn commit_outcome_base(request: DeconstructionCommitRequest) -> DeconstructionCommitOutcome {
-    DeconstructionCommitOutcome {
-        worker: request.worker,
-        order: request.order,
-        target: request.target,
-        result: DeconstructionCommitResult::StaleIdentity,
-    }
-}
-
-fn write_commit_outcome(world: &mut World, outcome: DeconstructionCommitOutcome) {
-    world
-        .resource_mut::<Messages<DeconstructionCommitOutcome>>()
-        .write(outcome);
-}
-
-fn write_cancel_outcome(world: &mut World, outcome: DeconstructionCancelOutcome) {
-    world
-        .resource_mut::<Messages<DeconstructionCancelOutcome>>()
-        .write(outcome);
 }

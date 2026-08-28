@@ -59,7 +59,7 @@ use bevy::ui_render::prelude::UiMaterialPlugin;
 use hw_core::gathering::{GatheringSpot, GatheringVisuals};
 #[cfg(feature = "profiling")]
 use hw_core::simulation_rng::FixedAuditSeed;
-use hw_core::system_sets::{FamiliarAiSystemSet, GameSystemSet};
+use hw_core::system_sets::GameSystemSet;
 use std::collections::HashSet;
 
 pub struct HwVisualPlugin;
@@ -265,16 +265,6 @@ impl Plugin for HwVisualPlugin {
             )
                 .chain()
                 .in_set(GameSystemSet::Visual),
-        );
-
-        app.add_systems(
-            Update,
-            (
-                speech::max_soul_visual_system,
-                speech::idle_visual::familiar_idle_visual_apply_system,
-                speech::squad_visual::squad_visual_system,
-            )
-                .in_set(FamiliarAiSystemSet::Execute),
         );
     }
 }

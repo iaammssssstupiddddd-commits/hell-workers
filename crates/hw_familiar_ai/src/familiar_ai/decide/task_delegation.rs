@@ -17,23 +17,47 @@ use std::collections::HashSet;
 use std::time::Instant;
 
 use crate::familiar_ai::decide::delegation_context::{
-    FamiliarDelegationContext, process_task_delegation_and_movement,
+    FamiliarDelegationContext, FamiliarMovementContext, process_supervision_movement,
+    process_task_delegation,
 };
 use crate::familiar_ai::decide::query_types::{FamiliarSoulQuery, FamiliarTaskQuery};
 #[cfg(feature = "profiling")]
 use crate::familiar_ai::decide::resources::FamiliarDelegationPerfMetrics;
 use crate::familiar_ai::decide::resources::FamiliarTaskDelegationTimer;
 use crate::familiar_ai::decide::task_management::FamiliarTaskAssignmentQueries;
+use crate::familiar_ai::decide::task_management::task_finder::DelegationCandidateSnapshot;
 use crate::familiar_ai::decide::task_management::{
     FamiliarEvaluatorDiagnostics, FamiliarTaskCandidateDiagnostics, FamiliarTaskDiagnosticCycle,
 };
 
 /// 使い魔AIのタスク委譲に必要なSystemParam
+type FamiliarDelegationQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Transform,
+        &'static hw_core::familiar::FamiliarOperation,
+        &'static hw_core::familiar::FamiliarPolicy,
+        Option<&'static hw_core::area::TaskArea>,
+        Option<&'static hw_core::relationships::Commanding>,
+        Option<&'static hw_core::relationships::ManagedTasks>,
+    ),
+    With<Familiar>,
+>;
+
+/// Inputs scanned once and shared by every Familiar evaluated in this cycle.
+struct DelegationCycleSnapshot {
+    active_move_targets: HashSet<Entity>,
+    incoming: crate::familiar_ai::decide::task_management::IncomingDeliverySnapshot,
+    candidates: DelegationCandidateSnapshot,
+}
+
 #[derive(SystemParam)]
 pub struct FamiliarAiTaskDelegationParams<'w, 's> {
     pub time: Res<'w, Time>,
     pub delegation_timer: ResMut<'w, FamiliarTaskDelegationTimer>,
-    pub q_familiars: FamiliarTaskQuery<'w, 's>,
+    pub q_familiars: FamiliarDelegationQuery<'w, 's>,
     pub q_souls: FamiliarSoulQuery<'w, 's>,
     pub task_queries: FamiliarTaskAssignmentQueries<'w, 's>,
     pub construction_sites: ConstructionSiteAccess<'w, 's>,
@@ -46,17 +70,17 @@ pub struct FamiliarAiTaskDelegationParams<'w, 's> {
     pub diagnostic_revisions: Res<'w, TaskDiagnosticInputRevisions>,
     pub published_diagnostics: ResMut<'w, FamiliarTaskCandidateDiagnostics>,
     #[cfg(feature = "profiling")]
-    pub perf_metrics: ResMut<'w, FamiliarDelegationPerfMetrics>,
+    pub perf_metrics: Option<ResMut<'w, FamiliarDelegationPerfMetrics>>,
 }
 
-/// 使い魔AIのタスク委譲・移動システム（Decide Phase）
-pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
+/// 0.5-second Familiar task-delegation cycle (Decide Phase).
+pub fn familiar_task_delegation_cycle_system(params: FamiliarAiTaskDelegationParams) {
     #[cfg(feature = "profiling")]
     let started_at = Instant::now();
     let FamiliarAiTaskDelegationParams {
         time,
         mut delegation_timer,
-        mut q_familiars,
+        q_familiars,
         mut q_souls,
         mut task_queries,
         construction_sites,
@@ -69,12 +93,15 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         diagnostic_revisions,
         mut published_diagnostics,
         #[cfg(feature = "profiling")]
-        mut perf_metrics,
+        perf_metrics,
         ..
     } = params;
 
     let allow_task_delegation = delegation_timer.advance(time.delta());
-    let active_move_targets = if allow_task_delegation {
+    if !allow_task_delegation {
+        return;
+    }
+    let active_move_targets = {
         let mut assignments = q_souls.transmute_lens_filtered::<&AssignedTask, Without<Familiar>>();
         assignments
             .query()
@@ -84,18 +111,18 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
                 _ => None,
             })
             .collect::<HashSet<_>>()
-    } else {
-        HashSet::new()
     };
-    let mut diagnostic_cycle = allow_task_delegation.then(|| {
-        FamiliarTaskDiagnosticCycle::new(published_diagnostics.next_cycle(), &diagnostic_revisions)
-    });
-
-    let incoming_snapshot = if allow_task_delegation {
-        crate::familiar_ai::decide::task_management::IncomingDeliverySnapshot::build(&task_queries)
-    } else {
-        crate::familiar_ai::decide::task_management::IncomingDeliverySnapshot::default()
+    let cycle_snapshot = DelegationCycleSnapshot {
+        active_move_targets,
+        incoming: crate::familiar_ai::decide::task_management::IncomingDeliverySnapshot::build(
+            &task_queries,
+        ),
+        candidates: DelegationCandidateSnapshot::build(&task_queries),
     };
+    let mut diagnostic_cycle = Some(FamiliarTaskDiagnosticCycle::new(
+        published_diagnostics.next_cycle(),
+        &diagnostic_revisions,
+    ));
 
     let mut reservation_shadow =
         crate::familiar_ai::decide::task_management::ReservationShadow::default();
@@ -107,14 +134,10 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
         fam_transform,
         familiar_op,
         familiar_policy,
-        _active_command,
-        mut ai_state,
-        mut fam_dest,
-        mut fam_path,
         task_area_opt,
         commanding,
         managed_tasks_opt,
-    ) in q_familiars.iter_mut()
+    ) in q_familiars.iter()
     {
         let mut evaluator_diagnostics = FamiliarEvaluatorDiagnostics::new(0);
         if let Some(cycle) = diagnostic_cycle.as_mut() {
@@ -127,19 +150,10 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             }
         }
 
-        let state_changed = ai_state.is_changed();
         let default_tasks = hw_core::relationships::ManagedTasks::default();
         let managed_tasks = managed_tasks_opt.unwrap_or(&default_tasks);
 
-        // Delegation needs a validated squad only on its 0.5 s cycle. The
-        // continuous supervising path also needs it to follow active workers;
-        // idle/searching/scouting frames avoid rebuilding the Vec entirely.
-        let needs_squad = allow_task_delegation
-            || matches!(
-                *ai_state,
-                hw_core::familiar::FamiliarAiState::Supervising { .. }
-            );
-        let squad_entities = if needs_squad {
+        let squad_entities = {
             let mut q_squad_lens = q_souls.transmute_lens_filtered::<
                 (Entity, &DamnedSoul, &IdleState, Option<&CommandedBy>),
                 Without<Familiar>,
@@ -153,8 +167,6 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
                 &q_squad,
             )
             .0
-        } else {
-            Vec::new()
         };
 
         let mut delegation_ctx = FamiliarDelegationContext {
@@ -162,12 +174,10 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             fam_transform,
             familiar_op,
             familiar_policy,
-            ai_state: &mut ai_state,
-            fam_dest: &mut fam_dest,
-            fam_path: &mut fam_path,
             task_area_opt,
             squad_entities: &squad_entities,
-            active_move_targets: &active_move_targets,
+            active_move_targets: &cycle_snapshot.active_move_targets,
+            candidate_snapshot: &cycle_snapshot.candidates,
             q_souls: &mut q_souls,
             task_queries: &mut task_queries,
             construction_sites: &construction_sites,
@@ -177,18 +187,16 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
             managed_tasks,
             world_map: &world_map,
             connectivity_cache: &mut connectivity_cache,
-            delta_secs: time.delta_secs(),
             // Yard 共有タスクは候補集合に残す。Idle command を周期 gate の
             // 例外にはせず、最大 0.5 秒で同じ候補探索へ入る。
             allow_task_delegation,
-            state_changed,
             reservation_shadow: &mut reservation_shadow,
             tile_site_index: &tile_site_index,
-            incoming_snapshot: &incoming_snapshot,
+            incoming_snapshot: &cycle_snapshot.incoming,
             diagnostics: &mut evaluator_diagnostics,
             diagnostic_revisions: &diagnostic_revisions,
         };
-        process_task_delegation_and_movement(&mut delegation_ctx);
+        process_task_delegation(&mut delegation_ctx);
         if let Some(cycle) = diagnostic_cycle.as_mut() {
             cycle.finish_evaluator(evaluator_diagnostics);
         }
@@ -199,7 +207,7 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
     }
 
     #[cfg(feature = "profiling")]
-    {
+    if let Some(mut perf_metrics) = perf_metrics {
         let (
             source_selector_calls,
             source_selector_cache_build_scanned_items,
@@ -263,6 +271,63 @@ pub fn familiar_task_delegation_system(params: FamiliarAiTaskDelegationParams) {
     }
 }
 
+/// Per-frame Familiar movement for Supervising and SearchingTask states.
+pub fn familiar_supervision_movement_system(
+    time: Res<Time>,
+    mut q_familiars: FamiliarTaskQuery,
+    mut q_souls: FamiliarSoulQuery,
+) {
+    for (
+        fam_entity,
+        fam_transform,
+        _familiar_op,
+        _familiar_policy,
+        _active_command,
+        mut ai_state,
+        mut fam_dest,
+        mut fam_path,
+        task_area_opt,
+        commanding,
+        _managed_tasks_opt,
+    ) in q_familiars.iter_mut()
+    {
+        let state_changed = ai_state.is_changed();
+        let squad_entities = if matches!(
+            *ai_state,
+            hw_core::familiar::FamiliarAiState::Supervising { .. }
+        ) {
+            let mut q_squad_lens = q_souls.transmute_lens_filtered::<
+                (Entity, &DamnedSoul, &IdleState, Option<&CommandedBy>),
+                Without<Familiar>,
+            >();
+            let q_squad = q_squad_lens.query();
+            let initial_squad =
+                crate::familiar_ai::decide::squad::SquadManager::build_squad(commanding);
+            crate::familiar_ai::decide::squad::SquadManager::validate_squad(
+                initial_squad,
+                fam_entity,
+                &q_squad,
+            )
+            .0
+        } else {
+            Vec::new()
+        };
+
+        process_supervision_movement(&mut FamiliarMovementContext {
+            fam_entity,
+            fam_transform,
+            ai_state: &mut ai_state,
+            fam_dest: &mut fam_dest,
+            fam_path: &mut fam_path,
+            task_area_opt,
+            squad_entities: &squad_entities,
+            q_souls: &mut q_souls,
+            delta_secs: time.delta_secs(),
+            state_changed,
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,7 +362,14 @@ mod tests {
             .init_resource::<FamiliarTaskCandidateDiagnostics>()
             .add_message::<ResourceReservationRequest>()
             .add_message::<TaskAssignmentRequest>()
-            .add_systems(Update, familiar_task_delegation_system);
+            .add_systems(
+                Update,
+                (
+                    familiar_task_delegation_cycle_system,
+                    familiar_supervision_movement_system,
+                )
+                    .chain(),
+            );
 
         let familiar = app
             .world_mut()

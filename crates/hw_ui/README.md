@@ -62,7 +62,7 @@
 |---|---|
 | `mod.rs` | 公開 API |
 | `menu.rs` | `menu_visibility_system` |
-| `info_panel/` | エンティティ詳細パネル（`InfoPanelState`, `InfoPanelPinState`, Stockpile editor、`info_panel_system`, `spawn_info_panel_ui`） |
+| `info_panel/` | エンティティ詳細パネル（`InfoPanelState`, `InfoPanelPinState`, typed Common/Soul/Stockpile/SoulSpa/Power node group、Stockpile editor、`info_panel_system`, `spawn_info_panel_ui`）。panel内lookupは`InfoPanelNodes`だけを正本とする |
 | `task_list/` | task dashboard表示契約（status/reason、4 filter、4 sort key、priority tier、action capability/state）とrender/interaction |
 | `tooltip_builder/` | ツールチップコンテンツ生成（widgets, text_wrap, templates） |
 

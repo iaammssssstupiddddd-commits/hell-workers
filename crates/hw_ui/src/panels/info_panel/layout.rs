@@ -327,7 +327,7 @@ pub fn spawn_info_panel_ui(
         .id();
     commands.entity(parent_entity).add_child(root);
     ui_nodes.set_slot(UiSlot::InfoPanelRoot, root);
-    info_panel_nodes.root = Some(root);
+    info_panel_nodes.common.root = Some(root);
 
     commands.entity(root).with_children(|parent| {
         parent
@@ -362,7 +362,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id();
                     ui_nodes.set_slot(UiSlot::Header, header);
-                    info_panel_nodes.header = Some(header);
+                    info_panel_nodes.common.header = Some(header);
 
                     let gender = left
                         .spawn((
@@ -378,7 +378,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id();
                     ui_nodes.set_slot(UiSlot::GenderIcon, gender);
-                    info_panel_nodes.gender_icon = Some(gender);
+                    info_panel_nodes.soul.gender_icon = Some(gender);
 
                     let rename_button = left
                         .spawn((
@@ -409,7 +409,7 @@ pub fn spawn_info_panel_ui(
                             ));
                         })
                         .id();
-                    info_panel_nodes.rename_button = Some(rename_button);
+                    info_panel_nodes.common.rename_button = Some(rename_button);
                 });
 
                 let unpin_button = row
@@ -443,7 +443,7 @@ pub fn spawn_info_panel_ui(
                     })
                     .id();
                 ui_nodes.set_slot(UiSlot::InfoPanelUnpinButton, unpin_button);
-                info_panel_nodes.unpin_button = Some(unpin_button);
+                info_panel_nodes.common.unpin_button = Some(unpin_button);
             });
 
         let rename_field_container = parent
@@ -457,7 +457,7 @@ pub fn spawn_info_panel_ui(
                 SoulRenameFieldContainer,
             ))
             .id();
-        info_panel_nodes.rename_field_container = Some(rename_field_container);
+        info_panel_nodes.common.rename_field_container = Some(rename_field_container);
 
         let stats = parent
             .spawn((
@@ -484,7 +484,7 @@ pub fn spawn_info_panel_ui(
                     ))
                     .id();
                 ui_nodes.set_slot(UiSlot::StatMotivation, motivation);
-                info_panel_nodes.motivation = Some(motivation);
+                info_panel_nodes.soul.motivation = Some(motivation);
 
                 col.spawn(Node {
                     flex_direction: FlexDirection::Row,
@@ -515,7 +515,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id();
                     ui_nodes.set_slot(UiSlot::StatStress, stress);
-                    info_panel_nodes.stress = Some(stress);
+                    info_panel_nodes.soul.stress = Some(stress);
                 });
 
                 col.spawn(Node {
@@ -547,7 +547,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id();
                     ui_nodes.set_slot(UiSlot::StatFatigue, fatigue);
-                    info_panel_nodes.fatigue = Some(fatigue);
+                    info_panel_nodes.soul.fatigue = Some(fatigue);
                 });
 
                 let dream = col
@@ -564,7 +564,7 @@ pub fn spawn_info_panel_ui(
                     ))
                     .id();
                 ui_nodes.set_slot(UiSlot::StatDream, dream);
-                info_panel_nodes.dream = Some(dream);
+                info_panel_nodes.soul.dream = Some(dream);
 
                 spawn_info_section_divider(col, game_assets, theme, "Current Task");
 
@@ -589,7 +589,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id();
                     ui_nodes.set_slot(UiSlot::TaskText, task);
-                    info_panel_nodes.task = Some(task);
+                    info_panel_nodes.soul.task = Some(task);
                 });
 
                 spawn_info_section_divider(col, game_assets, theme, "Inventory");
@@ -608,11 +608,11 @@ pub fn spawn_info_panel_ui(
                     ))
                     .id();
                 ui_nodes.set_slot(UiSlot::InventoryText, inventory);
-                info_panel_nodes.inventory = Some(inventory);
+                info_panel_nodes.soul.inventory = Some(inventory);
             })
             .id();
         ui_nodes.set_slot(UiSlot::InfoPanelStatsGroup, stats);
-        info_panel_nodes.stats_group = Some(stats);
+        info_panel_nodes.common.stats_group = Some(stats);
 
         let stockpile_group = parent
             .spawn(Node {
@@ -625,7 +625,7 @@ pub fn spawn_info_panel_ui(
             .with_children(|column| {
                 spawn_info_section_divider(column, game_assets, theme, "Stockpile Policy");
 
-                info_panel_nodes.stockpile_state = Some(
+                info_panel_nodes.stockpile.stockpile_state = Some(
                     column
                         .spawn((
                             Text::new(""),
@@ -641,7 +641,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id(),
                 );
-                info_panel_nodes.stockpile_current = Some(
+                info_panel_nodes.stockpile.stockpile_current = Some(
                     column
                         .spawn((
                             Text::new(""),
@@ -659,7 +659,7 @@ pub fn spawn_info_panel_ui(
 
                 spawn_info_section_divider(column, game_assets, theme, "Accepted Resources");
 
-                info_panel_nodes.stockpile_acceptance_summary = Some(
+                info_panel_nodes.stockpile.stockpile_acceptance_summary = Some(
                     column
                         .spawn((
                             Text::new(""),
@@ -691,7 +691,8 @@ pub fn spawn_info_panel_ui(
                             Val::Percent(50.0),
                             "Allow All",
                         );
-                        info_panel_nodes.stockpile_acceptance_all_button = Some(all_button);
+                        info_panel_nodes.stockpile.stockpile_acceptance_all_button =
+                            Some(all_button);
 
                         let (none_button, _) = spawn_stockpile_editor_button(
                             row,
@@ -700,7 +701,8 @@ pub fn spawn_info_panel_ui(
                             Val::Percent(50.0),
                             "Clear All",
                         );
-                        info_panel_nodes.stockpile_acceptance_none_button = Some(none_button);
+                        info_panel_nodes.stockpile.stockpile_acceptance_none_button =
+                            Some(none_button);
                     });
 
                 column
@@ -714,7 +716,7 @@ pub fn spawn_info_panel_ui(
                     })
                     .with_children(|checklist| {
                         for resource_type in STOCKPILE_ACCEPTANCE_RESOURCES {
-                            info_panel_nodes.stockpile_acceptance_rows.push(
+                            info_panel_nodes.stockpile.stockpile_acceptance_rows.push(
                                 spawn_stockpile_acceptance_row(
                                     checklist,
                                     game_assets,
@@ -741,9 +743,10 @@ pub fn spawn_info_panel_ui(
                             Val::Px(30.0),
                             "−",
                         );
-                        info_panel_nodes.stockpile_target_decrease_button = Some(decrease_button);
+                        info_panel_nodes.stockpile.stockpile_target_decrease_button =
+                            Some(decrease_button);
 
-                        info_panel_nodes.stockpile_target_text = Some(
+                        info_panel_nodes.stockpile.stockpile_target_text = Some(
                             row.spawn((
                                 Text::new("Target"),
                                 TextFont {
@@ -771,7 +774,8 @@ pub fn spawn_info_panel_ui(
                             Val::Px(30.0),
                             "+",
                         );
-                        info_panel_nodes.stockpile_target_increase_button = Some(increase_button);
+                        info_panel_nodes.stockpile.stockpile_target_increase_button =
+                            Some(increase_button);
                     });
 
                 let (priority_button, priority_text) = spawn_stockpile_editor_button(
@@ -781,8 +785,8 @@ pub fn spawn_info_panel_ui(
                     Val::Percent(100.0),
                     "Inbound Priority",
                 );
-                info_panel_nodes.stockpile_priority_button = Some(priority_button);
-                info_panel_nodes.stockpile_priority_text = Some(priority_text);
+                info_panel_nodes.stockpile.stockpile_priority_button = Some(priority_button);
+                info_panel_nodes.stockpile.stockpile_priority_text = Some(priority_text);
 
                 let (export_button, export_text) = spawn_stockpile_editor_button(
                     column,
@@ -791,8 +795,8 @@ pub fn spawn_info_panel_ui(
                     Val::Percent(100.0),
                     "Export",
                 );
-                info_panel_nodes.stockpile_export_button = Some(export_button);
-                info_panel_nodes.stockpile_export_text = Some(export_text);
+                info_panel_nodes.stockpile.stockpile_export_button = Some(export_button);
+                info_panel_nodes.stockpile.stockpile_export_text = Some(export_text);
 
                 spawn_info_section_divider(column, game_assets, theme, "Batch Edit");
                 let (area_button, _) = spawn_stockpile_editor_button(
@@ -802,10 +806,10 @@ pub fn spawn_info_panel_ui(
                     Val::Percent(100.0),
                     "Apply Policy to Area",
                 );
-                info_panel_nodes.stockpile_area_button = Some(area_button);
+                info_panel_nodes.stockpile.stockpile_area_button = Some(area_button);
             })
             .id();
-        info_panel_nodes.stockpile_group = Some(stockpile_group);
+        info_panel_nodes.stockpile.stockpile_group = Some(stockpile_group);
 
         let soul_spa_group = parent
             .spawn(Node {
@@ -817,7 +821,7 @@ pub fn spawn_info_panel_ui(
             })
             .with_children(|column| {
                 spawn_info_section_divider(column, game_assets, theme, "Soul Energy");
-                info_panel_nodes.soul_spa_status = Some(
+                info_panel_nodes.soul_spa.soul_spa_status = Some(
                     column
                         .spawn((
                             Text::new(""),
@@ -833,7 +837,7 @@ pub fn spawn_info_panel_ui(
                         ))
                         .id(),
                 );
-                info_panel_nodes.soul_spa_output = Some(
+                info_panel_nodes.soul_spa.soul_spa_output = Some(
                     column
                         .spawn((
                             Text::new(""),
@@ -849,7 +853,7 @@ pub fn spawn_info_panel_ui(
                         .id(),
                 );
 
-                info_panel_nodes.soul_spa_controls = Some(
+                info_panel_nodes.soul_spa.soul_spa_controls = Some(
                     column
                         .spawn(Node {
                             width: Val::Percent(100.0),
@@ -859,9 +863,9 @@ pub fn spawn_info_panel_ui(
                             ..default()
                         })
                         .with_children(|row| {
-                            info_panel_nodes.soul_spa_slots_decrease_button =
+                            info_panel_nodes.soul_spa.soul_spa_slots_decrease_button =
                                 Some(spawn_soul_spa_slot_button(row, game_assets, theme, "−"));
-                            info_panel_nodes.soul_spa_slots_text = Some(
+                            info_panel_nodes.soul_spa.soul_spa_slots_text = Some(
                                 row.spawn((
                                     Text::new("Active slots"),
                                     TextFont {
@@ -881,16 +885,16 @@ pub fn spawn_info_panel_ui(
                                 ))
                                 .id(),
                             );
-                            info_panel_nodes.soul_spa_slots_increase_button =
+                            info_panel_nodes.soul_spa.soul_spa_slots_increase_button =
                                 Some(spawn_soul_spa_slot_button(row, game_assets, theme, "+"));
                         })
                         .id(),
                 );
-                info_panel_nodes.soul_spa_cancel_button =
+                info_panel_nodes.soul_spa.soul_spa_cancel_button =
                     Some(spawn_soul_spa_cancel_button(column, game_assets, theme));
             })
             .id();
-        info_panel_nodes.soul_spa_group = Some(soul_spa_group);
+        info_panel_nodes.soul_spa.soul_spa_group = Some(soul_spa_group);
 
         let power_group = parent
             .spawn(Node {
@@ -914,18 +918,18 @@ pub fn spawn_info_panel_ui(
                         TextColor(theme.colors.text_primary_semantic),
                     )
                 };
-                info_panel_nodes.power_connection =
+                info_panel_nodes.power.power_connection =
                     Some(column.spawn((Text::new(""), text_bundle())).id());
-                info_panel_nodes.power_flow =
+                info_panel_nodes.power.power_flow =
                     Some(column.spawn((Text::new(""), text_bundle())).id());
-                info_panel_nodes.power_state =
+                info_panel_nodes.power.power_state =
                     Some(column.spawn((Text::new(""), text_bundle())).id());
                 let (button, text) = spawn_power_priority_button(column, game_assets, theme);
-                info_panel_nodes.power_priority_button = Some(button);
-                info_panel_nodes.power_priority_text = Some(text);
+                info_panel_nodes.power.power_priority_button = Some(button);
+                info_panel_nodes.power.power_priority_text = Some(text);
             })
             .id();
-        info_panel_nodes.power_group = Some(power_group);
+        info_panel_nodes.power.power_group = Some(power_group);
 
         let common = parent
             .spawn((
@@ -940,7 +944,7 @@ pub fn spawn_info_panel_ui(
             ))
             .id();
         ui_nodes.set_slot(UiSlot::CommonText, common);
-        info_panel_nodes.common = Some(common);
+        info_panel_nodes.common.summary = Some(common);
     });
 }
 
@@ -1043,24 +1047,35 @@ mod tests {
         app.update();
 
         let info_nodes = app.world().resource::<InfoPanelNodes>();
-        assert!(info_nodes.stockpile_acceptance_summary.is_some());
-        assert!(info_nodes.stockpile_acceptance_all_button.is_some());
-        assert!(info_nodes.stockpile_acceptance_none_button.is_some());
+        assert!(info_nodes.stockpile.stockpile_acceptance_summary.is_some());
+        assert!(
+            info_nodes
+                .stockpile
+                .stockpile_acceptance_all_button
+                .is_some()
+        );
+        assert!(
+            info_nodes
+                .stockpile
+                .stockpile_acceptance_none_button
+                .is_some()
+        );
         assert_eq!(
             info_nodes
+                .stockpile
                 .stockpile_acceptance_rows
                 .iter()
                 .map(|row| row.resource_type)
                 .collect::<Vec<_>>(),
             STOCKPILE_ACCEPTANCE_RESOURCES
         );
-        for row in &info_nodes.stockpile_acceptance_rows {
+        for row in &info_nodes.stockpile.stockpile_acceptance_rows {
             assert!(app.world().entity(row.button).contains::<Button>());
             assert!(app.world().entity(row.button).contains::<MenuButton>());
             assert!(app.world().entity(row.text).contains::<Text>());
         }
 
-        let root = info_nodes.root.unwrap();
+        let root = info_nodes.common.root.unwrap();
         let root_entity = app.world().entity(root);
         let root_node = root_entity.get::<Node>().unwrap();
         assert_eq!(root_node.max_height, Val::Vh(INFO_PANEL_MAX_HEIGHT_VH));
@@ -1124,6 +1139,7 @@ mod tests {
         let (button, text) = {
             let nodes = app.world().resource::<InfoPanelNodes>();
             let row = nodes
+                .stockpile
                 .stockpile_acceptance_rows
                 .iter()
                 .find(|row| row.resource_type == ResourceType::Rock)
@@ -1189,11 +1205,11 @@ mod tests {
         let (status, decrease, increase, controls, cancel) = {
             let nodes = app.world().resource::<InfoPanelNodes>();
             (
-                nodes.soul_spa_status.unwrap(),
-                nodes.soul_spa_slots_decrease_button.unwrap(),
-                nodes.soul_spa_slots_increase_button.unwrap(),
-                nodes.soul_spa_controls.unwrap(),
-                nodes.soul_spa_cancel_button.unwrap(),
+                nodes.soul_spa.soul_spa_status.unwrap(),
+                nodes.soul_spa.soul_spa_slots_decrease_button.unwrap(),
+                nodes.soul_spa.soul_spa_slots_increase_button.unwrap(),
+                nodes.soul_spa.soul_spa_controls.unwrap(),
+                nodes.soul_spa.soul_spa_cancel_button.unwrap(),
             )
         };
         assert_eq!(
@@ -1245,7 +1261,7 @@ mod tests {
         let nodes = app.world().resource::<InfoPanelNodes>();
         assert_eq!(
             app.world()
-                .get::<Node>(nodes.soul_spa_output.unwrap())
+                .get::<Node>(nodes.soul_spa.soul_spa_output.unwrap())
                 .unwrap()
                 .display,
             Display::None
@@ -1322,21 +1338,21 @@ mod tests {
         let nodes = app.world().resource::<InfoPanelNodes>();
         assert_eq!(
             app.world()
-                .get::<Node>(nodes.power_group.unwrap())
+                .get::<Node>(nodes.power.power_group.unwrap())
                 .unwrap()
                 .display,
             Display::Flex
         );
         assert!(
             app.world()
-                .get::<Text>(nodes.power_flow.unwrap())
+                .get::<Text>(nodes.power.power_flow.unwrap())
                 .unwrap()
                 .0
                 .contains("1.0W of 1.5W served [Priority prefix]")
         );
         let flow = &app
             .world()
-            .get::<Text>(nodes.power_flow.unwrap())
+            .get::<Text>(nodes.power.power_flow.unwrap())
             .unwrap()
             .0;
         assert!(flow.contains("0.5W deficit"));
@@ -1344,14 +1360,14 @@ mod tests {
         assert!(flow.contains("Shed order: (2, 1)"));
         assert!(
             app.world()
-                .get::<Text>(nodes.power_state.unwrap())
+                .get::<Text>(nodes.power.power_state.unwrap())
                 .unwrap()
                 .0
                 .contains("waiting for restore margin")
         );
         assert!(matches!(
             app.world()
-                .get::<MenuButton>(nodes.power_priority_button.unwrap())
+                .get::<MenuButton>(nodes.power.power_priority_button.unwrap())
                 .unwrap()
                 .0,
             MenuAction::SetPowerConsumerPriority {

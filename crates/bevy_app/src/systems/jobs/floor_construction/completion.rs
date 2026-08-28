@@ -44,7 +44,7 @@ pub(crate) struct FloorCompletionQueries<'w, 's> {
     nearby_souls: Local<'s, Vec<Entity>>,
     handles_3d: Res<'w, Building3dHandles>,
     #[cfg(feature = "profiling")]
-    metrics: ResMut<'w, ConstructionPerfMetrics>,
+    metrics: Option<ResMut<'w, ConstructionPerfMetrics>>,
 }
 
 /// Runtime-only footprint for a site in the curing phase.
@@ -181,11 +181,11 @@ fn evacuate_souls_from_blocked_tiles(
     q_souls: &mut Query<(Entity, &mut Transform, &mut Path), With<DamnedSoul>>,
     footprint: &CuringFootprint,
     world_map: &WorldMap,
-    #[cfg(feature = "profiling")] metrics: &mut ConstructionPerfMetrics,
+    #[cfg(feature = "profiling")] metrics: Option<&mut ConstructionPerfMetrics>,
 ) -> usize {
     collect_curing_soul_candidates(soul_grid, footprint, nearby_candidates);
     #[cfg(feature = "profiling")]
-    {
+    if let Some(metrics) = metrics {
         metrics.evacuation_candidates_scanned = metrics
             .evacuation_candidates_scanned
             .saturating_add(nearby_candidates.len() as u64);
@@ -243,7 +243,7 @@ pub(crate) fn floor_construction_completion_system(
     let started_at = Instant::now();
     for (site_entity, mut site, footprint_opt) in q_sites.iter_mut() {
         #[cfg(feature = "profiling")]
-        {
+        if let Some(metrics) = metrics.as_mut() {
             metrics.floor_sites_considered = metrics.floor_sites_considered.saturating_add(1);
         }
         // A site whose progress counter is incomplete cannot transition. Do
@@ -255,7 +255,7 @@ pub(crate) fn floor_construction_completion_system(
         if site.phase != FloorConstructionPhase::Curing {
             let site_tiles = indexed_floor_tiles(site_entity, &tile_site_index, &q_tiles);
             #[cfg(feature = "profiling")]
-            {
+            if let Some(metrics) = metrics.as_mut() {
                 metrics.floor_tiles_inspected = metrics
                     .floor_tiles_inspected
                     .saturating_add(site_tiles.len() as u64);
@@ -289,7 +289,7 @@ pub(crate) fn floor_construction_completion_system(
                 &footprint,
                 &world_map,
                 #[cfg(feature = "profiling")]
-                &mut metrics,
+                metrics.as_deref_mut(),
             );
             commands.entity(site_entity).insert(footprint);
 
@@ -306,7 +306,7 @@ pub(crate) fn floor_construction_completion_system(
             // index-backed cache here; do not reserve the footprint twice.
             let site_tiles = indexed_floor_tiles(site_entity, &tile_site_index, &q_tiles);
             #[cfg(feature = "profiling")]
-            {
+            if let Some(metrics) = metrics.as_mut() {
                 metrics.floor_tiles_inspected = metrics
                     .floor_tiles_inspected
                     .saturating_add(site_tiles.len() as u64);
@@ -327,7 +327,7 @@ pub(crate) fn floor_construction_completion_system(
                 &footprint,
                 &world_map,
                 #[cfg(feature = "profiling")]
-                &mut metrics,
+                metrics.as_deref_mut(),
             );
             if re_evacuated > 0 {
                 debug!(
@@ -369,7 +369,7 @@ pub(crate) fn floor_construction_completion_system(
         );
     }
     #[cfg(feature = "profiling")]
-    {
+    if let Some(metrics) = metrics.as_mut() {
         metrics.floor_completion_elapsed_micros = metrics
             .floor_completion_elapsed_micros
             .saturating_add(started_at.elapsed().as_micros() as u64);

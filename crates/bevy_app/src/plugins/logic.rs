@@ -127,19 +127,7 @@ impl Plugin for LogicPlugin {
 
         configure_task_owner_cancellation_schedule(app);
         configure_deconstruction_finalizer_schedule(app);
-        app.add_systems(
-            Update,
-            (
-                blueprint_cancellation_system,
-                floor_construction_cancellation_system,
-                wall_construction_cancellation_system,
-            )
-                .in_set(TaskOwnerCancellationSet::Cancel),
-        )
-        .add_systems(
-            Update,
-            soul_spa_construction_cancellation_system.in_set(TaskOwnerCancellationSet::Cancel),
-        );
+        register_task_owner_cancellation_systems(app);
         register_soul_energy_pipeline(app);
 
         // Soul Energy 型登録
@@ -289,6 +277,22 @@ impl Plugin for LogicPlugin {
     }
 }
 
+fn register_task_owner_cancellation_systems(app: &mut App) {
+    app.add_systems(
+        Update,
+        (
+            blueprint_cancellation_system,
+            floor_construction_cancellation_system,
+            wall_construction_cancellation_system,
+        )
+            .in_set(TaskOwnerCancellationSet::Cancel),
+    )
+    .add_systems(
+        Update,
+        soul_spa_construction_cancellation_system.in_set(TaskOwnerCancellationSet::Cancel),
+    );
+}
+
 fn register_construction_systems(app: &mut App) {
     // Group C: floor construction (phase order required).
     app.add_systems(
@@ -436,10 +440,14 @@ fn configure_deconstruction_finalizer_schedule(app: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::{
+        blueprint_cancellation_system, configure_deconstruction_finalizer_schedule,
         configure_obstacle_sync_schedule, configure_task_owner_cancellation_schedule,
-        door_auto_close_nearby_system, door_auto_open_nearby_system,
+        deconstruction_finalizer_system, door_auto_close_nearby_system,
+        door_auto_open_nearby_system, floor_construction_cancellation_system,
         floor_construction_phase_transition_system, register_construction_systems,
-        register_door_proximity_systems, wall_construction_phase_transition_system,
+        register_door_proximity_systems, register_task_owner_cancellation_systems,
+        soul_spa_construction_cancellation_system, wall_construction_cancellation_system,
+        wall_construction_phase_transition_system,
     };
     use crate::systems::GameSystemSet;
     use crate::systems::jobs::TaskOwnerCancellationSet;
@@ -512,6 +520,23 @@ mod tests {
             registered_system_count(&app, door_auto_close_nearby_system.system_type_id()),
             1
         );
+    }
+
+    #[test]
+    fn owner_transactions_have_single_production_registration() {
+        let mut app = App::new();
+        register_task_owner_cancellation_systems(&mut app);
+        configure_deconstruction_finalizer_schedule(&mut app);
+
+        for system_type in [
+            blueprint_cancellation_system.system_type_id(),
+            floor_construction_cancellation_system.system_type_id(),
+            wall_construction_cancellation_system.system_type_id(),
+            soul_spa_construction_cancellation_system.system_type_id(),
+            deconstruction_finalizer_system.system_type_id(),
+        ] {
+            assert_eq!(registered_system_count(&app, system_type), 1);
+        }
     }
 
     #[derive(Component)]

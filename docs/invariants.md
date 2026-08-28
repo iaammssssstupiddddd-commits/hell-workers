@@ -149,6 +149,8 @@ order自身または別の`DeconstructionOrder` roleをtargetにする保存grap
 `BuildingType`とOperational Soul Spaを実行可能にし、kindごとのexact owner shapeとcleanup planが
 成立しないtargetだけを`DependencyWaiting`またはtyped blockerへ閉じる。
 候補時とassignment apply時の両方でpending/claim/blocker、marker、provisional state、durable/assigned Moveを再検証する。
+各境界はlive ECSからquery非依存の`DeconstructionAssignmentFacts`を組み立て、`hw_jobs`のpure predicateを共有する。
+Query失敗とcandidate reason／apply outcomeへの変換は各consumer境界に残し、candidate snapshotをapplyの権限にしない。
 
 Soul executorはtargetを直接despawnせず、`AwaitingCommit`へ遷移してworld epochとexact task identity付きrequestを
 1回だけ発行する。root finalizerはcancelを先に処理し、target単位の同期claimを取得してから、関連worker全件を
@@ -353,11 +355,15 @@ Virtual Timeがpause中の情報パネル操作は停止中のLogicへrequestを
 ### I-U1: UI は simulation state を直接変更しない
 UI システムはシミュレーション状態（Soul のバイタル、タスク状態等）を直接変更してはならない。
 変更はイベント（Request 系）または Command を通じて行う。
+typed `UiIntent`のlive再検証とdomain mutationは`bevy_app::systems::ui_domain_commit`の
+`UiDomainCommitSet`だけが所有し、generic UI/save handlerより
+先に同frame commitする。pause/recovery中にrequestを次frameへ滞留させてはならない。
 → 詳細: [events.md](events.md)
 
 ### I-U2: システムセット実行順の遵守
 `Input → Spatial → Logic → Actor → Visual → Interface` の順序は固定。
 Visual / Interface フェーズから Logic フェーズのリソースに書き込んではならない。
+speechのstate-driven ingressは`GameSystemSet::Visual`配下に置き、fixed-step auditのVisual停止条件を迂回しない。
 
 ### I-U3: RemovedComponents は毎フレーム全リーダーを消費すること
 Bevy 0.19 の `RemovedComponents<T>` は removal message 用の `MessageCursor` を持つ。

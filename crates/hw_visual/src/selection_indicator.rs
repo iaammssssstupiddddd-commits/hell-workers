@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 use hw_core::constants::*;
-use hw_core::selection::{SelectedEntity, SelectionIndicator};
-use hw_ui::selection::{FamiliarMoveFeedback, SelectionHitKind, WorldPointerTarget};
+use hw_core::selection::{
+    FamiliarMoveFeedback, SelectedEntity, SelectionHitKind, SelectionIndicator, WorldPointerTarget,
+};
 use hw_world::WorldMap;
 
 #[derive(Component, Clone, Copy)]

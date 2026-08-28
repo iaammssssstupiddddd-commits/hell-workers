@@ -34,7 +34,8 @@ UI は **Widget 層**（`hw_ui`）と **Adapter 層**（`bevy_app/src/interface/
 | **Widget** | `hw_ui` | ノード生成・テーマ・レイアウト、ViewModel → Bevy UI ノードへの同期、操作の **`UiIntent` 発行** | `setup/`, `list/spawn`, `list/sync`, `panels/task_list/render`, `intents.rs` |
 | **ViewModel** | `bevy_app/src/interface/ui/` | ゲーム ECS（`Familiar`, `DamnedSoul`, `Designation` 等）から **表示用データを構築**、dirty 検出 | `list/view_model.rs`, `list/change_detection.rs`, `panels/task_list/view_model.rs`, `panels/task_list/dirty.rs` |
 | **Presenter** | `bevy_app/src/interface/ui/` | ViewModel を `hw_ui` の sync API に渡す **thin shell**（ゲーム依存の引数注入） | `list/sync.rs`, `panels/task_list/presenter.rs`, `panels/task_list/update.rs` |
-| **Intent Handler** | `bevy_app/src/interface/ui/interaction/` | `UiIntent` を受け取り **ワールド状態を変更**（`PlayMode`, `WorldMapWrite`, squad 操作等） | `intent_handler.rs`, `handlers/`, `intent_context.rs` |
+| **Intent Handler** | `bevy_app/src/interface/ui/interaction/` | `UiIntent` を受け取りUI mode／selection／save／menuを更新し、simulation-facing variantはcommit ownerへ残す | `intent_handler.rs`, `handlers/`, `intent_context.rs` |
+| **UI Domain Commit** | `bevy_app/src/systems/ui_domain_commit.rs` | typed `UiIntent`をlive再検証し、door／stockpile／Soul Spa／power owner request・outcomeへcommitする | `UiDomainCommitSet`, `UiDomainCommitCtx` |
 
 **規範:**
 

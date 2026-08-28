@@ -60,6 +60,34 @@ pub struct FamiliarCandidateSources<'a> {
     pub active_move_targets: &'a HashSet<Entity>,
 }
 
+/// Global candidate inputs that are invariant across Familiars in one delegation cycle.
+#[derive(Default)]
+pub struct DelegationCandidateSnapshot {
+    pub yards: Vec<Yard>,
+    pub global_designations: Vec<Entity>,
+}
+
+impl DelegationCandidateSnapshot {
+    pub fn build(queries: &FamiliarTaskAssignmentQueries<'_, '_>) -> Self {
+        let yards: Vec<Yard> = queries.yards.iter().cloned().collect();
+        let global_designations = queries
+            .designation
+            .designations
+            .iter()
+            .filter_map(|(entity, _, designation, managed_by_opt, _, _, _, _)| {
+                let is_managed_by_yard = managed_by_opt
+                    .is_some_and(|managed_by| queries.yards.get(managed_by.0).is_ok());
+                include_in_global_designation_scan(designation.work_type, is_managed_by_yard)
+                    .then_some(entity)
+            })
+            .collect();
+        Self {
+            yards,
+            global_designations,
+        }
+    }
+}
+
 fn include_in_global_designation_scan(work_type: WorkType, is_managed_by_yard: bool) -> bool {
     work_type == WorkType::Build || is_managed_by_yard
 }
@@ -71,13 +99,22 @@ pub fn collect_scored_candidates(
     sources: FamiliarCandidateSources<'_>,
     q_target_blueprints: &Query<&TargetBlueprint>,
 ) -> Vec<ScoredDelegationCandidate> {
-    collect_scored_candidates_internal(ctx, queries, sources, q_target_blueprints, None)
+    let cycle_snapshot = DelegationCandidateSnapshot::build(queries);
+    collect_scored_candidates_internal(
+        ctx,
+        queries,
+        sources,
+        &cycle_snapshot,
+        q_target_blueprints,
+        None,
+    )
 }
 
 pub(crate) fn collect_scored_candidates_with_diagnostics(
     ctx: FamiliarSearchContext<'_>,
     queries: &FamiliarTaskAssignmentQueries,
     sources: FamiliarCandidateSources<'_>,
+    cycle_snapshot: &DelegationCandidateSnapshot,
     q_target_blueprints: &Query<&TargetBlueprint>,
     diagnostics: &mut FamiliarEvaluatorDiagnostics,
     revisions: &TaskDiagnosticInputRevisions,
@@ -86,6 +123,7 @@ pub(crate) fn collect_scored_candidates_with_diagnostics(
         ctx,
         queries,
         sources,
+        cycle_snapshot,
         q_target_blueprints,
         Some((diagnostics, revisions)),
     )
@@ -95,32 +133,24 @@ fn collect_scored_candidates_internal(
     ctx: FamiliarSearchContext<'_>,
     queries: &FamiliarTaskAssignmentQueries,
     sources: FamiliarCandidateSources<'_>,
+    cycle_snapshot: &DelegationCandidateSnapshot,
     q_target_blueprints: &Query<&TargetBlueprint>,
     mut diagnostics: Option<(
         &mut FamiliarEvaluatorDiagnostics,
         &TaskDiagnosticInputRevisions,
     )>,
 ) -> Vec<ScoredDelegationCandidate> {
-    let all_yards: Vec<Yard> = queries.yards.iter().cloned().collect();
-
     let mut candidates = collect_candidate_entities(
         ctx.task_area_opt,
-        &all_yards,
+        &cycle_snapshot.yards,
         sources.managed_tasks,
         sources.designation_grid,
         sources.transport_request_grid,
     );
 
     let mut seen: HashSet<Entity> = candidates.iter().copied().collect();
-    for (entity, _, designation, managed_by_opt, _, _, _, _) in
-        queries.designation.designations.iter()
-    {
-        let is_managed_by_yard =
-            managed_by_opt.is_some_and(|managed_by| queries.yards.get(managed_by.0).is_ok());
-
-        if include_in_global_designation_scan(designation.work_type, is_managed_by_yard)
-            && seen.insert(entity)
-        {
+    for &entity in &cycle_snapshot.global_designations {
+        if seen.insert(entity) {
             candidates.push(entity);
         }
     }
@@ -152,7 +182,7 @@ fn collect_scored_candidates_internal(
             ctx.fam_entity,
             entity,
             ctx.task_area_opt,
-            &all_yards,
+            &cycle_snapshot.yards,
             &sources,
             queries,
         ) {
@@ -307,6 +337,7 @@ mod tests {
         mut probe: ResMut<MembershipProbe>,
     ) {
         let mut cycle = super::super::FamiliarTaskDiagnosticCycle::new(1, &revisions);
+        let candidate_snapshot = DelegationCandidateSnapshot::build(&queries);
         for (fam_entity, transform, task_area_opt, managed_tasks, policy) in &familiars {
             cycle.begin_evaluator();
             let mut diagnostics = FamiliarEvaluatorDiagnostics::new(1);
@@ -325,6 +356,7 @@ mod tests {
                     world_map: queries.read.world_map.as_ref(),
                     active_move_targets: &HashSet::new(),
                 },
+                &candidate_snapshot,
                 &q_target_blueprints,
                 &mut diagnostics,
                 &revisions,

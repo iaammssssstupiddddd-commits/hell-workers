@@ -138,7 +138,8 @@ M3で同時公開され、UIの表示能力を割当権限として使わずlive
 Familiar Perceive を開始します。主要システム: Perceive=`detect_state_changes_system` /
 `sync_reservations_system`（予約 dirty 時は即時、0.2秒ごとの安全監査あり）、
 Decide=`familiar_ai_state_system` / `blueprint_auto_gather_system`（1.0秒） /
-`familiar_task_delegation_system`（0.5秒）、Execute=`familiar_state_apply_system` /
+`familiar_task_delegation_cycle_system`（0.5秒） /
+`familiar_supervision_movement_system`（毎frame）、Execute=`familiar_state_apply_system` /
 `apply_squad_management_requests_system`等。
 
 ### 5.2. 主要モジュール
@@ -172,7 +173,7 @@ callers は `hw_familiar_ai::*` の完全パスを直接参照する。
   - **Resources**: `FamiliarTaskDelegationTimer` / `FamiliarDelegationPerfMetrics` / `hw_world::WalkabilityConnectivityCache` / `BlueprintAutoGatherTimer`
   - **RegisterType**: `FamiliarAiState` / `EncouragementCooldown`
   - **Perceive**: `detect_state_changes_system` / `detect_command_changes_system`
-  - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → blueprint_auto_gather → ApplyDeferred → task_delegation → encouragement_decision`（chain）
+  - **Decide**: `following_familiar_system`（独立）、`state_decision → ApplyDeferred → blueprint_auto_gather → ApplyDeferred → task_delegation → supervision_movement → encouragement_decision`（chain）
   - **Execute**: `familiar_state_apply_system` / `handle_state_changed_system` /
     `squad_logic_system` / `encouragement_apply_system` /
     `cleanup_encouragement_cooldowns_system`
@@ -291,7 +292,8 @@ operation / policy の変更は request がある Logic tick だけ処理しま�
 ### 7.5.3. 解体の候補・apply二重検証
 
 解体候補はFamiliar単位の収集時にtarget rootへ解決し、workerごとの到達判定ではそのroot位置を使う。
-active Move target集合はdelegation timerが発火したcycleだけ構築し、steady-stateの追加全Soul走査を作らない。
+active Move target集合、全Yard、Yard-owned/global Build Designation、incoming deliveryはdelegation timerが
+発火したcycleだけ`DelegationCycleSnapshot`へ一度構築し、Familiarごとのglobal scanとsteady-stateの追加全Soul走査を作らない。
 assignment message適用時は同batch開始時のactive Move集合、order/pending/claim/blocker、marker、phase、
 reservation operationが空であることを再確認し、stale requestから`WorkingOn`やreservationを作らない。
 
@@ -302,8 +304,9 @@ reservation operationが空であることを再確認し、stale requestから`
 - **イベント**: 状態遷移時に `FamiliarAiStateChangedEvent` を発火し、他のシステムが反応可能
 
 ### 7.7. タスク委譲のタイマーゲート
-- **仕組み**: `familiar_task_delegation_system` は **0.5秒間隔（初回即時）** で実行されます。
-- **効果**: タスク候補ごとの Boolean 到達判定は連結成分 cache を使うため、実経路生成 A* を起動せずに判定できます。timer は候補収集・スコアリングの頻度を抑制します。
+- **仕組み**: `familiar_task_delegation_cycle_system` は **0.5秒間隔（初回即時）** で実行されます。
+  `familiar_supervision_movement_system`は候補探索を持たず、監視／探索移動だけを毎frame処理します。
+- **効果**: タスク候補ごとの Boolean 到達判定は連結成分 cache を使うため、実経路生成 A* を起動せずに判定できます。timer は候補収集・スコアリングとglobal snapshot構築の頻度を抑制します。
 
 ### 7.8. Blueprint / WallConstruction / Mixer不足資材の自動Gather
 - **仕組み**: `blueprint_auto_gather_system` が **1.0秒間隔（初回即時）** で実行され、`DeliverToBlueprint` request（Wood / Rock）、`DeliverToWallConstruction` request（Wood）、`DeliverToMixerSolid` request（Rock）から不足を検知します。
@@ -316,7 +319,7 @@ reservation operationが空であることを再確認し、stale requestから`
 
 ### 7.9. latest-only タスク候補診断
 
-`familiar_task_delegation_system` は通常の 0.5 秒 cycle で `FamiliarTaskCandidateDiagnostics` を作り、
+`familiar_task_delegation_cycle_system` は通常の 0.5 秒 cycle で `FamiliarTaskCandidateDiagnostics` を作り、
 前 cycle の map を置換する。dashboard 表示の有無は探索回数や割り当て判断を変えない。
 
 - candidate universe は空間 index、`ManagedTasks`、Yard-owned / global Build 補助 scan を統合して重複排除した集合。

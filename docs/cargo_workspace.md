@@ -109,13 +109,15 @@ workspace 共通の `bevy` 依存は `default-features = false` で必要 featur
 - `interaction/` — tooltip/dialog/hover_action/status_display システム群（FPS, speed, dream pool, area_edit_preview 等）。Operation editorはdomain componentを書かずtyped intentだけを発行する
 - `list/` — EntityListDirty, EntityListViewModel, EntityListNodeIndex, FamiliarSectionNodes, EntityListMinimizeState, EntityListResizeState, DragState, spawn（`spawn_familiar_section`, `spawn_soul_list_item_entity` 等）, sync（`sync_familiar_sections`, `sync_unassigned_souls`）, section_toggle（`entity_list_section_toggle_system`）, selection_focus, tree_ops, visual（apply_row_highlight, entity_list_visual_feedback_system）
 - `panels/tooltip_builder/` — text_wrap, widgets (spawn_progress_bar 等), templates（Soul/Building/Resource/UiButton/Generic ツールチップ）
-- `panels/info_panel/` — InfoPanelPinState, InfoPanelState, spawn_info_panel_ui, info_panel_system
+- `panels/info_panel/` — InfoPanelPinState, InfoPanelState, spawn_info_panel_ui, info_panel_system。
+  `InfoPanelNodes`はCommon/Soul/Stockpile/SoulSpa/Powerのtyped section groupがpanel内の唯一の正本で、
+  `UiNodeRegistry`はcross-crate共有slotへのlayout時projectionだけに使う
 - `panels/task_list/` — `TaskEntry`、status/reason、filter/sort、action capability/state、work_type_icon、
   render（focus rowとaction barをsibling生成）、pure UI interaction。ゲームowner判定やcomponent mutationは持たない
 - `panels/menu.rs` — menu_visibility_system
 - `models/inspection/` — EntityInspectionModel, EntityInspectionViewModel, Soul / Stockpile / Soul Spa / Powerのtyped inspection fields
 - `notifications/` — `UserFacingNotification`、`NotificationCenter`、2秒dedupe、4秒toast expiry、toast 3件／重要履歴64件のreducerとUI。ゲーム固有outcome型には依存しない
-- `selection/` — SelectionIntent、screen-space candidate ordering、WorldPointerTarget、cleanup_selection_references_system、typed placement validation / feedback / area plan API（`SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は `hw_core` から re-export）
+- `selection/` — SelectionIntent、cleanup_selection_references_system、typed placement validation / feedback / area plan API（candidate ordering、`WorldPointerTarget`、`SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は `hw_core::selection` が所有）
 - `camera.rs` — `world_cursor_pos`（スクリーン座標→ワールド座標変換ユーティリティ。`MainCamera` は `hw_core` から re-export）
 - `plugins/` — UiCorePlugin / UiEntityListPlugin / UiFoundationPlugin / UiInfoPanelPlugin / UiTooltipPlugin（fn ポインタ受け付けシェル）
 - **`area_edit/`** — エリア選択・編集状態の純粋データ型（`AreaEditHandleKind`, `AreaEditOperation`, `AreaEditDrag`, `AreaEditSession`, `AreaEditHistory`, `AreaEditHistoryEntry`, `AreaEditClipboard`, `AreaEditPresets`）。`AreaEditClipboard` 等は `bevy_app/command/area_selection.rs` から直接 `pub use hw_ui::area_edit::*` として re-export。`AreaEditHandleKind` は `bevy_app/command/mod.rs` からも re-export。`area_edit/interaction.rs` に `detect_area_edit_operation`・`apply_area_edit_drag`・`cursor_icon_for_operation` の pure helper を所有（M1 移設済み）

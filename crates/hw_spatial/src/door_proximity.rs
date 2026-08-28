@@ -53,7 +53,7 @@ pub struct DoorAutoOpenParams<'w, 's> {
     q_souls: DoorOpenSoulQuery<'w, 's>,
     q_doors: DoorOpenQuery<'w, 's>,
     #[cfg(feature = "profiling")]
-    metrics: ResMut<'w, DoorPerfMetrics>,
+    metrics: Option<ResMut<'w, DoorPerfMetrics>>,
 }
 
 #[derive(SystemParam)]
@@ -62,7 +62,7 @@ pub struct DoorAutoCloseParams<'w, 's> {
     q_souls: DoorCloseSoulQuery<'w, 's>,
     q_doors: DoorCloseQuery<'w, 's>,
     #[cfg(feature = "profiling")]
-    metrics: ResMut<'w, DoorPerfMetrics>,
+    metrics: Option<ResMut<'w, DoorPerfMetrics>>,
 }
 
 /// Closed doors inspect only nearby indexed Soul candidates and open when one
@@ -105,7 +105,9 @@ pub fn door_auto_open_nearby_system(
             &mut nearby_candidates,
         );
         #[cfg(feature = "profiling")]
-        metrics.open_spatial_queries.merge(spatial_query);
+        if let Some(metrics) = metrics.as_mut() {
+            metrics.open_spatial_queries.merge(spatial_query);
+        }
         let should_open = nearby_candidates.iter().copied().any(|soul_entity| {
             #[cfg(feature = "profiling")]
             {
@@ -134,7 +136,7 @@ pub fn door_auto_open_nearby_system(
     }
 
     #[cfg(feature = "profiling")]
-    {
+    if let Some(metrics) = metrics.as_mut() {
         metrics.open_souls_scanned = metrics.open_souls_scanned.saturating_add(souls_scanned);
         metrics.open_waypoints_scanned = metrics
             .open_waypoints_scanned
@@ -181,7 +183,9 @@ pub fn door_auto_close_nearby_system(
             &mut nearby_candidates,
         );
         #[cfg(feature = "profiling")]
-        metrics.close_spatial_queries.merge(spatial_query);
+        if let Some(metrics) = metrics.as_mut() {
+            metrics.close_spatial_queries.merge(spatial_query);
+        }
         let has_nearby_soul = nearby_candidates.iter().copied().any(|soul_entity| {
             #[cfg(feature = "profiling")]
             {
@@ -215,7 +219,7 @@ pub fn door_auto_close_nearby_system(
     }
 
     #[cfg(feature = "profiling")]
-    {
+    if let Some(metrics) = metrics.as_mut() {
         metrics.close_souls_scanned = metrics.close_souls_scanned.saturating_add(souls_scanned);
     }
 }

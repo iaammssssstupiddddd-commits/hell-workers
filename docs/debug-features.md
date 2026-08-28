@@ -150,6 +150,30 @@ MS-WFC-4 以降、`Startup` の `setup()` が `prepare_generated_world_layout_re
 
 ---
 
+## 解体 actual-window受入ドライバ
+
+`NativeDeconstructionAcceptancePlugin`は通常起動では無効なopt-in driverであり、
+`hell-workers-run-native-acceptance` Skillの`plan-deconstruction`からだけ起動する。
+V1〜V5でOrdersからの解体指定、各建物種とSoul Spa、salvage表示、save/load後のstale request拒否、
+Help capture、Task Dashboardのpriority変更と2段階cancelをproduction経路で検査する。最終frameでは
+load後に残したWallを選択・pinし、typed `InfoPanelNodes`のroot authorityが一つだけであること、
+`Building: Wall` header、空のplain-building summary、非対象sectionの非表示を実UI上で検査してから撮影する。
+
+save/load証跡はartifact内の専用`runtime/saves/world.scn.ron`へ隔離する。driverは現行の
+`SaveStorageRoot + SaveSlotId::LegacyDefault`を同じpathへ束縛し、save requestを一度だけ発行する。
+Task Dashboardの2段階cancel中は`Time<Virtual>`をpauseせず相対速度だけ0にして、UIとLogic ownerを
+動かしたままcommit claimとの競合を防ぐ。外側validatorはV1〜V5、WorldEpoch、save hash、
+実window screenshot、renderer adapter/backendを独立に再検証する。
+
+2026-08-28のrefactor closureではIntel Arc / Vulkan / X11でV1〜V5と最終Info PanelがPASSし、
+`target/native-acceptance/building-deconstruction-20260828T141118Z-37ff852a/`へ
+2560×1440 PNG、503,876 byteのsave、source fingerprint付きのfail-closed artifactを保存した。
+
+検査対象と結果schemaの正本は
+`crates/bevy_app/src/systems/jobs/deconstruction/native_acceptance.rs`である。
+
+---
+
 ## セーブ／ロード actual-window受入ドライバ
 
 `NativeSaveLoadAcceptancePlugin`は通常バイナリに含まれる開発専用のopt-in driverであり、
@@ -217,5 +241,6 @@ fresh jobだけを再実行する。
 - `crates/bevy_app/src/plugins/interface_debug.rs` — デバッグシステム本体
 - `crates/bevy_app/src/plugins/interface.rs` — Interface セット登録
 - `crates/bevy_app/src/plugins/logic.rs` — Logic セット登録
+- `crates/bevy_app/src/systems/jobs/deconstruction/native_acceptance.rs` — opt-in解体受入driver
 - `crates/bevy_app/src/systems/save/native_acceptance.rs` — opt-in actual-window save/load受入driver
 - `crates/bevy_app/src/interface/ui/notifications/native_acceptance.rs` — opt-in Track A2 placement/notification受入driver

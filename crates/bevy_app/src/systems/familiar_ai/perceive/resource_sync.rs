@@ -97,7 +97,7 @@ pub struct ReservationSyncResources<'w> {
     signature_cache: ResMut<'w, ReservationSignatureCache>,
     cache: ResMut<'w, SharedResourceCache>,
     #[cfg(feature = "profiling")]
-    perf_metrics: ResMut<'w, ReservationSyncPerfMetrics>,
+    perf_metrics: Option<ResMut<'w, ReservationSyncPerfMetrics>>,
 }
 
 /// タスク状態から予約を同期するシステム (Sense Phase)
@@ -226,8 +226,7 @@ pub fn sync_reservations_system(
         .cache
         .replace_reservation_snapshot(mixer_dest_res, source_res);
     #[cfg(feature = "profiling")]
-    {
-        let metrics = &mut resources.perf_metrics;
+    if let Some(metrics) = resources.perf_metrics.as_mut() {
         metrics.full_rebuilds = metrics.full_rebuilds.saturating_add(1);
         metrics.pending_tasks_scanned = metrics
             .pending_tasks_scanned

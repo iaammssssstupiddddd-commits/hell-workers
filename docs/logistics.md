@@ -621,6 +621,9 @@ Stockpile / Blueprint / Tank などへの搬入予約は、Bevy の Relationship
   - `TaskWorkers == 0` のときは `Designation` / `TaskSlots` / `Priority` を外す、または despawn。
 - 同一 key の重複 request は許可しない。policy-driven `DepositToStockpile` の key は
   `(issued_by Yard, resource_type, receiver priority tier)` であり、anchor の変更で別 request にしない。
+- `DepositToStockpile`と`ConsolidateStockpile`は`producer/upsert.rs`の共通stockpile reconcilerを通す。
+  canonical選択はworker付きrequestを優先し、idle duplicateだけを除去する。需要消失時はworkerlessをdisable、
+  worker付きrequestをworker数へcapして`Claimed`を維持する。Consolidationのraw Lowとreceiver tierは混同しない。
 - demand 計算は `current + in_flight(+ reservation)` を使い、過剰発行を防ぐ。
 
 ### 8.3 予約の責務を統一

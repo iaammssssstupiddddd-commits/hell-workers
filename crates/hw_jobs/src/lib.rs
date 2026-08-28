@@ -14,17 +14,18 @@ pub use construction::{
     WallConstructionSite, WallTileState,
 };
 pub use deconstruction::{
-    DeconstructionBlockReason, DeconstructionBlocker, DeconstructionCancelOutcome,
-    DeconstructionCancelRequest, DeconstructionCancelResult, DeconstructionCommitClaim,
-    DeconstructionCommitOutcome, DeconstructionCommitRequest, DeconstructionCommitResult,
-    DeconstructionDesignationOutcome, DeconstructionDesignationRejectReason,
-    DeconstructionDesignationRequest, DeconstructionDesignationResult,
-    DeconstructionEligibilityFacts, DeconstructionOrder, DeconstructionOrders,
-    DeconstructionPending, DeconstructionRejectReason, DeconstructionSalvage,
+    DeconstructionAssignmentFacts, DeconstructionAssignmentRejection, DeconstructionBlockReason,
+    DeconstructionBlocker, DeconstructionCancelOutcome, DeconstructionCancelRequest,
+    DeconstructionCancelResult, DeconstructionCommitClaim, DeconstructionCommitOutcome,
+    DeconstructionCommitRequest, DeconstructionCommitResult, DeconstructionDesignationOutcome,
+    DeconstructionDesignationRejectReason, DeconstructionDesignationRequest,
+    DeconstructionDesignationResult, DeconstructionEligibilityFacts, DeconstructionOrder,
+    DeconstructionOrders, DeconstructionPending, DeconstructionRejectReason, DeconstructionSalvage,
     DeconstructionTargetClass, DeconstructionTargetMarkers, ResolvedDeconstructionTarget,
     TargetDeconstructionRoot, basic_deconstruction_marker_matches, deconstruction_marker_matches,
     deconstruction_salvage, evaluate_deconstruction_target, resolve_deconstruction_target,
     supports_basic_deconstruction_cleanup, supports_deconstruction_cleanup,
+    validate_deconstruction_assignment_facts,
 };
 pub use diagnostics::{
     TaskDiagnosticClass, TaskDiagnosticCounters, TaskDiagnosticCoverage, TaskDiagnosticCycleHeader,
