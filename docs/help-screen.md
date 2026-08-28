@@ -89,6 +89,11 @@ structure / Room / Powerの撤去後再計算を説明します。Constructing S
 project-owned shortcut文字列は`DEFAULT_BINDINGS`から生成します。provider本文へ同じキー名を重複記載せず、
 新しいpublic keyをformatterが扱えない場合はcatalog構築を失敗させます。カメラのdependency既定入力や
 rename widget固有の編集キーは、型付き`InputAction`を持たない明示的な例外です。
+
+world pointerのplayer契約は`camera-selection` topicの`world-selection`と
+`world-object-actions`へ掲載します。前者はscreen-space snap、release確定、drag slop、重なり巡回、
+footprint選択、後者はentity context menu、Familiar地面移動、Door lock、移動可能BuildingのMoveを扱います。
+詳細なruntime契約は[world-selection.md](world-selection.md)を正本とします。
 `coverage_approval.snap`はlauncherのlabel/tooltip、画面title・閉じる・navigation・shortcut接頭辞と
 それらのrender結果、launcher/chrome shortcut、section/topic/entryのID・title・全paragraph・shortcut、
 feature/owner、およびstable surface ID、Published target、Excluded reason、Blocked target/reason/ownerを

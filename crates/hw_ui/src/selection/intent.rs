@@ -15,3 +15,10 @@ pub enum SelectionIntent {
     /// No action this frame.
     None,
 }
+
+/// A right-click entity action resolved at the press location.
+#[derive(Message, Debug, Clone, Copy)]
+pub struct OpenWorldContextMenu {
+    pub target: Entity,
+    pub screen_pos: Vec2,
+}

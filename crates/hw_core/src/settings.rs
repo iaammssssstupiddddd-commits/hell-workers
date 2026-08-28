@@ -10,7 +10,7 @@ pub struct GameSettings {
     pub ui_scale: f32,
     /// カメラ WASD パン速度（PanCamera.pan_speed）
     pub camera_pan_speed: f32,
-    /// マウスドラッグパン（PanCamera.mouse_pan_settings.enabled）
+    /// Project-owned world pointer gestureによるマウスドラッグパン。
     pub camera_mouse_pan_enabled: bool,
     /// 起動時のゲーム速度
     pub default_time_speed: TimeSpeed,

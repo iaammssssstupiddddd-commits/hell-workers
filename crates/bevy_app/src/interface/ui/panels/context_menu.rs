@@ -2,13 +2,13 @@
 
 use crate::entities::damned_soul::DamnedSoul;
 use crate::entities::familiar::Familiar;
-use crate::interface::selection::HoveredEntity;
 use crate::interface::ui::interaction::despawn_context_menus;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
 use bevy::ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide};
 use hw_ui::components::*;
+use hw_ui::selection::OpenWorldContextMenu;
 use hw_ui::theme::UiTheme;
 
 type BuildingOrBlueprintQuery<'w, 's> = Query<
@@ -44,10 +44,9 @@ enum ContextTarget {
 #[derive(SystemParam)]
 pub struct ContextMenuInput<'w, 's> {
     buttons: Res<'w, ButtonInput<MouseButton>>,
-    q_window: Query<'w, 's, &'static Window, With<bevy::window::PrimaryWindow>>,
-    hovered: Res<'w, HoveredEntity>,
     ui_input_state: Res<'w, UiInputState>,
     resolved_frame: Res<'w, crate::input_actions::ResolvedInputFrame>,
+    requests: MessageReader<'w, 's, OpenWorldContextMenu>,
 }
 
 #[derive(SystemParam)]
@@ -56,6 +55,7 @@ pub struct ContextMenuClassifyQueries<'w, 's> {
     q_souls: Query<'w, 's, (), With<DamnedSoul>>,
     q_buildings: BuildingOrBlueprintQuery<'w, 's>,
     q_doors: Query<'w, 's, &'static crate::systems::jobs::Door>,
+    q_building_details: Query<'w, 's, &'static crate::systems::jobs::Building>,
     q_resources: ResourceItemQuery<'w, 's>,
 }
 
@@ -75,16 +75,16 @@ pub fn context_menu_system(
 ) {
     let ContextMenuInput {
         buttons,
-        q_window,
-        hovered,
         ui_input_state,
         resolved_frame,
+        mut requests,
     } = input;
     let ContextMenuClassifyQueries {
         q_familiars,
         q_souls,
         q_buildings,
         q_doors,
+        q_building_details,
         q_resources,
     } = classify_queries;
     let ContextMenuRenderAssets { game_assets, theme } = render_assets;
@@ -100,18 +100,13 @@ pub fn context_menu_system(
         return;
     }
 
-    if !buttons.just_pressed(MouseButton::Right) {
+    let Some(request) = requests.read().next().copied() else {
         return;
-    }
-    if ui_input_state.world_input_blocked() {
-        return;
-    }
+    };
 
     despawn_context_menus(&mut commands, &q_context_menu);
 
-    let Some(target_entity) = hovered.0 else {
-        return;
-    };
+    let target_entity = request.target;
     let target = classify_target(
         target_entity,
         &q_familiars,
@@ -123,21 +118,14 @@ pub fn context_menu_system(
         return;
     };
 
-    let Ok(window) = q_window.single() else {
-        return;
-    };
-    let Some(cursor_pos) = window.cursor_position() else {
-        return;
-    };
-
     selected_entity.0 = Some(target_entity);
 
     let anchor = commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                left: Val::Px(cursor_pos.x),
-                top: Val::Px(cursor_pos.y),
+                left: Val::Px(request.screen_pos.x),
+                top: Val::Px(request.screen_pos.y),
                 width: Val::Px(1.0),
                 height: Val::Px(1.0),
                 ..default()
@@ -238,6 +226,18 @@ pub fn context_menu_system(
                                 ("Lock Door", MenuAction::ToggleDoorLock(entity))
                             };
                         spawn_menu_item(menu, label, action, &game_assets, &theme);
+                    }
+                    if q_building_details
+                        .get(entity)
+                        .is_ok_and(|building| building.kind.is_player_movable())
+                    {
+                        spawn_menu_item(
+                            menu,
+                            "Move",
+                            MenuAction::MovePlantBuilding(entity),
+                            &game_assets,
+                            &theme,
+                        );
                     }
                 }
                 ContextTarget::Resource(entity) => {

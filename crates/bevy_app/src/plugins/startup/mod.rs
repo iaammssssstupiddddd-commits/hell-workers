@@ -55,7 +55,8 @@ use hw_core::GameTime;
 use hw_core::quality::{QualitySettings, RttQualityPreset};
 use hw_spatial::{
     BlueprintSpatialGrid, FamiliarSpatialGrid, FloorConstructionSpatialGrid,
-    GatheringSpotSpatialGrid, ResourceSpatialGrid, SpatialGrid, StockpileSpatialGrid,
+    GatheringSpotSpatialGrid, ResourceSpatialGrid, SelectableObstacleSpatialGrid, SpatialGrid,
+    StockpileSpatialGrid,
 };
 use hw_ui::components::ArchitectCategoryState;
 
@@ -88,6 +89,7 @@ impl Plugin for StartupPlugin {
             .init_resource::<BlueprintSpatialGrid>()
             .init_resource::<FloorConstructionSpatialGrid>()
             .init_resource::<StockpileSpatialGrid>()
+            .init_resource::<SelectableObstacleSpatialGrid>()
             .init_resource::<PerfScenarioConfig>()
             .init_resource::<PerfScenarioRandomStreams>()
             .add_plugins(Material2dPlugin::<rtt_composite::RttCompositeMaterial>::default())

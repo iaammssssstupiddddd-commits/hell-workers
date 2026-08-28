@@ -164,6 +164,7 @@ pub(crate) fn reset_runtime_caches(world: &mut World) {
     world.insert_resource(FamiliarSpatialGrid::default());
     world.insert_resource(FloorConstructionSpatialGrid::default());
     world.insert_resource(ResourceSpatialGrid::default());
+    world.insert_resource(hw_spatial::SelectableObstacleSpatialGrid::default());
     world.insert_resource(SpatialGrid::default());
     world.insert_resource(StockpileSpatialGrid::default());
     world.insert_resource(TransportRequestSpatialGrid::default());

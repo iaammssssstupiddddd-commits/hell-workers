@@ -490,15 +490,17 @@ roster relationshipを直接変更しない。
 | placement geometry API | `hw_ui::selection::placement` | `building_geometry`, `building_occupied_grids`, `building_spawn_pos`, `building_size`, `bucket_storage_geometry`, `validate_building_placement`, `validate_bucket_storage_placement` |
 | move geometry API | `hw_ui::selection::placement` | `move_anchor_grid`, `move_occupied_grids`, `move_spawn_pos`, `validate_moved_building_placement`, `validate_moved_bucket_storage_placement` |
 | floor / wall validation | `hw_ui::selection::placement` | `build_area_placement_plan`, `validate_area_size`, `validate_wall_area`, `validate_floor_tile`, `validate_wall_tile` |
-| selection intent | `hw_ui::selection::intent` | `SelectionIntent` |
+| selection intent | `hw_ui::selection::intent` | `SelectionIntent`, `OpenWorldContextMenu` |
+| pointer candidate | `hw_ui::selection::candidate` | screen-space distance、Direct/Snapped、stable ordering、`WorldPointerTarget` |
 | root adapter | `crates/bevy_app/src/interface/selection/*` | Query/Res から intent 生成、ECS 状態・WorldMap 変更の適用 |
 
 - `SelectedEntity` / `HoveredEntity` / `SelectionIndicator` は cross-crate で共有される interaction state として `hw_core::selection` に置き、`hw_ui::selection` は cleanup と placement validation の公開面を担う。`Commands`/`WorldMapWrite`/`NextState<PlayMode>` は使わない。
-- `update_selection_indicator` の実装本体は `hw_visual` にあるが、選択更新と同フレームで反映するため root `Interface` フェーズで登録する。
+- `update_selection_indicator` とFamiliar destination markerの実装本体は `hw_visual` にある。選択更新と同フレームで反映するためroot `Interface`フェーズで登録し、Building系は`WorldMap::snapshot_owner`からfootprintを再計算する。
 - `hw_ui::selection::placement` は building placement/move/SoulSpa/area placement の geometry, typed validation, live/recent feedback共通ロジックを保持する。`crates/bevy_app/src/interface/selection/building_place/placement.rs`・`building_move/preview.rs`・`building_move/click_handlers.rs`・`floor_place/validation.rs`・`soul_spa_place/mod.rs`・`crates/bevy_app/src/systems/visual/placement_ghost.rs` が共有する。内部は private submodule に分離済み: `geometry.rs`（座標変換・形状計算）/ `validation.rs`（配置可否判定）/ `tests.rs`。`placement.rs` root はファサード + 共有型定義のみ。
 - `building_move/geometry.rs` は hw_ui 移動に伴い削除済み。`building_move/placement.rs` は bucket storage 所有グリッド解決だけを持つ薄い adapter で、判定本体は `validate_moved_bucket_storage_placement` を使う。
 - floor/wall の tile reject reason と tile validation は `hw_ui::selection::placement` に共通化済み。rootの`build_floor_placement_plan` / `build_wall_placement_plan`がpreviewとcommitの両方で同じ`AreaPlacementPlan`を再構築し、有効タイルが1件以上なら部分採用する。`WorldMap` → `WorldReadApi` の adapter は `crates/bevy_app/src/world/map/mod.rs` の `WorldMapRef<'a>` 一箇所に集約済み（旧来の各ファイルのローカルラッパーは削除済み）。
-- `handle_mouse_input` の selection 判定は `SelectionIntent` を返す helper へ分離済み（`apply_selection_intent` が ECS 変更を適用）。
+- `handle_mouse_input` は共通resolverの候補をpress時にlatchし、5 logical px以内のreleaseだけを`SelectionIntent`へ変換する。Mouse Drag Panはproject-owned adapterがslop超過分から適用し、dependency `PanCamera`のmouse observerは無効、keyboard panとwheel zoomだけを維持する。詳細は[world-selection.md](world-selection.md)。
+- Tree／Rock選択用`SelectableObstacleSpatialGrid`は`ObstaclePosition`のAdded/Changed/Removedだけを同期し、通常pointer frameで全障害物を走査しない。
 - `building_move/mod.rs` は root shell として `preview.rs` / `system.rs` / `context.rs` / `click_handlers.rs` / `finalization.rs` を束ねる。`system.rs` は entrypoint に縮小され、`MoveStateCtx` / `MoveOpCtx` は `context.rs`、クリック別分岐は `click_handlers.rs`、`finalize_move_request` / `cancel_tasks_and_requests_for_moved_building` は `finalization.rs` に分離済み。`TransportRequest`・`unassign_task` 依存を持つため crate 境界としては root adapter に残留する。
 
 

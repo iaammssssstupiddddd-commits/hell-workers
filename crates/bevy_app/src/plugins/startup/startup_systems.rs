@@ -191,13 +191,15 @@ pub(super) fn setup(
 }
 
 fn gameplay_pan_camera() -> PanCamera {
-    PanCamera {
+    let mut controller = PanCamera {
         // Camera3d/RtT は固定 TopDown 姿勢を正本とするため、Camera2d だけを
         // 回す既定 Q/E 入力は無効化する。
         key_rotate_ccw: None,
         key_rotate_cw: None,
         ..default()
-    }
+    };
+    controller.mouse_pan_settings.enabled = false;
+    controller
 }
 
 pub(super) fn initialize_gizmo_config(mut config_store: ResMut<GizmoConfigStore>) {

@@ -11,7 +11,7 @@ use crate::input_actions::{
     sync_world_input_capture_system,
 };
 use crate::interface::selection::{
-    SelectedEntity, handle_mouse_input, pointer_hits_task_area_border,
+    SelectedEntity, WorldSelectionGesture, handle_mouse_input, pointer_hits_task_area_border,
 };
 use crate::interface::ui::UiInputState;
 use crate::interface::ui::help_controller::{HelpPauseGuard, apply_accepted_help_open_system};
@@ -23,7 +23,13 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use hw_core::game_state::{PlayMode, TaskMode};
 use hw_core::quality::QualitySettings;
+use hw_spatial::{
+    FamiliarSpatialGrid, ResourceSpatialGrid, SelectableObstacleSpatialGrid, SpatialGrid,
+    StockpileSpatialGrid,
+};
 use hw_ui::camera::MainCamera;
+use hw_ui::selection::{FamiliarMoveFeedback, OpenWorldContextMenu, WorldPointerTarget};
+use hw_world::WorldMap;
 
 pub struct InputPlugin;
 
@@ -35,6 +41,16 @@ impl Plugin for InputPlugin {
         app.init_resource::<UiInputState>();
         app.init_resource::<TaskAreaPointerClaim>();
         app.init_resource::<HelpPauseGuard>();
+        app.init_resource::<WorldSelectionGesture>();
+        app.init_resource::<WorldPointerTarget>();
+        app.init_resource::<FamiliarMoveFeedback>();
+        app.init_resource::<WorldMap>();
+        app.init_resource::<FamiliarSpatialGrid>();
+        app.init_resource::<SpatialGrid>();
+        app.init_resource::<ResourceSpatialGrid>();
+        app.init_resource::<StockpileSpatialGrid>();
+        app.init_resource::<SelectableObstacleSpatialGrid>();
+        app.add_message::<OpenWorldContextMenu>();
         configure_input_resolution_sets(app);
         app.add_systems(
             PreUpdate,

@@ -453,6 +453,8 @@ pub struct TransportRequestIndexTag;
 pub struct ResourceIndexTag;
 /// Tag for GatheringSpot centers.
 pub struct GatheringSpotIndexTag;
+/// Tag for selectable Tree/Rock obstacle positions.
+pub struct SelectableObstacleIndexTag;
 
 #[cfg(test)]
 mod tests {

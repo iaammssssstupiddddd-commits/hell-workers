@@ -6,7 +6,7 @@ use crate::interface::selection::floor_placement_system;
 use crate::interface::selection::soul_spa_place_input_system;
 use crate::interface::selection::{
     cleanup_selection_references_system, clear_companion_state_outside_build_mode,
-    update_hover_entity, update_selection_indicator,
+    update_familiar_destination_marker, update_hover_entity, update_selection_indicator,
 };
 use crate::interface::ui::interaction::handle_ui_intent;
 use crate::interface::ui::vignette::update_vignette_system;
@@ -43,6 +43,7 @@ fn register_ui_core_plugin_systems(app: &mut App) {
         (
             clear_companion_state_outside_build_mode,
             update_selection_indicator,
+            update_familiar_destination_marker,
         )
             .in_set(GameSystemSet::Interface),
     )

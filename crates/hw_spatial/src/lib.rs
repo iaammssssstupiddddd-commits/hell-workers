@@ -6,6 +6,7 @@ pub mod floor_construction;
 pub mod gathering;
 pub mod grid;
 pub mod resource;
+pub mod selectable_obstacle;
 pub mod soul;
 pub mod stockpile;
 pub mod transport_request;
@@ -31,11 +32,14 @@ pub use floor_construction::{
 pub use gathering::{GatheringSpotSpatialGrid, update_gathering_spot_spatial_grid_system};
 pub use grid::{
     BlueprintIndexTag, DesignationIndexTag, FamiliarIndexTag, FloorConstructionIndexTag,
-    GatheringSpotIndexTag, GridData, ResourceIndexTag, SoulIndexTag, SpatialGridOps, SpatialIndex,
-    SpatialQueryStats, StockpileIndexTag, TransformSpatialUpdateQuery, TransportRequestIndexTag,
-    update_transform_spatial_index_system,
+    GatheringSpotIndexTag, GridData, ResourceIndexTag, SelectableObstacleIndexTag, SoulIndexTag,
+    SpatialGridOps, SpatialIndex, SpatialQueryStats, StockpileIndexTag,
+    TransformSpatialUpdateQuery, TransportRequestIndexTag, update_transform_spatial_index_system,
 };
 pub use resource::{ResourceSpatialGrid, update_resource_spatial_grid_system};
+pub use selectable_obstacle::{
+    SelectableObstacleSpatialGrid, update_selectable_obstacle_spatial_grid_system,
+};
 pub use soul::{SpatialGrid, update_damned_soul_spatial_grid_system, update_spatial_grid_system};
 pub use stockpile::{StockpileSpatialGrid, update_stockpile_spatial_grid_system};
 pub use transport_request::{

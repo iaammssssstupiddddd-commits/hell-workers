@@ -48,8 +48,7 @@ pub fn building_move_system(
             .set(hw_core::game_state::PlayMode::Normal);
         return;
     };
-    use crate::systems::jobs::BuildingType;
-    if !matches!(building.kind, BuildingType::Tank | BuildingType::MudMixer) {
+    if !building.kind.is_player_movable() {
         clear_move_states(
             &mut state.move_context,
             &mut state.move_placement_state,

@@ -3142,6 +3142,7 @@ dependencies = [
  "bevy",
  "hw_core",
  "hw_spatial",
+ "hw_ui",
  "hw_world",
  "rand 0.8.5",
 ]

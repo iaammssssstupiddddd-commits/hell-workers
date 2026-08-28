@@ -23,6 +23,7 @@
 
 ## UI & Visuals
 - [help-screen.md](help-screen.md): F1/ボタンで開くプレイヤーHelp、catalog ownership、可逆pause、継続更新gate。
+- [world-selection.md](world-selection.md): screen-spaceオブジェクトスナップ、クリック／ドラッグ所有、右クリック、選択表示の契約。
 - [notifications.md](notifications.md): 有界なトースト／重要履歴、配置不能理由、セーブ／ロード終端結果、タスク操作・Stockpile方針変更結果の仕様。
 - [entity_list_ui.md](entity_list_ui.md): エンティティリストのフィルタリングと操作。
 - [task_list_ui.md](task_list_ui.md): タスクリストの表示・タブ切替・クリック操作。

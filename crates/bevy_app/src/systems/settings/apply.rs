@@ -70,7 +70,10 @@ pub fn apply_settings_system(
 
     if let Ok(mut pan_camera) = q_pan_camera.single_mut() {
         pan_camera.pan_speed = settings.camera_pan_speed;
-        pan_camera.mouse_pan_settings.enabled = settings.camera_mouse_pan_enabled;
+        // Mouse drag is owned by the project pointer gesture adapter so click slop and
+        // selection release can be resolved before camera movement. PanCamera still owns
+        // keyboard pan and wheel zoom.
+        pan_camera.mouse_pan_settings.enabled = false;
     }
 
     sync_debug_gizmos(

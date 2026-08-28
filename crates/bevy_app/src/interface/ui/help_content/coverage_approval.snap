@@ -15,7 +15,8 @@ entry|topic="getting-started"|id="getting-started-first-steps"|title="最初に�
 section|id="basic-controls"|title="基本操作"
 topic|feature="camera-selection"|owner="input-camera"|section="basic-controls"|id="camera-selection"|title="カメラと選択"
 entry|topic="camera-selection"|id="camera-pan-zoom"|title="カメラ移動"|paragraphs=["W / A / S / D で移動し、マウスホイールで拡大・縮小します。", "Settings で Mouse Drag Pan が有効なら、左ドラッグでもカメラを移動できます。", "カメラは固定のトップダウン表示で、表示階層や視点を切り替える操作はありません。"]|shortcut=Some("W / A / S / D / Mouse Wheel")
-entry|topic="camera-selection"|id="world-selection"|title="選択と右クリック"|paragraphs=["左クリックで対象を選びます。右クリックは選択対象と現在のモードに応じた操作を開きます。", "入力欄を編集中は、ゲーム用ショートカットが抑止されます。"]|shortcut=None
+entry|topic="camera-selection"|id="world-selection"|title="選択とスナップ"|paragraphs=["対象へ近づけると選択候補が先に表示されます。水色の強い表示は、カーソルの少し外側から対象へスナップしている状態です。", "左ボタンを離したときに候補を選びます。5 pxを超える左ドラッグはカメラ移動になり、選択を変更しません。", "同じ場所を続けて左クリックすると、資源と建物、建物と床など、重なった候補を順に選べます。建物とBlueprintは中心ではなく占有範囲全体が対象です。", "入力欄を編集中は、ゲーム用ショートカットが抑止されます。"]|shortcut=None
+entry|topic="camera-selection"|id="world-object-actions"|title="右クリック操作"|paragraphs=["対象上の右クリックは、その対象を選んでコンテキストメニューを開きます。使い魔では確認、Task Area編集、Operationを選べます。", "使い魔を選択して空き地を右クリックすると移動先を更新し、短時間マーカーを表示します。対象上では移動よりコンテキストメニューを優先します。", "Doorはメニューから施錠・解錠できます。TankとMud MixerはMoveを選べますが、移動できない建物にはMoveを表示しません。"]|shortcut=None
 topic|feature="time-help"|owner="input-camera"|section="basic-controls"|id="time-help"|title="時間とヘルプ"
 entry|topic="time-help"|id="time-controls"|title="時間速度"|paragraphs=["一時停止を切り替えるか、Paused / Normal / Fast / Super を直接選択できます。"]|shortcut=Some("Space / Esc / 1 / 2 / 3 / 4")
 entry|topic="time-help"|id="help-pause-behavior"|title="ヘルプ中の時間"|paragraphs=["通常時にヘルプを開くと自動で一時停止し、閉じると直前の相対速度で再開します。", "すでに Pause 中なら、ヘルプを閉じても Pause を維持します。"]|shortcut=Some("F1")
@@ -253,7 +254,7 @@ coverage|ui-intent::load-cancel|player|published:entry:save-load
 coverage|ui-intent::load-catalog-confirm|player|published:entry:save-load
 coverage|ui-intent::load-catalog-select|player|published:entry:save-load
 coverage|ui-intent::load-request|player|published:entry:save-load
-coverage|ui-intent::move-plant-building|player|published:entry:architect-building
+coverage|ui-intent::move-plant-building|player|published:entry:world-object-actions
 coverage|ui-intent::operation-close|player|published:entry:familiar-operation-policy
 coverage|ui-intent::operation-open|player|published:entry:familiar-operation-policy
 coverage|ui-intent::operation-settings-dialog|player|published:entry:familiar-operation-policy

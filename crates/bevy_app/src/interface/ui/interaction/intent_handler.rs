@@ -1016,10 +1016,17 @@ mod tests {
     }
 
     #[test]
-    fn move_plant_intent_rejects_despawned_or_non_plant_target() {
+    fn move_intent_rejects_stale_non_movable_and_pending_targets() {
         let mut app = domain_action_app();
         let wall = spawn_building(&mut app, BuildingType::Wall);
         write_intent(&mut app, UiIntent::MovePlantBuilding(wall));
+        app.update();
+
+        assert!(app.world().resource::<SelectedEntity>().0.is_none());
+        assert!(app.world().resource::<MoveContext>().0.is_none());
+
+        let soul_spa = spawn_building(&mut app, BuildingType::SoulSpa);
+        write_intent(&mut app, UiIntent::MovePlantBuilding(soul_spa));
         app.update();
 
         assert!(app.world().resource::<SelectedEntity>().0.is_none());
@@ -1099,7 +1106,7 @@ mod tests {
     #[test]
     fn move_action_cleanup_precedes_mode_and_menu_update() {
         let mut app = domain_action_app();
-        let plant = spawn_building(&mut app, BuildingType::SoulSpa);
+        let plant = spawn_building(&mut app, BuildingType::Tank);
         app.world_mut().resource_mut::<BuildContext>().0 = Some(BuildingType::Tank);
         app.world_mut().resource_mut::<TaskContext>().0 = TaskMode::FloorPlace(Some(Vec2::ZERO));
         *app.world_mut().resource_mut::<MenuState>() = MenuState::Architect;

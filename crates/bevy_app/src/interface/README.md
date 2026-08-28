@@ -15,7 +15,7 @@ selection suppression に従う。Modal/Pause capture の pending/visible sync �
 
 | ディレクトリ | 内容 |
 |---|---|
-| `selection/` | エンティティ選択・建物配置プレビュー・ヒットテスト |
+| `selection/` | screen-space soft snap、release確定のエンティティ選択、建物配置プレビュー・ヒットテスト |
 | `ui/` | UI セットアップ・パネル・リスト・インタラクション |
 
 ## selection/ ディレクトリ

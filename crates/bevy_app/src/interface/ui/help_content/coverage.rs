@@ -408,7 +408,7 @@ coverage_table! {
             published("architect-building")
         },
         "ui-intent::move-plant-building" => tuple(MovePlantBuilding(_)) => {
-            published("architect-building")
+            published("world-object-actions")
         },
         "ui-intent::stockpile-policy" => record(ApplyStockpilePolicy { .. }) => {
             published("zones-workflow")

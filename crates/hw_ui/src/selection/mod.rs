@@ -1,9 +1,15 @@
 use bevy::prelude::*;
 
+mod candidate;
 mod intent;
 mod placement;
 
-pub use intent::SelectionIntent;
+pub use candidate::{
+    FamiliarMoveFeedback, SelectionCandidate, SelectionHitKind, SelectionTargetClass,
+    WorldPointerTarget, classify_selection_distance, point_to_rect_distance,
+    sort_selection_candidates,
+};
+pub use intent::{OpenWorldContextMenu, SelectionIntent};
 pub use placement::{
     AreaPlacementPlan, BuildingPlacementContext, PlacementFeedback, PlacementFeedbackSet,
     PlacementFeedbackState, PlacementFeedbackStatus, PlacementGeometry, PlacementRejectReason,

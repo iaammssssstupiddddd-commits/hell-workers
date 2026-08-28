@@ -74,7 +74,7 @@ impl IntentDomainActionCtx<'_, '_> {
     pub(crate) fn is_move_plant_target(&self, entity: Entity) -> bool {
         self.q_buildings
             .get(entity)
-            .is_ok_and(|building| building.kind.category() == BuildingCategory::Plant)
+            .is_ok_and(|building| building.kind.is_player_movable())
     }
 
     pub(crate) fn toggle_door_lock(&mut self, entity: Entity) {

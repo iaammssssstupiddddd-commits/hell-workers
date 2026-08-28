@@ -9,5 +9,5 @@ pub struct SelectedEntity(pub Option<Entity>);
 pub struct HoveredEntity(pub Option<Entity>);
 
 /// 選択ハイライト表示エンティティのマーカー
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 pub struct SelectionIndicator;

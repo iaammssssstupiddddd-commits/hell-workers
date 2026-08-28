@@ -9,6 +9,7 @@ mod state {
     pub use hw_ui::selection::{
         HoveredEntity, SelectedEntity, SelectionIndicator, cleanup_selection_references_system,
     };
+    pub use hw_visual::update_familiar_destination_marker;
     pub use hw_visual::update_selection_indicator;
 }
 
@@ -16,10 +17,10 @@ pub use building_move::{building_move_preview_system, building_move_system};
 pub use building_place::blueprint_placement;
 pub use floor_place::{floor_placement_preview_system, floor_placement_system};
 pub(crate) use input::pointer_hits_task_area_border;
-pub use input::{handle_mouse_input, update_hover_entity};
+pub(crate) use input::{WorldSelectionGesture, handle_mouse_input, update_hover_entity};
 pub use mode::clear_companion_state_outside_build_mode;
 pub use soul_spa_place::soul_spa_place_input_system;
 pub use state::{
     HoveredEntity, SelectedEntity, SelectionIndicator, cleanup_selection_references_system,
-    update_selection_indicator,
+    update_familiar_destination_marker, update_selection_indicator,
 };

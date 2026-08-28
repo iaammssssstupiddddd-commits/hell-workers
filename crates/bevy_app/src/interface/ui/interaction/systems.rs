@@ -3,7 +3,7 @@ use crate::input_actions::ForegroundUiGate;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::ui::RelativeCursorPosition;
-use hw_jobs::{Building, BuildingCategory};
+use hw_jobs::Building;
 use hw_ui::UiIntent;
 use hw_ui::components::*;
 use hw_ui::interaction::HoverActionTarget;
@@ -146,7 +146,7 @@ pub fn ui_interaction_system(
     }
 }
 
-/// Root adapter that publishes only movable Plant buildings to the UI widget.
+/// Root adapter that publishes only buildings supported by the Move implementation.
 pub fn update_move_plant_hover_target_system(
     hovered: Res<HoveredEntity>,
     q_buildings: Query<&Building, Without<hw_jobs::DeconstructionPending>>,
@@ -155,7 +155,7 @@ pub fn update_move_plant_hover_target_system(
     target.0 = hovered.0.filter(|entity| {
         q_buildings
             .get(*entity)
-            .is_ok_and(|building| building.kind.category() == BuildingCategory::Plant)
+            .is_ok_and(|building| building.kind.is_player_movable())
     });
 }
 
@@ -291,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn move_overlay_is_limited_to_plant_buildings() {
+    fn move_overlay_is_limited_to_supported_buildings() {
         let mut app = App::new();
         app.init_resource::<HoveredEntity>()
             .init_resource::<HoverActionTarget>()
@@ -307,6 +307,13 @@ mod tests {
             .world_mut()
             .spawn(Building {
                 kind: BuildingType::Wall,
+                is_provisional: false,
+            })
+            .id();
+        let soul_spa = app
+            .world_mut()
+            .spawn(Building {
+                kind: BuildingType::SoulSpa,
                 is_provisional: false,
             })
             .id();
@@ -327,6 +334,7 @@ mod tests {
             (Some(tank), Some(tank)),
             (Some(pending_tank), None),
             (Some(wall), None),
+            (Some(soul_spa), None),
             (Some(non_building), None),
             (None, None),
         ] {

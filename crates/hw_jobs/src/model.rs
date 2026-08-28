@@ -115,6 +115,11 @@ impl BuildingType {
         )
     }
 
+    /// Whether the player can relocate this completed building with the Move tool.
+    pub const fn is_player_movable(self) -> bool {
+        matches!(self, Self::Tank | Self::MudMixer)
+    }
+
     pub fn category(&self) -> BuildingCategory {
         match self {
             BuildingType::Wall | BuildingType::Floor | BuildingType::Bridge => {

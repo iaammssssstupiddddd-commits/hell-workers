@@ -91,6 +91,16 @@ fn pan_camera_drag_app() -> (App, Entity, Entity, Location) {
     app.init_resource::<ButtonInput<KeyCode>>()
         .init_resource::<AccumulatedMouseScroll>()
         .init_resource::<PendingTestDrag>()
+        .init_resource::<WorldSelectionGesture>()
+        .init_resource::<hw_core::GameSettings>()
+        .init_resource::<hw_ui::selection::FamiliarMoveFeedback>()
+        .init_resource::<hw_world::WorldMap>()
+        .init_resource::<hw_spatial::FamiliarSpatialGrid>()
+        .init_resource::<hw_spatial::SpatialGrid>()
+        .init_resource::<hw_spatial::ResourceSpatialGrid>()
+        .init_resource::<hw_spatial::StockpileSpatialGrid>()
+        .init_resource::<hw_spatial::SelectableObstacleSpatialGrid>()
+        .add_message::<hw_ui::selection::OpenWorldContextMenu>()
         .add_plugins(PanCameraPlugin)
         .add_systems(
             PreUpdate,

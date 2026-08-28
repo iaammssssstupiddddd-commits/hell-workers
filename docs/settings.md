@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | `ui_scale` | UI Scale | `UiScale` |
 | `camera_pan_speed` | Camera Pan Speed | `PanCamera.pan_speed`（`MainCamera`） |
-| `camera_mouse_pan_enabled` | Mouse Drag Pan | `PanCamera.mouse_pan_settings.enabled` |
+| `camera_mouse_pan_enabled` | Mouse Drag Pan | project-owned world pointer gesture（`PanCamera.mouse_pan_settings.enabled`は常時false） |
 | `default_time_speed` | Default Game Speed | **起動時のみ** `Time<Virtual>` |
 | `debug_gizmos_enabled` | Debug Gizmos | `DebugVisible` + `GizmoConfigStore`（F12 と同期） |
 | `fps_display_enabled` | Show FPS | DevPanel 内 `UiSlot::FpsText` の `Visibility` |

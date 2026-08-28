@@ -12,10 +12,11 @@ use hw_logistics::{
     update_transport_request_spatial_grid_system_transport_request,
 };
 use hw_spatial::{
-    DesignationSpatialGrid, TransportRequestSpatialGrid,
+    DesignationSpatialGrid, SelectableObstacleSpatialGrid, TransportRequestSpatialGrid,
     update_blueprint_spatial_grid_system_blueprint, update_damned_soul_spatial_grid_system,
     update_designation_spatial_grid_system_designation, update_familiar_entity_spatial_grid_system,
     update_floor_construction_spatial_grid_system, update_gathering_spot_spatial_grid_system,
+    update_selectable_obstacle_spatial_grid_system,
 };
 
 pub struct SpatialPlugin;
@@ -25,6 +26,7 @@ impl Plugin for SpatialPlugin {
         app.init_resource::<TileSiteIndex>();
         app.init_resource::<DesignationSpatialGrid>();
         app.init_resource::<TransportRequestSpatialGrid>();
+        app.init_resource::<SelectableObstacleSpatialGrid>();
         app.add_systems(
             Update,
             (
@@ -41,6 +43,7 @@ impl Plugin for SpatialPlugin {
                 sync_removed_wall_tile_site_index_system,
                 update_stockpile_spatial_grid_system_stockpile,
                 update_transport_request_spatial_grid_system_transport_request,
+                update_selectable_obstacle_spatial_grid_system,
             )
                 .in_set(GameSystemSet::Spatial),
         );
