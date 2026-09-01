@@ -1,5 +1,5 @@
 use super::*;
-use bevy::ecs::system::RunSystemOnce;
+use bevy::ecs::{schedule::ApplyDeferred, system::RunSystemOnce};
 use hw_core::events::{OnTaskAbandoned, ResourceReservationRequest, TaskCompletedVisualMessage};
 use hw_core::familiar::{
     ActiveCommand, Familiar, FamiliarAiState, FamiliarOperation, FamiliarPolicy,
@@ -42,6 +42,9 @@ use hw_logistics::{
 };
 use hw_spatial::{DesignationSpatialGrid, ResourceSpatialGrid, TransportRequestSpatialGrid};
 use hw_visual::Building3dVisual;
+use hw_visual::wall_connection::{
+    WallConnectionMask, WallTopologyIndex, WallTopologyState, wall_connections_system,
+};
 use hw_world::{
     Room, RoomBoundaryLookup, RoomDetectionState, RoomTileLookup, RuntimePathSearchBudget,
     TerrainType, WalkabilityConnectivityCache, WorldMap, detect_rooms_system,
@@ -942,6 +945,48 @@ fn structure_commits_clear_exact_layers_and_place_salvage_outside_the_footprint(
             DeconstructionCommitResult::Committed
         );
     }
+}
+
+#[test]
+fn wall_commit_removes_the_connector_in_the_same_post_update() {
+    let mut app = test_app();
+    app.insert_resource(crate::test_support::empty_wall_visual_handles())
+        .init_resource::<WallTopologyIndex>()
+        .add_observer(hw_jobs::visual_sync::on_building_added_sync_visual)
+        .add_systems(Update, hw_jobs::visual_sync::sync_building_visual_system)
+        .add_systems(PostUpdate, (wall_connections_system, ApplyDeferred).chain());
+
+    let (fixture, footprint) = spawn_structure_fixture(&mut app, BuildingType::Wall);
+    let target_grid = footprint[0];
+    let neighbor_grid = (target_grid.0, target_grid.1 - 1);
+    let neighbor = app
+        .world_mut()
+        .spawn((
+            Building {
+                kind: BuildingType::Wall,
+                is_provisional: false,
+            },
+            Transform::from_translation(
+                WorldMap::grid_to_world(neighbor_grid.0, neighbor_grid.1).extend(0.0),
+            ),
+        ))
+        .id();
+
+    app.update();
+    assert_eq!(
+        app.world().get::<WallTopologyState>(neighbor).unwrap().mask,
+        WallConnectionMask::from_neighbors(true, false, false, false)
+    );
+
+    app.world_mut().write_message(commit_request(fixture, 0));
+    app.update();
+
+    assert!(app.world().get_entity(fixture.target).is_err());
+    assert_eq!(
+        app.world().get::<WallTopologyState>(neighbor).unwrap().mask,
+        WallConnectionMask::from_neighbors(false, false, false, false),
+        "deconstructed Wall remained a connector after the finalizer frame"
+    );
 }
 
 #[test]

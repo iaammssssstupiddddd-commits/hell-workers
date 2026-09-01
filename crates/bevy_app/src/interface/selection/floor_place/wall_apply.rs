@@ -77,11 +77,42 @@ mod tests {
     use crate::test_support::empty_building_3d_handles;
     use bevy::ecs::{schedule::ApplyDeferred, world::CommandQueue};
     use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
+    use hw_ui::selection::PlacementFeedbackSet;
     use hw_visual::Building3dVisual;
     use hw_visual::wall_connection::{
         WallConnectionDirty, WallConnectionMask, WallTopologyIndex, WallTopologyState,
         wall_connections_system,
     };
+
+    #[derive(Resource)]
+    struct TestWallPlacement {
+        instant: bool,
+    }
+
+    fn apply_test_wall_placement_in_commit(
+        mut commands: Commands,
+        mut world_map: ResMut<WorldMap>,
+        placement: Res<TestWallPlacement>,
+        handles: Res<Building3dHandles>,
+    ) {
+        let grids = vec![(7, 8), (8, 8)];
+        let area = crate::systems::command::TaskArea::from_points(
+            WorldMap::grid_to_world(7, 8),
+            WorldMap::grid_to_world(8, 8),
+        );
+        let plan = AreaPlacementPlan {
+            valid_tiles: grids.clone(),
+            total_tile_count: grids.len(),
+            first_reject: None,
+        };
+        apply_wall_placement(
+            &mut commands,
+            &mut world_map,
+            &area,
+            &plan,
+            placement.instant.then_some(&handles),
+        );
+    }
 
     fn apply_test_placement(instant: bool) -> (World, WorldMap, Vec<(i32, i32)>) {
         let grids = vec![(7, 8), (8, 8)];
@@ -164,10 +195,17 @@ mod tests {
         for instant in [false, true] {
             let mut app = App::new();
             app.insert_resource(crate::test_support::empty_wall_visual_handles())
+                .insert_resource(empty_building_3d_handles())
+                .insert_resource(WorldMap::default())
+                .insert_resource(TestWallPlacement { instant })
                 .init_resource::<WallConnectionDirty>()
                 .init_resource::<WallTopologyIndex>()
                 .add_observer(hw_jobs::visual_sync::on_building_added_sync_visual)
                 .add_systems(Update, hw_jobs::visual_sync::sync_building_visual_system)
+                .add_systems(
+                    Update,
+                    apply_test_wall_placement_in_commit.in_set(PlacementFeedbackSet::Commit),
+                )
                 .add_systems(PostUpdate, (wall_connections_system, ApplyDeferred).chain());
 
             let target_grid = (6, 8);
@@ -184,31 +222,6 @@ mod tests {
                 ))
                 .id();
             let grids = vec![(7, 8), (8, 8)];
-            let area = crate::systems::command::TaskArea::from_points(
-                WorldMap::grid_to_world(7, 8),
-                WorldMap::grid_to_world(8, 8),
-            );
-            let plan = AreaPlacementPlan {
-                valid_tiles: grids.clone(),
-                total_tile_count: grids.len(),
-                first_reject: None,
-            };
-            let handles = empty_building_3d_handles();
-            let mut world_map = WorldMap::default();
-            let mut queue = CommandQueue::default();
-            {
-                let mut commands = Commands::new(&mut queue, app.world());
-                apply_wall_placement(
-                    &mut commands,
-                    &mut world_map,
-                    &area,
-                    &plan,
-                    instant.then_some(&handles),
-                );
-            }
-            queue.apply(app.world_mut());
-            app.insert_resource(world_map);
-
             app.update();
 
             assert_eq!(
