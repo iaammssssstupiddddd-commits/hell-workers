@@ -18,6 +18,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `bin/gltf-validate` | pinned Khronos validator wrapper |
 | `bin/validate-wall-glb` | production Wall GLBの構造・bounds・port断面をbytesから再検証 |
 | `bin/create-wall-production-scene` | shared textureから6 familyの決定的Wall `.blend`を生成 |
+| `bin/render-wall-reference-board` | 6 familyを59.036° Orthographic / OCIO陽性条件で描画 |
 | `scripts/validate_asset_set_manifest.py` | Wall asset-set manifest v2と全参照artifactをexact検証 |
 | `scripts/validate_wall_textures.py` | shared textureとoptional +Y normal candidateをpixel検証 |
 | `scripts/promote_asset_set.py` | Wall final generationのplan / apply / recover / rollback transaction |
@@ -41,13 +42,14 @@ render-enabled meshが1個でなければexport前に失敗します。指定し
 cap、raw Y `-16..+16 wu`、9.6 wu port profile、12.8 wu corridor unionを検証します。
 
 production Wall sceneは各familyを1 tile単位、9.6 / 32 = 0.30 tile厚、上下`-0.5..+0.5 tile`でauthoringし、
-各collectionを192 trianglesへ決定的に分割します。正式exportだけはscene gate後のin-memory mesh copyへ
+上下2つのside material bandを持つ216〜240 trianglesへ決定的に分割します。正式exportだけはscene gate後のin-memory mesh copyへ
 `--geometry-scale 32 --materials-mode placeholder`を適用し、object transformをidentityのままraw wuへbakeします。
 Blender 5.1.1のglTF operatorにglobal scale propertyがないため、このopt-in頂点bakeを使います。既存exportの
 既定はscale 1 / material exportのままです。
 
 ```bash
 tools/blender_ai_workflow/bin/create-wall-production-scene
+tools/blender_ai_workflow/bin/render-wall-reference-board
 tools/blender_ai_workflow/bin/export-staging-glb \
   "$ASSET_ROOT/staging/blend/wall-production-v1.blend" \
   models/buildings/wall/wall_isolated.glb \

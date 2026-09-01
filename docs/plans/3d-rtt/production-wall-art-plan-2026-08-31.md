@@ -570,11 +570,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   rollbackはgenerationを消さずpointerだけを復元し、inert / temporary generationは明示recoverで隔離する。
 - workspace init / verifierへgeneric v1を保持したWall v2 generation / authority / quarantine layoutを追加した。
 - imagegenでshared albedo / emissive候補を作り、同一条件で1024角sRGBへresampleして外部stagingへ配置した。
-- 6 familyを各1 mesh / 192 triangles / UV0 / 1 materialで作る決定的Blender scene generatorと、production限定の
+- 6 familyを各1 mesh / 216〜240 triangles / UV0 / 1 material、上下2 side bandで作る決定的Blender scene generatorと、production限定の
   in-memory 32倍vertex bake / placeholder material exportを追加した。isolated診断はraw bounds
   `[-4.8,-16,-4.8]..[4.8,16,4.8]`、embedded image 0、Khronos error / warning 0、post-export pass。
 - optional normal候補を生成し、shared 3 textureを1024角opaque RGB、emissive purple UV leakage 0、normal linear /
   OpenGL `+Y`、vector length p05 / p50 / p95 `0.877 / 0.969 / 1.023`、positive Z 100%としてpixel gateで検証した。
+- 59.036° Orthographic reference board rendererを追加し、M0と同じOCIO configの陽性証拠付きで6 familyを
+  2×3配置に描画した。V原点の不一致を一度修正し、全面発光を解消して紫亀裂をT / Crossの限定bandへ収めた。
 - release receipt対応のrepo sync、正式6 GLB / manifest / reference board / rebuild reportは未実装。
 
 - 変更内容:

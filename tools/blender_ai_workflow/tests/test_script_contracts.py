@@ -104,6 +104,20 @@ class ScriptContractTests(unittest.TestCase):
         self.assertIn("create_wall_production_scene.py", wrapper)
         self.assertIn("--factory-startup", wrapper)
 
+    def test_wall_reference_board_requires_positive_ocio_and_fixed_camera(self) -> None:
+        source = (SCRIPTS_ROOT / "render_wall_reference_board.py").read_text(
+            encoding="utf-8"
+        )
+        wrapper = (WORKFLOW_ROOT / "bin/render-wall-reference-board").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("horizontal_angle = 59.036243", source)
+        self.assertIn('if ocio["fallback"]', source)
+        self.assertIn('camera_data.type = "ORTHO"', source)
+        self.assertIn("wall-production-v1-reference-board.png", source)
+        self.assertIn("wall-calibration-v2.ocio", wrapper)
+        self.assertIn("BLENDER_SAFE_NO_NETWORK=1", wrapper)
+
     def test_codex_mcp_surface_excludes_execution_and_direct_export(self) -> None:
         config = (PROJECT_ROOT / ".codex/config.toml").read_text(encoding="utf-8")
         self.assertIn('"blender_scene_save_as"', config)

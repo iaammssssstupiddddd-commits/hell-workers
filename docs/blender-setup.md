@@ -161,6 +161,8 @@ python3 scripts/sync_external_assets.py \
 production Wallは1 tile単位の6 collectionを`create-wall-production-scene`で作ります。Blender 5.1.1のglTF
 operatorにはglobal scale propertyがないため、正式exportは`--geometry-scale 32 --materials-mode placeholder`を
 明示し、検証後のin-memory mesh copyへだけ32倍をbakeします。保存済み`.blend`と既存exportの既定挙動は変更しません。
+`render-wall-reference-board`はM0と同じOCIO陽性configを強制し、59.036° Orthographicで6 familyを描画します。
+OCIO fallback時はreference reportをpassにしません。
 
 production Wall v2は上記legacy同期ではなく、candidate manifestに封印されたexact allowlistを隔離worktreeへ
 provisionします。`--dest`は必ず対象worktreeのasset rootまで明示し、最初に同じ引数の`--dry-run`を確認します。

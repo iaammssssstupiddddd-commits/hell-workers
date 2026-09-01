@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKFLOW_ROOT="$(cd "${BIN_DIR}/.." && pwd)"
+ASSET_WORKSPACE_ROOT="${HELL_WORKERS_ASSET_ROOT:-${HOME}/Sync/hell-workers-assets}"
+BLEND="${ASSET_WORKSPACE_ROOT}/staging/blend/wall-production-v1.blend"
+
+export BLENDER_SAFE_NO_NETWORK=1
+export OCIO="${WORKFLOW_ROOT}/fixtures/wall-calibration-v2.ocio"
+exec "${BIN_DIR}/blender-safe" \
+    --background \
+    --factory-startup \
+    "${BLEND}" \
+    --python-exit-code 2 \
+    --python "${WORKFLOW_ROOT}/scripts/render_wall_reference_board.py"

@@ -18,17 +18,17 @@ FAMILIES = {
     "isolated": {
         "collection": "Wall_Isolated",
         "outline": ((-0.15, -0.15), (0.15, -0.15), (0.15, 0.15), (-0.15, 0.15)),
-        "edge_subdivisions": 12,
+        "edge_subdivisions": 10,
     },
     "end": {
         "collection": "Wall_End",
         "outline": ((-0.15, -0.15), (0.15, -0.15), (0.15, 0.5), (-0.15, 0.5)),
-        "edge_subdivisions": 12,
+        "edge_subdivisions": 10,
     },
     "straight": {
         "collection": "Wall_Straight",
         "outline": ((-0.15, -0.5), (0.15, -0.5), (0.15, 0.5), (-0.15, 0.5)),
-        "edge_subdivisions": 12,
+        "edge_subdivisions": 10,
     },
     "corner": {
         "collection": "Wall_Corner",
@@ -40,7 +40,7 @@ FAMILIES = {
             (-0.15, 0.15),
             (-0.5, 0.15),
         ),
-        "edge_subdivisions": 8,
+        "edge_subdivisions": 6,
     },
     "t_junction": {
         "collection": "Wall_TJunction",
@@ -54,7 +54,7 @@ FAMILIES = {
             (-0.15, 0.15),
             (-0.5, 0.15),
         ),
-        "edge_subdivisions": 6,
+        "edge_subdivisions": 5,
     },
     "cross": {
         "collection": "Wall_Cross",
@@ -72,7 +72,7 @@ FAMILIES = {
             (-0.15, 0.15),
             (-0.5, 0.15),
         ),
-        "edge_subdivisions": 4,
+        "edge_subdivisions": 3,
     },
 }
 
@@ -107,10 +107,10 @@ def subdivided_outline(
 
 def atlas_uv(kind: str, x: float, y: float, z: float) -> tuple[float, float]:
     if kind == "rust":
-        return (0.67 + 0.29 * x, 0.03 + 0.64 * z)
+        return (0.67 + 0.29 * x, 0.32 + 0.64 * z)
     if kind == "purple":
-        return (0.03 + 0.60 * x, 0.73 + 0.23 * z)
-    return (0.03 + 0.60 * x, 0.03 + 0.64 * y)
+        return (0.03 + 0.60 * x, 0.04 + 0.22 * z)
+    return (0.03 + 0.60 * x, 0.32 + 0.64 * y)
 
 
 def create_prism(
@@ -122,20 +122,30 @@ def create_prism(
     outline = subdivided_outline(definition["outline"], definition["edge_subdivisions"])
     count = len(outline)
     vertices = [(x, y, -0.5) for x, y in outline]
+    vertices.extend((x, y, 0.0) for x, y in outline)
     vertices.extend((x, y, 0.5) for x, y in outline)
     vertices.extend(((0.0, 0.0, 0.5), (0.0, 0.0, -0.5)))
-    top_center = 2 * count
+    top_center = 3 * count
     bottom_center = top_center + 1
     faces: list[tuple[int, ...]] = []
     face_kinds: list[tuple[str, int]] = []
     for index in range(count):
         following = (index + 1) % count
-        faces.append((count + index, count + following, top_center))
+        faces.append((2 * count + index, 2 * count + following, top_center))
         face_kinds.append(("top", index))
         faces.append((following, index, bottom_center))
         face_kinds.append(("bottom", index))
         faces.append((index, following, count + following, count + index))
-        face_kinds.append(("side", index))
+        face_kinds.append(("side_lower", index))
+        faces.append(
+            (
+                count + index,
+                count + following,
+                2 * count + following,
+                2 * count + index,
+            )
+        )
+        face_kinds.append(("side_upper", index))
 
     mesh = bpy.data.meshes.new(f"Wall_{family}_Mesh")
     mesh.from_pydata(vertices, [], faces)
@@ -143,18 +153,22 @@ def create_prism(
     uv_layer = mesh.uv_layers.new(name="UVMap")
     for polygon, (kind, ordinal) in zip(mesh.polygons, face_kinds, strict=True):
         edge_group = ordinal // definition["edge_subdivisions"]
-        surface = (
-            "purple"
-            if kind == "side" and edge_group % 7 == 5
-            else "rust"
-            if kind == "side" and edge_group % 3 == 1
-            else "stone"
-        )
+        surface = "stone"
+        if kind == "side_lower" and edge_group % 4 == 2:
+            surface = "purple"
+        elif kind == "side_lower" and edge_group % 2 == 1:
+            surface = "rust"
         for loop_index in polygon.loop_indices:
             vertex = mesh.vertices[mesh.loops[loop_index].vertex_index].co
             x = min(max(float(vertex.x) + 0.5, 0.0), 1.0)
             y = min(max(float(vertex.y) + 0.5, 0.0), 1.0)
-            z = min(max(float(vertex.z) + 0.5, 0.0), 1.0)
+            z = (
+                min(max(float(vertex.z) * 2.0, 0.0), 1.0)
+                if kind == "side_upper"
+                else min(max((float(vertex.z) + 0.5) * 2.0, 0.0), 1.0)
+                if kind == "side_lower"
+                else min(max(float(vertex.z) + 0.5, 0.0), 1.0)
+            )
             uv_layer.data[loop_index].uv = atlas_uv(surface, x, y, z)
         polygon.use_smooth = False
 
