@@ -1946,6 +1946,16 @@ mod tests {
     }
 
     #[test]
+    fn structural_prepass_fragment_matches_bevy_prepass_shader_def_contract() {
+        let structural_prepass = include_str!(
+            "../../../../../../assets/shaders/topdown_structural_material_prepass.wgsl"
+        );
+
+        assert!(structural_prepass.contains("#ifdef PREPASS_FRAGMENT\n@fragment"));
+        assert!(structural_prepass.contains("#endif // PREPASS_FRAGMENT"));
+    }
+
+    #[test]
     fn p01_composite_binding_contract_is_exact() {
         let resources = p01_composite_render_resources();
         assert_eq!(resources.composite_draw_count, 1);

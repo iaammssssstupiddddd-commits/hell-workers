@@ -397,6 +397,12 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   durationはreal clockを検証しvirtual 0を要求するよう修正し、wall-densityではterrain以外の通常初期
   resource / facility / regrowth targetを生成しない隔離経路へ変更した。失敗artifactはbaselineへ流用せず、
   修正commitから全12 runを再採取する。
+- 修正subject `60328e60`の再試行ではcompleted N / 4N各3 runがpassし、上記2件の再発なしを確認した。
+  provisional N / 4N各3 runはrawを完走したが、仮設wallだけがspecializeするprepassでBevy 0.19の
+  `PREPASS_FRAGMENT`未定義variantにもfragment entry pointを宣言し、gated
+  `prepass_io::FragmentOutput`を参照するshader compile errorを6 runすべてで検出した。このartifactも
+  baselineへ流用せず、Bevy 0.19標準`pbr_prepass.wgsl`と同じfragment guardへ修正した次subjectから
+  全12 runを再採取する。
 
 - 変更内容:
   - current `Cuboid` wallをproduction cameraで撮影し、source fingerprint、camera、quality、DPI、adapter、asset viewを記録する。既存P02 visual referenceと、後述の`wall-density-v1`性能baselineを別artifactにする。
@@ -814,6 +820,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M0最初のnative Capture（subject `a69ea3df`）: `fail-closed / artifact invalid`。Small 3 runのreal 30 s / 60 s rawは取得したがvalidatorが停止中virtual clockを誤判定し、Medium 3 runは通常初期facilityと固定cell `(82, 57)`が衝突。合格baselineへ不使用（2026-09-01）
 - M0 native修正後 `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test`: `pass`。wall-density / indoor-lightはreal duration＋virtual 0、通常workloadはvirtual durationを検証（2026-09-01）
 - M0 native修正後 focused Rust config test: `pass (1 test, 2026-09-01)`。enabled wall-densityだけが通常初期resource / facility / regrowth targetを省略する隔離worldを要求。
+- M0 native再試行（subject `60328e60`）: completed N / 4Nの各3 runは`pass`。provisional N / 4Nの各3 runは
+  既存structural prepassの`PREPASS_FRAGMENT` guard欠落による同一shader compile errorで`fail-closed`。
+  Bevy 0.19標準shaderを一次情報として修正し、このartifactも合格baselineへ不使用（2026-09-01）。
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。

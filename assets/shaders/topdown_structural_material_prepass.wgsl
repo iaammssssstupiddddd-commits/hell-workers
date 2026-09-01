@@ -26,6 +26,7 @@ fn structural_discard(world_position: vec3<f32>) {
     }
 }
 
+#ifdef PREPASS_FRAGMENT
 @fragment
 fn fragment(
     in: prepass_io::VertexOutput,
@@ -43,3 +44,4 @@ fn fragment(
 #endif
     return out;
 }
+#endif // PREPASS_FRAGMENT
