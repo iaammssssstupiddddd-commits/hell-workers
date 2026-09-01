@@ -387,9 +387,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `wall_density_acceptance.py`のCapture laneを実装済み。clean commit、全asset view、source / harness、
   binary、N / 4N×completed / provisional×3 run、p95 / p99中央値・MADをfail-closedで封印する。
   dirty subjectではdirect `kitty`計画をblockすることまでself-test / dry-runで確認済み。
-- Bevy actual-window calibration phase、wall固有RenderDoc draw-group抽出、承認済みclean baseline commitからの
-  P02正式採取は未実装・未実行。N / 4Nの最初の正式Captureは下記理由で棄却済み。
-  Capture profileは`draw_groups=not-collected`を明記する。
+- subject `26dcb5a3`のclean commitから、専用native launcherでN / 4N×completed / provisional×3の
+  全12 runを再採取し、独立verifyをpassした。Capture profileは`draw_groups=not-collected`を明記し、
+  wall固有RenderDoc gateとは分離する。Bevy actual-window calibration phase、wall固有draw-group抽出、
+  P02正式採取は未実装・未実行のため、M0全体は未完了である。
 - この中間状態をM0完了や性能baselineとして扱わず、後続M1のasset制作開始gateにも使わない。
 - 最初の正式Capture試行（subject `a69ea3df`）はfail-closedで棄却した。Smallのraw 3 runは取得できたが、
   仮想時刻を停止するwall-densityへvalidatorがvirtual 30 s / 60 sを誤要求した。Mediumは通常worldの
@@ -409,6 +410,18 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `PREPASS_FRAGMENT`の`else`として返値なしのalpha-discard fragmentがあるため、同じ二分岐を採用し、
   両方でconstruction height discardを維持する。単純guardだけの仮説はこの一回で打ち切り、このartifactも
   baselineへ流用しない。
+- subject `26dcb5a3`の正式Captureは
+  `target/native-acceptance/wall-density-20260901T042252Z-36b45916`で`valid`となり、独立verifyも
+  `capture_runs=12 / status=pass`を返した。source fingerprint
+  `026921561a08112d731a30f607a2bbf3eb71f4b8306a45c991e2c18463e8a97a`、harness fingerprint
+  `0352f97a9b49cb967fcfbeca330db839ea0194e42293a02c20e8cb4728ae6b93`、asset-view fingerprint
+  `ee5acdc8214b61898f662f2fb502f07559309d322fb5e234d37159b63aed7643`を封印した。3 valid runの
+  p95 / p99中央値（MAD）は、completed N=`8.683672 (0.034590) / 9.378522 (0.022487)` ms、
+  completed 4N=`26.202343 (3.433323) / 40.219051 (1.202868)` ms、provisional
+  N=`10.629657 (0.887287) / 13.332263 (1.016646)` ms、provisional
+  4N=`10.495838 (1.323651) / 13.341914 (1.645682)` ms。全runのinitial / warm-up / measure-end
+  checksumはcase内で一致し、teardown warningは0だった。このartifactはCapture baselineとして使用できるが、
+  draw predicateは未検証なのでRenderDoc baselineを兼ねない。
 
 - 変更内容:
   - current `Cuboid` wallをproduction cameraで撮影し、source fingerprint、camera、quality、DPI、adapter、asset viewを記録する。既存P02 visual referenceと、後述の`wall-density-v1`性能baselineを別artifactにする。
@@ -768,21 +781,21 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### 現在地
 
-- 進捗: `M0実装・native baseline再採取中`
+- 進捗: `M0実装・Capture baseline採取済み`
 - 完了済み:
   - current active wall経路、2D connection system、material / transform / MeshTag、save rehydrate、external asset workflowを棚卸し済み。
   - 6 mesh / 16 mask、finite pool、fallback、native受入の実装境界を本書で固定済み。
   - production wallの局所横断における公称・連続最小厚9.6 wu、装飾外形上限12.8 wu、共通接続portを投影式と遠景pixel下限から固定済み。
   - M0のBlender geometry / color fixture、offline verifier、Rust `wall-density-v1` fixture、Capture profileを実装済み。
   - 最初のnative Captureをfail-closedで棄却し、duration clock誤判定と通常初期world混入を修正済み。
+  - subject `26dcb5a3`からcompleted / provisional各N / 4Nの全12 runを採取し、専用verifyでpass。3-run中央値 / MADと3 fingerprintを封印済み。
 - 未完了:
-  - 修正commitからcompleted / provisional各N / 4Nの全12 runを再採取し、3 valid run中央値 / MADを封印する。
   - wall固有draw-group抽出、P02 visual reference、OCIO陽性証明を閉じるまではM0未完了。M1以降は未着手。
 
 ### 次のAIが最初にやること
 
-1. 修正commitから`wall-density-v1` Capture全12 runを再採取し、raw sidecar、real duration、virtual 0、中央値 / MADを再検証する。
-2. current wallのP02 reference、wall固有draw-group抽出、OCIO陽性証明、canonical orientation / boundsを証拠付きで固定してM0を閉じる。
+1. current wallのP02 referenceとwall固有draw-group抽出を実装・採取し、Capture baselineとは別artifactで固定する。
+2. OCIO陽性証明とcanonical orientation / boundsを証拠付きで固定してM0を閉じる。
 3. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
 
 ### ブロッカー/注意点
@@ -832,6 +845,12 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M0 native再々試行（subject `749118d3`）: completed N / 4Nの各3 runは`pass`。provisional 6 runは
   depth-only `MAY_DISCARD`用の返値なしfragment不足によるValidation RenderErrorで`fail-closed`。
   Bevy 0.19標準prepassの`#else` entry pointまで一致させ、artifactは合格baselineへ不使用（2026-09-01）。
+- M0 native正式Capture（subject `26dcb5a3`）:
+  `target/native-acceptance/wall-density-20260901T042252Z-36b45916`は全12 run valid、teardown warning 0、
+  launcherの独立verifyも`capture_runs=12 / status=pass`。p95 / p99中央値（MAD）はcompleted
+  N=`8.683672 (0.034590) / 9.378522 (0.022487)` ms、4N=`26.202343 (3.433323) / 40.219051 (1.202868)` ms、
+  provisional N=`10.629657 (0.887287) / 13.332263 (1.016646)` ms、4N=`10.495838 (1.323651) / 13.341914 (1.645682)` ms。
+  `draw_groups=not-collected`のためCapture baselineとしてのみ採用（2026-09-01）。
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
@@ -839,7 +858,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
   通常ゲームの入力、表示、建築成立条件、runtime data、プレイヤー向け文言は不変（`HELL_WORKERS_DIFF_BASE=HEAD`でgate pass）。
 - 初期M0 toolingはユーザー指示により`06826fd2`へ中間commit済み。ただしCapture harnessを含む凍結済みbaseline commitではない。
-- 未解決エラー: OCIO mismatch、Bevy calibration / wall固有draw抽出未実装、正式baseline用の承認済みclean commitとnative採取なし、
+- 未解決エラー: OCIO mismatch、Bevy calibration / wall固有draw抽出・P02正式採取未実装、
   上記の既存repository hygiene違反。
 
 ### Definition of Done
