@@ -575,6 +575,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `[-4.8,-16,-4.8]..[4.8,16,4.8]`、embedded image 0、Khronos error / warning 0、post-export pass。
 - optional normal候補を生成し、shared 3 textureを1024角opaque RGB、emissive purple UV leakage 0、normal linear /
   OpenGL `+Y`、vector length p05 / p50 / p95 `0.877 / 0.969 / 1.023`、positive Z 100%としてpixel gateで検証した。
+- texture reportをasset-set manifest v2へhash結合し、report内のnormal decision / inventory / bytes / hashと
+  production inventoryを相互検証する。`rejected`ではnormal fileとnormal測定値をreportから除外し、sampling metadataの
+  持ち越しも拒否するため、最終manifestが不採用normalを間接参照する経路も閉じた。
 - 59.036° Orthographic reference board rendererを追加し、M0と同じOCIO configの陽性証拠付きで6 familyを
   2×3配置に描画した。V原点の不一致を一度修正し、全面発光を解消して紫亀裂をT / Crossの限定bandへ収めた。
 - release receipt対応のrepo sync、正式6 GLB / manifest / reference board / rebuild reportは未実装。

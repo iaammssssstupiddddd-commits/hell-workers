@@ -44,6 +44,7 @@ TOP_FIELDS = {
     "meshes",
     "production",
     "normal_decision",
+    "texture_report",
     "set_reports",
     "provenance",
     "license",
@@ -416,6 +417,65 @@ def validate_manifest(
         "mesh and production hashes differ",
     )
 
+    texture_report_relative, texture_report_hash, texture_report_path = (
+        validate_file_record(
+            manifest["texture_report"], reports_root, "texture validation report"
+        )
+    )
+    require(
+        texture_report_relative not in seen_report_paths,
+        "report path is duplicated",
+    )
+    seen_report_paths.add(texture_report_relative)
+    report_hashes.append(texture_report_hash)
+    texture_report = read_json(texture_report_path)
+    expected_texture_roles = {"albedo", "emissive"}
+    if decision in {"pending", "adopted"}:
+        expected_texture_roles.add("normal")
+    expected_texture_report_fields = {
+        "schema_version",
+        "status",
+        "asset_set_id",
+        "normal_decision",
+        "textures",
+        "emissive",
+        "albedo_mean_rgb",
+    }
+    if decision in {"pending", "adopted"}:
+        expected_texture_report_fields.add("normal")
+    require(
+        isinstance(texture_report, dict)
+        and set(texture_report) == expected_texture_report_fields
+        and texture_report["schema_version"] == 1
+        and texture_report["status"] == "pass"
+        and texture_report["asset_set_id"] == "wall-production-v1"
+        and texture_report["normal_decision"] == decision,
+        "texture validation report identity differs",
+    )
+    reported_textures = texture_report["textures"]
+    require(
+        isinstance(reported_textures, dict)
+        and set(reported_textures) == expected_texture_roles,
+        "texture validation report inventory differs",
+    )
+    texture_record_fields = {"path", "bytes", "sha256", "width", "height", "mode"}
+    for role, record in reported_textures.items():
+        production_path = TEXTURES[role]
+        require(
+            isinstance(record, dict)
+            and set(record) == texture_record_fields
+            and record["path"] == PurePosixPath(production_path).name
+            and record["bytes"]
+            == regular_file(exports_root, PurePosixPath(production_path), role)
+            .stat()
+            .st_size
+            and record["sha256"] == production_records[production_path]
+            and record["width"] == 1024
+            and record["height"] == 1024
+            and record["mode"] == "RGB",
+            f"texture validation report {role} link differs",
+        )
+
     set_reports = manifest["set_reports"]
     require(
         isinstance(set_reports, list) and len(set_reports) == 2,
@@ -560,7 +620,8 @@ def validate_manifest(
         "normal_decision": decision,
         "core_files": len(production["core"]),
         "optional_files": len(production["optional"]),
-        "mesh_reports": len(report_hashes) - 2,
+        "mesh_reports": len(report_hashes) - 3,
+        "texture_reports": 1,
         "set_reports": 2,
         "manifest_sha256": sha256(manifest_path),
     }

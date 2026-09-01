@@ -111,6 +111,10 @@
     ]
   },
   "normal_decision": "pending",
+  "texture_report": {
+    "path": "wall-production-v1.textures.json",
+    "sha256": ""
+  },
   "set_reports": [
     {"role": "reference_board", "file": {"path": "wall-production-v1.reference-board.json", "sha256": ""}},
     {"role": "rebuild", "file": {"path": "wall-production-v1.rebuild.json", "sha256": ""}}

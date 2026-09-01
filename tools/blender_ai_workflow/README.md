@@ -118,6 +118,7 @@ optional normalがlinear sampling / OpenGL `+Y`で、vector length・positive Z�
 python3 tools/blender_ai_workflow/scripts/validate_wall_textures.py \
   --texture-root "$ASSET_ROOT/staging/exports/textures/buildings/wall" \
   --report "$ASSET_ROOT/staging/reports/wall-production-v1.textures.json" \
+  --normal-decision pending \
   --normal-sampling linear \
   --normal-convention +Y
 ```

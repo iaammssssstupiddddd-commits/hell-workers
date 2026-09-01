@@ -44,20 +44,33 @@ def percentile(values: list[float], fraction: float) -> float:
 def validate_textures(
     texture_root: Path,
     *,
-    normal_sampling: str,
-    normal_convention: str,
+    normal_decision: str,
+    normal_sampling: str | None,
+    normal_convention: str | None,
 ) -> dict[str, Any]:
-    paths = {
-        role: texture_root / f"wall_{role}.png"
-        for role in ("albedo", "emissive", "normal")
-    }
+    require(
+        normal_decision in {"pending", "adopted", "rejected"},
+        "normal decision differs",
+    )
+    roles = ["albedo", "emissive"]
+    if normal_decision in {"pending", "adopted"}:
+        roles.append("normal")
+        require(
+            normal_sampling == "linear",
+            "normal texture must be sampled as linear data",
+        )
+        require(
+            normal_convention == "+Y",
+            "normal texture must use OpenGL +Y convention",
+        )
+    else:
+        require(
+            normal_sampling is None and normal_convention is None,
+            "rejected normal must not retain sampling metadata",
+        )
+    paths = {role: texture_root / f"wall_{role}.png" for role in roles}
     _, albedo = load_rgb(paths["albedo"], "albedo")
     _, emissive = load_rgb(paths["emissive"], "emissive")
-    _, normal = load_rgb(paths["normal"], "normal")
-    require(
-        normal_sampling == "linear", "normal texture must be sampled as linear data"
-    )
-    require(normal_convention == "+Y", "normal texture must use OpenGL +Y convention")
 
     hot_indices = [index for index, pixel in enumerate(emissive) if max(pixel) > 48]
     require(hot_indices, "emissive texture has no active pixels")
@@ -79,31 +92,14 @@ def validate_textures(
         "emissive active pixels are not magenta-purple",
     )
 
-    vectors = [tuple(channel / 127.5 - 1.0 for channel in pixel) for pixel in normal]
-    lengths = [
-        math.sqrt(sum(channel * channel for channel in vector)) for vector in vectors
-    ]
-    length_p05 = percentile(lengths, 0.05)
-    length_p50 = percentile(lengths, 0.50)
-    length_p95 = percentile(lengths, 0.95)
-    blue_positive_fraction = sum(vector[2] > 0.0 for vector in vectors) / len(vectors)
-    mean_blue = statistics.fmean(pixel[2] for pixel in normal)
-    require(
-        length_p05 >= 0.75 and length_p95 <= 1.25,
-        "normal vector length distribution differs",
-    )
-    require(
-        blue_positive_fraction >= 0.999, "normal texture contains back-facing vectors"
-    )
-    require(mean_blue >= 220.0, "normal texture has insufficient positive Z")
-
-    return {
+    report: dict[str, Any] = {
         "schema_version": 1,
         "status": "pass",
         "asset_set_id": "wall-production-v1",
+        "normal_decision": normal_decision,
         "textures": {
             role: {
-                "path": str(path.resolve()),
+                "path": path.name,
                 "bytes": path.stat().st_size,
                 "sha256": sha256(path),
                 "width": 1024,
@@ -118,7 +114,37 @@ def validate_textures(
             "active_mean_rgb": [round(value, 6) for value in hot_means],
             "allowed_uv_region": {"u_max_exclusive": 0.66, "v_min_exclusive": 0.70},
         },
-        "normal": {
+        "albedo_mean_rgb": [
+            round(statistics.fmean(pixel[channel] for pixel in albedo), 6)
+            for channel in range(3)
+        ],
+    }
+    if normal_decision in {"pending", "adopted"}:
+        _, normal = load_rgb(paths["normal"], "normal")
+        vectors = [
+            tuple(channel / 127.5 - 1.0 for channel in pixel) for pixel in normal
+        ]
+        lengths = [
+            math.sqrt(sum(channel * channel for channel in vector))
+            for vector in vectors
+        ]
+        length_p05 = percentile(lengths, 0.05)
+        length_p50 = percentile(lengths, 0.50)
+        length_p95 = percentile(lengths, 0.95)
+        blue_positive_fraction = sum(vector[2] > 0.0 for vector in vectors) / len(
+            vectors
+        )
+        mean_blue = statistics.fmean(pixel[2] for pixel in normal)
+        require(
+            length_p05 >= 0.75 and length_p95 <= 1.25,
+            "normal vector length distribution differs",
+        )
+        require(
+            blue_positive_fraction >= 0.999,
+            "normal texture contains back-facing vectors",
+        )
+        require(mean_blue >= 220.0, "normal texture has insufficient positive Z")
+        report["normal"] = {
             "sampling": normal_sampling,
             "convention": normal_convention,
             "vector_length_p05": round(length_p05, 6),
@@ -126,20 +152,21 @@ def validate_textures(
             "vector_length_p95": round(length_p95, 6),
             "blue_positive_fraction": round(blue_positive_fraction, 8),
             "mean_blue": round(mean_blue, 6),
-        },
-        "albedo_mean_rgb": [
-            round(statistics.fmean(pixel[channel] for pixel in albedo), 6)
-            for channel in range(3)
-        ],
-    }
+        }
+    return report
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--texture-root", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
-    parser.add_argument("--normal-sampling", required=True, choices=("linear",))
-    parser.add_argument("--normal-convention", required=True, choices=("+Y",))
+    parser.add_argument(
+        "--normal-decision",
+        required=True,
+        choices=("pending", "adopted", "rejected"),
+    )
+    parser.add_argument("--normal-sampling", choices=("linear",))
+    parser.add_argument("--normal-convention", choices=("+Y",))
     return parser
 
 
@@ -147,6 +174,7 @@ def main() -> int:
     args = build_parser().parse_args()
     report = validate_textures(
         args.texture_root.resolve(),
+        normal_decision=args.normal_decision,
         normal_sampling=args.normal_sampling,
         normal_convention=args.normal_convention,
     )

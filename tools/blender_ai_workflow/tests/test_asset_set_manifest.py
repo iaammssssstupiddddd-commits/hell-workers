@@ -52,6 +52,7 @@ def png_1024() -> bytes:
 class AssetSetFixture:
     def __init__(self, root: Path, validator) -> None:
         self.root = root
+        self.validator = validator
         self.blend_root = root / "blend"
         self.exports_root = root / "exports"
         self.reports_root = root / "reports"
@@ -143,6 +144,7 @@ class AssetSetFixture:
             "role": "texture:normal",
             "bytes": (self.exports_root / normal_file["path"]).stat().st_size,
         }
+        texture_report = self.write_texture_report("pending")
         set_reports = [
             {
                 "role": role,
@@ -183,6 +185,7 @@ class AssetSetFixture:
             "meshes": meshes,
             "production": {"core": core, "optional": [normal]},
             "normal_decision": "pending",
+            "texture_report": texture_report,
             "set_reports": set_reports,
             "provenance": {
                 "generators": [
@@ -214,6 +217,36 @@ class AssetSetFixture:
         self.manifest_path = self.reports_root / "wall-production-v1.asset-set.json"
         self.write()
 
+    def write_texture_report(self, decision: str) -> dict[str, str]:
+        roles = ["albedo", "emissive"]
+        if decision in {"pending", "adopted"}:
+            roles.append("normal")
+        textures = {}
+        for role in roles:
+            path = self.exports_root / self.validator.TEXTURES[role]
+            textures[role] = {
+                "path": path.name,
+                "bytes": path.stat().st_size,
+                "sha256": digest(path.read_bytes()),
+                "width": 1024,
+                "height": 1024,
+                "mode": "RGB",
+            }
+        payload = {
+            "schema_version": 1,
+            "status": "pass",
+            "asset_set_id": "wall-production-v1",
+            "normal_decision": decision,
+            "textures": textures,
+            "emissive": {},
+            "albedo_mean_rgb": [0.0, 0.0, 0.0],
+        }
+        if decision in {"pending", "adopted"}:
+            payload["normal"] = {}
+        return write_json_record(
+            self.reports_root, "wall-production-v1.textures.json", payload
+        )
+
     def write(self) -> None:
         self.manifest_path.write_text(
             json.dumps(self.manifest, indent=2, sort_keys=True) + "\n",
@@ -227,6 +260,7 @@ class AssetSetFixture:
         normal_record = self.manifest["production"]["optional"].pop()
         if normal == "adopted":
             self.manifest["production"]["core"].append(normal_record)
+        self.manifest["texture_report"] = self.write_texture_report(normal)
         approval = write_json_record(
             self.reports_root,
             "wall-production-v1.art-approval.json",
@@ -362,6 +396,46 @@ class AssetSetManifestTests(unittest.TestCase):
                 self.validator.ManifestError, "post-export hash link"
             ):
                 self.validate(fixture)
+
+    def test_texture_report_hash_must_match_production(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = AssetSetFixture(Path(directory), self.validator)
+            record = fixture.manifest["texture_report"]
+            payload = json.loads((fixture.reports_root / record["path"]).read_text())
+            payload["textures"]["albedo"]["sha256"] = "0" * 64
+            fixture.manifest["texture_report"] = write_json_record(
+                fixture.reports_root, record["path"], payload
+            )
+            fixture.write()
+            with self.assertRaisesRegex(
+                self.validator.ManifestError, "albedo link differs"
+            ):
+                self.validate(fixture)
+
+    def test_rejected_normal_report_cannot_retain_normal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = AssetSetFixture(Path(directory), self.validator)
+            fixture.make_final(normal="rejected")
+            record = fixture.manifest["texture_report"]
+            payload = json.loads((fixture.reports_root / record["path"]).read_text())
+            normal_path = fixture.exports_root / self.validator.TEXTURES["normal"]
+            payload["textures"]["normal"] = {
+                "path": normal_path.name,
+                "bytes": normal_path.stat().st_size,
+                "sha256": digest(normal_path.read_bytes()),
+                "width": 1024,
+                "height": 1024,
+                "mode": "RGB",
+            }
+            payload["normal"] = {}
+            fixture.manifest["texture_report"] = write_json_record(
+                fixture.reports_root, record["path"], payload
+            )
+            fixture.write()
+            with self.assertRaisesRegex(
+                self.validator.ManifestError, "identity differs"
+            ):
+                self.validate(fixture, mode="final")
 
     def test_path_traversal_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
