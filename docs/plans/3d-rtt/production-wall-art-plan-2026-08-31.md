@@ -559,18 +559,24 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   primitive / image / UV / port負例、およびBlender 5.1.1→Khronos→post-exportの実GLB正例がpassした。
 - asset-set manifest v2 templateとfail-closed validatorを追加した。candidate / finalを分離し、6 family、
   core / optionalの3通りのnormal在庫、24個のmesh report、2個のset report、tool identity / version、license、
-  provenance、art approval artifact、actual bytes hashをclosed setで検査する。既存generic v1は変更していない。
+  provenance、art approval artifact、geometry contract、production role / byte length / actual bytes hashをclosed setで
+  検査する。不変identity名は`asset_set_generation`へ統一し、既存generic v1は変更していない。
 - `sync_external_assets.py`へcandidate限定manifest allowlist modeを追加した。legacy modeを維持し、core 8 fileまたは
   pending optional normal 1 fileだけを明示asset rootへcopyする。manifest全体のhash検証、dry-run、symlink / path
   escape / tamper / delete併用 / receiptなしfinal拒否を単体testで確認した。
-- release receipt対応のsync、promotion transaction、production scene / 6 GLB / textureは未実装。
+- `promote_asset_set.py`へread-only plan、明示apply、recover、rollbackを追加した。absent / existing preimage、
+  exact payload、canonical receipt、単調generation / receipt ID、root外snapshotを検証し、全file / directory fsyncと
+  generation / pointer renameの各中断点でactiveが旧または完全な新世代だけになることを故障注入testで確認した。
+  rollbackはgenerationを消さずpointerだけを復元し、inert / temporary generationは明示recoverで隔離する。
+- workspace init / verifierへgeneric v1を保持したWall v2 generation / authority / quarantine layoutを追加した。
+- release receipt対応のrepo sync、production scene / 6 GLB / textureは未実装。
 
 - 変更内容:
   - 59度Orthographic reference boardを公称厚9.6 wu / 装飾外形最大12.8 wuで作り、黒石、錆鉄、トゲ、紫裂け目、ラフ線の優先順位を一枚で比較できるようにする。
   - 1つのBlender原本内の6 named collectionから6 meshとshared UV / textureを作り、export copyへ32倍scaleをbakeしてstagingへ個別exportする。
   - `validate-blend` / `export-staging-glb`へ同一のexact collection selectorを追加し、既存no-selector contractを維持する。
   - pre-export scene validatorに加え、生成GLBを直接decodeするproject固有post-export validatorを追加する。Khronos validatorと併用し、triangle / raw local bounds / identity node transform / mesh / primitive / UV / tangent有無 / embedded image 0 / missing textureを検査する。各armの8〜16 wu port collarをconnection axisへsliceし、連続最小厚、局所横断最大外形、境界port profileを回転不変で検査する。junctionは別armとのunion、isolatedは中心2軸fixtureで判定する。
-  - 既存の単体asset manifest v1を再解釈せず、別schemaのasset-set manifest v2 templateとfail-closed validatorを追加する。source、6 collection→6 GLB、production / optional texture、`normal_decision`、全report / artifact hash、M1 tool commit / tree hash、runtime subject commit、license、art reviewをclosed setとして記録する。M1 candidateだけはnormal / runtime subject / art reviewの`pending`を許すが、M4 final modeとM5は一つでも`pending`なら拒否する。
+  - 既存の単体asset manifest v1を再解釈せず、別schemaのasset-set manifest v2 templateとfail-closed validatorを追加する。source、6 collection→6 GLB、production / optional texture、`normal_decision`、全report / artifact hash、M1 tool commit / tree hash、runtime subject commit、license、art reviewをclosed setとして記録する。M1 candidateだけはnormal / runtime subjectの`pending`と`review_status=candidate`を許すが、M4 final modeとM5は一つでも`pending`なら拒否する。
   - `scripts/sync_external_assets.py`へ後方互換なmanifest allowlist modeと`--selection core | optional:normal`を追加する。manifest modeの`--dest`はasset rootであり、toolがgeneration固有payload pathとprojection pathを導出する。release modeだけは`--receipt <generation-scoped-receipt>`を必須にしてrepo generationへhash検証copyする。wall releaseでは選択集合とmanifestにない`models` / `textures` / `audio`をcopy対象にしない。通常mirrorへのcore同期はtemporary generationを完成・fsync・renameしてから検証済みruntime projectionを`assets/manifests/`へ最後にatomic replaceし、optional-only同期はactive projectionを書き換えない。外部provenanceの秘密や未承認optional fileを含めず、staging全体を無条件に同期しない。
   - canonical向けにmanifest allowlistだけを扱う`promote_asset_set.py`の`plan` / `apply` / `recover` / `rollback` modeを追加する。payloadとgeneration-scoped immutable receiptは同一filesystem上のtemporary directoryへ全件copy・hash検証し、全fileとdirectoryをfsyncする。そのdirectoryを一度だけimmutable `<GEN>`へrenameしてgeneration-store親directoryをfsyncし、最後に**唯一のmutable authority**であるactive pointerをtemporary fileのfsync→atomic rename→pointer親directoryのfsyncで切り替える。固定pathをfile単位で順次上書きしない。killが各fsync / rename段で起きても旧または新の完全なgenerationだけがactiveになり、`recover`はorphan temp / inert generationを検査・隔離する。既定動作はread-only `plan`とし、承認なしの`apply`を手順に入れない。
   - staging snapshotから独立rebuildを1回行い、同じ構造hashで再検査する。
@@ -610,8 +616,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [ ] post-export validatorが6正例をpassし、unknown / empty / multi-mesh、node transform、2 primitive、embedded image、bounds / port違反の負例を全件rejectする。
   - [ ] manifest allowlist付きsync dry-runの差分がwall asset setだけであり、primary / canonicalや無関係assetを対象にしない。
   - [ ] promotion toolとmanifest-aware syncのplan / apply / recover / rollback testが、existing / absent preimage、途中copy失敗、hash差替え、allowlist外file、全fsync / directory rename / pointer replace kill pointでfail-closedになり、canonical / repoのactive pointerが部分generationを指さない。
-  - [ ] receipt validatorがclosed field setとcanonical bytesを検査し、missing、wrong generation / manifest / plan、stale preimage pointer、別payloadへのreceipt再利用を全件rejectする。
-  - [ ] generic v1 workspaceは不変のまま、bootstrap / doctorがwall v2 generation / receipt / pointer layoutを冪等に作成・検査し、M1時点の運用docsとtool contractが一致する。
+  - [x] receipt validatorがclosed field setとcanonical bytesを検査し、missing、wrong generation / manifest / plan、stale preimage pointer、別payloadへのreceipt再利用を全件rejectする。
+  - [x] generic v1 workspaceは不変のまま、bootstrap / doctorがwall v2 generation / receipt / pointer layoutを冪等に作成・検査し、M1時点の運用docsとtool contractが一致する。
   - [ ] manifest / license / SHA-256 / scene・post-export・Khronos validator report / rebuild reportが揃う。
   - [ ] staging候補とcandidate-only normalがhash付きでprimary外のclean validation worktreeへprovisionされ、primary / canonicalとは明確に区別されている。
   - [ ] 6 mesh全てのUV0とtangent有無をpost-export reportへ記録し、tangent欠落時はM4の一回限り生成pathをtechnical fixtureで検査できる。normalのlinear / `+Y` contractも別reportで検査できる。

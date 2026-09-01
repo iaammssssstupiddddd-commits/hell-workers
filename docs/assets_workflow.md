@@ -132,6 +132,18 @@ python3 scripts/sync_external_assets.py \
 `--delete-missing`を併用できない。release / final manifestの同期にはgeneration-scoped promotion receiptが必要なため、
 receipt対応が完了するまではfail closedで拒否する。primary / canonicalへcandidateを直接同期しない。
 
+### Wall v2 canonical generation
+
+`init-asset-workspace`は既存generic v1を上書きせず、`generations/`、`authority/`、`quarantine/`とWall v2
+templateを冪等に追加する。`verify-asset-workspace`は必要directoryが実directoryであることと、generic v1 / Wall v2
+template schemaをread-onlyで検査する。
+
+final manifestの昇格は`promote_asset_set.py plan`でcurrent pointer preimageとroot外snapshot pathを封印してから行う。
+`apply`はM6の別承認対象であり、M5 evidence、release approval、固有receipt ID、approval UTC、`--confirm`が必須。
+世代payloadとimmutable receiptを完全にfsync・renameしてから、最後に`authority/wall-production-v1.active.json`だけを
+atomic replaceする。中断時の`recover`とpreimageへ戻す`rollback`は既定read-onlyで、`--apply`時も世代を削除せず
+`quarantine/`へ移す。generation番号とreceipt IDは再利用しない。
+
 ## 6. 競合回避ルール
 
 - 同じ原本ファイルを複数 PC で同時編集しない。

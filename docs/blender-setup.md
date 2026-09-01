@@ -174,6 +174,18 @@ python3 scripts/sync_external_assets.py \
 normal A/Bだけは同じcandidate generationから`--selection optional:normal`を別途使います。final manifestは
 promotion receipt対応が完了するまでこの同期コマンドでは拒否されます。
 
+外部workspaceを初期化・検査するコマンドは次の通りです。既存generic v1 templateは`--no-clobber`で保持され、
+Wall v2の`generations/`、`authority/`、`quarantine/`だけが追加されます。
+
+```bash
+tools/blender_ai_workflow/bin/init-asset-workspace
+tools/blender_ai_workflow/bin/verify-asset-workspace
+```
+
+final generationのcanonical昇格は制作・native検証とは別のM6承認操作です。通常はread-only planだけを作り、
+plan / manifest / M5 evidence / release approvalを提示して承認を得るまでは`apply --confirm`を実行しません。
+中断確認の`recover`とpreimage復帰の`rollback`も、`--apply`なしでは変更しません。
+
 正本へ昇格する前に、`manifests/asset-manifest.template.json` をコピーして、
 生成元、model/version、prompt/reference hash、ライセンス、Blender version、
 出力 hash、report、reviewer を記録してください。API token やcookieは書きません。

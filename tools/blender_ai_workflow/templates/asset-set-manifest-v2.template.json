@@ -2,11 +2,16 @@
   "schema_version": 2,
   "asset_set_id": "wall-production-v1",
   "manifest_mode": "candidate",
-  "candidate_generation": 1,
+  "asset_set_generation": 1,
   "created_at_utc": "",
   "source": {
     "blend": {
       "path": "wall-production-v1.blend",
+      "sha256": ""
+    },
+    "geometry_contract": {
+      "asset_set_id": "wall-production-v1",
+      "schema_version": 1,
       "sha256": ""
     },
     "tool_commit": "",
@@ -92,17 +97,17 @@
   ],
   "production": {
     "core": [
-      {"path": "models/buildings/wall/wall_isolated.glb", "sha256": ""},
-      {"path": "models/buildings/wall/wall_end.glb", "sha256": ""},
-      {"path": "models/buildings/wall/wall_straight.glb", "sha256": ""},
-      {"path": "models/buildings/wall/wall_corner.glb", "sha256": ""},
-      {"path": "models/buildings/wall/wall_t_junction.glb", "sha256": ""},
-      {"path": "models/buildings/wall/wall_cross.glb", "sha256": ""},
-      {"path": "textures/buildings/wall/wall_albedo.png", "sha256": ""},
-      {"path": "textures/buildings/wall/wall_emissive.png", "sha256": ""}
+      {"path": "models/buildings/wall/wall_isolated.glb", "role": "mesh:isolated", "bytes": 0, "sha256": ""},
+      {"path": "models/buildings/wall/wall_end.glb", "role": "mesh:end", "bytes": 0, "sha256": ""},
+      {"path": "models/buildings/wall/wall_straight.glb", "role": "mesh:straight", "bytes": 0, "sha256": ""},
+      {"path": "models/buildings/wall/wall_corner.glb", "role": "mesh:corner", "bytes": 0, "sha256": ""},
+      {"path": "models/buildings/wall/wall_t_junction.glb", "role": "mesh:t_junction", "bytes": 0, "sha256": ""},
+      {"path": "models/buildings/wall/wall_cross.glb", "role": "mesh:cross", "bytes": 0, "sha256": ""},
+      {"path": "textures/buildings/wall/wall_albedo.png", "role": "texture:albedo", "bytes": 0, "sha256": ""},
+      {"path": "textures/buildings/wall/wall_emissive.png", "role": "texture:emissive", "bytes": 0, "sha256": ""}
     ],
     "optional": [
-      {"path": "textures/buildings/wall/wall_normal.png", "sha256": ""}
+      {"path": "textures/buildings/wall/wall_normal.png", "role": "texture:normal", "bytes": 0, "sha256": ""}
     ]
   },
   "normal_decision": "pending",
@@ -137,7 +142,7 @@
     "file": {"path": "wall-production-v1.md", "sha256": ""}
   },
   "art_review": {
-    "status": "pending",
+    "status": "candidate",
     "reviewer": "",
     "reviewed_at_utc": "",
     "notes": "",

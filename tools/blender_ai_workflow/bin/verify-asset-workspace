@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ASSET_WORKSPACE_ROOT="${HELL_WORKERS_ASSET_ROOT:-${HOME}/Sync/hell-workers-assets}"
+
+required_directories=(
+    source/blender
+    source/generated
+    source/references
+    staging/imports
+    staging/blend
+    staging/exports
+    staging/renders
+    staging/reports
+    staging/snapshots
+    exports/models
+    exports/textures
+    exports/audio
+    manifests
+    licenses
+    generations
+    authority
+    quarantine
+)
+
+for relative in "${required_directories[@]}"; do
+    path="${ASSET_WORKSPACE_ROOT}/${relative}"
+    if [[ ! -d "${path}" || -L "${path}" ]]; then
+        echo "error: asset workspace directory is absent or a symlink: ${path}" >&2
+        exit 1
+    fi
+done
+
+python3 - "${ASSET_WORKSPACE_ROOT}" <<'PY'
+import json
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+templates = (
+    ("manifests/asset-manifest.template.json", 1),
+    ("manifests/wall-production-v1.asset-set.template.json", 2),
+)
+for relative, version in templates:
+    path = root / relative
+    if not path.is_file() or path.is_symlink():
+        raise SystemExit(f"error: asset workspace template is absent or a symlink: {path}")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != version:
+        raise SystemExit(f"error: asset workspace template schema differs: {path}")
+PY
+
+echo "ASSET_WORKSPACE_READY root=${ASSET_WORKSPACE_ROOT} wall_v2=yes"

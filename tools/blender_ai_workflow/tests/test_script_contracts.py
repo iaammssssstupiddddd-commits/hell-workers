@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -105,6 +107,23 @@ class ScriptContractTests(unittest.TestCase):
         self.assertEqual(wall["asset_set_id"], "wall-production-v1")
         self.assertEqual(len(wall["meshes"]), 6)
         self.assertEqual(wall["normal_decision"], "pending")
+
+    def test_workspace_init_is_idempotent_and_preserves_generic_v1(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "assets"
+            environment = {**os.environ, "HELL_WORKERS_ASSET_ROOT": str(root)}
+            init = WORKFLOW_ROOT / "bin/init-asset-workspace"
+            verify = WORKFLOW_ROOT / "bin/verify-asset-workspace"
+            subprocess.run([init], check=True, env=environment, capture_output=True)
+            generic = root / "manifests/asset-manifest.template.json"
+            generic.write_text('{"schema_version":1,"preserved":true}\n')
+            subprocess.run([init], check=True, env=environment, capture_output=True)
+            subprocess.run([verify], check=True, env=environment, capture_output=True)
+            self.assertTrue(json.loads(generic.read_text())["preserved"])
+            wall = root / "manifests/wall-production-v1.asset-set.template.json"
+            self.assertEqual(json.loads(wall.read_text())["schema_version"], 2)
+            for relative in ("generations", "authority", "quarantine"):
+                self.assertTrue((root / relative).is_dir())
 
 
 if __name__ == "__main__":

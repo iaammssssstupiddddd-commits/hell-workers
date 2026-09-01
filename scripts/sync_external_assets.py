@@ -14,8 +14,7 @@ from typing import Any
 ALLOWED_TOP_LEVEL_DIRS = ("textures", "models", "audio")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WALL_MANIFEST_VALIDATOR = (
-    PROJECT_ROOT
-    / "tools/blender_ai_workflow/scripts/validate_asset_set_manifest.py"
+    PROJECT_ROOT / "tools/blender_ai_workflow/scripts/validate_asset_set_manifest.py"
 )
 
 
@@ -73,10 +72,14 @@ def iter_source_files(source_top: Path):
             yield path
 
 
-def copy_if_needed(source_file: Path, source_top: Path, dest_top: Path, dry_run: bool) -> bool:
+def copy_if_needed(
+    source_file: Path, source_top: Path, dest_top: Path, dry_run: bool
+) -> bool:
     relative_path = source_file.relative_to(source_top)
     dest_file = dest_top / relative_path
-    needs_copy = not dest_file.exists() or not filecmp.cmp(source_file, dest_file, shallow=False)
+    needs_copy = not dest_file.exists() or not filecmp.cmp(
+        source_file, dest_file, shallow=False
+    )
 
     if not needs_copy:
         return False
@@ -135,7 +138,10 @@ def selected_manifest_records(
     if manifest["normal_decision"] != "pending":
         raise ValueError("optional:normal is available only for a pending candidate")
     records = manifest["production"]["optional"]
-    if len(records) != 1 or records[0]["path"] != "textures/buildings/wall/wall_normal.png":
+    if (
+        len(records) != 1
+        or records[0]["path"] != "textures/buildings/wall/wall_normal.png"
+    ):
         raise ValueError("optional:normal inventory differs")
     return records
 
@@ -152,7 +158,9 @@ def sync_manifest_assets(
     if dest_root.is_symlink():
         raise ValueError(f"Destination asset root is a symlink: {dest_root}")
     if dest_root.exists() and not dest_root.is_dir():
-        raise NotADirectoryError(f"Destination asset root is not a directory: {dest_root}")
+        raise NotADirectoryError(
+            f"Destination asset root is not a directory: {dest_root}"
+        )
     validator = load_wall_manifest_validator()
     manifest = validator.read_json(manifest_path)
     mode = manifest.get("manifest_mode") if isinstance(manifest, dict) else None
@@ -196,7 +204,7 @@ def sync_manifest_assets(
     print(
         "MANIFEST "
         f"asset_set_id={validation['asset_set_id']} "
-        f"generation={validation['candidate_generation']} "
+        f"generation={validation['asset_set_generation']} "
         f"sha256={validation['manifest_sha256']} selection={selection}"
     )
     return copied
@@ -245,9 +253,7 @@ def main() -> int:
             repo=PROJECT_ROOT,
         )
         print(
-            "DONE "
-            f"copied={copied} removed=0 "
-            f"dry_run={'yes' if args.dry_run else 'no'}"
+            f"DONE copied={copied} removed=0 dry_run={'yes' if args.dry_run else 'no'}"
         )
         return 0
 

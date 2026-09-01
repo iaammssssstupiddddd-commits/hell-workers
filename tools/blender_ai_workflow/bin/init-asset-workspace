@@ -19,7 +19,10 @@ install -d \
     "${ASSET_WORKSPACE_ROOT}/exports/textures" \
     "${ASSET_WORKSPACE_ROOT}/exports/audio" \
     "${ASSET_WORKSPACE_ROOT}/manifests" \
-    "${ASSET_WORKSPACE_ROOT}/licenses"
+    "${ASSET_WORKSPACE_ROOT}/licenses" \
+    "${ASSET_WORKSPACE_ROOT}/generations" \
+    "${ASSET_WORKSPACE_ROOT}/authority" \
+    "${ASSET_WORKSPACE_ROOT}/quarantine"
 
 cp --no-clobber \
     "${WORKFLOW_ROOT}/templates/asset-workspace.README.md" \
@@ -28,7 +31,11 @@ cp --no-clobber \
     "${WORKFLOW_ROOT}/templates/asset-manifest.template.json" \
     "${ASSET_WORKSPACE_ROOT}/manifests/asset-manifest.template.json"
 cp --no-clobber \
+    "${WORKFLOW_ROOT}/templates/asset-set-manifest-v2.template.json" \
+    "${ASSET_WORKSPACE_ROOT}/manifests/wall-production-v1.asset-set.template.json"
+cp --no-clobber \
     "${WORKFLOW_ROOT}/templates/licenses.README.md" \
     "${ASSET_WORKSPACE_ROOT}/licenses/README.md"
 
-echo "ASSET_WORKSPACE_READY root=${ASSET_WORKSPACE_ROOT}"
+HELL_WORKERS_ASSET_ROOT="${ASSET_WORKSPACE_ROOT}" \
+    "${WORKFLOW_ROOT}/bin/verify-asset-workspace"

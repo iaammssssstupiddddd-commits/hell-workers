@@ -8,8 +8,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SYNC_SCRIPT = PROJECT_ROOT / "scripts/sync_external_assets.py"
 ASSET_FIXTURE_SCRIPT = (
-    PROJECT_ROOT
-    / "tools/blender_ai_workflow/tests/test_asset_set_manifest.py"
+    PROJECT_ROOT / "tools/blender_ai_workflow/tests/test_asset_set_manifest.py"
 )
 
 
@@ -35,9 +34,7 @@ class ManifestAssetSyncTests(unittest.TestCase):
         external_root = Path(directory) / "external"
         staging_root = external_root / "staging"
         staging_root.mkdir(parents=True)
-        fixture = self.fixture_module.AssetSetFixture(
-            staging_root, self.validator
-        )
+        fixture = self.fixture_module.AssetSetFixture(staging_root, self.validator)
         fixture.licenses_root.rename(external_root / "licenses")
         fixture.licenses_root = external_root / "licenses"
         return fixture, external_root
@@ -65,9 +62,7 @@ class ManifestAssetSyncTests(unittest.TestCase):
             self.assertEqual(copied, 8)
             self.assertTrue(unrelated_dest.is_file())
             self.assertFalse((dest_root / "audio/unlisted.ogg").exists())
-            self.assertFalse(
-                (dest_root / self.validator.TEXTURES["normal"]).exists()
-            )
+            self.assertFalse((dest_root / self.validator.TEXTURES["normal"]).exists())
             for record in fixture.manifest["production"]["core"]:
                 self.assertEqual(
                     self.sync.sha256(dest_root / record["path"]), record["sha256"]
@@ -88,7 +83,11 @@ class ManifestAssetSyncTests(unittest.TestCase):
             )
             self.assertEqual(copied, 1)
             self.assertEqual(
-                [path.relative_to(dest_root).as_posix() for path in dest_root.rglob("*") if path.is_file()],
+                [
+                    path.relative_to(dest_root).as_posix()
+                    for path in dest_root.rglob("*")
+                    if path.is_file()
+                ],
                 [self.validator.TEXTURES["normal"]],
             )
 

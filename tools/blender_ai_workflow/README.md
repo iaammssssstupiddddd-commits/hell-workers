@@ -8,6 +8,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | Command | 用途 |
 |---|---|
 | `bin/init-asset-workspace` | 外部workspaceの階層と非秘密templateを安全に初期化 |
+| `bin/verify-asset-workspace` | generic v1とWall v2 generation workspaceをread-only検査 |
 | `bin/blender` 相当の `blender-safe` | Flatpak filesystemを最小化し、embedded Python auto-runを無効化 |
 | `bin/blender-ai` | 明示的な localhost MCP セッションを開始 |
 | `bin/install-mcp-addon` | hardened addon zipを構築・導入し、既存userprefをローカル退避 |
@@ -17,6 +18,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `bin/gltf-validate` | pinned Khronos validator wrapper |
 | `bin/validate-wall-glb` | production Wall GLBの構造・bounds・port断面をbytesから再検証 |
 | `scripts/validate_asset_set_manifest.py` | Wall asset-set manifest v2と全参照artifactをexact検証 |
+| `scripts/promote_asset_set.py` | Wall final generationのplan / apply / recover / rollback transaction |
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
 | `scripts/render_color_calibration.py` | 壁M0の固定5 patchをBlenderで描画し、OCIO陽性証明付きmetadataを出力 |
 | `scripts/verify_color_calibration.py` | Blender / Bevy PNGをCIEDE2000とemissive sanityでoffline照合 |
@@ -37,10 +39,12 @@ render-enabled meshが1個でなければexport前に失敗します。指定し
 cap、raw Y `-16..+16 wu`、9.6 wu port profile、12.8 wu corridor unionを検証します。
 
 Wall asset-set manifest v2は、既存の単体asset manifest v1とは別schemaです。candidate検証は
-`normal_decision=pending`（core 8 file＋optional normal 1 file）とpending runtime subject / art reviewを許し、
+`normal_decision=pending`（core 8 file＋optional normal 1 file）とpending runtime subject / candidate art reviewを許し、
 final検証はnormalをadopted（core 9）またはrejected（core 8）へ確定し、runtime subjectとhash付きのart approval
 artifactを必須にします。6 familyのGLB、scene / export / Khronos / post-export report、set report、1024角texture、
-source `.blend`、tool commit / tree / version、provenance、licenseをclosed field setとactual bytesのSHA-256で検査します。
+source `.blend`、geometry contract、tool commit / tree / version、provenance、licenseをclosed field setとactual bytesの
+role / byte length / SHA-256で検査します。不変identity fieldは`asset_set_generation`であり、runtimeの
+`activation_revision`とは別物です。
 
 ```bash
 python3 tools/blender_ai_workflow/scripts/validate_asset_set_manifest.py \
@@ -68,6 +72,23 @@ python3 scripts/sync_external_assets.py \
   --selection core \
   --dry-run
 ```
+
+final asset-setのcanonical promotionは既定でread-onlyな`plan`から開始します。planはcurrent active pointerの
+preimage、manifest / payload hash、単調generation、asset root、root外snapshotをcanonical JSONへ封印します。
+`apply`は別途承認されたM5 evidence、release approval、固有receipt ID、UTC時刻、`--confirm`がすべて必要です。
+
+```bash
+python3 tools/blender_ai_workflow/scripts/promote_asset_set.py plan \
+  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" \
+  --asset-root "$ASSET_ROOT" \
+  --snapshot "$SNAPSHOT_ROOT/wall-production-v1-preimage.json" \
+  --output "$ASSET_ROOT/staging/reports/wall-production-v1.promotion-plan.json"
+```
+
+payload / evidence / immutable receiptは同一temporary generation内でhash検証・file / directory fsyncした後、
+generation directoryを一度だけrenameします。最後に唯一のmutable authorityであるactive pointerをatomic replaceし、
+親directoryをfsyncします。`recover` / `rollback`も既定はread-onlyで、変更には各々`--apply`が必要です。
+rollbackはgenerationを削除せず、root外snapshotに封印したprevious pointerだけを復元します。
 
 ## Environment
 

@@ -71,7 +71,13 @@ class AssetSetFixture:
             output = write_record(
                 self.exports_root, output_path, f"glb:{family}".encode()
             )
-            core.append(copy.deepcopy(output))
+            core.append(
+                {
+                    **copy.deepcopy(output),
+                    "role": f"mesh:{family}",
+                    "bytes": (self.exports_root / output_path).stat().st_size,
+                }
+            )
             reports = {
                 "scene": write_json_record(
                     self.reports_root,
@@ -103,6 +109,9 @@ class AssetSetFixture:
                         "status": "pass",
                         "family": family,
                         "glb_sha256": output["sha256"],
+                        "contract_sha256": validator.sha256(
+                            validator.GEOMETRY_CONTRACT
+                        ),
                     },
                 ),
             }
@@ -116,14 +125,24 @@ class AssetSetFixture:
             )
 
         for texture in ("albedo", "emissive"):
-            core.append(
-                write_record(
-                    self.exports_root, validator.TEXTURES[texture], png_1024()
-                )
+            record = write_record(
+                self.exports_root, validator.TEXTURES[texture], png_1024()
             )
-        normal = write_record(
+            core.append(
+                {
+                    **record,
+                    "role": f"texture:{texture}",
+                    "bytes": (self.exports_root / record["path"]).stat().st_size,
+                }
+            )
+        normal_file = write_record(
             self.exports_root, validator.TEXTURES["normal"], png_1024()
         )
+        normal = {
+            **normal_file,
+            "role": "texture:normal",
+            "bytes": (self.exports_root / normal_file["path"]).stat().st_size,
+        }
         set_reports = [
             {
                 "role": role,
@@ -142,10 +161,15 @@ class AssetSetFixture:
             "schema_version": 2,
             "asset_set_id": "wall-production-v1",
             "manifest_mode": "candidate",
-            "candidate_generation": 1,
+            "asset_set_generation": 1,
             "created_at_utc": "2026-09-01T00:00:00Z",
             "source": {
                 "blend": blend,
+                "geometry_contract": {
+                    "asset_set_id": "wall-production-v1",
+                    "schema_version": 1,
+                    "sha256": validator.sha256(validator.GEOMETRY_CONTRACT),
+                },
                 "tool_commit": "a" * 40,
                 "tool_tree": "b" * 40,
                 "tool_versions": {
@@ -180,7 +204,7 @@ class AssetSetFixture:
                 "file": license_record,
             },
             "art_review": {
-                "status": "pending",
+                "status": "candidate",
                 "reviewer": "",
                 "reviewed_at_utc": "",
                 "notes": "",
@@ -209,7 +233,7 @@ class AssetSetFixture:
             {"status": "approved"},
         )
         self.manifest["art_review"] = {
-            "status": "approved",
+            "status": "art_approved",
             "reviewer": "art-owner",
             "reviewed_at_utc": "2026-09-01T00:01:00Z",
             "notes": "approved fixture",
@@ -277,6 +301,41 @@ class AssetSetManifestTests(unittest.TestCase):
             with self.assertRaisesRegex(self.validator.ManifestError, "sha256 differs"):
                 self.validate(fixture)
 
+    def test_declared_byte_length_is_exact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = AssetSetFixture(Path(directory), self.validator)
+            fixture.manifest["production"]["core"][0]["bytes"] += 1
+            fixture.write()
+            with self.assertRaisesRegex(
+                self.validator.ManifestError, "byte length differs"
+            ):
+                self.validate(fixture)
+
+    def test_production_role_cannot_be_swapped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = AssetSetFixture(Path(directory), self.validator)
+            fixture.manifest["production"]["core"][0]["role"] = "mesh:cross"
+            fixture.write()
+            with self.assertRaisesRegex(self.validator.ManifestError, "role differs"):
+                self.validate(fixture)
+
+    def test_post_export_report_binds_geometry_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = AssetSetFixture(Path(directory), self.validator)
+            report_record = fixture.manifest["meshes"][0]["reports"]["post_export"]
+            payload = json.loads(
+                (fixture.reports_root / report_record["path"]).read_text()
+            )
+            payload["contract_sha256"] = "0" * 64
+            fixture.manifest["meshes"][0]["reports"]["post_export"] = write_json_record(
+                fixture.reports_root, report_record["path"], payload
+            )
+            fixture.write()
+            with self.assertRaisesRegex(
+                self.validator.ManifestError, "geometry contract hash link"
+            ):
+                self.validate(fixture)
+
     def test_report_cannot_be_reused_for_two_roles(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = AssetSetFixture(Path(directory), self.validator)
@@ -295,10 +354,8 @@ class AssetSetManifestTests(unittest.TestCase):
                 (fixture.reports_root / report_record["path"]).read_text()
             )
             payload["glb_sha256"] = "0" * 64
-            fixture.manifest["meshes"][0]["reports"]["post_export"] = (
-                write_json_record(
-                    fixture.reports_root, report_record["path"], payload
-                )
+            fixture.manifest["meshes"][0]["reports"]["post_export"] = write_json_record(
+                fixture.reports_root, report_record["path"], payload
             )
             fixture.write()
             with self.assertRaisesRegex(
