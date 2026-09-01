@@ -44,4 +44,10 @@ fn fragment(
 #endif
     return out;
 }
+#else
+@fragment
+fn fragment(in: prepass_io::VertexOutput) {
+    structural_discard(in.world_position.xyz);
+    pbr_prepass_functions::prepass_alpha_discard(in);
+}
 #endif // PREPASS_FRAGMENT

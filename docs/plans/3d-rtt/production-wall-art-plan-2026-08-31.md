@@ -403,6 +403,12 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `prepass_io::FragmentOutput`を参照するshader compile errorを6 runすべてで検出した。このartifactも
   baselineへ流用せず、Bevy 0.19標準`pbr_prepass.wgsl`と同じfragment guardへ修正した次subjectから
   全12 runを再採取する。
+- subject `749118d3`ではcompleted N / 4N各3 runが再度passしたが、provisionalは6 runとも起動時に
+  depth-only `MAY_DISCARD` pipelineがfragment stageを要求し、guardの`else`側にentry pointがない
+  Validation RenderErrorでfail-closedになった。Bevy 0.19標準`pbr_prepass.wgsl`の正本には
+  `PREPASS_FRAGMENT`の`else`として返値なしのalpha-discard fragmentがあるため、同じ二分岐を採用し、
+  両方でconstruction height discardを維持する。単純guardだけの仮説はこの一回で打ち切り、このartifactも
+  baselineへ流用しない。
 
 - 変更内容:
   - current `Cuboid` wallをproduction cameraで撮影し、source fingerprint、camera、quality、DPI、adapter、asset viewを記録する。既存P02 visual referenceと、後述の`wall-density-v1`性能baselineを別artifactにする。
@@ -823,6 +829,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M0 native再試行（subject `60328e60`）: completed N / 4Nの各3 runは`pass`。provisional N / 4Nの各3 runは
   既存structural prepassの`PREPASS_FRAGMENT` guard欠落による同一shader compile errorで`fail-closed`。
   Bevy 0.19標準shaderを一次情報として修正し、このartifactも合格baselineへ不使用（2026-09-01）。
+- M0 native再々試行（subject `749118d3`）: completed N / 4Nの各3 runは`pass`。provisional 6 runは
+  depth-only `MAY_DISCARD`用の返値なしfragment不足によるValidation RenderErrorで`fail-closed`。
+  Bevy 0.19標準prepassの`#else` entry pointまで一致させ、artifactは合格baselineへ不使用（2026-09-01）。
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。

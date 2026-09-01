@@ -1952,6 +1952,10 @@ mod tests {
         );
 
         assert!(structural_prepass.contains("#ifdef PREPASS_FRAGMENT\n@fragment"));
+        assert!(
+            structural_prepass
+                .contains("#else\n@fragment\nfn fragment(in: prepass_io::VertexOutput)")
+        );
         assert!(structural_prepass.contains("#endif // PREPASS_FRAGMENT"));
     }
 
