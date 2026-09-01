@@ -27,6 +27,7 @@ SEED = 20_260_901
 WINDOW_WIDTH = 1280
 WINDOW_HEIGHT = 720
 WINDOW_SCALE_FACTOR = 1.0
+CAPTURE_REGION = (320, 40, 516, 674)
 WARMUP_SECONDS = 10.0
 MEASURE_SECONDS = 10.0
 RUN_TIMEOUT_SECONDS = 120.0
@@ -165,8 +166,8 @@ def validate_probe_status(value: Any, *, nonce: str) -> dict[str, Any]:
     native.require(
         fixture["target_size"] == "N"
         and fixture["wall_phase"] == "completed"
-        and fixture["subject_ordinal"] == 0
-        and fixture["subject_grid"] == [2, 2]
+        and fixture["subject_ordinal"] == 64
+        and fixture["subject_grid"] == [22, 17]
         and fixture["subject_mask"] == "0000",
         "Wall calibration subject differs",
     )
@@ -226,6 +227,14 @@ def validate_probe_status(value: Any, *, nonce: str) -> dict[str, Any]:
         and roi["x"] + roi["width"] <= WINDOW_WIDTH
         and roi["y"] + roi["height"] <= WINDOW_HEIGHT,
         "Wall ROI is invalid",
+    )
+    min_x, min_y, max_x, max_y = CAPTURE_REGION
+    native.require(
+        roi["x"] >= min_x
+        and roi["y"] >= min_y
+        and roi["x"] + roi["width"] <= max_x
+        and roi["y"] + roi["height"] <= max_y,
+        "Wall ROI overlaps fixed UI chrome",
     )
     world = require_object(
         probe["world_position"], "Wall world position", {"x", "y", "z"}
@@ -790,8 +799,8 @@ def self_test() -> int:
             "layout_checksum": "a" * 64,
             "target_size": "N",
             "wall_phase": "completed",
-            "subject_ordinal": 0,
-            "subject_grid": [2, 2],
+            "subject_ordinal": 64,
+            "subject_grid": [22, 17],
             "subject_mask": "0000",
         },
         "window": {"physical_width": 1280, "physical_height": 720, "scale_factor": 1.0},
@@ -803,8 +812,8 @@ def self_test() -> int:
             "fallback_mesh_resident": True,
         },
         "probe": {
-            "viewport_center": {"x": 640.0, "y": 360.0},
-            "roi": {"x": 592, "y": 312, "width": 96, "height": 96},
+            "viewport_center": {"x": 464.0, "y": 580.0},
+            "roi": {"x": 416, "y": 532, "width": 96, "height": 96},
             "world_position": {"x": 80.0, "y": 16.0, "z": -80.0},
         },
     }

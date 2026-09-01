@@ -30,6 +30,7 @@ const GRID_ORIGIN: (i32, i32) = (2, 2);
 const GRID_STRIDE: (i32, i32) = (5, 5);
 const GRID_COLUMNS: usize = 20;
 pub(super) const CAMERA_SCALE: f32 = 5.0;
+pub(super) const ACTUAL_WINDOW_SUBJECT_ORDINAL: u32 = 64;
 const MASK_COUNT: usize = 16;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -124,6 +125,7 @@ pub(crate) struct WallDensityFixtureState {
 
 pub(super) struct WallDensityProbeSubject<'a> {
     pub(super) entity: Entity,
+    pub(super) ordinal: u32,
     pub(super) grid: (i32, i32),
     pub(super) mask: u8,
     pub(super) layout_checksum: &'a str,
@@ -136,9 +138,13 @@ impl WallDensityFixtureState {
             .layout
             .as_ref()
             .filter(|_| self.phase == WallDensityFixturePhase::Ready)?;
-        let specimen = layout.specimens.first()?;
+        let specimen = layout
+            .specimens
+            .iter()
+            .find(|specimen| specimen.ordinal == ACTUAL_WINDOW_SUBJECT_ORDINAL)?;
         Some(WallDensityProbeSubject {
             entity: specimen.wall?,
+            ordinal: specimen.ordinal,
             grid: specimen.grid,
             mask: specimen.mask,
             layout_checksum: &layout.layout_checksum,

@@ -33,6 +33,7 @@ const SETTLE_DURATION: Duration = Duration::from_millis(1_600);
 const ACK_TIMEOUT: Duration = Duration::from_secs(15);
 const SETTLE_FRAMES: u32 = 3;
 const ROI_HALF_SIZE: u32 = 48;
+const CAPTURE_REGION: (u32, u32, u32, u32) = (320, 40, 516, 674);
 
 #[derive(Resource)]
 pub(crate) struct WallActualWindowAcceptance {
@@ -250,6 +251,9 @@ fn build_status(
     .ok_or_else(|| "wall actual-window subject cannot be projected into the client".to_string())?;
     let roi = roi_around_point(center, ROI_HALF_SIZE, physical_width, physical_height)
         .ok_or_else(|| "wall actual-window ROI lies outside the client".to_string())?;
+    if !roi_inside_capture_region(roi) {
+        return Err("wall actual-window ROI overlaps fixed UI chrome".to_string());
+    }
     let quality = config
         .requested_rtt_quality()
         .ok_or_else(|| "wall actual-window RtT quality is absent".to_string())?;
@@ -268,7 +272,7 @@ fn build_status(
             "layout_checksum": subject.layout_checksum,
             "target_size": "N",
             "wall_phase": subject.phase.as_str(),
-            "subject_ordinal": 0,
+            "subject_ordinal": subject.ordinal,
             "subject_grid": [subject.grid.0, subject.grid.1],
             "subject_mask": format!("{:04b}", subject.mask),
         },
@@ -350,6 +354,15 @@ fn roi_around_point(
     ))
 }
 
+fn roi_inside_capture_region(roi: (u32, u32, u32, u32)) -> bool {
+    let (x, y, width, height) = roi;
+    let (min_x, min_y, max_x, max_y) = CAPTURE_REGION;
+    x >= min_x
+        && y >= min_y
+        && x.checked_add(width).is_some_and(|right| right <= max_x)
+        && y.checked_add(height).is_some_and(|bottom| bottom <= max_y)
+}
+
 fn write_status(path: &Path, value: &Value) -> std::io::Result<()> {
     let parent = path
         .parent()
@@ -389,5 +402,8 @@ mod tests {
             Some((16, 16, 96, 96))
         );
         assert_eq!(roi_around_point(Vec2::new(20.0, 64.0), 48, 1280, 720), None);
+        assert!(roi_inside_capture_region((416, 532, 96, 96)));
+        assert!(!roi_inside_capture_region((288, 614, 96, 96)));
+        assert!(!roi_inside_capture_region((512, 532, 96, 96)));
     }
 }
