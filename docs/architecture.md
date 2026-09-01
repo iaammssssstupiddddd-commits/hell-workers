@@ -68,6 +68,16 @@ auto-build を適用外にする。各 blocker record は代表理由が使っ�
 
 `PreActor` / `PostActor`はpause gate外のtransaction境界である。P04ではInterfaceがenqueueしたmanual Door requestを次Updateの`PreActor`で適用し、unpaused `Actor`のauto Door / movement確定後に`PostActor`で室内Light Fieldをcollect/rebuildする。VisualのDoor presentationは同じUpdateのCPU field rebuild後を観測する。
 
+Wallの接続と3D presentationは、全`Update` writerの後に
+`PostUpdate::WallAssetReadinessSet → WallTopologyResolveSet → ApplyDeferred → WallPresentationApplySet → TransformSystems::Propagate`
+の順で確定する。`hw_visual`はBuilding / Blueprint contributorをcoalesceする差分topology indexとresolved
+`WallTopologyState`を所有し、root `bevy_app`はasset authorityとowner→3D visual index、production / fallbackの
+atomic applyを所有する。spawn / rehydrate時のfallback bundle、owner由来`MeshTag`、local / `GlobalTransform`初期化を
+creation-time例外とし、spawn後のWall `Mesh3d` / material / composed transform / tag mutationはpresentation applyだけが行う。
+generic building transform / material writerはWallを対象にしない。world replacementではleaf hookがtopology indexを
+full-rebuild待ちへ戻し、root hookがactivationとvisual owner indexをfallbackへ戻すため、`Last`のrehydrate frameは
+fallbackの正しいworld位置を保ち、次の`PostUpdate`でのみproductionへ再収束する。
+
 keyboard action は `crates/bevy_app/src/input_actions/` で一元解決する。
 F5/F9/V、B/Z/Space/Digit1-4、Familiar command、context 別 Escape、AreaEdit、Tab、P/O、
 F3/F4/F6/F7/F8/F12 を `InputPlugin` 所有の

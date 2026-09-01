@@ -735,14 +735,26 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `WallMeshFamily + QuarterTurns`へ写像するpure resolverを`819ca26d`で追加した。既存2D completed / provisionalの
   texture選択も同じmask生成を使用し、従来の16分岐と同値を維持する。
 - sealed geometry fixtureの16 mapping / +Y quarter turnをexhaustive table testで固定した。completed Doorがnorth connectorとして
-  同じmaskへ寄与する実経路も`4a728b06`で検証した。3D state / index / presentation applyはまだ接続していない。
+  同じmaskへ寄与する実経路も`4a728b06`で検証した。
 - `5f59d8b3`でentityごとのBuilding / Blueprint grid集合とgridごとのcoalesced contributor集合を持つ
   `WallTopologyIndex`を追加した。add / transform move / component removalで旧集合・新集合のself＋4近傍だけをdirtyにし、
   同一gridのBuilding＋Blueprintはconnector 1として解決する。2D completed / provisional consumerは同じresolved maskを使い、
   plain Wall rootへ`WallTopologyState { grid, mask, family, quarter_turn, revision }`を付与する。
 - steady frameはdirty target 0、resolution revision不変、component / sprite write 0とした。world replacementではindex / external dirtyを
   `hw_visual`所有hookでclearし、次frameに全Building / Blueprintを1回だけ再構築する。連続2回resetでもrebuild 1回、その次の
-  steady frameはrevision不変となるfocused testを追加した。PostUpdate scheduleと3D presentation applyは未接続である。
+  steady frameはrevision不変となるfocused testを追加した。
+- `ee1053c2`でtopology producerとasset readinessを`PostUpdate`へ移し、
+  `WallAssetReadinessSet -> WallTopologyResolveSet -> ApplyDeferred -> WallPresentationApplySet`を
+  `TransformSystems::Propagate`より前へ固定した。deferred topologyが同frameの3D mesh / material / composed transform / owner-derived
+  `MeshTag`へ届き、同じframeの`GlobalTransform`まで伝播するfocused testがpassした。
+- 3D visualへresolved topology、fallback / production mode、activation revisionを持つ`Wall3dPresentationState`を追加した。
+  root所有のowner→visual indexはactivation変更時だけ全ownerをrefreshし、通常はchanged owner / added visualだけを処理する。
+  exact asset-set identityとfinite material pairが一致する時だけ6 family meshと+Y quarter turnを適用し、不一致／failureでは全Wallを
+  procedural fallbackへ戻す。2つの異なるfamilyを同じactivation revisionで一括fallbackへ戻すtestとsteady frame 0-write testがpassした。
+- spawn / rehydrateはfallback bundleとowner tagのcreation-time初期化だけを担当し、Wallをgeneric transform / provisional material writerから
+  除外した。`Last` rehydrate frameでも原点表示にならないようfallback local値と同じ`GlobalTransform`を生成時に挿入する。
+  `hw_visual`のtopology resetとは別にroot所有hookでactivation / visual owner indexをfallbackへ戻し、連続resetとstale material identityの
+  fail-closed testを追加した。multi-tile施工、実save/load / rollback / recovery-onlyの統合testは未完了である。
 
 - 変更内容:
   - mask計算と `WallMeshFamily + QuarterTurns` resolverをpure functionへ抽出し、16件のexhaustive table testを追加する。
@@ -772,7 +784,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [ ] save/load後にexactly-one visualと同一mask / family / rotationが復元される。
   - [ ] normal load、rollback、recovery-only、連続2回resetの全world replacement testで、`Last` rehydrate frameは全wall fallbackかつlocal / `GlobalTransform`が正しいworld位置、次frame rebuild後は全wall production、mixed frame 0、旧`Entity`参照0、index rebuild 1回、重複contributor 0である。
   - [ ] asset `Eligible`からの初回有効化、同frame spawn、synthetic failure、restart後回復の各activation revisionで既存／新規wallが同じmodeへ一括収束する。creation-time fallback / tag初期化以外にpresentation apply外の`Mesh3d` / wall material / wall transform / `MeshTag` mutationがなく、既存generic writerがWallを除外している。
-  - [ ] steady stateのtopology再計算とmesh writeが0件である。
+  - [x] steady stateのtopology再計算とmesh writeが0件である。
   - [ ] M3のplayer-visible routeについてHelp impact decisionを完了し、必要なHelp更新を同じbatchへ含めてから完了を報告する。
 - 検証:
   - `python3 scripts/dev.py cargo -- test -p hw_visual wall_connection`
@@ -997,15 +1009,16 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - final subject `35f1f6e3`から色校正、Capture 12 run、RenderDoc 4 caseを再採取し、全artifactの独立verifyをpass。
     M0のsource / harness / asset viewを同じfingerprintへ凍結済み。
 - 未完了:
-  - M3のPostUpdate schedule / 3D consumer / atomic presentation applyは未着手。production assetはcanonical / primary
-    `assets/`へまだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
+  - M3のPostUpdate schedule、3D consumer、atomic presentation apply、world-replace用のroot / leaf reset分担は実装済み。
+    multi-tile施工のframing前後cancel、normal load / rollback / recovery-onlyを含む実save/load、owner移動・bounceとの統合testは未完了。
+    production assetはcanonical / primary `assets/`へまだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
 
 ### 次のAIが最初にやること
 
-1. topology producerを全logical writer後のPostUpdate setへ移し、ApplyDeferredを挟んで2D / 3D consumerが同frameの
-   `WallTopologyState`を読むscheduleを固定する。
-2. 3D visualへfamily / quarter turnを適用するatomic presentation writerを追加し、Door / blueprint / multi-tile lifecycleを閉じる。
-3. asset failure / world replace時の全Wall fallbackと`TransformSystems::Propagate`前のorderingへ進む。
+1. normal placement / Instant Build / multi-tile framing / framing前後cancel / deconstructionを通す統合testを追加し、
+   `PlacementFeedbackSet::Commit`後の同framedirty範囲とexactly-one visualを固定する。
+2. owner移動・回転・completion bounceでtopology quarter turnが消えず、完成遷移ではmaterialだけが変わることを固定する。
+3. normal load / rollback / recovery-only / 連続resetで、`Last` fallback位置、次frame production一括復帰、mixed 0、旧Entity参照0を検証する。
 
 ### ブロッカー/注意点
 
@@ -1127,6 +1140,17 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   completed / provisionalとも`D_N=1 / D_4N=1`、全8 replay一致でM0 draw predicateを完了（2026-09-01）。
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
+- M3 atomic presentation `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 wall_presentation --lib`:
+  `pass (4 tests, 2026-09-02)`。family / material / quarter turn、2-owner一括fallback、steady 0-write、
+  deferred topologyから同frame `GlobalTransform`、identity mismatch、連続resetを検証。
+- M3 topology / fallback spawn focused test:
+  `python3 scripts/dev.py cargo -- test -p hw_visual wall_connection --lib`は`pass (7 tests, 2026-09-02)`、
+  `fallback_wall_spawn_has_exactly_one_visual_mesh_material_and_tag`は`pass (1 test, 2026-09-02)`。
+- M3 atomic presentation実装後 `python3 scripts/dev.py check`と
+  `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-02)`。
+- M3 atomic presentation batchのHelp実経路判断: `No impact`。壁のmesh / material / rotation選択だけを変更し、
+  操作、workflow、成立条件、label、tooltip、shortcut、setting、notification、gameplay ruleは不変。
+  `scripts/check_help_impact.py`とtooling unit test 24件がpassし、commit `ee1053c2`へexact trailerを記録（2026-09-02）。
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
   既存tracked `scripts/check_crate_dependencies.py`がshebang付き`100644`であるrepository hygiene違反により停止（2026-09-01）。
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
@@ -1163,3 +1187,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-01` | `Codex` | current fallback専用actual-windowを実装・採取。formal density laneとsingle-case条件を二重鍵で分離し、isolated WallのUI非重複ROI、X11 client PNG、fallback residency、raw sidecar、fingerprintを封印 |
 | `2026-09-01` | `Codex` | wall専用RenderDoc checkpoint / extractor / native profileを実装・採取。中間color＋depth main passを実RDCで同定し、completed / provisionalのN / 4Nを各1 draw、全owner instance、2 replay一致で封印 |
 | `2026-09-01` | `Codex` | final subject `35f1f6e3`でBevy 5 patch UI隔離を実証し、OCIO陽性Blender referenceとのDelta E 0、Capture 12 run、RenderDoc 4 caseを同一fingerprintから再採取してM0を完了 |
+| `2026-09-02` | `Codex` | M3のPostUpdate topology / ApplyDeferred / presentation / transform propagation順、owner-indexed atomic production/fallback apply、creation-time fallback GlobalTransform、root / leaf world-reset分担を実装。steady 0-writeを閉じ、multi-tile / save-load統合を残した |
