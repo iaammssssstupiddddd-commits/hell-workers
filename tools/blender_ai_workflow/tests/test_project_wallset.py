@@ -71,7 +71,8 @@ class WallsetProjectionTests(unittest.TestCase):
                 encoded, self.projector.canonical_bytes(json.loads(encoded))
             )
             self.assertEqual(projection["asset_set_generation"], 3)
-            self.assertEqual(projection["authority"], "candidate")
+            self.assertEqual(projection["authority"], "isolated_candidate")
+            self.assertEqual(projection["review_status"], "candidate")
             self.assertEqual(
                 projection["manifest_sha256"],
                 hashlib.sha256(manifest.read_bytes()).hexdigest(),
@@ -101,6 +102,86 @@ class WallsetProjectionTests(unittest.TestCase):
                 self.projector.ProjectionError, "core inventory differs"
             ):
                 self.projector.project_candidate(manifest)
+
+    def test_release_projection_binds_receipt_and_generation_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = self.manifest(root)
+            payload = json.loads(manifest.read_text())
+            payload["manifest_mode"] = "final"
+            payload["normal_decision"] = "rejected"
+            payload["production"]["optional"] = []
+            payload["art_review"] = {"review_status": "art_approved"}
+            manifest.write_text(json.dumps(payload), encoding="utf-8")
+            manifest_hash = hashlib.sha256(manifest.read_bytes()).hexdigest()
+            receipt_payload = {
+                "approval": {
+                    "approved_at_utc": "2026-09-01T00:00:00Z",
+                    "path": "evidence/release-approval.json",
+                    "sha256": "1" * 64,
+                },
+                "asset_set_generation": 3,
+                "asset_set_id": "wall-production-v1",
+                "m5_evidence_bundle": {
+                    "path": "evidence/m5-evidence-bundle.json",
+                    "sha256": "2" * 64,
+                },
+                "manifest_sha256": manifest_hash,
+                "new_active": {
+                    "asset_set_generation": 3,
+                    "asset_set_id": "wall-production-v1",
+                    "manifest_sha256": manifest_hash,
+                },
+                "previous_active": {"status": "absent"},
+                "promotion_plan_sha256": "3" * 64,
+                "receipt_id": "receipt-release-01",
+                "schema_version": 1,
+                "tool_commit": "4" * 40,
+                "tool_tree": "5" * 40,
+            }
+            receipt = root / "promotion-receipt.json"
+            receipt.write_bytes(self.projector.canonical_bytes(receipt_payload))
+
+            projection = self.projector.project_release(manifest, receipt)
+
+            self.assertEqual(projection["authority"], "release_approved")
+            self.assertEqual(projection["review_status"], "art_approved")
+            self.assertIsNone(projection["candidate_normal"])
+            self.assertEqual(
+                projection["core"][0]["path"],
+                "wall_sets/3/models/wall_isolated.glb",
+            )
+            self.assertEqual(
+                projection["receipt"]["path"],
+                "wall_sets/3/authority/promotion-receipt.json",
+            )
+
+    def test_release_projection_rejects_receipt_for_another_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest = self.manifest(root)
+            payload = json.loads(manifest.read_text())
+            payload["manifest_mode"] = "final"
+            payload["normal_decision"] = "rejected"
+            payload["production"]["optional"] = []
+            payload["art_review"] = {"review_status": "art_approved"}
+            manifest.write_text(json.dumps(payload), encoding="utf-8")
+            receipt = root / "promotion-receipt.json"
+            receipt.write_bytes(
+                self.projector.canonical_bytes(
+                    {
+                        "asset_set_generation": 3,
+                        "asset_set_id": "wall-production-v1",
+                        "manifest_sha256": "f" * 64,
+                        "new_active": {},
+                        "schema_version": 1,
+                    }
+                )
+            )
+            with self.assertRaisesRegex(
+                self.projector.ProjectionError, "receipt binding differs"
+            ):
+                self.projector.project_release(manifest, receipt)
 
 
 if __name__ == "__main__":

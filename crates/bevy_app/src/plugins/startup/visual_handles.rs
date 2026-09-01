@@ -305,25 +305,6 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
             structural_material(LinearRgba::new(0.75, 0.38, 0.12, 1.0)),
         )
     };
-    let mut wall_production_complete =
-        make_topdown_structural_material(LinearRgba::WHITE, indoor_light_field.clone());
-    wall_production_complete.base.base_color_texture = Some(production_wall_assets.albedo.clone());
-    wall_production_complete.base.emissive = LinearRgba::WHITE;
-    wall_production_complete.base.emissive_texture = Some(production_wall_assets.emissive.clone());
-    let wall_production_complete = structural_materials.add(wall_production_complete);
-    let mut wall_production_provisional = make_topdown_structural_material(
-        LinearRgba::new(1.0, 1.0, 1.0, 0.9),
-        indoor_light_field.clone(),
-    );
-    wall_production_provisional.base.base_color_texture =
-        Some(production_wall_assets.albedo.clone());
-    wall_production_provisional.base.emissive = LinearRgba::WHITE;
-    wall_production_provisional.base.emissive_texture =
-        Some(production_wall_assets.emissive.clone());
-    let wall_production_provisional = structural_materials.add(with_topdown_alpha_mode(
-        wall_production_provisional,
-        AlphaMode::Blend,
-    ));
     let mut billboard_material = |image: Handle<Image>| {
         materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -347,10 +328,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     };
 
     commands.insert_resource(production_wall_assets);
-    commands.insert_resource(ProductionWallMaterialPool {
-        complete: wall_production_complete,
-        provisional: wall_production_provisional,
-    });
+    commands.insert_resource(ProductionWallMaterialPool::default());
 
     commands.insert_resource(Building3dHandles {
         wall_mesh,

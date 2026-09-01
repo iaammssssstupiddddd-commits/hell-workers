@@ -5,6 +5,7 @@ use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use bevy::asset::{AssetLoader, LoadContext, LoadState, io::Reader};
+use bevy::ecs::system::SystemParam;
 use bevy::gltf::GltfAssetLabel;
 use bevy::prelude::*;
 use hw_visual::TopDownStructuralMaterial;
@@ -35,13 +36,23 @@ static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WallAssetAuthority {
-    Candidate,
+    IsolatedCandidate,
+    ReleaseApproved,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WallNormalDecision {
     Pending,
+    Adopted,
+    Rejected,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WallArtReviewStatus {
+    ArtApproved,
+    Candidate,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,18 +64,89 @@ pub struct WallAssetFileRecord {
     pub sha256: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WallAssetReceiptRecord {
+    pub bytes: u64,
+    pub path: String,
+    pub sha256: String,
+}
+
 #[derive(Asset, TypePath, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WallAssetSetManifest {
     pub asset_set_generation: u64,
     pub asset_set_id: String,
     pub authority: WallAssetAuthority,
-    pub candidate_normal: WallAssetFileRecord,
+    pub candidate_normal: Option<WallAssetFileRecord>,
     pub core: Vec<WallAssetFileRecord>,
     pub manifest_sha256: String,
     pub normal_decision: WallNormalDecision,
-    pub receipt: Option<serde_json::Value>,
+    pub receipt: Option<WallAssetReceiptRecord>,
+    pub review_status: WallArtReviewStatus,
     pub schema_version: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WallReceiptApproval {
+    approved_at_utc: String,
+    path: String,
+    sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WallReceiptArtifact {
+    path: String,
+    sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WallReceiptActiveIdentity {
+    asset_set_generation: u64,
+    asset_set_id: String,
+    manifest_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, untagged)]
+enum WallReceiptPreviousActive {
+    Absent {
+        status: WallReceiptPreviousStatus,
+    },
+    Present {
+        asset_set_generation: u64,
+        manifest_sha256: String,
+        receipt_sha256: String,
+        sha256: String,
+        status: WallReceiptPreviousStatus,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WallReceiptPreviousStatus {
+    Absent,
+    Present,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WallPromotionReceipt {
+    approval: WallReceiptApproval,
+    asset_set_generation: u64,
+    asset_set_id: String,
+    m5_evidence_bundle: WallReceiptArtifact,
+    manifest_sha256: String,
+    new_active: WallReceiptActiveIdentity,
+    previous_active: WallReceiptPreviousActive,
+    promotion_plan_sha256: String,
+    receipt_id: String,
+    schema_version: u32,
+    tool_commit: String,
+    tool_tree: String,
 }
 
 #[derive(Default, TypePath)]
@@ -118,6 +200,27 @@ fn valid_sha256(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
+fn valid_git_oid(value: &str) -> bool {
+    value.len() == 40
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn runtime_core_path(generation: u64, source_path: &str, role: &str) -> String {
+    let relative = if role.starts_with("mesh:") {
+        format!(
+            "models/{}",
+            source_path
+                .rsplit_once('/')
+                .map_or(source_path, |(_, name)| name)
+        )
+    } else {
+        source_path.to_string()
+    };
+    format!("wall_sets/{generation}/{relative}")
+}
+
 pub fn decode_canonical_wallset(
     bytes: &[u8],
 ) -> Result<WallAssetSetManifest, WallAssetSetLoadError> {
@@ -135,26 +238,80 @@ pub fn decode_canonical_wallset(
         "asset-set generation is zero",
     )?;
     contract(
-        manifest.authority == WallAssetAuthority::Candidate,
-        "candidate loader authority differs",
-    )?;
-    contract(
-        manifest.normal_decision == WallNormalDecision::Pending,
-        "candidate normal decision differs",
-    )?;
-    contract(manifest.receipt.is_none(), "candidate receipt must be null")?;
-    contract(
         valid_sha256(&manifest.manifest_sha256),
         "manifest hash differs",
     )?;
+    let expected_core_len = match manifest.normal_decision {
+        WallNormalDecision::Adopted => CORE_INVENTORY.len() + 1,
+        WallNormalDecision::Pending | WallNormalDecision::Rejected => CORE_INVENTORY.len(),
+    };
     contract(
-        manifest.core.len() == CORE_INVENTORY.len(),
+        manifest.core.len() == expected_core_len,
         "core inventory length differs",
     )?;
     for (record, (path, role)) in manifest.core.iter().zip(CORE_INVENTORY) {
-        validate_record(record, path, role)?;
+        let expected_path = match manifest.authority {
+            WallAssetAuthority::IsolatedCandidate => path.to_string(),
+            WallAssetAuthority::ReleaseApproved => {
+                runtime_core_path(manifest.asset_set_generation, path, role)
+            }
+        };
+        validate_record(record, &expected_path, role)?;
     }
-    validate_record(&manifest.candidate_normal, NORMAL_PATH, "texture:normal")?;
+    match manifest.authority {
+        WallAssetAuthority::IsolatedCandidate => {
+            contract(
+                manifest.normal_decision == WallNormalDecision::Pending,
+                "candidate normal decision differs",
+            )?;
+            contract(
+                manifest.review_status == WallArtReviewStatus::Candidate,
+                "candidate review status differs",
+            )?;
+            contract(manifest.receipt.is_none(), "candidate receipt must be null")?;
+            let candidate_normal = manifest.candidate_normal.as_ref().ok_or_else(|| {
+                WallAssetSetLoadError::Contract("candidate normal is absent".into())
+            })?;
+            validate_record(candidate_normal, NORMAL_PATH, "texture:normal")?;
+        }
+        WallAssetAuthority::ReleaseApproved => {
+            contract(
+                manifest.normal_decision != WallNormalDecision::Pending,
+                "release normal decision is pending",
+            )?;
+            contract(
+                manifest.review_status == WallArtReviewStatus::ArtApproved,
+                "release review status differs",
+            )?;
+            contract(
+                manifest.candidate_normal.is_none(),
+                "release candidate normal must be null",
+            )?;
+            let receipt = manifest.receipt.as_ref().ok_or_else(|| {
+                WallAssetSetLoadError::Contract("release receipt is absent".into())
+            })?;
+            let expected_receipt = format!(
+                "wall_sets/{}/authority/promotion-receipt.json",
+                manifest.asset_set_generation
+            );
+            validate_receipt_record(receipt, &expected_receipt)?;
+            if manifest.normal_decision == WallNormalDecision::Adopted {
+                let record = manifest
+                    .core
+                    .last()
+                    .expect("adopted core length checked above");
+                validate_record(
+                    record,
+                    &runtime_core_path(
+                        manifest.asset_set_generation,
+                        NORMAL_PATH,
+                        "texture:normal",
+                    ),
+                    "texture:normal",
+                )?;
+            }
+        }
+    }
     Ok(manifest)
 }
 
@@ -167,6 +324,94 @@ fn validate_record(
     contract(record.role == role, format!("{path} role differs"))?;
     contract(record.bytes > 0, format!("{path} byte length is zero"))?;
     contract(valid_sha256(&record.sha256), format!("{path} hash differs"))
+}
+
+fn validate_receipt_record(
+    record: &WallAssetReceiptRecord,
+    path: &str,
+) -> Result<(), WallAssetSetLoadError> {
+    contract(record.path == path, "receipt path differs")?;
+    contract(record.bytes > 0, "receipt byte length is zero")?;
+    contract(valid_sha256(&record.sha256), "receipt hash differs")
+}
+
+fn decode_canonical_receipt(
+    bytes: &[u8],
+    manifest: &WallAssetSetManifest,
+) -> Result<WallPromotionReceipt, WallAssetSetLoadError> {
+    let receipt: WallPromotionReceipt = serde_json::from_slice(bytes)?;
+    let mut canonical = serde_json::to_vec(&receipt)?;
+    canonical.push(b'\n');
+    contract(
+        bytes == canonical,
+        "promotion receipt JSON is not canonical",
+    )?;
+    contract(
+        receipt.schema_version == 1 && receipt.asset_set_id == ASSET_SET_ID,
+        "promotion receipt identity differs",
+    )?;
+    contract(
+        receipt.asset_set_generation == manifest.asset_set_generation
+            && receipt.manifest_sha256 == manifest.manifest_sha256,
+        "promotion receipt payload binding differs",
+    )?;
+    contract(
+        receipt.new_active
+            == (WallReceiptActiveIdentity {
+                asset_set_generation: manifest.asset_set_generation,
+                asset_set_id: ASSET_SET_ID.to_string(),
+                manifest_sha256: manifest.manifest_sha256.clone(),
+            }),
+        "promotion receipt new identity differs",
+    )?;
+    contract(
+        valid_sha256(&receipt.promotion_plan_sha256)
+            && valid_sha256(&receipt.m5_evidence_bundle.sha256)
+            && valid_sha256(&receipt.approval.sha256),
+        "promotion receipt authority hash differs",
+    )?;
+    contract(
+        receipt.m5_evidence_bundle.path == "evidence/m5-evidence-bundle.json"
+            && receipt.approval.path == "evidence/release-approval.json"
+            && !receipt.approval.approved_at_utc.is_empty(),
+        "promotion receipt authority locator differs",
+    )?;
+    contract(
+        (8..=128).contains(&receipt.receipt_id.len())
+            && receipt.receipt_id.bytes().enumerate().all(|(index, byte)| {
+                byte.is_ascii_lowercase()
+                    || byte.is_ascii_digit()
+                    || (index > 0 && matches!(byte, b'.' | b'_' | b'-'))
+            }),
+        "promotion receipt ID differs",
+    )?;
+    contract(
+        valid_git_oid(&receipt.tool_commit) && valid_git_oid(&receipt.tool_tree),
+        "promotion receipt tool identity differs",
+    )?;
+    match &receipt.previous_active {
+        WallReceiptPreviousActive::Absent { status } => contract(
+            *status == WallReceiptPreviousStatus::Absent,
+            "promotion receipt absent preimage differs",
+        )?,
+        WallReceiptPreviousActive::Present {
+            asset_set_generation,
+            manifest_sha256,
+            receipt_sha256,
+            sha256,
+            status,
+        } => {
+            contract(
+                *status == WallReceiptPreviousStatus::Present
+                    && *asset_set_generation > 0
+                    && valid_sha256(manifest_sha256)
+                    && valid_sha256(receipt_sha256)
+                    && valid_sha256(sha256),
+                "promotion receipt present preimage differs",
+            )?;
+        }
+    }
+    Ok(receipt)
 }
 
 impl AssetLoader for WallAssetSetLoader {
@@ -183,6 +428,21 @@ impl AssetLoader for WallAssetSetLoader {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
         let manifest = decode_canonical_wallset(&bytes)?;
+        if let Some(receipt) = &manifest.receipt {
+            let payload = load_context
+                .read_asset_bytes(receipt.path.clone())
+                .await
+                .map_err(|error| WallAssetSetLoadError::Contract(error.to_string()))?;
+            contract(
+                payload.len() as u64 == receipt.bytes,
+                "promotion receipt byte length differs",
+            )?;
+            contract(
+                format!("{:x}", Sha256::digest(&payload)) == receipt.sha256,
+                "promotion receipt actual bytes hash differs",
+            )?;
+            decode_canonical_receipt(&payload, &manifest)?;
+        }
         for record in &manifest.core {
             let payload = load_context
                 .read_asset_bytes(record.path.clone())
@@ -206,41 +466,53 @@ impl AssetLoader for WallAssetSetLoader {
     }
 }
 
-#[derive(Resource, Clone)]
-pub struct ProductionWallAssetPool {
-    pub manifest: Handle<WallAssetSetManifest>,
-    pub meshes: [Handle<Mesh>; 6],
-    pub albedo: Handle<Image>,
-    pub emissive: Handle<Image>,
-    pub candidate_normal: Handle<Image>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WallAssetSetIdentity {
+    pub asset_set_generation: u64,
+    pub authority: WallAssetAuthority,
+    pub manifest_sha256: String,
 }
 
-impl ProductionWallAssetPool {
-    pub fn load(asset_server: &AssetServer) -> Self {
-        let meshes = std::array::from_fn(|index| {
-            let path = CORE_INVENTORY[index].0;
-            asset_server.load(
-                GltfAssetLabel::Primitive {
-                    mesh: 0,
-                    primitive: 0,
-                }
-                .from_asset(path),
-            )
-        });
+impl From<&WallAssetSetManifest> for WallAssetSetIdentity {
+    fn from(manifest: &WallAssetSetManifest) -> Self {
         Self {
-            manifest: asset_server.load(WALLSET_PATH),
-            meshes,
-            albedo: asset_server.load(CORE_INVENTORY[6].0),
-            emissive: asset_server.load(CORE_INVENTORY[7].0),
-            candidate_normal: asset_server.load(NORMAL_PATH),
+            asset_set_generation: manifest.asset_set_generation,
+            authority: manifest.authority,
+            manifest_sha256: manifest.manifest_sha256.clone(),
         }
     }
 }
 
+#[derive(Clone)]
+pub struct ResolvedProductionWallAssets {
+    pub identity: WallAssetSetIdentity,
+    pub meshes: [Handle<Mesh>; 6],
+    pub albedo: Handle<Image>,
+    pub emissive: Handle<Image>,
+    pub normal: Option<Handle<Image>>,
+    pub candidate_normal: Option<Handle<Image>>,
+}
+
 #[derive(Resource, Clone)]
+pub struct ProductionWallAssetPool {
+    pub manifest: Handle<WallAssetSetManifest>,
+    pub resolved: Option<ResolvedProductionWallAssets>,
+}
+
+impl ProductionWallAssetPool {
+    pub fn load(asset_server: &AssetServer) -> Self {
+        Self {
+            manifest: asset_server.load(WALLSET_PATH),
+            resolved: None,
+        }
+    }
+}
+
+#[derive(Resource, Clone, Default)]
 pub struct ProductionWallMaterialPool {
-    pub complete: Handle<TopDownStructuralMaterial>,
-    pub provisional: Handle<TopDownStructuralMaterial>,
+    pub identity: Option<WallAssetSetIdentity>,
+    pub complete: Option<Handle<TopDownStructuralMaterial>>,
+    pub provisional: Option<Handle<TopDownStructuralMaterial>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -255,12 +527,14 @@ pub enum WallAssetReadinessState {
     Fallback(WallAssetFallbackReason),
     Eligible {
         asset_set_generation: u64,
+        authority: WallAssetAuthority,
         manifest_sha256: String,
     },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WallOptionalAssetState {
+    NotPresent,
     Loading,
     Ready,
     Failed,
@@ -287,17 +561,33 @@ impl Default for WallAssetReadiness {
     }
 }
 
-#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
 pub struct WallAssetCandidatePolicy {
-    pub allow_candidate: bool,
+    pub allowed_generation: Option<u64>,
+    pub allowed_manifest_sha256: Option<String>,
 }
 
 impl Default for WallAssetCandidatePolicy {
     fn default() -> Self {
+        let enabled = std::env::var_os("HW_WALL_CANDIDATE").is_some_and(|value| value == "1");
+        let generation = std::env::var("HW_WALL_CANDIDATE_GENERATION")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|value| *value > 0);
+        let manifest_sha256 = std::env::var("HW_WALL_CANDIDATE_MANIFEST_SHA256")
+            .ok()
+            .filter(|value| valid_sha256(value));
         Self {
-            allow_candidate: std::env::var_os("HW_WALL_CANDIDATE")
-                .is_some_and(|value| value == "1"),
+            allowed_generation: enabled.then_some(generation).flatten(),
+            allowed_manifest_sha256: enabled.then_some(manifest_sha256).flatten(),
         }
+    }
+}
+
+impl WallAssetCandidatePolicy {
+    fn allows(&self, manifest: &WallAssetSetManifest) -> bool {
+        self.allowed_generation == Some(manifest.asset_set_generation)
+            && self.allowed_manifest_sha256.as_deref() == Some(&manifest.manifest_sha256)
     }
 }
 
@@ -320,7 +610,7 @@ fn required_load_state(
 }
 
 fn aggregate_state(
-    allow_candidate: bool,
+    candidate_policy: &WallAssetCandidatePolicy,
     manifest: Option<&WallAssetSetManifest>,
     required: impl IntoIterator<Item = RequiredLoadState>,
 ) -> WallAssetReadinessState {
@@ -337,46 +627,168 @@ fn aggregate_state(
     if saw_loading || manifest.is_none() {
         return WallAssetReadinessState::Loading;
     }
-    if !allow_candidate {
+    let manifest = manifest.expect("manifest presence checked above");
+    if manifest.authority == WallAssetAuthority::IsolatedCandidate
+        && !candidate_policy.allows(manifest)
+    {
         return WallAssetReadinessState::Fallback(WallAssetFallbackReason::CandidateDisabled);
     }
-    let manifest = manifest.expect("manifest presence checked above");
     WallAssetReadinessState::Eligible {
         asset_set_generation: manifest.asset_set_generation,
+        authority: manifest.authority,
         manifest_sha256: manifest.manifest_sha256.clone(),
     }
 }
 
+fn record_by_role<'a>(manifest: &'a WallAssetSetManifest, role: &str) -> &'a WallAssetFileRecord {
+    manifest
+        .core
+        .iter()
+        .find(|record| record.role == role)
+        .unwrap_or_else(|| panic!("validated Wall manifest lost role {role}"))
+}
+
+fn resolve_asset_handles(
+    asset_server: &AssetServer,
+    manifest: &WallAssetSetManifest,
+) -> ResolvedProductionWallAssets {
+    let meshes = std::array::from_fn(|index| {
+        let record = record_by_role(manifest, CORE_INVENTORY[index].1);
+        asset_server.load(
+            GltfAssetLabel::Primitive {
+                mesh: 0,
+                primitive: 0,
+            }
+            .from_asset(record.path.clone()),
+        )
+    });
+    let candidate_normal = manifest
+        .candidate_normal
+        .as_ref()
+        .map(|record| asset_server.load(record.path.clone()));
+    let normal = (manifest.normal_decision == WallNormalDecision::Adopted)
+        .then(|| asset_server.load(record_by_role(manifest, "texture:normal").path.clone()));
+    ResolvedProductionWallAssets {
+        identity: manifest.into(),
+        meshes,
+        albedo: asset_server.load(record_by_role(manifest, "texture:albedo").path.clone()),
+        emissive: asset_server.load(record_by_role(manifest, "texture:emissive").path.clone()),
+        normal,
+        candidate_normal,
+    }
+}
+
+fn initialize_material_handles(
+    assets: &ResolvedProductionWallAssets,
+    indoor_light_field: Handle<Image>,
+    structural_materials: &mut Assets<TopDownStructuralMaterial>,
+) -> ProductionWallMaterialPool {
+    use hw_visual::{make_topdown_structural_material, with_topdown_alpha_mode};
+
+    let mut complete =
+        make_topdown_structural_material(LinearRgba::WHITE, indoor_light_field.clone());
+    complete.base.base_color_texture = Some(assets.albedo.clone());
+    complete.base.emissive = LinearRgba::WHITE;
+    complete.base.emissive_texture = Some(assets.emissive.clone());
+    complete.base.normal_map_texture = assets.normal.clone();
+    let complete = structural_materials.add(complete);
+
+    let mut provisional =
+        make_topdown_structural_material(LinearRgba::new(1.0, 1.0, 1.0, 0.9), indoor_light_field);
+    provisional.base.base_color_texture = Some(assets.albedo.clone());
+    provisional.base.emissive = LinearRgba::WHITE;
+    provisional.base.emissive_texture = Some(assets.emissive.clone());
+    provisional.base.normal_map_texture = assets.normal.clone();
+    let provisional =
+        structural_materials.add(with_topdown_alpha_mode(provisional, AlphaMode::Blend));
+
+    ProductionWallMaterialPool {
+        identity: Some(assets.identity.clone()),
+        complete: Some(complete),
+        provisional: Some(provisional),
+    }
+}
+
+#[derive(SystemParam)]
+pub struct WallAssetReadinessParams<'w> {
+    asset_server: Res<'w, AssetServer>,
+    manifests: Res<'w, Assets<WallAssetSetManifest>>,
+    pool: ResMut<'w, ProductionWallAssetPool>,
+    materials: ResMut<'w, ProductionWallMaterialPool>,
+    structural_materials: ResMut<'w, Assets<TopDownStructuralMaterial>>,
+    indoor_light: Res<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
+    policy: Res<'w, WallAssetCandidatePolicy>,
+}
+
 pub fn update_wall_asset_readiness_system(
-    asset_server: Res<AssetServer>,
-    manifests: Res<Assets<WallAssetSetManifest>>,
-    pool: Res<ProductionWallAssetPool>,
-    materials: Res<ProductionWallMaterialPool>,
-    policy: Res<WallAssetCandidatePolicy>,
+    mut params: WallAssetReadinessParams,
     mut readiness: ResMut<WallAssetReadiness>,
 ) {
-    let _finite_material_pool = (materials.complete.id(), materials.provisional.id());
-    let manifest_state = required_load_state(&asset_server, pool.manifest.id());
+    let manifest_state = required_load_state(&params.asset_server, params.pool.manifest.id());
     let manifest = if manifest_state == RequiredLoadState::Ready {
-        manifests.get(&pool.manifest)
+        params.manifests.get(&params.pool.manifest)
     } else {
         None
     };
+    if let Some(manifest) = manifest {
+        let identity = WallAssetSetIdentity::from(manifest);
+        if params.pool.resolved.as_ref().map(|assets| &assets.identity) != Some(&identity) {
+            params.pool.resolved = Some(resolve_asset_handles(&params.asset_server, manifest));
+        }
+        let resolved = params
+            .pool
+            .resolved
+            .as_ref()
+            .expect("resolved Wall assets were initialized above");
+        if params.materials.identity.as_ref() != Some(&identity) {
+            if let Some(handle) = params.materials.complete.take() {
+                params.structural_materials.remove(handle.id());
+            }
+            if let Some(handle) = params.materials.provisional.take() {
+                params.structural_materials.remove(handle.id());
+            }
+            *params.materials = initialize_material_handles(
+                resolved,
+                params.indoor_light.handle().clone(),
+                &mut params.structural_materials,
+            );
+        }
+    }
+    let resolved = params.pool.resolved.as_ref();
+    let material_state = if resolved.is_some()
+        && params.materials.complete.is_some()
+        && params.materials.provisional.is_some()
+    {
+        RequiredLoadState::Ready
+    } else {
+        RequiredLoadState::Loading
+    };
     let required = std::iter::once(manifest_state)
-        .chain(
-            pool.meshes
+        .chain(std::iter::once(material_state))
+        .chain(resolved.into_iter().flat_map(|assets| {
+            assets
+                .meshes
                 .iter()
-                .map(|handle| required_load_state(&asset_server, handle.id())),
-        )
-        .chain([
-            required_load_state(&asset_server, pool.albedo.id()),
-            required_load_state(&asset_server, pool.emissive.id()),
-        ]);
-    let next_state = aggregate_state(policy.allow_candidate, manifest, required);
-    let next_normal = match required_load_state(&asset_server, pool.candidate_normal.id()) {
-        RequiredLoadState::Loading => WallOptionalAssetState::Loading,
-        RequiredLoadState::Ready => WallOptionalAssetState::Ready,
-        RequiredLoadState::Failed => WallOptionalAssetState::Failed,
+                .map(|handle| required_load_state(&params.asset_server, handle.id()))
+                .chain([
+                    required_load_state(&params.asset_server, assets.albedo.id()),
+                    required_load_state(&params.asset_server, assets.emissive.id()),
+                ])
+                .chain(
+                    assets
+                        .normal
+                        .iter()
+                        .map(|handle| required_load_state(&params.asset_server, handle.id())),
+                )
+        }));
+    let next_state = aggregate_state(&params.policy, manifest, required);
+    let next_normal = match resolved.and_then(|assets| assets.candidate_normal.as_ref()) {
+        None => WallOptionalAssetState::NotPresent,
+        Some(handle) => match required_load_state(&params.asset_server, handle.id()) {
+            RequiredLoadState::Loading => WallOptionalAssetState::Loading,
+            RequiredLoadState::Ready => WallOptionalAssetState::Ready,
+            RequiredLoadState::Failed => WallOptionalAssetState::Failed,
+        },
     };
     if readiness.state != next_state {
         readiness.state = next_state;
@@ -412,8 +824,8 @@ mod tests {
         WallAssetSetManifest {
             asset_set_generation: 1,
             asset_set_id: ASSET_SET_ID.to_string(),
-            authority: WallAssetAuthority::Candidate,
-            candidate_normal: record(NORMAL_PATH, "texture:normal"),
+            authority: WallAssetAuthority::IsolatedCandidate,
+            candidate_normal: Some(record(NORMAL_PATH, "texture:normal")),
             core: CORE_INVENTORY
                 .iter()
                 .map(|(path, role)| record(path, role))
@@ -421,7 +833,73 @@ mod tests {
             manifest_sha256: "b".repeat(64),
             normal_decision: WallNormalDecision::Pending,
             receipt: None,
+            review_status: WallArtReviewStatus::Candidate,
             schema_version: 1,
+        }
+    }
+
+    fn release_fixture() -> WallAssetSetManifest {
+        WallAssetSetManifest {
+            asset_set_generation: 7,
+            asset_set_id: ASSET_SET_ID.to_string(),
+            authority: WallAssetAuthority::ReleaseApproved,
+            candidate_normal: None,
+            core: CORE_INVENTORY
+                .iter()
+                .map(|(path, role)| record(&runtime_core_path(7, path, role), role))
+                .collect(),
+            manifest_sha256: "b".repeat(64),
+            normal_decision: WallNormalDecision::Rejected,
+            receipt: Some(WallAssetReceiptRecord {
+                bytes: 1,
+                path: "wall_sets/7/authority/promotion-receipt.json".to_string(),
+                sha256: "c".repeat(64),
+            }),
+            review_status: WallArtReviewStatus::ArtApproved,
+            schema_version: 1,
+        }
+    }
+
+    fn promotion_receipt(manifest: &WallAssetSetManifest) -> WallPromotionReceipt {
+        WallPromotionReceipt {
+            approval: WallReceiptApproval {
+                approved_at_utc: "2026-09-01T00:00:00Z".to_string(),
+                path: "evidence/release-approval.json".to_string(),
+                sha256: "1".repeat(64),
+            },
+            asset_set_generation: manifest.asset_set_generation,
+            asset_set_id: ASSET_SET_ID.to_string(),
+            m5_evidence_bundle: WallReceiptArtifact {
+                path: "evidence/m5-evidence-bundle.json".to_string(),
+                sha256: "2".repeat(64),
+            },
+            manifest_sha256: manifest.manifest_sha256.clone(),
+            new_active: WallReceiptActiveIdentity {
+                asset_set_generation: manifest.asset_set_generation,
+                asset_set_id: ASSET_SET_ID.to_string(),
+                manifest_sha256: manifest.manifest_sha256.clone(),
+            },
+            previous_active: WallReceiptPreviousActive::Absent {
+                status: WallReceiptPreviousStatus::Absent,
+            },
+            promotion_plan_sha256: "3".repeat(64),
+            receipt_id: "receipt-release-01".to_string(),
+            schema_version: 1,
+            tool_commit: "4".repeat(40),
+            tool_tree: "5".repeat(40),
+        }
+    }
+
+    fn encoded_receipt(receipt: &WallPromotionReceipt) -> Vec<u8> {
+        let mut bytes = serde_json::to_vec(receipt).unwrap();
+        bytes.push(b'\n');
+        bytes
+    }
+
+    fn candidate_policy(manifest: Option<&WallAssetSetManifest>) -> WallAssetCandidatePolicy {
+        WallAssetCandidatePolicy {
+            allowed_generation: manifest.map(|value| value.asset_set_generation),
+            allowed_manifest_sha256: manifest.map(|value| value.manifest_sha256.clone()),
         }
     }
 
@@ -438,6 +916,23 @@ mod tests {
             decode_canonical_wallset(&encoded(&manifest)).unwrap(),
             manifest
         );
+    }
+
+    #[test]
+    fn canonical_release_passes_with_generation_scoped_paths() {
+        let manifest = release_fixture();
+        assert_eq!(
+            decode_canonical_wallset(&encoded(&manifest)).unwrap(),
+            manifest
+        );
+    }
+
+    #[test]
+    fn release_without_receipt_is_rejected() {
+        let mut manifest = release_fixture();
+        manifest.receipt = None;
+        let error = decode_canonical_wallset(&encoded(&manifest)).unwrap_err();
+        assert!(error.to_string().contains("receipt is absent"));
     }
 
     #[test]
@@ -467,7 +962,11 @@ mod tests {
     #[test]
     fn candidate_receipt_is_rejected() {
         let mut manifest = fixture();
-        manifest.receipt = Some(serde_json::json!({"unexpected": true}));
+        manifest.receipt = Some(WallAssetReceiptRecord {
+            bytes: 1,
+            path: "unexpected".to_string(),
+            sha256: "c".repeat(64),
+        });
         let error = decode_canonical_wallset(&encoded(&manifest)).unwrap_err();
         assert!(error.to_string().contains("receipt must be null"));
     }
@@ -477,23 +976,35 @@ mod tests {
         let manifest = fixture();
         let states = [RequiredLoadState::Ready; 9];
         assert_eq!(
-            aggregate_state(false, Some(&manifest), states),
+            aggregate_state(&candidate_policy(None), Some(&manifest), states),
             WallAssetReadinessState::Fallback(WallAssetFallbackReason::CandidateDisabled)
         );
         assert!(matches!(
-            aggregate_state(true, Some(&manifest), states),
+            aggregate_state(&candidate_policy(Some(&manifest)), Some(&manifest), states),
+            WallAssetReadinessState::Eligible { .. }
+        ));
+        let mut wrong_hash_policy = candidate_policy(Some(&manifest));
+        wrong_hash_policy.allowed_manifest_sha256 = Some("f".repeat(64));
+        assert_eq!(
+            aggregate_state(&wrong_hash_policy, Some(&manifest), states),
+            WallAssetReadinessState::Fallback(WallAssetFallbackReason::CandidateDisabled)
+        );
+        let mut release = fixture();
+        release.authority = WallAssetAuthority::ReleaseApproved;
+        assert!(matches!(
+            aggregate_state(&candidate_policy(None), Some(&release), states),
             WallAssetReadinessState::Eligible { .. }
         ));
         let mut missing = states;
         missing[4] = RequiredLoadState::Loading;
         assert_eq!(
-            aggregate_state(true, Some(&manifest), missing),
+            aggregate_state(&candidate_policy(Some(&manifest)), Some(&manifest), missing),
             WallAssetReadinessState::Loading
         );
         let mut failed = states;
         failed[7] = RequiredLoadState::Failed;
         assert_eq!(
-            aggregate_state(true, Some(&manifest), failed),
+            aggregate_state(&candidate_policy(Some(&manifest)), Some(&manifest), failed),
             WallAssetReadinessState::Fallback(WallAssetFallbackReason::LoadFailed)
         );
     }
@@ -503,6 +1014,7 @@ mod tests {
         let mut readiness = WallAssetReadiness {
             state: WallAssetReadinessState::Eligible {
                 asset_set_generation: 1,
+                authority: WallAssetAuthority::IsolatedCandidate,
                 manifest_sha256: "b".repeat(64),
             },
             activation_revision: 4,
@@ -556,8 +1068,26 @@ mod tests {
             record.sha256 = format!("{:x}", Sha256::digest(payload.as_bytes()));
         }
         root.write(NORMAL_PATH, b"optional-normal");
-        manifest.candidate_normal.bytes = 15;
-        manifest.candidate_normal.sha256 = format!("{:x}", Sha256::digest(b"optional-normal"));
+        let candidate_normal = manifest.candidate_normal.as_mut().unwrap();
+        candidate_normal.bytes = 15;
+        candidate_normal.sha256 = format!("{:x}", Sha256::digest(b"optional-normal"));
+        root.write(WALLSET_PATH, &encoded(&manifest));
+        manifest
+    }
+
+    fn disk_release_fixture(root: &TestAssetRoot) -> WallAssetSetManifest {
+        let mut manifest = release_fixture();
+        for (ordinal, record) in manifest.core.iter_mut().enumerate() {
+            let payload = format!("release-core-payload-{ordinal}");
+            root.write(&record.path, payload.as_bytes());
+            record.bytes = payload.len() as u64;
+            record.sha256 = format!("{:x}", Sha256::digest(payload.as_bytes()));
+        }
+        let receipt_bytes = encoded_receipt(&promotion_receipt(&manifest));
+        let receipt = manifest.receipt.as_mut().unwrap();
+        receipt.bytes = receipt_bytes.len() as u64;
+        receipt.sha256 = format!("{:x}", Sha256::digest(&receipt_bytes));
+        root.write(&receipt.path, &receipt_bytes);
         root.write(WALLSET_PATH, &encoded(&manifest));
         manifest
     }
@@ -628,5 +1158,52 @@ mod tests {
             wait_for_terminal_load(&mut app, &handle),
             LoadState::Failed(_)
         ));
+    }
+
+    #[test]
+    fn bevy_loader_accepts_release_only_with_bound_receipt_bytes() {
+        let root = TestAssetRoot::new();
+        let expected = disk_release_fixture(&root);
+        let mut app = loader_app(&root.0);
+        let handle = app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut app, &handle),
+            LoadState::Loaded
+        ));
+        assert_eq!(
+            app.world()
+                .resource::<Assets<WallAssetSetManifest>>()
+                .get(&handle),
+            Some(&expected)
+        );
+    }
+
+    #[test]
+    fn bevy_loader_rejects_changed_release_receipt_bytes() {
+        let root = TestAssetRoot::new();
+        let manifest = disk_release_fixture(&root);
+        let receipt = manifest.receipt.unwrap();
+        root.write(&receipt.path, b"{}\n");
+        let mut app = loader_app(&root.0);
+        let handle = app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut app, &handle),
+            LoadState::Failed(_)
+        ));
+    }
+
+    #[test]
+    fn receipt_for_another_manifest_is_rejected() {
+        let manifest = release_fixture();
+        let mut receipt = promotion_receipt(&manifest);
+        receipt.manifest_sha256 = "f".repeat(64);
+        let error = decode_canonical_receipt(&encoded_receipt(&receipt), &manifest).unwrap_err();
+        assert!(error.to_string().contains("payload binding differs"));
     }
 }
