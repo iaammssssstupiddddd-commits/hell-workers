@@ -454,6 +454,9 @@ pub(crate) fn drive_perf_capture_system(
                 write_deconstruction_fixture_sidecar(&params.config, &params.deconstruction_fixture)
             });
             let result = result.and_then(|()| {
+                write_wall_density_fixture_sidecars(&params.config, &params.wall_density_fixture)
+            });
+            let result = result.and_then(|()| {
                 write_p02_presentation_sidecar(
                     &params.config,
                     calculate_p02_presentation(&params.checksum_queries),

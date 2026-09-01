@@ -1,7 +1,7 @@
 # アセット作成マイルストーン
 
 作成日: 2026-03-17
-最終更新: 2026-08-03（単一Scene RtT・TopDown hybrid方針へ再接続）
+最終更新: 2026-09-01（壁の本番アート化詳細計画を実行gateまで具体化）
 ステータス: 進行中（建築・terrain track継続、Soul GLB runtime trackはSuperseded）
 
 ---
@@ -11,6 +11,8 @@
 単一Scene RtT移行計画と連動するアセット制作のマイルストーン。旧Phase 3の完了履歴は`docs/plans/3d-rtt/milestone-roadmap.md`と`archived/phase3-implementation-plan-2026-03-16.md`に保存する。
 
 > **2026-08-03 方針変更:** Soul visible GLB固定、billboard廃止、全BuildingTypeのGLB化、section view用LOD0を新規作業の前提にしない。Soul GLB / animation / face atlasは完了履歴とfallback assetとして保持し、runtime表示は[`single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md`](single-scene-rtt-indoor-light-field-migration-plan-2026-08-03.md) M2の共有unlit billboardで再評価する。建築trackは同計画のpresentation mappingで`Structural3d`に分類された種類だけを対象に継続する。
+
+> **2026-08-31 壁track詳細化:** `MS-Asset-Pipeline`から`MS-Asset-Build-A`の制作、runtime接続、16接続形状、実機受入、canonical昇格は[`production-wall-art-plan-2026-08-31.md`](production-wall-art-plan-2026-08-31.md)を正本とする。下記の旧PoC条件と矛盾する場合は詳細計画を優先する。
 
 **基本方針**:
 - Soul GLB / AnimationGraph / face atlasは既存成果物として保持するが、新規runtime拡張は行わない。通常表示は共有unlit billboard PoCを正本候補とし、失敗時だけvisible GLB 1系統へfallbackする
@@ -25,7 +27,7 @@
 | Soul GLB / AnimationGraph / P1 clips / face atlas | ✅ 既存runtime成果物 | P02 billboardのfallback / animation sourceとしてのみ再利用を判断 |
 | `section_material.wgsl` / TerrainSurfaceMaterial / 3 LOD | ✅ 既存実装 | P00 baselineとP06 Light Field接続でTopDown表示を再受入 |
 | Familiar | ✅ 2D foregroundを維持 | 3D化しない。Wall depthが必要になった場合だけ別判断でbillboardへ移す |
-| 建築 GLB pipeline / wall PoC / `Structural3d` BuildingType | ❌ 未着手 | M2分類後、MS-Asset-Pipeline → Build-A → Build-B の順で進める |
+| 建築 GLB pipeline / wall PoC / `Structural3d` BuildingType | ❌ 未着手 | [`production-wall-art-plan-2026-08-31.md`](production-wall-art-plan-2026-08-31.md) M0〜M6でPipeline / Build-Aを閉じてからBuild-Bへ進む |
 
 `assets/` のバイナリは外部同期・gitignore 運用のため、「ファイル制作」と「コード側 runtime 接続」を分けて判定する。コード側の正は HEAD、バイナリ受入は外部 asset manifest と実機読込で確認する。
 
@@ -152,7 +154,7 @@ MS-P3-Pre-C（Camera角度確定）
   │         ├──→ MS-Asset-Terrain: 地形テクスチャ整備        ──→ MS-3-4 / MS-3-6
   │         └──→ MS-Asset-Pipeline: GLB生成パイプライン構築
   │                   │
-  │                   ├──→ MS-Asset-Build-A: 壁GLB PoC（4バリアント）  ──→ MS-3-5
+  │                   ├──→ MS-Asset-Build-A: 壁GLB PoC（6バリアント）  ──→ MS-3-5
   │                   └──→ MS-Asset-Build-B: 建築GLBフルセット         ──→ MS-3-5フル
 ```
 
@@ -312,6 +314,7 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 
 > **依存**: MS-P3-Pre-C（Camera3d 角度確定後。入力画像の撮影角度が定まる）
 > **ブロック先**: MS-Asset-Build-A
+> **詳細実行計画**: [`production-wall-art-plan-2026-08-31.md`](production-wall-art-plan-2026-08-31.md) M0〜M1
 
 **やること**:
 1. TRELLIS.2 / TripoSR の動作環境を確認する
@@ -319,51 +322,57 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 3. 生成 → Blender 品質確認 → LOD 調整 → `assets/models/` 配置の手順を文書化する
 4. テスト用（最も単純な形状：直線壁）でパイプラインを 1 周させる
 
-**Blender 品質ゲート（TopDown LOD1 基準）**:
-- LOD1: 100 三角形以下を目安（`section-material-proposal` §8.5 より）
-- LOD0: 現計画では制作要件にしない
+**Blender 品質ゲート（TopDown production mesh）**:
+- Wall production mesh: 150〜250 trianglesを目標、350 trianglesをhard capとする（現行`docs/rendering-performance.md`の専用予算を正とする）
+- wall専用runtime LOD切替や別LOD assetは現計画の制作要件にしない
 
 **成果物**: `docs/asset-pipeline-glb.md`（手順書）
 
 **完了条件**:
-- [ ] テスト用 GLB が `assets/models/` に配置されゲーム内で読み込める
+- [ ] テスト用 GLB が外部stagingからhash固定のprimary外・clean validation worktreeへprovisionされ、ゲーム内で読み込める
 - [ ] GLB 生成の手順書が存在する
 
 **ステータス**: [ ] 未着手
 
 ---
 
-### MS-Asset-Build-A: 壁GLB PoC（4バリアント）
+### MS-Asset-Build-A: 壁GLB PoC（6バリアント）
 
 > **依存**: MS-Asset-Pipeline 完了・MS-Asset-0 完了
-> **ブロック先**: 単一Scene RtT移行P02 / P06（構造3D分類とWall Light Field receiver）のPoC
+> **ブロック先**: 建築visual quality、MS-Asset-Build-B、新PC移行計画M4の最初のcanonical asset受入（P02 / P06のruntime契約は完了済み）
+> **詳細実行計画**: [`production-wall-art-plan-2026-08-31.md`](production-wall-art-plan-2026-08-31.md) M2〜M6。本節は成果物一覧だけを保持する。
 
-`billboard-camera-angle-proposal` §7 の壁メッシュ構成に従い、最初の 4 バリアントを制作する。
+`billboard-camera-angle-proposal` §7 の4形状案へ孤立・端を補い、16接続maskの意味を形状で保持する6バリアントを制作する。
 
 **制作ファイル**:
 | ファイル | 形状 | アウトライン検出 |
 | --- | --- | --- |
-| `assets/models/wall_straight.glb` | 直線 | 側面稜線あり |
-| `assets/models/wall_corner.glb` | L字 | **外側コーナー稜線あり**（エッジ検出に必須） |
-| `assets/models/wall_t_junction.glb` | T字 | 外側稜線あり |
-| `assets/models/wall_cross.glb` | 十字 | 外側稜線あり |
+| `assets/wall_sets/<GEN>/models/wall_isolated.glb` | 孤立 | 全周silhouette |
+| `assets/wall_sets/<GEN>/models/wall_end.glb` | 片端 | 接続側だけの腕と終端cap |
+| `assets/wall_sets/<GEN>/models/wall_straight.glb` | 直線 | 側面稜線あり |
+| `assets/wall_sets/<GEN>/models/wall_corner.glb` | L字 | **外側コーナー稜線あり**（エッジ検出に必須） |
+| `assets/wall_sets/<GEN>/models/wall_t_junction.glb` | T字 | 外側稜線あり |
+| `assets/wall_sets/<GEN>/models/wall_cross.glb` | 十字 | 外側稜線あり |
 
 **TopDown構造の仕様**:
-- `completed`層はWall接続形状、depth、directional shadow、Light Field receiverを成立させる
-- 建設中表現を3Dで維持する場合だけ`build_progress`によるY方向クリップを再利用する
+- `completed`層はWall接続形状、depth、directional shadowを成立させる。shared Light Field bindingは維持するが、現fragmentの未sample契約を壁作業だけで変更しない
+- 建設中表現は現行`ConstructionMask3dVisual`とProvisionalWall material遷移を維持し、未接続の`build_progress` clippingを本PoCの要件にしない
 - section cutで見せる内側層は制作要件にしない
+- 見た目の公称壁厚は各armの局所横断で`9.6 wu = 0.30 tile`とし、全腕の連続visible cross-sectionも9.6 wu未満へ細らせない。石・鉄・トゲ込み局所横断外形は12.8 wu以下、全6形状の接続境界は幅9.6 wuの同一profileとする
+- 論理占有は32×32 wuの1 cellを維持する。現行Door leafの5.76 wu厚はplaceholderであり、Wall厚の根拠や無隙間jambの受入値にはしない
 
-**LOD**:
-- LOD0: 現計画では予約のみ
-- LOD1: TopDown通常プレイ用（100三角形以下目安）
-- LOD2: ズームアウト時（後回し可）
+**Mesh tier**:
+- 本PoCはTopDown通常プレイ用production mesh 1段だけを作る（150〜250 triangles目標、350 triangles hard cap）
+- LOD0 / LOD2 assetとwall専用runtime LOD systemは本計画の非対象
 
 **完了条件**:
-- [ ] 4 バリアントが `assets/models/` に存在する
-- [ ] shared light-field対応materialでWall両側の照度が正しく見える（目視）
-- [ ] `build_progress` クリップで施工中アニメーションが動作する（目視）
+- [ ] 6 バリアントがprimary外のclean validation worktreeの`assets/wall_sets/<GEN>/models/`に存在し、Bevyで全件resident、fallback使用0である
+- [ ] 6 mesh＋Y軸回転でWall / Doorを含む全16接続maskが正しく見える
+- [ ] 全family / rotationで局所横断の連続壁体9.6 wu以上、装飾外形12.8 wu以下、境界port共通profileを満たす。14 px per tileでは内部色が残り、最大zoom-out 5ではHighの内部色1 px以上、Medium / Lowの最終合成silhouette連続を満たす
+- [ ] completed / provisionalが同じmesh topologyと有限shared material poolを使い、完成時はmaterialだけが遷移する
 - [ ] 現行TopDown斜視で「黒い石積み」の見た目が成立する
-- [ ] ポリゴン数が LOD1 基準（100 三角形以下）を満たす
+- [ ] 各production meshのポリゴン数がhard cap（350 triangles以下）を満たす
+- [ ] 専用wall galleryと既存P02 actual-window回帰がfail-closedで合格し、ユーザーが見た目を承認する
 
 **ステータス**: [ ] 未着手
 
@@ -378,7 +387,7 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 
 | ファイル | BuildingType | 備考 |
 | --- | --- | --- |
-| `assets/models/wall.glb` | Wall | 接続バリアントは Build-A の4形状から開始 |
+| `assets/wall_sets/<GEN>/models/wall_*.glb` | Wall | 接続バリアントは Build-A の6形状を使用。active `.wallset` projectionから参照 |
 | `assets/models/door.glb` | Door | open / closed の2状態 |
 | `assets/models/floor.glb` | Floor | 石畳。薄い slab で可 |
 | `assets/models/tank.glb` | Tank | empty / half / full は material または子 mesh で表現 |
@@ -431,7 +440,7 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 | MS-Asset-Char-Face | MS-3-Char-B | Soul の face atlas 状態連動の目視確認に必要 |
 | MS-Asset-Terrain | MS-3-4・MS-3-6 | 実装済み。MS-3-6 の最終目視受入だけ継続 |
 | MS-Asset-Pipeline | MS-Asset-Build-A | 建築 GLB の品質向上を開始する前提。MS-3-5 の material 契約は placeholder で先行可能 |
-| MS-Asset-Build-A | 建築 visual quality | 壁 4 バリアントの品質ゲート。MS-3-5 の material 契約は placeholder で先行可能 |
+| MS-Asset-Build-A | 建築 visual quality | 壁 6 バリアントの品質ゲート。MS-3-5 の material 契約は placeholder で先行可能 |
 | MS-Asset-Build-B | 建築 visual quality | `Structural3d`に分類された種類だけを最終GLBへ置換する |
 | MS-Asset-0 | MS-3-10 | 仮基準は完了。outline と壁ノーマルの PoC 受入が残る |
 
@@ -442,7 +451,7 @@ Familiar は Soul の本実装と表示方式再検討（MS-3-Fam-R）後に要�
 | 優先 | MS | 理由 |
 | --- | --- | --- |
 | P0 | MS-Asset-Pipeline | 建築 GLB の生成・Blender 品質確認・外部同期手順を確立する |
-| P1 | MS-Asset-Build-A | 直線・corner・T・cross の wall PoC で品質ゲートを固定する |
+| P1 | MS-Asset-Build-A | isolated・end・straight・corner・T・cross の wall PoC で品質ゲートを固定する |
 | P2 | MS-Asset-Build-B | M2で`Structural3d`に分類された建物だけを順次GLBへ置換する |
 | P2 | MS-Asset-0 residual | billboard alpha silhouetteと壁ノーマルのPoC受入値を確定する |
 | 完了 / fallback | Shader / Soul GLB / clips / face / terrain | 既存runtime接続済み。Soul系は新規本線にせず履歴とfallbackとして保持 |

@@ -1,0 +1,121 @@
+{
+  "cases": [
+    {
+      "connector_count": 192,
+      "mask_repetitions": 6,
+      "perf_size": "small",
+      "target_wall_count": 96,
+      "target_size": "N"
+    },
+    {
+      "connector_count": 768,
+      "mask_repetitions": 24,
+      "perf_size": "medium",
+      "target_wall_count": 384,
+      "target_size": "4N"
+    }
+  ],
+  "contract_id": "wall-density-v1",
+  "draw_gates": {
+    "completed": {
+      "draw_groups_4n_max": 6,
+      "draw_groups_4n_must_equal_n": true,
+      "draw_groups_n_max": 6
+    },
+    "provisional": {
+      "draw_groups_4n_max_formula": "4 * D_N + 6"
+    }
+  },
+  "environment": {
+    "adapter": "Intel",
+    "backend": "vulkan",
+    "dpi": 1.0,
+    "measure_seconds": 60,
+    "present_mode": "novsync",
+    "quality": "high",
+    "runs": 3,
+    "seed": 20260901,
+    "warmup_seconds": 30,
+    "window_backend": "x11",
+    "window_height": 720,
+    "window_width": 1280
+  },
+  "fixture": {
+    "camera_scale": 5.0,
+    "connector_kind": "door_blueprint",
+    "connector_offsets": {
+      "E": [
+        1,
+        0
+      ],
+      "N": [
+        0,
+        1
+      ],
+      "S": [
+        0,
+        -1
+      ],
+      "W": [
+        -1,
+        0
+      ]
+    },
+    "grid_layout": {
+      "columns": 20,
+      "origin": [
+        2,
+        2
+      ],
+      "row_major": true,
+      "stride": [
+        5,
+        5
+      ]
+    },
+    "mask_assignment": "target_ordinal_modulo_16",
+    "mask_bit_order": [
+      "N",
+      "S",
+      "W",
+      "E"
+    ],
+    "masks": [
+      "0000",
+      "0001",
+      "0010",
+      "0011",
+      "0100",
+      "0101",
+      "0110",
+      "0111",
+      "1000",
+      "1001",
+      "1010",
+      "1011",
+      "1100",
+      "1101",
+      "1110",
+      "1111"
+    ],
+    "specimens_must_not_connect": true,
+    "target_kind": "wall",
+    "target_phases": [
+      "completed",
+      "provisional"
+    ]
+  },
+  "measurement": {
+    "aggregation": "median_of_per_run_percentiles",
+    "mad_required": true,
+    "metrics": [
+      "p95",
+      "p99"
+    ],
+    "phases": [
+      "completed",
+      "provisional"
+    ]
+  },
+  "schema_version": 1
+}

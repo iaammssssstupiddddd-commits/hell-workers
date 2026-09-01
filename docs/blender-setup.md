@@ -216,7 +216,26 @@ tools/blender_ai_workflow/bin/verify-mcp-addon
 更新後は vendor tests、workflow tests、MCP stdio smoke を再実行します。
 upstream tag を動かす場合は、既存patchを無条件で当てず、差分を再監査してください。
 
-## 10. 既知の制約
+## 10. 壁M0の色校正
+
+壁の本番アート化では、Blender referenceとBevy actual-window captureを同じ5 patch contractで照合します。
+契約の正本は`tools/blender_ai_workflow/fixtures/wall-color-calibration-v1.json`です。stone、rust、
+dark-brown line、purpleの4色はunlit base-color経路としてD65 CIE Lab / CIEDE2000で比較し、
+purple emissiveは相対輝度liftだけを別判定します。
+
+Blender側は`render_color_calibration.py`で320×96、8-bit sRGB PNGとmetadataを
+`staging/reports/`へ生成します。metadataには実際のOCIO config path / SHA-256、runtime version、
+fallback状態、color pipeline、入力色、PNG SHA-256、source fingerprintが必要です。
+Bevy側artifactと揃った後、`verify_color_calibration.py`が中央16×16 px medianを再計算し、
+4 patch平均Delta E 2000 `<= 2.0`かつ各patch`<= 3.0`、emissive sanityをfail-closedで判定します。
+実行例と3つのgeometry / density / color fixtureの説明は
+[`tools/blender_ai_workflow/README.md`](../tools/blender_ai_workflow/README.md)を参照してください。
+
+現行Flatpakのconfig 2.5 / runtime 2.4.2は`fallback=true`として正しく記録されるため、
+diagnostic PNGが生成できても色gateはblockedのままです。互換環境で`fallback=false`の陽性証明を
+採取するまで、色承認とcanonical昇格を行いません。
+
+## 11. 既知の制約
 
 - Fedora Flatpak は Blender の OCIO config `2.5` を runtime OCIO `2.4.2` で読めず、
   fallback color management になります。geometry/render実行確認には使えますが、

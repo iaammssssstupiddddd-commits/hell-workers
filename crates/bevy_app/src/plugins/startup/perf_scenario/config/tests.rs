@@ -32,6 +32,7 @@ fn random_streams_are_stable_and_independent() {
         renderdoc_capture: false,
         rtt_light: None,
         behavior_case: None,
+        wall_phase: None,
         window_width: None,
         window_height: None,
         window_scale_factor: None,
@@ -177,6 +178,10 @@ fn every_enabled_fixture_freezes_until_the_initial_checkpoint() {
     assert!(!config.freezes_indoor_light_door_automation());
     assert!(!config.requires_p08_cross_consumer_setup_step());
 
+    config.workload = super::PerfWorkload::WallDensity;
+    assert!(config.freezes_fixture_setup());
+    assert!(config.keeps_virtual_time_paused_during_capture());
+
     config.workload = super::PerfWorkload::Gather;
     config.clock_mode = PerfClockMode::Realtime;
     assert!(config.freezes_fixture_setup());
@@ -187,6 +192,21 @@ fn every_enabled_fixture_freezes_until_the_initial_checkpoint() {
     config.enabled = false;
     assert!(!config.freezes_fixture_setup());
     assert!(!config.keeps_virtual_time_paused_during_capture());
+}
+
+#[test]
+fn wall_density_phase_names_are_explicit() {
+    assert_eq!(
+        super::PerfWallPhase::parse("completed"),
+        Some(super::PerfWallPhase::Completed)
+    );
+    assert_eq!(
+        super::PerfWallPhase::parse("provisional"),
+        Some(super::PerfWallPhase::Provisional)
+    );
+    assert_eq!(super::PerfWallPhase::parse("mixed"), None);
+    assert_eq!(super::PerfWallPhase::Completed.as_str(), "completed");
+    assert_eq!(super::PerfWallPhase::Provisional.as_str(), "provisional");
 }
 
 #[test]

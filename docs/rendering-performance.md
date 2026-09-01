@@ -246,29 +246,36 @@ RtT Camera3d の `ImageRenderTarget.scale_factor` は `Window DPI × RtT quality
 `world_to_viewport` の logical target px は LOD 観測時に同じ倍率を掛けて physical `tile_rtt_px` へ戻す。
 したがって上の面積・triangle 概算は DPI 1.0 / High の基準値である。
 
-### 可視ピクセル数（59° 投影係数）
+### 可視ピクセル数（59° Camera3d投影係数）
 
 | 面の向き | 投影係数 |
 |---|---|
-| 水平面（上面） | cos(59°) ≈ 0.515 |
-| 垂直面（前面） | sin(59°) ≈ 0.857 |
+| 水平面（上面、world Z方向） | sin(59°) ≈ 0.857 |
+| 垂直面（前面、world Y方向） | cos(59°) ≈ 0.514 |
+
+これはCamera3dのRtT内でfragment数を見積もる係数である。後段compositeの縦補正
+`hypot(150, 90) / 150 ≈ 1.166`は表示上の縦縮みを戻すが、Camera3dが生成済みのfragment数は
+増減させないため、下記GPU予算へは掛けない。最終画面上の形状寸法を求める場合は、縦補正後の
+`screen_y = -world_z + 0.6 × world_y`を使う。
 
 設備の推定可視面積：
 
 | 設備 | 仮定高さ | 可視面積 |
 |---|---|---|
-| 1×1 (Tank 等) | 1.5 tile | ~1,840 px |
-| 2×2 (MudMixer 等) | 1.8 tile | ~5,760 px |
+| 1×1 (Tank 等) | 1.5 tile | ~1,670 px |
+| 2×2 (MudMixer 等) | 1.8 tile | ~5,410 px |
 
 ### Triangle バジェット導出
 
-micropolygon 下限（1 tri ≥ 4 px²）× カリング率（可視率 35%）から GLB total tri を逆算:
+micropolygon 下限（1 tri ≥ 4 px²）× カリング率（可視率 35%）から設備のGLB total triを逆算し、
+制作予算は端数とsilhouette用余裕を上へ丸める。Wallは単純面積ではなく接続silhouetteとshared texture主体の
+専用計画値を使う。
 
-| 建築物 | 可視 tri | GLB total (÷0.35) |
-|---|---|---|
-| 壁 1×1 | 80〜175 | **150〜350 tri** |
-| 設備 1×1 | 460 | **~1,300 tri** |
-| 設備 2×2 | 1,440 | **~4,100 tri** |
+| 建築物 | 可視 tri概算 | 逆算値 (÷0.35) | 制作予算 |
+|---|---:|---:|---:|
+| 壁 1×1 | [本番壁計画](plans/3d-rtt/production-wall-art-plan-2026-08-31.md)で判定 | — | **150〜250 tri目標 / 350 tri hard cap** |
+| 設備 1×1 | ~420 | ~1,200 | **~1,300 tri** |
+| 設備 2×2 | ~1,350 | ~3,860 | **~4,100 tri** |
 
 ### 20 種類での draw call 数
 

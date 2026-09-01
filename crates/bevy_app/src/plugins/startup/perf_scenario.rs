@@ -119,6 +119,8 @@ mod renderdoc_capture;
 #[cfg(feature = "profiling")]
 mod save_transaction;
 #[cfg(feature = "profiling")]
+mod wall_density_fixture;
+#[cfg(feature = "profiling")]
 mod workload_driver;
 
 #[cfg(feature = "profiling")]
@@ -132,7 +134,7 @@ pub(crate) use capture_driver::{drive_perf_capture_system, start_perf_capture_sy
 pub(crate) use config::PerfDashboardMode;
 pub use config::{
     PerfFamiliarPolicyMode, PerfOperationDialogMode, PerfRenderMode, PerfScenarioConfig,
-    PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
+    PerfScenarioRandomStreams, PerfScenarioSize, PerfWallPhase, PerfWorkload,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use config::{
@@ -181,6 +183,10 @@ pub(crate) use save_transaction::{
     SaveTransactionCaptureState, drive_save_transaction_capture_system,
 };
 #[cfg(feature = "profiling")]
+pub(crate) use wall_density_fixture::{
+    WallDensityFixtureState, validate_wall_density_fixture_system,
+};
+#[cfg(feature = "profiling")]
 pub(crate) use workload_driver::drive_perf_workload_system;
 
 #[cfg(feature = "profiling")]
@@ -203,7 +209,7 @@ use output::{
     PerfCaptureWriteInput, fnv1a, fnv1a_bytes, write_deconstruction_fixture_sidecar,
     write_determinism_audit, write_dream_ui_metrics, write_indoor_light_fixture_sidecars,
     write_p02_presentation_sidecar, write_perf_capture, write_render_inventory,
-    write_window_observation,
+    write_wall_density_fixture_sidecars, write_window_observation,
 };
 
 #[cfg(feature = "profiling")]
@@ -678,6 +684,7 @@ pub(crate) struct PerfCaptureParams<'w, 's> {
     config: Res<'w, PerfScenarioConfig>,
     deconstruction_fixture: Res<'w, DeconstructionPerfFixtureState>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
+    wall_density_fixture: Res<'w, WallDensityFixtureState>,
     indoor_light_runtime: Res<'w, crate::systems::lighting::IndoorLightRuntime>,
     indoor_light_texture: Res<'w, crate::systems::visual::indoor_light_texture::IndoorLightTexture>,
     room_lookup: Res<'w, hw_world::RoomTileLookup>,

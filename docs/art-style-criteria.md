@@ -3,7 +3,8 @@
 作成日: 2026-03-21
 ステータス: 確定済み項目あり / PoC待ち項目あり
 
-関連: `docs/world_lore.md` §6.2〜6.3 / `docs/plans/3d-rtt/asset-milestones-2026-03-17.md` MS-Asset-0
+関連: `docs/world_lore.md` §6.2〜6.3 / `docs/plans/3d-rtt/asset-milestones-2026-03-17.md` MS-Asset-0 /
+[`production-wall-art-plan-2026-08-31.md`](plans/3d-rtt/production-wall-art-plan-2026-08-31.md)
 
 ---
 
@@ -101,6 +102,33 @@ shared Rectangle mesh
 | **壁デザイン** | 黒い石積み。錆びた鉄バンド・トゲのある補強パーツ |
 | **裂け目** | 紫の光（`#8b008b`）が漏れる「怠惰のエネルギー」表現 |
 | **金属** | 錆びた鉄（Rusty Metal）。均質な金属感は禁止 |
+
+#### Wall production geometry contract（確定済み）
+
+`TILE_SIZE = 32 wu`、壁高 `H = 32 wu` に対し、本番Wallの**公称構造厚は
+`9.6 wu = 0.30 tile`** とする。これは見た目のmesh厚であり、論理占有は従来どおり
+32×32 wuの1 cell全体である。
+
+| 項目 | 基準 |
+| --- | --- |
+| 基準高 | `32 wu`。local Y=`[-16, 16]`、world Y=`[0, 32]` |
+| 公称石積み厚 | 各armの局所横断方向で`9.6 wu`（中心線から`±4.8 wu`）。連続するvisible bodyも9.6 wu未満へ細らせない |
+| 石の凹凸・鉄バンド・トゲ込み外形 | 各arm中心線から局所横断`±6.4 wu`、全幅最大`12.8 wu = 0.40 tile`。junctionで交差する別armの長さは厚さへ数えない |
+| Wall同士の接続port | cell境界で公称厚`9.6 wu`の同一profileへ戻す |
+| cell内余白 | 公称面から各側`11.2 wu`。装飾最大時も各側`9.6 wu`を残す |
+
+現行59°CameraとRtT縦補正後は、画面縦軸への寄与が
+`-world_z + 0.6 × world_y`となる。高さ32 wuの壁は正面が19.2 px相当、公称上面が
+9.6 px相当となり、straight E-W壁の全投影高は28.8 px（`0.90 tile`）。装飾最大でも
+32 px（`1.00 tile`）を超えず、現行32 wu厚Cuboidの51.2 px（`1.60 tile`）から
+箱状の占有感を除ける。
+
+また、High・標準zoomで片側2 pxのtexture-baked lineを基準にすると、現行最大zoom-out factor 5では
+公称厚が1.92 px、両側線が合計0.8 px、内部の塗りが1.12 px残る。塗りを1 px以上残す
+下限9.0 wuを、0.05 tile単位で上へ丸めた値が9.6 wuである。固定screen-space outline、
+zoom上限、Camera角度、wall LODのいずれかを変更する場合は、この式から厚さを再評価する。
+1 pxの数値gateはHighにだけ適用し、Medium / Lowの最大zoom-outは最終compositeで切れない
+anti-aliased silhouetteを定性的に確認する。Lowの内部色を物理1 pxと主張しない。
 
 ### 5.2 地形テクスチャ LOD 基準（確定済み）
 

@@ -23,6 +23,7 @@ pub enum PerfWorkload {
     TaskDashboard,
     DreamUiBurst,
     IndoorLight,
+    WallDensity,
     Deconstruction,
     SaveTransaction,
 }
@@ -37,6 +38,7 @@ impl PerfWorkload {
             "task-dashboard" => Some(Self::TaskDashboard),
             "dream-ui-burst" => Some(Self::DreamUiBurst),
             "indoor-light" => Some(Self::IndoorLight),
+            "wall-density" => Some(Self::WallDensity),
             "deconstruction" => Some(Self::Deconstruction),
             "save-transaction" => Some(Self::SaveTransaction),
             _ => None,
@@ -52,6 +54,7 @@ impl PerfWorkload {
             Self::TaskDashboard => "task-dashboard",
             Self::DreamUiBurst => "dream-ui-burst",
             Self::IndoorLight => "indoor-light",
+            Self::WallDensity => "wall-density",
             Self::Deconstruction => "deconstruction",
             Self::SaveTransaction => "save-transaction",
         }
@@ -60,6 +63,29 @@ impl PerfWorkload {
     #[cfg(feature = "profiling")]
     pub(super) const fn has_automated_setup(self) -> bool {
         true
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PerfWallPhase {
+    Completed,
+    Provisional,
+}
+
+impl PerfWallPhase {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "completed" => Some(Self::Completed),
+            "provisional" => Some(Self::Provisional),
+            _ => None,
+        }
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Provisional => "provisional",
+        }
     }
 }
 
@@ -478,6 +504,7 @@ pub struct PerfScenarioConfig {
     renderdoc_capture: bool,
     rtt_light: Option<PerfRttLightSelection>,
     behavior_case: Option<PerfBehaviorCase>,
+    wall_phase: Option<PerfWallPhase>,
     window_width: Option<u32>,
     window_height: Option<u32>,
     window_scale_factor: Option<f32>,
@@ -519,7 +546,7 @@ impl PerfScenarioConfig {
         let workload = parse_value_or_default(
             value_from_args_or_env(&args, "--perf-workload", "HW_PERF_WORKLOAD")?,
             "--perf-workload",
-            "gather|path-door|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|deconstruction|save-transaction",
+            "gather|path-door|construction|ui-gpu|task-dashboard|dream-ui-burst|indoor-light|wall-density|deconstruction|save-transaction",
             PerfWorkload::parse,
             PerfWorkload::Gather,
         )?;
@@ -752,6 +779,29 @@ impl PerfScenarioConfig {
             })?),
             None => None,
         };
+        let wall_phase_value =
+            value_from_args_or_env(&args, "--perf-wall-phase", "HW_PERF_WALL_PHASE")?;
+        let wall_phase = match wall_phase_value {
+            Some(value) if workload == PerfWorkload::WallDensity => {
+                Some(PerfWallPhase::parse(&value).ok_or_else(|| {
+                    PerfScenarioConfigError(format!(
+                        "--perf-wall-phase must be completed|provisional; got '{value}'"
+                    ))
+                })?)
+            }
+            Some(_) => {
+                return Err(PerfScenarioConfigError(
+                    "--perf-wall-phase is reserved for --perf-workload wall-density".to_string(),
+                ));
+            }
+            None if workload == PerfWorkload::WallDensity => {
+                return Err(PerfScenarioConfigError(
+                    "--perf-workload wall-density requires --perf-wall-phase completed|provisional"
+                        .to_string(),
+                ));
+            }
+            None => None,
+        };
         match rtt_light.map(PerfRttLightSelection::lane) {
             Some("behavior") if behavior_case.is_none() => {
                 return Err(PerfScenarioConfigError(
@@ -841,6 +891,29 @@ impl PerfScenarioConfig {
                 }),
                 None => None,
             };
+        if workload == PerfWorkload::WallDensity
+            && (!matches!(size, PerfScenarioSize::Small | PerfScenarioSize::Medium)
+                || render_mode != PerfRenderMode::Gpu
+                || soul_count != 0
+                || familiar_count != 0
+                || !matches!(familiar_policy_mode, PerfFamiliarPolicyMode::Baseline)
+                || !matches!(operation_dialog_mode, PerfOperationDialogMode::Hidden)
+                || !matches!(dashboard_mode, PerfDashboardMode::Hidden)
+                || !matches!(clock_mode, PerfClockMode::Realtime)
+                || master_seed != 20_260_901
+                || warmup_secs != 30.0
+                || measure_secs != 60.0
+                || output_dir.is_none()
+                || window_width != Some(1280)
+                || window_height != Some(720)
+                || window_scale_factor != Some(1.0)
+                || rtt_quality != Some(RttQualityPreset::High))
+        {
+            return Err(PerfScenarioConfigError(
+                "wall-density requires small|medium/gpu/realtime, zero actors, seed 20260901, 30s warmup, 60s measure, an output directory, baseline policies, and exact 1280x720/scale-1/high window contract"
+                    .to_string(),
+            ));
+        }
         #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
             && (workload != PerfWorkload::IndoorLight
@@ -878,6 +951,7 @@ impl PerfScenarioConfig {
             renderdoc_capture,
             rtt_light,
             behavior_case,
+            wall_phase,
             window_width,
             window_height,
             window_scale_factor,
@@ -922,6 +996,10 @@ impl PerfScenarioConfig {
             Some(case) => Some(case.as_str()),
             None => None,
         }
+    }
+
+    pub const fn wall_phase(&self) -> Option<PerfWallPhase> {
+        self.wall_phase
     }
 
     pub const fn requested_window_scale_factor(&self) -> Option<f32> {
@@ -972,7 +1050,10 @@ impl PerfScenarioConfig {
     pub const fn keeps_virtual_time_paused_during_capture(&self) -> bool {
         self.enabled
             && !self.uses_fixed_timesteps()
-            && matches!(self.workload, PerfWorkload::IndoorLight)
+            && matches!(
+                self.workload,
+                PerfWorkload::IndoorLight | PerfWorkload::WallDensity
+            )
     }
 
     pub fn is_field_core(&self) -> bool {
@@ -1242,6 +1323,7 @@ impl Default for PerfScenarioConfig {
             renderdoc_capture: false,
             rtt_light: None,
             behavior_case: None,
+            wall_phase: None,
             window_width: None,
             window_height: None,
             window_scale_factor: None,

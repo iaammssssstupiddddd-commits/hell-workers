@@ -1,0 +1,98 @@
+{
+  "base_patches": [
+    {
+      "center_px": [
+        32,
+        32
+      ],
+      "id": "stone",
+      "input_hex_srgb": "#211b1b"
+    },
+    {
+      "center_px": [
+        96,
+        32
+      ],
+      "id": "rust",
+      "input_hex_srgb": "#8c4a2f"
+    },
+    {
+      "center_px": [
+        160,
+        32
+      ],
+      "id": "dark_brown_line",
+      "input_hex_srgb": "#1a0a00"
+    },
+    {
+      "center_px": [
+        224,
+        32
+      ],
+      "id": "purple",
+      "input_hex_srgb": "#8b008b"
+    }
+  ],
+  "color_pipeline": {
+    "automatic_exposure": false,
+    "display_device": "sRGB",
+    "exposure": 0.0,
+    "gamma": 1.0,
+    "look": "None",
+    "reference_view_transform": "Standard",
+    "tonemapping": "none"
+  },
+  "contract_id": "wall-color-calibration-v1",
+  "emissive_sanity": {
+    "base_patch_id": "purple",
+    "center_px": [
+      288,
+      32
+    ],
+    "id": "purple_emissive",
+    "input_hex_srgb": "#8b008b",
+    "minimum_relative_luminance_lift": 0.02,
+    "strength": 2.0
+  },
+  "image": {
+    "bit_depth": 8,
+    "color_space": "sRGB",
+    "format": "PNG",
+    "height": 96,
+    "patch_size_px": 32,
+    "roi_size_px": 16,
+    "width": 320
+  },
+  "metadata": {
+    "candidate_renderer": "bevy-client",
+    "reference_renderer": "blender",
+    "required_capture_fields": [
+      "encoded_format",
+      "height",
+      "image_sha256",
+      "rescaled",
+      "srgb",
+      "width"
+    ],
+    "required_color_fields": [
+      "automatic_exposure",
+      "display_device",
+      "exposure",
+      "gamma",
+      "look",
+      "tonemapping",
+      "view_transform"
+    ],
+    "required_ocio_fields": [
+      "config_path",
+      "config_sha256",
+      "fallback",
+      "runtime_version"
+    ]
+  },
+  "schema_version": 1,
+  "thresholds": {
+    "delta_e_2000_each_max": 3.0,
+    "delta_e_2000_mean_max": 2.0
+  }
+}

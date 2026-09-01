@@ -15,7 +15,7 @@ mod visual_handles;
 pub(crate) use asset_catalog::create_game_assets;
 pub use perf_scenario::{
     PerfFamiliarPolicyMode, PerfOperationDialogMode, PerfRenderMode, PerfScenarioConfig,
-    PerfScenarioRandomStreams, PerfScenarioSize, PerfWorkload,
+    PerfScenarioRandomStreams, PerfScenarioSize, PerfWallPhase, PerfWorkload,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use perf_scenario::{
@@ -137,6 +137,7 @@ impl Plugin for StartupPlugin {
                 .init_resource::<perf_scenario::PerfScenarioDriverState>()
                 .init_resource::<perf_scenario::DeconstructionPerfFixtureState>()
                 .init_resource::<perf_scenario::IndoorLightFixtureState>()
+                .init_resource::<perf_scenario::WallDensityFixtureState>()
                 .init_resource::<perf_scenario::PerfBehaviorCapture>()
                 .init_resource::<crate::systems::save::PerfLoadFaultInjection>()
                 .init_resource::<perf_scenario::FieldCoreDriverState>()
@@ -211,6 +212,11 @@ impl Plugin for StartupPlugin {
                         .chain()
                         .in_set(PerfScenarioSet::IndoorSettle)
                         .run_if(perf_scenario::should_settle_indoor_light_fixture),
+                )
+                .add_systems(
+                    Update,
+                    perf_scenario::validate_wall_density_fixture_system
+                        .in_set(PerfScenarioSet::IndoorSettle),
                 )
                 .add_systems(
                     Update,

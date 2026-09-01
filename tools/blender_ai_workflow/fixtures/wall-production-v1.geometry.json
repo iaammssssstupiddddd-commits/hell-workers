@@ -1,0 +1,127 @@
+{
+  "asset_set_id": "wall-production-v1",
+  "authoring": {
+    "blender_units_per_tile": 1.0,
+    "export_scale": 32.0,
+    "runtime_base_scale": 1.0
+  },
+  "bounds": {
+    "local_max": [
+      16.0,
+      16.0,
+      16.0
+    ],
+    "local_min": [
+      -16.0,
+      -16.0,
+      -16.0
+    ],
+    "origin": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "world_y_after_placement": [
+      0.0,
+      32.0
+    ]
+  },
+  "canonical_orientation": {
+    "corner_arms": [
+      "N",
+      "W"
+    ],
+    "end_arm": "N",
+    "positive_quarter_turn_axis": "+Y",
+    "straight_axis": "N_S",
+    "t_junction_open_side": "E",
+    "world_direction_vectors": {
+      "E": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "N": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "S": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "W": [
+        -1.0,
+        0.0,
+        0.0
+      ]
+    }
+  },
+  "geometry": {
+    "absolute_tolerance_wu": 0.01,
+    "height_wu": 32.0,
+    "nominal_and_minimum_continuous_thickness_wu": 9.6,
+    "ornament_envelope_width_wu": 12.8,
+    "port_collar_abs_s_wu": [
+      8.0,
+      16.0
+    ],
+    "port_half_width_wu": 4.8,
+    "port_width_wu": 9.6,
+    "tile_size_wu": 32.0
+  },
+  "mesh_contract": {
+    "embedded_images": 0,
+    "families": [
+      "isolated",
+      "end",
+      "straight",
+      "corner",
+      "t_junction",
+      "cross"
+    ],
+    "hard_triangle_cap_per_mesh": 350,
+    "meshes_per_glb": 1,
+    "primitives_per_mesh": 1,
+    "target_triangle_range_per_mesh": [
+      150,
+      250
+    ],
+    "texture_budget": {
+      "height": 1024,
+      "shared_roles": [
+        "albedo",
+        "emissive"
+      ],
+      "width": 1024
+    }
+  },
+  "schema_version": 1,
+  "topology": {
+    "mask_bit_order": [
+      "N",
+      "S",
+      "W",
+      "E"
+    ],
+    "mappings": [
+      {"family": "isolated", "mask": "0000", "quarter_turns_y": 0},
+      {"family": "end", "mask": "1000", "quarter_turns_y": 0},
+      {"family": "end", "mask": "0100", "quarter_turns_y": 2},
+      {"family": "end", "mask": "0010", "quarter_turns_y": 1},
+      {"family": "end", "mask": "0001", "quarter_turns_y": 3},
+      {"family": "straight", "mask": "1100", "quarter_turns_y": 0},
+      {"family": "straight", "mask": "0011", "quarter_turns_y": 1},
+      {"family": "corner", "mask": "1010", "quarter_turns_y": 0},
+      {"family": "corner", "mask": "1001", "quarter_turns_y": 3},
+      {"family": "corner", "mask": "0110", "quarter_turns_y": 1},
+      {"family": "corner", "mask": "0101", "quarter_turns_y": 2},
+      {"family": "t_junction", "mask": "1110", "quarter_turns_y": 0},
+      {"family": "t_junction", "mask": "1101", "quarter_turns_y": 2},
+      {"family": "t_junction", "mask": "1011", "quarter_turns_y": 3},
+      {"family": "t_junction", "mask": "0111", "quarter_turns_y": 1},
+      {"family": "cross", "mask": "1111", "quarter_turns_y": 0}
+    ]
+  }
+}

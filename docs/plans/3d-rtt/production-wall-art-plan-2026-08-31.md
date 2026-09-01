@@ -1,0 +1,829 @@
+# 壁の本番アート化計画
+
+## メタ情報
+
+| 項目 | 値 |
+| --- | --- |
+| 計画ID | `production-wall-art-plan-2026-08-31` |
+| ステータス | `In Progress (M0)` |
+| 作成日 | `2026-08-31` |
+| 最終更新日 | `2026-09-01` |
+| 作成者 | `Codex` |
+| 親計画 | [`asset-milestones-2026-03-17.md`](asset-milestones-2026-03-17.md) の `MS-Asset-Pipeline` / `MS-Asset-Build-A` |
+| 関連提案 | [`billboard-camera-angle-proposal-2026-03-16.md`](../../proposals/3d-rtt/archived/billboard-camera-angle-proposal-2026-03-16.md)（4形状案の履歴。本計画では孤立／端の意味を満たす6形状へ補完する） |
+| 関連Issue/PR | `N/A` |
+
+本書は、現在の茶色い `Cuboid` プレースホルダーを本番壁へ置き換えるための詳細実行計画である。
+親計画の壁PoCについて、アート制作、6 GLBから16接続maskへの写像、runtime lifecycle、実機受入、
+canonical asset昇格までを一つの閉じた作業列として具体化する。両者が矛盾する場合、壁については
+本書を優先する。
+
+## 0. 固定する結論と停止ゲート
+
+| 項目 | 本計画の結論 |
+| --- | --- |
+| 見た目 | Rough Vector Sketch。黒い石積み、錆びた鉄バンド／トゲ、紫 `#8b008b` の裂け目、暗茶 `#1a0a00` 起点のラフな線 |
+| 表示方式 | 現行TopDown 2.5Dの独立 `Structural3d` を維持し、ownerあたりexactly oneの `Mesh3d` を差し替える |
+| 形状数 | `isolated` / `end` / `straight` / `corner` / `t_junction` / `cross` の6共有mesh。16個のGLBは作らない |
+| 本番壁厚 | 公称構造厚`9.6 wu = 0.30 tile`、接続port半幅`±4.8 wu`。全腕の連続visible cross-sectionも9.6 wu以上、石・鉄・トゲ込み外形は最大`12.8 wu = 0.40 tile` |
+| 接続 | Wall、Door、Wall/Door blueprintを接続対象とし、16近傍maskを6形状＋Y軸90度回転へ決定的に写像する |
+| material | `TopDownStructuralMaterial` を維持し、active productionは完成／仮設2 handleだけを共有する。堅牢なfallback pairを含む総poolは4、entityごとのcloneは禁止 |
+| 裂け目の光 | shared emissive mapによる表面表現だけ。`PointLight`、gameplay照度、Light Field emitterは追加しない |
+| normal map | なしから開始し、native A/Bを一度だけ行う。差が採用基準を満たさなければ「なし」で確定する |
+| outline / unlit | texture-baked linework＋現行stylized directional shadowを第一候補とする。`base.unlit`比較は同じmaterial型内で行い、global outline rendererは本計画へ混在させない |
+| asset障害 | 6 meshとshared textureが全てresidentかつtopology consumerが有効になるまで、既存procedural `Cuboid`＋solid-color material pairをall-or-nothing fallbackとして表示する。透明化、一部だけの切替、読込だけを根拠にした本番化は禁止 |
+| 性能上限 | 各GLB 150〜350 triangles、production mesh 6＋fallback mesh 1、active production material 2＋fallback pair 2、production mesh/material組合せ上限12。実draw callとframe値はnative計測で判定 |
+| 正本昇格 | stagingで全gateを通した後、ユーザーの明示承認を得てから外部canonical `source/` / `exports/`へ昇格する |
+
+次は独立した停止ゲートであり、検査が通るまで後段の意味を縮小して解釈しない。
+
+1. Blender FlatpakのOCIO config `2.5`とruntime OCIO `2.4.2`の不一致を解消するまで、geometry検査は進めても**色再現性の承認とcanonical昇格は行わない**。
+2. 6 GLBまたはshared textureのうち1つでもmissing、failed、構造不正なら、native受入ではproduction wallを合格にしない。runtimeはfallbackを維持する。
+3. 自動pixel判定、validator、性能値だけでアート承認にしない。最終候補はユーザーの主観目視を必須とする。
+4. baked linework、lit/unlit比較のどちらでも平面的なイラストとして成立しない場合、同系統の数値調整を続けず、wall outline rendererを別提案・別計画として切り出す。
+
+### 0.1 未決事項の閉じ方
+
+| 未決事項 | 初期値 | 閉じるマイルストーン | 後から覆す条件 |
+| --- | --- | --- | --- |
+| Blender / runtime色変換 | 色承認blocked | M0で同一patchのOCIO gateをpass | OCIO、tonemapping、exposureのいずれかが変わった時だけ再検証 |
+| lit / unlit | lit第一候補 | M4のreference条件A/B＋ユーザー承認 | 採用後のP02回帰失敗時はM4へ戻す |
+| normal map | なし | M4でtechnical gate後にwinnerへ1回だけA/B | 採用条件を満たさなければなしで確定し、再調整しない |
+| baked outline | 採用候補 | M4のstandard / farthest zoom判定 | silhouette不成立なら本計画を止め、別outline提案へ移す |
+| Doorとの無隙間seam | 本計画では保証しない | Door本番asset計画へ移管 | Wall側port / mask / centerlineの不具合だけ本計画へ戻す |
+
+M4で比較するのは上表の未決事項だけである。壁厚、6 family、32 wu logical footprint、
+9.6 wu portは比較候補へ戻さない。
+
+## 1. 目的
+
+- 解決したい課題: active 3D wallのRough Vector Sketch本番assetへの置換と、制作からruntime受入までの一貫した経路
+- 現状の詳細:
+  - 完成壁と仮設壁のactive 3D表示は、`TILE_SIZE`立方体と単色materialのプレースホルダーであり、確定済みの建築アート基準を満たさない。
+  - 既存の16方向壁textureと接続systemは主に2D `Sprite` を対象としており、active `Building3dVisual` のmesh形状を変更しない。
+  - GLB制作、runtime読込、接続更新、load、fallback、実機受入を一つの完了条件で結ぶ計画がない。
+- 到達したい状態:
+  - 通常ゲームの全Wallが、黒石・錆鉄・紫裂け目を持つ共有GLB wallとして見える。
+  - 孤立、端、直線、全corner、全T、crossが、追加・撤去・Door隣接・仮設→完成・save/load後にも正しい形状と向きを保つ。
+  - 論理占有、移動阻害、Room境界、遮光、save schema、施工taskは変更せず、presentationだけを置き換える。
+  - asset欠落時は壁が消えず、明示的なfallback診断を残す。production受入時はfallback使用数が0である。
+- 成功指標:
+  - 16 maskのpure resolver testが全件合格し、normal build、Instant Build、blueprint、cancel、deconstruction、rehydrateの実経路testが合格する。
+  - wall ownerごとに `Building3dVisual` / `Mesh3d` / materialがexactly one、`MeshTag`は論理root gridを保持する。
+  - 全6 meshの接続portが幅9.6 wuの同一profile、各armの局所横断で連続壁体が9.6 wu以上、装飾込み外形が12.8 wu以下で、quarter turn後も同じ契約を満たす。
+  - native wall galleryで全16形状、完成／仮設、Door隣接、前後depth、completion bounce、load、撤去更新が実画像とsidecarの両方で合格する。
+  - resident production mesh handleは6、active production material handleは2、fallback使用0、各mesh 350 triangles以下、production mesh/material組合せ12以下を満たす。fallbackを含む総poolもmesh 7 / material 4で有限である。
+  - M0の`wall-density-v1` Cuboid baselineとM5 production、およびM5内の`force-fallback` controlとproductionを、各run内percentileを先に求めた3 valid runの中央値で比較し、Capture p95 / p99をそれぞれ`+5%`以内にする。completed opaque wallの`N` / `4N`ではM0で凍結したwall main-pass draw-group上限を満たし、provisional transparentはsorted phaseとして別計測する。
+  - ユーザーがproduction camera上の見た目を承認し、外部asset manifestとrepo runtime mirrorのSHA-256が一致する。
+
+## 2. スコープ
+
+### 対象（In Scope）
+
+- 壁のreference board、canonical Blender原本、6 GLB、shared albedo / emissive、必要時だけ比較用normal map。
+- Bevy 0.19でのGLB primitive直接読込、resident判定、procedural fallback、有限shared material pool。
+- Wall / Door / blueprintを含む4方向接続resolverと、3D mesh / rotationおよび既存2D blueprint表示への共有適用。
+- 建設開始、仮設、完成、Instant Build、cancel、deconstruction、save/load rehydrate、debug/perf fixtureでのpresentation lifecycle。
+- production camera、DPI、RtT quality、Soulとのdepthを含む専用actual-window受入と既存P02回帰。
+- asset pipeline、アート基準、建築表示、性能予算、README、親計画、Help影響判断の文書同期。
+
+### 非対象（Out of Scope）
+
+- Wallの占有cell、collision相当の `WorldMap` 障害、Room境界、遮光、耐久、資材、task、save schemaの仕様変更。
+- Door、Floor、設備、Soul、Familiarの新規アート制作。
+- Doorのframe / jamb、向き契約、暫定leafとの無隙間seam。本計画はWall側の9.6 wu portと接続maskまでを保証し、Door本番化で同portを消費する。
+- 16接続形状それぞれのGLB、wall専用LOD system、section view / LOD0、`build_progress` clippingの再有効化。
+- global outline post-process、screen-space edge renderer、共有shadow shaderの全面再設計。必要なら別提案にする。
+- Indoor Light Fieldのfragment sampling再有効化、紫裂け目によるgameplay light、PointLight、SpotLight。
+- canonical昇格、Git commit / pushをユーザー承認なしに実行すること。
+
+## 3. 現状とギャップ
+
+| 領域 | 現状 | 埋めるギャップ |
+| --- | --- | --- |
+| active wall | `visual_handles.rs`で `Cuboid::new(TILE_SIZE, TILE_SIZE, TILE_SIZE)`、完成は茶色、仮設は半透明amber | 6 production meshとshared texture/materialへ切替 |
+| 壁厚 | placeholder meshが32 wu幅で1 cell全体を覆い、見た目の構造厚と論理占有幅が同じ | 各armの局所横断を公称・連続最小9.6 wuへ縮め、12.8 wu装飾外形 / 9.6 wu接続portをasset contract化。論理占有32 wuは維持 |
+| 接続 | `hw_visual::wall_connection`にWall / Doorを含む16分岐があるが、`Sprite` imageだけを更新 | pure topology解決を抽出し、3D `Mesh3d` とY回転にも適用 |
+| lifecycle | completionはmaterialを交換し、visual transform syncはowner transformで毎回上書き | topology rotationをowner rotation / bounceと一つのpure transformで合成 |
+| save/load | rehydrateは通常spawn経路で3D shellを再構築 | load直後に同じ接続resolverでmesh / rotationを再構築するtestと証跡が不足 |
+| asset | repo外canonical generation storeは新規環境として空から開始。repo内の旧2D wall画像はruntime reference | stagingから最初のimmutable generationを作り、manifest、validator、recover / rollback、明示promoteを完結 |
+| material | `TopDownStructuralMaterial`はPBR/prepass/depth/shadow契約を持つ。Light Field handleはbindするが現fragmentでは意図的にsampleしない | 契約を壊さずalbedo / emissiveを接続し、flat illustration成立方法をnative比較で確定 |
+| art | `art-style-criteria.md`は壁デザインを確定、normal / outline詳細はPoC待ち | 比較条件、打切り条件、ユーザー承認artifactを定義 |
+| performance | current壁は完成／仮設各1 batch。現行文書の壁予算は150〜350 triangles | 6 mesh×2 materialの上限12 handle組合せとactual draw callを計測・記録 |
+
+### 3.1 保持するruntime契約
+
+- 1 logical Wallにつき独立した `Building3dVisual` はexactly oneとし、GLB `SceneRoot`や子mesh treeをspawnしない。
+- `MeshTag`はwall topologyの回転後座標ではなく、常に論理ownerのgrid anchorから生成する。
+- `Structural3d`、Scene RtT render layer、depth、directional shadow casting、completion bounce、cleanupの既存経路を維持する。
+- 完成Wallだけが論理的な遮光対象であり、ProvisionalWallは通光する現行仕様を変えない。
+- production meshは1 cell内に収まり、斜め配置や隣cellへの突き出しでgameplay footprintとの見た目をずらさない。
+- 見た目の公称壁厚9.6 wuに対し、WorldMapの移動阻害、Room境界、遮光、selectionは従来どおり32×32 wuの1 cellを使う。mesh脇の各11.2 wuは通路ではなく、建築cell内の視覚的余白である。
+- 現行Door leafの厚さ5.76 wuはPhase 2 placeholder値であり、Wall厚の根拠にも接続断面の正本にもしない。Wall–Doorはmask / centerline / Wall側portを検証し、leafとの無隙間jambはDoor本番化へ移管する。
+- current shaderのIndoor Light Field未sample状態をwall作業のついでに変更しない。
+
+## 4. 実装方針
+
+### 4.1 アートとasset contract
+
+#### 壁厚の算出と固定寸法
+
+このprojectにはmeter換算の正本がないため、一般建築のmm値をworld unitへ仮変換しない。現行の
+`TILE_SIZE = 32 wu`、高さ`H = 32 wu`、水平から
+`alpha = atan(150 / 90) = 59.036°`のproduction camera、RtT縦補正、Rough Vector Sketchの
+texture-baked line、現行zoom範囲からゲーム内の適正厚を算出する。
+
+縦補正後の正射影は、High / DPI 1.0 / camera scale 1を基準に次となる。
+
+```text
+screen_x = world_x
+screen_y = -world_z + (Z_OFFSET / VIEW_HEIGHT) * world_y
+         = -world_z + 0.6 * world_y
+```
+
+従ってstraight E-W壁の全投影高は`0.6H + t`であり、公称厚`t = 9.6`では
+`19.2 + 9.6 = 28.8 px = 0.90 tile`になる。装飾込み上限`t_max = 12.8`でも
+`32 px = 1.00 tile`で止まり、placeholderの`t = 32`が作る`51.2 px = 1.60 tile`の箱状外形へ戻らない。
+
+厚さの下限は遠景の線＋塗りから決める。High、標準zoom、32 px/tileでtextureへ焼く片側2 px線は、
+現行`PanCamera`の最大zoom-out factor 5では両側合計`4 / 5 = 0.8 px`になる。内部色を最低1 px残す条件は
+`t / 5 - 0.8 >= 1`、すなわち`t >= 9.0 wu`である。偽精度を避けて0.05 tile単位で上へ丸め、
+**`t = 0.30 tile = 9.6 wu`を固定値**とする。`0.25 tile = 8.0 wu`では最大zoom-out時の内部色が
+`0.8 px`へ落ちる一方、9.6 wuは`1.12 px`を残す。`tile_rtt_px = 14`でも全幅4.2 px、
+縮小後の両側線1.75 pxを除いて2.45 pxの内部色を残す。
+
+| geometry項目 | 固定値 | validator契約 |
+| --- | ---: | --- |
+| 基準高 | `32 wu = 1.00 tile` | raw local Y min / maxを`-16 / +16 wu`、world Yを`0..32 wu`に固定 |
+| 公称・連続最小構造厚 | `9.6 wu = 0.30 tile` | 各armの局所横断方向で中心線`±4.8 wu`のbandを含み、visible bodyを9.6 wu未満にしない |
+| 装飾込み局所横断外形 | `<= 12.8 wu = 0.40 tile` | 石の出、鉄バンド、トゲを含め各arm中心線から局所横断`±6.4 wu`以内 |
+| 接続port | 幅`9.6 wu`の共通profile | 接続軸のcell境界`±16 wu`で6 family共通。装飾は境界前にprofileへ戻す |
+| 公称面からcell端まで | 各側`11.2 wu` | logical footprintではなく視覚余白。通行可能にはしない |
+| 全local AABB | X/Zは`[-16, 16]`以内、Yはmin / max `-16 / +16` | 90°回転後もcell外へ出ず、ground接地と高さ基準を変えない |
+
+数値validatorの絶対許容差は`0.01 wu`とし、これはfloat export誤差だけに使う。公称厚や外形を
+`±0.01 wu`の美術調整範囲として扱わず、reportには測定最小／最大とfixtureとの差を残す。
+
+厚さはarmの**局所横断方向**で測る。corner / T / crossのjunctionで交差する別armの長さを
+「厚さ12.8 wu超」と誤判定しない。各connection axisの中心から境界へ向かう座標を`s`とし、
+`8 <= |s| <= 16 wu`をport collarとして、visible bodyが中心線`±4.8 wu`を含むこと、全geometryが
+局所横断`±6.4 wu`以内であること、`|s| = 16 wu`で共通port profileへ一致することをslice検査する。
+中心側`|s| < 8 wu`はactive arm corridorのunionとcell AABBで検査する。`isolated`はX / Z中心断面の
+visible body 9.6 wu以上、局所外形12.8 wu以下を別fixtureにする。
+
+`isolated`は腕なし、`end`以降は接続方向だけ同じ9.6 wu portへ届く。石の欠けや左右非対称は、
+各sliceのvisible cross-sectionを9.6 wu未満へ細らせない範囲で外側へ作る。深い欠けはalbedo / normalで表現し、
+接続境界のprofile、pivot、height silhouetteを全familyで一致させる。
+固定screen-space outline、zoom上限、Camera角度、RtT縦補正、wall LODのいずれかを変更する場合だけ
+上式から再算定し、単なる好みのA/Bで厚さを漂流させない。
+
+1. `docs/art-style-criteria.md`と`docs/world_lore.md`をreferenceの正本にし、production cameraの水平から約59度、Orthographicで判断する。
+2. 石積み、筆跡、暗茶のwobbly line、錆色、紫裂け目の大部分はshared albedo / emissiveへ焼き込み、top silhouetteに影響する鉄バンドとトゲだけをgeometryにする。
+3. 裂け目はemissive surfaceとして読ませるが、周辺を照らすlight entityは作らない。紫以外の明るい暖色を増やさない。
+4. 6 meshは各1 mesh / 1 primitive、共通UV atlas、material slot増加なしとする。targetは150〜250 triangles、hard capは350 trianglesとする。
+5. authoring sceneでは1 tileを1 Blender unitとし、高さ1.00、公称・連続最小厚0.30、装飾外形上限0.40、接続port半幅0.15で制作する。export専用objectへ32倍scaleを適用して頂点へbakeし、node transformをidentityにする。direct primitive handleはglTF node transformを使わないため、raw runtime Meshのlocal AABBはX/Zを`[-16, 16]`以内、Y min / maxを`-16 / +16`、originを中心に固定する。runtimeのbase scaleは1のまま、通常transformのY=`TILE_SIZE * 0.5`で底面がgroundに接する。
+6. shared textureはまず最大1024×1024のalbedo / emissive 1組とする。variant別textureを増やさず、解像不足がnative画像で証明された場合だけ予算を再決定する。
+
+#### 制作物と配置
+
+| 種別 | staging / canonical | repo runtime mirror |
+| --- | --- | --- |
+| Blender原本 | `staging/blend/wall-production-v1.blend` → 承認後 `generations/<GEN>/source/blender/buildings/wall-production-v1.blend` | 置かない |
+| isolated mesh | `staging/exports/models/wall_isolated.glb` → `generations/<GEN>/exports/models/wall_isolated.glb` | `assets/wall_sets/<GEN>/models/wall_isolated.glb` |
+| end mesh | `staging/exports/models/wall_end.glb` → `generations/<GEN>/exports/models/wall_end.glb` | `assets/wall_sets/<GEN>/models/wall_end.glb` |
+| straight mesh | `staging/exports/models/wall_straight.glb` → `generations/<GEN>/exports/models/wall_straight.glb` | `assets/wall_sets/<GEN>/models/wall_straight.glb` |
+| corner mesh | `staging/exports/models/wall_corner.glb` → `generations/<GEN>/exports/models/wall_corner.glb` | `assets/wall_sets/<GEN>/models/wall_corner.glb` |
+| T mesh | `staging/exports/models/wall_t_junction.glb` → `generations/<GEN>/exports/models/wall_t_junction.glb` | `assets/wall_sets/<GEN>/models/wall_t_junction.glb` |
+| cross mesh | `staging/exports/models/wall_cross.glb` → `generations/<GEN>/exports/models/wall_cross.glb` | `assets/wall_sets/<GEN>/models/wall_cross.glb` |
+| shared textures | `staging/exports/textures/buildings/wall/wall_{albedo,emissive}.png` → 同generationの`exports/`配下 | `assets/wall_sets/<GEN>/textures/buildings/wall/` |
+| optional normal | 比較中は`staging/exports/textures/buildings/wall/wall_normal.png`。採用時だけ同generationのcoreへ入れる | 比較中は隔離worktreeへcandidate-onlyで配置。採用時だけ`assets/wall_sets/<GEN>/textures/buildings/wall/wall_normal.png`へ同期 |
+| authority | stagingの`reports/wall-production-v1.asset-set.json`をM4で最終再封印し、M6で同じbytesを`generations/<GEN>/manifest/`へ配置。immutable receiptとactive pointerが承認を表す | receiptを`assets/wall_sets/<GEN>/authority/promotion-receipt.json`へcopyし、検証済みsubsetをcanonical JSONの`assets/manifests/wall-production-v1.wallset`へ投影する。後者が通常起動の唯一のmutable authority入力 |
+| 検査記録 | `staging/reports/`、承認後 `manifests/` / `licenses/` | hashはnative sidecarにも記録 |
+
+`<ASSET_ROOT>` は `HELL_WORKERS_ASSET_ROOT`、未指定時は `~/Sync/hell-workers-assets` とする。
+自動処理はcanonical `source/` / `exports/`へ直接書かない。各GLBは `validate-blend`、
+`export-staging-glb`、Khronos validator、bounds / mesh / primitive / triangle / UV検査を通す。
+
+6 GLBとshared textureは個別fileの寄せ集めではなく、`wall-production-v1`という1つのasset setとして
+固定する。stagingでは`staging/reports/wall-production-v1.asset-set.json`、承認後はimmutableな
+`generations/<GEN>/manifest/wall-production-v1.asset-set.json`をpayload正本とし、次をexact schemaで持たせる。
+
+- `schema_version`、`asset_set_id`、単調増加して再利用しない`asset_set_generation`、geometry contract version。
+- production coreのexact relative path / role / bytes / SHA-256。常時は6 mesh＋albedo＋emissiveの8 file、`normal_decision=adopted`時だけnormal roleを加えた9 fileを許し、それ以外の未知fileをcoreへ混ぜない。runtime projectionにも採用normalのpath / role / bytes / hashを必須化する。
+- optional A/B集合をcoreと別に列挙し、`normal_decision`を`pending | adopted | rejected`のclosed enumにする。M1の`candidate`だけは`pending`を許し、M4最終generationとM5は`pending`を拒否する。
+- source `.blend`、Blender / exporter / Khronos version、collection selector、scene / geometry / Khronos reportのhash、生成に使ったM1 tool commit / tool tree hash、検証対象のruntime subject commit。
+- provenance、license、`review_status = candidate | art_approved`、art approval artifact locator。M6のrelease承認はpayload manifestを書き換えず、同manifest hashを参照する別のpromotion receiptで表す。
+
+normal集合の正規化規則は次の1通りに固定する。M1 `pending`はcore 8 file（6 GLB＋albedo＋emissive）と
+optional normal 1 file、M4 `adopted`はnormalをcoreへ移した9 fileでoptional集合を空、`rejected`は
+core 8 fileかつoptional集合を空にする。rejected normalのpath / hashはfinal asset-set manifestへ残さず、
+art review evidenceだけが参照する。M5 / M6は常にこのpendingなしfinal coreだけをprovision / promoteする。
+
+runtime projectionはcanonical manifest hash、core path / role / bytes / hash、normal採否、review status、
+asset-set generationと`authority_mode = isolated_candidate | release_approved`を含み、provenanceの秘密や
+外部absolute pathを含めない。isolated candidateはreceipt fieldを持たずlauncherのexact identity opt-inを
+必須にし、release modeは同じpayload manifest hashを参照するimmutable promotion receipt path / hashを必須にする。
+wire formatはUTF-8 canonical JSON（key順固定、余分な空白なし、末尾LF 1つ）とし、projectorの再実行が
+byte-identicalであることをtestする。generic `.json` loaderと衝突させず、M2で`.wallset`だけを読む小さな
+`WallAssetSetManifest` asset / loaderを追加し、`serde_json`を通常build dependencyへ移す。Bevy 0.19の
+`LoadContext::read_asset_bytes`でcore fileを各1回読み、release modeではgeneration-scoped receiptも読み、
+bytes / SHA-256、canonical receipt schema、payload manifest hash / asset-set generation bindingをloader dependencyとして
+検証してからauthority候補を生成する。manifestの存在や自己申告hashだけをresident証拠にはしない。
+通常起動は`art_approved` payloadとM6の有効なpromotion receiptから投影された`release_authority=approved`
+だけを受理し、隔離profileはlauncherが封印したcandidate / art-approved hashとasset-set generationだけを
+authorityとして受理する。native sidecarは実際に読んだasset IDとprojection、payload manifest、receiptの
+path / hash / bytesを突き合わせ、asset set内の取り違えをfail-closedにする。
+
+promotion receiptもclosed schemaとし、`schema_version`、一意で別payloadへ再利用できない`receipt_id`、
+asset-set ID / generation / manifest hash、sealed promotion plan hash、M5 evidence bundle hash、approval artifact
+locator / hash / UTC timestamp、previous / new active pointer identity、生成tool commit / tree hashを持たせる。
+validatorはmissing field、別generation / manifest、plan hash不一致、承認時preimageと異なるstale pointer、
+別plan / payloadへのreceipt ID再利用を拒否する。runtime projectionとrepo copyはcanonical immutable receiptの
+同一bytes / hashだけを参照し、自己申告の`approved`文字列だけではauthorityにしない。
+
+#### 1原本から6 GLBを安全にexportする契約
+
+- `wall-production-v1.blend`は6つのnamed collectionを持ち、各collectionにexport対象のrenderable meshを1つだけ置く。
+- 現行`export_glb.py`はscene全体をexportするため、そのまま6回呼ばない。M1で後方互換な`--collection <exact-name>` selectorを`validate-blend` / `export-staging-glb`へ追加し、検査とexportの両方を同じ選択集合へ限定する。
+- 追加後のCLIは`validate-blend --collection <exact-name> <input.blend> <report.json> [max-triangles]`と`export-staging-glb --collection <exact-name> <input.blend> <output.glb> [max-triangles]`に固定する。`--collection`なしの現行位置引数形式も同じ意味で残す。
+- selectorはunknown、空、複数renderable mesh、非identity node transform、未適用scale、2 primitive以上をfail-closedにする。Blender 5.1.1のoperator引数は実行環境のPython introspectionで確認してから実装する。
+- runtimeはGLB materialを使わないため、各GLBにshared PNGを重複embedしない。geometry-onlyまたはplaceholder material exportの正確な設定を一次APIで確認し、GLB内embedded image 0を構造gateにする。
+- pre-export scene validatorとpost-export GLB validatorを分ける。前者は選択collectionのauthoring state、後者は生成物そのものの1 mesh / 1 primitive、node identity、raw accessor / decoded vertex bounds、UV / tangent、embedded image 0、triangle、port collar / junction / isolated geometryを検査する。scene側の`dimensions`をGLB raw AABBの代理にしない。
+- no-selectorの既存workflow smokeを壊さず、selectorごとのunit / integration testと6 output hash reportを追加する。unknown / empty / multi-mesh、non-identity node、2 primitive、embedded image、bounds / port違反をnegative fixtureとして全件failさせる。
+
+#### canonical承認前の隔離runtime検証worktree
+
+M2〜M5はstaging候補をゲームで読む必要があるが、`docs/blender-setup.md`の隔離契約に従い、
+承認前候補をprimary worktreeの`assets/`へ書かない。formal native profileが`--repo`配下の
+`assets/`をfingerprintする現行契約に合わせ、次の**一つのclean validation worktree**へasset viewを組み立てる。
+
+1. ユーザーが承認したscoped local commitから、repositoryの`target/`配下ではない一時directoryへclean validation worktreeを作る。code subjectの`git status --porcelain`は空を必須とする。
+2. checkout済みのtracked WGSLを保持したまま、既知良好なignored runtime asset mirrorをvalidation worktreeの`assets/`へmanifest / SHA-256付きで複製する。primary `assets/`を使う場合もread-only sourceとし、primary側へ逆同期しない。
+3. `--dest`はpayload directoryでなくasset rootを受け、manifest modeが`wall_sets/<GEN>/...`と`manifests/...`を決定する。`scripts/sync_external_assets.py --source "$ASSET_ROOT/staging/exports" --dest "$VALIDATION_WORKTREE/assets" --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" --selection core --dry-run`をreviewしてから、同じ引数から`--dry-run`だけを外してoverlayする。manifest外のstaging file、optional normal、無関係assetをcopyせず、tracked WGSLのhashがsubject commitと一致することを再確認する。
+4. 比較用normalは同じmanifestの`--selection optional:normal`で別途candidate-only配置し、core asset setと別hashにする。optional-only実行はcore runtime projection / active pointerを書き換えない。採用まではproduction readiness集合から除外し、raw staging treeの無条件copyや手作業copyを許さない。
+5. full asset-view hash、wall asset-set hash、non-wall asset-view hashを別々に固定する。candidate payloadを変更したら`asset_set_generation`と3 hashを更新し、旧generationの画像、performance、sidecarを再利用しない。
+6. M2〜M3のasset非依存testはprimaryで行い、実候補を必要とする主観A/B / GPU検証はvalidation worktreeだけで行う。ignored assetの追加は許すが、tracked fileの差分、symlink経由の可変asset view、primary / canonicalへの書込みがあればformal runを開始しない。
+7. M4のA/B harnessとfail-closed profileを完成させた後、対象diffをユーザーへ提示してscoped local harness commitの明示承認を得る。A/B採用後はprimaryでart比較toggle / debug material / 不採用normal経路を撤去し、final subjectのscoped local commitについて二度目の明示承認を得る。commit / push / canonical promoteの承認はそれぞれ分離する。
+8. M5はfinal commitから作った新しいclean validation worktreeへ、手順4のA/B normal overlayを行わず`--selection core`だけで固定asset viewを再構築する。adoptedならcore 9、rejectedならcore 8であり、final manifest外のnormalが存在すれば開始しない。P02 / wall-art launcherはclean code subjectと3 hashを固定し、M6のユーザー承認まではcanonical assetにもprimary `assets/`にも書かない。
+
+### 4.2 16接続maskから6 meshへの決定的写像
+
+接続順を `(N, S, W, E)` とする。`N/S`はworld gridの`y + 1 / y - 1`、`W/E`は
+`x - 1 / x + 1`であり、3Dでは既存の `2D +y = 3D -z` 変換後にY軸回転へ変換する。
+GLBのcanonical forwardとquarter turnの符号はM0でfixture画像とunit testに固定し、コード内へ
+散在させない。
+
+| `(N,S,W,E)` | family | 向き |
+| --- | --- | --- |
+| `0000` | isolated | 回転なし。cell中心だけで完結 |
+| `1000`, `0100`, `0010`, `0001` | end | canonical Nから接続方向N / S / W / Eへquarter turn |
+| `1100` | straight | N-S |
+| `0011` | straight | E-W |
+| `1010`, `1001`, `0110`, `0101` | corner | NW / NE / SW / SEへquarter turn |
+| `1110` | t_junction | Eがopen |
+| `1101` | t_junction | Wがopen |
+| `1011` | t_junction | Sがopen |
+| `0111` | t_junction | Nがopen |
+| `1111` | cross | canonical |
+
+- `end`はcell中心から接続側境界までの腕だけを持ち、存在しない反対側へ伸ばさない。`isolated`は接続腕を持たない。これにより16 maskの意味を形状で保持する。
+- `end` / `straight` / `corner` / `t_junction` / `cross`の各接続腕はcell境界まで届き、幅9.6 wuの同一port profileになる。連続壁体は9.6 wu未満へ細らせず、装飾は境界前に12.8 wu envelopeからportへ戻し、隣接Wall meshと隙間や重なりを作らない。
+- 接続対象は完成／仮設Wall、Wall blueprint、Door、Door blueprintであり、DoorStateのOpen / Closed / Lockedでは接続有無を変えない。
+- Door隣接でもWall側portは同じ9.6 wuとするが、現行5.76 wu厚leafとの段差やcell内のjamb gapをWall meshの越境で埋めない。Wall–Doorは接続maskと中心線を本計画で保証し、無隙間のframe / jambはDoor本番assetの契約にする。
+- pure resolverは `WallConnectionMask -> WallMeshFamily + QuarterTurns` を返し、3Dと既存2D image選択が同じmask計算を使う。2Dの個別texture名を3D familyへ逆流させない。
+
+### 4.3 Bevy 0.19での読込とfallback
+
+- GLB sceneをspawnせず、`GltfAssetLabel::Primitive { mesh: 0, primitive: 0 }.from_asset(path)`で `Handle<Mesh>` を直接取得する。これによりone wall = one `Mesh3d`、shared material、prepass、`MeshTag`の既存契約を保つ。
+- `Building3dHandles`のwall部分を、procedural fallback mesh＋solid-color完成／仮設pair、6 production mesh＋textured完成／仮設pair、asset readinessを表す専用有限poolへ分離する。非wall handleは変更しない。
+- assetの不変identityである`asset_set_generation + manifest_hash`と、process-localな表示遷移である`session_id + activation_revision`を分離する。readinessと表示有効化を一つのboolへ潰さず、`Fallback { reason, asset_set_identity, activation_revision }`、`Eligible { asset_set_identity, activation_revision }`、`ProductionActive { asset_set_identity, activation_revision }`相当のaggregate stateで表す。状態discriminantまたはactivation revisionが変わるごとに全Wallを一度だけrefreshし、同一sessionのsteady stateではmesh / material writeを0にする。
+- 起動中は6 production meshと採用済みshared texture集合のload stateを一括監視する。normal採用前のproduction core集合は6 mesh＋albedo＋emissiveであり、A/B用normalは別のcandidate-only集合として扱う。normal採用時だけrequired集合へ加える。全件CPU-readyでもM2では`Eligible`までとし、topology resolver / presentation consumerが未導入の通常ゲームへproduction meshを出さない。
+- `ProductionActive`へ進めるauthorityは、通常起動では承認済みruntime projection＋promotion receipt、隔離profileでは明示されたcandidate manifest hash / asset-set generationに限定する。staging fileがたまたまignored `assets/`へ存在するだけでは有効化しない。さらに`topology_ready`とrequired asset setの全件readyを同じactivation transitionで満たした時だけ、M3のpresentation applyが既存／同frame spawnを一括置換する。
+- missing / failed / unauthorized時は全Wallをfallbackへ揃え、path、load state、manifest hash、reasonを`session_id + activation_revision`ごとに一度だけ診断する。現Cargo featureにはfile watcherがないため、通常buildで「欠落fileを後から置けば自動回復する」とは約束しない。欠落／failedからの回復は同じasset-set identityを読むfresh process restartで検証し、restart自体は新しいasset generationをmintしない。focused testはfresh App再起動とinjectable load-state seamで`Failed -> restart -> Eligible`、`ProductionActive -> synthetic failure -> Fallback`を検証し、player-facing hot reloadや無制限retryは追加しない。
+- albedo / emissiveはGLB materialをscene経由で取り込まず、repo catalogのshared `Handle<Image>`から `TopDownStructuralMaterial` baseへ明示接続する。
+- 実装時はBevy 0.19のlocal sourceまたはdocsrs-mcpでload-state APIと `GltfAssetLabel` signatureを再確認し、旧版APIを推測で使わない。
+- CPU load stateをGPU prepare / actual renderingの証拠にしない。GPU-readyはactual-windowのresident sidecarとclient pixel predicatesで閉じ、missing / late albedo、missing / late emissive、ready切替と同frameのwall spawnをfocused testに含める。
+
+### 4.4 materialと平面イラスト判定
+
+- material型、render layer、prepass、depth、shadow castingは現行 `TopDownStructuralMaterial`を維持する。
+- 第一候補は、flat normal、roughness 1、reflectance 0、texture-baked linework、現行stylized directional shadowである。
+- lit第一候補は`base.emissive`へ非黒の有限shared multiplierを設定し、`emissive_texture`と乗算して紫裂け目を出す。multiplier、露出、texture color spaceはM0で1つのcandidate値に固定し、entityごとに変えない。
+- 比較候補は同じmaterial型の `StandardMaterial::unlit` flagだけを切り替える。現行custom fragmentのunlit分岐はemissiveを加算せずbase colorだけを返すため、比較用albedo自体にも読める紫裂け目を持たせ、unlitを「非emissive control」として評価する。unlitが平面感では勝つが発光要件を満たさない場合、本計画で共有shaderを場当たり的に変更せず別のwall material / shader提案へ送る。
+- unlit候補もdepth、wallからterrainへのshadow、Soul前後関係、completion bounceを実機で満たさなければ採用しない。
+- normal mapは「なし」と「同一albedoに対応する1枚」を同じcamera / quality / DPIで一度だけ比較する。比較前のtechnical gateとして、6 mesh全ての`Mesh::ATTRIBUTE_TANGENT`、UV0、normal画像の`ImageLoaderSettings::is_srgb = false`、Blender / glTFのOpenGL `+Y`規約に対応する`flip_normal_map_y = false`を検査し、非対称な既知normal patchで照明方向まで確認する。gate不合格を「見た目の差なし」に数えない。石の立体感より3D感やspecular noiseが強まる、またはtechnical gate通過後も差が読めない場合はなしで終了する。
+- geometry-only GLBのplaceholder materialにnormal textureがなければ、Bevy 0.19のglTF loaderは欠落tangentを自動生成しない。M1のpost-export reportでtangent有無を記録し、normal candidateで不足する場合だけM4 harnessが6つのresident `Mesh`へ`Mesh::generate_tangents()`を一度だけ適用してからcandidate-readyにする。生成失敗、UV0欠落、wall entityごとの生成は失格とする。normal不採用時はこのcandidate-only生成経路をfinal subjectから撤去する。
+- outlineが不足した場合は、texture線幅／色を延々と調整しない。baked lineworkではsilhouetteが成立しないという結果を記録し、global outlineの別提案へ送る。
+- 仮設と完成は同一mesh / topology / UVを使い、完成時はmaterial handleだけを交換する。仮設は既存amber / alphaの意味を維持し、紫emissiveを弱めるか無効にする値を有限poolで固定する。
+
+### 4.5 topology lifecycleとtransform ownership
+
+- `hw_visual`はmask、family、quarter turn、bidirectional connector indexとpure resolverを所有し、`bevy_app`はasset pool / readinessとproduction `Mesh3d`適用を所有する。`hw_visual`から`bevy_app`型へ依存させない。
+- dirty resourceをdrainするproducerは一つだけにし、transientなlogical-root topology componentまたは同等のimmutable change setを生成する。2D Sprite consumerと3D consumerが別々にdirtyをtakeして更新を奪い合う構成は禁止する。
+- 通常frameのreadiness / topology resolve / presentation applyは`PostUpdate`へ置き、`Update`の`GameSystemSet::Interface`内`PlacementFeedbackSet::Commit`を含むwriterが完了した後に、`WallAssetReadinessSet -> WallTopologyResolveSet -> ApplyDeferred -> WallPresentationApplySet`の順で実行する。wall final transform compositionはapplyへ統合し、このchain全体をBevy 0.19の`TransformSystems::Propagate`より前へ明示配置して同frameの`GlobalTransform`までtestする。別scheduleのsetへ見かけ上の`.after(...)`依存を書かない。
+- 3D visualへ `Wall3dPresentationState { family, quarter_turns }` 相当のcomponentを持たせ、`Mesh3d`選択と回転を同じstateから導出する。
+- owner transform、wall topology quarter turn、completion bounce scaleを一つのpure presentation transformで合成する。topology systemから `Transform`を場当たり的に上書きしない。
+- `WallConnectionDirty`を、dirty grid、`entity -> set<grid>`、`grid -> connector contributors / presentation targets`を保持するbidirectional indexへ拡張する。Added / Changed / Removedを旧集合と新集合の両方でself＋4近傍へ展開し、毎frameのworld全走査は行わない。
+- indexはpresentation用の派生projectionであり、WorldMap、Building、Door、construction stateに対する第二のgameplay正本にはしない。contributor identityごとのgrid集合と同一gridのref-count / targetを保持し、一時共存をcoalesceできる最小fieldだけに限定する。
+- connector snapshotは通常の `BuildingVisualState` / `BlueprintVisualState`だけでなく、normal wall placementの各 `WallTileVisualMirror`＋Transformも収集する。`WorldMap`が複数gridを単一 `WallConstructionSite`へ向けることだけからtile visual targetを推論しない。
+- resolverの`is_connector(grid)`はこのcanonical connector indexを読み、`WorldMap::building_entity(grid)`だけを正本にしない。WorldMapは論理occupancyとの不一致を検出するvalidation inputとして使う。
+- `WaitingWood`からframing中までの `WallTileBlueprint`は2D blueprint接続には参加するがproduction GLBを持たない。`FramedProvisional`でgridごとのspawned Wallへpresentation ownerを原子的に渡し、同じgridのsite / tile / spawned wall contributorは接続数1としてcoalesceする。
+- 次のwriter経路を同じdirty transactionへ接続する。
+  - generic Wall / Door blueprintと、複数tile `WallConstructionSite`配下の `WallTileBlueprint`追加、状態／位置変更、cancel。
+  - 通常施工の仮設Wall生成、完成material遷移。
+  - Instant Build / debug build。
+  - Wall / Doorのdeconstructionとdespawn。
+  - save/load rehydrateとrollback後のpresentation再構築。
+  - native / perf fixtureの直接spawn。
+- 仮設→完成は接続maskを変えずmaterialだけを変える。DoorState変更もmaskを変えない。Wall / Door / connector blueprint tileの追加・撤去・grid集合変更だけが隣接形状をdirtyにする。
+- visual lookupはframe内に `owner -> visual` mapを一度構築するか、既存cacheを安全に拡張してO(walls × dirty)走査を避ける。cacheを導入する場合はcleanup / reset / rehydrate testを同じマイルストーンに含める。
+- aggregate stateのdiscriminantまたは`activation_revision`が変わった時だけ全Wallを一度refreshしてfallback / productionを一括切替し、通常steady stateでは全走査もmesh writeも行わない。asset証拠とartifact照合には不変のasset-set identity、実行時refresh判定にはsession / activation identityを使い回さない。
+- world replacement reset hookの所有をcrate境界で分ける。`hw_visual::reset_for_world_replace`はbidirectional index、last-known grid、dirty queue / topology revision、resolved presentation cacheをclearしてfull-rebuild requestを立てるだけにする。`bevy_app`所有の別hook `reset_wall_asset_presentation_for_world_replace`がaggregate modeを`Fallback(WorldReplace)`へ落としてactivation revisionを進める。両hookはreset phase内で完了してから`presentation.shells` rehydrateを開始し、leaf crateからroot-owned stateを参照しない。
+- world replacement自体は`Last::SaveLoadApplySet`で`PostUpdate`より後に起きるため、rehydrateがspawnする全Wallはそのframeではfallbackに統一する。parentを持たないroot wall visualのcreation-time bundleへfallback `Mesh3d` / material / composed local `Transform`と、そのlocal値から作った`GlobalTransform`を同時挿入し、伝播済みの`GlobalTransform`既定値を表示しない。次frameの`PostUpdate`でmirrorからindexを一度だけfull rebuildし、全cell resolve完了後にassetが`Eligible`なら一括で`ProductionActive`へ戻す。fallback-only 1 frameは許容するがmixed表示は許容せず、Last frameのworld位置を含めnormal load / rollback / recovery-only / 連続2 resetで固定する。
+- spawn / rehydrateにはcreation-time fallback bundleとowner由来`MeshTag`の初期化だけを許可する。spawn後のproduction handle選択と`Mesh3d` / wall material / composed `Transform` / owner由来`MeshTag`のmutationは`WallPresentationApplySet`だけが行う。現行のprovisional material syncはlogical dirty / state producerへ変え、generic transform / tag syncからWallを除外する。`MeshTag`はowner grid / owner rotationから導出し、topology quarter turnを混ぜない。これにより「唯一writer」はcreationとmutationを混同せず検査できる。
+
+## 5. マイルストーン
+
+```text
+M0 contract / baseline / blocker確認
+  -> M1 staging asset制作・構造gate
+       -> M2 runtime load / material / Eligible（fallback維持）
+            -> M3 topology / lifecycle統合・ProductionActive化
+                 -> M4 art A/B・ユーザー承認
+                      -> M5 native回帰・性能gate
+                           -> M6 canonical昇格・docs・計画close
+```
+
+M0→M1→M2は順番に閉じ、asset / toolingとruntimeを別の編集agentや並行sessionへ分けない。
+M4の色承認、M5のproduction合格、M6の昇格はOCIO解消後に限る。
+
+| MS | 入力gate | 凍結する出力 | 変更時に無効化する後段 |
+| --- | --- | --- | --- |
+| M0 | current code / asset view、OCIO調査環境 | orientation / geometry fixture、color verifier、P02 baseline、`wall-density-v1`計測contract | fixture / color / 計測schema変更でM0 artifactを再採取 |
+| M1 | M0 fixture | 6 GLB、texture、`normal=pending` candidate generation、全validator report、承認済みtool commit | geometry / texture / tool変更でM1以降。M4の計画済み最終再封印はM1 validatorとM2 / M3 focused gateを再実行し、それ以外のmanifest差替えはM1以降を無効化 |
+| M2 | M1 manifest候補 | finite pool、aggregate readiness、`Eligible` activation。通常表示はfallback | required集合 / material / readiness変更でM2以降 |
+| M3 | M2 `Eligible` test pool | 16 mask resolver、index、atomic `ProductionActive` apply、world-replace契約 | resolver / schedule / lifecycle変更でM3以降 |
+| M4 | M3 production route、OCIO pass | lit / unlit、normal、outlineの採否、final code commit、final asset-set identity | code / shader / asset / profile変更でM4 artifact以降 |
+| M5 | M4 final commit / asset-set identity | final 9 case、P02、Capture、RenderDocのsealed evidence | source / asset / harness fingerprint変更でM5全件 |
+| M6 | M5 pass＋ユーザーpromote承認 | immutable canonical / repo generation、active authority、恒久docs、Help decision | 中断時はrecover、問題時は検証済みpointerへrollbackしてM6を再実行 |
+
+codeまたはruntime dataを変更した各マイルストーンでは、完了報告やlocal commitより前に
+`hell-workers-review-help-impact` Skillで実際のplayer-visible pathを確認する。後段で見え方や操作を
+さらに変えた場合は前回の`No impact`を流用せず、次のcommit前に再実行する。
+
+### M0: baselineと契約を凍結
+
+実装状況（2026-09-01）:
+
+- geometry / density / colorのmachine-readable fixture、CIEDE2000 offline verifier、
+  Blender calibration renderer、既知vectorとfail-closed metadataのunit testを実装済み。
+- 現行Flatpakでdiagnostic referenceを採取し、config 2.5 / runtime 2.4.2を
+  `fallback=true`として検出できることを確認済み。これは陽性証明ではないため色gateはblockedを維持する。
+- Rustの`wall-density` profiling workloadを実装済み。Small=N=96 / Medium=4N=384、
+  completed / provisional、20列・5 cell stride、16 mask、Door blueprint connector、camera scale 5を
+  production wall spawn / WorldMap予約経路で構築し、embedded contract hash、phase別layout checksum、
+  target / connector全行をfail-closed sidecarへ出す。profiling feature付きtest / Clippyはpass。
+- Bevy actual-window calibration phase、専用`wall_density_acceptance.py`、draw-group抽出、
+  承認済みclean baseline commitからのP02 / N / 4N正式採取は未実装・未実行。
+- この中間状態をM0完了や性能baselineとして扱わず、後続M1のasset制作開始gateにも使わない。
+
+- 変更内容:
+  - current `Cuboid` wallをproduction cameraで撮影し、source fingerprint、camera、quality、DPI、adapter、asset viewを記録する。既存P02 visual referenceと、後述の`wall-density-v1`性能baselineを別artifactにする。
+  - 6 GLBのcanonical orientation、pivot、raw primitive-local bounds、texture budget、triangle target、16 mask表をfixture test dataとして固定する。公称・連続最小厚9.6 wu、局所横断装飾外形12.8 wu以下、8〜16 wu port collar、境界port共通profileをmachine-readable geometry fixtureへ含める。
+  - OCIO差異の解消方法を別環境追加／Flatpak修正／互換configのいずれかで決め、Blenderとruntimeの同一color patchで検証する。Blender側artifactは実際にloadしたconfig path / SHA-256、OCIO runtime version、`fallback=false`の陽性証明を必須にし、4色が偶然近いだけではgateを閉じない。
+  - calibration-only Blender renderとBevy actual-window phase、およびoffline color verifierを先に実装する。自動露出を無効化し、view transform、look、tonemapping、exposure、gamma、出力解像度、patch入力値、base / emissive経路を固定する。stone / rust / dark-brown line / purpleの4色は同じunlit base-color経路で比較し、purple emissiveのlit sanity patchは別predicateにしてDelta Eへ混ぜない。
+  - rescale / JPEG化していない8-bit sRGB PNGのpatch中央16×16 px medianをD65 CIE Labへ変換して`Delta E 2000`を比較する。4 base patch平均`<= 2.0`かつ各patch`<= 3.0`を色再現gateとし、lit wall本体の美術判断とは分離する。offline verifierは既知CIEDE2000 vectorのunit testを持ち、artifactのPNG / ROI hash、各median、各Delta E、平均、全color metadataを再計算する。環境由来で閾値変更が必要なら候補閲覧前に根拠と新値を記録し、ユーザー承認なしに緩和しない。
+  - lit/unlit、normalなし/ありの比較仮説、合格観察、変化がない場合の打切りを記録する。normal比較は6 meshのtangent / UV0、linear image load、`+Y` / `flip_normal_map_y`、既知方向patchをtechnical prerequisiteとして固定する。
+  - current wall routeだけを使う`wall-density-v1` fixtureと専用`wall_density_acceptance.py`をproduction asset実装前に作る。測定targetは`N=96` / `4N=384` Wall ownerとし、16 maskをそれぞれ6回／24回ずつ、互いに接続しないspecimenへ配置する。近傍maskはfixture-owned Door blueprint connectorで作り、target外の3D wallを増やさない。座標列、support数、owner数、mask / family分布、fixture checksumをexact sidecarへ固定する。
+  - density profile script、Rust fixture module、predicate、measurement contractをprofile固有fingerprintのclosed file setへ追加し、M0 baseline commit以後はbyte変更しない。M4のgallery / color profileは別fileへ追加し、density profileへimportさせない。plan時と各case前後で再hashし、untracked helperやprofile外scriptを合格artifact生成へ使わない。
+  - completed opaqueとprovisional transparentを別process / phaseにする。seed `20260901`、High、DPI 1.0、1280×720、Vulkan / X11、`novsync`、30秒warm-up、60秒measure、3 valid runを固定し、各runのp95 / p99を先に計算してから中央値とMADを集約する。invalid runを除外して3本へ見せかけない。
+  - completed main passはwall-specific drawをmesh / material IDで抽出し、全6 familyを含む`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`をgateにする。M0のCuboid controlで4Nがrendererのinstance capacityを越えないことを確認する。provisional sorted phaseは同じbatchingを要求せず、`D_4N <= 4 * D_N + 6`をsuperlinear防止gateにしてcount / slopeを保存する。
+  - calibration / density harnessのcheck / clippy / verifyとHelp impact reviewを終え、対象diffを提示してユーザー承認を得たscoped local baseline commitを作る。M5ではこのcommitのclean worktreeへfinalと同一asset viewをprovisionしてbaseline legを再採取し、fixture / measurement contract hashが一致する場合だけ比較する。
+- 変更候補:
+  - `docs/art-style-criteria.md`
+  - `docs/blender-setup.md`
+  - `crates/bevy_app/src/plugins/startup/perf_scenario/`
+  - `.codex/skills/hell-workers-run-native-acceptance/scripts/wall_density_acceptance.py`（新規・M0後freeze）
+  - `.codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py`（新規calibration profile、M4でgallery拡張）
+  - `.codex/skills/hell-workers-run-native-acceptance/SKILL.md`
+  - `tools/blender_ai_workflow/scripts/render_color_calibration.py`（新規）
+  - `tools/blender_ai_workflow/scripts/verify_color_calibration.py`（新規）
+  - `tools/blender_ai_workflow/tests/`
+  - `<ASSET_ROOT>/staging/reports/wall-production-v1-baseline.*`
+- 完了条件:
+  - [ ] current wallのP02 visual referenceと`wall-density-v1`のN / 4N、completed / provisional baselineが、承認済みbaseline commitから保存されている。
+  - [ ] mask表、canonical orientation、bounds / pivotのfixture値に曖昧さがない。
+  - [ ] 9.6 wu公称・連続最小厚の算出条件、12.8 wu外形上限、9.6 wu共通portと再算定triggerがfixture / art基準に固定され、厚さA/Bを未決事項へ戻していない。
+  - [ ] OCIO色再現gateがpass、またはgeometry-only継続／色承認blockedが明記されている。
+  - [ ] OCIO artifactがconfig path / hash、runtime version、`fallback=false`、4 base patch＋emissive sanity patchの入力／経路／PNG／ROI／Delta Eを証明し、offline verifierの既知vector unit testと再検証がpassする。
+  - [ ] normal technical prerequisite、比較仮説、一度で打ち切る条件がartifact schema / testで固定されている。
+  - [ ] `wall-density-v1`のN / 4N、配置 / connector / mask checksum、seed、環境、時間、3-run中央値 / MAD、completed / provisional draw predicateがmachine-readable contractで凍結されている。
+  - [ ] code/runtime batchについてHelp impact decisionが完了し、baseline commit前の対象diffとcommit境界をユーザーが明示承認している。
+- 検証:
+  - `python3 tools/blender_ai_workflow/scripts/verify_color_calibration.py ...`
+  - `python3 -m unittest discover -s tools/blender_ai_workflow/tests`
+  - `hell-workers-run-native-acceptance` Skillのwall-art `plan`が返すdirect `kitty` launcherだけを実行する。
+  - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py plan --repo "$PWD" --adapter Intel`
+  - 上記も返されたdirect `kitty` launcherだけを実行する。
+  - `python3 scripts/dev.py check`
+  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+  - `python3 scripts/dev.py verify`
+  - `python3 scripts/dev.py docs --check`
+  - `git diff --check`
+
+### M1: production wall assetをstagingで制作
+
+- 変更内容:
+  - 59度Orthographic reference boardを公称厚9.6 wu / 装飾外形最大12.8 wuで作り、黒石、錆鉄、トゲ、紫裂け目、ラフ線の優先順位を一枚で比較できるようにする。
+  - 1つのBlender原本内の6 named collectionから6 meshとshared UV / textureを作り、export copyへ32倍scaleをbakeしてstagingへ個別exportする。
+  - `validate-blend` / `export-staging-glb`へ同一のexact collection selectorを追加し、既存no-selector contractを維持する。
+  - pre-export scene validatorに加え、生成GLBを直接decodeするproject固有post-export validatorを追加する。Khronos validatorと併用し、triangle / raw local bounds / identity node transform / mesh / primitive / UV / tangent有無 / embedded image 0 / missing textureを検査する。各armの8〜16 wu port collarをconnection axisへsliceし、連続最小厚、局所横断最大外形、境界port profileを回転不変で検査する。junctionは別armとのunion、isolatedは中心2軸fixtureで判定する。
+  - 既存の単体asset manifest v1を再解釈せず、別schemaのasset-set manifest v2 templateとfail-closed validatorを追加する。source、6 collection→6 GLB、production / optional texture、`normal_decision`、全report / artifact hash、M1 tool commit / tree hash、runtime subject commit、license、art reviewをclosed setとして記録する。M1 candidateだけはnormal / runtime subject / art reviewの`pending`を許すが、M4 final modeとM5は一つでも`pending`なら拒否する。
+  - `scripts/sync_external_assets.py`へ後方互換なmanifest allowlist modeと`--selection core | optional:normal`を追加する。manifest modeの`--dest`はasset rootであり、toolがgeneration固有payload pathとprojection pathを導出する。release modeだけは`--receipt <generation-scoped-receipt>`を必須にしてrepo generationへhash検証copyする。wall releaseでは選択集合とmanifestにない`models` / `textures` / `audio`をcopy対象にしない。通常mirrorへのcore同期はtemporary generationを完成・fsync・renameしてから検証済みruntime projectionを`assets/manifests/`へ最後にatomic replaceし、optional-only同期はactive projectionを書き換えない。外部provenanceの秘密や未承認optional fileを含めず、staging全体を無条件に同期しない。
+  - canonical向けにmanifest allowlistだけを扱う`promote_asset_set.py`の`plan` / `apply` / `recover` / `rollback` modeを追加する。payloadとgeneration-scoped immutable receiptは同一filesystem上のtemporary directoryへ全件copy・hash検証し、全fileとdirectoryをfsyncする。そのdirectoryを一度だけimmutable `<GEN>`へrenameしてgeneration-store親directoryをfsyncし、最後に**唯一のmutable authority**であるactive pointerをtemporary fileのfsync→atomic rename→pointer親directoryのfsyncで切り替える。固定pathをfile単位で順次上書きしない。killが各fsync / rename段で起きても旧または新の完全なgenerationだけがactiveになり、`recover`はorphan temp / inert generationを検査・隔離する。既定動作はread-only `plan`とし、承認なしの`apply`を手順に入れない。
+  - staging snapshotから独立rebuildを1回行い、同じ構造hashで再検査する。
+  - current generic manifest v1 / fixed `source`・`exports` routeを変更せず、wall asset-set v2だけがgeneration storeを使うことを`docs/assets_workflow.md` / `docs/blender-setup.md`へM1 tool commit内で追記する。`init-asset-workspace`とtemplate / doctorもwall generation / receipt / active-pointer directoryを冪等にbootstrap・検査し、旧workspaceを壊さないtestを追加する。M6では実際にpromoteしたgeneration / recovery evidenceで同節を最終化する。
+  - tooling / pipelineのcheckとHelp impact reviewを終え、対象diffを提示してユーザー承認を得たscoped local M1 tool commitを作る。そのclean commitからscene / GLB / report / candidate manifestを再生成し、tool commit / tree hashが自己申告でなくartifactと一致することを検査する。
+- 変更候補:
+  - `<ASSET_ROOT>/staging/blend/wall-production-v1.blend`
+  - `<ASSET_ROOT>/staging/exports/models/wall_*.glb`
+  - `<ASSET_ROOT>/staging/exports/textures/buildings/wall/`
+  - `<ASSET_ROOT>/staging/reports/`
+  - `tools/blender_ai_workflow/scripts/export_glb.py`
+  - `tools/blender_ai_workflow/scripts/validate_scene.py`
+  - `tools/blender_ai_workflow/scripts/validate_wall_glb.py`（新規post-export validator）
+  - `tools/blender_ai_workflow/scripts/validate_asset_set_manifest.py`（新規）
+  - `tools/blender_ai_workflow/scripts/promote_asset_set.py`（新規）
+  - `tools/blender_ai_workflow/bin/validate-blend`
+  - `tools/blender_ai_workflow/bin/export-staging-glb`
+  - `tools/blender_ai_workflow/bin/validate-wall-glb`（新規）
+  - `tools/blender_ai_workflow/templates/asset-set-manifest-v2.template.json`（新規。既存v1 templateは維持）
+  - `tools/blender_ai_workflow/tests/`
+  - `tools/blender_ai_workflow/README.md`
+  - `tools/blender_ai_workflow/bin/init-asset-workspace`
+  - `tools/blender_ai_workflow/templates/`
+  - `scripts/sync_external_assets.py`
+  - `scripts/tests/`（manifest allowlist testの既存配置規約に従う）
+  - `docs/asset-pipeline-glb.md`（新規）
+  - `docs/assets_workflow.md`
+  - `docs/blender-setup.md`
+- 完了条件:
+  - [ ] 6 GLB全てが1 mesh / 1 primitive、共通UV、embedded image 0、350 triangles以下である。
+  - [ ] raw primitive-local bounds / pivot / canonical orientationがM0 fixtureと一致し、Y min / maxは`-16 / +16 wu`、node transformはidentityである。
+  - [ ] 全接続腕のport collarで公称・連続最小厚が9.6 wu、石・鉄・トゲ込み局所横断外形が12.8 wu以下で、cell境界のport profileが6 mesh間で一致する。junctionの別armを厚さへ誤算入していない。
+  - [ ] albedo / emissiveが共通で、variantごとのmaterial slotやtextureがない。
+  - [ ] selectorは6 collectionを別々にexportし、unknown / empty / multi-meshを拒否し、既存no-selector smokeもpassする。
+  - [ ] asset-set manifest v2 validatorが、6 collection→6 GLB、production core / optional集合、normal decision、全report / license / SHA-256 / review statusをexact検証する。M1 candidate modeだけは明示的`pending`を許し、M4 final / M5 modeは拒否する。candidateは隔離profileだけ、通常productionはpromotion receipt付きauthorityだけにmode分離する。
+  - [ ] normal集合はpending 8 core＋1 optional、adopted 9 core＋0 optional、rejected 8 core＋0 optionalだけを許し、rejected normalはart evidence以外のfinal manifest / projection / asset viewに残らない。
+  - [ ] post-export validatorが6正例をpassし、unknown / empty / multi-mesh、node transform、2 primitive、embedded image、bounds / port違反の負例を全件rejectする。
+  - [ ] manifest allowlist付きsync dry-runの差分がwall asset setだけであり、primary / canonicalや無関係assetを対象にしない。
+  - [ ] promotion toolとmanifest-aware syncのplan / apply / recover / rollback testが、existing / absent preimage、途中copy失敗、hash差替え、allowlist外file、全fsync / directory rename / pointer replace kill pointでfail-closedになり、canonical / repoのactive pointerが部分generationを指さない。
+  - [ ] receipt validatorがclosed field setとcanonical bytesを検査し、missing、wrong generation / manifest / plan、stale preimage pointer、別payloadへのreceipt再利用を全件rejectする。
+  - [ ] generic v1 workspaceは不変のまま、bootstrap / doctorがwall v2 generation / receipt / pointer layoutを冪等に作成・検査し、M1時点の運用docsとtool contractが一致する。
+  - [ ] manifest / license / SHA-256 / scene・post-export・Khronos validator report / rebuild reportが揃う。
+  - [ ] staging候補とcandidate-only normalがhash付きでprimary外のclean validation worktreeへprovisionされ、primary / canonicalとは明確に区別されている。
+  - [ ] 6 mesh全てのUV0とtangent有無をpost-export reportへ記録し、tangent欠落時はM4の一回限り生成pathをtechnical fixtureで検査できる。normalのlinear / `+Y` contractも別reportで検査できる。
+  - [ ] まだcanonical generation store / active pointerへ昇格していない。
+  - [ ] tooling / runtime-data候補の実経路についてHelp impact decisionを完了し、scoped M1 tool commitをユーザーが明示承認し、そのcommitから全report / manifestを再生成してからM1完了を報告する。
+- 検証:
+  - `tools/blender_ai_workflow/bin/validate-blend --collection <exact-name> ...`
+  - `tools/blender_ai_workflow/bin/export-staging-glb --collection <exact-name> ...`
+  - `tools/blender_ai_workflow/bin/validate-wall-glb ...`
+  - `python3 tools/blender_ai_workflow/scripts/validate_asset_set_manifest.py ...`
+  - `python3 -m unittest discover -s tools/blender_ai_workflow/tests`
+  - `python3 scripts/sync_external_assets.py --source "$ASSET_ROOT/staging/exports" --dest "$VALIDATION_WORKTREE/assets" --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" --selection core --dry-run`
+  - `python3 scripts/dev.py docs --check`
+
+### M2: runtime asset pool、material、Eligible stateを接続
+
+- 変更内容:
+  - 6 GLB primitive、shared texture、`WallAssetSetManifest` custom asset / loaderをasset catalogへ追加し、wall専用のfinite handle poolを作る。normal A/B handleは隔離scenario限定のcandidate poolへ分離する。
+  - procedural `Cuboid`をfallbackとして保持し、6 mesh＋albedo＋emissive（採用確定後だけnormalを追加）の全CPU-readyとmanifest authorityをaggregateするload-state systemを追加する。このマイルストーンでは`Eligible`までに留め、通常gameplayのentityへproduction handleを適用しない。
+  - 完成／仮設のshared `TopDownStructuralMaterial`へalbedo / emissiveを接続する。entity単位のmaterial生成を禁止するtestを追加する。
+  - existing wall spawn、cleanup、material promotion、Scene RtT render layer、`MeshTag`のexactly-one契約をfallback上で維持する。spawn / rehydrateのcreation-time fallback / tag初期化だけを例外にし、production `Mesh3d` / materialとspawn後のwall transform / `MeshTag` mutationの唯一writerはM3で追加するpresentation applyへ集約する。
+- 変更候補:
+  - `crates/bevy_app/src/assets.rs`
+  - `crates/bevy_app/src/assets/`またはstartup配下のwall manifest loader（既存module境界に合わせる）
+  - `crates/bevy_app/src/plugins/startup/asset_catalog.rs`
+  - `crates/bevy_app/src/plugins/startup/visual_handles.rs`
+  - `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs`
+  - `crates/bevy_app/src/systems/visual/building3d_cleanup.rs`
+  - `crates/hw_visual/src/visual3d.rs`
+  - `crates/bevy_app/src/plugins/visual.rs`
+  - `crates/bevy_app/Cargo.toml`（`.wallset` canonical JSON loader用`serde_json`を通常dependency化）
+- 完了条件:
+  - [ ] 6 primitiveをBevy 0.19 APIで直接ロードし、`SceneRoot`や子meshを生成しない。
+  - [ ] required assetの全CPU-ready前／failure／unauthorized時は全wallがfallbackで見え、mixed状態やinvisible wallがない。
+  - [ ] `.wallset` projectorがcanonical JSONをbyte-identicalに再生成し、通常feature集合でloaderがcompileする。loaderは全core file、release modeではimmutable receiptのactual bytes / SHA-256も`LoadContext::read_asset_bytes`で照合し、canonical schemaとmanifest / generation bindingを検査する。非canonical wire、改変・未知・欠落core、missing / tampered / mismatched receiptでは`Eligible`にならない。hash検証はasset-set identityあたり1回で、wall entityごとにI/Oしない。
+  - [ ] 全CPU-ready＋manifest authority後はaggregate stateだけが`Eligible`へ一度遷移し、M2単独の通常gameplayでは既存／新規wallともfallbackのままである。test専用`topology_ready` seamでだけ、後段のatomic apply条件を検証する。
+  - [ ] active production materialは完成／仮設2 handle、fallbackを含む総poolは4 handleで有限であり、Indoor Light Field bindingと未sample契約を保持する。
+  - [ ] missing / late albedo / emissive、adopted normal、release receipt、ready切替と同frame spawn、synthetic asset failure後の一括fallbackがfocused testで合格する。receiptのmissing / tamper / wrong generation / wrong manifestは通常起動をfallbackへ落とす。failed fileの復旧はfresh App restartで検証し、同processの自動hot reloadを主張しない。candidate-only normalのmissing / lateはproduction core readinessを誤ってblockせず、normal A/Bだけをfail-closedにする。
+  - [ ] loaded primitiveのraw local AABB、identity node前提、world transform後AABBが1 tile / ground接地契約と一致し、asset reportの9.6 / 12.8 wu geometry値とhashが一致する。
+  - [ ] exactly-one `Building3dVisual` / `Mesh3d` / material / logical `MeshTag` testが合格する。
+  - [ ] asset-set identityとprocess-local session / activation revisionが混同されず、同一activation revisionのsteady stateではaggregate再遷移、全Wall走査、mesh / material writeが0である。fresh restartは同じasset generationを保持した新sessionとして回復する。
+  - [ ] M2の実経路についてHelp impact decisionを完了してからマイルストーン完了を報告する。
+- 検証:
+  - `python3 scripts/dev.py cargo -- test -p bevy_app wall`
+  - `python3 scripts/dev.py check`
+  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+
+### M3: 16 topologyと全lifecycleを統合しproductionを有効化
+
+- 変更内容:
+  - mask計算と `WallMeshFamily + QuarterTurns` resolverをpure functionへ抽出し、16件のexhaustive table testを追加する。
+  - 3D `Mesh3d` / topology state / transformを同期し、既存2D blueprint image selectionも同じmask sourceを使う。
+  - bidirectional `entity -> set<grid>` / `grid -> contributors + targets` indexを追加し、add / move / remove / cancel / rehydrateで旧集合・新集合のself＋4近傍だけを更新する。
+  - normal construction、Instant Build、deconstruction、save/load、fixtureの全production routeをresolverへ接続する。
+  - `Eligible + topology_ready`を一つのactivation transitionとして`ProductionActive`へ進める。spawn / rehydrateのcreation-time fallback bundle / tag初期化を除き、production handleとspawn後の`Mesh3d` / wall material / composed transform / owner-derived `MeshTag` mutationは`WallPresentationApplySet`だけが書く。failure / resetでは同じapplyが全wallをfallbackへ戻す。
+  - `hw_visual`のworld-replace hookへindex / last-known grid / dirty topology revision / resolved cacheのclearとfull-rebuild request、`bevy_app`の別hookへglobal fallback化 / activation revision更新を接続する。両reset完了後に`Last` rehydrateし、次frameに一回だけfull rebuild / production復帰する。
+- 変更候補:
+  - `crates/hw_visual/src/wall_connection.rs`
+  - `crates/hw_visual/src/visual3d.rs`
+  - `crates/hw_core/src/visual_mirror/construction.rs`（tile grid mirrorが必要な場合）
+  - `crates/bevy_app/src/systems/visual/building3d_cleanup.rs`
+  - `crates/bevy_app/src/systems/jobs/wall_construction/`
+  - `crates/bevy_app/src/systems/jobs/deconstruction/`
+  - `crates/bevy_app/src/systems/save/rehydrate/`
+  - `crates/bevy_app/src/plugins/startup/perf_scenario/`
+- 完了条件:
+  - [ ] 16 mask、Door接続、canonical rotationがtable-driven testで全件合格する。
+  - [ ] 全family / quarter turnのport collarで中心bandと接続portの半幅4.8 wu以上、局所横断の装飾半幅6.4 wu以下が不変で、Wall–Wall境界にgap / overlapがない。junctionはactive arm unionとして別判定する。
+  - [ ] `Update`内のwall / door / blueprint追加・撤去・cancelが、同frameの後続`PostUpdate`で対象と4近傍だけを更新する。
+  - [ ] 複数tile siteの配置→framing→`FramedProvisional`→完成と、framing前／後cancelで、全gridのconnectorとtile visual targetが欠落・重複しない。
+  - [ ] site / tile / spawned wallが同一gridに一時共存しても接続数1へcoalesceされ、GLBはspawned Wallだけにexactly oneである。
+  - [ ] 仮設→完成はmaterialだけが変わり、mesh family / rotation / `MeshTag`は不変である。
+  - [ ] topology producerだけがdirtyをdrainし、2D / 3D consumerが同じresolved stateを同じ`PostUpdate`で観測する。`PlacementFeedbackSet::Commit`由来の配置も1 frame遅延しない。
+  - [ ] `WallAssetReadinessSet -> WallTopologyResolveSet -> ApplyDeferred -> WallPresentationApplySet`が`TransformSystems::Propagate`より前に実行され、final transform / tag compositionもapply内で完了する。owner移動 / owner回転ではlocal / `GlobalTransform`と`MeshTag`が同frame更新され、completion bounceやtransform syncでtopology回転が消えず、topology quarter turnだけではowner-derived tagが変化しない。
+  - [ ] save/load後にexactly-one visualと同一mask / family / rotationが復元される。
+  - [ ] normal load、rollback、recovery-only、連続2回resetの全world replacement testで、`Last` rehydrate frameは全wall fallbackかつlocal / `GlobalTransform`が正しいworld位置、次frame rebuild後は全wall production、mixed frame 0、旧`Entity`参照0、index rebuild 1回、重複contributor 0である。
+  - [ ] asset `Eligible`からの初回有効化、同frame spawn、synthetic failure、restart後回復の各activation revisionで既存／新規wallが同じmodeへ一括収束する。creation-time fallback / tag初期化以外にpresentation apply外の`Mesh3d` / wall material / wall transform / `MeshTag` mutationがなく、既存generic writerがWallを除外している。
+  - [ ] steady stateのtopology再計算とmesh writeが0件である。
+  - [ ] M3のplayer-visible routeについてHelp impact decisionを完了し、必要なHelp更新を同じbatchへ含めてから完了を報告する。
+- 検証:
+  - `python3 scripts/dev.py cargo -- test -p hw_visual wall_connection`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app wall`
+  - `python3 scripts/dev.py cargo -- test -p bevy_app rehydrate`
+  - `python3 scripts/dev.py check`
+  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+
+### M4: art候補をnative A/Bし、ユーザー承認を得る
+
+- 変更内容:
+  - M3のproduction spawn / WorldMap / presentation routeを使う専用wall-art gallery scenarioを `bevy_app`へ追加する。`visual_test`の独自meshを使わない。
+  - source / asset fingerprint、phase ACK、client capture、offline再検証を持つwall-art fail-closed profileをA/B前に完成させ、High / Medium / Low、DPI、zoom、lifecycle phaseをparameter化する。M0でfreezeした`wall_density_acceptance.py`とRust density fixtureは変更せず、別の`wall_art_acceptance.py`へgallery phaseとart predicateを追加する。
+  - profile / gallery / comparison toggleを含むharness diffのcheck / clippy / verifyとHelp impact reviewを通した後、ユーザー承認を得てscoped local harness commitを作り、そのcommitのclean validation worktreeだけへstaging候補をprovisionする。
+  - A/Bを直積にせず、次の順次funnelで行う。
+    1. OCIO proofを固定calibration条件で一度だけ閉じる。OCIOまたはgeometry gate不合格は全art比較をblockする。optional normalだけのtechnical gate不合格はlit / unlit比較をblockせず、`normal_decision=rejected`として手順3だけをskipする。
+    2. normalなし、High、DPI 1.0、standard zoomの同じgalleryでlit対unlitだけを比較し、winnerを1つにする。unlitは現shader上emissive / normalを評価できないcontrolであることを観察記録へ明記する。
+    3. lit採用かつnormal technical gate合格時だけwinnerの同一条件でnormalなし対ありを1回比較する。normal gate不合格ならnormalをrejectしてlit候補を維持する。unlit採用時はnormal A/Bを省略し、紫emissive要件を満たせないため別wall shader提案へblockする。
+    4. 勝者だけを`tile_rtt_px = 14`、High最大zoom、Medium / Low最遠景、全16 mask / lifecycle galleryへ展開する。High / Medium / Low × DPI 3段のfull matrixはM5のfinal candidateだけに実行する。
+  - normal候補は隔離validation worktreeから`ImageLoaderSettings::is_srgb = false`で読み、tangent / UV / known-direction sidecar predicate不合格なら画像比較を開始しない。
+  - 一時toggleはcandidate IDとartifactを固定するためだけに使い、採用判断後に削除する。
+  - 石積みの読解性、平面イラスト感、wobbly line、錆鉄とトゲのsilhouette、紫裂け目、tile境界、Soulとのdepth、directional shadowを観察する。
+  - 厚さは9.6 wu固定で、standard、`tile_rtt_px = 14`境界、最大zoom-out 5、各qualityの全quarter turnを撮る。14 px/tileでは内部色、最大zoom-outではHighの内部色1 px以上を数値検査する。Medium / Lowの最遠景はfinal client composite後のanti-aliased silhouetteに穴、断線、frame間flickerがないことを定性的に検査し、物理1 pxの内部色を要求しない。全投影高とcell脇が通路に見えないことも確認し、8 / 9.6の通常A/Bは再開しない。
+  - ユーザーが1候補を承認し、outline / unlit / normalの最終値を `art-style-criteria.md`へ反映する。
+  - 採用後はprimaryでart comparison toggle / debug material / 不採用normal経路を撤去し、final profileを再度check / clippy / verifyする。M5の性能比較に必要なprofile-only controlはplayer-facing toggleと分離して保持する。Help impact reviewを再実行し、最終diffを提示して二度目の明示承認を得たscoped local commitからM5用clean worktreeを作る。
+  - final commit確定後、M1 candidateをそのまま書き換えず新しい`asset_set_generation`として再封印する。`normal_decision`を`adopted | rejected`へ確定し、採用A/B入力と同じpayload hash、M1 tool commit、M4 runtime subject commit、art approval artifact hash、`review_status=art_approved`を記録する。candidate runtime projectionを再生成し、manifest validator / post-export report再照合 / core allowlist sync / M2 loader-readiness / M3 activation-world-replace focused testを新generationで再実行する。payload差が選定artifactと一致しない、または`pending`が残る場合はA/Bへ戻り、M5へ進めない。
+- 完了条件:
+  - [ ] OCIO gateがconfig path / hash、runtime version、`fallback=false`を陽性証明し、Blender referenceとBevy client capture内の4 base-color patchが固定ROI / exposure / sRGB→Lab変換で`Delta E 2000`平均`<= 2.0`、各patch`<= 3.0`である。emissive sanity patchも別predicateでpassする。
+  - [ ] normal A/B artifactがcandidate-only hash、linear load、6 meshのtangent / UV0、`+Y`方向predicateを証明し、technical failureを「差なし」に分類していない。
+  - [ ] candidateごとの画像、hash、設定、観察結果が保存され、同じ仮説を無目的に再調整していない。
+  - [ ] lit / unlitを先に一軸比較し、lit winnerにだけnormal一軸比較を行っている。中間candidateへ9 case / full lifecycleを掛けておらず、交絡した比較artifactを採用根拠にしていない。
+  - [ ] ユーザーがproduction cameraで最終候補を承認している。
+  - [ ] baked lineworkで不合格なら別outline提案を作り、本計画を無理に完了扱いしていない。
+  - [ ] 9.6 wu straight E-W wallがstandardで全投影高0.90 tile、装飾最大でも1.00 tile以内である。`tile_rtt_px = 14`では内部色、最大zoom-out 5のHighでは内部色1 px以上、Medium / Lowではfinal compositeの無穴・無断線・無flicker silhouetteを全回転で満たす。
+  - [ ] 比較用normal / toggle / debug materialを採用結果に従い撤去している。
+  - [ ] M4 final asset generationが`normal_decision`、M1 tool commit、M4 runtime subject commit、art approval hashをpendingなしで封印し、選定時payloadと一致する。新generationのmanifest / projection、allowlist、M2 readiness、M3 activation / world-replace focused gateを再実行している。
+  - [ ] A/B harness commitと採用後final commitの前にそれぞれHelp impact decisionを完了し、各対象diff、およびcommitはするがpush / canonical promoteはしない境界を提示してユーザーの明示承認を得ている。未承認なら該当native phaseを開始しない。
+- 変更候補:
+  - `crates/bevy_app/src/plugins/startup/perf_scenario/`
+  - `.codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py`（M0 calibration profileへgallery / art phaseを追加）
+  - `.codex/skills/hell-workers-run-native-acceptance/SKILL.md`（profile手順を更新）
+  - `<ASSET_ROOT>/staging/reports/wall-production-v1-art-review.*`
+- 検証:
+  - `hell-workers-run-native-acceptance` Skillのno-prompt actual-window launcherを使用する。
+  - client windowだけをcaptureし、headless、`visual_test`、desktop全体captureを代用しない。
+
+### M5: 専用actual-window、P02回帰、性能を閉じる
+
+- 変更内容:
+  - M4で完成・commit済みのwall-art gallery / fail-closed profileを変更せず、final commitのclean validation worktreeで実行する。code / launcher / predicate修正が必要になった時点でartifactを無効化してM4へ戻り、final commit承認からやり直す。
+  - 性能用にはM0 baseline commitとM4 final commitから別々のclean worktreeを作り、同じfinal asset viewをexact copyする。full / wall-set / non-wallの3 hash、freeze済みdensity profile / Rust fixture / measurement contract hash、adapter / backend / windowを一致させる。baseline binaryは追加wall fileを参照しなくてもasset view自体はfinalと同じにする。
+  - gallery 1枚に、孤立、4端、2直線、4corner、4T、cross、Door隣接を配置し、完成列と仮設列を比較できるようにする。
+  - phaseを追加／撤去、仮設→完成bounce、Soul front/back、save/load rehydrate、standard / farthest player zoomに分け、launcher ACKをasset-set identityとprocess-local session / activation revisionの両方へ結んだclient-window captureを作る。
+  - High / Medium / Low × DPI 1.0 / 1.5 / 2.0のGPU-visible 9 caseを専用profileで検証し、既存P02 18 case matrixも回帰として再実行する。
+  - sidecarでsource fingerprint、3 asset hash、manifest authority / asset-set generation、session / activation revision、6 GLB / texture hash、load state、phase別fallback count、mask / family / rotation、owner / visual exact count、active / total mesh / material IDs、triangles、distinct mesh/material組合せ、geometry report hashと9.6 / 12.8 wu契約を検証する。steady productionはfallback 0、world-replace transitionだけは全owner fallbackの1 frameを許し、mixed countは全phase 0とする。
+  - M0 baseline commit対final production、およびfinal commit内のprofile-only `force-fallback` control対productionを、`wall-density-v1`のcompleted / provisional各N / 4Nで実行する。各runのp95 / p99を先に求め、3 valid runの中央値で両比較とも`<= +5%`を要求し、MADを併記する。
+  - bounded RenderDoc captureではcompleted opaqueのwall main-passを抽出し、`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`を要求する。provisional transparentは別sorted phaseで`D_4N <= 4 * D_N + 6`を要求し、count / normalized slopeを別artifactへ記録する。
+- 変更候補:
+  - `crates/bevy_app/src/plugins/startup/perf_scenario/`
+  - `docs/rendering-performance.md`
+- 完了条件:
+  - [ ] 9 caseのclient-window PNGとsidecarがfresh source / asset fingerprintに対してfail-closedでpassする。
+  - [ ] 全16 mask、Door接続、完成／仮設、追加／撤去、completion、depth、loadが画像とstateの両方でpassする。
+  - [ ] 全family / rotationのWall–Wall portが9.6 wuの同一profileで連続し、各armの局所横断で連続壁体が9.6 wu未満へ細らず、装飾が12.8 wu envelopeとcell AABBを越えない。最遠zoom-outではHighの内部色1 px以上、Medium / Lowのfinal composite silhouette連続を満たす。
+  - [ ] existing P02 matrixがwall depth、completion bounce、Render3d visible/hidden、exactly-oneを含め全件passする。
+  - [ ] production resident mesh 6、active production material 2、finite total pool mesh 7 / material 4、steady phaseのfallback active 0、world-replace transitionのfallback-only 1 frame、全phase mixed 0、各mesh 350 triangles以下、distinct production mesh/material組合せ12以下である。
+  - [ ] M0 baseline commitとfinal commitのclean worktreeが同一のfinal asset viewとbyte-identicalなdensity profile / fixture / contractを使い、N=96 / 4N=384、seed、warm-up / measure、3-run集約のいずれにもdriftがない。
+  - [ ] baseline対production、final `force-fallback`対productionのcompleted / provisional Capture p95 / p99中央値がそれぞれ`+5%`以内で、全run valid、MAD併記である。
+  - [ ] RenderDoc上のcompleted wall main-passが`D_N <= 6`、`D_4N <= 6`、`D_4N = D_N`、provisional sorted phaseが`D_4N <= 4 * D_N + 6`を満たす。
+  - [ ] native実行中のcode / profile / predicate変更が0で、source fingerprintはM4 final commitと一致する。修正が発生したrunを合格artifactへ流用していない。
+  - [ ] manifestはM4のpendingなしfinal generationと一致し、M1 candidate generationやA/B用optional集合のartifactをfinal証拠へ混ぜていない。validation worktreeはadopted core 9またはrejected core 8だけを含む。
+  - [ ] compare開始前に空の`<sealed-artifacts>` directoryを作り、4つの固有CSVと各SHA-256を保存している。既定`comparison.csv`へ上書きしていない。
+  - [ ] adapter / backend / window backendがartifactに記録され、headless結果をrenderer証拠にしていない。
+- 検証:
+  - 専用profileの `plan` が返すdirect `kitty` launcherだけを実行し、15〜30秒間隔でstatusをpollする。
+  - `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py plan --repo "$PWD" --adapter Intel`
+  - `python3 scripts/perf.py compare --baseline <m0-session> --candidate <final-production-session> --metric p95 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/baseline-vs-production-p95.csv`
+  - `python3 scripts/perf.py compare --baseline <m0-session> --candidate <final-production-session> --metric p99 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/baseline-vs-production-p99.csv`
+  - `python3 scripts/perf.py compare --baseline <final-force-fallback-session> --candidate <final-production-session> --metric p95 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/force-fallback-vs-production-p95.csv`
+  - `python3 scripts/perf.py compare --baseline <final-force-fallback-session> --candidate <final-production-session> --metric p99 --max-regression-pct 5 --min-runs 3 --output <sealed-artifacts>/force-fallback-vs-production-p99.csv`
+  - `python3 scripts/dev.py verify`
+  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+
+### M6: canonical昇格、文書同期、計画close
+
+- 変更内容:
+  - stagingの承認対象、asset-set manifest、license、validator、native artifact、recovery結果をユーザーへ提示する。承認直前にcandidate hashを再計算し、M5のasset-set identityと一致しなければM4へ戻る。M5で検証したpayload manifest bytesは変更せず、release承認は別のpromotion receiptへ記録する。
+  - canonical generation storeとprimary runtime mirrorについて、現在のactive pointer / receiptと参照先generationのpreimage（既存hashまたはabsent）を記録し、repositoryの`target/`外にimmutable promotion snapshotを作る。snapshot自体のmanifest / SHA-256とpointer rollback dry-runを検証してからpromote承認を求める。
+  - 明示承認後だけ、allowlistにある`.blend`、6 GLB、採用texture、payload manifest / licenseとgeneration-scoped immutable promotion receiptを同一filesystem上のtemporary generation directoryへcopyする。全file / directoryをfsyncし、hash検証後にimmutable `<GEN>`へ一回renameしてgeneration-store親directoryもfsyncする。その後にだけ、唯一のmutable authority pointerをtemporary fileのfsync→atomic rename→pointer親directoryのfsyncで切り替える。kill / I/O failure時は旧pointerを維持し、すでに切替済みなら完全な新generationを維持する。固定pathのfile単位上書きや「例外が捕捉できた場合だけrestore」に依存しない。
+  - canonical promote後にsource / destination / exact file listを再提示し、runtime mirror同期の別の明示承認を得る。generation-aware `scripts/sync_external_assets.py --dry-run`と実同期を同じallowlistで行い、repo側もtemporary generationのfile / directory fsync→generation rename→generation-store親fsyncを終えてから、唯一のmutable runtime authorityである`assets/manifests/wall-production-v1.wallset`をtemporary fileのfsync→atomic rename→manifest親directoryのfsyncで最後に切り替える。`--delete-missing`とunrelated asset copyを使わず、canonicalとrepoの各切替段にkillされてもactive pointerが常に完全な旧／新generationを指すことを`recover`で検査する。
+  - 実同期後のprimary repositoryから新processのclean startupとsave/loadを専用wall profileでactual-window再実行し、canonical / repo mirror / runtime sidecarのhash一致、promotion receiptに承認されたasset-set identity、resident production asset、fallback 0を確認する。このpost-promote runより前にM6を完了扱いしない。
+  - runtime再検証後に、アート基準、asset pipeline、building表示、性能、READMEの旧「2D pixel art」記述、親計画、workstation M4を実態へ同期する。
+  - functionality / runtime dataの最終状態に対し `hell-workers-review-help-impact` Skillを再実行し、実際のplayer-visible pathから `Update required` / `No impact`を記録する。
+  - 完了後は本計画を削除またはarchiveし、恒久仕様だけを正本docsへ残す。
+- 変更候補:
+  - `docs/art-style-criteria.md`
+  - `docs/asset-pipeline-glb.md`
+  - `docs/building.md`
+  - `docs/rendering-performance.md`
+  - `docs/assets_workflow.md`
+  - `docs/plans/3d-rtt/asset-milestones-2026-03-17.md`
+  - `docs/plans/development-workstation-blender-migration-plan-2026-07-29.md`
+  - `README.md`
+  - Help manifest / provider / coverage / approval snapshot（Help impactが`Update required`の場合だけ）
+- 完了条件:
+  - [ ] ユーザーのcanonical promote明示承認が記録されている。
+  - [ ] canonical / repo mirrorのactive pointer preimageまたはabsent状態、参照generation、immutable snapshot、snapshot manifest / hash、rollback dry-runがpromote前に検証されている。
+  - [ ] canonical generation payload / promotion receipt / repo runtime generation / runtime projectionのhashとasset-set identityが一致する。
+  - [ ] allowlist外のcanonical / repo asset差分が0で、file fsync / generation-directory fsync / generation rename / generation-store親fsync / pointer file fsync / pointer rename / pointer親fsync各段のprocess-kill test後もactive pointerは完全な旧または新generationだけを指す。`recover`がorphanを検出し、rollbackはpointerを検証済みpreimageへ同じdurable atomic手順で戻す。
+  - [ ] actual sync後のprimary clean startupとloadを専用actual-window profileで再実行し、promotion-receipt-approved asset-set generation、production asset resident、fallback 0、runtime hash一致を再確認している。
+  - [ ] Help impact decisionと必要なHelp / docs更新が完了している。
+  - [ ] `docs --write`後の2 indexをreviewし、全workspace gateがgreenである。
+  - [ ] 本計画の一時情報を恒久docsへ移し、plan lifecycleを閉じている。
+- 検証:
+  - `python3 tools/blender_ai_workflow/scripts/promote_asset_set.py plan --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" --asset-root "$ASSET_ROOT" --snapshot <outside-target-snapshot>`
+  - 上記plan artifactとユーザー承認後だけ、同じtoolの`apply --plan <sealed-plan>`。中断後は`recover --plan <sealed-plan>`、rollback承認後は`rollback --plan <sealed-plan>`を実行してactive pointer / generation hashを再検証
+  - `python3 scripts/sync_external_assets.py --source "$ASSET_ROOT/generations/<GEN>/exports" --dest "$PWD/assets" --manifest "$ASSET_ROOT/generations/<GEN>/manifest/wall-production-v1.asset-set.json" --receipt "$ASSET_ROOT/generations/<GEN>/authority/promotion-receipt.json" --selection core --dry-run`
+  - 上記dry-runと同じ引数から`--dry-run`だけを外した実同期（別途ユーザー承認後）
+  - `hell-workers-run-native-acceptance` Skillのpost-promote wall-art `plan`が返すdirect `kitty` launcher
+  - `python3 scripts/dev.py docs --write`
+  - `python3 scripts/dev.py docs --check`
+  - `python3 scripts/dev.py verify`
+  - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
+  - `git diff --check`
+
+## 6. 受入マトリクス
+
+| 対象 | 自動test | actual-window | 合格条件 |
+| --- | --- | --- | --- |
+| geometry / 厚さ | port collar slice / junction union / isolated / AABB validator | standard、14 px/tile、最大zoom-out 5の全回転 | 局所横断の公称・連続最小9.6 wu、装飾外形12.8 wu以下、共通port。straight standard外形0.90 tile／最大1.00 tile。14 px/tileで内部色、最遠Highで内部色1 px以上、最遠Medium / Lowでfinal silhouette連続 |
+| 16 topology | pure table 16件 | gallery全形状 | family / quarter turnと見た目が一致 |
+| Door接続 | DoorState 3種、blueprint含む | Wall-Door列 | stateに関係なくmask接続し撤去で近傍更新。Wall側portは9.6 wu、placeholder leafとの無隙間jambは要求しない |
+| lifecycle | add / cancel / deconstruct / completion | phase capture | stale mesh、重複visual、回転消失なし。同frame `GlobalTransform`まで一致 |
+| rehydrate | save candidate / presentation test | load前後capture | `Last` frameはfallback-onlyでlocal / `GlobalTransform`が正しいworld位置、次frameはproduction-only。同じmask / family / rotation / exact countでmixed 0 |
+| material | finite handle ID test | 完成／仮設列 | geometry不変、materialだけ遷移 |
+| depth / shadow | MeshTag / render layer invariant | Soul front/back、地面shadow | P02契約を維持 |
+| asset failure | missing / one-failed / late-ready / unauthorized / restart test | failure smoke | 全wall fallback、消失／mixedなし。通常buildのfailed回復はrestart-only |
+| asset production | manifest authority / hash / load state / bounds / tri | 9 case | promotion receipt承認済みまたはprofile明示candidate asset-set identityの6 mesh＋採用textureがGPU描画済み、fallback 0、350 tri以下 |
+| performance | `wall-density-v1` checksum、steady-state writes、handle / pair count | 3-run Capture / RenderDoc | topology write 0、production mesh 6、active material 2、total pool 7 / 4、pair 12以下、baseline / control比p95 / p99中央値`<= +5%`。completedは`D_N,D_4N<=6`かつ同数、transparentは`D_4N<=4D_N+6` |
+| art / color | candidate metadata、OCIO / CIEDE2000 verifier | OCIO-valid client PNG | config path / hashと`fallback=false`を証明し、順次A/Bの勝者をRough Vector Sketchとしてユーザー承認 |
+
+## 7. リスクと対策
+
+| リスク | 影響 | 対策 |
+| --- | --- | --- |
+| OCIO fallbackの色を正しいと誤認 | runtimeとの色差を本番化 | config path / hash、runtime version、`fallback=false`の陽性証明とoffline CIEDE2000再検証が揃うまで色承認とpromoteをblock |
+| GLB `SceneRoot`で複数childをspawn | exactly-one、cleanup、draw call、MeshTagが破綻 | primitive `Handle<Mesh>`を直接読み、1 mesh / 1 primitiveをvalidatorとtestで固定 |
+| transform syncがtopology回転を上書き | 数frame後やbounce後に向きが戻る | owner / topology / bounceをpure helperで一括合成し、順序testを追加 |
+| final transformがBevy propagationより遅い | 画像と`GlobalTransform`が1 frame古い | chainを`TransformSystems::Propagate`より前へ置き、same-frame local / global testを固定 |
+| 撤去後の旧gridを取得できない | 隣接壁がstale形状のまま | entity→last-known grid indexを保持し、Removedを旧位置からdirty化 |
+| world replacement後も旧indexが残る | 再利用Entityへのalias、重複connector | `hw_visual` resetでindex / topology revision / cache、`bevy_app` resetでactivation stateを分担してclearし、`Last` fallback spawnと次frameの一度だけの再構築・一括復帰を固定 |
+| asset readyだけでM3前にproduction化 | 全wallが誤ったfamily / rotationになる | M2は`Eligible`まで、manifest authority＋`topology_ready`をM3のatomic activation条件にする |
+| 6 meshまたはshared Imageの一部だけload | wallごとにstyle混在、壁消失 | asset-set identityとactivation revisionを分けたall-or-nothing readiness、procedural fallback、native fallback 0 gate。failed回復は同じasset generationのrestart-only |
+| promote中にprocess kill / 電源断 | 固定pathが旧新混在しmanifestと不一致 | immutable generationとreceiptをfsyncし、directory rename後にstore親もfsyncしてから、唯一のactive pointerをfile fsync→rename→親fsyncで切替。全kill pointのrecover / rollback testを必須化 |
+| ignored staging assetが通常起動へ紛れ込む | 未承認generationを本番表示 | 通常起動はart-approved payload＋approved promotion receiptのprojectionだけ、candidateは隔離profileのexact identity opt-inだけを許可 |
+| validation assetがprimaryやtracked shaderを汚す | formal subjectとasset証拠が一致しない | clean worktree内のignored assetだけへmanifest allowlistでoverlayし、tracked hash / git clean / 3 asset hashを毎run確認 |
+| 鉄トゲや石目をgeometry化しすぎる | triangle / silhouette noise / batch増 | silhouette-critical部だけgeometry、detailはshared texture、350 tri hard cap |
+| 壁厚が細すぎて遠景で輪郭だけになる | 石積みの塗りと接続が消える | Highの最大zoom-out 5で内部色1 px以上から9.6 wuを固定し、14 px/tile / Lowをactual-window受入へ含める |
+| 壁厚や装飾が太すぎて箱へ戻る | Rough Vector Sketchの平面感と隣tileの読解性が低下 | 公称9.6 wu、装飾12.8 wuをvalidatorで上限化し、straight E-Wの横断silhouetteだけを対象に縦補正後の全投影高を通常0.90 tile / 最大1.00 tile以内にする |
+| 細いvisual脇が歩ける空間に見える | 32 wu cell全体を塞ぐgameplayと見た目が食い違う | 11.2 wuは建築cell内余白と明記し、placement / selection maskとgalleryでblocked cellを同時表示する |
+| 暫定Door leafへ壁厚を合わせる | 5.76 wu placeholder値が本番asset契約へ固定され、向き／jamb不足を隠す | Wall portは9.6 wuを正本にし、Door seamは別asset scope。Wall–Door受入はmask / centerlineまでに限定 |
+| emissive裂け目がgameplay lightに見える | 室内照明ルールと混同 | surface emissive限定、PointLight / emitterを禁止、Help gameplay説明は変更しない |
+| unlit化でshadow / depthが退行 | actorと壁の前後関係や地面shadowが崩れる | 同じmaterial型でA/Bし、P02 actual-window回帰を採用gateにする |
+| normal / outline調整を惰性で反復 | 原因不明のまま工数増大 | tangent / linear / `+Y` technical gate後、仮説ごとに一度のA/B。変化なし／基準未達なら打切り、outlineは別計画 |
+| lit / unlit / normal / qualityを直積比較 | 交絡して採否理由が不明、artifactが肥大 | lit/unlit→lit winnerのnormal→final winnerのfull matrixという順次funnelに固定 |
+| performance fixtureがbaseline後に変わる | `+5%`比較が無意味 | `wall-density-v1` contract hashをM0で凍結し、変更時はbaselineから再採取。3-run中央値 / MADとdraw predicateをexact化 |
+| external binaryがGit差分に現れない | fresh cloneで欠落 | canonical manifest、runtime asset view hash、native residency、fallbackをfail-closed検査 |
+| 旧2D textureとactive 3Dを混同 | 見えないassetだけを修正 | production `Building3dVisual`経路を受入fixtureで直接証明 |
+
+## 8. ロールバック方針
+
+- コード側:
+  - production pool選択を無効にし、保持したprocedural `Cuboid` fallbackへ全wallを一括で戻せるようにする。
+  - topology resolver自体は2D blueprint correctnessにも使うため、asset rollbackと分離する。resolver不具合時は最後の承認済みmask tableへ戻す。
+- asset側:
+  - canonical promote前はstagingと一時validation worktreeを隔離したまま廃棄または再制作でき、primary `assets/`とcanonicalへ影響しない。一時worktreeの削除前にartifact / manifestの保存先を検証する。
+  - promote直前にcanonical / repo mirrorのactive pointerと参照generationのpreimageまたはabsent状態をimmutable snapshotへ保存する。中断時は`recover`でactive pointerが完全な旧／新generationを指すことを検証し、orphan temporary generationを隔離する。
+  - promote後の問題はpayloadをfile単位で戻さず、snapshot内の検証済みpreimage pointerへatomic rollbackする。repo mirrorも対応する完全なgenerationを検証してからpointerだけを戻し、旧generationはpost-promote受入完了まで削除しない。
+  - broad削除、`--delete-missing`、未確認の上書きを行わない。
+- release判断:
+  - missing、load failure、GPU不具合が出たbuildはfallbackを使ってplayableに保つが、production壁完成とは報告しない。
+  - rollback後もlogical Wall、save、Room、遮光データは変更しないため、save migrationは不要とする。
+
+## 9. AI引継ぎメモ
+
+### 現在地
+
+- 進捗: `計画作成済み / 実装0%`
+- 完了済み:
+  - current active wall経路、2D connection system、material / transform / MeshTag、save rehydrate、external asset workflowを棚卸し済み。
+  - 6 mesh / 16 mask、finite pool、fallback、native受入の実装境界を本書で固定済み。
+  - production wallの局所横断における公称・連続最小厚9.6 wu、装飾外形上限12.8 wu、共通接続portを投影式と遠景pixel下限から固定済み。
+- 未着手:
+  - M0以降すべて。asset、code、runtime dataは本計画作成時点で変更していない。
+
+### 次のAIが最初にやること
+
+1. `README.md`、`docs/DEVELOPMENT.md`、`docs/README.md`と本書の参照必須ファイルを読み、worktreeと外部asset rootを再棚卸しする。
+2. M0だけを開始し、OCIO陽性証明／offline verifier、current wall baseline、`wall-density-v1`、canonical orientation / boundsを証拠付きで固定する。
+3. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
+
+### ブロッカー/注意点
+
+- Blender OCIO config `2.5` / runtime `2.4.2` mismatchは色承認の現行blockerである。
+- `source/` / `exports/`が空なのは新規authoring baselineとして正常で、repo GLBを偽のBlender原本へ逆変換しない。
+- parent planの100 triangle / active `build_progress` / Light Field目視条件は現runtimeとずれている。壁の実行基準は本書の350 triangle cap、現行施工mask / material transition、Light Field未sample維持とする。
+- native受入は `hell-workers-run-native-acceptance` Skillのdirect `kitty` launcherとfail-closed artifact監視を使う。GUI権限をユーザーへ繰り返し依頼しない。
+- functionality、code、runtime dataを変更したら完了報告前に必ず `hell-workers-review-help-impact` Skillを使う。gate passだけでreview済みにしない。
+- agentを使う場合はread-only explore / code-reviewに限定し、file editはmain agentが `apply_patch`で行う。
+
+### 参照必須ファイル
+
+- `docs/art-style-criteria.md`
+- `docs/world_lore.md`
+- `docs/assets_workflow.md`
+- `docs/blender-setup.md`
+- `docs/rendering-performance.md`
+- `docs/indoor_lighting.md`
+- `docs/plans/3d-rtt/asset-milestones-2026-03-17.md`
+- `docs/plans/development-workstation-blender-migration-plan-2026-07-29.md`
+- `crates/hw_visual/src/wall_connection.rs`
+- `crates/hw_visual/src/visual3d.rs`
+- `crates/bevy_app/src/plugins/startup/visual_handles.rs`
+- `crates/bevy_app/src/systems/jobs/building_completion/spawn.rs`
+- `crates/bevy_app/src/systems/visual/building3d_cleanup.rs`
+
+### 最終確認ログ
+
+- 計画ブラッシュアップ後 `python3 scripts/dev.py docs --write`（plans / proposals両index review）: `pass (2026-09-01)`
+- 計画ブラッシュアップ後 `python3 scripts/dev.py docs --check`: `pass (2026-09-01)`
+- 計画ブラッシュアップ後 `git diff --check`: `pass (2026-09-01)`
+- M0初期tooling `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools/blender_ai_workflow/tests -v`: `pass (12 tests, 2026-09-01)`
+- M0初期tooling `ruff check tools/blender_ai_workflow/scripts tools/blender_ai_workflow/tests`: `pass (2026-09-01)`
+- M0 Rust fixture `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --features profiling wall_density -- --nocapture`: `pass (5 tests, 2026-09-01)`
+- M0 Rust fixture `python3 scripts/dev.py cargo -- clippy -p bevy_app@0.1.0 --all-targets --features profiling -- -D warnings`: `pass (2026-09-01)`
+- 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
+- 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
+- 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
+  既存tracked `scripts/check_crate_dependencies.py`がshebang付き`100644`であるrepository hygiene違反により停止（2026-09-01）。
+- M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
+  通常ゲームの入力、表示、建築成立条件、runtime data、プレイヤー向け文言は不変（`HELL_WORKERS_DIFF_BASE=HEAD`でgate pass）。
+- 未解決エラー: OCIO mismatch、Bevy calibration / wall-density native harness・draw抽出未実装、正式baseline用の承認済みclean commitなし、
+  上記の既存repository hygiene違反。
+
+### Definition of Done
+
+- [ ] M0〜M6の全完了条件を満たす。
+- [ ] 全16 topologyと全production lifecycleがunit / integration / actual-windowで合格する。
+- [ ] 6 production mesh、active production material 2、finite total pool mesh 7 / material 4、steady fallback 0、world-replace fallback-only 1 frame、mixed 0、350 triangles / mesh以下、mesh/material組合せ12以下を証拠化する。
+- [ ] 全16 maskを6 mesh＋該当quarter turnへ写像した全caseで、各armの局所横断における公称・連続最小厚9.6 wu、装飾外形12.8 wu以下、境界port同一profileを自動検査し、standard / 14 px per tile / 最大zoom-out 5の品質別基準で目視合格する。
+- [ ] `wall-density-v1`のN=96 / 4N=384、3 valid run中央値でbaseline / control比Capture p95 / p99 `<= +5%`、completed `D_N,D_4N<=6`かつ同数、provisional `D_4N<=4D_N+6`を証拠化する。
+- [ ] OCIO config path / hash、runtime version、`fallback=false`、offline CIEDE2000再検証が有効なclient captureでユーザーが本番アートを承認する。
+- [ ] canonical / repoのimmutable generation、payload manifest、promotion receipt / active projection、preimage snapshotが一致し、全kill-point recovery testとpost-promote primary actual-window profileがpassする。
+- [ ] `hell-workers-review-help-impact`の実経路判断と影響docs更新が完了する。
+- [ ] `python3 scripts/dev.py check`が成功する。
+- [ ] rust-analyzer workspace diagnosticsが0件である。
+- [ ] `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`が成功する。
+- [ ] `python3 scripts/dev.py verify`が成功する。
+- [ ] 専用wall-art native profileと既存P02 matrixがfail-closedで成功する。
+- [ ] plan lifecycleを閉じ、恒久仕様へ引継ぎ済みである。
+
+## 10. 更新履歴
+
+| 日付 | 変更者 | 内容 |
+| --- | --- | --- |
+| `2026-08-31` | `Codex` | active 3D wall、16接続、asset workflow、OCIO blocker、native受入を統合した初版を作成 |
+| `2026-08-31` | `Codex` | 32 wu placeholderから本番公称・連続最小厚9.6 wuを算出し、12.8 wu装飾外形、共通port、品質別遠景／Door／占有の検証契約を追加 |
+| `2026-09-01` | `Codex` | readinessとtopology activationを分離し、OCIO陽性証明、post-export / manifest gate、clean worktree、順次A/B、再現可能なN / 4N性能lane、world-replaceを具体化。M1→M4のasset再封印、receipt検証、immutable generation＋単一pointerのdurable promoteまで閉じた |
+| `2026-09-01` | `Codex` | M0を開始。geometry / density / color fixture、Blender calibration renderer、offline CIEDE2000 verifierとunit testを追加し、現行OCIO fallbackをfail-closedで検出する初期toolingを実装 |

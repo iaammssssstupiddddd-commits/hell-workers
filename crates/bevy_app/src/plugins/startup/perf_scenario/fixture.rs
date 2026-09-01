@@ -52,6 +52,8 @@ pub(super) enum PerfFixtureKind {
     DashboardTransportRequest,
     DashboardDesignation,
     DreamUiBurst,
+    WallDensityTarget,
+    WallDensityConnector,
 }
 
 #[cfg(feature = "profiling")]
@@ -68,6 +70,8 @@ impl PerfFixtureKind {
             Self::DashboardTransportRequest => 7,
             Self::DashboardDesignation => 8,
             Self::DreamUiBurst => 9,
+            Self::WallDensityTarget => 10,
+            Self::WallDensityConnector => 11,
         }
     }
 }
@@ -113,6 +117,17 @@ pub(super) type PerfSetupSoulQuery<'w, 's> = Query<
 type PerfTreeQuery<'w, 's> = Query<'w, 's, Entity, With<Tree>>;
 #[cfg(feature = "profiling")]
 type PerfRockQuery<'w, 's> = Query<'w, 's, Entity, With<Rock>>;
+#[cfg(feature = "profiling")]
+pub(super) type PerfMainCameraQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static mut Transform,
+    (
+        With<hw_ui::camera::MainCamera>,
+        Without<DamnedSoul>,
+        Without<Familiar>,
+    ),
+>;
 
 #[cfg(feature = "profiling")]
 #[derive(SystemParam)]
@@ -133,6 +148,8 @@ pub struct PerfWorkloadSetupParams<'w, 's> {
     deconstruction_fixture:
         ResMut<'w, super::deconstruction_fixture::DeconstructionPerfFixtureState>,
     indoor_light: ResMut<'w, super::indoor_light_fixture::IndoorLightFixtureState>,
+    wall_density: ResMut<'w, super::wall_density_fixture::WallDensityFixtureState>,
+    q_main_camera: PerfMainCameraQuery<'w, 's>,
     exit: MessageWriter<'w, AppExit>,
 }
 
@@ -187,6 +204,8 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
         mut virtual_time,
         mut deconstruction_fixture,
         mut indoor_light,
+        mut wall_density,
+        mut q_main_camera,
         mut exit,
     } = params;
 
@@ -197,7 +216,27 @@ fn setup_perf_workload_if_needed(params: PerfWorkloadSetupParams) {
         virtual_time.pause();
     }
 
-    if applied.workload || !config.enabled() || q_familiars.is_empty() {
+    if applied.workload || !config.enabled() {
+        return;
+    }
+
+    if config.workload == PerfWorkload::WallDensity {
+        super::wall_density_fixture::begin_wall_density_fixture(
+            &config,
+            super::wall_density_fixture::WallDensitySetupContext {
+                commands: &mut commands,
+                state: &mut wall_density,
+                world_map: &mut world_map,
+                game_assets: &game_assets,
+                handles_3d: &handles_3d,
+                q_main_camera: &mut q_main_camera,
+                exit: &mut exit,
+            },
+        );
+        return;
+    }
+
+    if q_familiars.is_empty() {
         return;
     }
 
@@ -343,6 +382,9 @@ fn configure_perf_workload(
         }
         PerfWorkload::IndoorLight => {
             unreachable!("indoor-light uses the production-topology settle pipeline")
+        }
+        PerfWorkload::WallDensity => {
+            unreachable!("wall-density uses the production-wall fixture pipeline")
         }
         PerfWorkload::Deconstruction => deconstruction_fixture::configure_deconstruction_fixture(
             commands,

@@ -16,6 +16,8 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `bin/export-staging-glb` | scene gate、GLB export、Khronos validatorを直列実行 |
 | `bin/gltf-validate` | pinned Khronos validator wrapper |
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
+| `scripts/render_color_calibration.py` | 壁M0の固定5 patchをBlenderで描画し、OCIO陽性証明付きmetadataを出力 |
+| `scripts/verify_color_calibration.py` | Blender / Bevy PNGをCIEDE2000とemissive sanityでoffline照合 |
 
 `validate-blend` と `export-staging-glb`:
 
@@ -92,3 +94,49 @@ tools/blender_ai_workflow/bin/workflow-smoke
 
 MCPの完全な疎通検査では `scripts/bridge_smoke_server.py` を起動中に、
 vendor venv のPythonで `scripts/mcp_smoke_client.py` を実行します。
+
+## Production wall M0 contracts
+
+壁の本番アート化M0は、次のmachine-readable fixtureを正とします。
+
+- `fixtures/wall-production-v1.geometry.json`: 32 wu cell、9.6 wu公称厚、12.8 wu装飾外形、
+  6 familyと16 maskのcanonical rotation。
+- `fixtures/wall-density-v1.json`: N=96 / 4N=384、20列・5 cell strideのexact配置、
+  Door blueprint connector数、camera scale、seed、画面・renderer・計測時間、
+  completed / provisionalのdraw predicate。profiling runtimeは同じbytesのSHA-256をpinし、
+  target / connector全行とphase別layout checksumをsidecarへ出す。
+- `fixtures/wall-color-calibration-v1.json`: 4 base patchとemissive sanity patch、
+  PNG / ROI / color pipeline、CIEDE2000閾値。
+
+Blender referenceはcanonical assetではなく外部`staging/reports/`へだけ出力します。
+既存artifactを上書きしないため、正式採取では承認済みsource fingerprintを名前と引数へ含めます。
+
+```bash
+ASSET_ROOT="${HELL_WORKERS_ASSET_ROOT:-$HOME/Sync/hell-workers-assets}"
+
+BLENDER_SAFE_NO_NETWORK=1 \
+  tools/blender_ai_workflow/bin/blender-safe \
+  --background --factory-startup --python-exit-code 2 \
+  --python tools/blender_ai_workflow/scripts/render_color_calibration.py -- \
+  --contract tools/blender_ai_workflow/fixtures/wall-color-calibration-v1.json \
+  --output "$ASSET_ROOT/staging/reports/wall-production-v1-color-reference.png" \
+  --metadata "$ASSET_ROOT/staging/reports/wall-production-v1-color-reference.json" \
+  --source-fingerprint '<approved-commit-and-tree-fingerprint>'
+```
+
+Bevy actual-window phaseが同じcontractのcandidate PNG / metadataを生成した後、offline gateを実行します。
+
+```bash
+python3 tools/blender_ai_workflow/scripts/verify_color_calibration.py \
+  --contract tools/blender_ai_workflow/fixtures/wall-color-calibration-v1.json \
+  --reference "$ASSET_ROOT/staging/reports/wall-production-v1-color-reference.png" \
+  --reference-metadata "$ASSET_ROOT/staging/reports/wall-production-v1-color-reference.json" \
+  --candidate "$ASSET_ROOT/staging/reports/wall-production-v1-color-candidate.png" \
+  --candidate-metadata "$ASSET_ROOT/staging/reports/wall-production-v1-color-candidate.json" \
+  --output "$ASSET_ROOT/staging/reports/wall-production-v1-color-verification.json"
+```
+
+reference metadataは実際に使ったOCIO config path / SHA-256、runtime version、
+`fallback=false`を必須とします。現行Fedora Flatpak Blender 5.1.1はconfig 2.5をruntime 2.4.2で
+fallbackするため、geometry用diagnostic renderは可能でも色gateは必ずblockedになります。
+fallbackを隠す、または4色の見た目だけでpass扱いにする運用は禁止です。
