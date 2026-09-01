@@ -376,7 +376,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 実装状況（2026-09-01）:
 
 - geometry / density / colorのmachine-readable fixture、CIEDE2000 offline verifier、
-  Blender calibration renderer、既知vectorとfail-closed metadataのunit testを実装済み。
+  Blender calibration renderer、既知vectorとfail-closed metadataのunit testを実装済み。geometry fixtureは
+  `maximum_cell_envelope`、raw vertical bounds、中心pivot、identity node、placement centerを別fieldへ分離し、
+  JSON SHA-256へ結合したcanonical上面／側面SVGを追加した。unit testは+Y正回転のN→Wを起点に16 maskを
+  全件再導出し、6 familyのarm / mask、SVG metadata、local Y `-16..+16`からworld Y `0..32`への配置を検証する。
 - 現行Flatpakでdiagnostic referenceを採取し、config 2.5 / runtime 2.4.2を
   `fallback=true`として検出できることを確認済み。これは陽性証明ではないため色gateはblockedを維持する。
 - Rustの`wall-density` profiling workloadを実装済み。Small=N=96 / Medium=4N=384、
@@ -413,6 +416,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   current wall pixels / current source stateへ、current fallback壁はhistorical P02性能 / production art承認へ
   使用できない。現在のP02 semantic validatorで過去artifactを現行matrixとして再解釈せず、登録時のimmutable
   locator整合だけを証明する。
+- canonical orientation / boundsの曖昧さを解消した。`local_min/max`は全familyが必ず満たす実AABBではなく
+  X/Z `-16..+16 wu`の最大cell envelope、各raw meshのvertical boundsだけをY `-16..+16 wu`へ固定する。
+  raw originはcell center / half-height `(0,0,0)`、node T/R/Sはidentity、runtime placement center Yは16 wuとし、
+  N=-Z / E=+X、+Yの+90°は上面視counterclockwiseでN→Wと固定した。canonical 6 familyから16 mask mappingを
+  数式で再導出するunit testと、同じcontract hashを持つ`wall-production-v1.orientation.svg`がpassした。
 - この中間状態をM0完了や性能baselineとして扱わず、後続M1のasset制作開始gateにも使わない。
 - 最初の正式Capture試行（subject `a69ea3df`）はfail-closedで棄却した。Smallのraw 3 runは取得できたが、
   仮想時刻を停止するwall-densityへvalidatorがvirtual 30 s / 60 sを誤要求した。Mediumは通常worldの
@@ -489,7 +497,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `<ASSET_ROOT>/staging/reports/wall-production-v1-baseline.*`
 - 完了条件:
   - [ ] current wallのP02 visual referenceと`wall-density-v1`のN / 4N、completed / provisional baselineが、承認済みbaseline commitから保存されている。
-  - [ ] mask表、canonical orientation、bounds / pivotのfixture値に曖昧さがない。
+  - [x] mask表、canonical orientation、bounds / pivotのfixture値に曖昧さがない。
   - [ ] 9.6 wu公称・連続最小厚の算出条件、12.8 wu外形上限、9.6 wu共通portと再算定triggerがfixture / art基準に固定され、厚さA/Bを未決事項へ戻していない。
   - [ ] OCIO色再現gateがpass、またはgeometry-only継続／色承認blockedが明記されている。
   - [ ] OCIO artifactがconfig path / hash、runtime version、`fallback=false`、4 base patch＋emissive sanity patchの入力／経路／PNG／ROI／Delta Eを証明し、offline verifierの既知vector unit testと再検証がpassする。
@@ -838,12 +846,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     `D_N=1 / D_4N=1`、rendered instance 96 / 384でdraw predicateを封印済み。
   - registered historical P02とcurrent fallback actual-windowを`wall-reference-locators-v1`で分離し、
     index / ledger / referenced artifactのidentityとhashをoffline verifierで封印済み。
+  - canonical orientation / bounds / pivot / placementをgeometry JSONとcontract-hash付きSVGへ固定し、
+    +Y quarter turnから16 maskを再導出するunit testをpass済み。
 - 未完了:
-  - OCIO陽性証明、canonical orientation / boundsを閉じるまではM0未完了。M1以降は未着手。
+  - OCIO陽性証明と、最終M0 commitからのCapture 12 run / RenderDoc 4 case再採取を閉じるまではM0未完了。M1以降は未着手。
 
 ### 次のAIが最初にやること
 
-1. OCIO陽性証明とcanonical orientation / boundsを証拠付きで固定してM0を閉じる。
+1. OCIO陽性証明を閉じ、M0最終commitからCapture 12 run / RenderDoc 4 caseを再採取する。
 2. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
 
 ### ブロッカー/注意点

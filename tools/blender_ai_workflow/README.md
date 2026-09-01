@@ -101,7 +101,10 @@ vendor venv のPythonで `scripts/mcp_smoke_client.py` を実行します。
 壁の本番アート化M0は、次のmachine-readable fixtureを正とします。
 
 - `fixtures/wall-production-v1.geometry.json`: 32 wu cell、9.6 wu公称厚、12.8 wu装飾外形、
-  6 familyと16 maskのcanonical rotation。
+  6 familyと16 maskのcanonical rotation。`bounds.contract_kind=maximum_cell_envelope`は全family共通の
+  cell内許容外形で、raw meshのYだけを`-16..+16 wu`へ固定し、配置中心Y=16 wuで接地します。
+- `fixtures/wall-production-v1.orientation.svg`: geometry JSONのSHA-256へ結合した上面／側面図。
+  N=-Z、E=+X、+Y正回転のN→W、6 canonical family、中心pivot、identity node、world Y=0..32を示します。
 - `fixtures/wall-density-v1.json`: N=96 / 4N=384、20列・5 cell strideのexact配置、
   Door blueprint connector数、camera scale、seed、画面・renderer・計測時間、
   completed / provisionalのdraw predicate。profiling runtimeは同じbytesのSHA-256をpinし、

@@ -6,6 +6,7 @@
     "runtime_base_scale": 1.0
   },
   "bounds": {
+    "contract_kind": "maximum_cell_envelope",
     "local_max": [
       16.0,
       16.0,
@@ -21,20 +22,98 @@
       0.0,
       0.0
     ],
+    "horizontal_boundary_planes_wu": [
+      -16.0,
+      16.0
+    ],
+    "placement_center_y_wu": 16.0,
+    "required_vertical_min_max_wu": [
+      -16.0,
+      16.0
+    ],
+    "node_transform": {
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "pivot_semantics": "cell_center_and_half_height_before_placement",
     "world_y_after_placement": [
       0.0,
       32.0
     ]
   },
   "canonical_orientation": {
-    "corner_arms": [
-      "N",
-      "W"
+    "canonical_families": [
+      {
+        "arms": [],
+        "family": "isolated",
+        "mask": "0000"
+      },
+      {
+        "arms": [
+          "N"
+        ],
+        "family": "end",
+        "mask": "1000"
+      },
+      {
+        "arms": [
+          "N",
+          "S"
+        ],
+        "family": "straight",
+        "mask": "1100"
+      },
+      {
+        "arms": [
+          "N",
+          "W"
+        ],
+        "family": "corner",
+        "mask": "1010"
+      },
+      {
+        "arms": [
+          "N",
+          "S",
+          "W"
+        ],
+        "family": "t_junction",
+        "mask": "1110"
+      },
+      {
+        "arms": [
+          "N",
+          "S",
+          "W",
+          "E"
+        ],
+        "family": "cross",
+        "mask": "1111"
+      }
     ],
-    "end_arm": "N",
+    "direction_cycle_positive_quarter_turn": [
+      "N",
+      "W",
+      "S",
+      "E"
+    ],
     "positive_quarter_turn_axis": "+Y",
-    "straight_axis": "N_S",
-    "t_junction_open_side": "E",
+    "positive_quarter_turn_degrees": 90,
+    "positive_quarter_turn_top_view": "counterclockwise",
     "world_direction_vectors": {
       "E": [
         1.0,

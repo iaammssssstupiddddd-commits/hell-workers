@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from xml.etree import ElementTree
 
 from PIL import Image, ImageColor, ImageDraw
 
@@ -38,10 +40,13 @@ def load_reference_locator_verifier():
 
 
 class WallGeometryContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.contract_path = FIXTURES_ROOT / "wall-production-v1.geometry.json"
+        cls.payload = json.loads(cls.contract_path.read_text(encoding="utf-8"))
+
     def test_geometry_contract_covers_each_mask_once(self) -> None:
-        payload = json.loads(
-            (FIXTURES_ROOT / "wall-production-v1.geometry.json").read_text(encoding="utf-8")
-        )
+        payload = self.payload
         self.assertEqual(payload["schema_version"], 1)
         mappings = payload["topology"]["mappings"]
         masks = [mapping["mask"] for mapping in mappings]
@@ -55,9 +60,7 @@ class WallGeometryContractTests(unittest.TestCase):
         self.assertTrue(all(mapping["quarter_turns_y"] in range(4) for mapping in mappings))
 
     def test_geometry_contract_freezes_wall_dimensions(self) -> None:
-        payload = json.loads(
-            (FIXTURES_ROOT / "wall-production-v1.geometry.json").read_text(encoding="utf-8")
-        )
+        payload = self.payload
         geometry = payload["geometry"]
         self.assertEqual(geometry["tile_size_wu"], 32.0)
         self.assertEqual(geometry["height_wu"], 32.0)
@@ -68,6 +71,88 @@ class WallGeometryContractTests(unittest.TestCase):
         self.assertEqual(geometry["port_collar_abs_s_wu"], [8.0, 16.0])
         self.assertEqual(payload["bounds"]["local_min"], [-16.0, -16.0, -16.0])
         self.assertEqual(payload["bounds"]["local_max"], [16.0, 16.0, 16.0])
+
+    def test_bounds_contract_distinguishes_envelope_pivot_and_placement(self) -> None:
+        bounds = self.payload["bounds"]
+        self.assertEqual(bounds["contract_kind"], "maximum_cell_envelope")
+        self.assertEqual(bounds["origin"], [0.0, 0.0, 0.0])
+        self.assertEqual(bounds["required_vertical_min_max_wu"], [-16.0, 16.0])
+        self.assertEqual(bounds["horizontal_boundary_planes_wu"], [-16.0, 16.0])
+        self.assertEqual(bounds["placement_center_y_wu"], 16.0)
+        self.assertEqual(bounds["world_y_after_placement"], [0.0, 32.0])
+        self.assertEqual(
+            [
+                bounds["required_vertical_min_max_wu"][0]
+                + bounds["placement_center_y_wu"],
+                bounds["required_vertical_min_max_wu"][1]
+                + bounds["placement_center_y_wu"],
+            ],
+            bounds["world_y_after_placement"],
+        )
+        self.assertEqual(
+            bounds["node_transform"],
+            {
+                "rotation_xyzw": [0.0, 0.0, 0.0, 1.0],
+                "scale": [1.0, 1.0, 1.0],
+                "translation": [0.0, 0.0, 0.0],
+            },
+        )
+
+    def test_positive_y_rotation_derives_all_topology_mappings(self) -> None:
+        orientation = self.payload["canonical_orientation"]
+        cycle = orientation["direction_cycle_positive_quarter_turn"]
+        self.assertEqual(cycle, ["N", "W", "S", "E"])
+        self.assertEqual(orientation["positive_quarter_turn_axis"], "+Y")
+        self.assertEqual(orientation["positive_quarter_turn_degrees"], 90)
+        self.assertEqual(
+            orientation["positive_quarter_turn_top_view"], "counterclockwise"
+        )
+        canonical = {
+            entry["family"]: entry for entry in orientation["canonical_families"]
+        }
+        self.assertEqual(
+            set(canonical),
+            {"isolated", "end", "straight", "corner", "t_junction", "cross"},
+        )
+        bit_order = self.payload["topology"]["mask_bit_order"]
+        for mapping in self.payload["topology"]["mappings"]:
+            family = canonical[mapping["family"]]
+            turns = mapping["quarter_turns_y"]
+            rotated = {
+                cycle[(cycle.index(direction) + turns) % len(cycle)]
+                for direction in family["arms"]
+            }
+            derived_mask = "".join(
+                "1" if direction in rotated else "0" for direction in bit_order
+            )
+            self.assertEqual(derived_mask, mapping["mask"], mapping)
+
+    def test_orientation_svg_is_bound_to_the_geometry_contract(self) -> None:
+        svg_path = FIXTURES_ROOT / "wall-production-v1.orientation.svg"
+        root = ElementTree.fromstring(svg_path.read_text(encoding="utf-8"))
+        contract_sha256 = hashlib.sha256(self.contract_path.read_bytes()).hexdigest()
+        self.assertEqual(root.attrib["data-contract-id"], self.payload["asset_set_id"])
+        self.assertEqual(root.attrib["data-contract-sha256"], contract_sha256)
+        namespace = {"svg": "http://www.w3.org/2000/svg"}
+        groups = {
+            group.attrib["data-family"]: group
+            for group in root.findall("svg:g", namespace)
+            if "data-family" in group.attrib
+        }
+        expected = {
+            entry["family"]: entry
+            for entry in self.payload["canonical_orientation"]["canonical_families"]
+        }
+        self.assertEqual(set(groups), set(expected))
+        for family, entry in expected.items():
+            self.assertEqual(groups[family].attrib["data-canonical-mask"], entry["mask"])
+            self.assertEqual(groups[family].attrib["data-arms"].split(), entry["arms"])
+        bounds_views = [
+            group
+            for group in root.findall("svg:g", namespace)
+            if group.attrib.get("data-view") == "bounds-and-pivot"
+        ]
+        self.assertEqual(len(bounds_views), 1)
 
 
 class WallDensityContractTests(unittest.TestCase):
