@@ -571,6 +571,42 @@ pub struct WallAssetReadiness {
     pub candidate_normal_revision: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WallProductionFallbackReason {
+    Loading,
+    CandidateDisabled,
+    LoadFailed,
+    TopologyUnavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WallProductionActivationState {
+    Fallback(WallProductionFallbackReason),
+    ReadyToApply {
+        asset_set_generation: u64,
+        authority: WallAssetAuthority,
+        manifest_sha256: String,
+        asset_activation_revision: u64,
+    },
+}
+
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
+pub struct WallProductionActivation {
+    pub(crate) topology_ready: bool,
+    pub decision_revision: u64,
+    pub state: WallProductionActivationState,
+}
+
+impl Default for WallProductionActivation {
+    fn default() -> Self {
+        Self {
+            topology_ready: false,
+            decision_revision: 0,
+            state: WallProductionActivationState::Fallback(WallProductionFallbackReason::Loading),
+        }
+    }
+}
+
 impl Default for WallAssetReadiness {
     fn default() -> Self {
         Self {
@@ -794,6 +830,47 @@ fn apply_readiness_transition(
     }
 }
 
+fn production_activation_state(
+    readiness: &WallAssetReadiness,
+    topology_ready: bool,
+) -> WallProductionActivationState {
+    match &readiness.state {
+        WallAssetReadinessState::Loading => {
+            WallProductionActivationState::Fallback(WallProductionFallbackReason::Loading)
+        }
+        WallAssetReadinessState::Fallback(WallAssetFallbackReason::CandidateDisabled) => {
+            WallProductionActivationState::Fallback(WallProductionFallbackReason::CandidateDisabled)
+        }
+        WallAssetReadinessState::Fallback(WallAssetFallbackReason::LoadFailed) => {
+            WallProductionActivationState::Fallback(WallProductionFallbackReason::LoadFailed)
+        }
+        WallAssetReadinessState::Eligible {
+            asset_set_generation,
+            authority,
+            manifest_sha256,
+        } if topology_ready => WallProductionActivationState::ReadyToApply {
+            asset_set_generation: *asset_set_generation,
+            authority: *authority,
+            manifest_sha256: manifest_sha256.clone(),
+            asset_activation_revision: readiness.activation_revision,
+        },
+        WallAssetReadinessState::Eligible { .. } => WallProductionActivationState::Fallback(
+            WallProductionFallbackReason::TopologyUnavailable,
+        ),
+    }
+}
+
+fn refresh_production_activation(
+    activation: &mut WallProductionActivation,
+    readiness: &WallAssetReadiness,
+) {
+    let next_state = production_activation_state(readiness, activation.topology_ready);
+    if activation.state != next_state {
+        activation.state = next_state;
+        activation.decision_revision = activation.decision_revision.wrapping_add(1);
+    }
+}
+
 #[derive(SystemParam)]
 pub struct WallAssetReadinessParams<'w> {
     asset_server: Res<'w, AssetServer>,
@@ -808,6 +885,7 @@ pub struct WallAssetReadinessParams<'w> {
 pub fn update_wall_asset_readiness_system(
     mut params: WallAssetReadinessParams,
     mut readiness: ResMut<WallAssetReadiness>,
+    mut activation: ResMut<WallProductionActivation>,
 ) {
     let manifest_state = required_load_state(&params.asset_server, params.pool.manifest.id());
     let manifest = if manifest_state == RequiredLoadState::Ready {
@@ -868,6 +946,7 @@ pub fn update_wall_asset_readiness_system(
         candidate_normal_load,
     );
     apply_readiness_transition(&mut readiness, next_state, next_normal);
+    refresh_production_activation(&mut activation, &readiness);
 }
 
 #[cfg(test)]
@@ -1140,6 +1219,55 @@ mod tests {
         assert_eq!(readiness.activation_revision, 3);
         assert_eq!(readiness.candidate_normal_revision, 2);
         assert_eq!(readiness.session_id, session_id);
+    }
+
+    #[test]
+    fn production_activation_requires_topology_and_falls_back_on_asset_failure() {
+        let manifest = fixture();
+        let mut readiness = WallAssetReadiness {
+            activation_revision: 8,
+            state: WallAssetReadinessState::Eligible {
+                asset_set_generation: manifest.asset_set_generation,
+                authority: manifest.authority,
+                manifest_sha256: manifest.manifest_sha256.clone(),
+            },
+            ..Default::default()
+        };
+        let mut activation = WallProductionActivation::default();
+
+        refresh_production_activation(&mut activation, &readiness);
+        assert_eq!(
+            activation.state,
+            WallProductionActivationState::Fallback(
+                WallProductionFallbackReason::TopologyUnavailable
+            )
+        );
+        assert_eq!(activation.decision_revision, 1);
+
+        activation.topology_ready = true;
+        refresh_production_activation(&mut activation, &readiness);
+        assert_eq!(
+            activation.state,
+            WallProductionActivationState::ReadyToApply {
+                asset_set_generation: manifest.asset_set_generation,
+                authority: manifest.authority,
+                manifest_sha256: manifest.manifest_sha256,
+                asset_activation_revision: 8,
+            }
+        );
+        assert_eq!(activation.decision_revision, 2);
+
+        refresh_production_activation(&mut activation, &readiness);
+        assert_eq!(activation.decision_revision, 2);
+
+        readiness.activation_revision = 9;
+        readiness.state = WallAssetReadinessState::Fallback(WallAssetFallbackReason::LoadFailed);
+        refresh_production_activation(&mut activation, &readiness);
+        assert_eq!(
+            activation.state,
+            WallProductionActivationState::Fallback(WallProductionFallbackReason::LoadFailed)
+        );
+        assert_eq!(activation.decision_revision, 3);
     }
 
     #[test]
@@ -1512,6 +1640,8 @@ mod tests {
         });
         app.world_mut()
             .insert_resource(WallAssetReadiness::default());
+        app.world_mut()
+            .insert_resource(WallProductionActivation::default());
         app.add_systems(Update, update_wall_asset_readiness_system);
 
         app.update();
@@ -1521,6 +1651,12 @@ mod tests {
             WallAssetReadinessState::Fallback(WallAssetFallbackReason::CandidateDisabled)
         );
         assert_eq!(unauthorized.activation_revision, 1);
+        assert_eq!(
+            app.world().resource::<WallProductionActivation>().state,
+            WallProductionActivationState::Fallback(
+                WallProductionFallbackReason::CandidateDisabled
+            )
+        );
         app.world_mut()
             .insert_resource(candidate_policy(Some(&manifest)));
         app.update();
@@ -1535,6 +1671,12 @@ mod tests {
         ));
         assert_eq!(eligible.activation_revision, 2);
         assert_eq!(eligible.candidate_normal, WallOptionalAssetState::Ready);
+        assert_eq!(
+            app.world().resource::<WallProductionActivation>().state,
+            WallProductionActivationState::Fallback(
+                WallProductionFallbackReason::TopologyUnavailable
+            )
+        );
         let materials = app.world().resource::<ProductionWallMaterialPool>();
         let complete = materials.complete.clone().expect("complete material");
         let provisional = materials.provisional.clone().expect("provisional material");
@@ -1545,8 +1687,21 @@ mod tests {
             2
         );
 
+        app.world_mut()
+            .resource_mut::<WallProductionActivation>()
+            .topology_ready = true;
         app.update();
         assert_eq!(app.world().resource::<WallAssetReadiness>(), &eligible);
+        let ready_to_apply = app.world().resource::<WallProductionActivation>().clone();
+        assert!(matches!(
+            ready_to_apply.state,
+            WallProductionActivationState::ReadyToApply {
+                asset_set_generation: 1,
+                authority: WallAssetAuthority::IsolatedCandidate,
+                asset_activation_revision: 2,
+                ..
+            }
+        ));
         let materials = app.world().resource::<ProductionWallMaterialPool>();
         assert_eq!(materials.complete.as_ref(), Some(&complete));
         assert_eq!(materials.provisional.as_ref(), Some(&provisional));
@@ -1555,6 +1710,11 @@ mod tests {
                 .resource::<Assets<TopDownStructuralMaterial>>()
                 .len(),
             2
+        );
+        app.update();
+        assert_eq!(
+            app.world().resource::<WallProductionActivation>(),
+            &ready_to_apply
         );
 
         let meshes = app.world().resource::<Assets<Mesh>>();
