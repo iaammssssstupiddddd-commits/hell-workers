@@ -586,6 +586,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - clean Git commit / treeと外部stagingの既知closed setだけからcandidate manifestを組み立て、全validatorがpassして
   から既存manifestをatomic置換するsealerと、provenance / license metadata templateを追加した。dirty repository、
   report欠落、validator不一致は封印前にfail-closedとする。
+- clean M1 tool subject `654d8d81` / tree `4d8e913a`から、OCIO陽性でsceneと6 familyを2回独立生成した。
+  GLB SHA-256はisolated=`f2562f4e…`、end=`da6da989…`、straight=`a7de77c0…`、corner=`a9c94432…`、
+  T=`b830ee9a…`、cross=`d99b92c6…`で2回ともbyte-identical、post-export構造値もexact一致した。
+- generation 1 / normal=`pending` candidate manifestをSHA-256
+  `d90f05c8837a37d0b2db8da5a0de571890ceeed045f7c4dbfa49aef95eb6b3c5`で封印した。core 8件とoptional normal 1件を
+  primary外detached validation worktreeへdry-run後にcopyし、再dry-runは両selectionとも`copied=0`、Git statusはclean。
+  primary assets / canonical generation / active pointerは変更していない。
 - release receipt対応のrepo sync、正式6 GLB / manifest / reference board / rebuild artifactは未完了。
 
 - 変更内容:
@@ -623,23 +630,23 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `docs/assets_workflow.md`
   - `docs/blender-setup.md`
 - 完了条件:
-  - [ ] 6 GLB全てが1 mesh / 1 primitive、共通UV、embedded image 0、350 triangles以下である。
-  - [ ] raw primitive-local bounds / pivot / canonical orientationがM0 fixtureと一致し、Y min / maxは`-16 / +16 wu`、node transformはidentityである。
-  - [ ] 全接続腕のport collarで公称・連続最小厚が9.6 wu、石・鉄・トゲ込み局所横断外形が12.8 wu以下で、cell境界のport profileが6 mesh間で一致する。junctionの別armを厚さへ誤算入していない。
-  - [ ] albedo / emissiveが共通で、variantごとのmaterial slotやtextureがない。
-  - [ ] selectorは6 collectionを別々にexportし、unknown / empty / multi-meshを拒否し、既存no-selector smokeもpassする。
+  - [x] 6 GLB全てが1 mesh / 1 primitive、共通UV、embedded image 0、350 triangles以下である。
+  - [x] raw primitive-local bounds / pivot / canonical orientationがM0 fixtureと一致し、Y min / maxは`-16 / +16 wu`、node transformはidentityである。
+  - [x] 全接続腕のport collarで公称・連続最小厚が9.6 wu、石・鉄・トゲ込み局所横断外形が12.8 wu以下で、cell境界のport profileが6 mesh間で一致する。junctionの別armを厚さへ誤算入していない。
+  - [x] albedo / emissiveが共通で、variantごとのmaterial slotやtextureがない。
+  - [x] selectorは6 collectionを別々にexportし、unknown / empty / multi-meshを拒否し、既存no-selector smokeもpassする。
   - [x] asset-set manifest v2 validatorが、6 collection→6 GLB、production core / optional集合、normal decision、全report / license / SHA-256 / review statusをexact検証する。M1 candidate modeだけは明示的`pending`を許し、M4 final / M5 modeは拒否する。candidateは隔離profileだけ、通常productionはpromotion receipt付きauthorityだけにmode分離する。
   - [x] normal集合はpending 8 core＋1 optional、adopted 9 core＋0 optional、rejected 8 core＋0 optionalだけを許し、rejected normalはart evidence以外のfinal manifest / projection / asset viewに残らない。
-  - [ ] post-export validatorが6正例をpassし、unknown / empty / multi-mesh、node transform、2 primitive、embedded image、bounds / port違反の負例を全件rejectする。
-  - [ ] manifest allowlist付きsync dry-runの差分がwall asset setだけであり、primary / canonicalや無関係assetを対象にしない。
-  - [ ] promotion toolとmanifest-aware syncのplan / apply / recover / rollback testが、existing / absent preimage、途中copy失敗、hash差替え、allowlist外file、全fsync / directory rename / pointer replace kill pointでfail-closedになり、canonical / repoのactive pointerが部分generationを指さない。
+  - [x] post-export validatorが6正例をpassし、unknown / empty / multi-mesh、node transform、2 primitive、embedded image、bounds / port違反の負例を全件rejectする。
+  - [x] manifest allowlist付きsync dry-runの差分がwall asset setだけであり、primary / canonicalや無関係assetを対象にしない。
+  - [x] promotion toolとmanifest-aware syncのplan / apply / recover / rollback testが、existing / absent preimage、途中copy失敗、hash差替え、allowlist外file、全fsync / directory rename / pointer replace kill pointでfail-closedになり、canonical / repoのactive pointerが部分generationを指さない。
   - [x] receipt validatorがclosed field setとcanonical bytesを検査し、missing、wrong generation / manifest / plan、stale preimage pointer、別payloadへのreceipt再利用を全件rejectする。
   - [x] generic v1 workspaceは不変のまま、bootstrap / doctorがwall v2 generation / receipt / pointer layoutを冪等に作成・検査し、M1時点の運用docsとtool contractが一致する。
-  - [ ] manifest / license / SHA-256 / scene・post-export・Khronos validator report / rebuild reportが揃う。
-  - [ ] staging候補とcandidate-only normalがhash付きでprimary外のclean validation worktreeへprovisionされ、primary / canonicalとは明確に区別されている。
-  - [ ] 6 mesh全てのUV0とtangent有無をpost-export reportへ記録し、tangent欠落時はM4の一回限り生成pathをtechnical fixtureで検査できる。normalのlinear / `+Y` contractも別reportで検査できる。
-  - [ ] まだcanonical generation store / active pointerへ昇格していない。
-  - [ ] tooling / runtime-data候補の実経路についてHelp impact decisionを完了し、scoped M1 tool commitをユーザーが明示承認し、そのcommitから全report / manifestを再生成してからM1完了を報告する。
+  - [x] manifest / license / SHA-256 / scene・post-export・Khronos validator report / rebuild reportが揃う。
+  - [x] staging候補とcandidate-only normalがhash付きでprimary外のclean validation worktreeへprovisionされ、primary / canonicalとは明確に区別されている。
+  - [x] 6 mesh全てのUV0とtangent有無をpost-export reportへ記録し、tangent欠落時はM4の一回限り生成pathをtechnical fixtureで検査できる。normalのlinear / `+Y` contractも別reportで検査できる。
+  - [x] まだcanonical generation store / active pointerへ昇格していない。
+  - [x] tooling / runtime-data候補の実経路についてHelp impact decisionを完了し、scoped M1 tool commitをユーザーが明示承認し、そのcommitから全report / manifestを再生成してからM1完了を報告する。
 - 検証:
   - `tools/blender_ai_workflow/bin/validate-blend --collection <exact-name> ...`
   - `tools/blender_ai_workflow/bin/export-staging-glb --collection <exact-name> ...`
