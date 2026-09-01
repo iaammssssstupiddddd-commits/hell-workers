@@ -395,15 +395,24 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `wall-density-v1`のisolated Wall ordinal 64 / grid `(22, 17)` / mask `0000`、ROIは
   `(416, 518, 96, 96)`で固定UI chromeと非重複である。fallback mesh resident、exact owner、High / DPI 1.0、
   Vulkan / X11、camera scale 5、raw performance sidecarとのlayout checksum一致を封印した。
-  registered historical P02 locatorは未実装のため、M0全体は未完了である。
+  current wallはhistorical P02の代用にしない。
 - wall専用runtime checkpoint、qrenderdoc extractor、`wall_renderdoc_acceptance.py`を実装し、subject
   `e149918c`からcompleted / provisional各N / 4Nの4 RDCを採取した。各RDCを2回replayした結果は
   byte-identicalで、completed / provisionalとも`D_N=1 / D_4N=1`、rendered instanceはN=96 / 4N=384で
   checkpointed owner全件と一致した。Wall main passは中間color＋depthへ一括描画し、次のfullscreen triangleが
   `hell-workers-rtt-scene`へ合成する実render graphを証拠化したため、最終Scene targetへの直接writeをdraw identityへ
-  要求しない。wall固有draw-group gateは完了したが、registered historical P02 locatorとOCIO陽性証明が残る。
+  要求しない。wall固有draw-group gateは完了した。
   残項目の実装でsource / harness closed setが変わる場合は、M0最終baseline commitからCapture 12 runと
   RenderDoc 4 caseを再採取し、途中commitの成功artifactをM5比較baselineへ流用しない。
+- `wall-reference-locators-v1`を実装し、登録済みhistorical P02
+  `baseline-index.json#/stages/p02`（subject `6ea0bf99` / attempt
+  `54d85a63-e237-4501-a0d0-33c1d0a29f3b`）とcurrent fallback壁
+  `wall-art-20260901T055138Z-f93b0b12`のauthority / role / 用途外範囲を分離した。offline verifierは
+  baseline index、SHA256SUMS、attempt manifest、RenderDoc manifest / checkpoint / extraction / RDC、
+  current manifest / observation / PNGの個別hashとidentityを再計算してpassした。historical P02は
+  current wall pixels / current source stateへ、current fallback壁はhistorical P02性能 / production art承認へ
+  使用できない。現在のP02 semantic validatorで過去artifactを現行matrixとして再解釈せず、登録時のimmutable
+  locator整合だけを証明する。
 - この中間状態をM0完了や性能baselineとして扱わず、後続M1のasset制作開始gateにも使わない。
 - 最初の正式Capture試行（subject `a69ea3df`）はfail-closedで棄却した。Smallのraw 3 runは取得できたが、
   仮想時刻を停止するwall-densityへvalidatorがvirtual 30 s / 60 sを誤要求した。Mediumは通常worldの
@@ -474,6 +483,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `.codex/skills/hell-workers-run-native-acceptance/SKILL.md`
   - `tools/blender_ai_workflow/scripts/render_color_calibration.py`（新規）
   - `tools/blender_ai_workflow/scripts/verify_color_calibration.py`（新規）
+  - `tools/blender_ai_workflow/scripts/verify_wall_reference_locators.py`（新規）
+  - `tools/blender_ai_workflow/fixtures/wall-reference-locators-v1.json`（新規）
   - `tools/blender_ai_workflow/tests/`
   - `<ASSET_ROOT>/staging/reports/wall-production-v1-baseline.*`
 - 完了条件:
@@ -486,6 +497,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [ ] `wall-density-v1`のN / 4N、配置 / connector / mask checksum、seed、環境、時間、3-run中央値 / MAD、completed / provisional draw predicateがmachine-readable contractで凍結されている。
   - [ ] code/runtime batchについてHelp impact decisionが完了し、baseline commit前の対象diffとcommit境界をユーザーが明示承認している。
 - 検証:
+  - `python3 tools/blender_ai_workflow/scripts/verify_wall_reference_locators.py`
   - `python3 tools/blender_ai_workflow/scripts/verify_color_calibration.py ...`
   - `python3 -m unittest discover -s tools/blender_ai_workflow/tests`
   - `hell-workers-run-native-acceptance` Skillのwall-art `plan`が返すdirect `kitty` launcherだけを実行する。
@@ -824,14 +836,15 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     exact owner、client PNG、raw sidecar、全fingerprintを独立verifyで封印済み。
   - subject `e149918c`のwall RenderDoc 4ケースを採取し、全8 replay一致、completed / provisionalとも
     `D_N=1 / D_4N=1`、rendered instance 96 / 384でdraw predicateを封印済み。
+  - registered historical P02とcurrent fallback actual-windowを`wall-reference-locators-v1`で分離し、
+    index / ledger / referenced artifactのidentityとhashをoffline verifierで封印済み。
 - 未完了:
-  - registered P02 referenceのlocator、OCIO陽性証明、canonical orientation / boundsを閉じるまではM0未完了。M1以降は未着手。
+  - OCIO陽性証明、canonical orientation / boundsを閉じるまではM0未完了。M1以降は未着手。
 
 ### 次のAIが最初にやること
 
-1. registered historical P02 artifactのlocatorを固定し、current calibrationとの用途分離をmachine-readableに閉じる。
-2. OCIO陽性証明とcanonical orientation / boundsを証拠付きで固定してM0を閉じる。
-3. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
+1. OCIO陽性証明とcanonical orientation / boundsを証拠付きで固定してM0を閉じる。
+2. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
 
 ### ブロッカー/注意点
 

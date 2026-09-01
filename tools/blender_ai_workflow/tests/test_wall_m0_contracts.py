@@ -25,6 +25,18 @@ def load_verifier():
     return module
 
 
+def load_reference_locator_verifier():
+    spec = importlib.util.spec_from_file_location(
+        "verify_wall_reference_locators",
+        SCRIPTS_ROOT / "verify_wall_reference_locators.py",
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load verify_wall_reference_locators.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class WallGeometryContractTests(unittest.TestCase):
     def test_geometry_contract_covers_each_mask_once(self) -> None:
         payload = json.loads(
@@ -85,6 +97,45 @@ class WallDensityContractTests(unittest.TestCase):
         self.assertEqual(payload["environment"]["runs"], 3)
         self.assertEqual(payload["environment"]["warmup_seconds"], 30)
         self.assertEqual(payload["environment"]["measure_seconds"], 60)
+
+
+class WallReferenceLocatorContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.verifier = load_reference_locator_verifier()
+        cls.contract = json.loads(
+            (FIXTURES_ROOT / "wall-reference-locators-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+    def test_contract_keeps_historical_and_current_roles_disjoint(self) -> None:
+        self.assertEqual(self.contract["schema_version"], 1)
+        self.assertEqual(self.contract["contract_id"], "wall-reference-locators-v1")
+        historical = self.contract["historical_p02"]
+        current = self.contract["current_wall"]
+        self.assertEqual(historical["role"], "historical-p02-presentation-contract")
+        self.assertIn("current-wall-pixels", historical["not_valid_for"])
+        self.assertEqual(current["role"], "current-fallback-wall-visual-reference")
+        self.assertIn("historical-p02-performance", current["not_valid_for"])
+        self.assertIn("production-wall-art-approval", current["not_valid_for"])
+
+    def test_checksum_ledger_rejects_duplicate_locators(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            ledger = Path(directory) / "SHA256SUMS"
+            digest = "a" * 64
+            ledger.write_text(
+                f"{digest}  evidence.json\n{digest}  evidence.json\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                self.verifier.ContractError, "duplicate checksum locator"
+            ):
+                self.verifier.parse_checksum_ledger(ledger)
+
+    def test_relative_path_rejects_parent_traversal(self) -> None:
+        with self.assertRaisesRegex(self.verifier.ContractError, "stay below its root"):
+            self.verifier.relative_path("../evidence.json", "fixture")
 
 
 class WallColorCalibrationVerifierTests(unittest.TestCase):

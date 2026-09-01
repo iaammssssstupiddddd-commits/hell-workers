@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "contract_id": "wall-reference-locators-v1",
+  "historical_p02": {
+    "role": "historical-p02-presentation-contract",
+    "authority": "registered-rtt-light-baseline-index",
+    "logical_locator": "rtt-light-v1/baseline-index.json#/stages/p02",
+    "artifact_root": "target/perf-runs/rtt-light/rtt-light-v1",
+    "not_valid_for": [
+      "current-wall-pixels",
+      "current-source-runtime-state"
+    ],
+    "baseline_index": {
+      "path": "baseline-index.json",
+      "sha256": "23f9ec7a351986a587695383af2d91b0c273a7d092568c4cec7a41cda6ee38fd"
+    },
+    "checksum_ledger": {
+      "path": "SHA256SUMS",
+      "sha256": "89e488b7d8da1acb7613612445c9f775d299c7914b9dc0226ade27fbdf4b576f"
+    },
+    "stage": {
+      "attempt_id": "54d85a63-e237-4501-a0d0-33c1d0a29f3b",
+      "subject_commit": "6ea0bf99391b1660607537304a3764f380a10eac",
+      "source_fingerprint": "0f43c3cfccbd7aabaec7e3b9ed203adae0ee198facc98617834441c7c5d4a2f0",
+      "attempt_manifest": {
+        "path": "p02-6ea0bf99391b1660/attempts/54d85a63-e237-4501-a0d0-33c1d0a29f3b/attempt-manifest.json",
+        "sha256": "ae8e1068261f9d0c07393fe477db5978fb0b09cba2572de3f666ffc64306a161"
+      },
+      "attempt_directory_sha256": "dcb207eed7ad12435131bd92d1cb090efb3906bc87e0fb4d091067b269ccb98d",
+      "renderdoc_case_directory_sha256": "e8eacc7907f4034357395b2f81374a2dabb16b61e40d84ae958000107962c024"
+    },
+    "renderdoc": {
+      "relative_root": "p02-6ea0bf99391b1660/attempts/54d85a63-e237-4501-a0d0-33c1d0a29f3b/renderdoc",
+      "manifest": {
+        "path": "p02-6ea0bf99391b1660/attempts/54d85a63-e237-4501-a0d0-33c1d0a29f3b/renderdoc/manifest.json",
+        "sha256": "afbafb9ab02a8dfdb59dd171066a7b3b11c1866db29bb88193522b81045262d4"
+      },
+      "runtime_checkpoint": {
+        "path": "p02-6ea0bf99391b1660/attempts/54d85a63-e237-4501-a0d0-33c1d0a29f3b/renderdoc/runtime-checkpoint.json",
+        "sha256": "4c6d752e9a640a06968fb9a21464790222097ef3190518b821e5a6f85856d98d"
+      },
+      "extraction": {
+        "path": "p02-6ea0bf99391b1660/attempts/54d85a63-e237-4501-a0d0-33c1d0a29f3b/renderdoc/extraction.json",
+        "sha256": "58a01bbd787b4cda5f42a6f4e1587c2b226c8c51c531138c60e08503e636936b"
+      },
+      "capture": {
+        "path": "p02-6ea0bf99391b1660/attempts/54d85a63-e237-4501-a0d0-33c1d0a29f3b/renderdoc/raw/indoor-light_capture.rdc",
+        "sha256": "38561b2ad8a9146aef6b80c269295b9d6cc49c5478dc807a316856d393f03120",
+        "bytes": 705337616
+      },
+      "expected_presentation": {
+        "layer_2d_camera_count": 1,
+        "layer_2d_pass_count": 1,
+        "building_count": 245,
+        "duplicate_presentation_count": 0,
+        "building_exactly_one_presentation": true,
+        "soul_count": 200,
+        "soul_billboard_count": 200,
+        "familiar_3d_count": 0,
+        "state_and_bounce_probes_pass": true
+      }
+    }
+  },
+  "current_wall": {
+    "role": "current-fallback-wall-visual-reference",
+    "authority": "wall-art-current-calibration-v1-manifest",
+    "logical_locator": "target/native-acceptance/wall-art-20260901T055138Z-f93b0b12/manifest.json",
+    "artifact_root": "target/native-acceptance/wall-art-20260901T055138Z-f93b0b12",
+    "not_valid_for": [
+      "historical-p02-performance",
+      "production-wall-art-approval"
+    ],
+    "profile": "wall-art-current-calibration-v1",
+    "subject_commit": "ad614903d2a47915c7752eef088448675445dbc3",
+    "source_fingerprint": "08a71968ca2582bcfd7d7aef575f256e6f8702286108cf292badbbad4940f678",
+    "harness_fingerprint": "c333eeb53db6343253de28abeefbb05d98f47ba51653dcde092bb9439017c2d9",
+    "asset_view_fingerprint": "ee5acdc8214b61898f662f2fb502f07559309d322fb5e234d37159b63aed7643",
+    "binary_sha256": "88cb2c157da6f015f893ca9b18d01e40f4df69f5c0e6b74474a322663c8e94b1",
+    "manifest": {
+      "path": "manifest.json",
+      "sha256": "a3ef1d1ab80f5042b0897c41c08e9625282cb38b5634a481302028f62c49d94b"
+    },
+    "observation": {
+      "path": "observation.json",
+      "sha256": "7506a7b9f323ddfe2c79eb32a1a4d74016a24957c353216c857b015a2c1a0986"
+    },
+    "screenshot": {
+      "path": "current-wall.png",
+      "sha256": "d69049a2b406acce7ab11537e9bef9acec63231c65e0fb016e40fdf7f30b8cc4",
+      "bytes": 508518
+    },
+    "expected_subject": {
+      "ordinal": 64,
+      "grid": [
+        22,
+        17
+      ],
+      "mask": "0000",
+      "roi": {
+        "x": 416,
+        "y": 518,
+        "width": 96,
+        "height": 96
+      }
+    }
+  }
+}

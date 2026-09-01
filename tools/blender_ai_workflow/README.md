@@ -18,6 +18,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
 | `scripts/render_color_calibration.py` | 壁M0の固定5 patchをBlenderで描画し、OCIO陽性証明付きmetadataを出力 |
 | `scripts/verify_color_calibration.py` | Blender / Bevy PNGをCIEDE2000とemissive sanityでoffline照合 |
+| `scripts/verify_wall_reference_locators.py` | 登録済みhistorical P02とcurrent fallback壁の用途・identity・artifact hashを分離検証 |
 
 `validate-blend` と `export-staging-glb`:
 
@@ -107,6 +108,16 @@ vendor venv のPythonで `scripts/mcp_smoke_client.py` を実行します。
   target / connector全行とphase別layout checksumをsidecarへ出す。
 - `fixtures/wall-color-calibration-v1.json`: 4 base patchとemissive sanity patch、
   PNG / ROI / color pipeline、CIEDE2000閾値。
+- `fixtures/wall-reference-locators-v1.json`: 登録済みhistorical P02 presentation artifactと
+  current fallback wall actual-window artifactのauthority、用途外範囲、identity、SHA-256。
+
+historical P02は過去の表示・性能契約でありcurrent wall pixelの正本ではありません。current fallback wallは
+現行画像の比較参照でありhistorical P02性能やproduction art承認には使いません。登録index、checksum ledger、
+P02 attempt / RenderDoc、current manifest / observation / PNGを一括検証するには次を実行します。
+
+```bash
+python3 tools/blender_ai_workflow/scripts/verify_wall_reference_locators.py
+```
 
 Blender referenceはcanonical assetではなく外部`staging/reports/`へだけ出力します。
 既存artifactを上書きしないため、正式採取では承認済みsource fingerprintを名前と引数へ含めます。
