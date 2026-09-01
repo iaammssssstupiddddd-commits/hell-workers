@@ -89,11 +89,13 @@ NATIVE_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_density_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py",
     "scripts/build_coordination.py",
     "scripts/cargo_runtime.py",
     "scripts/perf_tool/execution.py",
     "scripts/perf_tool/renderdoc_capture.py",
     "scripts/perf_tool/renderdoc_foundation.py",
+    "scripts/perf_tool/wall_renderdoc_extract.py",
     "scripts/perf_tool/rtt_light_bundle.py",
 )
 DECONSTRUCTION_CHECKS = {"V1", "V2", "V3", "V4", "V5"}

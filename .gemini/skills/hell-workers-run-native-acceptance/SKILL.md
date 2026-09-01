@@ -210,6 +210,28 @@ reports `draw_groups=not-collected`; it does not satisfy the Wall M0 RenderDoc
 draw-group gate until that separate evidence is added. Revalidate a completed
 Capture bundle with `verify --job-root <job-root>`.
 
+## Run the wall-density RenderDoc matrix
+
+Use the separate wall RenderDoc profile for the M0 draw-group gate. It captures
+completed and provisional Small=N / Medium=4N as four sequential Vulkan/X11
+processes from one read-only `profiling-renderdoc` binary capsule, then replays
+every RDC twice with the wall-specific extractor:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py \
+  plan --repo "$PWD" --adapter Intel
+```
+
+Run only the returned direct `kitty` command and poll `status --job-root
+<job-root>` every 15–30 seconds. The profile binds the clean subject, source and
+harness fingerprints, RenderDoc tools, capsule, runtime fixture checkpoint,
+RDC, and two normalized replays. It accepts completed walls only when
+`D_N <= 6`, `D_4N <= 6`, and `D_4N == D_N`; provisional walls require
+`D_4N <= 4 * D_N + 6`. This draw-only profile complements rather than replaces
+the 12-run wall-density frame-time matrix. Revalidate a completed bundle with
+`verify --job-root <job-root>`.
+
 ## Run the current Wall actual-window calibration
 
 Use the Wall calibration profile to capture the current production fallback
