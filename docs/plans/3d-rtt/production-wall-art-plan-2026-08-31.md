@@ -1203,12 +1203,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M3 world replacement integration test batchのHelp実経路判断: `No impact`。test-only rehydrate accessと既存transactionの検証だけで、
   load / recovery操作、workflow、成立条件、label、tooltip、shortcut、setting、notification、gameplay ruleは不変。
   `scripts/check_help_impact.py`とtooling unit test 24件がpassし、commit `122e9d47`へexact trailerを記録（2026-09-02）。
-- 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
-  既存tracked `scripts/check_crate_dependencies.py`がshebang付き`100644`であるrepository hygiene違反により停止（2026-09-01）。
+- 実装時 `python3 scripts/dev.py verify`: Python tooling 98件、Blender tooling 84件、performance self-test、agent rules、
+  Help impactまではpass。既存tracked `scripts/check_crate_dependencies.py`と`scripts/perf_tool/wall_renderdoc_extract.py`が
+  shebang付き`100644`であるrepository hygiene違反により停止（2026-09-02）。
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
   通常ゲームの入力、表示、建築成立条件、runtime data、プレイヤー向け文言は不変（`HELL_WORKERS_DIFF_BASE=HEAD`でgate pass）。
 - 初期M0 toolingはユーザー指示により`06826fd2`へ中間commit済み。ただしCapture harnessを含む凍結済みbaseline commitではない。
-- 未解決エラー: 上記の既存repository hygiene違反のみ。M0のOCIO、reference locator、orientation / boundsは解消済み。
+- 未解決エラー: 上記2件の既存repository hygiene違反のみ。M0のOCIO、reference locator、orientation / boundsは解消済み。
 
 ### Definition of Done
 
