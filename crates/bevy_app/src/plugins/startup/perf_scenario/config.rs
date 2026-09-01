@@ -812,7 +812,24 @@ impl PerfScenarioConfig {
             ));
         }
         let wall_actual_window = wall_actual_window_flag && wall_actual_window_environment;
-        if wall_actual_window
+        let wall_color_actual_window_flag = has_flag(&args, "--perf-wall-color-actual-window");
+        let wall_color_actual_window_environment =
+            env::var("HW_WALL_COLOR_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
+        if wall_color_actual_window_flag != wall_color_actual_window_environment {
+            return Err(PerfScenarioConfigError(
+                "--perf-wall-color-actual-window and HW_WALL_COLOR_ACTUAL_WINDOW=1 must be paired"
+                    .to_string(),
+            ));
+        }
+        let wall_color_actual_window =
+            wall_color_actual_window_flag && wall_color_actual_window_environment;
+        if wall_actual_window && wall_color_actual_window {
+            return Err(PerfScenarioConfigError(
+                "Wall current-visual and color-board actual-window profiles are mutually exclusive"
+                    .to_string(),
+            ));
+        }
+        if (wall_actual_window || wall_color_actual_window)
             && (workload != PerfWorkload::WallDensity
                 || size != PerfScenarioSize::Small
                 || wall_phase != Some(PerfWallPhase::Completed))
@@ -920,7 +937,11 @@ impl PerfScenarioConfig {
                 || !matches!(dashboard_mode, PerfDashboardMode::Hidden)
                 || !matches!(clock_mode, PerfClockMode::Realtime)
                 || master_seed != 20_260_901
-                || !wall_density_durations_match(wall_actual_window, warmup_secs, measure_secs)
+                || !wall_density_durations_match(
+                    wall_actual_window || wall_color_actual_window,
+                    warmup_secs,
+                    measure_secs,
+                )
                 || output_dir.is_none()
                 || window_width != Some(1280)
                 || window_height != Some(720)

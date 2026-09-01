@@ -253,6 +253,30 @@ visual reference only: it does not replace the registered historical P02
 artifact, the 12-run Wall Capture baseline, or the separate RenderDoc
 draw-group gate. Revalidate with `verify --job-root <job-root>`.
 
+## Run the Wall color-calibration pair
+
+First render the Blender reference from the same clean subject fingerprint with
+the sealed `tools/blender_ai_workflow/fixtures/wall-calibration-v2.ocio`,
+`BLENDER_SAFE_NO_NETWORK=1`, and `--require-ocio-positive`. Then plan the Bevy
+actual-window capture with those immutable reference paths:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_color_acceptance.py \
+  plan --repo "$PWD" --adapter Intel \
+  --reference "$HELL_WORKERS_ASSET_ROOT/staging/reports/<reference>.png" \
+  --reference-metadata "$HELL_WORKERS_ASSET_ROOT/staging/reports/<reference>.json"
+```
+
+Run only the returned direct `kitty` command and poll `status --job-root
+<job-root>` every 15–30 seconds. The profile renders the five-patch board with
+a dedicated final Camera2d, captures only the exact 320×96 board crop from the
+single X11 client without rescaling, and binds the contract, clean subject,
+source/harness/binary/asset fingerprints, Blender OCIO proof, raw performance
+sidecar, and candidate metadata. It recomputes CIEDE2000 and the separate
+emissive luminance predicate offline; either gate failing invalidates the job.
+Revalidate the sealed pair with `verify --job-root <job-root>`.
+
 ## Run the RtT-light migration recipe
 
 Use this path for the frozen `rtt-light-v1` baseline. Do not substitute a

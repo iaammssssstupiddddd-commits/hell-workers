@@ -121,6 +121,8 @@ mod save_transaction;
 #[cfg(feature = "profiling")]
 mod wall_actual_window;
 #[cfg(feature = "profiling")]
+mod wall_color_actual_window;
+#[cfg(feature = "profiling")]
 mod wall_density_fixture;
 #[cfg(feature = "profiling")]
 mod workload_driver;
@@ -187,6 +189,11 @@ pub(crate) use save_transaction::{
 #[cfg(feature = "profiling")]
 pub(crate) use wall_actual_window::{
     WallActualWindowAcceptance, publish_wall_actual_window_probe_status_system,
+};
+#[cfg(feature = "profiling")]
+pub(crate) use wall_color_actual_window::{
+    WallColorActualWindowAcceptance, publish_wall_color_actual_window_status_system,
+    setup_wall_color_board_system,
 };
 #[cfg(feature = "profiling")]
 pub(crate) use wall_density_fixture::{

@@ -853,13 +853,16 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     index / ledger / referenced artifactのidentityとhashをoffline verifierで封印済み。
   - canonical orientation / bounds / pivot / placementをgeometry JSONとcontract-hash付きSVGへ固定し、
     +Y quarter turnから16 maskを再導出するunit testをpass済み。
+  - profiling-onlyのBevy 5 patch actual-window phaseと専用fail-closed launcherを実装済み。通常current-wall
+    profileとは二重鍵で排他にし、dedicated final Camera2d、単一X11 clientのexact 320×96 crop、nonce / ACK、
+    Blender reference / OCIO proof / candidate metadata / offline Delta E再検証を同じartifactへ封印する。
 - 未完了:
-  - Bevy 5 patch actual-window candidate、clean subjectのBlender / Bevy color artifactとoffline Delta E gate、
+  - clean subjectのBlender / Bevy color artifactとoffline Delta E gate、
     最終M0 commitからのCapture 12 run / RenderDoc 4 case再採取を閉じるまではM0未完了。M1以降は未着手。
 
 ### 次のAIが最初にやること
 
-1. Bevy 5 patch actual-window phaseを閉じ、clean final subjectからBlender / Bevy color gateを採取する。
+1. clean final subjectからBlender / Bevy color gateを採取する。
 2. M0最終commitからCapture 12 run / RenderDoc 4 caseを再採取する。
 3. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
 

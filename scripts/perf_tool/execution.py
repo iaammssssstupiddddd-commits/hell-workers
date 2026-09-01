@@ -27,7 +27,11 @@ SOURCE_FINGERPRINT_FILES = {
     "rust-toolchain",
     "rust-toolchain.toml",
     "scripts/perf.py",
+    "tools/blender_ai_workflow/fixtures/wall-calibration-v2.ocio",
+    "tools/blender_ai_workflow/fixtures/wall-color-calibration-v1.json",
     "tools/blender_ai_workflow/fixtures/wall-density-v1.json",
+    "tools/blender_ai_workflow/scripts/render_color_calibration.py",
+    "tools/blender_ai_workflow/scripts/verify_color_calibration.py",
 }
 SOURCE_FINGERPRINT_PREFIXES = ("crates/", "scripts/perf_tool/")
 SOURCE_FINGERPRINT_ASSET_PREFIX = "assets/"
@@ -35,12 +39,15 @@ MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_color_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_density_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_renderdoc_acceptance.py",
     "scripts/build_coordination.py",
     "scripts/cargo_runtime.py",
     "scripts/perf_tool/execution.py",
     "scripts/perf_tool/renderdoc_capture.py",
     "scripts/perf_tool/renderdoc_foundation.py",
+    "scripts/perf_tool/wall_renderdoc_extract.py",
     "scripts/perf_tool/rtt_light_bundle.py",
 )
 SAVE_TRANSACTION_RUNTIME_ROOT = (REPO_ROOT / "target" / ".save-transaction-runtime").resolve()
@@ -979,6 +986,8 @@ def run_one(
         command.extend(["--perf-wall-phase", case.wall_phase])
     if args.wall_actual_window:
         command.append("--perf-wall-actual-window")
+    if args.wall_color_actual_window:
+        command.append("--perf-wall-color-actual-window")
     if args.capture_kind == "frame-time":
         command.extend(
             [

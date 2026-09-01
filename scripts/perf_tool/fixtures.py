@@ -3439,6 +3439,27 @@ def self_test() -> int:
             ]
         )
         validate_arguments(wall_actual_args)
+        wall_color_args = build_parser().parse_args(
+            [
+                "run", "--workload", "wall-density", "--wall-phase", "completed",
+                "--wall-color-actual-window", "--sizes", "small", "--renders", "gpu",
+                "--seed", "20260901", "--repeat", "1", "--preflight-runs", "0",
+                "--souls", "0", "--familiars", "0",
+                "--window-backend", "x11", "--backend", "vulkan",
+                "--present-mode", "novsync", "--window-width", "1280",
+                "--window-height", "720", "--window-scale-factor", "1.0",
+                "--rtt-quality", "high", "--warmup-secs", "10",
+                "--measure-secs", "10", "--dry-run",
+            ]
+        )
+        validate_arguments(wall_color_args)
+        wall_color_args.wall_actual_window = True
+        try:
+            validate_arguments(wall_color_args)
+        except ValueError as error:
+            assert "mutually exclusive" in str(error)
+        else:
+            raise AssertionError("simultaneous Wall actual-window profiles unexpectedly passed")
         wall_actual_args.wall_actual_window = False
         try:
             validate_arguments(wall_actual_args)

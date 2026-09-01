@@ -46,6 +46,14 @@ def add_run_arguments(
             "for the fail-closed native acceptance launcher"
         ),
     )
+    parser.add_argument(
+        "--wall-color-actual-window",
+        action="store_true",
+        help=(
+            "run the single-case Wall five-patch color calibration; reserved "
+            "for the fail-closed native acceptance launcher"
+        ),
+    )
     parser.add_argument("--stage", choices=RTT_LIGHT_STAGES)
     parser.add_argument("--lane", choices=RTT_LIGHT_LANES)
     parser.add_argument("--sizes", default="medium", help="comma-separated: small,medium,large")
@@ -434,13 +442,16 @@ def validate_arguments(args: argparse.Namespace) -> None:
         )
     selected_rtt_light = args.contract is not None or args.stage is not None or args.lane is not None
     if args.workload == "wall-density":
+        if args.wall_actual_window and args.wall_color_actual_window:
+            raise ValueError("Wall actual-window profiles are mutually exclusive")
+        wall_actual_window = args.wall_actual_window or args.wall_color_actual_window
         if args.command != "run":
             raise ValueError("wall-density is only available through perf.py run")
         if selected_rtt_light:
             raise ValueError("wall-density does not accept an RtT-light contract selection")
         if args.wall_phase not in {"completed", "provisional"}:
             raise ValueError("wall-density requires --wall-phase completed|provisional")
-        if args.wall_actual_window:
+        if wall_actual_window:
             if sizes != ["small"] or renders != ["gpu"]:
                 raise ValueError(
                     "wall-density actual-window requires --sizes small --renders gpu"
@@ -449,13 +460,13 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError("wall-density requires --sizes small,medium --renders gpu")
         if args.seed != 20_260_901:
             raise ValueError("wall-density requires --seed 20260901")
-        expected_repeat = 1 if args.wall_actual_window else 3
+        expected_repeat = 1 if wall_actual_window else 3
         if args.repeat != expected_repeat or args.preflight_runs != 0:
             raise ValueError(
                 f"wall-density requires --repeat {expected_repeat} --preflight-runs 0"
             )
-        expected_warmup = 10.0 if args.wall_actual_window else 30.0
-        expected_measure = 10.0 if args.wall_actual_window else 60.0
+        expected_warmup = 10.0 if wall_actual_window else 30.0
+        expected_measure = 10.0 if wall_actual_window else 60.0
         if args.warmup_secs != expected_warmup or args.measure_secs != expected_measure:
             raise ValueError(
                 "wall-density requires "
@@ -493,6 +504,8 @@ def validate_arguments(args: argparse.Namespace) -> None:
         raise ValueError("--wall-phase is reserved for --workload wall-density")
     if args.wall_actual_window:
         raise ValueError("--wall-actual-window is reserved for --workload wall-density")
+    if args.wall_color_actual_window:
+        raise ValueError("--wall-color-actual-window is reserved for --workload wall-density")
     if args.workload == "dream-ui-burst":
         if args.command not in {"run", "audit"}:
             raise ValueError("dream-ui-burst is available through perf.py run or audit")

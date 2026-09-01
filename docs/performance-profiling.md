@@ -288,6 +288,26 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
 このprofileも返されたdirect `kitty` launcherと`status_command`だけを使い、save/settingsをjob固有runtimeへ
 隔離する。結果は`verify-notifications`で再検証し、headless結果をUI/renderer証跡へ代用しない。
 
+壁M0のBlender / Bevy色校正は`wall-color-calibration-v1`専用profileで行う。先に同じclean
+source fingerprintからsealed OCIO configを使ったBlender reference PNG / metadataを生成し、次の
+`plan`へimmutable pathとして渡す。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_color_acceptance.py \
+  plan --repo "$PWD" --adapter Intel \
+  --reference "$HELL_WORKERS_ASSET_ROOT/staging/reports/<reference>.png" \
+  --reference-metadata "$HELL_WORKERS_ASSET_ROOT/staging/reports/<reference>.json"
+```
+
+返されたdirect `kitty` launcherだけを実行する。profileは`wall-density-v1`のSmall / completed / GPUを
+10秒warm-up＋10秒measureで1回実行し、通常wall calibrationとは排他的な
+`--wall-color-actual-window`をRust側の`HW_WALL_COLOR_ACTUAL_WINDOW=1`と二重鍵にする。専用final
+Camera2dの5 patchを単一X11 clientから320×96で無拡大cropし、4 base patchのCIEDE2000とemissive
+luminance liftをofflineで再計算する。PNG、metadata、OCIO proof、contract、source / harness / binary /
+asset fingerprints、performance sidecarのいずれかが変われば`verify`は失敗する。この色artifactはcurrent
+wall visual、12-run Capture、RenderDoc draw-group evidenceの代用にしない。
+
 resource preflightはnative recipe開始時に`MemAvailable` 10 GiBと実際のCargo target filesystem空き15 GiBを要求する。16 GiB以上ではCargo 2 job、未満では1 jobとし、`CARGO_INCREMENTAL=0`を固定する。各build / game / capture / replay stageの開始直前には`MemAvailable` 8 GiBを要求し、admission snapshotをartifactへ記録する。この8 GiBはstage開始ゲートであり、開始後に`MemAvailable`が一時的に8 GiBを下回ったことだけを理由に実行中processを停止しない。swapの使用量はmanifestへ診断情報として記録するが、RAMの下限を満たす場合の開始条件にはしない。Linuxで`MemAvailable`を読めない場合はstage開始を拒否する。helperは親環境の`CARGO_TARGET_DIR`を無視してworkspace `target/`へ、`TMPDIR` / `TMP` / `TEMP`を`target/.native-acceptance-tmp`へ固定し、`CARGO_HOME` / `RUSTUP_HOME`は安全な永続overrideだけを保持してtmpfs指定をaccount既定cacheへ戻す。job rootも`target/native-acceptance/`へ生成する。formal RenderDocのraw capture / replay workは`target/native-acceptance/renderdoc-foundation/<uuid>/`に置き、成功時だけscratchを削除する。失敗時はpartial raw、log、checkpoint、failure reasonを同じUUIDに保持する。capture/replay childは各600秒、RD0 outerは1,920秒、formal RenderDoc outerは1,320秒を上限とし、owned process groupをTERM→KILL→reapしてorphanを拒否する。capture前とRDC copy前には`max(15 GiB, 2 × RDC bytes + 1 GiB)`の同一filesystem空きを要求する。`/tmp`またはmemory-backed filesystemのjob / artifactを、default path・明示pathともに解決済みsymlink/mountまで検査して拒否し、残存`/tmp/hell-workers-*-target`はサイズを出して停止するが自動削除しない。`scripts/perf.py`と`scripts/dev.py`も同じくworkspace target・disk temporary・toolchain cache・最大2 Cargo jobsへ正規化し、Cargo compilationは`MemAvailable` 8 GiB未満では開始しない。Tracy capture / csvexportとRenderDocの子processもこのtemporary環境を継承する。通常のMemory受入はnative allocator + GNU timeを使い、Cargo/game/Capture/Memoryは並列化しない。artifactやCargo cacheの自動削除、別target directory、routineな`cargo clean`、`nice` / `ionice` / CPU affinityは行わない。
 
 native formalのproduction subject fingerprintと起動・監視harness fingerprintは別に封印する。Python native helper、build coordination、Cargo runtime guardだけを変更した場合、同じclean validation worktreeとworkspace `target/`を再利用し、既存Rust binaryやvalid S0/S1を不要にfull rebuildしない。asset fingerprintはmtimeではなく内容をhashする。Cargo profile、feature、toolchain、Rust/Cargo source、または測定結果validatorの変更は証拠の意味を変えるため、該当capsuleを再build / 再検証する。
