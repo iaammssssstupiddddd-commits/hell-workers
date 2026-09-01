@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 3 ]]; then
+    echo "usage: validate-wall-glb <input.glb> <family> <report-name.json>" >&2
+    exit 2
+fi
+
+BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKFLOW_ROOT="$(cd "${BIN_DIR}/.." && pwd)"
+ASSET_WORKSPACE_ROOT="${HELL_WORKERS_ASSET_ROOT:-${HOME}/Sync/hell-workers-assets}"
+
+exec python3 "${WORKFLOW_ROOT}/scripts/validate_wall_glb.py" \
+    --input "${ASSET_WORKSPACE_ROOT}/staging/exports/$1" \
+    --family "$2" \
+    --contract "${WORKFLOW_ROOT}/fixtures/wall-production-v1.geometry.json" \
+    --report "${ASSET_WORKSPACE_ROOT}/staging/reports/$3"

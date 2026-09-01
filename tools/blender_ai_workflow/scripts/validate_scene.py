@@ -205,12 +205,52 @@ def inspect_scene(
     require_uv: bool = False,
     require_material: bool = False,
     max_triangles: int | None = None,
+    collection_name: str | None = None,
+    require_single_mesh: bool = False,
 ) -> dict[str, Any]:
     depsgraph = bpy.context.evaluated_depsgraph_get()
     findings: list[dict[str, str]] = []
     meshes: list[dict[str, Any]] = []
 
-    for obj in sorted(bpy.context.scene.objects, key=lambda candidate: candidate.name):
+    collection = None
+    if collection_name is None:
+        candidate_objects = list(bpy.context.scene.objects)
+    else:
+        collection = bpy.data.collections.get(collection_name)
+        if collection is None:
+            findings.append(
+                issue(
+                    "error",
+                    "UNKNOWN_COLLECTION",
+                    f"Exact collection does not exist: {collection_name}",
+                )
+            )
+            candidate_objects = []
+        else:
+            candidate_objects = list(collection.all_objects)
+            if not candidate_objects:
+                findings.append(
+                    issue(
+                        "error",
+                        "EMPTY_COLLECTION",
+                        f"Exact collection has no objects: {collection_name}",
+                    )
+                )
+            scene_object_names = {obj.name for obj in bpy.context.scene.objects}
+            unlinked = sorted(
+                obj.name for obj in candidate_objects if obj.name not in scene_object_names
+            )
+            if unlinked:
+                findings.append(
+                    issue(
+                        "error",
+                        "COLLECTION_NOT_IN_SCENE",
+                        "Exact collection contains objects outside the active scene: "
+                        + ", ".join(unlinked),
+                    )
+                )
+
+    for obj in sorted(candidate_objects, key=lambda candidate: candidate.name):
         if obj.hide_render:
             continue
         if obj.type in {"CURVE", "SURFACE", "FONT", "META"}:
@@ -232,8 +272,19 @@ def inspect_scene(
         meshes.append(metrics)
         findings.extend(mesh_findings)
 
-    if not meshes:
+    if not meshes and not any(
+        entry["code"] in {"UNKNOWN_COLLECTION", "EMPTY_COLLECTION"}
+        for entry in findings
+    ):
         findings.append(issue("error", "NO_EXPORTABLE_MESH", "Scene has no render-enabled mesh objects."))
+    if require_single_mesh and len(meshes) != 1:
+        findings.append(
+            issue(
+                "error",
+                "MESH_COUNT",
+                f"Selected export requires exactly one mesh; found {len(meshes)}.",
+            )
+        )
 
     total_triangles = sum(mesh["triangles"] for mesh in meshes)
     if max_triangles is not None and total_triangles > max_triangles:
@@ -280,7 +331,7 @@ def inspect_scene(
 
     errors = [entry for entry in findings if entry["severity"] == "error"]
     warnings = [entry for entry in findings if entry["severity"] == "warning"]
-    return {
+    report = {
         "schema_version": 1,
         "blender_version": bpy.app.version_string,
         "blend_file": bpy.data.filepath or None,
@@ -296,6 +347,15 @@ def inspect_scene(
             "status": "error" if errors else "warning" if warnings else "ok",
         },
     }
+    if collection_name is not None:
+        report["selection"] = {
+            "mode": "exact_collection",
+            "collection": collection_name,
+            "collection_found": collection is not None,
+            "object_count": len(candidate_objects),
+            "require_single_mesh": require_single_mesh,
+        }
+    return report
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -304,6 +364,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-uv", action="store_true")
     parser.add_argument("--require-material", action="store_true")
     parser.add_argument("--max-triangles", type=positive_int)
+    parser.add_argument("--collection")
+    parser.add_argument("--require-single-mesh", action="store_true")
     parser.add_argument("--strict", action="store_true", help="Treat warnings as a failed gate")
     return parser
 
@@ -315,6 +377,8 @@ def main() -> None:
         require_uv=args.require_uv,
         require_material=args.require_material,
         max_triangles=args.max_triangles,
+        collection_name=args.collection,
+        require_single_mesh=args.require_single_mesh,
     )
     write_json_atomic(report_path, report)
     print(

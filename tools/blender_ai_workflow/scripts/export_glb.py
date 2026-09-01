@@ -30,6 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-uv", action="store_true")
     parser.add_argument("--require-material", action="store_true")
     parser.add_argument("--max-triangles", type=positive_int)
+    parser.add_argument("--collection")
+    parser.add_argument("--require-single-mesh", action="store_true")
     return parser
 
 
@@ -44,6 +46,8 @@ def main() -> None:
         require_uv=args.require_uv,
         require_material=args.require_material,
         max_triangles=args.max_triangles,
+        collection_name=args.collection,
+        require_single_mesh=args.require_single_mesh,
     )
     if validation["summary"]["errors"]:
         write_json_atomic(
@@ -56,6 +60,18 @@ def main() -> None:
         )
         raise RuntimeError("scene validation failed before export")
 
+    use_selection = args.collection is not None
+    if use_selection:
+        collection = bpy.data.collections.get(args.collection)
+        if collection is None:
+            raise RuntimeError("validated collection disappeared before export")
+        bpy.ops.object.select_all(action="DESELECT")
+        selected = list(collection.all_objects)
+        for obj in selected:
+            obj.select_set(True)
+        if selected:
+            bpy.context.view_layer.objects.active = selected[0]
+
     result = bpy.ops.export_scene.gltf(
         filepath=str(output_path),
         export_format="GLB",
@@ -65,6 +81,7 @@ def main() -> None:
         export_materials="EXPORT",
         export_animations=True,
         use_renderable=True,
+        use_selection=use_selection,
     )
     if "FINISHED" not in result:
         raise RuntimeError(f"Blender glTF exporter did not finish: {result}")
@@ -81,6 +98,8 @@ def main() -> None:
         "sha256": digest,
         "validation": validation,
     }
+    if args.collection is not None:
+        report["collection"] = args.collection
     write_json_atomic(report_path, report)
     print(f"GLB_EXPORTED output={output_path} sha256={digest} report={report_path}")
 

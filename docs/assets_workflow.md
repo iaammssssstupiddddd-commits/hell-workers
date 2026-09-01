@@ -76,6 +76,11 @@
 Blender AI編集、品質gate、MCPの安全境界は
 [`blender-setup.md`](blender-setup.md) を参照する。
 
+production Wall M1候補は1つの`.blend`にあるexact named collectionを個別に検査・exportする。各GLBは
+Khronos validatorの後に`tools/blender_ai_workflow/bin/validate-wall-glb`で実bytesを再検査し、scene reportだけを
+合格根拠にしない。M1中の`.blend`、GLB、texture、reportはすべて`staging/`に留め、asset-set manifestと
+promotion receiptの実装・検証・承認が終わる前に`source/`、canonical `exports/`、repo `assets/`へ移さない。
+
 マゼンタ背景付き画像から透過 PNG を作る場合は、既存の `scripts/convert_to_png.py` を使ってから `exports/textures/` に置く。
 
 ### 画像・モデル生成時の共通規約

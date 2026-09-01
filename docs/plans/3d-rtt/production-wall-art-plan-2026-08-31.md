@@ -549,6 +549,16 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### M1: production wall assetをstagingで制作
 
+実装状況（2026-09-01）:
+
+- exact collection selectorを`validate-blend` / `export-staging-glb`へ後方互換で追加した。指定時だけ
+  unknown / empty / multi-meshを拒否し、Blender実機の1 mesh正例exportと3負例を確認済み。
+- `validate_wall_glb.py` / `validate-wall-glb`を追加した。GLB JSON / BIN accessorを直接decodeし、1 node /
+  1 mesh / 1 primitive、identity、UV0、tangent有無、embedded image、triangle cap、raw bounds、active armの
+  core / port cross-section、junction corridor unionを検証する。純Pythonのisolated / straight正例とnode /
+  primitive / image / UV / port負例、およびBlender 5.1.1→Khronos→post-exportの実GLB正例がpassした。
+- asset-set manifest v2、allowlist sync、promotion transaction、production scene / 6 GLB / textureは未実装。
+
 - 変更内容:
   - 59度Orthographic reference boardを公称厚9.6 wu / 装飾外形最大12.8 wuで作り、黒石、錆鉄、トゲ、紫裂け目、ラフ線の優先順位を一枚で比較できるようにする。
   - 1つのBlender原本内の6 named collectionから6 meshとshared UV / textureを作り、export copyへ32倍scaleをbakeしてstagingへ個別exportする。

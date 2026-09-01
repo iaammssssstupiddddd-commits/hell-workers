@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 2 || $# -gt 3 ]]; then
-    echo "usage: validate-blend <input.blend> <report-name.json> [max-triangles]" >&2
+if [[ $# -lt 2 ]]; then
+    echo "usage: validate-blend <input.blend> <report-name.json> [max-triangles] [--collection <exact-name>]" >&2
     exit 2
 fi
 
@@ -12,11 +12,34 @@ ASSET_WORKSPACE_ROOT="${HELL_WORKERS_ASSET_ROOT:-${HOME}/Sync/hell-workers-asset
 INPUT_BLEND="$1"
 REPORT="${ASSET_WORKSPACE_ROOT}/staging/reports/$2"
 MAX_TRIANGLES="${3:-}"
+if [[ -n "${MAX_TRIANGLES}" && "${MAX_TRIANGLES}" == --* ]]; then
+    MAX_TRIANGLES=""
+else
+    [[ $# -lt 3 ]] || shift
+fi
+shift 2
+COLLECTION=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --collection)
+            [[ $# -ge 2 && -z "${COLLECTION}" ]] || { echo "invalid --collection" >&2; exit 2; }
+            COLLECTION="$2"
+            shift 2
+            ;;
+        *)
+            echo "unknown argument: $1" >&2
+            exit 2
+            ;;
+    esac
+done
 export BLENDER_SAFE_NO_NETWORK=1
 
 EXTRA_ARGS=()
 if [[ -n "${MAX_TRIANGLES}" ]]; then
     EXTRA_ARGS+=(--max-triangles "${MAX_TRIANGLES}")
+fi
+if [[ -n "${COLLECTION}" ]]; then
+    EXTRA_ARGS+=(--collection "${COLLECTION}" --require-single-mesh)
 fi
 
 exec "${BIN_DIR}/blender-safe" \

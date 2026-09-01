@@ -18,6 +18,13 @@ class ScriptContractTests(unittest.TestCase):
             with self.subTest(path=path.name):
                 ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
+    def test_wall_post_export_wrapper_is_project_local_and_fail_closed(self) -> None:
+        wrapper = (WORKFLOW_ROOT / "bin/validate-wall-glb").read_text(encoding="utf-8")
+        self.assertIn("validate_wall_glb.py", wrapper)
+        self.assertIn("wall-production-v1.geometry.json", wrapper)
+        self.assertIn("staging/exports", wrapper)
+        self.assertIn("staging/reports", wrapper)
+
     def test_common_path_guard_rejects_shared_prefix_sibling(self) -> None:
         spec = importlib.util.spec_from_file_location(
             "workflow_common",
@@ -42,6 +49,23 @@ class ScriptContractTests(unittest.TestCase):
         self.assertIn('staging_path(args.output, "exports")', source)
         self.assertIn("use_renderable=True", source)
         self.assertNotIn("sync_external_assets", source)
+
+    def test_exact_collection_export_is_opt_in_and_single_mesh(self) -> None:
+        export_source = (SCRIPTS_ROOT / "export_glb.py").read_text(encoding="utf-8")
+        validation_source = (SCRIPTS_ROOT / "validate_scene.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('parser.add_argument("--collection")', export_source)
+        self.assertIn("use_selection=use_selection", export_source)
+        self.assertIn('"UNKNOWN_COLLECTION"', validation_source)
+        self.assertIn('"EMPTY_COLLECTION"', validation_source)
+        self.assertIn('"COLLECTION_NOT_IN_SCENE"', validation_source)
+        self.assertIn('"MESH_COUNT"', validation_source)
+        for name in ("validate-blend", "export-staging-glb"):
+            wrapper = (WORKFLOW_ROOT / "bin" / name).read_text(encoding="utf-8")
+            with self.subTest(wrapper=name):
+                self.assertIn("--collection", wrapper)
+                self.assertIn("--require-single-mesh", wrapper)
 
     def test_codex_mcp_surface_excludes_execution_and_direct_export(self) -> None:
         config = (PROJECT_ROOT / ".codex/config.toml").read_text(encoding="utf-8")

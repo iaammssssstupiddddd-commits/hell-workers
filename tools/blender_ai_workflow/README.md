@@ -15,6 +15,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `bin/validate-blend` | evaluated sceneを検査して `staging/reports` へJSON出力 |
 | `bin/export-staging-glb` | scene gate、GLB export、Khronos validatorを直列実行 |
 | `bin/gltf-validate` | pinned Khronos validator wrapper |
+| `bin/validate-wall-glb` | production Wall GLBの構造・bounds・port断面をbytesから再検証 |
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
 | `scripts/render_color_calibration.py` | 壁M0の固定5 patchをBlenderで描画し、OCIO陽性証明付きmetadataを出力 |
 | `scripts/verify_color_calibration.py` | Blender / Bevy PNGをCIEDE2000とemissive sanityでoffline照合 |
@@ -23,9 +24,16 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 `validate-blend` と `export-staging-glb`:
 
 ```text
-validate-blend <input.blend> <report-name.json> [max-triangles]
-export-staging-glb <input.blend> <output-name.glb> [max-triangles]
+validate-blend <input.blend> <report-name.json> [max-triangles] [--collection <exact-name>]
+export-staging-glb <input.blend> <output-name.glb> [max-triangles] [--collection <exact-name>]
+validate-wall-glb <input.glb> <family> <report-name.json>
 ```
+
+`--collection`はM1 wall asset専用のopt-in selectorです。exact collectionがunknown / empty、または
+render-enabled meshが1個でなければexport前に失敗します。指定しない既存scene全体の検査・export contractは
+変更しません。collection export後はKhronos validatorに加えて`validate-wall-glb`を実行し、GLBのJSON / BINを
+直接decodeして1 node / 1 mesh / 1 primitive、identity node、UV0、tangent有無、embedded image 0、350 triangle
+cap、raw Y `-16..+16 wu`、9.6 wu port profile、12.8 wu corridor unionを検証します。
 
 ## Environment
 
