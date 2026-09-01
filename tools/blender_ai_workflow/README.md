@@ -21,6 +21,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `bin/render-wall-reference-board` | 6 familyを59.036° Orthographic / OCIO陽性条件で描画 |
 | `scripts/validate_asset_set_manifest.py` | Wall asset-set manifest v2と全参照artifactをexact検証 |
 | `scripts/validate_wall_textures.py` | shared textureとoptional +Y normal candidateをpixel検証 |
+| `scripts/verify_wall_rebuild.py` | 6 GLBとpost-export構造値の独立rebuild一致を検証 |
 | `scripts/promote_asset_set.py` | Wall final generationのplan / apply / recover / rollback transaction |
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
 | `scripts/render_color_calibration.py` | 壁M0の固定5 patchをBlenderで描画し、OCIO陽性証明付きmetadataを出力 |

@@ -580,7 +580,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   持ち越しも拒否するため、最終manifestが不採用normalを間接参照する経路も閉じた。
 - 59.036° Orthographic reference board rendererを追加し、M0と同じOCIO configの陽性証拠付きで6 familyを
   2×3配置に描画した。V原点の不一致を一度修正し、全面発光を解消して紫亀裂をT / Crossの限定bandへ収めた。
-- release receipt対応のrepo sync、正式6 GLB / manifest / reference board / rebuild reportは未実装。
+- 6 GLBのactual bytes hashとpost-exportのbounds / section / triangle / UV等の構造測定値をbaselineへ封印し、
+  独立再生成後のreportまで含めてexact比較するrebuild verifierを追加した。単体fixtureと現staging snapshotの
+  capture→verifyがpassし、正式M1 tool commitからの再生成artifact採取は未実施。
+- release receipt対応のrepo sync、正式6 GLB / manifest / reference board / rebuild artifactは未完了。
 
 - 変更内容:
   - 59度Orthographic reference boardを公称厚9.6 wu / 装飾外形最大12.8 wuで作り、黒石、錆鉄、トゲ、紫裂け目、ラフ線の優先順位を一枚で比較できるようにする。
