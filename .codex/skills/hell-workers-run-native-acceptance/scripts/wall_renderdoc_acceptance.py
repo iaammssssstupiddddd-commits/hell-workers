@@ -285,6 +285,7 @@ def validate_extraction(
         "rendered_instance_count",
         "checkpointed_owner_count",
         "wall_mesh_index_count",
+        "direct_scene_target_write",
         "draws",
     }
     native.require(set(group) == required_group_keys, "wall draw-group keys differ")
@@ -322,12 +323,20 @@ def validate_extraction(
             and not isinstance(draw["num_instances"], bool)
             and draw["num_instances"] > 0
             and isinstance(draw["color_resource_ids"], list)
-            and extraction["scene_target"]["resource_id"] in draw["color_resource_ids"]
+            and bool(draw["color_resource_ids"])
             and isinstance(draw["depth_resource_id"], str)
             and draw["depth_resource_id"]
             and draw["fragment_shader_present"] is True,
-            "wall draw row differs from the Scene color+depth predicate",
+            "wall draw row differs from the main color+depth predicate",
         )
+    native.require(
+        group["direct_scene_target_write"]
+        == all(
+            extraction["scene_target"]["resource_id"] in draw["color_resource_ids"]
+            for draw in group["draws"]
+        ),
+        "wall direct Scene-target classification differs",
+    )
     native.require(
         sum(draw["num_instances"] for draw in group["draws"])
         == group["rendered_instance_count"],

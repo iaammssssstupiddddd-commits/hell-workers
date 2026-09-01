@@ -306,7 +306,7 @@ def _select_wall_draw_group(
             draw["indexed"] is True
             and draw["num_indices"] == wall_mesh_index_count
             and draw["num_instances"] > 0
-            and scene_target_resource_id in draw["color_resource_ids"]
+            and bool(draw["color_resource_ids"])
             and draw["depth_resource_id"] is not None
             and draw["fragment_shader_present"] is True
         ):
@@ -345,6 +345,10 @@ def _select_wall_draw_group(
         "rendered_instance_count": rendered_instance_count,
         "checkpointed_owner_count": target_wall_count,
         "wall_mesh_index_count": wall_mesh_index_count,
+        "direct_scene_target_write": all(
+            scene_target_resource_id in draw["color_resource_ids"]
+            for draw in candidates
+        ),
         "draws": candidates,
     }
 
@@ -546,6 +550,21 @@ def self_test() -> int:
     )
     if selected["pass_id"] != "pass-0001" or selected["draw_group_count"] != 1:
         raise RuntimeError("wall main-pass draw selection regressed")
+    indirect_scene_draws = [
+        {
+            **draws[0],
+            "color_resource_ids": ["ResourceId::9"],
+        },
+        draws[1],
+    ]
+    selected = _select_wall_draw_group(
+        indirect_scene_draws,
+        scene_target_resource_id="ResourceId::7",
+        wall_mesh_index_count=36,
+        target_wall_count=96,
+    )
+    if selected["direct_scene_target_write"] is not False:
+        raise RuntimeError("wall intermediate-color main-pass selection regressed")
 
     class ActionFlags(IntFlag):
         BeginPass = 1
