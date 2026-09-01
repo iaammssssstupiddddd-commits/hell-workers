@@ -270,6 +270,20 @@ def validate_metadata(
         raise ContractError(f"{label} patch_inputs do not match the contract")
 
     if label == "reference":
+        projection = metadata.get("blender_projection")
+        if not isinstance(projection, dict):
+            raise ContractError("reference blender_projection metadata must be an object")
+        for field in contract["metadata"]["required_blender_projection_fields"]:
+            if field not in projection:
+                raise ContractError(f"reference blender_projection is missing {field}")
+        image = contract["image"]
+        if projection != {
+            "horizontal_world_span": image["width"],
+            "ortho_scale": image["width"],
+            "type": "orthographic",
+            "vertical_world_span": image["height"],
+        }:
+            raise ContractError("reference Blender projection differs from the contract")
         ocio = metadata.get("ocio")
         if not isinstance(ocio, dict):
             raise ContractError("reference OCIO metadata must be an object")
@@ -279,8 +293,20 @@ def validate_metadata(
         if not isinstance(ocio["config_path"], str) or not ocio["config_path"]:
             raise ContractError("reference OCIO config_path is required")
         require_sha256(ocio["config_sha256"], "reference OCIO config_sha256")
+        if not isinstance(ocio["config_version"], str) or not ocio["config_version"]:
+            raise ContractError("reference OCIO config_version is required")
         if not isinstance(ocio["runtime_version"], str) or not ocio["runtime_version"]:
             raise ContractError("reference OCIO runtime_version is required")
+        if ocio["validation_status"] != "pass":
+            raise ContractError("reference OCIO validation_status must be pass")
+        for field in ("config_cache_id", "active_config_cache_id"):
+            if not isinstance(ocio[field], str) or not ocio[field]:
+                raise ContractError(f"reference OCIO {field} is required")
+        if (
+            ocio["active_config_matches"] is not True
+            or ocio["active_config_cache_id"] != ocio["config_cache_id"]
+        ):
+            raise ContractError("reference OCIO active config must match the sealed config")
         if ocio["fallback"] is not False:
             raise ContractError("reference OCIO fallback must be false")
 

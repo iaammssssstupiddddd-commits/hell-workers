@@ -230,6 +230,20 @@ class WallColorCalibrationVerifierTests(unittest.TestCase):
         cls.contract_path = FIXTURES_ROOT / "wall-color-calibration-v1.json"
         cls.contract = json.loads(cls.contract_path.read_text(encoding="utf-8"))
 
+    def test_wall_ocio_config_freezes_exact_srgb_transfer(self) -> None:
+        config = (FIXTURES_ROOT / "wall-calibration-v2.ocio").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ocio_profile_version: 2.1", config)
+        self.assertIn("strictparsing: true", config)
+        self.assertIn("active_displays: [sRGB]", config)
+        self.assertIn("active_views: [Standard]", config)
+        self.assertIn(
+            "from_scene_reference: !<ExponentWithLinearTransform> "
+            "{gamma: 2.4, offset: 0.055, direction: inverse}",
+            config,
+        )
+
     def render_fixture_image(self, path: Path, *, candidate_shift: int = 0) -> None:
         image_spec = self.contract["image"]
         image = Image.new("RGB", (image_spec["width"], image_spec["height"]), "black")
@@ -286,11 +300,22 @@ class WallColorCalibrationVerifierTests(unittest.TestCase):
             "patch_inputs": patch_inputs,
         }
         if renderer == "blender":
+            metadata["blender_projection"] = {
+                "horizontal_world_span": self.contract["image"]["width"],
+                "ortho_scale": self.contract["image"]["width"],
+                "type": "orthographic",
+                "vertical_world_span": self.contract["image"]["height"],
+            }
             metadata["ocio"] = {
+                "active_config_cache_id": "fixture-cache-id",
+                "active_config_matches": True,
+                "config_cache_id": "fixture-cache-id",
                 "config_path": "/fixture/config.ocio",
                 "config_sha256": "a" * 64,
+                "config_version": "2.1",
                 "fallback": False,
                 "runtime_version": "2.4.2",
+                "validation_status": "pass",
             }
         return metadata
 
@@ -347,6 +372,58 @@ class WallColorCalibrationVerifierTests(unittest.TestCase):
             self.write_metadata(candidate_metadata, self.metadata(candidate, "bevy-client"))
 
             with self.assertRaisesRegex(self.verifier.ContractError, "fallback must be false"):
+                self.verifier.verify_calibration(
+                    contract_path=self.contract_path,
+                    reference_path=reference,
+                    reference_metadata_path=reference_metadata,
+                    candidate_path=candidate,
+                    candidate_metadata_path=candidate_metadata,
+                )
+
+    def test_reference_ocio_active_config_mismatch_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reference = root / "reference.png"
+            candidate = root / "candidate.png"
+            reference_metadata = root / "reference.json"
+            candidate_metadata = root / "candidate.json"
+            self.render_fixture_image(reference)
+            self.render_fixture_image(candidate)
+            metadata = self.metadata(reference, "blender")
+            metadata["ocio"]["active_config_cache_id"] = "unexpected-cache-id"
+            self.write_metadata(reference_metadata, metadata)
+            self.write_metadata(candidate_metadata, self.metadata(candidate, "bevy-client"))
+
+            with self.assertRaisesRegex(
+                self.verifier.ContractError, "active config must match"
+            ):
+                self.verifier.verify_calibration(
+                    contract_path=self.contract_path,
+                    reference_path=reference,
+                    reference_metadata_path=reference_metadata,
+                    candidate_path=candidate,
+                    candidate_metadata_path=candidate_metadata,
+                )
+
+    def test_reference_blender_projection_mismatch_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reference = root / "reference.png"
+            candidate = root / "candidate.png"
+            reference_metadata = root / "reference.json"
+            candidate_metadata = root / "candidate.json"
+            self.render_fixture_image(reference)
+            self.render_fixture_image(candidate)
+            metadata = self.metadata(reference, "blender")
+            metadata["blender_projection"]["ortho_scale"] = self.contract["image"][
+                "height"
+            ]
+            self.write_metadata(reference_metadata, metadata)
+            self.write_metadata(candidate_metadata, self.metadata(candidate, "bevy-client"))
+
+            with self.assertRaisesRegex(
+                self.verifier.ContractError, "projection differs"
+            ):
                 self.verifier.verify_calibration(
                     contract_path=self.contract_path,
                     reference_path=reference,

@@ -37,7 +37,7 @@ canonical asset昇格までを一つの閉じた作業列として具体化す�
 
 次は独立した停止ゲートであり、検査が通るまで後段の意味を縮小して解釈しない。
 
-1. Blender FlatpakのOCIO config `2.5`とruntime OCIO `2.4.2`の不一致を解消するまで、geometry検査は進めても**色再現性の承認とcanonical昇格は行わない**。
+1. Blender Flatpak同梱OCIO config `2.5`はruntime OCIO `2.4.2`で読めない。壁校正ではsealed profile 2.1 configを明示し、active config一致と`fallback=false`を証明する。明示なし／不一致ではgeometry検査だけを許し、**色再現性の承認とcanonical昇格は行わない**。
 2. 6 GLBまたはshared textureのうち1つでもmissing、failed、構造不正なら、native受入ではproduction wallを合格にしない。runtimeはfallbackを維持する。
 3. 自動pixel判定、validator、性能値だけでアート承認にしない。最終候補はユーザーの主観目視を必須とする。
 4. baked linework、lit/unlit比較のどちらでも平面的なイラストとして成立しない場合、同系統の数値調整を続けず、wall outline rendererを別提案・別計画として切り出す。
@@ -380,8 +380,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `maximum_cell_envelope`、raw vertical bounds、中心pivot、identity node、placement centerを別fieldへ分離し、
   JSON SHA-256へ結合したcanonical上面／側面SVGを追加した。unit testは+Y正回転のN→Wを起点に16 maskを
   全件再導出し、6 familyのarm / mask、SVG metadata、local Y `-16..+16`からworld Y `0..32`への配置を検証する。
-- 現行Flatpakでdiagnostic referenceを採取し、config 2.5 / runtime 2.4.2を
-  `fallback=true`として検出できることを確認済み。これは陽性証明ではないため色gateはblockedを維持する。
+- 現行Flatpakの同梱config 2.5 / runtime 2.4.2を`fallback=true`として検出した後、壁校正専用の
+  `wall-calibration-v2.ocio`（profile 2.1、Linear scene reference、exact sRGB transfer）を追加した。
+  runtime validation pass、明示config / active config cache ID一致、`fallback=false`をdiagnostic実機で確認した。
+  同時にBlender `Camera.ortho_scale`を画像height 96としていたため横長320 px boardの中央1 patchしか視野へ
+  入らない経路不成立を検出し、horizontal span 320へ修正した。修正後5 ROI medianはstone `(33,27,27)`、
+  rust `(140,74,47)`、dark brown `(26,10,0)`、purple `(139,0,139)`、emissive `(190,0,190)`である。
+  dirty diagnosticは正式証跡へ流用せず、clean final subjectからBlender referenceとBevy candidateを再採取する。
 - Rustの`wall-density` profiling workloadを実装済み。Small=N=96 / Medium=4N=384、
   completed / provisional、20列・5 cell stride、16 mask、Door blueprint connector、camera scale 5を
   production wall spawn / WorldMap予約経路で構築し、embedded contract hash、phase別layout checksum、
@@ -849,16 +854,19 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - canonical orientation / bounds / pivot / placementをgeometry JSONとcontract-hash付きSVGへ固定し、
     +Y quarter turnから16 maskを再導出するunit testをpass済み。
 - 未完了:
-  - OCIO陽性証明と、最終M0 commitからのCapture 12 run / RenderDoc 4 case再採取を閉じるまではM0未完了。M1以降は未着手。
+  - Bevy 5 patch actual-window candidate、clean subjectのBlender / Bevy color artifactとoffline Delta E gate、
+    最終M0 commitからのCapture 12 run / RenderDoc 4 case再採取を閉じるまではM0未完了。M1以降は未着手。
 
 ### 次のAIが最初にやること
 
-1. OCIO陽性証明を閉じ、M0最終commitからCapture 12 run / RenderDoc 4 caseを再採取する。
-2. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
+1. Bevy 5 patch actual-window phaseを閉じ、clean final subjectからBlender / Bevy color gateを採取する。
+2. M0最終commitからCapture 12 run / RenderDoc 4 caseを再採取する。
+3. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
 
 ### ブロッカー/注意点
 
-- Blender OCIO config `2.5` / runtime `2.4.2` mismatchは色承認の現行blockerである。
+- Blender同梱OCIO config `2.5` / runtime `2.4.2` mismatchは残るためdefault configで色承認しない。
+  壁5 patchはsealed profile 2.1 config＋`--require-ocio-positive`だけを正式経路とする。
 - `source/` / `exports/`が空なのは新規authoring baselineとして正常で、repo GLBを偽のBlender原本へ逆変換しない。
 - parent planの100 triangle / active `build_progress` / Light Field目視条件は現runtimeとずれている。壁の実行基準は本書の350 triangle cap、現行施工mask / material transition、Light Field未sample維持とする。
 - native受入は `hell-workers-run-native-acceptance` Skillのdirect `kitty` launcherとfail-closed artifact監視を使う。GUI権限をユーザーへ繰り返し依頼しない。

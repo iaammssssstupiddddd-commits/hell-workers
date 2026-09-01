@@ -224,22 +224,25 @@ dark-brown line、purpleの4色はunlit base-color経路としてD65 CIE Lab / C
 purple emissiveは相対輝度liftだけを別判定します。
 
 Blender側は`render_color_calibration.py`で320×96、8-bit sRGB PNGとmetadataを
-`staging/reports/`へ生成します。metadataには実際のOCIO config path / SHA-256、runtime version、
-fallback状態、color pipeline、入力色、PNG SHA-256、source fingerprintが必要です。
+`staging/reports/`へ生成します。metadataには実際のOCIO config path / SHA-256、profile / runtime version、
+明示configとactive configのcache ID一致、runtime validation、fallback状態、orthographic horizontal / vertical
+span、color pipeline、入力色、PNG SHA-256、source fingerprintが必要です。
 Bevy側artifactと揃った後、`verify_color_calibration.py`が中央16×16 px medianを再計算し、
 4 patch平均Delta E 2000 `<= 2.0`かつ各patch`<= 3.0`、emissive sanityをfail-closedで判定します。
 実行例と3つのgeometry / density / color fixtureの説明は
 [`tools/blender_ai_workflow/README.md`](../tools/blender_ai_workflow/README.md)を参照してください。
 
-現行Flatpakのconfig 2.5 / runtime 2.4.2は`fallback=true`として正しく記録されるため、
-diagnostic PNGが生成できても色gateはblockedのままです。互換環境で`fallback=false`の陽性証明を
-採取するまで、色承認とcanonical昇格を行いません。
+現行Flatpakの同梱config 2.5 / runtime 2.4.2は`fallback=true`として正しく記録されます。壁の正式校正では
+repo内の`tools/blender_ai_workflow/fixtures/wall-calibration-v2.ocio`（profile 2.1）を`OCIO`へ明示し、
+`--require-ocio-positive`を付けます。このconfigはruntime validationとactive cache ID一致が実機でpassし、
+exact sRGB transferを使います。dirty diagnostic artifactは正式証跡へ流用せず、clean subjectからBlender / Bevy
+両artifactを採取してoffline gateを通すまで色承認とcanonical昇格を行いません。
 
 ## 11. 既知の制約
 
-- Fedora Flatpak は Blender の OCIO config `2.5` を runtime OCIO `2.4.2` で読めず、
-  fallback color management になります。geometry/render実行確認には使えますが、
-  色再現性の受入は blocker です。
+- Fedora Flatpak 同梱の OCIO config `2.5` は runtime OCIO `2.4.2` で読めずfallbackします。
+  壁5 patch校正だけはsealed profile 2.1 configで回避しますが、一般Blender authoringをdefault configで
+  色承認することはできません。
 - `Material.use_nodes` は Blender 5.1.1 では動作しますが、6.0向けdeprecation warningが
   出ます。Blender upgradeとは別作業で移行します。
 - 既存 `soul.glb` は Khronos validatorで既知errorがあり、P08でproduction / visual-test

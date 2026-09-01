@@ -133,12 +133,30 @@ def resolve_ocio_evidence() -> dict[str, Any]:
         if resource:
             candidates.append(Path(resource) / "datafiles" / "colormanagement" / "config.ocio")
     config_path = next((candidate.resolve() for candidate in candidates if candidate.is_file()), None)
+    config_cache_id = ""
+    active_config_cache_id = ""
+    active_config_matches = False
+    validation_status = "not-run"
+    validation_error = ""
     try:
         import PyOpenColorIO as ocio
-
-        runtime_version = getattr(ocio, "__version__", None) or ocio.GetVersion()
     except (ImportError, AttributeError) as error:
         runtime_version = f"unavailable:{type(error).__name__}"
+        validation_status = "failed"
+        validation_error = f"{type(error).__name__}: {error}"
+    else:
+        runtime_version = getattr(ocio, "__version__", None) or ocio.GetVersion()
+        if config_path is not None:
+            try:
+                explicit_config = ocio.Config.CreateFromFile(str(config_path))
+                explicit_config.validate()
+                config_cache_id = explicit_config.getCacheID()
+                active_config_cache_id = ocio.GetCurrentConfig().getCacheID()
+                active_config_matches = active_config_cache_id == config_cache_id
+                validation_status = "pass"
+            except ocio.Exception as error:
+                validation_status = "failed"
+                validation_error = f"{type(error).__name__}: {error}"
     config_version = None
     if config_path:
         config_prefix = config_path.read_text(encoding="utf-8", errors="replace")[:4096]
@@ -163,12 +181,19 @@ def resolve_ocio_evidence() -> dict[str, Any]:
         "config_sha256": sha256_file(config_path) if config_path else None,
         "config_version": config_version,
         "runtime_version": str(runtime_version),
+        "config_cache_id": config_cache_id,
+        "active_config_cache_id": active_config_cache_id,
+        "active_config_matches": active_config_matches,
+        "validation_status": validation_status,
+        "validation_error": validation_error,
         "fallback": (
             config_path is None
             or config_version is None
             or runtime_pair is None
             or str(runtime_version).startswith("unavailable:")
             or incompatible_version
+            or validation_status != "pass"
+            or not active_config_matches
         ),
     }
 
@@ -199,7 +224,7 @@ def render_board(contract: dict[str, Any], output_path: Path) -> None:
 
     camera_data = bpy.data.cameras.new("wall_color_calibration_camera")
     camera_data.type = "ORTHO"
-    camera_data.ortho_scale = float(image["height"])
+    camera_data.ortho_scale = float(image["width"])
     camera = bpy.data.objects.new("wall_color_calibration_camera", camera_data)
     scene.collection.objects.link(camera)
     camera.location = (0.0, 0.0, 10.0)
@@ -236,6 +261,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", required=True)
     parser.add_argument("--metadata", required=True)
     parser.add_argument("--source-fingerprint", required=True)
+    parser.add_argument("--require-ocio-positive", action="store_true")
     return parser
 
 
@@ -251,6 +277,12 @@ def main() -> None:
         raise ValueError(f"calibration metadata must use .json: {metadata_path}")
     if output_path.exists() or metadata_path.exists():
         raise FileExistsError("refusing to overwrite an existing calibration artifact")
+    ocio_evidence = resolve_ocio_evidence()
+    if args.require_ocio_positive and ocio_evidence["fallback"]:
+        raise RuntimeError(
+            "OCIO positive proof is required but the active config is not validated: "
+            f"{ocio_evidence}"
+        )
     render_board(contract, output_path)
     pipeline = contract["color_pipeline"]
     patch_inputs = {
@@ -286,7 +318,13 @@ def main() -> None:
             "tonemapping": pipeline["tonemapping"],
             "view_transform": pipeline["reference_view_transform"],
         },
-        "ocio": resolve_ocio_evidence(),
+        "blender_projection": {
+            "horizontal_world_span": contract["image"]["width"],
+            "ortho_scale": contract["image"]["width"],
+            "type": "orthographic",
+            "vertical_world_span": contract["image"]["height"],
+        },
+        "ocio": ocio_evidence,
         "patch_inputs": patch_inputs,
         "emissive_strength": emissive["strength"],
     }

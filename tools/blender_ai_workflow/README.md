@@ -129,13 +129,15 @@ Blender referenceはcanonical assetではなく外部`staging/reports/`へだけ
 ASSET_ROOT="${HELL_WORKERS_ASSET_ROOT:-$HOME/Sync/hell-workers-assets}"
 
 BLENDER_SAFE_NO_NETWORK=1 \
+  OCIO="$PWD/tools/blender_ai_workflow/fixtures/wall-calibration-v2.ocio" \
   tools/blender_ai_workflow/bin/blender-safe \
   --background --factory-startup --python-exit-code 2 \
   --python tools/blender_ai_workflow/scripts/render_color_calibration.py -- \
   --contract tools/blender_ai_workflow/fixtures/wall-color-calibration-v1.json \
   --output "$ASSET_ROOT/staging/reports/wall-production-v1-color-reference.png" \
   --metadata "$ASSET_ROOT/staging/reports/wall-production-v1-color-reference.json" \
-  --source-fingerprint '<approved-commit-and-tree-fingerprint>'
+  --source-fingerprint '<approved-commit-and-tree-fingerprint>' \
+  --require-ocio-positive
 ```
 
 Bevy actual-window phaseが同じcontractのcandidate PNG / metadataを生成した後、offline gateを実行します。
@@ -150,7 +152,9 @@ python3 tools/blender_ai_workflow/scripts/verify_color_calibration.py \
   --output "$ASSET_ROOT/staging/reports/wall-production-v1-color-verification.json"
 ```
 
-reference metadataは実際に使ったOCIO config path / SHA-256、runtime version、
-`fallback=false`を必須とします。現行Fedora Flatpak Blender 5.1.1はconfig 2.5をruntime 2.4.2で
-fallbackするため、geometry用diagnostic renderは可能でも色gateは必ずblockedになります。
-fallbackを隠す、または4色の見た目だけでpass扱いにする運用は禁止です。
+reference metadataは実際に使ったOCIO config path / SHA-256、profile / runtime version、明示configと
+active configのcache ID一致、runtime validation pass、`fallback=false`を必須とします。Fedora Flatpak
+Blender 5.1.1の同梱config 2.5はruntime 2.4.2で読めないため、正式採取では壁校正専用の
+`fixtures/wall-calibration-v2.ocio`（OCIO profile 2.1、exact sRGB transfer）を`OCIO`へ明示し、
+`--require-ocio-positive`を付けます。default config、fallbackを隠す、または4色の見た目だけでpass扱いにする
+運用は禁止です。この専用configは壁5 patch校正だけの契約で、一般Blender authoringの色設定を置き換えません。

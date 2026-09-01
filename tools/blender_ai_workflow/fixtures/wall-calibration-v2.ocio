@@ -1,0 +1,55 @@
+ocio_profile_version: 2.1
+
+environment:
+  {}
+search_path: ""
+strictparsing: true
+luma: [0.2126, 0.7152, 0.0722]
+
+roles:
+  color_picking: sRGB
+  data: Non-Color
+  default: Linear
+  reference: Linear
+  rendering: Linear
+  scene_linear: Linear
+  texture_paint: sRGB
+
+file_rules:
+  - !<Rule> {name: Default, colorspace: default}
+
+displays:
+  sRGB:
+    - !<View> {name: Standard, colorspace: sRGB}
+
+active_displays: [sRGB]
+active_views: [Standard]
+
+colorspaces:
+  - !<ColorSpace>
+    name: Linear
+    family: working
+    equalitygroup: ""
+    bitdepth: 32f
+    isdata: false
+    encoding: scene-linear
+    allocation: uniform
+
+  - !<ColorSpace>
+    name: sRGB
+    family: display
+    equalitygroup: ""
+    bitdepth: 32f
+    isdata: false
+    encoding: sdr-video
+    allocation: uniform
+    from_scene_reference: !<ExponentWithLinearTransform> {gamma: 2.4, offset: 0.055, direction: inverse}
+
+  - !<ColorSpace>
+    name: Non-Color
+    family: data
+    equalitygroup: ""
+    bitdepth: 32f
+    isdata: true
+    encoding: data
+    allocation: uniform

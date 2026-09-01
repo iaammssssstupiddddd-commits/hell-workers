@@ -83,11 +83,22 @@
       "tonemapping",
       "view_transform"
     ],
+    "required_blender_projection_fields": [
+      "horizontal_world_span",
+      "ortho_scale",
+      "type",
+      "vertical_world_span"
+    ],
     "required_ocio_fields": [
+      "active_config_cache_id",
+      "active_config_matches",
+      "config_cache_id",
       "config_path",
       "config_sha256",
+      "config_version",
       "fallback",
-      "runtime_version"
+      "runtime_version",
+      "validation_status"
     ]
   },
   "schema_version": 1,

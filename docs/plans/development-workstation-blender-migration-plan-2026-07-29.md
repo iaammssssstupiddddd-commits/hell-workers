@@ -867,8 +867,11 @@ AI:
 - Blender upgradeとPC移行を同時に行わない。
 - 現PC用Blender MCP／glTF validatorの導入元は固定済み。旧端末との照合は行わない。
   rust-analyzer MCP／docsrs MCPは新PC側のversion／source／実queryを確認済み。
-- 現Blender FlatpakはOCIO config `2.5`をruntime OCIO `2.4.2`で読めずfallbackする。
-  geometry smokeには使えるが、色再現性の受入はこの不一致を解消するまでblockerである。
+- 現Blender Flatpakは同梱OCIO config `2.5`をruntime OCIO `2.4.2`で読めずfallbackする。壁5 patch校正に限り、
+  repoでsealedしたprofile 2.1 configを明示してactive cache ID一致を検証する経路を追加済み。一般authoringの
+  default色管理が解決したことは意味しない。
+  default configはgeometry smokeにだけ使い、一般authoringの色再現性には引き続き使わない。壁5 patchは
+  専用configのclean Blender / Bevy artifactとoffline Delta E gateを別途完了条件にする。
 
 ### 参照必須ファイル
 
@@ -920,7 +923,8 @@ AI:
 - 未解決エラー:
   - 最初の新規canonical assetが未作成。backup／restore手順はbaselineで実証済み。
   - fonts／faviconのlicense／provenanceと恒久的な管理経路が未確定。
-  - 現Blender FlatpakのOCIO version不一致により色再現性が未受入。
+  - 現Blender Flatpakのdefault OCIO version不一致により一般authoringの色再現性が未受入。壁5 patch専用configの
+    runtime陽性診断はpassしたが、clean Blender / Bevy artifactのoffline gateは未採取。
   - `gh` CLI tokenが無効。Git remote pushは成功済みだが、API／PR操作には再認証が必要。
 
 ### Definition of Done
@@ -956,6 +960,7 @@ AI:
 
 | 日付 | 変更者 | 内容 |
 | --- | --- | --- |
+| `2026-09-01` | `Codex` | 壁5 patch限定のsealed OCIO profile 2.1 configを追加し、runtime 2.4.2のvalidation、active cache ID一致、fallbackなしを診断。default configの一般authoring制約は維持 |
 | `2026-08-01` | `Codex` | ユーザー判断により旧Blender PCからの資産／設定引継ぎを廃止。このPCを唯一の新規authoring hostとし、M3を空workspace基準化、M4を新規canonical asset制作へ再定義 |
 | `2026-08-01` | `Codex` | ユーザー判断により内蔵disk暗号化をM2／G2の受け入れ条件そのものから削除。既完了の自動受け入れ結果に基づき、development-only G2を`PASS`へ更新 |
 | `2026-08-01` | `Codex` | 外部M1台帳から正しい現在地を復元し、新PC M2のfresh clone、WIP隔離復元、toolchain、MCP実query、GitHub、Vulkan、portable pathを受入。当初はLUKS欠落をG2 blockとして記録したが、上記のユーザー判断で解消 |
