@@ -5,7 +5,7 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `production-wall-art-plan-2026-08-31` |
-| ステータス | `In Progress (M2)` |
+| ステータス | `In Progress (M3)` |
 | 作成日 | `2026-08-31` |
 | 最終更新日 | `2026-09-02` |
 | 作成者 | `Codex` |
@@ -686,7 +686,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   正しいbytesを戻したfresh Appだけで回復し、同process hot reloadを主張しないfocused testを追加した。
 - runtime実装commitは`405f6e9c`、readiness負例commitは`546f4007`、sealed real-asset fixture commitは`473d922c`、
   normal mapのlinear load gateは`d194c123`、pool invariant testは`3f2c6f7c`、実system fixtureは`bb266315`、
-  topology-gated activation stateは`4ebc23a8`。
+  topology-gated activation stateは`4ebc23a8`、同frame fallback spawn gateは`116d1ff9`。
   `473d922c`から作成したprimary外clean worktree
   `staging/validation/wall-runtime-473d922c/worktree`へmanifest allowlistで8 core＋candidate normalだけを配置した。
   tracked差分／symlinkは0、candidate projection SHA-256は
@@ -717,11 +717,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [x] `.wallset` projectorがcanonical JSONをbyte-identicalに再生成し、通常feature集合でloaderがcompileする。loaderは全core file、release modeではimmutable receiptのactual bytes / SHA-256も`LoadContext::read_asset_bytes`で照合し、canonical schemaとmanifest / generation bindingを検査する。非canonical wire、改変・未知・欠落core、missing / tampered / mismatched receiptでは`Eligible`にならない。hash検証はasset-set identityあたり1回で、wall entityごとにI/Oしない。
   - [x] 全CPU-ready＋manifest authority後はaggregate stateだけが`Eligible`へ一度遷移し、M2単独の通常gameplayでは既存／新規wallともfallbackのままである。test専用`topology_ready` seamでだけ、後段のatomic apply条件を検証する。
   - [x] active production materialは完成／仮設2 handle、fallbackを含む総poolは4 handleで有限であり、Indoor Light Field bindingと未sample契約を保持する。
-  - [ ] missing / late albedo / emissive、adopted normal、release receipt、ready切替と同frame spawn、synthetic asset failure後の一括fallbackがfocused testで合格する。receiptのmissing / tamper / wrong generation / wrong manifestは通常起動をfallbackへ落とす。failed fileの復旧はfresh App restartで検証し、同processの自動hot reloadを主張しない。candidate-only normalのmissing / lateはproduction core readinessを誤ってblockせず、normal A/Bだけをfail-closedにする。
+  - [x] missing / late albedo / emissive、adopted normal、release receipt、ready切替と同frame spawn、synthetic asset failure後の一括fallbackがfocused testで合格する。receiptのmissing / tamper / wrong generation / wrong manifestは通常起動をfallbackへ落とす。failed fileの復旧はfresh App restartで検証し、同processの自動hot reloadを主張しない。candidate-only normalのmissing / lateはproduction core readinessを誤ってblockせず、normal A/Bだけをfail-closedにする。
   - [x] loaded primitiveのraw local AABB、identity node前提、world transform後AABBが1 tile / ground接地契約と一致し、asset reportの9.6 / 12.8 wu geometry値とhashが一致する。
   - [x] exactly-one `Building3dVisual` / `Mesh3d` / material / logical `MeshTag` testが合格する。
-  - [ ] asset-set identityとprocess-local session / activation revisionが混同されず、同一activation revisionのsteady stateではaggregate再遷移、全Wall走査、mesh / material writeが0である。fresh restartは同じasset generationを保持した新sessionとして回復する。
-  - [ ] M2の実経路についてHelp impact decisionを完了してからマイルストーン完了を報告する。
+  - [x] asset-set identityとprocess-local session / activation revisionが混同されず、同一activation revisionのsteady stateではaggregate再遷移、全Wall走査、mesh / material writeが0である。fresh restartは同じasset generationを保持した新sessionとして回復する。
+  - [x] M2の実経路についてHelp impact decisionを完了してからマイルストーン完了を報告する。
 - 検証:
   - `python3 scripts/dev.py cargo -- test -p bevy_app wall`
   - `python3 scripts/dev.py check`
@@ -953,7 +953,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### 現在地
 
-- 進捗: `M0・M1完了、M2実装中`
+- 進捗: `M0〜M2完了、M3実装中`
 - 完了済み:
   - current active wall経路、2D connection system、material / transform / MeshTag、save rehydrate、external asset workflowを棚卸し済み。
   - 6 mesh / 16 mask、finite pool、fallback、native受入の実装境界を本書で固定済み。
@@ -973,6 +973,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - subject `4ebc23a8`のclean validation worktreeからBevy 0.19実loader / readiness systemをheadless実行し、
     6 primitive、sRGBのalbedo / emissive、linearのnormal、candidate projection `c13d6134...`、raw bounds / triangle、
     unauthorized fallback、exact identityのEligible、topology gateのReadyToApply、steady-state revision / material handle不変をpass済み。
+  - `116d1ff9`で`ReadyToApply`と同frameの新規WallもM3 apply前はfallback bundleをexactly oneで維持するtestをpassし、
+    batchごとのHelp impact decisionを完了してM2を閉じた。
   - M3のcanonical `(N,S,W,E)` maskと6 family / quarter turn resolverを`819ca26d`で実装し、completed Door connectorの
     実経路を`4a728b06`で固定済み。3D mesh適用は未着手。
   - registered historical P02とcurrent fallback actual-windowを`wall-reference-locators-v1`で分離し、
@@ -986,16 +988,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - final subject `35f1f6e3`から色校正、Capture 12 run、RenderDoc 4 caseを再採取し、全artifactの独立verifyをpass。
     M0のsource / harness / asset viewを同じfingerprintへ凍結済み。
 - 未完了:
-  - M2のtest-only `topology_ready` seam、ready後synthetic failureの一括fallback判定、同revisionでWall走査／writeが0の
-    instrumentationをfocused testで閉じる。
   - M3のbidirectional topology index / atomic presentation applyは未着手。production assetはcanonical / primary
     `assets/`へまだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
 
 ### 次のAIが最初にやること
 
-1. M2のready後synthetic failure / missing adopted normal / same-frame spawnに残るfocused gateを閉じ、Help impact decisionを完了する。
-2. M3のbidirectional connector indexとresolved topology componentを追加し、add / move / removeのself＋4近傍dirtyを検証する。
-3. 2D / 3D consumerを同じresolved stateへ接続した後、atomic presentation applyとschedule orderingへ進む。
+1. M3のbidirectional connector indexとresolved topology componentを追加し、add / move / removeのself＋4近傍dirtyを検証する。
+2. 2D / 3D consumerを同じresolved stateへ接続し、Door / blueprint / multi-tile contributorのcoalesceを閉じる。
+3. atomic presentation applyと`TransformSystems::Propagate`前のschedule orderingへ進む。
 
 ### ブロッカー/注意点
 
