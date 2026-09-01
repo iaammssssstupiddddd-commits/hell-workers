@@ -774,6 +774,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   wall_construction_completion_system` chainへ通した。Framing完了時は各tileにprovisional Wallとexactly-one 3D visualが生成され、
   相互のend topologyを保ったままCoatingへ進む。Completionではsite / tileだけが消え、同じWall rootが完成material対象、
   completion bounce、同一topologyを維持する。
+- `122e9d47`で実DynamicWorld transaction、実rehydrate shell、root / leaf reset hook、production activation chainを一つのfixtureへ
+  統合した。normal load、rollbackの連続2 reset、recovery-onlyの全経路で、transaction直後は全Wallがfallback-onlyかつowner由来の
+  local / `GlobalTransform`と正しいworld位置を持つ。次の`PostUpdate`でexact asset identityと再構築済みtopologyを満たした全Wallが
+  production-onlyへ一括復帰し、presentation topologyとownerのmask / family / rotationが一致する。その次のsteady frameは
+  resolution revision不変で、旧Wall / visual Entityは残らない。
 
 - 変更内容:
   - mask計算と `WallMeshFamily + QuarterTurns` resolverをpure functionへ抽出し、16件のexhaustive table testを追加する。
@@ -800,11 +805,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [x] 仮設→完成はmaterialだけが変わり、mesh family / rotation / `MeshTag`は不変である。
   - [x] topology producerだけがdirtyをdrainし、2D / 3D consumerが同じresolved stateを同じ`PostUpdate`で観測する。`PlacementFeedbackSet::Commit`由来の配置も1 frame遅延しない。
   - [x] `WallAssetReadinessSet -> WallTopologyResolveSet -> ApplyDeferred -> WallPresentationApplySet`が`TransformSystems::Propagate`より前に実行され、final transform / tag compositionもapply内で完了する。owner移動 / owner回転ではlocal / `GlobalTransform`と`MeshTag`が同frame更新され、completion bounceやtransform syncでtopology回転が消えず、topology quarter turnだけではowner-derived tagが変化しない。
-  - [ ] save/load後にexactly-one visualと同一mask / family / rotationが復元される。
-  - [ ] normal load、rollback、recovery-only、連続2回resetの全world replacement testで、`Last` rehydrate frameは全wall fallbackかつlocal / `GlobalTransform`が正しいworld位置、次frame rebuild後は全wall production、mixed frame 0、旧`Entity`参照0、index rebuild 1回、重複contributor 0である。
+  - [x] save/load後にexactly-one visualと同一mask / family / rotationが復元される。
+  - [x] normal load、rollback、recovery-only、連続2回resetの全world replacement testで、`Last` rehydrate frameは全wall fallbackかつlocal / `GlobalTransform`が正しいworld位置、次frame rebuild後は全wall production、mixed frame 0、旧`Entity`参照0、index rebuild 1回、重複contributor 0である。
   - [ ] asset `Eligible`からの初回有効化、同frame spawn、synthetic failure、restart後回復の各activation revisionで既存／新規wallが同じmodeへ一括収束する。creation-time fallback / tag初期化以外にpresentation apply外の`Mesh3d` / wall material / wall transform / `MeshTag` mutationがなく、既存generic writerがWallを除外している。
   - [x] steady stateのtopology再計算とmesh writeが0件である。
-  - [ ] M3のplayer-visible routeについてHelp impact decisionを完了し、必要なHelp更新を同じbatchへ含めてから完了を報告する。
+  - [x] M3のplayer-visible routeについてHelp impact decisionを完了し、必要なHelp更新を同じbatchへ含めてから完了を報告する。
 - 検証:
   - `python3 scripts/dev.py cargo -- test -p hw_visual wall_connection`
   - `python3 scripts/dev.py cargo -- test -p bevy_app wall`
@@ -1030,12 +1035,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 未完了:
   - M3のPostUpdate schedule、3D consumer、atomic presentation apply、world-replace用のroot / leaf reset分担、`PlacementFeedbackSet::Commit`からのnormal / Instant Build配置、
     framing前後cancel、owner移動・回転、完成material-only遷移、completion bounceのfocused integration testは実装済み。
-    deconstructionの同frame topology更新とmulti-tile phase progressionも実装済み。normal load / rollback / recovery-onlyを含む実save/loadの統合testは未完了。
+    deconstructionの同frame topology更新、multi-tile phase progression、normal load / rollback / recovery-onlyの実transaction統合も実装済み。
+    M3で残るのは実candidate 6 meshに対するport collar / envelope geometry gateである。
     production assetはcanonical / primary `assets/`へまだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
 
 ### 次のAIが最初にやること
 
-1. normal load / rollback / recovery-only / 連続resetで、`Last` fallback位置、次frame production一括復帰、mixed 0、旧Entity参照0を検証する。
+1. clean validation worktreeの実candidate 6 meshへport collar / junction union / 9.6 wu nominal / 12.8 wu envelope gateを実行し、
+   M3最後のgeometry条件を閉じる。runtime lifecycleとworld replacementは完了済み。
 
 ### ブロッカー/注意点
 
@@ -1168,6 +1175,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M3 commit / teardown timing focused test:
   `normal_and_instant_placement_enter_the_same_topology_route`を`PlacementFeedbackSet::Commit`内のproducerへ強化し、
   `wall_commit_removes_the_connector_in_the_same_post_update`とともに各`pass (1 test, 2026-09-02)`。配置／解体の同frame topology更新を検証。
+- M3 world replacement focused test:
+  `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 systems::save::transaction::tests --lib`は`pass (16 tests, 2026-09-02)`、
+  `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 rehydrate --lib`は`pass (85 tests, 2026-09-02)`。normal / rollback /
+  recovery-only、fallback-only Last相当frame、次frame production-only、旧Entity除去、single rebuild / steady 0-writeを検証。
 - M3 topology / fallback spawn focused test:
   `python3 scripts/dev.py cargo -- test -p hw_visual wall_connection --lib`は`pass (8 tests, 2026-09-02)`、
   `fallback_wall_spawn_has_exactly_one_visual_mesh_material_and_tag`と
@@ -1189,6 +1200,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M3 multi-tile phase integration test batchのHelp実経路判断: `No impact`。既存の2 tile建設phaseとvisual ownershipを検証しただけで、
   操作、workflow、成立条件、label、tooltip、shortcut、setting、notification、gameplay ruleは不変。
   `scripts/check_help_impact.py`とtooling unit test 24件がpassし、commit `d0e23996`へexact trailerを記録（2026-09-02）。
+- M3 world replacement integration test batchのHelp実経路判断: `No impact`。test-only rehydrate accessと既存transactionの検証だけで、
+  load / recovery操作、workflow、成立条件、label、tooltip、shortcut、setting、notification、gameplay ruleは不変。
+  `scripts/check_help_impact.py`とtooling unit test 24件がpassし、commit `122e9d47`へexact trailerを記録（2026-09-02）。
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
   既存tracked `scripts/check_crate_dependencies.py`がshebang付き`100644`であるrepository hygiene違反により停止（2026-09-01）。
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
@@ -1230,3 +1244,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-02` | `Codex` | normal / Instant Build配置、framing前後cancel、completion bounceを実systemからPostUpdate topology / presentation / GlobalTransformまで通すfocused integration testを追加した |
 | `2026-09-02` | `Codex` | PlacementFeedbackSet commitとdeconstruction finalizerを同frame PostUpdate topologyへ接続する実system testを追加し、主要Update lifecycleのdirty timingを閉じた |
 | `2026-09-02` | `Codex` | 2 tile siteをframing spawn、coating transition、completionまで実system chainで通し、exactly-one visualと相互topologyが完成後も維持されることを固定した |
+| `2026-09-02` | `Codex` | normal / rollback / recovery-onlyの実world replacementをrehydrate fallbackから次frame production一括復帰まで検証し、旧Entity 0・single rebuild・steady 0-writeを固定した |
