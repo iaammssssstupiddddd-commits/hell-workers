@@ -3,7 +3,7 @@ use crate::layer::VisualLayerKind;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
-use hw_core::visual_mirror::construction::BlueprintVisualState;
+use hw_core::visual_mirror::construction::{BlueprintVisualState, WallTileVisualMirror};
 use hw_world::WorldMap;
 use std::collections::{HashMap, HashSet};
 
@@ -92,11 +92,15 @@ type Grid = (i32, i32);
 struct ContributorGrids {
     building: HashSet<Grid>,
     blueprint: HashSet<Grid>,
+    wall_tile: HashSet<Grid>,
 }
 
 impl ContributorGrids {
     fn combined(&self) -> HashSet<Grid> {
-        self.building.union(&self.blueprint).copied().collect()
+        let mut combined = self.building.clone();
+        combined.extend(self.blueprint.iter().copied());
+        combined.extend(self.wall_tile.iter().copied());
+        combined
     }
 }
 
@@ -173,6 +177,10 @@ impl WallTopologyIndex {
 
     fn set_blueprint(&mut self, entity: Entity, grids: impl IntoIterator<Item = Grid>) {
         self.replace_source(entity, |entry| &mut entry.blueprint, grids);
+    }
+
+    fn set_wall_tile(&mut self, entity: Entity, grid: Option<Grid>) {
+        self.replace_source(entity, |entry| &mut entry.wall_tile, grid);
     }
 
     fn mark_dirty_around(&mut self, grids: impl IntoIterator<Item = Grid>) {
@@ -252,15 +260,32 @@ type ChangedBlueprintQuery<'w, 's> = Query<
     Changed<BlueprintVisualState>,
 >;
 
+type ChangedWallTileQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform),
+    (
+        With<WallTileVisualMirror>,
+        Or<(
+            Added<WallTileVisualMirror>,
+            Changed<WallTileVisualMirror>,
+            Changed<Transform>,
+        )>,
+    ),
+>;
+
 #[derive(SystemParam)]
 pub struct WallTopologyQueries<'w, 's> {
     q_all_buildings: Query<'w, 's, (Entity, &'static Transform, &'static BuildingVisualState)>,
     q_changed_buildings: ChangedBuildingQuery<'w, 's>,
     q_all_blueprints: Query<'w, 's, (Entity, &'static BlueprintVisualState)>,
     q_changed_blueprints: ChangedBlueprintQuery<'w, 's>,
+    q_all_wall_tiles: Query<'w, 's, (Entity, &'static Transform), With<WallTileVisualMirror>>,
+    q_changed_wall_tiles: ChangedWallTileQuery<'w, 's>,
     q_walls_check: WallCheckQuery<'w, 's>,
     removed_buildings: RemovedComponents<'w, 's, BuildingVisualState>,
     removed_blueprints: RemovedComponents<'w, 's, BlueprintVisualState>,
+    removed_wall_tiles: RemovedComponents<'w, 's, WallTileVisualMirror>,
 }
 
 #[derive(SystemParam)]
@@ -287,6 +312,9 @@ pub fn wall_connections_system(
         index.set_blueprint(entity, []);
         commands.entity(entity).try_remove::<WallTopologyState>();
     }
+    for entity in topology.removed_wall_tiles.read() {
+        index.set_wall_tile(entity, None);
+    }
     if index.full_rebuild_requested {
         for (entity, transform, building_visual) in topology.q_all_buildings.iter() {
             let grid = matches!(
@@ -309,6 +337,12 @@ pub fn wall_connections_system(
             if !state.is_plain_wall {
                 commands.entity(entity).try_remove::<WallTopologyState>();
             }
+        }
+        for (entity, transform) in topology.q_all_wall_tiles.iter() {
+            index.set_wall_tile(
+                entity,
+                Some(WorldMap::world_to_grid(transform.translation.truncate())),
+            );
         }
         index.full_rebuild_requested = false;
     } else {
@@ -333,6 +367,12 @@ pub fn wall_connections_system(
             if !state.is_plain_wall {
                 commands.entity(entity).try_remove::<WallTopologyState>();
             }
+        }
+        for (entity, transform) in topology.q_changed_wall_tiles.iter() {
+            index.set_wall_tile(
+                entity,
+                Some(WorldMap::world_to_grid(transform.translation.truncate())),
+            );
         }
     }
     index.mark_dirty_around(dirty.take_removed());
@@ -635,6 +675,15 @@ mod tests {
             .id()
     }
 
+    fn spawn_wall_tile(app: &mut App, grid: Grid) -> Entity {
+        app.world_mut()
+            .spawn((
+                Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+                WallTileVisualMirror::default(),
+            ))
+            .id()
+    }
+
     fn expected_dirty_around(grids: impl IntoIterator<Item = Grid>) -> HashSet<Grid> {
         let mut dirty = HashSet::new();
         for (x, y) in grids {
@@ -851,6 +900,95 @@ mod tests {
                 .resource::<WallTopologyIndex>()
                 .by_grid
                 .contains_key(&connector_grid)
+        );
+        assert_eq!(
+            app.world().get::<WallTopologyState>(target).unwrap().mask,
+            WallConnectionMask::from_neighbors(false, false, false, false)
+        );
+    }
+
+    #[test]
+    fn construction_tile_and_spawned_wall_coalesce_to_one_connector() {
+        let mut images = Assets::<Image>::default();
+        let isolated = images.add(Image::default());
+        let connected = images.add(Image::default());
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<WallConnectionDirty>()
+            .init_resource::<WallTopologyIndex>()
+            .insert_resource(test_handles(isolated, connected))
+            .add_systems(Update, wall_connections_system);
+        let target_grid = (35, 35);
+        let connector_grid = (35, 36);
+        let (target, _) = spawn_completed_wall(&mut app, target_grid);
+        let tile = spawn_wall_tile(&mut app, connector_grid);
+
+        app.update();
+        assert_eq!(
+            app.world().get::<WallTopologyState>(target).unwrap().mask,
+            WallConnectionMask::from_neighbors(true, false, false, false)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WallTopologyIndex>()
+                .by_grid
+                .get(&connector_grid)
+                .unwrap()
+                .len(),
+            1
+        );
+
+        let (spawned_wall, _) = spawn_completed_wall(&mut app, connector_grid);
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<WallTopologyIndex>()
+                .by_grid
+                .get(&connector_grid)
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            app.world().get::<WallTopologyState>(target).unwrap().mask,
+            WallConnectionMask::from_neighbors(true, false, false, false)
+        );
+
+        app.world_mut().despawn(tile);
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<WallTopologyIndex>()
+                .by_grid
+                .get(&connector_grid)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            app.world().get::<WallTopologyState>(target).unwrap().mask,
+            WallConnectionMask::from_neighbors(true, false, false, false)
+        );
+
+        assert!(app.world_mut().despawn(spawned_wall));
+        assert!(app.world().get_entity(spawned_wall).is_err());
+        app.update();
+        let remaining = app
+            .world()
+            .resource::<WallTopologyIndex>()
+            .by_grid
+            .get(&connector_grid)
+            .cloned()
+            .unwrap_or_default();
+        assert!(
+            remaining.is_empty(),
+            "connector contributors remain after tile {tile:?} and wall {spawned_wall:?} removal: {remaining:?}"
+        );
+        assert!(
+            app.world()
+                .resource::<WallTopologyIndex>()
+                .last_update_targets
+                .contains(&target_grid)
         );
         assert_eq!(
             app.world().get::<WallTopologyState>(target).unwrap().mask,

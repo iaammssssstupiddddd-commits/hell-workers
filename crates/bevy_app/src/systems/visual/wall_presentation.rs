@@ -256,15 +256,20 @@ pub fn apply_wall_presentation_system(
 #[cfg(test)]
 mod tests {
     use bevy::transform::{TransformPlugin, TransformSystems};
+    use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
+    use hw_visual::WallVisualHandles;
     use hw_visual::wall_connection::{
-        QuarterTurns, ResolvedWallTopology, WallConnectionMask, WallTopologyResolveSet,
+        QuarterTurns, ResolvedWallTopology, WallConnectionDirty, WallConnectionMask,
+        WallTopologyIndex, WallTopologyResolveSet, wall_connections_system,
     };
+    use hw_world::WorldMap;
 
     use super::*;
     use crate::assets::wall_asset_set::{
-        ResolvedProductionWallAssets, WallAssetAuthority, WallAssetSetIdentity,
+        ResolvedProductionWallAssets, WallAssetAuthority, WallAssetReadiness,
+        WallAssetReadinessState, WallAssetSetIdentity, finalize_wall_production_activation_system,
     };
-    use crate::plugins::visual::WallPresentationApplySet;
+    use crate::plugins::visual::{WallAssetReadinessSet, WallPresentationApplySet};
 
     const GENERATION: u64 = 17;
     const MANIFEST_SHA256: &str = "presentation-test-manifest";
@@ -389,6 +394,47 @@ mod tests {
 
     fn add_apply_to_update(app: &mut App) {
         app.add_systems(Update, apply_wall_presentation_system);
+    }
+
+    fn wall_visual_handles() -> WallVisualHandles {
+        let unused = Handle::default();
+        WallVisualHandles {
+            stone_isolated: unused.clone(),
+            stone_horizontal_left: unused.clone(),
+            stone_horizontal_right: unused.clone(),
+            stone_horizontal_both: unused.clone(),
+            stone_vertical_top: unused.clone(),
+            stone_vertical_bottom: unused.clone(),
+            stone_vertical_both: unused.clone(),
+            stone_corner_tl: unused.clone(),
+            stone_corner_tr: unused.clone(),
+            stone_corner_bl: unused.clone(),
+            stone_corner_br: unused.clone(),
+            stone_t_up: unused.clone(),
+            stone_t_down: unused.clone(),
+            stone_t_left: unused.clone(),
+            stone_t_right: unused.clone(),
+            stone_cross: unused.clone(),
+            door_closed: unused.clone(),
+            door_open: unused.clone(),
+            mud_isolated: unused.clone(),
+            mud_horizontal: unused.clone(),
+            mud_vertical: unused.clone(),
+            mud_corner_tl: unused.clone(),
+            mud_corner_tr: unused.clone(),
+            mud_corner_bl: unused.clone(),
+            mud_corner_br: unused.clone(),
+            mud_t_up: unused.clone(),
+            mud_t_down: unused.clone(),
+            mud_t_left: unused.clone(),
+            mud_t_right: unused.clone(),
+            mud_cross: unused.clone(),
+            mud_end_top: unused.clone(),
+            mud_end_bottom: unused.clone(),
+            mud_end_left: unused.clone(),
+            mud_end_right: unused.clone(),
+            mud_floor: unused,
+        }
     }
 
     #[test]
@@ -589,6 +635,136 @@ mod tests {
         );
     }
 
+    #[test]
+    fn completion_transition_changes_only_the_shared_material() {
+        let mut fixture = make_fixture(add_apply_to_update);
+        fixture.app.update();
+
+        let mesh = fixture
+            .app
+            .world()
+            .get::<Mesh3d>(fixture.visual)
+            .unwrap()
+            .0
+            .clone();
+        let state = *fixture
+            .app
+            .world()
+            .get::<Wall3dPresentationState>(fixture.visual)
+            .unwrap();
+        let transform = *fixture
+            .app
+            .world()
+            .get::<Transform>(fixture.visual)
+            .unwrap();
+        let tag = fixture
+            .app
+            .world()
+            .get::<MeshTag>(fixture.visual)
+            .unwrap()
+            .clone();
+
+        fixture
+            .app
+            .world_mut()
+            .get_mut::<Building>(fixture.owner)
+            .unwrap()
+            .is_provisional = true;
+        fixture.app.update();
+
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            mesh
+        );
+        assert_eq!(
+            *fixture
+                .app
+                .world()
+                .get::<Wall3dPresentationState>(fixture.visual)
+                .unwrap(),
+            state
+        );
+        assert_eq!(
+            *fixture
+                .app
+                .world()
+                .get::<Transform>(fixture.visual)
+                .unwrap(),
+            transform
+        );
+        assert_eq!(
+            fixture.app.world().get::<MeshTag>(fixture.visual).unwrap(),
+            &tag
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<MeshMaterial3d<TopDownStructuralMaterial>>(fixture.visual)
+                .unwrap()
+                .0,
+            fixture.provisional_material
+        );
+    }
+
+    #[test]
+    fn owner_transform_and_topology_rotation_compose_without_corrupting_mesh_tag() {
+        let mut fixture = make_fixture(add_apply_to_update);
+        fixture.app.update();
+
+        {
+            let mut owner = fixture
+                .app
+                .world_mut()
+                .get_mut::<Transform>(fixture.owner)
+                .unwrap();
+            owner.rotation = Quat::from_rotation_z(std::f32::consts::FRAC_PI_2);
+            owner.scale = Vec3::splat(1.15);
+        }
+        fixture.app.update();
+
+        let owner = *fixture.app.world().get::<Transform>(fixture.owner).unwrap();
+        let expected = building_presentation_transform(BuildingType::Wall, &owner);
+        let actual = *fixture
+            .app
+            .world()
+            .get::<Transform>(fixture.visual)
+            .unwrap();
+        assert_eq!(actual, expected);
+        let owner_tag = fixture
+            .app
+            .world()
+            .get::<MeshTag>(fixture.visual)
+            .unwrap()
+            .clone();
+
+        fixture
+            .app
+            .world_mut()
+            .get_mut::<WallTopologyState>(fixture.owner)
+            .unwrap()
+            .resolved
+            .quarter_turns_y = QuarterTurns::ONE;
+        fixture.app.update();
+
+        let actual = *fixture
+            .app
+            .world()
+            .get::<Transform>(fixture.visual)
+            .unwrap();
+        assert!(actual.translation.abs_diff_eq(expected.translation, 1e-5));
+        assert!(actual.scale.abs_diff_eq(expected.scale, 1e-5));
+        assert!(actual.rotation.abs_diff_eq(
+            expected.rotation * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+            1e-5
+        ));
+        assert_eq!(
+            fixture.app.world().get::<MeshTag>(fixture.visual).unwrap(),
+            &owner_tag,
+            "topology-only quarter turns must not change the logical light anchor"
+        );
+    }
+
     fn insert_resolved_topology_for_test(
         mut commands: Commands,
         owners: Query<Entity, (With<Building>, Without<WallTopologyState>)>,
@@ -630,6 +806,52 @@ mod tests {
         );
     }
 
+    fn add_production_topology_chain(app: &mut App) {
+        app.insert_resource(WallProductionActivation::default())
+            .insert_resource(WallAssetReadiness {
+                activation_revision: 3,
+                state: WallAssetReadinessState::Eligible {
+                    asset_set_generation: GENERATION,
+                    authority: WallAssetAuthority::IsolatedCandidate,
+                    manifest_sha256: MANIFEST_SHA256.to_string(),
+                },
+                ..Default::default()
+            })
+            .insert_resource(wall_visual_handles())
+            .init_resource::<WallConnectionDirty>()
+            .init_resource::<WallTopologyIndex>()
+            .configure_sets(
+                PostUpdate,
+                (
+                    WallAssetReadinessSet,
+                    WallTopologyResolveSet,
+                    WallPresentationApplySet,
+                )
+                    .chain()
+                    .before(TransformSystems::Propagate),
+            )
+            .add_systems(
+                PostUpdate,
+                wall_connections_system.in_set(WallTopologyResolveSet),
+            )
+            .add_systems(
+                PostUpdate,
+                ApplyDeferred
+                    .after(WallTopologyResolveSet)
+                    .before(WallPresentationApplySet)
+                    .before(TransformSystems::Propagate),
+            )
+            .add_systems(
+                PostUpdate,
+                (
+                    finalize_wall_production_activation_system,
+                    apply_wall_presentation_system,
+                )
+                    .chain()
+                    .in_set(WallPresentationApplySet),
+            );
+    }
+
     #[test]
     fn deferred_topology_reaches_visual_and_global_transform_in_the_same_frame() {
         let mut fixture = make_fixture(add_post_update_chain);
@@ -659,6 +881,79 @@ mod tests {
         assert!(global.translation.abs_diff_eq(local.translation, 1e-5));
         assert!(global.rotation.abs_diff_eq(local.rotation, 1e-5));
         assert!(global.scale.abs_diff_eq(local.scale, 1e-5));
+    }
+
+    #[test]
+    fn real_topology_producer_updates_door_add_and_remove_in_the_same_frame() {
+        let mut fixture = make_fixture(add_production_topology_chain);
+        fixture
+            .app
+            .world_mut()
+            .entity_mut(fixture.owner)
+            .remove::<WallTopologyState>()
+            .insert(BuildingVisualState {
+                kind: BuildingTypeVisual::Wall,
+                is_provisional: false,
+            });
+        fixture
+            .app
+            .world_mut()
+            .get_mut::<Transform>(fixture.owner)
+            .unwrap()
+            .translation = WorldMap::grid_to_world(1, 2).extend(0.0);
+
+        fixture.app.update();
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            fixture.production_meshes[0]
+        );
+
+        let north_grid = (1, 3);
+        let door = fixture
+            .app
+            .world_mut()
+            .spawn((
+                Transform::from_translation(
+                    WorldMap::grid_to_world(north_grid.0, north_grid.1).extend(0.0),
+                ),
+                BuildingVisualState {
+                    kind: BuildingTypeVisual::Door,
+                    is_provisional: false,
+                },
+            ))
+            .id();
+        fixture.app.update();
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            fixture.production_meshes[1]
+        );
+        let topology = *fixture
+            .app
+            .world()
+            .get::<WallTopologyState>(fixture.owner)
+            .unwrap();
+        assert_eq!(
+            topology.mask,
+            WallConnectionMask::from_neighbors(true, false, false, false)
+        );
+        assert_eq!(topology.resolved.family, WallMeshFamily::End);
+        assert_eq!(topology.resolved.quarter_turns_y, QuarterTurns::ZERO);
+
+        fixture.app.world_mut().despawn(door);
+        fixture.app.update();
+        assert_eq!(
+            fixture.app.world().get::<Mesh3d>(fixture.visual).unwrap().0,
+            fixture.production_meshes[0]
+        );
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<WallTopologyState>(fixture.owner)
+                .unwrap()
+                .mask,
+            WallConnectionMask::from_neighbors(false, false, false, false)
+        );
     }
 
     #[test]

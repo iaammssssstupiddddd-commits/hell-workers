@@ -134,6 +134,66 @@ fn resting_soul_shell_remains_hidden_after_rehydrate() {
 }
 
 #[test]
+fn rehydrated_wall_starts_in_visible_fallback_at_its_world_position() {
+    use bevy::asset::{AssetApp, AssetPlugin};
+    use hw_visual::{Building3dVisual, Wall3dPresentationMode, Wall3dPresentationState};
+
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+    app.init_asset::<Image>()
+        .init_asset::<Font>()
+        .init_asset::<Gltf>()
+        .init_asset::<WorldAsset>();
+
+    let asset_server = app.world().resource::<AssetServer>().clone();
+    let game_assets = {
+        let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+        crate::plugins::startup::create_game_assets(&asset_server, &mut images)
+    };
+    let handles = empty_building_3d_handles();
+    let soul_handles = empty_soul_task_handles();
+    let position = WorldMap::grid_to_world(7, 8);
+    let wall = app
+        .world_mut()
+        .spawn((
+            Building {
+                kind: BuildingType::Wall,
+                is_provisional: false,
+            },
+            Transform::from_translation(position.extend(0.0)),
+        ))
+        .id();
+
+    rehydrate_shells(app.world_mut(), &game_assets, &handles, &soul_handles);
+    app.world_mut().flush();
+
+    let rows = app
+        .world_mut()
+        .query::<(
+            &Building3dVisual,
+            &Wall3dPresentationState,
+            &Mesh3d,
+            &MeshMaterial3d<hw_visual::TopDownStructuralMaterial>,
+            &Transform,
+            &GlobalTransform,
+        )>()
+        .iter(app.world())
+        .filter(|(visual, ..)| visual.owner == wall)
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 1);
+    let (visual, state, mesh, material, local, global) = rows[0];
+    assert_eq!(visual.owner, wall);
+    assert_eq!(state.mode, Wall3dPresentationMode::Fallback);
+    assert_eq!(mesh.0, handles.wall_mesh);
+    assert_eq!(material.0, handles.wall_material);
+    assert_eq!(
+        local.translation,
+        Vec3::new(position.x, TILE_SIZE * 0.5, -position.y)
+    );
+    assert_eq!(global.compute_transform(), *local);
+}
+
+#[test]
 fn rehydrated_rock_item_uses_the_small_ground_item_image() {
     use bevy::asset::{AssetApp, AssetPlugin};
 
