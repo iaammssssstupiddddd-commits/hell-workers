@@ -17,6 +17,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `bin/export-staging-glb` | scene gate、GLB export、Khronos validatorを直列実行 |
 | `bin/gltf-validate` | pinned Khronos validator wrapper |
 | `bin/validate-wall-glb` | production Wall GLBの構造・bounds・port断面をbytesから再検証 |
+| `bin/create-wall-production-scene` | shared textureから6 familyの決定的Wall `.blend`を生成 |
 | `scripts/validate_asset_set_manifest.py` | Wall asset-set manifest v2と全参照artifactをexact検証 |
 | `scripts/promote_asset_set.py` | Wall final generationのplan / apply / recover / rollback transaction |
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
@@ -28,7 +29,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 
 ```text
 validate-blend <input.blend> <report-name.json> [max-triangles] [--collection <exact-name>]
-export-staging-glb <input.blend> <output-name.glb> [max-triangles] [--collection <exact-name>]
+export-staging-glb <input.blend> <output-name.glb> [max-triangles] [--collection <exact-name>] [--geometry-scale <positive>] [--materials-mode <export|placeholder|none>]
 validate-wall-glb <input.glb> <family> <report-name.json>
 ```
 
@@ -37,6 +38,23 @@ render-enabled meshが1個でなければexport前に失敗します。指定し
 変更しません。collection export後はKhronos validatorに加えて`validate-wall-glb`を実行し、GLBのJSON / BINを
 直接decodeして1 node / 1 mesh / 1 primitive、identity node、UV0、tangent有無、embedded image 0、350 triangle
 cap、raw Y `-16..+16 wu`、9.6 wu port profile、12.8 wu corridor unionを検証します。
+
+production Wall sceneは各familyを1 tile単位、9.6 / 32 = 0.30 tile厚、上下`-0.5..+0.5 tile`でauthoringし、
+各collectionを192 trianglesへ決定的に分割します。正式exportだけはscene gate後のin-memory mesh copyへ
+`--geometry-scale 32 --materials-mode placeholder`を適用し、object transformをidentityのままraw wuへbakeします。
+Blender 5.1.1のglTF operatorにglobal scale propertyがないため、このopt-in頂点bakeを使います。既存exportの
+既定はscale 1 / material exportのままです。
+
+```bash
+tools/blender_ai_workflow/bin/create-wall-production-scene
+tools/blender_ai_workflow/bin/export-staging-glb \
+  "$ASSET_ROOT/staging/blend/wall-production-v1.blend" \
+  models/buildings/wall/wall_isolated.glb \
+  350 \
+  --collection Wall_Isolated \
+  --geometry-scale 32 \
+  --materials-mode placeholder
+```
 
 Wall asset-set manifest v2は、既存の単体asset manifest v1とは別schemaです。candidate検証は
 `normal_decision=pending`（core 8 file＋optional normal 1 file）とpending runtime subject / candidate art reviewを許し、

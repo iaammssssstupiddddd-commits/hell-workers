@@ -569,7 +569,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   generation / pointer renameの各中断点でactiveが旧または完全な新世代だけになることを故障注入testで確認した。
   rollbackはgenerationを消さずpointerだけを復元し、inert / temporary generationは明示recoverで隔離する。
 - workspace init / verifierへgeneric v1を保持したWall v2 generation / authority / quarantine layoutを追加した。
-- release receipt対応のrepo sync、production scene / 6 GLB / textureは未実装。
+- imagegenでshared albedo / emissive候補を作り、同一条件で1024角sRGBへresampleして外部stagingへ配置した。
+- 6 familyを各1 mesh / 192 triangles / UV0 / 1 materialで作る決定的Blender scene generatorと、production限定の
+  in-memory 32倍vertex bake / placeholder material exportを追加した。isolated診断はraw bounds
+  `[-4.8,-16,-4.8]..[4.8,16,4.8]`、embedded image 0、Khronos error / warning 0、post-export pass。
+- release receipt対応のrepo sync、正式6 GLB / manifest / reference board / rebuild reportは未実装。
 
 - 変更内容:
   - 59度Orthographic reference boardを公称厚9.6 wu / 装飾外形最大12.8 wuで作り、黒石、錆鉄、トゲ、紫裂け目、ラフ線の優先順位を一枚で比較できるようにする。

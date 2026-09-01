@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-    echo "usage: export-staging-glb <input.blend> <output-name.glb> [max-triangles] [--collection <exact-name>]" >&2
+    echo "usage: export-staging-glb <input.blend> <output-name.glb> [max-triangles] [--collection <exact-name>] [--geometry-scale <positive>] [--materials-mode <export|placeholder|none>]" >&2
     exit 2
 fi
 
@@ -10,8 +10,9 @@ BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKFLOW_ROOT="$(cd "${BIN_DIR}/.." && pwd)"
 ASSET_WORKSPACE_ROOT="${HELL_WORKERS_ASSET_ROOT:-${HOME}/Sync/hell-workers-assets}"
 INPUT_BLEND="$1"
-OUTPUT="${ASSET_WORKSPACE_ROOT}/staging/exports/$2"
-REPORT="${ASSET_WORKSPACE_ROOT}/staging/reports/$2.export.json"
+OUTPUT_RELATIVE="$2"
+OUTPUT="${ASSET_WORKSPACE_ROOT}/staging/exports/${OUTPUT_RELATIVE}"
+REPORT="${ASSET_WORKSPACE_ROOT}/staging/reports/${OUTPUT_RELATIVE}.export.json"
 MAX_TRIANGLES="${3:-}"
 if [[ -n "${MAX_TRIANGLES}" && "${MAX_TRIANGLES}" == --* ]]; then
     MAX_TRIANGLES=""
@@ -20,11 +21,23 @@ else
 fi
 shift 2
 COLLECTION=""
+GEOMETRY_SCALE=""
+MATERIALS_MODE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --collection)
             [[ $# -ge 2 && -z "${COLLECTION}" ]] || { echo "invalid --collection" >&2; exit 2; }
             COLLECTION="$2"
+            shift 2
+            ;;
+        --geometry-scale)
+            [[ $# -ge 2 && -z "${GEOMETRY_SCALE}" ]] || { echo "invalid --geometry-scale" >&2; exit 2; }
+            GEOMETRY_SCALE="$2"
+            shift 2
+            ;;
+        --materials-mode)
+            [[ $# -ge 2 && -z "${MATERIALS_MODE}" ]] || { echo "invalid --materials-mode" >&2; exit 2; }
+            MATERIALS_MODE="$2"
             shift 2
             ;;
         *)
@@ -42,6 +55,12 @@ fi
 if [[ -n "${COLLECTION}" ]]; then
     EXTRA_ARGS+=(--collection "${COLLECTION}" --require-single-mesh)
 fi
+if [[ -n "${GEOMETRY_SCALE}" ]]; then
+    EXTRA_ARGS+=(--geometry-scale "${GEOMETRY_SCALE}")
+fi
+if [[ -n "${MATERIALS_MODE}" ]]; then
+    EXTRA_ARGS+=(--materials-mode "${MATERIALS_MODE}")
+fi
 
 "${BIN_DIR}/blender-safe" \
     --background \
@@ -58,4 +77,4 @@ fi
 
 exec "${BIN_DIR}/gltf-validate" \
     "${OUTPUT}" \
-    --report "${ASSET_WORKSPACE_ROOT}/staging/reports/$2.khronos.json"
+    --report "${ASSET_WORKSPACE_ROOT}/staging/reports/${OUTPUT_RELATIVE}.khronos.json"

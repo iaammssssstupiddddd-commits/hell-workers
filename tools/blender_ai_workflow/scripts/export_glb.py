@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import math
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,18 +26,30 @@ from workflow_common import (
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", required=True, help="GLB output under staging/exports")
-    parser.add_argument("--report", required=True, help="JSON report under staging/reports")
+    parser.add_argument(
+        "--output", required=True, help="GLB output under staging/exports"
+    )
+    parser.add_argument(
+        "--report", required=True, help="JSON report under staging/reports"
+    )
     parser.add_argument("--require-uv", action="store_true")
     parser.add_argument("--require-material", action="store_true")
     parser.add_argument("--max-triangles", type=positive_int)
     parser.add_argument("--collection")
     parser.add_argument("--require-single-mesh", action="store_true")
+    parser.add_argument("--geometry-scale", type=float, default=1.0)
+    parser.add_argument(
+        "--materials-mode",
+        choices=("export", "placeholder", "none"),
+        default="export",
+    )
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args(script_arguments())
+    if not math.isfinite(args.geometry_scale) or args.geometry_scale <= 0.0:
+        raise ValueError("geometry scale must be finite and positive")
     output_path = staging_path(args.output, "exports")
     report_path = staging_path(args.report, "reports")
     if output_path.suffix.lower() != ".glb":
@@ -72,13 +85,24 @@ def main() -> None:
         if selected:
             bpy.context.view_layer.objects.active = selected[0]
 
+    scaled_objects = (
+        selected
+        if use_selection
+        else [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
+    )
+    if not math.isclose(args.geometry_scale, 1.0, abs_tol=1.0e-12):
+        for obj in scaled_objects:
+            obj.data = obj.data.copy()
+            for vertex in obj.data.vertices:
+                vertex.co *= args.geometry_scale
+
     result = bpy.ops.export_scene.gltf(
         filepath=str(output_path),
         export_format="GLB",
         export_yup=True,
         export_texcoords=True,
         export_normals=True,
-        export_materials="EXPORT",
+        export_materials=args.materials_mode.upper(),
         export_animations=True,
         use_renderable=True,
         use_selection=use_selection,
@@ -96,6 +120,8 @@ def main() -> None:
         "output": str(output_path),
         "bytes": output_path.stat().st_size,
         "sha256": digest,
+        "geometry_scale": args.geometry_scale,
+        "materials_mode": args.materials_mode,
         "validation": validation,
     }
     if args.collection is not None:

@@ -69,6 +69,41 @@ class ScriptContractTests(unittest.TestCase):
                 self.assertIn("--collection", wrapper)
                 self.assertIn("--require-single-mesh", wrapper)
 
+    def test_wall_export_scale_and_placeholder_material_are_opt_in(self) -> None:
+        source = (SCRIPTS_ROOT / "export_glb.py").read_text(encoding="utf-8")
+        wrapper = (WORKFLOW_ROOT / "bin/export-staging-glb").read_text(encoding="utf-8")
+        self.assertIn('parser.add_argument("--geometry-scale"', source)
+        self.assertIn('default="export"', source)
+        self.assertIn("obj.data = obj.data.copy()", source)
+        self.assertIn("vertex.co *= args.geometry_scale", source)
+        self.assertIn("export_materials=args.materials_mode.upper()", source)
+        self.assertIn("--geometry-scale", wrapper)
+        self.assertIn("--materials-mode", wrapper)
+        self.assertIn('OUTPUT_RELATIVE="$2"', wrapper)
+        self.assertNotIn("reports/$2.khronos.json", wrapper)
+
+    def test_wall_scene_generator_freezes_six_families_and_export_scale(self) -> None:
+        source = (SCRIPTS_ROOT / "create_wall_production_scene.py").read_text(
+            encoding="utf-8"
+        )
+        for collection in (
+            "Wall_Isolated",
+            "Wall_End",
+            "Wall_Straight",
+            "Wall_Corner",
+            "Wall_TJunction",
+            "Wall_Cross",
+        ):
+            self.assertIn(collection, source)
+        self.assertIn('obj["hw_export_scale"] = 32.0', source)
+        self.assertIn('obj["hw_nominal_thickness_wu"] = 9.6', source)
+        self.assertIn('uv_layers.new(name="UVMap")', source)
+        wrapper = (WORKFLOW_ROOT / "bin/create-wall-production-scene").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("create_wall_production_scene.py", wrapper)
+        self.assertIn("--factory-startup", wrapper)
+
     def test_codex_mcp_surface_excludes_execution_and_direct_export(self) -> None:
         config = (PROJECT_ROOT / ".codex/config.toml").read_text(encoding="utf-8")
         self.assertIn('"blender_scene_save_as"', config)
@@ -97,10 +132,9 @@ class ScriptContractTests(unittest.TestCase):
             )
         )
         wall = json.loads(
-            (
-                WORKFLOW_ROOT
-                / "templates/asset-set-manifest-v2.template.json"
-            ).read_text(encoding="utf-8")
+            (WORKFLOW_ROOT / "templates/asset-set-manifest-v2.template.json").read_text(
+                encoding="utf-8"
+            )
         )
         self.assertEqual(generic["schema_version"], 1)
         self.assertEqual(wall["schema_version"], 2)
