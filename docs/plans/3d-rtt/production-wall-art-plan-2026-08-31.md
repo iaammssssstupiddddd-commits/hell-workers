@@ -651,6 +651,16 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### M2: runtime asset pool、material、Eligible stateを接続
 
+実装状況（2026-09-01）:
+
+- M1 manifestのtool identityは現在HEADではなく、記録されたtool commit objectがrepositoryに存在し、そのcommitの
+  treeと`tool_tree`が一致する契約へ修正した。これにより後続runtime commitでM1証跡を誤失効させず、commit / treeの
+  組み替えは引き続き拒否する。
+- 検証済みcandidate manifestの8 core＋optional normalを、asset-set generation / manifest hash / authorityへ結合した
+  canonical JSON `.wallset`へprojectするtoolを追加した。candidate projectionはnormal=`pending`とreceipt=`null`に固定し、
+  final / release authorityのprojectionはpromotion receipt実装までfail-closedのままとする。
+- Bevy custom asset loader、finite handle pool、aggregate readiness、shared materialは未実装。
+
 - 変更内容:
   - 6 GLB primitive、shared texture、`WallAssetSetManifest` custom asset / loaderをasset catalogへ追加し、wall専用のfinite handle poolを作る。normal A/B handleは隔離scenario限定のcandidate poolへ分離する。
   - procedural `Cuboid`をfallbackとして保持し、6 mesh＋albedo＋emissive（採用確定後だけnormalを追加）の全CPU-readyとmanifest authorityをaggregateするload-state systemを追加する。このマイルストーンでは`Eligible`までに留め、通常gameplayのentityへproduction handleを適用しない。

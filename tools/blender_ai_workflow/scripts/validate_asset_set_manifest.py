@@ -267,12 +267,13 @@ def validate_manifest(
         )
     if repo is not None:
         require(
-            source["tool_commit"] == git_value(repo, "HEAD"),
-            "tool commit differs from repository HEAD",
+            git_value(repo, f"{source['tool_commit']}^{{commit}}")
+            == source["tool_commit"],
+            "tool commit is absent from repository",
         )
         require(
-            source["tool_tree"] == git_value(repo, "HEAD^{tree}"),
-            "tool tree differs from repository HEAD",
+            source["tool_tree"] == git_value(repo, f"{source['tool_commit']}^{{tree}}"),
+            "tool tree differs from tool commit",
         )
 
     meshes = manifest["meshes"]

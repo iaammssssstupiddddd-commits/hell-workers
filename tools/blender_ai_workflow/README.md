@@ -23,6 +23,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `scripts/validate_wall_textures.py` | shared textureとoptional +Y normal candidateをpixel検証 |
 | `scripts/verify_wall_rebuild.py` | 6 GLBとpost-export構造値の独立rebuild一致を検証 |
 | `scripts/seal_wall_candidate.py` | clean Git主体と外部stagingのclosed setからcandidate manifest v2を封印 |
+| `scripts/project_wallset.py` | 検証済みmanifestからcanonical runtime `.wallset` JSONを生成 |
 | `scripts/promote_asset_set.py` | Wall final generationのplan / apply / recover / rollback transaction |
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
 | `scripts/render_color_calibration.py` | 壁M0の固定5 patchをBlenderで描画し、OCIO陽性証明付きmetadataを出力 |
