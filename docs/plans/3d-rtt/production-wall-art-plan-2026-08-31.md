@@ -855,7 +855,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     +Y quarter turnから16 maskを再導出するunit testをpass済み。
   - profiling-onlyのBevy 5 patch actual-window phaseと専用fail-closed launcherを実装済み。通常current-wall
     profileとは二重鍵で排他にし、dedicated final Camera2d、単一X11 clientのexact 320×96 crop、nonce / ACK、
-    Blender reference / OCIO proof / candidate metadata / offline Delta E再検証を同じartifactへ封印する。
+    MainCameraへの明示UI隔離、Blender reference / OCIO proof / candidate metadata / offline Delta E再検証を
+    同じartifactへ封印する。
 - 未完了:
   - clean subjectのBlender / Bevy color artifactとoffline Delta E gate、
     最終M0 commitからのCapture 12 run / RenderDoc 4 case再採取を閉じるまではM0未完了。M1以降は未着手。

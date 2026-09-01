@@ -11,7 +11,9 @@ use std::time::Duration;
 use bevy::camera::visibility::RenderLayers;
 use bevy::color::LinearRgba;
 use bevy::prelude::*;
+use bevy::ui::IsDefaultUiCamera;
 use bevy::window::PrimaryWindow;
+use hw_ui::camera::MainCamera;
 use serde_json::{Value, json};
 #[cfg(test)]
 use sha2::{Digest, Sha256};
@@ -162,11 +164,29 @@ impl WallColorActualWindowAcceptance {
 pub(crate) fn setup_wall_color_board_system(
     mut commands: Commands,
     config: Res<PerfScenarioConfig>,
+    main_camera: Query<Entity, (With<Camera2d>, With<MainCamera>)>,
     mut acceptance: ResMut<WallColorActualWindowAcceptance>,
 ) {
     if !acceptance.enabled(&config) || acceptance.board_spawned {
         return;
     }
+    let Ok(main_camera) = main_camera.single() else {
+        let failure = failure_status(
+            &acceptance,
+            "wall-color setup requires one main Camera2d for UI isolation",
+        );
+        if let Some(path) = acceptance.status_path.as_deref()
+            && let Err(error) = write_status(path, &failure)
+        {
+            eprintln!("PERF_WALL_COLOR: cannot write setup failure: {error}");
+        }
+        acceptance.failed = true;
+        return;
+    };
+    // Bevy 0.19 otherwise assigns untargeted UI to the highest-order camera.
+    // Keep gameplay UI on its established main camera while the final camera
+    // clears and renders only the calibration board.
+    commands.entity(main_camera).insert(IsDefaultUiCamera);
     commands.spawn((
         Camera2d,
         Camera {
@@ -207,6 +227,8 @@ type PatchQuery<'w, 's> = Query<
 pub(crate) struct WallColorActualWindowParams<'w, 's> {
     window: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera: Query<'w, 's, (&'static Camera, &'static RenderLayers), With<WallColorCamera>>,
+    default_ui_camera:
+        Query<'w, 's, Entity, (With<Camera2d>, With<MainCamera>, With<IsDefaultUiCamera>)>,
     patches: PatchQuery<'w, 's>,
 }
 
@@ -291,6 +313,10 @@ fn build_status(
     if camera.order != CAMERA_ORDER || *layers != RenderLayers::layer(RENDER_LAYER) {
         return Err("wall-color camera contract differs".to_string());
     }
+    params
+        .default_ui_camera
+        .single()
+        .map_err(|_| "wall-color UI is not isolated on one main Camera2d".to_string())?;
     let mut seen = [false; PATCHES.len()];
     for (marker, sprite, transform, visibility, inherited_visibility) in &params.patches {
         let Some(spec) = PATCHES.get(marker.ordinal) else {
@@ -343,6 +369,7 @@ fn build_status(
             "camera": "dedicated-final-camera2d",
             "camera_order": CAMERA_ORDER,
             "render_layer": RENDER_LAYER,
+            "ui_target": "main-camera",
             "base_path": "sprite-unlit-srgb",
             "emissive_path": "sprite-linear-multiplier",
             "emissive_strength": EMISSIVE_STRENGTH,

@@ -304,7 +304,9 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
 10秒warm-up＋10秒measureで1回実行し、通常wall calibrationとは排他的な
 `--wall-color-actual-window`をRust側の`HW_WALL_COLOR_ACTUAL_WINDOW=1`と二重鍵にする。専用final
 Camera2dの5 patchを単一X11 clientから320×96で無拡大cropし、4 base patchのCIEDE2000とemissive
-luminance liftをofflineで再計算する。PNG、metadata、OCIO proof、contract、source / harness / binary /
+luminance liftをofflineで再計算する。最高order cameraへ未指定UIが移るBevy 0.19の既定動作を避けるため、
+既存MainCameraを`IsDefaultUiCamera`として明示し、専用cameraへのUI混入がないこともstatusで検証する。
+PNG、metadata、OCIO proof、contract、source / harness / binary /
 asset fingerprints、performance sidecarのいずれかが変われば`verify`は失敗する。この色artifactはcurrent
 wall visual、12-run Capture、RenderDoc draw-group evidenceの代用にしない。
 
