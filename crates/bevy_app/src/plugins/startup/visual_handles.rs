@@ -1,6 +1,7 @@
 //! GameAssets から hw_visual のハンドルリソースを初期化するシステム
 
 use crate::assets::GameAssets;
+use crate::assets::wall_asset_set::{ProductionWallAssetPool, ProductionWallMaterialPool};
 use bevy::camera::visibility::RenderLayers;
 use bevy::ecs::system::SystemParam;
 use bevy::mesh::Mesh;
@@ -109,6 +110,7 @@ pub struct InitVisualHandlesParams<'w, 's> {
     terrain_feature_map: Res<'w, TerrainFeatureMap>,
     terrain_id_map: Res<'w, TerrainIdMap>,
     indoor_light_texture: Res<'w, IndoorLightTexture>,
+    asset_server: Res<'w, AssetServer>,
 }
 
 pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
@@ -256,6 +258,7 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
     let soul_billboard_mesh = meshes.add(Rectangle::new(TILE_SIZE * 0.9, TILE_SIZE * 1.1));
 
     let indoor_light_field = params.indoor_light_texture.handle().clone();
+    let production_wall_assets = ProductionWallAssetPool::load(&params.asset_server);
     let wall_provisional_material = structural_materials.add(with_topdown_alpha_mode(
         make_topdown_structural_material(
             LinearRgba::new(0.95, 0.72, 0.45, 0.9),
@@ -271,22 +274,56 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         material.base.base_color_texture = Some(game_assets.mud_floor.clone());
         structural_materials.add(material)
     };
-    let mut structural_material = |color: LinearRgba| {
-        structural_materials.add(make_topdown_structural_material(
-            color,
-            indoor_light_field.clone(),
-        ))
+    let (
+        wall_material,
+        bridge_material,
+        door_closed_material,
+        door_open_material,
+        door_locked_material,
+        equipment_material,
+        tank_partial_material,
+        tank_full_material,
+        mixer_idle_material,
+        mixer_active_material,
+    ) = {
+        let mut structural_material = |color: LinearRgba| {
+            structural_materials.add(make_topdown_structural_material(
+                color,
+                indoor_light_field.clone(),
+            ))
+        };
+        (
+            structural_material(LinearRgba::new(0.56, 0.44, 0.30, 1.0)),
+            structural_material(LinearRgba::new(0.38, 0.24, 0.12, 1.0)),
+            structural_material(LinearRgba::new(0.6, 0.45, 0.2, 1.0)),
+            structural_material(LinearRgba::new(0.32, 0.62, 0.28, 1.0)),
+            structural_material(LinearRgba::new(0.68, 0.20, 0.16, 1.0)),
+            structural_material(LinearRgba::new(0.3, 0.5, 0.6, 1.0)),
+            structural_material(LinearRgba::new(0.24, 0.48, 0.72, 1.0)),
+            structural_material(LinearRgba::new(0.16, 0.68, 0.88, 1.0)),
+            structural_material(LinearRgba::new(0.42, 0.32, 0.24, 1.0)),
+            structural_material(LinearRgba::new(0.75, 0.38, 0.12, 1.0)),
+        )
     };
-    let wall_material = structural_material(LinearRgba::new(0.56, 0.44, 0.30, 1.0));
-    let bridge_material = structural_material(LinearRgba::new(0.38, 0.24, 0.12, 1.0));
-    let door_closed_material = structural_material(LinearRgba::new(0.6, 0.45, 0.2, 1.0));
-    let door_open_material = structural_material(LinearRgba::new(0.32, 0.62, 0.28, 1.0));
-    let door_locked_material = structural_material(LinearRgba::new(0.68, 0.20, 0.16, 1.0));
-    let equipment_material = structural_material(LinearRgba::new(0.3, 0.5, 0.6, 1.0));
-    let tank_partial_material = structural_material(LinearRgba::new(0.24, 0.48, 0.72, 1.0));
-    let tank_full_material = structural_material(LinearRgba::new(0.16, 0.68, 0.88, 1.0));
-    let mixer_idle_material = structural_material(LinearRgba::new(0.42, 0.32, 0.24, 1.0));
-    let mixer_active_material = structural_material(LinearRgba::new(0.75, 0.38, 0.12, 1.0));
+    let mut wall_production_complete =
+        make_topdown_structural_material(LinearRgba::WHITE, indoor_light_field.clone());
+    wall_production_complete.base.base_color_texture = Some(production_wall_assets.albedo.clone());
+    wall_production_complete.base.emissive = LinearRgba::WHITE;
+    wall_production_complete.base.emissive_texture = Some(production_wall_assets.emissive.clone());
+    let wall_production_complete = structural_materials.add(wall_production_complete);
+    let mut wall_production_provisional = make_topdown_structural_material(
+        LinearRgba::new(1.0, 1.0, 1.0, 0.9),
+        indoor_light_field.clone(),
+    );
+    wall_production_provisional.base.base_color_texture =
+        Some(production_wall_assets.albedo.clone());
+    wall_production_provisional.base.emissive = LinearRgba::WHITE;
+    wall_production_provisional.base.emissive_texture =
+        Some(production_wall_assets.emissive.clone());
+    let wall_production_provisional = structural_materials.add(with_topdown_alpha_mode(
+        wall_production_provisional,
+        AlphaMode::Blend,
+    ));
     let mut billboard_material = |image: Handle<Image>| {
         materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -308,6 +345,12 @@ pub fn init_visual_handles(mut params: InitVisualHandlesParams) {
         stress: billboard_material(game_assets.soul_stress.clone()),
         stress_breakdown: billboard_material(game_assets.soul_stress_breakdown.clone()),
     };
+
+    commands.insert_resource(production_wall_assets);
+    commands.insert_resource(ProductionWallMaterialPool {
+        complete: wall_production_complete,
+        provisional: wall_production_provisional,
+    });
 
     commands.insert_resource(Building3dHandles {
         wall_mesh,

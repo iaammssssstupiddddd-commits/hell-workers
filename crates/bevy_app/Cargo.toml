@@ -8,7 +8,7 @@ bevy = { workspace = true }
 rand = { workspace = true }
 ron = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 bevy_world_serialization = { workspace = true }
 hw_core = { path = "../hw_core" }
@@ -33,7 +33,6 @@ default = ["dynamic_linking"]
 dynamic_linking = ["bevy/dynamic_linking"]
 profiling = [
     "dep:wgpu",
-    "dep:serde_json",
     "hw_core/profiling",
     "hw_energy/profiling",
     "hw_infra/profiling",

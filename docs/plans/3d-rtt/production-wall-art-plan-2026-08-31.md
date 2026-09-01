@@ -659,7 +659,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 検証済みcandidate manifestの8 core＋optional normalを、asset-set generation / manifest hash / authorityへ結合した
   canonical JSON `.wallset`へprojectするtoolを追加した。candidate projectionはnormal=`pending`とreceipt=`null`に固定し、
   final / release authorityのprojectionはpromotion receipt実装までfail-closedのままとする。
-- Bevy custom asset loader、finite handle pool、aggregate readiness、shared materialは未実装。
+- Bevy 0.19のcustom `.wallset` asset / loaderを追加した。loaderはcanonical JSON bytes、closed 8 core＋optional normal、
+  path / role / byte length / SHA-256を検査し、`LoadContext::read_asset_bytes`で8 coreのactual bytesをasset-set単位に
+  再照合する。GLBは`GltfAssetLabel::Primitive { mesh: 0, primitive: 0 }`で6 handleへ直接loadし、SceneRootは作らない。
+- fallback 2 materialを維持したまま、albedo / emissive共有のproduction完成／仮設2 materialを有限poolとして作成した。
+  normal handle / revisionはcore aggregateから分離し、candidate authorityは`HW_WALL_CANDIDATE=1`の隔離profile以外では
+  `Fallback(CandidateDisabled)`になる。全required handleがreadyの場合だけasset generation / manifest hash付き`Eligible`へ
+  遷移し、steady stateはrevisionを増やさない。M2ではentityへのproduction適用を行わない。
 
 - 変更内容:
   - 6 GLB primitive、shared texture、`WallAssetSetManifest` custom asset / loaderをasset catalogへ追加し、wall専用のfinite handle poolを作る。normal A/B handleは隔離scenario限定のcandidate poolへ分離する。

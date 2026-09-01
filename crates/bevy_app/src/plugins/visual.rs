@@ -1,5 +1,8 @@
 //! ビジュアル関連のプラグイン
 
+use crate::assets::wall_asset_set::{
+    WallAssetCandidatePolicy, WallAssetReadiness, update_wall_asset_readiness_system,
+};
 use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
 use crate::plugins::startup::{
     Camera3dRtt, RttCompositeSprite, RttDirectionalLight, RttExtraDirectionalLight,
@@ -87,6 +90,8 @@ impl Plugin for VisualPlugin {
         );
 
         app.init_resource::<ActorBillboardOwnerCache>();
+        app.init_resource::<WallAssetCandidatePolicy>();
+        app.init_resource::<WallAssetReadiness>();
         app.init_resource::<TerrainLodMetrics>();
         app.init_resource::<TerrainLodState>();
 
@@ -101,6 +106,10 @@ impl Plugin for VisualPlugin {
         );
 
         app.add_systems(Update, sync_camera3d_system.in_set(GameSystemSet::Visual));
+        app.add_systems(
+            Update,
+            update_wall_asset_readiness_system.in_set(GameSystemSet::Visual),
+        );
         app.add_systems(
             Update,
             update_terrain_lod_metrics_system

@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use hw_ui::setup::UiAssets;
 
+pub mod wall_asset_set;
+
 impl UiAssets for GameAssets {
     fn font_ui(&self) -> &Handle<Font> {
         &self.font_ui

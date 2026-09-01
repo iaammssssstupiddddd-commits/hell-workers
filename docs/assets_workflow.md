@@ -144,6 +144,19 @@ final manifestの昇格は`promote_asset_set.py plan`でcurrent pointer preimage
 atomic replaceする。中断時の`recover`とpreimageへ戻す`rollback`は既定read-onlyで、`--apply`時も世代を削除せず
 `quarantine/`へ移す。generation番号とreceipt IDは再利用しない。
 
+### Wall runtime projection
+
+検証済みasset-set manifest v2は、そのままruntimeへ読ませず、`project_wallset.py`で
+`assets/manifests/wall-production-v1.wallset`へcanonical JSON projectionする。projectionはasset-set generation、
+元manifest SHA-256、authority、exact core inventoryを保持し、key順・空白・末尾改行を含むbyte表現を固定する。
+Bevy loaderは非canonical JSON、unknown field、path / role / byte length / SHA-256違反を拒否し、core 8 fileのactual bytesを
+asset rootから一度だけ読み直して照合する。
+
+candidate authorityは通常起動では常にfallbackで、primary / canonicalへ配置しない。隔離validation worktreeだけが
+`HW_WALL_CANDIDATE=1`を設定できる。M2では6 GLBの`Mesh0/Primitive0`、albedo、emissive、2 shared production materialを
+有限poolへloadするが、既存Wall entityへは適用せず、all-or-nothing aggregateを`Eligible`まで進めるだけである。
+optional normalは別revisionで追跡し、missing / failedでもproduction core readinessを変えない。
+
 ## 6. 競合回避ルール
 
 - 同じ原本ファイルを複数 PC で同時編集しない。

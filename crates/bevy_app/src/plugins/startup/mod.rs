@@ -29,6 +29,7 @@ pub use rtt_setup::{
 pub use visual_handles::{Building3dHandles, SoulBillboardHandles, Terrain3dHandles};
 
 use crate::world::map::{build_terrain_feature_map, build_terrain_id_map, spawn_boundary_meshes};
+use bevy::asset::AssetApp;
 #[cfg(feature = "profiling")]
 use perf_scenario::{
     PerfScenarioApplied, PerfScenarioSet, setup_perf_scenario_if_enabled,
@@ -64,7 +65,9 @@ pub struct StartupPlugin;
 
 impl Plugin for StartupPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<WorldMap>()
+        app.init_asset::<crate::assets::wall_asset_set::WallAssetSetManifest>()
+            .init_asset_loader::<crate::assets::wall_asset_set::WallAssetSetLoader>()
+            .init_resource::<WorldMap>()
             .register_type::<QualitySettings>()
             .register_type::<RttQualityPreset>()
             .init_resource::<QualitySettings>()
