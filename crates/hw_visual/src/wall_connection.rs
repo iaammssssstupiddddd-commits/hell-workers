@@ -4,8 +4,8 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
 use hw_core::visual_mirror::construction::BlueprintVisualState;
-use hw_world::{WorldMap, WorldMapRead};
-use std::collections::HashSet;
+use hw_world::WorldMap;
+use std::collections::{HashMap, HashSet};
 
 /// Four-neighbor Wall connector mask in the canonical `(N, S, W, E)` order.
 /// N is the high bit so `bits()` matches the M0 fixture's four-character masks.
@@ -83,6 +83,119 @@ pub const fn resolve_wall_topology(mask: WallConnectionMask) -> ResolvedWallTopo
     }
 }
 
+type Grid = (i32, i32);
+
+#[derive(Debug, Default)]
+struct ContributorGrids {
+    building: HashSet<Grid>,
+    blueprint: HashSet<Grid>,
+}
+
+impl ContributorGrids {
+    fn combined(&self) -> HashSet<Grid> {
+        self.building.union(&self.blueprint).copied().collect()
+    }
+}
+
+/// Incremental connector ownership shared by the 2D and 3D Wall consumers.
+#[derive(Resource, Debug)]
+pub struct WallTopologyIndex {
+    by_entity: HashMap<Entity, ContributorGrids>,
+    by_grid: HashMap<Grid, HashSet<Entity>>,
+    resolved: HashMap<Grid, ResolvedWallTopology>,
+    dirty_targets: HashSet<Grid>,
+    last_update_targets: HashSet<Grid>,
+    full_rebuild_requested: bool,
+    pub resolution_revision: u64,
+}
+
+impl Default for WallTopologyIndex {
+    fn default() -> Self {
+        Self {
+            by_entity: HashMap::new(),
+            by_grid: HashMap::new(),
+            resolved: HashMap::new(),
+            dirty_targets: HashSet::new(),
+            last_update_targets: HashSet::new(),
+            full_rebuild_requested: true,
+            resolution_revision: 0,
+        }
+    }
+}
+
+impl WallTopologyIndex {
+    fn replace_source(
+        &mut self,
+        entity: Entity,
+        source: fn(&mut ContributorGrids) -> &mut HashSet<Grid>,
+        grids: impl IntoIterator<Item = Grid>,
+    ) {
+        let old_combined = self
+            .by_entity
+            .get(&entity)
+            .map_or_else(HashSet::new, ContributorGrids::combined);
+        let entry = self.by_entity.entry(entity).or_default();
+        *source(entry) = grids.into_iter().collect();
+        let new_combined = entry.combined();
+        if old_combined == new_combined {
+            return;
+        }
+        for grid in old_combined.difference(&new_combined) {
+            if let Some(contributors) = self.by_grid.get_mut(grid) {
+                contributors.remove(&entity);
+                if contributors.is_empty() {
+                    self.by_grid.remove(grid);
+                }
+            }
+        }
+        for grid in new_combined.difference(&old_combined) {
+            self.by_grid.entry(*grid).or_default().insert(entity);
+        }
+        for grid in old_combined.union(&new_combined) {
+            add_neighbors_to_update(grid.0, grid.1, &mut self.dirty_targets);
+        }
+        if new_combined.is_empty() {
+            self.by_entity.remove(&entity);
+        }
+    }
+
+    fn set_building(&mut self, entity: Entity, grid: Option<Grid>) {
+        self.replace_source(entity, |entry| &mut entry.building, grid);
+    }
+
+    fn set_blueprint(&mut self, entity: Entity, grids: impl IntoIterator<Item = Grid>) {
+        self.replace_source(entity, |entry| &mut entry.blueprint, grids);
+    }
+
+    fn mark_dirty_around(&mut self, grids: impl IntoIterator<Item = Grid>) {
+        for (x, y) in grids {
+            add_neighbors_to_update(x, y, &mut self.dirty_targets);
+        }
+    }
+
+    fn has_connector(&self, grid: Grid) -> bool {
+        self.by_grid.get(&grid).is_some_and(|set| !set.is_empty())
+    }
+
+    fn contributors(&self, grid: Grid) -> Vec<Entity> {
+        self.by_grid
+            .get(&grid)
+            .map_or_else(Vec::new, |set| set.iter().copied().collect())
+    }
+
+    fn take_dirty(&mut self) -> HashSet<Grid> {
+        std::mem::take(&mut self.dirty_targets)
+    }
+}
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WallTopologyState {
+    pub grid: Grid,
+    pub mask: WallConnectionMask,
+    pub resolved: ResolvedWallTopology,
+    pub revision: u64,
+}
+
 /// Runtime wake-up for wall/door removals whose visual mirror disappears
 /// before the regular `Changed<BuildingVisualState>` query can observe it.
 #[derive(Resource, Debug, Default)]
@@ -107,7 +220,11 @@ type ChangedBuildingQuery<'w, 's> = Query<
     'w,
     's,
     (Entity, &'static Transform, &'static BuildingVisualState),
-    Or<(Added<BuildingVisualState>, Changed<BuildingVisualState>)>,
+    Or<(
+        Added<BuildingVisualState>,
+        Changed<BuildingVisualState>,
+        Changed<Transform>,
+    )>,
 >;
 
 type WallCheckQuery<'w, 's> = Query<
@@ -120,6 +237,24 @@ type WallCheckQuery<'w, 's> = Query<
     Or<(With<BuildingVisualState>, With<BlueprintVisualState>)>,
 >;
 
+type ChangedBlueprintQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static BlueprintVisualState),
+    Changed<BlueprintVisualState>,
+>;
+
+#[derive(SystemParam)]
+pub struct WallTopologyQueries<'w, 's> {
+    q_all_buildings: Query<'w, 's, (Entity, &'static Transform, &'static BuildingVisualState)>,
+    q_changed_buildings: ChangedBuildingQuery<'w, 's>,
+    q_all_blueprints: Query<'w, 's, (Entity, &'static BlueprintVisualState)>,
+    q_changed_blueprints: ChangedBlueprintQuery<'w, 's>,
+    q_walls_check: WallCheckQuery<'w, 's>,
+    removed_buildings: RemovedComponents<'w, 's, BuildingVisualState>,
+    removed_blueprints: RemovedComponents<'w, 's, BlueprintVisualState>,
+}
+
 #[derive(SystemParam)]
 pub struct WallConnectionQueries<'w, 's> {
     q_children: Query<'w, 's, &'static Children>,
@@ -129,50 +264,95 @@ pub struct WallConnectionQueries<'w, 's> {
 
 /// 壁の接続更新を行うシステム
 pub fn wall_connections_system(
+    mut commands: Commands,
     wall_handles: Res<WallVisualHandles>,
-    world_map: WorldMapRead,
-    q_new_buildings: ChangedBuildingQuery,
-    q_new_blueprints: Query<
-        (Entity, &Transform, &BlueprintVisualState),
-        Added<BlueprintVisualState>,
-    >,
-    q_walls_check: WallCheckQuery,
+    mut topology: WallTopologyQueries,
     mut dirty: ResMut<WallConnectionDirty>,
+    mut index: ResMut<WallTopologyIndex>,
     mut queries: WallConnectionQueries,
 ) {
-    let mut update_targets = HashSet::new();
-
-    for (x, y) in dirty.take_removed() {
-        add_neighbors_to_update(x, y, &mut update_targets);
+    for entity in topology.removed_buildings.read() {
+        index.set_building(entity, None);
+        commands.entity(entity).try_remove::<WallTopologyState>();
     }
-
-    for (_entity, transform, building_visual) in q_new_buildings.iter() {
-        if matches!(
-            building_visual.kind,
-            BuildingTypeVisual::Wall | BuildingTypeVisual::Door
-        ) {
-            let (x, y) = WorldMap::world_to_grid(transform.translation.truncate());
-            add_neighbors_to_update(x, y, &mut update_targets);
+    for entity in topology.removed_blueprints.read() {
+        index.set_blueprint(entity, []);
+        commands.entity(entity).try_remove::<WallTopologyState>();
+    }
+    if index.full_rebuild_requested {
+        for (entity, transform, building_visual) in topology.q_all_buildings.iter() {
+            let grid = matches!(
+                building_visual.kind,
+                BuildingTypeVisual::Wall | BuildingTypeVisual::Door
+            )
+            .then(|| WorldMap::world_to_grid(transform.translation.truncate()));
+            index.set_building(entity, grid);
+            if building_visual.kind != BuildingTypeVisual::Wall {
+                commands.entity(entity).try_remove::<WallTopologyState>();
+            }
         }
-    }
-
-    for (_entity, _transform, state) in q_new_blueprints.iter() {
-        if state.is_wall_or_door {
-            for &(gx, gy) in &state.occupied_grids {
-                add_neighbors_to_update(gx, gy, &mut update_targets);
+        for (entity, state) in topology.q_all_blueprints.iter() {
+            let grids = if state.is_wall_or_door {
+                state.occupied_grids.clone()
+            } else {
+                Vec::new()
+            };
+            index.set_blueprint(entity, grids);
+            if !state.is_plain_wall {
+                commands.entity(entity).try_remove::<WallTopologyState>();
+            }
+        }
+        index.full_rebuild_requested = false;
+    } else {
+        for (entity, transform, building_visual) in topology.q_changed_buildings.iter() {
+            let grid = matches!(
+                building_visual.kind,
+                BuildingTypeVisual::Wall | BuildingTypeVisual::Door
+            )
+            .then(|| WorldMap::world_to_grid(transform.translation.truncate()));
+            index.set_building(entity, grid);
+            if building_visual.kind != BuildingTypeVisual::Wall {
+                commands.entity(entity).try_remove::<WallTopologyState>();
+            }
+        }
+        for (entity, _transform, state) in topology.q_changed_blueprints.iter() {
+            let grids = if state.is_wall_or_door {
+                state.occupied_grids.clone()
+            } else {
+                Vec::new()
+            };
+            index.set_blueprint(entity, grids);
+            if !state.is_plain_wall {
+                commands.entity(entity).try_remove::<WallTopologyState>();
             }
         }
     }
+    index.mark_dirty_around(dirty.take_removed());
 
+    let update_targets = index.take_dirty();
+    index.last_update_targets = update_targets.clone();
     if update_targets.is_empty() {
         return;
     }
+    index.resolution_revision = index.resolution_revision.wrapping_add(1);
+    let revision = index.resolution_revision;
 
     for (gx, gy) in update_targets {
-        if let Some(entity) = world_map.building_entity((gx, gy))
-            && is_wall(gx, gy, world_map.as_ref(), &q_walls_check)
-        {
-            let is_plain_wall = q_walls_check.get(entity).ok().is_some_and(
+        let grid = (gx, gy);
+        if !index.has_connector(grid) {
+            index.resolved.remove(&grid);
+            continue;
+        }
+        let mask = WallConnectionMask::from_neighbors(
+            index.has_connector((gx, gy + 1)),
+            index.has_connector((gx, gy - 1)),
+            index.has_connector((gx - 1, gy)),
+            index.has_connector((gx + 1, gy)),
+        );
+        let resolved = resolve_wall_topology(mask);
+        index.resolved.insert(grid, resolved);
+        for entity in index.contributors(grid) {
+            let is_plain_wall = topology.q_walls_check.get(entity).ok().is_some_and(
                 |(building_visual_opt, blueprint_opt)| {
                     building_visual_opt.is_some_and(|v| v.kind == BuildingTypeVisual::Wall)
                         || blueprint_opt.is_some_and(|s| s.is_plain_wall)
@@ -181,6 +361,12 @@ pub fn wall_connections_system(
             if !is_plain_wall {
                 continue;
             }
+            commands.entity(entity).try_insert(WallTopologyState {
+                grid,
+                mask,
+                resolved,
+                revision,
+            });
 
             // 完成した Building は Sprite を VisualLayerKind::Struct 子エンティティに持つ
             let mut updated = false;
@@ -191,11 +377,9 @@ pub fn wall_connections_system(
                     {
                         update_wall_sprite(
                             entity,
-                            gx,
-                            gy,
+                            mask,
                             &mut sprite,
-                            world_map.as_ref(),
-                            &q_walls_check,
+                            &topology.q_walls_check,
                             &wall_handles,
                         );
                         updated = true;
@@ -207,11 +391,9 @@ pub fn wall_connections_system(
             if !updated && let Ok(mut sprite) = queries.q_blueprint_sprites.get_mut(entity) {
                 update_wall_sprite(
                     entity,
-                    gx,
-                    gy,
+                    mask,
                     &mut sprite,
-                    world_map.as_ref(),
-                    &q_walls_check,
+                    &topology.q_walls_check,
                     &wall_handles,
                 );
             }
@@ -229,18 +411,12 @@ fn add_neighbors_to_update(x: i32, y: i32, targets: &mut HashSet<(i32, i32)>) {
 
 fn update_wall_sprite(
     wall_entity: Entity,
-    x: i32,
-    y: i32,
+    mask: WallConnectionMask,
     sprite: &mut Sprite,
-    world_map: &WorldMap,
     q_walls_check: &WallCheckQuery<'_, '_>,
     wall_handles: &WallVisualHandles,
 ) {
-    let up = is_wall(x, y + 1, world_map, q_walls_check);
-    let down = is_wall(x, y - 1, world_map, q_walls_check);
-    let left = is_wall(x - 1, y, world_map, q_walls_check);
-    let right = is_wall(x + 1, y, world_map, q_walls_check);
-    let mask = WallConnectionMask::from_neighbors(up, down, left, right).bits();
+    let mask = mask.bits();
 
     let is_provisional = is_provisional_wall(wall_entity, q_walls_check);
 
@@ -302,20 +478,6 @@ fn is_provisional_wall(entity: Entity, q_walls_check: &WallCheckQuery<'_, '_>) -
         .ok()
         .and_then(|(visual_opt, _)| visual_opt)
         .is_some_and(|v| v.kind == BuildingTypeVisual::Wall && v.is_provisional)
-}
-
-fn is_wall(x: i32, y: i32, world_map: &WorldMap, q_walls_check: &WallCheckQuery<'_, '_>) -> bool {
-    if let Some(entity) = world_map.building_entity((x, y))
-        && let Ok((building_visual_opt, blueprint_opt)) = q_walls_check.get(entity)
-    {
-        if let Some(v) = building_visual_opt {
-            return matches!(v.kind, BuildingTypeVisual::Wall | BuildingTypeVisual::Door);
-        }
-        if let Some(s) = blueprint_opt {
-            return s.is_wall_or_door;
-        }
-    }
-    false
 }
 
 #[cfg(test)]
@@ -453,6 +615,26 @@ mod tests {
         (wall, sprite)
     }
 
+    fn spawn_completed_door(app: &mut App, grid: Grid) -> Entity {
+        app.world_mut()
+            .spawn((
+                Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+                BuildingVisualState {
+                    kind: BuildingTypeVisual::Door,
+                    is_provisional: false,
+                },
+            ))
+            .id()
+    }
+
+    fn expected_dirty_around(grids: impl IntoIterator<Item = Grid>) -> HashSet<Grid> {
+        let mut dirty = HashSet::new();
+        for (x, y) in grids {
+            add_neighbors_to_update(x, y, &mut dirty);
+        }
+        dirty
+    }
+
     #[test]
     fn removed_wall_dirty_refreshes_surviving_neighbor_sprite() {
         let mut images = Assets::<Image>::default();
@@ -462,6 +644,7 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<WorldMap>()
             .init_resource::<WallConnectionDirty>()
+            .init_resource::<WallTopologyIndex>()
             .insert_resource(test_handles(isolated.clone(), connected.clone()))
             .add_systems(Update, wall_connections_system);
 
@@ -501,6 +684,7 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<WorldMap>()
             .init_resource::<WallConnectionDirty>()
+            .init_resource::<WallTopologyIndex>()
             .insert_resource(test_handles(isolated, north_connected.clone()))
             .add_systems(Update, wall_connections_system);
         let target_grid = (12, 12);
@@ -536,6 +720,179 @@ mod tests {
                 family: WallMeshFamily::End,
                 quarter_turns_y: QuarterTurns::ZERO,
             }
+        );
+    }
+
+    #[test]
+    fn moving_connector_updates_old_and_new_neighborhood_once() {
+        let mut images = Assets::<Image>::default();
+        let isolated = images.add(Image::default());
+        let connected = images.add(Image::default());
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<WallConnectionDirty>()
+            .init_resource::<WallTopologyIndex>()
+            .insert_resource(test_handles(isolated, connected))
+            .add_systems(Update, wall_connections_system);
+        let target_grid = (20, 20);
+        let old_grid = (20, 21);
+        let new_grid = (21, 20);
+        let (target, _) = spawn_completed_wall(&mut app, target_grid);
+        let door = spawn_completed_door(&mut app, old_grid);
+        app.update();
+        assert_eq!(
+            app.world().get::<WallTopologyState>(target).unwrap().mask,
+            WallConnectionMask::from_neighbors(true, false, false, false)
+        );
+
+        app.world_mut()
+            .get_mut::<Transform>(door)
+            .unwrap()
+            .translation = WorldMap::grid_to_world(new_grid.0, new_grid.1).extend(0.0);
+        app.update();
+
+        let state = *app.world().get::<WallTopologyState>(target).unwrap();
+        assert_eq!(
+            state.mask,
+            WallConnectionMask::from_neighbors(false, false, false, true)
+        );
+        assert_eq!(state.resolved.family, WallMeshFamily::End);
+        assert_eq!(state.resolved.quarter_turns_y, QuarterTurns::THREE);
+        let index = app.world().resource::<WallTopologyIndex>();
+        assert_eq!(
+            index.last_update_targets,
+            expected_dirty_around([old_grid, new_grid])
+        );
+        let revision = index.resolution_revision;
+
+        app.update();
+        let index = app.world().resource::<WallTopologyIndex>();
+        assert!(index.last_update_targets.is_empty());
+        assert_eq!(index.resolution_revision, revision);
+        assert_eq!(
+            app.world()
+                .get::<WallTopologyState>(target)
+                .unwrap()
+                .revision,
+            revision
+        );
+    }
+
+    #[test]
+    fn building_and_blueprint_on_one_grid_coalesce_to_one_connector() {
+        let mut images = Assets::<Image>::default();
+        let isolated = images.add(Image::default());
+        let connected = images.add(Image::default());
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<WallConnectionDirty>()
+            .init_resource::<WallTopologyIndex>()
+            .insert_resource(test_handles(isolated, connected))
+            .add_systems(Update, wall_connections_system);
+        let target_grid = (30, 30);
+        let connector_grid = (30, 31);
+        let (target, _) = spawn_completed_wall(&mut app, target_grid);
+        let door = spawn_completed_door(&mut app, connector_grid);
+        let blueprint = app
+            .world_mut()
+            .spawn((
+                Transform::default(),
+                BlueprintVisualState {
+                    is_wall_or_door: true,
+                    is_plain_wall: false,
+                    occupied_grids: vec![connector_grid],
+                    ..default()
+                },
+            ))
+            .id();
+        app.update();
+        assert_eq!(
+            app.world().get::<WallTopologyState>(target).unwrap().mask,
+            WallConnectionMask::from_neighbors(true, false, false, false)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WallTopologyIndex>()
+                .by_grid
+                .get(&connector_grid)
+                .unwrap()
+                .len(),
+            2
+        );
+
+        app.world_mut().despawn(door);
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<WallTopologyIndex>()
+                .by_grid
+                .get(&connector_grid)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            app.world().get::<WallTopologyState>(target).unwrap().mask,
+            WallConnectionMask::from_neighbors(true, false, false, false)
+        );
+
+        app.world_mut().despawn(blueprint);
+        app.update();
+        assert!(
+            !app.world()
+                .resource::<WallTopologyIndex>()
+                .by_grid
+                .contains_key(&connector_grid)
+        );
+        assert_eq!(
+            app.world().get::<WallTopologyState>(target).unwrap().mask,
+            WallConnectionMask::from_neighbors(false, false, false, false)
+        );
+    }
+
+    #[test]
+    fn consecutive_world_resets_request_one_full_topology_rebuild() {
+        let mut images = Assets::<Image>::default();
+        let isolated = images.add(Image::default());
+        let connected = images.add(Image::default());
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<WallConnectionDirty>()
+            .init_resource::<WallTopologyIndex>()
+            .insert_resource(test_handles(isolated, connected))
+            .add_systems(Update, wall_connections_system);
+        let target_grid = (40, 40);
+        let (target, _) = spawn_completed_wall(&mut app, target_grid);
+        spawn_completed_door(&mut app, (40, 41));
+        app.update();
+        assert_eq!(
+            app.world().get::<WallTopologyState>(target).unwrap().mask,
+            WallConnectionMask::from_neighbors(true, false, false, false)
+        );
+
+        crate::reset_for_world_replace(app.world_mut());
+        crate::reset_for_world_replace(app.world_mut());
+        assert_eq!(
+            app.world()
+                .resource::<WallTopologyIndex>()
+                .resolution_revision,
+            0
+        );
+        app.update();
+        let rebuilt = app.world().resource::<WallTopologyIndex>();
+        assert_eq!(rebuilt.resolution_revision, 1);
+        assert!(!rebuilt.full_rebuild_requested);
+        assert_eq!(
+            app.world().get::<WallTopologyState>(target).unwrap().mask,
+            WallConnectionMask::from_neighbors(true, false, false, false)
+        );
+
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<WallTopologyIndex>()
+                .resolution_revision,
+            1
         );
     }
 }

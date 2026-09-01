@@ -90,6 +90,7 @@ impl Plugin for HwVisualPlugin {
         app.init_resource::<construction_mask3d::ConstructionMask3dOwnerCache>();
         app.init_resource::<dream::DreamPresentationLedger>();
         app.init_resource::<wall_connection::WallConnectionDirty>();
+        app.init_resource::<wall_connection::WallTopologyIndex>();
 
         // Message retention is intentionally independent from camera/UI and
         // from the profiling-only Visual-set run condition.
@@ -304,6 +305,12 @@ pub fn reset_for_world_replace(world: &mut World) {
     }
     if world.contains_resource::<dream::DreamPresentationLedger>() {
         world.insert_resource(dream::DreamPresentationLedger::default());
+    }
+    if world.contains_resource::<wall_connection::WallConnectionDirty>() {
+        world.insert_resource(wall_connection::WallConnectionDirty::default());
+    }
+    if world.contains_resource::<wall_connection::WallTopologyIndex>() {
+        world.insert_resource(wall_connection::WallTopologyIndex::default());
     }
 }
 
