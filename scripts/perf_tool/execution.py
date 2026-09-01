@@ -977,6 +977,8 @@ def run_one(
         command.extend(["--perf-behavior-case", case.behavior_case])
     if case.wall_phase is not None:
         command.extend(["--perf-wall-phase", case.wall_phase])
+    if args.wall_actual_window:
+        command.append("--perf-wall-actual-window")
     if args.capture_kind == "frame-time":
         command.extend(
             [

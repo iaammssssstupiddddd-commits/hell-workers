@@ -212,6 +212,14 @@ fn wall_density_phase_names_are_explicit() {
 }
 
 #[test]
+fn wall_density_actual_window_has_a_distinct_duration_contract() {
+    assert!(super::wall_density_durations_match(false, 30.0, 60.0));
+    assert!(!super::wall_density_durations_match(false, 10.0, 10.0));
+    assert!(super::wall_density_durations_match(true, 10.0, 10.0));
+    assert!(!super::wall_density_durations_match(true, 30.0, 60.0));
+}
+
+#[test]
 fn familiar_policy_and_dialog_modes_are_explicit() {
     assert_eq!(
         super::PerfFamiliarPolicyMode::parse("baseline"),

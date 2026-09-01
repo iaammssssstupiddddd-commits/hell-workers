@@ -802,6 +802,25 @@ impl PerfScenarioConfig {
             }
             None => None,
         };
+        let wall_actual_window_flag = has_flag(&args, "--perf-wall-actual-window");
+        let wall_actual_window_environment =
+            env::var("HW_WALL_ART_ACTUAL_WINDOW").is_ok_and(|value| value == "1");
+        if wall_actual_window_flag != wall_actual_window_environment {
+            return Err(PerfScenarioConfigError(
+                "--perf-wall-actual-window and HW_WALL_ART_ACTUAL_WINDOW=1 must be paired"
+                    .to_string(),
+            ));
+        }
+        let wall_actual_window = wall_actual_window_flag && wall_actual_window_environment;
+        if wall_actual_window
+            && (workload != PerfWorkload::WallDensity
+                || size != PerfScenarioSize::Small
+                || wall_phase != Some(PerfWallPhase::Completed))
+        {
+            return Err(PerfScenarioConfigError(
+                "Wall actual-window calibration requires wall-density/small/completed".to_string(),
+            ));
+        }
         match rtt_light.map(PerfRttLightSelection::lane) {
             Some("behavior") if behavior_case.is_none() => {
                 return Err(PerfScenarioConfigError(
@@ -901,8 +920,7 @@ impl PerfScenarioConfig {
                 || !matches!(dashboard_mode, PerfDashboardMode::Hidden)
                 || !matches!(clock_mode, PerfClockMode::Realtime)
                 || master_seed != 20_260_901
-                || warmup_secs != 30.0
-                || measure_secs != 60.0
+                || !wall_density_durations_match(wall_actual_window, warmup_secs, measure_secs)
                 || output_dir.is_none()
                 || window_width != Some(1280)
                 || window_height != Some(720)
@@ -910,7 +928,7 @@ impl PerfScenarioConfig {
                 || rtt_quality != Some(RttQualityPreset::High))
         {
             return Err(PerfScenarioConfigError(
-                "wall-density requires small|medium/gpu/realtime, zero actors, seed 20260901, 30s warmup, 60s measure, an output directory, baseline policies, and exact 1280x720/scale-1/high window contract"
+                "wall-density requires small|medium/gpu/realtime, zero actors, seed 20260901, its formal 30s/60s or paired actual-window 10s/10s duration, an output directory, baseline policies, and exact 1280x720/scale-1/high window contract"
                     .to_string(),
             ));
         }
@@ -1154,6 +1172,15 @@ impl PerfScenarioConfig {
     fn stream_seed(&self, stream: PerfRandomStream) -> u64 {
         splitmix64(self.master_seed ^ stream.salt())
     }
+}
+
+fn wall_density_durations_match(actual_window: bool, warmup_secs: f32, measure_secs: f32) -> bool {
+    let expected = if actual_window {
+        (10.0, 10.0)
+    } else {
+        (30.0, 60.0)
+    };
+    (warmup_secs, measure_secs) == expected
 }
 
 #[cfg(feature = "profiling-renderdoc")]
