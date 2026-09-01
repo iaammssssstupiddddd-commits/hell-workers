@@ -19,6 +19,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `bin/validate-wall-glb` | production Wall GLBの構造・bounds・port断面をbytesから再検証 |
 | `bin/create-wall-production-scene` | shared textureから6 familyの決定的Wall `.blend`を生成 |
 | `scripts/validate_asset_set_manifest.py` | Wall asset-set manifest v2と全参照artifactをexact検証 |
+| `scripts/validate_wall_textures.py` | shared textureとoptional +Y normal candidateをpixel検証 |
 | `scripts/promote_asset_set.py` | Wall final generationのplan / apply / recover / rollback transaction |
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
 | `scripts/render_color_calibration.py` | 壁M0の固定5 patchをBlenderで描画し、OCIO陽性証明付きmetadataを出力 |
@@ -107,6 +108,17 @@ payload / evidence / immutable receiptは同一temporary generation内でhash検
 generation directoryを一度だけrenameします。最後に唯一のmutable authorityであるactive pointerをatomic replaceし、
 親directoryをfsyncします。`recover` / `rollback`も既定はread-onlyで、変更には各々`--apply`が必要です。
 rollbackはgenerationを削除せず、root外snapshotに封印したprevious pointerだけを復元します。
+
+texture candidateは1024×1024 opaque RGBを必須とし、emissiveのactive pixelが紫UV領域外へ漏れないこと、
+optional normalがlinear sampling / OpenGL `+Y`で、vector length・positive Z条件を満たすことを検査します。
+
+```bash
+python3 tools/blender_ai_workflow/scripts/validate_wall_textures.py \
+  --texture-root "$ASSET_ROOT/staging/exports/textures/buildings/wall" \
+  --report "$ASSET_ROOT/staging/reports/wall-production-v1.textures.json" \
+  --normal-sampling linear \
+  --normal-convention +Y
+```
 
 ## Environment
 
