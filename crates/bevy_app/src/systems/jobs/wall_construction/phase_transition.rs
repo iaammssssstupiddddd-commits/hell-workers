@@ -82,3 +82,158 @@ pub(crate) fn spawn_wall_shell(
     );
     wall_entity
 }
+
+#[cfg(test)]
+mod tests {
+    use bevy::ecs::schedule::ApplyDeferred;
+    use hw_core::area::TaskArea;
+    use hw_core::visual_mirror::construction::WallTileVisualMirror;
+    use hw_logistics::tile_index::TileSiteIndex;
+    use hw_visual::Building3dVisual;
+    use hw_visual::blueprint::BuildingBounceEffect;
+    use hw_visual::wall_connection::{
+        WallConnectionDirty, WallConnectionMask, WallTopologyIndex, WallTopologyState,
+        wall_connections_system,
+    };
+
+    use super::*;
+
+    #[test]
+    fn two_tile_site_keeps_exact_topology_through_framing_and_completion() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<WorldMap>()
+            .init_resource::<TileSiteIndex>()
+            .insert_resource(crate::test_support::empty_building_3d_handles())
+            .insert_resource(crate::test_support::empty_wall_visual_handles())
+            .init_resource::<WallConnectionDirty>()
+            .init_resource::<WallTopologyIndex>()
+            .add_observer(hw_jobs::visual_sync::on_building_added_sync_visual)
+            .add_systems(Update, hw_jobs::visual_sync::sync_building_visual_system)
+            .add_systems(
+                Update,
+                (
+                    wall_framed_tile_spawn_system,
+                    hw_logistics::wall_construction_phase_transition_system,
+                    crate::systems::jobs::wall_construction::wall_construction_completion_system,
+                )
+                    .chain(),
+            )
+            .add_systems(PostUpdate, (wall_connections_system, ApplyDeferred).chain());
+
+        let grids = [(20, 20), (21, 20)];
+        let mut site = WallConstructionSite::new(
+            TaskArea::from_points(
+                WorldMap::grid_to_world(grids[0].0, grids[0].1),
+                WorldMap::grid_to_world(grids[1].0, grids[1].1),
+            ),
+            WorldMap::grid_to_world(grids[0].0, grids[0].1),
+            grids.len() as u32,
+        );
+        site.tiles_framed = grids.len() as u32;
+        let site_entity = app.world_mut().spawn(site).id();
+        let tile_entities = grids
+            .into_iter()
+            .map(|grid| {
+                let mut tile = WallTileBlueprint::new(site_entity, grid);
+                tile.state = WallTileState::FramedProvisional;
+                app.world_mut()
+                    .spawn((
+                        tile,
+                        WallTileVisualMirror::default(),
+                        Transform::from_translation(
+                            WorldMap::grid_to_world(grid.0, grid.1).extend(0.0),
+                        ),
+                    ))
+                    .id()
+            })
+            .collect::<Vec<_>>();
+        app.world_mut()
+            .resource_mut::<TileSiteIndex>()
+            .wall_tiles_by_site
+            .insert(site_entity, tile_entities.clone());
+        for grid in grids {
+            app.world_mut()
+                .resource_mut::<WorldMap>()
+                .set_building_occupancy(grid, site_entity);
+        }
+
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .get::<WallConstructionSite>(site_entity)
+                .unwrap()
+                .phase,
+            WallConstructionPhase::Coating
+        );
+        let walls = tile_entities
+            .iter()
+            .map(|tile_entity| {
+                let tile = app.world().get::<WallTileBlueprint>(*tile_entity).unwrap();
+                assert_eq!(tile.state, WallTileState::WaitingMud);
+                tile.spawned_wall.expect("framing must spawn a Wall")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            app.world().get::<WallTopologyState>(walls[0]).unwrap().mask,
+            WallConnectionMask::from_neighbors(false, false, false, true)
+        );
+        assert_eq!(
+            app.world().get::<WallTopologyState>(walls[1]).unwrap().mask,
+            WallConnectionMask::from_neighbors(false, false, true, false)
+        );
+        for wall in &walls {
+            let building = app.world().get::<Building>(*wall).unwrap();
+            assert!(building.is_provisional);
+            assert!(app.world().get::<ProvisionalWall>(*wall).is_some());
+            let visual_count = {
+                let world = app.world_mut();
+                let mut query = world.query::<&Building3dVisual>();
+                query
+                    .iter(world)
+                    .filter(|visual| visual.owner == *wall)
+                    .count()
+            };
+            assert_eq!(visual_count, 1);
+        }
+
+        {
+            let mut site = app
+                .world_mut()
+                .get_mut::<WallConstructionSite>(site_entity)
+                .unwrap();
+            site.tiles_coated = site.tiles_total;
+        }
+        for tile_entity in &tile_entities {
+            app.world_mut()
+                .get_mut::<WallTileBlueprint>(*tile_entity)
+                .unwrap()
+                .state = WallTileState::Complete;
+        }
+
+        app.update();
+
+        assert!(app.world().get_entity(site_entity).is_err());
+        assert!(
+            tile_entities
+                .iter()
+                .all(|entity| app.world().get_entity(*entity).is_err())
+        );
+        for (index, wall) in walls.into_iter().enumerate() {
+            let building = app.world().get::<Building>(wall).unwrap();
+            assert!(!building.is_provisional);
+            assert!(app.world().get::<ProvisionalWall>(wall).is_none());
+            assert!(app.world().get::<BuildingBounceEffect>(wall).is_some());
+            let expected_mask = if index == 0 {
+                WallConnectionMask::from_neighbors(false, false, false, true)
+            } else {
+                WallConnectionMask::from_neighbors(false, false, true, false)
+            };
+            assert_eq!(
+                app.world().get::<WallTopologyState>(wall).unwrap().mask,
+                expected_mask
+            );
+        }
+    }
+}
