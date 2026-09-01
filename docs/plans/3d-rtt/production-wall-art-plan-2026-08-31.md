@@ -761,7 +761,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 同commitで完成／仮設の切替がmesh family / topology rotation / transform / owner-derived `MeshTag`を維持してshared materialだけを
   交換すること、owner rotation / scaleとtopology quarter turnが合成されること、Door add / removeを実producerが同frameの3D familyへ
   反映することを固定した。rehydrate shellはexactly-one fallback visualを正しいlocal / `GlobalTransform`で生成する。
-  multi-tile施工のframing前後cancel、実save/load / rollback / recovery-only、completion bounceとの統合testは未完了である。
+  multi-tile施工の全phase進行、実save/load / rollback / recovery-onlyとの統合testは未完了である。
+- `54359061`でnormal / Instant Buildの2 tile配置を実`apply_wall_placement`とBuilding visual mirror observerから同じtopology routeへ通し、
+  normalは施工tileだけ、Instant Buildは各Wallのexactly-one 3D visualだけを生成することを固定した。framing前の施工tile単独とframing後の
+  施工tile＋spawn済みprovisional Wallを実cancellation systemで撤去し、同じframeの`PostUpdate`で隣接Wallがisolatedへ戻る。
+  実`building_bounce_animation_system`がowner scaleを更新したframeもtopology quarter turn、local / `GlobalTransform`が一致する。
 
 - 変更内容:
   - mask計算と `WallMeshFamily + QuarterTurns` resolverをpure functionへ抽出し、16件のexhaustive table testを追加する。
@@ -787,7 +791,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [x] site / tile / spawned wallが同一gridに一時共存しても接続数1へcoalesceされ、GLBはspawned Wallだけにexactly oneである。
   - [x] 仮設→完成はmaterialだけが変わり、mesh family / rotation / `MeshTag`は不変である。
   - [ ] topology producerだけがdirtyをdrainし、2D / 3D consumerが同じresolved stateを同じ`PostUpdate`で観測する。`PlacementFeedbackSet::Commit`由来の配置も1 frame遅延しない。
-  - [ ] `WallAssetReadinessSet -> WallTopologyResolveSet -> ApplyDeferred -> WallPresentationApplySet`が`TransformSystems::Propagate`より前に実行され、final transform / tag compositionもapply内で完了する。owner移動 / owner回転ではlocal / `GlobalTransform`と`MeshTag`が同frame更新され、completion bounceやtransform syncでtopology回転が消えず、topology quarter turnだけではowner-derived tagが変化しない。
+  - [x] `WallAssetReadinessSet -> WallTopologyResolveSet -> ApplyDeferred -> WallPresentationApplySet`が`TransformSystems::Propagate`より前に実行され、final transform / tag compositionもapply内で完了する。owner移動 / owner回転ではlocal / `GlobalTransform`と`MeshTag`が同frame更新され、completion bounceやtransform syncでtopology回転が消えず、topology quarter turnだけではowner-derived tagが変化しない。
   - [ ] save/load後にexactly-one visualと同一mask / family / rotationが復元される。
   - [ ] normal load、rollback、recovery-only、連続2回resetの全world replacement testで、`Last` rehydrate frameは全wall fallbackかつlocal / `GlobalTransform`が正しいworld位置、次frame rebuild後は全wall production、mixed frame 0、旧`Entity`参照0、index rebuild 1回、重複contributor 0である。
   - [ ] asset `Eligible`からの初回有効化、同frame spawn、synthetic failure、restart後回復の各activation revisionで既存／新規wallが同じmodeへ一括収束する。creation-time fallback / tag初期化以外にpresentation apply外の`Mesh3d` / wall material / wall transform / `MeshTag` mutationがなく、既存generic writerがWallを除外している。
@@ -1016,18 +1020,16 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - final subject `35f1f6e3`から色校正、Capture 12 run、RenderDoc 4 caseを再採取し、全artifactの独立verifyをpass。
     M0のsource / harness / asset viewを同じfingerprintへ凍結済み。
 - 未完了:
-  - M3のPostUpdate schedule、3D consumer、atomic presentation apply、world-replace用のroot / leaf reset分担、normal施工tileの
-    topology参加、owner移動・回転と完成material-only遷移のfocused testは実装済み。multi-tile施工のframing前後cancel、
-    normal load / rollback / recovery-onlyを含む実save/load、completion bounceとの統合testは未完了。
+  - M3のPostUpdate schedule、3D consumer、atomic presentation apply、world-replace用のroot / leaf reset分担、normal / Instant Build配置、
+    framing前後cancel、owner移動・回転、完成material-only遷移、completion bounceのfocused integration testは実装済み。
+    `PlacementFeedbackSet::Commit`そのものとdeconstruction、normal load / rollback / recovery-onlyを含む実save/loadの統合testは未完了。
     production assetはcanonical / primary `assets/`へまだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
 
 ### 次のAIが最初にやること
 
-1. normal placement / Instant Build / multi-tile framing / framing前後cancel / deconstructionを通す統合testを追加し、
-   `PlacementFeedbackSet::Commit`後の同framedirty範囲とexactly-one visualを固定する。
-2. 実completion systemが追加するcompletion bounce中もtopology quarter turnが消えず、同frameのlocal / `GlobalTransform`が一致する
-   統合testを追加する。owner移動・回転とmaterial-only遷移のfocused testは実装済み。
-3. normal load / rollback / recovery-only / 連続resetで、`Last` fallback位置、次frame production一括復帰、mixed 0、旧Entity参照0を検証する。
+1. `PlacementFeedbackSet::Commit`そのものとdeconstructionを通す統合testを追加し、同frame dirty範囲とexactly-one visualを固定する。
+   normal / Instant Build配置、framing前後cancel、completion bounceはfocused integration test実装済み。
+2. normal load / rollback / recovery-only / 連続resetで、`Last` fallback位置、次frame production一括復帰、mixed 0、旧Entity参照0を検証する。
 
 ### ブロッカー/注意点
 
@@ -1150,9 +1152,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - M3 atomic presentation `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 wall_presentation --lib`:
-  `pass (7 tests, 2026-09-02)`。family / material / quarter turn、2-owner一括fallback、steady 0-write、
+  `pass (8 tests, 2026-09-02)`。family / material / quarter turn、2-owner一括fallback、steady 0-write、
   deferred topologyから同frame `GlobalTransform`、identity mismatch、連続reset、material-only completion、owner transform合成、
-  real Door add / remove producerを検証。
+  real Door add / remove producer、completion bounceから同frame`GlobalTransform`までを検証。
+- M3 lifecycle focused test:
+  `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 wall_construction --lib`は`pass (4 tests, 2026-09-02)`、
+  `normal_and_instant_placement_enter_the_same_topology_route`は`pass (1 test, 2026-09-02)`。normal / Instant Build、
+  framing前後cancelから同frame topology更新、completion promotion / bounce開始を検証。
 - M3 topology / fallback spawn focused test:
   `python3 scripts/dev.py cargo -- test -p hw_visual wall_connection --lib`は`pass (8 tests, 2026-09-02)`、
   `fallback_wall_spawn_has_exactly_one_visual_mesh_material_and_tag`と
@@ -1165,6 +1171,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M3 normal construction topology / lifecycle test batchのHelp実経路判断: `No impact`。施工tileの既存visual topology参加と
   presentation orderingの検証を追加したが、操作、workflow、成立条件、label、tooltip、shortcut、setting、notification、gameplay ruleは不変。
   `scripts/check_help_impact.py`とtooling unit test 24件がpassし、commit `0ad6706c`へexact trailerを記録（2026-09-02）。
+- M3 placement / cancel / bounce lifecycle test batchのHelp実経路判断: `No impact`。既存のnormal / Instant Build配置、framing前後cancel、
+  completion bounceをpresentation契約へ接続する検証だけを追加し、操作、workflow、成立条件、label、tooltip、shortcut、setting、notification、
+  gameplay ruleは不変。`scripts/check_help_impact.py`とtooling unit test 24件がpassし、commit `54359061`へexact trailerを記録（2026-09-02）。
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
   既存tracked `scripts/check_crate_dependencies.py`がshebang付き`100644`であるrepository hygiene違反により停止（2026-09-01）。
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
@@ -1203,3 +1212,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-01` | `Codex` | final subject `35f1f6e3`でBevy 5 patch UI隔離を実証し、OCIO陽性Blender referenceとのDelta E 0、Capture 12 run、RenderDoc 4 caseを同一fingerprintから再採取してM0を完了 |
 | `2026-09-02` | `Codex` | M3のPostUpdate topology / ApplyDeferred / presentation / transform propagation順、owner-indexed atomic production/fallback apply、creation-time fallback GlobalTransform、root / leaf world-reset分担を実装。steady 0-writeを閉じ、multi-tile / save-load統合を残した |
 | `2026-09-02` | `Codex` | normal施工tileをtopology indexへ接続し、同一grid coalesce、material-only completion、owner / topology transform合成、Door同frame更新、rehydrate fallback位置をfocused testで固定した |
+| `2026-09-02` | `Codex` | normal / Instant Build配置、framing前後cancel、completion bounceを実systemからPostUpdate topology / presentation / GlobalTransformまで通すfocused integration testを追加した |
