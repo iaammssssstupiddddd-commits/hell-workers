@@ -2,7 +2,7 @@
 
 use crate::assets::wall_asset_set::{
     WallAssetCandidatePolicy, WallAssetReadiness, WallProductionActivation,
-    update_wall_asset_readiness_system,
+    finalize_wall_production_activation_system, update_wall_asset_readiness_system,
 };
 use crate::entities::familiar::{familiar_animation_system, update_familiar_range_indicator};
 use crate::plugins::startup::{
@@ -22,8 +22,7 @@ use crate::systems::visual::actor_billboard::{
 };
 use crate::systems::visual::building3d_cleanup::{
     DoorPresentationSyncSet, cleanup_building_3d_visuals_system, sync_building_3d_transform_system,
-    sync_door_presentation_system, sync_provisional_wall_material_system,
-    sync_structural_presentation_state_system,
+    sync_door_presentation_system, sync_structural_presentation_state_system,
 };
 use crate::systems::visual::camera_sync::sync_camera3d_system;
 use crate::systems::visual::indoor_light_texture::{
@@ -37,6 +36,10 @@ use crate::systems::visual::terrain_lod::{
     update_terrain_lod_metrics_system,
 };
 use crate::systems::visual::terrain_material::terrain_metadata_sync_system;
+use crate::systems::visual::wall_presentation::{
+    Wall3dVisualOwnerIndex, apply_wall_presentation_system,
+    reset_wall_presentation_for_world_replace,
+};
 use crate::world::map::TerrainChunk;
 use hw_core::game_state::PlayMode;
 use hw_visual::ActorBillboardOwnerCache;
@@ -46,6 +49,13 @@ use hw_visual::visual3d::{ActorBillboard3d, Building3dVisual};
 use hw_world::{TerrainChangedEvent, sync_room_overlay_tiles_system};
 
 use bevy::prelude::*;
+use bevy::transform::TransformSystems;
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WallAssetReadinessSet;
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WallPresentationApplySet;
 
 type MainRttCameraQuery<'w, 's> = Query<'w, 's, &'static mut Camera, With<Camera3dRtt>>;
 type RttDirectionalLightQuery<'w, 's> =
@@ -81,6 +91,11 @@ impl Plugin for VisualPlugin {
         );
         crate::systems::save::register_load_reset_hook(
             app,
+            "wall-production-presentation",
+            reset_wall_presentation_for_world_replace,
+        );
+        crate::systems::save::register_load_reset_hook(
+            app,
             "root-command-visuals",
             reset_root_command_visuals,
         );
@@ -94,10 +109,29 @@ impl Plugin for VisualPlugin {
         app.init_resource::<WallAssetCandidatePolicy>();
         app.init_resource::<WallAssetReadiness>();
         app.init_resource::<WallProductionActivation>();
+        app.init_resource::<Wall3dVisualOwnerIndex>();
         app.init_resource::<TerrainLodMetrics>();
         app.init_resource::<TerrainLodState>();
 
         app.add_message::<TerrainChangedEvent>();
+
+        app.configure_sets(
+            PostUpdate,
+            (
+                WallAssetReadinessSet,
+                hw_visual::wall_connection::WallTopologyResolveSet,
+                WallPresentationApplySet,
+            )
+                .chain()
+                .before(TransformSystems::Propagate),
+        );
+        app.add_systems(
+            PostUpdate,
+            ApplyDeferred
+                .after(hw_visual::wall_connection::WallTopologyResolveSet)
+                .before(WallPresentationApplySet)
+                .before(TransformSystems::Propagate),
+        );
 
         // Door mutations and the CPU Light Field are final before presentation.
         // Behavior observers remain after this stable consumer boundary.
@@ -109,8 +143,8 @@ impl Plugin for VisualPlugin {
 
         app.add_systems(Update, sync_camera3d_system.in_set(GameSystemSet::Visual));
         app.add_systems(
-            Update,
-            update_wall_asset_readiness_system.in_set(GameSystemSet::Visual),
+            PostUpdate,
+            update_wall_asset_readiness_system.in_set(WallAssetReadinessSet),
         );
         app.add_systems(
             Update,
@@ -206,7 +240,6 @@ impl Plugin for VisualPlugin {
             Update,
             (
                 cleanup_building_3d_visuals_system,
-                sync_provisional_wall_material_system,
                 sync_building_3d_transform_system
                     .after(hw_visual::blueprint::building_bounce_animation_system),
                 sync_structural_presentation_state_system,
@@ -220,6 +253,15 @@ impl Plugin for VisualPlugin {
                 .after(hw_spatial::door_auto_close_nearby_system)
                 .after(crate::systems::lighting::consume_door_lock_toggle_requests_system)
                 .in_set(DoorPresentationSyncSet),
+        );
+        app.add_systems(
+            PostUpdate,
+            (
+                finalize_wall_production_activation_system,
+                apply_wall_presentation_system,
+            )
+                .chain()
+                .in_set(WallPresentationApplySet),
         );
 
         // terrain metadata texture 更新（自然障害物除去後）

@@ -37,33 +37,6 @@ pub fn cleanup_building_3d_visuals_system(
     }
 }
 
-/// 仮設壁が本設壁に遷移した時に Building3dVisual のマテリアルを通常色に差し替える。
-pub fn sync_provisional_wall_material_system(
-    handles_3d: Res<Building3dHandles>,
-    q_buildings: Query<(Entity, &Building), Changed<Building>>,
-    q_visuals: Query<(Entity, &Building3dVisual)>,
-    mut q_materials: Query<&mut MeshMaterial3d<TopDownStructuralMaterial>>,
-) {
-    for (building_entity, building) in q_buildings.iter() {
-        // 仮設から本設への遷移のみ対象
-        if building.is_provisional {
-            continue;
-        }
-        if !matches!(building.kind, hw_jobs::BuildingType::Wall) {
-            continue;
-        }
-
-        for (visual_entity, visual) in q_visuals.iter() {
-            if visual.owner != building_entity {
-                continue;
-            }
-            if let Ok(mut mat) = q_materials.get_mut(visual_entity) {
-                mat.0 = handles_3d.wall_material.clone();
-            }
-        }
-    }
-}
-
 /// Converts a logical 2D building root transform into its active RtT
 /// presentation transform. Translation, type height, rotation and completion
 /// bounce scale are intentionally resolved independently.
@@ -132,6 +105,9 @@ pub fn sync_building_3d_transform_system(
         let Ok((building, owner)) = owners.get(owner_entity) else {
             continue;
         };
+        if building.kind == BuildingType::Wall {
+            continue;
+        }
         let mut transform_query = visuals.p1();
         let Ok((_, mut transform, mesh_tag)) = transform_query.get_mut(entity) else {
             continue;
@@ -151,6 +127,7 @@ pub fn sync_building_3d_transform_system(
 
     let changed: EntityHashMap<_> = changed_owners
         .iter()
+        .filter(|(_, building, _)| building.kind != BuildingType::Wall)
         .map(|(entity, building, transform)| (entity, (building.kind, *transform)))
         .collect();
     if changed.is_empty() {

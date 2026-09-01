@@ -13,6 +13,7 @@ pub mod soul_animation;
 pub mod task_area_visual;
 pub mod terrain_lod;
 pub mod terrain_material;
+pub mod wall_presentation;
 pub mod floor_construction {
     pub use hw_visual::floor_construction::{
         FloorCuringProgressBar, FloorTileBoneVisual, manage_floor_curing_progress_bars_system,

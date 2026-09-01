@@ -47,7 +47,7 @@ pub use familiar::{FamiliarVisualOffset, FamiliarVisualOwner};
 pub use visual3d::{
     ActorBillboard3d, ActorBillboardOwnerCache, Building3dVisual, Door3dVisual,
     DoorPresentationState, SoulAnimVisualState, SoulBillboardFrame, SoulBodyAnimState,
-    SoulFaceState, StructuralPresentationState,
+    SoulFaceState, StructuralPresentationState, Wall3dPresentationMode, Wall3dPresentationState,
 };
 
 pub use task_area_visual::{TaskAreaMaterial, TaskAreaVisual};
@@ -114,10 +114,15 @@ impl Plugin for HwVisualPlugin {
             Update,
             (
                 material::sync_terrain_feature_lut_uniforms_system,
-                wall_connection::wall_connections_system,
                 site_yard_visual::sync_site_yard_boundaries_system,
             )
                 .in_set(GameSystemSet::Visual),
+        );
+        app.add_systems(
+            PostUpdate,
+            wall_connection::wall_connections_system
+                .in_set(wall_connection::WallTopologyResolveSet)
+                .run_if(visual_updates_enabled),
         );
 
         // Blueprint visual systems

@@ -7,6 +7,9 @@ use hw_core::visual_mirror::construction::BlueprintVisualState;
 use hw_world::WorldMap;
 use std::collections::{HashMap, HashSet};
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WallTopologyResolveSet;
+
 /// Four-neighbor Wall connector mask in the canonical `(N, S, W, E)` order.
 /// N is the high bit so `bits()` matches the M0 fixture's four-character masks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -124,6 +127,11 @@ impl Default for WallTopologyIndex {
 }
 
 impl WallTopologyIndex {
+    /// True after the current world has completed its mandatory full rebuild.
+    pub fn is_ready(&self) -> bool {
+        !self.full_rebuild_requested
+    }
+
     fn replace_source(
         &mut self,
         entity: Entity,

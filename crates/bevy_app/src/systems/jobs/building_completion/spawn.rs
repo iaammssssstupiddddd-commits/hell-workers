@@ -7,6 +7,7 @@ use hw_core::constants::{TILE_SIZE, Z_BUILDING_FLOOR, Z_BUILDING_STRUCT};
 use hw_visual::layer::VisualLayerKind;
 use hw_visual::visual3d::{
     Building3dVisual, Door3dVisual, DoorPresentationState, StructuralPresentationState,
+    Wall3dPresentationState,
 };
 use hw_world::WorldMap;
 
@@ -238,8 +239,10 @@ pub(crate) fn spawn_building_3d_visual(
                 Mesh3d(handles_3d.wall_mesh.clone()),
                 MeshMaterial3d(material),
                 transform_3d,
+                GlobalTransform::from(transform_3d),
                 handles_3d.render_layers.clone(),
                 Building3dVisual { owner },
+                Wall3dPresentationState::default(),
                 structural_light_anchor_mesh_tag(kind, &owner_transform)
                     .expect("Wall grid anchor fits MeshTag"),
                 Name::new(format!("Building3dVisual ({:?})", kind)),
@@ -409,10 +412,11 @@ mod tests {
                 &MeshMaterial3d<hw_visual::TopDownStructuralMaterial>,
                 &MeshTag,
                 &Transform,
+                &GlobalTransform,
             )>();
             let rows = query.iter(&world).collect::<Vec<_>>();
             assert_eq!(rows.len(), 1);
-            let (visual, mesh, material, _, transform) = rows[0];
+            let (visual, mesh, material, _, transform, global_transform) = rows[0];
             assert_eq!(visual.owner, owner);
             assert_eq!(&mesh.0, &wall_mesh);
             assert_eq!(&material.0, expected_material);
@@ -420,6 +424,7 @@ mod tests {
                 transform.translation,
                 Vec3::new(pos2d.x, TILE_SIZE * 0.5, -pos2d.y)
             );
+            assert_eq!(global_transform.compute_transform(), *transform);
         }
     }
 }

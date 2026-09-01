@@ -9,6 +9,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::gltf::GltfAssetLabel;
 use bevy::prelude::*;
 use hw_visual::TopDownStructuralMaterial;
+use hw_visual::wall_connection::WallTopologyIndex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -869,6 +870,17 @@ fn refresh_production_activation(
         activation.state = next_state;
         activation.decision_revision = activation.decision_revision.wrapping_add(1);
     }
+}
+
+/// Publishes topology readiness after the resolver and refreshes the atomic
+/// production/fallback decision in the same `PostUpdate`.
+pub fn finalize_wall_production_activation_system(
+    topology: Res<WallTopologyIndex>,
+    readiness: Res<WallAssetReadiness>,
+    mut activation: ResMut<WallProductionActivation>,
+) {
+    activation.topology_ready = topology.is_ready();
+    refresh_production_activation(&mut activation, &readiness);
 }
 
 #[derive(SystemParam)]
