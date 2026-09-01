@@ -34,8 +34,8 @@
       },
       "reports": {
         "scene": {"path": "wall_isolated.scene.json", "sha256": ""},
-        "export": {"path": "wall_isolated.export.json", "sha256": ""},
-        "khronos": {"path": "wall_isolated.khronos.json", "sha256": ""},
+        "export": {"path": "models/buildings/wall/wall_isolated.glb.export.json", "sha256": ""},
+        "khronos": {"path": "models/buildings/wall/wall_isolated.glb.khronos.json", "sha256": ""},
         "post_export": {"path": "wall_isolated.post-export.json", "sha256": ""}
       }
     },
@@ -45,8 +45,8 @@
       "output": {"path": "models/buildings/wall/wall_end.glb", "sha256": ""},
       "reports": {
         "scene": {"path": "wall_end.scene.json", "sha256": ""},
-        "export": {"path": "wall_end.export.json", "sha256": ""},
-        "khronos": {"path": "wall_end.khronos.json", "sha256": ""},
+        "export": {"path": "models/buildings/wall/wall_end.glb.export.json", "sha256": ""},
+        "khronos": {"path": "models/buildings/wall/wall_end.glb.khronos.json", "sha256": ""},
         "post_export": {"path": "wall_end.post-export.json", "sha256": ""}
       }
     },
@@ -56,8 +56,8 @@
       "output": {"path": "models/buildings/wall/wall_straight.glb", "sha256": ""},
       "reports": {
         "scene": {"path": "wall_straight.scene.json", "sha256": ""},
-        "export": {"path": "wall_straight.export.json", "sha256": ""},
-        "khronos": {"path": "wall_straight.khronos.json", "sha256": ""},
+        "export": {"path": "models/buildings/wall/wall_straight.glb.export.json", "sha256": ""},
+        "khronos": {"path": "models/buildings/wall/wall_straight.glb.khronos.json", "sha256": ""},
         "post_export": {"path": "wall_straight.post-export.json", "sha256": ""}
       }
     },
@@ -67,8 +67,8 @@
       "output": {"path": "models/buildings/wall/wall_corner.glb", "sha256": ""},
       "reports": {
         "scene": {"path": "wall_corner.scene.json", "sha256": ""},
-        "export": {"path": "wall_corner.export.json", "sha256": ""},
-        "khronos": {"path": "wall_corner.khronos.json", "sha256": ""},
+        "export": {"path": "models/buildings/wall/wall_corner.glb.export.json", "sha256": ""},
+        "khronos": {"path": "models/buildings/wall/wall_corner.glb.khronos.json", "sha256": ""},
         "post_export": {"path": "wall_corner.post-export.json", "sha256": ""}
       }
     },
@@ -78,8 +78,8 @@
       "output": {"path": "models/buildings/wall/wall_t_junction.glb", "sha256": ""},
       "reports": {
         "scene": {"path": "wall_t_junction.scene.json", "sha256": ""},
-        "export": {"path": "wall_t_junction.export.json", "sha256": ""},
-        "khronos": {"path": "wall_t_junction.khronos.json", "sha256": ""},
+        "export": {"path": "models/buildings/wall/wall_t_junction.glb.export.json", "sha256": ""},
+        "khronos": {"path": "models/buildings/wall/wall_t_junction.glb.khronos.json", "sha256": ""},
         "post_export": {"path": "wall_t_junction.post-export.json", "sha256": ""}
       }
     },
@@ -89,8 +89,8 @@
       "output": {"path": "models/buildings/wall/wall_cross.glb", "sha256": ""},
       "reports": {
         "scene": {"path": "wall_cross.scene.json", "sha256": ""},
-        "export": {"path": "wall_cross.export.json", "sha256": ""},
-        "khronos": {"path": "wall_cross.khronos.json", "sha256": ""},
+        "export": {"path": "models/buildings/wall/wall_cross.glb.export.json", "sha256": ""},
+        "khronos": {"path": "models/buildings/wall/wall_cross.glb.khronos.json", "sha256": ""},
         "post_export": {"path": "wall_cross.post-export.json", "sha256": ""}
       }
     }

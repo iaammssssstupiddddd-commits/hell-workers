@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "asset_set_id": "wall-production-v1",
+  "name": "OpenAI Business Terms output ownership",
+  "terms_url": "https://openai.com/policies/may-2025-business-terms/",
+  "checked_at_utc": "",
+  "file": "wall-production-v1.md"
+}

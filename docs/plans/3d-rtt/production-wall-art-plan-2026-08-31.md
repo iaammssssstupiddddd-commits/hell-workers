@@ -583,6 +583,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 6 GLBのactual bytes hashとpost-exportのbounds / section / triangle / UV等の構造測定値をbaselineへ封印し、
   独立再生成後のreportまで含めてexact比較するrebuild verifierを追加した。単体fixtureと現staging snapshotの
   capture→verifyがpassし、正式M1 tool commitからの再生成artifact採取は未実施。
+- clean Git commit / treeと外部stagingの既知closed setだけからcandidate manifestを組み立て、全validatorがpassして
+  から既存manifestをatomic置換するsealerと、provenance / license metadata templateを追加した。dirty repository、
+  report欠落、validator不一致は封印前にfail-closedとする。
 - release receipt対応のrepo sync、正式6 GLB / manifest / reference board / rebuild artifactは未完了。
 
 - 変更内容:

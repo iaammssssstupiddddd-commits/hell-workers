@@ -22,6 +22,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `scripts/validate_asset_set_manifest.py` | Wall asset-set manifest v2と全参照artifactをexact検証 |
 | `scripts/validate_wall_textures.py` | shared textureとoptional +Y normal candidateをpixel検証 |
 | `scripts/verify_wall_rebuild.py` | 6 GLBとpost-export構造値の独立rebuild一致を検証 |
+| `scripts/seal_wall_candidate.py` | clean Git主体と外部stagingのclosed setからcandidate manifest v2を封印 |
 | `scripts/promote_asset_set.py` | Wall final generationのplan / apply / recover / rollback transaction |
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
 | `scripts/render_color_calibration.py` | 壁M0の固定5 patchをBlenderで描画し、OCIO陽性証明付きmetadataを出力 |
@@ -122,6 +123,19 @@ python3 tools/blender_ai_workflow/scripts/validate_wall_textures.py \
   --normal-decision pending \
   --normal-sampling linear \
   --normal-convention +Y
+```
+
+Candidate sealerはcleanなrepository `HEAD` / tree、6 mesh、texture report、reference board、独立rebuild、
+prompt provenance、license evidenceを1つのmanifestへhash結合します。検証が完了するまで既存manifestを置換しません。
+
+```bash
+python3 tools/blender_ai_workflow/scripts/seal_wall_candidate.py \
+  --asset-root "$ASSET_ROOT" \
+  --repo . \
+  --generation 1 \
+  --provenance "$ASSET_ROOT/source/generated/wall-production-v1/provenance.json" \
+  --license-metadata "$ASSET_ROOT/source/generated/wall-production-v1/license.json" \
+  --output "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json"
 ```
 
 ## Environment

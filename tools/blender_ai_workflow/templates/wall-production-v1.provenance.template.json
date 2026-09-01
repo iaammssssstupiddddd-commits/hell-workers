@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "asset_set_id": "wall-production-v1",
+  "generators": [
+    {
+      "role": "mesh",
+      "service": "procedural-blender",
+      "model": "Blender",
+      "version": "5.1.1",
+      "prompt": "source/generated/wall-production-v1/mesh-prompt.txt",
+      "references": []
+    },
+    {
+      "role": "texture",
+      "service": "OpenAI built-in image generation",
+      "model": "imagegen",
+      "version": "2026-09-01",
+      "prompt": "source/generated/wall-production-v1/texture-prompt.txt",
+      "references": [
+        "source/generated/wall-production-v1/wall_albedo.raw-1254.png",
+        "source/generated/wall-production-v1/wall_emissive.raw-1254.png",
+        "source/generated/wall-production-v1/wall_normal.raw-1254.png"
+      ]
+    }
+  ]
+}
