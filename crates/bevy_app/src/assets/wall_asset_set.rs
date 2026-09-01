@@ -703,12 +703,22 @@ fn resolve_asset_handles(
             .from_asset(record.path.clone()),
         )
     });
-    let candidate_normal = manifest
-        .candidate_normal
-        .as_ref()
-        .map(|record| asset_server.load(record.path.clone()));
-    let normal = (manifest.normal_decision == WallNormalDecision::Adopted)
-        .then(|| asset_server.load(record_by_role(manifest, "texture:normal").path.clone()));
+    let candidate_normal = manifest.candidate_normal.as_ref().map(|record| {
+        asset_server
+            .load_builder()
+            .with_settings(|settings: &mut bevy::image::ImageLoaderSettings| {
+                settings.is_srgb = false;
+            })
+            .load(record.path.clone())
+    });
+    let normal = (manifest.normal_decision == WallNormalDecision::Adopted).then(|| {
+        asset_server
+            .load_builder()
+            .with_settings(|settings: &mut bevy::image::ImageLoaderSettings| {
+                settings.is_srgb = false;
+            })
+            .load(record_by_role(manifest, "texture:normal").path.clone())
+    });
     ResolvedProductionWallAssets {
         identity: manifest.into(),
         meshes,
@@ -1251,7 +1261,13 @@ mod tests {
                 .chain([
                     server.load_state(assets.albedo.id()),
                     server.load_state(assets.emissive.id()),
-                ]);
+                ])
+                .chain(
+                    assets
+                        .candidate_normal
+                        .iter()
+                        .map(|handle| server.load_state(handle.id())),
+                );
             if states
                 .clone()
                 .all(|state| matches!(state, LoadState::Loaded))
@@ -1286,6 +1302,12 @@ mod tests {
                     server.get_load_states(assets.emissive.id()),
                 ),
             ])
+            .chain(assets.candidate_normal.iter().map(|handle| {
+                (
+                    server.get_path(handle.id()).map(|path| path.to_string()),
+                    server.get_load_states(handle.id()),
+                )
+            }))
             .collect();
         panic!("isolated Wall assets did not become ready: {diagnostics:?}");
     }
@@ -1336,6 +1358,36 @@ mod tests {
                 .map_or_else(|| mesh.count_vertices(), |indices| indices.len());
             assert!(index_count / 3 <= 350);
         }
+        let images = app.world().resource::<Assets<Image>>();
+        assert_eq!(
+            images
+                .get(&assets.albedo)
+                .expect("loaded albedo Image is absent")
+                .texture_descriptor
+                .format,
+            bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb
+        );
+        assert_eq!(
+            images
+                .get(&assets.emissive)
+                .expect("loaded emissive Image is absent")
+                .texture_descriptor
+                .format,
+            bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb
+        );
+        assert_eq!(
+            images
+                .get(
+                    assets
+                        .candidate_normal
+                        .as_ref()
+                        .expect("candidate normal handle is absent"),
+                )
+                .expect("loaded candidate normal Image is absent")
+                .texture_descriptor
+                .format,
+            bevy::render::render_resource::TextureFormat::Rgba8Unorm
+        );
     }
 
     #[test]
