@@ -310,6 +310,8 @@ pub(crate) fn spawn_building_3d_visual(
 
 #[cfg(test)]
 mod tests {
+    use bevy::ecs::world::CommandQueue;
+
     use super::*;
 
     #[test]
@@ -353,6 +355,60 @@ mod tests {
             assert_eq!(
                 (tag >> LIGHT_ANCHOR_POLICY_SHIFT) & 0x3,
                 LIGHT_ANCHOR_POLICY_DOOR
+            );
+        }
+    }
+
+    #[test]
+    fn fallback_wall_spawn_has_exactly_one_visual_mesh_material_and_tag() {
+        let mut meshes = Assets::<Mesh>::default();
+        let mut materials = Assets::<hw_visual::TopDownStructuralMaterial>::default();
+        let wall_mesh = meshes.add(Cuboid::new(TILE_SIZE, TILE_SIZE, TILE_SIZE));
+        let complete_material = materials.add(hw_visual::TopDownStructuralMaterial::default());
+        let provisional_material = materials.add(hw_visual::TopDownStructuralMaterial::default());
+        let mut handles = crate::test_support::empty_building_3d_handles();
+        handles.wall_mesh = wall_mesh.clone();
+        handles.wall_material = complete_material.clone();
+        handles.wall_provisional_material = provisional_material.clone();
+        let pos2d = WorldMap::grid_to_world(3, 4);
+
+        for (is_provisional, expected_material) in
+            [(false, &complete_material), (true, &provisional_material)]
+        {
+            let mut world = World::new();
+            let owner = world.spawn_empty().id();
+            let mut queue = CommandQueue::default();
+            {
+                let mut commands = Commands::new(&mut queue, &world);
+                spawn_building_3d_visual(
+                    &mut commands,
+                    owner,
+                    BuildingType::Wall,
+                    pos2d,
+                    is_provisional,
+                    &handles,
+                );
+            }
+            queue.apply(&mut world);
+
+            let visual_count = world.query::<&Building3dVisual>().iter(&world).count();
+            assert_eq!(visual_count, 1);
+            let mut query = world.query::<(
+                &Building3dVisual,
+                &Mesh3d,
+                &MeshMaterial3d<hw_visual::TopDownStructuralMaterial>,
+                &MeshTag,
+                &Transform,
+            )>();
+            let rows = query.iter(&world).collect::<Vec<_>>();
+            assert_eq!(rows.len(), 1);
+            let (visual, mesh, material, _, transform) = rows[0];
+            assert_eq!(visual.owner, owner);
+            assert_eq!(&mesh.0, &wall_mesh);
+            assert_eq!(&material.0, expected_material);
+            assert_eq!(
+                transform.translation,
+                Vec3::new(pos2d.x, TILE_SIZE * 0.5, -pos2d.y)
             );
         }
     }

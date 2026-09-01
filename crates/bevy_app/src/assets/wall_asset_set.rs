@@ -760,6 +760,40 @@ fn initialize_material_handles(
     }
 }
 
+fn refresh_material_handles(
+    assets: &ResolvedProductionWallAssets,
+    indoor_light_field: Handle<Image>,
+    pool: &mut ProductionWallMaterialPool,
+    structural_materials: &mut Assets<TopDownStructuralMaterial>,
+) -> bool {
+    if pool.identity.as_ref() == Some(&assets.identity) {
+        return false;
+    }
+    if let Some(handle) = pool.complete.take() {
+        structural_materials.remove(handle.id());
+    }
+    if let Some(handle) = pool.provisional.take() {
+        structural_materials.remove(handle.id());
+    }
+    *pool = initialize_material_handles(assets, indoor_light_field, structural_materials);
+    true
+}
+
+fn apply_readiness_transition(
+    readiness: &mut WallAssetReadiness,
+    next_state: WallAssetReadinessState,
+    next_normal: WallOptionalAssetState,
+) {
+    if readiness.state != next_state {
+        readiness.state = next_state;
+        readiness.activation_revision = readiness.activation_revision.wrapping_add(1);
+    }
+    if readiness.candidate_normal != next_normal {
+        readiness.candidate_normal = next_normal;
+        readiness.candidate_normal_revision = readiness.candidate_normal_revision.wrapping_add(1);
+    }
+}
+
 #[derive(SystemParam)]
 pub struct WallAssetReadinessParams<'w> {
     asset_server: Res<'w, AssetServer>,
@@ -791,19 +825,12 @@ pub fn update_wall_asset_readiness_system(
             .resolved
             .as_ref()
             .expect("resolved Wall assets were initialized above");
-        if params.materials.identity.as_ref() != Some(&identity) {
-            if let Some(handle) = params.materials.complete.take() {
-                params.structural_materials.remove(handle.id());
-            }
-            if let Some(handle) = params.materials.provisional.take() {
-                params.structural_materials.remove(handle.id());
-            }
-            *params.materials = initialize_material_handles(
-                resolved,
-                params.indoor_light.handle().clone(),
-                &mut params.structural_materials,
-            );
-        }
+        refresh_material_handles(
+            resolved,
+            params.indoor_light.handle().clone(),
+            &mut params.materials,
+            &mut params.structural_materials,
+        );
     }
     let resolved = params.pool.resolved.as_ref();
     let material_state = if resolved.is_some()
@@ -840,14 +867,7 @@ pub fn update_wall_asset_readiness_system(
         manifest.map(|value| value.candidate_normal_verification),
         candidate_normal_load,
     );
-    if readiness.state != next_state {
-        readiness.state = next_state;
-        readiness.activation_revision = readiness.activation_revision.wrapping_add(1);
-    }
-    if readiness.candidate_normal != next_normal {
-        readiness.candidate_normal = next_normal;
-        readiness.candidate_normal_revision = readiness.candidate_normal_revision.wrapping_add(1);
-    }
+    apply_readiness_transition(&mut readiness, next_state, next_normal);
 }
 
 #[cfg(test)]
@@ -1070,6 +1090,137 @@ mod tests {
             aggregate_state(&candidate_policy(Some(&manifest)), Some(&manifest), failed),
             WallAssetReadinessState::Fallback(WallAssetFallbackReason::LoadFailed)
         );
+    }
+
+    #[test]
+    fn readiness_revisions_change_once_per_observable_transition() {
+        let manifest = fixture();
+        let eligible = WallAssetReadinessState::Eligible {
+            asset_set_generation: manifest.asset_set_generation,
+            authority: manifest.authority,
+            manifest_sha256: manifest.manifest_sha256.clone(),
+        };
+        let mut readiness = WallAssetReadiness::default();
+        let session_id = readiness.session_id;
+
+        apply_readiness_transition(
+            &mut readiness,
+            WallAssetReadinessState::Loading,
+            WallOptionalAssetState::Loading,
+        );
+        assert_eq!(readiness.activation_revision, 0);
+        assert_eq!(readiness.candidate_normal_revision, 0);
+
+        apply_readiness_transition(
+            &mut readiness,
+            WallAssetReadinessState::Fallback(WallAssetFallbackReason::CandidateDisabled),
+            WallOptionalAssetState::Loading,
+        );
+        assert_eq!(readiness.activation_revision, 1);
+        assert_eq!(readiness.candidate_normal_revision, 0);
+
+        apply_readiness_transition(
+            &mut readiness,
+            eligible.clone(),
+            WallOptionalAssetState::Ready,
+        );
+        assert_eq!(readiness.activation_revision, 2);
+        assert_eq!(readiness.candidate_normal_revision, 1);
+
+        apply_readiness_transition(&mut readiness, eligible, WallOptionalAssetState::Ready);
+        assert_eq!(readiness.activation_revision, 2);
+        assert_eq!(readiness.candidate_normal_revision, 1);
+
+        apply_readiness_transition(
+            &mut readiness,
+            WallAssetReadinessState::Fallback(WallAssetFallbackReason::LoadFailed),
+            WallOptionalAssetState::Failed,
+        );
+        assert_eq!(readiness.activation_revision, 3);
+        assert_eq!(readiness.candidate_normal_revision, 2);
+        assert_eq!(readiness.session_id, session_id);
+    }
+
+    #[test]
+    fn production_material_pair_is_finite_and_keeps_light_field_binding() {
+        let mut images = Assets::<Image>::default();
+        let albedo = images.add(Image::default());
+        let emissive = images.add(Image::default());
+        let normal = images.add(Image::default());
+        let indoor_light = images.add(Image::default());
+        let mut materials = Assets::<TopDownStructuralMaterial>::default();
+        let mut pool = ProductionWallMaterialPool::default();
+        let mut assets = ResolvedProductionWallAssets {
+            identity: WallAssetSetIdentity::from(&fixture()),
+            meshes: std::array::from_fn(|_| Handle::default()),
+            albedo: albedo.clone(),
+            emissive: emissive.clone(),
+            normal: Some(normal.clone()),
+            candidate_normal: None,
+        };
+
+        assert!(refresh_material_handles(
+            &assets,
+            indoor_light.clone(),
+            &mut pool,
+            &mut materials,
+        ));
+        assert_eq!(materials.len(), 2);
+        let first_complete = pool.complete.clone().expect("complete material handle");
+        let first_provisional = pool
+            .provisional
+            .clone()
+            .expect("provisional material handle");
+
+        for handle in [&first_complete, &first_provisional] {
+            let material = materials.get(handle).expect("production Wall material");
+            assert_eq!(material.base.base_color_texture.as_ref(), Some(&albedo));
+            assert_eq!(material.base.emissive_texture.as_ref(), Some(&emissive));
+            assert_eq!(material.base.normal_map_texture.as_ref(), Some(&normal));
+            assert_eq!(
+                material.extension.indoor_light_field.as_ref(),
+                Some(&indoor_light)
+            );
+        }
+        assert_eq!(
+            materials
+                .get(&first_complete)
+                .expect("complete material")
+                .base
+                .alpha_mode,
+            AlphaMode::Opaque
+        );
+        assert_eq!(
+            materials
+                .get(&first_provisional)
+                .expect("provisional material")
+                .base
+                .alpha_mode,
+            AlphaMode::Blend
+        );
+
+        assert!(!refresh_material_handles(
+            &assets,
+            indoor_light.clone(),
+            &mut pool,
+            &mut materials,
+        ));
+        assert_eq!(pool.complete.as_ref(), Some(&first_complete));
+        assert_eq!(pool.provisional.as_ref(), Some(&first_provisional));
+        assert_eq!(materials.len(), 2);
+
+        assets.identity.asset_set_generation += 1;
+        assert!(refresh_material_handles(
+            &assets,
+            indoor_light,
+            &mut pool,
+            &mut materials,
+        ));
+        assert_eq!(materials.len(), 2);
+        assert!(materials.get(&first_complete).is_none());
+        assert!(materials.get(&first_provisional).is_none());
+        assert_ne!(pool.complete.as_ref(), Some(&first_complete));
+        assert_ne!(pool.provisional.as_ref(), Some(&first_provisional));
     }
 
     #[test]
