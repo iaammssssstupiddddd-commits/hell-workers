@@ -17,7 +17,7 @@ use hw_jobs::{
     SandPile,
 };
 use hw_visual::visual3d::Building3dVisual;
-use hw_world::{Room, RoomBoundaryLookup, RoomTileLookup, Yard};
+use hw_world::{DoorVisualHandles, Room, RoomBoundaryLookup, RoomTileLookup, Yard};
 
 #[cfg(feature = "profiling")]
 use hw_soul_ai::soul_ai::update::slow_simulation::SLOW_SIMULATION_STEP;
@@ -1545,6 +1545,7 @@ type IndoorLightOwnedItemsQuery<'w, 's> = Query<
 
 #[derive(SystemParam)]
 pub(super) struct IndoorLightAuditQueries<'w, 's> {
+    config: Res<'w, PerfScenarioConfig>,
     state: Res<'w, IndoorLightFixtureState>,
     q_buildings: IndoorLightBuildingQuery<'w, 's>,
     q_sprites: Query<'w, 's, &'static Sprite>,
@@ -1566,6 +1567,7 @@ pub(super) struct IndoorLightAuditQueries<'w, 's> {
     q_sand_piles: Query<'w, 's, (), With<SandPile>>,
     q_bone_piles: Query<'w, 's, (), With<BonePile>>,
     q_wheelbarrow_parking: Query<'w, 's, &'static WheelbarrowParking>,
+    door_handles: Res<'w, DoorVisualHandles>,
 }
 
 #[derive(SystemParam)]
@@ -1610,6 +1612,7 @@ pub(crate) struct IndoorLightValidationParams<'w, 's> {
     q_sand_piles: Query<'w, 's, (), With<SandPile>>,
     q_bone_piles: Query<'w, 's, (), With<BonePile>>,
     q_wheelbarrow_parking: Query<'w, 's, &'static WheelbarrowParking>,
+    door_handles: Res<'w, DoorVisualHandles>,
 }
 
 #[derive(Clone)]
@@ -1624,6 +1627,7 @@ struct ObservedBuilding {
     unpowered: bool,
     root_sprite: bool,
     child_sprites: usize,
+    child_images: Vec<Handle<Image>>,
     owner_visuals: usize,
 }
 
@@ -1722,6 +1726,13 @@ pub(crate) fn validate_indoor_light_fixture_system(mut p: IndoorLightValidationP
                         .filter(|child| p.q_sprites.contains(*child))
                         .count()
                 }),
+                child_images: children.map_or_else(Vec::new, |children| {
+                    children
+                        .iter()
+                        .filter_map(|child| p.q_sprites.get(child).ok())
+                        .map(|sprite| sprite.image.clone())
+                        .collect()
+                }),
                 owner_visuals: p
                     .q_visuals
                     .iter()
@@ -1811,17 +1822,31 @@ fn validate_observed_fixture(
         .map(|spec| {
             let building = exact_building(BuildingType::Door, spec.grid)?;
             assert_presentation(building)?;
+            let expected_image = if spec.state == hw_core::world::DoorState::Open {
+                &p.door_handles.door_open
+            } else {
+                &p.door_handles.door_closed
+            };
+            let image_contract_required = !p.config.is_field_core()
+                && p.config
+                    .rtt_light_selection()
+                    .is_none_or(|selection| selection.stage_id() != "p08");
             if building.door_state != Some(spec.state)
+                || (image_contract_required
+                    && building.child_images != [expected_image.clone()])
                 || p.world_map.door_entity(spec.grid.0, spec.grid.1) != Some(building.entity)
                 || p.world_map.door_state(spec.grid.0, spec.grid.1) != Some(spec.state)
                 || p.world_map.is_walkable(spec.grid.0, spec.grid.1)
                     != (spec.state != hw_core::world::DoorState::Locked)
             {
+                let image_matches = building.child_images == [expected_image.clone()];
                 return Err(format!(
-                    "Door at {:?} differs from static {:?} contract: state={:?}, owner={:?}, map_state={:?}, walkable={}",
+                    "Door at {:?} differs from static {:?} contract: state={:?}, image_required={}, image_matches={}, owner={:?}, map_state={:?}, walkable={}",
                     spec.grid,
                     spec.state,
                     building.door_state,
+                    image_contract_required,
+                    image_matches,
                     p.world_map.door_entity(spec.grid.0, spec.grid.1),
                     p.world_map.door_state(spec.grid.0, spec.grid.1),
                     p.world_map.is_walkable(spec.grid.0, spec.grid.1),
@@ -2630,7 +2655,24 @@ pub(super) fn collect_indoor_light_audit_records(
                 let state = expected
                     .door_state
                     .ok_or_else(|| "tracked Door is missing expected state".to_string())?;
+                let expected_image = if state == hw_core::world::DoorState::Open {
+                    &q.door_handles.door_open
+                } else {
+                    &q.door_handles.door_closed
+                };
+                let child_images = children.map_or_else(Vec::new, |children| {
+                    children
+                        .iter()
+                        .filter_map(|child| q.q_sprites.get(child).ok())
+                        .map(|sprite| sprite.image.clone())
+                        .collect::<Vec<_>>()
+                });
+                let image_contract_required = q
+                    .config
+                    .rtt_light_selection()
+                    .is_none_or(|selection| selection.stage_id() != "p08");
                 if door.map(|door| door.state) != Some(state)
+                    || (image_contract_required && child_images != [expected_image.clone()])
                     || q.world_map
                         .door_entity(expected.anchor.0, expected.anchor.1)
                         != Some(entity)

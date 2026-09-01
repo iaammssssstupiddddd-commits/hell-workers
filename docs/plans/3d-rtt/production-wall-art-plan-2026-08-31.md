@@ -422,12 +422,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   4N=`10.495838 (1.323651) / 13.341914 (1.645682)` ms。全runのinitial / warm-up / measure-end
   checksumはcase内で一致し、teardown warningは0だった。このartifactはCapture baselineとして使用できるが、
   draw predicateは未検証なのでRenderDoc baselineを兼ねない。
-- subject `1c136ca5`からP02 v9を開始した最初のcaseは、2026-08-20に削除済みのlegacy structural
-  Door spriteについてOpen画像handleを要求する古いfixture predicateでfail-closedになった。productionの
-  active 3D Doorはstate / material / transformを別predicateで検証済みで、`expected_presentation(Door)`も
-  child Sprite 0 / owner 3D 1を要求するため、auditとruntime validationから旧mirror画像条件だけを除去する。
-  `target/native-acceptance/p02-presentation-20260901T044343Z-344a5e7b`はinvalidのまま保持し、修正commitから
-  18 caseを最初から再採取する。
+- subject `1c136ca5`からhistorical P02 v9を再実行した最初のcaseは、P02時点で存在したlegacy structural
+  Door spriteのOpen画像handleを要求してfail-closedになった。Rust側だけ旧画像条件を除去したsubject
+  `f2699e9d`ではその検査を越えたが、Pythonのfrozen P02期待表がDoor / Tank / MudMixerのlegacy child Spriteを
+  正しく要求して停止した。これはcurrent P08 sourceをhistorical P02 subjectとして採取し直せないことの証拠であり、
+  frozen contractを現在値へ書き換えない。Rustの片側緩和は復元し、current wall visual referenceは既存の
+  registered P02 artifactと、current source専用のwall calibration profileを別artifactとして扱う。invalid job
+  `target/native-acceptance/p02-presentation-20260901T044343Z-344a5e7b`と
+  `target/native-acceptance/p02-presentation-20260901T044925Z-ec7236c5`は合格証跡へ流用しない。
 
 - 変更内容:
   - current `Cuboid` wallをproduction cameraで撮影し、source fingerprint、camera、quality、DPI、adapter、asset viewを記録する。既存P02 visual referenceと、後述の`wall-density-v1`性能baselineを別artifactにする。
@@ -859,9 +861,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `draw_groups=not-collected`のためCapture baselineとしてのみ採用（2026-09-01）。
 - M0 P02 reference初回試行（subject `1c136ca5`）:
   `target/native-acceptance/p02-presentation-20260901T044343Z-344a5e7b`は最初のHigh / DPI 1 / Render3d visibleで
-  invalid。削除済みlegacy Door child SpriteのOpen画像handleを要求するfixture predicateだけが失敗し、semantic
-  Door state / WorldMap owner / passabilityは一致。旧mirror画像条件をaudit / validationの双方から除去し、
-  focused profiling testとworkspace checkをpass（2026-09-01）。
+  invalid。P02時点のlegacy Door child SpriteのOpen画像handleを要求し、semantic Door state / WorldMap owner /
+  passabilityは一致（2026-09-01）。
+- M0 historical P02仮説確認（subject `f2699e9d`）:
+  `target/native-acceptance/p02-presentation-20260901T044925Z-ec7236c5`は同caseのproduction phase PNG 10枚を
+  採取した後、Python frozen期待表がDoor / Tank / MudMixerのlegacy child Sprite不足を検出してinvalid。
+  current P08 sourceへP02値を上書きする仮説を打ち切り、Rust validatorの片側緩和を復元。registered historical
+  P02 artifactとcurrent wall calibrationを分離する（2026-09-01）。
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
