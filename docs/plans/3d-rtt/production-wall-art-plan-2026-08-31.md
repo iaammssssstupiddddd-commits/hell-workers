@@ -383,8 +383,12 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   completed / provisional、20列・5 cell stride、16 mask、Door blueprint connector、camera scale 5を
   production wall spawn / WorldMap予約経路で構築し、embedded contract hash、phase別layout checksum、
   target / connector全行をfail-closed sidecarへ出す。profiling feature付きtest / Clippyはpass。
-- Bevy actual-window calibration phase、専用`wall_density_acceptance.py`、draw-group抽出、
-  承認済みclean baseline commitからのP02 / N / 4N正式採取は未実装・未実行。
+- `perf.py`へwall phase / exact matrix / raw sidecar再検証を統合し、専用
+  `wall_density_acceptance.py`のCapture laneを実装済み。clean commit、全asset view、source / harness、
+  binary、N / 4N×completed / provisional×3 run、p95 / p99中央値・MADをfail-closedで封印する。
+  dirty subjectではdirect `kitty`計画をblockすることまでself-test / dry-runで確認済み。
+- Bevy actual-window calibration phase、wall固有RenderDoc draw-group抽出、承認済みclean baseline commitからの
+  P02 / N / 4N正式採取は未実装・未実行。Capture profileは`draw_groups=not-collected`を明記する。
 - この中間状態をM0完了や性能baselineとして扱わず、後続M1のasset制作開始gateにも使わない。
 
 - 変更内容:
@@ -793,13 +797,18 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M0初期tooling `ruff check tools/blender_ai_workflow/scripts tools/blender_ai_workflow/tests`: `pass (2026-09-01)`
 - M0 Rust fixture `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 --features profiling wall_density -- --nocapture`: `pass (5 tests, 2026-09-01)`
 - M0 Rust fixture `python3 scripts/dev.py cargo -- clippy -p bevy_app@0.1.0 --all-targets --features profiling -- -D warnings`: `pass (2026-09-01)`
+- M0 Capture harness `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test`: `pass (2026-09-01)`
+- M0 Capture harness `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py self-test`: `pass (2026-09-01)`
+- M0 Capture harness `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/wall_density_acceptance.py self-test`: `pass (2026-09-01)`
+- M0 Capture harness exact matrix dry-run: `pass`。未コミット差分でnative `plan`が`blocked`になることも確認（2026-09-01）
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
   既存tracked `scripts/check_crate_dependencies.py`がshebang付き`100644`であるrepository hygiene違反により停止（2026-09-01）。
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
   通常ゲームの入力、表示、建築成立条件、runtime data、プレイヤー向け文言は不変（`HELL_WORKERS_DIFF_BASE=HEAD`でgate pass）。
-- 未解決エラー: OCIO mismatch、Bevy calibration / wall-density native harness・draw抽出未実装、正式baseline用の承認済みclean commitなし、
+- 初期M0 toolingはユーザー指示により`06826fd2`へ中間commit済み。ただしCapture harnessを含む凍結済みbaseline commitではない。
+- 未解決エラー: OCIO mismatch、Bevy calibration / wall固有draw抽出未実装、正式baseline用の承認済みclean commitとnative採取なし、
   上記の既存repository hygiene違反。
 
 ### Definition of Done
@@ -827,3 +836,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-08-31` | `Codex` | 32 wu placeholderから本番公称・連続最小厚9.6 wuを算出し、12.8 wu装飾外形、共通port、品質別遠景／Door／占有の検証契約を追加 |
 | `2026-09-01` | `Codex` | readinessとtopology activationを分離し、OCIO陽性証明、post-export / manifest gate、clean worktree、順次A/B、再現可能なN / 4N性能lane、world-replaceを具体化。M1→M4のasset再封印、receipt検証、immutable generation＋単一pointerのdurable promoteまで閉じた |
 | `2026-09-01` | `Codex` | M0を開始。geometry / density / color fixture、Blender calibration renderer、offline CIEDE2000 verifierとunit testを追加し、現行OCIO fallbackをfail-closedで検出する初期toolingを実装 |
+| `2026-09-01` | `Codex` | M0 Capture laneを実装。`perf.py`へwall phaseとraw sidecar再検証を追加し、専用native profileでclean subject / asset view / 12 run / median・MADを封印。draw-groupは未採取として分離 |

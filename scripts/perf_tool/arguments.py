@@ -33,9 +33,11 @@ def add_run_arguments(
             "indoor-light",
             "deconstruction",
             "save-transaction",
+            "wall-density",
         ],
     )
     parser.add_argument("--contract", choices=sorted(CONTRACT_FILES))
+    parser.add_argument("--wall-phase", choices=["completed", "provisional"])
     parser.add_argument("--stage", choices=RTT_LIGHT_STAGES)
     parser.add_argument("--lane", choices=RTT_LIGHT_LANES)
     parser.add_argument("--sizes", default="medium", help="comma-separated: small,medium,large")
@@ -423,6 +425,50 @@ def validate_arguments(args: argparse.Namespace) -> None:
             "task-dashboard requires familiar policy baseline and operation dialog hidden"
         )
     selected_rtt_light = args.contract is not None or args.stage is not None or args.lane is not None
+    if args.workload == "wall-density":
+        if args.command != "run":
+            raise ValueError("wall-density is only available through perf.py run")
+        if selected_rtt_light:
+            raise ValueError("wall-density does not accept an RtT-light contract selection")
+        if args.wall_phase not in {"completed", "provisional"}:
+            raise ValueError("wall-density requires --wall-phase completed|provisional")
+        if sizes != ["small", "medium"] or renders != ["gpu"]:
+            raise ValueError("wall-density requires --sizes small,medium --renders gpu")
+        if args.seed != 20_260_901:
+            raise ValueError("wall-density requires --seed 20260901")
+        if args.repeat != 3 or args.preflight_runs != 0:
+            raise ValueError("wall-density requires --repeat 3 --preflight-runs 0")
+        if args.warmup_secs != 30.0 or args.measure_secs != 60.0:
+            raise ValueError("wall-density requires --warmup-secs 30 --measure-secs 60")
+        if args.window_backend != "x11":
+            raise ValueError("wall-density requires --window-backend x11")
+        if args.backend != "vulkan" or args.present_mode != "novsync":
+            raise ValueError("wall-density requires --backend vulkan --present-mode novsync")
+        if (
+            args.window_width != 1280
+            or args.window_height != 720
+            or args.window_scale_factor != 1.0
+            or args.rtt_quality != "high"
+        ):
+            raise ValueError(
+                "wall-density requires 1280x720, scale factor 1.0, and RtT quality high"
+            )
+        if args.instrumentation != "capture":
+            raise ValueError("wall-density frame-time runs require --instrumentation capture")
+        if (
+            familiar_policies != ["baseline"]
+            or operation_dialog_modes != ["hidden"]
+            or dashboard_modes != ["hidden"]
+        ):
+            raise ValueError(
+                "wall-density requires familiar policy baseline, operation dialog hidden, "
+                "and dashboard hidden"
+            )
+        if args.souls != 0 or args.familiars != 0:
+            raise ValueError("wall-density requires --souls 0 --familiars 0")
+        return
+    if args.wall_phase is not None:
+        raise ValueError("--wall-phase is reserved for --workload wall-density")
     if args.workload == "dream-ui-burst":
         if args.command not in {"run", "audit"}:
             raise ValueError("dream-ui-burst is available through perf.py run or audit")

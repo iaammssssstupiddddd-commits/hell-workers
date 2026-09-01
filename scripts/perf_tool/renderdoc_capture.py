@@ -47,12 +47,14 @@ SOURCE_FILES = {
     "rust-toolchain",
     "rust-toolchain.toml",
     "scripts/perf.py",
+    "tools/blender_ai_workflow/fixtures/wall-density-v1.json",
 }
 SOURCE_PREFIXES = ("crates/", "scripts/perf_tool/")
 ASSET_PREFIX = "assets/"
 MEASUREMENT_HARNESS_FILES = (
     ".codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py",
     ".codex/skills/hell-workers-run-native-acceptance/scripts/p02_presentation_acceptance.py",
+    ".codex/skills/hell-workers-run-native-acceptance/scripts/wall_density_acceptance.py",
     "scripts/build_coordination.py",
     "scripts/cargo_runtime.py",
     "scripts/perf_tool/execution.py",

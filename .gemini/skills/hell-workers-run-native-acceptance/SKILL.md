@@ -188,6 +188,28 @@ clean worktree; v9 hashes that full local asset view at plan, rechecks it before
 every case, and binds it to the manifest/revalidation. Revalidate with `verify
 --job-root <job-root>`.
 
+## Run the wall-density Capture matrix
+
+Use the dedicated wall-density profile while freezing or comparing production
+Wall performance. It runs the exact `wall-density-v1` Small=N and Medium=4N
+fixture for completed and provisional walls, with three 30/60-second runs per
+case on High/DPI 1/Vulkan/X11:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_density_acceptance.py \
+  plan --repo "$PWD" --adapter Intel
+```
+
+Run only the returned direct `kitty` command and poll `status --job-root
+<job-root>` every 15–30 seconds. The profile rejects dirty subjects, source or
+harness drift, asset-view drift, wrong window/adapter settings, missing runs,
+and any raw fixture/layout/CSV mismatch. It recalculates validation and records
+the p95/p99 median and MAD for all 12 Capture runs. This profile intentionally
+reports `draw_groups=not-collected`; it does not satisfy the Wall M0 RenderDoc
+draw-group gate until that separate evidence is added. Revalidate a completed
+Capture bundle with `verify --job-root <job-root>`.
+
 ## Run the RtT-light migration recipe
 
 Use this path for the frozen `rtt-light-v1` baseline. Do not substitute a

@@ -88,6 +88,7 @@ def _run_suite(args: argparse.Namespace) -> int:
             operation_dialog,
             dashboard_mode,
             behavior_case,
+            args.wall_phase,
         )
         for size in sizes
         for render in renders
@@ -113,6 +114,11 @@ def _run_suite(args: argparse.Namespace) -> int:
                     ""
                     if case.behavior_case is None
                     else f" --perf-behavior-case {case.behavior_case}"
+                )
+                + (
+                    ""
+                    if case.wall_phase is None
+                    else f" --perf-wall-phase {case.wall_phase}"
                 )
             )
         return 0

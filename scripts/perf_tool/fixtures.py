@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import csv
 import json
 import re
 import tempfile
 from types import SimpleNamespace
 
 from .compare import *
-from .artifacts import read_indoor_light_gpu
+from .artifacts import read_indoor_light_gpu, read_wall_density_sidecars
 from .arguments import DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING
+from .model import WALL_DENSITY_CASES, WALL_DENSITY_CONTRACT_SHA256, WALL_DENSITY_LAYOUT_COLUMNS
 from .rtt_light_contract import (
     contract_fingerprints,
     expected_formal_cases,
@@ -3970,6 +3972,94 @@ def self_test() -> int:
             pass
         else:
             raise AssertionError("stale P08 cross-consumer sidecar unexpectedly passed")
+
+        wall_data = root / "wall-density-sidecars"
+        wall_data.mkdir()
+        wall_case = Case(
+            "wall-density", "small", "gpu", 20_260_901, None, None,
+            wall_phase="completed",
+        )
+        assert wall_case.identifier == "wall-density-small-gpu-seed-20260901-wall-completed"
+        assert wall_case.identifier != Case(
+            "wall-density", "small", "gpu", 20_260_901, None, None,
+            wall_phase="provisional",
+        ).identifier
+        write_json(
+            wall_data / "wall_density_fixture.json",
+            {
+                "schema_version": 1,
+                "contract_id": "wall-density-v1",
+                "contract_sha256": WALL_DENSITY_CONTRACT_SHA256,
+                "layout_checksum": WALL_DENSITY_CASES[("small", "completed")][4],
+                "target_size": "N",
+                "perf_size": "small",
+                "phase": "completed",
+                "target_wall_count": 96,
+                "connector_count": 192,
+                "mask_counts": {f"{mask:04b}": 6 for mask in range(16)},
+                "grid": {"origin": [2, 2], "stride": [5, 5], "columns": 20},
+                "camera_scale": 5.0,
+            },
+        )
+        wall_rows: list[dict[str, str]] = []
+        connector_ordinal = 0
+        for ordinal in range(96):
+            grid_x = 2 + (ordinal % 20) * 5
+            grid_y = 2 + (ordinal // 20) * 5
+            mask = ordinal % 16
+            common = {
+                "schema_version": "1",
+                "target_ordinal": str(ordinal),
+                "mask": f"{mask:04b}",
+                "phase": "completed",
+            }
+            wall_rows.append(common | {
+                "record_kind": "target",
+                "ordinal": str(ordinal),
+                "grid_x": str(grid_x),
+                "grid_y": str(grid_y),
+                "direction": "",
+            })
+            for bit, direction, offset_x, offset_y in (
+                (0b1000, "N", 0, 1),
+                (0b0100, "S", 0, -1),
+                (0b0010, "W", -1, 0),
+                (0b0001, "E", 1, 0),
+            ):
+                if mask & bit == 0:
+                    continue
+                wall_rows.append(common | {
+                    "record_kind": "connector",
+                    "ordinal": str(connector_ordinal),
+                    "grid_x": str(grid_x + offset_x),
+                    "grid_y": str(grid_y + offset_y),
+                    "direction": direction,
+                })
+                connector_ordinal += 1
+        with (wall_data / "wall_density_layout.csv").open(
+            "w", newline="", encoding="utf-8"
+        ) as handle:
+            writer = csv.DictWriter(handle, fieldnames=WALL_DENSITY_LAYOUT_COLUMNS)
+            writer.writeheader()
+            writer.writerows(wall_rows)
+        wall_fixture, parsed_wall_rows, wall_errors = read_wall_density_sidecars(
+            wall_data, expected_case=wall_case,
+        )
+        assert not wall_errors
+        assert wall_fixture is not None and parsed_wall_rows == wall_rows
+        wall_rows[-1]["grid_x"] = "0"
+        with (wall_data / "wall_density_layout.csv").open(
+            "w", newline="", encoding="utf-8"
+        ) as handle:
+            writer = csv.DictWriter(handle, fieldnames=WALL_DENSITY_LAYOUT_COLUMNS)
+            writer.writeheader()
+            writer.writerows(wall_rows)
+        _, _, wall_errors = read_wall_density_sidecars(
+            wall_data, expected_case=wall_case,
+        )
+        assert wall_errors == [
+            "wall_density_layout.csv rows differ from the frozen row-major layout"
+        ]
 
         from .renderdoc_foundation import run_self_test as renderdoc_foundation_self_test
 

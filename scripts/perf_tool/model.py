@@ -121,6 +121,38 @@ DREAM_UI_METRICS_COLUMNS = (
     "lifetime_checksum",
     "maximum_active_particles",
 )
+WALL_DENSITY_CONTRACT_SHA256 = (
+    "7b32f4e0ecd9cdb9223cde1b7f5aae93460e3ec861b2e3ae0e1eb2e2b87419c8"
+)
+WALL_DENSITY_LAYOUT_COLUMNS = (
+    "schema_version",
+    "record_kind",
+    "ordinal",
+    "target_ordinal",
+    "grid_x",
+    "grid_y",
+    "mask",
+    "direction",
+    "phase",
+)
+WALL_DENSITY_CASES = {
+    ("small", "completed"): (
+        "N", 96, 192, 6,
+        "2d6ebb05e0ddea502fa49ac832991f4dcd7e1c6109149cebd7c62d61bedd64bf",
+    ),
+    ("small", "provisional"): (
+        "N", 96, 192, 6,
+        "436cf15c38d26909d22dc36bfcc1118bcc04ba0aeb499b6308080e80172e6788",
+    ),
+    ("medium", "completed"): (
+        "4N", 384, 768, 24,
+        "bea0ceea470cb3e409bd17113b4b89923c81c9114f967f9019f765c9d4b7b642",
+    ),
+    ("medium", "provisional"): (
+        "4N", 384, 768, 24,
+        "9587bebc53d564b3e0d6ccbdea176c6c0c2b4165ffcafbd4caed82887a399c90",
+    ),
+}
 DECONSTRUCTION_FIXTURE_COLUMNS = (
     "schema_version",
     "initial_completed_buildings",
@@ -524,6 +556,7 @@ class Case:
     operation_dialog: str = "hidden"
     dashboard_mode: str = "hidden"
     behavior_case: str | None = None
+    wall_phase: str | None = None
 
     @property
     def identifier(self) -> str:
@@ -544,9 +577,11 @@ class Case:
         behavior_case = (
             "" if self.behavior_case is None else f"-behavior-{self.behavior_case}"
         )
+        wall_phase = "" if self.wall_phase is None else f"-wall-{self.wall_phase}"
         return (
             f"{self.workload}-{self.size}-{self.render}-seed-{self.seed}"
             f"{population}{familiar_policy}{operation_dialog}{dashboard_mode}{behavior_case}"
+            f"{wall_phase}"
         )
 
 
@@ -575,6 +610,8 @@ class Validation:
     deconstruction_fixture: dict[str, str] | None = None
     save_transaction: dict[str, str] | None = None
     dream_ui_metrics: dict[str, str] | None = None
+    wall_density_fixture: dict[str, Any] | None = None
+    wall_density_layout: list[dict[str, str]] | None = None
     timeline: list[dict[str, Any]] | None = None
     behavior_save_artifact: dict[str, Any] | None = None
     profile_artifact: dict[str, Any] | None = None
@@ -604,6 +641,8 @@ class Validation:
             "deconstruction_fixture": self.deconstruction_fixture,
             "save_transaction": self.save_transaction,
             "dream_ui_metrics": self.dream_ui_metrics,
+            "wall_density_fixture": self.wall_density_fixture,
+            "wall_density_layout": self.wall_density_layout,
             "timeline": self.timeline,
             "behavior_save_artifact": self.behavior_save_artifact,
             "profile_artifact": self.profile_artifact,
