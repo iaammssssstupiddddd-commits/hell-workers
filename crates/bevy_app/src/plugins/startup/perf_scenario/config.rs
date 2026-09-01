@@ -934,6 +934,7 @@ impl PerfScenarioConfig {
         }
         #[cfg(feature = "profiling-renderdoc")]
         if renderdoc_capture
+            && workload != PerfWorkload::WallDensity
             && (workload != PerfWorkload::IndoorLight
                 || !rtt_light.is_some_and(PerfRttLightSelection::supports_renderdoc_capture)
                 || size != PerfScenarioSize::Medium
@@ -946,7 +947,7 @@ impl PerfScenarioConfig {
                 || rtt_quality != Some(RttQualityPreset::High))
         {
             return Err(PerfScenarioConfigError(
-                "--perf-renderdoc-capture requires rtt-light-v1/current|p01|p02|p03|p04|p05/static medium/gpu/fixed, an output directory, and the exact 1920x1080/scale-1/high window contract"
+                "--perf-renderdoc-capture requires either the exact wall-density contract or rtt-light-v1/current|p01|p02|p03|p04|p05/static medium/gpu/fixed with an output directory and the exact 1920x1080/scale-1/high window contract"
                     .to_string(),
             ));
         }

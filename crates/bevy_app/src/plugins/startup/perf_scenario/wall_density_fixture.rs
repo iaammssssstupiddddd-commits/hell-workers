@@ -132,6 +132,15 @@ pub(super) struct WallDensityProbeSubject<'a> {
     pub(super) phase: PerfWallPhase,
 }
 
+pub(super) struct WallDensityRenderDocEvidence {
+    pub(super) target_entities: Vec<Entity>,
+    pub(super) layout_checksum: String,
+    pub(super) phase: PerfWallPhase,
+    pub(super) target_wall_count: usize,
+    pub(super) connector_count: usize,
+    pub(super) mask_counts: BTreeMap<String, usize>,
+}
+
 impl WallDensityFixtureState {
     pub(super) fn actual_window_subject(&self) -> Option<WallDensityProbeSubject<'_>> {
         let layout = self
@@ -216,6 +225,39 @@ impl WallDensityFixtureState {
             }
         }
         Ok((summary, csv))
+    }
+
+    pub(super) fn renderdoc_evidence(&self) -> Result<WallDensityRenderDocEvidence, String> {
+        if self.phase != WallDensityFixturePhase::Ready {
+            return Err(format!(
+                "wall-density RenderDoc evidence requested in {:?} phase",
+                self.phase
+            ));
+        }
+        let layout = self
+            .layout
+            .as_ref()
+            .ok_or_else(|| "wall-density Ready state has no layout".to_string())?;
+        let target_entities = layout
+            .specimens
+            .iter()
+            .map(|specimen| {
+                specimen.wall.ok_or_else(|| {
+                    format!(
+                        "wall-density target {} has no RenderDoc entity",
+                        specimen.ordinal
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(WallDensityRenderDocEvidence {
+            target_entities,
+            layout_checksum: layout.layout_checksum.clone(),
+            phase: layout.phase,
+            target_wall_count: layout.specimens.len(),
+            connector_count: layout.connector_count(),
+            mask_counts: layout.mask_counts(),
+        })
     }
 }
 

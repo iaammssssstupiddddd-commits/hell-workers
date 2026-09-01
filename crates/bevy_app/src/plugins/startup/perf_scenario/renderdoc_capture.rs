@@ -22,6 +22,7 @@ use bevy::render::{Render, RenderApp, RenderSystems};
 use bevy::shader::{Shader, ShaderCacheError};
 use libloading::Library;
 use serde::Serialize;
+use std::collections::{BTreeMap, HashSet};
 use std::ffi::{CStr, CString, c_void};
 use std::path::{Path, PathBuf};
 use std::ptr;
@@ -32,6 +33,8 @@ const RENDERDOC_GATE_TIMEOUT_FRAMES: u32 = 600;
 const RENDERDOC_CHECKPOINT_NAME: &str = "indoor-light-fixture-ready-v1";
 const RENDERDOC_REQUESTED_API_VERSION: &str = "1.6.0";
 const RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 4;
+const WALL_RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION: u32 = 1;
+const WALL_RENDERDOC_CHECKPOINT_NAME: &str = "wall-density-fixture-ready-v1";
 const RENDERDOC_SELECTOR_STRATEGY: &str = "wgpu_device_null_window";
 const SIMULATION_TICK_SOURCE: &str = "perf_capture.fixed_update_tick";
 const RTT_SCENE_LABEL: &str = "hell-workers-rtt-scene";
@@ -65,6 +68,10 @@ struct CpuCheckpointSignature {
 
 #[derive(Clone, Debug)]
 struct StableRenderDocCheckpoint {
+    schema_version: u32,
+    contract_id: &'static str,
+    stage_id: String,
+    checkpoint_name: &'static str,
     generation: u64,
     simulation_tick: u64,
     scene_target: AssetId<Image>,
@@ -74,6 +81,7 @@ struct StableRenderDocCheckpoint {
     runtime_field: Option<RuntimeFieldEvidence>,
     gpu_light_field: Option<RuntimeGpuLightFieldEvidence>,
     cross_consumer: Option<RuntimeCrossConsumerEvidence>,
+    wall_density: Option<RuntimeWallDensityEvidence>,
     receiver_fragment_shaders: Option<[AssetId<Shader>; 4]>,
     receiver_import_shaders: Option<[(AssetId<Shader>, Shader); 2]>,
     fixture: RuntimeFixtureEvidence,
@@ -81,7 +89,7 @@ struct StableRenderDocCheckpoint {
 
 #[derive(Clone, Debug, Serialize)]
 struct RuntimeFixtureEvidence {
-    fixture_checksum: &'static str,
+    fixture_checksum: String,
     rooms: usize,
     completed_floors: usize,
     completed_walls: usize,
@@ -163,6 +171,25 @@ struct RuntimeCrossConsumerEvidence {
     room_field_revision_match_count: u32,
     room_topology_match_count: u32,
     revision_epoch_consistency: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct RuntimeWallDensityEvidence {
+    schema_version: u32,
+    contract_sha256: &'static str,
+    layout_checksum: String,
+    target_size: &'static str,
+    perf_size: &'static str,
+    phase: &'static str,
+    target_wall_count: usize,
+    connector_count: usize,
+    mask_counts: BTreeMap<String, usize>,
+    wall_mesh_index_count: usize,
+    mesh_handle_match_count: usize,
+    material_handle_match_count: usize,
+    structural_visual_count: usize,
+    mesh_resident: bool,
+    material_resident: bool,
 }
 
 #[derive(Resource, Clone, Default, ExtractResource)]
@@ -347,6 +374,7 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     rtt_runtime: Res<'w, RttRuntime>,
     render_environment: Res<'w, PerfRenderEnvironmentEvidence>,
     indoor_light_fixture: Res<'w, IndoorLightFixtureState>,
+    wall_density_fixture: Res<'w, super::wall_density_fixture::WallDensityFixtureState>,
     asset_server: Res<'w, AssetServer>,
     shaders: Res<'w, Assets<Shader>>,
     receiver_shaders: Res<'w, RenderDocReceiverShaders>,
@@ -360,6 +388,16 @@ pub(crate) struct RenderDocCheckpointParams<'w, 's> {
     building_3d_handles: Res<'w, crate::plugins::startup::Building3dHandles>,
     terrain_3d_handles: Res<'w, crate::plugins::startup::Terrain3dHandles>,
     structural_materials: Res<'w, Assets<hw_visual::TopDownStructuralMaterial>>,
+    meshes: Res<'w, Assets<Mesh>>,
+    wall_visuals: Query<
+        'w,
+        's,
+        (
+            &'static hw_visual::visual3d::Building3dVisual,
+            &'static Mesh3d,
+            &'static MeshMaterial3d<hw_visual::TopDownStructuralMaterial>,
+        ),
+    >,
     terrain_materials: Res<'w, Assets<hw_visual::TerrainSurfaceMaterial>>,
     terrain_materials_lod1_lite: Res<'w, Assets<hw_visual::TerrainSurfaceMaterialLod1Lite>>,
     terrain_materials_lod2: Res<'w, Assets<hw_visual::TerrainSurfaceMaterialLod2>>,
@@ -496,6 +534,18 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
             bridge.replace(RenderDocBridgeState::Failed(reason));
             return;
         }
+    }
+
+    if params.config.workload == PerfWorkload::WallDensity {
+        match build_wall_renderdoc_checkpoint(&params, &mut state) {
+            Ok(Some(checkpoint)) => {
+                mailbox.0 = Some(checkpoint);
+                eprintln!("PERF_RENDERDOC: Wall CPU checkpoint ready; waiting for GPU settle");
+            }
+            Ok(None) => {}
+            Err(reason) => bridge.replace(RenderDocBridgeState::Failed(reason)),
+        }
+        return;
     }
 
     let Some(selection) = params.config.rtt_light_selection() else {
@@ -685,7 +735,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         return;
     };
     let fixture = RuntimeFixtureEvidence {
-        fixture_checksum: observation.layout_checksum,
+        fixture_checksum: observation.layout_checksum.to_string(),
         rooms: observation.rooms,
         completed_floors: observation.floors,
         completed_walls: observation.walls,
@@ -696,6 +746,10 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
 
     state.next_generation = state.next_generation.saturating_add(1);
     mailbox.0 = Some(StableRenderDocCheckpoint {
+        schema_version: RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION,
+        contract_id: selection.contract_id(),
+        stage_id: selection.stage_id().to_string(),
+        checkpoint_name: RENDERDOC_CHECKPOINT_NAME,
         generation: state.next_generation,
         simulation_tick: params.capture.fixed_update_tick(),
         scene_target: signature.scene_target,
@@ -705,6 +759,7 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         runtime_field,
         gpu_light_field,
         cross_consumer,
+        wall_density: None,
         receiver_fragment_shaders: selection
             .uses_gpu_light_field()
             .then(|| params.receiver_shaders.fragment_shader_ids()),
@@ -712,6 +767,129 @@ pub(crate) fn arm_renderdoc_checkpoint_system(
         fixture,
     });
     eprintln!("PERF_RENDERDOC: CPU checkpoint ready; waiting for GPU settle");
+}
+
+fn build_wall_renderdoc_checkpoint(
+    params: &RenderDocCheckpointParams<'_, '_>,
+    state: &mut RenderDocMainState,
+) -> Result<Option<StableRenderDocCheckpoint>, String> {
+    use super::wall_density_fixture::{CONTRACT_ID, CONTRACT_SHA256};
+
+    let evidence = params.wall_density_fixture.renderdoc_evidence()?;
+    let checksum = calculate_checksum(&params.checksum_queries);
+    if checksum.souls != 0 || checksum.familiars != 0 {
+        return Err("wall-density RenderDoc fixture contains actors".to_string());
+    }
+    let render_inventory = calculate_render_inventory(&params.checksum_queries);
+    validate_wall_render_inventory(render_inventory)?;
+    let target_entities = evidence
+        .target_entities
+        .iter()
+        .copied()
+        .collect::<HashSet<_>>();
+    let expected_material = match evidence.phase {
+        PerfWallPhase::Completed => &params.building_3d_handles.wall_material,
+        PerfWallPhase::Provisional => &params.building_3d_handles.wall_provisional_material,
+    };
+    let mut mesh_handle_match_count = 0usize;
+    let mut material_handle_match_count = 0usize;
+    let mut structural_visual_count = 0usize;
+    for (visual, mesh, material) in &params.wall_visuals {
+        structural_visual_count += 1;
+        if !target_entities.contains(&visual.owner) {
+            return Err(
+                "wall-density RenderDoc world contains a non-target structural visual".to_string(),
+            );
+        }
+        mesh_handle_match_count +=
+            usize::from(mesh.0.id() == params.building_3d_handles.wall_mesh.id());
+        material_handle_match_count += usize::from(material.0.id() == expected_material.id());
+    }
+    if structural_visual_count != evidence.target_wall_count
+        || mesh_handle_match_count != evidence.target_wall_count
+        || material_handle_match_count != evidence.target_wall_count
+    {
+        return Err("wall-density RenderDoc mesh/material ownership differs".to_string());
+    }
+    let mesh = params
+        .meshes
+        .get(&params.building_3d_handles.wall_mesh)
+        .ok_or_else(|| "wall-density RenderDoc wall mesh is not resident".to_string())?;
+    let wall_mesh_index_count = mesh
+        .indices()
+        .map(|indices| indices.len())
+        .ok_or_else(|| "wall-density RenderDoc wall mesh is not indexed".to_string())?;
+    let material_resident = params.structural_materials.contains(expected_material.id());
+    if !material_resident {
+        return Err("wall-density RenderDoc wall material is not resident".to_string());
+    }
+    let signature = CpuCheckpointSignature {
+        checksum: checksum.value,
+        scene_target: params.rtt_runtime.scene.id(),
+        mask_target: None,
+        render_inventory,
+        p02_presentation: None,
+    };
+    if state.previous == Some(signature) {
+        state.stable_updates = state.stable_updates.saturating_add(1);
+    } else {
+        state.previous = Some(signature);
+        state.stable_updates = 1;
+    }
+    if state.stable_updates < 2 {
+        return Ok(None);
+    }
+    state.next_generation = state.next_generation.saturating_add(1);
+    let phase = evidence.phase.as_str();
+    let size = params.config.size.as_str();
+    Ok(Some(StableRenderDocCheckpoint {
+        schema_version: WALL_RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION,
+        contract_id: CONTRACT_ID,
+        stage_id: format!("wall-density-{size}-{phase}"),
+        checkpoint_name: WALL_RENDERDOC_CHECKPOINT_NAME,
+        generation: state.next_generation,
+        simulation_tick: params.capture.fixed_update_tick(),
+        scene_target: signature.scene_target,
+        mask_target: None,
+        render_inventory,
+        p02_presentation: None,
+        runtime_field: None,
+        gpu_light_field: None,
+        cross_consumer: None,
+        wall_density: Some(RuntimeWallDensityEvidence {
+            schema_version: 1,
+            contract_sha256: CONTRACT_SHA256,
+            layout_checksum: evidence.layout_checksum.clone(),
+            target_size: if params.config.size == PerfScenarioSize::Small {
+                "N"
+            } else {
+                "4N"
+            },
+            perf_size: size,
+            phase,
+            target_wall_count: evidence.target_wall_count,
+            connector_count: evidence.connector_count,
+            mask_counts: evidence.mask_counts,
+            wall_mesh_index_count,
+            mesh_handle_match_count,
+            material_handle_match_count,
+            structural_visual_count,
+            mesh_resident: true,
+            material_resident,
+        }),
+        receiver_fragment_shaders: None,
+        receiver_import_shaders: None,
+        fixture: RuntimeFixtureEvidence {
+            fixture_checksum: evidence.layout_checksum,
+            rooms: 0,
+            completed_floors: 0,
+            completed_walls: usize::from(evidence.phase == PerfWallPhase::Completed)
+                * evidence.target_wall_count,
+            doors: 0,
+            supplied_lamp_candidates: 0,
+            unsupplied_lamp_candidates: 0,
+        },
+    }))
 }
 
 pub(crate) fn poll_renderdoc_capture_system(
@@ -731,19 +909,7 @@ pub(crate) fn poll_renderdoc_capture_system(
                 exit.write(AppExit::error());
                 return;
             };
-            let Some(selection) = config.rtt_light_selection() else {
-                bridge.replace(RenderDocBridgeState::Failed(
-                    "RenderDoc capture requires an RtT-light selection".to_string(),
-                ));
-                exit.write(AppExit::error());
-                return;
-            };
-            if let Err(error) = write_runtime_checkpoint(
-                output_dir,
-                &result,
-                selection.contract_id(),
-                selection.stage_id(),
-            ) {
+            if let Err(error) = write_runtime_checkpoint(output_dir, &result) {
                 error!("PERF_RENDERDOC: failed to write checkpoint: {error}");
                 bridge.replace(RenderDocBridgeState::Failed(error.to_string()));
                 exit.write(AppExit::error());
@@ -1136,6 +1302,27 @@ fn validate_medium_inventory(stage_id: &str, inventory: PerfRenderInventory) -> 
     }
 }
 
+fn validate_wall_render_inventory(inventory: PerfRenderInventory) -> Result<(), String> {
+    let expected = PerfRenderInventory {
+        scene_target_count: 1,
+        mask_target_count: 0,
+        camera_3d_rtt_count: 1,
+        camera_2d_count: 2,
+        layer_2d_pass_count: 1,
+        soul_proxy_3d: 0,
+        soul_mask_proxy_3d: 0,
+        soul_shadow_proxy_3d: 0,
+        familiar_proxy_3d: 0,
+    };
+    if inventory == expected {
+        Ok(())
+    } else {
+        Err(format!(
+            "wall-density RenderDoc inventory differs: observed={inventory:?} expected={expected:?}"
+        ))
+    }
+}
+
 impl LoadedRenderDoc {
     fn start_capture(&self, device: &RenderDevice) -> Result<(), String> {
         let functions = &self.functions;
@@ -1301,6 +1488,8 @@ struct RuntimeCheckpointFile<'a> {
     gpu_light_field: Option<RuntimeGpuLightFieldEvidence>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cross_consumer: Option<RuntimeCrossConsumerEvidence>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    wall_density: Option<RuntimeWallDensityEvidence>,
     render_resources: RuntimeRenderResources,
     fixture: RuntimeFixtureEvidence,
     capture_path: &'a Path,
@@ -1728,8 +1917,6 @@ fn subprocess_sha256(path: &Path) -> Result<String, std::io::Error> {
 fn write_runtime_checkpoint(
     output_dir: &Path,
     result: &RenderDocCaptureResult,
-    contract_id: &str,
-    stage_id: &str,
 ) -> std::io::Result<()> {
     let metadata = std::fs::metadata(&result.capture_path)?;
     if !metadata.is_file() || metadata.len() == 0 {
@@ -1749,13 +1936,13 @@ fn write_runtime_checkpoint(
         window_camera_count: value.window_camera_count,
     };
     let file = RuntimeCheckpointFile {
-        schema_version: RENDERDOC_RUNTIME_CHECKPOINT_SCHEMA_VERSION,
+        schema_version: result.checkpoint.schema_version,
         status: "valid",
-        contract_id: contract_id.to_string(),
-        stage_id: stage_id.to_string(),
+        contract_id: result.checkpoint.contract_id.to_string(),
+        stage_id: result.checkpoint.stage_id.clone(),
         generation: result.checkpoint.generation,
         checkpoint: RuntimeCheckpoint {
-            name: RENDERDOC_CHECKPOINT_NAME,
+            name: result.checkpoint.checkpoint_name,
             simulation_tick: result.checkpoint.simulation_tick,
             simulation_tick_source: SIMULATION_TICK_SOURCE,
             settle_frames: RENDERDOC_SETTLE_FRAMES,
@@ -1771,6 +1958,7 @@ fn write_runtime_checkpoint(
         runtime_field: result.checkpoint.runtime_field.clone(),
         gpu_light_field: result.checkpoint.gpu_light_field.clone(),
         cross_consumer: result.checkpoint.cross_consumer.clone(),
+        wall_density: result.checkpoint.wall_density.clone(),
         render_resources: p01_composite_render_resources(),
         fixture: result.checkpoint.fixture.clone(),
         capture_path: &result.capture_path,
@@ -1859,6 +2047,31 @@ mod tests {
         assert!(validate_medium_inventory("p04", inventory).is_ok());
         assert!(validate_medium_inventory("p06", inventory).is_ok());
         assert!(validate_medium_inventory("p01", inventory).is_err());
+    }
+
+    #[test]
+    fn wall_renderdoc_inventory_excludes_actor_and_mask_passes() {
+        let inventory = PerfRenderInventory {
+            scene_target_count: 1,
+            mask_target_count: 0,
+            camera_3d_rtt_count: 1,
+            camera_2d_count: 2,
+            layer_2d_pass_count: 1,
+            soul_proxy_3d: 0,
+            soul_mask_proxy_3d: 0,
+            soul_shadow_proxy_3d: 0,
+            familiar_proxy_3d: 0,
+        };
+        assert!(validate_wall_render_inventory(inventory).is_ok());
+
+        let mut unexpected_actor = inventory;
+        unexpected_actor.soul_proxy_3d = 1;
+        assert!(validate_wall_render_inventory(unexpected_actor).is_err());
+
+        let mut unexpected_pass = inventory;
+        unexpected_pass.mask_target_count = 1;
+        unexpected_pass.camera_3d_rtt_count = 2;
+        assert!(validate_wall_render_inventory(unexpected_pass).is_err());
     }
 
     #[test]
