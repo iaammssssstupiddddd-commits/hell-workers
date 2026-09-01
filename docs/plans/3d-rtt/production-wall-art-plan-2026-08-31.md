@@ -5,9 +5,9 @@
 | 項目 | 値 |
 | --- | --- |
 | 計画ID | `production-wall-art-plan-2026-08-31` |
-| ステータス | `In Progress (M0)` |
+| ステータス | `In Progress (M2)` |
 | 作成日 | `2026-08-31` |
-| 最終更新日 | `2026-09-01` |
+| 最終更新日 | `2026-09-02` |
 | 作成者 | `Codex` |
 | 親計画 | [`asset-milestones-2026-03-17.md`](asset-milestones-2026-03-17.md) の `MS-Asset-Pipeline` / `MS-Asset-Build-A` |
 | 関連提案 | [`billboard-camera-angle-proposal-2026-03-16.md`](../../proposals/3d-rtt/archived/billboard-camera-angle-proposal-2026-03-16.md)（4形状案の履歴。本計画では孤立／端の意味を満たす6形状へ補完する） |
@@ -658,23 +658,41 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### M2: runtime asset pool、material、Eligible stateを接続
 
-実装状況（2026-09-01）:
+実装状況（2026-09-02）:
 
 - M1 manifestのtool identityは現在HEADではなく、記録されたtool commit objectがrepositoryに存在し、そのcommitの
   treeと`tool_tree`が一致する契約へ修正した。これにより後続runtime commitでM1証跡を誤失効させず、commit / treeの
   組み替えは引き続き拒否する。
 - 検証済みcandidate manifestの8 core＋optional normalを、asset-set generation / manifest hash / authorityへ結合した
-  canonical JSON `.wallset`へprojectするtoolを追加した。candidate projectionはnormal=`pending`とreceipt=`null`に固定し、
-  final / release authorityのprojectionはpromotion receipt実装までfail-closedのままとする。
-- Bevy 0.19のcustom `.wallset` asset / loaderを追加した。loaderはcanonical JSON bytes、closed 8 core＋optional normal、
-  path / role / byte length / SHA-256を検査し、`LoadContext::read_asset_bytes`で8 coreのactual bytesをasset-set単位に
-  再照合する。GLBは`GltfAssetLabel::Primitive { mesh: 0, primitive: 0 }`で6 handleへ直接loadし、SceneRootは作らない。
-- fallback 2 materialを維持したまま、albedo / emissive共有のproduction完成／仮設2 materialを有限poolとして作成した。
-  normal handle / revisionはcore aggregateから分離し、candidate authorityは`HW_WALL_CANDIDATE=1`の隔離profile以外では
-  `Fallback(CandidateDisabled)`になる。全required handleがreadyの場合だけasset generation / manifest hash付き`Eligible`へ
-  遷移し、steady stateはrevisionを増やさない。M2ではentityへのproduction適用を行わない。
-- Bevy 0.19の実`AssetPlugin` / 非同期loaderをtemporary asset rootで起動するfocused testを追加した。8 coreを
-  actual bytes / length / SHA-256一致で`Loaded`にし、manifest封印後の1 core改変を`Failed`へ落とす経路がpassした。
+  canonical JSON `.wallset`へprojectするtoolを追加した。candidateは`isolated_candidate`、normal=`pending`、
+  receipt=`null`、review=`candidate`に固定する。release projectorはpendingなしのart-approved final manifestと
+  canonical promotion receiptを要求し、core pathを`wall_sets/<GEN>/...`へ写像して`release_approved` projectionへ閉じる。
+- Bevy 0.19のcustom `.wallset` asset / loaderを追加した。loaderはcanonical JSON bytes、closed 8／9 core、
+  path / role / byte length / SHA-256を検査し、`LoadContext::read_asset_bytes`で全coreのactual bytesをasset-set単位に
+  再照合する。releaseではgeneration-scoped receiptも同じAPIで読み、actual bytes / hash、closed canonical schema、
+  manifest hash / generation / new-active bindingを検証する。missing / tampered / wrong-generation / wrong-manifest receiptは
+  asset loadを`Failed`へ落とす。
+- manifestがCPU-loadedになるまでgeneration固有pathのmesh / texture handleを作らない二段階poolへ変更した。
+  GLBは`GltfAssetLabel::Primitive { mesh: 0, primitive: 0 }`で6 handleへ直接loadし、SceneRootは作らない。
+  fallback 2 materialを維持し、production完成／仮設materialはresolved albedo / emissiveと採用済みnormalだけから作る。
+  generation差替え時は旧production materialを除去して有限pairを維持する。M2ではentityへのproduction適用を行わない。
+- candidate opt-inは`HW_WALL_CANDIDATE=1`だけでなく、launcherが渡す
+  `HW_WALL_CANDIDATE_GENERATION`と`HW_WALL_CANDIDATE_MANIFEST_SHA256`のexact matchを必須にした。
+  release authorityは有効receiptをloaderが検査済みの場合だけ通常起動で候補になる。全required handleがreadyの場合だけ
+  authority付き`Eligible`へ進み、asset-set identityとprocess-local session / activation revisionを分離する。
+- optional normalは`.wallset` loaderがactual bytes / length / SHA-256を検証するがproduction coreからは分離する。
+  missing / tampered normalはA/B readinessだけを`Failed`へ落とし、8-file production manifestは`Loaded`を維持する。
+  adopted normalは9番目のrelease coreとして必須にする。missing albedo / emissiveはloadを失敗させ、同じgenerationの
+  正しいbytesを戻したfresh Appだけで回復し、同process hot reloadを主張しないfocused testを追加した。
+- runtime実装commitは`405f6e9c`、readiness負例commitは`546f4007`、sealed real-asset fixture commitは`473d922c`、
+  normal mapのlinear load gateは`d194c123`。
+  `473d922c`から作成したprimary外clean worktree
+  `staging/validation/wall-runtime-473d922c/worktree`へmanifest allowlistで8 core＋candidate normalだけを配置した。
+  tracked差分／symlinkは0、candidate projection SHA-256は
+  `c13d6134e1a063d36fb4a998612ebd41eb8afe70e6090440c448a75fa92b16b2`。`d194c123`へ進めた同worktree自身から
+  Bevyの実GLB / PNG loaderをheadless実行し、6 primitive、sRGBの
+  albedo / emissive、linearのnormal、raw AABB X/Z cell内・Y `-16..16`、350 triangles以下をpassした。
+  dirty診断runと旧worktreeは正式結果へ流用していない。
 
 - 変更内容:
   - 6 GLB primitive、shared texture、`WallAssetSetManifest` custom asset / loaderをasset catalogへ追加し、wall専用のfinite handle poolを作る。normal A/B handleは隔離scenario限定のcandidate poolへ分離する。
@@ -692,13 +710,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `crates/bevy_app/src/plugins/visual.rs`
   - `crates/bevy_app/Cargo.toml`（`.wallset` canonical JSON loader用`serde_json`を通常dependency化）
 - 完了条件:
-  - [ ] 6 primitiveをBevy 0.19 APIで直接ロードし、`SceneRoot`や子meshを生成しない。
+  - [x] 6 primitiveをBevy 0.19 APIで直接ロードし、`SceneRoot`や子meshを生成しない。
   - [ ] required assetの全CPU-ready前／failure／unauthorized時は全wallがfallbackで見え、mixed状態やinvisible wallがない。
-  - [ ] `.wallset` projectorがcanonical JSONをbyte-identicalに再生成し、通常feature集合でloaderがcompileする。loaderは全core file、release modeではimmutable receiptのactual bytes / SHA-256も`LoadContext::read_asset_bytes`で照合し、canonical schemaとmanifest / generation bindingを検査する。非canonical wire、改変・未知・欠落core、missing / tampered / mismatched receiptでは`Eligible`にならない。hash検証はasset-set identityあたり1回で、wall entityごとにI/Oしない。
+  - [x] `.wallset` projectorがcanonical JSONをbyte-identicalに再生成し、通常feature集合でloaderがcompileする。loaderは全core file、release modeではimmutable receiptのactual bytes / SHA-256も`LoadContext::read_asset_bytes`で照合し、canonical schemaとmanifest / generation bindingを検査する。非canonical wire、改変・未知・欠落core、missing / tampered / mismatched receiptでは`Eligible`にならない。hash検証はasset-set identityあたり1回で、wall entityごとにI/Oしない。
   - [ ] 全CPU-ready＋manifest authority後はaggregate stateだけが`Eligible`へ一度遷移し、M2単独の通常gameplayでは既存／新規wallともfallbackのままである。test専用`topology_ready` seamでだけ、後段のatomic apply条件を検証する。
   - [ ] active production materialは完成／仮設2 handle、fallbackを含む総poolは4 handleで有限であり、Indoor Light Field bindingと未sample契約を保持する。
   - [ ] missing / late albedo / emissive、adopted normal、release receipt、ready切替と同frame spawn、synthetic asset failure後の一括fallbackがfocused testで合格する。receiptのmissing / tamper / wrong generation / wrong manifestは通常起動をfallbackへ落とす。failed fileの復旧はfresh App restartで検証し、同processの自動hot reloadを主張しない。candidate-only normalのmissing / lateはproduction core readinessを誤ってblockせず、normal A/Bだけをfail-closedにする。
-  - [ ] loaded primitiveのraw local AABB、identity node前提、world transform後AABBが1 tile / ground接地契約と一致し、asset reportの9.6 / 12.8 wu geometry値とhashが一致する。
+  - [x] loaded primitiveのraw local AABB、identity node前提、world transform後AABBが1 tile / ground接地契約と一致し、asset reportの9.6 / 12.8 wu geometry値とhashが一致する。
   - [ ] exactly-one `Building3dVisual` / `Mesh3d` / material / logical `MeshTag` testが合格する。
   - [ ] asset-set identityとprocess-local session / activation revisionが混同されず、同一activation revisionのsteady stateではaggregate再遷移、全Wall走査、mesh / material writeが0である。fresh restartは同じasset generationを保持した新sessionとして回復する。
   - [ ] M2の実経路についてHelp impact decisionを完了してからマイルストーン完了を報告する。
@@ -925,7 +943,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### 現在地
 
-- 進捗: `M0完了・M1開始可能`
+- 進捗: `M0・M1完了、M2実装中`
 - 完了済み:
   - current active wall経路、2D connection system、material / transform / MeshTag、save rehydrate、external asset workflowを棚卸し済み。
   - 6 mesh / 16 mask、finite pool、fallback、native受入の実装境界を本書で固定済み。
@@ -938,6 +956,12 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     exact owner、client PNG、raw sidecar、全fingerprintを独立verifyで封印済み。
   - subject `e149918c`のwall RenderDoc 4ケースを採取し、全8 replay一致、completed / provisionalとも
     `D_N=1 / D_4N=1`、rendered instance 96 / 384でdraw predicateを封印済み。
+  - M1 generation 1の6 GLB＋shared texture＋candidate normalをproduction manifestへ封印し、primary外のclean
+    validation worktreeへallowlist配置済み。canonical / primary runtime asset mirrorは未変更。
+  - M2のcandidate / release `.wallset` projector、promotion receipt検証、二段階finite pool、exact candidate identity gate、
+    optional normal分離、fresh-process recovery testを`405f6e9c`〜`546f4007`で実装済み。
+  - subject `d194c123`のclean validation worktreeからBevy 0.19実loaderをheadless実行し、6 primitive、sRGBの
+    albedo / emissive、linearのnormal、candidate projection `c13d6134...`、raw bounds / triangle gateをpass済み。
   - registered historical P02とcurrent fallback actual-windowを`wall-reference-locators-v1`で分離し、
     index / ledger / referenced artifactのidentityとhashをoffline verifierで封印済み。
   - canonical orientation / bounds / pivot / placementをgeometry JSONとcontract-hash付きSVGへ固定し、
@@ -949,13 +973,16 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - final subject `35f1f6e3`から色校正、Capture 12 run、RenderDoc 4 caseを再採取し、全artifactの独立verifyをpass。
     M0のsource / harness / asset viewを同じfingerprintへ凍結済み。
 - 未完了:
-  - M1以降は未着手。production assetはcanonical / primary `assets/`へまだ書き込んでいない。
+  - M2のaggregate transition / steady-state、有限material pool、fallback上のexactly-one契約をsystem-level testで閉じる。
+  - M3のtopology resolver / atomic presentation applyは未着手。production assetはcanonical / primary `assets/`へ
+    まだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
 
 ### 次のAIが最初にやること
 
-1. M1の外部staging rootと6 GLB＋texture allowlistを確定し、canonical領域へ書かずasset制作を始める。
-2. 9.6 wu port / 12.8 wu envelope / 350 triangle capをpost-export validatorで全6 familyに適用する。
-3. M1 manifestをpending normal decisionとして封印し、clean worktree検証へ進む。
+1. M2のreadiness systemをtest Appで駆動し、unauthorized / loading / failed / eligibleと同revision steady stateを検証する。
+2. production completed / provisionalとfallback completed / provisionalの計4 material handleがgeneration差替え後も有限で、
+   Indoor Light Field未sample契約を維持するtestを追加する。
+3. fallback entityのexactly-one visual / mesh / material / logical tagを確認し、M2完了後にM3のresolverへ進む。
 
 ### ブロッカー/注意点
 
