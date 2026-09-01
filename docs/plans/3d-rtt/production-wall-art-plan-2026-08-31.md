@@ -685,14 +685,15 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   adopted normalは9番目のrelease coreとして必須にする。missing albedo / emissiveはloadを失敗させ、同じgenerationの
   正しいbytesを戻したfresh Appだけで回復し、同process hot reloadを主張しないfocused testを追加した。
 - runtime実装commitは`405f6e9c`、readiness負例commitは`546f4007`、sealed real-asset fixture commitは`473d922c`、
-  normal mapのlinear load gateは`d194c123`、pool invariant testは`3f2c6f7c`、実system fixtureは`bb266315`。
+  normal mapのlinear load gateは`d194c123`、pool invariant testは`3f2c6f7c`、実system fixtureは`bb266315`、
+  topology-gated activation stateは`4ebc23a8`。
   `473d922c`から作成したprimary外clean worktree
   `staging/validation/wall-runtime-473d922c/worktree`へmanifest allowlistで8 core＋candidate normalだけを配置した。
   tracked差分／symlinkは0、candidate projection SHA-256は
-  `c13d6134e1a063d36fb4a998612ebd41eb8afe70e6090440c448a75fa92b16b2`。`bb266315`へ進めた同worktree自身から
+  `c13d6134e1a063d36fb4a998612ebd41eb8afe70e6090440c448a75fa92b16b2`。`4ebc23a8`へ進めた同worktree自身から
   Bevyの実GLB / PNG loaderとreadiness systemをheadless実行し、6 primitive、sRGBのalbedo / emissive、linearの
   normal、raw AABB X/Z cell内・Y `-16..16`、350 triangles以下、unauthorized fallback、exact candidate identityでの
-  `Eligible`遷移、steady-state revision / material handle不変をpassした。
+  `Eligible`遷移、topology未準備時のfallback、test seamでの`ReadyToApply`、steady-state revision / material handle不変をpassした。
   dirty診断runと旧worktreeは正式結果へ流用していない。
 
 - 変更内容:
@@ -714,7 +715,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [x] 6 primitiveをBevy 0.19 APIで直接ロードし、`SceneRoot`や子meshを生成しない。
   - [x] required assetの全CPU-ready前／failure／unauthorized時は全wallがfallbackで見え、mixed状態やinvisible wallがない。
   - [x] `.wallset` projectorがcanonical JSONをbyte-identicalに再生成し、通常feature集合でloaderがcompileする。loaderは全core file、release modeではimmutable receiptのactual bytes / SHA-256も`LoadContext::read_asset_bytes`で照合し、canonical schemaとmanifest / generation bindingを検査する。非canonical wire、改変・未知・欠落core、missing / tampered / mismatched receiptでは`Eligible`にならない。hash検証はasset-set identityあたり1回で、wall entityごとにI/Oしない。
-  - [ ] 全CPU-ready＋manifest authority後はaggregate stateだけが`Eligible`へ一度遷移し、M2単独の通常gameplayでは既存／新規wallともfallbackのままである。test専用`topology_ready` seamでだけ、後段のatomic apply条件を検証する。
+  - [x] 全CPU-ready＋manifest authority後はaggregate stateだけが`Eligible`へ一度遷移し、M2単独の通常gameplayでは既存／新規wallともfallbackのままである。test専用`topology_ready` seamでだけ、後段のatomic apply条件を検証する。
   - [x] active production materialは完成／仮設2 handle、fallbackを含む総poolは4 handleで有限であり、Indoor Light Field bindingと未sample契約を保持する。
   - [ ] missing / late albedo / emissive、adopted normal、release receipt、ready切替と同frame spawn、synthetic asset failure後の一括fallbackがfocused testで合格する。receiptのmissing / tamper / wrong generation / wrong manifestは通常起動をfallbackへ落とす。failed fileの復旧はfresh App restartで検証し、同processの自動hot reloadを主張しない。candidate-only normalのmissing / lateはproduction core readinessを誤ってblockせず、normal A/Bだけをfail-closedにする。
   - [x] loaded primitiveのraw local AABB、identity node前提、world transform後AABBが1 tile / ground接地契約と一致し、asset reportの9.6 / 12.8 wu geometry値とhashが一致する。
@@ -727,6 +728,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`
 
 ### M3: 16 topologyと全lifecycleを統合しproductionを有効化
+
+実装状況（2026-09-02）:
+
+- `WallConnectionMask`のbit順をM0 fixtureと同じ`(N,S,W,E)`へ固定し、16 maskを
+  `WallMeshFamily + QuarterTurns`へ写像するpure resolverを`819ca26d`で追加した。既存2D completed / provisionalの
+  texture選択も同じmask生成を使用し、従来の16分岐と同値を維持する。
+- sealed geometry fixtureの16 mapping / +Y quarter turnをexhaustive table testで固定した。completed Doorがnorth connectorとして
+  同じmaskへ寄与する実経路も`4a728b06`で検証した。3D state / index / presentation applyはまだ接続していない。
 
 - 変更内容:
   - mask計算と `WallMeshFamily + QuarterTurns` resolverをpure functionへ抽出し、16件のexhaustive table testを追加する。
@@ -745,7 +754,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `crates/bevy_app/src/systems/save/rehydrate/`
   - `crates/bevy_app/src/plugins/startup/perf_scenario/`
 - 完了条件:
-  - [ ] 16 mask、Door接続、canonical rotationがtable-driven testで全件合格する。
+  - [x] 16 mask、Door接続、canonical rotationがtable-driven testで全件合格する。
   - [ ] 全family / quarter turnのport collarで中心bandと接続portの半幅4.8 wu以上、局所横断の装飾半幅6.4 wu以下が不変で、Wall–Wall境界にgap / overlapがない。junctionはactive arm unionとして別判定する。
   - [ ] `Update`内のwall / door / blueprint追加・撤去・cancelが、同frameの後続`PostUpdate`で対象と4近傍だけを更新する。
   - [ ] 複数tile siteの配置→framing→`FramedProvisional`→完成と、framing前／後cancelで、全gridのconnectorとtile visual targetが欠落・重複しない。
@@ -961,9 +970,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     validation worktreeへallowlist配置済み。canonical / primary runtime asset mirrorは未変更。
   - M2のcandidate / release `.wallset` projector、promotion receipt検証、二段階finite pool、exact candidate identity gate、
     optional normal分離、fresh-process recovery testを`405f6e9c`〜`546f4007`で実装済み。
-  - subject `bb266315`のclean validation worktreeからBevy 0.19実loader / readiness systemをheadless実行し、
+  - subject `4ebc23a8`のclean validation worktreeからBevy 0.19実loader / readiness systemをheadless実行し、
     6 primitive、sRGBのalbedo / emissive、linearのnormal、candidate projection `c13d6134...`、raw bounds / triangle、
-    unauthorized fallback、exact identityのEligible、steady-state revision / material handle不変をpass済み。
+    unauthorized fallback、exact identityのEligible、topology gateのReadyToApply、steady-state revision / material handle不変をpass済み。
+  - M3のcanonical `(N,S,W,E)` maskと6 family / quarter turn resolverを`819ca26d`で実装し、completed Door connectorの
+    実経路を`4a728b06`で固定済み。3D mesh適用は未着手。
   - registered historical P02とcurrent fallback actual-windowを`wall-reference-locators-v1`で分離し、
     index / ledger / referenced artifactのidentityとhashをoffline verifierで封印済み。
   - canonical orientation / bounds / pivot / placementをgeometry JSONとcontract-hash付きSVGへ固定し、
@@ -977,15 +988,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 未完了:
   - M2のtest-only `topology_ready` seam、ready後synthetic failureの一括fallback判定、同revisionでWall走査／writeが0の
     instrumentationをfocused testで閉じる。
-  - M3のtopology resolver / atomic presentation applyは未着手。production assetはcanonical / primary `assets/`へ
-    まだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
+  - M3のbidirectional topology index / atomic presentation applyは未着手。production assetはcanonical / primary
+    `assets/`へまだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
 
 ### 次のAIが最初にやること
 
-1. M2のactivation条件へtest-only `topology_ready` seamを設け、asset `Eligible`だけではproduction apply不可であることを検証する。
-2. ready後のsynthetic asset failureでatomic decisionがfallbackへ戻り、同revision steady stateではWall走査／writeが0になる
-   probeを追加する。
-3. 残るM2 focused gateとHelp impact decisionを閉じてから、M3の16-mask resolverへ進む。
+1. M2のready後synthetic failure / missing adopted normal / same-frame spawnに残るfocused gateを閉じ、Help impact decisionを完了する。
+2. M3のbidirectional connector indexとresolved topology componentを追加し、add / move / removeのself＋4近傍dirtyを検証する。
+3. 2D / 3D consumerを同じresolved stateへ接続した後、atomic presentation applyとschedule orderingへ進む。
 
 ### ブロッカー/注意点
 
