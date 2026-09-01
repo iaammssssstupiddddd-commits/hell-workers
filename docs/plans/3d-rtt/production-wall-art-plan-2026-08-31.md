@@ -666,6 +666,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   normal handle / revisionはcore aggregateから分離し、candidate authorityは`HW_WALL_CANDIDATE=1`の隔離profile以外では
   `Fallback(CandidateDisabled)`になる。全required handleがreadyの場合だけasset generation / manifest hash付き`Eligible`へ
   遷移し、steady stateはrevisionを増やさない。M2ではentityへのproduction適用を行わない。
+- Bevy 0.19の実`AssetPlugin` / 非同期loaderをtemporary asset rootで起動するfocused testを追加した。8 coreを
+  actual bytes / length / SHA-256一致で`Loaded`にし、manifest封印後の1 core改変を`Failed`へ落とす経路がpassした。
 
 - 変更内容:
   - 6 GLB primitive、shared texture、`WallAssetSetManifest` custom asset / loaderをasset catalogへ追加し、wall専用のfinite handle poolを作る。normal A/B handleは隔離scenario限定のcandidate poolへ分離する。

@@ -390,6 +390,13 @@ pub fn update_wall_asset_readiness_system(
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::thread;
+    use std::time::Duration;
+
+    use bevy::asset::{AssetApp, AssetMetaCheck, AssetPlugin};
+
     use super::*;
 
     fn record(path: &str, role: &str) -> WallAssetFileRecord {
@@ -512,5 +519,114 @@ mod tests {
         }
         assert_eq!(readiness.activation_revision, 4);
         assert_eq!(readiness.candidate_normal_revision, 3);
+    }
+
+    struct TestAssetRoot(PathBuf);
+
+    impl TestAssetRoot {
+        fn new() -> Self {
+            let ordinal = NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "hell-workers-wallset-{}-{ordinal}",
+                std::process::id()
+            ));
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+
+        fn write(&self, relative: &str, bytes: &[u8]) {
+            let path = self.0.join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, bytes).unwrap();
+        }
+    }
+
+    impl Drop for TestAssetRoot {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+
+    fn disk_fixture(root: &TestAssetRoot) -> WallAssetSetManifest {
+        let mut manifest = fixture();
+        for (ordinal, record) in manifest.core.iter_mut().enumerate() {
+            let payload = format!("core-payload-{ordinal}");
+            root.write(&record.path, payload.as_bytes());
+            record.bytes = payload.len() as u64;
+            record.sha256 = format!("{:x}", Sha256::digest(payload.as_bytes()));
+        }
+        root.write(NORMAL_PATH, b"optional-normal");
+        manifest.candidate_normal.bytes = 15;
+        manifest.candidate_normal.sha256 = format!("{:x}", Sha256::digest(b"optional-normal"));
+        root.write(WALLSET_PATH, &encoded(&manifest));
+        manifest
+    }
+
+    fn loader_app(root: &Path) -> App {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            AssetPlugin {
+                file_path: root.to_string_lossy().into_owned(),
+                watch_for_changes_override: Some(false),
+                meta_check: AssetMetaCheck::Never,
+                ..Default::default()
+            },
+        ))
+        .init_asset::<WallAssetSetManifest>()
+        .init_asset_loader::<WallAssetSetLoader>();
+        app
+    }
+
+    fn wait_for_terminal_load(app: &mut App, handle: &Handle<WallAssetSetManifest>) -> LoadState {
+        for _ in 0..200 {
+            app.update();
+            let state = app
+                .world()
+                .resource::<AssetServer>()
+                .load_state(handle.id());
+            if matches!(state, LoadState::Loaded | LoadState::Failed(_)) {
+                return state;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        panic!("Wall asset set did not reach a terminal load state");
+    }
+
+    #[test]
+    fn bevy_loader_reads_and_hashes_all_core_files_once() {
+        let root = TestAssetRoot::new();
+        let expected = disk_fixture(&root);
+        let mut app = loader_app(&root.0);
+        let handle = app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut app, &handle),
+            LoadState::Loaded
+        ));
+        assert_eq!(
+            app.world()
+                .resource::<Assets<WallAssetSetManifest>>()
+                .get(&handle),
+            Some(&expected)
+        );
+    }
+
+    #[test]
+    fn bevy_loader_rejects_changed_core_bytes() {
+        let root = TestAssetRoot::new();
+        let manifest = disk_fixture(&root);
+        root.write(&manifest.core[3].path, b"tampered");
+        let mut app = loader_app(&root.0);
+        let handle = app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut app, &handle),
+            LoadState::Failed(_)
+        ));
     }
 }
