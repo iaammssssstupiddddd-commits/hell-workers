@@ -848,6 +848,7 @@ mod tests {
     use std::time::Duration;
 
     use bevy::asset::{AssetApp, AssetMetaCheck, AssetPlugin};
+    use bevy::camera::primitives::MeshAabb;
 
     use super::*;
 
@@ -1209,6 +1210,132 @@ mod tests {
             thread::sleep(Duration::from_millis(5));
         }
         panic!("Wall asset set did not reach a terminal load state");
+    }
+
+    fn isolated_asset_app(root: &Path) -> App {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            AssetPlugin {
+                file_path: root.to_string_lossy().into_owned(),
+                watch_for_changes_override: Some(false),
+                meta_check: AssetMetaCheck::Never,
+                ..Default::default()
+            },
+            bevy::world_serialization::WorldSerializationPlugin,
+            bevy::mesh::MeshPlugin,
+            bevy::image::ImagePlugin::default_nearest(),
+            bevy::gltf::GltfPlugin::default(),
+        ))
+        .init_asset::<WallAssetSetManifest>()
+        .init_asset_loader::<WallAssetSetLoader>();
+        app.register_asset_loader(bevy::image::ImageLoader::new(
+            bevy::image::CompressedImageFormats::NONE,
+        ));
+        while app.plugins_state() == bevy::app::PluginsState::Adding {
+            bevy::tasks::tick_global_task_pools_on_main_thread();
+        }
+        app.finish();
+        app.cleanup();
+        app
+    }
+
+    fn wait_for_required_assets(app: &mut App, assets: &ResolvedProductionWallAssets) {
+        for _ in 0..10_000 {
+            app.update();
+            let server = app.world().resource::<AssetServer>();
+            let mut states = assets
+                .meshes
+                .iter()
+                .map(|handle| server.load_state(handle.id()))
+                .chain([
+                    server.load_state(assets.albedo.id()),
+                    server.load_state(assets.emissive.id()),
+                ]);
+            if states
+                .clone()
+                .all(|state| matches!(state, LoadState::Loaded))
+            {
+                return;
+            }
+            if states.any(|state| matches!(state, LoadState::Failed(_))) {
+                panic!("isolated Wall asset failed to load");
+            }
+        }
+        let server = app.world().resource::<AssetServer>();
+        let diagnostics: Vec<_> = assets
+            .meshes
+            .iter()
+            .map(|handle| {
+                (
+                    server.get_path(handle.id()).map(|path| path.to_string()),
+                    server.get_load_states(handle.id()),
+                )
+            })
+            .chain([
+                (
+                    server
+                        .get_path(assets.albedo.id())
+                        .map(|path| path.to_string()),
+                    server.get_load_states(assets.albedo.id()),
+                ),
+                (
+                    server
+                        .get_path(assets.emissive.id())
+                        .map(|path| path.to_string()),
+                    server.get_load_states(assets.emissive.id()),
+                ),
+            ])
+            .collect();
+        panic!("isolated Wall assets did not become ready: {diagnostics:?}");
+    }
+
+    #[test]
+    #[ignore = "requires a sealed candidate asset view outside the primary worktree"]
+    fn isolated_candidate_loads_six_real_primitives_with_valid_runtime_bounds() {
+        let root = PathBuf::from(
+            std::env::var("HW_WALL_ASSET_TEST_ROOT")
+                .expect("HW_WALL_ASSET_TEST_ROOT must name the isolated assets directory"),
+        );
+        let mut app = isolated_asset_app(&root);
+        let wallset = app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut app, &wallset),
+            LoadState::Loaded
+        ));
+        let manifest = app
+            .world()
+            .resource::<Assets<WallAssetSetManifest>>()
+            .get(&wallset)
+            .unwrap()
+            .clone();
+        assert_eq!(
+            manifest.candidate_normal_verification,
+            WallCandidateNormalVerification::Verified
+        );
+        let assets = resolve_asset_handles(app.world().resource::<AssetServer>(), &manifest);
+        wait_for_required_assets(&mut app, &assets);
+
+        let meshes = app.world().resource::<Assets<Mesh>>();
+        for handle in &assets.meshes {
+            let mesh = meshes.get(handle).expect("loaded primitive Mesh is absent");
+            let bounds = mesh
+                .compute_aabb()
+                .expect("primitive has no position bounds");
+            let minimum = bounds.center - bounds.half_extents;
+            let maximum = bounds.center + bounds.half_extents;
+            assert!(minimum.x >= -16.01 && maximum.x <= 16.01);
+            assert!(minimum.z >= -16.01 && maximum.z <= 16.01);
+            assert!((minimum.y + 16.0).abs() <= 0.01);
+            assert!((maximum.y - 16.0).abs() <= 0.01);
+            let index_count = mesh
+                .indices()
+                .map_or_else(|| mesh.count_vertices(), |indices| indices.len());
+            assert!(index_count / 3 <= 350);
+        }
     }
 
     #[test]
