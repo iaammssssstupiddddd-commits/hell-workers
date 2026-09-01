@@ -685,13 +685,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   adopted normalは9番目のrelease coreとして必須にする。missing albedo / emissiveはloadを失敗させ、同じgenerationの
   正しいbytesを戻したfresh Appだけで回復し、同process hot reloadを主張しないfocused testを追加した。
 - runtime実装commitは`405f6e9c`、readiness負例commitは`546f4007`、sealed real-asset fixture commitは`473d922c`、
-  normal mapのlinear load gateは`d194c123`。
+  normal mapのlinear load gateは`d194c123`、pool invariant testは`3f2c6f7c`、実system fixtureは`bb266315`。
   `473d922c`から作成したprimary外clean worktree
   `staging/validation/wall-runtime-473d922c/worktree`へmanifest allowlistで8 core＋candidate normalだけを配置した。
   tracked差分／symlinkは0、candidate projection SHA-256は
-  `c13d6134e1a063d36fb4a998612ebd41eb8afe70e6090440c448a75fa92b16b2`。`d194c123`へ進めた同worktree自身から
-  Bevyの実GLB / PNG loaderをheadless実行し、6 primitive、sRGBの
-  albedo / emissive、linearのnormal、raw AABB X/Z cell内・Y `-16..16`、350 triangles以下をpassした。
+  `c13d6134e1a063d36fb4a998612ebd41eb8afe70e6090440c448a75fa92b16b2`。`bb266315`へ進めた同worktree自身から
+  Bevyの実GLB / PNG loaderとreadiness systemをheadless実行し、6 primitive、sRGBのalbedo / emissive、linearの
+  normal、raw AABB X/Z cell内・Y `-16..16`、350 triangles以下、unauthorized fallback、exact candidate identityでの
+  `Eligible`遷移、steady-state revision / material handle不変をpassした。
   dirty診断runと旧worktreeは正式結果へ流用していない。
 
 - 変更内容:
@@ -711,13 +712,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `crates/bevy_app/Cargo.toml`（`.wallset` canonical JSON loader用`serde_json`を通常dependency化）
 - 完了条件:
   - [x] 6 primitiveをBevy 0.19 APIで直接ロードし、`SceneRoot`や子meshを生成しない。
-  - [ ] required assetの全CPU-ready前／failure／unauthorized時は全wallがfallbackで見え、mixed状態やinvisible wallがない。
+  - [x] required assetの全CPU-ready前／failure／unauthorized時は全wallがfallbackで見え、mixed状態やinvisible wallがない。
   - [x] `.wallset` projectorがcanonical JSONをbyte-identicalに再生成し、通常feature集合でloaderがcompileする。loaderは全core file、release modeではimmutable receiptのactual bytes / SHA-256も`LoadContext::read_asset_bytes`で照合し、canonical schemaとmanifest / generation bindingを検査する。非canonical wire、改変・未知・欠落core、missing / tampered / mismatched receiptでは`Eligible`にならない。hash検証はasset-set identityあたり1回で、wall entityごとにI/Oしない。
   - [ ] 全CPU-ready＋manifest authority後はaggregate stateだけが`Eligible`へ一度遷移し、M2単独の通常gameplayでは既存／新規wallともfallbackのままである。test専用`topology_ready` seamでだけ、後段のatomic apply条件を検証する。
-  - [ ] active production materialは完成／仮設2 handle、fallbackを含む総poolは4 handleで有限であり、Indoor Light Field bindingと未sample契約を保持する。
+  - [x] active production materialは完成／仮設2 handle、fallbackを含む総poolは4 handleで有限であり、Indoor Light Field bindingと未sample契約を保持する。
   - [ ] missing / late albedo / emissive、adopted normal、release receipt、ready切替と同frame spawn、synthetic asset failure後の一括fallbackがfocused testで合格する。receiptのmissing / tamper / wrong generation / wrong manifestは通常起動をfallbackへ落とす。failed fileの復旧はfresh App restartで検証し、同processの自動hot reloadを主張しない。candidate-only normalのmissing / lateはproduction core readinessを誤ってblockせず、normal A/Bだけをfail-closedにする。
   - [x] loaded primitiveのraw local AABB、identity node前提、world transform後AABBが1 tile / ground接地契約と一致し、asset reportの9.6 / 12.8 wu geometry値とhashが一致する。
-  - [ ] exactly-one `Building3dVisual` / `Mesh3d` / material / logical `MeshTag` testが合格する。
+  - [x] exactly-one `Building3dVisual` / `Mesh3d` / material / logical `MeshTag` testが合格する。
   - [ ] asset-set identityとprocess-local session / activation revisionが混同されず、同一activation revisionのsteady stateではaggregate再遷移、全Wall走査、mesh / material writeが0である。fresh restartは同じasset generationを保持した新sessionとして回復する。
   - [ ] M2の実経路についてHelp impact decisionを完了してからマイルストーン完了を報告する。
 - 検証:
@@ -960,8 +961,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     validation worktreeへallowlist配置済み。canonical / primary runtime asset mirrorは未変更。
   - M2のcandidate / release `.wallset` projector、promotion receipt検証、二段階finite pool、exact candidate identity gate、
     optional normal分離、fresh-process recovery testを`405f6e9c`〜`546f4007`で実装済み。
-  - subject `d194c123`のclean validation worktreeからBevy 0.19実loaderをheadless実行し、6 primitive、sRGBの
-    albedo / emissive、linearのnormal、candidate projection `c13d6134...`、raw bounds / triangle gateをpass済み。
+  - subject `bb266315`のclean validation worktreeからBevy 0.19実loader / readiness systemをheadless実行し、
+    6 primitive、sRGBのalbedo / emissive、linearのnormal、candidate projection `c13d6134...`、raw bounds / triangle、
+    unauthorized fallback、exact identityのEligible、steady-state revision / material handle不変をpass済み。
   - registered historical P02とcurrent fallback actual-windowを`wall-reference-locators-v1`で分離し、
     index / ledger / referenced artifactのidentityとhashをoffline verifierで封印済み。
   - canonical orientation / bounds / pivot / placementをgeometry JSONとcontract-hash付きSVGへ固定し、
@@ -973,16 +975,17 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - final subject `35f1f6e3`から色校正、Capture 12 run、RenderDoc 4 caseを再採取し、全artifactの独立verifyをpass。
     M0のsource / harness / asset viewを同じfingerprintへ凍結済み。
 - 未完了:
-  - M2のaggregate transition / steady-state、有限material pool、fallback上のexactly-one契約をsystem-level testで閉じる。
+  - M2のtest-only `topology_ready` seam、ready後synthetic failureの一括fallback判定、同revisionでWall走査／writeが0の
+    instrumentationをfocused testで閉じる。
   - M3のtopology resolver / atomic presentation applyは未着手。production assetはcanonical / primary `assets/`へ
     まだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
 
 ### 次のAIが最初にやること
 
-1. M2のreadiness systemをtest Appで駆動し、unauthorized / loading / failed / eligibleと同revision steady stateを検証する。
-2. production completed / provisionalとfallback completed / provisionalの計4 material handleがgeneration差替え後も有限で、
-   Indoor Light Field未sample契約を維持するtestを追加する。
-3. fallback entityのexactly-one visual / mesh / material / logical tagを確認し、M2完了後にM3のresolverへ進む。
+1. M2のactivation条件へtest-only `topology_ready` seamを設け、asset `Eligible`だけではproduction apply不可であることを検証する。
+2. ready後のsynthetic asset failureでatomic decisionがfallbackへ戻り、同revision steady stateではWall走査／writeが0になる
+   probeを追加する。
+3. 残るM2 focused gateとHelp impact decisionを閉じてから、M3の16-mask resolverへ進む。
 
 ### ブロッカー/注意点
 
