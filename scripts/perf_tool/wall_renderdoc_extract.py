@@ -312,9 +312,26 @@ def _select_wall_draw_group(
         ):
             candidates_by_pass.setdefault(draw["pass_id"], []).append(draw)
     if len(candidates_by_pass) != 1:
+        diagnostics = [
+            {
+                "pass_id": draw["pass_id"],
+                "event_id": draw["event_id"],
+                "indexed": draw["indexed"],
+                "num_indices": draw["num_indices"],
+                "num_instances": draw["num_instances"],
+                "has_scene_target": scene_target_resource_id
+                in draw["color_resource_ids"],
+                "has_depth": draw["depth_resource_id"] is not None,
+                "fragment_shader_present": draw["fragment_shader_present"],
+            }
+            for draw in draws
+            if draw["num_indices"] == wall_mesh_index_count
+            or scene_target_resource_id in draw["color_resource_ids"]
+        ][:64]
         raise RuntimeError(
             "wall draw identity did not resolve to exactly one Scene color+depth pass: "
-            f"candidates={sorted(candidates_by_pass)}"
+            f"candidates={sorted(candidates_by_pass)} diagnostics="
+            + json.dumps(diagnostics, sort_keys=True, separators=(",", ":"))
         )
     pass_id, candidates = next(iter(candidates_by_pass.items()))
     rendered_instance_count = sum(draw["num_instances"] for draw in candidates)

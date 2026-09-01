@@ -672,6 +672,13 @@ def run(args: argparse.Namespace) -> int:
                         state=state,
                         timeout_seconds=REPLAY_TIMEOUT_SECONDS,
                     )
+                    if not extraction.is_file():
+                        detail = "qrenderdoc did not produce extraction JSON"
+                        if failure.is_file():
+                            payload = native.read_json(failure)
+                            if isinstance(payload.get("error"), str):
+                                detail = payload["error"]
+                        raise native.AcceptanceError(detail)
                 log_text = "\n".join(
                     path.read_text(encoding="utf-8", errors="replace")
                     for path in (
