@@ -426,7 +426,18 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   raw originはcell center / half-height `(0,0,0)`、node T/R/Sはidentity、runtime placement center Yは16 wuとし、
   N=-Z / E=+X、+Yの+90°は上面視counterclockwiseでN→Wと固定した。canonical 6 familyから16 mask mappingを
   数式で再導出するunit testと、同じcontract hashを持つ`wall-production-v1.orientation.svg`がpassした。
-- この中間状態をM0完了や性能baselineとして扱わず、後続M1のasset制作開始gateにも使わない。
+- profiling-onlyのBevy 5 patch boardと`wall_color_acceptance.py`を実装した。最初の正式試行
+  `wall-color-20260901T080247Z-4a4d4ccc`は実X11 client captureとperformance sidecarまで成立したが、
+  highest-orderの専用cameraがBevy 0.19のdefault UI cameraになり、Pause UIが中央3 patchへ重なって
+  平均Delta E 2000 `16.092317`でfail-closedになった。このartifactは不採用とし、色値を変えず既存
+  MainCameraへ`IsDefaultUiCamera`を明示してUI隔離をstatus contractへ追加した。
+- final subject `35f1f6e3` / source fingerprint
+  `8b996922b015fe96786d01eddcdc39c467fae6341e65a64967cf5917a509d813`からBlender referenceとBevy
+  actual-windowを再採取した。`target/native-acceptance/wall-color-20260901T081824Z-e92a7d9c`は独立verifyで
+  passし、stone `(33,27,27)`、rust `(140,74,47)`、dark brown `(26,10,0)`、purple `(139,0,139)`、
+  emissive `(190,0,190)`、4 base patchの個別／平均Delta E 2000 `0.0`、emissive luminance lift
+  `0.07313`を封印した。manifest SHA-256は
+  `79f396735813de9b8c8e9f7e76b6c515ba7416d9f0c71d5efe17e05b246775c4`である。
 - 最初の正式Capture試行（subject `a69ea3df`）はfail-closedで棄却した。Smallのraw 3 runは取得できたが、
   仮想時刻を停止するwall-densityへvalidatorがvirtual 30 s / 60 sを誤要求した。Mediumは通常worldの
   初期facilityが固定fixture cell `(82, 57)`を先に予約して起動時に失敗した。M0 contractを凍結する前に、
@@ -457,6 +468,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   4N=`10.495838 (1.323651) / 13.341914 (1.645682)` ms。全runのinitial / warm-up / measure-end
   checksumはcase内で一致し、teardown warningは0だった。このartifactはCapture baselineとして使用できるが、
   draw predicateは未検証なのでRenderDoc baselineを兼ねない。
+- final subject `35f1f6e3`からCapture 12 runを再採取した。
+  `target/native-acceptance/wall-density-20260901T083037Z-e5dced2c`は独立verifyで
+  `capture_runs=12 / status=pass`、teardown warning全件0。p95 / p99中央値（MAD）はcompleted
+  N=`17.992724 (0.098033) / 18.895598 (0.029325)` ms、4N=`17.869519 (0.024907) /
+  18.765569 (0.034324)` ms、provisional N=`17.917287 (0.049389) / 18.933389 (0.157751)` ms、
+  4N=`17.971411 (0.016872) / 18.940292 (0.023251)` ms。manifest SHA-256は
+  `d52f9ca63344c546a47abf7ebfde2505797a9adb1e22b3799c98edd93647897e`、binary SHA-256は
+  `ced21d607e1f43885ebb9de4a964f4e0deb705c5571a457b4817b1c1a410ab3c`であり、M5比較のM0 baselineとする。
 - subject `1c136ca5`からhistorical P02 v9を再実行した最初のcaseは、P02時点で存在したlegacy structural
   Door spriteのOpen画像handleを要求してfail-closedになった。Rust側だけ旧画像条件を除去したsubject
   `f2699e9d`ではその検査を越えたが、Pythonのfrozen P02期待表がDoor / Tank / MudMixerのlegacy child Spriteを
@@ -474,6 +493,12 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   single-case 10秒warm-up / 10秒measureはPythonの専用selectorとRustの専用flag＋環境変数の二重鍵でのみ
   許可し、正式density laneの30秒 / 60秒契約は緩和しない。対象ROIは固定UI chromeと重ならない領域へ
   完全に収まらなければRust / Pythonの双方でfail-closedにする。
+- final subject `35f1f6e3`からRenderDoc 4 caseを再採取した。
+  `target/native-acceptance/wall-renderdoc-20260901T084945Z-4d218c02`は独立verifyで`cases=4 / status=pass`。
+  completed / provisionalとも`D_N=1 / D_4N=1`で全predicateを満たし、各RDCの2 replayが一致した。
+  manifest SHA-256は`59896f585581d852ce2187d19375b1277d27c1e5dd877da360500da486c275bc`、
+  RenderDoc binary SHA-256は`4f4eeb4bdee19c06d6cae3839ff855c46442bc3737e09399186e809e4e8a22e6`である。
+  color / Capture / RenderDocの3 artifactは同じsource / harness / asset-view fingerprintへ結合され、M0を完了する。
 
 - 変更内容:
   - current `Cuboid` wallをproduction cameraで撮影し、source fingerprint、camera、quality、DPI、adapter、asset viewを記録する。既存P02 visual referenceと、後述の`wall-density-v1`性能baselineを別artifactにする。
@@ -501,14 +526,14 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - `tools/blender_ai_workflow/tests/`
   - `<ASSET_ROOT>/staging/reports/wall-production-v1-baseline.*`
 - 完了条件:
-  - [ ] current wallのP02 visual referenceと`wall-density-v1`のN / 4N、completed / provisional baselineが、承認済みbaseline commitから保存されている。
+  - [x] current wallのP02 visual referenceと`wall-density-v1`のN / 4N、completed / provisional baselineが、承認済みbaseline commitから保存されている。
   - [x] mask表、canonical orientation、bounds / pivotのfixture値に曖昧さがない。
-  - [ ] 9.6 wu公称・連続最小厚の算出条件、12.8 wu外形上限、9.6 wu共通portと再算定triggerがfixture / art基準に固定され、厚さA/Bを未決事項へ戻していない。
-  - [ ] OCIO色再現gateがpass、またはgeometry-only継続／色承認blockedが明記されている。
-  - [ ] OCIO artifactがconfig path / hash、runtime version、`fallback=false`、4 base patch＋emissive sanity patchの入力／経路／PNG／ROI／Delta Eを証明し、offline verifierの既知vector unit testと再検証がpassする。
-  - [ ] normal technical prerequisite、比較仮説、一度で打ち切る条件がartifact schema / testで固定されている。
-  - [ ] `wall-density-v1`のN / 4N、配置 / connector / mask checksum、seed、環境、時間、3-run中央値 / MAD、completed / provisional draw predicateがmachine-readable contractで凍結されている。
-  - [ ] code/runtime batchについてHelp impact decisionが完了し、baseline commit前の対象diffとcommit境界をユーザーが明示承認している。
+  - [x] 9.6 wu公称・連続最小厚の算出条件、12.8 wu外形上限、9.6 wu共通portと再算定triggerがfixture / art基準に固定され、厚さA/Bを未決事項へ戻していない。
+  - [x] OCIO色再現gateがpass、またはgeometry-only継続／色承認blockedが明記されている。
+  - [x] OCIO artifactがconfig path / hash、runtime version、`fallback=false`、4 base patch＋emissive sanity patchの入力／経路／PNG／ROI／Delta Eを証明し、offline verifierの既知vector unit testと再検証がpassする。
+  - [x] normal technical prerequisite、比較仮説、一度で打ち切る条件がartifact schema / testで固定されている。
+  - [x] `wall-density-v1`のN / 4N、配置 / connector / mask checksum、seed、環境、時間、3-run中央値 / MAD、completed / provisional draw predicateがmachine-readable contractで凍結されている。
+  - [x] code/runtime batchについてHelp impact decisionが完了し、baseline commit前の対象diffとcommit境界をユーザーが明示承認している。
 - 検証:
   - `python3 tools/blender_ai_workflow/scripts/verify_wall_reference_locators.py`
   - `python3 tools/blender_ai_workflow/scripts/verify_color_calibration.py ...`
@@ -836,7 +861,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### 現在地
 
-- 進捗: `M0実装・Capture baseline採取済み`
+- 進捗: `M0完了・M1開始可能`
 - 完了済み:
   - current active wall経路、2D connection system、material / transform / MeshTag、save rehydrate、external asset workflowを棚卸し済み。
   - 6 mesh / 16 mask、finite pool、fallback、native受入の実装境界を本書で固定済み。
@@ -857,15 +882,16 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     profileとは二重鍵で排他にし、dedicated final Camera2d、単一X11 clientのexact 320×96 crop、nonce / ACK、
     MainCameraへの明示UI隔離、Blender reference / OCIO proof / candidate metadata / offline Delta E再検証を
     同じartifactへ封印する。
+  - final subject `35f1f6e3`から色校正、Capture 12 run、RenderDoc 4 caseを再採取し、全artifactの独立verifyをpass。
+    M0のsource / harness / asset viewを同じfingerprintへ凍結済み。
 - 未完了:
-  - clean subjectのBlender / Bevy color artifactとoffline Delta E gate、
-    最終M0 commitからのCapture 12 run / RenderDoc 4 case再採取を閉じるまではM0未完了。M1以降は未着手。
+  - M1以降は未着手。production assetはcanonical / primary `assets/`へまだ書き込んでいない。
 
 ### 次のAIが最初にやること
 
-1. clean final subjectからBlender / Bevy color gateを採取する。
-2. M0最終commitからCapture 12 run / RenderDoc 4 caseを再採取する。
-3. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
+1. M1の外部staging rootと6 GLB＋texture allowlistを確定し、canonical領域へ書かずasset制作を始める。
+2. 9.6 wu port / 12.8 wu envelope / 350 triangle capをpost-export validatorで全6 familyに適用する。
+3. M1 manifestをpending normal decisionとして封印し、clean worktree検証へ進む。
 
 ### ブロッカー/注意点
 
@@ -970,6 +996,21 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `b8dba6fb34c7a1566f4a3adc3ed599c76d5f10d8470efcf3da8dfb67902ce26f`、harness fingerprint
   `538e7b6958d68876cb68a6e6de9ecdca5b5b3e1a3ec5f29d7d64b3e8062e1d31`、binary SHA-256
   `0f3c83b698f27a70072c517f6f263d00b96736b30de6a9150bef61261afac1c8`を封印（2026-09-01）。
+- M0 5 patch色校正初回（subject `b142820f`）:
+  `target/native-acceptance/wall-color-20260901T080247Z-4a4d4ccc`は実client captureまで完走したが、
+  Bevy 0.19のdefault UI camera選択によりPause UIが中央3 patchへ混入し、平均Delta E 2000
+  `16.092317`でinvalid。色値の調整を行わずMainCameraへUI targetを固定し、このartifactは不採用（2026-09-01）。
+- M0 final subject色校正（subject `35f1f6e3`）:
+  `target/native-acceptance/wall-color-20260901T081824Z-e92a7d9c`は独立verifyで`status=pass`。
+  4 base patchの個別／平均Delta E 2000は全て`0.0`、emissive luminance liftは`0.07313`、
+  OCIO validation / active config cache ID / `fallback=false`を封印（2026-09-01）。
+- M0 final subject Capture（subject `35f1f6e3`）:
+  `target/native-acceptance/wall-density-20260901T083037Z-e5dced2c`は全12 run valid、teardown warning 0、
+  独立verifyで`capture_runs=12 / status=pass`。3-run中央値 / MADと全fixture checksumを同じsource / harness /
+  asset-view fingerprintへ封印（2026-09-01）。
+- M0 final subject RenderDoc（subject `35f1f6e3`）:
+  `target/native-acceptance/wall-renderdoc-20260901T084945Z-4d218c02`は独立verifyで`cases=4 / status=pass`。
+  completed / provisionalとも`D_N=1 / D_4N=1`、全8 replay一致でM0 draw predicateを完了（2026-09-01）。
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
@@ -977,8 +1018,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
   通常ゲームの入力、表示、建築成立条件、runtime data、プレイヤー向け文言は不変（`HELL_WORKERS_DIFF_BASE=HEAD`でgate pass）。
 - 初期M0 toolingはユーザー指示により`06826fd2`へ中間commit済み。ただしCapture harnessを含む凍結済みbaseline commitではない。
-- 未解決エラー: OCIO mismatch、registered historical P02 locator未実装、canonical orientation / bounds未封印、
-  上記の既存repository hygiene違反。
+- 未解決エラー: 上記の既存repository hygiene違反のみ。M0のOCIO、reference locator、orientation / boundsは解消済み。
 
 ### Definition of Done
 
@@ -1008,3 +1048,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-01` | `Codex` | M0 Capture laneを実装。`perf.py`へwall phaseとraw sidecar再検証を追加し、専用native profileでclean subject / asset view / 12 run / median・MADを封印。draw-groupは未採取として分離 |
 | `2026-09-01` | `Codex` | current fallback専用actual-windowを実装・採取。formal density laneとsingle-case条件を二重鍵で分離し、isolated WallのUI非重複ROI、X11 client PNG、fallback residency、raw sidecar、fingerprintを封印 |
 | `2026-09-01` | `Codex` | wall専用RenderDoc checkpoint / extractor / native profileを実装・採取。中間color＋depth main passを実RDCで同定し、completed / provisionalのN / 4Nを各1 draw、全owner instance、2 replay一致で封印 |
+| `2026-09-01` | `Codex` | final subject `35f1f6e3`でBevy 5 patch UI隔離を実証し、OCIO陽性Blender referenceとのDelta E 0、Capture 12 run、RenderDoc 4 caseを同一fingerprintから再採取してM0を完了 |
