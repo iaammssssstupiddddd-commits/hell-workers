@@ -55,6 +55,7 @@ def calibration_command(repo: Path, root: Path, adapter: str) -> list[str]:
         "wall-density",
         "--wall-phase",
         "completed",
+        "--wall-actual-window",
         "--sizes",
         "small",
         "--renders",
@@ -425,15 +426,8 @@ def run_calibration(
         }
     )
     command = calibration_command(repo, root, adapter)
-    state.update(
-        {
-            "current_stage": "capture",
-            "commands": [
-                {"stage": "build", "argv": density.build_command()},
-                {"stage": "capture", "argv": command},
-            ],
-        }
-    )
+    state.update({"current_stage": "capture"})
+    state.setdefault("commands", []).append({"stage": "capture", "argv": command})
     native.atomic_write_json(root / "job.json", state)
     deadline = time.monotonic() + RUN_TIMEOUT_SECONDS
     captured_status: dict[str, Any] | None = None
@@ -698,7 +692,7 @@ def run(args: argparse.Namespace) -> int:
         "current_stage": "build",
         "child_pid": None,
         "heartbeat_at": native.utc_now(),
-        "commands": [{"stage": "build", "argv": density.build_command()}],
+        "commands": [],
     }
     native.atomic_write_json(root / "job.json", state)
     try:
@@ -777,6 +771,11 @@ def verify(args: argparse.Namespace) -> int:
 
 
 def self_test() -> int:
+    command = calibration_command(Path("/repo"), Path("/artifact"), "Intel")
+    native.require(
+        "--wall-actual-window" in command,
+        "Wall calibration command lacks its single-case contract",
+    )
     nonce = "0123456789abcdef0123456789abcdef"
     fixture_hash = density.sha256(CONTRACT_PATH)
     status = {

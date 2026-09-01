@@ -38,6 +38,14 @@ def add_run_arguments(
     )
     parser.add_argument("--contract", choices=sorted(CONTRACT_FILES))
     parser.add_argument("--wall-phase", choices=["completed", "provisional"])
+    parser.add_argument(
+        "--wall-actual-window",
+        action="store_true",
+        help=(
+            "run the single-case current-Wall actual-window calibration; reserved "
+            "for the fail-closed native acceptance launcher"
+        ),
+    )
     parser.add_argument("--stage", choices=RTT_LIGHT_STAGES)
     parser.add_argument("--lane", choices=RTT_LIGHT_LANES)
     parser.add_argument("--sizes", default="medium", help="comma-separated: small,medium,large")
@@ -432,14 +440,28 @@ def validate_arguments(args: argparse.Namespace) -> None:
             raise ValueError("wall-density does not accept an RtT-light contract selection")
         if args.wall_phase not in {"completed", "provisional"}:
             raise ValueError("wall-density requires --wall-phase completed|provisional")
-        if sizes != ["small", "medium"] or renders != ["gpu"]:
+        if args.wall_actual_window:
+            if sizes != ["small"] or renders != ["gpu"]:
+                raise ValueError(
+                    "wall-density actual-window requires --sizes small --renders gpu"
+                )
+        elif sizes != ["small", "medium"] or renders != ["gpu"]:
             raise ValueError("wall-density requires --sizes small,medium --renders gpu")
         if args.seed != 20_260_901:
             raise ValueError("wall-density requires --seed 20260901")
-        if args.repeat != 3 or args.preflight_runs != 0:
-            raise ValueError("wall-density requires --repeat 3 --preflight-runs 0")
-        if args.warmup_secs != 30.0 or args.measure_secs != 60.0:
-            raise ValueError("wall-density requires --warmup-secs 30 --measure-secs 60")
+        expected_repeat = 1 if args.wall_actual_window else 3
+        if args.repeat != expected_repeat or args.preflight_runs != 0:
+            raise ValueError(
+                f"wall-density requires --repeat {expected_repeat} --preflight-runs 0"
+            )
+        expected_warmup = 10.0 if args.wall_actual_window else 30.0
+        expected_measure = 10.0 if args.wall_actual_window else 60.0
+        if args.warmup_secs != expected_warmup or args.measure_secs != expected_measure:
+            raise ValueError(
+                "wall-density requires "
+                f"--warmup-secs {expected_warmup:g} "
+                f"--measure-secs {expected_measure:g}"
+            )
         if args.window_backend != "x11":
             raise ValueError("wall-density requires --window-backend x11")
         if args.backend != "vulkan" or args.present_mode != "novsync":
@@ -469,6 +491,8 @@ def validate_arguments(args: argparse.Namespace) -> None:
         return
     if args.wall_phase is not None:
         raise ValueError("--wall-phase is reserved for --workload wall-density")
+    if args.wall_actual_window:
+        raise ValueError("--wall-actual-window is reserved for --workload wall-density")
     if args.workload == "dream-ui-burst":
         if args.command not in {"run", "audit"}:
             raise ValueError("dream-ui-burst is available through perf.py run or audit")

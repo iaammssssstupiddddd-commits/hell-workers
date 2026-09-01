@@ -3425,6 +3425,27 @@ def self_test() -> int:
         assert audit_args.audit_ticks == 128
         assert audit_args.familiar_policies == "baseline"
         assert audit_args.operation_dialog_modes == "hidden"
+        wall_actual_args = build_parser().parse_args(
+            [
+                "run", "--workload", "wall-density", "--wall-phase", "completed",
+                "--wall-actual-window", "--sizes", "small", "--renders", "gpu",
+                "--seed", "20260901", "--repeat", "1", "--preflight-runs", "0",
+                "--souls", "0", "--familiars", "0",
+                "--window-backend", "x11", "--backend", "vulkan",
+                "--present-mode", "novsync", "--window-width", "1280",
+                "--window-height", "720", "--window-scale-factor", "1.0",
+                "--rtt-quality", "high", "--warmup-secs", "10",
+                "--measure-secs", "10", "--dry-run",
+            ]
+        )
+        validate_arguments(wall_actual_args)
+        wall_actual_args.wall_actual_window = False
+        try:
+            validate_arguments(wall_actual_args)
+        except ValueError as error:
+            assert "--sizes small,medium" in str(error)
+        else:
+            raise AssertionError("single-case Wall calibration unexpectedly passed as formal")
         field_core_args = build_parser().parse_args(["field-core", "--dry-run"])
         validate_arguments(field_core_args)
         assert field_core_args.capture_kind == "field-core"
