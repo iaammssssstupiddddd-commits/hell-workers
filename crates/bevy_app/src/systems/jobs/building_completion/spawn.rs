@@ -377,6 +377,16 @@ mod tests {
         {
             let mut world = World::new();
             let owner = world.spawn_empty().id();
+            world.insert_resource(crate::assets::wall_asset_set::WallProductionActivation {
+                topology_ready: true,
+                decision_revision: 1,
+                state: crate::assets::wall_asset_set::WallProductionActivationState::ReadyToApply {
+                    asset_set_generation: 1,
+                    authority: crate::assets::wall_asset_set::WallAssetAuthority::IsolatedCandidate,
+                    manifest_sha256: "b".repeat(64),
+                    asset_activation_revision: 1,
+                },
+            });
             let mut queue = CommandQueue::default();
             {
                 let mut commands = Commands::new(&mut queue, &world);
