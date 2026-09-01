@@ -557,7 +557,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   1 mesh / 1 primitive、identity、UV0、tangent有無、embedded image、triangle cap、raw bounds、active armの
   core / port cross-section、junction corridor unionを検証する。純Pythonのisolated / straight正例とnode /
   primitive / image / UV / port負例、およびBlender 5.1.1→Khronos→post-exportの実GLB正例がpassした。
-- asset-set manifest v2、allowlist sync、promotion transaction、production scene / 6 GLB / textureは未実装。
+- asset-set manifest v2 templateとfail-closed validatorを追加した。candidate / finalを分離し、6 family、
+  core / optionalの3通りのnormal在庫、24個のmesh report、2個のset report、tool identity / version、license、
+  provenance、art approval artifact、actual bytes hashをclosed setで検査する。既存generic v1は変更していない。
+- allowlist sync、promotion transaction、production scene / 6 GLB / textureは未実装。
 
 - 変更内容:
   - 59度Orthographic reference boardを公称厚9.6 wu / 装飾外形最大12.8 wuで作り、黒石、錆鉄、トゲ、紫裂け目、ラフ線の優先順位を一枚で比較できるようにする。
@@ -599,8 +602,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [ ] 全接続腕のport collarで公称・連続最小厚が9.6 wu、石・鉄・トゲ込み局所横断外形が12.8 wu以下で、cell境界のport profileが6 mesh間で一致する。junctionの別armを厚さへ誤算入していない。
   - [ ] albedo / emissiveが共通で、variantごとのmaterial slotやtextureがない。
   - [ ] selectorは6 collectionを別々にexportし、unknown / empty / multi-meshを拒否し、既存no-selector smokeもpassする。
-  - [ ] asset-set manifest v2 validatorが、6 collection→6 GLB、production core / optional集合、normal decision、全report / license / SHA-256 / review statusをexact検証する。M1 candidate modeだけは明示的`pending`を許し、M4 final / M5 modeは拒否する。candidateは隔離profileだけ、通常productionはpromotion receipt付きauthorityだけにmode分離する。
-  - [ ] normal集合はpending 8 core＋1 optional、adopted 9 core＋0 optional、rejected 8 core＋0 optionalだけを許し、rejected normalはart evidence以外のfinal manifest / projection / asset viewに残らない。
+  - [x] asset-set manifest v2 validatorが、6 collection→6 GLB、production core / optional集合、normal decision、全report / license / SHA-256 / review statusをexact検証する。M1 candidate modeだけは明示的`pending`を許し、M4 final / M5 modeは拒否する。candidateは隔離profileだけ、通常productionはpromotion receipt付きauthorityだけにmode分離する。
+  - [x] normal集合はpending 8 core＋1 optional、adopted 9 core＋0 optional、rejected 8 core＋0 optionalだけを許し、rejected normalはart evidence以外のfinal manifest / projection / asset viewに残らない。
   - [ ] post-export validatorが6正例をpassし、unknown / empty / multi-mesh、node transform、2 primitive、embedded image、bounds / port違反の負例を全件rejectする。
   - [ ] manifest allowlist付きsync dry-runの差分がwall asset setだけであり、primary / canonicalや無関係assetを対象にしない。
   - [ ] promotion toolとmanifest-aware syncのplan / apply / recover / rollback testが、existing / absent preimage、途中copy失敗、hash差替え、allowlist外file、全fsync / directory rename / pointer replace kill pointでfail-closedになり、canonical / repoのactive pointerが部分generationを指さない。

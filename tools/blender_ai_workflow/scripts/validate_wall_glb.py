@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import struct
@@ -427,8 +428,10 @@ def validate_wall_glb(path: Path, family: str, contract_path: Path = DEFAULT_CON
         "schema_version": 1,
         "status": "pass",
         "asset_set_id": contract["asset_set_id"],
+        "contract_sha256": hashlib.sha256(contract_path.read_bytes()).hexdigest(),
         "family": family,
         "glb": str(path.resolve()),
+        "glb_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "mesh_count": 1,
         "primitive_count": 1,
         "triangle_count": len(triangles),

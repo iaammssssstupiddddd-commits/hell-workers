@@ -1,0 +1,146 @@
+{
+  "schema_version": 2,
+  "asset_set_id": "wall-production-v1",
+  "manifest_mode": "candidate",
+  "candidate_generation": 1,
+  "created_at_utc": "",
+  "source": {
+    "blend": {
+      "path": "wall-production-v1.blend",
+      "sha256": ""
+    },
+    "tool_commit": "",
+    "tool_tree": "",
+    "tool_versions": {
+      "blender": "5.1.1",
+      "exporter": "Blender glTF 2.0",
+      "khronos_validator": ""
+    },
+    "runtime_subject": "pending",
+    "source_fingerprint": ""
+  },
+  "meshes": [
+    {
+      "family": "isolated",
+      "collection": "Wall_Isolated",
+      "output": {
+        "path": "models/buildings/wall/wall_isolated.glb",
+        "sha256": ""
+      },
+      "reports": {
+        "scene": {"path": "wall_isolated.scene.json", "sha256": ""},
+        "export": {"path": "wall_isolated.export.json", "sha256": ""},
+        "khronos": {"path": "wall_isolated.khronos.json", "sha256": ""},
+        "post_export": {"path": "wall_isolated.post-export.json", "sha256": ""}
+      }
+    },
+    {
+      "family": "end",
+      "collection": "Wall_End",
+      "output": {"path": "models/buildings/wall/wall_end.glb", "sha256": ""},
+      "reports": {
+        "scene": {"path": "wall_end.scene.json", "sha256": ""},
+        "export": {"path": "wall_end.export.json", "sha256": ""},
+        "khronos": {"path": "wall_end.khronos.json", "sha256": ""},
+        "post_export": {"path": "wall_end.post-export.json", "sha256": ""}
+      }
+    },
+    {
+      "family": "straight",
+      "collection": "Wall_Straight",
+      "output": {"path": "models/buildings/wall/wall_straight.glb", "sha256": ""},
+      "reports": {
+        "scene": {"path": "wall_straight.scene.json", "sha256": ""},
+        "export": {"path": "wall_straight.export.json", "sha256": ""},
+        "khronos": {"path": "wall_straight.khronos.json", "sha256": ""},
+        "post_export": {"path": "wall_straight.post-export.json", "sha256": ""}
+      }
+    },
+    {
+      "family": "corner",
+      "collection": "Wall_Corner",
+      "output": {"path": "models/buildings/wall/wall_corner.glb", "sha256": ""},
+      "reports": {
+        "scene": {"path": "wall_corner.scene.json", "sha256": ""},
+        "export": {"path": "wall_corner.export.json", "sha256": ""},
+        "khronos": {"path": "wall_corner.khronos.json", "sha256": ""},
+        "post_export": {"path": "wall_corner.post-export.json", "sha256": ""}
+      }
+    },
+    {
+      "family": "t_junction",
+      "collection": "Wall_TJunction",
+      "output": {"path": "models/buildings/wall/wall_t_junction.glb", "sha256": ""},
+      "reports": {
+        "scene": {"path": "wall_t_junction.scene.json", "sha256": ""},
+        "export": {"path": "wall_t_junction.export.json", "sha256": ""},
+        "khronos": {"path": "wall_t_junction.khronos.json", "sha256": ""},
+        "post_export": {"path": "wall_t_junction.post-export.json", "sha256": ""}
+      }
+    },
+    {
+      "family": "cross",
+      "collection": "Wall_Cross",
+      "output": {"path": "models/buildings/wall/wall_cross.glb", "sha256": ""},
+      "reports": {
+        "scene": {"path": "wall_cross.scene.json", "sha256": ""},
+        "export": {"path": "wall_cross.export.json", "sha256": ""},
+        "khronos": {"path": "wall_cross.khronos.json", "sha256": ""},
+        "post_export": {"path": "wall_cross.post-export.json", "sha256": ""}
+      }
+    }
+  ],
+  "production": {
+    "core": [
+      {"path": "models/buildings/wall/wall_isolated.glb", "sha256": ""},
+      {"path": "models/buildings/wall/wall_end.glb", "sha256": ""},
+      {"path": "models/buildings/wall/wall_straight.glb", "sha256": ""},
+      {"path": "models/buildings/wall/wall_corner.glb", "sha256": ""},
+      {"path": "models/buildings/wall/wall_t_junction.glb", "sha256": ""},
+      {"path": "models/buildings/wall/wall_cross.glb", "sha256": ""},
+      {"path": "textures/buildings/wall/wall_albedo.png", "sha256": ""},
+      {"path": "textures/buildings/wall/wall_emissive.png", "sha256": ""}
+    ],
+    "optional": [
+      {"path": "textures/buildings/wall/wall_normal.png", "sha256": ""}
+    ]
+  },
+  "normal_decision": "pending",
+  "set_reports": [
+    {"role": "reference_board", "file": {"path": "wall-production-v1.reference-board.json", "sha256": ""}},
+    {"role": "rebuild", "file": {"path": "wall-production-v1.rebuild.json", "sha256": ""}}
+  ],
+  "provenance": {
+    "generators": [
+      {
+        "role": "mesh",
+        "service": "procedural-blender",
+        "model": "Blender",
+        "version": "5.1.1",
+        "prompt_sha256": "",
+        "reference_sha256": []
+      },
+      {
+        "role": "texture",
+        "service": "OpenAI built-in image generation",
+        "model": "",
+        "version": "",
+        "prompt_sha256": "",
+        "reference_sha256": []
+      }
+    ]
+  },
+  "license": {
+    "name": "",
+    "terms_url": "",
+    "checked_at_utc": "",
+    "file": {"path": "wall-production-v1.md", "sha256": ""}
+  },
+  "art_review": {
+    "status": "pending",
+    "reviewer": "",
+    "reviewed_at_utc": "",
+    "notes": "",
+    "artifact": null
+  }
+}

@@ -16,6 +16,7 @@ Hell Workers の AI 支援 Blender 編集を、staging 限定・検証付きで�
 | `bin/export-staging-glb` | scene gate、GLB export、Khronos validatorを直列実行 |
 | `bin/gltf-validate` | pinned Khronos validator wrapper |
 | `bin/validate-wall-glb` | production Wall GLBの構造・bounds・port断面をbytesから再検証 |
+| `scripts/validate_asset_set_manifest.py` | Wall asset-set manifest v2と全参照artifactをexact検証 |
 | `bin/workflow-smoke` | deterministic `.blend` / PNG / GLB / reports を生成 |
 | `scripts/render_color_calibration.py` | 壁M0の固定5 patchをBlenderで描画し、OCIO陽性証明付きmetadataを出力 |
 | `scripts/verify_color_calibration.py` | Blender / Bevy PNGをCIEDE2000とemissive sanityでoffline照合 |
@@ -34,6 +35,26 @@ render-enabled meshが1個でなければexport前に失敗します。指定し
 変更しません。collection export後はKhronos validatorに加えて`validate-wall-glb`を実行し、GLBのJSON / BINを
 直接decodeして1 node / 1 mesh / 1 primitive、identity node、UV0、tangent有無、embedded image 0、350 triangle
 cap、raw Y `-16..+16 wu`、9.6 wu port profile、12.8 wu corridor unionを検証します。
+
+Wall asset-set manifest v2は、既存の単体asset manifest v1とは別schemaです。candidate検証は
+`normal_decision=pending`（core 8 file＋optional normal 1 file）とpending runtime subject / art reviewを許し、
+final検証はnormalをadopted（core 9）またはrejected（core 8）へ確定し、runtime subjectとhash付きのart approval
+artifactを必須にします。6 familyのGLB、scene / export / Khronos / post-export report、set report、1024角texture、
+source `.blend`、tool commit / tree / version、provenance、licenseをclosed field setとactual bytesのSHA-256で検査します。
+
+```bash
+python3 tools/blender_ai_workflow/scripts/validate_asset_set_manifest.py \
+  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" \
+  --mode candidate \
+  --blend-root "$ASSET_ROOT/staging/blend" \
+  --exports-root "$ASSET_ROOT/staging/exports" \
+  --reports-root "$ASSET_ROOT/staging/reports" \
+  --licenses-root "$ASSET_ROOT/licenses" \
+  --repo "$PWD"
+```
+
+validatorはmanifestの`tool_commit` / `tool_tree`を指定repoのHEADと照合します。templateは必要fieldを示すための
+未封印雛形であり、空hashのまま検証を通るサンプルではありません。
 
 ## Environment
 

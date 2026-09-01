@@ -88,6 +88,24 @@ class ScriptContractTests(unittest.TestCase):
         self.assertEqual(payload["schema_version"], 1)
         self.assertIn("approval", payload)
 
+    def test_wall_asset_set_template_is_a_separate_v2_schema(self) -> None:
+        generic = json.loads(
+            (WORKFLOW_ROOT / "templates/asset-manifest.template.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        wall = json.loads(
+            (
+                WORKFLOW_ROOT
+                / "templates/asset-set-manifest-v2.template.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(generic["schema_version"], 1)
+        self.assertEqual(wall["schema_version"], 2)
+        self.assertEqual(wall["asset_set_id"], "wall-production-v1")
+        self.assertEqual(len(wall["meshes"]), 6)
+        self.assertEqual(wall["normal_decision"], "pending")
+
 
 if __name__ == "__main__":
     unittest.main()
