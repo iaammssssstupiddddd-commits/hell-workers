@@ -422,6 +422,12 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   4N=`10.495838 (1.323651) / 13.341914 (1.645682)` ms。全runのinitial / warm-up / measure-end
   checksumはcase内で一致し、teardown warningは0だった。このartifactはCapture baselineとして使用できるが、
   draw predicateは未検証なのでRenderDoc baselineを兼ねない。
+- subject `1c136ca5`からP02 v9を開始した最初のcaseは、2026-08-20に削除済みのlegacy structural
+  Door spriteについてOpen画像handleを要求する古いfixture predicateでfail-closedになった。productionの
+  active 3D Doorはstate / material / transformを別predicateで検証済みで、`expected_presentation(Door)`も
+  child Sprite 0 / owner 3D 1を要求するため、auditとruntime validationから旧mirror画像条件だけを除去する。
+  `target/native-acceptance/p02-presentation-20260901T044343Z-344a5e7b`はinvalidのまま保持し、修正commitから
+  18 caseを最初から再採取する。
 
 - 変更内容:
   - current `Cuboid` wallをproduction cameraで撮影し、source fingerprint、camera、quality、DPI、adapter、asset viewを記録する。既存P02 visual referenceと、後述の`wall-density-v1`性能baselineを別artifactにする。
@@ -851,6 +857,11 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   N=`8.683672 (0.034590) / 9.378522 (0.022487)` ms、4N=`26.202343 (3.433323) / 40.219051 (1.202868)` ms、
   provisional N=`10.629657 (0.887287) / 13.332263 (1.016646)` ms、4N=`10.495838 (1.323651) / 13.341914 (1.645682)` ms。
   `draw_groups=not-collected`のためCapture baselineとしてのみ採用（2026-09-01）。
+- M0 P02 reference初回試行（subject `1c136ca5`）:
+  `target/native-acceptance/p02-presentation-20260901T044343Z-344a5e7b`は最初のHigh / DPI 1 / Render3d visibleで
+  invalid。削除済みlegacy Door child SpriteのOpen画像handleを要求するfixture predicateだけが失敗し、semantic
+  Door state / WorldMap owner / passabilityは一致。旧mirror画像条件をaudit / validationの双方から除去し、
+  focused profiling testとworkspace checkをpass（2026-09-01）。
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
