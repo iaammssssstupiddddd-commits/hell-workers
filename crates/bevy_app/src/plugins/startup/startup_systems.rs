@@ -47,7 +47,16 @@ pub(super) fn initial_resource_spawner_timed(
     world_map: WorldMapWrite,
     generated_layout: Res<GeneratedWorldLayoutResource>,
     mut regrowth: ResMut<RegrowthManager>,
+    perf_config: Res<PerfScenarioConfig>,
 ) {
+    if perf_config.uses_isolated_wall_density_world() {
+        regrowth.zones.clear();
+        regrowth.last_regrowth_day = 0;
+        info!(
+            "PERF_SCENARIO: wall-density omitted normal initial resources, facilities, and regrowth targets"
+        );
+        return;
+    }
     configure_regrowth_from_generated_layout(&mut regrowth, &generated_layout.layout);
     initial_resource_spawner(
         commands,

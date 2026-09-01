@@ -181,6 +181,7 @@ fn every_enabled_fixture_freezes_until_the_initial_checkpoint() {
     config.workload = super::PerfWorkload::WallDensity;
     assert!(config.freezes_fixture_setup());
     assert!(config.keeps_virtual_time_paused_during_capture());
+    assert!(config.uses_isolated_wall_density_world());
 
     config.workload = super::PerfWorkload::Gather;
     config.clock_mode = PerfClockMode::Realtime;
@@ -192,6 +193,7 @@ fn every_enabled_fixture_freezes_until_the_initial_checkpoint() {
     config.enabled = false;
     assert!(!config.freezes_fixture_setup());
     assert!(!config.keeps_virtual_time_paused_during_capture());
+    assert!(!config.uses_isolated_wall_density_world());
 }
 
 #[test]

@@ -2271,6 +2271,12 @@ def read_wall_density_sidecars(
     return fixture, rows, errors
 
 
+def measurement_duration_clock(workload: str) -> tuple[str, bool]:
+    """Return the advancing capture clock and whether virtual time must stay frozen."""
+    pauses_virtual_time = workload in {"indoor-light", "wall-density"}
+    return ("real" if pauses_virtual_time else "virtual"), pauses_virtual_time
+
+
 def validate_run(
     run_dir: Path,
     *,
@@ -2730,8 +2736,8 @@ def validate_run(
                         f"summary {field} is {declared:.6f}, but frames.csv computes "
                         f"{computed:.6f}"
                     )
-        duration_clock = (
-            "real" if expected_case.workload == "indoor-light" else "virtual"
+        duration_clock, pauses_virtual_time = measurement_duration_clock(
+            expected_case.workload
         )
         for field, expected in (
             (f"warmup_{duration_clock}_secs", expected_warmup_secs),
@@ -2747,7 +2753,7 @@ def validate_run(
                 reasons.append(
                     f"summary {field} is {observed:.6f}, below requested {expected:.6f}"
                 )
-        if expected_case.workload == "indoor-light":
+        if pauses_virtual_time:
             for field in ("warmup_virtual_secs", "measure_virtual_secs"):
                 try:
                     observed = float(summary[field])
@@ -2755,7 +2761,8 @@ def validate_run(
                     continue
                 if not math.isclose(observed, 0.0, rel_tol=0.0, abs_tol=1e-6):
                     reasons.append(
-                        f"summary {field} is {observed:.6f}, expected 0 while indoor-light simulation is paused"
+                        f"summary {field} is {observed:.6f}, expected 0 while "
+                        f"{expected_case.workload} simulation is paused"
                     )
 
     if summary is not None and scene_roots is not None:

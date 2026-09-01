@@ -1056,6 +1056,15 @@ impl PerfScenarioConfig {
             )
     }
 
+    /// Wall-density owns the logical contents of its measurement world.
+    ///
+    /// Terrain and renderer startup still run, but the normal generated trees,
+    /// rocks, facilities, and regrowth targets must not reserve cells or add
+    /// unrelated draw work before the fixed wall fixture is installed.
+    pub const fn uses_isolated_wall_density_world(&self) -> bool {
+        self.enabled && matches!(self.workload, PerfWorkload::WallDensity)
+    }
+
     pub fn is_field_core(&self) -> bool {
         self.enabled
             && self.workload == PerfWorkload::IndoorLight

@@ -7,7 +7,11 @@ import tempfile
 from types import SimpleNamespace
 
 from .compare import *
-from .artifacts import read_indoor_light_gpu, read_wall_density_sidecars
+from .artifacts import (
+    measurement_duration_clock,
+    read_indoor_light_gpu,
+    read_wall_density_sidecars,
+)
 from .arguments import DECONSTRUCTION_HEADLESS_SOFTWARE_RENDERING_WARNING
 from .model import WALL_DENSITY_CASES, WALL_DENSITY_CONTRACT_SHA256, WALL_DENSITY_LAYOUT_COLUMNS
 from .rtt_light_contract import (
@@ -3979,6 +3983,9 @@ def self_test() -> int:
             "wall-density", "small", "gpu", 20_260_901, None, None,
             wall_phase="completed",
         )
+        assert measurement_duration_clock(wall_case.workload) == ("real", True)
+        assert measurement_duration_clock("indoor-light") == ("real", True)
+        assert measurement_duration_clock("gather") == ("virtual", False)
         assert wall_case.identifier == "wall-density-small-gpu-seed-20260901-wall-completed"
         assert wall_case.identifier != Case(
             "wall-density", "small", "gpu", 20_260_901, None, None,

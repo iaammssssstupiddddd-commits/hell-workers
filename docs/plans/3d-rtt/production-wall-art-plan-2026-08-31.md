@@ -388,8 +388,15 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   binary、N / 4N×completed / provisional×3 run、p95 / p99中央値・MADをfail-closedで封印する。
   dirty subjectではdirect `kitty`計画をblockすることまでself-test / dry-runで確認済み。
 - Bevy actual-window calibration phase、wall固有RenderDoc draw-group抽出、承認済みclean baseline commitからの
-  P02 / N / 4N正式採取は未実装・未実行。Capture profileは`draw_groups=not-collected`を明記する。
+  P02正式採取は未実装・未実行。N / 4Nの最初の正式Captureは下記理由で棄却済み。
+  Capture profileは`draw_groups=not-collected`を明記する。
 - この中間状態をM0完了や性能baselineとして扱わず、後続M1のasset制作開始gateにも使わない。
+- 最初の正式Capture試行（subject `a69ea3df`）はfail-closedで棄却した。Smallのraw 3 runは取得できたが、
+  仮想時刻を停止するwall-densityへvalidatorがvirtual 30 s / 60 sを誤要求した。Mediumは通常worldの
+  初期facilityが固定fixture cell `(82, 57)`を先に予約して起動時に失敗した。M0 contractを凍結する前に、
+  durationはreal clockを検証しvirtual 0を要求するよう修正し、wall-densityではterrain以外の通常初期
+  resource / facility / regrowth targetを生成しない隔離経路へ変更した。失敗artifactはbaselineへ流用せず、
+  修正commitから全12 runを再採取する。
 
 - 変更内容:
   - current `Cuboid` wallをproduction cameraで撮影し、source fingerprint、camera、quality、DPI、adapter、asset viewを記録する。既存P02 visual referenceと、後述の`wall-density-v1`性能baselineを別artifactにする。
@@ -749,18 +756,21 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### 現在地
 
-- 進捗: `計画作成済み / 実装0%`
+- 進捗: `M0実装・native baseline再採取中`
 - 完了済み:
   - current active wall経路、2D connection system、material / transform / MeshTag、save rehydrate、external asset workflowを棚卸し済み。
   - 6 mesh / 16 mask、finite pool、fallback、native受入の実装境界を本書で固定済み。
   - production wallの局所横断における公称・連続最小厚9.6 wu、装飾外形上限12.8 wu、共通接続portを投影式と遠景pixel下限から固定済み。
-- 未着手:
-  - M0以降すべて。asset、code、runtime dataは本計画作成時点で変更していない。
+  - M0のBlender geometry / color fixture、offline verifier、Rust `wall-density-v1` fixture、Capture profileを実装済み。
+  - 最初のnative Captureをfail-closedで棄却し、duration clock誤判定と通常初期world混入を修正済み。
+- 未完了:
+  - 修正commitからcompleted / provisional各N / 4Nの全12 runを再採取し、3 valid run中央値 / MADを封印する。
+  - wall固有draw-group抽出、P02 visual reference、OCIO陽性証明を閉じるまではM0未完了。M1以降は未着手。
 
 ### 次のAIが最初にやること
 
-1. `README.md`、`docs/DEVELOPMENT.md`、`docs/README.md`と本書の参照必須ファイルを読み、worktreeと外部asset rootを再棚卸しする。
-2. M0だけを開始し、OCIO陽性証明／offline verifier、current wall baseline、`wall-density-v1`、canonical orientation / boundsを証拠付きで固定する。
+1. 修正commitから`wall-density-v1` Capture全12 runを再採取し、raw sidecar、real duration、virtual 0、中央値 / MADを再検証する。
+2. current wallのP02 reference、wall固有draw-group抽出、OCIO陽性証明、canonical orientation / boundsを証拠付きで固定してM0を閉じる。
 3. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
 
 ### ブロッカー/注意点
@@ -801,6 +811,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M0 Capture harness `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/native_acceptance.py self-test`: `pass (2026-09-01)`
 - M0 Capture harness `PYTHONDONTWRITEBYTECODE=1 python3 .codex/skills/hell-workers-run-native-acceptance/scripts/wall_density_acceptance.py self-test`: `pass (2026-09-01)`
 - M0 Capture harness exact matrix dry-run: `pass`。未コミット差分でnative `plan`が`blocked`になることも確認（2026-09-01）
+- M0最初のnative Capture（subject `a69ea3df`）: `fail-closed / artifact invalid`。Small 3 runのreal 30 s / 60 s rawは取得したがvalidatorが停止中virtual clockを誤判定し、Medium 3 runは通常初期facilityと固定cell `(82, 57)`が衝突。合格baselineへ不使用（2026-09-01）
+- M0 native修正後 `PYTHONDONTWRITEBYTECODE=1 python3 scripts/perf.py self-test`: `pass`。wall-density / indoor-lightはreal duration＋virtual 0、通常workloadはvirtual durationを検証（2026-09-01）
+- M0 native修正後 focused Rust config test: `pass (1 test, 2026-09-01)`。enabled wall-densityだけが通常初期resource / facility / regrowth targetを省略する隔離worldを要求。
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
