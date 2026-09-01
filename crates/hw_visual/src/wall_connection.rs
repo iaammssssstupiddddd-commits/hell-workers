@@ -7,6 +7,82 @@ use hw_core::visual_mirror::construction::BlueprintVisualState;
 use hw_world::{WorldMap, WorldMapRead};
 use std::collections::HashSet;
 
+/// Four-neighbor Wall connector mask in the canonical `(N, S, W, E)` order.
+/// N is the high bit so `bits()` matches the M0 fixture's four-character masks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WallConnectionMask(u8);
+
+impl WallConnectionMask {
+    pub const fn from_neighbors(north: bool, south: bool, west: bool, east: bool) -> Self {
+        Self(((north as u8) << 3) | ((south as u8) << 2) | ((west as u8) << 1) | east as u8)
+    }
+
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WallMeshFamily {
+    Isolated,
+    End,
+    Straight,
+    Corner,
+    TJunction,
+    Cross,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct QuarterTurns(u8);
+
+impl QuarterTurns {
+    pub const ZERO: Self = Self(0);
+    pub const ONE: Self = Self(1);
+    pub const TWO: Self = Self(2);
+    pub const THREE: Self = Self(3);
+
+    pub const fn get(self) -> u8 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ResolvedWallTopology {
+    pub family: WallMeshFamily,
+    pub quarter_turns_y: QuarterTurns,
+}
+
+/// Maps every canonical connector mask to one of the six production meshes.
+/// Positive quarter turns rotate around +Y and appear counterclockwise from above.
+pub const fn resolve_wall_topology(mask: WallConnectionMask) -> ResolvedWallTopology {
+    use QuarterTurns as Q;
+    use WallMeshFamily as F;
+
+    let (family, quarter_turns_y) = match mask.bits() {
+        0b0000 => (F::Isolated, Q::ZERO),
+        0b1000 => (F::End, Q::ZERO),
+        0b0100 => (F::End, Q::TWO),
+        0b0010 => (F::End, Q::ONE),
+        0b0001 => (F::End, Q::THREE),
+        0b1100 => (F::Straight, Q::ZERO),
+        0b0011 => (F::Straight, Q::ONE),
+        0b1010 => (F::Corner, Q::ZERO),
+        0b1001 => (F::Corner, Q::THREE),
+        0b0110 => (F::Corner, Q::ONE),
+        0b0101 => (F::Corner, Q::TWO),
+        0b1110 => (F::TJunction, Q::ZERO),
+        0b1101 => (F::TJunction, Q::TWO),
+        0b1011 => (F::TJunction, Q::THREE),
+        0b0111 => (F::TJunction, Q::ONE),
+        0b1111 => (F::Cross, Q::ZERO),
+        _ => unreachable!(),
+    };
+    ResolvedWallTopology {
+        family,
+        quarter_turns_y,
+    }
+}
+
 /// Runtime wake-up for wall/door removals whose visual mirror disappears
 /// before the regular `Changed<BuildingVisualState>` query can observe it.
 #[derive(Resource, Debug, Default)]
@@ -164,54 +240,49 @@ fn update_wall_sprite(
     let down = is_wall(x, y - 1, world_map, q_walls_check);
     let left = is_wall(x - 1, y, world_map, q_walls_check);
     let right = is_wall(x + 1, y, world_map, q_walls_check);
+    let mask = WallConnectionMask::from_neighbors(up, down, left, right).bits();
 
     let is_provisional = is_provisional_wall(wall_entity, q_walls_check);
 
     let (texture, flip_x, flip_y) = if is_provisional {
-        match (up, down, left, right) {
-            (false, false, false, false) => (wall_handles.stone_isolated.clone(), false, false),
-            (false, false, true, false) => {
-                (wall_handles.stone_horizontal_left.clone(), false, false)
-            }
-            (false, false, false, true) => {
-                (wall_handles.stone_horizontal_right.clone(), false, false)
-            }
-            (false, false, true, true) => {
-                (wall_handles.stone_horizontal_both.clone(), false, false)
-            }
-            (true, false, false, false) => (wall_handles.stone_vertical_top.clone(), false, false),
-            (false, true, false, false) => {
-                (wall_handles.stone_vertical_bottom.clone(), false, false)
-            }
-            (true, true, false, false) => (wall_handles.stone_vertical_both.clone(), false, false),
-            (true, false, true, false) => (wall_handles.stone_corner_tl.clone(), false, false),
-            (true, false, false, true) => (wall_handles.stone_corner_tr.clone(), false, false),
-            (false, true, true, false) => (wall_handles.stone_corner_bl.clone(), false, false),
-            (false, true, false, true) => (wall_handles.stone_corner_br.clone(), false, false),
-            (true, true, true, false) => (wall_handles.stone_t_left.clone(), false, false),
-            (true, true, false, true) => (wall_handles.stone_t_right.clone(), false, false),
-            (true, false, true, true) => (wall_handles.stone_t_up.clone(), false, false),
-            (false, true, true, true) => (wall_handles.stone_t_down.clone(), false, false),
-            (true, true, true, true) => (wall_handles.stone_cross.clone(), false, false),
+        match mask {
+            0b0000 => (wall_handles.stone_isolated.clone(), false, false),
+            0b0010 => (wall_handles.stone_horizontal_left.clone(), false, false),
+            0b0001 => (wall_handles.stone_horizontal_right.clone(), false, false),
+            0b0011 => (wall_handles.stone_horizontal_both.clone(), false, false),
+            0b1000 => (wall_handles.stone_vertical_top.clone(), false, false),
+            0b0100 => (wall_handles.stone_vertical_bottom.clone(), false, false),
+            0b1100 => (wall_handles.stone_vertical_both.clone(), false, false),
+            0b1010 => (wall_handles.stone_corner_tl.clone(), false, false),
+            0b1001 => (wall_handles.stone_corner_tr.clone(), false, false),
+            0b0110 => (wall_handles.stone_corner_bl.clone(), false, false),
+            0b0101 => (wall_handles.stone_corner_br.clone(), false, false),
+            0b1110 => (wall_handles.stone_t_left.clone(), false, false),
+            0b1101 => (wall_handles.stone_t_right.clone(), false, false),
+            0b1011 => (wall_handles.stone_t_up.clone(), false, false),
+            0b0111 => (wall_handles.stone_t_down.clone(), false, false),
+            0b1111 => (wall_handles.stone_cross.clone(), false, false),
+            _ => unreachable!(),
         }
     } else {
-        match (up, down, left, right) {
-            (false, false, false, false) => (wall_handles.mud_isolated.clone(), false, false),
-            (false, false, true, false) => (wall_handles.mud_end_right.clone(), false, false),
-            (false, false, false, true) => (wall_handles.mud_end_left.clone(), false, false),
-            (false, false, true, true) => (wall_handles.mud_horizontal.clone(), false, false),
-            (true, false, false, false) => (wall_handles.mud_end_bottom.clone(), false, false),
-            (false, true, false, false) => (wall_handles.mud_end_top.clone(), false, false),
-            (true, true, false, false) => (wall_handles.mud_vertical.clone(), false, false),
-            (true, false, true, false) => (wall_handles.mud_corner_tl.clone(), false, false),
-            (true, false, false, true) => (wall_handles.mud_corner_tr.clone(), false, false),
-            (false, true, true, false) => (wall_handles.mud_corner_bl.clone(), false, false),
-            (false, true, false, true) => (wall_handles.mud_corner_br.clone(), false, false),
-            (true, true, true, false) => (wall_handles.mud_t_left.clone(), false, false),
-            (true, true, false, true) => (wall_handles.mud_t_right.clone(), false, false),
-            (true, false, true, true) => (wall_handles.mud_t_up.clone(), false, false),
-            (false, true, true, true) => (wall_handles.mud_t_down.clone(), false, false),
-            (true, true, true, true) => (wall_handles.mud_cross.clone(), false, false),
+        match mask {
+            0b0000 => (wall_handles.mud_isolated.clone(), false, false),
+            0b0010 => (wall_handles.mud_end_right.clone(), false, false),
+            0b0001 => (wall_handles.mud_end_left.clone(), false, false),
+            0b0011 => (wall_handles.mud_horizontal.clone(), false, false),
+            0b1000 => (wall_handles.mud_end_bottom.clone(), false, false),
+            0b0100 => (wall_handles.mud_end_top.clone(), false, false),
+            0b1100 => (wall_handles.mud_vertical.clone(), false, false),
+            0b1010 => (wall_handles.mud_corner_tl.clone(), false, false),
+            0b1001 => (wall_handles.mud_corner_tr.clone(), false, false),
+            0b0110 => (wall_handles.mud_corner_bl.clone(), false, false),
+            0b0101 => (wall_handles.mud_corner_br.clone(), false, false),
+            0b1110 => (wall_handles.mud_t_left.clone(), false, false),
+            0b1101 => (wall_handles.mud_t_right.clone(), false, false),
+            0b1011 => (wall_handles.mud_t_up.clone(), false, false),
+            0b0111 => (wall_handles.mud_t_down.clone(), false, false),
+            0b1111 => (wall_handles.mud_cross.clone(), false, false),
+            _ => unreachable!(),
         }
     };
 
@@ -250,6 +321,71 @@ fn is_wall(x: i32, y: i32, world_map: &WorldMap, q_walls_check: &WallCheckQuery<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn canonical_mask_order_is_north_south_west_east() {
+        assert_eq!(
+            WallConnectionMask::from_neighbors(true, false, false, false).bits(),
+            0b1000
+        );
+        assert_eq!(
+            WallConnectionMask::from_neighbors(false, true, false, false).bits(),
+            0b0100
+        );
+        assert_eq!(
+            WallConnectionMask::from_neighbors(false, false, true, false).bits(),
+            0b0010
+        );
+        assert_eq!(
+            WallConnectionMask::from_neighbors(false, false, false, true).bits(),
+            0b0001
+        );
+    }
+
+    #[test]
+    fn all_sixteen_masks_match_the_sealed_geometry_fixture() {
+        use QuarterTurns as Q;
+        use WallMeshFamily as F;
+
+        let expected = [
+            (0b0000, F::Isolated, Q::ZERO),
+            (0b1000, F::End, Q::ZERO),
+            (0b0100, F::End, Q::TWO),
+            (0b0010, F::End, Q::ONE),
+            (0b0001, F::End, Q::THREE),
+            (0b1100, F::Straight, Q::ZERO),
+            (0b0011, F::Straight, Q::ONE),
+            (0b1010, F::Corner, Q::ZERO),
+            (0b1001, F::Corner, Q::THREE),
+            (0b0110, F::Corner, Q::ONE),
+            (0b0101, F::Corner, Q::TWO),
+            (0b1110, F::TJunction, Q::ZERO),
+            (0b1101, F::TJunction, Q::TWO),
+            (0b1011, F::TJunction, Q::THREE),
+            (0b0111, F::TJunction, Q::ONE),
+            (0b1111, F::Cross, Q::ZERO),
+        ];
+
+        for (bits, family, quarter_turns_y) in expected {
+            let mask = WallConnectionMask(bits);
+            assert_eq!(
+                resolve_wall_topology(mask),
+                ResolvedWallTopology {
+                    family,
+                    quarter_turns_y,
+                },
+                "mask {bits:04b}"
+            );
+        }
+        assert_eq!(
+            expected
+                .iter()
+                .map(|(bits, _, _)| *bits)
+                .collect::<HashSet<_>>()
+                .len(),
+            16
+        );
+    }
 
     fn test_handles(
         mud_isolated: Handle<Image>,
