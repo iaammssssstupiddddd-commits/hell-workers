@@ -392,6 +392,7 @@ mod tests {
         mud_end_right: Handle<Image>,
     ) -> WallVisualHandles {
         let unused = Handle::default();
+        let mud_end_bottom = mud_end_right.clone();
         WallVisualHandles {
             stone_isolated: unused.clone(),
             stone_horizontal_left: unused.clone(),
@@ -424,7 +425,7 @@ mod tests {
             mud_t_right: unused.clone(),
             mud_cross: unused.clone(),
             mud_end_top: unused.clone(),
-            mud_end_bottom: unused.clone(),
+            mud_end_bottom,
             mud_end_left: unused.clone(),
             mud_end_right,
             mud_floor: unused,
@@ -489,6 +490,52 @@ mod tests {
         assert_eq!(
             app.world().get::<Sprite>(survivor_sprite).unwrap().image,
             isolated
+        );
+    }
+
+    #[test]
+    fn completed_door_contributes_to_the_canonical_north_mask() {
+        let mut images = Assets::<Image>::default();
+        let isolated = images.add(Image::default());
+        let north_connected = images.add(Image::default());
+        let mut app = App::new();
+        app.init_resource::<WorldMap>()
+            .init_resource::<WallConnectionDirty>()
+            .insert_resource(test_handles(isolated, north_connected.clone()))
+            .add_systems(Update, wall_connections_system);
+        let target_grid = (12, 12);
+        let north_grid = (12, 13);
+        let (_, target_sprite) = spawn_completed_wall(&mut app, target_grid);
+        let door = app
+            .world_mut()
+            .spawn((
+                Transform::from_translation(
+                    WorldMap::grid_to_world(north_grid.0, north_grid.1).extend(0.0),
+                ),
+                BuildingVisualState {
+                    kind: BuildingTypeVisual::Door,
+                    is_provisional: false,
+                },
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<WorldMap>()
+            .set_building(north_grid, door);
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<Sprite>(target_sprite).unwrap().image,
+            north_connected
+        );
+        assert_eq!(
+            resolve_wall_topology(WallConnectionMask::from_neighbors(
+                true, false, false, false
+            )),
+            ResolvedWallTopology {
+                family: WallMeshFamily::End,
+                quarter_turns_y: QuarterTurns::ZERO,
+            }
         );
     }
 }
