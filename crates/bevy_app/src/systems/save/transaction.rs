@@ -375,8 +375,10 @@ fn enter_recovery_failed(world: &mut World) {
 
 #[cfg(test)]
 mod tests {
-    use bevy::ecs::reflect::AppTypeRegistry;
+    use bevy::asset::{AssetApp, AssetPlugin};
+    use bevy::ecs::{reflect::AppTypeRegistry, schedule::ApplyDeferred};
     use bevy::reflect::Reflect;
+    use bevy::transform::{TransformPlugin, TransformSystems};
 
     use hw_core::GameTime;
     use hw_core::familiar::{
@@ -388,6 +390,7 @@ mod tests {
     use hw_core::relationships::{CommandedBy, Commanding, LoadedIn, LoadedItems, WorkingOn};
     use hw_core::selection::{HoveredEntity, SelectedEntity};
     use hw_core::soul::{DamnedSoul, DreamPool};
+    use hw_core::visual::SoulTaskHandles;
     use hw_jobs::{
         ActiveTaskIdentity, AssignedTask, Building, BuildingType, DeconstructData,
         DeconstructPhase, DeconstructionCancelOutcome, DeconstructionCancelRequest,
@@ -398,6 +401,11 @@ mod tests {
     };
     use hw_logistics::types::WheelbarrowParking;
     use hw_logistics::{BelongsTo, ResourceItem, Wheelbarrow};
+    use hw_visual::wall_connection::{
+        WallConnectionDirty, WallConnectionMask, WallTopologyIndex, WallTopologyResolveSet,
+        WallTopologyState, wall_connections_system,
+    };
+    use hw_visual::{Building3dVisual, Wall3dPresentationMode, Wall3dPresentationState};
     use hw_world::{Room, RoomBounds, RoomOverlayTile, WorldMap};
 
     use super::*;
@@ -408,7 +416,7 @@ mod tests {
     };
     use crate::systems::save::rehydrate::{
         normalize_task_logistics_runtime_for_test, rebuild_deconstruction_runtime,
-        validate_familiar_candidate,
+        rehydrate_presentation_shells_for_test, validate_familiar_candidate,
     };
     use crate::systems::save::schema::{
         build_persisted_world, collect_persisted_entities, register_save_types,
@@ -753,6 +761,238 @@ mod tests {
         let mut app = App::new();
         register_save_types(&mut app);
         app
+    }
+
+    fn empty_soul_task_handles() -> SoulTaskHandles {
+        SoulTaskHandles {
+            wood: default(),
+            tree_animes: Vec::new(),
+            icon_rock_small: default(),
+            icon_bone_small: default(),
+            icon_sand_small: default(),
+            icon_stasis_mud_small: default(),
+            bucket_water: default(),
+            bucket_empty: default(),
+        }
+    }
+
+    fn app_with_wall_replacement_runtime() -> App {
+        use crate::assets::wall_asset_set::{
+            ProductionWallAssetPool, ProductionWallMaterialPool, ResolvedProductionWallAssets,
+            WallAssetAuthority, WallAssetReadiness, WallAssetReadinessState, WallAssetSetIdentity,
+            WallProductionActivation, finalize_wall_production_activation_system,
+        };
+        use crate::plugins::visual::{WallAssetReadinessSet, WallPresentationApplySet};
+        use crate::systems::visual::wall_presentation::{
+            Wall3dVisualOwnerIndex, apply_wall_presentation_system,
+            reset_wall_presentation_for_world_replace,
+        };
+
+        const GENERATION: u64 = 73;
+        const MANIFEST_SHA: &str = "transaction-wall-manifest";
+
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), TransformPlugin))
+            .init_asset::<Image>()
+            .init_asset::<Font>()
+            .init_asset::<Gltf>()
+            .init_asset::<WorldAsset>();
+        register_save_types(&mut app);
+
+        let asset_server = app.world().resource::<AssetServer>().clone();
+        let game_assets = {
+            let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+            crate::plugins::startup::create_game_assets(&asset_server, &mut images)
+        };
+        let identity = WallAssetSetIdentity {
+            asset_set_generation: GENERATION,
+            authority: WallAssetAuthority::IsolatedCandidate,
+            manifest_sha256: MANIFEST_SHA.to_owned(),
+        };
+        let production_assets = ProductionWallAssetPool {
+            manifest: default(),
+            resolved: Some(ResolvedProductionWallAssets {
+                identity: identity.clone(),
+                meshes: std::array::from_fn(|_| Handle::default()),
+                albedo: default(),
+                emissive: default(),
+                normal: None,
+                candidate_normal: None,
+            }),
+        };
+        let production_materials = ProductionWallMaterialPool {
+            identity: Some(identity),
+            complete: Some(default()),
+            provisional: Some(default()),
+        };
+        app.insert_resource(game_assets)
+            .insert_resource(crate::test_support::empty_building_3d_handles())
+            .insert_resource(empty_soul_task_handles())
+            .insert_resource(crate::test_support::empty_wall_visual_handles())
+            .insert_resource(production_assets)
+            .insert_resource(production_materials)
+            .insert_resource(WallAssetReadiness {
+                activation_revision: 9,
+                state: WallAssetReadinessState::Eligible {
+                    asset_set_generation: GENERATION,
+                    authority: WallAssetAuthority::IsolatedCandidate,
+                    manifest_sha256: MANIFEST_SHA.to_owned(),
+                },
+                ..Default::default()
+            })
+            .init_resource::<WallProductionActivation>()
+            .init_resource::<WallConnectionDirty>()
+            .init_resource::<WallTopologyIndex>()
+            .init_resource::<Wall3dVisualOwnerIndex>()
+            .add_observer(hw_jobs::visual_sync::on_building_added_sync_visual)
+            .add_systems(Update, hw_jobs::visual_sync::sync_building_visual_system)
+            .configure_sets(
+                PostUpdate,
+                (
+                    WallAssetReadinessSet,
+                    WallTopologyResolveSet,
+                    WallPresentationApplySet,
+                )
+                    .chain()
+                    .before(TransformSystems::Propagate),
+            )
+            .add_systems(
+                PostUpdate,
+                wall_connections_system.in_set(WallTopologyResolveSet),
+            )
+            .add_systems(
+                PostUpdate,
+                ApplyDeferred
+                    .after(WallTopologyResolveSet)
+                    .before(WallPresentationApplySet)
+                    .before(TransformSystems::Propagate),
+            )
+            .add_systems(
+                PostUpdate,
+                (
+                    finalize_wall_production_activation_system,
+                    apply_wall_presentation_system,
+                )
+                    .chain()
+                    .in_set(WallPresentationApplySet),
+            );
+        super::super::register_load_reset_hook(
+            &mut app,
+            "wall-topology-test",
+            hw_visual::reset_for_world_replace,
+        );
+        super::super::register_load_reset_hook(
+            &mut app,
+            "wall-presentation-test",
+            reset_wall_presentation_for_world_replace,
+        );
+        app
+    }
+
+    fn spawn_persisted_wall(world: &mut World, grid: (i32, i32)) -> Entity {
+        world
+            .spawn((
+                Building {
+                    kind: BuildingType::Wall,
+                    is_provisional: false,
+                },
+                Transform::from_translation(WorldMap::grid_to_world(grid.0, grid.1).extend(0.0)),
+            ))
+            .id()
+    }
+
+    fn wall_replacement_candidate(grids: &[(i32, i32)], seconds: f32) -> DynamicWorld {
+        let mut source = app_with_save_schema();
+        insert_persisted_resources(source.world_mut(), seconds);
+        for &grid in grids {
+            spawn_persisted_wall(source.world_mut(), grid);
+        }
+        capture_from_app(&mut source)
+    }
+
+    fn wall_visual_rows(
+        world: &mut World,
+    ) -> Vec<(Entity, Entity, Wall3dPresentationMode, Transform, Transform)> {
+        let mut query = world.query::<(
+            Entity,
+            &Building3dVisual,
+            &Wall3dPresentationState,
+            &Transform,
+            &GlobalTransform,
+        )>();
+        query
+            .iter(world)
+            .map(|(entity, visual, state, local, global)| {
+                (
+                    entity,
+                    visual.owner,
+                    state.mode,
+                    *local,
+                    global.compute_transform(),
+                )
+            })
+            .collect()
+    }
+
+    fn assert_fallback_then_production(app: &mut App, expected_walls: usize) {
+        let fallback_rows = wall_visual_rows(app.world_mut());
+        assert_eq!(fallback_rows.len(), expected_walls);
+        for (_, owner, mode, local, global) in &fallback_rows {
+            assert_eq!(*mode, Wall3dPresentationMode::Fallback);
+            let owner_transform = app.world().get::<Transform>(*owner).unwrap();
+            let expected =
+                crate::systems::visual::building3d_cleanup::building_presentation_transform(
+                    BuildingType::Wall,
+                    owner_transform,
+                );
+            assert_eq!(*local, expected);
+            assert!(
+                local
+                    .translation
+                    .abs_diff_eq(global.translation, f32::EPSILON)
+            );
+            assert!(local.rotation.abs_diff_eq(global.rotation, f32::EPSILON));
+            assert!(local.scale.abs_diff_eq(global.scale, f32::EPSILON));
+        }
+
+        app.update();
+
+        let production_rows = wall_visual_rows(app.world_mut());
+        assert_eq!(production_rows.len(), expected_walls);
+        assert!(
+            production_rows
+                .iter()
+                .all(|(_, _, mode, _, _)| *mode == Wall3dPresentationMode::Production)
+        );
+        let resolved = {
+            let world = app.world_mut();
+            let mut query = world.query::<(&Building3dVisual, &Wall3dPresentationState)>();
+            query
+                .iter(world)
+                .map(|(visual, state)| (visual.owner, state.topology))
+                .collect::<Vec<_>>()
+        };
+        for (owner, presentation) in resolved {
+            assert_eq!(
+                presentation,
+                app.world()
+                    .get::<WallTopologyState>(owner)
+                    .unwrap()
+                    .resolved
+            );
+        }
+        let revision = app
+            .world()
+            .resource::<WallTopologyIndex>()
+            .resolution_revision;
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<WallTopologyIndex>()
+                .resolution_revision,
+            revision,
+            "world replacement must rebuild topology exactly once"
+        );
     }
 
     fn insert_persisted_resources(world: &mut World, seconds: f32) {
@@ -1208,6 +1448,101 @@ mod tests {
         assert_eq!(
             live.world().resource::<MutationTrace>().0,
             vec!["rehydrate"]
+        );
+    }
+
+    #[test]
+    fn wall_presentation_recovers_atomically_after_normal_rollback_and_recovery_replacement() {
+        let plan = ResolvedRehydratePlan::with_step_for_test(
+            "wall.presentation",
+            rehydrate_presentation_shells_for_test,
+        );
+        let incoming_grids = [(30, 30), (31, 30)];
+        let incoming = wall_replacement_candidate(&incoming_grids, 2.0);
+
+        let mut normal = app_with_wall_replacement_runtime();
+        insert_persisted_resources(normal.world_mut(), 1.0);
+        let old_normal_wall = spawn_persisted_wall(normal.world_mut(), (5, 5));
+        rehydrate_presentation_shells_for_test(normal.world_mut());
+        normal.world_mut().flush();
+        normal.update();
+        let old_normal_visual = wall_visual_rows(normal.world_mut())[0].0;
+        let type_registry = normal.world().resource::<AppTypeRegistry>().clone();
+        let registry = type_registry.read();
+
+        replace_persisted_world(normal.world_mut(), &incoming, &registry, &plan).unwrap();
+        assert!(normal.world().get_entity(old_normal_wall).is_err());
+        assert!(normal.world().get_entity(old_normal_visual).is_err());
+        assert_fallback_then_production(&mut normal, incoming_grids.len());
+
+        let mut rollback = app_with_wall_replacement_runtime();
+        insert_persisted_resources(rollback.world_mut(), 3.0);
+        let rollback_grid = (8, 9);
+        let old_rollback_wall = spawn_persisted_wall(rollback.world_mut(), rollback_grid);
+        rehydrate_presentation_shells_for_test(rollback.world_mut());
+        rollback.world_mut().flush();
+        rollback.update();
+        let rollback_type_registry = rollback.world().resource::<AppTypeRegistry>().clone();
+        let rollback_registry = rollback_type_registry.read();
+        let rollback_plan = plan.clone();
+        let result = replace_persisted_world_with_post_write(
+            rollback.world_mut(),
+            &incoming,
+            &rollback_registry,
+            &plan,
+            |_| Err("injected post-write failure".to_owned()),
+            move |world| {
+                rollback_plan.run(world);
+                Ok(())
+            },
+        );
+        assert!(matches!(result, Err(CommitError::Recovered { .. })));
+        assert!(rollback.world().get_entity(old_rollback_wall).is_err());
+        assert_fallback_then_production(&mut rollback, 1);
+        let restored_wall = wall_visual_rows(rollback.world_mut())[0].1;
+        assert_eq!(
+            rollback
+                .world()
+                .get::<WallTopologyState>(restored_wall)
+                .unwrap()
+                .mask,
+            WallConnectionMask::from_neighbors(false, false, false, false)
+        );
+
+        let mut recovery = app_with_wall_replacement_runtime();
+        insert_persisted_resources(recovery.world_mut(), 4.0);
+        spawn_persisted_wall(recovery.world_mut(), (11, 11));
+        rehydrate_presentation_shells_for_test(recovery.world_mut());
+        recovery.world_mut().flush();
+        recovery.update();
+        recovery.insert_resource(SaveRecoveryMode::RecoveryFailed);
+        let recovery_type_registry = recovery.world().resource::<AppTypeRegistry>().clone();
+        let recovery_registry = recovery_type_registry.read();
+
+        replace_recovery_only_world(recovery.world_mut(), &incoming, &recovery_registry, &plan)
+            .unwrap();
+        assert_eq!(
+            *recovery.world().resource::<SaveRecoveryMode>(),
+            SaveRecoveryMode::Healthy
+        );
+        assert_fallback_then_production(&mut recovery, incoming_grids.len());
+        let mut masks = wall_visual_rows(recovery.world_mut())
+            .into_iter()
+            .map(|(_, owner, ..)| {
+                recovery
+                    .world()
+                    .get::<WallTopologyState>(owner)
+                    .unwrap()
+                    .mask
+            })
+            .collect::<Vec<_>>();
+        masks.sort_by_key(|mask| mask.bits());
+        assert_eq!(
+            masks,
+            vec![
+                WallConnectionMask::from_neighbors(false, false, false, true),
+                WallConnectionMask::from_neighbors(false, false, true, false),
+            ]
         );
     }
 

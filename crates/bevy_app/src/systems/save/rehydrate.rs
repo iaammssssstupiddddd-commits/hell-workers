@@ -542,6 +542,11 @@ fn rehydrate_shell_step(world: &mut World) {
     });
 }
 
+#[cfg(test)]
+pub(super) fn rehydrate_presentation_shells_for_test(world: &mut World) {
+    rehydrate_shell_step(world);
+}
+
 fn wake_domains_after_load(world: &mut World) {
     world.init_resource::<crate::systems::energy::grid_recalc::EnergyUpdateDirty>();
     world
