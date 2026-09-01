@@ -70,7 +70,7 @@ auto-build を適用外にする。各 blocker record は代表理由が使っ�
 
 Wallの接続と3D presentationは、全`Update` writerの後に
 `PostUpdate::WallAssetReadinessSet → WallTopologyResolveSet → ApplyDeferred → WallPresentationApplySet → TransformSystems::Propagate`
-の順で確定する。`hw_visual`はBuilding / Blueprint contributorをcoalesceする差分topology indexとresolved
+の順で確定する。`hw_visual`はBuilding / Blueprint / `WallTileVisualMirror` contributorをcoalesceする差分topology indexとresolved
 `WallTopologyState`を所有し、root `bevy_app`はasset authorityとowner→3D visual index、production / fallbackの
 atomic applyを所有する。spawn / rehydrate時のfallback bundle、owner由来`MeshTag`、local / `GlobalTransform`初期化を
 creation-time例外とし、spawn後のWall `Mesh3d` / material / composed transform / tag mutationはpresentation applyだけが行う。
