@@ -560,7 +560,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - asset-set manifest v2 templateとfail-closed validatorを追加した。candidate / finalを分離し、6 family、
   core / optionalの3通りのnormal在庫、24個のmesh report、2個のset report、tool identity / version、license、
   provenance、art approval artifact、actual bytes hashをclosed setで検査する。既存generic v1は変更していない。
-- allowlist sync、promotion transaction、production scene / 6 GLB / textureは未実装。
+- `sync_external_assets.py`へcandidate限定manifest allowlist modeを追加した。legacy modeを維持し、core 8 fileまたは
+  pending optional normal 1 fileだけを明示asset rootへcopyする。manifest全体のhash検証、dry-run、symlink / path
+  escape / tamper / delete併用 / receiptなしfinal拒否を単体testで確認した。
+- release receipt対応のsync、promotion transaction、production scene / 6 GLB / textureは未実装。
 
 - 変更内容:
   - 59度Orthographic reference boardを公称厚9.6 wu / 装飾外形最大12.8 wuで作り、黒石、錆鉄、トゲ、紫裂け目、ラフ線の優先順位を一枚で比較できるようにする。

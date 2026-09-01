@@ -112,6 +112,26 @@ python scripts/sync_external_assets.py \
 - `--delete-missing` 指定時のみ、コピー元に存在しない同期対象ファイルを `assets/` から削除する
 - `fonts/` と `shaders/` には触れない
 
+Wall production asset-set v2だけは、staging全体を対象にする上記legacy modeではなくmanifest allowlist modeを使う。
+`--manifest`と`--selection`は必ず組で指定し、candidate manifestの全artifact / report / license / source hashと
+tool commitを検証した後、`core`のexact 8 file、または`optional:normal`の1 fileだけを明示したasset rootへ
+コピーする。manifest外のfileをcopy / deleteせず、symlinkやroot外pathも拒否する。
+
+```bash
+ASSET_ROOT="${HELL_WORKERS_ASSET_ROOT:-$HOME/Sync/hell-workers-assets}"
+
+python3 scripts/sync_external_assets.py \
+  --source "$ASSET_ROOT/staging/exports" \
+  --dest "$VALIDATION_WORKTREE/assets" \
+  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" \
+  --selection core \
+  --dry-run
+```
+
+`optional:normal`は`normal_decision=pending`のcandidateだけで利用できる。manifest modeでは
+`--delete-missing`を併用できない。release / final manifestの同期にはgeneration-scoped promotion receiptが必要なため、
+receipt対応が完了するまではfail closedで拒否する。primary / canonicalへcandidateを直接同期しない。
+
 ## 6. 競合回避ルール
 
 - 同じ原本ファイルを複数 PC で同時編集しない。
@@ -125,8 +145,9 @@ python scripts/sync_external_assets.py \
   - 個人開発または少人数でのアセット制作
   - 複数 PC 間で同じ原本を扱いたい
   - クラウド専用 SaaS へ依存したくない
-- 向いていない:
+- legacy modeが向いていない:
   - 同じバイナリを複数人が同時編集するワークフロー
   - 厳密なレビュー承認付き配布物管理
 
-厳密な配布管理が必要になったら、`exports/` の公開先だけを `S3` / `Cloudflare R2` に切り替え、`assets/` 反映フローは維持する。
+Wall asset-set v2の厳密な配布管理は、manifest allowlistとgeneration / receipt付きpromotion経路で扱う。
+legacy assetで公開先を外部storageへ切り替える場合も、`assets/`への既存反映フローは維持する。

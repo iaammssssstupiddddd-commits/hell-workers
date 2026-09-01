@@ -56,6 +56,19 @@ python3 tools/blender_ai_workflow/scripts/validate_asset_set_manifest.py \
 validatorはmanifestの`tool_commit` / `tool_tree`を指定repoのHEADと照合します。templateは必要fieldを示すための
 未封印雛形であり、空hashのまま検証を通るサンプルではありません。
 
+候補を隔離worktreeへprovisionする時は、repository側の同期scriptをmanifest modeで使います。
+`core`はexact 8 file、`optional:normal`はpending候補のnormal 1 fileだけを扱います。manifest外file、symlink、
+`--delete-missing`併用、promotion receipt未対応のfinal manifestは拒否されます。
+
+```bash
+python3 scripts/sync_external_assets.py \
+  --source "$ASSET_ROOT/staging/exports" \
+  --dest "$VALIDATION_WORKTREE/assets" \
+  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" \
+  --selection core \
+  --dry-run
+```
+
 ## Environment
 
 | Variable | Default |

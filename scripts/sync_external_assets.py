@@ -3,11 +3,20 @@ from __future__ import annotations
 
 import argparse
 import filecmp
+import hashlib
+import importlib.util
 import shutil
+from collections.abc import Iterable
 from pathlib import Path
-
+from types import ModuleType
+from typing import Any
 
 ALLOWED_TOP_LEVEL_DIRS = ("textures", "models", "audio")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+WALL_MANIFEST_VALIDATOR = (
+    PROJECT_ROOT
+    / "tools/blender_ai_workflow/scripts/validate_asset_set_manifest.py"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +44,16 @@ def parse_args() -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Print planned operations without copying or deleting files.",
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="Wall asset-set manifest v2. Requires --selection and copies only its exact allowlist.",
+    )
+    parser.add_argument(
+        "--selection",
+        choices=("core", "optional:normal"),
+        help="Manifest inventory to copy. Requires --manifest.",
     )
     return parser.parse_args()
 
@@ -69,6 +88,120 @@ def copy_if_needed(source_file: Path, source_top: Path, dest_top: Path, dry_run:
     return True
 
 
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def load_wall_manifest_validator() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "validate_asset_set_manifest", WALL_MANIFEST_VALIDATOR
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Cannot load Wall asset-set manifest validator")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def ensure_safe_destination(dest_root: Path, relative: Path) -> Path:
+    if relative.is_absolute() or ".." in relative.parts or "." in relative.parts:
+        raise ValueError(f"Manifest destination path escapes asset root: {relative}")
+    if relative.parts[0] not in ALLOWED_TOP_LEVEL_DIRS:
+        raise ValueError(f"Manifest destination top-level is not allowed: {relative}")
+
+    resolved_root = dest_root.resolve()
+    destination = dest_root / relative
+    if not destination.resolve(strict=False).is_relative_to(resolved_root):
+        raise ValueError(f"Manifest destination path escapes asset root: {relative}")
+    current = dest_root
+    for part in relative.parts[:-1]:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(f"Manifest destination parent is a symlink: {current}")
+    if destination.is_symlink():
+        raise ValueError(f"Manifest destination is a symlink: {destination}")
+    return destination
+
+
+def selected_manifest_records(
+    manifest: dict[str, Any], selection: str
+) -> Iterable[dict[str, str]]:
+    if selection == "core":
+        return manifest["production"]["core"]
+    if manifest["normal_decision"] != "pending":
+        raise ValueError("optional:normal is available only for a pending candidate")
+    records = manifest["production"]["optional"]
+    if len(records) != 1 or records[0]["path"] != "textures/buildings/wall/wall_normal.png":
+        raise ValueError("optional:normal inventory differs")
+    return records
+
+
+def sync_manifest_assets(
+    *,
+    source_root: Path,
+    dest_root: Path,
+    manifest_path: Path,
+    selection: str,
+    dry_run: bool,
+    repo: Path | None,
+) -> int:
+    if dest_root.is_symlink():
+        raise ValueError(f"Destination asset root is a symlink: {dest_root}")
+    if dest_root.exists() and not dest_root.is_dir():
+        raise NotADirectoryError(f"Destination asset root is not a directory: {dest_root}")
+    validator = load_wall_manifest_validator()
+    manifest = validator.read_json(manifest_path)
+    mode = manifest.get("manifest_mode") if isinstance(manifest, dict) else None
+    if mode != "candidate":
+        raise ValueError(
+            "Manifest sync currently accepts candidate mode only; release requires a promotion receipt"
+        )
+
+    staging_root = source_root.parent
+    external_root = staging_root.parent
+    validation = validator.validate_manifest(
+        manifest_path,
+        mode="candidate",
+        blend_root=staging_root / "blend",
+        exports_root=source_root,
+        reports_root=staging_root / "reports",
+        licenses_root=external_root / "licenses",
+        repo=repo,
+    )
+    records = selected_manifest_records(manifest, selection)
+
+    if not dry_run:
+        dest_root.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for record in records:
+        relative = Path(record["path"])
+        source_file = source_root / relative
+        destination = ensure_safe_destination(dest_root, relative)
+        needs_copy = (
+            not destination.is_file() or sha256(destination) != record["sha256"]
+        )
+        if not needs_copy:
+            continue
+        print(f"COPY {source_file} -> {destination}")
+        if not dry_run:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_file, destination)
+            if sha256(destination) != record["sha256"]:
+                raise OSError(f"Copied asset hash differs: {destination}")
+        copied += 1
+    print(
+        "MANIFEST "
+        f"asset_set_id={validation['asset_set_id']} "
+        f"generation={validation['candidate_generation']} "
+        f"sha256={validation['manifest_sha256']} selection={selection}"
+    )
+    return copied
+
+
 def delete_missing_files(source_top: Path, dest_top: Path, dry_run: bool) -> int:
     removed = 0
     if not dest_top.exists():
@@ -97,6 +230,26 @@ def main() -> int:
     dest_root = args.dest.expanduser().resolve()
 
     ensure_valid_source(source_root)
+
+    if (args.manifest is None) != (args.selection is None):
+        raise ValueError("--manifest and --selection must be specified together")
+    if args.manifest is not None:
+        if args.delete_missing:
+            raise ValueError("--delete-missing is not supported with manifest sync")
+        copied = sync_manifest_assets(
+            source_root=source_root,
+            dest_root=dest_root,
+            manifest_path=args.manifest.expanduser().resolve(),
+            selection=args.selection,
+            dry_run=args.dry_run,
+            repo=PROJECT_ROOT,
+        )
+        print(
+            "DONE "
+            f"copied={copied} removed=0 "
+            f"dry_run={'yes' if args.dry_run else 'no'}"
+        )
+        return 0
 
     copied = 0
     removed = 0

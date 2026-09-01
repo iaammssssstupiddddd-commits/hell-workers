@@ -158,6 +158,22 @@ python3 scripts/sync_external_assets.py \
 続けて公式 Khronos validator を実行します。直接 MCP export は禁止しているため、
 この経路を迂回できません。
 
+production Wall v2は上記legacy同期ではなく、candidate manifestに封印されたexact allowlistを隔離worktreeへ
+provisionします。`--dest`は必ず対象worktreeのasset rootまで明示し、最初に同じ引数の`--dry-run`を確認します。
+
+```bash
+python3 scripts/sync_external_assets.py \
+  --source "$ASSET_ROOT/staging/exports" \
+  --dest "$VALIDATION_WORKTREE/assets" \
+  --manifest "$ASSET_ROOT/staging/reports/wall-production-v1.asset-set.json" \
+  --selection core \
+  --dry-run
+```
+
+この候補経路はmanifest外のfileとoptional normalをcoreへ混ぜず、primary / canonicalを同期先にしません。
+normal A/Bだけは同じcandidate generationから`--selection optional:normal`を別途使います。final manifestは
+promotion receipt対応が完了するまでこの同期コマンドでは拒否されます。
+
 正本へ昇格する前に、`manifests/asset-manifest.template.json` をコピーして、
 生成元、model/version、prompt/reference hash、ライセンス、Blender version、
 出力 hash、report、reviewer を記録してください。API token やcookieは書きません。
