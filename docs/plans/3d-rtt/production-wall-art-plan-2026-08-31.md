@@ -389,8 +389,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   dirty subjectではdirect `kitty`計画をblockすることまでself-test / dry-runで確認済み。
 - subject `26dcb5a3`のclean commitから、専用native launcherでN / 4N×completed / provisional×3の
   全12 runを再採取し、独立verifyをpassした。Capture profileは`draw_groups=not-collected`を明記し、
-  wall固有RenderDoc gateとは分離する。current source専用Bevy actual-window calibration profileは実装済みだが
-  native採取前であり、wall固有draw-group抽出も未実装のため、M0全体は未完了である。
+  wall固有RenderDoc gateとは分離する。
+- current source専用Bevy actual-window calibration profileをsubject `ad614903`から採取し、
+  `target/native-acceptance/wall-art-20260901T055138Z-f93b0b12`の独立verifyがpassした。対象は
+  `wall-density-v1`のisolated Wall ordinal 64 / grid `(22, 17)` / mask `0000`、ROIは
+  `(416, 518, 96, 96)`で固定UI chromeと非重複である。fallback mesh resident、exact owner、High / DPI 1.0、
+  Vulkan / X11、camera scale 5、raw performance sidecarとのlayout checksum一致を封印した。
+  wall固有draw-group抽出とregistered historical P02 locatorは未実装のため、M0全体は未完了である。
 - この中間状態をM0完了や性能baselineとして扱わず、後続M1のasset制作開始gateにも使わない。
 - 最初の正式Capture試行（subject `a69ea3df`）はfail-closedで棄却した。Smallのraw 3 runは取得できたが、
   仮想時刻を停止するwall-densityへvalidatorがvirtual 30 s / 60 sを誤要求した。Mediumは通常worldの
@@ -436,6 +441,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   publishし、launcherが該当X11 clientだけをPNG化してACKする。raw performance sidecarとPNGのlayout checksum、
   clean subject、source / harness / binary / asset-view hashをoffline verifyで再計算する。これはcurrent visual
   referenceであり、historical P02、12-run Capture、RenderDoc draw-group証跡の代用にはしない。
+  single-case 10秒warm-up / 10秒measureはPythonの専用selectorとRustの専用flag＋環境変数の二重鍵でのみ
+  許可し、正式density laneの30秒 / 60秒契約は緩和しない。対象ROIは固定UI chromeと重ならない領域へ
+  完全に収まらなければRust / Pythonの双方でfail-closedにする。
 
 - 変更内容:
   - current `Cuboid` wallをproduction cameraで撮影し、source fingerprint、camera、quality、DPI、adapter、asset viewを記録する。既存P02 visual referenceと、後述の`wall-density-v1`性能baselineを別artifactにする。
@@ -804,13 +812,15 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - 最初のnative Captureをfail-closedで棄却し、duration clock誤判定と通常初期world混入を修正済み。
   - subject `26dcb5a3`からcompleted / provisional各N / 4Nの全12 runを採取し、専用verifyでpass。3-run中央値 / MADと3 fingerprintを封印済み。
   - historical P02再実行とcurrent source calibrationの契約差を確定し、current fallback専用actual-window profileを実装済み。
+  - subject `ad614903`のcurrent fallback actual-windowを採取し、isolated WallのUI非重複ROI、fallback resident、
+    exact owner、client PNG、raw sidecar、全fingerprintを独立verifyで封印済み。
 - 未完了:
-  - current fallback actual-window採取、wall固有draw-group抽出、registered P02 referenceのlocator、OCIO陽性証明を閉じるまではM0未完了。M1以降は未着手。
+  - wall固有draw-group抽出、registered P02 referenceのlocator、OCIO陽性証明を閉じるまではM0未完了。M1以降は未着手。
 
 ### 次のAIが最初にやること
 
-1. current fallback actual-window profileをclean commitから採取・verifyし、registered P02 referenceと別artifactで固定する。
-2. wall固有draw-group抽出を実装・採取し、Capture baselineとは別artifactで固定する。
+1. wall固有draw-group抽出を実装・採取し、Capture baselineとは別artifactで固定する。
+2. registered historical P02 artifactのlocatorを固定し、current calibrationとの用途分離をmachine-readableに閉じる。
 3. OCIO陽性証明とcanonical orientation / boundsを証拠付きで固定してM0を閉じる。
 4. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
 
@@ -878,7 +888,27 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   P02 artifactとcurrent wall calibrationを分離する（2026-09-01）。
 - M0 current Wall calibration tooling:
   Rust probe focused test `wall_actual_window` 2件、`wall_art_acceptance.py self-test`、`perf.py self-test`、
-  `native_acceptance.py self-test`がpass。native PNG採取はclean commit後に実行する（2026-09-01）。
+  `native_acceptance.py self-test`がpass（2026-09-01）。
+- M0 current Wall calibration初回試行（subject `e53195ed`）:
+  `target/native-acceptance/wall-art-20260901T051811Z-94e51f8b`は、正式12-run laneの引数validatorへ
+  single-case条件を渡してcapture開始前にinvalid。専用selectorを追加し、正式laneの条件は維持した（2026-09-01）。
+- M0 current Wall calibration第2試行（subject `26bcdb00`）:
+  `target/native-acceptance/wall-art-20260901T053432Z-8d0e2f43`は、Rust側が正式30秒 / 60秒だけを
+  許可して起動時にinvalid。専用Rust flagと`HW_WALL_ART_ACTUAL_WINDOW=1`の二重鍵へ10秒 / 10秒契約を
+  結び、片側だけではfail-closedにした（2026-09-01）。
+- M0 current Wall calibration第3試行（subject `5816b028`）:
+  `target/native-acceptance/wall-art-20260901T053708Z-6c99466c`は自動verifyでpassしたが、原寸目視で
+  ordinal 0のROIが下部UI barと重なることを確認したため正式referenceへ不採用。colored pixel判定を
+  UIが代替できないよう対象とcapture regionを固定した（2026-09-01）。
+- M0 current Wall calibration正式採取（subject `ad614903`）:
+  `target/native-acceptance/wall-art-20260901T055138Z-f93b0b12`は独立verifyで
+  `screenshots=1 / status=pass`。source fingerprint
+  `08a71968ca2582bcfd7d7aef575f256e6f8702286108cf292badbbad4940f678`、harness fingerprint
+  `c333eeb53db6343253de28abeefbb05d98f47ba51653dcde092bb9439017c2d9`、asset-view fingerprint
+  `ee5acdc8214b61898f662f2fb502f07559309d322fb5e234d37159b63aed7643`、PNG SHA-256
+  `d69049a2b406acce7ab11537e9bef9acec63231c65e0fb016e40fdf7f30b8cc4`を封印。isolated Wall
+  ordinal 64 / grid `(22, 17)` / mask `0000`、ROI `(416, 518, 96, 96)`はfixed UI chromeと非重複、
+  raw performance validationも理由0でpass（2026-09-01）。
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
@@ -886,7 +916,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
   通常ゲームの入力、表示、建築成立条件、runtime data、プレイヤー向け文言は不変（`HELL_WORKERS_DIFF_BASE=HEAD`でgate pass）。
 - 初期M0 toolingはユーザー指示により`06826fd2`へ中間commit済み。ただしCapture harnessを含む凍結済みbaseline commitではない。
-- 未解決エラー: OCIO mismatch、Bevy calibration / wall固有draw抽出・P02正式採取未実装、
+- 未解決エラー: OCIO mismatch、wall固有draw抽出・registered historical P02 locator未実装、
   上記の既存repository hygiene違反。
 
 ### Definition of Done
@@ -915,3 +945,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-01` | `Codex` | readinessとtopology activationを分離し、OCIO陽性証明、post-export / manifest gate、clean worktree、順次A/B、再現可能なN / 4N性能lane、world-replaceを具体化。M1→M4のasset再封印、receipt検証、immutable generation＋単一pointerのdurable promoteまで閉じた |
 | `2026-09-01` | `Codex` | M0を開始。geometry / density / color fixture、Blender calibration renderer、offline CIEDE2000 verifierとunit testを追加し、現行OCIO fallbackをfail-closedで検出する初期toolingを実装 |
 | `2026-09-01` | `Codex` | M0 Capture laneを実装。`perf.py`へwall phaseとraw sidecar再検証を追加し、専用native profileでclean subject / asset view / 12 run / median・MADを封印。draw-groupは未採取として分離 |
+| `2026-09-01` | `Codex` | current fallback専用actual-windowを実装・採取。formal density laneとsingle-case条件を二重鍵で分離し、isolated WallのUI非重複ROI、X11 client PNG、fallback residency、raw sidecar、fingerprintを封印 |
