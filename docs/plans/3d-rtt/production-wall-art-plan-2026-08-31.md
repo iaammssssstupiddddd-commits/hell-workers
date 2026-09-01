@@ -395,7 +395,15 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `wall-density-v1`のisolated Wall ordinal 64 / grid `(22, 17)` / mask `0000`、ROIは
   `(416, 518, 96, 96)`で固定UI chromeと非重複である。fallback mesh resident、exact owner、High / DPI 1.0、
   Vulkan / X11、camera scale 5、raw performance sidecarとのlayout checksum一致を封印した。
-  wall固有draw-group抽出とregistered historical P02 locatorは未実装のため、M0全体は未完了である。
+  registered historical P02 locatorは未実装のため、M0全体は未完了である。
+- wall専用runtime checkpoint、qrenderdoc extractor、`wall_renderdoc_acceptance.py`を実装し、subject
+  `e149918c`からcompleted / provisional各N / 4Nの4 RDCを採取した。各RDCを2回replayした結果は
+  byte-identicalで、completed / provisionalとも`D_N=1 / D_4N=1`、rendered instanceはN=96 / 4N=384で
+  checkpointed owner全件と一致した。Wall main passは中間color＋depthへ一括描画し、次のfullscreen triangleが
+  `hell-workers-rtt-scene`へ合成する実render graphを証拠化したため、最終Scene targetへの直接writeをdraw identityへ
+  要求しない。wall固有draw-group gateは完了したが、registered historical P02 locatorとOCIO陽性証明が残る。
+  残項目の実装でsource / harness closed setが変わる場合は、M0最終baseline commitからCapture 12 runと
+  RenderDoc 4 caseを再採取し、途中commitの成功artifactをM5比較baselineへ流用しない。
 - この中間状態をM0完了や性能baselineとして扱わず、後続M1のasset制作開始gateにも使わない。
 - 最初の正式Capture試行（subject `a69ea3df`）はfail-closedで棄却した。Smallのraw 3 runは取得できたが、
   仮想時刻を停止するwall-densityへvalidatorがvirtual 30 s / 60 sを誤要求した。Mediumは通常worldの
@@ -814,15 +822,16 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - historical P02再実行とcurrent source calibrationの契約差を確定し、current fallback専用actual-window profileを実装済み。
   - subject `ad614903`のcurrent fallback actual-windowを採取し、isolated WallのUI非重複ROI、fallback resident、
     exact owner、client PNG、raw sidecar、全fingerprintを独立verifyで封印済み。
+  - subject `e149918c`のwall RenderDoc 4ケースを採取し、全8 replay一致、completed / provisionalとも
+    `D_N=1 / D_4N=1`、rendered instance 96 / 384でdraw predicateを封印済み。
 - 未完了:
-  - wall固有draw-group抽出、registered P02 referenceのlocator、OCIO陽性証明を閉じるまではM0未完了。M1以降は未着手。
+  - registered P02 referenceのlocator、OCIO陽性証明、canonical orientation / boundsを閉じるまではM0未完了。M1以降は未着手。
 
 ### 次のAIが最初にやること
 
-1. wall固有draw-group抽出を実装・採取し、Capture baselineとは別artifactで固定する。
-2. registered historical P02 artifactのlocatorを固定し、current calibrationとの用途分離をmachine-readableに閉じる。
-3. OCIO陽性証明とcanonical orientation / boundsを証拠付きで固定してM0を閉じる。
-4. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
+1. registered historical P02 artifactのlocatorを固定し、current calibrationとの用途分離をmachine-readableに閉じる。
+2. OCIO陽性証明とcanonical orientation / boundsを証拠付きで固定してM0を閉じる。
+3. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
 
 ### ブロッカー/注意点
 
@@ -909,6 +918,23 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `d69049a2b406acce7ab11537e9bef9acec63231c65e0fb016e40fdf7f30b8cc4`を封印。isolated Wall
   ordinal 64 / grid `(22, 17)` / mask `0000`、ROI `(416, 518, 96, 96)`はfixed UI chromeと非重複、
   raw performance validationも理由0でpass（2026-09-01）。
+- M0 Wall RenderDoc初回（subject `e0f9e8a8`）:
+  `target/native-acceptance/wall-renderdoc-20260901T064623Z-2f98da48`はcompleted Nをcaptureし2 replayしたが、
+  Wall main passが最終Scene targetへ直接writeするという未検証前提で候補0となりinvalid。failure sidecarに条件別の
+  bounded draw inventoryがなかったため合格証跡へ不使用（2026-09-01）。
+- M0 Wall RenderDoc診断run（subject `842860a1`）:
+  `target/native-acceptance/wall-renderdoc-20260901T065924Z-18959771`で、Wallは`pass-0003 / event 298 /
+  indexed 36 / instances 96 / fragment+depth`の中間color targetへ一括描画され、`pass-0004 / event 368`の
+  fullscreen triangleが`hell-workers-rtt-scene`へ合成することを確定。最終target直接write仮説を一回で打ち切り、
+  このdiagnostic artifactも合格証跡へ不使用（2026-09-01）。
+- M0 Wall RenderDoc正式採取（subject `e149918c`）:
+  `target/native-acceptance/wall-renderdoc-20260901T070200Z-e09c0760`は独立verifyで`cases=4 / status=pass`。
+  completed / provisionalとも`D_N=1 / D_4N=1`で全predicateをpassし、rendered instanceも各96 / 384で
+  checkpointed owner全件と一致。4 RDCは各2 replayがbyte-identicalで、manifest SHA-256は
+  `cf590e7e2e6e9d9eadc47292bd21ca1c53b59274ae3941d7006cfe2984786969`、source fingerprint
+  `b8dba6fb34c7a1566f4a3adc3ed599c76d5f10d8470efcf3da8dfb67902ce26f`、harness fingerprint
+  `538e7b6958d68876cb68a6e6de9ecdca5b5b3e1a3ec5f29d7d64b3e8062e1d31`、binary SHA-256
+  `0f3c83b698f27a70072c517f6f263d00b96736b30de6a9150bef61261afac1c8`を封印（2026-09-01）。
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
@@ -916,7 +942,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
   通常ゲームの入力、表示、建築成立条件、runtime data、プレイヤー向け文言は不変（`HELL_WORKERS_DIFF_BASE=HEAD`でgate pass）。
 - 初期M0 toolingはユーザー指示により`06826fd2`へ中間commit済み。ただしCapture harnessを含む凍結済みbaseline commitではない。
-- 未解決エラー: OCIO mismatch、wall固有draw抽出・registered historical P02 locator未実装、
+- 未解決エラー: OCIO mismatch、registered historical P02 locator未実装、canonical orientation / bounds未封印、
   上記の既存repository hygiene違反。
 
 ### Definition of Done
@@ -946,3 +972,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-01` | `Codex` | M0を開始。geometry / density / color fixture、Blender calibration renderer、offline CIEDE2000 verifierとunit testを追加し、現行OCIO fallbackをfail-closedで検出する初期toolingを実装 |
 | `2026-09-01` | `Codex` | M0 Capture laneを実装。`perf.py`へwall phaseとraw sidecar再検証を追加し、専用native profileでclean subject / asset view / 12 run / median・MADを封印。draw-groupは未採取として分離 |
 | `2026-09-01` | `Codex` | current fallback専用actual-windowを実装・採取。formal density laneとsingle-case条件を二重鍵で分離し、isolated WallのUI非重複ROI、X11 client PNG、fallback residency、raw sidecar、fingerprintを封印 |
+| `2026-09-01` | `Codex` | wall専用RenderDoc checkpoint / extractor / native profileを実装・採取。中間color＋depth main passを実RDCで同定し、completed / provisionalのN / 4Nを各1 draw、全owner instance、2 replay一致で封印 |
