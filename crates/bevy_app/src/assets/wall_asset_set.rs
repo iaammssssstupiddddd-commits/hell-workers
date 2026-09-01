@@ -879,6 +879,7 @@ mod tests {
 
     use bevy::asset::{AssetApp, AssetMetaCheck, AssetPlugin};
     use bevy::camera::primitives::MeshAabb;
+    use bevy::ecs::system::RunSystemOnce;
 
     use super::*;
 
@@ -1491,6 +1492,70 @@ mod tests {
         );
         let assets = resolve_asset_handles(app.world().resource::<AssetServer>(), &manifest);
         wait_for_required_assets(&mut app, &assets);
+
+        app.world_mut()
+            .insert_resource(Assets::<TopDownStructuralMaterial>::default());
+        app.world_mut()
+            .run_system_once(
+                crate::systems::visual::indoor_light_texture::init_indoor_light_texture_system,
+            )
+            .expect("initialize focused Indoor Light texture");
+        app.world_mut().insert_resource(ProductionWallAssetPool {
+            manifest: wallset.clone(),
+            resolved: None,
+        });
+        app.world_mut()
+            .insert_resource(ProductionWallMaterialPool::default());
+        app.world_mut().insert_resource(WallAssetCandidatePolicy {
+            allowed_generation: None,
+            allowed_manifest_sha256: None,
+        });
+        app.world_mut()
+            .insert_resource(WallAssetReadiness::default());
+        app.add_systems(Update, update_wall_asset_readiness_system);
+
+        app.update();
+        let unauthorized = app.world().resource::<WallAssetReadiness>();
+        assert_eq!(
+            unauthorized.state,
+            WallAssetReadinessState::Fallback(WallAssetFallbackReason::CandidateDisabled)
+        );
+        assert_eq!(unauthorized.activation_revision, 1);
+        app.world_mut()
+            .insert_resource(candidate_policy(Some(&manifest)));
+        app.update();
+        let eligible = app.world().resource::<WallAssetReadiness>().clone();
+        assert!(matches!(
+            eligible.state,
+            WallAssetReadinessState::Eligible {
+                asset_set_generation: 1,
+                authority: WallAssetAuthority::IsolatedCandidate,
+                ..
+            }
+        ));
+        assert_eq!(eligible.activation_revision, 2);
+        assert_eq!(eligible.candidate_normal, WallOptionalAssetState::Ready);
+        let materials = app.world().resource::<ProductionWallMaterialPool>();
+        let complete = materials.complete.clone().expect("complete material");
+        let provisional = materials.provisional.clone().expect("provisional material");
+        assert_eq!(
+            app.world()
+                .resource::<Assets<TopDownStructuralMaterial>>()
+                .len(),
+            2
+        );
+
+        app.update();
+        assert_eq!(app.world().resource::<WallAssetReadiness>(), &eligible);
+        let materials = app.world().resource::<ProductionWallMaterialPool>();
+        assert_eq!(materials.complete.as_ref(), Some(&complete));
+        assert_eq!(materials.provisional.as_ref(), Some(&provisional));
+        assert_eq!(
+            app.world()
+                .resource::<Assets<TopDownStructuralMaterial>>()
+                .len(),
+            2
+        );
 
         let meshes = app.world().resource::<Assets<Mesh>>();
         for handle in &assets.meshes {
