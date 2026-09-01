@@ -55,6 +55,14 @@ pub enum WallArtReviewStatus {
     Candidate,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum WallCandidateNormalVerification {
+    Failed,
+    #[default]
+    NotChecked,
+    Verified,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WallAssetFileRecord {
@@ -85,6 +93,8 @@ pub struct WallAssetSetManifest {
     pub receipt: Option<WallAssetReceiptRecord>,
     pub review_status: WallArtReviewStatus,
     pub schema_version: u32,
+    #[serde(skip)]
+    pub candidate_normal_verification: WallCandidateNormalVerification,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -427,7 +437,7 @@ impl AssetLoader for WallAssetSetLoader {
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await?;
-        let manifest = decode_canonical_wallset(&bytes)?;
+        let mut manifest = decode_canonical_wallset(&bytes)?;
         if let Some(receipt) = &manifest.receipt {
             let payload = load_context
                 .read_asset_bytes(receipt.path.clone())
@@ -457,6 +467,18 @@ impl AssetLoader for WallAssetSetLoader {
                 digest == record.sha256,
                 format!("{} actual bytes hash differs", record.path),
             )?;
+        }
+        if let Some(record) = &manifest.candidate_normal {
+            manifest.candidate_normal_verification =
+                match load_context.read_asset_bytes(record.path.clone()).await {
+                    Ok(payload)
+                        if payload.len() as u64 == record.bytes
+                            && format!("{:x}", Sha256::digest(&payload)) == record.sha256 =>
+                    {
+                        WallCandidateNormalVerification::Verified
+                    }
+                    Ok(_) | Err(_) => WallCandidateNormalVerification::Failed,
+                };
         }
         Ok(manifest)
     }
@@ -606,6 +628,25 @@ fn required_load_state(
         Some(LoadState::Loaded) => RequiredLoadState::Ready,
         Some(LoadState::Failed(_)) => RequiredLoadState::Failed,
         Some(LoadState::NotLoaded | LoadState::Loading) | None => RequiredLoadState::Loading,
+    }
+}
+
+fn optional_asset_state(
+    verification: Option<WallCandidateNormalVerification>,
+    load_state: Option<RequiredLoadState>,
+) -> WallOptionalAssetState {
+    match (verification, load_state) {
+        (Some(WallCandidateNormalVerification::Failed), _) => WallOptionalAssetState::Failed,
+        (Some(WallCandidateNormalVerification::Verified), Some(RequiredLoadState::Ready)) => {
+            WallOptionalAssetState::Ready
+        }
+        (Some(WallCandidateNormalVerification::Verified), Some(RequiredLoadState::Failed)) => {
+            WallOptionalAssetState::Failed
+        }
+        (Some(WallCandidateNormalVerification::Verified), Some(RequiredLoadState::Loading))
+        | (Some(WallCandidateNormalVerification::NotChecked), Some(_))
+        | (None, Some(_)) => WallOptionalAssetState::Loading,
+        (_, None) => WallOptionalAssetState::NotPresent,
     }
 }
 
@@ -782,14 +823,13 @@ pub fn update_wall_asset_readiness_system(
                 )
         }));
     let next_state = aggregate_state(&params.policy, manifest, required);
-    let next_normal = match resolved.and_then(|assets| assets.candidate_normal.as_ref()) {
-        None => WallOptionalAssetState::NotPresent,
-        Some(handle) => match required_load_state(&params.asset_server, handle.id()) {
-            RequiredLoadState::Loading => WallOptionalAssetState::Loading,
-            RequiredLoadState::Ready => WallOptionalAssetState::Ready,
-            RequiredLoadState::Failed => WallOptionalAssetState::Failed,
-        },
-    };
+    let candidate_normal_load = resolved
+        .and_then(|assets| assets.candidate_normal.as_ref())
+        .map(|handle| required_load_state(&params.asset_server, handle.id()));
+    let next_normal = optional_asset_state(
+        manifest.map(|value| value.candidate_normal_verification),
+        candidate_normal_load,
+    );
     if readiness.state != next_state {
         readiness.state = next_state;
         readiness.activation_revision = readiness.activation_revision.wrapping_add(1);
@@ -835,6 +875,7 @@ mod tests {
             receipt: None,
             review_status: WallArtReviewStatus::Candidate,
             schema_version: 1,
+            candidate_normal_verification: WallCandidateNormalVerification::NotChecked,
         }
     }
 
@@ -857,7 +898,18 @@ mod tests {
             }),
             review_status: WallArtReviewStatus::ArtApproved,
             schema_version: 1,
+            candidate_normal_verification: WallCandidateNormalVerification::NotChecked,
         }
+    }
+
+    fn adopted_release_fixture() -> WallAssetSetManifest {
+        let mut manifest = release_fixture();
+        manifest.normal_decision = WallNormalDecision::Adopted;
+        manifest.core.push(record(
+            &runtime_core_path(7, NORMAL_PATH, "texture:normal"),
+            "texture:normal",
+        ));
+        manifest
     }
 
     fn promotion_receipt(manifest: &WallAssetSetManifest) -> WallPromotionReceipt {
@@ -1033,6 +1085,35 @@ mod tests {
         assert_eq!(readiness.candidate_normal_revision, 3);
     }
 
+    #[test]
+    fn optional_normal_requires_both_verified_bytes_and_a_loaded_image() {
+        assert_eq!(
+            optional_asset_state(
+                Some(WallCandidateNormalVerification::Verified),
+                Some(RequiredLoadState::Ready)
+            ),
+            WallOptionalAssetState::Ready
+        );
+        assert_eq!(
+            optional_asset_state(
+                Some(WallCandidateNormalVerification::Failed),
+                Some(RequiredLoadState::Ready)
+            ),
+            WallOptionalAssetState::Failed
+        );
+        assert_eq!(
+            optional_asset_state(
+                Some(WallCandidateNormalVerification::Verified),
+                Some(RequiredLoadState::Loading)
+            ),
+            WallOptionalAssetState::Loading
+        );
+        assert_eq!(
+            optional_asset_state(None, None),
+            WallOptionalAssetState::NotPresent
+        );
+    }
+
     struct TestAssetRoot(PathBuf);
 
     impl TestAssetRoot {
@@ -1071,12 +1152,19 @@ mod tests {
         let candidate_normal = manifest.candidate_normal.as_mut().unwrap();
         candidate_normal.bytes = 15;
         candidate_normal.sha256 = format!("{:x}", Sha256::digest(b"optional-normal"));
+        manifest.candidate_normal_verification = WallCandidateNormalVerification::Verified;
         root.write(WALLSET_PATH, &encoded(&manifest));
         manifest
     }
 
     fn disk_release_fixture(root: &TestAssetRoot) -> WallAssetSetManifest {
-        let mut manifest = release_fixture();
+        disk_release_fixture_from(root, release_fixture())
+    }
+
+    fn disk_release_fixture_from(
+        root: &TestAssetRoot,
+        mut manifest: WallAssetSetManifest,
+    ) -> WallAssetSetManifest {
         for (ordinal, record) in manifest.core.iter_mut().enumerate() {
             let payload = format!("release-core-payload-{ordinal}");
             root.write(&record.path, payload.as_bytes());
@@ -1161,6 +1249,97 @@ mod tests {
     }
 
     #[test]
+    fn missing_candidate_normal_does_not_fail_production_manifest() {
+        let root = TestAssetRoot::new();
+        let manifest = disk_fixture(&root);
+        fs::remove_file(root.0.join(NORMAL_PATH)).unwrap();
+        let mut app = loader_app(&root.0);
+        let handle = app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut app, &handle),
+            LoadState::Loaded
+        ));
+        assert_eq!(
+            app.world()
+                .resource::<Assets<WallAssetSetManifest>>()
+                .get(&handle)
+                .unwrap()
+                .candidate_normal_verification,
+            WallCandidateNormalVerification::Failed
+        );
+        assert_eq!(manifest.asset_set_generation, 1);
+    }
+
+    #[test]
+    fn changed_candidate_normal_is_failed_without_blocking_core() {
+        let root = TestAssetRoot::new();
+        disk_fixture(&root);
+        root.write(NORMAL_PATH, b"tampered-normal");
+        let mut app = loader_app(&root.0);
+        let handle = app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut app, &handle),
+            LoadState::Loaded
+        ));
+        assert_eq!(
+            app.world()
+                .resource::<Assets<WallAssetSetManifest>>()
+                .get(&handle)
+                .unwrap()
+                .candidate_normal_verification,
+            WallCandidateNormalVerification::Failed
+        );
+    }
+
+    #[test]
+    fn missing_albedo_or_emissive_recovers_only_in_a_fresh_app() {
+        for missing_index in [6, 7] {
+            let root = TestAssetRoot::new();
+            let expected = disk_fixture(&root);
+            let missing = &expected.core[missing_index];
+            fs::remove_file(root.0.join(&missing.path)).unwrap();
+            let mut failed_app = loader_app(&root.0);
+            let failed_handle = failed_app
+                .world()
+                .resource::<AssetServer>()
+                .load::<WallAssetSetManifest>(WALLSET_PATH);
+            assert!(matches!(
+                wait_for_terminal_load(&mut failed_app, &failed_handle),
+                LoadState::Failed(_)
+            ));
+
+            root.write(
+                &missing.path,
+                format!("core-payload-{missing_index}").as_bytes(),
+            );
+            let mut restarted_app = loader_app(&root.0);
+            let restarted_handle = restarted_app
+                .world()
+                .resource::<AssetServer>()
+                .load::<WallAssetSetManifest>(WALLSET_PATH);
+            assert!(matches!(
+                wait_for_terminal_load(&mut restarted_app, &restarted_handle),
+                LoadState::Loaded
+            ));
+            assert_eq!(
+                restarted_app
+                    .world()
+                    .resource::<Assets<WallAssetSetManifest>>()
+                    .get(&restarted_handle)
+                    .unwrap()
+                    .asset_set_generation,
+                expected.asset_set_generation
+            );
+        }
+    }
+
+    #[test]
     fn bevy_loader_accepts_release_only_with_bound_receipt_bytes() {
         let root = TestAssetRoot::new();
         let expected = disk_release_fixture(&root);
@@ -1187,6 +1366,47 @@ mod tests {
         let manifest = disk_release_fixture(&root);
         let receipt = manifest.receipt.unwrap();
         root.write(&receipt.path, b"{}\n");
+        let mut app = loader_app(&root.0);
+        let handle = app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut app, &handle),
+            LoadState::Failed(_)
+        ));
+    }
+
+    #[test]
+    fn adopted_normal_is_required_release_core() {
+        let root = TestAssetRoot::new();
+        let manifest = disk_release_fixture_from(&root, adopted_release_fixture());
+        let normal = manifest.core.last().unwrap();
+        fs::remove_file(root.0.join(&normal.path)).unwrap();
+        let mut app = loader_app(&root.0);
+        let handle = app
+            .world()
+            .resource::<AssetServer>()
+            .load::<WallAssetSetManifest>(WALLSET_PATH);
+        assert!(matches!(
+            wait_for_terminal_load(&mut app, &handle),
+            LoadState::Failed(_)
+        ));
+    }
+
+    #[test]
+    fn release_receipt_for_another_generation_fails_after_hash_match() {
+        let root = TestAssetRoot::new();
+        let mut manifest = disk_release_fixture(&root);
+        let mut receipt = promotion_receipt(&manifest);
+        receipt.asset_set_generation += 1;
+        receipt.new_active.asset_set_generation += 1;
+        let receipt_bytes = encoded_receipt(&receipt);
+        let receipt_record = manifest.receipt.as_mut().unwrap();
+        receipt_record.bytes = receipt_bytes.len() as u64;
+        receipt_record.sha256 = format!("{:x}", Sha256::digest(&receipt_bytes));
+        root.write(&receipt_record.path, &receipt_bytes);
+        root.write(WALLSET_PATH, &encoded(&manifest));
         let mut app = loader_app(&root.0);
         let handle = app
             .world()
