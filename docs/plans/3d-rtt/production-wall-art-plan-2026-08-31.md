@@ -770,6 +770,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   topologyが更新されることを固定した。実deconstruction finalizerがWallを撤去し`WallConnectionDirty`を発行したframeも、隣接Wallは
   同じ`PostUpdate`でisolatedへ戻る。Door add / remove、Blueprint add / move / remove、施工cancelの既存focused testと合わせ、
   Update writerからtopology producerまでの主要lifecycleを同frame契約へ接続した。
+- `d0e23996`で2 tile siteを実`wall_framed_tile_spawn_system -> wall_construction_phase_transition_system ->
+  wall_construction_completion_system` chainへ通した。Framing完了時は各tileにprovisional Wallとexactly-one 3D visualが生成され、
+  相互のend topologyを保ったままCoatingへ進む。Completionではsite / tileだけが消え、同じWall rootが完成material対象、
+  completion bounce、同一topologyを維持する。
 
 - 変更内容:
   - mask計算と `WallMeshFamily + QuarterTurns` resolverをpure functionへ抽出し、16件のexhaustive table testを追加する。
@@ -791,7 +795,7 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - [x] 16 mask、Door接続、canonical rotationがtable-driven testで全件合格する。
   - [ ] 全family / quarter turnのport collarで中心bandと接続portの半幅4.8 wu以上、局所横断の装飾半幅6.4 wu以下が不変で、Wall–Wall境界にgap / overlapがない。junctionはactive arm unionとして別判定する。
   - [x] `Update`内のwall / door / blueprint追加・撤去・cancelが、同frameの後続`PostUpdate`で対象と4近傍だけを更新する。
-  - [ ] 複数tile siteの配置→framing→`FramedProvisional`→完成と、framing前／後cancelで、全gridのconnectorとtile visual targetが欠落・重複しない。
+  - [x] 複数tile siteの配置→framing→`FramedProvisional`→完成と、framing前／後cancelで、全gridのconnectorとtile visual targetが欠落・重複しない。
   - [x] site / tile / spawned wallが同一gridに一時共存しても接続数1へcoalesceされ、GLBはspawned Wallだけにexactly oneである。
   - [x] 仮設→完成はmaterialだけが変わり、mesh family / rotation / `MeshTag`は不変である。
   - [x] topology producerだけがdirtyをdrainし、2D / 3D consumerが同じresolved stateを同じ`PostUpdate`で観測する。`PlacementFeedbackSet::Commit`由来の配置も1 frame遅延しない。
@@ -1026,13 +1030,12 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - 未完了:
   - M3のPostUpdate schedule、3D consumer、atomic presentation apply、world-replace用のroot / leaf reset分担、`PlacementFeedbackSet::Commit`からのnormal / Instant Build配置、
     framing前後cancel、owner移動・回転、完成material-only遷移、completion bounceのfocused integration testは実装済み。
-    deconstructionも同frame topology更新まで実装済み。multi-tile全phase進行とnormal load / rollback / recovery-onlyを含む実save/loadの統合testは未完了。
+    deconstructionの同frame topology更新とmulti-tile phase progressionも実装済み。normal load / rollback / recovery-onlyを含む実save/loadの統合testは未完了。
     production assetはcanonical / primary `assets/`へまだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
 
 ### 次のAIが最初にやること
 
 1. normal load / rollback / recovery-only / 連続resetで、`Last` fallback位置、次frame production一括復帰、mixed 0、旧Entity参照0を検証する。
-2. 2 tile以上のsiteを実phase transitionでframing→coating→completionまで進め、全gridのtile / spawned Wall / visual countを固定する。
 
 ### ブロッカー/注意点
 
@@ -1159,9 +1162,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   deferred topologyから同frame `GlobalTransform`、identity mismatch、連続reset、material-only completion、owner transform合成、
   real Door add / remove producer、completion bounceから同frame`GlobalTransform`までを検証。
 - M3 lifecycle focused test:
-  `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 wall_construction --lib`は`pass (4 tests, 2026-09-02)`、
+  `python3 scripts/dev.py cargo -- test -p bevy_app@0.1.0 wall_construction --lib`は`pass (5 tests, 2026-09-02)`、
   `normal_and_instant_placement_enter_the_same_topology_route`は`pass (1 test, 2026-09-02)`。normal / Instant Build、
-  framing前後cancelから同frame topology更新、completion promotion / bounce開始を検証。
+  framing前後cancelから同frame topology更新、2 tileのframing / coating / completion、completion promotion / bounce開始を検証。
 - M3 commit / teardown timing focused test:
   `normal_and_instant_placement_enter_the_same_topology_route`を`PlacementFeedbackSet::Commit`内のproducerへ強化し、
   `wall_commit_removes_the_connector_in_the_same_post_update`とともに各`pass (1 test, 2026-09-02)`。配置／解体の同frame topology更新を検証。
@@ -1183,6 +1186,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M3 placement commit / deconstruction timing test batchのHelp実経路判断: `No impact`。既存systemの同frame visual topology更新を固定しただけで、
   操作、workflow、成立条件、label、tooltip、shortcut、setting、notification、gameplay ruleは不変。
   `scripts/check_help_impact.py`とtooling unit test 24件がpassし、commit `729db30d`へexact trailerを記録（2026-09-02）。
+- M3 multi-tile phase integration test batchのHelp実経路判断: `No impact`。既存の2 tile建設phaseとvisual ownershipを検証しただけで、
+  操作、workflow、成立条件、label、tooltip、shortcut、setting、notification、gameplay ruleは不変。
+  `scripts/check_help_impact.py`とtooling unit test 24件がpassし、commit `d0e23996`へexact trailerを記録（2026-09-02）。
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。
   既存tracked `scripts/check_crate_dependencies.py`がshebang付き`100644`であるrepository hygiene違反により停止（2026-09-01）。
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
@@ -1223,3 +1229,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-02` | `Codex` | normal施工tileをtopology indexへ接続し、同一grid coalesce、material-only completion、owner / topology transform合成、Door同frame更新、rehydrate fallback位置をfocused testで固定した |
 | `2026-09-02` | `Codex` | normal / Instant Build配置、framing前後cancel、completion bounceを実systemからPostUpdate topology / presentation / GlobalTransformまで通すfocused integration testを追加した |
 | `2026-09-02` | `Codex` | PlacementFeedbackSet commitとdeconstruction finalizerを同frame PostUpdate topologyへ接続する実system testを追加し、主要Update lifecycleのdirty timingを閉じた |
+| `2026-09-02` | `Codex` | 2 tile siteをframing spawn、coating transition、completionまで実system chainで通し、exactly-one visualと相互topologyが完成後も維持されることを固定した |
