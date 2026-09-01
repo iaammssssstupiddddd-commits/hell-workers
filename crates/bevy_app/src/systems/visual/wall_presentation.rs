@@ -255,9 +255,11 @@ pub fn apply_wall_presentation_system(
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use bevy::transform::{TransformPlugin, TransformSystems};
     use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
-    use hw_visual::WallVisualHandles;
+    use hw_visual::blueprint::{BuildingBounceEffect, building_bounce_animation_system};
     use hw_visual::wall_connection::{
         QuarterTurns, ResolvedWallTopology, WallConnectionDirty, WallConnectionMask,
         WallTopologyIndex, WallTopologyResolveSet, wall_connections_system,
@@ -394,47 +396,6 @@ mod tests {
 
     fn add_apply_to_update(app: &mut App) {
         app.add_systems(Update, apply_wall_presentation_system);
-    }
-
-    fn wall_visual_handles() -> WallVisualHandles {
-        let unused = Handle::default();
-        WallVisualHandles {
-            stone_isolated: unused.clone(),
-            stone_horizontal_left: unused.clone(),
-            stone_horizontal_right: unused.clone(),
-            stone_horizontal_both: unused.clone(),
-            stone_vertical_top: unused.clone(),
-            stone_vertical_bottom: unused.clone(),
-            stone_vertical_both: unused.clone(),
-            stone_corner_tl: unused.clone(),
-            stone_corner_tr: unused.clone(),
-            stone_corner_bl: unused.clone(),
-            stone_corner_br: unused.clone(),
-            stone_t_up: unused.clone(),
-            stone_t_down: unused.clone(),
-            stone_t_left: unused.clone(),
-            stone_t_right: unused.clone(),
-            stone_cross: unused.clone(),
-            door_closed: unused.clone(),
-            door_open: unused.clone(),
-            mud_isolated: unused.clone(),
-            mud_horizontal: unused.clone(),
-            mud_vertical: unused.clone(),
-            mud_corner_tl: unused.clone(),
-            mud_corner_tr: unused.clone(),
-            mud_corner_bl: unused.clone(),
-            mud_corner_br: unused.clone(),
-            mud_t_up: unused.clone(),
-            mud_t_down: unused.clone(),
-            mud_t_left: unused.clone(),
-            mud_t_right: unused.clone(),
-            mud_cross: unused.clone(),
-            mud_end_top: unused.clone(),
-            mud_end_bottom: unused.clone(),
-            mud_end_left: unused.clone(),
-            mud_end_right: unused.clone(),
-            mud_floor: unused,
-        }
     }
 
     #[test]
@@ -765,6 +726,70 @@ mod tests {
         );
     }
 
+    #[test]
+    fn completion_bounce_preserves_topology_rotation_through_global_propagation() {
+        let mut fixture = make_fixture(add_production_topology_chain);
+        fixture
+            .app
+            .insert_resource(Time::<()>::default())
+            .add_systems(Update, building_bounce_animation_system);
+        fixture.app.update();
+
+        fixture
+            .app
+            .world_mut()
+            .get_mut::<WallTopologyState>(fixture.owner)
+            .unwrap()
+            .resolved
+            .quarter_turns_y = QuarterTurns::ONE;
+        fixture
+            .app
+            .world_mut()
+            .entity_mut(fixture.owner)
+            .insert(BuildingBounceEffect::completion());
+        fixture
+            .app
+            .world_mut()
+            .resource_mut::<Time<()>>()
+            .advance_by(Duration::from_millis(100));
+
+        fixture.app.update();
+
+        let owner = *fixture.app.world().get::<Transform>(fixture.owner).unwrap();
+        assert!(owner.scale.x > 1.0);
+        let mut expected = building_presentation_transform(BuildingType::Wall, &owner);
+        expected.rotation *= Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+        let local = *fixture
+            .app
+            .world()
+            .get::<Transform>(fixture.visual)
+            .unwrap();
+        assert_eq!(local, expected);
+        let global = fixture
+            .app
+            .world()
+            .get::<GlobalTransform>(fixture.visual)
+            .unwrap()
+            .compute_transform();
+        assert!(
+            global
+                .translation
+                .abs_diff_eq(expected.translation, f32::EPSILON)
+        );
+        assert!(global.rotation.abs_diff_eq(expected.rotation, 1e-5));
+        assert!(global.scale.abs_diff_eq(expected.scale, 1e-5));
+        assert_eq!(
+            fixture
+                .app
+                .world()
+                .get::<Wall3dPresentationState>(fixture.visual)
+                .unwrap()
+                .topology
+                .quarter_turns_y,
+            QuarterTurns::ONE
+        );
+    }
+
     fn insert_resolved_topology_for_test(
         mut commands: Commands,
         owners: Query<Entity, (With<Building>, Without<WallTopologyState>)>,
@@ -817,7 +842,7 @@ mod tests {
                 },
                 ..Default::default()
             })
-            .insert_resource(wall_visual_handles())
+            .insert_resource(crate::test_support::empty_wall_visual_handles())
             .init_resource::<WallConnectionDirty>()
             .init_resource::<WallTopologyIndex>()
             .configure_sets(

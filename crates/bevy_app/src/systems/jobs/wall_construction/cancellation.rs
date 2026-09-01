@@ -159,11 +159,17 @@ mod tests {
     use hw_core::area::TaskArea;
     use hw_core::events::{OnTaskAbandoned, ResourceReservationRequest};
     use hw_core::relationships::WorkingOn;
+    use hw_core::visual_mirror::building::{BuildingTypeVisual, BuildingVisualState};
+    use hw_core::visual_mirror::construction::WallTileVisualMirror;
     use hw_jobs::construction::{WallConstructionSite, WallTileBlueprint};
     use hw_jobs::{FrameWallPhase, FrameWallTileData};
     use hw_logistics::SharedResourceCache;
     use hw_logistics::transport_request::{
         TransportPriority, TransportRequest, TransportRequestKind,
+    };
+    use hw_visual::wall_connection::{
+        WallConnectionDirty, WallConnectionMask, WallTopologyIndex, WallTopologyState,
+        wall_connections_system,
     };
 
     fn empty_handles() -> ResourceItemVisualHandles {
@@ -292,5 +298,117 @@ mod tests {
         assert!(app.world().get_entity(site).is_err());
         let mut refunds = app.world_mut().query::<&hw_logistics::ResourceItem>();
         assert_eq!(refunds.iter(app.world()).count(), 0);
+    }
+
+    #[test]
+    fn cancellation_removes_pre_and_post_framing_connectors_in_the_same_frame() {
+        for with_spawned_wall in [false, true] {
+            let mut app = App::new();
+            app.add_plugins(MinimalPlugins)
+                .insert_resource(crate::world::map::WorldMap::default())
+                .init_resource::<TileSiteIndex>()
+                .init_resource::<SharedResourceCache>()
+                .insert_resource(empty_handles())
+                .insert_resource(crate::test_support::empty_wall_visual_handles())
+                .init_resource::<WallConnectionDirty>()
+                .init_resource::<WallTopologyIndex>()
+                .add_message::<ResourceReservationRequest>()
+                .add_message::<OnTaskAbandoned>()
+                .add_systems(
+                    Update,
+                    (wall_construction_cancellation_system, ApplyDeferred).chain(),
+                )
+                .add_systems(PostUpdate, (wall_connections_system, ApplyDeferred).chain());
+
+            let target_grid = (7, 7);
+            let construction_grid = (7, 8);
+            let target = app
+                .world_mut()
+                .spawn((
+                    Transform::from_translation(
+                        crate::world::map::WorldMap::grid_to_world(target_grid.0, target_grid.1)
+                            .extend(0.0),
+                    ),
+                    BuildingVisualState {
+                        kind: BuildingTypeVisual::Wall,
+                        is_provisional: false,
+                    },
+                ))
+                .id();
+            let site = app
+                .world_mut()
+                .spawn((
+                    Transform::default(),
+                    WallConstructionSite::new(
+                        TaskArea::from_points(Vec2::ZERO, Vec2::splat(32.0)),
+                        Vec2::ZERO,
+                        1,
+                    ),
+                ))
+                .id();
+            let spawned_wall = with_spawned_wall.then(|| {
+                app.world_mut()
+                    .spawn((
+                        Transform::from_translation(
+                            crate::world::map::WorldMap::grid_to_world(
+                                construction_grid.0,
+                                construction_grid.1,
+                            )
+                            .extend(0.0),
+                        ),
+                        BuildingVisualState {
+                            kind: BuildingTypeVisual::Wall,
+                            is_provisional: true,
+                        },
+                    ))
+                    .id()
+            });
+            let mut tile = WallTileBlueprint::new(site, construction_grid);
+            tile.spawned_wall = spawned_wall;
+            let tile_entity = app
+                .world_mut()
+                .spawn((
+                    tile,
+                    WallTileVisualMirror::default(),
+                    Transform::from_translation(
+                        crate::world::map::WorldMap::grid_to_world(
+                            construction_grid.0,
+                            construction_grid.1,
+                        )
+                        .extend(0.0),
+                    ),
+                ))
+                .id();
+            app.world_mut()
+                .resource_mut::<TileSiteIndex>()
+                .wall_tiles_by_site
+                .insert(site, vec![tile_entity]);
+            app.world_mut()
+                .resource_mut::<crate::world::map::WorldMap>()
+                .set_building_occupancy(construction_grid, spawned_wall.unwrap_or(site));
+
+            app.update();
+            assert_eq!(
+                app.world().get::<WallTopologyState>(target).unwrap().mask,
+                WallConnectionMask::from_neighbors(true, false, false, false),
+                "construction connector missing before cancellation (spawned={with_spawned_wall})"
+            );
+
+            app.world_mut()
+                .entity_mut(site)
+                .insert(WallConstructionCancelRequested);
+            app.update();
+
+            assert!(app.world().get_entity(site).is_err());
+            assert!(app.world().get_entity(tile_entity).is_err());
+            if let Some(wall) = spawned_wall {
+                assert!(app.world().get_entity(wall).is_err());
+            }
+            assert_eq!(
+                app.world().get::<WallTopologyState>(target).unwrap().mask,
+                WallConnectionMask::from_neighbors(false, false, false, false),
+                "cancelled connector survived PostUpdate (spawned={with_spawned_wall})"
+            );
+        }
     }
 }

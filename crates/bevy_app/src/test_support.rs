@@ -44,6 +44,47 @@ pub(crate) fn empty_building_3d_handles() -> crate::plugins::startup::Building3d
     }
 }
 
+pub(crate) fn empty_wall_visual_handles() -> hw_visual::WallVisualHandles {
+    let unused = Handle::default();
+    hw_visual::WallVisualHandles {
+        stone_isolated: unused.clone(),
+        stone_horizontal_left: unused.clone(),
+        stone_horizontal_right: unused.clone(),
+        stone_horizontal_both: unused.clone(),
+        stone_vertical_top: unused.clone(),
+        stone_vertical_bottom: unused.clone(),
+        stone_vertical_both: unused.clone(),
+        stone_corner_tl: unused.clone(),
+        stone_corner_tr: unused.clone(),
+        stone_corner_bl: unused.clone(),
+        stone_corner_br: unused.clone(),
+        stone_t_up: unused.clone(),
+        stone_t_down: unused.clone(),
+        stone_t_left: unused.clone(),
+        stone_t_right: unused.clone(),
+        stone_cross: unused.clone(),
+        door_closed: unused.clone(),
+        door_open: unused.clone(),
+        mud_isolated: unused.clone(),
+        mud_horizontal: unused.clone(),
+        mud_vertical: unused.clone(),
+        mud_corner_tl: unused.clone(),
+        mud_corner_tr: unused.clone(),
+        mud_corner_bl: unused.clone(),
+        mud_corner_br: unused.clone(),
+        mud_t_up: unused.clone(),
+        mud_t_down: unused.clone(),
+        mud_t_left: unused.clone(),
+        mud_t_right: unused.clone(),
+        mud_cross: unused.clone(),
+        mud_end_top: unused.clone(),
+        mud_end_bottom: unused.clone(),
+        mud_end_left: unused.clone(),
+        mud_end_right: unused.clone(),
+        mud_floor: unused,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
