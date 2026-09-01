@@ -736,6 +736,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   texture選択も同じmask生成を使用し、従来の16分岐と同値を維持する。
 - sealed geometry fixtureの16 mapping / +Y quarter turnをexhaustive table testで固定した。completed Doorがnorth connectorとして
   同じmaskへ寄与する実経路も`4a728b06`で検証した。3D state / index / presentation applyはまだ接続していない。
+- `5f59d8b3`でentityごとのBuilding / Blueprint grid集合とgridごとのcoalesced contributor集合を持つ
+  `WallTopologyIndex`を追加した。add / transform move / component removalで旧集合・新集合のself＋4近傍だけをdirtyにし、
+  同一gridのBuilding＋Blueprintはconnector 1として解決する。2D completed / provisional consumerは同じresolved maskを使い、
+  plain Wall rootへ`WallTopologyState { grid, mask, family, quarter_turn, revision }`を付与する。
+- steady frameはdirty target 0、resolution revision不変、component / sprite write 0とした。world replacementではindex / external dirtyを
+  `hw_visual`所有hookでclearし、次frameに全Building / Blueprintを1回だけ再構築する。連続2回resetでもrebuild 1回、その次の
+  steady frameはrevision不変となるfocused testを追加した。PostUpdate scheduleと3D presentation applyは未接続である。
 
 - 変更内容:
   - mask計算と `WallMeshFamily + QuarterTurns` resolverをpure functionへ抽出し、16件のexhaustive table testを追加する。
@@ -977,6 +984,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
     batchごとのHelp impact decisionを完了してM2を閉じた。
   - M3のcanonical `(N,S,W,E)` maskと6 family / quarter turn resolverを`819ca26d`で実装し、completed Door connectorの
     実経路を`4a728b06`で固定済み。3D mesh適用は未着手。
+  - `5f59d8b3`でbidirectional connector index、resolved `WallTopologyState`、bounded old/new dirty、Building＋Blueprint
+    coalesce、steady 0-write、world-replace full rebuildを実装済み。2D consumerは同じresolved maskへ移行した。
   - registered historical P02とcurrent fallback actual-windowを`wall-reference-locators-v1`で分離し、
     index / ledger / referenced artifactのidentityとhashをoffline verifierで封印済み。
   - canonical orientation / bounds / pivot / placementをgeometry JSONとcontract-hash付きSVGへ固定し、
@@ -988,14 +997,15 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - final subject `35f1f6e3`から色校正、Capture 12 run、RenderDoc 4 caseを再採取し、全artifactの独立verifyをpass。
     M0のsource / harness / asset viewを同じfingerprintへ凍結済み。
 - 未完了:
-  - M3のbidirectional topology index / atomic presentation applyは未着手。production assetはcanonical / primary
+  - M3のPostUpdate schedule / 3D consumer / atomic presentation applyは未着手。production assetはcanonical / primary
     `assets/`へまだ書き込んでおらず、通常gameplayのWallはfallbackのままである。
 
 ### 次のAIが最初にやること
 
-1. M3のbidirectional connector indexとresolved topology componentを追加し、add / move / removeのself＋4近傍dirtyを検証する。
-2. 2D / 3D consumerを同じresolved stateへ接続し、Door / blueprint / multi-tile contributorのcoalesceを閉じる。
-3. atomic presentation applyと`TransformSystems::Propagate`前のschedule orderingへ進む。
+1. topology producerを全logical writer後のPostUpdate setへ移し、ApplyDeferredを挟んで2D / 3D consumerが同frameの
+   `WallTopologyState`を読むscheduleを固定する。
+2. 3D visualへfamily / quarter turnを適用するatomic presentation writerを追加し、Door / blueprint / multi-tile lifecycleを閉じる。
+3. asset failure / world replace時の全Wall fallbackと`TransformSystems::Propagate`前のorderingへ進む。
 
 ### ブロッカー/注意点
 
