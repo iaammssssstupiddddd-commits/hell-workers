@@ -29,7 +29,7 @@ pub(super) const CONTRACT_SHA256: &str =
 const GRID_ORIGIN: (i32, i32) = (2, 2);
 const GRID_STRIDE: (i32, i32) = (5, 5);
 const GRID_COLUMNS: usize = 20;
-const CAMERA_SCALE: f32 = 5.0;
+pub(super) const CAMERA_SCALE: f32 = 5.0;
 const MASK_COUNT: usize = 16;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -122,7 +122,30 @@ pub(crate) struct WallDensityFixtureState {
     pub(super) failure: Option<String>,
 }
 
+pub(super) struct WallDensityProbeSubject<'a> {
+    pub(super) entity: Entity,
+    pub(super) grid: (i32, i32),
+    pub(super) mask: u8,
+    pub(super) layout_checksum: &'a str,
+    pub(super) phase: PerfWallPhase,
+}
+
 impl WallDensityFixtureState {
+    pub(super) fn actual_window_subject(&self) -> Option<WallDensityProbeSubject<'_>> {
+        let layout = self
+            .layout
+            .as_ref()
+            .filter(|_| self.phase == WallDensityFixturePhase::Ready)?;
+        let specimen = layout.specimens.first()?;
+        Some(WallDensityProbeSubject {
+            entity: specimen.wall?,
+            grid: specimen.grid,
+            mask: specimen.mask,
+            layout_checksum: &layout.layout_checksum,
+            phase: layout.phase,
+        })
+    }
+
     pub(super) fn sidecars(&self) -> Result<(serde_json::Value, String), String> {
         if self.phase != WallDensityFixturePhase::Ready {
             return Err(format!(

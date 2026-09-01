@@ -210,6 +210,27 @@ reports `draw_groups=not-collected`; it does not satisfy the Wall M0 RenderDoc
 draw-group gate until that separate evidence is added. Revalidate a completed
 Capture bundle with `verify --job-root <job-root>`.
 
+## Run the current Wall actual-window calibration
+
+Use the Wall calibration profile to capture the current production fallback
+from the normal `wall-density-v1` spawn route without reusing the historical
+P02 stage selector:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 \
+  .codex/skills/hell-workers-run-native-acceptance/scripts/wall_art_acceptance.py \
+  plan --repo "$PWD" --adapter Intel
+```
+
+Run only the returned direct `kitty` command and poll `status --job-root
+<job-root>` every 15–30 seconds. The M0 calibration profile binds one
+High/DPI 1/Vulkan/X11 client PNG to the game-owned Wall entity, resident
+fallback mesh, projected ROI, fixture checksum, clean subject, source,
+harness, binary, and complete asset-view fingerprints. It is a current-source
+visual reference only: it does not replace the registered historical P02
+artifact, the 12-run Wall Capture baseline, or the separate RenderDoc
+draw-group gate. Revalidate with `verify --job-root <job-root>`.
+
 ## Run the RtT-light migration recipe
 
 Use this path for the frozen `rtt-light-v1` baseline. Do not substitute a

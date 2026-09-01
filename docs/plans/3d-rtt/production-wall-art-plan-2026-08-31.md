@@ -389,8 +389,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   dirty subjectではdirect `kitty`計画をblockすることまでself-test / dry-runで確認済み。
 - subject `26dcb5a3`のclean commitから、専用native launcherでN / 4N×completed / provisional×3の
   全12 runを再採取し、独立verifyをpassした。Capture profileは`draw_groups=not-collected`を明記し、
-  wall固有RenderDoc gateとは分離する。Bevy actual-window calibration phase、wall固有draw-group抽出、
-  P02正式採取は未実装・未実行のため、M0全体は未完了である。
+  wall固有RenderDoc gateとは分離する。current source専用Bevy actual-window calibration profileは実装済みだが
+  native採取前であり、wall固有draw-group抽出も未実装のため、M0全体は未完了である。
 - この中間状態をM0完了や性能baselineとして扱わず、後続M1のasset制作開始gateにも使わない。
 - 最初の正式Capture試行（subject `a69ea3df`）はfail-closedで棄却した。Smallのraw 3 runは取得できたが、
   仮想時刻を停止するwall-densityへvalidatorがvirtual 30 s / 60 sを誤要求した。Mediumは通常worldの
@@ -430,6 +430,12 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   registered P02 artifactと、current source専用のwall calibration profileを別artifactとして扱う。invalid job
   `target/native-acceptance/p02-presentation-20260901T044343Z-344a5e7b`と
   `target/native-acceptance/p02-presentation-20260901T044925Z-ec7236c5`は合格証跡へ流用しない。
+- `wall-art-current-calibration-v1`を実装し、High / DPI 1.0 / Vulkan / X11のcurrent fallback Wallを
+  `wall-density-v1`のproduction spawnから1枚だけ採取する契約を追加した。game-owned probeはfallback mesh resident、
+  exact owner、fixture / contract hash、Camera3dRtt投影ROI、window / quality / camera scaleをnonce / generation付きで
+  publishし、launcherが該当X11 clientだけをPNG化してACKする。raw performance sidecarとPNGのlayout checksum、
+  clean subject、source / harness / binary / asset-view hashをoffline verifyで再計算する。これはcurrent visual
+  referenceであり、historical P02、12-run Capture、RenderDoc draw-group証跡の代用にはしない。
 
 - 変更内容:
   - current `Cuboid` wallをproduction cameraで撮影し、source fingerprint、camera、quality、DPI、adapter、asset viewを記録する。既存P02 visual referenceと、後述の`wall-density-v1`性能baselineを別artifactにする。
@@ -797,14 +803,16 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - M0のBlender geometry / color fixture、offline verifier、Rust `wall-density-v1` fixture、Capture profileを実装済み。
   - 最初のnative Captureをfail-closedで棄却し、duration clock誤判定と通常初期world混入を修正済み。
   - subject `26dcb5a3`からcompleted / provisional各N / 4Nの全12 runを採取し、専用verifyでpass。3-run中央値 / MADと3 fingerprintを封印済み。
+  - historical P02再実行とcurrent source calibrationの契約差を確定し、current fallback専用actual-window profileを実装済み。
 - 未完了:
-  - wall固有draw-group抽出、P02 visual reference、OCIO陽性証明を閉じるまではM0未完了。M1以降は未着手。
+  - current fallback actual-window採取、wall固有draw-group抽出、registered P02 referenceのlocator、OCIO陽性証明を閉じるまではM0未完了。M1以降は未着手。
 
 ### 次のAIが最初にやること
 
-1. current wallのP02 referenceとwall固有draw-group抽出を実装・採取し、Capture baselineとは別artifactで固定する。
-2. OCIO陽性証明とcanonical orientation / boundsを証拠付きで固定してM0を閉じる。
-3. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
+1. current fallback actual-window profileをclean commitから採取・verifyし、registered P02 referenceと別artifactで固定する。
+2. wall固有draw-group抽出を実装・採取し、Capture baselineとは別artifactで固定する。
+3. OCIO陽性証明とcanonical orientation / boundsを証拠付きで固定してM0を閉じる。
+4. M0 gateを報告してからM1 staging asset制作へ進み、canonical領域へは書き込まない。
 
 ### ブロッカー/注意点
 
@@ -868,6 +876,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   採取した後、Python frozen期待表がDoor / Tank / MudMixerのlegacy child Sprite不足を検出してinvalid。
   current P08 sourceへP02値を上書きする仮説を打ち切り、Rust validatorの片側緩和を復元。registered historical
   P02 artifactとcurrent wall calibrationを分離する（2026-09-01）。
+- M0 current Wall calibration tooling:
+  Rust probe focused test `wall_actual_window` 2件、`wall_art_acceptance.py self-test`、`perf.py self-test`、
+  `native_acceptance.py self-test`がpass。native PNG採取はclean commit後に実行する（2026-09-01）。
 - 実装時 `python3 scripts/dev.py check`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-01)`
 - 実装時 `python3 scripts/dev.py verify`: Python tooling（M0の12 testsを含む）とHelp impactまではpass。

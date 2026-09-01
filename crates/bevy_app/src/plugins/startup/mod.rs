@@ -130,8 +130,13 @@ impl Plugin for StartupPlugin {
             perf_scenario::install_renderdoc_capture(app);
             let p02_actual_window_requested =
                 perf_scenario::P02ActualWindowAcceptance::requested_from_environment();
+            let wall_actual_window_requested =
+                perf_scenario::WallActualWindowAcceptance::requested_from_environment();
             if p02_actual_window_requested {
                 app.init_resource::<perf_scenario::P02ActualWindowAcceptance>();
+            }
+            if wall_actual_window_requested {
+                app.init_resource::<perf_scenario::WallActualWindowAcceptance>();
             }
             app.init_resource::<PerfScenarioApplied>()
                 .init_resource::<perf_scenario::PerfScenarioDriverState>()
@@ -303,6 +308,14 @@ impl Plugin for StartupPlugin {
                         perf_scenario::publish_p02_actual_window_probe_status_system,
                     )
                         .chain()
+                        .in_set(PerfScenarioSet::Capture)
+                        .before(perf_scenario::drive_perf_capture_system),
+                );
+            }
+            if wall_actual_window_requested {
+                app.add_systems(
+                    Update,
+                    perf_scenario::publish_wall_actual_window_probe_status_system
                         .in_set(PerfScenarioSet::Capture)
                         .before(perf_scenario::drive_perf_capture_system),
                 );
