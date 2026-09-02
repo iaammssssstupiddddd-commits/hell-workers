@@ -1339,6 +1339,17 @@ fn write_status(path: &Path, value: &Value) -> std::io::Result<()> {
 mod tests {
     use super::*;
     use bevy::ecs::system::{IntoSystem, System};
+    use bevy::mesh::MeshTag;
+    use hw_visual::wall_connection::{
+        QuarterTurns, ResolvedWallTopology, WallConnectionMask, WallMeshFamily, WallTopologyState,
+    };
+
+    use crate::assets::wall_asset_set::{
+        ProductionWallAssetPool, ProductionWallMaterialPool, WallProductionActivation,
+    };
+    use crate::systems::visual::wall_presentation::{
+        Wall3dVisualOwnerIndex, apply_wall_presentation_system,
+    };
 
     #[test]
     fn actual_window_mutable_transform_queries_are_parameter_set_isolated() {
@@ -1394,14 +1405,19 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<Time>()
             .init_resource::<Time<Virtual>>()
+            .init_resource::<WallProductionActivation>()
+            .init_resource::<ProductionWallMaterialPool>()
+            .init_resource::<Wall3dVisualOwnerIndex>()
+            .insert_resource(ProductionWallAssetPool {
+                manifest: Handle::default(),
+                resolved: None,
+            })
+            .insert_resource(crate::test_support::empty_building_3d_handles())
             .add_systems(
                 Update,
-                (
-                    hw_visual::blueprint::building_bounce_animation_system,
-                    crate::systems::visual::building3d_cleanup::sync_building_3d_transform_system,
-                )
-                    .chain(),
-            );
+                hw_visual::blueprint::building_bounce_animation_system,
+            )
+            .add_systems(PostUpdate, apply_wall_presentation_system);
         app.world_mut().resource_mut::<Time<Virtual>>().pause();
         let paused_time = app.world().resource::<Time<Virtual>>().as_generic();
         app.world_mut().insert_resource(paused_time);
@@ -1415,11 +1431,27 @@ mod tests {
                 },
                 Transform::default(),
                 active_wall_bounce_probe(),
+                WallTopologyState {
+                    grid: WALL_PROBE_GRID,
+                    mask: WallConnectionMask::from_neighbors(false, false, false, false),
+                    resolved: ResolvedWallTopology {
+                        family: WallMeshFamily::Isolated,
+                        quarter_turns_y: QuarterTurns::ZERO,
+                    },
+                    revision: 1,
+                },
             ))
             .id();
         let visual = app
             .world_mut()
-            .spawn((Building3dVisual { owner: wall }, Transform::default()))
+            .spawn((
+                Building3dVisual { owner: wall },
+                hw_visual::Wall3dPresentationState::default(),
+                Mesh3d(Handle::default()),
+                MeshMaterial3d::<TopDownStructuralMaterial>(Handle::default()),
+                Transform::default(),
+                MeshTag(0),
+            ))
             .id();
 
         app.update();

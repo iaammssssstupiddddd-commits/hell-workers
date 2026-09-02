@@ -221,7 +221,7 @@ mod tests {
                     ),
                 ))
                 .id();
-            let grids = vec![(7, 8), (8, 8)];
+            let grids = [(7, 8), (8, 8)];
             app.update();
 
             assert_eq!(
