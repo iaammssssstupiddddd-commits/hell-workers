@@ -848,6 +848,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - harness commit `2cd86551`のclean worktreeから開始した最初のlit jobは、profiling buildとcandidate activationを
   通過した後、aggregate gallery residency predicateでfail-closedとなった。画像は採用せず、複合predicateを推測で
   調整しないためproduction / fallback / mesh / materialのactual countをfailure reasonへ追加して再診断する。
+- 診断commit `6456b173`の再試行で`production=96/96, fallback=0, meshes=1/6, materials=1/1`を取得し、asset / material
+  ではなくfixture connectorのvisual mirror初期値がproduction topology ingressへ届いていないことを確定した。
+  durable Door `Blueprint`からproduction `blueprint_visual_state()`を生成して同時挿入し、同じ経路で16 maskを解決する。
+  2件のinvalid jobと画像は比較証拠へ流用しない。
 
 - 変更内容:
   - M3のproduction spawn / WorldMap / presentation routeを使う専用wall-art gallery scenarioを `bevy_app`へ追加する。`visual_test`の独自meshを使わない。

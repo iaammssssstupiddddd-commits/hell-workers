@@ -350,10 +350,11 @@ fn spawn_door_blueprint_connector(
     connector: ConnectorSpec,
 ) -> Entity {
     let world_pos = WorldMap::grid_to_world(connector.grid.0, connector.grid.1);
+    let (blueprint, visual_state) = door_connector_blueprint(connector.grid);
     let entity = commands
         .spawn((
-            Blueprint::new(BuildingType::Door, vec![connector.grid]),
-            BlueprintVisualState::default(),
+            blueprint,
+            visual_state,
             Designation {
                 work_type: WorkType::Build,
             },
@@ -381,6 +382,12 @@ fn spawn_door_blueprint_connector(
         std::iter::once(connector.grid),
     );
     entity
+}
+
+fn door_connector_blueprint(grid: (i32, i32)) -> (Blueprint, BlueprintVisualState) {
+    let blueprint = Blueprint::new(BuildingType::Door, vec![grid]);
+    let visual_state = hw_jobs::visual_sync::blueprint_visual_state(&blueprint);
+    (blueprint, visual_state)
 }
 
 #[derive(SystemParam)]
@@ -649,6 +656,17 @@ mod tests {
     #[test]
     fn embedded_contract_hash_is_frozen() {
         assert_eq!(contract_sha256(), CONTRACT_SHA256);
+    }
+
+    #[test]
+    fn door_connector_enters_the_production_topology_mirror() {
+        let grid = (12, 34);
+        let (blueprint, mirror) = door_connector_blueprint(grid);
+        assert_eq!(blueprint.kind, BuildingType::Door);
+        assert_eq!(blueprint.occupied_grids, vec![grid]);
+        assert!(mirror.is_wall_or_door);
+        assert!(!mirror.is_plain_wall);
+        assert_eq!(mirror.occupied_grids, vec![grid]);
     }
 
     #[test]
