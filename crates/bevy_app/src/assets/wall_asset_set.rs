@@ -1527,10 +1527,10 @@ mod tests {
         assert!(matches!(
             eligible.state,
             WallAssetReadinessState::Eligible {
-                asset_set_generation: 1,
+                asset_set_generation,
                 authority: WallAssetAuthority::IsolatedCandidate,
                 ..
-            }
+            } if asset_set_generation == manifest.asset_set_generation
         ));
         assert_eq!(eligible.activation_revision, 2);
         assert_eq!(
@@ -1558,11 +1558,11 @@ mod tests {
         assert!(matches!(
             ready_to_apply.state,
             WallProductionActivationState::ReadyToApply {
-                asset_set_generation: 1,
+                asset_set_generation,
                 authority: WallAssetAuthority::IsolatedCandidate,
                 asset_activation_revision: 2,
                 ..
-            }
+            } if asset_set_generation == manifest.asset_set_generation
         ));
         let materials = app.world().resource::<ProductionWallMaterialPool>();
         assert_eq!(materials.complete.as_ref(), Some(&complete));
