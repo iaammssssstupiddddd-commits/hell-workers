@@ -863,6 +863,13 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - view修正commit `ee4defe2`のfocused lit `wall-art-20260902T065809Z-a5ff5829`はstandard zoom / UI抑制と全gallery
   stateをpassしたが、topologyを作るDoor Blueprintの施工sprite / task progressが壁を覆ったためart比較へ採用しない。
   connectorの論理Blueprint / visual mirrorは維持したまま比較時だけ192 visual subtreeをHiddenにし、0 visibleをsidecarで要求する。
+- connector visual抑制commit `3070fa44`から最終lit `wall-art-20260902T072458Z-7debdcc8`とunlit
+  `wall-art-20260902T074751Z-e126b294`を取得し、両方ともclient captureとoffline verifyをpassした。共通条件は
+  asset-view `d6720d3b…`、High / DPI 1 / standard zoom 1.0、96 production / fallback 0、6 mesh、16 mask各6件、
+  UI root 0 visible、connector visual 192 hidden / 0 visibleである。画像SHA-256はlit `b5c8e49a…`、unlit
+  `b34ffb09…`、全画面normalized MAE `0.00242271`、96 px subject ROI MAE `0.00300869`、litのROI平均は
+  unlitより`0.767216`高い。directional shadingと紫emissive要件を保持するlitを推奨し、ユーザー選定待ちとする。
+  完全な設定・locator・hashはstaging report `wall-production-v1-art-review.json`へ保存した。
 
 - 変更内容:
   - M3のproduction spawn / WorldMap / presentation routeを使う専用wall-art gallery scenarioを `bevy_app`へ追加する。`visual_test`の独自meshを使わない。
