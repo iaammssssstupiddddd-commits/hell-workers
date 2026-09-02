@@ -728,8 +728,6 @@ fn initialize_material_handles(
     let mut provisional =
         make_topdown_structural_material(LinearRgba::new(1.0, 1.0, 1.0, 0.9), indoor_light_field);
     provisional.base.base_color_texture = Some(assets.albedo.clone());
-    provisional.base.emissive = LinearRgba::WHITE;
-    provisional.base.emissive_texture = Some(assets.emissive.clone());
     provisional.base.normal_map_texture = assets.normal.clone();
     let provisional =
         structural_materials.add(with_topdown_alpha_mode(provisional, AlphaMode::Blend));
@@ -1240,7 +1238,6 @@ mod tests {
         for handle in [&first_complete, &first_provisional] {
             let material = materials.get(handle).expect("production Wall material");
             assert_eq!(material.base.base_color_texture.as_ref(), Some(&albedo));
-            assert_eq!(material.base.emissive_texture.as_ref(), Some(&emissive));
             assert_eq!(material.base.normal_map_texture.as_ref(), Some(&normal));
             assert!(!material.base.unlit);
             assert_eq!(
@@ -1248,6 +1245,20 @@ mod tests {
                 Some(&indoor_light)
             );
         }
+        assert_eq!(
+            materials
+                .get(&first_complete)
+                .expect("complete material")
+                .base
+                .emissive_texture
+                .as_ref(),
+            Some(&emissive)
+        );
+        let provisional_material = materials
+            .get(&first_provisional)
+            .expect("provisional material");
+        assert_eq!(provisional_material.base.emissive, LinearRgba::BLACK);
+        assert!(provisional_material.base.emissive_texture.is_none());
         assert_eq!(
             materials
                 .get(&first_complete)

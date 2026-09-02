@@ -81,6 +81,8 @@ Wall native helperだけが付与し、通常のsingle-case校正とformal densi
 binaryの`--perf-wall-presentation`とlauncherの`HW_WALL_PERF_PRESENTATION`は同値の二重鍵であり、通常runや
 Wall art actual-window profileからは指定できない。completed / provisionalのN=96 / 4N=384を各3 run採り、
 同一final binaryのfallback-control比p95 / p99中央値を各`+5%`以内で判定する。
+production provisionalは半透明albedoとshared light fieldを保ちつつ、transparent passのtexture sampleを抑えるため
+emissive textureをbindしない。completedだけが承認済みemissive textureを使用する。
 
 ### P06 shared Light Field runtime inventory
 

@@ -966,7 +966,15 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   `wall_density_presentation.rs`を実装した。binary flag / launcher環境の二重鍵で`production`と
   `fallback-control`を分離し、候補assetのload・activation・全owner一括収束後だけ30秒warm-upを開始する。
   各runの追加sidecarは初期／終了の同一性、production 6 mesh / 2 material、fallback 1 mesh / 2 material、
-  7 / 4有限pool、350 triangle上限、family / rotation分布、candidate identityを検査する。実機24 runは未採取である。
+  7 / 4有限pool、350 triangle上限、family / rotation分布、candidate identityを検査する。
+- subject `5537f621`の初回実機job
+  `target/native-acceptance/wall-production-performance-20260902T164026Z-bf161556`は全24 runを完走した。
+  completedはN / 4Nのp95 / p99が全件passし、provisional 4N p95も`-0.136%`だったが、provisional N p95だけが
+  fallback `11.328262 ms`に対してproduction `12.283340 ms`（`+8.431%`）となり、`+5%` gateでinvalidになった。
+  provisional Nのp50も3 runすべてproductionが約0.23〜0.31 ms遅いため単一外れ値とは扱わない。completed productionは
+  同じalbedo / emissiveを使いながらN p95 `-8.827%`であり、transparent provisionalだけに残る追加sampleを切り分ける。
+  完成壁のemissiveは維持し、建築途中だけemissive textureを外してalbedo＋shared light field＋Blendを維持する仮説を一度だけ
+  再計測する。改善しなければこの仮説を打ち切り、閾値を緩和しない。
 - M0最終subject `35f1f6e3`と現行の`wall_density_fixture.rs`には、後続commit `e792b710`で入った
   Door connector mirror初期化22行の差がある。この既知差を無視してbyte-identicalと主張しない。baseline比較は
   `35f1f6e3`へこのfixture-only修正だけを載せたclean派生subjectを作り、finalとdensity profile / fixture / contractを
