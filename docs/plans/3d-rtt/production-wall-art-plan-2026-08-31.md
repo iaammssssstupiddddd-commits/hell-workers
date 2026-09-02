@@ -825,6 +825,20 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### M4: art候補をnative A/Bし、ユーザー承認を得る
 
+実装状況（2026-09-02）:
+
+- M3で再検証したsealed generation 1のgeometry gateをM4の停止条件にも採用し、6 GLBのmanifest hash、
+  9.6 wu共通port、12.8 wu corridor union、UV0、triangle capがpassしている。
+- sealed OCIO陽性artifact `wall-color-20260901T081824Z-e92a7d9c`を現行offline verifierで再検証し、
+  生成reportは保存済みreportとbyte-identical、SHA-256
+  `470a6e06ec0c61c916aa7fe9ecabe34da66437626aa45ae339cff4296613b77c`、4 base patchの平均／各
+  Delta E 2000は`0.0`、emissive sanityもpassした。
+- candidate normal textureはsealed texture reportでlinear sampling / OpenGL `+Y`、vector length / positive Zをpassするが、
+  6 GLB全てに`TANGENT` attributeがないためnormal A/Bのtechnical gateはfailと判定した。「差なし」には分類せず、
+  generation 1のpending manifestは変更しない。M4 finalの新generationでは`normal_decision=rejected`として封印する。
+- lit / unlit A/B用gallery / launcher diffとnative captureは未着手。planの明示承認gateに従い、harness diffを
+  check / clippy / verify / Help review後に提示し、承認を得るまでnative phaseを開始しない。
+
 - 変更内容:
   - M3のproduction spawn / WorldMap / presentation routeを使う専用wall-art gallery scenarioを `bevy_app`へ追加する。`visual_test`の独自meshを使わない。
   - source / asset fingerprint、phase ACK、client capture、offline再検証を持つwall-art fail-closed profileをA/B前に完成させ、High / Medium / Low、DPI、zoom、lifecycle phaseをparameter化する。M0でfreezeした`wall_density_acceptance.py`とRust density fixtureは変更せず、別の`wall_art_acceptance.py`へgallery phaseとart predicateを追加する。
@@ -842,8 +856,8 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   - 採用後はprimaryでart comparison toggle / debug material / 不採用normal経路を撤去し、final profileを再度check / clippy / verifyする。M5の性能比較に必要なprofile-only controlはplayer-facing toggleと分離して保持する。Help impact reviewを再実行し、最終diffを提示して二度目の明示承認を得たscoped local commitからM5用clean worktreeを作る。
   - final commit確定後、M1 candidateをそのまま書き換えず新しい`asset_set_generation`として再封印する。`normal_decision`を`adopted | rejected`へ確定し、採用A/B入力と同じpayload hash、M1 tool commit、M4 runtime subject commit、art approval artifact hash、`review_status=art_approved`を記録する。candidate runtime projectionを再生成し、manifest validator / post-export report再照合 / core allowlist sync / M2 loader-readiness / M3 activation-world-replace focused testを新generationで再実行する。payload差が選定artifactと一致しない、または`pending`が残る場合はA/Bへ戻り、M5へ進めない。
 - 完了条件:
-  - [ ] OCIO gateがconfig path / hash、runtime version、`fallback=false`を陽性証明し、Blender referenceとBevy client capture内の4 base-color patchが固定ROI / exposure / sRGB→Lab変換で`Delta E 2000`平均`<= 2.0`、各patch`<= 3.0`である。emissive sanity patchも別predicateでpassする。
-  - [ ] normal A/B artifactがcandidate-only hash、linear load、6 meshのtangent / UV0、`+Y`方向predicateを証明し、technical failureを「差なし」に分類していない。
+  - [x] OCIO gateがconfig path / hash、runtime version、`fallback=false`を陽性証明し、Blender referenceとBevy client capture内の4 base-color patchが固定ROI / exposure / sRGB→Lab変換で`Delta E 2000`平均`<= 2.0`、各patch`<= 3.0`である。emissive sanity patchも別predicateでpassする。
+  - [x] normal technical gateがcandidate-only hash、linear load、UV0、`+Y`方向predicateと全6 meshのtangent有無を証明した。全mesh tangent不在を明示的technical failureとしてnormalをrejectし、画像A/Bや「差なし」判定へ進めていない。
   - [ ] candidateごとの画像、hash、設定、観察結果が保存され、同じ仮説を無目的に再調整していない。
   - [ ] lit / unlitを先に一軸比較し、lit winnerにだけnormal一軸比較を行っている。中間candidateへ9 case / full lifecycleを掛けておらず、交絡した比較artifactを採用根拠にしていない。
   - [ ] ユーザーがproduction cameraで最終候補を承認している。
@@ -1044,8 +1058,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 
 ### 次のAIが最初にやること
 
-1. M4のcandidate identity / OCIO陽性proof / native launcher preflightを固定し、lit / unlitの一軸A/Bから開始する。
-   optional normal比較はlit winner確定後だけ行い、canonical / primary assetへはまだ書き込まない。
+1. M4のlit / unlit一軸A/B用gallery / fail-closed launcherを実装し、check / clippy / verify / Help review後の
+   diffをユーザーへ提示する。明示承認後だけclean candidate worktreeでnative captureを開始する。
+   normalはtechnical reject済みなので比較せず、canonical / primary assetへはまだ書き込まない。
 
 ### ブロッカー/注意点
 
@@ -1191,6 +1206,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
   216〜240 triangles、UV0を確認した。`all_sixteen_masks_match_the_sealed_geometry_fixture`と
   `HW_WALL_ASSET_TEST_ROOT=<isolated-assets> ... isolated_candidate_loads_six_real_primitives_with_valid_runtime_bounds -- --ignored --exact`
   も各`pass (1 test, 2026-09-02)`。
+- M4 OCIO / normal preflight: `verify_color_calibration.py`でsealed Blender / Bevy pairを再検証し、保存済み
+  `verification.json`とbyte-identical SHA-256 `470a6e06...`、mean Delta E 2000 `0.0`でpass。
+  `wall-production-v1.textures.json`はnormalのlinear / `+Y`をpassする一方、同じsealed 6 GLBのdirect decodeは
+  全件`tangent_present=false`を確定したためnormal A/Bをtechnical reject（2026-09-02）。
 - M3 atomic presentation実装後 `python3 scripts/dev.py check`と
   `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`: `pass (2026-09-02)`。
 - M3 atomic presentation batchのHelp実経路判断: `No impact`。壁のmesh / material / rotation選択だけを変更し、
@@ -1262,3 +1281,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-02` | `Codex` | normal / rollback / recovery-onlyの実world replacementをrehydrate fallbackから次frame production一括復帰まで検証し、旧Entity 0・single rebuild・steady 0-writeを固定した |
 | `2026-09-02` | `Codex` | shebang付き検証script 2件のGit modeを100755へ修正し、P02 Wall bounce testをWall専用presentation owner経路へ移行。check、0-warning Clippy、全体verifyをpassした |
 | `2026-09-02` | `Codex` | clean validation worktreeのsealed 6 GLBをmanifest hash付きで再decodeし、9.6 wu共通port、12.8 wu corridor union、216〜240 triangle、16 mask回転、Bevy実loaderをpassしてM3を完了 |
+| `2026-09-02` | `Codex` | M4 preflightでsealed OCIO artifactをbyte-identical再検証。normal textureのlinear/+Yはpassしたが全6 GLBのtangent不在をtechnical failureとしてnormal A/Bをrejectし、lit/unlit比較だけを次段に残した |
