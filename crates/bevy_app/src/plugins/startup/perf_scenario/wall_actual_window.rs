@@ -291,7 +291,12 @@ fn build_status(
             || mesh_ids.len() != 6
             || material_ids.len() != 1
         {
-            return Err("wall comparison gallery residency differs".to_string());
+            return Err(format!(
+                "wall comparison gallery residency differs: production={production_count}/{}, fallback={fallback_count}/0, meshes={}/6, materials={}/1",
+                evidence.target_wall_count,
+                mesh_ids.len(),
+                material_ids.len(),
+            ));
         }
         let resolved = params
             .production_assets

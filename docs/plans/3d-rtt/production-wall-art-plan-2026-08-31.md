@@ -845,6 +845,9 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - ユーザーは2026-09-02にscoped harness実装と、そのcommit後のclean candidate worktreeでのnative lit / unlit
   capture開始を明示承認した。check / clippy / verify / Help reviewを完了してharness commitを作るまで、候補assetを
   primaryへprovisionせずnative phaseを開始しない。
+- harness commit `2cd86551`のclean worktreeから開始した最初のlit jobは、profiling buildとcandidate activationを
+  通過した後、aggregate gallery residency predicateでfail-closedとなった。画像は採用せず、複合predicateを推測で
+  調整しないためproduction / fallback / mesh / materialのactual countをfailure reasonへ追加して再診断する。
 
 - 変更内容:
   - M3のproduction spawn / WorldMap / presentation routeを使う専用wall-art gallery scenarioを `bevy_app`へ追加する。`visual_test`の独自meshを使わない。
