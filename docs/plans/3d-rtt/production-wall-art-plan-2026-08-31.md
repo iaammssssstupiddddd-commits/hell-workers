@@ -1203,13 +1203,19 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - M3 world replacement integration test batchのHelp実経路判断: `No impact`。test-only rehydrate accessと既存transactionの検証だけで、
   load / recovery操作、workflow、成立条件、label、tooltip、shortcut、setting、notification、gameplay ruleは不変。
   `scripts/check_help_impact.py`とtooling unit test 24件がpassし、commit `122e9d47`へexact trailerを記録（2026-09-02）。
-- 実装時 `python3 scripts/dev.py verify`: Python tooling 98件、Blender tooling 84件、performance self-test、agent rules、
-  Help impactまではpass。既存tracked `scripts/check_crate_dependencies.py`と`scripts/perf_tool/wall_renderdoc_extract.py`が
-  shebang付き`100644`であるrepository hygiene違反により停止（2026-09-02）。
+- M3全体 `python3 scripts/dev.py verify`: 初回は既存tracked `scripts/check_crate_dependencies.py`と
+  `scripts/perf_tool/wall_renderdoc_extract.py`がshebang付き`100644`であるrepository hygiene違反を検出した。
+  blobを変更せずGit modeだけを`100755`へ修正したcommit `365bcfb9`後、profiling testがWallを旧generic
+  transform writerへ接続していた回帰を検出。実runtimeと同じ`WallPresentationApplySet`経路へtestを移し、
+  Clippyの固定collectionも修正したcommit `7d51a374`後に全quality gateがpass（2026-09-02）。
+- M3 verify回帰修正batchのHelp実経路判断: `No impact`。Wall bounceのtest-only scheduleを既存presentation ownerへ
+  合わせ、固定test collectionを`Vec`から配列へ変えただけで、操作、workflow、成立条件、label、tooltip、shortcut、
+  setting、notification、runtime data、gameplay ruleは不変。`scripts/check_help_impact.py`とtooling unit test 24件がpassし、
+  commit `7d51a374`へexact trailerを記録（2026-09-02）。
 - M0初期batchのHelp実経路判断: `No impact`。開発用fixture / calibration tooling / test / docsだけで、
   通常ゲームの入力、表示、建築成立条件、runtime data、プレイヤー向け文言は不変（`HELL_WORKERS_DIFF_BASE=HEAD`でgate pass）。
 - 初期M0 toolingはユーザー指示により`06826fd2`へ中間commit済み。ただしCapture harnessを含む凍結済みbaseline commitではない。
-- 未解決エラー: 上記2件の既存repository hygiene違反のみ。M0のOCIO、reference locator、orientation / boundsは解消済み。
+- 未解決エラー: なし。M0のOCIO、reference locator、orientation / boundsとM3のrepository hygiene / profiling test回帰は解消済み。
 
 ### Definition of Done
 
@@ -1221,10 +1227,10 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 - [ ] OCIO config path / hash、runtime version、`fallback=false`、offline CIEDE2000再検証が有効なclient captureでユーザーが本番アートを承認する。
 - [ ] canonical / repoのimmutable generation、payload manifest、promotion receipt / active projection、preimage snapshotが一致し、全kill-point recovery testとpost-promote primary actual-window profileがpassする。
 - [ ] `hell-workers-review-help-impact`の実経路判断と影響docs更新が完了する。
-- [ ] `python3 scripts/dev.py check`が成功する。
+- [x] `python3 scripts/dev.py check`が成功する。
 - [ ] rust-analyzer workspace diagnosticsが0件である。
-- [ ] `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`が成功する。
-- [ ] `python3 scripts/dev.py verify`が成功する。
+- [x] `python3 scripts/dev.py cargo -- clippy --workspace --all-targets -- -D warnings`が成功する。
+- [x] `python3 scripts/dev.py verify`が成功する。
 - [ ] 専用wall-art native profileと既存P02 matrixがfail-closedで成功する。
 - [ ] plan lifecycleを閉じ、恒久仕様へ引継ぎ済みである。
 
@@ -1246,3 +1252,4 @@ codeまたはruntime dataを変更した各マイルストーンでは、完了�
 | `2026-09-02` | `Codex` | PlacementFeedbackSet commitとdeconstruction finalizerを同frame PostUpdate topologyへ接続する実system testを追加し、主要Update lifecycleのdirty timingを閉じた |
 | `2026-09-02` | `Codex` | 2 tile siteをframing spawn、coating transition、completionまで実system chainで通し、exactly-one visualと相互topologyが完成後も維持されることを固定した |
 | `2026-09-02` | `Codex` | normal / rollback / recovery-onlyの実world replacementをrehydrate fallbackから次frame production一括復帰まで検証し、旧Entity 0・single rebuild・steady 0-writeを固定した |
+| `2026-09-02` | `Codex` | shebang付き検証script 2件のGit modeを100755へ修正し、P02 Wall bounce testをWall専用presentation owner経路へ移行。check、0-warning Clippy、全体verifyをpassした |
